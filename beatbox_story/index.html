@@ -1491,6 +1491,379 @@ window.exports = window.module.exports;
       }
     ))));
   };
+  var HERO_LANES = ["B", "T", "K", "Pf"];
+  var _patBoom = () => Array.from({ length: 16 }, (_, i) => ({ beat: i, sound: "B" }));
+  var _patBackbeat = () => Array.from({ length: 16 }, (_, i) => ({ beat: i, sound: i % 2 === 0 ? "B" : "Pf" }));
+  var _patHat8ths = () => Array.from({ length: 32 }, (_, i) => ({ beat: i * 0.5, sound: "T" }));
+  var _patKitGroove = () => {
+    const p = [];
+    for (let b = 0; b < 16; b++) {
+      p.push({ beat: b, sound: b % 2 === 0 ? "B" : "Pf" });
+      p.push({ beat: b + 0.5, sound: "T" });
+    }
+    return p;
+  };
+  var _patWithRim = () => {
+    const p = _patKitGroove();
+    [3.75, 7.75, 11.75, 15.75].forEach((beat) => p.push({ beat, sound: "K" }));
+    return p;
+  };
+  var _patSyncoKick = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "B" });
+      p.push({ beat: off + 1, sound: "Pf" });
+      p.push({ beat: off + 1.75, sound: "B" });
+      p.push({ beat: off + 2.5, sound: "B" });
+      p.push({ beat: off + 3, sound: "Pf" });
+    }
+    return p;
+  };
+  var _patOffbeatHat = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "B" });
+      p.push({ beat: off + 1, sound: "Pf" });
+      p.push({ beat: off + 2, sound: "B" });
+      p.push({ beat: off + 3, sound: "Pf" });
+      [0.5, 1.5, 2.5, 3.5].forEach((o) => p.push({ beat: off + o, sound: "T" }));
+    }
+    return p;
+  };
+  var _patFullFour = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "B" });
+      p.push({ beat: off + 0.5, sound: "T" });
+      p.push({ beat: off + 1, sound: "Pf" });
+      p.push({ beat: off + 1.5, sound: "T" });
+      p.push({ beat: off + 1.75, sound: "K" });
+      p.push({ beat: off + 2, sound: "B" });
+      p.push({ beat: off + 2.5, sound: "T" });
+      p.push({ beat: off + 2.75, sound: "B" });
+      p.push({ beat: off + 3, sound: "Pf" });
+      p.push({ beat: off + 3.5, sound: "T" });
+    }
+    return p;
+  };
+  var _combo = (a, b) => {
+    const result = a.filter((n) => n.beat < 8).map((n) => ({ ...n }));
+    b.filter((n) => n.beat < 8).forEach((n) => {
+      result.push({ beat: n.beat + 8, sound: n.sound });
+    });
+    return result;
+  };
+  var HERO_LESSONS = [
+    { name: "BOOM BASIC", desc: "Kick on every beat", tier: 1, pattern: _patBoom() },
+    { name: "BACKBEAT", desc: "Kick on 1 & 3, snare on 2 & 4", tier: 1, pattern: _patBackbeat() },
+    { name: "HI-HAT 8THS", desc: "Hat on every 8th note", tier: 1, pattern: _patHat8ths() },
+    { name: "KIT GROOVE", desc: "Boom + snare + 8th hats", tier: 2, pattern: _patKitGroove() },
+    { name: "WITH RIMSHOT", desc: "Kit groove + rim accents", tier: 2, pattern: _patWithRim() },
+    { name: "SYNCO KICKS", desc: "Off-beat kicks, snare 2 & 4", tier: 2, pattern: _patSyncoKick() },
+    { name: "OFF-BEAT HATS", desc: 'Hats on the "ands" only', tier: 2, pattern: _patOffbeatHat() },
+    { name: "FULL FOUR", desc: "All four sounds, busy groove", tier: 3, pattern: _patFullFour() },
+    { name: "COMBO 1+2", desc: "Boom basic \u2192 backbeat", tier: 3, pattern: _combo(_patBoom(), _patBackbeat()) },
+    { name: "COMBO 3+4", desc: "Hat 8ths \u2192 kit groove", tier: 3, pattern: _combo(_patHat8ths(), _patKitGroove()) },
+    { name: "COMBO 5+6", desc: "With rim \u2192 synco kicks", tier: 3, pattern: _combo(_patWithRim(), _patSyncoKick()) },
+    { name: "COMBO 7+8", desc: "Off-beat \u2192 full four", tier: 3, pattern: _combo(_patOffbeatHat(), _patFullFour()) }
+  ];
+  var BeatboxHero = ({
+    onAccuracyUpdate,
+    onLessonComplete,
+    evaluateEveryMs = 2500,
+    active = true,
+    bpm = 90,
+    lessonIdx = 0
+  }) => {
+    const canvasRef = (0, import_react.useRef)(null);
+    const stateRef = (0, import_react.useRef)(null);
+    const [, forceRender] = (0, import_react.useState)(0);
+    const rerender = () => forceRender((n) => n + 1 & 65535);
+    const bpmRef = (0, import_react.useRef)(bpm);
+    (0, import_react.useEffect)(() => {
+      bpmRef.current = bpm;
+    }, [bpm]);
+    const lessonIdxRef = (0, import_react.useRef)(lessonIdx);
+    (0, import_react.useEffect)(() => {
+      lessonIdxRef.current = lessonIdx;
+    }, [lessonIdx]);
+    const HIT_PERFECT_MS = 130;
+    const HIT_GOOD_MS = 220;
+    const LOOKAHEAD_MS = 2e3;
+    const REPS_TOTAL = 4;
+    const COMPLETE_HOLD_MS = 1800;
+    const TRACK_W = 320;
+    const TRACK_H = 380;
+    const STRIKE_Y = TRACK_H - 56;
+    const LANE_W = TRACK_W / 4;
+    const PIXELS_PER_SEC = STRIKE_Y / (LOOKAHEAD_MS / 1e3);
+    const initState = (config) => {
+      const lesson = HERO_LESSONS[config.lessonIdx] || HERO_LESSONS[0];
+      const beatMs = 6e4 / config.bpm;
+      const patternMs = 16 * beatMs;
+      const notes = [];
+      for (let rep = 0; rep < REPS_TOTAL; rep++) {
+        const isDemo = rep % 2 === 0;
+        const repStart = rep * patternMs;
+        lesson.pattern.forEach((n, i) => {
+          const lane = HERO_LANES.indexOf(n.sound);
+          notes.push({
+            id: `r${rep}n${i}`,
+            time: repStart + n.beat * beatMs,
+            sound: n.sound,
+            lane: lane >= 0 ? lane : 0,
+            isDemo,
+            rep,
+            hit: false,
+            judged: false,
+            hitTime: 0,
+            hitGrade: null
+          });
+        });
+      }
+      return {
+        lesson,
+        lessonIdx: config.lessonIdx,
+        bpm: config.bpm,
+        beatMs,
+        patternMs,
+        totalMs: REPS_TOTAL * patternMs,
+        notes,
+        startTime: performance.now(),
+        hits: 0,
+        misses: 0,
+        perfects: 0,
+        laneFlash: { B: 0, T: 0, K: 0, Pf: 0 },
+        audioScheduled: /* @__PURE__ */ new Set(),
+        phase: "demo",
+        completeAt: 0,
+        completionFired: false
+      };
+    };
+    const handleTap = (sound) => {
+      const state2 = stateRef.current;
+      if (!state2) return;
+      const now = performance.now();
+      const songT = now - state2.startTime;
+      const lane = HERO_LANES.indexOf(sound);
+      playHeroSound(sound);
+      state2.laneFlash[sound] = now;
+      if (state2.phase !== "player") {
+        rerender();
+        return;
+      }
+      let bestIdx = -1;
+      let bestDelta = Infinity;
+      for (let i = 0; i < state2.notes.length; i++) {
+        const n = state2.notes[i];
+        if (n.judged || n.isDemo) continue;
+        if (n.lane !== lane) continue;
+        const delta = Math.abs(n.time - songT);
+        if (delta < bestDelta && delta <= HIT_GOOD_MS) {
+          bestDelta = delta;
+          bestIdx = i;
+        }
+      }
+      if (bestIdx >= 0) {
+        const n = state2.notes[bestIdx];
+        n.hit = true;
+        n.judged = true;
+        n.hitTime = now;
+        const isPerfect = bestDelta <= HIT_PERFECT_MS;
+        n.hitGrade = isPerfect ? "perfect" : "good";
+        state2.hits++;
+        if (isPerfect) state2.perfects++;
+      }
+      rerender();
+    };
+    (0, import_react.useEffect)(() => {
+      if (!active) return;
+      const ctx = getAudioCtx();
+      if (ctx?.state === "suspended") ctx.resume().catch(() => {
+      });
+      stateRef.current = initState({ bpm: bpmRef.current, lessonIdx });
+      rerender();
+      let raf = 0;
+      const drawCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const c = canvas.getContext("2d");
+        const state2 = stateRef.current;
+        if (!state2) return;
+        const now = performance.now();
+        const songT = now - state2.startTime;
+        c.fillStyle = "#0c0a09";
+        c.fillRect(0, 0, TRACK_W, TRACK_H);
+        for (let i = 0; i < 4; i++) {
+          c.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
+          c.fillRect(i * LANE_W, 0, LANE_W, TRACK_H);
+        }
+        c.fillStyle = "#1c1917";
+        for (let i = 1; i < 4; i++) c.fillRect(i * LANE_W, 0, 1, TRACK_H);
+        HERO_LANES.forEach((sound, i) => {
+          const age = now - state2.laneFlash[sound];
+          if (age < 120) {
+            c.globalAlpha = (1 - age / 120) * 0.3;
+            c.fillStyle = HERO_SOUNDS[sound].color;
+            c.fillRect(i * LANE_W, 0, LANE_W, TRACK_H);
+            c.globalAlpha = 1;
+          }
+        });
+        c.fillStyle = "rgba(212, 160, 23, 0.12)";
+        c.fillRect(0, STRIKE_Y - 14, TRACK_W, 28);
+        c.fillStyle = "#D4A017";
+        c.fillRect(0, STRIKE_Y - 2, TRACK_W, 4);
+        state2.notes.forEach((n) => {
+          const dt = n.time - songT;
+          const y = STRIKE_Y - dt * PIXELS_PER_SEC / 1e3;
+          if (y < -40 || y > TRACK_H + 40) return;
+          const x = n.lane * LANE_W;
+          const meta = HERO_SOUNDS[n.sound];
+          if (n.hit && now - n.hitTime < 260) {
+            const a = (now - n.hitTime) / 260;
+            c.globalAlpha = 1 - a;
+            c.fillStyle = n.hitGrade === "perfect" ? "#D4A017" : "#22d3ee";
+            c.fillRect(x + 2, STRIKE_Y - 16, LANE_W - 4, 32);
+            c.globalAlpha = 1;
+            return;
+          }
+          if (n.judged) return;
+          const pad = 4;
+          const noteH = 24;
+          if (n.isDemo) {
+            c.globalAlpha = 0.18;
+            c.fillStyle = meta.color;
+            c.fillRect(x + pad, y - noteH / 2, LANE_W - pad * 2, noteH);
+            c.globalAlpha = 0.8;
+            c.strokeStyle = meta.color;
+            c.lineWidth = 2;
+            c.strokeRect(x + pad, y - noteH / 2, LANE_W - pad * 2, noteH);
+            c.globalAlpha = 1;
+          } else {
+            c.fillStyle = meta.color;
+            c.fillRect(x + pad, y - noteH / 2, LANE_W - pad * 2, noteH);
+            c.fillStyle = "rgba(255,255,255,0.30)";
+            c.fillRect(x + pad, y - noteH / 2, LANE_W - pad * 2, 4);
+            c.fillStyle = "rgba(0,0,0,0.65)";
+            c.font = "bold 11px monospace";
+            c.textAlign = "center";
+            c.fillText(meta.label, x + LANE_W / 2, y + 4);
+          }
+        });
+        const phaseLabel2 = state2.phase === "complete" ? "LESSON COMPLETE" : state2.phase === "demo" ? "DEMO \xB7 LISTEN" : "YOUR TURN";
+        const phaseColor = state2.phase === "complete" ? "#22c55e" : state2.phase === "demo" ? "#22d3ee" : "#D4A017";
+        c.fillStyle = phaseColor;
+        c.font = 'bold 14px "Bebas Neue", "Oswald", sans-serif';
+        c.textAlign = "center";
+        c.fillText(phaseLabel2, TRACK_W / 2, 22);
+      };
+      const tick = () => {
+        const state2 = stateRef.current;
+        if (!state2) {
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+        const now = performance.now();
+        const songT = now - state2.startTime;
+        if (songT >= state2.totalMs && state2.phase !== "complete") {
+          state2.phase = "complete";
+          state2.completeAt = now;
+          const total = state2.hits + state2.misses;
+          const finalAcc = total > 0 ? state2.hits / total : 0;
+          if (!state2.completionFired) {
+            state2.completionFired = true;
+            onLessonComplete?.(state2.lessonIdx, finalAcc);
+          }
+          rerender();
+        } else if (state2.phase !== "complete") {
+          const repIdx = Math.floor(songT / state2.patternMs);
+          const newPhase = repIdx % 2 === 0 ? "demo" : "player";
+          if (newPhase !== state2.phase) {
+            state2.phase = newPhase;
+            rerender();
+          }
+        }
+        if (state2.phase === "complete" && now - state2.completeAt > COMPLETE_HOLD_MS) {
+          stateRef.current = initState({ bpm: bpmRef.current, lessonIdx: lessonIdxRef.current });
+          rerender();
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+        for (let i = 0; i < state2.notes.length; i++) {
+          const n = state2.notes[i];
+          if (n.judged || n.hit || n.isDemo) continue;
+          if (n.time + HIT_GOOD_MS < songT) {
+            n.judged = true;
+            state2.misses++;
+          }
+        }
+        for (let i = 0; i < state2.notes.length; i++) {
+          const n = state2.notes[i];
+          if (!n.isDemo) continue;
+          if (state2.audioScheduled.has(n.id)) continue;
+          if (n.time > songT) continue;
+          if (songT - n.time < 200) {
+            playHeroSound(n.sound);
+            state2.laneFlash[n.sound] = now;
+          }
+          state2.audioScheduled.add(n.id);
+        }
+        drawCanvas();
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      const evalInt = setInterval(() => {
+        const state2 = stateRef.current;
+        if (!state2) return;
+        const total = state2.hits + state2.misses;
+        if (total === 0) return;
+        onAccuracyUpdate?.(state2.hits / total, state2.hits, total);
+      }, evaluateEveryMs);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearInterval(evalInt);
+      };
+    }, [active, lessonIdx]);
+    const state = stateRef.current;
+    const totalJudged = state ? state.hits + state.misses : 0;
+    const accuracyPct = totalJudged > 0 ? Math.round(state.hits / totalJudged * 100) : 0;
+    const phaseLabel = state?.phase === "complete" ? "COMPLETE" : state?.phase === "player" ? "YOUR TURN" : "DEMO";
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(
+      "canvas",
+      {
+        ref: canvasRef,
+        width: TRACK_W,
+        height: TRACK_H,
+        className: "w-full block border-2 border-stone-800",
+        style: { aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: "#0c0a09", imageRendering: "auto" }
+      }
+    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, HERO_LANES.map((sound) => {
+      const meta = HERO_SOUNDS[sound];
+      return /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          key: sound,
+          onPointerDown: (e) => {
+            e.preventDefault();
+            handleTap(sound);
+          },
+          className: "py-5 border-2 active:scale-95 transition-transform select-none touch-none",
+          style: {
+            borderColor: meta.color,
+            background: `${meta.color}1f`,
+            color: meta.color,
+            fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+            fontSize: 22,
+            letterSpacing: "0.15em"
+          }
+        },
+        meta.label
+      );
+    })), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between items-center text-[10px] uppercase tracking-widest text-stone-500 px-1" }, /* @__PURE__ */ import_react.default.createElement("span", null, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, phaseLabel)), /* @__PURE__ */ import_react.default.createElement("span", null, "HITS ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, state?.hits || 0), " \xB7 MISS ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-red-500" }, state?.misses || 0)), /* @__PURE__ */ import_react.default.createElement("span", null, "ACC ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, accuracyPct, "%"))));
+  };
   var SoundStudio = ({ activeSlot, showToast }) => {
     const [permission, setPermission] = (0, import_react.useState)("idle");
     const [errorDetail, setErrorDetail] = (0, import_react.useState)("");
@@ -2983,6 +3356,21 @@ window.exports = window.module.exports;
               statGain = 2;
               bonusText = " (+1 bonus)";
             }
+          } else if (trainStat === "tec") {
+            const acc = accuracyRef.current || 0;
+            if (acc >= 0.8) {
+              statGain = 3;
+              bonusText = " (locked in!)";
+            } else if (acc >= 0.5) {
+              statGain = 2;
+              bonusText = " (+1 bonus)";
+            }
+            const bpmMult = Math.max(1, (charRef.current.tecBpm || 90) / 90);
+            if (bpmMult > 1) {
+              const before = statGain;
+              statGain = Math.round(statGain * bpmMult);
+              if (statGain > before) bonusText += ` (\xD7${bpmMult.toFixed(2)} BPM)`;
+            }
           }
           setChar((cc) => {
             const updated = {
@@ -3120,7 +3508,91 @@ window.exports = window.module.exports;
         className: "flex-1 py-2 border-2 border-stone-700 bg-stone-900/50 text-stone-400 text-xs uppercase tracking-widest hover:border-stone-600 transition-all"
       },
       "\u25C0 Back to AFK"
-    ))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "5 blocks \u2192 +1 ", trainConfig[trainStat].name, trainStat === "mus" ? " (up to +3 with tuner)" : ""), /* @__PURE__ */ import_react.default.createElement(ProgressBar, { block: trainActivity.block, total: 5, label: `Block ${trainActivity.block}/5`, color: trainConfig[trainStat].color }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-wider text-stone-500" }, /* @__PURE__ */ import_react.default.createElement("span", null, "Stat increases: ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, trainActivity.rewardsEarned)), /* @__PURE__ */ import_react.default.createElement("span", null, "1 block = 10 game min (", playMode ? "2s \xB7 slow" : "0.5s", ")")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "danger", onClick: () => trainActivity.stop("Training stopped"), className: "w-full py-3" }, "STOP \u25A0")))), tab === "studio" && /* @__PURE__ */ import_react.default.createElement(SoundStudio, { activeSlot, showToast }), tab === "eat" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Fridge \u2014 wholefood plant-based" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, Object.entries(FOOD).map(([k, f]) => {
+    ))), trainStat === "tec" && !playMode && /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onClick: () => {
+          accuracyRef.current = 0;
+          setPlayMode(true);
+        },
+        className: "w-full p-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-900/40 hover:to-amber-800/30 transition-all group"
+      },
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-3xl" }, "\u{1F3AE}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-left flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-base tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "BEATBOX HERO \xB7 TAP TO START"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-stone-400 uppercase tracking-wider mt-0.5" }, "Hit the notes in time \u2192 up to \xD73 stat gain")), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-xl group-hover:translate-x-1 transition-transform" }, "\u25B6"))
+    ), trainStat === "tec" && playMode && (() => {
+      const completed = char.tecLessonsCompleted || 0;
+      const currentIdx = Math.min(char.tecCurrentLesson || 0, completed);
+      const currentLesson = HERO_LESSONS[currentIdx] || HERO_LESSONS[0];
+      const bpm = char.tecBpm || 90;
+      const bpmMult = Math.max(1, bpm / 90);
+      const stepBpm = (delta) => setChar((c) => ({ ...c, tecBpm: Math.max(60, Math.min(140, (c.tecBpm || 90) + delta)) }));
+      return /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "overflow-x-auto -mx-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1.5 px-1 pb-1" }, HERO_LESSONS.map((lesson, i) => {
+        const unlocked = i <= completed;
+        const selected = i === currentIdx;
+        return /* @__PURE__ */ import_react.default.createElement(
+          "button",
+          {
+            key: i,
+            disabled: !unlocked,
+            onClick: () => setChar((c) => ({ ...c, tecCurrentLesson: i })),
+            className: `flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${selected ? "border-amber-500 bg-amber-500/10 text-amber-500" : unlocked ? "border-stone-700 text-stone-400 hover:border-amber-500/50" : "border-stone-800 text-stone-600 opacity-40"}`
+          },
+          !unlocked && "\u{1F512} ",
+          "#",
+          i + 1
+        );
+      }))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center -mt-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-sm tracking-widest", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "#", currentIdx + 1, " ", currentLesson.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, currentLesson.desc)), /* @__PURE__ */ import_react.default.createElement(
+        BeatboxHero,
+        {
+          onAccuracyUpdate: handleAccuracy,
+          onLessonComplete: (idx, accuracy) => {
+            setChar((c) => {
+              const next = { ...c };
+              if (idx >= (c.tecLessonsCompleted || 0)) {
+                next.tecLessonsCompleted = Math.min(HERO_LESSONS.length, idx + 1);
+              }
+              if (idx + 1 < HERO_LESSONS.length) {
+                next.tecCurrentLesson = idx + 1;
+              }
+              return next;
+            });
+          },
+          evaluateEveryMs: 2500,
+          active: trainActivity.active,
+          bpm,
+          lessonIdx: currentIdx
+        }
+      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-center gap-3" }, /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onPointerDown: (e) => {
+            e.preventDefault();
+            stepBpm(-5);
+          },
+          className: "w-10 h-10 border-2 border-stone-700 text-amber-500 text-xl active:scale-95 hover:border-amber-500/50 transition-all"
+        },
+        "\u2212"
+      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center min-w-[90px]" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-2xl tracking-wider leading-none", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, bpm, " BPM"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] text-stone-500 uppercase tracking-widest mt-0.5" }, bpmMult > 1 ? `\xD7${bpmMult.toFixed(2)} bonus` : "normal pace")), /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onPointerDown: (e) => {
+            e.preventDefault();
+            stepBpm(5);
+          },
+          className: "w-10 h-10 border-2 border-stone-700 text-amber-500 text-xl active:scale-95 hover:border-amber-500/50 transition-all"
+        },
+        "+"
+      )), /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onClick: () => {
+            setPlayMode(false);
+            accuracyRef.current = 0;
+          },
+          className: "w-full py-2 border-2 border-stone-700 bg-stone-900/50 text-stone-400 text-xs uppercase tracking-widest hover:border-stone-600 transition-all"
+        },
+        "\u25C0 Back to AFK"
+      ));
+    })(), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "5 blocks \u2192 +1 ", trainConfig[trainStat].name, trainStat === "mus" ? " (up to +3 with tuner)" : trainStat === "tec" ? " (up to +3 with Beatbox Hero, \xD7BPM bonus)" : ""), /* @__PURE__ */ import_react.default.createElement(ProgressBar, { block: trainActivity.block, total: 5, label: `Block ${trainActivity.block}/5`, color: trainConfig[trainStat].color }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-wider text-stone-500" }, /* @__PURE__ */ import_react.default.createElement("span", null, "Stat increases: ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, trainActivity.rewardsEarned)), /* @__PURE__ */ import_react.default.createElement("span", null, "1 block = 10 game min (", playMode ? "2s \xB7 slow" : "0.5s", ")")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "danger", onClick: () => trainActivity.stop("Training stopped"), className: "w-full py-3" }, "STOP \u25A0")))), tab === "studio" && /* @__PURE__ */ import_react.default.createElement(SoundStudio, { activeSlot, showToast }), tab === "eat" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Fridge \u2014 wholefood plant-based" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, Object.entries(FOOD).map(([k, f]) => {
       const foodIcon = k === "espresso" ? "coffee" : "star";
       return /* @__PURE__ */ import_react.default.createElement("div", { key: k, className: "flex items-center gap-3 p-2 border border-stone-800 bg-stone-900/30" }, /* @__PURE__ */ import_react.default.createElement(PixelIcon, { name: foodIcon, size: 20 }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-200 text-sm" }, f.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, f.energy ? `${f.energy >= 0 ? "+" : ""}${f.energy}\u26A1 ` : "", f.hunger ? `${f.hunger >= 0 ? "+" : ""}${f.hunger}\u{1F374} ` : "", f.mood ? `${f.mood >= 0 ? "+" : ""}${f.mood}\u2665` : "")), /* @__PURE__ */ import_react.default.createElement(Btn, { onClick: () => eat(k), disabled: char.cash < f.cost }, "$", f.cost));
     }))), tab === "rest" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "The Couch" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-400 text-xs uppercase tracking-wider" }, "Sleep until 6 AM. Restores full energy & advances a day.", char.minutes < 720 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 mt-1" }, "It's still daytime \u2014 are you sure?")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: sleep, className: "w-full py-3" }, "SLEEP \u{1F4A4}"))));
