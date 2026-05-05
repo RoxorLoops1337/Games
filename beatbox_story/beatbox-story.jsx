@@ -66,6 +66,8 @@ const initialChar = () => ({
   tecLessonsCompleted: 0, // count of lessons completed (lesson N unlocked = (N-1) <= completed)
   tecCurrentLesson: 0, // currently selected lesson index
   tecBpm: 90, // current BPM for the rhythm game
+  oriBpm: 100, // BPM for the originality sequencer
+  oriPattern: null, // sequencer state: { tracks: [{key, cells}] } — null means use default 4-hero seed
   created: false,
 });
 
@@ -1739,45 +1741,131 @@ const _patOffbeatHat = () => {
   }
   return p;
 };
-const _patFullFour = () => {
+// Lessons 6-12: each introduces a catalog sound that must be owned to unlock.
+// `lanes` overrides the default 4 lanes for that lesson; the K (rimshot) lane
+// is typically swapped for the lesson's required sound.
+const _patL6 = () => { // LIPROLL
   const p = [];
   for (let bar = 0; bar < 4; bar++) {
     const off = bar * 4;
-    p.push({ beat: off + 0,    sound: 'B'  });
-    p.push({ beat: off + 0.5,  sound: 'T'  });
-    p.push({ beat: off + 1,    sound: 'Pf' });
-    p.push({ beat: off + 1.5,  sound: 'T'  });
-    p.push({ beat: off + 1.75, sound: 'K'  });
-    p.push({ beat: off + 2,    sound: 'B'  });
-    p.push({ beat: off + 2.5,  sound: 'T'  });
-    p.push({ beat: off + 2.75, sound: 'B'  });
-    p.push({ beat: off + 3,    sound: 'Pf' });
-    p.push({ beat: off + 3.5,  sound: 'T'  });
+    p.push({ beat: off + 0,    sound: 'B'        });
+    p.push({ beat: off + 0.5,  sound: 'T'        });
+    p.push({ beat: off + 1,    sound: 'Pf'       });
+    p.push({ beat: off + 1.5,  sound: 'lip_roll' });
+    p.push({ beat: off + 2,    sound: 'B'        });
+    p.push({ beat: off + 2.5,  sound: 'T'        });
+    p.push({ beat: off + 3,    sound: 'Pf'       });
+    p.push({ beat: off + 3.5,  sound: 'lip_roll' });
   }
   return p;
 };
-// Combo: take first 8 beats of A, then first 8 beats of B (shifted to beats 8..15)
-const _combo = (a, b) => {
-  const result = a.filter(n => n.beat < 8).map(n => ({ ...n }));
-  b.filter(n => n.beat < 8).forEach(n => {
-    result.push({ beat: n.beat + 8, sound: n.sound });
-  });
-  return result;
+const _patL7 = () => { // 808 THROAT
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0,    sound: 'throat_kick' });
+    p.push({ beat: off + 0.5,  sound: 'T' });
+    p.push({ beat: off + 1,    sound: 'Pf' });
+    p.push({ beat: off + 1.5,  sound: 'T' });
+    p.push({ beat: off + 1.75, sound: 'throat_kick' });
+    p.push({ beat: off + 2,    sound: 'throat_kick' });
+    p.push({ beat: off + 2.5,  sound: 'T' });
+    p.push({ beat: off + 3,    sound: 'Pf' });
+    p.push({ beat: off + 3.5,  sound: 'T' });
+  }
+  return p;
+};
+const _patL8 = () => { // FAST HATS
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0, sound: 'B' });
+    p.push({ beat: off + 1, sound: 'Pf' });
+    p.push({ beat: off + 2, sound: 'B' });
+    p.push({ beat: off + 3, sound: 'Pf' });
+    for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: 'fast_hats' });
+  }
+  return p;
+};
+const _patL9 = () => { // INWARD K SNARE
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0, sound: 'B' });
+    p.push({ beat: off + 1, sound: 'inward_k' });
+    p.push({ beat: off + 2, sound: 'B' });
+    p.push({ beat: off + 3, sound: 'inward_k' });
+    for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: 'T' });
+    p.push({ beat: off + 0.75, sound: 'K' });
+    p.push({ beat: off + 2.75, sound: 'K' });
+  }
+  return p;
+};
+const _patL10 = () => { // INWARD BASS
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0,    sound: 'inward_bass' });
+    p.push({ beat: off + 1,    sound: 'Pf' });
+    p.push({ beat: off + 1.75, sound: 'inward_bass' });
+    p.push({ beat: off + 2,    sound: 'inward_bass' });
+    p.push({ beat: off + 3,    sound: 'Pf' });
+    for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: 'T' });
+  }
+  return p;
+};
+const _patL11 = () => { // CLICK ROLL
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0, sound: 'B' });
+    p.push({ beat: off + 1, sound: 'Pf' });
+    p.push({ beat: off + 2, sound: 'B' });
+    p.push({ beat: off + 3, sound: 'Pf' });
+    for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: 'T' });
+    p.push({ beat: off + 3.5, sound: 'click_roll' });
+  }
+  return p;
+};
+const _patL12 = () => { // UVULAR FINALE
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0,    sound: 'uvular_roll' });
+    p.push({ beat: off + 1,    sound: 'inward_bass' });
+    p.push({ beat: off + 1.75, sound: 'click_roll'  });
+    p.push({ beat: off + 2,    sound: 'uvular_roll' });
+    p.push({ beat: off + 2.5,  sound: 'click_roll'  });
+    p.push({ beat: off + 3,    sound: 'inward_bass' });
+    p.push({ beat: off + 3.75, sound: 'click_roll'  });
+    for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: 'fast_hats' });
+  }
+  return p;
 };
 
 const HERO_LESSONS = [
-  { name: 'BOOM BASIC',     desc: 'Kick on every beat',           tier: 1, pattern: _patBoom() },
-  { name: 'BACKBEAT',       desc: 'Kick on 1 & 3, snare on 2 & 4', tier: 1, pattern: _patBackbeat() },
-  { name: 'HI-HAT 8THS',    desc: 'Hat on every 8th note',         tier: 1, pattern: _patHat8ths() },
-  { name: 'KIT GROOVE',     desc: 'Boom + snare + 8th hats',       tier: 2, pattern: _patKitGroove() },
-  { name: 'WITH RIMSHOT',   desc: 'Kit groove + rim accents',      tier: 2, pattern: _patWithRim() },
-  { name: 'SYNCO KICKS',    desc: 'Off-beat kicks, snare 2 & 4',   tier: 2, pattern: _patSyncoKick() },
-  { name: 'OFF-BEAT HATS',  desc: 'Hats on the "ands" only',       tier: 2, pattern: _patOffbeatHat() },
-  { name: 'FULL FOUR',      desc: 'All four sounds, busy groove',  tier: 3, pattern: _patFullFour() },
-  { name: 'COMBO 1+2',      desc: 'Boom basic → backbeat',         tier: 3, pattern: _combo(_patBoom(), _patBackbeat()) },
-  { name: 'COMBO 3+4',      desc: 'Hat 8ths → kit groove',         tier: 3, pattern: _combo(_patHat8ths(), _patKitGroove()) },
-  { name: 'COMBO 5+6',      desc: 'With rim → synco kicks',        tier: 3, pattern: _combo(_patWithRim(), _patSyncoKick()) },
-  { name: 'COMBO 7+8',      desc: 'Off-beat → full four',          tier: 3, pattern: _combo(_patOffbeatHat(), _patFullFour()) },
+  // Lessons 1-5 use only the 4 hero sounds (always unlocked by progression)
+  { name: 'BOOM BASIC',   desc: 'Kick on every beat',            tier: 1, pattern: _patBoom() },
+  { name: 'BACKBEAT',     desc: 'Kick on 1 & 3, snare on 2 & 4', tier: 1, pattern: _patBackbeat() },
+  { name: 'HI-HAT 8THS',  desc: 'Hat on every 8th note',         tier: 1, pattern: _patHat8ths() },
+  { name: 'KIT GROOVE',   desc: 'Boom + snare + 8th hats',       tier: 2, pattern: _patKitGroove() },
+  { name: 'WITH RIMSHOT', desc: 'Kit groove + rim accents',      tier: 2, pattern: _patWithRim() },
+  // Lessons 6-12 each gate on owning a specific catalog sound (buy it in the shop).
+  { name: 'LIP ROLL DRILL', desc: 'Lip rolls on the offbeats',    tier: 2,
+    requires: 'lip_roll',    lanes: ['B', 'T', 'lip_roll', 'Pf'],     pattern: _patL6() },
+  { name: '808 THROAT',     desc: 'Heavy throat-kick groove',     tier: 2,
+    requires: 'throat_kick', lanes: ['throat_kick', 'T', 'K', 'Pf'],  pattern: _patL7() },
+  { name: 'FAST HATS',      desc: 'TKs doubling the hi-hat lane', tier: 2,
+    requires: 'fast_hats',   lanes: ['B', 'fast_hats', 'K', 'Pf'],    pattern: _patL8() },
+  { name: 'INWARD SNARE',   desc: 'Alternate snare voice',        tier: 2,
+    requires: 'inward_k',    lanes: ['B', 'T', 'K', 'inward_k'],      pattern: _patL9() },
+  { name: 'INWARD BASS',    desc: 'Deep inward bass kick',        tier: 3,
+    requires: 'inward_bass', lanes: ['inward_bass', 'T', 'K', 'Pf'],  pattern: _patL10() },
+  { name: 'CLICK ROLL',     desc: 'Click roll fills',             tier: 3,
+    requires: 'click_roll',  lanes: ['B', 'T', 'click_roll', 'Pf'],   pattern: _patL11() },
+  { name: 'UVULAR FINALE',  desc: 'All four advanced sounds',     tier: 4,
+    requires: 'uvular_roll', lanes: ['uvular_roll', 'fast_hats', 'click_roll', 'inward_bass'],
+    pattern: _patL12() },
 ];
 
 const BeatboxHero = ({
@@ -1815,6 +1903,7 @@ const BeatboxHero = ({
 
   const initState = (config) => {
     const lesson = HERO_LESSONS[config.lessonIdx] || HERO_LESSONS[0];
+    const lanes = lesson.lanes || HERO_LANES;
     const beatMs = 60000 / config.bpm;
     const patternMs = 16 * beatMs;
 
@@ -1823,7 +1912,7 @@ const BeatboxHero = ({
       const isDemo = rep % 2 === 0;
       const repStart = rep * patternMs;
       lesson.pattern.forEach((n, i) => {
-        const lane = HERO_LANES.indexOf(n.sound);
+        const lane = lanes.indexOf(n.sound);
         notes.push({
           id: `r${rep}n${i}`,
           time: repStart + n.beat * beatMs,
@@ -1839,10 +1928,14 @@ const BeatboxHero = ({
       });
     }
 
+    const laneFlash = {};
+    lanes.forEach(k => { laneFlash[k] = 0; });
+
     return {
       lesson,
       lessonIdx: config.lessonIdx,
       bpm: config.bpm,
+      lanes,
       beatMs,
       patternMs,
       totalMs: REPS_TOTAL * patternMs,
@@ -1851,7 +1944,7 @@ const BeatboxHero = ({
       hits: 0,
       misses: 0,
       perfects: 0,
-      laneFlash: { B: 0, T: 0, K: 0, Pf: 0 },
+      laneFlash,
       audioScheduled: new Set(),
       phase: 'demo',
       completeAt: 0,
@@ -1864,9 +1957,9 @@ const BeatboxHero = ({
     if (!state) return;
     const now = performance.now();
     const songT = now - state.startTime;
-    const lane = HERO_LANES.indexOf(sound);
+    const lane = state.lanes.indexOf(sound);
 
-    playHeroSound(sound);
+    playGameSound(sound);
     state.laneFlash[sound] = now;
 
     if (state.phase !== 'player') { rerender(); return; }
@@ -1931,11 +2024,12 @@ const BeatboxHero = ({
       for (let i = 1; i < 4; i++) c.fillRect(i * LANE_W, 0, 1, TRACK_H);
 
       // Lane flash overlay (~120ms fade)
-      HERO_LANES.forEach((sound, i) => {
-        const age = now - state.laneFlash[sound];
+      state.lanes.forEach((sound, i) => {
+        const age = now - (state.laneFlash[sound] || 0);
         if (age < 120) {
+          const meta = getSoundDisplay(sound);
           c.globalAlpha = (1 - age / 120) * 0.30;
-          c.fillStyle = HERO_SOUNDS[sound].color;
+          c.fillStyle = meta?.color || '#D4A017';
           c.fillRect(i * LANE_W, 0, LANE_W, TRACK_H);
           c.globalAlpha = 1;
         }
@@ -1954,7 +2048,7 @@ const BeatboxHero = ({
         if (y < -40 || y > TRACK_H + 40) return;
 
         const x = n.lane * LANE_W;
-        const meta = HERO_SOUNDS[n.sound];
+        const meta = getSoundDisplay(n.sound) || { color: '#D4A017', label: '?' };
 
         // Hit splash
         if (n.hit && (now - n.hitTime) < 260) {
@@ -2054,7 +2148,7 @@ const BeatboxHero = ({
         if (state.audioScheduled.has(n.id)) continue;
         if (n.time > songT) continue;
         if (songT - n.time < 200) {
-          playHeroSound(n.sound);
+          playGameSound(n.sound);
           state.laneFlash[n.sound] = now;
         }
         state.audioScheduled.add(n.id);
@@ -2096,12 +2190,12 @@ const BeatboxHero = ({
         className="w-full block border-2 border-stone-800"
         style={{ aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: '#0c0a09', imageRendering: 'auto' }} />
 
-      {/* Drum buttons */}
+      {/* Drum buttons — pulled from the current lesson's lanes (defaults to hero 4) */}
       <div className="grid grid-cols-4 gap-1">
-        {HERO_LANES.map(sound => {
-          const meta = HERO_SOUNDS[sound];
+        {(state?.lanes || HERO_LANES).map((sound, idx) => {
+          const meta = getSoundDisplay(sound) || { color: '#D4A017', label: '?' };
           return (
-            <button key={sound}
+            <button key={sound + idx}
               onPointerDown={(e) => { e.preventDefault(); handleTap(sound); }}
               className="py-5 border-2 active:scale-95 transition-transform select-none touch-none"
               style={{
@@ -2128,12 +2222,272 @@ const BeatboxHero = ({
   );
 };
 
+// ============ ORIGINALITY SEQUENCER ============
+// 16-step beat sequencer used during originality training. Tracks are dynamic —
+// 4 hero sounds by default, plus any owned catalog sounds. Plays in a loop while
+// active and reports a "creativity" score (0..1) every evaluateEveryMs so the
+// parent's onReward can scale ori stat gain.
+// Pattern persists per-character via char.oriPattern.
+
+const SEQ_STEPS = 16;
+
+const _seqDefault = () => ({
+  tracks: [
+    { key: 'B',  cells: [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false] },
+    { key: 'Pf', cells: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
+    { key: 'T',  cells: Array(SEQ_STEPS).fill(false).map((_, i) => i % 2 === 0) },
+    { key: 'K',  cells: Array(SEQ_STEPS).fill(false) },
+  ],
+});
+
+const Sequencer = ({
+  onCreativityUpdate,
+  evaluateEveryMs = 2500,
+  active = true,
+  bpm = 100,
+  pattern = null,
+  ownedSounds = [],
+  onPatternChange,
+  onBpmChange,
+}) => {
+  const [workPattern, setWorkPattern] = useState(() => {
+    if (pattern && Array.isArray(pattern.tracks) && pattern.tracks.length > 0) return pattern;
+    return _seqDefault();
+  });
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [showAddTrack, setShowAddTrack] = useState(false);
+
+  const stepRef = useRef(-1);
+  const intervalRef = useRef(null);
+  const patternRef = useRef(workPattern);
+  useEffect(() => { patternRef.current = workPattern; }, [workPattern]);
+  const bpmRef = useRef(bpm);
+  useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+
+  const computeCreativity = () => {
+    const tracks = patternRef.current?.tracks || [];
+    let activeCells = 0, usedSounds = 0;
+    tracks.forEach(t => {
+      const c = t.cells.filter(Boolean).length;
+      if (c > 0) usedSounds++;
+      activeCells += c;
+    });
+    const variety = Math.min(1, usedSounds / 4) * 0.5;
+    const density = Math.min(1, activeCells / 24) * 0.5;
+    return variety + density;
+  };
+
+  // Playback loop — restarts when active or bpm changes
+  useEffect(() => {
+    if (!active) {
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      stepRef.current = -1;
+      setCurrentStep(-1);
+      return;
+    }
+    const ctx = getAudioCtx();
+    if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
+
+    const tick = () => {
+      stepRef.current = (stepRef.current + 1) % SEQ_STEPS;
+      setCurrentStep(stepRef.current);
+      const tracks = patternRef.current?.tracks || [];
+      tracks.forEach(t => {
+        if (t.cells[stepRef.current]) playGameSound(t.key);
+      });
+    };
+    const stepMs = 60000 / Math.max(40, bpmRef.current) / 4;
+    intervalRef.current = setInterval(tick, stepMs);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); intervalRef.current = null; };
+  }, [active, bpm]);
+
+  // Periodic creativity reporting
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => onCreativityUpdate?.(computeCreativity()), evaluateEveryMs);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, evaluateEveryMs]);
+
+  const updatePattern = (mut) => {
+    setWorkPattern(p => {
+      const next = mut(p);
+      onPatternChange?.(next);
+      return next;
+    });
+  };
+
+  const toggleCell = (trackIdx, step) => {
+    updatePattern(p => ({
+      ...p,
+      tracks: p.tracks.map((t, i) => i === trackIdx
+        ? { ...t, cells: t.cells.map((c, j) => j === step ? !c : c) }
+        : t),
+    }));
+  };
+  const addTrack = (key) => {
+    updatePattern(p => p.tracks.some(t => t.key === key)
+      ? p
+      : ({ ...p, tracks: [...p.tracks, { key, cells: Array(SEQ_STEPS).fill(false) }] }));
+    setShowAddTrack(false);
+  };
+  const removeTrack = (trackIdx) => {
+    updatePattern(p => ({ ...p, tracks: p.tracks.filter((_, i) => i !== trackIdx) }));
+  };
+  const clearPattern = () => {
+    updatePattern(p => ({ ...p, tracks: p.tracks.map(t => ({ ...t, cells: Array(SEQ_STEPS).fill(false) })) }));
+  };
+
+  const usedKeys = new Set(workPattern.tracks.map(t => t.key));
+  const heroDefaults = new Set(Object.values(HERO_SOUNDS).map(m => m.defaultSound).filter(Boolean));
+  const availableSounds = [
+    ...Object.keys(HERO_SOUNDS),
+    ...ownedSounds.filter(k => !HERO_SOUNDS[k] && SOUND_CATALOG[k] && !heroDefaults.has(k)),
+  ].filter(k => !usedKeys.has(k));
+
+  const activeCells = workPattern.tracks.reduce((a, t) => a + t.cells.filter(Boolean).length, 0);
+
+  return (
+    <div className="space-y-2">
+      {/* Step grid */}
+      <div className="space-y-1">
+        {workPattern.tracks.map((track, trackIdx) => {
+          const meta = getSoundDisplay(track.key);
+          if (!meta) return null;
+          return (
+            <div key={track.key + trackIdx} className="flex items-center gap-1">
+              <div className="w-14 flex-shrink-0 flex items-center gap-0.5">
+                <button onPointerDown={(e) => { e.preventDefault(); removeTrack(trackIdx); }}
+                  className="text-stone-600 text-sm hover:text-red-500 px-1 leading-none">×</button>
+                <div className="flex-1 h-7 border flex items-center justify-center text-[10px] font-mono"
+                  style={{ borderColor: meta.color, color: meta.color, background: `${meta.color}15` }}
+                  title={meta.name}>
+                  {meta.label}
+                </div>
+              </div>
+              <div className="flex gap-[2px] flex-1">
+                {track.cells.map((on, step) => {
+                  const isCurrent = step === currentStep;
+                  const isBeat = step % 4 === 0;
+                  return (
+                    <button key={step}
+                      onPointerDown={(e) => { e.preventDefault(); toggleCell(trackIdx, step); }}
+                      className={`flex-1 h-7 border transition-colors ${
+                        isCurrent ? 'ring-1 ring-amber-500' : ''
+                      }`}
+                      style={on
+                        ? { borderColor: meta.color, background: meta.color }
+                        : { borderColor: isBeat ? '#44403c' : '#292524', background: isBeat ? '#1c1917' : '#0c0a09' }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add-track UI */}
+      {availableSounds.length > 0 && (
+        !showAddTrack ? (
+          <button onPointerDown={(e) => { e.preventDefault(); setShowAddTrack(true); }}
+            className="w-full py-1.5 border-2 border-dashed border-stone-700 text-stone-500 text-[10px] uppercase tracking-widest hover:border-amber-500/50 hover:text-amber-500">
+            + Add track
+          </button>
+        ) : (
+          <div className="space-y-1 border border-stone-800 p-2">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500">Pick a sound:</div>
+            <div className="flex flex-wrap gap-1">
+              {availableSounds.map(k => {
+                const m = getSoundDisplay(k);
+                if (!m) return null;
+                return (
+                  <button key={k}
+                    onPointerDown={(e) => { e.preventDefault(); addTrack(k); }}
+                    className="px-2 py-1 border-2 text-[10px] uppercase tracking-widest"
+                    style={{ borderColor: m.color, color: m.color }}>
+                    {m.label} · {m.name}
+                  </button>
+                );
+              })}
+              <button onPointerDown={(e) => { e.preventDefault(); setShowAddTrack(false); }}
+                className="px-2 py-1 border border-stone-700 text-stone-500 text-[10px] uppercase tracking-widest">
+                cancel
+              </button>
+            </div>
+          </div>
+        )
+      )}
+
+      {/* BPM + clear */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button onPointerDown={(e) => { e.preventDefault(); onBpmChange?.(Math.max(60, bpm - 5)); }}
+            className="w-8 h-8 border-2 border-stone-700 text-amber-500 active:scale-95">−</button>
+          <div className="text-center min-w-[80px]">
+            <div className="text-amber-500 text-lg tracking-wider leading-none" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {bpm} BPM
+            </div>
+            <div className="text-[9px] text-stone-500 uppercase tracking-widest mt-0.5">
+              {activeCells} hits · {workPattern.tracks.filter(t => t.cells.some(Boolean)).length} sounds
+            </div>
+          </div>
+          <button onPointerDown={(e) => { e.preventDefault(); onBpmChange?.(Math.min(180, bpm + 5)); }}
+            className="w-8 h-8 border-2 border-stone-700 text-amber-500 active:scale-95">+</button>
+        </div>
+        <button onPointerDown={(e) => { e.preventDefault(); clearPattern(); }}
+          className="px-3 py-1.5 border border-stone-700 text-stone-400 text-[10px] uppercase tracking-widest hover:border-red-500 hover:text-red-400">
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ============ SOUND STUDIO ============
 // Record & manage custom samples for the 4 hero sounds (B/T/K/Pf).
 // Per-character samples (stored in IndexedDB keyed by slot).
 // Time does NOT advance while in here — it's a configuration screen.
 
-const SoundStudio = ({ activeSlot, showToast }) => {
+// Color per SOUND_CATALOG category (used in Studio + Sequencer for owned sounds)
+const CAT_COLORS = {
+  Kicks: '#CC2200',
+  Hats: '#22d3ee',
+  Snares: '#fbbf24',
+  Rimshot: '#a78bfa',
+  Liproll: '#f97316',
+  Bass: '#7f1d1d',
+  Scratch: '#84cc16',
+  Whistles: '#67e8f9',
+  Clicks: '#fb7185',
+};
+
+// Build a 2-3 char label from a sound name (e.g. 'Lip Roll' → 'LR', 'Throat Kick' → 'TK').
+const _abbrevFromName = (name) => {
+  const words = name.replace(/[()]/g, '').split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+};
+
+// Look up display info for any sound key (hero or catalog).
+const getSoundDisplay = (key) => {
+  if (HERO_SOUNDS[key]) {
+    const m = HERO_SOUNDS[key];
+    return { key, label: m.label, color: m.color, name: m.name, isHero: true };
+  }
+  const m = SOUND_CATALOG[key];
+  if (!m) return null;
+  return {
+    key,
+    label: _abbrevFromName(m.name),
+    color: CAT_COLORS[m.cat] || '#a78bfa',
+    name: m.name,
+    isHero: false,
+    cat: m.cat,
+  };
+};
+
+const SoundStudio = ({ activeSlot, showToast, char }) => {
   const [permission, setPermission] = useState('idle'); // 'idle' | 'requesting' | 'granted' | 'denied' | 'insecure'
   const [errorDetail, setErrorDetail] = useState('');
   // sampleStatus only holds the *active* recording's transient status. Persistent
@@ -2418,8 +2772,8 @@ const SoundStudio = ({ activeSlot, showToast }) => {
         recordingKeyRef.current = null;
         setRecordingKey(null);
         setRefreshKey(k => k + 1);
-        showToast?.(`✓ ${HERO_SOUNDS[key].name} recorded`, 'win');
-        setTimeout(() => playHeroSound(key), 200);
+        showToast?.(`✓ ${(getSoundDisplay(key)?.name) || key} recorded`, 'win');
+        setTimeout(() => playGameSound(key), 200);
       } catch (err) {
         console.error('Sample processing failed:', err);
         if (!mountedRef.current) return;
@@ -2483,7 +2837,7 @@ const SoundStudio = ({ activeSlot, showToast }) => {
     if (!activeSlot) return;
     await deleteSampleForSlot(activeSlot, key);
     setRefreshKey(k => k + 1);
-    showToast?.(`${HERO_SOUNDS[key].name} reset to default`, 'info');
+    showToast?.(`${(getSoundDisplay(key)?.name) || key} reset to default`, 'info');
   };
 
   // Reset all sounds
@@ -2526,82 +2880,80 @@ const SoundStudio = ({ activeSlot, showToast }) => {
           </div>
         )}
 
-        {/* Sound cards */}
+        {/* Sound cards: 4 hero + every owned catalog sound */}
         <div className="space-y-2" key={refreshKey}>
-          {Object.entries(HERO_SOUNDS).map(([key, meta]) => {
-            // Status derivation (no more currentStatus helper):
-            // - If this key is currently being recorded, use the transient status from sampleStatus[key]
-            // - Otherwise, check HERO_SAMPLES for a custom sample
-            const isThisRecording = recordingKey === key;
-            const transient = sampleStatus[key]; // 'waiting' | 'recording' | undefined
-            const isWaiting = isThisRecording && transient === 'waiting';
-            const isRecording = isThisRecording && transient === 'recording';
-            const isCustom = !isThisRecording && !!HERO_SAMPLES[key];
-            const isDisabled = recordingKey && recordingKey !== key;
+          {(() => {
+            const heroEntries = Object.keys(HERO_SOUNDS);
+            // Hide catalog ids that are already a hero default (e.g. classic_kick → B).
+            const heroDefaults = new Set(Object.values(HERO_SOUNDS).map(m => m.defaultSound).filter(Boolean));
+            const ownedExtras = (char?.sounds || [])
+              .filter(id => SOUND_CATALOG[id] && !HERO_SOUNDS[id] && !heroDefaults.has(id));
+            const allKeys = [...heroEntries, ...ownedExtras];
+            return allKeys.map(key => {
+              const meta = getSoundDisplay(key);
+              if (!meta) return null;
+              const isThisRecording = recordingKey === key;
+              const transient = sampleStatus[key];
+              const isWaiting = isThisRecording && transient === 'waiting';
+              const isRecording = isThisRecording && transient === 'recording';
+              const isCustom = !isThisRecording && !!HERO_SAMPLES[key];
+              const isDisabled = recordingKey && recordingKey !== key;
 
-            return (
-              <div key={key}
-                className={`border-2 p-3 flex items-center gap-3 transition-all ${
-                  isWaiting || isRecording ? 'border-red-500 bg-red-950/30' :
-                  isCustom ? 'border-amber-500 bg-amber-500/5' :
-                  'border-stone-800 bg-stone-900/40'
-                }`}>
-                {/* Sound color square */}
-                <div className="w-12 h-12 border-2 flex items-center justify-center text-lg font-mono"
-                  style={{ borderColor: meta.color, color: meta.color, background: `${meta.color}15` }}>
-                  {meta.label}
-                </div>
-                {/* Info */}
-                <div className="flex-1">
-                  <div className="text-stone-100 text-sm tracking-wider"
-                    style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                    {meta.name.toUpperCase()}
+              return (
+                <div key={key}
+                  className={`border-2 p-3 flex items-center gap-3 transition-all ${
+                    isWaiting || isRecording ? 'border-red-500 bg-red-950/30' :
+                    isCustom ? 'border-amber-500 bg-amber-500/5' :
+                    'border-stone-800 bg-stone-900/40'
+                  }`}>
+                  <div className="w-12 h-12 border-2 flex items-center justify-center text-lg font-mono"
+                    style={{ borderColor: meta.color, color: meta.color, background: `${meta.color}15` }}>
+                    {meta.label}
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider mt-0.5"
-                    style={{ color: isWaiting || isRecording ? '#ef4444' : isCustom ? '#D4A017' : '#78716c' }}>
-                    {isWaiting ? 'WAITING FOR SOUND…' :
-                     isRecording ? 'RECORDING…' :
-                     isCustom ? '✓ CUSTOM SAMPLE' :
-                     'DEFAULT SYNTH'}
+                  <div className="flex-1">
+                    <div className="text-stone-100 text-sm tracking-wider"
+                      style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                      {meta.name.toUpperCase()}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-wider mt-0.5"
+                      style={{ color: isWaiting || isRecording ? '#ef4444' : isCustom ? '#D4A017' : '#78716c' }}>
+                      {isWaiting ? 'WAITING FOR SOUND…' :
+                       isRecording ? 'RECORDING…' :
+                       isCustom ? '✓ CUSTOM SAMPLE' :
+                       meta.isHero ? 'DEFAULT SYNTH' : 'CATALOG SYNTH'}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {isThisRecording ? (
+                      <button onClick={abortRecording}
+                        className="px-3 py-1 border-2 border-stone-500 bg-stone-800 text-stone-200 text-[10px] uppercase tracking-wider">
+                        ✕ Stop
+                      </button>
+                    ) : (
+                      <button onClick={() => recordSound(key)} disabled={isDisabled}
+                        className="px-3 py-1 border-2 border-red-700 bg-red-900/30 text-red-300 text-[10px] uppercase tracking-wider disabled:opacity-30">
+                        REC
+                      </button>
+                    )}
+                    <button onClick={() => playGameSound(key)} disabled={isThisRecording}
+                      className="px-3 py-1 border-2 border-stone-700 bg-stone-800 text-stone-300 text-[10px] uppercase tracking-wider disabled:opacity-30">
+                      ▶ Play
+                    </button>
+                    {isCustom && (
+                      <button onClick={() => resetSound(key)}
+                        className="px-3 py-1 border border-stone-800 text-stone-500 text-[9px] uppercase tracking-wider hover:text-amber-500">
+                        Reset
+                      </button>
+                    )}
                   </div>
                 </div>
-                {/* Buttons */}
-                <div className="flex flex-col gap-1">
-                  {isThisRecording ? (
-                    <button
-                      onClick={abortRecording}
-                      className="px-3 py-1 border-2 border-stone-500 bg-stone-800 text-stone-200 text-[10px] uppercase tracking-wider">
-                      ✕ Stop
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => recordSound(key)}
-                      disabled={isDisabled}
-                      className="px-3 py-1 border-2 border-red-700 bg-red-900/30 text-red-300 text-[10px] uppercase tracking-wider disabled:opacity-30">
-                      REC
-                    </button>
-                  )}
-                  <button
-                    onClick={() => playHeroSound(key)}
-                    disabled={isThisRecording}
-                    className="px-3 py-1 border-2 border-stone-700 bg-stone-800 text-stone-300 text-[10px] uppercase tracking-wider disabled:opacity-30">
-                    ▶ Play
-                  </button>
-                  {isCustom && (
-                    <button
-                      onClick={() => resetSound(key)}
-                      className="px-3 py-1 border border-stone-800 text-stone-500 text-[9px] uppercase tracking-wider hover:text-amber-500">
-                      Reset
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
 
         {/* Reset all */}
-        {Object.keys(HERO_SOUNDS).some(k => HERO_SAMPLES[k]) && (
+        {ALL_SAMPLE_KEYS().some(k => HERO_SAMPLES[k]) && (
           <button onClick={resetAll}
             className="w-full py-2 border border-stone-800 text-stone-500 text-[10px] uppercase tracking-widest hover:text-red-400 hover:border-red-700">
             Reset all sounds to default
@@ -3612,6 +3964,8 @@ export default function BeatboxStory() {
     if (typeof c.tecLessonsCompleted !== 'number') c.tecLessonsCompleted = 0; // 0 = none completed yet, only lesson 1 unlocked
     if (typeof c.tecCurrentLesson !== 'number') c.tecCurrentLesson = 0; // index into curriculum
     if (typeof c.tecBpm !== 'number') c.tecBpm = 90;
+    if (typeof c.oriBpm !== 'number') c.oriBpm = 100;
+    if (c.oriPattern === undefined) c.oriPattern = null;
     return c;
   };
 
@@ -3979,6 +4333,11 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
             statGain = Math.round(statGain * bpmMult);
             if (statGain > before) bonusText += ` (×${bpmMult.toFixed(2)} BPM)`;
           }
+        } else if (trainStat === 'ori') {
+          // Sequencer creativity score → bonus
+          const c = accuracyRef.current || 0;
+          if (c >= 0.8) { statGain = 3; bonusText = ' (creative!)'; }
+          else if (c >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
         }
         setChar(cc => {
           const updated = { ...cc, xp: cc.xp + 10,
@@ -4157,7 +4516,19 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                 )}
                 {trainStat === 'tec' && playMode && (() => {
                   const completed = char.tecLessonsCompleted || 0;
-                  const currentIdx = Math.min(char.tecCurrentLesson || 0, completed);
+                  const ownedSet = new Set(char.sounds || []);
+                  // A lesson is "playable" if (i) progression unlocks it AND (ii) any required sound is owned.
+                  const isPlayable = (i) => {
+                    if (i > completed) return false;
+                    const lesson = HERO_LESSONS[i];
+                    if (lesson?.requires && !ownedSet.has(lesson.requires)) return false;
+                    return true;
+                  };
+                  // Current selected lesson — fall back to the highest playable one if invalid.
+                  let currentIdx = Math.min(char.tecCurrentLesson || 0, HERO_LESSONS.length - 1);
+                  if (!isPlayable(currentIdx)) {
+                    for (let j = currentIdx; j >= 0; j--) { if (isPlayable(j)) { currentIdx = j; break; } }
+                  }
                   const currentLesson = HERO_LESSONS[currentIdx] || HERO_LESSONS[0];
                   const bpm = char.tecBpm || 90;
                   const bpmMult = Math.max(1, bpm / 90);
@@ -4168,18 +4539,20 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                       <div className="overflow-x-auto -mx-1">
                         <div className="flex gap-1.5 px-1 pb-1">
                           {HERO_LESSONS.map((lesson, i) => {
-                            const unlocked = i <= completed;
+                            const progressionOk = i <= completed;
+                            const needsSound = lesson.requires && !ownedSet.has(lesson.requires);
+                            const playable = progressionOk && !needsSound;
                             const selected = i === currentIdx;
                             return (
                               <button key={i}
-                                disabled={!unlocked}
+                                disabled={!playable}
                                 onClick={() => setChar(c => ({ ...c, tecCurrentLesson: i }))}
                                 className={`flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${
                                   selected ? 'border-amber-500 bg-amber-500/10 text-amber-500' :
-                                  unlocked ? 'border-stone-700 text-stone-400 hover:border-amber-500/50' :
+                                  playable ? 'border-stone-700 text-stone-400 hover:border-amber-500/50' :
                                              'border-stone-800 text-stone-600 opacity-40'
                                 }`}>
-                                {!unlocked && '🔒 '}#{i + 1}
+                                {!playable && '🔒 '}#{i + 1}
                               </button>
                             );
                           })}
@@ -4190,6 +4563,14 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                           #{currentIdx + 1} {currentLesson.name}
                         </div>
                         <div className="text-[10px] text-stone-500 uppercase tracking-wider">{currentLesson.desc}</div>
+                        {currentLesson.requires && (
+                          <div className="text-[10px] uppercase tracking-wider mt-0.5"
+                            style={{ color: ownedSet.has(currentLesson.requires) ? '#22c55e' : '#fbbf24' }}>
+                            {ownedSet.has(currentLesson.requires)
+                              ? `✓ uses ${SOUND_CATALOG[currentLesson.requires]?.name || currentLesson.requires}`
+                              : `🔒 needs ${SOUND_CATALOG[currentLesson.requires]?.name || currentLesson.requires} (buy in shop)`}
+                          </div>
+                        )}
                       </div>
 
                       <BeatboxHero
@@ -4239,7 +4620,42 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                     </>
                   );
                 })()}
-                <div className="text-[10px] text-stone-500 uppercase tracking-wider">5 blocks → +1 {trainConfig[trainStat].name}{trainStat === 'mus' ? ' (up to +3 with tuner)' : trainStat === 'tec' ? ' (up to +3 with Beatbox Hero, ×BPM bonus)' : ''}</div>
+                {trainStat === 'ori' && !playMode && (
+                  <button onClick={() => { accuracyRef.current = 0; setPlayMode(true); }}
+                    className="w-full p-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-900/40 hover:to-amber-800/30 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="text-3xl">🥁</div>
+                      <div className="text-left flex-1">
+                        <div className="text-amber-500 text-base tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                          BEAT SEQUENCER · TAP TO START
+                        </div>
+                        <div className="text-[11px] text-stone-400 uppercase tracking-wider mt-0.5">
+                          Program your beats → up to ×3 stat gain
+                        </div>
+                      </div>
+                      <div className="text-amber-500 text-xl group-hover:translate-x-1 transition-transform">▶</div>
+                    </div>
+                  </button>
+                )}
+                {trainStat === 'ori' && playMode && (
+                  <>
+                    <Sequencer
+                      onCreativityUpdate={handleAccuracy}
+                      evaluateEveryMs={2500}
+                      active={trainActivity.active}
+                      bpm={char.oriBpm || 100}
+                      pattern={char.oriPattern}
+                      ownedSounds={char.sounds || []}
+                      onPatternChange={(p) => setChar(c => ({ ...c, oriPattern: p }))}
+                      onBpmChange={(b) => setChar(c => ({ ...c, oriBpm: b }))}
+                    />
+                    <button onClick={() => { setPlayMode(false); accuracyRef.current = 0; }}
+                      className="w-full py-2 border-2 border-stone-700 bg-stone-900/50 text-stone-400 text-xs uppercase tracking-widest hover:border-stone-600 transition-all">
+                      ◀ Back to AFK
+                    </button>
+                  </>
+                )}
+                <div className="text-[10px] text-stone-500 uppercase tracking-wider">5 blocks → +1 {trainConfig[trainStat].name}{trainStat === 'mus' ? ' (up to +3 with tuner)' : trainStat === 'tec' ? ' (up to +3 with Beatbox Hero, ×BPM bonus)' : trainStat === 'ori' ? ' (up to +3 with creative beats)' : ''}</div>
                 <ProgressBar block={trainActivity.block} total={5} label={`Block ${trainActivity.block}/5`} color={trainConfig[trainStat].color} />
                 <div className="flex justify-between text-[10px] uppercase tracking-wider text-stone-500">
                   <span>Stat increases: <span className="text-amber-500">{trainActivity.rewardsEarned}</span></span>
@@ -4255,7 +4671,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       )}
 
       {tab === 'studio' && (
-        <SoundStudio activeSlot={activeSlot} showToast={showToast} />
+        <SoundStudio activeSlot={activeSlot} showToast={showToast} char={char} />
       )}
 
       {tab === 'eat' && (
@@ -5459,6 +5875,30 @@ const playHeroSound = (key) => {
   else if (key === 'Pf') playSnare(ctx, t);
 };
 
+// Play any sound by key. Handles hero keys (B/T/K/Pf) and SOUND_CATALOG ids.
+// For catalog ids: plays the player's recorded sample if available, else the catalog synth.
+// This is the unified audio entry point used by sequencer + tec lessons + battle.
+const playGameSound = (soundKey) => {
+  if (!soundKey) return;
+  if (HERO_SOUNDS[soundKey]) { playHeroSound(soundKey); return; }
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const sample = HERO_SAMPLES[soundKey];
+  if (sample) {
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = sample;
+      const gain = ctx.createGain();
+      gain.gain.value = 1.0;
+      src.connect(gain).connect(ctx.destination);
+      src.start(0);
+      return;
+    } catch (e) { /* fall through to catalog synth */ }
+  }
+  const meta = SOUND_CATALOG[soundKey];
+  if (meta) playSound(meta.cat, meta.name);
+};
+
 // ============ INDEXEDDB SAMPLE STORAGE ============
 // Per-slot persistence of custom recorded samples.
 // Each sample stored as { float32: ArrayBuffer, sampleRate: number }
@@ -5532,15 +5972,17 @@ const recordToBuffer = (record) => {
   return buf;
 };
 
-// Load all 4 samples for a given slot into HERO_SAMPLES.
+// All sound keys we may have stored a sample for: 4 hero keys + every catalog id.
+const ALL_SAMPLE_KEYS = () => [...Object.keys(HERO_SOUNDS), ...Object.keys(SOUND_CATALOG)];
+
+// Load all stored samples for a given slot into HERO_SAMPLES.
 // Sets undefined for keys without a stored sample (= use synth fallback).
 const loadSamplesForSlot = async (slotN) => {
   if (!slotN) {
-    Object.keys(HERO_SOUNDS).forEach(k => { delete HERO_SAMPLES[k]; });
+    Object.keys(HERO_SAMPLES).forEach(k => { delete HERO_SAMPLES[k]; });
     return;
   }
-  const keys = Object.keys(HERO_SOUNDS);
-  for (const k of keys) {
+  for (const k of ALL_SAMPLE_KEYS()) {
     const rec = await idbGet(`slot${slotN}:sample-${k}`);
     const buf = recordToBuffer(rec);
     if (buf) HERO_SAMPLES[k] = buf;
@@ -5568,7 +6010,7 @@ const deleteSampleForSlot = async (slotN, key) => {
 
 const deleteAllSamplesForSlot = async (slotN) => {
   if (!slotN) return;
-  for (const k of Object.keys(HERO_SOUNDS)) {
+  for (const k of ALL_SAMPLE_KEYS()) {
     delete HERO_SAMPLES[k];
     await idbDelete(`slot${slotN}:sample-${k}`);
   }
@@ -5939,9 +6381,18 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const extraSchedule = () => {
       let patternWindow = null;
 
-      // Pick a random unlocked lesson and weave its pattern into the middle of the round
-      if (completed > 0) {
-        const lessonIdx = Math.floor(Math.random() * completed);
+      // Pick a random playable lesson and weave its pattern into the middle of the round.
+      // Playable = progression-unlocked AND any required sound is owned.
+      const ownedSet = new Set(char.sounds || []);
+      const playableIdxs = [];
+      for (let i = 0; i < completed; i++) {
+        const l = HERO_LESSONS[i];
+        if (!l) continue;
+        if (l.requires && !ownedSet.has(l.requires)) continue;
+        playableIdxs.push(i);
+      }
+      if (playableIdxs.length > 0) {
+        const lessonIdx = playableIdxs[Math.floor(Math.random() * playableIdxs.length)];
         const lesson = HERO_LESSONS[lessonIdx];
         if (lesson) {
           const patternStartMs = 1500;
@@ -5955,7 +6406,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
             lesson.pattern.forEach(note => {
               const t = patternStartMs + note.beat * beatMs;
               if (t < ROUND_SECONDS * 1000) {
-                eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+                eventTimers.current.push(setTimeout(() => playGameSound(note.sound), t));
               }
             });
           }

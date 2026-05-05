@@ -202,6 +202,10 @@ window.exports = window.module.exports;
     // currently selected lesson index
     tecBpm: 90,
     // current BPM for the rhythm game
+    oriBpm: 100,
+    // BPM for the originality sequencer
+    oriPattern: null,
+    // sequencer state: { tracks: [{key, cells}] } — null means use default 4-hero seed
     created: false
   });
   var NUM_SLOTS = 5;
@@ -1508,67 +1512,168 @@ window.exports = window.module.exports;
     [3.75, 7.75, 11.75, 15.75].forEach((beat) => p.push({ beat, sound: "K" }));
     return p;
   };
-  var _patSyncoKick = () => {
-    const p = [];
-    for (let bar = 0; bar < 4; bar++) {
-      const off = bar * 4;
-      p.push({ beat: off + 0, sound: "B" });
-      p.push({ beat: off + 1, sound: "Pf" });
-      p.push({ beat: off + 1.75, sound: "B" });
-      p.push({ beat: off + 2.5, sound: "B" });
-      p.push({ beat: off + 3, sound: "Pf" });
-    }
-    return p;
-  };
-  var _patOffbeatHat = () => {
-    const p = [];
-    for (let bar = 0; bar < 4; bar++) {
-      const off = bar * 4;
-      p.push({ beat: off + 0, sound: "B" });
-      p.push({ beat: off + 1, sound: "Pf" });
-      p.push({ beat: off + 2, sound: "B" });
-      p.push({ beat: off + 3, sound: "Pf" });
-      [0.5, 1.5, 2.5, 3.5].forEach((o) => p.push({ beat: off + o, sound: "T" }));
-    }
-    return p;
-  };
-  var _patFullFour = () => {
+  var _patL6 = () => {
     const p = [];
     for (let bar = 0; bar < 4; bar++) {
       const off = bar * 4;
       p.push({ beat: off + 0, sound: "B" });
       p.push({ beat: off + 0.5, sound: "T" });
       p.push({ beat: off + 1, sound: "Pf" });
-      p.push({ beat: off + 1.5, sound: "T" });
-      p.push({ beat: off + 1.75, sound: "K" });
+      p.push({ beat: off + 1.5, sound: "lip_roll" });
       p.push({ beat: off + 2, sound: "B" });
       p.push({ beat: off + 2.5, sound: "T" });
-      p.push({ beat: off + 2.75, sound: "B" });
+      p.push({ beat: off + 3, sound: "Pf" });
+      p.push({ beat: off + 3.5, sound: "lip_roll" });
+    }
+    return p;
+  };
+  var _patL7 = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "throat_kick" });
+      p.push({ beat: off + 0.5, sound: "T" });
+      p.push({ beat: off + 1, sound: "Pf" });
+      p.push({ beat: off + 1.5, sound: "T" });
+      p.push({ beat: off + 1.75, sound: "throat_kick" });
+      p.push({ beat: off + 2, sound: "throat_kick" });
+      p.push({ beat: off + 2.5, sound: "T" });
       p.push({ beat: off + 3, sound: "Pf" });
       p.push({ beat: off + 3.5, sound: "T" });
     }
     return p;
   };
-  var _combo = (a, b) => {
-    const result = a.filter((n) => n.beat < 8).map((n) => ({ ...n }));
-    b.filter((n) => n.beat < 8).forEach((n) => {
-      result.push({ beat: n.beat + 8, sound: n.sound });
-    });
-    return result;
+  var _patL8 = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "B" });
+      p.push({ beat: off + 1, sound: "Pf" });
+      p.push({ beat: off + 2, sound: "B" });
+      p.push({ beat: off + 3, sound: "Pf" });
+      for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: "fast_hats" });
+    }
+    return p;
+  };
+  var _patL9 = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "B" });
+      p.push({ beat: off + 1, sound: "inward_k" });
+      p.push({ beat: off + 2, sound: "B" });
+      p.push({ beat: off + 3, sound: "inward_k" });
+      for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: "T" });
+      p.push({ beat: off + 0.75, sound: "K" });
+      p.push({ beat: off + 2.75, sound: "K" });
+    }
+    return p;
+  };
+  var _patL10 = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "inward_bass" });
+      p.push({ beat: off + 1, sound: "Pf" });
+      p.push({ beat: off + 1.75, sound: "inward_bass" });
+      p.push({ beat: off + 2, sound: "inward_bass" });
+      p.push({ beat: off + 3, sound: "Pf" });
+      for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: "T" });
+    }
+    return p;
+  };
+  var _patL11 = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "B" });
+      p.push({ beat: off + 1, sound: "Pf" });
+      p.push({ beat: off + 2, sound: "B" });
+      p.push({ beat: off + 3, sound: "Pf" });
+      for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: "T" });
+      p.push({ beat: off + 3.5, sound: "click_roll" });
+    }
+    return p;
+  };
+  var _patL12 = () => {
+    const p = [];
+    for (let bar = 0; bar < 4; bar++) {
+      const off = bar * 4;
+      p.push({ beat: off + 0, sound: "uvular_roll" });
+      p.push({ beat: off + 1, sound: "inward_bass" });
+      p.push({ beat: off + 1.75, sound: "click_roll" });
+      p.push({ beat: off + 2, sound: "uvular_roll" });
+      p.push({ beat: off + 2.5, sound: "click_roll" });
+      p.push({ beat: off + 3, sound: "inward_bass" });
+      p.push({ beat: off + 3.75, sound: "click_roll" });
+      for (let i = 0; i < 8; i++) p.push({ beat: off + i * 0.5, sound: "fast_hats" });
+    }
+    return p;
   };
   var HERO_LESSONS = [
+    // Lessons 1-5 use only the 4 hero sounds (always unlocked by progression)
     { name: "BOOM BASIC", desc: "Kick on every beat", tier: 1, pattern: _patBoom() },
     { name: "BACKBEAT", desc: "Kick on 1 & 3, snare on 2 & 4", tier: 1, pattern: _patBackbeat() },
     { name: "HI-HAT 8THS", desc: "Hat on every 8th note", tier: 1, pattern: _patHat8ths() },
     { name: "KIT GROOVE", desc: "Boom + snare + 8th hats", tier: 2, pattern: _patKitGroove() },
     { name: "WITH RIMSHOT", desc: "Kit groove + rim accents", tier: 2, pattern: _patWithRim() },
-    { name: "SYNCO KICKS", desc: "Off-beat kicks, snare 2 & 4", tier: 2, pattern: _patSyncoKick() },
-    { name: "OFF-BEAT HATS", desc: 'Hats on the "ands" only', tier: 2, pattern: _patOffbeatHat() },
-    { name: "FULL FOUR", desc: "All four sounds, busy groove", tier: 3, pattern: _patFullFour() },
-    { name: "COMBO 1+2", desc: "Boom basic \u2192 backbeat", tier: 3, pattern: _combo(_patBoom(), _patBackbeat()) },
-    { name: "COMBO 3+4", desc: "Hat 8ths \u2192 kit groove", tier: 3, pattern: _combo(_patHat8ths(), _patKitGroove()) },
-    { name: "COMBO 5+6", desc: "With rim \u2192 synco kicks", tier: 3, pattern: _combo(_patWithRim(), _patSyncoKick()) },
-    { name: "COMBO 7+8", desc: "Off-beat \u2192 full four", tier: 3, pattern: _combo(_patOffbeatHat(), _patFullFour()) }
+    // Lessons 6-12 each gate on owning a specific catalog sound (buy it in the shop).
+    {
+      name: "LIP ROLL DRILL",
+      desc: "Lip rolls on the offbeats",
+      tier: 2,
+      requires: "lip_roll",
+      lanes: ["B", "T", "lip_roll", "Pf"],
+      pattern: _patL6()
+    },
+    {
+      name: "808 THROAT",
+      desc: "Heavy throat-kick groove",
+      tier: 2,
+      requires: "throat_kick",
+      lanes: ["throat_kick", "T", "K", "Pf"],
+      pattern: _patL7()
+    },
+    {
+      name: "FAST HATS",
+      desc: "TKs doubling the hi-hat lane",
+      tier: 2,
+      requires: "fast_hats",
+      lanes: ["B", "fast_hats", "K", "Pf"],
+      pattern: _patL8()
+    },
+    {
+      name: "INWARD SNARE",
+      desc: "Alternate snare voice",
+      tier: 2,
+      requires: "inward_k",
+      lanes: ["B", "T", "K", "inward_k"],
+      pattern: _patL9()
+    },
+    {
+      name: "INWARD BASS",
+      desc: "Deep inward bass kick",
+      tier: 3,
+      requires: "inward_bass",
+      lanes: ["inward_bass", "T", "K", "Pf"],
+      pattern: _patL10()
+    },
+    {
+      name: "CLICK ROLL",
+      desc: "Click roll fills",
+      tier: 3,
+      requires: "click_roll",
+      lanes: ["B", "T", "click_roll", "Pf"],
+      pattern: _patL11()
+    },
+    {
+      name: "UVULAR FINALE",
+      desc: "All four advanced sounds",
+      tier: 4,
+      requires: "uvular_roll",
+      lanes: ["uvular_roll", "fast_hats", "click_roll", "inward_bass"],
+      pattern: _patL12()
+    }
   ];
   var BeatboxHero = ({
     onAccuracyUpdate,
@@ -1602,6 +1707,7 @@ window.exports = window.module.exports;
     const PIXELS_PER_SEC = STRIKE_Y / (LOOKAHEAD_MS / 1e3);
     const initState = (config) => {
       const lesson = HERO_LESSONS[config.lessonIdx] || HERO_LESSONS[0];
+      const lanes = lesson.lanes || HERO_LANES;
       const beatMs = 6e4 / config.bpm;
       const patternMs = 16 * beatMs;
       const notes = [];
@@ -1609,7 +1715,7 @@ window.exports = window.module.exports;
         const isDemo = rep % 2 === 0;
         const repStart = rep * patternMs;
         lesson.pattern.forEach((n, i) => {
-          const lane = HERO_LANES.indexOf(n.sound);
+          const lane = lanes.indexOf(n.sound);
           notes.push({
             id: `r${rep}n${i}`,
             time: repStart + n.beat * beatMs,
@@ -1624,10 +1730,15 @@ window.exports = window.module.exports;
           });
         });
       }
+      const laneFlash = {};
+      lanes.forEach((k) => {
+        laneFlash[k] = 0;
+      });
       return {
         lesson,
         lessonIdx: config.lessonIdx,
         bpm: config.bpm,
+        lanes,
         beatMs,
         patternMs,
         totalMs: REPS_TOTAL * patternMs,
@@ -1636,7 +1747,7 @@ window.exports = window.module.exports;
         hits: 0,
         misses: 0,
         perfects: 0,
-        laneFlash: { B: 0, T: 0, K: 0, Pf: 0 },
+        laneFlash,
         audioScheduled: /* @__PURE__ */ new Set(),
         phase: "demo",
         completeAt: 0,
@@ -1648,8 +1759,8 @@ window.exports = window.module.exports;
       if (!state2) return;
       const now = performance.now();
       const songT = now - state2.startTime;
-      const lane = HERO_LANES.indexOf(sound);
-      playHeroSound(sound);
+      const lane = state2.lanes.indexOf(sound);
+      playGameSound(sound);
       state2.laneFlash[sound] = now;
       if (state2.phase !== "player") {
         rerender();
@@ -1703,11 +1814,12 @@ window.exports = window.module.exports;
         }
         c.fillStyle = "#1c1917";
         for (let i = 1; i < 4; i++) c.fillRect(i * LANE_W, 0, 1, TRACK_H);
-        HERO_LANES.forEach((sound, i) => {
-          const age = now - state2.laneFlash[sound];
+        state2.lanes.forEach((sound, i) => {
+          const age = now - (state2.laneFlash[sound] || 0);
           if (age < 120) {
+            const meta = getSoundDisplay(sound);
             c.globalAlpha = (1 - age / 120) * 0.3;
-            c.fillStyle = HERO_SOUNDS[sound].color;
+            c.fillStyle = meta?.color || "#D4A017";
             c.fillRect(i * LANE_W, 0, LANE_W, TRACK_H);
             c.globalAlpha = 1;
           }
@@ -1721,7 +1833,7 @@ window.exports = window.module.exports;
           const y = STRIKE_Y - dt * PIXELS_PER_SEC / 1e3;
           if (y < -40 || y > TRACK_H + 40) return;
           const x = n.lane * LANE_W;
-          const meta = HERO_SOUNDS[n.sound];
+          const meta = getSoundDisplay(n.sound) || { color: "#D4A017", label: "?" };
           if (n.hit && now - n.hitTime < 260) {
             const a = (now - n.hitTime) / 260;
             c.globalAlpha = 1 - a;
@@ -1806,7 +1918,7 @@ window.exports = window.module.exports;
           if (state2.audioScheduled.has(n.id)) continue;
           if (n.time > songT) continue;
           if (songT - n.time < 200) {
-            playHeroSound(n.sound);
+            playGameSound(n.sound);
             state2.laneFlash[n.sound] = now;
           }
           state2.audioScheduled.add(n.id);
@@ -1840,12 +1952,12 @@ window.exports = window.module.exports;
         className: "w-full block border-2 border-stone-800",
         style: { aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: "#0c0a09", imageRendering: "auto" }
       }
-    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, HERO_LANES.map((sound) => {
-      const meta = HERO_SOUNDS[sound];
+    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, (state?.lanes || HERO_LANES).map((sound, idx) => {
+      const meta = getSoundDisplay(sound) || { color: "#D4A017", label: "?" };
       return /* @__PURE__ */ import_react.default.createElement(
         "button",
         {
-          key: sound,
+          key: sound + idx,
           onPointerDown: (e) => {
             e.preventDefault();
             handleTap(sound);
@@ -1864,7 +1976,256 @@ window.exports = window.module.exports;
       );
     })), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between items-center text-[10px] uppercase tracking-widest text-stone-500 px-1" }, /* @__PURE__ */ import_react.default.createElement("span", null, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, phaseLabel)), /* @__PURE__ */ import_react.default.createElement("span", null, "HITS ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, state?.hits || 0), " \xB7 MISS ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-red-500" }, state?.misses || 0)), /* @__PURE__ */ import_react.default.createElement("span", null, "ACC ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, accuracyPct, "%"))));
   };
-  var SoundStudio = ({ activeSlot, showToast }) => {
+  var SEQ_STEPS = 16;
+  var _seqDefault = () => ({
+    tracks: [
+      { key: "B", cells: [true, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false] },
+      { key: "Pf", cells: [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false] },
+      { key: "T", cells: Array(SEQ_STEPS).fill(false).map((_, i) => i % 2 === 0) },
+      { key: "K", cells: Array(SEQ_STEPS).fill(false) }
+    ]
+  });
+  var Sequencer = ({
+    onCreativityUpdate,
+    evaluateEveryMs = 2500,
+    active = true,
+    bpm = 100,
+    pattern = null,
+    ownedSounds = [],
+    onPatternChange,
+    onBpmChange
+  }) => {
+    const [workPattern, setWorkPattern] = (0, import_react.useState)(() => {
+      if (pattern && Array.isArray(pattern.tracks) && pattern.tracks.length > 0) return pattern;
+      return _seqDefault();
+    });
+    const [currentStep, setCurrentStep] = (0, import_react.useState)(-1);
+    const [showAddTrack, setShowAddTrack] = (0, import_react.useState)(false);
+    const stepRef = (0, import_react.useRef)(-1);
+    const intervalRef = (0, import_react.useRef)(null);
+    const patternRef = (0, import_react.useRef)(workPattern);
+    (0, import_react.useEffect)(() => {
+      patternRef.current = workPattern;
+    }, [workPattern]);
+    const bpmRef = (0, import_react.useRef)(bpm);
+    (0, import_react.useEffect)(() => {
+      bpmRef.current = bpm;
+    }, [bpm]);
+    const computeCreativity = () => {
+      const tracks = patternRef.current?.tracks || [];
+      let activeCells2 = 0, usedSounds = 0;
+      tracks.forEach((t) => {
+        const c = t.cells.filter(Boolean).length;
+        if (c > 0) usedSounds++;
+        activeCells2 += c;
+      });
+      const variety = Math.min(1, usedSounds / 4) * 0.5;
+      const density = Math.min(1, activeCells2 / 24) * 0.5;
+      return variety + density;
+    };
+    (0, import_react.useEffect)(() => {
+      if (!active) {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        stepRef.current = -1;
+        setCurrentStep(-1);
+        return;
+      }
+      const ctx = getAudioCtx();
+      if (ctx?.state === "suspended") ctx.resume().catch(() => {
+      });
+      const tick = () => {
+        stepRef.current = (stepRef.current + 1) % SEQ_STEPS;
+        setCurrentStep(stepRef.current);
+        const tracks = patternRef.current?.tracks || [];
+        tracks.forEach((t) => {
+          if (t.cells[stepRef.current]) playGameSound(t.key);
+        });
+      };
+      const stepMs = 6e4 / Math.max(40, bpmRef.current) / 4;
+      intervalRef.current = setInterval(tick, stepMs);
+      return () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      };
+    }, [active, bpm]);
+    (0, import_react.useEffect)(() => {
+      if (!active) return;
+      const id = setInterval(() => onCreativityUpdate?.(computeCreativity()), evaluateEveryMs);
+      return () => clearInterval(id);
+    }, [active, evaluateEveryMs]);
+    const updatePattern = (mut) => {
+      setWorkPattern((p) => {
+        const next = mut(p);
+        onPatternChange?.(next);
+        return next;
+      });
+    };
+    const toggleCell = (trackIdx, step) => {
+      updatePattern((p) => ({
+        ...p,
+        tracks: p.tracks.map((t, i) => i === trackIdx ? { ...t, cells: t.cells.map((c, j) => j === step ? !c : c) } : t)
+      }));
+    };
+    const addTrack = (key) => {
+      updatePattern((p) => p.tracks.some((t) => t.key === key) ? p : { ...p, tracks: [...p.tracks, { key, cells: Array(SEQ_STEPS).fill(false) }] });
+      setShowAddTrack(false);
+    };
+    const removeTrack = (trackIdx) => {
+      updatePattern((p) => ({ ...p, tracks: p.tracks.filter((_, i) => i !== trackIdx) }));
+    };
+    const clearPattern = () => {
+      updatePattern((p) => ({ ...p, tracks: p.tracks.map((t) => ({ ...t, cells: Array(SEQ_STEPS).fill(false) })) }));
+    };
+    const usedKeys = new Set(workPattern.tracks.map((t) => t.key));
+    const heroDefaults = new Set(Object.values(HERO_SOUNDS).map((m) => m.defaultSound).filter(Boolean));
+    const availableSounds = [
+      ...Object.keys(HERO_SOUNDS),
+      ...ownedSounds.filter((k) => !HERO_SOUNDS[k] && SOUND_CATALOG[k] && !heroDefaults.has(k))
+    ].filter((k) => !usedKeys.has(k));
+    const activeCells = workPattern.tracks.reduce((a, t) => a + t.cells.filter(Boolean).length, 0);
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1" }, workPattern.tracks.map((track, trackIdx) => {
+      const meta = getSoundDisplay(track.key);
+      if (!meta) return null;
+      return /* @__PURE__ */ import_react.default.createElement("div", { key: track.key + trackIdx, className: "flex items-center gap-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "w-14 flex-shrink-0 flex items-center gap-0.5" }, /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onPointerDown: (e) => {
+            e.preventDefault();
+            removeTrack(trackIdx);
+          },
+          className: "text-stone-600 text-sm hover:text-red-500 px-1 leading-none"
+        },
+        "\xD7"
+      ), /* @__PURE__ */ import_react.default.createElement(
+        "div",
+        {
+          className: "flex-1 h-7 border flex items-center justify-center text-[10px] font-mono",
+          style: { borderColor: meta.color, color: meta.color, background: `${meta.color}15` },
+          title: meta.name
+        },
+        meta.label
+      )), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-[2px] flex-1" }, track.cells.map((on, step) => {
+        const isCurrent = step === currentStep;
+        const isBeat = step % 4 === 0;
+        return /* @__PURE__ */ import_react.default.createElement(
+          "button",
+          {
+            key: step,
+            onPointerDown: (e) => {
+              e.preventDefault();
+              toggleCell(trackIdx, step);
+            },
+            className: `flex-1 h-7 border transition-colors ${isCurrent ? "ring-1 ring-amber-500" : ""}`,
+            style: on ? { borderColor: meta.color, background: meta.color } : { borderColor: isBeat ? "#44403c" : "#292524", background: isBeat ? "#1c1917" : "#0c0a09" }
+          }
+        );
+      })));
+    })), availableSounds.length > 0 && (!showAddTrack ? /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onPointerDown: (e) => {
+          e.preventDefault();
+          setShowAddTrack(true);
+        },
+        className: "w-full py-1.5 border-2 border-dashed border-stone-700 text-stone-500 text-[10px] uppercase tracking-widest hover:border-amber-500/50 hover:text-amber-500"
+      },
+      "+ Add track"
+    ) : /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1 border border-stone-800 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "Pick a sound:"), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-wrap gap-1" }, availableSounds.map((k) => {
+      const m = getSoundDisplay(k);
+      if (!m) return null;
+      return /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          key: k,
+          onPointerDown: (e) => {
+            e.preventDefault();
+            addTrack(k);
+          },
+          className: "px-2 py-1 border-2 text-[10px] uppercase tracking-widest",
+          style: { borderColor: m.color, color: m.color }
+        },
+        m.label,
+        " \xB7 ",
+        m.name
+      );
+    }), /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onPointerDown: (e) => {
+          e.preventDefault();
+          setShowAddTrack(false);
+        },
+        className: "px-2 py-1 border border-stone-700 text-stone-500 text-[10px] uppercase tracking-widest"
+      },
+      "cancel"
+    )))), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between gap-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onPointerDown: (e) => {
+          e.preventDefault();
+          onBpmChange?.(Math.max(60, bpm - 5));
+        },
+        className: "w-8 h-8 border-2 border-stone-700 text-amber-500 active:scale-95"
+      },
+      "\u2212"
+    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center min-w-[80px]" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-lg tracking-wider leading-none", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, bpm, " BPM"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] text-stone-500 uppercase tracking-widest mt-0.5" }, activeCells, " hits \xB7 ", workPattern.tracks.filter((t) => t.cells.some(Boolean)).length, " sounds")), /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onPointerDown: (e) => {
+          e.preventDefault();
+          onBpmChange?.(Math.min(180, bpm + 5));
+        },
+        className: "w-8 h-8 border-2 border-stone-700 text-amber-500 active:scale-95"
+      },
+      "+"
+    )), /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onPointerDown: (e) => {
+          e.preventDefault();
+          clearPattern();
+        },
+        className: "px-3 py-1.5 border border-stone-700 text-stone-400 text-[10px] uppercase tracking-widest hover:border-red-500 hover:text-red-400"
+      },
+      "Clear"
+    )));
+  };
+  var CAT_COLORS = {
+    Kicks: "#CC2200",
+    Hats: "#22d3ee",
+    Snares: "#fbbf24",
+    Rimshot: "#a78bfa",
+    Liproll: "#f97316",
+    Bass: "#7f1d1d",
+    Scratch: "#84cc16",
+    Whistles: "#67e8f9",
+    Clicks: "#fb7185"
+  };
+  var _abbrevFromName = (name) => {
+    const words = name.replace(/[()]/g, "").split(/\s+/).filter(Boolean);
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+  var getSoundDisplay = (key) => {
+    if (HERO_SOUNDS[key]) {
+      const m2 = HERO_SOUNDS[key];
+      return { key, label: m2.label, color: m2.color, name: m2.name, isHero: true };
+    }
+    const m = SOUND_CATALOG[key];
+    if (!m) return null;
+    return {
+      key,
+      label: _abbrevFromName(m.name),
+      color: CAT_COLORS[m.cat] || "#a78bfa",
+      name: m.name,
+      isHero: false,
+      cat: m.cat
+    };
+  };
+  var SoundStudio = ({ activeSlot, showToast, char }) => {
     const [permission, setPermission] = (0, import_react.useState)("idle");
     const [errorDetail, setErrorDetail] = (0, import_react.useState)("");
     const [sampleStatus, setSampleStatus] = (0, import_react.useState)({});
@@ -2145,8 +2506,8 @@ window.exports = window.module.exports;
           recordingKeyRef.current = null;
           setRecordingKey(null);
           setRefreshKey((k) => k + 1);
-          showToast?.(`\u2713 ${HERO_SOUNDS[key].name} recorded`, "win");
-          setTimeout(() => playHeroSound(key), 200);
+          showToast?.(`\u2713 ${getSoundDisplay(key)?.name || key} recorded`, "win");
+          setTimeout(() => playGameSound(key), 200);
         } catch (err) {
           console.error("Sample processing failed:", err);
           if (!mountedRef.current) return;
@@ -2202,7 +2563,7 @@ window.exports = window.module.exports;
       if (!activeSlot) return;
       await deleteSampleForSlot(activeSlot, key);
       setRefreshKey((k) => k + 1);
-      showToast?.(`${HERO_SOUNDS[key].name} reset to default`, "info");
+      showToast?.(`${getSoundDisplay(key)?.name || key} reset to default`, "info");
     };
     const resetAll = async () => {
       if (!activeSlot) return;
@@ -2218,75 +2579,83 @@ window.exports = window.module.exports;
         className: "h-full transition-all duration-75",
         style: { width: `${meterPct}%`, background: meterColor }
       }
-    ))), permission === "denied" && /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-red-900 bg-red-950/30 p-3 text-[11px] text-stone-300" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-red-400 uppercase tracking-widest mb-1" }, "Mic unavailable"), errorDetail), /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2", key: refreshKey }, Object.entries(HERO_SOUNDS).map(([key, meta]) => {
-      const isThisRecording = recordingKey === key;
-      const transient = sampleStatus[key];
-      const isWaiting = isThisRecording && transient === "waiting";
-      const isRecording = isThisRecording && transient === "recording";
-      const isCustom = !isThisRecording && !!HERO_SAMPLES[key];
-      const isDisabled = recordingKey && recordingKey !== key;
-      return /* @__PURE__ */ import_react.default.createElement(
-        "div",
-        {
-          key,
-          className: `border-2 p-3 flex items-center gap-3 transition-all ${isWaiting || isRecording ? "border-red-500 bg-red-950/30" : isCustom ? "border-amber-500 bg-amber-500/5" : "border-stone-800 bg-stone-900/40"}`
-        },
-        /* @__PURE__ */ import_react.default.createElement(
+    ))), permission === "denied" && /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-red-900 bg-red-950/30 p-3 text-[11px] text-stone-300" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-red-400 uppercase tracking-widest mb-1" }, "Mic unavailable"), errorDetail), /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2", key: refreshKey }, (() => {
+      const heroEntries = Object.keys(HERO_SOUNDS);
+      const heroDefaults = new Set(Object.values(HERO_SOUNDS).map((m) => m.defaultSound).filter(Boolean));
+      const ownedExtras = (char?.sounds || []).filter((id) => SOUND_CATALOG[id] && !HERO_SOUNDS[id] && !heroDefaults.has(id));
+      const allKeys = [...heroEntries, ...ownedExtras];
+      return allKeys.map((key) => {
+        const meta = getSoundDisplay(key);
+        if (!meta) return null;
+        const isThisRecording = recordingKey === key;
+        const transient = sampleStatus[key];
+        const isWaiting = isThisRecording && transient === "waiting";
+        const isRecording = isThisRecording && transient === "recording";
+        const isCustom = !isThisRecording && !!HERO_SAMPLES[key];
+        const isDisabled = recordingKey && recordingKey !== key;
+        return /* @__PURE__ */ import_react.default.createElement(
           "div",
           {
-            className: "w-12 h-12 border-2 flex items-center justify-center text-lg font-mono",
-            style: { borderColor: meta.color, color: meta.color, background: `${meta.color}15` }
+            key,
+            className: `border-2 p-3 flex items-center gap-3 transition-all ${isWaiting || isRecording ? "border-red-500 bg-red-950/30" : isCustom ? "border-amber-500 bg-amber-500/5" : "border-stone-800 bg-stone-900/40"}`
           },
-          meta.label
-        ),
-        /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1" }, /* @__PURE__ */ import_react.default.createElement(
-          "div",
-          {
-            className: "text-stone-100 text-sm tracking-wider",
-            style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
-          },
-          meta.name.toUpperCase()
-        ), /* @__PURE__ */ import_react.default.createElement(
-          "div",
-          {
-            className: "text-[10px] uppercase tracking-wider mt-0.5",
-            style: { color: isWaiting || isRecording ? "#ef4444" : isCustom ? "#D4A017" : "#78716c" }
-          },
-          isWaiting ? "WAITING FOR SOUND\u2026" : isRecording ? "RECORDING\u2026" : isCustom ? "\u2713 CUSTOM SAMPLE" : "DEFAULT SYNTH"
-        )),
-        /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-col gap-1" }, isThisRecording ? /* @__PURE__ */ import_react.default.createElement(
-          "button",
-          {
-            onClick: abortRecording,
-            className: "px-3 py-1 border-2 border-stone-500 bg-stone-800 text-stone-200 text-[10px] uppercase tracking-wider"
-          },
-          "\u2715 Stop"
-        ) : /* @__PURE__ */ import_react.default.createElement(
-          "button",
-          {
-            onClick: () => recordSound(key),
-            disabled: isDisabled,
-            className: "px-3 py-1 border-2 border-red-700 bg-red-900/30 text-red-300 text-[10px] uppercase tracking-wider disabled:opacity-30"
-          },
-          "REC"
-        ), /* @__PURE__ */ import_react.default.createElement(
-          "button",
-          {
-            onClick: () => playHeroSound(key),
-            disabled: isThisRecording,
-            className: "px-3 py-1 border-2 border-stone-700 bg-stone-800 text-stone-300 text-[10px] uppercase tracking-wider disabled:opacity-30"
-          },
-          "\u25B6 Play"
-        ), isCustom && /* @__PURE__ */ import_react.default.createElement(
-          "button",
-          {
-            onClick: () => resetSound(key),
-            className: "px-3 py-1 border border-stone-800 text-stone-500 text-[9px] uppercase tracking-wider hover:text-amber-500"
-          },
-          "Reset"
-        ))
-      );
-    })), Object.keys(HERO_SOUNDS).some((k) => HERO_SAMPLES[k]) && /* @__PURE__ */ import_react.default.createElement(
+          /* @__PURE__ */ import_react.default.createElement(
+            "div",
+            {
+              className: "w-12 h-12 border-2 flex items-center justify-center text-lg font-mono",
+              style: { borderColor: meta.color, color: meta.color, background: `${meta.color}15` }
+            },
+            meta.label
+          ),
+          /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1" }, /* @__PURE__ */ import_react.default.createElement(
+            "div",
+            {
+              className: "text-stone-100 text-sm tracking-wider",
+              style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
+            },
+            meta.name.toUpperCase()
+          ), /* @__PURE__ */ import_react.default.createElement(
+            "div",
+            {
+              className: "text-[10px] uppercase tracking-wider mt-0.5",
+              style: { color: isWaiting || isRecording ? "#ef4444" : isCustom ? "#D4A017" : "#78716c" }
+            },
+            isWaiting ? "WAITING FOR SOUND\u2026" : isRecording ? "RECORDING\u2026" : isCustom ? "\u2713 CUSTOM SAMPLE" : meta.isHero ? "DEFAULT SYNTH" : "CATALOG SYNTH"
+          )),
+          /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-col gap-1" }, isThisRecording ? /* @__PURE__ */ import_react.default.createElement(
+            "button",
+            {
+              onClick: abortRecording,
+              className: "px-3 py-1 border-2 border-stone-500 bg-stone-800 text-stone-200 text-[10px] uppercase tracking-wider"
+            },
+            "\u2715 Stop"
+          ) : /* @__PURE__ */ import_react.default.createElement(
+            "button",
+            {
+              onClick: () => recordSound(key),
+              disabled: isDisabled,
+              className: "px-3 py-1 border-2 border-red-700 bg-red-900/30 text-red-300 text-[10px] uppercase tracking-wider disabled:opacity-30"
+            },
+            "REC"
+          ), /* @__PURE__ */ import_react.default.createElement(
+            "button",
+            {
+              onClick: () => playGameSound(key),
+              disabled: isThisRecording,
+              className: "px-3 py-1 border-2 border-stone-700 bg-stone-800 text-stone-300 text-[10px] uppercase tracking-wider disabled:opacity-30"
+            },
+            "\u25B6 Play"
+          ), isCustom && /* @__PURE__ */ import_react.default.createElement(
+            "button",
+            {
+              onClick: () => resetSound(key),
+              className: "px-3 py-1 border border-stone-800 text-stone-500 text-[9px] uppercase tracking-wider hover:text-amber-500"
+            },
+            "Reset"
+          ))
+        );
+      });
+    })()), ALL_SAMPLE_KEYS().some((k) => HERO_SAMPLES[k]) && /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         onClick: resetAll,
@@ -3086,6 +3455,8 @@ window.exports = window.module.exports;
       if (typeof c.tecLessonsCompleted !== "number") c.tecLessonsCompleted = 0;
       if (typeof c.tecCurrentLesson !== "number") c.tecCurrentLesson = 0;
       if (typeof c.tecBpm !== "number") c.tecBpm = 90;
+      if (typeof c.oriBpm !== "number") c.oriBpm = 100;
+      if (c.oriPattern === void 0) c.oriPattern = null;
       return c;
     };
     (0, import_react.useEffect)(() => {
@@ -3377,6 +3748,15 @@ window.exports = window.module.exports;
               statGain = Math.round(statGain * bpmMult);
               if (statGain > before) bonusText += ` (\xD7${bpmMult.toFixed(2)} BPM)`;
             }
+          } else if (trainStat === "ori") {
+            const c = accuracyRef.current || 0;
+            if (c >= 0.8) {
+              statGain = 3;
+              bonusText = " (creative!)";
+            } else if (c >= 0.5) {
+              statGain = 2;
+              bonusText = " (+1 bonus)";
+            }
           }
           setChar((cc) => {
             const updated = {
@@ -3526,27 +3906,51 @@ window.exports = window.module.exports;
       /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-3xl" }, "\u{1F3AE}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-left flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-base tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "BEATBOX HERO \xB7 TAP TO START"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-stone-400 uppercase tracking-wider mt-0.5" }, "Hit the notes in time \u2192 up to \xD73 stat gain")), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-xl group-hover:translate-x-1 transition-transform" }, "\u25B6"))
     ), trainStat === "tec" && playMode && (() => {
       const completed = char.tecLessonsCompleted || 0;
-      const currentIdx = Math.min(char.tecCurrentLesson || 0, completed);
+      const ownedSet = new Set(char.sounds || []);
+      const isPlayable = (i) => {
+        if (i > completed) return false;
+        const lesson = HERO_LESSONS[i];
+        if (lesson?.requires && !ownedSet.has(lesson.requires)) return false;
+        return true;
+      };
+      let currentIdx = Math.min(char.tecCurrentLesson || 0, HERO_LESSONS.length - 1);
+      if (!isPlayable(currentIdx)) {
+        for (let j = currentIdx; j >= 0; j--) {
+          if (isPlayable(j)) {
+            currentIdx = j;
+            break;
+          }
+        }
+      }
       const currentLesson = HERO_LESSONS[currentIdx] || HERO_LESSONS[0];
       const bpm = char.tecBpm || 90;
       const bpmMult = Math.max(1, bpm / 90);
       const stepBpm = (delta) => setChar((c) => ({ ...c, tecBpm: Math.max(60, Math.min(140, (c.tecBpm || 90) + delta)) }));
       return /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "overflow-x-auto -mx-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1.5 px-1 pb-1" }, HERO_LESSONS.map((lesson, i) => {
-        const unlocked = i <= completed;
+        const progressionOk = i <= completed;
+        const needsSound = lesson.requires && !ownedSet.has(lesson.requires);
+        const playable = progressionOk && !needsSound;
         const selected = i === currentIdx;
         return /* @__PURE__ */ import_react.default.createElement(
           "button",
           {
             key: i,
-            disabled: !unlocked,
+            disabled: !playable,
             onClick: () => setChar((c) => ({ ...c, tecCurrentLesson: i })),
-            className: `flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${selected ? "border-amber-500 bg-amber-500/10 text-amber-500" : unlocked ? "border-stone-700 text-stone-400 hover:border-amber-500/50" : "border-stone-800 text-stone-600 opacity-40"}`
+            className: `flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${selected ? "border-amber-500 bg-amber-500/10 text-amber-500" : playable ? "border-stone-700 text-stone-400 hover:border-amber-500/50" : "border-stone-800 text-stone-600 opacity-40"}`
           },
-          !unlocked && "\u{1F512} ",
+          !playable && "\u{1F512} ",
           "#",
           i + 1
         );
-      }))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center -mt-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-sm tracking-widest", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "#", currentIdx + 1, " ", currentLesson.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, currentLesson.desc)), /* @__PURE__ */ import_react.default.createElement(
+      }))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center -mt-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-sm tracking-widest", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "#", currentIdx + 1, " ", currentLesson.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, currentLesson.desc), currentLesson.requires && /* @__PURE__ */ import_react.default.createElement(
+        "div",
+        {
+          className: "text-[10px] uppercase tracking-wider mt-0.5",
+          style: { color: ownedSet.has(currentLesson.requires) ? "#22c55e" : "#fbbf24" }
+        },
+        ownedSet.has(currentLesson.requires) ? `\u2713 uses ${SOUND_CATALOG[currentLesson.requires]?.name || currentLesson.requires}` : `\u{1F512} needs ${SOUND_CATALOG[currentLesson.requires]?.name || currentLesson.requires} (buy in shop)`
+      )), /* @__PURE__ */ import_react.default.createElement(
         BeatboxHero,
         {
           onAccuracyUpdate: handleAccuracy,
@@ -3598,7 +4002,39 @@ window.exports = window.module.exports;
         },
         "\u25C0 Back to AFK"
       ));
-    })(), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "5 blocks \u2192 +1 ", trainConfig[trainStat].name, trainStat === "mus" ? " (up to +3 with tuner)" : trainStat === "tec" ? " (up to +3 with Beatbox Hero, \xD7BPM bonus)" : ""), /* @__PURE__ */ import_react.default.createElement(ProgressBar, { block: trainActivity.block, total: 5, label: `Block ${trainActivity.block}/5`, color: trainConfig[trainStat].color }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-wider text-stone-500" }, /* @__PURE__ */ import_react.default.createElement("span", null, "Stat increases: ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, trainActivity.rewardsEarned)), /* @__PURE__ */ import_react.default.createElement("span", null, "1 block = 10 game min (", playMode ? "2s \xB7 slow" : "0.5s", ")")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "danger", onClick: () => trainActivity.stop("Training stopped"), className: "w-full py-3" }, "STOP \u25A0")))), tab === "studio" && /* @__PURE__ */ import_react.default.createElement(SoundStudio, { activeSlot, showToast }), tab === "eat" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Fridge \u2014 wholefood plant-based" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, Object.entries(FOOD).map(([k, f]) => {
+    })(), trainStat === "ori" && !playMode && /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onClick: () => {
+          accuracyRef.current = 0;
+          setPlayMode(true);
+        },
+        className: "w-full p-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-900/40 hover:to-amber-800/30 transition-all group"
+      },
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-3xl" }, "\u{1F941}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-left flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-base tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "BEAT SEQUENCER \xB7 TAP TO START"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-stone-400 uppercase tracking-wider mt-0.5" }, "Program your beats \u2192 up to \xD73 stat gain")), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-xl group-hover:translate-x-1 transition-transform" }, "\u25B6"))
+    ), trainStat === "ori" && playMode && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement(
+      Sequencer,
+      {
+        onCreativityUpdate: handleAccuracy,
+        evaluateEveryMs: 2500,
+        active: trainActivity.active,
+        bpm: char.oriBpm || 100,
+        pattern: char.oriPattern,
+        ownedSounds: char.sounds || [],
+        onPatternChange: (p) => setChar((c) => ({ ...c, oriPattern: p })),
+        onBpmChange: (b) => setChar((c) => ({ ...c, oriBpm: b }))
+      }
+    ), /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onClick: () => {
+          setPlayMode(false);
+          accuracyRef.current = 0;
+        },
+        className: "w-full py-2 border-2 border-stone-700 bg-stone-900/50 text-stone-400 text-xs uppercase tracking-widest hover:border-stone-600 transition-all"
+      },
+      "\u25C0 Back to AFK"
+    )), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "5 blocks \u2192 +1 ", trainConfig[trainStat].name, trainStat === "mus" ? " (up to +3 with tuner)" : trainStat === "tec" ? " (up to +3 with Beatbox Hero, \xD7BPM bonus)" : trainStat === "ori" ? " (up to +3 with creative beats)" : ""), /* @__PURE__ */ import_react.default.createElement(ProgressBar, { block: trainActivity.block, total: 5, label: `Block ${trainActivity.block}/5`, color: trainConfig[trainStat].color }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-wider text-stone-500" }, /* @__PURE__ */ import_react.default.createElement("span", null, "Stat increases: ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, trainActivity.rewardsEarned)), /* @__PURE__ */ import_react.default.createElement("span", null, "1 block = 10 game min (", playMode ? "2s \xB7 slow" : "0.5s", ")")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "danger", onClick: () => trainActivity.stop("Training stopped"), className: "w-full py-3" }, "STOP \u25A0")))), tab === "studio" && /* @__PURE__ */ import_react.default.createElement(SoundStudio, { activeSlot, showToast, char }), tab === "eat" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Fridge \u2014 wholefood plant-based" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, Object.entries(FOOD).map(([k, f]) => {
       const foodIcon = k === "espresso" ? "coffee" : "star";
       return /* @__PURE__ */ import_react.default.createElement("div", { key: k, className: "flex items-center gap-3 p-2 border border-stone-800 bg-stone-900/30" }, /* @__PURE__ */ import_react.default.createElement(PixelIcon, { name: foodIcon, size: 20 }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-200 text-sm" }, f.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, f.energy ? `${f.energy >= 0 ? "+" : ""}${f.energy}\u26A1 ` : "", f.hunger ? `${f.hunger >= 0 ? "+" : ""}${f.hunger}\u{1F374} ` : "", f.mood ? `${f.mood >= 0 ? "+" : ""}${f.mood}\u2665` : "")), /* @__PURE__ */ import_react.default.createElement(Btn, { onClick: () => eat(k), disabled: char.cash < f.cost }, "$", f.cost));
     }))), tab === "rest" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "The Couch" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-400 text-xs uppercase tracking-wider" }, "Sleep until 6 AM. Restores full energy & advances a day.", char.minutes < 720 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 mt-1" }, "It's still daytime \u2014 are you sure?")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: sleep, className: "w-full py-3" }, "SLEEP \u{1F4A4}"))));
@@ -4248,6 +4684,30 @@ window.exports = window.module.exports;
     else if (key === "K") playRimshot(ctx, t);
     else if (key === "Pf") playSnare(ctx, t);
   };
+  var playGameSound = (soundKey) => {
+    if (!soundKey) return;
+    if (HERO_SOUNDS[soundKey]) {
+      playHeroSound(soundKey);
+      return;
+    }
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const sample = HERO_SAMPLES[soundKey];
+    if (sample) {
+      try {
+        const src = ctx.createBufferSource();
+        src.buffer = sample;
+        const gain = ctx.createGain();
+        gain.gain.value = 1;
+        src.connect(gain).connect(ctx.destination);
+        src.start(0);
+        return;
+      } catch (e) {
+      }
+    }
+    const meta = SOUND_CATALOG[soundKey];
+    if (meta) playSound(meta.cat, meta.name);
+  };
   var IDB_NAME = "beatbox-story-samples";
   var IDB_STORE = "samples";
   var _idbPromise = null;
@@ -4314,15 +4774,15 @@ window.exports = window.module.exports;
     buf.getChannelData(0).set(float32);
     return buf;
   };
+  var ALL_SAMPLE_KEYS = () => [...Object.keys(HERO_SOUNDS), ...Object.keys(SOUND_CATALOG)];
   var loadSamplesForSlot = async (slotN) => {
     if (!slotN) {
-      Object.keys(HERO_SOUNDS).forEach((k) => {
+      Object.keys(HERO_SAMPLES).forEach((k) => {
         delete HERO_SAMPLES[k];
       });
       return;
     }
-    const keys = Object.keys(HERO_SOUNDS);
-    for (const k of keys) {
+    for (const k of ALL_SAMPLE_KEYS()) {
       const rec = await idbGet(`slot${slotN}:sample-${k}`);
       const buf = recordToBuffer(rec);
       if (buf) HERO_SAMPLES[k] = buf;
@@ -4345,7 +4805,7 @@ window.exports = window.module.exports;
   };
   var deleteAllSamplesForSlot = async (slotN) => {
     if (!slotN) return;
-    for (const k of Object.keys(HERO_SOUNDS)) {
+    for (const k of ALL_SAMPLE_KEYS()) {
       delete HERO_SAMPLES[k];
       await idbDelete(`slot${slotN}:sample-${k}`);
     }
@@ -4682,8 +5142,16 @@ window.exports = window.module.exports;
       const beatMs = 6e4 / battleBpm;
       const extraSchedule = () => {
         let patternWindow = null;
-        if (completed > 0) {
-          const lessonIdx = Math.floor(Math.random() * completed);
+        const ownedSet = new Set(char.sounds || []);
+        const playableIdxs = [];
+        for (let i = 0; i < completed; i++) {
+          const l = HERO_LESSONS[i];
+          if (!l) continue;
+          if (l.requires && !ownedSet.has(l.requires)) continue;
+          playableIdxs.push(i);
+        }
+        if (playableIdxs.length > 0) {
+          const lessonIdx = playableIdxs[Math.floor(Math.random() * playableIdxs.length)];
           const lesson = HERO_LESSONS[lessonIdx];
           if (lesson) {
             const patternStartMs = 1500;
@@ -4697,7 +5165,7 @@ window.exports = window.module.exports;
               lesson.pattern.forEach((note) => {
                 const t = patternStartMs + note.beat * beatMs;
                 if (t < ROUND_SECONDS * 1e3) {
-                  eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+                  eventTimers.current.push(setTimeout(() => playGameSound(note.sound), t));
                 }
               });
             }
