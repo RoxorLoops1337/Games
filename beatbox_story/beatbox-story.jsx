@@ -4408,15 +4408,21 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           if (acc >= 0.8) { statGain = 3; bonusText = ' (perfect pitch!)'; }
           else if (acc >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
         } else if (trainStat === 'tec') {
+          // Reward is tied to actual hits — watching demo or missing every note
+          // earns 0. Bonuses kick in as accuracy improves.
           const acc = accuracyRef.current || 0;
-          if (acc >= 0.8) { statGain = 3; bonusText = ' (locked in!)'; }
+          if (acc <= 0)        { statGain = 0; }
+          else if (acc >= 0.8) { statGain = 3; bonusText = ' (locked in!)'; }
           else if (acc >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
-          // Higher BPM = bigger reward (subtle multiplier on top of accuracy bonus)
-          const bpmMult = Math.max(1, (charRef.current.tecBpm || 90) / 90);
-          if (bpmMult > 1) {
-            const before = statGain;
-            statGain = Math.round(statGain * bpmMult);
-            if (statGain > before) bonusText += ` (×${bpmMult.toFixed(2)} BPM)`;
+          else                 { statGain = 1; }
+          // Higher BPM = bigger reward (only when there's a base gain)
+          if (statGain > 0) {
+            const bpmMult = Math.max(1, (charRef.current.tecBpm || 90) / 90);
+            if (bpmMult > 1) {
+              const before = statGain;
+              statGain = Math.round(statGain * bpmMult);
+              if (statGain > before) bonusText += ` (×${bpmMult.toFixed(2)} BPM)`;
+            }
           }
         } else if (trainStat === 'ori') {
           // Sequencer creativity score → bonus
@@ -4424,12 +4430,17 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           if (c >= 0.8) { statGain = 3; bonusText = ' (creative!)'; }
           else if (c >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
         }
-        setChar(cc => {
-          const updated = { ...cc, xp: cc.xp + 10,
-            stats: { ...cc.stats, [trainStat]: cc.stats[trainStat] + statGain } };
-          return checkLevelUp(updated);
-        });
-        showToast(`+${statGain} ${trainConfig[trainStat].name}${bonusText}`, 'win');
+        if (statGain > 0) {
+          setChar(cc => {
+            const updated = { ...cc, xp: cc.xp + 10,
+              stats: { ...cc.stats, [trainStat]: cc.stats[trainStat] + statGain } };
+            return checkLevelUp(updated);
+          });
+          showToast(`+${statGain} ${trainConfig[trainStat].name}${bonusText}`, 'win');
+        } else {
+          // Earned no stat — give a nudge instead of a confusing "+0" toast
+          showToast(`Block ended — no ${trainConfig[trainStat].name} gain. Keep playing!`, 'info');
+        }
       },
     },
   });
