@@ -13,10 +13,10 @@
     </header>
 
     <div id="hud">
-      <div id="status">Phase 1 — Demo Battle</div>
+      <div id="status">Round 1 — shop</div>
       <div id="controls">
-        <button id="btn-start">Start Battle</button>
-        <button id="btn-reset">Reset</button>
+        <button id="btn-start">Battle / New Run</button>
+        <button id="btn-reset">Reset Run</button>
         <label>Speed
           <select id="speed">
             <option value="0.5">0.5x</option>
@@ -35,6 +35,7 @@
       <div class="legend-item"><span class="dot snare"></span>Snare — Bruiser</div>
       <div class="legend-item"><span class="dot hihat"></span>Hi-Hat — Fast</div>
       <div class="legend-item"><span class="dot vocal"></span>Vocal — Healer</div>
+      <div class="legend-item"><span class="dot bass"></span>Bass — Artillery</div>
     </div>
   </div>
 
@@ -48,9 +49,13 @@
   <!-- game -->
   <script src="js/game/units.js"></script>
   <script src="js/game/combat.js"></script>
+  <script src="js/game/run.js"></script>
+  <script src="js/game/shop.js"></script>
+  <script src="js/game/encounters.js"></script>
 
   <!-- scenes -->
   <script src="js/scenes/combat-scene.js"></script>
+  <script src="js/scenes/shop-scene.js"></script>
 
   <!-- boot -->
   <script src="js/main.js"></script>

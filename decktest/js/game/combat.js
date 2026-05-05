@@ -99,7 +99,7 @@ window.Decktest = window.Decktest || {};
   }
 
   function dealDamage(arena, attacker, victim) {
-    const dmg = attacker.def.atk;
+    const dmg = attacker.atk != null ? attacker.atk : attacker.def.atk;
     victim.hp -= dmg;
     victim.flashTimer = 0.15;
     spawnFloater(arena, victim, '-' + dmg, '#fca5a5');

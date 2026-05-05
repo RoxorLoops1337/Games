@@ -36,40 +36,25 @@ window.Decktest = window.Decktest || {};
 
     function setSpeed(s) { speed = Math.max(0.1, Math.min(10, s)); }
 
-    function loadDemo() {
+    function loadRosters(playerRoster, foeRoster, foeBuff) {
       combat.reset(arena);
       resultLatch = null;
-
-      // Player team — front line tanks, back line damage + healer.
-      [
-        ['kick',  1, 1],
-        ['kick',  1, 2],
-        ['snare', 2, 1],
-        ['hihat', 2, 2],
-        ['vocal', 0, 0],
-        ['hihat', 0, 3],
-      ].forEach(([id, c, r]) => combat.addUnit(arena, units.spawn(id, 'player', c, r)));
-
-      // Foe team — mirrored on the right side.
-      [
-        ['kick',  6, 1],
-        ['snare', 6, 2],
-        ['snare', 5, 1],
-        ['hihat', 5, 2],
-        ['vocal', 7, 0],
-        ['hihat', 7, 3],
-      ].forEach(([id, c, r]) => combat.addUnit(arena, units.spawn(id, 'foe', c, r)));
-    }
-
-    function start() {
-      if (arena.state === 'won' || arena.state === 'lost' || arena.state === 'idle') {
-        if (arena.units.length === 0 || arena.state !== 'idle') loadDemo();
-        arena.state = 'fighting';
+      for (const p of playerRoster) {
+        combat.addUnit(arena, units.spawn(p.defId, 'player', p.col, p.row));
+      }
+      for (const f of foeRoster) {
+        const [defId, col, row] = Array.isArray(f) ? f : [f.defId, f.col, f.row];
+        combat.addUnit(arena, units.spawn(defId, 'foe', col, row, foeBuff));
       }
     }
 
-    function reset() {
-      loadDemo();
+    function start() {
+      if (arena.units.length === 0) return;
+      if (arena.state !== 'fighting') {
+        arena.state = 'fighting';
+        resultLatch = null;
+        arena.time = 0;
+      }
     }
 
     function update(dt) {
@@ -231,16 +216,15 @@ window.Decktest = window.Decktest || {};
       drawResult();
     }
 
-    loadDemo();
-
     return {
       arena,
+      loadRosters,
       start,
-      reset,
       setSpeed,
       update,
       render,
       isFinished: () => arena.state === 'won' || arena.state === 'lost',
+      isPlayerVictory: () => arena.state === 'won',
     };
   }
 

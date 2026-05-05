@@ -92,6 +92,25 @@ window.Decktest = window.Decktest || {};
     "....OO....OO..",
   ];
 
+  const BASS_SPRITE = [
+    ".OOOOOOOOOOOO.",
+    "OBBHHHHHHHHBBO",
+    "OBHHEEBBEEHHBO",
+    "OBHHEEBBEEHHBO",
+    "OBBBBBMMBBBBBO",
+    "OBOOOOOOOOOOBO",
+    "OBOAAAAAAAAOBO",
+    "OBOAOOOOOOAOBO",
+    "OBOAOaaaaOAOBO",
+    "OBOAOOOOOOAOBO",
+    "OBOAAAAAAAAOBO",
+    "OBOOOOOOOOOOBO",
+    "OBBBBBBBBBBBBO",
+    ".OOOOOOOOOOOO.",
+    "...OO....OO...",
+    "...OO....OO...",
+  ];
+
   // ---- palettes -----------------------------------------------------------
   // Each palette maps the chars above to a hex color.
 
@@ -111,12 +130,17 @@ window.Decktest = window.Decktest || {};
     O: '#1a0628', B: '#c084fc', b: '#581c87', H: '#f3e8ff',
     E: '#1a0628', M: '#1a0628', A: '#f472b6', a: '#9d174d', W: '#ffffff',
   };
+  const PAL_BASS = {
+    O: '#080612', B: '#5b21b6', b: '#2e1065', H: '#ddd6fe',
+    E: '#080612', M: '#080612', A: '#1f1f30', a: '#0b0b14', W: '#ffffff',
+  };
 
   // Enemy palettes: same sprites recolored to look like rivals.
   const PAL_KICK_FOE  = { ...PAL_KICK,  B: '#a3a3a3', b: '#404040', A: '#737373', a: '#262626' };
   const PAL_SNARE_FOE = { ...PAL_SNARE, B: '#9ca3af', b: '#374151', A: '#4b5563', a: '#1f2937' };
   const PAL_HIHAT_FOE = { ...PAL_HIHAT, B: '#94a3b8', b: '#334155', A: '#cbd5e1', a: '#475569' };
   const PAL_VOCAL_FOE = { ...PAL_VOCAL, B: '#71717a', b: '#27272a', A: '#a1a1aa', a: '#3f3f46' };
+  const PAL_BASS_FOE  = { ...PAL_BASS,  B: '#52525b', b: '#18181b', A: '#27272a', a: '#09090b' };
 
   // ---- unit definitions ---------------------------------------------------
 
@@ -187,27 +211,53 @@ window.Decktest = window.Decktest || {};
       foePalette: PAL_VOCAL_FOE,
       blurb: 'Hits the high note.',
     },
+    bass: {
+      id: 'bass',
+      name: 'Bass',
+      role: 'Artillery',
+      tier: 2,
+      cost: 5,
+      hp: 18,
+      atk: 9,
+      atkSpeed: 0.55,
+      range: 5,
+      moveSpeed: 1.1,
+      sprite: BASS_SPRITE,
+      palette: PAL_BASS,
+      foePalette: PAL_BASS_FOE,
+      blurb: 'Sub-frequency wallop.',
+    },
+  };
+
+  const SHOP_POOL_BY_TIER = {
+    1: ['kick', 'snare', 'hihat', 'vocal'],
+    2: ['bass'],
   };
 
   // Spawn a live unit instance from a definition.
-  function spawn(defId, team, col, row) {
+  // buff: optional { hpMul, atkMul } for foe scaling.
+  function spawn(defId, team, col, row, buff) {
     const def = UNIT_DEFS[defId];
     if (!def) throw new Error('Unknown unit: ' + defId);
+    const hpMul = buff && buff.hpMul ? buff.hpMul : 1;
+    const atkMul = buff && buff.atkMul ? buff.atkMul : 1;
+    const maxHp = Math.round(def.hp * hpMul);
     return {
       def,
       team,                 // 'player' or 'foe'
-      col, row,             // logical grid position
-      x: col, y: row,       // continuous position (for movement interp)
-      hp: def.hp,
-      maxHp: def.hp,
-      atkCd: 0,             // attack cooldown timer
+      col, row,
+      x: col, y: row,
+      hp: maxHp,
+      maxHp,
+      atk: Math.round(def.atk * atkMul),
+      atkCd: 0,
       healCd: def.healCooldown || 0,
       target: null,
-      flashTimer: 0,        // visual: hit flash
+      flashTimer: 0,
       bobPhase: Math.random() * Math.PI * 2,
-      attackAnim: 0,        // 0..1 progress for attack lunge
+      attackAnim: 0,
     };
   }
 
-  Decktest.units = { UNIT_DEFS, spawn };
+  Decktest.units = { UNIT_DEFS, SHOP_POOL_BY_TIER, spawn };
 })();

@@ -8,6 +8,7 @@
   --snare: #f5c518;
   --hihat: #38bdf8;
   --vocal: #c084fc;
+  --bass: #5b21b6;
 }
 
 * { box-sizing: border-box; }
@@ -131,3 +132,4 @@ canvas {
 .dot.snare { background: var(--snare); }
 .dot.hihat { background: var(--hihat); }
 .dot.vocal { background: var(--vocal); }
+.dot.bass { background: var(--bass); }

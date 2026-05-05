@@ -3,7 +3,9 @@ window.Decktest = window.Decktest || {};
 (function () {
   const keys = new Set();
   const pressed = new Set();
-  const mouse = { x: 0, y: 0, down: false, clicked: false };
+  const mouse = { x: 0, y: 0, down: false, clicked: false, rightClicked: false };
+  const clickListeners = [];
+  const rightClickListeners = [];
 
   function attach(canvas) {
     window.addEventListener('keydown', e => {
@@ -12,22 +14,46 @@ window.Decktest = window.Decktest || {};
     });
     window.addEventListener('keyup', e => keys.delete(e.key));
 
-    canvas.addEventListener('mousemove', e => {
+    function toCanvasCoords(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * canvas.width;
-      mouse.y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+      return {
+        x: ((clientX - rect.left) / rect.width) * canvas.width,
+        y: ((clientY - rect.top) / rect.height) * canvas.height,
+      };
+    }
+
+    canvas.addEventListener('mousemove', e => {
+      const c = toCanvasCoords(e.clientX, e.clientY);
+      mouse.x = c.x;
+      mouse.y = c.y;
     });
-    canvas.addEventListener('mousedown', () => { mouse.down = true; mouse.clicked = true; });
+    canvas.addEventListener('mousedown', e => {
+      const c = toCanvasCoords(e.clientX, e.clientY);
+      mouse.x = c.x; mouse.y = c.y;
+      if (e.button === 2) {
+        mouse.rightClicked = true;
+        for (const fn of rightClickListeners) fn(c);
+      } else {
+        mouse.down = true;
+        mouse.clicked = true;
+        for (const fn of clickListeners) fn(c);
+      }
+    });
     canvas.addEventListener('mouseup', () => { mouse.down = false; });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
   }
+
+  function onClick(fn) { clickListeners.push(fn); }
+  function onRightClick(fn) { rightClickListeners.push(fn); }
 
   function endFrame() {
     pressed.clear();
     mouse.clicked = false;
+    mouse.rightClicked = false;
   }
 
   Decktest.input = {
-    attach, endFrame,
+    attach, endFrame, onClick, onRightClick,
     isDown: k => keys.has(k),
     wasPressed: k => pressed.has(k),
     mouse,
