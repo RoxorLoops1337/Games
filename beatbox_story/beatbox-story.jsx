@@ -69,6 +69,9 @@ const initialChar = () => ({
   oriBpm: 100, // BPM for the originality sequencer
   oriPattern: null, // sequencer state: { tracks: [{key, cells}] } — null means use default 4-hero seed
   pendingDebuff: null, // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
+  showcaseBooking: null, // { day: number, minute: number } — Rhozel's booked Friday slot
+  lastShowcaseDay: null, // day a showcase was performed (cooldown: 7 days)
+  lastBattleDay: null, // day a battle happened (cooldown: 7 days)
   created: false,
 });
 
@@ -4038,6 +4041,9 @@ export default function BeatboxStory() {
     if (typeof c.oriBpm !== 'number') c.oriBpm = 100;
     if (c.oriPattern === undefined) c.oriPattern = null;
     if (c.pendingDebuff === undefined) c.pendingDebuff = null;
+    if (c.showcaseBooking === undefined) c.showcaseBooking = null;
+    if (c.lastShowcaseDay === undefined) c.lastShowcaseDay = null;
+    if (c.lastBattleDay === undefined) c.lastBattleDay = null;
     return c;
   };
 
@@ -4226,7 +4232,7 @@ export default function BeatboxStory() {
           {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} />}
           {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
           {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} />}
-          {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} />}
+          {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
           {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
         </div>
 
@@ -5112,10 +5118,179 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp }) {
   );
 }
 
+// ============ RHOZEL — BAR KEEPER ============
+// Funny dialogue NPC who books Friday showcases.
+
+const RHOZEL_GREETINGS = [
+  "Yo, lil homie! What you sippin' on tonight?",
+  "Aaayy, the people's champion in the building.",
+  "Look who decided to show up — you smell like ambition.",
+  "Welcome back. Try not to scare my regulars.",
+  "Ay, this ain't no daycare. You here to spit or what?",
+  "I run this bar, the cypher, and your hopes & dreams. What's good?",
+];
+const RHOZEL_NEED_FANS = [
+  "Ten fans? Ten?? My DOG got more followers than that. Build a buzz, then we talk.",
+  "Lil bro come back when more than your mama is screaming your name.",
+  "I need a crowd that pays my electric bill. Not a Spotify playlist of three.",
+];
+const RHOZEL_NEED_SHO = [
+  "Showmanship like wet cardboard. Practice the camera work, I'll see you next week.",
+  "You got the heat but no charisma — even my bar stool got more presence.",
+  "Pump up the showmanship. Friday crowd ain't here to hear, they here to SEE.",
+];
+const RHOZEL_COOLDOWN = [
+  "Already had your slot this week, hotshot. Let the people miss you.",
+  "One show a week. That's the rule. Even Beyoncé gotta breathe.",
+];
+const RHOZEL_BOOKED_OK = (timeStr, day) => [
+  `Aight, I see you. Friday ${timeStr}. Don't be late or I give the slot to a 14-year-old TikTok kid.`,
+  `Cool. Friday at ${timeStr}. Be sober, be loud, be there.`,
+  `Locked in: Friday, ${timeStr}. Mess this up and you're banned from karaoke too.`,
+];
+const RHOZEL_REMINDER = (timeStr) => [
+  `You're already on the list, Friday ${timeStr}. Don't make me regret it.`,
+  `Booked, kid. Friday ${timeStr}. Show up or shut up.`,
+];
+const _pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// 8 PM .. 0:30 AM in 30-min slots (in-game minutes since 6 AM)
+const SHOWCASE_SLOTS = [];
+for (let m = 14 * 60; m <= 18 * 60 + 30; m += 30) SHOWCASE_SLOTS.push(m);
+
+// How many days from current to next Friday (DAY_NAMES idx 4 = Friday).
+// If today IS Friday and the slot pool still has a future time, book today.
+const daysToNextFriday = (currentDay, currentMinutes) => {
+  const dow = dayOfWeek(currentDay);
+  if (dow < 4) return 4 - dow;
+  if (dow === 4) {
+    // Today; only book today if at least one slot is still in the future
+    const earliest = SHOWCASE_SLOTS[0];
+    if (currentMinutes < earliest) return 0;
+    return 7; // next Friday
+  }
+  return 11 - dow;
+};
+
+// Pick a random slot, biased to "still in the future" if today.
+const pickShowcaseSlot = (currentDay, bookingDay, currentMinutes) => {
+  const candidates = (currentDay === bookingDay)
+    ? SHOWCASE_SLOTS.filter(m => m > currentMinutes + 30)
+    : [...SHOWCASE_SLOTS];
+  return candidates[Math.floor(Math.random() * candidates.length)];
+};
+
+// ============ SHOWCASE PERFORMANCE ============
+// Free-play MPC pad grid using all of the player's owned sounds. 20-second
+// performance — taps + variety determine the reward.
+
+const ShowcasePerformance = ({ char, durationMs = 20000, onComplete }) => {
+  const [tapsCount, setTapsCount] = useState(0);
+  const [distinctSet, setDistinctSet] = useState(() => new Set());
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [pulse, setPulse] = useState({}); // {soundKey: timestamp} for visual flash
+  const startedAtRef = useRef(performance.now());
+  const finishedRef = useRef(false);
+  const tapsRef = useRef(0);
+  const distinctRef = useRef(new Set());
+
+  // Build the pad list: hero 4 + every owned non-default catalog sound
+  const heroDefaults = new Set(Object.values(HERO_SOUNDS).map(m => m.defaultSound).filter(Boolean));
+  const pads = [
+    ...Object.keys(HERO_SOUNDS),
+    ...(char.sounds || []).filter(id => SOUND_CATALOG[id] && !HERO_SOUNDS[id] && !heroDefaults.has(id)),
+  ];
+
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      const now = performance.now();
+      const t = now - startedAtRef.current;
+      setElapsedMs(t);
+      if (t >= durationMs && !finishedRef.current) {
+        finishedRef.current = true;
+        onComplete?.({
+          totalTaps: tapsRef.current,
+          distinctSounds: distinctRef.current.size,
+          durationMs,
+        });
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onTap = (key) => {
+    if (finishedRef.current) return;
+    playGameSound(key);
+    tapsRef.current += 1;
+    distinctRef.current.add(key);
+    setTapsCount(tapsRef.current);
+    setDistinctSet(new Set(distinctRef.current));
+    setPulse(p => ({ ...p, [key]: performance.now() }));
+  };
+
+  const progress = Math.min(1, elapsedMs / durationMs);
+  const cols = pads.length <= 4 ? pads.length : 4;
+
+  return (
+    <div className="space-y-3">
+      <div className="text-center">
+        <div className="text-amber-500 text-2xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          🔥 LIVE — {char.name?.toUpperCase()}
+        </div>
+        <div className="text-[10px] text-stone-500 uppercase tracking-[0.3em]">Free play · go off</div>
+      </div>
+
+      <div className="h-2 bg-stone-950 border border-stone-800 overflow-hidden">
+        <div className="h-full transition-all" style={{ width: `${progress * 100}%`, background: progress < 0.85 ? '#D4A017' : '#ef4444' }} />
+      </div>
+
+      <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        {pads.map(key => {
+          const meta = getSoundDisplay(key) || { color: '#D4A017', label: '?', name: key };
+          const lastTap = pulse[key] || 0;
+          const age = performance.now() - lastTap;
+          const flashing = age < 150;
+          return (
+            <button key={key}
+              onPointerDown={(e) => { e.preventDefault(); onTap(key); }}
+              className="aspect-square border-2 active:scale-95 transition-transform select-none touch-none"
+              style={{
+                borderColor: meta.color,
+                background: flashing ? meta.color : `${meta.color}1f`,
+                color: flashing ? '#0c0a09' : meta.color,
+                fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+                fontSize: 22,
+                letterSpacing: '0.15em',
+              }}>
+              <div>{meta.label}</div>
+              <div className="text-[9px] tracking-widest mt-1" style={{ opacity: flashing ? 0.7 : 0.5 }}>
+                {meta.name?.toUpperCase()}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-stone-500">
+        <span>HITS <span className="text-amber-500">{tapsCount}</span></span>
+        <span>SOUNDS <span className="text-amber-500">{distinctSet.size}/{pads.length}</span></span>
+        <span>TIME <span className="text-amber-500">{Math.max(0, Math.ceil((durationMs - elapsedMs) / 1000))}s</span></span>
+      </div>
+    </div>
+  );
+};
+
 // ============ SCREEN: BAR ============
 
-function BarScreen({ char, setChar, go, showToast }) {
+function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const [selected, setSelected] = useState(null);
+  const [rhozelLine, setRhozelLine] = useState(() => _pick(RHOZEL_GREETINGS));
+  const [performingShowcase, setPerformingShowcase] = useState(false);
 
   // Lock bar during daytime
   if (!isNightTime(char.minutes ?? 0)) {
@@ -5178,25 +5353,6 @@ function BarScreen({ char, setChar, go, showToast }) {
     }));
     showToast(`Open mic: +$${earn}`, 'win');
   };
-  const doShowcase = () => {
-    if (char.energy < 25) { showToast('Need 25 energy for a showcase', 'bad'); return; }
-    const sho = char.stats.sho || 0;
-    const mus = char.stats.mus || 0;
-    const tec = char.stats.tec || 0;
-    const earn = 50 + sho * 5 + mus * 3 + tec * 2 + Math.floor(Math.random() * 20);
-    const fans = Math.max(1, Math.floor(sho / 3) + Math.floor(Math.random() * 3));
-    setChar(c => ({
-      ...c,
-      cash: c.cash + earn,
-      energy: Math.max(0, c.energy - 25),
-      mood: Math.min(100, c.mood + 12),
-      minutes: c.minutes + 60,
-      heat: (c.heat || 0) + 6,
-      followers: c.followers + fans,
-      xp: c.xp + 25,
-    }));
-    showToast(`Showcase: +$${earn} · +${fans} fan${fans === 1 ? '' : 's'}`, 'win');
-  };
   const doKaraoke = () => {
     if (char.energy < 8) { showToast('Too tired to sing', 'bad'); return; }
     const earn = 4 + Math.floor(Math.random() * 5);
@@ -5213,8 +5369,107 @@ function BarScreen({ char, setChar, go, showToast }) {
     showToast(`Karaoke: +${musGain} musicality, +$${earn}`, 'win');
   };
 
-  // Showcase gating: needs basic credibility
-  const showcaseReady = (char.level || 1) >= 3 || (char.followers || 0) >= 10;
+  // ---- Rhozel / Friday-showcase booking ----
+  const SHOWCASE_FANS_REQ = 10;
+  const SHOWCASE_SHO_REQ = 8;
+  const FRIDAY_DOW = 4;
+  const showcaseCooldownDaysLeft = char.lastShowcaseDay
+    ? Math.max(0, 7 - (char.day - char.lastShowcaseDay))
+    : 0;
+  const onCooldown = showcaseCooldownDaysLeft > 0;
+  const meetsBookingReqs = (char.followers || 0) >= SHOWCASE_FANS_REQ && (char.stats.sho || 0) >= SHOWCASE_SHO_REQ;
+  const askRhozel = () => {
+    if (char.showcaseBooking) {
+      setRhozelLine(_pick(RHOZEL_REMINDER(clockString(char.showcaseBooking.minute))));
+      return;
+    }
+    if (onCooldown) {
+      setRhozelLine(_pick(RHOZEL_COOLDOWN));
+      return;
+    }
+    if ((char.followers || 0) < SHOWCASE_FANS_REQ) {
+      setRhozelLine(_pick(RHOZEL_NEED_FANS));
+      return;
+    }
+    if ((char.stats.sho || 0) < SHOWCASE_SHO_REQ) {
+      setRhozelLine(_pick(RHOZEL_NEED_SHO));
+      return;
+    }
+    // Book it
+    const days = daysToNextFriday(char.day, char.minutes);
+    const bookingDay = char.day + days;
+    const slot = pickShowcaseSlot(char.day, bookingDay, char.minutes);
+    const timeStr = clockString(slot);
+    setChar(c => ({ ...c, showcaseBooking: { day: bookingDay, minute: slot } }));
+    setRhozelLine(_pick(RHOZEL_BOOKED_OK(timeStr, bookingDay)));
+    showToast(`Booked: Friday ${timeStr}`, 'win');
+  };
+  const chatRhozel = () => setRhozelLine(_pick(RHOZEL_GREETINGS));
+
+  // Friday-night gig logic: are we in the booking window?
+  const booking = char.showcaseBooking;
+  const isBookingDay = booking && char.day === booking.day;
+  const minutesToGig = isBookingDay ? booking.minute - char.minutes : Infinity;
+  const inGigWindow = isBookingDay && minutesToGig <= 30 && minutesToGig >= -60;
+  const missedGig = booking && (char.day > booking.day || (isBookingDay && minutesToGig < -60));
+
+  // Auto-clear missed booking
+  useEffect(() => {
+    if (missedGig) {
+      setChar(c => ({ ...c, showcaseBooking: null }));
+      showToast('Missed your showcase. Rhozel ain\'t happy.', 'bad');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missedGig]);
+
+  const startShowcaseGig = () => {
+    if (!booking) return;
+    // Time skip to gig start
+    setChar(c => ({ ...c, minutes: booking.minute }));
+    setPerformingShowcase(true);
+  };
+  const finishShowcaseGig = ({ totalTaps, distinctSounds }) => {
+    const sho = char.stats.sho || 0;
+    const mus = char.stats.mus || 0;
+    const tec = char.stats.tec || 0;
+    const baseReward = 100 + sho * 10 + mus * 4 + tec * 4;
+    const engagement = Math.min(2, totalTaps / 30);
+    const variety = Math.min(1.5, distinctSounds / 4);
+    const reward = Math.round(baseReward * Math.max(0.5, engagement) * Math.max(0.7, variety));
+    const fans = Math.max(2, Math.floor(sho / 2 + distinctSounds));
+    setChar(c => {
+      const updated = {
+        ...c,
+        cash: c.cash + reward,
+        followers: c.followers + fans,
+        energy: Math.max(0, c.energy - 25),
+        minutes: c.minutes + 30, // 30 in-game min performance
+        mood: Math.min(100, c.mood + 18),
+        heat: (c.heat || 0) + 8,
+        xp: c.xp + 60,
+        showcaseBooking: null,
+        lastShowcaseDay: c.day,
+      };
+      return checkLevelUp ? checkLevelUp(updated) : updated;
+    });
+    showToast(`Showcase: +$${reward} · +${fans} fans 🔥`, 'win');
+    setPerformingShowcase(false);
+  };
+
+  // Battle once-per-week gating (Saturday, lastBattleDay)
+  const battleCooldownDaysLeft = char.lastBattleDay
+    ? Math.max(0, 7 - (char.day - char.lastBattleDay))
+    : 0;
+  const battleOnCooldown = battleCooldownDaysLeft > 0;
+
+  // While performing, take over the screen
+  if (performingShowcase) {
+    return (
+      <div className="space-y-3 pt-2">
+        <ShowcasePerformance char={char} durationMs={20000} onComplete={finishShowcaseGig} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -5251,23 +5506,46 @@ function BarScreen({ char, setChar, go, showToast }) {
       {schedule.activity === 'showcase' && (
         <Panel title="Friday Showcase">
           <div className="space-y-2">
-            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
-              Headline slot. Big payday — but only if you've got cred (Lvl 3+ or 10+ fans).
-            </div>
-            <Btn variant="primary" onClick={doShowcase} disabled={!showcaseReady || char.energy < 25} className="w-full py-3">
-              {showcaseReady ? 'HEADLINE 🎤 (-25⚡, +60 min)' : '🔒 NOT READY YET'}
-            </Btn>
-            {!showcaseReady && (
-              <div className="text-[10px] text-amber-500 text-center uppercase">
-                Reach Lvl 3 or 10 followers to qualify
+            {!booking && (
+              <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                No booking. Talk to Rhozel below — he runs the slot list.
               </div>
             )}
-            {showcaseReady && char.energy < 25 && <div className="text-[10px] text-red-500 text-center uppercase">Need 25 energy</div>}
+            {booking && !isBookingDay && (
+              <div className="text-[10px] text-amber-500 uppercase tracking-wider">
+                You're booked Friday at {clockString(booking.minute)}. Come back then.
+              </div>
+            )}
+            {booking && isBookingDay && minutesToGig > 30 && (
+              <div className="text-[10px] text-amber-500 uppercase tracking-wider">
+                Gig at {clockString(booking.minute)} · {Math.ceil(minutesToGig / 10) * 10} game-min to go. Hang tight.
+              </div>
+            )}
+            {booking && inGigWindow && (
+              <>
+                <div className="text-[10px] text-amber-500 uppercase tracking-widest text-center">
+                  ⭐ ON DECK — {clockString(booking.minute)}
+                </div>
+                <Btn variant="primary" onClick={startShowcaseGig} disabled={char.energy < 25} className="w-full py-3">
+                  READY FOR THE GIG 🔥 (-25⚡)
+                </Btn>
+                {char.energy < 25 && <div className="text-[10px] text-red-500 text-center uppercase">Need 25 energy</div>}
+              </>
+            )}
           </div>
         </Panel>
       )}
 
-      {schedule.activity === 'battle' && (
+      {schedule.activity === 'battle' && battleOnCooldown && (
+        <Panel title="Battle Night">
+          <div className="text-center py-3 space-y-2">
+            <div className="text-4xl">🥊</div>
+            <div className="text-xs text-stone-400 uppercase tracking-wider">You already battled this week. Come back in {battleCooldownDaysLeft} day{battleCooldownDaysLeft === 1 ? '' : 's'}.</div>
+          </div>
+        </Panel>
+      )}
+
+      {schedule.activity === 'battle' && !battleOnCooldown && (
         <Panel title="Choose your opponent">
           <div className="space-y-2">
             {NPCS.map((n, i) => {
@@ -5321,6 +5599,38 @@ function BarScreen({ char, setChar, go, showToast }) {
               GRAB THE MIC 🎶 (-8⚡, +30 min)
             </Btn>
             {char.energy < 8 && <div className="text-[10px] text-red-500 text-center uppercase">Need 8 energy</div>}
+          </div>
+        </Panel>
+      )}
+
+      {/* Rhozel — bar keeper + Friday showcase booking */}
+      {schedule.activity !== 'closed' && (
+        <Panel title="Rhozel · Bar Keeper">
+          <div className="flex gap-3 items-start">
+            <div className="text-4xl flex-shrink-0">🧔🏿‍♂️</div>
+            <div className="flex-1 space-y-2">
+              <div className="text-stone-200 text-sm tracking-wide italic border-l-2 border-amber-500/50 pl-2">
+                "{rhozelLine}"
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button onClick={askRhozel}
+                  className="px-2 py-1.5 border-2 border-amber-500/60 bg-amber-500/10 text-amber-500 text-[10px] uppercase tracking-widest hover:bg-amber-500/20">
+                  Friday gig?
+                </button>
+                <button onClick={chatRhozel}
+                  className="px-2 py-1.5 border-2 border-stone-700 text-stone-400 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+                  Just chatting
+                </button>
+              </div>
+              <div className="text-[9px] text-stone-600 uppercase tracking-wider">
+                Need {SHOWCASE_FANS_REQ}+ fans · {SHOWCASE_SHO_REQ}+ showmanship · 1 show / week
+              </div>
+              {booking && (
+                <div className="text-[9px] text-amber-500 uppercase tracking-widest border-t border-stone-800 pt-1">
+                  ✓ booked: friday {clockString(booking.minute)}
+                </div>
+              )}
+            </div>
           </div>
         </Panel>
       )}
@@ -6801,6 +7111,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         mood: Math.min(100, Math.max(0, c.mood + (won ? 15 : -10))),
         xp: c.xp + xp,
         defeated: won && !c.defeated.includes(opponent.name) ? [...c.defeated, opponent.name] : c.defeated,
+        lastBattleDay: c.day, // 1-battle-per-week cooldown
       };
       delete newC._opponent;
       return checkLevelUp(newC);
