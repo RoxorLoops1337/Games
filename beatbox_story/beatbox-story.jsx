@@ -68,6 +68,7 @@ const initialChar = () => ({
   tecBpm: 90, // current BPM for the rhythm game
   oriBpm: 100, // BPM for the originality sequencer
   oriPattern: null, // sequencer state: { tracks: [{key, cells}] } — null means use default 4-hero seed
+  pendingDebuff: null, // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
   created: false,
 });
 
@@ -165,6 +166,33 @@ function timeOfDay(mins) {
 
 const isDayTime = (mins) => mins < 720;       // before 6pm
 const isNightTime = (mins) => mins >= 720;    // 6pm onwards
+
+// Day-of-week starts day 1 = Tuesday (so a brand-new player isn't locked out
+// on a Monday). Returns 0=Mon, 1=Tue, ..., 6=Sun.
+const DAY_NAMES = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const DAY_NAMES_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const dayOfWeek = (day) => ((day || 1)) % 7;
+
+// What's happening at the bar tonight, indexed by day-of-week (0..6).
+const BAR_SCHEDULE = [
+  { activity: 'closed',   title: 'CLOSED',         tagline: 'Bar is dark — the doors stay shut on Mondays.' },
+  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Earn small change + heat.' },
+  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Earn small change + heat.' },
+  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Earn small change + heat.' },
+  { activity: 'showcase', title: 'PAID SHOWCASE',  tagline: 'Headline if you\'re good enough — better pay.' },
+  { activity: 'battle',   title: 'BATTLE NIGHT',   tagline: 'The cypher fires up. Pick a challenger.' },
+  { activity: 'karaoke',  title: 'KARAOKE NIGHT',  tagline: 'Sing along. Sharpen your musicality.' },
+];
+
+// Bar menu: snacks (eaten) and drinks (drank). Each gives an immediate boost
+// and a delayed debuff applied the next morning when you sleep.
+const BAR_MENU = {
+  spicy_wings:  { name: 'Spicy Wings',     kind: 'snack', cost: 8,  immediate: { mood: 12, hunger: 18 },          debuff: { hunger: -10 } },
+  energy_drink: { name: 'Energy Drink',    kind: 'drink', cost: 6,  immediate: { energy: 45, mood: 4 },           debuff: { energy: -25 } },
+  cocktail:     { name: 'Tropical Cocktail', kind: 'drink', cost: 12, immediate: { mood: 30, energy: 12 },        debuff: { mood: -18, energy: -8 } },
+  whiskey:      { name: 'Whiskey Shot',    kind: 'drink', cost: 10, immediate: { mood: 22, energy: 8 },           debuff: { mood: -22 } },
+  loaded_fries: { name: 'Loaded Fries',    kind: 'snack', cost: 9,  immediate: { hunger: 28, mood: 6, energy: 6 }, debuff: { hunger: -12 } },
+};
 
 // Palette per time of day
 const TIME_PALETTES = {
@@ -3969,6 +3997,7 @@ export default function BeatboxStory() {
     if (typeof c.tecBpm !== 'number') c.tecBpm = 90;
     if (typeof c.oriBpm !== 'number') c.oriBpm = 100;
     if (c.oriPattern === undefined) c.oriPattern = null;
+    if (c.pendingDebuff === undefined) c.pendingDebuff = null;
     return c;
   };
 
@@ -4247,7 +4276,7 @@ function HoodScreen({ go, char }) {
     { id: 'park', name: 'The Park', desc: 'Jam, busk, run', pixelIcon: 'tree', color: '#84cc16',
       locked: !isDayTime(mins), lockReason: 'The park is empty at night. Come back at sunrise (6 AM).' },
     { id: 'shop', name: 'The Shop', desc: 'Gear & food', pixelIcon: 'shop', color: '#C8DCEF' },
-    { id: 'bar', name: 'The Bar', desc: 'Battle for glory', pixelIcon: 'beer', color: '#CC2200',
+    { id: 'bar', name: 'The Bar', desc: `Tonight: ${BAR_SCHEDULE[dayOfWeek(char.day)].title}`, pixelIcon: 'beer', color: '#CC2200',
       locked: !isNightTime(mins), lockReason: 'The bar opens at 6 PM. The cypher only happens at night.' },
   ];
   return (
@@ -4384,15 +4413,21 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   };
 
   const sleep = () => {
-    setChar(c => ({
-      ...c,
-      energy: c.maxEnergy ?? 100,
-      hunger: Math.max(0, c.hunger - 30),
-      mood: Math.min(100, c.mood + 10),
-      day: c.day + 1,
-      minutes: 0, // reset to 6 AM
-    }));
-    showToast('Slept till morning', 'win');
+    setChar(c => {
+      const max = c.maxEnergy ?? 100;
+      let energy = max;
+      let hunger = Math.max(0, c.hunger - 30);
+      let mood = Math.min(100, c.mood + 10);
+      // Apply any pending debuff from last night's bar items (hangover/crash etc.)
+      const d = c.pendingDebuff;
+      if (d) {
+        energy = Math.max(0, Math.min(max, energy + (d.energy || 0)));
+        hunger = Math.max(0, Math.min(100, hunger + (d.hunger || 0)));
+        mood = Math.max(0, Math.min(100, mood + (d.mood || 0)));
+      }
+      return { ...c, energy, hunger, mood, day: c.day + 1, minutes: 0, pendingDebuff: null };
+    });
+    showToast(char.pendingDebuff ? 'Slept it off — feeling rough' : 'Slept till morning', char.pendingDebuff ? 'info' : 'win');
   };
 
   return (
@@ -5048,50 +5083,183 @@ function BarScreen({ char, setChar, go, showToast }) {
       <div className="space-y-3 pt-8 text-center">
         <div className="text-6xl">🍺</div>
         <div className="text-xl text-stone-400" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE BAR IS CLOSED</div>
-        <div className="text-xs text-stone-500 uppercase tracking-wider px-6">Battles only happen after dark. Come back at 6 PM when the cypher fires up.</div>
+        <div className="text-xs text-stone-500 uppercase tracking-wider px-6">Doors open at 6 PM. Come back tonight.</div>
         <Btn onClick={() => go('hood')} className="mt-4">← BACK TO HOOD</Btn>
       </div>
     );
   }
 
+  const dow = dayOfWeek(char.day);
+  const schedule = BAR_SCHEDULE[dow];
+  const dayName = DAY_NAMES[dow];
+
+  // Apply a temporary boost from the bar menu, queue the next-day debuff
+  const orderItem = (id) => {
+    const item = BAR_MENU[id];
+    if (!item) return;
+    if (char.cash < item.cost) { showToast('Not enough cash', 'bad'); return; }
+    setChar(c => {
+      const max = c.maxEnergy ?? 100;
+      const im = item.immediate;
+      const next = {
+        ...c,
+        cash: c.cash - item.cost,
+        minutes: c.minutes + 5,
+        energy: Math.max(0, Math.min(max, c.energy + (im.energy || 0))),
+        hunger: Math.max(0, Math.min(100, c.hunger + (im.hunger || 0))),
+        mood:   Math.max(0, Math.min(100, c.mood   + (im.mood   || 0))),
+      };
+      // Stack debuffs if multiple items consumed in one night
+      const prev = c.pendingDebuff || {};
+      next.pendingDebuff = {
+        energy: (prev.energy || 0) + (item.debuff.energy || 0),
+        mood:   (prev.mood   || 0) + (item.debuff.mood   || 0),
+        hunger: (prev.hunger || 0) + (item.debuff.hunger || 0),
+      };
+      return next;
+    });
+    showToast(`${item.kind === 'drink' ? 'Drank' : 'Ate'} ${item.name}`, 'win');
+  };
+
+  // Day-activity actions
+  const doOpenMic = () => {
+    if (char.energy < 10) { showToast('Too tired to perform', 'bad'); return; }
+    const sho = char.stats.sho || 0;
+    const earn = 10 + Math.round(sho * 1.5) + Math.floor(Math.random() * 6);
+    setChar(c => ({
+      ...c,
+      cash: c.cash + earn,
+      energy: Math.max(0, c.energy - 10),
+      mood: Math.min(100, c.mood + 5),
+      minutes: c.minutes + 30,
+      heat: (c.heat || 0) + 2,
+      followers: c.followers + (Math.random() < 0.3 ? 1 : 0),
+      xp: c.xp + 8,
+    }));
+    showToast(`Open mic: +$${earn}`, 'win');
+  };
+  const doShowcase = () => {
+    if (char.energy < 25) { showToast('Need 25 energy for a showcase', 'bad'); return; }
+    const sho = char.stats.sho || 0;
+    const mus = char.stats.mus || 0;
+    const tec = char.stats.tec || 0;
+    const earn = 50 + sho * 5 + mus * 3 + tec * 2 + Math.floor(Math.random() * 20);
+    const fans = Math.max(1, Math.floor(sho / 3) + Math.floor(Math.random() * 3));
+    setChar(c => ({
+      ...c,
+      cash: c.cash + earn,
+      energy: Math.max(0, c.energy - 25),
+      mood: Math.min(100, c.mood + 12),
+      minutes: c.minutes + 60,
+      heat: (c.heat || 0) + 6,
+      followers: c.followers + fans,
+      xp: c.xp + 25,
+    }));
+    showToast(`Showcase: +$${earn} · +${fans} fan${fans === 1 ? '' : 's'}`, 'win');
+  };
+  const doKaraoke = () => {
+    if (char.energy < 8) { showToast('Too tired to sing', 'bad'); return; }
+    const earn = 4 + Math.floor(Math.random() * 5);
+    const musGain = 1 + (Math.random() < 0.25 ? 1 : 0);
+    setChar(c => ({
+      ...c,
+      cash: c.cash + earn,
+      energy: Math.max(0, c.energy - 8),
+      mood: Math.min(100, c.mood + 6),
+      minutes: c.minutes + 30,
+      stats: { ...c.stats, mus: c.stats.mus + musGain },
+      xp: c.xp + 5,
+    }));
+    showToast(`Karaoke: +${musGain} musicality, +$${earn}`, 'win');
+  };
+
+  // Showcase gating: needs basic credibility
+  const showcaseReady = (char.level || 1) >= 3 || (char.followers || 0) >= 10;
+
   return (
     <div className="space-y-3">
-      <div className="text-center mb-2">
+      <div className="text-center mb-1">
         <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE BAR</div>
-        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Where battles happen</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-amber-500">{dayName} · {schedule.title}</div>
+        <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-0.5">{schedule.tagline}</div>
       </div>
 
-      <Panel title="Choose your opponent">
-        <div className="space-y-2">
-          {NPCS.map((n, i) => {
-            const beaten = char.defeated.includes(n.name);
-            const locked = i > 0 && !char.defeated.includes(NPCS[i - 1].name);
-            return (
-              <button key={n.name} onClick={() => !locked && setSelected(n)} disabled={locked}
-                className={`w-full p-3 border-2 text-left transition-all ${
-                  locked ? 'border-stone-900 bg-stone-950 opacity-40' :
-                  selected?.name === n.name ? 'border-amber-500 bg-amber-500/10' :
-                  beaten ? 'border-green-900/50 bg-green-950/20 hover:border-amber-500' :
-                  'border-stone-800 bg-stone-900/30 hover:border-amber-500'
-                }`}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="text-amber-500 tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>{n.name.toUpperCase()}</div>
-                    {beaten && <Trophy size={12} className="text-green-500" />}
-                    {locked && <span className="text-[10px] text-stone-600">🔒</span>}
-                  </div>
-                  <div className="text-[10px] text-stone-500">LVL {n.level}</div>
-                </div>
-                <div className="text-[10px] text-stone-500 uppercase tracking-wider">
-                  M{n.stats.mus} · T{n.stats.tec} · O{n.stats.ori} · S{n.stats.sho} · ${n.reward}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </Panel>
+      {/* Closed Mondays */}
+      {schedule.activity === 'closed' && (
+        <Panel title="Closed">
+          <div className="text-center py-4 space-y-2">
+            <div className="text-5xl">🚪</div>
+            <div className="text-xs text-stone-400 uppercase tracking-wider">No show tonight. Sleep it off and come back tomorrow.</div>
+          </div>
+        </Panel>
+      )}
 
-      {selected && (
+      {schedule.activity === 'openmic' && (
+        <Panel title="Open Mic Sign-Up">
+          <div className="space-y-2">
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+              Quick set, friendly crowd. Reward scales with showmanship.
+            </div>
+            <Btn variant="primary" onClick={doOpenMic} disabled={char.energy < 10} className="w-full py-3">
+              TAKE THE MIC 🎤 (-10⚡, +30 min)
+            </Btn>
+            {char.energy < 10 && <div className="text-[10px] text-red-500 text-center uppercase">Need 10 energy</div>}
+          </div>
+        </Panel>
+      )}
+
+      {schedule.activity === 'showcase' && (
+        <Panel title="Friday Showcase">
+          <div className="space-y-2">
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+              Headline slot. Big payday — but only if you've got cred (Lvl 3+ or 10+ fans).
+            </div>
+            <Btn variant="primary" onClick={doShowcase} disabled={!showcaseReady || char.energy < 25} className="w-full py-3">
+              {showcaseReady ? 'HEADLINE 🎤 (-25⚡, +60 min)' : '🔒 NOT READY YET'}
+            </Btn>
+            {!showcaseReady && (
+              <div className="text-[10px] text-amber-500 text-center uppercase">
+                Reach Lvl 3 or 10 followers to qualify
+              </div>
+            )}
+            {showcaseReady && char.energy < 25 && <div className="text-[10px] text-red-500 text-center uppercase">Need 25 energy</div>}
+          </div>
+        </Panel>
+      )}
+
+      {schedule.activity === 'battle' && (
+        <Panel title="Choose your opponent">
+          <div className="space-y-2">
+            {NPCS.map((n, i) => {
+              const beaten = char.defeated.includes(n.name);
+              const locked = i > 0 && !char.defeated.includes(NPCS[i - 1].name);
+              return (
+                <button key={n.name} onClick={() => !locked && setSelected(n)} disabled={locked}
+                  className={`w-full p-3 border-2 text-left transition-all ${
+                    locked ? 'border-stone-900 bg-stone-950 opacity-40' :
+                    selected?.name === n.name ? 'border-amber-500 bg-amber-500/10' :
+                    beaten ? 'border-green-900/50 bg-green-950/20 hover:border-amber-500' :
+                    'border-stone-800 bg-stone-900/30 hover:border-amber-500'
+                  }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <div className="text-amber-500 tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>{n.name.toUpperCase()}</div>
+                      {beaten && <Trophy size={12} className="text-green-500" />}
+                      {locked && <span className="text-[10px] text-stone-600">🔒</span>}
+                    </div>
+                    <div className="text-[10px] text-stone-500">LVL {n.level}</div>
+                  </div>
+                  <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                    M{n.stats.mus} · T{n.stats.tec} · O{n.stats.ori} · S{n.stats.sho} · ${n.reward}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+      {schedule.activity === 'battle' && selected && (
         <Panel title={`vs ${selected.name}`}>
           <div className="text-[10px] text-stone-400 uppercase tracking-wider mb-3">Sounds: {selected.sounds.map(s => SOUND_CATALOG[s]?.name).join(', ')}</div>
           <Btn variant="danger" onClick={() => go('battle') || setChar(c => ({ ...c, _opponent: selected }))} className="w-full py-3"
@@ -5100,6 +5268,58 @@ function BarScreen({ char, setChar, go, showToast }) {
           </Btn>
           {char.energy < 30 && <div className="text-[10px] text-red-500 text-center mt-2 uppercase">Need 30 energy</div>}
           {char.equipped.length === 0 && <div className="text-[10px] text-red-500 text-center mt-2 uppercase">No sounds equipped! Visit Shop</div>}
+        </Panel>
+      )}
+
+      {schedule.activity === 'karaoke' && (
+        <Panel title="Karaoke Night">
+          <div className="space-y-2">
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+              Sing along — sharpen your musicality.
+            </div>
+            <Btn variant="primary" onClick={doKaraoke} disabled={char.energy < 8} className="w-full py-3">
+              GRAB THE MIC 🎶 (-8⚡, +30 min)
+            </Btn>
+            {char.energy < 8 && <div className="text-[10px] text-red-500 text-center uppercase">Need 8 energy</div>}
+          </div>
+        </Panel>
+      )}
+
+      {/* Bar menu — drinks & snacks (always available when bar is open) */}
+      {schedule.activity !== 'closed' && (
+        <Panel title="Bar Menu">
+          <div className="space-y-2">
+            {Object.entries(BAR_MENU).map(([k, item]) => {
+              const im = item.immediate;
+              const db = item.debuff;
+              const fmt = (s, sym) => {
+                const e = s.energy ? `${s.energy >= 0 ? '+' : ''}${s.energy}⚡` : '';
+                const m = s.mood   ? `${s.mood   >= 0 ? '+' : ''}${s.mood}♥` : '';
+                const h = s.hunger ? `${s.hunger >= 0 ? '+' : ''}${s.hunger}🍴` : '';
+                return [e, m, h].filter(Boolean).join(' ');
+              };
+              return (
+                <div key={k} className="flex items-center gap-3 p-2 border border-stone-800 bg-stone-900/30">
+                  <PixelIcon name={item.kind === 'drink' ? 'coffee' : 'star'} size={20} />
+                  <div className="flex-1">
+                    <div className="text-stone-200 text-sm">{item.name}</div>
+                    <div className="text-[10px] text-amber-500 uppercase tracking-wider">
+                      {fmt(im)}
+                    </div>
+                    <div className="text-[9px] text-red-400 uppercase tracking-wider">
+                      hangover: {fmt(db)}
+                    </div>
+                  </div>
+                  <Btn onClick={() => orderItem(k)} disabled={char.cash < item.cost}>${item.cost}</Btn>
+                </div>
+              );
+            })}
+            {char.pendingDebuff && (
+              <div className="text-[10px] text-red-400 text-center uppercase tracking-wider">
+                ⚠ already feeling a hangover building for tomorrow
+              </div>
+            )}
+          </div>
         </Panel>
       )}
     </div>
