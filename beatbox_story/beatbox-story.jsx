@@ -1973,7 +1973,9 @@ const BeatboxHero = ({
       patternMs,
       totalMs: REPS_TOTAL * patternMs,
       notes,
-      startTime: performance.now(),
+      // Shift start by LOOKAHEAD_MS so notes spawn at the top of the canvas
+      // and scroll down to the strike line — instead of appearing already at it.
+      startTime: performance.now() + LOOKAHEAD_MS,
       hits: 0,
       misses: 0,
       perfects: 0,
@@ -2032,7 +2034,7 @@ const BeatboxHero = ({
     activeRef.current = active;
     if (active && stateRef.current) {
       const s = stateRef.current;
-      s.startTime = performance.now();
+      s.startTime = performance.now() + LOOKAHEAD_MS;
       s.hits = 0;
       s.misses = 0;
       s.perfects = 0;
@@ -6809,7 +6811,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const eventTimers = useRef([]);
   const playerScoreRef = useRef(0);
   const oppScoreRef = useRef(0);
-  const BATTLE_BPM = 130;
+  const BATTLE_BPM = 125;
   const ROUND_SECONDS = 12;
   const TOTAL_ROUNDS = 4;
 
