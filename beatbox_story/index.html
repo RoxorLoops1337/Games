@@ -160,11 +160,12 @@ window.exports = window.module.exports;
     buddha_bowl: { name: "Buddha Bowl", cost: 14, energy: 22, hunger: 50, mood: 4, kind: "food" }
   };
   var NPCS = [
-    { name: "Lil Crumb", stats: { mus: 8, tec: 8, ori: 6, sho: 7 }, sounds: ["classic_kick", "hi_hat", "psh_snare"], reward: 50, level: 1 },
-    { name: "DJ Phlegm", stats: { mus: 14, tec: 12, ori: 10, sho: 11 }, sounds: ["classic_kick", "inward_k", "fast_hats", "lip_roll"], reward: 120, level: 3 },
-    { name: "Mama Bass", stats: { mus: 18, tec: 14, ori: 18, sho: 14 }, sounds: ["throat_kick", "inward_bass", "d_low", "fast_hats"], reward: 250, level: 5 },
-    { name: "Vox Machina", stats: { mus: 22, tec: 24, ori: 20, sho: 18 }, sounds: ["throat_kick", "click_roll", "d_low", "laser", "inward_bass"], reward: 500, level: 8 },
-    { name: "The Champ", stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ["uvular_roll", "click_roll", "d_low", "inward_bass", "laser", "throat_kick"], reward: 1500, level: 12 }
+    { name: "Joel Burner", stats: { mus: 8, tec: 8, ori: 6, sho: 7 }, sounds: ["classic_kick", "hi_hat", "psh_snare"], reward: 50, level: 1 },
+    { name: "CeDe", stats: { mus: 12, tec: 11, ori: 9, sho: 10 }, sounds: ["classic_kick", "hi_hat", "psh_snare", "lip_roll"], reward: 100, level: 3 },
+    { name: "Sikker", stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ["classic_kick", "inward_k", "fast_hats", "lip_roll"], reward: 200, level: 5 },
+    { name: "Alim", stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ["throat_kick", "inward_bass", "fast_hats", "lip_roll"], reward: 350, level: 7 },
+    { name: "Olexinho", stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ["throat_kick", "click_roll", "d_low", "laser", "inward_bass"], reward: 700, level: 9 },
+    { name: "FatboxG", stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ["uvular_roll", "click_roll", "d_low", "inward_bass", "laser", "throat_kick"], reward: 1500, level: 12 }
   ];
   var JUDGES = [
     { name: "Tek", bias: "technicality", emoji: "\u2699\uFE0F" },
@@ -209,7 +210,7 @@ window.exports = window.module.exports;
     pendingDebuff: null,
     // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
     showcaseBooking: null,
-    // { day: number, minute: number } — Rhozel's booked Friday slot
+    // { day: number, minute: number } — Rohzel's booked Friday slot
     lastShowcaseDay: null,
     // day a showcase was performed (cooldown: 7 days)
     lastBattleDay: null,
@@ -4261,7 +4262,7 @@ window.exports = window.module.exports;
       playMode ? "\u25C0 AFK MODE" : "\u25B6 SPRINT MODE (build max \u26A1 energy)"
     ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, cfg.label), /* @__PURE__ */ import_react.default.createElement(ProgressBar, { block: activity.block, total: 5, label: `Block ${activity.block}/5` }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-wider text-stone-500" }, /* @__PURE__ */ import_react.default.createElement("span", null, "Rewards earned: ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, activity.rewardsEarned)), /* @__PURE__ */ import_react.default.createElement("span", null, "1 block = 10 game min (0.5s)")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "danger", onClick: () => activity.stop("Stopped early"), className: "w-full py-3" }, "STOP \u25A0"))));
   }
-  var RHOZEL_GREETINGS = [
+  var ROHZEL_GREETINGS = [
     "Yo, lil homie! What you sippin' on tonight?",
     "Aaayy, the people's champion in the building.",
     "Look who decided to show up \u2014 you smell like ambition.",
@@ -4269,26 +4270,26 @@ window.exports = window.module.exports;
     "Ay, this ain't no daycare. You here to spit or what?",
     "I run this bar, the cypher, and your hopes & dreams. What's good?"
   ];
-  var RHOZEL_NEED_FANS = [
+  var ROHZEL_NEED_FANS = [
     "Ten fans? Ten?? My DOG got more followers than that. Build a buzz, then we talk.",
     "Lil bro come back when more than your mama is screaming your name.",
     "I need a crowd that pays my electric bill. Not a Spotify playlist of three."
   ];
-  var RHOZEL_NEED_SHO = [
+  var ROHZEL_NEED_SHO = [
     "Showmanship like wet cardboard. Practice the camera work, I'll see you next week.",
     "You got the heat but no charisma \u2014 even my bar stool got more presence.",
     "Pump up the showmanship. Friday crowd ain't here to hear, they here to SEE."
   ];
-  var RHOZEL_COOLDOWN = [
+  var ROHZEL_COOLDOWN = [
     "Already had your slot this week, hotshot. Let the people miss you.",
     "One show a week. That's the rule. Even Beyonc\xE9 gotta breathe."
   ];
-  var RHOZEL_BOOKED_OK = (timeStr, day) => [
+  var ROHZEL_BOOKED_OK = (timeStr, day) => [
     `Aight, I see you. Friday ${timeStr}. Don't be late or I give the slot to a 14-year-old TikTok kid.`,
     `Cool. Friday at ${timeStr}. Be sober, be loud, be there.`,
     `Locked in: Friday, ${timeStr}. Mess this up and you're banned from karaoke too.`
   ];
-  var RHOZEL_REMINDER = (timeStr) => [
+  var ROHZEL_REMINDER = (timeStr) => [
     `You're already on the list, Friday ${timeStr}. Don't make me regret it.`,
     `Booked, kid. Friday ${timeStr}. Show up or shut up.`
   ];
@@ -4384,7 +4385,7 @@ window.exports = window.module.exports;
   };
   function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const [selected, setSelected] = (0, import_react.useState)(null);
-    const [rhozelLine, setRhozelLine] = (0, import_react.useState)(() => _pick(RHOZEL_GREETINGS));
+    const [rohzelLine, setRohzelLine] = (0, import_react.useState)(() => _pick(ROHZEL_GREETINGS));
     const [performingShowcase, setPerformingShowcase] = (0, import_react.useState)(false);
     if (!isNightTime(char.minutes ?? 0)) {
       return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3 pt-8 text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-6xl" }, "\u{1F37A}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xl text-stone-400", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "THE BAR IS CLOSED"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-stone-500 uppercase tracking-wider px-6" }, "Doors open at 6 PM. Come back tonight."), /* @__PURE__ */ import_react.default.createElement(Btn, { onClick: () => go("hood"), className: "mt-4" }, "\u2190 BACK TO HOOD"));
@@ -4462,21 +4463,21 @@ window.exports = window.module.exports;
     const showcaseCooldownDaysLeft = char.lastShowcaseDay ? Math.max(0, 7 - (char.day - char.lastShowcaseDay)) : 0;
     const onCooldown = showcaseCooldownDaysLeft > 0;
     const meetsBookingReqs = (char.followers || 0) >= SHOWCASE_FANS_REQ && (char.stats.sho || 0) >= SHOWCASE_SHO_REQ;
-    const askRhozel = () => {
+    const askRohzel = () => {
       if (char.showcaseBooking) {
-        setRhozelLine(_pick(RHOZEL_REMINDER(clockString(char.showcaseBooking.minute))));
+        setRohzelLine(_pick(ROHZEL_REMINDER(clockString(char.showcaseBooking.minute))));
         return;
       }
       if (onCooldown) {
-        setRhozelLine(_pick(RHOZEL_COOLDOWN));
+        setRohzelLine(_pick(ROHZEL_COOLDOWN));
         return;
       }
       if ((char.followers || 0) < SHOWCASE_FANS_REQ) {
-        setRhozelLine(_pick(RHOZEL_NEED_FANS));
+        setRohzelLine(_pick(ROHZEL_NEED_FANS));
         return;
       }
       if ((char.stats.sho || 0) < SHOWCASE_SHO_REQ) {
-        setRhozelLine(_pick(RHOZEL_NEED_SHO));
+        setRohzelLine(_pick(ROHZEL_NEED_SHO));
         return;
       }
       const days = daysToNextFriday(char.day, char.minutes);
@@ -4484,10 +4485,10 @@ window.exports = window.module.exports;
       const slot = pickShowcaseSlot(char.day, bookingDay, char.minutes);
       const timeStr = clockString(slot);
       setChar((c) => ({ ...c, showcaseBooking: { day: bookingDay, minute: slot } }));
-      setRhozelLine(_pick(RHOZEL_BOOKED_OK(timeStr, bookingDay)));
+      setRohzelLine(_pick(ROHZEL_BOOKED_OK(timeStr, bookingDay)));
       showToast(`Booked: Friday ${timeStr}`, "win");
     };
-    const chatRhozel = () => setRhozelLine(_pick(RHOZEL_GREETINGS));
+    const chatRohzel = () => setRohzelLine(_pick(ROHZEL_GREETINGS));
     const booking = char.showcaseBooking;
     const isBookingDay = booking && char.day === booking.day;
     const minutesToGig = isBookingDay ? booking.minute - char.minutes : Infinity;
@@ -4496,7 +4497,7 @@ window.exports = window.module.exports;
     (0, import_react.useEffect)(() => {
       if (missedGig) {
         setChar((c) => ({ ...c, showcaseBooking: null }));
-        showToast("Missed your showcase. Rhozel ain't happy.", "bad");
+        showToast("Missed your showcase. Rohzel ain't happy.", "bad");
       }
     }, [missedGig]);
     const startShowcaseGig = () => {
@@ -4537,7 +4538,7 @@ window.exports = window.module.exports;
     if (performingShowcase) {
       return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3 pt-2" }, /* @__PURE__ */ import_react.default.createElement(ShowcasePerformance, { char, durationMs: 2e4, onComplete: finishShowcaseGig }));
     }
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center mb-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-2xl tracking-widest text-stone-300", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "THE BAR"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-amber-500" }, dayName, " \xB7 ", schedule.title), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider mt-0.5" }, schedule.tagline)), schedule.activity === "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Closed" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center py-4 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-5xl" }, "\u{1F6AA}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-stone-400 uppercase tracking-wider" }, "No show tonight. Sleep it off and come back tomorrow."))), schedule.activity === "openmic" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Open Mic Sign-Up" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "Quick set, friendly crowd. Unpaid \u2014 you're here for the heat (and maybe a new fan)."), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: doOpenMic, disabled: char.energy < 10, className: "w-full py-3" }, "TAKE THE MIC \u{1F3A4} (-10\u26A1, +30 min)"), char.energy < 10 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 10 energy"))), schedule.activity === "showcase" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Friday Showcase" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, !booking && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "No booking. Talk to Rhozel below \u2014 he runs the slot list."), booking && !isBookingDay && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-amber-500 uppercase tracking-wider" }, "You're booked Friday at ", clockString(booking.minute), ". Come back then."), booking && isBookingDay && minutesToGig > 30 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-amber-500 uppercase tracking-wider" }, "Gig at ", clockString(booking.minute), " \xB7 ", Math.ceil(minutesToGig / 10) * 10, " game-min to go. Hang tight."), booking && inGigWindow && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-amber-500 uppercase tracking-widest text-center" }, "\u2B50 ON DECK \u2014 ", clockString(booking.minute)), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: startShowcaseGig, disabled: char.energy < 25, className: "w-full py-3" }, "READY FOR THE GIG \u{1F525} (-25\u26A1)"), char.energy < 25 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 25 energy")))), schedule.activity === "battle" && battleOnCooldown && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Battle Night" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center py-3 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-4xl" }, "\u{1F94A}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-stone-400 uppercase tracking-wider" }, "You already battled this week. Come back in ", battleCooldownDaysLeft, " day", battleCooldownDaysLeft === 1 ? "" : "s", "."))), schedule.activity === "battle" && !battleOnCooldown && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Choose your opponent" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, NPCS.map((n, i) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center mb-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-2xl tracking-widest text-stone-300", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "THE BAR"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-amber-500" }, dayName, " \xB7 ", schedule.title), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider mt-0.5" }, schedule.tagline)), schedule.activity === "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Closed" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center py-4 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-5xl" }, "\u{1F6AA}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-stone-400 uppercase tracking-wider" }, "No show tonight. Sleep it off and come back tomorrow."))), schedule.activity === "openmic" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Open Mic Sign-Up" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "Quick set, friendly crowd. Unpaid \u2014 you're here for the heat (and maybe a new fan)."), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: doOpenMic, disabled: char.energy < 10, className: "w-full py-3" }, "TAKE THE MIC \u{1F3A4} (-10\u26A1, +30 min)"), char.energy < 10 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 10 energy"))), schedule.activity === "showcase" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Friday Showcase" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, !booking && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "No booking. Talk to Rohzel below \u2014 he runs the slot list."), booking && !isBookingDay && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-amber-500 uppercase tracking-wider" }, "You're booked Friday at ", clockString(booking.minute), ". Come back then."), booking && isBookingDay && minutesToGig > 30 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-amber-500 uppercase tracking-wider" }, "Gig at ", clockString(booking.minute), " \xB7 ", Math.ceil(minutesToGig / 10) * 10, " game-min to go. Hang tight."), booking && inGigWindow && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-amber-500 uppercase tracking-widest text-center" }, "\u2B50 ON DECK \u2014 ", clockString(booking.minute)), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: startShowcaseGig, disabled: char.energy < 25, className: "w-full py-3" }, "READY FOR THE GIG \u{1F525} (-25\u26A1)"), char.energy < 25 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 25 energy")))), schedule.activity === "battle" && battleOnCooldown && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Battle Night" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center py-3 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-4xl" }, "\u{1F94A}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-stone-400 uppercase tracking-wider" }, "You already battled this week. Come back in ", battleCooldownDaysLeft, " day", battleCooldownDaysLeft === 1 ? "" : "s", "."))), schedule.activity === "battle" && !battleOnCooldown && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Choose your opponent" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, NPCS.map((n, i) => {
       const beaten = char.defeated.includes(n.name);
       const locked = i > 0 && !char.defeated.includes(NPCS[i - 1].name);
       return /* @__PURE__ */ import_react.default.createElement(
@@ -4560,17 +4561,17 @@ window.exports = window.module.exports;
         disabled: char.energy < 30 || char.equipped.length === 0
       },
       "START BATTLE \u{1F3A4} (-30\u26A1)"
-    ), char.energy < 30 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "Need 30 energy"), char.equipped.length === 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "No sounds equipped! Visit Shop")), schedule.activity === "karaoke" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Karaoke Night" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "Sing along \u2014 sharpen your musicality."), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: doKaraoke, disabled: char.energy < 8, className: "w-full py-3" }, "GRAB THE MIC \u{1F3B6} (-8\u26A1, +30 min)"), char.energy < 8 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 8 energy"))), schedule.activity !== "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Rhozel \xB7 Bar Keeper" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-3 items-start" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-4xl flex-shrink-0" }, "\u{1F9D4}\u{1F3FF}\u200D\u2642\uFE0F"), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-200 text-sm tracking-wide italic border-l-2 border-amber-500/50 pl-2" }, '"', rhozelLine, '"'), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-1.5" }, /* @__PURE__ */ import_react.default.createElement(
+    ), char.energy < 30 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "Need 30 energy"), char.equipped.length === 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "No sounds equipped! Visit Shop")), schedule.activity === "karaoke" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Karaoke Night" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "Sing along \u2014 sharpen your musicality."), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: doKaraoke, disabled: char.energy < 8, className: "w-full py-3" }, "GRAB THE MIC \u{1F3B6} (-8\u26A1, +30 min)"), char.energy < 8 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 8 energy"))), schedule.activity !== "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Rohzel \xB7 Bar Keeper" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-3 items-start" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-4xl flex-shrink-0" }, "\u{1F9D4}\u{1F3FF}\u200D\u2642\uFE0F"), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-200 text-sm tracking-wide italic border-l-2 border-amber-500/50 pl-2" }, '"', rohzelLine, '"'), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-1.5" }, /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
-        onClick: askRhozel,
+        onClick: askRohzel,
         className: "px-2 py-1.5 border-2 border-amber-500/60 bg-amber-500/10 text-amber-500 text-[10px] uppercase tracking-widest hover:bg-amber-500/20"
       },
       "Friday gig?"
     ), /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
-        onClick: chatRhozel,
+        onClick: chatRohzel,
         className: "px-2 py-1.5 border-2 border-stone-700 text-stone-400 text-[10px] uppercase tracking-widest hover:border-amber-500/40"
       },
       "Just chatting"
@@ -4604,11 +4605,12 @@ window.exports = window.module.exports;
     text.toUpperCase()
   ));
   var OPP_LOOKS = {
-    "Lil Crumb": { shirt: "#84cc16", skin: "#f5d4a8", hair: "#5a3a18", style: "short", accessory: null },
-    "DJ Phlegm": { shirt: "#3b82f6", skin: "#d4a87a", hair: "#1a1a2e", style: "mohawk", accessory: "shades" },
-    "Mama Bass": { shirt: "#a78bfa", skin: "#8a5a3a", hair: "#1c1917", style: "long", accessory: null },
-    "Vox Machina": { shirt: "#94a3b8", skin: "#c8b8a0", hair: "#9ca3af", style: "spike", accessory: "shades" },
-    "The Champ": { shirt: "#fbbf24", skin: "#5a3a20", hair: "#0c0a09", style: "fade", accessory: null }
+    "Joel Burner": { shirt: "#84cc16", skin: "#f5d4a8", hair: "#5a3a18", style: "short", accessory: null },
+    "CeDe": { shirt: "#3b82f6", skin: "#d4a87a", hair: "#1a1a2e", style: "mohawk", accessory: "shades" },
+    "Sikker": { shirt: "#a78bfa", skin: "#8a5a3a", hair: "#1c1917", style: "long", accessory: null },
+    "Alim": { shirt: "#f97316", skin: "#a87844", hair: "#1c1917", style: "short", accessory: null },
+    "Olexinho": { shirt: "#94a3b8", skin: "#c8b8a0", hair: "#9ca3af", style: "spike", accessory: "shades" },
+    "FatboxG": { shirt: "#fbbf24", skin: "#5a3a20", hair: "#0c0a09", style: "fade", accessory: null }
   };
   var _defaultOppLook = { shirt: "#CC2200", skin: "#d4a87a", hair: "#1c1917", style: "short", accessory: null };
   var JUDGE_LOOKS = {
