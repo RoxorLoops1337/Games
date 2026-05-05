@@ -2141,20 +2141,22 @@ const BeatboxHero = ({
         }
       });
 
-      // Phase banner
+      // Phase banner — skipped on battle/spectate completion (no celebratory text)
       const inactiveLabel = mode === 'spectate' ? 'STARTING SOON' : 'GET READY';
       const phaseLabel = !activeRef.current               ? inactiveLabel
-                       : state.phase === 'complete'        ? (mode === 'battle' ? 'ROUND COMPLETE' : 'LESSON COMPLETE')
+                       : state.phase === 'complete'        ? (mode === 'practice' ? 'LESSON COMPLETE' : null)
                        : state.phase === 'demo'            ? (mode === 'spectate' ? 'OPPONENT · WATCH' : 'DEMO · LISTEN')
                                                            : 'YOUR TURN';
-      const phaseColor = !activeRef.current               ? '#a8a29e'
-                       : state.phase === 'complete'        ? '#22c55e'
-                       : state.phase === 'demo'            ? '#22d3ee'
-                                                           : '#D4A017';
-      c.fillStyle = phaseColor;
-      c.font = 'bold 14px "Bebas Neue", "Oswald", sans-serif';
-      c.textAlign = 'center';
-      c.fillText(phaseLabel, TRACK_W / 2, 22);
+      if (phaseLabel) {
+        const phaseColor = !activeRef.current               ? '#a8a29e'
+                         : state.phase === 'complete'        ? '#22c55e'
+                         : state.phase === 'demo'            ? '#22d3ee'
+                                                             : '#D4A017';
+        c.fillStyle = phaseColor;
+        c.font = 'bold 14px "Bebas Neue", "Oswald", sans-serif';
+        c.textAlign = 'center';
+        c.fillText(phaseLabel, TRACK_W / 2, 22);
+      }
     };
 
     const tick = () => {
@@ -6814,7 +6816,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const eventTimers = useRef([]);
   const playerScoreRef = useRef(0);
   const oppScoreRef = useRef(0);
-  const BATTLE_BPM = 125;
+  const BATTLE_BPM = 115;
   const ROUND_SECONDS = 12;
   const TOTAL_ROUNDS = 4;
 

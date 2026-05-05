@@ -1920,12 +1920,14 @@ window.exports = window.module.exports;
           }
         });
         const inactiveLabel = mode === "spectate" ? "STARTING SOON" : "GET READY";
-        const phaseLabel2 = !activeRef.current ? inactiveLabel : state2.phase === "complete" ? mode === "battle" ? "ROUND COMPLETE" : "LESSON COMPLETE" : state2.phase === "demo" ? mode === "spectate" ? "OPPONENT \xB7 WATCH" : "DEMO \xB7 LISTEN" : "YOUR TURN";
-        const phaseColor = !activeRef.current ? "#a8a29e" : state2.phase === "complete" ? "#22c55e" : state2.phase === "demo" ? "#22d3ee" : "#D4A017";
-        c.fillStyle = phaseColor;
-        c.font = 'bold 14px "Bebas Neue", "Oswald", sans-serif';
-        c.textAlign = "center";
-        c.fillText(phaseLabel2, TRACK_W / 2, 22);
+        const phaseLabel2 = !activeRef.current ? inactiveLabel : state2.phase === "complete" ? mode === "practice" ? "LESSON COMPLETE" : null : state2.phase === "demo" ? mode === "spectate" ? "OPPONENT \xB7 WATCH" : "DEMO \xB7 LISTEN" : "YOUR TURN";
+        if (phaseLabel2) {
+          const phaseColor = !activeRef.current ? "#a8a29e" : state2.phase === "complete" ? "#22c55e" : state2.phase === "demo" ? "#22d3ee" : "#D4A017";
+          c.fillStyle = phaseColor;
+          c.font = 'bold 14px "Bebas Neue", "Oswald", sans-serif';
+          c.textAlign = "center";
+          c.fillText(phaseLabel2, TRACK_W / 2, 22);
+        }
       };
       const tick = () => {
         const state2 = stateRef.current;
@@ -5319,7 +5321,7 @@ window.exports = window.module.exports;
     const eventTimers = (0, import_react.useRef)([]);
     const playerScoreRef = (0, import_react.useRef)(0);
     const oppScoreRef = (0, import_react.useRef)(0);
-    const BATTLE_BPM = 125;
+    const BATTLE_BPM = 115;
     const ROUND_SECONDS = 12;
     const TOTAL_ROUNDS = 4;
     const sideForRound = (n) => {
