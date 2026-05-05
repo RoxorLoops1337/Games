@@ -4465,6 +4465,11 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   };
 
   const sleep = () => {
+    // Can't sleep on an empty stomach — go eat something first
+    if ((char.hunger ?? 0) <= 0) {
+      showToast('Too hungry to sleep — eat something first!', 'bad');
+      return;
+    }
     setChar(c => {
       const max = c.maxEnergy ?? 100;
       let energy = max;

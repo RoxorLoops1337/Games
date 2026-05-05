@@ -3800,6 +3800,10 @@ window.exports = window.module.exports;
       showToast(`${f.kind === "drink" ? "Drank" : "Ate"} ${f.name}`, "win");
     };
     const sleep = () => {
+      if ((char.hunger ?? 0) <= 0) {
+        showToast("Too hungry to sleep \u2014 eat something first!", "bad");
+        return;
+      }
       setChar((c) => {
         const max = c.maxEnergy ?? 100;
         let energy = max;
