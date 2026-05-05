@@ -4174,6 +4174,7 @@ export default function BeatboxStory() {
             <div className="px-3 py-2 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
+                  <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500">{DAY_NAMES_SHORT[dayOfWeek(char.day)]}</span>
                   <span className="text-[9px] uppercase tracking-[0.3em] text-stone-500">Day {char.day}</span>
                   <Clock minutes={char.minutes ?? 0} day={char.day} />
                 </div>
