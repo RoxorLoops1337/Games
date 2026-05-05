@@ -1681,7 +1681,9 @@ window.exports = window.module.exports;
     evaluateEveryMs = 2500,
     active = true,
     bpm = 90,
-    lessonIdx = 0
+    lessonIdx = 0,
+    mode = "practice"
+    // 'practice' = 4 reps demo/player loop; 'battle' = single player rep, no auto-restart
   }) => {
     const canvasRef = (0, import_react.useRef)(null);
     const stateRef = (0, import_react.useRef)(null);
@@ -1698,7 +1700,7 @@ window.exports = window.module.exports;
     const HIT_PERFECT_MS = 130;
     const HIT_GOOD_MS = 220;
     const LOOKAHEAD_MS = 2e3;
-    const REPS_TOTAL = 4;
+    const REPS_TOTAL = mode === "battle" ? 1 : 4;
     const COMPLETE_HOLD_MS = 1800;
     const TRACK_W = 320;
     const TRACK_H = 380;
@@ -1712,7 +1714,7 @@ window.exports = window.module.exports;
       const patternMs = 16 * beatMs;
       const notes = [];
       for (let rep = 0; rep < REPS_TOTAL; rep++) {
-        const isDemo = rep % 2 === 0;
+        const isDemo = mode === "practice" && rep % 2 === 0;
         const repStart = rep * patternMs;
         lesson.pattern.forEach((n, i) => {
           const lane = lanes.indexOf(n.sound);
@@ -1749,7 +1751,7 @@ window.exports = window.module.exports;
         perfects: 0,
         laneFlash,
         audioScheduled: /* @__PURE__ */ new Set(),
-        phase: "demo",
+        phase: mode === "battle" ? "player" : "demo",
         completeAt: 0,
         completionFired: false
       };
@@ -1892,13 +1894,13 @@ window.exports = window.module.exports;
           rerender();
         } else if (state2.phase !== "complete") {
           const repIdx = Math.floor(songT / state2.patternMs);
-          const newPhase = repIdx % 2 === 0 ? "demo" : "player";
+          const newPhase = mode === "battle" ? "player" : repIdx % 2 === 0 ? "demo" : "player";
           if (newPhase !== state2.phase) {
             state2.phase = newPhase;
             rerender();
           }
         }
-        if (state2.phase === "complete" && now - state2.completeAt > COMPLETE_HOLD_MS) {
+        if (mode === "practice" && state2.phase === "complete" && now - state2.completeAt > COMPLETE_HOLD_MS) {
           stateRef.current = initState({ bpm: bpmRef.current, lessonIdx: lessonIdxRef.current });
           rerender();
           raf = requestAnimationFrame(tick);
@@ -3239,74 +3241,6 @@ window.exports = window.module.exports;
       style: { width: i < block ? "100%" : i === block ? "50%" : "0%", background: color }
     }
   )))));
-  function runBattle(player, opponent) {
-    const log = [];
-    const playerSounds = player.equipped.map((id) => SOUND_CATALOG[id]).filter(Boolean);
-    const oppSounds = opponent.sounds.map((id) => SOUND_CATALOG[id]).filter(Boolean);
-    function performRound(name, stats, sounds, focus) {
-      let stamina = 100;
-      let score = 0;
-      const events = [];
-      const time = 15;
-      let elapsed = 0;
-      while (elapsed < time && stamina > 0) {
-        const usable = sounds.filter((s2) => s2.stamina <= stamina);
-        if (usable.length === 0) break;
-        const s = usable[Math.floor(Math.random() * usable.length)];
-        const statKey = s.stat === "musicality" ? "mus" : s.stat === "technicality" ? "tec" : s.stat === "originality" ? "ori" : "sho";
-        const mult = 1 + stats[statKey] / 30;
-        const focusMult = 0.7 + focus / 100 * 0.6;
-        const roll = 0.85 + Math.random() * 0.3;
-        const points = Math.round(s.base * mult * focusMult * roll);
-        score += points;
-        stamina -= s.stamina;
-        const speed = 1 - stats.tec / 80;
-        elapsed += 1.2 * speed;
-        events.push({ name: s.name, points, time: elapsed.toFixed(1) });
-      }
-      return { score, events, stamina };
-    }
-    const playerStats = { ...player.stats };
-    const playerFocus = Math.min(100, player.mood + 20);
-    const oppStats = { mus: opponent.stats.mus, tec: opponent.stats.tec, ori: opponent.stats.ori, sho: opponent.stats.sho };
-    const r1 = performRound(player.name, playerStats, playerSounds, playerFocus);
-    const r2 = performRound(opponent.name, oppStats, oppSounds, 80);
-    const r3 = performRound(player.name, playerStats, playerSounds, playerFocus);
-    const r4 = performRound(opponent.name, oppStats, oppSounds, 80);
-    const playerEvents = [...r1.events, ...r3.events];
-    const oppEvents = [...r2.events, ...r4.events];
-    const playerScore = r1.score + r3.score;
-    const oppScore = r2.score + r4.score;
-    const showmanshipBonusP = 1 + playerStats.sho / 50;
-    const showmanshipBonusO = 1 + oppStats.sho / 50;
-    const finalP = Math.round(playerScore * showmanshipBonusP);
-    const finalO = Math.round(oppScore * showmanshipBonusO);
-    const judgeVotes = JUDGES.map((j) => {
-      let pScore = finalP, oScore = finalO;
-      if (j.bias === "technicality") {
-        pScore = playerEvents.filter((e) => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name)]?.stat === "technicality").reduce((a, e) => a + e.points, 0) || pScore * 0.6;
-        oScore = oppEvents.filter((e) => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name)]?.stat === "technicality").reduce((a, e) => a + e.points, 0) || oScore * 0.6;
-      } else if (j.bias === "musicality") {
-        pScore = finalP * (1 + playerStats.mus / 60);
-        oScore = finalO * (1 + oppStats.mus / 60);
-      } else if (j.bias === "originality") {
-        const pUnique = new Set(playerEvents.map((e) => e.name)).size;
-        const oUnique = new Set(oppEvents.map((e) => e.name)).size;
-        pScore = finalP * (1 + pUnique / 10);
-        oScore = finalO * (1 + oUnique / 10);
-      } else if (j.bias === "showmanship") {
-        pScore = finalP * showmanshipBonusP;
-        oScore = finalO * showmanshipBonusO;
-      } else {
-        pScore *= 0.8 + Math.random() * 0.6;
-        oScore *= 0.8 + Math.random() * 0.6;
-      }
-      return { judge: j, vote: pScore > oScore ? "P" : "O", pScore: Math.round(pScore), oScore: Math.round(oScore) };
-    });
-    const playerVotes = judgeVotes.filter((v) => v.vote === "P").length;
-    const won = playerVotes >= 3;
-    return { won, finalP, finalO, r1, r2, r3, r4, judgeVotes, playerVotes };
-  }
   var Bar = ({ value, max, color, icon: Icon, label }) => /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-2" }, Icon && /* @__PURE__ */ import_react.default.createElement(Icon, { size: 14, className: "text-stone-400" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-widest text-stone-500 mb-0.5" }, /* @__PURE__ */ import_react.default.createElement("span", null, label), /* @__PURE__ */ import_react.default.createElement("span", null, Math.round(value), "/", max)), /* @__PURE__ */ import_react.default.createElement("div", { className: "h-2 bg-stone-900 border border-stone-800" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "h-full transition-all", style: { width: `${Math.max(0, Math.min(100, value / max * 100))}%`, background: color } }))));
   var Btn = ({ children, onClick, disabled, variant = "default", className = "" }) => {
     const styles = {
@@ -3714,7 +3648,8 @@ window.exports = window.module.exports;
       showToast,
       config: {
         blocksPerReward: 5,
-        tickEnergyCost: tCfg.tickEnergyCost,
+        // Energy drains slower while engaging with a mini-game (so sessions feel substantial)
+        tickEnergyCost: playMode ? tCfg.tickEnergyCost * 0.4 : tCfg.tickEnergyCost,
         tickHungerCost: 1,
         tickMoodDelta: -0.3,
         // Slow ticks down 4x when actively engaging with a mini-game (only mus has one for now,
@@ -5014,21 +4949,67 @@ window.exports = window.module.exports;
     const [liveScore, setLiveScore] = (0, import_react.useState)({ p: 0, o: 0 });
     const [timeLeft, setTimeLeft] = (0, import_react.useState)(15);
     const [comboLabel, setComboLabel] = (0, import_react.useState)(null);
+    const [playerPatternIdxs, setPlayerPatternIdxs] = (0, import_react.useState)(null);
+    const [oppPatternIdxs, setOppPatternIdxs] = (0, import_react.useState)(null);
+    const [tacticalSlot, setTacticalSlot] = (0, import_react.useState)(0);
     const opponent = char._opponent;
     const eventTimers = (0, import_react.useRef)([]);
     const playerScoreRef = (0, import_react.useRef)(0);
     const oppScoreRef = (0, import_react.useRef)(0);
+    const BATTLE_BPM = 130;
     const ROUND_SECONDS = 12;
     const TOTAL_ROUNDS = 4;
     const sideForRound = (n) => {
       const isA = n % 2 === 1;
       return playerFirst ? isA ? "P" : "O" : isA ? "O" : "P";
     };
-    const dataForRound = (n) => {
-      if (!result) return null;
+    const turnSlotForRound = (n) => n <= 2 ? 0 : 1;
+    const lessonIdxForRound = (n) => {
       const side = sideForRound(n);
-      if (side === "P") return n <= 2 ? result.r1 : result.r3;
-      return n <= 2 ? result.r2 : result.r4;
+      const slot = turnSlotForRound(n);
+      if (side === "P") return playerPatternIdxs?.[slot];
+      return oppPatternIdxs?.[slot];
+    };
+    const lessonValue = (lesson) => {
+      if (!lesson) return 0;
+      const tier = lesson.tier || 1;
+      return Math.round(lesson.pattern.length * (1 + tier * 0.4));
+    };
+    const playerRoundScore = (lessonIdx, accuracy) => {
+      const lesson = HERO_LESSONS[lessonIdx];
+      if (!lesson) return 0;
+      const base = lessonValue(lesson);
+      const statMult = 1 + (char.stats.tec + char.stats.mus) / 80;
+      return Math.round(base * accuracy * statMult);
+    };
+    const oppRoundScore = (lessonIdx) => {
+      const lesson = HERO_LESSONS[lessonIdx];
+      if (!lesson) return 0;
+      const base = lessonValue(lesson);
+      const focus = 0.55 + opponent.stats.tec / 60 * 0.4;
+      const statMult = 1 + (opponent.stats.tec + opponent.stats.mus) / 80;
+      return Math.round(base * focus * statMult);
+    };
+    const ownedSet = new Set(char.sounds || []);
+    const completed = char.tecLessonsCompleted || 0;
+    const isPlayableForPlayer = (i) => {
+      if (i > completed) return false;
+      const l = HERO_LESSONS[i];
+      return !l.requires || ownedSet.has(l.requires);
+    };
+    const playablePlayerIdxs = HERO_LESSONS.map((_, i) => i).filter(isPlayableForPlayer);
+    const computeDefaultPlayerPicks = () => {
+      const a = playablePlayerIdxs[0] ?? 0;
+      const b = playablePlayerIdxs[1] ?? a;
+      return [a, b];
+    };
+    const computeOppPicks = () => {
+      const oppLevel = opponent.level || 1;
+      const maxIdx = Math.max(0, Math.min(HERO_LESSONS.length - 1, oppLevel + 1));
+      const pool = [];
+      for (let i = 0; i <= maxIdx; i++) pool.push(i);
+      const pick = () => pool[Math.floor(Math.random() * pool.length)];
+      return [pick(), pick()];
     };
     (0, import_react.useEffect)(() => {
       if (!opponent) {
@@ -5056,47 +5037,61 @@ window.exports = window.module.exports;
           return;
         }
         setPlayerFirst(outcome === "lose");
-        const battleResult = runBattle(char, opponent);
-        setResult(battleResult);
         setPhase("countdown1");
       }, 1400);
     };
-    const catToHeroKey = (cat) => {
-      if (cat === "Kicks") return "B";
-      if (cat === "Hats") return "T";
-      if (cat === "Snares") return "Pf";
-      return "K";
+    const startTactical = () => {
+      getAudioCtx();
+      setPlayerPatternIdxs(computeDefaultPlayerPicks());
+      setOppPatternIdxs(computeOppPicks());
+      setTacticalSlot(0);
+      setPhase("tactical");
     };
-    const scheduleRound = (events, side, color, playSoundForEvent, extraSchedule, onDone) => {
-      setActiveSide(side);
+    const playOpponentRoundPattern = (lessonIdx, color, onDone) => {
+      eventTimers.current.forEach(clearTimeout);
+      eventTimers.current = [];
+      setActiveSide("O");
       setTimeLeft(ROUND_SECONDS);
-      const scoreRef = side === "P" ? playerScoreRef : oppScoreRef;
-      let runningScore = scoreRef.current;
-      events.forEach((e) => {
-        const t = parseFloat(e.time) / 15 * ROUND_SECONDS * 1e3;
+      setComboLabel(null);
+      const lesson = HERO_LESSONS[lessonIdx];
+      const beatMs = 6e4 / BATTLE_BPM;
+      if (lesson) {
         eventTimers.current.push(setTimeout(() => {
-          const soundId = Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name);
-          const sound = soundId ? SOUND_CATALOG[soundId] : null;
-          playSoundForEvent(e, sound);
-          setCurrentSound(e.name);
+          setCurrentSound(lesson.name);
           setCurrentSoundColor(color);
-          runningScore += e.points;
-          scoreRef.current = runningScore;
-          setLiveScore((s) => side === "P" ? { ...s, p: runningScore } : { ...s, o: runningScore });
-          if (sound) {
-            setJudgeHearts((h) => {
-              const next = [...h];
-              JUDGES.forEach((j, i) => {
-                if (j.bias === sound.stat) next[i] = next[i] + 1;
-                else if (j.bias === "random" && Math.random() < 0.35) next[i] = next[i] + 1;
-                else if (j.bias === "showmanship" && sound.tier >= 3 && Math.random() < 0.5) next[i] = next[i] + 1;
-              });
-              return next;
-            });
+        }, 250));
+        const startMs = 800;
+        lesson.pattern.forEach((note) => {
+          const t = startMs + note.beat * beatMs;
+          if (t < ROUND_SECONDS * 1e3 - 100) {
+            eventTimers.current.push(setTimeout(() => {
+              playGameSound(note.sound);
+              const cat = SOUND_CATALOG[note.sound]?.cat;
+              const display = SOUND_CATALOG[note.sound] || HERO_SOUNDS[note.sound];
+              if (display?.name) setCurrentSound(display.name);
+              if (Math.random() < 0.3) {
+                setJudgeHearts((h) => {
+                  const next = [...h];
+                  const i = Math.floor(Math.random() * 5);
+                  next[i] = next[i] + 1;
+                  return next;
+                });
+              }
+            }, t));
           }
-        }, t));
-      });
-      extraSchedule?.();
+        });
+        const startScore = oppScoreRef.current;
+        const finalScore = oppRoundScore(lessonIdx);
+        const endScore = startScore + finalScore;
+        for (let pct = 1; pct <= 10; pct++) {
+          const at = ROUND_SECONDS * 1e3 * pct / 10;
+          eventTimers.current.push(setTimeout(() => {
+            const v = Math.round(startScore + (endScore - startScore) * pct / 10);
+            oppScoreRef.current = v;
+            setLiveScore((s) => ({ ...s, o: v }));
+          }, at));
+        }
+      }
       for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
         eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1e3));
       }
@@ -5107,79 +5102,17 @@ window.exports = window.module.exports;
         onDone();
       }, ROUND_SECONDS * 1e3));
     };
-    const scheduleBeatFill = (pickSound, skipWindow = null) => {
-      const fillBpm = 130;
-      const stepMs = 6e4 / fillBpm / 2;
-      const endMs = ROUND_SECONDS * 1e3 - 200;
-      for (let t = stepMs / 2; t < endMs; t += stepMs) {
-        if (skipWindow && t >= skipWindow.start && t < skipWindow.end) continue;
-        if (Math.random() < 0.4) {
-          const ts = t;
-          eventTimers.current.push(setTimeout(() => pickSound(), ts));
-        }
+    const startPlayerRound = (lessonIdx, color) => {
+      eventTimers.current.forEach(clearTimeout);
+      eventTimers.current = [];
+      setActiveSide("P");
+      setCurrentSound(HERO_LESSONS[lessonIdx]?.name || null);
+      setCurrentSoundColor(color);
+      setTimeLeft(ROUND_SECONDS);
+      setComboLabel({ text: HERO_LESSONS[lessonIdx]?.name || "", key: Date.now() });
+      for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
+        eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1e3));
       }
-    };
-    const playOpponentRound = (events, color, onDone) => {
-      eventTimers.current.forEach(clearTimeout);
-      eventTimers.current = [];
-      const oppSounds = (opponent.sounds || []).map((id) => SOUND_CATALOG[id]).filter(Boolean);
-      const extraSchedule = () => {
-        if (oppSounds.length === 0) return;
-        scheduleBeatFill(() => {
-          const s = oppSounds[Math.floor(Math.random() * oppSounds.length)];
-          playSound(s.cat, s.name);
-        });
-      };
-      scheduleRound(events, "O", color, (e, sound) => {
-        if (sound?.cat) playSound(sound.cat, e.name);
-      }, extraSchedule, onDone);
-    };
-    const playPlayerRound = (events, color, onDone) => {
-      eventTimers.current.forEach(clearTimeout);
-      eventTimers.current = [];
-      const completed = char.tecLessonsCompleted || 0;
-      const battleBpm = 130;
-      const beatMs = 6e4 / battleBpm;
-      const extraSchedule = () => {
-        let patternWindow = null;
-        const ownedSet = new Set(char.sounds || []);
-        const playableIdxs = [];
-        for (let i = 0; i < completed; i++) {
-          const l = HERO_LESSONS[i];
-          if (!l) continue;
-          if (l.requires && !ownedSet.has(l.requires)) continue;
-          playableIdxs.push(i);
-        }
-        if (playableIdxs.length > 0) {
-          const lessonIdx = playableIdxs[Math.floor(Math.random() * playableIdxs.length)];
-          const lesson = HERO_LESSONS[lessonIdx];
-          if (lesson) {
-            const patternStartMs = 1500;
-            const patternEndMs = patternStartMs + 16 * beatMs;
-            if (patternEndMs <= ROUND_SECONDS * 1e3 - 500) {
-              patternWindow = { start: patternStartMs, end: patternEndMs };
-              eventTimers.current.push(setTimeout(() => {
-                setComboLabel({ text: lesson.name, key: Date.now() });
-              }, patternStartMs));
-              eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
-              lesson.pattern.forEach((note) => {
-                const t = patternStartMs + note.beat * beatMs;
-                if (t < ROUND_SECONDS * 1e3) {
-                  eventTimers.current.push(setTimeout(() => playGameSound(note.sound), t));
-                }
-              });
-            }
-          }
-        }
-        const HERO_FILL_KEYS = ["B", "T", "T", "K", "Pf"];
-        scheduleBeatFill(() => {
-          const key = HERO_FILL_KEYS[Math.floor(Math.random() * HERO_FILL_KEYS.length)];
-          playHeroSound(key);
-        }, patternWindow);
-      };
-      scheduleRound(events, "P", color, (e, sound) => {
-        playHeroSound(catToHeroKey(sound?.cat));
-      }, extraSchedule, onDone);
     };
     (0, import_react.useEffect)(() => {
       const isCountdown = /^countdown[1-4]$/.test(phase);
@@ -5213,18 +5146,64 @@ window.exports = window.module.exports;
     }, [phase]);
     (0, import_react.useEffect)(() => {
       const m = /^round([1-4])$/.exec(phase);
-      if (!m || !result) return;
+      if (!m) return;
+      if (!playerPatternIdxs || !oppPatternIdxs) return;
       const roundN = parseInt(m[1]);
       const side = sideForRound(roundN);
-      const data = dataForRound(roundN);
-      if (!data) return;
+      const lessonIdx = lessonIdxForRound(roundN);
       const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : "judging";
-      const onDone = () => setPhase(nextPhase);
-      if (side === "P") playPlayerRound(data.events, char.color, onDone);
-      else playOpponentRound(data.events, "#CC2200", onDone);
-    }, [phase, result]);
+      if (side === "O") {
+        playOpponentRoundPattern(lessonIdx, "#CC2200", () => setPhase(nextPhase));
+      } else {
+        startPlayerRound(lessonIdx, char.color);
+      }
+    }, [phase, playerPatternIdxs, oppPatternIdxs]);
+    const handlePlayerRoundComplete = (roundN, accuracy) => {
+      const lessonIdx = lessonIdxForRound(roundN);
+      const score = playerRoundScore(lessonIdx, accuracy);
+      const newScore = playerScoreRef.current + score;
+      playerScoreRef.current = newScore;
+      setLiveScore((s) => ({ ...s, p: newScore }));
+      eventTimers.current.push(setTimeout(() => {
+        setActiveSide(null);
+        setComboLabel(null);
+        const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : "judging";
+        setPhase(nextPhase);
+      }, 1500));
+    };
     (0, import_react.useEffect)(() => {
-      if (phase === "judging") {
+      if (phase !== "judging" || result) return;
+      const finalP = playerScoreRef.current;
+      const finalO = oppScoreRef.current;
+      const playerLessons = (playerPatternIdxs || []).map((i) => HERO_LESSONS[i]).filter(Boolean);
+      const oppLessons = (oppPatternIdxs || []).map((i) => HERO_LESSONS[i]).filter(Boolean);
+      const playerUniqueSounds = new Set(playerLessons.flatMap((l) => l.pattern.map((n) => n.sound)));
+      const oppUniqueSounds = new Set(oppLessons.flatMap((l) => l.pattern.map((n) => n.sound)));
+      const judgeVotes = JUDGES.map((j) => {
+        let p = finalP, o = finalO;
+        if (j.bias === "technicality") {
+          p *= 1 + char.stats.tec / 60;
+          o *= 1 + opponent.stats.tec / 60;
+        } else if (j.bias === "musicality") {
+          p *= 1 + char.stats.mus / 60;
+          o *= 1 + opponent.stats.mus / 60;
+        } else if (j.bias === "originality") {
+          p *= 1 + playerUniqueSounds.size / 8;
+          o *= 1 + oppUniqueSounds.size / 8;
+        } else if (j.bias === "showmanship") {
+          p *= 1 + char.stats.sho / 50;
+          o *= 1 + opponent.stats.sho / 50;
+        } else {
+          p *= 0.85 + Math.random() * 0.3;
+          o *= 0.85 + Math.random() * 0.3;
+        }
+        return { judge: j, vote: p > o ? "P" : "O", pScore: Math.round(p), oScore: Math.round(o) };
+      });
+      const playerVotes = judgeVotes.filter((v) => v.vote === "P").length;
+      setResult({ won: playerVotes >= 3, finalP, finalO, judgeVotes, playerVotes });
+    }, [phase]);
+    (0, import_react.useEffect)(() => {
+      if (phase === "judging" && result) {
         if (revealedJudges < 5) {
           const t = setTimeout(() => setRevealedJudges((r) => r + 1), 700);
           return () => clearTimeout(t);
@@ -5233,7 +5212,7 @@ window.exports = window.module.exports;
           return () => clearTimeout(t);
         }
       }
-    }, [phase, revealedJudges]);
+    }, [phase, revealedJudges, result]);
     const finishBattle = () => {
       const won = result.won;
       setChar((c) => {
@@ -5283,10 +5262,44 @@ window.exports = window.module.exports;
         judgeVotes: [],
         revealedJudges: 0
       }
-    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-2 text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-stone-800 bg-stone-900/30 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-sm tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, char.name.toUpperCase()), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase" }, "M", char.stats.mus, " T", char.stats.tec, " O", char.stats.ori, " S", char.stats.sho)), /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-stone-800 bg-stone-900/30 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-red-500 text-sm tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, opponent.name.toUpperCase()), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase" }, "M", opponent.stats.mus, " T", opponent.stats.tec, " O", opponent.stats.ori, " S", opponent.stats.sho))), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: () => {
-      getAudioCtx();
-      setPhase("rps");
-    }, className: "w-full py-3" }, "WHO GOES FIRST? \u{1F3B2}")), phase === "rps" && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-4 text-center pt-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "ROCK PAPER SCISSORS"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "Loser goes first"), !rps && /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-3 gap-2 pt-4" }, [{ k: "rock", e: "\u270A" }, { k: "paper", e: "\u270B" }, { k: "scissors", e: "\u270C\uFE0F" }].map((o) => /* @__PURE__ */ import_react.default.createElement(
+    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-2 text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-stone-800 bg-stone-900/30 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-sm tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, char.name.toUpperCase()), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase" }, "M", char.stats.mus, " T", char.stats.tec, " O", char.stats.ori, " S", char.stats.sho)), /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-stone-800 bg-stone-900/30 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-red-500 text-sm tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, opponent.name.toUpperCase()), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase" }, "M", opponent.stats.mus, " T", opponent.stats.tec, " O", opponent.stats.ori, " S", opponent.stats.sho))), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: startTactical, className: "w-full py-3" }, "PICK YOUR PATTERNS \u25B6")), phase === "tactical" && playerPatternIdxs && (() => {
+      const slots = [0, 1];
+      const setPick = (slot, idx) => {
+        setPlayerPatternIdxs((p) => {
+          const n = [...p];
+          n[slot] = idx;
+          return n;
+        });
+      };
+      return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-2xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "PREP YOUR SET"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-stone-500" }, "Pick a pattern for each of your two rounds")), slots.map((slot) => {
+        const currentIdx = playerPatternIdxs[slot];
+        const currentLesson = HERO_LESSONS[currentIdx];
+        return /* @__PURE__ */ import_react.default.createElement("div", { key: slot, className: "border-2 border-stone-800 bg-stone-900/30 p-2 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-baseline justify-between" }, /* @__PURE__ */ import_react.default.createElement(
+          "div",
+          {
+            className: "text-amber-500 text-xs uppercase tracking-widest",
+            style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
+          },
+          "Your turn #",
+          slot + 1
+        ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-400" }, currentLesson?.name || "\u2014")), /* @__PURE__ */ import_react.default.createElement("div", { className: "overflow-x-auto -mx-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1.5 px-1 pb-1" }, HERO_LESSONS.map((lesson, i) => {
+          const playable = isPlayableForPlayer(i);
+          const selected = i === currentIdx;
+          return /* @__PURE__ */ import_react.default.createElement(
+            "button",
+            {
+              key: i,
+              disabled: !playable,
+              onClick: () => setPick(slot, i),
+              className: `flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${selected ? "border-amber-500 bg-amber-500/10 text-amber-500" : playable ? "border-stone-700 text-stone-400 hover:border-amber-500/50" : "border-stone-800 text-stone-600 opacity-40"}`
+            },
+            !playable && "\u{1F512} ",
+            "#",
+            i + 1
+          );
+        }))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, currentLesson?.desc || ""));
+      }), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: () => setPhase("rps"), className: "w-full py-3" }, "LOCK IN \u25B6"));
+    })(), phase === "rps" && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-4 text-center pt-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "ROCK PAPER SCISSORS"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "Loser goes first"), !rps && /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-3 gap-2 pt-4" }, [{ k: "rock", e: "\u270A" }, { k: "paper", e: "\u270B" }, { k: "scissors", e: "\u270C\uFE0F" }].map((o) => /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         key: o.k,
@@ -5301,8 +5314,11 @@ window.exports = window.module.exports;
         style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
       },
       rps.outcome === "win" ? "YOU WIN! THEY START" : rps.outcome === "lose" ? "YOU GO FIRST" : "TIE \u2014 REPLAY"
-    ))), /^round[1-4]$/.test(phase) && result && (() => {
+    ))), /^round[1-4]$/.test(phase) && playerPatternIdxs && oppPatternIdxs && (() => {
       const roundN = parseInt(phase.replace("round", ""));
+      const side = sideForRound(roundN);
+      const lessonIdx = lessonIdxForRound(roundN);
+      const lesson = HERO_LESSONS[lessonIdx];
       return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(BattleHUD, { char, opponent, timeLeft, pScore: liveScore.p, oScore: liveScore.o }), /* @__PURE__ */ import_react.default.createElement(
         PixelStage,
         {
@@ -5316,7 +5332,18 @@ window.exports = window.module.exports;
           judgeHearts,
           comboLabel
         }
-      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse" }, "ROUND ", roundN, " / ", TOTAL_ROUNDS, " \xB7 ", activeSide === "P" ? `${char.name} performing` : `${opponent.name} performing`));
+      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-sm tracking-widest uppercase" }, "ROUND ", roundN, "/", TOTAL_ROUNDS, " \xB7 ", side === "P" ? char.name : opponent.name, " \xB7 ", lesson?.name), side === "P" && lesson != null && /* @__PURE__ */ import_react.default.createElement(
+        BeatboxHero,
+        {
+          mode: "battle",
+          active: true,
+          bpm: BATTLE_BPM,
+          lessonIdx,
+          onAccuracyUpdate: () => {
+          },
+          onLessonComplete: (_idx, accuracy) => handlePlayerRoundComplete(roundN, accuracy)
+        }
+      ));
     })(), /^countdown[1-4]$/.test(phase) && (() => {
       const roundN = parseInt(phase.replace("countdown", ""));
       const upcomingSide = sideForRound(roundN);
