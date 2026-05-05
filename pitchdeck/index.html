@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PITCH DECK — A Football Roguelike</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&family=Bungee&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  :root {
+    --grass-1: #2d5a2b;
+    --grass-2: #346b32;
+    --line: #f0f0e8;
+    --home: #d63e3e;
+    --home-dark: #7a1f1f;
+    --away: #2a4a8c;
+    --away-dark: #15264a;
+    --ball: #f5f1d8;
+    --hud-bg: #0a0a0a;
+    --hud-border: #1a1a1a;
+    --gold: #d4a437;
+    --energy: #4ad6c5;
+    --danger: #ff4757;
+    --yellow: #f5c842;
+    --blue: #4a8fd6;
+    --red: #e54b4b;
+    --text: #f0f0e8;
+    --text-dim: #888;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: #000;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    image-rendering: pixelated;
+    -webkit-font-smoothing: none;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  #app {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    background: var(--hud-bg);
+    overflow: hidden;
+  }
+
+  /* === TOP HUD === */
+  .topbar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 6px 12px;
+    background: linear-gradient(180deg, #000 0%, #111 100%);
+    border-bottom: 2px solid var(--hud-border);
+    gap: 12px;
+  }
+  .team-score { display: flex; align-items: center; gap: 8px; font-family: 'Bungee', sans-serif; }
+  .team-score.home { justify-self: start; }
+  .team-score.away { justify-self: end; flex-direction: row-reverse; }
+  .team-badge {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    border: 2px solid #000;
+    position: relative;
+  }
+  .team-badge.home { background: var(--home); }
+  .team-badge.away { background: var(--away); }
+  .team-badge.you::after {
+    content: 'YOU';
+    position: absolute;
+    bottom: -10px; left: 50%; transform: translateX(-50%);
+    font-size: 7px;
+    color: var(--energy);
+    font-family: 'Bungee', sans-serif;
+    letter-spacing: 1px;
+  }
+  .team-name { font-size: 11px; letter-spacing: 1px; }
+  .men-on-field { font-size: 9px; color: var(--text-dim); margin-top: 1px; }
+  .score-num {
+    font-size: 22px;
+    color: var(--gold);
+    text-shadow: 2px 2px 0 #000;
+    min-width: 22px;
+    text-align: center;
+  }
+  .center-info { text-align: center; font-family: 'VT323', monospace; }
+  .match-title {
+    font-family: 'Bungee', sans-serif;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--gold);
+  }
+  .turn-indicator { font-size: 13px; color: var(--text-dim); margin-top: 1px; }
+  .turn-indicator.your-turn { color: var(--energy); }
+  .turn-indicator.enemy-turn { color: var(--danger); }
+  .ref-info {
+    font-size: 10px;
+    color: #999;
+    margin-top: 1px;
+    letter-spacing: 1px;
+  }
+
+  /* === FIELD === */
+  .field-wrap {
+    position: relative;
+    overflow: hidden;
+    background: #000;
+    min-height: 0;
+  }
+  #field { position: absolute; display: block; }
+
+  .poss-banner {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Bungee', sans-serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    padding: 6px 16px;
+    border: 3px solid #000;
+    box-shadow: 4px 4px 0 #000;
+    z-index: 10;
+    white-space: nowrap;
+  }
+  .poss-banner.attacking { background: var(--home); color: #fff; }
+  .poss-banner.defending { background: var(--away); color: #fff; }
+  .poss-banner.loose { background: var(--gold); color: #000; }
+
+  .log {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000, -1px -1px 0 #000;
+    background: rgba(0,0,0,0.7);
+    padding: 4px 14px;
+    border: 1px solid rgba(255,255,255,0.2);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 11;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .log.show { opacity: 1; }
+  .log.foul { background: var(--gold); color: #000; border-color: #000; }
+  .log.card-yellow { background: var(--yellow); color: #000; border-color: #000; font-family: 'Bungee'; font-size: 16px; }
+  .log.card-red { background: var(--red); color: #fff; border-color: #000; font-family: 'Bungee'; font-size: 16px; }
+  .log.goal { background: var(--gold); color: #000; border-color: #000; font-family: 'Bungee'; font-size: 28px; padding: 12px 24px; }
+
+  .end-turn {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    background: var(--danger);
+    color: #fff;
+    border: 3px solid #000;
+    padding: 9px 12px;
+    font-family: 'Bungee', sans-serif;
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 #000;
+    z-index: 10;
+  }
+  .end-turn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .end-turn:hover:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 #000;
+  }
+
+  .targeting-banner {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gold);
+    color: #000;
+    font-family: 'Bungee', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 6px 12px;
+    border: 2px solid #000;
+    box-shadow: 3px 3px 0 #000;
+    z-index: 11;
+    pointer-events: none;
+    animation: bannerPulse 0.8s ease-in-out infinite alternate;
+  }
+  @keyframes bannerPulse {
+    from { transform: translateX(-50%) scale(1); }
+    to { transform: translateX(-50%) scale(1.05); }
+  }
+
+  /* === BOTTOM HAND === */
+  .hand-area {
+    background: linear-gradient(180deg, #111 0%, #000 100%);
+    border-top: 2px solid var(--hud-border);
+    padding: 6px 8px 8px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+    min-height: 130px;
+  }
+  @media (max-width: 600px) {
+    .hand-area { min-height: 122px; padding: 4px 6px 6px; gap: 6px; }
+  }
+
+  .energy-display { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .energy-orb {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--energy), #1a8a7a);
+    border: 2px solid #000;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Bungee', sans-serif;
+    font-size: 16px;
+    color: #000;
+    box-shadow: 0 0 8px rgba(74, 214, 197, 0.5);
+  }
+  .energy-label { font-family: 'VT323', monospace; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
+
+  .hand {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 2px 4px;
+    scrollbar-width: none;
+  }
+  .hand::-webkit-scrollbar { display: none; }
+  @media (max-width: 600px) { .hand { justify-content: flex-start; } }
+
+  .card {
+    --color: var(--gold);
+    width: 100px;
+    height: 130px;
+    flex-shrink: 0;
+    border: 3px solid #000;
+    border-radius: 6px;
+    padding: 6px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.25s, box-shadow 0.2s;
+    box-shadow: 4px 4px 0 #000, 0 0 0 2px var(--color);
+    user-select: none;
+    overflow: hidden;
+    background: linear-gradient(160deg, #1c1c24 0%, #0d0d12 100%);
+  }
+  .card.yellow { --color: var(--yellow); background: linear-gradient(160deg, #2a2410 0%, #0d0a05 100%); }
+  .card.blue   { --color: var(--blue);   background: linear-gradient(160deg, #0f1c2a 0%, #050a14 100%); }
+  .card.red    { --color: var(--red);    background: linear-gradient(160deg, #2a0f0f 0%, #0d0505 100%); }
+
+  .card-flag {
+    position: absolute;
+    top: 0; right: 0;
+    width: 0; height: 0;
+    border-style: solid;
+    border-width: 0 22px 22px 0;
+    border-color: transparent var(--color) transparent transparent;
+    z-index: 2;
+  }
+  @media (max-width: 600px) {
+    .card { width: 78px; height: 102px; padding: 4px; border-width: 2px; box-shadow: 2px 2px 0 #000, 0 0 0 1px var(--color); }
+    .card-flag { border-width: 0 16px 16px 0; }
+  }
+
+  .card.disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.7); }
+  .card.selected {
+    transform: translateY(-12px) rotate(-1deg);
+    box-shadow: 6px 8px 0 #000, 0 0 0 3px var(--color);
+    z-index: 5;
+  }
+  .card:hover:not(.disabled):not(.selected) {
+    transform: translateY(-6px);
+    box-shadow: 5px 7px 0 #000, 0 0 0 2px var(--color);
+  }
+
+  .card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-bottom: 3px;
+    border-bottom: 1px dashed rgba(255,255,255,0.15);
+  }
+  .card-cost {
+    width: 18px; height: 18px;
+    background: var(--color);
+    color: #000;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Bungee', sans-serif;
+    font-size: 11px;
+    border: 2px solid #000;
+  }
+  .card-type {
+    font-family: 'VT323', monospace;
+    font-size: 10px;
+    color: var(--color);
+    letter-spacing: 1px;
+  }
+  .card-art {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    filter: drop-shadow(2px 2px 0 #000);
+  }
+  .card-name {
+    font-family: 'Bungee', sans-serif;
+    font-size: 9px;
+    text-align: center;
+    color: var(--text);
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+  }
+  .card-desc {
+    font-family: 'VT323', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.05;
+    margin-top: 2px;
+    min-height: 22px;
+  }
+  @media (max-width: 600px) {
+    .card-cost { width: 14px; height: 14px; font-size: 9px; border-width: 1px; }
+    .card-type { font-size: 8px; }
+    .card-art { font-size: 18px; }
+    .card-name { font-size: 7px; }
+    .card-desc { font-size: 9px; min-height: 18px; line-height: 1; }
+  }
+
+  .deck-pile { display: flex; gap: 8px; align-items: center; }
+  .pile { text-align: center; font-family: 'VT323', monospace; }
+  .pile-stack {
+    width: 30px; height: 40px;
+    background: #1a1a22;
+    border: 2px solid #000;
+    border-radius: 4px;
+    box-shadow: 2px 2px 0 #000;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Bungee', sans-serif;
+    font-size: 13px;
+    color: var(--gold);
+  }
+  .pile-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; margin-top: 2px; }
+  @media (max-width: 600px) { .pile-stack { width: 24px; height: 32px; font-size: 11px; } .pile-label { font-size: 8px; } }
+
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    padding: 16px;
+  }
+  .modal.show { opacity: 1; pointer-events: all; }
+  .modal-content {
+    background: linear-gradient(160deg, #1c1c24, #0d0d12);
+    border: 3px solid var(--gold);
+    padding: 24px 28px;
+    text-align: center;
+    box-shadow: 8px 8px 0 #000;
+    max-width: 480px;
+  }
+  .modal h2 {
+    font-family: 'Bungee', sans-serif;
+    font-size: 24px;
+    color: var(--gold);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .modal p {
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    color: var(--text);
+    margin-bottom: 16px;
+    line-height: 1.4;
+  }
+  .modal button {
+    background: var(--energy);
+    color: #000;
+    border: 3px solid #000;
+    padding: 10px 22px;
+    font-family: 'Bungee', sans-serif;
+    font-size: 13px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  @keyframes cardFlip {
+    0% { transform: rotateY(0deg); }
+    50% { transform: rotateY(90deg); }
+    100% { transform: rotateY(0deg); }
+  }
+  .card.flipping { animation: cardFlip 0.5s ease-in-out; }
+
+  /* === META SCREENS === */
+  .screen { position: fixed; inset: 0; background: #000; z-index: 50; overflow-y: auto; padding: 16px; display: none; }
+  .screen.active { display: block; }
+  .screen-inner { max-width: 720px; margin: 0 auto; padding: 12px; }
+  .screen h1 { font-family: 'Bungee', sans-serif; font-size: 30px; color: var(--gold); letter-spacing: 3px; text-align: center; text-shadow: 3px 3px 0 #000; }
+  .screen h2 { font-family: 'Bungee', sans-serif; font-size: 18px; color: var(--energy); letter-spacing: 2px; margin: 14px 0 8px; }
+  .screen p, .screen li { font-family: 'VT323', monospace; font-size: 17px; color: var(--text); line-height: 1.35; }
+  .btn {
+    background: var(--energy); color: #000; border: 3px solid #000;
+    padding: 10px 18px; font-family: 'Bungee', sans-serif; font-size: 12px;
+    letter-spacing: 1px; cursor: pointer; box-shadow: 4px 4px 0 #000;
+    margin: 4px; transition: transform 0.1s;
+  }
+  .btn:hover:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.gold { background: var(--gold); }
+  .btn.danger { background: var(--danger); color: #fff; }
+  .btn.ghost { background: #222; color: var(--text); }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 12px 0; }
+  .start-hero { text-align: center; padding: 24px 12px; }
+  .start-hero .logo {
+    font-family: 'Bungee', sans-serif; font-size: 48px;
+    color: var(--gold); letter-spacing: 6px;
+    text-shadow: 4px 4px 0 var(--home), 8px 8px 0 #000; margin-bottom: 6px;
+  }
+  .start-hero .sub { font-family: 'VT323', monospace; font-size: 22px; color: var(--energy); letter-spacing: 2px; }
+  .start-blurb { background: #111; border: 3px solid #000; box-shadow: 4px 4px 0 var(--gold); padding: 14px; margin: 16px auto; max-width: 520px; }
+  .map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+  .map-node { border: 3px solid #000; padding: 10px; background: #1a1a22; box-shadow: 3px 3px 0 #000; position: relative; min-height: 130px; display: flex; flex-direction: column; cursor: default; }
+  .map-node.current { background: #2a2a3a; border-color: var(--energy); box-shadow: 3px 3px 0 var(--energy), 5px 5px 0 #000; cursor: pointer; }
+  .map-node.done { opacity: 0.5; background: #0a1a0a; border-color: #2d5a2b; }
+  .map-node.locked { opacity: 0.4; }
+  .map-node.final { background: #2a1414; border-color: var(--gold); }
+  .map-node .mn-no { font-family: 'Bungee'; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; }
+  .map-node .mn-name { font-family: 'Bungee'; font-size: 12px; color: var(--text); margin-top: 2px; line-height: 1.1; }
+  .map-node .mn-stars { color: var(--gold); font-size: 14px; margin-top: 4px; letter-spacing: 2px; }
+  .map-node .mn-ref { font-family: 'VT323', monospace; font-size: 12px; color: var(--text-dim); margin-top: auto; line-height: 1.1; }
+  .map-node .mn-tag { position: absolute; top: -8px; right: 6px; background: var(--gold); color: #000; font-family: 'Bungee'; font-size: 9px; padding: 2px 6px; border: 2px solid #000; }
+  .map-node.done .mn-tag { background: var(--energy); }
+  .map-node.final .mn-tag { background: var(--home); color: #fff; }
+  .stat-bar { display: flex; justify-content: space-between; align-items: center; background: #111; border: 2px solid #000; padding: 8px 12px; margin-bottom: 12px; font-family: 'VT323', monospace; font-size: 16px; flex-wrap: wrap; gap: 8px; }
+  .stat-bar .coins { color: var(--gold); font-family: 'Bungee'; font-size: 14px; letter-spacing: 1px; }
+  .stat-bar .progress { color: var(--energy); font-family: 'Bungee'; font-size: 12px; letter-spacing: 1px; }
+  .pre-block { background: #111; border: 3px solid #000; padding: 12px; box-shadow: 4px 4px 0 #000; margin: 10px 0; }
+  .ref-portrait { display: flex; gap: 12px; align-items: center; }
+  .ref-face { width: 60px; height: 60px; background: var(--gold); border: 3px solid #000; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; }
+  .strict-meter { flex: 1; min-width: 120px; }
+  .strict-meter .label { font-family: 'VT323'; font-size: 14px; color: var(--text-dim); }
+  .strict-meter .name { font-family: 'Bungee'; font-size: 13px; color: var(--text); letter-spacing: 1px; }
+  .strict-meter .bar { height: 14px; background: #000; border: 2px solid #000; position: relative; margin-top: 4px; overflow: hidden; }
+  .strict-meter .bar .fill { height: 100%; background: linear-gradient(90deg, var(--energy), var(--yellow), var(--danger)); transition: width .4s; }
+  .strict-meter .bar .marker { position: absolute; top: -3px; bottom: -3px; width: 3px; background: #fff; transition: left .4s; }
+  .deck-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+  .deck-list .chip { font-family: 'VT323'; font-size: 12px; padding: 2px 6px; border: 2px solid #000; background: #1a1a22; }
+  .deck-list .chip.yellow { border-color: var(--yellow); color: var(--yellow); }
+  .deck-list .chip.blue { border-color: var(--blue); color: var(--blue); }
+  .deck-list .chip.red { border-color: var(--red); color: var(--red); }
+  .pick-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
+  .pick-row .card { cursor: pointer; transform: scale(1.15); margin: 14px 4px; }
+  .pick-row .card:hover { transform: scale(1.22) translateY(-4px); }
+  .toast { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: var(--gold); color: #000; padding: 10px 16px; font-family: 'Bungee'; border: 3px solid #000; box-shadow: 4px 4px 0 #000; z-index: 200; opacity: 0; pointer-events: none; transition: opacity .3s; font-size: 13px; letter-spacing: 1px; text-align: center; }
+  .toast.show { opacity: 1; }
+  .toast.bad { background: var(--danger); color: #fff; }
+  .end-banner { text-align: center; padding: 30px 12px; }
+  .end-banner .big { font-family: 'Bungee'; font-size: 42px; letter-spacing: 4px; text-shadow: 3px 3px 0 #000; }
+  .end-banner .big.win { color: var(--gold); }
+  .end-banner .big.lose { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div id="app" style="display:none;">
+  <div class="topbar">
+    <div class="team-score home">
+      <div class="team-badge home you"></div>
+      <div>
+        <div class="team-name">YOU FC</div>
+        <div class="men-on-field" id="homeMen">7 on field</div>
+      </div>
+      <div class="score-num" id="homeScore">0</div>
+    </div>
+    <div class="center-info">
+      <div class="match-title">PITCH DECK</div>
+      <div class="turn-indicator your-turn" id="turnIndicator">YOUR TURN — RD 1</div>
+      <div class="ref-info" id="refInfo">REF: ?</div>
+    </div>
+    <div class="team-score away">
+      <div class="team-badge away"></div>
+      <div>
+        <div class="team-name">RIVAL FC</div>
+        <div class="men-on-field" id="awayMen">7 on field</div>
+      </div>
+      <div class="score-num" id="awayScore">0</div>
+    </div>
+  </div>
+
+  <div class="field-wrap" id="fieldWrap">
+    <canvas id="field"></canvas>
+    <div class="poss-banner" id="possBanner">⚔️ YOU ATTACK</div>
+    <div class="log" id="log"></div>
+    <div class="targeting-banner" id="targetingBanner" style="display:none;"></div>
+    <button class="end-turn" id="endTurn">END TURN ▶</button>
+  </div>
+
+  <div class="hand-area">
+    <div class="energy-display">
+      <div class="energy-orb" id="energyOrb">3</div>
+      <div class="energy-label">ENERGY</div>
+    </div>
+    <div class="hand" id="hand"></div>
+    <div class="deck-pile">
+      <div class="pile">
+        <div class="pile-stack" id="deckCount">9</div>
+        <div class="pile-label">DECK</div>
+      </div>
+      <div class="pile">
+        <div class="pile-stack" id="discardCount" style="color: var(--text-dim);">0</div>
+        <div class="pile-label">DISCARD</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h2 id="modalTitle">FULL TIME</h2>
+    <p id="modalText">Match over.</p>
+    <button id="modalBtn">CONTINUE ▶</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="screen active" id="screenStart">
+  <div class="screen-inner">
+    <div class="start-hero">
+      <div class="logo">PITCH DECK</div>
+      <div class="sub">A FOOTBALL ROGUELIKE</div>
+    </div>
+    <div class="start-blurb">
+      <p><b>Six matches. One deck. No mercy.</b></p>
+      <p>Play cards to pass, run, tackle, shoot. Win matches to add cards to your deck. Lose any match and the run ends.</p>
+      <p>Watch the ref — and pay him if you have to.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn gold" id="btnNewRun">START NEW RUN</button>
+      <button class="btn ghost" id="btnContinue" style="display:none;">CONTINUE RUN</button>
+    </div>
+    <div style="text-align:center; margin-top: 18px;">
+      <p style="color:var(--text-dim); font-size: 14px;">v1.0 — RoxorLoops</p>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screenMap">
+  <div class="screen-inner">
+    <div class="stat-bar">
+      <div class="coins">💰 <span id="mapCoins">0</span></div>
+      <div class="progress" id="mapProgress">MATCH 1/6</div>
+      <div><button class="btn ghost" id="btnAbandon" style="font-size:9px; padding:4px 8px;">ABANDON</button></div>
+    </div>
+    <h1>THE ROAD</h1>
+    <div class="map-grid" id="mapGrid"></div>
+    <h2>YOUR DECK <span style="color:var(--text-dim); font-size: 12px;">(<span id="deckSize">9</span> CARDS)</span></h2>
+    <div class="deck-list" id="deckChips"></div>
+    <div class="btn-row">
+      <button class="btn gold" id="btnEnter">ENTER NEXT MATCH ▶</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screenPreMatch">
+  <div class="screen-inner">
+    <div class="stat-bar">
+      <div class="coins">💰 <span id="preCoins">0</span></div>
+      <div class="progress" id="preProgress">MATCH 1/6</div>
+    </div>
+    <h1 id="preOpponentName">RIVAL FC</h1>
+    <p style="text-align:center;" id="preOpponentTag">A scrappy side. <span style="color:var(--gold);">★★</span></p>
+
+    <div class="pre-block">
+      <h2 style="margin-top:0;">TODAY'S REFEREE</h2>
+      <div class="ref-portrait">
+        <div class="ref-face" id="preRefFace">⚖️</div>
+        <div class="strict-meter">
+          <div class="name" id="preRefName">FAIR FIONA</div>
+          <div class="label" id="preRefLabel">Strictness: <span id="preRefStrict">50</span></div>
+          <div class="bar"><div class="fill" id="preRefFill" style="width:50%"></div><div class="marker" id="preRefMarker" style="left:50%"></div></div>
+          <div class="label" style="margin-top:4px;" id="preRefDesc">Balanced. By-the-book on fouls.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pre-block">
+      <h2 style="margin-top:0;">BRIBERY 💵</h2>
+      <p>Slip the ref some cash. Each bribe lowers strictness by 12. There's a small chance you get caught — and a caught ref turns ruthless.</p>
+      <p id="preBribeStatus" style="color:var(--gold);">Bribes used: 0 · Risk of being caught: 8%</p>
+      <div class="btn-row">
+        <button class="btn gold" id="btnBribe">BRIBE — 30 💰</button>
+      </div>
+    </div>
+
+    <div class="pre-block">
+      <h2 style="margin-top:0;">YOUR DECK</h2>
+      <div class="deck-list" id="preDeckChips"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn ghost" id="btnBackToMap">◀ BACK</button>
+      <button class="btn danger" id="btnKickOff">KICK OFF ▶</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screenPostMatch">
+  <div class="screen-inner">
+    <div class="end-banner">
+      <div class="big win" id="postBigText">VICTORY!</div>
+      <p style="font-size: 20px; margin-top: 8px;" id="postScore">3 - 1</p>
+      <p style="color: var(--gold); font-size: 22px;" id="postEarnings">+50 💰</p>
+    </div>
+    <h2>PICK A CARD</h2>
+    <p style="text-align:center;">Add one of these to your deck:</p>
+    <div class="pick-row" id="pickRow"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="btnSkipCard">SKIP — REST (clear all yellows)</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screenGameOver">
+  <div class="screen-inner">
+    <div class="end-banner">
+      <div class="big lose">RUN OVER</div>
+      <p style="font-size: 20px; margin-top: 8px;" id="goSubtitle">You lost the tie.</p>
+      <p id="goStats" style="color: var(--text-dim);"></p>
+    </div>
+    <div class="btn-row">
+      <button class="btn gold" id="btnRetry">START NEW RUN</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screenVictory">
+  <div class="screen-inner">
+    <div class="end-banner">
+      <div class="big win">CHAMPIONS!</div>
+      <p style="font-size: 22px; margin-top: 8px;">You lifted the trophy 🏆</p>
+      <p id="victoryStats" style="color: var(--text-dim);"></p>
+    </div>
+    <h2>FINAL DECK</h2>
+    <div class="deck-list" id="victoryDeck"></div>
+    <div class="btn-row">
+      <button class="btn gold" id="btnNewRunVictory">START NEW RUN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const FIELD_W = 100;
+const FIELD_H = 60;
+const HOME = 'home', AWAY = 'away';
+const ROUNDS_PER_MATCH = 8;
+
+// THREE COLORS:
+//   yellow  — TACTICAL: positioning, possession-agnostic
+//   blue    — DISCIPLINED: low risk, possession-dependent
+//   red     — AGGRESSIVE: high risk/reward (fouls possible)
+const CARDS = {
+  // YELLOW
+  move_forward: {
+    color: 'yellow', cost: 1, art: '⬆️', type: 'TACTIC',
+    name: 'PUSH UP',
+    desc: 'A teammate runs forward. If they have the ball, they dribble',
+    targetWith: 'teammate_or_carrier', targetWithout: 'teammate_or_carrier',
+  },
+  move_back: {
+    color: 'yellow', cost: 1, art: '⬇️', type: 'TACTIC',
+    name: 'DROP BACK',
+    desc: 'Pull a teammate deeper for shape',
+    targetWith: 'teammate_or_carrier', targetWithout: 'teammate_or_carrier',
+  },
+  switch_play: {
+    color: 'yellow', cost: 2, art: '↔️', type: 'TACTIC',
+    name: 'SWITCH PLAY',
+    desc: 'Spread the team to the opposite flank',
+    targetWith: null, targetWithout: null,
+  },
+  // BLUE
+  short_pass: {
+    color: 'blue', cost: 1, art: '⚽', type: 'PASS',
+    nameWith: 'SHORT PASS', nameWithout: 'CLOSE DOWN',
+    descWith: 'Safe pass to a chosen teammate',
+    descWithout: 'Closest defender shadows the carrier',
+    targetWith: 'teammate', targetWithout: null,
+  },
+  hold_up: {
+    color: 'blue', cost: 1, art: '🛡️', type: 'HOLD',
+    nameWith: 'HOLD UP', nameWithout: 'JOCKEY',
+    descWith: 'Shield the ball, gain +1 energy',
+    descWithout: 'Stand-up tackle, no foul risk',
+    targetWith: null, targetWithout: null,
+  },
+  drop_deep: {
+    color: 'blue', cost: 1, art: '🧱', type: 'SHAPE',
+    nameWith: 'PATIENT BUILD', nameWithout: 'DROP DEEP',
+    descWith: 'Whole team stays compact, low intercept risk',
+    descWithout: 'Defenders pull back to the box',
+    targetWith: null, targetWithout: null,
+  },
+  // RED
+  shoot: {
+    color: 'red', cost: 3, art: '🥅', type: 'SHOT',
+    nameWith: 'SHOOT', nameWithout: 'BLOCK',
+    descWith: 'Take a shot. Closer = better',
+    descWithout: 'Defender throws body in the lane',
+    targetWith: null, targetWithout: null,
+  },
+  through_ball: {
+    color: 'red', cost: 2, art: '🎯', type: 'PASS',
+    nameWith: 'THROUGH BALL', nameWithout: 'INTERCEPT',
+    descWith: 'Risky pass into space ahead of a runner',
+    descWithout: 'Closest defender dives into passing lane',
+    targetWith: 'teammate', targetWithout: null,
+  },
+  hard_tackle: {
+    color: 'red', cost: 1, art: '🦵', type: 'TACKLE',
+    nameWith: 'BURST', nameWithout: 'HARD TACKLE',
+    descWith: 'Carrier sprints forward aggressively',
+    descWithout: 'Big tackle. High win-rate, FOUL RISK',
+    targetWith: null, targetWithout: null,
+  },
+  // EXPANSION
+  high_line: {
+    color: 'yellow', cost: 1, art: '📏', type: 'TACTIC',
+    name: 'HIGH LINE',
+    desc: 'Defenders push up aggressively',
+    targetWith: null, targetWithout: null,
+  },
+  overlap: {
+    color: 'yellow', cost: 1, art: '🔀', type: 'TACTIC',
+    name: 'OVERLAP',
+    desc: 'Two midfielders make runs forward',
+    targetWith: null, targetWithout: null,
+  },
+  park_the_bus: {
+    color: 'yellow', cost: 2, art: '🚌', type: 'TACTIC',
+    name: 'PARK THE BUS',
+    desc: 'Whole team falls back behind the ball',
+    targetWith: null, targetWithout: null,
+  },
+  one_two: {
+    color: 'blue', cost: 2, art: '➰', type: 'PASS',
+    nameWith: 'ONE-TWO', nameWithout: 'MAN-MARK',
+    descWith: 'Pass and get the ball back, advanced',
+    descWithout: 'Stick to the carrier, follow them',
+    targetWith: 'teammate', targetWithout: null,
+  },
+  tempo: {
+    color: 'blue', cost: 1, art: '⏱️', type: 'CARDS',
+    name: 'TEMPO',
+    desc: 'Draw 2 extra cards',
+    targetWith: null, targetWithout: null,
+  },
+  hard_press: {
+    color: 'red', cost: 2, art: '🔥', type: 'PRESS',
+    nameWith: 'COUNTER', nameWithout: 'HARD PRESS',
+    descWith: 'Surge forward with 2 runners',
+    descWithout: 'Three defenders swarm the carrier',
+    targetWith: null, targetWithout: null,
+  },
+  nutmeg: {
+    color: 'red', cost: 2, art: '🪄', type: 'SKILL',
+    nameWith: 'NUTMEG', nameWithout: 'JUMP IN',
+    descWith: 'Dribble through nearest opponent',
+    descWithout: 'Risky lunge for the ball',
+    targetWith: null, targetWithout: null,
+  },
+  pro_foul: {
+    color: 'red', cost: 1, art: '🛑', type: 'FOUL',
+    nameWith: 'CYNICAL', nameWithout: 'PRO FOUL',
+    descWith: 'Step over to break the press',
+    descWithout: 'Take them down. Stops the attack, FOUL',
+    targetWith: null, targetWithout: null,
+  },
+};
+
+// Pool the run can offer as rewards (some duplicates of starters too)
+const REWARD_POOL = [
+  'move_forward','move_back','switch_play','high_line','overlap','park_the_bus',
+  'short_pass','hold_up','drop_deep','one_two','tempo',
+  'shoot','through_ball','hard_tackle','hard_press','nutmeg','pro_foul',
+];
+
+const OPPONENT_NAMES = [
+  'SHOREDITCH FC','IRON CITY UTD','NORDIC WOLVES','LISBON NIGHT','KOPPENBURG SC',
+  'TIGERS BK','RED HAZARD','EAST END BOYS','PALACIO 09','VILLA NOVA',
+];
+const OPPONENT_TAGS = [
+  'A scrappy local side.','Long-ball merchants.','Quick on the counter.','Old-school catenaccio.',
+  'Skill on the wings.','Brutal in midfield.','Famous for diving.','Champions last year.',
+];
+
+const STARTER_DECK = [
+  'move_forward', 'move_forward', 'move_back',
+  'short_pass', 'hold_up', 'drop_deep',
+  'shoot', 'through_ball', 'hard_tackle',
+];
+
+const state = {
+  portrait: false,
+  players: [],
+  ballCarrier: null,
+  ballPos: { x: 50, y: 30 },
+  ballTarget: null,
+  possession: HOME,
+  score: { home: 0, away: 0 },
+  round: 1,
+  turn: HOME,
+  energy: 3,
+  maxEnergy: 3,
+  hand: [],
+  deck: [],
+  discard: [],
+  busy: false,
+  matchOver: false,
+  targeting: null,
+  ref: { name: 'STRICT STEFAN', strictness: 50 },
+  discipline: {},
+};
+
+const REFS = [
+  { name: 'STRICT STEFAN',   strictness: 75, face: '😠', desc: 'Aggressive cards. Watch tackles.' },
+  { name: 'CASUAL CARLOS',   strictness: 35, face: '😎', desc: 'Lets it flow. Will still call clear ones.' },
+  { name: 'BY-THE-BOOK BO',  strictness: 60, face: '🤓', desc: 'Calls fouls fast. Cards on second.' },
+  { name: 'LENIENT LEO',     strictness: 25, face: '😴', desc: 'You can get away with murder.' },
+  { name: 'FAIR FIONA',      strictness: 50, face: '🙂', desc: 'Balanced. By-the-book on fouls.' },
+];
+
+const runState = {
+  active: false,
+  matches: [],
+  matchIdx: 0,
+  deck: [],
+  coins: 0,
+  bribesUsed: 0,
+  bribeAmount: 0,
+  caught: false,
+  yellowsClearedFor: {},
+  totalGoals: 0,
+  totalConceded: 0,
+  pendingPick: null,
+};
+
+const SAVE_KEY = 'pitchdeck_run_v1';
+
+function saveRun() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(runState)); } catch (e) {}
+}
+function loadRun() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const r = JSON.parse(raw);
+    if (!r || !r.active) return false;
+    Object.assign(runState, r);
+    return true;
+  } catch (e) { return false; }
+}
+function clearRun() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+}
+
+function initMatch() {
+  state.players = [];
+  // 7-a-side: 1-2-3-1
+  const homeFormation = [
+    { id: 'h0', role: 'GK',  x: 8,  y: 30 },
+    { id: 'h1', role: 'DEF', x: 22, y: 16 },
+    { id: 'h2', role: 'DEF', x: 22, y: 44 },
+    { id: 'h3', role: 'MID', x: 38, y: 12 },
+    { id: 'h4', role: 'MID', x: 38, y: 30 },
+    { id: 'h5', role: 'MID', x: 38, y: 48 },
+    { id: 'h6', role: 'FWD', x: 55, y: 30 },
+  ];
+  const awayFormation = [
+    { id: 'a0', role: 'GK',  x: 92, y: 30 },
+    { id: 'a1', role: 'DEF', x: 78, y: 16 },
+    { id: 'a2', role: 'DEF', x: 78, y: 44 },
+    { id: 'a3', role: 'MID', x: 62, y: 12 },
+    { id: 'a4', role: 'MID', x: 62, y: 30 },
+    { id: 'a5', role: 'MID', x: 62, y: 48 },
+    { id: 'a6', role: 'FWD', x: 45, y: 30 },
+  ];
+  homeFormation.forEach(p => state.players.push({ ...p, team: HOME, hx: p.x, hy: p.y, sentOff: false }));
+  awayFormation.forEach(p => state.players.push({ ...p, team: AWAY, hx: p.x, hy: p.y, sentOff: false }));
+
+  state.ballCarrier = 'h4';
+  state.ballPos = { x: 38, y: 30 };
+  state.possession = HOME;
+  state.score = { home: 0, away: 0 };
+  state.round = 1;
+  state.turn = HOME;
+  state.energy = state.maxEnergy = 3;
+
+  // Pull deck from run if active, else default starter
+  const sourceDeck = (runState.active && runState.deck.length) ? runState.deck : STARTER_DECK;
+  state.deck = shuffle([...sourceDeck]);
+  state.discard = [];
+  state.hand = [];
+  state.matchOver = false;
+  state.targeting = null;
+
+  // Pull ref from current run match, else random
+  if (runState.active && runState.matches[runState.matchIdx]) {
+    const m = runState.matches[runState.matchIdx];
+    let strictness = m.ref.strictness;
+    if (runState.caught) strictness = Math.min(100, strictness + 30);
+    else strictness = Math.max(0, strictness - runState.bribeAmount);
+    state.ref = { name: m.ref.name, strictness };
+    state.aiSkill = m.aiSkill || 1.0;
+  } else {
+    state.ref = REFS[Math.floor(Math.random() * REFS.length)];
+    state.aiSkill = 1.0;
+  }
+  state.discipline = {};
+  state.players.forEach(p => state.discipline[p.id] = { fouls: 0, yellow: false });
+
+  drawCards(5);
+  render();
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function drawCards(n) {
+  for (let i = 0; i < n; i++) {
+    if (state.deck.length === 0) {
+      if (state.discard.length === 0) break;
+      state.deck = shuffle(state.discard);
+      state.discard = [];
+    }
+    state.hand.push(state.deck.pop());
+  }
+}
+
+function getPlayer(id) { return state.players.find(p => p.id === id); }
+function teammates(team) { return state.players.filter(p => p.team === team && !p.sentOff); }
+function opponents(team) { return state.players.filter(p => p.team !== team && !p.sentOff); }
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function showLog(msg, opts = {}) {
+  const el = document.getElementById('log');
+  el.textContent = msg;
+  el.className = 'log show';
+  if (opts.style) el.classList.add(opts.style);
+  clearTimeout(showLog._t);
+  showLog._t = setTimeout(() => el.classList.remove('show'), opts.ms || 1500);
+}
+
+function nearestOpponent(p, team) {
+  const opps = opponents(team).filter(o => o.role !== 'GK');
+  if (opps.length === 0) return null;
+  return opps.sort((a, b) => dist(a, p) - dist(b, p))[0];
+}
+
+function homeHasBall() {
+  return state.ballCarrier && state.ballCarrier.startsWith('h');
+}
+
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const wrap = document.getElementById('fieldWrap');
+  const availW = wrap.clientWidth;
+  const availH = wrap.clientHeight;
+  state.portrait = availH > availW * 1.1;
+  const fieldRatio = state.portrait ? FIELD_H / FIELD_W : FIELD_W / FIELD_H;
+  let w = availW, h = availW / fieldRatio;
+  if (h > availH) { h = availH; w = availH * fieldRatio; }
+  canvas.width = w; canvas.height = h;
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  canvas.style.left = ((availW - w) / 2) + 'px';
+  canvas.style.top = ((availH - h) / 2) + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
+
+function logicalToScreen(x, y) {
+  if (state.portrait) {
+    return { sx: (y / FIELD_H) * canvas.width, sy: canvas.height - (x / FIELD_W) * canvas.height };
+  }
+  return { sx: (x / FIELD_W) * canvas.width, sy: (y / FIELD_H) * canvas.height };
+}
+function screenToLogical(sx, sy) {
+  if (state.portrait) {
+    return { x: ((canvas.height - sy) / canvas.height) * FIELD_W, y: (sx / canvas.width) * FIELD_H };
+  }
+  return { x: (sx / canvas.width) * FIELD_W, y: (sy / canvas.height) * FIELD_H };
+}
+
+function drawField() {
+  const w = canvas.width, h = canvas.height;
+  const portrait = state.portrait;
+  const stripes = 10;
+  for (let i = 0; i < stripes; i++) {
+    ctx.fillStyle = i % 2 ? '#2d5a2b' : '#346b32';
+    if (portrait) ctx.fillRect(0, (i / stripes) * h, w, h / stripes);
+    else ctx.fillRect((i / stripes) * w, 0, w / stripes, h);
+  }
+  ctx.strokeStyle = '#f0f0e8';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(8, 8, w - 16, h - 16);
+
+  if (portrait) {
+    ctx.beginPath(); ctx.moveTo(8, h/2); ctx.lineTo(w-8, h/2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(w/2, h/2, Math.min(w,h)*0.12, 0, Math.PI*2); ctx.stroke();
+    const boxW = w*0.5, boxH = h*0.15;
+    ctx.strokeRect(w/2-boxW/2, 8, boxW, boxH);
+    ctx.strokeRect(w/2-boxW/2, h-8-boxH, boxW, boxH);
+    ctx.fillStyle = '#f0f0e8';
+    ctx.fillRect(w/2-24, 2, 48, 8);
+    ctx.fillRect(w/2-24, h-10, 48, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '12px Bungee';
+    ctx.textAlign = 'center';
+    ctx.fillText('▲ YOU ATTACK', w/2, h - 18);
+  } else {
+    ctx.beginPath(); ctx.moveTo(w/2, 8); ctx.lineTo(w/2, h-8); ctx.stroke();
+    ctx.beginPath(); ctx.arc(w/2, h/2, Math.min(w,h)*0.1, 0, Math.PI*2); ctx.stroke();
+    const boxW = w*0.15, boxH = h*0.5;
+    ctx.strokeRect(8, h/2-boxH/2, boxW, boxH);
+    ctx.strokeRect(w-8-boxW, h/2-boxH/2, boxW, boxH);
+    ctx.fillStyle = '#f0f0e8';
+    ctx.fillRect(2, h/2-24, 8, 48);
+    ctx.fillRect(w-10, h/2-24, 8, 48);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '12px Bungee';
+    ctx.textAlign = 'left';
+    ctx.fillText('YOU ATTACK ▶', 14, 22);
+  }
+}
+
+function drawPlayer(p) {
+  if (p.sentOff) return;
+  const { sx, sy } = logicalToScreen(p.x, p.y);
+  const pixelSize = Math.max(2, Math.min(canvas.width, canvas.height) / 100);
+
+  if (state.targeting && state.targeting.validIds.has(p.id)) {
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200);
+    ctx.fillStyle = `rgba(74, 214, 197, ${0.25 + pulse * 0.4})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, pixelSize * 6.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#4ad6c5';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  if (state.ballCarrier === p.id) {
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 250);
+    const r = pixelSize * (5.5 + pulse * 0.8);
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+    grad.addColorStop(0, 'rgba(212, 164, 55, 0.55)');
+    grad.addColorStop(1, 'rgba(212, 164, 55, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(sx - pixelSize*2, sy + pixelSize*4, pixelSize*4, pixelSize);
+
+  const teamColor = p.team === HOME ? '#d63e3e' : '#2a4a8c';
+  const skin = '#f4c89b';
+  const shorts = p.team === HOME ? '#7a1f1f' : '#15264a';
+
+  ctx.fillStyle = skin;
+  ctx.fillRect(sx - pixelSize, sy - pixelSize*4, pixelSize*2, pixelSize*2);
+  ctx.fillStyle = teamColor;
+  ctx.fillRect(sx - pixelSize*2, sy - pixelSize*2, pixelSize*4, pixelSize*3);
+  ctx.fillStyle = shorts;
+  ctx.fillRect(sx - pixelSize*2, sy + pixelSize, pixelSize*4, pixelSize*2);
+  ctx.fillStyle = skin;
+  ctx.fillRect(sx - pixelSize*2, sy + pixelSize*3, pixelSize, pixelSize);
+  ctx.fillRect(sx + pixelSize, sy + pixelSize*3, pixelSize, pixelSize);
+
+  if (p.role === 'GK') {
+    ctx.fillStyle = '#ffeb3b';
+    ctx.fillRect(sx - pixelSize, sy - pixelSize*3, pixelSize*2, pixelSize);
+  }
+
+  const disc = state.discipline[p.id];
+  if (disc && disc.yellow) {
+    ctx.fillStyle = '#f5c842';
+    ctx.fillRect(sx + pixelSize*1.5, sy - pixelSize*5, pixelSize*1.5, pixelSize*2);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + pixelSize*1.5, sy - pixelSize*5, pixelSize*1.5, pixelSize*2);
+  }
+}
+
+function drawBall() {
+  const { sx, sy } = logicalToScreen(state.ballPos.x, state.ballPos.y);
+  const r = Math.max(3, Math.min(canvas.width, canvas.height) / 90);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + r + 2, r, r * 0.4, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#f5f1d8';
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(sx - r*0.3, sy - r*0.3, r*0.3, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function renderField() {
+  resizeCanvas();
+  drawField();
+  state.players.forEach(drawPlayer);
+  drawBall();
+}
+
+let lastHomeHadBall = null;
+function render() {
+  renderField();
+  document.getElementById('homeScore').textContent = state.score.home;
+  document.getElementById('awayScore').textContent = state.score.away;
+  document.getElementById('energyOrb').textContent = state.energy;
+  document.getElementById('deckCount').textContent = state.deck.length;
+  document.getElementById('discardCount').textContent = state.discard.length;
+  document.getElementById('homeMen').textContent = teammates(HOME).length + ' on field';
+  document.getElementById('awayMen').textContent = teammates(AWAY).length + ' on field';
+  document.getElementById('refInfo').textContent = `REF: ${state.ref.name} (${state.ref.strictness})`;
+
+  const ti = document.getElementById('turnIndicator');
+  if (state.matchOver) { ti.textContent = 'FULL TIME'; ti.className = 'turn-indicator'; }
+  else if (state.turn === HOME) { ti.textContent = `YOUR TURN — RD ${state.round}/${ROUNDS_PER_MATCH}`; ti.className = 'turn-indicator your-turn'; }
+  else { ti.textContent = `RIVAL TURN — RD ${state.round}/${ROUNDS_PER_MATCH}`; ti.className = 'turn-indicator enemy-turn'; }
+
+  const banner = document.getElementById('possBanner');
+  if (homeHasBall()) {
+    banner.textContent = '⚔️ YOU ATTACK';
+    banner.className = 'poss-banner attacking';
+  } else if (state.ballCarrier) {
+    banner.textContent = '🛡️ YOU DEFEND';
+    banner.className = 'poss-banner defending';
+  } else {
+    banner.textContent = '⚽ LOOSE BALL';
+    banner.className = 'poss-banner loose';
+  }
+
+  const wasHome = lastHomeHadBall;
+  const isHome = homeHasBall();
+  const flipped = wasHome !== null && wasHome !== isHome;
+  lastHomeHadBall = isHome;
+
+  renderHand();
+
+  if (flipped) {
+    document.querySelectorAll('.card').forEach((el, i) => {
+      el.style.animationDelay = (i * 50) + 'ms';
+      el.classList.add('flipping');
+      setTimeout(() => {
+        el.classList.remove('flipping');
+        el.style.animationDelay = '';
+      }, 500 + i * 50);
+    });
+  }
+
+  document.getElementById('endTurn').disabled = state.busy || state.turn !== HOME || state.matchOver;
+}
+
+function renderHand() {
+  const handEl = document.getElementById('hand');
+  handEl.innerHTML = '';
+  const hb = homeHasBall();
+  state.hand.forEach((cardId, idx) => {
+    const card = CARDS[cardId];
+    const playable = state.energy >= card.cost && state.turn === HOME && !state.busy && !state.matchOver;
+    const name = card.name || (hb ? card.nameWith : card.nameWithout);
+    const desc = card.desc || (hb ? card.descWith : card.descWithout);
+    const el = document.createElement('div');
+    const isSelected = state.targeting && state.targeting.cardIdx === idx;
+    el.className = `card ${card.color} ${playable ? '' : 'disabled'} ${isSelected ? 'selected' : ''}`;
+    el.innerHTML = `
+      <div class="card-flag"></div>
+      <div class="card-header">
+        <div class="card-cost">${card.cost}</div>
+        <div class="card-type">${card.type}</div>
+      </div>
+      <div class="card-art">${card.art}</div>
+      <div>
+        <div class="card-name">${name}</div>
+        <div class="card-desc">${desc}</div>
+      </div>
+    `;
+    if (playable) el.addEventListener('click', () => playCard(idx));
+    handEl.appendChild(el);
+  });
+}
+
+async function animateTick(durationMs = 1000) {
+  state.busy = true;
+  render();
+  const start = performance.now();
+  return new Promise(resolve => {
+    function step(now) {
+      const t = Math.min(1, (now - start) / durationMs);
+      for (const p of state.players) {
+        if (p.sentOff) continue;
+        p.x += (p.hx - p.x) * 0.10;
+        p.y += (p.hy - p.y) * 0.10;
+      }
+      if (state.ballTarget) {
+        const dx = state.ballTarget.x - state.ballPos.x;
+        const dy = state.ballTarget.y - state.ballPos.y;
+        state.ballPos.x += dx * 0.13;
+        state.ballPos.y += dy * 0.13;
+        if (Math.hypot(dx, dy) < 0.4) {
+          state.ballPos = { ...state.ballTarget };
+          state.ballTarget = null;
+        }
+      } else if (state.ballCarrier) {
+        const c = getPlayer(state.ballCarrier);
+        if (c) state.ballPos = { x: c.x, y: c.y - 1 };
+      }
+      renderField();
+      if (t < 1) requestAnimationFrame(step);
+      else { state.busy = false; resolve(); }
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function handleFieldTap(e) {
+  if (!state.targeting) return;
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  if (sx < 0 || sy < 0 || sx > rect.width || sy > rect.height) {
+    cancelTargeting(); return;
+  }
+  const { x, y } = screenToLogical(sx, sy);
+  let best = null, bestD = 999;
+  for (const id of state.targeting.validIds) {
+    const p = getPlayer(id);
+    if (!p) continue;
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  if (best && bestD < 8) commitCard(state.targeting.cardIdx, best.id);
+  else cancelTargeting();
+}
+canvas.addEventListener('click', handleFieldTap);
+canvas.addEventListener('touchend', e => {
+  if (!state.targeting) return;
+  const t = e.changedTouches[0];
+  if (!t) return;
+  e.preventDefault();
+  handleFieldTap({ clientX: t.clientX, clientY: t.clientY });
+});
+
+function enterTargeting(cardIdx, targetType, banner) {
+  let validIds;
+  if (targetType === 'teammate') {
+    validIds = new Set(teammates(HOME).filter(p => p.role !== 'GK' && p.id !== state.ballCarrier).map(p => p.id));
+  } else if (targetType === 'teammate_or_carrier') {
+    validIds = new Set(teammates(HOME).filter(p => p.role !== 'GK').map(p => p.id));
+  } else {
+    validIds = new Set();
+  }
+  state.targeting = { cardIdx, targetType, validIds };
+  const bEl = document.getElementById('targetingBanner');
+  bEl.textContent = banner;
+  bEl.style.display = 'block';
+  render();
+}
+
+function cancelTargeting() {
+  state.targeting = null;
+  document.getElementById('targetingBanner').style.display = 'none';
+  render();
+}
+
+async function playCard(idx) {
+  if (state.busy || state.turn !== HOME) return;
+  const cardId = state.hand[idx];
+  const card = CARDS[cardId];
+  if (state.energy < card.cost) return;
+
+  if (state.targeting && state.targeting.cardIdx === idx) {
+    cancelTargeting();
+    return;
+  }
+
+  const hb = homeHasBall();
+  const targetType = hb ? card.targetWith : card.targetWithout;
+  if (targetType) {
+    let banner = 'TAP A TEAMMATE';
+    if (cardId === 'move_forward') banner = 'TAP A TEAMMATE TO PUSH UP';
+    else if (cardId === 'move_back') banner = 'TAP A TEAMMATE TO DROP BACK';
+    enterTargeting(idx, targetType, banner);
+    return;
+  }
+  await commitCard(idx, null);
+}
+
+async function commitCard(idx, targetId) {
+  const cardId = state.hand[idx];
+  const card = CARDS[cardId];
+  state.energy -= card.cost;
+  state.hand.splice(idx, 1);
+  state.discard.push(cardId);
+  cancelTargeting();
+  await resolveCard(cardId, HOME, homeHasBall(), targetId);
+  render();
+  checkAutoEndTurn();
+}
+
+async function resolveCard(cardId, team, hasBall, targetId) {
+  switch (cardId) {
+    case 'move_forward': await actMovePlayer(team, targetId, +1); break;
+    case 'move_back':    await actMovePlayer(team, targetId, -1); break;
+    case 'switch_play':  await actSwitchPlay(team); break;
+    case 'short_pass':   if (hasBall) await actShortPass(team, targetId); else await actCloseDown(team); break;
+    case 'hold_up':      if (hasBall) await actHoldUp(team); else await actJockey(team); break;
+    case 'drop_deep':    if (hasBall) await actPatientBuild(team); else await actDropDeep(team); break;
+    case 'shoot':        if (hasBall) await actShoot(team); else await actBlock(team); break;
+    case 'through_ball': if (hasBall) await actThroughBall(team, targetId); else await actInterceptDive(team); break;
+    case 'hard_tackle':  if (hasBall) await actBurst(team); else await actHardTackle(team); break;
+    case 'high_line':    await actHighLine(team); break;
+    case 'overlap':      await actOverlap(team); break;
+    case 'park_the_bus': await actParkBus(team); break;
+    case 'one_two':      if (hasBall) await actOneTwo(team, targetId); else await actManMark(team); break;
+    case 'tempo':        await actTempo(team); break;
+    case 'hard_press':   if (hasBall) await actCounter(team); else await actHardPress(team); break;
+    case 'nutmeg':       if (hasBall) await actNutmeg(team); else await actJumpIn(team); break;
+    case 'pro_foul':     if (hasBall) await actStepOver(team); else await actProFoul(team); break;
+  }
+}
+
+// EXPANSION CARD ACTIONS
+async function actHighLine(team) {
+  const dirX = team === HOME ? 1 : -1;
+  teammates(team).filter(p => p.role === 'DEF').forEach(p => {
+    p.hx = clamp(p.x + 14 * dirX, 8, FIELD_W - 8);
+  });
+  showLog('HIGH LINE!');
+  await animateTick(900);
+}
+
+async function actOverlap(team) {
+  const dirX = team === HOME ? 1 : -1;
+  const mids = teammates(team).filter(p => p.role === 'MID' && p.id !== state.ballCarrier);
+  mids.sort(() => Math.random() - 0.5);
+  mids.slice(0, 2).forEach(p => {
+    p.hx = clamp(p.x + 12 * dirX, 8, FIELD_W - 8);
+  });
+  showLog('OVERLAPPING RUN!');
+  await animateTick(900);
+}
+
+async function actParkBus(team) {
+  const dirX = team === HOME ? 1 : -1;
+  teammates(team).forEach(p => {
+    if (p.role === 'GK') return;
+    p.hx = clamp(p.x - 10 * dirX, 8, FIELD_W - 8);
+  });
+  showLog('PARK THE BUS!');
+  await animateTick(1000);
+}
+
+async function actOneTwo(team, targetId) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  let target;
+  if (targetId) target = getPlayer(targetId);
+  else {
+    const cands = teammates(team).filter(p => p.id !== carrier.id && p.role !== 'GK');
+    cands.sort((a, b) => dist(a, carrier) - dist(b, carrier));
+    target = cands[0];
+  }
+  if (!target) return;
+  const dirX = team === HOME ? 1 : -1;
+  carrier.hx = clamp(carrier.x + 10 * dirX, 8, FIELD_W - 8);
+  showLog('ONE-TWO!');
+  state.ballCarrier = null;
+  state.ballTarget = { x: target.x, y: target.y - 1 };
+  await animateTick(700);
+  state.ballTarget = { x: carrier.hx, y: carrier.hy - 1 };
+  await animateTick(800);
+  state.ballCarrier = carrier.id;
+  showLog('BACK TO THE CARRIER!');
+}
+
+async function actManMark(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const marker = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
+  if (!marker) return;
+  marker.hx = carrier.x + (team === HOME ? -1.5 : 1.5);
+  marker.hy = carrier.y;
+  showLog('MAN-MARKED');
+  await animateTick(800);
+  if (Math.random() < 0.20) {
+    state.ballCarrier = marker.id;
+    state.possession = team;
+    showLog('PICKED HIS POCKET!');
+  }
+}
+
+async function actTempo(team) {
+  showLog('TEMPO — DRAW 2');
+  if (team === HOME) drawCards(2);
+  await wait(400);
+}
+
+async function actCounter(team) {
+  const dirX = team === HOME ? 1 : -1;
+  const fwds = teammates(team).filter(p => p.role === 'FWD' || p.role === 'MID')
+    .sort((a, b) => (b.x - a.x) * dirX).slice(0, 2);
+  fwds.forEach(p => {
+    p.hx = clamp(p.x + 16 * dirX, 8, FIELD_W - 8);
+  });
+  showLog('COUNTER ATTACK!');
+  await animateTick(1000);
+}
+
+async function actHardPress(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const pressers = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier)).slice(0, 3);
+  pressers.forEach((p, i) => {
+    const off = (i - 1) * 1.5;
+    p.hx = carrier.x + off;
+    p.hy = carrier.y + off;
+  });
+  showLog('SWARM PRESS!');
+  await animateTick(900);
+  if (Math.random() < 0.55) {
+    state.ballCarrier = pressers[0].id;
+    state.possession = team;
+    showLog('STOLE IT!');
+    return;
+  }
+  // Possible foul on hard press
+  if (Math.random() < 0.20) {
+    await handleFoul(pressers[0], carrier);
+  }
+}
+
+async function actNutmeg(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const dirX = team === HOME ? 1 : -1;
+  const opp = nearestOpponent(carrier, team);
+  showLog('NUTMEG ATTEMPT!');
+  await animateTick(500);
+  if (opp && dist(opp, carrier) < 8 && Math.random() < 0.55) {
+    carrier.hx = clamp(carrier.x + 12 * dirX, 8, FIELD_W - 8);
+    showLog('THROUGH HIS LEGS!');
+    await animateTick(700);
+  } else if (opp && Math.random() < 0.5) {
+    state.ballCarrier = opp.id;
+    state.possession = opp.team;
+    showLog('LOST IT!');
+    await wait(400);
+  } else {
+    showLog('NO ONE TO BEAT');
+    await wait(300);
+  }
+}
+
+async function actJumpIn(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const j = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
+  if (!j) return;
+  j.hx = carrier.x; j.hy = carrier.y;
+  showLog('JUMPING IN!');
+  await animateTick(700);
+  if (Math.random() < 0.40) {
+    state.ballCarrier = j.id;
+    state.possession = team;
+    showLog('WON IT!');
+  } else if (Math.random() < 0.30) {
+    await handleFoul(j, carrier);
+  }
+}
+
+async function actStepOver(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const dirX = team === HOME ? 1 : -1;
+  carrier.hx = clamp(carrier.x + 8 * dirX, 8, FIELD_W - 8);
+  showLog('STEP OVER!');
+  await animateTick(700);
+}
+
+async function actProFoul(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const tackler = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
+  if (!tackler) return;
+  tackler.hx = carrier.x; tackler.hy = carrier.y;
+  showLog('PROFESSIONAL FOUL!');
+  await animateTick(700);
+  // Always counts as a foul
+  await handleFoul(tackler, carrier);
+}
+
+// YELLOW
+async function actMovePlayer(team, targetId, dir) {
+  const dirX = (team === HOME ? 1 : -1) * dir;
+  const target = getPlayer(targetId);
+  if (!target) return;
+  target.hx = clamp(target.x + 14 * dirX, 8, FIELD_W - 8);
+  target.hy = target.y;
+  const isCarrier = state.ballCarrier === target.id;
+  showLog(dir > 0 ? (isCarrier ? 'DRIBBLING FORWARD!' : 'PUSH UP!') : 'DROP BACK');
+  await animateTick(900);
+  if (isCarrier && dir > 0) {
+    const opp = nearestOpponent(target, team);
+    if (opp && dist(opp, target) < 4 && Math.random() < 0.25) {
+      state.ballCarrier = opp.id;
+      state.possession = opp.team;
+      showLog('LOST IT IN TRAFFIC!');
+      await wait(400);
+    }
+  }
+}
+
+async function actSwitchPlay(team) {
+  teammates(team).forEach(p => {
+    if (p.role === 'GK') return;
+    p.hy = FIELD_H - p.y;
+  });
+  showLog('SWITCH PLAY!');
+  await animateTick(1100);
+}
+
+// BLUE
+async function actShortPass(team, targetId) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  let target;
+  if (targetId) target = getPlayer(targetId);
+  else {
+    const cands = teammates(team).filter(p => p.id !== carrier.id && p.role !== 'GK');
+    cands.sort((a, b) => dist(a, carrier) - dist(b, carrier));
+    target = cands[0];
+  }
+  if (!target) return;
+  showLog('SHORT PASS');
+  state.ballCarrier = null;
+  state.ballTarget = { x: target.x, y: target.y - 1 };
+  const passDist = dist(carrier, target);
+  const intercepted = Math.random() < Math.min(0.18, 0.03 + passDist / 120);
+  await animateTick(800);
+  if (intercepted) {
+    const opp = nearestOpponent(target, team);
+    if (opp) {
+      state.ballCarrier = opp.id;
+      state.possession = opp.team;
+      showLog('INTERCEPTED!');
+    }
+  } else {
+    state.ballCarrier = target.id;
+  }
+}
+
+async function actCloseDown(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const presser = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
+  if (!presser) return;
+  presser.hx = carrier.x + (Math.random() - 0.5) * 1.5;
+  presser.hy = carrier.y + 1;
+  showLog('CLOSING DOWN');
+  await animateTick(700);
+  if (Math.random() < 0.18) {
+    state.ballCarrier = presser.id;
+    state.possession = team;
+    showLog('STOLE IT CLEANLY!');
+  }
+}
+
+async function actHoldUp(team) {
+  showLog('SHIELDING — +1 ENERGY');
+  if (team === HOME) state.energy = Math.min(state.maxEnergy + 1, state.energy + 1);
+  await wait(500);
+}
+
+async function actJockey(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const j = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
+  if (!j) return;
+  j.hx = carrier.x + (team === HOME ? -2 : 2);
+  j.hy = carrier.y;
+  showLog('JOCKEYING');
+  await animateTick(700);
+  if (Math.random() < 0.12) {
+    state.ballCarrier = j.id;
+    state.possession = team;
+    showLog('WON IT!');
+  }
+}
+
+async function actPatientBuild(team) {
+  const dirX = team === HOME ? 1 : -1;
+  teammates(team).forEach(p => {
+    if (p.role === 'GK') return;
+    p.hx = clamp(p.x + 2 * dirX, 8, FIELD_W - 8);
+  });
+  showLog('PATIENT BUILD');
+  await animateTick(800);
+}
+
+async function actDropDeep(team) {
+  const dirX = team === HOME ? 1 : -1;
+  teammates(team).forEach(p => {
+    if (p.role === 'GK') return;
+    p.hx = clamp(p.x - 7 * dirX, 8, FIELD_W - 8);
+  });
+  showLog('DROP DEEP');
+  await animateTick(900);
+}
+
+// RED
+async function actShoot(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const goalX = team === HOME ? FIELD_W - 2 : 2;
+  const goalY = FIELD_H / 2;
+  const distance = Math.hypot(goalX - carrier.x, goalY - carrier.y);
+  showLog('SHOT!');
+  state.ballCarrier = null;
+  state.ballTarget = { x: goalX, y: goalY + (Math.random() - 0.5) * 8 };
+  await animateTick(800);
+  const goalProb = clamp(0.85 - distance / 38, 0.05, 0.85);
+  if (Math.random() < goalProb) {
+    state.score[team]++;
+    showLog('⚽ GOOOAL!!!', { style: 'goal', ms: 2200 });
+    await wait(1000);
+    resetAfterGoal(team === HOME ? AWAY : HOME);
+  } else {
+    showLog('SAVED!');
+    const gk = state.players.find(p => p.team !== team && p.role === 'GK');
+    if (gk) {
+      state.ballCarrier = gk.id;
+      state.possession = gk.team;
+    }
+    await wait(400);
+  }
+}
+
+async function actBlock(team) {
+  const dirX = team === HOME ? 1 : -1;
+  teammates(team).filter(p => p.role === 'DEF').forEach(p => {
+    p.hx = p.x + 4 * dirX;
+  });
+  showLog('BLOCKING LANE');
+  await animateTick(700);
+}
+
+async function actThroughBall(team, targetId) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const dirX = team === HOME ? 1 : -1;
+  let runner = targetId ? getPlayer(targetId) : null;
+  if (!runner) {
+    const cands = teammates(team).filter(p => p.id !== carrier.id && p.role !== 'GK');
+    cands.sort((a, b) => (b.x - a.x) * dirX);
+    runner = cands[0];
+  }
+  if (!runner) return;
+  runner.hx = clamp(runner.x + 14 * dirX, 8, FIELD_W - 8);
+  runner.hy = runner.y;
+  showLog('THROUGH BALL!');
+  state.ballCarrier = null;
+  state.ballTarget = { x: runner.hx, y: runner.hy - 1 };
+  await animateTick(1100);
+  if (Math.random() < 0.32) {
+    const opp = nearestOpponent(runner, team);
+    if (opp) {
+      state.ballCarrier = opp.id;
+      state.possession = opp.team;
+      showLog('CUT OUT!');
+    }
+  } else {
+    state.ballCarrier = runner.id;
+  }
+}
+
+async function actInterceptDive(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const diver = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
+  if (!diver) return;
+  diver.hx = carrier.x + (Math.random() - 0.5) * 4;
+  diver.hy = carrier.y + (Math.random() - 0.5) * 4;
+  showLog('DIVE FOR THE LANE!');
+  await animateTick(800);
+  if (Math.random() < 0.45) {
+    state.ballCarrier = diver.id;
+    state.possession = team;
+    showLog('GOT IT!');
+  }
+}
+
+async function actBurst(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const dirX = team === HOME ? 1 : -1;
+  carrier.hx = clamp(carrier.x + 14 * dirX, 8, FIELD_W - 8);
+  showLog('BURST FORWARD!');
+  await animateTick(900);
+  const opp = nearestOpponent(carrier, team);
+  if (opp && dist(opp, carrier) < 5 && Math.random() < 0.35) {
+    state.ballCarrier = opp.id;
+    state.possession = opp.team;
+    showLog('TACKLED!');
+  }
+}
+
+async function actHardTackle(team) {
+  const carrier = getPlayer(state.ballCarrier);
+  if (!carrier) return;
+  const tackler = teammates(team).filter(p => p.role !== 'GK')
+    .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
+  if (!tackler) return;
+  tackler.hx = carrier.x;
+  tackler.hy = carrier.y;
+  showLog('SLIDE TACKLE!');
+  await animateTick(800);
+
+  const refMod = state.ref.strictness / 100;
+  const baseFoul = 0.30;
+  const foulChance = baseFoul * (0.5 + refMod);
+  const cleanWinChance = 0.45;
+  const r = Math.random();
+
+  if (r < cleanWinChance) {
+    state.ballCarrier = tackler.id;
+    state.possession = team;
+    showLog('CLEAN TACKLE!');
+    await wait(500);
+    return;
+  }
+
+  if (r < cleanWinChance + foulChance) {
+    await handleFoul(tackler, carrier);
+    return;
+  }
+
+  showLog('MISSED THE TACKLE');
+  await wait(400);
+}
+
+async function handleFoul(tackler, carrier) {
+  showLog(`FOUL on ${tackler.role}!`, { style: 'foul', ms: 1400 });
+  await wait(800);
+
+  const disc = state.discipline[tackler.id];
+  disc.fouls++;
+  const strictness = state.ref.strictness;
+  let cardKind = null;
+
+  if (disc.yellow) {
+    cardKind = 'red';
+  } else if (disc.fouls >= 2) {
+    cardKind = 'yellow';
+  } else if (disc.fouls === 1 && strictness > 65 && Math.random() < 0.55) {
+    cardKind = 'yellow';
+  } else if (strictness > 80 && Math.random() < 0.25) {
+    cardKind = 'yellow';
+  }
+
+  if (cardKind === 'yellow') {
+    disc.yellow = true;
+    showLog(`🟨 YELLOW for ${tackler.role}`, { style: 'card-yellow', ms: 1800 });
+    await wait(1200);
+  } else if (cardKind === 'red') {
+    disc.yellow = false;
+    tackler.sentOff = true;
+    showLog(`🟥 RED CARD! ${tackler.role} SENT OFF`, { style: 'card-red', ms: 2400 });
+    await wait(1600);
+    if (state.ballCarrier === tackler.id) state.ballCarrier = null;
+  }
+
+  state.ballCarrier = carrier.id;
+  state.possession = carrier.team;
+  await wait(300);
+}
+
+function resetAfterGoal(kickoffTeam) {
+  state.players.forEach(p => {
+    if (p.sentOff) return;
+    p.x = p.hx; p.y = p.hy;
+  });
+  state.possession = kickoffTeam;
+  const mid = teammates(kickoffTeam).find(p => p.role === 'MID');
+  if (mid) {
+    state.ballCarrier = mid.id;
+    state.ballPos = { x: mid.x, y: mid.y - 1 };
+  }
+}
+
+function checkAutoEndTurn() {
+  const playable = state.hand.some(c => state.energy >= CARDS[c].cost);
+  if (!playable) setTimeout(() => endTurn(), 500);
+}
+
+document.getElementById('endTurn').addEventListener('click', () => endTurn());
+
+async function endTurn() {
+  if (state.busy || state.turn !== HOME) return;
+  state.discard.push(...state.hand);
+  state.hand = [];
+  state.turn = AWAY;
+  render();
+  await wait(400);
+  await aiTurn();
+  state.round++;
+  if (state.round > ROUNDS_PER_MATCH) {
+    endMatch();
+    return;
+  }
+  state.turn = HOME;
+  state.energy = state.maxEnergy;
+  drawCards(5);
+  render();
+}
+
+async function aiTurn() {
+  let energy = 3;
+  const aiPool = ['short_pass','short_pass','move_forward','through_ball','shoot','hard_tackle','hold_up','move_back','drop_deep'];
+  const aiHand = [];
+  for (let i = 0; i < 5; i++) aiHand.push(aiPool[Math.floor(Math.random()*aiPool.length)]);
+
+  while (energy > 0 && aiHand.length > 0 && !state.matchOver) {
+    const ahb = state.ballCarrier && state.ballCarrier.startsWith('a');
+    let pick = -1;
+    if (ahb) {
+      const carrier = getPlayer(state.ballCarrier);
+      const goalDist = carrier ? Math.hypot(2 - carrier.x, FIELD_H/2 - carrier.y) : 99;
+      if (goalDist < 25 && aiHand.includes('shoot') && energy >= 3) pick = aiHand.indexOf('shoot');
+      else if (aiHand.includes('through_ball') && energy >= 2) pick = aiHand.indexOf('through_ball');
+      else if (aiHand.includes('move_forward') && energy >= 1) pick = aiHand.indexOf('move_forward');
+      else if (aiHand.includes('short_pass') && energy >= 1) pick = aiHand.indexOf('short_pass');
+    } else {
+      if (aiHand.includes('hard_tackle') && energy >= 1 && Math.random() < 0.6) pick = aiHand.indexOf('hard_tackle');
+      else if (aiHand.includes('short_pass') && energy >= 1) pick = aiHand.indexOf('short_pass');
+      else if (aiHand.includes('move_forward') && energy >= 1) pick = aiHand.indexOf('move_forward');
+    }
+    if (pick === -1) pick = aiHand.findIndex(c => CARDS[c].cost <= energy);
+    if (pick === -1) break;
+
+    const cardId = aiHand[pick];
+    const cost = CARDS[cardId].cost;
+    aiHand.splice(pick, 1);
+    energy -= cost;
+
+    let aiTarget = null;
+    const card = CARDS[cardId];
+    const aiHasBall = !!ahb;
+    const ttype = aiHasBall ? card.targetWith : card.targetWithout;
+    if (ttype) {
+      const cands = teammates(AWAY).filter(p => p.role !== 'GK');
+      if (cardId === 'move_forward' || cardId === 'move_back') {
+        const c = cands.sort(() => Math.random() - 0.5)[0];
+        aiTarget = c ? c.id : null;
+      } else {
+        const dirX = -1;
+        cands.sort((a,b) => (b.x - a.x) * dirX);
+        aiTarget = cands[0] ? cands[0].id : null;
+      }
+    }
+    await resolveCard(cardId, AWAY, aiHasBall, aiTarget);
+    await wait(250);
+  }
+}
+
+function endMatch() {
+  state.matchOver = true;
+  const m = document.getElementById('modal');
+  const h = state.score.home, a = state.score.away;
+  let title, txt;
+  if (h > a) { title = 'YOU WIN!'; txt = `Final: ${h}-${a}.`; }
+  else if (h < a) { title = 'YOU LOST'; txt = `Final: ${h}-${a}.`; }
+  else { title = 'A DRAW'; txt = `Final: ${h}-${a}.`; }
+  document.getElementById('modalTitle').textContent = title;
+  let extra = ` Ref was ${state.ref.name}.`;
+  if (runState.active) extra += ` Tap to continue your run.`;
+  document.getElementById('modalText').textContent = txt + extra;
+  m.classList.add('show');
+  render();
+}
+
+document.getElementById('modalBtn').addEventListener('click', () => {
+  document.getElementById('modal').classList.remove('show');
+  if (runState.active) {
+    finishMatchRun();
+  } else {
+    initMatch();
+  }
+});
+
+// ===================== META LAYER =====================
+const SCREENS = ['screenStart','screenMap','screenPreMatch','screenPostMatch','screenGameOver','screenVictory'];
+function showScreen(id) {
+  SCREENS.forEach(s => document.getElementById(s).classList.remove('active'));
+  document.getElementById('app').style.display = 'none';
+  if (id === 'match') {
+    document.getElementById('app').style.display = '';
+    setTimeout(() => { resizeCanvas(); render(); }, 30);
+  } else {
+    document.getElementById(id).classList.add('active');
+  }
+}
+
+function toast(msg, bad) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function generateRunMatches() {
+  const refsCopy = [...REFS];
+  const namesCopy = [...OPPONENT_NAMES].sort(() => Math.random() - 0.5);
+  const tagsCopy = [...OPPONENT_TAGS].sort(() => Math.random() - 0.5);
+  const matches = [];
+  for (let i = 0; i < 6; i++) {
+    matches.push({
+      opponent: namesCopy[i] || ('TEAM ' + (i + 1)),
+      tag: tagsCopy[i % tagsCopy.length],
+      ref: refsCopy[Math.floor(Math.random() * refsCopy.length)],
+      difficulty: i + 1,
+      reward: 30 + i * 12,
+      aiSkill: 0.85 + i * 0.10,
+      isFinal: i === 5,
+      completed: false,
+    });
+  }
+  matches[5].opponent = 'GLORY UNITED';
+  matches[5].tag = 'The defending champions. The final.';
+  matches[5].ref = REFS.find(r => r.name === 'STRICT STEFAN');
+  return matches;
+}
+
+function startNewRun() {
+  runState.active = true;
+  runState.matches = generateRunMatches();
+  runState.matchIdx = 0;
+  runState.deck = [...STARTER_DECK];
+  runState.coins = 20;
+  runState.bribesUsed = 0;
+  runState.bribeAmount = 0;
+  runState.caught = false;
+  runState.yellowsClearedFor = {};
+  runState.totalGoals = 0;
+  runState.totalConceded = 0;
+  runState.pendingPick = null;
+  saveRun();
+  renderMap();
+  showScreen('screenMap');
+}
+
+function abandonRun() {
+  if (!confirm('Abandon this run? Your deck will be lost.')) return;
+  runState.active = false;
+  clearRun();
+  showScreen('screenStart');
+}
+
+function renderMap() {
+  document.getElementById('mapCoins').textContent = runState.coins;
+  document.getElementById('mapProgress').textContent = `MATCH ${Math.min(runState.matchIdx + 1, 6)}/6`;
+  const grid = document.getElementById('mapGrid');
+  grid.innerHTML = '';
+  runState.matches.forEach((m, i) => {
+    const node = document.createElement('div');
+    let cls = 'map-node';
+    let tag = '';
+    if (m.completed) { cls += ' done'; tag = '✓ DONE'; }
+    else if (i === runState.matchIdx) { cls += ' current'; tag = 'NEXT'; }
+    else if (i > runState.matchIdx) { cls += ' locked'; }
+    if (m.isFinal) cls += ' final';
+    if (m.isFinal && !m.completed) tag = 'FINAL';
+    node.className = cls;
+    const stars = '★'.repeat(m.difficulty) + '☆'.repeat(6 - m.difficulty);
+    node.innerHTML = `
+      ${tag ? `<div class="mn-tag">${tag}</div>` : ''}
+      <div class="mn-no">M${i + 1}</div>
+      <div class="mn-name">${m.opponent}</div>
+      <div class="mn-stars">${stars}</div>
+      <div class="mn-ref">${m.ref.face} ${m.ref.name}<br>STRICT ${m.ref.strictness}</div>
+    `;
+    if (i === runState.matchIdx && !m.completed) {
+      node.addEventListener('click', () => goToPreMatch());
+    }
+    grid.appendChild(node);
+  });
+  renderDeckChips('deckChips');
+  document.getElementById('deckSize').textContent = runState.deck.length;
+  document.getElementById('btnEnter').disabled = runState.matchIdx >= 6;
+}
+
+function renderDeckChips(elId) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '';
+  const counts = {};
+  runState.deck.forEach(c => counts[c] = (counts[c] || 0) + 1);
+  Object.keys(counts).sort().forEach(cardId => {
+    const card = CARDS[cardId];
+    if (!card) return;
+    const chip = document.createElement('div');
+    chip.className = 'chip ' + card.color;
+    const name = card.name || card.nameWith || cardId;
+    chip.textContent = (counts[cardId] > 1 ? `${counts[cardId]}× ` : '') + name;
+    el.appendChild(chip);
+  });
+}
+
+function goToPreMatch() {
+  const m = runState.matches[runState.matchIdx];
+  if (!m) return;
+  runState.bribesUsed = 0;
+  runState.bribeAmount = 0;
+  runState.caught = false;
+  document.getElementById('preCoins').textContent = runState.coins;
+  document.getElementById('preProgress').textContent = `MATCH ${runState.matchIdx + 1}/6`;
+  document.getElementById('preOpponentName').textContent = m.opponent;
+  const stars = '★'.repeat(m.difficulty) + '<span style="color:#444;">' + '★'.repeat(6 - m.difficulty) + '</span>';
+  document.getElementById('preOpponentTag').innerHTML = `${m.tag} <span style="color:var(--gold);">${stars}</span>`;
+  updateRefDisplay();
+  renderDeckChips('preDeckChips');
+  showScreen('screenPreMatch');
+}
+
+function updateRefDisplay() {
+  const m = runState.matches[runState.matchIdx];
+  const baseStrict = m.ref.strictness;
+  let s = baseStrict;
+  if (runState.caught) s = Math.min(100, s + 30);
+  else s = Math.max(0, s - runState.bribeAmount);
+
+  document.getElementById('preRefFace').textContent = m.ref.face;
+  document.getElementById('preRefName').textContent = m.ref.name;
+  document.getElementById('preRefStrict').textContent = s;
+  document.getElementById('preRefDesc').textContent = m.ref.desc;
+  document.getElementById('preRefFill').style.width = s + '%';
+  document.getElementById('preRefMarker').style.left = baseStrict + '%';
+
+  const catchRisk = Math.min(0.45, 0.08 + runState.bribesUsed * 0.10);
+  document.getElementById('preBribeStatus').textContent =
+    `Bribes used: ${runState.bribesUsed} · Risk of being caught: ${Math.round(catchRisk * 100)}%`;
+
+  const btn = document.getElementById('btnBribe');
+  btn.disabled = runState.coins < 30 || runState.bribesUsed >= 3 || runState.caught;
+  if (runState.caught) {
+    btn.textContent = 'CAUGHT — REF IS FURIOUS';
+  } else if (runState.bribesUsed >= 3) {
+    btn.textContent = 'BRIBE LIMIT REACHED';
+  } else {
+    btn.textContent = `BRIBE — 30 💰`;
+  }
+}
+
+function tryBribe() {
+  if (runState.coins < 30 || runState.bribesUsed >= 3 || runState.caught) return;
+  runState.coins -= 30;
+  runState.bribesUsed++;
+  const catchRisk = Math.min(0.45, 0.08 + (runState.bribesUsed - 1) * 0.10);
+  if (Math.random() < catchRisk) {
+    runState.caught = true;
+    runState.bribeAmount = 0;
+    toast('CAUGHT! THE REF IS NOT AMUSED', true);
+  } else {
+    runState.bribeAmount += 12;
+    toast(`Bribe accepted (-12 strictness)`);
+  }
+  document.getElementById('preCoins').textContent = runState.coins;
+  updateRefDisplay();
+  saveRun();
+}
+
+function startMatchFromRun() {
+  initMatch();
+  const m = runState.matches[runState.matchIdx];
+  if (m) {
+    const nameEls = document.querySelectorAll('.team-score.away .team-name');
+    if (nameEls[0]) nameEls[0].textContent = m.opponent;
+  }
+  showScreen('match');
+}
+
+async function finishMatchRun() {
+  const m = runState.matches[runState.matchIdx];
+  const h = state.score.home, a = state.score.away;
+  runState.totalGoals += h;
+  runState.totalConceded += a;
+  const won = h > a;
+  const drew = h === a;
+
+  if (!won) {
+    // Loss = run over (draws also end the run for this MVP — knockout style)
+    runState.active = false;
+    clearRun();
+    document.getElementById('goSubtitle').textContent = drew
+      ? `${h}-${a}. A draw isn't enough in knockout.`
+      : `${h}-${a}. ${m.opponent} sent you home.`;
+    document.getElementById('goStats').textContent =
+      `Reached match ${runState.matchIdx + 1}/6 · Goals scored: ${runState.totalGoals} · Conceded: ${runState.totalConceded}`;
+    showScreen('screenGameOver');
+    return;
+  }
+
+  // Won
+  m.completed = true;
+  let earnings = m.reward;
+  earnings += h * 10;
+  if (a === 0) earnings += 25;
+  runState.coins += earnings;
+
+  // Set up post-match
+  document.getElementById('postBigText').textContent = m.isFinal ? 'CHAMPIONS!' : 'VICTORY!';
+  document.getElementById('postBigText').className = 'big win';
+  document.getElementById('postScore').textContent = `${h} - ${a}`;
+  let earnText = `+${earnings} 💰`;
+  if (a === 0) earnText += ' (CLEAN SHEET BONUS)';
+  document.getElementById('postEarnings').textContent = earnText;
+
+  // Generate 3 card picks
+  const picks = [];
+  const pool = [...REWARD_POOL];
+  while (picks.length < 3 && pool.length) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picks.push(pool.splice(idx, 1)[0]);
+  }
+  runState.pendingPick = picks;
+  renderPickRow(picks);
+
+  if (m.isFinal) {
+    // Final won — go straight to victory after they pick (or skip)
+    document.getElementById('btnSkipCard').textContent = 'LIFT THE TROPHY 🏆';
+  } else {
+    document.getElementById('btnSkipCard').textContent = 'SKIP — REST (clear all yellows)';
+  }
+
+  saveRun();
+  showScreen('screenPostMatch');
+}
+
+function renderPickRow(picks) {
+  const row = document.getElementById('pickRow');
+  row.innerHTML = '';
+  picks.forEach(cardId => {
+    const card = CARDS[cardId];
+    const name = card.name || card.nameWith || cardId;
+    const desc = card.desc || card.descWith || '';
+    const el = document.createElement('div');
+    el.className = `card ${card.color}`;
+    el.innerHTML = `
+      <div class="card-flag"></div>
+      <div class="card-header">
+        <div class="card-cost">${card.cost}</div>
+        <div class="card-type">${card.type}</div>
+      </div>
+      <div class="card-art">${card.art}</div>
+      <div>
+        <div class="card-name">${name}</div>
+        <div class="card-desc">${desc}</div>
+      </div>
+    `;
+    el.addEventListener('click', () => pickCard(cardId));
+    row.appendChild(el);
+  });
+}
+
+function pickCard(cardId) {
+  runState.deck.push(cardId);
+  toast(`Added ${CARDS[cardId].name || CARDS[cardId].nameWith} to deck`);
+  afterPick();
+}
+
+function skipPick() {
+  // Clear all yellows
+  Object.keys(runState.yellowsClearedFor).forEach(k => delete runState.yellowsClearedFor[k]);
+  toast('Rest day — squad refreshed');
+  afterPick();
+}
+
+function afterPick() {
+  runState.pendingPick = null;
+  const finished = runState.matches[runState.matchIdx].isFinal;
+  runState.matchIdx++;
+  saveRun();
+  if (finished || runState.matchIdx >= 6) {
+    document.getElementById('victoryStats').textContent =
+      `Goals: ${runState.totalGoals} · Conceded: ${runState.totalConceded} · Coins remaining: ${runState.coins}`;
+    renderDeckChipsTo('victoryDeck');
+    runState.active = false;
+    clearRun();
+    showScreen('screenVictory');
+    return;
+  }
+  renderMap();
+  showScreen('screenMap');
+}
+
+function renderDeckChipsTo(elId) {
+  const target = document.getElementById(elId);
+  target.id = 'deckChips_tmp';
+  // borrow rendering by id swap
+  target.innerHTML = '';
+  const counts = {};
+  runState.deck.forEach(c => counts[c] = (counts[c] || 0) + 1);
+  Object.keys(counts).sort().forEach(cardId => {
+    const card = CARDS[cardId];
+    if (!card) return;
+    const chip = document.createElement('div');
+    chip.className = 'chip ' + card.color;
+    const name = card.name || card.nameWith || cardId;
+    chip.textContent = (counts[cardId] > 1 ? `${counts[cardId]}× ` : '') + name;
+    target.appendChild(chip);
+  });
+  target.id = elId;
+}
+
+// === EVENT WIRING ===
+window.addEventListener('load', () => {
+  resizeCanvas();
+
+  // Show "continue run" if save exists
+  const hasRun = loadRun();
+  if (hasRun) document.getElementById('btnContinue').style.display = '';
+
+  document.getElementById('btnNewRun').addEventListener('click', () => {
+    if (runState.active) {
+      if (!confirm('Start a new run? Your current run will be lost.')) return;
+    }
+    startNewRun();
+  });
+  document.getElementById('btnContinue').addEventListener('click', () => {
+    if (runState.active) {
+      // figure out which screen to show
+      renderMap();
+      showScreen('screenMap');
+    }
+  });
+  document.getElementById('btnAbandon').addEventListener('click', abandonRun);
+  document.getElementById('btnEnter').addEventListener('click', goToPreMatch);
+  document.getElementById('btnBackToMap').addEventListener('click', () => { renderMap(); showScreen('screenMap'); });
+  document.getElementById('btnKickOff').addEventListener('click', startMatchFromRun);
+  document.getElementById('btnBribe').addEventListener('click', tryBribe);
+  document.getElementById('btnSkipCard').addEventListener('click', skipPick);
+  document.getElementById('btnRetry').addEventListener('click', startNewRun);
+  document.getElementById('btnNewRunVictory').addEventListener('click', startNewRun);
+
+  // animation/render loops still run; they're inert when match is hidden
+  setInterval(() => {
+    if (!state.busy && document.getElementById('app').style.display !== 'none') {
+      if (state.ballCarrier) {
+        const c = getPlayer(state.ballCarrier);
+        if (c) state.ballPos = { x: c.x, y: c.y - 1 };
+      }
+      renderField();
+    }
+  }, 100);
+  function pulseLoop() {
+    if ((state.targeting || state.ballCarrier) && !state.busy && document.getElementById('app').style.display !== 'none') renderField();
+    requestAnimationFrame(pulseLoop);
+  }
+  requestAnimationFrame(pulseLoop);
+
+  // Default screen
+  showScreen('screenStart');
+});
+</script>
+</body>
+</html>
