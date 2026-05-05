@@ -3855,93 +3855,6 @@ window.exports = window.module.exports;
       "START BATTLE \u{1F3A4} (-30\u26A1)"
     ), char.energy < 30 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "Need 30 energy"), char.equipped.length === 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "No sounds equipped! Visit Shop")));
   }
-  var SketchDefs = () => /* @__PURE__ */ import_react.default.createElement("defs", null, /* @__PURE__ */ import_react.default.createElement("filter", { id: "sketchy", x: "-5%", y: "-5%", width: "110%", height: "110%" }, /* @__PURE__ */ import_react.default.createElement("feTurbulence", { type: "fractalNoise", baseFrequency: "0.03", numOctaves: "2", seed: "3" }), /* @__PURE__ */ import_react.default.createElement("feDisplacementMap", { in: "SourceGraphic", scale: "1.2" })), /* @__PURE__ */ import_react.default.createElement("filter", { id: "sketchy2", x: "-5%", y: "-5%", width: "110%", height: "110%" }, /* @__PURE__ */ import_react.default.createElement("feTurbulence", { type: "fractalNoise", baseFrequency: "0.05", numOctaves: "2", seed: "7" }), /* @__PURE__ */ import_react.default.createElement("feDisplacementMap", { in: "SourceGraphic", scale: "1.5" })), /* @__PURE__ */ import_react.default.createElement("pattern", { id: "paper", patternUnits: "userSpaceOnUse", width: "200", height: "200" }, /* @__PURE__ */ import_react.default.createElement("rect", { width: "200", height: "200", fill: "#1c1917" }), /* @__PURE__ */ import_react.default.createElement("rect", { width: "200", height: "200", fill: "url(#noise)", opacity: "0.4" })), /* @__PURE__ */ import_react.default.createElement("filter", { id: "noise" }, /* @__PURE__ */ import_react.default.createElement("feTurbulence", { baseFrequency: "0.9", numOctaves: "2" }), /* @__PURE__ */ import_react.default.createElement("feColorMatrix", { values: "0 0 0 0 0.05  0 0 0 0 0.05  0 0 0 0 0.05  0 0 0 0.3 0" })), /* @__PURE__ */ import_react.default.createElement("linearGradient", { id: "floorGrad", x1: "0", y1: "0", x2: "0", y2: "1" }, /* @__PURE__ */ import_react.default.createElement("stop", { offset: "0", stopColor: "#292524" }), /* @__PURE__ */ import_react.default.createElement("stop", { offset: "1", stopColor: "#1c1917" })));
-  var Judge = ({ x, y, vote, revealed, heartKey }) => {
-    const stroke = revealed && vote === "P" ? "#D4A017" : revealed && vote === "O" ? "#CC2200" : "#a8a29e";
-    const sw = revealed ? 2.5 : 1.8;
-    return /* @__PURE__ */ import_react.default.createElement("g", { filter: "url(#sketchy2)", style: { transition: "all 0.3s" } }, /* @__PURE__ */ import_react.default.createElement("circle", { cx: x, cy: y - 18, r: "6", fill: "none", stroke, strokeWidth: sw }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y - 12, x2: x, y2: y + 4, stroke, strokeWidth: sw }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y - 6, x2: x - 8, y2: y - 2, stroke, strokeWidth: sw }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y - 6, x2: x + 8, y2: y - 2, stroke, strokeWidth: sw }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x - 6, y1: y + 4, x2: x + 6, y2: y + 4, stroke, strokeWidth: sw }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x - 5, y1: y + 4, x2: x - 7, y2: y + 14, stroke, strokeWidth: sw }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x + 5, y1: y + 4, x2: x + 7, y2: y + 14, stroke, strokeWidth: sw }), heartKey > 0 && /* @__PURE__ */ import_react.default.createElement("g", { key: heartKey, style: { animation: "heartPop 1s ease-out forwards", transformOrigin: `${x}px ${y - 30}px` } }, /* @__PURE__ */ import_react.default.createElement(
-      "path",
-      {
-        d: `M ${x} ${y - 28}
-                   c -1.5 -3, -6 -3, -6 1
-                   c 0 3, 6 6, 6 6
-                   c 0 0, 6 -3, 6 -6
-                   c 0 -4, -4.5 -4, -6 -1 z`,
-        fill: "#ec4899",
-        stroke: "#0c0a09",
-        strokeWidth: "0.8"
-      }
-    )), revealed && /* @__PURE__ */ import_react.default.createElement("g", { style: { animation: "fadeIn 0.4s" } }, /* @__PURE__ */ import_react.default.createElement("circle", { cx: x, cy: y - 32, r: "9", fill: vote === "P" ? "#D4A017" : "#CC2200", stroke: "#0c0a09", strokeWidth: "1.5" }), /* @__PURE__ */ import_react.default.createElement("text", { x, y: y - 29, textAnchor: "middle", fontSize: "10", fontWeight: "900", fill: "#0c0a09", fontFamily: "monospace" }, vote === "P" ? "\u2713" : "\u2717")));
-  };
-  var Beatboxer = ({ x, y, color, facing, active, name }) => {
-    const dir = facing === "right" ? 1 : -1;
-    return /* @__PURE__ */ import_react.default.createElement("g", { filter: "url(#sketchy)", style: { transition: "opacity 0.4s" }, opacity: active ? 1 : 0.35 }, active && /* @__PURE__ */ import_react.default.createElement("ellipse", { cx: x, cy: y + 50, rx: "48", ry: "12", fill: color, opacity: "0.18" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: x, cy: y - 38, r: "10", fill: "none", stroke: color, strokeWidth: "2.5" }), /* @__PURE__ */ import_react.default.createElement(
-      "path",
-      {
-        d: `M ${x - 6} ${y - 46} Q ${x - 3} ${y - 50} ${x} ${y - 47} Q ${x + 3} ${y - 50} ${x + 6} ${y - 46}`,
-        fill: "none",
-        stroke: color,
-        strokeWidth: "2"
-      }
-    ), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y - 28, x2: x, y2: y + 5, stroke: color, strokeWidth: "2.5" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y - 22, x2: x + 14 * dir, y2: y - 30, stroke: color, strokeWidth: "2.5" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: x + 17 * dir, cy: y - 32, r: "3.5", fill: color, stroke: "#0c0a09", strokeWidth: "1" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x + 17 * dir, y1: y - 30, x2: x + 14 * dir, y2: y - 25, stroke: color, strokeWidth: "1.5" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y - 22, x2: x - 10 * dir, y2: y - 14, stroke: color, strokeWidth: "2.5" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y + 5, x2: x - 6, y2: y + 24, stroke: color, strokeWidth: "2.5" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: x, y1: y + 5, x2: x + 6, y2: y + 24, stroke: color, strokeWidth: "2.5" }), active ? /* @__PURE__ */ import_react.default.createElement("ellipse", { cx: x + 4 * dir, cy: y - 36, rx: "2", ry: "3", fill: "#0c0a09", stroke: color, strokeWidth: "1" }) : /* @__PURE__ */ import_react.default.createElement("line", { x1: x + 2 * dir, y1: y - 36, x2: x + 6 * dir, y2: y - 36, stroke: color, strokeWidth: "1.5" }), active && [0, 1, 2].map((i) => /* @__PURE__ */ import_react.default.createElement(
-      "path",
-      {
-        key: i,
-        d: `M ${x + (10 + i * 4) * dir} ${y - 38} Q ${x + (12 + i * 4) * dir} ${y - 36} ${x + (10 + i * 4) * dir} ${y - 34}`,
-        fill: "none",
-        stroke: color,
-        strokeWidth: "1.5",
-        opacity: 0.7 - i * 0.2,
-        style: { animation: `pulse ${0.4 + i * 0.1}s infinite` }
-      }
-    )), /* @__PURE__ */ import_react.default.createElement(
-      "text",
-      {
-        x,
-        y: y + 38,
-        textAnchor: "middle",
-        fontSize: "9",
-        fill: active ? color : "#57534e",
-        fontFamily: "'Bebas Neue', 'Oswald', monospace",
-        letterSpacing: "1"
-      },
-      name.toUpperCase()
-    ));
-  };
-  var Crowd = ({ width, height, intensity = 1 }) => {
-    const heads = [];
-    const baseY = height * 0.45;
-    let x = 0;
-    const seed = 42;
-    const rand = (i) => {
-      const v = Math.sin(seed + i * 12.9898) * 43758.5453;
-      return v - Math.floor(v);
-    };
-    for (let i = 0; x < width; i++) {
-      const r = 8 + rand(i) * 6;
-      const yOff = (rand(i + 100) - 0.5) * 12;
-      heads.push({ cx: x + r, cy: baseY + yOff, r });
-      x += r * 1.6 + rand(i + 200) * 4;
-    }
-    const arms = [];
-    for (let i = 0; i < heads.length; i++) {
-      if (rand(i + 300) > 0.55) {
-        const h = heads[i];
-        const armH = 25 + rand(i + 400) * 30 * intensity;
-        const sway = (rand(i + 500) - 0.5) * 8;
-        arms.push({ x1: h.cx - 3, y1: h.cy - h.r, x2: h.cx - 5 + sway, y2: h.cy - h.r - armH });
-        if (rand(i + 600) > 0.4) {
-          arms.push({ x1: h.cx + 3, y1: h.cy - h.r, x2: h.cx + 5 + sway, y2: h.cy - h.r - armH * 0.9 });
-        }
-      }
-    }
-    let path = `M 0 ${height} L 0 ${baseY + 5}`;
-    heads.forEach((h) => {
-      path += ` Q ${h.cx} ${h.cy - h.r} ${h.cx + h.r} ${h.cy + h.r * 0.3}`;
-    });
-    path += ` L ${width} ${baseY} L ${width} ${height} Z`;
-    return /* @__PURE__ */ import_react.default.createElement("g", { filter: "url(#sketchy2)" }, /* @__PURE__ */ import_react.default.createElement("path", { d: path, fill: "#0c0a09" }), arms.map((a, i) => /* @__PURE__ */ import_react.default.createElement("line", { key: i, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, stroke: "#0c0a09", strokeWidth: "3.5", strokeLinecap: "round" })), arms.filter((_, i) => i % 2 === 0).map((a, i) => /* @__PURE__ */ import_react.default.createElement("circle", { key: `f${i}`, cx: a.x2, cy: a.y2, r: "3", fill: "#0c0a09" })));
-  };
   var FloatingSound = ({ text, side, color = "#D4A017" }) => /* @__PURE__ */ import_react.default.createElement("div", { className: "absolute pointer-events-none", style: {
     left: side === "P" ? "15%" : "55%",
     top: "38%",
@@ -3959,23 +3872,268 @@ window.exports = window.module.exports;
     },
     text.toUpperCase()
   ));
-  var SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0, 0, 0, 0, 0], comboLabel = null }) => {
-    const W = 400, H = 320;
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "relative w-full overflow-hidden border-2 border-stone-800", style: { aspectRatio: "5/4", background: "#1c1917" } }, /* @__PURE__ */ import_react.default.createElement("svg", { viewBox: `0 0 ${W} ${H}`, className: "absolute inset-0 w-full h-full", preserveAspectRatio: "xMidYMid slice" }, /* @__PURE__ */ import_react.default.createElement(SketchDefs, null), /* @__PURE__ */ import_react.default.createElement("rect", { width: W, height: H, fill: "#1c1917" }), /* @__PURE__ */ import_react.default.createElement(
-      "path",
-      {
-        d: `M 70 ${H * 0.55} L 330 ${H * 0.55} L 380 ${H * 0.85} L 20 ${H * 0.85} Z`,
-        fill: "url(#floorGrad)",
-        stroke: "#44403c",
-        strokeWidth: "1.5",
-        filter: "url(#sketchy2)"
-      }
-    ), /* @__PURE__ */ import_react.default.createElement("g", { filter: "url(#sketchy2)", stroke: "#57534e", strokeWidth: "1.5", fill: "none" }, /* @__PURE__ */ import_react.default.createElement("rect", { x: "15", y: H * 0.4, width: "35", height: "50" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: "32", cy: H * 0.5, r: "9" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: "32", cy: H * 0.5, r: "4", fill: "#44403c" }), /* @__PURE__ */ import_react.default.createElement("text", { x: "32", y: H * 0.4 - 4, textAnchor: "middle", fontSize: "8", fill: "#78716c", fontFamily: "monospace" }, "PA"), /* @__PURE__ */ import_react.default.createElement("rect", { x: W - 50, y: H * 0.4, width: "35", height: "50" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: W - 33, cy: H * 0.5, r: "9" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: W - 33, cy: H * 0.5, r: "4", fill: "#44403c" }), /* @__PURE__ */ import_react.default.createElement("text", { x: W - 33, y: H * 0.4 - 4, textAnchor: "middle", fontSize: "8", fill: "#78716c", fontFamily: "monospace" }, "PA")), /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("line", { x1: "80", y1: H * 0.32, x2: W - 80, y2: H * 0.32, stroke: "#57534e", strokeWidth: "1.5", filter: "url(#sketchy2)" }), [0, 1, 2, 3, 4].map((i) => {
-      const jx = 100 + i * 50;
-      const jy = H * 0.28;
-      const v = judgeVotes?.[i];
-      return /* @__PURE__ */ import_react.default.createElement(Judge, { key: i, x: jx, y: jy, vote: v?.vote, revealed: i < revealedJudges, heartKey: judgeHearts[i] });
-    })), /* @__PURE__ */ import_react.default.createElement(Beatboxer, { x: 130, y: H * 0.62, color: char.color, facing: "right", active: activeSide === "P", name: char.name }), /* @__PURE__ */ import_react.default.createElement(Beatboxer, { x: W - 130, y: H * 0.62, color: "#CC2200", facing: "left", active: activeSide === "O", name: opponent.name }), /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(0, ${H * 0.78})` }, /* @__PURE__ */ import_react.default.createElement(Crowd, { width: W, height: H * 0.22, intensity: activeSide ? 1.2 : 0.8 }))), currentSound && activeSide && /* @__PURE__ */ import_react.default.createElement(FloatingSound, { key: currentSound + Date.now(), text: currentSound, side: activeSide, color: soundColor }), comboLabel && activeSide === "P" && /* @__PURE__ */ import_react.default.createElement(
+  var OPP_LOOKS = {
+    "Lil Crumb": { shirt: "#84cc16", skin: "#f5d4a8", hair: "#5a3a18", style: "short", accessory: null },
+    "DJ Phlegm": { shirt: "#3b82f6", skin: "#d4a87a", hair: "#1a1a2e", style: "mohawk", accessory: "shades" },
+    "Mama Bass": { shirt: "#a78bfa", skin: "#8a5a3a", hair: "#1c1917", style: "long", accessory: null },
+    "Vox Machina": { shirt: "#94a3b8", skin: "#c8b8a0", hair: "#9ca3af", style: "spike", accessory: "shades" },
+    "The Champ": { shirt: "#fbbf24", skin: "#5a3a20", hair: "#0c0a09", style: "fade", accessory: null }
+  };
+  var _defaultOppLook = { shirt: "#CC2200", skin: "#d4a87a", hair: "#1c1917", style: "short", accessory: null };
+  var JUDGE_LOOKS = {
+    technicality: { hair: "#22d3ee", shirt: "#0e3a4a" },
+    musicality: { hair: "#a78bfa", shirt: "#3a2a5a" },
+    originality: { hair: "#fbbf24", shirt: "#5a4030" },
+    showmanship: { hair: "#fb7185", shirt: "#4a1820" },
+    random: { hair: "#84cc16", shirt: "#2a3a1a" }
+  };
+  var drawBeatboxer = (ctx, x, y, look, facing, active, frameCount) => {
+    const px = (dx, dy, w, h, c) => _px(ctx, x + dx, y + dy, w, h, c);
+    const bob = active ? Math.floor(frameCount / 6) % 2 : 0;
+    px(-7, 0, 14, 1, "rgba(0,0,0,0.45)");
+    px(-4, -8 - bob, 3, 8, "#1a1a2e");
+    px(1, -8 + bob, 3, 8, "#1a1a2e");
+    px(-4, -1, 3, 1, "#fff");
+    px(1, -1, 3, 1, "#fff");
+    px(-5, -19, 10, 11, look.shirt);
+    px(-5, -19, 10, 1, "#fff");
+    px(-7, -18, 2, 8, look.shirt);
+    px(5, -18, 2, 8, look.shirt);
+    const handX = facing === "right" ? 6 : -8;
+    px(handX, -14, 2, 3, look.skin);
+    const micX = facing === "right" ? 6 : -10;
+    px(micX, -19, 2, 3, "#888");
+    px(micX - 1, -20, 4, 2, "#aaa");
+    px(-4, -25, 8, 7, look.skin);
+    if (look.style === "short") {
+      px(-4, -27, 8, 2, look.hair);
+    } else if (look.style === "mohawk") {
+      px(-4, -25, 8, 1, look.hair);
+      px(-1, -28, 2, 3, look.hair);
+    } else if (look.style === "long") {
+      px(-5, -26, 10, 2, look.hair);
+      px(-5, -23, 1, 5, look.hair);
+      px(4, -23, 1, 5, look.hair);
+    } else if (look.style === "spike") {
+      px(-4, -26, 8, 1, look.hair);
+      px(-3, -28, 2, 2, look.hair);
+      px(0, -29, 2, 3, look.hair);
+      px(2, -28, 2, 2, look.hair);
+    } else if (look.style === "fade") {
+      px(-4, -27, 8, 2, look.hair);
+      px(-4, -25, 8, 1, "#000");
+    }
+    const blink = frameCount % 120 < 4;
+    if (look.accessory === "shades") {
+      px(-3, -23, 7, 1, "#0c0a09");
+    } else if (!blink) {
+      px(-3, -23, 1, 1, "#1a1a2e");
+      px(1, -23, 1, 1, "#1a1a2e");
+    }
+    const mf = active ? Math.floor(frameCount / 4) % 4 : 0;
+    if (active && (mf === 1 || mf === 3)) {
+      px(-1, -20, 3, 2, "#3a1010");
+    } else {
+      px(-1, -20, 3, 1, "#5a2020");
+    }
+  };
+  var drawJudge = (ctx, x, y, look, vote, revealed, frameCount) => {
+    const px = (dx, dy, w, h, c) => _px(ctx, x + dx, y + dy, w, h, c);
+    px(-3, -7, 6, 7, look.shirt);
+    px(-3, -12, 6, 5, "#d4a87a");
+    px(-3, -13, 6, 2, look.hair);
+    px(-2, -10, 1, 1, "#1a1a2e");
+    px(1, -10, 1, 1, "#1a1a2e");
+    if (revealed && vote === "P") {
+      px(-2, -16, 4, 2, "#22c55e");
+      px(-1, -17, 2, 1, "#22c55e");
+    } else if (revealed && vote === "O") {
+      px(-2, -16, 4, 2, "#dc2626");
+      px(-1, -15, 2, 1, "#dc2626");
+    }
+  };
+  var drawPixelHeart = (ctx, x, y, alpha = 1) => {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#fb7185";
+    ctx.fillRect(x - 1, y, 1, 1);
+    ctx.fillRect(x + 1, y, 1, 1);
+    ctx.fillRect(x - 2, y - 1, 1, 1);
+    ctx.fillRect(x + 2, y - 1, 1, 1);
+    ctx.fillRect(x - 1, y - 1, 3, 1);
+    ctx.fillRect(x, y + 1, 1, 1);
+    ctx.globalAlpha = 1;
+  };
+  var PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0, 0, 0, 0, 0], comboLabel = null }) => {
+    const canvasRef = (0, import_react.useRef)(null);
+    const PXSCALE = 3;
+    const W = 200, H = 160;
+    const heartsRef = (0, import_react.useRef)([]);
+    const sparksRef = (0, import_react.useRef)([]);
+    const lastHeartsRef = (0, import_react.useRef)([0, 0, 0, 0, 0]);
+    const wavesPlayerRef = (0, import_react.useRef)([]);
+    const wavesOppRef = (0, import_react.useRef)([]);
+    const propsRef = (0, import_react.useRef)({});
+    const activeSideRef = (0, import_react.useRef)(activeSide);
+    (0, import_react.useEffect)(() => {
+      propsRef.current = { activeSide, currentSound, soundColor, judgeVotes, revealedJudges };
+      activeSideRef.current = activeSide;
+    }, [activeSide, currentSound, soundColor, judgeVotes, revealedJudges]);
+    (0, import_react.useEffect)(() => {
+      judgeHearts.forEach((h, i) => {
+        if (h > lastHeartsRef.current[i]) {
+          lastHeartsRef.current[i] = h;
+          const judgeX = 30 + i * 30;
+          const judgeY = 50;
+          heartsRef.current.push({
+            x: judgeX,
+            y: judgeY,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: -0.8 - Math.random() * 0.6,
+            life: 0,
+            ttl: 60
+          });
+          for (let s = 0; s < 5; s++) {
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
+            sparksRef.current.push({
+              x: judgeX + (Math.random() - 0.5) * 4,
+              y: judgeY,
+              vx: Math.cos(angle) * (0.4 + Math.random() * 0.8),
+              vy: Math.sin(angle) * (0.4 + Math.random() * 0.8),
+              life: 0,
+              ttl: 16,
+              color: ["#fb7185", "#fbbf24", "#f43f5e"][Math.floor(Math.random() * 3)]
+            });
+          }
+        }
+      });
+    }, [judgeHearts]);
+    (0, import_react.useEffect)(() => {
+      if (!currentSound || !activeSideRef.current) return;
+      const arr = activeSideRef.current === "P" ? wavesPlayerRef.current : wavesOppRef.current;
+      arr.push({ life: 0, ttl: 30, color: soundColor || "#D4A017" });
+    }, [currentSound, soundColor]);
+    (0, import_react.useEffect)(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      let raf, frameCount = 0;
+      const playerLook = { shirt: char.color || "#D4A017", skin: "#d4a87a", hair: "#1a1a2e", style: "short", accessory: null };
+      const oppLook = OPP_LOOKS[opponent.name] || _defaultOppLook;
+      const draw = () => {
+        frameCount++;
+        const { activeSide: activeSide2, judgeVotes: judgeVotes2, revealedJudges: revealedJudges2 } = propsRef.current;
+        if (canvas.width !== W * PXSCALE || canvas.height !== H * PXSCALE) {
+          canvas.width = W * PXSCALE;
+          canvas.height = H * PXSCALE;
+          ctx.imageSmoothingEnabled = false;
+        }
+        ctx.save();
+        ctx.scale(PXSCALE, PXSCALE);
+        _px(ctx, 0, 0, W, 60, "#1a0d2e");
+        _px(ctx, 0, 0, W, 30, "#0f0820");
+        for (let i = 0; i < 12; i++) {
+          const sx = (i * 17 + 9) % W;
+          const sy = (i * 5 + 4) % 28;
+          _px(ctx, sx, sy, 1, 1, i % 3 === 0 ? "#fef3c7" : "#a78bfa");
+        }
+        ctx.fillStyle = "rgba(212, 160, 23, 0.10)";
+        ctx.beginPath();
+        ctx.moveTo(20, 0);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(0, 90);
+        ctx.lineTo(80, 90);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(W - 20, 0);
+        ctx.lineTo(W, 0);
+        ctx.lineTo(W, 90);
+        ctx.lineTo(W - 80, 90);
+        ctx.closePath();
+        ctx.fill();
+        _px(ctx, 18, 60, 164, 4, "#5a4030");
+        _px(ctx, 18, 64, 164, 1, "#3a2818");
+        _px(ctx, 22, 64, 2, 6, "#3a2818");
+        _px(ctx, 176, 64, 2, 6, "#3a2818");
+        const biases = ["technicality", "musicality", "originality", "showmanship", "random"];
+        for (let i = 0; i < 5; i++) {
+          const jx = 30 + i * 30;
+          const v = judgeVotes2?.[i];
+          const look = JUDGE_LOOKS[biases[i]] || JUDGE_LOOKS.random;
+          drawJudge(ctx, jx, 60, look, v?.vote, i < revealedJudges2, frameCount);
+        }
+        _px(ctx, 0, 90, W, 50, "#3a2818");
+        for (let i = 0; i < 4; i++) _px(ctx, 0, 95 + i * 11, W, 1, "#2a1808");
+        _px(ctx, 0, 90, W, 2, "#5a4030");
+        _px(ctx, 0, 140, W, 20, "#0c0a09");
+        for (let i = 0; i < 25; i++) {
+          const cx = 4 + i * 8;
+          const ch = 4 + i * 7 % 6;
+          _px(ctx, cx, 140 - ch, 6, ch, "#1c1917");
+          _px(ctx, cx + 1, 138 - ch, 4, 3, "#0c0a09");
+        }
+        if (activeSide2 && frameCount % 30 < 15) {
+          for (let i = 0; i < 6; i++) {
+            const cx = 12 + i * 30 + i * 3 % 7;
+            _px(ctx, cx, 134, 1, 4, "#1c1917");
+          }
+        }
+        drawBeatboxer(ctx, 60, 130, playerLook, "right", activeSide2 === "P", frameCount);
+        drawBeatboxer(ctx, 140, 130, oppLook, "left", activeSide2 === "O", frameCount);
+        const drawWaves = (waves, sx) => {
+          for (let i = waves.length - 1; i >= 0; i--) {
+            const w = waves[i];
+            w.life++;
+            if (w.life > w.ttl) {
+              waves.splice(i, 1);
+              continue;
+            }
+            const t = w.life / w.ttl;
+            ctx.globalAlpha = (1 - t) * 0.6;
+            ctx.fillStyle = w.color;
+            const r = 4 + t * 22;
+            for (let a = 0; a < 10; a++) {
+              const angle = a / 10 * Math.PI * 2;
+              const xx = Math.floor(sx + Math.cos(angle) * r);
+              const yy = Math.floor(112 + Math.sin(angle) * r);
+              if (xx >= 0 && xx < W && yy >= 0 && yy < H) ctx.fillRect(xx, yy, 1, 1);
+            }
+            ctx.globalAlpha = 1;
+          }
+        };
+        drawWaves(wavesPlayerRef.current, 60);
+        drawWaves(wavesOppRef.current, 140);
+        heartsRef.current = heartsRef.current.filter((h) => {
+          h.life++;
+          h.x += h.vx;
+          h.y += h.vy;
+          h.vy += 0.02;
+          const t = h.life / h.ttl;
+          if (t > 1) return false;
+          drawPixelHeart(ctx, Math.floor(h.x), Math.floor(h.y), 1 - t * 0.7);
+          return true;
+        });
+        sparksRef.current = sparksRef.current.filter((s) => {
+          s.life++;
+          s.x += s.vx;
+          s.y += s.vy;
+          s.vy += 0.05;
+          if (s.life > s.ttl) return false;
+          const t = s.life / s.ttl;
+          ctx.globalAlpha = 1 - t;
+          ctx.fillStyle = s.color;
+          ctx.fillRect(Math.floor(s.x), Math.floor(s.y), 1, 1);
+          ctx.globalAlpha = 1;
+          return true;
+        });
+        ctx.restore();
+        raf = requestAnimationFrame(draw);
+      };
+      raf = requestAnimationFrame(draw);
+      return () => cancelAnimationFrame(raf);
+    }, [char.color, opponent.name]);
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "relative w-full overflow-hidden border-2 border-stone-800", style: { aspectRatio: "5/4", background: "#0c0a09" } }, /* @__PURE__ */ import_react.default.createElement("canvas", { ref: canvasRef, className: "block w-full h-full", style: { imageRendering: "pixelated" } }), currentSound && activeSide && /* @__PURE__ */ import_react.default.createElement(FloatingSound, { key: currentSound + Date.now(), text: currentSound, side: activeSide, color: soundColor }), comboLabel && activeSide === "P" && /* @__PURE__ */ import_react.default.createElement(
       "div",
       {
         key: comboLabel.key,
@@ -3986,11 +4144,7 @@ window.exports = window.module.exports;
         "div",
         {
           className: "text-base font-black tracking-widest px-2 py-1 border-2 border-amber-500 bg-amber-500/20",
-          style: {
-            fontFamily: '"Bebas Neue", "Oswald", sans-serif',
-            color: "#D4A017",
-            textShadow: "2px 2px 0 #0c0a09"
-          }
+          style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif', color: "#D4A017", textShadow: "2px 2px 0 #0c0a09" }
         },
         "\u{1F525} ",
         comboLabel.text
@@ -4001,20 +4155,6 @@ window.exports = window.module.exports;
           15% { transform: translateY(-5px) scale(1.1); opacity: 1; }
           80% { transform: translateY(-30px) scale(1); opacity: 1; }
           100% { transform: translateY(-50px) scale(0.9); opacity: 0; }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 0.7; }
-          50% { opacity: 0.2; }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.5); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes heartPop {
-          0% { transform: translateY(8px) scale(0.3); opacity: 0; }
-          20% { transform: translateY(0) scale(1.4); opacity: 1; }
-          50% { transform: translateY(-8px) scale(1); opacity: 1; }
-          100% { transform: translateY(-22px) scale(0.7); opacity: 0; }
         }
         @keyframes comboPop {
           0% { transform: translateY(8px) scale(0.5) rotate(-4deg); opacity: 0; }
@@ -4507,12 +4647,32 @@ window.exports = window.module.exports;
         onDone();
       }, ROUND_SECONDS * 1e3));
     };
+    const scheduleBeatFill = (pickSound, skipWindow = null) => {
+      const fillBpm = 130;
+      const stepMs = 6e4 / fillBpm / 2;
+      const endMs = ROUND_SECONDS * 1e3 - 200;
+      for (let t = stepMs / 2; t < endMs; t += stepMs) {
+        if (skipWindow && t >= skipWindow.start && t < skipWindow.end) continue;
+        if (Math.random() < 0.4) {
+          const ts = t;
+          eventTimers.current.push(setTimeout(() => pickSound(), ts));
+        }
+      }
+    };
     const playOpponentRound = (events, color, onDone) => {
       eventTimers.current.forEach(clearTimeout);
       eventTimers.current = [];
+      const oppSounds = (opponent.sounds || []).map((id) => SOUND_CATALOG[id]).filter(Boolean);
+      const extraSchedule = () => {
+        if (oppSounds.length === 0) return;
+        scheduleBeatFill(() => {
+          const s = oppSounds[Math.floor(Math.random() * oppSounds.length)];
+          playSound(s.cat, s.name);
+        });
+      };
       scheduleRound(events, "O", color, (e, sound) => {
         if (sound?.cat) playSound(sound.cat, e.name);
-      }, null, onDone);
+      }, extraSchedule, onDone);
     };
     const playPlayerRound = (events, color, onDone) => {
       eventTimers.current.forEach(clearTimeout);
@@ -4521,23 +4681,33 @@ window.exports = window.module.exports;
       const battleBpm = 130;
       const beatMs = 6e4 / battleBpm;
       const extraSchedule = () => {
-        if (completed <= 0) return;
-        const lessonIdx = Math.floor(Math.random() * completed);
-        const lesson = HERO_LESSONS[lessonIdx];
-        if (!lesson) return;
-        const patternStartMs = 1500;
-        const patternEndMs = patternStartMs + 16 * beatMs;
-        if (patternEndMs > ROUND_SECONDS * 1e3 - 500) return;
-        eventTimers.current.push(setTimeout(() => {
-          setComboLabel({ text: lesson.name, key: Date.now() });
-        }, patternStartMs));
-        eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
-        lesson.pattern.forEach((note) => {
-          const t = patternStartMs + note.beat * beatMs;
-          if (t < ROUND_SECONDS * 1e3) {
-            eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+        let patternWindow = null;
+        if (completed > 0) {
+          const lessonIdx = Math.floor(Math.random() * completed);
+          const lesson = HERO_LESSONS[lessonIdx];
+          if (lesson) {
+            const patternStartMs = 1500;
+            const patternEndMs = patternStartMs + 16 * beatMs;
+            if (patternEndMs <= ROUND_SECONDS * 1e3 - 500) {
+              patternWindow = { start: patternStartMs, end: patternEndMs };
+              eventTimers.current.push(setTimeout(() => {
+                setComboLabel({ text: lesson.name, key: Date.now() });
+              }, patternStartMs));
+              eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
+              lesson.pattern.forEach((note) => {
+                const t = patternStartMs + note.beat * beatMs;
+                if (t < ROUND_SECONDS * 1e3) {
+                  eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+                }
+              });
+            }
           }
-        });
+        }
+        const HERO_FILL_KEYS = ["B", "T", "T", "K", "Pf"];
+        scheduleBeatFill(() => {
+          const key = HERO_FILL_KEYS[Math.floor(Math.random() * HERO_FILL_KEYS.length)];
+          playHeroSound(key);
+        }, patternWindow);
       };
       scheduleRound(events, "P", color, (e, sound) => {
         playHeroSound(catToHeroKey(sound?.cat));
@@ -4636,7 +4806,7 @@ window.exports = window.module.exports;
       /* @__PURE__ */ import_react.default.createElement(import_lucide_react.ArrowLeft, { size: 14 }),
       " Forfeit"
     ), phase === "intro" && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3 pt-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-3xl tracking-tighter text-amber-500 font-black", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "BATTLE TIME"), /* @__PURE__ */ import_react.default.createElement(
-      SketchStage,
+      PixelStage,
       {
         char,
         opponent,
@@ -4666,7 +4836,7 @@ window.exports = window.module.exports;
     ))), /^round[1-4]$/.test(phase) && result && (() => {
       const roundN = parseInt(phase.replace("round", ""));
       return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(BattleHUD, { char, opponent, timeLeft, pScore: liveScore.p, oScore: liveScore.o }), /* @__PURE__ */ import_react.default.createElement(
-        SketchStage,
+        PixelStage,
         {
           char,
           opponent,
@@ -4684,7 +4854,7 @@ window.exports = window.module.exports;
       const upcomingSide = sideForRound(roundN);
       const upcomingName = upcomingSide === "P" ? char.name : opponent.name;
       return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(BattleHUD, { char, opponent, timeLeft: ROUND_SECONDS, pScore: liveScore.p, oScore: liveScore.o }), /* @__PURE__ */ import_react.default.createElement("div", { className: "relative" }, /* @__PURE__ */ import_react.default.createElement(
-        SketchStage,
+        PixelStage,
         {
           char,
           opponent,
@@ -4724,7 +4894,7 @@ window.exports = window.module.exports;
             }
           `));
     })(), phase === "judging" && result && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "JUDGES VOTE"), /* @__PURE__ */ import_react.default.createElement(
-      SketchStage,
+      PixelStage,
       {
         char,
         opponent,
