@@ -1,0 +1,5723 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Home, Music, Trophy, ShoppingBag, TreePine, Beer, Mic, Zap, Flame, Star, Volume2, Coffee, Dumbbell, ArrowLeft, Heart, Crown, Sparkles } from 'lucide-react';
+
+// ============ DATA ============
+
+const SOUND_CATALOG = {
+  classic_kick: { name: 'Classic Kick', cat: 'Kicks', tier: 1, stamina: 8, base: 12, stat: 'musicality' },
+  hi_hat: { name: 'Basic Hi-Hat', cat: 'Hats', tier: 1, stamina: 4, base: 7, stat: 'technicality' },
+  psh_snare: { name: 'PSH Snare', cat: 'Snares', tier: 1, stamina: 6, base: 10, stat: 'musicality' },
+  inward_k: { name: 'Inward K Snare', cat: 'Snares', tier: 2, stamina: 9, base: 16, stat: 'technicality' },
+  throat_kick: { name: '808 Throat Kick', cat: 'Kicks', tier: 2, stamina: 12, base: 20, stat: 'musicality' },
+  fast_hats: { name: 'Fast Hi-Hats (TKs)', cat: 'Hats', tier: 2, stamina: 10, base: 15, stat: 'technicality' },
+  lip_roll: { name: 'Lip Roll', cat: 'Liproll', tier: 2, stamina: 11, base: 17, stat: 'originality' },
+  inward_bass: { name: 'Inward Bass', cat: 'Bass', tier: 3, stamina: 14, base: 22, stat: 'originality' },
+  d_low: { name: 'D-Low Scratch', cat: 'Scratch', tier: 3, stamina: 15, base: 25, stat: 'originality' },
+  laser: { name: 'Laser Whistle', cat: 'Whistles', tier: 3, stamina: 13, base: 23, stat: 'originality' },
+  click_roll: { name: 'Click Roll', cat: 'Clicks', tier: 3, stamina: 16, base: 26, stat: 'technicality' },
+  uvular_roll: { name: 'Uvular Kick Roll', cat: 'Kicks', tier: 4, stamina: 22, base: 38, stat: 'technicality' },
+};
+
+const FOOD = {
+  banana: { name: 'Banana', cost: 4, energy: 12, hunger: 15, mood: 1 },
+  smoothie: { name: 'Green Smoothie', cost: 9, energy: 25, hunger: 20, mood: 3 },
+  oat_bowl: { name: 'Oat Bowl', cost: 7, energy: 18, hunger: 35, mood: 2 },
+  espresso: { name: 'Espresso', cost: 5, energy: 25, hunger: -15, mood: 2 },
+  buddha_bowl: { name: 'Buddha Bowl', cost: 14, energy: 22, hunger: 50, mood: 4 },
+};
+
+const NPCS = [
+  { name: 'Lil Crumb', stats: { mus: 8, tec: 8, ori: 6, sho: 7 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'], reward: 50, level: 1 },
+  { name: 'DJ Phlegm', stats: { mus: 14, tec: 12, ori: 10, sho: 11 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'], reward: 120, level: 3 },
+  { name: 'Mama Bass', stats: { mus: 18, tec: 14, ori: 18, sho: 14 }, sounds: ['throat_kick', 'inward_bass', 'd_low', 'fast_hats'], reward: 250, level: 5 },
+  { name: 'Vox Machina', stats: { mus: 22, tec: 24, ori: 20, sho: 18 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'], reward: 500, level: 8 },
+  { name: 'The Champ', stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'], reward: 1500, level: 12 },
+];
+
+const JUDGES = [
+  { name: 'Tek', bias: 'technicality', emoji: '⚙️' },
+  { name: 'Mel', bias: 'musicality', emoji: '🎵' },
+  { name: 'Origi', bias: 'originality', emoji: '✨' },
+  { name: 'Showtime', bias: 'showmanship', emoji: '🎭' },
+  { name: 'Wildcard', bias: 'random', emoji: '🎲' },
+];
+
+// ============ INITIAL STATE ============
+
+const initialChar = () => ({
+  name: '',
+  color: '#D4A017',
+  level: 1,
+  xp: 0,
+  cash: 30,
+  followers: 0,
+  energy: 100,
+  maxEnergy: 100, // can grow via running mini-game (+1 per 5 good bars)
+  hunger: 70,
+  mood: 70,
+  stats: { mus: 5, tec: 5, ori: 5, sho: 5 },
+  sounds: ['classic_kick', 'hi_hat', 'psh_snare'],
+  equipped: ['classic_kick', 'hi_hat', 'psh_snare'],
+  defeated: [],
+  day: 1,
+  minutes: 0, // minutes since 6 AM. 0=6am, 720=6pm, 1080=midnight, 1200=2am (forced sleep)
+  voiceRange: null, // null | 'higher' | 'lower' | 'auto' — set on first tuner use
+  voiceRangeMidi: null, // calibrated center note for 'auto' mode
+  tecLessonsCompleted: 0, // count of lessons completed (lesson N unlocked = (N-1) <= completed)
+  tecCurrentLesson: 0, // currently selected lesson index
+  tecBpm: 90, // current BPM for the rhythm game
+  created: false,
+});
+
+// ============ STORAGE ============
+// Multiple save slots — keys: character:slot1 .. character:slot5, plus active_slot pointer.
+// Legacy key 'character:main' is auto-migrated into slot 1 on first load.
+
+const NUM_SLOTS = 5;
+const slotKey = (n) => `character:slot${n}`;
+const ACTIVE_SLOT_KEY = 'active_slot';
+const LEGACY_KEY = 'character:main';
+
+async function getActiveSlot() {
+  try {
+    const r = await window.storage.get(ACTIVE_SLOT_KEY);
+    if (r && r.value) {
+      const n = parseInt(r.value, 10);
+      if (n >= 1 && n <= NUM_SLOTS) return n;
+    }
+  } catch {}
+  return null;
+}
+
+async function setActiveSlot(n) {
+  try { await window.storage.set(ACTIVE_SLOT_KEY, String(n)); } catch {}
+}
+
+async function loadSlot(n) {
+  try {
+    const r = await window.storage.get(slotKey(n));
+    return r ? JSON.parse(r.value) : null;
+  } catch { return null; }
+}
+
+async function saveSlot(n, c) {
+  try { await window.storage.set(slotKey(n), JSON.stringify(c)); } catch {}
+}
+
+async function deleteSlot(n) {
+  try { await window.storage.delete(slotKey(n)); } catch {}
+}
+
+// One-time migration: if legacy key exists and slot 1 is empty, move it over.
+async function migrateLegacy() {
+  try {
+    const slot1 = await loadSlot(1);
+    if (slot1) return; // already migrated or slot 1 in use
+    const legacy = await window.storage.get(LEGACY_KEY).catch(() => null);
+    if (legacy && legacy.value) {
+      const parsed = JSON.parse(legacy.value);
+      if (parsed && parsed.created) {
+        await saveSlot(1, parsed);
+        await setActiveSlot(1);
+        // Don't delete legacy yet — leave it as a backup for one session.
+      }
+    }
+  } catch {}
+}
+
+// Load all slots' summaries (for the slot picker UI). Returns array of length NUM_SLOTS.
+async function loadAllSlots() {
+  const out = [];
+  for (let i = 1; i <= NUM_SLOTS; i++) {
+    out.push(await loadSlot(i));
+  }
+  return out;
+}
+
+// ============ TIME SYSTEM ============
+// 1 real sec = 10 in-game minutes. 6 real sec = 1 in-game hour.
+// Day starts at 6 AM (minutes=0). Night begins at 18:00 (minutes=720). Forced sleep at 02:00 (minutes=1200).
+
+const TICK_MINUTES = 10; // each progress block = 10 in-game minutes
+const TICK_REAL_MS = 500; // 0.5 real seconds per tick
+const DAY_END = 1200; // 02:00 = forced sleep
+
+// Convert minutes-since-6am to clock string
+function clockString(mins) {
+  const total = (mins + 360) % 1440; // 6am offset
+  const h = Math.floor(total / 60);
+  const m = Math.floor(total % 60);
+  const hh = h % 12 === 0 ? 12 : h % 12;
+  const ampm = h < 12 ? 'AM' : 'PM';
+  return `${hh}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
+// What part of the day is it? Used for palette + lock checks
+function timeOfDay(mins) {
+  // mins: 0 = 6am, 720 = 6pm, 1080 = midnight
+  if (mins < 60) return 'dawn';      // 6-7am
+  if (mins < 720) return 'day';       // 7am-6pm
+  if (mins < 780) return 'dusk';      // 6-7pm
+  return 'night';                     // 7pm-2am
+}
+
+const isDayTime = (mins) => mins < 720;       // before 6pm
+const isNightTime = (mins) => mins >= 720;    // 6pm onwards
+
+// Palette per time of day
+const TIME_PALETTES = {
+  dawn:  { bg: '#1c1815', accent: '#f59e0b', glow: 'rgba(245,158,11,0.06)' },
+  day:   { bg: '#1a1a1f', accent: '#fbbf24', glow: 'rgba(251,191,36,0.04)' },
+  dusk:  { bg: '#1c1418', accent: '#f97316', glow: 'rgba(249,115,22,0.06)' },
+  night: { bg: '#0c0a18', accent: '#818cf8', glow: 'rgba(129,140,248,0.06)' },
+};
+
+// Clock + sun/moon component
+const Clock = ({ minutes, day }) => {
+  const tod = timeOfDay(minutes);
+  const isDay = tod === 'day' || tod === 'dawn';
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs">{isDay ? '☀️' : '🌙'}</span>
+      <span className="text-stone-300 font-mono text-xs">{clockString(minutes)}</span>
+    </div>
+  );
+};
+
+// ============ ACTIVITY ENGINE ============
+// Hook used by activity screens. Manages a real-time loop that ticks every 2 seconds,
+// awards rewards in 5-block sets, and stops when energy is exhausted or night cuts in.
+
+function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
+  // config: {
+  //   blocksPerReward: 5,         // how many ticks until reward fires
+  //   tickEnergyCost: number,     // energy drained per tick
+  //   tickHungerCost: number,     // hunger drained per tick
+  //   tickMoodDelta: number,      // mood change per tick (+ or -)
+  //   onReward: (setChar) => void // fires when 5 blocks complete
+  //   stopWhen: (char) => boolean // optional auto-stop condition (e.g. night falls)
+  // }
+  const [active, setActive] = useState(false);
+  const [block, setBlock] = useState(0); // 0-4, current block within reward cycle
+  const [rewardsEarned, setRewardsEarned] = useState(0);
+  const intervalRef = useRef(null);
+  const blockRef = useRef(0);
+  const activeRef = useRef(false);
+
+  // Always use latest config and char inside the interval (avoid stale closures)
+  const configRef = useRef(config);
+  useEffect(() => { configRef.current = config; }, [config]);
+  const charRef = useRef(char);
+  useEffect(() => { charRef.current = char; }, [char]);
+
+  const stop = (reason) => {
+    activeRef.current = false;
+    setActive(false);
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (reason) showToast(reason, reason.includes('!') ? 'bad' : 'info');
+  };
+
+  // The tick body (defined once, reads everything from refs)
+  const tickHandlerRef = useRef(() => {});
+  tickHandlerRef.current = () => {
+    const cfg = configRef.current;
+    const c = charRef.current;
+
+    const newMins = c.minutes + TICK_MINUTES;
+    const newEnergy = Math.max(0, c.energy - cfg.tickEnergyCost);
+    const newHunger = Math.max(0, c.hunger - cfg.tickHungerCost);
+    const newMood = Math.max(0, Math.min(100, c.mood + (cfg.tickMoodDelta || 0)));
+
+    let stopReason = null;
+    if (newEnergy < cfg.tickEnergyCost) stopReason = 'You collapsed from exhaustion';
+    else if (newHunger <= 0 && cfg.tickHungerCost > 0) stopReason = 'Too hungry to keep going';
+    else if (newMins >= DAY_END) stopReason = 'It got too late — heading home';
+    else if (cfg.stopWhen) {
+      const probe = { ...c, minutes: newMins, energy: newEnergy, hunger: newHunger, mood: newMood };
+      if (cfg.stopWhen(probe)) stopReason = cfg.stopReason || 'Activity ended';
+    }
+
+    const nextChar = { ...c, minutes: newMins, energy: newEnergy, hunger: newHunger, mood: newMood };
+    charRef.current = nextChar;
+    setChar(prev => ({ ...prev, minutes: newMins, energy: newEnergy, hunger: newHunger, mood: newMood }));
+
+    blockRef.current = blockRef.current + 1;
+    if (blockRef.current >= cfg.blocksPerReward) {
+      blockRef.current = 0;
+      setBlock(0);
+      setRewardsEarned(r => r + 1);
+      cfg.onReward();
+    } else {
+      setBlock(blockRef.current);
+    }
+
+    if (stopReason) {
+      activeRef.current = false;
+      setActive(false);
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      showToast(stopReason, 'bad');
+    }
+  };
+
+  const start = () => {
+    if (active) return;
+    if (charRef.current.energy < configRef.current.tickEnergyCost) { showToast('Too tired to start!', 'bad'); return; }
+    activeRef.current = true;
+    setActive(true);
+    setBlock(0);
+    blockRef.current = 0;
+    setRewardsEarned(0);
+    intervalRef.current = setInterval(() => tickHandlerRef.current(), configRef.current.tickRealMs || TICK_REAL_MS);
+  };
+
+  // Restart interval when tickRealMs changes (e.g. user toggles playMode mid-activity)
+  const tickRealMs = config.tickRealMs;
+  useEffect(() => {
+    if (!activeRef.current || !intervalRef.current) return;
+    clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => tickHandlerRef.current(), tickRealMs || TICK_REAL_MS);
+  }, [tickRealMs]);
+
+  // Cleanup on unmount
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  return { active, block, rewardsEarned, start, stop };
+}
+
+// ============ PIXEL ART ACTIVITIES ============
+// Helper for crisp pixel rendering on canvas
+
+const _px = (ctx, x, y, w, h, color) => {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
+};
+
+// ---------- BUSK ANIMATION ----------
+const BuskAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = true }) => {
+  const canvasRef = useRef(null);
+  const PXSCALE = 4;
+  const W = 140, H = 90;
+  const coinsRef = useRef([]);
+  const lastRewardRef = useRef(0);
+  const passerbyRef = useRef({ x: -20, color: '#84cc16', spawned: 0 });
+  const propsRef = useRef({ color, block, active });
+  useEffect(() => { propsRef.current = { color, block, active }; }, [color, block, active]);
+
+  useEffect(() => {
+    if (rewardKey > lastRewardRef.current) {
+      lastRewardRef.current = rewardKey;
+      for (let i = 0; i < 3; i++) {
+        coinsRef.current.push({
+          x: 64 + (Math.random() - 0.5) * 6,
+          y: 38,
+          vx: (Math.random() - 0.5) * 1.2,
+          vy: -1.5 - Math.random() * 0.5,
+          life: 0,
+          ttl: 60,
+        });
+      }
+    }
+  }, [rewardKey]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf, frameCount = 0;
+
+    const draw = () => {
+      frameCount++;
+      const { color, block, active } = propsRef.current;
+
+      if (canvas.width !== W * PXSCALE || canvas.height !== H * PXSCALE) {
+        canvas.width = W * PXSCALE;
+        canvas.height = H * PXSCALE;
+        ctx.imageSmoothingEnabled = false;
+      }
+      const px = (x, y, w, h, c) => _px(ctx, x, y, w, h, c);
+
+      ctx.save();
+      ctx.scale(PXSCALE, PXSCALE);
+
+      // sky
+      px(0, 0, W, 60, '#3a2a3a');
+      // distant buildings
+      px(0, 30, 30, 30, '#1c1825');
+      px(30, 22, 25, 38, '#221c2a');
+      px(55, 35, 22, 25, '#1c1825');
+      px(77, 28, 30, 32, '#221c2a');
+      px(107, 32, 33, 28, '#1c1825');
+      // building windows (lit)
+      for (let i = 0; i < 6; i++) {
+        const wx = 4 + i * 22 + (i % 2) * 5;
+        const wy = 38 + (i % 3) * 6;
+        if (wx < W - 4) px(wx, wy, 3, 3, '#fbbf24');
+      }
+      // sidewalk
+      px(0, 60, W, 30, '#3a3a3a');
+      px(0, 60, W, 1, '#5a5a5a');
+      px(20, 65, 1, 4, '#2a2a2a');
+      px(45, 70, 1, 3, '#2a2a2a');
+      px(95, 67, 1, 4, '#2a2a2a');
+      px(120, 72, 1, 3, '#2a2a2a');
+
+      // lamp post
+      px(15, 14, 2, 50, '#1c1917');
+      px(11, 14, 10, 2, '#1c1917');
+      px(8, 16, 4, 5, '#1c1917');
+      px(9, 21, 2, 1, '#fef3c7');
+      ctx.fillStyle = 'rgba(254,243,199,0.08)';
+      ctx.fillRect(0, 60, 30, 30);
+
+      // passerby
+      const pb = passerbyRef.current;
+      if (pb.x > W + 10) {
+        pb.spawned++;
+        if (frameCount > pb.spawned * 300) {
+          pb.x = -10;
+          const colors = ['#84cc16', '#a78bfa', '#fb7185', '#22d3ee', '#f97316'];
+          pb.color = colors[Math.floor(Math.random() * colors.length)];
+        }
+      } else {
+        pb.x += 0.4;
+      }
+      if (pb.x > -10 && pb.x < W + 10) {
+        const px_ = Math.floor(pb.x);
+        const walkCycle = Math.floor(frameCount / 8) % 2;
+        if (walkCycle === 0) {
+          px(px_ - 2, 73, 2, 5, '#1a1a2e');
+          px(px_ + 1, 74, 2, 4, '#1a1a2e');
+        } else {
+          px(px_ - 2, 74, 2, 4, '#1a1a2e');
+          px(px_ + 1, 73, 2, 5, '#1a1a2e');
+        }
+        px(px_ - 3, 65, 6, 8, pb.color);
+        px(px_ - 2, 60, 4, 5, '#d4a87a');
+        px(px_ - 2, 58, 4, 2, '#1a1a2e');
+      }
+
+      // tip jar
+      const jarX = 88, jarY = 70;
+      px(jarX, jarY, 12, 14, '#5a5048');
+      px(jarX + 1, jarY + 1, 10, 12, '#a89878');
+      px(jarX + 1, jarY + 1, 10, 2, '#7a6a50');
+      px(jarX - 1, jarY - 1, 14, 2, '#3a322a');
+      const coinPile = Math.min(8, lastRewardRef.current);
+      for (let i = 0; i < coinPile; i++) {
+        px(jarX + 2 + (i % 4) * 2, jarY + 11 - Math.floor(i / 4) * 2, 1, 1, '#D4A017');
+      }
+      if (frameCount % 60 < 30) {
+        px(jarX - 2, jarY - 6, 16, 4, '#fef3c7');
+        px(jarX + 5, jarY - 5, 1, 2, '#1c1917');
+      }
+
+      // beatboxer
+      const bx = 60, by = 78;
+      px(bx - 6, by, 12, 1, 'rgba(0,0,0,0.5)');
+      const bob = active ? Math.floor(frameCount / 6) % 2 : 0;
+      px(bx - 4, by - 8 - bob, 3, 8, '#1a1a2e');
+      px(bx + 1, by - 8 + bob, 3, 8, '#1a1a2e');
+      px(bx - 4, by - 1, 3, 1, '#fff');
+      px(bx + 1, by - 1, 3, 1, '#fff');
+      px(bx - 5, by - 18, 10, 11, color);
+      px(bx - 5, by - 18, 10, 1, '#fff');
+      px(bx - 5, by - 24, 10, 7, color);
+      // arms
+      px(bx + 5, by - 17, 2, 3, color);
+      px(bx + 6, by - 14, 2, 3, '#d4a87a');
+      px(bx + 7, by - 18, 2, 3, '#888');
+      px(bx + 6, by - 19, 4, 2, '#aaa');
+      px(bx - 7, by - 17, 2, 8, color);
+      // head
+      px(bx - 4, by - 24, 8, 7, '#d4a87a');
+      // eyes
+      const eyeBlink = frameCount % 120 < 4 ? 0 : 1;
+      if (eyeBlink) {
+        px(bx - 3, by - 22, 1, 1, '#1a1a2e');
+        px(bx + 1, by - 22, 1, 1, '#1a1a2e');
+      } else {
+        px(bx - 3, by - 22, 1, 1, '#5a4030');
+        px(bx + 1, by - 22, 1, 1, '#5a4030');
+      }
+      // mouth
+      const mouthFrame = active ? Math.floor(frameCount / 4) % 4 : 0;
+      if (active) {
+        if (mouthFrame === 0) px(bx - 1, by - 19, 3, 1, '#5a2020');
+        else if (mouthFrame === 1) px(bx - 1, by - 19, 3, 2, '#3a1010');
+        else if (mouthFrame === 2) px(bx, by - 19, 2, 1, '#5a2020');
+        else px(bx - 1, by - 19, 3, 2, '#3a1010');
+      } else {
+        px(bx - 1, by - 19, 3, 1, '#5a2020');
+      }
+
+      // soundwaves
+      if (active) {
+        const wavePhase = frameCount * 0.3;
+        for (let i = 0; i < 3; i++) {
+          const phase = wavePhase + i * 1.2;
+          const distance = (phase % 12);
+          const opacity = Math.max(0, 1 - distance / 12);
+          const waveX = bx + 14 + distance;
+          if (waveX < W) {
+            ctx.fillStyle = `rgba(212, 160, 23, ${opacity * 0.8})`;
+            ctx.fillRect(Math.floor(waveX), by - 22, 1, 1);
+            ctx.fillRect(Math.floor(waveX) + 1, by - 21, 1, 2);
+            ctx.fillRect(Math.floor(waveX) + 2, by - 19, 1, 1);
+            ctx.fillRect(Math.floor(waveX) + 1, by - 17, 1, 2);
+            ctx.fillRect(Math.floor(waveX), by - 15, 1, 1);
+          }
+        }
+        // sound text pops
+        if (block > 0) {
+          const popKey = Math.floor(frameCount / 25) % 3;
+          if ((frameCount % 25) < 10) {
+            const popText = ['BOOM', 'TSS', 'KSH'][popKey];
+            const popY = 30 + (frameCount % 25) * 0.5;
+            ctx.fillStyle = '#D4A017';
+            ctx.font = 'bold 7px monospace';
+            ctx.fillText(popText, bx + 12, popY);
+          }
+        }
+      }
+
+      // flying coins
+      coinsRef.current = coinsRef.current.filter(c => {
+        c.life++;
+        c.x += c.vx;
+        c.vy += 0.08;
+        c.y += c.vy;
+        px(c.x - 1, c.y - 1, 2, 2, '#D4A017');
+        px(c.x, c.y - 1, 1, 1, '#fef3c7');
+        return c.y < jarY + 8 && c.life < c.ttl;
+      });
+
+      ctx.restore();
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <canvas ref={canvasRef}
+      className="w-full block border-2 border-stone-800"
+      style={{ imageRendering: 'pixelated', background: '#1c1917', aspectRatio: `${W} / ${H}` }} />
+  );
+};
+// ============ RHYTHM TAP MINI-GAME ============
+// Three-lane rhythm game for the Busk activity.
+// Notes scroll right→left. When a note hits the target line, tap the matching lane.
+// Hit accuracy is reported back to the parent every `evaluateEveryMs` for bonus rewards.
+
+const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) => {
+  const canvasRef = useRef(null);
+  const tapStateRef = useRef({
+    notes: [],          // {time: scheduledMs, lane: 0|1|2, hit: bool, judged: bool}
+    lastSpawn: 0,
+    nextNoteIdx: 0,
+    startTime: 0,
+    hits: 0,            // hits in current evaluation window
+    misses: 0,
+    perfects: 0,
+    judgments: [],      // [{text: 'PERFECT'|'GOOD'|'MISS', born, lane}]
+    combo: 0,
+    maxCombo: 0,
+  });
+  const [feedback, setFeedback] = useState(0); // re-render trigger when judgments change
+
+  // Physical constants
+  const TRACK_W = 360;
+  const TRACK_H = 120;
+  const TARGET_X = 60; // where notes should be tapped
+  const NOTE_SPEED = 200; // pixels per second
+  const LEAD_TIME_MS = (TRACK_W - TARGET_X) / NOTE_SPEED * 1000; // time for note to travel from spawn to target
+  const HIT_PERFECT_MS = 80;
+  const HIT_GOOD_MS = 180;
+
+  // Pattern: a 4-beat boom-clap-boom-clap with a hat on every offbeat
+  // Lanes: 0 = BOOM (kick), 1 = TSS (hat), 2 = KSH (snare)
+  // Each entry is [beatPosition, lane] where beatPosition is in beats (0-indexed within a 4-beat bar)
+  const PATTERN = [
+    [0, 0],     // beat 1: kick
+    [0.5, 1],   // 1.5: hat
+    [1, 2],     // beat 2: snare
+    [1.5, 1],   // 2.5: hat
+    [2, 0],     // beat 3: kick
+    [2.5, 1],   // 3.5: hat
+    [3, 2],     // beat 4: snare
+    [3.5, 1],   // 4.5: hat
+  ];
+  const BPM = 100;
+  const BEAT_MS = 60000 / BPM;
+  const BAR_MS = BEAT_MS * 4;
+
+  // Note color per lane
+  const LANE_INFO = [
+    { label: 'BOOM', color: '#CC2200', cat: 'Kicks', sound: 'classic_kick' },
+    { label: 'TSS',  color: '#22d3ee', cat: 'Hats',  sound: 'hi_hat' },
+    { label: 'KSH',  color: '#D4A017', cat: 'Snares', sound: 'psh_snare' },
+  ];
+
+  // Generate notes on a rolling basis
+  const ensureNotesAhead = (now) => {
+    const state = tapStateRef.current;
+    const horizon = now - state.startTime + 4000; // schedule 4s into the future
+    while (state.lastSpawn < horizon) {
+      const barStart = state.lastSpawn;
+      PATTERN.forEach(([beat, lane]) => {
+        state.notes.push({
+          time: barStart + beat * BEAT_MS,
+          lane,
+          hit: false,
+          judged: false,
+          id: Math.random(),
+        });
+      });
+      state.lastSpawn += BAR_MS;
+    }
+  };
+
+  // Tap a lane
+  const tap = (lane) => {
+    const state = tapStateRef.current;
+    if (!state.startTime) return;
+    const now = performance.now();
+    const songT = now - state.startTime;
+
+    // Find the closest unhit note in this lane within the good hit window
+    let bestIdx = -1;
+    let bestDelta = Infinity;
+    for (let i = 0; i < state.notes.length; i++) {
+      const n = state.notes[i];
+      if (n.hit || n.judged) continue;
+      if (n.lane !== lane) continue;
+      const delta = Math.abs(n.time - songT);
+      if (delta < bestDelta && delta < HIT_GOOD_MS) {
+        bestDelta = delta;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      const n = state.notes[bestIdx];
+      n.hit = true;
+      n.judged = true;
+      const isPerfect = bestDelta < HIT_PERFECT_MS;
+      if (isPerfect) state.perfects++;
+      state.hits++;
+      state.combo++;
+      if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+      state.judgments.push({
+        text: isPerfect ? 'PERFECT' : 'GOOD',
+        born: now,
+        lane,
+        color: isPerfect ? '#D4A017' : '#22d3ee',
+      });
+      // Play the sound on hit (already plays automatically when crossed, but reinforce on perfect)
+      playSound(LANE_INFO[lane].cat, LANE_INFO[lane].sound);
+    } else {
+      // Mis-tap
+      state.combo = 0;
+      state.judgments.push({
+        text: 'MISS',
+        born: now,
+        lane,
+        color: '#CC2200',
+      });
+      state.misses++;
+    }
+    setFeedback(f => f + 1);
+  };
+
+  // Main animation + game loop
+  useEffect(() => {
+    if (!active) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let raf;
+    const state = tapStateRef.current;
+    state.startTime = performance.now();
+    state.lastSpawn = 0;
+    state.notes = [];
+    state.hits = 0;
+    state.misses = 0;
+    state.perfects = 0;
+    state.combo = 0;
+    state.maxCombo = 0;
+    state.judgments = [];
+
+    // Schedule periodic accuracy reports
+    const evalInterval = setInterval(() => {
+      const total = state.hits + state.misses;
+      // Count missed-by-passing notes too
+      const songT = performance.now() - state.startTime;
+      let passedNotes = 0;
+      state.notes.forEach(n => {
+        if (!n.judged && n.time + HIT_GOOD_MS < songT) {
+          n.judged = true;
+          state.misses++;
+          state.combo = 0;
+          passedNotes++;
+        }
+      });
+      const finalTotal = state.hits + state.misses;
+      const accuracy = finalTotal > 0 ? state.hits / finalTotal : 0;
+      onAccuracyUpdate?.(accuracy, state.hits, finalTotal);
+      // Reset window
+      state.hits = 0;
+      state.misses = 0;
+      state.perfects = 0;
+      // GC old notes
+      state.notes = state.notes.filter(n => n.time + HIT_GOOD_MS > songT);
+    }, evaluateEveryMs);
+
+    const draw = () => {
+      const now = performance.now();
+      const songT = now - state.startTime;
+      ensureNotesAhead(now);
+
+      // Auto-mark passed notes as missed (for visualization & combo break)
+      state.notes.forEach(n => {
+        if (!n.judged && n.time + HIT_GOOD_MS < songT) {
+          n.judged = true;
+          state.misses++;
+          state.combo = 0;
+        }
+      });
+
+      // Background
+      ctx.fillStyle = '#0c0a09';
+      ctx.fillRect(0, 0, TRACK_W, TRACK_H);
+
+      // Lane separators + labels
+      const laneH = TRACK_H / 3;
+      for (let i = 0; i < 3; i++) {
+        // Subtle lane background
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)';
+        ctx.fillRect(0, i * laneH, TRACK_W, laneH);
+        // Lane border
+        ctx.fillStyle = '#1c1917';
+        ctx.fillRect(0, (i + 1) * laneH - 1, TRACK_W, 1);
+      }
+
+      // Target line
+      ctx.fillStyle = '#D4A017';
+      ctx.fillRect(TARGET_X - 1, 0, 2, TRACK_H);
+      ctx.fillStyle = 'rgba(212, 160, 23, 0.2)';
+      ctx.fillRect(TARGET_X - 6, 0, 12, TRACK_H);
+
+      // Lane labels at left of target
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'right';
+      LANE_INFO.forEach((lane, i) => {
+        ctx.fillStyle = lane.color;
+        ctx.fillText(lane.label, TARGET_X - 10, i * laneH + laneH / 2 + 4);
+      });
+
+      // Draw notes
+      state.notes.forEach(n => {
+        const dt = n.time - songT;
+        const x = TARGET_X + dt / 1000 * NOTE_SPEED;
+        if (x < -20 || x > TRACK_W + 20) return;
+        const y = n.lane * laneH + laneH / 2;
+        if (n.hit) {
+          // Show flash
+          const age = Math.abs(songT - n.time);
+          if (age < 300) {
+            ctx.fillStyle = `rgba(212, 160, 23, ${1 - age / 300})`;
+            ctx.beginPath();
+            ctx.arc(TARGET_X, y, 18 + age / 10, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          return;
+        }
+        if (n.judged) return; // missed but not drawn
+
+        // Draw note as colored square with glow
+        const lane = LANE_INFO[n.lane];
+        ctx.shadowColor = lane.color;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = lane.color;
+        ctx.fillRect(x - 12, y - 12, 24, 24);
+        ctx.shadowBlur = 0;
+        // Inner highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(x - 10, y - 10, 20, 4);
+      });
+
+      // Judgment text feedback
+      state.judgments = state.judgments.filter(j => now - j.born < 600);
+      state.judgments.forEach(j => {
+        const age = (now - j.born) / 600;
+        const y = j.lane * laneH + laneH / 2 - 8 - age * 16;
+        ctx.fillStyle = j.color;
+        ctx.globalAlpha = 1 - age;
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(j.text, TARGET_X + 30, y);
+        ctx.globalAlpha = 1;
+      });
+
+      // Combo counter
+      if (state.combo >= 3) {
+        ctx.fillStyle = '#D4A017';
+        ctx.font = 'bold 18px "Bebas Neue", monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${state.combo}x COMBO`, TRACK_W - 10, 24);
+      }
+
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(evalInterval);
+    };
+  }, [active, evaluateEveryMs]);
+
+  // Handle keyboard taps too (D, F, J keys for desktop debug)
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'd' || e.key === 'D') tap(0);
+      else if (e.key === 'f' || e.key === 'F') tap(1);
+      else if (e.key === 'j' || e.key === 'J') tap(2);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  return (
+    <div className="space-y-2">
+      <canvas ref={canvasRef}
+        width={TRACK_W} height={TRACK_H}
+        className="w-full block border-2 border-stone-800"
+        style={{ aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: '#0c0a09', imageRendering: 'auto' }} />
+      <div className="grid grid-cols-3 gap-1">
+        {LANE_INFO.map((lane, i) => (
+          <button key={i}
+            onPointerDown={(e) => { e.preventDefault(); tap(i); }}
+            className="py-3 border-2 active:scale-95 transition-transform select-none touch-none"
+            style={{
+              borderColor: lane.color,
+              background: `${lane.color}22`,
+              color: lane.color,
+              fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+              fontSize: 18,
+              letterSpacing: '0.15em',
+            }}>
+            {lane.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ============ RUN TRACKER MINI-GAME ============
+// Track-and-Field style alternating-tap bar.
+// Hit LEFT then RIGHT then LEFT (alternating) — same-finger taps are ignored.
+// Each valid tap raises the bar; bar drains continuously.
+// Target zone: 60-85% (full reward). Burn zone: 85-100% (same reward, +energy cost).
+// Below 60%: "too slow", reduced reward.
+// Each "block" (~2.5s) where bar averaged in target/burn = a good bar.
+// Every 5 good bars → reports a "max-energy reward" event up to parent.
+
+const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEveryMs = 2500 }) => {
+  const [barLevel, setBarLevel] = useState(0); // 0-100
+  const [lastSide, setLastSide] = useState(null); // 'L' | 'R' | null
+  const [flashSide, setFlashSide] = useState(null); // brief visual feedback
+  const [goodBars, setGoodBars] = useState(0);
+  const [maxEnergyGained, setMaxEnergyGained] = useState(0); // session count
+
+  // Refs for the rAF loop (avoid stale closures)
+  const barRef = useRef(0);
+  const samplesRef = useRef([]); // bar level samples since last block evaluation
+  const burnTicksRef = useRef(0); // count of samples in burn zone, since last block
+  const lastSampleAtRef = useRef(performance.now());
+  const lastBlockAtRef = useRef(performance.now());
+  const goodBarsRef = useRef(0);
+
+  // Tunable physics constants
+  const TAP_GAIN = 12;       // bar units gained per valid alternating tap
+  const DRAIN_PER_SEC = 25;  // bar units drained per second
+  const TARGET_LO = 60;
+  const TARGET_HI = 85;
+  // Burn zone: above TARGET_HI
+
+  // Tap handler — only counts alternating
+  const handleTap = (side) => {
+    if (!active) return;
+    if (side === lastSide) {
+      // Same finger as last — ignored, no fill, brief red flash
+      setFlashSide({ side, ok: false });
+      setTimeout(() => setFlashSide(null), 100);
+      return;
+    }
+    // Valid alternating tap
+    setLastSide(side);
+    setFlashSide({ side, ok: true });
+    setTimeout(() => setFlashSide(null), 80);
+    barRef.current = Math.min(100, barRef.current + TAP_GAIN);
+    setBarLevel(barRef.current);
+  };
+
+  // Drain loop + block evaluation
+  useEffect(() => {
+    if (!active) return;
+    let raf;
+    const tick = () => {
+      const now = performance.now();
+      const dt = (now - lastSampleAtRef.current) / 1000; // seconds
+      lastSampleAtRef.current = now;
+
+      // Drain bar
+      barRef.current = Math.max(0, barRef.current - DRAIN_PER_SEC * dt);
+      setBarLevel(barRef.current);
+
+      // Sample for block evaluation
+      samplesRef.current.push(barRef.current);
+      if (barRef.current > TARGET_HI) burnTicksRef.current += 1;
+
+      // Block boundary — every evaluateEveryMs
+      if (now - lastBlockAtRef.current >= evaluateEveryMs) {
+        lastBlockAtRef.current = now;
+        const samples = samplesRef.current;
+        const avg = samples.reduce((s, x) => s + x, 0) / Math.max(1, samples.length);
+        const burnRatio = burnTicksRef.current / Math.max(1, samples.length);
+
+        // A "good bar" = avg was in target zone or above (≥60%)
+        const isGood = avg >= TARGET_LO;
+        if (isGood) {
+          goodBarsRef.current += 1;
+          setGoodBars(goodBarsRef.current);
+          // Every 3 good bars → +1 max energy
+          if (goodBarsRef.current >= 3) {
+            goodBarsRef.current = 0;
+            setGoodBars(0);
+            setMaxEnergyGained(m => m + 1);
+            onMaxEnergyTick?.();
+          }
+        }
+
+        // Tell parent about this block (for cash/stat rewards via standard activity loop,
+        // and for energy burn surcharge if we spent time in the burn zone)
+        onBlockResult?.({ avg, isGood, burnRatio });
+
+        samplesRef.current = [];
+        burnTicksRef.current = 0;
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [active, evaluateEveryMs]);
+
+  // Determine zone of current bar level for visual styling
+  const zone = barLevel >= TARGET_HI + 0.0001 ? 'burn' : barLevel >= TARGET_LO ? 'target' : 'slow';
+
+  return (
+    <div className="border-2 border-stone-800 bg-stone-900/50 p-3 space-y-3">
+      {/* Header */}
+      <div className="text-center">
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Sprint pace</div>
+        <div className="text-amber-500 text-base tracking-wider mt-1" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          ALTERNATE LEFT · RIGHT · LEFT · RIGHT
+        </div>
+      </div>
+
+      {/* The bar */}
+      <div className="flex items-stretch gap-3 h-44">
+        {/* Bar gauge */}
+        <div className="flex-1 relative bg-stone-950 border-2 border-stone-800 overflow-hidden">
+          {/* The fill (drawn first so labels and zone overlays sit on top) */}
+          <div className="absolute bottom-0 left-0 right-0 transition-all duration-75 z-0"
+               style={{
+                 height: `${barLevel}%`,
+                 background: zone === 'burn'
+                   ? 'linear-gradient(to top, #dc2626, #f87171, #fca5a5)'
+                   : zone === 'target'
+                   ? 'linear-gradient(to top, #D4A017, #fbbf24, #fef3c7)'
+                   : 'linear-gradient(to top, #57534e, #a8a29e)',
+                 boxShadow: zone === 'target' ? '0 -2px 16px rgba(212, 160, 23, 0.6)' :
+                            zone === 'burn' ? '0 -2px 16px rgba(239, 68, 68, 0.6)' : 'none',
+                 opacity: 0.95,
+               }} />
+
+          {/* Burn zone (top 15%) */}
+          <div className="absolute left-0 right-0 top-0 bg-red-900/25 border-b border-red-900/60 z-10" style={{ height: `${100 - TARGET_HI}%` }}>
+            <div className="absolute top-1 left-1 right-1 text-center text-[8px] text-red-400 uppercase tracking-widest">🔥 burning out</div>
+          </div>
+          {/* Target zone (60-85%) */}
+          <div className="absolute left-0 right-0 bg-amber-500/10 border-y-2 border-amber-500/60 z-10"
+               style={{ top: `${100 - TARGET_HI}%`, height: `${TARGET_HI - TARGET_LO}%` }}>
+            <div className="absolute inset-0 flex items-center justify-center text-[10px] text-amber-300 uppercase tracking-widest font-bold" style={{ textShadow: '0 0 4px rgba(0,0,0,0.8)' }}>target</div>
+          </div>
+          {/* Slow zone label */}
+          <div className="absolute left-1 bottom-1 text-[8px] text-stone-500 uppercase tracking-wider z-10" style={{ textShadow: '0 0 4px rgba(0,0,0,0.8)' }}>too slow</div>
+
+          {/* Numeric readout */}
+          <div className="absolute top-1 right-1 text-[10px] font-mono z-10"
+               style={{ color: zone === 'burn' ? '#fca5a5' : zone === 'target' ? '#fef3c7' : '#a8a29e', textShadow: '0 0 4px rgba(0,0,0,0.8)' }}>
+            {Math.round(barLevel)}%
+          </div>
+        </div>
+
+        {/* Stats sidebar */}
+        <div className="w-24 flex flex-col justify-between text-[10px] uppercase tracking-wider text-stone-500">
+          <div>
+            <div>Good bars</div>
+            <div className="text-amber-500 text-2xl font-bold leading-none mt-0.5"
+              style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {goodBars} <span className="text-stone-600 text-base">/ 3</span>
+            </div>
+            <div className="text-[9px] text-stone-600 mt-0.5">to next +max⚡</div>
+          </div>
+          <div>
+            <div>Gained</div>
+            <div className="text-amber-500 text-2xl font-bold leading-none mt-0.5"
+              style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              +{maxEnergyGained}
+            </div>
+            <div className="text-[9px] text-stone-600 mt-0.5">max energy</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tap buttons — big, side-by-side, finger-friendly */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onPointerDown={(e) => { e.preventDefault(); handleTap('L'); }}
+          className={`py-6 border-4 transition-all select-none ${
+            flashSide?.side === 'L'
+              ? (flashSide.ok ? 'border-amber-300 bg-amber-500/40 scale-95' : 'border-red-500 bg-red-900/40')
+              : 'border-amber-600 bg-amber-900/20 active:scale-95'
+          }`}
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}>
+          <div className="text-3xl">👈</div>
+          <div className="text-amber-500 text-base tracking-widest mt-1"
+            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>LEFT</div>
+        </button>
+        <button
+          onPointerDown={(e) => { e.preventDefault(); handleTap('R'); }}
+          className={`py-6 border-4 transition-all select-none ${
+            flashSide?.side === 'R'
+              ? (flashSide.ok ? 'border-amber-300 bg-amber-500/40 scale-95' : 'border-red-500 bg-red-900/40')
+              : 'border-amber-600 bg-amber-900/20 active:scale-95'
+          }`}
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}>
+          <div className="text-3xl">👉</div>
+          <div className="text-amber-500 text-base tracking-widest mt-1"
+            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>RIGHT</div>
+        </button>
+      </div>
+
+      <div className="text-[9px] text-stone-600 uppercase tracking-wider text-center pt-1 border-t border-stone-800">
+        Same finger twice = doesn't count · stay in <span className="text-amber-500">TARGET</span> zone — burning out costs extra ⚡
+      </div>
+    </div>
+  );
+};
+
+
+// Sing chord tones (3-note sequences forming major/minor triads).
+// Uses Web Audio + autocorrelation for monophonic pitch detection.
+// Reports an accuracy score to parent for bonus rewards.
+
+// Map of note names → MIDI numbers. Spans G3 (55) through G5 (79) — comfortable singing range.
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const midiToFreq = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
+const midiToName = (midi) => `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
+const freqToCents = (freq, targetFreq) => 1200 * Math.log2(freq / targetFreq);
+
+// Autocorrelation pitch detection (ACF/AMDF).
+// Operates on a Float32Array buffer of time-domain samples.
+// Returns frequency in Hz, or -1 if signal too weak / no clear pitch.
+function detectPitch(buffer, sampleRate) {
+  const SIZE = buffer.length;
+  // RMS gate — if too quiet, no detection
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return -1; // silence
+
+  // Trim to "voiced" region: find first/last sample crossing threshold
+  const threshold = 0.2;
+  let r1 = 0, r2 = SIZE - 1;
+  for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buffer[i]) < threshold) { r1 = i; break; }
+  for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buffer[SIZE - i]) < threshold) { r2 = SIZE - i; break; }
+  const trimmed = buffer.slice(r1, r2);
+  const T = trimmed.length;
+
+  // Autocorrelate
+  const c = new Array(T).fill(0);
+  for (let i = 0; i < T; i++) {
+    for (let j = 0; j < T - i; j++) {
+      c[i] += trimmed[j] * trimmed[j + i];
+    }
+  }
+
+  // Skip the first peak (it's just the signal correlating with itself at lag 0)
+  let d = 0;
+  while (d < T - 1 && c[d] > c[d + 1]) d++;
+
+  // Find next peak
+  let maxval = -1, maxpos = -1;
+  for (let i = d; i < T; i++) {
+    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+  }
+  if (maxpos < 1) return -1;
+
+  // Parabolic interpolation for sub-sample accuracy
+  let T0 = maxpos;
+  const x1 = c[T0 - 1] || 0;
+  const x2 = c[T0];
+  const x3 = c[T0 + 1] || 0;
+  const a = (x1 + x3 - 2 * x2) / 2;
+  const b = (x3 - x1) / 2;
+  if (a) T0 = T0 - b / (2 * a);
+
+  if (T0 < 1) return -1;
+  const freq = sampleRate / T0;
+  // Reasonable singing range filter
+  if (freq < 60 || freq > 1500) return -1;
+  return freq;
+}
+
+// Build a 3-note chord. Major = root, +4 semitones, +7. Minor = root, +3, +7.
+// Voice range presets. Numbers are MIDI roots that work as the bottom of a major/minor triad
+// while keeping the top note (root + 7 semitones = perfect fifth above) in a comfortable octave.
+const VOICE_RANGES = {
+  higher: {
+    label: 'Higher voice',
+    description: 'Soprano, alto, kids',
+    roots: [60, 62, 64, 65, 67, 69, 71, 72, 74], // C4..D5
+  },
+  lower: {
+    label: 'Lower voice',
+    description: 'Tenor, baritone, bass',
+    roots: [48, 50, 52, 53, 55, 57, 59, 60, 62], // C3..D4
+  },
+};
+
+// Auto-detected: build a roots list centered on the user's calibration note (±5 semitones).
+function rangeFromCalibration(midi) {
+  const center = Math.round(midi);
+  const roots = [];
+  // Keep root within ±4 semitones of detected note. Top of triad (root+7) ends up center+3.
+  // That keeps the triad mostly within ±5 semitones of where they sang.
+  for (let m = center - 4; m <= center + 4; m++) roots.push(m);
+  return roots;
+}
+
+function generateChord(roots) {
+  const pool = roots && roots.length ? roots : [55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72]; // default G3..C5
+  const root = pool[Math.floor(Math.random() * pool.length)];
+  const isMajor = Math.random() < 0.5;
+  const intervals = isMajor ? [0, 4, 7] : [0, 3, 7];
+  const notes = intervals.map(i => root + i);
+  return {
+    name: `${midiToName(root)} ${isMajor ? 'MAJOR' : 'MINOR'}`,
+    notes: notes.map(midi => ({ midi, freq: midiToFreq(midi), name: midiToName(midi) })),
+  };
+}
+
+// ============ VOICE RANGE PICKER ============
+// Asks user about their comfortable singing range. Two flavors:
+// 1) Quick pick: Higher / Lower (no mic needed)
+// 2) Auto-detect: hum a note for 2 seconds, we set the range from that
+const VoiceRangePicker = ({ currentRange = null, onSet, onCancel = null }) => {
+  const [mode, setMode] = useState('choose'); // 'choose' | 'detecting'
+  const [detectedNote, setDetectedNote] = useState(null);
+  const [detectionStatus, setDetectionStatus] = useState('');
+  const [permissionError, setPermissionError] = useState('');
+
+  // Auto-detect helpers
+  const audioCtxRef = useRef(null);
+  const streamRef = useRef(null);
+  const samplesRef = useRef([]);
+
+  const startCalibration = async () => {
+    setMode('detecting');
+    setDetectionStatus('Requesting mic…');
+    setPermissionError('');
+    try {
+      if (typeof window !== 'undefined' && window.isSecureContext === false) {
+        setPermissionError('Mic requires HTTPS. Use the Netlify URL on your phone.');
+        setMode('choose');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      streamRef.current = stream;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtxRef.current = ctx;
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      src.connect(analyser);
+      const buffer = new Float32Array(analyser.fftSize);
+      samplesRef.current = [];
+      setDetectionStatus("Hum any comfortable note for 2 seconds…");
+
+      const startedAt = performance.now();
+      const tick = () => {
+        if (!audioCtxRef.current) return; // disposed
+        analyser.getFloatTimeDomainData(buffer);
+        const freq = detectPitch(buffer, ctx.sampleRate);
+        if (freq > 0) samplesRef.current.push(freq);
+        const elapsed = performance.now() - startedAt;
+        if (elapsed < 2500) {
+          requestAnimationFrame(tick);
+        } else {
+          // Compute median pitch from collected samples
+          const samples = samplesRef.current.filter(f => f > 70 && f < 1100);
+          if (samples.length < 10) {
+            setDetectionStatus("Didn't hear enough — try humming louder. Tap to retry.");
+            cleanup();
+            return;
+          }
+          // Octave-fold to a target octave to reduce mis-octave detections
+          // Simple: use median frequency directly
+          samples.sort((a, b) => a - b);
+          const median = samples[Math.floor(samples.length / 2)];
+          const midi = Math.round(69 + 12 * Math.log2(median / 440));
+          setDetectedNote({ freq: median, midi, name: midiToName(midi) });
+          setDetectionStatus('');
+          cleanup();
+        }
+      };
+      requestAnimationFrame(tick);
+    } catch (err) {
+      const name = err?.name || 'Error';
+      let msg = err?.message || String(err);
+      if (name === 'NotAllowedError') msg = 'Mic permission denied. Pick higher/lower instead.';
+      setPermissionError(msg);
+      setMode('choose');
+    }
+  };
+
+  const cleanup = () => {
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
+    streamRef.current = null;
+    audioCtxRef.current = null;
+  };
+
+  useEffect(() => () => cleanup(), []);
+
+  const choose = (range) => {
+    onSet({ voiceRange: range, voiceRangeMidi: null });
+  };
+  const acceptDetection = () => {
+    onSet({ voiceRange: 'auto', voiceRangeMidi: detectedNote.midi });
+  };
+
+  return (
+    <div className="border-2 border-amber-500 bg-stone-950 p-4 space-y-3">
+      <div className="text-center">
+        <div className="text-amber-500 text-base tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          🎤 Pick your singing range
+        </div>
+        <div className="text-[11px] text-stone-400 mt-1">
+          We'll match notes to where your voice sits comfortably.
+        </div>
+      </div>
+
+      {mode === 'choose' && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => choose('higher')}
+              className={`p-3 border-2 transition-all ${currentRange === 'higher' ? 'border-amber-500 bg-amber-500/20' : 'border-stone-700 bg-stone-900/50 hover:border-amber-500/50'}`}>
+              <div className="text-amber-500 text-base" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>HIGHER VOICE</div>
+              <div className="text-[10px] text-stone-400 uppercase tracking-wider">soprano · alto · kids</div>
+            </button>
+            <button onClick={() => choose('lower')}
+              className={`p-3 border-2 transition-all ${currentRange === 'lower' ? 'border-amber-500 bg-amber-500/20' : 'border-stone-700 bg-stone-900/50 hover:border-amber-500/50'}`}>
+              <div className="text-amber-500 text-base" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>LOWER VOICE</div>
+              <div className="text-[10px] text-stone-400 uppercase tracking-wider">tenor · baritone · bass</div>
+            </button>
+          </div>
+
+          <div className="text-center text-[10px] uppercase tracking-widest text-stone-600">— or —</div>
+
+          <button onClick={startCalibration}
+            className="w-full p-3 border-2 border-stone-700 bg-stone-900/50 hover:border-amber-500/50 transition-all">
+            <div className="text-stone-200 text-sm">🎙️ Hum a comfortable note</div>
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-0.5">Auto-tune the range to your voice</div>
+          </button>
+
+          {permissionError && (
+            <div className="text-[10px] text-red-400 text-center">{permissionError}</div>
+          )}
+          {onCancel && (
+            <button onClick={onCancel} className="w-full text-[10px] text-stone-500 hover:text-stone-300 uppercase tracking-wider underline">
+              Cancel
+            </button>
+          )}
+        </>
+      )}
+
+      {mode === 'detecting' && !detectedNote && (
+        <div className="border-2 border-blue-500 bg-blue-950/30 p-4 text-center space-y-2">
+          <div className="text-3xl">🎙️</div>
+          <div className="text-blue-300 text-sm uppercase tracking-widest">{detectionStatus}</div>
+          {detectionStatus.includes('retry') && (
+            <button onClick={startCalibration}
+              className="px-3 py-1 mt-1 border border-blue-400 text-blue-300 text-[11px] uppercase">Retry</button>
+          )}
+          <button onClick={() => setMode('choose')} className="block w-full text-[10px] text-stone-500 underline">Cancel</button>
+        </div>
+      )}
+
+      {mode === 'detecting' && detectedNote && (
+        <div className="border-2 border-amber-500 bg-amber-950/30 p-4 text-center space-y-2">
+          <div className="text-[10px] text-stone-400 uppercase tracking-widest">Detected note</div>
+          <div className="text-amber-500 text-3xl" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            {detectedNote.name}
+          </div>
+          <div className="text-[10px] text-stone-500">{detectedNote.freq.toFixed(1)} Hz</div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <button onClick={() => { setDetectedNote(null); startCalibration(); }}
+              className="p-2 border border-stone-700 text-stone-300 text-[11px] uppercase tracking-wider">Try again</button>
+            <button onClick={acceptDetection}
+              className="p-2 border-2 border-amber-500 bg-amber-500/20 text-amber-500 text-[11px] uppercase tracking-wider">Use this</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
+                     voiceRange = 'higher', voiceRangeMidi = null, onChangeRange = null }) => {
+  const [permission, setPermission] = useState('pending'); // 'pending' | 'granted' | 'denied' | 'unsupported' | 'insecure'
+  const [errorDetail, setErrorDetail] = useState('');
+
+  // Resolve which root pool to use based on voiceRange + optional calibration midi
+  const resolveRoots = () => {
+    if (voiceRange === 'auto' && voiceRangeMidi) return rangeFromCalibration(voiceRangeMidi);
+    if (voiceRange === 'lower') return VOICE_RANGES.lower.roots;
+    return VOICE_RANGES.higher.roots; // default
+  };
+  const [chord, setChord] = useState(() => generateChord(resolveRoots()));
+  const [noteIdx, setNoteIdx] = useState(0); // current note in the chord (0..2)
+  const [phase, setPhase] = useState('listen'); // 'listen' | 'sing'
+  const [detectedFreq, setDetectedFreq] = useState(-1);
+  const [sustainFill, setSustainFill] = useState(0); // 0..1 of current note's hold meter
+  const [noteScores, setNoteScores] = useState([null, null, null]); // 0..1 per note
+
+  // Refs for the audio pipeline (reset on remount)
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const streamRef = useRef(null);
+  const bufferRef = useRef(null);
+
+  // The active note's accumulator state (only counts during 'sing' phase)
+  const noteStateRef = useRef({
+    inTuneTime: 0,
+    totalTime: 0,
+    DURATION_MS: 2500, // 1 bar @ 0.5s × 5 ticks
+    _lastTick: 0,
+  });
+
+  // Refs to avoid stale closures inside the rAF loop
+  const phaseRef = useRef(phase);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  const noteIdxRef = useRef(noteIdx);
+  useEffect(() => { noteIdxRef.current = noteIdx; }, [noteIdx]);
+  const chordRef = useRef(chord);
+  useEffect(() => { chordRef.current = chord; }, [chord]);
+
+  // Regenerate chord when the voice range setting changes
+  const voiceRangeKey = `${voiceRange}:${voiceRangeMidi || ''}`;
+  const lastRangeKeyRef = useRef(voiceRangeKey);
+  useEffect(() => {
+    if (lastRangeKeyRef.current !== voiceRangeKey) {
+      lastRangeKeyRef.current = voiceRangeKey;
+      setChord(generateChord(resolveRoots()));
+      setNoteIdx(0);
+      setNoteScores([null, null, null]);
+    }
+  }, [voiceRangeKey]);
+
+  // Track the active reference-tone audio nodes so we can stop them on phase change / unmount
+  const refTonesRef = useRef([]);
+
+  // Full-chord scores reported up to parent for bonus rewards
+  const chordScoresRef = useRef([]);
+
+  // Synthesize a soft pleasant reference tone.
+  // Uses fundamental + 1st harmonic (octave) at lower amplitude — gives an organ-like timbre.
+  const playReferenceTone = (freq, durationSec = 2.0) => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    // Stop any previous tones
+    refTonesRef.current.forEach(t => { try { t.stop(); } catch {} });
+    refTonesRef.current = [];
+
+    const t = ctx.currentTime;
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.0001, t);
+    masterGain.gain.linearRampToValueAtTime(0.18, t + 0.05);
+    masterGain.gain.setValueAtTime(0.18, t + durationSec - 0.15);
+    masterGain.gain.linearRampToValueAtTime(0.0001, t + durationSec);
+    masterGain.connect(ctx.destination);
+
+    // Fundamental
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'sine';
+    osc1.frequency.value = freq;
+    const g1 = ctx.createGain();
+    g1.gain.value = 1.0;
+    osc1.connect(g1).connect(masterGain);
+    osc1.start(t);
+    osc1.stop(t + durationSec + 0.05);
+
+    // Octave harmonic (softer)
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.value = freq * 2;
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.18;
+    osc2.connect(g2).connect(masterGain);
+    osc2.start(t);
+    osc2.stop(t + durationSec + 0.05);
+
+    // Fifth harmonic (very soft, gives warmth)
+    const osc3 = ctx.createOscillator();
+    osc3.type = 'sine';
+    osc3.frequency.value = freq * 3;
+    const g3 = ctx.createGain();
+    g3.gain.value = 0.06;
+    osc3.connect(g3).connect(masterGain);
+    osc3.start(t);
+    osc3.stop(t + durationSec + 0.05);
+
+    refTonesRef.current = [osc1, osc2, osc3];
+  };
+
+  // Mount: request mic + set up audio pipeline
+  useEffect(() => {
+    let cancelled = false;
+    const init = async () => {
+      try {
+        // Check secure context first — getUserMedia silently fails on http://
+        if (typeof window !== 'undefined' && window.isSecureContext === false) {
+          setPermission('insecure');
+          setErrorDetail('This page is loaded over an insecure connection. The mic API only works on https:// or localhost.');
+          return;
+        }
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setPermission('unsupported');
+          setErrorDetail('Your browser doesn\'t expose navigator.mediaDevices.getUserMedia. This usually means file:// on iOS Safari, or an old browser. Try hosting the page over HTTPS.');
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtxRef.current = ctx;
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 2048;
+        src.connect(analyser);
+        analyserRef.current = analyser;
+        bufferRef.current = new Float32Array(analyser.fftSize);
+        setPermission('granted');
+      } catch (err) {
+        console.error('Mic init failed:', err);
+        const name = err?.name || 'Error';
+        let detail = err?.message || String(err);
+        if (name === 'NotAllowedError') detail = 'Permission denied. Tap the lock icon in the URL bar and allow microphone access, then reload.';
+        else if (name === 'NotFoundError') detail = 'No microphone found on this device.';
+        else if (name === 'NotReadableError') detail = 'Mic is in use by another app or unavailable.';
+        else if (name === 'SecurityError') detail = 'Browser blocked mic access — you might be on http:// instead of https://.';
+        setErrorDetail(`${name}: ${detail}`);
+        setPermission('denied');
+      }
+    };
+    init();
+    return () => {
+      cancelled = true;
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      refTonesRef.current.forEach(t => { try { t.stop(); } catch {} });
+      if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
+    };
+  }, []);
+
+  // Phase scheduler: when permission becomes granted (or note changes), kick off the listen phase.
+  // The 'listen' phase plays the tone, then transitions to 'sing'. The 'sing' phase ends
+  // after DURATION_MS, scores the note, advances to next.
+  useEffect(() => {
+    if (permission !== 'granted' || !active) return;
+    let timer = null;
+
+    // Phase 1: LISTEN — play the target note for DURATION_MS
+    setPhase('listen');
+    setSustainFill(0);
+    const target = chord.notes[noteIdx];
+    if (target) {
+      playReferenceTone(target.freq, noteStateRef.current.DURATION_MS / 1000);
+    }
+
+    timer = setTimeout(() => {
+      // Phase 2: SING — turn off tone, start accumulating
+      setPhase('sing');
+      const ns = noteStateRef.current;
+      ns.inTuneTime = 0;
+      ns.totalTime = 0;
+      ns._lastTick = performance.now();
+
+      timer = setTimeout(() => {
+        // End of SING phase — score this note
+        const ns2 = noteStateRef.current;
+        const score = Math.min(1, ns2.inTuneTime / (ns2.DURATION_MS * 0.4));
+        setNoteScores(prev => {
+          const updated = [...prev];
+          updated[noteIdxRef.current] = score;
+          return updated;
+        });
+        chordScoresRef.current.push(score);
+
+        // Advance to next note (or new chord)
+        if (noteIdxRef.current < 2) {
+          setNoteIdx(i => i + 1);
+        } else {
+          // Generate new chord using the configured voice range
+          setChord(generateChord(resolveRoots()));
+          setNoteIdx(0);
+          setNoteScores([null, null, null]);
+        }
+      }, noteStateRef.current.DURATION_MS);
+    }, noteStateRef.current.DURATION_MS);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      // Stop any playing reference tones when phase changes
+      refTonesRef.current.forEach(t => { try { t.stop(); } catch {} });
+      refTonesRef.current = [];
+    };
+  }, [permission, active, chord, noteIdx]);
+
+  // Pitch detection + accumulation loop (runs continuously while active, but only scores during 'sing')
+  useEffect(() => {
+    if (permission !== 'granted' || !active) return;
+    let raf;
+    let lastEval = performance.now();
+
+    const tick = () => {
+      const analyser = analyserRef.current;
+      const buffer = bufferRef.current;
+      if (!analyser || !buffer) { raf = requestAnimationFrame(tick); return; }
+
+      analyser.getFloatTimeDomainData(buffer);
+      const freq = detectPitch(buffer, audioCtxRef.current.sampleRate);
+      setDetectedFreq(freq);
+
+      const now = performance.now();
+
+      // Only accumulate during 'sing' phase
+      if (phaseRef.current === 'sing') {
+        const ns = noteStateRef.current;
+        const target = chordRef.current.notes[noteIdxRef.current];
+        const dt = now - (ns._lastTick || now);
+        ns._lastTick = now;
+        ns.totalTime += dt;
+
+        if (freq > 0 && target) {
+          let cents = freqToCents(freq, target.freq);
+          while (cents > 600) cents -= 1200;
+          while (cents < -600) cents += 1200;
+          if (Math.abs(cents) < 50) {
+            ns.inTuneTime += dt;
+          }
+        }
+        setSustainFill(Math.min(1, ns.inTuneTime / (ns.DURATION_MS * 0.4)));
+      }
+
+      // Periodically report accuracy
+      if (now - lastEval > evaluateEveryMs) {
+        lastEval = now;
+        const scores = chordScoresRef.current;
+        if (scores.length > 0) {
+          const avg = scores.reduce((s, x) => s + x, 0) / scores.length;
+          onAccuracyUpdate?.(avg, scores.length);
+          chordScoresRef.current = scores.slice(-6);
+        }
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [permission, active, evaluateEveryMs]);
+
+  // === RENDER ===
+  if (permission === 'pending') {
+    return (
+      <div className="border-2 border-stone-800 bg-stone-900/50 p-6 text-center">
+        <div className="text-amber-500 text-sm uppercase tracking-widest">Requesting mic...</div>
+        <div className="text-xs text-stone-500 mt-2">Allow microphone access in your browser</div>
+      </div>
+    );
+  }
+  if (permission === 'denied' || permission === 'unsupported' || permission === 'insecure') {
+    return (
+      <div className="border-2 border-red-900 bg-red-950/30 p-4 text-left space-y-2">
+        <div className="text-red-400 text-sm uppercase tracking-widest text-center">🎤 Mic unavailable</div>
+        <div className="text-[11px] text-stone-400 leading-relaxed">{errorDetail || 'Could not access microphone.'}</div>
+        {(permission === 'insecure' || permission === 'unsupported') && (
+          <div className="text-[10px] text-stone-500 leading-relaxed border-t border-stone-800 pt-2 mt-2">
+            <div className="text-amber-500 mb-1">How to fix:</div>
+            Mobile browsers block mic access on <span className="font-mono">file://</span> URLs.
+            Drag this HTML file onto <span className="font-mono">netlify.com/drop</span> from your computer to get an HTTPS link, then open that link on your phone.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Granted — render the tuner
+  const target = chord.notes[noteIdx];
+  let cents = 0;
+  let isInTune = false;
+  if (detectedFreq > 0 && target) {
+    let c = freqToCents(detectedFreq, target.freq);
+    while (c > 600) c -= 1200;
+    while (c < -600) c += 1200;
+    cents = c;
+    isInTune = Math.abs(c) < 50;
+  }
+  // Clamp displayed needle to ±100 cents for visual clarity (in-tune zone is ±50, so it spans the middle half)
+  const needleCents = Math.max(-100, Math.min(100, cents));
+  const needlePos = (needleCents + 100) / 200; // 0..1
+
+  return (
+    <div className="border-2 border-stone-800 bg-stone-900/50 p-3 space-y-3">
+      {/* Chord title */}
+      <div className="text-center">
+        <div className="text-xs uppercase tracking-[0.3em] text-stone-500">Listen, then repeat</div>
+        <div className="text-amber-500 text-lg tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {chord.name}
+        </div>
+      </div>
+
+      {/* Sequence dots */}
+      <div className="flex justify-center gap-2">
+        {chord.notes.map((n, i) => (
+          <div key={i} className="flex flex-col items-center">
+            <div className={`w-3 h-3 rounded-full border-2 transition-all ${
+              i < noteIdx ? (noteScores[i] >= 0.7 ? 'bg-amber-500 border-amber-500' : noteScores[i] >= 0.3 ? 'bg-amber-700 border-amber-700' : 'bg-red-700 border-red-700') :
+              i === noteIdx ? 'border-amber-500 animate-pulse' :
+              'border-stone-700'
+            }`} />
+            <div className="text-[9px] text-stone-500 mt-1 font-mono">{n.name}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Phase indicator - big & obvious */}
+      <div className={`text-center py-2 border-2 transition-all ${
+        phase === 'listen' ? 'border-blue-500 bg-blue-500/10' : 'border-amber-500 bg-amber-500/10'
+      }`}>
+        <div className="text-[10px] uppercase tracking-[0.3em]" style={{ color: phase === 'listen' ? '#88AADD' : '#D4A017' }}>
+          {phase === 'listen' ? '🔊 Listen' : '🎤 Your turn — sing it back'}
+        </div>
+        <div className="text-4xl font-black leading-none my-1" style={{
+          fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+          color: phase === 'listen' ? '#88AADD' : '#D4A017',
+        }}>
+          {target?.name || '--'}
+        </div>
+        <div className="text-stone-500 text-[10px] font-mono">{target ? target.freq.toFixed(1) : '0'} Hz</div>
+      </div>
+
+      {/* Tuner needle - dimmed during listen phase */}
+      <div className={`relative h-16 bg-stone-950 border-2 border-stone-800 overflow-hidden transition-opacity ${phase === 'listen' ? 'opacity-30' : 'opacity-100'}`}>
+        {/* Tolerance zone — ±50 cents = middle 50% of the ±100 cent gauge. Looks generous on purpose. */}
+        <div className="absolute top-0 bottom-0 bg-amber-500/15 border-l border-r border-amber-500/40" style={{ left: '25%', right: '25%' }} />
+        {/* Center line (dim) */}
+        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-amber-500/20" />
+        {/* Edge labels */}
+        <div className="absolute top-1 left-2 text-[8px] text-stone-600 uppercase">flat</div>
+        <div className="absolute top-1 right-2 text-[8px] text-stone-600 uppercase">sharp</div>
+        <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] text-amber-500 uppercase">in tune</div>
+        {/* Needle */}
+        {detectedFreq > 0 && phase === 'sing' && (
+          <div className={`absolute top-6 bottom-2 w-1 transition-all duration-75 ${isInTune ? 'bg-amber-500' : 'bg-stone-300'}`}
+            style={{ left: `${needlePos * 100}%`, transform: 'translateX(-50%)',
+                     boxShadow: isInTune ? '0 0 12px #D4A017' : 'none' }} />
+        )}
+        {/* Cents readout */}
+        {detectedFreq > 0 && phase === 'sing' && (
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] font-mono"
+            style={{ color: isInTune ? '#D4A017' : '#a8a29e' }}>
+            {cents > 0 ? '+' : ''}{cents.toFixed(0)}¢
+          </div>
+        )}
+        {phase === 'sing' && detectedFreq < 0 && (
+          <div className="absolute inset-0 flex items-center justify-center text-stone-600 text-xs uppercase tracking-widest">
+            sing now
+          </div>
+        )}
+        {phase === 'listen' && (
+          <div className="absolute inset-0 flex items-center justify-center text-stone-600 text-xs uppercase tracking-widest">
+            playing reference tone...
+          </div>
+        )}
+      </div>
+
+      {/* Sustain meter */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-[9px] uppercase text-stone-500 tracking-wider">
+          <span>{phase === 'sing' ? 'Hold the note' : 'Get ready...'}</span>
+          <span>{Math.round(sustainFill * 100)}%</span>
+        </div>
+        <div className="h-3 bg-stone-950 border border-stone-800 overflow-hidden">
+          <div className="h-full transition-all duration-75"
+            style={{ width: `${sustainFill * 100}%`, background: sustainFill >= 0.95 ? '#D4A017' : sustainFill >= 0.5 ? '#aa8000' : '#5a4030' }} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============ BEATBOX HERO MINI-GAME ============
+// Guitar-Hero style rhythm trainer for Technicality.
+// 4 lanes (B/T/K/Pf), 4-bar patterns, alternating DEMO and PLAYER reps.
+// Reports cumulative accuracy via onAccuracyUpdate; fires onLessonComplete on final-rep end.
+
+// Lane order left-to-right
+const HERO_LANES = ['B', 'T', 'K', 'Pf'];
+
+// Each lesson is a 4-bar (16-beat) pattern. `beat` is in quarter-note units
+// (0..15.999), so 0.5 = 8th-note offset, 0.25 = 16th-note offset.
+const _patBoom = () => Array.from({ length: 16 }, (_, i) => ({ beat: i, sound: 'B' }));
+const _patBackbeat = () => Array.from({ length: 16 }, (_, i) => ({ beat: i, sound: i % 2 === 0 ? 'B' : 'Pf' }));
+const _patHat8ths = () => Array.from({ length: 32 }, (_, i) => ({ beat: i * 0.5, sound: 'T' }));
+const _patKitGroove = () => {
+  const p = [];
+  for (let b = 0; b < 16; b++) {
+    p.push({ beat: b, sound: b % 2 === 0 ? 'B' : 'Pf' });
+    p.push({ beat: b + 0.5, sound: 'T' });
+  }
+  return p;
+};
+const _patWithRim = () => {
+  const p = _patKitGroove();
+  // Rimshot fills on the "e" of beat 4 each bar
+  [3.75, 7.75, 11.75, 15.75].forEach(beat => p.push({ beat, sound: 'K' }));
+  return p;
+};
+const _patSyncoKick = () => {
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0,    sound: 'B'  });
+    p.push({ beat: off + 1,    sound: 'Pf' });
+    p.push({ beat: off + 1.75, sound: 'B'  });
+    p.push({ beat: off + 2.5,  sound: 'B'  });
+    p.push({ beat: off + 3,    sound: 'Pf' });
+  }
+  return p;
+};
+const _patOffbeatHat = () => {
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0, sound: 'B'  });
+    p.push({ beat: off + 1, sound: 'Pf' });
+    p.push({ beat: off + 2, sound: 'B'  });
+    p.push({ beat: off + 3, sound: 'Pf' });
+    // Hats only on the offbeats ("ands")
+    [0.5, 1.5, 2.5, 3.5].forEach(o => p.push({ beat: off + o, sound: 'T' }));
+  }
+  return p;
+};
+const _patFullFour = () => {
+  const p = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const off = bar * 4;
+    p.push({ beat: off + 0,    sound: 'B'  });
+    p.push({ beat: off + 0.5,  sound: 'T'  });
+    p.push({ beat: off + 1,    sound: 'Pf' });
+    p.push({ beat: off + 1.5,  sound: 'T'  });
+    p.push({ beat: off + 1.75, sound: 'K'  });
+    p.push({ beat: off + 2,    sound: 'B'  });
+    p.push({ beat: off + 2.5,  sound: 'T'  });
+    p.push({ beat: off + 2.75, sound: 'B'  });
+    p.push({ beat: off + 3,    sound: 'Pf' });
+    p.push({ beat: off + 3.5,  sound: 'T'  });
+  }
+  return p;
+};
+// Combo: take first 8 beats of A, then first 8 beats of B (shifted to beats 8..15)
+const _combo = (a, b) => {
+  const result = a.filter(n => n.beat < 8).map(n => ({ ...n }));
+  b.filter(n => n.beat < 8).forEach(n => {
+    result.push({ beat: n.beat + 8, sound: n.sound });
+  });
+  return result;
+};
+
+const HERO_LESSONS = [
+  { name: 'BOOM BASIC',     desc: 'Kick on every beat',           tier: 1, pattern: _patBoom() },
+  { name: 'BACKBEAT',       desc: 'Kick on 1 & 3, snare on 2 & 4', tier: 1, pattern: _patBackbeat() },
+  { name: 'HI-HAT 8THS',    desc: 'Hat on every 8th note',         tier: 1, pattern: _patHat8ths() },
+  { name: 'KIT GROOVE',     desc: 'Boom + snare + 8th hats',       tier: 2, pattern: _patKitGroove() },
+  { name: 'WITH RIMSHOT',   desc: 'Kit groove + rim accents',      tier: 2, pattern: _patWithRim() },
+  { name: 'SYNCO KICKS',    desc: 'Off-beat kicks, snare 2 & 4',   tier: 2, pattern: _patSyncoKick() },
+  { name: 'OFF-BEAT HATS',  desc: 'Hats on the "ands" only',       tier: 2, pattern: _patOffbeatHat() },
+  { name: 'FULL FOUR',      desc: 'All four sounds, busy groove',  tier: 3, pattern: _patFullFour() },
+  { name: 'COMBO 1+2',      desc: 'Boom basic → backbeat',         tier: 3, pattern: _combo(_patBoom(), _patBackbeat()) },
+  { name: 'COMBO 3+4',      desc: 'Hat 8ths → kit groove',         tier: 3, pattern: _combo(_patHat8ths(), _patKitGroove()) },
+  { name: 'COMBO 5+6',      desc: 'With rim → synco kicks',        tier: 3, pattern: _combo(_patWithRim(), _patSyncoKick()) },
+  { name: 'COMBO 7+8',      desc: 'Off-beat → full four',          tier: 3, pattern: _combo(_patOffbeatHat(), _patFullFour()) },
+];
+
+const BeatboxHero = ({
+  onAccuracyUpdate,
+  onLessonComplete,
+  evaluateEveryMs = 2500,
+  active = true,
+  bpm = 90,
+  lessonIdx = 0,
+}) => {
+  const canvasRef = useRef(null);
+  const stateRef = useRef(null);
+  const [, forceRender] = useState(0);
+  const rerender = () => forceRender(n => (n + 1) & 0xffff);
+
+  // Latest props mirrored to refs (so the rAF loop reads fresh values without needing dep changes)
+  const bpmRef = useRef(bpm);
+  useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+  const lessonIdxRef = useRef(lessonIdx);
+  useEffect(() => { lessonIdxRef.current = lessonIdx; }, [lessonIdx]);
+
+  // Constants
+  const HIT_PERFECT_MS = 130;
+  const HIT_GOOD_MS = 220;
+  const LOOKAHEAD_MS = 2000;
+  const REPS_TOTAL = 4; // demo, player, demo, player
+  const COMPLETE_HOLD_MS = 1800;
+
+  // Visual constants
+  const TRACK_W = 320;
+  const TRACK_H = 380;
+  const STRIKE_Y = TRACK_H - 56;
+  const LANE_W = TRACK_W / 4;
+  const PIXELS_PER_SEC = STRIKE_Y / (LOOKAHEAD_MS / 1000);
+
+  const initState = (config) => {
+    const lesson = HERO_LESSONS[config.lessonIdx] || HERO_LESSONS[0];
+    const beatMs = 60000 / config.bpm;
+    const patternMs = 16 * beatMs;
+
+    const notes = [];
+    for (let rep = 0; rep < REPS_TOTAL; rep++) {
+      const isDemo = rep % 2 === 0;
+      const repStart = rep * patternMs;
+      lesson.pattern.forEach((n, i) => {
+        const lane = HERO_LANES.indexOf(n.sound);
+        notes.push({
+          id: `r${rep}n${i}`,
+          time: repStart + n.beat * beatMs,
+          sound: n.sound,
+          lane: lane >= 0 ? lane : 0,
+          isDemo,
+          rep,
+          hit: false,
+          judged: false,
+          hitTime: 0,
+          hitGrade: null,
+        });
+      });
+    }
+
+    return {
+      lesson,
+      lessonIdx: config.lessonIdx,
+      bpm: config.bpm,
+      beatMs,
+      patternMs,
+      totalMs: REPS_TOTAL * patternMs,
+      notes,
+      startTime: performance.now(),
+      hits: 0,
+      misses: 0,
+      perfects: 0,
+      laneFlash: { B: 0, T: 0, K: 0, Pf: 0 },
+      audioScheduled: new Set(),
+      phase: 'demo',
+      completeAt: 0,
+      completionFired: false,
+    };
+  };
+
+  const handleTap = (sound) => {
+    const state = stateRef.current;
+    if (!state) return;
+    const now = performance.now();
+    const songT = now - state.startTime;
+    const lane = HERO_LANES.indexOf(sound);
+
+    playHeroSound(sound);
+    state.laneFlash[sound] = now;
+
+    if (state.phase !== 'player') { rerender(); return; }
+
+    let bestIdx = -1;
+    let bestDelta = Infinity;
+    for (let i = 0; i < state.notes.length; i++) {
+      const n = state.notes[i];
+      if (n.judged || n.isDemo) continue;
+      if (n.lane !== lane) continue;
+      const delta = Math.abs(n.time - songT);
+      if (delta < bestDelta && delta <= HIT_GOOD_MS) {
+        bestDelta = delta;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      const n = state.notes[bestIdx];
+      n.hit = true;
+      n.judged = true;
+      n.hitTime = now;
+      const isPerfect = bestDelta <= HIT_PERFECT_MS;
+      n.hitGrade = isPerfect ? 'perfect' : 'good';
+      state.hits++;
+      if (isPerfect) state.perfects++;
+    }
+    rerender();
+  };
+
+  // Main loop — re-runs only when active or lessonIdx changes (BPM is snapshotted at start)
+  useEffect(() => {
+    if (!active) return;
+
+    const ctx = getAudioCtx();
+    if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
+
+    stateRef.current = initState({ bpm: bpmRef.current, lessonIdx });
+    rerender();
+
+    let raf = 0;
+
+    const drawCanvas = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const c = canvas.getContext('2d');
+      const state = stateRef.current;
+      if (!state) return;
+      const now = performance.now();
+      const songT = now - state.startTime;
+
+      c.fillStyle = '#0c0a09';
+      c.fillRect(0, 0, TRACK_W, TRACK_H);
+
+      // Lane backgrounds
+      for (let i = 0; i < 4; i++) {
+        c.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)';
+        c.fillRect(i * LANE_W, 0, LANE_W, TRACK_H);
+      }
+      // Lane separators
+      c.fillStyle = '#1c1917';
+      for (let i = 1; i < 4; i++) c.fillRect(i * LANE_W, 0, 1, TRACK_H);
+
+      // Lane flash overlay (~120ms fade)
+      HERO_LANES.forEach((sound, i) => {
+        const age = now - state.laneFlash[sound];
+        if (age < 120) {
+          c.globalAlpha = (1 - age / 120) * 0.30;
+          c.fillStyle = HERO_SOUNDS[sound].color;
+          c.fillRect(i * LANE_W, 0, LANE_W, TRACK_H);
+          c.globalAlpha = 1;
+        }
+      });
+
+      // Strike line
+      c.fillStyle = 'rgba(212, 160, 23, 0.12)';
+      c.fillRect(0, STRIKE_Y - 14, TRACK_W, 28);
+      c.fillStyle = '#D4A017';
+      c.fillRect(0, STRIKE_Y - 2, TRACK_W, 4);
+
+      // Notes
+      state.notes.forEach(n => {
+        const dt = n.time - songT;
+        const y = STRIKE_Y - dt * PIXELS_PER_SEC / 1000;
+        if (y < -40 || y > TRACK_H + 40) return;
+
+        const x = n.lane * LANE_W;
+        const meta = HERO_SOUNDS[n.sound];
+
+        // Hit splash
+        if (n.hit && (now - n.hitTime) < 260) {
+          const a = (now - n.hitTime) / 260;
+          c.globalAlpha = 1 - a;
+          c.fillStyle = n.hitGrade === 'perfect' ? '#D4A017' : '#22d3ee';
+          c.fillRect(x + 2, STRIKE_Y - 16, LANE_W - 4, 32);
+          c.globalAlpha = 1;
+          return;
+        }
+        if (n.judged) return;
+
+        const pad = 4;
+        const noteH = 24;
+        if (n.isDemo) {
+          c.globalAlpha = 0.18;
+          c.fillStyle = meta.color;
+          c.fillRect(x + pad, y - noteH / 2, LANE_W - pad * 2, noteH);
+          c.globalAlpha = 0.8;
+          c.strokeStyle = meta.color;
+          c.lineWidth = 2;
+          c.strokeRect(x + pad, y - noteH / 2, LANE_W - pad * 2, noteH);
+          c.globalAlpha = 1;
+        } else {
+          c.fillStyle = meta.color;
+          c.fillRect(x + pad, y - noteH / 2, LANE_W - pad * 2, noteH);
+          c.fillStyle = 'rgba(255,255,255,0.30)';
+          c.fillRect(x + pad, y - noteH / 2, LANE_W - pad * 2, 4);
+          c.fillStyle = 'rgba(0,0,0,0.65)';
+          c.font = 'bold 11px monospace';
+          c.textAlign = 'center';
+          c.fillText(meta.label, x + LANE_W / 2, y + 4);
+        }
+      });
+
+      // Phase banner
+      const phaseLabel = state.phase === 'complete' ? 'LESSON COMPLETE'
+                       : state.phase === 'demo'     ? 'DEMO · LISTEN'
+                                                    : 'YOUR TURN';
+      const phaseColor = state.phase === 'complete' ? '#22c55e'
+                       : state.phase === 'demo'     ? '#22d3ee'
+                                                    : '#D4A017';
+      c.fillStyle = phaseColor;
+      c.font = 'bold 14px "Bebas Neue", "Oswald", sans-serif';
+      c.textAlign = 'center';
+      c.fillText(phaseLabel, TRACK_W / 2, 22);
+    };
+
+    const tick = () => {
+      const state = stateRef.current;
+      if (!state) { raf = requestAnimationFrame(tick); return; }
+      const now = performance.now();
+      const songT = now - state.startTime;
+
+      // Phase transitions
+      if (songT >= state.totalMs && state.phase !== 'complete') {
+        state.phase = 'complete';
+        state.completeAt = now;
+        const total = state.hits + state.misses;
+        const finalAcc = total > 0 ? state.hits / total : 0;
+        if (!state.completionFired) {
+          state.completionFired = true;
+          onLessonComplete?.(state.lessonIdx, finalAcc);
+        }
+        rerender();
+      } else if (state.phase !== 'complete') {
+        const repIdx = Math.floor(songT / state.patternMs);
+        const newPhase = repIdx % 2 === 0 ? 'demo' : 'player';
+        if (newPhase !== state.phase) {
+          state.phase = newPhase;
+          rerender();
+        }
+      }
+
+      // Auto-restart after celebration hold
+      if (state.phase === 'complete' && now - state.completeAt > COMPLETE_HOLD_MS) {
+        stateRef.current = initState({ bpm: bpmRef.current, lessonIdx: lessonIdxRef.current });
+        rerender();
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
+      // Auto-miss player notes that passed without being hit
+      for (let i = 0; i < state.notes.length; i++) {
+        const n = state.notes[i];
+        if (n.judged || n.hit || n.isDemo) continue;
+        if (n.time + HIT_GOOD_MS < songT) {
+          n.judged = true;
+          state.misses++;
+        }
+      }
+
+      // Fire demo sounds at strike-line crossing
+      for (let i = 0; i < state.notes.length; i++) {
+        const n = state.notes[i];
+        if (!n.isDemo) continue;
+        if (state.audioScheduled.has(n.id)) continue;
+        if (n.time > songT) continue;
+        if (songT - n.time < 200) {
+          playHeroSound(n.sound);
+          state.laneFlash[n.sound] = now;
+        }
+        state.audioScheduled.add(n.id);
+      }
+
+      drawCanvas();
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+
+    const evalInt = setInterval(() => {
+      const state = stateRef.current;
+      if (!state) return;
+      const total = state.hits + state.misses;
+      if (total === 0) return;
+      onAccuracyUpdate?.(state.hits / total, state.hits, total);
+    }, evaluateEveryMs);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(evalInt);
+    };
+    // bpm intentionally NOT in deps — snapshotted at start, picked up on next lesson restart
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, lessonIdx]);
+
+  const state = stateRef.current;
+  const totalJudged = state ? (state.hits + state.misses) : 0;
+  const accuracyPct = totalJudged > 0 ? Math.round((state.hits / totalJudged) * 100) : 0;
+  const phaseLabel = state?.phase === 'complete' ? 'COMPLETE'
+                   : state?.phase === 'player'   ? 'YOUR TURN'
+                                                 : 'DEMO';
+
+  return (
+    <div className="space-y-2">
+      <canvas ref={canvasRef}
+        width={TRACK_W} height={TRACK_H}
+        className="w-full block border-2 border-stone-800"
+        style={{ aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: '#0c0a09', imageRendering: 'auto' }} />
+
+      {/* Drum buttons */}
+      <div className="grid grid-cols-4 gap-1">
+        {HERO_LANES.map(sound => {
+          const meta = HERO_SOUNDS[sound];
+          return (
+            <button key={sound}
+              onPointerDown={(e) => { e.preventDefault(); handleTap(sound); }}
+              className="py-5 border-2 active:scale-95 transition-transform select-none touch-none"
+              style={{
+                borderColor: meta.color,
+                background: `${meta.color}1f`,
+                color: meta.color,
+                fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+                fontSize: 22,
+                letterSpacing: '0.15em',
+              }}>
+              {meta.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* HUD */}
+      <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-stone-500 px-1">
+        <span><span className="text-amber-500">{phaseLabel}</span></span>
+        <span>HITS <span className="text-amber-500">{state?.hits || 0}</span> · MISS <span className="text-red-500">{state?.misses || 0}</span></span>
+        <span>ACC <span className="text-amber-500">{accuracyPct}%</span></span>
+      </div>
+    </div>
+  );
+};
+
+// ============ SOUND STUDIO ============
+// Record & manage custom samples for the 4 hero sounds (B/T/K/Pf).
+// Per-character samples (stored in IndexedDB keyed by slot).
+// Time does NOT advance while in here — it's a configuration screen.
+
+const SoundStudio = ({ activeSlot, showToast }) => {
+  const [permission, setPermission] = useState('idle'); // 'idle' | 'requesting' | 'granted' | 'denied' | 'insecure'
+  const [errorDetail, setErrorDetail] = useState('');
+  // sampleStatus only holds the *active* recording's transient status. Persistent
+  // 'default' / 'custom' is derived from HERO_SAMPLES at render time.
+  const [sampleStatus, setSampleStatus] = useState({});
+  const [micLevel, setMicLevel] = useState(0); // 0..1 RMS
+  const [recordingKey, setRecordingKey] = useState(null); // which sound is being recorded
+  const [refreshKey, setRefreshKey] = useState(0); // to force re-render after sample save
+
+  const streamRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const recorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const rmsBufferRef = useRef(null);
+  const onsetDetectedRef = useRef(false);
+  const recordStartedAtRef = useRef(0);
+  const onsetAtRef = useRef(0);
+  const silenceStartedAtRef = useRef(0);
+  const rafRef = useRef(0);
+  // Mirror of recordingKey for use inside rAF loop (avoids stale closure)
+  const recordingKeyRef = useRef(null);
+  // Mounted flag — guards async state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  // Onset and silence thresholds for auto-detect recording
+  const ONSET_THRESHOLD = 0.04;
+  const SILENCE_THRESHOLD = 0.015;
+  const SILENCE_DURATION_MS = 120;
+  const MAX_AFTER_ONSET_MS = 1500;
+  const MAX_TOTAL_WAIT_MS = 4000;
+
+  // Reset all transient recording state. Safe to call multiple times.
+  const resetRecordingState = () => {
+    recordingKeyRef.current = null;
+    onsetDetectedRef.current = false;
+    silenceStartedAtRef.current = 0;
+    recordStartedAtRef.current = 0;
+    onsetAtRef.current = 0;
+    recordedChunksRef.current = [];
+    if (mountedRef.current) {
+      setRecordingKey(null);
+      setSampleStatus({});
+    }
+  };
+
+  // Initialize mic and analyser once
+  const ensureMicReady = async () => {
+    // If we already have a stream + analyser, just make sure the meter loop is running.
+    if (streamRef.current && analyserRef.current) {
+      ensureMeterLoopRunning();
+      return true;
+    }
+    setPermission('requesting');
+    try {
+      if (typeof window !== 'undefined' && window.isSecureContext === false) {
+        setPermission('insecure');
+        setErrorDetail('Mic requires HTTPS. Use a hosted URL.');
+        return false;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setPermission('denied');
+        setErrorDetail('Mic API not available in this browser.');
+        return false;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return false;
+      }
+      streamRef.current = stream;
+      const ctx = getAudioCtx();
+      audioCtxRef.current = ctx;
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      src.connect(analyser);
+      analyserRef.current = analyser;
+      rmsBufferRef.current = new Float32Array(analyser.fftSize);
+      setPermission('granted');
+      ensureMeterLoopRunning();
+      return true;
+    } catch (err) {
+      const name = err?.name || 'Error';
+      let msg = err?.message || String(err);
+      if (name === 'NotAllowedError') msg = 'Mic permission denied.';
+      else if (name === 'NotFoundError') msg = 'No mic found.';
+      else if (name === 'SecurityError') msg = 'Browser blocked mic. Need HTTPS.';
+      setErrorDetail(`${name}: ${msg}`);
+      setPermission('denied');
+      return false;
+    }
+  };
+
+  // Ensure exactly one rAF meter loop is running. Idempotent.
+  const ensureMeterLoopRunning = () => {
+    if (rafRef.current) return; // already running
+    const tick = () => {
+      // If component unmounted or analyser disposed, stop forever
+      if (!mountedRef.current) { rafRef.current = 0; return; }
+      const analyser = analyserRef.current;
+      const buf = rmsBufferRef.current;
+      if (!analyser || !buf) { rafRef.current = 0; return; }
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      const rms = Math.sqrt(sum / buf.length);
+      setMicLevel(rms);
+
+      // Recording state machine — uses refs for stable values across ticks
+      if (recorderRef.current && recordingKeyRef.current) {
+        const key = recordingKeyRef.current;
+        const now = performance.now();
+        const elapsed = now - recordStartedAtRef.current;
+
+        if (!onsetDetectedRef.current) {
+          if (rms > ONSET_THRESHOLD) {
+            onsetDetectedRef.current = true;
+            onsetAtRef.current = now;
+            setSampleStatus(s => ({ ...s, [key]: 'recording' }));
+          } else if (elapsed > MAX_TOTAL_WAIT_MS) {
+            // No onset → abort (recorder.onstop will fire and finalize state)
+            stopRecorder('no-onset');
+          }
+        } else {
+          const sinceOnset = now - onsetAtRef.current;
+          if (rms < SILENCE_THRESHOLD) {
+            if (silenceStartedAtRef.current === 0) silenceStartedAtRef.current = now;
+            else if (now - silenceStartedAtRef.current >= SILENCE_DURATION_MS) {
+              stopRecorder('silence');
+            }
+          } else {
+            silenceStartedAtRef.current = 0;
+          }
+          if (sinceOnset > MAX_AFTER_ONSET_MS) {
+            stopRecorder('max-duration');
+          }
+        }
+      }
+      // ALWAYS schedule the next frame — never break the loop
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+    if (recorderRef.current) {
+      try { recorderRef.current.stop(); } catch {}
+      recorderRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    analyserRef.current = null;
+    rmsBufferRef.current = null;
+  }, []);
+
+  // Stop the active recorder. The recorder's onstop handler does blob processing.
+  // The 'no-onset' case also clears UI state immediately because onstop won't have a useful blob.
+  const stopRecorder = (reason) => {
+    const recorder = recorderRef.current;
+    const key = recordingKeyRef.current;
+    if (!recorder) return;
+    recorderRef.current = null;
+    try { recorder.stop(); } catch {}
+    if (reason === 'no-onset') {
+      // Don't wait for onstop to clean UI — clear it now.
+      if (key && mountedRef.current) {
+        setSampleStatus(s => { const c = { ...s }; delete c[key]; return c; });
+      }
+      recordingKeyRef.current = null;
+      if (mountedRef.current) setRecordingKey(null);
+      showToast?.('No sound detected — try again', 'bad');
+    }
+    // For 'silence' / 'max-duration', recorder.onstop will fire and finalize.
+  };
+
+  // Manual abort — user-initiated cancel
+  const abortRecording = () => {
+    const key = recordingKeyRef.current;
+    if (!recorderRef.current) {
+      // Not recording but UI is stuck — force-clean everything
+      resetRecordingState();
+      return;
+    }
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
+    try { recorder.stop(); } catch {}
+    // Discard any captured chunks so onstop doesn't try to save garbage
+    recordedChunksRef.current = [];
+    if (key && mountedRef.current) {
+      setSampleStatus(s => { const c = { ...s }; delete c[key]; return c; });
+    }
+    recordingKeyRef.current = null;
+    onsetDetectedRef.current = false;
+    silenceStartedAtRef.current = 0;
+    if (mountedRef.current) setRecordingKey(null);
+  };
+
+  // Begin recording for a given key
+  const recordSound = async (key) => {
+    if (!activeSlot) { showToast?.('Need an active character first', 'bad'); return; }
+    // If something's already recording, abort it first (user retry case)
+    if (recorderRef.current) abortRecording();
+    const ok = await ensureMicReady();
+    if (!ok) return;
+    if (!mountedRef.current) return;
+
+    // Set up state for the new recording
+    recordingKeyRef.current = key;
+    setRecordingKey(key);
+    setSampleStatus(s => ({ ...s, [key]: 'waiting' }));
+    onsetDetectedRef.current = false;
+    silenceStartedAtRef.current = 0;
+    recordStartedAtRef.current = performance.now();
+    recordedChunksRef.current = [];
+
+    let recorder;
+    try {
+      const stream = streamRef.current;
+      recorder = new MediaRecorder(stream);
+    } catch (err) {
+      console.error('MediaRecorder constructor failed:', err);
+      resetRecordingState();
+      showToast?.('Recording not supported on this browser', 'bad');
+      return;
+    }
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    recorder.onerror = (e) => {
+      console.error('Recorder error:', e);
+      resetRecordingState();
+      showToast?.('Recorder error', 'bad');
+    };
+    recorder.onstop = async () => {
+      // Always clear the active recorder ref (defensive)
+      if (recorderRef.current === recorder) recorderRef.current = null;
+
+      const chunks = recordedChunksRef.current;
+      recordedChunksRef.current = [];
+
+      // If aborted (no chunks) — just cleanup and bail
+      if (chunks.length === 0) {
+        if (mountedRef.current && recordingKeyRef.current === key) {
+          setSampleStatus(s => { const c = { ...s }; delete c[key]; return c; });
+          recordingKeyRef.current = null;
+          setRecordingKey(null);
+        }
+        return;
+      }
+
+      try {
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        const arrayBuf = await blob.arrayBuffer();
+        const ctx = getAudioCtx();
+        const decoded = await ctx.decodeAudioData(arrayBuf.slice(0));
+        const processed = processSample(ctx, decoded);
+
+        if (!mountedRef.current) return;
+
+        if (!processed) {
+          setSampleStatus(s => { const c = { ...s }; delete c[key]; return c; });
+          recordingKeyRef.current = null;
+          setRecordingKey(null);
+          showToast?.('Recording too short — try again', 'bad');
+          return;
+        }
+
+        await saveSampleForSlot(activeSlot, key, processed);
+        if (!mountedRef.current) return;
+
+        setSampleStatus(s => { const c = { ...s }; delete c[key]; return c; });
+        recordingKeyRef.current = null;
+        setRecordingKey(null);
+        setRefreshKey(k => k + 1);
+        showToast?.(`✓ ${HERO_SOUNDS[key].name} recorded`, 'win');
+        setTimeout(() => playHeroSound(key), 200);
+      } catch (err) {
+        console.error('Sample processing failed:', err);
+        if (!mountedRef.current) return;
+        setSampleStatus(s => { const c = { ...s }; delete c[key]; return c; });
+        recordingKeyRef.current = null;
+        setRecordingKey(null);
+        showToast?.('Recording failed — try again', 'bad');
+      }
+    };
+
+    recorderRef.current = recorder;
+    try {
+      recorder.start();
+    } catch (err) {
+      console.error('recorder.start failed:', err);
+      recorderRef.current = null;
+      resetRecordingState();
+      showToast?.('Recorder failed to start', 'bad');
+    }
+  };
+
+  // Process a decoded AudioBuffer: trim silence, cap length, normalize peak.
+  // Returns a new AudioBuffer or null if too short.
+  const processSample = (ctx, buf) => {
+    const data = buf.getChannelData(0);
+    const sr = buf.sampleRate;
+    const TRIM_THRESHOLD = 0.02;
+    const SAFETY_LEAD_MS = 5;
+    const SAFETY_TAIL_MS = 30;
+    const MAX_LEN_MS = 600;
+
+    // Trim leading silence
+    let start = 0;
+    while (start < data.length && Math.abs(data[start]) < TRIM_THRESHOLD) start++;
+    start = Math.max(0, start - Math.floor(sr * SAFETY_LEAD_MS / 1000));
+    // Trim trailing silence
+    let end = data.length - 1;
+    while (end > start && Math.abs(data[end]) < TRIM_THRESHOLD) end--;
+    end = Math.min(data.length, end + Math.floor(sr * SAFETY_TAIL_MS / 1000));
+    // Cap length
+    const maxSamples = Math.floor(sr * MAX_LEN_MS / 1000);
+    if (end - start > maxSamples) end = start + maxSamples;
+    const trimmedLen = end - start;
+    if (trimmedLen < Math.floor(sr * 0.02)) return null; // <20ms = failure
+
+    // Normalize peak to 0.85
+    let peak = 0;
+    for (let i = start; i < end; i++) {
+      const v = Math.abs(data[i]);
+      if (v > peak) peak = v;
+    }
+    const gain = peak > 0 ? 0.85 / peak : 1;
+    const out = ctx.createBuffer(1, trimmedLen, sr);
+    const outData = out.getChannelData(0);
+    for (let i = 0; i < trimmedLen; i++) outData[i] = data[start + i] * gain;
+    return out;
+  };
+
+  // Reset a single sound to default (synth)
+  const resetSound = async (key) => {
+    if (!activeSlot) return;
+    await deleteSampleForSlot(activeSlot, key);
+    setRefreshKey(k => k + 1);
+    showToast?.(`${HERO_SOUNDS[key].name} reset to default`, 'info');
+  };
+
+  // Reset all sounds
+  const resetAll = async () => {
+    if (!activeSlot) return;
+    await deleteAllSamplesForSlot(activeSlot);
+    setRefreshKey(k => k + 1);
+    showToast?.('All sounds reset to default', 'info');
+  };
+
+  // Mic level indicator color
+  const meterColor = micLevel < 0.04 ? '#84cc16' : micLevel < 0.15 ? '#fbbf24' : '#ef4444';
+  const meterPct = Math.min(100, micLevel * 250); // amplify visual scale
+
+  return (
+    <Panel title="Sound Studio">
+      <div className="space-y-3">
+        <div className="text-[10px] uppercase tracking-wider text-stone-500">
+          Record your own beatbox sounds. They'll replace the defaults across the game.
+        </div>
+
+        {/* Live mic level meter */}
+        {permission === 'granted' && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-[9px] uppercase tracking-wider text-stone-500">
+              <span>🎤 Mic level</span>
+              <span className="font-mono">{(micLevel * 100).toFixed(0)}%</span>
+            </div>
+            <div className="h-2 bg-stone-950 border border-stone-800 overflow-hidden">
+              <div className="h-full transition-all duration-75"
+                style={{ width: `${meterPct}%`, background: meterColor }} />
+            </div>
+          </div>
+        )}
+
+        {permission === 'denied' && (
+          <div className="border-2 border-red-900 bg-red-950/30 p-3 text-[11px] text-stone-300">
+            <div className="text-red-400 uppercase tracking-widest mb-1">Mic unavailable</div>
+            {errorDetail}
+          </div>
+        )}
+
+        {/* Sound cards */}
+        <div className="space-y-2" key={refreshKey}>
+          {Object.entries(HERO_SOUNDS).map(([key, meta]) => {
+            // Status derivation (no more currentStatus helper):
+            // - If this key is currently being recorded, use the transient status from sampleStatus[key]
+            // - Otherwise, check HERO_SAMPLES for a custom sample
+            const isThisRecording = recordingKey === key;
+            const transient = sampleStatus[key]; // 'waiting' | 'recording' | undefined
+            const isWaiting = isThisRecording && transient === 'waiting';
+            const isRecording = isThisRecording && transient === 'recording';
+            const isCustom = !isThisRecording && !!HERO_SAMPLES[key];
+            const isDisabled = recordingKey && recordingKey !== key;
+
+            return (
+              <div key={key}
+                className={`border-2 p-3 flex items-center gap-3 transition-all ${
+                  isWaiting || isRecording ? 'border-red-500 bg-red-950/30' :
+                  isCustom ? 'border-amber-500 bg-amber-500/5' :
+                  'border-stone-800 bg-stone-900/40'
+                }`}>
+                {/* Sound color square */}
+                <div className="w-12 h-12 border-2 flex items-center justify-center text-lg font-mono"
+                  style={{ borderColor: meta.color, color: meta.color, background: `${meta.color}15` }}>
+                  {meta.label}
+                </div>
+                {/* Info */}
+                <div className="flex-1">
+                  <div className="text-stone-100 text-sm tracking-wider"
+                    style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                    {meta.name.toUpperCase()}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wider mt-0.5"
+                    style={{ color: isWaiting || isRecording ? '#ef4444' : isCustom ? '#D4A017' : '#78716c' }}>
+                    {isWaiting ? 'WAITING FOR SOUND…' :
+                     isRecording ? 'RECORDING…' :
+                     isCustom ? '✓ CUSTOM SAMPLE' :
+                     'DEFAULT SYNTH'}
+                  </div>
+                </div>
+                {/* Buttons */}
+                <div className="flex flex-col gap-1">
+                  {isThisRecording ? (
+                    <button
+                      onClick={abortRecording}
+                      className="px-3 py-1 border-2 border-stone-500 bg-stone-800 text-stone-200 text-[10px] uppercase tracking-wider">
+                      ✕ Stop
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => recordSound(key)}
+                      disabled={isDisabled}
+                      className="px-3 py-1 border-2 border-red-700 bg-red-900/30 text-red-300 text-[10px] uppercase tracking-wider disabled:opacity-30">
+                      REC
+                    </button>
+                  )}
+                  <button
+                    onClick={() => playHeroSound(key)}
+                    disabled={isThisRecording}
+                    className="px-3 py-1 border-2 border-stone-700 bg-stone-800 text-stone-300 text-[10px] uppercase tracking-wider disabled:opacity-30">
+                    ▶ Play
+                  </button>
+                  {isCustom && (
+                    <button
+                      onClick={() => resetSound(key)}
+                      className="px-3 py-1 border border-stone-800 text-stone-500 text-[9px] uppercase tracking-wider hover:text-amber-500">
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Reset all */}
+        {Object.keys(HERO_SOUNDS).some(k => HERO_SAMPLES[k]) && (
+          <button onClick={resetAll}
+            className="w-full py-2 border border-stone-800 text-stone-500 text-[10px] uppercase tracking-widest hover:text-red-400 hover:border-red-700">
+            Reset all sounds to default
+          </button>
+        )}
+
+        {/* Recovery: if UI looks stuck, force-reset everything */}
+        {recordingKey && (
+          <button onClick={() => { abortRecording(); resetRecordingState(); }}
+            className="w-full py-1 border border-stone-800 text-stone-600 text-[9px] uppercase tracking-widest hover:text-stone-300">
+            Stuck? Tap to reset recording state
+          </button>
+        )}
+
+        <div className="text-[9px] uppercase tracking-wider text-stone-600 leading-relaxed pt-2 border-t border-stone-800">
+          Tip: tap REC, wait for "WAITING FOR SOUND", then make the sound clearly. Recording auto-stops on silence.
+        </div>
+      </div>
+    </Panel>
+  );
+};
+
+
+// ---------- JAM ANIMATION ----------
+// A cypher: 4 beatboxers in a circle. The "active" one (whose turn it is) bobs and emits sounds.
+// Active beatboxer rotates through positions over time. Crowd silhouettes behind. Hands raised in time.
+const JamAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = true }) => {
+  const canvasRef = useRef(null);
+  const PXSCALE = 4;
+  const W = 140, H = 90;
+  const propsRef = useRef({ color, block, active });
+  useEffect(() => { propsRef.current = { color, block, active }; }, [color, block, active]);
+
+  const lastRewardRef = useRef(0);
+  const sparklesRef = useRef([]); // sparkles fly out on reward
+
+  useEffect(() => {
+    if (rewardKey > lastRewardRef.current) {
+      lastRewardRef.current = rewardKey;
+      for (let i = 0; i < 8; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        sparklesRef.current.push({
+          x: W / 2,
+          y: H / 2,
+          vx: Math.cos(angle) * (1 + Math.random()),
+          vy: Math.sin(angle) * (1 + Math.random()) - 0.5,
+          life: 0,
+          ttl: 30 + Math.random() * 20,
+          color: ['#D4A017', '#C8DCEF', '#fb7185', '#a78bfa'][Math.floor(Math.random() * 4)],
+        });
+      }
+    }
+  }, [rewardKey]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf, frameCount = 0;
+
+    // Cypher members - positioned roughly in an oval for perspective
+    // Player is always one of them (front-center, your color). Others are randomized.
+    const members = [
+      { x: 70, y: 64, scale: 1.0, color: 'PLAYER', name: 'you' },     // front center (player)
+      { x: 30, y: 56, scale: 0.85, color: '#84cc16', name: 'left' },  // back left
+      { x: 110, y: 56, scale: 0.85, color: '#fb7185', name: 'right' }, // back right
+      { x: 70, y: 50, scale: 0.75, color: '#a78bfa', name: 'back' },   // far back
+    ];
+
+    const draw = () => {
+      frameCount++;
+      const { color, block, active } = propsRef.current;
+
+      if (canvas.width !== W * PXSCALE || canvas.height !== H * PXSCALE) {
+        canvas.width = W * PXSCALE;
+        canvas.height = H * PXSCALE;
+        ctx.imageSmoothingEnabled = false;
+      }
+      const px = (x, y, w, h, c) => _px(ctx, x, y, w, h, c);
+
+      ctx.save();
+      ctx.scale(PXSCALE, PXSCALE);
+
+      // night sky
+      px(0, 0, W, 50, '#1a1428');
+      // stars
+      for (let i = 0; i < 12; i++) {
+        const sx = (i * 17 + 7) % W;
+        const sy = (i * 11) % 30 + 4;
+        const twinkle = Math.sin(frameCount * 0.05 + i) > 0.5 ? '#fef3c7' : '#a89060';
+        px(sx, sy, 1, 1, twinkle);
+      }
+      // moon
+      px(115, 10, 8, 8, '#fef3c7');
+      px(116, 10, 6, 6, '#fef3c7');
+      px(118, 11, 3, 3, '#0c0a09'); // crescent shadow
+
+      // crowd silhouette in background (behind cypher)
+      const crowdY = 42;
+      for (let i = 0; i < 18; i++) {
+        const cx = i * 8 + (i % 2) * 2;
+        const headBob = Math.sin(frameCount * 0.1 + i * 0.5) * 0.5;
+        // head
+        px(cx, crowdY + headBob, 4, 4, '#0a0a0a');
+        // body
+        px(cx - 1, crowdY + 4 + headBob, 6, 8, '#0a0a0a');
+        // raised arms (some)
+        if (i % 3 === 0) {
+          const armUp = Math.sin(frameCount * 0.15 + i) > 0;
+          if (armUp) {
+            px(cx - 2, crowdY + 1 + headBob, 1, 4, '#0a0a0a');
+            px(cx + 5, crowdY + 1 + headBob, 1, 4, '#0a0a0a');
+          }
+        }
+      }
+
+      // ground - dim concrete circle for the cypher
+      px(0, 50, W, 40, '#2a2520');
+      // cypher floor circle outline
+      ctx.strokeStyle = '#3a3530';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(70, 70, 50, 16, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Determine whose turn it is - rotates every ~5 seconds (300 frames at 60fps)
+      const turnIndex = Math.floor(frameCount / 240) % members.length;
+
+      // Sort members by y for depth (back to front)
+      const sortedIdx = [...members.keys()].sort((a, b) => members[a].y - members[b].y);
+
+      // Draw each member
+      sortedIdx.forEach(idx => {
+        const m = members[idx];
+        const isActive = idx === turnIndex && active;
+        const memberColor = m.color === 'PLAYER' ? color : m.color;
+        const s = m.scale;
+
+        const cx = m.x, cy = m.y + 12; // feet position
+        const charH = Math.floor(20 * s);
+        const charW = Math.floor(8 * s);
+
+        // shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(cx - charW / 2, cy + 1, charW, 1);
+
+        const bob = isActive ? Math.floor(frameCount / 5) % 2 : 0;
+
+        // legs
+        px(cx - 2, cy - 5 - bob, 1, 5, '#1a1a2e');
+        px(cx + 1, cy - 5 + bob, 1, 5, '#1a1a2e');
+        // shoes
+        px(cx - 2, cy - 1, 1, 1, '#fff');
+        px(cx + 1, cy - 1, 1, 1, '#fff');
+
+        // body
+        const bodyH = Math.floor(7 * s);
+        const bodyW = Math.floor(6 * s);
+        px(cx - bodyW / 2, cy - 5 - bodyH, bodyW, bodyH, memberColor);
+        // hood
+        const hoodH = Math.floor(4 * s);
+        px(cx - bodyW / 2, cy - 5 - bodyH - hoodH, bodyW, hoodH, memberColor);
+        // head
+        const headSize = Math.floor(5 * s);
+        px(cx - headSize / 2, cy - 5 - bodyH - headSize, headSize, headSize, '#d4a87a');
+
+        // mic if active
+        if (isActive) {
+          // arm up holding mic
+          px(cx + bodyW / 2, cy - 5 - bodyH + 1, 1, 2, memberColor);
+          px(cx + bodyW / 2 + 1, cy - 5 - bodyH - 2, 1, 2, '#d4a87a');
+          // mic
+          px(cx + bodyW / 2 + 2, cy - 5 - bodyH - 3, 2, 2, '#888');
+          // open mouth (animated)
+          const mouthOpen = Math.floor(frameCount / 4) % 2;
+          if (mouthOpen) {
+            px(cx - 1, cy - 5 - bodyH - 1, 2, 1, '#3a1010');
+          }
+        }
+      });
+
+      // Soundwaves from active member
+      if (active) {
+        const activeMember = members[turnIndex];
+        const ax = activeMember.x;
+        const ay = activeMember.y - 4;
+        for (let i = 0; i < 3; i++) {
+          const phase = (frameCount * 0.04 + i * 0.33) % 1;
+          const radius = phase * 25;
+          const opacity = (1 - phase) * 0.6;
+          ctx.strokeStyle = `rgba(212, 160, 23, ${opacity})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(ax, ay, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      // Sparkles (reward burst)
+      sparklesRef.current = sparklesRef.current.filter(s => {
+        s.life++;
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.05;
+        const opacity = 1 - s.life / s.ttl;
+        ctx.fillStyle = s.color;
+        ctx.globalAlpha = opacity;
+        ctx.fillRect(Math.floor(s.x), Math.floor(s.y), 2, 2);
+        ctx.globalAlpha = 1;
+        return s.life < s.ttl;
+      });
+
+      // "WHOSE TURN" indicator
+      if (active) {
+        const turnNames = ['YOU', 'L1', 'R1', 'B1'];
+        ctx.fillStyle = '#D4A017';
+        ctx.font = 'bold 6px monospace';
+        ctx.fillText(`▶ ${turnNames[turnIndex]}`, 4, 87);
+      }
+
+      ctx.restore();
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <canvas ref={canvasRef}
+      className="w-full block border-2 border-stone-800"
+      style={{ imageRendering: 'pixelated', background: '#0a0815', aspectRatio: `${W} / ${H}` }} />
+  );
+};
+
+// ---------- RUN ANIMATION ----------
+// Side-scrolling park: character jogs in place, world scrolls past (parallax trees).
+const RunAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = true }) => {
+  const canvasRef = useRef(null);
+  const PXSCALE = 4;
+  const W = 140, H = 90;
+  const propsRef = useRef({ color, block, active });
+  useEffect(() => { propsRef.current = { color, block, active }; }, [color, block, active]);
+
+  const lastRewardRef = useRef(0);
+  const sweatRef = useRef([]);
+
+  useEffect(() => {
+    if (rewardKey > lastRewardRef.current) {
+      lastRewardRef.current = rewardKey;
+      // Spawn a "+1!" floating text
+    }
+  }, [rewardKey]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf, frameCount = 0;
+    let scrollX = 0; // ground scroll
+    let scrollX2 = 0; // far parallax
+
+    const draw = () => {
+      frameCount++;
+      const { color, block, active } = propsRef.current;
+      const speed = active ? 1.5 : 0;
+
+      if (canvas.width !== W * PXSCALE || canvas.height !== H * PXSCALE) {
+        canvas.width = W * PXSCALE;
+        canvas.height = H * PXSCALE;
+        ctx.imageSmoothingEnabled = false;
+      }
+      const px = (x, y, w, h, c) => _px(ctx, x, y, w, h, c);
+
+      ctx.save();
+      ctx.scale(PXSCALE, PXSCALE);
+
+      // sky gradient (manual, for pixel feel)
+      px(0, 0, W, 25, '#fde8a8');  // peach
+      px(0, 25, W, 15, '#f5b070');  // amber
+      px(0, 40, W, 15, '#9b6a8e');  // purple-pink
+
+      // sun
+      const sunX = 95;
+      const sunY = 20;
+      px(sunX - 6, sunY - 6, 12, 12, '#fde0b0');
+      px(sunX - 5, sunY - 5, 10, 10, '#fef3c7');
+      px(sunX - 4, sunY - 4, 8, 8, '#ffd070');
+      px(sunX - 3, sunY - 3, 6, 6, '#ffb050');
+
+      scrollX2 -= speed * 0.3;
+      // distant mountains (slow parallax)
+      ctx.fillStyle = '#5a4868';
+      for (let i = 0; i < 6; i++) {
+        const mx = ((i * 30 + scrollX2) % (W + 30)) - 15;
+        const my = 38;
+        ctx.beginPath();
+        ctx.moveTo(mx, my + 10);
+        ctx.lineTo(mx + 15, my);
+        ctx.lineTo(mx + 30, my + 10);
+        ctx.fill();
+      }
+
+      // mid layer trees (medium parallax)
+      scrollX -= speed;
+      const treePositions = [0, 28, 55, 82, 110, 140, 168];
+      treePositions.forEach((tp, i) => {
+        const tx = ((tp + scrollX) % (W + 28)) - 14;
+        const ty = 48;
+        // trunk
+        px(tx + 4, ty + 8, 3, 8, '#3a2818');
+        // leaves (round-ish blob)
+        px(tx, ty - 2, 11, 11, '#2a5028');
+        px(tx + 1, ty - 4, 9, 4, '#2a5028');
+        px(tx - 1, ty + 1, 13, 5, '#2a5028');
+        // highlights
+        px(tx + 2, ty - 1, 3, 3, '#3a6a38');
+      });
+
+      // path / ground
+      px(0, 60, W, 30, '#7a5a30');
+      px(0, 60, W, 1, '#9a7a48');
+
+      // path lines (perspective lines moving toward viewer to suggest motion)
+      ctx.fillStyle = '#5a4020';
+      const lineSpacing = 12;
+      for (let i = 0; i < 6; i++) {
+        const lx = ((i * lineSpacing + scrollX) % (lineSpacing * 6)) - 4;
+        if (lx > -4 && lx < W) {
+          ctx.fillRect(Math.floor(lx), 80, 4, 2);
+        }
+      }
+
+      // foreground grass tufts (fast parallax)
+      const grassPositions = [10, 35, 55, 80, 100, 125, 145];
+      grassPositions.forEach((gp, i) => {
+        const gx = ((gp + scrollX * 1.5) % (W + 20)) - 10;
+        const gy = 86;
+        px(gx, gy, 1, 3, '#4a7028');
+        px(gx + 1, gy + 1, 1, 2, '#4a7028');
+        px(gx - 1, gy + 1, 1, 2, '#4a7028');
+        px(gx + 2, gy + 1, 1, 2, '#5a8038');
+      });
+
+      // RUNNER - center, bobbing in place
+      const runX = 50;
+      const runY = 70;
+      const runFrame = active ? Math.floor(frameCount / 4) % 4 : 0; // 4-frame run cycle
+      const bob = active ? (runFrame % 2 === 0 ? 0 : -1) : 0;
+
+      // shadow (oscillates with run)
+      ctx.fillStyle = `rgba(0,0,0,${0.4 + (runFrame === 0 || runFrame === 2 ? 0 : 0.1)})`;
+      ctx.fillRect(runX - 5, runY + 8, 10, 1);
+
+      // legs - 4 frame run cycle
+      // Legs swing forward/back
+      if (runFrame === 0) {
+        // mid stride 1
+        px(runX - 3, runY, 2, 6, '#1a1a2e'); // back leg
+        px(runX + 1, runY, 2, 6, '#1a1a2e'); // front leg
+        px(runX - 3, runY + 6, 2, 1, '#fff');
+        px(runX + 1, runY + 6, 2, 1, '#fff');
+      } else if (runFrame === 1) {
+        // right leg back, left leg forward
+        px(runX - 4, runY, 3, 5, '#1a1a2e');
+        px(runX + 2, runY, 3, 4, '#1a1a2e');
+        px(runX - 4, runY + 5, 3, 1, '#fff');
+        px(runX + 2, runY + 4, 3, 1, '#fff');
+      } else if (runFrame === 2) {
+        // mid stride 2
+        px(runX - 3, runY, 2, 6, '#1a1a2e');
+        px(runX + 1, runY, 2, 6, '#1a1a2e');
+        px(runX - 3, runY + 6, 2, 1, '#fff');
+        px(runX + 1, runY + 6, 2, 1, '#fff');
+      } else {
+        // left leg back, right leg forward
+        px(runX - 4, runY, 3, 4, '#1a1a2e');
+        px(runX + 2, runY, 3, 5, '#1a1a2e');
+        px(runX - 4, runY + 4, 3, 1, '#fff');
+        px(runX + 2, runY + 5, 3, 1, '#fff');
+      }
+
+      // body
+      px(runX - 4, runY - 8 + bob, 8, 8, color);
+      px(runX - 4, runY - 8 + bob, 8, 1, '#fff');
+
+      // arms swinging (alternates with legs)
+      if (runFrame === 1 || runFrame === 0) {
+        // left arm forward, right arm back
+        px(runX + 4, runY - 7 + bob, 2, 5, color);
+        px(runX + 5, runY - 3 + bob, 2, 1, '#d4a87a');
+        px(runX - 6, runY - 5 + bob, 2, 4, color);
+        px(runX - 6, runY - 1 + bob, 2, 1, '#d4a87a');
+      } else {
+        // right arm forward
+        px(runX - 6, runY - 7 + bob, 2, 5, color);
+        px(runX - 7, runY - 3 + bob, 2, 1, '#d4a87a');
+        px(runX + 4, runY - 5 + bob, 2, 4, color);
+        px(runX + 4, runY - 1 + bob, 2, 1, '#d4a87a');
+      }
+
+      // head
+      px(runX - 3, runY - 14 + bob, 6, 6, '#d4a87a');
+      // hair / cap (forward-leaning)
+      px(runX - 3, runY - 15 + bob, 6, 2, '#1a1a2e');
+      px(runX + 2, runY - 14 + bob, 2, 1, '#1a1a2e'); // hair flopping in wind
+      // eyes (looking forward, focused)
+      px(runX - 1, runY - 12 + bob, 1, 1, '#1a1a2e');
+      px(runX + 1, runY - 12 + bob, 1, 1, '#1a1a2e');
+      // mouth (slight 'o' for breathing)
+      px(runX, runY - 10 + bob, 1, 1, '#5a2020');
+
+      // sweat drops (occasional)
+      if (active && frameCount % 30 === 0) {
+        sweatRef.current.push({ x: runX - 6, y: runY - 14, vx: -0.3, vy: 0.1, life: 0 });
+      }
+      sweatRef.current = sweatRef.current.filter(s => {
+        s.life++;
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.05;
+        px(s.x, s.y, 1, 2, '#88c0d0');
+        return s.life < 30;
+      });
+
+      // motion lines behind runner
+      if (active) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+          const lineX = runX - 12 - i * 4 - (frameCount % 8);
+          ctx.beginPath();
+          ctx.moveTo(lineX, runY - 5 + i * 3);
+          ctx.lineTo(lineX - 5, runY - 5 + i * 3);
+          ctx.stroke();
+        }
+      }
+
+      // Distance counter (small UI inside scene)
+      if (active) {
+        const km = (lastRewardRef.current * 0.5 + (block * 0.1)).toFixed(1);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 6px monospace';
+        ctx.fillText(`${km}KM`, 4, 9);
+      }
+
+      ctx.restore();
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <canvas ref={canvasRef}
+      className="w-full block border-2 border-stone-800"
+      style={{ imageRendering: 'pixelated', background: '#fde8a8', aspectRatio: `${W} / ${H}` }} />
+  );
+};
+
+// ---------- PIXEL ICON ----------
+// Tiny 16x16 icons rendered on canvas. Used in menu lists.
+// Each kind is a hand-coded sprite.
+
+const PIXEL_ICONS = {
+  mic: (px) => {
+    // microphone
+    px(7, 2, 4, 1, '#999');
+    px(6, 3, 6, 5, '#bbb');
+    px(7, 3, 4, 5, '#888');
+    px(7, 4, 1, 1, '#fff');
+    px(8, 8, 2, 1, '#666');
+    px(8, 9, 2, 4, '#999');
+    px(6, 13, 6, 1, '#666');
+  },
+  jam: (px) => {
+    // 2 figures with sound waves between them (clearer cypher icon)
+    // Left figure
+    px(3, 5, 3, 4, '#D4A017');
+    px(4, 3, 1, 2, '#d4a87a'); // head
+    px(3, 9, 1, 3, '#1a1a2e'); // legs
+    px(5, 9, 1, 3, '#1a1a2e');
+    // Right figure
+    px(10, 5, 3, 4, '#fb7185');
+    px(11, 3, 1, 2, '#d4a87a'); // head
+    px(10, 9, 1, 3, '#1a1a2e'); // legs
+    px(12, 9, 1, 3, '#1a1a2e');
+    // Sound burst between them
+    px(7, 6, 2, 2, '#fef3c7');
+    px(7, 5, 1, 1, '#D4A017');
+    px(8, 5, 1, 1, '#D4A017');
+    px(7, 8, 1, 1, '#D4A017');
+    px(8, 8, 1, 1, '#D4A017');
+    // ground
+    px(2, 12, 12, 1, '#3a3a3a');
+  },
+  shoe: (px) => {
+    // running shoe
+    px(2, 9, 12, 3, '#D4A017');
+    px(3, 8, 8, 1, '#fff');
+    px(4, 7, 6, 1, '#fff');
+    px(11, 9, 1, 1, '#888'); // sole detail
+    px(2, 12, 12, 1, '#444'); // sole
+    px(5, 9, 1, 1, '#666'); // lace
+    px(7, 9, 1, 1, '#666');
+    px(9, 9, 1, 1, '#666');
+  },
+  fridge: (px) => {
+    // refrigerator
+    px(4, 2, 8, 12, '#e5e5e5');
+    px(4, 7, 8, 1, '#888'); // door split
+    px(10, 4, 1, 2, '#666'); // upper handle
+    px(10, 9, 1, 3, '#666'); // lower handle
+    px(5, 3, 2, 1, '#D4A017'); // sticker
+  },
+  pc: (px) => {
+    // monitor
+    px(2, 3, 12, 8, '#1a1a2e');
+    px(3, 4, 10, 6, '#3a5a8a');
+    px(4, 5, 2, 1, '#D4A017'); // waveform on screen
+    px(7, 5, 1, 2, '#D4A017');
+    px(10, 5, 2, 1, '#D4A017');
+    px(7, 11, 2, 1, '#666'); // stand
+    px(5, 13, 6, 1, '#666'); // base
+  },
+  couch: (px) => {
+    // couch profile
+    px(2, 7, 12, 5, '#7a3030');
+    px(2, 6, 12, 1, '#9a4040');
+    px(3, 8, 3, 3, '#5a2020'); // cushion
+    px(7, 8, 3, 3, '#5a2020');
+    px(11, 8, 2, 3, '#5a2020');
+    px(2, 12, 1, 1, '#3a1010'); // legs
+    px(13, 12, 1, 1, '#3a1010');
+    px(2, 4, 2, 4, '#5a2020'); // arm rest
+  },
+  star: (px) => {
+    // 4-point star
+    px(7, 2, 2, 12, '#D4A017');
+    px(2, 7, 12, 2, '#D4A017');
+    px(6, 3, 4, 10, '#fef3c7');
+    px(3, 6, 10, 4, '#fef3c7');
+    px(7, 7, 2, 2, '#D4A017');
+  },
+  fist: (px) => {
+    // raised fist
+    px(5, 4, 6, 4, '#d4a87a');
+    px(5, 3, 6, 1, '#a87858');
+    px(4, 5, 1, 3, '#a87858');
+    px(11, 5, 1, 3, '#a87858');
+    px(5, 8, 6, 6, '#d4a87a');
+    px(5, 8, 6, 1, '#a87858');
+    px(5, 9, 1, 1, '#a87858');
+    px(7, 6, 1, 1, '#1a1a2e'); // knuckle dots
+    px(9, 6, 1, 1, '#1a1a2e');
+  },
+  music: (px) => {
+    // music note
+    px(8, 2, 1, 9, '#D4A017');
+    px(9, 2, 3, 1, '#D4A017');
+    px(11, 3, 1, 4, '#D4A017');
+    px(5, 9, 4, 4, '#D4A017');
+    px(4, 10, 1, 2, '#D4A017');
+  },
+  sparkle: (px) => {
+    // diamond/sparkle
+    px(7, 2, 2, 1, '#a78bfa');
+    px(6, 3, 4, 1, '#c4b5fd');
+    px(5, 4, 6, 1, '#c4b5fd');
+    px(4, 5, 8, 1, '#a78bfa');
+    px(3, 6, 10, 4, '#a78bfa');
+    px(4, 10, 8, 1, '#a78bfa');
+    px(5, 11, 6, 1, '#7c3aed');
+    px(6, 12, 4, 1, '#7c3aed');
+    px(7, 13, 2, 1, '#5b21b6');
+    px(7, 5, 1, 1, '#fff'); // shine
+    px(7, 6, 1, 1, '#fff');
+  },
+  crown: (px) => {
+    // crown
+    px(2, 6, 12, 5, '#D4A017');
+    px(2, 5, 1, 1, '#D4A017');
+    px(7, 4, 2, 2, '#D4A017');
+    px(13, 5, 1, 1, '#D4A017');
+    px(2, 11, 12, 1, '#a87800');
+    px(2, 4, 1, 1, '#fef3c7');
+    px(7, 3, 2, 1, '#fef3c7');
+    px(13, 4, 1, 1, '#fef3c7');
+    px(4, 8, 1, 1, '#CC2200'); // gem
+    px(7, 8, 2, 1, '#22d3ee');
+    px(11, 8, 1, 1, '#CC2200');
+  },
+  zap: (px) => {
+    // lightning bolt
+    px(8, 2, 3, 3, '#D4A017');
+    px(7, 5, 3, 2, '#D4A017');
+    px(6, 7, 4, 1, '#fef3c7');
+    px(5, 8, 4, 2, '#D4A017');
+    px(4, 10, 4, 1, '#D4A017');
+    px(3, 11, 3, 3, '#D4A017');
+  },
+  beer: (px) => {
+    // beer mug
+    px(3, 4, 8, 1, '#fef3c7'); // foam
+    px(3, 3, 8, 1, '#fef3c7');
+    px(2, 4, 1, 1, '#fef3c7');
+    px(11, 4, 1, 1, '#fef3c7');
+    px(3, 5, 8, 8, '#f5b070');
+    px(3, 5, 1, 8, '#aa7050');
+    px(11, 5, 1, 1, '#aa7050');
+    px(11, 12, 1, 1, '#aa7050');
+    px(11, 6, 2, 6, '#aa7050'); // handle
+    px(13, 7, 1, 4, '#aa7050');
+    px(11, 7, 1, 4, '#f5b070');
+    px(3, 13, 8, 1, '#aa7050');
+  },
+  shop: (px) => {
+    // shopping bag
+    px(4, 5, 8, 9, '#C8DCEF');
+    px(4, 5, 8, 1, '#88abd0');
+    px(3, 6, 1, 7, '#88abd0');
+    px(12, 6, 1, 7, '#88abd0');
+    px(5, 3, 1, 2, '#88abd0'); // handles
+    px(10, 3, 1, 2, '#88abd0');
+    px(5, 2, 6, 1, '#88abd0');
+    px(7, 8, 2, 3, '#D4A017'); // tag
+  },
+  home: (px) => {
+    // house
+    px(7, 2, 2, 1, '#888'); // chimney
+    px(7, 3, 2, 2, '#666');
+    px(7, 3, 1, 6, '#7a3030'); // roof
+    px(8, 3, 1, 1, '#7a3030');
+    for (let i = 0; i < 7; i++) {
+      px(7 - i, 3 + i, 1, 1, '#7a3030');
+      px(8 + i, 3 + i, 1, 1, '#7a3030');
+    }
+    px(3, 9, 10, 5, '#D4A017');
+    px(3, 9, 10, 1, '#a87800');
+    px(7, 11, 2, 3, '#3a2818'); // door
+    px(5, 11, 1, 1, '#88abd0'); // window
+    px(11, 11, 1, 1, '#88abd0');
+  },
+  tree: (px) => {
+    // tree
+    px(7, 8, 2, 6, '#3a2818');
+    px(4, 4, 8, 5, '#2a5028');
+    px(5, 3, 6, 1, '#2a5028');
+    px(3, 5, 1, 3, '#2a5028');
+    px(12, 5, 1, 3, '#2a5028');
+    px(5, 5, 2, 2, '#3a6a38');
+    px(8, 6, 1, 1, '#3a6a38');
+  },
+  coffee: (px) => {
+    // coffee cup
+    px(4, 4, 7, 1, '#fff'); // steam
+    px(5, 3, 1, 1, '#aaa');
+    px(8, 3, 1, 1, '#aaa');
+    px(4, 5, 7, 8, '#a87858');
+    px(4, 5, 7, 1, '#3a1810'); // coffee top
+    px(4, 5, 1, 8, '#7a4830');
+    px(10, 5, 1, 8, '#7a4830');
+    px(11, 7, 2, 4, '#a87858'); // handle
+    px(12, 8, 1, 2, '#a87858');
+    px(11, 7, 1, 1, '#7a4830');
+    px(11, 10, 1, 1, '#7a4830');
+    px(4, 13, 7, 1, '#3a1810'); // saucer
+  },
+};
+
+const PixelIcon = ({ name, size = 16, className = '' }) => {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const pixelSize = size / 16;
+    canvas.width = size;
+    canvas.height = size;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, size, size);
+    const drawer = PIXEL_ICONS[name];
+    if (!drawer) {
+      // fallback: a simple square
+      ctx.fillStyle = '#666';
+      ctx.fillRect(2, 2, 12, 12);
+      return;
+    }
+    const px = (x, y, w, h, c) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(x * pixelSize, y * pixelSize, w * pixelSize, h * pixelSize);
+    };
+    drawer(px);
+  }, [name, size]);
+  return (
+    <canvas ref={canvasRef}
+      className={className}
+      width={size} height={size}
+      style={{ imageRendering: 'pixelated', width: size, height: size }} />
+  );
+};
+
+const ProgressBar = ({ block, total = 5, label, color = '#D4A017' }) => (
+  <div className="space-y-1">
+    {label && <div className="text-[10px] uppercase tracking-widest text-stone-500">{label}</div>}
+    <div className="flex gap-1">
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} className="flex-1 h-3 border border-stone-700 bg-stone-900 overflow-hidden">
+          <div className="h-full transition-all"
+            style={{ width: i < block ? '100%' : i === block ? '50%' : '0%', background: color }} />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ============ BATTLE LOGIC ============
+
+function runBattle(player, opponent) {
+  const log = [];
+  const playerSounds = player.equipped.map(id => SOUND_CATALOG[id]).filter(Boolean);
+  const oppSounds = opponent.sounds.map(id => SOUND_CATALOG[id]).filter(Boolean);
+
+  function performRound(name, stats, sounds, focus) {
+    let stamina = 100;
+    let score = 0;
+    const events = [];
+    const time = 15;
+    let elapsed = 0;
+    while (elapsed < time && stamina > 0) {
+      const usable = sounds.filter(s => s.stamina <= stamina);
+      if (usable.length === 0) break;
+      const s = usable[Math.floor(Math.random() * usable.length)];
+      const statKey = s.stat === 'musicality' ? 'mus' : s.stat === 'technicality' ? 'tec' : s.stat === 'originality' ? 'ori' : 'sho';
+      const mult = 1 + (stats[statKey] / 30);
+      const focusMult = 0.7 + (focus / 100) * 0.6;
+      const roll = 0.85 + Math.random() * 0.3;
+      const points = Math.round(s.base * mult * focusMult * roll);
+      score += points;
+      stamina -= s.stamina;
+      const speed = 1 - (stats.tec / 80);
+      elapsed += 1.2 * speed;
+      events.push({ name: s.name, points, time: elapsed.toFixed(1) });
+    }
+    return { score, events, stamina };
+  }
+
+  const playerStats = { ...player.stats };
+  const playerFocus = Math.min(100, player.mood + 20);
+  const oppStats = { mus: opponent.stats.mus, tec: opponent.stats.tec, ori: opponent.stats.ori, sho: opponent.stats.sho };
+
+  const r1 = performRound(player.name, playerStats, playerSounds, playerFocus);
+  const r2 = performRound(opponent.name, oppStats, oppSounds, 80);
+
+  const showmanshipBonusP = 1 + (playerStats.sho / 50);
+  const showmanshipBonusO = 1 + (oppStats.sho / 50);
+  const finalP = Math.round(r1.score * showmanshipBonusP);
+  const finalO = Math.round(r2.score * showmanshipBonusO);
+
+  const judgeVotes = JUDGES.map(j => {
+    let pScore = finalP, oScore = finalO;
+    if (j.bias === 'technicality') {
+      pScore = r1.events.filter(e => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name)]?.stat === 'technicality').reduce((a, e) => a + e.points, 0) || pScore * 0.6;
+      oScore = r2.events.filter(e => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name)]?.stat === 'technicality').reduce((a, e) => a + e.points, 0) || oScore * 0.6;
+    } else if (j.bias === 'musicality') {
+      pScore = finalP * (1 + playerStats.mus / 60);
+      oScore = finalO * (1 + oppStats.mus / 60);
+    } else if (j.bias === 'originality') {
+      const pUnique = new Set(r1.events.map(e => e.name)).size;
+      const oUnique = new Set(r2.events.map(e => e.name)).size;
+      pScore = finalP * (1 + pUnique / 10);
+      oScore = finalO * (1 + oUnique / 10);
+    } else if (j.bias === 'showmanship') {
+      pScore = finalP * showmanshipBonusP;
+      oScore = finalO * showmanshipBonusO;
+    } else {
+      pScore *= 0.8 + Math.random() * 0.6;
+      oScore *= 0.8 + Math.random() * 0.6;
+    }
+    return { judge: j, vote: pScore > oScore ? 'P' : 'O', pScore: Math.round(pScore), oScore: Math.round(oScore) };
+  });
+
+  const playerVotes = judgeVotes.filter(v => v.vote === 'P').length;
+  const won = playerVotes >= 3;
+
+  return { won, finalP, finalO, r1, r2, judgeVotes, playerVotes };
+}
+
+// ============ COMPONENTS ============
+
+const Bar = ({ value, max, color, icon: Icon, label }) => (
+  <div className="flex items-center gap-2">
+    {Icon && <Icon size={14} className="text-stone-400" />}
+    <div className="flex-1">
+      <div className="flex justify-between text-[10px] uppercase tracking-widest text-stone-500 mb-0.5">
+        <span>{label}</span>
+        <span>{Math.round(value)}/{max}</span>
+      </div>
+      <div className="h-2 bg-stone-900 border border-stone-800">
+        <div className="h-full transition-all" style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%`, background: color }} />
+      </div>
+    </div>
+  </div>
+);
+
+const Btn = ({ children, onClick, disabled, variant = 'default', className = '' }) => {
+  const styles = {
+    default: 'bg-stone-900 border-stone-700 hover:border-amber-500 text-stone-200',
+    primary: 'bg-amber-500 border-amber-600 hover:bg-amber-400 text-stone-950',
+    danger: 'bg-red-900 border-red-700 hover:bg-red-800 text-red-100',
+    ghost: 'bg-transparent border-stone-800 hover:border-stone-600 text-stone-400',
+  };
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className={`px-3 py-2 border-2 font-mono text-xs uppercase tracking-wider transition-all disabled:opacity-30 disabled:cursor-not-allowed ${styles[variant]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+const Panel = ({ children, title, className = '' }) => (
+  <div className={`bg-stone-950/80 border-2 border-stone-800 ${className}`}>
+    {title && <div className="border-b-2 border-stone-800 px-3 py-2 bg-stone-900/50">
+      <div className="text-amber-500 font-mono text-xs uppercase tracking-[0.2em]">{title}</div>
+    </div>}
+    <div className="p-3">{children}</div>
+  </div>
+);
+
+// ============ SLOTS SCREEN ============
+// Five save slots. User can switch between, create new, or delete characters.
+
+function SlotsScreen({ activeSlot, onSwitch, onDelete, onBack = null }) {
+  const [slots, setSlots] = useState(null); // array of (char | null)
+  const [confirmDelete, setConfirmDelete] = useState(null); // slot number being confirmed
+  const [confirmText, setConfirmText] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    loadAllSlots().then(setSlots);
+  }, [refreshKey]);
+
+  const handleDelete = async (n) => {
+    await onDelete(n);
+    setConfirmDelete(null);
+    setConfirmText('');
+    setRefreshKey(k => k + 1);
+  };
+
+  if (!slots) {
+    return (
+      <div className="text-center py-20 text-stone-500 uppercase tracking-widest text-xs">Loading…</div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pt-4">
+      <div className="text-center mb-2">
+        <div className="text-3xl tracking-widest text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          BEATBOXERS
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Pick a character or start fresh</div>
+      </div>
+
+      {slots.map((slot, idx) => {
+        const slotN = idx + 1;
+        const isActive = activeSlot === slotN;
+        const isFilled = slot && slot.created;
+        const isConfirming = confirmDelete === slotN;
+
+        return (
+          <div key={slotN}
+            className={`border-2 transition-all ${
+              isActive ? 'border-amber-500 bg-amber-500/5' :
+              isFilled ? 'border-stone-700 bg-stone-900/40' :
+              'border-stone-800 bg-stone-950/40 border-dashed'
+            }`}>
+            {!isConfirming ? (
+              <button onClick={() => onSwitch(slotN)}
+                className="w-full p-4 flex items-center gap-4 text-left hover:bg-stone-900/30 transition-all">
+                <div className="w-10 h-10 border-2 flex items-center justify-center text-sm font-mono"
+                  style={{
+                    borderColor: isFilled ? (slot.color || '#D4A017') : '#44403c',
+                    background: isFilled ? `${slot.color || '#D4A017'}22` : 'transparent',
+                    color: isFilled ? (slot.color || '#D4A017') : '#57534e',
+                  }}>
+                  {slotN}
+                </div>
+                <div className="flex-1">
+                  {isFilled ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <div className="text-stone-100 text-base tracking-wider"
+                          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                          {slot.name || 'UNNAMED'}
+                        </div>
+                        {isActive && (
+                          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-amber-500 text-stone-950 font-bold">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-0.5">
+                        Lvl {slot.level || 1} · Day {slot.day || 1} · ${slot.cash || 0} · {slot.followers || 0} fans
+                      </div>
+                      <div className="text-[10px] text-stone-600 uppercase tracking-wider mt-0.5">
+                        Mus {slot.stats?.mus || 0} · Tec {slot.stats?.tec || 0} · Ori {slot.stats?.ori || 0} · Sho {slot.stats?.sho || 0}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-stone-500 text-sm tracking-wider"
+                        style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                        EMPTY SLOT
+                      </div>
+                      <div className="text-[10px] text-stone-600 uppercase tracking-wider mt-0.5">
+                        Tap to create new character
+                      </div>
+                    </>
+                  )}
+                </div>
+                {isFilled && !isActive && (
+                  <span className="text-stone-600 text-[10px] uppercase tracking-wider">Switch →</span>
+                )}
+                {isFilled && isActive && (
+                  <span className="text-amber-500 text-[10px] uppercase tracking-wider">Continue →</span>
+                )}
+                {!isFilled && (
+                  <span className="text-stone-600 text-2xl">+</span>
+                )}
+              </button>
+            ) : (
+              // Delete confirmation state — must type DELETE
+              <div className="p-4 space-y-3">
+                <div className="text-red-400 text-sm uppercase tracking-widest">⚠ Delete {slot.name}?</div>
+                <div className="text-[11px] text-stone-400">
+                  This will permanently erase this character. Type <span className="text-red-400 font-mono font-bold">DELETE</span> below to confirm:
+                </div>
+                <input
+                  type="text"
+                  value={confirmText}
+                  onChange={e => setConfirmText(e.target.value)}
+                  placeholder="Type DELETE"
+                  autoFocus
+                  className="w-full px-3 py-2 bg-stone-950 border-2 border-red-900 text-stone-200 font-mono text-sm placeholder-stone-700 focus:border-red-500 outline-none uppercase tracking-wider"
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => { setConfirmDelete(null); setConfirmText(''); }}
+                    className="flex-1 py-2 border-2 border-stone-700 text-stone-400 text-[11px] uppercase tracking-widest hover:border-stone-500">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDelete(slotN)}
+                    disabled={confirmText !== 'DELETE'}
+                    className="flex-1 py-2 border-2 border-red-700 bg-red-900/30 text-red-300 text-[11px] uppercase tracking-widest hover:bg-red-900/50 disabled:opacity-30 disabled:cursor-not-allowed">
+                    Delete forever
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Delete trigger - only show on filled non-confirming slots */}
+            {isFilled && !isConfirming && (
+              <button onClick={() => setConfirmDelete(slotN)}
+                className="w-full px-4 py-1.5 border-t border-stone-800 text-[10px] text-stone-600 hover:text-red-400 uppercase tracking-widest transition-colors text-right">
+                🗑 Delete
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {onBack && (
+        <button onClick={onBack}
+          className="w-full mt-4 py-2 border-2 border-stone-800 text-stone-500 text-[11px] uppercase tracking-widest hover:border-stone-600">
+          ← Back to game
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ============ MAIN APP ============
+
+export default function BeatboxStory() {
+  const [char, setChar] = useState(null);
+  const [screen, setScreen] = useState('loading');
+  const [loaded, setLoaded] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [activeSlot, setActiveSlotState] = useState(null); // 1..5, null if none
+
+  // Apply migrations to a loaded character object (handles old saves missing new fields)
+  const migrateChar = (c) => {
+    if (!c) return c;
+    if (typeof c.minutes !== 'number') c.minutes = 0;
+    if (c.voiceRange === undefined) c.voiceRange = null;
+    if (c.voiceRangeMidi === undefined) c.voiceRangeMidi = null;
+    if (typeof c.maxEnergy !== 'number') c.maxEnergy = 100;
+    if (typeof c.tecLessonsCompleted !== 'number') c.tecLessonsCompleted = 0; // 0 = none completed yet, only lesson 1 unlocked
+    if (typeof c.tecCurrentLesson !== 'number') c.tecCurrentLesson = 0; // index into curriculum
+    if (typeof c.tecBpm !== 'number') c.tecBpm = 90;
+    return c;
+  };
+
+  // On mount: migrate legacy save, find active slot, load it (or show slots picker)
+  useEffect(() => {
+    (async () => {
+      await migrateLegacy();
+      const slot = await getActiveSlot();
+      if (slot) {
+        const c = await loadSlot(slot);
+        if (c && c.created) {
+          setChar(migrateChar(c));
+          setActiveSlotState(slot);
+          await loadSamplesForSlot(slot);
+          setScreen('hood');
+          setLoaded(true);
+          return;
+        }
+      }
+      // No active slot or it's empty — show the slots picker
+      setScreen('slots');
+      setLoaded(true);
+    })();
+  }, []);
+
+  // Save the active slot whenever char changes (post-load).
+  useEffect(() => {
+    if (char && char.created && loaded && activeSlot) saveSlot(activeSlot, char);
+  }, [char, loaded, activeSlot]);
+
+  // Switch to a different character slot (or to a new one)
+  const switchToSlot = async (n) => {
+    const c = await loadSlot(n);
+    if (c && c.created) {
+      setChar(migrateChar(c));
+      setActiveSlotState(n);
+      await setActiveSlot(n);
+      await loadSamplesForSlot(n); // load that character's custom samples
+      setScreen('hood');
+    } else {
+      // Empty slot → new character creation flow targeted at this slot
+      setChar(initialChar());
+      setActiveSlotState(n);
+      await setActiveSlot(n);
+      await loadSamplesForSlot(n); // (will be empty, falls back to synth)
+      setScreen('create');
+    }
+  };
+
+  // Delete a slot. Only the active char is rendered, so if active is deleted we go back to picker.
+  const deleteSlotAt = async (n) => {
+    await deleteSlot(n);
+    if (activeSlot === n) {
+      setChar(null);
+      setActiveSlotState(null);
+      setScreen('slots');
+    }
+  };
+
+  const showToast = (msg, type = 'info') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2200);
+  };
+
+  const update = (patch) => setChar(c => ({ ...c, ...patch }));
+  const updateStats = (patch) => setChar(c => ({ ...c, stats: { ...c.stats, ...patch } }));
+
+  const passTime = (energyCost = 0) => {
+    setChar(c => ({
+      ...c,
+      energy: Math.max(0, c.energy - energyCost),
+      hunger: Math.max(0, c.hunger - 5),
+      mood: Math.max(0, c.mood - 2),
+    }));
+  };
+
+  const checkLevelUp = (c) => {
+    const need = c.level * 100;
+    if (c.xp >= need) {
+      showToast(`LEVEL UP! → ${c.level + 1}`, 'win');
+      return { ...c, level: c.level + 1, xp: c.xp - need };
+    }
+    return c;
+  };
+
+  if (!loaded) {
+    return <div className="min-h-screen bg-stone-950 flex items-center justify-center text-amber-500 font-mono">LOADING...</div>;
+  }
+
+  // The slots screen renders without an active character
+  if (screen === 'slots' && !char) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-200 font-mono">
+        <div className="max-w-md mx-auto min-h-screen border-x border-stone-900 p-3">
+          <SlotsScreen
+            activeSlot={activeSlot}
+            onSwitch={switchToSlot}
+            onDelete={deleteSlotAt}
+            onBack={null}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (!char) {
+    return <div className="min-h-screen bg-stone-950 flex items-center justify-center text-amber-500 font-mono">LOADING...</div>;
+  }
+
+  const palette = TIME_PALETTES[timeOfDay(char?.minutes ?? 0)];
+
+  return (
+    <div className="min-h-screen text-stone-200 font-mono transition-colors duration-1000"
+      style={{
+        background: palette.bg,
+        backgroundImage: `radial-gradient(circle at 20% 10%, ${palette.glow} 0%, transparent 50%),
+                          radial-gradient(circle at 80% 80%, rgba(204,34,0,0.06) 0%, transparent 50%),
+                          repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px)`
+      }}>
+      <div className="max-w-md mx-auto min-h-screen border-x border-stone-900 relative">
+
+        {/* HEADER */}
+        {char && char.created && screen !== 'slots' && (
+          <div className="sticky top-0 z-20 bg-stone-950/95 backdrop-blur border-b-2 border-stone-800">
+            <div className="px-3 py-2 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] uppercase tracking-[0.3em] text-stone-500">Day {char.day}</span>
+                  <Clock minutes={char.minutes ?? 0} day={char.day} />
+                </div>
+                <div className="text-amber-500 font-bold tracking-wider text-sm" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                  {char.name.toUpperCase()} <span className="text-stone-500">·</span> LVL {char.level}
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="text-right">
+                  <div className="text-amber-400 font-bold text-sm">${char.cash}</div>
+                  <div className="text-[9px] text-stone-500 uppercase tracking-widest">{char.followers} fans</div>
+                </div>
+                <button
+                  onClick={() => setScreen('slots')}
+                  aria-label="Profiles & save slots"
+                  title="Profiles & save slots"
+                  className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-amber-500 border border-stone-800 hover:border-amber-500/50 transition-all">
+                  ⚙
+                </button>
+              </div>
+            </div>
+            <div className="px-3 pb-2 grid grid-cols-3 gap-2">
+              <Bar value={char.energy} max={char.maxEnergy ?? 100} color="#D4A017" icon={Zap} label="Energy" />
+              <Bar value={char.hunger} max={100} color="#84cc16" icon={Coffee} label="Fed" />
+              <Bar value={char.mood} max={100} color="#C8DCEF" icon={Heart} label="Mood" />
+            </div>
+            <div className="px-3 pb-2">
+              <div className="h-1 bg-stone-900">
+                <div className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all"
+                  style={{ width: `${(char.xp / (char.level * 100)) * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TOAST */}
+        {toast && (
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs">
+            <div className={`px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider ${
+              toast.type === 'win' ? 'bg-amber-500 border-amber-600 text-stone-950' :
+              toast.type === 'bad' ? 'bg-red-900 border-red-700 text-red-100' :
+              'bg-stone-900 border-stone-700 text-stone-200'
+            }`}>{toast.msg}</div>
+          </div>
+        )}
+
+        {/* SCREENS */}
+        <div className="p-3 pb-20">
+          {screen === 'slots' && (
+            <SlotsScreen
+              activeSlot={activeSlot}
+              onSwitch={switchToSlot}
+              onDelete={deleteSlotAt}
+              onBack={char && char.created && activeSlot ? () => setScreen('hood') : null}
+            />
+          )}
+          {screen === 'create' && <CreateScreen char={char} setChar={setChar} onDone={() => { setChar(c => ({ ...c, created: true })); setScreen('hood'); }} />}
+          {screen === 'hood' && <HoodScreen go={setScreen} char={char} />}
+          {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} />}
+          {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
+          {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} />}
+          {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} />}
+          {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
+        </div>
+
+        {/* FOOTER NAV */}
+        {char && char.created && screen !== 'battle' && screen !== 'create' && screen !== 'slots' && (
+          <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-stone-950 border-t-2 border-stone-800 z-20">
+            <div className="grid grid-cols-5 text-[10px]">
+              {[
+                { id: 'house', label: 'HOUSE', Icon: Home },
+                { id: 'park', label: 'PARK', Icon: TreePine },
+                { id: 'hood', label: 'HOOD', Icon: Music },
+                { id: 'shop', label: 'SHOP', Icon: ShoppingBag },
+                { id: 'bar', label: 'BAR', Icon: Beer },
+              ].map(t => (
+                <button key={t.id} onClick={() => setScreen(t.id)}
+                  className={`py-3 flex flex-col items-center gap-1 border-r border-stone-900 last:border-r-0 transition-all ${
+                    screen === t.id ? 'text-amber-500 bg-stone-900/50' : 'text-stone-500 hover:text-stone-300'
+                  }`}>
+                  <t.Icon size={16} />
+                  <span className="tracking-widest">{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============ SCREEN: CREATE ============
+
+function CreateScreen({ char, setChar, onDone }) {
+  const [name, setName] = useState('');
+  const colors = ['#D4A017', '#CC2200', '#C8DCEF', '#84cc16', '#a78bfa', '#fb7185'];
+  const [color, setColor] = useState(colors[0]);
+
+  return (
+    <div className="space-y-6 pt-12">
+      <div className="text-center">
+        <div className="text-amber-500 text-5xl tracking-tighter font-black" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif', letterSpacing: '-0.02em' }}>
+          BEATBOX
+        </div>
+        <div className="text-stone-300 text-3xl tracking-widest font-light -mt-2" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          STORY
+        </div>
+        <div className="mt-2 text-[10px] uppercase tracking-[0.3em] text-stone-500">From bedroom to world champion</div>
+      </div>
+
+      <div className="flex justify-center">
+        <div className="w-32 h-32 border-4 border-stone-700 flex items-center justify-center text-7xl"
+          style={{ background: `radial-gradient(circle, ${color}33 0%, transparent 70%)` }}>
+          <Mic size={64} style={{ color }} />
+        </div>
+      </div>
+
+      <Panel title="Pick your color">
+        <div className="flex gap-2 justify-center">
+          {colors.map(c => (
+            <button key={c} onClick={() => setColor(c)}
+              className={`w-10 h-10 border-2 transition-all ${color === c ? 'border-white scale-110' : 'border-stone-700'}`}
+              style={{ background: c }} />
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="Stage Name">
+        <input type="text" value={name} onChange={e => setName(e.target.value.slice(0, 16))}
+          placeholder="Your beatbox name..."
+          className="w-full bg-stone-900 border-2 border-stone-700 px-3 py-2 text-amber-500 font-mono uppercase tracking-wider focus:outline-none focus:border-amber-500" />
+      </Panel>
+
+      <Btn variant="primary" onClick={() => { setChar(c => ({ ...c, name: name.trim(), color })); onDone(); }}
+        disabled={name.trim().length < 2} className="w-full text-base py-3">
+        ENTER THE CIRCLE →
+      </Btn>
+    </div>
+  );
+}
+
+// ============ SCREEN: HOOD ============
+
+function HoodScreen({ go, char }) {
+  const mins = char.minutes ?? 0;
+  const places = [
+    { id: 'house', name: 'The House', desc: 'Train, eat, rest', pixelIcon: 'home', color: '#D4A017' },
+    { id: 'park', name: 'The Park', desc: 'Jam, busk, run', pixelIcon: 'tree', color: '#84cc16',
+      locked: !isDayTime(mins), lockReason: 'The park is empty at night. Come back at sunrise (6 AM).' },
+    { id: 'shop', name: 'The Shop', desc: 'Gear & food', pixelIcon: 'shop', color: '#C8DCEF' },
+    { id: 'bar', name: 'The Bar', desc: 'Battle for glory', pixelIcon: 'beer', color: '#CC2200',
+      locked: !isNightTime(mins), lockReason: 'The bar opens at 6 PM. The cypher only happens at night.' },
+  ];
+  return (
+    <div className="space-y-3 pt-4">
+      <div className="text-center mb-2">
+        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE HOOD</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Where will you go?</div>
+      </div>
+      {places.map(p => (
+        <button key={p.id} onClick={() => p.locked ? null : go(p.id)} disabled={p.locked}
+          className={`w-full p-4 flex items-center gap-4 transition-all group border-2 ${
+            p.locked ? 'bg-stone-950/50 border-stone-900 opacity-50 cursor-not-allowed' :
+            'bg-stone-900/50 border-stone-800 hover:border-amber-500'
+          }`}>
+          <div className={`w-14 h-14 border-2 flex items-center justify-center ${p.locked ? 'border-stone-800' : 'border-stone-700 group-hover:border-amber-500'}`}
+            style={{ background: p.locked ? '#0c0a0922' : `${p.color}22` }}>
+            <PixelIcon name={p.pixelIcon} size={40} className={p.locked ? 'opacity-40' : ''} />
+          </div>
+          <div className="flex-1 text-left">
+            <div className={`tracking-wider text-lg ${p.locked ? 'text-stone-600' : 'text-amber-500'}`} style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {p.name} {p.locked && <span className="text-xs">🔒</span>}
+            </div>
+            <div className="text-[11px] text-stone-500 uppercase tracking-wider">
+              {p.locked ? p.lockReason : p.desc}
+            </div>
+          </div>
+          {!p.locked && <div className="text-stone-700 group-hover:text-amber-500 text-2xl">→</div>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============ SCREEN: HOUSE ============
+
+function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, activeSlot }) {
+  const [tab, setTab] = useState('train');
+  const [trainStat, setTrainStat] = useState(null); // 'mus' | 'tec' | 'ori' | 'sho' | null
+  const [pendingStart, setPendingStart] = useState(false);
+  const [playMode, setPlayMode] = useState(false); // false = AFK, true = pitch tuner mini-game (mus only)
+  const [showRangePicker, setShowRangePicker] = useState(false); // shown when user wants to set/change voice range
+
+  const charRef = useRef(char);
+  useEffect(() => { charRef.current = char; }, [char]);
+
+  // Latest reported tuner accuracy (0..1) — applied as bonus to musicality reward
+  const accuracyRef = useRef(0);
+  const handleAccuracy = (acc) => { accuracyRef.current = acc; };
+
+  const trainConfig = {
+    mus: { name: 'Musicality', desc: 'Watch beatbox vids on YouTube', tickEnergyCost: 1.5, color: '#D4A017' },
+    tec: { name: 'Technicality', desc: 'Drill on Discord with the squad', tickEnergyCost: 2, color: '#C8DCEF' },
+    ori: { name: 'Originality', desc: 'Experiment, record loops', tickEnergyCost: 2.5, color: '#a78bfa' },
+    sho: { name: 'Showmanship', desc: 'Stream live, work the camera', tickEnergyCost: 1, color: '#CC2200' },
+  };
+
+  // Always call hook — pick a default stat config when none selected
+  const tCfg = trainConfig[trainStat || 'mus'];
+  const trainActivity = useActivity({
+    char, setChar, checkLevelUp, showToast,
+    config: {
+      blocksPerReward: 5,
+      tickEnergyCost: tCfg.tickEnergyCost,
+      tickHungerCost: 1,
+      tickMoodDelta: -0.3,
+      // Slow ticks down 4x when actively engaging with a mini-game (only mus has one for now,
+      // but the slowdown applies to all training when playMode is on so future mini-games inherit)
+      tickRealMs: playMode ? 2000 : undefined,
+      onReward: () => {
+        if (!trainStat) return;
+        // For musicality (tuner) and technicality (Beatbox Hero), accuracy gives bonus stat gain.
+        let statGain = 1;
+        let bonusText = '';
+        if (trainStat === 'mus') {
+          const acc = accuracyRef.current || 0;
+          if (acc >= 0.8) { statGain = 3; bonusText = ' (perfect pitch!)'; }
+          else if (acc >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
+        } else if (trainStat === 'tec') {
+          const acc = accuracyRef.current || 0;
+          if (acc >= 0.8) { statGain = 3; bonusText = ' (locked in!)'; }
+          else if (acc >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
+          // Higher BPM = bigger reward (subtle multiplier on top of accuracy bonus)
+          const bpmMult = Math.max(1, (charRef.current.tecBpm || 90) / 90);
+          if (bpmMult > 1) {
+            const before = statGain;
+            statGain = Math.round(statGain * bpmMult);
+            if (statGain > before) bonusText += ` (×${bpmMult.toFixed(2)} BPM)`;
+          }
+        }
+        setChar(cc => {
+          const updated = { ...cc, xp: cc.xp + 10,
+            stats: { ...cc.stats, [trainStat]: cc.stats[trainStat] + statGain } };
+          return checkLevelUp(updated);
+        });
+        showToast(`+${statGain} ${trainConfig[trainStat].name}${bonusText}`, 'win');
+      },
+    },
+  });
+
+  // When pendingStart is set, kick off training after render commits
+  useEffect(() => {
+    if (pendingStart && trainStat && !trainActivity.active) {
+      setPendingStart(false);
+      trainActivity.start();
+    }
+  }, [pendingStart, trainStat, trainActivity.active]);
+
+  // Reset play mode when training stops
+  useEffect(() => {
+    if (!trainActivity.active) {
+      setPlayMode(false);
+      accuracyRef.current = 0;
+    }
+  }, [trainActivity.active]);
+
+  const eat = (foodKey) => {
+    const f = FOOD[foodKey];
+    if (char.cash < f.cost) { showToast('Not enough cash', 'bad'); return; }
+    setChar(c => ({
+      ...c,
+      cash: c.cash - f.cost,
+      minutes: c.minutes + 5, // eating takes 5 min
+      energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + f.energy)),
+      hunger: Math.max(0, Math.min(100, c.hunger + f.hunger)),
+      mood: Math.max(0, Math.min(100, c.mood + f.mood)),
+    }));
+    showToast(`Ate ${f.name}`, 'win');
+  };
+
+  const sleep = () => {
+    setChar(c => ({
+      ...c,
+      energy: c.maxEnergy ?? 100,
+      hunger: Math.max(0, c.hunger - 30),
+      mood: Math.min(100, c.mood + 10),
+      day: c.day + 1,
+      minutes: 0, // reset to 6 AM
+    }));
+    showToast('Slept till morning', 'win');
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="text-center mb-2">
+        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE HOUSE</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Your home base</div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-1">
+        {[['train', 'PC / Train', 'pc'], ['studio', 'Studio', 'mic'], ['eat', 'Kitchen', 'fridge'], ['rest', 'Couch', 'couch']].map(([id, label, icon]) => (
+          <button key={id} onClick={() => setTab(id)} disabled={trainActivity.active}
+            className={`py-2 border-2 text-[10px] uppercase tracking-widest transition-all disabled:opacity-30 flex flex-col items-center gap-1 ${
+              tab === id ? 'border-amber-500 bg-amber-500/10 text-amber-500' : 'border-stone-800 text-stone-500'
+            }`}>
+            <PixelIcon name={icon} size={20} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {tab === 'train' && (
+        <>
+          {!trainActivity.active && (
+            <Panel title="Tap a stat to start training">
+              <div className="space-y-2">
+                {Object.entries(trainConfig).map(([key, t]) => {
+                  const iconName = key === 'mus' ? 'music' : key === 'tec' ? 'zap' : key === 'ori' ? 'sparkle' : 'crown';
+                  return (
+                    <button key={key}
+                      onClick={() => { setTrainStat(key); setPendingStart(true); }}
+                      disabled={char.energy < t.tickEnergyCost}
+                      className="w-full flex items-center gap-3 p-2 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
+                      <PixelIcon name={iconName} size={28} />
+                      <div className="flex-1 text-left">
+                        <div className="text-stone-200 text-sm">{t.name} <span className="text-stone-500 text-xs">· {char.stats[key]}</span></div>
+                        <div className="text-[10px] text-stone-500 uppercase">{t.desc}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-amber-500 text-xs">START ▶</div>
+                        <div className="text-[10px] text-stone-500">-{t.tickEnergyCost}⚡/tick</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Panel>
+          )}
+
+          {trainActivity.active && trainStat && (
+            <Panel title={`Training ${trainConfig[trainStat].name} — IN PROGRESS`}>
+              <div className="space-y-3">
+                {trainStat === 'mus' && !playMode && !showRangePicker && (
+                  <button onClick={() => {
+                    accuracyRef.current = 0;
+                    if (!char.voiceRange) {
+                      setShowRangePicker(true);
+                    } else {
+                      setPlayMode(true);
+                    }
+                  }}
+                    className="w-full p-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-900/40 hover:to-amber-800/30 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="text-3xl">🎤</div>
+                      <div className="text-left flex-1">
+                        <div className="text-amber-500 text-base tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                          SING ALONG · TAP TO START
+                        </div>
+                        <div className="text-[11px] text-stone-400 uppercase tracking-wider mt-0.5">
+                          Match the notes with your voice → up to ×3 stat gain
+                        </div>
+                      </div>
+                      <div className="text-amber-500 text-xl group-hover:translate-x-1 transition-transform">▶</div>
+                    </div>
+                  </button>
+                )}
+                {trainStat === 'mus' && showRangePicker && (
+                  <VoiceRangePicker
+                    currentRange={char.voiceRange}
+                    onSet={({ voiceRange, voiceRangeMidi }) => {
+                      setChar(c => ({ ...c, voiceRange, voiceRangeMidi }));
+                      setShowRangePicker(false);
+                      setPlayMode(true);
+                    }}
+                    onCancel={() => setShowRangePicker(false)}
+                  />
+                )}
+                {trainStat === 'mus' && playMode && (
+                  <>
+                    <PitchTuner
+                      onAccuracyUpdate={handleAccuracy}
+                      evaluateEveryMs={2500}
+                      active={trainActivity.active}
+                      voiceRange={char.voiceRange || 'higher'}
+                      voiceRangeMidi={char.voiceRangeMidi}
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => { setPlayMode(false); setShowRangePicker(true); }}
+                        className="flex-1 py-2 border border-stone-700 bg-stone-900/50 text-stone-400 text-[10px] uppercase tracking-widest hover:border-amber-500/50 transition-all">
+                        🎤 Range: {char.voiceRange === 'lower' ? 'Lower' : char.voiceRange === 'auto' ? 'Auto' : 'Higher'} (change)
+                      </button>
+                      <button onClick={() => { setPlayMode(false); accuracyRef.current = 0; }}
+                        className="flex-1 py-2 border-2 border-stone-700 bg-stone-900/50 text-stone-400 text-xs uppercase tracking-widest hover:border-stone-600 transition-all">
+                        ◀ Back to AFK
+                      </button>
+                    </div>
+                  </>
+                )}
+                {trainStat === 'tec' && !playMode && (
+                  <button onClick={() => { accuracyRef.current = 0; setPlayMode(true); }}
+                    className="w-full p-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-900/40 hover:to-amber-800/30 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="text-3xl">🎮</div>
+                      <div className="text-left flex-1">
+                        <div className="text-amber-500 text-base tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                          BEATBOX HERO · TAP TO START
+                        </div>
+                        <div className="text-[11px] text-stone-400 uppercase tracking-wider mt-0.5">
+                          Hit the notes in time → up to ×3 stat gain
+                        </div>
+                      </div>
+                      <div className="text-amber-500 text-xl group-hover:translate-x-1 transition-transform">▶</div>
+                    </div>
+                  </button>
+                )}
+                {trainStat === 'tec' && playMode && (() => {
+                  const completed = char.tecLessonsCompleted || 0;
+                  const currentIdx = Math.min(char.tecCurrentLesson || 0, completed);
+                  const currentLesson = HERO_LESSONS[currentIdx] || HERO_LESSONS[0];
+                  const bpm = char.tecBpm || 90;
+                  const bpmMult = Math.max(1, bpm / 90);
+                  const stepBpm = (delta) => setChar(c => ({ ...c, tecBpm: Math.max(60, Math.min(140, (c.tecBpm || 90) + delta)) }));
+                  return (
+                    <>
+                      {/* Lesson selector */}
+                      <div className="overflow-x-auto -mx-1">
+                        <div className="flex gap-1.5 px-1 pb-1">
+                          {HERO_LESSONS.map((lesson, i) => {
+                            const unlocked = i <= completed;
+                            const selected = i === currentIdx;
+                            return (
+                              <button key={i}
+                                disabled={!unlocked}
+                                onClick={() => setChar(c => ({ ...c, tecCurrentLesson: i }))}
+                                className={`flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${
+                                  selected ? 'border-amber-500 bg-amber-500/10 text-amber-500' :
+                                  unlocked ? 'border-stone-700 text-stone-400 hover:border-amber-500/50' :
+                                             'border-stone-800 text-stone-600 opacity-40'
+                                }`}>
+                                {!unlocked && '🔒 '}#{i + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="text-center -mt-1">
+                        <div className="text-amber-500 text-sm tracking-widest" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                          #{currentIdx + 1} {currentLesson.name}
+                        </div>
+                        <div className="text-[10px] text-stone-500 uppercase tracking-wider">{currentLesson.desc}</div>
+                      </div>
+
+                      <BeatboxHero
+                        onAccuracyUpdate={handleAccuracy}
+                        onLessonComplete={(idx, accuracy) => {
+                          setChar(c => {
+                            const next = { ...c };
+                            if (idx >= (c.tecLessonsCompleted || 0)) {
+                              next.tecLessonsCompleted = Math.min(HERO_LESSONS.length, idx + 1);
+                            }
+                            if (idx + 1 < HERO_LESSONS.length) {
+                              next.tecCurrentLesson = idx + 1;
+                            }
+                            return next;
+                          });
+                        }}
+                        evaluateEveryMs={2500}
+                        active={trainActivity.active}
+                        bpm={bpm}
+                        lessonIdx={currentIdx}
+                      />
+
+                      {/* BPM control */}
+                      <div className="flex items-center justify-center gap-3">
+                        <button onPointerDown={(e) => { e.preventDefault(); stepBpm(-5); }}
+                          className="w-10 h-10 border-2 border-stone-700 text-amber-500 text-xl active:scale-95 hover:border-amber-500/50 transition-all">
+                          −
+                        </button>
+                        <div className="text-center min-w-[90px]">
+                          <div className="text-amber-500 text-2xl tracking-wider leading-none" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                            {bpm} BPM
+                          </div>
+                          <div className="text-[9px] text-stone-500 uppercase tracking-widest mt-0.5">
+                            {bpmMult > 1 ? `×${bpmMult.toFixed(2)} bonus` : 'normal pace'}
+                          </div>
+                        </div>
+                        <button onPointerDown={(e) => { e.preventDefault(); stepBpm(5); }}
+                          className="w-10 h-10 border-2 border-stone-700 text-amber-500 text-xl active:scale-95 hover:border-amber-500/50 transition-all">
+                          +
+                        </button>
+                      </div>
+
+                      <button onClick={() => { setPlayMode(false); accuracyRef.current = 0; }}
+                        className="w-full py-2 border-2 border-stone-700 bg-stone-900/50 text-stone-400 text-xs uppercase tracking-widest hover:border-stone-600 transition-all">
+                        ◀ Back to AFK
+                      </button>
+                    </>
+                  );
+                })()}
+                <div className="text-[10px] text-stone-500 uppercase tracking-wider">5 blocks → +1 {trainConfig[trainStat].name}{trainStat === 'mus' ? ' (up to +3 with tuner)' : trainStat === 'tec' ? ' (up to +3 with Beatbox Hero, ×BPM bonus)' : ''}</div>
+                <ProgressBar block={trainActivity.block} total={5} label={`Block ${trainActivity.block}/5`} color={trainConfig[trainStat].color} />
+                <div className="flex justify-between text-[10px] uppercase tracking-wider text-stone-500">
+                  <span>Stat increases: <span className="text-amber-500">{trainActivity.rewardsEarned}</span></span>
+                  <span>1 block = 10 game min ({playMode ? '2s · slow' : '0.5s'})</span>
+                </div>
+                <Btn variant="danger" onClick={() => trainActivity.stop('Training stopped')} className="w-full py-3">
+                  STOP ■
+                </Btn>
+              </div>
+            </Panel>
+          )}
+        </>
+      )}
+
+      {tab === 'studio' && (
+        <SoundStudio activeSlot={activeSlot} showToast={showToast} />
+      )}
+
+      {tab === 'eat' && (
+        <Panel title="Fridge — wholefood plant-based">
+          <div className="space-y-2">
+            {Object.entries(FOOD).map(([k, f]) => {
+              const foodIcon = k === 'espresso' ? 'coffee' : 'star';
+              return (
+                <div key={k} className="flex items-center gap-3 p-2 border border-stone-800 bg-stone-900/30">
+                  <PixelIcon name={foodIcon} size={20} />
+                  <div className="flex-1">
+                    <div className="text-stone-200 text-sm">{f.name}</div>
+                    <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                      {f.energy ? `${f.energy >= 0 ? '+' : ''}${f.energy}⚡ ` : ''}
+                      {f.hunger ? `${f.hunger >= 0 ? '+' : ''}${f.hunger}🍴 ` : ''}
+                      {f.mood ? `${f.mood >= 0 ? '+' : ''}${f.mood}♥` : ''}
+                    </div>
+                  </div>
+                  <Btn onClick={() => eat(k)} disabled={char.cash < f.cost}>${f.cost}</Btn>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+      {tab === 'rest' && (
+        <Panel title="The Couch">
+          <div className="text-center space-y-3">
+            <div className="text-stone-400 text-xs uppercase tracking-wider">
+              Sleep until 6 AM. Restores full energy & advances a day.
+              {char.minutes < 720 && <div className="text-amber-500 mt-1">It's still daytime — are you sure?</div>}
+            </div>
+            <Btn variant="primary" onClick={sleep} className="w-full py-3">SLEEP 💤</Btn>
+          </div>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+// ============ SCREEN: SHOP ============
+
+function ShopScreen({ char, setChar, showToast, go }) {
+  const sounds = Object.entries(SOUND_CATALOG).filter(([id]) => !char.sounds.includes(id));
+  const cost = (s) => s.tier * 80;
+
+  const buy = (id, s) => {
+    const c = cost(s);
+    if (char.cash < c) { showToast('Not enough cash', 'bad'); return; }
+    if (char.followers < s.tier * 50) { showToast(`Need ${s.tier * 50} followers`, 'bad'); return; }
+    setChar(ch => ({ ...ch, cash: ch.cash - c, sounds: [...ch.sounds, id] }));
+    showToast(`Learned ${s.name}!`, 'win');
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="text-center mb-2">
+        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE SHOP</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Buy techniques & sounds</div>
+      </div>
+      <Panel title={`New sounds (${sounds.length} left)`}>
+        {sounds.length === 0 ? (
+          <div className="text-stone-500 text-center py-4 text-xs uppercase">All sounds learned 👑</div>
+        ) : (
+          <div className="space-y-2">
+            {sounds.map(([id, s]) => {
+              const c = cost(s);
+              const fNeeded = s.tier * 50;
+              const canAfford = char.cash >= c && char.followers >= fNeeded;
+              return (
+                <div key={id} className="p-2 border border-stone-800 bg-stone-900/30">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-stone-200 text-sm">{s.name}</div>
+                    <div className="flex gap-1">{Array.from({ length: s.tier }).map((_, i) => <Star key={i} size={10} className="text-amber-500 fill-amber-500" />)}</div>
+                  </div>
+                  <div className="text-[10px] text-stone-500 uppercase mb-2 tracking-wider">
+                    {s.cat} · {s.base}pts · {s.stamina}⚡ · {s.stat}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] text-stone-500">Need {fNeeded} fans</div>
+                    <Btn onClick={() => buy(id, s)} disabled={!canAfford}>${c}</Btn>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Equipped sounds (max 5)">
+        <div className="space-y-1 mb-2">
+          {char.sounds.map(id => {
+            const s = SOUND_CATALOG[id];
+            const equipped = char.equipped.includes(id);
+            return (
+              <div key={id} className="flex items-center justify-between p-2 border border-stone-800 bg-stone-900/30">
+                <div className="flex-1">
+                  <div className="text-sm text-stone-200">{s.name}</div>
+                  <div className="text-[10px] text-stone-500 uppercase">{s.cat} · {s.base}pts</div>
+                </div>
+                <Btn variant={equipped ? 'primary' : 'ghost'} onClick={() => {
+                  setChar(c => {
+                    if (equipped) return { ...c, equipped: c.equipped.filter(x => x !== id) };
+                    if (c.equipped.length >= 5) { showToast('Max 5 sounds', 'bad'); return c; }
+                    return { ...c, equipped: [...c.equipped, id] };
+                  });
+                }}>{equipped ? 'EQUIPPED' : 'EQUIP'}</Btn>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+// ============ SCREEN: PARK ============
+
+function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp }) {
+  const [selected, setSelected] = useState(null); // 'busk' | 'jam' | 'run' | null
+  const [pendingStart, setPendingStart] = useState(false);
+  const [playMode, setPlayMode] = useState(false); // false = AFK pixel art, true = rhythm tap mini-game
+
+  // Refs to capture latest char in onReward closures
+  const charRef = useRef(char);
+  useEffect(() => { charRef.current = char; }, [char]);
+
+  // Tracks the latest reported accuracy from the rhythm tap mini-game (0..1).
+  // Used by the busk onReward to apply a bonus.
+  const accuracyRef = useRef(0);
+  const handleAccuracy = (acc) => { accuracyRef.current = acc; };
+
+  // RunTracker state: each block reports avg bar position + burn ratio.
+  // Burn ratio is used to apply an extra energy penalty during burn-zone running.
+  // Good-block ratio modulates the run reward (cash/sho).
+  const runBlockRef = useRef({ avg: 0, isGood: false, burnRatio: 0 });
+  const handleRunBlock = (result) => { runBlockRef.current = result; };
+  // When the RunTracker fires a max-energy gain (every 5 good bars), grow the player's max energy.
+  const handleMaxEnergyTick = () => {
+    setChar(c => ({
+      ...c,
+      maxEnergy: Math.min(150, (c.maxEnergy ?? 100) + 1), // soft cap at 150
+    }));
+    showToast('💪 Max Energy +1', 'win');
+  };
+
+  // Each activity: rewards every 5 ticks (= 50 game minutes = 10 real seconds)
+  const activities = {
+    busk: {
+      name: 'Busk',
+      desc: 'Perform on the street for tips',
+      Icon: Mic,
+      pixelIcon: 'mic',
+      tickEnergyCost: 2,
+      tickHungerCost: 1,
+      tickMoodDelta: -0.5,
+      label: '5 blocks → cash + maybe a fan',
+      onReward: () => {
+        const c = charRef.current;
+        const baseEarned = 4 + Math.floor(Math.random() * 8) + Math.floor(c.stats.sho / 2);
+        // Bonus from rhythm tap accuracy (0 = no bonus, 1.0 = +100%)
+        // Threshold: <50% no bonus, 50-80% scales up to +50%, >80% caps at +100%
+        const acc = accuracyRef.current || 0;
+        let bonusMult = 1;
+        if (acc >= 0.8) bonusMult = 2.0;
+        else if (acc >= 0.5) bonusMult = 1 + (acc - 0.5) / 0.3 * 0.5;
+        const earned = Math.floor(baseEarned * bonusMult);
+        const fans = Math.random() < 0.4 || acc >= 0.8 ? 1 : 0;
+        setChar(cc => {
+          const updated = { ...cc, cash: cc.cash + earned, followers: cc.followers + fans, xp: cc.xp + 6 };
+          return checkLevelUp(updated);
+        });
+        const bonusText = bonusMult > 1 ? ` (${Math.round((bonusMult - 1) * 100)}% bonus!)` : '';
+        showToast(`+$${earned}${fans ? ' +1 fan' : ''}${bonusText}`, 'win');
+      },
+    },
+    jam: {
+      name: 'Jam Session',
+      desc: 'Cypher with other beatboxers',
+      Icon: Music,
+      pixelIcon: 'jam',
+      tickEnergyCost: 2,
+      tickHungerCost: 1,
+      tickMoodDelta: 1,
+      label: '5 blocks → random stat +1, mood up, fans',
+      onReward: () => {
+        const c = charRef.current;
+        const stat = ['mus', 'tec', 'ori'][Math.floor(Math.random() * 3)];
+        const fans = 1 + Math.floor(Math.random() * 3);
+        const statName = { mus: 'Musicality', tec: 'Technicality', ori: 'Originality' }[stat];
+        setChar(cc => {
+          const updated = { ...cc, followers: cc.followers + fans, xp: cc.xp + 8,
+            stats: { ...cc.stats, [stat]: cc.stats[stat] + 1 } };
+          return checkLevelUp(updated);
+        });
+        showToast(`+1 ${statName}, +${fans} fans`, 'win');
+      },
+    },
+    run: {
+      name: 'Go Running',
+      desc: 'Build stamina and clear your head',
+      Icon: Dumbbell,
+      pixelIcon: 'shoe',
+      tickEnergyCost: 3,
+      tickHungerCost: 2,
+      tickMoodDelta: 0.5,
+      label: '5 blocks → +1 Showmanship, mood up',
+      onReward: () => {
+        // In play mode, modulate reward by mini-game performance
+        const result = runBlockRef.current;
+        const isPlayMode = playMode && selected === 'run';
+        // burnSurcharge: if you spent significant time in burn zone this block, take an extra hit
+        const burnEnergy = isPlayMode ? Math.round(8 * (result.burnRatio || 0)) : 0;
+        // sho gain: 1 normally; when running in play mode and the last block was good, bump to 2
+        const shoGain = (isPlayMode && result.isGood) ? 2 : 1;
+
+        setChar(cc => {
+          const updated = { ...cc,
+            xp: cc.xp + 5,
+            mood: Math.min(100, cc.mood + 4),
+            energy: Math.max(0, cc.energy - burnEnergy),
+            stats: { ...cc.stats, sho: cc.stats.sho + shoGain }
+          };
+          return checkLevelUp(updated);
+        });
+        if (burnEnergy > 0) {
+          showToast(`+${shoGain} Showmanship · 🔥 -${burnEnergy} energy (burnout)`, 'win');
+        } else {
+          showToast(`+${shoGain} Showmanship${isPlayMode && result.isGood ? ' (+1 bonus)' : ''}`, 'win');
+        }
+      },
+    },
+  };
+
+  // Hook always has to be called — uses the selected activity config (default busk if none)
+  const cfg = activities[selected || 'busk'];
+  const activity = useActivity({
+    char, setChar, checkLevelUp, showToast,
+    config: {
+      blocksPerReward: 5,
+      tickEnergyCost: cfg.tickEnergyCost,
+      tickHungerCost: cfg.tickHungerCost,
+      tickMoodDelta: cfg.tickMoodDelta,
+      onReward: cfg.onReward,
+      stopWhen: (c) => !isDayTime(c.minutes),
+      stopReason: 'The sun is setting — park is emptying out',
+    },
+  });
+
+  // When pendingStart is set, kick off the activity after render commits
+  useEffect(() => {
+    if (pendingStart && selected && !activity.active) {
+      setPendingStart(false);
+      activity.start();
+    }
+  }, [pendingStart, selected, activity.active]);
+
+  // Reset play mode + accuracy when activity ends
+  useEffect(() => {
+    if (!activity.active) {
+      setPlayMode(false);
+      accuracyRef.current = 0;
+    }
+  }, [activity.active]);
+
+  // Lock park at night
+  if (!isDayTime(char.minutes ?? 0)) {
+    return (
+      <div className="space-y-3 pt-8 text-center">
+        <div className="text-6xl">🌙</div>
+        <div className="text-xl text-stone-400" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE PARK IS QUIET</div>
+        <div className="text-xs text-stone-500 uppercase tracking-wider px-6">Beatboxers don't gather here at night. Come back at sunrise — or head to the bar where the cypher lives after dark.</div>
+        <Btn onClick={() => go('hood')} className="mt-4">← BACK TO HOOD</Btn>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-center mb-2">
+        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE PARK</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Tap an activity to commit</div>
+      </div>
+
+      {!activity.active && (
+        <Panel title="Activities">
+          <div className="space-y-2">
+            {Object.entries(activities).map(([key, a]) => {
+              return (
+                <button key={key}
+                  onClick={() => { setSelected(key); setPendingStart(true); }}
+                  disabled={char.energy < a.tickEnergyCost}
+                  className="w-full flex items-center gap-3 p-3 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
+                  <PixelIcon name={a.pixelIcon} size={32} />
+                  <div className="flex-1 text-left">
+                    <div className="text-stone-200 text-sm">{a.name}</div>
+                    <div className="text-[10px] text-stone-500 uppercase tracking-wider">{a.desc}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-amber-500 text-xs">START ▶</div>
+                    <div className="text-[10px] text-stone-500 uppercase">-{a.tickEnergyCost}⚡/tick</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+      {activity.active && (
+        <Panel title={cfg.name + ' — IN PROGRESS'}>
+          <div className="space-y-3">
+            {selected === 'busk' && !playMode && (
+              <BuskAnimation color={char.color} block={activity.block} rewardKey={activity.rewardsEarned} active={activity.active} />
+            )}
+            {selected === 'busk' && playMode && (
+              <RhythmTap onAccuracyUpdate={handleAccuracy} evaluateEveryMs={2500} active={activity.active} />
+            )}
+            {selected === 'jam' && (
+              <JamAnimation color={char.color} block={activity.block} rewardKey={activity.rewardsEarned} active={activity.active} />
+            )}
+            {selected === 'run' && !playMode && (
+              <RunAnimation color={char.color} block={activity.block} rewardKey={activity.rewardsEarned} active={activity.active} />
+            )}
+            {selected === 'run' && playMode && (
+              <RunTracker
+                onBlockResult={handleRunBlock}
+                onMaxEnergyTick={handleMaxEnergyTick}
+                evaluateEveryMs={2500}
+                active={activity.active}
+              />
+            )}
+            {selected === 'busk' && (
+              <button onClick={() => { setPlayMode(p => !p); accuracyRef.current = 0; }}
+                className="w-full py-2 border-2 border-amber-500/50 bg-amber-500/10 text-amber-500 text-xs uppercase tracking-widest hover:bg-amber-500/20 transition-all">
+                {playMode ? '◀ AFK MODE' : '▶ PLAY RHYTHM (bonus tips)'}
+              </button>
+            )}
+            {selected === 'run' && (
+              <button onClick={() => { setPlayMode(p => !p); runBlockRef.current = { avg: 0, isGood: false, burnRatio: 0 }; }}
+                className="w-full py-2 border-2 border-amber-500/50 bg-amber-500/10 text-amber-500 text-xs uppercase tracking-widest hover:bg-amber-500/20 transition-all">
+                {playMode ? '◀ AFK MODE' : '▶ SPRINT MODE (build max ⚡ energy)'}
+              </button>
+            )}
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">{cfg.label}</div>
+            <ProgressBar block={activity.block} total={5} label={`Block ${activity.block}/5`} />
+            <div className="flex justify-between text-[10px] uppercase tracking-wider text-stone-500">
+              <span>Rewards earned: <span className="text-amber-500">{activity.rewardsEarned}</span></span>
+              <span>1 block = 10 game min (0.5s)</span>
+            </div>
+            <Btn variant="danger" onClick={() => activity.stop('Stopped early')} className="w-full py-3">
+              STOP ■
+            </Btn>
+          </div>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+// ============ SCREEN: BAR ============
+
+function BarScreen({ char, setChar, go, showToast }) {
+  const [selected, setSelected] = useState(null);
+
+  // Lock bar during daytime
+  if (!isNightTime(char.minutes ?? 0)) {
+    return (
+      <div className="space-y-3 pt-8 text-center">
+        <div className="text-6xl">🍺</div>
+        <div className="text-xl text-stone-400" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE BAR IS CLOSED</div>
+        <div className="text-xs text-stone-500 uppercase tracking-wider px-6">Battles only happen after dark. Come back at 6 PM when the cypher fires up.</div>
+        <Btn onClick={() => go('hood')} className="mt-4">← BACK TO HOOD</Btn>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-center mb-2">
+        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE BAR</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Where battles happen</div>
+      </div>
+
+      <Panel title="Choose your opponent">
+        <div className="space-y-2">
+          {NPCS.map((n, i) => {
+            const beaten = char.defeated.includes(n.name);
+            const locked = i > 0 && !char.defeated.includes(NPCS[i - 1].name);
+            return (
+              <button key={n.name} onClick={() => !locked && setSelected(n)} disabled={locked}
+                className={`w-full p-3 border-2 text-left transition-all ${
+                  locked ? 'border-stone-900 bg-stone-950 opacity-40' :
+                  selected?.name === n.name ? 'border-amber-500 bg-amber-500/10' :
+                  beaten ? 'border-green-900/50 bg-green-950/20 hover:border-amber-500' :
+                  'border-stone-800 bg-stone-900/30 hover:border-amber-500'
+                }`}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <div className="text-amber-500 tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>{n.name.toUpperCase()}</div>
+                    {beaten && <Trophy size={12} className="text-green-500" />}
+                    {locked && <span className="text-[10px] text-stone-600">🔒</span>}
+                  </div>
+                  <div className="text-[10px] text-stone-500">LVL {n.level}</div>
+                </div>
+                <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                  M{n.stats.mus} · T{n.stats.tec} · O{n.stats.ori} · S{n.stats.sho} · ${n.reward}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Panel>
+
+      {selected && (
+        <Panel title={`vs ${selected.name}`}>
+          <div className="text-[10px] text-stone-400 uppercase tracking-wider mb-3">Sounds: {selected.sounds.map(s => SOUND_CATALOG[s]?.name).join(', ')}</div>
+          <Btn variant="danger" onClick={() => go('battle') || setChar(c => ({ ...c, _opponent: selected }))} className="w-full py-3"
+            disabled={char.energy < 30 || char.equipped.length === 0}>
+            START BATTLE 🎤 (-30⚡)
+          </Btn>
+          {char.energy < 30 && <div className="text-[10px] text-red-500 text-center mt-2 uppercase">Need 30 energy</div>}
+          {char.equipped.length === 0 && <div className="text-[10px] text-red-500 text-center mt-2 uppercase">No sounds equipped! Visit Shop</div>}
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+// ============ SKETCH STAGE COMPONENTS ============
+
+// Hand-drawn-feel SVG with intentional wobble using filter
+const SketchDefs = () => (
+  <defs>
+    <filter id="sketchy" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="3" />
+      <feDisplacementMap in="SourceGraphic" scale="1.2" />
+    </filter>
+    <filter id="sketchy2" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="7" />
+      <feDisplacementMap in="SourceGraphic" scale="1.5" />
+    </filter>
+    <pattern id="paper" patternUnits="userSpaceOnUse" width="200" height="200">
+      <rect width="200" height="200" fill="#1c1917" />
+      <rect width="200" height="200" fill="url(#noise)" opacity="0.4" />
+    </pattern>
+    <filter id="noise">
+      <feTurbulence baseFrequency="0.9" numOctaves="2" />
+      <feColorMatrix values="0 0 0 0 0.05  0 0 0 0 0.05  0 0 0 0 0.05  0 0 0 0.3 0" />
+    </filter>
+    <linearGradient id="floorGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stopColor="#292524" />
+      <stop offset="1" stopColor="#1c1917" />
+    </linearGradient>
+  </defs>
+);
+
+// Single judge stick figure
+const Judge = ({ x, y, vote, revealed, heartKey }) => {
+  // vote: 'P' | 'O' | null. revealed: bool. heartKey: number that bumps when judge likes a sound
+  const stroke = revealed && vote === 'P' ? '#D4A017' : revealed && vote === 'O' ? '#CC2200' : '#a8a29e';
+  const sw = revealed ? 2.5 : 1.8;
+  return (
+    <g filter="url(#sketchy2)" style={{ transition: 'all 0.3s' }}>
+      {/* head */}
+      <circle cx={x} cy={y - 18} r="6" fill="none" stroke={stroke} strokeWidth={sw} />
+      {/* body */}
+      <line x1={x} y1={y - 12} x2={x} y2={y + 4} stroke={stroke} strokeWidth={sw} />
+      {/* arms */}
+      <line x1={x} y1={y - 6} x2={x - 8} y2={y - 2} stroke={stroke} strokeWidth={sw} />
+      <line x1={x} y1={y - 6} x2={x + 8} y2={y - 2} stroke={stroke} strokeWidth={sw} />
+      {/* legs / chair seat */}
+      <line x1={x - 6} y1={y + 4} x2={x + 6} y2={y + 4} stroke={stroke} strokeWidth={sw} />
+      <line x1={x - 5} y1={y + 4} x2={x - 7} y2={y + 14} stroke={stroke} strokeWidth={sw} />
+      <line x1={x + 5} y1={y + 4} x2={x + 7} y2={y + 14} stroke={stroke} strokeWidth={sw} />
+      {/* heart pop - retriggers when heartKey changes */}
+      {heartKey > 0 && (
+        <g key={heartKey} style={{ animation: 'heartPop 1s ease-out forwards', transformOrigin: `${x}px ${y - 30}px` }}>
+          <path d={`M ${x} ${y - 28}
+                   c -1.5 -3, -6 -3, -6 1
+                   c 0 3, 6 6, 6 6
+                   c 0 0, 6 -3, 6 -6
+                   c 0 -4, -4.5 -4, -6 -1 z`}
+            fill="#ec4899" stroke="#0c0a09" strokeWidth="0.8" />
+        </g>
+      )}
+      {/* vote bubble */}
+      {revealed && (
+        <g style={{ animation: 'fadeIn 0.4s' }}>
+          <circle cx={x} cy={y - 32} r="9" fill={vote === 'P' ? '#D4A017' : '#CC2200'} stroke="#0c0a09" strokeWidth="1.5" />
+          <text x={x} y={y - 29} textAnchor="middle" fontSize="10" fontWeight="900" fill="#0c0a09" fontFamily="monospace">
+            {vote === 'P' ? '✓' : '✗'}
+          </text>
+        </g>
+      )}
+    </g>
+  );
+};
+
+// Beatboxer figure - facing left or right
+const Beatboxer = ({ x, y, color, facing, active, name }) => {
+  // facing: 'right' | 'left'
+  const dir = facing === 'right' ? 1 : -1;
+  return (
+    <g filter="url(#sketchy)" style={{ transition: 'opacity 0.4s' }} opacity={active ? 1 : 0.35}>
+      {/* spotlight cone when active */}
+      {active && (
+        <ellipse cx={x} cy={y + 50} rx="48" ry="12" fill={color} opacity="0.18" />
+      )}
+      {/* head */}
+      <circle cx={x} cy={y - 38} r="10" fill="none" stroke={color} strokeWidth="2.5" />
+      {/* hair tuft */}
+      <path d={`M ${x - 6} ${y - 46} Q ${x - 3} ${y - 50} ${x} ${y - 47} Q ${x + 3} ${y - 50} ${x + 6} ${y - 46}`}
+        fill="none" stroke={color} strokeWidth="2" />
+      {/* body */}
+      <line x1={x} y1={y - 28} x2={x} y2={y + 5} stroke={color} strokeWidth="2.5" />
+      {/* arm to mic */}
+      <line x1={x} y1={y - 22} x2={x + 14 * dir} y2={y - 30} stroke={color} strokeWidth="2.5" />
+      {/* mic */}
+      <circle cx={x + 17 * dir} cy={y - 32} r="3.5" fill={color} stroke="#0c0a09" strokeWidth="1" />
+      <line x1={x + 17 * dir} y1={y - 30} x2={x + 14 * dir} y2={y - 25} stroke={color} strokeWidth="1.5" />
+      {/* other arm */}
+      <line x1={x} y1={y - 22} x2={x - 10 * dir} y2={y - 14} stroke={color} strokeWidth="2.5" />
+      {/* legs */}
+      <line x1={x} y1={y + 5} x2={x - 6} y2={y + 24} stroke={color} strokeWidth="2.5" />
+      <line x1={x} y1={y + 5} x2={x + 6} y2={y + 24} stroke={color} strokeWidth="2.5" />
+      {/* mouth - open when active */}
+      {active ? (
+        <ellipse cx={x + 4 * dir} cy={y - 36} rx="2" ry="3" fill="#0c0a09" stroke={color} strokeWidth="1" />
+      ) : (
+        <line x1={x + 2 * dir} y1={y - 36} x2={x + 6 * dir} y2={y - 36} stroke={color} strokeWidth="1.5" />
+      )}
+      {/* sound waves when active */}
+      {active && [0, 1, 2].map(i => (
+        <path key={i}
+          d={`M ${x + (10 + i * 4) * dir} ${y - 38} Q ${x + (12 + i * 4) * dir} ${y - 36} ${x + (10 + i * 4) * dir} ${y - 34}`}
+          fill="none" stroke={color} strokeWidth="1.5" opacity={0.7 - i * 0.2}
+          style={{ animation: `pulse ${0.4 + i * 0.1}s infinite` }} />
+      ))}
+      {/* name tag below */}
+      <text x={x} y={y + 38} textAnchor="middle" fontSize="9" fill={active ? color : '#57534e'}
+        fontFamily="'Bebas Neue', 'Oswald', monospace" letterSpacing="1">
+        {name.toUpperCase()}
+      </text>
+    </g>
+  );
+};
+
+// Crowd silhouette - hand-drawn jagged silhouette with raised hands
+const Crowd = ({ width, height, intensity = 1 }) => {
+  // Generate spiky crowd line procedurally but stable
+  const heads = [];
+  const baseY = height * 0.45;
+  let x = 0;
+  const seed = 42;
+  const rand = (i) => {
+    const v = Math.sin(seed + i * 12.9898) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  for (let i = 0; x < width; i++) {
+    const r = 8 + rand(i) * 6;
+    const yOff = (rand(i + 100) - 0.5) * 12;
+    heads.push({ cx: x + r, cy: baseY + yOff, r });
+    x += r * 1.6 + rand(i + 200) * 4;
+  }
+  // raised arms
+  const arms = [];
+  for (let i = 0; i < heads.length; i++) {
+    if (rand(i + 300) > 0.55) {
+      const h = heads[i];
+      const armH = 25 + rand(i + 400) * 30 * intensity;
+      const sway = (rand(i + 500) - 0.5) * 8;
+      arms.push({ x1: h.cx - 3, y1: h.cy - h.r, x2: h.cx - 5 + sway, y2: h.cy - h.r - armH });
+      if (rand(i + 600) > 0.4) {
+        arms.push({ x1: h.cx + 3, y1: h.cy - h.r, x2: h.cx + 5 + sway, y2: h.cy - h.r - armH * 0.9 });
+      }
+    }
+  }
+  // body path
+  let path = `M 0 ${height} L 0 ${baseY + 5}`;
+  heads.forEach(h => { path += ` Q ${h.cx} ${h.cy - h.r} ${h.cx + h.r} ${h.cy + h.r * 0.3}`; });
+  path += ` L ${width} ${baseY} L ${width} ${height} Z`;
+
+  return (
+    <g filter="url(#sketchy2)">
+      <path d={path} fill="#0c0a09" />
+      {arms.map((a, i) => (
+        <line key={i} x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} stroke="#0c0a09" strokeWidth="3.5" strokeLinecap="round" />
+      ))}
+      {/* fists at top of arms */}
+      {arms.filter((_, i) => i % 2 === 0).map((a, i) => (
+        <circle key={`f${i}`} cx={a.x2} cy={a.y2} r="3" fill="#0c0a09" />
+      ))}
+    </g>
+  );
+};
+
+// Floating sound name with wiggle
+const FloatingSound = ({ text, side, color = '#D4A017' }) => (
+  <div className="absolute pointer-events-none" style={{
+    left: side === 'P' ? '15%' : '55%',
+    top: '38%',
+    animation: 'soundFloat 1.2s ease-out forwards',
+  }}>
+    <div className="text-2xl font-black tracking-wider px-3 py-1"
+      style={{
+        fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+        color,
+        textShadow: '2px 2px 0 #0c0a09, -1px -1px 0 #0c0a09, 1px -1px 0 #0c0a09, -1px 1px 0 #0c0a09',
+        WebkitTextStroke: '0.5px #0c0a09',
+      }}>
+      {text.toUpperCase()}
+    </div>
+  </div>
+);
+
+// The full sketch stage
+const SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0] }) => {
+  const W = 400, H = 320;
+  return (
+    <div className="relative w-full overflow-hidden border-2 border-stone-800" style={{ aspectRatio: '5/4', background: '#1c1917' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice">
+        <SketchDefs />
+
+        {/* Paper-like backdrop with subtle texture */}
+        <rect width={W} height={H} fill="#1c1917" />
+
+        {/* Stage perspective floor */}
+        <path d={`M 70 ${H * 0.55} L 330 ${H * 0.55} L 380 ${H * 0.85} L 20 ${H * 0.85} Z`}
+          fill="url(#floorGrad)" stroke="#44403c" strokeWidth="1.5" filter="url(#sketchy2)" />
+
+        {/* Side speakers */}
+        <g filter="url(#sketchy2)" stroke="#57534e" strokeWidth="1.5" fill="none">
+          <rect x="15" y={H * 0.4} width="35" height="50" />
+          <circle cx="32" cy={H * 0.5} r="9" />
+          <circle cx="32" cy={H * 0.5} r="4" fill="#44403c" />
+          <text x="32" y={H * 0.4 - 4} textAnchor="middle" fontSize="8" fill="#78716c" fontFamily="monospace">PA</text>
+
+          <rect x={W - 50} y={H * 0.4} width="35" height="50" />
+          <circle cx={W - 33} cy={H * 0.5} r="9" />
+          <circle cx={W - 33} cy={H * 0.5} r="4" fill="#44403c" />
+          <text x={W - 33} y={H * 0.4 - 4} textAnchor="middle" fontSize="8" fill="#78716c" fontFamily="monospace">PA</text>
+        </g>
+
+        {/* Judges row (5 judges) */}
+        <g>
+          {/* judges bench */}
+          <line x1="80" y1={H * 0.32} x2={W - 80} y2={H * 0.32} stroke="#57534e" strokeWidth="1.5" filter="url(#sketchy2)" />
+          {[0, 1, 2, 3, 4].map(i => {
+            const jx = 100 + i * 50;
+            const jy = H * 0.28;
+            const v = judgeVotes?.[i];
+            return <Judge key={i} x={jx} y={jy} vote={v?.vote} revealed={i < revealedJudges} heartKey={judgeHearts[i]} />;
+          })}
+        </g>
+
+        {/* Beatboxers */}
+        <Beatboxer x={130} y={H * 0.62} color={char.color} facing="right" active={activeSide === 'P'} name={char.name} />
+        <Beatboxer x={W - 130} y={H * 0.62} color="#CC2200" facing="left" active={activeSide === 'O'} name={opponent.name} />
+
+        {/* Crowd silhouette at bottom */}
+        <g transform={`translate(0, ${H * 0.78})`}>
+          <Crowd width={W} height={H * 0.22} intensity={activeSide ? 1.2 : 0.8} />
+        </g>
+      </svg>
+
+      {/* Sound name overlay - HTML for crisp text */}
+      {currentSound && activeSide && (
+        <FloatingSound key={currentSound + Date.now()} text={currentSound} side={activeSide} color={soundColor} />
+      )}
+
+      <style>{`
+        @keyframes soundFloat {
+          0% { transform: translateY(0) scale(0.6); opacity: 0; }
+          15% { transform: translateY(-5px) scale(1.1); opacity: 1; }
+          80% { transform: translateY(-30px) scale(1); opacity: 1; }
+          100% { transform: translateY(-50px) scale(0.9); opacity: 0; }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 0.2; }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.5); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes heartPop {
+          0% { transform: translateY(8px) scale(0.3); opacity: 0; }
+          20% { transform: translateY(0) scale(1.4); opacity: 1; }
+          50% { transform: translateY(-8px) scale(1); opacity: 1; }
+          100% { transform: translateY(-22px) scale(0.7); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// HUD overlay - the top bar with names, bars, sound icons
+const BattleHUD = ({ char, opponent, timeLeft, pScore, oScore }) => {
+  const playerSounds = char.equipped.slice(0, 5).map(id => SOUND_CATALOG[id]);
+  const oppSounds = opponent.sounds.slice(0, 5).map(id => SOUND_CATALOG[id]);
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center mb-2">
+      {/* Player */}
+      <div>
+        <div className="text-amber-500 text-xs tracking-wider truncate" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {char.name.toUpperCase()}
+        </div>
+        <div className="h-1.5 bg-stone-900 border border-stone-800 mb-1">
+          <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (pScore / 400) * 100)}%`, transition: 'width 0.3s' }} />
+        </div>
+        <div className="flex gap-1">
+          {playerSounds.map((s, i) => (
+            <div key={i} className="w-5 h-5 border border-stone-700 bg-stone-900 flex items-center justify-center text-[8px] text-amber-500">
+              {s?.cat?.[0] || '?'}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Center timer */}
+      <div className="w-12 h-12 rounded-full border-2 border-stone-700 flex items-center justify-center bg-stone-900">
+        <span className="text-amber-500 font-mono text-lg font-bold">{timeLeft}</span>
+      </div>
+
+      {/* Opponent */}
+      <div className="text-right">
+        <div className="text-red-500 text-xs tracking-wider truncate" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {opponent.name.toUpperCase()}
+        </div>
+        <div className="h-1.5 bg-stone-900 border border-stone-800 mb-1">
+          <div className="h-full bg-red-600 ml-auto" style={{ width: `${Math.min(100, (oScore / 400) * 100)}%`, transition: 'width 0.3s' }} />
+        </div>
+        <div className="flex gap-1 justify-end">
+          {oppSounds.map((s, i) => (
+            <div key={i} className="w-5 h-5 border border-stone-700 bg-stone-900 flex items-center justify-center text-[8px] text-red-500">
+              {s?.cat?.[0] || '?'}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============ BEATBOX AUDIO SYNTH ============
+// Synthesizes beatbox-style sounds in-browser using Web Audio API.
+// No external samples — keeps the artifact self-contained.
+
+let _audioCtx = null;
+const getAudioCtx = () => {
+  if (typeof window === 'undefined') return null;
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; }
+  }
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  return _audioCtx;
+};
+
+// ============ BEATBOX HERO SOUND SYSTEM ============
+// Four named sounds: B (Kick), T (Hi-Hat), K (Rimshot), Pf (Snare).
+// Each has a synth fallback. User can override any of them with a custom
+// recorded AudioBuffer (per save slot, persisted in IndexedDB).
+//
+// HERO_SOUNDS[key] -> { name, color, label, cat, defaultSound }
+// HERO_SAMPLES[key] -> AudioBuffer | null (loaded custom recording for current slot)
+
+const HERO_SOUNDS = {
+  B:  { name: 'Kick',    color: '#CC2200', label: 'B',  cat: 'Kicks',  defaultSound: 'classic_kick' },
+  T:  { name: 'Hi-Hat',  color: '#22d3ee', label: 'T',  cat: 'Hats',   defaultSound: 'hi_hat' },
+  K:  { name: 'Rimshot', color: '#a78bfa', label: 'K',  cat: 'Rimshot', defaultSound: 'rimshot' },
+  Pf: { name: 'Snare',   color: '#fbbf24', label: 'Pf', cat: 'Snares', defaultSound: 'psh_snare' },
+};
+
+// Storage for currently loaded custom samples (per-slot).
+// Keys are 'B' / 'T' / 'K' / 'Pf'; values are AudioBuffer or undefined.
+const HERO_SAMPLES = {};
+
+// Synthesize Rimshot sound: 350Hz hollow body + 800Hz click + noise burst, ~90ms
+const playRimshot = (ctx, t) => {
+  // Body — woody mid-low tone
+  const body = ctx.createOscillator();
+  body.type = 'sine';
+  body.frequency.setValueAtTime(350, t);
+  body.frequency.exponentialRampToValueAtTime(180, t + 0.08);
+  const bodyGain = ctx.createGain();
+  bodyGain.gain.setValueAtTime(0.4, t);
+  bodyGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+  body.connect(bodyGain).connect(ctx.destination);
+  body.start(t); body.stop(t + 0.1);
+  // Click — sharp top-end attack
+  const click = ctx.createOscillator();
+  click.type = 'square';
+  click.frequency.setValueAtTime(800, t);
+  click.frequency.exponentialRampToValueAtTime(400, t + 0.02);
+  const clickGain = ctx.createGain();
+  clickGain.gain.setValueAtTime(0.2, t);
+  clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+  click.connect(clickGain).connect(ctx.destination);
+  click.start(t); click.stop(t + 0.03);
+  // Noise — short stick/wood grit
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer(ctx, 0.05);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 2000;
+  filter.Q.value = 1.5;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.15, t);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  noise.connect(filter).connect(noiseGain).connect(ctx.destination);
+  noise.start(t); noise.stop(t + 0.05);
+};
+
+// Play a hero sound by key. Uses custom sample if available, else falls back to synth.
+// Returns immediately (no scheduling latency for the audio dispatch).
+const playHeroSound = (key) => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const sample = HERO_SAMPLES[key];
+  if (sample) {
+    // Custom sample: fire via BufferSource with no envelope scheduling
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = sample;
+      const gain = ctx.createGain();
+      gain.gain.value = 1.0;
+      src.connect(gain).connect(ctx.destination);
+      src.start(0);
+      return;
+    } catch (e) { /* fall through to synth */ }
+  }
+  // Synth fallback
+  const t = ctx.currentTime;
+  const meta = HERO_SOUNDS[key];
+  if (!meta) return;
+  if (key === 'B') playKick(ctx, t, 60);
+  else if (key === 'T') playHat(ctx, t, false);
+  else if (key === 'K') playRimshot(ctx, t);
+  else if (key === 'Pf') playSnare(ctx, t);
+};
+
+// ============ INDEXEDDB SAMPLE STORAGE ============
+// Per-slot persistence of custom recorded samples.
+// Each sample stored as { float32: ArrayBuffer, sampleRate: number }
+// keys look like 'slot1:sample-B', 'slot1:sample-Pf', etc.
+
+const IDB_NAME = 'beatbox-story-samples';
+const IDB_STORE = 'samples';
+let _idbPromise = null;
+
+const openIdb = () => {
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB not supported')); return; }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return _idbPromise;
+};
+
+const idbGet = async (key) => {
+  try {
+    const db = await openIdb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch { return null; }
+};
+
+const idbPut = async (key, value) => {
+  try {
+    const db = await openIdb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const req = tx.objectStore(IDB_STORE).put(value, key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch { /* storage unavailable, silently skip */ }
+};
+
+const idbDelete = async (key) => {
+  try {
+    const db = await openIdb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const req = tx.objectStore(IDB_STORE).delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch { }
+};
+
+// Convert a stored {float32, sampleRate} record to an AudioBuffer
+const recordToBuffer = (record) => {
+  if (!record || !record.float32 || !record.sampleRate) return null;
+  const ctx = getAudioCtx();
+  if (!ctx) return null;
+  const float32 = record.float32 instanceof Float32Array
+    ? record.float32
+    : new Float32Array(record.float32);
+  const buf = ctx.createBuffer(1, float32.length, record.sampleRate);
+  buf.getChannelData(0).set(float32);
+  return buf;
+};
+
+// Load all 4 samples for a given slot into HERO_SAMPLES.
+// Sets undefined for keys without a stored sample (= use synth fallback).
+const loadSamplesForSlot = async (slotN) => {
+  if (!slotN) {
+    Object.keys(HERO_SOUNDS).forEach(k => { delete HERO_SAMPLES[k]; });
+    return;
+  }
+  const keys = Object.keys(HERO_SOUNDS);
+  for (const k of keys) {
+    const rec = await idbGet(`slot${slotN}:sample-${k}`);
+    const buf = recordToBuffer(rec);
+    if (buf) HERO_SAMPLES[k] = buf;
+    else delete HERO_SAMPLES[k];
+  }
+};
+
+// Save a recorded AudioBuffer for a given slot+key.
+// Stores Float32Array samples + sample rate.
+const saveSampleForSlot = async (slotN, key, buffer) => {
+  if (!slotN) return;
+  const float32 = buffer.getChannelData(0).slice(); // copy out
+  HERO_SAMPLES[key] = buffer;
+  await idbPut(`slot${slotN}:sample-${key}`, {
+    float32,
+    sampleRate: buffer.sampleRate,
+  });
+};
+
+const deleteSampleForSlot = async (slotN, key) => {
+  if (!slotN) return;
+  delete HERO_SAMPLES[key];
+  await idbDelete(`slot${slotN}:sample-${key}`);
+};
+
+const deleteAllSamplesForSlot = async (slotN) => {
+  if (!slotN) return;
+  for (const k of Object.keys(HERO_SOUNDS)) {
+    delete HERO_SAMPLES[k];
+    await idbDelete(`slot${slotN}:sample-${k}`);
+  }
+};
+
+// Helpers
+const noiseBuffer = (ctx, duration = 0.5) => {
+  const buf = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  return buf;
+};
+
+const playKick = (ctx, t, pitch = 60) => {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(pitch * 2.5, t);
+  osc.frequency.exponentialRampToValueAtTime(pitch * 0.6, t + 0.12);
+  gain.gain.setValueAtTime(0.9, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.2);
+};
+
+const playSnare = (ctx, t) => {
+  // noise burst + tonal body
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer(ctx, 0.2);
+  const nFilter = ctx.createBiquadFilter();
+  nFilter.type = 'highpass'; nFilter.frequency.value = 1500;
+  const nGain = ctx.createGain();
+  nGain.gain.setValueAtTime(0.5, t);
+  nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+  noise.connect(nFilter).connect(nGain).connect(ctx.destination);
+  noise.start(t);
+
+  const osc = ctx.createOscillator();
+  const oGain = ctx.createGain();
+  osc.type = 'triangle'; osc.frequency.value = 200;
+  oGain.gain.setValueAtTime(0.3, t);
+  oGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  osc.connect(oGain).connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.1);
+};
+
+const playHat = (ctx, t, open = false) => {
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer(ctx, 0.1);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'highpass'; filter.frequency.value = 7000;
+  const gain = ctx.createGain();
+  const dur = open ? 0.18 : 0.04;
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  noise.connect(filter).connect(gain).connect(ctx.destination);
+  noise.start(t); noise.stop(t + dur + 0.05);
+};
+
+const playBass = (ctx, t) => {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth'; osc.frequency.value = 55;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass'; filter.frequency.value = 200; filter.Q.value = 8;
+  gain.gain.setValueAtTime(0.4, t);
+  gain.gain.linearRampToValueAtTime(0.5, t + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.4);
+};
+
+const playScratch = (ctx, t) => {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(800, t);
+  osc.frequency.exponentialRampToValueAtTime(200, t + 0.08);
+  osc.frequency.exponentialRampToValueAtTime(1200, t + 0.16);
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.2);
+};
+
+const playWhistle = (ctx, t) => {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(2000, t);
+  osc.frequency.exponentialRampToValueAtTime(3500, t + 0.25);
+  gain.gain.setValueAtTime(0.001, t);
+  gain.gain.linearRampToValueAtTime(0.2, t + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.32);
+};
+
+const playLipRoll = (ctx, t) => {
+  // amplitude-modulated low buzz
+  const osc = ctx.createOscillator();
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  const mainGain = ctx.createGain();
+  osc.type = 'sawtooth'; osc.frequency.value = 90;
+  lfo.frequency.value = 28; lfoGain.gain.value = 0.3;
+  lfo.connect(lfoGain).connect(mainGain.gain);
+  mainGain.gain.setValueAtTime(0.25, t);
+  mainGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  osc.connect(mainGain).connect(ctx.destination);
+  osc.start(t); lfo.start(t);
+  osc.stop(t + 0.42); lfo.stop(t + 0.42);
+};
+
+const playClick = (ctx, t) => {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(1500, t);
+  osc.frequency.exponentialRampToValueAtTime(400, t + 0.02);
+  gain.gain.setValueAtTime(0.2, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.05);
+};
+
+// Map a sound category to its synth function
+const playSound = (cat, soundName) => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  try {
+    switch (cat) {
+      case 'Kicks':
+        if (/uvular|roll/i.test(soundName || '')) {
+          // roll: 4 fast kicks
+          for (let i = 0; i < 4; i++) playKick(ctx, t + i * 0.06, 70);
+        } else if (/throat|808/i.test(soundName || '')) {
+          playKick(ctx, t, 45);
+        } else {
+          playKick(ctx, t, 60);
+        }
+        break;
+      case 'Snares':
+        playSnare(ctx, t);
+        break;
+      case 'Hats':
+        if (/fast/i.test(soundName || '')) {
+          for (let i = 0; i < 6; i++) playHat(ctx, t + i * 0.05, false);
+        } else {
+          playHat(ctx, t, false);
+        }
+        break;
+      case 'Bass':
+        playBass(ctx, t);
+        break;
+      case 'Scratch':
+        playScratch(ctx, t);
+        break;
+      case 'Whistles':
+        playWhistle(ctx, t);
+        break;
+      case 'Liproll':
+        playLipRoll(ctx, t);
+        break;
+      case 'Clicks':
+        if (/roll/i.test(soundName || '')) {
+          for (let i = 0; i < 5; i++) playClick(ctx, t + i * 0.05);
+        } else {
+          playClick(ctx, t);
+        }
+        break;
+      default:
+        playKick(ctx, t);
+    }
+  } catch {}
+};
+
+// Short countdown beep (pitch up on final BEATBOX)
+const playBeep = (high = false) => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = high ? 880 : 440;
+  gain.gain.setValueAtTime(0.001, t);
+  gain.gain.linearRampToValueAtTime(0.25, t + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + (high ? 0.4 : 0.18));
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t); osc.stop(t + (high ? 0.42 : 0.2));
+};
+
+// ============ SCREEN: BATTLE ============
+
+function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
+  const [phase, setPhase] = useState('intro'); // intro, rps, countdown1, round1, countdown2, round2, judging, result
+  const [countdownVal, setCountdownVal] = useState(3); // 3, 2, 1, 'BEATBOX!'
+  const [judgeHearts, setJudgeHearts] = useState([0, 0, 0, 0, 0]); // bump key per judge to retrigger heart anim
+  const [rps, setRps] = useState(null);
+  const [result, setResult] = useState(null);
+  const [revealedJudges, setRevealedJudges] = useState(0);
+  const [activeSide, setActiveSide] = useState(null); // 'P' | 'O' | null
+  const [playerFirst, setPlayerFirst] = useState(true); // who performs round 1
+  const [currentSound, setCurrentSound] = useState(null);
+  const [currentSoundColor, setCurrentSoundColor] = useState('#D4A017');
+  const [liveScore, setLiveScore] = useState({ p: 0, o: 0 });
+  const [timeLeft, setTimeLeft] = useState(15);
+  const opponent = char._opponent;
+  const eventTimers = useRef([]);
+  const ROUND_SECONDS = 12;
+
+  useEffect(() => {
+    if (!opponent) { go('bar'); return; }
+  }, []);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => { eventTimers.current.forEach(clearTimeout); };
+  }, []);
+
+  if (!opponent) return null;
+
+  const playRps = (choice) => {
+    const opp = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+    const beats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+    let outcome;
+    if (choice === opp) outcome = 'tie';
+    else if (beats[choice] === opp) outcome = 'win';
+    else outcome = 'lose';
+    setRps({ player: choice, opp, outcome });
+    setTimeout(() => {
+      if (outcome === 'tie') { setRps(null); return; }
+      // Per design doc: loser of RPS goes first
+      // outcome === 'win' means player won RPS → opponent goes first
+      // outcome === 'lose' means player lost RPS → player goes first
+      setPlayerFirst(outcome === 'lose');
+      const battleResult = runBattle(char, opponent);
+      setResult(battleResult);
+      setPhase('countdown1');
+    }, 1400);
+  };
+
+  // Schedule sound events for a round (12 real seconds)
+  const playRound = (events, side, color, onDone) => {
+    eventTimers.current.forEach(clearTimeout);
+    eventTimers.current = [];
+    setActiveSide(side);
+    setLiveScore(s => side === 'P' ? { ...s, p: 0 } : { ...s, o: 0 });
+    setTimeLeft(ROUND_SECONDS);
+
+    // Events from runBattle are spread across ~15 fictional seconds.
+    // We compress that to ROUND_SECONDS of real time so pacing stays musical.
+    let runningScore = 0;
+
+    events.forEach((e) => {
+      const t = (parseFloat(e.time) / 15) * ROUND_SECONDS * 1000;
+      eventTimers.current.push(setTimeout(() => {
+        // Find the canonical sound id by matching name → grab its category
+        const soundId = Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name);
+        const sound = soundId ? SOUND_CATALOG[soundId] : null;
+        const cat = sound?.cat;
+
+        // Play audio
+        if (cat) playSound(cat, e.name);
+
+        // Update UI
+        setCurrentSound(e.name);
+        setCurrentSoundColor(color);
+        runningScore += e.points;
+        const finalScore = runningScore;
+        setLiveScore(s => side === 'P' ? { ...s, p: finalScore } : { ...s, o: finalScore });
+
+        // Trigger judge hearts: each judge whose bias matches the sound's stat category
+        // shows a heart pop. Random judge also reacts ~30% of time.
+        if (sound) {
+          setJudgeHearts(h => {
+            const next = [...h];
+            JUDGES.forEach((j, i) => {
+              if (j.bias === sound.stat) next[i] = next[i] + 1;
+              else if (j.bias === 'random' && Math.random() < 0.35) next[i] = next[i] + 1;
+              // High-tier sounds get extra love from showmanship judge
+              else if (j.bias === 'showmanship' && sound.tier >= 3 && Math.random() < 0.5) next[i] = next[i] + 1;
+            });
+            return next;
+          });
+        }
+      }, t));
+    });
+
+    // Countdown timer ticks (12, 11, 10, ... 0)
+    for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
+      eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1000));
+    }
+
+    eventTimers.current.push(setTimeout(() => {
+      setCurrentSound(null);
+      setActiveSide(null);
+      onDone();
+    }, ROUND_SECONDS * 1000));
+  };
+
+  // Countdown effect: 3 → 2 → 1 → BEATBOX! → start round
+  useEffect(() => {
+    if (phase !== 'countdown1' && phase !== 'countdown2') return;
+    setCountdownVal(3);
+    playBeep(false);
+    const timers = [
+      setTimeout(() => { setCountdownVal(2); playBeep(false); }, 800),
+      setTimeout(() => { setCountdownVal(1); playBeep(false); }, 1600),
+      setTimeout(() => { setCountdownVal('BEATBOX!'); playBeep(true); }, 2400),
+      setTimeout(() => {
+        if (phase === 'countdown1') setPhase('round1');
+        else setPhase('round2');
+      }, 3300),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase === 'round1' && result) {
+      if (playerFirst) {
+        playRound(result.r1.events, 'P', char.color, () => setPhase('countdown2'));
+      } else {
+        playRound(result.r2.events, 'O', '#CC2200', () => setPhase('countdown2'));
+      }
+    } else if (phase === 'round2' && result) {
+      if (playerFirst) {
+        playRound(result.r2.events, 'O', '#CC2200', () => setPhase('judging'));
+      } else {
+        playRound(result.r1.events, 'P', char.color, () => setPhase('judging'));
+      }
+    }
+  }, [phase, result]);
+
+  useEffect(() => {
+    if (phase === 'judging') {
+      if (revealedJudges < 5) {
+        const t = setTimeout(() => setRevealedJudges(r => r + 1), 700);
+        return () => clearTimeout(t);
+      } else {
+        const t = setTimeout(() => setPhase('result'), 800);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [phase, revealedJudges]);
+
+  const finishBattle = () => {
+    const won = result.won;
+    setChar(c => {
+      const reward = won ? opponent.reward : Math.floor(opponent.reward * 0.1);
+      const fans = won ? Math.floor(opponent.reward / 10) : 1;
+      const xp = won ? 60 : 20;
+      let newC = {
+        ...c,
+        cash: c.cash + reward,
+        followers: c.followers + fans,
+        energy: Math.max(0, c.energy - 30),
+        minutes: c.minutes + 90, // a battle takes ~90 game minutes
+        mood: Math.min(100, Math.max(0, c.mood + (won ? 15 : -10))),
+        xp: c.xp + xp,
+        defeated: won && !c.defeated.includes(opponent.name) ? [...c.defeated, opponent.name] : c.defeated,
+      };
+      delete newC._opponent;
+      return checkLevelUp(newC);
+    });
+    showToast(won ? `🏆 WIN! +$${opponent.reward}` : 'You lost. Train harder!', won ? 'win' : 'bad');
+    go('bar');
+  };
+
+  return (
+    <div className="space-y-3 pt-2">
+      <button onClick={() => { eventTimers.current.forEach(clearTimeout); setChar(c => { const n = { ...c }; delete n._opponent; return n; }); go('bar'); }}
+        className="text-stone-500 hover:text-stone-300 text-xs uppercase tracking-wider flex items-center gap-1">
+        <ArrowLeft size={14} /> Forfeit
+      </button>
+
+      {phase === 'intro' && (
+        <div className="space-y-3 pt-2">
+          <div className="text-center text-3xl tracking-tighter text-amber-500 font-black" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            BATTLE TIME
+          </div>
+          <SketchStage char={char} opponent={opponent} activeSide={null} currentSound={null}
+            judgeVotes={[]} revealedJudges={0} />
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <div className="border-2 border-stone-800 bg-stone-900/30 p-2">
+              <div className="text-amber-500 text-sm tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>{char.name.toUpperCase()}</div>
+              <div className="text-[10px] text-stone-500 uppercase">M{char.stats.mus} T{char.stats.tec} O{char.stats.ori} S{char.stats.sho}</div>
+            </div>
+            <div className="border-2 border-stone-800 bg-stone-900/30 p-2">
+              <div className="text-red-500 text-sm tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>{opponent.name.toUpperCase()}</div>
+              <div className="text-[10px] text-stone-500 uppercase">M{opponent.stats.mus} T{opponent.stats.tec} O{opponent.stats.ori} S{opponent.stats.sho}</div>
+            </div>
+          </div>
+          <Btn variant="primary" onClick={() => { getAudioCtx(); setPhase('rps'); }} className="w-full py-3">WHO GOES FIRST? 🎲</Btn>
+        </div>
+      )}
+
+      {phase === 'rps' && (
+        <div className="space-y-4 text-center pt-4">
+          <div className="text-amber-500 text-xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>ROCK PAPER SCISSORS</div>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500">Loser goes first</div>
+          {!rps && (
+            <div className="grid grid-cols-3 gap-2 pt-4">
+              {[{ k: 'rock', e: '✊' }, { k: 'paper', e: '✋' }, { k: 'scissors', e: '✌️' }].map(o => (
+                <button key={o.k} onClick={() => playRps(o.k)}
+                  className="aspect-square border-2 border-stone-800 hover:border-amber-500 text-5xl bg-stone-900/30 transition-all">
+                  {o.e}
+                </button>
+              ))}
+            </div>
+          )}
+          {rps && (
+            <div className="pt-4">
+              <div className="flex items-center justify-around text-5xl">
+                <div>{{ rock: '✊', paper: '✋', scissors: '✌️' }[rps.player]}</div>
+                <div className="text-stone-700 text-2xl">vs</div>
+                <div>{{ rock: '✊', paper: '✋', scissors: '✌️' }[rps.opp]}</div>
+              </div>
+              <div className={`mt-4 text-2xl tracking-wider ${rps.outcome === 'win' ? 'text-amber-500' : rps.outcome === 'lose' ? 'text-red-500' : 'text-stone-400'}`}
+                style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                {rps.outcome === 'win' ? 'YOU WIN! THEY START' : rps.outcome === 'lose' ? 'YOU GO FIRST' : 'TIE — REPLAY'}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(phase === 'round1' || phase === 'round2') && result && (
+        <div className="space-y-2">
+          <BattleHUD char={char} opponent={opponent} timeLeft={timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
+          <SketchStage char={char} opponent={opponent} activeSide={activeSide}
+            currentSound={currentSound} soundColor={currentSoundColor}
+            judgeVotes={[]} revealedJudges={0} judgeHearts={judgeHearts} />
+          <div className="text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse">
+            {activeSide === 'P' ? `${char.name} is performing` : `${opponent.name} is performing`}
+          </div>
+        </div>
+      )}
+
+      {(phase === 'countdown1' || phase === 'countdown2') && (
+        <div className="space-y-2">
+          <BattleHUD char={char} opponent={opponent} timeLeft={ROUND_SECONDS} pScore={liveScore.p} oScore={liveScore.o} />
+          <div className="relative">
+            <SketchStage char={char} opponent={opponent} activeSide={null}
+              currentSound={null} soundColor="#D4A017"
+              judgeVotes={[]} revealedJudges={0} judgeHearts={[0,0,0,0,0]} />
+            <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm">
+              <div key={countdownVal} className="text-center"
+                style={{ animation: 'countdownPop 0.7s ease-out' }}>
+                <div className={`font-black tracking-tighter ${typeof countdownVal === 'string' ? 'text-amber-500 text-6xl' : 'text-stone-100 text-8xl'}`}
+                  style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+                           textShadow: '4px 4px 0 #0c0a09' }}>
+                  {countdownVal}
+                </div>
+                {typeof countdownVal === 'string' && (
+                  <div className="text-stone-400 text-xs uppercase tracking-[0.4em] mt-2">
+                    {(() => {
+                      const isPlayerThisRound = (phase === 'countdown1' && playerFirst) || (phase === 'countdown2' && !playerFirst);
+                      return `${isPlayerThisRound ? char.name : opponent.name}'s turn`;
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <style>{`
+            @keyframes countdownPop {
+              0% { transform: scale(0.4); opacity: 0; }
+              30% { transform: scale(1.3); opacity: 1; }
+              60% { transform: scale(1); opacity: 1; }
+              100% { transform: scale(1); opacity: 1; }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {phase === 'judging' && result && (
+        <div className="space-y-3">
+          <div className="text-center text-amber-500 text-xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>JUDGES VOTE</div>
+          <SketchStage char={char} opponent={opponent} activeSide={null} currentSound={null}
+            judgeVotes={result.judgeVotes} revealedJudges={revealedJudges} judgeHearts={[0,0,0,0,0]} />
+          <div className="grid grid-cols-5 gap-1">
+            {result.judgeVotes.map((v, i) => (
+              <div key={i} className={`p-2 border-2 text-center transition-all ${
+                i >= revealedJudges ? 'border-stone-800 bg-stone-900' :
+                v.vote === 'P' ? 'border-amber-500 bg-amber-500/20' :
+                'border-red-700 bg-red-950/30'
+              }`}>
+                <div className="text-lg">{v.judge.emoji}</div>
+                <div className="text-[8px] uppercase mt-0.5 text-stone-400">{v.judge.name}</div>
+                {i < revealedJudges && <div className={`text-[10px] font-bold ${v.vote === 'P' ? 'text-amber-500' : 'text-red-500'}`}>{v.vote === 'P' ? 'YOU' : 'OPP'}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {phase === 'result' && result && (
+        <div className="space-y-4 text-center pt-2">
+          <div className={`text-6xl tracking-tighter font-black ${result.won ? 'text-amber-500' : 'text-red-500'}`} style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            {result.won ? 'VICTORY' : 'DEFEAT'}
+          </div>
+          <div className="text-stone-400 text-sm">
+            {result.playerVotes} - {5 - result.playerVotes}
+          </div>
+          <Panel title="Breakdown">
+            <div className="text-left text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-stone-500">Your score:</span> <span className="text-amber-500 font-bold">{result.finalP}</span></div>
+              <div className="flex justify-between"><span className="text-stone-500">Opponent:</span> <span className="text-red-500 font-bold">{result.finalO}</span></div>
+              <div className="flex justify-between"><span className="text-stone-500">Reward:</span> <span className="text-green-500 font-bold">${result.won ? opponent.reward : Math.floor(opponent.reward * 0.1)}</span></div>
+              <div className="flex justify-between"><span className="text-stone-500">XP gained:</span> <span className="text-blue-400">+{result.won ? 60 : 20}</span></div>
+            </div>
+          </Panel>
+          <Btn variant="primary" onClick={finishBattle} className="w-full py-3">CONTINUE →</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
