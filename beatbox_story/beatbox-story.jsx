@@ -552,11 +552,12 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
   const BEAT_MS = 60000 / BPM;
   const BAR_MS = BEAT_MS * 4;
 
-  // Note color per lane
+  // Note color per lane. heroKey maps to the 4 Beatbox Hero sounds so taps
+  // play the player's recorded studio samples (with synth fallback).
   const LANE_INFO = [
-    { label: 'BOOM', color: '#CC2200', cat: 'Kicks', sound: 'classic_kick' },
-    { label: 'TSS',  color: '#22d3ee', cat: 'Hats',  sound: 'hi_hat' },
-    { label: 'KSH',  color: '#D4A017', cat: 'Snares', sound: 'psh_snare' },
+    { label: 'BOOM', color: '#CC2200', heroKey: 'B'  },
+    { label: 'TSS',  color: '#22d3ee', heroKey: 'T'  },
+    { label: 'KSH',  color: '#D4A017', heroKey: 'Pf' },
   ];
 
   // Generate notes on a rolling basis
@@ -614,8 +615,8 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
         lane,
         color: isPerfect ? '#D4A017' : '#22d3ee',
       });
-      // Play the sound on hit (already plays automatically when crossed, but reinforce on perfect)
-      playSound(LANE_INFO[lane].cat, LANE_INFO[lane].sound);
+      // Play the recorded studio sample (or synth fallback) on hit
+      playHeroSound(LANE_INFO[lane].heroKey);
     } else {
       // Mis-tap
       state.combo = 0;

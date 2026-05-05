@@ -623,9 +623,9 @@ window.exports = window.module.exports;
     const BEAT_MS = 6e4 / BPM;
     const BAR_MS = BEAT_MS * 4;
     const LANE_INFO = [
-      { label: "BOOM", color: "#CC2200", cat: "Kicks", sound: "classic_kick" },
-      { label: "TSS", color: "#22d3ee", cat: "Hats", sound: "hi_hat" },
-      { label: "KSH", color: "#D4A017", cat: "Snares", sound: "psh_snare" }
+      { label: "BOOM", color: "#CC2200", heroKey: "B" },
+      { label: "TSS", color: "#22d3ee", heroKey: "T" },
+      { label: "KSH", color: "#D4A017", heroKey: "Pf" }
     ];
     const ensureNotesAhead = (now) => {
       const state = tapStateRef.current;
@@ -676,7 +676,7 @@ window.exports = window.module.exports;
           lane,
           color: isPerfect ? "#D4A017" : "#22d3ee"
         });
-        playSound(LANE_INFO[lane].cat, LANE_INFO[lane].sound);
+        playHeroSound(LANE_INFO[lane].heroKey);
       } else {
         state.combo = 0;
         state.judgments.push({
