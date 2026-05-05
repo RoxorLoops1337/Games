@@ -4873,6 +4873,345 @@ const FloatingSound = ({ text, side, color = '#D4A017' }) => (
   </div>
 );
 
+// ============ PIXEL BATTLE STAGE ============
+// Pixel-art battle stage. Replaces the SVG SketchStage. The player wears their
+// chosen color shirt (matching busk/run animations); each opponent has a
+// distinct look. Judges sit on a bench and react with floating pixel hearts.
+
+// Per-opponent visuals — keyed by NPC name
+const OPP_LOOKS = {
+  'Lil Crumb':   { shirt: '#84cc16', skin: '#f5d4a8', hair: '#5a3a18', style: 'short',  accessory: null },
+  'DJ Phlegm':   { shirt: '#3b82f6', skin: '#d4a87a', hair: '#1a1a2e', style: 'mohawk', accessory: 'shades' },
+  'Mama Bass':   { shirt: '#a78bfa', skin: '#8a5a3a', hair: '#1c1917', style: 'long',   accessory: null },
+  'Vox Machina': { shirt: '#94a3b8', skin: '#c8b8a0', hair: '#9ca3af', style: 'spike',  accessory: 'shades' },
+  'The Champ':   { shirt: '#fbbf24', skin: '#5a3a20', hair: '#0c0a09', style: 'fade',   accessory: null },
+};
+const _defaultOppLook = { shirt: '#CC2200', skin: '#d4a87a', hair: '#1c1917', style: 'short', accessory: null };
+
+// Judge bias → visual hint (hair color signals their personality)
+const JUDGE_LOOKS = {
+  technicality: { hair: '#22d3ee', shirt: '#0e3a4a' },
+  musicality:   { hair: '#a78bfa', shirt: '#3a2a5a' },
+  originality:  { hair: '#fbbf24', shirt: '#5a4030' },
+  showmanship:  { hair: '#fb7185', shirt: '#4a1820' },
+  random:       { hair: '#84cc16', shirt: '#2a3a1a' },
+};
+
+// Draw a beatboxer at logical (x, y), where y is feet level.
+const drawBeatboxer = (ctx, x, y, look, facing, active, frameCount) => {
+  const px = (dx, dy, w, h, c) => _px(ctx, x + dx, y + dy, w, h, c);
+  const bob = active ? Math.floor(frameCount / 6) % 2 : 0;
+
+  // Shadow
+  px(-7, 0, 14, 1, 'rgba(0,0,0,0.45)');
+  // Legs (alternating bob)
+  px(-4, -8 - bob, 3, 8, '#1a1a2e');
+  px(1, -8 + bob, 3, 8, '#1a1a2e');
+  // Shoes
+  px(-4, -1, 3, 1, '#fff');
+  px(1, -1, 3, 1, '#fff');
+  // Body / shirt
+  px(-5, -19, 10, 11, look.shirt);
+  px(-5, -19, 10, 1, '#fff'); // collar highlight
+  // Arms (shirt color)
+  px(-7, -18, 2, 8, look.shirt);
+  px(5, -18, 2, 8, look.shirt);
+  // Mic-side hand
+  const handX = facing === 'right' ? 6 : -8;
+  px(handX, -14, 2, 3, look.skin);
+  // Mic
+  const micX = facing === 'right' ? 6 : -10;
+  px(micX, -19, 2, 3, '#888');
+  px(micX - 1, -20, 4, 2, '#aaa');
+  // Head
+  px(-4, -25, 8, 7, look.skin);
+  // Hair styles
+  if (look.style === 'short') {
+    px(-4, -27, 8, 2, look.hair);
+  } else if (look.style === 'mohawk') {
+    px(-4, -25, 8, 1, look.hair);
+    px(-1, -28, 2, 3, look.hair);
+  } else if (look.style === 'long') {
+    px(-5, -26, 10, 2, look.hair);
+    px(-5, -23, 1, 5, look.hair);
+    px(4, -23, 1, 5, look.hair);
+  } else if (look.style === 'spike') {
+    px(-4, -26, 8, 1, look.hair);
+    px(-3, -28, 2, 2, look.hair);
+    px(0, -29, 2, 3, look.hair);
+    px(2, -28, 2, 2, look.hair);
+  } else if (look.style === 'fade') {
+    px(-4, -27, 8, 2, look.hair);
+    px(-4, -25, 8, 1, '#000');
+  }
+  // Eyes / accessory
+  const blink = frameCount % 120 < 4;
+  if (look.accessory === 'shades') {
+    px(-3, -23, 7, 1, '#0c0a09');
+  } else if (!blink) {
+    px(-3, -23, 1, 1, '#1a1a2e');
+    px(1, -23, 1, 1, '#1a1a2e');
+  }
+  // Mouth (animated when active)
+  const mf = active ? Math.floor(frameCount / 4) % 4 : 0;
+  if (active && (mf === 1 || mf === 3)) {
+    px(-1, -20, 3, 2, '#3a1010');
+  } else {
+    px(-1, -20, 3, 1, '#5a2020');
+  }
+};
+
+// Draw a seated judge at (x, y).
+const drawJudge = (ctx, x, y, look, vote, revealed, frameCount) => {
+  const px = (dx, dy, w, h, c) => _px(ctx, x + dx, y + dy, w, h, c);
+  // Body (seated, smaller)
+  px(-3, -7, 6, 7, look.shirt);
+  // Head
+  px(-3, -12, 6, 5, '#d4a87a');
+  // Hair
+  px(-3, -13, 6, 2, look.hair);
+  // Eyes
+  px(-2, -10, 1, 1, '#1a1a2e');
+  px(1, -10, 1, 1, '#1a1a2e');
+  // Vote indicator (revealed at end)
+  if (revealed && vote === 'P') {
+    px(-2, -16, 4, 2, '#22c55e');
+    px(-1, -17, 2, 1, '#22c55e');
+  } else if (revealed && vote === 'O') {
+    px(-2, -16, 4, 2, '#dc2626');
+    px(-1, -15, 2, 1, '#dc2626');
+  }
+};
+
+// Tiny pixel heart (3 wide × 3 tall, plus 2 side dots = 5 wide effective)
+const drawPixelHeart = (ctx, x, y, alpha = 1) => {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#fb7185';
+  ctx.fillRect(x - 1, y, 1, 1);
+  ctx.fillRect(x + 1, y, 1, 1);
+  ctx.fillRect(x - 2, y - 1, 1, 1);
+  ctx.fillRect(x + 2, y - 1, 1, 1);
+  ctx.fillRect(x - 1, y - 1, 3, 1);
+  ctx.fillRect(x, y + 1, 1, 1);
+  ctx.globalAlpha = 1;
+};
+
+const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0], comboLabel = null }) => {
+  const canvasRef = useRef(null);
+  const PXSCALE = 3;
+  const W = 200, H = 160;
+
+  const heartsRef = useRef([]);
+  const sparksRef = useRef([]);
+  const lastHeartsRef = useRef([0,0,0,0,0]);
+  const wavesPlayerRef = useRef([]);
+  const wavesOppRef = useRef([]);
+  const propsRef = useRef({});
+  const activeSideRef = useRef(activeSide);
+
+  useEffect(() => {
+    propsRef.current = { activeSide, currentSound, soundColor, judgeVotes, revealedJudges };
+    activeSideRef.current = activeSide;
+  }, [activeSide, currentSound, soundColor, judgeVotes, revealedJudges]);
+
+  // Watch judgeHearts: spawn floating hearts + sparks per judge bump
+  useEffect(() => {
+    judgeHearts.forEach((h, i) => {
+      if (h > lastHeartsRef.current[i]) {
+        lastHeartsRef.current[i] = h;
+        const judgeX = 30 + i * 30;
+        const judgeY = 50;
+        heartsRef.current.push({
+          x: judgeX, y: judgeY,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: -0.8 - Math.random() * 0.6,
+          life: 0, ttl: 60,
+        });
+        for (let s = 0; s < 5; s++) {
+          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
+          sparksRef.current.push({
+            x: judgeX + (Math.random() - 0.5) * 4,
+            y: judgeY,
+            vx: Math.cos(angle) * (0.4 + Math.random() * 0.8),
+            vy: Math.sin(angle) * (0.4 + Math.random() * 0.8),
+            life: 0, ttl: 16,
+            color: ['#fb7185', '#fbbf24', '#f43f5e'][Math.floor(Math.random() * 3)],
+          });
+        }
+      }
+    });
+  }, [judgeHearts]);
+
+  // Watch currentSound — emit a sound wave from the active side
+  useEffect(() => {
+    if (!currentSound || !activeSideRef.current) return;
+    const arr = activeSideRef.current === 'P' ? wavesPlayerRef.current : wavesOppRef.current;
+    arr.push({ life: 0, ttl: 30, color: soundColor || '#D4A017' });
+  }, [currentSound, soundColor]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf, frameCount = 0;
+
+    const playerLook = { shirt: char.color || '#D4A017', skin: '#d4a87a', hair: '#1a1a2e', style: 'short', accessory: null };
+    const oppLook = OPP_LOOKS[opponent.name] || _defaultOppLook;
+
+    const draw = () => {
+      frameCount++;
+      const { activeSide, judgeVotes, revealedJudges } = propsRef.current;
+
+      if (canvas.width !== W * PXSCALE || canvas.height !== H * PXSCALE) {
+        canvas.width = W * PXSCALE;
+        canvas.height = H * PXSCALE;
+        ctx.imageSmoothingEnabled = false;
+      }
+
+      ctx.save();
+      ctx.scale(PXSCALE, PXSCALE);
+
+      // Back wall
+      _px(ctx, 0, 0, W, 60, '#1a0d2e');
+      _px(ctx, 0, 0, W, 30, '#0f0820');
+      // Stars on back wall
+      for (let i = 0; i < 12; i++) {
+        const sx = (i * 17 + 9) % W;
+        const sy = (i * 5 + 4) % 28;
+        _px(ctx, sx, sy, 1, 1, i % 3 === 0 ? '#fef3c7' : '#a78bfa');
+      }
+
+      // Spotlights from top corners (subtle cones)
+      ctx.fillStyle = 'rgba(212, 160, 23, 0.10)';
+      ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(0, 0); ctx.lineTo(0, 90); ctx.lineTo(80, 90); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(W - 20, 0); ctx.lineTo(W, 0); ctx.lineTo(W, 90); ctx.lineTo(W - 80, 90); ctx.closePath(); ctx.fill();
+
+      // Judges bench
+      _px(ctx, 18, 60, 164, 4, '#5a4030');
+      _px(ctx, 18, 64, 164, 1, '#3a2818');
+      // Bench legs
+      _px(ctx, 22, 64, 2, 6, '#3a2818');
+      _px(ctx, 176, 64, 2, 6, '#3a2818');
+
+      // Judges
+      const biases = ['technicality', 'musicality', 'originality', 'showmanship', 'random'];
+      for (let i = 0; i < 5; i++) {
+        const jx = 30 + i * 30;
+        const v = judgeVotes?.[i];
+        const look = JUDGE_LOOKS[biases[i]] || JUDGE_LOOKS.random;
+        drawJudge(ctx, jx, 60, look, v?.vote, i < revealedJudges, frameCount);
+      }
+
+      // Stage floor
+      _px(ctx, 0, 90, W, 50, '#3a2818');
+      for (let i = 0; i < 4; i++) _px(ctx, 0, 95 + i * 11, W, 1, '#2a1808');
+      _px(ctx, 0, 90, W, 2, '#5a4030');
+
+      // Crowd silhouette
+      _px(ctx, 0, 140, W, 20, '#0c0a09');
+      for (let i = 0; i < 25; i++) {
+        const cx = 4 + i * 8;
+        const ch = 4 + ((i * 7) % 6);
+        _px(ctx, cx, 140 - ch, 6, ch, '#1c1917');
+        _px(ctx, cx + 1, 138 - ch, 4, 3, '#0c0a09');
+      }
+      // Crowd hands raised when someone is performing
+      if (activeSide && frameCount % 30 < 15) {
+        for (let i = 0; i < 6; i++) {
+          const cx = 12 + i * 30 + ((i * 3) % 7);
+          _px(ctx, cx, 134, 1, 4, '#1c1917');
+        }
+      }
+
+      // Beatboxers
+      drawBeatboxer(ctx, 60, 130, playerLook, 'right', activeSide === 'P', frameCount);
+      drawBeatboxer(ctx, 140, 130, oppLook, 'left', activeSide === 'O', frameCount);
+
+      // Sound waves emanating from active beatboxer (centered on torso ~y=110)
+      const drawWaves = (waves, sx) => {
+        for (let i = waves.length - 1; i >= 0; i--) {
+          const w = waves[i];
+          w.life++;
+          if (w.life > w.ttl) { waves.splice(i, 1); continue; }
+          const t = w.life / w.ttl;
+          ctx.globalAlpha = (1 - t) * 0.6;
+          ctx.fillStyle = w.color;
+          const r = 4 + t * 22;
+          for (let a = 0; a < 10; a++) {
+            const angle = (a / 10) * Math.PI * 2;
+            const xx = Math.floor(sx + Math.cos(angle) * r);
+            const yy = Math.floor(112 + Math.sin(angle) * r);
+            if (xx >= 0 && xx < W && yy >= 0 && yy < H) ctx.fillRect(xx, yy, 1, 1);
+          }
+          ctx.globalAlpha = 1;
+        }
+      };
+      drawWaves(wavesPlayerRef.current, 60);
+      drawWaves(wavesOppRef.current, 140);
+
+      // Hearts floating up
+      heartsRef.current = heartsRef.current.filter(h => {
+        h.life++; h.x += h.vx; h.y += h.vy; h.vy += 0.02;
+        const t = h.life / h.ttl;
+        if (t > 1) return false;
+        drawPixelHeart(ctx, Math.floor(h.x), Math.floor(h.y), 1 - t * 0.7);
+        return true;
+      });
+
+      // Spark particles
+      sparksRef.current = sparksRef.current.filter(s => {
+        s.life++; s.x += s.vx; s.y += s.vy; s.vy += 0.05;
+        if (s.life > s.ttl) return false;
+        const t = s.life / s.ttl;
+        ctx.globalAlpha = 1 - t;
+        ctx.fillStyle = s.color;
+        ctx.fillRect(Math.floor(s.x), Math.floor(s.y), 1, 1);
+        ctx.globalAlpha = 1;
+        return true;
+      });
+
+      ctx.restore();
+      raf = requestAnimationFrame(draw);
+    };
+
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [char.color, opponent.name]);
+
+  return (
+    <div className="relative w-full overflow-hidden border-2 border-stone-800" style={{ aspectRatio: '5/4', background: '#0c0a09' }}>
+      <canvas ref={canvasRef} className="block w-full h-full" style={{ imageRendering: 'pixelated' }} />
+      {currentSound && activeSide && (
+        <FloatingSound key={currentSound + Date.now()} text={currentSound} side={activeSide} color={soundColor} />
+      )}
+      {comboLabel && activeSide === 'P' && (
+        <div key={comboLabel.key} className="absolute pointer-events-none"
+          style={{ left: '8%', top: '12%', animation: 'comboPop 1.6s ease-out forwards' }}>
+          <div className="text-base font-black tracking-widest px-2 py-1 border-2 border-amber-500 bg-amber-500/20"
+            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif', color: '#D4A017', textShadow: '2px 2px 0 #0c0a09' }}>
+            🔥 {comboLabel.text}
+          </div>
+        </div>
+      )}
+      <style>{`
+        @keyframes soundFloat {
+          0% { transform: translateY(0) scale(0.6); opacity: 0; }
+          15% { transform: translateY(-5px) scale(1.1); opacity: 1; }
+          80% { transform: translateY(-30px) scale(1); opacity: 1; }
+          100% { transform: translateY(-50px) scale(0.9); opacity: 0; }
+        }
+        @keyframes comboPop {
+          0% { transform: translateY(8px) scale(0.5) rotate(-4deg); opacity: 0; }
+          15% { transform: translateY(-2px) scale(1.15) rotate(-2deg); opacity: 1; }
+          85% { transform: translateY(-4px) scale(1) rotate(-2deg); opacity: 1; }
+          100% { transform: translateY(-12px) scale(0.95) rotate(-2deg); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 // The full sketch stage
 const SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0], comboLabel = null }) => {
   const W = 400, H = 320;
@@ -5552,16 +5891,43 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
   };
 
   // Opponent rounds: use the standard SOUND_CATALOG playback.
+  // Schedule background beat fills at 8th notes (130 BPM) so the audio feels dense.
+  // skipWindow optionally suppresses fills inside [start, end) (used to leave room for
+  // a learned pattern in player rounds). pickKey returns either a hero-sound key or null.
+  const scheduleBeatFill = (pickSound, skipWindow = null) => {
+    const fillBpm = 130;
+    const stepMs = 60000 / fillBpm / 2;
+    const endMs = ROUND_SECONDS * 1000 - 200;
+    for (let t = stepMs / 2; t < endMs; t += stepMs) {
+      if (skipWindow && t >= skipWindow.start && t < skipWindow.end) continue;
+      if (Math.random() < 0.4) {
+        const ts = t;
+        eventTimers.current.push(setTimeout(() => pickSound(), ts));
+      }
+    }
+  };
+
   const playOpponentRound = (events, color, onDone) => {
     eventTimers.current.forEach(clearTimeout);
     eventTimers.current = [];
+
+    // Background fill from opponent's catalog sounds
+    const oppSounds = (opponent.sounds || []).map(id => SOUND_CATALOG[id]).filter(Boolean);
+    const extraSchedule = () => {
+      if (oppSounds.length === 0) return;
+      scheduleBeatFill(() => {
+        const s = oppSounds[Math.floor(Math.random() * oppSounds.length)];
+        playSound(s.cat, s.name);
+      });
+    };
+
     scheduleRound(events, 'O', color, (e, sound) => {
       if (sound?.cat) playSound(sound.cat, e.name);
-    }, null, onDone);
+    }, extraSchedule, onDone);
   };
 
   // Player rounds: play the player's studio recordings (via playHeroSound) on each event,
-  // and weave in a learned tec lesson pattern as a flourish — with a combo callout.
+  // weave in a learned tec lesson pattern, and fill the rest with random hero sounds.
   const playPlayerRound = (events, color, onDone) => {
     eventTimers.current.forEach(clearTimeout);
     eventTimers.current = [];
@@ -5571,28 +5937,37 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const beatMs = 60000 / battleBpm;
 
     const extraSchedule = () => {
+      let patternWindow = null;
+
       // Pick a random unlocked lesson and weave its pattern into the middle of the round
-      if (completed <= 0) return;
-      const lessonIdx = Math.floor(Math.random() * completed);
-      const lesson = HERO_LESSONS[lessonIdx];
-      if (!lesson) return;
-      const patternStartMs = 1500;
-      const patternEndMs = patternStartMs + 16 * beatMs; // 4 bars at battle BPM
-      if (patternEndMs > ROUND_SECONDS * 1000 - 500) return;
-
-      // Combo callout
-      eventTimers.current.push(setTimeout(() => {
-        setComboLabel({ text: lesson.name, key: Date.now() });
-      }, patternStartMs));
-      eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
-
-      // Pattern beats
-      lesson.pattern.forEach(note => {
-        const t = patternStartMs + note.beat * beatMs;
-        if (t < ROUND_SECONDS * 1000) {
-          eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+      if (completed > 0) {
+        const lessonIdx = Math.floor(Math.random() * completed);
+        const lesson = HERO_LESSONS[lessonIdx];
+        if (lesson) {
+          const patternStartMs = 1500;
+          const patternEndMs = patternStartMs + 16 * beatMs;
+          if (patternEndMs <= ROUND_SECONDS * 1000 - 500) {
+            patternWindow = { start: patternStartMs, end: patternEndMs };
+            eventTimers.current.push(setTimeout(() => {
+              setComboLabel({ text: lesson.name, key: Date.now() });
+            }, patternStartMs));
+            eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
+            lesson.pattern.forEach(note => {
+              const t = patternStartMs + note.beat * beatMs;
+              if (t < ROUND_SECONDS * 1000) {
+                eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+              }
+            });
+          }
         }
-      });
+      }
+
+      // Hat-heavy random hero-sound fills outside the pattern window
+      const HERO_FILL_KEYS = ['B', 'T', 'T', 'K', 'Pf'];
+      scheduleBeatFill(() => {
+        const key = HERO_FILL_KEYS[Math.floor(Math.random() * HERO_FILL_KEYS.length)];
+        playHeroSound(key);
+      }, patternWindow);
     };
 
     scheduleRound(events, 'P', color, (e, sound) => {
@@ -5687,7 +6062,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
           <div className="text-center text-3xl tracking-tighter text-amber-500 font-black" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
             BATTLE TIME
           </div>
-          <SketchStage char={char} opponent={opponent} activeSide={null} currentSound={null}
+          <PixelStage char={char} opponent={opponent} activeSide={null} currentSound={null}
             judgeVotes={[]} revealedJudges={0} />
           <div className="grid grid-cols-2 gap-2 text-center">
             <div className="border-2 border-stone-800 bg-stone-900/30 p-2">
@@ -5738,7 +6113,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         return (
           <div className="space-y-2">
             <BattleHUD char={char} opponent={opponent} timeLeft={timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
-            <SketchStage char={char} opponent={opponent} activeSide={activeSide}
+            <PixelStage char={char} opponent={opponent} activeSide={activeSide}
               currentSound={currentSound} soundColor={currentSoundColor}
               judgeVotes={[]} revealedJudges={0} judgeHearts={judgeHearts} comboLabel={comboLabel} />
             <div className="text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse">
@@ -5756,7 +6131,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
           <div className="space-y-2">
             <BattleHUD char={char} opponent={opponent} timeLeft={ROUND_SECONDS} pScore={liveScore.p} oScore={liveScore.o} />
             <div className="relative">
-              <SketchStage char={char} opponent={opponent} activeSide={null}
+              <PixelStage char={char} opponent={opponent} activeSide={null}
                 currentSound={null} soundColor="#D4A017"
                 judgeVotes={[]} revealedJudges={0} judgeHearts={[0,0,0,0,0]} />
               <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm">
@@ -5793,7 +6168,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
       {phase === 'judging' && result && (
         <div className="space-y-3">
           <div className="text-center text-amber-500 text-xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>JUDGES VOTE</div>
-          <SketchStage char={char} opponent={opponent} activeSide={null} currentSound={null}
+          <PixelStage char={char} opponent={opponent} activeSide={null} currentSound={null}
             judgeVotes={result.judgeVotes} revealedJudges={revealedJudges} judgeHearts={[0,0,0,0,0]} />
           <div className="grid grid-cols-5 gap-1">
             {result.judgeVotes.map((v, i) => (
