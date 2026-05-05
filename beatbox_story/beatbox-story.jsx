@@ -1875,6 +1875,7 @@ const BeatboxHero = ({
   active = true,
   bpm = 90,
   lessonIdx = 0,
+  mode = 'practice', // 'practice' = 4 reps demo/player loop; 'battle' = single player rep, no auto-restart
 }) => {
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
@@ -1891,7 +1892,7 @@ const BeatboxHero = ({
   const HIT_PERFECT_MS = 130;
   const HIT_GOOD_MS = 220;
   const LOOKAHEAD_MS = 2000;
-  const REPS_TOTAL = 4; // demo, player, demo, player
+  const REPS_TOTAL = mode === 'battle' ? 1 : 4; // single player rep in battle, 2 demo+2 player in practice
   const COMPLETE_HOLD_MS = 1800;
 
   // Visual constants
@@ -1909,7 +1910,8 @@ const BeatboxHero = ({
 
     const notes = [];
     for (let rep = 0; rep < REPS_TOTAL; rep++) {
-      const isDemo = rep % 2 === 0;
+      // Practice mode alternates demo/player; battle mode is straight player
+      const isDemo = mode === 'practice' && rep % 2 === 0;
       const repStart = rep * patternMs;
       lesson.pattern.forEach((n, i) => {
         const lane = lanes.indexOf(n.sound);
@@ -1946,7 +1948,7 @@ const BeatboxHero = ({
       perfects: 0,
       laneFlash,
       audioScheduled: new Set(),
-      phase: 'demo',
+      phase: mode === 'battle' ? 'player' : 'demo',
       completeAt: 0,
       completionFired: false,
     };
@@ -2116,15 +2118,16 @@ const BeatboxHero = ({
         rerender();
       } else if (state.phase !== 'complete') {
         const repIdx = Math.floor(songT / state.patternMs);
-        const newPhase = repIdx % 2 === 0 ? 'demo' : 'player';
+        // Battle mode: always 'player'. Practice: alternate demo/player.
+        const newPhase = mode === 'battle' ? 'player' : (repIdx % 2 === 0 ? 'demo' : 'player');
         if (newPhase !== state.phase) {
           state.phase = newPhase;
           rerender();
         }
       }
 
-      // Auto-restart after celebration hold
-      if (state.phase === 'complete' && now - state.completeAt > COMPLETE_HOLD_MS) {
+      // Auto-restart after celebration hold (practice only — battle stays on completion)
+      if (mode === 'practice' && state.phase === 'complete' && now - state.completeAt > COMPLETE_HOLD_MS) {
         stateRef.current = initState({ bpm: bpmRef.current, lessonIdx: lessonIdxRef.current });
         rerender();
         raf = requestAnimationFrame(tick);
@@ -4307,7 +4310,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     char, setChar, checkLevelUp, showToast,
     config: {
       blocksPerReward: 5,
-      tickEnergyCost: tCfg.tickEnergyCost,
+      // Energy drains slower while engaging with a mini-game (so sessions feel substantial)
+      tickEnergyCost: playMode ? tCfg.tickEnergyCost * 0.4 : tCfg.tickEnergyCost,
       tickHungerCost: 1,
       tickMoodDelta: -0.3,
       // Slow ticks down 4x when actively engaging with a mini-game (only mus has one for now,
@@ -6208,40 +6212,98 @@ const playBeep = (high = false) => {
 // ============ SCREEN: BATTLE ============
 
 function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
-  // Phases: intro, rps, countdown{1..4}, round{1..4}, judging, result
-  // Sequence: A, B, A, B (RPS loser is "A" = goes first)
+  // Phases: intro, tactical, rps, countdown{1..4}, round{1..4}, judging, result
+  // Sequence: A, B, A, B (RPS loser is "A" = goes first).
+  // Each side plays 2 prepared HERO_LESSONS patterns; player rounds use BeatboxHero
+  // in battle mode (MPC tap-along), opponent rounds auto-play their pattern.
   const [phase, setPhase] = useState('intro');
-  const [countdownVal, setCountdownVal] = useState(3); // 3, 2, 1, 'BEATBOX!'
-  const [judgeHearts, setJudgeHearts] = useState([0, 0, 0, 0, 0]); // bump key per judge to retrigger heart anim
+  const [countdownVal, setCountdownVal] = useState(3);
+  const [judgeHearts, setJudgeHearts] = useState([0, 0, 0, 0, 0]);
   const [rps, setRps] = useState(null);
   const [result, setResult] = useState(null);
   const [revealedJudges, setRevealedJudges] = useState(0);
-  const [activeSide, setActiveSide] = useState(null); // 'P' | 'O' | null
-  const [playerFirst, setPlayerFirst] = useState(true); // true if player is "A" (goes first)
+  const [activeSide, setActiveSide] = useState(null);
+  const [playerFirst, setPlayerFirst] = useState(true);
   const [currentSound, setCurrentSound] = useState(null);
   const [currentSoundColor, setCurrentSoundColor] = useState('#D4A017');
   const [liveScore, setLiveScore] = useState({ p: 0, o: 0 });
   const [timeLeft, setTimeLeft] = useState(15);
-  const [comboLabel, setComboLabel] = useState(null); // {text, key} when player performs a learned pattern
+  const [comboLabel, setComboLabel] = useState(null);
+  // Pattern picks (lesson indexes) for each side's two rounds. [first turn, second turn]
+  const [playerPatternIdxs, setPlayerPatternIdxs] = useState(null);
+  const [oppPatternIdxs, setOppPatternIdxs] = useState(null);
+  // Which player slot we're currently editing in the tactical screen (0 or 1)
+  const [tacticalSlot, setTacticalSlot] = useState(0);
   const opponent = char._opponent;
   const eventTimers = useRef([]);
   const playerScoreRef = useRef(0);
   const oppScoreRef = useRef(0);
+  const BATTLE_BPM = 130;
   const ROUND_SECONDS = 12;
   const TOTAL_ROUNDS = 4;
 
   // Which side performs round n (1..4)?
   const sideForRound = (n) => {
-    const isA = (n % 2 === 1); // odd = A, even = B
+    const isA = (n % 2 === 1);
     return playerFirst ? (isA ? 'P' : 'O') : (isA ? 'O' : 'P');
   };
-  // Which round-data object (r1..r4 from runBattle) corresponds to round n?
-  // r1, r3 always belong to the player; r2, r4 to the opponent — pick by side.
-  const dataForRound = (n) => {
-    if (!result) return null;
+  // Each side performs twice; which "turn slot" (0 or 1) is round n for that side?
+  const turnSlotForRound = (n) => (n <= 2 ? 0 : 1);
+
+  // Which lesson plays in round n
+  const lessonIdxForRound = (n) => {
     const side = sideForRound(n);
-    if (side === 'P') return n <= 2 ? result.r1 : result.r3;
-    return n <= 2 ? result.r2 : result.r4;
+    const slot = turnSlotForRound(n);
+    if (side === 'P') return playerPatternIdxs?.[slot];
+    return oppPatternIdxs?.[slot];
+  };
+
+  // Lesson scoring weight: longer + higher tier patterns are worth more
+  const lessonValue = (lesson) => {
+    if (!lesson) return 0;
+    const tier = lesson.tier || 1;
+    return Math.round(lesson.pattern.length * (1 + tier * 0.4));
+  };
+  const playerRoundScore = (lessonIdx, accuracy) => {
+    const lesson = HERO_LESSONS[lessonIdx];
+    if (!lesson) return 0;
+    const base = lessonValue(lesson);
+    const statMult = 1 + (char.stats.tec + char.stats.mus) / 80;
+    return Math.round(base * accuracy * statMult);
+  };
+  const oppRoundScore = (lessonIdx) => {
+    const lesson = HERO_LESSONS[lessonIdx];
+    if (!lesson) return 0;
+    const base = lessonValue(lesson);
+    const focus = 0.55 + (opponent.stats.tec / 60) * 0.4;
+    const statMult = 1 + (opponent.stats.tec + opponent.stats.mus) / 80;
+    return Math.round(base * focus * statMult);
+  };
+
+  // What lessons can the player pick? Same gating as tec training:
+  // progression-unlocked AND any required catalog sound is owned.
+  const ownedSet = new Set(char.sounds || []);
+  const completed = char.tecLessonsCompleted || 0;
+  const isPlayableForPlayer = (i) => {
+    if (i > completed) return false;
+    const l = HERO_LESSONS[i];
+    return !l.requires || ownedSet.has(l.requires);
+  };
+  const playablePlayerIdxs = HERO_LESSONS.map((_, i) => i).filter(isPlayableForPlayer);
+
+  // Default pattern picks for both sides — first 2 distinct playable lessons (player),
+  // 2 random from a level-scaled pool (opponent).
+  const computeDefaultPlayerPicks = () => {
+    const a = playablePlayerIdxs[0] ?? 0;
+    const b = playablePlayerIdxs[1] ?? a;
+    return [a, b];
+  };
+  const computeOppPicks = () => {
+    const oppLevel = opponent.level || 1;
+    const maxIdx = Math.max(0, Math.min(HERO_LESSONS.length - 1, oppLevel + 1));
+    const pool = []; for (let i = 0; i <= maxIdx; i++) pool.push(i);
+    const pick = () => pool[Math.floor(Math.random() * pool.length)];
+    return [pick(), pick()];
   };
 
   useEffect(() => {
@@ -6265,60 +6327,76 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     setRps({ player: choice, opp, outcome });
     setTimeout(() => {
       if (outcome === 'tie') { setRps(null); return; }
-      // Per design doc: loser of RPS goes first
-      // outcome === 'win' means player won RPS → opponent goes first
-      // outcome === 'lose' means player lost RPS → player goes first
+      // Loser of RPS goes first (the "A" beatboxer)
       setPlayerFirst(outcome === 'lose');
-      const battleResult = runBattle(char, opponent);
-      setResult(battleResult);
       setPhase('countdown1');
     }, 1400);
   };
 
-  // Map a battle event's SOUND_CATALOG category to one of the 4 hero sound keys.
-  // Used so the player's recorded studio samples (B/T/K/Pf) play during their rounds,
-  // with synth fallback when nothing's recorded.
-  const catToHeroKey = (cat) => {
-    if (cat === 'Kicks') return 'B';
-    if (cat === 'Hats') return 'T';
-    if (cat === 'Snares') return 'Pf';
-    return 'K';
+  // Enter tactical phase: lock in default picks for both sides (player can change theirs).
+  const startTactical = () => {
+    getAudioCtx();
+    setPlayerPatternIdxs(computeDefaultPlayerPicks());
+    setOppPatternIdxs(computeOppPicks());
+    setTacticalSlot(0);
+    setPhase('tactical');
   };
 
-  // Common scaffolding for both round types: schedule the runBattle events for visuals/score,
-  // tick the countdown, and signal completion. `playSoundForEvent` decides what to play on each.
-  const scheduleRound = (events, side, color, playSoundForEvent, extraSchedule, onDone) => {
-    setActiveSide(side);
+  // Opponent round: auto-play the picked lesson pattern at battle BPM, awarding a fixed
+  // score (derived from pattern value × focus from stats) progressively as the round runs.
+  const playOpponentRoundPattern = (lessonIdx, color, onDone) => {
+    eventTimers.current.forEach(clearTimeout);
+    eventTimers.current = [];
+    setActiveSide('O');
     setTimeLeft(ROUND_SECONDS);
-    const scoreRef = side === 'P' ? playerScoreRef : oppScoreRef;
-    let runningScore = scoreRef.current;
+    setComboLabel(null);
 
-    events.forEach((e) => {
-      const t = (parseFloat(e.time) / 15) * ROUND_SECONDS * 1000;
+    const lesson = HERO_LESSONS[lessonIdx];
+    const beatMs = 60000 / BATTLE_BPM;
+
+    if (lesson) {
+      // Show opp's pattern name as a callout (use the same combo-label slot but for opp side)
       eventTimers.current.push(setTimeout(() => {
-        const soundId = Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name);
-        const sound = soundId ? SOUND_CATALOG[soundId] : null;
-        playSoundForEvent(e, sound);
-        setCurrentSound(e.name);
+        setCurrentSound(lesson.name);
         setCurrentSoundColor(color);
-        runningScore += e.points;
-        scoreRef.current = runningScore;
-        setLiveScore(s => side === 'P' ? { ...s, p: runningScore } : { ...s, o: runningScore });
-        if (sound) {
-          setJudgeHearts(h => {
-            const next = [...h];
-            JUDGES.forEach((j, i) => {
-              if (j.bias === sound.stat) next[i] = next[i] + 1;
-              else if (j.bias === 'random' && Math.random() < 0.35) next[i] = next[i] + 1;
-              else if (j.bias === 'showmanship' && sound.tier >= 3 && Math.random() < 0.5) next[i] = next[i] + 1;
-            });
-            return next;
-          });
-        }
-      }, t));
-    });
+      }, 250));
 
-    extraSchedule?.();
+      // Schedule pattern notes: audio + occasional judge reactions
+      const startMs = 800;
+      lesson.pattern.forEach(note => {
+        const t = startMs + note.beat * beatMs;
+        if (t < ROUND_SECONDS * 1000 - 100) {
+          eventTimers.current.push(setTimeout(() => {
+            playGameSound(note.sound);
+            const cat = SOUND_CATALOG[note.sound]?.cat;
+            const display = SOUND_CATALOG[note.sound] || HERO_SOUNDS[note.sound];
+            if (display?.name) setCurrentSound(display.name);
+            // Judge hearts: opp triggers ~30% of notes randomly
+            if (Math.random() < 0.3) {
+              setJudgeHearts(h => {
+                const next = [...h];
+                const i = Math.floor(Math.random() * 5);
+                next[i] = next[i] + 1;
+                return next;
+              });
+            }
+          }, t));
+        }
+      });
+
+      // Score ticks up linearly so it feels alive
+      const startScore = oppScoreRef.current;
+      const finalScore = oppRoundScore(lessonIdx);
+      const endScore = startScore + finalScore;
+      for (let pct = 1; pct <= 10; pct++) {
+        const at = (ROUND_SECONDS * 1000 * pct) / 10;
+        eventTimers.current.push(setTimeout(() => {
+          const v = Math.round(startScore + (endScore - startScore) * pct / 10);
+          oppScoreRef.current = v;
+          setLiveScore(s => ({ ...s, o: v }));
+        }, at));
+      }
+    }
 
     for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
       eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1000));
@@ -6332,98 +6410,21 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     }, ROUND_SECONDS * 1000));
   };
 
-  // Opponent rounds: use the standard SOUND_CATALOG playback.
-  // Schedule background beat fills at 8th notes (130 BPM) so the audio feels dense.
-  // skipWindow optionally suppresses fills inside [start, end) (used to leave room for
-  // a learned pattern in player rounds). pickKey returns either a hero-sound key or null.
-  const scheduleBeatFill = (pickSound, skipWindow = null) => {
-    const fillBpm = 130;
-    const stepMs = 60000 / fillBpm / 2;
-    const endMs = ROUND_SECONDS * 1000 - 200;
-    for (let t = stepMs / 2; t < endMs; t += stepMs) {
-      if (skipWindow && t >= skipWindow.start && t < skipWindow.end) continue;
-      if (Math.random() < 0.4) {
-        const ts = t;
-        eventTimers.current.push(setTimeout(() => pickSound(), ts));
-      }
+  // Player round: rely on BeatboxHero (mounted in JSX) for audio + tap input. We just
+  // prep state — the score is awarded when BeatboxHero fires onLessonComplete.
+  const startPlayerRound = (lessonIdx, color) => {
+    eventTimers.current.forEach(clearTimeout);
+    eventTimers.current = [];
+    setActiveSide('P');
+    setCurrentSound(HERO_LESSONS[lessonIdx]?.name || null);
+    setCurrentSoundColor(color);
+    setTimeLeft(ROUND_SECONDS);
+    setComboLabel({ text: HERO_LESSONS[lessonIdx]?.name || '', key: Date.now() });
+
+    // Tick the countdown in sync with what BeatboxHero is doing
+    for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
+      eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1000));
     }
-  };
-
-  const playOpponentRound = (events, color, onDone) => {
-    eventTimers.current.forEach(clearTimeout);
-    eventTimers.current = [];
-
-    // Background fill from opponent's catalog sounds
-    const oppSounds = (opponent.sounds || []).map(id => SOUND_CATALOG[id]).filter(Boolean);
-    const extraSchedule = () => {
-      if (oppSounds.length === 0) return;
-      scheduleBeatFill(() => {
-        const s = oppSounds[Math.floor(Math.random() * oppSounds.length)];
-        playSound(s.cat, s.name);
-      });
-    };
-
-    scheduleRound(events, 'O', color, (e, sound) => {
-      if (sound?.cat) playSound(sound.cat, e.name);
-    }, extraSchedule, onDone);
-  };
-
-  // Player rounds: play the player's studio recordings (via playHeroSound) on each event,
-  // weave in a learned tec lesson pattern, and fill the rest with random hero sounds.
-  const playPlayerRound = (events, color, onDone) => {
-    eventTimers.current.forEach(clearTimeout);
-    eventTimers.current = [];
-
-    const completed = char.tecLessonsCompleted || 0;
-    const battleBpm = 130;
-    const beatMs = 60000 / battleBpm;
-
-    const extraSchedule = () => {
-      let patternWindow = null;
-
-      // Pick a random playable lesson and weave its pattern into the middle of the round.
-      // Playable = progression-unlocked AND any required sound is owned.
-      const ownedSet = new Set(char.sounds || []);
-      const playableIdxs = [];
-      for (let i = 0; i < completed; i++) {
-        const l = HERO_LESSONS[i];
-        if (!l) continue;
-        if (l.requires && !ownedSet.has(l.requires)) continue;
-        playableIdxs.push(i);
-      }
-      if (playableIdxs.length > 0) {
-        const lessonIdx = playableIdxs[Math.floor(Math.random() * playableIdxs.length)];
-        const lesson = HERO_LESSONS[lessonIdx];
-        if (lesson) {
-          const patternStartMs = 1500;
-          const patternEndMs = patternStartMs + 16 * beatMs;
-          if (patternEndMs <= ROUND_SECONDS * 1000 - 500) {
-            patternWindow = { start: patternStartMs, end: patternEndMs };
-            eventTimers.current.push(setTimeout(() => {
-              setComboLabel({ text: lesson.name, key: Date.now() });
-            }, patternStartMs));
-            eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
-            lesson.pattern.forEach(note => {
-              const t = patternStartMs + note.beat * beatMs;
-              if (t < ROUND_SECONDS * 1000) {
-                eventTimers.current.push(setTimeout(() => playGameSound(note.sound), t));
-              }
-            });
-          }
-        }
-      }
-
-      // Hat-heavy random hero-sound fills outside the pattern window
-      const HERO_FILL_KEYS = ['B', 'T', 'T', 'K', 'Pf'];
-      scheduleBeatFill(() => {
-        const key = HERO_FILL_KEYS[Math.floor(Math.random() * HERO_FILL_KEYS.length)];
-        playHeroSound(key);
-      }, patternWindow);
-    };
-
-    scheduleRound(events, 'P', color, (e, sound) => {
-      playHeroSound(catToHeroKey(sound?.cat));
-    }, extraSchedule, onDone);
   };
 
   // Countdown effect: 3 → 2 → 1 → BEATBOX! → start round
@@ -6451,23 +6452,77 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     }
   }, [phase]);
 
-  // Round runner: looks up which side performs round n and plays the matching round data.
+  // Round runner: opponent rounds auto-play their pattern; player rounds are driven
+  // by the BeatboxHero component mounted in JSX (its onLessonComplete advances phase).
   useEffect(() => {
     const m = /^round([1-4])$/.exec(phase);
-    if (!m || !result) return;
+    if (!m) return;
+    if (!playerPatternIdxs || !oppPatternIdxs) return;
     const roundN = parseInt(m[1]);
     const side = sideForRound(roundN);
-    const data = dataForRound(roundN);
-    if (!data) return;
+    const lessonIdx = lessonIdxForRound(roundN);
     const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : 'judging';
-    const onDone = () => setPhase(nextPhase);
-    if (side === 'P') playPlayerRound(data.events, char.color, onDone);
-    else playOpponentRound(data.events, '#CC2200', onDone);
+    if (side === 'O') {
+      playOpponentRoundPattern(lessonIdx, '#CC2200', () => setPhase(nextPhase));
+    } else {
+      startPlayerRound(lessonIdx, char.color);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, result]);
+  }, [phase, playerPatternIdxs, oppPatternIdxs]);
+
+  // When player's BeatboxHero finishes its single rep, score the round and advance.
+  const handlePlayerRoundComplete = (roundN, accuracy) => {
+    const lessonIdx = lessonIdxForRound(roundN);
+    const score = playerRoundScore(lessonIdx, accuracy);
+    const newScore = playerScoreRef.current + score;
+    playerScoreRef.current = newScore;
+    setLiveScore(s => ({ ...s, p: newScore }));
+    // Brief celebratory hold before advancing
+    eventTimers.current.push(setTimeout(() => {
+      setActiveSide(null);
+      setComboLabel(null);
+      const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : 'judging';
+      setPhase(nextPhase);
+    }, 1500));
+  };
+
+  // When judging starts, compute the result from accumulated scores + judges' biases.
+  useEffect(() => {
+    if (phase !== 'judging' || result) return;
+    const finalP = playerScoreRef.current;
+    const finalO = oppScoreRef.current;
+    // Distinct sounds across each side's two patterns (originality bias)
+    const playerLessons = (playerPatternIdxs || []).map(i => HERO_LESSONS[i]).filter(Boolean);
+    const oppLessons = (oppPatternIdxs || []).map(i => HERO_LESSONS[i]).filter(Boolean);
+    const playerUniqueSounds = new Set(playerLessons.flatMap(l => l.pattern.map(n => n.sound)));
+    const oppUniqueSounds = new Set(oppLessons.flatMap(l => l.pattern.map(n => n.sound)));
+    const judgeVotes = JUDGES.map(j => {
+      let p = finalP, o = finalO;
+      if (j.bias === 'technicality') {
+        p *= 1 + char.stats.tec / 60;
+        o *= 1 + opponent.stats.tec / 60;
+      } else if (j.bias === 'musicality') {
+        p *= 1 + char.stats.mus / 60;
+        o *= 1 + opponent.stats.mus / 60;
+      } else if (j.bias === 'originality') {
+        p *= 1 + playerUniqueSounds.size / 8;
+        o *= 1 + oppUniqueSounds.size / 8;
+      } else if (j.bias === 'showmanship') {
+        p *= 1 + char.stats.sho / 50;
+        o *= 1 + opponent.stats.sho / 50;
+      } else {
+        p *= 0.85 + Math.random() * 0.3;
+        o *= 0.85 + Math.random() * 0.3;
+      }
+      return { judge: j, vote: p > o ? 'P' : 'O', pScore: Math.round(p), oScore: Math.round(o) };
+    });
+    const playerVotes = judgeVotes.filter(v => v.vote === 'P').length;
+    setResult({ won: playerVotes >= 3, finalP, finalO, judgeVotes, playerVotes });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   useEffect(() => {
-    if (phase === 'judging') {
+    if (phase === 'judging' && result) {
       if (revealedJudges < 5) {
         const t = setTimeout(() => setRevealedJudges(r => r + 1), 700);
         return () => clearTimeout(t);
@@ -6476,7 +6531,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         return () => clearTimeout(t);
       }
     }
-  }, [phase, revealedJudges]);
+  }, [phase, revealedJudges, result]);
 
   const finishBattle = () => {
     const won = result.won;
@@ -6525,9 +6580,67 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
               <div className="text-[10px] text-stone-500 uppercase">M{opponent.stats.mus} T{opponent.stats.tec} O{opponent.stats.ori} S{opponent.stats.sho}</div>
             </div>
           </div>
-          <Btn variant="primary" onClick={() => { getAudioCtx(); setPhase('rps'); }} className="w-full py-3">WHO GOES FIRST? 🎲</Btn>
+          <Btn variant="primary" onClick={startTactical} className="w-full py-3">PICK YOUR PATTERNS ▶</Btn>
         </div>
       )}
+
+      {phase === 'tactical' && playerPatternIdxs && (() => {
+        const slots = [0, 1];
+        const setPick = (slot, idx) => {
+          setPlayerPatternIdxs(p => { const n = [...p]; n[slot] = idx; return n; });
+        };
+        return (
+          <div className="space-y-3">
+            <div className="text-center">
+              <div className="text-amber-500 text-2xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                PREP YOUR SET
+              </div>
+              <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Pick a pattern for each of your two rounds</div>
+            </div>
+            {slots.map(slot => {
+              const currentIdx = playerPatternIdxs[slot];
+              const currentLesson = HERO_LESSONS[currentIdx];
+              return (
+                <div key={slot} className="border-2 border-stone-800 bg-stone-900/30 p-2 space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <div className="text-amber-500 text-xs uppercase tracking-widest"
+                      style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                      Your turn #{slot + 1}
+                    </div>
+                    <div className="text-[10px] text-stone-400">
+                      {currentLesson?.name || '—'}
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto -mx-1">
+                    <div className="flex gap-1.5 px-1 pb-1">
+                      {HERO_LESSONS.map((lesson, i) => {
+                        const playable = isPlayableForPlayer(i);
+                        const selected = i === currentIdx;
+                        return (
+                          <button key={i}
+                            disabled={!playable}
+                            onClick={() => setPick(slot, i)}
+                            className={`flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${
+                              selected ? 'border-amber-500 bg-amber-500/10 text-amber-500' :
+                              playable ? 'border-stone-700 text-stone-400 hover:border-amber-500/50' :
+                                         'border-stone-800 text-stone-600 opacity-40'
+                            }`}>
+                            {!playable && '🔒 '}#{i + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                    {currentLesson?.desc || ''}
+                  </div>
+                </div>
+              );
+            })}
+            <Btn variant="primary" onClick={() => setPhase('rps')} className="w-full py-3">LOCK IN ▶</Btn>
+          </div>
+        );
+      })()}
 
       {phase === 'rps' && (
         <div className="space-y-4 text-center pt-4">
@@ -6559,17 +6672,30 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         </div>
       )}
 
-      {/^round[1-4]$/.test(phase) && result && (() => {
+      {/^round[1-4]$/.test(phase) && playerPatternIdxs && oppPatternIdxs && (() => {
         const roundN = parseInt(phase.replace('round', ''));
+        const side = sideForRound(roundN);
+        const lessonIdx = lessonIdxForRound(roundN);
+        const lesson = HERO_LESSONS[lessonIdx];
         return (
           <div className="space-y-2">
             <BattleHUD char={char} opponent={opponent} timeLeft={timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
             <PixelStage char={char} opponent={opponent} activeSide={activeSide}
               currentSound={currentSound} soundColor={currentSoundColor}
               judgeVotes={[]} revealedJudges={0} judgeHearts={judgeHearts} comboLabel={comboLabel} />
-            <div className="text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse">
-              ROUND {roundN} / {TOTAL_ROUNDS} · {activeSide === 'P' ? `${char.name} performing` : `${opponent.name} performing`}
+            <div className="text-center text-amber-500 text-sm tracking-widest uppercase">
+              ROUND {roundN}/{TOTAL_ROUNDS} · {side === 'P' ? char.name : opponent.name} · {lesson?.name}
             </div>
+            {side === 'P' && lesson != null && (
+              <BeatboxHero
+                mode="battle"
+                active={true}
+                bpm={BATTLE_BPM}
+                lessonIdx={lessonIdx}
+                onAccuracyUpdate={() => {}}
+                onLessonComplete={(_idx, accuracy) => handlePlayerRoundComplete(roundN, accuracy)}
+              />
+            )}
           </div>
         );
       })()}
