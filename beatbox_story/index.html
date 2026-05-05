@@ -2902,21 +2902,27 @@ window.exports = window.module.exports;
     const oppStats = { mus: opponent.stats.mus, tec: opponent.stats.tec, ori: opponent.stats.ori, sho: opponent.stats.sho };
     const r1 = performRound(player.name, playerStats, playerSounds, playerFocus);
     const r2 = performRound(opponent.name, oppStats, oppSounds, 80);
+    const r3 = performRound(player.name, playerStats, playerSounds, playerFocus);
+    const r4 = performRound(opponent.name, oppStats, oppSounds, 80);
+    const playerEvents = [...r1.events, ...r3.events];
+    const oppEvents = [...r2.events, ...r4.events];
+    const playerScore = r1.score + r3.score;
+    const oppScore = r2.score + r4.score;
     const showmanshipBonusP = 1 + playerStats.sho / 50;
     const showmanshipBonusO = 1 + oppStats.sho / 50;
-    const finalP = Math.round(r1.score * showmanshipBonusP);
-    const finalO = Math.round(r2.score * showmanshipBonusO);
+    const finalP = Math.round(playerScore * showmanshipBonusP);
+    const finalO = Math.round(oppScore * showmanshipBonusO);
     const judgeVotes = JUDGES.map((j) => {
       let pScore = finalP, oScore = finalO;
       if (j.bias === "technicality") {
-        pScore = r1.events.filter((e) => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name)]?.stat === "technicality").reduce((a, e) => a + e.points, 0) || pScore * 0.6;
-        oScore = r2.events.filter((e) => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name)]?.stat === "technicality").reduce((a, e) => a + e.points, 0) || oScore * 0.6;
+        pScore = playerEvents.filter((e) => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name)]?.stat === "technicality").reduce((a, e) => a + e.points, 0) || pScore * 0.6;
+        oScore = oppEvents.filter((e) => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name)]?.stat === "technicality").reduce((a, e) => a + e.points, 0) || oScore * 0.6;
       } else if (j.bias === "musicality") {
         pScore = finalP * (1 + playerStats.mus / 60);
         oScore = finalO * (1 + oppStats.mus / 60);
       } else if (j.bias === "originality") {
-        const pUnique = new Set(r1.events.map((e) => e.name)).size;
-        const oUnique = new Set(r2.events.map((e) => e.name)).size;
+        const pUnique = new Set(playerEvents.map((e) => e.name)).size;
+        const oUnique = new Set(oppEvents.map((e) => e.name)).size;
         pScore = finalP * (1 + pUnique / 10);
         oScore = finalO * (1 + oUnique / 10);
       } else if (j.bias === "showmanship") {
@@ -2930,7 +2936,7 @@ window.exports = window.module.exports;
     });
     const playerVotes = judgeVotes.filter((v) => v.vote === "P").length;
     const won = playerVotes >= 3;
-    return { won, finalP, finalO, r1, r2, judgeVotes, playerVotes };
+    return { won, finalP, finalO, r1, r2, r3, r4, judgeVotes, playerVotes };
   }
   var Bar = ({ value, max, color, icon: Icon, label }) => /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-2" }, Icon && /* @__PURE__ */ import_react.default.createElement(Icon, { size: 14, className: "text-stone-400" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-widest text-stone-500 mb-0.5" }, /* @__PURE__ */ import_react.default.createElement("span", null, label), /* @__PURE__ */ import_react.default.createElement("span", null, Math.round(value), "/", max)), /* @__PURE__ */ import_react.default.createElement("div", { className: "h-2 bg-stone-900 border border-stone-800" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "h-full transition-all", style: { width: `${Math.max(0, Math.min(100, value / max * 100))}%`, background: color } }))));
   var Btn = ({ children, onClick, disabled, variant = "default", className = "" }) => {
@@ -3953,7 +3959,7 @@ window.exports = window.module.exports;
     },
     text.toUpperCase()
   ));
-  var SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0, 0, 0, 0, 0] }) => {
+  var SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0, 0, 0, 0, 0], comboLabel = null }) => {
     const W = 400, H = 320;
     return /* @__PURE__ */ import_react.default.createElement("div", { className: "relative w-full overflow-hidden border-2 border-stone-800", style: { aspectRatio: "5/4", background: "#1c1917" } }, /* @__PURE__ */ import_react.default.createElement("svg", { viewBox: `0 0 ${W} ${H}`, className: "absolute inset-0 w-full h-full", preserveAspectRatio: "xMidYMid slice" }, /* @__PURE__ */ import_react.default.createElement(SketchDefs, null), /* @__PURE__ */ import_react.default.createElement("rect", { width: W, height: H, fill: "#1c1917" }), /* @__PURE__ */ import_react.default.createElement(
       "path",
@@ -3969,7 +3975,27 @@ window.exports = window.module.exports;
       const jy = H * 0.28;
       const v = judgeVotes?.[i];
       return /* @__PURE__ */ import_react.default.createElement(Judge, { key: i, x: jx, y: jy, vote: v?.vote, revealed: i < revealedJudges, heartKey: judgeHearts[i] });
-    })), /* @__PURE__ */ import_react.default.createElement(Beatboxer, { x: 130, y: H * 0.62, color: char.color, facing: "right", active: activeSide === "P", name: char.name }), /* @__PURE__ */ import_react.default.createElement(Beatboxer, { x: W - 130, y: H * 0.62, color: "#CC2200", facing: "left", active: activeSide === "O", name: opponent.name }), /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(0, ${H * 0.78})` }, /* @__PURE__ */ import_react.default.createElement(Crowd, { width: W, height: H * 0.22, intensity: activeSide ? 1.2 : 0.8 }))), currentSound && activeSide && /* @__PURE__ */ import_react.default.createElement(FloatingSound, { key: currentSound + Date.now(), text: currentSound, side: activeSide, color: soundColor }), /* @__PURE__ */ import_react.default.createElement("style", null, `
+    })), /* @__PURE__ */ import_react.default.createElement(Beatboxer, { x: 130, y: H * 0.62, color: char.color, facing: "right", active: activeSide === "P", name: char.name }), /* @__PURE__ */ import_react.default.createElement(Beatboxer, { x: W - 130, y: H * 0.62, color: "#CC2200", facing: "left", active: activeSide === "O", name: opponent.name }), /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(0, ${H * 0.78})` }, /* @__PURE__ */ import_react.default.createElement(Crowd, { width: W, height: H * 0.22, intensity: activeSide ? 1.2 : 0.8 }))), currentSound && activeSide && /* @__PURE__ */ import_react.default.createElement(FloatingSound, { key: currentSound + Date.now(), text: currentSound, side: activeSide, color: soundColor }), comboLabel && activeSide === "P" && /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        key: comboLabel.key,
+        className: "absolute pointer-events-none",
+        style: { left: "8%", top: "12%", animation: "comboPop 1.6s ease-out forwards" }
+      },
+      /* @__PURE__ */ import_react.default.createElement(
+        "div",
+        {
+          className: "text-base font-black tracking-widest px-2 py-1 border-2 border-amber-500 bg-amber-500/20",
+          style: {
+            fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+            color: "#D4A017",
+            textShadow: "2px 2px 0 #0c0a09"
+          }
+        },
+        "\u{1F525} ",
+        comboLabel.text
+      )
+    ), /* @__PURE__ */ import_react.default.createElement("style", null, `
         @keyframes soundFloat {
           0% { transform: translateY(0) scale(0.6); opacity: 0; }
           15% { transform: translateY(-5px) scale(1.1); opacity: 1; }
@@ -3989,6 +4015,12 @@ window.exports = window.module.exports;
           20% { transform: translateY(0) scale(1.4); opacity: 1; }
           50% { transform: translateY(-8px) scale(1); opacity: 1; }
           100% { transform: translateY(-22px) scale(0.7); opacity: 0; }
+        }
+        @keyframes comboPop {
+          0% { transform: translateY(8px) scale(0.5) rotate(-4deg); opacity: 0; }
+          15% { transform: translateY(-2px) scale(1.15) rotate(-2deg); opacity: 1; }
+          85% { transform: translateY(-4px) scale(1) rotate(-2deg); opacity: 1; }
+          100% { transform: translateY(-12px) scale(0.95) rotate(-2deg); opacity: 0; }
         }
       `));
   };
@@ -4381,9 +4413,23 @@ window.exports = window.module.exports;
     const [currentSoundColor, setCurrentSoundColor] = (0, import_react.useState)("#D4A017");
     const [liveScore, setLiveScore] = (0, import_react.useState)({ p: 0, o: 0 });
     const [timeLeft, setTimeLeft] = (0, import_react.useState)(15);
+    const [comboLabel, setComboLabel] = (0, import_react.useState)(null);
     const opponent = char._opponent;
     const eventTimers = (0, import_react.useRef)([]);
+    const playerScoreRef = (0, import_react.useRef)(0);
+    const oppScoreRef = (0, import_react.useRef)(0);
     const ROUND_SECONDS = 12;
+    const TOTAL_ROUNDS = 4;
+    const sideForRound = (n) => {
+      const isA = n % 2 === 1;
+      return playerFirst ? isA ? "P" : "O" : isA ? "O" : "P";
+    };
+    const dataForRound = (n) => {
+      if (!result) return null;
+      const side = sideForRound(n);
+      if (side === "P") return n <= 2 ? result.r1 : result.r3;
+      return n <= 2 ? result.r2 : result.r4;
+    };
     (0, import_react.useEffect)(() => {
       if (!opponent) {
         go("bar");
@@ -4415,25 +4461,28 @@ window.exports = window.module.exports;
         setPhase("countdown1");
       }, 1400);
     };
-    const playRound = (events, side, color, onDone) => {
-      eventTimers.current.forEach(clearTimeout);
-      eventTimers.current = [];
+    const catToHeroKey = (cat) => {
+      if (cat === "Kicks") return "B";
+      if (cat === "Hats") return "T";
+      if (cat === "Snares") return "Pf";
+      return "K";
+    };
+    const scheduleRound = (events, side, color, playSoundForEvent, extraSchedule, onDone) => {
       setActiveSide(side);
-      setLiveScore((s) => side === "P" ? { ...s, p: 0 } : { ...s, o: 0 });
       setTimeLeft(ROUND_SECONDS);
-      let runningScore = 0;
+      const scoreRef = side === "P" ? playerScoreRef : oppScoreRef;
+      let runningScore = scoreRef.current;
       events.forEach((e) => {
         const t = parseFloat(e.time) / 15 * ROUND_SECONDS * 1e3;
         eventTimers.current.push(setTimeout(() => {
           const soundId = Object.keys(SOUND_CATALOG).find((k) => SOUND_CATALOG[k].name === e.name);
           const sound = soundId ? SOUND_CATALOG[soundId] : null;
-          const cat = sound?.cat;
-          if (cat) playSound(cat, e.name);
+          playSoundForEvent(e, sound);
           setCurrentSound(e.name);
           setCurrentSoundColor(color);
           runningScore += e.points;
-          const finalScore = runningScore;
-          setLiveScore((s) => side === "P" ? { ...s, p: finalScore } : { ...s, o: finalScore });
+          scoreRef.current = runningScore;
+          setLiveScore((s) => side === "P" ? { ...s, p: runningScore } : { ...s, o: runningScore });
           if (sound) {
             setJudgeHearts((h) => {
               const next = [...h];
@@ -4447,17 +4496,57 @@ window.exports = window.module.exports;
           }
         }, t));
       });
+      extraSchedule?.();
       for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
         eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1e3));
       }
       eventTimers.current.push(setTimeout(() => {
         setCurrentSound(null);
         setActiveSide(null);
+        setComboLabel(null);
         onDone();
       }, ROUND_SECONDS * 1e3));
     };
+    const playOpponentRound = (events, color, onDone) => {
+      eventTimers.current.forEach(clearTimeout);
+      eventTimers.current = [];
+      scheduleRound(events, "O", color, (e, sound) => {
+        if (sound?.cat) playSound(sound.cat, e.name);
+      }, null, onDone);
+    };
+    const playPlayerRound = (events, color, onDone) => {
+      eventTimers.current.forEach(clearTimeout);
+      eventTimers.current = [];
+      const completed = char.tecLessonsCompleted || 0;
+      const battleBpm = 130;
+      const beatMs = 6e4 / battleBpm;
+      const extraSchedule = () => {
+        if (completed <= 0) return;
+        const lessonIdx = Math.floor(Math.random() * completed);
+        const lesson = HERO_LESSONS[lessonIdx];
+        if (!lesson) return;
+        const patternStartMs = 1500;
+        const patternEndMs = patternStartMs + 16 * beatMs;
+        if (patternEndMs > ROUND_SECONDS * 1e3 - 500) return;
+        eventTimers.current.push(setTimeout(() => {
+          setComboLabel({ text: lesson.name, key: Date.now() });
+        }, patternStartMs));
+        eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
+        lesson.pattern.forEach((note) => {
+          const t = patternStartMs + note.beat * beatMs;
+          if (t < ROUND_SECONDS * 1e3) {
+            eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+          }
+        });
+      };
+      scheduleRound(events, "P", color, (e, sound) => {
+        playHeroSound(catToHeroKey(sound?.cat));
+      }, extraSchedule, onDone);
+    };
     (0, import_react.useEffect)(() => {
-      if (phase !== "countdown1" && phase !== "countdown2") return;
+      const isCountdown = /^countdown[1-4]$/.test(phase);
+      if (!isCountdown) return;
+      const roundN = parseInt(phase.replace("countdown", ""));
       setCountdownVal(3);
       playBeep(false);
       const timers = [
@@ -4473,27 +4562,28 @@ window.exports = window.module.exports;
           setCountdownVal("BEATBOX!");
           playBeep(true);
         }, 2400),
-        setTimeout(() => {
-          if (phase === "countdown1") setPhase("round1");
-          else setPhase("round2");
-        }, 3300)
+        setTimeout(() => setPhase(`round${roundN}`), 3300)
       ];
       return () => timers.forEach(clearTimeout);
     }, [phase]);
     (0, import_react.useEffect)(() => {
-      if (phase === "round1" && result) {
-        if (playerFirst) {
-          playRound(result.r1.events, "P", char.color, () => setPhase("countdown2"));
-        } else {
-          playRound(result.r2.events, "O", "#CC2200", () => setPhase("countdown2"));
-        }
-      } else if (phase === "round2" && result) {
-        if (playerFirst) {
-          playRound(result.r2.events, "O", "#CC2200", () => setPhase("judging"));
-        } else {
-          playRound(result.r1.events, "P", char.color, () => setPhase("judging"));
-        }
+      if (phase === "countdown1") {
+        playerScoreRef.current = 0;
+        oppScoreRef.current = 0;
+        setLiveScore({ p: 0, o: 0 });
       }
+    }, [phase]);
+    (0, import_react.useEffect)(() => {
+      const m = /^round([1-4])$/.exec(phase);
+      if (!m || !result) return;
+      const roundN = parseInt(m[1]);
+      const side = sideForRound(roundN);
+      const data = dataForRound(roundN);
+      if (!data) return;
+      const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : "judging";
+      const onDone = () => setPhase(nextPhase);
+      if (side === "P") playPlayerRound(data.events, char.color, onDone);
+      else playOpponentRound(data.events, "#CC2200", onDone);
     }, [phase, result]);
     (0, import_react.useEffect)(() => {
       if (phase === "judging") {
@@ -4573,60 +4663,67 @@ window.exports = window.module.exports;
         style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
       },
       rps.outcome === "win" ? "YOU WIN! THEY START" : rps.outcome === "lose" ? "YOU GO FIRST" : "TIE \u2014 REPLAY"
-    ))), (phase === "round1" || phase === "round2") && result && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(BattleHUD, { char, opponent, timeLeft, pScore: liveScore.p, oScore: liveScore.o }), /* @__PURE__ */ import_react.default.createElement(
-      SketchStage,
-      {
-        char,
-        opponent,
-        activeSide,
-        currentSound,
-        soundColor: currentSoundColor,
-        judgeVotes: [],
-        revealedJudges: 0,
-        judgeHearts
-      }
-    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse" }, activeSide === "P" ? `${char.name} is performing` : `${opponent.name} is performing`)), (phase === "countdown1" || phase === "countdown2") && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(BattleHUD, { char, opponent, timeLeft: ROUND_SECONDS, pScore: liveScore.p, oScore: liveScore.o }), /* @__PURE__ */ import_react.default.createElement("div", { className: "relative" }, /* @__PURE__ */ import_react.default.createElement(
-      SketchStage,
-      {
-        char,
-        opponent,
-        activeSide: null,
-        currentSound: null,
-        soundColor: "#D4A017",
-        judgeVotes: [],
-        revealedJudges: 0,
-        judgeHearts: [0, 0, 0, 0, 0]
-      }
-    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm" }, /* @__PURE__ */ import_react.default.createElement(
-      "div",
-      {
-        key: countdownVal,
-        className: "text-center",
-        style: { animation: "countdownPop 0.7s ease-out" }
-      },
-      /* @__PURE__ */ import_react.default.createElement(
+    ))), /^round[1-4]$/.test(phase) && result && (() => {
+      const roundN = parseInt(phase.replace("round", ""));
+      return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(BattleHUD, { char, opponent, timeLeft, pScore: liveScore.p, oScore: liveScore.o }), /* @__PURE__ */ import_react.default.createElement(
+        SketchStage,
+        {
+          char,
+          opponent,
+          activeSide,
+          currentSound,
+          soundColor: currentSoundColor,
+          judgeVotes: [],
+          revealedJudges: 0,
+          judgeHearts,
+          comboLabel
+        }
+      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse" }, "ROUND ", roundN, " / ", TOTAL_ROUNDS, " \xB7 ", activeSide === "P" ? `${char.name} performing` : `${opponent.name} performing`));
+    })(), /^countdown[1-4]$/.test(phase) && (() => {
+      const roundN = parseInt(phase.replace("countdown", ""));
+      const upcomingSide = sideForRound(roundN);
+      const upcomingName = upcomingSide === "P" ? char.name : opponent.name;
+      return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement(BattleHUD, { char, opponent, timeLeft: ROUND_SECONDS, pScore: liveScore.p, oScore: liveScore.o }), /* @__PURE__ */ import_react.default.createElement("div", { className: "relative" }, /* @__PURE__ */ import_react.default.createElement(
+        SketchStage,
+        {
+          char,
+          opponent,
+          activeSide: null,
+          currentSound: null,
+          soundColor: "#D4A017",
+          judgeVotes: [],
+          revealedJudges: 0,
+          judgeHearts: [0, 0, 0, 0, 0]
+        }
+      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm" }, /* @__PURE__ */ import_react.default.createElement(
         "div",
         {
-          className: `font-black tracking-tighter ${typeof countdownVal === "string" ? "text-amber-500 text-6xl" : "text-stone-100 text-8xl"}`,
-          style: {
-            fontFamily: '"Bebas Neue", "Oswald", sans-serif',
-            textShadow: "4px 4px 0 #0c0a09"
-          }
+          key: countdownVal,
+          className: "text-center",
+          style: { animation: "countdownPop 0.7s ease-out" }
         },
-        countdownVal
-      ),
-      typeof countdownVal === "string" && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-400 text-xs uppercase tracking-[0.4em] mt-2" }, (() => {
-        const isPlayerThisRound = phase === "countdown1" && playerFirst || phase === "countdown2" && !playerFirst;
-        return `${isPlayerThisRound ? char.name : opponent.name}'s turn`;
-      })())
-    ))), /* @__PURE__ */ import_react.default.createElement("style", null, `
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-[10px] uppercase tracking-[0.4em] mb-2" }, "Round ", roundN, " / ", TOTAL_ROUNDS),
+        /* @__PURE__ */ import_react.default.createElement(
+          "div",
+          {
+            className: `font-black tracking-tighter ${typeof countdownVal === "string" ? "text-amber-500 text-6xl" : "text-stone-100 text-8xl"}`,
+            style: {
+              fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+              textShadow: "4px 4px 0 #0c0a09"
+            }
+          },
+          countdownVal
+        ),
+        typeof countdownVal === "string" && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-400 text-xs uppercase tracking-[0.4em] mt-2" }, upcomingName, "'s turn")
+      ))), /* @__PURE__ */ import_react.default.createElement("style", null, `
             @keyframes countdownPop {
               0% { transform: scale(0.4); opacity: 0; }
               30% { transform: scale(1.3); opacity: 1; }
               60% { transform: scale(1); opacity: 1; }
               100% { transform: scale(1); opacity: 1; }
             }
-          `)), phase === "judging" && result && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "JUDGES VOTE"), /* @__PURE__ */ import_react.default.createElement(
+          `));
+    })(), phase === "judging" && result && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "JUDGES VOTE"), /* @__PURE__ */ import_react.default.createElement(
       SketchStage,
       {
         char,

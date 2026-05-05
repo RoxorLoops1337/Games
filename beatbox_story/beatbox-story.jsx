@@ -3354,25 +3354,33 @@ function runBattle(player, opponent) {
   const playerFocus = Math.min(100, player.mood + 20);
   const oppStats = { mus: opponent.stats.mus, tec: opponent.stats.tec, ori: opponent.stats.ori, sho: opponent.stats.sho };
 
+  // Two rounds per beatboxer (A/B/A/B sequence chosen by RPS)
   const r1 = performRound(player.name, playerStats, playerSounds, playerFocus);
   const r2 = performRound(opponent.name, oppStats, oppSounds, 80);
+  const r3 = performRound(player.name, playerStats, playerSounds, playerFocus);
+  const r4 = performRound(opponent.name, oppStats, oppSounds, 80);
+
+  const playerEvents = [...r1.events, ...r3.events];
+  const oppEvents = [...r2.events, ...r4.events];
+  const playerScore = r1.score + r3.score;
+  const oppScore = r2.score + r4.score;
 
   const showmanshipBonusP = 1 + (playerStats.sho / 50);
   const showmanshipBonusO = 1 + (oppStats.sho / 50);
-  const finalP = Math.round(r1.score * showmanshipBonusP);
-  const finalO = Math.round(r2.score * showmanshipBonusO);
+  const finalP = Math.round(playerScore * showmanshipBonusP);
+  const finalO = Math.round(oppScore * showmanshipBonusO);
 
   const judgeVotes = JUDGES.map(j => {
     let pScore = finalP, oScore = finalO;
     if (j.bias === 'technicality') {
-      pScore = r1.events.filter(e => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name)]?.stat === 'technicality').reduce((a, e) => a + e.points, 0) || pScore * 0.6;
-      oScore = r2.events.filter(e => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name)]?.stat === 'technicality').reduce((a, e) => a + e.points, 0) || oScore * 0.6;
+      pScore = playerEvents.filter(e => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name)]?.stat === 'technicality').reduce((a, e) => a + e.points, 0) || pScore * 0.6;
+      oScore = oppEvents.filter(e => SOUND_CATALOG[Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name)]?.stat === 'technicality').reduce((a, e) => a + e.points, 0) || oScore * 0.6;
     } else if (j.bias === 'musicality') {
       pScore = finalP * (1 + playerStats.mus / 60);
       oScore = finalO * (1 + oppStats.mus / 60);
     } else if (j.bias === 'originality') {
-      const pUnique = new Set(r1.events.map(e => e.name)).size;
-      const oUnique = new Set(r2.events.map(e => e.name)).size;
+      const pUnique = new Set(playerEvents.map(e => e.name)).size;
+      const oUnique = new Set(oppEvents.map(e => e.name)).size;
       pScore = finalP * (1 + pUnique / 10);
       oScore = finalO * (1 + oUnique / 10);
     } else if (j.bias === 'showmanship') {
@@ -3388,7 +3396,7 @@ function runBattle(player, opponent) {
   const playerVotes = judgeVotes.filter(v => v.vote === 'P').length;
   const won = playerVotes >= 3;
 
-  return { won, finalP, finalO, r1, r2, judgeVotes, playerVotes };
+  return { won, finalP, finalO, r1, r2, r3, r4, judgeVotes, playerVotes };
 }
 
 // ============ COMPONENTS ============
@@ -4866,7 +4874,7 @@ const FloatingSound = ({ text, side, color = '#D4A017' }) => (
 );
 
 // The full sketch stage
-const SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0] }) => {
+const SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0], comboLabel = null }) => {
   const W = 400, H = 320;
   return (
     <div className="relative w-full overflow-hidden border-2 border-stone-800" style={{ aspectRatio: '5/4', background: '#1c1917' }}>
@@ -4920,6 +4928,21 @@ const SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, jud
         <FloatingSound key={currentSound + Date.now()} text={currentSound} side={activeSide} color={soundColor} />
       )}
 
+      {/* Combo callout — fires when the player performs a learned pattern */}
+      {comboLabel && activeSide === 'P' && (
+        <div key={comboLabel.key} className="absolute pointer-events-none"
+          style={{ left: '8%', top: '12%', animation: 'comboPop 1.6s ease-out forwards' }}>
+          <div className="text-base font-black tracking-widest px-2 py-1 border-2 border-amber-500 bg-amber-500/20"
+            style={{
+              fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+              color: '#D4A017',
+              textShadow: '2px 2px 0 #0c0a09',
+            }}>
+            🔥 {comboLabel.text}
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes soundFloat {
           0% { transform: translateY(0) scale(0.6); opacity: 0; }
@@ -4940,6 +4963,12 @@ const SketchStage = ({ char, opponent, activeSide, currentSound, soundColor, jud
           20% { transform: translateY(0) scale(1.4); opacity: 1; }
           50% { transform: translateY(-8px) scale(1); opacity: 1; }
           100% { transform: translateY(-22px) scale(0.7); opacity: 0; }
+        }
+        @keyframes comboPop {
+          0% { transform: translateY(8px) scale(0.5) rotate(-4deg); opacity: 0; }
+          15% { transform: translateY(-2px) scale(1.15) rotate(-2deg); opacity: 1; }
+          85% { transform: translateY(-4px) scale(1) rotate(-2deg); opacity: 1; }
+          100% { transform: translateY(-12px) scale(0.95) rotate(-2deg); opacity: 0; }
         }
       `}</style>
     </div>
@@ -5398,21 +5427,41 @@ const playBeep = (high = false) => {
 // ============ SCREEN: BATTLE ============
 
 function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
-  const [phase, setPhase] = useState('intro'); // intro, rps, countdown1, round1, countdown2, round2, judging, result
+  // Phases: intro, rps, countdown{1..4}, round{1..4}, judging, result
+  // Sequence: A, B, A, B (RPS loser is "A" = goes first)
+  const [phase, setPhase] = useState('intro');
   const [countdownVal, setCountdownVal] = useState(3); // 3, 2, 1, 'BEATBOX!'
   const [judgeHearts, setJudgeHearts] = useState([0, 0, 0, 0, 0]); // bump key per judge to retrigger heart anim
   const [rps, setRps] = useState(null);
   const [result, setResult] = useState(null);
   const [revealedJudges, setRevealedJudges] = useState(0);
   const [activeSide, setActiveSide] = useState(null); // 'P' | 'O' | null
-  const [playerFirst, setPlayerFirst] = useState(true); // who performs round 1
+  const [playerFirst, setPlayerFirst] = useState(true); // true if player is "A" (goes first)
   const [currentSound, setCurrentSound] = useState(null);
   const [currentSoundColor, setCurrentSoundColor] = useState('#D4A017');
   const [liveScore, setLiveScore] = useState({ p: 0, o: 0 });
   const [timeLeft, setTimeLeft] = useState(15);
+  const [comboLabel, setComboLabel] = useState(null); // {text, key} when player performs a learned pattern
   const opponent = char._opponent;
   const eventTimers = useRef([]);
+  const playerScoreRef = useRef(0);
+  const oppScoreRef = useRef(0);
   const ROUND_SECONDS = 12;
+  const TOTAL_ROUNDS = 4;
+
+  // Which side performs round n (1..4)?
+  const sideForRound = (n) => {
+    const isA = (n % 2 === 1); // odd = A, even = B
+    return playerFirst ? (isA ? 'P' : 'O') : (isA ? 'O' : 'P');
+  };
+  // Which round-data object (r1..r4 from runBattle) corresponds to round n?
+  // r1, r3 always belong to the player; r2, r4 to the opponent — pick by side.
+  const dataForRound = (n) => {
+    if (!result) return null;
+    const side = sideForRound(n);
+    if (side === 'P') return n <= 2 ? result.r1 : result.r3;
+    return n <= 2 ? result.r2 : result.r4;
+  };
 
   useEffect(() => {
     if (!opponent) { go('bar'); return; }
@@ -5445,45 +5494,41 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     }, 1400);
   };
 
-  // Schedule sound events for a round (12 real seconds)
-  const playRound = (events, side, color, onDone) => {
-    eventTimers.current.forEach(clearTimeout);
-    eventTimers.current = [];
-    setActiveSide(side);
-    setLiveScore(s => side === 'P' ? { ...s, p: 0 } : { ...s, o: 0 });
-    setTimeLeft(ROUND_SECONDS);
+  // Map a battle event's SOUND_CATALOG category to one of the 4 hero sound keys.
+  // Used so the player's recorded studio samples (B/T/K/Pf) play during their rounds,
+  // with synth fallback when nothing's recorded.
+  const catToHeroKey = (cat) => {
+    if (cat === 'Kicks') return 'B';
+    if (cat === 'Hats') return 'T';
+    if (cat === 'Snares') return 'Pf';
+    return 'K';
+  };
 
-    // Events from runBattle are spread across ~15 fictional seconds.
-    // We compress that to ROUND_SECONDS of real time so pacing stays musical.
-    let runningScore = 0;
+  // Common scaffolding for both round types: schedule the runBattle events for visuals/score,
+  // tick the countdown, and signal completion. `playSoundForEvent` decides what to play on each.
+  const scheduleRound = (events, side, color, playSoundForEvent, extraSchedule, onDone) => {
+    setActiveSide(side);
+    setTimeLeft(ROUND_SECONDS);
+    const scoreRef = side === 'P' ? playerScoreRef : oppScoreRef;
+    let runningScore = scoreRef.current;
 
     events.forEach((e) => {
       const t = (parseFloat(e.time) / 15) * ROUND_SECONDS * 1000;
       eventTimers.current.push(setTimeout(() => {
-        // Find the canonical sound id by matching name → grab its category
         const soundId = Object.keys(SOUND_CATALOG).find(k => SOUND_CATALOG[k].name === e.name);
         const sound = soundId ? SOUND_CATALOG[soundId] : null;
-        const cat = sound?.cat;
-
-        // Play audio
-        if (cat) playSound(cat, e.name);
-
-        // Update UI
+        playSoundForEvent(e, sound);
         setCurrentSound(e.name);
         setCurrentSoundColor(color);
         runningScore += e.points;
-        const finalScore = runningScore;
-        setLiveScore(s => side === 'P' ? { ...s, p: finalScore } : { ...s, o: finalScore });
-
-        // Trigger judge hearts: each judge whose bias matches the sound's stat category
-        // shows a heart pop. Random judge also reacts ~30% of time.
+        scoreRef.current = runningScore;
+        setLiveScore(s => side === 'P' ? { ...s, p: runningScore } : { ...s, o: runningScore });
         if (sound) {
           setJudgeHearts(h => {
             const next = [...h];
             JUDGES.forEach((j, i) => {
               if (j.bias === sound.stat) next[i] = next[i] + 1;
               else if (j.bias === 'random' && Math.random() < 0.35) next[i] = next[i] + 1;
-              // High-tier sounds get extra love from showmanship judge
               else if (j.bias === 'showmanship' && sound.tier >= 3 && Math.random() < 0.5) next[i] = next[i] + 1;
             });
             return next;
@@ -5492,7 +5537,8 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
       }, t));
     });
 
-    // Countdown timer ticks (12, 11, 10, ... 0)
+    extraSchedule?.();
+
     for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
       eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1000));
     }
@@ -5500,41 +5546,98 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     eventTimers.current.push(setTimeout(() => {
       setCurrentSound(null);
       setActiveSide(null);
+      setComboLabel(null);
       onDone();
     }, ROUND_SECONDS * 1000));
   };
 
+  // Opponent rounds: use the standard SOUND_CATALOG playback.
+  const playOpponentRound = (events, color, onDone) => {
+    eventTimers.current.forEach(clearTimeout);
+    eventTimers.current = [];
+    scheduleRound(events, 'O', color, (e, sound) => {
+      if (sound?.cat) playSound(sound.cat, e.name);
+    }, null, onDone);
+  };
+
+  // Player rounds: play the player's studio recordings (via playHeroSound) on each event,
+  // and weave in a learned tec lesson pattern as a flourish — with a combo callout.
+  const playPlayerRound = (events, color, onDone) => {
+    eventTimers.current.forEach(clearTimeout);
+    eventTimers.current = [];
+
+    const completed = char.tecLessonsCompleted || 0;
+    const battleBpm = 130;
+    const beatMs = 60000 / battleBpm;
+
+    const extraSchedule = () => {
+      // Pick a random unlocked lesson and weave its pattern into the middle of the round
+      if (completed <= 0) return;
+      const lessonIdx = Math.floor(Math.random() * completed);
+      const lesson = HERO_LESSONS[lessonIdx];
+      if (!lesson) return;
+      const patternStartMs = 1500;
+      const patternEndMs = patternStartMs + 16 * beatMs; // 4 bars at battle BPM
+      if (patternEndMs > ROUND_SECONDS * 1000 - 500) return;
+
+      // Combo callout
+      eventTimers.current.push(setTimeout(() => {
+        setComboLabel({ text: lesson.name, key: Date.now() });
+      }, patternStartMs));
+      eventTimers.current.push(setTimeout(() => setComboLabel(null), patternEndMs + 600));
+
+      // Pattern beats
+      lesson.pattern.forEach(note => {
+        const t = patternStartMs + note.beat * beatMs;
+        if (t < ROUND_SECONDS * 1000) {
+          eventTimers.current.push(setTimeout(() => playHeroSound(note.sound), t));
+        }
+      });
+    };
+
+    scheduleRound(events, 'P', color, (e, sound) => {
+      playHeroSound(catToHeroKey(sound?.cat));
+    }, extraSchedule, onDone);
+  };
+
   // Countdown effect: 3 → 2 → 1 → BEATBOX! → start round
   useEffect(() => {
-    if (phase !== 'countdown1' && phase !== 'countdown2') return;
+    const isCountdown = /^countdown[1-4]$/.test(phase);
+    if (!isCountdown) return;
+    const roundN = parseInt(phase.replace('countdown', ''));
     setCountdownVal(3);
     playBeep(false);
     const timers = [
       setTimeout(() => { setCountdownVal(2); playBeep(false); }, 800),
       setTimeout(() => { setCountdownVal(1); playBeep(false); }, 1600),
       setTimeout(() => { setCountdownVal('BEATBOX!'); playBeep(true); }, 2400),
-      setTimeout(() => {
-        if (phase === 'countdown1') setPhase('round1');
-        else setPhase('round2');
-      }, 3300),
+      setTimeout(() => setPhase(`round${roundN}`), 3300),
     ];
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 
+  // Reset cumulative scores at the start of round 1
   useEffect(() => {
-    if (phase === 'round1' && result) {
-      if (playerFirst) {
-        playRound(result.r1.events, 'P', char.color, () => setPhase('countdown2'));
-      } else {
-        playRound(result.r2.events, 'O', '#CC2200', () => setPhase('countdown2'));
-      }
-    } else if (phase === 'round2' && result) {
-      if (playerFirst) {
-        playRound(result.r2.events, 'O', '#CC2200', () => setPhase('judging'));
-      } else {
-        playRound(result.r1.events, 'P', char.color, () => setPhase('judging'));
-      }
+    if (phase === 'countdown1') {
+      playerScoreRef.current = 0;
+      oppScoreRef.current = 0;
+      setLiveScore({ p: 0, o: 0 });
     }
+  }, [phase]);
+
+  // Round runner: looks up which side performs round n and plays the matching round data.
+  useEffect(() => {
+    const m = /^round([1-4])$/.exec(phase);
+    if (!m || !result) return;
+    const roundN = parseInt(m[1]);
+    const side = sideForRound(roundN);
+    const data = dataForRound(roundN);
+    if (!data) return;
+    const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : 'judging';
+    const onDone = () => setPhase(nextPhase);
+    if (side === 'P') playPlayerRound(data.events, char.color, onDone);
+    else playOpponentRound(data.events, '#CC2200', onDone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, result]);
 
   useEffect(() => {
@@ -5630,44 +5733,51 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         </div>
       )}
 
-      {(phase === 'round1' || phase === 'round2') && result && (
-        <div className="space-y-2">
-          <BattleHUD char={char} opponent={opponent} timeLeft={timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
-          <SketchStage char={char} opponent={opponent} activeSide={activeSide}
-            currentSound={currentSound} soundColor={currentSoundColor}
-            judgeVotes={[]} revealedJudges={0} judgeHearts={judgeHearts} />
-          <div className="text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse">
-            {activeSide === 'P' ? `${char.name} is performing` : `${opponent.name} is performing`}
-          </div>
-        </div>
-      )}
-
-      {(phase === 'countdown1' || phase === 'countdown2') && (
-        <div className="space-y-2">
-          <BattleHUD char={char} opponent={opponent} timeLeft={ROUND_SECONDS} pScore={liveScore.p} oScore={liveScore.o} />
-          <div className="relative">
-            <SketchStage char={char} opponent={opponent} activeSide={null}
-              currentSound={null} soundColor="#D4A017"
-              judgeVotes={[]} revealedJudges={0} judgeHearts={[0,0,0,0,0]} />
-            <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm">
-              <div key={countdownVal} className="text-center"
-                style={{ animation: 'countdownPop 0.7s ease-out' }}>
-                <div className={`font-black tracking-tighter ${typeof countdownVal === 'string' ? 'text-amber-500 text-6xl' : 'text-stone-100 text-8xl'}`}
-                  style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif',
-                           textShadow: '4px 4px 0 #0c0a09' }}>
-                  {countdownVal}
-                </div>
-                {typeof countdownVal === 'string' && (
-                  <div className="text-stone-400 text-xs uppercase tracking-[0.4em] mt-2">
-                    {(() => {
-                      const isPlayerThisRound = (phase === 'countdown1' && playerFirst) || (phase === 'countdown2' && !playerFirst);
-                      return `${isPlayerThisRound ? char.name : opponent.name}'s turn`;
-                    })()}
-                  </div>
-                )}
-              </div>
+      {/^round[1-4]$/.test(phase) && result && (() => {
+        const roundN = parseInt(phase.replace('round', ''));
+        return (
+          <div className="space-y-2">
+            <BattleHUD char={char} opponent={opponent} timeLeft={timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
+            <SketchStage char={char} opponent={opponent} activeSide={activeSide}
+              currentSound={currentSound} soundColor={currentSoundColor}
+              judgeVotes={[]} revealedJudges={0} judgeHearts={judgeHearts} comboLabel={comboLabel} />
+            <div className="text-center text-amber-500 text-sm tracking-widest uppercase animate-pulse">
+              ROUND {roundN} / {TOTAL_ROUNDS} · {activeSide === 'P' ? `${char.name} performing` : `${opponent.name} performing`}
             </div>
           </div>
+        );
+      })()}
+
+      {/^countdown[1-4]$/.test(phase) && (() => {
+        const roundN = parseInt(phase.replace('countdown', ''));
+        const upcomingSide = sideForRound(roundN);
+        const upcomingName = upcomingSide === 'P' ? char.name : opponent.name;
+        return (
+          <div className="space-y-2">
+            <BattleHUD char={char} opponent={opponent} timeLeft={ROUND_SECONDS} pScore={liveScore.p} oScore={liveScore.o} />
+            <div className="relative">
+              <SketchStage char={char} opponent={opponent} activeSide={null}
+                currentSound={null} soundColor="#D4A017"
+                judgeVotes={[]} revealedJudges={0} judgeHearts={[0,0,0,0,0]} />
+              <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm">
+                <div key={countdownVal} className="text-center"
+                  style={{ animation: 'countdownPop 0.7s ease-out' }}>
+                  <div className="text-amber-500 text-[10px] uppercase tracking-[0.4em] mb-2">
+                    Round {roundN} / {TOTAL_ROUNDS}
+                  </div>
+                  <div className={`font-black tracking-tighter ${typeof countdownVal === 'string' ? 'text-amber-500 text-6xl' : 'text-stone-100 text-8xl'}`}
+                    style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+                             textShadow: '4px 4px 0 #0c0a09' }}>
+                    {countdownVal}
+                  </div>
+                  {typeof countdownVal === 'string' && (
+                    <div className="text-stone-400 text-xs uppercase tracking-[0.4em] mt-2">
+                      {upcomingName}'s turn
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           <style>{`
             @keyframes countdownPop {
               0% { transform: scale(0.4); opacity: 0; }
@@ -5677,7 +5787,8 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
             }
           `}</style>
         </div>
-      )}
+        );
+      })()}
 
       {phase === 'judging' && result && (
         <div className="space-y-3">
