@@ -27,11 +27,12 @@ const FOOD = {
 };
 
 const NPCS = [
-  { name: 'Lil Crumb', stats: { mus: 8, tec: 8, ori: 6, sho: 7 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'], reward: 50, level: 1 },
-  { name: 'DJ Phlegm', stats: { mus: 14, tec: 12, ori: 10, sho: 11 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'], reward: 120, level: 3 },
-  { name: 'Mama Bass', stats: { mus: 18, tec: 14, ori: 18, sho: 14 }, sounds: ['throat_kick', 'inward_bass', 'd_low', 'fast_hats'], reward: 250, level: 5 },
-  { name: 'Vox Machina', stats: { mus: 22, tec: 24, ori: 20, sho: 18 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'], reward: 500, level: 8 },
-  { name: 'The Champ', stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'], reward: 1500, level: 12 },
+  { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 50,   level: 1 },
+  { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 100,  level: 3 },
+  { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 200,  level: 5 },
+  { name: 'Alim',        stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ['throat_kick', 'inward_bass', 'fast_hats', 'lip_roll'],                          reward: 350,  level: 7 },
+  { name: 'Olexinho',    stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'],                   reward: 700,  level: 9 },
+  { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 1500, level: 12 },
 ];
 
 const JUDGES = [
@@ -69,7 +70,7 @@ const initialChar = () => ({
   oriBpm: 100, // BPM for the originality sequencer
   oriPattern: null, // sequencer state: { tracks: [{key, cells}] } — null means use default 4-hero seed
   pendingDebuff: null, // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
-  showcaseBooking: null, // { day: number, minute: number } — Rhozel's booked Friday slot
+  showcaseBooking: null, // { day: number, minute: number } — Rohzel's booked Friday slot
   lastShowcaseDay: null, // day a showcase was performed (cooldown: 7 days)
   lastBattleDay: null, // day a battle happened (cooldown: 7 days)
   created: false,
@@ -5120,10 +5121,10 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp }) {
   );
 }
 
-// ============ RHOZEL — BAR KEEPER ============
+// ============ ROHZEL — BAR KEEPER ============
 // Funny dialogue NPC who books Friday showcases.
 
-const RHOZEL_GREETINGS = [
+const ROHZEL_GREETINGS = [
   "Yo, lil homie! What you sippin' on tonight?",
   "Aaayy, the people's champion in the building.",
   "Look who decided to show up — you smell like ambition.",
@@ -5131,26 +5132,26 @@ const RHOZEL_GREETINGS = [
   "Ay, this ain't no daycare. You here to spit or what?",
   "I run this bar, the cypher, and your hopes & dreams. What's good?",
 ];
-const RHOZEL_NEED_FANS = [
+const ROHZEL_NEED_FANS = [
   "Ten fans? Ten?? My DOG got more followers than that. Build a buzz, then we talk.",
   "Lil bro come back when more than your mama is screaming your name.",
   "I need a crowd that pays my electric bill. Not a Spotify playlist of three.",
 ];
-const RHOZEL_NEED_SHO = [
+const ROHZEL_NEED_SHO = [
   "Showmanship like wet cardboard. Practice the camera work, I'll see you next week.",
   "You got the heat but no charisma — even my bar stool got more presence.",
   "Pump up the showmanship. Friday crowd ain't here to hear, they here to SEE.",
 ];
-const RHOZEL_COOLDOWN = [
+const ROHZEL_COOLDOWN = [
   "Already had your slot this week, hotshot. Let the people miss you.",
   "One show a week. That's the rule. Even Beyoncé gotta breathe.",
 ];
-const RHOZEL_BOOKED_OK = (timeStr, day) => [
+const ROHZEL_BOOKED_OK = (timeStr, day) => [
   `Aight, I see you. Friday ${timeStr}. Don't be late or I give the slot to a 14-year-old TikTok kid.`,
   `Cool. Friday at ${timeStr}. Be sober, be loud, be there.`,
   `Locked in: Friday, ${timeStr}. Mess this up and you're banned from karaoke too.`,
 ];
-const RHOZEL_REMINDER = (timeStr) => [
+const ROHZEL_REMINDER = (timeStr) => [
   `You're already on the list, Friday ${timeStr}. Don't make me regret it.`,
   `Booked, kid. Friday ${timeStr}. Show up or shut up.`,
 ];
@@ -5291,7 +5292,7 @@ const ShowcasePerformance = ({ char, durationMs = 20000, onComplete }) => {
 
 function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const [selected, setSelected] = useState(null);
-  const [rhozelLine, setRhozelLine] = useState(() => _pick(RHOZEL_GREETINGS));
+  const [rohzelLine, setRohzelLine] = useState(() => _pick(ROHZEL_GREETINGS));
   const [performingShowcase, setPerformingShowcase] = useState(false);
 
   // Lock bar during daytime
@@ -5371,7 +5372,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     showToast(`Karaoke: +${musGain} musicality, +$${earn}`, 'win');
   };
 
-  // ---- Rhozel / Friday-showcase booking ----
+  // ---- Rohzel / Friday-showcase booking ----
   const SHOWCASE_FANS_REQ = 10;
   const SHOWCASE_SHO_REQ = 8;
   const FRIDAY_DOW = 4;
@@ -5380,21 +5381,21 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     : 0;
   const onCooldown = showcaseCooldownDaysLeft > 0;
   const meetsBookingReqs = (char.followers || 0) >= SHOWCASE_FANS_REQ && (char.stats.sho || 0) >= SHOWCASE_SHO_REQ;
-  const askRhozel = () => {
+  const askRohzel = () => {
     if (char.showcaseBooking) {
-      setRhozelLine(_pick(RHOZEL_REMINDER(clockString(char.showcaseBooking.minute))));
+      setRohzelLine(_pick(ROHZEL_REMINDER(clockString(char.showcaseBooking.minute))));
       return;
     }
     if (onCooldown) {
-      setRhozelLine(_pick(RHOZEL_COOLDOWN));
+      setRohzelLine(_pick(ROHZEL_COOLDOWN));
       return;
     }
     if ((char.followers || 0) < SHOWCASE_FANS_REQ) {
-      setRhozelLine(_pick(RHOZEL_NEED_FANS));
+      setRohzelLine(_pick(ROHZEL_NEED_FANS));
       return;
     }
     if ((char.stats.sho || 0) < SHOWCASE_SHO_REQ) {
-      setRhozelLine(_pick(RHOZEL_NEED_SHO));
+      setRohzelLine(_pick(ROHZEL_NEED_SHO));
       return;
     }
     // Book it
@@ -5403,10 +5404,10 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const slot = pickShowcaseSlot(char.day, bookingDay, char.minutes);
     const timeStr = clockString(slot);
     setChar(c => ({ ...c, showcaseBooking: { day: bookingDay, minute: slot } }));
-    setRhozelLine(_pick(RHOZEL_BOOKED_OK(timeStr, bookingDay)));
+    setRohzelLine(_pick(ROHZEL_BOOKED_OK(timeStr, bookingDay)));
     showToast(`Booked: Friday ${timeStr}`, 'win');
   };
-  const chatRhozel = () => setRhozelLine(_pick(RHOZEL_GREETINGS));
+  const chatRohzel = () => setRohzelLine(_pick(ROHZEL_GREETINGS));
 
   // Friday-night gig logic: are we in the booking window?
   const booking = char.showcaseBooking;
@@ -5419,7 +5420,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   useEffect(() => {
     if (missedGig) {
       setChar(c => ({ ...c, showcaseBooking: null }));
-      showToast('Missed your showcase. Rhozel ain\'t happy.', 'bad');
+      showToast('Missed your showcase. Rohzel ain\'t happy.', 'bad');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missedGig]);
@@ -5510,7 +5511,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
           <div className="space-y-2">
             {!booking && (
               <div className="text-[10px] text-stone-500 uppercase tracking-wider">
-                No booking. Talk to Rhozel below — he runs the slot list.
+                No booking. Talk to Rohzel below — he runs the slot list.
               </div>
             )}
             {booking && !isBookingDay && (
@@ -5605,21 +5606,21 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         </Panel>
       )}
 
-      {/* Rhozel — bar keeper + Friday showcase booking */}
+      {/* Rohzel — bar keeper + Friday showcase booking */}
       {schedule.activity !== 'closed' && (
-        <Panel title="Rhozel · Bar Keeper">
+        <Panel title="Rohzel · Bar Keeper">
           <div className="flex gap-3 items-start">
             <div className="text-4xl flex-shrink-0">🧔🏿‍♂️</div>
             <div className="flex-1 space-y-2">
               <div className="text-stone-200 text-sm tracking-wide italic border-l-2 border-amber-500/50 pl-2">
-                "{rhozelLine}"
+                "{rohzelLine}"
               </div>
               <div className="grid grid-cols-2 gap-1.5">
-                <button onClick={askRhozel}
+                <button onClick={askRohzel}
                   className="px-2 py-1.5 border-2 border-amber-500/60 bg-amber-500/10 text-amber-500 text-[10px] uppercase tracking-widest hover:bg-amber-500/20">
                   Friday gig?
                 </button>
-                <button onClick={chatRhozel}
+                <button onClick={chatRohzel}
                   className="px-2 py-1.5 border-2 border-stone-700 text-stone-400 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
                   Just chatting
                 </button>
@@ -5872,11 +5873,12 @@ const FloatingSound = ({ text, side, color = '#D4A017' }) => (
 
 // Per-opponent visuals — keyed by NPC name
 const OPP_LOOKS = {
-  'Lil Crumb':   { shirt: '#84cc16', skin: '#f5d4a8', hair: '#5a3a18', style: 'short',  accessory: null },
-  'DJ Phlegm':   { shirt: '#3b82f6', skin: '#d4a87a', hair: '#1a1a2e', style: 'mohawk', accessory: 'shades' },
-  'Mama Bass':   { shirt: '#a78bfa', skin: '#8a5a3a', hair: '#1c1917', style: 'long',   accessory: null },
-  'Vox Machina': { shirt: '#94a3b8', skin: '#c8b8a0', hair: '#9ca3af', style: 'spike',  accessory: 'shades' },
-  'The Champ':   { shirt: '#fbbf24', skin: '#5a3a20', hair: '#0c0a09', style: 'fade',   accessory: null },
+  'Joel Burner': { shirt: '#84cc16', skin: '#f5d4a8', hair: '#5a3a18', style: 'short',  accessory: null     },
+  'CeDe':        { shirt: '#3b82f6', skin: '#d4a87a', hair: '#1a1a2e', style: 'mohawk', accessory: 'shades' },
+  'Sikker':      { shirt: '#a78bfa', skin: '#8a5a3a', hair: '#1c1917', style: 'long',   accessory: null     },
+  'Alim':        { shirt: '#f97316', skin: '#a87844', hair: '#1c1917', style: 'short',  accessory: null     },
+  'Olexinho':    { shirt: '#94a3b8', skin: '#c8b8a0', hair: '#9ca3af', style: 'spike',  accessory: 'shades' },
+  'FatboxG':     { shirt: '#fbbf24', skin: '#5a3a20', hair: '#0c0a09', style: 'fade',   accessory: null     },
 };
 const _defaultOppLook = { shirt: '#CC2200', skin: '#d4a87a', hair: '#1c1917', style: 'short', accessory: null };
 
