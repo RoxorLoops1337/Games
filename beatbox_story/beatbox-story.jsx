@@ -19,11 +19,11 @@ const SOUND_CATALOG = {
 };
 
 const FOOD = {
-  banana: { name: 'Banana', cost: 4, energy: 12, hunger: 15, mood: 1 },
-  smoothie: { name: 'Green Smoothie', cost: 9, energy: 25, hunger: 20, mood: 3 },
-  oat_bowl: { name: 'Oat Bowl', cost: 7, energy: 18, hunger: 35, mood: 2 },
-  espresso: { name: 'Espresso', cost: 5, energy: 25, hunger: -15, mood: 2 },
-  buddha_bowl: { name: 'Buddha Bowl', cost: 14, energy: 22, hunger: 50, mood: 4 },
+  banana:      { name: 'Banana',         cost: 4,  energy: 12, hunger: 15,  mood: 1, kind: 'food'  },
+  smoothie:    { name: 'Green Smoothie', cost: 9,  energy: 25, hunger: 20,  mood: 3, kind: 'drink' },
+  oat_bowl:    { name: 'Oat Bowl',       cost: 7,  energy: 18, hunger: 35,  mood: 2, kind: 'food'  },
+  espresso:    { name: 'Espresso',       cost: 5,  energy: 25, hunger: -15, mood: 2, kind: 'drink' },
+  buddha_bowl: { name: 'Buddha Bowl',    cost: 14, energy: 22, hunger: 50,  mood: 4, kind: 'food'  },
 };
 
 const NPCS = [
@@ -4376,7 +4376,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       hunger: Math.max(0, Math.min(100, c.hunger + f.hunger)),
       mood: Math.max(0, Math.min(100, c.mood + f.mood)),
     }));
-    showToast(`Ate ${f.name}`, 'win');
+    showToast(`${f.kind === 'drink' ? 'Drank' : 'Ate'} ${f.name}`, 'win');
   };
 
   const sleep = () => {
@@ -4678,7 +4678,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         <Panel title="Fridge — wholefood plant-based">
           <div className="space-y-2">
             {Object.entries(FOOD).map(([k, f]) => {
-              const foodIcon = k === 'espresso' ? 'coffee' : 'star';
+              const foodIcon = f.kind === 'drink' ? 'coffee' : 'star';
               return (
                 <div key={k} className="flex items-center gap-3 p-2 border border-stone-800 bg-stone-900/30">
                   <PixelIcon name={foodIcon} size={20} />
