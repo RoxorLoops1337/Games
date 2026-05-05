@@ -1919,13 +1919,13 @@ const BeatboxHero = ({
   // Constants
   const HIT_PERFECT_MS = 130;
   const HIT_GOOD_MS = 220;
-  const LOOKAHEAD_MS = 2000;
-  const REPS_TOTAL = mode === 'battle' ? 1 : 4; // single player rep in battle, 2 demo+2 player in practice
+  const LOOKAHEAD_MS = 1400; // notes appear ~1.4s before the strike line (was 2000)
+  const REPS_TOTAL = (mode === 'battle' || mode === 'spectate') ? 1 : 4; // single rep in battle/spectate, 2 demo+2 player in practice
   const COMPLETE_HOLD_MS = 1800;
 
-  // Visual constants
+  // Visual constants — shorter than before so the canvas fits above the fold
   const TRACK_W = 320;
-  const TRACK_H = 380;
+  const TRACK_H = mode === 'practice' ? 260 : 220;
   const STRIKE_Y = TRACK_H - 56;
   const LANE_W = TRACK_W / 4;
   const PIXELS_PER_SEC = STRIKE_Y / (LOOKAHEAD_MS / 1000);
@@ -1938,8 +1938,8 @@ const BeatboxHero = ({
 
     const notes = [];
     for (let rep = 0; rep < REPS_TOTAL; rep++) {
-      // Practice mode alternates demo/player; battle mode is straight player
-      const isDemo = mode === 'practice' && rep % 2 === 0;
+      // Practice mode alternates demo/player; battle = player; spectate = demo
+      const isDemo = (mode === 'practice' && rep % 2 === 0) || mode === 'spectate';
       const repStart = rep * patternMs;
       lesson.pattern.forEach((n, i) => {
         const lane = lanes.indexOf(n.sound);
@@ -1979,6 +1979,7 @@ const BeatboxHero = ({
       phase: mode === 'battle' ? 'player' : 'demo',
       completeAt: 0,
       completionFired: false,
+      mode,
     };
   };
 
@@ -2020,10 +2021,30 @@ const BeatboxHero = ({
     rerender();
   };
 
-  // Main loop — re-runs only when active or lessonIdx changes (BPM is snapshotted at start)
-  useEffect(() => {
-    if (!active) return;
+  // Track latest active flag for the rAF loop to read without re-mounting
+  const activeRef = useRef(active);
 
+  // When active flips on (e.g. round starts after a countdown), restart the song state
+  useEffect(() => {
+    activeRef.current = active;
+    if (active && stateRef.current) {
+      const s = stateRef.current;
+      s.startTime = performance.now();
+      s.hits = 0;
+      s.misses = 0;
+      s.perfects = 0;
+      s.audioScheduled = new Set();
+      s.completionFired = false;
+      s.completeAt = 0;
+      s.phase = mode === 'practice' ? 'demo' : (mode === 'spectate' ? 'demo' : 'player');
+      s.notes.forEach(n => { n.hit = false; n.judged = false; n.hitTime = 0; n.hitGrade = null; });
+      rerender();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  // Main loop — runs once per lesson, draws every frame whether active or not.
+  useEffect(() => {
     const ctx = getAudioCtx();
     if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
 
@@ -2115,12 +2136,15 @@ const BeatboxHero = ({
       });
 
       // Phase banner
-      const phaseLabel = state.phase === 'complete' ? 'LESSON COMPLETE'
-                       : state.phase === 'demo'     ? 'DEMO · LISTEN'
-                                                    : 'YOUR TURN';
-      const phaseColor = state.phase === 'complete' ? '#22c55e'
-                       : state.phase === 'demo'     ? '#22d3ee'
-                                                    : '#D4A017';
+      const inactiveLabel = mode === 'spectate' ? 'STARTING SOON' : 'GET READY';
+      const phaseLabel = !activeRef.current               ? inactiveLabel
+                       : state.phase === 'complete'        ? (mode === 'battle' ? 'ROUND COMPLETE' : 'LESSON COMPLETE')
+                       : state.phase === 'demo'            ? (mode === 'spectate' ? 'OPPONENT · WATCH' : 'DEMO · LISTEN')
+                                                           : 'YOUR TURN';
+      const phaseColor = !activeRef.current               ? '#a8a29e'
+                       : state.phase === 'complete'        ? '#22c55e'
+                       : state.phase === 'demo'            ? '#22d3ee'
+                                                           : '#D4A017';
       c.fillStyle = phaseColor;
       c.font = 'bold 14px "Bebas Neue", "Oswald", sans-serif';
       c.textAlign = 'center';
@@ -2130,6 +2154,15 @@ const BeatboxHero = ({
     const tick = () => {
       const state = stateRef.current;
       if (!state) { raf = requestAnimationFrame(tick); return; }
+
+      // When inactive (e.g. during a countdown before a player round), just paint the
+      // canvas with empty lanes + a "READY" banner so buttons + lanes are pre-visible.
+      if (!activeRef.current) {
+        drawCanvas();
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
       const now = performance.now();
       const songT = now - state.startTime;
 
@@ -2147,7 +2180,9 @@ const BeatboxHero = ({
       } else if (state.phase !== 'complete') {
         const repIdx = Math.floor(songT / state.patternMs);
         // Battle mode: always 'player'. Practice: alternate demo/player.
-        const newPhase = mode === 'battle' ? 'player' : (repIdx % 2 === 0 ? 'demo' : 'player');
+        const newPhase = mode === 'battle'   ? 'player'
+                       : mode === 'spectate' ? 'demo'
+                       : (repIdx % 2 === 0 ? 'demo' : 'player');
         if (newPhase !== state.phase) {
           state.phase = newPhase;
           rerender();
@@ -2192,6 +2227,7 @@ const BeatboxHero = ({
     raf = requestAnimationFrame(tick);
 
     const evalInt = setInterval(() => {
+      if (!activeRef.current) return;
       const state = stateRef.current;
       if (!state) return;
       const total = state.hits + state.misses;
@@ -2203,9 +2239,9 @@ const BeatboxHero = ({
       cancelAnimationFrame(raf);
       clearInterval(evalInt);
     };
-    // bpm intentionally NOT in deps — snapshotted at start, picked up on next lesson restart
+    // active toggles via activeRef without re-mount; bpm snapshotted at lesson start
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, lessonIdx]);
+  }, [lessonIdx]);
 
   const state = stateRef.current;
   const totalJudged = state ? (state.hits + state.misses) : 0;
@@ -2221,34 +2257,38 @@ const BeatboxHero = ({
         className="w-full block border-2 border-stone-800"
         style={{ aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: '#0c0a09', imageRendering: 'auto' }} />
 
-      {/* Drum buttons — pulled from the current lesson's lanes (defaults to hero 4) */}
-      <div className="grid grid-cols-4 gap-1">
-        {(state?.lanes || HERO_LANES).map((sound, idx) => {
-          const meta = getSoundDisplay(sound) || { color: '#D4A017', label: '?' };
-          return (
-            <button key={sound + idx}
-              onPointerDown={(e) => { e.preventDefault(); handleTap(sound); }}
-              className="py-5 border-2 active:scale-95 transition-transform select-none touch-none"
-              style={{
-                borderColor: meta.color,
-                background: `${meta.color}1f`,
-                color: meta.color,
-                fontFamily: '"Bebas Neue", "Oswald", sans-serif',
-                fontSize: 22,
-                letterSpacing: '0.15em',
-              }}>
-              {meta.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Drum buttons — hidden in spectate mode (player can't tap) */}
+      {mode !== 'spectate' && (
+        <div className="grid grid-cols-4 gap-1">
+          {(state?.lanes || HERO_LANES).map((sound, idx) => {
+            const meta = getSoundDisplay(sound) || { color: '#D4A017', label: '?' };
+            return (
+              <button key={sound + idx}
+                onPointerDown={(e) => { e.preventDefault(); handleTap(sound); }}
+                className="py-5 border-2 active:scale-95 transition-transform select-none touch-none"
+                style={{
+                  borderColor: meta.color,
+                  background: `${meta.color}1f`,
+                  color: meta.color,
+                  fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+                  fontSize: 22,
+                  letterSpacing: '0.15em',
+                }}>
+                {meta.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      {/* HUD */}
-      <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-stone-500 px-1">
-        <span><span className="text-amber-500">{phaseLabel}</span></span>
-        <span>HITS <span className="text-amber-500">{state?.hits || 0}</span> · MISS <span className="text-red-500">{state?.misses || 0}</span></span>
-        <span>ACC <span className="text-amber-500">{accuracyPct}%</span></span>
-      </div>
+      {/* HUD — only when player is the one tapping */}
+      {mode !== 'spectate' && (
+        <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-stone-500 px-1">
+          <span><span className="text-amber-500">{phaseLabel}</span></span>
+          <span>HITS <span className="text-amber-500">{state?.hits || 0}</span> · MISS <span className="text-red-500">{state?.misses || 0}</span></span>
+          <span>ACC <span className="text-amber-500">{accuracyPct}%</span></span>
+        </div>
+      )}
     </div>
   );
 };
@@ -5639,7 +5679,9 @@ const drawPixelHeart = (ctx, x, y, alpha = 1) => {
 const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0], comboLabel = null }) => {
   const canvasRef = useRef(null);
   const PXSCALE = 3;
-  const W = 200, H = 160;
+  // Tighter aspect (5:3 vs old 5:4): cropped the top empty sky so the stage sits
+  // higher on screen and BeatboxHero fits below without scrolling.
+  const W = 200, H = 120;
 
   const heartsRef = useRef([]);
   const sparksRef = useRef([]);
@@ -5660,7 +5702,7 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
       if (h > lastHeartsRef.current[i]) {
         lastHeartsRef.current[i] = h;
         const judgeX = 30 + i * 30;
-        const judgeY = 50;
+        const judgeY = 20;
         heartsRef.current.push({
           x: judgeX, y: judgeY,
           vx: (Math.random() - 0.5) * 0.5,
@@ -5712,27 +5754,26 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
       ctx.save();
       ctx.scale(PXSCALE, PXSCALE);
 
-      // Back wall
-      _px(ctx, 0, 0, W, 60, '#1a0d2e');
-      _px(ctx, 0, 0, W, 30, '#0f0820');
+      // Back wall (sky compressed: 0..30)
+      _px(ctx, 0, 0, W, 30, '#1a0d2e');
+      _px(ctx, 0, 0, W, 15, '#0f0820');
       // Stars on back wall
       for (let i = 0; i < 12; i++) {
         const sx = (i * 17 + 9) % W;
-        const sy = (i * 5 + 4) % 28;
+        const sy = (i * 5 + 4) % 14;
         _px(ctx, sx, sy, 1, 1, i % 3 === 0 ? '#fef3c7' : '#a78bfa');
       }
 
       // Spotlights from top corners (subtle cones)
       ctx.fillStyle = 'rgba(212, 160, 23, 0.10)';
-      ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(0, 0); ctx.lineTo(0, 90); ctx.lineTo(80, 90); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(W - 20, 0); ctx.lineTo(W, 0); ctx.lineTo(W, 90); ctx.lineTo(W - 80, 90); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(0, 0); ctx.lineTo(0, 60); ctx.lineTo(80, 60); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(W - 20, 0); ctx.lineTo(W, 0); ctx.lineTo(W, 60); ctx.lineTo(W - 80, 60); ctx.closePath(); ctx.fill();
 
-      // Judges bench
-      _px(ctx, 18, 60, 164, 4, '#5a4030');
-      _px(ctx, 18, 64, 164, 1, '#3a2818');
-      // Bench legs
-      _px(ctx, 22, 64, 2, 6, '#3a2818');
-      _px(ctx, 176, 64, 2, 6, '#3a2818');
+      // Judges bench (was at y=60, now at y=30)
+      _px(ctx, 18, 30, 164, 4, '#5a4030');
+      _px(ctx, 18, 34, 164, 1, '#3a2818');
+      _px(ctx, 22, 34, 2, 6, '#3a2818');
+      _px(ctx, 176, 34, 2, 6, '#3a2818');
 
       // Judges
       const biases = ['technicality', 'musicality', 'originality', 'showmanship', 'random'];
@@ -5740,35 +5781,35 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
         const jx = 30 + i * 30;
         const v = judgeVotes?.[i];
         const look = JUDGE_LOOKS[biases[i]] || JUDGE_LOOKS.random;
-        drawJudge(ctx, jx, 60, look, v?.vote, i < revealedJudges, frameCount);
+        drawJudge(ctx, jx, 30, look, v?.vote, i < revealedJudges, frameCount);
       }
 
-      // Stage floor
-      _px(ctx, 0, 90, W, 50, '#3a2818');
-      for (let i = 0; i < 4; i++) _px(ctx, 0, 95 + i * 11, W, 1, '#2a1808');
-      _px(ctx, 0, 90, W, 2, '#5a4030');
+      // Stage floor (was 90..140, now 60..100)
+      _px(ctx, 0, 60, W, 40, '#3a2818');
+      for (let i = 0; i < 3; i++) _px(ctx, 0, 65 + i * 11, W, 1, '#2a1808');
+      _px(ctx, 0, 60, W, 2, '#5a4030');
 
-      // Crowd silhouette
-      _px(ctx, 0, 140, W, 20, '#0c0a09');
+      // Crowd silhouette (was 140..160, now 100..120)
+      _px(ctx, 0, 100, W, 20, '#0c0a09');
       for (let i = 0; i < 25; i++) {
         const cx = 4 + i * 8;
         const ch = 4 + ((i * 7) % 6);
-        _px(ctx, cx, 140 - ch, 6, ch, '#1c1917');
-        _px(ctx, cx + 1, 138 - ch, 4, 3, '#0c0a09');
+        _px(ctx, cx, 100 - ch, 6, ch, '#1c1917');
+        _px(ctx, cx + 1, 98 - ch, 4, 3, '#0c0a09');
       }
       // Crowd hands raised when someone is performing
       if (activeSide && frameCount % 30 < 15) {
         for (let i = 0; i < 6; i++) {
           const cx = 12 + i * 30 + ((i * 3) % 7);
-          _px(ctx, cx, 134, 1, 4, '#1c1917');
+          _px(ctx, cx, 94, 1, 4, '#1c1917');
         }
       }
 
-      // Beatboxers
-      drawBeatboxer(ctx, 60, 130, playerLook, 'right', activeSide === 'P', frameCount);
-      drawBeatboxer(ctx, 140, 130, oppLook, 'left', activeSide === 'O', frameCount);
+      // Beatboxers (feet at y=95, was 130)
+      drawBeatboxer(ctx, 60, 95, playerLook, 'right', activeSide === 'P', frameCount);
+      drawBeatboxer(ctx, 140, 95, oppLook, 'left', activeSide === 'O', frameCount);
 
-      // Sound waves emanating from active beatboxer (centered on torso ~y=110)
+      // Sound waves emanating from active beatboxer (centered on torso ~y=78)
       const drawWaves = (waves, sx) => {
         for (let i = waves.length - 1; i >= 0; i--) {
           const w = waves[i];
@@ -5777,11 +5818,11 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
           const t = w.life / w.ttl;
           ctx.globalAlpha = (1 - t) * 0.6;
           ctx.fillStyle = w.color;
-          const r = 4 + t * 22;
+          const r = 4 + t * 18;
           for (let a = 0; a < 10; a++) {
             const angle = (a / 10) * Math.PI * 2;
             const xx = Math.floor(sx + Math.cos(angle) * r);
-            const yy = Math.floor(112 + Math.sin(angle) * r);
+            const yy = Math.floor(78 + Math.sin(angle) * r);
             if (xx >= 0 && xx < W && yy >= 0 && yy < H) ctx.fillRect(xx, yy, 1, 1);
           }
           ctx.globalAlpha = 1;
@@ -5820,7 +5861,7 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
   }, [char.color, opponent.name]);
 
   return (
-    <div className="relative w-full overflow-hidden border-2 border-stone-800" style={{ aspectRatio: '5/4', background: '#0c0a09' }}>
+    <div className="relative w-full overflow-hidden border-2 border-stone-800" style={{ aspectRatio: '5/3', background: '#0c0a09' }}>
       <canvas ref={canvasRef} className="block w-full h-full" style={{ imageRendering: 'pixelated' }} />
       {currentSound && activeSide && (
         <FloatingSound key={currentSound + Date.now()} text={currentSound} side={activeSide} color={soundColor} />
@@ -6564,43 +6605,35 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
 
   // Opponent round: auto-play the picked lesson pattern at battle BPM, awarding a fixed
   // score (derived from pattern value × focus from stats) progressively as the round runs.
+  // Opponent round: BeatboxHero (mounted in JSX in spectate mode) handles audio + visual notes.
+  // Here we just tick the score, emit occasional judge hearts, and signal completion.
   const playOpponentRoundPattern = (lessonIdx, color, onDone) => {
     eventTimers.current.forEach(clearTimeout);
     eventTimers.current = [];
     setActiveSide('O');
     setTimeLeft(ROUND_SECONDS);
     setComboLabel(null);
+    setCurrentSound(HERO_LESSONS[lessonIdx]?.name || null);
+    setCurrentSoundColor(color);
 
     const lesson = HERO_LESSONS[lessonIdx];
-    const beatMs = 60000 / BATTLE_BPM;
-
     if (lesson) {
-      // Show opp's pattern name as a callout (use the same combo-label slot but for opp side)
-      eventTimers.current.push(setTimeout(() => {
-        setCurrentSound(lesson.name);
-        setCurrentSoundColor(color);
-      }, 250));
-
-      // Schedule pattern notes: audio + occasional judge reactions
-      const startMs = 800;
+      const beatMs = 60000 / BATTLE_BPM;
+      // Random judge hearts — chance per pattern note (without firing audio; that's BeatboxHero's job)
+      const startMs = 0;
       lesson.pattern.forEach(note => {
         const t = startMs + note.beat * beatMs;
         if (t < ROUND_SECONDS * 1000 - 100) {
-          eventTimers.current.push(setTimeout(() => {
-            playGameSound(note.sound);
-            const cat = SOUND_CATALOG[note.sound]?.cat;
-            const display = SOUND_CATALOG[note.sound] || HERO_SOUNDS[note.sound];
-            if (display?.name) setCurrentSound(display.name);
-            // Judge hearts: opp triggers ~30% of notes randomly
-            if (Math.random() < 0.3) {
+          if (Math.random() < 0.3) {
+            eventTimers.current.push(setTimeout(() => {
               setJudgeHearts(h => {
                 const next = [...h];
                 const i = Math.floor(Math.random() * 5);
                 next[i] = next[i] + 1;
                 return next;
               });
-            }
-          }, t));
+            }, t));
+          }
         }
       });
 
@@ -6892,73 +6925,85 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         </div>
       )}
 
-      {/^round[1-4]$/.test(phase) && playerPatternIdxs && oppPatternIdxs && (() => {
-        const roundN = parseInt(phase.replace('round', ''));
+      {/^(round|countdown)[1-4]$/.test(phase) && playerPatternIdxs && oppPatternIdxs && (() => {
+        const m = /^(round|countdown)([1-4])$/.exec(phase);
+        const isCountdown = m[1] === 'countdown';
+        const roundN = parseInt(m[2]);
         const side = sideForRound(roundN);
         const lessonIdx = lessonIdxForRound(roundN);
         const lesson = HERO_LESSONS[lessonIdx];
+        const upcomingName = side === 'P' ? char.name : opponent.name;
+        const isPlayerRound = side === 'P';
+        const isOppRound = side === 'O';
         return (
           <div className="space-y-2">
-            <BattleHUD char={char} opponent={opponent} timeLeft={timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
-            <PixelStage char={char} opponent={opponent} activeSide={activeSide}
-              currentSound={currentSound} soundColor={currentSoundColor}
-              judgeVotes={[]} revealedJudges={0} judgeHearts={judgeHearts} comboLabel={comboLabel} />
-            <div className="text-center text-amber-500 text-sm tracking-widest uppercase">
-              ROUND {roundN}/{TOTAL_ROUNDS} · {side === 'P' ? char.name : opponent.name} · {lesson?.name}
+            <BattleHUD char={char} opponent={opponent} timeLeft={isCountdown ? ROUND_SECONDS : timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
+            <div className="relative">
+              <PixelStage char={char} opponent={opponent}
+                activeSide={isCountdown ? null : activeSide}
+                currentSound={isCountdown ? null : currentSound}
+                soundColor={isCountdown ? '#D4A017' : currentSoundColor}
+                judgeVotes={[]} revealedJudges={0}
+                judgeHearts={isCountdown ? [0,0,0,0,0] : judgeHearts}
+                comboLabel={isCountdown ? null : comboLabel} />
+              {isCountdown && (
+                <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm">
+                  <div key={countdownVal} className="text-center"
+                    style={{ animation: 'countdownPop 0.7s ease-out' }}>
+                    <div className="text-amber-500 text-[10px] uppercase tracking-[0.4em] mb-2">
+                      Round {roundN} / {TOTAL_ROUNDS}
+                    </div>
+                    <div className={`font-black tracking-tighter ${typeof countdownVal === 'string' ? 'text-amber-500 text-6xl' : 'text-stone-100 text-8xl'}`}
+                      style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif', textShadow: '4px 4px 0 #0c0a09' }}>
+                      {countdownVal}
+                    </div>
+                    {typeof countdownVal === 'string' && (
+                      <div className="text-stone-400 text-xs uppercase tracking-[0.4em] mt-2">
+                        {upcomingName}'s turn
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            {side === 'P' && lesson != null && (
+            {!isCountdown && (
+              <div className="text-center text-amber-500 text-sm tracking-widest uppercase">
+                ROUND {roundN}/{TOTAL_ROUNDS} · {upcomingName} · {lesson?.name}
+              </div>
+            )}
+            {/* Player rounds: BeatboxHero pre-mounts during countdown so canvas + buttons
+                are visible while the player gets ready. Activates when round starts. */}
+            {isPlayerRound && lesson != null && (
               <BeatboxHero
                 mode="battle"
-                active={true}
+                active={!isCountdown}
                 bpm={BATTLE_BPM}
                 lessonIdx={lessonIdx}
                 onAccuracyUpdate={() => {}}
                 onLessonComplete={(_idx, accuracy) => handlePlayerRoundComplete(roundN, accuracy)}
               />
             )}
+            {/* Opponent rounds: spectate-mode BeatboxHero shows their pattern as
+                ghost notes scrolling so the player can watch + listen. */}
+            {isOppRound && !isCountdown && lesson != null && (
+              <BeatboxHero
+                mode="spectate"
+                active={true}
+                bpm={BATTLE_BPM}
+                lessonIdx={lessonIdx}
+                onAccuracyUpdate={() => {}}
+                onLessonComplete={() => {}}
+              />
+            )}
+            <style>{`
+              @keyframes countdownPop {
+                0% { transform: scale(0.4); opacity: 0; }
+                30% { transform: scale(1.3); opacity: 1; }
+                60% { transform: scale(1); opacity: 1; }
+                100% { transform: scale(1); opacity: 1; }
+              }
+            `}</style>
           </div>
-        );
-      })()}
-
-      {/^countdown[1-4]$/.test(phase) && (() => {
-        const roundN = parseInt(phase.replace('countdown', ''));
-        const upcomingSide = sideForRound(roundN);
-        const upcomingName = upcomingSide === 'P' ? char.name : opponent.name;
-        return (
-          <div className="space-y-2">
-            <BattleHUD char={char} opponent={opponent} timeLeft={ROUND_SECONDS} pScore={liveScore.p} oScore={liveScore.o} />
-            <div className="relative">
-              <PixelStage char={char} opponent={opponent} activeSide={null}
-                currentSound={null} soundColor="#D4A017"
-                judgeVotes={[]} revealedJudges={0} judgeHearts={[0,0,0,0,0]} />
-              <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm">
-                <div key={countdownVal} className="text-center"
-                  style={{ animation: 'countdownPop 0.7s ease-out' }}>
-                  <div className="text-amber-500 text-[10px] uppercase tracking-[0.4em] mb-2">
-                    Round {roundN} / {TOTAL_ROUNDS}
-                  </div>
-                  <div className={`font-black tracking-tighter ${typeof countdownVal === 'string' ? 'text-amber-500 text-6xl' : 'text-stone-100 text-8xl'}`}
-                    style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif',
-                             textShadow: '4px 4px 0 #0c0a09' }}>
-                    {countdownVal}
-                  </div>
-                  {typeof countdownVal === 'string' && (
-                    <div className="text-stone-400 text-xs uppercase tracking-[0.4em] mt-2">
-                      {upcomingName}'s turn
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          <style>{`
-            @keyframes countdownPop {
-              0% { transform: scale(0.4); opacity: 0; }
-              30% { transform: scale(1.3); opacity: 1; }
-              60% { transform: scale(1); opacity: 1; }
-              100% { transform: scale(1); opacity: 1; }
-            }
-          `}</style>
-        </div>
         );
       })()}
 
