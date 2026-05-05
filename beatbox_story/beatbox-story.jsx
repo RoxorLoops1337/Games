@@ -179,9 +179,9 @@ const dayOfWeek = (day) => ((day || 1)) % 7;
 // What's happening at the bar tonight, indexed by day-of-week (0..6).
 const BAR_SCHEDULE = [
   { activity: 'closed',   title: 'CLOSED',         tagline: 'Bar is dark — the doors stay shut on Mondays.' },
-  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Earn small change + heat.' },
-  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Earn small change + heat.' },
-  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Earn small change + heat.' },
+  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Free slot — build heat + maybe fans.' },
+  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Free slot — build heat + maybe fans.' },
+  { activity: 'openmic',  title: 'OPEN MIC NIGHT', tagline: 'Take the mic. Free slot — build heat + maybe fans.' },
   { activity: 'showcase', title: 'PAID SHOWCASE',  tagline: 'Headline if you\'re good enough — better pay.' },
   { activity: 'battle',   title: 'BATTLE NIGHT',   tagline: 'The cypher fires up. Pick a challenger.' },
   { activity: 'karaoke',  title: 'KARAOKE NIGHT',  tagline: 'Sing along. Sharpen your musicality.' },
@@ -5342,18 +5342,18 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const doOpenMic = () => {
     if (char.energy < 10) { showToast('Too tired to perform', 'bad'); return; }
     const sho = char.stats.sho || 0;
-    const earn = 10 + Math.round(sho * 1.5) + Math.floor(Math.random() * 6);
+    // Open mic is unpaid — you do it for the cred, the heat, and maybe a fan or two.
+    const fanGain = (Math.random() < 0.4 ? 1 : 0) + (sho >= 8 ? 1 : 0);
     setChar(c => ({
       ...c,
-      cash: c.cash + earn,
       energy: Math.max(0, c.energy - 10),
       mood: Math.min(100, c.mood + 5),
       minutes: c.minutes + 30,
       heat: (c.heat || 0) + 2,
-      followers: c.followers + (Math.random() < 0.3 ? 1 : 0),
+      followers: c.followers + fanGain,
       xp: c.xp + 8,
     }));
-    showToast(`Open mic: +$${earn}`, 'win');
+    showToast(fanGain > 0 ? `Open mic done · +${fanGain} fan${fanGain === 1 ? '' : 's'}` : 'Open mic done · built some heat', 'win');
   };
   const doKaraoke = () => {
     if (char.energy < 8) { showToast('Too tired to sing', 'bad'); return; }
@@ -5495,7 +5495,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         <Panel title="Open Mic Sign-Up">
           <div className="space-y-2">
             <div className="text-[10px] text-stone-500 uppercase tracking-wider">
-              Quick set, friendly crowd. Reward scales with showmanship.
+              Quick set, friendly crowd. Unpaid — you're here for the heat (and maybe a new fan).
             </div>
             <Btn variant="primary" onClick={doOpenMic} disabled={char.energy < 10} className="w-full py-3">
               TAKE THE MIC 🎤 (-10⚡, +30 min)
