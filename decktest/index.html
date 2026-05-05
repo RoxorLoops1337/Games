@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Decktest — Beatbox Auto-Battler</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>DECKTEST</h1>
+      <div class="subtitle">a beatbox auto-battler</div>
+    </header>
+
+    <div id="hud">
+      <div id="status">Phase 1 — Demo Battle</div>
+      <div id="controls">
+        <button id="btn-start">Start Battle</button>
+        <button id="btn-reset">Reset</button>
+        <label>Speed
+          <select id="speed">
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="2">2x</option>
+            <option value="4">4x</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <canvas id="game" width="768" height="432"></canvas>
+
+    <div id="legend">
+      <div class="legend-item"><span class="dot kick"></span>Kick — Tank</div>
+      <div class="legend-item"><span class="dot snare"></span>Snare — Bruiser</div>
+      <div class="legend-item"><span class="dot hihat"></span>Hi-Hat — Fast</div>
+      <div class="legend-item"><span class="dot vocal"></span>Vocal — Healer</div>
+    </div>
+  </div>
+
+  <!-- engine -->
+  <script src="js/engine/rng.js"></script>
+  <script src="js/engine/input.js"></script>
+  <script src="js/engine/renderer.js"></script>
+  <script src="js/engine/sprite.js"></script>
+  <script src="js/engine/loop.js"></script>
+
+  <!-- game -->
+  <script src="js/game/units.js"></script>
+  <script src="js/game/combat.js"></script>
+
+  <!-- scenes -->
+  <script src="js/scenes/combat-scene.js"></script>
+
+  <!-- boot -->
+  <script src="js/main.js"></script>
+</body>
+</html>

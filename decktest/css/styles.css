@@ -1,0 +1,133 @@
+:root {
+  --bg: #0b0b12;
+  --panel: #15151f;
+  --ink: #e8e8f0;
+  --muted: #8a8aa0;
+  --accent: #4ade80;
+  --kick: #e74c3c;
+  --snare: #f5c518;
+  --hihat: #38bdf8;
+  --vocal: #c084fc;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+#app {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  margin: 0;
+  letter-spacing: 6px;
+  font-size: 36px;
+  color: var(--accent);
+  text-shadow: 0 0 12px rgba(74, 222, 128, 0.35);
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+#hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid #23233a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+#status {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+#controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+#controls label {
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+button, select {
+  background: #1f1f30;
+  color: var(--ink);
+  border: 1px solid #2e2e48;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover { background: #2a2a40; }
+button:active { transform: translateY(1px); }
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #050509;
+  border: 1px solid #23233a;
+  border-radius: 6px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#legend {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.dot.kick { background: var(--kick); }
+.dot.snare { background: var(--snare); }
+.dot.hihat { background: var(--hihat); }
+.dot.vocal { background: var(--vocal); }
