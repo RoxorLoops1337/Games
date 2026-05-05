@@ -1921,8 +1921,8 @@ const BeatboxHero = ({
   useEffect(() => { lessonIdxRef.current = lessonIdx; }, [lessonIdx]);
 
   // Constants
-  const HIT_PERFECT_MS = 130;
-  const HIT_GOOD_MS = 220;
+  const HIT_PERFECT_MS = 110;
+  const HIT_GOOD_MS = 180;
   const LOOKAHEAD_MS = 1400; // notes appear ~1.4s before the strike line (was 2000)
   const REPS_TOTAL = (mode === 'battle' || mode === 'spectate') ? 1 : 4; // single rep in battle/spectate, 2 demo+2 player in practice
   const COMPLETE_HOLD_MS = 1800;
@@ -2023,6 +2023,10 @@ const BeatboxHero = ({
       n.hitGrade = isPerfect ? 'perfect' : 'good';
       state.hits++;
       if (isPerfect) state.perfects++;
+    } else {
+      // Stray tap — no note in this lane near the strike line. Count it as a
+      // miss so spamming all four pads drops the accuracy.
+      state.misses++;
     }
     rerender();
   };
