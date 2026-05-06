@@ -5296,13 +5296,36 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   };
 
   const [sleeping, setSleeping] = useState(false);
+  const [napping, setNapping] = useState(false);
   const sleep = () => {
-    // Can't sleep on an empty stomach — go eat something first
     if ((char.hunger ?? 0) <= 0) {
       showToast('Too hungry to sleep — eat something first!', 'bad');
       return;
     }
     setSleeping(true);
+  };
+  const startNap = () => {
+    if ((char.hunger ?? 0) <= 0) {
+      showToast('Too hungry to nap — eat something first!', 'bad');
+      return;
+    }
+    setNapping(true);
+  };
+  const finishNap = (finalMinutes, forced) => {
+    setChar(c => {
+      const slept = Math.max(0, finalMinutes - (c.minutes ?? 0));
+      const hours = slept / 60;
+      const max = c.maxEnergy ?? 100;
+      return {
+        ...c,
+        minutes: Math.min(1200, finalMinutes),
+        energy: Math.max(0, Math.min(max, c.energy + Math.floor(hours * 12))),
+        hunger: Math.max(0, c.hunger - Math.floor(hours * 3)),
+        mood:   Math.max(0, Math.min(100, c.mood + Math.floor(hours * 2))),
+      };
+    });
+    setNapping(false);
+    showToast(forced ? '2 AM — got booted off the couch' : 'Napped — feeling sharper', forced ? 'info' : 'win');
   };
   const finishSleep = () => {
     setChar(c => {
@@ -5323,6 +5346,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   };
 
   if (sleeping) return <SleepAnimation char={char} onComplete={finishSleep} />;
+  if (napping)  return <PowerNapAnimation char={char} onWake={finishNap} />;
 
   return (
     <div className="space-y-3">
@@ -5669,12 +5693,20 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
 
       {tab === 'rest' && (
         <Panel title="The Couch">
-          <div className="text-center space-y-3">
-            <div className="text-stone-400 text-xs uppercase tracking-wider">
-              Sleep until 6 AM. Restores full energy & advances a day.
+          <div className="space-y-3">
+            <Btn variant="primary" onClick={startNap} className="w-full py-3">
+              😴 POWER NAP
+            </Btn>
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider text-center">
+              wake whenever · ~+12⚡ / hour, –3🍴 / hour
+            </div>
+            <Btn variant="primary" onClick={sleep} className="w-full py-3">
+              🌙 SLEEP TILL MORNING
+            </Btn>
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider text-center">
+              full energy · advances 1 day
               {char.minutes < 720 && <div className="text-amber-500 mt-1">It's still daytime — are you sure?</div>}
             </div>
-            <Btn variant="primary" onClick={sleep} className="w-full py-3">SLEEP 💤</Btn>
           </div>
         </Panel>
       )}
@@ -6161,6 +6193,142 @@ const OpenMicPerformance = ({ char, onComplete }) => {
 };
 
 // Sleep animation: fades dusk → night → dawn, plays a rooster crow on wake.
+// Power-nap modal: real-time "you nap on the couch, clock spins, wake when you want".
+// Game minutes advance at REAL_MS_PER_GAME_HOUR until the player wakes or hits DAY_END.
+const PowerNapAnimation = ({ char, onWake }) => {
+  const [napMinutes, setNapMinutes] = useState(char.minutes ?? 0);
+  const startedRealAtRef = useRef(performance.now());
+  const startMinutesRef = useRef(char.minutes ?? 0);
+  const lookRef = useRef(lookFromChar(char));
+  const wokeRef = useRef(false);
+  const REAL_MS_PER_GAME_HOUR = 1500; // ~1 game hour every 1.5 real seconds
+  const DAY_LIMIT = 1200; // 02:00, same as DAY_END
+
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      if (wokeRef.current) return;
+      const realElapsed = performance.now() - startedRealAtRef.current;
+      const gameMinElapsed = (realElapsed / REAL_MS_PER_GAME_HOUR) * 60;
+      const next = Math.min(DAY_LIMIT, startMinutesRef.current + gameMinElapsed);
+      setNapMinutes(next);
+      if (next >= DAY_LIMIT) {
+        if (!wokeRef.current) { wokeRef.current = true; onWake(next, true); }
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const wakeUp = () => {
+    if (wokeRef.current) return;
+    wokeRef.current = true;
+    onWake(napMinutes, false);
+  };
+
+  const slept = Math.max(0, napMinutes - startMinutesRef.current);
+  const sleptHours = Math.floor(slept / 60);
+  const sleptMins = Math.floor(slept % 60);
+  // Display the wall-clock time (game minutes since 6 AM)
+  const totalMin = napMinutes + 360;
+  const hour24 = Math.floor(totalMin / 60) % 24;
+  const minOfHour = Math.floor(totalMin % 60);
+  const hour12 = ((hour24 + 11) % 12) + 1;
+  const ampm = hour24 >= 12 ? 'PM' : 'AM';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: '#0c0a09' }}>
+      <div className="max-w-md w-full space-y-3">
+        <div className="text-center">
+          <div className="text-amber-500 text-2xl tracking-wider"
+            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            POWER NAP
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">
+            Slept {sleptHours}h {String(sleptMins).padStart(2, '0')}m
+          </div>
+        </div>
+        <PixelScene draw={(ctx, fc) => drawNapScene(ctx, fc, lookRef.current, napMinutes)} />
+        <div className="text-center text-amber-500 text-2xl tracking-widest"
+          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {hour12}:{String(minOfHour).padStart(2, '0')} {ampm}
+        </div>
+        <Btn variant="primary" onClick={wakeUp} className="w-full py-3">
+          WAKE UP ☀️
+        </Btn>
+      </div>
+    </div>
+  );
+};
+
+// Power-nap scene: bedroom with player on couch + a clock that spins as the
+// game minutes advance.
+const drawNapScene = (ctx, fc, look, currentMinutes) => {
+  const W = 200;
+  // Apartment bg (afternoon dim)
+  _px(ctx, 0, 0, W, 95, '#3a3540');
+  _px(ctx, 0, 95, W, 35, '#3a2818');
+  // Couch
+  _px(ctx, 24, 80, 110, 28, '#5a4030');
+  _px(ctx, 24, 80, 110, 4, '#7a5a40');
+  _px(ctx, 18, 76, 12, 18, '#5a4030');
+  _px(ctx, 128, 76, 12, 18, '#5a4030');
+  // Player lying on couch
+  _px(ctx, 38, 78, 78, 5, look?.shirt || '#a78bfa');
+  _px(ctx, 38, 83, 78, 1, '#fff');
+  _px(ctx, 110, 78, 18, 4, '#1a1a2e');
+  _px(ctx, 126, 76, 6, 2, '#fff');
+  _px(ctx, 30, 73, 12, 9, look?.skin || '#d4a87a');
+  _px(ctx, 30, 71, 12, 4, look?.hair || '#1a1a2e');
+  _px(ctx, 33, 76, 2, 1, '#0c0a09');
+  _px(ctx, 38, 76, 2, 1, '#0c0a09');
+  _px(ctx, 35, 79, 4, 1, '#3a1010');
+  // Z's drifting up
+  if (fc % 30 < 24) {
+    const phase = (fc / 30) % 3;
+    ctx.fillStyle = '#dac0a0';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('z', 50 + phase * 5, 65 - phase * 8);
+  }
+  // Clock in upper-right
+  const cx = 158, cy = 32, r = 22;
+  // Outer ring shadow + face
+  ctx.fillStyle = '#3a3530';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#dadada';
+  ctx.beginPath(); ctx.arc(cx, cy, r - 2, 0, Math.PI * 2); ctx.fill();
+  // Tick marks (12 positions)
+  ctx.fillStyle = '#1c1917';
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    const x = cx + Math.cos(ang) * (r - 4);
+    const y = cy + Math.sin(ang) * (r - 4);
+    const sz = i % 3 === 0 ? 2 : 1;
+    ctx.fillRect(Math.floor(x - sz / 2), Math.floor(y - sz / 2), sz, sz);
+  }
+  // Hands — spin with elapsed game minutes
+  const totalMin = (currentMinutes + 360);
+  const hourPos = ((totalMin / 60) % 12) / 12;
+  const minPos = (totalMin % 60) / 60;
+  const drawHand = (frac, len, width) => {
+    const ang = frac * Math.PI * 2 - Math.PI / 2;
+    const x = cx + Math.cos(ang) * len;
+    const y = cy + Math.sin(ang) * len;
+    ctx.strokeStyle = '#1c1917';
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke();
+  };
+  drawHand(hourPos, r - 10, 2.2);
+  drawHand(minPos, r - 4, 1.2);
+  // Center pin
+  ctx.fillStyle = '#1c1917';
+  ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, Math.PI * 2); ctx.fill();
+};
+
 const SleepAnimation = ({ char, durationMs = 4000, onComplete }) => {
   const [progress, setProgress] = useState(0);
   const startedAtRef = useRef(performance.now());
