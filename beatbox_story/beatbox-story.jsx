@@ -157,14 +157,12 @@ const TICK_MINUTES = 10; // each progress block = 10 in-game minutes
 const TICK_REAL_MS = 500; // 0.5 real seconds per tick
 const DAY_END = 1200; // 02:00 = forced sleep
 
-// Convert minutes-since-6am to clock string
+// Convert minutes-since-6am to a 24-hour clock string ("HH:MM").
 function clockString(mins) {
   const total = (mins + 360) % 1440; // 6am offset
   const h = Math.floor(total / 60);
   const m = Math.floor(total % 60);
-  const hh = h % 12 === 0 ? 12 : h % 12;
-  const ampm = h < 12 ? 'AM' : 'PM';
-  return `${hh}:${m.toString().padStart(2, '0')} ${ampm}`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 // What part of the day is it? Used for palette + lock checks
@@ -6236,8 +6234,6 @@ const PowerNapAnimation = ({ char, onWake }) => {
   const totalMin = napMinutes + 360;
   const hour24 = Math.floor(totalMin / 60) % 24;
   const minOfHour = Math.floor(totalMin % 60);
-  const hour12 = ((hour24 + 11) % 12) + 1;
-  const ampm = hour24 >= 12 ? 'PM' : 'AM';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: '#0c0a09' }}>
@@ -6254,7 +6250,7 @@ const PowerNapAnimation = ({ char, onWake }) => {
         <PixelScene draw={(ctx, fc) => drawNapScene(ctx, fc, lookRef.current, napMinutes)} />
         <div className="text-center text-amber-500 text-2xl tracking-widest"
           style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-          {hour12}:{String(minOfHour).padStart(2, '0')} {ampm}
+          {String(hour24).padStart(2, '0')}:{String(minOfHour).padStart(2, '0')}
         </div>
         <Btn variant="primary" onClick={wakeUp} className="w-full py-3">
           WAKE UP ☀️
