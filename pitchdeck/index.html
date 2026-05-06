@@ -722,7 +722,7 @@ const CARDS = {
   },
   // RED
   shoot: {
-    color: 'red', cost: 3, art: '🥅', type: 'SHOT',
+    color: 'red', cost: 2, art: '🥅', type: 'SHOT',
     nameWith: 'SHOOT', nameWithout: 'BLOCK',
     descWith: 'Take a shot. Closer = better',
     descWithout: 'Defender throws body in the lane',
@@ -1235,6 +1235,34 @@ async function animateTick(durationMs = 1000) {
         p.x += (p.hx - p.x) * 0.10;
         p.y += (p.hy - p.y) * 0.10;
       }
+      // Anti-overlap: keep sprites at least MIN_SEP apart on the field.
+      // The ball-carrier holds their ground; the other player slides aside.
+      const MIN_SEP = 2.4;
+      for (let i = 0; i < state.players.length; i++) {
+        const a = state.players[i];
+        if (a.sentOff) continue;
+        for (let j = i + 1; j < state.players.length; j++) {
+          const b = state.players[j];
+          if (b.sentOff) continue;
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.hypot(dx, dy);
+          if (d < MIN_SEP && d > 0.0001) {
+            const push = (MIN_SEP - d) * 0.55;
+            const nx = dx / d, ny = dy / d;
+            if (state.ballCarrier === a.id) {
+              b.x += nx * push * 1.6; b.y += ny * push * 1.6;
+            } else if (state.ballCarrier === b.id) {
+              a.x -= nx * push * 1.6; a.y -= ny * push * 1.6;
+            } else {
+              a.x -= nx * push; a.y -= ny * push;
+              b.x += nx * push; b.y += ny * push;
+            }
+          } else if (d <= 0.0001) {
+            // Exact overlap: nudge one sideways
+            b.x += 0.6; b.y += 0.6;
+          }
+        }
+      }
       if (state.ballTarget) {
         const dx = state.ballTarget.x - state.ballPos.x;
         const dy = state.ballTarget.y - state.ballPos.y;
@@ -1456,10 +1484,16 @@ async function actHardPress(team) {
   if (!carrier) return;
   const pressers = teammates(team).filter(p => p.role !== 'GK')
     .sort((a, b) => dist(a, carrier) - dist(b, carrier)).slice(0, 3);
+  // Spread the pressers around the carrier so no one is on top of them
+  const ring = [
+    { x: -2.5, y: -2.0 },
+    { x: -2.5, y:  2.0 },
+    { x:  2.5, y:  0.0 },
+  ];
   pressers.forEach((p, i) => {
-    const off = (i - 1) * 1.5;
-    p.hx = carrier.x + off;
-    p.hy = carrier.y + off;
+    const o = ring[i] || ring[0];
+    p.hx = clamp(carrier.x + o.x, 8, FIELD_W - 8);
+    p.hy = clamp(carrier.y + o.y, 4, FIELD_H - 4);
   });
   showLog('SWARM PRESS!');
   await animateTick(900);
@@ -1503,7 +1537,9 @@ async function actJumpIn(team) {
   const j = teammates(team).filter(p => p.role !== 'GK')
     .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
   if (!j) return;
-  j.hx = carrier.x; j.hy = carrier.y;
+  // Lunge in from the side, not on top of, the carrier
+  j.hx = clamp(carrier.x + (team === HOME ? -1.5 : 1.5), 8, FIELD_W - 8);
+  j.hy = clamp(carrier.y - 2.2, 4, FIELD_H - 4);
   showLog('JUMPING IN!');
   await animateTick(700);
   if (Math.random() < 0.40) {
@@ -1530,7 +1566,9 @@ async function actProFoul(team) {
   const tackler = teammates(team).filter(p => p.role !== 'GK')
     .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
   if (!tackler) return;
-  tackler.hx = carrier.x; tackler.hy = carrier.y;
+  // Take them out from the side
+  tackler.hx = clamp(carrier.x + (team === HOME ? -1.5 : 1.5), 8, FIELD_W - 8);
+  tackler.hy = clamp(carrier.y + 2.0, 4, FIELD_H - 4);
   showLog('PROFESSIONAL FOUL!');
   await animateTick(700);
   // Always counts as a foul
@@ -1761,8 +1799,10 @@ async function actHardTackle(team) {
   const tackler = teammates(team).filter(p => p.role !== 'GK')
     .sort((a, b) => dist(a, carrier) - dist(b, carrier))[0];
   if (!tackler) return;
+  // Slide in alongside, not on top of, the carrier
+  const sideY = (tackler.y > carrier.y ? 1 : -1) * 2.2;
   tackler.hx = carrier.x;
-  tackler.hy = carrier.y;
+  tackler.hy = clamp(carrier.y + sideY, 4, FIELD_H - 4);
   showLog('SLIDE TACKLE!');
   await animateTick(800);
 
@@ -1876,7 +1916,7 @@ async function aiTurn() {
     if (ahb) {
       const carrier = getPlayer(state.ballCarrier);
       const goalDist = carrier ? Math.hypot(2 - carrier.x, FIELD_H/2 - carrier.y) : 99;
-      if (goalDist < 25 && aiHand.includes('shoot') && energy >= 3) pick = aiHand.indexOf('shoot');
+      if (goalDist < 25 && aiHand.includes('shoot') && energy >= 2) pick = aiHand.indexOf('shoot');
       else if (aiHand.includes('through_ball') && energy >= 2) pick = aiHand.indexOf('through_ball');
       else if (aiHand.includes('move_forward') && energy >= 1) pick = aiHand.indexOf('move_forward');
       else if (aiHand.includes('short_pass') && energy >= 1) pick = aiHand.indexOf('short_pass');
@@ -2299,7 +2339,11 @@ window.addEventListener('load', () => {
         const c = getPlayer(state.ballCarrier);
         if (c) state.ballPos = { x: c.x, y: c.y - 1 };
       }
-      renderField();
+      // If possession changed since last render, do a full render so the
+      // card faces (with-ball / without-ball) stay accurate.
+      const isHome = homeHasBall();
+      if (isHome !== lastHomeHadBall) render();
+      else renderField();
     }
   }, 100);
   function pulseLoop() {
