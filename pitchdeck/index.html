@@ -683,7 +683,7 @@ const CARDS = {
   move_forward: {
     color: 'yellow', cost: 1, art: '⬆️', type: 'TACTIC',
     name: 'PUSH UP',
-    desc: 'A teammate runs forward. If they have the ball, they dribble',
+    desc: 'Teammate runs forward. If they have the ball, dribble + 1-tackle shield',
     targetWith: 'teammate_or_carrier', targetWithout: 'teammate_or_carrier',
   },
   move_back: {
@@ -702,7 +702,7 @@ const CARDS = {
   short_pass: {
     color: 'blue', cost: 1, art: '⚽', type: 'PASS',
     nameWith: 'SHORT PASS', nameWithout: 'CLOSE DOWN',
-    descWith: 'Safe pass to a chosen teammate',
+    descWith: 'Safe pass. Receiver gets a 1-tackle shield',
     descWithout: 'Closest defender shadows the carrier',
     targetWith: 'teammate', targetWithout: null,
   },
@@ -731,14 +731,14 @@ const CARDS = {
   through_ball: {
     color: 'red', cost: 2, art: '🎯', type: 'PASS',
     nameWith: 'THROUGH BALL', nameWithout: 'INTERCEPT',
-    descWith: 'Risky pass into space ahead of a runner',
+    descWith: 'Risky pass into space. Receiver gets a 1-tackle shield',
     descWithout: 'Closest defender dives into passing lane',
     targetWith: 'teammate', targetWithout: null,
   },
   hard_tackle: {
     color: 'red', cost: 1, art: '🦵', type: 'TACKLE',
     nameWith: 'BURST', nameWithout: 'HARD TACKLE',
-    descWith: 'Carrier sprints forward aggressively',
+    descWith: 'Carrier sprints + 1-tackle shield',
     descWithout: 'Big tackle. High win-rate, FOUL RISK',
     targetWith: null, targetWithout: null,
   },
@@ -764,7 +764,7 @@ const CARDS = {
   one_two: {
     color: 'blue', cost: 2, art: '➰', type: 'PASS',
     nameWith: 'ONE-TWO', nameWithout: 'MAN-MARK',
-    descWith: 'Pass and get the ball back, advanced',
+    descWith: 'Pass + get ball back + 1-tackle shield',
     descWithout: 'Stick to the carrier, follow them',
     targetWith: 'teammate', targetWithout: null,
   },
@@ -839,6 +839,7 @@ const state = {
   targeting: null,
   ref: { name: 'STRICT STEFAN', strictness: 50 },
   discipline: {},
+  shielded: null,
 };
 
 const REFS = [
@@ -922,6 +923,7 @@ function initMatch() {
   state.hand = [];
   state.matchOver = false;
   state.targeting = null;
+  state.shielded = null;
 
   // Pull ref from current run match, else random
   if (runState.active && runState.matches[runState.matchIdx]) {
@@ -1086,6 +1088,15 @@ function drawPlayer(p) {
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI*2);
     ctx.fill();
+  }
+
+  if (state.shielded === p.id) {
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+    ctx.strokeStyle = `rgba(74, 214, 197, ${0.45 + pulse * 0.45})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(sx, sy, pixelSize * 7, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -1442,6 +1453,7 @@ async function actOneTwo(team, targetId) {
   state.ballTarget = { x: carrier.hx, y: carrier.hy - 1 };
   await animateTick(800);
   state.ballCarrier = carrier.id;
+  state.shielded = carrier.id;
   showLog('BACK TO THE CARRIER!');
 }
 
@@ -1456,6 +1468,11 @@ async function actManMark(team) {
   showLog('MAN-MARKED');
   await animateTick(800);
   if (Math.random() < 0.20) {
+    if (state.shielded === state.ballCarrier) {
+      state.shielded = null;
+      showLog('CARRIER HELD ON!');
+      return;
+    }
     state.ballCarrier = marker.id;
     state.possession = team;
     showLog('PICKED HIS POCKET!');
@@ -1498,6 +1515,11 @@ async function actHardPress(team) {
   showLog('SWARM PRESS!');
   await animateTick(900);
   if (Math.random() < 0.55) {
+    if (state.shielded === state.ballCarrier) {
+      state.shielded = null;
+      showLog('CARRIER HELD ON!');
+      return;
+    }
     state.ballCarrier = pressers[0].id;
     state.possession = team;
     showLog('STOLE IT!');
@@ -1543,6 +1565,11 @@ async function actJumpIn(team) {
   showLog('JUMPING IN!');
   await animateTick(700);
   if (Math.random() < 0.40) {
+    if (state.shielded === state.ballCarrier) {
+      state.shielded = null;
+      showLog('CARRIER HELD ON!');
+      return;
+    }
     state.ballCarrier = j.id;
     state.possession = team;
     showLog('WON IT!');
@@ -1588,11 +1615,20 @@ async function actMovePlayer(team, targetId, dir) {
   if (isCarrier && dir > 0) {
     const opp = nearestOpponent(target, team);
     if (opp && dist(opp, target) < 4 && Math.random() < 0.25) {
+      if (state.shielded === target.id) {
+        state.shielded = null;
+        showLog('SHIELDED — KEPT IT!');
+        await wait(400);
+        return;
+      }
       state.ballCarrier = opp.id;
       state.possession = opp.team;
       showLog('LOST IT IN TRAFFIC!');
       await wait(400);
+      return;
     }
+    // Survived the dribble — shield the carrier for one tackle
+    state.shielded = target.id;
   }
 }
 
@@ -1628,10 +1664,13 @@ async function actShortPass(team, targetId) {
     if (opp) {
       state.ballCarrier = opp.id;
       state.possession = opp.team;
+      state.shielded = null;
       showLog('INTERCEPTED!');
     }
   } else {
     state.ballCarrier = target.id;
+    // Receiving a pass shields the new carrier from the next steal
+    state.shielded = target.id;
   }
 }
 
@@ -1646,6 +1685,11 @@ async function actCloseDown(team) {
   showLog('CLOSING DOWN');
   await animateTick(700);
   if (Math.random() < 0.18) {
+    if (state.shielded === state.ballCarrier) {
+      state.shielded = null;
+      showLog('CARRIER HELD ON!');
+      return;
+    }
     state.ballCarrier = presser.id;
     state.possession = team;
     showLog('STOLE IT CLEANLY!');
@@ -1669,6 +1713,11 @@ async function actJockey(team) {
   showLog('JOCKEYING');
   await animateTick(700);
   if (Math.random() < 0.12) {
+    if (state.shielded === state.ballCarrier) {
+      state.shielded = null;
+      showLog('CARRIER HELD ON!');
+      return;
+    }
     state.ballCarrier = j.id;
     state.possession = team;
     showLog('WON IT!');
@@ -1704,9 +1753,14 @@ async function actShoot(team) {
   const distance = Math.hypot(goalX - carrier.x, goalY - carrier.y);
   showLog('SHOT!');
   state.ballCarrier = null;
+  state.shielded = null;
   state.ballTarget = { x: goalX, y: goalY + (Math.random() - 0.5) * 8 };
   await animateTick(800);
-  const goalProb = clamp(0.85 - distance / 38, 0.05, 0.85);
+  let goalProb = clamp(0.90 - distance / 50, 0.08, 0.90);
+  if (team === AWAY) {
+    // Scale AI accuracy by aiSkill so early matches are friendlier
+    goalProb = clamp(goalProb * (state.aiSkill || 1.0) * 0.85, 0.05, 0.85);
+  }
   if (Math.random() < goalProb) {
     state.score[team]++;
     showLog('⚽ GOOOAL!!!', { style: 'goal', ms: 2200 });
@@ -1754,10 +1808,12 @@ async function actThroughBall(team, targetId) {
     if (opp) {
       state.ballCarrier = opp.id;
       state.possession = opp.team;
+      state.shielded = null;
       showLog('CUT OUT!');
     }
   } else {
     state.ballCarrier = runner.id;
+    state.shielded = runner.id;
   }
 }
 
@@ -1772,6 +1828,11 @@ async function actInterceptDive(team) {
   showLog('DIVE FOR THE LANE!');
   await animateTick(800);
   if (Math.random() < 0.45) {
+    if (state.shielded === state.ballCarrier) {
+      state.shielded = null;
+      showLog('CARRIER HELD ON!');
+      return;
+    }
     state.ballCarrier = diver.id;
     state.possession = team;
     showLog('GOT IT!');
@@ -1787,10 +1848,18 @@ async function actBurst(team) {
   await animateTick(900);
   const opp = nearestOpponent(carrier, team);
   if (opp && dist(opp, carrier) < 5 && Math.random() < 0.35) {
+    if (state.shielded === carrier.id) {
+      state.shielded = null;
+      showLog('TACKLE BOUNCES OFF!');
+      return;
+    }
     state.ballCarrier = opp.id;
     state.possession = opp.team;
     showLog('TACKLED!');
+    return;
   }
+  // Surviving a burst grants shield
+  state.shielded = carrier.id;
 }
 
 async function actHardTackle(team) {
@@ -1813,6 +1882,12 @@ async function actHardTackle(team) {
   const r = Math.random();
 
   if (r < cleanWinChance) {
+    if (state.shielded === carrier.id) {
+      state.shielded = null;
+      showLog('SHIELDED — HELD ON!');
+      await wait(500);
+      return;
+    }
     state.ballCarrier = tackler.id;
     state.possession = team;
     showLog('CLEAN TACKLE!');
@@ -1871,6 +1946,7 @@ function resetAfterGoal(kickoffTeam) {
     p.x = p.hx; p.y = p.hy;
   });
   state.possession = kickoffTeam;
+  state.shielded = null;
   const mid = teammates(kickoffTeam).find(p => p.role === 'MID');
   if (mid) {
     state.ballCarrier = mid.id;
@@ -1905,8 +1981,27 @@ async function endTurn() {
 }
 
 async function aiTurn() {
-  let energy = 3;
-  const aiPool = ['short_pass','short_pass','move_forward','through_ball','shoot','hard_tackle','hold_up','move_back','drop_deep'];
+  const skill = state.aiSkill || 1.0;
+  // Easier early matches: fewer plays, less aggressive deck.
+  let energy;
+  if (skill < 0.95) energy = 2;
+  else if (skill < 1.20) energy = 3;
+  else energy = 4;
+
+  let aiPool;
+  if (skill < 0.95) {
+    // Match 1: passive, no shoot, no through-ball
+    aiPool = ['short_pass','short_pass','short_pass','move_forward','hold_up','drop_deep','move_back'];
+  } else if (skill < 1.20) {
+    // Mid: balanced
+    aiPool = ['short_pass','short_pass','move_forward','through_ball','shoot','hard_tackle','hold_up','move_back','drop_deep'];
+  } else {
+    // Late game: aggressive, shooters & tacklers
+    aiPool = ['short_pass','through_ball','through_ball','shoot','shoot','hard_tackle','hard_tackle','move_forward','move_forward'];
+  }
+  const aggressive = skill >= 1.20;
+  const tackleChance = aggressive ? 0.7 : (skill < 0.95 ? 0.35 : 0.55);
+
   const aiHand = [];
   for (let i = 0; i < 5; i++) aiHand.push(aiPool[Math.floor(Math.random()*aiPool.length)]);
 
@@ -1921,7 +2016,7 @@ async function aiTurn() {
       else if (aiHand.includes('move_forward') && energy >= 1) pick = aiHand.indexOf('move_forward');
       else if (aiHand.includes('short_pass') && energy >= 1) pick = aiHand.indexOf('short_pass');
     } else {
-      if (aiHand.includes('hard_tackle') && energy >= 1 && Math.random() < 0.6) pick = aiHand.indexOf('hard_tackle');
+      if (aiHand.includes('hard_tackle') && energy >= 1 && Math.random() < tackleChance) pick = aiHand.indexOf('hard_tackle');
       else if (aiHand.includes('short_pass') && energy >= 1) pick = aiHand.indexOf('short_pass');
       else if (aiHand.includes('move_forward') && energy >= 1) pick = aiHand.indexOf('move_forward');
     }
