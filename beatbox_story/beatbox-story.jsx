@@ -1919,11 +1919,111 @@ const HERO_LESSONS = [
 // into one of the 4 hero keys (B/T/K/Pf) via a simple frequency-band heuristic.
 // Calls onHit(key) when it registers a hit. Used by Beatbox Hero in mic mode.
 
+// Real-input radix-2 FFT (in-place Cooley-Tukey). Input length must be a power of 2.
+// Returns Float32Array of magnitudes, length N/2.
+const _fftMag = (input) => {
+  const N = input.length;
+  const re = new Float32Array(N);
+  const im = new Float32Array(N);
+  // Hann window to reduce spectral leakage
+  for (let i = 0; i < N; i++) re[i] = input[i] * (0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
+  // Bit-reverse
+  let j = 0;
+  for (let i = 1; i < N; i++) {
+    let bit = N >> 1;
+    while (j & bit) { j ^= bit; bit >>= 1; }
+    j ^= bit;
+    if (i < j) { const tr = re[i]; re[i] = re[j]; re[j] = tr; }
+  }
+  // Butterflies
+  for (let len = 2; len <= N; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wre = Math.cos(ang);
+    const wim = Math.sin(ang);
+    for (let i = 0; i < N; i += len) {
+      let cre = 1, cim = 0;
+      const half = len >> 1;
+      for (let k = 0; k < half; k++) {
+        const a = i + k;
+        const b = a + half;
+        const tre = re[b] * cre - im[b] * cim;
+        const tim = re[b] * cim + im[b] * cre;
+        const ure = re[a];
+        const uim = im[a];
+        re[a] = ure + tre;
+        im[a] = uim + tim;
+        re[b] = ure - tre;
+        im[b] = uim - tim;
+        const ncre = cre * wre - cim * wim;
+        cim = cre * wim + cim * wre;
+        cre = ncre;
+      }
+    }
+  }
+  const mag = new Float32Array(N / 2);
+  for (let i = 0; i < N / 2; i++) mag[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+  return mag;
+};
+
+// Compute a 5-band normalized spectral profile from a time-domain window.
+const _bandProfile = (timeData, sampleRate) => {
+  const N = timeData.length;
+  const mag = _fftMag(timeData);
+  const binHz = sampleRate / N;
+  const sumPower = (lo, hi) => {
+    const a = Math.max(0, Math.floor(lo / binHz));
+    const b = Math.min(mag.length, Math.ceil(hi / binHz));
+    let s = 0;
+    for (let i = a; i < b; i++) s += mag[i] * mag[i];
+    return s;
+  };
+  const bands = [
+    sumPower(40, 150),    // sub-bass — kick
+    sumPower(150, 500),   // low-mid
+    sumPower(500, 2000),  // mid
+    sumPower(2000, 6000), // high — snare
+    sumPower(6000, 14000),// very-high — hat
+  ];
+  const total = bands.reduce((a, b) => a + b, 0);
+  if (total < 1e-6) return null;
+  return bands.map(b => b / total);
+};
+
+// Build a profile from a recorded studio sample. Picks the loudest moment
+// in the buffer, takes a 2048-sample (~43ms at 48k) window starting just
+// before the peak so the transient is in frame.
+const _profileFromBuffer = (audioBuffer, fftSize = 2048) => {
+  if (!audioBuffer) return null;
+  const data = audioBuffer.getChannelData(0);
+  const sr = audioBuffer.sampleRate;
+  let peakIdx = 0, peakAbs = 0;
+  for (let i = 0; i < data.length; i++) {
+    const a = Math.abs(data[i]);
+    if (a > peakAbs) { peakAbs = a; peakIdx = i; }
+  }
+  const start = Math.max(0, peakIdx - (fftSize >> 2));
+  const win = new Float32Array(fftSize);
+  for (let i = 0; i < fftSize; i++) {
+    const src = start + i;
+    win[i] = src < data.length ? data[src] : 0;
+  }
+  return _bandProfile(win, sr);
+};
+
+// Default profiles used when the player hasn't recorded that sound yet.
+const _DEFAULT_PROFILES = {
+  B:  [0.46, 0.34, 0.15, 0.04, 0.01],
+  K:  [0.05, 0.18, 0.45, 0.22, 0.10],
+  Pf: [0.04, 0.10, 0.22, 0.46, 0.18],
+  T:  [0.03, 0.07, 0.16, 0.30, 0.44],
+};
+
 const MicBeatboxDetector = ({ active, paused = false, onHit }) => {
   const [permission, setPermission] = useState('idle'); // 'idle'|'requesting'|'granted'|'denied'|'insecure'
   const [errorDetail, setErrorDetail] = useState('');
   const [level, setLevel] = useState(0);
   const [lastDetected, setLastDetected] = useState(null);
+  const [profileSources, setProfileSources] = useState({});
   const pausedRef = useRef(paused);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   const lastDetectedAtRef = useRef(0);
@@ -1963,23 +2063,26 @@ const MicBeatboxDetector = ({ active, paused = false, onHit }) => {
       if (!ctx) { setPermission('denied'); setErrorDetail('No audio context.'); return; }
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
+      analyser.fftSize = 2048; // 2048 = ~43 ms window @ 48k, better band resolution
       analyser.smoothingTimeConstant = 0;
       src.connect(analyser);
       setPermission('granted');
 
       const fftSize = analyser.fftSize;
       const sampleRate = ctx.sampleRate;
-      const binHz = sampleRate / fftSize;
       const timeBuf = new Float32Array(fftSize);
-      const freqBuf = new Uint8Array(analyser.frequencyBinCount);
-      const energyInBand = (lo, hi) => {
-        const a = Math.max(0, Math.floor(lo / binHz));
-        const b = Math.min(freqBuf.length, Math.ceil(hi / binHz));
-        let s = 0;
-        for (let i = a; i < b; i++) s += freqBuf[i];
-        return s / Math.max(1, b - a);
-      };
+
+      // Build per-key profiles from the player's recorded studio samples (if any)
+      // and fall back to the hardcoded defaults for keys that aren't recorded.
+      const profiles = {};
+      const usingRecording = {};
+      ['B', 'T', 'K', 'Pf'].forEach(k => {
+        const buf = HERO_SAMPLES[k];
+        const p = buf ? _profileFromBuffer(buf, fftSize) : null;
+        profiles[k] = p || _DEFAULT_PROFILES[k];
+        usingRecording[k] = !!p;
+      });
+      if (mounted) setProfileSources(usingRecording);
 
       const tick = () => {
         analyser.getFloatTimeDomainData(timeBuf);
@@ -1989,13 +2092,9 @@ const MicBeatboxDetector = ({ active, paused = false, onHit }) => {
         if (mounted) setLevel(rms);
 
         const now = performance.now();
-        // Slow-moving noise floor; gate triggers at max(static floor, 2× ambient)
         recentRms = recentRms * 0.95 + rms * 0.05;
         const dynThresh = Math.max(onsetFloor, recentRms * 2);
 
-        // Skip classification while paused (e.g. during DEMO phase, so the demo
-        // notes the game just played don't get picked up by the mic and trigger
-        // a feedback loop).
         if (pausedRef.current) {
           raf = requestAnimationFrame(tick);
           return;
@@ -2003,32 +2102,18 @@ const MicBeatboxDetector = ({ active, paused = false, onHit }) => {
 
         if (rms > dynThresh && now - lastOnsetMs > cooldownMs) {
           lastOnsetMs = now;
-          analyser.getByteFrequencyData(freqBuf);
-          const subBass  = energyInBand(40, 150);
-          const lowMid   = energyInBand(150, 500);
-          const mid      = energyInBand(500, 2000);
-          const high     = energyInBand(2000, 6000);
-          const veryHigh = energyInBand(6000, 14000);
-          const total = subBass + lowMid + mid + high + veryHigh;
-          if (total > 8) {
-            // Normalize the observed band energies to a probability distribution,
-            // then pick the key whose ideal profile is most similar (cosine).
-            const obs = [subBass / total, lowMid / total, mid / total, high / total, veryHigh / total];
-            // Per-key profiles: [subBass, lowMid, mid, high, veryHigh]
-            const PROFILES = {
-              B:  [0.46, 0.34, 0.15, 0.04, 0.01], // kick — dominant sub + low-mid
-              K:  [0.05, 0.18, 0.45, 0.22, 0.10], // rim/tongue click — mid-tonal
-              Pf: [0.04, 0.10, 0.22, 0.46, 0.18], // snare — bright noise centered in high
-              T:  [0.03, 0.07, 0.16, 0.30, 0.44], // hi-hat — dominant very-high
-            };
+          // FFT the live time-domain buffer into a 5-band normalized profile,
+          // then pick the closest profile by cosine similarity.
+          const obs = _bandProfile(timeBuf, sampleRate);
+          if (obs) {
             const cosSim = (a, b) => {
               let dot = 0, na = 0, nb = 0;
               for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
               return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
             };
             let bestKey = 'K', bestSim = -Infinity;
-            for (const k of Object.keys(PROFILES)) {
-              const s = cosSim(obs, PROFILES[k]);
+            for (const k of Object.keys(profiles)) {
+              const s = cosSim(obs, profiles[k]);
               if (s > bestSim) { bestSim = s; bestKey = k; }
             }
             if (mounted) {
@@ -2077,10 +2162,24 @@ const MicBeatboxDetector = ({ active, paused = false, onHit }) => {
         )}
       </div>
       {permission === 'granted' && (
-        <div className="h-2 bg-stone-950 border border-stone-800 overflow-hidden">
-          <div className="h-full transition-all duration-75"
-            style={{ width: `${meterPct}%`, background: meterColor }} />
-        </div>
+        <>
+          <div className="h-2 bg-stone-950 border border-stone-800 overflow-hidden">
+            <div className="h-full transition-all duration-75"
+              style={{ width: `${meterPct}%`, background: meterColor }} />
+          </div>
+          {/* Per-key profile source: ✓ = matched against your recording, otherwise default */}
+          <div className="flex justify-between text-[9px] uppercase tracking-widest">
+            {['B', 'T', 'K', 'Pf'].map(k => {
+              const meta = HERO_SOUNDS[k];
+              const learned = !!profileSources[k];
+              return (
+                <span key={k} style={{ color: learned ? meta.color : '#57534e' }}>
+                  {learned ? '✓' : '·'} {meta.label}
+                </span>
+              );
+            })}
+          </div>
+        </>
       )}
       {(permission === 'denied' || permission === 'insecure') && errorDetail && (
         <div className="text-[10px] text-red-400 uppercase tracking-wider">{errorDetail}</div>

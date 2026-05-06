@@ -1720,11 +1720,112 @@ window.exports = window.module.exports;
       pattern: _patL12()
     }
   ];
+  var _fftMag = (input) => {
+    const N = input.length;
+    const re = new Float32Array(N);
+    const im = new Float32Array(N);
+    for (let i = 0; i < N; i++) re[i] = input[i] * (0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
+    let j = 0;
+    for (let i = 1; i < N; i++) {
+      let bit = N >> 1;
+      while (j & bit) {
+        j ^= bit;
+        bit >>= 1;
+      }
+      j ^= bit;
+      if (i < j) {
+        const tr = re[i];
+        re[i] = re[j];
+        re[j] = tr;
+      }
+    }
+    for (let len = 2; len <= N; len <<= 1) {
+      const ang = -2 * Math.PI / len;
+      const wre = Math.cos(ang);
+      const wim = Math.sin(ang);
+      for (let i = 0; i < N; i += len) {
+        let cre = 1, cim = 0;
+        const half = len >> 1;
+        for (let k = 0; k < half; k++) {
+          const a = i + k;
+          const b = a + half;
+          const tre = re[b] * cre - im[b] * cim;
+          const tim = re[b] * cim + im[b] * cre;
+          const ure = re[a];
+          const uim = im[a];
+          re[a] = ure + tre;
+          im[a] = uim + tim;
+          re[b] = ure - tre;
+          im[b] = uim - tim;
+          const ncre = cre * wre - cim * wim;
+          cim = cre * wim + cim * wre;
+          cre = ncre;
+        }
+      }
+    }
+    const mag = new Float32Array(N / 2);
+    for (let i = 0; i < N / 2; i++) mag[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+    return mag;
+  };
+  var _bandProfile = (timeData, sampleRate) => {
+    const N = timeData.length;
+    const mag = _fftMag(timeData);
+    const binHz = sampleRate / N;
+    const sumPower = (lo, hi) => {
+      const a = Math.max(0, Math.floor(lo / binHz));
+      const b = Math.min(mag.length, Math.ceil(hi / binHz));
+      let s = 0;
+      for (let i = a; i < b; i++) s += mag[i] * mag[i];
+      return s;
+    };
+    const bands = [
+      sumPower(40, 150),
+      // sub-bass — kick
+      sumPower(150, 500),
+      // low-mid
+      sumPower(500, 2e3),
+      // mid
+      sumPower(2e3, 6e3),
+      // high — snare
+      sumPower(6e3, 14e3)
+      // very-high — hat
+    ];
+    const total = bands.reduce((a, b) => a + b, 0);
+    if (total < 1e-6) return null;
+    return bands.map((b) => b / total);
+  };
+  var _profileFromBuffer = (audioBuffer, fftSize = 2048) => {
+    if (!audioBuffer) return null;
+    const data = audioBuffer.getChannelData(0);
+    const sr = audioBuffer.sampleRate;
+    let peakIdx = 0, peakAbs = 0;
+    for (let i = 0; i < data.length; i++) {
+      const a = Math.abs(data[i]);
+      if (a > peakAbs) {
+        peakAbs = a;
+        peakIdx = i;
+      }
+    }
+    const start = Math.max(0, peakIdx - (fftSize >> 2));
+    const win = new Float32Array(fftSize);
+    for (let i = 0; i < fftSize; i++) {
+      const src = start + i;
+      win[i] = src < data.length ? data[src] : 0;
+    }
+    return _bandProfile(win, sr);
+  };
+  var _DEFAULT_PROFILES = {
+    B: [0.46, 0.34, 0.15, 0.04, 0.01],
+    K: [0.05, 0.18, 0.45, 0.22, 0.1],
+    Pf: [0.04, 0.1, 0.22, 0.46, 0.18],
+    T: [0.03, 0.07, 0.16, 0.3, 0.44]
+  };
   var MicBeatboxDetector = ({ active, paused = false, onHit }) => {
     const [permission, setPermission] = (0, import_react.useState)("idle");
     const [errorDetail, setErrorDetail] = (0, import_react.useState)("");
     const [level, setLevel] = (0, import_react.useState)(0);
     const [lastDetected, setLastDetected] = (0, import_react.useState)(null);
+    const [profileSources, setProfileSources] = (0, import_react.useState)({});
     const pausedRef = (0, import_react.useRef)(paused);
     (0, import_react.useEffect)(() => {
       pausedRef.current = paused;
@@ -1776,22 +1877,22 @@ window.exports = window.module.exports;
         }
         const src = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
-        analyser.fftSize = 1024;
+        analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0;
         src.connect(analyser);
         setPermission("granted");
         const fftSize = analyser.fftSize;
         const sampleRate = ctx.sampleRate;
-        const binHz = sampleRate / fftSize;
         const timeBuf = new Float32Array(fftSize);
-        const freqBuf = new Uint8Array(analyser.frequencyBinCount);
-        const energyInBand = (lo, hi) => {
-          const a = Math.max(0, Math.floor(lo / binHz));
-          const b = Math.min(freqBuf.length, Math.ceil(hi / binHz));
-          let s = 0;
-          for (let i = a; i < b; i++) s += freqBuf[i];
-          return s / Math.max(1, b - a);
-        };
+        const profiles = {};
+        const usingRecording = {};
+        ["B", "T", "K", "Pf"].forEach((k) => {
+          const buf = HERO_SAMPLES[k];
+          const p = buf ? _profileFromBuffer(buf, fftSize) : null;
+          profiles[k] = p || _DEFAULT_PROFILES[k];
+          usingRecording[k] = !!p;
+        });
+        if (mounted) setProfileSources(usingRecording);
         const tick = () => {
           analyser.getFloatTimeDomainData(timeBuf);
           let sumSq = 0;
@@ -1807,25 +1908,8 @@ window.exports = window.module.exports;
           }
           if (rms > dynThresh && now - lastOnsetMs > cooldownMs) {
             lastOnsetMs = now;
-            analyser.getByteFrequencyData(freqBuf);
-            const subBass = energyInBand(40, 150);
-            const lowMid = energyInBand(150, 500);
-            const mid = energyInBand(500, 2e3);
-            const high = energyInBand(2e3, 6e3);
-            const veryHigh = energyInBand(6e3, 14e3);
-            const total = subBass + lowMid + mid + high + veryHigh;
-            if (total > 8) {
-              const obs = [subBass / total, lowMid / total, mid / total, high / total, veryHigh / total];
-              const PROFILES = {
-                B: [0.46, 0.34, 0.15, 0.04, 0.01],
-                // kick — dominant sub + low-mid
-                K: [0.05, 0.18, 0.45, 0.22, 0.1],
-                // rim/tongue click — mid-tonal
-                Pf: [0.04, 0.1, 0.22, 0.46, 0.18],
-                // snare — bright noise centered in high
-                T: [0.03, 0.07, 0.16, 0.3, 0.44]
-                // hi-hat — dominant very-high
-              };
+            const obs = _bandProfile(timeBuf, sampleRate);
+            if (obs) {
               const cosSim = (a, b) => {
                 let dot = 0, na = 0, nb = 0;
                 for (let i = 0; i < a.length; i++) {
@@ -1836,8 +1920,8 @@ window.exports = window.module.exports;
                 return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
               };
               let bestKey = "K", bestSim = -Infinity;
-              for (const k of Object.keys(PROFILES)) {
-                const s = cosSim(obs, PROFILES[k]);
+              for (const k of Object.keys(profiles)) {
+                const s = cosSim(obs, profiles[k]);
                 if (s > bestSim) {
                   bestSim = s;
                   bestKey = k;
@@ -1866,13 +1950,17 @@ window.exports = window.module.exports;
     const meterColor = level < 0.04 ? "#84cc16" : level < 0.15 ? "#fbbf24" : "#ef4444";
     const meterPct = Math.min(100, level * 250);
     const detectedMeta = lastDetected ? HERO_SOUNDS[lastDetected] : null;
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1.5 border-2 border-stone-800 bg-stone-900/40 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "\u{1F3A4} ", permission === "granted" ? paused ? "paused \u2014 demo playing" : "listening" : permission === "requesting" ? "requesting mic\u2026" : permission === "denied" ? "mic denied" : permission === "insecure" ? "needs https" : "idle"), detectedMeta && /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] tracking-widest", style: { color: detectedMeta.color } }, detectedMeta.label, " \xB7 ", detectedMeta.name.toUpperCase())), permission === "granted" && /* @__PURE__ */ import_react.default.createElement("div", { className: "h-2 bg-stone-950 border border-stone-800 overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1.5 border-2 border-stone-800 bg-stone-900/40 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "\u{1F3A4} ", permission === "granted" ? paused ? "paused \u2014 demo playing" : "listening" : permission === "requesting" ? "requesting mic\u2026" : permission === "denied" ? "mic denied" : permission === "insecure" ? "needs https" : "idle"), detectedMeta && /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] tracking-widest", style: { color: detectedMeta.color } }, detectedMeta.label, " \xB7 ", detectedMeta.name.toUpperCase())), permission === "granted" && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "h-2 bg-stone-950 border border-stone-800 overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement(
       "div",
       {
         className: "h-full transition-all duration-75",
         style: { width: `${meterPct}%`, background: meterColor }
       }
-    )), (permission === "denied" || permission === "insecure") && errorDetail && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-400 uppercase tracking-wider" }, errorDetail));
+    )), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[9px] uppercase tracking-widest" }, ["B", "T", "K", "Pf"].map((k) => {
+      const meta = HERO_SOUNDS[k];
+      const learned = !!profileSources[k];
+      return /* @__PURE__ */ import_react.default.createElement("span", { key: k, style: { color: learned ? meta.color : "#57534e" } }, learned ? "\u2713" : "\xB7", " ", meta.label);
+    }))), (permission === "denied" || permission === "insecure") && errorDetail && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-400 uppercase tracking-wider" }, errorDetail));
   };
   var BeatboxHero = ({
     onAccuracyUpdate,
