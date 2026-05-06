@@ -341,6 +341,10 @@ window.exports = window.module.exports;
     const isDay = tod === "day" || tod === "dawn";
     return /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-xs" }, isDay ? "\u2600\uFE0F" : "\u{1F319}"), /* @__PURE__ */ import_react.default.createElement("span", { className: "text-stone-300 font-mono text-xs" }, clockString(minutes)));
   };
+  var _gamePaused = false;
+  var setGamePaused = (v) => {
+    _gamePaused = !!v;
+  };
   function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
     const [active, setActive] = (0, import_react.useState)(false);
     const [block, setBlock] = (0, import_react.useState)(0);
@@ -368,6 +372,7 @@ window.exports = window.module.exports;
     const tickHandlerRef = (0, import_react.useRef)(() => {
     });
     tickHandlerRef.current = () => {
+      if (_gamePaused) return;
       const cfg = configRef.current;
       const c = charRef.current;
       const newMins = c.minutes + TICK_MINUTES;
@@ -3821,6 +3826,9 @@ window.exports = window.module.exports;
     const [toast, setToast] = (0, import_react.useState)(null);
     const [activeSlot, setActiveSlotState] = (0, import_react.useState)(null);
     const [cutscene, setCutscene] = (0, import_react.useState)(null);
+    (0, import_react.useEffect)(() => {
+      setGamePaused(!!cutscene);
+    }, [cutscene]);
     const playCutscene = (props, flagPath, after) => {
       setCutscene({ ...props, onComplete: () => {
         setCutscene(null);
