@@ -1720,6 +1720,132 @@ window.exports = window.module.exports;
       pattern: _patL12()
     }
   ];
+  var MicBeatboxDetector = ({ active, onHit }) => {
+    const [permission, setPermission] = (0, import_react.useState)("idle");
+    const [errorDetail, setErrorDetail] = (0, import_react.useState)("");
+    const [level, setLevel] = (0, import_react.useState)(0);
+    const [lastDetected, setLastDetected] = (0, import_react.useState)(null);
+    const lastDetectedAtRef = (0, import_react.useRef)(0);
+    const onHitRef = (0, import_react.useRef)(onHit);
+    (0, import_react.useEffect)(() => {
+      onHitRef.current = onHit;
+    }, [onHit]);
+    (0, import_react.useEffect)(() => {
+      if (!active) return;
+      let raf = 0;
+      let stream = null;
+      let mounted = true;
+      let lastOnsetMs = 0;
+      let recentRms = 0;
+      const cooldownMs = 80;
+      const onsetFloor = 0.04;
+      (async () => {
+        if (typeof window !== "undefined" && window.isSecureContext === false) {
+          setPermission("insecure");
+          setErrorDetail("Mic requires HTTPS.");
+          return;
+        }
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setPermission("denied");
+          setErrorDetail("Mic API unavailable.");
+          return;
+        }
+        setPermission("requesting");
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+          });
+        } catch (e) {
+          setPermission("denied");
+          setErrorDetail(e && e.message || "Mic permission denied.");
+          return;
+        }
+        if (!mounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const ctx = getAudioCtx();
+        if (!ctx) {
+          setPermission("denied");
+          setErrorDetail("No audio context.");
+          return;
+        }
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0;
+        src.connect(analyser);
+        setPermission("granted");
+        const fftSize = analyser.fftSize;
+        const sampleRate = ctx.sampleRate;
+        const binHz = sampleRate / fftSize;
+        const timeBuf = new Float32Array(fftSize);
+        const freqBuf = new Uint8Array(analyser.frequencyBinCount);
+        const energyInBand = (lo, hi) => {
+          const a = Math.max(0, Math.floor(lo / binHz));
+          const b = Math.min(freqBuf.length, Math.ceil(hi / binHz));
+          let s = 0;
+          for (let i = a; i < b; i++) s += freqBuf[i];
+          return s / Math.max(1, b - a);
+        };
+        const tick = () => {
+          analyser.getFloatTimeDomainData(timeBuf);
+          let sumSq = 0;
+          for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
+          const rms = Math.sqrt(sumSq / timeBuf.length);
+          if (mounted) setLevel(rms);
+          const now = performance.now();
+          recentRms = recentRms * 0.95 + rms * 0.05;
+          const dynThresh = Math.max(onsetFloor, recentRms * 2);
+          if (rms > dynThresh && now - lastOnsetMs > cooldownMs) {
+            lastOnsetMs = now;
+            analyser.getByteFrequencyData(freqBuf);
+            const subBass = energyInBand(40, 150);
+            const lowMid = energyInBand(150, 500);
+            const mid = energyInBand(500, 2e3);
+            const high = energyInBand(2e3, 6e3);
+            const veryHigh = energyInBand(6e3, 14e3);
+            const total = subBass + lowMid + mid + high + veryHigh;
+            if (total > 8) {
+              const sb = subBass / total;
+              const h = high / total;
+              const vh = veryHigh / total;
+              let key;
+              if (sb > 0.32) key = "B";
+              else if (vh > 0.42) key = "T";
+              else if (h + vh > 0.55) key = "Pf";
+              else key = "K";
+              if (mounted) {
+                setLastDetected(key);
+                lastDetectedAtRef.current = now;
+              }
+              onHitRef.current?.(key);
+            }
+          }
+          if (lastDetected && now - lastDetectedAtRef.current > 400 && mounted) {
+            setLastDetected(null);
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      })();
+      return () => {
+        mounted = false;
+        if (raf) cancelAnimationFrame(raf);
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+      };
+    }, [active]);
+    const meterColor = level < 0.04 ? "#84cc16" : level < 0.15 ? "#fbbf24" : "#ef4444";
+    const meterPct = Math.min(100, level * 250);
+    const detectedMeta = lastDetected ? HERO_SOUNDS[lastDetected] : null;
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1.5 border-2 border-stone-800 bg-stone-900/40 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "\u{1F3A4} ", permission === "granted" ? "listening" : permission === "requesting" ? "requesting mic\u2026" : permission === "denied" ? "mic denied" : permission === "insecure" ? "needs https" : "idle"), detectedMeta && /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] tracking-widest", style: { color: detectedMeta.color } }, detectedMeta.label, " \xB7 ", detectedMeta.name.toUpperCase())), permission === "granted" && /* @__PURE__ */ import_react.default.createElement("div", { className: "h-2 bg-stone-950 border border-stone-800 overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        className: "h-full transition-all duration-75",
+        style: { width: `${meterPct}%`, background: meterColor }
+      }
+    )), (permission === "denied" || permission === "insecure") && errorDetail && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-400 uppercase tracking-wider" }, errorDetail));
+  };
   var BeatboxHero = ({
     onAccuracyUpdate,
     onLessonComplete,
@@ -1727,8 +1853,10 @@ window.exports = window.module.exports;
     active = true,
     bpm = 90,
     lessonIdx = 0,
-    mode = "practice"
+    mode = "practice",
     // 'practice' = 4 reps demo/player loop; 'battle' = single player rep, no auto-restart
+    inputMode = "tap"
+    // 'tap' = drum pads; 'mic' = beatbox into the mic (wider hit windows)
   }) => {
     const canvasRef = (0, import_react.useRef)(null);
     const stateRef = (0, import_react.useRef)(null);
@@ -1742,8 +1870,8 @@ window.exports = window.module.exports;
     (0, import_react.useEffect)(() => {
       lessonIdxRef.current = lessonIdx;
     }, [lessonIdx]);
-    const HIT_PERFECT_MS = 110;
-    const HIT_GOOD_MS = 180;
+    const HIT_PERFECT_MS = inputMode === "mic" ? 200 : 110;
+    const HIT_GOOD_MS = inputMode === "mic" ? 350 : 180;
     const LOOKAHEAD_MS = 1400;
     const REPS_TOTAL = mode === "battle" || mode === "spectate" ? 1 : 4;
     const COMPLETE_HOLD_MS = 1800;
@@ -2034,7 +2162,7 @@ window.exports = window.module.exports;
         className: "w-full block border-2 border-stone-800",
         style: { aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: "#0c0a09", imageRendering: "auto" }
       }
-    ), mode !== "spectate" && /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, (state?.lanes || HERO_LANES).map((sound, idx) => {
+    ), mode !== "spectate" && inputMode === "mic" && /* @__PURE__ */ import_react.default.createElement(MicBeatboxDetector, { active, onHit: handleTap }), mode !== "spectate" && inputMode !== "mic" && /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, (state?.lanes || HERO_LANES).map((sound, idx) => {
       const meta = getSoundDisplay(sound) || { color: "#D4A017", label: "?" };
       return /* @__PURE__ */ import_react.default.createElement(
         "button",
@@ -4130,6 +4258,7 @@ window.exports = window.module.exports;
     const [trainStat, setTrainStat] = (0, import_react.useState)(null);
     const [pendingStart, setPendingStart] = (0, import_react.useState)(false);
     const [playMode, setPlayMode] = (0, import_react.useState)(false);
+    const [tecInputMode, setTecInputMode] = (0, import_react.useState)("tap");
     const [showRangePicker, setShowRangePicker] = (0, import_react.useState)(false);
     const charRef = (0, import_react.useRef)(char);
     (0, import_react.useEffect)(() => {
@@ -4408,10 +4537,25 @@ window.exports = window.module.exports;
           style: { color: ownedSet.has(currentLesson.requires) ? "#22c55e" : "#fbbf24" }
         },
         ownedSet.has(currentLesson.requires) ? `\u2713 uses ${SOUND_CATALOG[currentLesson.requires]?.name || currentLesson.requires}` : `\u{1F512} needs ${SOUND_CATALOG[currentLesson.requires]?.name || currentLesson.requires} (buy in shop)`
+      )), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[9px] uppercase tracking-widest text-stone-500 mr-1" }, "Input"), /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onClick: () => setTecInputMode("tap"),
+          className: `flex-1 px-2 py-1.5 border-2 text-[10px] uppercase tracking-widest transition-all ${tecInputMode === "tap" ? "border-amber-500 bg-amber-500/10 text-amber-500" : "border-stone-700 text-stone-400 hover:border-amber-500/50"}`
+        },
+        "Tap pads"
+      ), /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onClick: () => setTecInputMode("mic"),
+          className: `flex-1 px-2 py-1.5 border-2 text-[10px] uppercase tracking-widest transition-all ${tecInputMode === "mic" ? "border-amber-500 bg-amber-500/10 text-amber-500" : "border-stone-700 text-stone-400 hover:border-amber-500/50"}`
+        },
+        "\u{1F3A4} Mic"
       )), /* @__PURE__ */ import_react.default.createElement(
         BeatboxHero,
         {
           onAccuracyUpdate: handleAccuracy,
+          inputMode: tecInputMode,
           onLessonComplete: (idx, accuracy) => {
             setChar((c) => {
               const next = { ...c };

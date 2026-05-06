@@ -1914,6 +1914,161 @@ const HERO_LESSONS = [
     pattern: _patL12() },
 ];
 
+// ============ MIC BEATBOX DETECTOR ============
+// Listens through the mic, runs onset detection, and classifies each transient
+// into one of the 4 hero keys (B/T/K/Pf) via a simple frequency-band heuristic.
+// Calls onHit(key) when it registers a hit. Used by Beatbox Hero in mic mode.
+
+const MicBeatboxDetector = ({ active, onHit }) => {
+  const [permission, setPermission] = useState('idle'); // 'idle'|'requesting'|'granted'|'denied'|'insecure'
+  const [errorDetail, setErrorDetail] = useState('');
+  const [level, setLevel] = useState(0);
+  const [lastDetected, setLastDetected] = useState(null);
+  const lastDetectedAtRef = useRef(0);
+  const onHitRef = useRef(onHit);
+  useEffect(() => { onHitRef.current = onHit; }, [onHit]);
+
+  useEffect(() => {
+    if (!active) return;
+    let raf = 0;
+    let stream = null;
+    let mounted = true;
+    let lastOnsetMs = 0;
+    let recentRms = 0;
+    const cooldownMs = 80;
+    const onsetFloor = 0.04;
+
+    (async () => {
+      if (typeof window !== 'undefined' && window.isSecureContext === false) {
+        setPermission('insecure'); setErrorDetail('Mic requires HTTPS.');
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setPermission('denied'); setErrorDetail('Mic API unavailable.');
+        return;
+      }
+      setPermission('requesting');
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
+      } catch (e) {
+        setPermission('denied'); setErrorDetail((e && e.message) || 'Mic permission denied.');
+        return;
+      }
+      if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+      const ctx = getAudioCtx();
+      if (!ctx) { setPermission('denied'); setErrorDetail('No audio context.'); return; }
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0;
+      src.connect(analyser);
+      setPermission('granted');
+
+      const fftSize = analyser.fftSize;
+      const sampleRate = ctx.sampleRate;
+      const binHz = sampleRate / fftSize;
+      const timeBuf = new Float32Array(fftSize);
+      const freqBuf = new Uint8Array(analyser.frequencyBinCount);
+      const energyInBand = (lo, hi) => {
+        const a = Math.max(0, Math.floor(lo / binHz));
+        const b = Math.min(freqBuf.length, Math.ceil(hi / binHz));
+        let s = 0;
+        for (let i = a; i < b; i++) s += freqBuf[i];
+        return s / Math.max(1, b - a);
+      };
+
+      const tick = () => {
+        analyser.getFloatTimeDomainData(timeBuf);
+        let sumSq = 0;
+        for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
+        const rms = Math.sqrt(sumSq / timeBuf.length);
+        if (mounted) setLevel(rms);
+
+        const now = performance.now();
+        // Slow-moving noise floor; gate triggers at max(static floor, 2× ambient)
+        recentRms = recentRms * 0.95 + rms * 0.05;
+        const dynThresh = Math.max(onsetFloor, recentRms * 2);
+
+        if (rms > dynThresh && now - lastOnsetMs > cooldownMs) {
+          lastOnsetMs = now;
+          analyser.getByteFrequencyData(freqBuf);
+          const subBass  = energyInBand(40, 150);
+          const lowMid   = energyInBand(150, 500);
+          const mid      = energyInBand(500, 2000);
+          const high     = energyInBand(2000, 6000);
+          const veryHigh = energyInBand(6000, 14000);
+          const total = subBass + lowMid + mid + high + veryHigh;
+          if (total > 8) {
+            const sb = subBass / total;
+            const h  = high / total;
+            const vh = veryHigh / total;
+            // Heuristic: kick = sub-bass dominant; hat = very-high dominant;
+            // snare = bright noise; rim = mid/tonal default.
+            let key;
+            if (sb > 0.32)                  key = 'B';
+            else if (vh > 0.42)             key = 'T';
+            else if (h + vh > 0.55)         key = 'Pf';
+            else                             key = 'K';
+            if (mounted) {
+              setLastDetected(key);
+              lastDetectedAtRef.current = now;
+            }
+            onHitRef.current?.(key);
+          }
+        }
+
+        // Clear the "detected" label after 400ms
+        if (lastDetected && now - lastDetectedAtRef.current > 400 && mounted) {
+          setLastDetected(null);
+        }
+
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    })();
+
+    return () => {
+      mounted = false;
+      if (raf) cancelAnimationFrame(raf);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  const meterColor = level < 0.04 ? '#84cc16' : level < 0.15 ? '#fbbf24' : '#ef4444';
+  const meterPct = Math.min(100, level * 250);
+  const detectedMeta = lastDetected ? HERO_SOUNDS[lastDetected] : null;
+
+  return (
+    <div className="space-y-1.5 border-2 border-stone-800 bg-stone-900/40 p-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-widest text-stone-500">
+          🎤 {permission === 'granted' ? 'listening' :
+              permission === 'requesting' ? 'requesting mic…' :
+              permission === 'denied' ? 'mic denied' :
+              permission === 'insecure' ? 'needs https' : 'idle'}
+        </span>
+        {detectedMeta && (
+          <span className="text-[10px] tracking-widest" style={{ color: detectedMeta.color }}>
+            {detectedMeta.label} · {detectedMeta.name.toUpperCase()}
+          </span>
+        )}
+      </div>
+      {permission === 'granted' && (
+        <div className="h-2 bg-stone-950 border border-stone-800 overflow-hidden">
+          <div className="h-full transition-all duration-75"
+            style={{ width: `${meterPct}%`, background: meterColor }} />
+        </div>
+      )}
+      {(permission === 'denied' || permission === 'insecure') && errorDetail && (
+        <div className="text-[10px] text-red-400 uppercase tracking-wider">{errorDetail}</div>
+      )}
+    </div>
+  );
+};
+
 const BeatboxHero = ({
   onAccuracyUpdate,
   onLessonComplete,
@@ -1922,6 +2077,7 @@ const BeatboxHero = ({
   bpm = 90,
   lessonIdx = 0,
   mode = 'practice', // 'practice' = 4 reps demo/player loop; 'battle' = single player rep, no auto-restart
+  inputMode = 'tap', // 'tap' = drum pads; 'mic' = beatbox into the mic (wider hit windows)
 }) => {
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
@@ -1934,9 +2090,10 @@ const BeatboxHero = ({
   const lessonIdxRef = useRef(lessonIdx);
   useEffect(() => { lessonIdxRef.current = lessonIdx; }, [lessonIdx]);
 
-  // Constants
-  const HIT_PERFECT_MS = 110;
-  const HIT_GOOD_MS = 180;
+  // Constants — wider hit windows in mic mode to compensate for ~50–100 ms
+  // detection latency.
+  const HIT_PERFECT_MS = inputMode === 'mic' ? 200 : 110;
+  const HIT_GOOD_MS    = inputMode === 'mic' ? 350 : 180;
   const LOOKAHEAD_MS = 1400; // notes appear ~1.4s before the strike line (was 2000)
   const REPS_TOTAL = (mode === 'battle' || mode === 'spectate') ? 1 : 4; // single rep in battle/spectate, 2 demo+2 player in practice
   const COMPLETE_HOLD_MS = 1800;
@@ -2283,8 +2440,13 @@ const BeatboxHero = ({
         className="w-full block border-2 border-stone-800"
         style={{ aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: '#0c0a09', imageRendering: 'auto' }} />
 
-      {/* Drum buttons — hidden in spectate mode (player can't tap) */}
-      {mode !== 'spectate' && (
+      {/* Mic detector replaces the drum pads when inputMode === 'mic' */}
+      {mode !== 'spectate' && inputMode === 'mic' && (
+        <MicBeatboxDetector active={active} onHit={handleTap} />
+      )}
+
+      {/* Drum buttons — hidden in spectate mode (player can't tap) and in mic mode */}
+      {mode !== 'spectate' && inputMode !== 'mic' && (
         <div className="grid grid-cols-4 gap-1">
           {(state?.lanes || HERO_LANES).map((sound, idx) => {
             const meta = getSoundDisplay(sound) || { color: '#D4A017', label: '?' };
@@ -4753,6 +4915,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   const [trainStat, setTrainStat] = useState(null); // 'mus' | 'tec' | 'ori' | 'sho' | null
   const [pendingStart, setPendingStart] = useState(false);
   const [playMode, setPlayMode] = useState(false); // false = AFK, true = pitch tuner mini-game (mus only)
+  const [tecInputMode, setTecInputMode] = useState('tap'); // 'tap' | 'mic' for Beatbox Hero
   const [showRangePicker, setShowRangePicker] = useState(false); // shown when user wants to set/change voice range
 
   const charRef = useRef(char);
@@ -5064,8 +5227,30 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                         )}
                       </div>
 
+                      {/* Input mode toggle: tap pads vs beatbox into mic */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] uppercase tracking-widest text-stone-500 mr-1">Input</span>
+                        <button onClick={() => setTecInputMode('tap')}
+                          className={`flex-1 px-2 py-1.5 border-2 text-[10px] uppercase tracking-widest transition-all ${
+                            tecInputMode === 'tap'
+                              ? 'border-amber-500 bg-amber-500/10 text-amber-500'
+                              : 'border-stone-700 text-stone-400 hover:border-amber-500/50'
+                          }`}>
+                          Tap pads
+                        </button>
+                        <button onClick={() => setTecInputMode('mic')}
+                          className={`flex-1 px-2 py-1.5 border-2 text-[10px] uppercase tracking-widest transition-all ${
+                            tecInputMode === 'mic'
+                              ? 'border-amber-500 bg-amber-500/10 text-amber-500'
+                              : 'border-stone-700 text-stone-400 hover:border-amber-500/50'
+                          }`}>
+                          🎤 Mic
+                        </button>
+                      </div>
+
                       <BeatboxHero
                         onAccuracyUpdate={handleAccuracy}
+                        inputMode={tecInputMode}
                         onLessonComplete={(idx, accuracy) => {
                           setChar(c => {
                             const next = { ...c };
