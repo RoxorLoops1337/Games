@@ -4612,21 +4612,25 @@ const drawSleepScene = (ctx, fc, look, progress) => {
   _px(ctx, 24, 80, 110, 4, '#7a5a40');
   _px(ctx, 18, 76, 12, 18, '#5a4030');
   _px(ctx, 128, 76, 12, 18, '#5a4030');
-  // Player lying on couch (head left, feet right)
-  // Body horizontal
-  _px(ctx, 38, 78, 78, 5, look?.shirt || '#a78bfa');
-  _px(ctx, 38, 83, 78, 1, '#fff');
-  // Legs
-  _px(ctx, 110, 78, 18, 4, '#1a1a2e');
-  _px(ctx, 126, 76, 6, 2, '#fff');
+  // Player lying on couch (head left, feet right) — chunky proportions
+  // Pillow under head
+  _px(ctx, 30, 78, 18, 3, '#a8a29e');
+  _px(ctx, 30, 78, 18, 1, '#cbc4be');
   // Head
-  _px(ctx, 30, 73, 12, 9, look?.skin || '#d4a87a');
-  _px(ctx, 30, 71, 12, 4, look?.hair || '#1a1a2e');
+  _px(ctx, 33, 72, 12, 9, look?.skin || '#d4a87a');
+  _px(ctx, 33, 70, 12, 3, look?.hair || '#1a1a2e');
   // Closed eyes
-  _px(ctx, 33, 76, 2, 1, '#0c0a09');
-  _px(ctx, 38, 76, 2, 1, '#0c0a09');
+  _px(ctx, 37, 76, 2, 1, '#0c0a09');
+  _px(ctx, 41, 76, 2, 1, '#0c0a09');
   // Tiny smile
-  _px(ctx, 35, 79, 4, 1, '#3a1010');
+  _px(ctx, 38, 79, 4, 1, '#3a1010');
+  // Body / torso (chunky)
+  _px(ctx, 45, 73, 32, 8, look?.shirt || '#a78bfa');
+  _px(ctx, 45, 73, 32, 1, '#fff');
+  // Pants/legs
+  _px(ctx, 77, 75, 22, 6, '#1a1a2e');
+  // Feet poking up
+  _px(ctx, 99, 72, 5, 3, '#fff');
   // Z's during sleep
   if (progress > 0.05 && progress < 0.85) {
     const phase = Math.floor(fc / 24) % 3;
@@ -6335,16 +6339,25 @@ const drawNapScene = (ctx, fc, look, currentMinutes) => {
   _px(ctx, 24, 80, 110, 4, '#7a5a40');
   _px(ctx, 18, 76, 12, 18, '#5a4030');
   _px(ctx, 128, 76, 12, 18, '#5a4030');
-  // Player lying on couch
-  _px(ctx, 38, 78, 78, 5, look?.shirt || '#a78bfa');
-  _px(ctx, 38, 83, 78, 1, '#fff');
-  _px(ctx, 110, 78, 18, 4, '#1a1a2e');
-  _px(ctx, 126, 76, 6, 2, '#fff');
-  _px(ctx, 30, 73, 12, 9, look?.skin || '#d4a87a');
-  _px(ctx, 30, 71, 12, 4, look?.hair || '#1a1a2e');
-  _px(ctx, 33, 76, 2, 1, '#0c0a09');
-  _px(ctx, 38, 76, 2, 1, '#0c0a09');
-  _px(ctx, 35, 79, 4, 1, '#3a1010');
+  // Player lying on couch — chunky proportions
+  // Pillow under head
+  _px(ctx, 30, 78, 18, 3, '#a8a29e');
+  _px(ctx, 30, 78, 18, 1, '#cbc4be');
+  // Head
+  _px(ctx, 33, 72, 12, 9, look?.skin || '#d4a87a');
+  _px(ctx, 33, 70, 12, 3, look?.hair || '#1a1a2e');
+  // Closed eyes
+  _px(ctx, 37, 76, 2, 1, '#0c0a09');
+  _px(ctx, 41, 76, 2, 1, '#0c0a09');
+  // Smile
+  _px(ctx, 38, 79, 4, 1, '#3a1010');
+  // Body / torso (chunky)
+  _px(ctx, 45, 73, 32, 8, look?.shirt || '#a78bfa');
+  _px(ctx, 45, 73, 32, 1, '#fff');
+  // Pants/legs
+  _px(ctx, 77, 75, 22, 6, '#1a1a2e');
+  // Feet poking up
+  _px(ctx, 99, 72, 5, 3, '#fff');
   // Z's drifting up
   if (fc % 30 < 24) {
     const phase = (fc / 30) % 3;
