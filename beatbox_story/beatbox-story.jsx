@@ -827,12 +827,16 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
     };
   }, [active, evaluateEveryMs]);
 
-  // Handle keyboard taps too (D, F, J keys for desktop debug)
+  // Keyboard taps: A=BOOM, S=TSS, D=KSH (desktop play).
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === 'd' || e.key === 'D') tap(0);
-      else if (e.key === 'f' || e.key === 'F') tap(1);
-      else if (e.key === 'j' || e.key === 'J') tap(2);
+      if (e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'a')      { e.preventDefault(); tap(0); }
+      else if (k === 's') { e.preventDefault(); tap(1); }
+      else if (k === 'd') { e.preventDefault(); tap(2); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -848,7 +852,7 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
         {LANE_INFO.map((lane, i) => (
           <button key={i}
             onPointerDown={(e) => { e.preventDefault(); tap(i); }}
-            className="py-3 border-2 active:scale-95 transition-transform select-none touch-none"
+            className="py-3 border-2 active:scale-95 transition-transform select-none touch-none relative"
             style={{
               borderColor: lane.color,
               background: `${lane.color}22`,
@@ -858,6 +862,7 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
               letterSpacing: '0.15em',
             }}>
             {lane.label}
+            <span className="absolute top-0.5 right-1 text-[8px] tracking-widest opacity-60">{['A','S','D'][i]}</span>
           </button>
         ))}
       </div>
@@ -912,6 +917,23 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
     barRef.current = Math.min(100, barRef.current + TAP_GAIN);
     setBarLevel(barRef.current);
   };
+
+  // Keyboard taps: A=left, D=right (also ArrowLeft/ArrowRight). Use a ref so
+  // the global handler always sees the latest closure (for active/lastSide).
+  const handleTapRef = useRef(handleTap);
+  handleTapRef.current = handleTap;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'a' || k === 'arrowleft')       { e.preventDefault(); handleTapRef.current('L'); }
+      else if (k === 'd' || k === 'arrowright') { e.preventDefault(); handleTapRef.current('R'); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Drain loop + block evaluation
   useEffect(() => {
@@ -1045,10 +1067,11 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
               ? (flashSide.ok ? 'border-amber-300 bg-amber-500/40 scale-95' : 'border-red-500 bg-red-900/40')
               : 'border-amber-600 bg-amber-900/20 active:scale-95'
           }`}
-          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}>
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none', position: 'relative' }}>
           <div className="text-3xl">👈</div>
           <div className="text-amber-500 text-base tracking-widest mt-1"
             style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>LEFT</div>
+          <span className="absolute top-1 right-2 text-[9px] tracking-widest text-amber-500/60">A</span>
         </button>
         <button
           onPointerDown={(e) => { e.preventDefault(); handleTap('R'); }}
@@ -1057,10 +1080,11 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
               ? (flashSide.ok ? 'border-amber-300 bg-amber-500/40 scale-95' : 'border-red-500 bg-red-900/40')
               : 'border-amber-600 bg-amber-900/20 active:scale-95'
           }`}
-          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}>
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none', position: 'relative' }}>
           <div className="text-3xl">👉</div>
           <div className="text-amber-500 text-base tracking-widest mt-1"
             style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>RIGHT</div>
+          <span className="absolute top-1 right-2 text-[9px] tracking-widest text-amber-500/60">D</span>
         </button>
       </div>
 
@@ -2344,6 +2368,28 @@ const BeatboxHero = ({
     rerender();
   };
 
+  // Keyboard taps: A=lane0, S=lane1, D=lane2, F=lane3. Skipped in mic & spectate
+  // modes. Use a ref so the global handler always sees the latest closure.
+  const handleTapRef = useRef(handleTap);
+  handleTapRef.current = handleTap;
+  useEffect(() => {
+    if (mode === 'spectate' || inputMode === 'mic') return;
+    const onKey = (e) => {
+      if (e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      const idx = k === 'a' ? 0 : k === 's' ? 1 : k === 'd' ? 2 : k === 'f' ? 3 : -1;
+      if (idx < 0) return;
+      const lanes = stateRef.current?.lanes || HERO_LANES;
+      if (idx >= lanes.length) return;
+      e.preventDefault();
+      handleTapRef.current(lanes[idx]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mode, inputMode]);
+
   // Track latest active flag for the rAF loop to read without re-mounting
   const activeRef = useRef(active);
 
@@ -2595,10 +2641,11 @@ const BeatboxHero = ({
         <div className="grid grid-cols-4 gap-1">
           {(state?.lanes || HERO_LANES).map((sound, idx) => {
             const meta = getSoundDisplay(sound) || { color: '#D4A017', label: '?' };
+            const keyHint = ['A','S','D','F'][idx];
             return (
               <button key={sound + idx}
                 onPointerDown={(e) => { e.preventDefault(); handleTap(sound); }}
-                className="py-5 border-2 active:scale-95 transition-transform select-none touch-none"
+                className="py-5 border-2 active:scale-95 transition-transform select-none touch-none relative"
                 style={{
                   borderColor: meta.color,
                   background: `${meta.color}1f`,
@@ -2608,6 +2655,7 @@ const BeatboxHero = ({
                   letterSpacing: '0.15em',
                 }}>
                 {meta.label}
+                {keyHint && <span className="absolute top-1 right-1.5 text-[9px] tracking-widest opacity-60">{keyHint}</span>}
               </button>
             );
           })}
@@ -7989,6 +8037,21 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     }, 1400);
   };
 
+  // Keyboard shortcuts for RPS: 1=rock, 2=paper, 3=scissors (only while picking).
+  useEffect(() => {
+    if (phase !== 'rps' || rps) return;
+    const onKey = (e) => {
+      if (e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const map = { '1': 'rock', '2': 'paper', '3': 'scissors' };
+      const choice = map[e.key];
+      if (choice) { e.preventDefault(); playRps(choice); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase, rps]);
+
   // Enter RPS phase from intro: pre-compute picks for both sides (player can change theirs in tactical).
   const startBattle = () => {
     getAudioCtx();
@@ -8387,10 +8450,11 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
           <div className="text-[10px] uppercase tracking-widest text-stone-500">Winner sees opponent's plan · loser gets countered</div>
           {!rps && (
             <div className="grid grid-cols-3 gap-2 pt-4">
-              {[{ k: 'rock', e: '✊' }, { k: 'paper', e: '✋' }, { k: 'scissors', e: '✌️' }].map(o => (
+              {[{ k: 'rock', e: '✊', n: 1 }, { k: 'paper', e: '✋', n: 2 }, { k: 'scissors', e: '✌️', n: 3 }].map(o => (
                 <button key={o.k} onClick={() => playRps(o.k)}
-                  className="aspect-square border-2 border-stone-800 hover:border-amber-500 text-5xl bg-stone-900/30 transition-all">
+                  className="relative aspect-square border-2 border-stone-800 hover:border-amber-500 text-5xl bg-stone-900/30 transition-all">
                   {o.e}
+                  <span className="absolute top-1 right-2 text-[10px] tracking-widest text-amber-500/70">{o.n}</span>
                 </button>
               ))}
             </div>
