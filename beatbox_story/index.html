@@ -177,6 +177,9 @@ window.exports = window.module.exports;
   var initialChar = () => ({
     name: "",
     color: "#D4A017",
+    skin: "#d4a87a",
+    hairColor: "#1a1a2e",
+    hairStyle: "short",
     level: 1,
     xp: 0,
     cash: 30,
@@ -3458,6 +3461,9 @@ window.exports = window.module.exports;
       if (c.showcaseBooking === void 0) c.showcaseBooking = null;
       if (c.lastShowcaseDay === void 0) c.lastShowcaseDay = null;
       if (c.lastBattleDay === void 0) c.lastBattleDay = null;
+      if (typeof c.skin !== "string") c.skin = "#d4a87a";
+      if (typeof c.hairColor !== "string") c.hairColor = "#1a1a2e";
+      if (typeof c.hairStyle !== "string") c.hairStyle = "short";
       return c;
     };
     (0, import_react.useEffect)(() => {
@@ -3566,7 +3572,7 @@ window.exports = window.module.exports;
           className: "w-8 h-8 flex items-center justify-center text-stone-500 hover:text-amber-500 border border-stone-800 hover:border-amber-500/50 transition-all"
         },
         "\u2699"
-      ))), /* @__PURE__ */ import_react.default.createElement("div", { className: "px-3 pb-2 grid grid-cols-3 gap-2" }, /* @__PURE__ */ import_react.default.createElement(Bar, { value: char.energy, max: char.maxEnergy ?? 100, color: "#D4A017", icon: Zap, label: "Energy" }), /* @__PURE__ */ import_react.default.createElement(Bar, { value: char.hunger, max: 100, color: "#84cc16", icon: import_lucide_react.Coffee, label: "Fed" }), /* @__PURE__ */ import_react.default.createElement(Bar, { value: char.mood, max: 100, color: "#C8DCEF", icon: import_lucide_react.Heart, label: "Mood" })), /* @__PURE__ */ import_react.default.createElement("div", { className: "px-3 pb-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "h-1 bg-stone-900" }, /* @__PURE__ */ import_react.default.createElement(
+      ))), /* @__PURE__ */ import_react.default.createElement("div", { className: "px-3 pb-2 grid grid-cols-3 gap-2" }, /* @__PURE__ */ import_react.default.createElement(Bar, { value: char.energy, max: char.maxEnergy ?? 100, color: "#D4A017", icon: import_lucide_react.Zap, label: "Energy" }), /* @__PURE__ */ import_react.default.createElement(Bar, { value: char.hunger, max: 100, color: "#84cc16", icon: import_lucide_react.Coffee, label: "Fed" }), /* @__PURE__ */ import_react.default.createElement(Bar, { value: char.mood, max: 100, color: "#C8DCEF", icon: import_lucide_react.Heart, label: "Mood" })), /* @__PURE__ */ import_react.default.createElement("div", { className: "px-3 pb-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "h-1 bg-stone-900" }, /* @__PURE__ */ import_react.default.createElement(
         "div",
         {
           className: "h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all",
@@ -3603,24 +3609,22 @@ window.exports = window.module.exports;
   }
   function CreateScreen({ char, setChar, onDone }) {
     const [name, setName] = (0, import_react.useState)("");
-    const colors = ["#D4A017", "#CC2200", "#C8DCEF", "#84cc16", "#a78bfa", "#fb7185"];
+    const colors = ["#D4A017", "#CC2200", "#C8DCEF", "#84cc16", "#a78bfa", "#fb7185", "#22d3ee", "#f97316"];
+    const skins = ["#f5d4a8", "#d4a87a", "#a87844", "#8a5a3a", "#5a3a20"];
+    const hairs = ["#1a1a2e", "#5a3a18", "#a87044", "#fbbf24", "#9ca3af", "#a78bfa"];
+    const styles = [
+      { id: "short", label: "Short" },
+      { id: "fade", label: "Fade" },
+      { id: "mohawk", label: "Mohawk" },
+      { id: "spike", label: "Spikes" },
+      { id: "long", label: "Long" }
+    ];
     const [color, setColor] = (0, import_react.useState)(colors[0]);
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-6 pt-12" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-5xl tracking-tighter font-black", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif', letterSpacing: "-0.02em" } }, "BEATBOX"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-300 text-3xl tracking-widest font-light -mt-2", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "STORY"), /* @__PURE__ */ import_react.default.createElement("div", { className: "mt-2 text-[10px] uppercase tracking-[0.3em] text-stone-500" }, "From bedroom to world champion")), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-center" }, /* @__PURE__ */ import_react.default.createElement(
-      "div",
-      {
-        className: "w-32 h-32 border-4 border-stone-700 flex items-center justify-center text-7xl",
-        style: { background: `radial-gradient(circle, ${color}33 0%, transparent 70%)` }
-      },
-      /* @__PURE__ */ import_react.default.createElement(import_lucide_react.Mic, { size: 64, style: { color } })
-    )), /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Pick your color" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-2 justify-center" }, colors.map((c) => /* @__PURE__ */ import_react.default.createElement(
-      "button",
-      {
-        key: c,
-        onClick: () => setColor(c),
-        className: `w-10 h-10 border-2 transition-all ${color === c ? "border-white scale-110" : "border-stone-700"}`,
-        style: { background: c }
-      }
-    )))), /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Stage Name" }, /* @__PURE__ */ import_react.default.createElement(
+    const [skin, setSkin] = (0, import_react.useState)(skins[1]);
+    const [hairColor, setHairColor] = (0, import_react.useState)(hairs[0]);
+    const [hairStyle, setHairStyle] = (0, import_react.useState)(styles[0].id);
+    const previewLook = { shirt: color, skin, hair: hairColor, style: hairStyle, accessory: null };
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-4 pt-6" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-5xl tracking-tighter font-black", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif', letterSpacing: "-0.02em" } }, "BEATBOX"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-300 text-3xl tracking-widest font-light -mt-2", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "STORY"), /* @__PURE__ */ import_react.default.createElement("div", { className: "mt-1 text-[10px] uppercase tracking-[0.3em] text-stone-500" }, "From bedroom to world champion")), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-center" }, /* @__PURE__ */ import_react.default.createElement(CharacterPortrait, { look: previewLook, size: 140, active: true })), /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Stage Name" }, /* @__PURE__ */ import_react.default.createElement(
       "input",
       {
         type: "text",
@@ -3629,12 +3633,44 @@ window.exports = window.module.exports;
         placeholder: "Your beatbox name...",
         className: "w-full bg-stone-900 border-2 border-stone-700 px-3 py-2 text-amber-500 font-mono uppercase tracking-wider focus:outline-none focus:border-amber-500"
       }
-    )), /* @__PURE__ */ import_react.default.createElement(
+    )), /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Shirt color" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-wrap gap-2 justify-center" }, colors.map((c) => /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        key: c,
+        onClick: () => setColor(c),
+        className: `w-9 h-9 border-2 transition-all ${color === c ? "border-white scale-110" : "border-stone-700"}`,
+        style: { background: c }
+      }
+    )))), /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Skin tone" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-wrap gap-2 justify-center" }, skins.map((c) => /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        key: c,
+        onClick: () => setSkin(c),
+        className: `w-9 h-9 border-2 transition-all ${skin === c ? "border-white scale-110" : "border-stone-700"}`,
+        style: { background: c }
+      }
+    )))), /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Hair" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-wrap gap-2 justify-center" }, hairs.map((c) => /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        key: c,
+        onClick: () => setHairColor(c),
+        className: `w-9 h-9 border-2 transition-all ${hairColor === c ? "border-white scale-110" : "border-stone-700"}`,
+        style: { background: c }
+      }
+    ))), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-wrap gap-1 justify-center" }, styles.map((s) => /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        key: s.id,
+        onClick: () => setHairStyle(s.id),
+        className: `px-3 py-1.5 border-2 text-[10px] uppercase tracking-widest ${hairStyle === s.id ? "border-amber-500 text-amber-500 bg-amber-500/10" : "border-stone-700 text-stone-400"}`
+      },
+      s.label
+    ))))), /* @__PURE__ */ import_react.default.createElement(
       Btn,
       {
         variant: "primary",
         onClick: () => {
-          setChar((c) => ({ ...c, name: name.trim(), color }));
+          setChar((c) => ({ ...c, name: name.trim(), color, skin, hairColor, hairStyle }));
           onDone();
         },
         disabled: name.trim().length < 2,
@@ -4580,7 +4616,14 @@ window.exports = window.module.exports;
         disabled: char.energy < 30 || char.equipped.length === 0
       },
       "START BATTLE \u{1F3A4} (-30\u26A1)"
-    ), char.energy < 30 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "Need 30 energy"), char.equipped.length === 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "No sounds equipped! Visit Shop")), schedule.activity === "karaoke" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Karaoke Night" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "Sing along \u2014 sharpen your musicality."), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: doKaraoke, disabled: char.energy < 8, className: "w-full py-3" }, "GRAB THE MIC \u{1F3B6} (-8\u26A1, +30 min)"), char.energy < 8 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 8 energy"))), schedule.activity !== "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Rohzel \xB7 Bar Keeper" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-3 items-start" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-4xl flex-shrink-0" }, "\u{1F9D4}\u{1F3FF}\u200D\u2642\uFE0F"), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-200 text-sm tracking-wide italic border-l-2 border-amber-500/50 pl-2" }, '"', rohzelLine, '"'), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-1.5" }, /* @__PURE__ */ import_react.default.createElement(
+    ), char.energy < 30 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "Need 30 energy"), char.equipped.length === 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center mt-2 uppercase" }, "No sounds equipped! Visit Shop")), schedule.activity === "karaoke" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Karaoke Night" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "Sing along \u2014 sharpen your musicality."), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: doKaraoke, disabled: char.energy < 8, className: "w-full py-3" }, "GRAB THE MIC \u{1F3B6} (-8\u26A1, +30 min)"), char.energy < 8 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-red-500 text-center uppercase" }, "Need 8 energy"))), schedule.activity !== "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Rohzel \xB7 Bar Keeper" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-3 items-start" }, /* @__PURE__ */ import_react.default.createElement(
+      CharacterPortrait,
+      {
+        look: { shirt: "#1c1917", skin: "#5a3a20", hair: "#0c0a09", style: "fade", accessory: null },
+        size: 64,
+        active: true
+      }
+    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-widest absolute", style: { display: "none" } }, "Rohzel"), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-200 text-sm tracking-wide italic border-l-2 border-amber-500/50 pl-2" }, '"', rohzelLine, '"'), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-1.5" }, /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         onClick: askRohzel,
@@ -4715,6 +4758,47 @@ window.exports = window.module.exports;
     ctx.fillRect(x, y + 1, 1, 1);
     ctx.globalAlpha = 1;
   };
+  var lookFromChar = (char) => ({
+    shirt: char?.color || "#D4A017",
+    skin: char?.skin || "#d4a87a",
+    hair: char?.hairColor || "#1a1a2e",
+    style: char?.hairStyle || "short",
+    accessory: null
+  });
+  var CharacterPortrait = ({ look, size = 64, active = false, bg = "#1c1917", className = "" }) => {
+    const canvasRef = (0, import_react.useRef)(null);
+    (0, import_react.useEffect)(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const W = 40, H = 40;
+      const PXSCALE = Math.max(1, Math.floor(size / W));
+      canvas.width = W * PXSCALE;
+      canvas.height = H * PXSCALE;
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      let raf, frame = 0;
+      const draw = () => {
+        frame++;
+        ctx.save();
+        ctx.scale(PXSCALE, PXSCALE);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        drawBeatboxer(ctx, 20, 36, look, "right", active, frame);
+        ctx.restore();
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
+      return () => cancelAnimationFrame(raf);
+    }, [look, size, active, bg]);
+    return /* @__PURE__ */ import_react.default.createElement(
+      "canvas",
+      {
+        ref: canvasRef,
+        style: { imageRendering: "pixelated", background: bg, width: size, height: size },
+        className: `block border-2 border-stone-700 ${className}`
+      }
+    );
+  };
   var PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0, 0, 0, 0, 0], comboLabel = null }) => {
     const canvasRef = (0, import_react.useRef)(null);
     const PXSCALE = 3;
@@ -4770,7 +4854,7 @@ window.exports = window.module.exports;
       const ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
       let raf, frameCount = 0;
-      const playerLook = { shirt: char.color || "#D4A017", skin: "#d4a87a", hair: "#1a1a2e", style: "short", accessory: null };
+      const playerLook = lookFromChar(char);
       const oppLook = OPP_LOOKS[opponent.name] || _defaultOppLook;
       const draw = () => {
         frameCount++;
