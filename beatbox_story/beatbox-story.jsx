@@ -72,7 +72,9 @@ const initialChar = () => ({
   tecCurrentLesson: 0, // currently selected lesson index
   tecBpm: 90, // current BPM for the rhythm game
   oriBpm: 100, // BPM for the originality sequencer
-  oriPattern: null, // sequencer state: { tracks: [{key, cells}] } — null means use default 4-hero seed
+  oriPattern: null, // legacy single-slot pattern — migrated to oriSlots[0]
+  oriSlots: null, // array of 4 patterns. null until first save. Default seeded on first use.
+  oriSlotIdx: 0, // currently active slot (0..3)
   pendingDebuff: null, // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
   showcaseBooking: null, // { day: number, minute: number } — Rohzel's booked Friday slot
   lastShowcaseDay: null, // day a showcase was performed (cooldown: 7 days)
@@ -2319,15 +2321,41 @@ const BeatboxHero = ({
 // Pattern persists per-character via char.oriPattern.
 
 const SEQ_STEPS = 16;
+const SEQ_SLOTS = 4;
 
-const _seqDefault = () => ({
-  tracks: [
-    { key: 'B',  cells: [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false] },
-    { key: 'Pf', cells: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
-    { key: 'T',  cells: Array(SEQ_STEPS).fill(false).map((_, i) => i % 2 === 0) },
+// Helper for cell arrays
+const _cells = (arr) => { const c = Array(SEQ_STEPS).fill(false); arr.forEach(i => { if (i >= 0 && i < SEQ_STEPS) c[i] = true; }); return c; };
+
+// Four built-in starter patterns. Player can edit any of them; each slot
+// persists independently on char.oriSlots[idx].
+const _seqStarter = (i) => {
+  if (i === 0) return { name: 'Boom Bap', tracks: [
+    { key: 'B',  cells: _cells([0, 8]) },
+    { key: 'Pf', cells: _cells([4, 12]) },
+    { key: 'T',  cells: _cells([0, 2, 4, 6, 8, 10, 12, 14]) },
     { key: 'K',  cells: Array(SEQ_STEPS).fill(false) },
-  ],
-});
+  ]};
+  if (i === 1) return { name: '4 on Floor', tracks: [
+    { key: 'B',  cells: _cells([0, 4, 8, 12]) },
+    { key: 'Pf', cells: _cells([4, 12]) },
+    { key: 'T',  cells: _cells([2, 6, 10, 14]) },
+    { key: 'K',  cells: Array(SEQ_STEPS).fill(false) },
+  ]};
+  if (i === 2) return { name: 'Half-Time', tracks: [
+    { key: 'B',  cells: _cells([0, 6]) },
+    { key: 'Pf', cells: _cells([8]) },
+    { key: 'T',  cells: _cells([0, 2, 4, 6, 8, 10, 12, 14]) },
+    { key: 'K',  cells: _cells([10, 14]) },
+  ]};
+  return { name: 'Empty', tracks: [
+    { key: 'B',  cells: Array(SEQ_STEPS).fill(false) },
+    { key: 'Pf', cells: Array(SEQ_STEPS).fill(false) },
+    { key: 'T',  cells: Array(SEQ_STEPS).fill(false) },
+    { key: 'K',  cells: Array(SEQ_STEPS).fill(false) },
+  ]};
+};
+const _seqDefault = () => _seqStarter(0); // back-compat with old single-pattern call sites
+const _seqDefaultSlots = () => Array.from({ length: SEQ_SLOTS }, (_, i) => _seqStarter(i));
 
 const Sequencer = ({
   onCreativityUpdate,
@@ -2335,14 +2363,23 @@ const Sequencer = ({
   active = true,
   bpm = 100,
   pattern = null,
+  slots = null,        // array of patterns, one per save slot
+  slotIdx = 0,         // currently selected save slot
   ownedSounds = [],
-  onPatternChange,
+  onPatternChange,     // (pattern) => void — writes to the active slot
+  onSlotChange,        // (idx) => void — switches active slot
   onBpmChange,
 }) => {
-  const [workPattern, setWorkPattern] = useState(() => {
-    if (pattern && Array.isArray(pattern.tracks) && pattern.tracks.length > 0) return pattern;
-    return _seqDefault();
-  });
+  // Active pattern for editing — derive from slots[slotIdx] or fall back to legacy pattern prop
+  const activePattern = (slots && slots[slotIdx])
+    || (pattern && Array.isArray(pattern.tracks) && pattern.tracks.length > 0 ? pattern : null)
+    || _seqDefault();
+  const [workPattern, setWorkPattern] = useState(activePattern);
+  // When slot changes (or active pattern changes externally), refresh local state
+  useEffect(() => {
+    setWorkPattern(activePattern);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotIdx]);
   const [currentStep, setCurrentStep] = useState(-1);
   const [showAddTrack, setShowAddTrack] = useState(false);
 
@@ -2438,6 +2475,29 @@ const Sequencer = ({
 
   return (
     <div className="space-y-2">
+      {/* Slot picker — 4 patterns saved per character */}
+      {slots && (
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] uppercase tracking-widest text-stone-500 mr-1">Slot</span>
+          {Array.from({ length: SEQ_SLOTS }).map((_, i) => {
+            const s = slots[i];
+            const selected = i === slotIdx;
+            const label = s?.name || `Slot ${i + 1}`;
+            return (
+              <button key={i}
+                onPointerDown={(e) => { e.preventDefault(); onSlotChange?.(i); }}
+                className={`flex-1 px-1.5 py-1 border-2 text-[9px] uppercase tracking-widest whitespace-nowrap overflow-hidden transition-all ${
+                  selected ? 'border-amber-500 bg-amber-500/10 text-amber-500' :
+                            'border-stone-700 text-stone-400 hover:border-amber-500/50'
+                }`}>
+                <div className="text-amber-500/70 leading-tight" style={{ fontSize: 9 }}>#{i + 1}</div>
+                <div className="leading-tight truncate">{label}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Step grid */}
       <div className="space-y-1">
         {workPattern.tracks.map((track, trackIdx) => {
@@ -4285,6 +4345,15 @@ export default function BeatboxStory() {
     if (typeof c.tecBpm !== 'number') c.tecBpm = 90;
     if (typeof c.oriBpm !== 'number') c.oriBpm = 100;
     if (c.oriPattern === undefined) c.oriPattern = null;
+    // Migrate single oriPattern → oriSlots[0], seed the rest with starter patterns
+    if (!Array.isArray(c.oriSlots)) {
+      const slots = _seqDefaultSlots();
+      if (c.oriPattern && Array.isArray(c.oriPattern.tracks) && c.oriPattern.tracks.length > 0) {
+        slots[0] = { name: c.oriPattern.name || 'Custom', tracks: c.oriPattern.tracks };
+      }
+      c.oriSlots = slots;
+    }
+    if (typeof c.oriSlotIdx !== 'number' || c.oriSlotIdx < 0 || c.oriSlotIdx >= SEQ_SLOTS) c.oriSlotIdx = 0;
     if (c.pendingDebuff === undefined) c.pendingDebuff = null;
     if (c.showcaseBooking === undefined) c.showcaseBooking = null;
     if (c.lastShowcaseDay === undefined) c.lastShowcaseDay = null;
@@ -5040,9 +5109,18 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                       evaluateEveryMs={2500}
                       active={trainActivity.active}
                       bpm={char.oriBpm || 100}
-                      pattern={char.oriPattern}
+                      slots={char.oriSlots}
+                      slotIdx={char.oriSlotIdx || 0}
                       ownedSounds={char.sounds || []}
-                      onPatternChange={(p) => setChar(c => ({ ...c, oriPattern: p }))}
+                      onPatternChange={(p) => setChar(c => {
+                        const slots = (c.oriSlots && c.oriSlots.length === SEQ_SLOTS)
+                          ? [...c.oriSlots]
+                          : _seqDefaultSlots();
+                        const idx = c.oriSlotIdx || 0;
+                        slots[idx] = { ...p, name: slots[idx]?.name || p.name };
+                        return { ...c, oriSlots: slots };
+                      })}
+                      onSlotChange={(idx) => setChar(c => ({ ...c, oriSlotIdx: idx }))}
                       onBpmChange={(b) => setChar(c => ({ ...c, oriBpm: b }))}
                     />
                     <button onClick={() => { setPlayMode(false); accuracyRef.current = 0; }}

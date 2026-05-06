@@ -210,7 +210,11 @@ window.exports = window.module.exports;
     oriBpm: 100,
     // BPM for the originality sequencer
     oriPattern: null,
-    // sequencer state: { tracks: [{key, cells}] } — null means use default 4-hero seed
+    // legacy single-slot pattern — migrated to oriSlots[0]
+    oriSlots: null,
+    // array of 4 patterns. null until first save. Default seeded on first use.
+    oriSlotIdx: 0,
+    // currently active slot (0..3)
     pendingDebuff: null,
     // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
     showcaseBooking: null,
@@ -2050,28 +2054,64 @@ window.exports = window.module.exports;
     })), mode !== "spectate" && /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between items-center text-[10px] uppercase tracking-widest text-stone-500 px-1" }, /* @__PURE__ */ import_react.default.createElement("span", null, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, phaseLabel)), /* @__PURE__ */ import_react.default.createElement("span", null, "HITS ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, state?.hits || 0), " \xB7 MISS ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-red-500" }, state?.misses || 0)), /* @__PURE__ */ import_react.default.createElement("span", null, "ACC ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, accuracyPct, "%"))));
   };
   var SEQ_STEPS = 16;
-  var _seqDefault = () => ({
-    tracks: [
-      { key: "B", cells: [true, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false] },
-      { key: "Pf", cells: [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false] },
-      { key: "T", cells: Array(SEQ_STEPS).fill(false).map((_, i) => i % 2 === 0) },
+  var SEQ_SLOTS = 4;
+  var _cells = (arr) => {
+    const c = Array(SEQ_STEPS).fill(false);
+    arr.forEach((i) => {
+      if (i >= 0 && i < SEQ_STEPS) c[i] = true;
+    });
+    return c;
+  };
+  var _seqStarter = (i) => {
+    if (i === 0) return { name: "Boom Bap", tracks: [
+      { key: "B", cells: _cells([0, 8]) },
+      { key: "Pf", cells: _cells([4, 12]) },
+      { key: "T", cells: _cells([0, 2, 4, 6, 8, 10, 12, 14]) },
       { key: "K", cells: Array(SEQ_STEPS).fill(false) }
-    ]
-  });
+    ] };
+    if (i === 1) return { name: "4 on Floor", tracks: [
+      { key: "B", cells: _cells([0, 4, 8, 12]) },
+      { key: "Pf", cells: _cells([4, 12]) },
+      { key: "T", cells: _cells([2, 6, 10, 14]) },
+      { key: "K", cells: Array(SEQ_STEPS).fill(false) }
+    ] };
+    if (i === 2) return { name: "Half-Time", tracks: [
+      { key: "B", cells: _cells([0, 6]) },
+      { key: "Pf", cells: _cells([8]) },
+      { key: "T", cells: _cells([0, 2, 4, 6, 8, 10, 12, 14]) },
+      { key: "K", cells: _cells([10, 14]) }
+    ] };
+    return { name: "Empty", tracks: [
+      { key: "B", cells: Array(SEQ_STEPS).fill(false) },
+      { key: "Pf", cells: Array(SEQ_STEPS).fill(false) },
+      { key: "T", cells: Array(SEQ_STEPS).fill(false) },
+      { key: "K", cells: Array(SEQ_STEPS).fill(false) }
+    ] };
+  };
+  var _seqDefault = () => _seqStarter(0);
+  var _seqDefaultSlots = () => Array.from({ length: SEQ_SLOTS }, (_, i) => _seqStarter(i));
   var Sequencer = ({
     onCreativityUpdate,
     evaluateEveryMs = 2500,
     active = true,
     bpm = 100,
     pattern = null,
+    slots = null,
+    // array of patterns, one per save slot
+    slotIdx = 0,
+    // currently selected save slot
     ownedSounds = [],
     onPatternChange,
+    // (pattern) => void — writes to the active slot
+    onSlotChange,
+    // (idx) => void — switches active slot
     onBpmChange
   }) => {
-    const [workPattern, setWorkPattern] = (0, import_react.useState)(() => {
-      if (pattern && Array.isArray(pattern.tracks) && pattern.tracks.length > 0) return pattern;
-      return _seqDefault();
-    });
+    const activePattern = slots && slots[slotIdx] || (pattern && Array.isArray(pattern.tracks) && pattern.tracks.length > 0 ? pattern : null) || _seqDefault();
+    const [workPattern, setWorkPattern] = (0, import_react.useState)(activePattern);
+    (0, import_react.useEffect)(() => {
+      setWorkPattern(activePattern);
+    }, [slotIdx]);
     const [currentStep, setCurrentStep] = (0, import_react.useState)(-1);
     const [showAddTrack, setShowAddTrack] = (0, import_react.useState)(false);
     const stepRef = (0, import_react.useRef)(-1);
@@ -2159,7 +2199,24 @@ window.exports = window.module.exports;
       ...ownedSounds.filter((k) => !HERO_SOUNDS[k] && SOUND_CATALOG[k] && !heroDefaults.has(k))
     ].filter((k) => !usedKeys.has(k));
     const activeCells = workPattern.tracks.reduce((a, t) => a + t.cells.filter(Boolean).length, 0);
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1" }, workPattern.tracks.map((track, trackIdx) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, slots && /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[9px] uppercase tracking-widest text-stone-500 mr-1" }, "Slot"), Array.from({ length: SEQ_SLOTS }).map((_, i) => {
+      const s = slots[i];
+      const selected = i === slotIdx;
+      const label = s?.name || `Slot ${i + 1}`;
+      return /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          key: i,
+          onPointerDown: (e) => {
+            e.preventDefault();
+            onSlotChange?.(i);
+          },
+          className: `flex-1 px-1.5 py-1 border-2 text-[9px] uppercase tracking-widest whitespace-nowrap overflow-hidden transition-all ${selected ? "border-amber-500 bg-amber-500/10 text-amber-500" : "border-stone-700 text-stone-400 hover:border-amber-500/50"}`
+        },
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500/70 leading-tight", style: { fontSize: 9 } }, "#", i + 1),
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "leading-tight truncate" }, label)
+      );
+    })), /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1" }, workPattern.tracks.map((track, trackIdx) => {
       const meta = getSoundDisplay(track.key);
       if (!meta) return null;
       return /* @__PURE__ */ import_react.default.createElement("div", { key: track.key + trackIdx, className: "flex items-center gap-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "w-14 flex-shrink-0 flex items-center gap-0.5" }, /* @__PURE__ */ import_react.default.createElement(
@@ -3771,6 +3828,14 @@ window.exports = window.module.exports;
       if (typeof c.tecBpm !== "number") c.tecBpm = 90;
       if (typeof c.oriBpm !== "number") c.oriBpm = 100;
       if (c.oriPattern === void 0) c.oriPattern = null;
+      if (!Array.isArray(c.oriSlots)) {
+        const slots = _seqDefaultSlots();
+        if (c.oriPattern && Array.isArray(c.oriPattern.tracks) && c.oriPattern.tracks.length > 0) {
+          slots[0] = { name: c.oriPattern.name || "Custom", tracks: c.oriPattern.tracks };
+        }
+        c.oriSlots = slots;
+      }
+      if (typeof c.oriSlotIdx !== "number" || c.oriSlotIdx < 0 || c.oriSlotIdx >= SEQ_SLOTS) c.oriSlotIdx = 0;
       if (c.pendingDebuff === void 0) c.pendingDebuff = null;
       if (c.showcaseBooking === void 0) c.showcaseBooking = null;
       if (c.lastShowcaseDay === void 0) c.lastShowcaseDay = null;
@@ -4391,9 +4456,16 @@ window.exports = window.module.exports;
         evaluateEveryMs: 2500,
         active: trainActivity.active,
         bpm: char.oriBpm || 100,
-        pattern: char.oriPattern,
+        slots: char.oriSlots,
+        slotIdx: char.oriSlotIdx || 0,
         ownedSounds: char.sounds || [],
-        onPatternChange: (p) => setChar((c) => ({ ...c, oriPattern: p })),
+        onPatternChange: (p) => setChar((c) => {
+          const slots = c.oriSlots && c.oriSlots.length === SEQ_SLOTS ? [...c.oriSlots] : _seqDefaultSlots();
+          const idx = c.oriSlotIdx || 0;
+          slots[idx] = { ...p, name: slots[idx]?.name || p.name };
+          return { ...c, oriSlots: slots };
+        }),
+        onSlotChange: (idx) => setChar((c) => ({ ...c, oriSlotIdx: idx })),
         onBpmChange: (b) => setChar((c) => ({ ...c, oriBpm: b }))
       }
     ), /* @__PURE__ */ import_react.default.createElement(
