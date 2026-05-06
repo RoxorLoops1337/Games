@@ -1971,8 +1971,10 @@ window.exports = window.module.exports;
     lessonIdx = 0,
     mode = "practice",
     // 'practice' = 4 reps demo/player loop; 'battle' = single player rep, no auto-restart
-    inputMode = "tap"
+    inputMode = "tap",
     // 'tap' = drum pads; 'mic' = beatbox into the mic (wider hit windows)
+    lessonOverride = null
+    // optional synthesized lesson — used by battle combos (16 beats)
   }) => {
     const canvasRef = (0, import_react.useRef)(null);
     const stateRef = (0, import_react.useRef)(null);
@@ -1986,6 +1988,10 @@ window.exports = window.module.exports;
     (0, import_react.useEffect)(() => {
       lessonIdxRef.current = lessonIdx;
     }, [lessonIdx]);
+    const lessonOverrideRef = (0, import_react.useRef)(lessonOverride);
+    (0, import_react.useEffect)(() => {
+      lessonOverrideRef.current = lessonOverride;
+    }, [lessonOverride]);
     const HIT_PERFECT_MS = inputMode === "mic" ? 200 : 110;
     const HIT_GOOD_MS = inputMode === "mic" ? 350 : 180;
     const LOOKAHEAD_MS = 1400;
@@ -1997,15 +2003,17 @@ window.exports = window.module.exports;
     const LANE_W = TRACK_W / 4;
     const PIXELS_PER_SEC = STRIKE_Y / (LOOKAHEAD_MS / 1e3);
     const initState = (config) => {
-      const lesson = HERO_LESSONS[config.lessonIdx] || HERO_LESSONS[0];
+      const lesson = config.lessonOverride || HERO_LESSONS[config.lessonIdx] || HERO_LESSONS[0];
       const lanes = lesson.lanes || HERO_LANES;
       const beatMs = 6e4 / config.bpm;
-      const patternMs = 16 * beatMs;
+      const patternBeats = lesson.patternBeats ?? 8;
+      const patternMs = patternBeats * beatMs;
+      const filteredPattern = (lesson.pattern || []).filter((n) => n.beat < patternBeats);
       const notes = [];
       for (let rep = 0; rep < REPS_TOTAL; rep++) {
         const isDemo = mode === "practice" && rep % 2 === 0 || mode === "spectate";
         const repStart = rep * patternMs;
-        lesson.pattern.forEach((n, i) => {
+        filteredPattern.forEach((n, i) => {
           const lane = lanes.indexOf(n.sound);
           notes.push({
             id: `r${rep}n${i}`,
@@ -2112,7 +2120,7 @@ window.exports = window.module.exports;
       const ctx = getAudioCtx();
       if (ctx?.state === "suspended") ctx.resume().catch(() => {
       });
-      stateRef.current = initState({ bpm: bpmRef.current, lessonIdx });
+      stateRef.current = initState({ bpm: bpmRef.current, lessonIdx, lessonOverride: lessonOverrideRef.current });
       rerender();
       let raf = 0;
       const drawCanvas = () => {
@@ -2224,7 +2232,7 @@ window.exports = window.module.exports;
           }
         }
         if (mode === "practice" && state2.phase === "complete" && now - state2.completeAt > COMPLETE_HOLD_MS) {
-          stateRef.current = initState({ bpm: bpmRef.current, lessonIdx: lessonIdxRef.current });
+          stateRef.current = initState({ bpm: bpmRef.current, lessonIdx: lessonIdxRef.current, lessonOverride: lessonOverrideRef.current });
           rerender();
           raf = requestAnimationFrame(tick);
           return;
@@ -6118,26 +6126,51 @@ window.exports = window.module.exports;
       return playerFirst ? isA ? "P" : "O" : isA ? "O" : "P";
     };
     const turnSlotForRound = (n) => n <= 2 ? 0 : 1;
-    const lessonIdxForRound = (n) => {
+    const combineLessons = (idxA, idxB) => {
+      const a = HERO_LESSONS[idxA];
+      if (!a) return null;
+      const lanes = a.lanes || HERO_LANES;
+      const aHalf = a.pattern.filter((n) => n.beat < 8).map((n) => ({ ...n }));
+      const b = idxB != null && idxB !== idxA ? HERO_LESSONS[idxB] : null;
+      let bHalf;
+      let name;
+      if (b) {
+        const laneSet = new Set(lanes);
+        bHalf = b.pattern.filter((n) => n.beat < 8 && laneSet.has(n.sound)).map((n) => ({ beat: n.beat + 8, sound: n.sound }));
+        name = `${a.name} \u2192 ${b.name}`;
+      } else {
+        bHalf = a.pattern.filter((n) => n.beat < 8).map((n) => ({ beat: n.beat + 8, sound: n.sound }));
+        name = a.name;
+      }
+      return {
+        name,
+        desc: a.desc,
+        tier: Math.max(a.tier || 1, b?.tier || 1),
+        requires: a.requires,
+        lanes,
+        pattern: [...aHalf, ...bHalf],
+        patternBeats: 16
+      };
+    };
+    const lessonForRound = (n) => {
       const side = sideForRound(n);
       const slot = turnSlotForRound(n);
-      if (side === "P") return playerPatternIdxs?.[slot];
-      return oppPatternIdxs?.[slot];
+      const ids = (side === "P" ? playerPatternIdxs : oppPatternIdxs)?.[slot];
+      if (!Array.isArray(ids)) return null;
+      return combineLessons(ids[0], ids[1]);
     };
     const lessonValue = (lesson) => {
       if (!lesson) return 0;
       const tier = lesson.tier || 1;
       return Math.round(lesson.pattern.length * (1 + tier * 0.4));
     };
-    const playerRoundScore = (lessonIdx, accuracy) => {
-      const lesson = HERO_LESSONS[lessonIdx];
+    const playerRoundScore = (lesson, accuracy) => {
       if (!lesson) return 0;
       const base = lessonValue(lesson);
       const statMult = 1 + (char.stats.tec + char.stats.mus) / 80;
       return Math.round(base * accuracy * statMult);
     };
-    const oppRoundScore = (lessonIdx) => {
-      const lesson = HERO_LESSONS[lessonIdx];
+    const oppRoundScore = (lesson) => {
       if (!lesson) return 0;
       const base = lessonValue(lesson);
       const focus = 0.55 + opponent.stats.tec / 60 * 0.4;
@@ -6153,9 +6186,12 @@ window.exports = window.module.exports;
     };
     const playablePlayerIdxs = HERO_LESSONS.map((_, i) => i).filter(isPlayableForPlayer);
     const computeDefaultPlayerPicks = () => {
-      const a = playablePlayerIdxs[0] ?? 0;
-      const b = playablePlayerIdxs[1] ?? a;
-      return [a, b];
+      const p = playablePlayerIdxs;
+      const a = p[0] ?? 0;
+      const b = p[1] ?? a;
+      const c = p[2] ?? b;
+      const d = p[3] ?? c;
+      return [[a, b], [c, d]];
     };
     const computeOppPicks = () => {
       const oppLevel = opponent.level || 1;
@@ -6163,7 +6199,7 @@ window.exports = window.module.exports;
       const pool = [];
       for (let i = 0; i <= maxIdx; i++) pool.push(i);
       const pick = () => pool[Math.floor(Math.random() * pool.length)];
-      return [pick(), pick()];
+      return [[pick(), pick()], [pick(), pick()]];
     };
     (0, import_react.useEffect)(() => {
       if (!opponent) {
@@ -6201,15 +6237,14 @@ window.exports = window.module.exports;
       setTacticalSlot(0);
       setPhase("tactical");
     };
-    const playOpponentRoundPattern = (lessonIdx, color, onDone) => {
+    const playOpponentRoundPattern = (lesson, color, onDone) => {
       eventTimers.current.forEach(clearTimeout);
       eventTimers.current = [];
       setActiveSide("O");
       setTimeLeft(ROUND_SECONDS);
       setComboLabel(null);
-      setCurrentSound(HERO_LESSONS[lessonIdx]?.name || null);
+      setCurrentSound(lesson?.name || null);
       setCurrentSoundColor(color);
-      const lesson = HERO_LESSONS[lessonIdx];
       if (lesson) {
         const beatMs = 6e4 / BATTLE_BPM;
         const startMs = 0;
@@ -6229,7 +6264,7 @@ window.exports = window.module.exports;
           }
         });
         const startScore = oppScoreRef.current;
-        const finalScore = oppRoundScore(lessonIdx);
+        const finalScore = oppRoundScore(lesson);
         const endScore = startScore + finalScore;
         for (let pct = 1; pct <= 10; pct++) {
           const at = ROUND_SECONDS * 1e3 * pct / 10;
@@ -6250,14 +6285,14 @@ window.exports = window.module.exports;
         onDone();
       }, ROUND_SECONDS * 1e3));
     };
-    const startPlayerRound = (lessonIdx, color) => {
+    const startPlayerRound = (lesson, color) => {
       eventTimers.current.forEach(clearTimeout);
       eventTimers.current = [];
       setActiveSide("P");
-      setCurrentSound(HERO_LESSONS[lessonIdx]?.name || null);
+      setCurrentSound(lesson?.name || null);
       setCurrentSoundColor(color);
       setTimeLeft(ROUND_SECONDS);
-      setComboLabel({ text: HERO_LESSONS[lessonIdx]?.name || "", key: Date.now() });
+      setComboLabel({ text: lesson?.name || "", key: Date.now() });
       for (let s = ROUND_SECONDS - 1; s >= 0; s--) {
         eventTimers.current.push(setTimeout(() => setTimeLeft(s), (ROUND_SECONDS - s) * 1e3));
       }
@@ -6298,17 +6333,17 @@ window.exports = window.module.exports;
       if (!playerPatternIdxs || !oppPatternIdxs) return;
       const roundN = parseInt(m[1]);
       const side = sideForRound(roundN);
-      const lessonIdx = lessonIdxForRound(roundN);
+      const lesson = lessonForRound(roundN);
       const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : "judging";
       if (side === "O") {
-        playOpponentRoundPattern(lessonIdx, "#CC2200", () => setPhase(nextPhase));
+        playOpponentRoundPattern(lesson, "#CC2200", () => setPhase(nextPhase));
       } else {
-        startPlayerRound(lessonIdx, char.color);
+        startPlayerRound(lesson, char.color);
       }
     }, [phase, playerPatternIdxs, oppPatternIdxs]);
     const handlePlayerRoundComplete = (roundN, accuracy) => {
-      const lessonIdx = lessonIdxForRound(roundN);
-      const score = playerRoundScore(lessonIdx, accuracy);
+      const lesson = lessonForRound(roundN);
+      const score = playerRoundScore(lesson, accuracy);
       const newScore = playerScoreRef.current + score;
       playerScoreRef.current = newScore;
       setLiveScore((s) => ({ ...s, p: newScore }));
@@ -6323,8 +6358,10 @@ window.exports = window.module.exports;
       if (phase !== "judging" || result) return;
       const finalP = playerScoreRef.current;
       const finalO = oppScoreRef.current;
-      const playerLessons = (playerPatternIdxs || []).map((i) => HERO_LESSONS[i]).filter(Boolean);
-      const oppLessons = (oppPatternIdxs || []).map((i) => HERO_LESSONS[i]).filter(Boolean);
+      const flatPlayerIdxs = (playerPatternIdxs || []).flat();
+      const flatOppIdxs = (oppPatternIdxs || []).flat();
+      const playerLessons = flatPlayerIdxs.map((i) => HERO_LESSONS[i]).filter(Boolean);
+      const oppLessons = flatOppIdxs.map((i) => HERO_LESSONS[i]).filter(Boolean);
       const playerUniqueSounds = new Set(playerLessons.flatMap((l) => l.pattern.map((n) => n.sound)));
       const oppUniqueSounds = new Set(oppLessons.flatMap((l) => l.pattern.map((n) => n.sound)));
       const judgeVotes = JUDGES.map((j) => {
@@ -6413,41 +6450,42 @@ window.exports = window.module.exports;
         revealedJudges: 0
       }
     ), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-2 text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-stone-800 bg-stone-900/30 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-sm tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, char.name.toUpperCase()), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase" }, "M", char.stats.mus, " T", char.stats.tec, " O", char.stats.ori, " S", char.stats.sho)), /* @__PURE__ */ import_react.default.createElement("div", { className: "border-2 border-stone-800 bg-stone-900/30 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-red-500 text-sm tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, opponent.name.toUpperCase()), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase" }, "M", opponent.stats.mus, " T", opponent.stats.tec, " O", opponent.stats.ori, " S", opponent.stats.sho))), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: startTactical, className: "w-full py-3" }, "PICK YOUR PATTERNS \u25B6")), phase === "tactical" && playerPatternIdxs && (() => {
-      const slots = [0, 1];
-      const setPick = (slot, idx) => {
-        setPlayerPatternIdxs((p) => {
-          const n = [...p];
-          n[slot] = idx;
-          return n;
-        });
+      const turns = [0, 1];
+      const halves = [0, 1];
+      const setPick = (turn, half, idx) => {
+        setPlayerPatternIdxs((p) => p.map((pair, t) => t === turn ? pair.map((v, h) => h === half ? idx : v) : pair));
       };
-      return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-2xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "PREP YOUR SET"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-stone-500" }, "Pick a pattern for each of your two rounds")), slots.map((slot) => {
-        const currentIdx = playerPatternIdxs[slot];
-        const currentLesson = HERO_LESSONS[currentIdx];
-        return /* @__PURE__ */ import_react.default.createElement("div", { key: slot, className: "border-2 border-stone-800 bg-stone-900/30 p-2 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-baseline justify-between" }, /* @__PURE__ */ import_react.default.createElement(
+      return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-2xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "PREP YOUR SET"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-stone-500" }, "Two patterns per round \xB7 half + half")), turns.map((turn) => {
+        const [a, b] = playerPatternIdxs[turn];
+        const lessonA = HERO_LESSONS[a];
+        const lessonB = HERO_LESSONS[b];
+        return /* @__PURE__ */ import_react.default.createElement("div", { key: turn, className: "border-2 border-stone-800 bg-stone-900/30 p-2 space-y-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-baseline justify-between" }, /* @__PURE__ */ import_react.default.createElement(
           "div",
           {
             className: "text-amber-500 text-xs uppercase tracking-widest",
             style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
           },
           "Your turn #",
-          slot + 1
-        ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-400" }, currentLesson?.name || "\u2014")), /* @__PURE__ */ import_react.default.createElement("div", { className: "overflow-x-auto -mx-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1.5 px-1 pb-1" }, HERO_LESSONS.map((lesson, i) => {
-          const playable = isPlayableForPlayer(i);
-          const selected = i === currentIdx;
-          return /* @__PURE__ */ import_react.default.createElement(
-            "button",
-            {
-              key: i,
-              disabled: !playable,
-              onClick: () => setPick(slot, i),
-              className: `flex-shrink-0 px-2.5 py-1.5 border-2 text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${selected ? "border-amber-500 bg-amber-500/10 text-amber-500" : playable ? "border-stone-700 text-stone-400 hover:border-amber-500/50" : "border-stone-800 text-stone-600 opacity-40"}`
-            },
-            !playable && "\u{1F512} ",
-            "#",
-            i + 1
-          );
-        }))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, currentLesson?.desc || ""));
+          turn + 1
+        ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-400" }, lessonA?.name || "\u2014", " \u2192 ", lessonB?.name || "\u2014")), halves.map((half) => {
+          const cur = playerPatternIdxs[turn][half];
+          return /* @__PURE__ */ import_react.default.createElement("div", { key: half, className: "space-y-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] uppercase tracking-widest text-stone-500" }, "Pattern ", half === 0 ? "A" : "B", ": ", HERO_LESSONS[cur]?.name || "\u2014"), /* @__PURE__ */ import_react.default.createElement("div", { className: "overflow-x-auto -mx-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1 px-1 pb-1" }, HERO_LESSONS.map((lesson, i) => {
+            const playable = isPlayableForPlayer(i);
+            const selected = i === cur;
+            return /* @__PURE__ */ import_react.default.createElement(
+              "button",
+              {
+                key: i,
+                disabled: !playable,
+                onClick: () => setPick(turn, half, i),
+                className: `flex-shrink-0 px-2 py-1 border text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${selected ? "border-amber-500 bg-amber-500/15 text-amber-500" : playable ? "border-stone-700 text-stone-400 hover:border-amber-500/50" : "border-stone-800 text-stone-600 opacity-40"}`
+              },
+              !playable && "\u{1F512} ",
+              "#",
+              i + 1
+            );
+          }))));
+        }));
       }), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: () => setPhase("rps"), className: "w-full py-3" }, "LOCK IN \u25B6"));
     })(), phase === "rps" && /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-4 text-center pt-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 text-xl tracking-wider", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "ROCK PAPER SCISSORS"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "Loser goes first"), !rps && /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-3 gap-2 pt-4" }, [{ k: "rock", e: "\u270A" }, { k: "paper", e: "\u270B" }, { k: "scissors", e: "\u270C\uFE0F" }].map((o) => /* @__PURE__ */ import_react.default.createElement(
       "button",
@@ -6469,8 +6507,7 @@ window.exports = window.module.exports;
       const isCountdown = m[1] === "countdown";
       const roundN = parseInt(m[2]);
       const side = sideForRound(roundN);
-      const lessonIdx = lessonIdxForRound(roundN);
-      const lesson = HERO_LESSONS[lessonIdx];
+      const lesson = lessonForRound(roundN);
       const upcomingName = side === "P" ? char.name : opponent.name;
       const isPlayerRound = side === "P";
       const isOppRound = side === "O";
@@ -6507,10 +6544,11 @@ window.exports = window.module.exports;
       ))), !isCountdown && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-amber-500 text-sm tracking-widest uppercase" }, "ROUND ", roundN, "/", TOTAL_ROUNDS, " \xB7 ", upcomingName, " \xB7 ", lesson?.name), isPlayerRound && lesson != null && /* @__PURE__ */ import_react.default.createElement(
         BeatboxHero,
         {
+          key: `p-r${roundN}`,
           mode: "battle",
           active: !isCountdown,
           bpm: BATTLE_BPM,
-          lessonIdx,
+          lessonOverride: lesson,
           onAccuracyUpdate: () => {
           },
           onLessonComplete: (_idx, accuracy) => handlePlayerRoundComplete(roundN, accuracy)
@@ -6518,10 +6556,11 @@ window.exports = window.module.exports;
       ), isOppRound && !isCountdown && lesson != null && /* @__PURE__ */ import_react.default.createElement(
         BeatboxHero,
         {
+          key: `o-r${roundN}`,
           mode: "spectate",
           active: true,
           bpm: BATTLE_BPM,
-          lessonIdx,
+          lessonOverride: lesson,
           onAccuracyUpdate: () => {
           },
           onLessonComplete: () => {
