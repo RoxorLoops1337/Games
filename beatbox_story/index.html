@@ -299,9 +299,7 @@ window.exports = window.module.exports;
     const total = (mins + 360) % 1440;
     const h = Math.floor(total / 60);
     const m = Math.floor(total % 60);
-    const hh = h % 12 === 0 ? 12 : h % 12;
-    const ampm = h < 12 ? "AM" : "PM";
-    return `${hh}:${m.toString().padStart(2, "0")} ${ampm}`;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   }
   function timeOfDay(mins) {
     if (mins < 60) return "dawn";
@@ -5320,8 +5318,6 @@ window.exports = window.module.exports;
     const totalMin = napMinutes + 360;
     const hour24 = Math.floor(totalMin / 60) % 24;
     const minOfHour = Math.floor(totalMin % 60);
-    const hour12 = (hour24 + 11) % 12 + 1;
-    const ampm = hour24 >= 12 ? "PM" : "AM";
     return /* @__PURE__ */ import_react.default.createElement("div", { className: "fixed inset-0 z-50 flex items-center justify-center p-5", style: { background: "#0c0a09" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "max-w-md w-full space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center" }, /* @__PURE__ */ import_react.default.createElement(
       "div",
       {
@@ -5335,11 +5331,9 @@ window.exports = window.module.exports;
         className: "text-center text-amber-500 text-2xl tracking-widest",
         style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
       },
-      hour12,
+      String(hour24).padStart(2, "0"),
       ":",
-      String(minOfHour).padStart(2, "0"),
-      " ",
-      ampm
+      String(minOfHour).padStart(2, "0")
     ), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: wakeUp, className: "w-full py-3" }, "WAKE UP \u2600\uFE0F")));
   };
   var drawNapScene = (ctx, fc, look, currentMinutes) => {
