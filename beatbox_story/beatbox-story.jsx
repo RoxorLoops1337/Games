@@ -3929,8 +3929,8 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
             {speaker}
           </div>
         )}
-        <div key={`${beatIdx}-${lineIdx}`} className="text-stone-100 text-lg leading-relaxed min-h-[3em]"
-          style={{ fontFamily: 'Georgia, serif', animation: 'cutFade 0.4s ease-out' }}>
+        <div key={`${beatIdx}-${lineIdx}`} className="text-stone-100 text-xl leading-snug min-h-[3em]"
+          style={{ fontFamily: '"Oswald", "Bebas Neue", sans-serif', fontWeight: 300, letterSpacing: '0.02em', animation: 'cutFade 0.4s ease-out' }}>
           {beatLines[lineIdx]}
         </div>
         <button onClick={advance}
