@@ -4448,6 +4448,147 @@ const drawDoor = (ctx, fc) => {
   _px(ctx, 50, 117, 100, 1, '#fbbf24');
 };
 
+// Open-mic stage: bar interior, raised platform, mic stand, player on stage,
+// crowd silhouettes bobbing in front, spotlight cone overhead.
+const drawOpenMicStage = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Back wall (dim bar)
+  _px(ctx, 0, 0, W, 90, '#1c1825');
+  // Bar back top stripe
+  _px(ctx, 0, 0, W, 4, '#2a1f1a');
+  // String lights along the top
+  for (let i = 0; i < 7; i++) {
+    const lx = 12 + i * 28;
+    if ((fc + i * 11) % 60 < 50) _px(ctx, lx, 6, 3, 3, i % 2 ? '#fbbf24' : '#fb7185');
+  }
+  // Stage platform
+  _px(ctx, 30, 86, 140, 18, '#5a4030');
+  _px(ctx, 30, 86, 140, 2, '#7a5a40');
+  _px(ctx, 30, 102, 140, 2, '#3a2818');
+  // Mic stand
+  _px(ctx, 99, 60, 2, 25, '#1a1a1a');
+  _px(ctx, 95, 84, 10, 1, '#1a1a1a');
+  _px(ctx, 96, 56, 6, 5, '#aaa');
+  _px(ctx, 96, 56, 6, 1, '#dadada');
+  // Spotlight cone
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.07)';
+  ctx.beginPath(); ctx.moveTo(80, 0); ctx.lineTo(120, 0); ctx.lineTo(140, 86); ctx.lineTo(60, 86); ctx.closePath(); ctx.fill();
+  // Player on stage (centered) — drawBeatboxer feet at y=86 (top of platform)
+  drawBeatboxer(ctx, 100, 86, look, 'right', true, fc);
+  // Sound waves from player
+  if (fc % 4 < 2) {
+    const wavePhase = (fc * 0.35) % 12;
+    ctx.globalAlpha = (1 - wavePhase / 12) * 0.7;
+    ctx.fillStyle = look.shirt;
+    const r = 4 + wavePhase * 1.6;
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      const xx = Math.floor(100 + Math.cos(ang) * r);
+      const yy = Math.floor(70 + Math.sin(ang) * r);
+      if (xx >= 0 && xx < W && yy >= 0 && yy < H) ctx.fillRect(xx, yy, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+  // Crowd silhouettes in front (heads bobbing slightly)
+  for (let i = 0; i < 14; i++) {
+    const cx = 4 + i * 14;
+    const ch = 14 + (i % 3) * 4;
+    const bob = Math.floor(Math.sin((fc + i * 7) * 0.18));
+    _px(ctx, cx, 130 - ch + bob, 10, ch, '#1c1917');
+    _px(ctx, cx + 2, 130 - ch - 4 + bob, 6, 5, '#0c0a09');
+    // Hands raised on every other person, occasionally
+    if (i % 3 === 1 && (fc + i * 5) % 30 < 12) {
+      _px(ctx, cx + 4, 130 - ch - 7 + bob, 1, 4, '#1c1917');
+    }
+  }
+};
+
+// Sleep scene: apartment, player on couch, light fades evening → night → dawn.
+const drawSleepScene = (ctx, fc, look, progress) => {
+  const W = 200, H = 130;
+  // Ambient color shifts with progress
+  let bgR, bgG, bgB;
+  if (progress < 0.3) {
+    const t = progress / 0.3;
+    bgR = 50 - t * 36; bgG = 40 - t * 30; bgB = 70 - t * 50; // dusk → night
+  } else if (progress < 0.7) {
+    bgR = 14; bgG = 10; bgB = 20; // deep night
+  } else {
+    const t = (progress - 0.7) / 0.3;
+    bgR = 14 + t * 90; bgG = 10 + t * 60; bgB = 20 + t * 30; // dawn warm
+  }
+  ctx.fillStyle = `rgb(${Math.floor(bgR)}, ${Math.floor(bgG)}, ${Math.floor(bgB)})`;
+  ctx.fillRect(0, 0, W, H);
+  // Floor
+  _px(ctx, 0, 100, W, 30, '#3a2818');
+  // Window — color tracks time
+  let winColor;
+  if (progress < 0.3) winColor = '#3a2840';
+  else if (progress < 0.7) winColor = '#0a0a14';
+  else winColor = '#fbbf24';
+  _px(ctx, 130, 18, 50, 42, winColor);
+  _px(ctx, 130, 18, 50, 1, '#1a1a1a');
+  _px(ctx, 130, 60, 50, 1, '#1a1a1a');
+  _px(ctx, 130, 18, 1, 42, '#1a1a1a');
+  _px(ctx, 179, 18, 1, 42, '#1a1a1a');
+  _px(ctx, 154, 18, 1, 42, '#1a1a1a');
+  // Stars during night
+  if (progress > 0.3 && progress < 0.7) {
+    for (let i = 0; i < 10; i++) {
+      const sx = 132 + (i * 4) % 46;
+      const sy = 21 + (i * 7) % 36;
+      if ((fc + i * 5) % 60 < 45) _px(ctx, sx, sy, 1, 1, '#fef3c7');
+    }
+  }
+  // Sun on dawn
+  if (progress > 0.85) {
+    const t = (progress - 0.85) / 0.15;
+    const sunR = 4 + t * 8;
+    _px(ctx, 152, 50 - sunR, sunR * 2, sunR * 2, '#fbbf24');
+  }
+  // Couch
+  _px(ctx, 24, 80, 110, 28, '#5a4030');
+  _px(ctx, 24, 80, 110, 4, '#7a5a40');
+  _px(ctx, 18, 76, 12, 18, '#5a4030');
+  _px(ctx, 128, 76, 12, 18, '#5a4030');
+  // Player lying on couch (head left, feet right)
+  // Body horizontal
+  _px(ctx, 38, 78, 78, 5, look?.shirt || '#a78bfa');
+  _px(ctx, 38, 83, 78, 1, '#fff');
+  // Legs
+  _px(ctx, 110, 78, 18, 4, '#1a1a2e');
+  _px(ctx, 126, 76, 6, 2, '#fff');
+  // Head
+  _px(ctx, 30, 73, 12, 9, look?.skin || '#d4a87a');
+  _px(ctx, 30, 71, 12, 4, look?.hair || '#1a1a2e');
+  // Closed eyes
+  _px(ctx, 33, 76, 2, 1, '#0c0a09');
+  _px(ctx, 38, 76, 2, 1, '#0c0a09');
+  // Tiny smile
+  _px(ctx, 35, 79, 4, 1, '#3a1010');
+  // Z's during sleep
+  if (progress > 0.05 && progress < 0.85) {
+    const phase = Math.floor(fc / 24) % 3;
+    const zY = 65 - phase * 8;
+    if (fc % 48 < 36) {
+      ctx.fillStyle = '#dac0a0';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText('z', 50 + phase * 5, zY);
+    }
+    if (fc % 48 < 18) {
+      ctx.fillStyle = '#aaa';
+      ctx.font = 'bold 6px monospace';
+      ctx.fillText('z', 60, zY - 4);
+    }
+  }
+  // Darkness overlay during deep night
+  if (progress > 0.3 && progress < 0.75) {
+    const dark = progress < 0.5 ? (progress - 0.3) / 0.2 : (0.75 - progress) / 0.25;
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.45 * dark})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+};
+
 const INTRO_BEATS = [
   { drawScene: drawOffice, lines: [
     'three years at the desk.',
@@ -5154,18 +5295,21 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     showToast(`${f.kind === 'drink' ? 'Drank' : 'Ate'} ${f.name}`, 'win');
   };
 
+  const [sleeping, setSleeping] = useState(false);
   const sleep = () => {
     // Can't sleep on an empty stomach — go eat something first
     if ((char.hunger ?? 0) <= 0) {
       showToast('Too hungry to sleep — eat something first!', 'bad');
       return;
     }
+    setSleeping(true);
+  };
+  const finishSleep = () => {
     setChar(c => {
       const max = c.maxEnergy ?? 100;
       let energy = max;
       let hunger = Math.max(0, c.hunger - 30);
       let mood = Math.min(100, c.mood + 10);
-      // Apply any pending debuff from last night's bar items (hangover/crash etc.)
       const d = c.pendingDebuff;
       if (d) {
         energy = Math.max(0, Math.min(max, energy + (d.energy || 0)));
@@ -5175,7 +5319,10 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       return { ...c, energy, hunger, mood, day: c.day + 1, minutes: 0, pendingDebuff: null };
     });
     showToast(char.pendingDebuff ? 'Slept it off — feeling rough' : 'Slept till morning', char.pendingDebuff ? 'info' : 'win');
+    setSleeping(false);
   };
+
+  if (sleeping) return <SleepAnimation char={char} onComplete={finishSleep} />;
 
   return (
     <div className="space-y-3">
@@ -5934,6 +6081,126 @@ const pickShowcaseSlot = (currentDay, bookingDay, currentMinutes) => {
 // Free-play MPC pad grid using all of the player's owned sounds. 20-second
 // performance — taps + variety determine the reward.
 
+// Open Mic Performance: pixel-art stage scene + plays 2 random sequencer
+// patterns from char.oriSlots back to back, then fires onComplete.
+const OpenMicPerformance = ({ char, onComplete }) => {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const lookRef = useRef(lookFromChar(char));
+
+  // Pick 2 random patterns that have any active cells. Fall back to starters
+  // if the player hasn't built any beats yet.
+  const picks = useRef(null);
+  if (!picks.current) {
+    const slots = (char.oriSlots || []).filter(s => s?.tracks?.some(t => t.cells?.some(Boolean)));
+    if (slots.length === 0) {
+      picks.current = [_seqStarter(0), _seqStarter(1)];
+    } else if (slots.length === 1) {
+      picks.current = [slots[0], slots[0]];
+    } else {
+      const shuffled = [...slots].sort(() => Math.random() - 0.5);
+      picks.current = [shuffled[0], shuffled[1]];
+    }
+  }
+
+  useEffect(() => {
+    const ctx = getAudioCtx();
+    if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
+    const bpm = char.oriBpm || 100;
+    const stepMs = 60000 / Math.max(40, bpm) / 4;
+    const STEPS = 16;
+    const REPS_PER_PATTERN = 4;
+    let step = 0, rep = 0, patIdx = 0;
+    const id = setInterval(() => {
+      const pattern = picks.current[patIdx];
+      if (pattern?.tracks) {
+        pattern.tracks.forEach(t => {
+          if (t.cells[step]) playGameSound(t.key);
+        });
+      }
+      step++;
+      if (step >= STEPS) {
+        step = 0;
+        rep++;
+        if (rep >= REPS_PER_PATTERN) {
+          rep = 0;
+          patIdx++;
+          if (patIdx >= picks.current.length) {
+            clearInterval(id);
+            const t = setTimeout(onComplete, 700);
+            return () => clearTimeout(t);
+          } else {
+            setActiveIdx(patIdx);
+          }
+        }
+      }
+    }, stepMs);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-5"
+      style={{ background: 'radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%)' }}>
+      <div className="max-w-md w-full space-y-3">
+        <div className="text-center">
+          <div className="text-amber-500 text-2xl tracking-wider"
+            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            🎤 OPEN MIC NIGHT
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">
+            {(char.name || '').toUpperCase()} · the room is yours
+          </div>
+        </div>
+        <PixelScene draw={(ctx, fc) => drawOpenMicStage(ctx, fc, lookRef.current)} />
+        <div className="text-center text-[10px] uppercase tracking-widest text-amber-500">
+          BEAT {Math.min(activeIdx + 1, picks.current.length)} / {picks.current.length} · {picks.current[activeIdx]?.name || 'CUSTOM'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Sleep animation: fades dusk → night → dawn, plays a rooster crow on wake.
+const SleepAnimation = ({ char, durationMs = 4000, onComplete }) => {
+  const [progress, setProgress] = useState(0);
+  const startedAtRef = useRef(performance.now());
+  const roosterPlayedRef = useRef(false);
+  const lookRef = useRef(lookFromChar(char));
+
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      const t = (performance.now() - startedAtRef.current) / durationMs;
+      setProgress(Math.min(1, t));
+      if (t > 0.85 && !roosterPlayedRef.current) {
+        roosterPlayedRef.current = true;
+        playRooster();
+      }
+      if (t >= 1) { onComplete(); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const phaseLabel = progress < 0.4 ? 'Drifting off…'
+                  : progress < 0.85 ? 'Sleeping'
+                                    : '🐓 Cock-a-doodle-doo';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: '#0c0a09' }}>
+      <div className="max-w-md w-full space-y-3">
+        <PixelScene draw={(ctx, fc) => drawSleepScene(ctx, fc, lookRef.current, progress)} />
+        <div className="text-center text-stone-300 text-base tracking-widest"
+          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {phaseLabel}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ShowcasePerformance = ({ char, durationMs = 20000, onComplete }) => {
   const [tapsCount, setTapsCount] = useState(0);
   const [distinctSet, setDistinctSet] = useState(() => new Set());
@@ -6041,6 +6308,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const [selected, setSelected] = useState(null);
   const [rohzelLine, setRohzelLine] = useState(() => _pick(ROHZEL_GREETINGS));
   const [performingShowcase, setPerformingShowcase] = useState(false);
+  const [performingOpenMic, setPerformingOpenMic] = useState(false);
 
   // Lock bar during daytime
   if (!isNightTime(char.minutes ?? 0)) {
@@ -6087,22 +6355,48 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   };
 
   // Day-activity actions
+  // Open mic now opens a stage performance modal (plays 2 random sequencer
+  // patterns) before applying the rewards. Fan gain scales slowly with
+  // total skills + showmanship so it grows as the character improves.
   const doOpenMic = () => {
     if (char.energy < 10) { showToast('Too tired to perform', 'bad'); return; }
-    const sho = char.stats.sho || 0;
-    // Open mic is unpaid — you do it for the cred, the heat, and maybe a fan or two.
-    const fanGain = (Math.random() < 0.4 ? 1 : 0) + (sho >= 8 ? 1 : 0);
-    setChar(c => ({
-      ...c,
-      energy: Math.max(0, c.energy - 10),
-      mood: Math.min(100, c.mood + 5),
-      minutes: c.minutes + 30,
-      heat: (c.heat || 0) + 2,
-      followers: c.followers + fanGain,
-      openMicCount: (c.openMicCount || 0) + 1,
-      xp: c.xp + 8,
-    }));
-    showToast(fanGain > 0 ? `Open mic done · +${fanGain} fan${fanGain === 1 ? '' : 's'}` : 'Open mic done · built some heat', 'win');
+    setPerformingOpenMic(true);
+  };
+  const finishOpenMic = () => {
+    setChar(c => {
+      const stats = c.stats || {};
+      const totalSkills = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
+      // Slow scaling: 1–3 fans early game, ~10 mid-late, capped at 20 elite.
+      const base = Math.floor(Math.max(0, totalSkills - 20) / 25);
+      const showBonus = Math.floor((stats.sho || 0) / 8);
+      const lucky = Math.floor(Math.random() * 3);
+      const fanGain = Math.max(1, Math.min(20, base + showBonus + lucky));
+      const next = {
+        ...c,
+        energy: Math.max(0, c.energy - 10),
+        mood: Math.min(100, c.mood + 5),
+        minutes: c.minutes + 60, // open mic is now a full hour of game time
+        heat: (c.heat || 0) + 2,
+        followers: c.followers + fanGain,
+        openMicCount: (c.openMicCount || 0) + 1,
+        xp: c.xp + 8,
+        _lastOpenMicFans: fanGain,
+      };
+      return next;
+    });
+    setPerformingOpenMic(false);
+    setTimeout(() => {
+      // Read the freshly-applied gain from a ref-ish trick: showToast happens
+      // once per click; we approximate by computing the fan gain again here
+      // for the toast (state may not be flushed). Cheap and matches above.
+      const stats = char.stats || {};
+      const totalSkills = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
+      const base = Math.floor(Math.max(0, totalSkills - 20) / 25);
+      const showBonus = Math.floor((stats.sho || 0) / 8);
+      // No randomness in toast — show ~ matching the typical pull
+      const approx = Math.max(1, Math.min(20, base + showBonus + 1));
+      showToast(`Open mic done · ~${approx} new fans 🎤`, 'win');
+    }, 0);
   };
   const doKaraoke = () => {
     if (char.energy < 8) { showToast('Too tired to sing', 'bad'); return; }
@@ -6214,6 +6508,9 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const battleOnCooldown = battleCooldownDaysLeft > 0;
 
   // While performing, take over the screen
+  if (performingOpenMic) {
+    return <OpenMicPerformance char={char} onComplete={finishOpenMic} />;
+  }
   if (performingShowcase) {
     return (
       <div className="space-y-3 pt-2">
@@ -7296,6 +7593,30 @@ const playSound = (cat, soundName) => {
 };
 
 // Short countdown beep (pitch up on final BEATBOX)
+// "Cock-a-doodle-doo" via short oscillator notes — wake-up sound
+const playRooster = () => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const note = (freq, start, dur, type = 'sawtooth', vol = 0.14) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(vol, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + dur);
+  };
+  // "ki - ke - ri - kiiiiii"
+  note(880, t0,        0.13);
+  note(1100, t0 + 0.16, 0.13);
+  note(990, t0 + 0.34, 0.16);
+  note(770, t0 + 0.55, 0.65, 'sawtooth', 0.16);
+};
+
 const playBeep = (high = false) => {
   const ctx = getAudioCtx();
   if (!ctx) return;
