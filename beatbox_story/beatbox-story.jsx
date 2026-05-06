@@ -6214,18 +6214,16 @@ const OpenMicPerformance = ({ char, onComplete }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const lookRef = useRef(lookFromChar(char));
 
-  // Pick 2 random patterns that have any active cells. Fall back to starters
-  // if the player hasn't built any beats yet.
+  // Pick ONE random pattern that has any active cells. Falls back to a starter
+  // if the player hasn't built any beats yet. The set then plays this single
+  // pattern back twice — a tight, focused open-mic showcase.
   const picks = useRef(null);
   if (!picks.current) {
     const slots = (char.oriSlots || []).filter(s => s?.tracks?.some(t => t.cells?.some(Boolean)));
     if (slots.length === 0) {
-      picks.current = [_seqStarter(0), _seqStarter(1)];
-    } else if (slots.length === 1) {
-      picks.current = [slots[0], slots[0]];
+      picks.current = [_seqStarter(0)];
     } else {
-      const shuffled = [...slots].sort(() => Math.random() - 0.5);
-      picks.current = [shuffled[0], shuffled[1]];
+      picks.current = [slots[Math.floor(Math.random() * slots.length)]];
     }
   }
 
@@ -6236,10 +6234,8 @@ const OpenMicPerformance = ({ char, onComplete }) => {
     // the room expects a bit of energy.
     const bpm = (char.oriBpm || 100) + 10;
     const stepMs = 60000 / Math.max(40, bpm) / 4;
-    // Open mic plays only the first 8 of 16 grid steps per pattern — keeps
-    // the set tight (a 4-on-floor still gives 2 kicks per pattern, not 4).
-    const STEPS = 8;
-    const REPS_PER_PATTERN = 1;
+    const STEPS = 16;
+    const REPS_PER_PATTERN = 2;
     let step = 0, rep = 0, patIdx = 0;
     const id = setInterval(() => {
       const pattern = picks.current[patIdx];
