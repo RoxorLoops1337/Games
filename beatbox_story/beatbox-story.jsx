@@ -86,6 +86,38 @@ const initialChar = () => ({
   created: false,
 });
 
+// ============ GLOBAL KEY DISPATCHER ============
+// One document-level capture-phase keydown listener, attached on first
+// subscription. Components register via onGlobalKey(handler) and get an
+// unsubscribe function back. Capture-phase ensures we see keys before any
+// other listener (or framework default) can stop propagation.
+
+const _keyListeners = new Set();
+let _keyListenerAttached = false;
+let _lastGlobalKey = '';
+let _lastGlobalKeyAt = 0;
+const _dispatchGlobalKey = (e) => {
+  // Stash for the debug overlay regardless of focus
+  _lastGlobalKey = `${e.key}/${e.code}`;
+  _lastGlobalKeyAt = performance.now();
+  // Skip if focused inside an editable field, or if a modifier is held —
+  // those are reserved for browser/system shortcuts.
+  const ae = (typeof document !== 'undefined') ? document.activeElement : null;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  _keyListeners.forEach(fn => { try { fn(e); } catch (err) { /* swallow */ } });
+};
+const onGlobalKey = (handler) => {
+  _keyListeners.add(handler);
+  if (!_keyListenerAttached && typeof document !== 'undefined' && typeof window !== 'undefined') {
+    _keyListenerAttached = true;
+    // Capture phase so we run before any framework listeners that might
+    // stop propagation. document covers all child event targets.
+    document.addEventListener('keydown', _dispatchGlobalKey, true);
+  }
+  return () => _keyListeners.delete(handler);
+};
+
 // ============ STORAGE ============
 // Multiple save slots — keys: character:slot1 .. character:slot5, plus active_slot pointer.
 // Legacy key 'character:main' is auto-migrated into slot 1 on first load.
@@ -831,18 +863,11 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
   // closures (active/state) on every render.
   const tapRef = useRef(tap);
   tapRef.current = tap;
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      const ae = document.activeElement;
-      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
-      if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A')      tapRef.current(0);
-      else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') tapRef.current(1);
-      else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') tapRef.current(2);
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
+  useEffect(() => onGlobalKey((e) => {
+    if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A')      tapRef.current(0);
+    else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') tapRef.current(1);
+    else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') tapRef.current(2);
+  }), []);
 
   return (
     <div className="space-y-2">
@@ -920,21 +945,13 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
     setBarLevel(barRef.current);
   };
 
-  // Keyboard taps: A=left, D=right (also ArrowLeft/ArrowRight). Use a ref so
-  // the global handler always sees the latest closure.
+  // Keyboard taps: A=left, D=right (also ArrowLeft/ArrowRight).
   const handleTapRef = useRef(handleTap);
   handleTapRef.current = handleTap;
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      const ae = document.activeElement;
-      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
-      if (e.code === 'KeyA' || e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A')       handleTapRef.current('L');
-      else if (e.code === 'KeyD' || e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') handleTapRef.current('R');
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  useEffect(() => onGlobalKey((e) => {
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A')       handleTapRef.current('L');
+    else if (e.code === 'KeyD' || e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') handleTapRef.current('R');
+  }), []);
 
   // Drain loop + block evaluation
   useEffect(() => {
@@ -2375,26 +2392,19 @@ const BeatboxHero = ({
   handleTapRef.current = handleTap;
   const heroModeRef = useRef({ mode, inputMode });
   heroModeRef.current = { mode, inputMode };
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      const { mode: m, inputMode: im } = heroModeRef.current;
-      if (m === 'spectate' || im === 'mic') return;
-      const ae = document.activeElement;
-      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
-      let idx = -1;
-      if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A') idx = 0;
-      else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') idx = 1;
-      else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') idx = 2;
-      else if (e.code === 'KeyF' || e.key === 'f' || e.key === 'F') idx = 3;
-      if (idx < 0) return;
-      const lanes = stateRef.current?.lanes || HERO_LANES;
-      if (idx >= lanes.length) return;
-      handleTapRef.current(lanes[idx]);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  useEffect(() => onGlobalKey((e) => {
+    const { mode: m, inputMode: im } = heroModeRef.current;
+    if (m === 'spectate' || im === 'mic') return;
+    let idx = -1;
+    if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A') idx = 0;
+    else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') idx = 1;
+    else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') idx = 2;
+    else if (e.code === 'KeyF' || e.key === 'f' || e.key === 'F') idx = 3;
+    if (idx < 0) return;
+    const lanes = stateRef.current?.lanes || HERO_LANES;
+    if (idx >= lanes.length) return;
+    handleTapRef.current(lanes[idx]);
+  }), []);
 
   // Track latest active flag for the rAF loop to read without re-mounting
   const activeRef = useRef(active);
@@ -4849,6 +4859,11 @@ export default function BeatboxStory() {
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState(null);
   const [activeSlot, setActiveSlotState] = useState(null); // 1..5, null if none
+  // TEMP key-debug indicator: shows the last key that reached the global
+  // dispatcher. If this never updates when you press a key on PC, the issue
+  // is upstream of our handlers (browser/OS swallowing the event).
+  const [keyDebug, setKeyDebug] = useState({ key: '', t: 0 });
+  useEffect(() => onGlobalKey((e) => setKeyDebug({ key: `${e.key} · ${e.code}`, t: Date.now() })), []);
   // Active narrative cutscene. Shape: { speaker, speakerColor, lines, onComplete }
   // (onComplete handles both advance-past-end and skip.)
   const [cutscene, setCutscene] = useState(null);
@@ -5014,6 +5029,15 @@ export default function BeatboxStory() {
                           radial-gradient(circle at 80% 80%, rgba(204,34,0,0.06) 0%, transparent 50%),
                           repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px)`
       }}>
+      {/* TEMP: key-press indicator. Remove once keyboard is confirmed working.
+          Shows the most recent key the global dispatcher saw. If pressing
+          A/S/D/F never updates this, key events are not reaching the page. */}
+      {keyDebug.key && (
+        <div style={{ position: 'fixed', top: 4, left: 4, zIndex: 9999, background: '#0c0a09', color: '#22d3ee',
+                      border: '1px solid #22d3ee', padding: '2px 6px', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>
+          KEY: {keyDebug.key}
+        </div>
+      )}
       <div className="max-w-md mx-auto min-h-screen border-x border-stone-900 relative">
 
         {/* HEADER */}
@@ -8061,17 +8085,12 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
   // Keyboard shortcuts for RPS: 1=rock, 2=paper, 3=scissors (only while picking).
   useEffect(() => {
     if (phase !== 'rps' || rps) return;
-    const onKey = (e) => {
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      const ae = document.activeElement;
-      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    return onGlobalKey((e) => {
       const map = { '1': 'rock', '2': 'paper', '3': 'scissors',
                     'Digit1': 'rock', 'Digit2': 'paper', 'Digit3': 'scissors' };
       const choice = map[e.key] || map[e.code];
       if (choice) playRps(choice);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    });
   }, [phase, rps]);
 
   // Enter RPS phase from intro: pre-compute picks for both sides (player can change theirs in tactical).
