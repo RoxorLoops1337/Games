@@ -27,6 +27,7 @@ const FOOD = {
 };
 
 const NPCS = [
+  { name: 'Pig Pen',     stats: { mus: 7,  tec: 7,  ori: 5,  sho: 6  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 40,   level: 1 },
   { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 50,   level: 1 },
   { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 100,  level: 3 },
   { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 200,  level: 5 },
@@ -76,6 +77,8 @@ const initialChar = () => ({
   showcaseBooking: null, // { day: number, minute: number } — Rohzel's booked Friday slot
   lastShowcaseDay: null, // day a showcase was performed (cooldown: 7 days)
   lastBattleDay: null, // day a battle happened (cooldown: 7 days)
+  openMicCount: 0, // total open mics performed (gates Friday show)
+  storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
 
@@ -3799,6 +3802,55 @@ const Panel = ({ children, title, className = '' }) => (
   </div>
 );
 
+// ============ CUTSCENE ============
+// Short narrative beat. Lines advance one at a time. Skip top-right.
+// Spec voice: short, conversational, slightly understated.
+
+const Cutscene = ({ speaker = null, speakerColor = '#D4A017', lines = [], onComplete }) => {
+  const [idx, setIdx] = useState(0);
+  const advance = () => {
+    if (idx + 1 >= lines.length) onComplete?.();
+    else setIdx(i => i + 1);
+  };
+  const skip = () => onComplete?.();
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-950 flex items-center justify-center p-6"
+      style={{ background: 'radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%)' }}>
+      <button onClick={skip}
+        className="absolute top-4 right-4 text-stone-500 text-[10px] uppercase tracking-widest hover:text-amber-500 px-2 py-1">
+        Skip →
+      </button>
+      <div className="max-w-md w-full space-y-6">
+        {speaker && (
+          <div className="text-[11px] uppercase tracking-[0.4em]" style={{ color: speakerColor, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            {speaker}
+          </div>
+        )}
+        <div key={idx} className="text-stone-100 text-xl leading-relaxed"
+          style={{ fontFamily: 'Georgia, serif', animation: 'cutFade 0.4s ease-out' }}>
+          {lines[idx]}
+        </div>
+        <button onClick={advance}
+          className="text-amber-500 text-3xl active:scale-90 transition-transform">
+          {idx + 1 < lines.length ? '→' : 'OK'}
+        </button>
+        <div className="flex gap-1 pt-2">
+          {lines.map((_, i) => (
+            <div key={i} className="h-0.5 flex-1 transition-colors"
+              style={{ background: i <= idx ? '#D4A017' : '#3a3530' }} />
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @keyframes cutFade {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 // ============ SLOTS SCREEN ============
 // Five save slots. User can switch between, create new, or delete characters.
 
@@ -3960,6 +4012,19 @@ export default function BeatboxStory() {
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState(null);
   const [activeSlot, setActiveSlotState] = useState(null); // 1..5, null if none
+  // Active narrative cutscene. Shape: { speaker, speakerColor, lines, onComplete }
+  // (onComplete handles both advance-past-end and skip.)
+  const [cutscene, setCutscene] = useState(null);
+  // Queue a cutscene + a story flag to set when it ends. flagPath e.g. 'introSeen'.
+  const playCutscene = (props, flagPath, after) => {
+    setCutscene({ ...props, onComplete: () => {
+      setCutscene(null);
+      if (flagPath) {
+        setChar(c => c ? { ...c, storyFlags: { ...(c.storyFlags || {}), [flagPath]: true } } : c);
+      }
+      after?.();
+    }});
+  };
 
   // Apply migrations to a loaded character object (handles old saves missing new fields)
   const migrateChar = (c) => {
@@ -3980,6 +4045,8 @@ export default function BeatboxStory() {
     if (typeof c.skin !== 'string') c.skin = '#d4a87a';
     if (typeof c.hairColor !== 'string') c.hairColor = '#1a1a2e';
     if (typeof c.hairStyle !== 'string') c.hairStyle = 'short';
+    if (typeof c.openMicCount !== 'number') c.openMicCount = 0;
+    if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
 
@@ -4020,12 +4087,19 @@ export default function BeatboxStory() {
       await loadSamplesForSlot(n); // load that character's custom samples
       setScreen('hood');
     } else {
-      // Empty slot → new character creation flow targeted at this slot
+      // Empty slot → intro cutscene → character creation
       setChar(initialChar());
       setActiveSlotState(n);
       await setActiveSlot(n);
-      await loadSamplesForSlot(n); // (will be empty, falls back to synth)
-      setScreen('create');
+      await loadSamplesForSlot(n);
+      playCutscene({
+        speaker: null,
+        lines: [
+          'You used to beatbox alone in your bedroom.',
+          'The day job is gone now.',
+          'Tonight, you go to the cypher.',
+        ],
+      }, 'introSeen', () => setScreen('create'));
     }
   };
 
@@ -4144,6 +4218,8 @@ export default function BeatboxStory() {
         )}
 
         {/* TOAST */}
+        {cutscene && <Cutscene {...cutscene} />}
+
         {toast && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs">
             <div className={`px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider ${
@@ -4168,7 +4244,7 @@ export default function BeatboxStory() {
           {screen === 'hood' && <HoodScreen go={setScreen} char={char} />}
           {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} />}
           {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
-          {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} />}
+          {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
           {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
         </div>
@@ -4871,7 +4947,7 @@ function ShopScreen({ char, setChar, showToast, go }) {
 
 // ============ SCREEN: PARK ============
 
-function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp }) {
+function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, playCutscene }) {
   const [selected, setSelected] = useState(null); // 'busk' | 'jam' | 'run' | null
   const [pendingStart, setPendingStart] = useState(false);
   const [playMode, setPlayMode] = useState(false); // false = AFK pixel art, true = rhythm tap mini-game
@@ -4951,6 +5027,17 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp }) {
           return checkLevelUp(updated);
         });
         showToast(`+1 ${statName}, +${fans} fans`, 'win');
+        // First-jam narrative beat — fires once per character
+        if (!c?.storyFlags?.firstJam) {
+          playCutscene?.({
+            speaker: null,
+            lines: [
+              'You stand in the circle.',
+              "Strangers, all of them. None of them care where you slept last night.",
+              'Maybe this is what you needed.',
+            ],
+          }, 'firstJam');
+        }
       },
     },
     run: {
@@ -5131,10 +5218,10 @@ const ROHZEL_NEED_FANS = [
   "Lil bro come back when more than your mama is screaming your name.",
   "I need a crowd that pays my electric bill. Not a Spotify playlist of three.",
 ];
-const ROHZEL_NEED_SHO = [
-  "Showmanship like wet cardboard. Practice the camera work, I'll see you next week.",
-  "You got the heat but no charisma — even my bar stool got more presence.",
-  "Pump up the showmanship. Friday crowd ain't here to hear, they here to SEE.",
+const ROHZEL_NEED_OPEN_MICS = [
+  "I haven't even seen you on my open mic stage. Earn your reps first.",
+  "Five open mics. That's the bar. Literally.",
+  "Friday's a privilege. Tue, Wed, Thu — the work's there. Show up.",
 ];
 const ROHZEL_COOLDOWN = [
   "Already had your slot this week, hotshot. Let the people miss you.",
@@ -5346,6 +5433,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       minutes: c.minutes + 30,
       heat: (c.heat || 0) + 2,
       followers: c.followers + fanGain,
+      openMicCount: (c.openMicCount || 0) + 1,
       xp: c.xp + 8,
     }));
     showToast(fanGain > 0 ? `Open mic done · +${fanGain} fan${fanGain === 1 ? '' : 's'}` : 'Open mic done · built some heat', 'win');
@@ -5367,14 +5455,14 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   };
 
   // ---- Rohzel / Friday-showcase booking ----
-  const SHOWCASE_FANS_REQ = 10;
-  const SHOWCASE_SHO_REQ = 8;
+  const SHOWCASE_FANS_REQ = 50;
+  const SHOWCASE_OPEN_MICS_REQ = 5;
   const FRIDAY_DOW = 4;
   const showcaseCooldownDaysLeft = char.lastShowcaseDay
     ? Math.max(0, 7 - (char.day - char.lastShowcaseDay))
     : 0;
   const onCooldown = showcaseCooldownDaysLeft > 0;
-  const meetsBookingReqs = (char.followers || 0) >= SHOWCASE_FANS_REQ && (char.stats.sho || 0) >= SHOWCASE_SHO_REQ;
+  const meetsBookingReqs = (char.followers || 0) >= SHOWCASE_FANS_REQ && (char.openMicCount || 0) >= SHOWCASE_OPEN_MICS_REQ;
   const askRohzel = () => {
     if (char.showcaseBooking) {
       setRohzelLine(_pick(ROHZEL_REMINDER(clockString(char.showcaseBooking.minute))));
@@ -5388,8 +5476,8 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       setRohzelLine(_pick(ROHZEL_NEED_FANS));
       return;
     }
-    if ((char.stats.sho || 0) < SHOWCASE_SHO_REQ) {
-      setRohzelLine(_pick(ROHZEL_NEED_SHO));
+    if ((char.openMicCount || 0) < SHOWCASE_OPEN_MICS_REQ) {
+      setRohzelLine(_pick(ROHZEL_NEED_OPEN_MICS));
       return;
     }
     // Book it
@@ -5623,7 +5711,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
                 </button>
               </div>
               <div className="text-[9px] text-stone-600 uppercase tracking-wider">
-                Need {SHOWCASE_FANS_REQ}+ fans · {SHOWCASE_SHO_REQ}+ showmanship · 1 show / week
+                Need {SHOWCASE_FANS_REQ}+ fans · {SHOWCASE_OPEN_MICS_REQ}+ open mics done · 1 show / week
               </div>
               {booking && (
                 <div className="text-[9px] text-amber-500 uppercase tracking-widest border-t border-stone-800 pt-1">
@@ -5703,6 +5791,7 @@ const FloatingSound = ({ text, side, color = '#D4A017' }) => (
 
 // Per-opponent visuals — keyed by NPC name
 const OPP_LOOKS = {
+  'Pig Pen':     { shirt: '#5a4030', skin: '#d4a87a', hair: '#1a1a2e', style: 'mohawk', accessory: 'shades' },
   'Joel Burner': { shirt: '#84cc16', skin: '#f5d4a8', hair: '#5a3a18', style: 'short',  accessory: null     },
   'CeDe':        { shirt: '#3b82f6', skin: '#d4a87a', hair: '#1a1a2e', style: 'mohawk', accessory: 'shades' },
   'Sikker':      { shirt: '#a78bfa', skin: '#8a5a3a', hair: '#1c1917', style: 'long',   accessory: null     },

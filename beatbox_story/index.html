@@ -160,6 +160,7 @@ window.exports = window.module.exports;
     buddha_bowl: { name: "Buddha Bowl", cost: 14, energy: 22, hunger: 50, mood: 4, kind: "food" }
   };
   var NPCS = [
+    { name: "Pig Pen", stats: { mus: 7, tec: 7, ori: 5, sho: 6 }, sounds: ["classic_kick", "hi_hat", "psh_snare"], reward: 40, level: 1 },
     { name: "Joel Burner", stats: { mus: 8, tec: 8, ori: 6, sho: 7 }, sounds: ["classic_kick", "hi_hat", "psh_snare"], reward: 50, level: 1 },
     { name: "CeDe", stats: { mus: 12, tec: 11, ori: 9, sho: 10 }, sounds: ["classic_kick", "hi_hat", "psh_snare", "lip_roll"], reward: 100, level: 3 },
     { name: "Sikker", stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ["classic_kick", "inward_k", "fast_hats", "lip_roll"], reward: 200, level: 5 },
@@ -218,6 +219,10 @@ window.exports = window.module.exports;
     // day a showcase was performed (cooldown: 7 days)
     lastBattleDay: null,
     // day a battle happened (cooldown: 7 days)
+    openMicCount: 0,
+    // total open mics performed (gates Friday show)
+    storyFlags: {},
+    // narrative beats — see narrative spec; all start undefined/false
     created: false
   });
   var NUM_SLOTS = 5;
@@ -3326,6 +3331,58 @@ window.exports = window.module.exports;
     );
   };
   var Panel = ({ children, title, className = "" }) => /* @__PURE__ */ import_react.default.createElement("div", { className: `bg-stone-950/80 border-2 border-stone-800 ${className}` }, title && /* @__PURE__ */ import_react.default.createElement("div", { className: "border-b-2 border-stone-800 px-3 py-2 bg-stone-900/50" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 font-mono text-xs uppercase tracking-[0.2em]" }, title)), /* @__PURE__ */ import_react.default.createElement("div", { className: "p-3" }, children));
+  var Cutscene = ({ speaker = null, speakerColor = "#D4A017", lines = [], onComplete }) => {
+    const [idx, setIdx] = (0, import_react.useState)(0);
+    const advance = () => {
+      if (idx + 1 >= lines.length) onComplete?.();
+      else setIdx((i) => i + 1);
+    };
+    const skip = () => onComplete?.();
+    return /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        className: "fixed inset-0 z-50 bg-stone-950 flex items-center justify-center p-6",
+        style: { background: "radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%)" }
+      },
+      /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onClick: skip,
+          className: "absolute top-4 right-4 text-stone-500 text-[10px] uppercase tracking-widest hover:text-amber-500 px-2 py-1"
+        },
+        "Skip \u2192"
+      ),
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "max-w-md w-full space-y-6" }, speaker && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] uppercase tracking-[0.4em]", style: { color: speakerColor, fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, speaker), /* @__PURE__ */ import_react.default.createElement(
+        "div",
+        {
+          key: idx,
+          className: "text-stone-100 text-xl leading-relaxed",
+          style: { fontFamily: "Georgia, serif", animation: "cutFade 0.4s ease-out" }
+        },
+        lines[idx]
+      ), /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          onClick: advance,
+          className: "text-amber-500 text-3xl active:scale-90 transition-transform"
+        },
+        idx + 1 < lines.length ? "\u2192" : "OK"
+      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1 pt-2" }, lines.map((_, i) => /* @__PURE__ */ import_react.default.createElement(
+        "div",
+        {
+          key: i,
+          className: "h-0.5 flex-1 transition-colors",
+          style: { background: i <= idx ? "#D4A017" : "#3a3530" }
+        }
+      )))),
+      /* @__PURE__ */ import_react.default.createElement("style", null, `
+        @keyframes cutFade {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `)
+    );
+  };
   function SlotsScreen({ activeSlot, onSwitch, onDelete, onBack = null }) {
     const [slots, setSlots] = (0, import_react.useState)(null);
     const [confirmDelete, setConfirmDelete] = (0, import_react.useState)(null);
@@ -3446,6 +3503,16 @@ window.exports = window.module.exports;
     const [loaded, setLoaded] = (0, import_react.useState)(false);
     const [toast, setToast] = (0, import_react.useState)(null);
     const [activeSlot, setActiveSlotState] = (0, import_react.useState)(null);
+    const [cutscene, setCutscene] = (0, import_react.useState)(null);
+    const playCutscene = (props, flagPath, after) => {
+      setCutscene({ ...props, onComplete: () => {
+        setCutscene(null);
+        if (flagPath) {
+          setChar((c) => c ? { ...c, storyFlags: { ...c.storyFlags || {}, [flagPath]: true } } : c);
+        }
+        after?.();
+      } });
+    };
     const migrateChar = (c) => {
       if (!c) return c;
       if (typeof c.minutes !== "number") c.minutes = 0;
@@ -3464,6 +3531,8 @@ window.exports = window.module.exports;
       if (typeof c.skin !== "string") c.skin = "#d4a87a";
       if (typeof c.hairColor !== "string") c.hairColor = "#1a1a2e";
       if (typeof c.hairStyle !== "string") c.hairStyle = "short";
+      if (typeof c.openMicCount !== "number") c.openMicCount = 0;
+      if (!c.storyFlags || typeof c.storyFlags !== "object") c.storyFlags = {};
       return c;
     };
     (0, import_react.useEffect)(() => {
@@ -3501,7 +3570,14 @@ window.exports = window.module.exports;
         setActiveSlotState(n);
         await setActiveSlot(n);
         await loadSamplesForSlot(n);
-        setScreen("create");
+        playCutscene({
+          speaker: null,
+          lines: [
+            "You used to beatbox alone in your bedroom.",
+            "The day job is gone now.",
+            "Tonight, you go to the cypher."
+          ]
+        }, "introSeen", () => setScreen("create"));
       }
     };
     const deleteSlotAt = async (n) => {
@@ -3578,7 +3654,7 @@ window.exports = window.module.exports;
           className: "h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all",
           style: { width: `${char.xp / (char.level * 100) * 100}%` }
         }
-      )))), toast && /* @__PURE__ */ import_react.default.createElement("div", { className: "fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs" }, /* @__PURE__ */ import_react.default.createElement("div", { className: `px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider ${toast.type === "win" ? "bg-amber-500 border-amber-600 text-stone-950" : toast.type === "bad" ? "bg-red-900 border-red-700 text-red-100" : "bg-stone-900 border-stone-700 text-stone-200"}` }, toast.msg)), /* @__PURE__ */ import_react.default.createElement("div", { className: "p-3 pb-20" }, screen === "slots" && /* @__PURE__ */ import_react.default.createElement(
+      )))), cutscene && /* @__PURE__ */ import_react.default.createElement(Cutscene, { ...cutscene }), toast && /* @__PURE__ */ import_react.default.createElement("div", { className: "fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs" }, /* @__PURE__ */ import_react.default.createElement("div", { className: `px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider ${toast.type === "win" ? "bg-amber-500 border-amber-600 text-stone-950" : toast.type === "bad" ? "bg-red-900 border-red-700 text-red-100" : "bg-stone-900 border-stone-700 text-stone-200"}` }, toast.msg)), /* @__PURE__ */ import_react.default.createElement("div", { className: "p-3 pb-20" }, screen === "slots" && /* @__PURE__ */ import_react.default.createElement(
         SlotsScreen,
         {
           activeSlot,
@@ -3589,7 +3665,7 @@ window.exports = window.module.exports;
       ), screen === "create" && /* @__PURE__ */ import_react.default.createElement(CreateScreen, { char, setChar, onDone: () => {
         setChar((c) => ({ ...c, created: true }));
         setScreen("hood");
-      } }), screen === "hood" && /* @__PURE__ */ import_react.default.createElement(HoodScreen, { go: setScreen, char }), screen === "house" && /* @__PURE__ */ import_react.default.createElement(HouseScreen, { char, update, updateStats, passTime, setChar, checkLevelUp, showToast, go: setScreen, activeSlot }), screen === "shop" && /* @__PURE__ */ import_react.default.createElement(ShopScreen, { char, setChar, showToast, go: setScreen }), screen === "park" && /* @__PURE__ */ import_react.default.createElement(ParkScreen, { char, setChar, passTime, showToast, go: setScreen, checkLevelUp }), screen === "bar" && /* @__PURE__ */ import_react.default.createElement(BarScreen, { char, setChar, go: setScreen, showToast, checkLevelUp }), screen === "battle" && /* @__PURE__ */ import_react.default.createElement(BattleScreen, { char, setChar, go: setScreen, showToast, checkLevelUp })), char && char.created && screen !== "battle" && screen !== "create" && screen !== "slots" && /* @__PURE__ */ import_react.default.createElement("div", { className: "fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-stone-950 border-t-2 border-stone-800 z-20" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-5 text-[10px]" }, [
+      } }), screen === "hood" && /* @__PURE__ */ import_react.default.createElement(HoodScreen, { go: setScreen, char }), screen === "house" && /* @__PURE__ */ import_react.default.createElement(HouseScreen, { char, update, updateStats, passTime, setChar, checkLevelUp, showToast, go: setScreen, activeSlot }), screen === "shop" && /* @__PURE__ */ import_react.default.createElement(ShopScreen, { char, setChar, showToast, go: setScreen }), screen === "park" && /* @__PURE__ */ import_react.default.createElement(ParkScreen, { char, setChar, passTime, showToast, go: setScreen, checkLevelUp, playCutscene }), screen === "bar" && /* @__PURE__ */ import_react.default.createElement(BarScreen, { char, setChar, go: setScreen, showToast, checkLevelUp }), screen === "battle" && /* @__PURE__ */ import_react.default.createElement(BattleScreen, { char, setChar, go: setScreen, showToast, checkLevelUp })), char && char.created && screen !== "battle" && screen !== "create" && screen !== "slots" && /* @__PURE__ */ import_react.default.createElement("div", { className: "fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-stone-950 border-t-2 border-stone-800 z-20" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-5 text-[10px]" }, [
         { id: "house", label: "HOUSE", Icon: import_lucide_react.Home },
         { id: "park", label: "PARK", Icon: import_lucide_react.TreePine },
         { id: "hood", label: "HOOD", Icon: import_lucide_react.Music },
@@ -4131,7 +4207,7 @@ window.exports = window.module.exports;
       } }, equipped ? "EQUIPPED" : "EQUIP"));
     }))));
   }
-  function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp }) {
+  function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, playCutscene }) {
     const [selected, setSelected] = (0, import_react.useState)(null);
     const [pendingStart, setPendingStart] = (0, import_react.useState)(false);
     const [playMode, setPlayMode] = (0, import_react.useState)(false);
@@ -4207,6 +4283,16 @@ window.exports = window.module.exports;
             return checkLevelUp(updated);
           });
           showToast(`+1 ${statName}, +${fans} fans`, "win");
+          if (!c?.storyFlags?.firstJam) {
+            playCutscene?.({
+              speaker: null,
+              lines: [
+                "You stand in the circle.",
+                "Strangers, all of them. None of them care where you slept last night.",
+                "Maybe this is what you needed."
+              ]
+            }, "firstJam");
+          }
         }
       },
       run: {
@@ -4331,10 +4417,10 @@ window.exports = window.module.exports;
     "Lil bro come back when more than your mama is screaming your name.",
     "I need a crowd that pays my electric bill. Not a Spotify playlist of three."
   ];
-  var ROHZEL_NEED_SHO = [
-    "Showmanship like wet cardboard. Practice the camera work, I'll see you next week.",
-    "You got the heat but no charisma \u2014 even my bar stool got more presence.",
-    "Pump up the showmanship. Friday crowd ain't here to hear, they here to SEE."
+  var ROHZEL_NEED_OPEN_MICS = [
+    "I haven't even seen you on my open mic stage. Earn your reps first.",
+    "Five open mics. That's the bar. Literally.",
+    "Friday's a privilege. Tue, Wed, Thu \u2014 the work's there. Show up."
   ];
   var ROHZEL_COOLDOWN = [
     "Already had your slot this week, hotshot. Let the people miss you.",
@@ -4491,6 +4577,7 @@ window.exports = window.module.exports;
         minutes: c.minutes + 30,
         heat: (c.heat || 0) + 2,
         followers: c.followers + fanGain,
+        openMicCount: (c.openMicCount || 0) + 1,
         xp: c.xp + 8
       }));
       showToast(fanGain > 0 ? `Open mic done \xB7 +${fanGain} fan${fanGain === 1 ? "" : "s"}` : "Open mic done \xB7 built some heat", "win");
@@ -4513,12 +4600,12 @@ window.exports = window.module.exports;
       }));
       showToast(`Karaoke: +${musGain} musicality, +$${earn}`, "win");
     };
-    const SHOWCASE_FANS_REQ = 10;
-    const SHOWCASE_SHO_REQ = 8;
+    const SHOWCASE_FANS_REQ = 50;
+    const SHOWCASE_OPEN_MICS_REQ = 5;
     const FRIDAY_DOW = 4;
     const showcaseCooldownDaysLeft = char.lastShowcaseDay ? Math.max(0, 7 - (char.day - char.lastShowcaseDay)) : 0;
     const onCooldown = showcaseCooldownDaysLeft > 0;
-    const meetsBookingReqs = (char.followers || 0) >= SHOWCASE_FANS_REQ && (char.stats.sho || 0) >= SHOWCASE_SHO_REQ;
+    const meetsBookingReqs = (char.followers || 0) >= SHOWCASE_FANS_REQ && (char.openMicCount || 0) >= SHOWCASE_OPEN_MICS_REQ;
     const askRohzel = () => {
       if (char.showcaseBooking) {
         setRohzelLine(_pick(ROHZEL_REMINDER(clockString(char.showcaseBooking.minute))));
@@ -4532,8 +4619,8 @@ window.exports = window.module.exports;
         setRohzelLine(_pick(ROHZEL_NEED_FANS));
         return;
       }
-      if ((char.stats.sho || 0) < SHOWCASE_SHO_REQ) {
-        setRohzelLine(_pick(ROHZEL_NEED_SHO));
+      if ((char.openMicCount || 0) < SHOWCASE_OPEN_MICS_REQ) {
+        setRohzelLine(_pick(ROHZEL_NEED_OPEN_MICS));
         return;
       }
       const days = daysToNextFriday(char.day, char.minutes);
@@ -4638,7 +4725,7 @@ window.exports = window.module.exports;
         className: "px-2 py-1.5 border-2 border-stone-700 text-stone-400 text-[10px] uppercase tracking-widest hover:border-amber-500/40"
       },
       "Just chatting"
-    )), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] text-stone-600 uppercase tracking-wider" }, "Need ", SHOWCASE_FANS_REQ, "+ fans \xB7 ", SHOWCASE_SHO_REQ, "+ showmanship \xB7 1 show / week"), booking && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] text-amber-500 uppercase tracking-widest border-t border-stone-800 pt-1" }, "\u2713 booked: friday ", clockString(booking.minute))))), schedule.activity !== "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Bar Menu" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, Object.entries(BAR_MENU).map(([k, item]) => {
+    )), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] text-stone-600 uppercase tracking-wider" }, "Need ", SHOWCASE_FANS_REQ, "+ fans \xB7 ", SHOWCASE_OPEN_MICS_REQ, "+ open mics done \xB7 1 show / week"), booking && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] text-amber-500 uppercase tracking-widest border-t border-stone-800 pt-1" }, "\u2713 booked: friday ", clockString(booking.minute))))), schedule.activity !== "closed" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Bar Menu" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, Object.entries(BAR_MENU).map(([k, item]) => {
       const im = item.immediate;
       const db = item.debuff;
       const fmt = (s, sym) => {
@@ -4668,6 +4755,7 @@ window.exports = window.module.exports;
     text.toUpperCase()
   ));
   var OPP_LOOKS = {
+    "Pig Pen": { shirt: "#5a4030", skin: "#d4a87a", hair: "#1a1a2e", style: "mohawk", accessory: "shades" },
     "Joel Burner": { shirt: "#84cc16", skin: "#f5d4a8", hair: "#5a3a18", style: "short", accessory: null },
     "CeDe": { shirt: "#3b82f6", skin: "#d4a87a", hair: "#1a1a2e", style: "mohawk", accessory: "shades" },
     "Sikker": { shirt: "#a78bfa", skin: "#8a5a3a", hair: "#1c1917", style: "long", accessory: null },
