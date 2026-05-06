@@ -1720,11 +1720,15 @@ window.exports = window.module.exports;
       pattern: _patL12()
     }
   ];
-  var MicBeatboxDetector = ({ active, onHit }) => {
+  var MicBeatboxDetector = ({ active, paused = false, onHit }) => {
     const [permission, setPermission] = (0, import_react.useState)("idle");
     const [errorDetail, setErrorDetail] = (0, import_react.useState)("");
     const [level, setLevel] = (0, import_react.useState)(0);
     const [lastDetected, setLastDetected] = (0, import_react.useState)(null);
+    const pausedRef = (0, import_react.useRef)(paused);
+    (0, import_react.useEffect)(() => {
+      pausedRef.current = paused;
+    }, [paused]);
     const lastDetectedAtRef = (0, import_react.useRef)(0);
     const onHitRef = (0, import_react.useRef)(onHit);
     (0, import_react.useEffect)(() => {
@@ -1797,6 +1801,10 @@ window.exports = window.module.exports;
           const now = performance.now();
           recentRms = recentRms * 0.95 + rms * 0.05;
           const dynThresh = Math.max(onsetFloor, recentRms * 2);
+          if (pausedRef.current) {
+            raf = requestAnimationFrame(tick);
+            return;
+          }
           if (rms > dynThresh && now - lastOnsetMs > cooldownMs) {
             lastOnsetMs = now;
             analyser.getByteFrequencyData(freqBuf);
@@ -1807,19 +1815,39 @@ window.exports = window.module.exports;
             const veryHigh = energyInBand(6e3, 14e3);
             const total = subBass + lowMid + mid + high + veryHigh;
             if (total > 8) {
-              const sb = subBass / total;
-              const h = high / total;
-              const vh = veryHigh / total;
-              let key;
-              if (sb > 0.32) key = "B";
-              else if (vh > 0.42) key = "T";
-              else if (h + vh > 0.55) key = "Pf";
-              else key = "K";
+              const obs = [subBass / total, lowMid / total, mid / total, high / total, veryHigh / total];
+              const PROFILES = {
+                B: [0.46, 0.34, 0.15, 0.04, 0.01],
+                // kick — dominant sub + low-mid
+                K: [0.05, 0.18, 0.45, 0.22, 0.1],
+                // rim/tongue click — mid-tonal
+                Pf: [0.04, 0.1, 0.22, 0.46, 0.18],
+                // snare — bright noise centered in high
+                T: [0.03, 0.07, 0.16, 0.3, 0.44]
+                // hi-hat — dominant very-high
+              };
+              const cosSim = (a, b) => {
+                let dot = 0, na = 0, nb = 0;
+                for (let i = 0; i < a.length; i++) {
+                  dot += a[i] * b[i];
+                  na += a[i] * a[i];
+                  nb += b[i] * b[i];
+                }
+                return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
+              };
+              let bestKey = "K", bestSim = -Infinity;
+              for (const k of Object.keys(PROFILES)) {
+                const s = cosSim(obs, PROFILES[k]);
+                if (s > bestSim) {
+                  bestSim = s;
+                  bestKey = k;
+                }
+              }
               if (mounted) {
-                setLastDetected(key);
+                setLastDetected(bestKey);
                 lastDetectedAtRef.current = now;
               }
-              onHitRef.current?.(key);
+              onHitRef.current?.(bestKey);
             }
           }
           if (lastDetected && now - lastDetectedAtRef.current > 400 && mounted) {
@@ -1838,7 +1866,7 @@ window.exports = window.module.exports;
     const meterColor = level < 0.04 ? "#84cc16" : level < 0.15 ? "#fbbf24" : "#ef4444";
     const meterPct = Math.min(100, level * 250);
     const detectedMeta = lastDetected ? HERO_SOUNDS[lastDetected] : null;
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1.5 border-2 border-stone-800 bg-stone-900/40 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "\u{1F3A4} ", permission === "granted" ? "listening" : permission === "requesting" ? "requesting mic\u2026" : permission === "denied" ? "mic denied" : permission === "insecure" ? "needs https" : "idle"), detectedMeta && /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] tracking-widest", style: { color: detectedMeta.color } }, detectedMeta.label, " \xB7 ", detectedMeta.name.toUpperCase())), permission === "granted" && /* @__PURE__ */ import_react.default.createElement("div", { className: "h-2 bg-stone-950 border border-stone-800 overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-1.5 border-2 border-stone-800 bg-stone-900/40 p-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, "\u{1F3A4} ", permission === "granted" ? paused ? "paused \u2014 demo playing" : "listening" : permission === "requesting" ? "requesting mic\u2026" : permission === "denied" ? "mic denied" : permission === "insecure" ? "needs https" : "idle"), detectedMeta && /* @__PURE__ */ import_react.default.createElement("span", { className: "text-[10px] tracking-widest", style: { color: detectedMeta.color } }, detectedMeta.label, " \xB7 ", detectedMeta.name.toUpperCase())), permission === "granted" && /* @__PURE__ */ import_react.default.createElement("div", { className: "h-2 bg-stone-950 border border-stone-800 overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement(
       "div",
       {
         className: "h-full transition-all duration-75",
@@ -1938,7 +1966,7 @@ window.exports = window.module.exports;
       const now = performance.now();
       const songT = now - state2.startTime;
       const lane = state2.lanes.indexOf(sound);
-      playGameSound(sound);
+      if (inputMode !== "mic") playGameSound(sound);
       state2.laneFlash[sound] = now;
       if (state2.phase !== "player") {
         rerender();
@@ -2162,7 +2190,14 @@ window.exports = window.module.exports;
         className: "w-full block border-2 border-stone-800",
         style: { aspectRatio: `${TRACK_W} / ${TRACK_H}`, background: "#0c0a09", imageRendering: "auto" }
       }
-    ), mode !== "spectate" && inputMode === "mic" && /* @__PURE__ */ import_react.default.createElement(MicBeatboxDetector, { active, onHit: handleTap }), mode !== "spectate" && inputMode !== "mic" && /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, (state?.lanes || HERO_LANES).map((sound, idx) => {
+    ), mode !== "spectate" && inputMode === "mic" && /* @__PURE__ */ import_react.default.createElement(
+      MicBeatboxDetector,
+      {
+        active,
+        paused: state?.phase !== "player",
+        onHit: handleTap
+      }
+    ), mode !== "spectate" && inputMode !== "mic" && /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, (state?.lanes || HERO_LANES).map((sound, idx) => {
       const meta = getSoundDisplay(sound) || { color: "#D4A017", label: "?" };
       return /* @__PURE__ */ import_react.default.createElement(
         "button",
@@ -4551,7 +4586,7 @@ window.exports = window.module.exports;
           className: `flex-1 px-2 py-1.5 border-2 text-[10px] uppercase tracking-widest transition-all ${tecInputMode === "mic" ? "border-amber-500 bg-amber-500/10 text-amber-500" : "border-stone-700 text-stone-400 hover:border-amber-500/50"}`
         },
         "\u{1F3A4} Mic"
-      )), /* @__PURE__ */ import_react.default.createElement(
+      )), tecInputMode === "mic" && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[9px] text-stone-500 uppercase tracking-widest text-center" }, "Tip: headphones recommended \xB7 mic pauses during the demo"), /* @__PURE__ */ import_react.default.createElement(
         BeatboxHero,
         {
           onAccuracyUpdate: handleAccuracy,

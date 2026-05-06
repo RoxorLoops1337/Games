@@ -1919,11 +1919,13 @@ const HERO_LESSONS = [
 // into one of the 4 hero keys (B/T/K/Pf) via a simple frequency-band heuristic.
 // Calls onHit(key) when it registers a hit. Used by Beatbox Hero in mic mode.
 
-const MicBeatboxDetector = ({ active, onHit }) => {
+const MicBeatboxDetector = ({ active, paused = false, onHit }) => {
   const [permission, setPermission] = useState('idle'); // 'idle'|'requesting'|'granted'|'denied'|'insecure'
   const [errorDetail, setErrorDetail] = useState('');
   const [level, setLevel] = useState(0);
   const [lastDetected, setLastDetected] = useState(null);
+  const pausedRef = useRef(paused);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
   const lastDetectedAtRef = useRef(0);
   const onHitRef = useRef(onHit);
   useEffect(() => { onHitRef.current = onHit; }, [onHit]);
@@ -1991,6 +1993,14 @@ const MicBeatboxDetector = ({ active, onHit }) => {
         recentRms = recentRms * 0.95 + rms * 0.05;
         const dynThresh = Math.max(onsetFloor, recentRms * 2);
 
+        // Skip classification while paused (e.g. during DEMO phase, so the demo
+        // notes the game just played don't get picked up by the mic and trigger
+        // a feedback loop).
+        if (pausedRef.current) {
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+
         if (rms > dynThresh && now - lastOnsetMs > cooldownMs) {
           lastOnsetMs = now;
           analyser.getByteFrequencyData(freqBuf);
@@ -2001,21 +2011,31 @@ const MicBeatboxDetector = ({ active, onHit }) => {
           const veryHigh = energyInBand(6000, 14000);
           const total = subBass + lowMid + mid + high + veryHigh;
           if (total > 8) {
-            const sb = subBass / total;
-            const h  = high / total;
-            const vh = veryHigh / total;
-            // Heuristic: kick = sub-bass dominant; hat = very-high dominant;
-            // snare = bright noise; rim = mid/tonal default.
-            let key;
-            if (sb > 0.32)                  key = 'B';
-            else if (vh > 0.42)             key = 'T';
-            else if (h + vh > 0.55)         key = 'Pf';
-            else                             key = 'K';
+            // Normalize the observed band energies to a probability distribution,
+            // then pick the key whose ideal profile is most similar (cosine).
+            const obs = [subBass / total, lowMid / total, mid / total, high / total, veryHigh / total];
+            // Per-key profiles: [subBass, lowMid, mid, high, veryHigh]
+            const PROFILES = {
+              B:  [0.46, 0.34, 0.15, 0.04, 0.01], // kick — dominant sub + low-mid
+              K:  [0.05, 0.18, 0.45, 0.22, 0.10], // rim/tongue click — mid-tonal
+              Pf: [0.04, 0.10, 0.22, 0.46, 0.18], // snare — bright noise centered in high
+              T:  [0.03, 0.07, 0.16, 0.30, 0.44], // hi-hat — dominant very-high
+            };
+            const cosSim = (a, b) => {
+              let dot = 0, na = 0, nb = 0;
+              for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+              return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
+            };
+            let bestKey = 'K', bestSim = -Infinity;
+            for (const k of Object.keys(PROFILES)) {
+              const s = cosSim(obs, PROFILES[k]);
+              if (s > bestSim) { bestSim = s; bestKey = k; }
+            }
             if (mounted) {
-              setLastDetected(key);
+              setLastDetected(bestKey);
               lastDetectedAtRef.current = now;
             }
-            onHitRef.current?.(key);
+            onHitRef.current?.(bestKey);
           }
         }
 
@@ -2045,7 +2065,7 @@ const MicBeatboxDetector = ({ active, onHit }) => {
     <div className="space-y-1.5 border-2 border-stone-800 bg-stone-900/40 p-2">
       <div className="flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-widest text-stone-500">
-          🎤 {permission === 'granted' ? 'listening' :
+          🎤 {permission === 'granted' ? (paused ? 'paused — demo playing' : 'listening') :
               permission === 'requesting' ? 'requesting mic…' :
               permission === 'denied' ? 'mic denied' :
               permission === 'insecure' ? 'needs https' : 'idle'}
@@ -2167,7 +2187,9 @@ const BeatboxHero = ({
     const songT = now - state.startTime;
     const lane = state.lanes.indexOf(sound);
 
-    playGameSound(sound);
+    // In mic mode the player is the audio source — playing back the matched
+    // sound through the speakers would feed back into the mic.
+    if (inputMode !== 'mic') playGameSound(sound);
     state.laneFlash[sound] = now;
 
     if (state.phase !== 'player') { rerender(); return; }
@@ -2442,7 +2464,10 @@ const BeatboxHero = ({
 
       {/* Mic detector replaces the drum pads when inputMode === 'mic' */}
       {mode !== 'spectate' && inputMode === 'mic' && (
-        <MicBeatboxDetector active={active} onHit={handleTap} />
+        <MicBeatboxDetector
+          active={active}
+          paused={state?.phase !== 'player'}
+          onHit={handleTap} />
       )}
 
       {/* Drum buttons — hidden in spectate mode (player can't tap) and in mic mode */}
@@ -5247,6 +5272,11 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                           🎤 Mic
                         </button>
                       </div>
+                      {tecInputMode === 'mic' && (
+                        <div className="text-[9px] text-stone-500 uppercase tracking-widest text-center">
+                          Tip: headphones recommended · mic pauses during the demo
+                        </div>
+                      )}
 
                       <BeatboxHero
                         onAccuracyUpdate={handleAccuracy}
