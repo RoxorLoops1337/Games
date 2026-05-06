@@ -4027,12 +4027,30 @@ const drawBedroom = (ctx, fc) => {
     ctx.fillStyle = 'rgba(254, 243, 199, 0.22)';
     ctx.fillRect(95, 50, 35, 50);
   }
-  _px(ctx, 102, 65, 22, 10, '#dadada');
-  _px(ctx, 102, 65, 22, 1, '#5a5a5a');
-  ctx.fillStyle = '#9a1a1a';
+  // Budget sheet on the table — red numbers doing the math, in case you missed
+  // the point that the bills are bigger than the savings.
+  const sx = 99, sy = 78;
+  _px(ctx, sx, sy, 32, 15, '#f0e4c8');           // paper
+  _px(ctx, sx, sy, 32, 1, '#c0a070');            // top shadow line
+  _px(ctx, sx + 31, sy, 1, 15, '#c0a070');       // right shadow line
   ctx.font = 'bold 5px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('RENT DUE', 113, 72);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#3a2818';
+  ctx.fillText('RENT',  sx + 2, sy + 5);
+  ctx.fillText('FOOD',  sx + 2, sy + 9);
+  ctx.fillText('BAL',   sx + 2, sy + 14);
+  // Red numbers — pulse subtly to draw the eye
+  ctx.fillStyle = (fc % 60 < 30) ? '#dc2626' : '#9a1a1a';
+  ctx.textAlign = 'right';
+  ctx.fillText('-800',  sx + 30, sy + 5);
+  ctx.fillText('-50',   sx + 30, sy + 9);
+  ctx.fillText('-123',  sx + 30, sy + 14);
+  // Underline above total
+  _px(ctx, sx + 14, sy + 11, 16, 1, '#3a2818');
+  // Pencil next to the paper
+  _px(ctx, sx - 6, sy + 13, 7, 1, '#fbbf24');
+  _px(ctx, sx - 7, sy + 13, 1, 1, '#3a2818');    // tip
+  _px(ctx, sx + 1, sy + 13, 2, 1, '#dc2626');    // eraser
 };
 
 const drawPhone = (ctx, fc) => {

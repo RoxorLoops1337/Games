@@ -3545,9 +3545,9 @@ window.exports = window.module.exports;
     _px(ctx, 179, 15, 1, 45, "#1a1a1a");
     _px(ctx, 154, 15, 1, 45, "#1a1a1a");
     for (let i = 0; i < 14; i++) {
-      const sx = 132 + i * 4 % 46;
-      const sy = 18 + i * 7 % 38;
-      if ((fc + i * 5) % 60 < 50) _px(ctx, sx, sy, 1, 1, i % 2 ? "#fbbf24" : "#fef3c7");
+      const sx2 = 132 + i * 4 % 46;
+      const sy2 = 18 + i * 7 % 38;
+      if ((fc + i * 5) % 60 < 50) _px(ctx, sx2, sy2, 1, 1, i % 2 ? "#fbbf24" : "#fef3c7");
     }
     _px(ctx, 8, 95, 80, 25, "#a87844");
     _px(ctx, 8, 95, 80, 2, "#c89a64");
@@ -3561,12 +3561,25 @@ window.exports = window.module.exports;
       ctx.fillStyle = "rgba(254, 243, 199, 0.22)";
       ctx.fillRect(95, 50, 35, 50);
     }
-    _px(ctx, 102, 65, 22, 10, "#dadada");
-    _px(ctx, 102, 65, 22, 1, "#5a5a5a");
-    ctx.fillStyle = "#9a1a1a";
+    const sx = 99, sy = 78;
+    _px(ctx, sx, sy, 32, 15, "#f0e4c8");
+    _px(ctx, sx, sy, 32, 1, "#c0a070");
+    _px(ctx, sx + 31, sy, 1, 15, "#c0a070");
     ctx.font = "bold 5px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("RENT DUE", 113, 72);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#3a2818";
+    ctx.fillText("RENT", sx + 2, sy + 5);
+    ctx.fillText("FOOD", sx + 2, sy + 9);
+    ctx.fillText("BAL", sx + 2, sy + 14);
+    ctx.fillStyle = fc % 60 < 30 ? "#dc2626" : "#9a1a1a";
+    ctx.textAlign = "right";
+    ctx.fillText("-800", sx + 30, sy + 5);
+    ctx.fillText("-50", sx + 30, sy + 9);
+    ctx.fillText("-123", sx + 30, sy + 14);
+    _px(ctx, sx + 14, sy + 11, 16, 1, "#3a2818");
+    _px(ctx, sx - 6, sy + 13, 7, 1, "#fbbf24");
+    _px(ctx, sx - 7, sy + 13, 1, 1, "#3a2818");
+    _px(ctx, sx + 1, sy + 13, 2, 1, "#dc2626");
   };
   var drawPhone = (ctx, fc) => {
     const W = 200, H = 130;
