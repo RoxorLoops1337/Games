@@ -4634,12 +4634,36 @@ window.exports = window.module.exports;
       showToast(`${f.kind === "drink" ? "Drank" : "Ate"} ${f.name}`, "win");
     };
     const [sleeping, setSleeping] = (0, import_react.useState)(false);
+    const [napping, setNapping] = (0, import_react.useState)(false);
     const sleep = () => {
       if ((char.hunger ?? 0) <= 0) {
         showToast("Too hungry to sleep \u2014 eat something first!", "bad");
         return;
       }
       setSleeping(true);
+    };
+    const startNap = () => {
+      if ((char.hunger ?? 0) <= 0) {
+        showToast("Too hungry to nap \u2014 eat something first!", "bad");
+        return;
+      }
+      setNapping(true);
+    };
+    const finishNap = (finalMinutes, forced) => {
+      setChar((c) => {
+        const slept = Math.max(0, finalMinutes - (c.minutes ?? 0));
+        const hours = slept / 60;
+        const max = c.maxEnergy ?? 100;
+        return {
+          ...c,
+          minutes: Math.min(1200, finalMinutes),
+          energy: Math.max(0, Math.min(max, c.energy + Math.floor(hours * 12))),
+          hunger: Math.max(0, c.hunger - Math.floor(hours * 3)),
+          mood: Math.max(0, Math.min(100, c.mood + Math.floor(hours * 2)))
+        };
+      });
+      setNapping(false);
+      showToast(forced ? "2 AM \u2014 got booted off the couch" : "Napped \u2014 feeling sharper", forced ? "info" : "win");
     };
     const finishSleep = () => {
       setChar((c) => {
@@ -4659,6 +4683,7 @@ window.exports = window.module.exports;
       setSleeping(false);
     };
     if (sleeping) return /* @__PURE__ */ import_react.default.createElement(SleepAnimation, { char, onComplete: finishSleep });
+    if (napping) return /* @__PURE__ */ import_react.default.createElement(PowerNapAnimation, { char, onWake: finishNap });
     return /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center mb-2" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-2xl tracking-widest text-stone-300", style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, "THE HOUSE"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-stone-500" }, "Your home base")), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-4 gap-1" }, [["train", "PC / Train", "pc"], ["studio", "Studio", "mic"], ["eat", "Kitchen", "fridge"], ["rest", "Couch", "couch"]].map(([id, label, icon]) => /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
@@ -4907,7 +4932,7 @@ window.exports = window.module.exports;
     )), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, "5 blocks \u2192 +1 ", trainConfig[trainStat].name, trainStat === "mus" ? " (up to +3 with tuner)" : trainStat === "tec" ? " (up to +3 with Beatbox Hero, \xD7BPM bonus)" : trainStat === "ori" ? " (up to +3 with creative beats)" : ""), /* @__PURE__ */ import_react.default.createElement(ProgressBar, { block: trainActivity.block, total: 5, label: `Block ${trainActivity.block}/5`, color: trainConfig[trainStat].color }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex justify-between text-[10px] uppercase tracking-wider text-stone-500" }, /* @__PURE__ */ import_react.default.createElement("span", null, "Stat increases: ", /* @__PURE__ */ import_react.default.createElement("span", { className: "text-amber-500" }, trainActivity.rewardsEarned)), /* @__PURE__ */ import_react.default.createElement("span", null, "1 block = 10 game min (", playMode ? "2s \xB7 slow" : "0.5s", ")")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "danger", onClick: () => trainActivity.stop("Training stopped"), className: "w-full py-3" }, "STOP \u25A0")))), tab === "studio" && /* @__PURE__ */ import_react.default.createElement(SoundStudio, { activeSlot, showToast, char }), tab === "eat" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "Fridge \u2014 wholefood plant-based" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-2" }, Object.entries(FOOD).map(([k, f]) => {
       const foodIcon = f.kind === "drink" ? "coffee" : "star";
       return /* @__PURE__ */ import_react.default.createElement("div", { key: k, className: "flex items-center gap-3 p-2 border border-stone-800 bg-stone-900/30" }, /* @__PURE__ */ import_react.default.createElement(PixelIcon, { name: foodIcon, size: 20 }), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex-1" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-200 text-sm" }, f.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider" }, f.energy ? `${f.energy >= 0 ? "+" : ""}${f.energy}\u26A1 ` : "", f.hunger ? `${f.hunger >= 0 ? "+" : ""}${f.hunger}\u{1F374} ` : "", f.mood ? `${f.mood >= 0 ? "+" : ""}${f.mood}\u2665` : "")), /* @__PURE__ */ import_react.default.createElement(Btn, { onClick: () => eat(k), disabled: char.cash < f.cost }, "$", f.cost));
-    }))), tab === "rest" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "The Couch" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-stone-400 text-xs uppercase tracking-wider" }, "Sleep until 6 AM. Restores full energy & advances a day.", char.minutes < 720 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 mt-1" }, "It's still daytime \u2014 are you sure?")), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: sleep, className: "w-full py-3" }, "SLEEP \u{1F4A4}"))));
+    }))), tab === "rest" && /* @__PURE__ */ import_react.default.createElement(Panel, { title: "The Couch" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: startNap, className: "w-full py-3" }, "\u{1F634} POWER NAP"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider text-center" }, "wake whenever \xB7 ~+12\u26A1 / hour, \u20133\u{1F374} / hour"), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: sleep, className: "w-full py-3" }, "\u{1F319} SLEEP TILL MORNING"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] text-stone-500 uppercase tracking-wider text-center" }, "full energy \xB7 advances 1 day", char.minutes < 720 && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 mt-1" }, "It's still daytime \u2014 are you sure?")))));
   }
   function ShopScreen({ char, setChar, showToast, go }) {
     const sounds = Object.entries(SOUND_CATALOG).filter(([id]) => !char.sounds.includes(id));
@@ -5255,6 +5280,129 @@ window.exports = window.module.exports;
         "\u{1F3A4} OPEN MIC NIGHT"
       ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-stone-500" }, (char.name || "").toUpperCase(), " \xB7 the room is yours")), /* @__PURE__ */ import_react.default.createElement(PixelScene, { draw: (ctx, fc) => drawOpenMicStage(ctx, fc, lookRef.current) }), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center text-[10px] uppercase tracking-widest text-amber-500" }, "BEAT ", Math.min(activeIdx + 1, picks.current.length), " / ", picks.current.length, " \xB7 ", picks.current[activeIdx]?.name || "CUSTOM"))
     );
+  };
+  var PowerNapAnimation = ({ char, onWake }) => {
+    const [napMinutes, setNapMinutes] = (0, import_react.useState)(char.minutes ?? 0);
+    const startedRealAtRef = (0, import_react.useRef)(performance.now());
+    const startMinutesRef = (0, import_react.useRef)(char.minutes ?? 0);
+    const lookRef = (0, import_react.useRef)(lookFromChar(char));
+    const wokeRef = (0, import_react.useRef)(false);
+    const REAL_MS_PER_GAME_HOUR = 1500;
+    const DAY_LIMIT = 1200;
+    (0, import_react.useEffect)(() => {
+      let raf;
+      const tick = () => {
+        if (wokeRef.current) return;
+        const realElapsed = performance.now() - startedRealAtRef.current;
+        const gameMinElapsed = realElapsed / REAL_MS_PER_GAME_HOUR * 60;
+        const next = Math.min(DAY_LIMIT, startMinutesRef.current + gameMinElapsed);
+        setNapMinutes(next);
+        if (next >= DAY_LIMIT) {
+          if (!wokeRef.current) {
+            wokeRef.current = true;
+            onWake(next, true);
+          }
+          return;
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(raf);
+    }, []);
+    const wakeUp = () => {
+      if (wokeRef.current) return;
+      wokeRef.current = true;
+      onWake(napMinutes, false);
+    };
+    const slept = Math.max(0, napMinutes - startMinutesRef.current);
+    const sleptHours = Math.floor(slept / 60);
+    const sleptMins = Math.floor(slept % 60);
+    const totalMin = napMinutes + 360;
+    const hour24 = Math.floor(totalMin / 60) % 24;
+    const minOfHour = Math.floor(totalMin % 60);
+    const hour12 = (hour24 + 11) % 12 + 1;
+    const ampm = hour24 >= 12 ? "PM" : "AM";
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "fixed inset-0 z-50 flex items-center justify-center p-5", style: { background: "#0c0a09" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "max-w-md w-full space-y-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-center" }, /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        className: "text-amber-500 text-2xl tracking-wider",
+        style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
+      },
+      "POWER NAP"
+    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[10px] uppercase tracking-[0.3em] text-stone-500" }, "Slept ", sleptHours, "h ", String(sleptMins).padStart(2, "0"), "m")), /* @__PURE__ */ import_react.default.createElement(PixelScene, { draw: (ctx, fc) => drawNapScene(ctx, fc, lookRef.current, napMinutes) }), /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        className: "text-center text-amber-500 text-2xl tracking-widest",
+        style: { fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
+      },
+      hour12,
+      ":",
+      String(minOfHour).padStart(2, "0"),
+      " ",
+      ampm
+    ), /* @__PURE__ */ import_react.default.createElement(Btn, { variant: "primary", onClick: wakeUp, className: "w-full py-3" }, "WAKE UP \u2600\uFE0F")));
+  };
+  var drawNapScene = (ctx, fc, look, currentMinutes) => {
+    const W = 200;
+    _px(ctx, 0, 0, W, 95, "#3a3540");
+    _px(ctx, 0, 95, W, 35, "#3a2818");
+    _px(ctx, 24, 80, 110, 28, "#5a4030");
+    _px(ctx, 24, 80, 110, 4, "#7a5a40");
+    _px(ctx, 18, 76, 12, 18, "#5a4030");
+    _px(ctx, 128, 76, 12, 18, "#5a4030");
+    _px(ctx, 38, 78, 78, 5, look?.shirt || "#a78bfa");
+    _px(ctx, 38, 83, 78, 1, "#fff");
+    _px(ctx, 110, 78, 18, 4, "#1a1a2e");
+    _px(ctx, 126, 76, 6, 2, "#fff");
+    _px(ctx, 30, 73, 12, 9, look?.skin || "#d4a87a");
+    _px(ctx, 30, 71, 12, 4, look?.hair || "#1a1a2e");
+    _px(ctx, 33, 76, 2, 1, "#0c0a09");
+    _px(ctx, 38, 76, 2, 1, "#0c0a09");
+    _px(ctx, 35, 79, 4, 1, "#3a1010");
+    if (fc % 30 < 24) {
+      const phase = fc / 30 % 3;
+      ctx.fillStyle = "#dac0a0";
+      ctx.font = "bold 9px monospace";
+      ctx.fillText("z", 50 + phase * 5, 65 - phase * 8);
+    }
+    const cx = 158, cy = 32, r = 22;
+    ctx.fillStyle = "#3a3530";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#dadada";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#1c1917";
+    for (let i = 0; i < 12; i++) {
+      const ang = i / 12 * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(ang) * (r - 4);
+      const y = cy + Math.sin(ang) * (r - 4);
+      const sz = i % 3 === 0 ? 2 : 1;
+      ctx.fillRect(Math.floor(x - sz / 2), Math.floor(y - sz / 2), sz, sz);
+    }
+    const totalMin = currentMinutes + 360;
+    const hourPos = totalMin / 60 % 12 / 12;
+    const minPos = totalMin % 60 / 60;
+    const drawHand = (frac, len, width) => {
+      const ang = frac * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(ang) * len;
+      const y = cy + Math.sin(ang) * len;
+      ctx.strokeStyle = "#1c1917";
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    };
+    drawHand(hourPos, r - 10, 2.2);
+    drawHand(minPos, r - 4, 1.2);
+    ctx.fillStyle = "#1c1917";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+    ctx.fill();
   };
   var SleepAnimation = ({ char, durationMs = 4e3, onComplete }) => {
     const [progress, setProgress] = (0, import_react.useState)(0);
