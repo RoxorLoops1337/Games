@@ -6214,25 +6214,27 @@ const OpenMicPerformance = ({ char, onComplete }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const lookRef = useRef(lookFromChar(char));
 
-  // Pick ONE random pattern that has any active cells. Falls back to a starter
-  // if the player hasn't built any beats yet. The set then plays this single
-  // pattern back twice — a tight, focused open-mic showcase.
+  // Pick 2 random patterns that have any active cells. Falls back to starters
+  // if the player hasn't built any beats yet.
   const picks = useRef(null);
   if (!picks.current) {
     const slots = (char.oriSlots || []).filter(s => s?.tracks?.some(t => t.cells?.some(Boolean)));
     if (slots.length === 0) {
-      picks.current = [_seqStarter(0)];
+      picks.current = [_seqStarter(0), _seqStarter(1)];
+    } else if (slots.length === 1) {
+      picks.current = [slots[0], slots[0]];
     } else {
-      picks.current = [slots[Math.floor(Math.random() * slots.length)]];
+      const shuffled = [...slots].sort(() => Math.random() - 0.5);
+      picks.current = [shuffled[0], shuffled[1]];
     }
   }
 
   useEffect(() => {
     const ctx = getAudioCtx();
     if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
-    // Open mic plays a touch faster than the player's saved sequencer BPM —
-    // the room expects a bit of energy.
-    const bpm = (char.oriBpm || 100) + 10;
+    // Open mic plays a notch faster than the player's saved sequencer BPM —
+    // the room expects energy.
+    const bpm = (char.oriBpm || 100) + 20;
     const stepMs = 60000 / Math.max(40, bpm) / 4;
     const STEPS = 16;
     const REPS_PER_PATTERN = 2;
