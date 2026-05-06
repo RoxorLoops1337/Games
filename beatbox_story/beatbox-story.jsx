@@ -4912,9 +4912,11 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp }) {
       label: '5 blocks → cash + maybe a fan',
       onReward: () => {
         const c = charRef.current;
-        const baseEarned = 4 + Math.floor(Math.random() * 8) + Math.floor(c.stats.sho / 2);
+        // Cash scales with total skills, so beginners earn pocket change while
+        // a seasoned beatboxer pulls a real crowd.
+        const totalSkills = (c.stats.mus || 0) + (c.stats.tec || 0) + (c.stats.ori || 0) + (c.stats.sho || 0);
+        const baseEarned = Math.floor(totalSkills / 6) + Math.floor(Math.random() * 3);
         // Bonus from rhythm tap accuracy (0 = no bonus, 1.0 = +100%)
-        // Threshold: <50% no bonus, 50-80% scales up to +50%, >80% caps at +100%
         const acc = accuracyRef.current || 0;
         let bonusMult = 1;
         if (acc >= 0.8) bonusMult = 2.0;
