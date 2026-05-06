@@ -827,19 +827,21 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
     };
   }, [active, evaluateEveryMs]);
 
-  // Keyboard taps: A=BOOM, S=TSS, D=KSH (desktop play).
+  // Keyboard taps: A=BOOM, S=TSS, D=KSH. Use a ref so the listener sees fresh
+  // closures (active/state) on every render.
+  const tapRef = useRef(tap);
+  tapRef.current = tap;
   useEffect(() => {
     const handler = (e) => {
-      if (e.repeat) return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      const k = e.key.toLowerCase();
-      if (k === 'a')      { e.preventDefault(); tap(0); }
-      else if (k === 's') { e.preventDefault(); tap(1); }
-      else if (k === 'd') { e.preventDefault(); tap(2); }
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A')      tapRef.current(0);
+      else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') tapRef.current(1);
+      else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') tapRef.current(2);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
   }, []);
 
   return (
@@ -919,20 +921,19 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
   };
 
   // Keyboard taps: A=left, D=right (also ArrowLeft/ArrowRight). Use a ref so
-  // the global handler always sees the latest closure (for active/lastSide).
+  // the global handler always sees the latest closure.
   const handleTapRef = useRef(handleTap);
   handleTapRef.current = handleTap;
   useEffect(() => {
     const onKey = (e) => {
-      if (e.repeat) return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      const k = e.key.toLowerCase();
-      if (k === 'a' || k === 'arrowleft')       { e.preventDefault(); handleTapRef.current('L'); }
-      else if (k === 'd' || k === 'arrowright') { e.preventDefault(); handleTapRef.current('R'); }
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A')       handleTapRef.current('L');
+      else if (e.code === 'KeyD' || e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') handleTapRef.current('R');
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
 
   // Drain loop + block evaluation
@@ -2368,27 +2369,32 @@ const BeatboxHero = ({
     rerender();
   };
 
-  // Keyboard taps: A=lane0, S=lane1, D=lane2, F=lane3. Skipped in mic & spectate
-  // modes. Use a ref so the global handler always sees the latest closure.
+  // Keyboard taps: A=lane0, S=lane1, D=lane2, F=lane3. Skipped in spectate
+  // mode (player can't tap) and mic mode (voice is the input).
   const handleTapRef = useRef(handleTap);
   handleTapRef.current = handleTap;
+  const heroModeRef = useRef({ mode, inputMode });
+  heroModeRef.current = { mode, inputMode };
   useEffect(() => {
-    if (mode === 'spectate' || inputMode === 'mic') return;
     const onKey = (e) => {
-      if (e.repeat) return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      const k = e.key.toLowerCase();
-      const idx = k === 'a' ? 0 : k === 's' ? 1 : k === 'd' ? 2 : k === 'f' ? 3 : -1;
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const { mode: m, inputMode: im } = heroModeRef.current;
+      if (m === 'spectate' || im === 'mic') return;
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      let idx = -1;
+      if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A') idx = 0;
+      else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') idx = 1;
+      else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') idx = 2;
+      else if (e.code === 'KeyF' || e.key === 'f' || e.key === 'F') idx = 3;
       if (idx < 0) return;
       const lanes = stateRef.current?.lanes || HERO_LANES;
       if (idx >= lanes.length) return;
-      e.preventDefault();
       handleTapRef.current(lanes[idx]);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [mode, inputMode]);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   // Track latest active flag for the rAF loop to read without re-mounting
   const activeRef = useRef(active);
@@ -6202,7 +6208,9 @@ const OpenMicPerformance = ({ char, onComplete }) => {
   useEffect(() => {
     const ctx = getAudioCtx();
     if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
-    const bpm = char.oriBpm || 100;
+    // Open mic plays a touch faster than the player's saved sequencer BPM —
+    // the room expects a bit of energy.
+    const bpm = (char.oriBpm || 100) + 10;
     const stepMs = 60000 / Math.max(40, bpm) / 4;
     const STEPS = 16;
     const REPS_PER_PATTERN = 4;
@@ -8054,15 +8062,16 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
   useEffect(() => {
     if (phase !== 'rps' || rps) return;
     const onKey = (e) => {
-      if (e.repeat) return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      const map = { '1': 'rock', '2': 'paper', '3': 'scissors' };
-      const choice = map[e.key];
-      if (choice) { e.preventDefault(); playRps(choice); }
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      const map = { '1': 'rock', '2': 'paper', '3': 'scissors',
+                    'Digit1': 'rock', 'Digit2': 'paper', 'Digit3': 'scissors' };
+      const choice = map[e.key] || map[e.code];
+      if (choice) playRps(choice);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [phase, rps]);
 
   // Enter RPS phase from intro: pre-compute picks for both sides (player can change theirs in tactical).
