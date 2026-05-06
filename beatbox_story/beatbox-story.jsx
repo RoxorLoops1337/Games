@@ -28,13 +28,14 @@ const FOOD = {
 
 const NPCS = [
   // Rewards halved + opps tougher (see playOpponentRoundPattern focus formula).
-  { name: 'Pig Pen',     stats: { mus: 7,  tec: 7,  ori: 5,  sho: 6  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 20,  level: 1 },
-  { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 25,  level: 1 },
-  { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 50,  level: 3 },
-  { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 100, level: 5 },
-  { name: 'Alim',        stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ['throat_kick', 'inward_bass', 'fast_hats', 'lip_roll'],                          reward: 175, level: 7 },
-  { name: 'Olexinho',    stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'],                   reward: 350, level: 9 },
-  { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 750, level: 12 },
+  // counterSkill (0–1): when player wins RPS, opponent re-rolls picks to counter player based on this.
+  { name: 'Pig Pen',     stats: { mus: 7,  tec: 7,  ori: 5,  sho: 6  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 20,  level: 1,  counterSkill: 0.20 },
+  { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 25,  level: 1,  counterSkill: 0.30 },
+  { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 50,  level: 3,  counterSkill: 0.40 },
+  { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 100, level: 5,  counterSkill: 0.55 },
+  { name: 'Alim',        stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ['throat_kick', 'inward_bass', 'fast_hats', 'lip_roll'],                          reward: 175, level: 7,  counterSkill: 0.70 },
+  { name: 'Olexinho',    stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'],                   reward: 350, level: 9,  counterSkill: 0.80 },
+  { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 750, level: 12, counterSkill: 0.95 },
 ];
 
 const JUDGES = [
@@ -84,6 +85,38 @@ const initialChar = () => ({
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
+
+// ============ GLOBAL KEY DISPATCHER ============
+// One document-level capture-phase keydown listener, attached on first
+// subscription. Components register via onGlobalKey(handler) and get an
+// unsubscribe function back. Capture-phase ensures we see keys before any
+// other listener (or framework default) can stop propagation.
+
+const _keyListeners = new Set();
+let _keyListenerAttached = false;
+let _lastGlobalKey = '';
+let _lastGlobalKeyAt = 0;
+const _dispatchGlobalKey = (e) => {
+  // Stash for the debug overlay regardless of focus
+  _lastGlobalKey = `${e.key}/${e.code}`;
+  _lastGlobalKeyAt = performance.now();
+  // Skip if focused inside an editable field, or if a modifier is held —
+  // those are reserved for browser/system shortcuts.
+  const ae = (typeof document !== 'undefined') ? document.activeElement : null;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  _keyListeners.forEach(fn => { try { fn(e); } catch (err) { /* swallow */ } });
+};
+const onGlobalKey = (handler) => {
+  _keyListeners.add(handler);
+  if (!_keyListenerAttached && typeof document !== 'undefined' && typeof window !== 'undefined') {
+    _keyListenerAttached = true;
+    // Capture phase so we run before any framework listeners that might
+    // stop propagation. document covers all child event targets.
+    document.addEventListener('keydown', _dispatchGlobalKey, true);
+  }
+  return () => _keyListeners.delete(handler);
+};
 
 // ============ STORAGE ============
 // Multiple save slots — keys: character:slot1 .. character:slot5, plus active_slot pointer.
@@ -826,16 +859,15 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
     };
   }, [active, evaluateEveryMs]);
 
-  // Handle keyboard taps too (D, F, J keys for desktop debug)
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === 'd' || e.key === 'D') tap(0);
-      else if (e.key === 'f' || e.key === 'F') tap(1);
-      else if (e.key === 'j' || e.key === 'J') tap(2);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+  // Keyboard taps: A=BOOM, S=TSS, D=KSH. Use a ref so the listener sees fresh
+  // closures (active/state) on every render.
+  const tapRef = useRef(tap);
+  tapRef.current = tap;
+  useEffect(() => onGlobalKey((e) => {
+    if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A')      tapRef.current(0);
+    else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') tapRef.current(1);
+    else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') tapRef.current(2);
+  }), []);
 
   return (
     <div className="space-y-2">
@@ -847,7 +879,7 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
         {LANE_INFO.map((lane, i) => (
           <button key={i}
             onPointerDown={(e) => { e.preventDefault(); tap(i); }}
-            className="py-3 border-2 active:scale-95 transition-transform select-none touch-none"
+            className="py-3 border-2 active:scale-95 transition-transform select-none touch-none relative"
             style={{
               borderColor: lane.color,
               background: `${lane.color}22`,
@@ -857,6 +889,7 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
               letterSpacing: '0.15em',
             }}>
             {lane.label}
+            <span className="absolute top-0.5 right-1 text-[8px] tracking-widest opacity-60">{['A','S','D'][i]}</span>
           </button>
         ))}
       </div>
@@ -911,6 +944,14 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
     barRef.current = Math.min(100, barRef.current + TAP_GAIN);
     setBarLevel(barRef.current);
   };
+
+  // Keyboard taps: A=left, D=right (also ArrowLeft/ArrowRight).
+  const handleTapRef = useRef(handleTap);
+  handleTapRef.current = handleTap;
+  useEffect(() => onGlobalKey((e) => {
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A')       handleTapRef.current('L');
+    else if (e.code === 'KeyD' || e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') handleTapRef.current('R');
+  }), []);
 
   // Drain loop + block evaluation
   useEffect(() => {
@@ -1044,10 +1085,11 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
               ? (flashSide.ok ? 'border-amber-300 bg-amber-500/40 scale-95' : 'border-red-500 bg-red-900/40')
               : 'border-amber-600 bg-amber-900/20 active:scale-95'
           }`}
-          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}>
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none', position: 'relative' }}>
           <div className="text-3xl">👈</div>
           <div className="text-amber-500 text-base tracking-widest mt-1"
             style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>LEFT</div>
+          <span className="absolute top-1 right-2 text-[9px] tracking-widest text-amber-500/60">A</span>
         </button>
         <button
           onPointerDown={(e) => { e.preventDefault(); handleTap('R'); }}
@@ -1056,10 +1098,11 @@ const RunTracker = ({ onBlockResult, onMaxEnergyTick, active = true, evaluateEve
               ? (flashSide.ok ? 'border-amber-300 bg-amber-500/40 scale-95' : 'border-red-500 bg-red-900/40')
               : 'border-amber-600 bg-amber-900/20 active:scale-95'
           }`}
-          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}>
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none', position: 'relative' }}>
           <div className="text-3xl">👉</div>
           <div className="text-amber-500 text-base tracking-widest mt-1"
             style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>RIGHT</div>
+          <span className="absolute top-1 right-2 text-[9px] tracking-widest text-amber-500/60">D</span>
         </button>
       </div>
 
@@ -2343,6 +2386,26 @@ const BeatboxHero = ({
     rerender();
   };
 
+  // Keyboard taps: A=lane0, S=lane1, D=lane2, F=lane3. Skipped in spectate
+  // mode (player can't tap) and mic mode (voice is the input).
+  const handleTapRef = useRef(handleTap);
+  handleTapRef.current = handleTap;
+  const heroModeRef = useRef({ mode, inputMode });
+  heroModeRef.current = { mode, inputMode };
+  useEffect(() => onGlobalKey((e) => {
+    const { mode: m, inputMode: im } = heroModeRef.current;
+    if (m === 'spectate' || im === 'mic') return;
+    let idx = -1;
+    if (e.code === 'KeyA' || e.key === 'a' || e.key === 'A') idx = 0;
+    else if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') idx = 1;
+    else if (e.code === 'KeyD' || e.key === 'd' || e.key === 'D') idx = 2;
+    else if (e.code === 'KeyF' || e.key === 'f' || e.key === 'F') idx = 3;
+    if (idx < 0) return;
+    const lanes = stateRef.current?.lanes || HERO_LANES;
+    if (idx >= lanes.length) return;
+    handleTapRef.current(lanes[idx]);
+  }), []);
+
   // Track latest active flag for the rAF loop to read without re-mounting
   const activeRef = useRef(active);
 
@@ -2594,10 +2657,11 @@ const BeatboxHero = ({
         <div className="grid grid-cols-4 gap-1">
           {(state?.lanes || HERO_LANES).map((sound, idx) => {
             const meta = getSoundDisplay(sound) || { color: '#D4A017', label: '?' };
+            const keyHint = ['A','S','D','F'][idx];
             return (
               <button key={sound + idx}
                 onPointerDown={(e) => { e.preventDefault(); handleTap(sound); }}
-                className="py-5 border-2 active:scale-95 transition-transform select-none touch-none"
+                className="py-5 border-2 active:scale-95 transition-transform select-none touch-none relative"
                 style={{
                   borderColor: meta.color,
                   background: `${meta.color}1f`,
@@ -2607,6 +2671,7 @@ const BeatboxHero = ({
                   letterSpacing: '0.15em',
                 }}>
                 {meta.label}
+                {keyHint && <span className="absolute top-1 right-1.5 text-[9px] tracking-widest opacity-60">{keyHint}</span>}
               </button>
             );
           })}
@@ -4563,21 +4628,25 @@ const drawSleepScene = (ctx, fc, look, progress) => {
   _px(ctx, 24, 80, 110, 4, '#7a5a40');
   _px(ctx, 18, 76, 12, 18, '#5a4030');
   _px(ctx, 128, 76, 12, 18, '#5a4030');
-  // Player lying on couch (head left, feet right)
-  // Body horizontal
-  _px(ctx, 38, 78, 78, 5, look?.shirt || '#a78bfa');
-  _px(ctx, 38, 83, 78, 1, '#fff');
-  // Legs
-  _px(ctx, 110, 78, 18, 4, '#1a1a2e');
-  _px(ctx, 126, 76, 6, 2, '#fff');
+  // Player lying on couch (head left, feet right) — chunky proportions
+  // Pillow under head
+  _px(ctx, 30, 78, 18, 3, '#a8a29e');
+  _px(ctx, 30, 78, 18, 1, '#cbc4be');
   // Head
-  _px(ctx, 30, 73, 12, 9, look?.skin || '#d4a87a');
-  _px(ctx, 30, 71, 12, 4, look?.hair || '#1a1a2e');
+  _px(ctx, 33, 72, 12, 9, look?.skin || '#d4a87a');
+  _px(ctx, 33, 70, 12, 3, look?.hair || '#1a1a2e');
   // Closed eyes
-  _px(ctx, 33, 76, 2, 1, '#0c0a09');
-  _px(ctx, 38, 76, 2, 1, '#0c0a09');
+  _px(ctx, 37, 76, 2, 1, '#0c0a09');
+  _px(ctx, 41, 76, 2, 1, '#0c0a09');
   // Tiny smile
-  _px(ctx, 35, 79, 4, 1, '#3a1010');
+  _px(ctx, 38, 79, 4, 1, '#3a1010');
+  // Body / torso (chunky)
+  _px(ctx, 45, 73, 32, 8, look?.shirt || '#a78bfa');
+  _px(ctx, 45, 73, 32, 1, '#fff');
+  // Pants/legs
+  _px(ctx, 77, 75, 22, 6, '#1a1a2e');
+  // Feet poking up
+  _px(ctx, 99, 72, 5, 3, '#fff');
   // Z's during sleep
   if (progress > 0.05 && progress < 0.85) {
     const phase = Math.floor(fc / 24) % 3;
@@ -4790,6 +4859,11 @@ export default function BeatboxStory() {
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState(null);
   const [activeSlot, setActiveSlotState] = useState(null); // 1..5, null if none
+  // TEMP key-debug indicator: shows the last key that reached the global
+  // dispatcher. If this never updates when you press a key on PC, the issue
+  // is upstream of our handlers (browser/OS swallowing the event).
+  const [keyDebug, setKeyDebug] = useState({ key: '', t: 0 });
+  useEffect(() => onGlobalKey((e) => setKeyDebug({ key: `${e.key} · ${e.code}`, t: Date.now() })), []);
   // Active narrative cutscene. Shape: { speaker, speakerColor, lines, onComplete }
   // (onComplete handles both advance-past-end and skip.)
   const [cutscene, setCutscene] = useState(null);
@@ -4955,6 +5029,15 @@ export default function BeatboxStory() {
                           radial-gradient(circle at 80% 80%, rgba(204,34,0,0.06) 0%, transparent 50%),
                           repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px)`
       }}>
+      {/* TEMP: key-press indicator. Remove once keyboard is confirmed working.
+          Shows the most recent key the global dispatcher saw. If pressing
+          A/S/D/F never updates this, key events are not reaching the page. */}
+      {keyDebug.key && (
+        <div style={{ position: 'fixed', top: 4, left: 4, zIndex: 9999, background: '#0c0a09', color: '#22d3ee',
+                      border: '1px solid #22d3ee', padding: '2px 6px', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>
+          KEY: {keyDebug.key}
+        </div>
+      )}
       <div className="max-w-md mx-auto min-h-screen border-x border-stone-900 relative">
 
         {/* HEADER */}
@@ -6131,28 +6214,28 @@ const OpenMicPerformance = ({ char, onComplete }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const lookRef = useRef(lookFromChar(char));
 
-  // Pick 2 random patterns that have any active cells. Fall back to starters
-  // if the player hasn't built any beats yet.
+  // Pick ONE random pattern that has any active cells. Falls back to a starter
+  // if the player hasn't built any beats yet. The set then plays this single
+  // pattern back twice — a tight, focused open-mic showcase.
   const picks = useRef(null);
   if (!picks.current) {
     const slots = (char.oriSlots || []).filter(s => s?.tracks?.some(t => t.cells?.some(Boolean)));
     if (slots.length === 0) {
-      picks.current = [_seqStarter(0), _seqStarter(1)];
-    } else if (slots.length === 1) {
-      picks.current = [slots[0], slots[0]];
+      picks.current = [_seqStarter(0)];
     } else {
-      const shuffled = [...slots].sort(() => Math.random() - 0.5);
-      picks.current = [shuffled[0], shuffled[1]];
+      picks.current = [slots[Math.floor(Math.random() * slots.length)]];
     }
   }
 
   useEffect(() => {
     const ctx = getAudioCtx();
     if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
-    const bpm = char.oriBpm || 100;
+    // Open mic plays a touch faster than the player's saved sequencer BPM —
+    // the room expects a bit of energy.
+    const bpm = (char.oriBpm || 100) + 10;
     const stepMs = 60000 / Math.max(40, bpm) / 4;
     const STEPS = 16;
-    const REPS_PER_PATTERN = 4;
+    const REPS_PER_PATTERN = 2;
     let step = 0, rep = 0, patIdx = 0;
     const id = setInterval(() => {
       const pattern = picks.current[patIdx];
@@ -6286,16 +6369,25 @@ const drawNapScene = (ctx, fc, look, currentMinutes) => {
   _px(ctx, 24, 80, 110, 4, '#7a5a40');
   _px(ctx, 18, 76, 12, 18, '#5a4030');
   _px(ctx, 128, 76, 12, 18, '#5a4030');
-  // Player lying on couch
-  _px(ctx, 38, 78, 78, 5, look?.shirt || '#a78bfa');
-  _px(ctx, 38, 83, 78, 1, '#fff');
-  _px(ctx, 110, 78, 18, 4, '#1a1a2e');
-  _px(ctx, 126, 76, 6, 2, '#fff');
-  _px(ctx, 30, 73, 12, 9, look?.skin || '#d4a87a');
-  _px(ctx, 30, 71, 12, 4, look?.hair || '#1a1a2e');
-  _px(ctx, 33, 76, 2, 1, '#0c0a09');
-  _px(ctx, 38, 76, 2, 1, '#0c0a09');
-  _px(ctx, 35, 79, 4, 1, '#3a1010');
+  // Player lying on couch — chunky proportions
+  // Pillow under head
+  _px(ctx, 30, 78, 18, 3, '#a8a29e');
+  _px(ctx, 30, 78, 18, 1, '#cbc4be');
+  // Head
+  _px(ctx, 33, 72, 12, 9, look?.skin || '#d4a87a');
+  _px(ctx, 33, 70, 12, 3, look?.hair || '#1a1a2e');
+  // Closed eyes
+  _px(ctx, 37, 76, 2, 1, '#0c0a09');
+  _px(ctx, 41, 76, 2, 1, '#0c0a09');
+  // Smile
+  _px(ctx, 38, 79, 4, 1, '#3a1010');
+  // Body / torso (chunky)
+  _px(ctx, 45, 73, 32, 8, look?.shirt || '#a78bfa');
+  _px(ctx, 45, 73, 32, 1, '#fff');
+  // Pants/legs
+  _px(ctx, 77, 75, 22, 6, '#1a1a2e');
+  // Feet poking up
+  _px(ctx, 99, 72, 5, 3, '#fff');
   // Z's drifting up
   if (fc % 30 < 24) {
     const phase = (fc / 30) % 3;
@@ -7984,17 +8076,69 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
       if (outcome === 'tie') { setRps(null); return; }
       // Loser of RPS goes first (the "A" beatboxer)
       setPlayerFirst(outcome === 'lose');
-      setPhase('countdown1');
+      setPhase('tactical');
     }, 1400);
   };
 
-  // Enter tactical phase: lock in default picks for both sides (player can change theirs).
-  const startTactical = () => {
+  // Keyboard shortcuts for RPS: 1=rock, 2=paper, 3=scissors (only while picking).
+  useEffect(() => {
+    if (phase !== 'rps' || rps) return;
+    return onGlobalKey((e) => {
+      const map = { '1': 'rock', '2': 'paper', '3': 'scissors',
+                    'Digit1': 'rock', 'Digit2': 'paper', 'Digit3': 'scissors' };
+      const choice = map[e.key] || map[e.code];
+      if (choice) playRps(choice);
+    });
+  }, [phase, rps]);
+
+  // Enter RPS phase from intro: pre-compute picks for both sides (player can change theirs in tactical).
+  const startBattle = () => {
     getAudioCtx();
     setPlayerPatternIdxs(computeDefaultPlayerPicks());
     setOppPatternIdxs(computeOppPicks());
     setTacticalSlot(0);
-    setPhase('tactical');
+    setPhase('rps');
+  };
+
+  // Counter style: which style beats `style`? (e.g. SNARE beats BOOM, so counterStyleOf('BOOM') === 'SNARE')
+  const counterStyleOf = (style) => {
+    if (!style) return null;
+    return Object.keys(STYLE_BEATS).find(k => STYLE_BEATS[k] === style) || null;
+  };
+
+  // Opponent re-rolls picks to counter the player's locked-in picks. Per pick,
+  // probability=counterSkill of choosing a counter-style; otherwise random from level pool.
+  const oppCounterReroll = (playerPicks, opp) => {
+    const oppLevel = opp.level || 1;
+    const maxIdx = Math.max(0, Math.min(HERO_LESSONS.length - 1, oppLevel + 1));
+    const pool = []; for (let i = 0; i <= maxIdx; i++) pool.push(i);
+    const skill = (typeof opp.counterSkill === 'number') ? opp.counterSkill : 0.5;
+    const pickFor = (playerIdx) => {
+      const playerStyle = HERO_LESSONS[playerIdx]?.style;
+      const desired = counterStyleOf(playerStyle);
+      if (desired && Math.random() < skill) {
+        const counters = pool.filter(i => HERO_LESSONS[i]?.style === desired);
+        if (counters.length) return counters[Math.floor(Math.random() * counters.length)];
+      }
+      return pool[Math.floor(Math.random() * pool.length)];
+    };
+    return [
+      [pickFor(playerPicks[0][0]), pickFor(playerPicks[0][1])],
+      [pickFor(playerPicks[1][0]), pickFor(playerPicks[1][1])],
+    ];
+  };
+
+  // Lock In handler: if player won RPS we proceed straight to countdown (player has
+  // already seen and countered). If player lost, opp re-rolls picks to counter player.
+  const lockInTactical = () => {
+    if (playerFirst) {
+      // Player lost RPS — opp adapts to counter player's plan
+      const counterPicks = oppCounterReroll(playerPatternIdxs, opponent);
+      setOppPatternIdxs(counterPicks);
+      setPhase('oppReveal');
+    } else {
+      setPhase('countdown1');
+    }
   };
 
   // Opponent round: auto-play the picked lesson pattern at battle BPM, awarding a fixed
@@ -8228,13 +8372,16 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
               <div className="text-[10px] text-stone-500 uppercase">M{opponent.stats.mus} T{opponent.stats.tec} O{opponent.stats.ori} S{opponent.stats.sho}</div>
             </div>
           </div>
-          <Btn variant="primary" onClick={startTactical} className="w-full py-3">PICK YOUR PATTERNS ▶</Btn>
+          <Btn variant="primary" onClick={startBattle} className="w-full py-3">START BATTLE ▶</Btn>
         </div>
       )}
 
       {phase === 'tactical' && playerPatternIdxs && oppPatternIdxs && (() => {
         const turns = [0, 1];
         const halves = [0, 1];
+        // playerFirst === true means player LOST RPS (loser-goes-first). When true,
+        // opponent's picks are hidden and they will re-roll on Lock In.
+        const revealOpp = !playerFirst;
         const setPick = (turn, half, idx) => {
           setPlayerPatternIdxs(p => p.map((pair, t) => t === turn
             ? pair.map((v, h) => h === half ? idx : v)
@@ -8246,13 +8393,20 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
             {style}
           </span>
         ) : null;
+        const HiddenBadge = () => (
+          <span className="text-[8px] tracking-widest uppercase px-1 py-[1px] border border-stone-700 text-stone-600">??</span>
+        );
         return (
           <div className="space-y-3">
             <div className="text-center">
               <div className="text-amber-500 text-2xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
                 PREP YOUR SET
               </div>
-              <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Two patterns per round · counter the opponent's style</div>
+              <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">
+                {revealOpp
+                  ? "You won RPS — opponent's plan revealed · counter their style"
+                  : "You lost RPS — opponent will counter your plan"}
+              </div>
             </div>
             {/* Counter-cycle reference */}
             <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest">
@@ -8274,17 +8428,19 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
                       Your turn #{turn + 1}
                     </div>
                     <div className="flex items-center gap-1 text-[10px] text-red-400">
-                      vs <StyleBadge style={oppA?.style} /> + <StyleBadge style={oppB?.style} />
+                      vs {revealOpp
+                        ? <><StyleBadge style={oppA?.style} /> + <StyleBadge style={oppB?.style} /></>
+                        : <><HiddenBadge /> + <HiddenBadge /></>}
                     </div>
                   </div>
                   {halves.map(half => {
                     const cur = playerPatternIdxs[turn][half];
                     const oppIdx = oppPatternIdxs[turn][half];
                     const myStyle = HERO_LESSONS[cur]?.style;
-                    const oppStyle = HERO_LESSONS[oppIdx]?.style;
-                    const m = styleMatchup(myStyle, oppStyle);
-                    const matchTag = m > 1 ? '✓ counters' : m < 1 ? '✗ countered' : '· neutral';
-                    const matchColor = m > 1 ? '#22c55e' : m < 1 ? '#ef4444' : '#a8a29e';
+                    const oppStyle = revealOpp ? HERO_LESSONS[oppIdx]?.style : null;
+                    const m = revealOpp ? styleMatchup(myStyle, oppStyle) : 1;
+                    const matchTag = !revealOpp ? '· hidden' : (m > 1 ? '✓ counters' : m < 1 ? '✗ countered' : '· neutral');
+                    const matchColor = !revealOpp ? '#78716c' : (m > 1 ? '#22c55e' : m < 1 ? '#ef4444' : '#a8a29e');
                     return (
                       <div key={half} className="space-y-1">
                         <div className="flex items-center justify-between">
@@ -8298,8 +8454,8 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
                             {HERO_LESSONS.map((lesson, i) => {
                               const playable = isPlayableForPlayer(i);
                               const selected = i === cur;
-                              const styleM = styleMatchup(lesson.style, oppStyle);
-                              const tint = styleM > 1 ? '#22c55e' : styleM < 1 ? '#ef4444' : null;
+                              const styleM = revealOpp ? styleMatchup(lesson.style, oppStyle) : 1;
+                              const tint = revealOpp ? (styleM > 1 ? '#22c55e' : styleM < 1 ? '#ef4444' : null) : null;
                               return (
                                 <button key={i}
                                   disabled={!playable}
@@ -8322,7 +8478,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
                 </div>
               );
             })}
-            <Btn variant="primary" onClick={() => setPhase('rps')} className="w-full py-3">LOCK IN ▶</Btn>
+            <Btn variant="primary" onClick={lockInTactical} className="w-full py-3">LOCK IN ▶</Btn>
           </div>
         );
       })()}
@@ -8330,13 +8486,14 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
       {phase === 'rps' && (
         <div className="space-y-4 text-center pt-4">
           <div className="text-amber-500 text-xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>ROCK PAPER SCISSORS</div>
-          <div className="text-[10px] uppercase tracking-widest text-stone-500">Loser goes first</div>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500">Winner sees opponent's plan · loser gets countered</div>
           {!rps && (
             <div className="grid grid-cols-3 gap-2 pt-4">
-              {[{ k: 'rock', e: '✊' }, { k: 'paper', e: '✋' }, { k: 'scissors', e: '✌️' }].map(o => (
+              {[{ k: 'rock', e: '✊', n: 1 }, { k: 'paper', e: '✋', n: 2 }, { k: 'scissors', e: '✌️', n: 3 }].map(o => (
                 <button key={o.k} onClick={() => playRps(o.k)}
-                  className="aspect-square border-2 border-stone-800 hover:border-amber-500 text-5xl bg-stone-900/30 transition-all">
+                  className="relative aspect-square border-2 border-stone-800 hover:border-amber-500 text-5xl bg-stone-900/30 transition-all">
                   {o.e}
+                  <span className="absolute top-1 right-2 text-[10px] tracking-widest text-amber-500/70">{o.n}</span>
                 </button>
               ))}
             </div>
@@ -8350,12 +8507,55 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
               </div>
               <div className={`mt-4 text-2xl tracking-wider ${rps.outcome === 'win' ? 'text-amber-500' : rps.outcome === 'lose' ? 'text-red-500' : 'text-stone-400'}`}
                 style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                {rps.outcome === 'win' ? 'YOU WIN! THEY START' : rps.outcome === 'lose' ? 'YOU GO FIRST' : 'TIE — REPLAY'}
+                {rps.outcome === 'win' ? "YOU WIN! READ THEIR PLAN" : rps.outcome === 'lose' ? "YOU LOSE — THEY'LL COUNTER" : 'TIE — REPLAY'}
               </div>
             </div>
           )}
         </div>
       )}
+
+      {phase === 'oppReveal' && playerPatternIdxs && oppPatternIdxs && (() => {
+        const StyleBadge = ({ style }) => style ? (
+          <span className="text-[10px] tracking-widest uppercase px-1.5 py-[2px] border"
+            style={{ borderColor: STYLE_COLORS[style], color: STYLE_COLORS[style] }}>
+            {style}
+          </span>
+        ) : null;
+        const skillPct = Math.round((opponent.counterSkill ?? 0.5) * 100);
+        return (
+          <div className="space-y-4 text-center pt-4">
+            <div className="text-red-500 text-xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {opponent.name.toUpperCase()} ADAPTS
+            </div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500">
+              Counter skill {skillPct}% · they re-picked to counter your set
+            </div>
+            <div className="space-y-2">
+              {[0, 1].map(turn => {
+                const [pA, pB] = playerPatternIdxs[turn];
+                const [oA, oB] = oppPatternIdxs[turn];
+                const pStyleA = HERO_LESSONS[pA]?.style;
+                const pStyleB = HERO_LESSONS[pB]?.style;
+                const oStyleA = HERO_LESSONS[oA]?.style;
+                const oStyleB = HERO_LESSONS[oB]?.style;
+                return (
+                  <div key={turn} className="border-2 border-stone-800 bg-stone-900/30 p-2 grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="text-amber-500 uppercase tracking-widest text-left">
+                      Turn #{turn + 1} · You
+                      <div className="flex gap-1 mt-1"><StyleBadge style={pStyleA} /> + <StyleBadge style={pStyleB} /></div>
+                    </div>
+                    <div className="text-red-400 uppercase tracking-widest text-left">
+                      Them
+                      <div className="flex gap-1 mt-1"><StyleBadge style={oStyleA} /> + <StyleBadge style={oStyleB} /></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <Btn variant="primary" onClick={() => setPhase('countdown1')} className="w-full py-3">BRACE YOURSELF ▶</Btn>
+          </div>
+        );
+      })()}
 
       {/^(round|countdown)[1-4]$/.test(phase) && playerPatternIdxs && oppPatternIdxs && (() => {
         const m = /^(round|countdown)([1-4])$/.exec(phase);
