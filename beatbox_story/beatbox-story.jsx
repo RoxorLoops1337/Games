@@ -6237,7 +6237,7 @@ const OpenMicPerformance = ({ char, onComplete }) => {
     const bpm = (char.oriBpm || 100) + 10;
     const stepMs = 60000 / Math.max(40, bpm) / 4;
     const STEPS = 16;
-    const REPS_PER_PATTERN = 4;
+    const REPS_PER_PATTERN = 2;
     let step = 0, rep = 0, patIdx = 0;
     const id = setInterval(() => {
       const pattern = picks.current[patIdx];
