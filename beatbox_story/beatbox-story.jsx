@@ -27,13 +27,14 @@ const FOOD = {
 };
 
 const NPCS = [
-  { name: 'Pig Pen',     stats: { mus: 7,  tec: 7,  ori: 5,  sho: 6  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 40,   level: 1 },
-  { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 50,   level: 1 },
-  { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 100,  level: 3 },
-  { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 200,  level: 5 },
-  { name: 'Alim',        stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ['throat_kick', 'inward_bass', 'fast_hats', 'lip_roll'],                          reward: 350,  level: 7 },
-  { name: 'Olexinho',    stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'],                   reward: 700,  level: 9 },
-  { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 1500, level: 12 },
+  // Rewards halved + opps tougher (see playOpponentRoundPattern focus formula).
+  { name: 'Pig Pen',     stats: { mus: 7,  tec: 7,  ori: 5,  sho: 6  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 20,  level: 1 },
+  { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 25,  level: 1 },
+  { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 50,  level: 3 },
+  { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 100, level: 5 },
+  { name: 'Alim',        stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ['throat_kick', 'inward_bass', 'fast_hats', 'lip_roll'],                          reward: 175, level: 7 },
+  { name: 'Olexinho',    stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'],                   reward: 350, level: 9 },
+  { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 750, level: 12 },
 ];
 
 const JUDGES = [
@@ -1887,27 +1888,40 @@ const _patL12 = () => { // UVULAR FINALE
   return p;
 };
 
+// Style cycle (rock-paper-scissors for beats):
+//   BOOM beats HATS · HATS beats RIM · RIM beats SNARE · SNARE beats BOOM
+// Each pattern has a primary style. Picking a counter style multiplies your
+// round score; getting countered by the opponent multiplies it down.
+const STYLE_BEATS = { BOOM: 'HATS', HATS: 'RIM', RIM: 'SNARE', SNARE: 'BOOM' };
+const STYLE_COLORS = { BOOM: '#CC2200', HATS: '#22d3ee', RIM: '#a78bfa', SNARE: '#fbbf24' };
+const styleMatchup = (you, them) => {
+  if (!you || !them) return 1;
+  if (STYLE_BEATS[you] === them) return 1.5;     // you counter
+  if (STYLE_BEATS[them] === you) return 0.7;     // they counter you
+  return 1.0;                                    // neutral or mirror
+};
+
 const HERO_LESSONS = [
   // Lessons 1-5 use only the 4 hero sounds (always unlocked by progression)
-  { name: 'BOOM BASIC',   desc: 'Kick on every beat',            tier: 1, pattern: _patBoom() },
-  { name: 'BACKBEAT',     desc: 'Kick on 1 & 3, snare on 2 & 4', tier: 1, pattern: _patBackbeat() },
-  { name: 'HI-HAT 8THS',  desc: 'Hat on every 8th note',         tier: 1, pattern: _patHat8ths() },
-  { name: 'KIT GROOVE',   desc: 'Boom + snare + 8th hats',       tier: 2, pattern: _patKitGroove() },
-  { name: 'WITH RIMSHOT', desc: 'Kit groove + rim accents',      tier: 2, pattern: _patWithRim() },
+  { name: 'BOOM BASIC',   desc: 'Kick on every beat',            tier: 1, style: 'BOOM',  pattern: _patBoom() },
+  { name: 'BACKBEAT',     desc: 'Kick on 1 & 3, snare on 2 & 4', tier: 1, style: 'SNARE', pattern: _patBackbeat() },
+  { name: 'HI-HAT 8THS',  desc: 'Hat on every 8th note',         tier: 1, style: 'HATS',  pattern: _patHat8ths() },
+  { name: 'KIT GROOVE',   desc: 'Boom + snare + 8th hats',       tier: 2, style: 'SNARE', pattern: _patKitGroove() },
+  { name: 'WITH RIMSHOT', desc: 'Kit groove + rim accents',      tier: 2, style: 'RIM',   pattern: _patWithRim() },
   // Lessons 6-12 each gate on owning a specific catalog sound (buy it in the shop).
-  { name: 'LIP ROLL DRILL', desc: 'Lip rolls on the offbeats',    tier: 2,
+  { name: 'LIP ROLL DRILL', desc: 'Lip rolls on the offbeats',    tier: 2, style: 'HATS',
     requires: 'lip_roll',    lanes: ['B', 'T', 'lip_roll', 'Pf'],     pattern: _patL6() },
-  { name: '808 THROAT',     desc: 'Heavy throat-kick groove',     tier: 2,
+  { name: '808 THROAT',     desc: 'Heavy throat-kick groove',     tier: 2, style: 'BOOM',
     requires: 'throat_kick', lanes: ['throat_kick', 'T', 'K', 'Pf'],  pattern: _patL7() },
-  { name: 'FAST HATS',      desc: 'TKs doubling the hi-hat lane', tier: 2,
+  { name: 'FAST HATS',      desc: 'TKs doubling the hi-hat lane', tier: 2, style: 'HATS',
     requires: 'fast_hats',   lanes: ['B', 'fast_hats', 'K', 'Pf'],    pattern: _patL8() },
-  { name: 'INWARD SNARE',   desc: 'Alternate snare voice',        tier: 2,
+  { name: 'INWARD SNARE',   desc: 'Alternate snare voice',        tier: 2, style: 'SNARE',
     requires: 'inward_k',    lanes: ['B', 'T', 'K', 'inward_k'],      pattern: _patL9() },
-  { name: 'INWARD BASS',    desc: 'Deep inward bass kick',        tier: 3,
+  { name: 'INWARD BASS',    desc: 'Deep inward bass kick',        tier: 3, style: 'BOOM',
     requires: 'inward_bass', lanes: ['inward_bass', 'T', 'K', 'Pf'],  pattern: _patL10() },
-  { name: 'CLICK ROLL',     desc: 'Click roll fills',             tier: 3,
+  { name: 'CLICK ROLL',     desc: 'Click roll fills',             tier: 3, style: 'RIM',
     requires: 'click_roll',  lanes: ['B', 'T', 'click_roll', 'Pf'],   pattern: _patL11() },
-  { name: 'UVULAR FINALE',  desc: 'All four advanced sounds',     tier: 4,
+  { name: 'UVULAR FINALE',  desc: 'All four advanced sounds',     tier: 4, style: 'BOOM',
     requires: 'uvular_roll', lanes: ['uvular_roll', 'fast_hats', 'click_roll', 'inward_bass'],
     pattern: _patL12() },
 ];
@@ -7885,18 +7899,37 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const tier = lesson.tier || 1;
     return Math.round(lesson.pattern.length * (1 + tier * 0.4));
   };
-  const playerRoundScore = (lesson, accuracy) => {
+  // Per-round style matchup: avg counter multiplier across both player picks
+  // vs opp's matching turn slot picks. >1 = player counters; <1 = countered.
+  const styleMatchupForRound = (n, asPlayer) => {
+    const slot = turnSlotForRound(n);
+    const me = (asPlayer ? playerPatternIdxs : oppPatternIdxs)?.[slot];
+    const them = (asPlayer ? oppPatternIdxs : playerPatternIdxs)?.[slot];
+    if (!Array.isArray(me) || !Array.isArray(them)) return 1;
+    let sum = 0;
+    for (let i = 0; i < me.length; i++) {
+      const myStyle = HERO_LESSONS[me[i]]?.style;
+      const theirStyle = HERO_LESSONS[them[i]]?.style;
+      sum += styleMatchup(myStyle, theirStyle);
+    }
+    return sum / me.length;
+  };
+
+  const playerRoundScore = (lesson, accuracy, roundN) => {
     if (!lesson) return 0;
     const base = lessonValue(lesson);
     const statMult = 1 + (char.stats.tec + char.stats.mus) / 80;
-    return Math.round(base * accuracy * statMult);
+    const counter = roundN ? styleMatchupForRound(roundN, true) : 1;
+    return Math.round(base * accuracy * statMult * counter);
   };
-  const oppRoundScore = (lesson) => {
+  const oppRoundScore = (lesson, roundN) => {
     if (!lesson) return 0;
     const base = lessonValue(lesson);
-    const focus = 0.55 + (opponent.stats.tec / 60) * 0.4;
+    // Opp focus tightened — they're now genuinely good (was 0.55–0.95).
+    const focus = 0.7 + (opponent.stats.tec / 60) * 0.3;
     const statMult = 1 + (opponent.stats.tec + opponent.stats.mus) / 80;
-    return Math.round(base * focus * statMult);
+    const counter = roundN ? styleMatchupForRound(roundN, false) : 1;
+    return Math.round(base * focus * statMult * counter);
   };
 
   // What lessons can the player pick? Same gating as tec training:
@@ -7968,7 +8001,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
   // score (derived from pattern value × focus from stats) progressively as the round runs.
   // Opponent round: BeatboxHero (mounted in JSX in spectate mode) handles audio + visual notes.
   // Here we just tick the score, emit occasional judge hearts, and signal completion.
-  const playOpponentRoundPattern = (lesson, color, onDone) => {
+  const playOpponentRoundPattern = (lesson, color, onDone, roundForOpp = null) => {
     eventTimers.current.forEach(clearTimeout);
     eventTimers.current = [];
     setActiveSide('O');
@@ -7999,7 +8032,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
 
       // Score ticks up linearly so it feels alive
       const startScore = oppScoreRef.current;
-      const finalScore = oppRoundScore(lesson);
+      const finalScore = oppRoundScore(lesson, roundForOpp);
       const endScore = startScore + finalScore;
       for (let pct = 1; pct <= 10; pct++) {
         const at = (ROUND_SECONDS * 1000 * pct) / 10;
@@ -8076,7 +8109,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const lesson = lessonForRound(roundN);
     const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : 'judging';
     if (side === 'O') {
-      playOpponentRoundPattern(lesson, '#CC2200', () => setPhase(nextPhase));
+      playOpponentRoundPattern(lesson, '#CC2200', () => setPhase(nextPhase), roundN);
     } else {
       startPlayerRound(lesson, char.color);
     }
@@ -8086,7 +8119,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
   // When player's BeatboxHero finishes its single rep, score the round and advance.
   const handlePlayerRoundComplete = (roundN, accuracy) => {
     const lesson = lessonForRound(roundN);
-    const score = playerRoundScore(lesson, accuracy);
+    const score = playerRoundScore(lesson, accuracy, roundN);
     const newScore = playerScoreRef.current + score;
     playerScoreRef.current = newScore;
     setLiveScore(s => ({ ...s, p: newScore }));
@@ -8199,7 +8232,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         </div>
       )}
 
-      {phase === 'tactical' && playerPatternIdxs && (() => {
+      {phase === 'tactical' && playerPatternIdxs && oppPatternIdxs && (() => {
         const turns = [0, 1];
         const halves = [0, 1];
         const setPick = (turn, half, idx) => {
@@ -8207,18 +8240,32 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
             ? pair.map((v, h) => h === half ? idx : v)
             : pair));
         };
+        const StyleBadge = ({ style, dim }) => style ? (
+          <span className="text-[8px] tracking-widest uppercase px-1 py-[1px] border"
+            style={{ borderColor: STYLE_COLORS[style], color: dim ? '#78716c' : STYLE_COLORS[style] }}>
+            {style}
+          </span>
+        ) : null;
         return (
           <div className="space-y-3">
             <div className="text-center">
               <div className="text-amber-500 text-2xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
                 PREP YOUR SET
               </div>
-              <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Two patterns per round · half + half</div>
+              <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Two patterns per round · counter the opponent's style</div>
+            </div>
+            {/* Counter-cycle reference */}
+            <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest">
+              <StyleBadge style="BOOM" /><span className="text-stone-600">›</span>
+              <StyleBadge style="HATS" /><span className="text-stone-600">›</span>
+              <StyleBadge style="RIM" /><span className="text-stone-600">›</span>
+              <StyleBadge style="SNARE" /><span className="text-stone-600">›</span>
+              <StyleBadge style="BOOM" dim />
             </div>
             {turns.map(turn => {
-              const [a, b] = playerPatternIdxs[turn];
-              const lessonA = HERO_LESSONS[a];
-              const lessonB = HERO_LESSONS[b];
+              const [oA, oB] = oppPatternIdxs[turn];
+              const oppA = HERO_LESSONS[oA];
+              const oppB = HERO_LESSONS[oB];
               return (
                 <div key={turn} className="border-2 border-stone-800 bg-stone-900/30 p-2 space-y-2">
                   <div className="flex items-baseline justify-between">
@@ -8226,31 +8273,43 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
                       style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
                       Your turn #{turn + 1}
                     </div>
-                    <div className="text-[10px] text-stone-400">
-                      {(lessonA?.name || '—')} → {(lessonB?.name || '—')}
+                    <div className="flex items-center gap-1 text-[10px] text-red-400">
+                      vs <StyleBadge style={oppA?.style} /> + <StyleBadge style={oppB?.style} />
                     </div>
                   </div>
                   {halves.map(half => {
                     const cur = playerPatternIdxs[turn][half];
+                    const oppIdx = oppPatternIdxs[turn][half];
+                    const myStyle = HERO_LESSONS[cur]?.style;
+                    const oppStyle = HERO_LESSONS[oppIdx]?.style;
+                    const m = styleMatchup(myStyle, oppStyle);
+                    const matchTag = m > 1 ? '✓ counters' : m < 1 ? '✗ countered' : '· neutral';
+                    const matchColor = m > 1 ? '#22c55e' : m < 1 ? '#ef4444' : '#a8a29e';
                     return (
                       <div key={half} className="space-y-1">
-                        <div className="text-[9px] uppercase tracking-widest text-stone-500">
-                          Pattern {half === 0 ? 'A' : 'B'}: {HERO_LESSONS[cur]?.name || '—'}
+                        <div className="flex items-center justify-between">
+                          <div className="text-[9px] uppercase tracking-widest text-stone-500 flex items-center gap-1">
+                            Pattern {half === 0 ? 'A' : 'B'}: {HERO_LESSONS[cur]?.name || '—'} <StyleBadge style={myStyle} />
+                          </div>
+                          <span className="text-[9px] uppercase tracking-widest" style={{ color: matchColor }}>{matchTag}</span>
                         </div>
                         <div className="overflow-x-auto -mx-1">
                           <div className="flex gap-1 px-1 pb-1">
                             {HERO_LESSONS.map((lesson, i) => {
                               const playable = isPlayableForPlayer(i);
                               const selected = i === cur;
+                              const styleM = styleMatchup(lesson.style, oppStyle);
+                              const tint = styleM > 1 ? '#22c55e' : styleM < 1 ? '#ef4444' : null;
                               return (
                                 <button key={i}
                                   disabled={!playable}
                                   onClick={() => setPick(turn, half, i)}
                                   className={`flex-shrink-0 px-2 py-1 border text-[10px] uppercase tracking-widest whitespace-nowrap transition-all ${
                                     selected ? 'border-amber-500 bg-amber-500/15 text-amber-500' :
-                                    playable ? 'border-stone-700 text-stone-400 hover:border-amber-500/50' :
+                                    playable ? 'text-stone-400 hover:border-amber-500/50' :
                                                'border-stone-800 text-stone-600 opacity-40'
-                                  }`}>
+                                  }`}
+                                  style={!selected && playable && tint ? { borderColor: tint } : (!selected && playable ? { borderColor: '#44403c' } : undefined)}>
                                   {!playable && '🔒 '}#{i + 1}
                                 </button>
                               );
