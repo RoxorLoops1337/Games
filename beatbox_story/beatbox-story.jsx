@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, Trophy, ShoppingBag, TreePine, Beer, Mic, Star, Coffee, Dumbbell, ArrowLeft, Heart } from 'lucide-react';
+import { Home, Music, Trophy, ShoppingBag, TreePine, Beer, Mic, Zap, Star, Coffee, Dumbbell, ArrowLeft, Heart } from 'lucide-react';
 
 // ============ DATA ============
 
@@ -48,6 +48,9 @@ const JUDGES = [
 const initialChar = () => ({
   name: '',
   color: '#D4A017',
+  skin: '#d4a87a',
+  hairColor: '#1a1a2e',
+  hairStyle: 'short',
   level: 1,
   xp: 0,
   cash: 30,
@@ -3974,6 +3977,9 @@ export default function BeatboxStory() {
     if (c.showcaseBooking === undefined) c.showcaseBooking = null;
     if (c.lastShowcaseDay === undefined) c.lastShowcaseDay = null;
     if (c.lastBattleDay === undefined) c.lastBattleDay = null;
+    if (typeof c.skin !== 'string') c.skin = '#d4a87a';
+    if (typeof c.hairColor !== 'string') c.hairColor = '#1a1a2e';
+    if (typeof c.hairStyle !== 'string') c.hairStyle = 'short';
     return c;
   };
 
@@ -4198,11 +4204,25 @@ export default function BeatboxStory() {
 
 function CreateScreen({ char, setChar, onDone }) {
   const [name, setName] = useState('');
-  const colors = ['#D4A017', '#CC2200', '#C8DCEF', '#84cc16', '#a78bfa', '#fb7185'];
-  const [color, setColor] = useState(colors[0]);
+  const colors    = ['#D4A017', '#CC2200', '#C8DCEF', '#84cc16', '#a78bfa', '#fb7185', '#22d3ee', '#f97316'];
+  const skins     = ['#f5d4a8', '#d4a87a', '#a87844', '#8a5a3a', '#5a3a20'];
+  const hairs     = ['#1a1a2e', '#5a3a18', '#a87044', '#fbbf24', '#9ca3af', '#a78bfa'];
+  const styles    = [
+    { id: 'short',  label: 'Short' },
+    { id: 'fade',   label: 'Fade' },
+    { id: 'mohawk', label: 'Mohawk' },
+    { id: 'spike',  label: 'Spikes' },
+    { id: 'long',   label: 'Long' },
+  ];
+  const [color, setColor]         = useState(colors[0]);
+  const [skin, setSkin]           = useState(skins[1]);
+  const [hairColor, setHairColor] = useState(hairs[0]);
+  const [hairStyle, setHairStyle] = useState(styles[0].id);
+
+  const previewLook = { shirt: color, skin, hair: hairColor, style: hairStyle, accessory: null };
 
   return (
-    <div className="space-y-6 pt-12">
+    <div className="space-y-4 pt-6">
       <div className="text-center">
         <div className="text-amber-500 text-5xl tracking-tighter font-black" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif', letterSpacing: '-0.02em' }}>
           BEATBOX
@@ -4210,25 +4230,12 @@ function CreateScreen({ char, setChar, onDone }) {
         <div className="text-stone-300 text-3xl tracking-widest font-light -mt-2" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
           STORY
         </div>
-        <div className="mt-2 text-[10px] uppercase tracking-[0.3em] text-stone-500">From bedroom to world champion</div>
+        <div className="mt-1 text-[10px] uppercase tracking-[0.3em] text-stone-500">From bedroom to world champion</div>
       </div>
 
       <div className="flex justify-center">
-        <div className="w-32 h-32 border-4 border-stone-700 flex items-center justify-center text-7xl"
-          style={{ background: `radial-gradient(circle, ${color}33 0%, transparent 70%)` }}>
-          <Mic size={64} style={{ color }} />
-        </div>
+        <CharacterPortrait look={previewLook} size={140} active={true} />
       </div>
-
-      <Panel title="Pick your color">
-        <div className="flex gap-2 justify-center">
-          {colors.map(c => (
-            <button key={c} onClick={() => setColor(c)}
-              className={`w-10 h-10 border-2 transition-all ${color === c ? 'border-white scale-110' : 'border-stone-700'}`}
-              style={{ background: c }} />
-          ))}
-        </div>
-      </Panel>
 
       <Panel title="Stage Name">
         <input type="text" value={name} onChange={e => setName(e.target.value.slice(0, 16))}
@@ -4236,7 +4243,48 @@ function CreateScreen({ char, setChar, onDone }) {
           className="w-full bg-stone-900 border-2 border-stone-700 px-3 py-2 text-amber-500 font-mono uppercase tracking-wider focus:outline-none focus:border-amber-500" />
       </Panel>
 
-      <Btn variant="primary" onClick={() => { setChar(c => ({ ...c, name: name.trim(), color })); onDone(); }}
+      <Panel title="Shirt color">
+        <div className="flex flex-wrap gap-2 justify-center">
+          {colors.map(c => (
+            <button key={c} onClick={() => setColor(c)}
+              className={`w-9 h-9 border-2 transition-all ${color === c ? 'border-white scale-110' : 'border-stone-700'}`}
+              style={{ background: c }} />
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="Skin tone">
+        <div className="flex flex-wrap gap-2 justify-center">
+          {skins.map(c => (
+            <button key={c} onClick={() => setSkin(c)}
+              className={`w-9 h-9 border-2 transition-all ${skin === c ? 'border-white scale-110' : 'border-stone-700'}`}
+              style={{ background: c }} />
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="Hair">
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2 justify-center">
+            {hairs.map(c => (
+              <button key={c} onClick={() => setHairColor(c)}
+                className={`w-9 h-9 border-2 transition-all ${hairColor === c ? 'border-white scale-110' : 'border-stone-700'}`}
+                style={{ background: c }} />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1 justify-center">
+            {styles.map(s => (
+              <button key={s.id} onClick={() => setHairStyle(s.id)}
+                className={`px-3 py-1.5 border-2 text-[10px] uppercase tracking-widest ${hairStyle === s.id ? 'border-amber-500 text-amber-500 bg-amber-500/10' : 'border-stone-700 text-stone-400'}`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Panel>
+
+      <Btn variant="primary"
+        onClick={() => { setChar(c => ({ ...c, name: name.trim(), color, skin, hairColor, hairStyle })); onDone(); }}
         disabled={name.trim().length < 2} className="w-full text-base py-3">
         ENTER THE CIRCLE →
       </Btn>
@@ -5554,7 +5602,10 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       {schedule.activity !== 'closed' && (
         <Panel title="Rohzel · Bar Keeper">
           <div className="flex gap-3 items-start">
-            <div className="text-4xl flex-shrink-0">🧔🏿‍♂️</div>
+            <CharacterPortrait
+              look={{ shirt: '#1c1917', skin: '#5a3a20', hair: '#0c0a09', style: 'fade', accessory: null }}
+              size={64} active={true} />
+            <div className="text-[10px] text-stone-500 uppercase tracking-widest absolute" style={{ display: 'none' }}>Rohzel</div>
             <div className="flex-1 space-y-2">
               <div className="text-stone-200 text-sm tracking-wide italic border-l-2 border-amber-500/50 pl-2">
                 "{rohzelLine}"
@@ -5767,6 +5818,48 @@ const drawPixelHeart = (ctx, x, y, alpha = 1) => {
   ctx.globalAlpha = 1;
 };
 
+// Build the canvas-friendly "look" object from a character record
+const lookFromChar = (char) => ({
+  shirt: char?.color || '#D4A017',
+  skin:  char?.skin || '#d4a87a',
+  hair:  char?.hairColor || '#1a1a2e',
+  style: char?.hairStyle || 'short',
+  accessory: null,
+});
+
+// Reusable pixel-art portrait — renders drawBeatboxer at any size on a small canvas.
+const CharacterPortrait = ({ look, size = 64, active = false, bg = '#1c1917', className = '' }) => {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const W = 40, H = 40;
+    const PXSCALE = Math.max(1, Math.floor(size / W));
+    canvas.width = W * PXSCALE;
+    canvas.height = H * PXSCALE;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf, frame = 0;
+    const draw = () => {
+      frame++;
+      ctx.save();
+      ctx.scale(PXSCALE, PXSCALE);
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+      drawBeatboxer(ctx, 20, 36, look, 'right', active, frame);
+      ctx.restore();
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, [look, size, active, bg]);
+  return (
+    <canvas ref={canvasRef}
+      style={{ imageRendering: 'pixelated', background: bg, width: size, height: size }}
+      className={`block border-2 border-stone-700 ${className}`} />
+  );
+};
+
 const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0], comboLabel = null }) => {
   const canvasRef = useRef(null);
   const PXSCALE = 3;
@@ -5829,7 +5922,7 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
     ctx.imageSmoothingEnabled = false;
     let raf, frameCount = 0;
 
-    const playerLook = { shirt: char.color || '#D4A017', skin: '#d4a87a', hair: '#1a1a2e', style: 'short', accessory: null };
+    const playerLook = lookFromChar(char);
     const oppLook = OPP_LOOKS[opponent.name] || _defaultOppLook;
 
     const draw = () => {
