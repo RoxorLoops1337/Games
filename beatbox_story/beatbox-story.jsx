@@ -6236,7 +6236,9 @@ const OpenMicPerformance = ({ char, onComplete }) => {
     // the room expects a bit of energy.
     const bpm = (char.oriBpm || 100) + 10;
     const stepMs = 60000 / Math.max(40, bpm) / 4;
-    const STEPS = 16;
+    // Open mic plays only the first 8 of 16 grid steps per pattern — keeps
+    // the set tight (a 4-on-floor still gives 2 kicks per pattern, not 4).
+    const STEPS = 8;
     const REPS_PER_PATTERN = 1;
     let step = 0, rep = 0, patIdx = 0;
     const id = setInterval(() => {
