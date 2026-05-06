@@ -3331,48 +3331,99 @@ window.exports = window.module.exports;
     );
   };
   var Panel = ({ children, title, className = "" }) => /* @__PURE__ */ import_react.default.createElement("div", { className: `bg-stone-950/80 border-2 border-stone-800 ${className}` }, title && /* @__PURE__ */ import_react.default.createElement("div", { className: "border-b-2 border-stone-800 px-3 py-2 bg-stone-900/50" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-amber-500 font-mono text-xs uppercase tracking-[0.2em]" }, title)), /* @__PURE__ */ import_react.default.createElement("div", { className: "p-3" }, children));
-  var Cutscene = ({ speaker = null, speakerColor = "#D4A017", lines = [], onComplete }) => {
-    const [idx, setIdx] = (0, import_react.useState)(0);
+  var PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
+    const canvasRef = (0, import_react.useRef)(null);
+    (0, import_react.useEffect)(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      let raf, fc = 0;
+      const loop = () => {
+        fc++;
+        ctx.save();
+        ctx.scale(scale, scale);
+        ctx.fillStyle = "#0c0a09";
+        ctx.fillRect(0, 0, w, h);
+        try {
+          draw(ctx, fc);
+        } catch (e) {
+        }
+        ctx.restore();
+        raf = requestAnimationFrame(loop);
+      };
+      loop();
+      return () => cancelAnimationFrame(raf);
+    }, [draw, w, h, scale]);
+    return /* @__PURE__ */ import_react.default.createElement(
+      "canvas",
+      {
+        ref: canvasRef,
+        style: { imageRendering: "pixelated", width: "100%", aspectRatio: `${w}/${h}` },
+        className: "block border-2 border-stone-800"
+      }
+    );
+  };
+  var Cutscene = ({ speaker = null, speakerColor = "#D4A017", beats, lines, onComplete }) => {
+    const allBeats = beats || (lines ? [{ lines }] : []);
+    const [beatIdx, setBeatIdx] = (0, import_react.useState)(0);
+    const [lineIdx, setLineIdx] = (0, import_react.useState)(0);
+    const beat = allBeats[beatIdx];
+    const beatLines = beat?.lines || [];
+    const isLastLine = lineIdx + 1 >= beatLines.length;
+    const isLastBeat = beatIdx + 1 >= allBeats.length;
+    const isFinal = isLastLine && isLastBeat;
     const advance = () => {
-      if (idx + 1 >= lines.length) onComplete?.();
-      else setIdx((i) => i + 1);
+      if (isFinal) onComplete?.();
+      else if (isLastLine) {
+        setBeatIdx((b) => b + 1);
+        setLineIdx(0);
+      } else setLineIdx((l) => l + 1);
     };
-    const skip = () => onComplete?.();
     return /* @__PURE__ */ import_react.default.createElement(
       "div",
       {
-        className: "fixed inset-0 z-50 bg-stone-950 flex items-center justify-center p-6",
+        className: "fixed inset-0 z-50 flex items-center justify-center p-5",
         style: { background: "radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%)" }
       },
       /* @__PURE__ */ import_react.default.createElement(
         "button",
         {
-          onClick: skip,
+          onClick: onComplete,
           className: "absolute top-4 right-4 text-stone-500 text-[10px] uppercase tracking-widest hover:text-amber-500 px-2 py-1"
         },
         "Skip \u2192"
       ),
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "max-w-md w-full space-y-6" }, speaker && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] uppercase tracking-[0.4em]", style: { color: speakerColor, fontFamily: '"Bebas Neue", "Oswald", sans-serif' } }, speaker), /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "max-w-md w-full space-y-4" }, beat?.drawScene && /* @__PURE__ */ import_react.default.createElement("div", { key: beatIdx, style: { animation: "cutFade 0.5s ease-out" } }, /* @__PURE__ */ import_react.default.createElement(PixelScene, { draw: beat.drawScene })), speaker && /* @__PURE__ */ import_react.default.createElement(
         "div",
         {
-          key: idx,
-          className: "text-stone-100 text-xl leading-relaxed",
+          className: "text-[11px] uppercase tracking-[0.4em]",
+          style: { color: speakerColor, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }
+        },
+        speaker
+      ), /* @__PURE__ */ import_react.default.createElement(
+        "div",
+        {
+          key: `${beatIdx}-${lineIdx}`,
+          className: "text-stone-100 text-lg leading-relaxed min-h-[3em]",
           style: { fontFamily: "Georgia, serif", animation: "cutFade 0.4s ease-out" }
         },
-        lines[idx]
+        beatLines[lineIdx]
       ), /* @__PURE__ */ import_react.default.createElement(
         "button",
         {
           onClick: advance,
           className: "text-amber-500 text-3xl active:scale-90 transition-transform"
         },
-        idx + 1 < lines.length ? "\u2192" : "OK"
-      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1 pt-2" }, lines.map((_, i) => /* @__PURE__ */ import_react.default.createElement(
+        isFinal ? "OK" : "\u2192"
+      ), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex gap-1 pt-1" }, allBeats.map((_, i) => /* @__PURE__ */ import_react.default.createElement(
         "div",
         {
           key: i,
           className: "h-0.5 flex-1 transition-colors",
-          style: { background: i <= idx ? "#D4A017" : "#3a3530" }
+          style: { background: i < beatIdx ? "#D4A017" : i === beatIdx ? "#a8740a" : "#3a3530" }
         }
       )))),
       /* @__PURE__ */ import_react.default.createElement("style", null, `
@@ -3383,6 +3434,202 @@ window.exports = window.module.exports;
       `)
     );
   };
+  var drawOffice = (ctx, fc) => {
+    const W = 200;
+    _px(ctx, 0, 0, W, 100, "#454e5e");
+    _px(ctx, 0, 100, W, 30, "#2a2820");
+    _px(ctx, 110, 12, 78, 38, "#5a7090");
+    _px(ctx, 110, 12, 78, 1, "#1a1a1a");
+    _px(ctx, 110, 50, 78, 1, "#1a1a1a");
+    _px(ctx, 110, 12, 1, 38, "#1a1a1a");
+    _px(ctx, 187, 12, 1, 38, "#1a1a1a");
+    _px(ctx, 148, 12, 1, 38, "#1a1a1a");
+    for (let i = 0; i < 8; i++) {
+      const bx = 112 + i * 9, bh = 14 + i % 3 * 8;
+      _px(ctx, bx, 50 - bh, 8, bh, "#252a38");
+      if ((fc + i) % 12 < 8) _px(ctx, bx + 3, 52 - bh, 1, 1, "#fef3c7");
+    }
+    _px(ctx, 178, 0, 22, 100, "#3a3a42");
+    _px(ctx, 22, 76, 110, 5, "#7a5a40");
+    _px(ctx, 22, 81, 110, 24, "#4a3a28");
+    _px(ctx, 26, 105, 4, 8, "#2a1808");
+    _px(ctx, 124, 105, 4, 8, "#2a1808");
+    _px(ctx, 42, 44, 50, 32, "#0a0a0a");
+    _px(ctx, 45, 47, 44, 26, fc % 14 < 11 ? "#5a8a3a" : "#3a5a2a");
+    ctx.fillStyle = "#0c0a09";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("AI", 67, 65);
+    _px(ctx, 62, 76, 10, 4, "#1a1a1a");
+    _px(ctx, 100, 56, 25, 20, "#a87844");
+    _px(ctx, 100, 56, 25, 2, "#c89a64");
+    _px(ctx, 105, 54, 14, 4, "#a87844");
+    _px(ctx, 102, 62, 21, 1, "#5a3a18");
+    _px(ctx, 56, 92, 22, 4, "#3a2818");
+    _px(ctx, 56, 92, 3, 18, "#3a2818");
+    _px(ctx, 75, 92, 3, 18, "#3a2818");
+    _px(ctx, 62, 88, 12, 6, "#5a6068");
+    _px(ctx, 64, 80, 8, 9, "#d4a87a");
+    _px(ctx, 64, 80, 8, 3, "#1a1a2e");
+    if (fc % 90 < 4) {
+      ctx.globalAlpha = 0.18;
+      _px(ctx, 0, 0, W, 100, "#fef3c7");
+      ctx.globalAlpha = 1;
+    }
+  };
+  var drawBedroom = (ctx, fc) => {
+    const W = 200;
+    _px(ctx, 0, 0, W, 95, "#3a3540");
+    _px(ctx, 0, 95, W, 35, "#3a2818");
+    _px(ctx, 130, 15, 50, 45, "#1a0d2e");
+    _px(ctx, 130, 15, 50, 1, "#1a1a1a");
+    _px(ctx, 130, 60, 50, 1, "#1a1a1a");
+    _px(ctx, 130, 15, 1, 45, "#1a1a1a");
+    _px(ctx, 179, 15, 1, 45, "#1a1a1a");
+    _px(ctx, 154, 15, 1, 45, "#1a1a1a");
+    for (let i = 0; i < 14; i++) {
+      const sx = 132 + i * 4 % 46;
+      const sy = 18 + i * 7 % 38;
+      if ((fc + i * 5) % 60 < 50) _px(ctx, sx, sy, 1, 1, i % 2 ? "#fbbf24" : "#fef3c7");
+    }
+    _px(ctx, 8, 95, 80, 25, "#a87844");
+    _px(ctx, 8, 95, 80, 2, "#c89a64");
+    _px(ctx, 8, 117, 80, 3, "#5a3a18");
+    _px(ctx, 12, 92, 24, 8, "#dac0a0");
+    _px(ctx, 100, 70, 30, 25, "#5a4030");
+    _px(ctx, 100, 70, 30, 2, "#7a5a40");
+    _px(ctx, 110, 50, 8, 20, "#1a1a1a");
+    _px(ctx, 105, 45, 18, 6, "#fbbf24");
+    if (fc % 6 < 3) {
+      ctx.fillStyle = "rgba(254, 243, 199, 0.22)";
+      ctx.fillRect(95, 50, 35, 50);
+    }
+    _px(ctx, 102, 65, 22, 10, "#dadada");
+    _px(ctx, 102, 65, 22, 1, "#5a5a5a");
+    ctx.fillStyle = "#9a1a1a";
+    ctx.font = "bold 5px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("RENT DUE", 113, 72);
+  };
+  var drawPhone = (ctx, fc) => {
+    const W = 200, H = 130;
+    _px(ctx, 0, 0, W, H, "#0a0a14");
+    for (let i = 0; i < 26; i++) {
+      const x = (i * 17 + 5) % W;
+      const y = (i * 13 + 3) % H;
+      _px(ctx, x, y, 1, 1, "#1c1c2a");
+    }
+    _px(ctx, 70, 78, 60, 50, "#2a1f1a");
+    _px(ctx, 75, 70, 50, 10, "#5a3a20");
+    _px(ctx, 84, 30, 32, 65, "#1c1917");
+    _px(ctx, 87, 35, 26, 55, "#0c0a09");
+    for (let i = 0; i < 14; i++) {
+      const x = 89 + i * 2;
+      const amp = 4 + Math.abs(Math.sin((fc + i * 6) * 0.18) * 14);
+      ctx.fillStyle = "#22d3ee";
+      ctx.fillRect(x, 60 - amp / 2, 1, amp);
+    }
+    ctx.fillStyle = "#fbbf24";
+    ctx.fillRect(94, 80, 1, 4);
+    ctx.fillRect(98, 78, 1, 6);
+    ctx.fillRect(102, 80, 1, 4);
+    ctx.fillStyle = "rgba(34, 211, 238, 0.10)";
+    ctx.fillRect(70, 22, 60, 80);
+    if (fc % 5 < 2) {
+      ctx.fillStyle = "rgba(34, 211, 238, 0.04)";
+      ctx.fillRect(0, 0, W, H);
+    }
+  };
+  var drawMirror = (ctx, fc) => {
+    const W = 200;
+    _px(ctx, 0, 0, W, 95, "#2a253a");
+    _px(ctx, 0, 95, W, 35, "#3a2818");
+    _px(ctx, 60, 8, 80, 104, "#5a4030");
+    _px(ctx, 65, 13, 70, 94, "#1c1917");
+    const shirt = "#a78bfa", skin = "#d4a87a", hair = "#1a1a2e";
+    _px(ctx, 88, 78, 22, 24, shirt);
+    _px(ctx, 88, 78, 22, 2, "#fff");
+    _px(ctx, 84, 80, 4, 16, shirt);
+    _px(ctx, 110, 80, 4, 16, shirt);
+    _px(ctx, 110, 88, 4, 5, skin);
+    _px(ctx, 113, 65, 3, 22, "#888");
+    _px(ctx, 112, 62, 5, 4, "#aaa");
+    _px(ctx, 89, 56, 20, 20, skin);
+    _px(ctx, 89, 53, 20, 5, hair);
+    if (fc % 180 < 6) {
+      _px(ctx, 94, 64, 3, 1, skin);
+      _px(ctx, 102, 64, 3, 1, skin);
+    } else {
+      _px(ctx, 94, 64, 3, 2, "#0c0a09");
+      _px(ctx, 102, 64, 3, 2, "#0c0a09");
+    }
+    _px(ctx, 96, 70, 7, 1, "#3a1010");
+    if (fc % 40 < 20) {
+      ctx.fillStyle = "rgba(254, 243, 199, 0.05)";
+      ctx.fillRect(65, 13, 70, 94);
+    }
+  };
+  var drawDoor = (ctx, fc) => {
+    const W = 200, H = 130;
+    _px(ctx, 0, 0, W, H, "#1a1820");
+    _px(ctx, 50, 8, 100, 112, "#2a1f1a");
+    _px(ctx, 56, 14, 88, 100, "#1a0d2e");
+    for (let i = 0; i < 6; i++) {
+      const bx = 58 + i * 14;
+      const bh = 28 + i % 3 * 14;
+      _px(ctx, bx, 70 - bh, 12, bh, "#252a38");
+      for (let j = 0; j < 3; j++) {
+        if ((fc + i * 2 + j * 3) % 18 < 13) {
+          _px(ctx, bx + 2 + j * 4, 75 - bh + j * 8, 2, 2, "#fbbf24");
+        }
+      }
+    }
+    if (fc % 14 < 10) {
+      ctx.fillStyle = "#fb7185";
+      ctx.font = "bold 7px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("CYPHER", 100, 38);
+    } else if (fc % 14 < 12) {
+      ctx.fillStyle = "#7a3a40";
+      ctx.font = "bold 7px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("CYPHER", 100, 38);
+    }
+    const stand = fc % 24 < 12 ? 0 : 1;
+    _px(ctx, 92, 70 + stand, 16, 50, "#0c0a09");
+    _px(ctx, 94, 60 + stand, 12, 12, "#0c0a09");
+    _px(ctx, 107, 60 + stand, 1, 60, "#fbbf24");
+    _px(ctx, 0, 117, W, 13, "#3a2818");
+    _px(ctx, 0, 117, W, 1, "#5a4030");
+    _px(ctx, 50, 117, 100, 1, "#fbbf24");
+  };
+  var INTRO_BEATS = [
+    { drawScene: drawOffice, lines: [
+      "three years at the desk.",
+      "one HR meeting. one cardboard box.",
+      "they said the AI's just faster."
+    ] },
+    { drawScene: drawBedroom, lines: [
+      "rent's due sunday.",
+      "the savings ran out tuesday.",
+      "you do the math twice. it doesn't get better."
+    ] },
+    { drawScene: drawPhone, lines: [
+      "you've been beatboxing in your bedroom since you were fourteen.",
+      "never on a stage. never for money.",
+      "312 followers. half of them bots."
+    ] },
+    { drawScene: drawMirror, lines: [
+      "the parents would take you back.",
+      "that's the worst part \u2014 they would.",
+      "so you tell yourself: not yet."
+    ] },
+    { drawScene: drawDoor, lines: [
+      "practice every day.",
+      "busk till the jar fills up.",
+      "and tonight \u2014 tonight you go to the cypher."
+    ] }
+  ];
   function SlotsScreen({ activeSlot, onSwitch, onDelete, onBack = null }) {
     const [slots, setSlots] = (0, import_react.useState)(null);
     const [confirmDelete, setConfirmDelete] = (0, import_react.useState)(null);
@@ -3570,14 +3817,7 @@ window.exports = window.module.exports;
         setActiveSlotState(n);
         await setActiveSlot(n);
         await loadSamplesForSlot(n);
-        playCutscene({
-          speaker: null,
-          lines: [
-            "You used to beatbox alone in your bedroom.",
-            "The day job is gone now.",
-            "Tonight, you go to the cypher."
-          ]
-        }, "introSeen", () => setScreen("create"));
+        playCutscene({ beats: INTRO_BEATS }, "introSeen", () => setScreen("create"));
       }
     };
     const deleteSlotAt = async (n) => {
