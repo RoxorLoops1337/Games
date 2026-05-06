@@ -477,6 +477,18 @@
   .end-banner .big { font-family: 'Bungee'; font-size: 42px; letter-spacing: 4px; text-shadow: 3px 3px 0 #000; }
   .end-banner .big.win { color: var(--gold); }
   .end-banner .big.lose { color: var(--danger); }
+  .roster { display: grid; gap: 4px; }
+  .roster-row { display: grid; grid-template-columns: 28px 50px 1fr; gap: 8px; align-items: center; font-family: 'VT323'; font-size: 14px; padding: 4px 6px; background: #0a0a14; border: 1px solid #222; }
+  .roster-row.gone { opacity: 0.35; text-decoration: line-through; }
+  .roster-row .num { font-family: 'Bungee'; font-size: 11px; color: var(--text-dim); text-align: center; }
+  .rrole { font-family: 'Bungee'; font-size: 10px; padding: 3px 0; text-align: center; border: 2px solid #000; letter-spacing: 1px; }
+  .rrole.GK  { background: #ffeb3b; color: #000; }
+  .rrole.DEF { background: #f0f0e8; color: #000; }
+  .rrole.MID { background: #4ad6c5; color: #000; }
+  .rrole.FWD { background: #d4a437; color: #000; }
+  .role-legend { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+  .role-legend .lg { display: flex; align-items: center; gap: 4px; font-family: 'VT323'; font-size: 13px; color: var(--text-dim); }
+  .role-legend .dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #000; display: inline-block; }
 </style>
 </head>
 <body>
@@ -613,6 +625,17 @@
     </div>
 
     <div class="pre-block">
+      <h2 style="margin-top:0;">YOUR STARTING XI</h2>
+      <div class="roster" id="preRoster"></div>
+      <div class="role-legend">
+        <span class="lg"><span class="dot" style="background:#ffeb3b"></span>GK</span>
+        <span class="lg"><span class="dot" style="background:#f0f0e8"></span>DEF +Tackle</span>
+        <span class="lg"><span class="dot" style="background:#4ad6c5"></span>MID +Pass</span>
+        <span class="lg"><span class="dot" style="background:#d4a437"></span>FWD +Shot</span>
+      </div>
+    </div>
+
+    <div class="pre-block">
       <h2 style="margin-top:0;">YOUR DECK</h2>
       <div class="deck-list" id="preDeckChips"></div>
     </div>
@@ -724,7 +747,7 @@ const CARDS = {
   shoot: {
     color: 'red', cost: 2, art: '🥅', type: 'SHOT',
     nameWith: 'SHOOT', nameWithout: 'BLOCK',
-    descWith: 'Take a shot. Closer = better',
+    descWith: 'Take a shot. Closer = better. FWDs hit harder',
     descWithout: 'Defender throws body in the lane',
     targetWith: null, targetWithout: null,
   },
@@ -739,7 +762,7 @@ const CARDS = {
     color: 'red', cost: 1, art: '🦵', type: 'TACKLE',
     nameWith: 'BURST', nameWithout: 'HARD TACKLE',
     descWith: 'Carrier sprints + 1-tackle shield',
-    descWithout: 'Big tackle. High win-rate, FOUL RISK',
+    descWithout: 'Big tackle. FOUL RISK. DEFs win cleaner',
     targetWith: null, targetWithout: null,
   },
   // EXPANSION
@@ -1119,6 +1142,17 @@ function drawPlayer(p) {
   if (p.role === 'GK') {
     ctx.fillStyle = '#ffeb3b';
     ctx.fillRect(sx - pixelSize, sy - pixelSize*3, pixelSize*2, pixelSize);
+  } else {
+    const rolePip = { DEF: '#f0f0e8', MID: '#4ad6c5', FWD: '#d4a437' }[p.role];
+    if (rolePip) {
+      ctx.fillStyle = rolePip;
+      ctx.beginPath();
+      ctx.arc(sx, sy - pixelSize * 5.4, Math.max(2, pixelSize * 0.9), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
   }
 
   const disc = state.discipline[p.id];
@@ -1657,7 +1691,10 @@ async function actShortPass(team, targetId) {
   state.ballCarrier = null;
   state.ballTarget = { x: target.x, y: target.y - 1 };
   const passDist = dist(carrier, target);
-  const intercepted = Math.random() < Math.min(0.18, 0.03 + passDist / 120);
+  let interceptChance = Math.min(0.18, 0.03 + passDist / 120);
+  if (carrier.role === 'MID') interceptChance *= 0.55;  // Playmaker passes safer
+  if (target.role === 'MID') interceptChance *= 0.85;   // MID receivers control it
+  const intercepted = Math.random() < interceptChance;
   await animateTick(800);
   if (intercepted) {
     const opp = nearestOpponent(target, team);
@@ -1684,7 +1721,8 @@ async function actCloseDown(team) {
   presser.hy = carrier.y + 1;
   showLog('CLOSING DOWN');
   await animateTick(700);
-  if (Math.random() < 0.18) {
+  const closeStealChance = presser.role === 'DEF' ? 0.30 : 0.18;
+  if (Math.random() < closeStealChance) {
     if (state.shielded === state.ballCarrier) {
       state.shielded = null;
       showLog('CARRIER HELD ON!');
@@ -1712,7 +1750,8 @@ async function actJockey(team) {
   j.hy = carrier.y;
   showLog('JOCKEYING');
   await animateTick(700);
-  if (Math.random() < 0.12) {
+  const jockeyStealChance = j.role === 'DEF' ? 0.22 : 0.12;
+  if (Math.random() < jockeyStealChance) {
     if (state.shielded === state.ballCarrier) {
       state.shielded = null;
       showLog('CARRIER HELD ON!');
@@ -1757,9 +1796,10 @@ async function actShoot(team) {
   state.ballTarget = { x: goalX, y: goalY + (Math.random() - 0.5) * 8 };
   await animateTick(800);
   let goalProb = clamp(0.90 - distance / 50, 0.08, 0.90);
+  if (carrier.role === 'FWD') goalProb = clamp(goalProb + 0.15, 0.08, 0.95);
   if (team === AWAY) {
     // Scale AI accuracy by aiSkill so early matches are friendlier
-    goalProb = clamp(goalProb * (state.aiSkill || 1.0) * 0.85, 0.05, 0.85);
+    goalProb = clamp(goalProb * (state.aiSkill || 1.0) * 0.85, 0.05, 0.90);
   }
   if (Math.random() < goalProb) {
     state.score[team]++;
@@ -1803,7 +1843,9 @@ async function actThroughBall(team, targetId) {
   state.ballCarrier = null;
   state.ballTarget = { x: runner.hx, y: runner.hy - 1 };
   await animateTick(1100);
-  if (Math.random() < 0.32) {
+  let cutChance = 0.32;
+  if (carrier.role === 'MID') cutChance *= 0.7;  // Playmaker threads needles
+  if (Math.random() < cutChance) {
     const opp = nearestOpponent(runner, team);
     if (opp) {
       state.ballCarrier = opp.id;
@@ -1827,7 +1869,8 @@ async function actInterceptDive(team) {
   diver.hy = carrier.y + (Math.random() - 0.5) * 4;
   showLog('DIVE FOR THE LANE!');
   await animateTick(800);
-  if (Math.random() < 0.45) {
+  const diveStealChance = diver.role === 'DEF' ? 0.55 : 0.45;
+  if (Math.random() < diveStealChance) {
     if (state.shielded === state.ballCarrier) {
       state.shielded = null;
       showLog('CARRIER HELD ON!');
@@ -1876,9 +1919,11 @@ async function actHardTackle(team) {
   await animateTick(800);
 
   const refMod = state.ref.strictness / 100;
-  const baseFoul = 0.30;
+  // Defenders tackle cleaner — better clean-win odds and lower foul risk
+  const isDef = tackler.role === 'DEF';
+  const baseFoul = isDef ? 0.22 : 0.30;
   const foulChance = baseFoul * (0.5 + refMod);
-  const cleanWinChance = 0.45;
+  const cleanWinChance = isDef ? 0.60 : 0.45;
   const r = Math.random();
 
   if (r < cleanWinChance) {
@@ -2203,8 +2248,33 @@ function goToPreMatch() {
   const stars = '★'.repeat(m.difficulty) + '<span style="color:#444;">' + '★'.repeat(6 - m.difficulty) + '</span>';
   document.getElementById('preOpponentTag').innerHTML = `${m.tag} <span style="color:var(--gold);">${stars}</span>`;
   updateRefDisplay();
+  renderRoster();
   renderDeckChips('preDeckChips');
   showScreen('screenPreMatch');
+}
+
+function renderRoster() {
+  const lineup = [
+    { num: 1, role: 'GK',  bonus: 'Last line of defense' },
+    { num: 4, role: 'DEF', bonus: '+15% tackle win, lower foul' },
+    { num: 5, role: 'DEF', bonus: '+15% tackle win, lower foul' },
+    { num: 6, role: 'MID', bonus: 'Safer passes & through balls' },
+    { num: 8, role: 'MID', bonus: 'Safer passes & through balls' },
+    { num: 10,role: 'MID', bonus: 'Safer passes & through balls' },
+    { num: 9, role: 'FWD', bonus: '+15% shot accuracy' },
+  ];
+  const el = document.getElementById('preRoster');
+  el.innerHTML = '';
+  lineup.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'roster-row';
+    row.innerHTML = `
+      <div class="num">#${p.num}</div>
+      <div class="rrole ${p.role}">${p.role}</div>
+      <div class="rbonus">${p.bonus}</div>
+    `;
+    el.appendChild(row);
+  });
 }
 
 function updateRefDisplay() {
