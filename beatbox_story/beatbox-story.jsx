@@ -230,6 +230,11 @@ const Clock = ({ minutes, day }) => {
 // Hook used by activity screens. Manages a real-time loop that ticks every 2 seconds,
 // awards rewards in 5-block sets, and stops when energy is exhausted or night cuts in.
 
+// Global pause flag — set while a cutscene is active so activity ticks
+// (time, energy/hunger consumption, reward blocks) don't advance underneath it.
+let _gamePaused = false;
+const setGamePaused = (v) => { _gamePaused = !!v; };
+
 function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
   // config: {
   //   blocksPerReward: 5,         // how many ticks until reward fires
@@ -262,6 +267,7 @@ function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
   // The tick body (defined once, reads everything from refs)
   const tickHandlerRef = useRef(() => {});
   tickHandlerRef.current = () => {
+    if (_gamePaused) return; // Pause the activity loop while a cutscene plays
     const cfg = configRef.current;
     const c = charRef.current;
 
@@ -4340,6 +4346,8 @@ export default function BeatboxStory() {
   // Active narrative cutscene. Shape: { speaker, speakerColor, lines, onComplete }
   // (onComplete handles both advance-past-end and skip.)
   const [cutscene, setCutscene] = useState(null);
+  // Pause the activity tick + time progression while a cutscene is up
+  useEffect(() => { setGamePaused(!!cutscene); }, [cutscene]);
   // Queue a cutscene + a story flag to set when it ends. flagPath e.g. 'introSeen'.
   const playCutscene = (props, flagPath, after) => {
     setCutscene({ ...props, onComplete: () => {
