@@ -28,13 +28,14 @@ const FOOD = {
 
 const NPCS = [
   // Rewards halved + opps tougher (see playOpponentRoundPattern focus formula).
-  { name: 'Pig Pen',     stats: { mus: 7,  tec: 7,  ori: 5,  sho: 6  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 20,  level: 1 },
-  { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 25,  level: 1 },
-  { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 50,  level: 3 },
-  { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 100, level: 5 },
-  { name: 'Alim',        stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ['throat_kick', 'inward_bass', 'fast_hats', 'lip_roll'],                          reward: 175, level: 7 },
-  { name: 'Olexinho',    stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'],                   reward: 350, level: 9 },
-  { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 750, level: 12 },
+  // counterSkill (0–1): when player wins RPS, opponent re-rolls picks to counter player based on this.
+  { name: 'Pig Pen',     stats: { mus: 7,  tec: 7,  ori: 5,  sho: 6  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 20,  level: 1,  counterSkill: 0.20 },
+  { name: 'Joel Burner', stats: { mus: 8,  tec: 8,  ori: 6,  sho: 7  }, sounds: ['classic_kick', 'hi_hat', 'psh_snare'],                                          reward: 25,  level: 1,  counterSkill: 0.30 },
+  { name: 'CeDe',        stats: { mus: 12, tec: 11, ori: 9,  sho: 10 }, sounds: ['classic_kick', 'hi_hat', 'psh_snare', 'lip_roll'],                              reward: 50,  level: 3,  counterSkill: 0.40 },
+  { name: 'Sikker',      stats: { mus: 15, tec: 15, ori: 14, sho: 12 }, sounds: ['classic_kick', 'inward_k', 'fast_hats', 'lip_roll'],                            reward: 100, level: 5,  counterSkill: 0.55 },
+  { name: 'Alim',        stats: { mus: 19, tec: 18, ori: 17, sho: 15 }, sounds: ['throat_kick', 'inward_bass', 'fast_hats', 'lip_roll'],                          reward: 175, level: 7,  counterSkill: 0.70 },
+  { name: 'Olexinho',    stats: { mus: 24, tec: 22, ori: 22, sho: 19 }, sounds: ['throat_kick', 'click_roll', 'd_low', 'laser', 'inward_bass'],                   reward: 350, level: 9,  counterSkill: 0.80 },
+  { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 750, level: 12, counterSkill: 0.95 },
 ];
 
 const JUDGES = [
@@ -7984,17 +7985,58 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
       if (outcome === 'tie') { setRps(null); return; }
       // Loser of RPS goes first (the "A" beatboxer)
       setPlayerFirst(outcome === 'lose');
-      setPhase('countdown1');
+      setPhase('tactical');
     }, 1400);
   };
 
-  // Enter tactical phase: lock in default picks for both sides (player can change theirs).
-  const startTactical = () => {
+  // Enter RPS phase from intro: pre-compute picks for both sides (player can change theirs in tactical).
+  const startBattle = () => {
     getAudioCtx();
     setPlayerPatternIdxs(computeDefaultPlayerPicks());
     setOppPatternIdxs(computeOppPicks());
     setTacticalSlot(0);
-    setPhase('tactical');
+    setPhase('rps');
+  };
+
+  // Counter style: which style beats `style`? (e.g. SNARE beats BOOM, so counterStyleOf('BOOM') === 'SNARE')
+  const counterStyleOf = (style) => {
+    if (!style) return null;
+    return Object.keys(STYLE_BEATS).find(k => STYLE_BEATS[k] === style) || null;
+  };
+
+  // Opponent re-rolls picks to counter the player's locked-in picks. Per pick,
+  // probability=counterSkill of choosing a counter-style; otherwise random from level pool.
+  const oppCounterReroll = (playerPicks, opp) => {
+    const oppLevel = opp.level || 1;
+    const maxIdx = Math.max(0, Math.min(HERO_LESSONS.length - 1, oppLevel + 1));
+    const pool = []; for (let i = 0; i <= maxIdx; i++) pool.push(i);
+    const skill = (typeof opp.counterSkill === 'number') ? opp.counterSkill : 0.5;
+    const pickFor = (playerIdx) => {
+      const playerStyle = HERO_LESSONS[playerIdx]?.style;
+      const desired = counterStyleOf(playerStyle);
+      if (desired && Math.random() < skill) {
+        const counters = pool.filter(i => HERO_LESSONS[i]?.style === desired);
+        if (counters.length) return counters[Math.floor(Math.random() * counters.length)];
+      }
+      return pool[Math.floor(Math.random() * pool.length)];
+    };
+    return [
+      [pickFor(playerPicks[0][0]), pickFor(playerPicks[0][1])],
+      [pickFor(playerPicks[1][0]), pickFor(playerPicks[1][1])],
+    ];
+  };
+
+  // Lock In handler: if player won RPS we proceed straight to countdown (player has
+  // already seen and countered). If player lost, opp re-rolls picks to counter player.
+  const lockInTactical = () => {
+    if (playerFirst) {
+      // Player lost RPS — opp adapts to counter player's plan
+      const counterPicks = oppCounterReroll(playerPatternIdxs, opponent);
+      setOppPatternIdxs(counterPicks);
+      setPhase('oppReveal');
+    } else {
+      setPhase('countdown1');
+    }
   };
 
   // Opponent round: auto-play the picked lesson pattern at battle BPM, awarding a fixed
@@ -8228,13 +8270,16 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
               <div className="text-[10px] text-stone-500 uppercase">M{opponent.stats.mus} T{opponent.stats.tec} O{opponent.stats.ori} S{opponent.stats.sho}</div>
             </div>
           </div>
-          <Btn variant="primary" onClick={startTactical} className="w-full py-3">PICK YOUR PATTERNS ▶</Btn>
+          <Btn variant="primary" onClick={startBattle} className="w-full py-3">START BATTLE ▶</Btn>
         </div>
       )}
 
       {phase === 'tactical' && playerPatternIdxs && oppPatternIdxs && (() => {
         const turns = [0, 1];
         const halves = [0, 1];
+        // playerFirst === true means player LOST RPS (loser-goes-first). When true,
+        // opponent's picks are hidden and they will re-roll on Lock In.
+        const revealOpp = !playerFirst;
         const setPick = (turn, half, idx) => {
           setPlayerPatternIdxs(p => p.map((pair, t) => t === turn
             ? pair.map((v, h) => h === half ? idx : v)
@@ -8246,13 +8291,20 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
             {style}
           </span>
         ) : null;
+        const HiddenBadge = () => (
+          <span className="text-[8px] tracking-widest uppercase px-1 py-[1px] border border-stone-700 text-stone-600">??</span>
+        );
         return (
           <div className="space-y-3">
             <div className="text-center">
               <div className="text-amber-500 text-2xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
                 PREP YOUR SET
               </div>
-              <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Two patterns per round · counter the opponent's style</div>
+              <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">
+                {revealOpp
+                  ? "You won RPS — opponent's plan revealed · counter their style"
+                  : "You lost RPS — opponent will counter your plan"}
+              </div>
             </div>
             {/* Counter-cycle reference */}
             <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest">
@@ -8274,17 +8326,19 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
                       Your turn #{turn + 1}
                     </div>
                     <div className="flex items-center gap-1 text-[10px] text-red-400">
-                      vs <StyleBadge style={oppA?.style} /> + <StyleBadge style={oppB?.style} />
+                      vs {revealOpp
+                        ? <><StyleBadge style={oppA?.style} /> + <StyleBadge style={oppB?.style} /></>
+                        : <><HiddenBadge /> + <HiddenBadge /></>}
                     </div>
                   </div>
                   {halves.map(half => {
                     const cur = playerPatternIdxs[turn][half];
                     const oppIdx = oppPatternIdxs[turn][half];
                     const myStyle = HERO_LESSONS[cur]?.style;
-                    const oppStyle = HERO_LESSONS[oppIdx]?.style;
-                    const m = styleMatchup(myStyle, oppStyle);
-                    const matchTag = m > 1 ? '✓ counters' : m < 1 ? '✗ countered' : '· neutral';
-                    const matchColor = m > 1 ? '#22c55e' : m < 1 ? '#ef4444' : '#a8a29e';
+                    const oppStyle = revealOpp ? HERO_LESSONS[oppIdx]?.style : null;
+                    const m = revealOpp ? styleMatchup(myStyle, oppStyle) : 1;
+                    const matchTag = !revealOpp ? '· hidden' : (m > 1 ? '✓ counters' : m < 1 ? '✗ countered' : '· neutral');
+                    const matchColor = !revealOpp ? '#78716c' : (m > 1 ? '#22c55e' : m < 1 ? '#ef4444' : '#a8a29e');
                     return (
                       <div key={half} className="space-y-1">
                         <div className="flex items-center justify-between">
@@ -8298,8 +8352,8 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
                             {HERO_LESSONS.map((lesson, i) => {
                               const playable = isPlayableForPlayer(i);
                               const selected = i === cur;
-                              const styleM = styleMatchup(lesson.style, oppStyle);
-                              const tint = styleM > 1 ? '#22c55e' : styleM < 1 ? '#ef4444' : null;
+                              const styleM = revealOpp ? styleMatchup(lesson.style, oppStyle) : 1;
+                              const tint = revealOpp ? (styleM > 1 ? '#22c55e' : styleM < 1 ? '#ef4444' : null) : null;
                               return (
                                 <button key={i}
                                   disabled={!playable}
@@ -8322,7 +8376,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
                 </div>
               );
             })}
-            <Btn variant="primary" onClick={() => setPhase('rps')} className="w-full py-3">LOCK IN ▶</Btn>
+            <Btn variant="primary" onClick={lockInTactical} className="w-full py-3">LOCK IN ▶</Btn>
           </div>
         );
       })()}
@@ -8330,7 +8384,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
       {phase === 'rps' && (
         <div className="space-y-4 text-center pt-4">
           <div className="text-amber-500 text-xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>ROCK PAPER SCISSORS</div>
-          <div className="text-[10px] uppercase tracking-widest text-stone-500">Loser goes first</div>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500">Winner sees opponent's plan · loser gets countered</div>
           {!rps && (
             <div className="grid grid-cols-3 gap-2 pt-4">
               {[{ k: 'rock', e: '✊' }, { k: 'paper', e: '✋' }, { k: 'scissors', e: '✌️' }].map(o => (
@@ -8350,12 +8404,55 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
               </div>
               <div className={`mt-4 text-2xl tracking-wider ${rps.outcome === 'win' ? 'text-amber-500' : rps.outcome === 'lose' ? 'text-red-500' : 'text-stone-400'}`}
                 style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                {rps.outcome === 'win' ? 'YOU WIN! THEY START' : rps.outcome === 'lose' ? 'YOU GO FIRST' : 'TIE — REPLAY'}
+                {rps.outcome === 'win' ? "YOU WIN! READ THEIR PLAN" : rps.outcome === 'lose' ? "YOU LOSE — THEY'LL COUNTER" : 'TIE — REPLAY'}
               </div>
             </div>
           )}
         </div>
       )}
+
+      {phase === 'oppReveal' && playerPatternIdxs && oppPatternIdxs && (() => {
+        const StyleBadge = ({ style }) => style ? (
+          <span className="text-[10px] tracking-widest uppercase px-1.5 py-[2px] border"
+            style={{ borderColor: STYLE_COLORS[style], color: STYLE_COLORS[style] }}>
+            {style}
+          </span>
+        ) : null;
+        const skillPct = Math.round((opponent.counterSkill ?? 0.5) * 100);
+        return (
+          <div className="space-y-4 text-center pt-4">
+            <div className="text-red-500 text-xl tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {opponent.name.toUpperCase()} ADAPTS
+            </div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500">
+              Counter skill {skillPct}% · they re-picked to counter your set
+            </div>
+            <div className="space-y-2">
+              {[0, 1].map(turn => {
+                const [pA, pB] = playerPatternIdxs[turn];
+                const [oA, oB] = oppPatternIdxs[turn];
+                const pStyleA = HERO_LESSONS[pA]?.style;
+                const pStyleB = HERO_LESSONS[pB]?.style;
+                const oStyleA = HERO_LESSONS[oA]?.style;
+                const oStyleB = HERO_LESSONS[oB]?.style;
+                return (
+                  <div key={turn} className="border-2 border-stone-800 bg-stone-900/30 p-2 grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="text-amber-500 uppercase tracking-widest text-left">
+                      Turn #{turn + 1} · You
+                      <div className="flex gap-1 mt-1"><StyleBadge style={pStyleA} /> + <StyleBadge style={pStyleB} /></div>
+                    </div>
+                    <div className="text-red-400 uppercase tracking-widest text-left">
+                      Them
+                      <div className="flex gap-1 mt-1"><StyleBadge style={oStyleA} /> + <StyleBadge style={oStyleB} /></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <Btn variant="primary" onClick={() => setPhase('countdown1')} className="w-full py-3">BRACE YOURSELF ▶</Btn>
+          </div>
+        );
+      })()}
 
       {/^(round|countdown)[1-4]$/.test(phase) && playerPatternIdxs && oppPatternIdxs && (() => {
         const m = /^(round|countdown)([1-4])$/.exec(phase);
