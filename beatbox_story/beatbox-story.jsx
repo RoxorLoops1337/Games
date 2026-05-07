@@ -8515,6 +8515,57 @@ export default function BeatboxStory() {
     return withUnlocks;
   };
 
+  // ---- 2 AM hard cap ----
+  // Anywhere the player can drift past DAY_END (eating, mingle, bar drinks,
+  // open mics, showcases, battles), this watcher catches it and force-
+  // collapses them home: next day at 6 AM, partial energy, mood penalty.
+  // Rent is also processed if the new day lands on a Sunday so they can't
+  // dodge it by staying out late on Saturday.
+  useEffect(() => {
+    if (!char || !char.created) return;
+    if ((char.minutes || 0) < DAY_END) return;
+    setChar(c => {
+      if ((c.minutes || 0) < DAY_END) return c;       // race-guard
+      const max = c.maxEnergy ?? 100;
+      const newDay = c.day + 1;
+      // Inline rent check (mirrors finishSleep's computeRentEvent)
+      let cash = c.cash || 0;
+      let rentLate = c.rentLate || 0;
+      let lastRentPaidDay = c.lastRentPaidDay;
+      const flags = { ...(c.storyFlags || {}) };
+      if (newDay % 7 === 6 && c.lastRentPaidDay !== newDay) {
+        const amount = RENT_BY_TIER[(c.apartmentTier || 1) - 1] || RENT_BY_TIER[0];
+        if (cash >= amount) {
+          cash -= amount;
+          rentLate = 0;
+          lastRentPaidDay = newDay;
+          flags.firstRentPaid = true;
+        } else {
+          rentLate = (rentLate || 0) + 1;
+          // Don't process eviction inline here — let the next "real" sleep
+          // catch it. Just queue the rent-late state.
+          if (rentLate >= 3) rentLate = 2;
+        }
+      }
+      return {
+        ...c,
+        day: newDay,
+        minutes: 0,
+        energy: Math.floor(max * 0.6),
+        hunger: Math.max(0, (c.hunger || 0) - 25),
+        mood: Math.max(0, (c.mood || 0) - 12),
+        cash,
+        rentLate,
+        lastRentPaidDay,
+        pendingDebuff: null,
+        storyFlags: flags,
+      };
+    });
+    setScreen('house');
+    setTimeout(() => showToast('You collapsed at 2 AM. Got home somehow.', 'bad'), 80);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [char?.minutes]);
+
   if (!loaded) {
     return <div className="min-h-screen bg-stone-950 flex items-center justify-center text-amber-500 font-mono">LOADING...</div>;
   }
