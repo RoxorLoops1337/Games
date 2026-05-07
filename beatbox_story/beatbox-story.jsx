@@ -91,6 +91,11 @@ const initialChar = () => ({
   lastFoxySafetyNetDay: 0, // last day Foxy fed you for free (one per in-game week)
   lastFoxySoupDay: 0, // last day you ate Foxy Soup (free, daily)
   foxyLoanTaken: false, // one-time $15 loan from Foxy when you're broke
+  mingleCount: 0, // total bar conversations had
+  romanceAffinity: {}, // { candidateId: number } per romance candidate
+  romanceState: {}, // { candidateId: 'none' | 'romancing' | 'couple' }
+  dateBooking: null, // { partner, day, minute } when a date is scheduled
+  metEncounters: {}, // { encounterId: count } so we can vary lines per re-meet
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -503,6 +508,146 @@ const BAR_MENU = {
   cocktail:     { name: 'Tropical Cocktail', kind: 'drink', cost: 12, immediate: { mood: 30, energy: 12 },        debuff: { mood: -18, energy: -8 } },
   whiskey:      { name: 'Whiskey Shot',    kind: 'drink', cost: 10, immediate: { mood: 22, energy: 8 },           debuff: { mood: -22 } },
   loaded_fries: { name: 'Loaded Fries',    kind: 'snack', cost: 9,  immediate: { hunger: 28, mood: 6, energy: 6 }, debuff: { hunger: -12 } },
+};
+
+// ============ MINGLE — bar conversations ============
+// One conversation = 30 game minutes + ~6 energy. Each `encounter` defines
+// who you bump into, when they're available (gating), how often (weight),
+// and a single-beat dialogue: opener line + 2-3 reply choices, each with
+// a response line and small effects (mood/cash/followers/flags/affinity).
+//
+// Encounters share a registry so adding new ones (sponsors, romances,
+// recurring NPCs) is a single config push.
+
+const _enc = (id, cfg) => ({ id, weight: 1, when: () => true, ...cfg });
+
+// Generic strangers — the fallback pool. All have weight ≥ 3 so they
+// dominate the random roll until rare/triggered encounters fire.
+const MINGLE_GENERIC = [
+  _enc('barfly_old', { weight: 4, beats: [{
+    speaker: { name: 'old timer', color: '#a8a29e' },
+    line: "you new here? haven't seen your face.",
+    options: [
+      { text: "yeah. just moved this way.", outcome: { line: "well. don't make a fool of yourself.", effects: { mood: +2 } } },
+      { text: "i've been around. you just don't notice.", outcome: { line: "ha. fair.", effects: { mood: +3 } } },
+      { text: "(nod. say nothing.)",         outcome: { line: "...alright then.", effects: { mood: +0 } } },
+    ],
+  }]}),
+  _enc('hipster_dj', { weight: 3, beats: [{
+    speaker: { name: 'someone in a thrifted shirt', color: '#a78bfa' },
+    line: "you look like you'd know a good record store.",
+    options: [
+      { text: "i don't really do vinyl.",         outcome: { line: "yeah, no, that's a thing.", effects: { mood: +1 } } },
+      { text: "depends what you're looking for.", outcome: { line: "ok, ok. i see you.",         effects: { mood: +3, followers: +1 } } },
+      { text: "is this a pickup line?",           outcome: { line: "haha. unfortunately yes.",   effects: { mood: +5 } } },
+    ],
+  }]}),
+  _enc('shy_fan', { weight: 3, when: (c) => (c.followers || 0) >= 5, beats: [{
+    speaker: { name: 'a quiet kid', color: '#22d3ee' },
+    line: "i, um. i think i've seen your clips? sorry. that's weird.",
+    options: [
+      { text: "no, that's nice. thank you.",  outcome: { line: "ok cool ok cool ok bye.",   effects: { mood: +6, followers: +2 } } },
+      { text: "oh — what'd you think?",       outcome: { line: "i liked the rolls. you're good.", effects: { mood: +5, followers: +3 } } },
+      { text: "yeah that's me.",              outcome: { line: "...yeah. ok. cool.",         effects: { mood: +2, followers: +1 } } },
+    ],
+  }]}),
+  _enc('know_it_all', { weight: 3, beats: [{
+    speaker: { name: 'guy with strong opinions', color: '#fb7185' },
+    line: "real beatbox died in 2009. fact.",
+    options: [
+      { text: "you might be right actually.",  outcome: { line: "thank you. THANK you.",     effects: { mood: -1 } } },
+      { text: "that's a lot to put on 2009.",  outcome: { line: "no, see, you don't get it.", effects: { mood: -2 } } },
+      { text: "(walk away)",                   outcome: { line: null,                         effects: { mood: +1 } } },
+    ],
+  }]}),
+  _enc('regular_drunk', { weight: 3, beats: [{
+    speaker: { name: 'a guy four beers in', color: '#f97316' },
+    line: "i used to play guitar. did i tell you that?",
+    options: [
+      { text: "what'd you play?",          outcome: { line: "...i forget. but it was good.", effects: { mood: +2 } } },
+      { text: "you should pick it up again.", outcome: { line: "yeah. yeah maybe i will.",     effects: { mood: +3 } } },
+      { text: "(let him keep talking)",       outcome: { line: "you're a good listener.",      effects: { mood: +1 } } },
+    ],
+  }]}),
+  _enc('travel_writer', { weight: 2, beats: [{
+    speaker: { name: 'someone with a notebook', color: '#84cc16' },
+    line: "you live here? i'm trying to find the real stuff.",
+    options: [
+      { text: "the real stuff is in your room. trust.", outcome: { line: "ok wow philosophical.", effects: { mood: +2 } } },
+      { text: "go to the park on a thursday afternoon.",  outcome: { line: "park, thursday. got it.", effects: { mood: +3, followers: +1 } } },
+      { text: "tourists ruin places. sorry.",            outcome: { line: "...damn. ok.",              effects: { mood: -1 } } },
+    ],
+  }]}),
+  _enc('open_mic_friend', { weight: 3, when: (c) => (c.openMicCount || 0) >= 1, beats: [{
+    speaker: { name: 'someone who saw you tuesday', color: '#fbbf24' },
+    line: "tuesday. you. that thing you did at the end.",
+    options: [
+      { text: "good or bad?",                  outcome: { line: "good. i'm telling you good.", effects: { mood: +6, followers: +2 } } },
+      { text: "thanks. it's been work.",      outcome: { line: "yeah it shows. keep going.",   effects: { mood: +5 } } },
+      { text: "what thing.",                   outcome: { line: "the rolls. obviously.",        effects: { mood: +3 } } },
+    ],
+  }]}),
+  _enc('overheard', { weight: 3, beats: [{
+    speaker: { name: 'two friends talking', color: '#dadada' },
+    line: "(you overhear: 'the thing about beatboxing is anyone can do it now, that's the problem.')",
+    options: [
+      { text: "actually... no it isn't.",                 outcome: { line: "oh — sorry, didn't see you there.", effects: { mood: +1 } } },
+      { text: "(let it go and order a water)",            outcome: { line: null,                                effects: { mood: +0 } } },
+      { text: "anyone CAN do it. that's the point.",      outcome: { line: "huh. yeah, i guess.",               effects: { mood: +2 } } },
+    ],
+  }]}),
+  _enc('lost_phone', { weight: 2, beats: [{
+    speaker: { name: 'someone panicking', color: '#fb7185' },
+    line: "have you seen a phone? black case. screen cracked.",
+    options: [
+      { text: "i'll help you look.",     outcome: { line: "thank you thank you. you're a saint.", effects: { mood: +5 } } },
+      { text: "you check the bathroom?", outcome: { line: "...not yet. okay.",                     effects: { mood: +2 } } },
+      { text: "no, sorry.",              outcome: { line: "right. ok.",                            effects: {} } },
+    ],
+  }]}),
+  _enc('quiet_one', { weight: 3, beats: [{
+    speaker: { name: 'someone alone at the bar', color: '#a8a29e' },
+    line: "...",
+    options: [
+      { text: "rough day?",                outcome: { line: "...yeah. yeah a bit.",              effects: { mood: +3 } } },
+      { text: "(sit one stool over)",      outcome: { line: "(they nod, slightly.)",             effects: { mood: +2 } } },
+      { text: "(walk past)",               outcome: { line: null,                                 effects: {} } },
+    ],
+  }]}),
+];
+
+// Filter encounters by their `when(c)` predicate, then weighted-pick one.
+const pickMingleEncounter = (char, pool) => {
+  const eligible = pool.filter(e => {
+    try { return e.when(char); } catch { return false; }
+  });
+  if (eligible.length === 0) return null;
+  const total = eligible.reduce((s, e) => s + (e.weight || 1), 0);
+  let r = Math.random() * total;
+  for (const e of eligible) {
+    r -= (e.weight || 1);
+    if (r <= 0) return e;
+  }
+  return eligible[eligible.length - 1];
+};
+
+// Apply the effects from a chosen reply to the char.
+const applyMingleEffects = (c, effects) => {
+  const e = effects || {};
+  const max = c.maxEnergy ?? 100;
+  let next = { ...c };
+  if (typeof e.mood === 'number')      next.mood = Math.max(0, Math.min(100, (c.mood || 0) + e.mood));
+  if (typeof e.energy === 'number')    next.energy = Math.max(0, Math.min(max, (c.energy || 0) + e.energy));
+  if (typeof e.hunger === 'number')    next.hunger = Math.max(0, Math.min(100, (c.hunger || 0) + e.hunger));
+  if (typeof e.cash === 'number')      next.cash = Math.max(0, (c.cash || 0) + e.cash);
+  if (typeof e.followers === 'number') next.followers = Math.max(0, (c.followers || 0) + e.followers);
+  if (e.flags) next.storyFlags = { ...(c.storyFlags || {}), ...e.flags };
+  if (e.affinity) {
+    const aff = { ...(c.romanceAffinity || {}) };
+    for (const [k, v] of Object.entries(e.affinity)) aff[k] = (aff[k] || 0) + v;
+    next.romanceAffinity = aff;
+  }
+  return next;
 };
 
 // Palette per time of day
@@ -4884,6 +5029,120 @@ const FoxyModal = ({ char, setChar, showToast, onClose }) => {
   );
 };
 
+// ============ MINGLE ENCOUNTER MODAL ============
+// Single-beat dialogue UI: opener → reply choice → response. Applies the
+// chosen option's effects (mood / followers / cash / story flags / romance
+// affinity) on close. The whole conversation costs 30 game minutes + 6
+// energy regardless of outcome.
+
+const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
+  const [picked, setPicked] = useState(null); // selected reply option (or null)
+  const beat = encounter.beats[0];
+  const speaker = beat.speaker;
+  // Stable random shirt + skin for the stranger silhouette per encounter
+  const lookRef = useRef(null);
+  if (!lookRef.current) {
+    const shirts = ['#a04040','#5a7050','#a06030','#4060a0','#a06090','#7a3a40','#5a3a18','#3a5a6a'];
+    const hairs = ['#1a1a2e','#3a2410','#5a2010','#7a3a20','#dadada'];
+    const skins = ['#d4a87a','#a87844','#e0b890','#7a5040'];
+    lookRef.current = {
+      shirt: speaker?.color || shirts[Math.floor(Math.random() * shirts.length)],
+      skin:  skins[Math.floor(Math.random() * skins.length)],
+      hair:  hairs[Math.floor(Math.random() * hairs.length)],
+    };
+  }
+  const finish = () => {
+    if (!picked) return;
+    setChar(c => {
+      let next = applyMingleEffects(c, picked.outcome.effects);
+      next.minutes = (c.minutes || 0) + 30;
+      next.energy = Math.max(0, (next.energy || 0) - 6);
+      next.mingleCount = (c.mingleCount || 0) + 1;
+      next.metEncounters = { ...(c.metEncounters || {}),
+        [encounter.id]: ((c.metEncounters || {})[encounter.id] || 0) + 1 };
+      return next;
+    });
+    onClose?.();
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
+      style={{ background: 'radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%)' }}>
+      <div className="max-w-md w-full bg-stone-950 border-2 border-stone-800">
+        {/* Pixel-art bar interior + stranger silhouette */}
+        <PixelScene draw={(ctx, fc) => drawMingleScene(ctx, fc, lookRef.current, encounter)} />
+        {/* Speaker name */}
+        <div className="px-3 pt-3">
+          <div className="text-[11px] uppercase tracking-[0.4em] mb-1"
+            style={{ color: speaker.color, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            {speaker.name}
+          </div>
+          <div className="text-stone-100 text-base leading-snug min-h-[2em]"
+            style={{ fontFamily: '"Oswald", sans-serif', fontWeight: 300 }}>
+            "{beat.line}"
+          </div>
+        </div>
+        {/* Reply options or response */}
+        <div className="p-3 space-y-2">
+          {!picked ? (
+            beat.options.map((opt, i) => (
+              <button key={i} onClick={() => setPicked(opt)}
+                className="w-full text-left px-3 py-2 border-2 border-stone-800 hover:border-amber-500/50 bg-stone-900/40 transition-all">
+                <span className="text-stone-300 text-sm" style={{ fontFamily: '"Oswald", sans-serif' }}>
+                  → {opt.text}
+                </span>
+              </button>
+            ))
+          ) : (
+            <>
+              <div className="px-3 py-2 border-2 border-amber-500/40 bg-amber-500/5">
+                <div className="text-[9px] uppercase tracking-widest text-amber-500/60 mb-1">you said</div>
+                <div className="text-stone-300 text-sm italic"
+                  style={{ fontFamily: '"Oswald", sans-serif' }}>"{picked.text}"</div>
+              </div>
+              {picked.outcome.line && (
+                <div className="px-3 py-2 border-2 border-stone-800 bg-stone-900/40">
+                  <div className="text-[9px] uppercase tracking-widest mb-1" style={{ color: speaker.color }}>
+                    {speaker.name}
+                  </div>
+                  <div className="text-stone-100 text-base"
+                    style={{ fontFamily: '"Oswald", sans-serif', fontWeight: 300 }}>
+                    "{picked.outcome.line}"
+                  </div>
+                </div>
+              )}
+              {/* Tiny effects readout (only show what changed) */}
+              {(() => {
+                const e = picked.outcome.effects || {};
+                const bits = [];
+                if (e.mood)      bits.push(`${e.mood > 0 ? '+' : ''}${e.mood}♥`);
+                if (e.energy)    bits.push(`${e.energy > 0 ? '+' : ''}${e.energy}⚡`);
+                if (e.hunger)    bits.push(`${e.hunger > 0 ? '+' : ''}${e.hunger}🍴`);
+                if (e.cash)      bits.push(`${e.cash > 0 ? '+' : ''}$${e.cash}`);
+                if (e.followers) bits.push(`${e.followers > 0 ? '+' : ''}${e.followers} fans`);
+                return bits.length ? (
+                  <div className="text-[10px] uppercase tracking-widest text-amber-500 text-center pt-1">
+                    {bits.join(' · ')}
+                  </div>
+                ) : null;
+              })()}
+              <Btn variant="primary" onClick={finish} className="w-full py-3 mt-2">
+                LEAVE THE BAR CHATTER →
+              </Btn>
+            </>
+          )}
+        </div>
+        {/* Cost reminder + skip-out */}
+        <div className="px-3 pb-3 flex items-center justify-between text-[10px] uppercase tracking-widest text-stone-600">
+          <span>+30 min · -6⚡</span>
+          {!picked && (
+            <button onClick={() => onClose?.()} className="hover:text-amber-500">leave →</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============ INTRO SCENE DRAWERS (pixel art) ============
 
 const drawOffice = (ctx, fc) => {
@@ -6221,6 +6480,81 @@ const drawPennyRevealScene = (ctx, fc, look) => {
   ctx.fillRect(0, 0, W, H);
 };
 
+// Mingle scene — bar interior with the stranger silhouette occupying the
+// stool-side of the counter. Used as the backdrop for any conversation.
+// `encounter.id` lets us add bespoke set-pieces later (e.g. sponsor scenes
+// with logos behind the bar) — for now everyone gets the same backdrop.
+const drawMingleScene = (ctx, fc, look, encounter) => {
+  const W = 200, H = 130;
+  // Back wall + wallpaper
+  _px(ctx, 0, 0, W, 60, '#1c1825');
+  for (let y = 6; y < 60; y += 12) for (let x = 8; x < W; x += 14) _px(ctx, x, y, 1, 1, '#2a1f1a');
+  // Shelf 1
+  _px(ctx, 0, 14, W, 14, '#3a2418');
+  _px(ctx, 0, 14, W, 1, '#5a3818');
+  _px(ctx, 0, 27, W, 1, '#1a1408');
+  for (let i = 0; i < 10; i++) {
+    const bx = 8 + i * 18;
+    const colors = ['#a04040', '#5a8030', '#fbbf24', '#22d3ee'];
+    _px(ctx, bx, 16, 4, 9, colors[i % 4]);
+    _px(ctx, bx + 1, 14, 2, 2, '#1a1a1a');
+    if (fc % (40 + i * 3) < 4) _px(ctx, bx + 1, 17, 1, 1, '#fff');
+  }
+  // Shelf 2
+  _px(ctx, 0, 28, W, 14, '#3a2418');
+  _px(ctx, 0, 28, W, 1, '#5a3818');
+  _px(ctx, 0, 41, W, 1, '#1a1408');
+  for (let i = 0; i < 8; i++) {
+    const bx = 14 + i * 22;
+    _px(ctx, bx, 30, 4, 10, ['#5a3a40', '#3a5060', '#7a3a20'][i % 3]);
+    _px(ctx, bx + 1, 29, 2, 1, '#1a1a1a');
+  }
+  // Bar counter
+  const counterY = 96;
+  _px(ctx, 0, counterY, W, 4, '#7a5030');
+  _px(ctx, 0, counterY, W, 1, '#a07050');
+  _px(ctx, 0, counterY + 4, W, 4, '#5a3a18');
+  _px(ctx, 0, counterY + 8, W, 22, '#3a2010');
+  // Hanging warm bar light (centered on the stranger)
+  _px(ctx, 110, 0, 1, 18, '#1a1a1a');
+  _px(ctx, 105, 17, 11, 4, '#3a2818');
+  _px(ctx, 106, 21, 9, 2, '#fbbf24');
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.10)';
+  ctx.beginPath(); ctx.arc(110, 22, 36, 0, Math.PI * 2); ctx.fill();
+  // Stranger seated at the counter (right side)
+  const x = 116;
+  // Shirt + collar
+  const shirt = look?.shirt || '#a78bfa';
+  const skin  = look?.skin  || '#d4a87a';
+  const hair  = look?.hair  || '#1a1a2e';
+  _px(ctx, x - 6, counterY - 16, 12, 16, shirt);
+  _px(ctx, x - 6, counterY - 16, 12, 1, '#fff');
+  // Arms resting on the counter
+  _px(ctx, x - 8, counterY - 4, 3, 4, shirt);
+  _px(ctx, x + 5, counterY - 4, 3, 4, shirt);
+  _px(ctx, x - 7, counterY - 1, 2, 1, skin);
+  _px(ctx, x + 6, counterY - 1, 2, 1, skin);
+  // Head
+  _px(ctx, x - 4, counterY - 25, 8, 8, skin);
+  _px(ctx, x - 4, counterY - 27, 8, 3, hair);
+  // Eyes (looking your way)
+  _px(ctx, x - 3, counterY - 22, 1, 1, '#0c0a09');
+  _px(ctx, x + 1, counterY - 22, 1, 1, '#0c0a09');
+  // Slight mouth
+  _px(ctx, x - 1, counterY - 19, 3, 1, '#5a2020');
+  // Drink in front of them
+  _px(ctx, x - 9, counterY - 7, 5, 7, '#3a3a40');
+  _px(ctx, x - 8, counterY - 5, 3, 4, ['#fbbf24','#22d3ee','#fb7185','#84cc16'][(encounter?.id?.length || 0) % 4]);
+  _px(ctx, x - 9, counterY - 7, 5, 1, '#dadada');
+  // Player's drink on the left side
+  _px(ctx, 60, counterY - 7, 5, 7, '#3a3a40');
+  _px(ctx, 61, counterY - 5, 3, 4, '#22d3ee');
+  _px(ctx, 60, counterY - 7, 5, 1, '#dadada');
+  // Vignette
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+  ctx.fillRect(0, 0, W, H);
+};
+
 // Open-mic stage: bar interior, raised platform, mic stand, player on stage,
 // crowd silhouettes bobbing in front, spotlight cone overhead.
 const drawOpenMicStage = (ctx, fc, look) => {
@@ -7272,6 +7606,11 @@ export default function BeatboxStory() {
     if (typeof c.lastFoxySafetyNetDay !== 'number') c.lastFoxySafetyNetDay = 0;
     if (typeof c.lastFoxySoupDay !== 'number') c.lastFoxySoupDay = 0;
     if (typeof c.foxyLoanTaken !== 'boolean') c.foxyLoanTaken = false;
+    if (typeof c.mingleCount !== 'number') c.mingleCount = 0;
+    if (!c.romanceAffinity || typeof c.romanceAffinity !== 'object') c.romanceAffinity = {};
+    if (!c.romanceState || typeof c.romanceState !== 'object') c.romanceState = {};
+    if (c.dateBooking === undefined) c.dateBooking = null;
+    if (!c.metEncounters || typeof c.metEncounters !== 'object') c.metEncounters = {};
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -9318,6 +9657,13 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const [rohzelLine, setRohzelLine] = useState(() => _pick(ROHZEL_GREETINGS));
   const [performingShowcase, setPerformingShowcase] = useState(false);
   const [performingOpenMic, setPerformingOpenMic] = useState(false);
+  const [mingleEncounter, setMingleEncounter] = useState(null);
+  const startMingle = () => {
+    if (char.energy < 6) { showToast('Too tired to chat', 'bad'); return; }
+    const enc = pickMingleEncounter(char, MINGLE_GENERIC);
+    if (!enc) { showToast('The bar is unusually quiet tonight.', 'info'); return; }
+    setMingleEncounter(enc);
+  };
 
   // Lock bar during daytime
   if (!isNightTime(char.minutes ?? 0)) {
@@ -9550,6 +9896,28 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
             <div className="text-xs text-stone-400 uppercase tracking-wider">No show tonight. Sleep it off and come back tomorrow.</div>
           </div>
         </Panel>
+      )}
+
+      {/* Mingle — chat with whoever's at the bar tonight. Available any open night. */}
+      {schedule.activity !== 'closed' && (
+        <Panel title="Mingle">
+          <div className="space-y-2">
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+              Read the room. Strike up a conversation. Sometimes you meet someone who matters.
+            </div>
+            <Btn variant="primary" onClick={startMingle} disabled={char.energy < 6} className="w-full py-3">
+              MINGLE 🍻 (-6⚡, +30 min)
+            </Btn>
+            {char.energy < 6 && <div className="text-[10px] text-red-500 text-center uppercase">Need 6 energy</div>}
+          </div>
+        </Panel>
+      )}
+
+      {/* The encounter modal — mounts when the player triggers Mingle. */}
+      {mingleEncounter && (
+        <MingleEncounter
+          char={char} setChar={setChar} encounter={mingleEncounter}
+          showToast={showToast} onClose={() => setMingleEncounter(null)} />
       )}
 
       {schedule.activity === 'openmic' && (
