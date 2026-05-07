@@ -5087,83 +5087,124 @@ const drawSleepScene = (ctx, fc, look, progress) => {
 // ============ TRAINING SCENES ============
 // Pixel-art animations rendered behind each training stat's AFK panel.
 
-// Musicality: small stage with mic on a stand, spotlight, character singing
-// into it at face level.
+// Musicality: practicing in your own living room — couch, TV, lamp, plant,
+// rug, character standing with a mic on a stand, singing.
 const drawMusicalityScene = (ctx, fc, look) => {
   const W = 200, H = 130;
-  // Back wall: deep curtain red gradient
-  for (let y = 0; y < 90; y++) {
-    const t = y / 90;
-    const r = Math.floor(0x3a + t * 0x10);
-    const g = Math.floor(0x10 + t * 0x06);
-    const b = Math.floor(0x18 + t * 0x06);
-    _px(ctx, 0, y, W, 1, `rgb(${r},${g},${b})`);
+  // Wall (warm beige room tone)
+  _px(ctx, 0, 0, W, 95, '#5a4848');
+  // Wallpaper subtle stripes
+  for (let x = 0; x < W; x += 12) _px(ctx, x, 0, 1, 95, '#4a3838');
+  // Floor (wood planks)
+  _px(ctx, 0, 95, W, 35, '#5a3a20');
+  _px(ctx, 0, 95, W, 1, '#7a5a30');
+  for (let i = 0; i < 5; i++) _px(ctx, i * 40, 96, 1, 34, '#3a2410');
+  // Wall art (framed picture, top right)
+  _px(ctx, 138, 14, 38, 28, '#3a2410');
+  _px(ctx, 140, 16, 34, 24, '#7a5a40');
+  // Picture content — abstract triangles
+  _px(ctx, 144, 20, 6, 14, '#fbbf24');
+  _px(ctx, 152, 22, 8, 12, '#22d3ee');
+  _px(ctx, 162, 18, 8, 18, '#fb7185');
+  // Window (small, top left) showing daytime
+  _px(ctx, 16, 14, 38, 30, '#7ec0e8');
+  _px(ctx, 16, 14, 38, 1, '#1a1a1a');
+  _px(ctx, 16, 43, 38, 1, '#1a1a1a');
+  _px(ctx, 16, 14, 1, 30, '#1a1a1a');
+  _px(ctx, 53, 14, 1, 30, '#1a1a1a');
+  _px(ctx, 35, 14, 1, 30, '#1a1a1a');                 // mullion
+  _px(ctx, 16, 28, 38, 1, '#1a1a1a');                 // mullion
+  // Cloud + sun in window
+  _px(ctx, 44, 18, 6, 4, '#fef3c7');                  // sun
+  _px(ctx, 22, 32, 8, 3, '#fff');                     // cloud
+  _px(ctx, 24, 30, 4, 2, '#fff');
+  // Rug under the singing area
+  _px(ctx, 60, 110, 80, 16, '#7a3a40');
+  _px(ctx, 60, 110, 80, 1, '#a05060');
+  _px(ctx, 60, 125, 80, 1, '#5a2a30');
+  // Rug pattern
+  for (let i = 0; i < 4; i++) {
+    _px(ctx, 70 + i * 18, 114, 8, 8, '#a05060');
+    _px(ctx, 73 + i * 18, 117, 2, 2, '#fbbf24');
   }
-  // Side curtain folds (vertical pleats)
-  for (let i = 0; i < 6; i++) {
-    _px(ctx, 4 + i * 5, 0, 1, 90, '#2a0e10');
-    _px(ctx, 6 + i * 5, 0, 1, 90, '#5a1a20');
-    _px(ctx, W - 8 - i * 5, 0, 1, 90, '#2a0e10');
-    _px(ctx, W - 6 - i * 5, 0, 1, 90, '#5a1a20');
-  }
-  // Curtain valance at top (scalloped)
-  for (let x = 0; x < W; x += 14) {
-    _px(ctx, x, 0, 14, 4, '#5a1a1f');
-    _px(ctx, x + 6, 4, 2, 2, '#5a1a1f');
-  }
-  // String lights along the valance
-  for (let i = 0; i < 9; i++) {
-    const lx = 12 + i * 22;
-    if ((fc + i * 11) % 50 < 40) _px(ctx, lx, 7, 2, 2, i % 2 ? '#fbbf24' : '#fb7185');
-  }
-  // Spotlight cone from above (drawn before stage so floor takes the light)
+  // Couch on the left
+  _px(ctx, 4, 78, 50, 30, '#5a3a40');
+  _px(ctx, 4, 78, 50, 4, '#7a5060');
+  _px(ctx, 4, 108, 50, 4, '#3a2030');
+  _px(ctx, 0, 74, 8, 30, '#5a3a40');                  // left armrest
+  _px(ctx, 50, 74, 8, 30, '#5a3a40');                 // right armrest
+  _px(ctx, 0, 74, 8, 2, '#7a5060');
+  _px(ctx, 50, 74, 8, 2, '#7a5060');
+  // Couch cushions (visible top edge)
+  _px(ctx, 10, 80, 18, 6, '#7a5060');
+  _px(ctx, 30, 80, 18, 6, '#7a5060');
+  _px(ctx, 10, 80, 18, 1, '#a07080');
+  _px(ctx, 30, 80, 18, 1, '#a07080');
+  // Cushion small pillow
+  _px(ctx, 40, 84, 10, 6, '#fbbf24');
+  _px(ctx, 40, 84, 10, 1, '#fef3c7');
+  // Couch legs
+  _px(ctx, 4, 108, 4, 4, '#1a1a1a');
+  _px(ctx, 50, 108, 4, 4, '#1a1a1a');
+  // Plant on the right (potted)
+  _px(ctx, 168, 92, 14, 10, '#3a2410');               // pot
+  _px(ctx, 168, 92, 14, 2, '#5a3820');                // pot rim
+  _px(ctx, 170, 78, 10, 14, '#3a7028');               // foliage main
+  _px(ctx, 168, 80, 4, 8, '#3a7028');                 // leaf left
+  _px(ctx, 180, 80, 4, 8, '#3a7028');                 // leaf right
+  _px(ctx, 172, 74, 6, 6, '#4a8038');                 // top leaf
+  // Floor lamp on the right (between plant and TV)
+  _px(ctx, 152, 92, 4, 18, '#1a1a1a');                // pole
+  _px(ctx, 148, 110, 12, 2, '#1a1a1a');               // base
+  _px(ctx, 146, 80, 16, 6, '#fbbf24');                // shade
+  _px(ctx, 146, 80, 16, 1, '#fef3c7');
+  _px(ctx, 148, 86, 12, 2, '#a87a30');                // shade bottom
+  // Lamp glow
   ctx.save();
-  ctx.fillStyle = 'rgba(254, 243, 199, 0.10)';
-  ctx.beginPath();
-  ctx.moveTo(80, 0); ctx.lineTo(120, 0);
-  ctx.lineTo(135, 92); ctx.lineTo(65, 92);
-  ctx.closePath();
-  ctx.fill();
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.08)';
+  ctx.beginPath(); ctx.arc(154, 88, 26, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
-  // Stage floor (warm wood with planks)
-  _px(ctx, 0, 90, W, 40, '#3a2818');
-  _px(ctx, 0, 90, W, 2, '#5a4030');
-  // Plank seams
-  for (let i = 0; i < 5; i++) _px(ctx, 4 + i * 40, 92, 1, 38, '#2a1a10');
-  // Footlights strip
-  _px(ctx, 0, 92, W, 1, '#fbbf24');
-  // Bright "stage glow" under spotlight
-  ctx.save();
-  ctx.fillStyle = 'rgba(254, 243, 199, 0.10)';
-  ctx.fillRect(70, 92, 60, 4);
-  ctx.restore();
-  // ---- Mic stand ----
-  // Player drawBeatboxer feet at y=90, head center ~y=68, eyes y=67.
+  // Small bookshelf or TV in the back? Keep it simple — small TV/cabinet
+  _px(ctx, 64, 56, 60, 24, '#1a1a1a');                // TV
+  _px(ctx, 64, 56, 60, 2, '#3a3a3a');
+  _px(ctx, 66, 58, 56, 20, '#0c0a18');                // screen
+  // Animated TV content — concentric circles (music video vibe)
+  for (let i = 0; i < 3; i++) {
+    const phase = ((fc + i * 12) % 30) / 30;
+    const r = 2 + phase * 18;
+    ctx.globalAlpha = 1 - phase;
+    ctx.strokeStyle = ['#fb7185', '#22d3ee', '#fbbf24'][i];
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(94, 68, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // TV stand
+  _px(ctx, 78, 80, 32, 6, '#3a2410');
+  // ---- Mic stand (now in the living room, on the rug) ----
   // Round disc base
-  _px(ctx, 86, 88, 16, 2, '#1a1a1a');
-  _px(ctx, 88, 87, 12, 1, '#3a3a3a');
-  _px(ctx, 90, 86, 8, 1, '#1a1a1a');
-  // Pole going up to a clamp at face level
-  _px(ctx, 93, 71, 2, 17, '#1a1a1a');
-  _px(ctx, 93, 71, 1, 17, '#3a3a3a');             // pole highlight
-  // Mic clamp (small bracket attaching capsule to pole)
+  _px(ctx, 86, 108, 16, 2, '#1a1a1a');
+  _px(ctx, 88, 107, 12, 1, '#3a3a3a');
+  _px(ctx, 90, 106, 8, 1, '#1a1a1a');
+  // Pole
+  _px(ctx, 93, 71, 2, 36, '#1a1a1a');
+  _px(ctx, 93, 71, 1, 36, '#3a3a3a');                 // pole highlight
+  // Mic clamp
   _px(ctx, 95, 69, 3, 3, '#3a3a3a');
   _px(ctx, 95, 69, 3, 1, '#5a5a5a');
-  // Mic capsule — rounded "ball" shape, 6 wide at midline
-  // Outline pixels with progressive widths form a smooth ellipse
-  _px(ctx, 99, 60, 2, 1, '#3a3a3a');              // top cap
+  // Mic capsule — rounded ball
+  _px(ctx, 99, 60, 2, 1, '#3a3a3a');
   _px(ctx, 98, 61, 4, 1, '#3a3a3a');
-  _px(ctx, 97, 62, 6, 4, '#2a2a2a');              // wide middle (4 rows tall)
+  _px(ctx, 97, 62, 6, 4, '#2a2a2a');
   _px(ctx, 98, 66, 4, 1, '#1a1a1a');
-  _px(ctx, 99, 67, 2, 1, '#1a1a1a');              // bottom cap
-  // Top-left highlight (specular)
+  _px(ctx, 99, 67, 2, 1, '#1a1a1a');
   _px(ctx, 98, 61, 2, 1, '#5a5a5a');
   _px(ctx, 97, 62, 1, 2, '#5a5a5a');
-  // Subtle horizontal grille texture (3 lines)
   _px(ctx, 98, 63, 4, 1, '#444');
   _px(ctx, 98, 65, 4, 1, '#444');
-  // Player to the right of mic, facing left toward it
-  drawBeatboxer(ctx, 112, 90, look, 'left', true, fc);
+  // Player on the rug, facing left toward mic — feet land on the rug top
+  drawBeatboxer(ctx, 112, 110, look, 'left', true, fc);
   // Singing waves from mouth toward mic
   const mf = Math.floor(fc / 6) % 4;
   if (mf >= 2) {
@@ -5172,7 +5213,7 @@ const drawMusicalityScene = (ctx, fc, look) => {
     ctx.fillStyle = '#fbbf24';
     for (let i = 0; i < 3; i++) {
       const r = 4 + wavePhase + i * 3;
-      ctx.fillRect(Math.floor(105 - r / 2), 67 + i, Math.floor(r), 1);
+      ctx.fillRect(Math.floor(105 - r / 2), 87 + i, Math.floor(r), 1);
     }
     ctx.globalAlpha = 1;
   }
@@ -5180,8 +5221,8 @@ const drawMusicalityScene = (ctx, fc, look) => {
   for (let i = 0; i < 3; i++) {
     const phase = (fc * 0.6 + i * 28) % 80;
     if (phase < 60) {
-      const nx = 92 + Math.sin((fc * 0.05) + i) * 3 + i * 6;
-      const ny = 60 - phase * 0.5;
+      const nx = 90 + Math.sin((fc * 0.05) + i) * 3 + i * 6;
+      const ny = 80 - phase * 0.5;
       ctx.globalAlpha = Math.max(0, 1 - phase / 60);
       ctx.fillStyle = '#fef3c7';
       ctx.fillRect(Math.floor(nx), Math.floor(ny), 3, 2);
@@ -5189,13 +5230,6 @@ const drawMusicalityScene = (ctx, fc, look) => {
       ctx.fillRect(Math.floor(nx + 3), Math.floor(ny - 5), 2, 1);
       ctx.globalAlpha = 1;
     }
-  }
-  // Crowd silhouettes at very bottom (heads + shoulders bobbing)
-  for (let i = 0; i < 5; i++) {
-    const cx = 18 + i * 40;
-    const bob = Math.sin(fc * 0.15 + i * 0.7) * 1;
-    _px(ctx, cx, Math.floor(116 + bob), 8, 8, '#0a0a0a');
-    _px(ctx, cx - 1, Math.floor(124 + bob), 10, 6, '#0a0a0a');
   }
 };
 
@@ -5236,37 +5270,81 @@ const drawTechnicalityScene = (ctx, fc, look) => {
   _px(ctx, 109, 60, 4, 18, '#1a1a1a');             // stand neck
   _px(ctx, 86, 26, 64, 38, '#0c0a09');             // bezel
   _px(ctx, 86, 26, 64, 2, '#3a3a3a');              // bezel top
-  _px(ctx, 88, 28, 60, 34, '#0a0a14');             // screen bg
-  // Animated waveform on screen — 4 bands oscillating
-  const screenX = 90, screenY = 32, screenW = 56, screenH = 28;
-  // Track lanes
-  for (let track = 0; track < 4; track++) {
-    const ty = screenY + track * 6;
-    // Lane background
-    _px(ctx, screenX, ty, screenW, 6, track % 2 === 0 ? '#10142a' : '#0c0a14');
-    const colors = ['#22d3ee', '#fbbf24', '#a78bfa', '#fb7185'];
-    for (let x = 0; x < screenW; x++) {
-      const v = Math.abs(Math.sin((x + fc * 0.5 + track * 3) * 0.2 + track));
-      const h = 1 + Math.floor(v * 4);
-      _px(ctx, screenX + x, ty + 5 - h, 1, h, colors[track]);
+  _px(ctx, 88, 28, 60, 34, '#2b2d31');             // discord screen bg (dark gray)
+  // ---- Discord-style server UI on the screen ----
+  const screenX = 88, screenY = 28, screenW = 60, screenH = 34;
+  // Server icon column (left rail)
+  _px(ctx, screenX, screenY, 8, screenH, '#1e1f22');
+  // Active server indicator (white pill on left edge)
+  _px(ctx, screenX, screenY + 5, 1, 5, '#fff');
+  // Server icons (rounded squares)
+  const serverColors = ['#5865f2', '#fbbf24', '#23a55a', '#f23f42'];
+  for (let i = 0; i < 4; i++) {
+    const sy = screenY + 4 + i * 7;
+    _px(ctx, screenX + 2, sy, 5, 5, serverColors[i]);
+    if (i === 0) {
+      // active server has a square (rounded effect)
+      _px(ctx, screenX + 2, sy, 5, 1, '#7884f3');
     }
   }
-  // Track separators
-  for (let i = 1; i < 4; i++) {
-    _px(ctx, screenX, screenY + i * 6, screenW, 1, '#1a2030');
+  // Channel sidebar (narrow — only icons + tiny labels)
+  const sideX = screenX + 8, sideW = 14;
+  _px(ctx, sideX, screenY, sideW, screenH, '#2b2d31');
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 4px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('BBX', sideX + 1, screenY + 5);
+  // Channel list (super short labels)
+  const channels = ['gen', 'beat', 'tec', 'clip'];
+  for (let i = 0; i < channels.length; i++) {
+    if (i === 1) {
+      _px(ctx, sideX, screenY + 7 + i * 5, sideW, 5, '#404249');
+      ctx.fillStyle = '#fff';
+    } else {
+      ctx.fillStyle = '#80848e';
+    }
+    ctx.fillText('#', sideX + 1, screenY + 11 + i * 5);
+    ctx.fillText(channels[i], sideX + 5, screenY + 11 + i * 5);
   }
-  // REC indicator (blinking)
-  if (fc % 30 < 22) {
-    ctx.fillStyle = '#dc2626';
-    ctx.font = 'bold 5px monospace';
+  // Main message area
+  const msgX = screenX + 22, msgY = screenY, msgW = screenW - 22;
+  _px(ctx, msgX, msgY, msgW, screenH, '#313338');
+  // Channel header bar
+  _px(ctx, msgX, msgY, msgW, 5, '#1e1f22');
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 4px monospace';
+  ctx.fillText('# beat', msgX + 1, msgY + 4);
+  ctx.fillStyle = '#7a7f87';
+  ctx.fillText('· 12 on', msgX + 14, msgY + 4);
+  // Messages — short text that fits
+  const messages = [
+    { color: '#fb7185', name: 'crystix', text: 'sick triplet!' },
+    { color: '#22d3ee', name: 'rohzel',  text: 'friday is on' },
+    { color: '#fbbf24', name: 'alim',    text: 'roll practice' },
+  ];
+  const newMsgIdx = Math.floor(fc / 90) % messages.length;
+  for (let i = 0; i < 3; i++) {
+    const my = msgY + 7 + i * 7;
+    _px(ctx, msgX + 1, my + 1, 3, 3, messages[i].color);
+    ctx.fillStyle = messages[i].color;
+    ctx.font = 'bold 4px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('● REC', screenX + 1, screenY + screenH - 1);
+    ctx.fillText(messages[i].name, msgX + 5, my + 3);
+    ctx.fillStyle = '#dbdee1';
+    ctx.font = '4px monospace';
+    ctx.fillText(messages[i].text, msgX + 5, my + 7);
+    if (i === newMsgIdx) {
+      _px(ctx, msgX + msgW - 4, my + 1, 3, 2, '#f23f42');
+    }
   }
-  // BPM counter top right of screen
-  ctx.fillStyle = '#22c55e';
-  ctx.font = 'bold 5px monospace';
-  ctx.textAlign = 'right';
-  ctx.fillText('120 BPM', screenX + screenW - 1, screenY + 6);
+  // Typing indicator at the bottom
+  const typingDot = Math.floor(fc / 12) % 4;
+  ctx.font = '4px monospace';
+  for (let i = 0; i < 3; i++) {
+    _px(ctx, msgX + 2 + i * 2, msgY + screenH - 3, 1, 1, i === typingDot ? '#dbdee1' : '#80848e');
+  }
+  ctx.fillStyle = '#80848e';
+  ctx.fillText('typing', msgX + 9, msgY + screenH - 1);
   // Power LED on monitor bezel
   if (fc % 50 < 40) _px(ctx, 144, 62, 1, 1, '#22c55e');
   // Keyboard
@@ -5383,15 +5461,11 @@ const drawOriginalityScene = (ctx, fc, look) => {
   _px(ctx, lcdX, lcdY, lcdW, lcdH, '#0a3a14');
   _px(ctx, lcdX, lcdY, lcdW, 1, '#1a5a24');
   _px(ctx, lcdX, lcdY + lcdH - 1, lcdW, 1, '#062a0a');
+  // LCD shows the steady "BEATBOX" title (no flicker)
   ctx.fillStyle = '#22c55e';
   ctx.font = 'bold 7px monospace';
   ctx.textAlign = 'center';
-  if (Math.floor(fc / 30) % 2 === 0) {
-    ctx.fillText('BEATBOX', lcdX + lcdW / 2, lcdY + 9);
-  } else {
-    const step = Math.floor(fc / 4) % 16;
-    ctx.fillText(`STEP ${String(step + 1).padStart(2, '0')}/16`, lcdX + lcdW / 2, lcdY + 9);
-  }
+  ctx.fillText('BEATBOX', lcdX + lcdW / 2, lcdY + 9);
   // Knobs (3 along top right)
   for (let i = 0; i < 3; i++) {
     const kx = mx + mw - 30 + i * 9;
@@ -7338,10 +7412,15 @@ const PowerNapAnimation = ({ char, onWake }) => {
   const slept = Math.max(0, napMinutes - startMinutesRef.current);
   const sleptHours = Math.floor(slept / 60);
   const sleptMins = Math.floor(slept % 60);
-  // Display the wall-clock time (game minutes since 6 AM)
+  // Wall-clock time (game minutes since 6 AM)
   const totalMin = napMinutes + 360;
   const hour24 = Math.floor(totalMin / 60) % 24;
   const minOfHour = Math.floor(totalMin % 60);
+  // Predicted energy when waking right now — matches finishNap math
+  // (+12 energy per hour slept, capped at maxEnergy).
+  const maxEnergy = char.maxEnergy ?? 100;
+  const predictedEnergy = Math.min(maxEnergy, char.energy + Math.floor((slept / 60) * 12));
+  const energyPct = Math.round((predictedEnergy / maxEnergy) * 100);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: '#0c0a09' }}>
@@ -7356,9 +7435,25 @@ const PowerNapAnimation = ({ char, onWake }) => {
           </div>
         </div>
         <PixelScene draw={(ctx, fc) => drawNapScene(ctx, fc, lookRef.current, napMinutes)} />
-        <div className="text-center text-amber-500 text-2xl tracking-widest"
-          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-          {String(hour24).padStart(2, '0')}:{String(minOfHour).padStart(2, '0')}
+        {/* Live HUD: in-game wall clock + energy gauge */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="border-2 border-stone-800 bg-stone-900/50 p-2 text-center">
+            <div className="text-[9px] uppercase tracking-widest text-stone-500">In-game time</div>
+            <div className="text-amber-500 text-2xl tracking-widest leading-none mt-1"
+              style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {String(hour24).padStart(2, '0')}:{String(minOfHour).padStart(2, '0')}
+            </div>
+          </div>
+          <div className="border-2 border-stone-800 bg-stone-900/50 p-2 text-center">
+            <div className="text-[9px] uppercase tracking-widest text-stone-500">Energy</div>
+            <div className="text-amber-500 text-2xl tracking-widest leading-none mt-1"
+              style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {predictedEnergy}/{maxEnergy}
+            </div>
+            <div className="mt-1 h-1.5 bg-stone-950 border border-stone-800">
+              <div className="h-full bg-amber-500 transition-all" style={{ width: `${energyPct}%` }} />
+            </div>
+          </div>
         </div>
         <Btn variant="primary" onClick={wakeUp} className="w-full py-3">
           WAKE UP ☀️
