@@ -616,6 +616,191 @@ const MINGLE_GENERIC = [
   }]}),
 ];
 
+// ---- Recurring named NPCs at the bar ----
+// PIG PEN — only present once he's challenged you. Lines depend on whether
+// you've battled, lost, won, or already had the Penny reveal beat.
+const MINGLE_PIGPEN = [
+  _enc('pigpen_pre', { weight: 4,
+    look: { shirt: '#1a1a1a', skin: '#d4a87a', hair: '#dc2626' },
+    when: (c) => c.storyFlags?.pigPenChallenged && !c.storyFlags?.pigPenBattled,
+    beats: [{
+      speaker: { name: 'PIG PEN', color: '#fb7185' },
+      line: "saturday's getting close. you bringing your A or what.",
+      options: [
+        { text: "i'll be there.",                outcome: { line: "we'll see.",                effects: { mood: +1 } } },
+        { text: "you sound nervous.",            outcome: { line: "ha. nervous. that's cute.",  effects: { mood: +2 } } },
+        { text: "(stay quiet)",                  outcome: { line: "...whatever. saturday.",    effects: { mood: -1 } } },
+      ],
+    }],
+  }),
+  _enc('pigpen_after_loss', { weight: 4,
+    look: { shirt: '#1a1a1a', skin: '#d4a87a', hair: '#dc2626' },
+    when: (c) => c.storyFlags?.pigPenBattled && (c.storyFlags?.pigPenWins || 0) === 0,
+    beats: [{
+      speaker: { name: 'PIG PEN', color: '#fb7185' },
+      line: "i told you. you're not ready.",
+      options: [
+        { text: "i'll be ready next time.",  outcome: { line: "yeah, alright. show me.",         effects: { mood: +2 } } },
+        { text: "i was off my A.",           outcome: { line: "everyone's off their A. excuses.", effects: { mood: -2 } } },
+        { text: "(walk past)",               outcome: { line: null,                              effects: {} } },
+      ],
+    }],
+  }),
+  _enc('pigpen_after_win', { weight: 4,
+    look: { shirt: '#1a1a1a', skin: '#d4a87a', hair: '#dc2626' },
+    when: (c) => (c.storyFlags?.pigPenWins || 0) >= 1 && !c.storyFlags?.pennyReveal,
+    beats: [{
+      speaker: { name: 'PIG PEN', color: '#fb7185' },
+      line: "rematch. this saturday. i'm not letting that one stand.",
+      options: [
+        { text: "anytime.",                  outcome: { line: "good.",                          effects: { mood: +3 } } },
+        { text: "you sure?",                 outcome: { line: "i said anytime.",                effects: { mood: +2 } } },
+        { text: "you talk a lot.",           outcome: { line: "that's the GAME, brother.",      effects: { mood: +1 } } },
+      ],
+    }],
+  }),
+  _enc('pigpen_post_penny', { weight: 3,
+    look: { shirt: '#1a1a1a', skin: '#d4a87a', hair: '#dc2626' },
+    when: (c) => c.storyFlags?.pennyReveal,
+    beats: [{
+      speaker: { name: 'PIG PEN', color: '#fb7185' },
+      line: "you eat dinner?",
+      options: [
+        { text: "not yet.",                  outcome: { line: "kitchen's closed. but the wings here are not bad.", effects: { mood: +5 } } },
+        { text: "yeah. you?",                outcome: { line: "yeah. i'm good.",                                    effects: { mood: +4 } } },
+        { text: "what'd you call me?",       outcome: { line: "...nothing. forget it.",                             effects: { mood: +2 } } },
+      ],
+    }],
+  }),
+];
+
+// CRYSTIX — online friend, very rare in-person. Gated by 2+ battle wins
+// total. No romance, just a warm meeting.
+const MINGLE_CRYSTIX = [
+  _enc('crystix_first_meet', { weight: 1,
+    look: { shirt: '#22d3ee', skin: '#e0b890', hair: '#3a2410' },
+    when: (c) => (c.defeated?.length || 0) >= 2 && !c.storyFlags?.crystixMet,
+    beats: [{
+      speaker: { name: 'CRYSTIX', color: '#22d3ee' },
+      line: "yo. yo wait. you're— you're the kid. from the discord. the one that posts the rolls.",
+      options: [
+        { text: "crystix?? in the flesh??",       outcome: { line: "BRO. yes. i'm passing through. clip we doing — your tunes are nuts.",
+                                                              effects: { mood: +12, followers: +3, flags: { crystixMet: true } } } },
+        { text: "you're a real person.",          outcome: { line: "haha — i've been told. yeah. yeah it's me.",
+                                                              effects: { mood: +10, followers: +2, flags: { crystixMet: true } } } },
+        { text: "do i know you?",                 outcome: { line: "...crystix? from the forum? bro it's been YEARS.",
+                                                              effects: { mood: +6, flags: { crystixMet: true } } } },
+      ],
+    }],
+  }),
+  // Re-meet — happens occasionally after the first time, low weight
+  _enc('crystix_remeet', { weight: 1,
+    look: { shirt: '#22d3ee', skin: '#e0b890', hair: '#3a2410' },
+    when: (c) => c.storyFlags?.crystixMet,
+    beats: [{
+      speaker: { name: 'CRYSTIX', color: '#22d3ee' },
+      line: "you again! i'm in town for like another week. wild we keep crossing.",
+      options: [
+        { text: "we should do something.",        outcome: { line: "for real. text me.",     effects: { mood: +6 } } },
+        { text: "good to see you.",               outcome: { line: "you too man.",           effects: { mood: +5 } } },
+        { text: "still here? thought you'd left.", outcome: { line: "ha — soon. soon.",       effects: { mood: +3 } } },
+      ],
+    }],
+  }),
+];
+
+// SPONSORS — five brands, each with two stages. Pre-stage = casual stranger
+// (low weight, before threshold). Post-stage = pitch (medium weight, once
+// threshold hit). After accept/decline, the brand's flag locks them out.
+const _sponsorEncounter = (id, brand, color, threshold, intro, pitchLine, accept, decline) => ([
+  _enc(`sponsor_${id}_pre`, { weight: 2,
+    look: { shirt: color, skin: '#d4a87a', hair: '#3a2410' },
+    when: (c) => (c.followers || 0) < threshold && !c.storyFlags?.[`sponsor_${id}_done`],
+    beats: [{
+      speaker: { name: 'a guy in a logo polo', color },
+      line: intro,
+      options: [
+        { text: "yeah, i do music.",     outcome: { line: "interesting. interesting.",  effects: { mood: +2 } } },
+        { text: "what do you do?",       outcome: { line: "i'm in marketing. boring.",   effects: { mood: +1 } } },
+        { text: "(nod)",                 outcome: { line: "...alright then.",            effects: {} } },
+      ],
+    }],
+  }),
+  _enc(`sponsor_${id}_pitch`, { weight: 4,
+    look: { shirt: color, skin: '#d4a87a', hair: '#3a2410' },
+    when: (c) => (c.followers || 0) >= threshold && !c.storyFlags?.[`sponsor_${id}_done`],
+    beats: [{
+      speaker: { name: `${brand.toUpperCase()} REP`, color },
+      line: pitchLine,
+      options: [
+        { text: `accept the ${brand} deal`,
+          outcome: { line: accept,
+            effects: { cash: +50, followers: +10, mood: +8,
+              flags: { [`sponsor_${id}_done`]: true, [`sponsor_${id}_signed`]: true } } } },
+        { text: "i'll think about it.",
+          outcome: { line: "no rush. we'll be around.",
+            effects: { mood: +1 } } },
+        { text: "not interested.",
+          outcome: { line: decline,
+            effects: { flags: { [`sponsor_${id}_done`]: true } } } },
+      ],
+    }],
+  }),
+]);
+
+const MINGLE_SPONSORS = [
+  ..._sponsorEncounter('redfull', 'Redfull', '#dc2626', 50,
+    "those wings are NUTS huh. anyway — what do you do, you a musician?",
+    "we love your energy. we'd love to put REDFULL on your stage. $50 sign-on, our cans at every show. you in?",
+    "energy drink companies — sign every kid with a follower count. let's go.",
+    "your loss. literally."),
+  ..._sponsorEncounter('adipas', 'Adipas', '#a8a29e', 100,
+    "love your fit. did you get those at the thrift on søndergade?",
+    "ADIPAS culture. we want to drop some kit on you. you wear the stripes, we wire $50 + a fresh tracksuit every quarter.",
+    "stripes. shoes. tracksuit. you'll look the part for the festival.",
+    "you sure? thought you'd love the kit."),
+  ..._sponsorEncounter('sure', 'Sure', '#fbbf24', 75,
+    "the bar mics here are SO bad. you ever record clean?",
+    "SURE microphones. we want one of our SM-class on every show you play. fifty bucks up front, the gear's yours to keep.",
+    "the rolls deserve better than a bar mic. signed.",
+    "fair. when you change your mind we're here."),
+  ..._sponsorEncounter('snortvpn', 'Snort-VPN', '#a78bfa', 30,
+    "*sniff* — yeah. *sniff* — i'm in cybersecurity. *sniff* — privacy stuff.",
+    "*sniff sniff* — SNORT-VPN — best on the *sniff* market. $50 to mention us once a show. *sniff* deal?",
+    "yeah! *sniff* — yeah! you won't regret this *sniff*.",
+    "your call. *sniff* — your CALL."),
+  ..._sponsorEncounter('samsong', 'Samsong', '#22d3ee', 150,
+    "i'm in tech. boring conference here this week. you're way more interesting.",
+    "SAMSONG ELECTRONICS. our new headphones, your sets. fifty up front, swag for life. tasteful integration. you in?",
+    "welcome to the family. tasteful. understated. samsong.",
+    "alright. small loss for us, big loss for you. kidding."),
+];
+
+// Bad encounter — drunk in your face. No good options. Mood penalty.
+const MINGLE_BAD = [
+  _enc('drunk_aggressive', { weight: 2,
+    look: { shirt: '#7a3a40', skin: '#a87844', hair: '#1a1a1a' },
+    beats: [{
+      speaker: { name: '???', color: '#dc2626' },
+      line: "what're you LOOKIN at???",
+      options: [
+        { text: "nothing man, sorry.",       outcome: { line: "yeah, you better be sorry. PUNK.", effects: { mood: -8 } } },
+        { text: "you alright?",              outcome: { line: "i'm GREAT. fuck off.",              effects: { mood: -10 } } },
+        { text: "(walk away fast)",          outcome: { line: null,                                 effects: { mood: -3 } } },
+      ],
+    }],
+  }),
+];
+
+// Combined mingle pool — used by the bar's MINGLE button.
+const MINGLE_POOL = [
+  ...MINGLE_GENERIC,
+  ...MINGLE_PIGPEN,
+  ...MINGLE_CRYSTIX,
+  ...MINGLE_SPONSORS,
+  ...MINGLE_BAD,
+];
+
 // Filter encounters by their `when(c)` predicate, then weighted-pick one.
 const pickMingleEncounter = (char, pool) => {
   const eligible = pool.filter(e => {
@@ -5039,17 +5224,22 @@ const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
   const [picked, setPicked] = useState(null); // selected reply option (or null)
   const beat = encounter.beats[0];
   const speaker = beat.speaker;
-  // Stable random shirt + skin for the stranger silhouette per encounter
+  // Use the encounter's `look` if defined (for named NPCs like Pig Pen,
+  // Crystix, sponsors); otherwise randomise a generic stranger.
   const lookRef = useRef(null);
   if (!lookRef.current) {
-    const shirts = ['#a04040','#5a7050','#a06030','#4060a0','#a06090','#7a3a40','#5a3a18','#3a5a6a'];
-    const hairs = ['#1a1a2e','#3a2410','#5a2010','#7a3a20','#dadada'];
-    const skins = ['#d4a87a','#a87844','#e0b890','#7a5040'];
-    lookRef.current = {
-      shirt: speaker?.color || shirts[Math.floor(Math.random() * shirts.length)],
-      skin:  skins[Math.floor(Math.random() * skins.length)],
-      hair:  hairs[Math.floor(Math.random() * hairs.length)],
-    };
+    if (encounter.look) {
+      lookRef.current = encounter.look;
+    } else {
+      const shirts = ['#a04040','#5a7050','#a06030','#4060a0','#a06090','#7a3a40','#5a3a18','#3a5a6a'];
+      const hairs = ['#1a1a2e','#3a2410','#5a2010','#7a3a20','#dadada'];
+      const skins = ['#d4a87a','#a87844','#e0b890','#7a5040'];
+      lookRef.current = {
+        shirt: speaker?.color || shirts[Math.floor(Math.random() * shirts.length)],
+        skin:  skins[Math.floor(Math.random() * skins.length)],
+        hair:  hairs[Math.floor(Math.random() * hairs.length)],
+      };
+    }
   }
   const finish = () => {
     if (!picked) return;
@@ -9660,7 +9850,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
   const [mingleEncounter, setMingleEncounter] = useState(null);
   const startMingle = () => {
     if (char.energy < 6) { showToast('Too tired to chat', 'bad'); return; }
-    const enc = pickMingleEncounter(char, MINGLE_GENERIC);
+    const enc = pickMingleEncounter(char, MINGLE_POOL);
     if (!enc) { showToast('The bar is unusually quiet tonight.', 'info'); return; }
     setMingleEncounter(enc);
   };
