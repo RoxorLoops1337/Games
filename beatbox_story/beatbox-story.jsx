@@ -285,6 +285,112 @@ const BAD_SLEEP_REASONS = [
                        when: (c) => (c.pendingDebuff?.energy || 0) <= -10 },
 ];
 
+// ============ RANDOM EVENTS ============
+// Roll once per sleep transition. ~30% chance any event fires; the picker
+// filters by `when(c)` then weighted-picks. Each event applies a small
+// effect + a 1-beat narrative line. Some are pure flavor, some are setbacks,
+// some are surprise wins.
+const RANDOM_EVENTS = [
+  { id: 'bird_poop', weight: 3, color: '#a8a29e',
+    title: 'A SEAGULL JUST BLESSED YOU',
+    lines: ['Right on the jacket. New jacket too.'],
+    effects: { mood: -3 } },
+  { id: 'street_compliment', weight: 4, color: '#fbbf24',
+    title: 'STREET COMPLIMENT',
+    lines: ["A stranger heard you in the park.", '"that\'s actually sick. keep it up."'],
+    effects: { mood: +5, followers: +1 } },
+  { id: 'lost_tenner', weight: 2, color: '#22c55e',
+    title: 'TEN BUCKS ON THE GROUND',
+    lines: ['Wadded up next to the bus stop.', 'Nobody else around. Yours now.'],
+    effects: { cash: +10, mood: +4 } },
+  { id: 'song_on_radio', weight: 3, when: (c) => c.day >= 10, color: '#fb7185',
+    title: 'THE SONG',
+    lines: [
+      'A track came on. The one that made you start.',
+      "You're standing in the kitchen at 1 AM.",
+      "You're not the same person who first heard this.",
+    ],
+    effects: { mood: +12 } },
+  { id: 'old_yt_comment', weight: 2, when: (c) => c.day >= 14, color: '#fb7185',
+    title: 'A NOTIFICATION FROM 2017',
+    lines: [
+      'YouTube reminded you of a comment.',
+      "'one day i'll do this on a real stage.'",
+      "You'd forgotten you wrote it.",
+    ],
+    effects: { mood: +8 } },
+  { id: 'birthday_gig', weight: 2, when: (c) => c.storyFlags?.firstJam, color: '#fbbf24',
+    title: 'BIRTHDAY GIG',
+    lines: ["Someone DM'd you: birthday party tonight, $30 cash.", "Twenty minutes. Done. Easy money."],
+    effects: { cash: +30, followers: +3, mood: +5 } },
+  { id: 'journalist_dm', weight: 2, when: (c) => (c.followers || 0) >= 20, color: '#22d3ee',
+    title: 'A JOURNALIST WROTE',
+    lines: ['Local mag wants 200 words about the scene.', 'You answered. Thoughtfully.'],
+    effects: { stats: { sho: +1 }, mood: +6 } },
+  { id: 'crystix_viral', weight: 1, when: (c) => c.storyFlags?.crystixMet, color: '#22d3ee',
+    title: 'CRYSTIX TAGGED YOU',
+    lines: ['Their clip blew up. Your face is in the duet panel.', 'Notifications won\'t stop.'],
+    effects: { followers: +50, mood: +10 } },
+  { id: 'bike_stolen', weight: 2, when: (c) => c.day >= 5, color: '#dc2626',
+    title: 'YOUR BIKE IS GONE',
+    lines: ['You locked it. They cut the lock.', 'Walking everywhere now.'],
+    effects: { cash: -25, mood: -8 } },
+  { id: 'phone_died', weight: 2, when: (c) => c.day >= 4, color: '#a8a29e',
+    title: 'PHONE FROZE AT 3%',
+    lines: ['Then died completely. You missed every text.'],
+    effects: { mood: -5, special: 'markAllRead' } },
+  { id: 'algorithm_dud', weight: 2, when: (c) => (c.followers || 0) >= 30, color: '#5a5046',
+    title: 'POST FLOPPED',
+    lines: ['12 likes in 6 hours. The algorithm forgot you.'],
+    effects: { mood: -8 } },
+  { id: 'free_coffee', weight: 2, when: (c) => (c.followers || 0) >= 50, color: '#fbbf24',
+    title: 'FREE COFFEE',
+    lines: ['Barista recognized you. "this one\'s on the house."', 'You almost cried.'],
+    effects: { energy: +15, mood: +6 } },
+  { id: 'og_invite', weight: 1, when: (c) => c.day >= 20, color: '#D4A017',
+    title: 'AN OLDER VOICE LEFT A VOICEMEMO',
+    lines: ['"come by the studio next week. bring patterns."', "You don't recognize the number."],
+    effects: { stats: { tec: +1 }, mood: +8 } },
+  { id: 'rent_help', weight: 1, when: (c) => (c.rentLate || 0) >= 1, color: '#84cc16',
+    title: 'PARENTS WIRED MONEY',
+    lines: ['$40 in your account. No note.', "You'll call your mum later. Maybe."],
+    effects: { cash: +40, mood: +3 } },
+  { id: 'good_dream', weight: 2, when: (c) => c.day >= 8, color: '#a78bfa',
+    title: 'A GOOD DREAM',
+    lines: ['You woke up smiling for once.', "Couldn't tell anyone what it was about."],
+    effects: { mood: +10, energy: +5 } },
+];
+
+const pickRandomEvent = (c) => {
+  const eligible = RANDOM_EVENTS.filter(e => !e.when || (() => { try { return e.when(c); } catch { return false; } })());
+  if (!eligible.length) return null;
+  const total = eligible.reduce((s, e) => s + (e.weight || 1), 0);
+  let r = Math.random() * total;
+  for (const e of eligible) { r -= (e.weight || 1); if (r <= 0) return e; }
+  return eligible[eligible.length - 1];
+};
+
+// Apply a random event's effects to a char, returning a new char.
+const applyRandomEvent = (c, ev) => {
+  const e = ev?.effects || {};
+  let next = { ...c };
+  const max = c.maxEnergy ?? 100;
+  if (typeof e.mood === 'number')      next.mood = _clampPct((c.mood || 0) + e.mood);
+  if (typeof e.energy === 'number')    next.energy = Math.max(0, Math.min(max, (c.energy || 0) + e.energy));
+  if (typeof e.hunger === 'number')    next.hunger = _clampPct((c.hunger || 0) + e.hunger);
+  if (typeof e.cash === 'number')      next.cash = Math.max(0, (c.cash || 0) + e.cash);
+  if (typeof e.followers === 'number') next.followers = Math.max(0, (c.followers || 0) + e.followers);
+  if (e.stats) {
+    next.stats = { ...(c.stats || {}) };
+    for (const [k, v] of Object.entries(e.stats)) next.stats[k] = (next.stats[k] || 0) + v;
+  }
+  if (e.flags) next.storyFlags = { ...(c.storyFlags || {}), ...e.flags };
+  if (e.special === 'markAllRead') {
+    next.messages = (c.messages || []).map(m => ({ ...m, read: true }));
+  }
+  return next;
+};
+
 // Foxy — your roommate. Soft-spoken, plant person, makes too much soup.
 // Ambient quips used as a fallback (when nothing else is going on).
 const FOXY_QUIPS = [
@@ -618,6 +724,22 @@ const dayOfWeek = (day) => ((day || 1)) % 7;
 // Rent (auto-deducted on Sunday morning sleep transition; apartment tier sets the amount).
 const RENT_BY_TIER = [50, 100, 200];   // tier 1 / 2 / 3 weekly rent
 const COUCHSURF_DAYS = 3;              // days at Foxy's friend after eviction
+
+// ============ CONTENT GATING ============
+// Locations and shop sub-stores unlock day-by-day so the early game has a
+// natural ramp instead of dumping everything on the player at once.
+const CONTENT_UNLOCKS = {
+  bar:        { day: 3, label: "You're not ready for the cypher yet. Take a few days." },
+  shop:       { day: 4, label: 'Shops open day 4. Save your cash.' },
+  mingle:     { day: 5, label: 'You barely know the regulars yet. Day 5.' },
+  // Shop sub-store unlocks
+  store_music:     { day: 4, label: 'Day 4' },
+  store_furniture: { day: 5, label: 'Day 5' },
+  store_clothing:  { day: 7, label: 'Day 7' },
+  store_pet:       { day: 10, label: 'Day 10' },
+};
+const isUnlocked = (c, key) => (c?.day || 0) >= (CONTENT_UNLOCKS[key]?.day || 0);
+
 
 // Compute the rent event for a given char + new day. Returns null when
 // rent isn't due (not Sunday or already paid this week). When due, returns
@@ -8827,13 +8949,17 @@ function CreateScreen({ char, setChar, onDone }) {
 
 function HoodScreen({ go, char }) {
   const mins = char.minutes ?? 0;
+  const shopLockedByDay = !isUnlocked(char, 'shop');
+  const barLockedByDay  = !isUnlocked(char, 'bar');
   const places = [
     { id: 'house', name: 'The House', desc: 'Train, eat, rest', pixelIcon: 'home', color: '#D4A017' },
     { id: 'park', name: 'The Park', desc: 'Jam, busk, run', pixelIcon: 'tree', color: '#84cc16',
       locked: !isDayTime(mins), lockReason: 'The park is empty at night. Come back at sunrise (6 AM).' },
-    { id: 'shop', name: 'The Shop', desc: 'Gear & food', pixelIcon: 'shop', color: '#C8DCEF' },
-    { id: 'bar', name: 'The Bar', desc: `Tonight: ${BAR_SCHEDULE[dayOfWeek(char.day)].title}`, pixelIcon: 'beer', color: '#CC2200',
-      locked: !isNightTime(mins), lockReason: 'The bar opens at 6 PM. The cypher only happens at night.' },
+    { id: 'shop', name: 'The Shop', desc: 'Gear & food', pixelIcon: 'shop', color: '#C8DCEF',
+      locked: shopLockedByDay, lockReason: shopLockedByDay ? CONTENT_UNLOCKS.shop.label : null },
+    { id: 'bar', name: 'The Bar', desc: barLockedByDay ? '' : `Tonight: ${BAR_SCHEDULE[dayOfWeek(char.day)].title}`, pixelIcon: 'beer', color: '#CC2200',
+      locked: barLockedByDay || !isNightTime(mins),
+      lockReason: barLockedByDay ? CONTENT_UNLOCKS.bar.label : 'The bar opens at 6 PM. The cypher only happens at night.' },
   ];
   return (
     <div className="space-y-3 pt-4">
@@ -9156,6 +9282,14 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     const dayAdvance = rentEvent?.type === 'evicted' ? 1 + COUCHSURF_DAYS : 1;
     const newDay = c0.day + dayAdvance;
 
+    // ---- Random event roll ----
+    // ~30% chance overnight that something quietly happens. Picked from a
+    // weighted pool gated by current state.
+    let randomEvent = null;
+    if (rentEvent?.type !== 'evicted' && Math.random() < 0.30) {
+      randomEvent = pickRandomEvent({ ...c0, day: newDay });
+    }
+
     // ---- Bad-sleep roll ----
     // ~10% chance of a rough night. Picks the most state-relevant reason
     // (so a battle is on, you'll lie awake about the battle; rent is late,
@@ -9228,6 +9362,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         day: newDay, minutes: 0, pendingDebuff: null,
         storyFlags: flags,
         followers: (c.followers || 0) + extraFollowers };
+      // Apply random event effects inline so the morning state reflects them
+      if (randomEvent) next = applyRandomEvent(next, randomEvent);
       // Parent message triggers (cooldown ≥3 days between parent texts)
       const cd = newDay - (next.lastParentMsgDay || 0);
       if (cd >= 3) {
@@ -9255,6 +9391,15 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     // its own cutscene chain).
     if (badSleep && rentEvent?.type !== 'evicted') {
       setTimeout(() => showToast(`Bad sleep · ${badSleep.line}`, 'bad'), 100);
+    }
+
+    // Random event — small cutscene only on the rent-paid / clean path.
+    if (randomEvent && rentEvent?.type !== 'evicted') {
+      setTimeout(() => playCutscene({
+        speaker: randomEvent.title,
+        speakerColor: randomEvent.color || '#D4A017',
+        beats: [{ lines: randomEvent.lines }],
+      }), 200);
     }
 
     // Toast + queued cutscene based on the rent event
@@ -9987,18 +10132,21 @@ function ShopScreen({ char, setChar, showToast, go }) {
       <div className="grid grid-cols-2 gap-2">
         {stores.map(s => {
           const meta = STORE_META[s];
-          const ownedHere = Object.entries(GEAR_CATALOG).filter(([, it]) => it.store === s && char.gear?.[Object.entries(GEAR_CATALOG).find(([id, x]) => x === it)?.[0]]).length;
           const totalHere = Object.values(GEAR_CATALOG).filter(it => it.store === s).length;
           const owned = Object.entries(GEAR_CATALOG).filter(([id, it]) => it.store === s && char.gear?.[id]).length;
+          const locked = !isUnlocked(char, `store_${s}`);
           return (
-            <button key={s} onClick={() => setBranch(s)}
-              className="aspect-square border-2 border-stone-800 hover:border-amber-500/50 bg-stone-900/30 flex flex-col items-center justify-center gap-2 transition-all p-3">
-              <div className="text-4xl">{meta.icon}</div>
-              <div className="text-xs uppercase tracking-widest" style={{ color: meta.color, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            <button key={s} onClick={() => !locked && setBranch(s)} disabled={locked}
+              className={`aspect-square border-2 flex flex-col items-center justify-center gap-2 transition-all p-3 ${
+                locked ? 'border-stone-900 bg-stone-950/40 opacity-50 cursor-not-allowed'
+                       : 'border-stone-800 hover:border-amber-500/50 bg-stone-900/30'
+              }`}>
+              <div className="text-4xl">{locked ? '🔒' : meta.icon}</div>
+              <div className="text-xs uppercase tracking-widest" style={{ color: locked ? '#5a5046' : meta.color, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
                 {meta.display}
               </div>
               <div className="text-[9px] uppercase tracking-widest text-stone-600">
-                {owned}/{totalHere} owned
+                {locked ? `unlocks ${CONTENT_UNLOCKS[`store_${s}`].label.toLowerCase()}` : `${owned}/${totalHere} owned`}
               </div>
             </button>
           );
@@ -11097,8 +11245,8 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         </Panel>
       )}
 
-      {/* Mingle — chat with whoever's at the bar tonight. Available any open night. */}
-      {schedule.activity !== 'closed' && (
+      {/* Mingle — chat with whoever's at the bar. Gated by day-5 unlock. */}
+      {schedule.activity !== 'closed' && isUnlocked(char, 'mingle') && (
         <Panel title="Mingle">
           <div className="space-y-2">
             <div className="text-[10px] text-stone-500 uppercase tracking-wider">
@@ -11108,6 +11256,13 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
               MINGLE 🍻 (-6⚡, +30 min)
             </Btn>
             {char.energy < 6 && <div className="text-[10px] text-red-500 text-center uppercase">Need 6 energy</div>}
+          </div>
+        </Panel>
+      )}
+      {schedule.activity !== 'closed' && !isUnlocked(char, 'mingle') && (
+        <Panel title="Mingle 🔒">
+          <div className="text-[10px] text-stone-600 uppercase tracking-wider text-center py-1">
+            {CONTENT_UNLOCKS.mingle.label}
           </div>
         </Panel>
       )}
