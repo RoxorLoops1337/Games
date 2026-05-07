@@ -157,6 +157,11 @@ const initialChar = () => ({
   daily: {}, // counters reset every sleep — drives daily-challenge progress
   dailyChallenge: null, // { id, claimed } the challenge active for today
   achievements: {}, // { id: dayEarned } unlocked achievements
+  lastTourDay: 0, // last day a tour was started (cooldown: 7 days)
+  festivalState: null, // null | 'invited' | 'prepping' | 'done'
+  festivalAcceptedDay: 0,
+  festivalPath: null, // 'A' | 'B' | 'C'
+  festivalResult: null, // 'win' | 'lose'
   gear: {}, // { itemId: true } for purchased gear (PC, headphones, plant, etc.)
   lastCoffeeDay: 0, // last day you used the home coffee machine
   lastPlantWaterDay: 0, // last day you watered the houseplant (alive ≤5 days)
@@ -471,6 +476,17 @@ const applyAchievements = (c) => {
   for (const a of newly) ach[a.id] = day;
   return { char: { ...c, achievements: ach }, earned: newly };
 };
+
+// ============ FESTIVAL ARC (BBBWC2027) ============
+// Trigger conditions intentionally loose for now (testable from a fresh
+// save in a reasonable amount of play). Ratchet up after balancing.
+const festivalEligible = (c) =>
+  !c?.festivalState
+  && (c?.defeated?.length || 0) >= 3
+  && ((c?.openMicCount || 0) + Object.keys(c?.storyFlags || {}).filter(k => k === 'firstShowcase').length) >= 5
+  && (c?.stats?.mus || 0) >= 8 && (c?.stats?.tec || 0) >= 8 && (c?.stats?.ori || 0) >= 8 && (c?.stats?.sho || 0) >= 8
+  && (c?.day || 0) >= 25;
+const FESTIVAL_PREP_DAYS = 14;
 
 // Foxy — your roommate. Soft-spoken, plant person, makes too much soup.
 // Ambient quips used as a fallback (when nothing else is going on).
@@ -8670,6 +8686,11 @@ export default function BeatboxStory() {
     if (!c.daily || typeof c.daily !== 'object') c.daily = {};
     if (c.dailyChallenge === undefined) c.dailyChallenge = null;
     if (!c.achievements || typeof c.achievements !== 'object') c.achievements = {};
+    if (typeof c.lastTourDay !== 'number') c.lastTourDay = 0;
+    if (c.festivalState === undefined) c.festivalState = null;
+    if (typeof c.festivalAcceptedDay !== 'number') c.festivalAcceptedDay = 0;
+    if (c.festivalPath === undefined) c.festivalPath = null;
+    if (c.festivalResult === undefined) c.festivalResult = null;
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
     if (typeof c.lastPlantWaterDay !== 'number') c.lastPlantWaterDay = 0;
@@ -8965,7 +8986,7 @@ export default function BeatboxStory() {
           {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} playCutscene={playCutscene} />}
           {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
           {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
-          {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
+          {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
         </div>
 
@@ -9254,14 +9275,16 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         // Gear multipliers on top of the base gain:
         //  - PC boosts Tec & Ori by 25%
         //  - Mic boosts Mus by 25%
+        // Festival prep: doubles all training gains until the festival.
         if (statGain > 0) {
           let gearMult = 1;
           if ((trainStat === 'tec' || trainStat === 'ori') && hasGear(cRef, 'pc'))  gearMult *= 1.25;
           if (trainStat === 'mus' && hasGear(cRef, 'mic')) gearMult *= 1.25;
+          if (cRef?.festivalState === 'prepping') gearMult *= 2;
           if (gearMult > 1) {
             const before = statGain;
             statGain = Math.round(statGain * gearMult);
-            if (statGain > before) bonusText += ' · 🎛️';
+            if (statGain > before) bonusText += cRef?.festivalState === 'prepping' ? ' · 🌟 prep' : ' · 🎛️';
           }
         }
         if (statGain > 0) {
@@ -9529,6 +9552,13 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       if ((next.followers || 0) > 0) {
         if (Math.random() < 0.05) next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_FAN));
         if (Math.random() < 0.04) next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_HATE));
+      }
+      // Festival invite — when eligible, Rohzel sends the message that hooks
+      // the late-game arc. Only fires once.
+      if (festivalEligible(next) && !next.storyFlags?.festivalInviteSent) {
+        next = addMessage(next, 'rohzel', "festival people called.\nthey want you.\nsit down. let's talk.");
+        next.storyFlags = { ...(next.storyFlags || {}), festivalInviteSent: true };
+        next.festivalState = 'invited';
       }
       return next;
     });
@@ -11181,12 +11211,55 @@ const ShowcasePerformance = ({ char, durationMs = 20000, onComplete }) => {
 
 // ============ SCREEN: BAR ============
 
-function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
+function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene }) {
   const [selected, setSelected] = useState(null);
   const [rohzelLine, setRohzelLine] = useState(() => _pick(ROHZEL_GREETINGS));
   const [performingShowcase, setPerformingShowcase] = useState(false);
   const [performingOpenMic, setPerformingOpenMic] = useState(false);
   const [mingleEncounter, setMingleEncounter] = useState(null);
+
+  // Festival path resolver — wins/loses based on stat threshold + RNG.
+  // Each path applies its reward + closing cutscene + sets festivalState='done'.
+  const runFestival = (path) => {
+    const stats = char.stats || {};
+    const total = (stats.mus||0) + (stats.tec||0) + (stats.ori||0) + (stats.sho||0);
+    // Win odds scale with total stats; floor 25% at low, near-certain at high.
+    const winOdds = Math.min(0.95, 0.25 + total / 120);
+    const won = Math.random() < winOdds;
+    const cash = won ? (path === 'A' ? 600 : path === 'B' ? 350 : 450) : 80;
+    const fans = won ? (path === 'B' ? 200 : path === 'A' ? 100 : 130) : 25;
+    setChar(c => ({
+      ...c,
+      cash: (c.cash || 0) + cash,
+      followers: (c.followers || 0) + fans,
+      energy: Math.max(0, (c.energy || 0) - 50),
+      mood: _clampPct((c.mood || 0) + (won ? 30 : -10)),
+      xp: c.xp + (won ? 200 : 80),
+      festivalState: 'done',
+      festivalPath: path,
+      festivalResult: won ? 'win' : 'lose',
+      storyFlags: { ...(c.storyFlags || {}), festivalPlayed: true,
+        ...(won ? { festivalWon: true } : {}) },
+    }));
+    const pathName = path === 'A' ? 'the gauntlet' : path === 'B' ? 'the collab' : 'the showcase';
+    setTimeout(() => playCutscene?.({
+      speaker: won ? 'YOU MADE IT' : 'YOU PLAYED',
+      speakerColor: won ? '#fbbf24' : '#a8a29e',
+      beats: [{ lines: won
+        ? [
+            `You won ${pathName}.`,
+            "The room held its breath. The room let it out as you finished.",
+            `+$${cash} · +${fans} fans · the rest of your life feels different now.`,
+          ]
+        : [
+            `You played ${pathName}. The crowd was kind.`,
+            "Some things you carry home aren't trophies.",
+            `+$${cash} · +${fans} fans · you'll be back.`,
+          ]
+      }],
+    }), 100);
+    go('hood');
+  };
   const startMingle = () => {
     if (char.energy < 6) { showToast('Too tired to chat', 'bad'); return; }
     const enc = pickMingleEncounter(char, MINGLE_POOL);
@@ -11433,6 +11506,157 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         <div className="text-[10px] uppercase tracking-[0.3em] text-amber-500">{dayName} · {schedule.title}</div>
         <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-0.5">{schedule.tagline}</div>
       </div>
+
+      {/* Festival arc — invite, prep countdown, and the event button */}
+      {char.festivalState === 'invited' && (
+        <Panel title="🌟 BBBWC2027">
+          <div className="space-y-2">
+            <div className="text-stone-300 text-xs italic leading-snug" style={{ fontFamily: '"Oswald", sans-serif' }}>
+              "Rohzel slides paperwork across the bar. <br/>
+              World championship. Three weeks to prepare. They want you."
+            </div>
+            <div className="flex gap-2">
+              <Btn variant="primary" className="flex-1 py-2"
+                onClick={() => {
+                  setChar(c => ({ ...c, festivalState: 'prepping', festivalAcceptedDay: c.day }));
+                  setTimeout(() => playCutscene?.({
+                    speaker: 'ROHZEL',
+                    speakerColor: '#22d3ee',
+                    beats: [{ lines: [
+                      "good. fourteen days from today.",
+                      "training gives double the gains till then.",
+                      "don't waste it.",
+                    ]}],
+                  }), 100);
+                }}>
+                ACCEPT THE INVITE ✓
+              </Btn>
+              <Btn className="flex-1 py-2"
+                onClick={() => showToast('Rohzel: come back when you decide.', 'info')}>
+                NOT YET
+              </Btn>
+            </div>
+          </div>
+        </Panel>
+      )}
+      {char.festivalState === 'prepping' && (() => {
+        const daysIn = char.day - (char.festivalAcceptedDay || char.day);
+        const daysLeft = Math.max(0, FESTIVAL_PREP_DAYS - daysIn);
+        const ready = daysLeft === 0;
+        return (
+          <Panel title="🌟 BBBWC2027 PREP">
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase tracking-widest text-amber-500">
+                {ready ? 'TONIGHT IS THE NIGHT' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} to go · 2× training gains`}
+              </div>
+              {ready && (
+                <Btn variant="primary" className="w-full py-3"
+                  onClick={() => {
+                    setTimeout(() => playCutscene?.({
+                      speaker: 'BBBWC2027',
+                      speakerColor: '#fbbf24',
+                      beats: [{ lines: [
+                        "The room is bigger than anything you've played.",
+                        "Crew on the side. Sound check. Pick your path.",
+                      ]}],
+                      onComplete: () => {},
+                    }), 50);
+                    // open the path picker via a temporary screen flag
+                    setChar(c => ({ ...c, festivalState: 'choosing' }));
+                  }}>
+                  GO TO BBBWC →
+                </Btn>
+              )}
+            </div>
+          </Panel>
+        );
+      })()}
+      {char.festivalState === 'choosing' && (
+        <Panel title="🌟 BBBWC2027 — PICK YOUR PATH">
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500">
+              Each path: one big show. Win or lose, the arc closes.
+            </div>
+            {[
+              { id: 'A', label: 'Solo Battle Gauntlet', desc: '3 escalating opponents · highest cash · classic battle UI' },
+              { id: 'B', label: 'Collab with Crystix',   desc: 'duet showcase · highest fan gain', requires: c => !!c.storyFlags?.crystixMet, lock: 'Need to have met Crystix' },
+              { id: 'C', label: 'Solo Showcase',         desc: 'judges, no opponents · balanced reward' },
+            ].map(p => {
+              const locked = p.requires && !p.requires(char);
+              return (
+                <button key={p.id} disabled={locked} onClick={() => runFestival(p.id)}
+                  className={`w-full p-2 text-left border-2 ${locked ? 'border-stone-900 bg-stone-950/40 opacity-40' : 'border-stone-800 bg-stone-900/30 hover:border-amber-500'}`}>
+                  <div className="text-amber-500 text-sm uppercase tracking-widest" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                    {locked ? '🔒 ' : ''}{p.label}
+                  </div>
+                  <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                    {locked ? p.lock : p.desc}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+      {char.festivalState === 'done' && (
+        <Panel title="🌟 BBBWC2027 — done">
+          <div className="text-[10px] uppercase tracking-widest text-amber-500 text-center py-1">
+            you played the festival. {char.festivalResult === 'win' ? 'and you won.' : 'and you came home.'}
+          </div>
+        </Panel>
+      )}
+
+      {/* Out-of-town tour — gated by 50 followers, 7-day cooldown */}
+      {(char.followers || 0) >= 50 && (() => {
+        const cooled = (char.day - (char.lastTourDay || 0)) >= 7;
+        const onCooldown = !cooled;
+        const daysLeft = Math.max(0, 7 - (char.day - (char.lastTourDay || 0)));
+        const goTour = () => {
+          if (onCooldown || (char.energy || 0) < 30) return;
+          const sho = char.stats?.sho || 0;
+          const fans = 6 + Math.floor(sho / 2) + Math.floor(Math.random() * 6);
+          const cash = 60 + sho * 4 + Math.floor(Math.random() * 30);
+          setChar(c => ({
+            ...c,
+            day: c.day + 2,
+            minutes: 0,
+            cash: (c.cash || 0) + cash,
+            followers: (c.followers || 0) + fans,
+            energy: Math.floor((c.maxEnergy ?? 100) * 0.7),
+            hunger: Math.max(0, (c.hunger || 0) - 30),
+            mood: _clampPct((c.mood || 0) + 8),
+            lastTourDay: c.day,
+          }));
+          go('hood');
+          setTimeout(() => playCutscene?.({
+            speaker: 'WEEKEND TOUR',
+            speakerColor: '#fbbf24',
+            beats: [{ lines: [
+              "Two days on the road. Two cities, two crowds.",
+              "Bus seats. Cheap motel. Better sound system than home.",
+              `+$${cash} · +${fans} fans · two days gone.`,
+            ]}],
+          }), 100);
+        };
+        return (
+          <Panel title="Weekend Tour">
+            <div className="space-y-2">
+              <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                Two cities, one weekend. Bigger crowds. Bigger payday.
+              </div>
+              <Btn variant="primary" onClick={goTour}
+                disabled={onCooldown || (char.energy || 0) < 30}
+                className="w-full py-3">
+                {onCooldown ? `🚐 ON THE ROAD COOLDOWN · ${daysLeft}d`
+                            : '🚐 GO ON TOUR (-30⚡, +2 days)'}
+              </Btn>
+              {(char.energy || 0) < 30 && !onCooldown && (
+                <div className="text-[10px] text-red-500 text-center uppercase">Need 30 energy</div>
+              )}
+            </div>
+          </Panel>
+        );
+      })()}
 
       {/* Closed Mondays */}
       {schedule.activity === 'closed' && (
