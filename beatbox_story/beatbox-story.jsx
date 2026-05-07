@@ -1214,9 +1214,9 @@ const applyMingleEffects = (c, effects, outcome) => {
   const e = effects || {};
   const max = c.maxEnergy ?? 100;
   let next = { ...c };
-  if (typeof e.mood === 'number')      next.mood = Math.max(0, Math.min(100, (c.mood || 0) + e.mood));
+  if (typeof e.mood === 'number')      next.mood = _clampPct((c.mood || 0) + e.mood);
   if (typeof e.energy === 'number')    next.energy = Math.max(0, Math.min(max, (c.energy || 0) + e.energy));
-  if (typeof e.hunger === 'number')    next.hunger = Math.max(0, Math.min(100, (c.hunger || 0) + e.hunger));
+  if (typeof e.hunger === 'number')    next.hunger = _clampPct((c.hunger || 0) + e.hunger);
   if (typeof e.cash === 'number')      next.cash = Math.max(0, (c.cash || 0) + e.cash);
   if (typeof e.followers === 'number') next.followers = Math.max(0, (c.followers || 0) + e.followers);
   if (e.flags) next.storyFlags = { ...(c.storyFlags || {}), ...e.flags };
@@ -1411,7 +1411,7 @@ function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
     const newHunger = Math.max(0, c.hunger - cfg.tickHungerCost);
     // Activity's own per-tick mood delta + passive decay (hunger/energy taxed)
     const passiveDrain = _moodDrainFor(c, TICK_MINUTES);
-    const newMood = Math.max(0, Math.min(100, c.mood + (cfg.tickMoodDelta || 0) - passiveDrain));
+    const newMood = _clampPct(c.mood + (cfg.tickMoodDelta || 0) - passiveDrain);
 
     let stopReason = null;
     if (newEnergy < cfg.tickEnergyCost) stopReason = 'You collapsed from exhaustion';
@@ -1477,6 +1477,27 @@ const _px = (ctx, x, y, w, h, color) => {
   ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
 };
 
+// Pixel-art sky-gradient strip. Fills (0,0)→(W,h) row-by-row with an
+// rgb(r,g,b) interpolated per scanline. Each component takes a base byte
+// and an end-byte; intermediate values are linearly interpolated and
+// clamped to 255. Reused by every scene that paints a sky band.
+const _drawSky = (ctx, W, h, fromR, fromG, fromB, toR, toG, toB) => {
+  for (let y = 0; y < h; y++) {
+    const t = y / h;
+    const r = Math.min(255, Math.floor(fromR + t * (toR - fromR)));
+    const g = Math.min(255, Math.floor(fromG + t * (toG - fromG)));
+    const b = Math.min(255, Math.floor(fromB + t * (toB - fromB)));
+    _px(ctx, 0, y, W, 1, `rgb(${r},${g},${b})`);
+  }
+};
+
+// Common preset: sunny-day blue gradient (top → horizon).
+const _drawDaytimeSky = (ctx, W, h = 50) =>
+  _drawSky(ctx, W, h, 0x7a, 0xc0, 0xe8, 0x7a + 0x30, 0xc0 + 0x18, 0xe8 + 0x10);
+
+// Pct clamp helper: 0..100. Half a dozen places used _clampPct(...).
+const _clampPct = (v) => v < 0 ? 0 : v > 100 ? 100 : v;
+
 // ---------- BUSK ANIMATION ----------
 const BuskAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = true }) => {
   const canvasRef = useRef(null);
@@ -1525,15 +1546,8 @@ const BuskAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = t
       ctx.save();
       ctx.scale(PXSCALE, PXSCALE);
 
-      // ---- Daytime park (was nighttime city) ----
-      // Sky — soft blue gradient from top to horizon
-      for (let y = 0; y < 50; y++) {
-        const t = y / 50;
-        const r = Math.floor(0x7a + t * 0x30);
-        const g = Math.floor(0xc0 + t * 0x18);
-        const b = Math.floor(0xe8 + t * 0x10);
-        px(0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
-      }
+      // ---- Daytime park sky ----
+      _drawDaytimeSky(ctx, W);
       // Sun (top-right)
       px(118, 8, 10, 10, '#fef3c7');
       px(120, 6, 6, 14, '#fef3c7');
@@ -4710,13 +4724,7 @@ const JamAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = tr
       ctx.scale(PXSCALE, PXSCALE);
 
       // ---- Daytime park sky ----
-      for (let y = 0; y < 50; y++) {
-        const t = y / 50;
-        const r = Math.floor(0x7a + t * 0x30);
-        const g = Math.floor(0xc0 + t * 0x18);
-        const b = Math.floor(0xe8 + t * 0x10);
-        px(0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
-      }
+      _drawDaytimeSky(ctx, W);
       // Sun
       px(116, 6, 10, 10, '#fef3c7');
       px(118, 4, 6, 14, '#fef3c7');
@@ -5393,7 +5401,7 @@ const Bar = ({ value, max, color, icon: Icon, label }) => (
         <span>{Math.round(value)}/{max}</span>
       </div>
       <div className="h-2 bg-stone-900 border border-stone-800">
-        <div className="h-full transition-all" style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%`, background: color }} />
+        <div className="h-full transition-all" style={{ width: `${_clampPct((value / max) * 100)}%`, background: color }} />
       </div>
     </div>
   </div>
@@ -5767,7 +5775,7 @@ const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
       const t = passMinutes(c, 30);
       next.minutes = t.minutes;
       next.energy = Math.max(0, (next.energy || 0) - 6);
-      next.mood = Math.max(0, Math.min(100, t.mood + (next.mood - (c.mood || 0))));
+      next.mood = _clampPct(t.mood + (next.mood - (c.mood || 0)));
       next.mingleCount = (c.mingleCount || 0) + 1;
       next.metEncounters = { ...(c.metEncounters || {}),
         [encounter.id]: ((c.metEncounters || {})[encounter.id] || 0) + 1 };
@@ -6418,13 +6426,7 @@ const drawDoor = (ctx, fc) => {
 const _drawRentScene = (ctx, fc, state) => {
   const W = 200, H = 130;
   // Sky — subtle dawn gradient
-  for (let y = 0; y < 60; y++) {
-    const t = y / 60;
-    const r = Math.floor(0x4a + t * 0x40);
-    const g = Math.floor(0x40 + t * 0x40);
-    const b = Math.floor(0x6a + t * 0x18);
-    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
-  }
+  _drawSky(ctx, W, 60, 0x4a, 0x40, 0x6a, 0x4a + 0x40, 0x40 + 0x40, 0x6a + 0x18);
   // Sun on the horizon
   _px(ctx, 28, 24, 12, 12, '#fef3c7');
   ctx.fillStyle = 'rgba(254,243,199,0.25)';
@@ -6696,14 +6698,8 @@ const drawCouchSurfScene = (ctx, fc, look) => {
 // 6. Back on your feet — sun rising over restored apartment, fresh start.
 const drawBackOnFeetScene = (ctx, fc) => {
   const W = 200, H = 130;
-  // Bright sunrise sky
-  for (let y = 0; y < 90; y++) {
-    const t = y / 90;
-    const r = Math.floor(0xff * (1 - t * 0.2));
-    const g = Math.floor(0xc0 + t * 0x20);
-    const b = Math.floor(0x60 + t * 0x80);
-    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
-  }
+  // Bright sunrise sky (saturated peach → cool sky)
+  _drawSky(ctx, W, 90, 0xff, 0xc0, 0x60, Math.floor(0xff * 0.8), 0xc0 + 0x20, 0x60 + 0x80);
   // Big rising sun
   const sunY = 50;
   _px(ctx, 88, sunY, 24, 24, '#fef3c7');
@@ -7016,13 +7012,7 @@ const drawPigPen = (ctx, x, y, frameCount, pose = 'smug') => {
 const drawPigPenChallengeScene = (ctx, fc, look) => {
   const W = 200, H = 130;
   // Daytime park sky
-  for (let y = 0; y < 50; y++) {
-    const t = y / 50;
-    const r = Math.floor(0x7a + t * 0x30);
-    const g = Math.floor(0xc0 + t * 0x18);
-    const b = Math.floor(0xe8 + t * 0x10);
-    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
-  }
+  _drawDaytimeSky(ctx, W);
   // Sun upper-left
   _px(ctx, 16, 8, 10, 10, '#fef3c7');
   ctx.fillStyle = 'rgba(254,243,199,0.30)';
@@ -7219,13 +7209,7 @@ const drawPennyRevealScene = (ctx, fc, look) => {
 const drawDateScene = (ctx, fc, playerLook, partnerLook) => {
   const W = 200, H = 130;
   // Sky gradient
-  for (let y = 0; y < 50; y++) {
-    const t = y / 50;
-    const r = Math.floor(0x7a + t * 0x30);
-    const g = Math.floor(0xc0 + t * 0x18);
-    const b = Math.floor(0xe8 + t * 0x10);
-    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
-  }
+  _drawDaytimeSky(ctx, W);
   // Sun
   _px(ctx, 18, 8, 10, 10, '#fef3c7');
   ctx.fillStyle = 'rgba(254,243,199,0.30)';
@@ -9052,8 +9036,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         ...t,
         cash: c.cash - f.cost,
         energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + f.energy)),
-        hunger: Math.max(0, Math.min(100, c.hunger + f.hunger)),
-        mood:   Math.max(0, Math.min(100, t.mood + f.mood)),
+        hunger: _clampPct(c.hunger + f.hunger),
+        mood:   _clampPct(t.mood + f.mood),
       };
     });
     showToast(`${f.kind === 'drink' ? 'Drank' : 'Ate'} ${f.name}`, 'win');
@@ -9068,7 +9052,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       return { ...c, ...t,
         energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 25)),
         hunger: Math.max(0, c.hunger - 15),
-        mood:   Math.max(0, Math.min(100, t.mood + 2)),
+        mood:   _clampPct(t.mood + 2),
         lastCoffeeDay: c.day };
     });
     showToast('Home espresso · +25⚡ -15🍴 +2♥', 'win');
@@ -9081,7 +9065,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     setChar(c => {
       const t = passMinutes(c, 10);
       return { ...c, ...t,
-        mood: Math.max(0, Math.min(100, t.mood + 5)),
+        mood: _clampPct(t.mood + 5),
         lastYogaDay: c.day };
     });
     showToast('Meditated. +5 mood', 'win');
@@ -9105,8 +9089,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         ...c,
         ...t,
         energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 10)),
-        hunger: Math.max(0, Math.min(100, c.hunger + 30)),
-        mood:   Math.max(0, Math.min(100, t.mood + 2)),
+        hunger: _clampPct(c.hunger + 30),
+        mood:   _clampPct(t.mood + 2),
         lastFoxySoupDay: c.day,
       };
     });
@@ -9157,7 +9141,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         minutes: Math.min(1200, finalMinutes),
         energy: Math.max(0, Math.min(max, c.energy + Math.floor(hours * 12))),
         hunger: Math.max(0, c.hunger - Math.floor(hours * 3)),
-        mood:   Math.max(0, Math.min(100, c.mood + Math.floor(hours * 2))),
+        mood:   _clampPct(c.mood + Math.floor(hours * 2)),
       };
     });
     setNapping(false);
@@ -9236,8 +9220,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       const d = c.pendingDebuff;
       if (d) {
         energy = Math.max(0, Math.min(max, energy + (d.energy || 0)));
-        hunger = Math.max(0, Math.min(100, hunger + (d.hunger || 0)));
-        mood = Math.max(0, Math.min(100, mood + (d.mood || 0)));
+        hunger = _clampPct(hunger + (d.hunger || 0));
+        mood = _clampPct(mood + (d.mood || 0));
       }
       let next = { ...c, energy, hunger, mood, cash,
         rentLate, lastRentPaidDay,
@@ -10894,8 +10878,8 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         ...c, ...t,
         cash: c.cash - item.cost,
         energy: Math.max(0, Math.min(max, c.energy + (im.energy || 0))),
-        hunger: Math.max(0, Math.min(100, c.hunger + (im.hunger || 0))),
-        mood:   Math.max(0, Math.min(100, t.mood + (im.mood || 0))),
+        hunger: _clampPct(c.hunger + (im.hunger || 0)),
+        mood:   _clampPct(t.mood + (im.mood || 0)),
       };
       // Stack debuffs if multiple items consumed in one night
       const prev = c.pendingDebuff || {};
