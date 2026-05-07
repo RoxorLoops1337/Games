@@ -776,6 +776,244 @@ const MINGLE_SPONSORS = [
     "alright. small loss for us, big loss for you. kidding."),
 ];
 
+// ---- Romance candidates ----
+// Three to start (one masc, one fem, one nb). Each conversation beat has
+// three replies: a "right" answer that matches their vibe (+1 affinity, mood
+// up), a neutral one (0 affinity, mood up a bit), and a "wrong" one that
+// reads as rude or off-base (-1 affinity, slight mood penalty).
+//
+// Affinity thresholds drive state:
+//   < 5  : building     (regular convos)
+//   >= 5 : romancing    ("ask out" option appears, can schedule a date)
+//   >= 10: couple       (locked in; date scenes unlock partner perks)
+//
+// applyMingleEffects auto-promotes state when affinity crosses thresholds.
+
+// LUCA — he/him, sound engineer, music tech nerd. Right answers: curious
+// about gear, engaged with the craft. Wrong: dismissive or rude.
+const _LUCA_LOOK = { shirt: '#3a5060', skin: '#d4a87a', hair: '#1a1a2e' };
+const ROMANCE_LUCA = _enc('romance_luca', { weight: 2,
+  look: _LUCA_LOOK,
+  when: () => true,
+  beats: [
+    { speaker: { name: 'LUCA', color: '#22d3ee' },
+      line: "you're the beatboxer right? what mic you using on stage?",
+      options: [
+        { text: "honestly? whatever rohzel hands me. is that bad?",
+          outcome: { line: "haha — yeah, kinda. dynamic mics eat your highs. i'll dm you a list.",
+            effects: { mood: +6, affinity: { luca: +1 } } } },
+        { text: "i don't really think about it.",
+          outcome: { line: "you should. it's half the sound.",
+            effects: { mood: +2 } } },
+        { text: "is this a sales pitch?",
+          outcome: { line: "...no. forget i asked.",
+            effects: { mood: -3, affinity: { luca: -1 } } } },
+      ]},
+    { speaker: { name: 'LUCA', color: '#22d3ee' },
+      line: "the room here is so dead. the bass just vanishes.",
+      options: [
+        { text: "yeah, the back wall eats it. the curtains don't help.",
+          outcome: { line: "EXACTLY. someone said it. someone finally said it.",
+            effects: { mood: +6, affinity: { luca: +1 } } } },
+        { text: "i hadn't noticed.",
+          outcome: { line: "now you'll never un-hear it. sorry.",
+            effects: { mood: +2 } } },
+        { text: "it's fine.",
+          outcome: { line: "...sure.",
+            effects: { mood: -2, affinity: { luca: -1 } } } },
+      ]},
+    { speaker: { name: 'LUCA', color: '#22d3ee' },
+      line: "i'm engineering a session sunday. wanna come watch?",
+      options: [
+        { text: "i'd actually love that.",
+          outcome: { line: "ok. cool. i'll text you the address.",
+            effects: { mood: +8, affinity: { luca: +1 } } } },
+        { text: "depends. who's it for?",
+          outcome: { line: "a band. local. they're alright.",
+            effects: { mood: +3 } } },
+        { text: "i don't really do studios.",
+          outcome: { line: "huh. ok.",
+            effects: { mood: -2, affinity: { luca: -1 } } } },
+      ]},
+    { speaker: { name: 'LUCA', color: '#22d3ee' },
+      line: "what do you listen to when you're not beatboxing?",
+      options: [
+        { text: "honestly a lot of weird minimal stuff. you?",
+          outcome: { line: "minimal heads UNITE. i'll send you a playlist.",
+            effects: { mood: +6, affinity: { luca: +1 } } } },
+        { text: "depends on the day.",
+          outcome: { line: "yeah, fair, fair.",
+            effects: { mood: +2 } } },
+        { text: "i don't really listen to music.",
+          outcome: { line: "...wait what.",
+            effects: { mood: -3, affinity: { luca: -1 } } } },
+      ]},
+  ],
+});
+
+// MIRA — she/her, visual artist, comes to the bar to sketch. Right answers:
+// thoughtful, curious, low-key. Wrong: too cocky, dismissive of art.
+const _MIRA_LOOK = { shirt: '#a06090', skin: '#e0b890', hair: '#5a2010' };
+const ROMANCE_MIRA = _enc('romance_mira', { weight: 2,
+  look: _MIRA_LOOK,
+  when: () => true,
+  beats: [
+    { speaker: { name: 'MIRA', color: '#fb7185' },
+      line: "i'm trying to draw the bar but i can't get the lights right.",
+      options: [
+        { text: "can i see? — without judgement.",
+          outcome: { line: "...yeah. ok. just for a sec.",
+            effects: { mood: +6, affinity: { mira: +1 } } } },
+        { text: "you should add more red.",
+          outcome: { line: "thanks. helpful.",
+            effects: { mood: +1 } } },
+        { text: "drawing in a bar is a bit much.",
+          outcome: { line: "...alright.",
+            effects: { mood: -3, affinity: { mira: -1 } } } },
+      ]},
+    { speaker: { name: 'MIRA', color: '#fb7185' },
+      line: "i feel like everyone here is performing. you too. but it's nice.",
+      options: [
+        { text: "you noticed. i think about that all the time.",
+          outcome: { line: "yeah. yeah you would.",
+            effects: { mood: +6, affinity: { mira: +1 } } } },
+        { text: "i'm not performing. this is just me.",
+          outcome: { line: "okay. sure.",
+            effects: { mood: +1 } } },
+        { text: "everyone's performing all the time. it's not deep.",
+          outcome: { line: "right. ok.",
+            effects: { mood: -3, affinity: { mira: -1 } } } },
+      ]},
+    { speaker: { name: 'MIRA', color: '#fb7185' },
+      line: "i saw a video of you. you really focus when you're in it.",
+      options: [
+        { text: "thank you. that's the only place i'm not in my head.",
+          outcome: { line: "i could tell. that's why i kept watching.",
+            effects: { mood: +8, affinity: { mira: +1 } } } },
+        { text: "haha thanks.",
+          outcome: { line: "(soft smile.)",
+            effects: { mood: +3 } } },
+        { text: "you watched me a lot then?",
+          outcome: { line: "...not — not like that.",
+            effects: { mood: -2, affinity: { mira: -1 } } } },
+      ]},
+    { speaker: { name: 'MIRA', color: '#fb7185' },
+      line: "when did you know you wanted to do this?",
+      options: [
+        { text: "fourteen. i watched a video nine times in a row.",
+          outcome: { line: "that's a real answer. most people give a fake one.",
+            effects: { mood: +8, affinity: { mira: +1 } } } },
+        { text: "i don't know. it just kept being there.",
+          outcome: { line: "yeah. yeah it goes like that.",
+            effects: { mood: +4 } } },
+        { text: "it's just for cash, honestly.",
+          outcome: { line: "oh. okay.",
+            effects: { mood: -3, affinity: { mira: -1 } } } },
+      ]},
+  ],
+});
+
+// SKY — they/them, dancer, friend of Rohzel's, playful. Right answers:
+// playful, honest, can take a joke. Wrong: too earnest or too try-hard.
+const _SKY_LOOK = { shirt: '#fbbf24', skin: '#a87844', hair: '#dadada' };
+const ROMANCE_SKY = _enc('romance_sky', { weight: 2,
+  look: _SKY_LOOK,
+  when: () => true,
+  beats: [
+    { speaker: { name: 'SKY', color: '#84cc16' },
+      line: "ok don't beatbox at me. everyone does. it's exhausting.",
+      options: [
+        { text: "i wasn't going to. i'm trying to drink in peace.",
+          outcome: { line: "OKAY thank you. that's the energy.",
+            effects: { mood: +6, affinity: { sky: +1 } } } },
+        { text: "deal.",
+          outcome: { line: "deal.",
+            effects: { mood: +3 } } },
+        { text: "*does a small beat anyway*",
+          outcome: { line: "...you couldn't help yourself.",
+            effects: { mood: -2, affinity: { sky: -1 } } } },
+      ]},
+    { speaker: { name: 'SKY', color: '#84cc16' },
+      line: "i dance. badly. on purpose. it's a whole thing.",
+      options: [
+        { text: "show me sometime?",
+          outcome: { line: "absolutely not. you have to earn it.",
+            effects: { mood: +6, affinity: { sky: +1 } } } },
+        { text: "what does that mean.",
+          outcome: { line: "you'll see one day. or you won't.",
+            effects: { mood: +3 } } },
+        { text: "you should take it more seriously.",
+          outcome: { line: "ok dad.",
+            effects: { mood: -3, affinity: { sky: -1 } } } },
+      ]},
+    { speaker: { name: 'SKY', color: '#84cc16' },
+      line: "rohzel said you're new-ish. how's the city treating you?",
+      options: [
+        { text: "broke. tired. weirdly happy.",
+          outcome: { line: "iconic. that's literally the trifecta.",
+            effects: { mood: +8, affinity: { sky: +1 } } } },
+        { text: "it's fine. it's a city.",
+          outcome: { line: "ok mr. relatable.",
+            effects: { mood: +3 } } },
+        { text: "not how i pictured it.",
+          outcome: { line: "yeah well, nothing is.",
+            effects: { mood: +1 } } },
+      ]},
+    { speaker: { name: 'SKY', color: '#84cc16' },
+      line: "if you HAD to dance to one song forever — what's it.",
+      options: [
+        { text: "something stupid. i'd want it to be stupid.",
+          outcome: { line: "STOP. i love this answer. i love this person.",
+            effects: { mood: +8, affinity: { sky: +1 } } } },
+        { text: "i don't really dance.",
+          outcome: { line: "everyone dances. some of us just lie about it.",
+            effects: { mood: +3 } } },
+        { text: "something profound. classical maybe.",
+          outcome: { line: "...sure, mozart. mozart for life.",
+            effects: { mood: -1, affinity: { sky: -1 } } } },
+      ]},
+  ],
+});
+
+// Ask-out variants — appear when affinity >= 5 and no current dateBooking.
+// Schedule a park date 2 days from now at 16:00.
+const _askOutEnc = (id, name, color, look) => _enc(`romance_${id}_askout`, { weight: 3,
+  look,
+  when: (c) => (c.romanceAffinity?.[id] || 0) >= 5
+              && (c.romanceState?.[id] || 'building') !== 'couple'
+              && !c.dateBooking,
+  beats: [{
+    speaker: { name, color },
+    line: id === 'sky'
+      ? "ok. listen. i'm gonna do something weird. you free saturday?"
+      : id === 'mira'
+        ? "i was thinking — would you wanna meet at the park sometime? not weird."
+        : "i'm at the park sunday afternoon. you should come. we can just talk.",
+    options: [
+      { text: "yes. let's do it.",
+        outcome: {
+          line: id === 'sky' ? "OK ok ok ok. saturday. park. you better show.": id === 'mira' ? "ok. let's say sunday at four." : "i'll be at the park bench by the trees. you'll find me.",
+          effects: { mood: +12, affinity: { [id]: +2 },
+            flags: { [`${id}_dateScheduled`]: true } },
+          // The encounter handler reads bookDate to schedule it.
+          bookDate: { partner: id, partnerName: name, partnerColor: color, daysAhead: 2, minute: 600 },
+        } },
+      { text: "let me think about it.",
+        outcome: { line: "...yeah. ok. sure.",
+          effects: { mood: -1, affinity: { [id]: -1 } } } },
+    ],
+  }],
+});
+
+const MINGLE_ROMANCE = [
+  ROMANCE_LUCA,
+  ROMANCE_MIRA,
+  ROMANCE_SKY,
+  _askOutEnc('luca', 'LUCA', '#22d3ee', _LUCA_LOOK),
+  _askOutEnc('mira', 'MIRA', '#fb7185', _MIRA_LOOK),
+  _askOutEnc('sky',  'SKY',  '#84cc16', _SKY_LOOK),
+];
+
 // Bad encounter — drunk in your face. No good options. Mood penalty.
 const MINGLE_BAD = [
   _enc('drunk_aggressive', { weight: 2,
@@ -798,6 +1036,7 @@ const MINGLE_POOL = [
   ...MINGLE_PIGPEN,
   ...MINGLE_CRYSTIX,
   ...MINGLE_SPONSORS,
+  ...MINGLE_ROMANCE,
   ...MINGLE_BAD,
 ];
 
@@ -816,8 +1055,10 @@ const pickMingleEncounter = (char, pool) => {
   return eligible[eligible.length - 1];
 };
 
-// Apply the effects from a chosen reply to the char.
-const applyMingleEffects = (c, effects) => {
+// Apply the effects from a chosen reply to the char. Auto-promotes romance
+// state based on resulting affinity (>=10 = couple, >=5 = romancing), and
+// schedules a date booking if the option carried a `bookDate` directive.
+const applyMingleEffects = (c, effects, outcome) => {
   const e = effects || {};
   const max = c.maxEnergy ?? 100;
   let next = { ...c };
@@ -829,8 +1070,27 @@ const applyMingleEffects = (c, effects) => {
   if (e.flags) next.storyFlags = { ...(c.storyFlags || {}), ...e.flags };
   if (e.affinity) {
     const aff = { ...(c.romanceAffinity || {}) };
-    for (const [k, v] of Object.entries(e.affinity)) aff[k] = (aff[k] || 0) + v;
+    for (const [k, v] of Object.entries(e.affinity)) aff[k] = Math.max(0, (aff[k] || 0) + v);
     next.romanceAffinity = aff;
+    // Auto-track romance state per candidate
+    const state = { ...(c.romanceState || {}) };
+    for (const id of Object.keys(aff)) {
+      if (aff[id] >= 10)      state[id] = 'couple';
+      else if (aff[id] >= 5)  state[id] = 'romancing';
+      else                    state[id] = 'building';
+    }
+    next.romanceState = state;
+  }
+  // Date booking — set on the option that asks the partner out
+  if (outcome?.bookDate) {
+    const bd = outcome.bookDate;
+    next.dateBooking = {
+      partner: bd.partner,
+      partnerName: bd.partnerName,
+      partnerColor: bd.partnerColor,
+      day: (c.day || 1) + (bd.daysAhead || 2),
+      minute: bd.minute || 600,
+    };
   }
   return next;
 };
@@ -5222,7 +5482,13 @@ const FoxyModal = ({ char, setChar, showToast, onClose }) => {
 
 const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
   const [picked, setPicked] = useState(null); // selected reply option (or null)
-  const beat = encounter.beats[0];
+  // Stable random beat per mount — encounters can carry multiple beats and
+  // we pick one at random so each meeting feels fresh.
+  const beatRef = useRef(null);
+  if (!beatRef.current) {
+    beatRef.current = encounter.beats[Math.floor(Math.random() * encounter.beats.length)];
+  }
+  const beat = beatRef.current;
   const speaker = beat.speaker;
   // Use the encounter's `look` if defined (for named NPCs like Pig Pen,
   // Crystix, sponsors); otherwise randomise a generic stranger.
@@ -5244,7 +5510,7 @@ const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
   const finish = () => {
     if (!picked) return;
     setChar(c => {
-      let next = applyMingleEffects(c, picked.outcome.effects);
+      let next = applyMingleEffects(c, picked.outcome.effects, picked.outcome);
       next.minutes = (c.minutes || 0) + 30;
       next.energy = Math.max(0, (next.energy || 0) - 6);
       next.mingleCount = (c.mingleCount || 0) + 1;
@@ -5252,6 +5518,28 @@ const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
         [encounter.id]: ((c.metEncounters || {})[encounter.id] || 0) + 1 };
       return next;
     });
+    // Toast when a date gets scheduled or someone becomes a couple
+    if (picked.outcome.bookDate) {
+      const bd = picked.outcome.bookDate;
+      const dayName = DAY_NAMES_SHORT[((char.day || 1) + (bd.daysAhead || 2)) % 7];
+      const m = bd.minute || 600;
+      const hh = String(Math.floor(((m + 360) / 60) % 24)).padStart(2, '0');
+      const mm = String(Math.floor((m + 360) % 60)).padStart(2, '0');
+      showToast?.(`Date with ${bd.partnerName}: ${dayName} ${hh}:${mm} · park`, 'win');
+    } else if (picked.outcome.effects?.affinity) {
+      // Detect promotion to couple
+      for (const [id, delta] of Object.entries(picked.outcome.effects.affinity)) {
+        const newAff = (char.romanceAffinity?.[id] || 0) + delta;
+        const oldState = char.romanceState?.[id] || 'building';
+        if (newAff >= 10 && oldState !== 'couple') {
+          showToast?.(`You and ${id.toUpperCase()} are a couple now ❤️`, 'win');
+          break;
+        } else if (newAff >= 5 && oldState === 'building') {
+          showToast?.(`Things with ${id.toUpperCase()} are getting real`, 'win');
+          break;
+        }
+      }
+    }
     onClose?.();
   };
   return (
@@ -6668,6 +6956,117 @@ const drawPennyRevealScene = (ctx, fc, look) => {
   // Quiet vignette / dim atmosphere
   ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
   ctx.fillRect(0, 0, W, H);
+};
+
+// Park date scene — both characters on a bench under a tree, daylight,
+// soft sparkles. Used as the cutscene backdrop when a player meets their
+// scheduled romance partner at the park.
+const drawDateScene = (ctx, fc, playerLook, partnerLook) => {
+  const W = 200, H = 130;
+  // Sky gradient
+  for (let y = 0; y < 50; y++) {
+    const t = y / 50;
+    const r = Math.floor(0x7a + t * 0x30);
+    const g = Math.floor(0xc0 + t * 0x18);
+    const b = Math.floor(0xe8 + t * 0x10);
+    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
+  }
+  // Sun
+  _px(ctx, 18, 8, 10, 10, '#fef3c7');
+  ctx.fillStyle = 'rgba(254,243,199,0.30)';
+  ctx.beginPath(); ctx.arc(23, 13, 14, 0, Math.PI * 2); ctx.fill();
+  // Cloud
+  _px(ctx, 100, 12, 22, 4, '#fff');
+  _px(ctx, 104, 9, 14, 7, '#fff');
+  _px(ctx, 108, 7, 6, 9, '#fff');
+  _px(ctx, 102, 16, 18, 1, '#dadada');
+  // Grass
+  _px(ctx, 0, 50, W, 80, '#6a9a3a');
+  for (let i = 0; i < 24; i++) {
+    const gx = (i * 9) % W;
+    const gy = 56 + (i % 3) * 6;
+    _px(ctx, gx, gy, 1, 2, '#5a8a30');
+  }
+  // Tree on the left, behind the bench
+  _px(ctx, 32, 30, 28, 30, '#3a7028');
+  _px(ctx, 28, 36, 36, 18, '#3a7028');
+  _px(ctx, 24, 40, 44, 12, '#3a7028');
+  _px(ctx, 36, 46, 18, 8, '#4a8038');
+  _px(ctx, 44, 60, 4, 24, '#3a2410');                    // trunk
+  // Bench (centered-right under the tree)
+  _px(ctx, 60, 90, 80, 4, '#7a5040');                    // seat plank
+  _px(ctx, 60, 90, 80, 1, '#a07050');
+  _px(ctx, 60, 78, 80, 2, '#7a5040');                    // back top
+  _px(ctx, 60, 80, 4, 12, '#5a3a18');                    // left arm
+  _px(ctx, 136, 80, 4, 12, '#5a3a18');                   // right arm
+  _px(ctx, 64, 94, 4, 12, '#3a2410');                    // left leg
+  _px(ctx, 132, 94, 4, 12, '#3a2410');                   // right leg
+  // Two figures sitting on the bench, facing forward
+  // Player on the left
+  const px = 84, partnerX = 116, seatY = 92;
+  // Player legs
+  _px(ctx, px - 4, seatY + 1, 3, 8, '#1a1a2e');
+  _px(ctx, px + 1, seatY + 1, 3, 8, '#1a1a2e');
+  _px(ctx, px - 4, seatY + 8, 3, 1, '#fff');
+  _px(ctx, px + 1, seatY + 8, 3, 1, '#fff');
+  // Player body
+  _px(ctx, px - 5, seatY - 11, 10, 12, playerLook?.shirt || '#a78bfa');
+  _px(ctx, px - 5, seatY - 11, 10, 1, '#fff');
+  // Player arms (one resting between them, one on lap)
+  _px(ctx, px - 7, seatY - 9, 2, 8, playerLook?.shirt || '#a78bfa');
+  _px(ctx, px + 5, seatY - 9, 2, 8, playerLook?.shirt || '#a78bfa');
+  _px(ctx, px - 7, seatY - 2, 2, 2, playerLook?.skin || '#d4a87a');
+  _px(ctx, px + 5, seatY - 2, 2, 2, playerLook?.skin || '#d4a87a');
+  // Player head
+  _px(ctx, px - 4, seatY - 18, 8, 7, playerLook?.skin || '#d4a87a');
+  _px(ctx, px - 4, seatY - 20, 8, 3, playerLook?.hair || '#1a1a2e');
+  _px(ctx, px - 3, seatY - 16, 1, 1, '#0c0a09');
+  _px(ctx, px + 1, seatY - 16, 1, 1, '#0c0a09');
+  _px(ctx, px - 1, seatY - 13, 3, 1, '#3a1010');         // small smile
+  // Partner mirrored (head colors per their look)
+  _px(ctx, partnerX - 4, seatY + 1, 3, 8, '#1a1a2e');
+  _px(ctx, partnerX + 1, seatY + 1, 3, 8, '#1a1a2e');
+  _px(ctx, partnerX - 4, seatY + 8, 3, 1, '#fff');
+  _px(ctx, partnerX + 1, seatY + 8, 3, 1, '#fff');
+  _px(ctx, partnerX - 5, seatY - 11, 10, 12, partnerLook?.shirt || '#fb7185');
+  _px(ctx, partnerX - 5, seatY - 11, 10, 1, '#fff');
+  _px(ctx, partnerX - 7, seatY - 9, 2, 8, partnerLook?.shirt || '#fb7185');
+  _px(ctx, partnerX + 5, seatY - 9, 2, 8, partnerLook?.shirt || '#fb7185');
+  _px(ctx, partnerX - 7, seatY - 2, 2, 2, partnerLook?.skin || '#e0b890');
+  _px(ctx, partnerX + 5, seatY - 2, 2, 2, partnerLook?.skin || '#e0b890');
+  _px(ctx, partnerX - 4, seatY - 18, 8, 7, partnerLook?.skin || '#e0b890');
+  _px(ctx, partnerX - 4, seatY - 20, 8, 3, partnerLook?.hair || '#5a2010');
+  _px(ctx, partnerX - 3, seatY - 16, 1, 1, '#0c0a09');
+  _px(ctx, partnerX + 1, seatY - 16, 1, 1, '#0c0a09');
+  _px(ctx, partnerX - 1, seatY - 13, 3, 1, '#3a1010');
+  // Hearts drifting up between them
+  for (let i = 0; i < 3; i++) {
+    const phase = (fc * 0.6 + i * 28) % 80;
+    if (phase < 60) {
+      const hx = 100 + Math.sin((fc * 0.05) + i) * 4;
+      const hy = 80 - phase * 0.6;
+      ctx.globalAlpha = Math.max(0, 1 - phase / 60);
+      _px(ctx, Math.floor(hx), Math.floor(hy), 3, 2, '#fb7185');
+      _px(ctx, Math.floor(hx), Math.floor(hy + 2), 1, 1, '#fb7185');
+      _px(ctx, Math.floor(hx + 2), Math.floor(hy + 2), 1, 1, '#fb7185');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Crowd silhouettes far in the background
+  for (let i = 0; i < 6; i++) {
+    const cx = 4 + i * 32;
+    const headBob = Math.sin(fc * 0.15 + i * 0.5) * 0.5;
+    _px(ctx, cx, 60 + headBob, 3, 3, '#a87844');
+    _px(ctx, cx - 1, 63 + headBob, 5, 6, ['#a04040','#5a7050','#a06030'][i % 3]);
+  }
+  // Sparkles
+  for (let i = 0; i < 6; i++) {
+    if ((fc + i * 11) % 60 < 30) {
+      const sx = 60 + i * 12;
+      const sy = 30 + (i % 3) * 8;
+      _px(ctx, sx, sy, 1, 1, '#fef3c7');
+    }
+  }
 };
 
 // Mingle scene — bar interior with the stranger silhouette occupying the
@@ -9118,6 +9517,67 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
   const charRef = useRef(char);
   useEffect(() => { charRef.current = char; }, [char]);
 
+  // ---- Date arrival check ----
+  // If you walk into the park on the day a romance partner asked you to
+  // meet here, surface a "MEET <PARTNER>" button. Trigger the date scene
+  // when tapped; consume the booking either way (showing up = +affinity,
+  // showing up late = mood penalty handled below).
+  const dateBooking = char.dateBooking;
+  const onDateDay = !!dateBooking && (dateBooking.day === char.day);
+  const dateMissed = !!dateBooking && (dateBooking.day < char.day);
+  // If you're already past the date day with the booking still set, fire
+  // a one-time stand-up penalty + clear the booking.
+  useEffect(() => {
+    if (!dateMissed) return;
+    const partner = dateBooking.partner;
+    setChar(c => ({
+      ...c,
+      dateBooking: null,
+      mood: Math.max(0, (c.mood || 0) - 10),
+      romanceAffinity: { ...(c.romanceAffinity || {}), [partner]: Math.max(0, (c.romanceAffinity?.[partner] || 0) - 2) },
+    }));
+    showToast?.(`You stood ${dateBooking.partnerName} up. -10 mood.`, 'bad');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateMissed]);
+
+  const goOnDate = () => {
+    if (!onDateDay) return;
+    const bd = dateBooking;
+    const partnerLook =
+      bd.partner === 'luca' ? _LUCA_LOOK :
+      bd.partner === 'mira' ? _MIRA_LOOK :
+      bd.partner === 'sky'  ? _SKY_LOOK  : { shirt: '#a78bfa' };
+    const playerLook = lookFromChar(char);
+    playCutscene?.({
+      speaker: bd.partnerName,
+      speakerColor: bd.partnerColor,
+      beats: [{
+        drawScene: (ctx, fc) => drawDateScene(ctx, fc, playerLook, partnerLook),
+        lines: [
+          "you came.",
+          "i wasn't sure if you would.",
+          "...this is nice.",
+        ],
+      }],
+    });
+    // Apply: clear booking, +affinity, +mood, +1 hour gametime
+    setChar(c => {
+      const aff = { ...(c.romanceAffinity || {}) };
+      aff[bd.partner] = (aff[bd.partner] || 0) + 3;
+      const state = { ...(c.romanceState || {}) };
+      if (aff[bd.partner] >= 10)     state[bd.partner] = 'couple';
+      else if (aff[bd.partner] >= 5) state[bd.partner] = 'romancing';
+      return {
+        ...c,
+        dateBooking: null,
+        minutes: (c.minutes || 0) + 60,
+        mood: Math.min(100, (c.mood || 0) + 18),
+        romanceAffinity: aff,
+        romanceState: state,
+      };
+    });
+  };
+
   // Tracks the latest reported accuracy from the rhythm tap mini-game (0..1).
   // Used by the busk onReward to apply a bonus.
   const accuracyRef = useRef(0);
@@ -9310,6 +9770,24 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE PARK</div>
         <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Tap an activity to commit</div>
       </div>
+
+      {/* Date trigger — when you're at the park on the day a romance partner asked you to meet here. */}
+      {onDateDay && !activity.active && (
+        <Panel title="Date">
+          <div className="space-y-2">
+            <div className="text-xs uppercase tracking-widest"
+              style={{ color: dateBooking.partnerColor, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {dateBooking.partnerName} is on the bench by the trees.
+            </div>
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+              Skip and you'll stand them up. Mood + affinity penalty.
+            </div>
+            <Btn variant="primary" onClick={goOnDate} className="w-full py-3">
+              💕 MEET {dateBooking.partnerName.toUpperCase()} (+1 hr)
+            </Btn>
+          </div>
+        </Panel>
+      )}
 
       {!activity.active && (
         <Panel title="Activities">
