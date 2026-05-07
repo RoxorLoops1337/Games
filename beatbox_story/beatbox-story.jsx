@@ -18,6 +18,53 @@ const SOUND_CATALOG = {
   uvular_roll: { name: 'Uvular Kick Roll', cat: 'Kicks', tier: 4, stamina: 22, base: 38, stat: 'technicality' },
 };
 
+// ============ SOUND UNLOCKS ============
+// Sounds were previously sold in the shop. They're now milestone-gated
+// achievements. Each entry has a `condition(c)` predicate; checkSoundUnlocks
+// runs on every meaningful state change and adds newly-eligible sounds to
+// char.sounds (auto-equipping if there's room) plus a celebratory toast.
+
+const SOUND_UNLOCKS = {
+  // Tier 1 — granted at character creation, no condition.
+  classic_kick: { tier: 1, label: 'Start',                                cond: () => true },
+  hi_hat:       { tier: 1, label: 'Start',                                cond: () => true },
+  psh_snare:    { tier: 1, label: 'Start',                                cond: () => true },
+  // Tier 2 — early-game milestones
+  inward_k:     { tier: 2, label: 'Find the cypher · 3 jams',             cond: (c) => (c.storyFlags?.jamCount || 0) >= 3 },
+  throat_kick:  { tier: 2, label: 'Beat Pig Pen',                         cond: (c) => (c.storyFlags?.pigPenWins || 0) >= 1 },
+  fast_hats:    { tier: 2, label: '5 open mics performed',                cond: (c) => (c.openMicCount || 0) >= 5 },
+  lip_roll:     { tier: 2, label: 'Originality stat ≥ 10',                cond: (c) => (c.stats?.ori || 0) >= 10 },
+  // Tier 3 — mid-game
+  inward_bass:  { tier: 3, label: 'Beat Sikker',                          cond: (c) => (c.defeated || []).includes('Sikker') },
+  d_low:        { tier: 3, label: '200 followers',                        cond: (c) => (c.followers || 0) >= 200 },
+  laser:        { tier: 3, label: 'Beat Alim',                            cond: (c) => (c.defeated || []).includes('Alim') },
+  click_roll:   { tier: 3, label: '500 followers',                        cond: (c) => (c.followers || 0) >= 500 },
+  // Tier 4 — late-game
+  uvular_roll:  { tier: 4, label: 'Beat FatboxG',                         cond: (c) => (c.defeated || []).includes('FatboxG') },
+};
+
+// Returns array of sound IDs newly unlocked by `c` that aren't already owned.
+const newlyUnlockedSounds = (c) => {
+  const owned = new Set(c.sounds || []);
+  return Object.entries(SOUND_UNLOCKS)
+    .filter(([id, cfg]) => !owned.has(id) && cfg.cond(c))
+    .map(([id]) => id);
+};
+
+// Apply unlocks to a char (returns new char + array of unlocked names so the
+// caller can show toasts/cutscenes).
+const applySoundUnlocks = (c) => {
+  const ids = newlyUnlockedSounds(c);
+  if (ids.length === 0) return { char: c, unlocked: [] };
+  let next = { ...c, sounds: [...(c.sounds || []), ...ids] };
+  // Auto-equip while there's room in the 5-slot equipped bar
+  let equipped = [...(c.equipped || [])];
+  for (const id of ids) if (equipped.length < 5 && !equipped.includes(id)) equipped.push(id);
+  next.equipped = equipped;
+  return { char: next, unlocked: ids.map(id => SOUND_CATALOG[id]?.name || id) };
+};
+
+
 const FOOD = {
   banana:      { name: 'Banana',         cost: 4,  energy: 12, hunger: 15,  mood: 1, kind: 'food'  },
   smoothie:    { name: 'Green Smoothie', cost: 9,  energy: 25, hunger: 20,  mood: 3, kind: 'drink' },
@@ -96,6 +143,8 @@ const initialChar = () => ({
   romanceState: {}, // { candidateId: 'none' | 'romancing' | 'couple' }
   dateBooking: null, // { partner, day, minute } when a date is scheduled
   metEncounters: {}, // { encounterId: count } so we can vary lines per re-meet
+  gear: {}, // { itemId: true } for purchased gear (PC, headphones, plant, etc.)
+  lastCoffeeDay: 0, // last day you used the home coffee machine
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -1161,6 +1210,84 @@ const applyMingleEffects = (c, effects, outcome) => {
     };
   }
   return next;
+};
+
+// ============ GEAR (the upgraded shop) ============
+// One-time purchases. Each item lives in char.gear[id] = true once bought.
+// Effects are applied at the relevant code paths (training, sleep, runs,
+// performances, etc.). Items belong to one of four sub-stores.
+//
+// Stores: 'music' | 'furniture' | 'clothing' | 'pet'
+
+const GEAR_CATALOG = {
+  // ---- 🎵 Music store ----
+  pc: {
+    name: 'Studio PC', store: 'music', cost: 800, fans: 0,
+    desc: '+25% to Tec & Ori training stat gains',
+  },
+  mpc: {
+    name: 'Pro MPC (BBX-32)', store: 'music', cost: 600, fans: 0,
+    desc: 'Doubles your sequencer slots (4 → 8)',
+  },
+  mic: {
+    name: 'Studio Condenser Mic', store: 'music', cost: 500, fans: 0,
+    desc: '+25% to all mic-mode + Mus reward; better PitchTuner accuracy',
+  },
+  premium_headphones: {
+    name: 'Premium Headphones', store: 'music', cost: 250, fans: 0,
+    desc: '+25% accuracy in BeatboxHero mic-mode',
+  },
+  studio_monitors: {
+    name: 'Studio Monitors', store: 'music', cost: 300, fans: 0,
+    desc: '+25% to ori sequencer creativity score',
+  },
+  camera_tripod: {
+    name: 'Camera + Tripod', store: 'music', cost: 200, fans: 0,
+    desc: 'Auto-posts your clips · +1 follower/day passively',
+  },
+  // ---- 🛋️ Furniture store ----
+  new_bed: {
+    name: 'Memory-Foam Bed', store: 'furniture', cost: 600, fans: 0,
+    desc: '+20 max-energy boost the morning after a full sleep',
+  },
+  houseplant: {
+    name: 'Houseplant', store: 'furniture', cost: 50, fans: 0,
+    desc: '+1 mood every morning if it stays alive (water = $5/3 days)',
+  },
+  coffee_machine: {
+    name: 'Coffee Machine', store: 'furniture', cost: 120, fans: 0,
+    desc: 'One free home espresso per day (+25⚡, -15🍴, +2♥)',
+  },
+  yoga_mat: {
+    name: 'Yoga Mat', store: 'furniture', cost: 60, fans: 0,
+    desc: 'Daily meditate action: +5 mood, 10 game min',
+  },
+  earplugs: {
+    name: 'Earplugs', store: 'furniture', cost: 30, fans: 0,
+    desc: 'Removes "noisy upstairs" + "heating stuck" bad-sleep reasons',
+  },
+  // ---- 👕 Clothing store ----
+  wardrobe_refresh: {
+    name: 'Wardrobe Refresh', store: 'clothing', cost: 200, fans: 0,
+    desc: '+1 sho gain on every battle / open mic / showcase',
+  },
+  premium_shoes: {
+    name: 'Premium Running Shoes', store: 'clothing', cost: 150, fans: 0,
+    desc: '+1 extra sho per run reward block',
+  },
+  // ---- 🐾 Pet store ----
+  cat: {
+    name: 'Cat 🐈', store: 'pet', cost: 100, fans: 0,
+    desc: '+2 mood every morning · costs $3/day in food',
+  },
+};
+
+// Sub-store metadata (display name + tone color + icon)
+const STORE_META = {
+  music:     { display: 'Music Store',     color: '#22d3ee', icon: '🎵' },
+  furniture: { display: 'Furniture Store', color: '#84cc16', icon: '🛋️' },
+  clothing:  { display: 'Clothing Store',  color: '#fb7185', icon: '👕' },
+  pet:       { display: 'Pet Store',       color: '#fbbf24', icon: '🐾' },
 };
 
 // Palette per time of day
@@ -8272,6 +8399,8 @@ export default function BeatboxStory() {
     if (!c.romanceState || typeof c.romanceState !== 'object') c.romanceState = {};
     if (c.dateBooking === undefined) c.dateBooking = null;
     if (!c.metEncounters || typeof c.metEncounters !== 'object') c.metEncounters = {};
+    if (!c.gear || typeof c.gear !== 'object') c.gear = {};
+    if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -8350,12 +8479,21 @@ export default function BeatboxStory() {
   };
 
   const checkLevelUp = (c) => {
+    let next = c;
     const need = c.level * 100;
     if (c.xp >= need) {
       showToast(`LEVEL UP! → ${c.level + 1}`, 'win');
-      return { ...c, level: c.level + 1, xp: c.xp - need };
+      next = { ...c, level: c.level + 1, xp: c.xp - need };
     }
-    return c;
+    // Sound unlocks fire from the same checkpoint — every event that
+    // could shift a stat / follower / battle-win count routes through
+    // checkLevelUp, so this catches them all in one place.
+    const { char: withUnlocks, unlocked } = applySoundUnlocks(next);
+    if (unlocked.length) {
+      // Defer toast(s) so they show after the current state flush
+      setTimeout(() => unlocked.forEach(name => showToast(`🔓 Unlocked: ${name}`, 'win')), 80);
+    }
+    return withUnlocks;
   };
 
   if (!loaded) {
@@ -9535,75 +9673,156 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
 // ============ SCREEN: SHOP ============
 
 function ShopScreen({ char, setChar, showToast, go }) {
-  const sounds = Object.entries(SOUND_CATALOG).filter(([id]) => !char.sounds.includes(id));
-  const cost = (s) => s.tier * 80;
+  const [branch, setBranch] = useState(null); // null = hub, otherwise store key
+  const [showSounds, setShowSounds] = useState(false); // sounds catalog modal
 
-  const buy = (id, s) => {
-    const c = cost(s);
-    if (char.cash < c) { showToast('Not enough cash', 'bad'); return; }
-    if (char.followers < s.tier * 50) { showToast(`Need ${s.tier * 50} followers`, 'bad'); return; }
-    setChar(ch => ({ ...ch, cash: ch.cash - c, sounds: [...ch.sounds, id] }));
-    showToast(`Learned ${s.name}!`, 'win');
+  const buyGear = (id) => {
+    const item = GEAR_CATALOG[id];
+    if (!item) return;
+    if (char.gear?.[id]) return;                            // already owned
+    if (char.cash < item.cost) { showToast('Not enough cash', 'bad'); return; }
+    setChar(c => ({ ...c, cash: c.cash - item.cost, gear: { ...(c.gear || {}), [id]: true } }));
+    showToast(`Bought ${item.name}!`, 'win');
   };
 
-  return (
-    <div className="space-y-3">
-      <div className="text-center mb-2">
-        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE SHOP</div>
-        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Buy techniques & sounds</div>
-      </div>
-      <Panel title={`New sounds (${sounds.length} left)`}>
-        {sounds.length === 0 ? (
-          <div className="text-stone-500 text-center py-4 text-xs uppercase">All sounds learned 👑</div>
-        ) : (
+  // ---- Sounds catalog (replaces old sound-buying UI) ----
+  if (showSounds) {
+    const ordered = Object.entries(SOUND_CATALOG);
+    return (
+      <div className="space-y-3">
+        <button onClick={() => setShowSounds(false)}
+          className="text-stone-500 hover:text-amber-500 text-xs uppercase tracking-widest flex items-center gap-1">
+          <ArrowLeft size={14} /> Back to shop
+        </button>
+        <div className="text-center mb-1">
+          <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>SOUNDS CATALOG</div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Locked sounds unlock as you grow</div>
+        </div>
+        <Panel title={`Owned (${(char.sounds || []).length}/${ordered.length})`}>
           <div className="space-y-2">
-            {sounds.map(([id, s]) => {
-              const c = cost(s);
-              const fNeeded = s.tier * 50;
-              const canAfford = char.cash >= c && char.followers >= fNeeded;
+            {ordered.map(([id, s]) => {
+              const owned = (char.sounds || []).includes(id);
+              const equipped = (char.equipped || []).includes(id);
+              const unlock = SOUND_UNLOCKS[id];
               return (
-                <div key={id} className="p-2 border border-stone-800 bg-stone-900/30">
+                <div key={id} className={`p-2 border bg-stone-900/30 ${owned ? 'border-stone-800' : 'border-stone-900 opacity-60'}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <div className="text-stone-200 text-sm">{s.name}</div>
+                    <div className={`text-sm ${owned ? 'text-stone-200' : 'text-stone-500'}`}>
+                      {owned ? '' : '🔒 '}{s.name}
+                    </div>
                     <div className="flex gap-1">{Array.from({ length: s.tier }).map((_, i) => <Star key={i} size={10} className="text-amber-500 fill-amber-500" />)}</div>
                   </div>
-                  <div className="text-[10px] text-stone-500 uppercase mb-2 tracking-wider">
+                  <div className="text-[10px] text-stone-500 uppercase mb-1 tracking-wider">
                     {s.cat} · {s.base}pts · {s.stamina}⚡ · {s.stat}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-[10px] text-stone-500">Need {fNeeded} fans</div>
-                    <Btn onClick={() => buy(id, s)} disabled={!canAfford}>${c}</Btn>
+                  {owned ? (
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] text-amber-500/70 uppercase tracking-widest">unlocked · {unlock?.label}</div>
+                      <Btn variant={equipped ? 'primary' : 'ghost'} onClick={() => {
+                        setChar(c => {
+                          if (equipped) return { ...c, equipped: c.equipped.filter(x => x !== id) };
+                          if (c.equipped.length >= 5) { showToast('Max 5 sounds', 'bad'); return c; }
+                          return { ...c, equipped: [...c.equipped, id] };
+                        });
+                      }}>{equipped ? 'EQUIPPED' : 'EQUIP'}</Btn>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-stone-600 uppercase tracking-widest">
+                      🔒 {unlock?.label || 'unlock condition unknown'}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      </div>
+    );
+  }
+
+  // ---- Sub-store view ----
+  if (branch) {
+    const meta = STORE_META[branch];
+    const items = Object.entries(GEAR_CATALOG).filter(([, it]) => it.store === branch);
+    return (
+      <div className="space-y-3">
+        <button onClick={() => setBranch(null)}
+          className="text-stone-500 hover:text-amber-500 text-xs uppercase tracking-widest flex items-center gap-1">
+          <ArrowLeft size={14} /> Back to shop
+        </button>
+        <div className="text-center mb-1">
+          <div className="text-2xl tracking-widest" style={{ color: meta.color, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            {meta.icon} {meta.display.toUpperCase()}
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">tap an item to buy</div>
+        </div>
+        <Panel title={`${items.length} items`}>
+          <div className="space-y-2">
+            {items.map(([id, it]) => {
+              const owned = char.gear?.[id];
+              const canAfford = (char.cash || 0) >= it.cost;
+              return (
+                <div key={id} className={`p-2 border bg-stone-900/30 ${owned ? 'border-amber-500/50' : 'border-stone-800'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-stone-200 text-sm">{it.name}</div>
+                    {owned ? (
+                      <div className="text-[10px] uppercase tracking-widest text-amber-500">OWNED</div>
+                    ) : (
+                      <Btn onClick={() => buyGear(id)} disabled={!canAfford}>${it.cost}</Btn>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-stone-500 uppercase tracking-wider leading-snug">
+                    {it.desc}
                   </div>
                 </div>
               );
             })}
           </div>
-        )}
-      </Panel>
+        </Panel>
+      </div>
+    );
+  }
 
-      <Panel title="Equipped sounds (max 5)">
-        <div className="space-y-1 mb-2">
-          {char.sounds.map(id => {
-            const s = SOUND_CATALOG[id];
-            const equipped = char.equipped.includes(id);
-            return (
-              <div key={id} className="flex items-center justify-between p-2 border border-stone-800 bg-stone-900/30">
-                <div className="flex-1">
-                  <div className="text-sm text-stone-200">{s.name}</div>
-                  <div className="text-[10px] text-stone-500 uppercase">{s.cat} · {s.base}pts</div>
-                </div>
-                <Btn variant={equipped ? 'primary' : 'ghost'} onClick={() => {
-                  setChar(c => {
-                    if (equipped) return { ...c, equipped: c.equipped.filter(x => x !== id) };
-                    if (c.equipped.length >= 5) { showToast('Max 5 sounds', 'bad'); return c; }
-                    return { ...c, equipped: [...c.equipped, id] };
-                  });
-                }}>{equipped ? 'EQUIPPED' : 'EQUIP'}</Btn>
+  // ---- Shop hub ----
+  const stores = ['music', 'furniture', 'clothing', 'pet'];
+  return (
+    <div className="space-y-3">
+      <div className="text-center mb-2">
+        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE SHOP</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">pick a branch</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {stores.map(s => {
+          const meta = STORE_META[s];
+          const ownedHere = Object.entries(GEAR_CATALOG).filter(([, it]) => it.store === s && char.gear?.[Object.entries(GEAR_CATALOG).find(([id, x]) => x === it)?.[0]]).length;
+          const totalHere = Object.values(GEAR_CATALOG).filter(it => it.store === s).length;
+          const owned = Object.entries(GEAR_CATALOG).filter(([id, it]) => it.store === s && char.gear?.[id]).length;
+          return (
+            <button key={s} onClick={() => setBranch(s)}
+              className="aspect-square border-2 border-stone-800 hover:border-amber-500/50 bg-stone-900/30 flex flex-col items-center justify-center gap-2 transition-all p-3">
+              <div className="text-4xl">{meta.icon}</div>
+              <div className="text-xs uppercase tracking-widest" style={{ color: meta.color, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                {meta.display}
               </div>
-            );
-          })}
+              <div className="text-[9px] uppercase tracking-widest text-stone-600">
+                {owned}/{totalHere} owned
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <button onClick={() => setShowSounds(true)}
+        className="w-full p-3 border-2 border-stone-800 hover:border-amber-500/50 bg-stone-900/30 flex items-center justify-between transition-all">
+        <div>
+          <div className="text-amber-500 text-sm uppercase tracking-widest" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            🎚️ Sounds catalog
+          </div>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500">
+            {(char.sounds || []).length}/{Object.keys(SOUND_CATALOG).length} unlocked · view & equip
+          </div>
         </div>
-      </Panel>
+        <span className="text-amber-500 text-xl">→</span>
+      </button>
     </div>
   );
 }
