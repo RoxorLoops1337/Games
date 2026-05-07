@@ -11056,7 +11056,11 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const sho = char.stats.sho || 0;
     const mus = char.stats.mus || 0;
     const tec = char.stats.tec || 0;
-    const baseReward = 100 + sho * 10 + mus * 4 + tec * 4;
+    // Reward roughly quartered from the original tuning. Early game (stats
+    // around 5/5/5) tops out near $165 with a perfect performance; mid-game
+    // (15/15/15) maxes ~$360; late game (25/25/25) maxes ~$435. The cap is
+    // baseReward * 3 (engagement 2x * variety 1.5x).
+    const baseReward = 30 + sho * 3 + mus + tec;
     const engagement = Math.min(2, totalTaps / 30);
     const variety = Math.min(1.5, distinctSounds / 4);
     const reward = Math.round(baseReward * Math.max(0.5, engagement) * Math.max(0.7, variety));
