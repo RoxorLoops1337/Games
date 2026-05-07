@@ -64,6 +64,17 @@ const applySoundUnlocks = (c) => {
   return { char: next, unlocked: ids.map(id => SOUND_CATALOG[id]?.name || id) };
 };
 
+// ============ GEAR EFFECT HELPERS ============
+// Each helper queries char.gear[id] and returns a multiplier or boolean.
+// Wired into the relevant code paths (training, runs, performances, etc.)
+const hasGear = (c, id) => !!(c?.gear?.[id]);
+// True if the houseplant is alive — owned AND watered within 5 days.
+const plantAlive = (c) => hasGear(c, 'houseplant') && ((c?.day || 0) - (c?.lastPlantWaterDay || 0)) < 5;
+// Earplugs disable noisy/heating bad-sleep reasons.
+const FILTERED_BAD_SLEEP = (c) => hasGear(c, 'earplugs')
+  ? BAD_SLEEP_REASONS.filter(r => r.id !== 'noisy' && r.id !== 'heating')
+  : BAD_SLEEP_REASONS;
+
 
 const FOOD = {
   banana:      { name: 'Banana',         cost: 4,  energy: 12, hunger: 15,  mood: 1, kind: 'food'  },
@@ -145,6 +156,7 @@ const initialChar = () => ({
   metEncounters: {}, // { encounterId: count } so we can vary lines per re-meet
   gear: {}, // { itemId: true } for purchased gear (PC, headphones, plant, etc.)
   lastCoffeeDay: 0, // last day you used the home coffee machine
+  lastPlantWaterDay: 0, // last day you watered the houseplant (alive ≤5 days)
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -3342,6 +3354,7 @@ const BeatboxHero = ({
   lessonIdx = 0,
   mode = 'practice', // 'practice' = 4 reps demo/player loop; 'battle' = single player rep, no auto-restart
   inputMode = 'tap', // 'tap' = drum pads; 'mic' = beatbox into the mic (wider hit windows)
+  accuracyBoost = 1, // 1.25 with premium_headphones — widens the hit windows
   lessonOverride = null, // optional synthesized lesson — used by battle combos (16 beats)
 }) => {
   const canvasRef = useRef(null);
@@ -3358,9 +3371,10 @@ const BeatboxHero = ({
   useEffect(() => { lessonOverrideRef.current = lessonOverride; }, [lessonOverride]);
 
   // Constants — wider hit windows in mic mode to compensate for ~50–100 ms
-  // detection latency.
-  const HIT_PERFECT_MS = inputMode === 'mic' ? 200 : 110;
-  const HIT_GOOD_MS    = inputMode === 'mic' ? 350 : 180;
+  // detection latency. accuracyBoost (e.g. 1.25 with premium headphones)
+  // widens both hit windows.
+  const HIT_PERFECT_MS = (inputMode === 'mic' ? 200 : 110) * accuracyBoost;
+  const HIT_GOOD_MS    = (inputMode === 'mic' ? 350 : 180) * accuracyBoost;
   const LOOKAHEAD_MS = 1400; // notes appear ~1.4s before the strike line (was 2000)
   const REPS_TOTAL = (mode === 'battle' || mode === 'spectate') ? 1 : 4; // single rep in battle/spectate, 2 demo+2 player in practice
   const COMPLETE_HOLD_MS = 1800;
@@ -8401,6 +8415,7 @@ export default function BeatboxStory() {
     if (!c.metEncounters || typeof c.metEncounters !== 'object') c.metEncounters = {};
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
+    if (typeof c.lastPlantWaterDay !== 'number') c.lastPlantWaterDay = 0;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -8914,10 +8929,13 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
             }
           }
         } else if (trainStat === 'ori') {
-          // Sequencer creativity score → bonus
-          const c = accuracyRef.current || 0;
-          if (c >= 0.8) { statGain = 3; bonusText = ' (creative!)'; }
-          else if (c >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
+          // Sequencer creativity score → bonus.
+          // Studio monitors give a +25% boost so thresholds get cleared more easily.
+          let cv = accuracyRef.current || 0;
+          if (hasGear(charRef.current, 'studio_monitors')) cv = cv * 1.25;
+          if (cv >= 0.8)      { statGain = 3; bonusText = ' (creative!)'; }
+          else if (cv >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
+          if (hasGear(charRef.current, 'studio_monitors')) bonusText += ' · 🎚️';
         }
         if (statGain > 0) {
           setChar(cc => {
@@ -8962,6 +8980,29 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       mood: Math.max(0, Math.min(100, decayMood(c, 5) + f.mood)),
     }));
     showToast(`${f.kind === 'drink' ? 'Drank' : 'Ate'} ${f.name}`, 'win');
+  };
+
+  // Home espresso (Coffee Machine gear) — once per in-game day.
+  const drinkHomeCoffee = () => {
+    if (!hasGear(char, 'coffee_machine')) return;
+    if (char.day === char.lastCoffeeDay) return;
+    setChar(c => ({
+      ...c,
+      minutes: c.minutes + 5,
+      energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 25)),
+      hunger: Math.max(0, c.hunger - 15),
+      mood: Math.max(0, Math.min(100, decayMood(c, 5) + 2)),
+      lastCoffeeDay: c.day,
+    }));
+    showToast('Home espresso · +25⚡ -15🍴 +2♥', 'win');
+  };
+
+  // Water the houseplant — costs $5, resets the 5-day timer.
+  const waterPlant = () => {
+    if (!hasGear(char, 'houseplant')) return;
+    if ((char.cash || 0) < 5) { showToast("Need $5 for water can refill", 'bad'); return; }
+    setChar(c => ({ ...c, cash: c.cash - 5, lastPlantWaterDay: c.day }));
+    showToast('Watered the plant. +mood every morning while alive.', 'win');
   };
 
   // Foxy Soup — free meal Foxy makes daily, claimable once per in-game day.
@@ -9063,16 +9104,19 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     // you'll lie awake about that). Falls back to a random ambient one.
     let badSleep = null;
     if (Math.random() < 0.10 && rentEvent?.type !== 'evicted') {
-      const eligible = BAD_SLEEP_REASONS.filter(r => !r.when || r.when(c0, newDay));
+      const sourcePool = FILTERED_BAD_SLEEP(c0);     // earplugs strip noisy/heating
+      const eligible = sourcePool.filter(r => !r.when || r.when(c0, newDay));
       const stateReasons = eligible.filter(r => r.when);
       const ambient = eligible.filter(r => !r.when);
       const pool = stateReasons.length && Math.random() < 0.6 ? stateReasons : (eligible.length ? eligible : ambient);
-      badSleep = pool[Math.floor(Math.random() * pool.length)];
+      badSleep = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
     }
 
     setChar(c => {
       const max = c.maxEnergy ?? 100;
-      let energy = max;
+      // Memory-foam bed gives +20 max-energy worth of boost overnight
+      const bedBonus = hasGear(c, 'new_bed') ? 20 : 0;
+      let energy = Math.min(max, max + bedBonus);
       let hunger = Math.max(0, c.hunger - 30);
       let mood = Math.min(100, c.mood + 10);
       // Apply bad-sleep penalties (energy not full + mood hit)
@@ -9080,6 +9124,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         energy = Math.floor(max * (badSleep.energyCap ?? 0.7));
         mood = Math.max(0, mood - 10);
       }
+      // Houseplant: +1 mood per morning if it's still alive
+      if (plantAlive(c)) mood = Math.min(100, mood + 1);
       let cash = c.cash;
       let rentLate = c.rentLate || 0;
       let lastRentPaidDay = c.lastRentPaidDay;
@@ -9489,6 +9535,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                       <BeatboxHero
                         onAccuracyUpdate={handleAccuracy}
                         inputMode={tecInputMode}
+                        accuracyBoost={hasGear(char, 'premium_headphones') ? 1.25 : 1}
                         onLessonComplete={(idx, accuracy) => {
                           setChar(c => {
                             const next = { ...c };
@@ -9600,6 +9647,45 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       {tab === 'eat' && (
         <Panel title="Fridge — wholefood plant-based">
           <div className="space-y-2">
+            {/* Coffee Machine — daily free espresso (gear). */}
+            {hasGear(char, 'coffee_machine') && (() => {
+              const claimed = char.day === char.lastCoffeeDay;
+              return (
+                <div className="flex items-center gap-3 p-2 border-2 bg-stone-900/30"
+                  style={{ borderColor: claimed ? '#3a3530' : '#7a5040' }}>
+                  <span className="text-xl">☕</span>
+                  <div className="flex-1">
+                    <div className="text-stone-200 text-sm">Home Espresso</div>
+                    <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                      +25⚡ -15🍴 +2♥ · {claimed ? 'tomorrow' : 'free, today'}
+                    </div>
+                  </div>
+                  <Btn onClick={drinkHomeCoffee} disabled={claimed}>
+                    {claimed ? 'TODAY' : 'BREW'}
+                  </Btn>
+                </div>
+              );
+            })()}
+            {/* Houseplant — water it to keep alive. */}
+            {hasGear(char, 'houseplant') && (() => {
+              const alive = plantAlive(char);
+              const daysSinceWater = char.day - (char.lastPlantWaterDay || 0);
+              return (
+                <div className="flex items-center gap-3 p-2 border-2 bg-stone-900/30"
+                  style={{ borderColor: alive ? '#3a7028' : '#5a3a30' }}>
+                  <span className="text-xl">{alive ? '🌿' : '🥀'}</span>
+                  <div className="flex-1">
+                    <div className="text-stone-200 text-sm">{alive ? 'Houseplant (alive)' : 'Houseplant (wilting)'}</div>
+                    <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                      +1♥ each morning · last watered {daysSinceWater} day{daysSinceWater === 1 ? '' : 's'} ago
+                    </div>
+                  </div>
+                  <Btn onClick={waterPlant} disabled={(char.cash || 0) < 5}>
+                    💧 $5
+                  </Btn>
+                </div>
+              );
+            })()}
             {/* Foxy Soup — free, once per in-game day. */}
             {(() => {
               const claimed = char.day === char.lastFoxySoupDay;
@@ -9681,7 +9767,12 @@ function ShopScreen({ char, setChar, showToast, go }) {
     if (!item) return;
     if (char.gear?.[id]) return;                            // already owned
     if (char.cash < item.cost) { showToast('Not enough cash', 'bad'); return; }
-    setChar(c => ({ ...c, cash: c.cash - item.cost, gear: { ...(c.gear || {}), [id]: true } }));
+    setChar(c => {
+      let next = { ...c, cash: c.cash - item.cost, gear: { ...(c.gear || {}), [id]: true } };
+      // Special-case fields some gear needs initialized on purchase
+      if (id === 'houseplant') next.lastPlantWaterDay = c.day;
+      return next;
+    });
     showToast(`Bought ${item.name}!`, 'win');
   };
 
@@ -10022,7 +10113,9 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         // burnSurcharge: if you spent significant time in burn zone this block, take an extra hit
         const burnEnergy = isPlayMode ? Math.round(8 * (result.burnRatio || 0)) : 0;
         // sho gain: 1 normally; when running in play mode and the last block was good, bump to 2
-        const shoGain = (isPlayMode && result.isGood) ? 2 : 1;
+        // Premium running shoes give an additional +1 per block.
+        const shoesBonus = hasGear(charRef.current, 'premium_shoes') ? 1 : 0;
+        const shoGain = ((isPlayMode && result.isGood) ? 2 : 1) + shoesBonus;
 
         setChar(cc => {
           const updated = { ...cc,
@@ -10715,6 +10808,8 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       const showBonus = Math.floor((stats.sho || 0) / 8);
       const lucky = Math.floor(Math.random() * 3);
       const fanGain = Math.max(1, Math.min(20, base + showBonus + lucky));
+      // Wardrobe Refresh: +1 sho on every show
+      const wardrobeBonus = hasGear(c, 'wardrobe_refresh') ? 1 : 0;
       let next = {
         ...c,
         energy: Math.max(0, c.energy - 10),
@@ -10725,6 +10820,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         openMicCount: (c.openMicCount || 0) + 1,
         xp: c.xp + 8,
         _lastOpenMicFans: fanGain,
+        stats: { ...(c.stats || {}), sho: (c.stats?.sho || 0) + wardrobeBonus },
       };
       // Good-show parent text trigger (only on a strong show, with cooldown)
       const cd = c.day - (c.lastParentMsgDay || 0);
@@ -10840,6 +10936,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const reward = Math.round(baseReward * Math.max(0.5, engagement) * Math.max(0.7, variety));
     const fans = Math.max(2, Math.floor(sho / 2 + distinctSounds));
     setChar(c => {
+      const wardrobeBonus = hasGear(c, 'wardrobe_refresh') ? 1 : 0;
       const updated = {
         ...c,
         cash: c.cash + reward,
@@ -10851,6 +10948,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         xp: c.xp + 60,
         showcaseBooking: null,
         lastShowcaseDay: c.day,
+        stats: { ...(c.stats || {}), sho: (c.stats?.sho || 0) + wardrobeBonus },
       };
       return checkLevelUp ? checkLevelUp(updated) : updated;
     });
@@ -12460,6 +12558,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
         defeated: won && !c.defeated.includes(opponent.name) ? [...c.defeated, opponent.name] : c.defeated,
         lastBattleDay: c.day, // 1-battle-per-week cooldown
         storyFlags: flags,
+        stats: { ...(c.stats || {}), sho: (c.stats?.sho || 0) + (hasGear(c, 'wardrobe_refresh') ? 1 : 0) },
       };
       delete newC._opponent;
       return checkLevelUp(newC);
@@ -12748,6 +12847,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
                 active={!isCountdown}
                 bpm={BATTLE_BPM}
                 lessonOverride={lesson}
+                accuracyBoost={hasGear(char, 'premium_headphones') ? 1.25 : 1}
                 onAccuracyUpdate={() => {}}
                 onLessonComplete={(_idx, accuracy) => handlePlayerRoundComplete(roundN, accuracy)}
               />
