@@ -88,6 +88,7 @@ const initialChar = () => ({
   evictionRecoveryDay: null, // day on which a couch-surf recovery resolves
   messages: [], // phone messages, newest last; { id, sender, text, day, minute, read }
   lastParentMsgDay: 0, // for cooldown on parent-message triggers
+  lastFoxySafetyNetDay: 0, // last day Foxy fed you for free (one per in-game week)
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -165,6 +166,23 @@ const PARENT_MESSAGES = {
     "the dog misses you. i miss you too but the dog more",
   ],
 };
+
+// Foxy — your roommate. Soft-spoken, plant person, makes too much soup.
+// Quips that appear on the home screen and (rarely) as phone messages.
+const FOXY_QUIPS = [
+  "you look like shit. eat something.",
+  "did you sleep at all?",
+  "the plant is dying, that's on you.",
+  "i made too much soup again.",
+  "your phone's been buzzing for an hour.",
+  "the kettle's still warm if you want tea.",
+  "it's three days till sunday. just saying.",
+  "i'm at work till seven. don't burn anything.",
+];
+const FOXY_SAFETY_NET_LINES = [
+  "i made too much.",
+  "eat.",
+];
 
 const _msgPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -5455,6 +5473,174 @@ const drawBackOnFeetScene = (ctx, fc) => {
   }
 };
 
+// ============ FOXY — ROOMMATE ============
+// Foxy is non-binary, soft-spoken, plant person. Pixel art draws them with
+// a green oversized sweater + soft layered hair. Always neutral expression.
+
+// Draw a small Foxy figure at (x, y) where y = feet baseline. Used for the
+// safety-net cutscene and the home-screen Foxy panel.
+const drawFoxy = (ctx, x, y, frameCount) => {
+  // Shadow
+  _px(ctx, x - 7, y, 14, 1, 'rgba(0,0,0,0.45)');
+  // Legs (slightly wider than the player)
+  _px(ctx, x - 4, y - 9, 3, 9, '#1a1a1a');
+  _px(ctx, x + 1, y - 9, 3, 9, '#1a1a1a');
+  // Slip-on shoes (felt, not athletic)
+  _px(ctx, x - 5, y - 1, 4, 1, '#5a3a40');
+  _px(ctx, x + 1, y - 1, 4, 1, '#5a3a40');
+  // Oversized green sweater (boxy)
+  _px(ctx, x - 6, y - 22, 12, 13, '#5a8030');
+  _px(ctx, x - 6, y - 22, 12, 1, '#7aa040');         // collar highlight
+  _px(ctx, x - 6, y - 22, 1, 13, '#3a6020');         // shadow side
+  // Sleeves (oversized — past wrists)
+  _px(ctx, x - 8, y - 21, 2, 10, '#5a8030');
+  _px(ctx, x + 6, y - 21, 2, 10, '#5a8030');
+  _px(ctx, x - 8, y - 12, 2, 1, '#3a6020');          // sleeve cuff
+  _px(ctx, x + 6, y - 12, 2, 1, '#3a6020');
+  // Visible bit of hand (one)
+  _px(ctx, x + 7, y - 11, 1, 2, '#d4a87a');
+  // Head (slightly tilted softer skin tone)
+  _px(ctx, x - 4, y - 28, 8, 7, '#e0b890');
+  // Soft layered hair (warm tone — auburn-ish)
+  _px(ctx, x - 5, y - 30, 10, 3, '#7a3a20');
+  _px(ctx, x - 5, y - 27, 1, 3, '#7a3a20');          // sideburn left
+  _px(ctx, x + 4, y - 27, 1, 3, '#7a3a20');          // sideburn right
+  // Eyes (closed crescents — gentle/sleepy by default)
+  _px(ctx, x - 3, y - 25, 2, 1, '#3a2010');
+  _px(ctx, x + 1, y - 25, 2, 1, '#3a2010');
+  // Soft neutral mouth
+  _px(ctx, x - 1, y - 22, 3, 1, '#5a2020');
+  // Tiny earring (occasional sparkle)
+  _px(ctx, x + 4, y - 24, 1, 1, '#fbbf24');
+  if (frameCount % 90 < 4) _px(ctx, x + 4, y - 24, 1, 1, '#fef3c7');
+};
+
+// Foxy's safety-net soup scene — small kitchen with an island. Bowl of green
+// soup steams on the island, Foxy on the right, player on the left, looking
+// tired.
+const drawFoxySoupScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Apartment kitchen wall
+  _px(ctx, 0, 0, W, 95, '#3a2a30');
+  // Wallpaper dots
+  for (let y = 8; y < 95; y += 12) for (let x = 8; x < W; x += 12) _px(ctx, x, y, 1, 1, '#5a3a40');
+  // Wall trim
+  _px(ctx, 0, 94, W, 1, '#5a3a40');
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#3a2010');
+  _px(ctx, 0, 95, W, 1, '#5a3018');
+  for (let i = 0; i < 5; i++) _px(ctx, i * 40, 96, 1, 34, '#2a1808');
+  // Window upper-left
+  _px(ctx, 6, 8, 30, 24, '#7ec0e8');
+  _px(ctx, 6, 8, 30, 1, '#1a1a1a');
+  _px(ctx, 6, 31, 30, 1, '#1a1a1a');
+  _px(ctx, 6, 8, 1, 24, '#1a1a1a');
+  _px(ctx, 35, 8, 1, 24, '#1a1a1a');
+  _px(ctx, 20, 8, 1, 24, '#1a1a1a');
+  _px(ctx, 6, 19, 30, 1, '#1a1a1a');
+  // Cloud + sun in window
+  _px(ctx, 26, 12, 6, 3, '#fef3c7');
+  _px(ctx, 10, 22, 8, 2, '#fff');
+  // Plant in pot on window sill
+  _px(ctx, 4, 32, 12, 6, '#3a2410');
+  _px(ctx, 6, 24, 8, 8, '#3a7028');
+  _px(ctx, 4, 26, 4, 4, '#3a7028');
+  _px(ctx, 14, 26, 4, 4, '#3a7028');
+  _px(ctx, 8, 22, 4, 4, '#4a8038');
+  // Cabinets along back wall
+  _px(ctx, 60, 30, 84, 50, '#5a3a28');
+  _px(ctx, 60, 30, 84, 2, '#7a5a40');
+  // Cabinet doors
+  for (let i = 0; i < 4; i++) {
+    _px(ctx, 64 + i * 20, 32, 18, 22, '#3a2418');
+    _px(ctx, 64 + i * 20, 32, 18, 1, '#7a5a40');
+    _px(ctx, 72 + i * 20, 42, 2, 1, '#a07050');       // handle
+  }
+  // Counter top of cabinets
+  _px(ctx, 60, 54, 84, 4, '#7a5040');
+  _px(ctx, 60, 54, 84, 1, '#a07050');
+  // Toaster on the back counter
+  _px(ctx, 116, 46, 14, 8, '#a8a29e');
+  _px(ctx, 116, 46, 14, 1, '#dadada');
+  _px(ctx, 124, 50, 4, 1, '#1a1a1a');                 // slot
+  // ---- Kitchen island in front ----
+  const ix = 70, iy = 92;
+  // Island surface (top, slightly visible angled edge)
+  _px(ctx, ix, iy, 60, 4, '#7a5040');
+  _px(ctx, ix, iy, 60, 1, '#a07050');
+  // Island front face
+  _px(ctx, ix, iy + 4, 60, 22, '#5a3a28');
+  _px(ctx, ix, iy + 4, 60, 1, '#7a5a40');
+  // Island legs
+  _px(ctx, ix + 2, iy + 26, 4, 4, '#1a1a1a');
+  _px(ctx, ix + 54, iy + 26, 4, 4, '#1a1a1a');
+  // ---- Bowl of soup on the island ----
+  const bx = 88, by = 86;
+  // Bowl outer (wider top)
+  _px(ctx, bx, by, 24, 1, '#a87844');                 // top rim
+  _px(ctx, bx, by, 24, 1, '#c89a64');                 // top highlight
+  _px(ctx, bx + 2, by + 1, 20, 4, '#a87844');         // bowl wall
+  _px(ctx, bx + 4, by + 5, 16, 1, '#5a3a18');         // bowl bottom shadow
+  // Soup (green inside the bowl)
+  _px(ctx, bx + 3, by + 1, 18, 3, '#5a8030');
+  _px(ctx, bx + 3, by + 1, 18, 1, '#7aa040');
+  // Carrot bit floating
+  _px(ctx, bx + 8, by + 2, 2, 1, '#f97316');
+  _px(ctx, bx + 14, by + 2, 1, 1, '#f97316');
+  // Spoon poking out
+  _px(ctx, bx + 19, by - 4, 1, 5, '#a8a29e');
+  _px(ctx, bx + 18, by - 5, 3, 2, '#dadada');
+  // Steam plumes
+  for (let i = 0; i < 3; i++) {
+    const phase = (fc + i * 18) % 50;
+    const sx = bx + 6 + i * 6;
+    const sy = by - 6 - phase * 0.4;
+    if (phase < 40) {
+      ctx.globalAlpha = 0.7 * (1 - phase / 40);
+      _px(ctx, Math.floor(sx + Math.sin(phase * 0.2) * 2), Math.floor(sy), 1, 2, '#dadada');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Foxy on the right side of the island
+  drawFoxy(ctx, 156, 126, fc);
+  // Player coming in from the left, looks tired
+  const px = 28;
+  // Legs
+  _px(ctx, px - 4, 116, 3, 10, '#1a1a2e');
+  _px(ctx, px + 1, 116, 3, 10, '#1a1a2e');
+  _px(ctx, px - 4, 125, 3, 1, '#fff');
+  _px(ctx, px + 1, 125, 3, 1, '#fff');
+  // Body
+  _px(ctx, px - 5, 105, 10, 11, look?.shirt || '#a78bfa');
+  _px(ctx, px - 5, 105, 10, 1, '#fff');               // collar
+  // Arms hanging
+  _px(ctx, px - 7, 106, 2, 8, look?.shirt || '#a78bfa');
+  _px(ctx, px + 5, 106, 2, 8, look?.shirt || '#a78bfa');
+  _px(ctx, px - 7, 113, 2, 2, look?.skin || '#d4a87a');
+  _px(ctx, px + 5, 113, 2, 2, look?.skin || '#d4a87a');
+  // Head
+  _px(ctx, px - 4, 98, 8, 7, look?.skin || '#d4a87a');
+  _px(ctx, px - 4, 96, 8, 3, look?.hair || '#1a1a2e');
+  // Tired eyes (small w/ dark circles)
+  _px(ctx, px - 3, 101, 1, 1, '#0c0a09');
+  _px(ctx, px + 1, 101, 1, 1, '#0c0a09');
+  _px(ctx, px - 3, 100, 1, 1, '#3a2010');
+  _px(ctx, px + 1, 100, 1, 1, '#3a2010');
+  // Mouth (slight frown)
+  _px(ctx, px - 1, 104, 3, 1, '#3a1010');
+  // Heart particle drifting up between them
+  if (fc % 80 < 60) {
+    const hp = (fc % 80) / 60;
+    const hx = 80 + Math.sin(fc * 0.05) * 4;
+    const hy = 70 - hp * 50;
+    ctx.globalAlpha = Math.max(0, 1 - hp);
+    _px(ctx, Math.floor(hx), Math.floor(hy), 3, 2, '#fb7185');
+    _px(ctx, Math.floor(hx), Math.floor(hy + 2), 1, 1, '#fb7185');
+    _px(ctx, Math.floor(hx + 2), Math.floor(hy + 2), 1, 1, '#fb7185');
+    ctx.globalAlpha = 1;
+  }
+};
+
 // Open-mic stage: bar interior, raised platform, mic stand, player on stage,
 // crowd silhouettes bobbing in front, spotlight cone overhead.
 const drawOpenMicStage = (ctx, fc, look) => {
@@ -6503,6 +6689,7 @@ export default function BeatboxStory() {
     if (c.evictionRecoveryDay === undefined) c.evictionRecoveryDay = null;
     if (!Array.isArray(c.messages)) c.messages = [];
     if (typeof c.lastParentMsgDay !== 'number') c.lastParentMsgDay = 0;
+    if (typeof c.lastFoxySafetyNetDay !== 'number') c.lastFoxySafetyNetDay = 0;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -6917,6 +7104,49 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   const accuracyRef = useRef(0);
   const handleAccuracy = (acc) => { accuracyRef.current = acc; };
 
+  // Foxy's safety-net food — when you walk into the house with no cash and
+  // no hunger, Foxy puts a bowl on the counter once per in-game week.
+  // (cap: cash < 5 AND hunger == 0 AND ≥ 7 days since the last time.)
+  useEffect(() => {
+    if (!char) return;
+    const cooled = (char.day - (char.lastFoxySafetyNetDay || 0)) >= 7
+                || (char.lastFoxySafetyNetDay || 0) === 0;
+    if (!cooled) return;
+    if ((char.cash || 0) >= 5) return;
+    if ((char.hunger || 0) > 0) return;
+    // Trigger once
+    const isFirst = !char.storyFlags?.foxyFirstSafetyNet;
+    setChar(c => {
+      let next = {
+        ...c,
+        hunger: Math.max(c.hunger || 0, 40),
+        mood: Math.min(100, (c.mood || 0) + 5),
+        lastFoxySafetyNetDay: c.day,
+        storyFlags: { ...(c.storyFlags || {}), foxyFirstSafetyNet: true },
+      };
+      // Foxy follows up with a soft text the next time you check your phone.
+      next = addMessage(next, 'foxy', _msgPick(FOXY_QUIPS));
+      return next;
+    });
+    // Show the cutscene (only big the first time; later ones are silent + toast)
+    if (isFirst) {
+      setTimeout(() => playCutscene?.({
+        speaker: 'FOXY',
+        speakerColor: '#84cc16',
+        beats: [{
+          drawScene: (ctx, fc) => drawFoxySoupScene(ctx, fc, lookFromChar(char)),
+          lines: [
+            "i made too much.",
+            "eat.",
+          ],
+        }],
+      }, 'foxyFirstSafetyNet'), 50);
+    } else {
+      showToast('Foxy left soup on the counter (+40 hunger)', 'win');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const trainConfig = {
     mus: { name: 'Musicality', desc: 'Watch beatbox vids on YouTube', tickEnergyCost: 1.5, color: '#D4A017' },
     tec: { name: 'Technicality', desc: 'Drill on Discord with the squad', tickEnergyCost: 2, color: '#C8DCEF' },
@@ -7201,11 +7431,27 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   if (sleeping) return <SleepAnimation char={char} onComplete={finishSleep} />;
   if (napping)  return <PowerNapAnimation char={char} onWake={finishNap} />;
 
+  // Stable Foxy quip per house-screen mount (so it doesn't flicker on
+  // every render). Re-rolls when day or tab changes.
+  const foxyQuip = useRef(_msgPick(FOXY_QUIPS));
+  useEffect(() => { foxyQuip.current = _msgPick(FOXY_QUIPS); }, [char?.day, tab]);
+
   return (
     <div className="space-y-3">
       <div className="text-center mb-2">
         <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE HOUSE</div>
         <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Your home base</div>
+      </div>
+
+      {/* Foxy roommate presence — small panel with a rotating in-character quip. */}
+      <div className="border-2 border-stone-800 bg-stone-900/30 px-3 py-2 flex items-center gap-3">
+        <div className="w-9 h-9 border border-stone-800 flex items-center justify-center" style={{ background: '#1a3018' }}>
+          <span className="text-lg" style={{ filter: 'sepia(0.3)' }}>🌿</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[9px] uppercase tracking-[0.3em] text-lime-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>FOXY · roommate</div>
+          <div className="text-stone-300 text-xs italic truncate">"{foxyQuip.current}"</div>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-1">
