@@ -8042,10 +8042,9 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       showToast(char.pendingDebuff ? 'Slept it off — feeling rough' : 'Slept till morning', char.pendingDebuff ? 'info' : 'win');
     }
   };
-
-  if (sleeping) return <SleepAnimation char={char} onComplete={finishSleep} />;
-  if (napping)  return <PowerNapAnimation char={char} onWake={finishNap} />;
-
+  // ALL HOOKS MUST RUN BEFORE THE EARLY RETURNS BELOW.
+  // Foxy modal open state.
+  const [foxyOpen, setFoxyOpen] = useState(false);
   // Foxy's tip is recomputed whenever any of her trigger inputs changes
   // (hunger/energy/mood bins, day, story flags, etc). Stable between
   // unrelated renders so it doesn't flicker on every keystroke.
@@ -8075,7 +8074,9 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     foxyTipKeyRef.current = foxyTipKey;
   }
   const foxyTip = foxyTipRef.current;
-  const [foxyOpen, setFoxyOpen] = useState(false);
+
+  if (sleeping) return <SleepAnimation char={char} onComplete={finishSleep} />;
+  if (napping)  return <PowerNapAnimation char={char} onWake={finishNap} />;
 
   return (
     <div className="space-y-3">
