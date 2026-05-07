@@ -162,6 +162,7 @@ const initialChar = () => ({
   festivalAcceptedDay: 0,
   festivalPath: null, // 'A' | 'B' | 'C'
   festivalResult: null, // 'win' | 'lose'
+  outfit: 'default', // active stage outfit id (see OUTFITS catalog)
   gear: {}, // { itemId: true } for purchased gear (PC, headphones, plant, etc.)
   lastCoffeeDay: 0, // last day you used the home coffee machine
   lastPlantWaterDay: 0, // last day you watered the houseplant (alive ≤5 days)
@@ -475,6 +476,33 @@ const applyAchievements = (c) => {
   const ach = { ...(c.achievements || {}) };
   for (const a of newly) ach[a.id] = day;
   return { char: { ...c, achievements: ach }, earned: newly };
+};
+
+// ============ STAGE OUTFITS ============
+// Cosmetic shirt-color overrides used for performances + the home screen
+// avatar. Each outfit has a milestone gate (auto-unlocked) and applies
+// only when the player picks it as their active outfit.
+const OUTFITS = {
+  default:        { name: 'Default', desc: 'Your everyday color', shirt: null,         cond: () => true },
+  tracksuit:      { name: 'Track Suit',      desc: 'After signing Adipas',         shirt: '#1a1a1a',  cond: (c) => !!c.storyFlags?.sponsor_adipas_signed },
+  stage_gold:     { name: 'Stage Gold',      desc: '100 followers',                shirt: '#fbbf24',  cond: (c) => (c.followers || 0) >= 100 },
+  red_devil:      { name: 'Red Devil',       desc: 'Beat Pig Pen twice',           shirt: '#dc2626',  cond: (c) => (c.storyFlags?.pigPenWins || 0) >= 2 },
+  champion_white: { name: 'Champion White',  desc: 'Win BBBWC2027',                shirt: '#dadada',  cond: (c) => !!c.storyFlags?.festivalWon },
+  romance_pink:   { name: 'Mira\'s Hand-Stitched', desc: 'Mira couple',            shirt: '#fb7185',  cond: (c) => c.romanceState?.mira === 'couple' },
+  romance_lime:   { name: 'Sky\'s Joke Shirt',     desc: 'Sky couple',             shirt: '#84cc16',  cond: (c) => c.romanceState?.sky === 'couple' },
+  romance_cyan:   { name: 'Luca\'s Studio Tee',    desc: 'Luca couple',            shirt: '#22d3ee',  cond: (c) => c.romanceState?.luca === 'couple' },
+};
+const outfitUnlocked = (c, id) => {
+  const o = OUTFITS[id];
+  if (!o) return false;
+  try { return o.cond(c); } catch { return false; }
+};
+// Returns the shirt color in effect for performances (active outfit if
+// unlocked + selected, else char.color).
+const activeOutfitShirt = (c) => {
+  const id = c?.outfit || 'default';
+  if (id !== 'default' && outfitUnlocked(c, id) && OUTFITS[id]?.shirt) return OUTFITS[id].shirt;
+  return c?.color || '#D4A017';
 };
 
 // ============ FESTIVAL ARC (BBBWC2027) ============
@@ -8691,6 +8719,7 @@ export default function BeatboxStory() {
     if (typeof c.festivalAcceptedDay !== 'number') c.festivalAcceptedDay = 0;
     if (c.festivalPath === undefined) c.festivalPath = null;
     if (c.festivalResult === undefined) c.festivalResult = null;
+    if (typeof c.outfit !== 'string') c.outfit = 'default';
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
     if (typeof c.lastPlantWaterDay !== 'number') c.lastPlantWaterDay = 0;
@@ -10200,6 +10229,39 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
               full energy · advances 1 day
               {char.minutes < 720 && <div className="text-amber-500 mt-1">It's still daytime — are you sure?</div>}
             </div>
+            {/* Stage Wardrobe — pick a stage outfit; unlocks via milestones */}
+            <div className="border-t border-stone-800 pt-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                STAGE WARDROBE
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {Object.entries(OUTFITS).map(([id, o]) => {
+                  const unlocked = outfitUnlocked(char, id);
+                  const active = (char.outfit || 'default') === id;
+                  return (
+                    <button key={id}
+                      onClick={() => unlocked && setChar(c => ({ ...c, outfit: id }))}
+                      disabled={!unlocked}
+                      title={unlocked ? `${o.name} · ${o.desc}` : `🔒 ${o.desc}`}
+                      className={`aspect-square border-2 flex flex-col items-center justify-center gap-1 transition-all ${
+                        active ? 'border-amber-500 bg-amber-500/10' :
+                        unlocked ? 'border-stone-800 hover:border-amber-500/50 bg-stone-900/30' :
+                                   'border-stone-900 bg-stone-950/40 opacity-40 cursor-not-allowed'
+                      }`}>
+                      <div className="w-7 h-7 border border-stone-700"
+                        style={{ background: id === 'default' ? char.color : (o.shirt || '#a78bfa') }} />
+                      <div className="text-[8px] uppercase tracking-widest text-stone-500 truncate w-full text-center px-1">
+                        {unlocked ? o.name : '🔒'}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] text-stone-600 uppercase tracking-wider text-center">
+                applied to all on-stage performances
+              </div>
+            </div>
+
             {/* Yoga Mat — gear-gated daily meditation */}
             {hasGear(char, 'yoga_mat') && (() => {
               const claimed = char.day === char.lastYogaDay;
@@ -12034,7 +12096,7 @@ const drawPixelHeart = (ctx, x, y, alpha = 1) => {
 
 // Build the canvas-friendly "look" object from a character record
 const lookFromChar = (char) => ({
-  shirt: char?.color || '#D4A017',
+  shirt: activeOutfitShirt(char),
   skin:  char?.skin || '#d4a87a',
   hair:  char?.hairColor || '#1a1a2e',
   style: char?.hairStyle || 'short',
