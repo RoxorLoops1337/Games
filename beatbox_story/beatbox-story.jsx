@@ -157,6 +157,7 @@ const initialChar = () => ({
   gear: {}, // { itemId: true } for purchased gear (PC, headphones, plant, etc.)
   lastCoffeeDay: 0, // last day you used the home coffee machine
   lastPlantWaterDay: 0, // last day you watered the houseplant (alive ≤5 days)
+  lastYogaDay: 0, // last day you meditated on the yoga mat
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -3802,7 +3803,8 @@ const BeatboxHero = ({
 // Pattern persists per-character via char.oriPattern.
 
 const SEQ_STEPS = 16;
-const SEQ_SLOTS = 4;
+const SEQ_SLOTS = 4;     // base slot count
+const SEQ_SLOTS_MPC = 8; // doubled when the Pro MPC gear is owned
 
 // Helper for cell arrays
 const _cells = (arr) => { const c = Array(SEQ_STEPS).fill(false); arr.forEach(i => { if (i >= 0 && i < SEQ_STEPS) c[i] = true; }); return c; };
@@ -3846,6 +3848,7 @@ const Sequencer = ({
   pattern = null,
   slots = null,        // array of patterns, one per save slot
   slotIdx = 0,         // currently selected save slot
+  slotCount = SEQ_SLOTS, // total tabs to show — doubles to 8 with the Pro MPC gear
   ownedSounds = [],
   onPatternChange,     // (pattern) => void — writes to the active slot
   onSlotChange,        // (idx) => void — switches active slot
@@ -3960,7 +3963,7 @@ const Sequencer = ({
       {slots && (
         <div className="flex items-center gap-1">
           <span className="text-[9px] uppercase tracking-widest text-stone-500 mr-1">Slot</span>
-          {Array.from({ length: SEQ_SLOTS }).map((_, i) => {
+          {Array.from({ length: slotCount }).map((_, i) => {
             const s = slots[i];
             const selected = i === slotIdx;
             const label = s?.name || `Slot ${i + 1}`;
@@ -8416,6 +8419,7 @@ export default function BeatboxStory() {
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
     if (typeof c.lastPlantWaterDay !== 'number') c.lastPlantWaterDay = 0;
+    if (typeof c.lastYogaDay !== 'number') c.lastYogaDay = 0;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -8907,6 +8911,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         // For musicality (tuner) and technicality (Beatbox Hero), accuracy gives bonus stat gain.
         let statGain = 1;
         let bonusText = '';
+        const cRef = charRef.current;
         if (trainStat === 'mus') {
           const acc = accuracyRef.current || 0;
           if (acc >= 0.8) { statGain = 3; bonusText = ' (perfect pitch!)'; }
@@ -8932,10 +8937,23 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           // Sequencer creativity score → bonus.
           // Studio monitors give a +25% boost so thresholds get cleared more easily.
           let cv = accuracyRef.current || 0;
-          if (hasGear(charRef.current, 'studio_monitors')) cv = cv * 1.25;
+          if (hasGear(cRef, 'studio_monitors')) cv = cv * 1.25;
           if (cv >= 0.8)      { statGain = 3; bonusText = ' (creative!)'; }
           else if (cv >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
-          if (hasGear(charRef.current, 'studio_monitors')) bonusText += ' · 🎚️';
+          if (hasGear(cRef, 'studio_monitors')) bonusText += ' · 🎚️';
+        }
+        // Gear multipliers on top of the base gain:
+        //  - PC boosts Tec & Ori by 25%
+        //  - Mic boosts Mus by 25%
+        if (statGain > 0) {
+          let gearMult = 1;
+          if ((trainStat === 'tec' || trainStat === 'ori') && hasGear(cRef, 'pc'))  gearMult *= 1.25;
+          if (trainStat === 'mus' && hasGear(cRef, 'mic')) gearMult *= 1.25;
+          if (gearMult > 1) {
+            const before = statGain;
+            statGain = Math.round(statGain * gearMult);
+            if (statGain > before) bonusText += ' · 🎛️';
+          }
         }
         if (statGain > 0) {
           setChar(cc => {
@@ -8995,6 +9013,19 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       lastCoffeeDay: c.day,
     }));
     showToast('Home espresso · +25⚡ -15🍴 +2♥', 'win');
+  };
+
+  // Yoga Mat meditation — daily +5 mood, 10 game min.
+  const meditate = () => {
+    if (!hasGear(char, 'yoga_mat')) return;
+    if (char.day === char.lastYogaDay) return;
+    setChar(c => ({
+      ...c,
+      minutes: c.minutes + 10,
+      mood: Math.max(0, Math.min(100, decayMood(c, 10) + 5)),
+      lastYogaDay: c.day,
+    }));
+    showToast('Meditated. +5 mood', 'win');
   };
 
   // Water the houseplant — costs $5, resets the 5-day timer.
@@ -9126,6 +9157,13 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       }
       // Houseplant: +1 mood per morning if it's still alive
       if (plantAlive(c)) mood = Math.min(100, mood + 1);
+      // Cat: +2 mood / morning, costs $3/day in food (only if you can afford it)
+      if (hasGear(c, 'cat') && (c.cash || 0) >= 3) {
+        mood = Math.min(100, mood + 2);
+        cash = Math.max(0, (c.cash || 0) - 3);
+      }
+      // Camera + Tripod: passive +1 follower per day from auto-posted clips
+      let extraFollowers = hasGear(c, 'camera_tripod') ? 1 : 0;
       let cash = c.cash;
       let rentLate = c.rentLate || 0;
       let lastRentPaidDay = c.lastRentPaidDay;
@@ -9161,7 +9199,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       let next = { ...c, energy, hunger, mood, cash,
         rentLate, lastRentPaidDay,
         day: newDay, minutes: 0, pendingDebuff: null,
-        storyFlags: flags };
+        storyFlags: flags,
+        followers: (c.followers || 0) + extraFollowers };
       // Parent message triggers (cooldown ≥3 days between parent texts)
       const cd = newDay - (next.lastParentMsgDay || 0);
       if (cd >= 3) {
@@ -9535,7 +9574,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                       <BeatboxHero
                         onAccuracyUpdate={handleAccuracy}
                         inputMode={tecInputMode}
-                        accuracyBoost={hasGear(char, 'premium_headphones') ? 1.25 : 1}
+                        accuracyBoost={(hasGear(char, 'premium_headphones') ? 1.25 : 1) * (hasGear(char, 'mic') ? 1.15 : 1)}
                         onLessonComplete={(idx, accuracy) => {
                           setChar(c => {
                             const next = { ...c };
@@ -9607,11 +9646,24 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                       bpm={char.oriBpm || 100}
                       slots={char.oriSlots}
                       slotIdx={char.oriSlotIdx || 0}
+                      slotCount={hasGear(char, 'mpc') ? SEQ_SLOTS_MPC : SEQ_SLOTS}
                       ownedSounds={char.sounds || []}
                       onPatternChange={(p) => setChar(c => {
-                        const slots = (c.oriSlots && c.oriSlots.length === SEQ_SLOTS)
-                          ? [...c.oriSlots]
-                          : _seqDefaultSlots();
+                        const target = hasGear(c, 'mpc') ? SEQ_SLOTS_MPC : SEQ_SLOTS;
+                        let slots;
+                        if (Array.isArray(c.oriSlots) && c.oriSlots.length === target) {
+                          slots = [...c.oriSlots];
+                        } else {
+                          slots = _seqDefaultSlots();
+                          // Pad up to target with starter patterns when MPC was just bought
+                          while (slots.length < target) slots.push(_seqStarter(slots.length % 4));
+                          // Carry over any existing patterns
+                          if (Array.isArray(c.oriSlots)) {
+                            for (let i = 0; i < c.oriSlots.length && i < target; i++) {
+                              if (c.oriSlots[i]) slots[i] = c.oriSlots[i];
+                            }
+                          }
+                        }
                         const idx = c.oriSlotIdx || 0;
                         slots[idx] = { ...p, name: slots[idx]?.name || p.name };
                         return { ...c, oriSlots: slots };
@@ -9749,6 +9801,20 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
               full energy · advances 1 day
               {char.minutes < 720 && <div className="text-amber-500 mt-1">It's still daytime — are you sure?</div>}
             </div>
+            {/* Yoga Mat — gear-gated daily meditation */}
+            {hasGear(char, 'yoga_mat') && (() => {
+              const claimed = char.day === char.lastYogaDay;
+              return (
+                <>
+                  <Btn onClick={meditate} disabled={claimed} className="w-full py-3">
+                    {claimed ? '🧘 ALREADY MEDITATED TODAY' : '🧘 MEDITATE (+5♥, 10 min)'}
+                  </Btn>
+                  <div className="text-[10px] text-stone-500 uppercase tracking-wider text-center">
+                    on the yoga mat · once per in-game day
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </Panel>
       )}
@@ -9771,6 +9837,15 @@ function ShopScreen({ char, setChar, showToast, go }) {
       let next = { ...c, cash: c.cash - item.cost, gear: { ...(c.gear || {}), [id]: true } };
       // Special-case fields some gear needs initialized on purchase
       if (id === 'houseplant') next.lastPlantWaterDay = c.day;
+      if (id === 'mpc') {
+        // Pad oriSlots out to 8 with starter patterns (carry over existing)
+        const existing = Array.isArray(c.oriSlots) ? c.oriSlots : [];
+        const slots = [];
+        for (let i = 0; i < SEQ_SLOTS_MPC; i++) {
+          slots.push(existing[i] || _seqStarter(i % 4));
+        }
+        next.oriSlots = slots;
+      }
       return next;
     });
     showToast(`Bought ${item.name}!`, 'win');
