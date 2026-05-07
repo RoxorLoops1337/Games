@@ -297,11 +297,6 @@ const FOXY_QUIPS = [
   "you've been weird this week. you good?",
   "post comes around four. i'll grab yours.",
 ];
-const FOXY_SAFETY_NET_LINES = [
-  "i made too much.",
-  "eat.",
-];
-
 const _msgPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // ---- Passive mood decay ----
@@ -1235,62 +1230,62 @@ const applyMingleEffects = (c, effects, outcome) => {
 const GEAR_CATALOG = {
   // ---- 🎵 Music store ----
   pc: {
-    name: 'Studio PC', store: 'music', cost: 800, fans: 0,
+    name: 'Studio PC', store: 'music', cost: 800,
     desc: '+25% to Tec & Ori training stat gains',
   },
   mpc: {
-    name: 'Pro MPC (BBX-32)', store: 'music', cost: 600, fans: 0,
+    name: 'Pro MPC (BBX-32)', store: 'music', cost: 600,
     desc: 'Doubles your sequencer slots (4 → 8)',
   },
   mic: {
-    name: 'Studio Condenser Mic', store: 'music', cost: 500, fans: 0,
+    name: 'Studio Condenser Mic', store: 'music', cost: 500,
     desc: '+25% to all mic-mode + Mus reward; better PitchTuner accuracy',
   },
   premium_headphones: {
-    name: 'Premium Headphones', store: 'music', cost: 250, fans: 0,
+    name: 'Premium Headphones', store: 'music', cost: 250,
     desc: '+25% accuracy in BeatboxHero mic-mode',
   },
   studio_monitors: {
-    name: 'Studio Monitors', store: 'music', cost: 300, fans: 0,
+    name: 'Studio Monitors', store: 'music', cost: 300,
     desc: '+25% to ori sequencer creativity score',
   },
   camera_tripod: {
-    name: 'Camera + Tripod', store: 'music', cost: 200, fans: 0,
+    name: 'Camera + Tripod', store: 'music', cost: 200,
     desc: 'Auto-posts your clips · +1 follower/day passively',
   },
   // ---- 🛋️ Furniture store ----
   new_bed: {
-    name: 'Memory-Foam Bed', store: 'furniture', cost: 600, fans: 0,
+    name: 'Memory-Foam Bed', store: 'furniture', cost: 600,
     desc: '+20 max-energy boost the morning after a full sleep',
   },
   houseplant: {
-    name: 'Houseplant', store: 'furniture', cost: 50, fans: 0,
+    name: 'Houseplant', store: 'furniture', cost: 50,
     desc: '+1 mood every morning if it stays alive (water = $5/3 days)',
   },
   coffee_machine: {
-    name: 'Coffee Machine', store: 'furniture', cost: 120, fans: 0,
+    name: 'Coffee Machine', store: 'furniture', cost: 120,
     desc: 'One free home espresso per day (+25⚡, -15🍴, +2♥)',
   },
   yoga_mat: {
-    name: 'Yoga Mat', store: 'furniture', cost: 60, fans: 0,
+    name: 'Yoga Mat', store: 'furniture', cost: 60,
     desc: 'Daily meditate action: +5 mood, 10 game min',
   },
   earplugs: {
-    name: 'Earplugs', store: 'furniture', cost: 30, fans: 0,
+    name: 'Earplugs', store: 'furniture', cost: 30,
     desc: 'Removes "noisy upstairs" + "heating stuck" bad-sleep reasons',
   },
   // ---- 👕 Clothing store ----
   wardrobe_refresh: {
-    name: 'Wardrobe Refresh', store: 'clothing', cost: 200, fans: 0,
+    name: 'Wardrobe Refresh', store: 'clothing', cost: 200,
     desc: '+1 sho gain on every battle / open mic / showcase',
   },
   premium_shoes: {
-    name: 'Premium Running Shoes', store: 'clothing', cost: 150, fans: 0,
+    name: 'Premium Running Shoes', store: 'clothing', cost: 150,
     desc: '+1 extra sho per run reward block',
   },
   // ---- 🐾 Pet store ----
   cat: {
-    name: 'Cat 🐈', store: 'pet', cost: 100, fans: 0,
+    name: 'Cat 🐈', store: 'pet', cost: 100,
     desc: '+2 mood every morning · costs $3/day in food',
   },
 };
@@ -8367,11 +8362,6 @@ export default function BeatboxStory() {
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState(null);
   const [activeSlot, setActiveSlotState] = useState(null); // 1..5, null if none
-  // TEMP key-debug indicator: shows the last key that reached the global
-  // dispatcher. If this never updates when you press a key on PC, the issue
-  // is upstream of our handlers (browser/OS swallowing the event).
-  const [keyDebug, setKeyDebug] = useState({ key: '', t: 0 });
-  useEffect(() => onGlobalKey((e) => setKeyDebug({ key: `${e.key} · ${e.code}`, t: Date.now() })), []);
   // Active narrative cutscene. Shape: { speaker, speakerColor, lines, onComplete }
   // (onComplete handles both advance-past-end and skip.)
   const [cutscene, setCutscene] = useState(null);
@@ -8616,15 +8606,6 @@ export default function BeatboxStory() {
                           radial-gradient(circle at 80% 80%, rgba(204,34,0,0.06) 0%, transparent 50%),
                           repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px)`
       }}>
-      {/* TEMP: key-press indicator. Remove once keyboard is confirmed working.
-          Shows the most recent key the global dispatcher saw. If pressing
-          A/S/D/F never updates this, key events are not reaching the page. */}
-      {keyDebug.key && (
-        <div style={{ position: 'fixed', top: 4, left: 4, zIndex: 9999, background: '#0c0a09', color: '#22d3ee',
-                      border: '1px solid #22d3ee', padding: '2px 6px', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>
-          KEY: {keyDebug.key}
-        </div>
-      )}
       <div className="max-w-md mx-auto min-h-screen border-x border-stone-900 relative">
 
         {/* HEADER */}
@@ -10961,7 +10942,6 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         followers: c.followers + fanGain,
         openMicCount: (c.openMicCount || 0) + 1,
         xp: c.xp + 8,
-        _lastOpenMicFans: fanGain,
         stats: { ...(c.stats || {}), sho: (c.stats?.sho || 0) + wardrobeBonus },
       };
       // Good-show parent text trigger (only on a strong show, with cooldown)
