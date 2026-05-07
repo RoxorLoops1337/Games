@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multiplayer Arcade</title>
+<style>
+  :root {
+    --green: #0f0;
+    --green-dim: #053;
+    --bg: #000;
+    --panel: #001a00;
+    --accent: #0ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--bg); color: var(--green);
+    font-family: ui-monospace, "Courier New", monospace;
+  }
+  body {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px 12px 40px;
+  }
+  h1 {
+    margin: 0 0 4px; letter-spacing: 6px; font-size: 28px;
+    text-shadow: 0 0 8px var(--green);
+  }
+  .tag { color: var(--accent); font-size: 12px; letter-spacing: 2px; margin-bottom: 16px; }
+
+  .screen {
+    width: 540px; max-width: 96vw;
+    background: var(--panel);
+    border: 1px solid var(--green);
+    border-radius: 4px;
+    padding: 18px;
+    box-shadow: 0 0 12px rgba(0,255,0,0.15);
+  }
+  .screen.hidden { display: none; }
+
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+
+  h2 { margin: 0 0 10px; font-size: 16px; letter-spacing: 3px; color: var(--accent); }
+  label { font-size: 13px; }
+
+  input, button, select {
+    background: #000; color: var(--green);
+    border: 1px solid var(--green); border-radius: 2px;
+    font-family: inherit; font-size: 14px; padding: 8px 12px;
+  }
+  input { width: 200px; }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  button {
+    cursor: pointer; transition: background 0.1s;
+    text-transform: uppercase; letter-spacing: 2px;
+  }
+  button:hover:not(:disabled) { background: #003300; }
+  button.primary { background: #003300; }
+  button.primary:hover:not(:disabled) { background: #005500; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .code {
+    font-size: 28px; letter-spacing: 8px; color: #fff;
+    background: #002200; padding: 6px 14px;
+    border: 1px dashed var(--green); border-radius: 2px;
+    user-select: all; display: inline-block;
+  }
+  .muted { color: #088; font-size: 12px; }
+  .err { color: #f44; font-size: 13px; min-height: 18px; }
+  .ok { color: var(--accent); font-size: 13px; min-height: 18px; }
+
+  .game-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .game-card {
+    border: 1px solid var(--green-dim);
+    padding: 10px; cursor: pointer; border-radius: 2px;
+    background: #000; transition: all 0.15s;
+  }
+  .game-card:hover { border-color: var(--green); background: #002200; }
+  .game-card.selected { border-color: var(--accent); background: #003322; box-shadow: 0 0 8px var(--accent); }
+  .game-card .name { font-weight: bold; letter-spacing: 2px; margin-bottom: 4px; }
+  .game-card .desc { font-size: 11px; color: #088; }
+
+  .player-list { list-style: none; padding: 0; margin: 0; }
+  .player-list li {
+    padding: 6px 8px; border-left: 3px solid;
+    background: #000; margin-bottom: 4px; font-size: 14px;
+    display: flex; justify-content: space-between;
+  }
+
+  canvas {
+    background: #000; border: 2px solid var(--green); display: block;
+    max-width: 100%; height: auto; image-rendering: pixelated;
+  }
+  #scores {
+    margin-top: 10px; font-size: 14px; line-height: 1.6;
+    width: 540px; max-width: 96vw;
+  }
+  .scoreline { display: flex; justify-content: space-between; padding: 2px 6px; }
+
+  .controls-help { font-size: 12px; color: #088; margin-top: 8px; }
+
+  a { color: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--green-dim); margin: 14px 0; }
+</style>
+</head>
+<body>
+
+<h1>ARCADE.NET</h1>
+<div class="tag">PEER &middot; TO &middot; PEER &middot; MULTIPLAYER</div>
+
+<!-- ============ MENU ============ -->
+<div id="menuScreen" class="screen">
+  <h2>// CONNECT</h2>
+  <div class="col">
+    <div class="row">
+      <label>Name</label>
+      <input id="nameInput" maxlength="12" value="Player" />
+    </div>
+    <hr>
+    <div class="row between">
+      <button id="hostBtn" class="primary">Host new room</button>
+      <div class="row">
+        <input id="joinCode" placeholder="ROOM CODE" maxlength="6" style="text-transform:uppercase;width:140px;" />
+        <button id="joinBtn">Join</button>
+      </div>
+    </div>
+    <div id="menuStatus" class="ok"></div>
+  </div>
+</div>
+
+<!-- ============ LOBBY ============ -->
+<div id="lobbyScreen" class="screen hidden">
+  <div class="row between">
+    <h2>// LOBBY</h2>
+    <div>Room: <span id="roomCode" class="code"></span></div>
+  </div>
+  <div class="muted" style="margin:6px 0 12px;">Share the code. Friends open this page and tap Join.</div>
+
+  <div class="col">
+    <div>
+      <h2>Players</h2>
+      <ul id="playerList" class="player-list"></ul>
+    </div>
+
+    <div>
+      <h2>Game</h2>
+      <div id="gameCards" class="game-cards"></div>
+    </div>
+
+    <div class="row between">
+      <button id="leaveBtn">Leave room</button>
+      <button id="startBtn" class="primary">Start game</button>
+    </div>
+    <div id="lobbyStatus" class="ok"></div>
+  </div>
+</div>
+
+<!-- ============ GAME ============ -->
+<div id="gameScreen" class="screen hidden" style="background:transparent;border:none;box-shadow:none;padding:0;">
+  <div class="row between" style="margin-bottom:8px;">
+    <div id="gameTitle" style="font-size:18px;letter-spacing:3px;"></div>
+    <button id="backToLobby">Back to lobby</button>
+  </div>
+  <canvas id="game" width="600" height="600"></canvas>
+  <div id="scores"></div>
+  <div id="controlsHelp" class="controls-help"></div>
+  <div id="gameStatus" class="ok" style="margin-top:6px;"></div>
+</div>
+
+<div class="muted" style="margin-top:18px;">
+  <a href="../index.html">&larr; back to single-player</a>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+(() => {
+  // =============================================================
+  // CONFIG
+  // =============================================================
+  const COLS = 30, ROWS = 30, CELL = 20;
+  const CANVAS_W = COLS * CELL, CANVAS_H = ROWS * CELL;
+  const COLORS = ['#0f0', '#0ff', '#ff0', '#f0f', '#f80', '#08f', '#f44', '#8f8'];
+
+  const GAMES = {
+    snake: {
+      name: 'SNAKE',
+      desc: 'Eat food, grow, last one alive wins.',
+      tickMs: 130,
+      controls: 'Arrow keys / WASD',
+    },
+    tron: {
+      name: 'TRON',
+      desc: 'Light cycles. Trails are walls. Survive longest.',
+      tickMs: 90,
+      controls: 'Arrow keys / WASD',
+    },
+  };
+
+  // =============================================================
+  // STATE
+  // =============================================================
+  const state = {
+    role: null,            // 'host' | 'client'
+    peer: null,
+    conns: new Map(),      // host: peerId -> conn
+    hostConn: null,        // client side
+    roomCode: null,
+    me: { id: null, name: 'Player' },
+
+    selectedGame: 'snake',
+    inLobby: false,
+    inGame: false,
+
+    // game state (host-authoritative)
+    players: new Map(),    // id -> { id, name, color, snake, dir, nextDir, alive, score }
+    food: null,
+    gameMode: 'snake',
+    tickHandle: null,
+    roundActive: false,
+  };
+
+  const $ = id => document.getElementById(id);
+
+  // =============================================================
+  // SCREENS
+  // =============================================================
+  function showScreen(name) {
+    for (const s of ['menuScreen', 'lobbyScreen', 'gameScreen']) {
+      $(s).classList.toggle('hidden', s !== name);
+    }
+  }
+
+  // =============================================================
+  // LOBBY UI
+  // =============================================================
+  function renderGameCards() {
+    const isHost = state.role === 'host';
+    const cards = Object.entries(GAMES).map(([key, g]) => {
+      const sel = key === state.selectedGame ? 'selected' : '';
+      const click = isHost ? `onclick="window.__selectGame('${key}')"` : '';
+      const style = isHost ? '' : 'style="opacity:0.7;cursor:default;"';
+      return `<div class="game-card ${sel}" ${click} ${style}>
+        <div class="name">${g.name}</div>
+        <div class="desc">${g.desc}</div>
+      </div>`;
+    }).join('');
+    $('gameCards').innerHTML = cards;
+  }
+  window.__selectGame = key => {
+    if (state.role !== 'host') return;
+    state.selectedGame = key;
+    renderGameCards();
+    broadcastLobby();
+  };
+
+  function renderPlayerList() {
+    const items = [...state.players.values()].map(p => {
+      const tag = p.id === state.me.id ? ' (you)' : '';
+      const role = p.id === state.peer?.id && state.role === 'host' ? ' [host]'
+                 : (state.role === 'host' && p.id === state.me.id ? ' [host]' : '');
+      return `<li style="border-color:${p.color};">
+        <span><span style="color:${p.color}">&#9632;</span> ${escapeHtml(p.name)}${tag}${role}</span>
+        <span class="muted">${p.score || 0}</span>
+      </li>`;
+    }).join('');
+    $('playerList').innerHTML = items || '<li class="muted">No players yet...</li>';
+  }
+
+  function setLobbyStatus(msg, isError) {
+    const el = $('lobbyStatus');
+    el.className = isError ? 'err' : 'ok';
+    el.textContent = msg || '';
+  }
+  function setMenuStatus(msg, isError) {
+    const el = $('menuStatus');
+    el.className = isError ? 'err' : 'ok';
+    el.textContent = msg || '';
+  }
+
+  // =============================================================
+  // NETWORKING — common
+  // =============================================================
+  function makeCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 5; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  }
+  const peerIdFor = code => 'arcade-' + code.toUpperCase();
+
+  // =============================================================
+  // HOST
+  // =============================================================
+  function hostRoom() {
+    state.role = 'host';
+    state.roomCode = makeCode();
+    state.me.name = ($('nameInput').value || 'Host').trim().slice(0, 12) || 'Host';
+
+    setMenuStatus('Connecting to signaling server...');
+    state.peer = new Peer(peerIdFor(state.roomCode));
+
+    state.peer.on('open', id => {
+      state.me.id = id;
+      addPlayer(id, state.me.name);
+      enterLobby();
+    });
+
+    state.peer.on('connection', conn => {
+      conn.on('open', () => {
+        state.conns.set(conn.peer, conn);
+        conn.on('data', data => onHostData(conn, data));
+        conn.on('close', () => removePlayer(conn.peer));
+      });
+    });
+
+    state.peer.on('error', err => {
+      setMenuStatus('Error: ' + err.type + ' — ' + (err.message || 'unknown'), true);
+      state.role = null;
+    });
+  }
+
+  function onHostData(conn, msg) {
+    if (msg.type === 'join') {
+      addPlayer(conn.peer, msg.name || 'Player');
+      broadcastLobby();
+    } else if (msg.type === 'input') {
+      const p = state.players.get(conn.peer);
+      if (p && p.alive) applyInput(p, msg.dir);
+    } else if (msg.type === 'leave') {
+      removePlayer(conn.peer);
+    }
+  }
+
+  function broadcastLobby() {
+    const payload = {
+      type: 'lobby',
+      players: [...state.players.values()].map(p => ({
+        id: p.id, name: p.name, color: p.color, score: p.score || 0,
+      })),
+      selectedGame: state.selectedGame,
+      inGame: state.inGame,
+    };
+    for (const c of state.conns.values()) c.send(payload);
+    renderPlayerList();
+    renderGameCards();
+  }
+
+  function broadcastState() {
+    const payload = {
+      type: 'state',
+      gameMode: state.gameMode,
+      food: state.food,
+      players: [...state.players.values()].map(p => ({
+        id: p.id, name: p.name, color: p.color,
+        snake: p.snake, alive: p.alive, score: p.score,
+      })),
+    };
+    for (const c of state.conns.values()) c.send(payload);
+  }
+
+  function broadcastEvent(evt) {
+    for (const c of state.conns.values()) c.send(evt);
+  }
+
+  function addPlayer(id, name) {
+    if (state.players.has(id)) return;
+    const colorIdx = state.players.size % COLORS.length;
+    state.players.set(id, {
+      id, name,
+      color: COLORS[colorIdx],
+      snake: [], dir: { x: 1, y: 0 }, nextDir: { x: 1, y: 0 },
+      alive: false, score: 0,
+    });
+  }
+
+  function removePlayer(id) {
+    state.players.delete(id);
+    state.conns.delete(id);
+    broadcastLobby();
+  }
+
+  // =============================================================
+  // CLIENT
+  // =============================================================
+  function joinRoom() {
+    const code = ($('joinCode').value || '').trim().toUpperCase();
+    if (code.length < 4) { setMenuStatus('Enter a valid room code.', true); return; }
+    state.role = 'client';
+    state.me.name = ($('nameInput').value || 'Player').trim().slice(0, 12) || 'Player';
+
+    setMenuStatus('Connecting to room ' + code + '...');
+    state.peer = new Peer();
+
+    state.peer.on('open', () => {
+      const conn = state.peer.connect(peerIdFor(code), { reliable: true });
+      state.hostConn = conn;
+      state.roomCode = code;
+
+      conn.on('open', () => {
+        conn.send({ type: 'join', name: state.me.name });
+        state.me.id = state.peer.id;
+        enterLobby();
+      });
+      conn.on('data', onClientData);
+      conn.on('close', () => {
+        setLobbyStatus('Disconnected from host.', true);
+        setTimeout(() => leaveRoom(), 1500);
+      });
+      conn.on('error', err => setMenuStatus('Connection error: ' + err.type, true));
+    });
+
+    state.peer.on('error', err => {
+      const msg = err.type === 'peer-unavailable'
+        ? 'Room not found — check the code.'
+        : 'Error: ' + err.type;
+      setMenuStatus(msg, true);
+      state.role = null;
+    });
+  }
+
+  function onClientData(msg) {
+    if (msg.type === 'lobby') {
+      state.players = new Map(msg.players.map(p => [p.id, { ...p }]));
+      state.selectedGame = msg.selectedGame || 'snake';
+      renderPlayerList();
+      renderGameCards();
+      if (msg.inGame && !state.inGame) enterGame(state.selectedGame);
+      if (!msg.inGame && state.inGame) backToLobby();
+    } else if (msg.type === 'state') {
+      state.gameMode = msg.gameMode;
+      state.food = msg.food;
+      state.players = new Map(msg.players.map(p => [p.id, p]));
+      if (!state.inGame) enterGame(msg.gameMode);
+      drawGame();
+      renderScores();
+    } else if (msg.type === 'roundOver') {
+      $('gameStatus').textContent = msg.message;
+    } else if (msg.type === 'kicked') {
+      setMenuStatus(msg.reason || 'Removed by host.', true);
+      leaveRoom();
+    }
+  }
+
+  // =============================================================
+  // FLOW
+  // =============================================================
+  function enterLobby() {
+    state.inLobby = true;
+    state.inGame = false;
+    $('roomCode').textContent = state.roomCode;
+    $('startBtn').classList.toggle('hidden', state.role !== 'host');
+    $('startBtn').disabled = false;
+    setLobbyStatus('');
+    renderPlayerList();
+    renderGameCards();
+    showScreen('lobbyScreen');
+    if (state.role === 'host') broadcastLobby();
+  }
+
+  function leaveRoom() {
+    if (state.role === 'client' && state.hostConn?.open) {
+      try { state.hostConn.send({ type: 'leave' }); } catch {}
+    }
+    if (state.tickHandle) { clearInterval(state.tickHandle); state.tickHandle = null; }
+    if (state.peer) { try { state.peer.destroy(); } catch {} }
+    state.peer = null;
+    state.hostConn = null;
+    state.conns.clear();
+    state.players.clear();
+    state.role = null;
+    state.inLobby = false;
+    state.inGame = false;
+    state.roundActive = false;
+    showScreen('menuScreen');
+  }
+
+  function startGame() {
+    if (state.role !== 'host') return;
+    if (state.players.size === 0) { setLobbyStatus('No players.', true); return; }
+    state.gameMode = state.selectedGame;
+    state.inGame = true;
+    state.roundActive = true;
+    initRound();
+    broadcastLobby();
+    enterGame(state.gameMode);
+    if (state.tickHandle) clearInterval(state.tickHandle);
+    state.tickHandle = setInterval(hostTick, GAMES[state.gameMode].tickMs);
+  }
+
+  function backToLobby() {
+    state.inGame = false;
+    state.roundActive = false;
+    if (state.tickHandle) { clearInterval(state.tickHandle); state.tickHandle = null; }
+    if (state.role === 'host') broadcastLobby();
+    enterLobby();
+  }
+
+  function enterGame(mode) {
+    state.inGame = true;
+    state.gameMode = mode;
+    $('gameTitle').textContent = '// ' + GAMES[mode].name;
+    $('controlsHelp').textContent = GAMES[mode].controls + (state.role === 'host' ? ' • Space to restart' : '');
+    $('gameStatus').textContent = '';
+    showScreen('gameScreen');
+    drawGame();
+    renderScores();
+  }
+
+  // =============================================================
+  // GAME LOGIC (host-authoritative)
+  // =============================================================
+  function initRound() {
+    const total = state.players.size;
+    let i = 0;
+    for (const p of state.players.values()) {
+      spawnSnake(p, i++, total);
+    }
+    if (state.gameMode === 'snake') placeFood();
+    else state.food = null;
+  }
+
+  function spawnSnake(p, idx, total) {
+    const margin = 4;
+    const startX = margin + Math.floor((COLS - 2 * margin) * (idx / Math.max(1, total)));
+    const startY = Math.floor(ROWS / 2) + (idx % 2 === 0 ? -3 : 3);
+    p.snake = [
+      { x: startX,     y: startY },
+      { x: startX - 1, y: startY },
+      { x: startX - 2, y: startY },
+    ];
+    p.dir = { x: 1, y: 0 };
+    p.nextDir = { x: 1, y: 0 };
+    p.alive = true;
+  }
+
+  function placeFood() {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const fx = Math.floor(Math.random() * COLS);
+      const fy = Math.floor(Math.random() * ROWS);
+      let occupied = false;
+      for (const p of state.players.values()) {
+        if (p.snake.some(s => s.x === fx && s.y === fy)) { occupied = true; break; }
+      }
+      if (!occupied) { state.food = { x: fx, y: fy }; return; }
+    }
+    state.food = null;
+  }
+
+  function applyInput(p, dir) {
+    if (!dir) return;
+    if (Math.abs(dir.x) + Math.abs(dir.y) !== 1) return;
+    if (dir.x === -p.dir.x && dir.y === -p.dir.y) return;
+    p.nextDir = dir;
+  }
+
+  function hostTick() {
+    if (!state.roundActive) return;
+    const newHeads = new Map();
+    for (const p of state.players.values()) {
+      if (!p.alive) continue;
+      p.dir = p.nextDir;
+      newHeads.set(p.id, { x: p.snake[0].x + p.dir.x, y: p.snake[0].y + p.dir.y });
+    }
+
+    // wall + self collisions
+    for (const [id, head] of newHeads) {
+      const p = state.players.get(id);
+      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { p.alive = false; continue; }
+      const selfBody = state.gameMode === 'tron' ? p.snake : p.snake.slice(0, -1);
+      if (selfBody.some(s => s.x === head.x && s.y === head.y)) p.alive = false;
+    }
+
+    // collisions vs other snakes
+    for (const [id, head] of newHeads) {
+      const p = state.players.get(id);
+      if (!p.alive) continue;
+      for (const other of state.players.values()) {
+        if (other.id === id) continue;
+        if (other.snake.some(s => s.x === head.x && s.y === head.y)) { p.alive = false; break; }
+      }
+    }
+
+    // head-to-head
+    const headPositions = new Map();
+    for (const [id, head] of newHeads) {
+      const k = head.x + ',' + head.y;
+      if (!headPositions.has(k)) headPositions.set(k, []);
+      headPositions.get(k).push(id);
+    }
+    for (const ids of headPositions.values()) {
+      if (ids.length > 1) for (const id of ids) state.players.get(id).alive = false;
+    }
+
+    // advance survivors
+    for (const [id, head] of newHeads) {
+      const p = state.players.get(id);
+      if (!p.alive) continue;
+      p.snake.unshift(head);
+      if (state.gameMode === 'snake') {
+        if (state.food && head.x === state.food.x && head.y === state.food.y) {
+          p.score++;
+          placeFood();
+        } else {
+          p.snake.pop();
+        }
+      }
+      // tron: never pop, never eat
+    }
+
+    // tron scoring: alive players gain a point per tick
+    if (state.gameMode === 'tron') {
+      for (const p of state.players.values()) if (p.alive) p.score++;
+    }
+
+    broadcastState();
+    drawGame();
+    renderScores();
+
+    const aliveCount = [...state.players.values()].filter(p => p.alive).length;
+    const minToEnd = state.players.size > 1 ? 1 : 0;
+    if (aliveCount <= minToEnd) {
+      state.roundActive = false;
+      clearInterval(state.tickHandle);
+      state.tickHandle = null;
+      const winner = [...state.players.values()].find(p => p.alive);
+      const message = winner ? winner.name + ' wins!' : 'Round over.';
+      broadcastEvent({ type: 'roundOver', message });
+      $('gameStatus').textContent = message + ' (Host: press Space or Start)';
+    }
+  }
+
+  // =============================================================
+  // RENDER
+  // =============================================================
+  function drawGame() {
+    const ctx = $('game').getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // grid
+    ctx.strokeStyle = '#021';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x * CELL + 0.5, 0); ctx.lineTo(x * CELL + 0.5, CANVAS_H); ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * CELL + 0.5); ctx.lineTo(CANVAS_W, y * CELL + 0.5); ctx.stroke();
+    }
+
+    if (state.gameMode === 'snake' && state.food) {
+      ctx.fillStyle = '#f00';
+      ctx.shadowColor = '#f00'; ctx.shadowBlur = 8;
+      ctx.fillRect(state.food.x * CELL + 3, state.food.y * CELL + 3, CELL - 6, CELL - 6);
+      ctx.shadowBlur = 0;
+    }
+
+    for (const p of state.players.values()) {
+      if (!p.snake || p.snake.length === 0) continue;
+      ctx.fillStyle = p.alive ? p.color : '#444';
+      if (p.alive) { ctx.shadowColor = p.color; ctx.shadowBlur = 4; }
+      for (let i = 0; i < p.snake.length; i++) {
+        const seg = p.snake[i];
+        const pad = i === 0 ? 0 : 1;
+        ctx.fillRect(seg.x * CELL + pad, seg.y * CELL + pad, CELL - pad * 2, CELL - pad * 2);
+      }
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  function renderScores() {
+    const lines = [...state.players.values()].sort((a, b) => (b.score || 0) - (a.score || 0)).map(p => {
+      const tag = p.id === state.me.id ? ' (you)' : '';
+      const dead = p.alive === false && state.inGame ? ' DEAD' : '';
+      return `<div class="scoreline" style="color:${p.color}">
+        <span>&#9632; ${escapeHtml(p.name)}${tag}</span>
+        <span>${p.score || 0}${dead ? ' · ' + dead : ''}</span>
+      </div>`;
+    });
+    $('scores').innerHTML = lines.join('');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // =============================================================
+  // INPUT
+  // =============================================================
+  document.addEventListener('keydown', e => {
+    let dir = null;
+    switch (e.key) {
+      case 'ArrowUp': case 'w': case 'W': dir = { x: 0, y: -1 }; break;
+      case 'ArrowDown': case 's': case 'S': dir = { x: 0, y: 1 }; break;
+      case 'ArrowLeft': case 'a': case 'A': dir = { x: -1, y: 0 }; break;
+      case 'ArrowRight': case 'd': case 'D': dir = { x: 1, y: 0 }; break;
+      case ' ':
+        if (state.role === 'host' && state.inGame && !state.roundActive) {
+          e.preventDefault();
+          startGame();
+          return;
+        }
+        break;
+    }
+    if (!dir || !state.inGame) return;
+    e.preventDefault();
+    if (state.role === 'host') {
+      const me = state.players.get(state.me.id);
+      if (me && me.alive) applyInput(me, dir);
+    } else if (state.role === 'client' && state.hostConn?.open) {
+      state.hostConn.send({ type: 'input', dir });
+    }
+  });
+
+  // =============================================================
+  // WIRING
+  // =============================================================
+  $('hostBtn').addEventListener('click', hostRoom);
+  $('joinBtn').addEventListener('click', joinRoom);
+  $('startBtn').addEventListener('click', startGame);
+  $('leaveBtn').addEventListener('click', leaveRoom);
+  $('backToLobby').addEventListener('click', () => {
+    if (state.role === 'host') backToLobby();
+    else $('gameStatus').textContent = 'Only host can return to lobby.';
+  });
+  $('joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
+  $('joinCode').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+
+  renderGameCards();
+  showScreen('menuScreen');
+})();
+</script>
+</body>
+</html>
