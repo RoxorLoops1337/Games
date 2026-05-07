@@ -315,6 +315,13 @@ const _moodDrainFor = (c, minutes) => {
 const decayMood = (c, minutes) => {
   return Math.max(0, (c.mood || 0) - _moodDrainFor(c, minutes));
 };
+// Convenience: returns a `{ minutes, mood }` partial that bumps minutes by
+// `n` and applies passive mood decay. The activity's positive bumps (food,
+// performance highs) are added on top by the caller.
+const passMinutes = (c, n) => ({
+  minutes: (c.minutes || 0) + n,
+  mood: decayMood(c, n),
+});
 
 // Foxy's context-aware tip system. Returns a single tip string based on
 // the player's current state. Priority order (high → low): survival
@@ -611,6 +618,26 @@ const dayOfWeek = (day) => ((day || 1)) % 7;
 // Rent (auto-deducted on Sunday morning sleep transition; apartment tier sets the amount).
 const RENT_BY_TIER = [50, 100, 200];   // tier 1 / 2 / 3 weekly rent
 const COUCHSURF_DAYS = 3;              // days at Foxy's friend after eviction
+
+// Compute the rent event for a given char + new day. Returns null when
+// rent isn't due (not Sunday or already paid this week). When due, returns
+// { type: 'paid' | 'missed' | 'warning' | 'evicted', amount, ... }.
+// Used by both finishSleep (full sleep transition) and the App's 2 AM
+// collapse watcher.
+const computeRentEvent = (c, newDay) => {
+  if (newDay % 7 !== 6) return null;                       // not Sunday
+  if (c.lastRentPaidDay === newDay) return null;           // already handled
+  const tier = c.apartmentTier || 1;
+  const amount = RENT_BY_TIER[tier - 1] || RENT_BY_TIER[0];
+  if ((c.cash || 0) >= amount) {
+    const firstTime = !c.storyFlags?.firstRentPaid;
+    return { type: 'paid', amount, firstTime };
+  }
+  const next = (c.rentLate || 0) + 1;
+  if (next >= 3)  return { type: 'evicted', amount, weeks: next };
+  if (next === 2) return { type: 'warning', amount };
+  return                  { type: 'missed', amount };
+};
 
 // What's happening at the bar tonight, indexed by day-of-week (0..6).
 const BAR_SCHEDULE = [
@@ -5736,10 +5763,11 @@ const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
     if (!picked) return;
     setChar(c => {
       let next = applyMingleEffects(c, picked.outcome.effects, picked.outcome);
-      next.minutes = (c.minutes || 0) + 30;
+      // 30 min at the bar — bump time + apply passive mood decay
+      const t = passMinutes(c, 30);
+      next.minutes = t.minutes;
       next.energy = Math.max(0, (next.energy || 0) - 6);
-      // Passive mood decay over the 30 min spent at the bar
-      next.mood = Math.max(0, Math.min(100, next.mood - _moodDrainFor(c, 30)));
+      next.mood = Math.max(0, Math.min(100, t.mood + (next.mood - (c.mood || 0))));
       next.mingleCount = (c.mingleCount || 0) + 1;
       next.metEncounters = { ...(c.metEncounters || {}),
         [encounter.id]: ((c.metEncounters || {})[encounter.id] || 0) + 1 };
@@ -7337,28 +7365,10 @@ const drawMingleScene = (ctx, fc, look, encounter) => {
   _px(ctx, 106, 21, 9, 2, '#fbbf24');
   ctx.fillStyle = 'rgba(254, 243, 199, 0.10)';
   ctx.beginPath(); ctx.arc(110, 22, 36, 0, Math.PI * 2); ctx.fill();
-  // Stranger seated at the counter (right side)
+  // Stranger seated at the counter (right side) — shared seated drawer
   const x = 116;
-  // Shirt + collar
-  const shirt = look?.shirt || '#a78bfa';
-  const skin  = look?.skin  || '#d4a87a';
-  const hair  = look?.hair  || '#1a1a2e';
-  _px(ctx, x - 6, counterY - 16, 12, 16, shirt);
-  _px(ctx, x - 6, counterY - 16, 12, 1, '#fff');
-  // Arms resting on the counter
-  _px(ctx, x - 8, counterY - 4, 3, 4, shirt);
-  _px(ctx, x + 5, counterY - 4, 3, 4, shirt);
-  _px(ctx, x - 7, counterY - 1, 2, 1, skin);
-  _px(ctx, x + 6, counterY - 1, 2, 1, skin);
-  // Head
-  _px(ctx, x - 4, counterY - 25, 8, 8, skin);
-  _px(ctx, x - 4, counterY - 27, 8, 3, hair);
-  // Eyes (looking your way)
-  _px(ctx, x - 3, counterY - 22, 1, 1, '#0c0a09');
-  _px(ctx, x + 1, counterY - 22, 1, 1, '#0c0a09');
-  // Slight mouth
-  _px(ctx, x - 1, counterY - 19, 3, 1, '#5a2020');
-  // Drink in front of them
+  _drawSeatedAtBar(ctx, x, counterY, look, fc, 'player');
+  // Drink in front of them — color varies a little per encounter
   _px(ctx, x - 9, counterY - 7, 5, 7, '#3a3a40');
   _px(ctx, x - 8, counterY - 5, 3, 4, ['#fbbf24','#22d3ee','#fb7185','#84cc16'][(encounter?.id?.length || 0) % 4]);
   _px(ctx, x - 9, counterY - 7, 5, 1, '#dadada');
@@ -8534,24 +8544,22 @@ export default function BeatboxStory() {
       if ((c.minutes || 0) < DAY_END) return c;       // race-guard
       const max = c.maxEnergy ?? 100;
       const newDay = c.day + 1;
-      // Inline rent check (mirrors finishSleep's computeRentEvent)
+      const rent = computeRentEvent(c, newDay);
       let cash = c.cash || 0;
       let rentLate = c.rentLate || 0;
       let lastRentPaidDay = c.lastRentPaidDay;
       const flags = { ...(c.storyFlags || {}) };
-      if (newDay % 7 === 6 && c.lastRentPaidDay !== newDay) {
-        const amount = RENT_BY_TIER[(c.apartmentTier || 1) - 1] || RENT_BY_TIER[0];
-        if (cash >= amount) {
-          cash -= amount;
-          rentLate = 0;
-          lastRentPaidDay = newDay;
-          flags.firstRentPaid = true;
-        } else {
-          rentLate = (rentLate || 0) + 1;
-          // Don't process eviction inline here — let the next "real" sleep
-          // catch it. Just queue the rent-late state.
-          if (rentLate >= 3) rentLate = 2;
-        }
+      if (rent?.type === 'paid') {
+        cash -= rent.amount;
+        rentLate = 0;
+        lastRentPaidDay = newDay;
+        flags.firstRentPaid = true;
+      } else if (rent?.type === 'missed' || rent?.type === 'warning') {
+        rentLate = rent.type === 'warning' ? 2 : 1;
+      } else if (rent?.type === 'evicted') {
+        // Don't trigger the full eviction arc from a 2 AM collapse — keep
+        // it at warning so the next *real* sleep handles it properly.
+        rentLate = 2;
       }
       return {
         ...c,
@@ -9037,14 +9045,17 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   const eat = (foodKey) => {
     const f = FOOD[foodKey];
     if (char.cash < f.cost) { showToast('Not enough cash', 'bad'); return; }
-    setChar(c => ({
-      ...c,
-      cash: c.cash - f.cost,
-      minutes: c.minutes + 5, // eating takes 5 min
-      energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + f.energy)),
-      hunger: Math.max(0, Math.min(100, c.hunger + f.hunger)),
-      mood: Math.max(0, Math.min(100, decayMood(c, 5) + f.mood)),
-    }));
+    setChar(c => {
+      const t = passMinutes(c, 5); // eating takes 5 min
+      return {
+        ...c,
+        ...t,
+        cash: c.cash - f.cost,
+        energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + f.energy)),
+        hunger: Math.max(0, Math.min(100, c.hunger + f.hunger)),
+        mood:   Math.max(0, Math.min(100, t.mood + f.mood)),
+      };
+    });
     showToast(`${f.kind === 'drink' ? 'Drank' : 'Ate'} ${f.name}`, 'win');
   };
 
@@ -9052,14 +9063,14 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   const drinkHomeCoffee = () => {
     if (!hasGear(char, 'coffee_machine')) return;
     if (char.day === char.lastCoffeeDay) return;
-    setChar(c => ({
-      ...c,
-      minutes: c.minutes + 5,
-      energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 25)),
-      hunger: Math.max(0, c.hunger - 15),
-      mood: Math.max(0, Math.min(100, decayMood(c, 5) + 2)),
-      lastCoffeeDay: c.day,
-    }));
+    setChar(c => {
+      const t = passMinutes(c, 5);
+      return { ...c, ...t,
+        energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 25)),
+        hunger: Math.max(0, c.hunger - 15),
+        mood:   Math.max(0, Math.min(100, t.mood + 2)),
+        lastCoffeeDay: c.day };
+    });
     showToast('Home espresso · +25⚡ -15🍴 +2♥', 'win');
   };
 
@@ -9067,12 +9078,12 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   const meditate = () => {
     if (!hasGear(char, 'yoga_mat')) return;
     if (char.day === char.lastYogaDay) return;
-    setChar(c => ({
-      ...c,
-      minutes: c.minutes + 10,
-      mood: Math.max(0, Math.min(100, decayMood(c, 10) + 5)),
-      lastYogaDay: c.day,
-    }));
+    setChar(c => {
+      const t = passMinutes(c, 10);
+      return { ...c, ...t,
+        mood: Math.max(0, Math.min(100, t.mood + 5)),
+        lastYogaDay: c.day };
+    });
     showToast('Meditated. +5 mood', 'win');
   };
 
@@ -9088,14 +9099,17 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   // Modest stats, but keeps you from starving when broke.
   const eatFoxySoup = () => {
     if (char.day === char.lastFoxySoupDay) return;       // already had today's
-    setChar(c => ({
-      ...c,
-      minutes: c.minutes + 5,
-      energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 10)),
-      hunger: Math.max(0, Math.min(100, c.hunger + 30)),
-      mood: Math.max(0, Math.min(100, decayMood(c, 5) + 2)),
-      lastFoxySoupDay: c.day,
-    }));
+    setChar(c => {
+      const t = passMinutes(c, 5);
+      return {
+        ...c,
+        ...t,
+        energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 10)),
+        hunger: Math.max(0, Math.min(100, c.hunger + 30)),
+        mood:   Math.max(0, Math.min(100, t.mood + 2)),
+        lastFoxySoupDay: c.day,
+      };
+    });
     showToast('Ate Foxy Soup. +30🍴 +10⚡ +2♥', 'win');
   };
 
@@ -9149,25 +9163,6 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     setNapping(false);
     showToast(forced ? '2 AM — got booted off the couch' : 'Napped — feeling sharper', forced ? 'info' : 'win');
   };
-  // Rent processing on the Sunday morning sleep transition. Returns the
-  // event type so finishSleep can chain a cutscene afterwards.
-  const computeRentEvent = (c, newDay) => {
-    if (newDay % 7 !== 6) return null;                         // not Sunday
-    if (c.lastRentPaidDay === newDay) return null;             // already handled
-    const tier = c.apartmentTier || 1;
-    const amount = RENT_BY_TIER[tier - 1] || RENT_BY_TIER[0];
-    if ((c.cash || 0) >= amount) {
-      // Can pay
-      const firstTime = !c.storyFlags?.firstRentPaid;
-      return { type: 'paid', amount, firstTime };
-    }
-    // Can't pay — escalate by week
-    const next = (c.rentLate || 0) + 1;
-    if (next >= 3)      return { type: 'evicted', amount, weeks: next };
-    if (next === 2)     return { type: 'warning', amount };
-    return                       { type: 'missed', amount };
-  };
-
   const finishSleep = () => {
     const c0 = char;
     if (!c0) { setSleeping(false); return; }
@@ -10894,13 +10889,13 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     setChar(c => {
       const max = c.maxEnergy ?? 100;
       const im = item.immediate;
+      const t = passMinutes(c, 5);
       const next = {
-        ...c,
+        ...c, ...t,
         cash: c.cash - item.cost,
-        minutes: c.minutes + 5,
         energy: Math.max(0, Math.min(max, c.energy + (im.energy || 0))),
         hunger: Math.max(0, Math.min(100, c.hunger + (im.hunger || 0))),
-        mood:   Math.max(0, Math.min(100, decayMood(c, 5) + (im.mood || 0))),
+        mood:   Math.max(0, Math.min(100, t.mood + (im.mood || 0))),
       };
       // Stack debuffs if multiple items consumed in one night
       const prev = c.pendingDebuff || {};
@@ -10933,11 +10928,11 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       const fanGain = Math.max(1, Math.min(20, base + showBonus + lucky));
       // Wardrobe Refresh: +1 sho on every show
       const wardrobeBonus = hasGear(c, 'wardrobe_refresh') ? 1 : 0;
+      const t = passMinutes(c, 60); // open mic is a full hour of game time
       let next = {
-        ...c,
+        ...c, ...t,
         energy: Math.max(0, c.energy - 10),
-        mood: Math.min(100, decayMood(c, 60) + 5),
-        minutes: c.minutes + 60, // open mic is now a full hour of game time
+        mood: Math.min(100, t.mood + 5),
         heat: (c.heat || 0) + 2,
         followers: c.followers + fanGain,
         openMicCount: (c.openMicCount || 0) + 1,
@@ -10977,15 +10972,15 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     if (char.energy < 8) { showToast('Too tired to sing', 'bad'); return; }
     const earn = 4 + Math.floor(Math.random() * 5);
     const musGain = 1 + (Math.random() < 0.25 ? 1 : 0);
-    setChar(c => ({
-      ...c,
-      cash: c.cash + earn,
-      energy: Math.max(0, c.energy - 8),
-      mood: Math.min(100, decayMood(c, 30) + 6),
-      minutes: c.minutes + 30,
-      stats: { ...c.stats, mus: c.stats.mus + musGain },
-      xp: c.xp + 5,
-    }));
+    setChar(c => {
+      const t = passMinutes(c, 30);
+      return { ...c, ...t,
+        cash: c.cash + earn,
+        energy: Math.max(0, c.energy - 8),
+        mood: Math.min(100, t.mood + 6),
+        stats: { ...c.stats, mus: c.stats.mus + musGain },
+        xp: c.xp + 5 };
+    });
     showToast(`Karaoke: +${musGain} musicality, +$${earn}`, 'win');
   };
 
@@ -11063,13 +11058,13 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
     const fans = Math.max(2, Math.floor(sho / 2 + distinctSounds));
     setChar(c => {
       const wardrobeBonus = hasGear(c, 'wardrobe_refresh') ? 1 : 0;
+      const t = passMinutes(c, 30); // 30 in-game min performance
       const updated = {
-        ...c,
+        ...c, ...t,
         cash: c.cash + reward,
         followers: c.followers + fans,
         energy: Math.max(0, c.energy - 25),
-        minutes: c.minutes + 30, // 30 in-game min performance
-        mood: Math.min(100, decayMood(c, 30) + 18),
+        mood: Math.min(100, t.mood + 18),
         heat: (c.heat || 0) + 8,
         xp: c.xp + 60,
         showcaseBooking: null,
@@ -12673,13 +12668,13 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
       } else if (opponent.name === 'Pig Pen') {
         flags.pigPenBattled = true;
       }
+      const t = passMinutes(c, 90); // a battle takes ~90 game minutes
       let newC = {
-        ...c,
+        ...c, ...t,
         cash: c.cash + reward,
         followers: c.followers + fans,
         energy: Math.max(0, c.energy - 30),
-        minutes: c.minutes + 90, // a battle takes ~90 game minutes
-        mood: Math.min(100, Math.max(0, decayMood(c, 90) + (won ? 15 : -10))),
+        mood: Math.min(100, Math.max(0, t.mood + (won ? 15 : -10))),
         xp: c.xp + xp,
         defeated: won && !c.defeated.includes(opponent.name) ? [...c.defeated, opponent.name] : c.defeated,
         lastBattleDay: c.day, // 1-battle-per-week cooldown
