@@ -174,6 +174,55 @@ const PARENT_MESSAGES = {
   ],
 };
 
+// Anonymous internet messages — hate + fan. Sender shows as 'UNKNOWN'.
+// Triggers: after performances (good show → fan, bad show → hate), and a
+// small daily roll on sleep transition (3% each).
+const UNKNOWN_MESSAGES_HATE = [
+  "your beats are wack.",
+  "stop posting. you're not it.",
+  "saw your clip. yikes.",
+  "delete your account.",
+  "embarrassing tbh",
+  "you peaked at the open mic lmao",
+  "no one cares.",
+  "0 talent. confirmed.",
+  "could literally be replaced by a drum machine.",
+  "this is why people miss real beatboxers.",
+];
+const UNKNOWN_MESSAGES_FAN = [
+  "saw your clip — fire 🔥",
+  "bro you're underrated. keep going.",
+  "i don't know you but i love your stuff.",
+  "the rolls last show?? insane.",
+  "showed my friends your video. they're hooked.",
+  "from a stranger: keep doing what you're doing.",
+  "you're inspiring. that's all.",
+  "your beats hit different.",
+  "i wait for your posts. please don't stop.",
+  "you remind me why i started.",
+];
+
+// Bad-sleep reasons — ~10% chance per sleep. Each has a narrative line
+// and an `energyCap` (fraction of maxEnergy you wake up at instead of full).
+// Some are state-conditional via `when(c, newDay)`.
+const BAD_SLEEP_REASONS = [
+  { id: 'nightmare',   energyCap: 0.7, line: "Bad dream. You woke up rattled." },
+  { id: 'lonely',      energyCap: 0.75, line: "The apartment was too quiet for sleeping." },
+  { id: 'noisy',       energyCap: 0.7, line: "Upstairs neighbor played speed garage at 3am." },
+  { id: 'heating',     energyCap: 0.8, line: "Couldn't get comfortable. The heating is stuck on high." },
+  { id: 'layoff',      energyCap: 0.6, line: "You woke up at 4am thinking about the job. Again." },
+  { id: 'rent',        energyCap: 0.6, line: "You couldn't stop thinking about the rent.",
+                       when: (c) => (c.rentLate || 0) >= 1 },
+  { id: 'battle',      energyCap: 0.65, line: "Your brain ran the next battle on a loop.",
+                       when: (c, newDay) => (newDay % 7) === 5 || (newDay % 7) === 4 },
+  { id: 'showcase',    energyCap: 0.65, line: "Friday's set looped in your head all night.",
+                       when: (c, newDay) => c.showcaseBooking?.day && c.showcaseBooking.day - newDay <= 1 && c.showcaseBooking.day >= newDay },
+  { id: 'replay_loss', energyCap: 0.7, line: "You replayed the battle you lost. Every move.",
+                       when: (c) => c.lastBattleDay && (c.day - c.lastBattleDay) <= 2 && (c.storyFlags?.pigPenWins || 0) === 0 && c.storyFlags?.pigPenBattled },
+  { id: 'caffeine',    energyCap: 0.7, line: "That late espresso came back to bite.",
+                       when: (c) => (c.pendingDebuff?.energy || 0) <= -10 },
+];
+
 // Foxy — your roommate. Soft-spoken, plant person, makes too much soup.
 // Ambient quips used as a fallback (when nothing else is going on).
 const FOXY_QUIPS = [
@@ -192,6 +241,23 @@ const FOXY_SAFETY_NET_LINES = [
 ];
 
 const _msgPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// ---- Passive mood decay ----
+// Mood doesn't just go up. Per game hour you lose ~1 mood passively
+// (loneliness/boredom). Hunger or energy under 30 doubles the drain;
+// hitting 0 makes it ~3x. Used at every meaningful time-passing event.
+const _moodDrainFor = (c, minutes) => {
+  let perHour = 1;
+  if ((c.hunger || 0) < 30)  perHour += 0.7;
+  if ((c.energy || 0) < 30)  perHour += 0.7;
+  if ((c.hunger || 0) === 0) perHour += 1.0;
+  if ((c.energy || 0) === 0) perHour += 1.0;
+  return (minutes / 60) * perHour;
+};
+// Returns the new mood value after `minutes` of decay.
+const decayMood = (c, minutes) => {
+  return Math.max(0, (c.mood || 0) - _moodDrainFor(c, minutes));
+};
 
 // Foxy's context-aware tip system. Returns a single tip string based on
 // the player's current state. Priority order (high → low): survival
@@ -1165,7 +1231,9 @@ function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
     const newMins = c.minutes + TICK_MINUTES;
     const newEnergy = Math.max(0, c.energy - cfg.tickEnergyCost);
     const newHunger = Math.max(0, c.hunger - cfg.tickHungerCost);
-    const newMood = Math.max(0, Math.min(100, c.mood + (cfg.tickMoodDelta || 0)));
+    // Activity's own per-tick mood delta + passive decay (hunger/energy taxed)
+    const passiveDrain = _moodDrainFor(c, TICK_MINUTES);
+    const newMood = Math.max(0, Math.min(100, c.mood + (cfg.tickMoodDelta || 0) - passiveDrain));
 
     let stopReason = null;
     if (newEnergy < cfg.tickEnergyCost) stopReason = 'You collapsed from exhaustion';
@@ -5515,6 +5583,8 @@ const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
       let next = applyMingleEffects(c, picked.outcome.effects, picked.outcome);
       next.minutes = (c.minutes || 0) + 30;
       next.energy = Math.max(0, (next.energy || 0) - 6);
+      // Passive mood decay over the 30 min spent at the bar
+      next.mood = Math.max(0, Math.min(100, next.mood - _moodDrainFor(c, 30)));
       next.mingleCount = (c.mingleCount || 0) + 1;
       next.metEncounters = { ...(c.metEncounters || {}),
         [encounter.id]: ((c.metEncounters || {})[encounter.id] || 0) + 1 };
@@ -8751,7 +8821,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       minutes: c.minutes + 5, // eating takes 5 min
       energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + f.energy)),
       hunger: Math.max(0, Math.min(100, c.hunger + f.hunger)),
-      mood: Math.max(0, Math.min(100, c.mood + f.mood)),
+      mood: Math.max(0, Math.min(100, decayMood(c, 5) + f.mood)),
     }));
     showToast(`${f.kind === 'drink' ? 'Drank' : 'Ate'} ${f.name}`, 'win');
   };
@@ -8765,7 +8835,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       minutes: c.minutes + 5,
       energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 10)),
       hunger: Math.max(0, Math.min(100, c.hunger + 30)),
-      mood: Math.max(0, Math.min(100, c.mood + 2)),
+      mood: Math.max(0, Math.min(100, decayMood(c, 5) + 2)),
       lastFoxySoupDay: c.day,
     }));
     showToast('Ate Foxy Soup. +30🍴 +10⚡ +2♥', 'win');
@@ -8849,11 +8919,29 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     const dayAdvance = rentEvent?.type === 'evicted' ? 1 + COUCHSURF_DAYS : 1;
     const newDay = c0.day + dayAdvance;
 
+    // ---- Bad-sleep roll ----
+    // ~10% chance of a rough night. Picks the most state-relevant reason
+    // (so a battle is on, you'll lie awake about the battle; rent is late,
+    // you'll lie awake about that). Falls back to a random ambient one.
+    let badSleep = null;
+    if (Math.random() < 0.10 && rentEvent?.type !== 'evicted') {
+      const eligible = BAD_SLEEP_REASONS.filter(r => !r.when || r.when(c0, newDay));
+      const stateReasons = eligible.filter(r => r.when);
+      const ambient = eligible.filter(r => !r.when);
+      const pool = stateReasons.length && Math.random() < 0.6 ? stateReasons : (eligible.length ? eligible : ambient);
+      badSleep = pool[Math.floor(Math.random() * pool.length)];
+    }
+
     setChar(c => {
       const max = c.maxEnergy ?? 100;
       let energy = max;
       let hunger = Math.max(0, c.hunger - 30);
       let mood = Math.min(100, c.mood + 10);
+      // Apply bad-sleep penalties (energy not full + mood hit)
+      if (badSleep) {
+        energy = Math.floor(max * (badSleep.energyCap ?? 0.7));
+        mood = Math.max(0, mood - 10);
+      }
       let cash = c.cash;
       let rentLate = c.rentLate || 0;
       let lastRentPaidDay = c.lastRentPaidDay;
@@ -8903,9 +8991,21 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           next.lastParentMsgDay = newDay;
         }
       }
+      // Anonymous internet messages — small daily roll. Followers > 0 →
+      // some chance of a fan or a hater pinging in.
+      if ((next.followers || 0) > 0) {
+        if (Math.random() < 0.05) next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_FAN));
+        if (Math.random() < 0.04) next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_HATE));
+      }
       return next;
     });
     setSleeping(false);
+
+    // Bad-sleep narrative toast (skipped during eviction since that has
+    // its own cutscene chain).
+    if (badSleep && rentEvent?.type !== 'evicted') {
+      setTimeout(() => showToast(`Bad sleep · ${badSleep.line}`, 'bad'), 100);
+    }
 
     // Toast + queued cutscene based on the rent event
     if (rentEvent?.type === 'paid') {
@@ -10365,7 +10465,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         minutes: c.minutes + 5,
         energy: Math.max(0, Math.min(max, c.energy + (im.energy || 0))),
         hunger: Math.max(0, Math.min(100, c.hunger + (im.hunger || 0))),
-        mood:   Math.max(0, Math.min(100, c.mood   + (im.mood   || 0))),
+        mood:   Math.max(0, Math.min(100, decayMood(c, 5) + (im.mood || 0))),
       };
       // Stack debuffs if multiple items consumed in one night
       const prev = c.pendingDebuff || {};
@@ -10399,7 +10499,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       let next = {
         ...c,
         energy: Math.max(0, c.energy - 10),
-        mood: Math.min(100, c.mood + 5),
+        mood: Math.min(100, decayMood(c, 60) + 5),
         minutes: c.minutes + 60, // open mic is now a full hour of game time
         heat: (c.heat || 0) + 2,
         followers: c.followers + fanGain,
@@ -10412,6 +10512,13 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       if (cd >= 3 && fanGain >= 5 && Math.random() < 0.35) {
         next = addMessage(next, 'parents', _msgPick(PARENT_MESSAGES.goodShow));
         next.lastParentMsgDay = c.day;
+      }
+      // Anonymous internet reactions to the show. Strong shows attract
+      // fans, weak ones attract haters.
+      if (fanGain >= 5 && Math.random() < 0.35) {
+        next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_FAN));
+      } else if (fanGain <= 1 && Math.random() < 0.30) {
+        next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_HATE));
       }
       return next;
     });
@@ -10437,7 +10544,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       ...c,
       cash: c.cash + earn,
       energy: Math.max(0, c.energy - 8),
-      mood: Math.min(100, c.mood + 6),
+      mood: Math.min(100, decayMood(c, 30) + 6),
       minutes: c.minutes + 30,
       stats: { ...c.stats, mus: c.stats.mus + musGain },
       xp: c.xp + 5,
@@ -10520,7 +10627,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         followers: c.followers + fans,
         energy: Math.max(0, c.energy - 25),
         minutes: c.minutes + 30, // 30 in-game min performance
-        mood: Math.min(100, c.mood + 18),
+        mood: Math.min(100, decayMood(c, 30) + 18),
         heat: (c.heat || 0) + 8,
         xp: c.xp + 60,
         showcaseBooking: null,
@@ -12129,7 +12236,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
         followers: c.followers + fans,
         energy: Math.max(0, c.energy - 30),
         minutes: c.minutes + 90, // a battle takes ~90 game minutes
-        mood: Math.min(100, Math.max(0, c.mood + (won ? 15 : -10))),
+        mood: Math.min(100, Math.max(0, decayMood(c, 90) + (won ? 15 : -10))),
         xp: c.xp + xp,
         defeated: won && !c.defeated.includes(opponent.name) ? [...c.defeated, opponent.name] : c.defeated,
         lastBattleDay: c.day, // 1-battle-per-week cooldown
