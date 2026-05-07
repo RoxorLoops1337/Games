@@ -4573,6 +4573,118 @@ const MessagesPanel = ({ char, setChar, onClose }) => {
   );
 };
 
+// ============ FOXY UI COMPONENTS ============
+// Small avatar canvas showing just Foxy's face — used in the home-screen
+// panel and the modal. drawFoxy lives later in the file (intro scenes
+// section) but is already declared by the time these components render.
+
+const FoxyAvatar = ({ size = 36, animate = true }) => {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const W = 24, H = 24;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf, fc = 0;
+    const loop = () => {
+      fc++;
+      ctx.save();
+      ctx.scale(size / W, size / H);
+      ctx.fillStyle = '#1a3018';
+      ctx.fillRect(0, 0, W, H);
+      // A subtle radial glow
+      ctx.fillStyle = 'rgba(132, 204, 22, 0.12)';
+      ctx.beginPath(); ctx.arc(12, 12, 14, 0, Math.PI * 2); ctx.fill();
+      // Foxy head only — copy the relevant pixels from drawFoxy at a fixed origin
+      const x = 12, y = 22;
+      // Head
+      _px(ctx, x - 4, y - 17, 8, 7, '#e0b890');
+      // Hair
+      _px(ctx, x - 5, y - 19, 10, 3, '#7a3a20');
+      _px(ctx, x - 5, y - 16, 1, 3, '#7a3a20');
+      _px(ctx, x + 4, y - 16, 1, 3, '#7a3a20');
+      // Eyes
+      _px(ctx, x - 3, y - 14, 2, 1, '#3a2010');
+      _px(ctx, x + 1, y - 14, 2, 1, '#3a2010');
+      // Mouth
+      _px(ctx, x - 1, y - 11, 3, 1, '#5a2020');
+      // Earring sparkle (animated)
+      _px(ctx, x + 4, y - 13, 1, 1, '#fbbf24');
+      if (animate && fc % 90 < 4) _px(ctx, x + 4, y - 13, 1, 1, '#fef3c7');
+      // Sweater shoulder peek
+      _px(ctx, x - 5, y - 10, 10, 4, '#5a8030');
+      _px(ctx, x - 5, y - 10, 10, 1, '#7aa040');
+      ctx.restore();
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => cancelAnimationFrame(raf);
+  }, [size, animate]);
+  return <canvas ref={canvasRef} style={{ imageRendering: 'pixelated', width: size, height: size, display: 'block' }} />;
+};
+
+// FoxyModal — tap-to-open interaction. Shows a bigger Foxy portrait, a
+// stack of recent quips, and a "wave hi" action that gives a small mood
+// boost (cooldown: once per in-game day).
+const FoxyModal = ({ char, setChar, showToast, onClose }) => {
+  // Three quips for this visit (stable while modal is open)
+  const quipsRef = useRef(null);
+  if (!quipsRef.current) {
+    const pool = [...FOXY_QUIPS].sort(() => Math.random() - 0.5);
+    quipsRef.current = pool.slice(0, 3);
+  }
+  const lastWaveDay = char.storyFlags?.lastFoxyWaveDay || 0;
+  const canWave = (char.day - lastWaveDay) >= 1 || lastWaveDay === 0;
+  const wave = () => {
+    if (!canWave) return;
+    setChar(c => ({
+      ...c,
+      mood: Math.min(100, (c.mood || 0) + 2),
+      storyFlags: { ...(c.storyFlags || {}), lastFoxyWaveDay: c.day },
+    }));
+    showToast?.('Foxy waved back. +2 mood', 'info');
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
+      style={{ background: 'rgba(12, 10, 9, 0.85)' }}>
+      <div className="max-w-md w-full bg-stone-950 border-2 border-stone-800">
+        <div className="border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <FoxyAvatar size={48} />
+            <div>
+              <div className="text-lime-500 text-xl tracking-widest"
+                style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>FOXY</div>
+              <div className="text-[9px] uppercase tracking-[0.3em] text-stone-500">roommate · they/them</div>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="text-stone-500 hover:text-amber-500 text-2xl px-3 py-1">×</button>
+        </div>
+        <div className="px-3 py-3 space-y-2">
+          {quipsRef.current.map((q, i) => (
+            <div key={i} className="text-stone-300 text-sm italic leading-snug"
+              style={{ fontFamily: '"Oswald", sans-serif', fontWeight: 300 }}>
+              "{q}"
+            </div>
+          ))}
+        </div>
+        <div className="border-t-2 border-stone-800 p-3">
+          <button onClick={wave} disabled={!canWave}
+            className={`w-full py-2 border-2 text-xs uppercase tracking-widest transition-all ${
+              canWave ? 'border-lime-500 text-lime-500 hover:bg-lime-500/10'
+                       : 'border-stone-800 text-stone-600 cursor-not-allowed'
+            }`}>
+            {canWave ? '👋 say hi to Foxy  ·  +2 mood' : 'already said hi today'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============ INTRO SCENE DRAWERS (pixel art) ============
 
 const drawOffice = (ctx, fc) => {
@@ -7704,6 +7816,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   // every render). Re-rolls when day or tab changes.
   const foxyQuip = useRef(_msgPick(FOXY_QUIPS));
   useEffect(() => { foxyQuip.current = _msgPick(FOXY_QUIPS); }, [char?.day, tab]);
+  const [foxyOpen, setFoxyOpen] = useState(false);
 
   return (
     <div className="space-y-3">
@@ -7712,16 +7825,25 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Your home base</div>
       </div>
 
-      {/* Foxy roommate presence — small panel with a rotating in-character quip. */}
-      <div className="border-2 border-stone-800 bg-stone-900/30 px-3 py-2 flex items-center gap-3">
-        <div className="w-9 h-9 border border-stone-800 flex items-center justify-center" style={{ background: '#1a3018' }}>
-          <span className="text-lg" style={{ filter: 'sepia(0.3)' }}>🌿</span>
+      {/* Foxy roommate panel — tap to open a small interaction modal. */}
+      <button onClick={() => setFoxyOpen(true)}
+        className="w-full border-2 border-stone-800 bg-stone-900/30 hover:border-lime-500/50 px-3 py-2 flex items-start gap-3 text-left transition-all">
+        <div className="border border-stone-800 flex-shrink-0">
+          <FoxyAvatar size={36} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[9px] uppercase tracking-[0.3em] text-lime-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>FOXY · roommate</div>
-          <div className="text-stone-300 text-xs italic truncate">"{foxyQuip.current}"</div>
+          <div className="flex items-center justify-between">
+            <div className="text-[9px] uppercase tracking-[0.3em] text-lime-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              FOXY · roommate
+            </div>
+            <span className="text-[9px] uppercase tracking-widest text-stone-600">tap →</span>
+          </div>
+          <div className="text-stone-300 text-xs italic leading-snug whitespace-normal break-words">
+            "{foxyQuip.current}"
+          </div>
         </div>
-      </div>
+      </button>
+      {foxyOpen && <FoxyModal char={char} setChar={setChar} showToast={showToast} onClose={() => setFoxyOpen(false)} />}
 
       <div className="grid grid-cols-4 gap-1">
         {[['train', 'PC / Train', 'pc'], ['studio', 'Studio', 'mic'], ['eat', 'Kitchen', 'fridge'], ['rest', 'Couch', 'couch']].map(([id, label, icon]) => (
