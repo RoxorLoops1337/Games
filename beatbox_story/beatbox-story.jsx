@@ -96,6 +96,49 @@ const NPCS = [
   { name: 'FatboxG',     stats: { mus: 30, tec: 32, ori: 28, sho: 28 }, sounds: ['uvular_roll', 'click_roll', 'd_low', 'inward_bass', 'laser', 'throat_kick'],    reward: 750, level: 12, counterSkill: 0.95 },
 ];
 
+// Crew battles — 3v3 stat-check showdowns. Unlocked when player has beaten 3+
+// solo opponents. Each crew has 3 members + a flavor name. Resolved as best
+// of 3 rounds (each round: avg(playerStat) + ally bump vs avg(oppStat) +
+// random±10, mood-modulated).
+const CREWS = [
+  {
+    id: 'pen_pals',
+    name: 'PEN PALS',
+    desc: 'Pig Pen + 2 friends from his crew. Easy money if you survive.',
+    minDefeated: 3,
+    members: [
+      { name: 'Pig Pen', stats: { mus: 7, tec: 7, ori: 5, sho: 6 } },
+      { name: 'Ras-T',   stats: { mus: 9, tec: 8, ori: 7, sho: 6 } },
+      { name: 'Kiko',    stats: { mus: 8, tec: 7, ori: 9, sho: 7 } },
+    ],
+    reward: { cash: 80, followers: 15 },
+  },
+  {
+    id: 'vpn_vets',
+    name: 'VPN VETS',
+    desc: 'Three veterans of the regional scene. Watch the throat kicks.',
+    minDefeated: 5,
+    members: [
+      { name: 'Klem',    stats: { mus: 14, tec: 14, ori: 12, sho: 13 } },
+      { name: 'Niko-1',  stats: { mus: 13, tec: 15, ori: 14, sho: 12 } },
+      { name: 'Boomer',  stats: { mus: 15, tec: 12, ori: 13, sho: 14 } },
+    ],
+    reward: { cash: 200, followers: 35, flag: 'crewVpn' },
+  },
+  {
+    id: 'world_champs',
+    name: 'WORLD CHAMPS',
+    desc: 'Three names from the global circuit. Win this and you move continents.',
+    minDefeated: 7,
+    members: [
+      { name: 'Vex',     stats: { mus: 26, tec: 27, ori: 24, sho: 25 } },
+      { name: 'Mir',     stats: { mus: 28, tec: 24, ori: 26, sho: 26 } },
+      { name: 'TK-9',    stats: { mus: 27, tec: 28, ori: 25, sho: 27 } },
+    ],
+    reward: { cash: 800, followers: 120, flag: 'crewChamps' },
+  },
+];
+
 const JUDGES = [
   { name: 'Tek', bias: 'technicality', emoji: '⚙️' },
   { name: 'Mel', bias: 'musicality', emoji: '🎵' },
@@ -163,6 +206,11 @@ const initialChar = () => ({
   festivalPath: null, // 'A' | 'B' | 'C'
   festivalResult: null, // 'win' | 'lose'
   outfit: 'default', // active stage outfit id (see OUTFITS catalog)
+  bjarneSessions: 0, // BeeAmGee studio coaching sessions completed
+  lastBjarneDay: 0, // last day you trained with BeeAmGee (cooldown: 3 days)
+  apartmentMovedInDay: 0, // track when you upgraded for the move-in cutscene gating
+  sickDay: 0, // day you woke up sick (lose the day to bed)
+  flashbacksSeen: {}, // { id: dayShownOn } so each fires only once
   gear: {}, // { itemId: true } for purchased gear (PC, headphones, plant, etc.)
   lastCoffeeDay: 0, // last day you used the home coffee machine
   lastPlantWaterDay: 0, // last day you watered the houseplant (alive ≤5 days)
@@ -368,6 +416,51 @@ const RANDOM_EVENTS = [
     title: 'A GOOD DREAM',
     lines: ['You woke up smiling for once.', "Couldn't tell anyone what it was about."],
     effects: { mood: +10, energy: +5 } },
+  // ---- Setbacks: bad days that test your discipline ----
+  { id: 'sick_day', weight: 2, when: (c) => c.day >= 6 && (c.sickDay || 0) !== c.day, color: '#84cc16',
+    title: 'YOU\'RE SICK',
+    lines: [
+      "Sore throat. Headache. The kind of tired sleep can't fix.",
+      "No drills today. No mic. No bar.",
+      "Soup, water, bed. The rest will wait.",
+    ],
+    effects: { mood: -8, energy: -25, special: 'sick' } },
+  { id: 'parking_ticket', weight: 2, when: (c) => c.day >= 7, color: '#dc2626',
+    title: 'PARKING TICKET',
+    lines: ['$40 stuck under the wiper.', '"Expired permit." You forgot.'],
+    effects: { cash: -40, mood: -6 } },
+  { id: 'dentist', weight: 1, when: (c) => c.day >= 12, color: '#dc2626',
+    title: 'DENTIST EMERGENCY',
+    lines: ["Molar split on a piece of granola.", "$80 to numb it. $200 you don't have for the crown.", "You'll deal with it later."],
+    effects: { cash: -80, mood: -10 } },
+  { id: 'broken_phone', weight: 1, when: (c) => c.day >= 8, color: '#5a5046',
+    title: 'CRACKED SCREEN',
+    lines: ['Drop. Spider web. The repair guy charges $60.', "It still works. Mostly."],
+    effects: { cash: -60, mood: -4 } },
+  { id: 'food_poisoning', weight: 1, when: (c) => c.day >= 10, color: '#84cc16',
+    title: 'BAD TAKEOUT',
+    lines: ["Bathroom floor for two hours. The bin nearby just in case.", "Whatever was in that container, it's not in you anymore."],
+    effects: { hunger: -30, mood: -8, energy: -15 } },
+  { id: 'tax_letter', weight: 1, when: (c) => c.day >= 18, color: '#a8a29e',
+    title: 'A LETTER FROM THE COUNCIL',
+    lines: ['"Outstanding balance: $120."', "You don't fully understand it. But you owe it.", "Pay this month or it triples."],
+    effects: { cash: -120, mood: -10 } },
+  { id: 'bombed_set', weight: 2, when: (c) => (c.openMicCount || 0) >= 2 && c.day >= 5, color: '#dc2626',
+    title: 'YOU BOMBED LAST NIGHT',
+    lines: [
+      "Wrong key. Wrong rhythm. The crowd just stared.",
+      "A clip's already up. Twelve angry comments.",
+      "Tomorrow's another day. Probably.",
+    ],
+    effects: { mood: -15, followers: -3 } },
+  { id: 'rivalry_clip', weight: 1, when: (c) => (c.followers || 0) >= 80 && c.storyFlags?.pigPenWins, color: '#fb7185',
+    title: 'SOMEONE DISSED YOU ONLINE',
+    lines: ["A reply video. Your name. Your face. Forty thousand views and climbing.", "The comments are split. Some defend you.", "It feels like a fight you didn't pick."],
+    effects: { mood: -12, followers: +8 } },
+  { id: 'rent_increase_letter', weight: 1, when: (c) => c.day >= 25 && (c.apartmentTier || 1) === 1, color: '#dc2626',
+    title: 'NOTICE FROM THE LANDLORD',
+    lines: ['Rent goes up $10/week starting next month.', '"Market conditions." That\'s all the letter says.'],
+    effects: { mood: -8, special: 'rentBump' } },
 ];
 
 const pickRandomEvent = (c) => {
@@ -396,6 +489,12 @@ const applyRandomEvent = (c, ev) => {
   if (e.flags) next.storyFlags = { ...(c.storyFlags || {}), ...e.flags };
   if (e.special === 'markAllRead') {
     next.messages = (c.messages || []).map(m => ({ ...m, read: true }));
+  }
+  if (e.special === 'sick') {
+    next.sickDay = c.day;
+  }
+  if (e.special === 'rentBump') {
+    next.rentBumped = true; // visible elsewhere if we want a flag; not deducted automatically
   }
   return next;
 };
@@ -849,6 +948,119 @@ const dayOfWeek = (day) => ((day || 1)) % 7;
 // Rent (auto-deducted on Sunday morning sleep transition; apartment tier sets the amount).
 const RENT_BY_TIER = [50, 100, 200];   // tier 1 / 2 / 3 weekly rent
 const COUCHSURF_DAYS = 3;              // days at Foxy's friend after eviction
+
+// Apartment upgrades. tier 2 = nicer flat ($1500 to move in), tier 3 = loft ($5000).
+// Each tier passively buffs the morning sleep transition, and tier 3 also boosts
+// any home recording (+25% to studio coaching mus reward & sequencer ori).
+const APT_UPGRADES = {
+  2: {
+    cost: 1500, dayReq: 14, fansReq: 30,
+    name: 'Real apartment',
+    desc: 'A bedroom. A kitchen. A door that locks. +5 mood every morning. Bad-sleep events less common.',
+  },
+  3: {
+    cost: 5000, dayReq: 30, fansReq: 200,
+    name: 'Loft with home studio',
+    desc: 'Skyline view. Mixing desk. +10 mood every morning. +1 mus every full sleep. +25% home recording reward.',
+  },
+};
+
+// ============ FLASHBACKS + DREAMS ============
+// One-time narrative beats fired at the morning sleep transition. Each fires
+// once when its `when` condition first matches; the id is stored under
+// char.flashbacksSeen[id] = day so it never re-fires.
+const FLASHBACKS = [
+  { id: 'childhood',
+    when: (c) => !!c.storyFlags?.firstJam && (c.day || 0) >= 5,
+    speaker: null,
+    drawFn: 'drawFlashbackChildhoodScene',
+    lines: [
+      "Before bed, a memory you hadn't pulled up in years.",
+      "Twelve years old. Your bedroom mirror. A little phone propped on a stack of books.",
+      "Three minutes of beats nobody would ever see. You said the bass kicks were 'sick'.",
+      "It's still the same circuit. Just with better gear.",
+    ],
+  },
+  { id: 'parent_voice',
+    when: (c) => (c.rentLate || 0) >= 1 || (c.day || 0) >= 12,
+    speaker: null,
+    drawFn: 'drawFlashbackParentScene',
+    lines: [
+      "1 AM in the kitchen. The phone glows on the counter.",
+      "An old voicemail you saved and kept saving.",
+      "\"call when you get this. don't worry about waking us. we love you.\"",
+      "You haven't called this week.",
+    ],
+  },
+  { id: 'yt_comment',
+    when: (c) => (c.followers || 0) >= 100,
+    speaker: null,
+    drawFn: 'drawFlashbackCommentScene',
+    lines: [
+      "Down a YouTube rabbit hole. Your old channel.",
+      "A comment from 2017 you forgot you wrote.",
+      "\"one day i'll do this on a real stage. saving this for when i'm 30.\"",
+      "Not 30 yet. But not nothing, either.",
+    ],
+  },
+  { id: 'the_song',
+    when: (c) => !!c.storyFlags?.firstShowcase || (c.day || 0) >= 20,
+    speaker: null,
+    drawFn: 'drawFlashbackSongScene',
+    lines: [
+      "Last bus home. Window cold against your forehead.",
+      "Earbuds in. The track that started everything plays again.",
+      "Bus driver glances back. You realize you've been beatboxing under your breath.",
+      "You're not the same person who first heard this.",
+    ],
+  },
+];
+
+// Resolve a 3-round crew battle. Returns { rounds: [...], won: bool, ourScore, theirScore }
+// rounds[i] = { our: number, their: number, win: bool, ourMember, theirMember }
+const resolveCrewBattle = (c, crew) => {
+  const stats = c.stats || {};
+  const ourTotal = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
+  const moodMod = ((c.mood || 50) - 50) / 4; // -12.5 .. +12.5
+  // Two allies — split a chunk of the player total. Ally strength scales with
+  // the player's relationships (Foxy = always there, +5; defeated NPCs = +3 each).
+  const allyBoost = 5 + Math.min(2, (c.defeated || []).length) * 3;
+  const ourPerRound = Math.floor(ourTotal * 0.6) + allyBoost;
+  const rounds = [];
+  let ourScore = 0, theirScore = 0;
+  for (let i = 0; i < 3; i++) {
+    const them = crew.members[i];
+    const theirTotal = (them.stats.mus || 0) + (them.stats.tec || 0) + (them.stats.ori || 0) + (them.stats.sho || 0);
+    const ourRoll = ourPerRound + moodMod + (Math.random() * 20 - 10);
+    const theirRoll = Math.floor(theirTotal * 0.7) + (Math.random() * 20 - 10);
+    const win = ourRoll >= theirRoll;
+    if (win) ourScore++; else theirScore++;
+    rounds.push({ our: Math.round(ourRoll), their: Math.round(theirRoll), win, theirMember: them });
+  }
+  return { rounds, won: ourScore > theirScore, ourScore, theirScore };
+};
+
+// Mapping from id-string to actual function — the FLASHBACKS table can't
+// reference these directly (defined later) without hoist friction.
+const _flashbackDrawFn = (name) => {
+  if (name === 'drawFlashbackChildhoodScene') return drawFlashbackChildhoodScene;
+  if (name === 'drawFlashbackParentScene') return drawFlashbackParentScene;
+  if (name === 'drawFlashbackCommentScene') return drawFlashbackCommentScene;
+  if (name === 'drawFlashbackSongScene') return drawFlashbackSongScene;
+  if (name === 'drawDreamScene') return drawDreamScene;
+  return null;
+};
+
+// Pick the next flashback eligible for the given char. Returns null when none
+// match or all already seen.
+const pickFlashback = (c) => {
+  const seen = c.flashbacksSeen || {};
+  for (const f of FLASHBACKS) {
+    if (seen[f.id]) continue;
+    try { if (f.when(c)) return f; } catch { /* skip */ }
+  }
+  return null;
+};
 
 // ============ CONTENT GATING ============
 // Locations and shop sub-stores unlock day-by-day so the early game has a
@@ -1694,6 +1906,7 @@ function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
   const start = () => {
     if (active) return;
     if (charRef.current.energy < configRef.current.tickEnergyCost) { showToast('Too tired to start!', 'bad'); return; }
+    if ((charRef.current.sickDay || 0) === charRef.current.day) { showToast('Too sick to do anything today', 'bad'); return; }
     activeRef.current = true;
     setActive(true);
     setBlock(0);
@@ -7302,6 +7515,468 @@ const drawPigPen = (ctx, x, y, frameCount, pose = 'smug') => {
   _px(ctx, x, y - 21, 2, 1, '#1a1a2e');
 };
 
+// ============ BEEAMGEE — OG MENTOR ============
+// 50-something Danish OG. Gray beard, leather jacket, quiet posture.
+// Always shows up exactly when needed. Doesn't perform anymore — just
+// watches.
+
+const drawBeeAmGee = (ctx, x, y, frameCount) => {
+  // Shadow
+  _px(ctx, x - 7, y, 14, 1, 'rgba(0,0,0,0.5)');
+  // Legs (still, slightly wider stance)
+  _px(ctx, x - 4, y - 9, 3, 9, '#1c1c1c');
+  _px(ctx, x + 1, y - 9, 3, 9, '#1c1c1c');
+  // Boots
+  _px(ctx, x - 5, y - 1, 4, 1, '#2a2a2a');
+  _px(ctx, x + 1, y - 1, 4, 1, '#2a2a2a');
+  // Black leather jacket (bigger than the player's silhouette)
+  _px(ctx, x - 6, y - 22, 12, 14, '#1a1a1a');
+  _px(ctx, x - 6, y - 22, 12, 1, '#3a3a3a');           // collar highlight
+  _px(ctx, x - 6, y - 8, 12, 1, '#0a0a0a');            // hem shadow
+  // Lapels
+  _px(ctx, x - 4, y - 21, 2, 8, '#3a3a3a');
+  _px(ctx, x + 2, y - 21, 2, 8, '#3a3a3a');
+  // Arms hanging
+  _px(ctx, x - 8, y - 21, 2, 12, '#1a1a1a');
+  _px(ctx, x + 6, y - 21, 2, 12, '#1a1a1a');
+  // Hands (slightly weathered)
+  _px(ctx, x - 8, y - 9, 2, 2, '#a87844');
+  _px(ctx, x + 6, y - 9, 2, 2, '#a87844');
+  // Head — slightly ruddy, weathered
+  _px(ctx, x - 4, y - 30, 8, 8, '#c89065');
+  // Hair & beard — gray. Hair receding (small patch on top, more around the back).
+  _px(ctx, x - 4, y - 32, 8, 2, '#a8a29e');            // hair top
+  _px(ctx, x - 4, y - 30, 1, 6, '#a8a29e');            // sideburn left
+  _px(ctx, x + 3, y - 30, 1, 6, '#a8a29e');            // sideburn right
+  // Beard
+  _px(ctx, x - 3, y - 24, 6, 2, '#dadada');            // chin beard
+  _px(ctx, x - 4, y - 25, 1, 1, '#a8a29e');
+  _px(ctx, x + 4, y - 25, 1, 1, '#a8a29e');
+  // Eyes — quiet, observing
+  _px(ctx, x - 3, y - 28, 1, 1, '#1a1a2e');
+  _px(ctx, x + 2, y - 28, 1, 1, '#1a1a2e');
+  // Crow's feet (subtle wrinkle)
+  _px(ctx, x - 4, y - 27, 1, 1, '#7a5040');
+  _px(ctx, x + 3, y - 27, 1, 1, '#7a5040');
+  // Mouth — flat (he doesn't smile easy)
+  _px(ctx, x - 1, y - 26, 3, 1, '#5a3010');
+  // Single faint glint on a watch (every few seconds)
+  if (frameCount % 60 < 4) _px(ctx, x + 6, y - 11, 1, 1, '#fbbf24');
+};
+
+// Cypher sighting — daytime park, BeeAmGee in the back of the crowd.
+// Triggered after the player wins their first Saturday battle.
+const drawBjarneCypherScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  _drawDaytimeSky(ctx, W);
+  _px(ctx, 16, 8, 10, 10, '#fef3c7');
+  ctx.fillStyle = 'rgba(254,243,199,0.30)';
+  ctx.beginPath(); ctx.arc(21, 13, 14, 0, Math.PI * 2); ctx.fill();
+  // Grass + ground
+  _px(ctx, 0, 50, W, 80, '#6a9a3a');
+  for (let i = 0; i < 24; i++) _px(ctx, (i * 9) % W, 52 + (i % 3) * 4, 1, 2, '#5a8a30');
+  // Trees
+  for (let i = 0; i < 5; i++) {
+    const tx = 5 + i * 38;
+    _px(ctx, tx - 8, 38, 16, 8, '#3a7028');
+    _px(ctx, tx - 6, 34, 12, 4, '#4a8030');
+    _px(ctx, tx - 1, 46, 2, 6, '#3a2410');
+  }
+  // Crowd silhouettes (brighter than background)
+  for (let i = 0; i < 14; i++) {
+    const cx = 4 + i * 14 + (i % 2) * 4;
+    const headBob = Math.sin(fc * 0.1 + i * 0.5) * 0.5;
+    _px(ctx, cx, 60 + headBob, 4, 4, '#a87844');
+    _px(ctx, cx - 1, 64 + headBob, 6, 8, ['#a04040','#5a7050','#a06030','#4060a0','#a06090'][i % 5]);
+  }
+  // Cypher dirt circle
+  ctx.fillStyle = '#a89060';
+  ctx.beginPath(); ctx.ellipse(100, 106, 80, 18, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#7a6a48'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(100, 106, 78, 17, 0, 0, Math.PI * 2); ctx.stroke();
+  // Player in the cypher (center)
+  drawBeatboxer(ctx, 100, 110, look, 'right', true, fc);
+  // BeeAmGee in the back, half-hidden by the crowd, watching
+  drawBeeAmGee(ctx, 168, 88, fc);
+  // Subtle eye-line: glow over BeeAmGee + a pixel arrow toward player
+  if (fc % 30 < 18) {
+    ctx.fillStyle = 'rgba(168, 162, 158, 0.18)';
+    ctx.beginPath(); ctx.arc(168, 70, 18, 0, Math.PI * 2); ctx.fill();
+  }
+};
+
+// BeeAmGee meets you at the open mic — bar interior, dim spotlight.
+const drawBjarneMeetingScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Dim bar
+  _px(ctx, 0, 0, W, 95, '#1c1825');
+  for (let y = 6; y < 95; y += 12) for (let x = 8; x < W; x += 14) _px(ctx, x, y, 1, 1, '#2a1f1a');
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#3a2818');
+  _px(ctx, 0, 95, W, 1, '#5a4030');
+  // Stage edge (left side)
+  _px(ctx, 4, 86, 80, 4, '#5a4030');
+  _px(ctx, 4, 86, 80, 1, '#7a5a40');
+  // Mic stand on stage
+  _px(ctx, 38, 84, 12, 2, '#1a1a1a');
+  _px(ctx, 43, 60, 2, 24, '#1a1a1a');
+  _px(ctx, 41, 56, 6, 4, '#2a2a2a');
+  // Spotlight cone over the stage
+  ctx.save();
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.10)';
+  ctx.beginPath();
+  ctx.moveTo(30, 0); ctx.lineTo(56, 0);
+  ctx.lineTo(70, 86); ctx.lineTo(16, 86);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // Player on stage (just stepped off)
+  drawBeatboxer(ctx, 44, 86, look, 'right', false, fc);
+  // BeeAmGee approaching from right side
+  drawBeeAmGee(ctx, 138, 110, fc);
+  // Speech intent — small diagonal lines suggesting "approaching"
+  if (fc % 24 < 12) {
+    _px(ctx, 90, 100, 6, 1, '#fbbf24');
+    _px(ctx, 100, 102, 6, 1, '#fbbf24');
+  }
+  // Crowd silhouettes far in the background
+  for (let i = 0; i < 8; i++) {
+    const cx = 80 + i * 14;
+    _px(ctx, cx, 76, 4, 4, '#0c0a09');
+    _px(ctx, cx - 1, 80, 6, 8, '#1a1a1a');
+  }
+};
+
+// Studio coaching scene — small recording room with BeeAmGee at the desk
+// + player at the mic. One scene reused for every coaching session.
+const drawBjarneStudioScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Wall — warm dark wood paneling
+  _px(ctx, 0, 0, W, 95, '#3a2818');
+  for (let y = 0; y < 95; y += 8) _px(ctx, 0, y, W, 1, '#2a1a10');
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#1a1410');
+  _px(ctx, 0, 95, W, 1, '#3a2818');
+  // Wall acoustic foam (geometric pattern)
+  for (let y = 8; y < 70; y += 14) for (let x = 8; x < W; x += 14) {
+    _px(ctx, x, y, 8, 8, '#2a1a10');
+    _px(ctx, x + 2, y + 2, 4, 4, '#5a3818');
+  }
+  // Mixing desk on the left (BeeAmGee's side)
+  _px(ctx, 0, 78, 70, 16, '#1a1a1a');
+  _px(ctx, 0, 78, 70, 2, '#3a3a3a');
+  // Faders
+  for (let i = 0; i < 8; i++) {
+    const fx = 6 + i * 7;
+    _px(ctx, fx, 80, 1, 12, '#4a4a4a');
+    _px(ctx, fx - 1, 82 + (i % 4) * 2, 3, 2, '#fbbf24');
+  }
+  // VU meters (animated)
+  for (let i = 0; i < 4; i++) {
+    const mx = 60 + i;
+    const lvl = Math.abs(Math.sin(fc * 0.3 + i)) * 8;
+    _px(ctx, mx, 80, 1, 8, '#1c1917');
+    for (let l = 0; l < lvl; l++) _px(ctx, mx, 88 - l, 1, 1, l > 5 ? '#dc2626' : l > 3 ? '#fbbf24' : '#22c55e');
+  }
+  // BeeAmGee at the desk
+  drawBeeAmGee(ctx, 30, 110, fc);
+  // Mic on a stand, right side, with player
+  _px(ctx, 130, 108, 16, 2, '#1a1a1a');
+  _px(ctx, 137, 70, 2, 38, '#1a1a1a');
+  _px(ctx, 134, 68, 8, 4, '#2a2a2a');
+  _px(ctx, 134, 64, 8, 4, '#2a2a2a');
+  // Player at the mic
+  drawBeatboxer(ctx, 156, 110, look, 'left', true, fc);
+  // Sound waves from player toward mic
+  if (fc % 8 < 4) {
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(146, 78, 2, 1);
+    ctx.fillRect(146, 80, 4, 1);
+    ctx.fillRect(146, 82, 2, 1);
+  }
+  // Hanging warm lamp
+  _px(ctx, 100, 0, 1, 12, '#1a1a1a');
+  _px(ctx, 96, 11, 9, 4, '#3a2818');
+  _px(ctx, 97, 15, 7, 2, '#fbbf24');
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.08)';
+  ctx.beginPath(); ctx.arc(100, 18, 32, 0, Math.PI * 2); ctx.fill();
+};
+
+// ---- Crew battle scene (3v3 lineup) ----
+const drawCrewBattleScene = (ctx, fc, look, crewName) => {
+  const W = 200, H = 130;
+  // Bar interior (low light)
+  _drawSky(ctx, W, 50, 0x2a, 0x18, 0x40, 0x4a, 0x20, 0x60);
+  _px(ctx, 0, 50, W, 80, '#1a1018');
+  // Stage edge
+  _px(ctx, 0, 90, W, 4, '#3a2818');
+  _px(ctx, 0, 94, W, 36, '#0d0608');
+  // Stage lights
+  for (let i = 0; i < 5; i++) {
+    const lx = 16 + i * 42;
+    _px(ctx, lx, 0, 4, 8, '#fbbf24');
+    ctx.fillStyle = `rgba(254,243,199,${0.10 + 0.06 * Math.sin(fc * 0.2 + i)})`;
+    ctx.beginPath(); ctx.arc(lx + 2, 6, 24, 0, Math.PI * 2); ctx.fill();
+  }
+  // Player crew on the left (3 figures)
+  drawBeatboxer(ctx, 18, 110, look, 'right', true, fc);
+  // Allies — generic friends drawn smaller, slightly offset
+  _px(ctx, 50, 88, 12, 12, '#f4c098'); // ally head
+  _px(ctx, 51, 91, 1, 1, '#0f0c0a');
+  _px(ctx, 56, 91, 1, 1, '#0f0c0a');
+  _px(ctx, 50, 100, 12, 10, '#84cc16');
+  _px(ctx, 50, 110, 12, 10, '#1a1a1a');
+  _px(ctx, 70, 90, 12, 12, '#d4a87a');
+  _px(ctx, 71, 93, 1, 1, '#0f0c0a');
+  _px(ctx, 76, 93, 1, 1, '#0f0c0a');
+  _px(ctx, 70, 102, 12, 10, '#a78bfa');
+  _px(ctx, 70, 112, 12, 8, '#1a1a1a');
+  // Opponent crew on the right (3 figures)
+  _px(ctx, 110, 88, 12, 12, '#d4a87a');
+  _px(ctx, 110, 100, 12, 10, '#dc2626');
+  _px(ctx, 110, 110, 12, 10, '#1a1a1a');
+  _px(ctx, 130, 86, 14, 14, '#c89878');
+  _px(ctx, 130, 100, 14, 12, '#fb7185');
+  _px(ctx, 130, 112, 14, 8, '#1a1a1a');
+  drawBeatboxer(ctx, 156, 110, { ...look, shirt: '#dc2626' }, 'left', true, fc);
+  // VS in the middle
+  if (fc % 30 < 18) _px(ctx, 96, 70, 4, 8, '#fbbf24');
+  // Crew name banner
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(60, 14, 80, 14);
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(crewName || 'CREW', 100, 24);
+  ctx.textAlign = 'start';
+};
+
+// ---- Flashbacks (childhood / origin scenes) and Dream sequence ----
+// Childhood video — a kid alone in a bedroom with a mirror, recording.
+const drawFlashbackChildhoodScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Sepia tint background — childhood bedroom
+  _px(ctx, 0, 0, W, 90, '#3a2a18');
+  for (let y = 0; y < 90; y += 8) _px(ctx, 0, y, W, 1, '#2a1a08');
+  _px(ctx, 0, 90, W, 40, '#5a3a18');
+  // Posters on the wall (childhood beatbox heroes — colored squares)
+  _px(ctx, 18, 14, 24, 32, '#dc2626');
+  _px(ctx, 20, 16, 20, 26, '#fbbf24');
+  _px(ctx, 50, 18, 22, 28, '#22d3ee');
+  _px(ctx, 52, 20, 18, 22, '#a78bfa');
+  // Mirror (small standing one)
+  _px(ctx, 130, 30, 30, 50, '#5a4838');
+  _px(ctx, 132, 32, 26, 46, '#1a2030');
+  for (let i = 0; i < 5; i++) _px(ctx, 134 + i * 4, 35 + i * 8, 6, 2, 'rgba(255,255,255,0.10)');
+  // Bed corner (left)
+  _px(ctx, 0, 70, 30, 30, '#5a4040');
+  // Kid (smaller drawBeatboxer-like figure, looking at the mirror)
+  const kx = 100, ky = 110;
+  _px(ctx, kx + 4, ky - 22, 8, 8, '#f4c098');     // head (smaller)
+  _px(ctx, kx + 5, ky - 19, 1, 1, '#0f0c0a');     // eyes
+  _px(ctx, kx + 9, ky - 19, 1, 1, '#0f0c0a');
+  _px(ctx, kx + 4, ky - 14, 8, 6, look.shirt || '#a78bfa'); // shirt (small)
+  _px(ctx, kx + 4, ky - 8, 8, 8, '#3a2818'); // pants
+  _px(ctx, kx + 14, ky - 18, 5, 4, '#1a1a1a'); // tiny mic
+  // "REC" indicator on a corner of the mirror (early phone screen)
+  if (fc % 30 < 18) _px(ctx, 134, 35, 6, 4, '#dc2626');
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  ctx.fillRect(0, 0, W, 12);
+  ctx.fillRect(0, H - 16, W, 16);
+};
+// Parent voice — empty kitchen, late-night phone glow.
+const drawFlashbackParentScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Dark kitchen
+  _px(ctx, 0, 0, W, 90, '#1a1818');
+  _px(ctx, 0, 90, W, 40, '#2a2418');
+  // Cabinets (silhouettes)
+  for (let i = 0; i < 5; i++) _px(ctx, 8 + i * 36, 14, 30, 36, '#251f1c');
+  // Phone glow on a counter — animated pulse
+  const glow = 0.4 + 0.2 * Math.sin(fc * 0.1);
+  ctx.fillStyle = `rgba(180, 200, 255, ${glow.toFixed(3)})`;
+  ctx.beginPath(); ctx.arc(100, 100, 40, 0, Math.PI * 2); ctx.fill();
+  // Phone (speaker on counter)
+  _px(ctx, 95, 96, 12, 6, '#1a1a1a');
+  _px(ctx, 96, 97, 10, 4, '#2a3050');
+  // Player sitting on the floor against a wall, looking at phone
+  drawBeatboxer(ctx, 60, 116, look, 'right', false, fc);
+  // Tiny clock on the wall — late hour
+  _px(ctx, 160, 16, 18, 18, '#1a1a1a');
+  _px(ctx, 162, 18, 14, 14, '#3a3530');
+  _px(ctx, 169, 19, 1, 6, '#fbbf24');
+  _px(ctx, 169, 25, 4, 1, '#fbbf24');
+};
+// YouTube-comment flashback — a laptop screen at night.
+const drawFlashbackCommentScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  _px(ctx, 0, 0, W, 90, '#0a0d12');
+  _px(ctx, 0, 90, W, 40, '#1a1818');
+  // Laptop screen (centered)
+  _px(ctx, 50, 30, 100, 60, '#1a1a1a');
+  _px(ctx, 52, 32, 96, 56, '#0d0d0d');
+  // Comment box (white with a quoted line)
+  _px(ctx, 56, 38, 88, 24, '#fafafa');
+  _px(ctx, 58, 41, 84, 2, '#e5e5e5');
+  // Pretend text — alternating bars
+  _px(ctx, 60, 45, 60, 1, '#0a0a0a');
+  _px(ctx, 60, 48, 80, 1, '#0a0a0a');
+  _px(ctx, 60, 51, 70, 1, '#0a0a0a');
+  _px(ctx, 60, 56, 30, 2, '#dc2626'); // highlighted line
+  // Reaction count + heart icon
+  _px(ctx, 60, 64, 8, 6, '#dc2626');
+  _px(ctx, 70, 65, 14, 4, '#7a7a7a');
+  // Laptop base
+  _px(ctx, 44, 90, 112, 6, '#2a2a2a');
+  // Cursor blink
+  if (fc % 30 < 16) _px(ctx, 144, 56, 1, 4, '#0a0a0a');
+  // Player sitting in the dark, lit by the screen
+  drawBeatboxer(ctx, 16, 116, look, 'right', false, fc);
+};
+// "The song" flashback — earbuds on a bus at night.
+const drawFlashbackSongScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Bus interior — windows show city lights streaking past
+  _px(ctx, 0, 0, W, 90, '#15181f');
+  _px(ctx, 0, 90, W, 40, '#0a0d10');
+  // Windows
+  for (let i = 0; i < 4; i++) {
+    const wx = 10 + i * 48;
+    _px(ctx, wx, 18, 38, 30, '#0a0d18');
+    _px(ctx, wx, 18, 38, 1, '#3a3a40');
+    _px(ctx, wx, 47, 38, 1, '#3a3a40');
+    _px(ctx, wx, 18, 1, 30, '#3a3a40');
+    _px(ctx, wx + 37, 18, 1, 30, '#3a3a40');
+    // Streaking lights
+    for (let l = 0; l < 5; l++) {
+      const lx = (wx + 4 + ((fc * 2 + l * 9 + i * 7) % 30));
+      _px(ctx, lx, 28 + (l % 3) * 5, 6, 1, '#fbbf24');
+    }
+  }
+  // Player sitting (head bob — earbuds in)
+  const bob = Math.floor(Math.sin(fc * 0.15) * 1);
+  drawBeatboxer(ctx, 80, 110 + bob, look, 'right', false, fc);
+  // Earbud cord — thin wavering line from ear to pocket
+  ctx.strokeStyle = '#fafafa';
+  ctx.beginPath();
+  ctx.moveTo(94, 92 + bob);
+  ctx.lineTo(96, 102 + bob);
+  ctx.lineTo(94, 110 + bob);
+  ctx.stroke();
+  // Music notes drifting
+  for (let i = 0; i < 3; i++) {
+    const ny = 84 + bob - Math.floor(((fc + i * 12) % 36) / 2);
+    _px(ctx, 110 + i * 6, ny, 2, 2, '#fbbf24');
+    _px(ctx, 111 + i * 6, ny + 2, 1, 2, '#fbbf24');
+  }
+};
+
+// Dream sequence — abstract surreal scene. Fires on rare sleep events post-day-30.
+const drawDreamScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Gradient sky in violet/pink (dream tint)
+  _drawSky(ctx, W, H, 0x1a, 0x10, 0x40, 0x6a, 0x20, 0x8a);
+  // Floating geometric shapes
+  for (let i = 0; i < 6; i++) {
+    const x = (i * 33 + fc) % W;
+    const y = 20 + ((i * 17 + (fc / 2 | 0)) % 80);
+    const sz = 6 + (i % 3) * 3;
+    const colors = ['#fbbf24', '#22d3ee', '#fb7185', '#a78bfa', '#84cc16', '#f97316'];
+    _px(ctx, x, y, sz, sz, colors[i]);
+  }
+  // Distant stage with a giant mic floating in the air
+  _px(ctx, 80, 50, 40, 4, '#1a1a1a');
+  _px(ctx, 96, 30, 8, 24, '#1a1a1a');
+  _px(ctx, 92, 22, 16, 12, '#3a3a3a');
+  // Crowd silhouettes (just heads)
+  for (let i = 0; i < 14; i++) _px(ctx, 5 + i * 14, 100 + (i % 3) * 4, 6, 5, '#1a1a1a');
+  // Player floating mid-air, no ground beneath
+  const float = Math.sin(fc * 0.12) * 3;
+  drawBeatboxer(ctx, 92, Math.floor(80 + float), look, 'right', true, fc);
+};
+
+// Apartment Tier 2 move-in — a nicer flat. Hardwood, art on the wall, a window.
+const drawApt2Scene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  _px(ctx, 0, 0, W, 90, '#3a2a1a'); // warm wall
+  for (let y = 0; y < 90; y += 16) _px(ctx, 0, y, W, 1, '#2a1a10');
+  _px(ctx, 0, 90, W, 40, '#4a3018'); // hardwood floor
+  for (let x = 0; x < W; x += 14) _px(ctx, x, 90, 1, 40, '#3a2010');
+  // Window
+  _px(ctx, 130, 16, 50, 36, '#1a2030');
+  _px(ctx, 130, 16, 50, 2, '#5a4830');
+  _px(ctx, 130, 16, 2, 36, '#5a4830');
+  _px(ctx, 178, 16, 2, 36, '#5a4830');
+  _px(ctx, 130, 50, 50, 2, '#5a4830');
+  _px(ctx, 154, 16, 2, 36, '#5a4830');
+  _px(ctx, 130, 32, 50, 2, '#5a4830');
+  // City lights through window (animated twinkle)
+  for (let i = 0; i < 8; i++) {
+    const lx = 134 + (i * 6 + (fc / 10 | 0)) % 44;
+    const ly = 22 + (i % 3) * 8;
+    if ((fc + i * 3) % 30 < 18) _px(ctx, lx, ly, 1, 1, '#fbbf24');
+  }
+  // Couch
+  _px(ctx, 16, 70, 60, 22, '#7a3a3a');
+  _px(ctx, 16, 70, 60, 3, '#9a4a4a');
+  _px(ctx, 16, 92, 60, 4, '#3a1a1a');
+  _px(ctx, 22, 64, 16, 8, '#9a4a4a');
+  _px(ctx, 54, 64, 16, 8, '#9a4a4a');
+  // Framed art on wall
+  _px(ctx, 30, 14, 30, 22, '#1a1a1a');
+  _px(ctx, 32, 16, 26, 18, '#fbbf24');
+  _px(ctx, 36, 20, 18, 10, '#dc2626');
+  // Plant
+  _px(ctx, 88, 70, 12, 22, '#3a2010');
+  _px(ctx, 86, 60, 16, 12, '#3a7028');
+  _px(ctx, 88, 56, 12, 8, '#4a8030');
+  // Player standing center, looking around
+  drawBeatboxer(ctx, 110, 110, look, 'right', true, fc);
+  // Boxes on the floor (just moved in)
+  _px(ctx, 80, 100, 14, 12, '#7a5a30');
+  _px(ctx, 80, 100, 14, 2, '#5a3a20');
+};
+
+// Apartment Tier 3 move-in — a loft with a home studio.
+const drawApt3Scene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  _px(ctx, 0, 0, W, 92, '#1a1a20'); // dark loft wall
+  // Brick texture accents
+  for (let y = 0; y < 92; y += 6) for (let x = (y % 12 === 0 ? 0 : 6); x < W; x += 12) _px(ctx, x, y, 5, 5, '#2a2025');
+  _px(ctx, 0, 92, W, 38, '#2a2018'); // polished concrete floor
+  // Big window with skyline
+  _px(ctx, 10, 8, 110, 60, '#0a1020');
+  _px(ctx, 10, 8, 110, 2, '#5a4830');
+  _px(ctx, 10, 66, 110, 2, '#5a4830');
+  _px(ctx, 10, 8, 2, 60, '#5a4830');
+  _px(ctx, 118, 8, 2, 60, '#5a4830');
+  // City skyline silhouette
+  for (let i = 0; i < 12; i++) {
+    const bx = 12 + i * 9;
+    const bh = 12 + ((i * 7) % 22);
+    _px(ctx, bx, 68 - bh, 8, bh, '#1a1525');
+    if ((fc + i * 5) % 50 < 30) _px(ctx, bx + 2 + (i % 3) * 2, 68 - bh + 4, 1, 1, '#fbbf24');
+    if ((fc + i * 7) % 50 < 30) _px(ctx, bx + 4, 68 - bh + 8, 1, 1, '#fbbf24');
+  }
+  // Moon
+  _px(ctx, 100, 16, 8, 8, '#fef3c7');
+  // Mixing desk in foreground (signature loft-studio piece)
+  _px(ctx, 130, 70, 60, 20, '#0a0a0a');
+  _px(ctx, 130, 70, 60, 2, '#3a3a3a');
+  for (let i = 0; i < 8; i++) {
+    const fx = 134 + i * 7;
+    _px(ctx, fx, 74, 1, 14, '#4a4a4a');
+    _px(ctx, fx - 1, 76 + (i % 5) * 2, 3, 2, '#fbbf24');
+  }
+  // Monitors (twin speakers)
+  _px(ctx, 132, 56, 12, 14, '#1a1a1a');
+  _px(ctx, 134, 60, 8, 4, '#fbbf24');
+  _px(ctx, 176, 56, 12, 14, '#1a1a1a');
+  _px(ctx, 178, 60, 8, 4, '#fbbf24');
+  // Player standing in the middle, taking it in
+  drawBeatboxer(ctx, 70, 110, look, 'right', true, fc);
+};
+
 // Pig Pen's challenge — cutscene at the cypher (daytime park).
 const drawPigPenChallengeScene = (ctx, fc, look) => {
   const W = 200, H = 130;
@@ -8720,6 +9395,11 @@ export default function BeatboxStory() {
     if (c.festivalPath === undefined) c.festivalPath = null;
     if (c.festivalResult === undefined) c.festivalResult = null;
     if (typeof c.outfit !== 'string') c.outfit = 'default';
+    if (typeof c.bjarneSessions !== 'number') c.bjarneSessions = 0;
+    if (typeof c.lastBjarneDay !== 'number') c.lastBjarneDay = 0;
+    if (typeof c.apartmentMovedInDay !== 'number') c.apartmentMovedInDay = 0;
+    if (typeof c.sickDay !== 'number') c.sickDay = 0;
+    if (!c.flashbacksSeen || typeof c.flashbacksSeen !== 'object') c.flashbacksSeen = {};
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
     if (typeof c.lastPlantWaterDay !== 'number') c.lastPlantWaterDay = 0;
@@ -9185,6 +9865,91 @@ function HoodScreen({ go, char }) {
   );
 }
 
+// ---- BeeAmGee mentor: studio coaching panel ----
+// $50/session, 3-day cooldown, +1 stat (player picks). Drips backstory lines.
+const BJARNE_LINES = {
+  1: "first time i battled was '92. lost ugly. cried in the bathroom. came back the next week.",
+  2: "every kid who comes through here thinks they invented the bass kick.",
+  3: "made it to the world finals once. three times, actually. never won.",
+  4: "your tongue knows more than your brain. trust it.",
+  5: "it's not the win. it's that you fought for it. nobody remembers second place except second place.",
+  6: "i had a daughter. she'd be your age now.",
+  7: "she didn't beatbox. she liked the violin. fancy that.",
+  8: "you can hear when somebody's afraid of the mic. you can hear when they're not. that's the only difference.",
+  9: "there's no secret. there's just hours. and somebody who'll sit in the room with you while you do them.",
+  10: "don't end up like me, kid. find someone to come home to.",
+};
+const _bjarneLineFor = (n) => BJARNE_LINES[n] || "keep working. show me next week.";
+
+function BjarneCoachingPanel({ char, setChar, showToast, playCutscene, checkLevelUp }) {
+  const sessions = char.bjarneSessions || 0;
+  const cooldownLeft = Math.max(0, 3 - (char.day - (char.lastBjarneDay || 0)));
+  const onCooldown = cooldownLeft > 0 && (char.lastBjarneDay || 0) > 0;
+  const canAfford = (char.cash || 0) >= 50;
+  const canTrain = !onCooldown && canAfford && (char.energy || 0) >= 10;
+  const train = (stat) => {
+    if (!canTrain) return;
+    const nextSessions = sessions + 1;
+    setChar(c => {
+      const t = passMinutes(c, 90); // 90-min studio session
+      return checkLevelUp({
+        ...c, ...t,
+        cash: c.cash - 50,
+        energy: Math.max(0, c.energy - 10),
+        mood: Math.min(100, t.mood + 4),
+        xp: c.xp + 10,
+        stats: { ...(c.stats || {}), [stat]: (c.stats?.[stat] || 0) + 1 },
+        bjarneSessions: nextSessions,
+        lastBjarneDay: c.day,
+      });
+    });
+    const statName = { mus: 'Musicality', tec: 'Technicality', ori: 'Originality', sho: 'Showmanship' }[stat];
+    showToast(`Trained with BeeAmGee · +1 ${statName}`, 'win');
+    playCutscene?.({
+      speaker: 'BEEAMGEE',
+      speakerColor: '#a3a3a3',
+      beats: [{
+        drawScene: (ctx, fc) => drawBjarneStudioScene(ctx, fc, lookFromChar(char)),
+        lines: [
+          _bjarneLineFor(nextSessions),
+          'You run drills until your jaw aches. He nods, twice.',
+          '"that\'s enough for today. same time next week."',
+        ],
+      }],
+    });
+  };
+  return (
+    <Panel title="BeeAmGee — Studio Coaching">
+      <div className="space-y-3">
+        <div className="text-[11px] text-stone-400 leading-relaxed">
+          The old man taught half the city. He'll work with you for $50 a session.
+          {sessions > 0 && <span className="block mt-1 text-stone-500">Sessions completed: {sessions}</span>}
+        </div>
+        {onCooldown ? (
+          <div className="text-[10px] text-amber-500 uppercase tracking-wider text-center">
+            Resting · {cooldownLeft} day{cooldownLeft === 1 ? '' : 's'} until next session
+          </div>
+        ) : (
+          <>
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+              Pick a focus · 90 min · –10⚡ · –$50 · +1 stat
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[['mus','Musicality'],['tec','Technicality'],['ori','Originality'],['sho','Showmanship']].map(([id, label]) => (
+                <Btn key={id} onClick={() => train(id)} disabled={!canTrain}>
+                  {label}
+                </Btn>
+              ))}
+            </div>
+            {!canAfford && <div className="text-[10px] text-rose-500 uppercase tracking-wider text-center">Need $50</div>}
+            {(char.energy || 0) < 10 && <div className="text-[10px] text-rose-500 uppercase tracking-wider text-center">Too tired</div>}
+          </>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 // ============ SCREEN: HOUSE ============
 
 function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, activeSlot, playCutscene }) {
@@ -9445,6 +10210,42 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     }
     setSleeping(true);
   };
+  const moveToApt = (targetTier) => {
+    const upgrade = APT_UPGRADES[targetTier];
+    if (!upgrade) return;
+    if ((char.cash || 0) < upgrade.cost) { showToast(`Need $${upgrade.cost}`, 'bad'); return; }
+    if ((char.day || 0) < upgrade.dayReq) { showToast(`Wait until day ${upgrade.dayReq}`, 'bad'); return; }
+    if ((char.followers || 0) < upgrade.fansReq) { showToast(`Need ${upgrade.fansReq} fans`, 'bad'); return; }
+    setChar(c => ({
+      ...c,
+      cash: c.cash - upgrade.cost,
+      apartmentTier: targetTier,
+      apartmentMovedInDay: c.day,
+      mood: Math.min(100, (c.mood || 0) + 15),
+    }));
+    showToast(`Moved in · -$${upgrade.cost}`, 'win');
+    const draw = targetTier === 2 ? drawApt2Scene : drawApt3Scene;
+    const lines2 = [
+      "You sign the lease. Hand over the deposit. The keys feel light.",
+      "It's small. But it's yours. With a real bedroom and a window.",
+      "You sit on the floor for a minute, just listening. The traffic. Somebody laughing in the hall.",
+      "This is what it sounds like to be doing okay.",
+    ];
+    const lines3 = [
+      "The freight elevator groans up to the top floor.",
+      "Concrete. Brick. Skyline through twelve feet of glass.",
+      "You set the mixing desk up by the window. Plug in the monitors. Press play.",
+      "It rings. The whole loft rings. Your loft.",
+      "You earned this.",
+    ];
+    setTimeout(() => playCutscene?.({
+      speaker: null,
+      beats: [{
+        drawScene: (ctx, fc) => draw(ctx, fc, lookFromChar(char)),
+        lines: targetTier === 3 ? lines3 : lines2,
+      }],
+    }, `apt${targetTier}MovedIn`), 50);
+  };
   const startNap = () => {
     if ((char.hunger ?? 0) <= 0) {
       showToast('Too hungry to nap — eat something first!', 'bad');
@@ -9513,6 +10314,11 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       }
       // Houseplant: +1 mood per morning if it's still alive
       if (plantAlive(c)) mood = Math.min(100, mood + 1);
+      // Apartment tier bonuses — tier 2: +5 mood, tier 3: +10 mood + 1 mus
+      const aptTier = c.apartmentTier || 1;
+      let extraMusFromHome = 0;
+      if (aptTier === 2) mood = Math.min(100, mood + 5);
+      if (aptTier === 3) { mood = Math.min(100, mood + 10); extraMusFromHome = 1; }
       // Cat: +2 mood / morning, costs $3/day in food (only if you can afford it)
       if (hasGear(c, 'cat') && (c.cash || 0) >= 3) {
         mood = Math.min(100, mood + 2);
@@ -9556,6 +10362,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         rentLate, lastRentPaidDay,
         day: newDay, minutes: 0, pendingDebuff: null,
         storyFlags: flags,
+        stats: { ...(c.stats || {}), mus: (c.stats?.mus || 0) + extraMusFromHome },
         followers: (c.followers || 0) + extraFollowers };
       // Apply random event effects inline so the morning state reflects them
       if (randomEvent) next = applyRandomEvent(next, randomEvent);
@@ -9606,6 +10413,39 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         speakerColor: randomEvent.color || '#D4A017',
         beats: [{ lines: randomEvent.lines }],
       }), 200);
+    }
+
+    // Flashback — late-game one-shot reflection. ~25% chance per sleep when
+    // an unseen flashback is eligible, fires once each.
+    if (rentEvent?.type !== 'evicted' && Math.random() < 0.25) {
+      const fb = pickFlashback({ ...c0, day: newDay });
+      if (fb) {
+        setChar(cc => ({ ...cc, flashbacksSeen: { ...(cc.flashbacksSeen || {}), [fb.id]: newDay } }));
+        const draw = _flashbackDrawFn(fb.drawFn);
+        setTimeout(() => playCutscene({
+          speaker: fb.speaker || null,
+          beats: [{
+            drawScene: draw ? (ctx, fc) => draw(ctx, fc, lookFromChar(c0)) : undefined,
+            lines: fb.lines,
+          }],
+        }), 320);
+      }
+    }
+
+    // Dream sequence — late-game (day 30+). Small ~5% chance per sleep.
+    if (rentEvent?.type !== 'evicted' && (newDay >= 30) && Math.random() < 0.05) {
+      setTimeout(() => playCutscene({
+        speaker: null,
+        beats: [{
+          drawScene: (ctx, fc) => drawDreamScene(ctx, fc, lookFromChar(c0)),
+          lines: [
+            "You're on a stage that goes forever in every direction.",
+            "Faces in the crowd you don't recognize. They know your name.",
+            "The mic in your hand is too heavy. Then weightless.",
+            "You wake before the round ends.",
+          ],
+        }],
+      }), 400);
     }
 
     // Toast + queued cutscene based on the rent event
@@ -10121,7 +10961,12 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       )}
 
       {tab === 'studio' && (
-        <SoundStudio activeSlot={activeSlot} showToast={showToast} char={char} />
+        <div className="space-y-3">
+          <SoundStudio activeSlot={activeSlot} showToast={showToast} char={char} />
+          {char.storyFlags?.bjarneIntroduced && (
+            <BjarneCoachingPanel char={char} setChar={setChar} showToast={showToast} playCutscene={playCutscene} checkLevelUp={checkLevelUp} />
+          )}
+        </div>
       )}
 
       {tab === 'eat' && (
@@ -10261,6 +11106,40 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                 applied to all on-stage performances
               </div>
             </div>
+
+            {/* Move out / Apartment upgrade */}
+            {(char.apartmentTier || 1) < 3 && (
+              <div className="border-t border-stone-800 pt-3 space-y-2">
+                <div className="text-[10px] uppercase tracking-[0.3em] text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                  MOVE OUT
+                </div>
+                {[2, 3].filter(t => t > (char.apartmentTier || 1)).map(t => {
+                  const u = APT_UPGRADES[t];
+                  const dayLocked = (char.day || 0) < u.dayReq;
+                  const fansLocked = (char.followers || 0) < u.fansReq;
+                  const broke = (char.cash || 0) < u.cost;
+                  const locked = dayLocked || fansLocked || broke;
+                  return (
+                    <div key={t} className="p-2 border-2 bg-stone-900/30"
+                      style={{ borderColor: locked ? '#3a3530' : '#7a5040' }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-stone-200 text-sm">{u.name}</span>
+                        <span className="text-[9px] uppercase tracking-widest text-stone-600">tier {t}</span>
+                      </div>
+                      <div className="text-[10px] text-stone-500 mt-1 leading-snug">{u.desc}</div>
+                      <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-1">
+                        ${u.cost} · day {u.dayReq}+ · {u.fansReq} fans · rent ${RENT_BY_TIER[t-1]}/wk
+                      </div>
+                      <Btn onClick={() => moveToApt(t)} disabled={locked} className="w-full mt-2">
+                        {dayLocked ? `Wait til day ${u.dayReq}` :
+                         fansLocked ? `Need ${u.fansReq} fans` :
+                         broke ? `Need $${u.cost}` : `MOVE IN — $${u.cost}`}
+                      </Btn>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Yoga Mat — gear-gated daily meditation */}
             {hasGear(char, 'yoga_mat') && (() => {
@@ -10633,6 +11512,34 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
               ],
             }],
           }, 'pigPenChallenged');
+        }
+        // BeeAmGee cypher sighting — fires once after first battle win (any opponent)
+        if ((c?.defeated?.length || 0) >= 1 && !flags.bjarneCypherSighting) {
+          playCutscene?.({
+            speaker: null,
+            beats: [{
+              drawScene: (ctx, fc) => drawBjarneCypherScene(ctx, fc, lookFromChar(c)),
+              lines: [
+                "Someone's standing at the back of the cypher.",
+                "Gray beard. Leather jacket. Doesn't perform.",
+                "He nods once when you finish your round. Then he's gone.",
+                "...who was that?",
+              ],
+            }],
+          }, 'bjarneCypherSighting');
+        }
+        // Famous beatboxer crashes the cypher — fires once mid-arc (5+ jams, 30+ followers)
+        if (nextJamCount >= 5 && (c?.followers || 0) >= 30 && !flags.fatboxgVisit) {
+          playCutscene?.({
+            speaker: null,
+            lines: [
+              "The circle goes quiet mid-round.",
+              "Heads turn. Someone you know from the videos just stepped into the cypher.",
+              "They throw a 30-second flurry that nobody can answer. Then they're gone, walking off with two friends.",
+              "Someone whispers their name. You pretend you weren't watching.",
+              "There's a long way to go.",
+            ],
+          }, 'fatboxgVisit');
         }
       },
     },
@@ -11379,9 +12286,11 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
   // total skills + showmanship so it grows as the character improves.
   const doOpenMic = () => {
     if (char.energy < 10) { showToast('Too tired to perform', 'bad'); return; }
+    if ((char.sickDay || 0) === char.day) { showToast('Too sick to perform tonight', 'bad'); return; }
     setPerformingOpenMic(true);
   };
   const finishOpenMic = () => {
+    const cBefore = charRef.current;
     setChar(c => {
       const stats = c.stats || {};
       const totalSkills = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
@@ -11420,6 +12329,36 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
       return next;
     });
     setPerformingOpenMic(false);
+    // Cutscenes: first open-mic beat + BeeAmGee meeting (if eligible)
+    setTimeout(() => {
+      const c = cBefore || {};
+      const flags = c.storyFlags || {};
+      if (!flags.firstOpenMicDone) {
+        playCutscene?.({
+          speaker: null,
+          lines: [
+            'Hot lights. A mic. Forty strangers staring back.',
+            'The room exhales when you do. Whatever happens here, it counts.',
+            'You held the room. Even just for a minute.',
+          ],
+        }, 'firstOpenMicDone');
+      }
+      if (flags.bjarneCypherSighting && !flags.bjarneIntroduced) {
+        playCutscene?.({
+          speaker: 'BEEAMGEE',
+          speakerColor: '#a3a3a3',
+          beats: [{
+            drawScene: (ctx, fc) => drawBjarneMeetingScene(ctx, fc, lookFromChar(c)),
+            lines: [
+              "saw you in the cypher last week.",
+              "you've got something. raw. unfinished. but something.",
+              "name's BeeAmGee. been at this thirty years.",
+              "come find me when you're ready. studio. fifty bucks. i'll show you what i know.",
+            ],
+          }],
+        }, 'bjarneIntroduced');
+      }
+    }, 0);
     setTimeout(() => {
       // Read the freshly-applied gain from a ref-ish trick: showToast happens
       // once per click; we approximate by computing the fan gain again here
@@ -11433,8 +12372,54 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
       showToast(`Open mic done · ~${approx} new fans 🎤`, 'win');
     }, 0);
   };
+  const doCrewBattle = (crew) => {
+    if ((char.energy || 0) < 30) { showToast('Need 30 energy', 'bad'); return; }
+    if ((char.sickDay || 0) === char.day) { showToast('Too sick to battle', 'bad'); return; }
+    const result = resolveCrewBattle(char, crew);
+    setChar(c => {
+      const t = passMinutes(c, 90);
+      const reward = crew.reward;
+      let next = {
+        ...c, ...t,
+        energy: Math.max(0, c.energy - 30),
+        mood: Math.min(100, t.mood + (result.won ? 12 : -10)),
+        cash: c.cash + (result.won ? reward.cash : Math.floor(reward.cash * 0.2)),
+        followers: Math.max(0, c.followers + (result.won ? reward.followers : -3)),
+        xp: c.xp + (result.won ? 30 : 12),
+        heat: (c.heat || 0) + 4,
+        lastBattleDay: c.day,
+        storyFlags: { ...(c.storyFlags || {}),
+          [`crew_${crew.id}_${result.won ? 'won' : 'lost'}`]: true,
+          ...(result.won && reward.flag ? { [reward.flag]: true } : {}),
+        },
+      };
+      if (result.won) next = checkLevelUp(next);
+      return next;
+    });
+    const summaryLines = result.rounds.map((r, i) => `Round ${i+1}: ${r.win ? 'WON' : 'LOST'} vs ${r.theirMember.name} · ${r.our}–${r.their}`);
+    setTimeout(() => playCutscene({
+      speaker: result.won ? 'CREW BATTLE — WIN' : 'CREW BATTLE — LOSS',
+      speakerColor: result.won ? '#84cc16' : '#dc2626',
+      beats: [{
+        drawScene: (ctx, fc) => drawCrewBattleScene(ctx, fc, lookFromChar(char), crew.name),
+        lines: result.won ? [
+          `vs ${crew.name}.`,
+          ...summaryLines,
+          `Final: ${result.ourScore}–${result.theirScore}.`,
+          'You took the building. Your crew is howling. Drinks tonight are free.',
+        ] : [
+          `vs ${crew.name}.`,
+          ...summaryLines,
+          `Final: ${result.ourScore}–${result.theirScore}.`,
+          'You held your own. Not enough. Next round, next month.',
+        ],
+      }],
+    }), 50);
+    showToast(result.won ? `Crew win! +${crew.reward.followers} fans, +$${crew.reward.cash}` : 'Crew loss · -3 fans, mood -10', result.won ? 'win' : 'bad');
+  };
   const doKaraoke = () => {
     if (char.energy < 8) { showToast('Too tired to sing', 'bad'); return; }
+    if ((char.sickDay || 0) === char.day) { showToast('Lost your voice — call it a night', 'bad'); return; }
     const earn = 4 + Math.floor(Math.random() * 5);
     const musGain = 1 + (Math.random() < 0.25 ? 1 : 0);
     setChar(c => {
@@ -11856,6 +12841,41 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
           </Btn>
           {char.energy < 30 && <div className="text-[10px] text-red-500 text-center mt-2 uppercase">Need 30 energy</div>}
           {char.equipped.length === 0 && <div className="text-[10px] text-red-500 text-center mt-2 uppercase">No sounds equipped! Visit Shop</div>}
+        </Panel>
+      )}
+
+      {schedule.activity === 'battle' && !battleOnCooldown && (char.defeated || []).length >= 3 && (
+        <Panel title="Crew Battle (3v3)">
+          <div className="space-y-2">
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+              Bring two friends. Best of 3 rounds. Bigger wins, longer night.
+            </div>
+            {CREWS.map(crew => {
+              const locked = (char.defeated || []).length < crew.minDefeated;
+              const won = !!char.storyFlags?.[`crew_${crew.id}_won`];
+              return (
+                <button key={crew.id} onClick={() => !locked && doCrewBattle(crew)} disabled={locked || char.energy < 30}
+                  className={`w-full p-3 border-2 text-left transition-all ${
+                    locked ? 'border-stone-900 bg-stone-950 opacity-40 cursor-not-allowed' :
+                    won ? 'border-green-900/50 bg-green-950/20 hover:border-amber-500' :
+                    'border-stone-800 bg-stone-900/30 hover:border-amber-500'
+                  }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <div className="text-amber-500 tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                        {crew.name}
+                      </div>
+                      {won && <Trophy size={12} className="text-green-500" />}
+                      {locked && <span className="text-[10px] text-stone-600">🔒 beat {crew.minDefeated} solo</span>}
+                    </div>
+                    <div className="text-[10px] text-stone-500">+${crew.reward.cash} · +{crew.reward.followers} fans</div>
+                  </div>
+                  <div className="text-[10px] text-stone-500 leading-snug">{crew.desc}</div>
+                </button>
+              );
+            })}
+            {char.energy < 30 && <div className="text-[10px] text-red-500 text-center uppercase">Need 30 energy</div>}
+          </div>
         </Panel>
       )}
 
