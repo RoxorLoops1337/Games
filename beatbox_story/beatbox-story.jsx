@@ -5641,6 +5641,275 @@ const drawFoxySoupScene = (ctx, fc, look) => {
   }
 };
 
+// ============ PIG PEN — RIVAL ============
+// Stocky local beatboxer. Cocky. Cap with a stylized clock face — his stage
+// name is a wordplay on Big Ben. Black-and-red track jacket. Permasmirk.
+
+// Draw Pig Pen at (x, y) — y is the feet baseline.
+// `pose` controls his demeanor: 'smug' (default) | 'sad' (post-loss).
+const drawPigPen = (ctx, x, y, frameCount, pose = 'smug') => {
+  // Shadow
+  _px(ctx, x - 9, y, 18, 1, 'rgba(0,0,0,0.5)');
+  // Legs (slightly wide stance)
+  _px(ctx, x - 6, y - 9, 4, 9, '#1a1a1a');
+  _px(ctx, x + 2, y - 9, 4, 9, '#1a1a1a');
+  // Trainers (white sole, red top)
+  _px(ctx, x - 7, y - 1, 5, 1, '#fff');
+  _px(ctx, x + 2, y - 1, 5, 1, '#fff');
+  _px(ctx, x - 7, y - 2, 5, 1, '#dc2626');
+  _px(ctx, x + 2, y - 2, 5, 1, '#dc2626');
+  // Body — black track jacket with red side stripes
+  _px(ctx, x - 7, y - 22, 14, 13, '#1a1a1a');
+  _px(ctx, x - 7, y - 22, 14, 1, '#3a3a3a');
+  // Red side stripes
+  _px(ctx, x - 7, y - 18, 1, 8, '#dc2626');
+  _px(ctx, x + 6, y - 18, 1, 8, '#dc2626');
+  // Zipper
+  _px(ctx, x, y - 20, 1, 10, '#5a5a5a');
+  // Arms (longer than the player's — bigger character)
+  _px(ctx, x - 9, y - 21, 2, 10, '#1a1a1a');
+  _px(ctx, x + 7, y - 21, 2, 10, '#1a1a1a');
+  // Hands
+  _px(ctx, x - 9, y - 12, 2, 2, '#d4a87a');
+  _px(ctx, x + 7, y - 12, 2, 2, '#d4a87a');
+  // Pointing-finger pose for the smug version (right hand pointing forward)
+  if (pose === 'smug') {
+    _px(ctx, x + 9, y - 18, 4, 1, '#d4a87a');
+  }
+  // Head (slightly wider than player)
+  _px(ctx, x - 5, y - 30, 10, 8, '#d4a87a');
+  // Cap (red with yellow brim/Big Ben clock face)
+  _px(ctx, x - 6, y - 33, 12, 4, '#dc2626');         // crown
+  _px(ctx, x - 6, y - 33, 12, 1, '#fb7185');         // crown highlight
+  _px(ctx, x - 6, y - 29, 12, 1, '#7a1a14');         // band shadow
+  _px(ctx, x + 5, y - 31, 4, 1, '#1a1a1a');          // brim sticking out right
+  // Clock face on cap (stylized — yellow circle with two lines)
+  _px(ctx, x - 1, y - 32, 3, 3, '#fbbf24');
+  _px(ctx, x, y - 31, 1, 1, '#1a1a1a');               // hour hand
+  _px(ctx, x + 1, y - 30, 1, 1, '#1a1a1a');           // minute hand
+  // Eyes
+  if (pose === 'smug') {
+    // Squinting smug (one eye narrowed)
+    _px(ctx, x - 3, y - 25, 2, 1, '#1a1a2e');
+    _px(ctx, x + 1, y - 25, 2, 1, '#1a1a2e');
+  } else {
+    // Sad / down-cast eyes (small pupils, looking down)
+    _px(ctx, x - 3, y - 24, 1, 1, '#1a1a2e');
+    _px(ctx, x + 2, y - 24, 1, 1, '#1a1a2e');
+  }
+  // Mouth — smug smirk vs flat
+  if (pose === 'smug') {
+    // Smirk: line up on one side
+    _px(ctx, x - 1, y - 22, 4, 1, '#5a2020');
+    _px(ctx, x + 2, y - 23, 1, 1, '#5a2020');         // upturned right corner
+  } else {
+    _px(ctx, x - 1, y - 22, 4, 1, '#3a1010');
+  }
+  // Goatee
+  _px(ctx, x, y - 21, 2, 1, '#1a1a2e');
+};
+
+// Pig Pen's challenge — cutscene at the cypher (daytime park).
+const drawPigPenChallengeScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Daytime park sky
+  for (let y = 0; y < 50; y++) {
+    const t = y / 50;
+    const r = Math.floor(0x7a + t * 0x30);
+    const g = Math.floor(0xc0 + t * 0x18);
+    const b = Math.floor(0xe8 + t * 0x10);
+    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
+  }
+  // Sun upper-left
+  _px(ctx, 16, 8, 10, 10, '#fef3c7');
+  ctx.fillStyle = 'rgba(254,243,199,0.30)';
+  ctx.beginPath(); ctx.arc(21, 13, 14, 0, Math.PI * 2); ctx.fill();
+  // Sunlit grass — fills everything below the sky
+  _px(ctx, 0, 50, W, 80, '#6a9a3a');
+  // Grass blades texture
+  for (let i = 0; i < 24; i++) {
+    const gx = (i * 9) % W;
+    const gy = 52 + (i % 4) * 4;
+    _px(ctx, gx, gy, 1, 2, '#5a8a30');
+  }
+  // Trees background
+  for (let i = 0; i < 5; i++) {
+    const tx = 5 + i * 38;
+    _px(ctx, tx - 8, 38, 16, 8, '#3a7028');
+    _px(ctx, tx - 6, 34, 12, 4, '#4a8030');
+    _px(ctx, tx - 3, 30, 6, 4, '#5a9038');
+    _px(ctx, tx - 1, 46, 2, 6, '#3a2410');
+  }
+  // Crowd silhouette behind (other cypher members, light tones)
+  for (let i = 0; i < 14; i++) {
+    const cx = 4 + i * 14 + (i % 2) * 4;
+    const headBob = Math.sin(fc * 0.1 + i * 0.5) * 0.5;
+    _px(ctx, cx, 60 + headBob, 4, 4, '#a87844');
+    _px(ctx, cx - 1, 64 + headBob, 6, 8, ['#a04040','#5a7050','#a06030','#4060a0','#a06090'][i % 5]);
+    _px(ctx, cx, 59 + headBob, 4, 1, ['#3a2410','#1a1a2e','#5a3010'][i % 3]);
+  }
+  // Dirt cypher circle (in front of crowd)
+  ctx.fillStyle = '#a89060';
+  ctx.beginPath();
+  ctx.ellipse(100, 106, 80, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#7a6a48';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(100, 106, 78, 17, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // Speckles
+  for (let i = 0; i < 8; i++) _px(ctx, 40 + i * 18, 100 + (i % 3) * 4, 1, 1, '#7a6a48');
+  // Pig Pen on the right, mid-trash-talk, finger-pointing pose
+  drawPigPen(ctx, 138, 110, fc, 'smug');
+  // Player on the left, facing him
+  _px(ctx, 60, 100, 12, 14, look?.shirt || '#a78bfa');
+  _px(ctx, 60, 100, 12, 2, '#fff');
+  _px(ctx, 58, 102, 2, 8, look?.shirt || '#a78bfa');
+  _px(ctx, 72, 102, 2, 8, look?.shirt || '#a78bfa');
+  _px(ctx, 58, 109, 2, 2, look?.skin || '#d4a87a');
+  _px(ctx, 72, 109, 2, 2, look?.skin || '#d4a87a');
+  _px(ctx, 62, 89, 8, 11, look?.skin || '#d4a87a');
+  _px(ctx, 62, 87, 8, 3, look?.hair || '#1a1a2e');
+  _px(ctx, 64, 92, 1, 1, '#0c0a09');
+  _px(ctx, 68, 92, 1, 1, '#0c0a09');
+  _px(ctx, 64, 96, 4, 1, '#3a1010');
+  // Legs
+  _px(ctx, 60, 114, 4, 8, '#1a1a2e');
+  _px(ctx, 68, 114, 4, 8, '#1a1a2e');
+  _px(ctx, 60, 121, 4, 1, '#fff');
+  _px(ctx, 68, 121, 4, 1, '#fff');
+  // Speech bubbles / shouting marks from Pig Pen (visual punctuation)
+  if (fc % 30 < 22) {
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 8px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('!', 122, 76);
+    ctx.fillText('!', 119, 70);
+  }
+  // Sun/heat lines on Pig Pen
+  if (fc % 12 < 6) {
+    _px(ctx, 134, 70, 1, 3, '#fbbf24');
+    _px(ctx, 142, 68, 1, 3, '#fbbf24');
+  }
+};
+
+// Helper: draw a "seated at the bar" silhouette — head + torso + arms only,
+// since the bar counter blocks the legs. Pig Pen pose 'sad' (head down).
+const _drawSeatedAtBar = (ctx, x, counterY, look, frameCount, who) => {
+  // who is 'pigpen' or 'player'
+  if (who === 'pigpen') {
+    // Stocky shoulders + black/red track jacket
+    _px(ctx, x - 7, counterY - 16, 14, 16, '#1a1a1a');
+    _px(ctx, x - 7, counterY - 16, 14, 1, '#3a3a3a');
+    // Red side stripes
+    _px(ctx, x - 7, counterY - 12, 1, 12, '#dc2626');
+    _px(ctx, x + 6, counterY - 12, 1, 12, '#dc2626');
+    // Zipper
+    _px(ctx, x, counterY - 14, 1, 14, '#5a5a5a');
+    // Slumped arms resting on the counter
+    _px(ctx, x - 9, counterY - 4, 4, 4, '#1a1a1a');
+    _px(ctx, x + 5, counterY - 4, 4, 4, '#1a1a1a');
+    _px(ctx, x - 8, counterY - 1, 2, 1, '#d4a87a');
+    _px(ctx, x + 7, counterY - 1, 2, 1, '#d4a87a');
+    // Head — tilted down (lower y position with no neck visible)
+    _px(ctx, x - 5, counterY - 26, 10, 8, '#d4a87a');
+    // Cap (red, with clock face)
+    _px(ctx, x - 6, counterY - 29, 12, 4, '#dc2626');
+    _px(ctx, x - 6, counterY - 29, 12, 1, '#fb7185');
+    _px(ctx, x - 6, counterY - 25, 12, 1, '#7a1a14');
+    _px(ctx, x + 5, counterY - 27, 4, 1, '#1a1a1a');
+    _px(ctx, x - 1, counterY - 28, 3, 3, '#fbbf24');
+    _px(ctx, x, counterY - 27, 1, 1, '#1a1a1a');
+    _px(ctx, x + 1, counterY - 26, 1, 1, '#1a1a1a');
+    // Down-cast eyes (just dots low on the face)
+    _px(ctx, x - 3, counterY - 21, 1, 1, '#1a1a2e');
+    _px(ctx, x + 2, counterY - 21, 1, 1, '#1a1a2e');
+    // Flat sad mouth
+    _px(ctx, x - 1, counterY - 19, 3, 1, '#3a1010');
+    // Goatee
+    _px(ctx, x, counterY - 18, 2, 1, '#1a1a2e');
+  } else {
+    // Player seated, neutral
+    _px(ctx, x - 5, counterY - 16, 10, 16, look?.shirt || '#a78bfa');
+    _px(ctx, x - 5, counterY - 16, 10, 1, '#fff');
+    _px(ctx, x - 7, counterY - 4, 3, 4, look?.shirt || '#a78bfa');
+    _px(ctx, x + 4, counterY - 4, 3, 4, look?.shirt || '#a78bfa');
+    _px(ctx, x - 7, counterY - 1, 2, 1, look?.skin || '#d4a87a');
+    _px(ctx, x + 5, counterY - 1, 2, 1, look?.skin || '#d4a87a');
+    // Head
+    _px(ctx, x - 4, counterY - 25, 8, 8, look?.skin || '#d4a87a');
+    _px(ctx, x - 4, counterY - 27, 8, 3, look?.hair || '#1a1a2e');
+    _px(ctx, x - 3, counterY - 22, 1, 1, '#0c0a09');
+    _px(ctx, x + 1, counterY - 22, 1, 1, '#0c0a09');
+    _px(ctx, x - 1, counterY - 19, 3, 1, '#3a1010');
+  }
+};
+
+// Penny reveal — bar interior, dim, Pig Pen at the bar after losing.
+const drawPennyRevealScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Dim bar wall (back wall)
+  _px(ctx, 0, 0, W, 60, '#1c1825');
+  // Wallpaper specs
+  for (let y = 6; y < 60; y += 12) for (let x = 8; x < W; x += 14) _px(ctx, x, y, 1, 1, '#2a1f1a');
+  // Shelves with bottles behind the bar (two rows)
+  _px(ctx, 0, 14, W, 14, '#3a2418');
+  _px(ctx, 0, 14, W, 1, '#5a3818');
+  _px(ctx, 0, 27, W, 1, '#1a1408');
+  for (let i = 0; i < 10; i++) {
+    const bx = 8 + i * 18;
+    const colors = ['#a04040', '#5a8030', '#fbbf24', '#22d3ee'];
+    _px(ctx, bx, 16, 4, 9, colors[i % 4]);
+    _px(ctx, bx + 1, 14, 2, 2, '#1a1a1a');
+    if (fc % (40 + i * 3) < 4) _px(ctx, bx + 1, 17, 1, 1, '#fff');
+  }
+  _px(ctx, 0, 28, W, 14, '#3a2418');
+  _px(ctx, 0, 28, W, 1, '#5a3818');
+  _px(ctx, 0, 41, W, 1, '#1a1408');
+  for (let i = 0; i < 8; i++) {
+    const bx = 14 + i * 22;
+    _px(ctx, bx, 30, 4, 10, ['#5a3a40', '#3a5060', '#7a3a20'][i % 3]);
+    _px(ctx, bx + 1, 29, 2, 1, '#1a1a1a');
+  }
+  // Bar counter — top edge + face
+  const counterY = 96;
+  _px(ctx, 0, counterY, W, 4, '#7a5030');
+  _px(ctx, 0, counterY, W, 1, '#a07050');
+  _px(ctx, 0, counterY + 4, W, 4, '#5a3a18');
+  _px(ctx, 0, counterY + 8, W, 22, '#3a2010');
+  // Subtle counter glints
+  for (let i = 0; i < 6; i++) _px(ctx, 14 + i * 32, counterY + 1, 4, 1, '#a07050');
+  // Hanging warm bar light over Pig Pen
+  const lightX = 110;
+  _px(ctx, lightX, 0, 1, 18, '#1a1a1a');
+  _px(ctx, lightX - 5, 17, 11, 4, '#3a2818');
+  _px(ctx, lightX - 4, 21, 9, 2, '#fbbf24');
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.12)';
+  ctx.beginPath(); ctx.arc(lightX, 22, 36, 0, Math.PI * 2); ctx.fill();
+  // Player on the left side, seated
+  _drawSeatedAtBar(ctx, 60, counterY, look, fc, 'player');
+  // Pig Pen on the right side, head down, sad
+  _drawSeatedAtBar(ctx, 116, counterY, null, fc, 'pigpen');
+  // Drinks on the counter — player's blue, Pig Pen's amber whiskey
+  // Player drink (blue)
+  _px(ctx, 56, counterY - 8, 6, 8, '#3a3a40');         // glass walls
+  _px(ctx, 57, counterY - 7, 4, 5, '#22d3ee');         // drink
+  _px(ctx, 56, counterY - 8, 6, 1, '#dadada');         // rim
+  // Pig Pen drink (amber, almost finished)
+  _px(ctx, 124, counterY - 8, 6, 8, '#3a3a40');
+  _px(ctx, 125, counterY - 4, 4, 3, '#fbbf24');        // half-empty amber
+  _px(ctx, 124, counterY - 8, 6, 1, '#dadada');
+  // A second empty glass beside Pig Pen (he's been here a while)
+  _px(ctx, 132, counterY - 6, 6, 6, '#3a3a40');
+  _px(ctx, 132, counterY - 6, 6, 1, '#dadada');
+  // Coaster ring on the counter near Pig Pen
+  _px(ctx, 134, counterY + 1, 4, 1, '#5a3a18');
+  // Quiet vignette / dim atmosphere
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+  ctx.fillRect(0, 0, W, H);
+};
+
 // Open-mic stage: bar interior, raised platform, mic stand, player on stage,
 // crowd silhouettes bobbing in front, spotlight cone overhead.
 const drawOpenMicStage = (ctx, fc, look) => {
@@ -6922,7 +7191,7 @@ export default function BeatboxStory() {
           {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
           {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
-          {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
+          {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
         </div>
 
         {/* FOOTER NAV */}
@@ -7978,8 +8247,11 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         const fans = 1 + Math.floor(Math.random() * 3);
         const statName = { mus: 'Musicality', tec: 'Technicality', ori: 'Originality' }[stat];
         setChar(cc => {
+          const flags = cc.storyFlags || {};
+          const jamCount = (flags.jamCount || 0) + 1;
           const updated = { ...cc, followers: cc.followers + fans, xp: cc.xp + 8,
-            stats: { ...cc.stats, [stat]: cc.stats[stat] + 1 } };
+            stats: { ...cc.stats, [stat]: cc.stats[stat] + 1 },
+            storyFlags: { ...flags, jamCount } };
           return checkLevelUp(updated);
         });
         showToast(`+1 ${statName}, +${fans} fans`, 'win');
@@ -7993,6 +8265,26 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
               'Maybe this is what you needed.',
             ],
           }, 'firstJam');
+          return;
+        }
+        // Pig Pen's challenge cutscene — fires once after 3+ jams or sho >= 8
+        const flags = c?.storyFlags || {};
+        const nextJamCount = (flags.jamCount || 0) + 1;
+        const sho = c?.stats?.sho || 0;
+        if (!flags.pigPenChallenged && (nextJamCount >= 3 || sho >= 8)) {
+          playCutscene?.({
+            speaker: 'PIG PEN',
+            speakerColor: '#fb7185',
+            beats: [{
+              drawScene: (ctx, fc) => drawPigPenChallengeScene(ctx, fc, lookFromChar(c)),
+              lines: [
+                "yo. you. new face.",
+                "you sound like you been practicing in a closet.",
+                "saturday. bar. you and me.",
+                "don't bring a friend. you'll need 'em on the way home.",
+              ],
+            }],
+          }, 'pigPenChallenged');
         }
       },
     },
@@ -9949,7 +10241,7 @@ const playBeep = (high = false) => {
 
 // ============ SCREEN: BATTLE ============
 
-function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
+function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene }) {
   // Phases: intro, tactical, rps, countdown{1..4}, round{1..4}, judging, result
   // Sequence: A, B, A, B (RPS loser is "A" = goes first).
   // Each side plays 2 prepared HERO_LESSONS patterns; player rounds use BeatboxHero
@@ -10371,10 +10663,20 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
 
   const finishBattle = () => {
     const won = result.won;
+    let triggerPennyReveal = false;
     setChar(c => {
       const reward = won ? opponent.reward : Math.floor(opponent.reward * 0.1);
       const fans = won ? Math.floor(opponent.reward / 10) : 1;
       const xp = won ? 60 : 20;
+      const flags = { ...(c.storyFlags || {}) };
+      // Pig Pen win counter — drives the Penny reveal arc
+      if (won && opponent.name === 'Pig Pen') {
+        flags.pigPenWins = (flags.pigPenWins || 0) + 1;
+        flags.pigPenBattled = true;
+        if (flags.pigPenWins === 2 && !flags.pennyReveal) triggerPennyReveal = true;
+      } else if (opponent.name === 'Pig Pen') {
+        flags.pigPenBattled = true;
+      }
       let newC = {
         ...c,
         cash: c.cash + reward,
@@ -10385,12 +10687,30 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp }) {
         xp: c.xp + xp,
         defeated: won && !c.defeated.includes(opponent.name) ? [...c.defeated, opponent.name] : c.defeated,
         lastBattleDay: c.day, // 1-battle-per-week cooldown
+        storyFlags: flags,
       };
       delete newC._opponent;
       return checkLevelUp(newC);
     });
     showToast(won ? `🏆 WIN! +$${opponent.reward}` : 'You lost. Train harder!', won ? 'win' : 'bad');
     go('bar');
+    // Penny reveal — fires after 2 Pig Pen wins, after the bar transition.
+    if (triggerPennyReveal) {
+      setTimeout(() => playCutscene?.({
+        speaker: 'PIG PEN',
+        speakerColor: '#fb7185',
+        beats: [{
+          drawScene: (ctx, fc) => drawPennyRevealScene(ctx, fc, lookFromChar(char)),
+          lines: [
+            "you again. sit down.",
+            "...",
+            "y'know my mum used to call me Penny.",
+            "...don't tell anyone that.",
+            "call me Penny too if you want. just... not in front of the others.",
+          ],
+        }],
+      }, 'pennyReveal'), 600);
+    }
   };
 
   return (
