@@ -82,6 +82,10 @@ const initialChar = () => ({
   lastShowcaseDay: null, // day a showcase was performed (cooldown: 7 days)
   lastBattleDay: null, // day a battle happened (cooldown: 7 days)
   openMicCount: 0, // total open mics performed (gates Friday show)
+  apartmentTier: 1, // 1 = studio ($50/wk), 2 = nicer ($100), 3 = loft ($200)
+  rentLate: 0, // consecutive missed Sundays (0..2 — at 3 you get evicted)
+  lastRentPaidDay: null, // day rent was last paid (so we don't double-charge)
+  evictionRecoveryDay: null, // day on which a couch-surf recovery resolves
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -216,6 +220,10 @@ const isNightTime = (mins) => mins >= 720;    // 6pm onwards
 const DAY_NAMES = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const DAY_NAMES_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const dayOfWeek = (day) => ((day || 1)) % 7;
+
+// Rent (auto-deducted on Sunday morning sleep transition; apartment tier sets the amount).
+const RENT_BY_TIER = [50, 100, 200];   // tier 1 / 2 / 3 weekly rent
+const COUCHSURF_DAYS = 3;              // days at Foxy's friend after eviction
 
 // What's happening at the bar tonight, indexed by day-of-week (0..6).
 const BAR_SCHEDULE = [
@@ -4939,6 +4947,373 @@ const drawDoor = (ctx, fc) => {
   _px(ctx, 0, 122, W, 1, '#fbbf24');
 };
 
+// ============ RENT CUTSCENE SCENES ============
+// All four share the same apartment-front silhouette so it reads as the
+// same place across the arc. `state` selects the dressing.
+
+// Helper: paints a small Sunday-morning apartment exterior. mailboxState
+// controls the notice on the door / overflow envelopes / boards on door.
+const _drawRentScene = (ctx, fc, state) => {
+  const W = 200, H = 130;
+  // Sky — subtle dawn gradient
+  for (let y = 0; y < 60; y++) {
+    const t = y / 60;
+    const r = Math.floor(0x4a + t * 0x40);
+    const g = Math.floor(0x40 + t * 0x40);
+    const b = Math.floor(0x6a + t * 0x18);
+    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
+  }
+  // Sun on the horizon
+  _px(ctx, 28, 24, 12, 12, '#fef3c7');
+  ctx.fillStyle = 'rgba(254,243,199,0.25)';
+  ctx.beginPath(); ctx.arc(34, 30, 16, 0, Math.PI * 2); ctx.fill();
+  // Apartment building
+  _px(ctx, 60, 6, 84, 90, '#7a4030');
+  _px(ctx, 60, 6, 84, 2, '#a06040');
+  // Brick mortar
+  for (let y = 10; y < 96; y += 6) {
+    _px(ctx, 60, y, 84, 1, '#5a2810');
+    const offset = (y / 6) % 2 === 0 ? 0 : 12;
+    for (let x = 60 + offset; x < 144; x += 24) _px(ctx, x, y, 1, 6, '#5a2810');
+  }
+  // Upstairs window
+  _px(ctx, 76, 16, 18, 16, '#3a3a4a');
+  _px(ctx, 76, 16, 18, 1, '#1a1a1a');
+  _px(ctx, 76, 31, 18, 1, '#1a1a1a');
+  _px(ctx, 76, 16, 1, 16, '#1a1a1a');
+  _px(ctx, 93, 16, 1, 16, '#1a1a1a');
+  _px(ctx, 84, 16, 1, 16, '#1a1a1a');
+  _px(ctx, 76, 23, 18, 1, '#1a1a1a');
+  // Curtain
+  if (state !== 'evicted') _px(ctx, 77, 17, 8, 14, '#5a4a30');
+  _px(ctx, 110, 16, 18, 16, '#3a3a4a');
+  _px(ctx, 110, 16, 18, 1, '#1a1a1a');
+  _px(ctx, 110, 31, 18, 1, '#1a1a1a');
+  _px(ctx, 110, 16, 1, 16, '#1a1a1a');
+  _px(ctx, 127, 16, 1, 16, '#1a1a1a');
+  _px(ctx, 118, 16, 1, 16, '#1a1a1a');
+  _px(ctx, 110, 23, 18, 1, '#1a1a1a');
+  // Door frame + door
+  _px(ctx, 88, 50, 28, 46, '#3a1a14');
+  _px(ctx, 90, 52, 24, 44, state === 'evicted' ? '#3a2820' : '#a02a20');
+  _px(ctx, 90, 52, 24, 2, state === 'evicted' ? '#5a3a30' : '#c84030');
+  // Door panels
+  _px(ctx, 94, 56, 16, 16, state === 'evicted' ? '#2a1a10' : '#7a1a14');
+  _px(ctx, 94, 56, 16, 1, state === 'evicted' ? '#4a3020' : '#c84030');
+  _px(ctx, 94, 76, 16, 16, state === 'evicted' ? '#2a1a10' : '#7a1a14');
+  _px(ctx, 94, 76, 16, 1, state === 'evicted' ? '#4a3020' : '#c84030');
+  // Doorknob
+  _px(ctx, 109, 75, 2, 2, '#fbbf24');
+  // Stoop
+  _px(ctx, 80, 96, 40, 4, '#5a4030');
+  _px(ctx, 80, 96, 40, 1, '#7a5a40');
+  // Sidewalk
+  _px(ctx, 0, 100, W, 30, '#7a7a7a');
+  _px(ctx, 0, 100, W, 1, '#a8a8a8');
+  // Mailbox at the right of the stoop
+  _px(ctx, 144, 80, 12, 14, '#3a3a3a');
+  _px(ctx, 144, 80, 12, 2, '#5a5a5a');
+  _px(ctx, 144, 90, 12, 1, '#1a1a1a');
+  // Mail flag
+  _px(ctx, 156, 82, 4, 1, state === 'paid' ? '#22c55e' : '#dc2626');
+  _px(ctx, 156, 82, 1, 4, state === 'paid' ? '#22c55e' : '#dc2626');
+  // Mailbox post
+  _px(ctx, 148, 94, 4, 6, '#1a1a1a');
+  // House number plaque
+  ctx.fillStyle = '#fef3c7';
+  ctx.font = 'bold 5px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('14', 102, 49);
+  // ---- State-specific dressing ----
+  if (state === 'paid') {
+    // Coin sliding into mailbox + green check
+    if (fc % 50 < 30) {
+      const drop = (fc % 50) / 30;
+      _px(ctx, 152, 70 + Math.floor(drop * 10), 3, 3, '#fbbf24');
+      _px(ctx, 153, 70 + Math.floor(drop * 10), 1, 1, '#fef3c7');
+    }
+    // Big green check on door
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(96, 66); ctx.lineTo(100, 70); ctx.lineTo(108, 60);
+    ctx.stroke();
+  } else if (state === 'missed') {
+    // Single overdue notice taped on door
+    _px(ctx, 94, 60, 16, 14, '#fbbf24');
+    _px(ctx, 94, 60, 16, 1, '#fef3c7');
+    ctx.fillStyle = '#7a1a14';
+    ctx.font = 'bold 4px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('LATE', 102, 65);
+    ctx.fillStyle = '#3a1a10';
+    ctx.fillText('-50$', 102, 71);
+    // Mailbox overflowing with bills
+    _px(ctx, 145, 74, 10, 6, '#f0e4c8');
+    _px(ctx, 146, 73, 8, 1, '#f0e4c8');
+    _px(ctx, 147, 75, 6, 1, '#dc2626');
+    // Pulsing red mail flag
+    if (fc % 30 < 18) {
+      _px(ctx, 156, 80, 4, 3, '#fb7185');
+    }
+    // Sad cloud above
+    _px(ctx, 130, 12, 14, 6, '#5a5060');
+    _px(ctx, 132, 10, 10, 4, '#5a5060');
+    // Single tear
+    if (fc % 60 < 40) _px(ctx, 137, 18, 1, 2, '#22d3ee');
+  } else if (state === 'warning') {
+    // Big red FINAL WARNING notice
+    _px(ctx, 90, 56, 24, 24, '#dc2626');
+    _px(ctx, 90, 56, 24, 2, '#fb7185');
+    _px(ctx, 91, 57, 22, 22, '#7a1a14');
+    ctx.fillStyle = '#fef3c7';
+    ctx.font = 'bold 5px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('FINAL', 102, 64);
+    ctx.fillText('WARNING', 102, 70);
+    ctx.font = 'bold 4px monospace';
+    ctx.fillText('PAY OR LEAVE', 102, 76);
+    // Flashing red border
+    if (fc % 20 < 10) {
+      _px(ctx, 88, 54, 28, 28, 'rgba(255,0,0,0.20)');
+    }
+    // Storm cloud above
+    _px(ctx, 100, 4, 30, 8, '#3a3540');
+    _px(ctx, 95, 6, 8, 6, '#3a3540');
+    _px(ctx, 130, 6, 8, 6, '#3a3540');
+    // Lightning flash (rare)
+    if (fc % 70 < 4) {
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.moveTo(118, 12); ctx.lineTo(114, 22); ctx.lineTo(118, 22);
+      ctx.lineTo(112, 32); ctx.lineTo(120, 18); ctx.lineTo(116, 18);
+      ctx.lineTo(120, 12); ctx.closePath();
+      ctx.fill();
+    }
+    // Mailbox: lots of unopened bills
+    _px(ctx, 145, 72, 10, 8, '#f0e4c8');
+    _px(ctx, 144, 71, 12, 1, '#dc2626');
+    _px(ctx, 146, 74, 8, 1, '#dc2626');
+    _px(ctx, 146, 76, 8, 1, '#dc2626');
+  } else if (state === 'evicted') {
+    // Boards across the door
+    _px(ctx, 86, 60, 32, 4, '#7a5030');
+    _px(ctx, 86, 64, 32, 1, '#5a3010');
+    _px(ctx, 86, 76, 32, 4, '#7a5030');
+    _px(ctx, 86, 80, 32, 1, '#5a3010');
+    // Nail heads
+    for (let i = 0; i < 4; i++) {
+      _px(ctx, 88 + i * 8, 61, 2, 2, '#1a1a1a');
+      _px(ctx, 88 + i * 8, 77, 2, 2, '#1a1a1a');
+    }
+    // Eviction notice papered over
+    _px(ctx, 94, 60, 16, 12, '#dadada');
+    _px(ctx, 94, 60, 16, 1, '#fff');
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 4px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('EVICTED', 102, 66);
+    ctx.fillStyle = '#1c1917';
+    ctx.font = 'bold 3px monospace';
+    ctx.fillText('NO ENTRY', 102, 70);
+    // Cardboard boxes on the stoop
+    _px(ctx, 56, 86, 18, 12, '#a87844');
+    _px(ctx, 56, 86, 18, 1, '#c89a64');
+    _px(ctx, 56, 90, 18, 1, '#5a3a18');
+    _px(ctx, 124, 88, 20, 10, '#a87844');
+    _px(ctx, 124, 88, 20, 1, '#c89a64');
+    _px(ctx, 124, 92, 20, 1, '#5a3a18');
+    // Plant sticking out of one box
+    _px(ctx, 64, 80, 4, 6, '#3a7028');
+    _px(ctx, 62, 82, 8, 4, '#3a7028');
+    // Lonely figure (shadow) walking off-screen left
+    _px(ctx, 4, 102, 6, 14, '#1a1a1a');
+    _px(ctx, 6, 96, 6, 6, '#1a1a1a');
+    _px(ctx, 4, 116, 2, 4, '#1a1a1a');
+    _px(ctx, 10, 116, 2, 4, '#1a1a1a');
+    // Drag bag silhouette
+    _px(ctx, 12, 110, 6, 6, '#3a2818');
+    // Heavy gray sky tone
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.fillRect(0, 0, W, 60);
+  }
+};
+
+// 1. Rent paid (small celebratory beat — used as the first-rent intro only).
+const drawRentPaidScene = (ctx, fc) => { _drawRentScene(ctx, fc, 'paid'); };
+// 2. Rent missed (week 1 — overdue notice on door).
+const drawRentMissedScene = (ctx, fc) => { _drawRentScene(ctx, fc, 'missed'); };
+// 3. Eviction warning (week 2 — final warning notice + storm).
+const drawEvictionWarningScene = (ctx, fc) => { _drawRentScene(ctx, fc, 'warning'); };
+// 4. Eviction (week 3 — boards on door, boxes on stoop, character walking away).
+const drawEvictedScene = (ctx, fc) => { _drawRentScene(ctx, fc, 'evicted'); };
+
+// 5. Couch-surfing at Foxy's friend's place — second beat of eviction arc.
+const drawCouchSurfScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Wall (cool dim apartment)
+  _px(ctx, 0, 0, W, 95, '#252a35');
+  for (let y = 8; y < 95; y += 14) for (let x = 8; x < W; x += 14) _px(ctx, x, y, 1, 1, '#2a3040');
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#2a1a10');
+  _px(ctx, 0, 95, W, 1, '#3a2818');
+  // Window with night sky
+  _px(ctx, 130, 14, 50, 36, '#0c0a18');
+  _px(ctx, 130, 14, 50, 1, '#1a1a1a');
+  _px(ctx, 130, 49, 50, 1, '#1a1a1a');
+  _px(ctx, 130, 14, 1, 36, '#1a1a1a');
+  _px(ctx, 179, 14, 1, 36, '#1a1a1a');
+  _px(ctx, 154, 14, 1, 36, '#1a1a1a');
+  // Stars
+  for (let i = 0; i < 12; i++) {
+    const sx = 132 + (i * 4) % 46;
+    const sy = 16 + (i * 7) % 32;
+    if ((fc + i * 5) % 60 < 50) _px(ctx, sx, sy, 1, 1, '#fef3c7');
+  }
+  // Couch (someone else's — different color from your living room)
+  _px(ctx, 24, 78, 110, 28, '#3a4040');
+  _px(ctx, 24, 78, 110, 4, '#5a6060');
+  _px(ctx, 18, 76, 12, 18, '#3a4040');
+  _px(ctx, 128, 76, 12, 18, '#3a4040');
+  // Spare blanket (Foxy gave them)
+  _px(ctx, 36, 78, 80, 12, '#7a5040');
+  _px(ctx, 36, 78, 80, 1, '#a07050');
+  // Player slumped on couch — restless, eyes open
+  // Pillow under head
+  _px(ctx, 30, 78, 14, 3, '#a8a29e');
+  // Head
+  _px(ctx, 33, 72, 12, 9, look?.skin || '#d4a87a');
+  _px(ctx, 33, 70, 12, 3, look?.hair || '#1a1a2e');
+  // Open eyes (can't sleep) — staring up at ceiling
+  _px(ctx, 37, 76, 1, 1, '#0c0a09');
+  _px(ctx, 41, 76, 1, 1, '#0c0a09');
+  // Frown
+  _px(ctx, 38, 79, 4, 1, '#3a1010');
+  // Body / blanket covering
+  _px(ctx, 45, 73, 32, 8, look?.shirt || '#a78bfa');
+  _px(ctx, 45, 73, 32, 1, '#fff');
+  _px(ctx, 77, 75, 22, 6, '#1a1a1a');
+  _px(ctx, 99, 72, 5, 3, '#fff');
+  // Calendar on the wall, animating days passing (3 visible Xs)
+  _px(ctx, 80, 16, 36, 28, '#f0e4c8');
+  _px(ctx, 80, 16, 36, 1, '#c0a070');
+  _px(ctx, 80, 16, 36, 5, '#7a1a14');
+  ctx.fillStyle = '#fef3c7';
+  ctx.font = 'bold 4px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('THIS WEEK', 98, 21);
+  // Day grid (2 rows × 4)
+  for (let r = 0; r < 2; r++) {
+    for (let cn = 0; cn < 4; cn++) {
+      const cx = 84 + cn * 8;
+      const cy = 25 + r * 8;
+      _px(ctx, cx, cy, 6, 6, '#fff');
+      _px(ctx, cx, cy, 6, 1, '#c0a070');
+      // X out the first 3 squares as days pass
+      const idx = r * 4 + cn;
+      const dayPassed = Math.min(3, Math.floor(fc / 60));
+      if (idx < dayPassed) {
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx + 1, cy + 1); ctx.lineTo(cx + 5, cy + 5);
+        ctx.moveTo(cx + 5, cy + 1); ctx.lineTo(cx + 1, cy + 5);
+        ctx.stroke();
+      }
+    }
+  }
+  // Lamp on side table
+  _px(ctx, 4, 64, 12, 4, '#fbbf24');
+  _px(ctx, 8, 68, 4, 12, '#1a1a1a');
+  _px(ctx, 4, 80, 12, 2, '#5a3a18');
+  // Lamp glow
+  ctx.fillStyle = 'rgba(254,243,199,0.10)';
+  ctx.beginPath(); ctx.arc(10, 70, 24, 0, Math.PI * 2); ctx.fill();
+};
+
+// 6. Back on your feet — sun rising over restored apartment, fresh start.
+const drawBackOnFeetScene = (ctx, fc) => {
+  const W = 200, H = 130;
+  // Bright sunrise sky
+  for (let y = 0; y < 90; y++) {
+    const t = y / 90;
+    const r = Math.floor(0xff * (1 - t * 0.2));
+    const g = Math.floor(0xc0 + t * 0x20);
+    const b = Math.floor(0x60 + t * 0x80);
+    _px(ctx, 0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
+  }
+  // Big rising sun
+  const sunY = 50;
+  _px(ctx, 88, sunY, 24, 24, '#fef3c7');
+  _px(ctx, 92, sunY - 4, 16, 4, '#fef3c7');
+  _px(ctx, 92, sunY + 24, 16, 4, '#fef3c7');
+  _px(ctx, 84, sunY + 4, 4, 16, '#fef3c7');
+  _px(ctx, 112, sunY + 4, 4, 16, '#fef3c7');
+  // Sun rays
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2 + fc * 0.01;
+    const r = 22 + ((fc + i * 5) % 40) * 0.4;
+    const sx = Math.floor(100 + Math.cos(ang) * r);
+    const sy = Math.floor(sunY + 12 + Math.sin(ang) * r);
+    if (sx > 0 && sx < W && sy > 0 && sy < 90) {
+      _px(ctx, sx, sy, 1, 1, '#fef3c7');
+    }
+  }
+  // Apartment building (reopened, no boards)
+  _px(ctx, 60, 30, 84, 70, '#7a4030');
+  _px(ctx, 60, 30, 84, 2, '#a06040');
+  for (let y = 34; y < 100; y += 6) {
+    _px(ctx, 60, y, 84, 1, '#5a2810');
+  }
+  // Windows lit warm
+  _px(ctx, 76, 38, 18, 14, '#fbbf24');
+  _px(ctx, 76, 38, 18, 1, '#1a1a1a');
+  _px(ctx, 76, 51, 18, 1, '#1a1a1a');
+  _px(ctx, 110, 38, 18, 14, '#fbbf24');
+  _px(ctx, 110, 38, 18, 1, '#1a1a1a');
+  _px(ctx, 110, 51, 18, 1, '#1a1a1a');
+  // Door (restored — red, no boards)
+  _px(ctx, 88, 60, 28, 40, '#3a1a14');
+  _px(ctx, 90, 62, 24, 38, '#a02a20');
+  _px(ctx, 90, 62, 24, 2, '#c84030');
+  _px(ctx, 94, 66, 16, 12, '#7a1a14');
+  _px(ctx, 94, 66, 16, 1, '#c84030');
+  _px(ctx, 94, 80, 16, 14, '#7a1a14');
+  _px(ctx, 94, 80, 16, 1, '#c84030');
+  _px(ctx, 109, 80, 2, 2, '#fbbf24');
+  // Welcome mat
+  _px(ctx, 80, 100, 40, 4, '#fbbf24');
+  _px(ctx, 80, 100, 40, 1, '#fef3c7');
+  ctx.fillStyle = '#3a1a10';
+  ctx.font = 'bold 4px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('HOME', 100, 104);
+  // Sidewalk
+  _px(ctx, 0, 104, W, 26, '#a89060');
+  _px(ctx, 0, 104, W, 1, '#cba880');
+  // Player walking up to door (silhouette from behind, with new keys)
+  const stand = Math.floor(fc / 12) % 2;
+  _px(ctx, 32, 110 + stand, 12, 14, '#5a3a40');
+  _px(ctx, 34, 100 + stand, 8, 10, '#d4a87a');
+  _px(ctx, 34, 98 + stand, 8, 4, '#1a1a2e');
+  _px(ctx, 32, 124 + stand, 4, 4, '#1a1a2e');
+  _px(ctx, 38, 124 + stand, 4, 4, '#1a1a2e');
+  // Keys jingling in hand (animated)
+  _px(ctx, 44, 112 + stand, 2, 2, '#fbbf24');
+  _px(ctx, 46, 113 + stand, 2, 2, '#fbbf24');
+  if (fc % 16 < 8) _px(ctx, 47, 110 + stand, 1, 4, '#fef3c7');
+  // Birds in the sky
+  for (let i = 0; i < 3; i++) {
+    const bx = (12 + i * 24 + Math.floor(fc * 0.3)) % W;
+    const by = 14 + i * 6 + Math.sin((fc + i * 30) * 0.05) * 2;
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(bx - 2, by + 1); ctx.lineTo(bx, by); ctx.lineTo(bx + 2, by + 1);
+    ctx.stroke();
+  }
+};
+
 // Open-mic stage: bar interior, raised platform, mic stand, player on stage,
 // crowd silhouettes bobbing in front, spotlight cone overhead.
 const drawOpenMicStage = (ctx, fc, look) => {
@@ -5980,6 +6355,10 @@ export default function BeatboxStory() {
     if (typeof c.hairColor !== 'string') c.hairColor = '#1a1a2e';
     if (typeof c.hairStyle !== 'string') c.hairStyle = 'short';
     if (typeof c.openMicCount !== 'number') c.openMicCount = 0;
+    if (typeof c.apartmentTier !== 'number') c.apartmentTier = 1;
+    if (typeof c.rentLate !== 'number') c.rentLate = 0;
+    if (c.lastRentPaidDay === undefined) c.lastRentPaidDay = null;
+    if (c.evictionRecoveryDay === undefined) c.evictionRecoveryDay = null;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -6178,7 +6557,7 @@ export default function BeatboxStory() {
           )}
           {screen === 'create' && <CreateScreen char={char} setChar={setChar} onDone={() => { setChar(c => ({ ...c, created: true })); setScreen('hood'); }} />}
           {screen === 'hood' && <HoodScreen go={setScreen} char={char} />}
-          {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} />}
+          {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} playCutscene={playCutscene} />}
           {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
           {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} />}
@@ -6349,7 +6728,7 @@ function HoodScreen({ go, char }) {
 
 // ============ SCREEN: HOUSE ============
 
-function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, activeSlot }) {
+function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, activeSlot, playCutscene }) {
   const [tab, setTab] = useState('train');
   const [trainStat, setTrainStat] = useState(null); // 'mus' | 'tec' | 'ori' | 'sho' | null
   const [pendingStart, setPendingStart] = useState(false);
@@ -6493,22 +6872,142 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     setNapping(false);
     showToast(forced ? '2 AM — got booted off the couch' : 'Napped — feeling sharper', forced ? 'info' : 'win');
   };
+  // Rent processing on the Sunday morning sleep transition. Returns the
+  // event type so finishSleep can chain a cutscene afterwards.
+  const computeRentEvent = (c, newDay) => {
+    if (newDay % 7 !== 6) return null;                         // not Sunday
+    if (c.lastRentPaidDay === newDay) return null;             // already handled
+    const tier = c.apartmentTier || 1;
+    const amount = RENT_BY_TIER[tier - 1] || RENT_BY_TIER[0];
+    if ((c.cash || 0) >= amount) {
+      // Can pay
+      const firstTime = !c.storyFlags?.firstRentPaid;
+      return { type: 'paid', amount, firstTime };
+    }
+    // Can't pay — escalate by week
+    const next = (c.rentLate || 0) + 1;
+    if (next >= 3)      return { type: 'evicted', amount, weeks: next };
+    if (next === 2)     return { type: 'warning', amount };
+    return                       { type: 'missed', amount };
+  };
+
   const finishSleep = () => {
+    const c0 = char;
+    if (!c0) { setSleeping(false); return; }
+    const newDayBase = c0.day + 1;
+    const rentEvent = computeRentEvent(c0, newDayBase);
+    // Eviction adds 3 couch-surf days on top of the normal +1
+    const dayAdvance = rentEvent?.type === 'evicted' ? 1 + COUCHSURF_DAYS : 1;
+    const newDay = c0.day + dayAdvance;
+
     setChar(c => {
       const max = c.maxEnergy ?? 100;
       let energy = max;
       let hunger = Math.max(0, c.hunger - 30);
       let mood = Math.min(100, c.mood + 10);
+      let cash = c.cash;
+      let rentLate = c.rentLate || 0;
+      let lastRentPaidDay = c.lastRentPaidDay;
+      const flags = { ...(c.storyFlags || {}) };
+      // Apply rent event (recomputed against `c`, the live state)
+      if (rentEvent) {
+        if (rentEvent.type === 'paid') {
+          cash = Math.max(0, (c.cash || 0) - rentEvent.amount);
+          rentLate = 0;
+          lastRentPaidDay = newDayBase;
+          flags.firstRentPaid = true;
+        } else if (rentEvent.type === 'missed') {
+          rentLate = 1;
+          mood = Math.max(0, mood - 10);
+        } else if (rentEvent.type === 'warning') {
+          rentLate = 2;
+          mood = Math.max(0, mood - 15);
+        } else if (rentEvent.type === 'evicted') {
+          // Couch surf debuffs: half energy, hunger drained, big mood hit.
+          energy = Math.floor(max * 0.5);
+          hunger = Math.max(0, hunger - 20);
+          mood = Math.max(0, mood - 30);
+          rentLate = 0;
+          flags.evictedOnce = true;
+        }
+      }
       const d = c.pendingDebuff;
       if (d) {
         energy = Math.max(0, Math.min(max, energy + (d.energy || 0)));
         hunger = Math.max(0, Math.min(100, hunger + (d.hunger || 0)));
         mood = Math.max(0, Math.min(100, mood + (d.mood || 0)));
       }
-      return { ...c, energy, hunger, mood, day: c.day + 1, minutes: 0, pendingDebuff: null };
+      return { ...c, energy, hunger, mood, cash,
+        rentLate, lastRentPaidDay,
+        day: newDay, minutes: 0, pendingDebuff: null,
+        storyFlags: flags };
     });
-    showToast(char.pendingDebuff ? 'Slept it off — feeling rough' : 'Slept till morning', char.pendingDebuff ? 'info' : 'win');
     setSleeping(false);
+
+    // Toast + queued cutscene based on the rent event
+    if (rentEvent?.type === 'paid') {
+      showToast(`Rent paid · -$${rentEvent.amount}`, 'info');
+      // First-time rent: show a quick celebratory beat
+      if (rentEvent.firstTime) {
+        setTimeout(() => playCutscene({
+          beats: [{
+            drawScene: drawRentPaidScene,
+            lines: [
+              "Sunday. Rent's paid.",
+              `-$${rentEvent.amount}. The apartment's still yours.`,
+              "Another week to make it work.",
+            ],
+          }],
+        }, 'firstRentPaid'), 50);
+      }
+    } else if (rentEvent?.type === 'missed') {
+      showToast(`Rent late · week 1. Mood -10`, 'bad');
+      setTimeout(() => playCutscene({
+        beats: [{
+          drawScene: drawRentMissedScene,
+          lines: [
+            "You didn't make rent this week.",
+            "The notice is taped to your door.",
+            "You've got till next Sunday.",
+          ],
+        }],
+      }), 50);
+    } else if (rentEvent?.type === 'warning') {
+      showToast(`Rent late · final warning. Mood -15`, 'bad');
+      setTimeout(() => playCutscene({
+        beats: [{
+          drawScene: drawEvictionWarningScene,
+          lines: [
+            "Final warning, in red ink.",
+            "Pay by Sunday or you're out.",
+            "Your phone hasn't stopped buzzing.",
+          ],
+        }],
+      }), 50);
+    } else if (rentEvent?.type === 'evicted') {
+      showToast(`Evicted. Couch-surfing for ${COUCHSURF_DAYS} days.`, 'bad');
+      setTimeout(() => playCutscene({
+        beats: [
+          { drawScene: drawEvictedScene, lines: [
+            "Boards on the door.",
+            "Your stuff in two cardboard boxes.",
+            "Nowhere to go but Foxy's friend's couch.",
+          ]},
+          { drawScene: (ctx, fc) => drawCouchSurfScene(ctx, fc, lookFromChar(char)), lines: [
+            `${COUCHSURF_DAYS} nights on a stranger's couch.`,
+            "You don't sleep much.",
+            "The plant's probably dead by now.",
+          ]},
+          { drawScene: drawBackOnFeetScene, lines: [
+            "A new key. A fresh start.",
+            "Rent counter back to zero.",
+            "Don't miss it again.",
+          ]},
+        ],
+      }), 50);
+    } else {
+      showToast(char.pendingDebuff ? 'Slept it off — feeling rough' : 'Slept till morning', char.pendingDebuff ? 'info' : 'win');
+    }
   };
 
   if (sleeping) return <SleepAnimation char={char} onComplete={finishSleep} />;
