@@ -420,35 +420,71 @@ const BuskAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = t
       ctx.save();
       ctx.scale(PXSCALE, PXSCALE);
 
-      // sky
-      px(0, 0, W, 60, '#3a2a3a');
-      // distant buildings
-      px(0, 30, 30, 30, '#1c1825');
-      px(30, 22, 25, 38, '#221c2a');
-      px(55, 35, 22, 25, '#1c1825');
-      px(77, 28, 30, 32, '#221c2a');
-      px(107, 32, 33, 28, '#1c1825');
-      // building windows (lit)
-      for (let i = 0; i < 6; i++) {
-        const wx = 4 + i * 22 + (i % 2) * 5;
-        const wy = 38 + (i % 3) * 6;
-        if (wx < W - 4) px(wx, wy, 3, 3, '#fbbf24');
+      // ---- Daytime park (was nighttime city) ----
+      // Sky — soft blue gradient from top to horizon
+      for (let y = 0; y < 50; y++) {
+        const t = y / 50;
+        const r = Math.floor(0x7a + t * 0x30);
+        const g = Math.floor(0xc0 + t * 0x18);
+        const b = Math.floor(0xe8 + t * 0x10);
+        px(0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
       }
-      // sidewalk
-      px(0, 60, W, 30, '#3a3a3a');
-      px(0, 60, W, 1, '#5a5a5a');
-      px(20, 65, 1, 4, '#2a2a2a');
-      px(45, 70, 1, 3, '#2a2a2a');
-      px(95, 67, 1, 4, '#2a2a2a');
-      px(120, 72, 1, 3, '#2a2a2a');
-
-      // lamp post
-      px(15, 14, 2, 50, '#1c1917');
-      px(11, 14, 10, 2, '#1c1917');
-      px(8, 16, 4, 5, '#1c1917');
-      px(9, 21, 2, 1, '#fef3c7');
-      ctx.fillStyle = 'rgba(254,243,199,0.08)';
-      ctx.fillRect(0, 60, 30, 30);
+      // Sun (top-right)
+      px(118, 8, 10, 10, '#fef3c7');
+      px(120, 6, 6, 14, '#fef3c7');
+      px(116, 10, 14, 6, '#fef3c7');
+      ctx.fillStyle = 'rgba(254, 243, 199, 0.30)';
+      ctx.beginPath(); ctx.arc(123, 13, 12, 0, Math.PI * 2); ctx.fill();
+      // Drifting clouds
+      const cloud = (cx, cy) => {
+        px(cx, cy, 12, 3, '#fff');
+        px(cx + 2, cy - 2, 8, 5, '#fff');
+        px(cx + 4, cy - 3, 4, 6, '#fff');
+        px(cx + 1, cy + 3, 10, 1, '#dadada');
+      };
+      cloud(20 + ((frameCount * 0.05) % 160) - 20, 10);
+      cloud(70 + ((frameCount * 0.03) % 160) - 30, 22);
+      // Distant buildings (light daytime palette behind park)
+      px(0, 36, 26, 24, '#a8a4b8');
+      px(26, 30, 22, 30, '#bcb8c8');
+      px(48, 40, 18, 20, '#9ea0b8');
+      px(66, 32, 26, 28, '#bcb8c8');
+      px(92, 38, 22, 22, '#a8a4b8');
+      px(114, 34, 26, 26, '#bcb8c8');
+      // Building window glints (bright, not lit-from-within)
+      for (let i = 0; i < 5; i++) {
+        const wx = 8 + i * 24;
+        const wy = 42 + (i % 2) * 4;
+        px(wx, wy, 3, 2, '#dadada');
+      }
+      // Park grass (mid)
+      px(0, 56, W, 8, '#5a8a3a');
+      px(0, 56, W, 1, '#7aaa4a');
+      // Tree foliage clusters at the edges
+      const tree = (tx, ty) => {
+        px(tx - 6, ty - 12, 14, 10, '#2a6020');
+        px(tx - 4, ty - 16, 10, 6, '#3a7028');
+        px(tx - 2, ty - 18, 6, 4, '#4a8030');
+        // trunk
+        px(tx - 1, ty - 2, 2, 6, '#3a2410');
+      };
+      tree(8, 60);
+      tree(132, 60);
+      // Path / sidewalk (warm gray, not shadowy)
+      px(0, 64, W, 26, '#b0a890');
+      px(0, 64, W, 1, '#c8c0a0');
+      // Path edge stones
+      for (let i = 0; i < 7; i++) px(i * 22 + 4, 88, 6, 1, '#7a7058');
+      // Speckles in pavement
+      px(20, 72, 1, 1, '#7a7058');
+      px(45, 78, 1, 1, '#7a7058');
+      px(95, 70, 1, 1, '#7a7058');
+      px(120, 80, 1, 1, '#7a7058');
+      // Lamp post turned off (decorative)
+      px(15, 14, 2, 50, '#3a3530');
+      px(11, 14, 10, 2, '#3a3530');
+      px(8, 16, 4, 5, '#3a3530');
+      // No glow during day
 
       // passerby
       const pb = passerbyRef.current;
@@ -3564,47 +3600,86 @@ const JamAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = tr
       ctx.save();
       ctx.scale(PXSCALE, PXSCALE);
 
-      // night sky
-      px(0, 0, W, 50, '#1a1428');
-      // stars
-      for (let i = 0; i < 12; i++) {
-        const sx = (i * 17 + 7) % W;
-        const sy = (i * 11) % 30 + 4;
-        const twinkle = Math.sin(frameCount * 0.05 + i) > 0.5 ? '#fef3c7' : '#a89060';
-        px(sx, sy, 1, 1, twinkle);
+      // ---- Daytime park sky ----
+      for (let y = 0; y < 50; y++) {
+        const t = y / 50;
+        const r = Math.floor(0x7a + t * 0x30);
+        const g = Math.floor(0xc0 + t * 0x18);
+        const b = Math.floor(0xe8 + t * 0x10);
+        px(0, y, W, 1, `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`);
       }
-      // moon
-      px(115, 10, 8, 8, '#fef3c7');
-      px(116, 10, 6, 6, '#fef3c7');
-      px(118, 11, 3, 3, '#0c0a09'); // crescent shadow
+      // Sun
+      px(116, 6, 10, 10, '#fef3c7');
+      px(118, 4, 6, 14, '#fef3c7');
+      px(114, 8, 14, 6, '#fef3c7');
+      ctx.fillStyle = 'rgba(254, 243, 199, 0.30)';
+      ctx.beginPath(); ctx.arc(121, 11, 12, 0, Math.PI * 2); ctx.fill();
+      // Drifting clouds
+      const cloud = (cx, cy) => {
+        px(cx, cy, 12, 3, '#fff');
+        px(cx + 2, cy - 2, 8, 5, '#fff');
+        px(cx + 4, cy - 3, 4, 6, '#fff');
+        px(cx + 1, cy + 3, 10, 1, '#dadada');
+      };
+      cloud(15 + ((frameCount * 0.04) % 160) - 30, 12);
+      cloud(70 + ((frameCount * 0.025) % 180) - 40, 24);
 
-      // crowd silhouette in background (behind cypher)
-      const crowdY = 42;
+      // Trees in background (foliage line)
+      for (let i = 0; i < 5; i++) {
+        const tx = 5 + i * 30;
+        px(tx - 8, 38, 16, 8, '#3a7028');
+        px(tx - 6, 34, 12, 4, '#4a8030');
+        px(tx - 3, 30, 6, 4, '#5a9038');
+        px(tx - 1, 46, 2, 6, '#3a2410');                // trunk
+      }
+
+      // Daytime crowd silhouette (lighter, daylight bodies — not pure black)
+      const crowdY = 40;
       for (let i = 0; i < 18; i++) {
         const cx = i * 8 + (i % 2) * 2;
         const headBob = Math.sin(frameCount * 0.1 + i * 0.5) * 0.5;
-        // head
-        px(cx, crowdY + headBob, 4, 4, '#0a0a0a');
-        // body
-        px(cx - 1, crowdY + 4 + headBob, 6, 8, '#0a0a0a');
+        const colors = ['#5a3020', '#6a4030', '#3a2818', '#5a3a28', '#7a5040'];
+        const shirt = ['#a04040', '#5a7050', '#a06030', '#4060a0', '#a06090'][i % 5];
+        // head (skin tone)
+        px(cx, crowdY + headBob, 4, 4, '#a87844');
+        // body shirt
+        px(cx - 1, crowdY + 4 + headBob, 6, 8, shirt);
+        // hair
+        px(cx, crowdY - 1 + headBob, 4, 1, colors[i % colors.length]);
         // raised arms (some)
         if (i % 3 === 0) {
           const armUp = Math.sin(frameCount * 0.15 + i) > 0;
           if (armUp) {
-            px(cx - 2, crowdY + 1 + headBob, 1, 4, '#0a0a0a');
-            px(cx + 5, crowdY + 1 + headBob, 1, 4, '#0a0a0a');
+            px(cx - 2, crowdY + 1 + headBob, 1, 4, shirt);
+            px(cx + 5, crowdY + 1 + headBob, 1, 4, shirt);
           }
         }
       }
 
-      // ground - dim concrete circle for the cypher
-      px(0, 50, W, 40, '#2a2520');
-      // cypher floor circle outline
-      ctx.strokeStyle = '#3a3530';
+      // Ground — sunlit grass (lighter, warm)
+      px(0, 50, W, 40, '#6a9a3a');
+      // Grass blades (subtle texture)
+      for (let i = 0; i < 18; i++) {
+        const gx = (i * 8) % W;
+        const gy = 56 + (i % 3) * 6;
+        px(gx, gy, 1, 2, '#5a8a30');
+      }
+      // Cypher floor circle — dirt path stomped flat
+      ctx.fillStyle = '#a89060';
+      ctx.beginPath();
+      ctx.ellipse(70, 72, 52, 17, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#7a6a48';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.ellipse(70, 70, 50, 16, 0, 0, Math.PI * 2);
+      ctx.ellipse(70, 72, 50, 16, 0, 0, Math.PI * 2);
       ctx.stroke();
+      // Speckles inside the dirt circle for texture
+      for (let i = 0; i < 8; i++) {
+        const sx = 30 + i * 10;
+        const sy = 68 + (i % 3) * 4;
+        px(sx, sy, 1, 1, '#7a6a48');
+      }
 
       // Determine whose turn it is - rotates every ~5 seconds (300 frames at 60fps)
       const turnIndex = Math.floor(frameCount / 240) % members.length;
@@ -3711,7 +3786,7 @@ const JamAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = tr
   return (
     <canvas ref={canvasRef}
       className="w-full block border-2 border-stone-800"
-      style={{ imageRendering: 'pixelated', background: '#0a0815', aspectRatio: `${W} / ${H}` }} />
+      style={{ imageRendering: 'pixelated', background: '#7ec0e8', aspectRatio: `${W} / ${H}` }} />
   );
 };
 
@@ -4334,42 +4409,133 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
 // ============ INTRO SCENE DRAWERS (pixel art) ============
 
 const drawOffice = (ctx, fc) => {
-  const W = 200;
+  const W = 200, H = 130;
+  // Wall (cool corporate gray)
   _px(ctx, 0, 0, W, 100, '#454e5e');
+  // Wall trim
+  _px(ctx, 0, 99, W, 1, '#2a2f3a');
+  // Floor (carpet brown)
   _px(ctx, 0, 100, W, 30, '#2a2820');
-  _px(ctx, 110, 12, 78, 38, '#5a7090');
-  _px(ctx, 110, 12, 78, 1, '#1a1a1a');
-  _px(ctx, 110, 50, 78, 1, '#1a1a1a');
-  _px(ctx, 110, 12, 1, 38, '#1a1a1a');
-  _px(ctx, 187, 12, 1, 38, '#1a1a1a');
-  _px(ctx, 148, 12, 1, 38, '#1a1a1a');
+  _px(ctx, 0, 100, W, 1, '#3a3328');
+  // Big window on the right showing skyscrapers (nighttime corporate vibe)
+  _px(ctx, 116, 8, 76, 50, '#5a7090');
+  _px(ctx, 116, 8, 76, 1, '#1a1a1a');
+  _px(ctx, 116, 58, 76, 1, '#1a1a1a');
+  _px(ctx, 116, 8, 1, 50, '#1a1a1a');
+  _px(ctx, 191, 8, 1, 50, '#1a1a1a');
+  _px(ctx, 154, 8, 1, 50, '#1a1a1a');     // window divider
+  // Skyline silhouettes inside window
   for (let i = 0; i < 8; i++) {
-    const bx = 112 + i * 9, bh = 14 + (i % 3) * 8;
-    _px(ctx, bx, 50 - bh, 8, bh, '#252a38');
-    if ((fc + i) % 12 < 8) _px(ctx, bx + 3, 52 - bh, 1, 1, '#fef3c7');
+    const bx = 118 + i * 9, bh = 12 + (i % 3) * 8;
+    _px(ctx, bx, 58 - bh, 8, bh, '#252a38');
+    if ((fc + i) % 12 < 8) _px(ctx, bx + 3, 60 - bh, 1, 1, '#fef3c7');
+    if ((fc + i * 3) % 18 < 12) _px(ctx, bx + 5, 56 - bh + 2, 1, 1, '#fbbf24');
   }
-  _px(ctx, 178, 0, 22, 100, '#3a3a42');
-  _px(ctx, 22, 76, 110, 5, '#7a5a40');
-  _px(ctx, 22, 81, 110, 24, '#4a3a28');
-  _px(ctx, 26, 105, 4, 8, '#2a1808');
-  _px(ctx, 124, 105, 4, 8, '#2a1808');
-  _px(ctx, 42, 44, 50, 32, '#0a0a0a');
-  _px(ctx, 45, 47, 44, 26, fc % 14 < 11 ? '#5a8a3a' : '#3a5a2a');
-  ctx.fillStyle = '#0c0a09';
-  ctx.font = 'bold 14px monospace';
+  // Wall clock (top-left) — late hour
+  _px(ctx, 18, 14, 18, 18, '#dadada');
+  _px(ctx, 18, 14, 18, 1, '#a8a29e');
+  _px(ctx, 35, 14, 1, 18, '#a8a29e');
+  // Tick marks
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    const x = 27 + Math.cos(ang) * 7;
+    const y = 23 + Math.sin(ang) * 7;
+    _px(ctx, Math.round(x), Math.round(y), 1, 1, '#1c1917');
+  }
+  // Hour hand — pointing at 11 (late evening, just got fired)
+  ctx.strokeStyle = '#1c1917';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(27, 23);
+  ctx.lineTo(27 - 3, 23 - 4);
+  ctx.stroke();
+  // Minute hand
+  ctx.beginPath();
+  ctx.moveTo(27, 23);
+  ctx.lineTo(27 + 5, 23 - 1);
+  ctx.stroke();
+  // "EXIT" sign over door (dim red)
+  _px(ctx, 78, 4, 22, 10, '#7a1a14');
+  _px(ctx, 78, 4, 22, 1, '#a02a20');
+  ctx.fillStyle = '#fef3c7';
+  ctx.font = 'bold 7px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('AI', 67, 65);
-  _px(ctx, 62, 76, 10, 4, '#1a1a1a');
-  _px(ctx, 100, 56, 25, 20, '#a87844');
-  _px(ctx, 100, 56, 25, 2, '#c89a64');
-  _px(ctx, 105, 54, 14, 4, '#a87844');
-  _px(ctx, 102, 62, 21, 1, '#5a3a18');
-  _px(ctx, 56, 92, 22, 4, '#3a2818');
-  _px(ctx, 56, 92, 3, 18, '#3a2818');
-  _px(ctx, 75, 92, 3, 18, '#3a2818');
-  _px(ctx, 62, 88, 12, 6, '#5a6068');
-  _px(ctx, 64, 80, 8, 9, '#d4a87a');
-  _px(ctx, 64, 80, 8, 3, '#1a1a2e');
+  ctx.fillText('EXIT', 89, 12);
+  // Cubicle wall divider
+  _px(ctx, 60, 30, 4, 70, '#3a3a45');
+  _px(ctx, 60, 30, 1, 70, '#5a5a65');
+  // Desk (extends across)
+  _px(ctx, 22, 76, 100, 5, '#7a5a40');
+  _px(ctx, 22, 76, 100, 1, '#a07c50');
+  _px(ctx, 22, 81, 100, 22, '#4a3a28');
+  // Desk legs
+  _px(ctx, 26, 103, 4, 6, '#2a1808');
+  _px(ctx, 116, 103, 4, 6, '#2a1808');
+  // Monitor on desk
+  _px(ctx, 70, 50, 32, 26, '#0a0a0a');
+  _px(ctx, 70, 50, 32, 1, '#3a3a3a');
+  _px(ctx, 73, 53, 26, 20, '#0c1428');         // dark blue screen
+  // Animated AI takeover content — pulse + scanlines
+  const pulse = Math.floor(fc / 6) % 3;
+  // Scanlines
+  for (let y = 0; y < 20; y += 2) {
+    ctx.globalAlpha = 0.20;
+    _px(ctx, 73, 53 + y, 26, 1, '#22d3ee');
+    ctx.globalAlpha = 1;
+  }
+  // Big AI logo (pulses size with frame)
+  const aiSize = 11 + pulse;
+  ctx.fillStyle = pulse === 2 ? '#ef4444' : '#22d3ee';
+  ctx.font = `bold ${aiSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('AI', 86, 67 + Math.floor(pulse / 2));
+  // Glowing eye/cursor below
+  if (fc % 30 < 18) _px(ctx, 85, 70, 2, 1, '#22d3ee');
+  // Monitor stand
+  _px(ctx, 84, 75, 4, 3, '#1a1a1a');
+  _px(ctx, 80, 76, 12, 1, '#1a1a1a');
+  // Cardboard box on desk (packed up belongings)
+  _px(ctx, 26, 64, 28, 12, '#a87844');
+  _px(ctx, 26, 64, 28, 2, '#c89a64');         // top highlight
+  _px(ctx, 26, 76, 28, 2, '#5a3a18');         // shadow
+  _px(ctx, 38, 60, 4, 6, '#a87844');          // sticking-out item
+  _px(ctx, 32, 62, 3, 4, '#fef3c7');          // paper
+  _px(ctx, 47, 61, 5, 5, '#22c55e');          // plant leaf
+  _px(ctx, 49, 58, 1, 4, '#22c55e');
+  // "FIRED" pink slip on top of box (alternates with reveal)
+  if (fc % 90 < 60) {
+    _px(ctx, 26, 70, 12, 6, '#fbbf24');
+    _px(ctx, 26, 70, 12, 1, '#fef3c7');
+    ctx.fillStyle = '#7a1a14';
+    ctx.font = 'bold 4px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('FIRED', 32, 75);
+  }
+  // Empty chair pushed back (just been vacated)
+  _px(ctx, 102, 92, 18, 4, '#3a2818');        // seat
+  _px(ctx, 102, 96, 4, 14, '#3a2818');        // left leg
+  _px(ctx, 116, 96, 4, 14, '#3a2818');        // right leg
+  _px(ctx, 110, 80, 4, 13, '#3a2818');        // back support
+  _px(ctx, 102, 78, 18, 5, '#5a4030');        // chair back
+  _px(ctx, 102, 78, 18, 1, '#7a5a40');
+  // Player figure: standing dejected to the left of desk, holding nothing
+  // Feet at y=110
+  _px(ctx, 132, 102, 4, 8, '#1a1a2e');         // left leg
+  _px(ctx, 138, 102, 4, 8, '#1a1a2e');
+  _px(ctx, 132, 109, 4, 1, '#fff');            // shoes
+  _px(ctx, 138, 109, 4, 1, '#fff');
+  _px(ctx, 130, 88, 12, 14, '#5a5a6a');        // body (gray suit)
+  _px(ctx, 130, 88, 12, 1, '#fff');
+  _px(ctx, 128, 90, 2, 12, '#5a5a6a');         // arms hanging
+  _px(ctx, 142, 90, 2, 12, '#5a5a6a');
+  _px(ctx, 128, 100, 2, 2, '#d4a87a');         // hands
+  _px(ctx, 142, 100, 2, 2, '#d4a87a');
+  _px(ctx, 132, 78, 8, 10, '#d4a87a');         // head
+  _px(ctx, 132, 76, 8, 3, '#1a1a2e');          // hair
+  _px(ctx, 134, 82, 1, 1, '#0c0a09');          // eyes
+  _px(ctx, 138, 82, 1, 1, '#0c0a09');
+  _px(ctx, 134, 86, 5, 1, '#3a1010');          // mouth (slight frown)
+  // Lightning flash from monitor (rare AI-took-my-job vibe)
   if (fc % 90 < 4) {
     ctx.globalAlpha = 0.18;
     _px(ctx, 0, 0, W, 100, '#fef3c7');
@@ -4378,151 +4544,399 @@ const drawOffice = (ctx, fc) => {
 };
 
 const drawBedroom = (ctx, fc) => {
-  const W = 200;
+  const W = 200, H = 130;
+  // Wall and floor
   _px(ctx, 0, 0, W, 95, '#3a3540');
-  _px(ctx, 0, 95, W, 35, '#3a2818');
-  _px(ctx, 130, 15, 50, 45, '#1a0d2e');
+  _px(ctx, 0, 95, W, 1, '#5a5060');                    // wall trim
+  _px(ctx, 0, 95, W, 35, '#3a2818');                   // wood floor
+  for (let i = 0; i < 5; i++) _px(ctx, i * 40, 96, 1, 34, '#2a1a10');
+  // Window with starfield (deep night)
+  _px(ctx, 130, 15, 50, 45, '#0a0a14');
   _px(ctx, 130, 15, 50, 1, '#1a1a1a');
   _px(ctx, 130, 60, 50, 1, '#1a1a1a');
   _px(ctx, 130, 15, 1, 45, '#1a1a1a');
   _px(ctx, 179, 15, 1, 45, '#1a1a1a');
   _px(ctx, 154, 15, 1, 45, '#1a1a1a');
-  for (let i = 0; i < 14; i++) {
+  // Curtains on the window
+  _px(ctx, 124, 14, 6, 47, '#5a3a40');
+  _px(ctx, 180, 14, 6, 47, '#5a3a40');
+  _px(ctx, 124, 14, 6, 2, '#7a5a60');
+  _px(ctx, 180, 14, 6, 2, '#7a5a60');
+  // Stars
+  for (let i = 0; i < 16; i++) {
     const sx = 132 + (i * 4) % 46;
     const sy = 18 + (i * 7) % 38;
-    if ((fc + i * 5) % 60 < 50) _px(ctx, sx, sy, 1, 1, i % 2 ? '#fbbf24' : '#fef3c7');
+    if ((fc + i * 5) % 60 < 50) _px(ctx, sx, sy, 1, 1, i % 3 === 0 ? '#fbbf24' : '#fef3c7');
   }
-  _px(ctx, 8, 95, 80, 25, '#a87844');
-  _px(ctx, 8, 95, 80, 2, '#c89a64');
-  _px(ctx, 8, 117, 80, 3, '#5a3a18');
-  _px(ctx, 12, 92, 24, 8, '#dac0a0');
-  _px(ctx, 100, 70, 30, 25, '#5a4030');
-  _px(ctx, 100, 70, 30, 2, '#7a5a40');
-  _px(ctx, 110, 50, 8, 20, '#1a1a1a');
-  _px(ctx, 105, 45, 18, 6, '#fbbf24');
-  if (fc % 6 < 3) {
-    ctx.fillStyle = 'rgba(254, 243, 199, 0.22)';
-    ctx.fillRect(95, 50, 35, 50);
+  // Crescent moon
+  _px(ctx, 162, 22, 6, 6, '#fef3c7');
+  _px(ctx, 164, 22, 4, 5, '#0a0a14');
+  // Bed (left side) with pillow
+  _px(ctx, 4, 95, 76, 25, '#a87844');                  // bed frame
+  _px(ctx, 4, 95, 76, 2, '#c89a64');                   // top highlight
+  _px(ctx, 4, 117, 76, 3, '#5a3a18');                  // bottom shadow
+  _px(ctx, 8, 92, 24, 8, '#dac0a0');                   // pillow
+  _px(ctx, 8, 92, 24, 1, '#fff');
+  // Rumpled blanket on bed
+  _px(ctx, 36, 100, 42, 12, '#3a4a6a');
+  _px(ctx, 36, 100, 42, 1, '#5a6a8a');
+  for (let i = 0; i < 4; i++) _px(ctx, 40 + i * 10, 102, 6, 1, '#5a6a8a');
+  // Desk (right side, smaller)
+  _px(ctx, 96, 80, 60, 4, '#7a5a40');
+  _px(ctx, 96, 80, 60, 1, '#a07c50');
+  _px(ctx, 96, 84, 60, 18, '#5a4030');
+  _px(ctx, 100, 102, 4, 14, '#3a2410');
+  _px(ctx, 148, 102, 4, 14, '#3a2410');
+  // Desk lamp - cone shade
+  _px(ctx, 104, 60, 12, 2, '#1a1a1a');                 // shade top
+  _px(ctx, 104, 62, 12, 5, '#fbbf24');                 // shade glow
+  _px(ctx, 109, 67, 2, 13, '#1a1a1a');                 // lamp neck
+  _px(ctx, 105, 79, 10, 1, '#1a1a1a');                 // lamp base
+  // Lamp light cone (animated)
+  if (fc % 6 < 5) {
+    ctx.fillStyle = 'rgba(254, 243, 199, 0.18)';
+    ctx.beginPath();
+    ctx.moveTo(108, 67);
+    ctx.lineTo(112, 67);
+    ctx.lineTo(126, 88);
+    ctx.lineTo(96, 88);
+    ctx.closePath();
+    ctx.fill();
   }
-  // Budget sheet on the table — red numbers doing the math, in case you missed
-  // the point that the bills are bigger than the savings.
-  const sx = 99, sy = 78;
-  _px(ctx, sx, sy, 32, 15, '#f0e4c8');           // paper
-  _px(ctx, sx, sy, 32, 1, '#c0a070');            // top shadow line
-  _px(ctx, sx + 31, sy, 1, 15, '#c0a070');       // right shadow line
+  // ---- Budget sheet on desk under the lamp ----
+  const sx = 100, sy = 80 - 11;                         // paper sticks up over the desk top a bit
+  _px(ctx, sx, sy, 36, 14, '#f0e4c8');                  // paper
+  _px(ctx, sx, sy, 36, 1, '#c0a070');
+  _px(ctx, sx + 35, sy, 1, 14, '#c0a070');
+  // Place the actual paper on the desk — keep it readable
+  const px2 = 102, py2 = 84;
+  _px(ctx, px2, py2, 32, 14, '#f0e4c8');                // paper (lying flat)
+  _px(ctx, px2, py2, 32, 1, '#c0a070');
+  _px(ctx, px2 + 31, py2, 1, 14, '#c0a070');
   ctx.font = 'bold 5px monospace';
   ctx.textAlign = 'left';
   ctx.fillStyle = '#3a2818';
-  ctx.fillText('RENT',  sx + 2, sy + 5);
-  ctx.fillText('FOOD',  sx + 2, sy + 9);
-  ctx.fillText('BAL',   sx + 2, sy + 14);
-  // Red numbers — pulse subtly to draw the eye
+  ctx.fillText('RENT', px2 + 2, py2 + 5);
+  ctx.fillText('FOOD', px2 + 2, py2 + 9);
+  ctx.fillText('BAL',  px2 + 2, py2 + 14);
   ctx.fillStyle = (fc % 60 < 30) ? '#dc2626' : '#9a1a1a';
   ctx.textAlign = 'right';
-  ctx.fillText('-800',  sx + 30, sy + 5);
-  ctx.fillText('-50',   sx + 30, sy + 9);
-  ctx.fillText('-123',  sx + 30, sy + 14);
-  // Underline above total
-  _px(ctx, sx + 14, sy + 11, 16, 1, '#3a2818');
-  // Pencil next to the paper
-  _px(ctx, sx - 6, sy + 13, 7, 1, '#fbbf24');
-  _px(ctx, sx - 7, sy + 13, 1, 1, '#3a2818');    // tip
-  _px(ctx, sx + 1, sy + 13, 2, 1, '#dc2626');    // eraser
+  ctx.fillText('-800', px2 + 30, py2 + 5);
+  ctx.fillText('-50',  px2 + 30, py2 + 9);
+  ctx.fillText('-123', px2 + 30, py2 + 14);
+  _px(ctx, px2 + 14, py2 + 11, 16, 1, '#3a2818');
+  // Pencil on desk to the left of paper
+  _px(ctx, 92, 90, 8, 1, '#fbbf24');
+  _px(ctx, 91, 90, 1, 1, '#3a2818');
+  _px(ctx, 100, 90, 2, 1, '#dc2626');
+  // ---- Player slumped on the bed, head in hands ----
+  const slump = Math.floor(fc / 60) % 2;                // tiny head bob (sigh)
+  // Legs out in front
+  _px(ctx, 36, 108, 22, 4, '#1a1a2e');                  // legs (pants)
+  _px(ctx, 56, 108, 4, 4, '#fff');                      // foot
+  // Body sitting upright
+  _px(ctx, 30, 92, 14, 16, '#7a5a40');                  // shirt (warm tan)
+  _px(ctx, 30, 92, 14, 2, '#a07a50');                   // shirt collar
+  // Arms holding head
+  _px(ctx, 26, 86, 4, 8, '#7a5a40');                    // left arm up
+  _px(ctx, 44, 86, 4, 8, '#7a5a40');                    // right arm up
+  _px(ctx, 26, 86, 4, 2, '#d4a87a');                    // left hand at temple
+  _px(ctx, 44, 86, 4, 2, '#d4a87a');                    // right hand at temple
+  // Head
+  _px(ctx, 30, 80 + slump, 14, 12, '#d4a87a');
+  _px(ctx, 30, 78 + slump, 14, 3, '#1a1a2e');           // hair
+  // Closed sad eyes
+  _px(ctx, 33, 84 + slump, 2, 1, '#0c0a09');
+  _px(ctx, 39, 84 + slump, 2, 1, '#0c0a09');
+  // Frown
+  _px(ctx, 34, 88 + slump, 6, 1, '#3a1010');
+  // Small empty wallet on floor in front of bed
+  _px(ctx, 64, 116, 14, 4, '#5a3a18');
+  _px(ctx, 64, 116, 14, 1, '#7a5a30');
+  _px(ctx, 70, 117, 2, 2, '#fbbf24');                   // last coin?
 };
 
 const drawPhone = (ctx, fc) => {
   const W = 200, H = 130;
+  // Dim hand-holds-phone-in-bedroom backdrop
   _px(ctx, 0, 0, W, H, '#0a0a14');
+  // Subtle dust motes
   for (let i = 0; i < 26; i++) {
     const x = (i * 17 + 5) % W;
     const y = (i * 13 + 3) % H;
     _px(ctx, x, y, 1, 1, '#1c1c2a');
   }
-  _px(ctx, 70, 78, 60, 50, '#2a1f1a');
-  _px(ctx, 75, 70, 50, 10, '#5a3a20');
-  _px(ctx, 84, 30, 32, 65, '#1c1917');
-  _px(ctx, 87, 35, 26, 55, '#0c0a09');
-  for (let i = 0; i < 14; i++) {
-    const x = 89 + i * 2;
-    const amp = 4 + Math.abs(Math.sin((fc + i * 6) * 0.18) * 14);
-    ctx.fillStyle = '#22d3ee';
-    ctx.fillRect(x, 60 - amp / 2, 1, amp);
-  }
+  // Hand holding phone (left hand at bottom)
+  _px(ctx, 60, 110, 14, 20, '#d4a87a');
+  _px(ctx, 60, 110, 14, 2, '#e4b88a');
+  _px(ctx, 56, 116, 4, 10, '#d4a87a');                  // thumb
+  _px(ctx, 56, 116, 4, 2, '#e4b88a');
+  // Phone body (vertical)
+  _px(ctx, 64, 14, 72, 110, '#1a1a1a');
+  _px(ctx, 64, 14, 72, 2, '#3a3a3a');
+  _px(ctx, 64, 122, 72, 2, '#0a0a0a');
+  _px(ctx, 64, 14, 2, 110, '#3a3a3a');                  // left edge highlight
+  _px(ctx, 134, 14, 2, 110, '#0a0a0a');                 // right edge shadow
+  // Camera notch top
+  _px(ctx, 96, 16, 8, 3, '#0a0a0a');
+  _px(ctx, 99, 17, 2, 1, '#222');
+  // Screen interior
+  const sx = 68, sy = 22, sw = 64, sh = 96;
+  _px(ctx, sx, sy, sw, sh, '#0c0a18');
+  // Status bar
+  _px(ctx, sx, sy, sw, 6, '#16142a');
+  ctx.fillStyle = '#a89060';
+  ctx.font = 'bold 4px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('11:42PM', sx + 2, sy + 5);
+  ctx.textAlign = 'right';
+  ctx.fillText('3%', sx + sw - 2, sy + 5);              // dying battery
+  // Profile header (your account)
+  _px(ctx, sx + 4, sy + 9, 12, 12, '#5a3a40');
+  _px(ctx, sx + 5, sy + 10, 10, 10, '#a87844');         // avatar circle (you)
+  _px(ctx, sx + 7, sy + 12, 6, 5, '#d4a87a');           // face
+  _px(ctx, sx + 7, sy + 11, 6, 2, '#1a1a2e');           // hair
+  // Name + handle
+  ctx.fillStyle = '#fef3c7';
+  ctx.font = 'bold 5px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('@you', sx + 19, sy + 14);
+  ctx.fillStyle = '#5a5a6a';
+  ctx.font = '4px monospace';
+  ctx.fillText('beatboxer · home', sx + 19, sy + 19);
+  // Big follower count "312"
   ctx.fillStyle = '#fbbf24';
-  ctx.fillRect(94, 80, 1, 4);
-  ctx.fillRect(98, 78, 1, 6);
-  ctx.fillRect(102, 80, 1, 4);
-  ctx.fillStyle = 'rgba(34, 211, 238, 0.10)';
-  ctx.fillRect(70, 22, 60, 80);
-  if (fc % 5 < 2) {
-    ctx.fillStyle = 'rgba(34, 211, 238, 0.04)';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('312', sx + sw / 2, sy + 36);
+  ctx.fillStyle = '#a89060';
+  ctx.font = 'bold 5px monospace';
+  ctx.fillText('FOLLOWERS', sx + sw / 2, sy + 43);
+  // "half of them bots" — show a row of generic gray avatars with BOT tags
+  const botRow = sy + 50;
+  for (let i = 0; i < 5; i++) {
+    const bx = sx + 4 + i * 12;
+    _px(ctx, bx, botRow, 8, 8, '#3a3a45');              // avatar circle bg
+    _px(ctx, bx + 1, botRow + 1, 6, 6, '#5a5a6a');      // face placeholder
+    // Bot mark (animated occasional flag)
+    if ((fc + i * 3) % 30 < 20 && i % 2 === 0) {
+      _px(ctx, bx + 5, botRow - 1, 4, 3, '#dc2626');
+      ctx.fillStyle = '#fef3c7';
+      ctx.font = 'bold 3px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('BOT', bx + 7, botRow + 1);
+    }
+  }
+  // Latest post: waveform card (a beatbox video)
+  const cardY = sy + 64;
+  _px(ctx, sx + 4, cardY, sw - 8, 30, '#1c1825');
+  _px(ctx, sx + 4, cardY, sw - 8, 1, '#3a3540');
+  // Waveform inside card
+  for (let i = 0; i < 14; i++) {
+    const x = sx + 8 + i * 3;
+    const amp = 2 + Math.abs(Math.sin((fc + i * 6) * 0.18) * 8);
+    ctx.fillStyle = '#22d3ee';
+    ctx.fillRect(x, cardY + 14 - amp / 2, 2, amp);
+  }
+  // Like / Comment row under the card
+  ctx.fillStyle = '#fb7185';
+  ctx.font = 'bold 4px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('♥ 4', sx + 8, cardY + 27);
+  ctx.fillStyle = '#5a5a6a';
+  ctx.fillText('💬 0', sx + 24, cardY + 27);
+  ctx.fillText('↗ 0', sx + 40, cardY + 27);
+  // Subtle blue glow to feel like phone is the only light source
+  ctx.fillStyle = 'rgba(34, 211, 238, 0.06)';
+  ctx.fillRect(40, 0, 110, 130);
+  // Occasional refresh flicker
+  if (fc % 90 < 4) {
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.06)';
     ctx.fillRect(0, 0, W, H);
   }
 };
 
 const drawMirror = (ctx, fc) => {
-  const W = 200;
+  const W = 200, H = 130;
+  // Bedroom wall + floor
   _px(ctx, 0, 0, W, 95, '#2a253a');
   _px(ctx, 0, 95, W, 35, '#3a2818');
+  _px(ctx, 0, 95, W, 1, '#5a3a28');
+  // Wallpaper hint
+  for (let y = 6; y < 95; y += 14) {
+    for (let x = 8; x < W; x += 14) _px(ctx, x, y, 1, 1, '#3a3045');
+  }
+  // Bedside lamp on the left (the light source)
+  _px(ctx, 18, 50, 12, 8, '#fbbf24');
+  _px(ctx, 18, 50, 12, 1, '#fef3c7');
+  _px(ctx, 22, 58, 4, 16, '#1a1a1a');                   // lamp neck
+  _px(ctx, 16, 74, 16, 2, '#1a1a1a');                   // lamp base
+  // Lamp light glow
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.08)';
+  ctx.beginPath(); ctx.arc(24, 56, 40, 0, Math.PI * 2); ctx.fill();
+  // ---- The mirror ----
+  // Frame (wooden)
   _px(ctx, 60, 8, 80, 104, '#5a4030');
-  _px(ctx, 65, 13, 70, 94, '#1c1917');
-  const shirt = '#a78bfa', skin = '#d4a87a', hair = '#1a1a2e';
-  _px(ctx, 88, 78, 22, 24, shirt);
-  _px(ctx, 88, 78, 22, 2, '#fff');
-  _px(ctx, 84, 80, 4, 16, shirt);
-  _px(ctx, 110, 80, 4, 16, shirt);
-  _px(ctx, 110, 88, 4, 5, skin);
-  _px(ctx, 113, 65, 3, 22, '#888');
-  _px(ctx, 112, 62, 5, 4, '#aaa');
-  _px(ctx, 89, 56, 20, 20, skin);
-  _px(ctx, 89, 53, 20, 5, hair);
-  if (fc % 180 < 6) {
-    _px(ctx, 94, 64, 3, 1, skin);
-    _px(ctx, 102, 64, 3, 1, skin);
+  _px(ctx, 60, 8, 80, 2, '#7a5a40');                    // top highlight
+  _px(ctx, 60, 8, 2, 104, '#7a5a40');                   // left highlight
+  _px(ctx, 138, 8, 2, 104, '#3a2410');                  // right shadow
+  _px(ctx, 60, 110, 80, 2, '#3a2410');                  // bottom shadow
+  // Mirror surface — bluish gradient to feel like glass
+  for (let y = 0; y < 94; y++) {
+    const t = y / 94;
+    const r = Math.floor(0x28 + t * 0x06);
+    const g = Math.floor(0x28 + t * 0x06);
+    const b = Math.floor(0x40 - t * 0x10);
+    _px(ctx, 65, 13 + y, 70, 1, `rgb(${r},${g},${b})`);
+  }
+  // Glass sheen (subtle)
+  for (let i = 0; i < 4; i++) {
+    const sy = 18 + i * 22;
+    _px(ctx, 67 + i * 3, sy, 8, 1, 'rgba(255,255,255,0.10)');
+  }
+  // ---- Character reflection inside the mirror ----
+  const shirt = '#7a5a40';                              // tan plain shirt (intro: no chosen color yet)
+  const skin = '#d4a87a';
+  const hair = '#1a1a2e';
+  // Use a subtle haze on the reflection to read as "in the mirror"
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(65, 13, 70, 94);
+  ctx.clip();
+  ctx.globalAlpha = 0.92;
+  // Body — face-on
+  _px(ctx, 88, 76, 22, 28, shirt);                      // shirt body
+  _px(ctx, 88, 76, 22, 2, '#a07a50');                   // collar
+  _px(ctx, 88, 76, 1, 28, '#a07a50');                   // shoulder highlight left
+  _px(ctx, 84, 80, 4, 18, shirt);                       // left arm
+  _px(ctx, 110, 80, 4, 18, shirt);                      // right arm
+  _px(ctx, 84, 96, 4, 4, skin);                         // left hand
+  _px(ctx, 110, 96, 4, 4, skin);                        // right hand
+  // Head
+  _px(ctx, 88, 56, 22, 20, skin);                       // face
+  _px(ctx, 88, 53, 22, 6, hair);                        // hair
+  _px(ctx, 86, 58, 2, 6, hair);                         // sideburn left
+  _px(ctx, 110, 58, 2, 6, hair);                        // sideburn right
+  // Eyes (occasional blink)
+  if (fc % 180 < 8) {
+    _px(ctx, 94, 64, 4, 1, skin);
+    _px(ctx, 102, 64, 4, 1, skin);
   } else {
     _px(ctx, 94, 64, 3, 2, '#0c0a09');
     _px(ctx, 102, 64, 3, 2, '#0c0a09');
   }
-  _px(ctx, 96, 70, 7, 1, '#3a1010');
+  // Slight conflicted mouth — tightens to a line every few seconds
+  if (fc % 120 < 60) {
+    _px(ctx, 96, 71, 7, 1, '#3a1010');                  // neutral line
+  } else {
+    _px(ctx, 96, 71, 7, 2, '#3a1010');                  // pursed
+  }
+  // A single tear drop occasionally (rare)
+  if (fc % 240 < 30) {
+    const ty = 66 + ((fc % 240) - 0) / 6;
+    _px(ctx, 95, Math.floor(ty), 1, 2, '#22d3ee');
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  // Soft glow on mirror corner
   if (fc % 40 < 20) {
     ctx.fillStyle = 'rgba(254, 243, 199, 0.05)';
-    ctx.fillRect(65, 13, 70, 94);
+    ctx.fillRect(65, 13, 70, 24);
   }
+  // Floor reflection of the mirror frame (suggests it stands on the floor)
+  _px(ctx, 56, 112, 88, 1, '#3a2818');
+  _px(ctx, 56, 113, 88, 1, '#2a1810');
 };
 
 const drawDoor = (ctx, fc) => {
   const W = 200, H = 130;
-  _px(ctx, 0, 0, W, H, '#1a1820');
-  _px(ctx, 50, 8, 100, 112, '#2a1f1a');
-  _px(ctx, 56, 14, 88, 100, '#1a0d2e');
-  for (let i = 0; i < 6; i++) {
-    const bx = 58 + i * 14;
-    const bh = 28 + (i % 3) * 14;
-    _px(ctx, bx, 70 - bh, 12, bh, '#252a38');
-    for (let j = 0; j < 3; j++) {
-      if ((fc + i * 2 + j * 3) % 18 < 13) {
-        _px(ctx, bx + 2 + j * 4, 75 - bh + j * 8, 2, 2, '#fbbf24');
-      }
-    }
+  // Night street
+  _px(ctx, 0, 0, W, H, '#0a0a14');
+  // Stars
+  for (let i = 0; i < 18; i++) {
+    const sx = (i * 11 + 5) % W;
+    const sy = (i * 7) % 30;
+    if ((fc + i * 5) % 90 < 70) _px(ctx, sx, sy, 1, 1, i % 3 ? '#fbbf24' : '#fef3c7');
   }
-  if (fc % 14 < 10) {
-    ctx.fillStyle = '#fb7185';
-    ctx.font = 'bold 7px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('CYPHER', 100, 38);
-  } else if (fc % 14 < 12) {
-    ctx.fillStyle = '#7a3a40';
-    ctx.font = 'bold 7px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('CYPHER', 100, 38);
+  // Brick wall surrounding the door
+  _px(ctx, 0, 30, W, 90, '#3a1f1a');
+  // Brick mortar pattern
+  for (let y = 32; y < 120; y += 6) {
+    _px(ctx, 0, y, W, 1, '#2a1410');
+    const offset = (y / 6) % 2 === 0 ? 0 : 12;
+    for (let x = offset; x < W; x += 24) _px(ctx, x, y, 1, 6, '#2a1410');
   }
-  const stand = fc % 24 < 12 ? 0 : 1;
-  _px(ctx, 92, 70 + stand, 16, 50, '#0c0a09');
-  _px(ctx, 94, 60 + stand, 12, 12, '#0c0a09');
-  _px(ctx, 107, 60 + stand, 1, 60, '#fbbf24');
-  _px(ctx, 0, 117, W, 13, '#3a2818');
-  _px(ctx, 0, 117, W, 1, '#5a4030');
-  _px(ctx, 50, 117, 100, 1, '#fbbf24');
+  // Door frame (door is recessed)
+  _px(ctx, 56, 28, 88, 92, '#1a0d10');
+  _px(ctx, 56, 28, 88, 2, '#3a1810');                   // top frame
+  _px(ctx, 56, 28, 2, 92, '#3a1810');
+  _px(ctx, 142, 28, 2, 92, '#3a1810');
+  // Door (red)
+  _px(ctx, 62, 38, 76, 82, '#7a1a14');
+  _px(ctx, 62, 38, 76, 2, '#a02a20');                   // top highlight
+  _px(ctx, 62, 38, 2, 82, '#a02a20');                   // left highlight
+  _px(ctx, 136, 38, 2, 82, '#3a0a08');                  // right shadow
+  // Door panels (raised rectangles)
+  _px(ctx, 70, 50, 28, 26, '#5a1410');
+  _px(ctx, 70, 50, 28, 1, '#a02a20');
+  _px(ctx, 102, 50, 28, 26, '#5a1410');
+  _px(ctx, 102, 50, 28, 1, '#a02a20');
+  _px(ctx, 70, 84, 28, 26, '#5a1410');
+  _px(ctx, 70, 84, 28, 1, '#a02a20');
+  _px(ctx, 102, 84, 28, 26, '#5a1410');
+  _px(ctx, 102, 84, 28, 1, '#a02a20');
+  // Doorknob
+  _px(ctx, 130, 78, 2, 2, '#fbbf24');
+  _px(ctx, 130, 78, 1, 1, '#fef3c7');
+  // Marquee/sign over the door — neon "CYPHER" with bulbs
+  _px(ctx, 50, 6, 100, 22, '#1a0a0d');
+  _px(ctx, 50, 6, 100, 2, '#3a1a14');
+  _px(ctx, 50, 26, 100, 2, '#0a0a08');
+  // Marquee bulb border (animated chase)
+  for (let i = 0; i < 14; i++) {
+    const lx = 54 + i * 7;
+    const litTop = (Math.floor(fc / 4) + i) % 4 < 2;
+    _px(ctx, lx, 8, 2, 2, litTop ? '#fef3c7' : '#7a6a30');
+    _px(ctx, lx, 24, 2, 2, litTop ? '#fbbf24' : '#7a6a30');
+  }
+  // CYPHER neon text — flickers (rare dim)
+  const flicker = (fc % 100 < 4) ? '#7a3a40' : '#fb7185';
+  ctx.fillStyle = flicker;
+  ctx.font = 'bold 10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('CYPHER', 100, 21);
+  // Glow behind text
+  ctx.fillStyle = 'rgba(251, 113, 133, 0.20)';
+  ctx.fillRect(70, 11, 60, 16);
+  // Tiny "TONIGHT" / arrow under marquee
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = 'bold 5px monospace';
+  ctx.fillText('TONIGHT', 100, 36);
+  // Doorman silhouette to the right of the door
+  _px(ctx, 150, 96, 8, 14, '#0c0a09');                  // body
+  _px(ctx, 152, 88, 4, 8, '#0c0a09');                   // head
+  _px(ctx, 150, 86, 8, 3, '#0c0a09');                   // hat brim
+  _px(ctx, 152, 84, 4, 3, '#0c0a09');                   // hat top
+  // Velvet rope post + rope toward off-screen
+  _px(ctx, 162, 106, 2, 14, '#3a3a3a');
+  _px(ctx, 161, 104, 4, 3, '#fbbf24');                  // post top
+  _px(ctx, 164, 110, 28, 1, '#7a1a14');                 // rope
+  _px(ctx, 164, 111, 28, 1, '#5a1010');
+  // Player approaching from the left, viewed from behind (small silhouette)
+  const stand = Math.floor(fc / 12) % 2;
+  _px(ctx, 28, 96 + stand, 12, 14, '#1a1a2e');          // jacket
+  _px(ctx, 28, 96 + stand, 12, 2, '#3a3a4a');
+  _px(ctx, 30, 86 + stand, 8, 10, '#d4a87a');           // back of head + neck
+  _px(ctx, 30, 84 + stand, 8, 4, '#1a1a2e');            // hair
+  _px(ctx, 30, 110 + stand, 4, 8, '#1a1a2e');           // legs
+  _px(ctx, 36, 110 + stand, 4, 8, '#1a1a2e');
+  _px(ctx, 30, 117 + stand, 4, 1, '#fff');
+  _px(ctx, 36, 117 + stand, 4, 1, '#fff');
+  // Sidewalk
+  _px(ctx, 0, 118, W, 12, '#3a2818');
+  _px(ctx, 0, 118, W, 1, '#5a4030');
+  // Sidewalk edge stripe
+  _px(ctx, 0, 122, W, 1, '#fbbf24');
 };
 
 // Open-mic stage: bar interior, raised platform, mic stand, player on stage,
