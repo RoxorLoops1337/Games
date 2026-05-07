@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, Trophy, ShoppingBag, TreePine, Beer, Mic, Zap, Star, Coffee, Dumbbell, ArrowLeft, Heart } from 'lucide-react';
+import { Home, Music, Trophy, ShoppingBag, TreePine, Beer, Mic, Zap, Star, Coffee, Dumbbell, ArrowLeft, Heart, MessageSquare } from 'lucide-react';
 
 // ============ DATA ============
 
@@ -86,6 +86,8 @@ const initialChar = () => ({
   rentLate: 0, // consecutive missed Sundays (0..2 — at 3 you get evicted)
   lastRentPaidDay: null, // day rent was last paid (so we don't double-charge)
   evictionRecoveryDay: null, // day on which a couch-surf recovery resolves
+  messages: [], // phone messages, newest last; { id, sender, text, day, minute, read }
+  lastParentMsgDay: 0, // for cooldown on parent-message triggers
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -121,6 +123,66 @@ const onGlobalKey = (handler) => {
   }
   return () => _keyListeners.delete(handler);
 };
+
+// ============ PHONE MESSAGES ============
+// Low-cost narrative dripfeed channel. NPCs send one-way texts; the player
+// can read them but doesn't reply. Each new unread message shows a badge
+// on the phone icon in the header.
+
+const SENDER_META = {
+  parents: { display: 'PARENTS',   color: '#fbbf24' },
+  rohzel:  { display: 'ROHZEL',    color: '#22d3ee' },
+  pigpen:  { display: 'PIG PEN',   color: '#fb7185' },
+  penny:   { display: 'PENNY',     color: '#a78bfa' },
+  foxy:    { display: 'FOXY',      color: '#84cc16' },
+  crystix: { display: 'CRYSTIX',   color: '#22d3ee' },
+  beeamgee:{ display: 'BEEAMGEE',  color: '#D4A017' },
+  unknown: { display: 'UNKNOWN',   color: '#a8a29e' },
+};
+
+// Parent message rotations — keyed by trigger reason.
+const PARENT_MESSAGES = {
+  hungerLow: [
+    "are you eating? we're not mad about the job but call your mother",
+    "did you eat today? please eat something",
+  ],
+  rentPaid: [
+    "rent paid this month? we can help if you need",
+    "we saw a couple thousand in our account if you need it",
+  ],
+  rentMissed: [
+    "are you doing okay? the door's always open here",
+    "your father said let us help you. text back",
+  ],
+  goodShow: [
+    "saw your show on insta lol look at you",
+    "the auntie is asking who taught you to do that. what do i tell her",
+  ],
+  random: [
+    "just thinking of you ❤️",
+    "dad found your high school yearbook 😂",
+    "your cousin asked when you're coming home",
+    "the dog misses you. i miss you too but the dog more",
+  ],
+};
+
+const _msgPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// Push a new message onto a char's messages array (returns a new char).
+const addMessage = (c, sender, text) => {
+  const msg = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    sender,
+    text,
+    day: c.day,
+    minute: c.minutes ?? 0,
+    read: false,
+  };
+  return { ...c, messages: [...(c.messages || []), msg] };
+};
+
+// Count unread messages on a char (cheap; for the header badge).
+const unreadMessageCount = (c) => (c.messages || []).filter(m => !m.read).length;
 
 // ============ STORAGE ============
 // Multiple save slots — keys: character:slot1 .. character:slot5, plus active_slot pointer.
@@ -4414,6 +4476,85 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
   );
 };
 
+// ============ MESSAGES PANEL ============
+// Full-screen modal that shows the inbox. Newest first. Tapping a message
+// marks it read.
+
+const MessagesPanel = ({ char, setChar, onClose }) => {
+  const messages = [...(char.messages || [])].reverse(); // newest first
+  // Mark all as read on view (so badge clears once you open)
+  useEffect(() => {
+    if ((char.messages || []).some(m => !m.read)) {
+      setChar(c => ({ ...c, messages: (c.messages || []).map(m => ({ ...m, read: true })) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Format "x minutes ago" / "today" / "Day N" relative to current
+  const formatStamp = (m) => {
+    const dayDelta = char.day - m.day;
+    if (dayDelta === 0) return 'TODAY';
+    if (dayDelta === 1) return 'YESTERDAY';
+    if (dayDelta < 7) return `${dayDelta} DAYS AGO`;
+    return `DAY ${m.day}`;
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
+      style={{ background: 'rgba(12, 10, 9, 0.90)' }}>
+      <div className="max-w-md w-full max-h-full overflow-y-auto bg-stone-950 border-2 border-stone-800">
+        {/* Header */}
+        <div className="sticky top-0 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
+          <div>
+            <div className="text-amber-500 text-xl tracking-widest"
+              style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              MESSAGES
+            </div>
+            <div className="text-[9px] uppercase tracking-[0.3em] text-stone-500">
+              {messages.length} total
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="text-stone-500 hover:text-amber-500 text-2xl px-3 py-1">
+            ×
+          </button>
+        </div>
+        {/* List */}
+        {messages.length === 0 ? (
+          <div className="p-8 text-center text-stone-500 text-sm">
+            <div className="text-4xl mb-2 opacity-40">📭</div>
+            no messages yet.
+            <div className="text-[10px] uppercase tracking-widest mt-2 text-stone-700">
+              your phone is quiet
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-stone-900">
+            {messages.map(m => {
+              const meta = SENDER_META[m.sender] || SENDER_META.unknown;
+              return (
+                <div key={m.id} className="px-3 py-2">
+                  <div className="flex items-baseline justify-between mb-1">
+                    <span className="text-[11px] tracking-[0.3em] font-bold"
+                      style={{ color: meta.color, fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                      {meta.display}
+                    </span>
+                    <span className="text-[9px] uppercase tracking-widest text-stone-600">
+                      · {formatStamp(m)}
+                    </span>
+                  </div>
+                  <div className="text-stone-300 text-sm leading-snug"
+                    style={{ fontFamily: '"Oswald", sans-serif', fontWeight: 300 }}>
+                    {m.text}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ============ INTRO SCENE DRAWERS (pixel art) ============
 
 const drawOffice = (ctx, fc) => {
@@ -6313,6 +6454,7 @@ export default function BeatboxStory() {
   // Active narrative cutscene. Shape: { speaker, speakerColor, lines, onComplete }
   // (onComplete handles both advance-past-end and skip.)
   const [cutscene, setCutscene] = useState(null);
+  const [showMessages, setShowMessages] = useState(false);
   // Pause the activity tick + time progression while a cutscene is up
   useEffect(() => { setGamePaused(!!cutscene); }, [cutscene]);
   // Queue a cutscene + a story flag to set when it ends. flagPath e.g. 'introSeen'.
@@ -6359,6 +6501,8 @@ export default function BeatboxStory() {
     if (typeof c.rentLate !== 'number') c.rentLate = 0;
     if (c.lastRentPaidDay === undefined) c.lastRentPaidDay = null;
     if (c.evictionRecoveryDay === undefined) c.evictionRecoveryDay = null;
+    if (!Array.isArray(c.messages)) c.messages = [];
+    if (typeof c.lastParentMsgDay !== 'number') c.lastParentMsgDay = 0;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -6504,11 +6648,29 @@ export default function BeatboxStory() {
                   {char.name.toUpperCase()} <span className="text-stone-500">·</span> LVL {char.level}
                 </div>
               </div>
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-2">
                 <div className="text-right">
                   <div className="text-amber-400 font-bold text-sm">${char.cash}</div>
                   <div className="text-[9px] text-stone-500 uppercase tracking-widest">{char.followers} fans</div>
                 </div>
+                {(() => {
+                  const unread = unreadMessageCount(char);
+                  return (
+                    <button
+                      onClick={() => setShowMessages(true)}
+                      aria-label="Messages"
+                      title="Messages"
+                      className="relative w-8 h-8 flex items-center justify-center text-stone-500 hover:text-amber-500 border border-stone-800 hover:border-amber-500/50 transition-all">
+                      <MessageSquare size={14} />
+                      {unread > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 flex items-center justify-center
+                          text-[9px] font-bold bg-red-600 text-white rounded-full leading-none">
+                          {unread > 9 ? '9+' : unread}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })()}
                 <button
                   onClick={() => setScreen('slots')}
                   aria-label="Profiles & save slots"
@@ -6534,6 +6696,7 @@ export default function BeatboxStory() {
 
         {/* TOAST */}
         {cutscene && <Cutscene {...cutscene} />}
+        {showMessages && <MessagesPanel char={char} setChar={setChar} onClose={() => setShowMessages(false)} />}
 
         {toast && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs">
@@ -6555,7 +6718,18 @@ export default function BeatboxStory() {
               onBack={char && char.created && activeSlot ? () => setScreen('hood') : null}
             />
           )}
-          {screen === 'create' && <CreateScreen char={char} setChar={setChar} onDone={() => { setChar(c => ({ ...c, created: true })); setScreen('hood'); }} />}
+          {screen === 'create' && <CreateScreen char={char} setChar={setChar} onDone={() => {
+            setChar(c => {
+              // Seed the inbox with a welcoming parent text so the player knows the icon exists.
+              let next = { ...c, created: true };
+              if (!(c.messages || []).length) {
+                next = addMessage(next, 'parents', "you settled in? we're not mad about the job. come over for sunday dinner anytime ❤️");
+                next.lastParentMsgDay = c.day || 1;
+              }
+              return next;
+            });
+            setScreen('hood');
+          }} />}
           {screen === 'hood' && <HoodScreen go={setScreen} char={char} />}
           {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} playCutscene={playCutscene} />}
           {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
@@ -6937,10 +7111,24 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         hunger = Math.max(0, Math.min(100, hunger + (d.hunger || 0)));
         mood = Math.max(0, Math.min(100, mood + (d.mood || 0)));
       }
-      return { ...c, energy, hunger, mood, cash,
+      let next = { ...c, energy, hunger, mood, cash,
         rentLate, lastRentPaidDay,
         day: newDay, minutes: 0, pendingDebuff: null,
         storyFlags: flags };
+      // Parent message triggers (cooldown ≥3 days between parent texts)
+      const cd = newDay - (next.lastParentMsgDay || 0);
+      if (cd >= 3) {
+        let reason = null;
+        if (rentEvent?.type === 'paid'    && Math.random() < 0.45) reason = 'rentPaid';
+        else if ((rentEvent?.type === 'missed' || rentEvent?.type === 'warning') && Math.random() < 0.75) reason = 'rentMissed';
+        else if ((next.hunger || 0) < 30  && Math.random() < 0.50) reason = 'hungerLow';
+        else if (newDay % 7 === 6         && Math.random() < 0.30) reason = 'random';
+        if (reason) {
+          next = addMessage(next, 'parents', _msgPick(PARENT_MESSAGES[reason]));
+          next.lastParentMsgDay = newDay;
+        }
+      }
+      return next;
     });
     setSleeping(false);
 
@@ -8246,7 +8434,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
       const showBonus = Math.floor((stats.sho || 0) / 8);
       const lucky = Math.floor(Math.random() * 3);
       const fanGain = Math.max(1, Math.min(20, base + showBonus + lucky));
-      const next = {
+      let next = {
         ...c,
         energy: Math.max(0, c.energy - 10),
         mood: Math.min(100, c.mood + 5),
@@ -8257,6 +8445,12 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         xp: c.xp + 8,
         _lastOpenMicFans: fanGain,
       };
+      // Good-show parent text trigger (only on a strong show, with cooldown)
+      const cd = c.day - (c.lastParentMsgDay || 0);
+      if (cd >= 3 && fanGain >= 5 && Math.random() < 0.35) {
+        next = addMessage(next, 'parents', _msgPick(PARENT_MESSAGES.goodShow));
+        next.lastParentMsgDay = c.day;
+      }
       return next;
     });
     setPerformingOpenMic(false);
