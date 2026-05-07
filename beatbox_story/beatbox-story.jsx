@@ -1354,6 +1354,22 @@ function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
   const charRef = useRef(char);
   useEffect(() => { charRef.current = char; }, [char]);
 
+  // Force-stop the activity if char.day changes underneath us (i.e. a 2 AM
+  // collapse rolled the day over). Without this, the global day-end watcher
+  // resets minutes to 0 and the activity tick happily ticks on the new day,
+  // draining energy across multiple sleeps until you exhaust.
+  const startDayRef = useRef(null);
+  useEffect(() => {
+    if (!active) { startDayRef.current = null; return; }
+    if (startDayRef.current == null) { startDayRef.current = char?.day; return; }
+    if (char?.day !== startDayRef.current) {
+      activeRef.current = false;
+      setActive(false);
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      startDayRef.current = null;
+    }
+  }, [char?.day, active]);
+
   const stop = (reason) => {
     activeRef.current = false;
     setActive(false);
