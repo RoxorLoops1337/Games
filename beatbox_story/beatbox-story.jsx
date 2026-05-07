@@ -4670,6 +4670,589 @@ const drawSleepScene = (ctx, fc, look, progress) => {
   }
 };
 
+// ============ TRAINING SCENES ============
+// Pixel-art animations rendered behind each training stat's AFK panel.
+
+// Musicality: small stage with mic on a stand, spotlight, character singing
+// into it at face level.
+const drawMusicalityScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Back wall: deep curtain red gradient
+  for (let y = 0; y < 90; y++) {
+    const t = y / 90;
+    const r = Math.floor(0x3a + t * 0x10);
+    const g = Math.floor(0x10 + t * 0x06);
+    const b = Math.floor(0x18 + t * 0x06);
+    _px(ctx, 0, y, W, 1, `rgb(${r},${g},${b})`);
+  }
+  // Side curtain folds (vertical pleats)
+  for (let i = 0; i < 6; i++) {
+    _px(ctx, 4 + i * 5, 0, 1, 90, '#2a0e10');
+    _px(ctx, 6 + i * 5, 0, 1, 90, '#5a1a20');
+    _px(ctx, W - 8 - i * 5, 0, 1, 90, '#2a0e10');
+    _px(ctx, W - 6 - i * 5, 0, 1, 90, '#5a1a20');
+  }
+  // Curtain valance at top (scalloped)
+  for (let x = 0; x < W; x += 14) {
+    _px(ctx, x, 0, 14, 4, '#5a1a1f');
+    _px(ctx, x + 6, 4, 2, 2, '#5a1a1f');
+  }
+  // String lights along the valance
+  for (let i = 0; i < 9; i++) {
+    const lx = 12 + i * 22;
+    if ((fc + i * 11) % 50 < 40) _px(ctx, lx, 7, 2, 2, i % 2 ? '#fbbf24' : '#fb7185');
+  }
+  // Spotlight cone from above (drawn before stage so floor takes the light)
+  ctx.save();
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.10)';
+  ctx.beginPath();
+  ctx.moveTo(80, 0); ctx.lineTo(120, 0);
+  ctx.lineTo(135, 92); ctx.lineTo(65, 92);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  // Stage floor (warm wood with planks)
+  _px(ctx, 0, 90, W, 40, '#3a2818');
+  _px(ctx, 0, 90, W, 2, '#5a4030');
+  // Plank seams
+  for (let i = 0; i < 5; i++) _px(ctx, 4 + i * 40, 92, 1, 38, '#2a1a10');
+  // Footlights strip
+  _px(ctx, 0, 92, W, 1, '#fbbf24');
+  // Bright "stage glow" under spotlight
+  ctx.save();
+  ctx.fillStyle = 'rgba(254, 243, 199, 0.10)';
+  ctx.fillRect(70, 92, 60, 4);
+  ctx.restore();
+  // ---- Mic stand ----
+  // Player drawBeatboxer feet at y=90, head center ~y=68, eyes y=67.
+  // Round disc base
+  _px(ctx, 86, 88, 16, 2, '#1a1a1a');
+  _px(ctx, 88, 87, 12, 1, '#3a3a3a');
+  _px(ctx, 90, 86, 8, 1, '#1a1a1a');
+  // Pole going up to a clamp at face level
+  _px(ctx, 93, 71, 2, 17, '#1a1a1a');
+  _px(ctx, 93, 71, 1, 17, '#3a3a3a');             // pole highlight
+  // Mic clamp (small bracket attaching capsule to pole)
+  _px(ctx, 95, 69, 3, 3, '#3a3a3a');
+  _px(ctx, 95, 69, 3, 1, '#5a5a5a');
+  // Mic capsule — rounded "ball" shape, 6 wide at midline
+  // Outline pixels with progressive widths form a smooth ellipse
+  _px(ctx, 99, 60, 2, 1, '#3a3a3a');              // top cap
+  _px(ctx, 98, 61, 4, 1, '#3a3a3a');
+  _px(ctx, 97, 62, 6, 4, '#2a2a2a');              // wide middle (4 rows tall)
+  _px(ctx, 98, 66, 4, 1, '#1a1a1a');
+  _px(ctx, 99, 67, 2, 1, '#1a1a1a');              // bottom cap
+  // Top-left highlight (specular)
+  _px(ctx, 98, 61, 2, 1, '#5a5a5a');
+  _px(ctx, 97, 62, 1, 2, '#5a5a5a');
+  // Subtle horizontal grille texture (3 lines)
+  _px(ctx, 98, 63, 4, 1, '#444');
+  _px(ctx, 98, 65, 4, 1, '#444');
+  // Player to the right of mic, facing left toward it
+  drawBeatboxer(ctx, 112, 90, look, 'left', true, fc);
+  // Singing waves from mouth toward mic
+  const mf = Math.floor(fc / 6) % 4;
+  if (mf >= 2) {
+    const wavePhase = (fc * 0.3) % 14;
+    ctx.globalAlpha = (1 - wavePhase / 14) * 0.85;
+    ctx.fillStyle = '#fbbf24';
+    for (let i = 0; i < 3; i++) {
+      const r = 4 + wavePhase + i * 3;
+      ctx.fillRect(Math.floor(105 - r / 2), 67 + i, Math.floor(r), 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+  // Music notes floating up between mic and character
+  for (let i = 0; i < 3; i++) {
+    const phase = (fc * 0.6 + i * 28) % 80;
+    if (phase < 60) {
+      const nx = 92 + Math.sin((fc * 0.05) + i) * 3 + i * 6;
+      const ny = 60 - phase * 0.5;
+      ctx.globalAlpha = Math.max(0, 1 - phase / 60);
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(Math.floor(nx), Math.floor(ny), 3, 2);
+      ctx.fillRect(Math.floor(nx + 2), Math.floor(ny - 5), 1, 5);
+      ctx.fillRect(Math.floor(nx + 3), Math.floor(ny - 5), 2, 1);
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Crowd silhouettes at very bottom (heads + shoulders bobbing)
+  for (let i = 0; i < 5; i++) {
+    const cx = 18 + i * 40;
+    const bob = Math.sin(fc * 0.15 + i * 0.7) * 1;
+    _px(ctx, cx, Math.floor(116 + bob), 8, 8, '#0a0a0a');
+    _px(ctx, cx - 1, Math.floor(124 + bob), 10, 6, '#0a0a0a');
+  }
+};
+
+// Technicality: side-view of desk with PC monitor, PC tower, headphones on character.
+const drawTechnicalityScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Back wall — cool studio tones
+  _px(ctx, 0, 0, W, 95, '#1a1d2a');
+  // Wall posters
+  _px(ctx, 12, 16, 22, 16, '#5a3030'); _px(ctx, 13, 17, 20, 14, '#fb7185');
+  _px(ctx, 13, 22, 20, 1, '#fff');
+  _px(ctx, 162, 12, 24, 18, '#2a3a5a'); _px(ctx, 163, 13, 22, 16, '#22d3ee');
+  _px(ctx, 165, 16, 18, 1, '#fff'); _px(ctx, 165, 20, 14, 1, '#fff');
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#2a1a14');
+  _px(ctx, 0, 95, W, 1, '#5a3a28');
+  // Desk top + apron
+  _px(ctx, 22, 80, 156, 4, '#7a5030');
+  _px(ctx, 22, 80, 156, 1, '#a0703f');
+  _px(ctx, 22, 84, 156, 12, '#5a3825');
+  // Desk legs
+  _px(ctx, 26, 84, 4, 24, '#3a2410');
+  _px(ctx, 170, 84, 4, 24, '#3a2410');
+  // PC tower under the right side of the desk
+  _px(ctx, 152, 86, 16, 32, '#1a1a1a');
+  _px(ctx, 152, 86, 16, 1, '#3a3a3a');
+  _px(ctx, 153, 89, 14, 1, '#3a3a3a');
+  // Front grille / drives
+  _px(ctx, 154, 91, 12, 1, '#2a2a2a');
+  _px(ctx, 154, 95, 12, 1, '#2a2a2a');
+  // PC LED (animated)
+  if (fc % 30 < 20) _px(ctx, 165, 100, 1, 1, '#22c55e');
+  if (fc % 12 < 4)  _px(ctx, 162, 100, 1, 1, '#fbbf24');
+  // Vent slits
+  for (let i = 0; i < 3; i++) _px(ctx, 154, 110 + i * 2, 12, 1, '#0a0a0a');
+  // Monitor: stand + screen
+  _px(ctx, 100, 78, 22, 2, '#1a1a1a');             // stand base
+  _px(ctx, 109, 60, 4, 18, '#1a1a1a');             // stand neck
+  _px(ctx, 86, 26, 64, 38, '#0c0a09');             // bezel
+  _px(ctx, 86, 26, 64, 2, '#3a3a3a');              // bezel top
+  _px(ctx, 88, 28, 60, 34, '#0a0a14');             // screen bg
+  // Animated waveform on screen — 4 bands oscillating
+  const screenX = 90, screenY = 32, screenW = 56, screenH = 28;
+  // Track lanes
+  for (let track = 0; track < 4; track++) {
+    const ty = screenY + track * 6;
+    // Lane background
+    _px(ctx, screenX, ty, screenW, 6, track % 2 === 0 ? '#10142a' : '#0c0a14');
+    const colors = ['#22d3ee', '#fbbf24', '#a78bfa', '#fb7185'];
+    for (let x = 0; x < screenW; x++) {
+      const v = Math.abs(Math.sin((x + fc * 0.5 + track * 3) * 0.2 + track));
+      const h = 1 + Math.floor(v * 4);
+      _px(ctx, screenX + x, ty + 5 - h, 1, h, colors[track]);
+    }
+  }
+  // Track separators
+  for (let i = 1; i < 4; i++) {
+    _px(ctx, screenX, screenY + i * 6, screenW, 1, '#1a2030');
+  }
+  // REC indicator (blinking)
+  if (fc % 30 < 22) {
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 5px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('● REC', screenX + 1, screenY + screenH - 1);
+  }
+  // BPM counter top right of screen
+  ctx.fillStyle = '#22c55e';
+  ctx.font = 'bold 5px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('120 BPM', screenX + screenW - 1, screenY + 6);
+  // Power LED on monitor bezel
+  if (fc % 50 < 40) _px(ctx, 144, 62, 1, 1, '#22c55e');
+  // Keyboard
+  _px(ctx, 64, 78, 60, 3, '#2a2a2a');
+  _px(ctx, 64, 78, 60, 1, '#3a3a3a');
+  for (let i = 0; i < 14; i++) _px(ctx, 65 + i * 4, 79, 2, 1, '#1a1a1a');
+  // Mouse
+  _px(ctx, 130, 78, 6, 4, '#2a2a2a');
+  _px(ctx, 130, 78, 6, 1, '#3a3a3a');
+  _px(ctx, 132, 78, 1, 2, '#1a1a1a');
+  // Coffee mug (left side of desk)
+  _px(ctx, 30, 74, 8, 6, '#a8a29e');
+  _px(ctx, 30, 74, 8, 1, '#cbc4be');
+  _px(ctx, 38, 75, 2, 4, '#a8a29e');
+  // Steam from mug
+  if (fc % 40 < 30) {
+    const sf = (fc % 40) / 30;
+    ctx.globalAlpha = 0.5 * (1 - sf);
+    _px(ctx, 33, 70 - Math.floor(sf * 8), 1, 2, '#dadada');
+    _px(ctx, 35, 68 - Math.floor(sf * 6), 1, 2, '#dadada');
+    ctx.globalAlpha = 1;
+  }
+  // ---- Player seated at desk, facing right ----
+  // Chair back (taller, padded)
+  _px(ctx, 36, 56, 14, 42, '#2a1a14');
+  _px(ctx, 36, 56, 14, 2, '#3a2820');
+  _px(ctx, 36, 96, 14, 6, '#1a1a1a');
+  // Chair armrest hint
+  _px(ctx, 50, 76, 4, 3, '#1a1a1a');
+  // Chair stem and base
+  _px(ctx, 41, 102, 4, 8, '#1a1a1a');
+  _px(ctx, 32, 110, 22, 2, '#1a1a1a');
+  _px(ctx, 30, 112, 4, 2, '#1a1a1a');
+  _px(ctx, 52, 112, 4, 2, '#1a1a1a');
+  // Head bob (very subtle while focused)
+  const headBob = Math.floor(fc / 12) % 2;
+  // Torso (visible above chair back), facing right
+  _px(ctx, 50, 64, 12, 16, look?.shirt || '#a78bfa');
+  _px(ctx, 50, 64, 12, 2, '#fff');                       // shirt collar/top
+  _px(ctx, 50, 64, 1, 16, '#fff');                       // shirt left highlight
+  // Right arm extending forward to keyboard
+  _px(ctx, 62, 68, 8, 3, look?.shirt || '#a78bfa');
+  _px(ctx, 70, 68, 4, 3, look?.skin || '#d4a87a');       // hand
+  // Head (round-ish)
+  _px(ctx, 52, 50 + headBob, 10, 10, look?.skin || '#d4a87a');
+  // Hair (varied by style)
+  if ((look?.style || 'short') === 'short') {
+    _px(ctx, 52, 48 + headBob, 10, 3, look?.hair || '#1a1a2e');
+  } else if (look?.style === 'long') {
+    _px(ctx, 52, 49 + headBob, 10, 2, look?.hair || '#1a1a2e');
+    _px(ctx, 52, 51 + headBob, 1, 8, look?.hair || '#1a1a2e');
+  } else if (look?.style === 'mohawk') {
+    _px(ctx, 52, 50 + headBob, 10, 1, look?.hair || '#1a1a2e');
+    _px(ctx, 56, 46 + headBob, 2, 4, look?.hair || '#1a1a2e');
+  } else if (look?.style === 'spike') {
+    _px(ctx, 52, 49 + headBob, 10, 1, look?.hair || '#1a1a2e');
+    _px(ctx, 53, 47 + headBob, 2, 2, look?.hair || '#1a1a2e');
+    _px(ctx, 56, 46 + headBob, 2, 3, look?.hair || '#1a1a2e');
+    _px(ctx, 58, 47 + headBob, 2, 2, look?.hair || '#1a1a2e');
+  } else {
+    _px(ctx, 52, 48 + headBob, 10, 3, look?.hair || '#1a1a2e');
+  }
+  // Headphones (over hair, big chunky cup over right ear since profile faces right)
+  _px(ctx, 52, 47 + headBob, 10, 2, '#1a1a1a');          // band over head
+  _px(ctx, 51, 49 + headBob, 2, 2, '#0c0a09');           // band side (wraps around)
+  // Right ear cup (visible from this side)
+  _px(ctx, 60, 53 + headBob, 4, 7, '#1a1a1a');
+  _px(ctx, 60, 53 + headBob, 1, 7, '#3a3a3a');
+  _px(ctx, 61, 54 + headBob, 2, 5, '#2a2a2a');
+  // Eye (one visible)
+  _px(ctx, 58, 55 + headBob, 1, 1, '#0c0a09');
+  // Mouth (concentration)
+  _px(ctx, 56, 58 + headBob, 2, 1, '#3a1010');
+  // Cable from headphone cup down to PC tower
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(63, 60 + headBob);
+  ctx.lineTo(70, 78);
+  ctx.lineTo(155, 90);                                   // into PC tower
+  ctx.stroke();
+};
+
+// Originality: front view of an MPC-style "BEATBOX" drum machine — flashing
+// pads, LCD display, knobs, step LED row.
+const drawOriginalityScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Tabletop (dark wood with horizontal grain)
+  _px(ctx, 0, 0, W, H, '#1c1410');
+  for (let y = 0; y < H; y += 12) _px(ctx, 0, y, W, 1, '#2a1f18');
+  // Soft warm glow from top
+  ctx.save();
+  ctx.fillStyle = 'rgba(212, 160, 23, 0.05)';
+  ctx.beginPath(); ctx.arc(100, 0, 90, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // MPC body
+  const mx = 24, my = 12, mw = 152, mh = 110;
+  _px(ctx, mx + 4, my + mh, mw, 4, '#0a0a08');                 // drop shadow
+  _px(ctx, mx, my, mw, mh, '#2a2a2a');
+  _px(ctx, mx, my, mw, 2, '#4a4a4a');                          // top edge highlight
+  _px(ctx, mx, my, 2, mh, '#3a3a3a');                          // left edge
+  _px(ctx, mx + mw - 2, my, 2, mh, '#1a1a1a');                 // right edge
+  _px(ctx, mx, my + mh - 2, mw, 2, '#1a1a1a');                 // bottom edge
+  // Top control plate
+  _px(ctx, mx + 4, my + 4, mw - 8, 16, '#1a1a1a');
+  _px(ctx, mx + 4, my + 4, mw - 8, 1, '#3a3a3a');
+  // Brand text on left
+  ctx.fillStyle = '#D4A017';
+  ctx.font = 'bold 5px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('BBX-16', mx + 8, my + 13);
+  // LCD display
+  const lcdX = mx + 38, lcdY = my + 6, lcdW = 50, lcdH = 12;
+  _px(ctx, lcdX, lcdY, lcdW, lcdH, '#0a3a14');
+  _px(ctx, lcdX, lcdY, lcdW, 1, '#1a5a24');
+  _px(ctx, lcdX, lcdY + lcdH - 1, lcdW, 1, '#062a0a');
+  ctx.fillStyle = '#22c55e';
+  ctx.font = 'bold 7px monospace';
+  ctx.textAlign = 'center';
+  if (Math.floor(fc / 30) % 2 === 0) {
+    ctx.fillText('BEATBOX', lcdX + lcdW / 2, lcdY + 9);
+  } else {
+    const step = Math.floor(fc / 4) % 16;
+    ctx.fillText(`STEP ${String(step + 1).padStart(2, '0')}/16`, lcdX + lcdW / 2, lcdY + 9);
+  }
+  // Knobs (3 along top right)
+  for (let i = 0; i < 3; i++) {
+    const kx = mx + mw - 30 + i * 9;
+    _px(ctx, kx, my + 7, 7, 7, '#4a4a4a');
+    _px(ctx, kx, my + 7, 7, 1, '#6a6a6a');
+    _px(ctx, kx, my + 7, 1, 7, '#5a5a5a');
+    // pointer (animated)
+    const angle = (fc * 0.04 + i * 0.7) % (Math.PI * 2);
+    const px = Math.floor(kx + 3.5 + Math.cos(angle) * 2.5);
+    const py = Math.floor(my + 10.5 + Math.sin(angle) * 2.5);
+    _px(ctx, px, py, 1, 1, '#fbbf24');
+  }
+  // Pad grid 4×4 — sized so the whole grid fits inside the body with margin
+  const padSize = 14;
+  const padGap  = 3;
+  const gridW = padSize * 4 + padGap * 3;          // 4*14 + 3*3 = 65
+  const padX0 = mx + Math.floor((mw - gridW) / 2); // centered horizontally
+  const padY0 = my + 26;                           // below LCD/header
+  const stepBeat = Math.floor(fc / 4) % 16;
+  // A simple looping pattern across the 16 steps. step → (row, col)
+  // Pads light up steady when their step is in the "on" set, brighten on the
+  // current step.
+  const padPattern = [
+    [1, 0, 1, 0], // row 0 (kick)
+    [0, 1, 0, 0], // row 1 (snare)
+    [1, 1, 1, 1], // row 2 (hats)
+    [0, 0, 0, 1], // row 3 (cymbal)
+  ];
+  const padColors = ['#fb7185', '#fbbf24', '#22d3ee', '#a78bfa'];
+  const curRow = Math.floor(stepBeat / 4);
+  const curCol = stepBeat % 4;
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) {
+      const px = padX0 + col * (padSize + padGap);
+      const py = padY0 + row * (padSize + padGap);
+      // Pad shell
+      _px(ctx, px, py, padSize, padSize, '#0c0a09');
+      _px(ctx, px + 1, py + 1, padSize - 2, padSize - 2, '#1a1a1a');
+      _px(ctx, px + 1, py + 1, padSize - 2, 1, '#3a3a3a');
+      const baseColor = padColors[row];
+      const isHit = padPattern[row][col] === 1;
+      const flash = (curRow === row && curCol === col);
+      if (flash && isHit) {
+        // Bright flash: full inner + white top streak
+        _px(ctx, px + 2, py + 2, padSize - 4, padSize - 4, baseColor);
+        _px(ctx, px + 2, py + 2, padSize - 4, 2, '#fff');
+      } else if (flash) {
+        // Step head over a non-hit: dim color highlight
+        ctx.globalAlpha = 0.5;
+        _px(ctx, px + 3, py + 3, padSize - 6, padSize - 6, baseColor);
+        ctx.globalAlpha = 1;
+      } else if (isHit) {
+        // Steady-lit pad
+        _px(ctx, px + 3, py + 3, padSize - 6, padSize - 6, baseColor);
+        ctx.globalAlpha = 0.3;
+        _px(ctx, px + 2, py + 2, padSize - 4, padSize - 4, baseColor);
+        ctx.globalAlpha = 1;
+      } else {
+        // Dim glow
+        ctx.globalAlpha = 0.15;
+        _px(ctx, px + 4, py + 4, padSize - 8, padSize - 8, baseColor);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  // Step LED row at the bottom of the unit (16 LEDs)
+  const ledY = my + mh - 8;
+  const ledStart = mx + 8;
+  const ledW = 4, ledGap = 5;
+  for (let s = 0; s < 16; s++) {
+    const lx = ledStart + s * (ledW + ledGap - 1);
+    const on = stepBeat === s;
+    _px(ctx, lx, ledY, ledW, 3, on ? '#fbbf24' : '#3a2810');
+    if (on) _px(ctx, lx, ledY, ledW, 1, '#fef3c7');
+  }
+  // Tiny labels above the LED row
+  ctx.fillStyle = '#5a4a30';
+  ctx.font = 'bold 4px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('STEPS', mx + 8, ledY - 1);
+};
+
+// Showmanship: bedroom with character dancing in front of a tall mirror.
+// The reflection is clipped to the mirror's interior so it appears INSIDE.
+const drawShowmanshipScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Wall
+  _px(ctx, 0, 0, W, 95, '#2a2335');
+  // Wallpaper pattern (subtle dots)
+  for (let y = 6; y < 95; y += 12) {
+    for (let x = 8; x < W; x += 12) {
+      _px(ctx, x, y, 1, 1, '#3a3045');
+    }
+  }
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#3a2818');
+  _px(ctx, 0, 95, W, 1, '#5a3a28');
+  // Floor planks
+  for (let i = 0; i < 5; i++) _px(ctx, i * 40, 96, 1, 34, '#2a1a10');
+  // Disco ball at top center (mounted on cord)
+  _px(ctx, 96, 6, 8, 8, '#aaa');
+  _px(ctx, 96, 6, 8, 1, '#dadada');
+  _px(ctx, 96, 7, 1, 6, '#888');                // ball left shadow
+  _px(ctx, 103, 7, 1, 6, '#dadada');            // ball right highlight
+  _px(ctx, 100, 0, 1, 6, '#1a1a1a');            // hanging cord
+  // Animated facet glints inside the disco ball
+  for (let i = 0; i < 6; i++) {
+    const f = (fc + i * 7) % 24;
+    if (f < 12) {
+      const fx = 97 + (i * 3) % 6;
+      const fy = 7 + Math.floor(i / 2);
+      _px(ctx, fx, fy, 1, 1, '#fef3c7');
+    }
+  }
+  // Sparkle rays radiating outward
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2 + fc * 0.02;
+    const r = 14 + ((fc + i * 5) % 30) * 0.5;
+    if ((fc + i * 11) % 60 < 35) {
+      const sx = Math.floor(100 + Math.cos(ang) * r);
+      const sy = Math.floor(10 + Math.sin(ang) * r);
+      if (sx > 0 && sx < W && sy > 0 && sy < 90) {
+        _px(ctx, sx, sy, 1, 1, i % 2 ? '#fbbf24' : '#fef3c7');
+      }
+    }
+  }
+  // ---- Mirror ----
+  const mfX = 22, mfY = 30, mfW = 50, mfH = 78;
+  // Outer ornate gold frame
+  _px(ctx, mfX - 4, mfY - 4, mfW + 8, mfH + 8, '#7a540a');
+  _px(ctx, mfX - 4, mfY - 4, mfW + 8, 2, '#fbbf24');           // top highlight
+  _px(ctx, mfX - 4, mfY - 4, 2, mfH + 8, '#fbbf24');           // left highlight
+  _px(ctx, mfX + mfW + 2, mfY - 4, 2, mfH + 8, '#3a2410');     // right shadow
+  _px(ctx, mfX - 4, mfY + mfH + 2, mfW + 8, 2, '#3a2410');     // bottom shadow
+  // Frame ornaments (small bumps)
+  _px(ctx, mfX - 3, mfY - 6, 2, 2, '#fbbf24');
+  _px(ctx, mfX + mfW + 1, mfY - 6, 2, 2, '#fbbf24');
+  _px(ctx, mfX + Math.floor(mfW / 2) - 1, mfY - 6, 2, 2, '#fbbf24');
+  // Mirror surface — bluish gradient
+  for (let y = 0; y < mfH; y++) {
+    const t = y / mfH;
+    const r = Math.floor(0x44 + t * 0x06);
+    const g = Math.floor(0x4a + t * 0x06);
+    const b = Math.floor(0x6a - t * 0x10);
+    _px(ctx, mfX, mfY + y, mfW, 1, `rgb(${r},${g},${b})`);
+  }
+  // Subtle diagonal sparkle on the glass
+  for (let i = 0; i < 4; i++) {
+    const sy = mfY + 6 + i * 18;
+    _px(ctx, mfX + 4 + i * 2, sy, 6, 1, 'rgba(255,255,255,0.10)');
+  }
+  // Reflection — clipped to mirror bounds, drawn at fixed center inside mirror
+  const danceFrame = Math.floor(fc / 8) % 4;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(mfX, mfY, mfW, mfH);
+  ctx.clip();
+  // Reflection-floor cue (slightly visible) at bottom of mirror
+  _px(ctx, mfX, mfY + mfH - 6, mfW, 6, 'rgba(58,40,24,0.4)');
+  // Reflection: mirrored dancer placed in the mirror interior, slight haze
+  ctx.globalAlpha = 0.85;
+  drawDancer(ctx, mfX + Math.floor(mfW / 2), mfY + mfH - 6, look, danceFrame, true, 1);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  // Floor reflection of the mirror (subtle gradient strip)
+  _px(ctx, mfX - 4, mfY + mfH + 5, mfW + 8, 1, 'rgba(255,255,255,0.05)');
+  // Real dancer (right side of room)
+  const playerX = 138, playerY = 112;
+  drawDancer(ctx, playerX, playerY, look, danceFrame, false, 1);
+  // Music notes streaming up from real dancer
+  for (let i = 0; i < 4; i++) {
+    const phase = (fc * 0.5 + i * 22) % 80;
+    if (phase < 60) {
+      const nx = playerX - 8 + Math.sin((fc * 0.05) + i) * 4 + i * 6;
+      const ny = 100 - phase * 0.7;
+      ctx.globalAlpha = Math.max(0, 1 - phase / 60);
+      ctx.fillStyle = i % 2 ? '#fb7185' : '#fbbf24';
+      ctx.fillRect(Math.floor(nx), Math.floor(ny), 3, 2);
+      ctx.fillRect(Math.floor(nx + 2), Math.floor(ny - 5), 1, 5);
+      ctx.fillRect(Math.floor(nx + 3), Math.floor(ny - 5), 2, 1);
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Speaker box on the floor (giving the dancer something to dance to)
+  _px(ctx, 162, 100, 18, 22, '#1a1a1a');
+  _px(ctx, 162, 100, 18, 1, '#3a3a3a');
+  _px(ctx, 165, 103, 12, 7, '#0a0a0a');                  // upper cone
+  _px(ctx, 170, 105, 2, 3, '#2a2a2a');                   // cone center
+  _px(ctx, 165, 113, 12, 7, '#0a0a0a');                  // lower cone
+  _px(ctx, 170, 115, 2, 3, '#2a2a2a');
+  // Speaker pulse (animated)
+  if (fc % 16 < 8) {
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(160, 98, 22, 26);
+    ctx.globalAlpha = 1;
+  }
+};
+
+// Tiny dancer pose helper used by the showmanship scene + its mirror.
+// (x, y) is feet-center. Different `frame` produces different pose.
+const drawDancer = (ctx, x, y, look, frame, mirrored, scaleHint) => {
+  // We don't actually scale because pixel art looks better at 1:1, but we
+  // do alter pose by frame.
+  const px = (dx, dy, w, h, c) => {
+    const rx = mirrored ? -dx - w + 1 : dx;
+    _px(ctx, x + rx, y + dy, w, h, c);
+  };
+  // Pose by frame:
+  // 0: arms up
+  // 1: arms wide (left high, right out)
+  // 2: arms down (rest)
+  // 3: arms wide (left out, right high)
+  const armUpL = (frame === 0) || (frame === 1);
+  const armUpR = (frame === 0) || (frame === 3);
+  const legSplit = frame % 2 === 1;
+  // Shadow
+  px(-7, 0, 14, 1, 'rgba(0,0,0,0.45)');
+  // Legs
+  if (legSplit) {
+    px(-5, -8, 3, 8, '#1a1a2e');
+    px(2, -8, 3, 8, '#1a1a2e');
+  } else {
+    px(-4, -8, 3, 8, '#1a1a2e');
+    px(1, -8, 3, 8, '#1a1a2e');
+  }
+  // Shoes
+  if (legSplit) { px(-5, -1, 3, 1, '#fff'); px(2, -1, 3, 1, '#fff'); }
+  else          { px(-4, -1, 3, 1, '#fff'); px(1, -1, 3, 1, '#fff'); }
+  // Body / shirt
+  px(-5, -19, 10, 11, look?.shirt || '#a78bfa');
+  px(-5, -19, 10, 1, '#fff');
+  // Arms — depending on pose
+  // Left arm
+  if (armUpL) {
+    px(-7, -25, 2, 6, look?.shirt || '#a78bfa'); // arm up
+    px(-7, -27, 2, 2, look?.skin || '#d4a87a');   // hand
+  } else {
+    px(-9, -16, 2, 8, look?.shirt || '#a78bfa'); // arm out
+    px(-11, -14, 2, 2, look?.skin || '#d4a87a'); // hand
+  }
+  // Right arm
+  if (armUpR) {
+    px(5, -25, 2, 6, look?.shirt || '#a78bfa');
+    px(5, -27, 2, 2, look?.skin || '#d4a87a');
+  } else {
+    px(7, -16, 2, 8, look?.shirt || '#a78bfa');
+    px(9, -14, 2, 2, look?.skin || '#d4a87a');
+  }
+  // Head
+  px(-4, -25, 8, 7, look?.skin || '#d4a87a');
+  // Hair
+  if ((look?.style || 'short') === 'short') {
+    px(-4, -27, 8, 2, look?.hair || '#1a1a2e');
+  } else if (look?.style === 'mohawk') {
+    px(-4, -25, 8, 1, look?.hair || '#1a1a2e');
+    px(-1, -28, 2, 3, look?.hair || '#1a1a2e');
+  } else if (look?.style === 'long') {
+    px(-5, -26, 10, 2, look?.hair || '#1a1a2e');
+  } else if (look?.style === 'spike') {
+    px(-4, -26, 8, 1, look?.hair || '#1a1a2e');
+    px(-3, -28, 2, 2, look?.hair || '#1a1a2e');
+    px(0, -29, 2, 3, look?.hair || '#1a1a2e');
+  } else if (look?.style === 'fade') {
+    px(-4, -27, 8, 2, look?.hair || '#1a1a2e');
+    px(-4, -25, 8, 1, '#000');
+  }
+  // Eyes
+  px(-3, -23, 1, 1, '#1a1a2e');
+  px(1, -23, 1, 1, '#1a1a2e');
+  // Mouth (smile while dancing)
+  px(-1, -20, 3, 1, '#3a1010');
+};
+
 const INTRO_BEATS = [
   { drawScene: drawOffice, lines: [
     'three years at the desk.',
@@ -5493,6 +6076,18 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           {trainActivity.active && trainStat && (
             <Panel title={`Training ${trainConfig[trainStat].name} — IN PROGRESS`}>
               <div className="space-y-3">
+                {/* Pixel-art scene for the AFK training visual.
+                    Hidden during the active mini-game (playMode), since that
+                    has its own UI. Shown for sho regardless (no mini-game). */}
+                {(!playMode || trainStat === 'sho') && (() => {
+                  const lookFn = lookFromChar(char);
+                  const sceneFn =
+                    trainStat === 'mus' ? drawMusicalityScene  :
+                    trainStat === 'tec' ? drawTechnicalityScene :
+                    trainStat === 'ori' ? drawOriginalityScene  :
+                                          drawShowmanshipScene;
+                  return <PixelScene draw={(ctx, fc) => sceneFn(ctx, fc, lookFn)} />;
+                })()}
                 {trainStat === 'mus' && !playMode && !showRangePicker && (
                   <button onClick={() => {
                     accuracyRef.current = 0;
