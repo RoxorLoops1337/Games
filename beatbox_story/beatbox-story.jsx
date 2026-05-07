@@ -89,6 +89,8 @@ const initialChar = () => ({
   messages: [], // phone messages, newest last; { id, sender, text, day, minute, read }
   lastParentMsgDay: 0, // for cooldown on parent-message triggers
   lastFoxySafetyNetDay: 0, // last day Foxy fed you for free (one per in-game week)
+  lastFoxySoupDay: 0, // last day you ate Foxy Soup (free, daily)
+  foxyLoanTaken: false, // one-time $15 loan from Foxy when you're broke
   storyFlags: {}, // narrative beats — see narrative spec; all start undefined/false
   created: false,
 });
@@ -168,16 +170,16 @@ const PARENT_MESSAGES = {
 };
 
 // Foxy — your roommate. Soft-spoken, plant person, makes too much soup.
-// Quips that appear on the home screen and (rarely) as phone messages.
+// Ambient quips used as a fallback (when nothing else is going on).
 const FOXY_QUIPS = [
-  "you look like shit. eat something.",
-  "did you sleep at all?",
-  "the plant is dying, that's on you.",
+  "the plant's still alive. barely.",
   "i made too much soup again.",
-  "your phone's been buzzing for an hour.",
   "the kettle's still warm if you want tea.",
-  "it's three days till sunday. just saying.",
   "i'm at work till seven. don't burn anything.",
+  "the heating's making that noise again.",
+  "matcha?",
+  "you've been weird this week. you good?",
+  "post comes around four. i'll grab yours.",
 ];
 const FOXY_SAFETY_NET_LINES = [
   "i made too much.",
@@ -185,6 +187,183 @@ const FOXY_SAFETY_NET_LINES = [
 ];
 
 const _msgPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// Foxy's context-aware tip system. Returns a single tip string based on
+// the player's current state. Priority order (high → low): survival
+// (energy/hunger/mood) → rent/money → narrative arc (jam → pig pen) →
+// showcase / open-mic gates → day-of-week awareness → fallback ambient.
+//
+// Each rule's `when(c)` is checked in order; the first match's `lines`
+// pool is sampled. This makes Foxy feel like she's reading the room
+// instead of cycling random one-liners.
+const FOXY_TIPS = [
+  // ---- Survival: critical ----
+  { when: (c) => (c.energy || 0) <= 5, lines: [
+    "stop. sleep. you can't beatbox like this.",
+    "go to bed. seriously.",
+    "you're zombie-walking. couch. now.",
+  ]},
+  { when: (c) => (c.hunger || 0) <= 5, lines: [
+    "eat. now.",
+    "i made too much soup. it's in the fridge. eat it.",
+    "the fridge is right there. you are not running on vibes.",
+  ]},
+  { when: (c) => (c.mood || 0) <= 10, lines: [
+    "you've been quiet for two days. talk to me.",
+    "go for a run. i'm not joking.",
+    "we don't have to talk. just don't sit there.",
+  ]},
+  // ---- Survival: low ----
+  { when: (c) => (c.energy || 0) < 25, lines: [
+    "you should take a nap. couch's right there.",
+    "you look like shit. lie down.",
+    "power nap. then we'll talk.",
+  ]},
+  { when: (c) => (c.hunger || 0) < 25, lines: [
+    "you look hungry. there's leftovers in the fridge.",
+    "the kitchen is fifteen feet from you. use it.",
+    "soup's in the pot. don't wait for me.",
+  ]},
+  { when: (c) => (c.mood || 0) < 30, lines: [
+    "go for a run or something. you've been weird all day.",
+    "the park is free. fresh air, free.",
+    "stream a movie. anything. unclench.",
+  ]},
+  // ---- Rent / money pressure ----
+  { when: (c) => (c.rentLate || 0) >= 2, lines: [
+    "look. i don't know your business. but pay the rent.",
+    "the landlord came by. twice.",
+    "if you get evicted i'm not telling your mum.",
+  ]},
+  { when: (c) => (c.rentLate || 0) === 1, lines: [
+    "did you pay rent? i swear i heard them knock.",
+    "the rent thing. you're handling it, right?",
+    "i'm not bringing it up. i'm just saying.",
+  ]},
+  // Saturday before rent: "tomorrow's sunday"
+  { when: (c) => ((c.day || 1) % 7) === 5 && (c.cash || 0) < 60 && (c.apartmentTier || 1) === 1, lines: [
+    "tomorrow's sunday. just saying.",
+    "rent's $50 every sunday. you got that?",
+    "you're cutting it close again.",
+  ]},
+  { when: (c) => (c.cash || 0) < 5 && !c.foxyLoanTaken, lines: [
+    "you're broke huh. tap me. i'll lend you something. once.",
+    "i can spot you fifteen bucks. tap. just this once.",
+    "you got cash for groceries? tap me. i'll figure it out.",
+  ]},
+  { when: (c) => (c.cash || 0) < 5 && c.foxyLoanTaken, lines: [
+    "i already lent you fifteen. busk. the park.",
+    "no more loans. busk. you're good at it.",
+    "you're broke again. that's fine. eat the soup.",
+  ]},
+  // ---- Narrative: jam arc ----
+  { when: (c) => !c.storyFlags?.firstJam, lines: [
+    "i heard there's jams in the park. that's where the beatboxers go right?",
+    "if you're going to do this beatbox thing, go where they are. park has a cypher.",
+    "you're not gonna make it sitting in the apartment. there's people in the park.",
+  ]},
+  { when: (c) => c.storyFlags?.firstJam && !c.storyFlags?.pigPenChallenged
+                 && (c.storyFlags?.jamCount || 0) < 3, lines: [
+    "still going to the jams? keep at it.",
+    "the cypher again? good. go.",
+    "more practice in the circle. less in the bedroom.",
+    "the park people are your people now i guess.",
+  ]},
+  { when: (c) => c.storyFlags?.pigPenChallenged && !c.storyFlags?.pigPenBattled, lines: [
+    "some loud guy was asking about you. saturday at the bar?",
+    "i don't know who 'pig pen' is. doesn't sound like a friend.",
+    "battle night is saturday at the bar. that's all i know.",
+  ]},
+  { when: (c) => c.storyFlags?.pigPenBattled && (c.storyFlags?.pigPenWins || 0) === 0, lines: [
+    "the loud guy still talks shit. ignore him. or beat him. either way.",
+    "battles once a week. train, go again.",
+    "you'll get him next time. i don't know what that even means but yeah.",
+  ]},
+  { when: (c) => (c.storyFlags?.pigPenWins || 0) === 1 && !c.storyFlags?.pennyReveal, lines: [
+    "you've been smiling more this week.",
+    "whatever you're doing on saturdays. keep doing it.",
+    "the loud guy hasn't come around as much.",
+  ]},
+  // ---- Showcase / Rohzel ----
+  { when: (c) => c.showcaseBooking?.day, lines: [
+    "you got a show friday? i'll come. probably.",
+    "friday show. don't bomb. eat first.",
+    "i'll be in the back. don't look for me.",
+  ]},
+  { when: (c) => (c.followers || 0) >= 30 && !c.showcaseBooking?.day
+                 && (c.openMicCount || 0) >= 5 && !c.storyFlags?.rohzelFridayOffer, lines: [
+    "the bartender's been asking about you. go see him.",
+    "you should talk to rohzel. friday slots are a thing.",
+    "the bar guy. he doesn't say much. say less back.",
+  ]},
+  { when: (c) => (c.openMicCount || 0) === 0 && c.storyFlags?.firstJam, lines: [
+    "the bar has open mics tue/wed/thu. small crowd, free slot.",
+    "open mic at the bar. easy way to get reps.",
+    "if the cypher's the gym, the open mic's the test.",
+  ]},
+  { when: (c) => (c.openMicCount || 0) >= 1 && (c.openMicCount || 0) < 3, lines: [
+    "more open mics this week. it adds up.",
+    "the bar still doing open mic? go.",
+  ]},
+  // ---- Followers / fans ----
+  { when: (c) => (c.followers || 0) < 5 && c.storyFlags?.firstJam, lines: [
+    "you've got like four followers. busk. people will see you.",
+    "no one knows you exist yet. park, jar on the ground, go.",
+    "the algorithm doesn't care if you're shy.",
+  ]},
+  // ---- Day-of-week awareness (fires when nothing more urgent) ----
+  // dow 0 = MON (bar closed), 1 = TUE, 2 = WED, 3 = THU, 4 = FRI, 5 = SAT, 6 = SUN
+  { when: (c) => ((c.day || 1) % 7) === 0, lines: [
+    "the bar's closed mondays. don't bother.",
+    "monday. quiet. go train. go run.",
+    "mondays are for laundry. fyi.",
+  ]},
+  { when: (c) => {
+    const dow = (c.day || 1) % 7;
+    return dow >= 1 && dow <= 3;
+  }, lines: [
+    "open mic tonight if you've got the energy.",
+    "the bar's open. open mic night.",
+    "small crowd at the bar tonight. less to bomb in front of.",
+  ]},
+  { when: (c) => ((c.day || 1) % 7) === 4, lines: [
+    "friday. weekend's basically here.",
+    "friday's a show night if you've got the slot.",
+    "people get loose on fridays. go play.",
+  ]},
+  { when: (c) => ((c.day || 1) % 7) === 5, lines: [
+    "battle night. you ready?",
+    "saturday. the bar gets loud tonight.",
+    "saturdays are for war. so they tell me.",
+  ]},
+  { when: (c) => ((c.day || 1) % 7) === 6, lines: [
+    "sunday. rent day. the long day.",
+    "i'm doing groceries. need anything?",
+    "sundays are slow. take the slow.",
+  ]},
+];
+
+// Pick the highest-priority tip that applies, given the current char.
+// Falls back to a random ambient quip if nothing matches.
+const pickFoxyTip = (char) => {
+  if (!char) return _msgPick(FOXY_QUIPS);
+  for (const rule of FOXY_TIPS) {
+    try { if (rule.when(char)) return _msgPick(rule.lines); } catch { /* skip */ }
+  }
+  return _msgPick(FOXY_QUIPS);
+};
+
+// Pick up to N tips for the modal — the top-priority match plus a couple
+// of ambient quips for flavor.
+const pickFoxyTipsForModal = (char, n = 3) => {
+  const tips = [pickFoxyTip(char)];
+  const pool = [...FOXY_QUIPS].sort(() => Math.random() - 0.5);
+  for (const q of pool) {
+    if (tips.length >= n) break;
+    if (!tips.includes(q)) tips.push(q);
+  }
+  return tips;
+};
 
 // Push a new message onto a char's messages array (returns a new char).
 const addMessage = (c, sender, text) => {
@@ -4630,12 +4809,10 @@ const FoxyAvatar = ({ size = 36, animate = true }) => {
 // stack of recent quips, and a "wave hi" action that gives a small mood
 // boost (cooldown: once per in-game day).
 const FoxyModal = ({ char, setChar, showToast, onClose }) => {
-  // Three quips for this visit (stable while modal is open)
+  // Three tips for this visit — top-priority context tip + 2 flavor quips.
+  // Stable while the modal is open.
   const quipsRef = useRef(null);
-  if (!quipsRef.current) {
-    const pool = [...FOXY_QUIPS].sort(() => Math.random() - 0.5);
-    quipsRef.current = pool.slice(0, 3);
-  }
+  if (!quipsRef.current) quipsRef.current = pickFoxyTipsForModal(char, 3);
   const lastWaveDay = char.storyFlags?.lastFoxyWaveDay || 0;
   const canWave = (char.day - lastWaveDay) >= 1 || lastWaveDay === 0;
   const wave = () => {
@@ -4671,7 +4848,7 @@ const FoxyModal = ({ char, setChar, showToast, onClose }) => {
             </div>
           ))}
         </div>
-        <div className="border-t-2 border-stone-800 p-3">
+        <div className="border-t-2 border-stone-800 p-3 space-y-2">
           <button onClick={wave} disabled={!canWave}
             className={`w-full py-2 border-2 text-xs uppercase tracking-widest transition-all ${
               canWave ? 'border-lime-500 text-lime-500 hover:bg-lime-500/10'
@@ -4679,6 +4856,28 @@ const FoxyModal = ({ char, setChar, showToast, onClose }) => {
             }`}>
             {canWave ? '👋 say hi to Foxy  ·  +2 mood' : 'already said hi today'}
           </button>
+          {/* One-time $15 loan when you're really broke. */}
+          {(char.cash || 0) < 5 && !char.foxyLoanTaken && (
+            <button onClick={() => {
+              setChar(c => {
+                if (c.foxyLoanTaken || (c.cash || 0) >= 5) return c;
+                let next = { ...c, cash: (c.cash || 0) + 15, foxyLoanTaken: true,
+                             mood: Math.min(100, (c.mood || 0) + 3) };
+                next = addMessage(next, 'foxy', "this is a one-time thing. go busk in the park. seriously.");
+                return next;
+              });
+              showToast?.('Foxy lent you $15. Go busk.', 'win');
+              onClose();
+            }}
+              className="w-full py-2 border-2 border-amber-500 text-amber-500 text-xs uppercase tracking-widest hover:bg-amber-500/10 transition-all">
+              💸 ask Foxy for $15  ·  one-time
+            </button>
+          )}
+          {char.foxyLoanTaken && (char.cash || 0) < 5 && (
+            <div className="text-[10px] uppercase tracking-widest text-stone-600 text-center">
+              you already borrowed once. busk in the park.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -7071,6 +7270,8 @@ export default function BeatboxStory() {
     if (!Array.isArray(c.messages)) c.messages = [];
     if (typeof c.lastParentMsgDay !== 'number') c.lastParentMsgDay = 0;
     if (typeof c.lastFoxySafetyNetDay !== 'number') c.lastFoxySafetyNetDay = 0;
+    if (typeof c.lastFoxySoupDay !== 'number') c.lastFoxySoupDay = 0;
+    if (typeof c.foxyLoanTaken !== 'boolean') c.foxyLoanTaken = false;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
   };
@@ -7625,6 +7826,39 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     showToast(`${f.kind === 'drink' ? 'Drank' : 'Ate'} ${f.name}`, 'win');
   };
 
+  // Foxy Soup — free meal Foxy makes daily, claimable once per in-game day.
+  // Modest stats, but keeps you from starving when broke.
+  const eatFoxySoup = () => {
+    if (char.day === char.lastFoxySoupDay) return;       // already had today's
+    setChar(c => ({
+      ...c,
+      minutes: c.minutes + 5,
+      energy: Math.max(0, Math.min(c.maxEnergy ?? 100, c.energy + 10)),
+      hunger: Math.max(0, Math.min(100, c.hunger + 30)),
+      mood: Math.max(0, Math.min(100, c.mood + 2)),
+      lastFoxySoupDay: c.day,
+    }));
+    showToast('Ate Foxy Soup. +30🍴 +10⚡ +2♥', 'win');
+  };
+
+  // Foxy's $15 loan — one-time only, when you're really broke. Comes with
+  // a parental lecture-text afterward telling you to busk.
+  const takeFoxyLoan = () => {
+    if (char.foxyLoanTaken) return;
+    if (char.cash >= 5) return;                          // only when broke
+    setChar(c => {
+      let next = {
+        ...c,
+        cash: (c.cash || 0) + 15,
+        foxyLoanTaken: true,
+        mood: Math.min(100, (c.mood || 0) + 3),
+      };
+      next = addMessage(next, 'foxy', "this is a one-time thing. go busk in the park. seriously.");
+      return next;
+    });
+    showToast('Foxy lent you $15. Go busk.', 'win');
+  };
+
   const [sleeping, setSleeping] = useState(false);
   const [napping, setNapping] = useState(false);
   const sleep = () => {
@@ -7812,10 +8046,35 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   if (sleeping) return <SleepAnimation char={char} onComplete={finishSleep} />;
   if (napping)  return <PowerNapAnimation char={char} onWake={finishNap} />;
 
-  // Stable Foxy quip per house-screen mount (so it doesn't flicker on
-  // every render). Re-rolls when day or tab changes.
-  const foxyQuip = useRef(_msgPick(FOXY_QUIPS));
-  useEffect(() => { foxyQuip.current = _msgPick(FOXY_QUIPS); }, [char?.day, tab]);
+  // Foxy's tip is recomputed whenever any of her trigger inputs changes
+  // (hunger/energy/mood bins, day, story flags, etc). Stable between
+  // unrelated renders so it doesn't flicker on every keystroke.
+  const foxyTipKey = [
+    char?.day,
+    Math.floor((char?.energy || 0) / 25),
+    Math.floor((char?.hunger || 0) / 25),
+    Math.floor((char?.mood || 0) / 25),
+    char?.rentLate || 0,
+    Math.floor((char?.cash || 0) / 25),
+    Math.floor((char?.followers || 0) / 10),
+    char?.openMicCount || 0,
+    char?.showcaseBooking?.day || 0,
+    char?.storyFlags?.firstJam ? 1 : 0,
+    char?.storyFlags?.jamCount || 0,
+    char?.storyFlags?.pigPenChallenged ? 1 : 0,
+    char?.storyFlags?.pigPenBattled ? 1 : 0,
+    char?.storyFlags?.pigPenWins || 0,
+    char?.storyFlags?.pennyReveal ? 1 : 0,
+    char?.storyFlags?.rohzelFridayOffer ? 1 : 0,
+    tab,
+  ].join(':');
+  const foxyTipRef = useRef('');
+  const foxyTipKeyRef = useRef('');
+  if (foxyTipKeyRef.current !== foxyTipKey) {
+    foxyTipRef.current = pickFoxyTip(char);
+    foxyTipKeyRef.current = foxyTipKey;
+  }
+  const foxyTip = foxyTipRef.current;
   const [foxyOpen, setFoxyOpen] = useState(false);
 
   return (
@@ -7839,7 +8098,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
             <span className="text-[9px] uppercase tracking-widest text-stone-600">tap →</span>
           </div>
           <div className="text-stone-300 text-xs italic leading-snug whitespace-normal break-words">
-            "{foxyQuip.current}"
+            "{foxyTip}"
           </div>
         </div>
       </button>
@@ -8172,6 +8431,32 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       {tab === 'eat' && (
         <Panel title="Fridge — wholefood plant-based">
           <div className="space-y-2">
+            {/* Foxy Soup — free, once per in-game day. */}
+            {(() => {
+              const claimed = char.day === char.lastFoxySoupDay;
+              return (
+                <div className="flex items-center gap-3 p-2 border-2 bg-stone-900/30"
+                  style={{ borderColor: claimed ? '#3a3530' : '#84cc16' }}>
+                  <FoxyAvatar size={20} animate={!claimed} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lime-500 text-sm" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                        FOXY SOUP
+                      </span>
+                      <span className="text-[9px] uppercase tracking-widest text-stone-600">
+                        {claimed ? '· tomorrow' : '· free, today'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                      +10⚡ +30🍴 +2♥
+                    </div>
+                  </div>
+                  <Btn onClick={eatFoxySoup} disabled={claimed}>
+                    {claimed ? 'EATEN' : 'TAKE'}
+                  </Btn>
+                </div>
+              );
+            })()}
             {Object.entries(FOOD).map(([k, f]) => {
               const foodIcon = f.kind === 'drink' ? 'coffee' : 'star';
               return (
