@@ -154,6 +154,9 @@ const initialChar = () => ({
   romanceState: {}, // { candidateId: 'none' | 'romancing' | 'couple' }
   dateBooking: null, // { partner, day, minute } when a date is scheduled
   metEncounters: {}, // { encounterId: count } so we can vary lines per re-meet
+  daily: {}, // counters reset every sleep — drives daily-challenge progress
+  dailyChallenge: null, // { id, claimed } the challenge active for today
+  achievements: {}, // { id: dayEarned } unlocked achievements
   gear: {}, // { itemId: true } for purchased gear (PC, headphones, plant, etc.)
   lastCoffeeDay: 0, // last day you used the home coffee machine
   lastPlantWaterDay: 0, // last day you watered the houseplant (alive ≤5 days)
@@ -389,6 +392,84 @@ const applyRandomEvent = (c, ev) => {
     next.messages = (c.messages || []).map(m => ({ ...m, read: true }));
   }
   return next;
+};
+
+// ============ DAILY CHALLENGES ============
+// One challenge per in-game day. Picked at sleep transition based on the
+// new day-of-week. Each targets a counter inside char.daily, which is
+// reset every morning. Reward gets claimed once, manually, when target met.
+const DAILY_CHALLENGES = [
+  { id: 'jams_3',     label: 'Do 3 cypher jams',     target: 3, counter: 'jams',     reward: { cash: 15 } },
+  { id: 'openmic_1',  label: 'Play 1 open mic',      target: 1, counter: 'openMics', reward: { cash: 15 },
+    when: (dow) => dow >= 1 && dow <= 3 }, // Tue/Wed/Thu only
+  { id: 'mingle_2',   label: 'Have 2 bar conversations', target: 2, counter: 'mingles', reward: { cash: 10 },
+    when: (dow) => dow !== 0 }, // not Monday
+  { id: 'busks_2',    label: 'Busk twice in the park',   target: 2, counter: 'busks',  reward: { cash: 12 } },
+  { id: 'runs_1',     label: 'Complete a run session',   target: 1, counter: 'runs',   reward: { cash: 8, mood: 5 } },
+  { id: 'battle_win', label: 'Win a battle tonight', target: 1, counter: 'battleWins', reward: { cash: 30 },
+    when: (dow) => dow === 5 }, // Saturday
+  { id: 'showcase',   label: 'Play the Friday showcase', target: 1, counter: 'showcases', reward: { cash: 30 },
+    when: (dow) => dow === 4 }, // Friday
+  { id: 'foxy_hi',    label: 'Say hi to Foxy',       target: 1, counter: 'foxyHi',   reward: { mood: 6 } },
+];
+
+const pickDailyChallenge = (dow, c) => {
+  const eligible = DAILY_CHALLENGES.filter(ch => !ch.when || ch.when(dow));
+  if (!eligible.length) return null;
+  return eligible[Math.floor(Math.random() * eligible.length)];
+};
+
+// Bump a counter on char.daily — used as a setChar updater fragment.
+const bumpDaily = (c, counter, by = 1) => ({
+  ...c,
+  daily: { ...(c.daily || {}), [counter]: (c.daily?.[counter] || 0) + by },
+});
+
+const dailyChallengeMet = (c) => {
+  const dc = c?.dailyChallenge;
+  if (!dc) return false;
+  const ch = DAILY_CHALLENGES.find(x => x.id === dc.id);
+  if (!ch) return false;
+  return (c.daily?.[ch.counter] || 0) >= ch.target;
+};
+
+// ============ ACHIEVEMENTS ============
+// Auto-checked from checkLevelUp (same checkpoint as sound unlocks). Each
+// has a tier (bronze/silver/gold) for visual flair.
+const ACHIEVEMENTS = [
+  { id: 'first_steps',     label: 'First Steps',         desc: 'Stand in the cypher for the first time', tier: 'b', cond: (c) => !!c.storyFlags?.firstJam },
+  { id: 'cypher_regular',  label: 'Cypher Regular',      desc: 'Do 10 jams',                              tier: 'b', cond: (c) => (c.storyFlags?.jamCount || 0) >= 10 },
+  { id: 'open_mic_newcomer', label: 'Open Mic Newcomer', desc: 'Play your first open mic',                tier: 'b', cond: (c) => (c.openMicCount || 0) >= 1 },
+  { id: 'mic_veteran',     label: 'Mic Veteran',         desc: 'Play 10 open mics',                       tier: 's', cond: (c) => (c.openMicCount || 0) >= 10 },
+  { id: 'first_saturday',  label: 'First Saturday',      desc: 'Show up to your first battle',            tier: 'b', cond: (c) => !!c.storyFlags?.pigPenBattled },
+  { id: 'first_blood',     label: 'First Blood',         desc: 'Win your first battle',                   tier: 's', cond: (c) => (c.defeated || []).length >= 1 },
+  { id: 'pen_to_penny',    label: 'Pen to Penny',        desc: 'Beat Pig Pen twice',                      tier: 's', cond: (c) => (c.storyFlags?.pigPenWins || 0) >= 2 },
+  { id: 'the_crew',        label: 'The Crew',            desc: 'Defeat all 7 opponents',                  tier: 'g', cond: (c) => (c.defeated || []).length >= 7 },
+  { id: 'one_hundred',     label: 'One Hundred',         desc: 'Reach 100 followers',                     tier: 'b', cond: (c) => (c.followers || 0) >= 100 },
+  { id: 'thousand_strong', label: 'Thousand Strong',     desc: 'Reach 1,000 followers',                   tier: 's', cond: (c) => (c.followers || 0) >= 1000 },
+  { id: 'ten_k',           label: 'Ten Thousand',        desc: 'Reach 10,000 followers',                  tier: 'g', cond: (c) => (c.followers || 0) >= 10000 },
+  { id: 'gear_hoarder',    label: 'Gear Hoarder',        desc: 'Own 5 pieces of gear',                    tier: 'b', cond: (c) => Object.keys(c.gear || {}).length >= 5 },
+  { id: 'completist_gear', label: 'Completist (Gear)',   desc: 'Own every shop item',                     tier: 'g', cond: (c) => Object.keys(c.gear || {}).length >= 14 },
+  { id: 'sound_master',    label: 'Sound Master',        desc: 'Unlock every sound',                      tier: 'g', cond: (c) => (c.sounds || []).length >= 12 },
+  { id: 'in_love',         label: 'In Love',             desc: 'Become a couple with someone',            tier: 's', cond: (c) => Object.values(c.romanceState || {}).includes('couple') },
+  { id: 'penny_revealed',  label: 'Real Name Penny',     desc: 'Earn the Penny reveal',                   tier: 's', cond: (c) => !!c.storyFlags?.pennyReveal },
+  { id: 'crystix',         label: 'Bro from the Forum',  desc: 'Meet Crystix in person',                  tier: 's', cond: (c) => !!c.storyFlags?.crystixMet },
+  { id: 'sponsored',       label: 'Sponsored',           desc: 'Sign your first sponsorship',             tier: 'b', cond: (c) => Object.keys(c.storyFlags || {}).some(k => k.startsWith('sponsor_') && k.endsWith('_signed')) },
+  { id: 'all_sponsors',    label: 'Five-Brand Athlete',  desc: 'Sign all 5 sponsorships',                 tier: 'g', cond: (c) => ['snortvpn','redfull','sure','adipas','samsong'].every(s => c.storyFlags?.[`sponsor_${s}_signed`]) },
+  { id: 'level_10',        label: 'Level Ten',           desc: 'Reach level 10',                          tier: 'b', cond: (c) => (c.level || 1) >= 10 },
+];
+const TIER_COLOR = { b: '#a8a29e', s: '#dadada', g: '#fbbf24' };
+
+const newlyEarnedAchievements = (c) => {
+  return ACHIEVEMENTS.filter(a => !c.achievements?.[a.id] && a.cond(c));
+};
+const applyAchievements = (c) => {
+  const newly = newlyEarnedAchievements(c);
+  if (!newly.length) return { char: c, earned: [] };
+  const day = c.day || 0;
+  const ach = { ...(c.achievements || {}) };
+  for (const a of newly) ach[a.id] = day;
+  return { char: { ...c, achievements: ach }, earned: newly };
 };
 
 // Foxy — your roommate. Soft-spoken, plant person, makes too much soup.
@@ -5793,6 +5874,7 @@ const FoxyModal = ({ char, setChar, showToast, onClose }) => {
       ...c,
       mood: Math.min(100, (c.mood || 0) + 2),
       storyFlags: { ...(c.storyFlags || {}), lastFoxyWaveDay: c.day },
+      daily: { ...(c.daily || {}), foxyHi: (c.daily?.foxyHi || 0) + 1 },
     }));
     showToast?.('Foxy waved back. +2 mood', 'info');
   };
@@ -5856,6 +5938,51 @@ const FoxyModal = ({ char, setChar, showToast, onClose }) => {
   );
 };
 
+// ============ ACHIEVEMENTS PANEL ============
+const AchievementsPanel = ({ char, onClose }) => {
+  const earned = ACHIEVEMENTS.filter(a => char.achievements?.[a.id]);
+  const locked = ACHIEVEMENTS.filter(a => !char.achievements?.[a.id]);
+  const Row = ({ a, isEarned }) => {
+    const c = TIER_COLOR[a.tier] || '#a8a29e';
+    return (
+      <div className={`p-2 border bg-stone-900/30 ${isEarned ? 'border-stone-800' : 'border-stone-900 opacity-60'}`}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{isEarned ? '🏆' : '🔒'}</span>
+            <span className="text-sm" style={{ color: isEarned ? c : '#5a5046', fontFamily: '"Bebas Neue", "Oswald", sans-serif', letterSpacing: 1 }}>
+              {a.label.toUpperCase()}
+            </span>
+          </div>
+          {isEarned && <span className="text-[9px] uppercase tracking-widest text-stone-600">day {char.achievements[a.id]}</span>}
+        </div>
+        <div className="text-[10px] text-stone-500 uppercase tracking-wider">{a.desc}</div>
+      </div>
+    );
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: 'rgba(12, 10, 9, 0.90)' }}>
+      <div className="max-w-md w-full max-h-full overflow-y-auto bg-stone-950 border-2 border-stone-800">
+        <div className="sticky top-0 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
+          <div>
+            <div className="text-amber-500 text-xl tracking-widest" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              ACHIEVEMENTS
+            </div>
+            <div className="text-[9px] uppercase tracking-[0.3em] text-stone-500">
+              {earned.length}/{ACHIEVEMENTS.length} unlocked
+            </div>
+          </div>
+          <button onClick={onClose} className="text-stone-500 hover:text-amber-500 text-2xl px-3 py-1">×</button>
+        </div>
+        <div className="p-3 space-y-2">
+          {earned.map(a => <Row key={a.id} a={a} isEarned />)}
+          {earned.length > 0 && locked.length > 0 && <div className="border-t border-stone-900 my-1" />}
+          {locked.map(a => <Row key={a.id} a={a} isEarned={false} />)}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============ MINGLE ENCOUNTER MODAL ============
 // Single-beat dialogue UI: opener → reply choice → response. Applies the
 // chosen option's effects (mood / followers / cash / story flags / romance
@@ -5899,6 +6026,7 @@ const MingleEncounter = ({ char, setChar, encounter, showToast, onClose }) => {
       next.energy = Math.max(0, (next.energy || 0) - 6);
       next.mood = _clampPct(t.mood + (next.mood - (c.mood || 0)));
       next.mingleCount = (c.mingleCount || 0) + 1;
+      next.daily = { ...(c.daily || {}), mingles: (c.daily?.mingles || 0) + 1 };
       next.metEncounters = { ...(c.metEncounters || {}),
         [encounter.id]: ((c.metEncounters || {})[encounter.id] || 0) + 1 };
       return next;
@@ -8482,6 +8610,7 @@ export default function BeatboxStory() {
   // (onComplete handles both advance-past-end and skip.)
   const [cutscene, setCutscene] = useState(null);
   const [showMessages, setShowMessages] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
   // Pause the activity tick + time progression while a cutscene is up
   useEffect(() => { setGamePaused(!!cutscene); }, [cutscene]);
   // Queue a cutscene + a story flag to set when it ends. flagPath e.g. 'introSeen'.
@@ -8538,6 +8667,9 @@ export default function BeatboxStory() {
     if (!c.romanceState || typeof c.romanceState !== 'object') c.romanceState = {};
     if (c.dateBooking === undefined) c.dateBooking = null;
     if (!c.metEncounters || typeof c.metEncounters !== 'object') c.metEncounters = {};
+    if (!c.daily || typeof c.daily !== 'object') c.daily = {};
+    if (c.dailyChallenge === undefined) c.dailyChallenge = null;
+    if (!c.achievements || typeof c.achievements !== 'object') c.achievements = {};
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
     if (typeof c.lastPlantWaterDay !== 'number') c.lastPlantWaterDay = 0;
@@ -8631,10 +8763,13 @@ export default function BeatboxStory() {
     // checkLevelUp, so this catches them all in one place.
     const { char: withUnlocks, unlocked } = applySoundUnlocks(next);
     if (unlocked.length) {
-      // Defer toast(s) so they show after the current state flush
       setTimeout(() => unlocked.forEach(name => showToast(`🔓 Unlocked: ${name}`, 'win')), 80);
     }
-    return withUnlocks;
+    const { char: withAch, earned } = applyAchievements(withUnlocks);
+    if (earned.length) {
+      setTimeout(() => earned.forEach(a => showToast(`🏆 Achievement: ${a.label}`, 'win')), 140);
+    }
+    return withAch;
   };
 
   // ---- 2 AM hard cap ----
@@ -8760,6 +8895,13 @@ export default function BeatboxStory() {
                   );
                 })()}
                 <button
+                  onClick={() => setShowAchievements(true)}
+                  aria-label="Achievements"
+                  title="Achievements"
+                  className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-amber-500 border border-stone-800 hover:border-amber-500/50 transition-all">
+                  <Trophy size={14} />
+                </button>
+                <button
                   onClick={() => setScreen('slots')}
                   aria-label="Profiles & save slots"
                   title="Profiles & save slots"
@@ -8785,6 +8927,7 @@ export default function BeatboxStory() {
         {/* TOAST */}
         {cutscene && <Cutscene {...cutscene} />}
         {showMessages && <MessagesPanel char={char} setChar={setChar} onClose={() => setShowMessages(false)} />}
+        {showAchievements && <AchievementsPanel char={char} onClose={() => setShowAchievements(false)} />}
 
         {toast && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs">
@@ -9364,6 +9507,10 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         followers: (c.followers || 0) + extraFollowers };
       // Apply random event effects inline so the morning state reflects them
       if (randomEvent) next = applyRandomEvent(next, randomEvent);
+      // Reset daily counters + pick a new daily challenge
+      next.daily = {};
+      const newChallenge = pickDailyChallenge(newDay % 7, next);
+      next.dailyChallenge = newChallenge ? { id: newChallenge.id, claimed: false } : null;
       // Parent message triggers (cooldown ≥3 days between parent texts)
       const cd = newDay - (next.lastParentMsgDay || 0);
       if (cd >= 3) {
@@ -9529,6 +9676,56 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         </div>
       </button>
       {foxyOpen && <FoxyModal char={char} setChar={setChar} showToast={showToast} onClose={() => setFoxyOpen(false)} />}
+
+      {/* Daily challenge HUD */}
+      {(() => {
+        const dc = char.dailyChallenge;
+        if (!dc) return null;
+        const def = DAILY_CHALLENGES.find(x => x.id === dc.id);
+        if (!def) return null;
+        const progress = char.daily?.[def.counter] || 0;
+        const met = progress >= def.target;
+        const claimed = dc.claimed;
+        const claim = () => {
+          if (!met || claimed) return;
+          setChar(c => {
+            const r = def.reward || {};
+            return {
+              ...c,
+              cash: (c.cash || 0) + (r.cash || 0),
+              followers: (c.followers || 0) + (r.followers || 0),
+              mood: _clampPct((c.mood || 0) + (r.mood || 0)),
+              dailyChallenge: { ...c.dailyChallenge, claimed: true },
+            };
+          });
+          showToast?.(`Daily: +${def.reward?.cash ? `$${def.reward.cash}` : ''}${def.reward?.mood ? ` +${def.reward.mood}♥` : ''}${def.reward?.followers ? ` +${def.reward.followers} fans` : ''}`, 'win');
+        };
+        return (
+          <div className={`border-2 px-3 py-2 ${met && !claimed ? 'border-amber-500 bg-amber-500/5' : claimed ? 'border-stone-800 bg-stone-900/40 opacity-70' : 'border-stone-800 bg-stone-900/30'}`}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[9px] uppercase tracking-[0.3em] text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                DAILY CHALLENGE
+              </div>
+              <div className="text-[9px] uppercase tracking-widest text-stone-600">
+                {progress}/{def.target}{claimed ? ' · claimed' : ''}
+              </div>
+            </div>
+            <div className="text-stone-300 text-xs">{def.label}</div>
+            <div className="flex items-center justify-between mt-1">
+              <div className="text-[9px] uppercase tracking-widest text-stone-500">
+                Reward: {def.reward?.cash ? `$${def.reward.cash}` : ''}{def.reward?.mood ? ` +${def.reward.mood}♥` : ''}{def.reward?.followers ? ` +${def.reward.followers} fans` : ''}
+              </div>
+              <button onClick={claim} disabled={!met || claimed}
+                className={`px-2 py-1 text-[9px] uppercase tracking-widest border ${
+                  met && !claimed ? 'border-amber-500 text-amber-500 hover:bg-amber-500/10'
+                                  : 'border-stone-800 text-stone-700 cursor-not-allowed'
+                }`}>
+                {claimed ? 'CLAIMED' : met ? 'CLAIM →' : 'IN PROGRESS'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-4 gap-1">
         {[['train', 'PC / Train', 'pc'], ['studio', 'Studio', 'mic'], ['eat', 'Kitchen', 'fridge'], ['rest', 'Couch', 'couch']].map(([id, label, icon]) => (
@@ -10284,7 +10481,7 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         const earned = Math.floor(baseEarned * bonusMult);
         const fans = Math.random() < 0.4 || acc >= 0.8 ? 1 : 0;
         setChar(cc => {
-          const updated = { ...cc, cash: cc.cash + earned, followers: cc.followers + fans, xp: cc.xp + 6 };
+          const updated = bumpDaily({ ...cc, cash: cc.cash + earned, followers: cc.followers + fans, xp: cc.xp + 6 }, 'busks');
           return checkLevelUp(updated);
         });
         const bonusText = bonusMult > 1 ? ` (${Math.round((bonusMult - 1) * 100)}% bonus!)` : '';
@@ -10308,9 +10505,9 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         setChar(cc => {
           const flags = cc.storyFlags || {};
           const jamCount = (flags.jamCount || 0) + 1;
-          const updated = { ...cc, followers: cc.followers + fans, xp: cc.xp + 8,
+          const updated = bumpDaily({ ...cc, followers: cc.followers + fans, xp: cc.xp + 8,
             stats: { ...cc.stats, [stat]: cc.stats[stat] + 1 },
-            storyFlags: { ...flags, jamCount } };
+            storyFlags: { ...flags, jamCount } }, 'jams');
           return checkLevelUp(updated);
         });
         showToast(`+1 ${statName}, +${fans} fans`, 'win');
@@ -10368,12 +10565,12 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         const shoGain = ((isPlayMode && result.isGood) ? 2 : 1) + shoesBonus;
 
         setChar(cc => {
-          const updated = { ...cc,
+          const updated = bumpDaily({ ...cc,
             xp: cc.xp + 5,
             mood: Math.min(100, cc.mood + 4),
             energy: Math.max(0, cc.energy - burnEnergy),
             stats: { ...cc.stats, sho: cc.stats.sho + shoGain }
-          };
+          }, 'runs');
           return checkLevelUp(updated);
         });
         if (burnEnergy > 0) {
@@ -11070,6 +11267,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         openMicCount: (c.openMicCount || 0) + 1,
         xp: c.xp + 8,
         stats: { ...(c.stats || {}), sho: (c.stats?.sho || 0) + wardrobeBonus },
+        daily: { ...(c.daily || {}), openMics: (c.daily?.openMics || 0) + 1 },
       };
       // Good-show parent text trigger (only on a strong show, with cooldown)
       const cd = c.day - (c.lastParentMsgDay || 0);
@@ -11202,6 +11400,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp }) {
         showcaseBooking: null,
         lastShowcaseDay: c.day,
         stats: { ...(c.stats || {}), sho: (c.stats?.sho || 0) + wardrobeBonus },
+        daily: { ...(c.daily || {}), showcases: (c.daily?.showcases || 0) + 1 },
       };
       return checkLevelUp ? checkLevelUp(updated) : updated;
     });
@@ -12819,6 +13018,7 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
         lastBattleDay: c.day, // 1-battle-per-week cooldown
         storyFlags: flags,
         stats: { ...(c.stats || {}), sho: (c.stats?.sho || 0) + (hasGear(c, 'wardrobe_refresh') ? 1 : 0) },
+        daily: { ...(c.daily || {}), battleWins: (c.daily?.battleWins || 0) + (won ? 1 : 0) },
       };
       delete newC._opponent;
       return checkLevelUp(newC);
