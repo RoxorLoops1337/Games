@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Multiplayer Snake</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: #000;
+    color: #0f0;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 { margin: 12px 0 4px; letter-spacing: 4px; }
+  .panel {
+    width: 440px;
+    max-width: 95vw;
+    background: #001a00;
+    border: 1px solid #0f0;
+    padding: 12px;
+    margin: 8px 0;
+    box-sizing: border-box;
+  }
+  button, input {
+    background: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    font-family: monospace;
+    font-size: 14px;
+    padding: 6px 10px;
+  }
+  button:hover { background: #003300; cursor: pointer; }
+  input { width: 160px; }
+  canvas { background: #000; border: 2px solid #0f0; display: block; }
+  #scores { margin-top: 8px; font-size: 14px; line-height: 1.5; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hidden { display: none !important; }
+  .code {
+    font-size: 22px;
+    letter-spacing: 4px;
+    color: #fff;
+    background: #002200;
+    padding: 4px 8px;
+    border: 1px dashed #0f0;
+    user-select: all;
+  }
+  .muted { color: #088; font-size: 12px; }
+  #status { margin: 8px 0; font-size: 13px; min-height: 16px; }
+  a { color: #0ff; }
+</style>
+</head>
+<body>
+  <h1>MULTIPLAYER SNAKE</h1>
+  <div class="muted">peer-to-peer over WebRTC &middot; share the room code with friends</div>
+
+  <div id="lobby" class="panel">
+    <div class="row" style="justify-content:space-between;">
+      <button id="hostBtn">Host new room</button>
+      <div class="row">
+        <input id="joinCode" placeholder="ROOM CODE" maxlength="6" />
+        <button id="joinBtn">Join</button>
+      </div>
+    </div>
+    <div id="nameRow" class="row" style="margin-top:10px;">
+      <label>Name: <input id="nameInput" maxlength="12" value="Player" /></label>
+    </div>
+    <div id="status"></div>
+    <div id="hostInfo" class="hidden">
+      <div>Room code: <span id="roomCode" class="code"></span></div>
+      <div class="muted">Friends open this page and tap "Join".</div>
+      <button id="startBtn" style="margin-top:8px;">Start game</button>
+    </div>
+  </div>
+
+  <canvas id="game" width="500" height="500" class="hidden"></canvas>
+  <div id="scores" class="hidden"></div>
+  <div class="muted" style="margin:10px;">
+    Arrow keys / WASD to move &middot; Space to restart (host only) &middot;
+    <a href="../index.html">back</a>
+  </div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+(() => {
+  const COLS = 25, ROWS = 25, CELL = 20;
+  const TICK_MS = 130;
+  const COLORS = ['#0f0', '#0ff', '#ff0', '#f0f', '#f80', '#08f', '#f44', '#8f8'];
+
+  const $ = id => document.getElementById(id);
+  const canvas = $('game');
+  const ctx = canvas.getContext('2d');
+
+  const state = {
+    role: null,         // 'host' | 'client'
+    peer: null,
+    conns: new Map(),   // host: peerId -> DataConnection
+    hostConn: null,     // client: connection to host
+    roomCode: null,
+    me: { id: null, name: 'Player' },
+    players: new Map(), // id -> { name, color, snake, dir, nextDir, alive, score }
+    food: null,
+    started: false,
+    tickHandle: null,
+  };
+
+  function setStatus(msg) { $('status').textContent = msg; }
+
+  function makeCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 5; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  }
+
+  function peerIdFor(code) { return 'snake-' + code.toUpperCase(); }
+
+  // --- HOST -----------------------------------------------------------------
+  function hostRoom() {
+    const code = makeCode();
+    state.role = 'host';
+    state.roomCode = code;
+    state.me.name = $('nameInput').value.trim() || 'Host';
+
+    setStatus('Connecting to signaling server...');
+    state.peer = new Peer(peerIdFor(code));
+
+    state.peer.on('open', id => {
+      state.me.id = id;
+      addPlayer(id, state.me.name);
+      $('hostInfo').classList.remove('hidden');
+      $('roomCode').textContent = code;
+      $('hostBtn').disabled = true;
+      $('joinBtn').disabled = true;
+      setStatus('Room ready. Waiting for players...');
+    });
+
+    state.peer.on('connection', conn => {
+      conn.on('open', () => {
+        state.conns.set(conn.peer, conn);
+        conn.on('data', data => onHostData(conn, data));
+        conn.on('close', () => removePlayer(conn.peer));
+      });
+    });
+
+    state.peer.on('error', err => {
+      setStatus('Error: ' + err.type + ' (' + err.message + ')');
+    });
+  }
+
+  function onHostData(conn, msg) {
+    if (msg.type === 'join') {
+      addPlayer(conn.peer, msg.name || 'Player');
+      broadcastLobby();
+    } else if (msg.type === 'input') {
+      const p = state.players.get(conn.peer);
+      if (p && p.alive) applyInput(p, msg.dir);
+    }
+  }
+
+  function broadcastLobby() {
+    const payload = {
+      type: 'lobby',
+      players: [...state.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color })),
+      started: state.started,
+    };
+    for (const c of state.conns.values()) c.send(payload);
+    renderScores();
+  }
+
+  function broadcastState() {
+    const payload = {
+      type: 'state',
+      food: state.food,
+      players: [...state.players.values()].map(p => ({
+        id: p.id, name: p.name, color: p.color,
+        snake: p.snake, alive: p.alive, score: p.score,
+      })),
+    };
+    for (const c of state.conns.values()) c.send(payload);
+  }
+
+  function addPlayer(id, name) {
+    if (state.players.has(id)) return;
+    const colorIdx = state.players.size % COLORS.length;
+    state.players.set(id, {
+      id, name,
+      color: COLORS[colorIdx],
+      snake: [], dir: { x: 1, y: 0 }, nextDir: { x: 1, y: 0 },
+      alive: false, score: 0,
+    });
+  }
+
+  function removePlayer(id) {
+    state.players.delete(id);
+    state.conns.delete(id);
+    broadcastLobby();
+  }
+
+  function spawnSnake(p, idx, total) {
+    const margin = 3;
+    const startX = margin + Math.floor((COLS - 2 * margin) * (idx / Math.max(1, total)));
+    const startY = Math.floor(ROWS / 2);
+    p.snake = [
+      { x: startX,     y: startY },
+      { x: startX - 1, y: startY },
+      { x: startX - 2, y: startY },
+    ];
+    p.dir = { x: 1, y: 0 };
+    p.nextDir = { x: 1, y: 0 };
+    p.alive = true;
+  }
+
+  function placeFood() {
+    while (true) {
+      const fx = Math.floor(Math.random() * COLS);
+      const fy = Math.floor(Math.random() * ROWS);
+      let occupied = false;
+      for (const p of state.players.values()) {
+        if (p.snake.some(s => s.x === fx && s.y === fy)) { occupied = true; break; }
+      }
+      if (!occupied) { state.food = { x: fx, y: fy }; return; }
+    }
+  }
+
+  function applyInput(p, dir) {
+    if (!dir) return;
+    if (dir.x === -p.dir.x && dir.y === -p.dir.y) return; // no reverse
+    if (Math.abs(dir.x) + Math.abs(dir.y) !== 1) return;
+    p.nextDir = dir;
+  }
+
+  function startGame() {
+    if (state.players.size === 0) return;
+    state.started = true;
+    let i = 0;
+    const total = state.players.size;
+    for (const p of state.players.values()) {
+      p.score = 0;
+      spawnSnake(p, i++, total);
+    }
+    placeFood();
+    showGameUI();
+    broadcastLobby();
+    if (state.tickHandle) clearInterval(state.tickHandle);
+    state.tickHandle = setInterval(hostTick, TICK_MS);
+  }
+
+  function hostTick() {
+    const newHeads = new Map();
+    for (const p of state.players.values()) {
+      if (!p.alive) continue;
+      p.dir = p.nextDir;
+      const head = { x: p.snake[0].x + p.dir.x, y: p.snake[0].y + p.dir.y };
+      newHeads.set(p.id, head);
+    }
+    // wall + self collisions
+    for (const [id, head] of newHeads) {
+      const p = state.players.get(id);
+      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { p.alive = false; continue; }
+      if (p.snake.some((s, i) => i < p.snake.length - 1 && s.x === head.x && s.y === head.y)) {
+        p.alive = false;
+      }
+    }
+    // collisions vs other snakes (current bodies)
+    for (const [id, head] of newHeads) {
+      const p = state.players.get(id);
+      if (!p.alive) continue;
+      for (const other of state.players.values()) {
+        if (other.id === id) continue;
+        if (other.snake.some(s => s.x === head.x && s.y === head.y)) { p.alive = false; break; }
+      }
+    }
+    // head-to-head
+    const headPositions = new Map();
+    for (const [id, head] of newHeads) {
+      const key = head.x + ',' + head.y;
+      if (!headPositions.has(key)) headPositions.set(key, []);
+      headPositions.get(key).push(id);
+    }
+    for (const ids of headPositions.values()) {
+      if (ids.length > 1) for (const id of ids) state.players.get(id).alive = false;
+    }
+    // advance survivors
+    for (const [id, head] of newHeads) {
+      const p = state.players.get(id);
+      if (!p.alive) continue;
+      p.snake.unshift(head);
+      if (state.food && head.x === state.food.x && head.y === state.food.y) {
+        p.score++;
+        placeFood();
+      } else {
+        p.snake.pop();
+      }
+    }
+    broadcastState();
+    drawFromState({
+      food: state.food,
+      players: [...state.players.values()].map(p => ({
+        id: p.id, name: p.name, color: p.color,
+        snake: p.snake, alive: p.alive, score: p.score,
+      })),
+    });
+    renderScores();
+
+    const aliveCount = [...state.players.values()].filter(p => p.alive).length;
+    if (aliveCount <= (state.players.size > 1 ? 1 : 0)) {
+      clearInterval(state.tickHandle);
+      state.tickHandle = null;
+      state.started = false;
+      const winner = [...state.players.values()].find(p => p.alive);
+      const msg = winner ? winner.name + ' wins!' : 'Round over.';
+      for (const c of state.conns.values()) c.send({ type: 'roundOver', message: msg });
+      setStatus(msg + ' Host: press Start to play again.');
+    }
+  }
+
+  // --- CLIENT ---------------------------------------------------------------
+  function joinRoom() {
+    const code = $('joinCode').value.trim().toUpperCase();
+    if (code.length < 4) { setStatus('Enter a room code.'); return; }
+    state.role = 'client';
+    state.me.name = $('nameInput').value.trim() || 'Player';
+
+    setStatus('Connecting...');
+    state.peer = new Peer();
+    state.peer.on('open', () => {
+      const conn = state.peer.connect(peerIdFor(code), { reliable: true });
+      state.hostConn = conn;
+      conn.on('open', () => {
+        $('hostBtn').disabled = true;
+        $('joinBtn').disabled = true;
+        $('joinCode').disabled = true;
+        setStatus('Connected. Waiting for host to start...');
+        conn.send({ type: 'join', name: state.me.name });
+      });
+      conn.on('data', onClientData);
+      conn.on('close', () => setStatus('Disconnected from host.'));
+    });
+    state.peer.on('error', err => setStatus('Error: ' + err.type));
+  }
+
+  function onClientData(msg) {
+    if (msg.type === 'lobby') {
+      state.players = new Map(msg.players.map(p => [p.id, p]));
+      renderScores();
+      if (msg.started) showGameUI();
+    } else if (msg.type === 'state') {
+      state.food = msg.food;
+      state.players = new Map(msg.players.map(p => [p.id, p]));
+      showGameUI();
+      drawFromState(msg);
+      renderScores();
+    } else if (msg.type === 'roundOver') {
+      setStatus(msg.message);
+    }
+  }
+
+  // --- RENDER ---------------------------------------------------------------
+  function showGameUI() {
+    canvas.classList.remove('hidden');
+    $('scores').classList.remove('hidden');
+  }
+
+  function drawFromState(s) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // grid
+    ctx.strokeStyle = '#021';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, ROWS * CELL); ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(COLS * CELL, y * CELL); ctx.stroke();
+    }
+    if (s.food) {
+      ctx.fillStyle = '#f00';
+      ctx.fillRect(s.food.x * CELL + 2, s.food.y * CELL + 2, CELL - 4, CELL - 4);
+    }
+    for (const p of s.players) {
+      ctx.fillStyle = p.alive ? p.color : '#333';
+      for (let i = 0; i < p.snake.length; i++) {
+        const seg = p.snake[i];
+        const pad = i === 0 ? 0 : 1;
+        ctx.fillRect(seg.x * CELL + pad, seg.y * CELL + pad, CELL - pad * 2, CELL - pad * 2);
+      }
+    }
+  }
+
+  function renderScores() {
+    const lines = [];
+    const players = state.role === 'host'
+      ? [...state.players.values()]
+      : [...state.players.values()];
+    for (const p of players) {
+      const tag = p.id === state.me.id ? ' (you)' : '';
+      const dead = p.alive === false && state.started ? ' [dead]' : '';
+      lines.push(`<span style="color:${p.color}">&#9632;</span> ${escapeHtml(p.name)}${tag} — ${p.score || 0}${dead}`);
+    }
+    $('scores').innerHTML = lines.join('<br>');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // --- INPUT ----------------------------------------------------------------
+  document.addEventListener('keydown', e => {
+    let dir = null;
+    switch (e.key) {
+      case 'ArrowUp': case 'w': case 'W': dir = { x: 0, y: -1 }; break;
+      case 'ArrowDown': case 's': case 'S': dir = { x: 0, y: 1 }; break;
+      case 'ArrowLeft': case 'a': case 'A': dir = { x: -1, y: 0 }; break;
+      case 'ArrowRight': case 'd': case 'D': dir = { x: 1, y: 0 }; break;
+      case ' ':
+        if (state.role === 'host' && !state.tickHandle) startGame();
+        e.preventDefault();
+        return;
+    }
+    if (!dir) return;
+    e.preventDefault();
+    if (state.role === 'host') {
+      const me = state.players.get(state.me.id);
+      if (me && me.alive) applyInput(me, dir);
+    } else if (state.role === 'client' && state.hostConn && state.hostConn.open) {
+      state.hostConn.send({ type: 'input', dir });
+    }
+  });
+
+  // --- WIRING ---------------------------------------------------------------
+  $('hostBtn').addEventListener('click', hostRoom);
+  $('joinBtn').addEventListener('click', joinRoom);
+  $('startBtn').addEventListener('click', startGame);
+  $('joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
+})();
+</script>
+</body>
+</html>
