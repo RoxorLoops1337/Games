@@ -206,6 +206,7 @@ const initialChar = () => ({
   festivalPath: null, // 'A' | 'B' | 'C'
   festivalResult: null, // 'win' | 'lose'
   outfit: 'default', // active stage outfit id (see OUTFITS catalog)
+  accessory: 'none', // active accessory id (see ACCESSORIES catalog)
   bjarneSessions: 0, // BeeAmGee studio coaching sessions completed
   lastBjarneDay: 0, // last day you trained with BeeAmGee (cooldown: 3 days)
   apartmentMovedInDay: 0, // track when you upgraded for the move-in cutscene gating
@@ -590,11 +591,31 @@ const OUTFITS = {
   romance_pink:   { name: 'Mira\'s Hand-Stitched', desc: 'Mira couple',            shirt: '#fb7185',  cond: (c) => c.romanceState?.mira === 'couple' },
   romance_lime:   { name: 'Sky\'s Joke Shirt',     desc: 'Sky couple',             shirt: '#84cc16',  cond: (c) => c.romanceState?.sky === 'couple' },
   romance_cyan:   { name: 'Luca\'s Studio Tee',    desc: 'Luca couple',            shirt: '#22d3ee',  cond: (c) => c.romanceState?.luca === 'couple' },
+  romance_amber:  { name: 'Pascal\'s Press Tee',   desc: 'Pascal couple',          shirt: '#fbbf24',  cond: (c) => c.romanceState?.pascal === 'couple' },
+  romance_violet: { name: 'Jin\'s Studio Wrap',    desc: 'Jin couple',             shirt: '#a78bfa',  cond: (c) => c.romanceState?.jin === 'couple' },
+  romance_rose:   { name: 'Roo\'s Festival Pass',  desc: 'Roo couple',             shirt: '#fb7185',  cond: (c) => c.romanceState?.roo === 'couple' },
 };
 const outfitUnlocked = (c, id) => {
   const o = OUTFITS[id];
   if (!o) return false;
   try { return o.cond(c); } catch { return false; }
+};
+
+// Stage accessories (hats, glasses) — separate slot from outfits, applied on
+// top of the chosen outfit. Each has its own milestone gate.
+const ACCESSORIES = {
+  none:       { name: 'None',         desc: '',                          id: null,         cond: () => true },
+  cap:        { name: 'Snapback',     desc: '5 open mics done',          id: 'cap',        cond: (c) => (c.openMicCount || 0) >= 5 },
+  beanie:     { name: 'Studio Beanie', desc: 'Train with BeeAmGee 3x',    id: 'beanie',     cond: (c) => (c.bjarneSessions || 0) >= 3 },
+  shades:     { name: 'Shades',       desc: '50 followers',              id: 'shades',     cond: (c) => (c.followers || 0) >= 50 },
+  glasses:    { name: 'Round Glasses', desc: 'Pascal couple',            id: 'glasses',    cond: (c) => c.romanceState?.pascal === 'couple' },
+  fedora:     { name: 'Fedora',       desc: '10 jams done',              id: 'fedora',     cond: (c) => (c.storyFlags?.jamCount || 0) >= 10 },
+  headphones: { name: 'Headphones',   desc: 'Buy premium headphones',    id: 'headphones', cond: (c) => !!c.gear?.premium_headphones },
+};
+const accessoryUnlocked = (c, id) => {
+  const a = ACCESSORIES[id];
+  if (!a) return false;
+  try { return a.cond(c); } catch { return false; }
 };
 // Returns the shirt color in effect for performances (active outfit if
 // unlocked + selected, else char.color).
@@ -1616,13 +1637,205 @@ const _askOutEnc = (id, name, color, look) => _enc(`romance_${id}_askout`, { wei
   }],
 });
 
+// PASCAL — he/him, music critic. Right answers: confident but humble, real.
+// Wrong: defensive, name-dropping.
+const _PASCAL_LOOK = { shirt: '#fbbf24', skin: '#c89878', hair: '#3a2010' };
+const ROMANCE_PASCAL = _enc('romance_pascal', { weight: 2,
+  look: _PASCAL_LOOK,
+  when: (c) => (c.followers || 0) >= 30, // shows up once you're on the radar
+  beats: [
+    { speaker: { name: 'PASCAL', color: '#fbbf24' },
+      line: "i write about music. i was at your last open mic. i had thoughts.",
+      options: [
+        { text: "go on. i can take it.",
+          outcome: { line: "the third pattern needed more space. the second was perfect. you knew it was perfect.",
+            effects: { mood: +6, affinity: { pascal: +1 } } } },
+        { text: "good ones?",
+          outcome: { line: "some good. some honest. you want both?",
+            effects: { mood: +3 } } },
+        { text: "everyone has thoughts.",
+          outcome: { line: "...yeah. ok.",
+            effects: { mood: -3, affinity: { pascal: -1 } } } },
+      ]},
+    { speaker: { name: 'PASCAL', color: '#fbbf24' },
+      line: "i used to play. trumpet. i was never very good. that's why i write.",
+      options: [
+        { text: "i bet you were better than you remember.",
+          outcome: { line: "...maybe. nobody's said that to me.",
+            effects: { mood: +6, affinity: { pascal: +1 } } } },
+        { text: "writing's its own thing. it counts.",
+          outcome: { line: "thanks. i needed that.",
+            effects: { mood: +5, affinity: { pascal: +1 } } } },
+        { text: "trumpet's hard.",
+          outcome: { line: "yeah. it is.",
+            effects: { mood: +1 } } },
+      ]},
+    { speaker: { name: 'PASCAL', color: '#fbbf24' },
+      line: "what's the worst review you've ever gotten?",
+      options: [
+        { text: "honestly? something my dad said in 2018. still in my head.",
+          outcome: { line: "those are the only ones that count, aren't they.",
+            effects: { mood: +8, affinity: { pascal: +1 } } } },
+        { text: "i don't read reviews.",
+          outcome: { line: "everyone reads them. don't lie.",
+            effects: { mood: -2 } } },
+        { text: "i don't get bad ones.",
+          outcome: { line: "...alright, mozart.",
+            effects: { mood: -4, affinity: { pascal: -1 } } } },
+      ]},
+    { speaker: { name: 'PASCAL', color: '#fbbf24' },
+      line: "i'm trying to write a long-form piece about why this scene matters. why does it matter to you?",
+      options: [
+        { text: "it's the only place i'm in my body and not my head.",
+          outcome: { line: "i'm putting that in. with your name. is that ok?",
+            effects: { mood: +10, affinity: { pascal: +2 } } } },
+        { text: "it's just fun.",
+          outcome: { line: "fun's an underrated reason.",
+            effects: { mood: +3 } } },
+        { text: "i don't really think about it.",
+          outcome: { line: "you should. now you'll have to.",
+            effects: { mood: +2 } } },
+      ]},
+  ],
+});
+
+// JIN — they/them, dancer/choreographer. Right answers: respectful of the
+// craft, willing to be wrong, curious.
+const _JIN_LOOK = { shirt: '#a78bfa', skin: '#e4b890', hair: '#1a1a1a' };
+const ROMANCE_JIN = _enc('romance_jin', { weight: 2,
+  look: _JIN_LOOK,
+  when: (c) => (c.openMicCount || 0) >= 3,
+  beats: [
+    { speaker: { name: 'JIN', color: '#a78bfa' },
+      line: "i choreograph for the underground. i've been watching you. you have rhythm but no body.",
+      options: [
+        { text: "i'd love to learn what you mean by that.",
+          outcome: { line: "...yeah. ok. that's the right answer.",
+            effects: { mood: +6, affinity: { jin: +1 } } } },
+        { text: "people pay to hear me. body's optional.",
+          outcome: { line: "they'll pay more if you give them both.",
+            effects: { mood: +1 } } },
+        { text: "what's that even supposed to mean.",
+          outcome: { line: "if you have to ask. yeah.",
+            effects: { mood: -3, affinity: { jin: -1 } } } },
+      ]},
+    { speaker: { name: 'JIN', color: '#a78bfa' },
+      line: "every great performer i've worked with stops thinking eventually. how close are you?",
+      options: [
+        { text: "honestly? not close. i'm in my head a lot.",
+          outcome: { line: "good. that's the first step. admitting it.",
+            effects: { mood: +6, affinity: { jin: +1 } } } },
+        { text: "i'm there sometimes. depends on the night.",
+          outcome: { line: "yeah. depends. always depends.",
+            effects: { mood: +3 } } },
+        { text: "i don't think while i perform.",
+          outcome: { line: "everyone thinks. you just notice or you don't.",
+            effects: { mood: +1 } } },
+      ]},
+    { speaker: { name: 'JIN', color: '#a78bfa' },
+      line: "i work with my body for a living. mine hates me by 30. yours will too.",
+      options: [
+        { text: "what helps?",
+          outcome: { line: "stretching every morning. your jaw, your neck. listen to your throat.",
+            effects: { mood: +6, affinity: { jin: +1 } } } },
+        { text: "i'm careful.",
+          outcome: { line: "everyone says that until they aren't.",
+            effects: { mood: +2 } } },
+        { text: "i'll worry about that later.",
+          outcome: { line: "famous last words.",
+            effects: { mood: -3, affinity: { jin: -1 } } } },
+      ]},
+    { speaker: { name: 'JIN', color: '#a78bfa' },
+      line: "i'm putting together a piece. dance + beatbox. live. would you ever do that?",
+      options: [
+        { text: "yes. immediately. tell me when.",
+          outcome: { line: "ok. friday. i'll send you the studio address.",
+            effects: { mood: +10, affinity: { jin: +2 }, flags: { jinCollab: true } } } },
+        { text: "tell me more first.",
+          outcome: { line: "fair. i'll write up the brief.",
+            effects: { mood: +3 } } },
+        { text: "not really my thing.",
+          outcome: { line: "ok. fine. won't ask twice.",
+            effects: { mood: -3, affinity: { jin: -1 } } } },
+      ]},
+  ],
+});
+
+// ROO — she/her, festival promoter. Right answers: ambitious without being
+// transactional, says no when it's no.
+const _ROO_LOOK = { shirt: '#fb7185', skin: '#d4a87a', hair: '#fbbf24' };
+const ROMANCE_ROO = _enc('romance_roo', { weight: 2,
+  look: _ROO_LOOK,
+  when: (c) => (c.followers || 0) >= 80,
+  beats: [
+    { speaker: { name: 'ROO', color: '#fb7185' },
+      line: "i book stages. nothing big yet. i'm watching everybody right now. don't be normal.",
+      options: [
+        { text: "no promises. but i'll try not to be boring.",
+          outcome: { line: "good answer. that's the only one i'll remember tomorrow.",
+            effects: { mood: +6, affinity: { roo: +1 } } } },
+        { text: "i'm normal. that's why i beatbox.",
+          outcome: { line: "haha. ok. you have a sense of humor at least.",
+            effects: { mood: +3 } } },
+        { text: "what kind of stages?",
+          outcome: { line: "the kind you'd want to be on.",
+            effects: { mood: +2 } } },
+      ]},
+    { speaker: { name: 'ROO', color: '#fb7185' },
+      line: "everyone wants to be on a festival stage. nobody wants to do the work to deserve one.",
+      options: [
+        { text: "i'm doing the work. you'll see.",
+          outcome: { line: "i hope so. i'm rooting for somebody this year.",
+            effects: { mood: +6, affinity: { roo: +1 } } } },
+        { text: "what's the work look like to you?",
+          outcome: { line: "twenty minutes you'd watch sober. that's it.",
+            effects: { mood: +5, affinity: { roo: +1 } } } },
+        { text: "i deserve one.",
+          outcome: { line: "...do you? we'll see.",
+            effects: { mood: -3, affinity: { roo: -1 } } } },
+      ]},
+    { speaker: { name: 'ROO', color: '#fb7185' },
+      line: "what would you do if i offered you a slot, no questions, just yes or no?",
+      options: [
+        { text: "i'd ask what slot. i'd want to know what i'm walking into.",
+          outcome: { line: "good. people who say yes too fast disappoint me.",
+            effects: { mood: +8, affinity: { roo: +1 } } } },
+        { text: "yes. obviously.",
+          outcome: { line: "...obviously.",
+            effects: { mood: +1 } } },
+        { text: "depends on the bag.",
+          outcome: { line: "ok. i hear you. i don't love it. but i hear you.",
+            effects: { mood: -2 } } },
+      ]},
+    { speaker: { name: 'ROO', color: '#fb7185' },
+      line: "people in this scene get burned out fast. how do you keep showing up?",
+      options: [
+        { text: "i don't always. some weeks are bad. i just don't quit.",
+          outcome: { line: "that's the answer. that's the only answer.",
+            effects: { mood: +10, affinity: { roo: +2 } } } },
+        { text: "i love it.",
+          outcome: { line: "everyone says that. then they leave.",
+            effects: { mood: +2 } } },
+        { text: "i'm not burned out.",
+          outcome: { line: "give it a year.",
+            effects: { mood: -2 } } },
+      ]},
+  ],
+});
+
 const MINGLE_ROMANCE = [
   ROMANCE_LUCA,
   ROMANCE_MIRA,
   ROMANCE_SKY,
+  ROMANCE_PASCAL,
+  ROMANCE_JIN,
+  ROMANCE_ROO,
   _askOutEnc('luca', 'LUCA', '#22d3ee', _LUCA_LOOK),
   _askOutEnc('mira', 'MIRA', '#fb7185', _MIRA_LOOK),
   _askOutEnc('sky',  'SKY',  '#84cc16', _SKY_LOOK),
+  _askOutEnc('pascal', 'PASCAL', '#fbbf24', _PASCAL_LOOK),
+  _askOutEnc('jin',    'JIN',    '#a78bfa', _JIN_LOOK),
+  _askOutEnc('roo',    'ROO',    '#fb7185', _ROO_LOOK),
 ];
 
 // Bad encounter — drunk in your face. No good options. Mood penalty.
@@ -9395,6 +9608,10 @@ export default function BeatboxStory() {
     if (c.festivalPath === undefined) c.festivalPath = null;
     if (c.festivalResult === undefined) c.festivalResult = null;
     if (typeof c.outfit !== 'string') c.outfit = 'default';
+    if (typeof c.accessory !== 'string') c.accessory = 'none';
+    if (typeof c.lastStreamDay !== 'number') c.lastStreamDay = 0;
+    if (typeof c.lastStreamViewers !== 'number') c.lastStreamViewers = 0;
+    if (typeof c.sickDay !== 'number') c.sickDay = 0;
     if (typeof c.bjarneSessions !== 'number') c.bjarneSessions = 0;
     if (typeof c.lastBjarneDay !== 'number') c.lastBjarneDay = 0;
     if (typeof c.apartmentMovedInDay !== 'number') c.apartmentMovedInDay = 0;
@@ -9862,6 +10079,71 @@ function HoodScreen({ go, char }) {
         </button>
       ))}
     </div>
+  );
+}
+
+// ---- Livestream panel: go live for X minutes, earn $/fans by stats + viewers ----
+// Unlocked at 20 followers (small audience needed). Once-per-day cooldown.
+// Tier-2/3 apartment buffs your viewer ceiling and reward.
+function LivestreamPanel({ char, setChar, showToast, checkLevelUp }) {
+  const minFollowers = 20;
+  const locked = (char.followers || 0) < minFollowers;
+  const lastDay = char.lastStreamDay || 0;
+  const onCooldown = lastDay === char.day;
+  const tier = char.apartmentTier || 1;
+  const energyCost = 15;
+  const canStream = !locked && !onCooldown && (char.energy || 0) >= energyCost;
+  const goLive = () => {
+    if (!canStream) return;
+    setChar(c => {
+      const stats = c.stats || {};
+      const skill = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
+      const fanCap = Math.max(8, Math.floor((c.followers || 0) * 0.15));
+      const tierBoost = tier === 3 ? 1.4 : tier === 2 ? 1.2 : 1.0;
+      const skillFactor = Math.min(1.5, 0.5 + skill / 80);
+      const viewers = Math.floor((10 + Math.random() * fanCap) * skillFactor * tierBoost);
+      const tipDollars = Math.floor(viewers * (0.3 + Math.random() * 0.4));
+      const fanGain = Math.floor(viewers / 6);
+      const t = passMinutes(c, 60);
+      return checkLevelUp({
+        ...c, ...t,
+        cash: c.cash + tipDollars,
+        followers: c.followers + fanGain,
+        energy: Math.max(0, c.energy - energyCost),
+        mood: Math.min(100, t.mood + 4),
+        xp: c.xp + 6,
+        heat: (c.heat || 0) + 2,
+        lastStreamDay: c.day,
+        lastStreamViewers: viewers,
+      });
+    });
+    showToast('Stream done — check the panel for tonight\'s numbers', 'win');
+  };
+  const lastViewers = char.lastStreamViewers || 0;
+  return (
+    <Panel title="Livestream">
+      <div className="space-y-2">
+        {locked ? (
+          <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+            🔒 Need {minFollowers} followers to go live
+          </div>
+        ) : (
+          <>
+            <div className="text-[10px] text-stone-400 leading-relaxed">
+              60 min · –{energyCost}⚡ · viewers and tips scale with skill, fans, and apartment tier.
+            </div>
+            {lastViewers > 0 && (
+              <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                last stream · {lastViewers} viewers
+              </div>
+            )}
+            <Btn variant="primary" onClick={goLive} disabled={!canStream} className="w-full py-3">
+              {onCooldown ? 'STREAMED TODAY' : (char.energy || 0) < energyCost ? 'TOO TIRED' : '🔴 GO LIVE — 60 min'}
+            </Btn>
+          </>
+        )}
+      </div>
+    </Panel>
   );
 }
 
@@ -10963,6 +11245,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       {tab === 'studio' && (
         <div className="space-y-3">
           <SoundStudio activeSlot={activeSlot} showToast={showToast} char={char} />
+          <LivestreamPanel char={char} setChar={setChar} showToast={showToast} checkLevelUp={checkLevelUp} />
           {char.storyFlags?.bjarneIntroduced && (
             <BjarneCoachingPanel char={char} setChar={setChar} showToast={showToast} playCutscene={playCutscene} checkLevelUp={checkLevelUp} />
           )}
@@ -11104,6 +11387,35 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
               </div>
               <div className="text-[10px] text-stone-600 uppercase tracking-wider text-center">
                 applied to all on-stage performances
+              </div>
+            </div>
+
+            {/* Stage Accessories */}
+            <div className="border-t border-stone-800 pt-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                ACCESSORIES
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {Object.entries(ACCESSORIES).map(([id, a]) => {
+                  const unlocked = accessoryUnlocked(char, id);
+                  const active = (char.accessory || 'none') === id;
+                  const label = a.name;
+                  return (
+                    <button key={id}
+                      onClick={() => unlocked && setChar(c => ({ ...c, accessory: id }))}
+                      disabled={!unlocked}
+                      title={unlocked ? `${a.name}${a.desc ? ' · ' + a.desc : ''}` : `🔒 ${a.desc}`}
+                      className={`aspect-square border-2 flex items-center justify-center transition-all ${
+                        active ? 'border-amber-500 bg-amber-500/10' :
+                        unlocked ? 'border-stone-800 hover:border-amber-500/50 bg-stone-900/30' :
+                                   'border-stone-900 bg-stone-950/40 opacity-40 cursor-not-allowed'
+                      }`}>
+                      <div className="text-[9px] uppercase tracking-widest text-stone-400 text-center px-1">
+                        {unlocked ? label : '🔒'}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -12433,6 +12745,37 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
     });
     showToast(`Karaoke: +${musGain} musicality, +$${earn}`, 'win');
   };
+  // Karaoke Challenge — 3-song streak with rising difficulty. Each "round" is a
+  // skill check vs (mus + sho) + random — fail any and you bow out with what
+  // you've got. Pure narrative resolution, no minigame UI.
+  const doKaraokeChallenge = () => {
+    if (char.energy < 24) { showToast('Need 24 energy for the challenge', 'bad'); return; }
+    if ((char.sickDay || 0) === char.day) { showToast('Lost your voice — call it a night', 'bad'); return; }
+    const stats = char.stats || {};
+    const skill = (stats.mus || 0) + Math.floor((stats.sho || 0) / 2);
+    let rounds = 0;
+    const log = [];
+    for (let i = 0; i < 3; i++) {
+      const target = 5 + i * 6;
+      const roll = skill + Math.floor(Math.random() * 12) - 4;
+      if (roll >= target) { rounds++; log.push(`Round ${i+1}: nailed it (${roll} vs ${target})`); }
+      else { log.push(`Round ${i+1}: cracked (${roll} vs ${target})`); break; }
+    }
+    const baseEarn = rounds * 14 + Math.floor(Math.random() * 8);
+    const fanGain = rounds >= 3 ? 5 : rounds >= 1 ? 1 : 0;
+    const musGain = 1 + Math.floor(rounds / 2);
+    setChar(c => {
+      const t = passMinutes(c, 30 + rounds * 10);
+      return checkLevelUp({ ...c, ...t,
+        cash: c.cash + baseEarn,
+        followers: c.followers + fanGain,
+        energy: Math.max(0, c.energy - 24),
+        mood: Math.min(100, t.mood + (rounds >= 3 ? 14 : rounds >= 1 ? 6 : -4)),
+        stats: { ...c.stats, mus: c.stats.mus + musGain, sho: c.stats.sho + 1 },
+        xp: c.xp + (8 + rounds * 4) });
+    });
+    showToast(rounds === 3 ? `Karaoke 3-streak! +$${baseEarn}, +${fanGain} fans` : rounds >= 1 ? `Karaoke ${rounds}/3 · +$${baseEarn}` : 'Choked on round 1', rounds >= 1 ? 'win' : 'bad');
+  };
 
   // ---- Rohzel / Friday-showcase booking ----
   const SHOWCASE_FANS_REQ = 50;
@@ -12888,6 +13231,12 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
             <Btn variant="primary" onClick={doKaraoke} disabled={char.energy < 8} className="w-full py-3">
               GRAB THE MIC 🎶 (-8⚡, +30 min)
             </Btn>
+            <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-2">
+              Or try the 3-song streak — bigger reward, harder each round.
+            </div>
+            <Btn variant="primary" onClick={doKaraokeChallenge} disabled={char.energy < 24} className="w-full py-3">
+              KARAOKE CHALLENGE 🏆 (-24⚡)
+            </Btn>
             {char.energy < 8 && <div className="text-[10px] text-red-500 text-center uppercase">Need 8 energy</div>}
           </div>
         </Panel>
@@ -13066,9 +13415,39 @@ const drawBeatboxer = (ctx, x, y, look, facing, active, frameCount) => {
   const blink = frameCount % 120 < 4;
   if (look.accessory === 'shades') {
     px(-3, -23, 7, 1, '#0c0a09');
+  } else if (look.accessory === 'glasses') {
+    // Round glasses — two circles with a bridge
+    px(-3, -23, 2, 2, '#1a1a1a');
+    px(1, -23, 2, 2, '#1a1a1a');
+    px(-1, -22, 2, 1, '#1a1a1a');
+    if (!blink) {
+      px(-2, -22, 1, 1, '#fafafa');
+      px(2, -22, 1, 1, '#fafafa');
+    }
   } else if (!blink) {
     px(-3, -23, 1, 1, '#1a1a2e');
     px(1, -23, 1, 1, '#1a1a2e');
+  }
+  // Hat accessories layered over hair
+  if (look.accessory === 'cap') {
+    px(-5, -28, 10, 2, '#dc2626'); // crown
+    px(-5, -28, 10, 1, '#fbbf24'); // band
+    px(facing === 'right' ? 4 : -8, -27, 4, 1, '#dc2626'); // brim
+  } else if (look.accessory === 'beanie') {
+    px(-4, -29, 8, 4, '#1a1a1a');
+    px(-4, -27, 8, 1, '#fbbf24');
+    px(-1, -30, 2, 1, '#1a1a1a');
+  } else if (look.accessory === 'fedora') {
+    px(-6, -29, 12, 1, '#1a1a1a');
+    px(-4, -31, 8, 2, '#1a1a1a');
+    px(-3, -28, 6, 1, '#fbbf24');
+  } else if (look.accessory === 'headphones') {
+    // Headphones over the head
+    px(-5, -27, 1, 5, '#1a1a1a');
+    px(4, -27, 1, 5, '#1a1a1a');
+    px(-4, -28, 8, 1, '#1a1a1a');
+    px(-6, -25, 1, 3, '#dc2626');
+    px(4, -25, 1, 3, '#dc2626');
   }
   // Mouth (animated when active)
   const mf = active ? Math.floor(frameCount / 4) % 4 : 0;
@@ -13115,13 +13494,18 @@ const drawPixelHeart = (ctx, x, y, alpha = 1) => {
 };
 
 // Build the canvas-friendly "look" object from a character record
-const lookFromChar = (char) => ({
-  shirt: activeOutfitShirt(char),
-  skin:  char?.skin || '#d4a87a',
-  hair:  char?.hairColor || '#1a1a2e',
-  style: char?.hairStyle || 'short',
-  accessory: null,
-});
+const lookFromChar = (char) => {
+  const accId = char?.accessory || 'none';
+  const acc = ACCESSORIES[accId];
+  const isUnlocked = acc && (() => { try { return acc.cond(char); } catch { return false; } })();
+  return {
+    shirt: activeOutfitShirt(char),
+    skin:  char?.skin || '#d4a87a',
+    hair:  char?.hairColor || '#1a1a2e',
+    style: char?.hairStyle || 'short',
+    accessory: isUnlocked ? acc.id : null,
+  };
+};
 
 // Reusable pixel-art portrait — renders drawBeatboxer at any size on a small canvas.
 const CharacterPortrait = ({ look, size = 64, active = false, bg = '#1c1917', className = '' }) => {
