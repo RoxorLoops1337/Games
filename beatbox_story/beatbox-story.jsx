@@ -8102,25 +8102,93 @@ const drawFlashbackSongScene = (ctx, fc, look) => {
 // Dream sequence — abstract surreal scene. Fires on rare sleep events post-day-30.
 const drawDreamScene = (ctx, fc, look) => {
   const W = 200, H = 130;
-  // Gradient sky in violet/pink (dream tint)
-  _drawSky(ctx, W, H, 0x1a, 0x10, 0x40, 0x6a, 0x20, 0x8a);
-  // Floating geometric shapes
-  for (let i = 0; i < 6; i++) {
-    const x = (i * 33 + fc) % W;
-    const y = 20 + ((i * 17 + (fc / 2 | 0)) % 80);
-    const sz = 6 + (i % 3) * 3;
-    const colors = ['#fbbf24', '#22d3ee', '#fb7185', '#a78bfa', '#84cc16', '#f97316'];
-    _px(ctx, x, y, sz, sz, colors[i]);
+  // Violet/pink dream sky, darker at top
+  _drawSky(ctx, W, 86, 0x12, 0x08, 0x30, 0x6a, 0x20, 0x8a);
+  // Twinkling stars and pink motes
+  for (let i = 0; i < 20; i++) {
+    const sx = (i * 13 + (fc / 4 | 0)) % W;
+    const sy = (i * 7) % 60;
+    const tw = (fc + i * 9) % 80;
+    if (tw < 50) _px(ctx, sx, sy, 1, 1, tw < 25 ? '#fef3c7' : '#fbcfe8');
   }
-  // Distant stage with a giant mic floating in the air
-  _px(ctx, 80, 50, 40, 4, '#1a1a1a');
-  _px(ctx, 96, 30, 8, 24, '#1a1a1a');
-  _px(ctx, 92, 22, 16, 12, '#3a3a3a');
-  // Crowd silhouettes (just heads)
-  for (let i = 0; i < 14; i++) _px(ctx, 5 + i * 14, 100 + (i % 3) * 4, 6, 5, '#1a1a1a');
-  // Player floating mid-air, no ground beneath
+  // Glowing horizon band where the stage meets the void
+  for (let y = 80; y < 90; y++) {
+    const t = (y - 80) / 10;
+    const r = Math.floor(0x6a + t * 0x40);
+    const g = Math.floor(0x20 + t * 0x18);
+    const b = Math.floor(0x8a - t * 0x40);
+    _px(ctx, 0, y, W, 1, `rgb(${r},${g},${b})`);
+  }
+  // Stage floor — receding checker with subtle scroll
+  _px(ctx, 0, 90, W, 40, '#0a0820');
+  for (let row = 0; row < 5; row++) {
+    const y = 90 + row * 8;
+    const cellW = 6 + row * 3;
+    const offset = (fc / 6 + row * 4) | 0;
+    for (let x = -cellW + (offset % (cellW * 2)); x < W; x += cellW * 2) {
+      _px(ctx, x, y, cellW, 8, '#1a0d3a');
+    }
+  }
+  // Floating geometric shapes — drift, bob, faint echo trail
+  const colors = ['#fbbf24', '#22d3ee', '#fb7185', '#a78bfa', '#84cc16', '#f97316', '#fde68a'];
+  for (let i = 0; i < 8; i++) {
+    const baseX = (i * 27 + (fc / 2 | 0)) % (W + 20) - 10;
+    const baseY = 18 + ((i * 19) % 60) + Math.floor(Math.sin((fc + i * 30) * 0.04) * 4);
+    const sz = 5 + (i % 3) * 3;
+    const c = colors[i % colors.length];
+    _px(ctx, baseX, baseY, sz, sz, c);
+    _px(ctx, baseX + 1, baseY + 1, Math.max(1, sz - 3), 1, '#fff');
+    ctx.globalAlpha = 0.25;
+    _px(ctx, baseX - 4, baseY + 2, sz, sz, c);
+    ctx.globalAlpha = 1;
+  }
+  // Crowd silhouettes — heads with arms that wave in and out
+  for (let i = 0; i < 18; i++) {
+    const cx = 4 + i * 11;
+    const wave = Math.sin((fc + i * 14) * 0.06);
+    const cy = 100 + (i % 3) * 4;
+    _px(ctx, cx, cy, 6, 6, '#0a0510');
+    if (wave > 0.4) {
+      _px(ctx, cx - 1, cy - 5, 2, 6, '#0a0510');
+      _px(ctx, cx + 5, cy - 5, 2, 6, '#0a0510');
+    } else if (wave > 0) {
+      _px(ctx, cx, cy - 3, 2, 4, '#0a0510');
+      _px(ctx, cx + 4, cy - 3, 2, 4, '#0a0510');
+    }
+  }
+  // Stage platform behind the crowd
+  _px(ctx, 60, 86, 80, 4, '#1a1a1a');
+  _px(ctx, 60, 86, 80, 1, '#3a3a3a');
+  // Mic + stand on the stage; player floats above
+  _px(ctx, 99, 60, 2, 26, '#1a1a1a');
+  _px(ctx, 96, 56, 8, 6, '#2a2a2a');
+  _px(ctx, 97, 57, 6, 4, '#fbbf24');
+  // Spotlight cone from above
+  ctx.fillStyle = 'rgba(254,243,199,0.10)';
+  ctx.beginPath();
+  ctx.moveTo(100, 0);
+  ctx.lineTo(60, 90);
+  ctx.lineTo(140, 90);
+  ctx.closePath();
+  ctx.fill();
+  // Pulsing echo rings around the mic
+  for (let r = 0; r < 4; r++) {
+    const phase = ((fc + r * 18) % 72) / 72;
+    ctx.globalAlpha = 0.5 * (1 - phase);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(100, 60, 6 + phase * 30, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // Player floating mid-air above the mic
   const float = Math.sin(fc * 0.12) * 3;
-  drawBeatboxer(ctx, 92, Math.floor(80 + float), look, 'right', true, fc);
+  drawBeatboxer(ctx, 92, Math.floor(46 + float), look, 'right', true, fc);
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(0, 0, W, 8);
+  ctx.fillRect(0, H - 10, W, 10);
 };
 
 // Apartment Tier 2 move-in — a nicer flat. Hardwood, art on the wall, a window.
@@ -8203,6 +8271,256 @@ const drawApt3Scene = (ctx, fc, look) => {
   _px(ctx, 178, 60, 8, 4, '#fbbf24');
   // Player standing in the middle, taking it in
   drawBeatboxer(ctx, 70, 110, look, 'right', true, fc);
+};
+
+// Houseplant drowning — fires when the 4th watering of the day kills the plant.
+// Late kitchen, water cascading off the pot, plant slumped, regretful pose.
+const drawPlantDrownScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Dim kitchen wall — same dotted wallpaper as the soup scene, blue-shifted
+  _px(ctx, 0, 0, W, 95, '#2a1f30');
+  for (let y = 8; y < 95; y += 12) for (let x = 8; x < W; x += 12) _px(ctx, x, y, 1, 1, '#3a2540');
+  _px(ctx, 0, 94, W, 1, '#3a2540');
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#251510');
+  _px(ctx, 0, 95, W, 1, '#3a1f18');
+  for (let i = 0; i < 5; i++) _px(ctx, i * 40, 96, 1, 34, '#1a0808');
+  // Window — moonlit
+  _px(ctx, 6, 8, 30, 24, '#0a1530');
+  _px(ctx, 6, 8, 30, 1, '#1a1a1a');
+  _px(ctx, 6, 31, 30, 1, '#1a1a1a');
+  _px(ctx, 6, 8, 1, 24, '#1a1a1a');
+  _px(ctx, 35, 8, 1, 24, '#1a1a1a');
+  _px(ctx, 20, 8, 1, 24, '#1a1a1a');
+  _px(ctx, 6, 19, 30, 1, '#1a1a1a');
+  // Moon + a few stars
+  _px(ctx, 26, 12, 4, 4, '#fef3c7');
+  _px(ctx, 12, 14, 1, 1, '#fff');
+  _px(ctx, 16, 24, 1, 1, '#fff');
+  // Counter where the pot sits
+  _px(ctx, 60, 64, 110, 4, '#7a5040');
+  _px(ctx, 60, 64, 110, 1, '#a07050');
+  _px(ctx, 60, 68, 110, 22, '#3a2418');
+  // Sickly pendant lamp glow above the pot
+  ctx.fillStyle = 'rgba(254,243,199,0.10)';
+  ctx.beginPath(); ctx.arc(110, 50, 36, 0, Math.PI * 2); ctx.fill();
+  _px(ctx, 108, 0, 4, 14, '#1a1a1a');
+  _px(ctx, 102, 14, 16, 4, '#3a3a3a');
+  _px(ctx, 104, 18, 12, 4, '#fbbf24');
+  // ---- Pot of doom ----
+  const px = 100, py = 44;
+  // Pot body
+  _px(ctx, px, py + 14, 22, 6, '#5a3018');
+  _px(ctx, px - 1, py + 12, 24, 2, '#6a3820');
+  _px(ctx, px, py + 14, 22, 1, '#8a5030');
+  // Soaked dirt overflowing the rim
+  _px(ctx, px + 1, py + 11, 20, 2, '#1a0a05');
+  // Drowned plant — bent stalk + droopy leaves
+  _px(ctx, px + 9, py - 2, 2, 14, '#4a5028');
+  _px(ctx, px + 11, py + 1, 2, 4, '#4a5028');
+  _px(ctx, px + 4, py + 2, 6, 2, '#a08030');
+  _px(ctx, px + 3, py + 4, 4, 2, '#7a5028');
+  _px(ctx, px + 13, py + 1, 6, 2, '#8a6028');
+  _px(ctx, px + 16, py + 3, 5, 2, '#6a4828');
+  // One leaf falling, drifting
+  const leafY = py - 4 + Math.floor(((fc % 90) / 90) * 30);
+  const leafX = px + 12 + Math.sin(fc * 0.1) * 3;
+  ctx.globalAlpha = 0.9;
+  _px(ctx, Math.floor(leafX), leafY, 4, 2, '#a08030');
+  ctx.globalAlpha = 1;
+  // Water cascading down the pot's sides
+  for (let i = 0; i < 8; i++) {
+    const phase = (fc + i * 7) % 50;
+    const wx = px - 1 + (i % 2 === 0 ? 0 : 22);
+    const wy = py + 12 + (phase / 2 | 0);
+    if (wy < 96) _px(ctx, wx, wy, 1, 3, '#7ec0e8');
+  }
+  // Puddle expanding under the pot
+  const pud = Math.min(28, 6 + Math.floor(fc / 8));
+  _px(ctx, Math.floor(px + 11 - pud / 2), py + 20, pud, 2, '#3a6080');
+  _px(ctx, Math.floor(px + 11 - pud / 2), py + 20, pud, 1, '#7ec0e8');
+  // Drips spilling off the counter edge to the floor
+  for (let i = 0; i < 4; i++) {
+    const phase = (fc + i * 13) % 60;
+    const dx = px - 6 + i * 11;
+    const dy = 68 + phase;
+    if (dy < 100) _px(ctx, dx, dy, 1, 3, '#7ec0e8');
+  }
+  // Watering can on the counter, tipped forward, still dripping
+  const cx = 152, cy = 56;
+  _px(ctx, cx, cy, 18, 8, '#5a8038');
+  _px(ctx, cx, cy, 18, 1, '#7aa048');
+  _px(ctx, cx + 16, cy - 4, 6, 4, '#5a8038');
+  _px(ctx, cx + 16, cy - 4, 6, 1, '#7aa048');
+  _px(ctx, cx - 4, cy + 1, 4, 5, '#3a5028');
+  if (fc % 36 < 30) _px(ctx, cx + 18, cy + (fc % 36 / 4 | 0), 1, 2, '#7ec0e8');
+  // Player on the left, hand to forehead, regretful
+  const ppx = 30;
+  // Legs
+  _px(ctx, ppx - 4, 116, 3, 10, '#1a1a2e');
+  _px(ctx, ppx + 1, 116, 3, 10, '#1a1a2e');
+  _px(ctx, ppx - 4, 125, 3, 1, '#fff');
+  _px(ctx, ppx + 1, 125, 3, 1, '#fff');
+  // Body
+  _px(ctx, ppx - 5, 105, 10, 11, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 5, 105, 10, 1, '#fff');
+  // Right arm hanging
+  _px(ctx, ppx + 5, 106, 2, 8, look?.shirt || '#a78bfa');
+  _px(ctx, ppx + 5, 113, 2, 2, look?.skin || '#d4a87a');
+  // Left arm raised — hand on forehead
+  _px(ctx, ppx - 7, 100, 2, 6, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 5, 96, 4, 2, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 1, 96, 2, 2, look?.skin || '#d4a87a');
+  // Head
+  _px(ctx, ppx - 4, 98, 8, 7, look?.skin || '#d4a87a');
+  _px(ctx, ppx - 4, 96, 8, 3, look?.hair || '#1a1a2e');
+  // Sad eyes, frown
+  _px(ctx, ppx - 3, 101, 2, 1, '#0c0a09');
+  _px(ctx, ppx + 1, 101, 2, 1, '#0c0a09');
+  _px(ctx, ppx - 1, 104, 3, 1, '#3a1010');
+  // Sweat drop above head
+  if (fc % 60 < 40) {
+    _px(ctx, ppx + 6, 90, 1, 3, '#7ec0e8');
+    _px(ctx, ppx + 6, 92, 2, 2, '#7ec0e8');
+  }
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(0, 0, W, 8);
+  ctx.fillRect(0, H - 10, W, 10);
+};
+
+// Houseplant arrival — Tuesday morning. Bright, hopeful counterpart to the
+// drown scene; fires when the player buys a replacement plant.
+const drawPlantArrivedScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Sunny morning kitchen — warmer wallpaper
+  _px(ctx, 0, 0, W, 95, '#5a4a48');
+  for (let y = 8; y < 95; y += 12) for (let x = 8; x < W; x += 12) _px(ctx, x, y, 1, 1, '#7a6a68');
+  _px(ctx, 0, 94, W, 1, '#7a6a68');
+  // Floor
+  _px(ctx, 0, 95, W, 35, '#5a3018');
+  _px(ctx, 0, 95, W, 1, '#8a5028');
+  for (let i = 0; i < 5; i++) _px(ctx, i * 40, 96, 1, 34, '#3a1808');
+  // Big window with bright morning sky
+  _px(ctx, 110, 8, 60, 44, '#bfe0f0');
+  _px(ctx, 110, 8, 60, 1, '#1a1a1a');
+  _px(ctx, 110, 51, 60, 1, '#1a1a1a');
+  _px(ctx, 110, 8, 1, 44, '#1a1a1a');
+  _px(ctx, 169, 8, 1, 44, '#1a1a1a');
+  _px(ctx, 140, 8, 1, 44, '#1a1a1a');
+  _px(ctx, 110, 28, 60, 1, '#1a1a1a');
+  // Sun + halo
+  _px(ctx, 152, 14, 12, 12, '#fef3c7');
+  ctx.fillStyle = 'rgba(254,243,199,0.30)';
+  ctx.beginPath(); ctx.arc(158, 20, 18, 0, Math.PI * 2); ctx.fill();
+  // Distant rooftops
+  for (let i = 0; i < 6; i++) {
+    const bx = 112 + i * 10;
+    const bh = 6 + (i * 3) % 8;
+    _px(ctx, bx, 50 - bh, 8, bh, '#3a4050');
+  }
+  // Counter
+  _px(ctx, 0, 64, 90, 4, '#a07050');
+  _px(ctx, 0, 64, 90, 1, '#c08070');
+  _px(ctx, 0, 68, 90, 22, '#5a3a28');
+  // Sunbeam falling onto the counter (with drifting dust motes)
+  ctx.fillStyle = 'rgba(254,243,199,0.16)';
+  ctx.beginPath();
+  ctx.moveTo(132, 8); ctx.lineTo(160, 8);
+  ctx.lineTo(80, 95); ctx.lineTo(50, 95);
+  ctx.closePath(); ctx.fill();
+  for (let i = 0; i < 8; i++) {
+    const phase = (fc + i * 11) % 120;
+    const dx = 60 + ((i * 9 + (fc / 4 | 0)) % 60);
+    const dy = 20 + phase / 2;
+    if (dy < 90) _px(ctx, dx, Math.floor(dy), 1, 1, '#fef3c7');
+  }
+  // Paper shopping bag with receipt sticking out
+  const bagX = 12, bagY = 50;
+  _px(ctx, bagX, bagY, 24, 14, '#c0a070');
+  _px(ctx, bagX, bagY, 24, 2, '#a08050');
+  _px(ctx, bagX + 4, bagY + 4, 4, 8, '#a08050');
+  _px(ctx, bagX + 16, bagY + 4, 4, 8, '#a08050');
+  _px(ctx, bagX + 26, bagY + 2, 6, 12, '#fafafa');
+  _px(ctx, bagX + 27, bagY + 4, 4, 1, '#1a1a1a');
+  _px(ctx, bagX + 27, bagY + 6, 3, 1, '#1a1a1a');
+  _px(ctx, bagX + 27, bagY + 8, 4, 1, '#1a1a1a');
+  // ---- Fresh houseplant centerpiece ----
+  const px = 56, py = 40;
+  // Terracotta pot
+  _px(ctx, px, py + 14, 22, 8, '#a04020');
+  _px(ctx, px - 1, py + 12, 24, 2, '#c05030');
+  _px(ctx, px, py + 14, 22, 1, '#d06040');
+  _px(ctx, px + 2, py + 16, 18, 1, '#7a3018');
+  // Soil
+  _px(ctx, px + 1, py + 11, 20, 2, '#3a1f10');
+  // Plant — vibrant, layered greens
+  _px(ctx, px + 9, py - 2, 2, 14, '#3a7028');
+  _px(ctx, px + 2, py - 2, 8, 4, '#3a7028');
+  _px(ctx, px + 3, py - 1, 6, 2, '#5a9038');
+  _px(ctx, px + 11, py - 4, 8, 5, '#3a7028');
+  _px(ctx, px + 12, py - 3, 6, 3, '#5a9038');
+  _px(ctx, px + 6, py - 6, 8, 4, '#4a8030');
+  _px(ctx, px + 7, py - 5, 6, 2, '#6aa040');
+  _px(ctx, px + 4, py + 2, 14, 3, '#3a7028');
+  _px(ctx, px + 5, py + 3, 12, 1, '#5a9038');
+  // New shoot wiggling at the top
+  const wig = Math.sin(fc * 0.08) * 1;
+  _px(ctx, Math.floor(px + 9 + wig), py - 8, 1, 3, '#84cc16');
+  _px(ctx, Math.floor(px + 9 + wig), py - 9, 2, 1, '#a3e635');
+  // Sparkle particles
+  for (let i = 0; i < 4; i++) {
+    const phase = (fc + i * 24) % 96;
+    if (phase < 60) {
+      ctx.globalAlpha = 1 - phase / 60;
+      const sx = px + 4 + i * 5;
+      const sy = py - 14 + Math.floor(Math.sin((fc + i * 20) * 0.1) * 3);
+      _px(ctx, sx, sy, 1, 3, '#fef3c7');
+      _px(ctx, sx - 1, sy + 1, 3, 1, '#fef3c7');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // "TUE" price sticker on the pot
+  _px(ctx, px + 13, py + 17, 8, 4, '#fafafa');
+  ctx.fillStyle = '#0a0a0a';
+  ctx.font = 'bold 3px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('TUE', px + 17, py + 20);
+  // Player on the right, smiling toward the plant
+  const ppx = 150;
+  _px(ctx, ppx - 4, 116, 3, 10, '#1a1a2e');
+  _px(ctx, ppx + 1, 116, 3, 10, '#1a1a2e');
+  _px(ctx, ppx - 4, 125, 3, 1, '#fff');
+  _px(ctx, ppx + 1, 125, 3, 1, '#fff');
+  _px(ctx, ppx - 5, 105, 10, 11, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 5, 105, 10, 1, '#fff');
+  _px(ctx, ppx - 7, 106, 2, 8, look?.shirt || '#a78bfa');
+  _px(ctx, ppx + 5, 106, 2, 8, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 7, 113, 2, 2, look?.skin || '#d4a87a');
+  _px(ctx, ppx + 5, 113, 2, 2, look?.skin || '#d4a87a');
+  _px(ctx, ppx - 4, 98, 8, 7, look?.skin || '#d4a87a');
+  _px(ctx, ppx - 4, 96, 8, 3, look?.hair || '#1a1a2e');
+  // Eyes + smile
+  _px(ctx, ppx - 3, 101, 1, 1, '#0c0a09');
+  _px(ctx, ppx + 2, 101, 1, 1, '#0c0a09');
+  _px(ctx, ppx - 2, 103, 4, 1, '#3a1010');
+  _px(ctx, ppx - 3, 102, 1, 1, '#3a1010');
+  _px(ctx, ppx + 2, 102, 1, 1, '#3a1010');
+  // Tiny heart drifting from player toward plant
+  if (fc % 90 < 70) {
+    const hp = (fc % 90) / 70;
+    const hx = 140 - hp * 70;
+    const hy = 96 - Math.sin(hp * Math.PI) * 12;
+    ctx.globalAlpha = Math.max(0, 1 - hp * 0.8);
+    _px(ctx, Math.floor(hx), Math.floor(hy), 3, 2, '#fb7185');
+    _px(ctx, Math.floor(hx), Math.floor(hy + 2), 1, 1, '#fb7185');
+    _px(ctx, Math.floor(hx + 2), Math.floor(hy + 2), 1, 1, '#fb7185');
+    ctx.globalAlpha = 1;
+  }
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(0, 0, W, 6);
+  ctx.fillRect(0, H - 8, W, 8);
 };
 
 // Pig Pen's challenge — cutscene at the cypher (daytime park).
@@ -10034,7 +10352,7 @@ export default function BeatboxStory() {
           }} />}
           {screen === 'hood' && <HoodScreen go={setScreen} char={char} />}
           {screen === 'house' && <HouseScreen char={char} update={update} updateStats={updateStats} passTime={passTime} setChar={setChar} checkLevelUp={checkLevelUp} showToast={showToast} go={setScreen} activeSlot={activeSlot} playCutscene={playCutscene} />}
-          {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} />}
+          {screen === 'shop' && <ShopScreen char={char} setChar={setChar} showToast={showToast} go={setScreen} playCutscene={playCutscene} />}
           {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
@@ -10612,6 +10930,18 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         plantWaterCountDay: c.day,
       }));
       showToast('You overwatered it. The plant drowned. 🥀 Replacement next Tuesday.', 'bad');
+      setTimeout(() => playCutscene?.({
+        speaker: 'the houseplant',
+        speakerColor: '#a08030',
+        beats: [{
+          drawScene: (ctx, fc) => drawPlantDrownScene(ctx, fc, lookFromChar(char)),
+          lines: [
+            "blub. blub. ...blub.",
+            "(it tipped over slow, like it knew.)",
+            "Nursery only restocks plants on Tuesdays.",
+          ],
+        }],
+      }), 200);
       return;
     }
     setChar(c => ({ ...c,
@@ -11723,7 +12053,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
 
 // ============ SCREEN: SHOP ============
 
-function ShopScreen({ char, setChar, showToast, go }) {
+function ShopScreen({ char, setChar, showToast, go, playCutscene }) {
   const [branch, setBranch] = useState(null); // null = hub, otherwise store key
   const [showSounds, setShowSounds] = useState(false); // sounds catalog modal
 
@@ -11764,6 +12094,19 @@ function ShopScreen({ char, setChar, showToast, go }) {
       return next;
     });
     showToast(`Bought ${item.name}!`, 'win');
+    if (replacingDeadPlant) {
+      setTimeout(() => playCutscene?.({
+        speaker: null,
+        beats: [{
+          drawScene: (ctx, fc) => drawPlantArrivedScene(ctx, fc, lookFromChar(char)),
+          lines: [
+            "Tuesday. The nursery had one left.",
+            "You set it on the counter, careful this time.",
+            "(every three days, a small drink. that's it.)",
+          ],
+        }],
+      }), 200);
+    }
   };
 
   // ---- Sounds catalog (replaces old sound-buying UI) ----
