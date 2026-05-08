@@ -10670,10 +10670,10 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       const max = c.maxEnergy ?? 100;
       return {
         ...c,
-        minutes: Math.min(1200, finalMinutes),
-        energy: Math.max(0, Math.min(max, c.energy + Math.floor(hours * 12))),
-        hunger: Math.max(0, c.hunger - Math.floor(hours * 3)),
-        mood:   _clampPct(c.mood + Math.floor(hours * 2)),
+        minutes: Math.round(Math.min(1200, finalMinutes)),
+        energy: Math.round(Math.max(0, Math.min(max, c.energy + Math.floor(hours * 12)))),
+        hunger: Math.round(Math.max(0, c.hunger - Math.floor(hours * 3))),
+        mood:   Math.round(_clampPct(c.mood + Math.floor(hours * 2))),
       };
     });
     setNapping(false);
@@ -12455,7 +12455,7 @@ const PowerNapAnimation = ({ char, onWake }) => {
   // Predicted energy when waking right now — matches finishNap math
   // (+12 energy per hour slept, capped at maxEnergy).
   const maxEnergy = char.maxEnergy ?? 100;
-  const predictedEnergy = Math.min(maxEnergy, char.energy + Math.floor((slept / 60) * 12));
+  const predictedEnergy = Math.round(Math.min(maxEnergy, char.energy + Math.floor((slept / 60) * 12)));
   const energyPct = Math.round((predictedEnergy / maxEnergy) * 100);
 
   return (
