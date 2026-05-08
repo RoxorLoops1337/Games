@@ -11055,10 +11055,17 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
             // entry up front with a clear message instead of starting and
             // bouncing the player out one tick later.
             const blockReason = (cost) => {
-              if ((char.sickDay || 0) === char.day) return 'Too sick to train today';
-              if ((char.energy || 0) < cost * 3)    return 'Too tired to focus — power nap or eat first';
-              if ((char.hunger || 0) < 15)          return 'Too hungry to train — eat something first';
-              if ((char.mood || 0) < 15)            return 'Too grumpy to focus — watch TV or take a walk first';
+              if ((char.sickDay || 0) === char.day) return 'Too sick to train';
+              if ((char.energy || 0) < cost * 3)    return 'Too tired';
+              if ((char.hunger || 0) < 15)          return 'Too hungry';
+              if ((char.mood || 0) < 15)            return 'Too grumpy';
+              return null;
+            };
+            const blockHint = (cost) => {
+              if ((char.sickDay || 0) === char.day) return 'Rest until tomorrow';
+              if ((char.energy || 0) < cost * 3)    return 'Power nap on the couch';
+              if ((char.hunger || 0) < 15)          return 'Eat in the kitchen';
+              if ((char.mood || 0) < 15)            return 'Watch TV or take a walk';
               return null;
             };
             return (
@@ -11067,36 +11074,44 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                   {Object.entries(trainConfig).map(([key, t]) => {
                     const iconName = key === 'mus' ? 'music' : key === 'tec' ? 'zap' : key === 'ori' ? 'sparkle' : 'crown';
                     const reason = blockReason(t.tickEnergyCost);
-                    const disabled = !!reason;
+                    const hint = blockHint(t.tickEnergyCost);
                     return (
                       <button key={key}
                         onClick={() => {
-                          if (reason) { showToast(reason, 'bad'); return; }
+                          if (reason) { showToast(`${reason} · ${hint}`, 'bad'); return; }
                           setTrainStat(key); setPendingStart(true);
                         }}
-                        disabled={disabled}
-                        title={reason || ''}
-                        className="w-full flex items-center gap-3 p-2 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
-                        <PixelIcon name={iconName} size={28} />
+                        title={reason ? `${reason} — ${hint}` : ''}
+                        className={`w-full flex items-center gap-3 p-2 border-2 transition-all ${
+                          reason
+                            ? 'border-rose-900/60 bg-rose-950/20 cursor-not-allowed'
+                            : 'border-stone-800 bg-stone-900/30 hover:border-amber-500'
+                        }`}>
+                        <div className={reason ? 'opacity-40' : ''}>
+                          <PixelIcon name={iconName} size={28} />
+                        </div>
                         <div className="flex-1 text-left">
-                          <div className="text-stone-200 text-sm">{t.name} <span className="text-stone-500 text-xs">· {char.stats[key]}</span></div>
+                          <div className={`text-sm ${reason ? 'text-stone-500' : 'text-stone-200'}`}>
+                            {t.name} <span className="text-stone-600 text-xs">· {char.stats[key]}</span>
+                          </div>
                           <div className="text-[10px] text-stone-500 uppercase">{t.desc}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-amber-500 text-xs">START ▶</div>
-                          <div className="text-[10px] text-stone-500">-{t.tickEnergyCost}⚡/tick</div>
+                          {reason ? (
+                            <>
+                              <div className="text-rose-400 text-xs uppercase tracking-wider">🔒 {reason}</div>
+                              <div className="text-[10px] text-stone-500 uppercase">{hint}</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-amber-500 text-xs">START ▶</div>
+                              <div className="text-[10px] text-stone-500">-{t.tickEnergyCost}⚡/tick</div>
+                            </>
+                          )}
                         </div>
                       </button>
                     );
                   })}
-                  {(() => {
-                    const r = blockReason(trainConfig.sho.tickEnergyCost); // cheapest stat
-                    return r ? (
-                      <div className="text-[10px] text-amber-500 uppercase tracking-wider text-center pt-2">
-                        {r}
-                      </div>
-                    ) : null;
-                  })()}
                 </div>
               </Panel>
             );
@@ -12134,11 +12149,19 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         // Per-activity entry gate. Busk has no hunger/mood reqs (it's the
         // safety net); jam and run still need the player to be in shape.
         const blockReason = (key, cost) => {
-          if ((char.sickDay || 0) === char.day) return 'Too sick to do anything today';
-          if ((char.energy || 0) < cost * 3)    return 'Too tired — power nap or eat first';
-          if (key === 'busk') return null;       // free survival loop, no hunger/mood gate
-          if ((char.hunger || 0) < 15)          return 'Too hungry — eat something first';
-          if ((char.mood || 0) < 15)            return 'Too grumpy to focus — watch TV or take a walk first';
+          if ((char.sickDay || 0) === char.day) return 'Too sick';
+          if ((char.energy || 0) < cost * 3)    return 'Too tired';
+          if (key === 'busk') return null;
+          if ((char.hunger || 0) < 15)          return 'Too hungry';
+          if ((char.mood || 0) < 15)            return 'Too grumpy';
+          return null;
+        };
+        const blockHint = (key, cost) => {
+          if ((char.sickDay || 0) === char.day) return 'Rest until tomorrow';
+          if ((char.energy || 0) < cost * 3)    return 'Power nap on the couch';
+          if (key === 'busk') return null;
+          if ((char.hunger || 0) < 15)          return 'Eat in the kitchen';
+          if ((char.mood || 0) < 15)            return 'Watch TV or take a walk';
           return null;
         };
         return (
@@ -12146,36 +12169,42 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
             <div className="space-y-2">
               {Object.entries(activities).map(([key, a]) => {
                 const reason = blockReason(key, a.tickEnergyCost);
-                const disabled = !!reason;
+                const hint = blockHint(key, a.tickEnergyCost);
                 return (
                   <button key={key}
                     onClick={() => {
-                      if (reason) { showToast(reason, 'bad'); return; }
+                      if (reason) { showToast(`${reason} · ${hint}`, 'bad'); return; }
                       setSelected(key); setPendingStart(true);
                     }}
-                    disabled={disabled}
-                    title={reason || ''}
-                    className="w-full flex items-center gap-3 p-3 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
-                    <PixelIcon name={a.pixelIcon} size={32} />
+                    title={reason ? `${reason} — ${hint}` : ''}
+                    className={`w-full flex items-center gap-3 p-3 border-2 transition-all ${
+                      reason
+                        ? 'border-rose-900/60 bg-rose-950/20 cursor-not-allowed'
+                        : 'border-stone-800 bg-stone-900/30 hover:border-amber-500'
+                    }`}>
+                    <div className={reason ? 'opacity-40' : ''}>
+                      <PixelIcon name={a.pixelIcon} size={32} />
+                    </div>
                     <div className="flex-1 text-left">
-                      <div className="text-stone-200 text-sm">{a.name}</div>
+                      <div className={`text-sm ${reason ? 'text-stone-500' : 'text-stone-200'}`}>{a.name}</div>
                       <div className="text-[10px] text-stone-500 uppercase tracking-wider">{a.desc}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-amber-500 text-xs">START ▶</div>
-                      <div className="text-[10px] text-stone-500 uppercase">-{a.tickEnergyCost}⚡/tick</div>
+                      {reason ? (
+                        <>
+                          <div className="text-rose-400 text-xs uppercase tracking-wider">🔒 {reason}</div>
+                          <div className="text-[10px] text-stone-500 uppercase">{hint}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-amber-500 text-xs">START ▶</div>
+                          <div className="text-[10px] text-stone-500 uppercase">-{a.tickEnergyCost}⚡/tick</div>
+                        </>
+                      )}
                     </div>
                   </button>
                 );
               })}
-              {(() => {
-                const r = blockReason('jam', activities.jam.tickEnergyCost);
-                return r ? (
-                  <div className="text-[10px] text-amber-500 uppercase tracking-wider text-center pt-2">
-                    {r}
-                  </div>
-                ) : null;
-              })()}
             </div>
           </Panel>
         );
