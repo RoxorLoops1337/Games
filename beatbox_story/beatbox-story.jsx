@@ -8523,6 +8523,411 @@ const drawPlantArrivedScene = (ctx, fc, look) => {
   ctx.fillRect(0, H - 8, W, 8);
 };
 
+// ============ WEEKEND TOUR ============
+// Three-beat sequence that plays when the player goes on the out-of-town tour.
+// Beat 1 (road) → Beat 2 (motel) → Beat 3 (headline stage with reward).
+
+// Beat 1 — the tour van rolling down the highway at golden hour, gear strapped
+// to the roof, distant city skyline ahead.
+const drawTourRoadScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Sunset sky — orange high to pink-violet low
+  _drawSky(ctx, W, 70, 0xff, 0x90, 0x40, 0x60, 0x30, 0x80);
+  // Sun on the horizon, half-set
+  _px(ctx, 144, 56, 22, 14, '#fef3c7');
+  ctx.fillStyle = 'rgba(254,243,199,0.30)';
+  ctx.beginPath(); ctx.arc(155, 60, 22, 0, Math.PI * 2); ctx.fill();
+  // Distant city skyline silhouette
+  for (let i = 0; i < 16; i++) {
+    const bx = i * 13;
+    const bh = 10 + ((i * 7 + 3) % 26);
+    _px(ctx, bx, 70 - bh, 11, bh, '#1a1a25');
+    // A few lit windows
+    for (let w = 0; w < 3; w++) {
+      const wx = bx + 2 + w * 3;
+      const wy = 70 - bh + 4 + (w % 2) * 6;
+      if ((i + w) % 3 === 0) _px(ctx, wx, wy, 1, 1, '#fbbf24');
+    }
+  }
+  // Road horizon haze
+  _px(ctx, 0, 70, W, 2, '#3a2a30');
+  // Asphalt
+  _px(ctx, 0, 72, W, 58, '#1a1a20');
+  // Road shoulder lines
+  _px(ctx, 0, 72, W, 1, '#5a5050');
+  _px(ctx, 0, 128, W, 2, '#3a3030');
+  // Receding lane stripes — animated scroll
+  for (let i = 0; i < 14; i++) {
+    const offset = (fc * 4) % 28;
+    const x = (i * 28) - offset;
+    // Perspective: stripes get longer/thicker as they come forward
+    const t = i / 14;
+    const stripeW = 12 + t * 16;
+    const stripeH = 1 + Math.floor(t * 3);
+    const y = 80 + Math.floor(t * 38);
+    _px(ctx, Math.floor(x), y, Math.floor(stripeW), stripeH, '#fef3c7');
+  }
+  // Telephone poles passing on the right
+  for (let i = 0; i < 4; i++) {
+    const px = ((i * 60) - (fc * 3) % 60) + 180;
+    if (px > -10 && px < W + 10) {
+      _px(ctx, px, 50, 2, 30, '#3a2818');
+      _px(ctx, px - 4, 52, 10, 1, '#3a2818');
+    }
+  }
+  // ---- Tour van ----
+  // Subtle bounce
+  const vbob = Math.sin(fc * 0.3) > 0 ? 0 : 1;
+  const vx = 50, vy = 86 + vbob;
+  // Body
+  _px(ctx, vx, vy, 76, 26, '#dc2626');
+  _px(ctx, vx, vy, 76, 3, '#7a1010');                  // shadow band on top
+  _px(ctx, vx, vy + 23, 76, 3, '#7a1010');             // skirt shadow
+  // Cab front (slight slope)
+  _px(ctx, vx + 76, vy + 4, 8, 22, '#dc2626');
+  _px(ctx, vx + 84, vy + 8, 4, 18, '#dc2626');
+  _px(ctx, vx + 88, vy + 12, 2, 14, '#dc2626');
+  // Side windows
+  _px(ctx, vx + 6, vy + 4, 18, 10, '#1a2030');
+  _px(ctx, vx + 26, vy + 4, 18, 10, '#1a2030');
+  _px(ctx, vx + 46, vy + 4, 18, 10, '#1a2030');
+  _px(ctx, vx + 6, vy + 4, 18, 1, '#3a4050');          // top reflection
+  _px(ctx, vx + 26, vy + 4, 18, 1, '#3a4050');
+  _px(ctx, vx + 46, vy + 4, 18, 1, '#3a4050');
+  // Window mullions
+  _px(ctx, vx + 24, vy + 4, 2, 10, '#1a1a1a');
+  _px(ctx, vx + 44, vy + 4, 2, 10, '#1a1a1a');
+  // Player silhouette in middle window — head bobs
+  const hbob = Math.sin(fc * 0.18) > 0 ? 0 : 1;
+  _px(ctx, vx + 32, vy + 6 + hbob, 6, 6, look?.skin || '#d4a87a');
+  _px(ctx, vx + 32, vy + 4 + hbob, 6, 3, look?.hair || '#1a1a2e');
+  _px(ctx, vx + 33, vy + 8 + hbob, 1, 1, '#0c0a09');
+  _px(ctx, vx + 36, vy + 8 + hbob, 1, 1, '#0c0a09');
+  // Driver in the cab window
+  _px(ctx, vx + 78, vy + 10, 5, 5, '#84cc16');
+  _px(ctx, vx + 78, vy + 9, 5, 2, '#1a1a2e');
+  // "TOUR" decal on the side
+  ctx.fillStyle = '#fef3c7';
+  ctx.font = 'bold 7px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('TOUR', vx + 38, vy + 22);
+  // Headlight cone (it's getting dark)
+  ctx.fillStyle = 'rgba(254,243,199,0.20)';
+  ctx.beginPath();
+  ctx.moveTo(vx + 90, vy + 18);
+  ctx.lineTo(vx + 130, vy + 6);
+  ctx.lineTo(vx + 130, vy + 30);
+  ctx.closePath();
+  ctx.fill();
+  _px(ctx, vx + 88, vy + 16, 2, 4, '#fef3c7');
+  // Tail light
+  _px(ctx, vx, vy + 16, 2, 4, '#dc2626');
+  // Wheels (animated rotation via simple alternating spokes)
+  const spoke = (fc % 8) < 4;
+  _px(ctx, vx + 8, vy + 22, 12, 8, '#0a0a0a');
+  _px(ctx, vx + 11, vy + 24, 6, 4, spoke ? '#3a3a3a' : '#5a5a5a');
+  _px(ctx, vx + 64, vy + 22, 12, 8, '#0a0a0a');
+  _px(ctx, vx + 67, vy + 24, 6, 4, spoke ? '#3a3a3a' : '#5a5a5a');
+  // Gear strapped to the roof — speakers + cases
+  _px(ctx, vx + 10, vy - 8, 18, 8, '#1a1a1a');         // speaker case
+  _px(ctx, vx + 12, vy - 6, 6, 4, '#fbbf24');          // speaker cone
+  _px(ctx, vx + 30, vy - 6, 24, 6, '#3a2818');         // duffel
+  _px(ctx, vx + 30, vy - 6, 24, 1, '#5a3828');
+  _px(ctx, vx + 56, vy - 8, 14, 8, '#1a1a1a');         // mic case
+  // Strap
+  _px(ctx, vx + 8, vy - 8, 64, 1, '#5a5a5a');
+  _px(ctx, vx + 8, vy + 1, 1, 1, '#5a5a5a');
+  _px(ctx, vx + 72, vy + 1, 1, 1, '#5a5a5a');
+  // Exhaust puff trailing behind
+  for (let i = 0; i < 3; i++) {
+    const ph = (fc + i * 12) % 36;
+    if (ph < 30) {
+      ctx.globalAlpha = 0.5 * (1 - ph / 30);
+      _px(ctx, vx - 6 - i * 4, vy + 22, 4, 3, '#a8a29e');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  ctx.fillRect(0, 0, W, 6);
+  ctx.fillRect(0, H - 8, W, 8);
+};
+
+// Beat 2 — cheap motel room at night with the gig gear staged for tomorrow.
+// Neon "MOTEL" sign flickers through the window, TV static plays low.
+const drawTourMotelScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Dim wall — old wallpaper with a tired mustard-and-brown stripe
+  _px(ctx, 0, 0, W, 95, '#3a2a18');
+  for (let y = 0; y < 95; y += 6) _px(ctx, 0, y, W, 1, y % 12 === 0 ? '#4a3520' : '#2a1a08');
+  // Wall trim
+  _px(ctx, 0, 94, W, 1, '#5a3a20');
+  // Carpet floor — ugly green
+  _px(ctx, 0, 95, W, 35, '#3a4828');
+  for (let i = 0; i < 24; i++) {
+    const fx = (i * 9 + 3) % W;
+    const fy = 96 + (i % 4) * 8;
+    _px(ctx, fx, fy, 2, 1, '#2a3818');
+  }
+  // ---- Window with neon MOTEL sign outside ----
+  _px(ctx, 110, 14, 70, 50, '#0a0a18');                 // night sky
+  _px(ctx, 110, 14, 70, 1, '#1a1a1a');
+  _px(ctx, 110, 63, 70, 1, '#1a1a1a');
+  _px(ctx, 110, 14, 1, 50, '#1a1a1a');
+  _px(ctx, 179, 14, 1, 50, '#1a1a1a');
+  _px(ctx, 144, 14, 1, 50, '#1a1a1a');
+  _px(ctx, 110, 38, 70, 1, '#1a1a1a');
+  // Distant building rooftops
+  for (let i = 0; i < 8; i++) {
+    const bx = 112 + i * 9;
+    const bh = 4 + (i * 5) % 10;
+    _px(ctx, bx, 64 - bh, 7, bh, '#1a1525');
+  }
+  // Stars
+  for (let i = 0; i < 8; i++) {
+    const sx = 112 + (i * 8 + 3) % 65;
+    const sy = 16 + (i * 3) % 18;
+    if ((fc + i * 7) % 100 < 60) _px(ctx, sx, sy, 1, 1, '#fef3c7');
+  }
+  // Neon MOTEL sign (across the street)
+  const flick = (fc % 90) < 80 ? 1 : 0.4;        // occasional flicker
+  ctx.globalAlpha = flick;
+  // Sign post
+  _px(ctx, 150, 50, 2, 14, '#3a3a3a');
+  // Sign frame
+  _px(ctx, 138, 26, 30, 24, '#1a1a1a');
+  _px(ctx, 140, 28, 26, 20, '#3a1010');
+  // M O T E L letters in pink neon (5 little glyphs as colored bars)
+  ctx.fillStyle = '#fb7185';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('MOTEL', 153, 41);
+  // Neon glow halo
+  ctx.globalAlpha = 0.3 * flick;
+  ctx.fillStyle = '#fb7185';
+  ctx.beginPath(); ctx.arc(153, 38, 24, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+  // Cast pink light inside the room (window glow)
+  ctx.fillStyle = `rgba(251,113,133,${(0.10 * flick).toFixed(3)})`;
+  ctx.fillRect(80, 50, 100, 50);
+  // ---- Bed (left) ----
+  const bx = 6, by = 76;
+  // Frame
+  _px(ctx, bx, by, 80, 22, '#5a3a28');
+  _px(ctx, bx, by, 80, 3, '#7a5040');
+  // Mattress
+  _px(ctx, bx + 4, by + 4, 72, 14, '#fafafa');
+  _px(ctx, bx + 4, by + 4, 72, 1, '#dadada');
+  // Tan blanket on top
+  _px(ctx, bx + 8, by + 6, 64, 8, '#a87a48');
+  _px(ctx, bx + 8, by + 6, 64, 1, '#c89a68');
+  // Pillow
+  _px(ctx, bx + 4, by + 4, 18, 8, '#fafafa');
+  _px(ctx, bx + 4, by + 4, 18, 1, '#dadada');
+  // Headboard
+  _px(ctx, bx, by - 8, 80, 8, '#3a2418');
+  _px(ctx, bx, by - 8, 80, 1, '#5a3828');
+  // ---- Nightstand + lamp ----
+  _px(ctx, 92, 84, 14, 14, '#3a2418');
+  _px(ctx, 92, 84, 14, 1, '#5a3828');
+  _px(ctx, 96, 76, 6, 8, '#3a3a3a');                    // lamp base
+  _px(ctx, 94, 68, 10, 8, '#fef3c7');                   // lampshade lit
+  // Lamp glow
+  ctx.fillStyle = 'rgba(254,243,199,0.18)';
+  ctx.beginPath(); ctx.arc(99, 74, 28, 0, Math.PI * 2); ctx.fill();
+  // ---- TV on the dresser (right side, foreground) ----
+  const tvX = 130, tvY = 84;
+  _px(ctx, tvX - 6, tvY + 16, 60, 14, '#3a2418');       // dresser
+  _px(ctx, tvX - 6, tvY + 16, 60, 1, '#5a3828');
+  // TV body
+  _px(ctx, tvX, tvY, 48, 16, '#1a1a1a');
+  _px(ctx, tvX + 2, tvY + 2, 44, 12, '#0a0a0a');
+  // TV static — random pixel noise
+  for (let i = 0; i < 28; i++) {
+    const nx = tvX + 3 + ((i * 13 + fc * 3) % 42);
+    const ny = tvY + 3 + ((i * 7 + fc) % 10);
+    const c = (i + fc) % 3 === 0 ? '#fafafa' : (i + fc) % 3 === 1 ? '#7a7a7a' : '#3a3a3a';
+    _px(ctx, nx, ny, 1, 1, c);
+  }
+  // Two little antennas
+  _px(ctx, tvX + 14, tvY - 8, 1, 8, '#3a3a3a');
+  _px(ctx, tvX + 34, tvY - 8, 1, 8, '#3a3a3a');
+  // ---- Open suitcase on the bed with gear ----
+  _px(ctx, bx + 24, by - 4, 32, 6, '#1a1a1a');
+  _px(ctx, bx + 24, by - 4, 32, 1, '#3a3a3a');
+  _px(ctx, bx + 26, by - 2, 8, 4, '#dc2626');           // shirt
+  _px(ctx, bx + 36, by - 2, 8, 4, '#84cc16');           // shirt
+  _px(ctx, bx + 46, by - 2, 6, 4, '#fbbf24');           // headphones
+  // ---- Player sitting on the edge of the bed, headphones on, practicing ----
+  const ppx = 28, ppy = 72;
+  // Legs hanging off the bed
+  _px(ctx, ppx - 4, ppy + 18, 3, 12, '#1a1a2e');
+  _px(ctx, ppx + 1, ppy + 18, 3, 12, '#1a1a2e');
+  _px(ctx, ppx - 4, ppy + 29, 3, 1, '#fff');
+  _px(ctx, ppx + 1, ppy + 29, 3, 1, '#fff');
+  // Body — leaning slightly forward
+  _px(ctx, ppx - 5, ppy + 7, 10, 11, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 5, ppy + 7, 10, 1, '#fff');
+  // Arms — one up to the ear (headphones), one down
+  _px(ctx, ppx + 5, ppy + 8, 2, 10, look?.shirt || '#a78bfa');
+  _px(ctx, ppx + 5, ppy + 17, 2, 2, look?.skin || '#d4a87a');
+  _px(ctx, ppx - 7, ppy + 4, 2, 6, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 5, ppy + 2, 4, 2, look?.shirt || '#a78bfa');
+  _px(ctx, ppx - 1, ppy + 2, 2, 2, look?.skin || '#d4a87a');
+  // Head
+  _px(ctx, ppx - 4, ppy, 8, 7, look?.skin || '#d4a87a');
+  _px(ctx, ppx - 4, ppy - 2, 8, 3, look?.hair || '#1a1a2e');
+  // Headphones (over ears)
+  _px(ctx, ppx - 5, ppy + 2, 1, 4, '#1a1a1a');
+  _px(ctx, ppx + 4, ppy + 2, 1, 4, '#1a1a1a');
+  _px(ctx, ppx - 5, ppy - 2, 10, 1, '#1a1a1a');         // headband
+  _px(ctx, ppx - 5, ppy - 1, 10, 1, '#fbbf24');         // gold accent
+  // Closed eyes (in the zone) and slight smirk
+  _px(ctx, ppx - 3, ppy + 3, 2, 1, '#0c0a09');
+  _px(ctx, ppx + 1, ppy + 3, 2, 1, '#0c0a09');
+  _px(ctx, ppx - 1, ppy + 5, 3, 1, '#3a1010');
+  // Music notes drifting up from the player
+  for (let i = 0; i < 3; i++) {
+    const ph = (fc + i * 24) % 90;
+    if (ph < 70) {
+      ctx.globalAlpha = 1 - ph / 70;
+      const ny = ppy - 6 - Math.floor(ph * 0.5);
+      const nx = ppx + 8 + i * 6 + Math.floor(Math.sin((fc + i * 20) * 0.1) * 2);
+      _px(ctx, nx, ny, 2, 2, '#fbbf24');
+      _px(ctx, nx + 1, ny + 2, 1, 2, '#fbbf24');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Tiny clock on the wall above the TV — 1:47am
+  _px(ctx, 154, 70, 16, 8, '#1a1a1a');
+  _px(ctx, 156, 71, 12, 6, '#0a0a0a');
+  ctx.fillStyle = '#fb7185';
+  ctx.font = 'bold 5px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('1:47', 162, 76);
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(0, 0, W, 8);
+  ctx.fillRect(0, H - 10, W, 10);
+};
+
+// Beat 3 — bigger venue, bigger crowd, payday. Player headlining under colored
+// stage lights with crowd silhouettes hands up.
+const drawTourStageScene = (ctx, fc, look) => {
+  const W = 200, H = 130;
+  // Dark venue rear wall
+  _px(ctx, 0, 0, W, 90, '#0a0612');
+  // Faint ceiling rig — truss across the top
+  _px(ctx, 4, 6, W - 8, 4, '#1a1a1a');
+  for (let i = 0; i < 16; i++) _px(ctx, 6 + i * 12, 6, 2, 4, '#2a2a2a');
+  // Hanging spotlights on the truss
+  for (let i = 0; i < 5; i++) {
+    const lx = 16 + i * 40;
+    _px(ctx, lx, 10, 6, 4, '#3a3a3a');
+    _px(ctx, lx + 1, 14, 4, 2, '#1a1a1a');
+  }
+  // Three colored spotlight cones — gentle sweep
+  const sweep = Math.sin(fc * 0.04) * 14;
+  const cones = [
+    { x: 36, color: 'rgba(251,113,133,0.16)' },          // pink
+    { x: 100, color: 'rgba(251,191,36,0.18)' },          // amber
+    { x: 164, color: 'rgba(34,211,238,0.16)' },          // cyan
+  ];
+  for (const c of cones) {
+    ctx.fillStyle = c.color;
+    ctx.beginPath();
+    ctx.moveTo(c.x, 14);
+    ctx.lineTo(c.x - 26 + sweep, 92);
+    ctx.lineTo(c.x + 26 + sweep, 92);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Smoke/haze layer (subtle horizontal bands)
+  for (let y = 60; y < 90; y += 4) {
+    ctx.globalAlpha = 0.10;
+    _px(ctx, 0, y, W, 2, '#fafafa');
+    ctx.globalAlpha = 1;
+  }
+  // ---- Big stage platform ----
+  _px(ctx, 0, 90, W, 6, '#1a1a1a');
+  _px(ctx, 0, 90, W, 1, '#3a3a3a');
+  // Stage front lip lights
+  for (let i = 0; i < 24; i++) {
+    const lx = 4 + i * 8;
+    const on = (fc + i * 4) % 30 < 18;
+    _px(ctx, lx, 91, 4, 2, on ? '#fbbf24' : '#3a2818');
+  }
+  // Speaker stacks left + right
+  _px(ctx, 4, 70, 16, 22, '#1a1a1a');
+  _px(ctx, 6, 72, 12, 8, '#3a3a3a');
+  _px(ctx, 6, 82, 12, 8, '#3a3a3a');
+  _px(ctx, 8, 75, 8, 2, '#fbbf24');
+  _px(ctx, 8, 85, 8, 2, '#fbbf24');
+  _px(ctx, 180, 70, 16, 22, '#1a1a1a');
+  _px(ctx, 182, 72, 12, 8, '#3a3a3a');
+  _px(ctx, 182, 82, 12, 8, '#3a3a3a');
+  _px(ctx, 184, 75, 8, 2, '#fbbf24');
+  _px(ctx, 184, 85, 8, 2, '#fbbf24');
+  // Banner / venue name backdrop
+  _px(ctx, 60, 18, 80, 18, '#1a0d28');
+  _px(ctx, 60, 18, 80, 1, '#3a2058');
+  _px(ctx, 60, 35, 80, 1, '#3a2058');
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('LIVE', 100, 30);
+  ctx.font = 'bold 4px monospace';
+  ctx.fillStyle = '#a78bfa';
+  ctx.fillText('TOUR · NIGHT 2', 100, 35);
+  // ---- Dense crowd silhouettes — multiple rows for depth ----
+  for (let row = 0; row < 4; row++) {
+    const baseY = 100 + row * 6;
+    const rowAlpha = 1 - row * 0.15;
+    ctx.globalAlpha = rowAlpha;
+    for (let i = 0; i < 22 + row * 2; i++) {
+      const cx = (i * 9 + row * 4) % W - 2;
+      const wave = Math.sin((fc + i * 11 + row * 6) * 0.07);
+      const hsz = 5 + (row % 2);
+      _px(ctx, cx, baseY, hsz, hsz, '#0a0510');
+      // Some hands raised
+      if (wave > 0.3 && row < 2) {
+        _px(ctx, cx, baseY - 4, 1, 4, '#0a0510');
+        _px(ctx, cx + hsz - 1, baseY - 4, 1, 4, '#0a0510');
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  // Phone screens in the crowd (little white dots held up)
+  for (let i = 0; i < 6; i++) {
+    const phx = 20 + (i * 30 + (fc / 10 | 0)) % 160;
+    const phy = 92 + (i % 3) * 4;
+    if ((fc + i * 15) % 80 < 60) _px(ctx, phx, phy, 1, 2, '#fafafa');
+  }
+  // ---- Player on stage, mic stand ----
+  // Mic stand in the center
+  _px(ctx, 99, 70, 2, 22, '#1a1a1a');
+  _px(ctx, 96, 66, 8, 6, '#2a2a2a');
+  _px(ctx, 97, 67, 6, 4, '#fbbf24');
+  // Player drawn just left of the mic, facing forward
+  drawBeatboxer(ctx, 86, 92, look, 'right', true, fc);
+  // Confetti raining gently
+  const cConfetti = ['#fbbf24', '#fb7185', '#22d3ee', '#a78bfa', '#84cc16'];
+  for (let i = 0; i < 18; i++) {
+    const lifeT = ((fc + i * 17) % 180) / 180;
+    const cx = (i * 13 + 4) % W;
+    const cy = lifeT * 100 + 6;
+    _px(ctx, cx, Math.floor(cy), 2, 2, cConfetti[i % cConfetti.length]);
+  }
+  // Lens flare from the central spotlight, pulsing
+  const flarePulse = 0.20 + 0.15 * Math.sin(fc * 0.12);
+  ctx.fillStyle = `rgba(254,243,199,${flarePulse.toFixed(3)})`;
+  ctx.beginPath(); ctx.arc(100, 60, 28, 0, Math.PI * 2); ctx.fill();
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(0, 0, W, 6);
+  ctx.fillRect(0, H - 8, W, 8);
+};
+
 // Pig Pen's challenge — cutscene at the cypher (daytime park).
 const drawPigPenChallengeScene = (ctx, fc, look) => {
   const W = 200, H = 130;
@@ -13679,14 +14084,33 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
             lastTourDay: c.day,
           }));
           go('hood');
+          const tourLook = lookFromChar(char);
           setTimeout(() => playCutscene?.({
             speaker: 'WEEKEND TOUR',
             speakerColor: '#fbbf24',
-            beats: [{ lines: [
-              "Two days on the road. Two cities, two crowds.",
-              "Bus seats. Cheap motel. Better sound system than home.",
-              `+$${cash} · +${fans} fans · two days gone.`,
-            ]}],
+            beats: [
+              {
+                drawScene: (ctx, fc) => drawTourRoadScene(ctx, fc, tourLook),
+                lines: [
+                  "Two days on the road. Two cities, two crowds.",
+                  "Sun going down behind the skyline. Speakers strapped tight.",
+                ],
+              },
+              {
+                drawScene: (ctx, fc) => drawTourMotelScene(ctx, fc, tourLook),
+                lines: [
+                  "Bus seats. Cheap motel. Better sound system than home.",
+                  "1:47am. Headphones on. Going through tomorrow's set one more time.",
+                ],
+              },
+              {
+                drawScene: (ctx, fc) => drawTourStageScene(ctx, fc, tourLook),
+                lines: [
+                  "Lights. Confetti. People who came just for you.",
+                  `+$${cash} · +${fans} fans · two days gone.`,
+                ],
+              },
+            ],
           }), 100);
         };
         return (
