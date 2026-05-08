@@ -9377,6 +9377,84 @@ const INTRO_BEATS = [
   ]},
 ];
 
+// ============ TUTORIAL POP-UPS ============
+// One-shot Foxy tips that fire on first-occurrence state transitions, to
+// guide brand-new players through their opening loop. Each tutorial sets a
+// flag (`tut_<id>`) on storyFlags so it never re-fires. Watcher lives inside
+// the App component and only fires when no other cutscene is active.
+const TUTORIALS = [
+  { id: 'start_busk',
+    when: (c) => (c.day || 1) === 1 && (c.minutes || 0) < 600 && (c.cash || 0) < 30,
+    lines: [
+      "first up — head to the park and busk for an hour.",
+      "you'll get a few bucks and bump your showmanship. it's how everyone starts here.",
+    ],
+  },
+  { id: 'low_energy',
+    when: (c) => (c.energy || 0) <= 30 && !c._sleepingNow,
+    lines: [
+      "you're getting tired. when energy's low, head home.",
+      "couch tab in your apartment — power nap to top up, or sleep till morning.",
+    ],
+  },
+  { id: 'low_hunger',
+    when: (c) => (c.hunger || 0) <= 30,
+    lines: [
+      "stomach's rumbling. swing by your kitchen and eat something.",
+      "tip: i drop a free Foxy Soup in your fridge every day. take it.",
+    ],
+  },
+  { id: 'low_mood',
+    when: (c) => (c.mood || 100) <= 30,
+    lines: [
+      "you're in a slump. mood drains your training rewards if it stays low.",
+      "talk to people at the bar, take a walk, or play a song to get back up.",
+    ],
+  },
+  { id: 'first_money',
+    when: (c) => (c.cash || 0) >= 25 && (c.day || 1) <= 4,
+    lines: [
+      "nice — pocket money. don't spend it all on snacks.",
+      "sunday rent is $50 a week to start. budget around that.",
+    ],
+  },
+  { id: 'try_jam',
+    when: (c) => (c.day || 1) >= 2 && (c.cash || 0) >= 5 && !c.storyFlags?.firstJam,
+    lines: [
+      "once you've got busking down, try Jam in the park.",
+      "5 cycles → +1 random stat + a few followers. that's how you get on the radar.",
+    ],
+  },
+  { id: 'bar_open',
+    when: (c) => (c.day || 1) >= 3,
+    lines: [
+      "the bar opens today. tap the bar tile in the city.",
+      "tue/wed/thu = open mic — free shot at fans. fri = paid showcase, sat = battle, sun = karaoke.",
+    ],
+  },
+  { id: 'late_night',
+    when: (c) => (c.minutes || 0) >= 1080,
+    lines: [
+      "heads up — it's getting late.",
+      "the day cuts off at 2 AM. sleep before then or you'll collapse and lose half your morning.",
+    ],
+  },
+  { id: 'rent_warning',
+    when: (c) => ((c.day || 1) % 7) === 5 && (c.cash || 0) < 50 && !c.storyFlags?.firstRentPaid,
+    lines: [
+      "saturday already. rent's $50 tomorrow.",
+      "if you're short — busk hard, hit the karaoke bar tonight, or skip a meal. don't miss it.",
+    ],
+  },
+  { id: 'shop_open',
+    when: (c) => (c.day || 1) >= 4,
+    lines: [
+      "the shop opens today. four sub-stores: music, furniture, clothing, pet.",
+      "music gear boosts training; furniture buffs your home; clothing affects shows; pet's a daily mood bump.",
+    ],
+  },
+];
+
 // ============ SLOTS SCREEN ============
 // Five save slots. User can switch between, create new, or delete characters.
 
@@ -9555,6 +9633,25 @@ export default function BeatboxStory() {
       after?.();
     }});
   };
+
+  // Tutorial pop-ups — fire one Foxy tip per state transition, only when no
+  // cutscene is up and only once per id. Stored under storyFlags as `tut_<id>`.
+  useEffect(() => {
+    if (!char || !char.created) return;
+    if (cutscene) return;
+    if (screen === 'loading' || screen === 'slots' || screen === 'create' || screen === 'intro') return;
+    const flags = char.storyFlags || {};
+    for (const t of TUTORIALS) {
+      if (flags[`tut_${t.id}`]) continue;
+      try { if (!t.when(char)) continue; } catch { continue; }
+      playCutscene({
+        speaker: 'FOXY · TIP',
+        speakerColor: '#84cc16',
+        lines: t.lines,
+      }, `tut_${t.id}`);
+      break;
+    }
+  }, [char?.day, char?.minutes, char?.energy, char?.hunger, char?.mood, char?.cash, char?.created, char?.storyFlags, cutscene, screen]);
 
   // Apply migrations to a loaded character object (handles old saves missing new fields)
   const migrateChar = (c) => {
