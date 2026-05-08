@@ -11046,31 +11046,57 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
 
       {tab === 'train' && (
         <>
-          {!trainActivity.active && (
-            <Panel title="Tap a stat to start training">
-              <div className="space-y-2">
-                {Object.entries(trainConfig).map(([key, t]) => {
-                  const iconName = key === 'mus' ? 'music' : key === 'tec' ? 'zap' : key === 'ori' ? 'sparkle' : 'crown';
-                  return (
-                    <button key={key}
-                      onClick={() => { setTrainStat(key); setPendingStart(true); }}
-                      disabled={char.energy < t.tickEnergyCost}
-                      className="w-full flex items-center gap-3 p-2 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
-                      <PixelIcon name={iconName} size={28} />
-                      <div className="flex-1 text-left">
-                        <div className="text-stone-200 text-sm">{t.name} <span className="text-stone-500 text-xs">· {char.stats[key]}</span></div>
-                        <div className="text-[10px] text-stone-500 uppercase">{t.desc}</div>
+          {!trainActivity.active && (() => {
+            // Precheck: training needs enough headroom for several ticks. Block
+            // entry up front with a clear message instead of starting and
+            // bouncing the player out one tick later.
+            const blockReason = (cost) => {
+              if ((char.sickDay || 0) === char.day) return 'Too sick to train today';
+              if ((char.energy || 0) < cost * 3)    return 'Too tired to focus — power nap or eat first';
+              if ((char.hunger || 0) < 15)          return 'Too hungry to train — eat something first';
+              if ((char.mood || 0) < 15)            return 'Too grumpy to focus — watch TV or take a walk first';
+              return null;
+            };
+            return (
+              <Panel title="Tap a stat to start training">
+                <div className="space-y-2">
+                  {Object.entries(trainConfig).map(([key, t]) => {
+                    const iconName = key === 'mus' ? 'music' : key === 'tec' ? 'zap' : key === 'ori' ? 'sparkle' : 'crown';
+                    const reason = blockReason(t.tickEnergyCost);
+                    const disabled = !!reason;
+                    return (
+                      <button key={key}
+                        onClick={() => {
+                          if (reason) { showToast(reason, 'bad'); return; }
+                          setTrainStat(key); setPendingStart(true);
+                        }}
+                        disabled={disabled}
+                        title={reason || ''}
+                        className="w-full flex items-center gap-3 p-2 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
+                        <PixelIcon name={iconName} size={28} />
+                        <div className="flex-1 text-left">
+                          <div className="text-stone-200 text-sm">{t.name} <span className="text-stone-500 text-xs">· {char.stats[key]}</span></div>
+                          <div className="text-[10px] text-stone-500 uppercase">{t.desc}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-amber-500 text-xs">START ▶</div>
+                          <div className="text-[10px] text-stone-500">-{t.tickEnergyCost}⚡/tick</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {(() => {
+                    const r = blockReason(trainConfig.sho.tickEnergyCost); // cheapest stat
+                    return r ? (
+                      <div className="text-[10px] text-amber-500 uppercase tracking-wider text-center pt-2">
+                        {r}
                       </div>
-                      <div className="text-right">
-                        <div className="text-amber-500 text-xs">START ▶</div>
-                        <div className="text-[10px] text-stone-500">-{t.tickEnergyCost}⚡/tick</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </Panel>
-          )}
+                    ) : null;
+                  })()}
+                </div>
+              </Panel>
+            );
+          })()}
 
           {trainActivity.active && trainStat && (
             <Panel title={`Training ${trainConfig[trainStat].name} — IN PROGRESS`}>
@@ -12100,30 +12126,56 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         </Panel>
       )}
 
-      {!activity.active && (
-        <Panel title="Activities">
-          <div className="space-y-2">
-            {Object.entries(activities).map(([key, a]) => {
-              return (
-                <button key={key}
-                  onClick={() => { setSelected(key); setPendingStart(true); }}
-                  disabled={char.energy < a.tickEnergyCost}
-                  className="w-full flex items-center gap-3 p-3 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
-                  <PixelIcon name={a.pixelIcon} size={32} />
-                  <div className="flex-1 text-left">
-                    <div className="text-stone-200 text-sm">{a.name}</div>
-                    <div className="text-[10px] text-stone-500 uppercase tracking-wider">{a.desc}</div>
+      {!activity.active && (() => {
+        // Per-activity entry gate. Busk has no hunger/mood reqs (it's the
+        // safety net); jam and run still need the player to be in shape.
+        const blockReason = (key, cost) => {
+          if ((char.sickDay || 0) === char.day) return 'Too sick to do anything today';
+          if ((char.energy || 0) < cost * 3)    return 'Too tired — power nap or eat first';
+          if (key === 'busk') return null;       // free survival loop, no hunger/mood gate
+          if ((char.hunger || 0) < 15)          return 'Too hungry — eat something first';
+          if ((char.mood || 0) < 15)            return 'Too grumpy to focus — watch TV or take a walk first';
+          return null;
+        };
+        return (
+          <Panel title="Activities">
+            <div className="space-y-2">
+              {Object.entries(activities).map(([key, a]) => {
+                const reason = blockReason(key, a.tickEnergyCost);
+                const disabled = !!reason;
+                return (
+                  <button key={key}
+                    onClick={() => {
+                      if (reason) { showToast(reason, 'bad'); return; }
+                      setSelected(key); setPendingStart(true);
+                    }}
+                    disabled={disabled}
+                    title={reason || ''}
+                    className="w-full flex items-center gap-3 p-3 border-2 border-stone-800 bg-stone-900/30 hover:border-amber-500 disabled:opacity-30 transition-all">
+                    <PixelIcon name={a.pixelIcon} size={32} />
+                    <div className="flex-1 text-left">
+                      <div className="text-stone-200 text-sm">{a.name}</div>
+                      <div className="text-[10px] text-stone-500 uppercase tracking-wider">{a.desc}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-amber-500 text-xs">START ▶</div>
+                      <div className="text-[10px] text-stone-500 uppercase">-{a.tickEnergyCost}⚡/tick</div>
+                    </div>
+                  </button>
+                );
+              })}
+              {(() => {
+                const r = blockReason('jam', activities.jam.tickEnergyCost);
+                return r ? (
+                  <div className="text-[10px] text-amber-500 uppercase tracking-wider text-center pt-2">
+                    {r}
                   </div>
-                  <div className="text-right">
-                    <div className="text-amber-500 text-xs">START ▶</div>
-                    <div className="text-[10px] text-stone-500 uppercase">-{a.tickEnergyCost}⚡/tick</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </Panel>
-      )}
+                ) : null;
+              })()}
+            </div>
+          </Panel>
+        );
+      })()}
 
       {activity.active && (
         <Panel title={cfg.name + ' — IN PROGRESS'}>
