@@ -655,9 +655,9 @@ const _msgPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // (loneliness/boredom). Hunger or energy under 30 doubles the drain;
 // hitting 0 makes it ~3x. Used at every meaningful time-passing event.
 const _moodDrainFor = (c, minutes) => {
-  let perHour = 1;
-  if ((c.hunger || 0) < 30)  perHour += 0.7;
-  if ((c.energy || 0) < 30)  perHour += 0.7;
+  let perHour = 0.3;
+  if ((c.hunger || 0) < 30)  perHour += 0.5;
+  if ((c.energy || 0) < 30)  perHour += 0.5;
   if ((c.hunger || 0) === 0) perHour += 1.0;
   if ((c.energy || 0) === 0) perHour += 1.0;
   return (minutes / 60) * perHour;
@@ -10523,6 +10523,33 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     showToast('Home espresso · +25⚡ -15🍴 +2♥', 'win');
   };
 
+  // Couch downtime — small mood pickup, no cost beyond time. No cooldown
+  // (the time cost is the limiter). 30 min · +10 mood · -3 energy.
+  const watchTv = () => {
+    if ((char.energy || 0) < 3) { showToast('Too tired to focus', 'bad'); return; }
+    setChar(c => {
+      const t = passMinutes(c, 30);
+      return { ...c, ...t,
+        mood: _clampPct(t.mood + 10),
+        energy: Math.max(0, c.energy - 3),
+        hunger: Math.max(0, c.hunger - 4) };
+    });
+    showToast('Watched TV · +10 mood', 'win');
+  };
+  // Play games — slightly bigger mood + small ori bump. 45 min · +14 mood · -5 energy.
+  const playGames = () => {
+    if ((char.energy || 0) < 5) { showToast('Too tired to focus', 'bad'); return; }
+    setChar(c => {
+      const t = passMinutes(c, 45);
+      return { ...c, ...t,
+        mood: _clampPct(t.mood + 14),
+        energy: Math.max(0, c.energy - 5),
+        hunger: Math.max(0, c.hunger - 6),
+        stats: { ...c.stats, ori: (c.stats?.ori || 0) + (Math.random() < 0.40 ? 1 : 0) } };
+    });
+    showToast('Played a few rounds · +14 mood', 'win');
+  };
+
   // Yoga Mat meditation — daily +5 mood, 10 game min.
   const meditate = () => {
     if (!hasGear(char, 'yoga_mat')) return;
@@ -11454,6 +11481,21 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
               full energy · advances 1 day
               {char.minutes < 720 && <div className="text-amber-500 mt-1">It's still daytime — are you sure?</div>}
             </div>
+            {/* Quick mood pickups — no cooldown, just a time cost */}
+            <div className="border-t border-stone-800 pt-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                DOWNTIME
+              </div>
+              <Btn onClick={watchTv} disabled={(char.energy || 0) < 3} className="w-full py-3">
+                📺 WATCH TV (+10♥, 30 min, –3⚡)
+              </Btn>
+              <Btn onClick={playGames} disabled={(char.energy || 0) < 5} className="w-full py-3">
+                🎮 PLAY GAMES (+14♥, 45 min, –5⚡, sometimes +1 ori)
+              </Btn>
+              <div className="text-[10px] text-stone-600 uppercase tracking-wider text-center">
+                kill some time, get your head right
+              </div>
+            </div>
             {/* Stage Wardrobe — pick a stage outfit; unlocks via milestones */}
             <div className="border-t border-stone-800 pt-3 space-y-2">
               <div className="text-[10px] uppercase tracking-[0.3em] text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
@@ -11844,8 +11886,8 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
       Icon: Mic,
       pixelIcon: 'mic',
       tickEnergyCost: 2,
-      tickHungerCost: 1,
-      tickMoodDelta: -0.5,
+      tickHungerCost: 0,
+      tickMoodDelta: 0,
       label: '5 blocks → cash + maybe a fan',
       onReward: () => {
         const c = charRef.current;
