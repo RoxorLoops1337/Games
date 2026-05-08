@@ -966,6 +966,21 @@ const DAY_NAMES = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATU
 const DAY_NAMES_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const dayOfWeek = (day) => ((day || 1)) % 7;
 
+// Days from `fromDay` to the NEXT Tuesday (strictly after; if fromDay IS
+// Tuesday, returns 7). Tuesday = idx 1 in DAY_NAMES.
+const daysToNextTuesday = (fromDay) => {
+  const dow = dayOfWeek(fromDay);
+  if (dow === 1) return 7;
+  return ((1 - dow) + 7) % 7;
+};
+// Earliest day a drowned plant can be replaced: the first Tuesday strictly
+// after the death day. Returns 0 when the plant isn't dead.
+const replantAvailableDay = (c) => {
+  if (!c?.plantDead) return 0;
+  const deathDay = c?.plantDeathDay || c?.day || 0;
+  return deathDay + daysToNextTuesday(deathDay);
+};
+
 // Rent (auto-deducted on Sunday morning sleep transition; apartment tier sets the amount).
 const RENT_BY_TIER = [50, 100, 200];   // tier 1 / 2 / 3 weekly rent
 const COUCHSURF_DAYS = 3;              // days at Foxy's friend after eviction
@@ -9728,6 +9743,7 @@ export default function BeatboxStory() {
     if (typeof c.plantWaterCount !== 'number') c.plantWaterCount = 0;
     if (typeof c.plantWaterCountDay !== 'number') c.plantWaterCountDay = 0;
     if (typeof c.plantDead !== 'boolean') c.plantDead = false;
+    if (typeof c.plantDeathDay !== 'number') c.plantDeathDay = 0;
     if (typeof c.lastYogaDay !== 'number') c.lastYogaDay = 0;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
@@ -10591,10 +10607,11 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       setChar(c => ({ ...c,
         cash: c.cash - 5,
         plantDead: true,
+        plantDeathDay: c.day,
         plantWaterCount: 4,
         plantWaterCountDay: c.day,
       }));
-      showToast('You overwatered it. The plant drowned. 🥀', 'bad');
+      showToast('You overwatered it. The plant drowned. 🥀 Replacement next Tuesday.', 'bad');
       return;
     }
     setChar(c => ({ ...c,
@@ -11493,7 +11510,13 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                     </div>
                     <div className="text-[10px] text-stone-500 uppercase tracking-wider">
                       {dead
-                        ? 'overwatered · buy a new one in the shop'
+                        ? (() => {
+                            const ready = replantAvailableDay(char);
+                            const wait = Math.max(0, ready - (char.day || 0));
+                            return wait > 0
+                              ? `overwatered · nursery restocks tuesday (${wait}d)`
+                              : 'overwatered · nursery has plants today — buy one';
+                          })()
                         : <>+1♥ each morning · last watered {daysSinceWater} day{daysSinceWater === 1 ? '' : 's'} ago · {todayCount}/3 today</>}
                     </div>
                   </div>
@@ -11707,9 +11730,18 @@ function ShopScreen({ char, setChar, showToast, go }) {
   const buyGear = (id) => {
     const item = GEAR_CATALOG[id];
     if (!item) return;
-    // Houseplant is the one consumable: a dead one can be replaced.
+    // Houseplant is the one consumable: a dead one can be replaced — but only
+    // starting on the Tuesday after it drowned (overwatering has consequences).
     const replacingDeadPlant = id === 'houseplant' && char.plantDead;
     if (char.gear?.[id] && !replacingDeadPlant) return;     // already owned
+    if (replacingDeadPlant) {
+      const ready = replantAvailableDay(char);
+      if ((char.day || 0) < ready) {
+        const wait = ready - (char.day || 0);
+        showToast(`Plant nursery restocks Tuesday — ${wait} day${wait === 1 ? '' : 's'} to go.`, 'bad');
+        return;
+      }
+    }
     if (char.cash < item.cost) { showToast('Not enough cash', 'bad'); return; }
     setChar(c => {
       let next = { ...c, cash: c.cash - item.cost, gear: { ...(c.gear || {}), [id]: true } };
@@ -11813,18 +11845,30 @@ function ShopScreen({ char, setChar, showToast, go }) {
               const replaceable = id === 'houseplant' && char.plantDead;
               const showOwned = owned && !replaceable;
               const canAfford = (char.cash || 0) >= it.cost;
+              // Drowned plants restock at the nursery on the next Tuesday.
+              const replantReadyDay = replaceable ? replantAvailableDay(char) : 0;
+              const replantLocked = replaceable && (char.day || 0) < replantReadyDay;
+              const replantWait = replantLocked ? replantReadyDay - (char.day || 0) : 0;
               return (
                 <div key={id} className={`p-2 border bg-stone-900/30 ${showOwned ? 'border-amber-500/50' : 'border-stone-800'}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <div className="text-stone-200 text-sm">{it.name}{replaceable && <span className="text-rose-400 text-[10px] ml-2 uppercase tracking-widest">drowned · replace?</span>}</div>
+                    <div className="text-stone-200 text-sm">
+                      {it.name}
+                      {replaceable && !replantLocked && <span className="text-rose-400 text-[10px] ml-2 uppercase tracking-widest">drowned · replace?</span>}
+                      {replantLocked && <span className="text-stone-500 text-[10px] ml-2 uppercase tracking-widest">restocks tuesday</span>}
+                    </div>
                     {showOwned ? (
                       <div className="text-[10px] uppercase tracking-widest text-amber-500">OWNED</div>
+                    ) : replantLocked ? (
+                      <div className="text-[10px] uppercase tracking-widest text-stone-500">{replantWait}d</div>
                     ) : (
                       <Btn onClick={() => buyGear(id)} disabled={!canAfford}>${it.cost}</Btn>
                     )}
                   </div>
                   <div className="text-[10px] text-stone-500 uppercase tracking-wider leading-snug">
-                    {it.desc}
+                    {replantLocked
+                      ? 'Nursery only restocks houseplants on Tuesdays. Try again then.'
+                      : it.desc}
                   </div>
                 </div>
               );
