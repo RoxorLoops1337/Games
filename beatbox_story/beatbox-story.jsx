@@ -68,8 +68,8 @@ const applySoundUnlocks = (c) => {
 // Each helper queries char.gear[id] and returns a multiplier or boolean.
 // Wired into the relevant code paths (training, runs, performances, etc.)
 const hasGear = (c, id) => !!(c?.gear?.[id]);
-// True if the houseplant is alive — owned AND watered within 5 days.
-const plantAlive = (c) => hasGear(c, 'houseplant') && ((c?.day || 0) - (c?.lastPlantWaterDay || 0)) < 5;
+// True if the houseplant is alive — owned AND watered within 5 days AND not overwatered to death.
+const plantAlive = (c) => hasGear(c, 'houseplant') && !c?.plantDead && ((c?.day || 0) - (c?.lastPlantWaterDay || 0)) < 5;
 // Earplugs disable noisy/heating bad-sleep reasons.
 const FILTERED_BAD_SLEEP = (c) => hasGear(c, 'earplugs')
   ? BAD_SLEEP_REASONS.filter(r => r.id !== 'noisy' && r.id !== 'heating')
@@ -9725,6 +9725,9 @@ export default function BeatboxStory() {
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
     if (typeof c.lastPlantWaterDay !== 'number') c.lastPlantWaterDay = 0;
+    if (typeof c.plantWaterCount !== 'number') c.plantWaterCount = 0;
+    if (typeof c.plantWaterCountDay !== 'number') c.plantWaterCountDay = 0;
+    if (typeof c.plantDead !== 'boolean') c.plantDead = false;
     if (typeof c.lastYogaDay !== 'number') c.lastYogaDay = 0;
     if (!c.storyFlags || typeof c.storyFlags !== 'object') c.storyFlags = {};
     return c;
@@ -10575,12 +10578,32 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     showToast('Meditated. +5 mood', 'win');
   };
 
-  // Water the houseplant — costs $5, resets the 5-day timer.
+  // Water the houseplant — costs $5, resets the 5-day timer. Max 3 waterings
+  // per day; the 4th drowns the plant.
   const waterPlant = () => {
     if (!hasGear(char, 'houseplant')) return;
+    if (char.plantDead) { showToast('The plant is dead. Buy a new one.', 'bad'); return; }
     if ((char.cash || 0) < 5) { showToast("Need $5 for water can refill", 'bad'); return; }
-    setChar(c => ({ ...c, cash: c.cash - 5, lastPlantWaterDay: c.day }));
-    showToast('Watered the plant. +mood every morning while alive.', 'win');
+    const sameDay = char.plantWaterCountDay === char.day;
+    const count = sameDay ? (char.plantWaterCount || 0) : 0;
+    if (count >= 3) {
+      // Already at the daily cap → this watering drowns the plant.
+      setChar(c => ({ ...c,
+        cash: c.cash - 5,
+        plantDead: true,
+        plantWaterCount: 4,
+        plantWaterCountDay: c.day,
+      }));
+      showToast('You overwatered it. The plant drowned. 🥀', 'bad');
+      return;
+    }
+    setChar(c => ({ ...c,
+      cash: c.cash - 5,
+      lastPlantWaterDay: c.day,
+      plantWaterCount: count + 1,
+      plantWaterCountDay: c.day,
+    }));
+    showToast(`Watered the plant (${count + 1}/3 today). +mood every morning while alive.`, 'win');
   };
 
   // Foxy Soup — free meal Foxy makes daily, claimable once per in-game day.
@@ -11451,22 +11474,31 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                 </div>
               );
             })()}
-            {/* Houseplant — water it to keep alive. */}
+            {/* Houseplant — water it to keep alive. Max 3/day; 4th drowns it. */}
             {hasGear(char, 'houseplant') && (() => {
               const alive = plantAlive(char);
+              const dead = !!char.plantDead;
               const daysSinceWater = char.day - (char.lastPlantWaterDay || 0);
+              const sameDay = char.plantWaterCountDay === char.day;
+              const todayCount = sameDay ? (char.plantWaterCount || 0) : 0;
+              const atCap = todayCount >= 3;
+              const broke = (char.cash || 0) < 5;
               return (
                 <div className="flex items-center gap-3 p-2 border-2 bg-stone-900/30"
-                  style={{ borderColor: alive ? '#3a7028' : '#5a3a30' }}>
-                  <span className="text-xl">{alive ? '🌿' : '🥀'}</span>
+                  style={{ borderColor: dead ? '#5a2020' : alive ? '#3a7028' : '#5a3a30' }}>
+                  <span className="text-xl">{dead ? '💀' : alive ? '🌿' : '🥀'}</span>
                   <div className="flex-1">
-                    <div className="text-stone-200 text-sm">{alive ? 'Houseplant (alive)' : 'Houseplant (wilting)'}</div>
+                    <div className="text-stone-200 text-sm">
+                      {dead ? 'Houseplant (drowned)' : alive ? 'Houseplant (alive)' : 'Houseplant (wilting)'}
+                    </div>
                     <div className="text-[10px] text-stone-500 uppercase tracking-wider">
-                      +1♥ each morning · last watered {daysSinceWater} day{daysSinceWater === 1 ? '' : 's'} ago
+                      {dead
+                        ? 'overwatered · buy a new one in the shop'
+                        : <>+1♥ each morning · last watered {daysSinceWater} day{daysSinceWater === 1 ? '' : 's'} ago · {todayCount}/3 today</>}
                     </div>
                   </div>
-                  <Btn onClick={waterPlant} disabled={(char.cash || 0) < 5}>
-                    💧 $5
+                  <Btn onClick={waterPlant} disabled={dead || broke}>
+                    {dead ? '💀' : atCap ? '💧 $5 ⚠️' : '💧 $5'}
                   </Btn>
                 </div>
               );
@@ -11675,12 +11707,19 @@ function ShopScreen({ char, setChar, showToast, go }) {
   const buyGear = (id) => {
     const item = GEAR_CATALOG[id];
     if (!item) return;
-    if (char.gear?.[id]) return;                            // already owned
+    // Houseplant is the one consumable: a dead one can be replaced.
+    const replacingDeadPlant = id === 'houseplant' && char.plantDead;
+    if (char.gear?.[id] && !replacingDeadPlant) return;     // already owned
     if (char.cash < item.cost) { showToast('Not enough cash', 'bad'); return; }
     setChar(c => {
       let next = { ...c, cash: c.cash - item.cost, gear: { ...(c.gear || {}), [id]: true } };
       // Special-case fields some gear needs initialized on purchase
-      if (id === 'houseplant') next.lastPlantWaterDay = c.day;
+      if (id === 'houseplant') {
+        next.lastPlantWaterDay = c.day;
+        next.plantDead = false;
+        next.plantWaterCount = 0;
+        next.plantWaterCountDay = c.day;
+      }
       if (id === 'mpc') {
         // Pad oriSlots out to 8 with starter patterns (carry over existing)
         const existing = Array.isArray(c.oriSlots) ? c.oriSlots : [];
@@ -11770,12 +11809,15 @@ function ShopScreen({ char, setChar, showToast, go }) {
           <div className="space-y-2">
             {items.map(([id, it]) => {
               const owned = char.gear?.[id];
+              // Dead plant can be replaced — show as not-owned so the buy button comes back.
+              const replaceable = id === 'houseplant' && char.plantDead;
+              const showOwned = owned && !replaceable;
               const canAfford = (char.cash || 0) >= it.cost;
               return (
-                <div key={id} className={`p-2 border bg-stone-900/30 ${owned ? 'border-amber-500/50' : 'border-stone-800'}`}>
+                <div key={id} className={`p-2 border bg-stone-900/30 ${showOwned ? 'border-amber-500/50' : 'border-stone-800'}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <div className="text-stone-200 text-sm">{it.name}</div>
-                    {owned ? (
+                    <div className="text-stone-200 text-sm">{it.name}{replaceable && <span className="text-rose-400 text-[10px] ml-2 uppercase tracking-widest">drowned · replace?</span>}</div>
+                    {showOwned ? (
                       <div className="text-[10px] uppercase tracking-widest text-amber-500">OWNED</div>
                     ) : (
                       <Btn onClick={() => buyGear(id)} disabled={!canAfford}>${it.cost}</Btn>
