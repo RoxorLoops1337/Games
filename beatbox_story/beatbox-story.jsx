@@ -10420,13 +10420,17 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           if (acc >= 0.8) { statGain = 3; bonusText = ' (perfect pitch!)'; }
           else if (acc >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
         } else if (trainStat === 'tec') {
-          // Reward is tied to actual hits — watching demo or missing every note
-          // earns 0. Bonuses kick in as accuracy improves.
-          const acc = accuracyRef.current || 0;
-          if (acc <= 0)        { statGain = 0; }
-          else if (acc >= 0.8) { statGain = 3; bonusText = ' (locked in!)'; }
-          else if (acc >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
-          else                 { statGain = 1; }
+          // AFK drilling = baseline +1. Play-mode reward is tied to accuracy:
+          // watching demo or whiffing every note earns 0; locked-in play earns +3.
+          if (!playMode) {
+            statGain = 1;
+          } else {
+            const acc = accuracyRef.current || 0;
+            if (acc <= 0)        { statGain = 0; }
+            else if (acc >= 0.8) { statGain = 3; bonusText = ' (locked in!)'; }
+            else if (acc >= 0.5) { statGain = 2; bonusText = ' (+1 bonus)'; }
+            else                 { statGain = 1; }
+          }
           // Higher BPM = bigger reward (only when there's a base gain)
           if (statGain > 0) {
             const bpmMult = Math.max(1, (charRef.current.tecBpm || 90) / 90);
