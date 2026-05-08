@@ -9453,6 +9453,14 @@ const TUTORIALS = [
       "music gear boosts training; furniture buffs your home; clothing affects shows; pet's a daily mood bump.",
     ],
   },
+  { id: 'routines',
+    when: (c) => (c.openMicCount || 0) >= 1,
+    lines: [
+      "now you've done a mic — about your routines.",
+      "in the studio tab at home, you can build your own. open the sequencer and lay down loops.",
+      "training Originality unlocks new sequencer ideas + scoring boosts. better routines = better mics.",
+    ],
+  },
 ];
 
 // ============ SLOTS SCREEN ============
@@ -12401,7 +12409,7 @@ const OpenMicPerformance = ({ char, onComplete }) => {
         </div>
         <PixelScene draw={(ctx, fc) => drawOpenMicStage(ctx, fc, lookRef.current)} />
         <div className="text-center text-[10px] uppercase tracking-widest text-amber-500">
-          BEAT {Math.min(activeIdx + 1, picks.current.length)} / {picks.current.length} · {picks.current[activeIdx]?.name || 'CUSTOM'}
+          ROUTINE {Math.min(activeIdx + 1, picks.current.length)} / {picks.current.length} · {picks.current[activeIdx]?.name || 'CUSTOM'}
         </div>
       </div>
     </div>
@@ -12826,7 +12834,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
     setPerformingOpenMic(true);
   };
   const finishOpenMic = () => {
-    const cBefore = charRef.current;
+    const cBefore = char;
     setChar(c => {
       const stats = c.stats || {};
       const totalSkills = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
