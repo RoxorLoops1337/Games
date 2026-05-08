@@ -9457,8 +9457,8 @@ const TUTORIALS = [
     when: (c) => (c.openMicCount || 0) >= 1,
     lines: [
       "now you've done a mic — about your routines.",
-      "in the studio tab at home, you can build your own. open the sequencer and lay down loops.",
-      "training Originality unlocks new sequencer ideas + scoring boosts. better routines = better mics.",
+      "head home → PC/Train tab → train Originality. that's where the MPC lives — build your own loops there.",
+      "your saved patterns are what gets played at open mics. better originality = better routines = better shows.",
     ],
   },
 ];
