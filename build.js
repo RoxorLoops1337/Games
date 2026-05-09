@@ -25,6 +25,7 @@ const STATIC_PATHS = [
   'beatbox_story',
   'decktest',
   'pitchdeck',
+  'DhauwieSurvival',
 ];
 
 // JSX entry points to bundle. Output paths are relative to dist/.
