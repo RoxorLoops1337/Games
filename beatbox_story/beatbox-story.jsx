@@ -648,7 +648,7 @@ const FOXY_QUIPS = [
   "you've been weird this week. you good?",
   "post comes around four. i'll grab yours.",
 ];
-const _msgPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const _pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // ---- Passive mood decay ----
 // Mood doesn't just go up. Per game hour you lose ~1 mood passively
@@ -832,11 +832,11 @@ const FOXY_TIPS = [
 // Pick the highest-priority tip that applies, given the current char.
 // Falls back to a random ambient quip if nothing matches.
 const pickFoxyTip = (char) => {
-  if (!char) return _msgPick(FOXY_QUIPS);
+  if (!char) return _pick(FOXY_QUIPS);
   for (const rule of FOXY_TIPS) {
-    try { if (rule.when(char)) return _msgPick(rule.lines); } catch { /* skip */ }
+    try { if (rule.when(char)) return _pick(rule.lines); } catch { /* skip */ }
   }
-  return _msgPick(FOXY_QUIPS);
+  return _pick(FOXY_QUIPS);
 };
 
 // Pick up to N tips for the modal — the top-priority match plus a couple
@@ -6280,13 +6280,25 @@ const PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     let raf, fc = 0;
+    // Errors thrown by a scene's draw fn are caught so one bad scene can't
+    // crash the whole canvas loop, but we surface each unique error to the
+    // dev console once instead of swallowing 60 of them per second.
+    const seenSceneErrors = new Set();
     const loop = () => {
       fc++;
       ctx.save();
       ctx.scale(scale, scale);
       ctx.fillStyle = '#0c0a09';
       ctx.fillRect(0, 0, w, h);
-      try { draw(ctx, fc); } catch (e) { /* swallow scene errors */ }
+      try {
+        draw(ctx, fc);
+      } catch (e) {
+        const key = (e && e.message) || String(e);
+        if (!seenSceneErrors.has(key)) {
+          seenSceneErrors.add(key);
+          console.error('PixelScene draw threw:', e);
+        }
+      }
       ctx.restore();
       raf = requestAnimationFrame(loop);
     };
@@ -10830,7 +10842,6 @@ export default function BeatboxStory() {
     if (typeof c.bjarneSessions !== 'number') c.bjarneSessions = 0;
     if (typeof c.lastBjarneDay !== 'number') c.lastBjarneDay = 0;
     if (typeof c.apartmentMovedInDay !== 'number') c.apartmentMovedInDay = 0;
-    if (typeof c.sickDay !== 'number') c.sickDay = 0;
     if (!c.flashbacksSeen || typeof c.flashbacksSeen !== 'object') c.flashbacksSeen = {};
     if (!c.gear || typeof c.gear !== 'object') c.gear = {};
     if (typeof c.lastCoffeeDay !== 'number') c.lastCoffeeDay = 0;
@@ -10866,10 +10877,58 @@ export default function BeatboxStory() {
     })();
   }, []);
 
-  // Save the active slot whenever char changes (post-load).
+  // Save the active slot whenever char changes, but throttled so we don't
+  // serialize the whole char + hit storage on every activity tick. At most
+  // one save per SAVE_THROTTLE_MS, with a trailing-edge save to capture the
+  // latest state, plus a beforeunload flush so closing the tab doesn't lose
+  // recent progress.
+  const SAVE_THROTTLE_MS = 2000;
+  const lastSaveTimeRef = useRef(0);
+  const pendingSaveRef = useRef(null);
+  const latestCharRef = useRef(char);
+  useEffect(() => { latestCharRef.current = char; }, [char]);
   useEffect(() => {
-    if (char && char.created && loaded && activeSlot) saveSlot(activeSlot, char);
+    if (!(char && char.created && loaded && activeSlot)) return;
+    const now = Date.now();
+    const elapsed = now - lastSaveTimeRef.current;
+    if (pendingSaveRef.current) {
+      clearTimeout(pendingSaveRef.current);
+      pendingSaveRef.current = null;
+    }
+    if (elapsed >= SAVE_THROTTLE_MS) {
+      lastSaveTimeRef.current = now;
+      saveSlot(activeSlot, char);
+    } else {
+      pendingSaveRef.current = setTimeout(() => {
+        lastSaveTimeRef.current = Date.now();
+        pendingSaveRef.current = null;
+        saveSlot(activeSlot, latestCharRef.current);
+      }, SAVE_THROTTLE_MS - elapsed);
+    }
   }, [char, loaded, activeSlot]);
+  // Best-effort flush on tab close / visibility hide so you never lose more
+  // than the throttle window's worth of progress.
+  useEffect(() => {
+    const flush = () => {
+      const c = latestCharRef.current;
+      if (!(c && c.created && loaded && activeSlot)) return;
+      if (pendingSaveRef.current) {
+        clearTimeout(pendingSaveRef.current);
+        pendingSaveRef.current = null;
+      }
+      lastSaveTimeRef.current = Date.now();
+      saveSlot(activeSlot, c);
+    };
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush();
+    });
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      // visibilitychange listener is anonymous; harmless to leave on a
+      // long-lived App. (App in this codebase mounts once.)
+    };
+  }, [loaded, activeSlot]);
 
   // Switch to a different character slot (or to a new one)
   const switchToSlot = async (n) => {
@@ -11517,7 +11576,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         storyFlags: { ...(c.storyFlags || {}), foxyFirstSafetyNet: true },
       };
       // Foxy follows up with a soft text the next time you check your phone.
-      next = addMessage(next, 'foxy', _msgPick(FOXY_QUIPS));
+      next = addMessage(next, 'foxy', _pick(FOXY_QUIPS));
       return next;
     });
     // Show the cutscene (only big the first time; later ones are silent + toast)
@@ -11536,8 +11595,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     } else {
       showToast('Foxy left soup on the counter (+40 hunger)', 'win');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [char?.day, char?.cash, char?.hunger, char?.lastFoxySafetyNetDay]);
 
   const trainConfig = {
     mus: { name: 'Musicality', desc: 'Watch beatbox vids on YouTube', tickEnergyCost: 1.5, color: '#D4A017' },
@@ -11977,15 +12035,15 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         else if ((next.hunger || 0) < 30  && Math.random() < 0.50) reason = 'hungerLow';
         else if (newDay % 7 === 6         && Math.random() < 0.30) reason = 'random';
         if (reason) {
-          next = addMessage(next, 'parents', _msgPick(PARENT_MESSAGES[reason]));
+          next = addMessage(next, 'parents', _pick(PARENT_MESSAGES[reason]));
           next.lastParentMsgDay = newDay;
         }
       }
       // Anonymous internet messages — small daily roll. Followers > 0 →
       // some chance of a fan or a hater pinging in.
       if ((next.followers || 0) > 0) {
-        if (Math.random() < 0.05) next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_FAN));
-        if (Math.random() < 0.04) next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_HATE));
+        if (Math.random() < 0.05) next = addMessage(next, 'unknown', _pick(UNKNOWN_MESSAGES_FAN));
+        if (Math.random() < 0.04) next = addMessage(next, 'unknown', _pick(UNKNOWN_MESSAGES_HATE));
       }
       // Festival invite — when eligible, Rohzel sends the message that hooks
       // the late-game arc. Only fires once.
@@ -13583,7 +13641,6 @@ const ROHZEL_REMINDER = (timeStr) => [
   `You're already on the list, Friday ${timeStr}. Don't make me regret it.`,
   `Booked, kid. Friday ${timeStr}. Show up or shut up.`,
 ];
-const _pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // 8 PM .. 0:30 AM in 30-min slots (in-game minutes since 6 AM)
 const SHOWCASE_SLOTS = [];
@@ -14115,14 +14172,16 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
   };
   const finishOpenMic = () => {
     const cBefore = char;
+    // Roll the fan gain ONCE up front so the toast can show the actual
+    // number (not a re-derived approximation that drifts from reality).
+    const stats = char.stats || {};
+    const totalSkills = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
+    const base = Math.floor(Math.max(0, totalSkills - 20) / 25);
+    const showBonus = Math.floor((stats.sho || 0) / 8);
+    const lucky = Math.floor(Math.random() * 3);
+    // Slow scaling: 1–3 fans early game, ~10 mid-late, capped at 20 elite.
+    const fanGain = Math.max(1, Math.min(20, base + showBonus + lucky));
     setChar(c => {
-      const stats = c.stats || {};
-      const totalSkills = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
-      // Slow scaling: 1–3 fans early game, ~10 mid-late, capped at 20 elite.
-      const base = Math.floor(Math.max(0, totalSkills - 20) / 25);
-      const showBonus = Math.floor((stats.sho || 0) / 8);
-      const lucky = Math.floor(Math.random() * 3);
-      const fanGain = Math.max(1, Math.min(20, base + showBonus + lucky));
       // Wardrobe Refresh: +1 sho on every show
       const wardrobeBonus = hasGear(c, 'wardrobe_refresh') ? 1 : 0;
       const t = passMinutes(c, 60); // open mic is a full hour of game time
@@ -14140,15 +14199,15 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
       // Good-show parent text trigger (only on a strong show, with cooldown)
       const cd = c.day - (c.lastParentMsgDay || 0);
       if (cd >= 3 && fanGain >= 5 && Math.random() < 0.35) {
-        next = addMessage(next, 'parents', _msgPick(PARENT_MESSAGES.goodShow));
+        next = addMessage(next, 'parents', _pick(PARENT_MESSAGES.goodShow));
         next.lastParentMsgDay = c.day;
       }
       // Anonymous internet reactions to the show. Strong shows attract
       // fans, weak ones attract haters.
       if (fanGain >= 5 && Math.random() < 0.35) {
-        next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_FAN));
+        next = addMessage(next, 'unknown', _pick(UNKNOWN_MESSAGES_FAN));
       } else if (fanGain <= 1 && Math.random() < 0.30) {
-        next = addMessage(next, 'unknown', _msgPick(UNKNOWN_MESSAGES_HATE));
+        next = addMessage(next, 'unknown', _pick(UNKNOWN_MESSAGES_HATE));
       }
       return next;
     });
@@ -14183,18 +14242,7 @@ function BarScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene })
         }, 'bjarneIntroduced');
       }
     }, 0);
-    setTimeout(() => {
-      // Read the freshly-applied gain from a ref-ish trick: showToast happens
-      // once per click; we approximate by computing the fan gain again here
-      // for the toast (state may not be flushed). Cheap and matches above.
-      const stats = char.stats || {};
-      const totalSkills = (stats.mus || 0) + (stats.tec || 0) + (stats.ori || 0) + (stats.sho || 0);
-      const base = Math.floor(Math.max(0, totalSkills - 20) / 25);
-      const showBonus = Math.floor((stats.sho || 0) / 8);
-      // No randomness in toast — show ~ matching the typical pull
-      const approx = Math.max(1, Math.min(20, base + showBonus + 1));
-      showToast(`Open mic done · ~${approx} new fans 🎤`, 'win');
-    }, 0);
+    showToast(`Open mic done · +${fanGain} new fans 🎤`, 'win');
   };
   const doCrewBattle = (crew) => {
     if ((char.energy || 0) < 30) { showToast('Need 30 energy', 'bad'); return; }
