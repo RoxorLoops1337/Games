@@ -6480,6 +6480,156 @@ const FoxyModal = ({ char, setChar, showToast, onClose }) => {
 };
 
 // ============ ACHIEVEMENTS PANEL ============
+// Hidden developer mode panel. Triple-tap the day-of-week badge in the
+// header → enter passcode (808) → this opens. Lets the developer skip
+// ahead to specific days of the week, set the time, edit cash/energy/etc
+// without grinding the live game loop.
+const DevPanel = ({ char, setChar, onClose, onLock }) => {
+  if (!char) return null;
+  const setDow = (target) => {
+    // Day-of-week formula: dayOfWeek(d) = d % 7. Move forward to nearest match.
+    const cur = (char.day || 1) % 7;
+    let delta = (target - cur + 7) % 7;
+    if (delta === 0) delta = 7; // tap-same-day = jump a week forward
+    setChar(c => ({ ...c, day: (c.day || 1) + delta, minutes: 0 }));
+  };
+  const bumpDay = (n) => setChar(c => ({ ...c, day: Math.max(1, (c.day || 1) + n) }));
+  const setMinutes = (m) => setChar(c => ({ ...c, minutes: Math.max(0, Math.min(DAY_END - 30, m)) }));
+  const setCash = (n) => setChar(c => ({ ...c, cash: Math.max(0, n) }));
+  const fullRestore = () => setChar(c => ({
+    ...c,
+    energy: c.maxEnergy ?? 100,
+    hunger: 100,
+    mood: 100,
+  }));
+  const bumpFollowers = (n) => setChar(c => ({ ...c, followers: Math.max(0, (c.followers || 0) + n) }));
+  const bumpStat = (key, n) => setChar(c => ({
+    ...c,
+    stats: { ...(c.stats || {}), [key]: Math.max(0, Math.min(100, ((c.stats?.[key]) || 0) + n)) },
+  }));
+  const minutesToHHMM = (mins) => {
+    const t = ((mins || 0) + 6 * 60);  // day starts at 6 AM
+    const h = Math.floor((t / 60) % 24);
+    const m = (t % 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/85 backdrop-blur-sm p-3"
+      onClick={onClose}>
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-stone-950 border-2 border-amber-500/50 p-3 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+        style={{ boxShadow: '0 0 32px rgba(212,160,23,0.18)' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-amber-400 text-base tracking-widest uppercase" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>⚡ DEV PANEL</div>
+            <div className="text-[10px] text-stone-500 uppercase tracking-widest">Hidden — triple-tap day badge to reopen</div>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-amber-500 text-lg leading-none px-2">×</button>
+        </div>
+
+        <Panel title={`Day ${char.day} · ${DAY_NAMES[dayOfWeek(char.day)]} · ${minutesToHHMM(char.minutes)}`}>
+          <div className="space-y-2">
+            <div className="text-[9px] uppercase tracking-widest text-stone-500">Jump to next…</div>
+            <div className="grid grid-cols-7 gap-1">
+              {DAY_NAMES_SHORT.map((n, i) => {
+                const cur = dayOfWeek(char.day) === i;
+                return (
+                  <button key={n} onClick={() => setDow(i)}
+                    className={`py-1.5 border-2 text-[10px] uppercase tracking-widest transition-all ${cur
+                      ? 'border-amber-500 bg-amber-500/15 text-amber-500'
+                      : 'border-stone-800 bg-stone-900/40 text-stone-300 hover:border-amber-500/40'}`}>
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-4 gap-1 pt-1">
+              <button onClick={() => bumpDay(-7)} className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">−7d</button>
+              <button onClick={() => bumpDay(-1)} className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">−1d</button>
+              <button onClick={() => bumpDay(+1)} className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">+1d</button>
+              <button onClick={() => bumpDay(+7)} className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">+7d</button>
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title={`Time of day · ${minutesToHHMM(char.minutes)}`}>
+          <div className="space-y-2">
+            <input type="range" min={0} max={DAY_END - 30} step={30}
+              value={char.minutes || 0}
+              onChange={(e) => setMinutes(Number(e.target.value))}
+              className="w-full" />
+            <div className="grid grid-cols-4 gap-1">
+              {[
+                { label: '06:00', m: 0 },
+                { label: '12:00', m: 6 * 60 },
+                { label: '18:00', m: 12 * 60 },
+                { label: '23:00', m: 17 * 60 },
+              ].map(p => (
+                <button key={p.label} onClick={() => setMinutes(p.m)}
+                  className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title={`Cash · $${char.cash || 0}`}>
+          <div className="grid grid-cols-4 gap-1">
+            {[
+              { label: '+$50', d: 50 },
+              { label: '+$500', d: 500 },
+              { label: '+$5k', d: 5000 },
+              { label: '$0', set: 0 },
+            ].map(p => (
+              <button key={p.label}
+                onClick={() => p.set != null ? setCash(p.set) : setCash((char.cash || 0) + p.d)}
+                className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel title={`Stats · ${char.followers || 0} fans · LVL ${char.level}`}>
+          <div className="grid grid-cols-2 gap-1">
+            <button onClick={fullRestore}
+              className="py-1.5 border border-amber-500/40 bg-amber-500/10 text-amber-300 text-[10px] uppercase tracking-widest hover:border-amber-500">
+              ⚡ Full restore
+            </button>
+            <button onClick={() => bumpFollowers(50)}
+              className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+              +50 fans
+            </button>
+            <button onClick={() => bumpFollowers(500)}
+              className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+              +500 fans
+            </button>
+            <button onClick={() => setChar(c => ({ ...c, xp: ((c.level || 1) * 100) }))}
+              className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+              Fill XP bar
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-1 mt-1">
+            {['mus', 'tec', 'ori', 'sho'].map(k => (
+              <button key={k} onClick={() => bumpStat(k, 5)}
+                className="py-1.5 border border-stone-800 bg-stone-900/40 text-stone-300 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+                +5 {k.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <button onClick={onLock}
+          className="w-full py-2 border-2 border-stone-800 bg-stone-900/40 text-stone-500 text-[10px] uppercase tracking-widest hover:border-red-500/50 hover:text-red-400 transition-all">
+          🔒 Lock dev mode (forget code)
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const AchievementsPanel = ({ char, onClose }) => {
   const earned = ACHIEVEMENTS.filter(a => char.achievements?.[a.id]);
   const locked = ACHIEVEMENTS.filter(a => !char.achievements?.[a.id]);
@@ -10423,6 +10573,31 @@ export default function BeatboxStory() {
   const [cutscene, setCutscene] = useState(null);
   const [showMessages, setShowMessages] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  // Hidden developer mode. Triple-tap the day-of-week badge → enter passcode
+  // (808) → unlocks. Persists in localStorage so it's sticky between sessions.
+  // Inside the panel you can jump days, set time, edit cash/energy/etc.
+  const [devUnlocked, setDevUnlocked] = useState(() => {
+    try { return typeof localStorage !== 'undefined' && localStorage.getItem('beatbox_dev') === '1'; }
+    catch { return false; }
+  });
+  const [showDevPanel, setShowDevPanel] = useState(false);
+  const devTapsRef = useRef({ count: 0, last: 0 });
+  const handleDevBadgeTap = () => {
+    const now = Date.now();
+    const t = devTapsRef.current;
+    if (now - t.last > 800) t.count = 0;
+    t.last = now;
+    t.count += 1;
+    if (t.count < 3) return;
+    t.count = 0;
+    if (devUnlocked) { setShowDevPanel(true); return; }
+    const code = typeof window !== 'undefined' ? window.prompt('Dev code:') : null;
+    if (code && code.trim() === '808') {
+      try { localStorage.setItem('beatbox_dev', '1'); } catch {}
+      setDevUnlocked(true);
+      setShowDevPanel(true);
+    }
+  };
   // Pause the activity tick + time progression while a cutscene is up
   useEffect(() => { setGamePaused(!!cutscene); }, [cutscene]);
   // Queue a cutscene + a story flag to set when it ends. flagPath e.g. 'introSeen'.
@@ -10713,7 +10888,12 @@ export default function BeatboxStory() {
             <div className="px-3 py-2 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] uppercase tracking-[0.3em] text-amber-500">{DAY_NAMES_SHORT[dayOfWeek(char.day)]}</span>
+                  <span onClick={handleDevBadgeTap}
+                    className={`text-[9px] uppercase tracking-[0.3em] cursor-default select-none ${devUnlocked ? 'text-amber-300' : 'text-amber-500'}`}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    title={devUnlocked ? 'Dev mode (triple-tap to open panel)' : ''}>
+                    {DAY_NAMES_SHORT[dayOfWeek(char.day)]}{devUnlocked ? '*' : ''}
+                  </span>
                   <span className="text-[9px] uppercase tracking-[0.3em] text-stone-500">Day {char.day}</span>
                   <Clock minutes={char.minutes ?? 0} day={char.day} />
                 </div>
@@ -10778,6 +10958,14 @@ export default function BeatboxStory() {
         {cutscene && <Cutscene {...cutscene} />}
         {showMessages && <MessagesPanel char={char} setChar={setChar} onClose={() => setShowMessages(false)} />}
         {showAchievements && <AchievementsPanel char={char} onClose={() => setShowAchievements(false)} />}
+        {showDevPanel && devUnlocked && (
+          <DevPanel char={char} setChar={setChar} onClose={() => setShowDevPanel(false)}
+            onLock={() => {
+              try { localStorage.removeItem('beatbox_dev'); } catch {}
+              setDevUnlocked(false);
+              setShowDevPanel(false);
+            }} />
+        )}
 
         {toast && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs">
