@@ -4089,6 +4089,7 @@ const MicBeatboxDetector = ({ active, paused = false, onHit }) => {
 const BeatboxHero = ({
   onAccuracyUpdate,
   onLessonComplete,
+  onStreak,
   evaluateEveryMs = 2500,
   active = true,
   bpm = 90,
@@ -4110,6 +4111,8 @@ const BeatboxHero = ({
   useEffect(() => { lessonIdxRef.current = lessonIdx; }, [lessonIdx]);
   const lessonOverrideRef = useRef(lessonOverride);
   useEffect(() => { lessonOverrideRef.current = lessonOverride; }, [lessonOverride]);
+  const onStreakRef = useRef(onStreak);
+  useEffect(() => { onStreakRef.current = onStreak; }, [onStreak]);
 
   // Constants — wider hit windows in mic mode to compensate for ~50–100 ms
   // detection latency. accuracyBoost (e.g. 1.25 with premium headphones)
@@ -4178,6 +4181,8 @@ const BeatboxHero = ({
       hits: 0,
       misses: 0,
       perfects: 0,
+      streak: 0,        // current consecutive perfect hits
+      bestStreak: 0,    // peak streak this run
       laneFlash,
       audioScheduled: new Set(),
       phase: mode === 'battle' ? 'player' : 'demo',
@@ -4222,11 +4227,23 @@ const BeatboxHero = ({
       const isPerfect = bestDelta <= HIT_PERFECT_MS;
       n.hitGrade = isPerfect ? 'perfect' : 'good';
       state.hits++;
-      if (isPerfect) state.perfects++;
+      if (isPerfect) {
+        state.perfects++;
+        state.streak++;
+        if (state.streak > state.bestStreak) state.bestStreak = state.streak;
+        onStreakRef.current?.(state.streak);
+      } else if (state.streak > 0) {
+        state.streak = 0;
+        onStreakRef.current?.(0);
+      }
     } else {
       // Stray tap — no note in this lane near the strike line. Count it as a
       // miss so spamming all four pads drops the accuracy.
       state.misses++;
+      if (state.streak > 0) {
+        state.streak = 0;
+        onStreakRef.current?.(0);
+      }
     }
     rerender();
   };
@@ -4263,6 +4280,8 @@ const BeatboxHero = ({
       s.hits = 0;
       s.misses = 0;
       s.perfects = 0;
+      s.streak = 0;
+      s.bestStreak = 0;
       s.audioScheduled = new Set();
       s.completionFired = false;
       s.completeAt = 0;
@@ -4406,7 +4425,7 @@ const BeatboxHero = ({
         const finalAcc = total > 0 ? state.hits / total : 0;
         if (!state.completionFired) {
           state.completionFired = true;
-          onLessonComplete?.(state.lessonIdx, finalAcc);
+          onLessonComplete?.(state.lessonIdx, finalAcc, { bestStreak: state.bestStreak, perfects: state.perfects });
         }
         rerender();
       } else if (state.phase !== 'complete') {
@@ -4436,6 +4455,10 @@ const BeatboxHero = ({
         if (n.time + HIT_GOOD_MS < songT) {
           n.judged = true;
           state.misses++;
+          if (state.streak > 0) {
+            state.streak = 0;
+            onStreakRef.current?.(0);
+          }
         }
       }
 
@@ -14625,7 +14648,116 @@ const CharacterPortrait = ({ look, size = 64, active = false, bg = '#1c1917', cl
   );
 };
 
-const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0], comboLabel = null }) => {
+// Full-overlay splash that slams in when the player triggers a finisher at the
+// end of a round. Big slab text, scanline flash, ember rain.
+const FinisherSplash = ({ name, bonus, peak }) => {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const W = 200, H = 120, S = 3;
+    canvas.width = W * S; canvas.height = H * S;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf, fc = 0;
+    const sparks = [];
+    for (let i = 0; i < 22; i++) {
+      sparks.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: -0.6 - Math.random() * 1.2,
+        ttl: 60 + Math.random() * 40,
+        life: 0,
+        c: ['#fef3c7', '#fbbf24', '#f97316', '#dc2626'][Math.floor(Math.random() * 4)],
+      });
+    }
+    const loop = () => {
+      fc++;
+      ctx.save();
+      ctx.scale(S, S);
+      // Backdrop — pulsing red-orange radial-feeling gradient via rings
+      ctx.fillStyle = '#1a0612';
+      ctx.fillRect(0, 0, W, H);
+      const ringAlpha = 0.18 + 0.10 * Math.sin(fc * 0.15);
+      ctx.fillStyle = `rgba(220,38,38,${ringAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+      // Radial pulse rings from center
+      for (let r = 0; r < 4; r++) {
+        const phase = ((fc + r * 12) % 60) / 60;
+        ctx.globalAlpha = (1 - phase) * 0.6;
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(W / 2, H / 2, 10 + phase * 90, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      // Diagonal speed-line overlay scrolling
+      for (let i = 0; i < 14; i++) {
+        const lx = ((i * 18 + fc * 4) % (W + 60)) - 30;
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(lx, 0, 2, H);
+        ctx.globalAlpha = 1;
+      }
+      // Sparks rising
+      for (const s of sparks) {
+        s.life++;
+        s.x += s.vx; s.y += s.vy;
+        if (s.life > s.ttl || s.y < -4) { s.x = Math.random() * W; s.y = H + 4; s.life = 0; s.vy = -0.6 - Math.random() * 1.2; continue; }
+        const t = s.life / s.ttl;
+        ctx.globalAlpha = 1 - t;
+        ctx.fillStyle = s.c;
+        ctx.fillRect(Math.floor(s.x), Math.floor(s.y), 1, 1);
+        ctx.globalAlpha = 1;
+      }
+      // Bottom flame strip
+      for (let i = 0; i < 22; i++) {
+        const fx = i * 9 + 4;
+        const fy = H - 14 - Math.floor(Math.sin((fc + i * 12) * 0.2) * 3);
+        _px(ctx, fx - 1, fy + 4, 4, 10, '#dc2626');
+        _px(ctx, fx, fy + 2, 2, 10, '#f97316');
+        _px(ctx, fx, fy, 1, 6, '#fbbf24');
+        if ((fc + i) % 4 < 2) _px(ctx, fx, fy - 2, 1, 2, '#fef3c7');
+      }
+      // Big slab title
+      ctx.fillStyle = '#0c0a09';
+      ctx.font = 'bold 26px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('FINISHER!', W / 2 + 1, 50);  // shadow
+      const flicker = (fc % 8) < 4 ? '#fef3c7' : '#fbbf24';
+      ctx.fillStyle = flicker;
+      ctx.fillText('FINISHER!', W / 2, 49);
+      // Move name
+      ctx.font = 'bold 9px monospace';
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillText(`★ ${name} ★`, W / 2, 64);
+      // Stats line
+      ctx.font = 'bold 7px monospace';
+      ctx.fillStyle = '#a8a29e';
+      ctx.fillText(`${peak} PERFECT IN A ROW · BONUS +${bonus}`, W / 2, 78);
+      ctx.restore();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [name, bonus, peak]);
+  return (
+    <div className="absolute inset-0 flex items-center justify-center"
+      style={{ animation: 'finisherSlam 0.4s ease-out' }}>
+      <canvas ref={canvasRef} className="w-full h-full" style={{ imageRendering: 'pixelated' }} />
+      <style>{`
+        @keyframes finisherSlam {
+          0% { transform: scale(0.6); opacity: 0; }
+          40% { transform: scale(1.1); opacity: 1; }
+          70% { transform: scale(0.98); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judgeVotes, revealedJudges, judgeHearts = [0,0,0,0,0], comboLabel = null, playerStreak = 0 }) => {
   const canvasRef = useRef(null);
   const PXSCALE = 3;
   // Tighter aspect (5:3 vs old 5:4): cropped the top empty sky so the stage sits
@@ -14641,9 +14773,9 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
   const activeSideRef = useRef(activeSide);
 
   useEffect(() => {
-    propsRef.current = { activeSide, currentSound, soundColor, judgeVotes, revealedJudges };
+    propsRef.current = { activeSide, currentSound, soundColor, judgeVotes, revealedJudges, playerStreak };
     activeSideRef.current = activeSide;
-  }, [activeSide, currentSound, soundColor, judgeVotes, revealedJudges]);
+  }, [activeSide, currentSound, soundColor, judgeVotes, revealedJudges, playerStreak]);
 
   // Watch judgeHearts: spawn floating hearts + sparks per judge bump
   useEffect(() => {
@@ -14755,6 +14887,62 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
       }
 
       // Beatboxers (feet at y=95, was 130)
+      // If the player is on a perfect streak, paint a flame aura BEHIND them so
+      // the sprite reads on top.
+      const ps = propsRef.current.playerStreak || 0;
+      if (ps >= 4) {
+        const auraIntensity = Math.min(1, (ps - 4) / 6 + 0.4);  // 4 → 0.4, 10 → 1.0
+        const auraR = 16 + Math.min(8, ps - 4);
+        const cx = 60, cy = 78;
+        // Outer glow halo (orange)
+        ctx.globalAlpha = 0.18 * auraIntensity;
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath(); ctx.arc(cx, cy, auraR + 4, 0, Math.PI * 2); ctx.fill();
+        // Inner glow (gold)
+        ctx.globalAlpha = 0.30 * auraIntensity;
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath(); ctx.arc(cx, cy, auraR, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        // Pixel flame tongues licking up around the body
+        const flameColors = ['#fef3c7', '#fbbf24', '#f97316', '#dc2626'];
+        const flameCount = 7 + Math.min(6, ps - 4);
+        for (let i = 0; i < flameCount; i++) {
+          const angle = (i / flameCount) * Math.PI * 2 + frameCount * 0.04;
+          const wob = Math.sin((frameCount + i * 11) * 0.18) * 2;
+          const dist = auraR - 2 + wob;
+          const fx = Math.floor(cx + Math.cos(angle) * dist);
+          const fy = Math.floor(cy + Math.sin(angle) * dist - 2);
+          // Layered flame: outer red, mid orange, core gold, tip white
+          _px(ctx, fx - 1, fy - 4, 3, 6, flameColors[3]);     // red outer
+          _px(ctx, fx, fy - 5, 2, 5, flameColors[2]);         // orange
+          _px(ctx, fx, fy - 6, 1, 4, flameColors[1]);         // gold
+          if ((frameCount + i) % 4 < 2) _px(ctx, fx, fy - 7, 1, 2, flameColors[0]); // tip
+        }
+        // Rising ember sparks
+        for (let i = 0; i < 4; i++) {
+          const phase = ((frameCount + i * 11) % 30) / 30;
+          const ex = cx + Math.sin((frameCount + i * 17) * 0.1) * (12 + phase * 6);
+          const ey = cy - 8 - phase * 22;
+          ctx.globalAlpha = (1 - phase) * auraIntensity;
+          _px(ctx, Math.floor(ex), Math.floor(ey), 1, 1, phase < 0.4 ? '#fef3c7' : '#fbbf24');
+          ctx.globalAlpha = 1;
+        }
+        // FINISHER threshold: extra "charged" overlay on the body
+        if (ps >= FINISHER_THRESHOLD) {
+          if (frameCount % 12 < 6) {
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = '#fef3c7';
+            _px(ctx, cx - 8, cy - 14, 16, 28, '#fef3c7');
+            ctx.globalAlpha = 1;
+          }
+          // "ARMED" text floating above
+          ctx.fillStyle = '#fef3c7';
+          ctx.font = 'bold 6px monospace';
+          ctx.textAlign = 'center';
+          const bob = Math.floor(Math.sin(frameCount * 0.2) * 1);
+          ctx.fillText('⚡ ARMED', cx, 50 + bob);
+        }
+      }
       drawBeatboxer(ctx, 60, 95, playerLook, 'right', activeSide === 'P', frameCount);
       drawBeatboxer(ctx, 140, 95, oppLook, 'left', activeSide === 'O', frameCount);
 
@@ -14845,49 +15033,115 @@ const PixelStage = ({ char, opponent, activeSide, currentSound, soundColor, judg
 // The full sketch stage
 
 // HUD overlay - the top bar with names, bars, sound icons
-const BattleHUD = ({ char, opponent, timeLeft, pScore, oScore }) => {
+// Hype label bands keyed off the score gap between player and opponent.
+// Used in the HUD for the live momentum indicator (no exact numbers).
+const _hypeLabel = (gap) => {
+  if (gap >= 60) return { text: 'CROWD GOES WILD', color: '#fbbf24' };
+  if (gap >= 25) return { text: 'YOU\'RE COOKING', color: '#fbbf24' };
+  if (gap >= 8)  return { text: 'EDGE: YOU', color: '#a3e635' };
+  if (gap > -8)  return { text: 'NECK AND NECK', color: '#a8a29e' };
+  if (gap > -25) return { text: 'OPP HAS THE EDGE', color: '#fb923c' };
+  if (gap > -60) return { text: 'SHAKE IT OFF', color: '#fb7185' };
+  return { text: 'BURIED', color: '#dc2626' };
+};
+
+// Finisher arms once the player chains FINISHER_THRESHOLD perfect hits.
+const FINISHER_THRESHOLD = 8;
+
+const BattleHUD = ({ char, opponent, timeLeft, pScore, oScore, streak = 0, finisherArmed = false }) => {
   const playerSounds = char.equipped.slice(0, 5).map(id => SOUND_CATALOG[id]);
   const oppSounds = opponent.sounds.slice(0, 5).map(id => SOUND_CATALOG[id]);
+  // Hype: relative score gap mapped to -100..+100, clamped.
+  const gap = pScore - oScore;
+  const hypePct = Math.max(-100, Math.min(100, (gap / 80) * 100));
+  const hype = _hypeLabel(gap);
+  const finisherFill = Math.min(100, (streak / FINISHER_THRESHOLD) * 100);
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center mb-2">
-      {/* Player */}
-      <div>
-        <div className="text-amber-500 text-xs tracking-wider truncate" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-          {char.name.toUpperCase()}
-        </div>
-        <div className="h-1.5 bg-stone-900 border border-stone-800 mb-1">
-          <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (pScore / 400) * 100)}%`, transition: 'width 0.3s' }} />
-        </div>
-        <div className="flex gap-1">
-          {playerSounds.map((s, i) => (
-            <div key={i} className="w-5 h-5 border border-stone-700 bg-stone-900 flex items-center justify-center text-[8px] text-amber-500">
-              {s?.cat?.[0] || '?'}
+    <div className="space-y-1.5 mb-2">
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+        {/* Player */}
+        <div>
+          <div className="flex items-center justify-between">
+            <div className="text-amber-500 text-xs tracking-wider truncate" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+              {char.name.toUpperCase()}
             </div>
-          ))}
+            {streak > 0 && (
+              <div className={`text-[9px] uppercase tracking-widest font-bold ${streak >= FINISHER_THRESHOLD ? 'text-amber-300 animate-pulse' : streak >= 4 ? 'text-amber-400' : 'text-stone-500'}`}>
+                {streak >= 4 ? '🔥 ' : ''}×{streak}
+              </div>
+            )}
+          </div>
+          <div className="h-1.5 bg-stone-900 border border-stone-800 mb-1">
+            <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (pScore / 400) * 100)}%`, transition: 'width 0.3s' }} />
+          </div>
+          <div className="flex gap-1">
+            {playerSounds.map((s, i) => (
+              <div key={i} className="w-5 h-5 border border-stone-700 bg-stone-900 flex items-center justify-center text-[8px] text-amber-500">
+                {s?.cat?.[0] || '?'}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Center timer */}
+        <div className="w-12 h-12 rounded-full border-2 border-stone-700 flex items-center justify-center bg-stone-900">
+          <span className="text-amber-500 font-mono text-lg font-bold">{timeLeft}</span>
+        </div>
+
+        {/* Opponent */}
+        <div className="text-right">
+          <div className="text-red-500 text-xs tracking-wider truncate" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            {opponent.name.toUpperCase()}
+          </div>
+          <div className="h-1.5 bg-stone-900 border border-stone-800 mb-1">
+            <div className="h-full bg-red-600 ml-auto" style={{ width: `${Math.min(100, (oScore / 400) * 100)}%`, transition: 'width 0.3s' }} />
+          </div>
+          <div className="flex gap-1 justify-end">
+            {oppSounds.map((s, i) => (
+              <div key={i} className="w-5 h-5 border border-stone-700 bg-stone-900 flex items-center justify-center text-[8px] text-red-500">
+                {s?.cat?.[0] || '?'}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Center timer */}
-      <div className="w-12 h-12 rounded-full border-2 border-stone-700 flex items-center justify-center bg-stone-900">
-        <span className="text-amber-500 font-mono text-lg font-bold">{timeLeft}</span>
+      {/* HYPE meter — symmetric momentum bar without exact numbers */}
+      <div className="px-1">
+        <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.3em] text-stone-500 mb-0.5">
+          <span>OPP</span>
+          <span style={{ color: hype.color, fontWeight: 'bold' }}>{hype.text}</span>
+          <span>YOU</span>
+        </div>
+        <div className="relative h-2 bg-stone-900 border border-stone-800">
+          {/* Center marker */}
+          <div className="absolute top-0 bottom-0 left-1/2 w-px bg-stone-700" />
+          {/* Fill: starts at center, extends right (player lead) or left (opp lead) */}
+          {hypePct >= 0 ? (
+            <div className="absolute top-0 bottom-0 left-1/2 bg-amber-500"
+              style={{ width: `${hypePct / 2}%`, transition: 'width 0.4s' }} />
+          ) : (
+            <div className="absolute top-0 bottom-0 bg-red-600"
+              style={{ left: `${50 + hypePct / 2}%`, width: `${-hypePct / 2}%`, transition: 'all 0.4s' }} />
+          )}
+        </div>
       </div>
 
-      {/* Opponent */}
-      <div className="text-right">
-        <div className="text-red-500 text-xs tracking-wider truncate" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-          {opponent.name.toUpperCase()}
+      {/* Finisher gauge — visible while player streak is building or armed */}
+      {(streak > 0 || finisherArmed) && (
+        <div className="px-1">
+          <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.3em] mb-0.5">
+            <span className={finisherArmed ? 'text-amber-300 font-bold' : 'text-stone-500'}>
+              {finisherArmed ? '⚡ FINISHER ARMED' : 'FINISHER'}
+            </span>
+            <span className="text-stone-600">{Math.min(streak, FINISHER_THRESHOLD)}/{FINISHER_THRESHOLD} perfects</span>
+          </div>
+          <div className="h-1 bg-stone-900 border border-stone-800">
+            <div className={`h-full ${finisherArmed ? 'bg-amber-300' : 'bg-amber-600'}`}
+              style={{ width: `${finisherFill}%`, transition: 'width 0.2s', boxShadow: finisherArmed ? '0 0 8px #fbbf24' : 'none' }} />
+          </div>
         </div>
-        <div className="h-1.5 bg-stone-900 border border-stone-800 mb-1">
-          <div className="h-full bg-red-600 ml-auto" style={{ width: `${Math.min(100, (oScore / 400) * 100)}%`, transition: 'width 0.3s' }} />
-        </div>
-        <div className="flex gap-1 justify-end">
-          {oppSounds.map((s, i) => (
-            <div key={i} className="w-5 h-5 border border-stone-700 bg-stone-900 flex items-center justify-center text-[8px] text-red-500">
-              {s?.cat?.[0] || '?'}
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -15363,6 +15617,15 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
   const [liveScore, setLiveScore] = useState({ p: 0, o: 0 });
   const [timeLeft, setTimeLeft] = useState(15);
   const [comboLabel, setComboLabel] = useState(null);
+  // Live perfect-hit streak for the player (resets between rounds; drives aura,
+  // hype, and the FINISHER trigger when it reaches FINISHER_THRESHOLD).
+  const [streak, setStreak] = useState(0);
+  // Set true when streak hits FINISHER_THRESHOLD during the round; latches until
+  // the round ends so the bar keeps glowing even if the chain breaks.
+  const [finisherArmed, setFinisherArmed] = useState(false);
+  // Finisher splash overlay state. When non-null, full-screen splash is drawn
+  // over the stage with the prepared move's name and a bonus score.
+  const [finisher, setFinisher] = useState(null);
   // Pattern picks (lesson indexes) for each side's two rounds. [first turn, second turn]
   const [playerPatternIdxs, setPlayerPatternIdxs] = useState(null);
   const [oppPatternIdxs, setOppPatternIdxs] = useState(null);
@@ -15681,6 +15944,13 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
       oppScoreRef.current = 0;
       setLiveScore({ p: 0, o: 0 });
     }
+    // Reset per-round streak/finisher state on every countdown so the gauge
+    // and aura don't bleed between rounds.
+    if (/^countdown[1-4]$/.test(phase)) {
+      setStreak(0);
+      setFinisherArmed(false);
+      setFinisher(null);
+    }
   }, [phase]);
 
   // Round runner: opponent rounds auto-play their pattern; player rounds are driven
@@ -15701,19 +15971,46 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, playerPatternIdxs, oppPatternIdxs]);
 
+  // Pick the player's prepared finisher: by convention, MPC slot 0. Falls back
+  // to a generic name if the player hasn't owned an MPC or written any pads.
+  const finisherMoveName = () => {
+    const slot0 = char.oriSlots?.[0];
+    const hasNotes = slot0?.tracks?.some?.(t => t?.cells?.some?.(Boolean));
+    if (!hasGear(char, 'mpc') || !hasNotes) return 'MEGA COMBO';
+    return char.name ? `${char.name.toUpperCase()}'S SIGNATURE` : 'SIGNATURE COMBO';
+  };
+
   // When player's BeatboxHero finishes its single rep, score the round and advance.
-  const handlePlayerRoundComplete = (roundN, accuracy) => {
+  const handlePlayerRoundComplete = (roundN, accuracy, info = {}) => {
     const lesson = lessonForRound(roundN);
     const score = playerRoundScore(lesson, accuracy, roundN);
-    const newScore = playerScoreRef.current + score;
-    playerScoreRef.current = newScore;
-    setLiveScore(s => ({ ...s, p: newScore }));
+    let total = playerScoreRef.current + score;
+    // Finisher: armed mid-round (peak streak ≥ FINISHER_THRESHOLD) → bonus +
+    // splash overlay. Bonus scales with peak streak so longer chains pay more.
+    const peak = info.bestStreak || 0;
+    const armed = peak >= FINISHER_THRESHOLD;
+    if (armed) {
+      const bonus = Math.round(score * 0.5 + peak * 4);
+      total += bonus;
+      setFinisher({ name: finisherMoveName(), bonus, peak });
+    }
+    playerScoreRef.current = total;
+    setLiveScore(s => ({ ...s, p: total }));
     eventTimers.current.push(setTimeout(() => {
       setActiveSide(null);
       setComboLabel(null);
+      setFinisher(null);
+      setFinisherArmed(false);
+      setStreak(0);
       const nextPhase = roundN < TOTAL_ROUNDS ? `countdown${roundN + 1}` : 'judging';
       setPhase(nextPhase);
-    }, 1500));
+    }, armed ? 2600 : 1500));
+  };
+
+  // BeatboxHero streak callback — drives aura, HUD gauge, and finisher arming.
+  const handleStreak = (current) => {
+    setStreak(current);
+    if (current >= FINISHER_THRESHOLD) setFinisherArmed(true);
   };
 
   // When judging starts, compute the result from accumulated scores + judges' biases.
@@ -16039,7 +16336,11 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
         const isOppRound = side === 'O';
         return (
           <div className="space-y-2">
-            <BattleHUD char={char} opponent={opponent} timeLeft={isCountdown ? ROUND_SECONDS : timeLeft} pScore={liveScore.p} oScore={liveScore.o} />
+            <BattleHUD char={char} opponent={opponent}
+              timeLeft={isCountdown ? ROUND_SECONDS : timeLeft}
+              pScore={liveScore.p} oScore={liveScore.o}
+              streak={isCountdown ? 0 : streak}
+              finisherArmed={isCountdown ? false : finisherArmed} />
             <div className="relative">
               <PixelStage char={char} opponent={opponent}
                 activeSide={isCountdown ? null : activeSide}
@@ -16047,7 +16348,11 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
                 soundColor={isCountdown ? '#D4A017' : currentSoundColor}
                 judgeVotes={[]} revealedJudges={0}
                 judgeHearts={isCountdown ? [0,0,0,0,0] : judgeHearts}
-                comboLabel={isCountdown ? null : comboLabel} />
+                comboLabel={isCountdown ? null : comboLabel}
+                playerStreak={isCountdown ? 0 : streak} />
+              {finisher && (
+                <FinisherSplash name={finisher.name} bonus={finisher.bonus} peak={finisher.peak} />
+              )}
               {isCountdown && (
                 <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm">
                   <div key={countdownVal} className="text-center"
@@ -16084,7 +16389,8 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
                 lessonOverride={lesson}
                 accuracyBoost={hasGear(char, 'premium_headphones') ? 1.25 : 1}
                 onAccuracyUpdate={() => {}}
-                onLessonComplete={(_idx, accuracy) => handlePlayerRoundComplete(roundN, accuracy)}
+                onStreak={handleStreak}
+                onLessonComplete={(_idx, accuracy, info) => handlePlayerRoundComplete(roundN, accuracy, info)}
               />
             )}
             {/* Opponent rounds: spectate-mode BeatboxHero shows their pattern as
