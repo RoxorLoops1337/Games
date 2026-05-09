@@ -131,8 +131,12 @@
     justify-content: center;
     flex-direction: column;
     text-align: center;
-    padding: 20px;
+    padding: 20px 20px 40px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
+  #overlay::before, #overlay::after { content: ''; flex: 0 0 auto; }
   #overlay h1 {
     font-size: 56px;
     margin: 0 0 8px 0;
@@ -189,6 +193,13 @@
   body.touch #wave-info { font-size: 12px; padding: 4px 10px; top: 8px; }
   body.touch #compass { font-size: 10px; padding: 4px 7px; top: 8px; right: 8px; display: none; }
   body.touch #weapon-bar { bottom: 170px; }
+  body.touch #overlay { justify-content: flex-start; padding-top: 16px; }
+  body.touch #overlay h1 { font-size: 32px; margin: 6px 0 4px 0; letter-spacing: 2px; }
+  body.touch #overlay h2 { font-size: 14px; margin: 0 0 12px 0; letter-spacing: 1px; }
+  body.touch #overlay .story { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+  body.touch #overlay .controls { font-size: 11px; line-height: 1.5; padding: 8px 12px; margin-bottom: 14px; }
+  body.touch #overlay button { padding: 14px 36px; font-size: 16px; }
+  body.touch #overlay > div:last-child { font-size: 11px !important; padding-bottom: 12px; }
 
   #joystick {
     position: fixed;
