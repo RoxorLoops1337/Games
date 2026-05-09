@@ -15967,6 +15967,9 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
   const eventTimers = useRef([]);
   const playerScoreRef = useRef(0);
   const oppScoreRef = useRef(0);
+  // Used to scroll the BeatboxHero canvas + pads into view at the start of a
+  // player round, so the buttons aren't half-hidden below the fold.
+  const playerHeroRef = useRef(null);
   const BATTLE_BPM = 115;
   const ROUND_SECONDS = 12;
   const TOTAL_ROUNDS = 4;
@@ -16283,6 +16286,36 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
       setFinisherArmed(false);
       setFinisher(null);
     }
+  }, [phase]);
+
+  // When a player round actually starts, lock body scroll and pull the
+  // BeatboxHero into the viewport so the pads aren't half-hidden below the
+  // fold. Without this, mobile Safari's URL-bar-on-tap behavior makes the
+  // page feel jumpy while the player is hammering buttons. Cleanup restores
+  // scroll when the round ends or the screen unmounts.
+  useEffect(() => {
+    const m = /^round([1-4])$/.exec(phase);
+    if (!m) return;
+    const roundN = parseInt(m[1]);
+    if (sideForRound(roundN) !== 'P') return;
+    // Pull the canvas + pads into view, centered so the user can see both.
+    requestAnimationFrame(() => {
+      const el = playerHeroRef.current;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    // Hard scroll lock for the duration of the round — Safari URL bar can
+    // still resize the viewport but body content won't reflow under the
+    // user's fingers.
+    const prevOverflow = document.body.style.overflow;
+    const prevOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
+    };
   }, [phase]);
 
   // Round runner: opponent rounds auto-play their pattern; player rounds are driven
@@ -16713,17 +16746,19 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
             {/* Player rounds: BeatboxHero pre-mounts during countdown so canvas + buttons
                 are visible while the player gets ready. Activates when round starts. */}
             {isPlayerRound && lesson != null && (
-              <BeatboxHero
-                key={`p-r${roundN}`}
-                mode="battle"
-                active={!isCountdown}
-                bpm={BATTLE_BPM}
-                lessonOverride={lesson}
-                accuracyBoost={hasGear(char, 'premium_headphones') ? 1.25 : 1}
-                onAccuracyUpdate={() => {}}
-                onStreak={handleStreak}
-                onLessonComplete={(_idx, accuracy, info) => handlePlayerRoundComplete(roundN, accuracy, info)}
-              />
+              <div ref={playerHeroRef} style={{ touchAction: 'manipulation', scrollMarginTop: 12 }}>
+                <BeatboxHero
+                  key={`p-r${roundN}`}
+                  mode="battle"
+                  active={!isCountdown}
+                  bpm={BATTLE_BPM}
+                  lessonOverride={lesson}
+                  accuracyBoost={hasGear(char, 'premium_headphones') ? 1.25 : 1}
+                  onAccuracyUpdate={() => {}}
+                  onStreak={handleStreak}
+                  onLessonComplete={(_idx, accuracy, info) => handlePlayerRoundComplete(roundN, accuracy, info)}
+                />
+              </div>
             )}
             {/* Opponent rounds: spectate-mode BeatboxHero shows their pattern as
                 ghost notes scrolling so the player can watch + listen. */}
