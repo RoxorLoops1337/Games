@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Dhauwie Survival</title>
 <style>
   html, body {
@@ -14,7 +15,8 @@
     font-family: 'Courier New', monospace;
     user-select: none;
   }
-  #game { display: block; }
+  #game { display: block; touch-action: none; }
+  body.touch { touch-action: none; overscroll-behavior: none; }
   #hud {
     position: fixed;
     inset: 0;
@@ -178,6 +180,119 @@
   .hidden { display: none !important; }
   .pulse { animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  /* Mobile touch controls - only shown on touch devices */
+  #mobile-controls { display: none; }
+  body.touch #mobile-controls { display: block; }
+  body.touch #stats { font-size: 11px; min-width: 130px; padding: 5px 8px; bottom: auto; top: 56px; left: 8px; }
+  body.touch #weapon-info { font-size: 11px; min-width: 130px; padding: 5px 8px; bottom: auto; top: 56px; right: 8px; }
+  body.touch #wave-info { font-size: 12px; padding: 4px 10px; top: 8px; }
+  body.touch #compass { font-size: 10px; padding: 4px 7px; top: 8px; right: 8px; display: none; }
+  body.touch #weapon-bar { bottom: 170px; }
+
+  #joystick {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: rgba(0,255,136,0.08);
+    border: 2px solid rgba(0,255,136,0.4);
+    pointer-events: auto;
+    touch-action: none;
+    z-index: 6;
+  }
+  #joystick-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 56px;
+    height: 56px;
+    margin-left: -28px;
+    margin-top: -28px;
+    border-radius: 50%;
+    background: rgba(0,255,136,0.55);
+    border: 2px solid #00ff88;
+    box-shadow: 0 0 12px rgba(0,255,136,0.6);
+    pointer-events: none;
+  }
+  #look-pad {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 55%;
+    height: 100%;
+    pointer-events: auto;
+    touch-action: none;
+    z-index: 6;
+  }
+  .touch-btn {
+    position: fixed;
+    border-radius: 50%;
+    background: rgba(0,255,136,0.15);
+    border: 2px solid #00ff88;
+    color: #fff;
+    font-family: inherit;
+    font-weight: bold;
+    text-align: center;
+    pointer-events: auto;
+    touch-action: none;
+    z-index: 7;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .touch-btn:active { background: rgba(0,255,136,0.5); }
+  #btn-shoot {
+    right: 20px; bottom: 30px;
+    width: 96px; height: 96px;
+    font-size: 14px;
+    background: rgba(255,80,80,0.22);
+    border-color: #ff4444;
+  }
+  #btn-shoot:active { background: rgba(255,80,80,0.55); }
+  #btn-jump {
+    right: 130px; bottom: 90px;
+    width: 64px; height: 64px;
+    font-size: 12px;
+  }
+  #btn-reload {
+    right: 30px; bottom: 140px;
+    width: 56px; height: 56px;
+    font-size: 11px;
+  }
+  #weapon-bar {
+    position: fixed;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 7;
+    pointer-events: auto;
+  }
+  body:not(.touch) #weapon-bar { display: none; }
+  .wbtn {
+    width: 50px;
+    height: 44px;
+    border-radius: 6px;
+    border: 1px solid #00ff88;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1.1;
+    text-align: center;
+    pointer-events: auto;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    padding: 4px 2px;
+  }
+  .wbtn:active, .wbtn.active { background: rgba(0,255,136,0.45); }
+  .wbtn .num { color: #88ffaa; font-weight: bold; display: block; font-size: 10px; }
 </style>
 </head>
 <body>
@@ -207,6 +322,20 @@
     <span style="color:#88ffaa">Lab Distance:</span> <span id="lab-dist">--</span>m
   </div>
   <div id="message"></div>
+
+  <div id="mobile-controls">
+    <div id="look-pad"></div>
+    <div id="joystick"><div id="joystick-knob"></div></div>
+    <button class="touch-btn" id="btn-shoot">FIRE</button>
+    <button class="touch-btn" id="btn-jump">JUMP</button>
+    <button class="touch-btn" id="btn-reload">RELOAD</button>
+    <div id="weapon-bar">
+      <button class="wbtn active" data-w="pistol"><span class="num">1</span>Pistol</button>
+      <button class="wbtn" data-w="shotgun"><span class="num">2</span>Shot</button>
+      <button class="wbtn" data-w="smg"><span class="num">3</span>SMG</button>
+      <button class="wbtn" data-w="antidote"><span class="num">4</span>Holy</button>
+    </div>
+  </div>
 </div>
 
 <div id="overlay">
@@ -224,15 +353,20 @@
     Find the lab. Survive the horde. Save the world.
   </div>
   <div class="controls">
-    <b style="color:#00ff88">CONTROLS</b><br>
+    <b style="color:#00ff88">DESKTOP</b><br>
     Move: <b>W A S D</b> &nbsp;&middot;&nbsp; Look: <b>Mouse</b><br>
     Shoot: <b>Left Click</b> &nbsp;&middot;&nbsp; Reload: <b>R</b><br>
     Switch weapons: <b>1 2 3 4</b> &nbsp;&middot;&nbsp; Sprint: <b>Shift</b><br>
-    Jump: <b>Space</b> &nbsp;&middot;&nbsp; Pause: <b>Esc</b><br>
+    Jump: <b>Space</b><br>
+    <br>
+    <b style="color:#00ff88">MOBILE</b><br>
+    Move: <b>Left joystick</b> &nbsp;&middot;&nbsp; Look: <b>Drag right side</b><br>
+    Tap <b>FIRE / JUMP / RELOAD</b> &nbsp;&middot;&nbsp; Switch via <b>1-4</b> bar<br>
+    <br>
     Pick up weapon crates by walking over them.
   </div>
   <button id="start-btn">BEGIN</button>
-  <div style="margin-top:16px;font-size:12px;color:#666;">Click anywhere in-game to enable mouse look</div>
+  <div style="margin-top:16px;font-size:12px;color:#666;">Desktop: click in-game to enable mouse look. Mobile: rotate to landscape for best play.</div>
 </div>
 
 <script type="importmap">
@@ -489,7 +623,11 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('mousedown', e => { if (e.button === 0) mouseDown = true; });
 addEventListener('mouseup',   e => { if (e.button === 0) mouseDown = false; });
 
+const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if (isTouch) document.body.classList.add('touch');
+
 canvas.addEventListener('click', () => {
+  if (isTouch) return;
   if (gameStarted && !gameOver && document.pointerLockElement !== canvas) {
     canvas.requestPointerLock();
   }
@@ -501,6 +639,120 @@ addEventListener('mousemove', e => {
   player.yaw   -= e.movementX * sens;
   player.pitch -= e.movementY * sens;
   player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
+});
+
+// --- Mobile touch controls ---
+const touchMove = { x: 0, y: 0 };
+const joystick = document.getElementById('joystick');
+const joystickKnob = document.getElementById('joystick-knob');
+const lookPad = document.getElementById('look-pad');
+
+let joyTouchId = null;
+let joyCenter = { x: 0, y: 0 };
+const JOY_RADIUS = 50;
+
+function joyStart(e) {
+  if (joyTouchId !== null) return;
+  const t = e.changedTouches[0];
+  joyTouchId = t.identifier;
+  const rect = joystick.getBoundingClientRect();
+  joyCenter.x = rect.left + rect.width / 2;
+  joyCenter.y = rect.top + rect.height / 2;
+  joyMove(e);
+  e.preventDefault();
+}
+function joyMove(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joyTouchId) continue;
+    let dx = t.clientX - joyCenter.x;
+    let dy = t.clientY - joyCenter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > JOY_RADIUS) { dx = dx / dist * JOY_RADIUS; dy = dy / dist * JOY_RADIUS; }
+    joystickKnob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    touchMove.x = dx / JOY_RADIUS;
+    touchMove.y = dy / JOY_RADIUS;
+    e.preventDefault();
+    return;
+  }
+}
+function joyEnd(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joyTouchId) continue;
+    joyTouchId = null;
+    touchMove.x = 0;
+    touchMove.y = 0;
+    joystickKnob.style.transform = '';
+    e.preventDefault();
+    return;
+  }
+}
+joystick.addEventListener('touchstart', joyStart, { passive: false });
+joystick.addEventListener('touchmove', joyMove, { passive: false });
+joystick.addEventListener('touchend', joyEnd, { passive: false });
+joystick.addEventListener('touchcancel', joyEnd, { passive: false });
+
+let lookTouchId = null;
+let lookLast = { x: 0, y: 0 };
+function lookStart(e) {
+  if (lookTouchId !== null) return;
+  const t = e.changedTouches[0];
+  lookTouchId = t.identifier;
+  lookLast.x = t.clientX;
+  lookLast.y = t.clientY;
+  e.preventDefault();
+}
+function lookMove(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== lookTouchId) continue;
+    const sens = 0.005;
+    const dx = t.clientX - lookLast.x;
+    const dy = t.clientY - lookLast.y;
+    player.yaw   -= dx * sens;
+    player.pitch -= dy * sens;
+    player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
+    lookLast.x = t.clientX;
+    lookLast.y = t.clientY;
+    e.preventDefault();
+    return;
+  }
+}
+function lookEnd(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== lookTouchId) continue;
+    lookTouchId = null;
+    e.preventDefault();
+    return;
+  }
+}
+lookPad.addEventListener('touchstart', lookStart, { passive: false });
+lookPad.addEventListener('touchmove', lookMove, { passive: false });
+lookPad.addEventListener('touchend', lookEnd, { passive: false });
+lookPad.addEventListener('touchcancel', lookEnd, { passive: false });
+
+function bindHold(id, onDown, onUp) {
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', e => { onDown(); e.preventDefault(); }, { passive: false });
+  el.addEventListener('touchend',   e => { if (onUp) onUp(); e.preventDefault(); }, { passive: false });
+  el.addEventListener('touchcancel',e => { if (onUp) onUp(); e.preventDefault(); }, { passive: false });
+  el.addEventListener('mousedown',  e => { onDown(); e.preventDefault(); });
+  el.addEventListener('mouseup',    e => { if (onUp) onUp(); e.preventDefault(); });
+}
+bindHold('btn-shoot', () => { mouseDown = true; }, () => { mouseDown = false; });
+bindHold('btn-jump',  () => { keys['Space'] = true; }, () => { keys['Space'] = false; });
+bindHold('btn-reload',() => { tryReload(); }, null);
+
+document.querySelectorAll('.wbtn').forEach(btn => {
+  btn.addEventListener('touchstart', e => {
+    switchWeapon(btn.dataset.w);
+    document.querySelectorAll('.wbtn').forEach(b => b.classList.remove('active'));
+    if (inventory[btn.dataset.w].has) btn.classList.add('active');
+    e.preventDefault();
+  }, { passive: false });
+  btn.addEventListener('click', e => {
+    switchWeapon(btn.dataset.w);
+    document.querySelectorAll('.wbtn').forEach(b => b.classList.remove('active'));
+    if (inventory[btn.dataset.w].has) btn.classList.add('active');
+  });
 });
 
 const zombies = [];
@@ -1128,7 +1380,7 @@ function startGame() {
   ensureAudio();
   startWave(1);
   updateHud();
-  canvas.requestPointerLock();
+  if (!isTouch) canvas.requestPointerLock();
   showMessage('Find the LAB (green beacon NE) for the Antidote!', 4000);
 }
 
@@ -1153,6 +1405,7 @@ function endGame(victory) {
 }
 
 document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('start-btn').addEventListener('touchstart', e => { e.preventDefault(); startGame(); }, { passive: false });
 
 function update(dt) {
   if (!gameStarted || gameOver) return;
@@ -1164,6 +1417,10 @@ function update(dt) {
   if (keys['KeyS']) moveDir.sub(forward);
   if (keys['KeyD']) moveDir.add(right);
   if (keys['KeyA']) moveDir.sub(right);
+  if (Math.abs(touchMove.x) > 0.05 || Math.abs(touchMove.y) > 0.05) {
+    moveDir.add(forward.clone().multiplyScalar(-touchMove.y));
+    moveDir.add(right.clone().multiplyScalar(touchMove.x));
+  }
   if (moveDir.lengthSq() > 0) moveDir.normalize();
   const speed = MOVE_SPEED * (keys['ShiftLeft'] || keys['ShiftRight'] ? SPRINT_MULT : 1);
   const delta = new THREE.Vector3(moveDir.x * speed * dt, 0, moveDir.z * speed * dt);
