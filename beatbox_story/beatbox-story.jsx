@@ -3052,20 +3052,34 @@ function rangeFromCalibration(midi) {
   return roots;
 }
 
-// Per-note duration (ms) for each tuner difficulty. Beginner uses very short
-// notes for snappy do-re-mi call-and-response; Advanced keeps the original
-// 2.5s per note for full triads.
+// Per-mode tuner config:
+//   intervals: 'triad' (random major/minor [0,4,7]/[0,3,7]) or 'doremi' ([0,2,4])
+//   flow:      'alternating'    — listen one note → sing it → next
+//              'demo-then-sing' — listen all 3 in a row → sing all 3 in a row
+//   durationMs is per single note (both during listen and during sing).
 const TUNER_MODES = {
-  beginner: { label: 'Beginner', tag: 'do re mi', durationMs: 800 },
-  advanced: { label: 'Advanced', tag: 'full triads', durationMs: 2500 },
+  beginner: {
+    label: 'Beginner',
+    tag: 'echo each note',
+    durationMs: 2500,
+    intervals: 'triad',
+    flow: 'alternating',
+  },
+  advanced: {
+    label: 'Advanced',
+    tag: '3 in a row',
+    durationMs: 1000,
+    intervals: 'doremi',
+    flow: 'demo-then-sing',
+  },
 };
 
-function generateChord(roots, mode = 'advanced') {
+function generateChord(roots, mode = 'beginner') {
+  const cfg = TUNER_MODES[mode] || TUNER_MODES.beginner;
   const pool = roots && roots.length ? roots : [55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72]; // default G3..C5
   const root = pool[Math.floor(Math.random() * pool.length)];
-  if (mode === 'beginner') {
-    // Do-Re-Mi: root, major 2nd, major 3rd. Always ascending, always major
-    // — the easiest possible call-and-response.
+  if (cfg.intervals === 'doremi') {
+    // Do-Re-Mi: root, major 2nd, major 3rd. Always ascending, always major.
     const intervals = [0, 2, 4];
     const notes = intervals.map(i => root + i);
     return {
@@ -3251,11 +3265,11 @@ const VoiceRangePicker = ({ currentRange = null, onSet, onCancel = null }) => {
 
 const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
                      voiceRange = 'higher', voiceRangeMidi = null, onChangeRange = null,
-                     mode = 'advanced' }) => {
+                     mode = 'beginner' }) => {
   const [permission, setPermission] = useState('pending'); // 'pending' | 'granted' | 'denied' | 'unsupported' | 'insecure'
   const [errorDetail, setErrorDetail] = useState('');
 
-  const modeCfg = TUNER_MODES[mode] || TUNER_MODES.advanced;
+  const modeCfg = TUNER_MODES[mode] || TUNER_MODES.beginner;
 
   // Resolve which root pool to use based on voiceRange + optional calibration midi
   const resolveRoots = () => {
@@ -3266,6 +3280,9 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   const [chord, setChord] = useState(() => generateChord(resolveRoots(), mode));
   const [noteIdx, setNoteIdx] = useState(0); // current note in the chord (0..2)
   const [phase, setPhase] = useState('listen'); // 'listen' | 'sing'
+  // Which note is currently being demoed during the listen-all phase of the
+  // demo-then-sing flow (-1 when not in that phase). Drives UI highlight.
+  const [demoIdx, setDemoIdx] = useState(-1);
   const [detectedFreq, setDetectedFreq] = useState(-1);
   const [sustainFill, setSustainFill] = useState(0); // 0..1 of current note's hold meter
   const [noteScores, setNoteScores] = useState([null, null, null]); // 0..1 per note
@@ -3365,6 +3382,45 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
     refTonesRef.current = [osc1, osc2, osc3];
   };
 
+  // Schedule a sequence of reference tones back-to-back via WebAudio's
+  // absolute clock — used by the demo-then-sing flow so all 3 demo notes
+  // play at consistent timing without setTimeout drift.
+  const playReferenceSequence = (notes, durationSecEach, gapSec = 0.05) => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    refTonesRef.current.forEach(t => { try { t.stop(); } catch {} });
+    refTonesRef.current = [];
+    const startBase = ctx.currentTime + 0.02;
+    const allOscs = [];
+    notes.forEach((note, i) => {
+      const t0 = startBase + i * (durationSecEach + gapSec);
+      const t1 = t0 + durationSecEach;
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.0001, t0);
+      masterGain.gain.linearRampToValueAtTime(0.18, t0 + 0.04);
+      masterGain.gain.setValueAtTime(0.18, Math.max(t0 + 0.05, t1 - 0.10));
+      masterGain.gain.linearRampToValueAtTime(0.0001, t1);
+      masterGain.connect(ctx.destination);
+      const osc1 = ctx.createOscillator();
+      osc1.type = 'sine'; osc1.frequency.value = note.freq;
+      const g1 = ctx.createGain(); g1.gain.value = 1.0;
+      osc1.connect(g1).connect(masterGain);
+      osc1.start(t0); osc1.stop(t1 + 0.05);
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'sine'; osc2.frequency.value = note.freq * 2;
+      const g2 = ctx.createGain(); g2.gain.value = 0.18;
+      osc2.connect(g2).connect(masterGain);
+      osc2.start(t0); osc2.stop(t1 + 0.05);
+      const osc3 = ctx.createOscillator();
+      osc3.type = 'sine'; osc3.frequency.value = note.freq * 3;
+      const g3 = ctx.createGain(); g3.gain.value = 0.06;
+      osc3.connect(g3).connect(masterGain);
+      osc3.start(t0); osc3.stop(t1 + 0.05);
+      allOscs.push(osc1, osc2, osc3);
+    });
+    refTonesRef.current = allOscs;
+  };
+
   // Mount: request mic + set up audio pipeline
   useEffect(() => {
     let cancelled = false;
@@ -3419,54 +3475,75 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   // after DURATION_MS, scores the note, advances to next.
   useEffect(() => {
     if (permission !== 'granted' || !active) return;
-    let timer = null;
-
-    // Phase 1: LISTEN — play the target note for DURATION_MS
-    setPhase('listen');
-    setSustainFill(0);
+    const timers = [];
+    const DUR = noteStateRef.current.DURATION_MS;
     const target = chord.notes[noteIdx];
-    if (target) {
-      playReferenceTone(target.freq, noteStateRef.current.DURATION_MS / 1000);
-    }
+    if (!target) return;
 
-    timer = setTimeout(() => {
-      // Phase 2: SING — turn off tone, start accumulating
+    // Helper: end-of-sing scoring and advance.
+    const scoreAndAdvance = () => {
+      const ns2 = noteStateRef.current;
+      const score = Math.min(1, ns2.inTuneTime / (ns2.DURATION_MS * 0.4));
+      setNoteScores(prev => {
+        const updated = [...prev];
+        updated[noteIdxRef.current] = score;
+        return updated;
+      });
+      chordScoresRef.current.push(score);
+      if (noteIdxRef.current < 2) {
+        setNoteIdx(i => i + 1);
+      } else {
+        setChord(generateChord(resolveRoots(), mode));
+        setNoteIdx(0);
+        setNoteScores([null, null, null]);
+      }
+    };
+
+    // Helper: enter sing for the current target.
+    const startSing = () => {
       setPhase('sing');
+      setDemoIdx(-1);
       const ns = noteStateRef.current;
       ns.inTuneTime = 0;
       ns.totalTime = 0;
       ns._lastTick = performance.now();
+      timers.push(setTimeout(scoreAndAdvance, DUR));
+    };
 
-      timer = setTimeout(() => {
-        // End of SING phase — score this note
-        const ns2 = noteStateRef.current;
-        const score = Math.min(1, ns2.inTuneTime / (ns2.DURATION_MS * 0.4));
-        setNoteScores(prev => {
-          const updated = [...prev];
-          updated[noteIdxRef.current] = score;
-          return updated;
+    if (modeCfg.flow === 'demo-then-sing') {
+      // Listen-all → sing-all flow. The listen-all phase only fires on
+      // noteIdx === 0; on subsequent notes within the same chord, we go
+      // straight to sing for that note.
+      if (noteIdx === 0) {
+        setPhase('listen');
+        setSustainFill(0);
+        setDemoIdx(0);
+        playReferenceSequence(chord.notes, DUR / 1000, 0.05);
+        // Highlight which note is currently being demoed.
+        chord.notes.forEach((_, i) => {
+          if (i > 0) timers.push(setTimeout(() => setDemoIdx(i), i * (DUR + 50)));
         });
-        chordScoresRef.current.push(score);
-
-        // Advance to next note (or new chord)
-        if (noteIdxRef.current < 2) {
-          setNoteIdx(i => i + 1);
-        } else {
-          // Generate new chord using the configured voice range + mode
-          setChord(generateChord(resolveRoots(), mode));
-          setNoteIdx(0);
-          setNoteScores([null, null, null]);
-        }
-      }, noteStateRef.current.DURATION_MS);
-    }, noteStateRef.current.DURATION_MS);
+        // After all 3 demo notes have played, transition to singing note 0.
+        const totalDemoMs = chord.notes.length * DUR + (chord.notes.length - 1) * 50;
+        timers.push(setTimeout(() => startSing(), totalDemoMs));
+      } else {
+        startSing();
+      }
+    } else {
+      // Alternating: listen one, sing one (the original behavior).
+      setPhase('listen');
+      setSustainFill(0);
+      setDemoIdx(-1);
+      playReferenceTone(target.freq, DUR / 1000);
+      timers.push(setTimeout(() => startSing(), DUR));
+    }
 
     return () => {
-      if (timer) clearTimeout(timer);
-      // Stop any playing reference tones when phase changes
+      timers.forEach(clearTimeout);
       refTonesRef.current.forEach(t => { try { t.stop(); } catch {} });
       refTonesRef.current = [];
     };
-  }, [permission, active, chord, noteIdx]);
+  }, [permission, active, chord, noteIdx, modeCfg.flow]);
 
   // Pitch detection + accumulation loop (runs continuously while active, but only scores during 'sing')
   useEffect(() => {
@@ -3561,12 +3638,24 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   const needleCents = Math.max(-100, Math.min(100, cents));
   const needlePos = (needleCents + 100) / 200; // 0..1
 
+  // What to show as the "current note" — during the listen-all demo phase
+  // we follow the demoIdx; otherwise the actual sing target.
+  const displayNote = (demoIdx >= 0 ? chord.notes[demoIdx] : target);
+  const isDemoAll = demoIdx >= 0;
+  const phaseHint = isDemoAll
+    ? `🔊 Listen — note ${demoIdx + 1} / ${chord.notes.length}`
+    : phase === 'listen'
+      ? '🔊 Listen'
+      : modeCfg.flow === 'demo-then-sing'
+        ? `🎤 Sing back — note ${noteIdx + 1} / ${chord.notes.length}`
+        : '🎤 Your turn — sing it back';
   return (
     <div className="border-2 border-stone-800 bg-stone-900/50 p-3 space-y-3">
       {/* Chord title */}
       <div className="text-center">
         <div className="text-xs uppercase tracking-[0.3em] text-stone-500">
-          Listen, then repeat <span className="text-stone-600">· {modeCfg.label}</span>
+          {modeCfg.flow === 'demo-then-sing' ? 'Listen all 3, then sing all 3' : 'Listen, then repeat'}
+          <span className="text-stone-600"> · {modeCfg.label}</span>
         </div>
         <div className="text-amber-500 text-lg tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
           {chord.name}
@@ -3578,6 +3667,8 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
         {chord.notes.map((n, i) => (
           <div key={i} className="flex flex-col items-center">
             <div className={`w-3 h-3 rounded-full border-2 transition-all ${
+              isDemoAll && i === demoIdx ? 'bg-blue-500 border-blue-500 animate-pulse' :
+              isDemoAll ? 'border-stone-700' :
               i < noteIdx ? (noteScores[i] >= 0.7 ? 'bg-amber-500 border-amber-500' : noteScores[i] >= 0.3 ? 'bg-amber-700 border-amber-700' : 'bg-red-700 border-red-700') :
               i === noteIdx ? 'border-amber-500 animate-pulse' :
               'border-stone-700'
@@ -3589,18 +3680,18 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
 
       {/* Phase indicator - big & obvious */}
       <div className={`text-center py-2 border-2 transition-all ${
-        phase === 'listen' ? 'border-blue-500 bg-blue-500/10' : 'border-amber-500 bg-amber-500/10'
+        (phase === 'listen' || isDemoAll) ? 'border-blue-500 bg-blue-500/10' : 'border-amber-500 bg-amber-500/10'
       }`}>
-        <div className="text-[10px] uppercase tracking-[0.3em]" style={{ color: phase === 'listen' ? '#88AADD' : '#D4A017' }}>
-          {phase === 'listen' ? '🔊 Listen' : '🎤 Your turn — sing it back'}
+        <div className="text-[10px] uppercase tracking-[0.3em]" style={{ color: (phase === 'listen' || isDemoAll) ? '#88AADD' : '#D4A017' }}>
+          {phaseHint}
         </div>
         <div className="text-4xl font-black leading-none my-1" style={{
           fontFamily: '"Bebas Neue", "Oswald", sans-serif',
-          color: phase === 'listen' ? '#88AADD' : '#D4A017',
+          color: (phase === 'listen' || isDemoAll) ? '#88AADD' : '#D4A017',
         }}>
-          {target?.name || '--'}
+          {displayNote?.name || '--'}
         </div>
-        <div className="text-stone-500 text-[10px] font-mono">{target ? target.freq.toFixed(1) : '0'} Hz</div>
+        <div className="text-stone-500 text-[10px] font-mono">{displayNote ? displayNote.freq.toFixed(1) : '0'} Hz</div>
       </div>
 
       {/* Tuner needle - dimmed during listen phase */}
@@ -12266,8 +12357,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                           </div>
                           <div className="text-[11px] text-stone-400 uppercase tracking-wider mt-0.5">
                             {tunerMode === 'beginner'
-                              ? '3-note do-re-mi · short notes · easy warm-up'
-                              : 'Full major/minor triads · longer notes · ×3 stat gain'}
+                              ? 'Full triads · echo each note one at a time'
+                              : 'Do-re-mi · listen to all 3, then sing all 3 back'}
                           </div>
                         </div>
                         <div className="text-amber-500 text-xl group-hover:translate-x-1 transition-transform">▶</div>
