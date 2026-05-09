@@ -87,6 +87,12 @@ const copyStatic = () => {
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));
     console.log(`built ${t.entryPoints[0]} → ${path.relative(REPO, t.outfile)}`);
+    // Also drop a copy alongside the source so the site works without
+    // running the build (e.g. if Cloudflare Pages hasn't been configured
+    // with `npm run build` yet, or for local file:// previews).
+    const sourceCopy = path.join(REPO, path.basename(path.dirname(t.outfile)), path.basename(t.outfile));
+    fs.copyFileSync(t.outfile, sourceCopy);
+    console.log(`mirrored        → ${path.relative(REPO, sourceCopy)}`);
   }
 })().catch((err) => {
   console.error(err);
