@@ -405,10 +405,13 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a0e0e);
-scene.fog = new THREE.Fog(0x1a0e0e, 30, 140);
+scene.background = new THREE.Color(0xc28b75);
+scene.fog = new THREE.Fog(0xc28b75, 60, 220);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 500);
 camera.position.set(0, PLAYER_HEIGHT, 0);
@@ -419,9 +422,9 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-const hemi = new THREE.HemisphereLight(0xffaaaa, 0x220000, 0.5);
+const hemi = new THREE.HemisphereLight(0xffd9b3, 0x55403a, 1.1);
 scene.add(hemi);
-const moon = new THREE.DirectionalLight(0xb0c4ff, 0.7);
+const moon = new THREE.DirectionalLight(0xfff0d6, 1.5);
 moon.position.set(40, 80, 30);
 moon.castShadow = true;
 moon.shadow.mapSize.set(1024, 1024);
@@ -438,7 +441,126 @@ flashlight.position.copy(camera.position);
 scene.add(flashlight);
 scene.add(flashlight.target);
 
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x2a1a1a, roughness: 0.95 });
+// --- Procedural textures (canvas-based) ---
+function makeBuildingTexture(baseHex, windowLitHex, roofHex) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = baseHex;
+  g.fillRect(0, 0, 256, 256);
+  g.fillStyle = 'rgba(0,0,0,0.18)';
+  for (let y = 0; y < 256; y += 16) {
+    g.fillRect(0, y, 256, 1);
+    const off = (y / 16) % 2 === 0 ? 0 : 32;
+    for (let x = off; x < 256; x += 64) g.fillRect(x, y, 1, 16);
+  }
+  for (let i = 0; i < 800; i++) {
+    g.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.07).toFixed(3) + ')';
+    g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  }
+  for (let wy = 28; wy < 224; wy += 64) {
+    for (let wx = 28; wx < 224; wx += 64) {
+      g.fillStyle = Math.random() < 0.65 ? windowLitHex : '#1a1c22';
+      g.fillRect(wx, wy, 28, 36);
+      g.strokeStyle = '#222';
+      g.lineWidth = 2;
+      g.strokeRect(wx, wy, 28, 36);
+      g.beginPath();
+      g.moveTo(wx + 14, wy);    g.lineTo(wx + 14, wy + 36);
+      g.moveTo(wx, wy + 18);    g.lineTo(wx + 28, wy + 18);
+      g.strokeStyle = '#111';
+      g.stroke();
+    }
+  }
+  g.fillStyle = roofHex;
+  g.fillRect(0, 0, 256, 10);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function makeGroundTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#574a40';
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2200; i++) {
+    const v = 50 + Math.floor(Math.random() * 60);
+    g.fillStyle = 'rgb(' + v + ',' + (v - 8) + ',' + (v - 16) + ')';
+    g.fillRect(Math.random() * 256, Math.random() * 256, 1, 1);
+  }
+  g.strokeStyle = 'rgba(0,0,0,0.25)';
+  g.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    g.beginPath();
+    let x = Math.random() * 256, y = Math.random() * 256;
+    g.moveTo(x, y);
+    for (let j = 0; j < 5; j++) {
+      x += (Math.random() - 0.5) * 60;
+      y += (Math.random() - 0.5) * 60;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  g.fillStyle = '#c9a958';
+  for (let y = 16; y < 256; y += 36) g.fillRect(126, y, 4, 16);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.repeat.set(48, 48);
+  return tex;
+}
+
+function makeWoodTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#8a5a30';
+  g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = 'rgba(0,0,0,0.25)';
+  g.lineWidth = 1;
+  for (let y = 2; y < 64; y += 5) {
+    g.beginPath();
+    g.moveTo(0, y);
+    for (let x = 0; x <= 64; x += 4) {
+      g.lineTo(x, y + Math.sin(x * 0.4 + y) * 0.8);
+    }
+    g.stroke();
+  }
+  g.strokeStyle = '#3a1a08';
+  g.lineWidth = 2;
+  for (let y = 0; y < 64; y += 16) {
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(64, y);
+    g.stroke();
+  }
+  for (let i = 0; i < 3; i++) {
+    g.fillStyle = '#3a1a08';
+    g.beginPath();
+    g.arc(Math.random() * 64, Math.random() * 64, 2, 0, Math.PI * 2);
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const buildingTextures = [
+  makeBuildingTexture('#a87a55', '#ffd87a', '#5a3528'),
+  makeBuildingTexture('#6c7d96', '#ffe089', '#2a3344'),
+  makeBuildingTexture('#a85b48', '#fff0a8', '#3a1812'),
+  makeBuildingTexture('#8d9a78', '#ffc66a', '#3c4830'),
+  makeBuildingTexture('#9a7ca4', '#ffeeaa', '#3a2d44'),
+];
+const groundTex = makeGroundTexture();
+const woodTex = makeWoodTexture();
+const wallTex = makeBuildingTexture('#4d4845', '#3a3024', '#1c1a18');
+
+const groundMat = new THREE.MeshStandardMaterial({ map: groundTex, color: 0xd9c0a4, roughness: 0.95 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_SIZE * 2, WORLD_SIZE * 2), groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -459,22 +581,62 @@ function addBox(x, y, z, w, h, d, color = 0x444444, roughness = 0.8) {
   return m;
 }
 
-const HW = WORLD_SIZE / 2;
-addBox(0,  6,  HW, WORLD_SIZE, 12, 2, 0x1a1a1a);
-addBox(0,  6, -HW, WORLD_SIZE, 12, 2, 0x1a1a1a);
-addBox( HW, 6, 0, 2, 12, WORLD_SIZE, 0x1a1a1a);
-addBox(-HW, 6, 0, 2, 12, WORLD_SIZE, 0x1a1a1a);
+function addBuilding(x, y, z, w, h, d) {
+  const baseTex = buildingTextures[(Math.random() * buildingTextures.length) | 0];
+  const tex = baseTex.clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(h / 5)));
+  const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.88 });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  scene.add(m);
+  obstacles.push({ mesh: m, box: new THREE.Box3().setFromObject(m) });
+  return m;
+}
 
-const colors = [0x3a2a2a, 0x2f2020, 0x4a3838, 0x33282a, 0x2a2226];
+function addCrate(x, y, z, s) {
+  const tex = woodTex.clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(1, 1);
+  const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.85 });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  scene.add(m);
+  obstacles.push({ mesh: m, box: new THREE.Box3().setFromObject(m) });
+  return m;
+}
+
+const HW = WORLD_SIZE / 2;
+function addWall(x, y, z, w, h, d) {
+  const tex = wallTex.clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(Math.max(2, Math.round(w / 8)), Math.max(2, Math.round(h / 4)));
+  const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.95 });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  scene.add(m);
+  obstacles.push({ mesh: m, box: new THREE.Box3().setFromObject(m) });
+}
+addWall(0,  6,  HW, WORLD_SIZE, 12, 2);
+addWall(0,  6, -HW, WORLD_SIZE, 12, 2);
+addWall( HW, 6, 0, 2, 12, WORLD_SIZE);
+addWall(-HW, 6, 0, 2, 12, WORLD_SIZE);
+
 for (let i = 0; i < 36; i++) {
   const x = (Math.random() - 0.5) * (WORLD_SIZE - 30);
   const z = (Math.random() - 0.5) * (WORLD_SIZE - 30);
   if (Math.hypot(x, z) < 8) continue;
   if (Math.hypot(x - 90, z - 90) < 18) continue;
   const w = 4 + Math.random() * 8;
-  const h = 4 + Math.random() * 12;
+  const h = 5 + Math.random() * 14;
   const d = 4 + Math.random() * 8;
-  addBox(x, h / 2, z, w, h, d, colors[(Math.random() * colors.length) | 0]);
+  addBuilding(x, h / 2, z, w, h, d);
 }
 
 for (let i = 0; i < 60; i++) {
@@ -482,7 +644,7 @@ for (let i = 0; i < 60; i++) {
   const z = (Math.random() - 0.5) * (WORLD_SIZE - 10);
   if (Math.hypot(x, z) < 4) continue;
   const s = 0.6 + Math.random() * 1.4;
-  addBox(x, s / 2, z, s, s, s, 0x2b1f1f);
+  addCrate(x, s / 2, z, s);
 }
 
 const labPos = new THREE.Vector3(90, 0, 90);
@@ -652,7 +814,6 @@ addEventListener('mousemove', e => {
   player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
 });
 
-// --- Mobile touch controls ---
 const touchMove = { x: 0, y: 0 };
 const joystick = document.getElementById('joystick');
 const joystickKnob = document.getElementById('joystick-knob');
@@ -770,7 +931,7 @@ const zombies = [];
 class Zombie {
   constructor(pos, tier = 0) {
     this.tier = tier;
-    const tints = [0x336633, 0x556633, 0x664433, 0x553355];
+    const tints = [0x6aa845, 0x9a9c40, 0xb87440, 0x9a4ea0];
     const hps   = [40, 65, 90, 130];
     const speeds= [1.6, 2.0, 2.4, 2.0];
     const dmgs  = [8, 12, 16, 22];
@@ -788,7 +949,7 @@ class Zombie {
     group.add(body);
     const head = new THREE.Mesh(
       new THREE.BoxGeometry(0.4 * s, 0.4 * s, 0.4 * s),
-      new THREE.MeshStandardMaterial({ color: tints[tier] === 0x553355 ? 0xffffff : 0x88aa66, emissive: 0x110011, roughness: 0.9 })
+      new THREE.MeshStandardMaterial({ color: tints[tier] === 0x9a4ea0 ? 0xffffff : 0xb6d685, emissive: 0x110011, roughness: 0.9 })
     );
     head.position.y = 1.4 * s + 0.5 * s;
     head.castShadow = true;
