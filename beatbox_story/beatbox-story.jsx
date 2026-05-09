@@ -2093,11 +2093,16 @@ function useActivity({ char, setChar, checkLevelUp, showToast, config }) {
     const cfg = configRef.current;
     const c = charRef.current;
 
-    const newMins = c.minutes + TICK_MINUTES;
+    // Activities can override how many in-game minutes one tick advances. Used
+    // to slow time progression while the player is in an interactive mini-game
+    // (so they get to actually play it instead of running out of energy/day).
+    const tickMins = cfg.tickMinutes ?? TICK_MINUTES;
+
+    const newMins = c.minutes + tickMins;
     const newEnergy = Math.max(0, c.energy - cfg.tickEnergyCost);
     const newHunger = Math.max(0, c.hunger - cfg.tickHungerCost);
     // Activity's own per-tick mood delta + passive decay (hunger/energy taxed)
-    const passiveDrain = _moodDrainFor(c, TICK_MINUTES);
+    const passiveDrain = _moodDrainFor(c, tickMins);
     const newMood = _clampPct(c.mood + (cfg.tickMoodDelta || 0) - passiveDrain);
 
     let stopReason = null;
@@ -11175,13 +11180,18 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     char, setChar, checkLevelUp, showToast,
     config: {
       blocksPerReward: 5,
-      // Energy drains slower while engaging with a mini-game (so sessions feel substantial)
-      tickEnergyCost: playMode ? tCfg.tickEnergyCost * 0.4 : tCfg.tickEnergyCost,
-      tickHungerCost: 1,
-      tickMoodDelta: -0.3,
-      // Slow ticks down 4x when actively engaging with a mini-game (only mus has one for now,
-      // but the slowdown applies to all training when playMode is on so future mini-games inherit)
-      tickRealMs: playMode ? 2000 : undefined,
+      // While the player is actively engaged in a mini-game (BeatboxHero,
+      // sequencer, pitch tuner) we cut the energy drain hard so a single
+      // session lasts long enough to actually enjoy. AFK training stays at
+      // full rate so passive grind still feels intentional.
+      tickEnergyCost: playMode ? tCfg.tickEnergyCost * 0.3 : tCfg.tickEnergyCost,
+      tickHungerCost: playMode ? 0.5 : 1,
+      tickMoodDelta: playMode ? -0.15 : -0.3,
+      // In playMode: slower real-time pulse AND each tick advances fewer in-
+      // game minutes, so the in-game day doesn't end mid-bar either.
+      // AFK training is unchanged.
+      tickRealMs: playMode ? 2500 : undefined,
+      tickMinutes: playMode ? 3 : undefined,
       onReward: () => {
         if (!trainStat) return;
         // For musicality (tuner) and technicality (Beatbox Hero), accuracy gives bonus stat gain.
@@ -12948,9 +12958,13 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
     char, setChar, checkLevelUp, showToast,
     config: {
       blocksPerReward: 5,
-      tickEnergyCost: cfg.tickEnergyCost,
-      tickHungerCost: cfg.tickHungerCost,
+      // Mini-game playMode: slower drain + slower clock so a session in the
+      // park (busk-tap, run, jam) lasts long enough to be fun.
+      tickEnergyCost: playMode ? cfg.tickEnergyCost * 0.4 : cfg.tickEnergyCost,
+      tickHungerCost: playMode ? cfg.tickHungerCost * 0.5 : cfg.tickHungerCost,
       tickMoodDelta: cfg.tickMoodDelta,
+      tickRealMs: playMode ? 2500 : undefined,
+      tickMinutes: playMode ? 3 : undefined,
       onReward: cfg.onReward,
       stopWhen: (c) => !isDayTime(c.minutes),
       stopReason: 'The sun is setting — park is emptying out',
