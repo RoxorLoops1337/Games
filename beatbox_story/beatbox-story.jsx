@@ -3052,9 +3052,27 @@ function rangeFromCalibration(midi) {
   return roots;
 }
 
-function generateChord(roots) {
+// Per-note duration (ms) for each tuner difficulty. Beginner uses very short
+// notes for snappy do-re-mi call-and-response; Advanced keeps the original
+// 2.5s per note for full triads.
+const TUNER_MODES = {
+  beginner: { label: 'Beginner', tag: 'do re mi', durationMs: 800 },
+  advanced: { label: 'Advanced', tag: 'full triads', durationMs: 2500 },
+};
+
+function generateChord(roots, mode = 'advanced') {
   const pool = roots && roots.length ? roots : [55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72]; // default G3..C5
   const root = pool[Math.floor(Math.random() * pool.length)];
+  if (mode === 'beginner') {
+    // Do-Re-Mi: root, major 2nd, major 3rd. Always ascending, always major
+    // — the easiest possible call-and-response.
+    const intervals = [0, 2, 4];
+    const notes = intervals.map(i => root + i);
+    return {
+      name: `${midiToName(root)} DO-RE-MI`,
+      notes: notes.map(midi => ({ midi, freq: midiToFreq(midi), name: midiToName(midi) })),
+    };
+  }
   const isMajor = Math.random() < 0.5;
   const intervals = isMajor ? [0, 4, 7] : [0, 3, 7];
   const notes = intervals.map(i => root + i);
@@ -3232,9 +3250,12 @@ const VoiceRangePicker = ({ currentRange = null, onSet, onCancel = null }) => {
 
 
 const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
-                     voiceRange = 'higher', voiceRangeMidi = null, onChangeRange = null }) => {
+                     voiceRange = 'higher', voiceRangeMidi = null, onChangeRange = null,
+                     mode = 'advanced' }) => {
   const [permission, setPermission] = useState('pending'); // 'pending' | 'granted' | 'denied' | 'unsupported' | 'insecure'
   const [errorDetail, setErrorDetail] = useState('');
+
+  const modeCfg = TUNER_MODES[mode] || TUNER_MODES.advanced;
 
   // Resolve which root pool to use based on voiceRange + optional calibration midi
   const resolveRoots = () => {
@@ -3242,7 +3263,7 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
     if (voiceRange === 'lower') return VOICE_RANGES.lower.roots;
     return VOICE_RANGES.higher.roots; // default
   };
-  const [chord, setChord] = useState(() => generateChord(resolveRoots()));
+  const [chord, setChord] = useState(() => generateChord(resolveRoots(), mode));
   const [noteIdx, setNoteIdx] = useState(0); // current note in the chord (0..2)
   const [phase, setPhase] = useState('listen'); // 'listen' | 'sing'
   const [detectedFreq, setDetectedFreq] = useState(-1);
@@ -3255,13 +3276,18 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   const streamRef = useRef(null);
   const bufferRef = useRef(null);
 
-  // The active note's accumulator state (only counts during 'sing' phase)
+  // The active note's accumulator state (only counts during 'sing' phase).
+  // DURATION_MS comes from the chosen mode (Beginner: 800ms; Advanced: 2500ms).
   const noteStateRef = useRef({
     inTuneTime: 0,
     totalTime: 0,
-    DURATION_MS: 2500, // 1 bar @ 0.5s × 5 ticks
+    DURATION_MS: modeCfg.durationMs,
     _lastTick: 0,
   });
+  // Keep DURATION_MS in sync if the mode prop ever flips at runtime.
+  useEffect(() => {
+    noteStateRef.current.DURATION_MS = modeCfg.durationMs;
+  }, [modeCfg.durationMs]);
 
   // Refs to avoid stale closures inside the rAF loop
   const phaseRef = useRef(phase);
@@ -3271,13 +3297,13 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   const chordRef = useRef(chord);
   useEffect(() => { chordRef.current = chord; }, [chord]);
 
-  // Regenerate chord when the voice range setting changes
-  const voiceRangeKey = `${voiceRange}:${voiceRangeMidi || ''}`;
+  // Regenerate chord when the voice range OR mode setting changes
+  const voiceRangeKey = `${voiceRange}:${voiceRangeMidi || ''}:${mode}`;
   const lastRangeKeyRef = useRef(voiceRangeKey);
   useEffect(() => {
     if (lastRangeKeyRef.current !== voiceRangeKey) {
       lastRangeKeyRef.current = voiceRangeKey;
-      setChord(generateChord(resolveRoots()));
+      setChord(generateChord(resolveRoots(), mode));
       setNoteIdx(0);
       setNoteScores([null, null, null]);
     }
@@ -3426,8 +3452,8 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
         if (noteIdxRef.current < 2) {
           setNoteIdx(i => i + 1);
         } else {
-          // Generate new chord using the configured voice range
-          setChord(generateChord(resolveRoots()));
+          // Generate new chord using the configured voice range + mode
+          setChord(generateChord(resolveRoots(), mode));
           setNoteIdx(0);
           setNoteScores([null, null, null]);
         }
@@ -3539,7 +3565,9 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
     <div className="border-2 border-stone-800 bg-stone-900/50 p-3 space-y-3">
       {/* Chord title */}
       <div className="text-center">
-        <div className="text-xs uppercase tracking-[0.3em] text-stone-500">Listen, then repeat</div>
+        <div className="text-xs uppercase tracking-[0.3em] text-stone-500">
+          Listen, then repeat <span className="text-stone-600">· {modeCfg.label}</span>
+        </div>
         <div className="text-amber-500 text-lg tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
           {chord.name}
         </div>
@@ -11115,6 +11143,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   const [pendingStart, setPendingStart] = useState(false);
   const [playMode, setPlayMode] = useState(false); // false = AFK, true = pitch tuner mini-game (mus only)
   const [tecInputMode, setTecInputMode] = useState('tap'); // 'tap' | 'mic' for Beatbox Hero
+  const [tunerMode, setTunerMode] = useState('beginner'); // 'beginner' (do-re-mi) | 'advanced' (full triads)
   const [showRangePicker, setShowRangePicker] = useState(false); // shown when user wants to set/change voice range
 
   const charRef = useRef(char);
@@ -11949,28 +11978,50 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                   return <PixelScene draw={(ctx, fc) => sceneFn(ctx, fc, lookFn)} />;
                 })()}
                 {trainStat === 'mus' && !playMode && !showRangePicker && (
-                  <button onClick={() => {
-                    accuracyRef.current = 0;
-                    if (!char.voiceRange) {
-                      setShowRangePicker(true);
-                    } else {
-                      setPlayMode(true);
-                    }
-                  }}
-                    className="w-full p-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-900/40 hover:to-amber-800/30 transition-all group">
-                    <div className="flex items-center gap-3">
-                      <div className="text-3xl">🎤</div>
-                      <div className="text-left flex-1">
-                        <div className="text-amber-500 text-base tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                          SING ALONG · TAP TO START
-                        </div>
-                        <div className="text-[11px] text-stone-400 uppercase tracking-wider mt-0.5">
-                          Match the notes with your voice → up to ×3 stat gain
-                        </div>
-                      </div>
-                      <div className="text-amber-500 text-xl group-hover:translate-x-1 transition-transform">▶</div>
+                  <div className="space-y-2">
+                    {/* Mode picker — pick the warm-up before starting the tuner */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(TUNER_MODES).map(([key, m]) => {
+                        const selected = tunerMode === key;
+                        return (
+                          <button key={key} onClick={() => setTunerMode(key)}
+                            className={`p-2 border-2 transition-all text-left ${selected
+                              ? 'border-amber-500 bg-amber-500/15'
+                              : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'}`}>
+                            <div className={`text-xs uppercase tracking-wider ${selected ? 'text-amber-500' : 'text-stone-300'}`}
+                              style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                              {m.label}
+                            </div>
+                            <div className="text-[10px] text-stone-500 uppercase tracking-wider">{m.tag}</div>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </button>
+                    <button onClick={() => {
+                      accuracyRef.current = 0;
+                      if (!char.voiceRange) {
+                        setShowRangePicker(true);
+                      } else {
+                        setPlayMode(true);
+                      }
+                    }}
+                      className="w-full p-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-900/40 hover:to-amber-800/30 transition-all group">
+                      <div className="flex items-center gap-3">
+                        <div className="text-3xl">🎤</div>
+                        <div className="text-left flex-1">
+                          <div className="text-amber-500 text-base tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                            SING ALONG · TAP TO START
+                          </div>
+                          <div className="text-[11px] text-stone-400 uppercase tracking-wider mt-0.5">
+                            {tunerMode === 'beginner'
+                              ? '3-note do-re-mi · short notes · easy warm-up'
+                              : 'Full major/minor triads · longer notes · ×3 stat gain'}
+                          </div>
+                        </div>
+                        <div className="text-amber-500 text-xl group-hover:translate-x-1 transition-transform">▶</div>
+                      </div>
+                    </button>
+                  </div>
                 )}
                 {trainStat === 'mus' && showRangePicker && (
                   <VoiceRangePicker
@@ -11991,7 +12042,22 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                       active={trainActivity.active}
                       voiceRange={char.voiceRange || 'higher'}
                       voiceRangeMidi={char.voiceRangeMidi}
+                      mode={tunerMode}
                     />
+                    {/* Inline mode toggle — flip Beginner/Advanced without leaving */}
+                    <div className="grid grid-cols-2 gap-1">
+                      {Object.entries(TUNER_MODES).map(([key, m]) => {
+                        const selected = tunerMode === key;
+                        return (
+                          <button key={key} onClick={() => setTunerMode(key)}
+                            className={`py-1.5 border-2 text-[10px] uppercase tracking-widest transition-all ${selected
+                              ? 'border-amber-500 bg-amber-500/15 text-amber-500'
+                              : 'border-stone-800 bg-stone-900/40 text-stone-400 hover:border-stone-700'}`}>
+                            {m.label} · {m.tag}
+                          </button>
+                        );
+                      })}
+                    </div>
                     <div className="flex gap-2">
                       <button onClick={() => { setPlayMode(false); setShowRangePicker(true); }}
                         className="flex-1 py-2 border border-stone-700 bg-stone-900/50 text-stone-400 text-[10px] uppercase tracking-widest hover:border-amber-500/50 transition-all">
