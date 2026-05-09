@@ -6630,7 +6630,21 @@ const DevPanel = ({ char, setChar, onClose, onLock }) => {
   );
 };
 
-const AchievementsPanel = ({ char, onClose }) => {
+const AchievementsPanel = ({ char, onClose, devUnlocked = false, onDevUnlock = null, onOpenDevPanel = null }) => {
+  // Backup entry to dev mode — type "808" here if the triple-tap gesture isn't
+  // working on this device. Hidden visually so casual players don't poke it.
+  const [devCodeInput, setDevCodeInput] = useState('');
+  const [devCodeBad, setDevCodeBad] = useState(false);
+  const submitDevCode = () => {
+    if (!onDevUnlock) return;
+    const ok = onDevUnlock(devCodeInput);
+    if (!ok) {
+      setDevCodeBad(true);
+      setTimeout(() => setDevCodeBad(false), 800);
+    } else {
+      setDevCodeInput('');
+    }
+  };
   const earned = ACHIEVEMENTS.filter(a => char.achievements?.[a.id]);
   const locked = ACHIEVEMENTS.filter(a => !char.achievements?.[a.id]);
   const Row = ({ a, isEarned }) => {
@@ -6668,7 +6682,38 @@ const AchievementsPanel = ({ char, onClose }) => {
           {earned.map(a => <Row key={a.id} a={a} isEarned />)}
           {earned.length > 0 && locked.length > 0 && <div className="border-t border-stone-900 my-1" />}
           {locked.map(a => <Row key={a.id} a={a} isEarned={false} />)}
+          {/* Dev backdoor — if the triple-tap on the day chip won't fire on
+              your device, type the code here. Already-unlocked sessions get
+              a direct shortcut into the panel. */}
+          <div className="border-t border-stone-900 mt-3 pt-3">
+            {devUnlocked ? (
+              <button onClick={() => { onOpenDevPanel?.(); }}
+                className="w-full py-2 border border-amber-500/40 bg-amber-500/10 text-amber-300 text-[10px] uppercase tracking-widest hover:border-amber-500 transition-all">
+                ⚡ Open dev panel
+              </button>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="text-[9px] uppercase tracking-[0.3em] text-stone-700 text-center">— hidden —</div>
+                <div className="flex gap-1">
+                  <input
+                    type="password"
+                    value={devCodeInput}
+                    onChange={(e) => setDevCodeInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitDevCode(); }}
+                    placeholder="code"
+                    className={`flex-1 px-2 py-1.5 bg-stone-900 border-2 text-stone-300 text-[10px] uppercase tracking-widest font-mono outline-none ${devCodeBad ? 'border-red-700' : 'border-stone-800 focus:border-amber-500/40'}`}
+                    style={{ animation: devCodeBad ? 'shake 0.4s' : 'none' }}
+                  />
+                  <button onClick={submitDevCode}
+                    className="px-3 py-1.5 border-2 border-stone-800 bg-stone-900/40 text-stone-500 text-[10px] uppercase tracking-widest hover:border-amber-500/40">
+                    Enter
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+        <style>{`@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-4px)} 40%{transform:translateX(4px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} }`}</style>
       </div>
     </div>
   );
@@ -10581,6 +10626,15 @@ export default function BeatboxStory() {
     catch { return false; }
   });
   const [showDevPanel, setShowDevPanel] = useState(false);
+  // Backup entry: if the prompt-based unlock is awkward on a phone, the
+  // Achievements panel exposes a small input that calls this directly.
+  const tryDevUnlock = (code) => {
+    if (!code || code.trim() !== '808') return false;
+    try { localStorage.setItem('beatbox_dev', '1'); } catch {}
+    setDevUnlocked(true);
+    setShowDevPanel(true);
+    return true;
+  };
   const devTapsRef = useRef({ count: 0, last: 0 });
   const handleDevBadgeTap = () => {
     const now = Date.now();
@@ -10592,11 +10646,7 @@ export default function BeatboxStory() {
     t.count = 0;
     if (devUnlocked) { setShowDevPanel(true); return; }
     const code = typeof window !== 'undefined' ? window.prompt('Dev code:') : null;
-    if (code && code.trim() === '808') {
-      try { localStorage.setItem('beatbox_dev', '1'); } catch {}
-      setDevUnlocked(true);
-      setShowDevPanel(true);
-    }
+    tryDevUnlock(code);
   };
   // Pause the activity tick + time progression while a cutscene is up
   useEffect(() => { setGamePaused(!!cutscene); }, [cutscene]);
@@ -10888,12 +10938,21 @@ export default function BeatboxStory() {
             <div className="px-3 py-2 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <span onClick={handleDevBadgeTap}
-                    className={`text-[9px] uppercase tracking-[0.3em] cursor-default select-none ${devUnlocked ? 'text-amber-300' : 'text-amber-500'}`}
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                    title={devUnlocked ? 'Dev mode (triple-tap to open panel)' : ''}>
+                  <button onClick={handleDevBadgeTap}
+                    type="button"
+                    aria-label="Day of week"
+                    title={devUnlocked ? 'Dev mode (triple-tap)' : ''}
+                    className={`text-[9px] uppercase tracking-[0.3em] select-none p-0 m-0 bg-transparent border-0 ${devUnlocked ? 'text-amber-300' : 'text-amber-500'}`}
+                    style={{
+                      WebkitTapHighlightColor: 'transparent',
+                      WebkitUserSelect: 'none',
+                      userSelect: 'none',
+                      WebkitTouchCallout: 'none',
+                      touchAction: 'manipulation',
+                      cursor: 'default',
+                    }}>
                     {DAY_NAMES_SHORT[dayOfWeek(char.day)]}{devUnlocked ? '*' : ''}
-                  </span>
+                  </button>
                   <span className="text-[9px] uppercase tracking-[0.3em] text-stone-500">Day {char.day}</span>
                   <Clock minutes={char.minutes ?? 0} day={char.day} />
                 </div>
@@ -10957,7 +11016,12 @@ export default function BeatboxStory() {
         {/* TOAST */}
         {cutscene && <Cutscene {...cutscene} />}
         {showMessages && <MessagesPanel char={char} setChar={setChar} onClose={() => setShowMessages(false)} />}
-        {showAchievements && <AchievementsPanel char={char} onClose={() => setShowAchievements(false)} />}
+        {showAchievements && (
+          <AchievementsPanel char={char} onClose={() => setShowAchievements(false)}
+            devUnlocked={devUnlocked}
+            onDevUnlock={(code) => tryDevUnlock(code)}
+            onOpenDevPanel={() => { setShowAchievements(false); setShowDevPanel(true); }} />
+        )}
         {showDevPanel && devUnlocked && (
           <DevPanel char={char} setChar={setChar} onClose={() => setShowDevPanel(false)}
             onLock={() => {
