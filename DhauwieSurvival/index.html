@@ -441,7 +441,6 @@ flashlight.position.copy(camera.position);
 scene.add(flashlight);
 scene.add(flashlight.target);
 
-// --- Procedural textures (canvas-based) ---
 function makeBuildingTexture(baseHex, windowLitHex, roofHex) {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 256;
@@ -549,6 +548,43 @@ function makeWoodTexture() {
   return tex;
 }
 
+function makeSkinTexture(baseHex) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = baseHex;
+  g.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 28; i++) {
+    g.fillStyle = 'rgba(0,0,0,' + (0.10 + Math.random() * 0.30).toFixed(2) + ')';
+    g.beginPath();
+    g.arc(Math.random() * 64, Math.random() * 64, 1 + Math.random() * 2.4, 0, Math.PI * 2);
+    g.fill();
+  }
+  for (let i = 0; i < 7; i++) {
+    g.fillStyle = 'rgba(120,18,18,' + (0.45 + Math.random() * 0.3).toFixed(2) + ')';
+    g.beginPath();
+    g.arc(Math.random() * 64, Math.random() * 64, 1.2 + Math.random() * 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = 'rgba(60,10,40,0.45)';
+  g.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    g.beginPath();
+    let x = Math.random() * 64, y = Math.random() * 64;
+    g.moveTo(x, y);
+    for (let j = 0; j < 4; j++) {
+      x += (Math.random() - 0.5) * 16;
+      y += (Math.random() - 0.5) * 16;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 const buildingTextures = [
   makeBuildingTexture('#a87a55', '#ffd87a', '#5a3528'),
   makeBuildingTexture('#6c7d96', '#ffe089', '#2a3344'),
@@ -559,6 +595,12 @@ const buildingTextures = [
 const groundTex = makeGroundTexture();
 const woodTex = makeWoodTexture();
 const wallTex = makeBuildingTexture('#4d4845', '#3a3024', '#1c1a18');
+const zombieSkinTextures = [
+  makeSkinTexture('#a89878'),
+  makeSkinTexture('#9aa050'),
+  makeSkinTexture('#7a3a22'),
+  makeSkinTexture('#4a2046'),
+];
 
 const groundMat = new THREE.MeshStandardMaterial({ map: groundTex, color: 0xd9c0a4, roughness: 0.95 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_SIZE * 2, WORLD_SIZE * 2), groundMat);
@@ -931,49 +973,178 @@ const zombies = [];
 class Zombie {
   constructor(pos, tier = 0) {
     this.tier = tier;
-    const tints = [0x6aa845, 0x9a9c40, 0xb87440, 0x9a4ea0];
-    const hps   = [40, 65, 90, 130];
-    const speeds= [1.6, 2.0, 2.4, 2.0];
-    const dmgs  = [8, 12, 16, 22];
-    const sizes = [1.0, 1.05, 1.15, 1.3];
+    const tints       = [0xa89878, 0x9aa050, 0x9a4828, 0x6a2a5a];
+    const eyeColors   = [0xff2424, 0xff5500, 0xffaa00, 0xff10ff];
+    const eyeIntens   = [1.2, 1.5, 1.8, 2.5];
+    const hps         = [40, 65, 90, 130];
+    const speeds      = [1.6, 2.0, 2.4, 2.0];
+    const dmgs        = [8, 12, 16, 22];
+    const sizes       = [1.0, 1.1, 1.25, 1.5];
     const s = sizes[tier];
     this.hp = hps[tier];
     this.speed = speeds[tier];
     this.damage = dmgs[tier];
+    this.scale = s;
+    this.size = s;
+
+    const skinTex = zombieSkinTextures[tier];
 
     const group = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: tints[tier], roughness: 0.9 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6 * s, 1.0 * s, 0.4 * s), bodyMat);
-    body.position.y = 0.5 * s + 0.5 * s;
-    body.castShadow = true;
-    group.add(body);
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.4 * s, 0.4 * s, 0.4 * s),
-      new THREE.MeshStandardMaterial({ color: tints[tier] === 0x9a4ea0 ? 0xffffff : 0xb6d685, emissive: 0x110011, roughness: 0.9 })
-    );
-    head.position.y = 1.4 * s + 0.5 * s;
+
+    const torsoMat = new THREE.MeshStandardMaterial({
+      map: skinTex, color: tints[tier], roughness: 0.95,
+      emissive: tier === 3 ? 0x331122 : 0x000000,
+      emissiveIntensity: tier === 3 ? 0.5 : 0
+    });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62 * s, 0.85 * s, 0.38 * s), torsoMat);
+    torso.position.y = 1.0 * s;
+    torso.castShadow = true;
+    group.add(torso);
+
+    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.95 });
+    const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.66 * s, 0.55 * s, 0.4 * s), shirtMat);
+    shirt.position.y = 0.85 * s;
+    group.add(shirt);
+
+    const woundMat = new THREE.MeshStandardMaterial({
+      color: 0x661010, emissive: 0x881010, emissiveIntensity: 0.6, roughness: 0.7
+    });
+    const wound = new THREE.Mesh(new THREE.BoxGeometry(0.28 * s, 0.20 * s, 0.06 * s), woundMat);
+    wound.position.set(-0.05 * s, 1.10 * s, 0.21 * s);
+    group.add(wound);
+
+    const headMat = new THREE.MeshStandardMaterial({
+      map: skinTex, color: tints[tier], roughness: 0.95,
+      emissive: tier === 3 ? 0x331122 : 0x000000,
+      emissiveIntensity: tier === 3 ? 0.5 : 0
+    });
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.44 * s, 0.46 * s, 0.42 * s), headMat);
+    head.position.y = 1.7 * s;
     head.castShadow = true;
     group.add(head);
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0xff2222, emissiveIntensity: 1.0 });
-    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.07 * s, 0.07 * s, 0.07 * s), eyeMat);
+
+    const socketMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const socketL = new THREE.Mesh(new THREE.BoxGeometry(0.13 * s, 0.11 * s, 0.06 * s), socketMat);
+    socketL.position.set(-0.10 * s, 1.78 * s, 0.21 * s);
+    group.add(socketL);
+    const socketR = socketL.clone();
+    socketR.position.x = 0.10 * s;
+    group.add(socketR);
+
+    const eyeColor = eyeColors[tier];
+    const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.07 * s, 0.06 * s, 0.04 * s), eyeMat);
+    eyeL.position.set(-0.10 * s, 1.78 * s, 0.235 * s);
+    group.add(eyeL);
     const eyeR = eyeL.clone();
-    eyeL.position.set(-0.1 * s, 1.45 * s + 0.5 * s, 0.21 * s);
-    eyeR.position.set( 0.1 * s, 1.45 * s + 0.5 * s, 0.21 * s);
-    group.add(eyeL); group.add(eyeR);
-    const armMat = bodyMat;
-    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 0.7 * s, 0.18 * s), armMat);
+    eyeR.position.x = 0.10 * s;
+    group.add(eyeR);
+    if (tier >= 2) {
+      const eyeLight = new THREE.PointLight(eyeColor, eyeIntens[tier] * 0.6, 4);
+      eyeLight.position.set(0, 1.78 * s, 0.3 * s);
+      group.add(eyeLight);
+    }
+
+    const mouthMat = new THREE.MeshStandardMaterial({
+      color: 0x4a0a0a, emissive: 0x5a1010, emissiveIntensity: 0.5, roughness: 0.7
+    });
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.24 * s, 0.07 * s, 0.05 * s), mouthMat);
+    mouth.position.set(0, 1.62 * s, 0.21 * s);
+    group.add(mouth);
+    const teethMat = new THREE.MeshStandardMaterial({ color: 0xe8d8b8, roughness: 0.5 });
+    const teeth = new THREE.Mesh(new THREE.BoxGeometry(0.20 * s, 0.025 * s, 0.04 * s), teethMat);
+    teeth.position.set(0, 1.625 * s, 0.225 * s);
+    group.add(teeth);
+
+    const noseMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.06 * s, 0.07 * s, 0.04 * s), noseMat);
+    nose.position.set(0, 1.70 * s, 0.21 * s);
+    group.add(nose);
+
+    if (tier >= 2) {
+      const spikeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.2 });
+      const spikeL = new THREE.Mesh(new THREE.ConeGeometry(0.08 * s, 0.26 * s, 4), spikeMat);
+      spikeL.position.set(-0.34 * s, 1.4 * s, 0);
+      spikeL.rotation.z = 0.5;
+      group.add(spikeL);
+      const spikeR = spikeL.clone();
+      spikeR.position.x = 0.34 * s;
+      spikeR.rotation.z = -0.5;
+      group.add(spikeR);
+    }
+    if (tier === 3) {
+      const hornMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.3 });
+      const hornL = new THREE.Mesh(new THREE.ConeGeometry(0.07 * s, 0.4 * s, 6), hornMat);
+      hornL.position.set(-0.14 * s, 2.05 * s, 0);
+      hornL.rotation.z = 0.4;
+      group.add(hornL);
+      const hornR = hornL.clone();
+      hornR.position.x = 0.14 * s;
+      hornR.rotation.z = -0.4;
+      group.add(hornR);
+    }
+
+    const armMat = new THREE.MeshStandardMaterial({
+      map: skinTex, color: tints[tier], roughness: 0.95,
+      emissive: tier === 3 ? 0x331122 : 0x000000,
+      emissiveIntensity: tier === 3 ? 0.4 : 0
+    });
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16 * s, 0.62 * s, 0.16 * s), armMat);
+    armL.position.set(-0.40 * s, 1.15 * s, 0.32 * s);
+    armL.rotation.x = -1.15;
+    armL.castShadow = true;
+    group.add(armL);
     const armR = armL.clone();
-    armL.position.set(-0.45 * s, 1.0 * s + 0.5 * s, 0.25 * s);
-    armR.position.set( 0.45 * s, 1.0 * s + 0.5 * s, 0.25 * s);
-    armL.rotation.x = -0.7; armR.rotation.x = -0.7;
-    group.add(armL); group.add(armR);
+    armR.position.x = 0.40 * s;
+    group.add(armR);
+
+    const clawMat = new THREE.MeshStandardMaterial({
+      color: 0x301010, roughness: 0.4, metalness: 0.3,
+      emissive: 0x200505, emissiveIntensity: 0.3
+    });
+    const clawL = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 0.18 * s, 0.18 * s), clawMat);
+    clawL.position.set(-0.40 * s, 1.40 * s, 0.85 * s);
+    group.add(clawL);
+    const clawR = clawL.clone();
+    clawR.position.x = 0.40 * s;
+    group.add(clawR);
+    for (const x of [-0.40, 0.40]) {
+      for (let k = -1; k <= 1; k++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.025 * s, 0.10 * s, 4), clawMat);
+        spike.position.set(x * s + k * 0.06 * s, 1.40 * s, 1.0 * s);
+        spike.rotation.x = -Math.PI / 2;
+        group.add(spike);
+      }
+    }
+
+    const pantMat = new THREE.MeshStandardMaterial({ color: 0x121218, roughness: 0.95 });
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.20 * s, 0.6 * s, 0.22 * s), pantMat);
+    legL.position.set(-0.13 * s, 0.30 * s, 0);
+    legL.castShadow = true;
+    group.add(legL);
+    const legR = legL.clone();
+    legR.position.x = 0.13 * s;
+    group.add(legR);
+
+    const footMat = new THREE.MeshStandardMaterial({ color: 0x2a1010, roughness: 0.9 });
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.22 * s, 0.10 * s, 0.30 * s), footMat);
+    footL.position.set(-0.13 * s, 0.05 * s, 0.05 * s);
+    group.add(footL);
+    const footR = footL.clone();
+    footR.position.x = 0.13 * s;
+    group.add(footR);
 
     group.position.copy(pos);
     scene.add(group);
     this.mesh = group;
-    this.body = body; this.head = head; this.armL = armL; this.armR = armR;
-    this.scale = s;
-    this.size = s;
+    this.body = torso;
+    this.head = head;
+    this.torsoMat = torsoMat;
+    this.armMat = armMat;
+    this.headMat = headMat;
+    this.armL = armL; this.armR = armR;
+    this.legL = legL; this.legR = legR;
+    this.shirt = shirt;
     this.attackCooldown = 0;
     this.dead = false;
     this.walkPhase = Math.random() * Math.PI * 2;
@@ -1005,13 +1176,16 @@ class Zombie {
     this.mesh.rotation.y = Math.atan2(player.pos.x - this.mesh.position.x, player.pos.z - this.mesh.position.z) + (this.transformed ? Math.PI : 0);
 
     this.walkPhase += dt * 6;
-    const swing = Math.sin(this.walkPhase) * 0.3;
-    this.armL.rotation.x = -0.7 + swing;
-    this.armR.rotation.x = -0.7 - swing;
-    this.mesh.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.06;
+    const swing = Math.sin(this.walkPhase) * 0.35;
+    this.armL.rotation.x = -1.15 + swing * 0.4;
+    this.armR.rotation.x = -1.15 - swing * 0.4;
+    this.legL.rotation.x = -swing;
+    this.legR.rotation.x = swing;
+    this.mesh.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.05;
+    this.mesh.rotation.x = dist < 5 ? -0.12 : 0;
 
     this.attackCooldown -= dt;
-    if (!this.transformed && dist < 1.4 && this.attackCooldown <= 0) {
+    if (!this.transformed && dist < 1.5 && this.attackCooldown <= 0) {
       this.attackCooldown = 1.0;
       damagePlayer(this.damage);
     }
@@ -1020,9 +1194,16 @@ class Zombie {
   takeDamage(dmg) {
     if (this.dead || this.transformed) return false;
     this.hp -= dmg;
-    const orig = this.body.material.color.getHex();
-    this.body.material.color.setHex(0xff5555);
-    setTimeout(() => { if (!this.dead) this.body.material.color.setHex(orig); }, 70);
+    const orig = this.torsoMat.color.getHex();
+    this.torsoMat.color.setHex(0xff5555);
+    this.armMat.color.setHex(0xff5555);
+    this.headMat.color.setHex(0xff5555);
+    setTimeout(() => {
+      if (this.dead) return;
+      this.torsoMat.color.setHex(orig);
+      this.armMat.color.setHex(orig);
+      this.headMat.color.setHex(orig);
+    }, 80);
     if (this.hp <= 0) {
       this.die();
       return true;
@@ -1044,16 +1225,19 @@ class Zombie {
 
   transform() {
     this.transformed = true;
-    this.body.material.color.setHex(0xfafafa);
-    this.body.material.emissive = new THREE.Color(0x444422);
-    this.head.material.color.setHex(0xffe0bd);
-    this.head.material.emissive = new THREE.Color(0x222200);
+    this.torsoMat.color.setHex(0xfafafa);
+    this.torsoMat.emissive = new THREE.Color(0x444422);
+    this.armMat.color.setHex(0xfafafa);
+    this.armMat.emissive = new THREE.Color(0x222211);
+    this.headMat.color.setHex(0xffe0bd);
+    this.headMat.emissive = new THREE.Color(0x222200);
+    this.shirt.material.color.setHex(0xfafafa);
     const halo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.3 * this.scale, 0.04, 8, 24),
+      new THREE.TorusGeometry(0.32 * this.scale, 0.04, 8, 24),
       new THREE.MeshStandardMaterial({ color: 0xffff66, emissive: 0xffff66, emissiveIntensity: 1.5 })
     );
     halo.rotation.x = Math.PI / 2;
-    halo.position.y = 1.85 * this.scale + 0.5 * this.scale;
+    halo.position.y = 2.05 * this.scale;
     this.mesh.add(halo);
     this.speed *= 0.5;
     player.score += 50;
@@ -1179,8 +1363,8 @@ function shoot() {
     for (const z of zombies) {
       if (z.dead || z.transformed) continue;
       const sphereCenter = z.mesh.position.clone();
-      sphereCenter.y += 1.2 * z.scale;
-      const sphereR = 0.7 * z.scale;
+      sphereCenter.y += 1.3 * z.scale;
+      const sphereR = 0.95 * z.scale;
       const v = sphereCenter.clone().sub(origin);
       const proj = v.dot(dir);
       if (proj < 0) continue;
