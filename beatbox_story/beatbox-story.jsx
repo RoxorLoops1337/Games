@@ -199,6 +199,8 @@ const initialChar = () => ({
   metEncounters: {}, // { encounterId: count } so we can vary lines per re-meet
   daily: {}, // counters reset every sleep — drives daily-challenge progress
   dailyChallenge: null, // { id, claimed } the challenge active for today
+  weekly: {}, // counters reset every Monday morning — drives weekly-challenge progress
+  weeklyChallenge: null, // { id, claimed } the challenge active for this week
   achievements: {}, // { id: dayEarned } unlocked achievements
   lastTourDay: 0, // last day a tour was started (cooldown: 7 days)
   festivalState: null, // null | 'invited' | 'prepping' | 'done'
@@ -525,10 +527,13 @@ const pickDailyChallenge = (dow, c) => {
   return eligible[Math.floor(Math.random() * eligible.length)];
 };
 
-// Bump a counter on char.daily — used as a setChar updater fragment.
+// Bump a counter on char.daily AND char.weekly — used as a setChar updater
+// fragment. Same counter feeds both clocks; daily resets every morning,
+// weekly resets every Monday morning.
 const bumpDaily = (c, counter, by = 1) => ({
   ...c,
-  daily: { ...(c.daily || {}), [counter]: (c.daily?.[counter] || 0) + by },
+  daily:  { ...(c.daily  || {}), [counter]: (c.daily?.[counter]  || 0) + by },
+  weekly: { ...(c.weekly || {}), [counter]: (c.weekly?.[counter] || 0) + by },
 });
 
 const dailyChallengeMet = (c) => {
@@ -538,6 +543,22 @@ const dailyChallengeMet = (c) => {
   if (!ch) return false;
   return (c.daily?.[ch.counter] || 0) >= ch.target;
 };
+
+// ============ WEEKLY CHALLENGES ============
+// One per in-game week (resets every Monday-morning sleep). Counters live
+// in char.weekly (auto-incremented by bumpDaily so any daily-tracked action
+// also counts toward the weekly).
+const WEEKLY_CHALLENGES = [
+  { id: 'wk_battles_3',  label: 'Win 3 battles this week',     target: 3,  counter: 'battleWins', reward: { cash: 100, followers: 20 } },
+  { id: 'wk_openmic_5',  label: 'Play 5 open mics this week',  target: 5,  counter: 'openMics',   reward: { cash: 80,  followers: 15 } },
+  { id: 'wk_jams_15',    label: 'Do 15 cypher jams this week', target: 15, counter: 'jams',       reward: { cash: 60,  followers: 10 } },
+  { id: 'wk_busks_10',   label: 'Busk 10 times this week',     target: 10, counter: 'busks',      reward: { cash: 70,  followers: 8 } },
+  { id: 'wk_mingles_8',  label: 'Mingle 8 nights this week',   target: 8,  counter: 'mingles',    reward: { cash: 50,  mood: 10 } },
+  { id: 'wk_runs_4',     label: 'Run 4 sessions this week',    target: 4,  counter: 'runs',       reward: { cash: 40,  mood: 15 } },
+];
+
+const pickWeeklyChallenge = () =>
+  WEEKLY_CHALLENGES[Math.floor(Math.random() * WEEKLY_CHALLENGES.length)];
 
 // ============ ACHIEVEMENTS ============
 // Auto-checked from checkLevelUp (same checkpoint as sound unlocks). Each
@@ -10906,6 +10927,8 @@ export default function BeatboxStory() {
     if (!c.metEncounters || typeof c.metEncounters !== 'object') c.metEncounters = {};
     if (!c.daily || typeof c.daily !== 'object') c.daily = {};
     if (c.dailyChallenge === undefined) c.dailyChallenge = null;
+    if (!c.weekly || typeof c.weekly !== 'object') c.weekly = {};
+    if (c.weeklyChallenge === undefined) c.weeklyChallenge = null;
     if (!c.achievements || typeof c.achievements !== 'object') c.achievements = {};
     if (typeof c.lastTourDay !== 'number') c.lastTourDay = 0;
     if (c.festivalState === undefined) c.festivalState = null;
@@ -12104,6 +12127,15 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       next.daily = {};
       const newChallenge = pickDailyChallenge(newDay % 7, next);
       next.dailyChallenge = newChallenge ? { id: newChallenge.id, claimed: false } : null;
+      // Weekly: reset on Monday-morning rollover (newDay % 7 === 0). Also
+      // kickstart immediately for slots that don't have one yet so the
+      // player isn't waiting until next Monday.
+      const startOfWeek = (newDay % 7) === 0;
+      if (startOfWeek || !next.weeklyChallenge) {
+        next.weekly = {};
+        const newWeekly = pickWeeklyChallenge();
+        next.weeklyChallenge = newWeekly ? { id: newWeekly.id, claimed: false } : null;
+      }
       // Parent message triggers (cooldown ≥3 days between parent texts)
       const cd = newDay - (next.lastParentMsgDay || 0);
       if (cd >= 3) {
@@ -12351,6 +12383,58 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
               <button onClick={claim} disabled={!met || claimed}
                 className={`px-2 py-1 text-[9px] uppercase tracking-widest border ${
                   met && !claimed ? 'border-amber-500 text-amber-500 hover:bg-amber-500/10'
+                                  : 'border-stone-800 text-stone-700 cursor-not-allowed'
+                }`}>
+                {claimed ? 'CLAIMED' : met ? 'CLAIM →' : 'IN PROGRESS'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Weekly challenge HUD — bigger goal, bigger reward, persists across days */}
+      {(() => {
+        const wc = char.weeklyChallenge;
+        if (!wc) return null;
+        const def = WEEKLY_CHALLENGES.find(x => x.id === wc.id);
+        if (!def) return null;
+        const progress = char.weekly?.[def.counter] || 0;
+        const met = progress >= def.target;
+        const claimed = wc.claimed;
+        const dow = (char.day || 1) % 7;
+        const daysToMonday = dow === 0 ? 7 : (7 - dow);
+        const claim = () => {
+          if (!met || claimed) return;
+          setChar(c => {
+            const r = def.reward || {};
+            return {
+              ...c,
+              cash: (c.cash || 0) + (r.cash || 0),
+              followers: (c.followers || 0) + (r.followers || 0),
+              mood: _clampPct((c.mood || 0) + (r.mood || 0)),
+              weeklyChallenge: { ...c.weeklyChallenge, claimed: true },
+            };
+          });
+          showToast?.(`Weekly: +${def.reward?.cash ? `$${def.reward.cash}` : ''}${def.reward?.mood ? ` +${def.reward.mood}♥` : ''}${def.reward?.followers ? ` +${def.reward.followers} fans` : ''}`, 'win');
+        };
+        return (
+          <div className={`border-2 px-3 py-2 ${met && !claimed ? 'border-fuchsia-500 bg-fuchsia-500/5' : claimed ? 'border-stone-800 bg-stone-900/40 opacity-70' : 'border-stone-800 bg-stone-900/30'}`}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[9px] uppercase tracking-[0.3em] text-fuchsia-400" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                WEEKLY CHALLENGE
+              </div>
+              <div className="text-[9px] uppercase tracking-widest text-stone-600">
+                {progress}/{def.target}{claimed ? ' · claimed' : ` · ${daysToMonday}d left`}
+              </div>
+            </div>
+            <div className="text-stone-300 text-xs">{def.label}</div>
+            <div className="flex items-center justify-between mt-1">
+              <div className="text-[9px] uppercase tracking-widest text-stone-500">
+                Reward: {def.reward?.cash ? `$${def.reward.cash}` : ''}{def.reward?.mood ? ` +${def.reward.mood}♥` : ''}{def.reward?.followers ? ` +${def.reward.followers} fans` : ''}
+              </div>
+              <button onClick={claim} disabled={!met || claimed}
+                className={`px-2 py-1 text-[9px] uppercase tracking-widest border ${
+                  met && !claimed ? 'border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/10'
                                   : 'border-stone-800 text-stone-700 cursor-not-allowed'
                 }`}>
                 {claimed ? 'CLAIMED' : met ? 'CLAIM →' : 'IN PROGRESS'}
