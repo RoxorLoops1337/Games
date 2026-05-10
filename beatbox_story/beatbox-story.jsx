@@ -3094,12 +3094,39 @@ const TUNER_MODES = {
     intervals: 'doremi',
     flow: 'demo-then-sing',
   },
+  karaoke: {
+    label: 'Karaoke',
+    tag: '5-note melody',
+    durationMs: 700,
+    intervals: 'melody',
+    flow: 'demo-then-sing',
+  },
 };
+
+// Diatonic 5-note melody templates for karaoke mode.
+const MELODY_TEMPLATES = [
+  { name: 'DO-RE-MI-FA-SOL',  intervals: [0, 2, 4, 5, 7] },
+  { name: 'SOL-FA-MI-RE-DO',  intervals: [7, 5, 4, 2, 0] },
+  { name: 'DO-MI-SOL-MI-DO',  intervals: [0, 4, 7, 4, 0] },
+  { name: 'DO-RE-MI-RE-DO',   intervals: [0, 2, 4, 2, 0] },
+  { name: 'MI-RE-DO-RE-MI',   intervals: [4, 2, 0, 2, 4] },
+  { name: 'DO-MI-DO-SOL-DO',  intervals: [0, 4, 0, 7, 0] },
+  { name: 'TWINKLE INTRO',    intervals: [0, 0, 7, 7, 9] },
+];
 
 function generateChord(roots, mode = 'beginner') {
   const cfg = TUNER_MODES[mode] || TUNER_MODES.beginner;
   const pool = roots && roots.length ? roots : [55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72]; // default G3..C5
   const root = pool[Math.floor(Math.random() * pool.length)];
+  if (cfg.intervals === 'melody') {
+    // Karaoke melody — 5 diatonic notes from a curated template.
+    const tpl = MELODY_TEMPLATES[Math.floor(Math.random() * MELODY_TEMPLATES.length)];
+    const notes = tpl.intervals.map(i => root + i);
+    return {
+      name: `${midiToName(root)} ${tpl.name}`,
+      notes: notes.map(midi => ({ midi, freq: midiToFreq(midi), name: midiToName(midi) })),
+    };
+  }
   if (cfg.intervals === 'doremi') {
     // Do-Re-Mi: root, major 2nd, major 3rd. Always ascending, always major.
     const intervals = [0, 2, 4];
@@ -3307,7 +3334,7 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   const [demoIdx, setDemoIdx] = useState(-1);
   const [detectedFreq, setDetectedFreq] = useState(-1);
   const [sustainFill, setSustainFill] = useState(0); // 0..1 of current note's hold meter
-  const [noteScores, setNoteScores] = useState([null, null, null]); // 0..1 per note
+  const [noteScores, setNoteScores] = useState(() => chord.notes.map(() => null)); // 0..1 per note
 
   // Refs for the audio pipeline (reset on remount)
   const audioCtxRef = useRef(null);
@@ -3342,9 +3369,10 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   useEffect(() => {
     if (lastRangeKeyRef.current !== voiceRangeKey) {
       lastRangeKeyRef.current = voiceRangeKey;
-      setChord(generateChord(resolveRoots(), mode));
+      const fresh = generateChord(resolveRoots(), mode);
+      setChord(fresh);
       setNoteIdx(0);
-      setNoteScores([null, null, null]);
+      setNoteScores(fresh.notes.map(() => null));
     }
   }, [voiceRangeKey]);
 
@@ -3512,12 +3540,14 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
         return updated;
       });
       chordScoresRef.current.push(score);
-      if (noteIdxRef.current < 2) {
+      const lastIdx = (chordRef.current?.notes?.length || 1) - 1;
+      if (noteIdxRef.current < lastIdx) {
         setNoteIdx(i => i + 1);
       } else {
-        setChord(generateChord(resolveRoots(), mode));
+        const fresh = generateChord(resolveRoots(), mode);
+        setChord(fresh);
         setNoteIdx(0);
-        setNoteScores([null, null, null]);
+        setNoteScores(fresh.notes.map(() => null));
       }
     };
 
@@ -3676,7 +3706,7 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
       {/* Chord title */}
       <div className="text-center">
         <div className="text-xs uppercase tracking-[0.3em] text-stone-500">
-          {modeCfg.flow === 'demo-then-sing' ? 'Listen all 3, then sing all 3' : 'Listen, then repeat'}
+          {modeCfg.flow === 'demo-then-sing' ? `Listen all ${chord.notes.length}, then sing all ${chord.notes.length}` : 'Listen, then repeat'}
           <span className="text-stone-600"> · {modeCfg.label}</span>
         </div>
         <div className="text-amber-500 text-lg tracking-wider" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
@@ -12710,7 +12740,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                 {trainStat === 'mus' && !playMode && !showRangePicker && (
                   <div className="space-y-2">
                     {/* Mode picker — pick the warm-up before starting the tuner */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       {Object.entries(TUNER_MODES).map(([key, m]) => {
                         const selected = tunerMode === key;
                         return (
@@ -12743,9 +12773,9 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                             SING ALONG · TAP TO START
                           </div>
                           <div className="text-[11px] text-stone-400 uppercase tracking-wider mt-0.5">
-                            {tunerMode === 'beginner'
-                              ? 'Full triads · echo each note one at a time'
-                              : 'Do-re-mi · listen to all 3, then sing all 3 back'}
+                            {tunerMode === 'beginner' && 'Full triads · echo each note one at a time'}
+                            {tunerMode === 'advanced' && 'Do-re-mi · listen to all 3, then sing all 3 back'}
+                            {tunerMode === 'karaoke'  && '5-note melody · listen, then sing the whole phrase back'}
                           </div>
                         </div>
                         <div className="text-amber-500 text-xl group-hover:translate-x-1 transition-transform">▶</div>
@@ -12775,7 +12805,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                       mode={tunerMode}
                     />
                     {/* Inline mode toggle — flip Beginner/Advanced without leaving */}
-                    <div className="grid grid-cols-2 gap-1">
+                    <div className="grid grid-cols-3 gap-1">
                       {Object.entries(TUNER_MODES).map(([key, m]) => {
                         const selected = tunerMode === key;
                         return (
