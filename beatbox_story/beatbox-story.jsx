@@ -10563,6 +10563,8 @@ function SlotsScreen({ activeSlot, onSwitch, onDelete, onBack = null }) {
   const [confirmDelete, setConfirmDelete] = useState(null); // slot number being confirmed
   const [confirmText, setConfirmText] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [importStatus, setImportStatus] = useState(null); // { slot, msg, kind }
+  const fileInputRefs = useRef({}); // hidden <input type="file"> per slot
 
   useEffect(() => {
     loadAllSlots().then(setSlots);
@@ -10573,6 +10575,46 @@ function SlotsScreen({ activeSlot, onSwitch, onDelete, onBack = null }) {
     setConfirmDelete(null);
     setConfirmText('');
     setRefreshKey(k => k + 1);
+  };
+
+  // Serialize a slot's character to a JSON file the user can save to disk
+  // (lightweight cloud-save: copy this file to another device + import).
+  const exportSlot = (n, slot) => {
+    if (!slot || !slot.created) return;
+    const safeName = (slot.name || 'character').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+    const filename = `beatbox-${safeName}-slot${n}-day${slot.day || 1}.json`;
+    const blob = new Blob([JSON.stringify(slot, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  };
+
+  // Import a JSON save into the given slot. Validates loosely (must have
+  // `created: true` and look like an object) so a random file can't trash
+  // the slot, but doesn't enforce schema — migrateChar will fill in any
+  // missing fields the next time the slot is loaded.
+  const importSlot = async (n, file) => {
+    if (!file) return;
+    setImportStatus({ slot: n, msg: 'Reading file...', kind: 'info' });
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== 'object' || !parsed.created) {
+        setImportStatus({ slot: n, msg: "That doesn't look like a Beatbox save.", kind: 'bad' });
+        return;
+      }
+      await saveSlot(n, parsed);
+      setImportStatus({ slot: n, msg: `Imported ${parsed.name || 'character'} ✓`, kind: 'win' });
+      setRefreshKey(k => k + 1);
+    } catch (e) {
+      setImportStatus({ slot: n, msg: `Import failed: ${e.message || e}`, kind: 'bad' });
+    }
   };
 
   if (!slots) {
@@ -10687,12 +10729,48 @@ function SlotsScreen({ activeSlot, onSwitch, onDelete, onBack = null }) {
               </div>
             )}
 
-            {/* Delete trigger - only show on filled non-confirming slots */}
+            {/* Filled slot footer: Export + Delete side by side */}
             {isFilled && !isConfirming && (
-              <button onClick={() => setConfirmDelete(slotN)}
-                className="w-full px-4 py-1.5 border-t border-stone-800 text-[10px] text-stone-600 hover:text-red-400 uppercase tracking-widest transition-colors text-right">
-                🗑 Delete
-              </button>
+              <div className="flex border-t border-stone-800">
+                <button onClick={() => exportSlot(slotN, slot)}
+                  className="flex-1 px-4 py-1.5 text-[10px] text-stone-600 hover:text-amber-400 uppercase tracking-widest transition-colors text-left">
+                  📤 Export save
+                </button>
+                <button onClick={() => setConfirmDelete(slotN)}
+                  className="flex-1 px-4 py-1.5 text-[10px] text-stone-600 hover:text-red-400 uppercase tracking-widest transition-colors text-right">
+                  🗑 Delete
+                </button>
+              </div>
+            )}
+
+            {/* Empty slot footer: hidden file input + visible "import" link */}
+            {!isFilled && (
+              <div className="border-t border-stone-800">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  ref={(el) => { fileInputRefs.current[slotN] = el; }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) importSlot(slotN, f);
+                    e.target.value = '';
+                  }}
+                  style={{ display: 'none' }}
+                />
+                <button onClick={() => fileInputRefs.current[slotN]?.click()}
+                  className="w-full px-4 py-1.5 text-[10px] text-stone-600 hover:text-amber-400 uppercase tracking-widest transition-colors text-center">
+                  📥 Import save (.json)
+                </button>
+                {importStatus && importStatus.slot === slotN && (
+                  <div className={`px-4 py-1.5 text-[10px] uppercase tracking-widest text-center ${
+                    importStatus.kind === 'win' ? 'text-amber-400' :
+                    importStatus.kind === 'bad' ? 'text-red-400' :
+                    'text-stone-500'
+                  }`}>
+                    {importStatus.msg}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         );
