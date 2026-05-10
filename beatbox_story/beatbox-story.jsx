@@ -178,6 +178,7 @@ const initialChar = () => ({
   oriPattern: null, // legacy single-slot pattern — migrated to oriSlots[0]
   oriSlots: null, // array of 4 patterns. null until first save. Default seeded on first use.
   songs: [], // released MPC patterns. Each: { id, name, releasedDay, activeCells, lifetimeFans }
+  crew: [], // recruited NPCs. Each: { id, joinedDay, lifetimeCash, lifetimeFans }
   oriSlotIdx: 0, // currently active slot (0..3)
   pendingDebuff: null, // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
   showcaseBooking: null, // { day: number, minute: number } — Rohzel's booked Friday slot
@@ -560,6 +561,42 @@ const WEEKLY_CHALLENGES = [
 
 const pickWeeklyChallenge = () =>
   WEEKLY_CHALLENGES[Math.floor(Math.random() * WEEKLY_CHALLENGES.length)];
+
+// ============ CREW ============
+// Recruitable beatboxers. Each crew member adds a small daily passive cash +
+// fan trickle that gets paid out on the morning sleep transition. They unlock
+// progressively as the player's followers grow (the scene "comes to you").
+// One-time recruitCost in cash. No upkeep — once you own them they're yours.
+const CREW_NPCS = [
+  {
+    id: 'jaxx',  name: 'JAXX',   blurb: 'Local cypher regular · loves a 4-on-floor',
+    look: { skin: '#d4a87a', hair: '#3a2410', shirt: '#a04040' },
+    recruitCost: 80,   recruitMinFans: 25,   dailyCash: 6,  dailyFans: 1,
+  },
+  {
+    id: 'noor',  name: 'NOOR',   blurb: 'YouTube tutorial nerd · sharp ear',
+    look: { skin: '#c08070', hair: '#5a2010', shirt: '#5a7050' },
+    recruitCost: 200,  recruitMinFans: 75,   dailyCash: 12, dailyFans: 2,
+  },
+  {
+    id: 'duo_t', name: 'DUO-T',  blurb: 'Twin brothers — one mic, two voices',
+    look: { skin: '#a87844', hair: '#1a1a2e', shirt: '#7a5a30' },
+    recruitCost: 400,  recruitMinFans: 200,  dailyCash: 22, dailyFans: 4,
+  },
+  {
+    id: 'glaze', name: 'GLAZE',  blurb: 'Producer / hat specialist · ex-radio host',
+    look: { skin: '#e0b890', hair: '#dadada', shirt: '#3a5a6a' },
+    recruitCost: 800,  recruitMinFans: 500,  dailyCash: 38, dailyFans: 7,
+  },
+  {
+    id: 'mira',  name: 'MIRA',   blurb: 'Choir-trained ringer · perfect pitch',
+    look: { skin: '#d4a87a', hair: '#7a3a20', shirt: '#a06090' },
+    recruitCost: 1500, recruitMinFans: 1200, dailyCash: 60, dailyFans: 12,
+  },
+];
+
+const crewIsRecruited = (c, id) => Array.isArray(c.crew) && c.crew.some(m => m.id === id);
+const crewIsAvailable = (c, npc) => (c.followers || 0) >= (npc.recruitMinFans || 0);
 
 // ============ ACHIEVEMENTS ============
 // Auto-checked from checkLevelUp (same checkpoint as sound unlocks). Each
@@ -10961,6 +10998,7 @@ export default function BeatboxStory() {
     if (!c.weekly || typeof c.weekly !== 'object') c.weekly = {};
     if (c.weeklyChallenge === undefined) c.weeklyChallenge = null;
     if (!Array.isArray(c.songs)) c.songs = [];
+    if (!Array.isArray(c.crew)) c.crew = [];
     if (!c.achievements || typeof c.achievements !== 'object') c.achievements = {};
     if (typeof c.lastTourDay !== 'number') c.lastTourDay = 0;
     if (c.festivalState === undefined) c.festivalState = null;
@@ -11524,6 +11562,103 @@ function HoodScreen({ go, char }) {
 }
 
 // ---- Livestream panel: go live for X minutes, earn $/fans by stats + viewers ----
+// ============ CREW PANEL ============
+// Recruit beatboxers from CREW_NPCS as your followers grow. Each crew
+// member adds a small daily cash + fan trickle (paid out in the morning
+// sleep transition). One-time recruitCost in cash, no upkeep.
+function CrewPanel({ char, setChar, showToast }) {
+  const recruited = Array.isArray(char.crew) ? char.crew : [];
+  const recruit = (npc) => {
+    if (crewIsRecruited(char, npc.id)) return;
+    if ((char.followers || 0) < npc.recruitMinFans) {
+      showToast?.(`${npc.name} needs ${npc.recruitMinFans} fans first`, 'bad');
+      return;
+    }
+    if ((char.cash || 0) < npc.recruitCost) {
+      showToast?.(`Need $${npc.recruitCost} to recruit ${npc.name}`, 'bad');
+      return;
+    }
+    setChar(c => ({
+      ...c,
+      cash: (c.cash || 0) - npc.recruitCost,
+      crew: [
+        ...(Array.isArray(c.crew) ? c.crew : []),
+        { id: npc.id, joinedDay: c.day || 1, lifetimeCash: 0, lifetimeFans: 0 },
+      ],
+    }));
+    showToast?.(`👥 ${npc.name} joined the crew`, 'win');
+  };
+  return (
+    <Panel title={`Crew · ${recruited.length}/${CREW_NPCS.length}`}>
+      <div className="space-y-2">
+        {CREW_NPCS.map(npc => {
+          const isIn = crewIsRecruited(char, npc.id);
+          const member = recruited.find(m => m.id === npc.id);
+          const available = crewIsAvailable(char, npc);
+          const broke = (char.cash || 0) < npc.recruitCost;
+          return (
+            <div key={npc.id}
+              className={`p-2 border-2 ${isIn ? 'border-amber-500/50 bg-amber-500/5' : available ? 'border-stone-700 bg-stone-900/40' : 'border-stone-800 bg-stone-950/40 opacity-60'}`}>
+              <div className="flex items-center gap-3">
+                {/* Tiny pixel avatar */}
+                <div className="w-8 h-8 flex items-center justify-center" style={{
+                  background: npc.look.shirt, border: '2px solid', borderColor: npc.look.hair,
+                }}>
+                  <div style={{ width: 14, height: 14, background: npc.look.skin, borderRadius: 2 }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <div className="text-stone-100 text-sm tracking-wider"
+                      style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                      {npc.name}
+                    </div>
+                    {isIn && (
+                      <span className="text-[9px] uppercase tracking-widest text-amber-500">CREW</span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-stone-500 leading-snug">{npc.blurb}</div>
+                  <div className="text-[9px] uppercase tracking-widest mt-0.5">
+                    {isIn ? (
+                      <span className="text-amber-400">
+                        +${npc.dailyCash}/day · +{npc.dailyFans} fan{npc.dailyFans === 1 ? '' : 's'}/day
+                        <span className="text-stone-600"> · lifetime ${member?.lifetimeCash || 0} / {member?.lifetimeFans || 0} fans</span>
+                      </span>
+                    ) : !available ? (
+                      <span className="text-stone-600">🔒 unlock at {npc.recruitMinFans} fans</span>
+                    ) : (
+                      <span className="text-stone-500">
+                        +${npc.dailyCash}/day · +{npc.dailyFans} fans/day
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {!isIn && available && (
+                  <button onClick={() => recruit(npc)} disabled={broke}
+                    className={`px-2 py-1 text-[10px] uppercase tracking-widest border ${
+                      broke ? 'border-stone-800 text-stone-700 cursor-not-allowed'
+                            : 'border-amber-500 text-amber-500 hover:bg-amber-500/10'
+                    }`}>
+                    ${npc.recruitCost}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {recruited.length > 0 && (() => {
+          const totalDailyCash = recruited.reduce((a, m) => a + ((CREW_NPCS.find(x => x.id === m.id)?.dailyCash) || 0), 0);
+          const totalDailyFans = recruited.reduce((a, m) => a + ((CREW_NPCS.find(x => x.id === m.id)?.dailyFans) || 0), 0);
+          return (
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 text-center pt-1 border-t border-stone-800">
+              Crew yield: +${totalDailyCash}/day · +{totalDailyFans} fan{totalDailyFans === 1 ? '' : 's'}/day
+            </div>
+          );
+        })()}
+      </div>
+    </Panel>
+  );
+}
+
 // ============ SONGS LIBRARY ============
 // Lets the player "release" any of their MPC sequencer slots as a named
 // song. Released songs trickle fans for ~7 days (decaying daily). Gives
@@ -12317,6 +12452,30 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           next._morningSongFans = songFans;
         }
       }
+      // Crew passive yield: each recruited member adds a small daily cash +
+      // fan bump. Surfaced as a single follow-up wake-up toast.
+      if (Array.isArray(next.crew) && next.crew.length) {
+        let crewCash = 0;
+        let crewFans = 0;
+        next.crew = next.crew.map(m => {
+          const npc = CREW_NPCS.find(x => x.id === m.id);
+          if (!npc) return m;
+          const cash = npc.dailyCash || 0;
+          const fans = npc.dailyFans || 0;
+          crewCash += cash;
+          crewFans += fans;
+          return {
+            ...m,
+            lifetimeCash: (m.lifetimeCash || 0) + cash,
+            lifetimeFans: (m.lifetimeFans || 0) + fans,
+          };
+        });
+        if (crewCash > 0 || crewFans > 0) {
+          next.cash = (next.cash || 0) + crewCash;
+          next.followers = (next.followers || 0) + crewFans;
+          next._morningCrewYield = { cash: crewCash, fans: crewFans };
+        }
+      }
       // Weekly: reset on Monday-morning rollover (newDay % 7 === 0). Also
       // kickstart immediately for slots that don't have one yet so the
       // player isn't waiting until next Monday.
@@ -12474,6 +12633,15 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       const n = char._morningSongFans;
       setTimeout(() => showToast(`🎵 Your songs earned +${n} new fan${n === 1 ? '' : 's'}`, 'win'), 500);
       setChar(c => { const next = { ...c }; delete next._morningSongFans; return next; });
+    }
+    // Crew passive yield wake-up toast.
+    if (char._morningCrewYield && (char._morningCrewYield.cash > 0 || char._morningCrewYield.fans > 0)) {
+      const { cash, fans } = char._morningCrewYield;
+      const parts = [];
+      if (cash > 0) parts.push(`+$${cash}`);
+      if (fans > 0) parts.push(`+${fans} fan${fans === 1 ? '' : 's'}`);
+      setTimeout(() => showToast(`👥 Crew brought in ${parts.join(' / ')}`, 'win'), 800);
+      setChar(c => { const next = { ...c }; delete next._morningCrewYield; return next; });
     }
   };
   // ALL HOOKS MUST RUN BEFORE THE EARLY RETURNS BELOW.
@@ -13057,6 +13225,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         <div className="space-y-3">
           <SoundStudio activeSlot={activeSlot} showToast={showToast} char={char} />
           <SongsLibrary char={char} setChar={setChar} showToast={showToast} />
+          <CrewPanel char={char} setChar={setChar} showToast={showToast} />
           <LivestreamPanel char={char} setChar={setChar} showToast={showToast} checkLevelUp={checkLevelUp} />
           {char.storyFlags?.bjarneIntroduced && (
             <BjarneCoachingPanel char={char} setChar={setChar} showToast={showToast} playCutscene={playCutscene} checkLevelUp={checkLevelUp} />
