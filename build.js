@@ -1,5 +1,7 @@
 // Bundles each game's entry JSX into a self-contained IIFE and assembles a
-// clean `dist/` directory for Cloudflare Pages to deploy.
+// clean `dist/` directory for Cloudflare Pages to deploy. Stamps each
+// bundle's URL with a content-hash query string so browsers re-fetch when
+// the code actually changes (avoids stale-cache after deploys).
 //
 // Run: `npm run build` (one-shot) or `npm run watch` (rebuild JSX only).
 //
@@ -10,6 +12,7 @@
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const watch = process.argv.includes('--watch');
 
@@ -88,12 +91,31 @@ const copyStatic = () => {
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));
     console.log(`built ${t.entryPoints[0]} → ${path.relative(REPO, t.outfile)}`);
-    // Also drop a copy alongside the source so the site works without
-    // running the build (e.g. if Cloudflare Pages hasn't been configured
-    // with `npm run build` yet, or for local file:// previews).
-    const sourceCopy = path.join(REPO, path.basename(path.dirname(t.outfile)), path.basename(t.outfile));
-    fs.copyFileSync(t.outfile, sourceCopy);
-    console.log(`mirrored        → ${path.relative(REPO, sourceCopy)}`);
+    // Compute a content hash so the served HTML can cache-bust the bundle
+    // automatically on every deploy.
+    const bundleBytes = fs.readFileSync(t.outfile);
+    const hash = crypto.createHash('sha256').update(bundleBytes).digest('hex').slice(0, 10);
+    const bundleBaseName = path.basename(t.outfile);
+    const distGameDir = path.dirname(t.outfile);
+    const distIndexPath = path.join(distGameDir, 'index.html');
+    const sourceGameDir = path.basename(distGameDir); // e.g. 'beatbox_story'
+    const sourceIndexPath = path.join(REPO, sourceGameDir, 'index.html');
+    const sourceCopyPath = path.join(REPO, sourceGameDir, bundleBaseName);
+    // Mirror bundle into the source folder so the site works without a
+    // Pages build step (e.g. file:// previews).
+    fs.copyFileSync(t.outfile, sourceCopyPath);
+    console.log(`mirrored        → ${path.relative(REPO, sourceCopyPath)}`);
+    // Rewrite both index.html copies (dist + source) to pin the hash.
+    const stamp = (htmlPath) => {
+      if (!fs.existsSync(htmlPath)) return;
+      const before = fs.readFileSync(htmlPath, 'utf8');
+      const re = new RegExp(`(${bundleBaseName.replace(/\./g, '\\.')})(\\?v=[^"]+)?`, 'g');
+      const after = before.replace(re, `$1?v=${hash}`);
+      if (before !== after) fs.writeFileSync(htmlPath, after);
+    };
+    stamp(distIndexPath);
+    stamp(sourceIndexPath);
+    console.log(`hash-stamped    → ${bundleBaseName}?v=${hash}`);
   }
 })().catch((err) => {
   console.error(err);
