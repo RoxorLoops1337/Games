@@ -177,6 +177,7 @@ const initialChar = () => ({
   oriBpm: 100, // BPM for the originality sequencer
   oriPattern: null, // legacy single-slot pattern — migrated to oriSlots[0]
   oriSlots: null, // array of 4 patterns. null until first save. Default seeded on first use.
+  songs: [], // released MPC patterns. Each: { id, name, releasedDay, activeCells, lifetimeFans }
   oriSlotIdx: 0, // currently active slot (0..3)
   pendingDebuff: null, // {energy?, mood?, hunger?} applied next time you sleep (from bar items)
   showcaseBooking: null, // { day: number, minute: number } — Rohzel's booked Friday slot
@@ -10929,6 +10930,7 @@ export default function BeatboxStory() {
     if (c.dailyChallenge === undefined) c.dailyChallenge = null;
     if (!c.weekly || typeof c.weekly !== 'object') c.weekly = {};
     if (c.weeklyChallenge === undefined) c.weeklyChallenge = null;
+    if (!Array.isArray(c.songs)) c.songs = [];
     if (!c.achievements || typeof c.achievements !== 'object') c.achievements = {};
     if (typeof c.lastTourDay !== 'number') c.lastTourDay = 0;
     if (c.festivalState === undefined) c.festivalState = null;
@@ -11492,6 +11494,139 @@ function HoodScreen({ go, char }) {
 }
 
 // ---- Livestream panel: go live for X minutes, earn $/fans by stats + viewers ----
+// ============ SONGS LIBRARY ============
+// Lets the player "release" any of their MPC sequencer slots as a named
+// song. Released songs trickle fans for ~7 days (decaying daily). Gives
+// the sequencer a payoff beyond just training Originality and adds a soft
+// idle layer to the loop. Actual fan accrual happens in the morning sleep
+// transition — this panel is the UI for releasing + browsing.
+const SONG_DECAY = [0.32, 0.24, 0.18, 0.12, 0.08, 0.04, 0.02]; // 7-day fade
+
+function SongsLibrary({ char, setChar, showToast }) {
+  const [drafting, setDrafting] = useState(false);
+  const [pickSlotIdx, setPickSlotIdx] = useState(char.oriSlotIdx || 0);
+  const [name, setName] = useState('');
+  const slots = Array.isArray(char.oriSlots) ? char.oriSlots : [];
+  const songs = Array.isArray(char.songs) ? char.songs : [];
+  const today = char.day || 1;
+
+  const countCells = (slot) => {
+    if (!slot || !Array.isArray(slot.tracks)) return 0;
+    return slot.tracks.reduce((acc, t) => acc + (t?.cells?.filter(Boolean).length || 0), 0);
+  };
+
+  const release = () => {
+    const slot = slots[pickSlotIdx];
+    if (!slot) return;
+    const cells = countCells(slot);
+    if (cells < 4) {
+      showToast?.('Pattern is too sparse — at least 4 hits to release', 'bad');
+      return;
+    }
+    const finalName = (name.trim() || slot.name || `Track ${(songs.length || 0) + 1}`).slice(0, 28);
+    setChar(c => ({
+      ...c,
+      songs: [
+        ...(Array.isArray(c.songs) ? c.songs : []),
+        {
+          id: `song_${Date.now()}`,
+          name: finalName,
+          releasedDay: c.day || 1,
+          activeCells: cells,
+          lifetimeFans: 0,
+        },
+      ],
+    }));
+    showToast?.(`🎵 Released "${finalName}" — earnings start tomorrow`, 'win');
+    setDrafting(false);
+    setName('');
+  };
+
+  return (
+    <Panel title={`Songs · ${songs.length}`}>
+      {!drafting && (
+        <button onClick={() => { setPickSlotIdx(char.oriSlotIdx || 0); setDrafting(true); }}
+          className="w-full p-2 mb-2 border-2 border-amber-500/40 bg-amber-500/5 text-amber-400 text-[11px] uppercase tracking-widest hover:bg-amber-500/10">
+          🎙 Release a new song
+        </button>
+      )}
+
+      {drafting && (
+        <div className="space-y-2 mb-2 p-2 border-2 border-amber-500/40 bg-amber-500/5">
+          <div className="text-[10px] uppercase tracking-widest text-amber-400">Pick a pattern</div>
+          <div className="grid grid-cols-2 gap-1">
+            {slots.map((s, i) => {
+              const cells = countCells(s);
+              const selected = pickSlotIdx === i;
+              return (
+                <button key={i} onClick={() => { setPickSlotIdx(i); if (!name) setName(s?.name || ''); }}
+                  className={`p-1.5 border-2 text-left text-[10px] transition-all ${selected
+                    ? 'border-amber-500 bg-amber-500/15 text-amber-300'
+                    : 'border-stone-800 bg-stone-900/40 text-stone-300 hover:border-stone-700'}`}>
+                  <div className="uppercase tracking-widest font-bold truncate">{s?.name || `Slot ${i + 1}`}</div>
+                  <div className="text-stone-500">{cells} hits</div>
+                </button>
+              );
+            })}
+          </div>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={slots[pickSlotIdx]?.name || 'Song name'}
+            maxLength={28}
+            className="w-full px-2 py-1.5 bg-stone-950 border-2 border-stone-800 text-stone-200 text-xs focus:border-amber-500/50 outline-none uppercase tracking-wider"
+          />
+          <div className="flex gap-1">
+            <button onClick={() => { setDrafting(false); setName(''); }}
+              className="flex-1 py-1.5 border-2 border-stone-800 text-stone-500 text-[10px] uppercase tracking-widest hover:border-stone-600">
+              Cancel
+            </button>
+            <button onClick={release}
+              className="flex-1 py-1.5 border-2 border-amber-500 bg-amber-500/15 text-amber-400 text-[10px] uppercase tracking-widest hover:bg-amber-500/25">
+              🎵 Release
+            </button>
+          </div>
+        </div>
+      )}
+
+      {songs.length === 0 && !drafting && (
+        <div className="text-[10px] uppercase tracking-widest text-stone-500 text-center py-2">
+          No songs released yet · Build a beat in the MPC, then come release it here
+        </div>
+      )}
+
+      {songs.length > 0 && (
+        <div className="space-y-1">
+          {[...songs].reverse().map((s) => {
+            const age = today - (s.releasedDay || 0);
+            const earningDays = SONG_DECAY.length;
+            const remaining = Math.max(0, earningDays - age);
+            const isEarning = remaining > 0;
+            return (
+              <div key={s.id}
+                className={`p-2 border-2 ${isEarning ? 'border-amber-500/40 bg-amber-500/5' : 'border-stone-800 bg-stone-900/40 opacity-70'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="text-stone-200 text-xs tracking-wider truncate"
+                    style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                    🎵 {s.name}
+                  </div>
+                  <div className="text-[9px] uppercase tracking-widest text-stone-500">
+                    {isEarning ? `${remaining}d left` : 'archived'}
+                  </div>
+                </div>
+                <div className="text-[10px] text-stone-500 uppercase tracking-wider">
+                  Released day {s.releasedDay} · {s.activeCells} hits · +{s.lifetimeFans || 0} fans earned
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 // Unlocked at 20 followers (small audience needed). Once-per-day cooldown.
 // Tier-2/3 apartment buffs your viewer ceiling and reward.
 function LivestreamPanel({ char, setChar, showToast, checkLevelUp }) {
@@ -12130,6 +12265,28 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       next.daily = {};
       const newChallenge = pickDailyChallenge(newDay % 7, next);
       next.dailyChallenge = newChallenge ? { id: newChallenge.id, claimed: false } : null;
+      // Released songs trickle fans for ~7 days, decaying daily. Pool size
+      // scales with totalSkills + the song's hit count (more elaborate
+      // beats earn more). Older than 7 days = song stops earning but stays
+      // in the library.
+      if (Array.isArray(next.songs) && next.songs.length) {
+        const SONG_DECAY = [0.32, 0.24, 0.18, 0.12, 0.08, 0.04, 0.02];
+        const totalSkills = (next.stats?.mus || 0) + (next.stats?.tec || 0) + (next.stats?.ori || 0) + (next.stats?.sho || 0);
+        let songFans = 0;
+        next.songs = next.songs.map(s => {
+          const ageDays = newDay - (s.releasedDay || 0);
+          if (ageDays <= 0 || ageDays > SONG_DECAY.length) return s;
+          const decay = SONG_DECAY[ageDays - 1];
+          const pool = Math.max(5, Math.floor(totalSkills / 4 + (s.activeCells || 0) * 1.5));
+          const earned = Math.max(0, Math.round(pool * decay));
+          songFans += earned;
+          return { ...s, lifetimeFans: (s.lifetimeFans || 0) + earned };
+        });
+        if (songFans > 0) {
+          next.followers = (next.followers || 0) + songFans;
+          next._morningSongFans = songFans;
+        }
+      }
       // Weekly: reset on Monday-morning rollover (newDay % 7 === 0). Also
       // kickstart immediately for slots that don't have one yet so the
       // player isn't waiting until next Monday.
@@ -12280,6 +12437,13 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       }), 50);
     } else {
       showToast(char.pendingDebuff ? 'Slept it off — feeling rough' : 'Slept till morning', char.pendingDebuff ? 'info' : 'win');
+    }
+    // Surface released-song fan earnings as a follow-up toast and clear the
+    // ephemeral _morningSongFans field so it doesn't double-fire.
+    if (char._morningSongFans && char._morningSongFans > 0) {
+      const n = char._morningSongFans;
+      setTimeout(() => showToast(`🎵 Your songs earned +${n} new fan${n === 1 ? '' : 's'}`, 'win'), 500);
+      setChar(c => { const next = { ...c }; delete next._morningSongFans; return next; });
     }
   };
   // ALL HOOKS MUST RUN BEFORE THE EARLY RETURNS BELOW.
@@ -12862,6 +13026,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       {tab === 'studio' && (
         <div className="space-y-3">
           <SoundStudio activeSlot={activeSlot} showToast={showToast} char={char} />
+          <SongsLibrary char={char} setChar={setChar} showToast={showToast} />
           <LivestreamPanel char={char} setChar={setChar} showToast={showToast} checkLevelUp={checkLevelUp} />
           {char.storyFlags?.bjarneIntroduced && (
             <BjarneCoachingPanel char={char} setChar={setChar} showToast={showToast} playCutscene={playCutscene} checkLevelUp={checkLevelUp} />
