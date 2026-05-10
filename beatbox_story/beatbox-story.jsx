@@ -6359,6 +6359,41 @@ const Panel = ({ children, title, className = '' }) => (
 // Beat-based narrative cinematics. Each "beat" has an optional pixel-art scene
 // drawer (function (ctx, frameCount) => void) and an array of text lines.
 
+// ============ ERROR BOUNDARY ============
+// Catches render-time exceptions inside the screen layer and shows a small
+// recovery card instead of unmounting the whole tree (which previously
+// rendered as a fully black page). Logs the error so devtools surfaces it.
+class ScreenErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) {
+    // Surface to console so the dev can copy/paste the stack.
+    console.error('ScreenErrorBoundary caught:', err, info?.componentStack);
+  }
+  reset = () => this.setState({ err: null });
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div style={{ padding: 16, color: '#e7e5e4', minHeight: '60vh' }}>
+        <div style={{ color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.3em', fontSize: 11, marginBottom: 8 }}>
+          ⚠ Render crashed
+        </div>
+        <div style={{ fontSize: 12, marginBottom: 8 }}>
+          Something threw while drawing the screen. Your save is fine — tap Retry to re-render.
+        </div>
+        <pre style={{ fontSize: 10, color: '#fbbf24', background: '#1c1917', padding: 8, overflow: 'auto', maxHeight: '40vh', whiteSpace: 'pre-wrap' }}>
+          {String(this.state.err?.message || this.state.err)}
+          {this.state.err?.stack ? '\n\n' + this.state.err.stack : ''}
+        </pre>
+        <button onClick={this.reset}
+          style={{ marginTop: 12, padding: '8px 16px', background: '#fbbf24', color: '#0c0a09', border: 'none', textTransform: 'uppercase', letterSpacing: '0.2em', fontSize: 11, cursor: 'pointer' }}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+}
+
 const PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
   const canvasRef = useRef(null);
   useEffect(() => {
@@ -11367,6 +11402,7 @@ export default function BeatboxStory() {
 
         {/* SCREENS */}
         <div className="p-3 pb-20">
+          <ScreenErrorBoundary>
           {screen === 'slots' && (
             <SlotsScreen
               activeSlot={activeSlot}
@@ -11393,6 +11429,7 @@ export default function BeatboxStory() {
           {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
+          </ScreenErrorBoundary>
         </div>
 
         {/* FOOTER NAV */}
@@ -12334,6 +12371,43 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   const finishSleep = () => {
     const c0 = char;
     if (!c0) { setSleeping(false); return; }
+    // Pre-compute the morning song/crew yield from c0 BEFORE the setChar
+    // updater, so the values are also available for the wake-up toasts
+    // without round-tripping through ephemeral char fields (which were
+    // leaking into the saved JSON).
+    const _nextDayProbe = (c0.day || 0) + 1;
+    const SONG_DECAY = [0.32, 0.24, 0.18, 0.12, 0.08, 0.04, 0.02];
+    let _songFans = 0;
+    let _updatedSongs = c0.songs;
+    if (Array.isArray(c0.songs) && c0.songs.length) {
+      const ts = (c0.stats?.mus || 0) + (c0.stats?.tec || 0) + (c0.stats?.ori || 0) + (c0.stats?.sho || 0);
+      _updatedSongs = c0.songs.map(s => {
+        const ageDays = _nextDayProbe - (s.releasedDay || 0);
+        if (ageDays <= 0 || ageDays > SONG_DECAY.length) return s;
+        const decay = SONG_DECAY[ageDays - 1];
+        const pool = Math.max(5, Math.floor(ts / 4 + (s.activeCells || 0) * 1.5));
+        const earned = Math.max(0, Math.round(pool * decay));
+        _songFans += earned;
+        return { ...s, lifetimeFans: (s.lifetimeFans || 0) + earned };
+      });
+    }
+    let _crewCash = 0, _crewFans = 0;
+    let _updatedCrew = c0.crew;
+    if (Array.isArray(c0.crew) && c0.crew.length) {
+      _updatedCrew = c0.crew.map(m => {
+        const npc = CREW_NPCS.find(x => x.id === m.id);
+        if (!npc) return m;
+        const cash = npc.dailyCash || 0;
+        const fans = npc.dailyFans || 0;
+        _crewCash += cash;
+        _crewFans += fans;
+        return {
+          ...m,
+          lifetimeCash: (m.lifetimeCash || 0) + cash,
+          lifetimeFans: (m.lifetimeFans || 0) + fans,
+        };
+      });
+    }
     const newDayBase = c0.day + 1;
     const rentEvent = computeRentEvent(c0, newDayBase);
     // Eviction adds 3 couch-surf days on top of the normal +1
@@ -12432,52 +12506,15 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       next.daily = {};
       const newChallenge = pickDailyChallenge(newDay % 7, next);
       next.dailyChallenge = newChallenge ? { id: newChallenge.id, claimed: false } : null;
-      // Released songs trickle fans for ~7 days, decaying daily. Pool size
-      // scales with totalSkills + the song's hit count (more elaborate
-      // beats earn more). Older than 7 days = song stops earning but stays
-      // in the library.
-      if (Array.isArray(next.songs) && next.songs.length) {
-        const SONG_DECAY = [0.32, 0.24, 0.18, 0.12, 0.08, 0.04, 0.02];
-        const totalSkills = (next.stats?.mus || 0) + (next.stats?.tec || 0) + (next.stats?.ori || 0) + (next.stats?.sho || 0);
-        let songFans = 0;
-        next.songs = next.songs.map(s => {
-          const ageDays = newDay - (s.releasedDay || 0);
-          if (ageDays <= 0 || ageDays > SONG_DECAY.length) return s;
-          const decay = SONG_DECAY[ageDays - 1];
-          const pool = Math.max(5, Math.floor(totalSkills / 4 + (s.activeCells || 0) * 1.5));
-          const earned = Math.max(0, Math.round(pool * decay));
-          songFans += earned;
-          return { ...s, lifetimeFans: (s.lifetimeFans || 0) + earned };
-        });
-        if (songFans > 0) {
-          next.followers = (next.followers || 0) + songFans;
-          next._morningSongFans = songFans;
-        }
-      }
-      // Crew passive yield: each recruited member adds a small daily cash +
-      // fan bump. Surfaced as a single follow-up wake-up toast.
-      if (Array.isArray(next.crew) && next.crew.length) {
-        let crewCash = 0;
-        let crewFans = 0;
-        next.crew = next.crew.map(m => {
-          const npc = CREW_NPCS.find(x => x.id === m.id);
-          if (!npc) return m;
-          const cash = npc.dailyCash || 0;
-          const fans = npc.dailyFans || 0;
-          crewCash += cash;
-          crewFans += fans;
-          return {
-            ...m,
-            lifetimeCash: (m.lifetimeCash || 0) + cash,
-            lifetimeFans: (m.lifetimeFans || 0) + fans,
-          };
-        });
-        if (crewCash > 0 || crewFans > 0) {
-          next.cash = (next.cash || 0) + crewCash;
-          next.followers = (next.followers || 0) + crewFans;
-          next._morningCrewYield = { cash: crewCash, fans: crewFans };
-        }
-      }
+      // Apply pre-computed song + crew yields (computed from c0 above).
+      next.songs = _updatedSongs;
+      next.crew  = _updatedCrew;
+      if (_songFans > 0) next.followers = (next.followers || 0) + _songFans;
+      if (_crewCash > 0) next.cash      = (next.cash || 0) + _crewCash;
+      if (_crewFans > 0) next.followers = (next.followers || 0) + _crewFans;
+      // Old builds leaked these onto saved chars — strip them defensively.
+      delete next._morningSongFans;
+      delete next._morningCrewYield;
       // Weekly: reset on Monday-morning rollover (newDay % 7 === 0). Also
       // kickstart immediately for slots that don't have one yet so the
       // player isn't waiting until next Monday.
@@ -12629,21 +12666,15 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     } else {
       showToast(char.pendingDebuff ? 'Slept it off — feeling rough' : 'Slept till morning', char.pendingDebuff ? 'info' : 'win');
     }
-    // Surface released-song fan earnings as a follow-up toast and clear the
-    // ephemeral _morningSongFans field so it doesn't double-fire.
-    if (char._morningSongFans && char._morningSongFans > 0) {
-      const n = char._morningSongFans;
-      setTimeout(() => showToast(`🎵 Your songs earned +${n} new fan${n === 1 ? '' : 's'}`, 'win'), 500);
-      setChar(c => { const next = { ...c }; delete next._morningSongFans; return next; });
+    // Wake-up toasts using the precomputed yields (no ephemeral char fields).
+    if (_songFans > 0) {
+      setTimeout(() => showToast(`🎵 Your songs earned +${_songFans} new fan${_songFans === 1 ? '' : 's'}`, 'win'), 500);
     }
-    // Crew passive yield wake-up toast.
-    if (char._morningCrewYield && (char._morningCrewYield.cash > 0 || char._morningCrewYield.fans > 0)) {
-      const { cash, fans } = char._morningCrewYield;
+    if (_crewCash > 0 || _crewFans > 0) {
       const parts = [];
-      if (cash > 0) parts.push(`+$${cash}`);
-      if (fans > 0) parts.push(`+${fans} fan${fans === 1 ? '' : 's'}`);
+      if (_crewCash > 0) parts.push(`+$${_crewCash}`);
+      if (_crewFans > 0) parts.push(`+${_crewFans} fan${_crewFans === 1 ? '' : 's'}`);
       setTimeout(() => showToast(`👥 Crew brought in ${parts.join(' / ')}`, 'win'), 800);
-      setChar(c => { const next = { ...c }; delete next._morningCrewYield; return next; });
     }
   };
   // ALL HOOKS MUST RUN BEFORE THE EARLY RETURNS BELOW.
@@ -12699,7 +12730,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
           { key: 'sleep',   label: 'Sleep till morning',        done: (char.day || 1) > 1,                        hint: '🛋 House · Couch' },
           { key: 'jam',     label: 'Jam with the cypher',       done: !!f.firstJam,                               hint: '🎶 Park · Jam' },
           { key: 'openmic', label: 'Play your first open mic',  done: (char.openMicCount || 0) >= 1,              hint: '🎙 Bar · Tue/Wed/Thu' },
-          { key: 'shop',    label: 'Buy your first sound',      done: Object.keys(char.gear || {}).length >= 1 || (char.sounds || []).length > 1, hint: '🛒 City · Shop' },
+          { key: 'shop',    label: 'Buy your first gear/sound', done: Object.keys(char.gear || {}).length >= 1, hint: '🛒 City · Shop' },
         ];
         const doneCount = items.filter(x => x.done).length;
         const allDone = doneCount === items.length;
