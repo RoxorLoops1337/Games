@@ -11082,6 +11082,7 @@ export default function BeatboxStory() {
     const need = c.level * 100;
     if (c.xp >= need) {
       showToast(`LEVEL UP! → ${c.level + 1}`, 'win');
+      try { playLevelUp(); } catch {}
       next = { ...c, level: c.level + 1, xp: c.xp - need };
     }
     // Sound unlocks fire from the same checkpoint — every event that
@@ -11089,10 +11090,12 @@ export default function BeatboxStory() {
     // checkLevelUp, so this catches them all in one place.
     const { char: withUnlocks, unlocked } = applySoundUnlocks(next);
     if (unlocked.length) {
+      try { setTimeout(() => playUnlock(), 60); } catch {}
       setTimeout(() => unlocked.forEach(name => showToast(`🔓 Unlocked: ${name}`, 'win')), 80);
     }
     const { char: withAch, earned } = applyAchievements(withUnlocks);
     if (earned.length) {
+      try { setTimeout(() => playAchievement(), 130); } catch {}
       setTimeout(() => earned.forEach(a => showToast(`🏆 Achievement: ${a.label}`, 'win')), 140);
     }
     return withAch;
@@ -16230,6 +16233,76 @@ const playBeep = (high = false) => {
   osc.start(t); osc.stop(t + (high ? 0.42 : 0.2));
 };
 
+// Quick helper: schedule a sine "blip" at freq starting at time t for `dur`s
+// with a small attack + exponential decay envelope. Used by the polish stings.
+const _blip = (ctx, t, freq, dur = 0.18, gainPeak = 0.22, type = 'sine') => {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.linearRampToValueAtTime(gainPeak, t + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.02);
+};
+
+// Level-up fanfare: rising arpeggio + held final note. Major triad.
+const playLevelUp = () => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  // C5 → E5 → G5 → C6 sweep
+  _blip(ctx, t,        523.25, 0.16, 0.22, 'triangle');
+  _blip(ctx, t + 0.10, 659.25, 0.16, 0.22, 'triangle');
+  _blip(ctx, t + 0.20, 783.99, 0.16, 0.22, 'triangle');
+  _blip(ctx, t + 0.30, 1046.5, 0.55, 0.26, 'triangle');
+  // Sparkle layer — fifth above held final note
+  _blip(ctx, t + 0.32, 1568.0, 0.40, 0.10, 'sine');
+};
+
+// Achievement: short, bright two-note chime (kalimba-ish).
+const playAchievement = () => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  _blip(ctx, t,        880,    0.30, 0.20, 'sine');
+  _blip(ctx, t + 0.08, 1318.5, 0.45, 0.18, 'sine');
+};
+
+// Sound unlock: single soft "ding" (lower than achievement).
+const playUnlock = () => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  _blip(ctx, t,        659.25, 0.30, 0.18, 'sine');
+  _blip(ctx, t + 0.06, 987.77, 0.45, 0.16, 'sine');
+};
+
+// Battle victory sting: confident I-V-I cadence.
+const playWinSting = () => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  // C5 - E5 - G5 - high C6 hold
+  _blip(ctx, t,        523.25, 0.18, 0.24, 'triangle');
+  _blip(ctx, t + 0.14, 659.25, 0.18, 0.24, 'triangle');
+  _blip(ctx, t + 0.28, 783.99, 0.18, 0.24, 'triangle');
+  _blip(ctx, t + 0.42, 1046.5, 0.70, 0.28, 'triangle');
+  _blip(ctx, t + 0.42, 1318.5, 0.70, 0.18, 'triangle');  // 3rd above for richness
+};
+
+// Battle defeat sting: descending minor third, somber.
+const playLossSting = () => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  _blip(ctx, t,        440.0, 0.30, 0.22, 'sine');
+  _blip(ctx, t + 0.20, 369.99, 0.55, 0.20, 'sine');  // F#4 → minor feel
+  _blip(ctx, t + 0.50, 293.66, 0.85, 0.18, 'sine');
+};
+
 // ============ SCREEN: BATTLE ============
 
 function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene }) {
@@ -16722,6 +16795,9 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
         const t = setTimeout(() => setRevealedJudges(r => r + 1), 700);
         return () => clearTimeout(t);
       } else {
+        // Play win/loss sting one beat before the result screen lands so it
+        // syncs with the VICTORY/DEFEAT slab fade-in.
+        try { setTimeout(() => (result.won ? playWinSting() : playLossSting()), 200); } catch {}
         const t = setTimeout(() => setPhase('result'), 800);
         return () => clearTimeout(t);
       }
