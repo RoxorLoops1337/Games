@@ -12522,6 +12522,12 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       let extraMusFromHome = 0;
       if (aptTier === 2) mood = Math.min(100, mood + 5);
       if (aptTier === 3) { mood = Math.min(100, mood + 10); extraMusFromHome = 1; }
+      // Declared up here so the cat block below (which writes to `cash`)
+      // doesn't hit a temporal-dead-zone error. The cat-gear save state in
+      // particular was producing a silent setChar throw → black screen.
+      let cash = c.cash;
+      let rentLate = c.rentLate || 0;
+      let lastRentPaidDay = c.lastRentPaidDay;
       // Cat: +2 mood / morning, costs $3/day in food (only if you can afford it)
       if (hasGear(c, 'cat') && (c.cash || 0) >= 3) {
         mood = Math.min(100, mood + 2);
@@ -12529,9 +12535,6 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       }
       // Camera + Tripod: passive +1 follower per day from auto-posted clips
       let extraFollowers = hasGear(c, 'camera_tripod') ? 1 : 0;
-      let cash = c.cash;
-      let rentLate = c.rentLate || 0;
-      let lastRentPaidDay = c.lastRentPaidDay;
       const flags = { ...(c.storyFlags || {}) };
       // Apply rent event (recomputed against `c`, the live state)
       if (rentEvent) {
