@@ -6394,6 +6394,54 @@ class ScreenErrorBoundary extends React.Component {
   }
 }
 
+// Fixed banner at the top of the screen that surfaces async / effect /
+// event-handler errors (which React's <ErrorBoundary> can't catch). Listens
+// to window 'error' and 'unhandledrejection'. Tap the X to dismiss.
+const GlobalErrorOverlay = () => {
+  const [errors, setErrors] = useState([]);
+  useEffect(() => {
+    const push = (msg, src) => {
+      setErrors(es => {
+        // Dedup identical messages so a 60Hz spam doesn't fill the screen.
+        if (es.some(e => e.msg === msg)) return es;
+        return [...es, { msg, src, t: Date.now() }];
+      });
+    };
+    const onError = (e) => push(
+      String(e?.message || e?.error?.message || e?.error || 'unknown error'),
+      `${e?.filename || ''}:${e?.lineno || ''}:${e?.colno || ''}`.replace(/^::$/, '')
+    );
+    const onRejection = (e) => push(
+      String(e?.reason?.message || e?.reason || 'unhandled promise rejection'),
+      'promise'
+    );
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, []);
+  if (errors.length === 0) return null;
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, padding: 8, background: '#7f1d1d', color: '#fef2f2', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.4, maxHeight: '40vh', overflow: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+        <span style={{ fontWeight: 'bold', letterSpacing: '0.2em' }}>⚠ JS ERROR · {errors.length}</span>
+        <button onClick={() => setErrors([])}
+          style={{ background: 'transparent', border: '1px solid #fef2f2', color: '#fef2f2', padding: '2px 6px', fontFamily: 'monospace', fontSize: 10, cursor: 'pointer' }}>
+          dismiss
+        </button>
+      </div>
+      {errors.map((e, i) => (
+        <div key={i} style={{ borderTop: i > 0 ? '1px solid #991b1b' : 'none', paddingTop: i > 0 ? 4 : 0, marginTop: i > 0 ? 4 : 0 }}>
+          <div style={{ wordBreak: 'break-word' }}>{e.msg}</div>
+          {e.src && <div style={{ opacity: 0.6, fontSize: 10 }}>{e.src}</div>}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
   const canvasRef = useRef(null);
   useEffect(() => {
@@ -11282,6 +11330,8 @@ export default function BeatboxStory() {
   const palette = TIME_PALETTES[timeOfDay(char?.minutes ?? 0)];
 
   return (
+    <ScreenErrorBoundary>
+    <GlobalErrorOverlay />
     <div className="min-h-screen text-stone-200 font-mono transition-colors duration-1000"
       style={{
         background: palette.bg,
@@ -11456,6 +11506,7 @@ export default function BeatboxStory() {
         )}
       </div>
     </div>
+    </ScreenErrorBoundary>
   );
 }
 
