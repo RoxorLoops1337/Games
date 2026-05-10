@@ -813,6 +813,95 @@ const labPos = new THREE.Vector3(90, 0, 90);
   addBox(labPos.x, 10, labPos.z, 3, 0.6, 0.6, 0xffffff);
 }
 
+// --- Flow-field pathfinding (BFS from player on a coarse grid) ---
+const CELL_SIZE = 4;
+const GRID_W = Math.ceil((HW * 2) / CELL_SIZE);
+const FAR_DIST = 1 << 30;
+const gridBlocked = new Uint8Array(GRID_W * GRID_W);
+const gridDist = new Int32Array(GRID_W * GRID_W);
+const bfsQueue = new Int32Array(GRID_W * GRID_W);
+function w2cell(wx, wz) {
+  let ci = Math.floor((wx + HW) / CELL_SIZE);
+  let cj = Math.floor((wz + HW) / CELL_SIZE);
+  if (ci < 0) ci = 0; else if (ci >= GRID_W) ci = GRID_W - 1;
+  if (cj < 0) cj = 0; else if (cj >= GRID_W) cj = GRID_W - 1;
+  return [ci, cj];
+}
+function cell2w(ci, cj) {
+  return [(ci + 0.5) * CELL_SIZE - HW, (cj + 0.5) * CELL_SIZE - HW];
+}
+function buildGridBlocked() {
+  const sample = new THREE.Vector3();
+  for (let cj = 0; cj < GRID_W; cj++) {
+    for (let ci = 0; ci < GRID_W; ci++) {
+      const wx = (ci + 0.5) * CELL_SIZE - HW;
+      const wz = (cj + 0.5) * CELL_SIZE - HW;
+      sample.set(wx, 1, wz);
+      let blk = 0;
+      for (const o of obstacles) {
+        if (o.box.distanceToPoint(sample) < 0.9) { blk = 1; break; }
+      }
+      gridBlocked[cj * GRID_W + ci] = blk;
+    }
+  }
+}
+buildGridBlocked();
+
+function recomputeFlowField() {
+  for (let i = 0; i < gridDist.length; i++) gridDist[i] = FAR_DIST;
+  let [pi, pj] = w2cell(player.pos.x, player.pos.z);
+  if (gridBlocked[pj * GRID_W + pi]) {
+    let bestSq = Infinity, bi = pi, bj = pj;
+    for (let r = 1; r <= 3 && bestSq === Infinity; r++) {
+      for (let dj = -r; dj <= r; dj++) {
+        for (let di = -r; di <= r; di++) {
+          const ci = pi + di, cj = pj + dj;
+          if (ci < 0 || ci >= GRID_W || cj < 0 || cj >= GRID_W) continue;
+          if (gridBlocked[cj * GRID_W + ci]) continue;
+          const d2 = di * di + dj * dj;
+          if (d2 < bestSq) { bestSq = d2; bi = ci; bj = cj; }
+        }
+      }
+    }
+    pi = bi; pj = bj;
+  }
+  let head = 0, tail = 0;
+  const startIdx = pj * GRID_W + pi;
+  gridDist[startIdx] = 0;
+  bfsQueue[tail++] = startIdx;
+  while (head < tail) {
+    const idx = bfsQueue[head++];
+    const cj = (idx / GRID_W) | 0;
+    const ci = idx - cj * GRID_W;
+    const d = gridDist[idx];
+    if (ci + 1 < GRID_W) {
+      const ni = idx + 1;
+      if (!gridBlocked[ni] && gridDist[ni] === FAR_DIST) {
+        gridDist[ni] = d + 1; bfsQueue[tail++] = ni;
+      }
+    }
+    if (ci > 0) {
+      const ni = idx - 1;
+      if (!gridBlocked[ni] && gridDist[ni] === FAR_DIST) {
+        gridDist[ni] = d + 1; bfsQueue[tail++] = ni;
+      }
+    }
+    if (cj + 1 < GRID_W) {
+      const ni = idx + GRID_W;
+      if (!gridBlocked[ni] && gridDist[ni] === FAR_DIST) {
+        gridDist[ni] = d + 1; bfsQueue[tail++] = ni;
+      }
+    }
+    if (cj > 0) {
+      const ni = idx - GRID_W;
+      if (!gridBlocked[ni] && gridDist[ni] === FAR_DIST) {
+        gridDist[ni] = d + 1; bfsQueue[tail++] = ni;
+      }
+    }
+  }
+}
+let flowFieldTimer = 0;
+
 let audioCtx = null;
 function ensureAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1259,12 +1348,49 @@ class Zombie {
 
   update(dt) {
     if (this.dead) return;
-    const toP = new THREE.Vector3().subVectors(player.pos, this.mesh.position);
-    toP.y = 0;
-    const dist = toP.length();
-    if (dist > 0.001) toP.normalize();
-    const desired = this.transformed ? -1 : 1;
-    const move = toP.multiplyScalar(this.speed * dt * desired);
+    // Distance to player (used everywhere)
+    const toPlayer = new THREE.Vector3().subVectors(player.pos, this.mesh.position);
+    toPlayer.y = 0;
+    const dist = toPlayer.length();
+
+    // Pick a movement direction
+    let dir = new THREE.Vector3();
+    if (this.transformed) {
+      // Walk away from player
+      if (dist > 0.001) dir.copy(toPlayer).normalize().multiplyScalar(-1);
+    } else if (dist < 7) {
+      // Close-quarters: direct beeline
+      if (dist > 0.001) dir.copy(toPlayer).normalize();
+    } else {
+      // Mid/long range: follow flow-field gradient toward player
+      const [zi, zj] = w2cell(this.mesh.position.x, this.mesh.position.z);
+      const myIdx = zj * GRID_W + zi;
+      const myD = gridDist[myIdx];
+      let bestD = myD;
+      let bestDi = 0, bestDj = 0;
+      // 8 neighbours - pick the lowest-distance reachable one
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          if (di === 0 && dj === 0) continue;
+          const ni = zi + di, nj = zj + dj;
+          if (ni < 0 || ni >= GRID_W || nj < 0 || nj >= GRID_W) continue;
+          const nidx = nj * GRID_W + ni;
+          if (gridBlocked[nidx]) continue;
+          const nd = gridDist[nidx];
+          if (nd < bestD) { bestD = nd; bestDi = di; bestDj = dj; }
+        }
+      }
+      if (bestDi === 0 && bestDj === 0) {
+        // No improvement found - fall back to direct
+        if (dist > 0.001) dir.copy(toPlayer).normalize();
+      } else {
+        const [tx, tz] = cell2w(zi + bestDi, zj + bestDj);
+        dir.set(tx - this.mesh.position.x, 0, tz - this.mesh.position.z);
+        if (dir.length() > 0.001) dir.normalize();
+      }
+    }
+
+    const move = dir.clone().multiplyScalar(this.speed * dt);
     const next = this.mesh.position.clone().add(move);
 
     let blocked = false;
@@ -1273,11 +1399,20 @@ class Zombie {
     }
     if (!blocked) this.mesh.position.copy(next);
     else {
-      const side = new THREE.Vector3(-toP.z, 0, toP.x).multiplyScalar(this.speed * dt * 0.7);
+      // Local sliding fallback (perpendicular)
+      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(this.speed * dt * 0.7);
       const alt = this.mesh.position.clone().add(side);
       let altBlocked = false;
       for (const o of obstacles) if (o.box.distanceToPoint(alt) < 0.5) { altBlocked = true; break; }
       if (!altBlocked) this.mesh.position.copy(alt);
+      else {
+        // Try the other perpendicular direction too
+        const side2 = side.clone().multiplyScalar(-1);
+        const alt2 = this.mesh.position.clone().add(side2);
+        let alt2Blocked = false;
+        for (const o of obstacles) if (o.box.distanceToPoint(alt2) < 0.5) { alt2Blocked = true; break; }
+        if (!alt2Blocked) this.mesh.position.copy(alt2);
+      }
     }
     this.mesh.rotation.y = Math.atan2(player.pos.x - this.mesh.position.x, player.pos.z - this.mesh.position.z) + (this.transformed ? Math.PI : 0);
 
@@ -2259,6 +2394,7 @@ function startGame() {
   player.alive = true;
   ensureAudio();
   startWind();
+  recomputeFlowField();
   startWave(1);
   updateHud();
   if (!isTouch) canvas.requestPointerLock();
@@ -2377,6 +2513,13 @@ function update(dt) {
   } else {
     intermissionTimer -= dt;
     if (intermissionTimer <= 0) startWave(currentWave + 1);
+  }
+
+  // Refresh the flow field a few times per second so zombies route around buildings
+  flowFieldTimer -= dt;
+  if (flowFieldTimer <= 0) {
+    recomputeFlowField();
+    flowFieldTimer = 0.25;
   }
 
   for (const z of zombies) z.update(dt);
