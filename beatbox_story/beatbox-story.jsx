@@ -12420,6 +12420,21 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     showToast(forced ? '2 AM — got booted off the couch' : 'Napped — feeling sharper', forced ? 'info' : 'win');
   };
   const finishSleep = () => {
+    try { return _finishSleepImpl(); }
+    catch (e) {
+      // Surface ANY synchronous throw inside the sleep transition as a
+      // visible red banner instead of silently unmounting to a black page.
+      try {
+        window.dispatchEvent(new ErrorEvent('error', {
+          message: `finishSleep threw: ${e?.message || e}`,
+          error: e,
+        }));
+      } catch {}
+      setSleeping(false);
+      showToast(`Sleep failed: ${String(e?.message || e).slice(0, 120)}`, 'bad');
+    }
+  };
+  const _finishSleepImpl = () => {
     const c0 = char;
     if (!c0) { setSleeping(false); return; }
     // Pre-compute the morning song/crew yield from c0 BEFORE the setChar
