@@ -12503,6 +12503,7 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
     }
 
     setChar(c => {
+      try {
       const max = c.maxEnergy ?? 100;
       // Memory-foam bed gives +20 max-energy worth of boost overnight
       const bedBonus = hasGear(c, 'new_bed') ? 20 : 0;
@@ -12617,6 +12618,19 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         next.festivalState = 'invited';
       }
       return next;
+      } catch (e) {
+        // setChar updater errors happen inside React's batch; the outer
+        // try/catch around finishSleep wouldn't catch them. Surface via the
+        // GlobalErrorOverlay so we can see what threw, and return the
+        // unmodified char so the user isn't stuck.
+        try {
+          window.dispatchEvent(new ErrorEvent('error', {
+            message: `morning setChar updater threw: ${e?.message || e}`,
+            error: e,
+          }));
+        } catch {}
+        return c;
+      }
     });
     setSleeping(false);
 
