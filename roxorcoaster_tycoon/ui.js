@@ -132,6 +132,7 @@ export function rideDetailWindow(state, ride) {
           ${ride.status === 'closed' || ride.status === 'testing' ? '<button data-act="open">Open</button>' : ''}
           ${ride.status === 'open' ? '<button data-act="close">Close</button>' : ''}
           ${ride.status === 'closed' && isCoaster && !ride.tested ? '<button data-act="test">Test</button>' : ''}
+          ${isCoaster && ride.status === 'building' ? '<button data-act="resume">Resume Building</button>' : ''}
           <button data-act="demolish">Demolish</button>
         </div>
       `;
@@ -146,6 +147,11 @@ export function rideDetailWindow(state, ride) {
       body.querySelector('[data-act="demolish"]').onclick = () => {
         state._demolishCallback(ride);
         refresh();
+      };
+      const resume = body.querySelector('[data-act="resume"]');
+      if (resume) resume.onclick = () => {
+        state.ui.coasterBuilding = ride;
+        coasterBuilderWindow(state, ride);
       };
     }
   });
