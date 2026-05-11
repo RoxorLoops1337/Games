@@ -212,25 +212,33 @@
     #toolbar-toggle, #side-toggle { display: block; }
 
     #toolbar {
-      left: 8px; right: 8px; top: auto; bottom: 8px;
+      left: 8px; right: 8px; top: auto; bottom: -260px;
       width: auto; max-height: 50vh;
       flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
       gap: 4px; padding: 6px;
-      transform: translateY(calc(100% + 12px));
-      transition: transform 0.2s;
+      transition: bottom 0.2s;
     }
-    #toolbar.open { transform: translateY(0); }
+    #toolbar.open { bottom: 8px; }
     #toolbar h3 { display: none; }
     #toolbar > button {
       flex: 0 0 auto; padding: 10px 12px; font-size: 13px; min-height: 44px;
       white-space: nowrap;
     }
+    /* Sub-menus float OVER the toolbar (not inside) so they don't get
+       clipped by the toolbar's overflow:auto.  Use position:fixed so
+       they're anchored to the viewport. */
     #toolbar .sub {
-      position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 6px;
-      flex-direction: row; flex-wrap: nowrap; overflow-x: auto;
-      background: rgba(26,32,50,0.95); padding: 6px; border: 1px solid #2b3552;
-      border-radius: 4px;
+      position: fixed; left: 8px; right: 8px;
+      top: auto; bottom: 68px;
+      flex-direction: row; flex-wrap: wrap; overflow-x: auto; overflow-y: auto;
+      max-height: 50vh;
+      background: rgba(26,32,50,0.97); padding: 8px; border: 1px solid #3a4670;
+      border-radius: 6px; gap: 4px;
+      box-shadow: 0 -6px 18px rgba(0,0,0,0.4);
+      z-index: 6;
     }
+    /* When the toolbar is closed, hide any open sub-menu too */
+    #toolbar:not(.open) .sub { display: none !important; }
     #toolbar .sub button { flex: 0 0 auto; padding: 10px 12px; font-size: 12px; min-height: 40px; white-space: nowrap; }
     #toolbar .cost { float: none; display: block; font-size: 10px; }
 
@@ -267,9 +275,9 @@
     .win .body { padding: 10px 12px; max-height: calc(100vh - 180px); touch-action: pan-y; }
     .win .body button { padding: 8px 12px; font-size: 13px; min-height: 36px; }
 
-    /* Allow horizontal scroll inside the toolbar */
+    /* Allow horizontal scroll inside the toolbar and vertical inside subs */
     #toolbar { touch-action: pan-x; }
-    #toolbar .sub { touch-action: pan-x; }
+    #toolbar .sub { touch-action: pan-x pan-y; }
 
     /* Allow vertical scroll on title-screen scenarios + body */
     #title-screen { touch-action: pan-y; }
