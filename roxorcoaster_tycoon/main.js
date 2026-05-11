@@ -146,6 +146,9 @@ function startScenario(sc) {
   state.cam.y = -window.innerHeight / 2 + (e.tx + e.ty) * (TILE_H / 2);
   document.getElementById('title-screen').style.display = 'none';
   notify(state, `Welcome to ${state.parkName}!`, 'good');
+  setTimeout(() => notify(state, 'Click "Footpath" then click on map to lay paths', 'info'), 1500);
+  setTimeout(() => notify(state, 'Then "Rides" → Carousel to place your first ride', 'info'), 4500);
+  setTimeout(() => notify(state, 'Build paths to connect your rides — peeps will queue up!', 'info'), 7500);
 }
 
 function hydrateFromSave(data) {
