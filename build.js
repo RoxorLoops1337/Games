@@ -29,6 +29,7 @@ const STATIC_PATHS = [
   'decktest',
   'pitchdeck',
   'DhauwieSurvival',
+  'roxorcoaster_tycoon',
 ];
 
 // JSX entry points to bundle. Output paths are relative to dist/.
