@@ -79,14 +79,120 @@ leaves that anyone may import.
 
 ## 0003 — UI rendering technology: deferred (2026-05-11)
 
-**Status:** Open
+**Status:** Superseded by 0006
 
 **Context:** HUD and menus can be drawn either inside Pixi (single canvas,
 one input pipeline) or as DOM overlays (accessibility, native form
 controls, easier styling).
 
-**Decision:** Deferred. The initial scaffolding uses neither — only the Pixi
-canvas with "Hello Park". When we add the first HUD element we will revisit
-and record the choice here.
+**Decision:** Deferred at scaffolding time; resolved in 0006.
 
-**Consequences:** None yet.
+---
+
+## 0004 — Entity model: lightweight ECS (2026-05-11)
+
+**Status:** Accepted
+
+**Context:** We need a structure for ~2000 peeps + rides + staff + tiles
+that's flexible enough to compose behaviour and fast enough to iterate
+in tight loops. Three options: classical OOP (one class per entity),
+data-oriented SoA (parallel typed arrays, RCT2-style), and component-based
+ECS (entities as ids, components in flat stores, systems iterate).
+
+**Decision:** Lightweight ECS. Entities are opaque numeric ids;
+components are stored in per-component flat structures (typed arrays
+where the field is numeric, regular arrays where it's a struct/string);
+systems are plain functions that iterate matching entities and run a
+single concern.
+
+**Consequences:**
+- Most peep components (position, needs, facing) end up as typed arrays
+  anyway, so we capture most of the data-oriented win.
+- Composition over inheritance: a "queueing peep" is `Position +
+  PathFollower + Needs + InQueue`, not a subclass.
+- Some indirection cost vs. raw SoA, accepted for the readability win.
+- We hand-roll a tiny ECS rather than pulling in `bitecs`; the surface we
+  need is small and we want full control over save/load shape.
+
+---
+
+## 0005 — Track representation: hybrid, segments now / spline-ready (2026-05-11)
+
+**Status:** Accepted
+
+**Context:** Coaster tracks can be modelled as fixed tile-snapped
+segments (RCT1/2-style: easy, limited expressiveness) or continuous
+splines (Planet Coaster-style: expressive, complex). Switching later
+would be painful if early systems hard-code the segment representation.
+
+**Decision:** Sim talks to tracks through a `TrackCurve` interface that
+exposes `totalLength`, `sampleAt(distance)`, and `isStation(distance)`.
+v1 implementation `TileSegmentCurve` composes a sequence of fixed segment
+types snapped to the grid. A future `SplineCurve` can replace it without
+touching the ride simulation system.
+
+**Consequences:**
+- Slightly more design work upfront — vehicles must reference tracks via
+  the interface, not the segment list directly.
+- Editor and serialization in v1 stay simple (just save the segment
+  array).
+- `getSegments()` on the interface is `T[] | null` so segment-aware UI
+  (the track editor) can ask for them when present and fall back to
+  generic curve-based controls when not.
+
+---
+
+## 0006 — UI rendering: hybrid (DOM windows, in-Pixi overlays) (2026-05-11)
+
+**Status:** Accepted (supersedes 0003)
+
+**Context:** See 0003. We considered three options: pure DOM, pure
+in-Pixi widgets, or hybrid.
+
+**Decision:** Hybrid.
+- **DOM** for windows, menus, dialogs, finance reports, scenario panel
+  — anywhere styling, accessibility, and native form controls matter.
+- **Pixi** for in-world overlays — peep thought bubbles, hover
+  tooltips, build-mode cursor, ghost-piece preview, tile highlights.
+
+**Consequences:**
+- Two input pipelines must coordinate: pointer events on the canvas vs.
+  on DOM windows. The input layer (`engine/input`) is the single point
+  that disambiguates.
+- We avoid building a from-scratch Pixi widget toolkit (buttons,
+  scrollbars, text inputs).
+- A small Zustand store mirrors the slice of sim state DOM windows need;
+  windows subscribe to selectors. UI never mutates sim state directly —
+  it dispatches intents into a queue drained at the start of each tick.
+
+---
+
+## 0007 — Determinism: best-effort (2026-05-11)
+
+**Status:** Accepted
+
+**Context:** Three positions: full deterministic sim (lockstep
+multiplayer, replays, harder discipline — no `Math.random`, careful
+floats), no determinism guarantees (free use of `Math.random`,
+wall-clock), or best-effort (seeded RNG everywhere, but no commitment to
+bit-identical cross-machine outputs).
+
+**Decision:** Best-effort.
+- All randomness flows from a seeded PRNG owned by the `World`. No
+  `Math.random` calls in `game/*` or `engine/*`.
+- The RNG state is part of the save file, so reload-from-save continues
+  identically to the in-memory continuation on the same build.
+- We use `performance.now()` only at the input/render boundary, never in
+  sim code.
+- We do **not** commit to identical sim output across machines or browser
+  versions — float ordering and `Math.fround` discipline are out of
+  scope for v1.
+
+**Consequences:**
+- Very useful for bug repros: a save + the next N intents reliably
+  reproduces the failure on the same machine.
+- Replays are feasible (seed + intent log + tick count) on the same
+  build, with the cross-machine caveat above.
+- Lockstep multiplayer is deferred. If we ever want it, the discipline
+  to upgrade is: audit floats, switch hot loops to deterministic
+  helpers, and pin the JS engine version.
