@@ -8771,6 +8771,162 @@ const drawFlashbackSongScene = (ctx, fc, look) => {
   }
 };
 
+// ============ TITLE SCREEN ART ============
+// Pixel-art splash for the main menu — sunset city skyline, neon sign, a
+// mic on the foreground stage with animated sound rings + drifting embers.
+// Sits behind the HTML title overlay in TitleScreen.
+const drawTitleScene = (ctx, fc) => {
+  const W = 200, H = 130;
+  // Deep sunset sky
+  _drawSky(ctx, W, 76, 0xff, 0x80, 0x40, 0x40, 0x18, 0x60);
+  // Big sun
+  _px(ctx, 130, 38, 30, 30, '#fef3c7');
+  ctx.fillStyle = 'rgba(254,243,199,0.30)';
+  ctx.beginPath(); ctx.arc(145, 53, 26, 0, Math.PI * 2); ctx.fill();
+  // Distant city skyline silhouette (back row)
+  for (let i = 0; i < 22; i++) {
+    const bx = i * 9 - 4;
+    const bh = 10 + ((i * 11 + 5) % 28);
+    _px(ctx, bx, 76 - bh, 8, bh, '#1a0d2e');
+    // Lit windows that twinkle
+    for (let w = 0; w < 4; w++) {
+      const wy = 76 - bh + 3 + w * 4;
+      const wx = bx + (w % 2 ? 2 : 5);
+      if ((fc + i * 3 + w * 7) % 90 < 40) _px(ctx, wx, wy, 1, 1, '#fbbf24');
+    }
+  }
+  // Front-row taller buildings
+  for (let i = 0; i < 7; i++) {
+    const bx = i * 28 + 4;
+    const bh = 30 + ((i * 13) % 14);
+    _px(ctx, bx, 80 - bh, 24, bh, '#0c0820');
+    _px(ctx, bx, 80 - bh, 1, bh, '#1a1530');         // edge highlight
+    // Windows
+    for (let r = 0; r < Math.floor(bh / 6); r++) {
+      for (let c = 0; c < 3; c++) {
+        const wx = bx + 4 + c * 6;
+        const wy = 80 - bh + 4 + r * 6;
+        if ((i + r + c) % 3 !== 0) {
+          const on = (fc + i * 5 + r * 7 + c * 11) % 70 < 55;
+          _px(ctx, wx, wy, 2, 2, on ? '#fbbf24' : '#3a3020');
+        }
+      }
+    }
+  }
+  // Animated ground steam from subway grates
+  for (let i = 0; i < 4; i++) {
+    const phase = (fc + i * 20) % 60;
+    const sx = 30 + i * 45;
+    const sy = 92 - phase * 0.6;
+    if (phase < 50) {
+      ctx.globalAlpha = 0.4 * (1 - phase / 50);
+      _px(ctx, sx, Math.floor(sy), 6, 2, '#a8a29e');
+      _px(ctx, sx + 1, Math.floor(sy) - 2, 4, 2, '#a8a29e');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Stage floor + crowd
+  _px(ctx, 0, 80, W, 50, '#0a0612');
+  for (let i = 0; i < 20; i++) {
+    const cx = 4 + i * 10;
+    _px(ctx, cx, 110, 7, 6, '#1c1917');
+    _px(ctx, cx + 1, 108, 5, 3, '#0c0a09');
+  }
+  // Mic stand center stage
+  const mx = 100, my = 92;
+  _px(ctx, mx, my, 2, 18, '#2a2a2a');                   // pole
+  _px(ctx, mx - 1, my - 2, 4, 4, '#1a1a1a');           // base
+  _px(ctx, mx - 3, my - 8, 8, 8, '#2a2a2a');           // head
+  _px(ctx, mx - 2, my - 7, 6, 6, '#fbbf24');           // grille glow
+  // Pulsing rings around the mic
+  for (let r = 0; r < 4; r++) {
+    const phase = ((fc + r * 14) % 56) / 56;
+    ctx.globalAlpha = 0.45 * (1 - phase);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(mx + 1, my - 4, 6 + phase * 28, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // Rising embers
+  for (let i = 0; i < 8; i++) {
+    const phase = (fc + i * 11) % 110;
+    const ex = mx + Math.sin((fc + i * 17) * 0.05) * (14 + phase * 0.2);
+    const ey = my - 8 - phase * 0.6;
+    if (ey > 30) {
+      ctx.globalAlpha = (1 - phase / 110);
+      _px(ctx, Math.floor(ex), Math.floor(ey), 1, 1, phase < 30 ? '#fef3c7' : '#fbbf24');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(0, 0, W, 6);
+  ctx.fillRect(0, H - 8, W, 8);
+};
+
+// ============ TITLE SCREEN ============
+// Main-menu splash. Sits at the top of the screen flow on cold start.
+// Plays the pixel-art title scene behind the game name; the Play button
+// dispatches to the right downstream screen (hood / slots).
+const TitleScreen = ({ char, hasActiveSlot, onPlay, onSlots, onSettings }) => {
+  const [settings] = useSettings();
+  const playLabel = hasActiveSlot && char?.name
+    ? `Continue as ${char.name.toUpperCase()}`
+    : 'New Game';
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-between py-6 px-3 text-center"
+      style={{
+        background: 'linear-gradient(180deg, #1a0d2e 0%, #0c0a09 50%, #0c0a09 100%)',
+        animation: settings.reducedMotion ? 'none' : 'screenFade 0.45s ease-out',
+      }}>
+      {/* Top spacer */}
+      <div className="h-2" />
+
+      {/* Title text */}
+      <div className="space-y-1 pt-4">
+        <div className="text-[10px] uppercase tracking-[0.5em] text-amber-500/70">A LIFE-SIM</div>
+        <div className="text-[56px] sm:text-[72px] leading-none tracking-tighter text-amber-400"
+          style={{
+            fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+            textShadow: '4px 4px 0 #0c0a09, 8px 8px 24px rgba(212,160,23,0.30)',
+          }}>
+          BEATBOX<br />STORY
+        </div>
+        <div className="text-[11px] uppercase tracking-[0.4em] text-stone-400 pt-1">the cypher is calling</div>
+      </div>
+
+      {/* Centerpiece pixel scene */}
+      <div className="w-full max-w-md mt-2">
+        <PixelScene draw={drawTitleScene} />
+      </div>
+
+      {/* Buttons */}
+      <div className="w-full max-w-md space-y-2">
+        <button onClick={onPlay}
+          className="w-full py-4 border-2 border-amber-500 bg-gradient-to-r from-amber-950/40 to-amber-900/30 text-amber-400 text-base uppercase tracking-[0.3em] hover:from-amber-900/50 hover:to-amber-800/40 active:scale-[0.98] transition-all"
+          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          ▶ {playLabel}
+        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={onSlots}
+            className="py-2 border-2 border-stone-700 text-stone-300 text-[11px] uppercase tracking-[0.3em] hover:border-amber-500/50 transition-all">
+            👥 Beatboxers
+          </button>
+          <button onClick={onSettings}
+            className="py-2 border-2 border-stone-700 text-stone-300 text-[11px] uppercase tracking-[0.3em] hover:border-amber-500/50 transition-all">
+            ⚙ Settings
+          </button>
+        </div>
+        <div className="text-[9px] uppercase tracking-[0.3em] text-stone-600 pt-1">
+          v · built with ❤︎
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Dream sequence — abstract surreal scene. Fires on rare sleep events post-day-30.
 const drawDreamScene = (ctx, fc, look) => {
   const W = 200, H = 130;
@@ -11258,7 +11414,9 @@ export default function BeatboxStory() {
     return c;
   };
 
-  // On mount: migrate legacy save, find active slot, load it (or show slots picker)
+  // On mount: migrate legacy save, find active slot, load it. Land on the
+  // title screen regardless — tapping Play continues to 'hood' if there's
+  // an active char, or 'slots' if not.
   useEffect(() => {
     (async () => {
       await migrateLegacy();
@@ -11269,13 +11427,9 @@ export default function BeatboxStory() {
           setChar(migrateChar(c));
           setActiveSlotState(slot);
           await loadSamplesForSlot(slot);
-          setScreen('hood');
-          setLoaded(true);
-          return;
         }
       }
-      // No active slot or it's empty — show the slots picker
-      setScreen('slots');
+      setScreen('title');
       setLoaded(true);
     })();
   }, []);
@@ -11459,6 +11613,26 @@ export default function BeatboxStory() {
     return <div className="min-h-screen bg-stone-950 flex items-center justify-center text-amber-500 font-mono">LOADING...</div>;
   }
 
+  // Title screen — main-menu splash. Sits at the top of the screen flow on
+  // every cold start. Continues to 'hood' if there's an active loaded
+  // character, otherwise dispatches to the slots picker.
+  if (screen === 'title') {
+    const hasActiveSlot = !!(char && char.created && activeSlot);
+    return (
+      <>
+        <GlobalErrorOverlay />
+        <TitleScreen
+          char={char}
+          hasActiveSlot={hasActiveSlot}
+          onPlay={() => setScreen(hasActiveSlot ? 'hood' : 'slots')}
+          onSlots={() => setScreen('slots')}
+          onSettings={() => setShowSettings(true)} />
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+        <style>{`@keyframes screenFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      </>
+    );
+  }
+
   // The slots screen renders without an active character
   if (screen === 'slots' && !char) {
     return (
@@ -11619,6 +11793,9 @@ export default function BeatboxStory() {
         {/* SCREENS */}
         <div className="p-3 pb-20">
           <ScreenErrorBoundary>
+          <div key={screen} style={{
+            animation: getSettings().reducedMotion ? 'none' : 'screenFade 0.28s ease-out',
+          }}>
           {screen === 'slots' && (
             <SlotsScreen
               activeSlot={activeSlot}
@@ -11645,8 +11822,10 @@ export default function BeatboxStory() {
           {screen === 'park' && <ParkScreen char={char} setChar={setChar} passTime={passTime} showToast={showToast} go={setScreen} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'bar' && <BarScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
           {screen === 'battle' && <BattleScreen char={char} setChar={setChar} go={setScreen} showToast={showToast} checkLevelUp={checkLevelUp} playCutscene={playCutscene} />}
+          </div>
           </ScreenErrorBoundary>
         </div>
+        <style>{`@keyframes screenFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
         {/* FOOTER NAV */}
         {char && char.created && screen !== 'battle' && screen !== 'create' && screen !== 'slots' && (
