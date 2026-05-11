@@ -511,7 +511,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xc28b75);
-scene.fog = new THREE.Fog(0xc28b75, 60, 220);
+// Slightly cooler horizon fog so distant buildings melt into the dust haze
+scene.fog = new THREE.Fog(0xb87456, 50, 200);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 500);
 camera.position.set(0, PLAYER_HEIGHT, 0);
@@ -811,6 +812,307 @@ const labPos = new THREE.Vector3(90, 0, 90);
 
   addBox(labPos.x, 9, labPos.z, 0.6, 4, 0.6, 0xffffff);
   addBox(labPos.x, 10, labPos.z, 3, 0.6, 0.6, 0xffffff);
+}
+
+// === Atmosphere: sky dome, sun, ground decals, cars, lamps, trees ===
+
+// Sky gradient dome (replaces flat background)
+{
+  const skyCanvas = document.createElement('canvas');
+  skyCanvas.width = 4; skyCanvas.height = 512;
+  const skyG = skyCanvas.getContext('2d');
+  const grad = skyG.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0,    '#2a1838');  // zenith deep violet
+  grad.addColorStop(0.22, '#523648');  // upper haze
+  grad.addColorStop(0.45, '#a05c5a');  // warm band
+  grad.addColorStop(0.62, '#d28058');  // sunset orange
+  grad.addColorStop(0.78, '#e8a878');  // horizon glow
+  grad.addColorStop(0.90, '#8e4a28');  // dust haze
+  grad.addColorStop(1,    '#3a2018');  // ground horizon
+  skyG.fillStyle = grad;
+  skyG.fillRect(0, 0, 4, 512);
+  // Faint stars near the top
+  for (let i = 0; i < 40; i++) {
+    skyG.globalAlpha = 0.25 + Math.random() * 0.55;
+    skyG.fillStyle = '#ffffff';
+    skyG.fillRect(Math.random() * 4, Math.random() * 130, 1, 1);
+  }
+  skyG.globalAlpha = 1;
+  const skyTex = new THREE.CanvasTexture(skyCanvas);
+  skyTex.colorSpace = THREE.SRGBColorSpace;
+  const skyGeo = new THREE.SphereGeometry(420, 32, 18);
+  const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false });
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  scene.add(sky);
+  scene.background = null; // sky dome is the backdrop now
+}
+
+// Sun + halo
+{
+  const sunPos = new THREE.Vector3(80, 70, -200).normalize().multiplyScalar(320);
+  const sun = new THREE.Mesh(
+    new THREE.SphereGeometry(7, 20, 14),
+    new THREE.MeshBasicMaterial({ color: 0xfff0c8, fog: false, depthWrite: false })
+  );
+  sun.position.copy(sunPos);
+  scene.add(sun);
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(20, 20, 14),
+    new THREE.MeshBasicMaterial({ color: 0xffc880, fog: false, depthWrite: false, transparent: true, opacity: 0.32 })
+  );
+  halo.position.copy(sunPos);
+  scene.add(halo);
+  const halo2 = new THREE.Mesh(
+    new THREE.SphereGeometry(48, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff9050, fog: false, depthWrite: false, transparent: true, opacity: 0.12 })
+  );
+  halo2.position.copy(sunPos);
+  scene.add(halo2);
+}
+
+// Helper: find a spot clear of all existing obstacles (and not on spawn/lab)
+function findClearSpot(minClear) {
+  if (minClear === undefined) minClear = 2.5;
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const x = (Math.random() - 0.5) * (WORLD_SIZE - 20);
+    const z = (Math.random() - 0.5) * (WORLD_SIZE - 20);
+    if (Math.hypot(x, z) < 8) continue;
+    if (Math.hypot(x - 90, z - 90) < 16) continue;
+    const sample = new THREE.Vector3(x, 1, z);
+    let blocked = false;
+    for (const o of obstacles) {
+      if (o.box.distanceToPoint(sample) < minClear) { blocked = true; break; }
+    }
+    if (!blocked) return [x, z];
+  }
+  return null;
+}
+
+// --- Abandoned car ---
+function makeCar(x, z, rot) {
+  const carColors = [0x6a1818, 0x1a2a4a, 0x3a3a3a, 0x5a4828, 0x2a3a2a, 0x4a4a4a, 0x7a3a1a];
+  const carColor = carColors[(Math.random() * carColors.length) | 0];
+  const body = new THREE.MeshStandardMaterial({ color: carColor, metalness: 0.55, roughness: 0.5 });
+  const dirty = new THREE.MeshStandardMaterial({ color: 0x222226, metalness: 0.7, roughness: 0.4 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x0a0c14, metalness: 0.3, roughness: 0.15 });
+  const tire  = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.95 });
+  const rim   = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, metalness: 0.6, roughness: 0.45 });
+  const head  = new THREE.MeshStandardMaterial({ color: 0xeeeebb, emissive: 0x202010, roughness: 0.2 });
+  const tail  = new THREE.MeshStandardMaterial({ color: 0xaa2020, emissive: 0x442020, roughness: 0.3 });
+
+  const g = new THREE.Group();
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.55, 4.2), body);
+  chassis.position.y = 0.55;
+  chassis.castShadow = true; chassis.receiveShadow = true;
+  g.add(chassis);
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.10, 1.35), body);
+  hood.position.set(0, 0.88, 1.25);
+  g.add(hood);
+  const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.10, 1.15), body);
+  trunk.position.set(0, 0.88, -1.40);
+  g.add(trunk);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.62, 1.95), body);
+  cabin.position.set(0, 1.15, -0.05);
+  cabin.castShadow = true;
+  g.add(cabin);
+  const greenhouse = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.55, 1.88), glass);
+  greenhouse.position.set(0, 1.18, -0.05);
+  g.add(greenhouse);
+  for (const [px, pz] of [[0.78, 0.85], [-0.78, 0.85], [0.78, -0.85], [-0.78, -0.85]]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.06), body);
+    p.position.set(px, 1.18, pz);
+    g.add(p);
+  }
+  const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.30, 14);
+  const rimGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.32, 8);
+  for (const [wx, wy, wz] of [[-0.95, 0.38, 1.4], [0.95, 0.38, 1.4], [-0.95, 0.38, -1.4], [0.95, 0.38, -1.4]]) {
+    const t = new THREE.Mesh(wheelGeo, tire);
+    t.position.set(wx, wy, wz); t.rotation.z = Math.PI / 2;
+    g.add(t);
+    const r = new THREE.Mesh(rimGeo, rim);
+    r.position.set(wx, wy, wz); r.rotation.z = Math.PI / 2;
+    g.add(r);
+  }
+  const fbump = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.18, 0.14), dirty);
+  fbump.position.set(0, 0.42, 2.10);
+  g.add(fbump);
+  const rbump = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.18, 0.14), dirty);
+  rbump.position.set(0, 0.42, -2.10);
+  g.add(rbump);
+  const hlL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.06), head);
+  hlL.position.set(-0.58, 0.72, 2.08);
+  g.add(hlL);
+  const hlR = hlL.clone(); hlR.position.x = 0.58;
+  g.add(hlR);
+  const tlL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.12, 0.05), tail);
+  tlL.position.set(-0.58, 0.78, -2.10);
+  g.add(tlL);
+  const tlR = tlL.clone(); tlR.position.x = 0.58;
+  g.add(tlR);
+  const mirL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.10, 0.18), body);
+  mirL.position.set(-0.95, 1.30, 0.55);
+  g.add(mirL);
+  const mirR = mirL.clone(); mirR.position.x = 0.95;
+  g.add(mirR);
+
+  g.position.set(x, 0, z);
+  g.rotation.y = rot;
+  g.rotation.z = (Math.random() - 0.5) * 0.05;
+  scene.add(g);
+  obstacles.push({ mesh: g, box: new THREE.Box3().setFromObject(g) });
+}
+
+// --- Streetlamp with point light ---
+function makeLamp(x, z) {
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.7, roughness: 0.5 });
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.30, 0.28, 8), poleMat);
+  base.position.y = 0.14;
+  g.add(base);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 5.5, 8), poleMat);
+  pole.position.y = 2.85;
+  pole.castShadow = true;
+  g.add(pole);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.10, 0.10), poleMat);
+  arm.position.set(0.65, 5.25, 0);
+  g.add(arm);
+  const brace = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.9), poleMat);
+  brace.position.set(0.4, 4.95, 0);
+  brace.rotation.z = -0.6;
+  g.add(brace);
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.20, 0.36), poleMat);
+  housing.position.set(1.28, 5.10, 0);
+  g.add(housing);
+  const bulb = new THREE.Mesh(
+    new THREE.BoxGeometry(0.30, 0.05, 0.30),
+    new THREE.MeshStandardMaterial({ color: 0xfff4c8, emissive: 0xfff4c8, emissiveIntensity: 2.8 })
+  );
+  bulb.position.set(1.28, 4.96, 0);
+  g.add(bulb);
+  const light = new THREE.PointLight(0xffd49a, 1.6, 18);
+  light.position.set(1.28, 4.9, 0);
+  g.add(light);
+
+  g.position.set(x, 0, z);
+  g.rotation.y = Math.random() * Math.PI * 2;
+  scene.add(g);
+  obstacles.push({
+    mesh: g,
+    box: new THREE.Box3(
+      new THREE.Vector3(x - 0.25, 0, z - 0.25),
+      new THREE.Vector3(x + 0.25, 5.5, z + 0.25)
+    )
+  });
+}
+
+// --- Dead tree ---
+function makeTree(x, z) {
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x2c1a10, roughness: 0.95 });
+  const g = new THREE.Group();
+  const trunkH = 3 + Math.random() * 2.4;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.24, trunkH, 7), trunkMat);
+  trunk.position.y = trunkH / 2;
+  trunk.castShadow = true;
+  g.add(trunk);
+  const branchCount = 5 + ((Math.random() * 5) | 0);
+  for (let i = 0; i < branchCount; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const len = 0.7 + Math.random() * 1.1;
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.07, len, 5), trunkMat);
+    const baseY = trunkH * 0.55 + Math.random() * (trunkH * 0.35);
+    br.position.set(Math.cos(ang) * (0.18 + len * 0.5), baseY + Math.random() * 0.2, Math.sin(ang) * (0.18 + len * 0.5));
+    br.rotation.z = Math.cos(ang) * (0.6 + Math.random() * 0.7);
+    br.rotation.x = -Math.sin(ang) * (0.6 + Math.random() * 0.7);
+    g.add(br);
+    if (Math.random() < 0.5) {
+      const tw = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 0.4 + Math.random() * 0.4, 4), trunkMat);
+      tw.position.set(br.position.x + Math.cos(ang) * 0.3, br.position.y + 0.15, br.position.z + Math.sin(ang) * 0.3);
+      tw.rotation.z = Math.cos(ang) * 1.0;
+      tw.rotation.x = -Math.sin(ang) * 1.0;
+      g.add(tw);
+    }
+  }
+  g.position.set(x, 0, z);
+  g.rotation.y = Math.random() * Math.PI * 2;
+  scene.add(g);
+  obstacles.push({
+    mesh: g,
+    box: new THREE.Box3(
+      new THREE.Vector3(x - 0.3, 0, z - 0.3),
+      new THREE.Vector3(x + 0.3, trunkH, z + 0.3)
+    )
+  });
+}
+
+for (let i = 0; i < 14; i++) { const s = findClearSpot(3.2); if (s) makeCar(s[0], s[1], Math.random() * Math.PI * 2); }
+for (let i = 0; i < 14; i++) { const s = findClearSpot(2.0); if (s) makeLamp(s[0], s[1]); }
+for (let i = 0; i < 22; i++) { const s = findClearSpot(2.0); if (s) makeTree(s[0], s[1]); }
+
+for (let i = 0; i < 55; i++) {
+  const x = (Math.random() - 0.5) * (WORLD_SIZE - 20);
+  const z = (Math.random() - 0.5) * (WORLD_SIZE - 20);
+  const sample = new THREE.Vector3(x, 0.5, z);
+  let onObstacle = false;
+  for (const o of obstacles) {
+    if (o.box.distanceToPoint(sample) < 0.2) { onObstacle = true; break; }
+  }
+  if (onObstacle) continue;
+  const isBlood = Math.random() < 0.6;
+  const sz = 0.9 + Math.random() * 2.2;
+  const decal = new THREE.Mesh(
+    new THREE.CircleGeometry(sz, 7),
+    new THREE.MeshBasicMaterial({
+      color: isBlood ? 0x4a0a0a : 0x1a140e,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false
+    })
+  );
+  decal.rotation.x = -Math.PI / 2;
+  decal.rotation.z = Math.random() * Math.PI * 2;
+  decal.position.set(x, 0.015 + Math.random() * 0.005, z);
+  scene.add(decal);
+}
+
+const dustCount = 240;
+const dustGeo = new THREE.BufferGeometry();
+const dustPos = new Float32Array(dustCount * 3);
+const dustVel = new Float32Array(dustCount * 3);
+for (let i = 0; i < dustCount; i++) {
+  dustPos[i * 3]     = (Math.random() - 0.5) * 80;
+  dustPos[i * 3 + 1] = 0.4 + Math.random() * 8;
+  dustPos[i * 3 + 2] = (Math.random() - 0.5) * 80;
+  dustVel[i * 3]     = (Math.random() - 0.5) * 0.5;
+  dustVel[i * 3 + 1] = 0.10 + Math.random() * 0.30;
+  dustVel[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+const dustMat = new THREE.PointsMaterial({
+  color: 0xe2c8a4,
+  size: 0.08,
+  transparent: true,
+  opacity: 0.5,
+  sizeAttenuation: true,
+  depthWrite: false,
+  fog: true
+});
+const dustParticles = new THREE.Points(dustGeo, dustMat);
+scene.add(dustParticles);
+function updateDust(dt) {
+  const a = dustGeo.attributes.position.array;
+  for (let i = 0; i < dustCount; i++) {
+    a[i * 3]     += dustVel[i * 3]     * dt;
+    a[i * 3 + 1] += dustVel[i * 3 + 1] * dt;
+    a[i * 3 + 2] += dustVel[i * 3 + 2] * dt;
+    const dx = a[i * 3]     - player.pos.x;
+    const dz = a[i * 3 + 2] - player.pos.z;
+    if (dx >  40) a[i * 3]     -= 80;
+    if (dx < -40) a[i * 3]     += 80;
+    if (dz >  40) a[i * 3 + 2] -= 80;
+    if (dz < -40) a[i * 3 + 2] += 80;
+    if (a[i * 3 + 1] > 9) a[i * 3 + 1] = 0.3;
+  }
+  dustGeo.attributes.position.needsUpdate = true;
 }
 
 // --- Flow-field pathfinding (BFS from player on a coarse grid) ---
@@ -2744,6 +3046,7 @@ function update(dt) {
   updateStreakTimer(dt);
   updatePowerups(dt);
   updateMuzzleFlash(dt);
+  updateDust(dt);
   tickGroans(dt);
   drawMinimap();
 
