@@ -52,7 +52,10 @@ export function placeRide(state, kind, tx, ty) {
     id, kind, name: makeName(state, def),
     category: def.category,
     tx, ty, w: def.w, h: def.h,
-    status: def.category === 'shop' ? 'open' : 'closed',
+    // shops are open immediately; flat rides auto-open (no test needed).
+    // coasters are 'closed' initially via the coaster builder.
+    status: 'open',
+    tested: true,
     excitement: def.baseExc || 0,
     intensity: def.baseInt || 0,
     nausea: def.baseNaus || 0,
@@ -73,8 +76,7 @@ export function placeRide(state, kind, tx, ty) {
     breakdownAt: -1,
     entranceTx: null, entranceTy: null,
     exitTx: null, exitTy: null,
-    needsEntrance: def.category !== 'shop' ? true : true,
-    tested: false,
+    needsEntrance: true,
     operatingCost: def.category === 'shop' ? 1 : 3,
   };
   // mark footprint
@@ -93,34 +95,50 @@ export function placeRide(state, kind, tx, ty) {
 function autoEntranceExit(state, ride) {
   // For shops: single entrance/exit at first adjacent path or open tile.
   // For flat rides: entrance + exit on opposite sides if possible.
+  // Prefer tiles that already have a path tile adjacent to them so peeps
+  // can actually reach the ride.
   const candidates = [];
+  const baseH = tile(state.terrain, ride.tx, ride.ty).hN;
   for (let yy = -1; yy <= ride.h; yy++) for (let xx = -1; xx <= ride.w; xx++) {
+    // skip footprint interior
     if (xx >= 0 && xx < ride.w && yy >= 0 && yy < ride.h) continue;
-    if (xx < -0.1 && yy < -0.1) continue;
-    if (xx >= ride.w && yy >= ride.h) continue;
+    // skip strict corners
+    const isCorner = (xx < 0 || xx >= ride.w) && (yy < 0 || yy >= ride.h);
+    if (isCorner) continue;
     const ax = ride.tx + xx, ay = ride.ty + yy;
     const t = tile(state.terrain, ax, ay);
     if (!t) continue;
     if (t.water || t.ride || t.scenery || t.path) continue;
     if (!t.owned) continue;
     if (!isFlat(t)) continue;
-    if (t.hN !== tile(state.terrain, ride.tx, ride.ty).hN) continue;
-    candidates.push({ tx: ax, ty: ay });
+    if (t.hN !== baseH) continue;
+    // score: 1 if adjacent to existing path, else 0
+    let score = 0;
+    for (const d of [{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}]) {
+      const n = tile(state.terrain, ax + d.dx, ay + d.dy);
+      if (n && n.path) { score = 2; break; }
+    }
+    candidates.push({ tx: ax, ty: ay, score });
   }
+  // Highest score first; ties broken by order found.
+  candidates.sort((a, b) => b.score - a.score);
   if (candidates.length) {
     const ent = candidates.shift();
     ride.entranceTx = ent.tx; ride.entranceTy = ent.ty;
     const et = tile(state.terrain, ent.tx, ent.ty);
     et.rideEntrance = ride.id;
     if (ride.category !== 'shop' && candidates.length) {
-      // pick the farthest one
-      candidates.sort((a, b) => (Math.hypot(b.tx - ent.tx, b.ty - ent.ty) - Math.hypot(a.tx - ent.tx, a.ty - ent.ty)));
+      // exit prefers the farthest path-adjacent tile
+      candidates.sort((a, b) => {
+        const sa = a.score - Math.hypot(a.tx - ent.tx, a.ty - ent.ty) * 0.01;
+        const sb = b.score - Math.hypot(b.tx - ent.tx, b.ty - ent.ty) * 0.01;
+        return sb - sa;
+      });
       const ex = candidates[0];
       ride.exitTx = ex.tx; ride.exitTy = ex.ty;
       const xt = tile(state.terrain, ex.tx, ex.ty);
       xt.rideExit = ride.id;
     } else {
-      // shop: entrance acts as both
       ride.exitTx = ent.tx; ride.exitTy = ent.ty;
     }
   }

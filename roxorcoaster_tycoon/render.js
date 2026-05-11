@@ -730,6 +730,40 @@ function drawStaffMember(s, cam, state) {
 
 function drawOverlay(state) {
   const { ui, cam } = state;
+  // coaster builder cursor — always show when a coaster is being built
+  if (ui.coasterBuilding) {
+    const co = ui.coasterBuilding;
+    const c = co.cursor;
+    const sc = tileToScreen(c.tx + 0.5, c.ty + 0.5, c.h, cam);
+    ctx.save();
+    ctx.strokeStyle = '#ffd76b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 2]);
+    ctx.beginPath();
+    const cornerN = tileToScreen(c.tx, c.ty, c.h, cam);
+    const cornerE = tileToScreen(c.tx + 1, c.ty, c.h, cam);
+    const cornerS = tileToScreen(c.tx + 1, c.ty + 1, c.h, cam);
+    const cornerW = tileToScreen(c.tx, c.ty + 1, c.h, cam);
+    ctx.moveTo(cornerN.sx, cornerN.sy); ctx.lineTo(cornerE.sx, cornerE.sy);
+    ctx.lineTo(cornerS.sx, cornerS.sy); ctx.lineTo(cornerW.sx, cornerW.sy);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // arrow showing direction
+    const dirVec = [{dx:0,dy:-0.3},{dx:0.3,dy:0},{dx:0,dy:0.3},{dx:-0.3,dy:0}][c.dir];
+    const tip = tileToScreen(c.tx + 0.5 + dirVec.dx, c.ty + 0.5 + dirVec.dy, c.h, cam);
+    ctx.strokeStyle = '#ffd76b';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sc.sx, sc.sy);
+    ctx.lineTo(tip.sx, tip.sy);
+    ctx.stroke();
+    ctx.fillStyle = '#ffd76b';
+    ctx.beginPath();
+    ctx.arc(tip.sx, tip.sy, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   if (!ui.ghost) return;
   // draw a translucent preview at hover tile
   const ht = ui.hoverTile;
