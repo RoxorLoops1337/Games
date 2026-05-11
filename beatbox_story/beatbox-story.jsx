@@ -961,6 +961,42 @@ async function saveSlot(n, c) {
   try { await window.storage.set(slotKey(n), JSON.stringify(c)); } catch {}
 }
 
+// ============ USER SETTINGS ============
+// Player-level prefs (NOT per-save). Persisted in localStorage so they
+// survive slot switches and reloads. Module-level cache + subscriber set
+// so the audio + animation code can read the latest values synchronously
+// without prop drilling, while React components can useSettings() to
+// re-render on change.
+const SETTINGS_KEY = 'beatbox_settings';
+const DEFAULT_SETTINGS = {
+  muted: false,         // kill all WebAudio output
+  reducedMotion: false, // skip the cutscene fade + achievement modal pop
+  fastDialogue: false,  // auto-advance cutscene lines after ~2s
+};
+let _settingsCache = (() => {
+  try {
+    if (typeof localStorage === 'undefined') return { ...DEFAULT_SETTINGS };
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+  } catch { return { ...DEFAULT_SETTINGS }; }
+})();
+const _settingsListeners = new Set();
+const getSettings = () => _settingsCache;
+const updateSettings = (patch) => {
+  _settingsCache = { ..._settingsCache, ...patch };
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settingsCache)); } catch {}
+  _settingsListeners.forEach(fn => fn(_settingsCache));
+};
+const useSettings = () => {
+  const [s, setS] = useState(_settingsCache);
+  useEffect(() => {
+    const fn = (next) => setS(next);
+    _settingsListeners.add(fn);
+    return () => _settingsListeners.delete(fn);
+  }, []);
+  return [s, updateSettings];
+};
+
 async function deleteSlot(n) {
   try { await window.storage.delete(slotKey(n)); } catch {}
 }
@@ -6488,6 +6524,7 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
   const allBeats = beats || (lines ? [{ lines }] : []);
   const [beatIdx, setBeatIdx] = useState(0);
   const [lineIdx, setLineIdx] = useState(0);
+  const [settings] = useSettings();
   const beat = allBeats[beatIdx];
   const beatLines = beat?.lines || [];
   const isLastLine = lineIdx + 1 >= beatLines.length;
@@ -6498,6 +6535,16 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
     else if (isLastLine) { setBeatIdx(b => b + 1); setLineIdx(0); }
     else setLineIdx(l => l + 1);
   };
+  // Fast-dialogue mode: auto-advance after a short hold so the player can
+  // skim through long beats without tapping. Tap still advances early.
+  useEffect(() => {
+    if (!settings.fastDialogue) return;
+    const id = setTimeout(advance, 2000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beatIdx, lineIdx, settings.fastDialogue, isFinal]);
+  const fade = settings.reducedMotion ? 'none' : 'cutFade 0.5s ease-out';
+  const lineFade = settings.reducedMotion ? 'none' : 'cutFade 0.4s ease-out';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5"
       style={{ background: 'radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%)' }}>
@@ -6507,7 +6554,7 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
       </button>
       <div className="max-w-md w-full space-y-4">
         {beat?.drawScene && (
-          <div key={beatIdx} style={{ animation: 'cutFade 0.5s ease-out' }}>
+          <div key={beatIdx} style={{ animation: fade }}>
             <PixelScene draw={beat.drawScene} />
           </div>
         )}
@@ -6518,7 +6565,7 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
           </div>
         )}
         <div key={`${beatIdx}-${lineIdx}`} className="text-stone-100 text-xl leading-snug min-h-[3em]"
-          style={{ fontFamily: '"Oswald", "Bebas Neue", sans-serif', fontWeight: 300, letterSpacing: '0.02em', animation: 'cutFade 0.4s ease-out' }}>
+          style={{ fontFamily: '"Oswald", "Bebas Neue", sans-serif', fontWeight: 300, letterSpacing: '0.02em', animation: lineFade }}>
           {beatLines[lineIdx]}
         </div>
         <button onClick={advance}
@@ -6901,6 +6948,105 @@ const DevPanel = ({ char, setChar, onClose, onLock }) => {
           🔒 Lock dev mode (forget code)
         </button>
       </div>
+    </div>
+  );
+};
+
+// Player-facing options. Persists to localStorage via the module-level
+// settings system above so it survives slot switches and reloads.
+const SettingsModal = ({ onClose }) => {
+  const [settings, update] = useSettings();
+  const Row = ({ k, label, desc }) => (
+    <label className="flex items-start gap-3 p-2 border-2 border-stone-800 bg-stone-900/30 cursor-pointer hover:border-stone-700 transition-all">
+      <input
+        type="checkbox"
+        checked={!!settings[k]}
+        onChange={(e) => update({ [k]: e.target.checked })}
+        className="mt-0.5"
+      />
+      <div className="flex-1">
+        <div className="text-stone-200 text-xs uppercase tracking-widest"
+          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {label}
+        </div>
+        <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-0.5 leading-snug">
+          {desc}
+        </div>
+      </div>
+    </label>
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/85 backdrop-blur-sm p-3"
+      onClick={onClose}>
+      <div className="w-full max-w-md bg-stone-950 border-2 border-stone-700 p-3 space-y-3"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="text-amber-500 text-base tracking-widest uppercase"
+            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+            ⚙ SETTINGS
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-amber-500 text-lg leading-none px-2">×</button>
+        </div>
+        <div className="space-y-1.5">
+          <Row k="muted"         label="Mute audio"      desc="Silence every game sound — beats, stings, sleep rooster, the lot." />
+          <Row k="reducedMotion" label="Reduce motion"   desc="Skip the cutscene fade and the achievement modal pop-in." />
+          <Row k="fastDialogue"  label="Fast dialogue"   desc="Cutscene lines auto-advance after ~2s. Still tappable." />
+        </div>
+        <div className="text-[10px] uppercase tracking-widest text-stone-600 text-center pt-1 border-t border-stone-900">
+          Preferences are saved on this device.
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Achievement unlock fanfare — a small celebratory modal that pops when a
+// new achievement fires. Auto-dismisses after a short hold; tap anywhere
+// to dismiss earlier. Respects reduced-motion (no scale-in animation).
+const AchievementFanfare = ({ item, onClose }) => {
+  const [settings] = useSettings();
+  const reduce = settings.reducedMotion;
+  const tierColor = (TIER_COLOR && TIER_COLOR[item.tier]) || '#fbbf24';
+  useEffect(() => {
+    const id = setTimeout(onClose, 3000);
+    return () => clearTimeout(id);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
+      style={{ background: 'rgba(12,10,9,0.78)' }}
+      onClick={onClose}>
+      <div className="w-full max-w-sm p-4 text-center border-2"
+        style={{
+          borderColor: tierColor,
+          background: 'linear-gradient(180deg, rgba(28,25,23,0.95), rgba(12,10,9,0.95))',
+          boxShadow: `0 0 28px ${tierColor}44`,
+          animation: reduce ? 'none' : 'achPop 0.5s ease-out',
+        }}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="text-[10px] uppercase tracking-[0.4em] mb-1" style={{ color: tierColor }}>
+          Achievement Unlocked
+        </div>
+        <div className="text-5xl mb-2">🏆</div>
+        <div className="text-stone-100 text-xl tracking-wider mb-1"
+          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {item.label}
+        </div>
+        <div className="text-[11px] text-stone-400 leading-snug px-2">
+          {item.desc}
+        </div>
+        <button onClick={onClose}
+          className="mt-3 px-4 py-1.5 text-[10px] uppercase tracking-widest border-2 text-stone-300 hover:text-amber-300"
+          style={{ borderColor: tierColor }}>
+          Nice
+        </button>
+      </div>
+      <style>{`
+        @keyframes achPop {
+          0% { transform: scale(0.6); opacity: 0; }
+          60% { transform: scale(1.05); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 };
@@ -10971,6 +11117,9 @@ export default function BeatboxStory() {
   const [cutscene, setCutscene] = useState(null);
   const [showMessages, setShowMessages] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  // Queue of freshly-earned achievements waiting for their fanfare modal.
+  const [achievementQueue, setAchievementQueue] = useState([]);
   // Hidden developer mode. Triple-tap the day-of-week badge → enter passcode
   // (808) → unlocks. Persists in localStorage so it's sticky between sessions.
   // Inside the panel you can jump days, set time, edit cash/energy/etc.
@@ -11249,6 +11398,9 @@ export default function BeatboxStory() {
     const { char: withAch, earned } = applyAchievements(withUnlocks);
     if (earned.length) {
       try { setTimeout(() => playAchievement(), 130); } catch {}
+      // Queue the fanfare modals; toast still fires for catch-up info but the
+      // modal is the headline moment.
+      setAchievementQueue(q => [...q, ...earned]);
       setTimeout(() => earned.forEach(a => showToast(`🏆 Achievement: ${a.label}`, 'win')), 140);
     }
     return withAch;
@@ -11393,6 +11545,13 @@ export default function BeatboxStory() {
                   );
                 })()}
                 <button
+                  onClick={() => setShowSettings(true)}
+                  aria-label="Settings"
+                  title="Settings"
+                  className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-amber-500 border border-stone-800 hover:border-amber-500/50 transition-all">
+                  <span className="text-xs leading-none">⚙</span>
+                </button>
+                <button
                   onClick={() => setShowAchievements(true)}
                   aria-label="Achievements"
                   title="Achievements"
@@ -11430,6 +11589,13 @@ export default function BeatboxStory() {
             devUnlocked={devUnlocked}
             onDevUnlock={(code) => tryDevUnlock(code)}
             onOpenDevPanel={() => { setShowAchievements(false); setShowDevPanel(true); }} />
+        )}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+        {achievementQueue.length > 0 && (
+          <AchievementFanfare
+            key={achievementQueue[0].id}
+            item={achievementQueue[0]}
+            onClose={() => setAchievementQueue(q => q.slice(1))} />
         )}
         {showDevPanel && devUnlocked && (
           <DevPanel char={char} setChar={setChar} onClose={() => setShowDevPanel(false)}
@@ -16324,6 +16490,9 @@ const BattleHUD = ({ char, opponent, timeLeft, pScore, oScore, streak = 0, finis
 let _audioCtx = null;
 const getAudioCtx = () => {
   if (typeof window === 'undefined') return null;
+  // Honor the player's mute setting — every audio helper in the game routes
+  // through this getter, so returning null here kills all WebAudio cleanly.
+  if (getSettings().muted) return null;
   if (!_audioCtx) {
     try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; }
   }
