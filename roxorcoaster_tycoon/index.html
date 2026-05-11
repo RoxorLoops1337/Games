@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Roxor Coaster Tycoon</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #1a2030; color: #e8eaf0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    user-select: none;
+  }
+  #game { display: block; cursor: crosshair; image-rendering: pixelated; }
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 44px; padding: 0 12px;
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(180deg, rgba(28,34,52,0.95), rgba(20,26,40,0.9));
+    border-bottom: 1px solid #2b3552;
+    font-size: 13px; pointer-events: none; z-index: 5;
+  }
+  #hud .stat { display: flex; gap: 6px; align-items: center; }
+  #hud .stat b { color: #9fb4ff; font-weight: 600; }
+  #hud .stat .v { color: #ffd76b; font-variant-numeric: tabular-nums; }
+  #hud .stat.cash .v { color: #6bd97c; }
+  #hud .stat.cash.neg .v { color: #ff6b78; }
+  #hud .pad { flex: 1; }
+  #hud .speed { pointer-events: auto; display: flex; gap: 4px; }
+  #hud .speed button {
+    background: #232a40; border: 1px solid #2e3958; color: #cfd5e8;
+    padding: 4px 8px; font-size: 12px; cursor: pointer; border-radius: 3px;
+  }
+  #hud .speed button.active { background: #3956a8; border-color: #5a7be0; color: #fff; }
+
+  #toolbar {
+    position: absolute; left: 8px; top: 56px; width: 192px;
+    background: rgba(26,32,50,0.92); border: 1px solid #2b3552; border-radius: 4px;
+    padding: 8px; display: flex; flex-direction: column; gap: 4px;
+    z-index: 4; font-size: 12px;
+  }
+  #toolbar h3 { margin: 4px 0 2px; font-size: 11px; color: #7d8aab; text-transform: uppercase; letter-spacing: 0.06em; }
+  #toolbar button {
+    background: #232a40; border: 1px solid #2e3958; color: #d8ddef;
+    padding: 6px 8px; cursor: pointer; border-radius: 3px;
+    text-align: left; font-size: 12px;
+  }
+  #toolbar button:hover { background: #2c344f; }
+  #toolbar button.active { background: #3956a8; border-color: #6082e5; color: #fff; }
+  #toolbar .sub { display: none; padding-left: 8px; gap: 3px; flex-direction: column; }
+  #toolbar .sub.show { display: flex; }
+  #toolbar .sub button { font-size: 11px; padding: 4px 6px; }
+  #toolbar .cost { float: right; color: #ffd76b; font-size: 10px; }
+
+  #side {
+    position: absolute; right: 8px; top: 56px; width: 230px;
+    background: rgba(26,32,50,0.92); border: 1px solid #2b3552; border-radius: 4px;
+    padding: 8px; font-size: 11px; z-index: 4; max-height: calc(100vh - 80px);
+    overflow: hidden;
+  }
+  #side h3 { margin: 0 0 6px; font-size: 11px; color: #7d8aab; text-transform: uppercase; letter-spacing: 0.06em; }
+  #side .ride-row { display: flex; justify-content: space-between; padding: 3px 4px; border-bottom: 1px solid #232a40; }
+  #side .ride-row:hover { background: #232a40; cursor: pointer; }
+  #side .bar { display: inline-block; width: 36px; height: 5px; background: #1b2138; border-radius: 2px; vertical-align: middle; overflow: hidden; }
+  #side .bar > i { display: block; height: 100%; background: #6bd97c; }
+
+  #notifications {
+    position: absolute; right: 8px; bottom: 8px; width: 280px;
+    display: flex; flex-direction: column-reverse; gap: 4px;
+    pointer-events: none; z-index: 6;
+  }
+  .notif {
+    background: rgba(36,44,68,0.95); border-left: 3px solid #5a7be0;
+    padding: 6px 10px; font-size: 12px; border-radius: 0 3px 3px 0;
+    pointer-events: auto; cursor: pointer;
+    animation: slidein 0.3s ease-out;
+  }
+  .notif.warn { border-left-color: #ffaa3b; }
+  .notif.bad { border-left-color: #ff6b78; }
+  .notif.good { border-left-color: #6bd97c; }
+  @keyframes slidein { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  #window-host {
+    position: absolute; inset: 0; pointer-events: none; z-index: 10;
+  }
+  .win {
+    position: absolute; min-width: 260px; max-width: 420px;
+    background: rgba(28,34,52,0.97); border: 1px solid #3a4670;
+    border-radius: 4px; box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    pointer-events: auto; font-size: 12px;
+  }
+  .win .titlebar {
+    background: linear-gradient(180deg, #3956a8, #2c4488);
+    padding: 5px 8px; font-weight: 600; cursor: move;
+    display: flex; justify-content: space-between; align-items: center;
+    border-radius: 4px 4px 0 0;
+  }
+  .win .titlebar button {
+    background: transparent; border: none; color: #fff; cursor: pointer;
+    font-size: 14px; padding: 0 4px;
+  }
+  .win .body { padding: 8px 10px; max-height: 60vh; overflow-y: auto; }
+  .win .body button {
+    background: #2c3552; border: 1px solid #3e4a72; color: #d8ddef;
+    padding: 4px 8px; font-size: 11px; cursor: pointer; border-radius: 3px;
+    margin: 2px;
+  }
+  .win .body button:hover { background: #36406b; }
+  .win .row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .win .row b { color: #9fb4ff; }
+  .win .stat-bar { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .win .stat-bar .label { flex: 0 0 70px; font-size: 11px; }
+  .win .stat-bar .bg { flex: 1; height: 6px; background: #1b2138; border-radius: 3px; overflow: hidden; }
+  .win .stat-bar .bg > i { display: block; height: 100%; }
+
+  #help {
+    position: absolute; bottom: 8px; left: 8px; max-width: 380px;
+    background: rgba(26,32,50,0.85); border: 1px solid #2b3552;
+    padding: 6px 10px; font-size: 11px; color: #a8b1cc;
+    border-radius: 3px; z-index: 4;
+    line-height: 1.5;
+  }
+  #help kbd {
+    background: #2c3552; border: 1px solid #3e4a72; padding: 1px 5px;
+    border-radius: 2px; font-size: 10px; color: #fff;
+  }
+
+  #debug {
+    position: absolute; left: 8px; bottom: 8px;
+    background: rgba(0,0,0,0.7); padding: 4px 8px;
+    font: 10px monospace; color: #6bd97c;
+    border-radius: 3px; display: none; z-index: 4;
+  }
+  #debug.show { display: block; }
+  #help.hide { display: none; }
+
+  #title-screen {
+    position: absolute; inset: 0; background: linear-gradient(180deg, #15192d 0%, #2b3268 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; gap: 16px;
+  }
+  #title-screen h1 {
+    font-size: 56px; margin: 0;
+    background: linear-gradient(180deg, #ffd76b, #ff8c3b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 4px 12px rgba(255,140,60,0.3);
+    letter-spacing: 2px;
+  }
+  #title-screen p { color: #a8b1cc; margin: 0; font-size: 14px; }
+  #title-screen .scenarios {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-top: 24px; max-width: 800px;
+  }
+  #title-screen .scenarios .card {
+    background: rgba(36,44,68,0.85); border: 1px solid #3a4670;
+    padding: 14px; border-radius: 6px; cursor: pointer; width: 220px;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  #title-screen .scenarios .card:hover { transform: translateY(-3px); border-color: #6082e5; }
+  #title-screen .scenarios .card h3 { margin: 0 0 6px; color: #ffd76b; }
+  #title-screen .scenarios .card p { font-size: 11px; color: #a8b1cc; }
+  #title-screen .scenarios .card .diff { font-size: 10px; color: #6bd97c; text-transform: uppercase; }
+  #title-screen .scenarios .card .diff.med { color: #ffaa3b; }
+  #title-screen .scenarios .card .diff.hard { color: #ff6b78; }
+  #title-screen .footer { color: #5a6480; font-size: 11px; margin-top: 16px; }
+  #title-screen .load-btn {
+    background: #3956a8; color: #fff; border: 1px solid #6082e5; padding: 8px 16px;
+    border-radius: 3px; cursor: pointer; font-size: 13px; margin-top: 8px;
+  }
+
+  .tooltip {
+    position: absolute; background: rgba(0,0,0,0.85); padding: 4px 8px;
+    border-radius: 3px; font-size: 11px; pointer-events: none;
+    z-index: 50; max-width: 240px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="stat cash"><b>$</b><span class="v" id="hud-cash">0</span></div>
+    <div class="stat"><b>Guests</b><span class="v" id="hud-guests">0</span></div>
+    <div class="stat"><b>Rating</b><span class="v" id="hud-rating">0</span></div>
+    <div class="stat"><b>Date</b><span class="v" id="hud-date">Mar Y1</span></div>
+    <div class="stat"><b>Park</b><span class="v" id="hud-park">My Park</span></div>
+    <div class="pad"></div>
+    <div class="speed">
+      <button data-speed="0">⏸</button>
+      <button data-speed="1" class="active">▶</button>
+      <button data-speed="2">▶▶</button>
+      <button data-speed="4">▶▶▶</button>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <h3>Build</h3>
+    <button data-tool="terrain">⛰ Terrain</button>
+    <div class="sub" data-sub="terrain">
+      <button data-sub-tool="raise">Raise <span class="cost">$2</span></button>
+      <button data-sub-tool="lower">Lower <span class="cost">$2</span></button>
+      <button data-sub-tool="level">Level</button>
+      <button data-sub-tool="grass">Grass</button>
+      <button data-sub-tool="sand">Sand</button>
+      <button data-sub-tool="dirt">Dirt</button>
+      <button data-sub-tool="water">Water</button>
+    </div>
+    <button data-tool="path">⎯ Footpath <span class="cost">$10</span></button>
+    <button data-tool="queue">⎯ Queue Path <span class="cost">$10</span></button>
+    <button data-tool="ride">🎡 Rides</button>
+    <div class="sub" data-sub="ride">
+      <button data-ride="carousel">Carousel <span class="cost">$700</span></button>
+      <button data-ride="ferris">Ferris Wheel <span class="cost">$900</span></button>
+      <button data-ride="swinger">Swinging Ship <span class="cost">$800</span></button>
+      <button data-ride="twist">Twist <span class="cost">$1100</span></button>
+      <button data-ride="topspin">Top Spin <span class="cost">$1400</span></button>
+      <button data-ride="haunted">Haunted House <span class="cost">$1000</span></button>
+    </div>
+    <button data-tool="coaster">🎢 Coaster <span class="cost">$30+</span></button>
+    <button data-tool="shop">🍔 Shops</button>
+    <div class="sub" data-sub="shop">
+      <button data-shop="burger">Burger Bar <span class="cost">$500</span></button>
+      <button data-shop="drink">Drink Stall <span class="cost">$400</span></button>
+      <button data-shop="icecream">Ice Cream <span class="cost">$450</span></button>
+      <button data-shop="bathroom">Bathroom <span class="cost">$350</span></button>
+      <button data-shop="info">Info Kiosk <span class="cost">$300</span></button>
+    </div>
+    <button data-tool="scenery">🌳 Scenery</button>
+    <div class="sub" data-sub="scenery">
+      <button data-scenery="tree">Tree <span class="cost">$20</span></button>
+      <button data-scenery="bush">Bush <span class="cost">$10</span></button>
+      <button data-scenery="bench">Bench <span class="cost">$50</span></button>
+      <button data-scenery="bin">Bin <span class="cost">$30</span></button>
+      <button data-scenery="lamp">Lamp <span class="cost">$40</span></button>
+      <button data-scenery="fountain">Fountain <span class="cost">$200</span></button>
+    </div>
+    <button data-tool="staff">👷 Hire Staff</button>
+    <div class="sub" data-sub="staff">
+      <button data-staff="handyman">Handyman <span class="cost">$50/wk</span></button>
+      <button data-staff="mechanic">Mechanic <span class="cost">$80/wk</span></button>
+      <button data-staff="entertainer">Entertainer <span class="cost">$60/wk</span></button>
+    </div>
+    <button data-tool="demolish">⛏ Demolish</button>
+    <h3>Game</h3>
+    <button data-action="finance">💰 Finance</button>
+    <button data-action="park">🏰 Park Info</button>
+    <button data-action="research">🔬 Research</button>
+    <button data-action="save">💾 Save</button>
+    <button data-action="load">📁 Load</button>
+    <button data-action="menu">🏠 Main Menu</button>
+  </div>
+
+  <div id="side">
+    <h3>Rides &amp; Shops</h3>
+    <div id="ride-list">none built yet</div>
+  </div>
+
+  <div id="notifications"></div>
+  <div id="window-host"></div>
+
+  <div id="help">
+    <kbd>WASD</kbd>/<kbd>arrows</kbd> pan · <kbd>Q</kbd>/<kbd>E</kbd> rotate · <kbd>wheel</kbd> zoom ·
+    <kbd>esc</kbd> cancel · <kbd>F3</kbd> debug · <kbd>space</kbd> pause
+  </div>
+  <div id="debug"></div>
+
+  <div id="title-screen">
+    <h1>ROXOR COASTER TYCOON</h1>
+    <p>Build, manage, and watch your theme park come alive</p>
+    <div class="scenarios" id="scenario-list"></div>
+    <button class="load-btn" id="load-game-btn">Load Saved Game</button>
+    <p class="footer">A homage to Chris Sawyer's masterpiece</p>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
