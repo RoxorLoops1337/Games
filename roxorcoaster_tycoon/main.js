@@ -232,43 +232,142 @@ canvas.addEventListener('wheel', (e) => {
   state.cam.y = (state.cam.y + my) * k - my;
 }, { passive: false });
 
-let dragging = false, dragX = 0, dragY = 0, dragMode = null;
+// Pointer / touch handling.  Supports:
+//  • Mouse: middle-click pan, left-click action (paint-drag for terrain/path), right-click cancels tool.
+//  • Touch: single-finger drag pans, tap places, pinch zooms, two-finger twist rotates.
+const pointers = new Map(); // pointerId -> {x, y, startX, startY, startTime, pointerType, mode}
+const DRAG_THRESHOLD = 8;   // pixels before a single-finger touch becomes a pan
+const TAP_MAX_MS = 500;
+let pinchStartDist = 0, pinchStartZoom = 1, pinchCenter = null, pinchStartAngle = 0, pinchStartRot = 0;
+
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.button === 1 || (e.button === 0 && state.ui.tool == null)) {
-    dragging = true;
-    dragMode = 'pan';
-    dragX = e.clientX; dragY = e.clientY;
-    canvas.setPointerCapture(e.pointerId);
-  } else if (e.button === 0) {
-    handleClick(e);
-    dragging = true;
-    dragMode = 'paint';
-    canvas.setPointerCapture(e.pointerId);
-  } else if (e.button === 2) {
-    // right-click cancels tool
-    state.ui.tool = null; state.ui.subTool = null; state.ui.ghost = null;
-    updateToolbarUI();
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, {
+    x: e.clientX, y: e.clientY,
+    startX: e.clientX, startY: e.clientY,
+    startTime: performance.now(),
+    pointerType: e.pointerType,
+    mode: null,
+  });
+
+  if (e.pointerType === 'mouse') {
+    if (e.button === 1 || (e.button === 0 && state.ui.tool == null)) {
+      pointers.get(e.pointerId).mode = 'pan';
+    } else if (e.button === 0) {
+      // immediate action + drag-paint enabled
+      handleClick(e);
+      pointers.get(e.pointerId).mode = 'paint';
+    } else if (e.button === 2) {
+      state.ui.tool = null; state.ui.subTool = null; state.ui.ghost = null;
+      updateToolbarUI();
+      pointers.delete(e.pointerId);
+    }
+    return;
   }
-});
-canvas.addEventListener('pointermove', (e) => {
-  // update hover tile
+
+  // Touch / pen: figure out hover so the ghost shows where we'll place
   const sx = e.clientX, sy = e.clientY;
   const t = pickTile(sx, sy, state);
   state.ui.hoverTile = t ? { tx: t.tx, ty: t.ty } : null;
   updateGhost();
-  // panning
-  if (dragging && dragMode === 'pan') {
-    state.cam.x -= e.clientX - dragX;
-    state.cam.y -= e.clientY - dragY;
-    dragX = e.clientX; dragY = e.clientY;
-  } else if (dragging && dragMode === 'paint' && state.ui.tool === 'terrain') {
-    handlePaint(e);
-  } else if (dragging && dragMode === 'paint' && (state.ui.tool === 'path' || state.ui.tool === 'queue')) {
-    handlePaint(e);
+
+  // If a second finger lands, switch into pinch mode
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinchStartDist = Math.hypot(a.x - b.x, a.y - b.y);
+    pinchStartZoom = state.cam.zoom;
+    pinchCenter = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    pinchStartAngle = Math.atan2(b.y - a.y, b.x - a.x);
+    pinchStartRot = state.cam.rotation;
+    for (const p of pointers.values()) p.mode = 'pinch';
   }
 });
-canvas.addEventListener('pointerup', () => { dragging = false; dragMode = null; });
+
+canvas.addEventListener('pointermove', (e) => {
+  const p = pointers.get(e.pointerId);
+  if (p) {
+    p.x = e.clientX; p.y = e.clientY;
+  }
+  // hover preview
+  const t = pickTile(e.clientX, e.clientY, state);
+  state.ui.hoverTile = t ? { tx: t.tx, ty: t.ty } : null;
+  updateGhost();
+
+  if (!p) return;
+
+  // pinch / two-finger
+  if (pointers.size === 2 && p.mode === 'pinch') {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    const scale = dist / Math.max(1, pinchStartDist);
+    const newZoom = clampZoom(pinchStartZoom * scale);
+    // Pin the pinch midpoint
+    if (newZoom !== state.cam.zoom) {
+      const k = newZoom / state.cam.zoom;
+      const cx = pinchCenter.x, cy = pinchCenter.y;
+      state.cam.x = (state.cam.x + cx) * k - cx;
+      state.cam.y = (state.cam.y + cy) * k - cy;
+      state.cam.zoom = newZoom;
+    }
+    // two-finger rotate: significant angle delta steps rotation
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const deltaA = ((ang - pinchStartAngle) * 180 / Math.PI + 540) % 360 - 180;
+    const steps = Math.round(deltaA / 90);
+    const newRot = (pinchStartRot + steps + 4) & 3;
+    if (newRot !== state.cam.rotation) state.cam.rotation = newRot;
+    return;
+  }
+
+  // touch: decide pan vs paint based on which tool is active once movement exceeds threshold
+  if (p.pointerType !== 'mouse' && p.mode == null) {
+    const moved = Math.hypot(p.x - p.startX, p.y - p.startY);
+    if (moved > DRAG_THRESHOLD) {
+      p.mode = isPaintTool(state.ui.tool) ? 'paint' : 'pan';
+    }
+  }
+
+  if (p.mode === 'pan') {
+    const dx = e.movementX || (e.clientX - (p.lastX ?? p.startX));
+    const dy = e.movementY || (e.clientY - (p.lastY ?? p.startY));
+    state.cam.x -= dx;
+    state.cam.y -= dy;
+  } else if (p.mode === 'paint') {
+    if (isPaintTool(state.ui.tool)) handlePaint(e);
+  }
+  p.lastX = e.clientX; p.lastY = e.clientY;
+});
+
+function isPaintTool(tool) {
+  return tool === 'terrain' || tool === 'path' || tool === 'queue' || tool === 'demolish';
+}
+
+function pointerEnd(e) {
+  const p = pointers.get(e.pointerId);
+  if (!p) return;
+  // For touch / pen: if it didn't become a pan/pinch and was quick, treat as tap
+  if (p.pointerType !== 'mouse' && (p.mode == null || p.mode === 'pinch')) {
+    const moved = Math.hypot(p.x - p.startX, p.y - p.startY);
+    const dt = performance.now() - p.startTime;
+    if (p.mode == null && moved <= DRAG_THRESHOLD && dt < TAP_MAX_MS) {
+      // tap → place at finger location
+      const t = pickTile(p.x, p.y, state);
+      state.ui.hoverTile = t ? { tx: t.tx, ty: t.ty } : null;
+      handleClick({ clientX: p.x, clientY: p.y });
+    }
+  }
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchCenter = null;
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', pointerEnd);
+canvas.addEventListener('pointerleave', pointerEnd);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function clampZoom(z) {
+  const levels = [0.5, 0.75, 1, 1.5, 2, 3];
+  // snap to nearest level so it feels stepwise but allow fluid pinch in between
+  return Math.max(levels[0], Math.min(levels[levels.length - 1], z));
+}
 
 function handleClick(e) {
   if (!state.terrain) return;
@@ -476,6 +575,7 @@ function updateToolbarUI() {
 document.getElementById('toolbar').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
+  let closeOnSelect = false;
   if (btn.dataset.tool) {
     if (state.ui.tool === btn.dataset.tool) {
       state.ui.tool = null;
@@ -483,26 +583,37 @@ document.getElementById('toolbar').addEventListener('click', (e) => {
     } else {
       state.ui.tool = btn.dataset.tool;
       state.ui.subTool = null;
-      // close coaster builder if switching tools
-      if (state.ui.coasterBuilding && state.ui.tool !== 'coaster') {
-        // keep the coaster building window — but ignore mouse on canvas
-      }
     }
     state.ui.ghost = null;
     updateToolbarUI();
+    // Tools that don't need a sub-pick — close the toolbar on mobile so
+    // the player can start placing/using right away.
+    if (state.ui.tool === 'path' || state.ui.tool === 'queue' ||
+        state.ui.tool === 'coaster' || state.ui.tool === 'demolish') {
+      closeOnSelect = true;
+    }
   } else if (btn.dataset.subTool) {
     state.ui.subTool = btn.dataset.subTool;
     updateToolbarUI();
+    closeOnSelect = true;
   } else if (btn.dataset.ride) {
     state.ui.tool = 'ride'; state.ui.subTool = btn.dataset.ride; updateToolbarUI();
+    closeOnSelect = true;
   } else if (btn.dataset.shop) {
     state.ui.tool = 'shop'; state.ui.subTool = btn.dataset.shop; updateToolbarUI();
+    closeOnSelect = true;
   } else if (btn.dataset.scenery) {
     state.ui.tool = 'scenery'; state.ui.subTool = btn.dataset.scenery; updateToolbarUI();
+    closeOnSelect = true;
   } else if (btn.dataset.staff) {
     state.ui.tool = 'staff'; state.ui.subTool = btn.dataset.staff; updateToolbarUI();
+    closeOnSelect = true;
   } else if (btn.dataset.action) {
     handleAction(btn.dataset.action);
+    closeOnSelect = true;
+  }
+  if (closeOnSelect && isMobile()) {
+    toolbarEl.classList.remove('open');
   }
 });
 
@@ -526,6 +637,29 @@ function handleAction(action) {
 document.querySelectorAll('#hud .speed button').forEach(b => {
   b.onclick = () => { state.gameSpeed = parseInt(b.dataset.speed); updateSpeedUI(); };
 });
+
+// Rotate buttons (also useful on desktop)
+document.getElementById('rot-l').onclick = () => { state.cam.rotation = (state.cam.rotation + 3) & 3; };
+document.getElementById('rot-r').onclick = () => { state.cam.rotation = (state.cam.rotation + 1) & 3; };
+
+// Mobile toolbar / side toggles
+const toolbarEl = document.getElementById('toolbar');
+const sideEl = document.getElementById('side');
+const toolbarToggle = document.getElementById('toolbar-toggle');
+const sideToggle = document.getElementById('side-toggle');
+toolbarToggle.onclick = () => {
+  toolbarEl.classList.toggle('open');
+  if (toolbarEl.classList.contains('open')) sideEl.classList.remove('open');
+};
+sideToggle.onclick = () => {
+  sideEl.classList.toggle('open');
+  if (sideEl.classList.contains('open')) toolbarEl.classList.remove('open');
+};
+// On desktop the toolbar is always visible; on mobile we start it hidden
+// (it slides in when the toggle button is tapped).
+function isMobile() { return matchMedia('(pointer: coarse)').matches || window.innerWidth < 800; }
+// When player taps a tool button on mobile we expand the toolbar; tapping
+// a sub-tool keeps it open so they can fine-tune.
 function updateSpeedUI() {
   document.querySelectorAll('#hud .speed button').forEach(b => {
     b.classList.toggle('active', parseInt(b.dataset.speed) === state.gameSpeed);
