@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a2030">
 <title>Roxor Coaster Tycoon</title>
 <style>
   html, body {
@@ -10,8 +13,14 @@
     background: #1a2030; color: #e8eaf0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    overscroll-behavior: none;
+    touch-action: none;
   }
-  #game { display: block; cursor: crosshair; image-rendering: pixelated; }
+  #game { display: block; cursor: crosshair; image-rendering: pixelated; touch-action: none; }
+  button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
   #hud {
     position: absolute; top: 0; left: 0; right: 0;
     height: 44px; padding: 0 12px;
@@ -32,6 +41,24 @@
     padding: 4px 8px; font-size: 12px; cursor: pointer; border-radius: 3px;
   }
   #hud .speed button.active { background: #3956a8; border-color: #5a7be0; color: #fff; }
+  #hud .rotate { pointer-events: auto; display: none; gap: 4px; }
+  #hud .rotate button {
+    background: #232a40; border: 1px solid #2e3958; color: #cfd5e8;
+    padding: 4px 8px; font-size: 14px; cursor: pointer; border-radius: 3px;
+    min-width: 32px;
+  }
+  #toolbar-toggle {
+    position: absolute; top: 50px; left: 8px;
+    background: rgba(36,44,68,0.95); border: 1px solid #3a4670; color: #fff;
+    padding: 8px 12px; font-size: 18px; cursor: pointer; border-radius: 4px;
+    z-index: 5; display: none;
+  }
+  #side-toggle {
+    position: absolute; top: 50px; right: 8px;
+    background: rgba(36,44,68,0.95); border: 1px solid #3a4670; color: #fff;
+    padding: 8px 12px; font-size: 16px; cursor: pointer; border-radius: 4px;
+    z-index: 5; display: none;
+  }
 
   #toolbar {
     position: absolute; left: 8px; top: 56px; width: 192px;
@@ -56,7 +83,7 @@
     position: absolute; right: 8px; top: 56px; width: 230px;
     background: rgba(26,32,50,0.92); border: 1px solid #2b3552; border-radius: 4px;
     padding: 8px; font-size: 11px; z-index: 4; max-height: calc(100vh - 80px);
-    overflow: hidden;
+    overflow-y: auto; touch-action: pan-y;
   }
   #side h3 { margin: 0 0 6px; font-size: 11px; color: #7d8aab; text-transform: uppercase; letter-spacing: 0.06em; }
   #side .ride-row { display: flex; justify-content: space-between; padding: 3px 4px; border-bottom: 1px solid #232a40; }
@@ -173,6 +200,96 @@
     border-radius: 3px; font-size: 11px; pointer-events: none;
     z-index: 50; max-width: 240px; line-height: 1.4;
   }
+
+  /* ----- Mobile responsive layout ----- */
+  @media (pointer: coarse), (max-width: 800px) {
+    #hud { height: 38px; padding: 0 6px; gap: 8px; font-size: 11px; flex-wrap: nowrap; overflow: hidden; }
+    #hud .stat b { display: none; }
+    #hud .stat:nth-child(5) { display: none; } /* hide park name */
+    #hud .rotate { display: flex; }
+    #hud .speed button { padding: 3px 6px; font-size: 11px; min-width: 28px; }
+
+    #toolbar-toggle, #side-toggle { display: block; }
+
+    #toolbar {
+      left: 8px; right: 8px; top: auto; bottom: 8px;
+      width: auto; max-height: 50vh;
+      flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+      gap: 4px; padding: 6px;
+      transform: translateY(calc(100% + 12px));
+      transition: transform 0.2s;
+    }
+    #toolbar.open { transform: translateY(0); }
+    #toolbar h3 { display: none; }
+    #toolbar > button {
+      flex: 0 0 auto; padding: 10px 12px; font-size: 13px; min-height: 44px;
+      white-space: nowrap;
+    }
+    #toolbar .sub {
+      position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 6px;
+      flex-direction: row; flex-wrap: nowrap; overflow-x: auto;
+      background: rgba(26,32,50,0.95); padding: 6px; border: 1px solid #2b3552;
+      border-radius: 4px;
+    }
+    #toolbar .sub button { flex: 0 0 auto; padding: 10px 12px; font-size: 12px; min-height: 40px; white-space: nowrap; }
+    #toolbar .cost { float: none; display: block; font-size: 10px; }
+
+    #side {
+      right: 8px; top: 96px; width: auto; max-width: 260px;
+      transform: translateX(calc(100% + 16px));
+      transition: transform 0.2s;
+    }
+    #side.open { transform: translateX(0); }
+
+    #help { display: none; }
+
+    /* Stack scenario cards vertically and fit screen */
+    #title-screen h1 { font-size: 32px; }
+    #title-screen p { font-size: 12px; padding: 0 16px; text-align: center; }
+    #title-screen .scenarios {
+      grid-template-columns: 1fr; gap: 8px; padding: 0 16px;
+      max-width: 100%; width: 100%; box-sizing: border-box;
+      max-height: 50vh; overflow-y: auto;
+    }
+    #title-screen .scenarios .card { width: auto; padding: 10px; }
+    #title-screen .scenarios .card h3 { font-size: 14px; margin-bottom: 4px; }
+    #title-screen .scenarios .card p { font-size: 11px; padding: 0; text-align: left; }
+
+    /* Windows: take up most of the screen, scroll inside */
+    .win {
+      left: 4px !important; right: 4px !important;
+      top: 50px !important; bottom: 60px;
+      width: auto; max-width: none !important; min-width: 0;
+      max-height: calc(100vh - 120px);
+    }
+    .win .titlebar { padding: 10px 12px; font-size: 14px; cursor: default; }
+    .win .titlebar button { font-size: 18px; padding: 2px 8px; }
+    .win .body { padding: 10px 12px; max-height: calc(100vh - 180px); touch-action: pan-y; }
+    .win .body button { padding: 8px 12px; font-size: 13px; min-height: 36px; }
+
+    /* Allow horizontal scroll inside the toolbar */
+    #toolbar { touch-action: pan-x; }
+    #toolbar .sub { touch-action: pan-x; }
+
+    /* Allow vertical scroll on title-screen scenarios + body */
+    #title-screen { touch-action: pan-y; }
+    #title-screen .scenarios { touch-action: pan-y; }
+
+    #notifications { left: 8px; right: 8px; width: auto; max-width: none; bottom: 8px; }
+    .notif { font-size: 13px; padding: 8px 12px; }
+
+    /* Make the speed buttons easier to tap */
+    #hud .speed { gap: 2px; }
+  }
+
+  /* Very narrow phones */
+  @media (max-width: 480px) {
+    #hud { gap: 6px; padding: 0 4px; }
+    #hud .stat .v { font-size: 11px; }
+    #hud .speed button { padding: 2px 5px; font-size: 10px; min-width: 24px; }
+    #hud .rotate button { padding: 2px 6px; font-size: 12px; min-width: 26px; }
+    #toolbar > button { padding: 10px 8px; font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -185,6 +302,10 @@
     <div class="stat"><b>Date</b><span class="v" id="hud-date">Mar Y1</span></div>
     <div class="stat"><b>Park</b><span class="v" id="hud-park">My Park</span></div>
     <div class="pad"></div>
+    <div class="rotate">
+      <button id="rot-l" title="Rotate left (Q)">⟲</button>
+      <button id="rot-r" title="Rotate right (E)">⟳</button>
+    </div>
     <div class="speed">
       <button data-speed="0">⏸</button>
       <button data-speed="1" class="active">▶</button>
@@ -192,6 +313,9 @@
       <button data-speed="4">▶▶▶</button>
     </div>
   </div>
+
+  <button id="toolbar-toggle" aria-label="Toggle toolbar">🛠</button>
+  <button id="side-toggle" aria-label="Toggle ride list">📋</button>
 
   <div id="toolbar">
     <h3>Build</h3>
