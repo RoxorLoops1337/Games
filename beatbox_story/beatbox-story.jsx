@@ -11803,7 +11803,7 @@ export default function BeatboxStory() {
   if (screen === 'title') {
     const hasActiveSlot = !!(char && char.created && activeSlot);
     return (
-      <>
+      <ScreenErrorBoundary>
         <GlobalErrorOverlay />
         <TitleScreen
           char={char}
@@ -11813,7 +11813,7 @@ export default function BeatboxStory() {
           onSettings={() => setShowSettings(true)} />
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
         <style>{`@keyframes screenFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-      </>
+      </ScreenErrorBoundary>
     );
   }
 
