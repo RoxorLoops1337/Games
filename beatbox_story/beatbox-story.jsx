@@ -17732,16 +17732,42 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     });
-    // Hard scroll lock for the duration of the round — Safari URL bar can
-    // still resize the viewport but body content won't reflow under the
-    // user's fingers.
-    const prevOverflow = document.body.style.overflow;
-    const prevOverscroll = document.body.style.overscrollBehavior;
-    document.body.style.overflow = 'hidden';
-    document.body.style.overscrollBehavior = 'contain';
+    // Hard viewport lock for the duration of the round. body+html overflow
+    // alone isn't enough on Android Chrome — the URL bar can still toggle
+    // on edge-area touches, reflowing the page. Pinning the html element's
+    // height + overscroll prevents Chrome from doing the URL-bar dance,
+    // and a wrapper-level touchmove preventDefault stops any leftover
+    // gesture from being interpreted as a scroll.
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
+      htmlHeight: html.style.height,
+      bodyOverflow: body.style.overflow,
+      bodyOverscroll: body.style.overscrollBehavior,
+      bodyTouchAction: body.style.touchAction,
+    };
+    html.style.overflow = 'hidden';
+    html.style.overscrollBehavior = 'none';
+    html.style.height = '100%';
+    body.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'none';
+    body.style.touchAction = 'none';
+    // Swallow touchmove inside the player area so nothing the browser
+    // interprets as a scroll can slip through. Has to be passive:false
+    // to allow preventDefault on touch events.
+    const wrapper = playerHeroRef.current;
+    const stopMove = (e) => { e.preventDefault(); };
+    wrapper?.addEventListener('touchmove', stopMove, { passive: false });
     return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.overscrollBehavior = prevOverscroll;
+      html.style.overflow = prev.htmlOverflow;
+      html.style.overscrollBehavior = prev.htmlOverscroll;
+      html.style.height = prev.htmlHeight;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+      body.style.touchAction = prev.bodyTouchAction;
+      wrapper?.removeEventListener('touchmove', stopMove);
     };
   }, [phase]);
 
@@ -18176,7 +18202,12 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
             {/* Player rounds: BeatboxHero pre-mounts during countdown so canvas + buttons
                 are visible while the player gets ready. Activates when round starts. */}
             {isPlayerRound && lesson != null && (
-              <div ref={playerHeroRef} style={{ touchAction: 'manipulation', scrollMarginTop: 12 }}>
+              <div ref={playerHeroRef}
+                // touch-action:none means the browser won't interpret any
+                // gesture in this area as scroll/zoom; pads still get the
+                // onPointerDown taps, but Android Chrome can't fire URL-bar
+                // toggles or pull-to-refresh in here.
+                style={{ touchAction: 'none', scrollMarginTop: 12, overscrollBehavior: 'none' }}>
                 <BeatboxHero
                   key={`p-r${roundN}`}
                   mode="battle"
