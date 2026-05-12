@@ -12216,14 +12216,16 @@ function HoodScreen({ go, char }) {
             through. Coordinates are eyeballed onto the night art. */}
         {!isDay && (
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            {/* Apartment windows — soft amber breathing */}
+            {/* Apartment windows — soft amber breathing. Positions verified
+                against the actual painted lit windows in the source art via
+                a sharp-rendered preview. */}
             {[
-              { top: 12, left: 32, h: 8, w: 4, delay: 0 },
-              { top: 12, left: 42, h: 8, w: 4, delay: 0.7 },
-              { top: 12, left: 52, h: 8, w: 4, delay: 1.4 },
-              { top: 22, left: 32, h: 8, w: 4, delay: 0.3 },
-              { top: 22, left: 42, h: 8, w: 4, delay: 1.1 },
-              { top: 22, left: 52, h: 8, w: 4, delay: 1.8 },
+              { top: 22, left: 38, h: 4, w: 4, delay: 0 },
+              { top: 22, left: 46, h: 4, w: 4, delay: 0.7 },
+              { top: 22, left: 54, h: 4, w: 4, delay: 1.4 },
+              { top: 29, left: 38, h: 4, w: 4, delay: 0.3 },
+              { top: 29, left: 46, h: 4, w: 4, delay: 1.1 },
+              { top: 29, left: 54, h: 4, w: 4, delay: 1.8 },
             ].map((w, i) => (
               <div key={`w${i}`} className="absolute"
                 style={{
@@ -12235,10 +12237,11 @@ function HoodScreen({ go, char }) {
                 }} />
             ))}
 
-            {/* LIVE neon sign — red, faster pulse with occasional flicker */}
+            {/* LIVE neon sign — red, faster pulse with occasional flicker.
+                Positions verified to land directly on the painted sign. */}
             <div className="absolute"
               style={{
-                top: '34%', left: '78%', width: '14%', height: '5%',
+                top: '49%', left: '75%', width: '12%', height: '5%',
                 background: 'radial-gradient(ellipse at center, rgba(251,56,90,0.85), rgba(251,56,90,0))',
                 animation: 'nightNeon 1.8s ease-in-out infinite',
                 mixBlendMode: 'screen',
@@ -12246,7 +12249,7 @@ function HoodScreen({ go, char }) {
             {/* Halo behind the sign for extra glow */}
             <div className="absolute"
               style={{
-                top: '30%', left: '70%', width: '30%', height: '14%',
+                top: '44%', left: '70%', width: '22%', height: '14%',
                 background: 'radial-gradient(circle at 50% 50%, rgba(251,56,90,0.30), rgba(251,56,90,0) 60%)',
                 animation: 'nightNeonHalo 1.8s ease-in-out infinite',
                 mixBlendMode: 'screen',
@@ -12255,7 +12258,7 @@ function HoodScreen({ go, char }) {
             {/* Corner shop awning glow — warm orange */}
             <div className="absolute"
               style={{
-                top: '74%', left: '62%', width: '34%', height: '14%',
+                top: '77%', left: '64%', width: '30%', height: '12%',
                 background: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.45), rgba(255,136,40,0) 70%)',
                 animation: 'nightShop 4.5s ease-in-out infinite',
                 mixBlendMode: 'screen',
