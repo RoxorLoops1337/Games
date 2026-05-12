@@ -3696,7 +3696,12 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, []);
+    // Depend on `permission` because the canvas isn't in the DOM until
+    // permission becomes 'granted' (the early-return UIs are rendered
+    // for 'pending'/'denied'). With [] deps the effect would fire once
+    // on the first mount when ribbonCanvasRef.current was still null
+    // and never re-run, so the ribbon stayed empty forever.
+  }, [permission]);
 
   // Mount: request mic + set up audio pipeline
   useEffect(() => {
@@ -12127,48 +12132,102 @@ function CreateScreen({ char, setChar, onDone }) {
 }
 
 // ============ SCREEN: HOOD ============
-
+// Pixel-art map of the neighborhood with clickable location hotspots.
+// Day / night background swaps based on the in-game clock; hotspots dim
+// + show 🔒 when their location is locked (e.g. shop before day 5,
+// bar at noon, park after sundown).
 function HoodScreen({ go, char }) {
   const mins = char.minutes ?? 0;
+  const isDay = isDayTime(mins);
   const shopLockedByDay = !isUnlocked(char, 'shop');
   const barLockedByDay  = !isUnlocked(char, 'bar');
-  const places = [
-    { id: 'house', name: 'The House', desc: 'Train, eat, rest', pixelIcon: 'home', color: '#D4A017' },
-    { id: 'park', name: 'The Park', desc: 'Jam, busk, run', pixelIcon: 'tree', color: '#84cc16',
-      locked: !isDayTime(mins), lockReason: 'The park is empty at night. Come back at sunrise (6 AM).' },
-    { id: 'shop', name: 'The Shop', desc: 'Gear & food', pixelIcon: 'shop', color: '#C8DCEF',
-      locked: shopLockedByDay, lockReason: shopLockedByDay ? CONTENT_UNLOCKS.shop.label : null },
-    { id: 'bar', name: 'The Bar', desc: barLockedByDay ? '' : `Tonight: ${BAR_SCHEDULE[dayOfWeek(char.day)].title}`, pixelIcon: 'beer', color: '#CC2200',
+  // Hotspot rectangles given as percentages of the map's box, eyeballed
+  // from the source art. Tweak if the art shifts.
+  const hotspots = [
+    { id: 'house', name: 'House',
+      top: 6, left: 30, width: 38, height: 23,
+      locked: false,
+      desc: 'Train, eat, rest' },
+    { id: 'park', name: 'Park',
+      top: 31, left: 6, width: 53, height: 27,
+      locked: !isDayTime(mins),
+      lockReason: 'Empty at night · come back at sunrise (6 AM)',
+      desc: 'Jam, busk, run' },
+    { id: 'bar', name: 'Bar',
+      top: 33, left: 64, width: 32, height: 19,
       locked: barLockedByDay || !isNightTime(mins),
-      lockReason: barLockedByDay ? CONTENT_UNLOCKS.bar.label : 'The bar opens at 6 PM. The cypher only happens at night.' },
+      lockReason: barLockedByDay ? CONTENT_UNLOCKS.bar.label : 'Opens at 6 PM',
+      desc: barLockedByDay ? '' : `Tonight: ${BAR_SCHEDULE[dayOfWeek(char.day)].title}` },
+    { id: 'shop', name: 'Shop',
+      top: 70, left: 60, width: 38, height: 22,
+      locked: shopLockedByDay,
+      lockReason: shopLockedByDay ? CONTENT_UNLOCKS.shop.label : null,
+      desc: 'Gear & food' },
   ];
   return (
-    <div className="space-y-3 pt-4">
-      <div className="text-center mb-2">
-        <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE HOOD</div>
-        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Where will you go?</div>
+    <div className="space-y-3 pt-2">
+      <div className="text-center mb-1">
+        <div className="text-2xl tracking-widest text-stone-300"
+          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          THE HOOD
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">
+          {isDay ? '☀ daytime · streets are alive' : '🌙 nighttime · neon glow'}
+        </div>
       </div>
-      {places.map(p => (
-        <button key={p.id} onClick={() => p.locked ? null : go(p.id)} disabled={p.locked}
-          className={`w-full p-4 flex items-center gap-4 transition-all group border-2 ${
-            p.locked ? 'bg-stone-950/50 border-stone-900 opacity-50 cursor-not-allowed' :
-            'bg-stone-900/50 border-stone-800 hover:border-amber-500'
-          }`}>
-          <div className={`w-14 h-14 border-2 flex items-center justify-center ${p.locked ? 'border-stone-800' : 'border-stone-700 group-hover:border-amber-500'}`}
-            style={{ background: p.locked ? '#0c0a0922' : `${p.color}22` }}>
-            <PixelIcon name={p.pixelIcon} size={40} className={p.locked ? 'opacity-40' : ''} />
-          </div>
-          <div className="flex-1 text-left">
-            <div className={`tracking-wider text-lg ${p.locked ? 'text-stone-600' : 'text-amber-500'}`} style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-              {p.name} {p.locked && <span className="text-xs">🔒</span>}
+
+      <div className="relative w-full max-w-md mx-auto border-2 border-stone-800 select-none"
+        style={{ aspectRatio: '480 / 860', background: '#0c0a09' }}>
+        <img src={isDay ? 'hood-day.png' : 'hood-night.png'}
+          alt="The hood"
+          className="absolute inset-0 w-full h-full block pointer-events-none"
+          style={{ imageRendering: 'pixelated' }} />
+        {hotspots.map(h => (
+          <button key={h.id}
+            onClick={() => { if (!h.locked) go(h.id); }}
+            disabled={h.locked}
+            aria-label={h.name}
+            title={h.locked ? h.lockReason : `${h.name} · ${h.desc}`}
+            className={`absolute transition-all ${
+              h.locked
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:scale-[1.02] active:scale-95'
+            }`}
+            style={{
+              top: `${h.top}%`,
+              left: `${h.left}%`,
+              width: `${h.width}%`,
+              height: `${h.height}%`,
+              background: h.locked
+                ? 'rgba(0,0,0,0.45)'
+                : 'rgba(212, 160, 23, 0.06)',
+              border: h.locked
+                ? '2px dashed rgba(120,113,108,0.5)'
+                : '2px solid rgba(212, 160, 23, 0.55)',
+              boxShadow: h.locked ? 'none' : '0 0 12px rgba(212,160,23,0.30) inset',
+            }}>
+            <div
+              className={`absolute left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] uppercase tracking-widest whitespace-nowrap ${
+                h.locked ? 'bg-stone-950/90 text-stone-400 border border-stone-800'
+                         : 'bg-amber-500 text-stone-950 font-bold'
+              }`}
+              style={{
+                fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+                bottom: '4px',
+              }}>
+              {h.locked ? '🔒 ' : ''}{h.name}
             </div>
-            <div className="text-[11px] text-stone-500 uppercase tracking-wider">
-              {p.locked ? p.lockReason : p.desc}
-            </div>
-          </div>
-          {!p.locked && <div className="text-stone-700 group-hover:text-amber-500 text-2xl">→</div>}
-        </button>
-      ))}
+          </button>
+        ))}
+      </div>
+
+      {hotspots.some(h => h.locked) && (
+        <div className="text-[10px] uppercase tracking-wider text-stone-500 px-2 space-y-0.5">
+          {hotspots.filter(h => h.locked && h.lockReason).map(h => (
+            <div key={h.id}>🔒 <span className="text-stone-400">{h.name}</span> · {h.lockReason}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
