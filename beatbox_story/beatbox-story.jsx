@@ -11794,7 +11794,34 @@ export default function BeatboxStory() {
   }, [char?.minutes]);
 
   if (!loaded) {
-    return <div className="min-h-screen bg-stone-950 flex items-center justify-center text-amber-500 font-mono">LOADING...</div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center font-mono px-6"
+        style={{ background: 'linear-gradient(180deg, #1a0d2e 0%, #0c0a09 60%, #0c0a09 100%)' }}>
+        <div className="text-[10px] uppercase tracking-[0.5em] text-amber-500/70 mb-2">A LIFE-SIM</div>
+        <div className="text-[44px] sm:text-[60px] leading-none tracking-tighter text-amber-400 text-center"
+          style={{
+            fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+            textShadow: '3px 3px 0 #0c0a09, 6px 6px 18px rgba(212,160,23,0.30)',
+            animation: 'loadPulse 2.4s ease-in-out infinite',
+          }}>
+          BEATBOX<br />STORY
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.4em] text-stone-500 mt-4">loading<span style={{ animation: 'loadDots 1.4s steps(4) infinite' }}>...</span></div>
+        <style>{`
+          @keyframes loadPulse {
+            0%, 100% { opacity: 0.85; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.02); }
+          }
+          @keyframes loadDots {
+            0%   { opacity: 0; }
+            25%  { opacity: 0.4; }
+            50%  { opacity: 0.7; }
+            75%  { opacity: 1; }
+            100% { opacity: 0; }
+          }
+        `}</style>
+      </div>
+    );
   }
 
   // Title screen — main-menu splash. Sits at the top of the screen flow on
@@ -12145,16 +12172,16 @@ function HoodScreen({ go, char }) {
   // from the source art. Tweak if the art shifts.
   const hotspots = [
     { id: 'house', name: 'House',
-      top: 14, left: 36, width: 28, height: 15,
+      top: 12, left: 36, width: 28, height: 17,
       locked: false,
       desc: 'Train, eat, rest' },
     { id: 'park', name: 'Park',
-      top: 33, left: 8, width: 47, height: 23,
+      top: 33, left: 8, width: 47, height: 25,
       locked: !isDayTime(mins),
       lockReason: 'Empty at night · come back at sunrise (6 AM)',
       desc: 'Jam, busk, run' },
     { id: 'bar', name: 'Bar',
-      top: 38, left: 66, width: 29, height: 14,
+      top: 38, left: 67, width: 27, height: 12,
       locked: barLockedByDay || !isNightTime(mins),
       lockReason: barLockedByDay ? CONTENT_UNLOCKS.bar.label : 'Opens at 6 PM',
       desc: barLockedByDay ? '' : `Tonight: ${BAR_SCHEDULE[dayOfWeek(char.day)].title}` },
