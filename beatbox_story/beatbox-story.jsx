@@ -9060,9 +9060,16 @@ const TitleScreen = ({ char, hasActiveSlot, onPlay, onSlots, onSettings }) => {
         <div className="text-[11px] uppercase tracking-[0.4em] text-stone-400 pt-1">the cypher is calling</div>
       </div>
 
-      {/* Centerpiece pixel scene */}
+      {/* Centerpiece — hand-painted pixel-art title image. Sits in a
+          framed box matching the rest of the game's UI; chunky-pixel
+          imageRendering preserves the artwork's sharp pixels. */}
       <div className="w-full max-w-md mt-2">
-        <PixelScene draw={drawTitleScene} />
+        <div className="border-2 border-stone-800 overflow-hidden"
+          style={{ boxShadow: '0 0 32px rgba(212,160,23,0.18)' }}>
+          <img src="title.png" alt="Beatbox Story key art"
+            className="block w-full h-auto"
+            style={{ imageRendering: 'pixelated', aspectRatio: '1376 / 768' }} />
+        </div>
       </div>
 
       {/* Buttons */}
