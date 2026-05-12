@@ -12182,6 +12182,127 @@ function HoodScreen({ go, char }) {
           alt="The hood"
           className="absolute inset-0 w-full h-full block pointer-events-none"
           style={{ imageRendering: 'pixelated' }} />
+
+        {/* Animated lighting overlay — only at night. Each light is an
+            absolutely-positioned div with a soft box-shadow glow and a
+            CSS animation. pointer-events:none so hotspot taps fall
+            through. Coordinates are eyeballed onto the night art. */}
+        {!isDay && (
+          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+            {/* Apartment windows — soft amber breathing */}
+            {[
+              { top: 12, left: 32, h: 8, w: 4, delay: 0 },
+              { top: 12, left: 42, h: 8, w: 4, delay: 0.7 },
+              { top: 12, left: 52, h: 8, w: 4, delay: 1.4 },
+              { top: 22, left: 32, h: 8, w: 4, delay: 0.3 },
+              { top: 22, left: 42, h: 8, w: 4, delay: 1.1 },
+              { top: 22, left: 52, h: 8, w: 4, delay: 1.8 },
+            ].map((w, i) => (
+              <div key={`w${i}`} className="absolute"
+                style={{
+                  top: `${w.top}%`, left: `${w.left}%`,
+                  width: `${w.w}%`, height: `${w.h}%`,
+                  background: 'radial-gradient(ellipse at center, rgba(255, 196, 96, 0.55), rgba(255, 196, 96, 0))',
+                  animation: `nightWindow 3.6s ease-in-out ${w.delay}s infinite`,
+                  mixBlendMode: 'screen',
+                }} />
+            ))}
+
+            {/* LIVE neon sign — red, faster pulse with occasional flicker */}
+            <div className="absolute"
+              style={{
+                top: '34%', left: '78%', width: '14%', height: '5%',
+                background: 'radial-gradient(ellipse at center, rgba(251,56,90,0.85), rgba(251,56,90,0))',
+                animation: 'nightNeon 1.8s ease-in-out infinite',
+                mixBlendMode: 'screen',
+              }} />
+            {/* Halo behind the sign for extra glow */}
+            <div className="absolute"
+              style={{
+                top: '30%', left: '70%', width: '30%', height: '14%',
+                background: 'radial-gradient(circle at 50% 50%, rgba(251,56,90,0.30), rgba(251,56,90,0) 60%)',
+                animation: 'nightNeonHalo 1.8s ease-in-out infinite',
+                mixBlendMode: 'screen',
+              }} />
+
+            {/* Corner shop awning glow — warm orange */}
+            <div className="absolute"
+              style={{
+                top: '74%', left: '62%', width: '34%', height: '14%',
+                background: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.45), rgba(255,136,40,0) 70%)',
+                animation: 'nightShop 4.5s ease-in-out infinite',
+                mixBlendMode: 'screen',
+              }} />
+
+            {/* Park / sidewalk lamps — small steady amber pools */}
+            {[
+              { top: 38, left: 8, size: 8 },
+              { top: 56, left: 6, size: 7 },
+              { top: 60, left: 28, size: 6 },
+              { top: 65, left: 50, size: 7 },
+              { top: 80, left: 14, size: 7 },
+              { top: 86, left: 50, size: 6 },
+            ].map((l, i) => (
+              <div key={`l${i}`} className="absolute"
+                style={{
+                  top: `${l.top}%`, left: `${l.left}%`,
+                  width: `${l.size}%`, height: `${l.size * 0.7}%`,
+                  background: 'radial-gradient(ellipse at center, rgba(255,176,80,0.45), rgba(255,176,80,0) 70%)',
+                  animation: `nightLamp 5s ease-in-out ${i * 0.4}s infinite`,
+                  mixBlendMode: 'screen',
+                }} />
+            ))}
+
+            {/* Distant skyline twinkles — tiny dots */}
+            {Array.from({ length: 14 }).map((_, i) => {
+              const top = 1 + (i * 13 % 6);
+              const left = 5 + (i * 17 % 90);
+              const dur = 2.5 + (i % 5) * 0.6;
+              const delay = (i * 0.37) % 3;
+              return (
+                <div key={`s${i}`} className="absolute"
+                  style={{
+                    top: `${top}%`, left: `${left}%`,
+                    width: '2px', height: '2px',
+                    background: '#fef3c7',
+                    boxShadow: '0 0 4px 2px rgba(254,243,199,0.7)',
+                    animation: `nightTwinkle ${dur}s ease-in-out ${delay}s infinite`,
+                    mixBlendMode: 'screen',
+                  }} />
+              );
+            })}
+            <style>{`
+              @keyframes nightWindow {
+                0%, 100% { opacity: 0.55; transform: scale(1); }
+                50% { opacity: 0.85; transform: scale(1.05); }
+              }
+              @keyframes nightNeon {
+                0%, 6%, 10%, 100% { opacity: 1; }
+                4%, 8% { opacity: 0.35; }
+                50% { opacity: 0.85; }
+                52% { opacity: 0.4; }
+                54% { opacity: 0.85; }
+              }
+              @keyframes nightNeonHalo {
+                0%, 100% { opacity: 0.7; }
+                50% { opacity: 1; }
+              }
+              @keyframes nightShop {
+                0%, 100% { opacity: 0.85; }
+                50% { opacity: 1; }
+              }
+              @keyframes nightLamp {
+                0%, 100% { opacity: 0.7; }
+                50% { opacity: 1; }
+              }
+              @keyframes nightTwinkle {
+                0%, 100% { opacity: 0.2; transform: scale(0.8); }
+                50% { opacity: 1; transform: scale(1.2); }
+              }
+            `}</style>
+          </div>
+        )}
+
         {hotspots.map(h => (
           <button key={h.id}
             onClick={() => { if (!h.locked) go(h.id); }}
