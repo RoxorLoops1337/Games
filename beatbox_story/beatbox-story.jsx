@@ -3435,6 +3435,16 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
   useEffect(() => { noteIdxRef.current = noteIdx; }, [noteIdx]);
   const chordRef = useRef(chord);
   useEffect(() => { chordRef.current = chord; }, [chord]);
+  // Live mirrors for the SingStar-style pitch ribbon's rAF loop. State
+  // setters re-render React; the canvas reads these refs each frame.
+  const detectedFreqRef = useRef(-1);
+  useEffect(() => { detectedFreqRef.current = detectedFreq; }, [detectedFreq]);
+  const demoIdxRef = useRef(-1);
+  useEffect(() => { demoIdxRef.current = demoIdx; }, [demoIdx]);
+  const noteScoresRef = useRef([]);
+  useEffect(() => { noteScoresRef.current = noteScores; }, [noteScores]);
+  // Canvas the ribbon draws onto.
+  const ribbonCanvasRef = useRef(null);
 
   // Regenerate chord when the voice range OR mode setting changes
   const voiceRangeKey = `${voiceRange}:${voiceRangeMidi || ''}:${mode}`;
@@ -3543,6 +3553,150 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
     });
     refTonesRef.current = allOscs;
   };
+
+  // SingStar-style pitch ribbon: draws the chord's notes as colored bars
+  // laid out left-to-right at heights mapped to their pitch, plus the
+  // player's detected pitch as a marker at the current note's column.
+  // The marker turns green when within ±50¢ of the target so it's much
+  // easier to see "am I on pitch?" than the abstract cents needle.
+  useEffect(() => {
+    const canvas = ribbonCanvasRef.current;
+    if (!canvas) return;
+    const W = 360, H = 130, S = 2;
+    canvas.width = W * S; canvas.height = H * S;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    let raf;
+    let fc = 0;
+    const loop = () => {
+      fc++;
+      const chord = chordRef.current;
+      const noteIdx = noteIdxRef.current;
+      const demoIdx = demoIdxRef.current;
+      const phase = phaseRef.current;
+      const detectedFreq = detectedFreqRef.current;
+      const noteScores = noteScoresRef.current || [];
+      if (!chord || !chord.notes || !chord.notes.length) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+      ctx.save();
+      ctx.scale(S, S);
+      // Background
+      ctx.fillStyle = '#0c0a09';
+      ctx.fillRect(0, 0, W, H);
+      // Y-range with headroom — clamp the player's pitch into a sensible
+      // window so a stray octave error doesn't fly the marker off-canvas.
+      const midis = chord.notes.map(n => n.midi);
+      const yMin = Math.min(...midis) - 4;
+      const yMax = Math.max(...midis) + 4;
+      const yRange = Math.max(8, yMax - yMin);
+      const padX = 18, padTop = 14, padBottom = 22;
+      const usableH = H - padTop - padBottom;
+      const midiToY = (midi) => {
+        const t = (midi - yMin) / yRange;
+        return H - padBottom - t * usableH;
+      };
+      // Subtle staff lines every 2 semitones
+      ctx.fillStyle = '#1c1917';
+      for (let m = Math.ceil(yMin); m < yMax; m += 2) {
+        const y = midiToY(m);
+        ctx.fillRect(padX, y, W - 2 * padX, 1);
+      }
+      // Layout
+      const barCount = chord.notes.length;
+      const barAreaW = W - 2 * padX;
+      const stepX = barAreaW / barCount;
+      const barWidth = stepX * 0.7;
+      const currentIdx = demoIdx >= 0 ? demoIdx : noteIdx;
+      // Note bars
+      chord.notes.forEach((n, i) => {
+        const cx = padX + i * stepX + stepX / 2;
+        const x = cx - barWidth / 2;
+        const y = midiToY(n.midi);
+        const isCurrent = i === currentIdx;
+        const isPast = (noteScores[i] != null) || (i < noteIdx && phase === 'sing');
+        const score = noteScores[i] || 0;
+        const baseColor = isCurrent
+          ? '#fbbf24'
+          : isPast
+            ? (score >= 0.7 ? '#5a8030' : score >= 0.3 ? '#7a6028' : '#7a2828')
+            : '#3a3530';
+        // Body
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(x, y - 5, barWidth, 10);
+        // Highlight stripe (lighter top edge)
+        ctx.fillStyle = 'rgba(255,255,255,0.18)';
+        ctx.fillRect(x, y - 5, barWidth, 2);
+        if (isCurrent) {
+          // Animated pulsing outline
+          const pulse = 0.6 + 0.4 * Math.sin(fc * 0.15);
+          ctx.globalAlpha = pulse;
+          ctx.strokeStyle = '#fef3c7';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x - 1.5, y - 6.5, barWidth + 3, 13);
+          ctx.globalAlpha = 1;
+        }
+        // Note name label
+        ctx.fillStyle = isCurrent ? '#fbbf24' : '#7a7570';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(n.name, cx, H - 6);
+      });
+      // Player's detected pitch — only render during the sing phase (not
+      // listen / demo) so the player isn't looking at their own mic noise.
+      if (detectedFreq > 0 && phase === 'sing' && currentIdx >= 0 && currentIdx < chord.notes.length) {
+        const target = chord.notes[currentIdx];
+        let detectedMidi = 69 + 12 * Math.log2(detectedFreq / 440);
+        // Fold octave errors so the marker doesn't shoot off the chart
+        while (detectedMidi - target.midi > 8) detectedMidi -= 12;
+        while (target.midi - detectedMidi > 8) detectedMidi += 12;
+        const clampedMidi = Math.max(yMin, Math.min(yMax, detectedMidi));
+        const py = midiToY(clampedMidi);
+        const targetX = padX + currentIdx * stepX + stepX / 2;
+        let cents = freqToCents(detectedFreq, target.freq);
+        while (cents > 600) cents -= 1200;
+        while (cents < -600) cents += 1200;
+        const absCents = Math.abs(cents);
+        const inTune = absCents < 50;
+        const close   = absCents < 100;
+        const color = inTune ? '#22c55e' : close ? '#fbbf24' : '#dc2626';
+        // Faint vertical guide from the bar to the player marker
+        ctx.fillStyle = `${color}33`;
+        const ty = midiToY(target.midi);
+        const guideY1 = Math.min(py, ty);
+        const guideY2 = Math.max(py, ty);
+        ctx.fillRect(targetX - 1, guideY1, 2, Math.max(2, guideY2 - guideY1));
+        // Player marker — small horizontal bar at the detected pitch
+        const markerW = barWidth * 0.85;
+        ctx.fillStyle = color;
+        ctx.fillRect(targetX - markerW / 2, py - 2, markerW, 4);
+        // In-tune glow
+        if (inTune) {
+          ctx.fillStyle = 'rgba(34,197,94,0.30)';
+          ctx.fillRect(targetX - markerW / 2 - 4, py - 5, markerW + 8, 10);
+        }
+        // Cents readout next to marker
+        ctx.fillStyle = color;
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'left';
+        const centsLabel = `${cents > 0 ? '+' : ''}${cents.toFixed(0)}¢`;
+        ctx.fillText(centsLabel, targetX + markerW / 2 + 4, py + 3);
+      }
+      // Phase label top-left
+      ctx.fillStyle = phase === 'listen' ? '#88AADD' : '#fbbf24';
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'left';
+      const phaseTxt = (phase === 'listen' || demoIdx >= 0)
+        ? (demoIdx >= 0 ? `🔊 LISTEN ${demoIdx + 1}/${chord.notes.length}` : '🔊 LISTEN')
+        : `🎤 SING ${noteIdx + 1}/${chord.notes.length}`;
+      ctx.fillText(phaseTxt, padX, padTop - 2);
+      ctx.restore();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // Mount: request mic + set up audio pipeline
   useEffect(() => {
@@ -3802,6 +3956,15 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
           </div>
         ))}
       </div>
+
+      {/* SingStar-style pitch ribbon — primary visual feedback. Notes are
+          laid out left→right at heights matching their pitch; the player's
+          detected pitch shows as a marker at the active note's column,
+          green when within ±50¢. Replaces the abstract cents needle as the
+          go-to "am I on pitch?" indicator. */}
+      <canvas ref={ribbonCanvasRef}
+        className="w-full block border-2 border-stone-800"
+        style={{ aspectRatio: '360 / 130', imageRendering: 'pixelated', background: '#0c0a09' }} />
 
       {/* Phase indicator - big & obvious */}
       <div className={`text-center py-2 border-2 transition-all ${
