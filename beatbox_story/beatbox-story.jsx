@@ -3962,8 +3962,17 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
           detected pitch shows as a marker at the active note's column,
           green when within ±50¢. Replaces the abstract cents needle as the
           go-to "am I on pitch?" indicator. */}
+      <div className="flex items-baseline justify-between px-1">
+        <div className="text-[9px] uppercase tracking-[0.3em] text-amber-500"
+          style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          🎯 PITCH TRACK
+        </div>
+        <div className="text-[8px] uppercase tracking-widest text-stone-600">
+          green = on pitch
+        </div>
+      </div>
       <canvas ref={ribbonCanvasRef}
-        className="w-full block border-2 border-stone-800"
+        className="w-full block border-2 border-amber-700/40"
         style={{ aspectRatio: '360 / 130', imageRendering: 'pixelated', background: '#0c0a09' }} />
 
       {/* Phase indicator - big & obvious */}
