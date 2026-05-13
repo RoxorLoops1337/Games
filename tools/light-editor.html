@@ -248,6 +248,7 @@
       <button onclick="addLight('lamp')">+ Add lamp</button>
       <button onclick="addLight('neon')">+ Add neon</button>
       <button onclick="addLight('star')">+ Add star</button>
+      <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
       <button onclick="resetToDefaults()">Reset to defaults</button>
     </div>
 
@@ -292,9 +293,9 @@ const LIGHT_TYPES = {
   },
   shop: {
     name: 'Shop awning',
-    color: 'rgba(255,136,40,0.45)',
+    color: 'rgba(255,136,40,0.55)',
     edge: '#ff8828',
-    grad: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.45), rgba(255,136,40,0) 70%)',
+    grad: 'radial-gradient(ellipse at 50% 0%, rgba(255,136,40,0.55), rgba(255,136,40,0) 85%)',
     anim: 'nightShop 4.5s ease-in-out infinite',
   },
   lamp: {
@@ -327,12 +328,12 @@ const DEFAULTS = [
   { id: 'neon',  kind: 'neon',  t: 48.81112144123889,  l: 78.7225000991434,  w: 18.429771771890863, h: 5.283319567387068 },
   { id: 'neon2', kind: 'neon',  t: 45.383085614317544, l: 72.99491766140545, w: 4.38577440910533,   h: 6.888792504592703, name: '2' },
   { id: 'halo',  kind: 'halo',  t: 54.199507884425266, l: 77.27580578799176, w: 22.724194212008243, h: 17.872036393283803 },
-  { id: 'shop',  kind: 'shop',  t: 74.73344346090346,  l: 61.96954314720813, w: 31.353642032836294, h: 17.66639134774136 },
+  { id: 'shop',  kind: 'shop',  t: 74.73344346090346,  l: 63.41073234666768, w: 30.092598184668756, h: 15.977179866382073 },
   // Lamps (height = size * 0.7 to match production)
-  { id: 'lamp1', kind: 'lamp', t: 24.400657306929926, l: 17.98307126427665,  w: 15.783426197652282, h: 11.048398338356597 },
-  { id: 'lamp2', kind: 'lamp', t: 64.87733722215262,  l: 54.39255086056472,  w: 16.64467005076142,  h: 11.651269035532994 },
-  { id: 'lamp3', kind: 'lamp', t: 83.98772567776562,  l: 16.663292899349617, w: 18.18274111675127,  h: 12.727918781725888 },
-  { id: 'lamp4', kind: 'lamp', t: 80.77145822354066,  l: 39.67851512928299,  w: 19.521148526729064, h: 13.664803968710345 },
+  { id: 'lamp1', kind: 'lamp', t: 24.60175268445738, l: 17.08231152141227,  w: 16.504027394662923, h: 11.552819176264046 },
+  { id: 'lamp2', kind: 'lamp', t: 64.78900105257001, l: 53.28976867026466,  w: 19.34690309838851,  h: 13.542832168871957 },
+  { id: 'lamp3', kind: 'lamp', t: 82.79056652190431, l: 15.162327756717678, w: 17.05806324091985,  h: 11.940644268643895 },
+  { id: 'lamp4', kind: 'lamp', t: 81.60309158570334, l: 39.3401077193052,   w: 19.35194791997145,  h: 13.546363543980015 },
 ];
 
 // Persist the current layout to localStorage on every change so the user's
@@ -549,6 +550,24 @@ function resetToDefaults() {
   lights = JSON.parse(JSON.stringify(DEFAULTS));
   selectedId = null;
   render();
+}
+
+// Explicit save button — auto-save already runs on every change, but the
+// button gives a visible confirmation that the layout is persisted.
+function manualSave() {
+  saveLayout();
+  const btn = document.getElementById('saveBtn');
+  if (!btn) return;
+  const original = btn.textContent;
+  btn.textContent = '✓ Saved!';
+  btn.style.background = '#34d399';
+  btn.style.borderColor = '#34d399';
+  clearTimeout(manualSave._t);
+  manualSave._t = setTimeout(() => {
+    btn.textContent = original;
+    btn.style.background = '';
+    btn.style.borderColor = '';
+  }, 1400);
 }
 
 // ============ DRAG / RESIZE ============

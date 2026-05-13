@@ -12263,11 +12263,13 @@ function HoodScreen({ go, char }) {
                 mixBlendMode: 'screen',
               }} />
 
-            {/* Corner shop awning glow — warm orange */}
+            {/* Corner shop awning glow — warm orange. Center at the top
+                edge so the half-ellipse fades downward over the awning
+                instead of getting cropped mid-gradient at the top. */}
             <div className="absolute"
               style={{
-                top: '74.73344346090346%', left: '61.96954314720813%', width: '31.353642032836294%', height: '17.66639134774136%',
-                background: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.45), rgba(255,136,40,0) 70%)',
+                top: '74.73344346090346%', left: '63.41073234666768%', width: '30.092598184668756%', height: '15.977179866382073%',
+                background: 'radial-gradient(ellipse at 50% 0%, rgba(255,136,40,0.55), rgba(255,136,40,0) 85%)',
                 animation: 'nightShop 4.5s ease-in-out 0.8s infinite',
                 mixBlendMode: 'screen',
               }} />
@@ -12275,10 +12277,10 @@ function HoodScreen({ go, char }) {
             {/* Park / sidewalk lamps — small steady amber pools, each
                 with its own period for organic shimmer. */}
             {[
-              { top: 24.400657306929926, left: 17.98307126427665, size: 15.783426197652282 },
-              { top: 64.87733722215262, left: 54.39255086056472, size: 16.64467005076142 },
-              { top: 83.98772567776562, left: 16.663292899349617, size: 18.18274111675127 },
-              { top: 80.77145822354066, left: 39.67851512928299, size: 19.521148526729064 },
+              { top: 24.60175268445738, left: 17.08231152141227, size: 16.504027394662923 },
+              { top: 64.78900105257001, left: 53.28976867026466, size: 19.34690309838851 },
+              { top: 82.79056652190431, left: 15.162327756717678, size: 17.05806324091985 },
+              { top: 81.60309158570334, left: 39.3401077193052,  size: 19.35194791997145 },
             ].map((l, i) => (
               <div key={`l${i}`} className="absolute"
                 style={{
