@@ -13,13 +13,31 @@
     min-height: 100vh;
     overflow: hidden;
   }
-  .root { display: flex; height: 100vh; }
+  .root { display: flex; height: 100vh; position: relative; }
   .canvas-pane {
     flex: 1; position: relative;
     display: flex; align-items: center; justify-content: center;
     background: repeating-linear-gradient(45deg, #181715, #181715 8px, #1c1917 8px, #1c1917 16px);
     overflow: auto;
   }
+  /* Floating gear/close button — always visible, on top of everything */
+  .gear-toggle {
+    position: fixed;
+    top: 12px; right: 12px;
+    z-index: 1000;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #fbbf24;
+    color: #0c0a09;
+    border: 2px solid #0c0a09;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    font-size: 22px; line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+  .gear-toggle:active { transform: scale(0.92); }
   .map-frame {
     position: relative;
     aspect-ratio: 480 / 860;
@@ -75,7 +93,21 @@
     border-left: 2px solid #292524;
     display: flex; flex-direction: column;
     overflow-y: auto;
+    transition: transform 0.25s ease-out;
   }
+  /* On narrow viewports the side pane slides in as an overlay from the
+     right and the canvas keeps the full width. */
+  @media (max-width: 760px) {
+    .side-pane {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(92vw, 380px);
+      z-index: 900;
+      box-shadow: -8px 0 24px rgba(0,0,0,0.6);
+    }
+    .canvas-pane { width: 100%; }
+  }
+  .side-pane.collapsed { transform: translateX(110%); }
   .side-pane header {
     padding: 12px;
     border-bottom: 1px solid #292524;
@@ -168,6 +200,7 @@
 </style>
 </head>
 <body>
+<button class="gear-toggle" id="gearBtn" onclick="togglePane()" title="Show / hide settings" aria-label="Toggle settings">⚙</button>
 <div class="root">
   <div class="canvas-pane">
     <div class="map-frame" id="frame">
@@ -175,7 +208,7 @@
       <!-- lights injected by JS -->
     </div>
   </div>
-  <aside class="side-pane">
+  <aside class="side-pane" id="side">
     <header>
       <h1>⚙ Light Editor</h1>
       <div class="sub">
@@ -479,6 +512,18 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   render();
 });
+
+// Side-pane collapse: starts collapsed on narrow viewports so the map is
+// the first thing you see; tap the floating gear ⚙ to toggle.
+function togglePane() {
+  const side = document.getElementById('side');
+  const btn = document.getElementById('gearBtn');
+  const collapsed = side.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '⚙' : '×';
+}
+if (window.innerWidth <= 760) {
+  document.getElementById('side').classList.add('collapsed');
+}
 
 render();
 </script>
