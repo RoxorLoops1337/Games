@@ -12488,7 +12488,7 @@ function HoodScreen({ go, char }) {
         <div className="absolute pointer-events-none"
           aria-hidden="true"
           style={{
-            width: '13%',
+            width: '6.5%',
             aspectRatio: '74 / 64',
             backgroundImage: 'url(cat-walk.png)',
             backgroundRepeat: 'no-repeat',
