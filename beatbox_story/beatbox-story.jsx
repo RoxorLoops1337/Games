@@ -12269,7 +12269,7 @@ function HoodScreen({ go, char }) {
                 is fully transparent at every edge — no hard cutoff. */}
             <div className="absolute"
               style={{
-                top: '74.73344346090346%', left: '63.41073234666768%', width: '30.092598184668756%', height: '15.977179866382073%',
+                top: '76.10923040359813%', left: '54.959327824019915%', width: '41.167114671325116%', height: '22.711519943904932%',
                 background: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.55), rgba(255,136,40,0) 40%)',
                 animation: 'nightShop 4.5s ease-in-out 0.8s infinite',
                 mixBlendMode: 'screen',
@@ -12278,10 +12278,10 @@ function HoodScreen({ go, char }) {
             {/* Park / sidewalk lamps — small steady amber pools, each
                 with its own period for organic shimmer. */}
             {[
-              { top: 24.60175268445738, left: 17.08231152141227, size: 16.504027394662923 },
-              { top: 64.78900105257001, left: 53.28976867026466, size: 19.34690309838851 },
-              { top: 82.5940357095342,  left: 15.866611466938325, size: 16.881990862585393 },
-              { top: 81.11173540455374, left: 39.86831905119139,  size: 20.232304008526555 },
+              { top: 23.029415495909713, left: 18.13873418518465, size: 15.271526549438907 },
+              { top: 61.447782907449316, left: 52.9376355198301,  size: 17.938335677947215 },
+              { top: 81.02168556533128,  left: 16.74696755549343, size: 14.945217913375087 },
+              { top: 78.75322962173223,  left: 40.39653618619476, size: 17.943380499530157 },
             ].map((l, i) => (
               <div key={`l${i}`} className="absolute"
                 style={{
