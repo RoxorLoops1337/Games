@@ -12304,7 +12304,13 @@ function HoodScreen({ go, char }) {
             <style>{`
               @keyframes nightWindow {
                 0%, 100% { opacity: 0.55; transform: scale(1); }
+                17% { opacity: 0.62; }
+                19% { opacity: 0.42; }
+                21% { opacity: 0.64; }
                 50% { opacity: 0.85; transform: scale(1.05); }
+                67% { opacity: 0.72; }
+                69% { opacity: 0.52; }
+                71% { opacity: 0.78; }
               }
               @keyframes nightNeon {
                 0%, 6%, 10%, 100% { opacity: 1; }
@@ -12315,19 +12321,35 @@ function HoodScreen({ go, char }) {
               }
               @keyframes nightNeonHalo {
                 0%, 100% { opacity: 0.7; }
+                11% { opacity: 0.55; }
+                13% { opacity: 0.82; }
                 50% { opacity: 1; }
+                63% { opacity: 0.7; }
+                65% { opacity: 0.9; }
               }
               @keyframes nightShop {
                 0%, 100% { opacity: 0.85; }
+                14% { opacity: 0.7; }
+                16% { opacity: 0.92; }
                 50% { opacity: 1; }
+                66% { opacity: 0.78; }
+                68% { opacity: 0.95; }
               }
               @keyframes nightLamp {
                 0%, 100% { opacity: 0.7; }
+                16% { opacity: 0.55; }
+                18% { opacity: 0.82; }
                 50% { opacity: 1; }
+                68% { opacity: 0.65; }
+                70% { opacity: 0.88; }
               }
               @keyframes nightTwinkle {
                 0%, 100% { opacity: 0.2; transform: scale(0.8); }
+                20% { opacity: 0.5; }
+                22% { opacity: 0.15; }
                 50% { opacity: 1; transform: scale(1.2); }
+                72% { opacity: 0.55; }
+                74% { opacity: 0.18; }
               }
             `}</style>
           </div>
