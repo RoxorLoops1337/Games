@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beatbox Story · Light Position Editor</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0c0a09; color: #e7e5e4;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .root { display: flex; height: 100vh; }
+  .canvas-pane {
+    flex: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg, #181715, #181715 8px, #1c1917 8px, #1c1917 16px);
+    overflow: auto;
+  }
+  .map-frame {
+    position: relative;
+    aspect-ratio: 480 / 860;
+    height: 96vh;
+    max-width: 96vw;
+    border: 2px solid #44403c;
+    box-shadow: 0 0 32px rgba(0,0,0,0.6);
+    user-select: none;
+  }
+  .map-frame img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+  .light {
+    position: absolute;
+    cursor: move;
+    border: 1px dashed rgba(255,255,255,0.3);
+    transition: border-color 0.1s;
+  }
+  .light.selected {
+    border: 1px solid #fbbf24;
+    z-index: 2;
+  }
+  .light .glow {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .handle {
+    position: absolute;
+    width: 12px; height: 12px;
+    background: #fbbf24;
+    border: 1px solid #0c0a09;
+    cursor: nwse-resize;
+    bottom: -6px; right: -6px;
+  }
+  .light .label {
+    position: absolute; top: -18px; left: 0;
+    font-size: 10px; font-weight: bold;
+    color: #fff; background: #0c0a09;
+    padding: 1px 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-radius: 2px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .side-pane {
+    width: 380px;
+    background: #1c1917;
+    border-left: 2px solid #292524;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .side-pane header {
+    padding: 12px;
+    border-bottom: 1px solid #292524;
+  }
+  .side-pane h1 {
+    margin: 0; font-size: 14px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: #fbbf24;
+  }
+  .side-pane .sub {
+    margin-top: 4px; font-size: 10px; color: #78716c;
+    line-height: 1.4;
+  }
+  .controls { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #292524; }
+  .controls button {
+    background: #292524; color: #fafaf9;
+    border: 1px solid #44403c; padding: 6px 10px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    font-size: 10px; cursor: pointer; font-family: inherit;
+  }
+  .controls button:hover { background: #44403c; }
+  .controls button.primary { background: #fbbf24; color: #0c0a09; border-color: #fbbf24; }
+  .controls button.primary:hover { background: #fcd34d; }
+  .selected-info {
+    padding: 10px 12px;
+    border-bottom: 1px solid #292524;
+    font-size: 11px;
+  }
+  .selected-info .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .selected-info label { width: 50px; color: #a8a29e; text-transform: uppercase; font-size: 9px; letter-spacing: 0.15em; }
+  .selected-info input {
+    background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
+    padding: 3px 6px; font-family: monospace; width: 60px; font-size: 11px;
+  }
+  .output {
+    padding: 10px 12px; flex: 1;
+    display: flex; flex-direction: column;
+  }
+  .output h2 {
+    margin: 0 0 6px; font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: #a8a29e;
+  }
+  .output textarea {
+    flex: 1;
+    background: #0c0a09; color: #d4d4d4;
+    border: 1px solid #292524; padding: 8px;
+    font-family: 'Menlo', monospace; font-size: 10px;
+    line-height: 1.4; resize: none;
+    min-height: 200px;
+  }
+  .list { padding: 6px 12px; max-height: 220px; overflow-y: auto; }
+  .list .item {
+    padding: 4px 6px; font-size: 11px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .list .item:hover { background: #292524; }
+  .list .item.selected { border-left-color: #fbbf24; background: #292524; }
+  .list .item .swatch {
+    width: 12px; height: 12px; border: 1px solid #44403c;
+  }
+  /* Light animations — match production */
+  @keyframes nightWindow {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 0.85; transform: scale(1.05); }
+  }
+  @keyframes nightNeon {
+    0%, 6%, 10%, 100% { opacity: 1; }
+    4%, 8% { opacity: 0.35; }
+    50% { opacity: 0.85; }
+    52% { opacity: 0.4; }
+    54% { opacity: 0.85; }
+  }
+  @keyframes nightNeonHalo {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+  @keyframes nightShop {
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 1; }
+  }
+  @keyframes nightLamp {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+  @keyframes nightTwinkle {
+    0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
+</style>
+</head>
+<body>
+<div class="root">
+  <div class="canvas-pane">
+    <div class="map-frame" id="frame">
+      <img id="map" src="../beatbox_story/hood-night.png" alt="hood night">
+      <!-- lights injected by JS -->
+    </div>
+  </div>
+  <aside class="side-pane">
+    <header>
+      <h1>⚙ Light Editor</h1>
+      <div class="sub">
+        Drag a light to move · drag bottom-right handle to resize ·
+        arrow keys nudge selected by 0.5% · Shift+arrows by 2% ·
+        Delete removes selected · "+ Add" buttons add new lights.
+        Copy the JSX block at the bottom and paste it into the code.
+      </div>
+    </header>
+
+    <div class="controls">
+      <button onclick="toggleMap()" id="mapToggle">Switch to day map</button>
+      <button onclick="addLight('window')">+ Add window</button>
+      <button onclick="addLight('lamp')">+ Add lamp</button>
+      <button onclick="addLight('star')">+ Add star</button>
+      <button onclick="resetToDefaults()">Reset to defaults</button>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <div class="selected-info" id="info">
+      <div class="row" style="color:#78716c;">Select a light to edit.</div>
+    </div>
+
+    <div class="output">
+      <h2>JSX paste-ready</h2>
+      <textarea id="out" readonly></textarea>
+      <button onclick="copyOut()" class="primary" style="margin-top:6px;padding:8px;font-size:11px;border:none;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;background:#fbbf24;color:#0c0a09;font-family:inherit;">Copy to clipboard</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+// ============ STATE ============
+// Each light: { id, kind, t, l, w, h, color (optional, for star/lamp tints) }
+const LIGHT_TYPES = {
+  window: {
+    name: 'Window',
+    color: 'rgba(255,196,96,0.55)',
+    edge: '#ffc060',
+    grad: 'radial-gradient(ellipse at center, rgba(255, 196, 96, 0.55), rgba(255, 196, 96, 0))',
+    anim: 'nightWindow 3.6s ease-in-out infinite',
+  },
+  neon: {
+    name: 'LIVE neon',
+    color: 'rgba(251,56,90,0.7)',
+    edge: '#ff4060',
+    grad: 'radial-gradient(ellipse at center, rgba(251,56,90,0.85), rgba(251,56,90,0))',
+    anim: 'nightNeon 1.8s ease-in-out infinite',
+  },
+  halo: {
+    name: 'Neon halo',
+    color: 'rgba(251,56,90,0.18)',
+    edge: '#ff4060',
+    grad: 'radial-gradient(circle at 50% 50%, rgba(251,56,90,0.30), rgba(251,56,90,0) 60%)',
+    anim: 'nightNeonHalo 1.8s ease-in-out infinite',
+  },
+  shop: {
+    name: 'Shop awning',
+    color: 'rgba(255,136,40,0.45)',
+    edge: '#ff8828',
+    grad: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.45), rgba(255,136,40,0) 70%)',
+    anim: 'nightShop 4.5s ease-in-out infinite',
+  },
+  lamp: {
+    name: 'Street lamp',
+    color: 'rgba(255,176,80,0.45)',
+    edge: '#ffb050',
+    grad: 'radial-gradient(ellipse at center, rgba(255,176,80,0.45), rgba(255,176,80,0) 70%)',
+    anim: 'nightLamp 5s ease-in-out infinite',
+  },
+  star: {
+    name: 'Twinkle',
+    color: '#fef3c7',
+    edge: '#fef3c7',
+    grad: '#fef3c7',
+    boxShadow: '0 0 4px 2px rgba(254,243,199,0.7)',
+    anim: 'nightTwinkle 3s ease-in-out infinite',
+  },
+};
+
+const DEFAULTS = [
+  // Windows (production-current values)
+  { id: 'w1', kind: 'window', t: 22, l: 38, w: 4, h: 4, delay: 0 },
+  { id: 'w2', kind: 'window', t: 22, l: 46, w: 4, h: 4, delay: 0.7 },
+  { id: 'w3', kind: 'window', t: 22, l: 54, w: 4, h: 4, delay: 1.4 },
+  { id: 'w4', kind: 'window', t: 29, l: 38, w: 4, h: 4, delay: 0.3 },
+  { id: 'w5', kind: 'window', t: 29, l: 46, w: 4, h: 4, delay: 1.1 },
+  { id: 'w6', kind: 'window', t: 29, l: 54, w: 4, h: 4, delay: 1.8 },
+  { id: 'neon',  kind: 'neon',  t: 49, l: 75, w: 12, h: 5 },
+  { id: 'halo',  kind: 'halo',  t: 44, l: 70, w: 22, h: 14 },
+  { id: 'shop',  kind: 'shop',  t: 77, l: 64, w: 30, h: 12 },
+  // Lamps
+  { id: 'lamp1', kind: 'lamp', t: 38, l: 8,  w: 8,  h: 5.6 },
+  { id: 'lamp2', kind: 'lamp', t: 56, l: 6,  w: 7,  h: 4.9 },
+  { id: 'lamp3', kind: 'lamp', t: 60, l: 28, w: 6,  h: 4.2 },
+  { id: 'lamp4', kind: 'lamp', t: 65, l: 50, w: 7,  h: 4.9 },
+  { id: 'lamp5', kind: 'lamp', t: 80, l: 14, w: 7,  h: 4.9 },
+  { id: 'lamp6', kind: 'lamp', t: 86, l: 50, w: 6,  h: 4.2 },
+];
+
+let lights = JSON.parse(JSON.stringify(DEFAULTS));
+let selectedId = null;
+let mapKind = 'night';
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function frameRect() {
+  return document.getElementById('frame').getBoundingClientRect();
+}
+
+function render() {
+  const frame = document.getElementById('frame');
+  // Remove old light elements
+  frame.querySelectorAll('.light').forEach(el => el.remove());
+  for (const L of lights) {
+    const t = LIGHT_TYPES[L.kind];
+    const el = document.createElement('div');
+    el.className = 'light' + (L.id === selectedId ? ' selected' : '');
+    el.dataset.id = L.id;
+    el.style.top = L.t + '%';
+    el.style.left = L.l + '%';
+    el.style.width = L.w + '%';
+    el.style.height = L.h + '%';
+    const glow = document.createElement('div');
+    glow.className = 'glow';
+    glow.style.background = t.grad;
+    if (t.boxShadow) glow.style.boxShadow = t.boxShadow;
+    glow.style.animation = t.anim;
+    el.appendChild(glow);
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    lbl.textContent = t.name + (L.kind === 'window' ? ' ' + L.id.slice(1) : '');
+    el.appendChild(lbl);
+    const handle = document.createElement('div');
+    handle.className = 'handle';
+    handle.dataset.role = 'resize';
+    el.appendChild(handle);
+    frame.appendChild(el);
+  }
+  renderList();
+  renderInfo();
+  renderOutput();
+}
+
+function renderList() {
+  const ul = document.getElementById('list');
+  ul.innerHTML = '';
+  for (const L of lights) {
+    const t = LIGHT_TYPES[L.kind];
+    const item = document.createElement('div');
+    item.className = 'item' + (L.id === selectedId ? ' selected' : '');
+    item.onclick = () => { selectedId = L.id; render(); };
+    item.innerHTML = '<span>' + L.id + ' · ' + t.name + '</span>';
+    const sw = document.createElement('div');
+    sw.className = 'swatch';
+    sw.style.background = t.edge;
+    item.appendChild(sw);
+    ul.appendChild(item);
+  }
+}
+
+function renderInfo() {
+  const info = document.getElementById('info');
+  const L = lights.find(x => x.id === selectedId);
+  if (!L) { info.innerHTML = '<div class="row" style="color:#78716c;">Select a light to edit.</div>'; return; }
+  info.innerHTML =
+    '<div style="font-size:10px;color:#fbbf24;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">' + L.id + ' (' + LIGHT_TYPES[L.kind].name + ')</div>' +
+    '<div class="row"><label>Top</label><input id="i-t" type="number" step="0.5" value="' + L.t + '"></div>' +
+    '<div class="row"><label>Left</label><input id="i-l" type="number" step="0.5" value="' + L.l + '"></div>' +
+    '<div class="row"><label>Width</label><input id="i-w" type="number" step="0.5" value="' + L.w + '"></div>' +
+    '<div class="row"><label>Height</label><input id="i-h" type="number" step="0.5" value="' + L.h + '"></div>' +
+    '<button onclick="deleteSelected()" style="margin-top:8px;background:#7f1d1d;color:#fef2f2;border:1px solid #991b1b;padding:4px 8px;cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;font-family:inherit;">Delete</button>';
+  ['t','l','w','h'].forEach(k => {
+    const inp = document.getElementById('i-' + k);
+    inp.onchange = () => { L[k] = parseFloat(inp.value) || 0; render(); };
+  });
+}
+
+function renderOutput() {
+  const wins = lights.filter(L => L.kind === 'window');
+  const lamps = lights.filter(L => L.kind === 'lamp');
+  const stars = lights.filter(L => L.kind === 'star');
+  const neon = lights.find(L => L.kind === 'neon');
+  const halo = lights.find(L => L.kind === 'halo');
+  const shop = lights.find(L => L.kind === 'shop');
+  let out = '';
+  if (wins.length) {
+    out += '// Windows\n[\n';
+    wins.forEach((L, i) => {
+      out += '  { top: ' + L.t + ', left: ' + L.l + ', h: ' + L.h + ', w: ' + L.w + ', delay: ' + (L.delay ?? (i * 0.35).toFixed(2)) + ' },\n';
+    });
+    out += ']\n\n';
+  }
+  if (neon) out += '// LIVE neon\ntop: \'' + neon.t + '%\', left: \'' + neon.l + '%\', width: \'' + neon.w + '%\', height: \'' + neon.h + '%\'\n\n';
+  if (halo) out += '// Neon halo\ntop: \'' + halo.t + '%\', left: \'' + halo.l + '%\', width: \'' + halo.w + '%\', height: \'' + halo.h + '%\'\n\n';
+  if (shop) out += '// Shop awning\ntop: \'' + shop.t + '%\', left: \'' + shop.l + '%\', width: \'' + shop.w + '%\', height: \'' + shop.h + '%\'\n\n';
+  if (lamps.length) {
+    out += '// Lamps\n[\n';
+    lamps.forEach(L => {
+      // production stores lamps as { top, left, size } where height = size * 0.7
+      const size = L.w;
+      out += '  { top: ' + L.t + ', left: ' + L.l + ', size: ' + size + ' },\n';
+    });
+    out += ']\n\n';
+  }
+  if (stars.length) {
+    out += '// Stars (extras you added)\n[\n';
+    stars.forEach(L => {
+      out += '  { top: ' + L.t + ', left: ' + L.l + ' },\n';
+    });
+    out += ']\n';
+  }
+  document.getElementById('out').value = out;
+}
+
+function copyOut() {
+  const out = document.getElementById('out');
+  out.select();
+  document.execCommand('copy');
+  out.blur();
+}
+
+function toggleMap() {
+  mapKind = mapKind === 'night' ? 'day' : 'night';
+  document.getElementById('map').src = '../beatbox_story/hood-' + mapKind + '.png';
+  document.getElementById('mapToggle').textContent = mapKind === 'night' ? 'Switch to day map' : 'Switch to night map';
+}
+
+function addLight(kind) {
+  const id = kind + Date.now().toString(36);
+  const defaults = { window: { w: 4, h: 4 }, lamp: { w: 7, h: 4.9 }, star: { w: 1, h: 1 } }[kind] || { w: 8, h: 6 };
+  lights.push({ id, kind, t: 40, l: 40, ...defaults });
+  selectedId = id;
+  render();
+}
+
+function deleteSelected() {
+  lights = lights.filter(L => L.id !== selectedId);
+  selectedId = null;
+  render();
+}
+
+function resetToDefaults() {
+  if (!confirm('Reset all lights to production defaults?')) return;
+  lights = JSON.parse(JSON.stringify(DEFAULTS));
+  selectedId = null;
+  render();
+}
+
+// ============ DRAG / RESIZE ============
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  const lightEl = e.target.closest('.light');
+  if (!lightEl) return;
+  const id = lightEl.dataset.id;
+  const L = lights.find(x => x.id === id);
+  if (!L) return;
+  selectedId = id;
+  const role = e.target.dataset.role;
+  const rect = frameRect();
+  drag = {
+    id, role: role || 'move',
+    startX: e.clientX, startY: e.clientY,
+    startT: L.t, startL: L.l, startW: L.w, startH: L.h,
+    rectW: rect.width, rectH: rect.height,
+  };
+  e.preventDefault();
+  render();
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const L = lights.find(x => x.id === drag.id);
+  if (!L) return;
+  const dxPct = ((e.clientX - drag.startX) / drag.rectW) * 100;
+  const dyPct = ((e.clientY - drag.startY) / drag.rectH) * 100;
+  if (drag.role === 'move') {
+    L.l = clamp(drag.startL + dxPct, 0, 100 - L.w);
+    L.t = clamp(drag.startT + dyPct, 0, 100 - L.h);
+  } else if (drag.role === 'resize') {
+    L.w = clamp(drag.startW + dxPct, 1, 100 - L.l);
+    L.h = clamp(drag.startH + dyPct, 1, 100 - L.t);
+  }
+  render();
+});
+document.addEventListener('pointerup', () => { drag = null; });
+
+// ============ KEYBOARD ============
+document.addEventListener('keydown', (e) => {
+  if (!selectedId) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const L = lights.find(x => x.id === selectedId);
+  if (!L) return;
+  const step = e.shiftKey ? 2 : 0.5;
+  if (e.key === 'ArrowUp')    L.t = Math.max(0, L.t - step);
+  else if (e.key === 'ArrowDown')  L.t = Math.min(100 - L.h, L.t + step);
+  else if (e.key === 'ArrowLeft')  L.l = Math.max(0, L.l - step);
+  else if (e.key === 'ArrowRight') L.l = Math.min(100 - L.w, L.l + step);
+  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); return; }
+  else return;
+  e.preventDefault();
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
