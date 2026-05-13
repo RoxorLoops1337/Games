@@ -232,11 +232,12 @@
   </div>
   <aside class="side-pane" id="side">
     <header>
-      <h1>⚙ Light Editor</h1>
+      <h1>⚙ Light Editor <span id="savedBadge" style="float:right;font-size:9px;color:#34d399;letter-spacing:0.2em;opacity:0.45;transition:opacity 0.3s;">● SAVED</span></h1>
       <div class="sub">
         Drag a light to move · drag bottom-right handle to resize ·
         arrow keys nudge selected by 0.5% · Shift+arrows by 2% ·
         Delete removes selected · "+ Add" buttons add new lights.
+        Your layout auto-saves to this browser — Reset wipes it.
         Copy the JSX block at the bottom and paste it into the code.
       </div>
     </header>
@@ -314,26 +315,52 @@ const LIGHT_TYPES = {
 };
 
 const DEFAULTS = [
-  // Windows (production-current values, hand-tuned in this very editor)
-  { id: 'w1', kind: 'window', t: 21.42, l: 36.22, w: 3.10, h: 3.97, delay: 0 },
-  { id: 'w2', kind: 'window', t: 21.47, l: 40.95, w: 3.21, h: 4.04, delay: 0.7 },
-  { id: 'w3', kind: 'window', t: 22,    l: 54,    w: 4,    h: 4,    delay: 1.4 },
-  { id: 'w4', kind: 'window', t: 27.49, l: 36.54, w: 5.41, h: 6.57, delay: 0.3 },
-  { id: 'w5', kind: 'window', t: 27.36, l: 43.38, w: 5.08, h: 6.92, delay: 1.1 },
-  { id: 'w6', kind: 'window', t: 29,    l: 54,    w: 4,    h: 4,    delay: 1.8 },
-  { id: 'neon',  kind: 'neon',  t: 49, l: 75, w: 12, h: 5 },
-  { id: 'halo',  kind: 'halo',  t: 44, l: 70, w: 22, h: 14 },
-  { id: 'shop',  kind: 'shop',  t: 77, l: 64, w: 30, h: 12 },
-  // Lamps
-  { id: 'lamp1', kind: 'lamp', t: 38, l: 8,  w: 8,  h: 5.6 },
-  { id: 'lamp2', kind: 'lamp', t: 56, l: 6,  w: 7,  h: 4.9 },
-  { id: 'lamp3', kind: 'lamp', t: 60, l: 28, w: 6,  h: 4.2 },
-  { id: 'lamp4', kind: 'lamp', t: 65, l: 50, w: 7,  h: 4.9 },
-  { id: 'lamp5', kind: 'lamp', t: 80, l: 14, w: 7,  h: 4.9 },
-  { id: 'lamp6', kind: 'lamp', t: 86, l: 50, w: 6,  h: 4.2 },
+  // Windows (production values — hand-tuned in this very editor)
+  { id: 'w1', kind: 'window', t: 21.60887855876111, l: 35.88158019709708, w: 3.10, h: 3.97, delay: 0 },
+  { id: 'w2', kind: 'window', t: 21.47, l: 40.780805589704954, w: 3.21, h: 4.04, delay: 0.7 },
+  { id: 'w3', kind: 'window', t: 21.527801873851825, l: 45.53975898239213, w: 4, h: 4, delay: 1.4 },
+  { id: 'w4', kind: 'window', t: 20.4070108153233, l: 52.95284923263007, w: 4.056364163626268, h: 3.3590420208708855, delay: 0.3 },
+  { id: 'w5', kind: 'window', t: 27.076680432612932, l: 36.44259542552348, w: 5.08, h: 6.92, delay: 1.1 },
+  { id: 'w6', kind: 'window', t: 27.30008259567759, l: 43.678508932820435, w: 4.676821016418147, h: 6.455435097857652, delay: 1.8 },
+  { id: 'w7', kind: 'window', t: 23.945225667563083, l: 53.36717634636739, w: 3.661592590022208, h: 5.699917404322408, delay: 2.10 },
+  { id: 'w8', kind: 'window', t: 23.4730258121695, l: 58.781732084787436, w: 4, h: 4.755517693535244, delay: 2.45 },
+  { id: 'neon',  kind: 'neon',  t: 48.81112144123889,  l: 78.7225000991434,  w: 18.429771771890863, h: 5.283319567387068 },
+  { id: 'neon2', kind: 'neon',  t: 45.383085614317544, l: 72.99491766140545, w: 4.38577440910533,   h: 6.888792504592703, name: '2' },
+  { id: 'halo',  kind: 'halo',  t: 54.199507884425266, l: 77.27580578799176, w: 22.724194212008243, h: 17.872036393283803 },
+  { id: 'shop',  kind: 'shop',  t: 74.73344346090346,  l: 61.96954314720813, w: 31.353642032836294, h: 17.66639134774136 },
+  // Lamps (height = size * 0.7 to match production)
+  { id: 'lamp1', kind: 'lamp', t: 24.400657306929926, l: 17.98307126427665,  w: 15.783426197652282, h: 11.048398338356597 },
+  { id: 'lamp2', kind: 'lamp', t: 64.87733722215262,  l: 54.39255086056472,  w: 16.64467005076142,  h: 11.651269035532994 },
+  { id: 'lamp3', kind: 'lamp', t: 83.98772567776562,  l: 16.663292899349617, w: 18.18274111675127,  h: 12.727918781725888 },
+  { id: 'lamp4', kind: 'lamp', t: 80.77145822354066,  l: 39.67851512928299,  w: 19.521148526729064, h: 13.664803968710345 },
 ];
 
-let lights = JSON.parse(JSON.stringify(DEFAULTS));
+// Persist the current layout to localStorage on every change so the user's
+// tweaks survive a reload. "Reset to defaults" clears this snapshot.
+const STORAGE_KEY = 'bbs-light-editor-layout-v2';
+function loadLayout() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) return null;
+    return arr;
+  } catch (e) { return null; }
+}
+function saveLayout() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(lights));
+    const badge = document.getElementById('savedBadge');
+    if (badge) {
+      badge.style.opacity = '1';
+      clearTimeout(saveLayout._t);
+      saveLayout._t = setTimeout(() => { badge.style.opacity = '0.45'; }, 600);
+    }
+  } catch (e) {}
+}
+
+const savedLayout = loadLayout();
+let lights = savedLayout || JSON.parse(JSON.stringify(DEFAULTS));
 let selectedId = null;
 let mapKind = 'night';
 
@@ -343,12 +370,32 @@ function frameRect() {
   return document.getElementById('frame').getBoundingClientRect();
 }
 
+// Per-light flicker timing: each light of a given kind gets its own period
+// (and offset) so they don't pulse in lock-step. Matches production.
+function animFor(L, kindIdx) {
+  const keyframe = LIGHT_TYPES[L.kind].anim.split(' ')[0];
+  const durTable = {
+    window: 3.2 + (kindIdx % 4) * 0.45,
+    lamp:   4.2 + (kindIdx % 3) * 0.7,
+    neon:   1.8 + (kindIdx % 3) * 0.5,
+    halo:   2.2 + (kindIdx % 2) * 0.4,
+    shop:   4.5,
+    star:   2.5 + (kindIdx % 5) * 0.6,
+  };
+  const dur = durTable[L.kind] ?? 3;
+  const delay = (L.delay !== undefined) ? L.delay : ((kindIdx * 0.55) % 3);
+  return keyframe + ' ' + dur + 's ease-in-out ' + delay + 's infinite';
+}
+
 function render() {
   const frame = document.getElementById('frame');
   // Remove old light elements
   frame.querySelectorAll('.light').forEach(el => el.remove());
+  const kindCounters = {};
   for (const L of lights) {
     const t = LIGHT_TYPES[L.kind];
+    const kIdx = kindCounters[L.kind] || 0;
+    kindCounters[L.kind] = kIdx + 1;
     const el = document.createElement('div');
     el.className = 'light' + (L.id === selectedId ? ' selected' : '');
     el.dataset.id = L.id;
@@ -360,7 +407,7 @@ function render() {
     glow.className = 'glow';
     glow.style.background = t.grad;
     if (t.boxShadow) glow.style.boxShadow = t.boxShadow;
-    glow.style.animation = t.anim;
+    glow.style.animation = animFor(L, kIdx);
     el.appendChild(glow);
     const lbl = document.createElement('div');
     lbl.className = 'label';
@@ -376,6 +423,7 @@ function render() {
   renderList();
   renderInfo();
   renderOutput();
+  saveLayout();
 }
 
 function renderList() {
@@ -496,7 +544,8 @@ function deleteSelected() {
 }
 
 function resetToDefaults() {
-  if (!confirm('Reset all lights to production defaults?')) return;
+  if (!confirm('Reset all lights to built-in defaults? Your saved layout will be discarded.')) return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
   lights = JSON.parse(JSON.stringify(DEFAULTS));
   selectedId = null;
   render();
