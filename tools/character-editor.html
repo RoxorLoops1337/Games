@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beatbox Story · Hotspot Position Editor</title>
+<title>Beatbox Story · Character Editor</title>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -45,47 +45,51 @@
     border: 2px solid #44403c;
     box-shadow: 0 0 32px rgba(0,0,0,0.6);
     user-select: none;
+    overflow: hidden;
   }
-  .map-frame img {
+  .map-frame img.map {
     position: absolute; inset: 0;
     width: 100%; height: 100%;
     image-rendering: pixelated;
     pointer-events: none;
   }
-  .spot {
+  /* Each character is a sprite-sheet div anchored at center-bottom.
+     The clickable hit-box is the dashed wrapper around it. */
+  .character {
     position: absolute;
+    image-rendering: pixelated;
+    pointer-events: auto;
     cursor: move;
-    border: 2px solid var(--c);
-    background: color-mix(in srgb, var(--c) 18%, transparent);
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset, 0 0 14px color-mix(in srgb, var(--c) 50%, transparent) inset;
-    transition: filter 0.1s;
+    transform: translate(-50%, -100%);
+    outline: 1px dashed rgba(251, 191, 36, 0.5);
+    outline-offset: -1px;
+    background-repeat: no-repeat;
   }
-  .spot.selected {
-    filter: brightness(1.2);
-    outline: 2px dashed #fff;
-    outline-offset: 2px;
-    z-index: 2;
+  .character.selected {
+    outline: 2px dashed #fbbf24;
+    z-index: 5;
   }
-  .handle {
-    position: absolute;
-    width: 14px; height: 14px;
-    background: var(--c);
-    border: 1px solid #0c0a09;
-    cursor: nwse-resize;
-    bottom: -7px; right: -7px;
-  }
-  .spot .label {
-    position: absolute; bottom: 6px; left: 50%;
+  .character .label {
+    position: absolute; top: -16px; left: 50%;
     transform: translateX(-50%);
-    font-size: 11px; font-weight: bold;
-    color: #0c0a09; background: var(--c);
-    padding: 2px 8px;
+    font-size: 9px; font-weight: bold;
+    color: #fff; background: #0c0a09;
+    padding: 1px 5px;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.1em;
     border-radius: 2px;
     pointer-events: none;
     white-space: nowrap;
-    font-family: "Bebas Neue", "Oswald", sans-serif;
+  }
+  /* Bottom-right scale handle */
+  .character .handle {
+    position: absolute;
+    width: 14px; height: 14px;
+    background: #fbbf24;
+    border: 1px solid #0c0a09;
+    cursor: nwse-resize;
+    bottom: -7px; right: -7px;
+    z-index: 2;
   }
   .side-pane {
     width: 380px;
@@ -122,7 +126,7 @@
     padding: 6px 12px; font-size: 10px; letter-spacing: 0.15em;
     text-transform: uppercase; color: #a8a29e;
     border-bottom: 1px solid #292524;
-    display: flex; gap: 10px;
+    display: flex; gap: 10px; flex-wrap: wrap;
   }
   .nav-strip a { color: #fbbf24; text-decoration: none; }
   .nav-strip a:hover { text-decoration: underline; }
@@ -142,11 +146,12 @@
     font-size: 11px;
   }
   .selected-info .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
-  .selected-info label { width: 50px; color: #a8a29e; text-transform: uppercase; font-size: 9px; letter-spacing: 0.15em; }
+  .selected-info label { width: 70px; color: #a8a29e; text-transform: uppercase; font-size: 9px; letter-spacing: 0.15em; }
   .selected-info input {
     background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
-    padding: 3px 6px; font-family: monospace; width: 60px; font-size: 11px;
+    padding: 3px 6px; font-family: monospace; width: 80px; font-size: 11px;
   }
+  .selected-info input.wide { width: 170px; }
   .output {
     padding: 10px 12px; flex: 1;
     display: flex; flex-direction: column;
@@ -161,9 +166,9 @@
     border: 1px solid #292524; padding: 8px;
     font-family: 'Menlo', monospace; font-size: 10px;
     line-height: 1.4; resize: none;
-    min-height: 200px;
+    min-height: 180px;
   }
-  .list { padding: 6px 12px; max-height: 220px; overflow-y: auto; }
+  .list { padding: 6px 12px; max-height: 200px; overflow-y: auto; }
   .list .item {
     padding: 4px 6px; font-size: 11px;
     cursor: pointer;
@@ -172,9 +177,6 @@
   }
   .list .item:hover { background: #292524; }
   .list .item.selected { border-left-color: #fbbf24; background: #292524; }
-  .list .item .swatch {
-    width: 14px; height: 14px; border: 1px solid #44403c;
-  }
 </style>
 </head>
 <body>
@@ -182,30 +184,31 @@
 <div class="root">
   <div class="canvas-pane">
     <div class="map-frame" id="frame">
-      <img id="map" src="../beatbox_story/hood-day.png" alt="hood day">
-      <!-- hotspots injected by JS -->
+      <img class="map" id="map" src="../beatbox_story/hood-day.png" alt="hood day">
+      <!-- characters injected by JS -->
     </div>
   </div>
   <aside class="side-pane" id="side">
     <header>
-      <h1>🎯 Hotspot Editor <span id="savedBadge" style="float:right;font-size:9px;color:#34d399;letter-spacing:0.2em;opacity:0.45;transition:opacity 0.3s;">● SAVED</span></h1>
+      <h1>👤 Characters <span id="savedBadge" style="float:right;font-size:9px;color:#34d399;letter-spacing:0.2em;opacity:0.45;transition:opacity 0.3s;">● SAVED</span></h1>
       <div class="sub">
-        Drag a hotspot to move · drag bottom-right handle to resize ·
+        Drag a character to move · drag bottom-right handle to resize ·
         arrow keys nudge selected by 0.5% · Shift+arrows by 2%.
-        Layout auto-saves to this browser — Reset wipes it.
-        Copy the snippet at the bottom and paste it into HoodScreen().
+        Each character cycles its sprite-sheet in place. Position
+        coords describe where the feet land. Layout auto-saves locally.
       </div>
     </header>
 
     <div class="nav-strip">
       <span>Other tools:</span>
       <a href="./light-editor.html">💡 Lights</a>
+      <a href="./hotspot-editor.html">🎯 Hotspots</a>
       <a href="./cat-path-editor.html">🐈 Cat path</a>
-      <a href="./character-editor.html">👤 Characters</a>
     </div>
 
     <div class="controls">
       <button onclick="toggleMap()" id="mapToggle">Switch to night map</button>
+      <button onclick="addCharacter()">+ Add character (copy of selected)</button>
       <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
       <button onclick="resetToDefaults()">Reset to defaults</button>
     </div>
@@ -213,7 +216,7 @@
     <div class="list" id="list"></div>
 
     <div class="selected-info" id="info">
-      <div class="row" style="color:#78716c;">Select a hotspot to edit.</div>
+      <div class="row" style="color:#78716c;">Tap a character to edit.</div>
     </div>
 
     <div class="output">
@@ -225,17 +228,21 @@
 </div>
 
 <script>
-// Fixed set of four named hotspots — these match the game's HoodScreen.
-// The user can move/resize each but cannot add/remove (the game wires
-// each id into different gameplay screens).
+// Default = whatever's currently in production CHARACTERS[].
 const DEFAULTS = [
-  { id: 'house', name: 'House', t: 10.25, l: 32.88, w: 29.77, h: 21.19, color: '#60a5fa' },
-  { id: 'park',  name: 'Park',  t: 48.5,  l: 19.79, w: 33.62, h: 18.35, color: '#86efac' },
-  { id: 'bar',   name: 'Bar',   t: 39.85, l: 74.99, w: 25.01, h: 20.9,  color: '#c084fc' },
-  { id: 'shop',  name: 'Shop',  t: 71.21, l: 64,    w: 36,    h: 22.73, color: '#fb923c' },
+  {
+    id: 'beatboxer1',
+    name: 'Beatboxer',
+    x: 35, y: 63,
+    width: 7,
+    sheet: 'beatboxer-park.png',
+    frames: 8,
+    aspect: '64 / 128',
+    loop: 0.8,
+  },
 ];
 
-const STORAGE_KEY = 'bbs-hotspot-editor-layout-v1';
+const STORAGE_KEY = 'bbs-character-editor-v1';
 function loadLayout() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -247,7 +254,7 @@ function loadLayout() {
 }
 function saveLayout() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(spots));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(characters));
     const badge = document.getElementById('savedBadge');
     if (badge) {
       badge.style.opacity = '1';
@@ -257,15 +264,9 @@ function saveLayout() {
   } catch (e) {}
 }
 
-const savedLayout = loadLayout();
-// When restoring a saved layout, merge in any new defaults the user has
-// never touched (so future-added hotspots auto-appear).
-function mergeDefaults(saved) {
-  const byId = Object.fromEntries(saved.map(s => [s.id, s]));
-  return DEFAULTS.map(d => byId[d.id] ? { ...d, ...byId[d.id], color: d.color } : { ...d });
-}
-let spots = savedLayout ? mergeDefaults(savedLayout) : JSON.parse(JSON.stringify(DEFAULTS));
-let selectedId = null;
+const saved = loadLayout();
+let characters = saved ? JSON.parse(JSON.stringify(saved)) : JSON.parse(JSON.stringify(DEFAULTS));
+let selectedId = characters.length ? characters[0].id : null;
 let mapKind = 'day';
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -273,19 +274,35 @@ function frameRect() { return document.getElementById('frame').getBoundingClient
 
 function render() {
   const frame = document.getElementById('frame');
-  frame.querySelectorAll('.spot').forEach(el => el.remove());
-  for (const S of spots) {
+  frame.querySelectorAll('.character').forEach(el => el.remove());
+  // Inject per-character keyframes so each sprite-sheet animates with
+  // the right step count.
+  let style = document.getElementById('charKF');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'charKF';
+    document.head.appendChild(style);
+  }
+  style.textContent = characters.map(c => `
+    @keyframes charStep_${c.id} {
+      from { background-position: 0% 0; }
+      to   { background-position: 100% 0; }
+    }`).join('\n');
+
+  for (const c of characters) {
     const el = document.createElement('div');
-    el.className = 'spot' + (S.id === selectedId ? ' selected' : '');
-    el.dataset.id = S.id;
-    el.style.setProperty('--c', S.color);
-    el.style.top = S.t + '%';
-    el.style.left = S.l + '%';
-    el.style.width = S.w + '%';
-    el.style.height = S.h + '%';
+    el.className = 'character' + (c.id === selectedId ? ' selected' : '');
+    el.dataset.id = c.id;
+    el.style.left = c.x + '%';
+    el.style.top = c.y + '%';
+    el.style.width = c.width + '%';
+    el.style.aspectRatio = c.aspect;
+    el.style.backgroundImage = 'url(../beatbox_story/' + c.sheet + ')';
+    el.style.backgroundSize = (c.frames * 100) + '% 100%';
+    el.style.animation = 'charStep_' + c.id + ' ' + c.loop + 's steps(' + c.frames + ', jump-none) infinite';
     const lbl = document.createElement('div');
     lbl.className = 'label';
-    lbl.textContent = S.name;
+    lbl.textContent = c.name || c.id;
     el.appendChild(lbl);
     const handle = document.createElement('div');
     handle.className = 'handle';
@@ -302,41 +319,58 @@ function render() {
 function renderList() {
   const ul = document.getElementById('list');
   ul.innerHTML = '';
-  for (const S of spots) {
+  for (const c of characters) {
     const item = document.createElement('div');
-    item.className = 'item' + (S.id === selectedId ? ' selected' : '');
-    item.onclick = () => { selectedId = S.id; render(); };
-    item.innerHTML = '<span>' + S.id + ' · ' + S.name + '</span>';
-    const sw = document.createElement('div');
-    sw.className = 'swatch';
-    sw.style.background = S.color;
-    item.appendChild(sw);
+    item.className = 'item' + (c.id === selectedId ? ' selected' : '');
+    item.onclick = () => { selectedId = c.id; render(); };
+    item.innerHTML = '<span>' + c.id + ' · ' + (c.name || '') + '</span>';
     ul.appendChild(item);
   }
 }
 
 function renderInfo() {
   const info = document.getElementById('info');
-  const S = spots.find(x => x.id === selectedId);
-  if (!S) { info.innerHTML = '<div class="row" style="color:#78716c;">Select a hotspot to edit.</div>'; return; }
+  const c = characters.find(x => x.id === selectedId);
+  if (!c) { info.innerHTML = '<div class="row" style="color:#78716c;">Tap a character to edit.</div>'; return; }
   info.innerHTML =
-    '<div style="font-size:10px;color:' + S.color + ';letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">' + S.name + ' (' + S.id + ')</div>' +
-    '<div class="row"><label>Top</label><input id="i-t" type="number" step="0.5" value="' + S.t + '"></div>' +
-    '<div class="row"><label>Left</label><input id="i-l" type="number" step="0.5" value="' + S.l + '"></div>' +
-    '<div class="row"><label>Width</label><input id="i-w" type="number" step="0.5" value="' + S.w + '"></div>' +
-    '<div class="row"><label>Height</label><input id="i-h" type="number" step="0.5" value="' + S.h + '"></div>';
-  ['t','l','w','h'].forEach(k => {
+    '<div style="font-size:10px;color:#fbbf24;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">' + c.id + '</div>' +
+    '<div class="row"><label>Name</label><input id="i-name" type="text" value="' + (c.name || '').replace(/"/g,'&quot;') + '" class="wide"></div>' +
+    '<div class="row"><label>X (%)</label><input id="i-x" type="number" step="0.5" value="' + c.x + '"></div>' +
+    '<div class="row"><label>Y (%)</label><input id="i-y" type="number" step="0.5" value="' + c.y + '"></div>' +
+    '<div class="row"><label>Width (%)</label><input id="i-width" type="number" step="0.5" value="' + c.width + '"></div>' +
+    '<div class="row"><label>Sheet</label><input id="i-sheet" type="text" value="' + c.sheet + '" class="wide"></div>' +
+    '<div class="row"><label>Frames</label><input id="i-frames" type="number" step="1" min="1" value="' + c.frames + '"></div>' +
+    '<div class="row"><label>Aspect</label><input id="i-aspect" type="text" value="' + c.aspect + '" placeholder="W / H" class="wide"></div>' +
+    '<div class="row"><label>Loop (s)</label><input id="i-loop" type="number" step="0.1" min="0.1" value="' + c.loop + '"></div>' +
+    '<button onclick="deleteSelected()" style="margin-top:8px;background:#7f1d1d;color:#fef2f2;border:1px solid #991b1b;padding:4px 8px;cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;font-family:inherit;">Delete</button>';
+  ['name','x','y','width','sheet','frames','aspect','loop'].forEach(k => {
     const inp = document.getElementById('i-' + k);
-    inp.onchange = () => { S[k] = parseFloat(inp.value) || 0; render(); };
+    inp.onchange = () => {
+      if (k === 'name' || k === 'sheet' || k === 'aspect') c[k] = inp.value;
+      else if (k === 'frames') c[k] = parseInt(inp.value, 10) || 1;
+      else c[k] = parseFloat(inp.value) || 0;
+      render();
+    };
   });
 }
 
 function renderOutput() {
   const round = v => Math.round(v * 100) / 100;
-  let out = '// Paste these into the hotspots array in HoodScreen()\n';
-  spots.forEach(S => {
-    out += "{ id: '" + S.id + "', name: '" + S.name + "', top: " + round(S.t) + ", left: " + round(S.l) + ", width: " + round(S.w) + ", height: " + round(S.h) + " },\n";
+  let out = '// Characters — paste into HoodScreen() in beatbox-story.jsx\n';
+  out += 'const CHARACTERS = [\n';
+  characters.forEach(c => {
+    out += '  {\n';
+    out += "    id: '" + c.id + "',\n";
+    out += "    name: '" + (c.name || '').replace(/'/g, "\\'") + "',\n";
+    out += '    x: ' + round(c.x) + ', y: ' + round(c.y) + ',\n';
+    out += '    width: ' + round(c.width) + ',\n';
+    out += "    sheet: '" + c.sheet + "',\n";
+    out += '    frames: ' + c.frames + ',\n';
+    out += "    aspect: '" + c.aspect + "',\n";
+    out += '    loop: ' + c.loop + ',\n';
+    out += '  },\n';
   });
+  out += '];\n';
   document.getElementById('out').value = out;
 }
 
@@ -353,11 +387,29 @@ function toggleMap() {
   document.getElementById('mapToggle').textContent = mapKind === 'day' ? 'Switch to night map' : 'Switch to day map';
 }
 
+function addCharacter() {
+  const src = characters.find(x => x.id === selectedId) || characters[0] || DEFAULTS[0];
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = (src ? src.id.replace(/\d+$/, '') : 'char') + Date.now().toString(36).slice(-4);
+  copy.x = (src.x || 50) + 5;
+  copy.y = src.y || 60;
+  characters.push(copy);
+  selectedId = copy.id;
+  render();
+}
+
+function deleteSelected() {
+  if (selectedId === null) return;
+  characters = characters.filter(c => c.id !== selectedId);
+  selectedId = characters.length ? characters[0].id : null;
+  render();
+}
+
 function resetToDefaults() {
-  if (!confirm('Reset all hotspots to built-in defaults? Your saved layout will be discarded.')) return;
+  if (!confirm('Reset all characters to built-in defaults? Your saved layout will be discarded.')) return;
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-  spots = JSON.parse(JSON.stringify(DEFAULTS));
-  selectedId = null;
+  characters = JSON.parse(JSON.stringify(DEFAULTS));
+  selectedId = characters.length ? characters[0].id : null;
   render();
 }
 
@@ -380,18 +432,18 @@ function manualSave() {
 // ============ DRAG / RESIZE ============
 let drag = null;
 document.addEventListener('pointerdown', (e) => {
-  const spotEl = e.target.closest('.spot');
-  if (!spotEl) return;
-  const id = spotEl.dataset.id;
-  const S = spots.find(x => x.id === id);
-  if (!S) return;
+  const charEl = e.target.closest('.character');
+  if (!charEl) return;
+  const id = charEl.dataset.id;
+  const c = characters.find(x => x.id === id);
+  if (!c) return;
   selectedId = id;
   const role = e.target.dataset.role;
   const rect = frameRect();
   drag = {
     id, role: role || 'move',
     startX: e.clientX, startY: e.clientY,
-    startT: S.t, startL: S.l, startW: S.w, startH: S.h,
+    startCx: c.x, startCy: c.y, startW: c.width,
     rectW: rect.width, rectH: rect.height,
   };
   e.preventDefault();
@@ -399,16 +451,18 @@ document.addEventListener('pointerdown', (e) => {
 });
 document.addEventListener('pointermove', (e) => {
   if (!drag) return;
-  const S = spots.find(x => x.id === drag.id);
-  if (!S) return;
+  const c = characters.find(x => x.id === drag.id);
+  if (!c) return;
   const dxPct = ((e.clientX - drag.startX) / drag.rectW) * 100;
   const dyPct = ((e.clientY - drag.startY) / drag.rectH) * 100;
   if (drag.role === 'move') {
-    S.l = clamp(drag.startL + dxPct, 0, 100 - S.w);
-    S.t = clamp(drag.startT + dyPct, 0, 100 - S.h);
+    c.x = drag.startCx + dxPct;
+    c.y = drag.startCy + dyPct;
   } else if (drag.role === 'resize') {
-    S.w = clamp(drag.startW + dxPct, 4, 100 - S.l);
-    S.h = clamp(drag.startH + dyPct, 4, 100 - S.t);
+    // Use whichever delta is larger as the scale change; characters
+    // keep their sprite-sheet aspect via aspectRatio CSS anyway.
+    const delta = Math.max(dxPct, dyPct);
+    c.width = clamp(drag.startW + delta, 1, 50);
   }
   render();
 });
@@ -416,15 +470,15 @@ document.addEventListener('pointerup', () => { drag = null; });
 
 // ============ KEYBOARD ============
 document.addEventListener('keydown', (e) => {
-  if (!selectedId) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  const S = spots.find(x => x.id === selectedId);
-  if (!S) return;
+  const c = characters.find(x => x.id === selectedId);
+  if (!c) return;
   const step = e.shiftKey ? 2 : 0.5;
-  if (e.key === 'ArrowUp')         S.t = Math.max(0, S.t - step);
-  else if (e.key === 'ArrowDown')  S.t = Math.min(100 - S.h, S.t + step);
-  else if (e.key === 'ArrowLeft')  S.l = Math.max(0, S.l - step);
-  else if (e.key === 'ArrowRight') S.l = Math.min(100 - S.w, S.l + step);
+  if (e.key === 'ArrowUp')         c.y -= step;
+  else if (e.key === 'ArrowDown')  c.y += step;
+  else if (e.key === 'ArrowLeft')  c.x -= step;
+  else if (e.key === 'ArrowRight') c.x += step;
+  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); return; }
   else return;
   e.preventDefault();
   render();
