@@ -12297,27 +12297,32 @@ function HoodScreen({ go, char }) {
             ))}
 
             {/* Sewer vapor — wispy white-blue steam rising from the
-                manhole lids. The inner gradient is what animates so
-                the bounding box stays still (and the editor's resize
-                handle doesn't drift). Tune positions in the light
-                editor by adding "vapor" lights over the painted lids. */}
+                manhole lids. Three sub-puffs per source, staggered by
+                negative animation-delay so one is always rising while
+                another fades at the top — gives a continuous smoky
+                column instead of a single puff-and-gap rhythm. */}
             {[
               { top: 56, left: 26, w: 4, h: 10, delay: 0 },
               { top: 78, left: 38, w: 4, h: 10, delay: 1.4 },
-            ].map((v, i) => (
-              <div key={`v${i}`} className="absolute pointer-events-none"
-                style={{
-                  top: `${v.top}%`, left: `${v.left}%`,
-                  width: `${v.w}%`, height: `${v.h}%`,
-                  mixBlendMode: 'screen',
-                }}>
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'radial-gradient(ellipse at 50% 85%, rgba(220,230,240,0.6), rgba(220,230,240,0) 70%)',
-                  animation: `nightVapor ${3.5 + (i % 3) * 0.6}s ease-out ${v.delay}s infinite`,
-                }} />
-              </div>
-            ))}
+            ].map((v, i) => {
+              const dur = 3.5 + (i % 3) * 0.6;
+              return (
+                <div key={`v${i}`} className="absolute pointer-events-none"
+                  style={{
+                    top: `${v.top}%`, left: `${v.left}%`,
+                    width: `${v.w}%`, height: `${v.h}%`,
+                    mixBlendMode: 'screen',
+                  }}>
+                  {[0, 1, 2].map(j => (
+                    <div key={j} style={{
+                      position: 'absolute', inset: 0,
+                      background: 'radial-gradient(ellipse at 50% 85%, rgba(220,230,240,0.45), rgba(220,230,240,0) 70%)',
+                      animation: `nightVapor ${dur}s linear ${v.delay - j * (dur / 3)}s infinite`,
+                    }} />
+                  ))}
+                </div>
+              );
+            })}
 
             {/* Distant skyline twinkles — tiny dots */}
             {Array.from({ length: 14 }).map((_, i) => {
@@ -12388,13 +12393,14 @@ function HoodScreen({ go, char }) {
                 74% { opacity: 0.18; }
               }
               /* Vapor: rises from the bottom of its box, expanding and
-                 fading out. Mix-blend-screen keeps it from looking
-                 like a solid white blob over dark areas. */
+                 fading. Plateau in the middle 70% of the cycle so
+                 stacked staggered puffs blend without a visible
+                 "born / die" line. */
               @keyframes nightVapor {
-                0%   { opacity: 0;   transform: translateY(15%)  scale(0.6); }
-                20%  { opacity: 0.7; }
-                70%  { opacity: 0.5; }
-                100% { opacity: 0;   transform: translateY(-55%) scale(1.5); }
+                0%   { opacity: 0;    transform: translateY(20%)  scale(0.5); }
+                15%  { opacity: 0.55; }
+                85%  { opacity: 0.5;  }
+                100% { opacity: 0;    transform: translateY(-50%) scale(1.6); }
               }
             `}</style>
           </div>

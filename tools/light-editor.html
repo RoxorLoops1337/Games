@@ -220,10 +220,10 @@
     74% { opacity: 0.18; }
   }
   @keyframes nightVapor {
-    0%   { opacity: 0;   transform: translateY(15%)  scale(0.6); }
-    20%  { opacity: 0.7; }
-    70%  { opacity: 0.5; }
-    100% { opacity: 0;   transform: translateY(-55%) scale(1.5); }
+    0%   { opacity: 0;    transform: translateY(20%)  scale(0.5); }
+    15%  { opacity: 0.55; }
+    85%  { opacity: 0.5;  }
+    100% { opacity: 0;    transform: translateY(-50%) scale(1.6); }
   }
 </style>
 </head>
@@ -319,10 +319,10 @@ const LIGHT_TYPES = {
   },
   vapor: {
     name: 'Sewer vapor',
-    color: 'rgba(220,230,240,0.6)',
+    color: 'rgba(220,230,240,0.45)',
     edge: '#dce6f0',
-    grad: 'radial-gradient(ellipse at 50% 85%, rgba(220,230,240,0.6), rgba(220,230,240,0) 70%)',
-    anim: 'nightVapor 3.5s ease-out infinite',
+    grad: 'radial-gradient(ellipse at 50% 85%, rgba(220,230,240,0.45), rgba(220,230,240,0) 70%)',
+    anim: 'nightVapor 3.5s linear infinite',
   },
   star: {
     name: 'Twinkle',
@@ -434,12 +434,28 @@ function render() {
     el.style.left = L.l + '%';
     el.style.width = L.w + '%';
     el.style.height = L.h + '%';
-    const glow = document.createElement('div');
-    glow.className = 'glow';
-    glow.style.background = t.grad;
-    if (t.boxShadow) glow.style.boxShadow = t.boxShadow;
-    glow.style.animation = animFor(L, kIdx);
-    el.appendChild(glow);
+    if (L.kind === 'vapor') {
+      // Vapor: stack 3 sub-puffs staggered by -dur/3 each so one is
+      // always rising while another fades at the top — continuous
+      // smoky column instead of a single puff-and-gap rhythm.
+      const dur = 3.5 + (kIdx % 3) * 0.6;
+      const baseDelay = (L.delay !== undefined) ? L.delay : ((kIdx * 0.55) % 3);
+      for (let j = 0; j < 3; j++) {
+        const sub = document.createElement('div');
+        sub.style.position = 'absolute';
+        sub.style.inset = '0';
+        sub.style.background = t.grad;
+        sub.style.animation = 'nightVapor ' + dur + 's linear ' + (baseDelay - j * (dur / 3)) + 's infinite';
+        el.appendChild(sub);
+      }
+    } else {
+      const glow = document.createElement('div');
+      glow.className = 'glow';
+      glow.style.background = t.grad;
+      if (t.boxShadow) glow.style.boxShadow = t.boxShadow;
+      glow.style.animation = animFor(L, kIdx);
+      el.appendChild(glow);
+    }
     const lbl = document.createElement('div');
     lbl.className = 'label';
     // Friendly name overrides the auto-generated id when set.
