@@ -14976,6 +14976,36 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
         <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Tap an activity to commit</div>
       </div>
 
+      {/* A friendly tabby strolls across the park strip on every mount.
+          Two stacked animations: catLegs cycles the 6-frame sprite sheet
+          (steps timing keeps each frame on for ~100ms) and catWalkBy
+          slides the whole element from off-left to off-right once.
+          pointer-events:none so the cat never blocks panel taps. */}
+      <div className="relative w-full overflow-hidden pointer-events-none"
+        style={{ height: '64px' }}>
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          width: '56px',
+          height: '64px',
+          backgroundImage: 'url(cat-walk.png)',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: '600% 100%',
+          imageRendering: 'pixelated',
+          animation: 'catLegs 0.6s steps(6) infinite, catWalkBy 9s linear forwards',
+        }} />
+        <style>{`
+          @keyframes catLegs {
+            from { background-position: 0 0; }
+            to   { background-position: -600% 0; }
+          }
+          @keyframes catWalkBy {
+            from { left: -64px; }
+            to   { left: 100%; }
+          }
+        `}</style>
+      </div>
+
       {/* Date trigger — when you're at the park on the day a romance partner asked you to meet here. */}
       {onDateDay && !activity.active && (
         <Panel title="Date">
