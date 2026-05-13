@@ -12218,67 +12218,74 @@ function HoodScreen({ go, char }) {
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
             {/* Apartment windows — soft amber breathing. Positions hand-
                 tuned by the user via tools/light-editor.html so each glow
-                lands on a specific lit window in the painted art. */}
+                lands on a specific lit window in the painted art. Each
+                window has its own duration so the flickers de-sync. */}
             {[
-              { top: 21.42, left: 36.22, h: 3.97, w: 3.10, delay: 0 },
-              { top: 21.47, left: 40.95, h: 4.04, w: 3.21, delay: 0.7 },
-              { top: 22,    left: 54,    h: 4,    w: 4,    delay: 1.4 },
-              { top: 27.49, left: 36.54, h: 6.57, w: 5.41, delay: 0.3 },
-              { top: 27.36, left: 43.38, h: 6.92, w: 5.08, delay: 1.1 },
-              { top: 29,    left: 54,    h: 4,    w: 4,    delay: 1.8 },
+              { top: 21.60887855876111, left: 35.88158019709708, h: 3.97, w: 3.1, delay: 0 },
+              { top: 21.47, left: 40.780805589704954, h: 4.04, w: 3.21, delay: 0.7 },
+              { top: 21.527801873851825, left: 45.53975898239213, h: 4, w: 4, delay: 1.4 },
+              { top: 20.4070108153233, left: 52.95284923263007, h: 3.3590420208708855, w: 4.056364163626268, delay: 0.3 },
+              { top: 27.076680432612932, left: 36.44259542552348, h: 6.92, w: 5.08, delay: 1.1 },
+              { top: 27.30008259567759, left: 43.678508932820435, h: 6.455435097857652, w: 4.676821016418147, delay: 1.8 },
+              { top: 23.945225667563083, left: 53.36717634636739, h: 5.699917404322408, w: 3.661592590022208, delay: 2.10 },
+              { top: 23.4730258121695, left: 58.781732084787436, h: 4.755517693535244, w: 4, delay: 2.45 },
             ].map((w, i) => (
               <div key={`w${i}`} className="absolute"
                 style={{
                   top: `${w.top}%`, left: `${w.left}%`,
                   width: `${w.w}%`, height: `${w.h}%`,
                   background: 'radial-gradient(ellipse at center, rgba(255, 196, 96, 0.55), rgba(255, 196, 96, 0))',
-                  animation: `nightWindow 3.6s ease-in-out ${w.delay}s infinite`,
+                  animation: `nightWindow ${3.2 + (i % 4) * 0.45}s ease-in-out ${w.delay}s infinite`,
                   mixBlendMode: 'screen',
                 }} />
             ))}
 
-            {/* LIVE neon sign — red, faster pulse with occasional flicker.
-                Positions verified to land directly on the painted sign. */}
-            <div className="absolute"
-              style={{
-                top: '49%', left: '75%', width: '12%', height: '5%',
-                background: 'radial-gradient(ellipse at center, rgba(251,56,90,0.85), rgba(251,56,90,0))',
-                animation: 'nightNeon 1.8s ease-in-out infinite',
-                mixBlendMode: 'screen',
-              }} />
+            {/* LIVE neon sign — main red bar + small accent. Different
+                durations + delays so they don't flicker in lock-step. */}
+            {[
+              { top: 48.81112144123889, left: 78.7225000991434,  w: 18.429771771890863, h: 5.283319567387068, dur: 1.8, delay: 0 },
+              { top: 45.383085614317544, left: 72.99491766140545, w: 4.38577440910533,   h: 6.888792504592703, dur: 2.3, delay: 0.5 },
+            ].map((n, i) => (
+              <div key={`n${i}`} className="absolute"
+                style={{
+                  top: `${n.top}%`, left: `${n.left}%`, width: `${n.w}%`, height: `${n.h}%`,
+                  background: 'radial-gradient(ellipse at center, rgba(251,56,90,0.85), rgba(251,56,90,0))',
+                  animation: `nightNeon ${n.dur}s ease-in-out ${n.delay}s infinite`,
+                  mixBlendMode: 'screen',
+                }} />
+            ))}
             {/* Halo behind the sign for extra glow */}
             <div className="absolute"
               style={{
-                top: '44%', left: '70%', width: '22%', height: '14%',
+                top: '54.199507884425266%', left: '77.27580578799176%', width: '22.724194212008243%', height: '17.872036393283803%',
                 background: 'radial-gradient(circle at 50% 50%, rgba(251,56,90,0.30), rgba(251,56,90,0) 60%)',
-                animation: 'nightNeonHalo 1.8s ease-in-out infinite',
+                animation: 'nightNeonHalo 2.2s ease-in-out 0.3s infinite',
                 mixBlendMode: 'screen',
               }} />
 
             {/* Corner shop awning glow — warm orange */}
             <div className="absolute"
               style={{
-                top: '77%', left: '64%', width: '30%', height: '12%',
+                top: '74.73344346090346%', left: '61.96954314720813%', width: '31.353642032836294%', height: '17.66639134774136%',
                 background: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.45), rgba(255,136,40,0) 70%)',
-                animation: 'nightShop 4.5s ease-in-out infinite',
+                animation: 'nightShop 4.5s ease-in-out 0.8s infinite',
                 mixBlendMode: 'screen',
               }} />
 
-            {/* Park / sidewalk lamps — small steady amber pools */}
+            {/* Park / sidewalk lamps — small steady amber pools, each
+                with its own period for organic shimmer. */}
             {[
-              { top: 38, left: 8, size: 8 },
-              { top: 56, left: 6, size: 7 },
-              { top: 60, left: 28, size: 6 },
-              { top: 65, left: 50, size: 7 },
-              { top: 80, left: 14, size: 7 },
-              { top: 86, left: 50, size: 6 },
+              { top: 24.400657306929926, left: 17.98307126427665, size: 15.783426197652282 },
+              { top: 64.87733722215262, left: 54.39255086056472, size: 16.64467005076142 },
+              { top: 83.98772567776562, left: 16.663292899349617, size: 18.18274111675127 },
+              { top: 80.77145822354066, left: 39.67851512928299, size: 19.521148526729064 },
             ].map((l, i) => (
               <div key={`l${i}`} className="absolute"
                 style={{
                   top: `${l.top}%`, left: `${l.left}%`,
                   width: `${l.size}%`, height: `${l.size * 0.7}%`,
                   background: 'radial-gradient(ellipse at center, rgba(255,176,80,0.45), rgba(255,176,80,0) 70%)',
-                  animation: `nightLamp 5s ease-in-out ${i * 0.4}s infinite`,
+                  animation: `nightLamp ${4.2 + (i % 3) * 0.7}s ease-in-out ${i * 0.55}s infinite`,
                   mixBlendMode: 'screen',
                 }} />
             ))}
