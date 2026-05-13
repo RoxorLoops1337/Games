@@ -172,7 +172,13 @@
   /* Light animations — match production */
   @keyframes nightWindow {
     0%, 100% { opacity: 0.55; transform: scale(1); }
+    17% { opacity: 0.62; }
+    19% { opacity: 0.42; }
+    21% { opacity: 0.64; }
     50% { opacity: 0.85; transform: scale(1.05); }
+    67% { opacity: 0.72; }
+    69% { opacity: 0.52; }
+    71% { opacity: 0.78; }
   }
   @keyframes nightNeon {
     0%, 6%, 10%, 100% { opacity: 1; }
@@ -183,19 +189,35 @@
   }
   @keyframes nightNeonHalo {
     0%, 100% { opacity: 0.7; }
+    11% { opacity: 0.55; }
+    13% { opacity: 0.82; }
     50% { opacity: 1; }
+    63% { opacity: 0.7; }
+    65% { opacity: 0.9; }
   }
   @keyframes nightShop {
     0%, 100% { opacity: 0.85; }
+    14% { opacity: 0.7; }
+    16% { opacity: 0.92; }
     50% { opacity: 1; }
+    66% { opacity: 0.78; }
+    68% { opacity: 0.95; }
   }
   @keyframes nightLamp {
     0%, 100% { opacity: 0.7; }
+    16% { opacity: 0.55; }
+    18% { opacity: 0.82; }
     50% { opacity: 1; }
+    68% { opacity: 0.65; }
+    70% { opacity: 0.88; }
   }
   @keyframes nightTwinkle {
     0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    20% { opacity: 0.5; }
+    22% { opacity: 0.15; }
     50% { opacity: 1; transform: scale(1.2); }
+    72% { opacity: 0.55; }
+    74% { opacity: 0.18; }
   }
 </style>
 </head>
@@ -223,6 +245,7 @@
       <button onclick="toggleMap()" id="mapToggle">Switch to day map</button>
       <button onclick="addLight('window')">+ Add window</button>
       <button onclick="addLight('lamp')">+ Add lamp</button>
+      <button onclick="addLight('neon')">+ Add neon</button>
       <button onclick="addLight('star')">+ Add star</button>
       <button onclick="resetToDefaults()">Reset to defaults</button>
     </div>
@@ -291,13 +314,13 @@ const LIGHT_TYPES = {
 };
 
 const DEFAULTS = [
-  // Windows (production-current values)
-  { id: 'w1', kind: 'window', t: 22, l: 38, w: 4, h: 4, delay: 0 },
-  { id: 'w2', kind: 'window', t: 22, l: 46, w: 4, h: 4, delay: 0.7 },
-  { id: 'w3', kind: 'window', t: 22, l: 54, w: 4, h: 4, delay: 1.4 },
-  { id: 'w4', kind: 'window', t: 29, l: 38, w: 4, h: 4, delay: 0.3 },
-  { id: 'w5', kind: 'window', t: 29, l: 46, w: 4, h: 4, delay: 1.1 },
-  { id: 'w6', kind: 'window', t: 29, l: 54, w: 4, h: 4, delay: 1.8 },
+  // Windows (production-current values, hand-tuned in this very editor)
+  { id: 'w1', kind: 'window', t: 21.42, l: 36.22, w: 3.10, h: 3.97, delay: 0 },
+  { id: 'w2', kind: 'window', t: 21.47, l: 40.95, w: 3.21, h: 4.04, delay: 0.7 },
+  { id: 'w3', kind: 'window', t: 22,    l: 54,    w: 4,    h: 4,    delay: 1.4 },
+  { id: 'w4', kind: 'window', t: 27.49, l: 36.54, w: 5.41, h: 6.57, delay: 0.3 },
+  { id: 'w5', kind: 'window', t: 27.36, l: 43.38, w: 5.08, h: 6.92, delay: 1.1 },
+  { id: 'w6', kind: 'window', t: 29,    l: 54,    w: 4,    h: 4,    delay: 1.8 },
   { id: 'neon',  kind: 'neon',  t: 49, l: 75, w: 12, h: 5 },
   { id: 'halo',  kind: 'halo',  t: 44, l: 70, w: 22, h: 14 },
   { id: 'shop',  kind: 'shop',  t: 77, l: 64, w: 30, h: 12 },
@@ -341,7 +364,8 @@ function render() {
     el.appendChild(glow);
     const lbl = document.createElement('div');
     lbl.className = 'label';
-    lbl.textContent = t.name + (L.kind === 'window' ? ' ' + L.id.slice(1) : '');
+    // Friendly name overrides the auto-generated id when set.
+    lbl.textContent = L.name ? L.name : (t.name + (L.kind === 'window' ? ' ' + L.id.slice(1) : ''));
     el.appendChild(lbl);
     const handle = document.createElement('div');
     handle.className = 'handle';
@@ -362,7 +386,8 @@ function renderList() {
     const item = document.createElement('div');
     item.className = 'item' + (L.id === selectedId ? ' selected' : '');
     item.onclick = () => { selectedId = L.id; render(); };
-    item.innerHTML = '<span>' + L.id + ' · ' + t.name + '</span>';
+    const label = L.name ? (L.name + ' · ' + t.name) : (L.id + ' · ' + t.name);
+    item.innerHTML = '<span>' + label + '</span>';
     const sw = document.createElement('div');
     sw.className = 'swatch';
     sw.style.background = t.edge;
@@ -375,8 +400,10 @@ function renderInfo() {
   const info = document.getElementById('info');
   const L = lights.find(x => x.id === selectedId);
   if (!L) { info.innerHTML = '<div class="row" style="color:#78716c;">Select a light to edit.</div>'; return; }
+  const heading = (L.name ? L.name : L.id) + ' (' + LIGHT_TYPES[L.kind].name + ')';
   info.innerHTML =
-    '<div style="font-size:10px;color:#fbbf24;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">' + L.id + ' (' + LIGHT_TYPES[L.kind].name + ')</div>' +
+    '<div style="font-size:10px;color:#fbbf24;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">' + heading + '</div>' +
+    '<div class="row"><label>Name</label><input id="i-name" type="text" value="' + (L.name || '').replace(/"/g, '&quot;') + '" placeholder="' + L.id + '" style="width:160px;"></div>' +
     '<div class="row"><label>Top</label><input id="i-t" type="number" step="0.5" value="' + L.t + '"></div>' +
     '<div class="row"><label>Left</label><input id="i-l" type="number" step="0.5" value="' + L.l + '"></div>' +
     '<div class="row"><label>Width</label><input id="i-w" type="number" step="0.5" value="' + L.w + '"></div>' +
@@ -386,39 +413,50 @@ function renderInfo() {
     const inp = document.getElementById('i-' + k);
     inp.onchange = () => { L[k] = parseFloat(inp.value) || 0; render(); };
   });
+  const nameInp = document.getElementById('i-name');
+  const commitName = () => {
+    const v = nameInp.value.trim();
+    L.name = v || undefined;
+    render();
+  };
+  nameInp.onchange = commitName;
+  nameInp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); nameInp.blur(); } };
 }
 
 function renderOutput() {
-  const wins = lights.filter(L => L.kind === 'window');
+  const labelFor = (L) => L.name ? L.name : L.id;
+  const wins  = lights.filter(L => L.kind === 'window');
   const lamps = lights.filter(L => L.kind === 'lamp');
   const stars = lights.filter(L => L.kind === 'star');
-  const neon = lights.find(L => L.kind === 'neon');
-  const halo = lights.find(L => L.kind === 'halo');
-  const shop = lights.find(L => L.kind === 'shop');
+  const neons = lights.filter(L => L.kind === 'neon');
+  const halo  = lights.find(L => L.kind === 'halo');
+  const shop  = lights.find(L => L.kind === 'shop');
   let out = '';
   if (wins.length) {
     out += '// Windows\n[\n';
     wins.forEach((L, i) => {
-      out += '  { top: ' + L.t + ', left: ' + L.l + ', h: ' + L.h + ', w: ' + L.w + ', delay: ' + (L.delay ?? (i * 0.35).toFixed(2)) + ' },\n';
+      out += '  { top: ' + L.t + ', left: ' + L.l + ', h: ' + L.h + ', w: ' + L.w + ', delay: ' + (L.delay ?? (i * 0.35).toFixed(2)) + ' }, // ' + labelFor(L) + '\n';
     });
     out += ']\n\n';
   }
-  if (neon) out += '// LIVE neon\ntop: \'' + neon.t + '%\', left: \'' + neon.l + '%\', width: \'' + neon.w + '%\', height: \'' + neon.h + '%\'\n\n';
-  if (halo) out += '// Neon halo\ntop: \'' + halo.t + '%\', left: \'' + halo.l + '%\', width: \'' + halo.w + '%\', height: \'' + halo.h + '%\'\n\n';
-  if (shop) out += '// Shop awning\ntop: \'' + shop.t + '%\', left: \'' + shop.l + '%\', width: \'' + shop.w + '%\', height: \'' + shop.h + '%\'\n\n';
+  neons.forEach(N => {
+    out += '// ' + labelFor(N) + ' (neon)\ntop: \'' + N.t + '%\', left: \'' + N.l + '%\', width: \'' + N.w + '%\', height: \'' + N.h + '%\'\n\n';
+  });
+  if (halo) out += '// ' + labelFor(halo) + ' (halo)\ntop: \'' + halo.t + '%\', left: \'' + halo.l + '%\', width: \'' + halo.w + '%\', height: \'' + halo.h + '%\'\n\n';
+  if (shop) out += '// ' + labelFor(shop) + ' (shop awning)\ntop: \'' + shop.t + '%\', left: \'' + shop.l + '%\', width: \'' + shop.w + '%\', height: \'' + shop.h + '%\'\n\n';
   if (lamps.length) {
     out += '// Lamps\n[\n';
     lamps.forEach(L => {
       // production stores lamps as { top, left, size } where height = size * 0.7
       const size = L.w;
-      out += '  { top: ' + L.t + ', left: ' + L.l + ', size: ' + size + ' },\n';
+      out += '  { top: ' + L.t + ', left: ' + L.l + ', size: ' + size + ' }, // ' + labelFor(L) + '\n';
     });
     out += ']\n\n';
   }
   if (stars.length) {
     out += '// Stars (extras you added)\n[\n';
     stars.forEach(L => {
-      out += '  { top: ' + L.t + ', left: ' + L.l + ' },\n';
+      out += '  { top: ' + L.t + ', left: ' + L.l + ' }, // ' + labelFor(L) + '\n';
     });
     out += ']\n';
   }
@@ -440,7 +478,12 @@ function toggleMap() {
 
 function addLight(kind) {
   const id = kind + Date.now().toString(36);
-  const defaults = { window: { w: 4, h: 4 }, lamp: { w: 7, h: 4.9 }, star: { w: 1, h: 1 } }[kind] || { w: 8, h: 6 };
+  const defaults = {
+    window: { w: 4, h: 4 },
+    lamp:   { w: 7, h: 4.9 },
+    neon:   { w: 12, h: 5 },
+    star:   { w: 1, h: 1 },
+  }[kind] || { w: 8, h: 6 };
   lights.push({ id, kind, t: 40, l: 40, ...defaults });
   selectedId = id;
   render();

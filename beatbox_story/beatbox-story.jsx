@@ -12216,16 +12216,16 @@ function HoodScreen({ go, char }) {
             through. Coordinates are eyeballed onto the night art. */}
         {!isDay && (
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            {/* Apartment windows — soft amber breathing. Positions verified
-                against the actual painted lit windows in the source art via
-                a sharp-rendered preview. */}
+            {/* Apartment windows — soft amber breathing. Positions hand-
+                tuned by the user via tools/light-editor.html so each glow
+                lands on a specific lit window in the painted art. */}
             {[
-              { top: 22, left: 38, h: 4, w: 4, delay: 0 },
-              { top: 22, left: 46, h: 4, w: 4, delay: 0.7 },
-              { top: 22, left: 54, h: 4, w: 4, delay: 1.4 },
-              { top: 29, left: 38, h: 4, w: 4, delay: 0.3 },
-              { top: 29, left: 46, h: 4, w: 4, delay: 1.1 },
-              { top: 29, left: 54, h: 4, w: 4, delay: 1.8 },
+              { top: 21.42, left: 36.22, h: 3.97, w: 3.10, delay: 0 },
+              { top: 21.47, left: 40.95, h: 4.04, w: 3.21, delay: 0.7 },
+              { top: 22,    left: 54,    h: 4,    w: 4,    delay: 1.4 },
+              { top: 27.49, left: 36.54, h: 6.57, w: 5.41, delay: 0.3 },
+              { top: 27.36, left: 43.38, h: 6.92, w: 5.08, delay: 1.1 },
+              { top: 29,    left: 54,    h: 4,    w: 4,    delay: 1.8 },
             ].map((w, i) => (
               <div key={`w${i}`} className="absolute"
                 style={{
@@ -12304,7 +12304,13 @@ function HoodScreen({ go, char }) {
             <style>{`
               @keyframes nightWindow {
                 0%, 100% { opacity: 0.55; transform: scale(1); }
+                17% { opacity: 0.62; }
+                19% { opacity: 0.42; }
+                21% { opacity: 0.64; }
                 50% { opacity: 0.85; transform: scale(1.05); }
+                67% { opacity: 0.72; }
+                69% { opacity: 0.52; }
+                71% { opacity: 0.78; }
               }
               @keyframes nightNeon {
                 0%, 6%, 10%, 100% { opacity: 1; }
@@ -12315,19 +12321,35 @@ function HoodScreen({ go, char }) {
               }
               @keyframes nightNeonHalo {
                 0%, 100% { opacity: 0.7; }
+                11% { opacity: 0.55; }
+                13% { opacity: 0.82; }
                 50% { opacity: 1; }
+                63% { opacity: 0.7; }
+                65% { opacity: 0.9; }
               }
               @keyframes nightShop {
                 0%, 100% { opacity: 0.85; }
+                14% { opacity: 0.7; }
+                16% { opacity: 0.92; }
                 50% { opacity: 1; }
+                66% { opacity: 0.78; }
+                68% { opacity: 0.95; }
               }
               @keyframes nightLamp {
                 0%, 100% { opacity: 0.7; }
+                16% { opacity: 0.55; }
+                18% { opacity: 0.82; }
                 50% { opacity: 1; }
+                68% { opacity: 0.65; }
+                70% { opacity: 0.88; }
               }
               @keyframes nightTwinkle {
                 0%, 100% { opacity: 0.2; transform: scale(0.8); }
+                20% { opacity: 0.5; }
+                22% { opacity: 0.15; }
                 50% { opacity: 1; transform: scale(1.2); }
+                72% { opacity: 0.55; }
+                74% { opacity: 0.18; }
               }
             `}</style>
           </div>
