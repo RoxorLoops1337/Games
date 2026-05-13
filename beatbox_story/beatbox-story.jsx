@@ -12489,7 +12489,7 @@ function HoodScreen({ go, char }) {
           aria-hidden="true"
           style={{
             width: '13%',
-            aspectRatio: '80 / 64',
+            aspectRatio: '74 / 64',
             backgroundImage: 'url(cat-walk.png)',
             backgroundRepeat: 'no-repeat',
             backgroundSize: '400% 100%',
