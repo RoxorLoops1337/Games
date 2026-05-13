@@ -12308,7 +12308,7 @@ function HoodScreen({ go, char }) {
                 within the box (no edge bleed, no hard top line). */}
             <div className="absolute"
               style={{
-                top: '76.10923040359813%', left: '54.959327824019915%', width: '41.167114671325116%', height: '22.711519943904932%',
+                top: '69.23025034533137%', left: '51.6139932574855%', width: '48.3860067425145%', height: '28.607787639872498%',
                 background: 'radial-gradient(ellipse at 50% 50%, rgba(255,136,40,0.6), rgba(255,136,40,0) 45%)',
                 animation: 'nightShop 4.5s ease-in-out 0.8s infinite',
                 mixBlendMode: 'screen',
@@ -12338,8 +12338,11 @@ function HoodScreen({ go, char }) {
                 another fades at the top — gives a continuous smoky
                 column instead of a single puff-and-gap rhythm. */}
             {[
-              { top: 56, left: 26, w: 4, h: 10, delay: 0 },
-              { top: 78, left: 38, w: 4, h: 10, delay: 1.4 },
+              { top: 30.959064404764717, left: 34.71786927178655, w: 6.993201416099867, h: 8.132843920500472, delay: 0.00 },
+              { top: 34.59510144083729,  left: 82.0809444317872,  w: 7.3453403696516,   h: 8.525934695465015, delay: 0.70 },
+              { top: 34.595094963009664, left: 91.41269343675572, w: 8.401763033423983, h: 9.115559521713484, delay: 1.40 },
+              { top: 72.62599990127791,  left: 34.54180269656928, w: 6.641056659430953, h: 8.132850398328099, delay: 2.10 },
+              { top: 60.93172991552784,  left: 77.85524217046331, w: 6.81712903776541,  h: 8.525928217637388, delay: 2.80 },
             ].map((v, i) => {
               const dur = 3.5 + (i % 3) * 0.6;
               return (
