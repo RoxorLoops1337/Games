@@ -12491,6 +12491,11 @@ function HoodScreen({ go, char }) {
             backgroundRepeat: 'no-repeat',
             backgroundSize: '600% 100%',
             imageRendering: 'pixelated',
+            // Anchor by the paws (center-bottom) so the CAT_PATH coords
+            // describe where the feet land, matching the editor preview.
+            // Without this transform the cat's TOP-LEFT sits on the path
+            // and renders ~one cat-height too low.
+            transform: 'translate(-50%, -100%)',
             animation: `catLegs 0.6s steps(6, jump-none) infinite, catHoodWalk ${CAT_DUR}s linear forwards`,
             zIndex: 3,
           }} />
