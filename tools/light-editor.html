@@ -300,7 +300,7 @@ const LIGHT_TYPES = {
     name: 'Shop awning',
     color: 'rgba(255,136,40,0.55)',
     edge: '#ff8828',
-    grad: 'radial-gradient(ellipse at 50% 0%, rgba(255,136,40,0.55), rgba(255,136,40,0) 85%)',
+    grad: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.55), rgba(255,136,40,0) 40%)',
     anim: 'nightShop 4.5s ease-in-out infinite',
   },
   lamp: {
@@ -337,8 +337,8 @@ const DEFAULTS = [
   // Lamps (height = size * 0.7 to match production)
   { id: 'lamp1', kind: 'lamp', t: 24.60175268445738, l: 17.08231152141227,  w: 16.504027394662923, h: 11.552819176264046 },
   { id: 'lamp2', kind: 'lamp', t: 64.78900105257001, l: 53.28976867026466,  w: 19.34690309838851,  h: 13.542832168871957 },
-  { id: 'lamp3', kind: 'lamp', t: 82.79056652190431, l: 15.162327756717678, w: 17.05806324091985,  h: 11.940644268643895 },
-  { id: 'lamp4', kind: 'lamp', t: 81.60309158570334, l: 39.3401077193052,   w: 19.35194791997145,  h: 13.546363543980015 },
+  { id: 'lamp3', kind: 'lamp', t: 82.5940357095342,  l: 15.866611466938325, w: 16.881990862585393, h: 11.817393603809775 },
+  { id: 'lamp4', kind: 'lamp', t: 81.11173540455374, l: 39.86831905119139,  w: 20.232304008526555, h: 14.162612805968589 },
 ];
 
 // Persist the current layout to localStorage on every change so the user's
@@ -397,6 +397,11 @@ function render() {
   const frame = document.getElementById('frame');
   // Remove old light elements
   frame.querySelectorAll('.light').forEach(el => el.remove());
+  // Self-heal any lamp whose h has drifted from w*0.7 (e.g. from an
+  // older saved layout): production always renders h = size * 0.7.
+  for (const L of lights) {
+    if (L.kind === 'lamp') L.h = L.w * 0.7;
+  }
   const kindCounters = {};
   for (const L of lights) {
     const t = LIGHT_TYPES[L.kind];
@@ -465,7 +470,16 @@ function renderInfo() {
     '<button onclick="deleteSelected()" style="margin-top:8px;background:#7f1d1d;color:#fef2f2;border:1px solid #991b1b;padding:4px 8px;cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;font-family:inherit;">Delete</button>';
   ['t','l','w','h'].forEach(k => {
     const inp = document.getElementById('i-' + k);
-    inp.onchange = () => { L[k] = parseFloat(inp.value) || 0; render(); };
+    inp.onchange = () => {
+      L[k] = parseFloat(inp.value) || 0;
+      // Lamps render in production as height = size * 0.7. Keep w and h
+      // coupled so what you see in the editor matches the game exactly.
+      if (L.kind === 'lamp') {
+        if (k === 'h') L.w = L.h / 0.7;
+        L.h = L.w * 0.7;
+      }
+      render();
+    };
   });
   const nameInp = document.getElementById('i-name');
   const commitName = () => {
@@ -607,6 +621,10 @@ document.addEventListener('pointermove', (e) => {
   } else if (drag.role === 'resize') {
     L.w = clamp(drag.startW + dxPct, 1, 100 - L.l);
     L.h = clamp(drag.startH + dyPct, 1, 100 - L.t);
+    // Production renders lamps with height = size * 0.7, so lock the
+    // editor's lamp shape to that ratio. Otherwise the editor preview
+    // disagrees with the game and the lamp drifts in-game.
+    if (L.kind === 'lamp') L.h = clamp(L.w * 0.7, 1, 100 - L.t);
   }
   render();
 });

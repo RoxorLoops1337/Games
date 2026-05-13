@@ -12263,13 +12263,14 @@ function HoodScreen({ go, char }) {
                 mixBlendMode: 'screen',
               }} />
 
-            {/* Corner shop awning glow — warm orange. Center at the top
-                edge so the half-ellipse fades downward over the awning
-                instead of getting cropped mid-gradient at the top. */}
+            {/* Corner shop awning glow — warm orange. Pool of light
+                centered slightly above box-center so it sits on the
+                painted awning, with a tight 40% stop so the gradient
+                is fully transparent at every edge — no hard cutoff. */}
             <div className="absolute"
               style={{
                 top: '74.73344346090346%', left: '63.41073234666768%', width: '30.092598184668756%', height: '15.977179866382073%',
-                background: 'radial-gradient(ellipse at 50% 0%, rgba(255,136,40,0.55), rgba(255,136,40,0) 85%)',
+                background: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.55), rgba(255,136,40,0) 40%)',
                 animation: 'nightShop 4.5s ease-in-out 0.8s infinite',
                 mixBlendMode: 'screen',
               }} />
@@ -12279,8 +12280,8 @@ function HoodScreen({ go, char }) {
             {[
               { top: 24.60175268445738, left: 17.08231152141227, size: 16.504027394662923 },
               { top: 64.78900105257001, left: 53.28976867026466, size: 19.34690309838851 },
-              { top: 82.79056652190431, left: 15.162327756717678, size: 17.05806324091985 },
-              { top: 81.60309158570334, left: 39.3401077193052,  size: 19.35194791997145 },
+              { top: 82.5940357095342,  left: 15.866611466938325, size: 16.881990862585393 },
+              { top: 81.11173540455374, left: 39.86831905119139,  size: 20.232304008526555 },
             ].map((l, i) => (
               <div key={`l${i}`} className="absolute"
                 style={{
