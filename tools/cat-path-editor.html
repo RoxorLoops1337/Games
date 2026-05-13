@@ -87,17 +87,17 @@
   /* Cat sprite live preview */
   .cat-preview {
     position: absolute;
-    width: 11%;
-    aspect-ratio: 57 / 64;
+    width: 13%;
+    aspect-ratio: 80 / 64;
     background-image: url(../beatbox_story/cat-walk.png);
-    background-size: 600% 100%;
+    background-size: 400% 100%;
     background-repeat: no-repeat;
     image-rendering: pixelated;
     pointer-events: none;
     /* Anchor the sprite by its FEET (center-bottom) so the waypoint
        coords describe where the paws are, not the top-left corner. */
     transform: translate(-50%, -100%);
-    animation: catLegs 0.6s steps(6, jump-none) infinite, catPathPreview var(--cat-dur, 14s) linear infinite;
+    animation: catLegs 0.5s steps(4, jump-none) infinite, catPathPreview var(--cat-dur, 14s) linear infinite;
     z-index: 3;
   }
   @keyframes catLegs {
