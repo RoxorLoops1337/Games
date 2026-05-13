@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beatbox Story · Hotspot Position Editor</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0c0a09; color: #e7e5e4;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .root { display: flex; height: 100vh; position: relative; }
+  .canvas-pane {
+    flex: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg, #181715, #181715 8px, #1c1917 8px, #1c1917 16px);
+    overflow: auto;
+  }
+  .gear-toggle {
+    position: fixed;
+    top: 12px; right: 12px;
+    z-index: 1000;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #fbbf24;
+    color: #0c0a09;
+    border: 2px solid #0c0a09;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    font-size: 22px; line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+  .gear-toggle:active { transform: scale(0.92); }
+  .map-frame {
+    position: relative;
+    aspect-ratio: 480 / 860;
+    height: 96vh;
+    max-width: 96vw;
+    border: 2px solid #44403c;
+    box-shadow: 0 0 32px rgba(0,0,0,0.6);
+    user-select: none;
+  }
+  .map-frame img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+  .spot {
+    position: absolute;
+    cursor: move;
+    border: 2px solid var(--c);
+    background: color-mix(in srgb, var(--c) 18%, transparent);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset, 0 0 14px color-mix(in srgb, var(--c) 50%, transparent) inset;
+    transition: filter 0.1s;
+  }
+  .spot.selected {
+    filter: brightness(1.2);
+    outline: 2px dashed #fff;
+    outline-offset: 2px;
+    z-index: 2;
+  }
+  .handle {
+    position: absolute;
+    width: 14px; height: 14px;
+    background: var(--c);
+    border: 1px solid #0c0a09;
+    cursor: nwse-resize;
+    bottom: -7px; right: -7px;
+  }
+  .spot .label {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; font-weight: bold;
+    color: #0c0a09; background: var(--c);
+    padding: 2px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    border-radius: 2px;
+    pointer-events: none;
+    white-space: nowrap;
+    font-family: "Bebas Neue", "Oswald", sans-serif;
+  }
+  .side-pane {
+    width: 380px;
+    background: #1c1917;
+    border-left: 2px solid #292524;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+    transition: transform 0.25s ease-out;
+  }
+  @media (max-width: 760px) {
+    .side-pane {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(92vw, 380px);
+      z-index: 900;
+      box-shadow: -8px 0 24px rgba(0,0,0,0.6);
+    }
+    .canvas-pane { width: 100%; }
+  }
+  .side-pane.collapsed { transform: translateX(110%); }
+  .side-pane header {
+    padding: 12px;
+    border-bottom: 1px solid #292524;
+  }
+  .side-pane h1 {
+    margin: 0; font-size: 14px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: #fbbf24;
+  }
+  .side-pane .sub {
+    margin-top: 4px; font-size: 10px; color: #78716c;
+    line-height: 1.4;
+  }
+  .nav-strip {
+    padding: 6px 12px; font-size: 10px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: #a8a29e;
+    border-bottom: 1px solid #292524;
+    display: flex; gap: 10px;
+  }
+  .nav-strip a { color: #fbbf24; text-decoration: none; }
+  .nav-strip a:hover { text-decoration: underline; }
+  .controls { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #292524; }
+  .controls button {
+    background: #292524; color: #fafaf9;
+    border: 1px solid #44403c; padding: 6px 10px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    font-size: 10px; cursor: pointer; font-family: inherit;
+  }
+  .controls button:hover { background: #44403c; }
+  .controls button.primary { background: #fbbf24; color: #0c0a09; border-color: #fbbf24; }
+  .controls button.primary:hover { background: #fcd34d; }
+  .selected-info {
+    padding: 10px 12px;
+    border-bottom: 1px solid #292524;
+    font-size: 11px;
+  }
+  .selected-info .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .selected-info label { width: 50px; color: #a8a29e; text-transform: uppercase; font-size: 9px; letter-spacing: 0.15em; }
+  .selected-info input {
+    background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
+    padding: 3px 6px; font-family: monospace; width: 60px; font-size: 11px;
+  }
+  .output {
+    padding: 10px 12px; flex: 1;
+    display: flex; flex-direction: column;
+  }
+  .output h2 {
+    margin: 0 0 6px; font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: #a8a29e;
+  }
+  .output textarea {
+    flex: 1;
+    background: #0c0a09; color: #d4d4d4;
+    border: 1px solid #292524; padding: 8px;
+    font-family: 'Menlo', monospace; font-size: 10px;
+    line-height: 1.4; resize: none;
+    min-height: 200px;
+  }
+  .list { padding: 6px 12px; max-height: 220px; overflow-y: auto; }
+  .list .item {
+    padding: 4px 6px; font-size: 11px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .list .item:hover { background: #292524; }
+  .list .item.selected { border-left-color: #fbbf24; background: #292524; }
+  .list .item .swatch {
+    width: 14px; height: 14px; border: 1px solid #44403c;
+  }
+</style>
+</head>
+<body>
+<button class="gear-toggle" id="gearBtn" onclick="togglePane()" title="Show / hide settings" aria-label="Toggle settings">⚙</button>
+<div class="root">
+  <div class="canvas-pane">
+    <div class="map-frame" id="frame">
+      <img id="map" src="../beatbox_story/hood-day.png" alt="hood day">
+      <!-- hotspots injected by JS -->
+    </div>
+  </div>
+  <aside class="side-pane" id="side">
+    <header>
+      <h1>🎯 Hotspot Editor <span id="savedBadge" style="float:right;font-size:9px;color:#34d399;letter-spacing:0.2em;opacity:0.45;transition:opacity 0.3s;">● SAVED</span></h1>
+      <div class="sub">
+        Drag a hotspot to move · drag bottom-right handle to resize ·
+        arrow keys nudge selected by 0.5% · Shift+arrows by 2%.
+        Layout auto-saves to this browser — Reset wipes it.
+        Copy the snippet at the bottom and paste it into HoodScreen().
+      </div>
+    </header>
+
+    <div class="nav-strip">
+      <span>Other tools:</span>
+      <a href="./light-editor.html">💡 Lights →</a>
+    </div>
+
+    <div class="controls">
+      <button onclick="toggleMap()" id="mapToggle">Switch to night map</button>
+      <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
+      <button onclick="resetToDefaults()">Reset to defaults</button>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <div class="selected-info" id="info">
+      <div class="row" style="color:#78716c;">Select a hotspot to edit.</div>
+    </div>
+
+    <div class="output">
+      <h2>Paste-ready snippet</h2>
+      <textarea id="out" readonly></textarea>
+      <button onclick="copyOut()" class="primary" style="margin-top:6px;padding:8px;font-size:11px;border:none;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;background:#fbbf24;color:#0c0a09;font-family:inherit;">Copy to clipboard</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+// Fixed set of four named hotspots — these match the game's HoodScreen.
+// The user can move/resize each but cannot add/remove (the game wires
+// each id into different gameplay screens).
+const DEFAULTS = [
+  { id: 'house', name: 'House', t: 13, l: 32, w: 34, h: 15, color: '#60a5fa' },
+  { id: 'park',  name: 'Park',  t: 37, l: 5,  w: 47, h: 21, color: '#86efac' },
+  { id: 'bar',   name: 'Bar',   t: 37, l: 62, w: 31, h: 15, color: '#c084fc' },
+  { id: 'shop',  name: 'Shop',  t: 66, l: 58, w: 36, h: 19, color: '#fb923c' },
+];
+
+const STORAGE_KEY = 'bbs-hotspot-editor-layout-v1';
+function loadLayout() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) return null;
+    return arr;
+  } catch (e) { return null; }
+}
+function saveLayout() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(spots));
+    const badge = document.getElementById('savedBadge');
+    if (badge) {
+      badge.style.opacity = '1';
+      clearTimeout(saveLayout._t);
+      saveLayout._t = setTimeout(() => { badge.style.opacity = '0.45'; }, 600);
+    }
+  } catch (e) {}
+}
+
+const savedLayout = loadLayout();
+// When restoring a saved layout, merge in any new defaults the user has
+// never touched (so future-added hotspots auto-appear).
+function mergeDefaults(saved) {
+  const byId = Object.fromEntries(saved.map(s => [s.id, s]));
+  return DEFAULTS.map(d => byId[d.id] ? { ...d, ...byId[d.id], color: d.color } : { ...d });
+}
+let spots = savedLayout ? mergeDefaults(savedLayout) : JSON.parse(JSON.stringify(DEFAULTS));
+let selectedId = null;
+let mapKind = 'day';
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function frameRect() { return document.getElementById('frame').getBoundingClientRect(); }
+
+function render() {
+  const frame = document.getElementById('frame');
+  frame.querySelectorAll('.spot').forEach(el => el.remove());
+  for (const S of spots) {
+    const el = document.createElement('div');
+    el.className = 'spot' + (S.id === selectedId ? ' selected' : '');
+    el.dataset.id = S.id;
+    el.style.setProperty('--c', S.color);
+    el.style.top = S.t + '%';
+    el.style.left = S.l + '%';
+    el.style.width = S.w + '%';
+    el.style.height = S.h + '%';
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    lbl.textContent = S.name;
+    el.appendChild(lbl);
+    const handle = document.createElement('div');
+    handle.className = 'handle';
+    handle.dataset.role = 'resize';
+    el.appendChild(handle);
+    frame.appendChild(el);
+  }
+  renderList();
+  renderInfo();
+  renderOutput();
+  saveLayout();
+}
+
+function renderList() {
+  const ul = document.getElementById('list');
+  ul.innerHTML = '';
+  for (const S of spots) {
+    const item = document.createElement('div');
+    item.className = 'item' + (S.id === selectedId ? ' selected' : '');
+    item.onclick = () => { selectedId = S.id; render(); };
+    item.innerHTML = '<span>' + S.id + ' · ' + S.name + '</span>';
+    const sw = document.createElement('div');
+    sw.className = 'swatch';
+    sw.style.background = S.color;
+    item.appendChild(sw);
+    ul.appendChild(item);
+  }
+}
+
+function renderInfo() {
+  const info = document.getElementById('info');
+  const S = spots.find(x => x.id === selectedId);
+  if (!S) { info.innerHTML = '<div class="row" style="color:#78716c;">Select a hotspot to edit.</div>'; return; }
+  info.innerHTML =
+    '<div style="font-size:10px;color:' + S.color + ';letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">' + S.name + ' (' + S.id + ')</div>' +
+    '<div class="row"><label>Top</label><input id="i-t" type="number" step="0.5" value="' + S.t + '"></div>' +
+    '<div class="row"><label>Left</label><input id="i-l" type="number" step="0.5" value="' + S.l + '"></div>' +
+    '<div class="row"><label>Width</label><input id="i-w" type="number" step="0.5" value="' + S.w + '"></div>' +
+    '<div class="row"><label>Height</label><input id="i-h" type="number" step="0.5" value="' + S.h + '"></div>';
+  ['t','l','w','h'].forEach(k => {
+    const inp = document.getElementById('i-' + k);
+    inp.onchange = () => { S[k] = parseFloat(inp.value) || 0; render(); };
+  });
+}
+
+function renderOutput() {
+  const round = v => Math.round(v * 100) / 100;
+  let out = '// Paste these into the hotspots array in HoodScreen()\n';
+  spots.forEach(S => {
+    out += "{ id: '" + S.id + "', name: '" + S.name + "', top: " + round(S.t) + ", left: " + round(S.l) + ", width: " + round(S.w) + ", height: " + round(S.h) + " },\n";
+  });
+  document.getElementById('out').value = out;
+}
+
+function copyOut() {
+  const out = document.getElementById('out');
+  out.select();
+  document.execCommand('copy');
+  out.blur();
+}
+
+function toggleMap() {
+  mapKind = mapKind === 'day' ? 'night' : 'day';
+  document.getElementById('map').src = '../beatbox_story/hood-' + mapKind + '.png';
+  document.getElementById('mapToggle').textContent = mapKind === 'day' ? 'Switch to night map' : 'Switch to day map';
+}
+
+function resetToDefaults() {
+  if (!confirm('Reset all hotspots to built-in defaults? Your saved layout will be discarded.')) return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  spots = JSON.parse(JSON.stringify(DEFAULTS));
+  selectedId = null;
+  render();
+}
+
+function manualSave() {
+  saveLayout();
+  const btn = document.getElementById('saveBtn');
+  if (!btn) return;
+  const original = btn.textContent;
+  btn.textContent = '✓ Saved!';
+  btn.style.background = '#34d399';
+  btn.style.borderColor = '#34d399';
+  clearTimeout(manualSave._t);
+  manualSave._t = setTimeout(() => {
+    btn.textContent = original;
+    btn.style.background = '';
+    btn.style.borderColor = '';
+  }, 1400);
+}
+
+// ============ DRAG / RESIZE ============
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  const spotEl = e.target.closest('.spot');
+  if (!spotEl) return;
+  const id = spotEl.dataset.id;
+  const S = spots.find(x => x.id === id);
+  if (!S) return;
+  selectedId = id;
+  const role = e.target.dataset.role;
+  const rect = frameRect();
+  drag = {
+    id, role: role || 'move',
+    startX: e.clientX, startY: e.clientY,
+    startT: S.t, startL: S.l, startW: S.w, startH: S.h,
+    rectW: rect.width, rectH: rect.height,
+  };
+  e.preventDefault();
+  render();
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const S = spots.find(x => x.id === drag.id);
+  if (!S) return;
+  const dxPct = ((e.clientX - drag.startX) / drag.rectW) * 100;
+  const dyPct = ((e.clientY - drag.startY) / drag.rectH) * 100;
+  if (drag.role === 'move') {
+    S.l = clamp(drag.startL + dxPct, 0, 100 - S.w);
+    S.t = clamp(drag.startT + dyPct, 0, 100 - S.h);
+  } else if (drag.role === 'resize') {
+    S.w = clamp(drag.startW + dxPct, 4, 100 - S.l);
+    S.h = clamp(drag.startH + dyPct, 4, 100 - S.t);
+  }
+  render();
+});
+document.addEventListener('pointerup', () => { drag = null; });
+
+// ============ KEYBOARD ============
+document.addEventListener('keydown', (e) => {
+  if (!selectedId) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const S = spots.find(x => x.id === selectedId);
+  if (!S) return;
+  const step = e.shiftKey ? 2 : 0.5;
+  if (e.key === 'ArrowUp')         S.t = Math.max(0, S.t - step);
+  else if (e.key === 'ArrowDown')  S.t = Math.min(100 - S.h, S.t + step);
+  else if (e.key === 'ArrowLeft')  S.l = Math.max(0, S.l - step);
+  else if (e.key === 'ArrowRight') S.l = Math.min(100 - S.w, S.l + step);
+  else return;
+  e.preventDefault();
+  render();
+});
+
+function togglePane() {
+  const side = document.getElementById('side');
+  const btn = document.getElementById('gearBtn');
+  const collapsed = side.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '⚙' : '×';
+}
+if (window.innerWidth <= 760) {
+  document.getElementById('side').classList.add('collapsed');
+}
+
+render();
+</script>
+</body>
+</html>

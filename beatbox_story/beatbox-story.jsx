@@ -12372,7 +12372,7 @@ function HoodScreen({ go, char }) {
             title={h.locked ? h.lockReason : `${h.name} · ${h.desc}`}
             className={`absolute transition-all ${
               h.locked
-                ? 'opacity-50 cursor-not-allowed'
+                ? 'opacity-60 cursor-not-allowed'
                 : 'hover:scale-[1.02] active:scale-95'
             }`}
             style={{
@@ -12380,13 +12380,9 @@ function HoodScreen({ go, char }) {
               left: `${h.left}%`,
               width: `${h.width}%`,
               height: `${h.height}%`,
-              background: h.locked
-                ? 'rgba(0,0,0,0.45)'
-                : 'rgba(212, 160, 23, 0.06)',
-              border: h.locked
-                ? '2px dashed rgba(120,113,108,0.5)'
-                : '2px solid rgba(212, 160, 23, 0.55)',
-              boxShadow: h.locked ? 'none' : '0 0 12px rgba(212,160,23,0.30) inset',
+              background: h.locked ? 'rgba(0,0,0,0.35)' : 'transparent',
+              border: 'none',
+              boxShadow: 'none',
             }}>
             <div
               className={`absolute left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] uppercase tracking-widest whitespace-nowrap ${
