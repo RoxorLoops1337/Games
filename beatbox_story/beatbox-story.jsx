@@ -12176,6 +12176,28 @@ const CAT_PATH = [
 ];
 const CAT_DUR = 5;
 
+// Stationary animated characters drawn on top of the hood map. Each
+// runs a sprite-sheet step animation in place. Tune positions in
+// tools/character-editor.html and paste the array back here.
+//   x, y       — center-bottom (paws/feet) anchor in % of map box
+//   width      — sprite width in % of map width
+//   sheet      — PNG filename in beatbox_story/
+//   frames     — frame count along the horizontal sheet
+//   aspect     — frame width / frame height ratio string for CSS aspectRatio
+//   loop       — full cycle duration in seconds
+const CHARACTERS = [
+  {
+    id: 'beatboxer1',
+    name: 'Beatboxer',
+    x: 35, y: 63,
+    width: 7,
+    sheet: 'beatboxer-park.png',
+    frames: 8,
+    aspect: '64 / 128',
+    loop: 0.8,
+  },
+];
+
 // Build a @keyframes string from CAT_PATH, distributing time stops by
 // arc length so the cat walks at constant pixel-speed across segments
 // of different lengths.
@@ -12505,12 +12527,40 @@ function HoodScreen({ go, char }) {
             animation: `catLegs 0.5s steps(4, jump-none) ${Math.max(1, Math.round(CAT_DUR / 0.5))} forwards, catHoodWalk ${CAT_DUR}s linear forwards`,
             zIndex: 3,
           }} />
+
+        {/* Stationary park characters — each is a sprite-sheet that
+            cycles in place. Anchored center-bottom so { x, y } points
+            at the character's feet. */}
+        {CHARACTERS.map(c => (
+          <div key={c.id}
+            className="absolute pointer-events-none"
+            aria-hidden="true"
+            style={{
+              left: `${c.x}%`,
+              top: `${c.y}%`,
+              width: `${c.width}%`,
+              aspectRatio: c.aspect,
+              backgroundImage: `url(${c.sheet})`,
+              backgroundRepeat: 'no-repeat',
+              backgroundSize: `${c.frames * 100}% 100%`,
+              imageRendering: 'pixelated',
+              transform: 'translate(-50%, -100%)',
+              animation: `charStep_${c.id} ${c.loop}s steps(${c.frames}, jump-none) infinite`,
+              zIndex: 2,
+            }} />
+        ))}
         <style>{`
           @keyframes catLegs {
             from { background-position: 0% 0; }
             to   { background-position: 100% 0; }
           }
           ${catKeyframeCss}
+          ${CHARACTERS.map(c => `
+            @keyframes charStep_${c.id} {
+              from { background-position: 0% 0; }
+              to   { background-position: 100% 0; }
+            }
+          `).join('\n')}
         `}</style>
       </div>
 
