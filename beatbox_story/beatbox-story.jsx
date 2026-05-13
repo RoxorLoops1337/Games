@@ -13900,17 +13900,58 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         );
       })()}
 
-      <div className="grid grid-cols-4 gap-1">
-        {[['train', 'PC / Train', 'pc'], ['studio', 'Studio', 'mic'], ['eat', 'Kitchen', 'fridge'], ['rest', 'Couch', 'couch']].map(([id, label, icon]) => (
-          <button key={id} onClick={() => setTab(id)} disabled={trainActivity.active}
-            className={`py-2 border-2 text-[10px] uppercase tracking-widest transition-all disabled:opacity-30 flex flex-col items-center gap-1 ${
-              tab === id ? 'border-amber-500 bg-amber-500/10 text-amber-500' : 'border-stone-800 text-stone-500'
-            }`}>
-            <PixelIcon name={icon} size={20} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Apartment map — clickable hotspots for each activity area.
+          Day / night swaps the painted background based on game time.
+          Tune positions in tools/hotspot-editor.html (use the Map
+          dropdown to switch from hood to apartment). */}
+      {(() => {
+        const isDay = isDayTime(char.minutes ?? 0);
+        const houseHotspots = [
+          { id: 'train',  name: 'PC',      top: 12, left: 8,  width: 32, height: 18, icon: 'pc' },
+          { id: 'studio', name: 'Studio',  top: 12, left: 50, width: 42, height: 19, icon: 'mic' },
+          { id: 'eat',    name: 'Kitchen', top: 35, left: 52, width: 42, height: 22, icon: 'fridge' },
+          { id: 'rest',   name: 'Couch',   top: 64, left: 38, width: 56, height: 28, icon: 'couch' },
+        ];
+        return (
+          <div className="relative w-full max-w-md mx-auto border-2 border-stone-800 select-none overflow-hidden"
+            style={{ aspectRatio: '480 / 854', background: '#0c0a09' }}>
+            <img src={isDay ? 'house-day.png' : 'house-night.png'}
+              alt="The apartment"
+              className="absolute inset-0 w-full h-full block pointer-events-none"
+              style={{ imageRendering: 'pixelated' }} />
+            {houseHotspots.map(h => (
+              <button key={h.id}
+                onClick={() => setTab(h.id)}
+                disabled={trainActivity.active}
+                aria-label={h.name}
+                title={h.name}
+                className={`absolute transition-all ${
+                  trainActivity.active ? 'opacity-30 cursor-not-allowed'
+                                       : 'hover:scale-[1.02] active:scale-95'
+                }`}
+                style={{
+                  top: `${h.top}%`,
+                  left: `${h.left}%`,
+                  width: `${h.width}%`,
+                  height: `${h.height}%`,
+                  background: 'transparent',
+                  border: 'none',
+                  boxShadow: 'none',
+                }}>
+                <div
+                  className={`absolute left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] uppercase tracking-widest whitespace-nowrap flex items-center gap-1 ${
+                    tab === h.id ? 'bg-amber-500 text-stone-950 font-bold'
+                                 : 'bg-stone-950/80 text-stone-200 border border-stone-700'
+                  }`}
+                  style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif', bottom: '4px' }}>
+                  <PixelIcon name={h.icon} size={12} />
+                  <span>{h.name}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {tab === 'train' && (
         <>
