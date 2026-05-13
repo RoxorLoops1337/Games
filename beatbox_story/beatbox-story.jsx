@@ -12267,10 +12267,13 @@ function HoodScreen({ go, char }) {
                 centered slightly above box-center so it sits on the
                 painted awning, with a tight 40% stop so the gradient
                 is fully transparent at every edge — no hard cutoff. */}
+            {/* Corner shop awning glow — warm orange. Centered ellipse
+                with a tight 45% stop so the glow is fully contained
+                within the box (no edge bleed, no hard top line). */}
             <div className="absolute"
               style={{
                 top: '76.10923040359813%', left: '54.959327824019915%', width: '41.167114671325116%', height: '22.711519943904932%',
-                background: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.55), rgba(255,136,40,0) 40%)',
+                background: 'radial-gradient(ellipse at 50% 50%, rgba(255,136,40,0.6), rgba(255,136,40,0) 45%)',
                 animation: 'nightShop 4.5s ease-in-out 0.8s infinite',
                 mixBlendMode: 'screen',
               }} />
@@ -12291,6 +12294,29 @@ function HoodScreen({ go, char }) {
                   animation: `nightLamp ${4.2 + (i % 3) * 0.7}s ease-in-out ${i * 0.55}s infinite`,
                   mixBlendMode: 'screen',
                 }} />
+            ))}
+
+            {/* Sewer vapor — wispy white-blue steam rising from the
+                manhole lids. The inner gradient is what animates so
+                the bounding box stays still (and the editor's resize
+                handle doesn't drift). Tune positions in the light
+                editor by adding "vapor" lights over the painted lids. */}
+            {[
+              { top: 56, left: 26, w: 4, h: 10, delay: 0 },
+              { top: 78, left: 38, w: 4, h: 10, delay: 1.4 },
+            ].map((v, i) => (
+              <div key={`v${i}`} className="absolute pointer-events-none"
+                style={{
+                  top: `${v.top}%`, left: `${v.left}%`,
+                  width: `${v.w}%`, height: `${v.h}%`,
+                  mixBlendMode: 'screen',
+                }}>
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'radial-gradient(ellipse at 50% 85%, rgba(220,230,240,0.6), rgba(220,230,240,0) 70%)',
+                  animation: `nightVapor ${3.5 + (i % 3) * 0.6}s ease-out ${v.delay}s infinite`,
+                }} />
+              </div>
             ))}
 
             {/* Distant skyline twinkles — tiny dots */}
@@ -12360,6 +12386,15 @@ function HoodScreen({ go, char }) {
                 50% { opacity: 1; transform: scale(1.2); }
                 72% { opacity: 0.55; }
                 74% { opacity: 0.18; }
+              }
+              /* Vapor: rises from the bottom of its box, expanding and
+                 fading out. Mix-blend-screen keeps it from looking
+                 like a solid white blob over dark areas. */
+              @keyframes nightVapor {
+                0%   { opacity: 0;   transform: translateY(15%)  scale(0.6); }
+                20%  { opacity: 0.7; }
+                70%  { opacity: 0.5; }
+                100% { opacity: 0;   transform: translateY(-55%) scale(1.5); }
               }
             `}</style>
           </div>

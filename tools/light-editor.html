@@ -219,6 +219,12 @@
     72% { opacity: 0.55; }
     74% { opacity: 0.18; }
   }
+  @keyframes nightVapor {
+    0%   { opacity: 0;   transform: translateY(15%)  scale(0.6); }
+    20%  { opacity: 0.7; }
+    70%  { opacity: 0.5; }
+    100% { opacity: 0;   transform: translateY(-55%) scale(1.5); }
+  }
 </style>
 </head>
 <body>
@@ -252,6 +258,7 @@
       <button onclick="addLight('window')">+ Add window</button>
       <button onclick="addLight('lamp')">+ Add lamp</button>
       <button onclick="addLight('neon')">+ Add neon</button>
+      <button onclick="addLight('vapor')">+ Add vapor</button>
       <button onclick="addLight('star')">+ Add star</button>
       <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
       <button onclick="resetToDefaults()">Reset to defaults</button>
@@ -300,7 +307,7 @@ const LIGHT_TYPES = {
     name: 'Shop awning',
     color: 'rgba(255,136,40,0.55)',
     edge: '#ff8828',
-    grad: 'radial-gradient(ellipse at 50% 30%, rgba(255,136,40,0.55), rgba(255,136,40,0) 40%)',
+    grad: 'radial-gradient(ellipse at 50% 50%, rgba(255,136,40,0.6), rgba(255,136,40,0) 45%)',
     anim: 'nightShop 4.5s ease-in-out infinite',
   },
   lamp: {
@@ -309,6 +316,13 @@ const LIGHT_TYPES = {
     edge: '#ffb050',
     grad: 'radial-gradient(ellipse at center, rgba(255,176,80,0.45), rgba(255,176,80,0) 70%)',
     anim: 'nightLamp 5s ease-in-out infinite',
+  },
+  vapor: {
+    name: 'Sewer vapor',
+    color: 'rgba(220,230,240,0.6)',
+    edge: '#dce6f0',
+    grad: 'radial-gradient(ellipse at 50% 85%, rgba(220,230,240,0.6), rgba(220,230,240,0) 70%)',
+    anim: 'nightVapor 3.5s ease-out infinite',
   },
   star: {
     name: 'Twinkle',
@@ -339,6 +353,10 @@ const DEFAULTS = [
   { id: 'lamp2', kind: 'lamp', t: 61.447782907449316, l: 52.9376355198301,  w: 17.938335677947215, h: 12.55683497456305 },
   { id: 'lamp3', kind: 'lamp', t: 81.02168556533128,  l: 16.74696755549343, w: 14.945217913375087, h: 10.461652539362561 },
   { id: 'lamp4', kind: 'lamp', t: 78.75322962173223,  l: 40.39653618619476, w: 17.943380499530157, h: 12.56036634967111 },
+  // Sewer vapor — wispy steam rising from manhole lids; positions are
+  // initial guesses, user fine-tunes via the editor.
+  { id: 'vapor1', kind: 'vapor', t: 56, l: 26, w: 4, h: 10, delay: 0 },
+  { id: 'vapor2', kind: 'vapor', t: 78, l: 38, w: 4, h: 10, delay: 1.4 },
 ];
 
 // Persist the current layout to localStorage on every change so the user's
@@ -387,10 +405,12 @@ function animFor(L, kindIdx) {
     halo:   2.2 + (kindIdx % 2) * 0.4,
     shop:   4.5,
     star:   2.5 + (kindIdx % 5) * 0.6,
+    vapor:  3.5 + (kindIdx % 3) * 0.6,
   };
   const dur = durTable[L.kind] ?? 3;
   const delay = (L.delay !== undefined) ? L.delay : ((kindIdx * 0.55) % 3);
-  return keyframe + ' ' + dur + 's ease-in-out ' + delay + 's infinite';
+  const easing = L.kind === 'vapor' ? 'ease-out' : 'ease-in-out';
+  return keyframe + ' ' + dur + 's ' + easing + ' ' + delay + 's infinite';
 }
 
 function render() {
@@ -497,6 +517,7 @@ function renderOutput() {
   const lamps = lights.filter(L => L.kind === 'lamp');
   const stars = lights.filter(L => L.kind === 'star');
   const neons = lights.filter(L => L.kind === 'neon');
+  const vapors = lights.filter(L => L.kind === 'vapor');
   const halo  = lights.find(L => L.kind === 'halo');
   const shop  = lights.find(L => L.kind === 'shop');
   let out = '';
@@ -518,6 +539,13 @@ function renderOutput() {
       // production stores lamps as { top, left, size } where height = size * 0.7
       const size = L.w;
       out += '  { top: ' + L.t + ', left: ' + L.l + ', size: ' + size + ' }, // ' + labelFor(L) + '\n';
+    });
+    out += ']\n\n';
+  }
+  if (vapors.length) {
+    out += '// Sewer vapor\n[\n';
+    vapors.forEach((L, i) => {
+      out += '  { top: ' + L.t + ', left: ' + L.l + ', w: ' + L.w + ', h: ' + L.h + ', delay: ' + (L.delay ?? (i * 0.7).toFixed(2)) + ' }, // ' + labelFor(L) + '\n';
     });
     out += ']\n\n';
   }
@@ -550,6 +578,7 @@ function addLight(kind) {
     window: { w: 4, h: 4 },
     lamp:   { w: 7, h: 4.9 },
     neon:   { w: 12, h: 5 },
+    vapor:  { w: 4, h: 10 },
     star:   { w: 1, h: 1 },
   }[kind] || { w: 8, h: 6 };
   lights.push({ id, kind, t: 40, l: 40, ...defaults });
