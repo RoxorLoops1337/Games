@@ -12168,11 +12168,11 @@ function CreateScreen({ char, setChar, onDone }) {
 // CAT_DUR is total seconds for one full traversal.
 const CAT_PATH = [
   { x: -5.99,  y: 71.73 },
-  { x: 22.56,  y: 70.68 },
+  { x: 26.08,  y: 68.91 },
   { x: 30.76,  y: 71.99 },
   { x: 38.95,  y: 73.30 },
   { x: 58.86,  y: 73.31 },
-  { x: 107.95, y: 65.13 },
+  { x: 114.91, y: 64.29 },
 ];
 const CAT_DUR = 5;
 
