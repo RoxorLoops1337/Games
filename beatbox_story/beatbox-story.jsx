@@ -12163,11 +12163,43 @@ function CreateScreen({ char, setChar, onDone }) {
 // Day / night background swaps based on the in-game clock; hotspots dim
 // + show 🔒 when their location is locked (e.g. shop before day 5,
 // bar at noon, park after sundown).
+// Cat walking-path waypoints — coordinates are % of the hood map box.
+// Tune in tools/cat-path-editor.html (live preview + drag-to-edit).
+// CAT_DUR is total seconds for one full traversal.
+const CAT_PATH = [
+  { x: -12, y: 54 },
+  { x: 100, y: 54 },
+];
+const CAT_DUR = 14;
+
+// Build a @keyframes string from CAT_PATH, distributing time stops by
+// arc length so the cat walks at constant pixel-speed across segments
+// of different lengths.
+function buildCatKeyframe(path) {
+  if (!path || path.length < 2) {
+    return '@keyframes catHoodWalk { from { left: -12%; top: 54%; } to { left: 100%; top: 54%; } }';
+  }
+  const dists = [];
+  for (let i = 1; i < path.length; i++) {
+    const dx = path[i].x - path[i - 1].x;
+    const dy = path[i].y - path[i - 1].y;
+    dists.push(Math.sqrt(dx * dx + dy * dy));
+  }
+  const total = dists.reduce((s, d) => s + d, 0) || 1;
+  let cum = 0;
+  const stops = path.map((p, i) => {
+    const pct = i === 0 ? 0 : ((cum += dists[i - 1]) / total) * 100;
+    return `${pct.toFixed(2)}% { left: ${p.x}%; top: ${p.y}%; }`;
+  });
+  return `@keyframes catHoodWalk {\n${stops.join('\n')}\n}`;
+}
+
 function HoodScreen({ go, char }) {
   const mins = char.minutes ?? 0;
   const isDay = isDayTime(mins);
   const shopLockedByDay = !isUnlocked(char, 'shop');
   const barLockedByDay  = !isUnlocked(char, 'bar');
+  const catKeyframeCss = buildCatKeyframe(CAT_PATH);
   // Hotspot rectangles given as percentages of the map's box, eyeballed
   // from the source art. Tweak if the art shifts.
   const hotspots = [
@@ -12441,31 +12473,21 @@ function HoodScreen({ go, char }) {
         ))}
 
         {/* A friendly tabby strolls through the park region on every
-            mount of the hood map. Positioned absolutely inside the
-            map's aspect-locked container so it tracks the painted park
-            no matter the viewport size. pointer-events:none so the
-            hotspots underneath stay tappable.
-
-            Animation timing notes — the previous build used
-              steps(6, end) from 0 to -600%
-            which briefly hits the -600% (entire sheet scrolled off
-            the box) value at every iteration boundary — that was the
-            "on/off" flash. Now uses
-              steps(6, jump-none) from 0% to 100%
-            which holds 6 evenly-spaced positions (0/20/40/60/80/100%)
-            and the last one carries through to the next cycle's start
-            without ever passing through a blank frame. */}
+            mount of the hood map. Path is driven by the CAT_PATH array
+            (waypoints in % of the map); the keyframe stops are
+            distributed by arc length so the cat walks at constant
+            pixel-speed regardless of segment length. Tune in
+            tools/cat-path-editor.html and paste the array back here. */}
         <div className="absolute pointer-events-none"
           aria-hidden="true"
           style={{
-            top: '54%',
             width: '11%',
             aspectRatio: '57 / 64',
             backgroundImage: 'url(cat-walk.png)',
             backgroundRepeat: 'no-repeat',
             backgroundSize: '600% 100%',
             imageRendering: 'pixelated',
-            animation: 'catLegs 0.6s steps(6, jump-none) infinite, catHoodWalk 14s linear forwards',
+            animation: `catLegs 0.6s steps(6, jump-none) infinite, catHoodWalk ${CAT_DUR}s linear forwards`,
             zIndex: 3,
           }} />
         <style>{`
@@ -12473,10 +12495,7 @@ function HoodScreen({ go, char }) {
             from { background-position: 0% 0; }
             to   { background-position: 100% 0; }
           }
-          @keyframes catHoodWalk {
-            from { left: -12%; }
-            to   { left: 100%; }
-          }
+          ${catKeyframeCss}
         `}</style>
       </div>
 

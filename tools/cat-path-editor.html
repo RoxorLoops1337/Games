@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beatbox Story · Cat Path Editor</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0c0a09; color: #e7e5e4;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .root { display: flex; height: 100vh; position: relative; }
+  .canvas-pane {
+    flex: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg, #181715, #181715 8px, #1c1917 8px, #1c1917 16px);
+    overflow: auto;
+  }
+  .gear-toggle {
+    position: fixed;
+    top: 12px; right: 12px;
+    z-index: 1000;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #fbbf24;
+    color: #0c0a09;
+    border: 2px solid #0c0a09;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    font-size: 22px; line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+  .gear-toggle:active { transform: scale(0.92); }
+  .map-frame {
+    position: relative;
+    aspect-ratio: 480 / 860;
+    height: 96vh;
+    max-width: 96vw;
+    border: 2px solid #44403c;
+    box-shadow: 0 0 32px rgba(0,0,0,0.6);
+    user-select: none;
+    cursor: crosshair;
+  }
+  .map-frame img.map {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+  /* SVG overlay holds the polyline path */
+  svg.path-overlay {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+  svg.path-overlay polyline {
+    fill: none;
+    stroke: #fbbf24;
+    stroke-width: 0.5;
+    stroke-dasharray: 1 1;
+    opacity: 0.85;
+  }
+  .waypoint {
+    position: absolute;
+    width: 22px; height: 22px;
+    margin-left: -11px; margin-top: -11px;
+    border-radius: 50%;
+    background: #fbbf24;
+    border: 2px solid #0c0a09;
+    color: #0c0a09;
+    font-size: 11px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    cursor: move;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .waypoint.selected {
+    background: #f87171;
+    box-shadow: 0 0 0 3px #f87171, 0 2px 6px rgba(0,0,0,0.5);
+  }
+  /* Cat sprite live preview */
+  .cat-preview {
+    position: absolute;
+    width: 11%;
+    aspect-ratio: 57 / 64;
+    background-image: url(../beatbox_story/cat-walk.png);
+    background-size: 600% 100%;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    pointer-events: none;
+    /* Anchor the sprite by its FEET (center-bottom) so the waypoint
+       coords describe where the paws are, not the top-left corner. */
+    transform: translate(-50%, -100%);
+    animation: catLegs 0.6s steps(6, jump-none) infinite, catPathPreview var(--cat-dur, 14s) linear infinite;
+    z-index: 3;
+  }
+  @keyframes catLegs {
+    from { background-position: 0% 0; }
+    to   { background-position: 100% 0; }
+  }
+  /* catPathPreview is injected dynamically into #catPathKF */
+
+  .side-pane {
+    width: 380px;
+    background: #1c1917;
+    border-left: 2px solid #292524;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+    transition: transform 0.25s ease-out;
+  }
+  @media (max-width: 760px) {
+    .side-pane {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(92vw, 380px);
+      z-index: 900;
+      box-shadow: -8px 0 24px rgba(0,0,0,0.6);
+    }
+    .canvas-pane { width: 100%; }
+  }
+  .side-pane.collapsed { transform: translateX(110%); }
+  .side-pane header {
+    padding: 12px;
+    border-bottom: 1px solid #292524;
+  }
+  .side-pane h1 {
+    margin: 0; font-size: 14px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: #fbbf24;
+  }
+  .side-pane .sub {
+    margin-top: 4px; font-size: 10px; color: #78716c;
+    line-height: 1.4;
+  }
+  .nav-strip {
+    padding: 6px 12px; font-size: 10px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: #a8a29e;
+    border-bottom: 1px solid #292524;
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .nav-strip a { color: #fbbf24; text-decoration: none; }
+  .nav-strip a:hover { text-decoration: underline; }
+  .controls { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #292524; }
+  .controls button, .controls label {
+    background: #292524; color: #fafaf9;
+    border: 1px solid #44403c; padding: 6px 10px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    font-size: 10px; cursor: pointer; font-family: inherit;
+  }
+  .controls button:hover { background: #44403c; }
+  .controls button.primary { background: #fbbf24; color: #0c0a09; border-color: #fbbf24; }
+  .controls button.primary:hover { background: #fcd34d; }
+  .controls .row { display: flex; align-items: center; gap: 8px; }
+  .controls .row label {
+    background: none; border: none; padding: 0;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: #a8a29e; font-size: 10px;
+    flex: 1;
+  }
+  .controls input[type=number] {
+    background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
+    padding: 4px 8px; font-family: monospace; width: 72px; font-size: 11px;
+  }
+  .selected-info {
+    padding: 10px 12px;
+    border-bottom: 1px solid #292524;
+    font-size: 11px;
+  }
+  .selected-info .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .selected-info label { width: 50px; color: #a8a29e; text-transform: uppercase; font-size: 9px; letter-spacing: 0.15em; }
+  .selected-info input {
+    background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
+    padding: 3px 6px; font-family: monospace; width: 70px; font-size: 11px;
+  }
+  .output {
+    padding: 10px 12px; flex: 1;
+    display: flex; flex-direction: column;
+  }
+  .output h2 {
+    margin: 0 0 6px; font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: #a8a29e;
+  }
+  .output textarea {
+    flex: 1;
+    background: #0c0a09; color: #d4d4d4;
+    border: 1px solid #292524; padding: 8px;
+    font-family: 'Menlo', monospace; font-size: 10px;
+    line-height: 1.4; resize: none;
+    min-height: 180px;
+  }
+  .list { padding: 6px 12px; max-height: 200px; overflow-y: auto; }
+  .list .item {
+    padding: 4px 6px; font-size: 11px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .list .item:hover { background: #292524; }
+  .list .item.selected { border-left-color: #fbbf24; background: #292524; }
+</style>
+</head>
+<body>
+<button class="gear-toggle" id="gearBtn" onclick="togglePane()" title="Show / hide settings" aria-label="Toggle settings">⚙</button>
+<div class="root">
+  <div class="canvas-pane">
+    <div class="map-frame" id="frame">
+      <img class="map" id="map" src="../beatbox_story/hood-day.png" alt="hood day">
+      <svg class="path-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <polyline id="pathLine" points="" />
+      </svg>
+      <div class="cat-preview" id="catPreview"></div>
+      <!-- waypoints injected by JS -->
+    </div>
+  </div>
+  <aside class="side-pane" id="side">
+    <header>
+      <h1>🐈 Cat Path <span id="savedBadge" style="float:right;font-size:9px;color:#34d399;letter-spacing:0.2em;opacity:0.45;transition:opacity 0.3s;">● SAVED</span></h1>
+      <div class="sub">
+        Click empty map area to add a waypoint · drag a waypoint to move ·
+        arrow keys nudge selected by 0.5% · Shift+arrows by 2% ·
+        Delete removes selected. The cat walks the points in order at
+        constant pixel-speed. Layout auto-saves to this browser.
+      </div>
+    </header>
+
+    <div class="nav-strip">
+      <span>Other tools:</span>
+      <a href="./light-editor.html">💡 Lights</a>
+      <a href="./hotspot-editor.html">🎯 Hotspots</a>
+    </div>
+
+    <div class="controls">
+      <button onclick="toggleMap()" id="mapToggle">Switch to night map</button>
+      <div class="row">
+        <label for="durInp">Duration (s)</label>
+        <input id="durInp" type="number" step="0.5" min="1" value="14" onchange="setDuration(this.value)">
+      </div>
+      <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
+      <button onclick="resetToDefaults()">Reset to defaults</button>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <div class="selected-info" id="info">
+      <div class="row" style="color:#78716c;">Tap the map to add waypoints, then drag them.</div>
+    </div>
+
+    <div class="output">
+      <h2>Paste-ready snippet</h2>
+      <textarea id="out" readonly></textarea>
+      <button onclick="copyOut()" class="primary" style="margin-top:6px;padding:8px;font-size:11px;border:none;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;background:#fbbf24;color:#0c0a09;font-family:inherit;">Copy to clipboard</button>
+    </div>
+  </aside>
+</div>
+
+<!-- Dynamic keyframe rule for the live cat preview (re-written
+     whenever the path changes). -->
+<style id="catPathKF"></style>
+
+<script>
+// Default path matches what's currently in HoodScreen — cat strolls
+// straight across the painted park at y=54%.
+const DEFAULTS = {
+  duration: 14,
+  points: [
+    { x: -12, y: 54 },
+    { x: 100, y: 54 },
+  ],
+};
+
+const STORAGE_KEY = 'bbs-cat-path-editor-v1';
+function loadLayout() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.points) || obj.points.length < 2) return null;
+    return obj;
+  } catch (e) { return null; }
+}
+function saveLayout() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ duration, points }));
+    const badge = document.getElementById('savedBadge');
+    if (badge) {
+      badge.style.opacity = '1';
+      clearTimeout(saveLayout._t);
+      saveLayout._t = setTimeout(() => { badge.style.opacity = '0.45'; }, 600);
+    }
+  } catch (e) {}
+}
+
+const saved = loadLayout();
+let duration = saved ? saved.duration : DEFAULTS.duration;
+let points   = saved ? JSON.parse(JSON.stringify(saved.points)) : JSON.parse(JSON.stringify(DEFAULTS.points));
+let selectedIdx = null;
+let mapKind = 'day';
+
+document.getElementById('durInp').value = duration;
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function frameRect() { return document.getElementById('frame').getBoundingClientRect(); }
+
+// Build a @keyframes string distributing stops by arc length so the
+// cat moves at constant pixel-speed. Mirrors production logic.
+function buildKeyframe(pts) {
+  if (!pts || pts.length < 2) {
+    return '@keyframes catPathPreview { from { left: 0%; top: 50%; } to { left: 100%; top: 50%; } }';
+  }
+  const dists = [];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i - 1].x;
+    const dy = pts[i].y - pts[i - 1].y;
+    dists.push(Math.sqrt(dx * dx + dy * dy));
+  }
+  const total = dists.reduce((s, d) => s + d, 0) || 1;
+  let cum = 0;
+  const stops = pts.map((p, i) => {
+    const pct = i === 0 ? 0 : ((cum += dists[i - 1]) / total) * 100;
+    return pct.toFixed(2) + '% { left: ' + p.x + '%; top: ' + p.y + '%; }';
+  });
+  return '@keyframes catPathPreview {\n' + stops.join('\n') + '\n}';
+}
+
+function render() {
+  const frame = document.getElementById('frame');
+  // Remove old waypoints
+  frame.querySelectorAll('.waypoint').forEach(el => el.remove());
+  // Polyline points (SVG coords match viewBox 0..100)
+  const poly = points.map(p => p.x + ',' + p.y).join(' ');
+  document.getElementById('pathLine').setAttribute('points', poly);
+  // Waypoints
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const el = document.createElement('div');
+    el.className = 'waypoint' + (i === selectedIdx ? ' selected' : '');
+    el.dataset.idx = i;
+    el.style.left = p.x + '%';
+    el.style.top = p.y + '%';
+    el.textContent = i + 1;
+    frame.appendChild(el);
+  }
+  // Cat preview animation — refresh keyframe + duration var
+  document.getElementById('catPathKF').textContent = buildKeyframe(points);
+  document.getElementById('catPreview').style.setProperty('--cat-dur', duration + 's');
+  // Kick the animation to restart so the change is visible immediately
+  const cat = document.getElementById('catPreview');
+  cat.style.animation = 'none';
+  // eslint-disable-next-line no-void
+  void cat.offsetWidth;
+  cat.style.animation = '';
+  renderList();
+  renderInfo();
+  renderOutput();
+  saveLayout();
+}
+
+function renderList() {
+  const ul = document.getElementById('list');
+  ul.innerHTML = '';
+  points.forEach((p, i) => {
+    const item = document.createElement('div');
+    item.className = 'item' + (i === selectedIdx ? ' selected' : '');
+    item.onclick = () => { selectedIdx = i; render(); };
+    item.innerHTML = '<span>' + (i + 1) + ' · (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ')</span>';
+    ul.appendChild(item);
+  });
+}
+
+function renderInfo() {
+  const info = document.getElementById('info');
+  if (selectedIdx === null || selectedIdx < 0 || selectedIdx >= points.length) {
+    info.innerHTML = '<div class="row" style="color:#78716c;">Tap a waypoint to edit.</div>';
+    return;
+  }
+  const p = points[selectedIdx];
+  info.innerHTML =
+    '<div style="font-size:10px;color:#fbbf24;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">Point ' + (selectedIdx + 1) + ' of ' + points.length + '</div>' +
+    '<div class="row"><label>X (%)</label><input id="i-x" type="number" step="0.5" value="' + p.x + '"></div>' +
+    '<div class="row"><label>Y (%)</label><input id="i-y" type="number" step="0.5" value="' + p.y + '"></div>' +
+    '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">' +
+      '<button onclick="insertBefore()" style="background:#292524;color:#fafaf9;border:1px solid #44403c;padding:4px 8px;cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;font-family:inherit;">+ Before</button>' +
+      '<button onclick="insertAfter()" style="background:#292524;color:#fafaf9;border:1px solid #44403c;padding:4px 8px;cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;font-family:inherit;">+ After</button>' +
+      '<button onclick="deleteSelected()" style="background:#7f1d1d;color:#fef2f2;border:1px solid #991b1b;padding:4px 8px;cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;font-family:inherit;">Delete</button>' +
+    '</div>';
+  ['x', 'y'].forEach(k => {
+    const inp = document.getElementById('i-' + k);
+    inp.onchange = () => { p[k] = parseFloat(inp.value) || 0; render(); };
+  });
+}
+
+function renderOutput() {
+  const round = v => Math.round(v * 100) / 100;
+  let out = '// Cat walking path — paste into HoodScreen() in beatbox-story.jsx\n';
+  out += 'const CAT_PATH = [\n';
+  points.forEach(p => {
+    out += '  { x: ' + round(p.x) + ', y: ' + round(p.y) + ' },\n';
+  });
+  out += '];\n';
+  out += 'const CAT_DUR = ' + duration + '; // seconds for one full traversal\n';
+  document.getElementById('out').value = out;
+}
+
+function copyOut() {
+  const out = document.getElementById('out');
+  out.select();
+  document.execCommand('copy');
+  out.blur();
+}
+
+function toggleMap() {
+  mapKind = mapKind === 'day' ? 'night' : 'day';
+  document.getElementById('map').src = '../beatbox_story/hood-' + mapKind + '.png';
+  document.getElementById('mapToggle').textContent = mapKind === 'day' ? 'Switch to night map' : 'Switch to day map';
+}
+
+function setDuration(v) {
+  duration = parseFloat(v) || 1;
+  render();
+}
+
+function resetToDefaults() {
+  if (!confirm('Reset path to built-in defaults? Your saved layout will be discarded.')) return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  duration = DEFAULTS.duration;
+  points = JSON.parse(JSON.stringify(DEFAULTS.points));
+  document.getElementById('durInp').value = duration;
+  selectedIdx = null;
+  render();
+}
+
+function manualSave() {
+  saveLayout();
+  const btn = document.getElementById('saveBtn');
+  if (!btn) return;
+  const original = btn.textContent;
+  btn.textContent = '✓ Saved!';
+  btn.style.background = '#34d399';
+  btn.style.borderColor = '#34d399';
+  clearTimeout(manualSave._t);
+  manualSave._t = setTimeout(() => {
+    btn.textContent = original;
+    btn.style.background = '';
+    btn.style.borderColor = '';
+  }, 1400);
+}
+
+function insertBefore() {
+  if (selectedIdx === null) return;
+  const p = points[selectedIdx];
+  const before = points[selectedIdx - 1];
+  const newP = before
+    ? { x: (before.x + p.x) / 2, y: (before.y + p.y) / 2 }
+    : { x: p.x - 10, y: p.y };
+  points.splice(selectedIdx, 0, newP);
+  render();
+}
+function insertAfter() {
+  if (selectedIdx === null) return;
+  const p = points[selectedIdx];
+  const after = points[selectedIdx + 1];
+  const newP = after
+    ? { x: (p.x + after.x) / 2, y: (p.y + after.y) / 2 }
+    : { x: p.x + 10, y: p.y };
+  points.splice(selectedIdx + 1, 0, newP);
+  selectedIdx = selectedIdx + 1;
+  render();
+}
+function deleteSelected() {
+  if (selectedIdx === null) return;
+  if (points.length <= 2) { alert('Path needs at least 2 points.'); return; }
+  points.splice(selectedIdx, 1);
+  selectedIdx = null;
+  render();
+}
+
+// ============ DRAG / CLICK-TO-ADD ============
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  // Drag on existing waypoint
+  const wp = e.target.closest('.waypoint');
+  if (wp) {
+    const idx = parseInt(wp.dataset.idx, 10);
+    selectedIdx = idx;
+    const rect = frameRect();
+    drag = {
+      idx,
+      startX: e.clientX, startY: e.clientY,
+      startPx: points[idx].x, startPy: points[idx].y,
+      rectW: rect.width, rectH: rect.height,
+    };
+    e.preventDefault();
+    render();
+    return;
+  }
+  // Click empty map area → add waypoint at click position
+  const frame = document.getElementById('frame');
+  if (e.target === frame || e.target.closest('.map-frame') === frame) {
+    if (e.target.tagName === 'IMG' || e.target.tagName === 'svg' || e.target.tagName === 'polyline' || e.target === frame) {
+      const rect = frameRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      points.push({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+      selectedIdx = points.length - 1;
+      render();
+    }
+  }
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dxPct = ((e.clientX - drag.startX) / drag.rectW) * 100;
+  const dyPct = ((e.clientY - drag.startY) / drag.rectH) * 100;
+  points[drag.idx].x = drag.startPx + dxPct;
+  points[drag.idx].y = drag.startPy + dyPct;
+  render();
+});
+document.addEventListener('pointerup', () => { drag = null; });
+
+// ============ KEYBOARD ============
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (selectedIdx === null) return;
+  const p = points[selectedIdx];
+  const step = e.shiftKey ? 2 : 0.5;
+  if (e.key === 'ArrowUp')         p.y -= step;
+  else if (e.key === 'ArrowDown')  p.y += step;
+  else if (e.key === 'ArrowLeft')  p.x -= step;
+  else if (e.key === 'ArrowRight') p.x += step;
+  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); return; }
+  else return;
+  e.preventDefault();
+  render();
+});
+
+function togglePane() {
+  const side = document.getElementById('side');
+  const btn = document.getElementById('gearBtn');
+  const collapsed = side.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '⚙' : '×';
+}
+if (window.innerWidth <= 760) {
+  document.getElementById('side').classList.add('collapsed');
+}
+
+render();
+</script>
+</body>
+</html>
