@@ -12216,16 +12216,16 @@ function HoodScreen({ go, char }) {
             through. Coordinates are eyeballed onto the night art. */}
         {!isDay && (
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            {/* Apartment windows — soft amber breathing. Positions verified
-                against the actual painted lit windows in the source art via
-                a sharp-rendered preview. */}
+            {/* Apartment windows — soft amber breathing. Positions hand-
+                tuned by the user via tools/light-editor.html so each glow
+                lands on a specific lit window in the painted art. */}
             {[
-              { top: 22, left: 38, h: 4, w: 4, delay: 0 },
-              { top: 22, left: 46, h: 4, w: 4, delay: 0.7 },
-              { top: 22, left: 54, h: 4, w: 4, delay: 1.4 },
-              { top: 29, left: 38, h: 4, w: 4, delay: 0.3 },
-              { top: 29, left: 46, h: 4, w: 4, delay: 1.1 },
-              { top: 29, left: 54, h: 4, w: 4, delay: 1.8 },
+              { top: 21.42, left: 36.22, h: 3.97, w: 3.10, delay: 0 },
+              { top: 21.47, left: 40.95, h: 4.04, w: 3.21, delay: 0.7 },
+              { top: 22,    left: 54,    h: 4,    w: 4,    delay: 1.4 },
+              { top: 27.49, left: 36.54, h: 6.57, w: 5.41, delay: 0.3 },
+              { top: 27.36, left: 43.38, h: 6.92, w: 5.08, delay: 1.1 },
+              { top: 29,    left: 54,    h: 4,    w: 4,    delay: 1.8 },
             ].map((w, i) => (
               <div key={`w${i}`} className="absolute"
                 style={{
