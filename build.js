@@ -29,7 +29,6 @@ const STATIC_PATHS = [
   'decktest',
   'pitchdeck',
   'DhauwieSurvival',
-  'roxorcoaster_tycoon',
   'tools',
 ];
 
