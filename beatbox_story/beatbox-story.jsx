@@ -12239,7 +12239,7 @@ function HoodScreen({ go, char }) {
         </div>
       </div>
 
-      <div className="relative w-full max-w-md mx-auto border-2 border-stone-800 select-none"
+      <div className="relative w-full max-w-md mx-auto border-2 border-stone-800 select-none overflow-hidden"
         style={{ aspectRatio: '480 / 860', background: '#0c0a09' }}>
         <img src={isDay ? 'hood-day.png' : 'hood-night.png'}
           alt="The hood"
