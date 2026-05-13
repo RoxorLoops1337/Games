@@ -12189,12 +12189,12 @@ const CHARACTERS = [
   {
     id: 'beatboxer1',
     name: 'Beatboxer',
-    x: 35, y: 63,
-    width: 7,
+    x: 40.1, y: 59.38,
+    width: 8.61,
     sheet: 'beatboxer-park.png',
     frames: 8,
     aspect: '64 / 128',
-    loop: 0.8,
+    loop: 1,
   },
 ];
 
