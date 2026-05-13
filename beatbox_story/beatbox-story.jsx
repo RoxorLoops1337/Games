@@ -12499,7 +12499,10 @@ function HoodScreen({ go, char }) {
             // Without this transform the cat's TOP-LEFT sits on the path
             // and renders ~one cat-height too low.
             transform: 'translate(-50%, -100%)',
-            animation: `catLegs 0.5s steps(4, jump-none) infinite, catHoodWalk ${CAT_DUR}s linear forwards`,
+            // Tie leg cycles to the walk duration so the legs stop the
+            // moment the cat reaches the path's end (otherwise the cat
+            // sits off-screen forever bobbing its legs).
+            animation: `catLegs 0.5s steps(4, jump-none) ${Math.max(1, Math.round(CAT_DUR / 0.5))} forwards, catHoodWalk ${CAT_DUR}s linear forwards`,
             zIndex: 3,
           }} />
         <style>{`
