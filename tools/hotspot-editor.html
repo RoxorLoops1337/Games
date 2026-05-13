@@ -39,7 +39,7 @@
   .gear-toggle:active { transform: scale(0.92); }
   .map-frame {
     position: relative;
-    aspect-ratio: 480 / 860;
+    /* aspect-ratio is set dynamically per map in JS */
     height: 96vh;
     max-width: 96vw;
     border: 2px solid #44403c;
@@ -192,8 +192,8 @@
       <div class="sub">
         Drag a hotspot to move · drag bottom-right handle to resize ·
         arrow keys nudge selected by 0.5% · Shift+arrows by 2%.
-        Layout auto-saves to this browser — Reset wipes it.
-        Copy the snippet at the bottom and paste it into HoodScreen().
+        Pick a map below to switch between the hood and the apartment.
+        Each map saves separately. Reset only wipes the current map.
       </div>
     </header>
 
@@ -205,6 +205,11 @@
     </div>
 
     <div class="controls">
+      <select id="mapSelect" onchange="switchMap(this.value)"
+        style="background:#292524;color:#fafaf9;border:1px solid #44403c;padding:6px 10px;text-transform:uppercase;letter-spacing:0.15em;font-size:10px;font-family:inherit;">
+        <option value="hood">Hood map</option>
+        <option value="house">Apartment</option>
+      </select>
       <button onclick="toggleMap()" id="mapToggle">Switch to night map</button>
       <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
       <button onclick="resetToDefaults()">Reset to defaults</button>
@@ -225,20 +230,43 @@
 </div>
 
 <script>
-// Fixed set of four named hotspots — these match the game's HoodScreen.
-// The user can move/resize each but cannot add/remove (the game wires
-// each id into different gameplay screens).
-const DEFAULTS = [
-  { id: 'house', name: 'House', t: 10.25, l: 32.88, w: 29.77, h: 21.19, color: '#60a5fa' },
-  { id: 'park',  name: 'Park',  t: 48.5,  l: 19.79, w: 33.62, h: 18.35, color: '#86efac' },
-  { id: 'bar',   name: 'Bar',   t: 39.85, l: 74.99, w: 25.01, h: 20.9,  color: '#c084fc' },
-  { id: 'shop',  name: 'Shop',  t: 71.21, l: 64,    w: 36,    h: 22.73, color: '#fb923c' },
-];
+// Each map gets its own image, aspect, hotspot defaults, and target
+// screen function (the snippet header shows which array to paste into).
+const MAPS = {
+  hood: {
+    label: 'Hood map',
+    imgBase: 'hood',          // beatbox_story/hood-day.png / hood-night.png
+    aspect: '480 / 860',
+    target: 'HoodScreen()',
+    storageKey: 'bbs-hotspot-editor-layout-v1',
+    defaults: [
+      { id: 'house', name: 'House', t: 10.25, l: 32.88, w: 29.77, h: 21.19, color: '#60a5fa' },
+      { id: 'park',  name: 'Park',  t: 48.5,  l: 19.79, w: 33.62, h: 18.35, color: '#86efac' },
+      { id: 'bar',   name: 'Bar',   t: 39.85, l: 74.99, w: 25.01, h: 20.9,  color: '#c084fc' },
+      { id: 'shop',  name: 'Shop',  t: 71.21, l: 64,    w: 36,    h: 22.73, color: '#fb923c' },
+    ],
+  },
+  house: {
+    label: 'Apartment',
+    imgBase: 'house',         // beatbox_story/house-day.png / house-night.png
+    aspect: '480 / 854',
+    target: 'HouseScreen() (apartment hotspots)',
+    storageKey: 'bbs-hotspot-editor-house-v1',
+    defaults: [
+      { id: 'train',  name: 'PC',      t: 12, l: 8,  w: 32, h: 18, color: '#fbbf24' },
+      { id: 'studio', name: 'Studio',  t: 12, l: 50, w: 42, h: 19, color: '#c084fc' },
+      { id: 'eat',    name: 'Kitchen', t: 35, l: 52, w: 42, h: 22, color: '#86efac' },
+      { id: 'rest',   name: 'Couch',   t: 64, l: 38, w: 56, h: 28, color: '#fb923c' },
+    ],
+  },
+};
 
-const STORAGE_KEY = 'bbs-hotspot-editor-layout-v1';
-function loadLayout() {
+let activeMapId = 'hood';
+function activeMap() { return MAPS[activeMapId]; }
+
+function loadLayout(mapId) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(MAPS[mapId].storageKey);
     if (!raw) return null;
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr) || !arr.length) return null;
@@ -247,7 +275,7 @@ function loadLayout() {
 }
 function saveLayout() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(spots));
+    localStorage.setItem(activeMap().storageKey, JSON.stringify(spots));
     const badge = document.getElementById('savedBadge');
     if (badge) {
       badge.style.opacity = '1';
@@ -257,16 +285,28 @@ function saveLayout() {
   } catch (e) {}
 }
 
-const savedLayout = loadLayout();
-// When restoring a saved layout, merge in any new defaults the user has
-// never touched (so future-added hotspots auto-appear).
-function mergeDefaults(saved) {
+// When restoring a saved layout, merge in any new defaults the user
+// hasn't touched yet so future-added hotspots auto-appear.
+function mergeDefaults(saved, defaults) {
   const byId = Object.fromEntries(saved.map(s => [s.id, s]));
-  return DEFAULTS.map(d => byId[d.id] ? { ...d, ...byId[d.id], color: d.color } : { ...d });
+  return defaults.map(d => byId[d.id] ? { ...d, ...byId[d.id], color: d.color } : { ...d });
 }
-let spots = savedLayout ? mergeDefaults(savedLayout) : JSON.parse(JSON.stringify(DEFAULTS));
+
+function loadSpotsForActive() {
+  const saved = loadLayout(activeMapId);
+  return saved ? mergeDefaults(saved, activeMap().defaults)
+               : JSON.parse(JSON.stringify(activeMap().defaults));
+}
+
+let spots = loadSpotsForActive();
 let selectedId = null;
 let mapKind = 'day';
+
+function applyMapMeta() {
+  document.getElementById('frame').style.aspectRatio = activeMap().aspect;
+  document.getElementById('map').src = '../beatbox_story/' + activeMap().imgBase + '-' + mapKind + '.png';
+  document.getElementById('mapToggle').textContent = mapKind === 'day' ? 'Switch to night map' : 'Switch to day map';
+}
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function frameRect() { return document.getElementById('frame').getBoundingClientRect(); }
@@ -333,7 +373,7 @@ function renderInfo() {
 
 function renderOutput() {
   const round = v => Math.round(v * 100) / 100;
-  let out = '// Paste these into the hotspots array in HoodScreen()\n';
+  let out = '// Paste these into the hotspots array in ' + activeMap().target + '\n';
   spots.forEach(S => {
     out += "{ id: '" + S.id + "', name: '" + S.name + "', top: " + round(S.t) + ", left: " + round(S.l) + ", width: " + round(S.w) + ", height: " + round(S.h) + " },\n";
   });
@@ -349,14 +389,22 @@ function copyOut() {
 
 function toggleMap() {
   mapKind = mapKind === 'day' ? 'night' : 'day';
-  document.getElementById('map').src = '../beatbox_story/hood-' + mapKind + '.png';
-  document.getElementById('mapToggle').textContent = mapKind === 'day' ? 'Switch to night map' : 'Switch to day map';
+  applyMapMeta();
+}
+
+function switchMap(id) {
+  if (!MAPS[id]) return;
+  activeMapId = id;
+  spots = loadSpotsForActive();
+  selectedId = null;
+  applyMapMeta();
+  render();
 }
 
 function resetToDefaults() {
-  if (!confirm('Reset all hotspots to built-in defaults? Your saved layout will be discarded.')) return;
-  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-  spots = JSON.parse(JSON.stringify(DEFAULTS));
+  if (!confirm('Reset ' + activeMap().label + ' hotspots to built-in defaults? Your saved layout for this map will be discarded.')) return;
+  try { localStorage.removeItem(activeMap().storageKey); } catch (e) {}
+  spots = JSON.parse(JSON.stringify(activeMap().defaults));
   selectedId = null;
   render();
 }
@@ -440,6 +488,7 @@ if (window.innerWidth <= 760) {
   document.getElementById('side').classList.add('collapsed');
 }
 
+applyMapMeta();
 render();
 </script>
 </body>
