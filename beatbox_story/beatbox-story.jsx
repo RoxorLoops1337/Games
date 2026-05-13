@@ -12488,18 +12488,18 @@ function HoodScreen({ go, char }) {
         <div className="absolute pointer-events-none"
           aria-hidden="true"
           style={{
-            width: '11%',
-            aspectRatio: '57 / 64',
+            width: '13%',
+            aspectRatio: '80 / 64',
             backgroundImage: 'url(cat-walk.png)',
             backgroundRepeat: 'no-repeat',
-            backgroundSize: '600% 100%',
+            backgroundSize: '400% 100%',
             imageRendering: 'pixelated',
             // Anchor by the paws (center-bottom) so the CAT_PATH coords
             // describe where the feet land, matching the editor preview.
             // Without this transform the cat's TOP-LEFT sits on the path
             // and renders ~one cat-height too low.
             transform: 'translate(-50%, -100%)',
-            animation: `catLegs 0.6s steps(6, jump-none) infinite, catHoodWalk ${CAT_DUR}s linear forwards`,
+            animation: `catLegs 0.5s steps(4, jump-none) infinite, catHoodWalk ${CAT_DUR}s linear forwards`,
             zIndex: 3,
           }} />
         <style>{`
