@@ -348,16 +348,19 @@ const DEFAULTS = [
   { id: 'neon',  kind: 'neon',  t: 48.81112144123889,  l: 78.7225000991434,  w: 18.429771771890863, h: 5.283319567387068 },
   { id: 'neon2', kind: 'neon',  t: 45.383085614317544, l: 72.99491766140545, w: 4.38577440910533,   h: 6.888792504592703, name: '2' },
   { id: 'halo',  kind: 'halo',  t: 54.199507884425266, l: 77.27580578799176, w: 22.724194212008243, h: 17.872036393283803 },
-  { id: 'shop',  kind: 'shop',  t: 76.10923040359813,  l: 54.959327824019915, w: 41.167114671325116, h: 22.711519943904932 },
+  { id: 'shop',  kind: 'shop',  t: 69.23025034533137,  l: 51.6139932574855,   w: 48.3860067425145,  h: 28.607787639872498 },
   // Lamps (height = size * 0.7 to match production)
   { id: 'lamp1', kind: 'lamp', t: 23.029415495909713, l: 18.13873418518465, w: 15.271526549438907, h: 10.690068584607235 },
   { id: 'lamp2', kind: 'lamp', t: 61.447782907449316, l: 52.9376355198301,  w: 17.938335677947215, h: 12.55683497456305 },
   { id: 'lamp3', kind: 'lamp', t: 81.02168556533128,  l: 16.74696755549343, w: 14.945217913375087, h: 10.461652539362561 },
   { id: 'lamp4', kind: 'lamp', t: 78.75322962173223,  l: 40.39653618619476, w: 17.943380499530157, h: 12.56036634967111 },
-  // Sewer vapor — wispy steam rising from manhole lids; positions are
-  // initial guesses, user fine-tunes via the editor.
-  { id: 'vapor1', kind: 'vapor', t: 56, l: 26, w: 4, h: 10, delay: 0 },
-  { id: 'vapor2', kind: 'vapor', t: 78, l: 38, w: 4, h: 10, delay: 1.4 },
+  // Sewer vapor — wispy steam rising from manhole lids. Positions tuned
+  // by the user; five sources spread across the hood map.
+  { id: 'vapor1', kind: 'vapor', t: 30.959064404764717, l: 34.71786927178655, w: 6.993201416099867, h: 8.132843920500472, delay: 0.00 },
+  { id: 'vapor2', kind: 'vapor', t: 34.59510144083729,  l: 82.0809444317872,  w: 7.3453403696516,   h: 8.525934695465015, delay: 0.70 },
+  { id: 'vapor3', kind: 'vapor', t: 34.595094963009664, l: 91.41269343675572, w: 8.401763033423983, h: 9.115559521713484, delay: 1.40 },
+  { id: 'vapor4', kind: 'vapor', t: 72.62599990127791,  l: 34.54180269656928, w: 6.641056659430953, h: 8.132850398328099, delay: 2.10 },
+  { id: 'vapor5', kind: 'vapor', t: 60.93172991552784,  l: 77.85524217046331, w: 6.81712903776541,  h: 8.525928217637388, delay: 2.80 },
 ];
 
 // Persist the current layout to localStorage on every change so the user's
