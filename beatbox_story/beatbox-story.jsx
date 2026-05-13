@@ -12439,6 +12439,45 @@ function HoodScreen({ go, char }) {
             </div>
           </button>
         ))}
+
+        {/* A friendly tabby strolls through the park region on every
+            mount of the hood map. Positioned absolutely inside the
+            map's aspect-locked container so it tracks the painted park
+            no matter the viewport size. pointer-events:none so the
+            hotspots underneath stay tappable.
+
+            Animation timing notes — the previous build used
+              steps(6, end) from 0 to -600%
+            which briefly hits the -600% (entire sheet scrolled off
+            the box) value at every iteration boundary — that was the
+            "on/off" flash. Now uses
+              steps(6, jump-none) from 0% to 100%
+            which holds 6 evenly-spaced positions (0/20/40/60/80/100%)
+            and the last one carries through to the next cycle's start
+            without ever passing through a blank frame. */}
+        <div className="absolute pointer-events-none"
+          aria-hidden="true"
+          style={{
+            top: '54%',
+            width: '11%',
+            aspectRatio: '57 / 64',
+            backgroundImage: 'url(cat-walk.png)',
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: '600% 100%',
+            imageRendering: 'pixelated',
+            animation: 'catLegs 0.6s steps(6, jump-none) infinite, catHoodWalk 14s linear forwards',
+            zIndex: 3,
+          }} />
+        <style>{`
+          @keyframes catLegs {
+            from { background-position: 0% 0; }
+            to   { background-position: 100% 0; }
+          }
+          @keyframes catHoodWalk {
+            from { left: -12%; }
+            to   { left: 100%; }
+          }
+        `}</style>
       </div>
 
       {hotspots.some(h => h.locked) && (
@@ -14974,36 +15013,6 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
       <div className="text-center mb-2">
         <div className="text-2xl tracking-widest text-stone-300" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>THE PARK</div>
         <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Tap an activity to commit</div>
-      </div>
-
-      {/* A friendly tabby strolls across the park strip on every mount.
-          Two stacked animations: catLegs cycles the 6-frame sprite sheet
-          (steps timing keeps each frame on for ~100ms) and catWalkBy
-          slides the whole element from off-left to off-right once.
-          pointer-events:none so the cat never blocks panel taps. */}
-      <div className="relative w-full overflow-hidden pointer-events-none"
-        style={{ height: '64px' }}>
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          width: '56px',
-          height: '64px',
-          backgroundImage: 'url(cat-walk.png)',
-          backgroundRepeat: 'no-repeat',
-          backgroundSize: '600% 100%',
-          imageRendering: 'pixelated',
-          animation: 'catLegs 0.6s steps(6) infinite, catWalkBy 9s linear forwards',
-        }} />
-        <style>{`
-          @keyframes catLegs {
-            from { background-position: 0 0; }
-            to   { background-position: -600% 0; }
-          }
-          @keyframes catWalkBy {
-            from { left: -64px; }
-            to   { left: 100%; }
-          }
-        `}</style>
       </div>
 
       {/* Date trigger — when you're at the park on the day a romance partner asked you to meet here. */}
