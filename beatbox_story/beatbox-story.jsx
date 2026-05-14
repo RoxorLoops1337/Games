@@ -12998,11 +12998,13 @@ const HOUSE_LIGHT_KINDS = {
 };
 
 const HOUSE_LIGHTS = [
-  { id: 'sun1',     kind: 'sun',     t: 4,  l: 4,  w: 30, h: 22, dayOnly: true },
-  { id: 'monitor1', kind: 'monitor', t: 17, l: 22, w: 10, h: 6,  opacityDay: 0.55, opacityNight: 1 },
-  { id: 'rec1',     kind: 'rec',     t: 20, l: 85, w: 4,  h: 3,  nightOnly: true },
-  { id: 'ceiling1', kind: 'ceiling', t: 34, l: 54, w: 40, h: 16 },
-  { id: 'tv1',      kind: 'tv',      t: 64, l: 4,  w: 14, h: 10, opacityDay: 0.4, opacityNight: 1 },
+  { id: 'sun1',             kind: 'sun',     t: 4.81,  l: 5.78,  w: 26.31, h: 23.65, dayOnly: true },
+  { id: 'monitor1',         kind: 'monitor', t: 14.25, l: 29.31, w: 10.79, h: 7.25 },
+  { id: 'rec1',             kind: 'rec',     t: 16.43, l: 79.4,  w: 4,     h: 3,     nightOnly: true },
+  { id: 'ceiling1',         kind: 'ceiling', t: 34,    l: 54,    w: 44.23, h: 17.77 },
+  { id: 'tv1',              kind: 'tv',      t: 64.91, l: 4.51,  w: 21.49, h: 14.46 },
+  { id: 'ceilingmp5m8rk1',  kind: 'ceiling', t: 5.01,  l: 53.02, w: 40.48, h: 11.09 },
+  { id: 'ceilingmp5m9jrv',  kind: 'ceiling', t: 68.56, l: 72.86, w: 20.31, h: 16 },
 ];
 
 function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, activeSlot, playCutscene }) {
