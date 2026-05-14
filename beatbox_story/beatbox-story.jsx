@@ -12958,7 +12958,7 @@ function BjarneCoachingPanel({ char, setChar, showToast, playCutscene, checkLeve
 // ============ SCREEN: HOUSE ============
 
 function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, activeSlot, playCutscene }) {
-  const [tab, setTab] = useState('train');
+  const [tab, setTab] = useState(null);  // null = no modal open, just the map
   const [trainStat, setTrainStat] = useState(null); // 'mus' | 'tec' | 'ori' | 'sho' | null
   const [pendingStart, setPendingStart] = useState(false);
   const [playMode, setPlayMode] = useState(false); // false = AFK, true = pitch tuner mini-game (mus only)
@@ -13109,6 +13109,17 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       },
     },
   });
+
+  // Escape key closes the tab modal (unless an activity is mid-tick;
+  // matches the hotspot button's disabled-while-active behaviour).
+  useEffect(() => {
+    if (!tab) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !trainActivity.active) setTab(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tab, trainActivity.active]);
 
   // When pendingStart is set, kick off training after render commits
   useEffect(() => {
@@ -13953,6 +13964,31 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         );
       })()}
 
+      {/* Tab content as a modal popup over the apartment map. Tapping
+          a hotspot opens it; tap the backdrop, the × button, or Escape
+          to close. Locked open while an activity is active (matches
+          the hotspot button's disabled state — you finish/stop the
+          activity first, then you can leave the room). */}
+      {tab && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => { if (!trainActivity.active) setTab(null); }}
+          aria-modal="true" role="dialog">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative bg-stone-950 border-2 border-amber-500/40 w-full max-w-md max-h-[92vh] sm:max-h-[88vh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-500 tracking-widest uppercase text-sm"
+                style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                <PixelIcon name={tab === 'train' ? 'pc' : tab === 'studio' ? 'mic' : tab === 'eat' ? 'fridge' : 'couch'} size={16} />
+                <span>{tab === 'train' ? 'PC / Train' : tab === 'studio' ? 'Studio' : tab === 'eat' ? 'Kitchen' : 'Couch'}</span>
+              </div>
+              <button onClick={() => setTab(null)}
+                disabled={trainActivity.active}
+                className="text-stone-400 hover:text-amber-500 disabled:opacity-30 disabled:cursor-not-allowed text-2xl leading-none w-8 h-8 flex items-center justify-center"
+                aria-label="Close">×</button>
+            </div>
+            <div className="p-3 space-y-3">
+
       {tab === 'train' && (
         <>
           {!trainActivity.active && (() => {
@@ -14612,6 +14648,11 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
             })()}
           </div>
         </Panel>
+      )}
+
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
