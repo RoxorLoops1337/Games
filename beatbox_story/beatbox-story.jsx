@@ -12530,8 +12530,9 @@ function HoodScreen({ go, char }) {
 
         {/* Stationary park characters — each is a sprite-sheet that
             cycles in place. Anchored center-bottom so { x, y } points
-            at the character's feet. */}
-        {CHARACTERS.map(c => (
+            at the character's feet. Hidden at night since the park
+            hotspot is locked then (and the painted scene is empty). */}
+        {isDay && CHARACTERS.map(c => (
           <div key={c.id}
             className="absolute pointer-events-none"
             aria-hidden="true"
