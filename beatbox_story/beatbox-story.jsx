@@ -12958,6 +12958,53 @@ function BjarneCoachingPanel({ char, setChar, showToast, playCutscene, checkLeve
 
 // ============ SCREEN: HOUSE ============
 
+// Apartment atmosphere lights. Same data model as the hood lights —
+// each entry positions and sizes a soft gradient overlay that animates
+// in place. Tune in tools/light-editor.html (Map dropdown → Apartment).
+//   dayOnly  / nightOnly: gate visibility by game-time
+//   opacityDay / opacityNight: scale opacity per time-of-day for kinds
+//                              that should fade rather than disappear
+const HOUSE_LIGHT_KINDS = {
+  sun: {
+    name: 'Window sun-shaft',
+    edge: '#ffdc96',
+    grad: 'radial-gradient(ellipse at 30% 20%, rgba(255,220,150,0.35), rgba(255,220,150,0) 65%)',
+    anim: 'houseSun 8s ease-in-out infinite',
+  },
+  monitor: {
+    name: 'PC monitor',
+    edge: '#96d2ff',
+    grad: 'radial-gradient(ellipse at center, rgba(150,210,255,0.55), rgba(150,210,255,0) 75%)',
+    anim: 'houseMonitor 1.6s ease-in-out infinite',
+  },
+  rec: {
+    name: 'Studio rec light',
+    edge: '#ff5050',
+    grad: 'radial-gradient(circle at center, rgba(255,80,80,0.9), rgba(255,80,80,0) 70%)',
+    anim: 'houseRecLight 2.4s ease-in-out infinite',
+  },
+  ceiling: {
+    name: 'Kitchen ceiling',
+    edge: '#ffcd78',
+    grad: 'radial-gradient(ellipse at 50% 0%, rgba(255,205,120,0.35), rgba(255,205,120,0) 75%)',
+    anim: 'houseKitchen 5s ease-in-out infinite',
+  },
+  tv: {
+    name: 'TV glow',
+    edge: '#78b4ff',
+    grad: 'radial-gradient(ellipse at center, rgba(120,180,255,0.6), rgba(120,180,255,0) 75%)',
+    anim: 'houseTv 1.2s steps(6) infinite',
+  },
+};
+
+const HOUSE_LIGHTS = [
+  { id: 'sun1',     kind: 'sun',     t: 4,  l: 4,  w: 30, h: 22, dayOnly: true },
+  { id: 'monitor1', kind: 'monitor', t: 17, l: 22, w: 10, h: 6,  opacityDay: 0.55, opacityNight: 1 },
+  { id: 'rec1',     kind: 'rec',     t: 20, l: 85, w: 4,  h: 3,  nightOnly: true },
+  { id: 'ceiling1', kind: 'ceiling', t: 34, l: 54, w: 40, h: 16 },
+  { id: 'tv1',      kind: 'tv',      t: 64, l: 4,  w: 14, h: 10, opacityDay: 0.4, opacityNight: 1 },
+];
+
 function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, activeSlot, playCutscene }) {
   const [tab, setTab] = useState(null);  // null = no modal open, just the map
   const [trainStat, setTrainStat] = useState(null); // 'mus' | 'tec' | 'ori' | 'sho' | null
@@ -13933,59 +13980,28 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
               className="absolute inset-0 w-full h-full block pointer-events-none"
               style={{ imageRendering: 'pixelated' }} />
 
-            {/* Apartment atmosphere — subtle, ambient. Sits between the
-                painted map and the hotspot labels (pointer-events:none
-                so taps fall through to the buttons below). */}
+            {/* Apartment atmosphere — array-driven so the layout can be
+                tuned in tools/light-editor.html. Sits between the
+                painted map and the hotspot labels; pointer-events:none
+                so taps fall through to the buttons below. */}
             <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-              {isDay && (
-                /* Warm sun-shaft from the bedroom window. Sits over the
-                   painted blinds and breathes slowly. */
-                <div className="absolute" style={{
-                  top: '4%', left: '4%', width: '30%', height: '22%',
-                  background: 'radial-gradient(ellipse at 30% 20%, rgba(255,220,150,0.35), rgba(255,220,150,0) 65%)',
-                  animation: 'houseSun 8s ease-in-out infinite',
-                  mixBlendMode: 'screen',
-                }} />
-              )}
-
-              {/* PC monitor glow — cyan, flickers subtly. Slightly
-                  brighter at night. */}
-              <div className="absolute" style={{
-                top: '17%', left: '22%', width: '10%', height: '6%',
-                background: 'radial-gradient(ellipse at center, rgba(150,210,255,0.55), rgba(150,210,255,0) 75%)',
-                animation: 'houseMonitor 1.6s ease-in-out infinite',
-                opacity: isDay ? 0.55 : 1,
-                mixBlendMode: 'screen',
-              }} />
-
-              {/* Studio rec light — small red dot, only visible at
-                  night so it doesn't fight the daylight scene. */}
-              {!isDay && (
-                <div className="absolute" style={{
-                  top: '20%', left: '85%', width: '4%', height: '3%',
-                  background: 'radial-gradient(circle at center, rgba(255,80,80,0.9), rgba(255,80,80,0) 70%)',
-                  animation: 'houseRecLight 2.4s ease-in-out infinite',
-                  mixBlendMode: 'screen',
-                }} />
-              )}
-
-              {/* Kitchen ceiling light — warm cone. Always on. */}
-              <div className="absolute" style={{
-                top: '34%', left: '54%', width: '40%', height: '16%',
-                background: 'radial-gradient(ellipse at 50% 0%, rgba(255,205,120,0.35), rgba(255,205,120,0) 75%)',
-                animation: 'houseKitchen 5s ease-in-out infinite',
-                mixBlendMode: 'screen',
-              }} />
-
-              {/* TV glow — blue, irregular flicker. Cranked up at
-                  night so the living-room feels lived-in. */}
-              <div className="absolute" style={{
-                top: '64%', left: '4%', width: '14%', height: '10%',
-                background: 'radial-gradient(ellipse at center, rgba(120,180,255,0.6), rgba(120,180,255,0) 75%)',
-                animation: 'houseTv 1.2s steps(6) infinite',
-                opacity: isDay ? 0.4 : 1,
-                mixBlendMode: 'screen',
-              }} />
+              {HOUSE_LIGHTS.map(L => {
+                if (L.dayOnly && !isDay) return null;
+                if (L.nightOnly && isDay) return null;
+                const k = HOUSE_LIGHT_KINDS[L.kind];
+                if (!k) return null;
+                const op = isDay ? (L.opacityDay ?? 1) : (L.opacityNight ?? 1);
+                return (
+                  <div key={L.id} className="absolute" style={{
+                    top: `${L.t}%`, left: `${L.l}%`,
+                    width: `${L.w}%`, height: `${L.h}%`,
+                    background: k.grad,
+                    animation: k.anim,
+                    opacity: op,
+                    mixBlendMode: 'screen',
+                  }} />
+                );
+              })}
               <style>{`
                 @keyframes houseSun {
                   0%, 100% { opacity: 0.85; }
