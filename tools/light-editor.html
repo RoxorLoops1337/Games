@@ -40,7 +40,7 @@
   .gear-toggle:active { transform: scale(0.92); }
   .map-frame {
     position: relative;
-    aspect-ratio: 480 / 860;
+    /* aspect-ratio set dynamically per map in JS */
     height: 96vh;
     max-width: 96vw;
     border: 2px solid #44403c;
@@ -243,8 +243,8 @@
         Drag a light to move · drag bottom-right handle to resize ·
         arrow keys nudge selected by 0.5% · Shift+arrows by 2% ·
         Delete removes selected · "+ Add" buttons add new lights.
-        Your layout auto-saves to this browser — Reset wipes it.
-        Copy the JSX block at the bottom and paste it into the code.
+        Pick a map below to switch between the hood and apartment.
+        Each map saves separately. Reset only wipes the current map.
       </div>
     </header>
 
@@ -256,12 +256,13 @@
     </div>
 
     <div class="controls">
+      <select id="mapSelect" onchange="switchMap(this.value)"
+        style="background:#292524;color:#fafaf9;border:1px solid #44403c;padding:6px 10px;text-transform:uppercase;letter-spacing:0.15em;font-size:10px;font-family:inherit;">
+        <option value="hood">Hood map</option>
+        <option value="house">Apartment</option>
+      </select>
       <button onclick="toggleMap()" id="mapToggle">Switch to day map</button>
-      <button onclick="addLight('window')">+ Add window</button>
-      <button onclick="addLight('lamp')">+ Add lamp</button>
-      <button onclick="addLight('neon')">+ Add neon</button>
-      <button onclick="addLight('vapor')">+ Add vapor</button>
-      <button onclick="addLight('star')">+ Add star</button>
+      <div id="addButtons" style="display:flex;flex-direction:column;gap:8px;"></div>
       <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
       <button onclick="resetToDefaults()">Reset to defaults</button>
     </div>
@@ -283,52 +284,47 @@
 <script>
 // ============ STATE ============
 // Each light: { id, kind, t, l, w, h, color (optional, for star/lamp tints) }
-const LIGHT_TYPES = {
+
+// Hood-map kinds (night-time street ambience).
+const HOOD_KINDS = {
   window: {
     name: 'Window',
-    color: 'rgba(255,196,96,0.55)',
     edge: '#ffc060',
     grad: 'radial-gradient(ellipse at center, rgba(255, 196, 96, 0.55), rgba(255, 196, 96, 0))',
     anim: 'nightWindow 3.6s ease-in-out infinite',
   },
   neon: {
     name: 'LIVE neon',
-    color: 'rgba(251,56,90,0.7)',
     edge: '#ff4060',
     grad: 'radial-gradient(ellipse at center, rgba(251,56,90,0.85), rgba(251,56,90,0))',
     anim: 'nightNeon 1.8s ease-in-out infinite',
   },
   halo: {
     name: 'Neon halo',
-    color: 'rgba(251,56,90,0.18)',
     edge: '#ff4060',
     grad: 'radial-gradient(circle at 50% 50%, rgba(251,56,90,0.30), rgba(251,56,90,0) 60%)',
     anim: 'nightNeonHalo 1.8s ease-in-out infinite',
   },
   shop: {
     name: 'Shop awning',
-    color: 'rgba(255,136,40,0.55)',
     edge: '#ff8828',
     grad: 'radial-gradient(ellipse at 50% 50%, rgba(255,136,40,0.6), rgba(255,136,40,0) 45%)',
     anim: 'nightShop 4.5s ease-in-out infinite',
   },
   lamp: {
     name: 'Street lamp',
-    color: 'rgba(255,176,80,0.45)',
     edge: '#ffb050',
     grad: 'radial-gradient(ellipse at center, rgba(255,176,80,0.45), rgba(255,176,80,0) 70%)',
     anim: 'nightLamp 5s ease-in-out infinite',
   },
   vapor: {
     name: 'Sewer vapor',
-    color: 'rgba(220,230,240,0.45)',
     edge: '#dce6f0',
     grad: 'radial-gradient(ellipse at 50% 85%, rgba(220,230,240,0.45), rgba(220,230,240,0) 70%)',
     anim: 'nightVapor 3.5s linear infinite',
   },
   star: {
     name: 'Twinkle',
-    color: '#fef3c7',
     edge: '#fef3c7',
     grad: '#fef3c7',
     boxShadow: '0 0 4px 2px rgba(254,243,199,0.7)',
@@ -336,7 +332,41 @@ const LIGHT_TYPES = {
   },
 };
 
-const DEFAULTS = [
+// Apartment-map kinds (interior atmosphere).
+const HOUSE_KINDS = {
+  sun: {
+    name: 'Window sun-shaft',
+    edge: '#ffdc96',
+    grad: 'radial-gradient(ellipse at 30% 20%, rgba(255,220,150,0.35), rgba(255,220,150,0) 65%)',
+    anim: 'houseSun 8s ease-in-out infinite',
+  },
+  monitor: {
+    name: 'PC monitor',
+    edge: '#96d2ff',
+    grad: 'radial-gradient(ellipse at center, rgba(150,210,255,0.55), rgba(150,210,255,0) 75%)',
+    anim: 'houseMonitor 1.6s ease-in-out infinite',
+  },
+  rec: {
+    name: 'Studio rec light',
+    edge: '#ff5050',
+    grad: 'radial-gradient(circle at center, rgba(255,80,80,0.9), rgba(255,80,80,0) 70%)',
+    anim: 'houseRecLight 2.4s ease-in-out infinite',
+  },
+  ceiling: {
+    name: 'Kitchen ceiling',
+    edge: '#ffcd78',
+    grad: 'radial-gradient(ellipse at 50% 0%, rgba(255,205,120,0.35), rgba(255,205,120,0) 75%)',
+    anim: 'houseKitchen 5s ease-in-out infinite',
+  },
+  tv: {
+    name: 'TV glow',
+    edge: '#78b4ff',
+    grad: 'radial-gradient(ellipse at center, rgba(120,180,255,0.6), rgba(120,180,255,0) 75%)',
+    anim: 'houseTv 1.2s steps(6) infinite',
+  },
+};
+
+const HOOD_DEFAULTS = [
   // Windows (production values — hand-tuned in this very editor)
   { id: 'w1', kind: 'window', t: 21.60887855876111, l: 35.88158019709708, w: 3.10, h: 3.97, delay: 0 },
   { id: 'w2', kind: 'window', t: 21.47, l: 40.780805589704954, w: 3.21, h: 4.04, delay: 0.7 },
@@ -355,8 +385,7 @@ const DEFAULTS = [
   { id: 'lamp2', kind: 'lamp', t: 61.447782907449316, l: 52.9376355198301,  w: 17.938335677947215, h: 12.55683497456305 },
   { id: 'lamp3', kind: 'lamp', t: 81.02168556533128,  l: 16.74696755549343, w: 14.945217913375087, h: 10.461652539362561 },
   { id: 'lamp4', kind: 'lamp', t: 78.75322962173223,  l: 40.39653618619476, w: 17.943380499530157, h: 12.56036634967111 },
-  // Sewer vapor — wispy steam rising from manhole lids. Positions tuned
-  // by the user; five sources spread across the hood map.
+  // Sewer vapor — wispy steam rising from manhole lids.
   { id: 'vapor1', kind: 'vapor', t: 30.959064404764717, l: 34.71786927178655, w: 6.993201416099867, h: 8.132843920500472, delay: 0.00 },
   { id: 'vapor2', kind: 'vapor', t: 34.59510144083729,  l: 82.0809444317872,  w: 7.3453403696516,   h: 8.525934695465015, delay: 0.70 },
   { id: 'vapor3', kind: 'vapor', t: 34.595094963009664, l: 91.41269343675572, w: 8.401763033423983, h: 9.115559521713484, delay: 1.40 },
@@ -364,12 +393,54 @@ const DEFAULTS = [
   { id: 'vapor5', kind: 'vapor', t: 60.93172991552784,  l: 77.85524217046331, w: 6.81712903776541,  h: 8.525928217637388, delay: 2.80 },
 ];
 
-// Persist the current layout to localStorage on every change so the user's
-// tweaks survive a reload. "Reset to defaults" clears this snapshot.
-const STORAGE_KEY = 'bbs-light-editor-layout-v2';
-function loadLayout() {
+const HOUSE_DEFAULTS = [
+  { id: 'sun1',     kind: 'sun',     t: 4,  l: 4,  w: 30, h: 22, dayOnly: true },
+  { id: 'monitor1', kind: 'monitor', t: 17, l: 22, w: 10, h: 6 },
+  { id: 'rec1',     kind: 'rec',     t: 20, l: 85, w: 4,  h: 3, nightOnly: true },
+  { id: 'ceiling1', kind: 'ceiling', t: 34, l: 54, w: 40, h: 16 },
+  { id: 'tv1',      kind: 'tv',      t: 64, l: 4,  w: 14, h: 10 },
+];
+
+const MAPS = {
+  hood: {
+    label: 'Hood map',
+    imgBase: 'hood',
+    aspect: '480 / 860',
+    storageKey: 'bbs-light-editor-layout-v2',
+    target: 'HoodScreen()',
+    kinds: HOOD_KINDS,
+    defaults: HOOD_DEFAULTS,
+    addButtons: ['window', 'lamp', 'neon', 'vapor', 'star'],
+    defaultMapKind: 'night',
+  },
+  house: {
+    label: 'Apartment',
+    imgBase: 'house',
+    aspect: '480 / 854',
+    storageKey: 'bbs-light-editor-house-v1',
+    target: 'HouseScreen() (HOUSE_LIGHTS array)',
+    kinds: HOUSE_KINDS,
+    defaults: HOUSE_DEFAULTS,
+    addButtons: ['sun', 'monitor', 'rec', 'ceiling', 'tv'],
+    defaultMapKind: 'night',
+  },
+};
+
+let activeMapId = 'hood';
+function activeMap() { return MAPS[activeMapId]; }
+// Single legacy alias so existing code that reads LIGHT_TYPES still works
+// against whatever map is active.
+function LIGHT_TYPES_obj() { return activeMap().kinds; }
+const LIGHT_TYPES = new Proxy({}, {
+  get: (_, k) => LIGHT_TYPES_obj()[k],
+  has: (_, k) => k in LIGHT_TYPES_obj(),
+  ownKeys: () => Reflect.ownKeys(LIGHT_TYPES_obj()),
+  getOwnPropertyDescriptor: (_, k) => Object.getOwnPropertyDescriptor(LIGHT_TYPES_obj(), k),
+});
+
+function loadLayout(mapId) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(MAPS[mapId].storageKey);
     if (!raw) return null;
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr) || !arr.length) return null;
@@ -378,7 +449,7 @@ function loadLayout() {
 }
 function saveLayout() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(lights));
+    localStorage.setItem(activeMap().storageKey, JSON.stringify(lights));
     const badge = document.getElementById('savedBadge');
     if (badge) {
       badge.style.opacity = '1';
@@ -388,10 +459,39 @@ function saveLayout() {
   } catch (e) {}
 }
 
-const savedLayout = loadLayout();
-let lights = savedLayout || JSON.parse(JSON.stringify(DEFAULTS));
+function loadLightsForActive() {
+  const saved = loadLayout(activeMapId);
+  return saved || JSON.parse(JSON.stringify(activeMap().defaults));
+}
+
+let lights = loadLightsForActive();
 let selectedId = null;
-let mapKind = 'night';
+let mapKind = activeMap().defaultMapKind;
+
+function applyMapMeta() {
+  document.getElementById('frame').style.aspectRatio = activeMap().aspect;
+  document.getElementById('map').src = '../beatbox_story/' + activeMap().imgBase + '-' + mapKind + '.png';
+  document.getElementById('mapToggle').textContent = mapKind === 'night' ? 'Switch to day map' : 'Switch to night map';
+  // Rebuild the kind-specific "+ Add" buttons.
+  const wrap = document.getElementById('addButtons');
+  wrap.innerHTML = '';
+  for (const k of activeMap().addButtons) {
+    const btn = document.createElement('button');
+    btn.textContent = '+ Add ' + (activeMap().kinds[k]?.name?.toLowerCase() || k);
+    btn.onclick = () => addLight(k);
+    wrap.appendChild(btn);
+  }
+}
+
+function switchMap(id) {
+  if (!MAPS[id]) return;
+  activeMapId = id;
+  mapKind = activeMap().defaultMapKind;
+  lights = loadLightsForActive();
+  selectedId = null;
+  applyMapMeta();
+  render();
+}
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -402,6 +502,13 @@ function frameRect() {
 // Per-light flicker timing: each light of a given kind gets its own period
 // (and offset) so they don't pulse in lock-step. Matches production.
 function animFor(L, kindIdx) {
+  // House kinds use the raw animation string from their kind config —
+  // the timings match production verbatim, no per-instance varying.
+  if (activeMapId === 'house') {
+    return LIGHT_TYPES[L.kind].anim;
+  }
+  // Hood kinds: pick the keyframe name + give each instance its own
+  // duration and delay so they don't pulse in lock-step.
   const keyframe = LIGHT_TYPES[L.kind].anim.split(' ')[0];
   const durTable = {
     window: 3.2 + (kindIdx % 4) * 0.45,
@@ -534,6 +641,29 @@ function renderInfo() {
 
 function renderOutput() {
   const labelFor = (L) => L.name ? L.name : L.id;
+  let out = '';
+
+  // Apartment: emit a single HOUSE_LIGHTS array that drop-in replaces
+  // the production constant.
+  if (activeMapId === 'house') {
+    const round = v => Math.round(v * 100) / 100;
+    out += '// Paste these into the HOUSE_LIGHTS array in ' + activeMap().target + '\n';
+    out += 'const HOUSE_LIGHTS = [\n';
+    lights.forEach(L => {
+      const flags = [];
+      if (L.dayOnly)   flags.push('dayOnly: true');
+      if (L.nightOnly) flags.push('nightOnly: true');
+      if (L.opacityDay   !== undefined) flags.push('opacityDay: '   + L.opacityDay);
+      if (L.opacityNight !== undefined) flags.push('opacityNight: ' + L.opacityNight);
+      const flagStr = flags.length ? ', ' + flags.join(', ') : '';
+      out += "  { id: '" + L.id + "', kind: '" + L.kind + "', t: " + round(L.t) + ', l: ' + round(L.l) + ', w: ' + round(L.w) + ', h: ' + round(L.h) + flagStr + ' },\n';
+    });
+    out += '];\n';
+    document.getElementById('out').value = out;
+    return;
+  }
+
+  // Hood map keeps its existing per-section snippet format.
   const wins  = lights.filter(L => L.kind === 'window');
   const lamps = lights.filter(L => L.kind === 'lamp');
   const stars = lights.filter(L => L.kind === 'star');
@@ -541,7 +671,6 @@ function renderOutput() {
   const vapors = lights.filter(L => L.kind === 'vapor');
   const halo  = lights.find(L => L.kind === 'halo');
   const shop  = lights.find(L => L.kind === 'shop');
-  let out = '';
   if (wins.length) {
     out += '// Windows\n[\n';
     wins.forEach((L, i) => {
@@ -589,20 +718,24 @@ function copyOut() {
 
 function toggleMap() {
   mapKind = mapKind === 'night' ? 'day' : 'night';
-  document.getElementById('map').src = '../beatbox_story/hood-' + mapKind + '.png';
-  document.getElementById('mapToggle').textContent = mapKind === 'night' ? 'Switch to day map' : 'Switch to night map';
+  applyMapMeta();
 }
 
 function addLight(kind) {
   const id = kind + Date.now().toString(36);
-  const defaults = {
+  const sizeDefaults = {
     window: { w: 4, h: 4 },
     lamp:   { w: 7, h: 4.9 },
     neon:   { w: 12, h: 5 },
     vapor:  { w: 4, h: 10 },
     star:   { w: 1, h: 1 },
+    sun:     { w: 30, h: 22 },
+    monitor: { w: 10, h: 6 },
+    rec:     { w: 4, h: 3 },
+    ceiling: { w: 40, h: 16 },
+    tv:      { w: 14, h: 10 },
   }[kind] || { w: 8, h: 6 };
-  lights.push({ id, kind, t: 40, l: 40, ...defaults });
+  lights.push({ id, kind, t: 40, l: 40, ...sizeDefaults });
   selectedId = id;
   render();
 }
@@ -614,9 +747,9 @@ function deleteSelected() {
 }
 
 function resetToDefaults() {
-  if (!confirm('Reset all lights to built-in defaults? Your saved layout will be discarded.')) return;
-  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-  lights = JSON.parse(JSON.stringify(DEFAULTS));
+  if (!confirm('Reset ' + activeMap().label + ' lights to built-in defaults? Your saved layout for this map will be discarded.')) return;
+  try { localStorage.removeItem(activeMap().storageKey); } catch (e) {}
+  lights = JSON.parse(JSON.stringify(activeMap().defaults));
   selectedId = null;
   render();
 }
@@ -709,6 +842,7 @@ if (window.innerWidth <= 760) {
   document.getElementById('side').classList.add('collapsed');
 }
 
+applyMapMeta();
 render();
 </script>
 </body>
