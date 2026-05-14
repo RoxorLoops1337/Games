@@ -13919,11 +13919,11 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       {(() => {
         const isDay = isDayTime(char.minutes ?? 0);
         const houseHotspots = [
-          { id: 'train',    name: 'PC',       top: 12, left: 8,  width: 32, height: 18, icon: 'pc' },
-          { id: 'studio',   name: 'Studio',   top: 12, left: 50, width: 42, height: 19, icon: 'mic' },
-          { id: 'eat',      name: 'Kitchen',  top: 35, left: 52, width: 42, height: 22, icon: 'fridge' },
-          { id: 'wardrobe', name: 'Wardrobe', top: 35, left: 8,  width: 28, height: 22, icon: 'star' },
-          { id: 'rest',     name: 'Couch',    top: 64, left: 38, width: 56, height: 28, icon: 'couch' },
+          { id: 'train',    name: 'PC',       top: 4.06,  left: 9.07,  width: 38.53, height: 29.77, icon: 'pc' },
+          { id: 'studio',   name: 'Studio',   top: 3.46,  left: 52.27, width: 42.67, height: 29.87, icon: 'mic' },
+          { id: 'eat',      name: 'Kitchen',  top: 35.37, left: 59.07, width: 37.6,  height: 28.44, icon: 'fridge' },
+          { id: 'wardrobe', name: 'Wardrobe', top: 35.67, left: 3.6,   width: 51.87, height: 22.67, icon: 'star' },
+          { id: 'rest',     name: 'Couch',    top: 68.27, left: 41.47, width: 50.93, height: 22.9,  icon: 'couch' },
         ];
         return (
           <div className="relative w-full max-w-md mx-auto border-2 border-stone-800 select-none overflow-hidden"
