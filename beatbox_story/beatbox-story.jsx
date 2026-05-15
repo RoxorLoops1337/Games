@@ -10692,8 +10692,8 @@ const INTRO_BEATS = [
   // pulses cyan on the back wall.
   { image: 'intro-1-office.png',
     lights: [
-      { t: 6, l: 56, w: 38, h: 28, bg: 'radial-gradient(ellipse at 50% 50%, rgba(120,190,255,0.55), rgba(120,190,255,0) 65%)', anim: 'introCyanPulse 2.6s ease-in-out infinite' },
-      { t: 0, l: 0,  w: 100, h: 100, bg: 'linear-gradient(180deg, rgba(80,110,160,0.18), rgba(40,60,100,0.10))', anim: 'none' },
+      { t: 6.31, l: 51.49, w: 41.12, h: 41.26, bg: 'radial-gradient(ellipse at 50% 50%, rgba(120,190,255,0.55), rgba(120,190,255,0) 65%)', anim: 'introCyanPulse 2.6s ease-in-out infinite' },
+      { t: 0,    l: -0.02, w: 100,   h: 100,   bg: 'linear-gradient(180deg, rgba(80,110,160,0.18), rgba(40,60,100,0.10))', anim: 'none' },
     ],
     lines: [
       'three years at the desk.',
@@ -10703,8 +10703,8 @@ const INTRO_BEATS = [
   // Bedroom. Sunset warmth from the window + dim phone screen.
   { image: 'intro-2-bedroom.png',
     lights: [
-      { t: 2,  l: 70, w: 28, h: 50, bg: 'radial-gradient(ellipse at 30% 30%, rgba(255,160,80,0.45), rgba(255,160,80,0) 70%)', anim: 'introBreathe 6s ease-in-out infinite' },
-      { t: 42, l: 36, w: 10, h: 8, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.65), rgba(150,210,255,0) 75%)', anim: 'introMonitor 1.6s ease-in-out infinite' },
+      { t: 5.46,  l: 70.34, w: 28.59, h: 53.91, bg: 'radial-gradient(ellipse at 30% 30%, rgba(255,160,80,0.45), rgba(255,160,80,0) 70%)', anim: 'introBreathe 6s ease-in-out infinite' },
+      { t: 44.98, l: 42.85, w: 11.3,  h: 10.08, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.55), rgba(150,210,255,0) 75%)', anim: 'introMonitor 1.6s ease-in-out infinite' },
     ],
     lines: [
       "rent's due sunday.",
@@ -10714,7 +10714,7 @@ const INTRO_BEATS = [
   // Close-up phone. Big cyan glow off the screen.
   { image: 'intro-3-phone.png',
     lights: [
-      { t: 12, l: 36, w: 38, h: 70, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.45), rgba(150,210,255,0) 75%)', anim: 'introMonitor 2.2s ease-in-out infinite' },
+      { t: 8.07, l: 27.47, w: 42.15, h: 94.92, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.55), rgba(150,210,255,0) 75%)', anim: 'introMonitor 1.6s ease-in-out infinite' },
     ],
     lines: [
       "you've been beatboxing in your bedroom since you were fourteen.",
@@ -10724,7 +10724,7 @@ const INTRO_BEATS = [
   // Mirror. Warm bulb cone above the mirror.
   { image: 'intro-4-mirror.png',
     lights: [
-      { t: 0,  l: 32, w: 36, h: 30, bg: 'radial-gradient(ellipse at 50% 0%, rgba(255,225,170,0.55), rgba(255,225,170,0) 75%)', anim: 'introBreathe 4s ease-in-out infinite' },
+      { t: 7.11, l: 40.34, w: 39.75, h: 43.92, bg: 'radial-gradient(ellipse at 50% 0%, rgba(255,225,170,0.55), rgba(255,225,170,0) 75%)', anim: 'introBreathe 4s ease-in-out infinite' },
     ],
     lines: [
       'the parents would take you back.',
@@ -10734,8 +10734,8 @@ const INTRO_BEATS = [
   // Door. Blue TV flicker + warm hallway light through the open door.
   { image: 'intro-5-door.png',
     lights: [
-      { t: 38, l: 32, w: 18, h: 18, bg: 'radial-gradient(ellipse at center, rgba(120,180,255,0.7), rgba(120,180,255,0) 75%)', anim: 'introTvFlicker 1.2s steps(6) infinite' },
-      { t: 5,  l: 48, w: 28, h: 80, bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,230,180,0.30), rgba(255,230,180,0) 70%)', anim: 'introBreathe 5s ease-in-out infinite' },
+      { t: 37.63, l: 22.08, w: 21.59, h: 23.74, bg: 'radial-gradient(ellipse at center, rgba(120,180,255,0.7), rgba(120,180,255,0) 75%)', anim: 'introTvFlicker 1.2s steps(6) infinite' },
+      { t: 15.48, l: 49.18, w: 22.65, h: 79.38, bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,230,180,0.30), rgba(255,230,180,0) 70%)', anim: 'introBreathe 5s ease-in-out infinite' },
     ],
     lines: [
       'practice every day.',
@@ -10745,8 +10745,10 @@ const INTRO_BEATS = [
   // Bar. Red LIVE neon with a soft halo, plus a cool street tint.
   { image: 'intro-6-bar.png',
     lights: [
-      { t: 8,  l: 28, w: 44, h: 22, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
-      { t: 0,  l: 0,  w: 100, h: 100, bg: 'linear-gradient(180deg, rgba(40,70,130,0.18), rgba(20,30,60,0.10))', anim: 'none' },
+      { t: 73.09, l: 27.9,  w: 53.07, h: 23.13, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
+      { t: 0.24,  l: -0.16, w: 100,   h: 100,   bg: 'linear-gradient(180deg, rgba(80,110,160,0.18), rgba(40,60,100,0.10))', anim: 'none' },
+      { t: 14.86, l: 34.62, w: 28.85, h: 22.16, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
+      { t: 5.63,  l: 24.92, w: 6.72,  h: 34.86, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
     ],
     lines: [
       'the LIVE sign hums.',
