@@ -6730,7 +6730,12 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
         Skip →
       </button>
       <div className="max-w-md w-full space-y-4">
-        {beat?.drawScene && (
+        {beat?.image ? (
+          <div key={beatIdx} style={{ animation: fade }}>
+            <img src={beat.image} alt="" className="w-full block border border-stone-800"
+              style={{ imageRendering: 'pixelated', filter: beat.filter || 'none', animation: beat.imageAnim || 'none' }} />
+          </div>
+        ) : beat?.drawScene && (
           <div key={beatIdx} style={{ animation: fade }}>
             <PixelScene draw={beat.drawScene} />
           </div>
@@ -6760,6 +6765,13 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
         @keyframes cutFade {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        /* Used by the intro's "rest of the night is a blur" beat — pulses
+           the brightness/saturation of an already-blurred image to read
+           as memory flashing past rather than a single still. */
+        @keyframes introNightStrobe {
+          0%, 100% { filter: blur(4px) brightness(1.4) saturate(1.6) contrast(1.1); }
+          50%      { filter: blur(6px) brightness(1.8) saturate(2.0) contrast(1.2); }
         }
       `}</style>
     </div>
@@ -11100,30 +11112,52 @@ const drawDancer = (ctx, x, y, look, frame, mirrored, scaleHint) => {
 };
 
 const INTRO_BEATS = [
-  { drawScene: drawOffice, lines: [
+  { image: 'intro-1-office.png', lines: [
     'three years at the desk.',
     'one HR meeting. one cardboard box.',
     "they said the AI's just faster.",
   ]},
-  { drawScene: drawBedroom, lines: [
+  { image: 'intro-2-bedroom.png', lines: [
     "rent's due sunday.",
     'the savings ran out tuesday.',
     "you do the math twice. it doesn't get better.",
   ]},
-  { drawScene: drawPhone, lines: [
+  { image: 'intro-3-phone.png', lines: [
     "you've been beatboxing in your bedroom since you were fourteen.",
     'never on a stage. never for money.',
     '312 followers. half of them bots.',
   ]},
-  { drawScene: drawMirror, lines: [
+  { image: 'intro-4-mirror.png', lines: [
     'the parents would take you back.',
     "that's the worst part — they would.",
     'so you tell yourself: not yet.',
   ]},
-  { drawScene: drawDoor, lines: [
+  { image: 'intro-5-door.png', lines: [
     'practice every day.',
     'busk till the jar fills up.',
     'and tonight — tonight you go to the cypher.',
+  ]},
+  // Arrives at the bar — the LIVE neon, deciding to step in.
+  { image: 'intro-6-bar.png', lines: [
+    'the LIVE sign hums.',
+    'you stand on the wet pavement a second too long.',
+    "the door's right there.",
+  ]},
+  // The night gets wild — same bar shot, blurred + brightened so it
+  // reads like memory in pieces rather than a fresh scene.
+  { image: 'intro-6-bar.png',
+    filter: 'blur(4px) brightness(1.4) saturate(1.6) contrast(1.1)',
+    imageAnim: 'introNightStrobe 1.6s ease-in-out infinite',
+    lines: [
+      "inside is louder than you expected.",
+      'cyphers. beers. cheers. someone hands you the mic.',
+      "you don't remember saying yes.",
+    ]},
+  // Morning after — wakes up on the couch. Game starts here.
+  { image: 'intro-7-couch.png', lines: [
+    'morning. couch. head pounding.',
+    'the cypher was real.',
+    "and tonight... you go again.",
   ]},
 ];
 
