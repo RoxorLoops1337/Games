@@ -341,29 +341,31 @@ const BEATS = [
 ];
 
 // Defaults match what's currently in INTRO_BEATS in production.
+// Built-in defaults — kept in sync with the production INTRO_BEATS
+// lights so "Reset this beat" and a fresh session both match the game.
 const BEAT_DEFAULTS = [
   // office
   [
-    { id: 'ai',   kind: 'screen-cyan-soft', t: 6,  l: 56, w: 38, h: 28 },
-    { id: 'cool', kind: 'tint-cool',        t: 0,  l: 0,  w: 100, h: 100 },
+    { id: 'ai',   kind: 'screen-cyan-soft', t: 6.31, l: 51.49, w: 41.12, h: 41.26 },
+    { id: 'cool', kind: 'tint-cool',        t: 0,    l: -0.02, w: 100,   h: 100 },
   ],
   // bedroom
   [
-    { id: 'window', kind: 'warm-glow',   t: 2,  l: 70, w: 28, h: 50 },
-    { id: 'phone',  kind: 'screen-cyan', t: 42, l: 36, w: 10, h: 8 },
+    { id: 'window', kind: 'warm-glow',   t: 5.46,  l: 70.34, w: 28.59, h: 53.91 },
+    { id: 'phone',  kind: 'screen-cyan', t: 44.98, l: 42.85, w: 11.3,  h: 10.08 },
   ],
   // phone
   [
-    { id: 'screen', kind: 'screen-cyan', t: 12, l: 36, w: 38, h: 70 },
+    { id: 'screen', kind: 'screen-cyan', t: 8.07, l: 27.47, w: 42.15, h: 94.92 },
   ],
   // mirror
   [
-    { id: 'bulb', kind: 'warm-cone', t: 0, l: 32, w: 36, h: 30 },
+    { id: 'bulb', kind: 'warm-cone', t: 7.11, l: 40.34, w: 39.75, h: 43.92 },
   ],
   // door
   [
-    { id: 'tv',      kind: 'tv-blue',      t: 38, l: 32, w: 18, h: 18 },
-    { id: 'hallway', kind: 'warm-hallway', t: 5,  l: 48, w: 28, h: 80 },
+    { id: 'tv',      kind: 'tv-blue',      t: 37.63, l: 22.08, w: 21.59, h: 23.74 },
+    { id: 'hallway', kind: 'warm-hallway', t: 15.48, l: 49.18, w: 22.65, h: 79.38 },
   ],
   // bar — three desynced red neons + a cool street tint
   [
@@ -379,12 +381,16 @@ const BEAT_DEFAULTS = [
   ],
   // couch
   [
-    { id: 'sun', kind: 'warm-stripe', t: 5,  l: 38, w: 22, h: 60 },
-    { id: 'tv',  kind: 'tv-blue',     t: 12, l: 6,  w: 18, h: 30 },
+    { id: 'sun', kind: 'warm-stripe', t: -0.48, l: 37.01, w: 16.47, h: 48.01 },
+    { id: 'tv',  kind: 'tv-blue',     t: 16.24, l: 1.11,  w: 18.81, h: 32.38 },
+    { id: 'cone', kind: 'warm-cone',  t: 21.19, l: 82.29, w: 17.15, h: 34.06 },
   ],
 ];
 
-const STORAGE_PREFIX = 'bbs-intro-light-editor-v1-';
+// v2 — bumped after the 16:9 intro art swap so the editor drops any
+// saved positions tuned against the old images and starts from the
+// defaults above (which match the current production layout).
+const STORAGE_PREFIX = 'bbs-intro-light-editor-v2-';
 function storageKey(beatIdx) { return STORAGE_PREFIX + beatIdx; }
 
 let activeBeat = 0;
