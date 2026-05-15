@@ -6759,44 +6759,49 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, musi
             every transition). */}
         {beats?.some(b => b.image) ? (
           <div className="relative w-full overflow-hidden border border-stone-800 bg-black"
-            style={{ aspectRatio: '1672 / 941' }}>
+            style={{ aspectRatio: '480 / 270' }}>
             {beats.map((b, i) => b.image ? (
               <div key={i} className="absolute inset-0"
                 style={{
                   opacity: i === beatIdx ? 1 : 0,
-                  // Long cinematic cross-fade. will-change hints the
-                  // compositor to keep each layer on the GPU so the
-                  // browser doesn't repaint during the blend.
                   transition: settings.reducedMotion ? 'none' : 'opacity 1.1s ease-in-out',
-                  willChange: 'opacity, transform',
+                  willChange: 'opacity',
                   pointerEvents: 'none',
                 }}>
-                {/* Image holder gets a subtle ken-burns zoom while it's
-                    the active beat — kicks in when the wrapper has
-                    opacity 1. Anim cancels for the inactive layers
-                    because their parent opacity is 0. */}
-                <img src={b.image} alt=""
-                  className="block w-full h-full object-cover"
+                {/* Ken-burns transform layer — wraps BOTH the image and
+                    its light overlays so they zoom/pan together. (The
+                    lights used to be siblings of a transformed <img>,
+                    so the scene drifted out from under them — that was
+                    the "lights misplaced" bug.) The filter-based
+                    imageAnim, e.g. the wild beat's strobe, stays on the
+                    <img> since it animates `filter`, not `transform`. */}
+                <div className="absolute inset-0"
                   style={{
-                    imageRendering: 'pixelated',
-                    filter: b.filter || 'none',
-                    animation: b.imageAnim || (settings.reducedMotion ? 'none' : 'introKenBurns 14s ease-in-out infinite alternate'),
-                    willChange: 'transform, filter',
-                  }} />
-                {/* Per-beat lights overlay (animated CSS gradients on
-                    top of the painted scene). pointer-events:none so
-                    taps to advance still register on the wrapper. */}
-                {(b.lights || []).map((L, j) => (
-                  <div key={j} className="absolute" aria-hidden="true"
+                    animation: settings.reducedMotion ? 'none' : 'introKenBurns 14s ease-in-out infinite alternate',
+                    willChange: 'transform',
+                  }}>
+                  <img src={b.image} alt=""
+                    className="block w-full h-full object-cover"
                     style={{
-                      top: `${L.t}%`, left: `${L.l}%`,
-                      width: `${L.w}%`, height: `${L.h}%`,
-                      background: L.bg,
-                      animation: L.anim || 'none',
-                      mixBlendMode: 'screen',
-                      pointerEvents: 'none',
+                      imageRendering: 'pixelated',
+                      filter: b.filter || 'none',
+                      animation: b.imageAnim || 'none',
+                      willChange: 'filter',
                     }} />
-                ))}
+                  {/* Per-beat lights overlay (animated CSS gradients on
+                      top of the painted scene). */}
+                  {(b.lights || []).map((L, j) => (
+                    <div key={j} className="absolute" aria-hidden="true"
+                      style={{
+                        top: `${L.t}%`, left: `${L.l}%`,
+                        width: `${L.w}%`, height: `${L.h}%`,
+                        background: L.bg,
+                        animation: L.anim || 'none',
+                        mixBlendMode: 'screen',
+                        pointerEvents: 'none',
+                      }} />
+                  ))}
+                </div>
               </div>
             ) : null)}
           </div>
