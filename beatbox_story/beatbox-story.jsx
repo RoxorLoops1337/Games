@@ -10789,7 +10789,7 @@ const INTRO_BEATS = [
     lights: [
       { t: -0.48, l: 37.01, w: 16.47, h: 48.01, bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,210,140,0.40), rgba(255,210,140,0) 75%)', anim: 'introBreathe 7s ease-in-out infinite' },
       { t: 16.24, l: 1.11,  w: 18.81, h: 32.38, bg: 'radial-gradient(ellipse at center, rgba(120,180,255,0.7), rgba(120,180,255,0) 75%)', anim: 'introTvFlicker 1.2s steps(6) infinite' },
-      { t: 21.19, l: 82.29, w: 17.15, h: 34.06, bg: 'radial-gradient(ellipse at 50% 0%, rgba(255,225,170,0.55), rgba(255,225,170,0) 75%)', anim: 'introBreathe 4s ease-in-out infinite' },
+      { t: 23.33, l: 82.29, w: 17.15, h: 34.06, bg: 'radial-gradient(ellipse at 50% 0%, rgba(255,225,170,0.55), rgba(255,225,170,0) 75%)', anim: 'introBreathe 4s ease-in-out infinite' },
     ],
     lines: [
       'morning. couch. head pounding.',
