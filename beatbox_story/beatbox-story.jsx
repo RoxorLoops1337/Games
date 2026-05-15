@@ -10756,12 +10756,14 @@ const INTRO_BEATS = [
       'and tonight — tonight you go to the cypher.',
     ]},
   // Bar. Red LIVE neon with a soft halo, plus a cool street tint.
+  // The three neon glows run on different durations + negative
+  // start-delays so they flicker out of sync — no lock-step blink.
   { image: 'intro-6-bar.png',
     lights: [
       { t: 73.09, l: 27.9,  w: 53.07, h: 23.13, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
       { t: 0.24,  l: -0.16, w: 100,   h: 100,   bg: 'linear-gradient(180deg, rgba(80,110,160,0.18), rgba(40,60,100,0.10))', anim: 'none' },
-      { t: 14.86, l: 34.62, w: 28.85, h: 22.16, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
-      { t: 5.63,  l: 24.92, w: 6.72,  h: 34.86, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
+      { t: 14.86, l: 34.62, w: 28.85, h: 22.16, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 2.4s ease-in-out -0.9s infinite' },
+      { t: 5.63,  l: 24.92, w: 6.72,  h: 34.86, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.5s ease-in-out -1.7s infinite' },
     ],
     lines: [
       'the LIVE sign hums.',
