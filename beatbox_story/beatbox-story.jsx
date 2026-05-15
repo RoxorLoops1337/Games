@@ -10770,8 +10770,9 @@ const INTRO_BEATS = [
   // Couch morning. Warm window stripe + the TV still on.
   { image: 'intro-7-couch.png',
     lights: [
-      { t: 5,  l: 38, w: 22, h: 60, bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,210,140,0.40), rgba(255,210,140,0) 75%)', anim: 'introBreathe 7s ease-in-out infinite' },
-      { t: 12, l: 6,  w: 18, h: 30, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.40), rgba(150,210,255,0) 75%)', anim: 'introTvFlicker 1.4s steps(6) infinite' },
+      { t: 0.22, l: 31.58, w: 33.63, h: 70.49, bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,210,140,0.40), rgba(255,210,140,0) 75%)', anim: 'introBreathe 7s ease-in-out infinite' },
+      { t: 0.59, l: -3.2,  w: 24.68, h: 41.11, bg: 'radial-gradient(ellipse at center, rgba(120,180,255,0.7), rgba(120,180,255,0) 75%)', anim: 'introTvFlicker 1.2s steps(6) infinite' },
+      { t: 11,   l: 87.22, w: 10,    h: 40,    bg: 'radial-gradient(ellipse at 30% 30%, rgba(255,160,80,0.45), rgba(255,160,80,0) 70%)', anim: 'introBreathe 6s ease-in-out infinite' },
     ],
     lines: [
       'morning. couch. head pounding.',
