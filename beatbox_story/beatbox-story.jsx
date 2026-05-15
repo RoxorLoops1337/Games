@@ -6697,11 +6697,18 @@ const PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
   );
 };
 
-const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onComplete }) => {
+const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, music = null, onComplete }) => {
   const allBeats = beats || (lines ? [{ lines }] : []);
   const [beatIdx, setBeatIdx] = useState(0);
   const [lineIdx, setLineIdx] = useState(0);
   const [settings] = useSettings();
+  // Optional looping score for the cutscene (e.g. the gloomy intro
+  // theme). Starts on mount, fades out when the cutscene closes.
+  useEffect(() => {
+    if (!music) return;
+    startMusic(music);
+    return () => stopMusic();
+  }, [music]);
   const beat = allBeats[beatIdx];
   const beatLines = beat?.lines || [];
   const isLastLine = lineIdx + 1 >= beatLines.length;
@@ -8637,6 +8644,12 @@ const drawTitleScene = (ctx, fc) => {
 // dispatches to the right downstream screen (hood / slots).
 const TitleScreen = ({ char, hasActiveSlot, onPlay, onSlots, onSettings }) => {
   const [settings] = useSettings();
+  // Uptempo title theme — starts on mount (kicks in once the audio
+  // context is unlocked by the first tap) and fades out on leave.
+  useEffect(() => {
+    startMusic('title');
+    return () => stopMusic();
+  }, []);
   const playLabel = hasActiveSlot && char?.name
     ? `Continue as ${char.name.toUpperCase()}`
     : 'New Game';
@@ -11342,7 +11355,7 @@ export default function BeatboxStory() {
       setActiveSlotState(n);
       await setActiveSlot(n);
       await loadSamplesForSlot(n);
-      playCutscene({ beats: INTRO_BEATS }, 'introSeen', () => setScreen('create'));
+      playCutscene({ beats: INTRO_BEATS, music: 'intro' }, 'introSeen', () => setScreen('create'));
     }
   };
 
@@ -17616,6 +17629,212 @@ const playLossSting = () => {
   _blip(ctx, t + 0.20, 369.99, 0.55, 0.20, 'sine');  // F#4 → minor feel
   _blip(ctx, t + 0.50, 293.66, 0.85, 0.18, 'sine');
 };
+
+// ============ BACKGROUND MUSIC ============
+// Two looping procedural tracks driven by a WebAudio lookahead
+// scheduler. `startMusic(name)` spins up a 25ms timer that schedules
+// every track event ~180ms ahead of the playhead; `stopMusic()` fades
+// the master gain and tears the timer down. Honours the mute setting
+// via getAudioCtx() like every other sound in the game.
+
+const _mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+// One synth voice — osc → optional lowpass → ADSR gain → out.
+function _musVoice(ctx, out, midi, t, dur, opt) {
+  const o = opt || {};
+  const osc = ctx.createOscillator();
+  osc.type = o.type || 'square';
+  osc.frequency.value = _mtof(midi);
+  if (o.detune) osc.detune.value = o.detune;
+  const g = ctx.createGain();
+  const peak = o.gain != null ? o.gain : 0.14;
+  const atk = o.attack != null ? o.attack : 0.008;
+  const rel = o.release != null ? o.release : 0.09;
+  const sustainEnd = Math.max(t + atk, t + dur - rel);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + atk);
+  g.gain.setValueAtTime(peak, sustainEnd);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let head = osc;
+  if (o.filter) {
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = o.filter;
+    head.connect(f); head = f;
+  }
+  head.connect(g); g.connect(out);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+
+// Drum hits for the title track.
+function _musKick(ctx, out, t) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, t);
+  osc.frequency.exponentialRampToValueAtTime(45, t + 0.11);
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+  osc.connect(g); g.connect(out);
+  osc.start(t); osc.stop(t + 0.18);
+}
+function _musSnare(ctx, out, t) {
+  const n = ctx.createBufferSource();
+  n.buffer = noiseBuffer(ctx, 0.16);
+  const f = ctx.createBiquadFilter();
+  f.type = 'highpass'; f.frequency.value = 1400;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.28, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  n.connect(f); f.connect(g); g.connect(out);
+  n.start(t); n.stop(t + 0.16);
+}
+function _musHat(ctx, out, t, open) {
+  const n = ctx.createBufferSource();
+  n.buffer = noiseBuffer(ctx, open ? 0.12 : 0.04);
+  const f = ctx.createBiquadFilter();
+  f.type = 'highpass'; f.frequency.value = 7000;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(open ? 0.12 : 0.16, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (open ? 0.12 : 0.04));
+  n.connect(f); f.connect(g); g.connect(out);
+  n.start(t); n.stop(t + (open ? 0.12 : 0.05));
+}
+
+// ---- TITLE TRACK ----------------------------------------------------
+// Uptempo, bouncy, major-key chiptune (Sonic / TMNT energy). 160 BPM,
+// 16th-note grid, 64-step (4-bar) loop. Progression C - G - Am - F.
+const _TITLE = {
+  bpm: 160, stepsPerBeat: 4, steps: 64, volume: 0.32,
+  barRoots: [48, 43, 45, 41],          // C3, G2, A2, F2
+  triad:    [0, 4, 7, 12],
+  // lead melody — one entry per step, MIDI note or 0 for rest
+  lead: [
+    79,0,0,76, 0,0,79,0, 84,0,0,83, 81,0,79,0,   // bar 1 (C)
+    79,0,0,74, 0,0,79,0, 83,0,0,86, 83,0,79,0,   // bar 2 (G)
+    81,0,0,77, 0,0,81,0, 84,0,0,88, 84,0,81,0,   // bar 3 (Am)
+    77,0,0,72, 0,0,77,0, 81,0,84,0, 81,0,79,77,  // bar 4 (F)
+  ],
+  render(ctx, out, step, t, stepDur) {
+    const bar = Math.floor(step / 16);
+    const inBar = step % 16;
+    const root = this.barRoots[bar];
+    // Drums — four-on-floor kick, backbeat snare, 8th-note hats.
+    if (inBar % 4 === 0) _musKick(ctx, out, t);
+    if (inBar % 8 === 4) _musSnare(ctx, out, t);
+    if (inBar % 2 === 0) _musHat(ctx, out, t, inBar % 4 === 2);
+    // Bass — bouncy running 8ths, root / octave alternating.
+    if (inBar % 2 === 0) {
+      const oct = (inBar % 4 === 2) ? 12 : 0;
+      _musVoice(ctx, out, root + oct, t, stepDur * 1.7,
+        { type: 'square', gain: 0.16, release: 0.06, filter: 1600 });
+    }
+    // Arp — fast chord shimmer on every step.
+    const arpNote = root + 12 + this.triad[step % 4];
+    _musVoice(ctx, out, arpNote, t, stepDur * 0.9,
+      { type: 'square', gain: 0.045, attack: 0.004, release: 0.04 });
+    // Lead melody — square + triangle doubled, lightly detuned.
+    const n = this.lead[step];
+    if (n) {
+      _musVoice(ctx, out, n, t, stepDur * 3.4,
+        { type: 'square', gain: 0.12, attack: 0.006, release: 0.12, detune: 4 });
+      _musVoice(ctx, out, n, t, stepDur * 3.4,
+        { type: 'triangle', gain: 0.07, attack: 0.006, release: 0.12, detune: -6 });
+    }
+  },
+};
+
+// ---- INTRO TRACK ----------------------------------------------------
+// Slow, gloomy, futuristic. 68 BPM, quarter-note grid, 32-step (8-bar)
+// loop. Progression Am - F - C - Em — minor, unresolved, melancholy.
+const _INTRO = {
+  bpm: 68, stepsPerBeat: 1, steps: 32, volume: 0.38,
+  barRoots: [45, 41, 48, 40],          // A2, F2, C3, E2
+  // sparse melody — MIDI or 0, one per quarter-note step
+  mel: [
+    0,0,72,0,   0,69,0,0,   0,0,68,0,   0,65,0,0,    // Am / F (G#=68 leading tone)
+    0,0,67,0,   0,64,0,0,   0,0,71,0,   0,67,0,0,    // C  / Em
+  ],
+  render(ctx, out, step, t, stepDur) {
+    const bar = Math.floor(step / 8);
+    const inBar = step % 8;
+    const root = this.barRoots[bar];
+    // Pad — retrigger the held triad at the top of each bar. Long
+    // slow-attack chord, two detuned osc layers for a wide future-synth
+    // bed, gently lowpassed.
+    if (inBar === 0) {
+      const isF = bar === 1;
+      const third = isF ? 4 : 3;       // F is major; the rest minor
+      const chord = [0, third, 7, 12];
+      const barDur = stepDur * 8;
+      for (const off of chord) {
+        _musVoice(ctx, out, root + 12 + off, t, barDur * 1.02,
+          { type: 'triangle', gain: 0.05, attack: barDur * 0.35, release: barDur * 0.4, detune: 7, filter: 1200 });
+        _musVoice(ctx, out, root + 12 + off, t, barDur * 1.02,
+          { type: 'sawtooth', gain: 0.022, attack: barDur * 0.4, release: barDur * 0.45, detune: -9, filter: 900 });
+      }
+      // Sub bass — long low root.
+      _musVoice(ctx, out, root - 12, t, barDur * 1.04,
+        { type: 'sine', gain: 0.16, attack: 0.05, release: barDur * 0.3 });
+    }
+    // Melody — sparse, soft, with a faint octave-up shadow for the
+    // futuristic sheen.
+    const n = this.mel[step];
+    if (n) {
+      _musVoice(ctx, out, n, t, stepDur * 2.6,
+        { type: 'triangle', gain: 0.1, attack: 0.04, release: 0.5, filter: 2200 });
+      _musVoice(ctx, out, n + 12, t, stepDur * 2.2,
+        { type: 'sine', gain: 0.03, attack: 0.06, release: 0.5, detune: 10 });
+    }
+  },
+};
+
+const _MUSIC_TRACKS = { title: _TITLE, intro: _INTRO };
+
+let _music = null;   // { name, ctx, gain, timer, step, nextNoteTime, ... }
+
+function startMusic(name) {
+  const track = _MUSIC_TRACKS[name];
+  if (!track) return;
+  if (_music && _music.name === name) return;   // already playing it
+  stopMusic();
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0.0001, ctx.currentTime);
+  master.gain.linearRampToValueAtTime(track.volume, ctx.currentTime + 0.8);
+  master.connect(ctx.destination);
+  const stepDur = 60 / track.bpm / track.stepsPerBeat;
+  const state = { name, ctx, gain: master, step: 0, nextNoteTime: ctx.currentTime + 0.12, stepDur, track };
+  state.timer = setInterval(() => {
+    if (!_music || _music !== state) return;
+    // Mute toggled mid-track: getAudioCtx only blocks NEW contexts, the
+    // live one keeps running — so check settings explicitly.
+    if (getSettings().muted) { stopMusic(); return; }
+    const c = state.ctx;
+    while (state.nextNoteTime < c.currentTime + 0.18) {
+      try { state.track.render(c, state.gain, state.step, state.nextNoteTime, state.stepDur); } catch (e) {}
+      state.step = (state.step + 1) % state.track.steps;
+      state.nextNoteTime += state.stepDur;
+    }
+  }, 25);
+  _music = state;
+}
+
+function stopMusic() {
+  if (!_music) return;
+  const s = _music;
+  _music = null;
+  clearInterval(s.timer);
+  try {
+    const now = s.ctx.currentTime;
+    s.gain.gain.cancelScheduledValues(now);
+    s.gain.gain.setValueAtTime(s.gain.gain.value, now);
+    s.gain.gain.linearRampToValueAtTime(0.0001, now + 0.5);
+    setTimeout(() => { try { s.gain.disconnect(); } catch (e) {} }, 800);
+  } catch (e) {}
+}
 
 // ============ SCREEN: BATTLE ============
 
