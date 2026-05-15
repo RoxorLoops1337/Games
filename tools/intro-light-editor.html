@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beatbox Story · Intro Light Editor</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0c0a09; color: #e7e5e4;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .root { display: flex; height: 100vh; position: relative; }
+  .canvas-pane {
+    flex: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg, #181715, #181715 8px, #1c1917 8px, #1c1917 16px);
+    overflow: auto;
+  }
+  .gear-toggle {
+    position: fixed;
+    top: 12px; right: 12px;
+    z-index: 1000;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #fbbf24;
+    color: #0c0a09;
+    border: 2px solid #0c0a09;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    font-size: 22px; line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+  .gear-toggle:active { transform: scale(0.92); }
+  .map-frame {
+    position: relative;
+    aspect-ratio: 1672 / 941;
+    width: min(90vw, 880px);
+    border: 2px solid #44403c;
+    box-shadow: 0 0 32px rgba(0,0,0,0.6);
+    user-select: none;
+    overflow: hidden;
+    background: #000;
+  }
+  .map-frame img.scene {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+  .light {
+    position: absolute;
+    cursor: move;
+    border: 1px dashed rgba(255,255,255,0.3);
+    transition: border-color 0.1s;
+  }
+  .light.selected {
+    border: 1px solid #fbbf24;
+    z-index: 2;
+  }
+  .light .glow {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .handle {
+    position: absolute;
+    width: 12px; height: 12px;
+    background: #fbbf24;
+    border: 1px solid #0c0a09;
+    cursor: nwse-resize;
+    bottom: -6px; right: -6px;
+  }
+  .light .label {
+    position: absolute; top: -16px; left: 0;
+    font-size: 9px; font-weight: bold;
+    color: #fff; background: #0c0a09;
+    padding: 1px 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-radius: 2px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .side-pane {
+    width: 380px;
+    background: #1c1917;
+    border-left: 2px solid #292524;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+    transition: transform 0.25s ease-out;
+  }
+  @media (max-width: 760px) {
+    .side-pane {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(92vw, 380px);
+      z-index: 900;
+      box-shadow: -8px 0 24px rgba(0,0,0,0.6);
+    }
+    .canvas-pane { width: 100%; }
+  }
+  .side-pane.collapsed { transform: translateX(110%); }
+  .side-pane header { padding: 12px; border-bottom: 1px solid #292524; }
+  .side-pane h1 { margin: 0; font-size: 14px; letter-spacing: 0.3em; text-transform: uppercase; color: #fbbf24; }
+  .side-pane .sub { margin-top: 4px; font-size: 10px; color: #78716c; line-height: 1.4; }
+  .nav-strip { padding: 6px 12px; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #a8a29e; border-bottom: 1px solid #292524; display: flex; gap: 10px; flex-wrap: wrap; }
+  .nav-strip a { color: #fbbf24; text-decoration: none; }
+  .nav-strip a:hover { text-decoration: underline; }
+  .controls { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #292524; }
+  .controls select, .controls button {
+    background: #292524; color: #fafaf9; border: 1px solid #44403c;
+    padding: 6px 10px; text-transform: uppercase; letter-spacing: 0.15em;
+    font-size: 10px; cursor: pointer; font-family: inherit;
+  }
+  .controls button:hover { background: #44403c; }
+  .controls button.primary { background: #fbbf24; color: #0c0a09; border-color: #fbbf24; }
+  .controls button.primary:hover { background: #fcd34d; }
+  .selected-info { padding: 10px 12px; border-bottom: 1px solid #292524; font-size: 11px; }
+  .selected-info .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .selected-info label { width: 60px; color: #a8a29e; text-transform: uppercase; font-size: 9px; letter-spacing: 0.15em; }
+  .selected-info input, .selected-info select {
+    background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
+    padding: 3px 6px; font-family: monospace; width: 80px; font-size: 11px;
+  }
+  .selected-info select.wide { width: 160px; }
+  .output { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; }
+  .output h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #a8a29e; }
+  .output textarea {
+    flex: 1;
+    background: #0c0a09; color: #d4d4d4;
+    border: 1px solid #292524; padding: 8px;
+    font-family: 'Menlo', monospace; font-size: 10px;
+    line-height: 1.4; resize: none; min-height: 180px;
+  }
+  .list { padding: 6px 12px; max-height: 200px; overflow-y: auto; }
+  .list .item {
+    padding: 4px 6px; font-size: 11px; cursor: pointer;
+    border-left: 3px solid transparent;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .list .item:hover { background: #292524; }
+  .list .item.selected { border-left-color: #fbbf24; background: #292524; }
+  .list .item .swatch { width: 12px; height: 12px; border: 1px solid #44403c; }
+
+  /* All intro keyframes — mirror the production set so the preview
+     animation matches the in-game look exactly. */
+  @keyframes introBreathe {
+    0%, 100% { opacity: 0.78; } 50% { opacity: 1; }
+  }
+  @keyframes introCyanPulse {
+    0%, 100% { opacity: 0.85; } 50% { opacity: 1; }
+  }
+  @keyframes introMonitor {
+    0%, 100% { opacity: 0.9; }
+    40% { opacity: 1; } 42% { opacity: 0.5; } 44% { opacity: 1; }
+  }
+  @keyframes introTvFlicker {
+    0%   { opacity: 0.6; }
+    16%  { opacity: 0.95; }
+    33%  { opacity: 0.7; }
+    50%  { opacity: 1; }
+    66%  { opacity: 0.75; }
+    83%  { opacity: 0.9; }
+    100% { opacity: 0.6; }
+  }
+  @keyframes introNeonLive {
+    0%, 6%, 10%, 100% { opacity: 1; }
+    4%, 8% { opacity: 0.35; }
+    50% { opacity: 0.85; } 52% { opacity: 0.4; } 54% { opacity: 0.85; }
+  }
+  @keyframes introStrobeA {
+    0%, 60%, 100% { opacity: 0; } 30% { opacity: 1; }
+  }
+  @keyframes introStrobeB {
+    0%, 100% { opacity: 0; } 50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<button class="gear-toggle" id="gearBtn" onclick="togglePane()" title="Show / hide settings" aria-label="Toggle settings">⚙</button>
+<div class="root">
+  <div class="canvas-pane">
+    <div class="map-frame" id="frame">
+      <img class="scene" id="scene" src="../beatbox_story/intro-1-office.png" alt="intro scene">
+    </div>
+  </div>
+  <aside class="side-pane" id="side">
+    <header>
+      <h1>🎬 Intro Lights <span id="savedBadge" style="float:right;font-size:9px;color:#34d399;letter-spacing:0.2em;opacity:0.45;transition:opacity 0.3s;">● SAVED</span></h1>
+      <div class="sub">
+        Pick a beat to edit. Drag a light to move · drag bottom-right
+        handle to resize · arrow keys nudge selected by 0.5% ·
+        Shift+arrows by 2% · Delete removes selected.
+        Per-beat auto-save. Reset only wipes the current beat.
+      </div>
+    </header>
+
+    <div class="nav-strip">
+      <span>Other tools:</span>
+      <a href="./light-editor.html">💡 Lights</a>
+      <a href="./hotspot-editor.html">🎯 Hotspots</a>
+      <a href="./cat-path-editor.html">🐈 Cat path</a>
+      <a href="./character-editor.html">👤 Characters</a>
+    </div>
+
+    <div class="controls">
+      <select id="beatSelect" onchange="switchBeat(this.value)">
+        <option value="0">Beat 1 — Office</option>
+        <option value="1">Beat 2 — Bedroom</option>
+        <option value="2">Beat 3 — Phone</option>
+        <option value="3">Beat 4 — Mirror</option>
+        <option value="4">Beat 5 — Door</option>
+        <option value="5">Beat 6 — Bar</option>
+        <option value="6">Beat 7 — Wild night</option>
+        <option value="7">Beat 8 — Couch</option>
+      </select>
+      <div id="addButtons" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <button onclick="manualSave()" id="saveBtn" class="primary">💾 Save layout</button>
+      <button onclick="resetToDefaults()">Reset this beat</button>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <div class="selected-info" id="info">
+      <div class="row" style="color:#78716c;">Select a light to edit.</div>
+    </div>
+
+    <div class="output">
+      <h2>Paste-ready snippet</h2>
+      <textarea id="out" readonly></textarea>
+      <button onclick="copyOut()" class="primary" style="margin-top:6px;padding:8px;font-size:11px;border:none;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;background:#fbbf24;color:#0c0a09;font-family:inherit;">Copy to clipboard</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+// Light kinds — each provides a CSS background gradient and animation.
+// User can place any kind on any beat.
+const LIGHT_KINDS = {
+  'screen-cyan': {
+    name: 'PC/phone screen',
+    edge: '#96d2ff',
+    bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.55), rgba(150,210,255,0) 75%)',
+    anim: 'introMonitor 1.6s ease-in-out infinite',
+  },
+  'screen-cyan-soft': {
+    name: 'AI screen (slow)',
+    edge: '#78bee6',
+    bg: 'radial-gradient(ellipse at 50% 50%, rgba(120,190,255,0.55), rgba(120,190,255,0) 65%)',
+    anim: 'introCyanPulse 2.6s ease-in-out infinite',
+  },
+  'warm-glow': {
+    name: 'Warm glow (window/bulb)',
+    edge: '#ffa050',
+    bg: 'radial-gradient(ellipse at 30% 30%, rgba(255,160,80,0.45), rgba(255,160,80,0) 70%)',
+    anim: 'introBreathe 6s ease-in-out infinite',
+  },
+  'warm-cone': {
+    name: 'Warm cone (bulb above)',
+    edge: '#ffe1aa',
+    bg: 'radial-gradient(ellipse at 50% 0%, rgba(255,225,170,0.55), rgba(255,225,170,0) 75%)',
+    anim: 'introBreathe 4s ease-in-out infinite',
+  },
+  'warm-hallway': {
+    name: 'Warm hallway',
+    edge: '#ffe6b4',
+    bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,230,180,0.30), rgba(255,230,180,0) 70%)',
+    anim: 'introBreathe 5s ease-in-out infinite',
+  },
+  'warm-stripe': {
+    name: 'Sun stripe',
+    edge: '#ffd28c',
+    bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,210,140,0.40), rgba(255,210,140,0) 75%)',
+    anim: 'introBreathe 7s ease-in-out infinite',
+  },
+  'tv-blue': {
+    name: 'TV (blue flicker)',
+    edge: '#78b4ff',
+    bg: 'radial-gradient(ellipse at center, rgba(120,180,255,0.7), rgba(120,180,255,0) 75%)',
+    anim: 'introTvFlicker 1.2s steps(6) infinite',
+  },
+  'neon-red': {
+    name: 'Red neon',
+    edge: '#ff3c5a',
+    bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)',
+    anim: 'introNeonLive 1.8s ease-in-out infinite',
+  },
+  'strobe-red': {
+    name: 'Strobe red',
+    edge: '#ff3c78',
+    bg: 'radial-gradient(circle at 30% 50%, rgba(255,60,120,0.45), rgba(255,60,120,0) 60%)',
+    anim: 'introStrobeA 0.4s steps(3) infinite',
+  },
+  'strobe-blue': {
+    name: 'Strobe blue',
+    edge: '#648cff',
+    bg: 'radial-gradient(circle at 70% 50%, rgba(100,140,255,0.45), rgba(100,140,255,0) 60%)',
+    anim: 'introStrobeB 0.5s steps(3) infinite',
+  },
+  'tint-cool': {
+    name: 'Cool tint (full)',
+    edge: '#506ea0',
+    bg: 'linear-gradient(180deg, rgba(80,110,160,0.18), rgba(40,60,100,0.10))',
+    anim: 'none',
+  },
+  'tint-warm': {
+    name: 'Warm tint (full)',
+    edge: '#c89060',
+    bg: 'linear-gradient(180deg, rgba(200,140,80,0.18), rgba(120,70,40,0.10))',
+    anim: 'none',
+  },
+};
+
+const BEATS = [
+  { id: 0, name: 'office',  image: 'intro-1-office.png' },
+  { id: 1, name: 'bedroom', image: 'intro-2-bedroom.png' },
+  { id: 2, name: 'phone',   image: 'intro-3-phone.png' },
+  { id: 3, name: 'mirror',  image: 'intro-4-mirror.png' },
+  { id: 4, name: 'door',    image: 'intro-5-door.png' },
+  { id: 5, name: 'bar',     image: 'intro-6-bar.png' },
+  { id: 6, name: 'wild',    image: 'intro-6-bar.png' },
+  { id: 7, name: 'couch',   image: 'intro-7-couch.png' },
+];
+
+// Defaults match what's currently in INTRO_BEATS in production.
+const BEAT_DEFAULTS = [
+  // office
+  [
+    { id: 'ai',   kind: 'screen-cyan-soft', t: 6,  l: 56, w: 38, h: 28 },
+    { id: 'cool', kind: 'tint-cool',        t: 0,  l: 0,  w: 100, h: 100 },
+  ],
+  // bedroom
+  [
+    { id: 'window', kind: 'warm-glow',   t: 2,  l: 70, w: 28, h: 50 },
+    { id: 'phone',  kind: 'screen-cyan', t: 42, l: 36, w: 10, h: 8 },
+  ],
+  // phone
+  [
+    { id: 'screen', kind: 'screen-cyan', t: 12, l: 36, w: 38, h: 70 },
+  ],
+  // mirror
+  [
+    { id: 'bulb', kind: 'warm-cone', t: 0, l: 32, w: 36, h: 30 },
+  ],
+  // door
+  [
+    { id: 'tv',      kind: 'tv-blue',      t: 38, l: 32, w: 18, h: 18 },
+    { id: 'hallway', kind: 'warm-hallway', t: 5,  l: 48, w: 28, h: 80 },
+  ],
+  // bar
+  [
+    { id: 'neon', kind: 'neon-red', t: 8, l: 28, w: 44, h: 22 },
+    { id: 'cool', kind: 'tint-cool', t: 0, l: 0, w: 100, h: 100 },
+  ],
+  // wild
+  [
+    { id: 'strobeR', kind: 'strobe-red',  t: 0, l: 0,  w: 60, h: 100 },
+    { id: 'strobeB', kind: 'strobe-blue', t: 0, l: 40, w: 60, h: 100 },
+  ],
+  // couch
+  [
+    { id: 'sun', kind: 'warm-stripe', t: 5,  l: 38, w: 22, h: 60 },
+    { id: 'tv',  kind: 'tv-blue',     t: 12, l: 6,  w: 18, h: 30 },
+  ],
+];
+
+const STORAGE_PREFIX = 'bbs-intro-light-editor-v1-';
+function storageKey(beatIdx) { return STORAGE_PREFIX + beatIdx; }
+
+let activeBeat = 0;
+let lights = JSON.parse(JSON.stringify(BEAT_DEFAULTS[0]));
+let selectedId = null;
+
+function loadBeat(idx) {
+  try {
+    const raw = localStorage.getItem(storageKey(idx));
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) return null;
+    return arr;
+  } catch (e) { return null; }
+}
+function saveLayout() {
+  try {
+    localStorage.setItem(storageKey(activeBeat), JSON.stringify(lights));
+    const badge = document.getElementById('savedBadge');
+    if (badge) {
+      badge.style.opacity = '1';
+      clearTimeout(saveLayout._t);
+      saveLayout._t = setTimeout(() => { badge.style.opacity = '0.45'; }, 600);
+    }
+  } catch (e) {}
+}
+
+function applySceneImage() {
+  document.getElementById('scene').src = '../beatbox_story/' + BEATS[activeBeat].image;
+}
+
+function renderAddButtons() {
+  const wrap = document.getElementById('addButtons');
+  wrap.innerHTML = '';
+  for (const [k, info] of Object.entries(LIGHT_KINDS)) {
+    const b = document.createElement('button');
+    b.textContent = '+ Add ' + info.name;
+    b.onclick = () => addLight(k);
+    wrap.appendChild(b);
+  }
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function frameRect() { return document.getElementById('frame').getBoundingClientRect(); }
+
+function render() {
+  const frame = document.getElementById('frame');
+  frame.querySelectorAll('.light').forEach(el => el.remove());
+  for (const L of lights) {
+    const k = LIGHT_KINDS[L.kind]; if (!k) continue;
+    const el = document.createElement('div');
+    el.className = 'light' + (L.id === selectedId ? ' selected' : '');
+    el.dataset.id = L.id;
+    el.style.top = L.t + '%';
+    el.style.left = L.l + '%';
+    el.style.width = L.w + '%';
+    el.style.height = L.h + '%';
+    const glow = document.createElement('div');
+    glow.className = 'glow';
+    glow.style.background = k.bg;
+    glow.style.animation = k.anim;
+    el.appendChild(glow);
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    lbl.textContent = k.name;
+    el.appendChild(lbl);
+    const handle = document.createElement('div');
+    handle.className = 'handle';
+    handle.dataset.role = 'resize';
+    el.appendChild(handle);
+    frame.appendChild(el);
+  }
+  renderList();
+  renderInfo();
+  renderOutput();
+  saveLayout();
+}
+
+function renderList() {
+  const ul = document.getElementById('list');
+  ul.innerHTML = '';
+  for (const L of lights) {
+    const k = LIGHT_KINDS[L.kind]; if (!k) continue;
+    const item = document.createElement('div');
+    item.className = 'item' + (L.id === selectedId ? ' selected' : '');
+    item.onclick = () => { selectedId = L.id; render(); };
+    item.innerHTML = '<span>' + L.id + ' · ' + k.name + '</span>';
+    const sw = document.createElement('div'); sw.className = 'swatch';
+    sw.style.background = k.edge;
+    item.appendChild(sw);
+    ul.appendChild(item);
+  }
+}
+
+function renderInfo() {
+  const info = document.getElementById('info');
+  const L = lights.find(x => x.id === selectedId);
+  if (!L) { info.innerHTML = '<div class="row" style="color:#78716c;">Select a light to edit.</div>'; return; }
+  const k = LIGHT_KINDS[L.kind] || { name: '???' };
+  info.innerHTML =
+    '<div style="font-size:10px;color:' + (k.edge || '#fbbf24') + ';letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px;">' + L.id + ' (' + k.name + ')</div>' +
+    '<div class="row"><label>Kind</label><select id="i-kind" class="wide">' +
+      Object.entries(LIGHT_KINDS).map(([key, v]) => '<option value="' + key + '"' + (key === L.kind ? ' selected' : '') + '>' + v.name + '</option>').join('') +
+    '</select></div>' +
+    '<div class="row"><label>Top</label><input id="i-t" type="number" step="0.5" value="' + L.t + '"></div>' +
+    '<div class="row"><label>Left</label><input id="i-l" type="number" step="0.5" value="' + L.l + '"></div>' +
+    '<div class="row"><label>Width</label><input id="i-w" type="number" step="0.5" value="' + L.w + '"></div>' +
+    '<div class="row"><label>Height</label><input id="i-h" type="number" step="0.5" value="' + L.h + '"></div>' +
+    '<button onclick="deleteSelected()" style="margin-top:8px;background:#7f1d1d;color:#fef2f2;border:1px solid #991b1b;padding:4px 8px;cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;font-family:inherit;">Delete</button>';
+  document.getElementById('i-kind').onchange = (e) => { L.kind = e.target.value; render(); };
+  ['t','l','w','h'].forEach(k => {
+    const inp = document.getElementById('i-' + k);
+    inp.onchange = () => { L[k] = parseFloat(inp.value) || 0; render(); };
+  });
+}
+
+function renderOutput() {
+  const round = v => Math.round(v * 100) / 100;
+  let out = '// Paste these into INTRO_BEATS[' + activeBeat + '].lights\n';
+  out += 'lights: [\n';
+  for (const L of lights) {
+    const k = LIGHT_KINDS[L.kind]; if (!k) continue;
+    const bg = JSON.stringify(k.bg);
+    const anim = JSON.stringify(k.anim);
+    out += '  { t: ' + round(L.t) + ', l: ' + round(L.l) + ', w: ' + round(L.w) + ', h: ' + round(L.h)
+        + ', bg: ' + bg + ', anim: ' + anim + ' },\n';
+  }
+  out += ']\n';
+  document.getElementById('out').value = out;
+}
+
+function copyOut() {
+  const out = document.getElementById('out');
+  out.select();
+  document.execCommand('copy');
+  out.blur();
+}
+
+function switchBeat(idx) {
+  activeBeat = parseInt(idx, 10) || 0;
+  applySceneImage();
+  const saved = loadBeat(activeBeat);
+  lights = saved ? saved : JSON.parse(JSON.stringify(BEAT_DEFAULTS[activeBeat] || []));
+  selectedId = null;
+  render();
+}
+
+function addLight(kind) {
+  const id = kind + Date.now().toString(36).slice(-4);
+  lights.push({ id, kind, t: 40, l: 40, w: 20, h: 20 });
+  selectedId = id;
+  render();
+}
+
+function deleteSelected() {
+  if (selectedId === null) return;
+  lights = lights.filter(L => L.id !== selectedId);
+  selectedId = null;
+  render();
+}
+
+function resetToDefaults() {
+  if (!confirm('Reset beat ' + (activeBeat + 1) + ' to built-in defaults?')) return;
+  try { localStorage.removeItem(storageKey(activeBeat)); } catch (e) {}
+  lights = JSON.parse(JSON.stringify(BEAT_DEFAULTS[activeBeat] || []));
+  selectedId = null;
+  render();
+}
+
+function manualSave() {
+  saveLayout();
+  const btn = document.getElementById('saveBtn');
+  if (!btn) return;
+  const original = btn.textContent;
+  btn.textContent = '✓ Saved!';
+  btn.style.background = '#34d399';
+  btn.style.borderColor = '#34d399';
+  clearTimeout(manualSave._t);
+  manualSave._t = setTimeout(() => {
+    btn.textContent = original;
+    btn.style.background = '';
+    btn.style.borderColor = '';
+  }, 1400);
+}
+
+// ============ DRAG / RESIZE ============
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  const lightEl = e.target.closest('.light');
+  if (!lightEl) return;
+  const id = lightEl.dataset.id;
+  const L = lights.find(x => x.id === id);
+  if (!L) return;
+  selectedId = id;
+  const role = e.target.dataset.role;
+  const rect = frameRect();
+  drag = {
+    id, role: role || 'move',
+    startX: e.clientX, startY: e.clientY,
+    startT: L.t, startL: L.l, startW: L.w, startH: L.h,
+    rectW: rect.width, rectH: rect.height,
+  };
+  e.preventDefault();
+  render();
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const L = lights.find(x => x.id === drag.id);
+  if (!L) return;
+  const dxPct = ((e.clientX - drag.startX) / drag.rectW) * 100;
+  const dyPct = ((e.clientY - drag.startY) / drag.rectH) * 100;
+  if (drag.role === 'move') {
+    L.l = clamp(drag.startL + dxPct, -10, 100);
+    L.t = clamp(drag.startT + dyPct, -10, 100);
+  } else if (drag.role === 'resize') {
+    L.w = clamp(drag.startW + dxPct, 2, 200);
+    L.h = clamp(drag.startH + dyPct, 2, 200);
+  }
+  render();
+});
+document.addEventListener('pointerup', () => { drag = null; });
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (selectedId === null) return;
+  const L = lights.find(x => x.id === selectedId); if (!L) return;
+  const step = e.shiftKey ? 2 : 0.5;
+  if (e.key === 'ArrowUp')         L.t -= step;
+  else if (e.key === 'ArrowDown')  L.t += step;
+  else if (e.key === 'ArrowLeft')  L.l -= step;
+  else if (e.key === 'ArrowRight') L.l += step;
+  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); return; }
+  else return;
+  e.preventDefault();
+  render();
+});
+
+function togglePane() {
+  const side = document.getElementById('side');
+  const btn = document.getElementById('gearBtn');
+  const collapsed = side.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '⚙' : '×';
+}
+if (window.innerWidth <= 760) {
+  document.getElementById('side').classList.add('collapsed');
+}
+
+renderAddButtons();
+switchBeat(0);
+</script>
+</body>
+</html>
