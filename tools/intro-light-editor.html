@@ -291,6 +291,18 @@ const LIGHT_KINDS = {
     bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)',
     anim: 'introNeonLive 1.8s ease-in-out infinite',
   },
+  'neon-red-b': {
+    name: 'Red neon (slow flicker)',
+    edge: '#ff3c5a',
+    bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)',
+    anim: 'introNeonLive 2.4s ease-in-out -0.9s infinite',
+  },
+  'neon-red-c': {
+    name: 'Red neon (fast flicker)',
+    edge: '#ff3c5a',
+    bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)',
+    anim: 'introNeonLive 1.5s ease-in-out -1.7s infinite',
+  },
   'strobe-red': {
     name: 'Strobe red',
     edge: '#ff3c78',
@@ -353,10 +365,12 @@ const BEAT_DEFAULTS = [
     { id: 'tv',      kind: 'tv-blue',      t: 38, l: 32, w: 18, h: 18 },
     { id: 'hallway', kind: 'warm-hallway', t: 5,  l: 48, w: 28, h: 80 },
   ],
-  // bar
+  // bar — three desynced red neons + a cool street tint
   [
-    { id: 'neon', kind: 'neon-red', t: 8, l: 28, w: 44, h: 22 },
-    { id: 'cool', kind: 'tint-cool', t: 0, l: 0, w: 100, h: 100 },
+    { id: 'neon1', kind: 'neon-red',   t: 73.09, l: 27.9,  w: 53.07, h: 23.13 },
+    { id: 'cool',  kind: 'tint-cool',  t: 0.24,  l: -0.16, w: 100,   h: 100 },
+    { id: 'neon2', kind: 'neon-red-b', t: 14.86, l: 34.62, w: 28.85, h: 22.16 },
+    { id: 'neon3', kind: 'neon-red-c', t: 5.63,  l: 24.92, w: 6.72,  h: 34.86 },
   ],
   // wild
   [
