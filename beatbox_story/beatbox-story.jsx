@@ -6730,10 +6730,40 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
         Skip →
       </button>
       <div className="max-w-md w-full space-y-4">
-        {beat?.image ? (
-          <div key={beatIdx} style={{ animation: fade }}>
-            <img src={beat.image} alt="" className="w-full block border border-stone-800"
-              style={{ imageRendering: 'pixelated', filter: beat.filter || 'none', animation: beat.imageAnim || 'none' }} />
+        {/* Whether the active beat has art at all (image OR drawScene).
+            If any beat in this cutscene has an image, render a single
+            cross-fading stack so swapping between beats doesn't tear
+            down + recreate the <img> element (which is what was causing
+            the stutter — the browser had to re-fetch / re-decode on
+            every transition). */}
+        {beats?.some(b => b.image) ? (
+          <div className="relative w-full overflow-hidden border border-stone-800 bg-black"
+            style={{ aspectRatio: '16 / 9' }}>
+            {beats.map((b, i) => b.image ? (
+              <div key={i} className="absolute inset-0"
+                style={{
+                  opacity: i === beatIdx ? 1 : 0,
+                  transition: settings.reducedMotion ? 'none' : 'opacity 0.7s ease-in-out',
+                  pointerEvents: 'none',
+                }}>
+                <img src={b.image} alt="" className="block w-full h-full object-cover"
+                  style={{ imageRendering: 'pixelated', filter: b.filter || 'none', animation: b.imageAnim || 'none' }} />
+                {/* Per-beat lights overlay (animated CSS gradients on
+                    top of the painted scene). pointer-events:none so
+                    taps to advance still register on the wrapper. */}
+                {(b.lights || []).map((L, j) => (
+                  <div key={j} className="absolute" aria-hidden="true"
+                    style={{
+                      top: `${L.t}%`, left: `${L.l}%`,
+                      width: `${L.w}%`, height: `${L.h}%`,
+                      background: L.bg,
+                      animation: L.anim || 'none',
+                      mixBlendMode: 'screen',
+                      pointerEvents: 'none',
+                    }} />
+                ))}
+              </div>
+            ) : null)}
           </div>
         ) : beat?.drawScene && (
           <div key={beatIdx} style={{ animation: fade }}>
@@ -6766,12 +6796,55 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, onCo
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        /* Used by the intro's "rest of the night is a blur" beat — pulses
-           the brightness/saturation of an already-blurred image to read
-           as memory flashing past rather than a single still. */
+        /* Generic soft breathe (sun shafts, warm bulbs). */
+        @keyframes introBreathe {
+          0%, 100% { opacity: 0.78; }
+          50%      { opacity: 1; }
+        }
+        /* Cyan office screen — slow, calm, dead-eyed. */
+        @keyframes introCyanPulse {
+          0%, 100% { opacity: 0.85; }
+          50%      { opacity: 1; }
+        }
+        /* PC monitor / phone glow with a subtle flicker. */
+        @keyframes introMonitor {
+          0%, 100% { opacity: 0.9; }
+          40%      { opacity: 1; }
+          42%      { opacity: 0.5; }
+          44%      { opacity: 1; }
+        }
+        /* TV blue stepped flicker — matches the apartment TV. */
+        @keyframes introTvFlicker {
+          0%   { opacity: 0.6; }
+          16%  { opacity: 0.95; }
+          33%  { opacity: 0.7; }
+          50%  { opacity: 1; }
+          66%  { opacity: 0.75; }
+          83%  { opacity: 0.9; }
+          100% { opacity: 0.6; }
+        }
+        /* LIVE neon — same rhythm as nightNeon. */
+        @keyframes introNeonLive {
+          0%, 6%, 10%, 100% { opacity: 1; }
+          4%, 8% { opacity: 0.35; }
+          50%    { opacity: 0.85; }
+          52%    { opacity: 0.4; }
+          54%    { opacity: 0.85; }
+        }
+        /* "Rest of the night is a blur" — pulses the bar shot's filter
+           so the moment reads as memory flashing past, not a still. */
         @keyframes introNightStrobe {
           0%, 100% { filter: blur(4px) brightness(1.4) saturate(1.6) contrast(1.1); }
           50%      { filter: blur(6px) brightness(1.8) saturate(2.0) contrast(1.2); }
+        }
+        /* Two nightclub strobes offset from each other for the wild beat. */
+        @keyframes introStrobeA {
+          0%, 60%, 100% { opacity: 0; }
+          30%           { opacity: 1; }
+        }
+        @keyframes introStrobeB {
+          0%, 100% { opacity: 0; }
+          50%      { opacity: 1; }
         }
       `}</style>
     </div>
@@ -11112,53 +11185,96 @@ const drawDancer = (ctx, x, y, look, frame, mirrored, scaleHint) => {
 };
 
 const INTRO_BEATS = [
-  { image: 'intro-1-office.png', lines: [
-    'three years at the desk.',
-    'one HR meeting. one cardboard box.',
-    "they said the AI's just faster.",
-  ]},
-  { image: 'intro-2-bedroom.png', lines: [
-    "rent's due sunday.",
-    'the savings ran out tuesday.',
-    "you do the math twice. it doesn't get better.",
-  ]},
-  { image: 'intro-3-phone.png', lines: [
-    "you've been beatboxing in your bedroom since you were fourteen.",
-    'never on a stage. never for money.',
-    '312 followers. half of them bots.',
-  ]},
-  { image: 'intro-4-mirror.png', lines: [
-    'the parents would take you back.',
-    "that's the worst part — they would.",
-    'so you tell yourself: not yet.',
-  ]},
-  { image: 'intro-5-door.png', lines: [
-    'practice every day.',
-    'busk till the jar fills up.',
-    'and tonight — tonight you go to the cypher.',
-  ]},
-  // Arrives at the bar — the LIVE neon, deciding to step in.
-  { image: 'intro-6-bar.png', lines: [
-    'the LIVE sign hums.',
-    'you stand on the wet pavement a second too long.',
-    "the door's right there.",
-  ]},
-  // The night gets wild — same bar shot, blurred + brightened so it
-  // reads like memory in pieces rather than a fresh scene.
+  // Office. Cold blue overlay sets corporate-dread mood; the AI screen
+  // pulses cyan on the back wall.
+  { image: 'intro-1-office.png',
+    lights: [
+      { t: 6, l: 56, w: 38, h: 28, bg: 'radial-gradient(ellipse at 50% 50%, rgba(120,190,255,0.55), rgba(120,190,255,0) 65%)', anim: 'introCyanPulse 2.6s ease-in-out infinite' },
+      { t: 0, l: 0,  w: 100, h: 100, bg: 'linear-gradient(180deg, rgba(80,110,160,0.18), rgba(40,60,100,0.10))', anim: 'none' },
+    ],
+    lines: [
+      'three years at the desk.',
+      'one HR meeting. one cardboard box.',
+      "they said the AI's just faster.",
+    ]},
+  // Bedroom. Sunset warmth from the window + dim phone screen.
+  { image: 'intro-2-bedroom.png',
+    lights: [
+      { t: 2,  l: 70, w: 28, h: 50, bg: 'radial-gradient(ellipse at 30% 30%, rgba(255,160,80,0.45), rgba(255,160,80,0) 70%)', anim: 'introBreathe 6s ease-in-out infinite' },
+      { t: 42, l: 36, w: 10, h: 8, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.65), rgba(150,210,255,0) 75%)', anim: 'introMonitor 1.6s ease-in-out infinite' },
+    ],
+    lines: [
+      "rent's due sunday.",
+      'the savings ran out tuesday.',
+      "you do the math twice. it doesn't get better.",
+    ]},
+  // Close-up phone. Big cyan glow off the screen.
+  { image: 'intro-3-phone.png',
+    lights: [
+      { t: 12, l: 36, w: 38, h: 70, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.45), rgba(150,210,255,0) 75%)', anim: 'introMonitor 2.2s ease-in-out infinite' },
+    ],
+    lines: [
+      "you've been beatboxing in your bedroom since you were fourteen.",
+      'never on a stage. never for money.',
+      '312 followers. half of them bots.',
+    ]},
+  // Mirror. Warm bulb cone above the mirror.
+  { image: 'intro-4-mirror.png',
+    lights: [
+      { t: 0,  l: 32, w: 36, h: 30, bg: 'radial-gradient(ellipse at 50% 0%, rgba(255,225,170,0.55), rgba(255,225,170,0) 75%)', anim: 'introBreathe 4s ease-in-out infinite' },
+    ],
+    lines: [
+      'the parents would take you back.',
+      "that's the worst part — they would.",
+      'so you tell yourself: not yet.',
+    ]},
+  // Door. Blue TV flicker + warm hallway light through the open door.
+  { image: 'intro-5-door.png',
+    lights: [
+      { t: 38, l: 32, w: 18, h: 18, bg: 'radial-gradient(ellipse at center, rgba(120,180,255,0.7), rgba(120,180,255,0) 75%)', anim: 'introTvFlicker 1.2s steps(6) infinite' },
+      { t: 5,  l: 48, w: 28, h: 80, bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,230,180,0.30), rgba(255,230,180,0) 70%)', anim: 'introBreathe 5s ease-in-out infinite' },
+    ],
+    lines: [
+      'practice every day.',
+      'busk till the jar fills up.',
+      'and tonight — tonight you go to the cypher.',
+    ]},
+  // Bar. Red LIVE neon with a soft halo, plus a cool street tint.
+  { image: 'intro-6-bar.png',
+    lights: [
+      { t: 8,  l: 28, w: 44, h: 22, bg: 'radial-gradient(ellipse at 50% 50%, rgba(255,60,90,0.55), rgba(255,60,90,0) 70%)', anim: 'introNeonLive 1.8s ease-in-out infinite' },
+      { t: 0,  l: 0,  w: 100, h: 100, bg: 'linear-gradient(180deg, rgba(40,70,130,0.18), rgba(20,30,60,0.10))', anim: 'none' },
+    ],
+    lines: [
+      'the LIVE sign hums.',
+      'you stand on the wet pavement a second too long.',
+      "the door's right there.",
+    ]},
+  // The wild middle of the night — bar shot blurred + strobed. Drop in
+  // extra coloured strobes so the moment reads as nightclub chaos.
   { image: 'intro-6-bar.png',
     filter: 'blur(4px) brightness(1.4) saturate(1.6) contrast(1.1)',
     imageAnim: 'introNightStrobe 1.6s ease-in-out infinite',
+    lights: [
+      { t: 0,  l: 0,  w: 60,  h: 100, bg: 'radial-gradient(circle at 30% 50%, rgba(255,60,120,0.45), rgba(255,60,120,0) 60%)', anim: 'introStrobeA 0.4s steps(3) infinite' },
+      { t: 0,  l: 40, w: 60,  h: 100, bg: 'radial-gradient(circle at 70% 50%, rgba(100,140,255,0.45), rgba(100,140,255,0) 60%)', anim: 'introStrobeB 0.5s steps(3) infinite' },
+    ],
     lines: [
       "inside is louder than you expected.",
       'cyphers. beers. cheers. someone hands you the mic.',
       "you don't remember saying yes.",
     ]},
-  // Morning after — wakes up on the couch. Game starts here.
-  { image: 'intro-7-couch.png', lines: [
-    'morning. couch. head pounding.',
-    'the cypher was real.',
-    "and tonight... you go again.",
-  ]},
+  // Couch morning. Warm window stripe + the TV still on.
+  { image: 'intro-7-couch.png',
+    lights: [
+      { t: 5,  l: 38, w: 22, h: 60, bg: 'radial-gradient(ellipse at 50% 30%, rgba(255,210,140,0.40), rgba(255,210,140,0) 75%)', anim: 'introBreathe 7s ease-in-out infinite' },
+      { t: 12, l: 6,  w: 18, h: 30, bg: 'radial-gradient(ellipse at center, rgba(150,210,255,0.40), rgba(150,210,255,0) 75%)', anim: 'introTvFlicker 1.4s steps(6) infinite' },
+    ],
+    lines: [
+      'morning. couch. head pounding.',
+      'the cypher was real.',
+      "and tonight... you go again.",
+    ]},
 ];
 
 // ============ TUTORIAL POP-UPS ============
