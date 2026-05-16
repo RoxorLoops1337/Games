@@ -198,7 +198,7 @@
         handle to resize · arrow keys nudge selected by 0.5% ·
         Shift+arrows by 2% · Delete removes selected.
         Per-beat auto-save. Reset only wipes the current beat.
-        <span style="color:#fbbf24;">build 2026-05-15-c</span> — if you
+        <span style="color:#fbbf24;">build 2026-05-15-d</span> — if you
         don't see this line, hard-refresh (Cmd/Ctrl+Shift+R).
       </div>
     </header>
@@ -236,7 +236,10 @@
     <div class="output">
       <h2>Paste-ready snippet</h2>
       <textarea id="out" readonly></textarea>
-      <button onclick="copyOut()" class="primary" style="margin-top:6px;padding:8px;font-size:11px;border:none;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;background:#fbbf24;color:#0c0a09;font-family:inherit;">Copy to clipboard</button>
+      <div style="display:flex; gap:6px; margin-top:6px;">
+        <button onclick="copyOut()" class="primary" style="flex:1;padding:8px;font-size:11px;border:none;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;background:#44403c;color:#fafaf9;font-family:inherit;">Copy this beat</button>
+        <button onclick="copyAllBeats()" class="primary" style="flex:1;padding:8px;font-size:11px;border:none;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;background:#fbbf24;color:#0c0a09;font-family:inherit;">Copy ALL 8 beats</button>
+      </div>
     </div>
   </aside>
 </div>
@@ -509,18 +512,22 @@ function renderInfo() {
   });
 }
 
-function renderOutput() {
+// Format one beat's light array into a paste-ready `[ ... ]` block.
+function formatLights(lightArr) {
   const round = v => Math.round(v * 100) / 100;
-  let out = '// Paste these into INTRO_BEATS[' + activeBeat + '].lights\n';
-  out += 'lights: [\n';
-  for (const L of lights) {
+  let out = '[\n';
+  for (const L of (lightArr || [])) {
     const k = LIGHT_KINDS[L.kind]; if (!k) continue;
-    const bg = JSON.stringify(k.bg);
-    const anim = JSON.stringify(k.anim);
     out += '  { t: ' + round(L.t) + ', l: ' + round(L.l) + ', w: ' + round(L.w) + ', h: ' + round(L.h)
-        + ', bg: ' + bg + ', anim: ' + anim + ' },\n';
+        + ', bg: ' + JSON.stringify(k.bg) + ', anim: ' + JSON.stringify(k.anim) + ' },\n';
   }
-  out += ']\n';
+  out += ']';
+  return out;
+}
+
+function renderOutput() {
+  let out = '// Paste these into INTRO_BEATS[' + activeBeat + '].lights\n';
+  out += 'lights: ' + formatLights(lights) + '\n';
   document.getElementById('out').value = out;
 }
 
@@ -529,6 +536,24 @@ function copyOut() {
   out.select();
   document.execCommand('copy');
   out.blur();
+}
+
+// Export EVERY beat at once. Reads each beat's saved layout (or its
+// built-in default if never edited); the active beat uses the live
+// in-memory lights. Drops the whole thing in the textarea + clipboard
+// so all 8 beats can be applied in one paste.
+function copyAllBeats() {
+  let out = '// === ALL 8 INTRO BEAT LIGHTS — apply each block to INTRO_BEATS[N].lights ===\n\n';
+  for (let i = 0; i < BEATS.length; i++) {
+    const arr = (i === activeBeat) ? lights : (loadBeat(i) || BEAT_DEFAULTS[i] || []);
+    out += '// INTRO_BEATS[' + i + '].lights  (' + BEATS[i].name + ')\n';
+    out += formatLights(arr) + '\n\n';
+  }
+  const ta = document.getElementById('out');
+  ta.value = out;
+  ta.select();
+  document.execCommand('copy');
+  ta.blur();
 }
 
 function switchBeat(idx) {
