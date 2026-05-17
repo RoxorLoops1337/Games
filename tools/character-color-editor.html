@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beatbox Story · Character Color Lab</title>
+<link rel="stylesheet" href="editor-common.css">
+<style>
+  /* Preview canvas sits centred on a checkerboard so transparency reads. */
+  .preview-wrap {
+    position: relative;
+    border: 2px solid #44403c;
+    box-shadow: 0 0 32px rgba(0,0,0,0.6);
+    background:
+      repeating-conic-gradient(#1c1917 0% 25%, #14110f 0% 50%) 50% / 24px 24px;
+    image-rendering: pixelated;
+    max-width: 90vw; max-height: 92vh;
+  }
+  .preview-wrap canvas {
+    display: block;
+    image-rendering: pixelated;
+    max-width: 90vw; max-height: 92vh;
+  }
+  .empty-hint {
+    color: #78716c; font-size: 12px; letter-spacing: 0.15em;
+    text-transform: uppercase; text-align: center; padding: 60px 30px;
+  }
+  /* Palette swatch grid */
+  .palette {
+    padding: 8px 12px; border-bottom: 1px solid #292524;
+    display: flex; flex-wrap: wrap; gap: 4px;
+  }
+  .swatch {
+    width: 26px; height: 26px;
+    border: 2px solid #292524;
+    cursor: pointer; position: relative;
+    box-sizing: border-box;
+  }
+  .swatch.skin    { border-color: #f59e0b; }
+  .swatch.clothes { border-color: #38bdf8; }
+  .swatch .tag {
+    position: absolute; bottom: -1px; right: -1px;
+    font-size: 8px; font-weight: bold;
+    background: #0c0a09; color: #fff;
+    padding: 0 2px; line-height: 1.4;
+  }
+  .swatch.skin .tag    { background: #f59e0b; color: #0c0a09; }
+  .swatch.clothes .tag { background: #38bdf8; color: #0c0a09; }
+  /* Group slider sections */
+  .group {
+    padding: 10px 12px; border-bottom: 1px solid #292524;
+  }
+  .group h3 {
+    margin: 0 0 8px; font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .group h3.skin    { color: #f59e0b; }
+  .group h3.clothes { color: #38bdf8; }
+  .slider-row {
+    display: flex; align-items: center; gap: 8px; margin: 6px 0;
+  }
+  .slider-row label {
+    width: 64px; font-size: 9px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #a8a29e;
+  }
+  .slider-row input[type=range] { flex: 1; accent-color: #fbbf24; }
+  .slider-row .val {
+    width: 44px; text-align: right; font-family: monospace;
+    font-size: 11px; color: #fafaf9;
+  }
+  .file-label {
+    display: block; background: #fbbf24; color: #0c0a09;
+    text-align: center; padding: 8px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    cursor: pointer; font-weight: bold;
+  }
+  .file-label:hover { background: #fcd34d; }
+  .file-label input { display: none; }
+  .hint { font-size: 9px; color: #78716c; line-height: 1.4; padding: 2px 0; }
+</style>
+</head>
+<body>
+<button class="gear-toggle" id="gearBtn" onclick="togglePane()" title="Show / hide settings" aria-label="Toggle settings">⚙</button>
+<div class="root">
+  <div class="canvas-pane" id="canvasPane">
+    <div class="empty-hint" id="emptyHint">Upload a character PNG to begin →</div>
+    <div class="preview-wrap" id="previewWrap" style="display:none;">
+      <canvas id="preview"></canvas>
+    </div>
+  </div>
+  <aside class="side-pane" id="side">
+    <header>
+      <h1>🎨 Character Colors</h1>
+      <div class="sub">
+        Upload a character PNG. Click each colour swatch to tag it
+        SKIN or CLOTHES (click again to cycle / clear). Then use the
+        hue / saturation / lightness sliders to recolour each group —
+        relative shading is preserved so pixel-art shadows survive.
+      </div>
+    </header>
+
+    <div class="nav-strip">
+      <span>Other tools:</span>
+      <a href="./light-editor.html">💡 Lights</a>
+      <a href="./hotspot-editor.html">🎯 Hotspots</a>
+      <a href="./cat-path-editor.html">🐈 Cat path</a>
+      <a href="./character-editor.html">👤 Characters</a>
+      <a href="./intro-light-editor.html">🎬 Intro lights</a>
+    </div>
+
+    <div class="controls">
+      <label class="file-label">
+        Upload character PNG
+        <input type="file" id="upload" accept="image/png,image/jpeg,image/webp">
+      </label>
+      <button onclick="exportPng()" id="exportBtn">⬇ Export recoloured PNG</button>
+      <button onclick="resetColors()">Reset colours</button>
+    </div>
+
+    <div class="palette" id="palette">
+      <span class="hint">Palette appears here once an image is loaded.</span>
+    </div>
+
+    <div class="group" data-group="skin">
+      <h3 class="skin">Skin</h3>
+      <div class="slider-row">
+        <label>Hue</label>
+        <input type="range" min="-180" max="180" value="0" data-g="skin" data-k="hue">
+        <span class="val" id="skin-hue">0°</span>
+      </div>
+      <div class="slider-row">
+        <label>Saturation</label>
+        <input type="range" min="0" max="200" value="100" data-g="skin" data-k="sat">
+        <span class="val" id="skin-sat">100%</span>
+      </div>
+      <div class="slider-row">
+        <label>Lightness</label>
+        <input type="range" min="-50" max="50" value="0" data-g="skin" data-k="light">
+        <span class="val" id="skin-light">0</span>
+      </div>
+    </div>
+
+    <div class="group" data-group="clothes">
+      <h3 class="clothes">Clothes</h3>
+      <div class="slider-row">
+        <label>Hue</label>
+        <input type="range" min="-180" max="180" value="0" data-g="clothes" data-k="hue">
+        <span class="val" id="clothes-hue">0°</span>
+      </div>
+      <div class="slider-row">
+        <label>Saturation</label>
+        <input type="range" min="0" max="200" value="100" data-g="clothes" data-k="sat">
+        <span class="val" id="clothes-sat">100%</span>
+      </div>
+      <div class="slider-row">
+        <label>Lightness</label>
+        <input type="range" min="-50" max="50" value="0" data-g="clothes" data-k="light">
+        <span class="val" id="clothes-light">0</span>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script src="editor-common.js"></script>
+<script>
+// ---- state ----------------------------------------------------------
+let srcImageData = null;   // original ImageData (never mutated)
+let workCanvas = null;     // offscreen canvas at native resolution
+let workCtx = null;
+// "r,g,b" -> 'skin' | 'clothes' | null
+const tags = {};
+// per-group transform: hue (deg), sat (0..2 multiplier), light (-0.5..0.5)
+const groups = {
+  skin:    { hue: 0, sat: 1, light: 0 },
+  clothes: { hue: 0, sat: 1, light: 0 },
+};
+const STORAGE_KEY = 'bbs-char-color-lab-v1';
+
+// ---- colour maths ---------------------------------------------------
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0; const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r)      h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else                h = (r - g) / d + 4;
+    h /= 6;
+  }
+  return [h * 360, s, l];
+}
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  let r, g, b;
+  if (s === 0) { r = g = b = l; }
+  else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * q - l;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+// ---- image load -----------------------------------------------------
+function loadImage(src) {
+  const img = new Image();
+  img.onload = () => {
+    workCanvas = document.createElement('canvas');
+    workCanvas.width = img.naturalWidth;
+    workCanvas.height = img.naturalHeight;
+    workCtx = workCanvas.getContext('2d');
+    workCtx.imageSmoothingEnabled = false;
+    workCtx.drawImage(img, 0, 0);
+    srcImageData = workCtx.getImageData(0, 0, workCanvas.width, workCanvas.height);
+    // Size the visible preview — scale up so small sprites are big.
+    const preview = document.getElementById('preview');
+    const scale = Math.max(1, Math.floor(420 / Math.max(workCanvas.width, workCanvas.height)));
+    preview.width = workCanvas.width * scale;
+    preview.height = workCanvas.height * scale;
+    document.getElementById('emptyHint').style.display = 'none';
+    document.getElementById('previewWrap').style.display = 'block';
+    buildPalette();
+    recolour();
+    persist();
+  };
+  img.src = src;
+}
+
+// ---- palette extraction --------------------------------------------
+function buildPalette() {
+  const data = srcImageData.data;
+  const counts = new Map();
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 8) continue;            // skip (near-)transparent
+    const key = data[i] + ',' + data[i+1] + ',' + data[i+2];
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  // Most-used colours first; cap the grid so a noisy image stays usable.
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 96);
+  const wrap = document.getElementById('palette');
+  wrap.innerHTML = '';
+  if (counts.size > 96) {
+    const n = document.createElement('span');
+    n.className = 'hint';
+    n.textContent = counts.size + ' colours — showing the 96 most common. (Tighter pixel-art palettes tag faster.)';
+    wrap.appendChild(n);
+  }
+  for (const [key] of sorted) {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (tags[key] ? ' ' + tags[key] : '');
+    sw.style.background = 'rgb(' + key + ')';
+    sw.dataset.key = key;
+    sw.title = 'rgb(' + key + ') — click to tag';
+    if (tags[key]) {
+      const tg = document.createElement('span');
+      tg.className = 'tag';
+      tg.textContent = tags[key] === 'skin' ? 'S' : 'C';
+      sw.appendChild(tg);
+    }
+    sw.onclick = () => {
+      // cycle: untagged -> skin -> clothes -> untagged
+      const cur = tags[key];
+      tags[key] = cur === undefined || cur === null ? 'skin'
+                : cur === 'skin' ? 'clothes' : null;
+      if (!tags[key]) delete tags[key];
+      buildPalette();
+      recolour();
+      persist();
+    };
+    wrap.appendChild(sw);
+  }
+}
+
+// ---- recolour -------------------------------------------------------
+function recolour() {
+  if (!srcImageData) return;
+  const src = srcImageData.data;
+  const out = workCtx.createImageData(srcImageData.width, srcImageData.height);
+  const dst = out.data;
+  for (let i = 0; i < src.length; i += 4) {
+    const r = src[i], g = src[i+1], b = src[i+2], a = src[i+3];
+    dst[i+3] = a;
+    if (a < 8) { dst[i] = r; dst[i+1] = g; dst[i+2] = b; continue; }
+    const grp = tags[r + ',' + g + ',' + b];
+    if (!grp) { dst[i] = r; dst[i+1] = g; dst[i+2] = b; continue; }
+    const t = groups[grp];
+    let [h, s, l] = rgbToHsl(r, g, b);
+    h += t.hue;
+    s = Math.max(0, Math.min(1, s * t.sat));
+    l = Math.max(0, Math.min(1, l + t.light));
+    const [nr, ng, nb] = hslToRgb(h, s, l);
+    dst[i] = nr; dst[i+1] = ng; dst[i+2] = nb;
+  }
+  workCtx.putImageData(out, 0, 0);
+  // Blit the native-res result onto the scaled-up preview canvas.
+  const preview = document.getElementById('preview');
+  const pctx = preview.getContext('2d');
+  pctx.imageSmoothingEnabled = false;
+  pctx.clearRect(0, 0, preview.width, preview.height);
+  pctx.drawImage(workCanvas, 0, 0, preview.width, preview.height);
+}
+
+// ---- slider wiring --------------------------------------------------
+function fmt(g, k, raw) {
+  if (k === 'hue')   return raw + '°';
+  if (k === 'sat')   return raw + '%';
+  return (raw > 0 ? '+' : '') + raw;
+}
+document.querySelectorAll('input[type=range]').forEach(inp => {
+  inp.addEventListener('input', () => {
+    const g = inp.dataset.g, k = inp.dataset.k;
+    const raw = parseInt(inp.value, 10);
+    document.getElementById(g + '-' + k).textContent = fmt(g, k, raw);
+    if (k === 'hue')        groups[g].hue = raw;
+    else if (k === 'sat')   groups[g].sat = raw / 100;
+    else                    groups[g].light = raw / 100;
+    recolour();
+    persist();
+  });
+});
+
+function syncSliders() {
+  document.querySelectorAll('input[type=range]').forEach(inp => {
+    const g = inp.dataset.g, k = inp.dataset.k;
+    let raw;
+    if (k === 'hue')      raw = groups[g].hue;
+    else if (k === 'sat') raw = Math.round(groups[g].sat * 100);
+    else                  raw = Math.round(groups[g].light * 100);
+    inp.value = raw;
+    document.getElementById(g + '-' + k).textContent = fmt(g, k, raw);
+  });
+}
+
+function resetColors() {
+  groups.skin = { hue: 0, sat: 1, light: 0 };
+  groups.clothes = { hue: 0, sat: 1, light: 0 };
+  syncSliders();
+  recolour();
+  persist();
+}
+
+function exportPng() {
+  if (!workCanvas) { alert('Upload a character first.'); return; }
+  const a = document.createElement('a');
+  a.download = 'character-recoloured.png';
+  a.href = workCanvas.toDataURL('image/png');
+  a.click();
+}
+
+// ---- persistence (image + tags + sliders survive a reload) ----------
+function persist() {
+  try {
+    if (!workCanvas) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      img: workCanvas.toDataURL('image/png'),
+      tags, groups,
+    }));
+  } catch (e) { /* image too big for localStorage — skip */ }
+}
+function restore() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    Object.assign(tags, s.tags || {});
+    if (s.groups) { groups.skin = s.groups.skin; groups.clothes = s.groups.clothes; }
+    syncSliders();
+    if (s.img) loadImage(s.img);
+  } catch (e) {}
+}
+
+document.getElementById('upload').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  // New image — drop the old tags, they referenced different colours.
+  for (const k of Object.keys(tags)) delete tags[k];
+  const reader = new FileReader();
+  reader.onload = () => loadImage(reader.result);
+  reader.readAsDataURL(file);
+});
+
+restore();
+</script>
+</body>
+</html>
