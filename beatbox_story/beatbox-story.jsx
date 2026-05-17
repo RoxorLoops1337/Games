@@ -13457,54 +13457,6 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         <div className="text-[10px] uppercase tracking-[0.3em] text-stone-500">Your home base</div>
       </div>
 
-      {/* Onboarding quest checklist — first-week goals, derived from existing
-          state. Disappears once all 6 are checked OR after day 7. */}
-      {(() => {
-        const f = char.storyFlags || {};
-        const items = [
-          { key: 'busk',    label: 'Busk in the park',          done: !!f.firstBusk,                              hint: '🎤 Park · Busk' },
-          { key: 'eat',     label: 'Eat from the kitchen',      done: !!f.firstAte || !!f.foxyFirstSafetyNet,     hint: '🍽 House · Kitchen' },
-          { key: 'sleep',   label: 'Sleep till morning',        done: (char.day || 1) > 1,                        hint: '🛋 House · Couch' },
-          { key: 'jam',     label: 'Jam with the cypher',       done: !!f.firstJam,                               hint: '🎶 Park · Jam' },
-          { key: 'openmic', label: 'Play your first open mic',  done: (char.openMicCount || 0) >= 1,              hint: '🎙 Bar · Tue/Wed/Thu' },
-          { key: 'shop',    label: 'Buy your first gear/sound', done: Object.keys(char.gear || {}).length >= 1, hint: '🛒 City · Shop' },
-        ];
-        const doneCount = items.filter(x => x.done).length;
-        const allDone = doneCount === items.length;
-        // Hide once all done & at least 1 day has passed since completion;
-        // also hide outright after day 7 to keep the panel out of veterans'
-        // way even if they skipped a step.
-        const hideAfterDay = 7;
-        if (allDone && (char.day || 1) > 2) return null;
-        if ((char.day || 1) > hideAfterDay) return null;
-        return (
-          <div className="border-2 border-stone-700 bg-gradient-to-br from-amber-950/30 to-stone-900/40 px-3 py-2">
-            <div className="flex items-center justify-between mb-1">
-              <div className="text-[10px] uppercase tracking-[0.3em] text-amber-400" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                FIRST WEEK · {doneCount}/{items.length}
-              </div>
-              <div className="text-[9px] uppercase tracking-widest text-stone-500">
-                {allDone ? '✓ tutorial complete' : 'getting started'}
-              </div>
-            </div>
-            <div className="space-y-0.5">
-              {items.map(x => (
-                <div key={x.key} className="flex items-center gap-2 text-[11px]">
-                  <span className={`inline-block w-3 text-center ${x.done ? 'text-amber-400' : 'text-stone-600'}`}>
-                    {x.done ? '✓' : '☐'}
-                  </span>
-                  <span className={`flex-1 ${x.done ? 'text-stone-500 line-through' : 'text-stone-200'}`}>
-                    {x.label}
-                  </span>
-                  {!x.done && (
-                    <span className="text-[9px] uppercase tracking-widest text-stone-600">{x.hint}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Foxy roommate panel — tap to open a small interaction modal. */}
       <button onClick={() => setFoxyOpen(true)}
@@ -13526,15 +13478,29 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       </button>
       {foxyOpen && <FoxyModal char={char} setChar={setChar} showToast={showToast} onClose={() => setFoxyOpen(false)} />}
 
-      {/* Challenges — collapsed to a single compact button that opens a
-          popup, instead of two always-on panels cluttering the map.
-          The button glows amber when something is ready to claim. */}
+      {/* Goals — a single compact button opening a popup that holds the
+          first-week onboarding checklist + the daily & weekly
+          challenges, instead of three always-on panels on the map. */}
       {(() => {
         const dc = char.dailyChallenge;
         const wc = char.weeklyChallenge;
         const ddef = dc && DAILY_CHALLENGES.find(x => x.id === dc.id);
         const wdef = wc && WEEKLY_CHALLENGES.find(x => x.id === wc.id);
-        if (!ddef && !wdef) return null;
+        // First-week onboarding checklist — shown for the opening week.
+        const f = char.storyFlags || {};
+        const checkItems = [
+          { key: 'busk',    label: 'Busk in the park',          done: !!f.firstBusk,                          hint: '🎤 Park · Busk' },
+          { key: 'eat',     label: 'Eat from the kitchen',      done: !!f.firstAte || !!f.foxyFirstSafetyNet, hint: '🍽 House · Kitchen' },
+          { key: 'sleep',   label: 'Sleep till morning',        done: (char.day || 1) > 1,                    hint: '🛋 House · Couch' },
+          { key: 'jam',     label: 'Jam with the cypher',       done: !!f.firstJam,                           hint: '🎶 Park · Jam' },
+          { key: 'openmic', label: 'Play your first open mic',  done: (char.openMicCount || 0) >= 1,          hint: '🎙 Bar · Tue/Wed/Thu' },
+          { key: 'shop',    label: 'Buy your first gear/sound', done: Object.keys(char.gear || {}).length >= 1, hint: '🛒 City · Shop' },
+        ];
+        const checkDone = checkItems.filter(x => x.done).length;
+        const checkAll = checkDone === checkItems.length;
+        // Same visibility rule as the old standalone panel.
+        const checklistVisible = !((checkAll && (char.day || 1) > 2) || (char.day || 1) > 7);
+        if (!checklistVisible && !ddef && !wdef) return null;
         const dProg = ddef ? (char.daily?.[ddef.counter] || 0) : 0;
         const wProg = wdef ? (char.weekly?.[wdef.counter] || 0) : 0;
         const dMet = !!ddef && dProg >= ddef.target;
@@ -13611,19 +13577,21 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                           : 'border-stone-800 bg-stone-900/30 hover:border-stone-700'}`}>
               <span className={`text-[11px] uppercase tracking-[0.25em] ${claimable ? 'text-amber-400' : 'text-stone-400'}`}
                 style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                🎯 Challenges
+                🎯 Goals
               </span>
               <span className={`text-[9px] uppercase tracking-widest ${claimable ? 'text-amber-400 font-bold' : 'text-stone-500'}`}>
                 {claimable
                   ? `${claimable} ready to claim →`
-                  : `${ddef ? `daily ${dProg}/${ddef.target}` : ''}${ddef && wdef ? ' · ' : ''}${wdef ? `weekly ${wProg}/${wdef.target}` : ''}`}
+                  : checklistVisible
+                    ? `first week ${checkDone}/${checkItems.length} →`
+                    : `${ddef ? `daily ${dProg}/${ddef.target}` : ''}${ddef && wdef ? ' · ' : ''}${wdef ? `weekly ${wProg}/${wdef.target}` : ''}`}
               </span>
             </button>
             {showHint && (
               <div className="flex items-start gap-1 text-[9px] uppercase tracking-wider text-amber-400/90 px-1 -mt-1"
                 style={{ animation: 'none' }}>
                 <span aria-hidden="true">↑</span>
-                <span>Your daily &amp; weekly challenges live here — tap for bonus cash &amp; fans.</span>
+                <span>Your goals &amp; challenges live here — tap for tasks and bonus cash.</span>
               </div>
             )}
             {challengesOpen && (
@@ -13635,13 +13603,46 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
                   <div className="sticky top-0 z-10 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
                     <div className="text-amber-500 text-sm tracking-widest uppercase"
                       style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                      🎯 Challenges
+                      🎯 Goals
                     </div>
                     <button onClick={() => setChallengesOpen(false)}
                       className="text-stone-400 hover:text-amber-500 text-2xl leading-none w-8 h-8 flex items-center justify-center"
                       aria-label="Close">×</button>
                   </div>
                   <div className="p-3 space-y-3">
+                    {checklistVisible && (
+                      <div className="border-2 border-stone-700 bg-gradient-to-br from-amber-950/30 to-stone-900/40 px-3 py-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-[10px] uppercase tracking-[0.3em] text-amber-400"
+                            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                            FIRST WEEK · {checkDone}/{checkItems.length}
+                          </div>
+                          <div className="text-[9px] uppercase tracking-widest text-stone-500">
+                            {checkAll ? '✓ tutorial complete' : 'getting started'}
+                          </div>
+                        </div>
+                        <div className="space-y-0.5">
+                          {checkItems.map(x => (
+                            <div key={x.key} className="flex items-center gap-2 text-[11px]">
+                              <span className={`inline-block w-3 text-center ${x.done ? 'text-amber-400' : 'text-stone-600'}`}>
+                                {x.done ? '✓' : '☐'}
+                              </span>
+                              <span className={`flex-1 ${x.done ? 'text-stone-500 line-through' : 'text-stone-200'}`}>
+                                {x.label}
+                              </span>
+                              {!x.done && (
+                                <span className="text-[9px] uppercase tracking-widest text-stone-600">{x.hint}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {!ddef && !wdef && (
+                      <div className="text-[10px] uppercase tracking-widest text-stone-600 text-center py-1">
+                        Daily &amp; weekly challenges unlock after your first sleep.
+                      </div>
+                    )}
                     {ddef && card('DAILY CHALLENGE',
                       'text-[9px] uppercase tracking-[0.3em] text-amber-500',
                       ddef, dProg, dMet, dc.claimed, claimDaily, '',
