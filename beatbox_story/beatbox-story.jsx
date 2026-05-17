@@ -3467,6 +3467,25 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
 
   // Synthesize a soft pleasant reference tone.
   // Uses fundamental + 1st harmonic (octave) at lower amplitude — gives an organ-like timbre.
+  // Build the 3-oscillator reference voice — fundamental + octave (soft)
+  // + fifth harmonic (very soft, organ-like warmth) — feeding `dest`,
+  // sounding from t0 to t1. Returns the oscillators so callers can
+  // track/stop them. Shared by the single-tone and sequence players.
+  const buildRefVoice = (ctx, freq, dest, t0, t1) => {
+    const mk = (mult, gain) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq * mult;
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      osc.connect(g).connect(dest);
+      osc.start(t0);
+      osc.stop(t1 + 0.05);
+      return osc;
+    };
+    return [mk(1, 1.0), mk(2, 0.18), mk(3, 0.06)];
+  };
+
   const playReferenceTone = (freq, durationSec = 2.0) => {
     const ctx = audioCtxRef.current;
     if (!ctx) return;
@@ -3482,37 +3501,7 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
     masterGain.gain.linearRampToValueAtTime(0.0001, t + durationSec);
     masterGain.connect(ctx.destination);
 
-    // Fundamental
-    const osc1 = ctx.createOscillator();
-    osc1.type = 'sine';
-    osc1.frequency.value = freq;
-    const g1 = ctx.createGain();
-    g1.gain.value = 1.0;
-    osc1.connect(g1).connect(masterGain);
-    osc1.start(t);
-    osc1.stop(t + durationSec + 0.05);
-
-    // Octave harmonic (softer)
-    const osc2 = ctx.createOscillator();
-    osc2.type = 'sine';
-    osc2.frequency.value = freq * 2;
-    const g2 = ctx.createGain();
-    g2.gain.value = 0.18;
-    osc2.connect(g2).connect(masterGain);
-    osc2.start(t);
-    osc2.stop(t + durationSec + 0.05);
-
-    // Fifth harmonic (very soft, gives warmth)
-    const osc3 = ctx.createOscillator();
-    osc3.type = 'sine';
-    osc3.frequency.value = freq * 3;
-    const g3 = ctx.createGain();
-    g3.gain.value = 0.06;
-    osc3.connect(g3).connect(masterGain);
-    osc3.start(t);
-    osc3.stop(t + durationSec + 0.05);
-
-    refTonesRef.current = [osc1, osc2, osc3];
+    refTonesRef.current = buildRefVoice(ctx, freq, masterGain, t, t + durationSec);
   };
 
   // Schedule a sequence of reference tones back-to-back via WebAudio's
@@ -3534,22 +3523,7 @@ const PitchTuner = ({ onAccuracyUpdate, evaluateEveryMs = 2500, active = true,
       masterGain.gain.setValueAtTime(0.18, Math.max(t0 + 0.05, t1 - 0.10));
       masterGain.gain.linearRampToValueAtTime(0.0001, t1);
       masterGain.connect(ctx.destination);
-      const osc1 = ctx.createOscillator();
-      osc1.type = 'sine'; osc1.frequency.value = note.freq;
-      const g1 = ctx.createGain(); g1.gain.value = 1.0;
-      osc1.connect(g1).connect(masterGain);
-      osc1.start(t0); osc1.stop(t1 + 0.05);
-      const osc2 = ctx.createOscillator();
-      osc2.type = 'sine'; osc2.frequency.value = note.freq * 2;
-      const g2 = ctx.createGain(); g2.gain.value = 0.18;
-      osc2.connect(g2).connect(masterGain);
-      osc2.start(t0); osc2.stop(t1 + 0.05);
-      const osc3 = ctx.createOscillator();
-      osc3.type = 'sine'; osc3.frequency.value = note.freq * 3;
-      const g3 = ctx.createGain(); g3.gain.value = 0.06;
-      osc3.connect(g3).connect(masterGain);
-      osc3.start(t0); osc3.stop(t1 + 0.05);
-      allOscs.push(osc1, osc2, osc3);
+      allOscs.push(...buildRefVoice(ctx, note.freq, masterGain, t0, t1));
     });
     refTonesRef.current = allOscs;
   };
@@ -11727,7 +11701,7 @@ export default function BeatboxStory() {
           </div>
           </ScreenErrorBoundary>
         </div>
-        <style>{`@keyframes screenFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+        <style>{`@keyframes screenFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
         {/* FOOTER NAV */}
         {char && char.created && screen !== 'battle' && screen !== 'create' && screen !== 'slots' && (
