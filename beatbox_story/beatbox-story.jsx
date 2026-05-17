@@ -13415,6 +13415,8 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   // ALL HOOKS MUST RUN BEFORE THE EARLY RETURNS BELOW.
   // Foxy modal open state.
   const [foxyOpen, setFoxyOpen] = useState(false);
+  // Challenges popup open state.
+  const [challengesOpen, setChallengesOpen] = useState(false);
   // Foxy's tip is recomputed whenever any of her trigger inputs changes
   // (hunger/energy/mood bins, day, story flags, etc). Stable between
   // unrelated renders so it doesn't flicker on every keystroke.
@@ -13524,105 +13526,137 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       </button>
       {foxyOpen && <FoxyModal char={char} setChar={setChar} showToast={showToast} onClose={() => setFoxyOpen(false)} />}
 
-      {/* Daily challenge HUD */}
+      {/* Challenges — collapsed to a single compact button that opens a
+          popup, instead of two always-on panels cluttering the map.
+          The button glows amber when something is ready to claim. */}
       {(() => {
         const dc = char.dailyChallenge;
-        if (!dc) return null;
-        const def = DAILY_CHALLENGES.find(x => x.id === dc.id);
-        if (!def) return null;
-        const progress = char.daily?.[def.counter] || 0;
-        const met = progress >= def.target;
-        const claimed = dc.claimed;
-        const claim = () => {
-          if (!met || claimed) return;
+        const wc = char.weeklyChallenge;
+        const ddef = dc && DAILY_CHALLENGES.find(x => x.id === dc.id);
+        const wdef = wc && WEEKLY_CHALLENGES.find(x => x.id === wc.id);
+        if (!ddef && !wdef) return null;
+        const dProg = ddef ? (char.daily?.[ddef.counter] || 0) : 0;
+        const wProg = wdef ? (char.weekly?.[wdef.counter] || 0) : 0;
+        const dMet = !!ddef && dProg >= ddef.target;
+        const wMet = !!wdef && wProg >= wdef.target;
+        const dClaimable = dMet && !dc.claimed;
+        const wClaimable = wMet && !wc.claimed;
+        const claimable = (dClaimable ? 1 : 0) + (wClaimable ? 1 : 0);
+        const showHint = !char.storyFlags?.seenChallengesHint;
+        const rewardStr = (r) => `${r?.cash ? `$${r.cash}` : ''}${r?.mood ? ` +${r.mood}♥` : ''}${r?.followers ? ` +${r.followers} fans` : ''}`.trim();
+        const openChallenges = () => {
+          setChallengesOpen(true);
+          if (showHint) setChar(c => ({ ...c, storyFlags: { ...(c.storyFlags || {}), seenChallengesHint: true } }));
+        };
+        const claimDaily = () => {
+          if (!dClaimable) return;
           setChar(c => {
-            const r = def.reward || {};
-            return {
-              ...c,
+            const r = ddef.reward || {};
+            return { ...c,
               cash: (c.cash || 0) + (r.cash || 0),
               followers: (c.followers || 0) + (r.followers || 0),
               mood: _clampPct((c.mood || 0) + (r.mood || 0)),
-              dailyChallenge: { ...c.dailyChallenge, claimed: true },
-            };
+              dailyChallenge: { ...c.dailyChallenge, claimed: true } };
           });
-          showToast?.(`Daily: +${def.reward?.cash ? `$${def.reward.cash}` : ''}${def.reward?.mood ? ` +${def.reward.mood}♥` : ''}${def.reward?.followers ? ` +${def.reward.followers} fans` : ''}`, 'win');
+          showToast?.(`Daily: ${rewardStr(ddef.reward)}`, 'win');
         };
-        return (
-          <div className={`border-2 px-3 py-2 ${met && !claimed ? 'border-amber-500 bg-amber-500/5' : claimed ? 'border-stone-800 bg-stone-900/40 opacity-70' : 'border-stone-800 bg-stone-900/30'}`}>
+        const claimWeekly = () => {
+          if (!wClaimable) return;
+          setChar(c => {
+            const r = wdef.reward || {};
+            return { ...c,
+              cash: (c.cash || 0) + (r.cash || 0),
+              followers: (c.followers || 0) + (r.followers || 0),
+              mood: _clampPct((c.mood || 0) + (r.mood || 0)),
+              weeklyChallenge: { ...c.weeklyChallenge, claimed: true } };
+          });
+          showToast?.(`Weekly: ${rewardStr(wdef.reward)}`, 'win');
+        };
+        const dow = (char.day || 1) % 7;
+        const daysToMonday = dow === 0 ? 7 : (7 - dow);
+        // One challenge card (shared layout for daily + weekly). Accent
+        // classes are passed as full literal strings so the Tailwind
+        // Play CDN picks them up — no dynamic class interpolation.
+        const card = (title, titleCls, def, prog, met, claimed, onClaim, sub, cardMetCls, btnMetCls) => (
+          <div className={`border-2 px-3 py-2 ${
+            met && !claimed ? cardMetCls
+                            : claimed ? 'border-stone-800 bg-stone-900/40 opacity-70'
+                                      : 'border-stone-800 bg-stone-900/30'}`}>
             <div className="flex items-center justify-between mb-1">
-              <div className="text-[9px] uppercase tracking-[0.3em] text-amber-500" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                DAILY CHALLENGE
+              <div className={titleCls} style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                {title}
               </div>
               <div className="text-[9px] uppercase tracking-widest text-stone-600">
-                {progress}/{def.target}{claimed ? ' · claimed' : ''}
+                {prog}/{def.target}{claimed ? ' · claimed' : sub}
               </div>
             </div>
             <div className="text-stone-300 text-xs">{def.label}</div>
             <div className="flex items-center justify-between mt-1">
               <div className="text-[9px] uppercase tracking-widest text-stone-500">
-                Reward: {def.reward?.cash ? `$${def.reward.cash}` : ''}{def.reward?.mood ? ` +${def.reward.mood}♥` : ''}{def.reward?.followers ? ` +${def.reward.followers} fans` : ''}
+                Reward: {rewardStr(def.reward)}
               </div>
-              <button onClick={claim} disabled={!met || claimed}
+              <button onClick={onClaim} disabled={!met || claimed}
                 className={`px-2 py-1 text-[9px] uppercase tracking-widest border ${
-                  met && !claimed ? 'border-amber-500 text-amber-500 hover:bg-amber-500/10'
-                                  : 'border-stone-800 text-stone-700 cursor-not-allowed'
-                }`}>
+                  met && !claimed ? btnMetCls : 'border-stone-800 text-stone-700 cursor-not-allowed'}`}>
                 {claimed ? 'CLAIMED' : met ? 'CLAIM →' : 'IN PROGRESS'}
               </button>
             </div>
           </div>
         );
-      })()}
-
-      {/* Weekly challenge HUD — bigger goal, bigger reward, persists across days */}
-      {(() => {
-        const wc = char.weeklyChallenge;
-        if (!wc) return null;
-        const def = WEEKLY_CHALLENGES.find(x => x.id === wc.id);
-        if (!def) return null;
-        const progress = char.weekly?.[def.counter] || 0;
-        const met = progress >= def.target;
-        const claimed = wc.claimed;
-        const dow = (char.day || 1) % 7;
-        const daysToMonday = dow === 0 ? 7 : (7 - dow);
-        const claim = () => {
-          if (!met || claimed) return;
-          setChar(c => {
-            const r = def.reward || {};
-            return {
-              ...c,
-              cash: (c.cash || 0) + (r.cash || 0),
-              followers: (c.followers || 0) + (r.followers || 0),
-              mood: _clampPct((c.mood || 0) + (r.mood || 0)),
-              weeklyChallenge: { ...c.weeklyChallenge, claimed: true },
-            };
-          });
-          showToast?.(`Weekly: +${def.reward?.cash ? `$${def.reward.cash}` : ''}${def.reward?.mood ? ` +${def.reward.mood}♥` : ''}${def.reward?.followers ? ` +${def.reward.followers} fans` : ''}`, 'win');
-        };
         return (
-          <div className={`border-2 px-3 py-2 ${met && !claimed ? 'border-fuchsia-500 bg-fuchsia-500/5' : claimed ? 'border-stone-800 bg-stone-900/40 opacity-70' : 'border-stone-800 bg-stone-900/30'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <div className="text-[9px] uppercase tracking-[0.3em] text-fuchsia-400" style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                WEEKLY CHALLENGE
+          <>
+            <button onClick={openChallenges}
+              className={`w-full border-2 px-3 py-2 flex items-center justify-between transition-all ${
+                claimable ? 'border-amber-500 bg-amber-500/10 hover:bg-amber-500/15'
+                          : 'border-stone-800 bg-stone-900/30 hover:border-stone-700'}`}>
+              <span className={`text-[11px] uppercase tracking-[0.25em] ${claimable ? 'text-amber-400' : 'text-stone-400'}`}
+                style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                🎯 Challenges
+              </span>
+              <span className={`text-[9px] uppercase tracking-widest ${claimable ? 'text-amber-400 font-bold' : 'text-stone-500'}`}>
+                {claimable
+                  ? `${claimable} ready to claim →`
+                  : `${ddef ? `daily ${dProg}/${ddef.target}` : ''}${ddef && wdef ? ' · ' : ''}${wdef ? `weekly ${wProg}/${wdef.target}` : ''}`}
+              </span>
+            </button>
+            {showHint && (
+              <div className="flex items-start gap-1 text-[9px] uppercase tracking-wider text-amber-400/90 px-1 -mt-1"
+                style={{ animation: 'none' }}>
+                <span aria-hidden="true">↑</span>
+                <span>Your daily &amp; weekly challenges live here — tap for bonus cash &amp; fans.</span>
               </div>
-              <div className="text-[9px] uppercase tracking-widest text-stone-600">
-                {progress}/{def.target}{claimed ? ' · claimed' : ` · ${daysToMonday}d left`}
+            )}
+            {challengesOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+                onClick={() => setChallengesOpen(false)} role="dialog" aria-modal="true">
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                <div className="relative bg-stone-950 border-2 border-amber-500/40 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}>
+                  <div className="sticky top-0 z-10 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
+                    <div className="text-amber-500 text-sm tracking-widest uppercase"
+                      style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                      🎯 Challenges
+                    </div>
+                    <button onClick={() => setChallengesOpen(false)}
+                      className="text-stone-400 hover:text-amber-500 text-2xl leading-none w-8 h-8 flex items-center justify-center"
+                      aria-label="Close">×</button>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {ddef && card('DAILY CHALLENGE',
+                      'text-[9px] uppercase tracking-[0.3em] text-amber-500',
+                      ddef, dProg, dMet, dc.claimed, claimDaily, '',
+                      'border-amber-500 bg-amber-500/5',
+                      'border-amber-500 text-amber-500 hover:bg-amber-500/10')}
+                    {wdef && card('WEEKLY CHALLENGE',
+                      'text-[9px] uppercase tracking-[0.3em] text-fuchsia-400',
+                      wdef, wProg, wMet, wc.claimed, claimWeekly, ` · ${daysToMonday}d left`,
+                      'border-fuchsia-500 bg-fuchsia-500/5',
+                      'border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/10')}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="text-stone-300 text-xs">{def.label}</div>
-            <div className="flex items-center justify-between mt-1">
-              <div className="text-[9px] uppercase tracking-widest text-stone-500">
-                Reward: {def.reward?.cash ? `$${def.reward.cash}` : ''}{def.reward?.mood ? ` +${def.reward.mood}♥` : ''}{def.reward?.followers ? ` +${def.reward.followers} fans` : ''}
-              </div>
-              <button onClick={claim} disabled={!met || claimed}
-                className={`px-2 py-1 text-[9px] uppercase tracking-widest border ${
-                  met && !claimed ? 'border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/10'
-                                  : 'border-stone-800 text-stone-700 cursor-not-allowed'
-                }`}>
-                {claimed ? 'CLAIMED' : met ? 'CLAIM →' : 'IN PROGRESS'}
-              </button>
-            </div>
-          </div>
+            )}
+          </>
         );
       })()}
 
