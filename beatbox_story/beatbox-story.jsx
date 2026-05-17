@@ -6657,6 +6657,12 @@ const GlobalErrorOverlay = () => {
 
 const PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
   const canvasRef = useRef(null);
+  // Callers pass an inline arrow for `draw`, so its identity changes on
+  // every parent render. Mirror it into a ref and keep it out of the
+  // effect deps — otherwise the 60fps rAF loop tears down and rebuilds
+  // on every render of whatever screen the scene is on.
+  const drawRef = useRef(draw);
+  drawRef.current = draw;
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -6676,7 +6682,7 @@ const PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
       ctx.fillStyle = '#0c0a09';
       ctx.fillRect(0, 0, w, h);
       try {
-        draw(ctx, fc);
+        drawRef.current(ctx, fc);
       } catch (e) {
         const key = (e && e.message) || String(e);
         if (!seenSceneErrors.has(key)) {
@@ -6689,7 +6695,7 @@ const PixelScene = ({ draw, w = 200, h = 130, scale = 3 }) => {
     };
     loop();
     return () => cancelAnimationFrame(raf);
-  }, [draw, w, h, scale]);
+  }, [w, h, scale]);
   return (
     <canvas ref={canvasRef}
       style={{ imageRendering: 'pixelated', width: '100%', aspectRatio: `${w}/${h}` }}
@@ -11186,6 +11192,10 @@ export default function BeatboxStory() {
 
   // Tutorial pop-ups — fire one Foxy tip per state transition, only when no
   // cutscene is up and only once per id. Stored under storyFlags as `tut_<id>`.
+  // The minutes dependency is bucketed to the hour: the tutorial predicates
+  // only test broad time-of-day thresholds, so re-scanning on every single
+  // minute tick is wasted work.
+  const tutHourBucket = Math.floor((char?.minutes || 0) / 60);
   useEffect(() => {
     if (!char || !char.created) return;
     if (cutscene) return;
@@ -11201,7 +11211,7 @@ export default function BeatboxStory() {
       }, `tut_${t.id}`);
       break;
     }
-  }, [char?.day, char?.minutes, char?.energy, char?.hunger, char?.mood, char?.cash, char?.created, char?.storyFlags, cutscene, screen]);
+  }, [char?.day, tutHourBucket, char?.energy, char?.hunger, char?.mood, char?.cash, char?.created, char?.storyFlags, cutscene, screen]);
 
   // Apply migrations to a loaded character object (handles old saves missing new fields)
   const migrateChar = (c) => {
@@ -17880,8 +17890,6 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
   // Pattern picks (lesson indexes) for each side's two rounds. [first turn, second turn]
   const [playerPatternIdxs, setPlayerPatternIdxs] = useState(null);
   const [oppPatternIdxs, setOppPatternIdxs] = useState(null);
-  // Which player slot we're currently editing in the tactical screen (0 or 1)
-  const [tacticalSlot, setTacticalSlot] = useState(0);
   const opponent = char._opponent;
   const eventTimers = useRef([]);
   const playerScoreRef = useRef(0);
