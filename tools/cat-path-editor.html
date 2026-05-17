@@ -4,39 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beatbox Story · Cat Path Editor</title>
+<link rel="stylesheet" href="editor-common.css">
 <style>
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0;
-    background: #0c0a09; color: #e7e5e4;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    min-height: 100vh;
-    overflow: hidden;
-  }
-  .root { display: flex; height: 100vh; position: relative; }
-  .canvas-pane {
-    flex: 1; position: relative;
-    display: flex; align-items: center; justify-content: center;
-    background: repeating-linear-gradient(45deg, #181715, #181715 8px, #1c1917 8px, #1c1917 16px);
-    overflow: auto;
-  }
-  .gear-toggle {
-    position: fixed;
-    top: 12px; right: 12px;
-    z-index: 1000;
-    width: 44px; height: 44px;
-    border-radius: 50%;
-    background: #fbbf24;
-    color: #0c0a09;
-    border: 2px solid #0c0a09;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    font-size: 22px; line-height: 1;
-    cursor: pointer;
-    font-family: inherit;
-    display: flex; align-items: center; justify-content: center;
-    transition: transform 0.2s;
-  }
-  .gear-toggle:active { transform: scale(0.92); }
   .map-frame {
     position: relative;
     aspect-ratio: 480 / 860;
@@ -106,55 +75,12 @@
   }
   /* catPathPreview is injected dynamically into #catPathKF */
 
-  .side-pane {
-    width: 380px;
-    background: #1c1917;
-    border-left: 2px solid #292524;
-    display: flex; flex-direction: column;
-    overflow-y: auto;
-    transition: transform 0.25s ease-out;
-  }
-  @media (max-width: 760px) {
-    .side-pane {
-      position: fixed;
-      top: 0; right: 0; bottom: 0;
-      width: min(92vw, 380px);
-      z-index: 900;
-      box-shadow: -8px 0 24px rgba(0,0,0,0.6);
-    }
-    .canvas-pane { width: 100%; }
-  }
-  .side-pane.collapsed { transform: translateX(110%); }
-  .side-pane header {
-    padding: 12px;
-    border-bottom: 1px solid #292524;
-  }
-  .side-pane h1 {
-    margin: 0; font-size: 14px; letter-spacing: 0.3em;
-    text-transform: uppercase; color: #fbbf24;
-  }
-  .side-pane .sub {
-    margin-top: 4px; font-size: 10px; color: #78716c;
-    line-height: 1.4;
-  }
-  .nav-strip {
-    padding: 6px 12px; font-size: 10px; letter-spacing: 0.15em;
-    text-transform: uppercase; color: #a8a29e;
-    border-bottom: 1px solid #292524;
-    display: flex; gap: 10px; flex-wrap: wrap;
-  }
-  .nav-strip a { color: #fbbf24; text-decoration: none; }
-  .nav-strip a:hover { text-decoration: underline; }
-  .controls { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #292524; }
   .controls button, .controls label {
     background: #292524; color: #fafaf9;
     border: 1px solid #44403c; padding: 6px 10px;
     text-transform: uppercase; letter-spacing: 0.15em;
     font-size: 10px; cursor: pointer; font-family: inherit;
   }
-  .controls button:hover { background: #44403c; }
-  .controls button.primary { background: #fbbf24; color: #0c0a09; border-color: #fbbf24; }
-  .controls button.primary:hover { background: #fcd34d; }
   .controls .row { display: flex; align-items: center; gap: 8px; }
   .controls .row label {
     background: none; border: none; padding: 0;
@@ -166,42 +92,15 @@
     background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
     padding: 4px 8px; font-family: monospace; width: 72px; font-size: 11px;
   }
-  .selected-info {
-    padding: 10px 12px;
-    border-bottom: 1px solid #292524;
-    font-size: 11px;
-  }
-  .selected-info .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
   .selected-info label { width: 50px; color: #a8a29e; text-transform: uppercase; font-size: 9px; letter-spacing: 0.15em; }
   .selected-info input {
     background: #0c0a09; color: #fafaf9; border: 1px solid #44403c;
     padding: 3px 6px; font-family: monospace; width: 70px; font-size: 11px;
   }
-  .output {
-    padding: 10px 12px; flex: 1;
-    display: flex; flex-direction: column;
-  }
-  .output h2 {
-    margin: 0 0 6px; font-size: 11px; letter-spacing: 0.2em;
-    text-transform: uppercase; color: #a8a29e;
-  }
   .output textarea {
-    flex: 1;
-    background: #0c0a09; color: #d4d4d4;
-    border: 1px solid #292524; padding: 8px;
-    font-family: 'Menlo', monospace; font-size: 10px;
-    line-height: 1.4; resize: none;
     min-height: 180px;
   }
   .list { padding: 6px 12px; max-height: 200px; overflow-y: auto; }
-  .list .item {
-    padding: 4px 6px; font-size: 11px;
-    cursor: pointer;
-    border-left: 3px solid transparent;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .list .item:hover { background: #292524; }
-  .list .item.selected { border-left-color: #fbbf24; background: #292524; }
 </style>
 </head>
 <body>
@@ -264,6 +163,7 @@
      whenever the path changes). -->
 <style id="catPathKF"></style>
 
+<script src="editor-common.js"></script>
 <script>
 // Default path matches what's currently in HoodScreen — cat strolls
 // straight across the painted park at y=54%.
@@ -304,9 +204,6 @@ let selectedIdx = null;
 let mapKind = 'day';
 
 document.getElementById('durInp').value = duration;
-
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function frameRect() { return document.getElementById('frame').getBoundingClientRect(); }
 
 // Build a @keyframes string distributing stops by arc length so the
 // cat moves at constant pixel-speed. Mirrors production logic.
@@ -406,13 +303,6 @@ function renderOutput() {
   out += '];\n';
   out += 'const CAT_DUR = ' + duration + '; // seconds for one full traversal\n';
   document.getElementById('out').value = out;
-}
-
-function copyOut() {
-  const out = document.getElementById('out');
-  out.select();
-  document.execCommand('copy');
-  out.blur();
 }
 
 function toggleMap() {
@@ -538,16 +428,6 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   render();
 });
-
-function togglePane() {
-  const side = document.getElementById('side');
-  const btn = document.getElementById('gearBtn');
-  const collapsed = side.classList.toggle('collapsed');
-  btn.textContent = collapsed ? '⚙' : '×';
-}
-if (window.innerWidth <= 760) {
-  document.getElementById('side').classList.add('collapsed');
-}
 
 render();
 </script>
