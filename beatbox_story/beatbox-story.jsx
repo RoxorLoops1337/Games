@@ -2530,7 +2530,8 @@ const BuskAnimation = ({ color = '#D4A017', block = 0, rewardKey = 0, active = t
 };
 // ============ RHYTHM TAP MINI-GAME ============
 // Three-lane rhythm game for the Busk activity.
-// Notes scroll right→left. When a note hits the target line, tap the matching lane.
+// Notes fall top→bottom down 3 columns. When a note reaches the target
+// line near the bottom, tap the matching lane.
 // Hit accuracy is reported back to the parent every `evaluateEveryMs` for bonus rewards.
 
 const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) => {
@@ -2549,12 +2550,12 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
   });
   const [feedback, setFeedback] = useState(0); // re-render trigger when judgments change
 
-  // Physical constants
-  const TRACK_W = 360;
-  const TRACK_H = 120;
-  const TARGET_X = 60; // where notes should be tapped
-  const NOTE_SPEED = 200; // pixels per second
-  const LEAD_TIME_MS = (TRACK_W - TARGET_X) / NOTE_SPEED * 1000; // time for note to travel from spawn to target
+  // Physical constants — vertical track: notes fall down 3 columns.
+  const TRACK_W = 300;
+  const TRACK_H = 300;
+  const TARGET_Y = 245;        // where notes should be tapped (near the bottom)
+  const NOTE_SPEED = 175;      // pixels per second (downward)
+  const LEAD_TIME_MS = TARGET_Y / NOTE_SPEED * 1000; // travel time from spawn (top) to target
   const HIT_PERFECT_MS = 80;
   const HIT_GOOD_MS = 180;
 
@@ -2715,44 +2716,42 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
       ctx.fillStyle = '#0c0a09';
       ctx.fillRect(0, 0, TRACK_W, TRACK_H);
 
-      // Lane separators + labels
-      const laneH = TRACK_H / 3;
+      // Lane separators (vertical columns) + column backgrounds
+      const laneW = TRACK_W / 3;
       for (let i = 0; i < 3; i++) {
-        // Subtle lane background
         ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)';
-        ctx.fillRect(0, i * laneH, TRACK_W, laneH);
-        // Lane border
+        ctx.fillRect(i * laneW, 0, laneW, TRACK_H);
         ctx.fillStyle = '#1c1917';
-        ctx.fillRect(0, (i + 1) * laneH - 1, TRACK_W, 1);
+        ctx.fillRect((i + 1) * laneW - 1, 0, 1, TRACK_H);
       }
 
-      // Target line
+      // Target line — horizontal, near the bottom
       ctx.fillStyle = '#D4A017';
-      ctx.fillRect(TARGET_X - 1, 0, 2, TRACK_H);
+      ctx.fillRect(0, TARGET_Y - 1, TRACK_W, 2);
       ctx.fillStyle = 'rgba(212, 160, 23, 0.2)';
-      ctx.fillRect(TARGET_X - 6, 0, 12, TRACK_H);
+      ctx.fillRect(0, TARGET_Y - 6, TRACK_W, 12);
 
-      // Lane labels at left of target
-      ctx.font = 'bold 10px monospace';
-      ctx.textAlign = 'right';
+      // Lane labels at the top of each column
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
       LANE_INFO.forEach((lane, i) => {
         ctx.fillStyle = lane.color;
-        ctx.fillText(lane.label, TARGET_X - 10, i * laneH + laneH / 2 + 4);
+        ctx.fillText(lane.label, i * laneW + laneW / 2, 16);
       });
 
-      // Draw notes
+      // Draw notes — fall straight down their column toward TARGET_Y
       state.notes.forEach(n => {
         const dt = n.time - songT;
-        const x = TARGET_X + dt / 1000 * NOTE_SPEED;
-        if (x < -20 || x > TRACK_W + 20) return;
-        const y = n.lane * laneH + laneH / 2;
+        const y = TARGET_Y - dt / 1000 * NOTE_SPEED;
+        if (y < -20 || y > TRACK_H + 20) return;
+        const x = n.lane * laneW + laneW / 2;
         if (n.hit) {
           // Show flash
           const age = Math.abs(songT - n.time);
           if (age < 300) {
             ctx.fillStyle = `rgba(212, 160, 23, ${1 - age / 300})`;
             ctx.beginPath();
-            ctx.arc(TARGET_X, y, 18 + age / 10, 0, Math.PI * 2);
+            ctx.arc(x, TARGET_Y, 18 + age / 10, 0, Math.PI * 2);
             ctx.fill();
           }
           return;
@@ -2764,32 +2763,33 @@ const RhythmTap = ({ onAccuracyUpdate, evaluateEveryMs = 5000, active = true }) 
         ctx.shadowColor = lane.color;
         ctx.shadowBlur = 10;
         ctx.fillStyle = lane.color;
-        ctx.fillRect(x - 12, y - 12, 24, 24);
+        ctx.fillRect(x - 14, y - 14, 28, 28);
         ctx.shadowBlur = 0;
         // Inner highlight
         ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.fillRect(x - 10, y - 10, 20, 4);
+        ctx.fillRect(x - 12, y - 12, 24, 4);
       });
 
-      // Judgment text feedback
+      // Judgment text feedback — rises just above the hit line
       state.judgments = state.judgments.filter(j => now - j.born < 600);
       state.judgments.forEach(j => {
         const age = (now - j.born) / 600;
-        const y = j.lane * laneH + laneH / 2 - 8 - age * 16;
+        const x = j.lane * laneW + laneW / 2;
+        const y = TARGET_Y - 26 - age * 16;
         ctx.fillStyle = j.color;
         ctx.globalAlpha = 1 - age;
         ctx.font = 'bold 14px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(j.text, TARGET_X + 30, y);
+        ctx.fillText(j.text, x, y);
         ctx.globalAlpha = 1;
       });
 
-      // Combo counter
+      // Combo counter — in the empty strip below the hit line
       if (state.combo >= 3) {
         ctx.fillStyle = '#D4A017';
         ctx.font = 'bold 18px "Bebas Neue", monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(`${state.combo}x COMBO`, TRACK_W - 10, 24);
+        ctx.fillText(`${state.combo}x COMBO`, TRACK_W - 10, TRACK_H - 12);
       }
 
       raf = requestAnimationFrame(draw);
@@ -15079,6 +15079,20 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
       {activity.active && (
         <Panel title={cfg.name + ' — IN PROGRESS'}>
           <div className="space-y-3">
+            {/* Mode toggle sits ABOVE the mini-game so it's nowhere near
+                the tap buttons at the bottom — no accidental taps. */}
+            {selected === 'busk' && (
+              <button onClick={() => { setPlayMode(p => !p); accuracyRef.current = 0; }}
+                className="w-full py-2 border-2 border-amber-500/50 bg-amber-500/10 text-amber-500 text-xs uppercase tracking-widest hover:bg-amber-500/20 transition-all">
+                {playMode ? '◀ AFK MODE' : '▶ PLAY RHYTHM (bonus tips)'}
+              </button>
+            )}
+            {selected === 'run' && (
+              <button onClick={() => { setPlayMode(p => !p); runBlockRef.current = { avg: 0, isGood: false, burnRatio: 0 }; }}
+                className="w-full py-2 border-2 border-amber-500/50 bg-amber-500/10 text-amber-500 text-xs uppercase tracking-widest hover:bg-amber-500/20 transition-all">
+                {playMode ? '◀ AFK MODE' : '▶ SPRINT MODE (build max ⚡ energy)'}
+              </button>
+            )}
             {selected === 'busk' && !playMode && (
               <BuskAnimation color={char.color} block={activity.block} rewardKey={activity.rewardsEarned} active={activity.active} />
             )}
@@ -15098,18 +15112,6 @@ function ParkScreen({ char, setChar, passTime, showToast, go, checkLevelUp, play
                 evaluateEveryMs={2500}
                 active={activity.active}
               />
-            )}
-            {selected === 'busk' && (
-              <button onClick={() => { setPlayMode(p => !p); accuracyRef.current = 0; }}
-                className="w-full py-2 border-2 border-amber-500/50 bg-amber-500/10 text-amber-500 text-xs uppercase tracking-widest hover:bg-amber-500/20 transition-all">
-                {playMode ? '◀ AFK MODE' : '▶ PLAY RHYTHM (bonus tips)'}
-              </button>
-            )}
-            {selected === 'run' && (
-              <button onClick={() => { setPlayMode(p => !p); runBlockRef.current = { avg: 0, isGood: false, burnRatio: 0 }; }}
-                className="w-full py-2 border-2 border-amber-500/50 bg-amber-500/10 text-amber-500 text-xs uppercase tracking-widest hover:bg-amber-500/20 transition-all">
-                {playMode ? '◀ AFK MODE' : '▶ SPRINT MODE (build max ⚡ energy)'}
-              </button>
             )}
             <div className="text-[10px] text-stone-500 uppercase tracking-wider">{cfg.label}</div>
             <ProgressBar block={activity.block} total={5} label={`Block ${activity.block}/5`} />
