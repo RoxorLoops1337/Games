@@ -11105,6 +11105,183 @@ function SlotsScreen({ activeSlot, onSwitch, onDelete, onBack = null }) {
   );
 }
 
+// Goals — a single compact top-bar button opening a popup that holds the
+// first-week onboarding checklist + the daily & weekly challenges. Lives in
+// the global HUD so it's reachable from any screen, not just the apartment.
+function GoalsButton({ char, setChar, showToast }) {
+  const [challengesOpen, setChallengesOpen] = useState(false);
+  const dc = char.dailyChallenge;
+  const wc = char.weeklyChallenge;
+  const ddef = dc && DAILY_CHALLENGES.find(x => x.id === dc.id);
+  const wdef = wc && WEEKLY_CHALLENGES.find(x => x.id === wc.id);
+  const f = char.storyFlags || {};
+  const checkItems = [
+    { key: 'busk',    label: 'Busk in the park',          done: !!f.firstBusk,                          hint: '🎤 Park · Busk' },
+    { key: 'eat',     label: 'Eat from the kitchen',      done: !!f.firstAte || !!f.foxyFirstSafetyNet, hint: '🍽 House · Kitchen' },
+    { key: 'sleep',   label: 'Sleep till morning',        done: (char.day || 1) > 1,                    hint: '🛋 House · Couch' },
+    { key: 'jam',     label: 'Jam with the cypher',       done: !!f.firstJam,                           hint: '🎶 Park · Jam' },
+    { key: 'openmic', label: 'Play your first open mic',  done: (char.openMicCount || 0) >= 1,          hint: '🎙 Bar · Tue/Wed/Thu' },
+    { key: 'shop',    label: 'Buy your first gear/sound', done: Object.keys(char.gear || {}).length >= 1, hint: '🛒 City · Shop' },
+  ];
+  const checkDone = checkItems.filter(x => x.done).length;
+  const checkAll = checkDone === checkItems.length;
+  const checklistVisible = !((checkAll && (char.day || 1) > 2) || (char.day || 1) > 7);
+  if (!checklistVisible && !ddef && !wdef) return null;
+  const dProg = ddef ? (char.daily?.[ddef.counter] || 0) : 0;
+  const wProg = wdef ? (char.weekly?.[wdef.counter] || 0) : 0;
+  const dMet = !!ddef && dProg >= ddef.target;
+  const wMet = !!wdef && wProg >= wdef.target;
+  const dClaimable = dMet && !dc.claimed;
+  const wClaimable = wMet && !wc.claimed;
+  const claimable = (dClaimable ? 1 : 0) + (wClaimable ? 1 : 0);
+  const showHint = !char.storyFlags?.seenChallengesHint;
+  const rewardStr = (r) => `${r?.cash ? `$${r.cash}` : ''}${r?.mood ? ` +${r.mood}♥` : ''}${r?.followers ? ` +${r.followers} fans` : ''}`.trim();
+  const openChallenges = () => {
+    setChallengesOpen(true);
+    if (showHint) setChar(c => ({ ...c, storyFlags: { ...(c.storyFlags || {}), seenChallengesHint: true } }));
+  };
+  const claimDaily = () => {
+    if (!dClaimable) return;
+    setChar(c => {
+      const r = ddef.reward || {};
+      return { ...c,
+        cash: (c.cash || 0) + (r.cash || 0),
+        followers: (c.followers || 0) + (r.followers || 0),
+        mood: _clampPct((c.mood || 0) + (r.mood || 0)),
+        dailyChallenge: { ...c.dailyChallenge, claimed: true } };
+    });
+    showToast?.(`Daily: ${rewardStr(ddef.reward)}`, 'win');
+  };
+  const claimWeekly = () => {
+    if (!wClaimable) return;
+    setChar(c => {
+      const r = wdef.reward || {};
+      return { ...c,
+        cash: (c.cash || 0) + (r.cash || 0),
+        followers: (c.followers || 0) + (r.followers || 0),
+        mood: _clampPct((c.mood || 0) + (r.mood || 0)),
+        weeklyChallenge: { ...c.weeklyChallenge, claimed: true } };
+    });
+    showToast?.(`Weekly: ${rewardStr(wdef.reward)}`, 'win');
+  };
+  const dow = (char.day || 1) % 7;
+  const daysToMonday = dow === 0 ? 7 : (7 - dow);
+  const card = (title, titleCls, def, prog, met, claimed, onClaim, sub, cardMetCls, btnMetCls) => (
+    <div className={`border-2 px-3 py-2 ${
+      met && !claimed ? cardMetCls
+                      : claimed ? 'border-stone-800 bg-stone-900/40 opacity-70'
+                                : 'border-stone-800 bg-stone-900/30'}`}>
+      <div className="flex items-center justify-between mb-1">
+        <div className={titleCls} style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+          {title}
+        </div>
+        <div className="text-[9px] uppercase tracking-widest text-stone-600">
+          {prog}/{def.target}{claimed ? ' · claimed' : sub}
+        </div>
+      </div>
+      <div className="text-stone-300 text-xs">{def.label}</div>
+      <div className="flex items-center justify-between mt-1">
+        <div className="text-[9px] uppercase tracking-widest text-stone-500">
+          Reward: {rewardStr(def.reward)}
+        </div>
+        <button onClick={onClaim} disabled={!met || claimed}
+          className={`px-2 py-1 text-[9px] uppercase tracking-widest border ${
+            met && !claimed ? btnMetCls : 'border-stone-800 text-stone-700 cursor-not-allowed'}`}>
+          {claimed ? 'CLAIMED' : met ? 'CLAIM →' : 'IN PROGRESS'}
+        </button>
+      </div>
+    </div>
+  );
+  return (
+    <>
+      <button
+        onClick={openChallenges}
+        aria-label="Goals"
+        title="Goals & challenges"
+        className={`relative w-8 h-8 flex items-center justify-center border transition-all ${
+          claimable
+            ? 'border-amber-500 bg-amber-500/10 text-amber-400'
+            : showHint
+              ? 'border-amber-500/60 text-amber-400'
+              : 'border-stone-800 text-stone-500 hover:text-amber-500 hover:border-amber-500/50'}`}>
+        <span className="text-xs leading-none">🎯</span>
+        {claimable > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 flex items-center justify-center
+            text-[9px] font-bold bg-amber-500 text-black rounded-full leading-none">
+            {claimable}
+          </span>
+        )}
+        {claimable === 0 && showHint && (
+          <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full" />
+        )}
+      </button>
+      {challengesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+          onClick={() => setChallengesOpen(false)} role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative bg-stone-950 border-2 border-amber-500/40 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
+              <div className="text-amber-500 text-sm tracking-widest uppercase"
+                style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                🎯 Goals
+              </div>
+              <button onClick={() => setChallengesOpen(false)}
+                className="text-stone-400 hover:text-amber-500 text-2xl leading-none w-8 h-8 flex items-center justify-center"
+                aria-label="Close">×</button>
+            </div>
+            <div className="p-3 space-y-3">
+              {checklistVisible && (
+                <div className="border-2 border-stone-700 bg-gradient-to-br from-amber-950/30 to-stone-900/40 px-3 py-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-amber-400"
+                      style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
+                      FIRST WEEK · {checkDone}/{checkItems.length}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-widest text-stone-500">
+                      {checkAll ? '✓ tutorial complete' : 'getting started'}
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    {checkItems.map(x => (
+                      <div key={x.key} className="flex items-center gap-2 text-[11px]">
+                        <span className={`inline-block w-3 text-center ${x.done ? 'text-amber-400' : 'text-stone-600'}`}>
+                          {x.done ? '✓' : '☐'}
+                        </span>
+                        <span className={`flex-1 ${x.done ? 'text-stone-500 line-through' : 'text-stone-200'}`}>
+                          {x.label}
+                        </span>
+                        {!x.done && (
+                          <span className="text-[9px] uppercase tracking-widest text-stone-600">{x.hint}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!ddef && !wdef && (
+                <div className="text-[10px] uppercase tracking-widest text-stone-600 text-center py-1">
+                  Daily &amp; weekly challenges unlock after your first sleep.
+                </div>
+              )}
+              {ddef && card('DAILY CHALLENGE',
+                'text-[9px] uppercase tracking-[0.3em] text-amber-500',
+                ddef, dProg, dMet, dc.claimed, claimDaily, '',
+                'border-amber-500 bg-amber-500/5',
+                'border-amber-500 text-amber-500 hover:bg-amber-500/10')}
+              {wdef && card('WEEKLY CHALLENGE',
+                'text-[9px] uppercase tracking-[0.3em] text-fuchsia-400',
+                wdef, wProg, wMet, wc.claimed, claimWeekly, ` · ${daysToMonday}d left`,
+                'border-fuchsia-500 bg-fuchsia-500/5',
+                'border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/10')}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ============ MAIN APP ============
 
 export default function BeatboxStory() {
@@ -11576,6 +11753,7 @@ export default function BeatboxStory() {
                   <div className="text-amber-400 font-bold text-sm">${char.cash}</div>
                   <div className="text-[9px] text-stone-500 uppercase tracking-widest">{char.followers} fans</div>
                 </div>
+                <GoalsButton char={char} setChar={setChar} showToast={showToast} />
                 {(() => {
                   const unread = unreadMessageCount(char);
                   return (
@@ -13415,8 +13593,6 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
   // ALL HOOKS MUST RUN BEFORE THE EARLY RETURNS BELOW.
   // Foxy modal open state.
   const [foxyOpen, setFoxyOpen] = useState(false);
-  // Challenges popup open state.
-  const [challengesOpen, setChallengesOpen] = useState(false);
   // Foxy's tip is recomputed whenever any of her trigger inputs changes
   // (hunger/energy/mood bins, day, story flags, etc). Stable between
   // unrelated renders so it doesn't flicker on every keystroke.
@@ -13477,189 +13653,6 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         </div>
       </button>
       {foxyOpen && <FoxyModal char={char} setChar={setChar} showToast={showToast} onClose={() => setFoxyOpen(false)} />}
-
-      {/* Goals — a single compact button opening a popup that holds the
-          first-week onboarding checklist + the daily & weekly
-          challenges, instead of three always-on panels on the map. */}
-      {(() => {
-        const dc = char.dailyChallenge;
-        const wc = char.weeklyChallenge;
-        const ddef = dc && DAILY_CHALLENGES.find(x => x.id === dc.id);
-        const wdef = wc && WEEKLY_CHALLENGES.find(x => x.id === wc.id);
-        // First-week onboarding checklist — shown for the opening week.
-        const f = char.storyFlags || {};
-        const checkItems = [
-          { key: 'busk',    label: 'Busk in the park',          done: !!f.firstBusk,                          hint: '🎤 Park · Busk' },
-          { key: 'eat',     label: 'Eat from the kitchen',      done: !!f.firstAte || !!f.foxyFirstSafetyNet, hint: '🍽 House · Kitchen' },
-          { key: 'sleep',   label: 'Sleep till morning',        done: (char.day || 1) > 1,                    hint: '🛋 House · Couch' },
-          { key: 'jam',     label: 'Jam with the cypher',       done: !!f.firstJam,                           hint: '🎶 Park · Jam' },
-          { key: 'openmic', label: 'Play your first open mic',  done: (char.openMicCount || 0) >= 1,          hint: '🎙 Bar · Tue/Wed/Thu' },
-          { key: 'shop',    label: 'Buy your first gear/sound', done: Object.keys(char.gear || {}).length >= 1, hint: '🛒 City · Shop' },
-        ];
-        const checkDone = checkItems.filter(x => x.done).length;
-        const checkAll = checkDone === checkItems.length;
-        // Same visibility rule as the old standalone panel.
-        const checklistVisible = !((checkAll && (char.day || 1) > 2) || (char.day || 1) > 7);
-        if (!checklistVisible && !ddef && !wdef) return null;
-        const dProg = ddef ? (char.daily?.[ddef.counter] || 0) : 0;
-        const wProg = wdef ? (char.weekly?.[wdef.counter] || 0) : 0;
-        const dMet = !!ddef && dProg >= ddef.target;
-        const wMet = !!wdef && wProg >= wdef.target;
-        const dClaimable = dMet && !dc.claimed;
-        const wClaimable = wMet && !wc.claimed;
-        const claimable = (dClaimable ? 1 : 0) + (wClaimable ? 1 : 0);
-        const showHint = !char.storyFlags?.seenChallengesHint;
-        const rewardStr = (r) => `${r?.cash ? `$${r.cash}` : ''}${r?.mood ? ` +${r.mood}♥` : ''}${r?.followers ? ` +${r.followers} fans` : ''}`.trim();
-        const openChallenges = () => {
-          setChallengesOpen(true);
-          if (showHint) setChar(c => ({ ...c, storyFlags: { ...(c.storyFlags || {}), seenChallengesHint: true } }));
-        };
-        const claimDaily = () => {
-          if (!dClaimable) return;
-          setChar(c => {
-            const r = ddef.reward || {};
-            return { ...c,
-              cash: (c.cash || 0) + (r.cash || 0),
-              followers: (c.followers || 0) + (r.followers || 0),
-              mood: _clampPct((c.mood || 0) + (r.mood || 0)),
-              dailyChallenge: { ...c.dailyChallenge, claimed: true } };
-          });
-          showToast?.(`Daily: ${rewardStr(ddef.reward)}`, 'win');
-        };
-        const claimWeekly = () => {
-          if (!wClaimable) return;
-          setChar(c => {
-            const r = wdef.reward || {};
-            return { ...c,
-              cash: (c.cash || 0) + (r.cash || 0),
-              followers: (c.followers || 0) + (r.followers || 0),
-              mood: _clampPct((c.mood || 0) + (r.mood || 0)),
-              weeklyChallenge: { ...c.weeklyChallenge, claimed: true } };
-          });
-          showToast?.(`Weekly: ${rewardStr(wdef.reward)}`, 'win');
-        };
-        const dow = (char.day || 1) % 7;
-        const daysToMonday = dow === 0 ? 7 : (7 - dow);
-        // One challenge card (shared layout for daily + weekly). Accent
-        // classes are passed as full literal strings so the Tailwind
-        // Play CDN picks them up — no dynamic class interpolation.
-        const card = (title, titleCls, def, prog, met, claimed, onClaim, sub, cardMetCls, btnMetCls) => (
-          <div className={`border-2 px-3 py-2 ${
-            met && !claimed ? cardMetCls
-                            : claimed ? 'border-stone-800 bg-stone-900/40 opacity-70'
-                                      : 'border-stone-800 bg-stone-900/30'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <div className={titleCls} style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                {title}
-              </div>
-              <div className="text-[9px] uppercase tracking-widest text-stone-600">
-                {prog}/{def.target}{claimed ? ' · claimed' : sub}
-              </div>
-            </div>
-            <div className="text-stone-300 text-xs">{def.label}</div>
-            <div className="flex items-center justify-between mt-1">
-              <div className="text-[9px] uppercase tracking-widest text-stone-500">
-                Reward: {rewardStr(def.reward)}
-              </div>
-              <button onClick={onClaim} disabled={!met || claimed}
-                className={`px-2 py-1 text-[9px] uppercase tracking-widest border ${
-                  met && !claimed ? btnMetCls : 'border-stone-800 text-stone-700 cursor-not-allowed'}`}>
-                {claimed ? 'CLAIMED' : met ? 'CLAIM →' : 'IN PROGRESS'}
-              </button>
-            </div>
-          </div>
-        );
-        return (
-          <>
-            <button onClick={openChallenges}
-              className={`w-full border-2 px-3 py-2 flex items-center justify-between transition-all ${
-                claimable ? 'border-amber-500 bg-amber-500/10 hover:bg-amber-500/15'
-                          : 'border-stone-800 bg-stone-900/30 hover:border-stone-700'}`}>
-              <span className={`text-[11px] uppercase tracking-[0.25em] ${claimable ? 'text-amber-400' : 'text-stone-400'}`}
-                style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                🎯 Goals
-              </span>
-              <span className={`text-[9px] uppercase tracking-widest ${claimable ? 'text-amber-400 font-bold' : 'text-stone-500'}`}>
-                {claimable
-                  ? `${claimable} ready to claim →`
-                  : checklistVisible
-                    ? `first week ${checkDone}/${checkItems.length} →`
-                    : `${ddef ? `daily ${dProg}/${ddef.target}` : ''}${ddef && wdef ? ' · ' : ''}${wdef ? `weekly ${wProg}/${wdef.target}` : ''}`}
-              </span>
-            </button>
-            {showHint && (
-              <div className="flex items-start gap-1 text-[9px] uppercase tracking-wider text-amber-400/90 px-1 -mt-1"
-                style={{ animation: 'none' }}>
-                <span aria-hidden="true">↑</span>
-                <span>Your goals &amp; challenges live here — tap for tasks and bonus cash.</span>
-              </div>
-            )}
-            {challengesOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
-                onClick={() => setChallengesOpen(false)} role="dialog" aria-modal="true">
-                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                <div className="relative bg-stone-950 border-2 border-amber-500/40 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl"
-                  onClick={(e) => e.stopPropagation()}>
-                  <div className="sticky top-0 z-10 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
-                    <div className="text-amber-500 text-sm tracking-widest uppercase"
-                      style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                      🎯 Goals
-                    </div>
-                    <button onClick={() => setChallengesOpen(false)}
-                      className="text-stone-400 hover:text-amber-500 text-2xl leading-none w-8 h-8 flex items-center justify-center"
-                      aria-label="Close">×</button>
-                  </div>
-                  <div className="p-3 space-y-3">
-                    {checklistVisible && (
-                      <div className="border-2 border-stone-700 bg-gradient-to-br from-amber-950/30 to-stone-900/40 px-3 py-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="text-[10px] uppercase tracking-[0.3em] text-amber-400"
-                            style={{ fontFamily: '"Bebas Neue", "Oswald", sans-serif' }}>
-                            FIRST WEEK · {checkDone}/{checkItems.length}
-                          </div>
-                          <div className="text-[9px] uppercase tracking-widest text-stone-500">
-                            {checkAll ? '✓ tutorial complete' : 'getting started'}
-                          </div>
-                        </div>
-                        <div className="space-y-0.5">
-                          {checkItems.map(x => (
-                            <div key={x.key} className="flex items-center gap-2 text-[11px]">
-                              <span className={`inline-block w-3 text-center ${x.done ? 'text-amber-400' : 'text-stone-600'}`}>
-                                {x.done ? '✓' : '☐'}
-                              </span>
-                              <span className={`flex-1 ${x.done ? 'text-stone-500 line-through' : 'text-stone-200'}`}>
-                                {x.label}
-                              </span>
-                              {!x.done && (
-                                <span className="text-[9px] uppercase tracking-widest text-stone-600">{x.hint}</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {!ddef && !wdef && (
-                      <div className="text-[10px] uppercase tracking-widest text-stone-600 text-center py-1">
-                        Daily &amp; weekly challenges unlock after your first sleep.
-                      </div>
-                    )}
-                    {ddef && card('DAILY CHALLENGE',
-                      'text-[9px] uppercase tracking-[0.3em] text-amber-500',
-                      ddef, dProg, dMet, dc.claimed, claimDaily, '',
-                      'border-amber-500 bg-amber-500/5',
-                      'border-amber-500 text-amber-500 hover:bg-amber-500/10')}
-                    {wdef && card('WEEKLY CHALLENGE',
-                      'text-[9px] uppercase tracking-[0.3em] text-fuchsia-400',
-                      wdef, wProg, wMet, wc.claimed, claimWeekly, ` · ${daysToMonday}d left`,
-                      'border-fuchsia-500 bg-fuchsia-500/5',
-                      'border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/10')}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        );
-      })()}
 
       {/* Apartment map — clickable hotspots for each activity area.
           Day / night swaps the painted background based on game time.
@@ -14209,6 +14202,10 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
       {tab === 'eat' && (
         <Panel title="Fridge — wholefood plant-based">
           <div className="space-y-2">
+            {/* FED readout — HUD is hidden behind this popup, so show hunger here. */}
+            <div className="pb-1">
+              <Bar value={char.hunger} max={100} color="#84cc16" icon={Coffee} label="Fed" />
+            </div>
             {/* Coffee Machine — daily free espresso (gear). */}
             {hasGear(char, 'coffee_machine') && (() => {
               const claimed = char.day === char.lastCoffeeDay;
