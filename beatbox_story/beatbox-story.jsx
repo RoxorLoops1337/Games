@@ -18071,7 +18071,6 @@ function BattleScreen({ char, setChar, go, showToast, checkLevelUp, playCutscene
     getAudioCtx();
     setPlayerPatternIdxs(computeDefaultPlayerPicks());
     setOppPatternIdxs(computeOppPicks());
-    setTacticalSlot(0);
     setPhase('rps');
   };
 
