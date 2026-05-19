@@ -12148,7 +12148,7 @@ function HoodScreen({ go, char }) {
               left: `${h.left}%`,
               width: `${h.width}%`,
               height: `${h.height}%`,
-              background: h.locked ? 'rgba(0,0,0,0.35)' : 'transparent',
+              background: 'transparent',
               border: 'none',
               boxShadow: 'none',
             }}>
@@ -13778,7 +13778,6 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
           onClick={() => { if (!trainActivity.active) setTab(null); }}
           aria-modal="true" role="dialog">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
           <div className="relative bg-stone-950 border-2 border-amber-500/40 w-full max-w-md max-h-[92vh] sm:max-h-[88vh] overflow-y-auto shadow-2xl"
             onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 z-10 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
