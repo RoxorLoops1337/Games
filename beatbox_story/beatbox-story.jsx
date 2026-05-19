@@ -12148,7 +12148,7 @@ function HoodScreen({ go, char }) {
               left: `${h.left}%`,
               width: `${h.width}%`,
               height: `${h.height}%`,
-              background: h.locked ? 'rgba(0,0,0,0.35)' : 'transparent',
+              background: 'transparent',
               border: 'none',
               boxShadow: 'none',
             }}>
