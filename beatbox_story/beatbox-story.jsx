@@ -6724,7 +6724,7 @@ const Cutscene = ({ speaker = null, speakerColor = '#D4A017', beats, lines, musi
   const fade = settings.reducedMotion ? 'none' : 'cutFade 0.5s ease-out';
   const lineFade = settings.reducedMotion ? 'none' : 'cutFade 0.4s ease-out';
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-5"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-5"
       style={{ background: 'radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%)' }}>
       <button onClick={onComplete}
         className="absolute top-4 right-4 text-stone-500 text-[10px] uppercase tracking-widest hover:text-amber-500 px-2 py-1">
@@ -7301,7 +7301,7 @@ const AchievementFanfare = ({ item, onClose }) => {
     return () => clearTimeout(id);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
       style={{ background: 'rgba(12,10,9,0.78)' }}
       onClick={onClose}>
       <div className="w-full max-w-sm p-4 text-center border-2"
@@ -11545,8 +11545,7 @@ export default function BeatboxStory() {
 
         {/* HEADER */}
         {char && char.created && screen !== 'slots' && (
-          <div className="sticky top-0 bg-stone-950/95 backdrop-blur border-b-2 border-stone-800"
-            style={{ zIndex: 55 }}>
+          <div className="sticky top-0 z-20 bg-stone-950/95 backdrop-blur border-b-2 border-stone-800">
             <div className="px-3 py-2 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -11658,7 +11657,7 @@ export default function BeatboxStory() {
         )}
 
         {toast && (
-          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[56] max-w-xs">
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-xs">
             <div className={`px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider ${
               toast.type === 'win' ? 'bg-amber-500 border-amber-600 text-stone-950' :
               toast.type === 'bad' ? 'bg-red-900 border-red-700 text-red-100' :
@@ -13779,7 +13778,6 @@ function HouseScreen({ char, setChar, passTime, showToast, checkLevelUp, go, act
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
           onClick={() => { if (!trainActivity.active) setTab(null); }}
           aria-modal="true" role="dialog">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
           <div className="relative bg-stone-950 border-2 border-amber-500/40 w-full max-w-md max-h-[92vh] sm:max-h-[88vh] overflow-y-auto shadow-2xl"
             onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 z-10 bg-stone-950 border-b-2 border-stone-800 px-3 py-2 flex items-center justify-between">
