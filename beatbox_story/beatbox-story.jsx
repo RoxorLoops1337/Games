@@ -12318,7 +12318,7 @@ function HoodScreen({ go, char }) {
             title={h.locked ? h.lockReason : `${h.name} · ${h.desc}`}
             className={`absolute transition-all ${
               h.locked
-                ? 'opacity-60 cursor-not-allowed'
+                ? 'opacity-40 cursor-not-allowed pointer-events-none'
                 : 'hover:scale-[1.02] active:scale-95'
             }`}
             style={{
@@ -12326,21 +12326,20 @@ function HoodScreen({ go, char }) {
               left: `${h.left}%`,
               width: `${h.width}%`,
               height: `${h.height}%`,
-              background: h.locked ? 'rgba(0,0,0,0.35)' : 'transparent',
+              background: h.locked ? 'rgba(0,0,0,0.5)' : 'transparent',
               border: 'none',
               boxShadow: 'none',
             }}>
-            <div
-              className={`absolute left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] uppercase tracking-widest whitespace-nowrap ${
-                h.locked ? 'bg-stone-950/90 text-stone-400 border border-stone-800'
-                         : 'bg-amber-500 text-stone-950 font-bold'
-              }`}
-              style={{
-                fontFamily: '"Bebas Neue", "Oswald", sans-serif',
-                bottom: '4px',
-              }}>
-              {h.locked ? '🔒 ' : ''}{h.name}
-            </div>
+            {!h.locked && (
+              <div
+                className="absolute left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] uppercase tracking-widest whitespace-nowrap bg-amber-500 text-stone-950 font-bold"
+                style={{
+                  fontFamily: '"Bebas Neue", "Oswald", sans-serif',
+                  bottom: '4px',
+                }}>
+                {h.name}
+              </div>
+            )}
           </button>
         ))}
 
@@ -12408,13 +12407,6 @@ function HoodScreen({ go, char }) {
         `}</style>
       </div>
 
-      {hotspots.some(h => h.locked) && (
-        <div className="text-[10px] uppercase tracking-wider text-stone-500 px-2 space-y-0.5">
-          {hotspots.filter(h => h.locked && h.lockReason).map(h => (
-            <div key={h.id}>🔒 <span className="text-stone-400">{h.name}</span> · {h.lockReason}</div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
