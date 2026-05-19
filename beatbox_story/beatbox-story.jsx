@@ -11545,7 +11545,8 @@ export default function BeatboxStory() {
 
         {/* HEADER */}
         {char && char.created && screen !== 'slots' && (
-          <div className="sticky top-0 z-[55] bg-stone-950/95 backdrop-blur border-b-2 border-stone-800">
+          <div className="sticky top-0 bg-stone-950/95 backdrop-blur border-b-2 border-stone-800"
+            style={{ zIndex: 55 }}>
             <div className="px-3 py-2 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
