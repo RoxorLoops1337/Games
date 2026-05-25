@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Beatbox Story · Editor Tools</title>
+  <link rel="stylesheet" href="./editor-common.css" />
+  <style>
+    html, body { overflow: auto; }
+    .index-root {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+    .index-root h1 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: #fbbf24;
+    }
+    .index-root .lede {
+      margin: 0 0 24px;
+      font-size: 11px;
+      color: #78716c;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    @media (min-width: 560px) {
+      .tool-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .tool-card {
+      display: block;
+      padding: 14px 16px;
+      background: #1c1917;
+      border: 1px solid #292524;
+      color: inherit;
+      text-decoration: none;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .tool-card:hover {
+      border-color: #fbbf24;
+      transform: translateY(-1px);
+    }
+    .tool-card .row {
+      display: flex; align-items: baseline; gap: 8px;
+      margin-bottom: 6px;
+    }
+    .tool-card .icon { font-size: 18px; line-height: 1; }
+    .tool-card .name {
+      font-size: 12px; letter-spacing: 0.25em;
+      text-transform: uppercase; color: #fbbf24;
+    }
+    .tool-card .desc {
+      font-size: 11px; color: #a8a29e; line-height: 1.45;
+    }
+    .footer-links {
+      margin-top: 28px;
+      font-size: 10px; letter-spacing: 0.2em;
+      text-transform: uppercase; color: #57534e;
+    }
+    .footer-links a { color: #a8a29e; text-decoration: none; margin-right: 14px; }
+    .footer-links a:hover { color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <div class="index-root">
+    <h1>Editor Tools</h1>
+    <p class="lede">Beatbox Story · Pick a tool</p>
+
+    <div class="tool-grid">
+      <a class="tool-card" href="./light-editor.html">
+        <div class="row"><span class="icon">💡</span><span class="name">Lights</span></div>
+        <div class="desc">Place &amp; size the night-time window / lamp glows on the hood map.</div>
+      </a>
+      <a class="tool-card" href="./hotspot-editor.html">
+        <div class="row"><span class="icon">🎯</span><span class="name">Hotspots</span></div>
+        <div class="desc">Position the clickable building rectangles on hood / apartment maps.</div>
+      </a>
+      <a class="tool-card" href="./cat-path-editor.html">
+        <div class="row"><span class="icon">🐈</span><span class="name">Cat path</span></div>
+        <div class="desc">Author the waypoints the alley cat walks across the hood.</div>
+      </a>
+      <a class="tool-card" href="./character-editor.html">
+        <div class="row"><span class="icon">👤</span><span class="name">Characters</span></div>
+        <div class="desc">Drop &amp; resize stationary characters on a map.</div>
+      </a>
+      <a class="tool-card" href="./intro-light-editor.html">
+        <div class="row"><span class="icon">🎬</span><span class="name">Intro lights</span></div>
+        <div class="desc">Tune the per-beat light positions in the intro cutscene.</div>
+      </a>
+      <a class="tool-card" href="./character-color-editor.html">
+        <div class="row"><span class="icon">🎨</span><span class="name">Char colours</span></div>
+        <div class="desc">Sample skin / clothing regions on a character PNG to drive recolouring.</div>
+      </a>
+    </div>
+
+    <div class="footer-links">
+      <a href="/beatbox_story/">← Game</a>
+    </div>
+  </div>
+</body>
+</html>
