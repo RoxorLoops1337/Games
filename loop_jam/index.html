@@ -7,7 +7,9 @@
 <style>
   :root {
     --rox: #6ee7a8;
+    --rox-soft: rgba(110, 231, 168, 0.18);
     --jas: #f5a3d0;
+    --jas-soft: rgba(245, 163, 208, 0.18);
     --bg-1: #1a1530;
     --bg-2: #2a1a3a;
     --bg-3: #0f0a1f;
@@ -33,11 +35,13 @@
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
-    padding: 20px 12px 24px;
+    padding: 18px 12px 24px;
+    position: relative;
+    overflow-x: hidden;
   }
   h1 {
     margin: 4px 0 2px;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 800;
     letter-spacing: 1px;
     background: linear-gradient(90deg, var(--rox), #9fd0ff, var(--jas));
@@ -47,41 +51,142 @@
   }
   .sub {
     opacity: 0.65;
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: 2px;
     text-transform: uppercase;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
   }
 
-  /* Progress bar / loop timeline */
-  #timeline {
+  /* === Central gauge: loop ring + active count === */
+  .gauge {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    margin: 4px 0 14px;
+  }
+  .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .gauge .ring-bg {
+    fill: none;
+    stroke: rgba(255,255,255,0.07);
+    stroke-width: 6;
+  }
+  .gauge .ring-fill {
+    fill: none;
+    stroke: rgba(255,255,255,0.18);
+    stroke-width: 6;
+    stroke-linecap: round;
+    transition: stroke 0.4s ease;
+  }
+  .gauge .ring-loop {
+    fill: none;
+    stroke: url(#loopGrad);
+    stroke-width: 4;
+    stroke-linecap: round;
+  }
+  .gauge.full .ring-fill {
+    stroke: url(#fullGrad);
+    filter: drop-shadow(0 0 8px rgba(255,255,255,0.6));
+  }
+  .gauge .center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .gauge .count {
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(180deg, #fff, #d8d4ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .gauge .count .of {
+    font-size: 14px;
+    opacity: 0.5;
+    font-weight: 600;
+  }
+  .gauge .lbl {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.55;
+    margin-top: 4px;
+  }
+  .gauge.full .count {
+    background: linear-gradient(90deg, var(--rox), #ffe28a, var(--jas));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: jiggle 0.6s ease-in-out infinite;
+  }
+  @keyframes jiggle {
+    0%, 100% { transform: rotate(-2deg) scale(1); }
+    50%      { transform: rotate(2deg)  scale(1.05); }
+  }
+
+  /* === Pad grid (team rows) === */
+  #grid-wrap {
     width: min(100%, 520px);
-    height: 6px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 3px;
-    overflow: hidden;
-    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
   }
-  #playhead {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, var(--rox), var(--jas));
-    transition: width 0.05s linear;
-  }
-
-  /* Button grid */
-  #grid {
+  .row {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
-    width: min(100%, 520px);
-    margin-bottom: 16px;
+    padding: 10px;
+    border-radius: 22px;
+    overflow: hidden;
   }
+  .row::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0.55;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .row.rox::before {
+    background:
+      radial-gradient(ellipse at 10% 50%, rgba(110, 231, 168, 0.22), transparent 60%),
+      radial-gradient(ellipse at 90% 50%, rgba(110, 231, 168, 0.12), transparent 60%);
+  }
+  .row.jas::before {
+    background:
+      radial-gradient(ellipse at 10% 50%, rgba(245, 163, 208, 0.22), transparent 60%),
+      radial-gradient(ellipse at 90% 50%, rgba(245, 163, 208, 0.12), transparent 60%);
+  }
+  .row > * { position: relative; z-index: 1; }
+  .row .team-tag {
+    position: absolute;
+    top: 6px;
+    left: 14px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    opacity: 0.55;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .row.rox .team-tag { color: var(--rox); }
+  .row.jas .team-tag { color: var(--jas); }
+
   @media (max-width: 520px) {
-    #grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    h1 { font-size: 24px; }
+    .row { grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 14px 10px 10px; }
+    h1 { font-size: 22px; }
+    .gauge { width: 120px; height: 120px; }
   }
 
+  /* === Pad === */
   .pad {
     position: relative;
     aspect-ratio: 1 / 1;
@@ -89,9 +194,27 @@
     background: rgba(255, 255, 255, 0.04);
     border: 2px solid rgba(255,255,255,0.08);
     cursor: pointer;
-    overflow: hidden;
-    transition: transform 0.12s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    overflow: visible;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
     -webkit-tap-highlight-color: transparent;
+  }
+  .pad .clip {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+  }
+  .pad .stage-shadow {
+    position: absolute;
+    bottom: 4%;
+    left: 12%;
+    right: 12%;
+    height: 6px;
+    background: radial-gradient(ellipse, rgba(0,0,0,0.5), transparent 70%);
+    filter: blur(2px);
+    transition: transform 0.12s ease, opacity 0.18s ease;
+    pointer-events: none;
+    opacity: 0.6;
   }
   .pad img {
     position: absolute;
@@ -102,7 +225,9 @@
     object-position: center bottom;
     pointer-events: none;
     filter: grayscale(0.7) brightness(0.7);
-    transition: filter 0.25s ease, transform 0.25s ease;
+    transition: filter 0.25s ease;
+    transform-origin: center bottom;
+    will-change: transform;
   }
   .pad .label {
     position: absolute;
@@ -117,7 +242,7 @@
     color: rgba(255,255,255,0.6);
     text-shadow: 0 1px 4px rgba(0,0,0,0.8);
     pointer-events: none;
-    z-index: 2;
+    z-index: 3;
   }
   .pad.rox.active {
     background: rgba(110, 231, 168, 0.18);
@@ -129,39 +254,75 @@
     border-color: var(--jas);
     box-shadow: 0 0 24px rgba(245, 163, 208, 0.45), inset 0 0 24px rgba(245, 163, 208, 0.15);
   }
-  .pad.active img {
-    filter: grayscale(0) brightness(1);
-    animation: bounce 0.5s ease-in-out infinite alternate;
-  }
+  .pad.active img { filter: grayscale(0) brightness(1); }
   .pad.active .label { color: #fff; }
-  .pad:active { transform: scale(0.96); }
+  .pad.active .stage-shadow { opacity: 1; }
+
+  /* Tap punch */
+  .pad.punch { animation: punch 0.32s cubic-bezier(.2,.9,.3,1.4); }
+  @keyframes punch {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(0.92); }
+    70%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
+  }
+  /* Mute wiggle */
+  .pad.wiggle img { animation: wiggle 0.34s ease; }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25%      { transform: rotate(-6deg); }
+    75%      { transform: rotate(6deg); }
+  }
+
   .pad.loading { opacity: 0.4; cursor: wait; }
 
-  @keyframes bounce {
-    0%   { transform: translateY(0) scale(1); }
-    100% { transform: translateY(-3px) scale(1.02); }
-  }
-
-  /* Beat indicator dots in corner of active pad */
-  .pad .beat {
+  /* === Floating music notes per active pad === */
+  .pad .notes {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.2);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    z-index: 2;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 4;
   }
-  .pad.active .beat {
-    background: #fff;
-    opacity: 1;
-    box-shadow: 0 0 12px #fff;
+  .note {
+    position: absolute;
+    font-size: 18px;
+    opacity: 0;
+    animation: noteFloat 1.6s ease-out forwards;
+    will-change: transform, opacity;
+    pointer-events: none;
+    text-shadow: 0 0 6px currentColor;
+  }
+  @keyframes noteFloat {
+    0%   { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.6); }
+    15%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--dx, 20px), -90px) rotate(var(--rot, 30deg)) scale(1); }
   }
 
-  /* Controls */
+  /* === Sparkle on first tap === */
+  .sparkle {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .sparkle::before, .sparkle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .sparkle::before {
+    border: 3px solid #fff;
+    animation: sparkRing 0.7s ease-out forwards;
+  }
+  @keyframes sparkRing {
+    0%   { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  /* === Controls === */
   #controls {
     display: flex;
     gap: 10px;
@@ -190,6 +351,7 @@
     color: #ffb0b0;
   }
 
+  /* === Loader === */
   #loader {
     position: fixed;
     inset: 0;
@@ -216,12 +378,13 @@
   #loader .pct { font-size: 12px; letter-spacing: 2px; opacity: 0.7; }
   #loader .title { font-size: 18px; font-weight: 800; margin-bottom: 12px; }
 
+  /* === Start overlay (click-through) === */
   #start-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 10, 31, 0.55);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background: rgba(15, 10, 31, 0.45);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -230,29 +393,37 @@
     pointer-events: none;
     transition: opacity 0.4s ease;
   }
-  #start-overlay.hidden { opacity: 0; pointer-events: none; }
+  #start-overlay.hidden { opacity: 0; }
   #start-overlay .big {
-    font-size: 32px;
+    font-size: 30px;
     font-weight: 800;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     background: linear-gradient(90deg, var(--rox), var(--jas));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
-  #start-overlay .hint { font-size: 13px; opacity: 0.7; letter-spacing: 2px; text-transform: uppercase; }
+  #start-overlay .hint { font-size: 12px; opacity: 0.75; letter-spacing: 2px; text-transform: uppercase; }
   #start-overlay .pulse {
-    width: 80px; height: 80px;
+    width: 72px; height: 72px;
     border-radius: 50%;
     border: 2px solid var(--rox);
-    margin-bottom: 18px;
+    margin-bottom: 16px;
     display: flex; align-items: center; justify-content: center;
     animation: pulse 1.6s ease-in-out infinite;
-    font-size: 32px;
+    font-size: 28px;
   }
   @keyframes pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(110, 231, 168, 0.5); transform: scale(1); }
-    50%      { box-shadow: 0 0 0 20px rgba(110, 231, 168, 0); transform: scale(1.05); }
+    50%      { box-shadow: 0 0 0 18px rgba(110, 231, 168, 0); transform: scale(1.05); }
+  }
+
+  /* === Confetti canvas === */
+  #confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 80;
   }
 </style>
 </head>
@@ -261,13 +432,41 @@
 <h1>LOOP JAM</h1>
 <div class="sub">tap to mix · stays in sync</div>
 
-<div id="timeline"><div id="playhead"></div></div>
+<div class="gauge" id="gauge">
+  <svg viewBox="0 0 100 100">
+    <defs>
+      <linearGradient id="loopGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#6ee7a8" />
+        <stop offset="100%" stop-color="#f5a3d0" />
+      </linearGradient>
+      <linearGradient id="fullGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#6ee7a8" />
+        <stop offset="50%" stop-color="#ffe28a" />
+        <stop offset="100%" stop-color="#f5a3d0" />
+      </linearGradient>
+    </defs>
+    <circle class="ring-bg" cx="50" cy="50" r="42" />
+    <circle class="ring-fill" id="ring-fill" cx="50" cy="50" r="42"
+            stroke-dasharray="0 999" />
+    <circle class="ring-loop" id="ring-loop" cx="50" cy="50" r="34"
+            stroke-dasharray="0 999" />
+  </svg>
+  <div class="center">
+    <div class="count"><span id="active-count">0</span><span class="of">/8</span></div>
+    <div class="lbl">tracks</div>
+  </div>
+</div>
 
-<div id="grid"></div>
+<div id="grid-wrap">
+  <div class="row rox" id="row-rox"><span class="team-tag">Rox</span></div>
+  <div class="row jas" id="row-jas"><span class="team-tag">Jas</span></div>
+</div>
 
 <div id="controls">
   <button class="ctrl danger" id="stop-all">Stop All</button>
 </div>
+
+<canvas id="confetti"></canvas>
 
 <div id="loader">
   <div class="title">Loading loops…</div>
@@ -294,12 +493,21 @@
     { id: 'jas-drone',  name: 'Drone',  team: 'jas' },
   ];
 
-  const grid = document.getElementById('grid');
+  const rowRox = document.getElementById('row-rox');
+  const rowJas = document.getElementById('row-jas');
   const loader = document.getElementById('loader');
   const loaderPct = document.getElementById('loader-pct');
   const startOverlay = document.getElementById('start-overlay');
   const stopAllBtn = document.getElementById('stop-all');
-  const playhead = document.getElementById('playhead');
+  const gauge = document.getElementById('gauge');
+  const ringFill = document.getElementById('ring-fill');
+  const ringLoop = document.getElementById('ring-loop');
+  const activeCountEl = document.getElementById('active-count');
+  const confettiCanvas = document.getElementById('confetti');
+  const cctx = confettiCanvas.getContext('2d');
+
+  const RING_FILL_CIRCUMFERENCE = 2 * Math.PI * 42;
+  const RING_LOOP_CIRCUMFERENCE = 2 * Math.PI * 34;
 
   // Build DOM
   const pads = TRACKS.map((t, i) => {
@@ -307,30 +515,37 @@
     el.className = `pad ${t.team} loading`;
     el.dataset.idx = i;
     el.innerHTML = `
-      <div class="beat"></div>
-      <img src="${t.id}.png" alt="${t.name}" draggable="false">
-      <div class="label">${t.team === 'rox' ? 'Rox' : 'Jas'} · ${t.name}</div>
+      <div class="clip">
+        <div class="stage-shadow"></div>
+        <img src="${t.id}.png" alt="${t.name}" draggable="false">
+        <div class="label">${t.team === 'rox' ? 'Rox' : 'Jas'} · ${t.name}</div>
+      </div>
+      <div class="notes"></div>
     `;
-    grid.appendChild(el);
+    (t.team === 'rox' ? rowRox : rowJas).appendChild(el);
     return el;
   });
+  const padImgs = pads.map(p => p.querySelector('img'));
+  const padNoteContainers = pads.map(p => p.querySelector('.notes'));
 
   // --- Audio engine ---
   let ctx = null;
-  let buffers = [];        // AudioBuffer[]
-  let sources = [];        // AudioBufferSourceNode[] (current generation)
-  let gains = [];          // GainNode[]
+  let buffers = [];
+  let sources = [];
+  let gains = [];
+  let analysers = [];
+  let analyserData = [];
   const active = new Array(TRACKS.length).fill(false);
-  let started = false;     // sources running?
-  let startTime = 0;       // ctx.currentTime when loop started
-  let loopDuration = 0;    // seconds (taken from first buffer)
-  const FADE = 0.06;       // seconds for mute/unmute click suppression
+  const padLevel = new Array(TRACKS.length).fill(0); // smoothed 0..1
+  let started = false;
+  let startTime = 0;
+  let loopDuration = 0;
+  const FADE = 0.06;
 
   async function preload() {
     const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
     let done = 0;
     const total = TRACKS.length;
-
     const results = await Promise.all(TRACKS.map(async (t, i) => {
       const res = await fetch(`${t.id}.ogg`);
       const arr = await res.arrayBuffer();
@@ -339,13 +554,9 @@
       loaderPct.textContent = Math.round((done / total) * 100) + '%';
       return { i, buf };
     }));
-
     buffers = new Array(TRACKS.length);
     for (const { i, buf } of results) buffers[i] = buf;
     loopDuration = buffers[0].duration;
-
-    // We decoded with tmpCtx but the AudioContext we'll actually play with
-    // needs to be created on a user gesture (Safari/iOS). Close the tmp one.
     try { tmpCtx.close(); } catch {}
 
     loader.classList.add('hidden');
@@ -363,10 +574,11 @@
     ensureContext();
     if (ctx.state === 'suspended') ctx.resume();
 
-    // Build a fresh generation of sources, all started at the same time.
     sources = [];
     gains = [];
-    const t0 = ctx.currentTime + 0.05; // small lead to align all .start() calls
+    analysers = [];
+    analyserData = [];
+    const t0 = ctx.currentTime + 0.05;
     startTime = t0;
 
     for (let i = 0; i < TRACKS.length; i++) {
@@ -375,15 +587,24 @@
       src.loop = true;
       const g = ctx.createGain();
       g.gain.value = (i === initialIdx) ? 1 : 0;
-      src.connect(g).connect(ctx.destination);
+      const an = ctx.createAnalyser();
+      an.fftSize = 256;
+      an.smoothingTimeConstant = 0.6;
+      src.connect(g).connect(an).connect(ctx.destination);
       src.start(t0);
       sources.push(src);
       gains.push(g);
+      analysers.push(an);
+      analyserData.push(new Uint8Array(an.frequencyBinCount));
       active[i] = (i === initialIdx);
     }
     started = true;
-    updatePadVisuals();
+    updateActivity();
     startOverlay.classList.add('hidden');
+    // Sparkle on the first tap
+    spawnSparkle(pads[initialIdx]);
+    pads[initialIdx].classList.add('punch');
+    setTimeout(() => pads[initialIdx].classList.remove('punch'), 320);
   }
 
   function stopAll() {
@@ -392,50 +613,191 @@
       try { sources[i].stop(); } catch {}
       sources[i].disconnect();
       gains[i].disconnect();
+      analysers[i].disconnect();
     }
-    sources = [];
-    gains = [];
+    sources = []; gains = []; analysers = []; analyserData = [];
     active.fill(false);
+    padLevel.fill(0);
     started = false;
-    updatePadVisuals();
-    playhead.style.width = '0%';
+    updateActivity();
+    setRingDash(ringLoop, 0, RING_LOOP_CIRCUMFERENCE);
+    pads.forEach(p => { p.classList.remove('active'); });
+    padImgs.forEach(img => { img.style.transform = ''; });
     startOverlay.classList.remove('hidden');
   }
 
   function toggle(idx) {
-    if (!buffers.length) return; // not loaded yet
+    if (!buffers.length) return;
     if (!started) { startAll(idx); return; }
     active[idx] = !active[idx];
-    const target = active[idx] ? 1 : 0;
+    const turningOn = active[idx];
+    const target = turningOn ? 1 : 0;
     const g = gains[idx].gain;
     const now = ctx.currentTime;
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
     g.linearRampToValueAtTime(target, now + FADE);
-    updatePadVisuals();
+
+    pads[idx].classList.add('punch');
+    setTimeout(() => pads[idx].classList.remove('punch'), 320);
+    if (!turningOn) {
+      pads[idx].classList.add('wiggle');
+      setTimeout(() => pads[idx].classList.remove('wiggle'), 340);
+    }
+    updateActivity();
   }
 
-  function updatePadVisuals() {
+  function setRingDash(circle, fraction, circumference) {
+    const len = Math.max(0, Math.min(1, fraction)) * circumference;
+    circle.setAttribute('stroke-dasharray', `${len} ${circumference}`);
+  }
+
+  let lastFullState = false;
+  function updateActivity() {
+    const n = active.reduce((s, v) => s + (v ? 1 : 0), 0);
+    activeCountEl.textContent = n;
+    setRingDash(ringFill, n / 8, RING_FILL_CIRCUMFERENCE);
     pads.forEach((p, i) => p.classList.toggle('active', active[i]));
+    const isFull = n === 8;
+    gauge.classList.toggle('full', isFull);
+    if (isFull && !lastFullState) {
+      burstConfetti();
+    }
+    lastFullState = isFull;
   }
 
-  // Event wiring
+  function spawnSparkle(pad) {
+    const s = document.createElement('div');
+    s.className = 'sparkle';
+    pad.appendChild(s);
+    setTimeout(() => s.remove(), 720);
+  }
+
+  // === Floating music notes ===
+  const NOTE_GLYPHS = ['♪', '♫', '♬', '♩'];
+  let noteCounter = 0;
+  function spawnNote(idx) {
+    const container = padNoteContainers[idx];
+    const n = document.createElement('span');
+    n.className = 'note';
+    n.textContent = NOTE_GLYPHS[noteCounter++ % NOTE_GLYPHS.length];
+    const dx = (Math.random() * 40 - 20);
+    const rot = (Math.random() * 60 - 30);
+    n.style.setProperty('--dx', dx + 'px');
+    n.style.setProperty('--rot', rot + 'deg');
+    n.style.left = (30 + Math.random() * 40) + '%';
+    n.style.top = '40%';
+    n.style.color = TRACKS[idx].team === 'rox' ? '#a8f0c8' : '#ffc7e3';
+    container.appendChild(n);
+    setTimeout(() => n.remove(), 1700);
+  }
+  // Throttle: at most one note every ~280ms per active pad, with some randomness.
+  let lastNoteAt = new Array(TRACKS.length).fill(0);
+
+  // === Confetti ===
+  let confettiParticles = [];
+  function resizeConfetti() {
+    const dpr = window.devicePixelRatio || 1;
+    confettiCanvas.width = window.innerWidth * dpr;
+    confettiCanvas.height = window.innerHeight * dpr;
+    confettiCanvas.style.width = window.innerWidth + 'px';
+    confettiCanvas.style.height = window.innerHeight + 'px';
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resizeConfetti();
+  window.addEventListener('resize', resizeConfetti);
+
+  function burstConfetti() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const colors = ['#6ee7a8', '#f5a3d0', '#ffe28a', '#9fd0ff', '#ffffff'];
+    const N = 140;
+    for (let i = 0; i < N; i++) {
+      confettiParticles.push({
+        x: W / 2 + (Math.random() - 0.5) * 60,
+        y: H * 0.35 + (Math.random() - 0.5) * 30,
+        vx: (Math.random() - 0.5) * 9,
+        vy: (Math.random() * -10) - 3,
+        g: 0.32 + Math.random() * 0.15,
+        size: 4 + Math.random() * 5,
+        color: colors[(Math.random() * colors.length) | 0],
+        rot: Math.random() * Math.PI * 2,
+        vr: (Math.random() - 0.5) * 0.3,
+        life: 0,
+        maxLife: 120 + Math.random() * 60,
+      });
+    }
+  }
+
+  function drawConfetti() {
+    if (!confettiParticles.length) {
+      cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      return;
+    }
+    cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    const next = [];
+    for (const p of confettiParticles) {
+      p.vy += p.g;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+      p.life++;
+      const alpha = Math.max(0, 1 - p.life / p.maxLife);
+      cctx.save();
+      cctx.globalAlpha = alpha;
+      cctx.translate(p.x, p.y);
+      cctx.rotate(p.rot);
+      cctx.fillStyle = p.color;
+      cctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      cctx.restore();
+      if (p.life < p.maxLife && p.y < window.innerHeight + 40) next.push(p);
+    }
+    confettiParticles = next;
+  }
+
+  // === Reactive bobbing + loop ring + note spawn loop ===
+  function tick() {
+    if (started) {
+      const loopT = (ctx.currentTime - startTime) % loopDuration;
+      setRingDash(ringLoop, loopT / loopDuration, RING_LOOP_CIRCUMFERENCE);
+
+      const now = performance.now();
+      for (let i = 0; i < TRACKS.length; i++) {
+        let level = 0;
+        if (active[i]) {
+          analysers[i].getByteFrequencyData(analyserData[i]);
+          // average lower-mid band for body
+          let sum = 0;
+          const N = analyserData[i].length;
+          for (let k = 0; k < N; k++) sum += analyserData[i][k];
+          const avg = sum / N / 255; // 0..1
+          level = avg;
+        }
+        // smooth
+        padLevel[i] += (level - padLevel[i]) * 0.25;
+        const lvl = padLevel[i];
+        // Scale 1.0 → 1.10 and lift slightly
+        const scale = 1 + lvl * 0.12;
+        const lift = -lvl * 4;
+        padImgs[i].style.transform = `translateY(${lift}px) scale(${scale})`;
+
+        // Note spawn when energetic
+        if (active[i] && lvl > 0.22 && now - lastNoteAt[i] > 280 + Math.random() * 200) {
+          spawnNote(i);
+          lastNoteAt[i] = now;
+        }
+      }
+    }
+    drawConfetti();
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // Events
   pads.forEach((p, i) => {
-    const handler = (e) => { e.preventDefault(); toggle(i); };
-    p.addEventListener('click', handler);
+    p.addEventListener('click', (e) => { e.preventDefault(); toggle(i); });
   });
   stopAllBtn.addEventListener('click', stopAll);
-
-  // Playhead loop progress
-  function tickPlayhead() {
-    if (started && loopDuration > 0) {
-      const t = (ctx.currentTime - startTime) % loopDuration;
-      const pct = Math.max(0, t / loopDuration) * 100;
-      playhead.style.width = pct + '%';
-    }
-    requestAnimationFrame(tickPlayhead);
-  }
-  requestAnimationFrame(tickPlayhead);
 
   // Kick off
   preload().catch(err => {
