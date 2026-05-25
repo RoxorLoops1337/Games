@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Loop Jam — Rox & Jas</title>
+<style>
+  :root {
+    --rox: #6ee7a8;
+    --jas: #f5a3d0;
+    --bg-1: #1a1530;
+    --bg-2: #2a1a3a;
+    --bg-3: #0f0a1f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background:
+      radial-gradient(ellipse at 20% 0%, var(--bg-2) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, #1f2a4a 0%, transparent 50%),
+      linear-gradient(180deg, var(--bg-1) 0%, var(--bg-3) 100%);
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px 12px 24px;
+  }
+  h1 {
+    margin: 4px 0 2px;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, var(--rox), #9fd0ff, var(--jas));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub {
+    opacity: 0.65;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  /* Progress bar / loop timeline */
+  #timeline {
+    width: min(100%, 520px);
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  #playhead {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--rox), var(--jas));
+    transition: width 0.05s linear;
+  }
+
+  /* Button grid */
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    width: min(100%, 520px);
+    margin-bottom: 16px;
+  }
+  @media (max-width: 520px) {
+    #grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    h1 { font-size: 24px; }
+  }
+
+  .pad {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 2px solid rgba(255,255,255,0.08);
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.12s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pad img {
+    position: absolute;
+    inset: 8% 4% 0% 4%;
+    width: 92%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+    pointer-events: none;
+    filter: grayscale(0.7) brightness(0.7);
+    transition: filter 0.25s ease, transform 0.25s ease;
+  }
+  .pad .label {
+    position: absolute;
+    bottom: 6px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .pad.rox.active {
+    background: rgba(110, 231, 168, 0.18);
+    border-color: var(--rox);
+    box-shadow: 0 0 24px rgba(110, 231, 168, 0.45), inset 0 0 24px rgba(110, 231, 168, 0.15);
+  }
+  .pad.jas.active {
+    background: rgba(245, 163, 208, 0.18);
+    border-color: var(--jas);
+    box-shadow: 0 0 24px rgba(245, 163, 208, 0.45), inset 0 0 24px rgba(245, 163, 208, 0.15);
+  }
+  .pad.active img {
+    filter: grayscale(0) brightness(1);
+    animation: bounce 0.5s ease-in-out infinite alternate;
+  }
+  .pad.active .label { color: #fff; }
+  .pad:active { transform: scale(0.96); }
+  .pad.loading { opacity: 0.4; cursor: wait; }
+
+  @keyframes bounce {
+    0%   { transform: translateY(0) scale(1); }
+    100% { transform: translateY(-3px) scale(1.02); }
+  }
+
+  /* Beat indicator dots in corner of active pad */
+  .pad .beat {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 2;
+  }
+  .pad.active .beat {
+    background: #fff;
+    opacity: 1;
+    box-shadow: 0 0 12px #fff;
+  }
+
+  /* Controls */
+  #controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button.ctrl {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  button.ctrl:hover { background: rgba(255,255,255,0.12); }
+  button.ctrl:active { transform: scale(0.96); }
+  button.ctrl.danger {
+    background: rgba(255, 90, 90, 0.12);
+    border-color: rgba(255, 90, 90, 0.4);
+    color: #ffb0b0;
+  }
+
+  #loader {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 10, 31, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: opacity 0.4s ease;
+  }
+  #loader.hidden { opacity: 0; pointer-events: none; }
+  #loader .ring {
+    width: 56px;
+    height: 56px;
+    border: 4px solid rgba(255,255,255,0.1);
+    border-top-color: var(--rox);
+    border-right-color: var(--jas);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loader .pct { font-size: 12px; letter-spacing: 2px; opacity: 0.7; }
+  #loader .title { font-size: 18px; font-weight: 800; margin-bottom: 12px; }
+
+  #start-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 10, 31, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 90;
+    cursor: pointer;
+    transition: opacity 0.4s ease;
+  }
+  #start-overlay.hidden { opacity: 0; pointer-events: none; }
+  #start-overlay .big {
+    font-size: 32px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, var(--rox), var(--jas));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  #start-overlay .hint { font-size: 13px; opacity: 0.7; letter-spacing: 2px; text-transform: uppercase; }
+  #start-overlay .pulse {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 2px solid var(--rox);
+    margin-bottom: 18px;
+    display: flex; align-items: center; justify-content: center;
+    animation: pulse 1.6s ease-in-out infinite;
+    font-size: 32px;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(110, 231, 168, 0.5); transform: scale(1); }
+    50%      { box-shadow: 0 0 0 20px rgba(110, 231, 168, 0); transform: scale(1.05); }
+  }
+</style>
+</head>
+<body>
+
+<h1>LOOP JAM</h1>
+<div class="sub">tap to mix · stays in sync</div>
+
+<div id="timeline"><div id="playhead"></div></div>
+
+<div id="grid"></div>
+
+<div id="controls">
+  <button class="ctrl danger" id="stop-all">Stop All</button>
+</div>
+
+<div id="loader">
+  <div class="title">Loading loops…</div>
+  <div class="ring"></div>
+  <div class="pct" id="loader-pct">0%</div>
+</div>
+
+<div id="start-overlay" class="hidden">
+  <div class="pulse">▶</div>
+  <div class="big">Tap any character</div>
+  <div class="hint">to start the jam</div>
+</div>
+
+<script>
+(() => {
+  const TRACKS = [
+    { id: 'rox-drone',  name: 'Drone',  team: 'rox' },
+    { id: 'rox-ding',   name: 'Ding',   team: 'rox' },
+    { id: 'rox-shaker', name: 'Shaker', team: 'rox' },
+    { id: 'rox-beat',   name: 'Beat',   team: 'rox' },
+    { id: 'jas-lead',   name: 'Lead',   team: 'jas' },
+    { id: 'jas-choir',  name: 'Choir',  team: 'jas' },
+    { id: 'jas-ding',   name: 'Ding',   team: 'jas' },
+    { id: 'jas-drone',  name: 'Drone',  team: 'jas' },
+  ];
+
+  const grid = document.getElementById('grid');
+  const loader = document.getElementById('loader');
+  const loaderPct = document.getElementById('loader-pct');
+  const startOverlay = document.getElementById('start-overlay');
+  const stopAllBtn = document.getElementById('stop-all');
+  const playhead = document.getElementById('playhead');
+
+  // Build DOM
+  const pads = TRACKS.map((t, i) => {
+    const el = document.createElement('div');
+    el.className = `pad ${t.team} loading`;
+    el.dataset.idx = i;
+    el.innerHTML = `
+      <div class="beat"></div>
+      <img src="${t.id}.png" alt="${t.name}" draggable="false">
+      <div class="label">${t.team === 'rox' ? 'Rox' : 'Jas'} · ${t.name}</div>
+    `;
+    grid.appendChild(el);
+    return el;
+  });
+
+  // --- Audio engine ---
+  let ctx = null;
+  let buffers = [];        // AudioBuffer[]
+  let sources = [];        // AudioBufferSourceNode[] (current generation)
+  let gains = [];          // GainNode[]
+  const active = new Array(TRACKS.length).fill(false);
+  let started = false;     // sources running?
+  let startTime = 0;       // ctx.currentTime when loop started
+  let loopDuration = 0;    // seconds (taken from first buffer)
+  const FADE = 0.06;       // seconds for mute/unmute click suppression
+
+  async function preload() {
+    const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let done = 0;
+    const total = TRACKS.length;
+
+    const results = await Promise.all(TRACKS.map(async (t, i) => {
+      const res = await fetch(`${t.id}.ogg`);
+      const arr = await res.arrayBuffer();
+      const buf = await tmpCtx.decodeAudioData(arr.slice(0));
+      done++;
+      loaderPct.textContent = Math.round((done / total) * 100) + '%';
+      return { i, buf };
+    }));
+
+    buffers = new Array(TRACKS.length);
+    for (const { i, buf } of results) buffers[i] = buf;
+    loopDuration = buffers[0].duration;
+
+    // We decoded with tmpCtx but the AudioContext we'll actually play with
+    // needs to be created on a user gesture (Safari/iOS). Close the tmp one.
+    try { tmpCtx.close(); } catch {}
+
+    loader.classList.add('hidden');
+    setTimeout(() => loader.remove(), 500);
+    startOverlay.classList.remove('hidden');
+    pads.forEach(p => p.classList.remove('loading'));
+  }
+
+  function ensureContext() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  function startAll(initialIdx) {
+    ensureContext();
+    if (ctx.state === 'suspended') ctx.resume();
+
+    // Build a fresh generation of sources, all started at the same time.
+    sources = [];
+    gains = [];
+    const t0 = ctx.currentTime + 0.05; // small lead to align all .start() calls
+    startTime = t0;
+
+    for (let i = 0; i < TRACKS.length; i++) {
+      const src = ctx.createBufferSource();
+      src.buffer = buffers[i];
+      src.loop = true;
+      const g = ctx.createGain();
+      g.gain.value = (i === initialIdx) ? 1 : 0;
+      src.connect(g).connect(ctx.destination);
+      src.start(t0);
+      sources.push(src);
+      gains.push(g);
+      active[i] = (i === initialIdx);
+    }
+    started = true;
+    updatePadVisuals();
+    startOverlay.classList.add('hidden');
+  }
+
+  function stopAll() {
+    if (!started) return;
+    for (let i = 0; i < sources.length; i++) {
+      try { sources[i].stop(); } catch {}
+      sources[i].disconnect();
+      gains[i].disconnect();
+    }
+    sources = [];
+    gains = [];
+    active.fill(false);
+    started = false;
+    updatePadVisuals();
+    playhead.style.width = '0%';
+    startOverlay.classList.remove('hidden');
+  }
+
+  function toggle(idx) {
+    if (!buffers.length) return; // not loaded yet
+    if (!started) { startAll(idx); return; }
+    active[idx] = !active[idx];
+    const target = active[idx] ? 1 : 0;
+    const g = gains[idx].gain;
+    const now = ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(target, now + FADE);
+    updatePadVisuals();
+  }
+
+  function updatePadVisuals() {
+    pads.forEach((p, i) => p.classList.toggle('active', active[i]));
+  }
+
+  // Event wiring
+  pads.forEach((p, i) => {
+    const handler = (e) => { e.preventDefault(); toggle(i); };
+    p.addEventListener('click', handler);
+  });
+  stopAllBtn.addEventListener('click', stopAll);
+
+  // Playhead loop progress
+  function tickPlayhead() {
+    if (started && loopDuration > 0) {
+      const t = (ctx.currentTime - startTime) % loopDuration;
+      const pct = Math.max(0, t / loopDuration) * 100;
+      playhead.style.width = pct + '%';
+    }
+    requestAnimationFrame(tickPlayhead);
+  }
+  requestAnimationFrame(tickPlayhead);
+
+  // Kick off
+  preload().catch(err => {
+    loaderPct.textContent = 'Error: ' + err.message;
+    console.error(err);
+  });
+})();
+</script>
+</body>
+</html>
