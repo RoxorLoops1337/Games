@@ -12,21 +12,31 @@ const Enemy = (() => {
   ];
 
   function make(x, y, kind) {
-    const c = U.pick(colors);
+    const k = kind ?? U.weighted([["rammer", 4], ["racer", 3], ["ped_hunter", 2]]);
+    let color, trim, accel, maxSpeed, hp, brake = 480, turnRate = 2.4;
+    if (k === "cop") {
+      color = "#1a1a3a"; trim = "#ffffff";
+      accel = 360; maxSpeed = 480; hp = 100; turnRate = 2.7;
+    } else {
+      const c = U.pick(colors);
+      color = c.color; trim = c.trim;
+      accel = 280 + (k === "racer" ? 80 : 0);
+      maxSpeed = 420 + (k === "racer" ? 100 : 0);
+      hp = 80;
+    }
     const car = Car.make({
-      x, y, color: c.color, trim: c.trim,
-      accel: 280 + (kind === "racer" ? 80 : 0),
-      maxSpeed: 420 + (kind === "racer" ? 100 : 0),
-      brake: 480, turnRate: 2.4,
-      hp: 80, maxHp: 80,
+      x, y, color, trim,
+      accel, maxSpeed, brake, turnRate,
+      hp, maxHp: hp,
     });
     return {
       car,
-      kind: kind ?? U.weighted([["rammer", 4], ["racer", 3], ["ped_hunter", 2]]),
+      kind: k,
       stateTimer: 0,
       wanderAngle: Math.random() * U.TAU,
       target: { x, y },
       lastHonk: 0,
+      sirenTimer: 0,
       dead: false,
     };
   }
@@ -49,7 +59,7 @@ const Enemy = (() => {
     let throttle = 0.7;
     let steer = 0;
 
-    if (e.kind === "rammer") {
+    if (e.kind === "rammer" || e.kind === "cop") {
       tx = player.car.x + player.car.vx * 0.3;
       ty = player.car.y + player.car.vy * 0.3;
       throttle = 1;
@@ -98,25 +108,47 @@ const Enemy = (() => {
     Car.maybeTireTracks(e.car, dt);
     Car.emitTrails(e.car, dt);
 
-    // occasional honk if close to player
-    e.lastHonk -= dt;
-    if (e.lastHonk <= 0 && U.dist2(e.car.x, e.car.y, player.car.x, player.car.y) < 200*200) {
-      e.lastHonk = U.rand(3, 7);
-      if (Math.random() < 0.4) Audio.honk();
+    // Occasional siren for cops, honk for civilians.
+    if (e.kind === "cop") {
+      e.sirenTimer -= dt;
+      if (e.sirenTimer <= 0) {
+        e.sirenTimer = U.rand(1.4, 2.6);
+        if (U.dist2(e.car.x, e.car.y, player.car.x, player.car.y) < 500 * 500) Audio.siren();
+      }
+    } else {
+      e.lastHonk -= dt;
+      if (e.lastHonk <= 0 && U.dist2(e.car.x, e.car.y, player.car.x, player.car.y) < 200*200) {
+        e.lastHonk = U.rand(3, 7);
+        if (Math.random() < 0.4) Audio.honk();
+      }
     }
   }
 
   function draw(ctx, e) {
     if (e.dead) return;
     Car.draw(ctx, e.car);
-    // Faction sticker on the roof so players can read them at a glance.
     ctx.save();
     ctx.translate(e.car.x, e.car.y);
     ctx.rotate(e.car.angle);
-    ctx.fillStyle = e.kind === "rammer" ? "#ff2222" :
-                    e.kind === "racer"  ? "#00ddff" :
-                                          "#ffaa00";
-    ctx.fillRect(-3, -3, 6, 6);
+    if (e.kind === "cop") {
+      // Flashing red/blue lightbar mounted on the roof.
+      const flash = Math.floor(performance.now() / 120) % 2 === 0;
+      ctx.fillStyle = "#111";
+      ctx.fillRect(-6, -8, 12, 4);
+      ctx.fillStyle = flash ? "#ff0000" : "#0033ff";
+      ctx.fillRect(-5, -7, 5, 2);
+      ctx.fillStyle = flash ? "#0033ff" : "#ff0000";
+      ctx.fillRect( 0, -7, 5, 2);
+      // White door panel for the iconic black & white look.
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(-2, -e.car.width/2, 4, e.car.width);
+    } else {
+      // Faction sticker on the roof so players can read them at a glance.
+      ctx.fillStyle = e.kind === "rammer" ? "#ff2222" :
+                      e.kind === "racer"  ? "#00ddff" :
+                                            "#ffaa00";
+      ctx.fillRect(-3, -3, 6, 6);
+    }
     ctx.restore();
   }
 

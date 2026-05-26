@@ -23,6 +23,8 @@ const Audio = (() => {
     muted = m;
     if (masterGain) masterGain.gain.value = m ? 0 : 0.5;
   }
+  function isMuted() { return muted; }
+  function toggleMuted() { setMuted(!muted); return muted; }
 
   // Returns a noise buffer for white-noise based sounds (crashes, explosions).
   let noiseBuf = null;
@@ -201,7 +203,7 @@ const Audio = (() => {
   }
 
   return {
-    init, resume, setMuted,
+    init, resume, setMuted, isMuted, toggleMuted,
     splat, scream, crash, explosion, pickup, powerupGet,
     nitroBoost, honk, comboLevelUp, siren,
     startEngine, updateEngine, stopEngine,

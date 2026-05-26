@@ -7,6 +7,7 @@ const HUD = (() => {
   const score = el("hud-score");
   const kills = el("hud-kills");
   const combo = el("hud-combo");
+  const wanted = el("hud-wanted");
   const hpFill = el("hp-fill");
   const nitroFill = el("nitro-fill");
   const speedoText = el("speedo-text");
@@ -23,6 +24,9 @@ const HUD = (() => {
     score.textContent = state.score.toLocaleString();
     kills.textContent = state.kills;
     combo.textContent = "x" + state.combo;
+    const w = state.wanted ?? 0;
+    wanted.textContent = "★".repeat(w) + "☆".repeat(5 - w);
+    wanted.style.color = w >= 4 ? "#ff2222" : w >= 2 ? "#ff8800" : "#888";
 
     const hpPct = U.clamp(state.player.car.hp / state.player.car.maxHp, 0, 1);
     hpFill.style.width = (hpPct * 100) + "%";
@@ -79,11 +83,16 @@ const HUD = (() => {
       if (p.dead) continue;
       minimapCtx.fillRect(p.x * sx - 0.5, p.y * sy - 0.5, 1, 1);
     }
-    // Enemies red.
-    minimapCtx.fillStyle = "#f33";
+    // Enemies red, cops blue, traffic gray.
     for (const e of state.enemies) {
       if (e.dead) continue;
+      minimapCtx.fillStyle = e.kind === "cop" ? "#33aaff" : "#f33";
       minimapCtx.fillRect(e.car.x * sx - 1, e.car.y * sy - 1, 3, 3);
+    }
+    minimapCtx.fillStyle = "#888";
+    for (const t of (state.traffic || [])) {
+      if (t.dead) continue;
+      minimapCtx.fillRect(t.car.x * sx - 1, t.car.y * sy - 1, 2, 2);
     }
     // Power-ups gold.
     minimapCtx.fillStyle = "#ffd700";

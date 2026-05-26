@@ -137,8 +137,30 @@ const Game = (() => {
                      mode === "freeplay" ? 9999 :
                      90;
 
+    // Civilian traffic: slow non-aggressive cars that drive around. Stored
+    // as Enemy entities with kind="racer" but a flag to keep them docile —
+    // simpler than introducing a third entity type.
+    const traffic = [];
+    const numTraffic = 4 + idx;
+    for (let i = 0; i < numTraffic; i++) {
+      let tries = 30, x = 0, y = 0;
+      while (tries-- > 0) {
+        x = U.rand(60, World.size().w - 60);
+        y = U.rand(60, World.size().h - 60);
+        if (World.isRoadAt(x, y) && U.dist(x, y, player.car.x, player.car.y) > 350) break;
+      }
+      const t = Enemy.make(x, y, "racer");
+      t.civilian = true;
+      // Tone them down: slower, less hp, lighter colors.
+      t.car.maxSpeed = 220;
+      t.car.accel = 180;
+      t.car.hp = 50;
+      t.car.maxHp = 50;
+      traffic.push(t);
+    }
+
     G = {
-      player, peds, enemies, powerups,
+      player, peds, enemies, powerups, traffic,
       score: 0, kills: 0, combo: 1, comboTimer: 0,
       timeLeft, totalTime: 0,
       targetKills,
@@ -146,6 +168,10 @@ const Game = (() => {
       multiKillCount: 0,
       level: idx,
       paused: false,
+      wanted: 0,            // 0..5 stars
+      wantedHeat: 0,        // accumulates from chaos, raises wanted when high
+      wantedCooldown: 0,    // ticks down — wanted drops when 0
+      copSpawnTimer: 4,
       _siren: 0,
     };
   }
@@ -174,7 +200,10 @@ const Game = (() => {
       if (state === STATE.PLAYING) { state = STATE.PAUSED; HUD.show("pause"); }
       else if (state === STATE.PAUSED) { state = STATE.PLAYING; HUD.hide("pause"); }
     }
-    if (Input.wasPressed("M")) Audio.setMuted(false);
+    if (Input.wasPressed("M")) {
+      const m = Audio.toggleMuted();
+      HUD.bigMsg(m ? "MUTED" : "UNMUTED", 1.2);
+    }
 
     if (state === STATE.PLAYING) {
       // Slow-mo bleeds back to normal.
@@ -198,6 +227,7 @@ const Game = (() => {
       return;
     }
 
+
     // --- Player update ---
     Player.update(G.player, dt, getIntent);
     clampToWorld(G.player.car);
@@ -213,6 +243,14 @@ const Game = (() => {
       Enemy.update(e, dt, G.player, G.peds);
       clampToWorld(e.car);
     }
+    // --- Traffic ---
+    for (const t of G.traffic) {
+      Enemy.update(t, dt, G.player, G.peds);
+      clampToWorld(t.car);
+    }
+
+    // --- Wanted level ---
+    updateWanted(dt);
 
     // --- Power-ups ---
     for (const u of G.powerups) Powerup.update(u, dt);
@@ -285,6 +323,62 @@ const Game = (() => {
     HUD.update(G);
     HUD.tickCombo(dt);
     HUD.tickBig(dt);
+  }
+
+  // Cops are added to the regular `enemies` array so the collision logic
+  // doesn't need to know about them specially. The wanted level just
+  // governs how many we maintain on the streets.
+  function updateWanted(dt) {
+    G.wantedCooldown -= dt;
+    if (G.wantedCooldown < 0) G.wantedCooldown = 0;
+
+    // Wanted decays when out of trouble for a while.
+    if (G.wantedCooldown === 0 && G.wanted > 0) {
+      G.wantedHeat -= dt * 0.5;
+      if (G.wantedHeat <= -5) {
+        G.wanted = Math.max(0, G.wanted - 1);
+        G.wantedHeat = 0;
+        HUD.bigMsg("WANTED LEVEL: " + "★".repeat(G.wanted) + "☆".repeat(5 - G.wanted));
+      }
+    }
+
+    if (G.wanted > 0) {
+      const desiredCops = G.wanted; // 1..5 cops at once
+      let copsAlive = 0;
+      for (const e of G.enemies) if (e.kind === "cop" && !e.dead) copsAlive++;
+      G.copSpawnTimer -= dt;
+      if (copsAlive < desiredCops && G.copSpawnTimer <= 0) {
+        spawnCop();
+        G.copSpawnTimer = 4;
+      }
+    }
+  }
+
+  function raiseHeat(amount, points = 0) {
+    G.wantedHeat += amount;
+    G.wantedCooldown = 8; // postpone decay
+    const thresholds = [0, 3, 8, 16, 28, 45];
+    let newWanted = G.wanted;
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+      if (G.wantedHeat >= thresholds[i]) { newWanted = i; break; }
+    }
+    if (newWanted > G.wanted) {
+      G.wanted = newWanted;
+      HUD.bigMsg("WANTED LEVEL UP: " + "★".repeat(G.wanted) + "☆".repeat(5 - G.wanted));
+      Audio.comboLevelUp(2);
+    }
+  }
+
+  function spawnCop() {
+    const { w, h } = World.size();
+    let tries = 20, x = 0, y = 0;
+    while (tries-- > 0) {
+      x = U.rand(40, w - 40);
+      y = U.rand(40, h - 40);
+      if (World.isRoadAt(x, y) && U.dist(x, y, G.player.car.x, G.player.car.y) > 400) break;
+    }
+    const cop = Enemy.make(x, y, "cop");
+    G.enemies.push(cop);
   }
 
   function clampToWorld(car) {
@@ -368,13 +462,17 @@ const Game = (() => {
 
     // Add some bonus time on kills in carnage mode.
     if (mode === "carnage") G.timeLeft += 0.6;
+
+    // Killing draws police heat.
+    raiseHeat(0.6);
   }
 
   function collideEnemies() {
-    // Player vs enemy
+    // Player vs enemy (cops + rivals + traffic all flow through here)
     const pc = G.player.car;
     const pr = Car.radius(pc);
-    for (const e of G.enemies) {
+    const allOpponents = G.enemies.concat(G.traffic);
+    for (const e of allOpponents) {
       if (e.dead) continue;
       const er = Car.radius(e.car);
       if (U.circleOverlap(pc.x, pc.y, pr, e.car.x, e.car.y, er, 0)) {
@@ -406,10 +504,12 @@ const Game = (() => {
       }
     }
 
-    // Enemy vs enemy (lighter — they don't take real damage from each other)
-    for (let i = 0; i < G.enemies.length; i++) {
-      for (let j = i + 1; j < G.enemies.length; j++) {
-        const a = G.enemies[i], b = G.enemies[j];
+    // Cross-faction (enemy vs enemy / traffic) just pushes them apart so
+    // they don't pile up in the same tile.
+    const all = G.enemies.concat(G.traffic);
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const a = all[i], b = all[j];
         if (a.dead || b.dead) continue;
         const ar = Car.radius(a.car), br = Car.radius(b.car);
         if (U.circleOverlap(a.car.x, a.car.y, ar, b.car.x, b.car.y, br, 0)) {
@@ -430,20 +530,25 @@ const Game = (() => {
     Particles.explosion(e.car.x, e.car.y);
     Audio.explosion();
     shake(18);
-    G.score += 500;
-    pushPopup(e.car.x, e.car.y - 14, "+500", "#ff8800");
-    HUD.bigMsg("RIVAL WASTED");
+    const reward = e.kind === "cop" ? 800 : (e.civilian ? 300 : 500);
+    G.score += reward;
+    pushPopup(e.car.x, e.car.y - 14, "+" + reward, "#ff8800");
+    HUD.bigMsg(e.kind === "cop" ? "COP DOWN" : e.civilian ? "CIVILIAN WASTED" : "RIVAL WASTED");
     slowMo(0.4, 0.4);
+    // Big heat consequences for killing the law or a civilian.
+    if (e.kind === "cop") raiseHeat(6);
+    else if (e.civilian) raiseHeat(2);
   }
 
   function collideObstacles() {
     for (const o of World.getObstacles()) {
       if (o.destroyed) continue;
-      // Player
       checkCarVsObstacle(G.player.car, o, "player");
-      // Enemies
       for (const e of G.enemies) {
         if (!e.dead) checkCarVsObstacle(e.car, o, "enemy");
+      }
+      for (const t of G.traffic) {
+        if (!t.dead) checkCarVsObstacle(t.car, o, "enemy");
       }
     }
   }
@@ -610,6 +715,8 @@ const Game = (() => {
     const sortedPeds = G.peds.slice().sort((a, b) => a.y - b.y);
     for (const p of sortedPeds) Pedestrian.draw(ctx, p);
 
+    // Traffic (drawn under enemies — they're background filler)
+    for (const t of G.traffic) Enemy.draw(ctx, t);
     // Enemies
     for (const e of G.enemies) Enemy.draw(ctx, e);
 
