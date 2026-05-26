@@ -297,14 +297,26 @@
     font-size: 11px;
   }
   #btn-interact {
-    right: 100px; bottom: 200px;
-    width: 70px; height: 70px;
-    font-size: 12px;
+    /* Big, centered above the weapon bar so it's impossible to miss */
+    left: 50%;
+    bottom: 235px;
+    transform: translateX(-50%);
+    width: 150px; height: 70px;
+    border-radius: 14px;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 2px;
     background: rgba(255,224,102,0.22);
-    border-color: #ffe066;
-    color: #ffe066;
+    border: 3px solid #ffe066;
+    color: #fff8d0;
+    box-shadow: 0 0 14px rgba(255,224,102,0.55), inset 0 0 10px rgba(255,224,102,0.25);
+    animation: interact-pulse 1.0s infinite ease-in-out;
   }
-  #btn-interact:active { background: rgba(255,224,102,0.55); }
+  #btn-interact:active { background: rgba(255,224,102,0.7); }
+  @keyframes interact-pulse {
+    0%,100% { box-shadow: 0 0 12px rgba(255,224,102,0.5),  inset 0 0 8px rgba(255,224,102,0.2); }
+    50%     { box-shadow: 0 0 26px rgba(255,224,102,0.95), inset 0 0 14px rgba(255,224,102,0.45); }
+  }
   #weapon-bar {
     position: fixed;
     bottom: 14px;
@@ -3835,6 +3847,17 @@ function drawMinimap() {
     mctx.fillStyle = c;
     mctx.beginPath(); mctx.arc(px, py, 3, 0, Math.PI * 2); mctx.fill();
   }
+  // Cars on the minimap so the player can see drivables on the radar
+  for (const o of obstacles) {
+    if (!o.isCar) continue;
+    const [cx, cy] = w2m(o.mesh.position.x, o.mesh.position.z);
+    if (cx < 2 || cx > W - 2 || cy < 2 || cy > H - 2) continue;
+    mctx.fillStyle = '#ffd089';
+    mctx.fillRect(cx - 2.5, cy - 2.5, 5, 5);
+    mctx.strokeStyle = '#ffaa44';
+    mctx.lineWidth = 1;
+    mctx.strokeRect(cx - 2.5, cy - 2.5, 5, 5);
+  }
   mctx.restore();
   mctx.strokeStyle = '#00ff88';
   mctx.lineWidth = 2;
@@ -3924,6 +3947,7 @@ function startGame() {
       } catch (_) {}
     }
     step = 'showMessage';    showMessage('Find the LAB (green beacon NE) for the Antidote!', 4000);
+    step = 'carHint';        if (isTouch) setTimeout(() => { if (!gameOver) showMessage('See a car? Walk up to it and the yellow DRIVE button will appear', 3500); }, 4600);
   } catch (err) {
     showFatal('startGame failed at [' + step + ']\n' + (err && err.message ? err.message : err) + '\n' + (err && err.stack ? err.stack.split('\n').slice(0,5).join('\n') : ''));
     throw err;
@@ -4176,10 +4200,11 @@ function update(dt) {
     if (mouseDown) shoot();
   }
 
-  // Find nearest interactable car (on foot only)
+  // Find nearest interactable car (on foot only) — generous range so the
+  // player doesn't have to be right on top of the car to see the prompt.
   if (!inVehicle) {
     nearestCar = null;
-    let bestD = 3.2;
+    let bestD = 5.5;
     for (const o of obstacles) {
       if (!o.isCar) continue;
       const d = Math.hypot(player.pos.x - o.mesh.position.x, player.pos.z - o.mesh.position.z);
