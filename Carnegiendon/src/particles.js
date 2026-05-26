@@ -1,189 +1,205 @@
-// Particle system: blood splatter, body chunks, smoke, sparks, fire,
-// pavement decals (blood stains + tire tracks that persist for the level).
+// 3D particle effects. Three flavors live here:
+//   - Short-lived sprite-ish bits (blood drops, smoke puffs, sparks, fire)
+//     rendered as small unlit cubes that scale + fade as they age.
+//   - Persistent "debris" objects that are existing meshes (body parts
+//     from squished peds) which keep their full geometry while tumbling.
+//   - A water-jet emitter used by destroyed fire hydrants.
+// All of them go through update(dt) which advances physics and prunes
+// dead entries.
 const Particles = (() => {
-  // Live particles drawn above the ground each frame.
-  const live = [];
-  // Decals are baked to an offscreen canvas the size of the map so they
-  // persist cheaply without an ever-growing particle array.
-  let decalCanvas = null;
-  let decalCtx = null;
-  let mapW = 0, mapH = 0;
+  let scene = null;
+  const live = [];   // sprite-ish particles
+  const debris = []; // existing meshes flung through the air
 
-  function initDecals(w, h) {
-    mapW = w; mapH = h;
-    decalCanvas = document.createElement("canvas");
-    decalCanvas.width = w;
-    decalCanvas.height = h;
-    decalCtx = decalCanvas.getContext("2d");
-  }
+  function init(sceneRef) { scene = sceneRef; }
 
   function reset() {
+    for (const p of live) if (p.mesh && p.mesh.parent) p.mesh.parent.remove(p.mesh);
+    for (const d of debris) if (d.mesh && d.mesh.parent) d.mesh.parent.remove(d.mesh);
     live.length = 0;
-    if (decalCtx) decalCtx.clearRect(0, 0, mapW, mapH);
+    debris.length = 0;
   }
 
-  function add(p) {
-    p.life = p.life ?? 1;
-    p.maxLife = p.life;
-    p.vx = p.vx ?? 0;
-    p.vy = p.vy ?? 0;
-    p.drag = p.drag ?? 0.92;
-    p.gravity = p.gravity ?? 0;
-    p.size = p.size ?? 3;
-    p.color = p.color ?? "#fff";
-    p.type = p.type ?? "circle";
+  function makeQuick(x, y, z, color, size, life) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(size, size, size),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 }),
+    );
+    m.position.set(x, y, z);
+    scene.add(m);
+    const p = {
+      mesh: m, x, y, z, vx: 0, vy: 0, vz: 0,
+      drag: 0.92, gravity: 0, size, color,
+      life, maxLife: life, growth: 0, spin: 0,
+    };
     live.push(p);
+    return p;
   }
 
-  // Blood: a fountain of red drops + a permanent stain on the ground.
-  function bloodBurst(x, y, intensity = 1) {
-    const drops = 12 + Math.floor(intensity * 18);
+  function bloodBurst(x, y, z, intensity = 1) {
+    const drops = 14 + Math.floor(intensity * 18);
     for (let i = 0; i < drops; i++) {
       const a = Math.random() * U.TAU;
-      const sp = U.rand(60, 240) * intensity;
-      add({
-        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        size: U.rand(2, 5),
-        color: U.pick(["#c00000", "#a00000", "#ff2222", "#800000"]),
-        life: U.rand(0.4, 0.9),
-        drag: 0.88, gravity: 0,
-        type: "blood",
-      });
+      const sp = U.rand(4, 12) * intensity;
+      const p = makeQuick(x, y, z,
+        U.pick([0xc00000, 0xa00000, 0xff2222, 0x800000]),
+        U.rand(0.15, 0.35),
+        U.rand(0.4, 0.9));
+      p.vx = Math.cos(a) * sp;
+      p.vy = U.rand(2, 7);
+      p.vz = Math.sin(a) * sp;
+      p.gravity = -22;
+      p.drag = 0.96;
     }
-    // Permanent stain.
-    if (decalCtx) {
-      const blots = 4 + Math.floor(intensity * 5);
-      for (let i = 0; i < blots; i++) {
-        const a = Math.random() * U.TAU;
-        const r = U.rand(2, 14 * intensity);
-        const px = x + Math.cos(a) * U.rand(0, 18 * intensity);
-        const py = y + Math.sin(a) * U.rand(0, 18 * intensity);
-        decalCtx.fillStyle = `rgba(${U.randInt(100,180)},0,0,${U.rand(0.5,0.9)})`;
-        decalCtx.beginPath();
-        decalCtx.arc(px, py, r, 0, U.TAU);
-        decalCtx.fill();
+  }
+
+  function smoke(x, y, z, opts = {}) {
+    const p = makeQuick(x, y, z, 0x404040, 0.9, U.rand(0.8, 1.4));
+    p.mesh.material.color.setHex(opts.color ?? 0x404040);
+    p.vx = U.rand(-2, 2) + (opts.vx ?? 0);
+    p.vy = U.rand(2, 4);
+    p.vz = U.rand(-2, 2) + (opts.vz ?? 0);
+    p.growth = 1.6;
+    p.drag = 0.94;
+    p.mesh.material.opacity = 0.6;
+  }
+
+  function fire(x, y, z, vx = 0, vz = 0) {
+    const p = makeQuick(x, y, z,
+      U.pick([0xffcc00, 0xff8800, 0xff4400, 0xff0000]),
+      U.rand(0.3, 0.7),
+      U.rand(0.25, 0.55));
+    p.vx = U.rand(-2, 2) + vx;
+    p.vy = U.rand(1, 4);
+    p.vz = U.rand(-2, 2) + vz;
+    p.growth = -0.8;
+    p.drag = 0.92;
+  }
+
+  function spark(x, y, z) {
+    const a = Math.random() * U.TAU;
+    const sp = U.rand(6, 14);
+    const p = makeQuick(x, y, z,
+      U.pick([0xffffaa, 0xffaa00, 0xffffff]),
+      U.rand(0.08, 0.18),
+      U.rand(0.15, 0.35));
+    p.vx = Math.cos(a) * sp;
+    p.vy = U.rand(2, 6);
+    p.vz = Math.sin(a) * sp;
+    p.gravity = -20;
+  }
+
+  function explosion(x, y, z) {
+    for (let i = 0; i < 26; i++) fire(x, y, z);
+    for (let i = 0; i < 16; i++) spark(x, y, z);
+    for (let i = 0; i < 12; i++) smoke(x, y, z);
+    World.paintBlood(x, z, 1.8);   // scorch + blood mark
+  }
+
+  function water(x, y, z) {
+    const p = makeQuick(x + U.rand(-0.4, 0.4), y, z + U.rand(-0.4, 0.4),
+      0x4cb4ff, U.rand(0.1, 0.2), U.rand(0.4, 0.8));
+    p.vx = U.rand(-2, 2);
+    p.vy = U.rand(7, 10);
+    p.vz = U.rand(-2, 2);
+    p.gravity = -22;
+    p.mesh.material.opacity = 0.7;
+  }
+
+  function addDebris(mesh, opts) {
+    debris.push({
+      mesh,
+      vx: opts.vx ?? 0, vy: opts.vy ?? 0, vz: opts.vz ?? 0,
+      rx: opts.rx ?? 0, ry: opts.ry ?? 0, rz: opts.rz ?? 0,
+      life: opts.life ?? 2, maxLife: opts.life ?? 2,
+      bloody: !!opts.bloody, settled: false,
+    });
+    // Tint the debris red if it's a piece of a person.
+    if (opts.bloody && mesh.material) {
+      if (Array.isArray(mesh.material)) {
+        for (const m of mesh.material) m.color.lerp(new THREE.Color(0x880000), 0.4);
+      } else {
+        mesh.material.color.lerp(new THREE.Color(0x880000), 0.4);
       }
     }
-  }
-
-  function bodyChunks(x, y, n = 6) {
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * U.TAU;
-      const sp = U.rand(120, 320);
-      add({
-        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        size: U.rand(3, 7),
-        color: U.pick(["#a04040", "#702020", "#601010", "#ffeeaa"]),
-        life: U.rand(0.5, 1.1), drag: 0.9,
-        type: "chunk",
-      });
-    }
-  }
-
-  function smoke(x, y, opts = {}) {
-    add({
-      x: x + U.rand(-4, 4), y: y + U.rand(-4, 4),
-      vx: U.rand(-30, 30) + (opts.vx ?? 0),
-      vy: U.rand(-30, 30) + (opts.vy ?? 0) - 20,
-      size: U.rand(6, 14), color: opts.color ?? "rgba(80,80,80,0.7)",
-      life: U.rand(0.6, 1.4), drag: 0.92, growth: U.rand(20, 40),
-      type: "smoke",
-    });
-  }
-
-  function fire(x, y, opts = {}) {
-    add({
-      x, y,
-      vx: U.rand(-20, 20) + (opts.vx ?? 0),
-      vy: U.rand(-40, -10) + (opts.vy ?? 0),
-      size: U.rand(4, 9),
-      color: U.pick(["#ffcc00", "#ff8800", "#ff4400", "#ff0000"]),
-      life: U.rand(0.25, 0.6), drag: 0.9, growth: -8,
-      type: "fire",
-    });
-  }
-
-  function spark(x, y) {
-    const a = Math.random() * U.TAU;
-    const sp = U.rand(80, 220);
-    add({
-      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-      size: U.rand(1, 2.5),
-      color: U.pick(["#ffffaa", "#ffaa00", "#ffffff"]),
-      life: U.rand(0.15, 0.35), drag: 0.85,
-      type: "spark",
-    });
-  }
-
-  function explosion(x, y) {
-    for (let i = 0; i < 30; i++) fire(x, y);
-    for (let i = 0; i < 18; i++) spark(x, y);
-    for (let i = 0; i < 14; i++) smoke(x, y);
-    // shockwave decal
-    if (decalCtx) {
-      decalCtx.fillStyle = "rgba(20,20,20,0.6)";
-      decalCtx.beginPath();
-      decalCtx.arc(x, y, 36, 0, U.TAU);
-      decalCtx.fill();
-    }
-  }
-
-  // A pair of tire stripes baked to the decal layer. Called by cars when
-  // the handbrake bites or speed differential exceeds a threshold.
-  function tireTrack(x, y, angle, width = 18, color = "rgba(20,20,20,0.5)") {
-    if (!decalCtx) return;
-    const half = width / 2;
-    const [lx, ly] = U.rotate(0, -half, angle);
-    const [rx, ry] = U.rotate(0,  half, angle);
-    decalCtx.fillStyle = color;
-    decalCtx.beginPath();
-    decalCtx.arc(x + lx, y + ly, 2.2, 0, U.TAU);
-    decalCtx.fill();
-    decalCtx.beginPath();
-    decalCtx.arc(x + rx, y + ry, 2.2, 0, U.TAU);
-    decalCtx.fill();
   }
 
   function update(dt) {
     for (let i = live.length - 1; i >= 0; i--) {
       const p = live[i];
       p.life -= dt;
-      if (p.life <= 0) { live.splice(i, 1); continue; }
+      if (p.life <= 0) {
+        if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+        live.splice(i, 1);
+        continue;
+      }
       p.vx *= Math.pow(p.drag, dt * 60);
-      p.vy *= Math.pow(p.drag, dt * 60);
-      p.vy += p.gravity * dt;
+      p.vy += (p.gravity ?? 0) * dt;
+      p.vz *= Math.pow(p.drag, dt * 60);
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (p.growth) p.size = Math.max(0.5, p.size + p.growth * dt);
+      p.z += p.vz * dt;
+      if (p.y < 0.05) { p.y = 0.05; p.vy = -p.vy * 0.4; if (Math.abs(p.vy) < 1) p.vy = 0; }
+      const grow = p.growth * dt;
+      const scaleMul = 1 + grow / Math.max(0.01, p.size);
+      if (scaleMul > 0) p.mesh.scale.multiplyScalar(scaleMul);
+      p.size += grow;
+      p.mesh.position.set(p.x, p.y, p.z);
+      p.mesh.material.opacity = U.clamp(p.life / p.maxLife, 0, 1);
     }
-  }
 
-  function drawDecals(ctx, cam) {
-    if (!decalCanvas) return;
-    ctx.drawImage(decalCanvas, -cam.x, -cam.y);
-  }
-
-  function draw(ctx) {
-    for (const p of live) {
-      const a = p.life / p.maxLife;
-      ctx.globalAlpha = a;
-      if (p.type === "spark") {
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-      } else {
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, U.TAU);
-        ctx.fill();
+    for (let i = debris.length - 1; i >= 0; i--) {
+      const d = debris[i];
+      d.life -= dt;
+      if (d.life <= 0) {
+        if (d.mesh.parent) d.mesh.parent.remove(d.mesh);
+        debris.splice(i, 1);
+        continue;
+      }
+      if (d.settled) continue;
+      d.vy += -22 * dt;
+      d.mesh.position.x += d.vx * dt;
+      d.mesh.position.y += d.vy * dt;
+      d.mesh.position.z += d.vz * dt;
+      d.mesh.rotation.x += d.rx * dt;
+      d.mesh.rotation.y += d.ry * dt;
+      d.mesh.rotation.z += d.rz * dt;
+      if (d.mesh.position.y < 0.1) {
+        d.mesh.position.y = 0.1;
+        d.vy = -d.vy * 0.3;
+        d.vx *= 0.5; d.vz *= 0.5;
+        d.rx *= 0.5; d.ry *= 0.5; d.rz *= 0.5;
+        if (Math.abs(d.vy) < 0.5) { d.settled = true; d.vy = 0; }
+        if (d.bloody) {
+          World.paintBlood(d.mesh.position.x, d.mesh.position.z, 0.8);
+        }
       }
     }
-    ctx.globalAlpha = 1;
   }
 
-  function count() { return live.length; }
+  function count() { return live.length + debris.length; }
+
+  // Compatibility shims used elsewhere.
+  function bodyChunks(x, y, z, n = 6) {
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(U.rand(0.15, 0.35), U.rand(0.15, 0.35), U.rand(0.15, 0.35)),
+        new THREE.MeshLambertMaterial({ color: U.pick([0xa04040, 0x702020, 0x601010, 0xeed4a0]) }),
+      );
+      m.position.set(x, y + 1, z);
+      scene.add(m);
+      const a = Math.random() * U.TAU;
+      const sp = U.rand(6, 14);
+      addDebris(m, {
+        vx: Math.cos(a) * sp, vy: U.rand(4, 9), vz: Math.sin(a) * sp,
+        rx: U.rand(-6, 6), ry: U.rand(-6, 6), rz: U.rand(-6, 6),
+        life: U.rand(1.5, 3), bloody: true,
+      });
+    }
+  }
 
   return {
-    initDecals, reset, bloodBurst, bodyChunks, smoke, fire, spark, explosion,
-    tireTrack, update, drawDecals, draw, count,
+    init, reset, bloodBurst, bodyChunks, smoke, fire, spark, explosion,
+    water, addDebris, update, count,
   };
 })();

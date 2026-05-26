@@ -1,5 +1,6 @@
-// All DOM/HUD updates live here. Game state is read-only as far as HUD
-// is concerned.
+// HUD updates (DOM overlay on top of the WebGL canvas). Reads game state
+// each frame and shoves it into the right elements; also projects
+// world-space score popups onto screen space using the active camera.
 const HUD = (() => {
   const el = (id) => document.getElementById(id);
 
@@ -18,6 +19,19 @@ const HUD = (() => {
   const powerupList = el("powerup-list");
   const comboPopup = el("combo-popup");
   const bigMessage = el("big-message");
+  const hudRoot = el("hud");
+
+  // Cheap pool of DOM nodes for the floating "+points" popups.
+  const popupPool = [];
+  function getPopupEl() {
+    for (const p of popupPool) if (!p._live) { p._live = true; p.style.opacity = 1; return p; }
+    const d = document.createElement("div");
+    d.className = "world-popup";
+    d._live = true;
+    hudRoot.appendChild(d);
+    popupPool.push(d);
+    return d;
+  }
 
   function update(state) {
     time.textContent = U.formatTime(state.timeLeft);
@@ -37,15 +51,13 @@ const HUD = (() => {
     const np = U.clamp(state.player.nitro / state.player.maxNitro, 0, 1);
     nitroFill.style.width = (np * 100) + "%";
 
-    const mph = U.toMph(state.player.car.speed);
-    speedoText.textContent = Math.abs(Math.round(mph)) + " MPH";
-    const sp01 = U.clamp(Math.abs(state.player.car.speed) / 760, 0, 1);
+    // Convert engine "units/sec" into a believable speedo reading.
+    const mph = Math.abs(state.player.car.speed) * 2.5;
+    speedoText.textContent = Math.round(mph) + " MPH";
+    const sp01 = U.clamp(Math.abs(state.player.car.speed) / 70, 0, 1);
     speedoArc.style.strokeDashoffset = (160 * (1 - sp01)).toFixed(1);
-    // needle: -90deg = idle (pointing up), +90deg = max
-    const deg = -90 + sp01 * 180;
-    speedoNeedle.setAttribute("transform", `rotate(${deg} 60 60)`);
+    speedoNeedle.setAttribute("transform", `rotate(${-90 + sp01 * 180} 60 60)`);
 
-    // power-up list
     const active = [];
     if (state.player.nitroActive) active.push("NITRO");
     if (state.player.powerups.spike > 0)     active.push(`SPIKES ${state.player.powerups.spike.toFixed(1)}s`);
@@ -63,59 +75,85 @@ const HUD = (() => {
     const W = minimap.width, H = minimap.height;
     minimapCtx.fillStyle = "#000";
     minimapCtx.fillRect(0, 0, W, H);
-    const sx = W / w;
-    const sy = H / h;
+    // Map world coordinate (xz centered at origin) to minimap px.
+    const sx = W / w, sy = H / h;
+    const tx = (x) => (x + w / 2) * sx;
+    const ty = (z) => (z + h / 2) * sy;
 
-    // Sketch the road tiles with a light fill.
+    // Sketch roads — sample tile grid.
     minimapCtx.fillStyle = "#333";
-    const TILE = World.size().tile;
-    for (let y = 0; y < World.size().rows; y++) {
-      for (let x = 0; x < World.size().cols; x++) {
-        if (World.isRoadAt(x * TILE + TILE/2, y * TILE + TILE/2)) {
-          minimapCtx.fillRect(x * TILE * sx, y * TILE * sy, TILE * sx, TILE * sy);
+    const { rows, cols, tile } = World.size();
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const cx = x * tile + tile/2 - w/2;
+        const cz = y * tile + tile/2 - h/2;
+        if (World.isRoadAt(cx, cz)) {
+          minimapCtx.fillRect(tx(cx) - tile*sx/2, ty(cz) - tile*sy/2, tile * sx, tile * sy);
         }
       }
     }
-
-    // Pedestrians as tiny white dots.
     minimapCtx.fillStyle = "#fff";
     for (const p of state.peds) {
       if (p.dead) continue;
-      minimapCtx.fillRect(p.x * sx - 0.5, p.y * sy - 0.5, 1, 1);
+      minimapCtx.fillRect(tx(p.x) - 0.5, ty(p.y) - 0.5, 1, 1);
     }
-    // Enemies red, cops blue, traffic gray.
     for (const e of state.enemies) {
       if (e.dead) continue;
       minimapCtx.fillStyle = e.kind === "cop" ? "#33aaff" : "#f33";
-      minimapCtx.fillRect(e.car.x * sx - 1, e.car.y * sy - 1, 3, 3);
+      minimapCtx.fillRect(tx(e.car.x) - 1, ty(e.car.y) - 1, 3, 3);
     }
     minimapCtx.fillStyle = "#888";
     for (const t of (state.traffic || [])) {
       if (t.dead) continue;
-      minimapCtx.fillRect(t.car.x * sx - 1, t.car.y * sy - 1, 2, 2);
+      minimapCtx.fillRect(tx(t.car.x) - 1, ty(t.car.y) - 1, 2, 2);
     }
-    // Power-ups gold.
     minimapCtx.fillStyle = "#ffd700";
     for (const u of state.powerups) {
       if (u.taken) continue;
-      minimapCtx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
+      minimapCtx.fillRect(tx(u.x) - 1, ty(u.y) - 1, 2, 2);
     }
-    // Player green.
     minimapCtx.fillStyle = "#0f0";
-    const px = state.player.car.x * sx, py = state.player.car.y * sy;
-    minimapCtx.fillRect(px - 2, py - 2, 4, 4);
-    // Player view direction.
+    const ppx = tx(state.player.car.x), ppy = ty(state.player.car.y);
+    minimapCtx.fillRect(ppx - 2, ppy - 2, 4, 4);
     minimapCtx.strokeStyle = "#0f0";
     minimapCtx.beginPath();
-    minimapCtx.moveTo(px, py);
-    minimapCtx.lineTo(px + Math.cos(state.player.car.angle) * 8,
-                     py + Math.sin(state.player.car.angle) * 8);
+    minimapCtx.moveTo(ppx, ppy);
+    minimapCtx.lineTo(ppx + Math.cos(state.player.car.angle) * 8,
+                     ppy + Math.sin(state.player.car.angle) * 8);
     minimapCtx.stroke();
-
-    // Border.
     minimapCtx.strokeStyle = "#a00";
     minimapCtx.lineWidth = 1;
     minimapCtx.strokeRect(0.5, 0.5, W - 1, H - 1);
+  }
+
+  // World-space "+score" popups: project the world point through the
+  // camera and place a DOM element at the resulting screen coordinate.
+  const v3 = (typeof THREE !== "undefined") ? new THREE.Vector3() : null;
+  function tickPopups(dt, popups, camera) {
+    if (!camera || !v3) { return; }
+    // Mark all pool entries as candidates for retirement; we'll re-mark live ones.
+    for (const e of popupPool) e._used = false;
+    for (let i = popups.length - 1; i >= 0; i--) {
+      const p = popups[i];
+      p.life -= dt;
+      p.y += dt * 1.5;
+      if (p.life <= 0) { popups.splice(i, 1); continue; }
+      v3.set(p.x, p.y, p.z);
+      v3.project(camera);
+      if (v3.z > 1 || v3.z < -1) continue; // behind camera or far past
+      const sx = (v3.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-v3.y * 0.5 + 0.5) * window.innerHeight;
+      const e = getPopupEl();
+      e._used = true;
+      e.textContent = p.text;
+      e.style.color = p.color;
+      e.style.left = sx + "px";
+      e.style.top = sy + "px";
+      e.style.opacity = U.clamp(p.life / 1.2, 0, 1);
+    }
+    for (const e of popupPool) {
+      if (!e._used && e._live) { e._live = false; e.style.opacity = 0; }
+    }
   }
 
   let comboTimer = 0;
@@ -150,10 +188,10 @@ const HUD = (() => {
     }
   }
 
-  function show(id)   { el(id).classList.remove("hidden"); }
-  function hide(id)   { el(id).classList.add("hidden"); }
-  function showHUD()  { el("hud").classList.remove("hidden"); }
-  function hideHUD()  { el("hud").classList.add("hidden"); }
+  function show(id) { el(id).classList.remove("hidden"); }
+  function hide(id) { el(id).classList.add("hidden"); }
+  function showHUD() { el("hud").classList.remove("hidden"); }
+  function hideHUD() { el("hud").classList.add("hidden"); }
 
-  return { update, flashCombo, tickCombo, bigMsg, tickBig, show, hide, showHUD, hideHUD };
+  return { update, flashCombo, tickCombo, bigMsg, tickBig, tickPopups, show, hide, showHUD, hideHUD };
 })();
