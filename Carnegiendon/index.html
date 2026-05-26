@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CARNEGIENDON</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" width="1024" height="640"></canvas>
+
+    <div id="hud" class="hidden">
+      <div id="hud-top">
+        <div class="hud-block">
+          <div class="hud-label">TIME</div>
+          <div id="hud-time" class="hud-value big">0:00</div>
+        </div>
+        <div class="hud-block">
+          <div class="hud-label">SCORE</div>
+          <div id="hud-score" class="hud-value big">0</div>
+        </div>
+        <div class="hud-block">
+          <div class="hud-label">KILLS</div>
+          <div id="hud-kills" class="hud-value big">0</div>
+        </div>
+        <div class="hud-block">
+          <div class="hud-label">COMBO</div>
+          <div id="hud-combo" class="hud-value big">x1</div>
+        </div>
+      </div>
+
+      <div id="hud-bottom-left">
+        <div class="hud-label">ARMOR</div>
+        <div id="hp-bar"><div id="hp-fill"></div></div>
+        <div class="hud-label" style="margin-top:8px">NITRO</div>
+        <div id="nitro-bar"><div id="nitro-fill"></div></div>
+        <div id="powerup-list"></div>
+      </div>
+
+      <div id="hud-bottom-right">
+        <div id="speedo">
+          <svg viewBox="0 0 120 70">
+            <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="#222" stroke-width="6"/>
+            <path id="speedo-arc" d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="#f33" stroke-width="6"
+                  stroke-dasharray="160" stroke-dashoffset="160" stroke-linecap="round"/>
+            <line id="speedo-needle" x1="60" y1="60" x2="60" y2="18" stroke="#fff" stroke-width="3"
+                  transform="rotate(-90 60 60)" stroke-linecap="round"/>
+            <circle cx="60" cy="60" r="5" fill="#fff"/>
+          </svg>
+          <div id="speedo-text">0 MPH</div>
+        </div>
+        <canvas id="minimap" width="180" height="180"></canvas>
+      </div>
+
+      <div id="combo-popup"></div>
+      <div id="big-message"></div>
+    </div>
+
+    <div id="menu" class="overlay">
+      <h1 class="title">CARNEGIENDON</h1>
+      <div class="subtitle">VEHICULAR MANSLAUGHTER · 1997</div>
+      <div class="menu-buttons">
+        <button data-mode="carnage">CARNAGE MODE</button>
+        <button data-mode="survival">SURVIVAL MODE</button>
+        <button data-mode="freeplay">FREE PLAY</button>
+      </div>
+      <div class="hi-block">
+        <div>HIGH SCORE: <span id="hi-score">0</span></div>
+        <div>MOST KILLS: <span id="hi-kills">0</span></div>
+      </div>
+      <div class="controls">
+        <div><b>W / ↑</b> · ACCELERATE</div>
+        <div><b>S / ↓</b> · BRAKE / REVERSE</div>
+        <div><b>A / ←</b> · STEER LEFT</div>
+        <div><b>D / →</b> · STEER RIGHT</div>
+        <div><b>SPACE</b> · HANDBRAKE</div>
+        <div><b>SHIFT</b> · NITRO</div>
+        <div><b>P / ESC</b> · PAUSE</div>
+      </div>
+      <a href="/" class="back-link">← BACK TO GAMES</a>
+    </div>
+
+    <div id="pause" class="overlay hidden">
+      <h1>PAUSED</h1>
+      <div class="menu-buttons">
+        <button id="resume-btn">RESUME</button>
+        <button id="quit-btn">QUIT TO MENU</button>
+      </div>
+    </div>
+
+    <div id="gameover" class="overlay hidden">
+      <h1 class="bloody">WASTED</h1>
+      <div id="gameover-stats"></div>
+      <div class="menu-buttons">
+        <button id="retry-btn">TRY AGAIN</button>
+        <button id="gameover-menu-btn">MAIN MENU</button>
+      </div>
+    </div>
+
+    <div id="victory" class="overlay hidden">
+      <h1 class="winner">CARNAGE COMPLETE</h1>
+      <div id="victory-stats"></div>
+      <div class="menu-buttons">
+        <button id="next-btn">NEXT LEVEL</button>
+        <button id="victory-menu-btn">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/utils.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/input.js"></script>
+  <script src="src/particles.js"></script>
+  <script src="src/world.js"></script>
+  <script src="src/pedestrian.js"></script>
+  <script src="src/car.js"></script>
+  <script src="src/player.js"></script>
+  <script src="src/enemy.js"></script>
+  <script src="src/powerup.js"></script>
+  <script src="src/hud.js"></script>
+  <script src="src/game.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
