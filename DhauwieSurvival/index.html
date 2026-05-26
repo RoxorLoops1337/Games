@@ -1582,16 +1582,50 @@ function enterVehicle(car) {
 }
 function exitVehicle() {
   if (!currentVehicle) return;
-  const offX = Math.cos(vehicleHeading + Math.PI / 2) * 2.4;
-  const offZ = -Math.sin(vehicleHeading + Math.PI / 2) * 2.4;
-  player.pos.set(
-    currentVehicle.mesh.position.x + offX,
-    PLAYER_HEIGHT,
-    currentVehicle.mesh.position.z + offZ
-  );
-  // Clamp player inside boundary
+  const h = vehicleHeading;
+  // Car's right vector (perpendicular to forward) in world space
+  const rightX =  Math.cos(h), rightZ = -Math.sin(h);
+  // Forward vector (matches the drive direction)
+  const fwdX  = -Math.sin(h), fwdZ  = -Math.cos(h);
+  const carX = currentVehicle.mesh.position.x;
+  const carZ = currentVehicle.mesh.position.z;
+  // Candidate exit positions ordered by preference. Distances are larger
+  // than half the car's diagonal so the player never spawns inside the
+  // car's axis-aligned bounding box.
+  const tries = [
+    { dx:  rightX * 2.8, dz:  rightZ * 2.8 },  // right (driver) side
+    { dx: -rightX * 2.8, dz: -rightZ * 2.8 },  // left side
+    { dx:  rightX * 4.2, dz:  rightZ * 4.2 },  // further right
+    { dx: -rightX * 4.2, dz: -rightZ * 4.2 },  // further left
+    { dx: -fwdX   * 3.5, dz: -fwdZ   * 3.5 },  // behind the car
+    { dx:  fwdX   * 3.5, dz:  fwdZ   * 3.5 },  // in front of the car
+  ];
+  const sample = new THREE.Vector3();
+  let placed = false;
+  for (const t of tries) {
+    const tx = carX + t.dx;
+    const tz = carZ + t.dz;
+    if (Math.abs(tx) > HW - 1 || Math.abs(tz) > HW - 1) continue;
+    sample.set(tx, 1, tz);
+    let blocked = false;
+    for (const o of obstacles) {
+      if (o === currentVehicle) continue;
+      if (o.box.distanceToPoint(sample) < 0.55) { blocked = true; break; }
+    }
+    if (!blocked) {
+      player.pos.set(tx, PLAYER_HEIGHT, tz);
+      placed = true;
+      break;
+    }
+  }
+  if (!placed) {
+    // Last-resort: shove the player well to the right and clamp later
+    player.pos.set(carX + rightX * 3.0, PLAYER_HEIGHT, carZ + rightZ * 3.0);
+  }
   if (Math.abs(player.pos.x) > HW - 1) player.pos.x = Math.sign(player.pos.x) * (HW - 1);
   if (Math.abs(player.pos.z) > HW - 1) player.pos.z = Math.sign(player.pos.z) * (HW - 1);
+  player.vel.y = 0;
+  player.onGround = true;
   inVehicle = false;
   currentVehicle = null;
   vehicleSpeed = 0;
