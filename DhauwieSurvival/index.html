@@ -3432,15 +3432,34 @@ function endGame(victory) {
   again.addEventListener('touchstart', e => { e.preventDefault(); reload(); }, { passive: false });
 }
 
-// Expose startGame globally so the inline onclick on #start-btn can call it
-// even though the rest of the script lives inside a module.
-window.__startDhauwie = startGame;
-// Also bind via JS directly to the button as a redundant safety net.
+// One-shot wrapper so multiple firing event paths don't double-start.
+let _startInvoked = false;
+function attemptStart(label, e) {
+  if (_startInvoked) return;
+  _startInvoked = true;
+  if (e && e.cancelable && e.preventDefault) { try { e.preventDefault(); } catch (_) {} }
+  const btn = document.getElementById('start-btn');
+  if (btn) btn.textContent = 'STARTING (' + label + ')';
+  try {
+    startGame();
+  } catch (err) {
+    _startInvoked = false;
+    if (btn) btn.textContent = 'BEGIN';
+    // showFatal is defined alongside startGame — re-throw so it picks up too
+    throw err;
+  }
+}
+window.__startDhauwie = (e) => attemptStart('inline', e);
+// Bind every reasonable event on the button so whichever path the browser
+// uses first will trigger startGame. preventDefault on touch/pointer keeps
+// the synthetic click from running afterward.
 {
   const btn = document.getElementById('start-btn');
   if (btn) {
-    btn.addEventListener('click', () => startGame());
-    btn.addEventListener('touchend', e => { e.preventDefault(); startGame(); }, { passive: false });
+    btn.addEventListener('click',       e => attemptStart('click', e));
+    btn.addEventListener('touchstart',  e => attemptStart('touchstart', e), { passive: false });
+    btn.addEventListener('touchend',    e => attemptStart('touchend', e), { passive: false });
+    btn.addEventListener('pointerdown', e => attemptStart('pointerdown', e));
   }
 }
 
