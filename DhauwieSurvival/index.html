@@ -203,6 +203,7 @@
   #overlay button:hover { background: #44ffaa; }
   #overlay button:active { background: #ffcc66; transform: scale(0.97); }
   #overlay button { touch-action: manipulation; }
+  #overlay button:disabled { background: #555; color: #aaa; cursor: wait; transform: none; }
   .hidden { display: none !important; }
   .pulse { animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
@@ -613,21 +614,66 @@
     </div>
   </div>
   <div id="overlay-foot">
-    <button id="start-btn" onclick="window.__startDhauwie && window.__startDhauwie()">BEGIN</button>
+    <button id="start-btn" disabled onclick="window.__startDhauwie && window.__startDhauwie()">LOADING...</button>
     <div class="hint" style="font-size:12px;color:#666;">Desktop: click in-game for mouse look. Mobile: rotate to landscape.</div>
   </div>
 </div>
 
+<!-- Boot diagnostic runs synchronously before anything else, so we can
+     see immediately if the module never loads (e.g. CDN failure). -->
+<div id="boot-status">boot - waiting for engine...</div>
+<style>
+  #boot-status {
+    position: fixed; top: 0; left: 0; right: 0;
+    background: #1a1a1a; color: #88ffaa;
+    padding: 6px 10px; font: 12px monospace;
+    text-align: center; z-index: 99;
+    border-bottom: 1px solid #00ff88;
+  }
+  #boot-status.ok { background: #042; color: #88ffaa; }
+  #boot-status.err { background: #c00; color: #fff; }
+  #boot-status.gone { display: none; }
+</style>
+<script>
+  // Live status that updates as the boot proceeds — visible before the module
+  // even tries to load. If the module never executes, this is what stays.
+  (function () {
+    function set(msg, cls) {
+      const el = document.getElementById('boot-status');
+      if (!el) return;
+      el.textContent = msg;
+      el.className = cls || '';
+    }
+    window.__boot = { set };
+    window.addEventListener('error', e => {
+      set('JS error: ' + (e.message || 'unknown') + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0), 'err');
+    });
+    // Watchdog: if the module hasn't reported "ready" within 10s, surface that.
+    setTimeout(function () {
+      if (!window.__moduleReady) {
+        if (!window.__moduleStarted) {
+          set('engine never loaded — CDN unreachable? try wifi / different browser', 'err');
+        } else {
+          set('engine started but did not finish initializing — check JS error above', 'err');
+        }
+      }
+    }, 10000);
+  })();
+</script>
+
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    "three": "https://esm.sh/three@0.160.0"
   }
 }
 </script>
 
 <script type="module">
 import * as THREE from 'three';
+// Mark engine as started so the boot watchdog knows the module ran.
+window.__moduleStarted = true;
+if (window.__boot) window.__boot.set('engine loaded - initializing scene...', 'ok');
 
 const WORLD_SIZE = 240;
 const PLAYER_HEIGHT = 1.7;
@@ -3754,6 +3800,21 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+// Engine fully ready. Update the boot banner and remove it shortly after.
+window.__moduleReady = true;
+if (window.__boot) {
+  window.__boot.set('READY - tap BEGIN to start', 'ok');
+  const btn = document.getElementById('start-btn');
+  if (btn) {
+    btn.textContent = 'BEGIN';
+    btn.disabled = false;
+  }
+  setTimeout(() => {
+    const el = document.getElementById('boot-status');
+    if (el) el.classList.add('gone');
+  }, 2000);
+}
 </script>
 </body>
 </html>
