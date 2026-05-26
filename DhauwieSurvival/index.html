@@ -3372,18 +3372,38 @@ let gameOver = false;
 let won = false;
 let lastTime = performance.now();
 
+// Visible runtime error reporter (mobile has no devtools open by default)
+function showFatal(msg) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c00;color:#fff;padding:10px;z-index:9999;font:13px monospace;white-space:pre-wrap;word-break:break-word;';
+  d.textContent = msg;
+  document.body.appendChild(d);
+}
+window.addEventListener('error', e => {
+  showFatal('ERR ' + (e.message || '') + '\n@ ' + (e.filename||'') + ':' + (e.lineno||0));
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e.reason;
+  showFatal('PROMISE ERR ' + (r && r.message ? r.message : r));
+});
+
 function startGame() {
-  document.getElementById('overlay').classList.add('hidden');
-  document.getElementById('hud').classList.remove('hidden');
-  gameStarted = true;
-  player.alive = true;
-  ensureAudio();
-  startWind();
-  recomputeFlowField();
-  startWave(1);
-  updateHud();
-  if (!isTouch) canvas.requestPointerLock();
-  showMessage('Find the LAB (green beacon NE) for the Antidote!', 4000);
+  let step = 'init';
+  try {
+    step = 'hide overlay';   document.getElementById('overlay').classList.add('hidden');
+    step = 'show hud';       document.getElementById('hud').classList.remove('hidden');
+    step = 'set flags';      gameStarted = true; player.alive = true;
+    step = 'ensureAudio';    ensureAudio();
+    step = 'startWind';      startWind();
+    step = 'flowField';      recomputeFlowField();
+    step = 'startWave';      startWave(1);
+    step = 'updateHud';      updateHud();
+    step = 'pointerLock';    if (!isTouch) canvas.requestPointerLock();
+    step = 'showMessage';    showMessage('Find the LAB (green beacon NE) for the Antidote!', 4000);
+  } catch (err) {
+    showFatal('startGame failed at [' + step + ']\n' + (err && err.message ? err.message : err) + '\n' + (err && err.stack ? err.stack.split('\n').slice(0,5).join('\n') : ''));
+    throw err;
+  }
 }
 
 function endGame(victory) {
@@ -3699,11 +3719,19 @@ function update(dt) {
   updateHud();
 }
 
+let _loopErrShown = false;
 function loop(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
-  update(dt);
-  renderer.render(scene, camera);
+  try {
+    update(dt);
+    renderer.render(scene, camera);
+  } catch (err) {
+    if (!_loopErrShown) {
+      _loopErrShown = true;
+      showFatal('loop error: ' + (err && err.message ? err.message : err) + '\n' + (err && err.stack ? err.stack.split('\n').slice(0,5).join('\n') : ''));
+    }
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
