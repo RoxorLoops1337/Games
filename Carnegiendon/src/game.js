@@ -217,10 +217,16 @@ const Game = (() => {
 
     if (state === STATE.PLAYING) {
       timeScale = U.lerp(timeScale, 1, U.clamp(rawDt * 4, 0, 1));
-      tick(rawDt * timeScale);
+      // A thrown error inside tick() would otherwise kill the rAF chain
+      // and freeze the game. Log and keep going.
+      try { tick(rawDt * timeScale); }
+      catch (err) { console.error("tick crashed:", err); }
     }
 
-    if (scene && camera) renderer.render(scene, camera);
+    if (scene && camera) {
+      try { renderer.render(scene, camera); }
+      catch (err) { console.error("render crashed:", err); }
+    }
     Input.endFrame();
     requestAnimationFrame(loop);
   }
@@ -277,7 +283,11 @@ const Game = (() => {
     if (G.player.car.hp <= 0) { gameOver(); return; }
     if (mode === "carnage" && G.kills >= G.targetKills) { finishLevel(); return; }
 
-    // Re-stock peds if the streets are emptying.
+    // Prune dead pedestrian records so the array doesn't grow without
+    // bound across a long session, then refill if the streets are thin.
+    if (G.peds.length > 120) {
+      G.peds = G.peds.filter((p) => !p.dead);
+    }
     const liveCount = G.peds.reduce((a, p) => a + (p.dead ? 0 : 1), 0);
     if (liveCount < 35) {
       const spawns = World.getSpawns();

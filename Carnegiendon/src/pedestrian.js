@@ -173,20 +173,25 @@ const Pedestrian = (() => {
     return Math.floor(100 * intensity * bonusMult);
   }
 
-  // The corpse: detach the meshes from the ped group and launch each
-  // chunk with its own velocity + spin so it tumbles. They live as
-  // independent objects in the scene until they expire.
+  // The corpse: detach each body mesh from the ped group, lift it into
+  // world space, and hand it to the particle system as physics debris.
+  // Each chunk tumbles, falls, and bleeds the ground where it lands.
   function flingBody(p, hitX, hitZ, force) {
-    const parent = p.mesh.parent;
+    const parent = p.mesh.parent;       // the THREE.Scene
     if (!parent) return;
     const partsArr = [p.parts.legs, p.parts.torso, p.parts.head];
     const ang = U.angleTo(hitX, hitZ, p.x, p.y);
+    const worldPos = new THREE.Vector3();
+    const worldQuat = new THREE.Quaternion();
     for (const part of partsArr) {
-      // Reparent into the world group so coordinates aren't local to ped.
-      const worldPos = new THREE.Vector3();
+      // Capture world transform before reparenting (after add(), the
+      // local transform becomes the world transform since parent is the
+      // scene root).
       part.getWorldPosition(worldPos);
+      part.getWorldQuaternion(worldQuat);
+      parent.add(part);                  // Three.js auto-detaches from p.mesh
       part.position.copy(worldPos);
-      parent.parent.add(part);  // attach to the scene root, above the ped group
+      part.quaternion.copy(worldQuat);
       Particles.addDebris(part, {
         vx: Math.cos(ang) * U.rand(8, 18) + U.rand(-3, 3),
         vy: U.rand(6, 12),
@@ -196,7 +201,6 @@ const Pedestrian = (() => {
         bloody: true,
       });
     }
-    // Hide the empty ped group.
     parent.remove(p.mesh);
   }
 
