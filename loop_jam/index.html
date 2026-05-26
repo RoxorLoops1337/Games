@@ -746,17 +746,25 @@
     if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
   }
   document.addEventListener('visibilitychange', () => {
-    if (started && document.visibilityState === 'visible') acquireWakeLock();
+    if (started && document.visibilityState === 'visible') {
+      acquireWakeLock();
+      if (ctx && ctx.state === 'suspended') ctx.resume();
+    }
   });
 
   async function preload() {
-    const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Create the one and only AudioContext now (it stays suspended until
+    // the first user gesture). Decoding through this context resamples
+    // every buffer to the playback sample rate, so the runtime never has
+    // to resample again per source — that's what kept the 8 sources from
+    // staying sample-aligned over many loop cycles.
+    ensureContext();
     let done = 0;
     const total = TRACKS.length;
     const results = await Promise.all(TRACKS.map(async (t, i) => {
       const res = await fetch(`${t.id}.ogg`);
       const arr = await res.arrayBuffer();
-      const buf = await tmpCtx.decodeAudioData(arr.slice(0));
+      const buf = await ctx.decodeAudioData(arr.slice(0));
       done++;
       loaderPct.textContent = Math.round((done / total) * 100) + '%';
       return { i, buf };
@@ -764,7 +772,6 @@
     buffers = new Array(TRACKS.length);
     for (const { i, buf } of results) buffers[i] = buf;
     loopDuration = buffers[0].duration;
-    try { tmpCtx.close(); } catch {}
 
     loader.classList.add('hidden');
     setTimeout(() => loader.remove(), 500);
@@ -790,6 +797,10 @@
       const src = ctx.createBufferSource();
       src.buffer = buffers[i];
       src.loop = true;
+      // Pin loop boundaries to the buffer's exact sample length so the
+      // wrap point is identical across all 8 sources.
+      src.loopStart = 0;
+      src.loopEnd = buffers[i].length / ctx.sampleRate;
       const g = ctx.createGain();
       const initial = (i === initialIdx) ? (initialLevel ?? 1) : 0;
       g.gain.value = initial;
