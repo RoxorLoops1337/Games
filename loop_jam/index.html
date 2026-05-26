@@ -335,7 +335,6 @@
     inset: 0;
     border: 1.5px solid var(--ink);
     border-radius: 3px;
-    filter: url(#wobble);
     pointer-events: none;
   }
   .pad.active .fader { opacity: 1; }
@@ -365,14 +364,13 @@
     color: var(--ink);
     background: #fffaee;
     border: 2px solid var(--ink);
-    border-radius: 14px;
+    border-radius: 14px 16px 13px 17px;
     padding: 1px 8px;
     transform: translateY(-50%);
     opacity: 0;
     pointer-events: none;
     z-index: 6;
     transition: opacity 0.15s ease;
-    filter: url(#wobble);
   }
   .pad.dragging .level-bubble { opacity: 1; }
 
@@ -1057,30 +1055,38 @@
     confettiParticles = next;
   }
 
+  // Bobbing visuals only need ~30 Hz to look smooth; halving cuts the
+  // per-frame audio-thread reads (8 analysers worth) and the resulting
+  // style writes by half. Loop ring & confetti still run every frame.
+  let tickFrame = 0;
   function tick() {
+    tickFrame++;
     if (started) {
       const loopT = (ctx.currentTime - startTime) % loopDuration;
       setRingDash(ringLoop, loopT / loopDuration, RING_LOOP_CIRC);
 
-      const now = performance.now();
-      for (let i = 0; i < TRACKS.length; i++) {
-        let level = 0;
-        if (isActive(i)) {
-          analysers[i].getByteFrequencyData(analyserData[i]);
-          let sum = 0;
-          const N = analyserData[i].length;
-          for (let k = 0; k < N; k++) sum += analyserData[i][k];
-          level = sum / N / 255;
-        }
-        padLevel[i] += (level - padLevel[i]) * 0.25;
-        const lvl = padLevel[i];
-        const scale = 1 + lvl * 0.14;
-        const lift = -lvl * 5;
-        padImgs[i].style.transform = `translateY(${lift}px) scale(${scale})`;
+      if ((tickFrame & 1) === 0) {
+        const now = performance.now();
+        for (let i = 0; i < TRACKS.length; i++) {
+          let level = 0;
+          if (isActive(i)) {
+            analysers[i].getByteFrequencyData(analyserData[i]);
+            let sum = 0;
+            const N = analyserData[i].length;
+            for (let k = 0; k < N; k++) sum += analyserData[i][k];
+            level = sum / N / 255;
+          }
+          // Doubled smoothing factor to compensate for half the updates.
+          padLevel[i] += (level - padLevel[i]) * 0.45;
+          const lvl = padLevel[i];
+          const scale = 1 + lvl * 0.14;
+          const lift = -lvl * 5;
+          padImgs[i].style.transform = `translateY(${lift}px) scale(${scale})`;
 
-        if (isActive(i) && lvl > 0.22 && now - lastNoteAt[i] > 280 + Math.random() * 200) {
-          spawnNote(i);
-          lastNoteAt[i] = now;
+          if (isActive(i) && lvl > 0.22 && now - lastNoteAt[i] > 280 + Math.random() * 200) {
+            spawnNote(i);
+            lastNoteAt[i] = now;
+          }
         }
       }
     }
@@ -1090,6 +1096,27 @@
   requestAnimationFrame(tick);
 
   // --- Pointer gesture: tap toggles, vertical drag sets level ---
+  // The pending drag target is applied once per animation frame, not on
+  // every pointermove. pointermove can fire up to 120 Hz on mobile, and
+  // doing audio param + DOM writes that often can starve the audio
+  // thread and produce crackle.
+  const dragTargets = new Array(TRACKS.length).fill(null);
+  let dragRafScheduled = false;
+  function flushDrags() {
+    dragRafScheduled = false;
+    for (let i = 0; i < TRACKS.length; i++) {
+      const t = dragTargets[i];
+      if (t == null) continue;
+      setLevel(i, t, true);
+      dragTargets[i] = null;
+    }
+  }
+  function scheduleDragFlush() {
+    if (dragRafScheduled) return;
+    dragRafScheduled = true;
+    requestAnimationFrame(flushDrags);
+  }
+
   function attachGesture(pad, idx) {
     const DRAG_THRESH = 9;
     const DRAG_RANGE = 110; // px from 0..1
@@ -1097,7 +1124,6 @@
     let startY = 0;
     let startLevel = 0;
     let dragging = false;
-    let lastHapticLevel = 0;
 
     pad.addEventListener('pointerdown', (e) => {
       if (!buffers.length) return;
@@ -1106,7 +1132,6 @@
       startY = e.clientY;
       startLevel = levels[idx];
       dragging = false;
-      lastHapticLevel = startLevel;
       try { pad.setPointerCapture(pointerId); } catch {}
       e.preventDefault();
     });
@@ -1125,12 +1150,9 @@
         }
       }
       if (dragging) {
-        const newLevel = startLevel + dy / DRAG_RANGE;
-        setLevel(idx, newLevel, true);
-        if (Math.abs(levels[idx] - lastHapticLevel) > 0.12) {
-          haptic(8);
-          lastHapticLevel = levels[idx];
-        }
+        // Just stash the latest target; the rAF flush applies it.
+        dragTargets[idx] = startLevel + dy / DRAG_RANGE;
+        scheduleDragFlush();
       }
     });
 
@@ -1140,6 +1162,11 @@
       if (!dragging) {
         handleTap(idx);
       } else {
+        // Apply any pending value once more synchronously, then settle.
+        if (dragTargets[idx] != null) {
+          setLevel(idx, dragTargets[idx], true);
+          dragTargets[idx] = null;
+        }
         updateActivity();
         haptic(12);
       }
