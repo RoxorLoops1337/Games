@@ -629,6 +629,7 @@
       <b style="color:#00ff88">MOBILE</b><br>
       Move: <b>Left joystick</b> &nbsp;&middot;&nbsp; Look: <b>Drag right side</b><br>
       Tap <b>FIRE / JUMP / RELOAD</b> &nbsp;&middot;&nbsp; Switch via <b>1-4</b> bar<br>
+      Hold <b style="color:#ff8866">FIRE</b> and drag to aim while shooting (pull down vs recoil)<br>
       Tap <b style="color:#ffe066">DRIVE</b> near a car to hop in &nbsp;&middot;&nbsp; <b>EXIT</b> to get out<br>
       <br>
       Pick up weapon crates by walking over them.<br>
@@ -2172,7 +2173,62 @@ function bindHold(id, onDown, onUp) {
   el.addEventListener('mousedown',  e => { onDown(); e.preventDefault(); });
   el.addEventListener('mouseup',    e => { if (onUp) onUp(); e.preventDefault(); });
 }
-bindHold('btn-shoot', () => { mouseDown = true; }, () => { mouseDown = false; });
+// FIRE button is a drag-to-aim pad: tap and hold to shoot, drag while
+// holding to nudge the camera (so you can pull down to compensate for
+// recoil while spraying with the SMG, just like a real mobile FPS).
+{
+  const fireBtn = document.getElementById('btn-shoot');
+  let fireTouchId = null;
+  let fireLast = { x: 0, y: 0 };
+  const FIRE_SENS = 0.005;
+  const releaseFire = () => {
+    fireTouchId = null;
+    mouseDown = false;
+  };
+  fireBtn.addEventListener('touchstart', e => {
+    if (fireTouchId !== null) { e.preventDefault(); return; }
+    const t = e.changedTouches[0];
+    fireTouchId = t.identifier;
+    fireLast.x = t.clientX;
+    fireLast.y = t.clientY;
+    mouseDown = true;
+    e.preventDefault();
+  }, { passive: false });
+  fireBtn.addEventListener('touchmove', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== fireTouchId) continue;
+      const dx = t.clientX - fireLast.x;
+      const dy = t.clientY - fireLast.y;
+      player.yaw   -= dx * FIRE_SENS;
+      player.pitch -= dy * FIRE_SENS;
+      player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
+      fireLast.x = t.clientX;
+      fireLast.y = t.clientY;
+      e.preventDefault();
+      return;
+    }
+  }, { passive: false });
+  fireBtn.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== fireTouchId) continue;
+      releaseFire();
+      e.preventDefault();
+      return;
+    }
+  }, { passive: false });
+  fireBtn.addEventListener('touchcancel', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== fireTouchId) continue;
+      releaseFire();
+      e.preventDefault();
+      return;
+    }
+  }, { passive: false });
+  // Mouse path (desktop testing): plain hold to fire, no drag
+  fireBtn.addEventListener('mousedown', e => { mouseDown = true; e.preventDefault(); });
+  fireBtn.addEventListener('mouseup',   e => { mouseDown = false; e.preventDefault(); });
+  fireBtn.addEventListener('mouseleave',()=> { mouseDown = false; });
+}
 bindHold('btn-jump',  () => { keys['Space'] = true; }, () => { keys['Space'] = false; });
 bindHold('btn-reload',() => { tryReload(); }, null);
 bindHold('btn-interact', () => {
