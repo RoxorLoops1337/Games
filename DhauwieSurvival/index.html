@@ -201,6 +201,7 @@
     letter-spacing: 2px;
   }
   #overlay button:hover { background: #44ffaa; }
+  #overlay button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .hidden { display: none !important; }
   .pulse { animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
@@ -3410,8 +3411,31 @@ function endGame(victory) {
   again.addEventListener('touchstart', e => { e.preventDefault(); reload(); }, { passive: false });
 }
 
-document.getElementById('start-btn').addEventListener('click', startGame);
-document.getElementById('start-btn').addEventListener('touchstart', e => { e.preventDefault(); startGame(); }, { passive: false });
+let _startedOnce = false;
+function safeStartGame(e) {
+  if (_startedOnce) return;
+  _startedOnce = true;
+  if (e && e.preventDefault) { try { e.preventDefault(); } catch (_) {} }
+  try {
+    startGame();
+  } catch (err) {
+    _startedOnce = false;
+    alert('Start failed: ' + (err && err.message ? err.message : err));
+    throw err;
+  }
+}
+// Event delegation: any tap/click on the start button (or inside it) triggers
+// startGame. Works for click, touch, and pointer events across browsers.
+function isStartTarget(t) {
+  while (t) {
+    if (t.id === 'start-btn') return true;
+    t = t.parentNode;
+  }
+  return false;
+}
+document.addEventListener('click',      e => { if (isStartTarget(e.target)) safeStartGame(e); });
+document.addEventListener('touchend',   e => { if (isStartTarget(e.target)) safeStartGame(e); }, { passive: false });
+document.addEventListener('pointerup',  e => { if (isStartTarget(e.target)) safeStartGame(e); });
 
 function update(dt) {
   if (!gameStarted || gameOver) return;
