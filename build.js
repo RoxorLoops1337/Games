@@ -31,6 +31,7 @@ const STATIC_PATHS = [
   'DhauwieSurvival',
   'Carnegiendon',
   'loop_jam',
+  'gamedevloop',
   'tools',
 ];
 

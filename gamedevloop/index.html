@@ -1,0 +1,1957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>GameDev Loop</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --bg2: #11151a;
+    --bg3: #1a2028;
+    --fg: #c8f5d8;
+    --green: #00ff88;
+    --dim: #5a7a6c;
+    --yellow: #ffd357;
+    --pink: #ff5fa2;
+    --cyan: #5fd1ff;
+    --red: #ff5050;
+    --line: #1c2630;
+    --shadow: 0 0 0 1px var(--line), 0 4px 12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Courier New', ui-monospace, monospace;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      transparent 0,
+      transparent 2px,
+      rgba(0, 255, 136, 0.03) 3px,
+      rgba(0, 255, 136, 0.03) 3px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-width: 520px;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ============== TOP BAR ============== */
+  #topbar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 8px 8px 6px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 2px;
+    background: var(--bg3);
+    border-radius: 4px;
+    border: 1px solid transparent;
+    font-size: 11px;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .stat .lbl { color: var(--dim); font-size: 9px; letter-spacing: 1px; }
+  .stat .val { font-size: 16px; font-weight: bold; color: var(--green); margin-top: 2px; }
+  .stat.money .val { color: var(--yellow); }
+  .stat.hype .val { color: var(--pink); }
+  .stat.sanity .val { color: var(--cyan); }
+  .stat.day .val { color: var(--green); }
+  .stat.pulse { animation: pulse 0.5s; border-color: var(--green); }
+  .stat.warn .val { color: var(--red); animation: blink 1s infinite; }
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ============== COHORT BARS ============== */
+  #cohort {
+    display: flex;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .arch {
+    flex: 1;
+    background: var(--bg3);
+    border-radius: 4px;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    min-width: 0;
+  }
+  .arch .ico { font-size: 16px; flex-shrink: 0; }
+  .arch .info { flex: 1; min-width: 0; }
+  .arch .top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+  }
+  .arch .count { font-weight: bold; }
+  .arch .bar {
+    height: 4px;
+    background: #000;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 2px;
+  }
+  .arch .fill {
+    height: 100%;
+    transition: width 0.3s, background 0.3s;
+  }
+  .arch.whales .count { color: var(--yellow); }
+  .arch.whales .fill { background: var(--yellow); }
+  .arch.players .count { color: var(--green); }
+  .arch.players .fill { background: var(--green); }
+  .arch.streamers .count { color: var(--pink); }
+  .arch.streamers .fill { background: var(--pink); }
+  .arch.low .fill { background: var(--red) !important; }
+
+  /* ============== LOOP AREA ============== */
+  #loopwrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at center, #0e1418 0%, var(--bg) 70%);
+    min-height: 0;
+  }
+  #loopsvg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .slot-bg {
+    fill: var(--bg3);
+    stroke: var(--line);
+    stroke-width: 1.5;
+    transition: fill 0.2s, stroke 0.2s;
+  }
+  .slot.empty .slot-bg { fill: var(--bg3); }
+  .slot.placeable .slot-bg {
+    fill: rgba(0, 255, 136, 0.15);
+    stroke: var(--green);
+    animation: glow 1s ease-in-out infinite;
+  }
+  .slot.synergy .slot-bg {
+    stroke: var(--pink);
+    stroke-width: 2.5;
+  }
+  .slot-icon { font-size: 22px; pointer-events: none; user-select: none; }
+  .slot-stage-lbl {
+    font-size: 7px;
+    fill: var(--dim);
+    text-anchor: middle;
+    pointer-events: none;
+    letter-spacing: 0.5px;
+  }
+  .slot text.slot-icon-text {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+  .hazard .slot-bg {
+    fill: rgba(255, 80, 80, 0.2);
+    stroke: var(--red);
+    animation: pulse-red 0.8s infinite;
+  }
+  @keyframes glow {
+    0%,100% { filter: drop-shadow(0 0 2px var(--green)); }
+    50% { filter: drop-shadow(0 0 8px var(--green)); }
+  }
+  @keyframes pulse-red {
+    0%,100% { filter: drop-shadow(0 0 1px var(--red)); }
+    50% { filter: drop-shadow(0 0 8px var(--red)); }
+  }
+  .loop-path {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+  }
+  .hero {
+    transition: transform 0.35s ease-in-out;
+  }
+  .hero-body {
+    fill: var(--green);
+    stroke: #fff;
+    stroke-width: 1;
+    filter: drop-shadow(0 0 6px var(--green));
+  }
+
+  /* off-path slots stacked vertically right of the loop on wide, below on tall */
+  .off-slot {
+    cursor: pointer;
+  }
+  .off-slot-lbl {
+    font-size: 7.5px;
+    fill: var(--dim);
+    text-anchor: middle;
+    pointer-events: none;
+    letter-spacing: 1px;
+  }
+
+  /* Floating numbers */
+  .floater {
+    position: absolute;
+    pointer-events: none;
+    font-size: 13px;
+    font-weight: bold;
+    animation: floatUp 1.1s ease-out forwards;
+    text-shadow: 0 1px 2px #000;
+    z-index: 6;
+  }
+  .floater.pos { color: var(--green); }
+  .floater.neg { color: var(--red); }
+  .floater.money { color: var(--yellow); }
+  .floater.hype { color: var(--pink); }
+  @keyframes floatUp {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-44px); opacity: 0; }
+  }
+
+  /* Synergy banner */
+  .synergy-flash {
+    position: absolute;
+    left: 50%;
+    top: 30%;
+    transform: translate(-50%, -50%);
+    background: var(--bg);
+    border: 2px solid var(--pink);
+    color: var(--pink);
+    padding: 8px 16px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    font-size: 12px;
+    border-radius: 4px;
+    z-index: 10;
+    animation: synflash 1.5s ease-out forwards;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(255, 95, 162, 0.5);
+  }
+  @keyframes synflash {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    20% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -70%) scale(1); opacity: 0; }
+  }
+
+  /* ============== LOG ============== */
+  #log {
+    background: var(--bg2);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 4px 8px;
+    height: 36px;
+    overflow: hidden;
+    font-size: 10px;
+    color: var(--dim);
+    flex-shrink: 0;
+    position: relative;
+  }
+  #log-inner {
+    line-height: 14px;
+  }
+  .log-row {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    animation: slidein 0.3s;
+  }
+  .log-row.good { color: var(--green); }
+  .log-row.bad { color: var(--red); }
+  .log-row.synergy { color: var(--pink); }
+  .log-row.boss { color: var(--yellow); font-weight: bold; }
+  @keyframes slidein {
+    from { transform: translateX(-6px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* ============== HAND ============== */
+  #hand {
+    display: flex;
+    gap: 6px;
+    padding: 8px 8px;
+    background: var(--bg2);
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-shrink: 0;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #hand::-webkit-scrollbar { display: none; }
+  .card {
+    flex: 0 0 84px;
+    height: 108px;
+    background: linear-gradient(180deg, #1e2832 0%, #141a20 100%);
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+  }
+  .card.selected {
+    border-color: var(--green);
+    transform: translateY(-6px);
+    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.4);
+  }
+  .card.unaffordable {
+    opacity: 0.4;
+  }
+  .card .cname {
+    font-size: 9px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 11px;
+    color: var(--fg);
+    min-height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card .cicon {
+    font-size: 28px;
+    text-align: center;
+    margin: 2px 0;
+    line-height: 1;
+  }
+  .card .cdesc {
+    font-size: 8px;
+    text-align: center;
+    color: var(--dim);
+    flex: 1;
+    line-height: 10px;
+    overflow: hidden;
+  }
+  .card .ccost {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--yellow);
+    color: #000;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    border: 2px solid var(--bg2);
+  }
+  .card .ckind {
+    position: absolute;
+    bottom: 2px;
+    left: 4px;
+    font-size: 7px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+  .card.kind-mon { border-color: rgba(255, 211, 87, 0.4); }
+  .card.kind-content { border-color: rgba(95, 209, 255, 0.4); }
+  .card.kind-mechanic { border-color: rgba(0, 255, 136, 0.4); }
+  .card.kind-comm { border-color: rgba(255, 95, 162, 0.4); }
+  .card.kind-mkt { border-color: rgba(255, 211, 87, 0.4); }
+  .card.kind-studio { border-color: rgba(95, 209, 255, 0.4); }
+
+  /* ============== BOTTOM CONTROLS ============== */
+  #controls {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: var(--bg2);
+    border-top: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .btn {
+    flex: 1;
+    background: var(--bg3);
+    border: 1.5px solid var(--line);
+    color: var(--fg);
+    padding: 12px 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn.primary {
+    background: var(--green);
+    color: #000;
+    border-color: var(--green);
+    box-shadow: 0 0 12px rgba(0, 255, 136, 0.3);
+  }
+  .btn.primary:hover { background: #66ffaa; }
+  .btn.ghost {
+    background: transparent;
+    flex: 0 0 64px;
+    font-size: 11px;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ============== OVERLAY ============== */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+    animation: fadein 0.3s;
+  }
+  @keyframes fadein {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .panel {
+    background: var(--bg2);
+    border: 2px solid var(--green);
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 420px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 0 40px rgba(0, 255, 136, 0.25);
+  }
+  .panel h2 {
+    margin: 0 0 12px;
+    color: var(--green);
+    text-align: center;
+    letter-spacing: 4px;
+    font-size: 20px;
+  }
+  .panel h3 {
+    color: var(--yellow);
+    margin: 12px 0 6px;
+    font-size: 14px;
+    letter-spacing: 2px;
+  }
+  .panel p {
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--fg);
+    margin: 6px 0;
+  }
+  .panel .small { font-size: 11px; color: var(--dim); }
+  .panel .ico-big { font-size: 56px; text-align: center; margin: 8px 0; }
+  .panel.boss { border-color: var(--yellow); }
+  .panel.boss h2 { color: var(--yellow); }
+  .panel.bad { border-color: var(--red); }
+  .panel.bad h2 { color: var(--red); }
+  .panel.victory { border-color: var(--pink); }
+  .panel.victory h2 { color: var(--pink); }
+  .panel .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 10px 0;
+  }
+  .panel .stat-row {
+    background: var(--bg3);
+    padding: 6px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .panel .stat-row .v {
+    display: block;
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--green);
+  }
+  .panel button {
+    width: 100%;
+    background: var(--green);
+    color: #000;
+    border: none;
+    padding: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 12px;
+  }
+  .panel button.ghost {
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid var(--line);
+    margin-top: 6px;
+  }
+  .panel button:active { transform: scale(0.97); }
+
+  .tile-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .tile-card {
+    background: var(--bg3);
+    border-radius: 4px;
+    padding: 6px;
+    text-align: center;
+    font-size: 10px;
+  }
+  .tile-card .icx { font-size: 22px; margin-bottom: 2px; }
+
+  /* tutorial bubble */
+  .tutorial-bubble {
+    position: absolute;
+    background: var(--bg);
+    border: 2px solid var(--green);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--fg);
+    z-index: 50;
+    max-width: 240px;
+    box-shadow: 0 0 16px rgba(0, 255, 136, 0.4);
+    animation: fadein 0.4s;
+  }
+  .tutorial-bubble button {
+    background: var(--green);
+    color: #000;
+    border: none;
+    padding: 5px 10px;
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: bold;
+    border-radius: 4px;
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* boss flash */
+  .boss-flash {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 80, 80, 0.4);
+    z-index: 99;
+    animation: bossflash 0.6s;
+    pointer-events: none;
+  }
+  @keyframes bossflash {
+    0% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* Menu */
+  #menubtn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--dim);
+    width: 26px;
+    height: 22px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    z-index: 7;
+  }
+
+  .empty-hand {
+    width: 100%;
+    padding: 30px 0;
+    text-align: center;
+    color: var(--dim);
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+
+  /* placement hint */
+  .placement-hint {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    z-index: 8;
+    animation: pulse 1s infinite;
+  }
+
+  /* button row for back / replace */
+  .ovl-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .ovl-actions button {
+    flex: 1;
+  }
+
+  /* unlock pulse */
+  .unlock-pulse {
+    color: var(--pink);
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-align: center;
+    margin: 8px 0;
+    animation: pulse 1.2s infinite;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <button id="menubtn" aria-label="Menu">≡</button>
+
+  <div id="topbar">
+    <div class="stat day"><span class="lbl">LAP</span><span class="val" id="stat-day">1/12</span></div>
+    <div class="stat money"><span class="lbl">$</span><span class="val" id="stat-money">80</span></div>
+    <div class="stat hype"><span class="lbl">HYPE</span><span class="val" id="stat-hype">0</span></div>
+    <div class="stat sanity"><span class="lbl">SANITY</span><span class="val" id="stat-sanity">100</span></div>
+  </div>
+
+  <div id="cohort">
+    <div class="arch whales" id="arch-whales">
+      <span class="ico">🐳</span>
+      <div class="info">
+        <div class="top"><span>WHALES</span><span class="count" id="cnt-whales">1</span></div>
+        <div class="bar"><div class="fill" id="fill-whales" style="width:50%"></div></div>
+      </div>
+    </div>
+    <div class="arch players" id="arch-players">
+      <span class="ico">🎮</span>
+      <div class="info">
+        <div class="top"><span>PLAYERS</span><span class="count" id="cnt-players">10</span></div>
+        <div class="bar"><div class="fill" id="fill-players" style="width:50%"></div></div>
+      </div>
+    </div>
+    <div class="arch streamers" id="arch-streamers">
+      <span class="ico">📺</span>
+      <div class="info">
+        <div class="top"><span>STREAMERS</span><span class="count" id="cnt-streamers">1</span></div>
+        <div class="bar"><div class="fill" id="fill-streamers" style="width:50%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loopwrap">
+    <svg id="loopsvg" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div id="log"><div id="log-inner"></div></div>
+
+  <div id="hand"></div>
+
+  <div id="controls">
+    <button class="btn ghost" id="btn-cancel" style="display:none;">CANCEL</button>
+    <button class="btn primary" id="btn-next">▶ RUN LAP</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   GAMEDEV LOOP — a Loop Hero-inspired meta game dev sim
+   ============================================================ */
+
+// ---------- TILE LIBRARY ----------
+// kind: 'path' (slots 0-7) | 'community' | 'marketing' | 'studio' (off-path)
+// effects.{archetype}.eng = engagement delta when triggered
+// effects.{archetype}.spend = money from that archetype this lap
+// effects.sanity / .hype = passive deltas applied during trigger
+// effects.cohort.{archetype} = growth delta
+const TILES = {
+  // MECHANICS
+  tutorial:    { id:'tutorial',    name:'Tutorial Quest', icon:'📖', cost:5,  kind:'path', tags:['mech','onboard'],   desc:'+ENG players', effects:{ players:{eng:+10}, sanity:-1 }},
+  skilltree:   { id:'skilltree',   name:'Skill Tree',     icon:'🌳', cost:8,  kind:'path', tags:['mech'],             desc:'+ENG players/whales', effects:{ players:{eng:+6}, whales:{eng:+4}, sanity:-1 }},
+  bossfight:   { id:'bossfight',   name:'Boss Fight',     icon:'⚔️', cost:10, kind:'path', tags:['mech','combat'],    desc:'+whales -casuals', effects:{ whales:{eng:+12}, players:{eng:-3}, sanity:-2 }},
+  procgen:     { id:'procgen',     name:'Procgen World',  icon:'🌀', cost:12, kind:'path', tags:['mech','content'],   desc:'+streamers', effects:{ streamers:{eng:+10}, players:{eng:+4}, sanity:-2 }},
+  crafting:    { id:'crafting',    name:'Crafting',       icon:'🔨', cost:10, kind:'path', tags:['mech'],             desc:'+ENG players', effects:{ players:{eng:+8}, whales:{eng:+2}, sanity:-1 }},
+  coop:        { id:'coop',        name:'Co-op Mode',     icon:'🤝', cost:15, kind:'path', tags:['mech','social'],    desc:'cohort growth', effects:{ players:{eng:+5}, streamers:{eng:+3}, cohort:{players:+1}, sanity:-2 }},
+  difficulty:  { id:'difficulty',  name:'Hard Mode',      icon:'💀', cost:5,  kind:'path', tags:['mech'],             desc:'+whales -players', effects:{ whales:{eng:+10}, players:{eng:-6}, sanity:-1 }},
+  // MONETIZATION
+  cosmetic:    { id:'cosmetic',    name:'Cosmetic Shop',  icon:'👗', cost:5,  kind:'path', tags:['money'],            desc:'$ from whales', effects:{ whales:{spend:+12, eng:+2}, players:{eng:-1} }},
+  battlepass:  { id:'battlepass',  name:'Battle Pass',    icon:'🎟️', cost:10, kind:'path', tags:['money'],            desc:'$$ retention', effects:{ players:{spend:+6, eng:-1}, whales:{spend:+8} }},
+  lootbox:     { id:'lootbox',     name:'Loot Box',       icon:'🎁', cost:5,  kind:'path', tags:['money','toxic'],    desc:'$$$ but churn', effects:{ whales:{spend:+18}, players:{eng:-6}, streamers:{eng:-4}, hype:-3 }},
+  ads:         { id:'ads',         name:'In-Game Ads',    icon:'📺', cost:0,  kind:'path', tags:['money','toxic'],    desc:'$ but churn', effects:{ players:{spend:+3, eng:-3}, whales:{eng:-2}, streamers:{eng:-2} }},
+  founders:    { id:'founders',    name:'Founders Pack',  icon:'🏅', cost:5,  kind:'path', tags:['money'],            desc:'early $$', effects:{ whales:{spend:+15, eng:+1} }},
+  premiumcur:  { id:'premiumcur',  name:'Premium Coins',  icon:'🪙', cost:5,  kind:'path', tags:['money','toxic'],    desc:'$ everyone hates', effects:{ whales:{spend:+10}, players:{eng:-4}, streamers:{eng:-2} }},
+  // CONTENT
+  lore:        { id:'lore',        name:'Lore Codex',     icon:'📜', cost:8,  kind:'path', tags:['content','story'],  desc:'+streamers', effects:{ streamers:{eng:+10}, players:{eng:+2} }},
+  npcdialogue: { id:'npcdialogue', name:'NPC Dialogue',   icon:'💬', cost:7,  kind:'path', tags:['content','story'],  desc:'+streamers (combo lore)', effects:{ streamers:{eng:+8}, players:{eng:+3} }},
+  secret:      { id:'secret',      name:'Secret Area',    icon:'🗝️', cost:10, kind:'path', tags:['content'],          desc:'+hype', effects:{ streamers:{eng:+6}, hype:+5 }},
+  easteregg:   { id:'easteregg',   name:'Easter Egg',     icon:'🥚', cost:3,  kind:'path', tags:['content'],          desc:'+hype small', effects:{ streamers:{eng:+3}, hype:+2 }},
+  cutscene:    { id:'cutscene',    name:'Cutscene',       icon:'🎬', cost:5,  kind:'path', tags:['content','story'],  desc:'+players -whales', effects:{ players:{eng:+8}, whales:{eng:-3} }},
+  // COMMUNITY (off-path)
+  discord:     { id:'discord',     name:'Discord',        icon:'💬', cost:10, kind:'community', tags:['comm'],         desc:'cohort retention +', effects:{ retention:0.07 }},
+  wiki:        { id:'wiki',        name:'Community Wiki', icon:'📚', cost:8,  kind:'community', tags:['comm','story'], desc:'lore tiles 2x', effects:{ loreMult:2 }},
+  modtools:    { id:'modtools',    name:'Mod Tools',      icon:'🧩', cost:15, kind:'community', tags:['comm'],         desc:'streamer mult', effects:{ streamerMult:1.5 }},
+  // MARKETING (off-path)
+  trailer:     { id:'trailer',     name:'Trailer',        icon:'🎞️', cost:20, kind:'marketing', tags:['mkt'],          desc:'+hype +wishlists', effects:{ hypePerLap:+4, cohortPerLap:{players:1} }},
+  steamsale:   { id:'steamsale',   name:'Steam Sale',     icon:'🏷️', cost:5,  kind:'marketing', tags:['mkt'],          desc:'+players', effects:{ cohortPerLap:{players:1} }},
+  influencer:  { id:'influencer',  name:'Influencer',     icon:'🎤', cost:30, kind:'marketing', tags:['mkt'],          desc:'+hype +streamers', effects:{ hypePerLap:+5, cohortPerLap:{streamers:1} }},
+  // STUDIO (off-path)
+  artist:      { id:'artist',      name:'Hire Artist',    icon:'🎨', cost:20, kind:'studio',    tags:['studio'],       desc:'content +30%', effects:{ contentMult:1.3 }},
+  programmer:  { id:'programmer',  name:'Hire Programmer',icon:'⌨️', cost:20, kind:'studio',    tags:['studio'],       desc:'mech +30%', effects:{ mechMult:1.3 }},
+  composer:    { id:'composer',    name:'Hire Composer',  icon:'🎵', cost:15, kind:'studio',    tags:['studio'],       desc:'+hype each lap', effects:{ hypePerLap:+2 }},
+  // HAZARDS (spawn-only, not in hand)
+  bug:         { id:'bug',         name:'Game Bug',       icon:'🐛', cost:0,  kind:'path', tags:['hazard'], hazard:true, fixCost:10, desc:'-2 sanity/lap', effects:{ sanity:-2, hype:-1 }},
+  crunch:      { id:'crunch',      name:'Crunch',         icon:'🔥', cost:0,  kind:'studio', tags:['hazard'], hazard:true, fixCost:0, desc:'-3 sanity/lap', effects:{ sanity:-3 }},
+  engineupd:   { id:'engineupd',   name:'Engine Update',  icon:'⚙️', cost:0,  kind:'path', tags:['hazard'], hazard:true, fixCost:15, desc:'blocks slot', effects:{ sanity:-1 }},
+};
+
+const STARTING_DECK = ['tutorial','tutorial','skilltree','crafting','lore','easteregg','cosmetic','cutscene','steamsale','discord'];
+const ALL_UNLOCKABLES = ['bossfight','procgen','coop','difficulty','battlepass','lootbox','ads','founders','premiumcur','npcdialogue','secret','wiki','modtools','trailer','influencer','artist','programmer','composer'];
+
+const STAGE_LABELS = ['DISCOVER','WISHLIST','INSTALL','TUTORIAL','EARLY','MID','END','LAPSED'];
+
+// ---------- SYNERGIES ----------
+// Checked at lap-end and during walk; bonuses logged + flashed.
+const SYNERGIES = [
+  { id:'worldbuilding', name:'WORLDBUILDING',
+    check: s => hasAdjacent(s.slots, 'lore', 'npcdialogue'),
+    apply: ctx => { ctx.streamersBonus += 12; ctx.hype += 4; } },
+  { id:'roguelite', name:'ROGUELITE',
+    check: s => hasAllOnPath(s.slots, ['procgen','crafting','bossfight']),
+    apply: ctx => { ctx.streamersBonus += 10; ctx.playersBonus += 10; ctx.cohort.players += 2; ctx.hype += 6; } },
+  { id:'whaletrap', name:'WHALE TRAP',
+    check: s => countAdjacentByTag(s.slots, 'money', 3),
+    apply: ctx => { ctx.whaleSpendMult += 1.5; ctx.playersBonus -= 10; ctx.hype -= 4; } },
+  { id:'mastery', name:'MASTERY LOOP',
+    check: s => hasAdjacent(s.slots, 'bossfight','skilltree'),
+    apply: ctx => { ctx.whalesBonus += 8; ctx.cohort.whales += 1; ctx.hype += 3; } },
+  { id:'cult', name:'CULT FOLLOWING',
+    check: s => has(s.offSlots.community, 'discord') && has(s.offSlots.community, 'wiki') && hasOnPath(s.slots, 'easteregg'),
+    apply: ctx => { ctx.noChurn = true; ctx.hype += 8; } },
+  { id:'liveservice', name:'LIVE SERVICE',
+    check: s => hasOnPath(s.slots, 'battlepass') && hasOnPath(s.slots, 'coop') && has(s.offSlots.marketing, 'trailer'),
+    apply: ctx => { ctx.cohort.players += 2; ctx.whaleSpendMult += 0.5; ctx.hype += 4; } },
+  { id:'spectacle', name:'SPECTACLE',
+    check: s => hasOnPath(s.slots, 'secret') && hasOnPath(s.slots, 'procgen'),
+    apply: ctx => { ctx.streamersBonus += 8; ctx.hype += 4; } },
+  { id:'predatory', name:'PREDATORY',
+    check: s => hasOnPath(s.slots, 'lootbox') && hasOnPath(s.slots, 'premiumcur'),
+    apply: ctx => { ctx.whaleSpendMult += 1.0; ctx.hype -= 8; ctx.playersBonus -= 8; } },
+];
+
+// Helpers (use Tile IDs)
+function has(slot, id) { return slot && slot.id === id; }
+function hasOnPath(slots, id) { return slots.some(s => s && s.id === id); }
+function hasAllOnPath(slots, ids) { return ids.every(id => hasOnPath(slots, id)); }
+function hasAdjacent(slots, a, b) {
+  for (let i = 0; i < slots.length; i++) {
+    const j = (i + 1) % slots.length;
+    if (slots[i] && slots[j] &&
+        ((slots[i].id === a && slots[j].id === b) || (slots[i].id === b && slots[j].id === a))) {
+      return true;
+    }
+  }
+  return false;
+}
+function countAdjacentByTag(slots, tag, n) {
+  let run = 0, best = 0;
+  for (let i = 0; i < slots.length * 2; i++) {
+    const s = slots[i % slots.length];
+    if (s && s.tags && s.tags.includes(tag)) { run++; best = Math.max(best, run); }
+    else run = 0;
+  }
+  return best >= n;
+}
+
+// ---------- GAME STATE ----------
+let state;
+function newState(unlocked) {
+  return {
+    lap: 1,
+    maxLap: 12,
+    money: 80,
+    hype: 0,
+    sanity: 100,
+    cohort: { whales: 1, players: 10, streamers: 1 },
+    engagement: { whales: 50, players: 50, streamers: 50 },
+    slots: Array(8).fill(null),
+    offSlots: { community: null, marketing: null, studio: null },
+    hand: [],
+    log: [],
+    heroPos: 0,
+    selectedCard: null,
+    running: false,
+    ended: false,
+    ending: null,
+    pendingHazards: [],
+    bossesBeaten: [],
+    seenTutorial: false,
+    unlocked: unlocked || [],
+    runStats: { tilesPlaced: 0, synergiesHit: new Set(), maxCohort: 11, ending: null },
+  };
+}
+
+// ---------- PERSISTENT (META) ----------
+const SAVE_KEY = 'gamedevloop.save.v1';
+function loadMeta() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultMeta();
+    const m = JSON.parse(raw);
+    return Object.assign(defaultMeta(), m);
+  } catch (e) { return defaultMeta(); }
+}
+function defaultMeta() {
+  return {
+    unlocked: [],
+    seenTutorial: false,
+    runs: 0,
+    wins: { cult:0, hit:0, opus:0 },
+    losses: { burnout:0, bankrupt:0, vaporware:0 },
+    bestHype: 0,
+    bestMoney: 0,
+    seenSynergies: [],
+  };
+}
+function saveMeta(m) {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(m));
+}
+let meta = loadMeta();
+
+// ---------- AUDIO ----------
+let audioCtx = null;
+function audio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function tone(freq, duration = 0.1, type = 'square', gain = 0.05) {
+  try {
+    const c = audio();
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = gain;
+    o.connect(g); g.connect(c.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + duration);
+    o.stop(c.currentTime + duration + 0.01);
+  } catch (e) {}
+}
+function sfx(name) {
+  switch (name) {
+    case 'place':   tone(440, 0.05, 'square', 0.04); setTimeout(()=>tone(660, 0.05, 'square', 0.03), 30); break;
+    case 'tap':     tone(900, 0.03, 'sine', 0.03); break;
+    case 'lap':     tone(330, 0.08, 'triangle', 0.04); setTimeout(()=>tone(440, 0.08, 'triangle', 0.04), 80); setTimeout(()=>tone(550, 0.12, 'triangle', 0.04), 160); break;
+    case 'synergy': tone(660, 0.06, 'square', 0.05); setTimeout(()=>tone(880, 0.06, 'square', 0.05), 60); setTimeout(()=>tone(1100, 0.12, 'sawtooth', 0.04), 120); break;
+    case 'bad':     tone(150, 0.15, 'sawtooth', 0.06); break;
+    case 'win':     [523, 659, 784, 1046].forEach((f, i) => setTimeout(()=>tone(f, 0.18, 'triangle', 0.05), i*120)); break;
+    case 'lose':    [400, 300, 200, 100].forEach((f, i) => setTimeout(()=>tone(f, 0.2, 'sawtooth', 0.06), i*150)); break;
+    case 'boss':    tone(110, 0.4, 'sawtooth', 0.07); setTimeout(()=>tone(165, 0.3, 'sawtooth', 0.06), 200); break;
+    case 'money':   tone(880, 0.04, 'sine', 0.04); break;
+    case 'hype':    tone(1200, 0.05, 'triangle', 0.04); break;
+  }
+}
+
+// ---------- RENDER: SVG LOOP ----------
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const loopSvg = document.getElementById('loopsvg');
+
+const LOOP = {
+  cx: 200, cy: 195, r: 115,
+  slotSize: 56,
+  offCx: 200, offCy: 195, offR: 50,
+};
+
+function pathSlotPos(i) {
+  const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
+  return { x: LOOP.cx + Math.cos(angle) * LOOP.r, y: LOOP.cy + Math.sin(angle) * LOOP.r };
+}
+function offSlotPos(idx) {
+  // 3 off-slots arranged in a row inside the loop
+  const positions = [
+    { x: 142, y: 188 },
+    { x: 200, y: 188 },
+    { x: 258, y: 188 },
+  ];
+  return positions[idx];
+}
+
+function renderLoop() {
+  loopSvg.innerHTML = '';
+
+  // Loop path
+  const path = document.createElementNS(SVG_NS, 'circle');
+  path.setAttribute('cx', LOOP.cx);
+  path.setAttribute('cy', LOOP.cy);
+  path.setAttribute('r', LOOP.r);
+  path.classList.add('loop-path');
+  loopSvg.appendChild(path);
+
+  // Center label
+  const center = document.createElementNS(SVG_NS, 'text');
+  center.setAttribute('x', 200);
+  center.setAttribute('y', 134);
+  center.setAttribute('class', 'slot-stage-lbl');
+  center.setAttribute('font-size', 9);
+  center.textContent = 'YOUR STUDIO';
+  loopSvg.appendChild(center);
+
+  // Off-path labels above row of off slots
+  const offLabels = ['COMM','MKT','STUDIO'];
+  for (let i = 0; i < 3; i++) {
+    const pos = offSlotPos(i);
+    renderSlot(loopSvg, pos.x, pos.y, 38, getOffSlot(i), { offIdx: i, label: offLabels[i] });
+  }
+
+  // Path slots
+  for (let i = 0; i < 8; i++) {
+    const pos = pathSlotPos(i);
+    renderSlot(loopSvg, pos.x, pos.y, LOOP.slotSize, state.slots[i], { pathIdx: i, label: STAGE_LABELS[i] });
+  }
+
+  // Hero marker (drawn last to layer above) — only visible during the walk.
+  if (state.running) {
+    const hpos = pathSlotPos(state.heroPos);
+    drawHero(hpos.x, hpos.y);
+  }
+}
+
+function getOffSlot(i) {
+  if (i === 0) return state.offSlots.community;
+  if (i === 1) return state.offSlots.marketing;
+  if (i === 2) return state.offSlots.studio;
+}
+function setOffSlot(i, tile) {
+  if (i === 0) state.offSlots.community = tile;
+  if (i === 1) state.offSlots.marketing = tile;
+  if (i === 2) state.offSlots.studio = tile;
+}
+function offSlotKindForIdx(i) {
+  return ['community','marketing','studio'][i];
+}
+
+function renderSlot(svg, x, y, size, tile, meta) {
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.classList.add('slot');
+  if (meta.offIdx !== undefined) g.classList.add('off-slot');
+  if (tile) {
+    g.classList.add('filled');
+    if (tile.hazard) g.classList.add('hazard');
+  } else {
+    g.classList.add('empty');
+  }
+  g.setAttribute('data-x', x);
+  g.setAttribute('data-y', y);
+
+  // placeable highlight
+  if (state.selectedCard && state.money >= state.selectedCard.cost) {
+    const tk = state.selectedCard.kind;
+    const targetKind = meta.offIdx !== undefined ? offSlotKindForIdx(meta.offIdx) : 'path';
+    if (tk === targetKind && (!tile || !tile.hazard)) g.classList.add('placeable');
+  }
+
+  // background
+  const rect = document.createElementNS(SVG_NS, 'rect');
+  rect.setAttribute('x', x - size/2);
+  rect.setAttribute('y', y - size/2);
+  rect.setAttribute('width', size);
+  rect.setAttribute('height', size);
+  rect.setAttribute('rx', 6);
+  rect.classList.add('slot-bg');
+  g.appendChild(rect);
+
+  // stage label
+  if (meta.label) {
+    const lbl = document.createElementNS(SVG_NS, 'text');
+    lbl.setAttribute('x', x);
+    lbl.setAttribute('y', y - size/2 - 3);
+    lbl.setAttribute('class', meta.offIdx !== undefined ? 'off-slot-lbl' : 'slot-stage-lbl');
+    lbl.textContent = meta.label;
+    g.appendChild(lbl);
+  }
+
+  // tile icon
+  if (tile) {
+    const ic = document.createElementNS(SVG_NS, 'text');
+    ic.setAttribute('x', x);
+    ic.setAttribute('y', y);
+    ic.setAttribute('class', 'slot-icon-text');
+    ic.setAttribute('font-size', meta.offIdx !== undefined ? 22 : 26);
+    ic.textContent = tile.icon;
+    g.appendChild(ic);
+  } else if (meta.offIdx !== undefined) {
+    const placeholder = document.createElementNS(SVG_NS, 'text');
+    placeholder.setAttribute('x', x);
+    placeholder.setAttribute('y', y);
+    placeholder.setAttribute('class', 'slot-icon-text');
+    placeholder.setAttribute('font-size', 18);
+    placeholder.setAttribute('opacity', 0.3);
+    placeholder.textContent = ['💬','📣','🏢'][meta.offIdx];
+    g.appendChild(placeholder);
+  }
+
+  // tap target
+  g.addEventListener('click', () => onSlotTap(meta));
+  g.addEventListener('touchend', (e) => { e.preventDefault(); onSlotTap(meta); });
+
+  svg.appendChild(g);
+}
+
+function drawHero(x, y) {
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.classList.add('hero');
+  const c = document.createElementNS(SVG_NS, 'circle');
+  c.setAttribute('cx', x);
+  c.setAttribute('cy', y);
+  c.setAttribute('r', 8);
+  c.classList.add('hero-body');
+  g.appendChild(c);
+  const t = document.createElementNS(SVG_NS, 'text');
+  t.setAttribute('x', x);
+  t.setAttribute('y', y);
+  t.setAttribute('class', 'slot-icon-text');
+  t.setAttribute('font-size', 12);
+  t.textContent = '🎮';
+  g.appendChild(t);
+  loopSvg.appendChild(g);
+}
+
+// ---------- RENDER: HUD ----------
+function renderHUD() {
+  document.getElementById('stat-day').textContent = state.lap + '/' + state.maxLap;
+  document.getElementById('stat-money').textContent = Math.floor(state.money);
+  document.getElementById('stat-hype').textContent = Math.floor(state.hype);
+  document.getElementById('stat-sanity').textContent = Math.max(0, Math.floor(state.sanity));
+
+  const sanEl = document.getElementById('stat-sanity').parentElement;
+  if (state.sanity < 25) sanEl.classList.add('warn'); else sanEl.classList.remove('warn');
+
+  // Cohort bars
+  for (const a of ['whales','players','streamers']) {
+    const c = state.cohort[a];
+    const e = state.engagement[a];
+    document.getElementById('cnt-' + a).textContent = Math.floor(c);
+    document.getElementById('fill-' + a).style.width = Math.max(0, Math.min(100, e)) + '%';
+    const archEl = document.getElementById('arch-' + a);
+    if (e < 25) archEl.classList.add('low'); else archEl.classList.remove('low');
+  }
+}
+
+// ---------- RENDER: HAND ----------
+function renderHand() {
+  const hand = document.getElementById('hand');
+  hand.innerHTML = '';
+  if (state.hand.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-hand';
+    empty.textContent = 'NO CARDS — RUN LAP TO DRAW';
+    hand.appendChild(empty);
+    return;
+  }
+  state.hand.forEach((tile, idx) => {
+    const card = document.createElement('div');
+    const kindClass = ({ path:'mechanic', community:'comm', marketing:'mkt', studio:'studio' })[tile.kind] || 'mechanic';
+    // override by tag for nicer color coding
+    const c2 = tile.tags && tile.tags.includes('money') ? 'mon'
+             : tile.tags && tile.tags.includes('content') ? 'content'
+             : tile.tags && tile.tags.includes('comm') ? 'comm'
+             : tile.tags && tile.tags.includes('mkt') ? 'mkt'
+             : tile.tags && tile.tags.includes('studio') ? 'studio'
+             : 'mechanic';
+    card.className = 'card kind-' + c2;
+    if (state.selectedCard && state.selectedCard.handIdx === idx) card.classList.add('selected');
+    if (state.money < tile.cost) card.classList.add('unaffordable');
+
+    card.innerHTML = `
+      <div class="ccost">${tile.cost}</div>
+      <div class="cname">${tile.name}</div>
+      <div class="cicon">${tile.icon}</div>
+      <div class="cdesc">${tile.desc || ''}</div>
+      <div class="ckind">${tile.kind === 'path' ? 'PATH' : tile.kind.toUpperCase()}</div>
+    `;
+    card.addEventListener('click', () => onCardTap(idx));
+    card.addEventListener('touchend', (e) => { e.preventDefault(); onCardTap(idx); });
+    hand.appendChild(card);
+  });
+}
+
+// ---------- RENDER: LOG ----------
+function logEvent(text, kind) {
+  state.log.push({ text, kind });
+  if (state.log.length > 30) state.log.shift();
+  renderLog();
+}
+function renderLog() {
+  const inner = document.getElementById('log-inner');
+  inner.innerHTML = '';
+  // show last 2-3 lines
+  const recent = state.log.slice(-3);
+  recent.forEach(e => {
+    const r = document.createElement('div');
+    r.className = 'log-row ' + (e.kind || '');
+    r.textContent = e.text;
+    inner.appendChild(r);
+  });
+}
+
+// ---------- INPUT HANDLERS ----------
+function onCardTap(idx) {
+  if (state.running || state.ended) return;
+  const tile = state.hand[idx];
+  if (!tile) return;
+  if (state.money < tile.cost) {
+    flashWarn('Not enough $');
+    sfx('bad');
+    return;
+  }
+  sfx('tap');
+  if (state.selectedCard && state.selectedCard.handIdx === idx) {
+    state.selectedCard = null;
+    setCancelBtn(false);
+  } else {
+    state.selectedCard = Object.assign({ handIdx: idx }, tile);
+    setCancelBtn(true);
+  }
+  renderHand();
+  renderLoop();
+  updatePlacementHint();
+}
+
+function setCancelBtn(show) {
+  document.getElementById('btn-cancel').style.display = show ? '' : 'none';
+}
+
+function onSlotTap(meta) {
+  if (state.running || state.ended) return;
+
+  // Identify slot tile + kind
+  const isOff = meta.offIdx !== undefined;
+  const slotKind = isOff ? offSlotKindForIdx(meta.offIdx) : 'path';
+  const currentTile = isOff ? getOffSlot(meta.offIdx) : state.slots[meta.pathIdx];
+
+  // If currently holding a hazard fix (clicking a hazard with no card to drop)
+  if (!state.selectedCard && currentTile && currentTile.hazard) {
+    attemptHazardFix(meta, currentTile);
+    return;
+  }
+
+  // Show info if tapping a non-hazard tile without a card
+  if (!state.selectedCard && currentTile && !currentTile.hazard) {
+    showTileInfo(currentTile, meta);
+    return;
+  }
+
+  // Try to place
+  if (state.selectedCard) {
+    if (slotKind !== state.selectedCard.kind) {
+      flashWarn('Wrong slot type');
+      sfx('bad');
+      return;
+    }
+    if (currentTile && currentTile.hazard) {
+      flashWarn('Fix hazard first');
+      sfx('bad');
+      return;
+    }
+    placeCard(state.selectedCard, meta);
+  }
+}
+
+function placeCard(card, meta) {
+  if (state.money < card.cost) { flashWarn('Not enough $'); return; }
+  state.money -= card.cost;
+  const tile = TILES[card.id];
+  if (meta.offIdx !== undefined) {
+    setOffSlot(meta.offIdx, tile);
+  } else {
+    state.slots[meta.pathIdx] = tile;
+  }
+  state.hand.splice(card.handIdx, 1);
+  state.selectedCard = null;
+  state.runStats.tilesPlaced++;
+  setCancelBtn(false);
+  sfx('place');
+  if (navigator.vibrate) navigator.vibrate(10);
+  spawnFloater((meta.offIdx !== undefined ? offSlotPos(meta.offIdx) : pathSlotPos(meta.pathIdx)), '-$' + card.cost, 'money');
+  renderAll();
+  checkImmediateSynergyHint();
+  updatePlacementHint();
+}
+
+function attemptHazardFix(meta, tile) {
+  const cost = tile.fixCost || 0;
+  if (state.money < cost) { flashWarn('Need $' + cost + ' to fix'); sfx('bad'); return; }
+  state.money -= cost;
+  if (meta.offIdx !== undefined) setOffSlot(meta.offIdx, null);
+  else state.slots[meta.pathIdx] = null;
+  logEvent('Fixed ' + tile.name + (cost ? ' for $' + cost : ''), 'good');
+  sfx('place');
+  renderAll();
+}
+
+function showTileInfo(tile, meta) {
+  // Pop a brief info bubble at slot
+  const pos = meta.offIdx !== undefined ? offSlotPos(meta.offIdx) : pathSlotPos(meta.pathIdx);
+  spawnFloater(pos, tile.name, 'pos');
+}
+
+function updatePlacementHint() {
+  const existing = document.querySelector('.placement-hint');
+  if (existing) existing.remove();
+  if (state.selectedCard) {
+    const hint = document.createElement('div');
+    hint.className = 'placement-hint';
+    hint.textContent = 'TAP A SLOT — ' + state.selectedCard.kind.toUpperCase();
+    document.getElementById('loopwrap').appendChild(hint);
+  }
+}
+
+function flashWarn(text) {
+  const log = document.getElementById('log');
+  const old = log.style.borderColor;
+  log.style.borderColor = 'var(--red)';
+  setTimeout(() => log.style.borderColor = '', 300);
+  logEvent(text, 'bad');
+}
+
+// ---------- DRAW HAND ----------
+function drawHand() {
+  // Refill to 4 cards from the unlocked pool + starting deck.
+  const target = 4;
+  const pool = [...STARTING_DECK, ...state.unlocked];
+  while (state.hand.length < target) {
+    const id = pool[Math.floor(Math.random() * pool.length)];
+    if (id && TILES[id] && !TILES[id].hazard) {
+      state.hand.push(TILES[id]);
+    } else break;
+  }
+}
+
+// ---------- LAP SIMULATION ----------
+async function runLap() {
+  if (state.running || state.ended) return;
+  state.running = true;
+  setCancelBtn(false);
+  state.selectedCard = null;
+  document.getElementById('btn-next').disabled = true;
+  updatePlacementHint();
+
+  sfx('lap');
+  logEvent('— Lap ' + state.lap + ' begins —', '');
+
+  // Determine boss
+  const isBossLap = (state.lap === 4 || state.lap === 8 || state.lap === 12);
+
+  // Per-lap passive: off-slot effects fire once at start
+  applyPassivePerLap();
+
+  // Hero walk: traverse 8 slots
+  for (let i = 0; i < 8; i++) {
+    state.heroPos = i;
+    renderLoop();
+    await sleep(420);
+    const slot = state.slots[i];
+    if (slot) await processTile(slot, i);
+    renderHUD();
+    if (state.ended) { state.running = false; return; }
+  }
+
+  // End-of-lap synergy check (full pass — also flashed during walk but ensure all apply)
+  const synBonus = applySynergies();
+  applyEndOfLap(synBonus);
+  renderHUD();
+  await sleep(400);
+
+  // Sanity hit baseline
+  applyBaseSanityCost();
+
+  // Boss?
+  if (isBossLap) {
+    await sleep(300);
+    await runBoss(state.lap);
+    if (state.ended) { state.running = false; return; }
+  }
+
+  // Spawn hazards on a probability that increases mid/late
+  await maybeSpawnHazard();
+
+  // Update cohort counts based on engagement
+  updateCohortCounts();
+
+  // Check loss conditions
+  if (state.sanity <= 0) { endRun('burnout'); return; }
+  if (state.money < -50) { endRun('bankrupt'); return; }
+  const totalCohort = state.cohort.whales + state.cohort.players + state.cohort.streamers;
+  if (totalCohort <= 0) { endRun('vaporware'); return; }
+  state.runStats.maxCohort = Math.max(state.runStats.maxCohort, totalCohort);
+
+  // Increment lap
+  state.lap++;
+  if (state.lap > state.maxLap) {
+    state.running = false;
+    return finishRun();
+  }
+
+  // Refill hand
+  drawHand();
+  renderAll();
+  document.getElementById('btn-next').disabled = false;
+  state.running = false;
+}
+
+function applyPassivePerLap() {
+  // Off-slot effects
+  const off = state.offSlots;
+  if (off.marketing) {
+    const m = off.marketing.effects || {};
+    if (m.hypePerLap) {
+      state.hype += m.hypePerLap;
+      logEvent(off.marketing.name + ': +' + m.hypePerLap + ' hype', 'good');
+      sfx('hype');
+    }
+    if (m.cohortPerLap) {
+      for (const k of Object.keys(m.cohortPerLap)) {
+        state.cohort[k] = (state.cohort[k] || 0) + m.cohortPerLap[k];
+        logEvent(off.marketing.name + ': +' + m.cohortPerLap[k] + ' ' + k, 'good');
+      }
+    }
+  }
+  if (off.studio && off.studio.effects && off.studio.effects.hypePerLap) {
+    state.hype += off.studio.effects.hypePerLap;
+    logEvent(off.studio.name + ': +' + off.studio.effects.hypePerLap + ' hype', 'good');
+  }
+}
+
+async function processTile(tile, pathIdx) {
+  if (tile.hazard) {
+    // hazards bleed sanity/hype each lap until removed
+    const e = tile.effects || {};
+    if (e.sanity) {
+      state.sanity += e.sanity;
+      spawnFloater(pathSlotPos(pathIdx), e.sanity, 'neg');
+      logEvent('🐛 ' + tile.name + ': ' + e.sanity + ' sanity', 'bad');
+    }
+    if (e.hype) state.hype += e.hype;
+    return;
+  }
+
+  // Apply tile effects with multipliers
+  const mults = computeMultipliers();
+  const e = tile.effects || {};
+  // archetype-specific
+  for (const arch of ['whales','players','streamers']) {
+    if (e[arch]) {
+      let engD = e[arch].eng || 0;
+      let spendD = e[arch].spend || 0;
+      // Multipliers
+      if (tile.tags && tile.tags.includes('content')) engD *= mults.contentMult;
+      if (tile.tags && tile.tags.includes('mech')) engD *= mults.mechMult;
+      if (arch === 'streamers') engD *= mults.streamerMult;
+      if (tile.id === 'lore' && mults.loreMult) engD *= mults.loreMult;
+      if (tile.tags && tile.tags.includes('money') && arch === 'whales') spendD *= mults.whaleSpendMult;
+
+      if (engD) {
+        state.engagement[arch] = Math.max(-30, Math.min(120, state.engagement[arch] + engD));
+        spawnFloater(pathSlotPos(pathIdx), (engD > 0 ? '+' : '') + Math.round(engD), engD > 0 ? 'pos' : 'neg');
+      }
+      if (spendD) {
+        const earned = Math.round(spendD * state.cohort[arch]);
+        state.money += earned;
+        spawnFloater(pathSlotPos(pathIdx), '+$' + earned, 'money');
+        sfx('money');
+      }
+    }
+    if (e.cohort && e.cohort[arch]) {
+      state.cohort[arch] += e.cohort[arch];
+    }
+  }
+  if (e.sanity) {
+    state.sanity += e.sanity;
+    if (e.sanity < 0) {
+      // small visual
+    }
+  }
+  if (e.hype) {
+    state.hype += e.hype;
+    if (e.hype > 0) { spawnFloater(pathSlotPos(pathIdx), '+' + e.hype + ' hype', 'hype'); sfx('hype'); }
+  }
+
+  // Live synergy detection on adjacent tiles (visual flash on first appearance per lap)
+  detectLocalSynergy(pathIdx);
+
+  await sleep(120);
+}
+
+function computeMultipliers() {
+  const off = state.offSlots;
+  let mults = {
+    contentMult: 1,
+    mechMult: 1,
+    streamerMult: 1,
+    loreMult: 1,
+    whaleSpendMult: 1,
+    retention: 0,
+  };
+  if (off.studio) {
+    const e = off.studio.effects || {};
+    if (e.contentMult) mults.contentMult *= e.contentMult;
+    if (e.mechMult) mults.mechMult *= e.mechMult;
+  }
+  if (off.community) {
+    const e = off.community.effects || {};
+    if (e.loreMult) mults.loreMult *= e.loreMult;
+    if (e.streamerMult) mults.streamerMult *= e.streamerMult;
+    if (e.retention) mults.retention += e.retention;
+  }
+  return mults;
+}
+
+// Detect adjacent synergy at pathIdx and flash if first appearance this lap.
+let synergiesFlashedThisLap = new Set();
+function detectLocalSynergy(idx) {
+  const n = (idx + 1) % 8;
+  const p = (idx + 7) % 8;
+  const a = state.slots[idx], b = state.slots[n], c = state.slots[p];
+  const pairs = [[a,b],[a,c]];
+  for (const [x,y] of pairs) {
+    if (!x || !y) continue;
+    if ((x.id==='lore' && y.id==='npcdialogue') || (x.id==='npcdialogue' && y.id==='lore')) {
+      flashSynergy('WORLDBUILDING');
+    } else if ((x.id==='bossfight' && y.id==='skilltree') || (x.id==='skilltree' && y.id==='bossfight')) {
+      flashSynergy('MASTERY LOOP');
+    }
+  }
+}
+
+function flashSynergy(name) {
+  if (synergiesFlashedThisLap.has(name)) return;
+  synergiesFlashedThisLap.add(name);
+  state.runStats.synergiesHit.add(name);
+  if (!meta.seenSynergies.includes(name)) {
+    meta.seenSynergies.push(name);
+    saveMeta(meta);
+  }
+  const el = document.createElement('div');
+  el.className = 'synergy-flash';
+  el.textContent = name + ' ✨';
+  document.getElementById('loopwrap').appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+  sfx('synergy');
+  if (navigator.vibrate) navigator.vibrate([15, 30, 30]);
+}
+
+function applySynergies() {
+  const ctx = {
+    whalesBonus: 0, playersBonus: 0, streamersBonus: 0,
+    whaleSpendMult: 0,
+    cohort: { whales:0, players:0, streamers:0 },
+    hype: 0,
+    noChurn: false,
+  };
+  for (const syn of SYNERGIES) {
+    if (syn.check(state)) {
+      syn.apply(ctx);
+      state.runStats.synergiesHit.add(syn.name);
+      logEvent('✨ ' + syn.name + ' active', 'synergy');
+      if (!meta.seenSynergies.includes(syn.name)) {
+        meta.seenSynergies.push(syn.name);
+        saveMeta(meta);
+      }
+    }
+  }
+  return ctx;
+}
+
+function applyEndOfLap(syn) {
+  // Apply synergy bonuses
+  state.engagement.whales = clamp(state.engagement.whales + syn.whalesBonus, -30, 120);
+  state.engagement.players = clamp(state.engagement.players + syn.playersBonus, -30, 120);
+  state.engagement.streamers = clamp(state.engagement.streamers + syn.streamersBonus, -30, 120);
+  state.cohort.whales += syn.cohort.whales;
+  state.cohort.players += syn.cohort.players;
+  state.cohort.streamers += syn.cohort.streamers;
+  state.hype += syn.hype;
+  if (syn.whaleSpendMult > 0) {
+    const bonus = Math.round(syn.whaleSpendMult * state.cohort.whales * 5);
+    if (bonus > 0) { state.money += bonus; logEvent('Whale trap: +$' + bonus, 'synergy'); }
+  }
+  state._noChurnThisLap = syn.noChurn;
+
+  // Hype derived from streamers count + engagement
+  const streamerHype = Math.floor(state.cohort.streamers * Math.max(0, state.engagement.streamers - 30) / 25);
+  if (streamerHype > 0) {
+    state.hype += streamerHype;
+    logEvent('Streamer buzz: +' + streamerHype + ' hype', 'good');
+  }
+
+  // engagement natural decay toward 50 each lap (mild)
+  for (const a of ['whales','players','streamers']) {
+    if (state.engagement[a] > 50) state.engagement[a] -= 2;
+    else if (state.engagement[a] < 50) state.engagement[a] += 1;
+  }
+
+  synergiesFlashedThisLap.clear();
+}
+
+function applyBaseSanityCost() {
+  // baseline crunch per lap as scope grows
+  const tiles = state.slots.filter(s => s).length + Object.values(state.offSlots).filter(s => s).length;
+  const cost = Math.max(1, Math.floor(tiles / 5));
+  state.sanity -= cost;
+  // Composer helps morale slightly
+  if (state.offSlots.studio && state.offSlots.studio.id === 'composer') state.sanity += 1;
+  logEvent('Daily drain: -' + cost + ' sanity', 'bad');
+}
+
+function updateCohortCounts() {
+  const mults = computeMultipliers();
+  const retention = mults.retention;
+  for (const a of ['whales','players','streamers']) {
+    const e = state.engagement[a];
+    // growth when e > 80
+    if (e > 80 && Math.random() < 0.5 + retention) {
+      state.cohort[a] += 1;
+      logEvent('+1 ' + a + ' joined!', 'good');
+      sfx('hype');
+    }
+    // churn when e < 20
+    if (e < 20 && !state._noChurnThisLap) {
+      const churn = Math.max(1, Math.floor(state.cohort[a] * 0.15));
+      state.cohort[a] = Math.max(0, state.cohort[a] - churn);
+      if (churn > 0) { logEvent('-' + churn + ' ' + a + ' churned', 'bad'); sfx('bad'); }
+    }
+  }
+}
+
+async function maybeSpawnHazard() {
+  // probability scales with lap
+  let p = 0.15 + state.lap * 0.04;
+  if (state.offSlots.studio && state.offSlots.studio.id === 'composer') p -= 0.08;
+  if (state.sanity < 30) p += 0.15;
+  if (Math.random() > p) return;
+  // pick hazard type
+  const types = ['bug','crunch','engineupd'];
+  const haz = TILES[types[Math.floor(Math.random() * types.length)]];
+  // Find a slot matching the hazard's kind
+  const candidates = [];
+  if (haz.kind === 'studio') {
+    if (!state.offSlots.studio) candidates.push({ offIdx: 2 });
+  } else {
+    for (let i = 0; i < 8; i++) if (!state.slots[i]) candidates.push({ pathIdx: i });
+  }
+  if (candidates.length === 0) return;
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  if (pick.offIdx !== undefined) setOffSlot(pick.offIdx, haz);
+  else state.slots[pick.pathIdx] = haz;
+  logEvent('⚠️ ' + haz.name + ' appeared!', 'bad');
+  sfx('bad');
+  if (navigator.vibrate) navigator.vibrate(40);
+  renderLoop();
+  await sleep(400);
+}
+
+// ---------- BOSSES ----------
+async function runBoss(lap) {
+  let bossKey, name, desc;
+  if (lap === 4) { bossKey = 'reviewer'; name = 'THE REVIEWER'; desc = 'A respected critic is judging your loop...'; }
+  else if (lap === 8) { bossKey = 'mob'; name = 'THE MOB'; desc = 'The angry fanbase forms a mob...'; }
+  else { bossKey = 'awards'; name = 'THE GAME AWARDS'; desc = 'Final judgment time.'; }
+
+  flashBoss();
+  sfx('boss');
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+  await showOverlay({
+    title: name,
+    desc,
+    icon: { reviewer: '🎙️', mob: '🔥', awards: '🏆' }[bossKey],
+    cls: 'boss',
+    btn: 'BRING IT ON',
+  });
+
+  // Resolve
+  let result;
+  if (bossKey === 'reviewer') {
+    const content = state.slots.filter(s => s && s.tags && s.tags.includes('content')).length;
+    const mech = state.slots.filter(s => s && s.tags && s.tags.includes('mech')).length;
+    const tox = state.slots.filter(s => s && s.tags && s.tags.includes('toxic')).length;
+    const score = content + mech * 0.5 - tox * 2;
+    if (score >= 3) {
+      state.hype += 30;
+      result = { good:true, title:'4/5 STARS — INTERESTING!', body:`+30 hype.\nScore: ${score.toFixed(1)}` };
+    } else if (score >= 1) {
+      state.hype += 10;
+      result = { good:true, title:'3/5 — DECENT', body:`+10 hype.\nScore: ${score.toFixed(1)}` };
+    } else {
+      state.hype -= 20;
+      result = { good:false, title:'1/5 — PASS', body:`-20 hype. Heavy monetization?\nScore: ${score.toFixed(1)}` };
+    }
+  } else if (bossKey === 'mob') {
+    const tox = state.slots.filter(s => s && s.tags && s.tags.includes('toxic')).length;
+    const playerEng = state.engagement.players;
+    if (tox >= 2 || playerEng < 30) {
+      const loss = Math.floor(state.cohort.players * 0.4);
+      state.cohort.players = Math.max(0, state.cohort.players - loss);
+      state.hype -= 15;
+      result = { good:false, title:'BACKLASH', body:`-${loss} players, -15 hype.` };
+    } else {
+      state.hype += 10;
+      result = { good:true, title:'COMMUNITY DEFENDED YOU', body:'+10 hype, +5 sanity.' };
+      state.sanity += 5;
+    }
+  } else {
+    // Game Awards: not the end, but seeds the ending
+    if (state.hype >= 150) {
+      state.hype += 30;
+      result = { good:true, title:'NOMINATED 🏆', body:'+30 hype, +20 wishlists.' };
+      state.cohort.players += 5;
+    } else if (state.hype >= 80) {
+      result = { good:true, title:'MENTIONED', body:'Some buzz. +5 hype.' };
+      state.hype += 5;
+    } else {
+      result = { good:false, title:'IGNORED', body:'No mention. -5 hype.' };
+      state.hype -= 5;
+    }
+  }
+  state.bossesBeaten.push(bossKey);
+  await showOverlay({
+    title: result.title,
+    desc: result.body,
+    icon: result.good ? '🎉' : '💀',
+    cls: result.good ? 'boss' : 'bad',
+    btn: 'CONTINUE',
+  });
+}
+
+function flashBoss() {
+  const el = document.createElement('div');
+  el.className = 'boss-flash';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 600);
+}
+
+// ---------- ENDING / RUN COMPLETION ----------
+function endRun(why) {
+  state.ended = true;
+  state.running = false;
+  state.ending = why;
+  const titles = { burnout:'BURNOUT', bankrupt:'BANKRUPT', vaporware:'VAPORWARE' };
+  const descs = {
+    burnout: 'Your sanity hit zero. You quit games for fishing.',
+    bankrupt: 'You ran out of cash. The studio folds.',
+    vaporware: 'Your entire audience churned. Game shipped to no one.',
+  };
+  meta.losses[why] = (meta.losses[why] || 0) + 1;
+  meta.runs += 1;
+  state.runStats.ending = why;
+  saveMeta(meta);
+  sfx('lose');
+  if (navigator.vibrate) navigator.vibrate([200, 80, 200]);
+  showEndScreen(titles[why], descs[why], '💀', 'bad');
+}
+
+function finishRun() {
+  state.ended = true;
+  let ending, title, desc, icon, cls;
+  if (state.hype >= 200 && state.money >= 700) {
+    ending = 'opus'; title = 'MAGNUM OPUS'; icon = '🏆';
+    desc = 'Critical AND commercial smash. You made a classic. Your team is rich and beloved.';
+    cls = 'victory';
+    meta.wins.opus = (meta.wins.opus || 0) + 1;
+  } else if (state.hype >= 150 && state.money < 500) {
+    ending = 'cult'; title = 'CULT CLASSIC'; icon = '👁️';
+    desc = 'Critically adored, commercially modest. You will be cited in retrospectives.';
+    cls = 'victory';
+    meta.wins.cult = (meta.wins.cult || 0) + 1;
+  } else if (state.money >= 800) {
+    ending = 'hit'; title = 'MASS HIT'; icon = '💰';
+    desc = 'You printed money. Reviewers shrug. The sequel is greenlit.';
+    cls = 'victory';
+    meta.wins.hit = (meta.wins.hit || 0) + 1;
+  } else {
+    ending = 'mid'; title = 'SHIPPED IT'; icon = '📦';
+    desc = 'It came out. It exists. Some people played it. You survived.';
+    cls = 'boss';
+    meta.wins.mid = (meta.wins.mid || 0) + 1;
+  }
+  meta.bestHype = Math.max(meta.bestHype, state.hype);
+  meta.bestMoney = Math.max(meta.bestMoney, state.money);
+  meta.runs += 1;
+  state.runStats.ending = ending;
+
+  // Unlock 1-2 new tiles on every successful run
+  const locked = ALL_UNLOCKABLES.filter(id => !meta.unlocked.includes(id));
+  const newUnlocks = [];
+  const unlockCount = ending === 'opus' ? 3 : ending === 'mid' ? 1 : 2;
+  for (let i = 0; i < unlockCount && locked.length > 0; i++) {
+    const pick = locked.splice(Math.floor(Math.random() * locked.length), 1)[0];
+    meta.unlocked.push(pick);
+    newUnlocks.push(pick);
+  }
+  saveMeta(meta);
+  sfx('win');
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+  showEndScreen(title, desc, icon, cls, newUnlocks);
+}
+
+// ---------- OVERLAYS ----------
+function showOverlay({ title, desc, icon, cls, btn, html }) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.className = 'overlay';
+    ov.innerHTML = `
+      <div class="panel ${cls || ''}">
+        ${icon ? `<div class="ico-big">${icon}</div>` : ''}
+        <h2>${title}</h2>
+        ${html ? html : `<p>${(desc || '').replace(/\n/g, '<br>')}</p>`}
+        <button id="ov-btn">${btn || 'CONTINUE'}</button>
+      </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#ov-btn').addEventListener('click', () => {
+      ov.remove();
+      resolve();
+    });
+  });
+}
+
+function showEndScreen(title, desc, icon, cls, newUnlocks) {
+  const synList = Array.from(state.runStats.synergiesHit).map(s => `<li>${s}</li>`).join('');
+  const unlocksHtml = newUnlocks && newUnlocks.length
+    ? `<div class="unlock-pulse">🔓 UNLOCKED: ${newUnlocks.map(id => TILES[id].name).join(', ')}</div>`
+    : '';
+  const html = `
+    <div class="ico-big">${icon}</div>
+    <h2>${title}</h2>
+    <p>${desc}</p>
+    <div class="stats">
+      <div class="stat-row">💰 $<span class="v">${Math.floor(state.money)}</span></div>
+      <div class="stat-row">⭐ HYPE<span class="v">${Math.floor(state.hype)}</span></div>
+      <div class="stat-row">🧠 SANITY<span class="v">${Math.max(0, Math.floor(state.sanity))}</span></div>
+      <div class="stat-row">👥 COHORT<span class="v">${state.cohort.whales + state.cohort.players + state.cohort.streamers}</span></div>
+    </div>
+    ${synList ? `<h3>SYNERGIES HIT</h3><ul style="font-size:12px;color:var(--pink);">${synList}</ul>` : ''}
+    ${unlocksHtml}
+    <p class="small">Run ${meta.runs} • Lap ${state.lap}/${state.maxLap}</p>
+  `;
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `<div class="panel ${cls}">${html}<button id="ov-again">PLAY AGAIN</button><button class="ghost" id="ov-menu">MAIN MENU</button></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#ov-again').addEventListener('click', () => { ov.remove(); newGame(); });
+  ov.querySelector('#ov-menu').addEventListener('click', () => { ov.remove(); showMainMenu(); });
+}
+
+// ---------- MENU ----------
+function showMainMenu() {
+  const totalUnlocks = ALL_UNLOCKABLES.length;
+  const unlockedCount = meta.unlocked.length;
+  const synList = meta.seenSynergies.map(s => `<li>${s}</li>`).join('');
+  const html = `
+    <div class="ico-big">🎮</div>
+    <h2>GAMEDEV LOOP</h2>
+    <p class="small">Place tiles around your retention loop.<br>Survive 12 laps. Don't burn out.<br>Inspired by Loop Hero.</p>
+    <h3>STATS</h3>
+    <div class="stats">
+      <div class="stat-row">RUNS<span class="v">${meta.runs}</span></div>
+      <div class="stat-row">🏆 OPUS<span class="v">${meta.wins.opus||0}</span></div>
+      <div class="stat-row">👁️ CULT<span class="v">${meta.wins.cult||0}</span></div>
+      <div class="stat-row">💰 HIT<span class="v">${meta.wins.hit||0}</span></div>
+    </div>
+    <p class="small">Unlocked tiles: ${unlockedCount}/${totalUnlocks}</p>
+    ${synList ? `<h3>SYNERGIES DISCOVERED</h3><ul style="font-size:11px;color:var(--pink);">${synList}</ul>` : ''}
+    <p class="small" style="margin-top:12px;">Tap card → tap slot. Watch for synergies (adjacent tiles on the loop).</p>
+  `;
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `<div class="panel">${html}<button id="ov-start">▶ NEW RUN</button><button class="ghost" id="ov-howto">HOW TO PLAY</button><button class="ghost" id="ov-reset">RESET PROGRESS</button></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#ov-start').addEventListener('click', () => { ov.remove(); newGame(); });
+  ov.querySelector('#ov-howto').addEventListener('click', () => showHowTo());
+  ov.querySelector('#ov-reset').addEventListener('click', () => {
+    if (confirm('Reset all progress?')) {
+      localStorage.removeItem(SAVE_KEY);
+      meta = loadMeta();
+      ov.remove();
+      showMainMenu();
+    }
+  });
+}
+
+function showHowTo() {
+  showOverlay({
+    title: 'HOW TO PLAY',
+    icon: '📖',
+    html: `
+      <p><b>The Loop</b>: Players auto-walk an 8-stage retention funnel each lap. You shape the experience by placing tiles.</p>
+      <p><b>Place tiles</b>: Tap a card → tap a glowing slot. Cards have a kind: PATH (on the loop) or off-path (COMM / MKT / STUDIO — inside the loop).</p>
+      <p><b>Cohort</b>: 🐳 Whales pay big. 🎮 Players are your base. 📺 Streamers amplify hype. Each has engagement (the bar). Below 25 they churn. Above 80 they grow.</p>
+      <p><b>Synergies</b>: Adjacent tiles can trigger combos (e.g. Lore + NPC = Worldbuilding). Off-path + path combos exist too. Discover them by experimenting.</p>
+      <p><b>Bosses</b>: Lap 4, 8, 12. The Reviewer judges content/monetization balance. The Mob punishes toxic monetization. Game Awards finalize hype.</p>
+      <p><b>Hazards</b>: Bugs, Crunch, Engine Updates appear and bleed sanity. Tap them (no card selected) to spend $ to fix.</p>
+      <p><b>Endings</b>: Burnout / Bankrupt / Vaporware = bad. Cult Classic = high hype, low $. Mass Hit = high $. Magnum Opus = both.</p>
+    `,
+    btn: 'GOT IT',
+  });
+}
+
+function tutorialNudge() {
+  if (meta.seenTutorial) return;
+  // Show 3-step bubble tutorial
+  const steps = [
+    { text: 'Tap a CARD below to select it.', target: '#hand', anchor: 'top' },
+    { text: 'Then tap a glowing SLOT on the loop to place.', target: '#loopwrap', anchor: 'center' },
+    { text: 'Press ▶ RUN LAP when you\'re ready.', target: '#btn-next', anchor: 'top' },
+  ];
+  let idx = 0;
+  function show() {
+    if (idx >= steps.length) {
+      meta.seenTutorial = true;
+      saveMeta(meta);
+      return;
+    }
+    const s = steps[idx];
+    const target = document.querySelector(s.target);
+    if (!target) { idx++; return show(); }
+    const rect = target.getBoundingClientRect();
+    const bubble = document.createElement('div');
+    bubble.className = 'tutorial-bubble';
+    bubble.innerHTML = s.text + '<br><button>NEXT</button>';
+    document.body.appendChild(bubble);
+    const br = bubble.getBoundingClientRect();
+    let top = rect.top - br.height - 10;
+    if (s.anchor === 'center') top = rect.top + rect.height/2 - br.height/2;
+    if (top < 8) top = rect.bottom + 8;
+    let left = rect.left + rect.width/2 - br.width/2;
+    if (left < 8) left = 8;
+    if (left + br.width > window.innerWidth - 8) left = window.innerWidth - br.width - 8;
+    bubble.style.top = top + 'px';
+    bubble.style.left = left + 'px';
+    bubble.querySelector('button').addEventListener('click', () => {
+      bubble.remove();
+      idx++;
+      show();
+    });
+  }
+  setTimeout(show, 400);
+}
+
+// ---------- UTILITIES ----------
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function spawnFloater(svgPos, text, kind) {
+  const wrap = document.getElementById('loopwrap');
+  const rect = wrap.getBoundingClientRect();
+  const wrapW = rect.width, wrapH = rect.height;
+  // Convert SVG coords (400x400) to wrap coords accounting for preserveAspect
+  const svgRect = loopSvg.getBoundingClientRect();
+  const sx = svgRect.left - rect.left + (svgPos.x / 400) * svgRect.width;
+  const sy = svgRect.top - rect.top + (svgPos.y / 400) * svgRect.height;
+  const f = document.createElement('div');
+  f.className = 'floater ' + (kind || '');
+  f.textContent = text;
+  f.style.left = sx + 'px';
+  f.style.top = sy + 'px';
+  wrap.appendChild(f);
+  setTimeout(() => f.remove(), 1200);
+}
+
+function checkImmediateSynergyHint() {
+  // Light feedback if placement now would create a synergy at-rest
+  const adj = SYNERGIES.filter(s => s.check(state));
+  // Re-color slots in synergy
+  if (adj.length > 0) {
+    // small flash on first such pair
+    // visualize already done via renderLoop class adjustments? skip for now
+  }
+}
+
+// ---------- GAME LIFECYCLE ----------
+function newGame() {
+  meta = loadMeta();
+  state = newState(meta.unlocked.slice());
+  drawHand();
+  renderAll();
+  updatePlacementHint();
+  if (!meta.seenTutorial) tutorialNudge();
+}
+
+function renderAll() {
+  renderHUD();
+  renderLoop();
+  renderHand();
+  renderLog();
+}
+
+// ---------- WIRING ----------
+document.getElementById('btn-next').addEventListener('click', () => {
+  if (state && !state.running && !state.ended) {
+    audio();
+    runLap();
+  }
+});
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  state.selectedCard = null;
+  setCancelBtn(false);
+  updatePlacementHint();
+  renderAll();
+});
+document.getElementById('menubtn').addEventListener('click', () => {
+  showMainMenu();
+});
+
+// Boot: show main menu first
+window.addEventListener('load', () => {
+  // initialize an idle state so renders don't fail before newGame
+  state = newState(meta.unlocked.slice());
+  renderAll();
+  showMainMenu();
+});
+
+// Resize: re-render loop on rotation
+window.addEventListener('resize', () => {
+  if (state) renderLoop();
+});
+</script>
+</body>
+</html>
