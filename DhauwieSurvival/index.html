@@ -1380,6 +1380,14 @@ function showPerkPicker(waveJustCleared) {
       paused = false;
       playTone(880, 0.10, 'square', 0.10);
       playTone(1320, 0.12, 'square', 0.10);
+      // Re-acquire pointer lock on desktop so the player can keep aiming
+      // immediately. The click itself satisfies the user-gesture requirement.
+      if (!isTouch && !gameOver) {
+        try {
+          const p = canvas.requestPointerLock();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } catch (_) {}
+      }
     };
     card.addEventListener('click', pick);
     card.addEventListener('touchstart', e => { e.preventDefault(); pick(); }, { passive: false });
@@ -1387,6 +1395,10 @@ function showPerkPicker(waveJustCleared) {
   });
   panel.classList.remove('hidden');
   paused = true;
+  // Release pointer lock so the desktop cursor is visible and can click a perk
+  if (document.pointerLockElement) {
+    try { document.exitPointerLock(); } catch (_) {}
+  }
 }
 
 // === Safehouses: enterable buildings with supply crates + survivors ===
