@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>CARNEGIENDON</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app">
-    <canvas id="game" width="1024" height="640"></canvas>
+    <canvas id="game"></canvas>
 
     <div id="hud" class="hidden">
       <div id="hud-top">
@@ -69,6 +69,7 @@
       <div class="touch-btn" id="touch-nitro">NITRO</div>
       <div class="touch-btn" id="touch-handbrake">DRIFT</div>
       <div class="touch-btn small" id="touch-pause">II</div>
+      <div class="touch-btn small" id="touch-cam">CAM</div>
     </div>
 
     <div id="menu" class="overlay">
@@ -90,6 +91,7 @@
         <div><b>D / →</b> · STEER RIGHT</div>
         <div><b>SPACE</b> · HANDBRAKE</div>
         <div><b>SHIFT</b> · NITRO</div>
+        <div><b>C</b> · CHANGE CAMERA</div>
         <div><b>P / ESC</b> · PAUSE</div>
         <div><b>M</b> · MUTE</div>
       </div>
@@ -121,8 +123,13 @@
         <button id="victory-menu-btn">MAIN MENU</button>
       </div>
     </div>
+
+    <div id="loading" class="overlay">
+      <div class="title" style="font-size:48px">LOADING…</div>
+    </div>
   </div>
 
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
   <script src="src/utils.js"></script>
   <script src="src/audio.js"></script>
   <script src="src/input.js"></script>

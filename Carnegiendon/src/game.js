@@ -1,57 +1,51 @@
-// Game orchestration: state machine, main loop, collisions, scoring.
+// Game orchestration in 3D: owns the THREE renderer/scene/camera, the
+// frame loop, collisions, scoring, wanted-level, and the state machine.
 const Game = (() => {
   const STATE = { MENU: "menu", PLAYING: "playing", PAUSED: "paused", GAMEOVER: "gameover", VICTORY: "victory" };
 
-  let canvas, ctx;
+  let canvas, renderer, scene, camera;
   let state = STATE.MENU;
   let mode = "carnage";
   let levelIndex = 0;
-
-  // Game state container — read by HUD via the `state.*` shape it expects.
   let G = null;
-
-  // Camera tracks the player with a bit of look-ahead.
-  let cam = { x: 0, y: 0, shake: 0 };
-
-  // Slow-motion multiplier (1 = normal). Decays back to 1.
   let timeScale = 1;
+  let popups = [];   // floating world-space score text rendered via the HUD overlay
+  let shake = 0;
 
-  // Score popups in world space (separate from particles for legibility).
-  let popups = [];
-
-  function pushPopup(x, y, text, color) {
-    popups.push({ x, y, text, color, life: 1.2, vy: -40 });
-  }
-
-  function loadHighScores() {
-    try {
-      const raw = localStorage.getItem("carnegiendon-hi");
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
+  function loadHi() {
+    try { const r = localStorage.getItem("carnegiendon-hi3d"); if (r) return JSON.parse(r); } catch (e) {}
     return { score: 0, kills: 0 };
   }
-  function saveHighScores(hi) {
-    try { localStorage.setItem("carnegiendon-hi", JSON.stringify(hi)); } catch (e) {}
-  }
+  function saveHi(h) { try { localStorage.setItem("carnegiendon-hi3d", JSON.stringify(h)); } catch (e) {} }
 
   function start(canvasEl) {
     canvas = canvasEl;
-    ctx = canvas.getContext("2d");
-    fitCanvas();
-    window.addEventListener("resize", fitCanvas);
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x0a0a14, 1);
 
-    const hi = loadHighScores();
+    camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 800);
+    camera.position.set(0, 8, 16);
+
+    fit();
+    window.addEventListener("resize", fit);
+
+    const hi = loadHi();
     document.getElementById("hi-score").textContent = hi.score.toLocaleString();
     document.getElementById("hi-kills").textContent = hi.kills.toString();
+    document.getElementById("loading").classList.add("hidden");
 
     requestAnimationFrame(loop);
   }
 
-  function fitCanvas() {
-    // Render at a fixed virtual resolution scaled to fit the viewport.
-    const ratio = Math.min(window.innerWidth / 1024, window.innerHeight / 640);
-    canvas.style.width = (1024 * ratio) + "px";
-    canvas.style.height = (640 * ratio) + "px";
+  function fit() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
   }
 
   function newGame(selectedMode) {
@@ -64,117 +58,125 @@ const Game = (() => {
     HUD.hide("victory");
     HUD.hide("pause");
     HUD.showHUD();
-    Audio.init();
-    Audio.resume();
-    Audio.startEngine();
-    Audio.startMusic();
-    const intro = mode === "carnage"  ? `KILL ${G.targetKills} TO ESCAPE` :
-                  mode === "survival" ? "SURVIVE THE STREETS" :
-                                        "ENJOY YOURSELF";
-    HUD.bigMsg(intro, 2.2);
+    Audio.init(); Audio.resume();
+    Audio.startEngine(); Audio.startMusic();
+    HUD.bigMsg(mode === "carnage" ? `KILL ${G.targetKills} TO ESCAPE` :
+               mode === "survival" ? "SURVIVE THE STREETS" : "ENJOY YOURSELF", 2.2);
   }
 
   function setupLevel(idx) {
+    // Tear down the previous scene if we have one.
+    if (scene) {
+      while (scene.children.length) scene.remove(scene.children[0]);
+    }
+    scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x18141c, 80, 260);
+    scene.background = new THREE.Color(0x18141c);
+
+    // Lighting: a warm-ish ambient + a slightly bluish "moonlight" key.
+    scene.add(new THREE.AmbientLight(0x6b6680, 0.85));
+    const sun = new THREE.DirectionalLight(0xfff0d0, 0.9);
+    sun.position.set(60, 90, 30);
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0x445080, 0.4);
+    fill.position.set(-30, 60, -20);
+    scene.add(fill);
+
+    Particles.init(scene);
     Particles.reset();
     popups = [];
-    timeScale = 1;
-    cam = { x: 0, y: 0, shake: 0 };
+    shake = 0; timeScale = 1;
 
-    World.generate(idx, "city");
-    Particles.initDecals(World.size().w, World.size().h);
+    World.generate(idx, scene);
 
-    // Spawn the player on a road tile near the center.
-    const { w, h, tile } = World.size();
-    let px = w / 2, py = h / 2;
-    // Snap to a nearby road.
+    // Spawn player on or near a road tile in the middle.
+    const { w, h } = World.size();
+    let px = 0, py = 0;
     outer:
-    for (let r = 0; r < 12; r++) {
+    for (let r = 0; r < 16; r++) {
       for (let a = 0; a < 8; a++) {
         const ang = a * (U.TAU / 8);
-        const cx = w/2 + Math.cos(ang) * r * tile;
-        const cy = h/2 + Math.sin(ang) * r * tile;
-        if (World.isRoadAt(cx, cy)) { px = cx; py = cy; break outer; }
+        const cx = Math.cos(ang) * r * 4;
+        const cz = Math.sin(ang) * r * 4;
+        if (World.isRoadAt(cx, cz)) { px = cx; py = cz; break outer; }
       }
     }
-
     const player = Player.make(px, py);
+    Car.addToScene(player.car, scene);
+
     const peds = [];
-    const numPeds = 80 + idx * 25;
+    const numPeds = 60 + idx * 20;
     const spawns = World.getSpawns();
     for (let i = 0; i < numPeds; i++) {
       const s = U.pick(spawns);
-      peds.push(Pedestrian.make(s.x + U.rand(-8, 8), s.y + U.rand(-8, 8)));
+      const p = Pedestrian.make(s.x + U.rand(-1, 1), s.y + U.rand(-1, 1));
+      scene.add(p.mesh);
+      peds.push(p);
     }
 
     const enemies = [];
     const numEnemies = 3 + idx * 2;
     for (let i = 0; i < numEnemies; i++) {
-      // spawn enemies away from player
-      let tries = 30, x = 0, y = 0;
+      let tries = 30, x = 0, z = 0;
       while (tries-- > 0) {
-        x = U.rand(60, w - 60);
-        y = U.rand(60, h - 60);
-        if (World.isRoadAt(x, y) && U.dist(x, y, player.car.x, player.car.y) > 400) break;
+        x = U.rand(-w/2 + 8, w/2 - 8);
+        z = U.rand(-h/2 + 8, h/2 - 8);
+        if (World.isRoadAt(x, z) && U.dist(x, z, player.car.x, player.car.y) > 50) break;
       }
-      enemies.push(Enemy.make(x, y));
+      const e = Enemy.make(x, z);
+      scene.add(e.car.mesh);
+      enemies.push(e);
+    }
+
+    const traffic = [];
+    const numTraffic = 4 + idx;
+    for (let i = 0; i < numTraffic; i++) {
+      let tries = 30, x = 0, z = 0;
+      while (tries-- > 0) {
+        x = U.rand(-w/2 + 8, w/2 - 8);
+        z = U.rand(-h/2 + 8, h/2 - 8);
+        if (World.isRoadAt(x, z) && U.dist(x, z, player.car.x, player.car.y) > 40) break;
+      }
+      const t = Enemy.make(x, z, "racer");
+      t.civilian = true;
+      t.car.maxSpeed = 18; t.car.accel = 14; t.car.hp = 50; t.car.maxHp = 50;
+      scene.add(t.car.mesh);
+      traffic.push(t);
     }
 
     const powerups = [];
     for (let i = 0; i < 14; i++) {
-      let tries = 20, x = 0, y = 0;
+      let tries = 20, x = 0, z = 0;
       while (tries-- > 0) {
-        x = U.rand(40, w - 40);
-        y = U.rand(40, h - 40);
-        const t = World.tileAt(x, y);
+        x = U.rand(-w/2 + 6, w/2 - 6);
+        z = U.rand(-h/2 + 6, h/2 - 6);
+        const t = World.tileAt(x, z);
         if (t === World.T.ROAD || t === World.T.SIDEWALK) break;
       }
-      powerups.push(Powerup.make(x, y));
+      const u = Powerup.make(x, z);
+      scene.add(u.mesh);
+      u.mesh.position.set(x, 0, z);
+      powerups.push(u);
     }
 
     const targetKills = mode === "survival" ? 9999 :
                         mode === "freeplay" ? 9999 :
-                        30 + idx * 15;
+                        25 + idx * 12;
     const timeLeft = mode === "survival" ? 9999 :
                      mode === "freeplay" ? 9999 :
                      90;
 
-    // Civilian traffic: slow non-aggressive cars that drive around. Stored
-    // as Enemy entities with kind="racer" but a flag to keep them docile —
-    // simpler than introducing a third entity type.
-    const traffic = [];
-    const numTraffic = 4 + idx;
-    for (let i = 0; i < numTraffic; i++) {
-      let tries = 30, x = 0, y = 0;
-      while (tries-- > 0) {
-        x = U.rand(60, World.size().w - 60);
-        y = U.rand(60, World.size().h - 60);
-        if (World.isRoadAt(x, y) && U.dist(x, y, player.car.x, player.car.y) > 350) break;
-      }
-      const t = Enemy.make(x, y, "racer");
-      t.civilian = true;
-      // Tone them down: slower, less hp, lighter colors.
-      t.car.maxSpeed = 220;
-      t.car.accel = 180;
-      t.car.hp = 50;
-      t.car.maxHp = 50;
-      traffic.push(t);
-    }
-
     G = {
-      player, peds, enemies, powerups, traffic,
+      player, peds, enemies, traffic, powerups,
       score: 0, kills: 0, combo: 1, comboTimer: 0,
-      timeLeft, totalTime: 0,
-      targetKills,
-      multiKillWindow: 0,
-      multiKillCount: 0,
-      level: idx,
-      paused: false,
-      wanted: 0,            // 0..5 stars
-      wantedHeat: 0,        // accumulates from chaos, raises wanted when high
-      wantedCooldown: 0,    // ticks down — wanted drops when 0
-      copSpawnTimer: 4,
+      multiKillCount: 0, multiKillWindow: 0,
+      timeLeft, totalTime: 0, targetKills, level: idx,
+      wanted: 0, wantedHeat: 0, wantedCooldown: 0, copSpawnTimer: 4,
       _siren: 0,
     };
+
+    // Snap the camera so we don't see the world wipe.
+    Player.updateCamera(player, camera, 1);
   }
 
   function getIntent() {
@@ -186,9 +188,6 @@ const Game = (() => {
     if (Input.isDown("RIGHT")) steer += 1;
     let handbrake = Input.isDown("SPACE");
     let nitro = Input.isDown("SHIFT");
-
-    // Touch overrides — only apply when the touch UI is active so we don't
-    // zero out a keyboard input that happens to be at rest.
     const t = Touch.getOverride();
     if (t) {
       if (t.throttle !== 0) throttle = t.throttle;
@@ -204,10 +203,12 @@ const Game = (() => {
     const rawDt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    // Pause input.
     if (Input.wasPressed("P") || Input.wasPressed("ESC")) {
       if (state === STATE.PLAYING) { state = STATE.PAUSED; HUD.show("pause"); }
       else if (state === STATE.PAUSED) { state = STATE.PLAYING; HUD.hide("pause"); }
+    }
+    if (Input.wasPressed("C") && G && state === STATE.PLAYING) {
+      Player.cycleView(G.player);
     }
     if (Input.wasPressed("M")) {
       const m = Audio.toggleMuted();
@@ -215,13 +216,11 @@ const Game = (() => {
     }
 
     if (state === STATE.PLAYING) {
-      // Slow-mo bleeds back to normal.
       timeScale = U.lerp(timeScale, 1, U.clamp(rawDt * 4, 0, 1));
-      const dt = rawDt * timeScale;
-      tick(dt);
+      tick(rawDt * timeScale);
     }
 
-    render();
+    if (scene && camera) renderer.render(scene, camera);
     Input.endFrame();
     requestAnimationFrame(loop);
   }
@@ -229,119 +228,85 @@ const Game = (() => {
   function tick(dt) {
     if (!G) return;
     G.totalTime += dt;
-
     if (mode === "carnage") G.timeLeft -= dt;
-    if (G.timeLeft <= 0 && mode === "carnage") {
-      finishLevel();
-      return;
-    }
+    if (G.timeLeft <= 0 && mode === "carnage") { finishLevel(); return; }
 
-
-    // --- Player update ---
-    Player.update(G.player, dt, getIntent);
+    const intent = getIntent();
+    Player.update(G.player, dt, intent);
     clampToWorld(G.player.car);
 
-    // --- Pedestrians ---
     for (const p of G.peds) {
+      if (p.dead) continue;
       Pedestrian.update(p, dt, G.player.car);
       clampPed(p);
     }
-
-    // --- Enemies ---
     for (const e of G.enemies) {
+      if (e.dead) continue;
       Enemy.update(e, dt, G.player, G.peds);
       clampToWorld(e.car);
     }
-    // --- Traffic ---
     for (const t of G.traffic) {
+      if (t.dead) continue;
       Enemy.update(t, dt, G.player, G.peds);
       clampToWorld(t.car);
     }
-
-    // --- Wanted level ---
-    updateWanted(dt);
-
-    // --- Power-ups ---
     for (const u of G.powerups) Powerup.update(u, dt);
 
-    // --- Collisions ---
+    updateWanted(dt);
     collidePedestrians();
-    collideEnemies();
+    collideOpponents();
     collideObstacles();
     collidePowerups();
-
-    // --- Particles ---
     Particles.update(dt);
     World.updateHydrants(dt);
 
-    // --- Combo decay ---
     if (G.comboTimer > 0) {
       G.comboTimer -= dt;
-      if (G.comboTimer <= 0) {
-        G.combo = 1;
-        G.multiKillCount = 0;
-      }
+      if (G.comboTimer <= 0) { G.combo = 1; G.multiKillCount = 0; }
     }
 
-    // --- Score popups ---
-    for (let i = popups.length - 1; i >= 0; i--) {
-      const pp = popups[i];
-      pp.life -= dt; pp.y += pp.vy * dt; pp.vy *= 0.95;
-      if (pp.life <= 0) popups.splice(i, 1);
+    // Apply camera shake by jittering the camera after Player.updateCamera.
+    Player.updateCamera(G.player, camera, dt);
+    if (shake > 0.01) {
+      camera.position.x += (Math.random() - 0.5) * shake * 0.4;
+      camera.position.y += (Math.random() - 0.5) * shake * 0.2;
+      camera.position.z += (Math.random() - 0.5) * shake * 0.4;
+      shake *= Math.exp(-8 * dt);
     }
 
-    // --- Camera ---
-    updateCamera(dt);
+    if (G.player.car.hp <= 0) { gameOver(); return; }
+    if (mode === "carnage" && G.kills >= G.targetKills) { finishLevel(); return; }
 
-    // --- Player death ---
-    if (G.player.car.hp <= 0) {
-      gameOver();
-      return;
-    }
-
-    // --- Victory ---
-    if (mode === "carnage" && G.kills >= G.targetKills) {
-      finishLevel();
-      return;
-    }
-
-    // --- Respawn peds slowly so the world doesn't empty out ---
-    if (G.peds.filter(p => !p.dead).length < 40) {
+    // Re-stock peds if the streets are emptying.
+    const liveCount = G.peds.reduce((a, p) => a + (p.dead ? 0 : 1), 0);
+    if (liveCount < 35) {
       const spawns = World.getSpawns();
-      for (let i = 0; i < 4; i++) {
-        // Spawn somewhere off-screen-ish.
-        let tries = 8;
-        while (tries-- > 0) {
-          const s = U.pick(spawns);
-          if (U.dist(s.x, s.y, G.player.car.x, G.player.car.y) > 480) {
-            G.peds.push(Pedestrian.make(s.x, s.y));
-            break;
-          }
+      for (let i = 0; i < 3; i++) {
+        const s = U.pick(spawns);
+        if (U.dist(s.x, s.y, G.player.car.x, G.player.car.y) > 60) {
+          const p = Pedestrian.make(s.x, s.y);
+          scene.add(p.mesh);
+          G.peds.push(p);
         }
       }
     }
 
-    // --- Spawn rare ambient siren wail ---
     G._siren -= dt;
     if (G._siren <= 0) {
-      G._siren = U.rand(15, 30);
-      if (Math.random() < 0.5) Audio.siren();
+      G._siren = U.rand(18, 32);
+      if (G.wanted > 0 && Math.random() < 0.5) Audio.siren();
     }
 
-    // --- HUD updates ---
     HUD.update(G);
     HUD.tickCombo(dt);
     HUD.tickBig(dt);
+    HUD.tickPopups(dt, popups, camera);
   }
 
-  // Cops are added to the regular `enemies` array so the collision logic
-  // doesn't need to know about them specially. The wanted level just
-  // governs how many we maintain on the streets.
+  // --- Wanted level (same shape as the 2D version) -------------------
   function updateWanted(dt) {
     G.wantedCooldown -= dt;
     if (G.wantedCooldown < 0) G.wantedCooldown = 0;
-
-    // Wanted decays when out of trouble for a while.
     if (G.wantedCooldown === 0 && G.wanted > 0) {
       G.wantedHeat -= dt * 0.5;
       if (G.wantedHeat <= -5) {
@@ -350,172 +315,157 @@ const Game = (() => {
         HUD.bigMsg("WANTED LEVEL: " + "★".repeat(G.wanted) + "☆".repeat(5 - G.wanted));
       }
     }
-
     if (G.wanted > 0) {
-      const desiredCops = G.wanted; // 1..5 cops at once
-      let copsAlive = 0;
-      for (const e of G.enemies) if (e.kind === "cop" && !e.dead) copsAlive++;
+      const desired = G.wanted;
+      let alive = 0;
+      for (const e of G.enemies) if (e.kind === "cop" && !e.dead) alive++;
       G.copSpawnTimer -= dt;
-      if (copsAlive < desiredCops && G.copSpawnTimer <= 0) {
+      if (alive < desired && G.copSpawnTimer <= 0) {
         spawnCop();
         G.copSpawnTimer = 4;
       }
     }
   }
-
-  function raiseHeat(amount, points = 0) {
+  function raiseHeat(amount) {
     G.wantedHeat += amount;
-    G.wantedCooldown = 8; // postpone decay
+    G.wantedCooldown = 8;
     const thresholds = [0, 3, 8, 16, 28, 45];
-    let newWanted = G.wanted;
+    let nw = G.wanted;
     for (let i = thresholds.length - 1; i >= 0; i--) {
-      if (G.wantedHeat >= thresholds[i]) { newWanted = i; break; }
+      if (G.wantedHeat >= thresholds[i]) { nw = i; break; }
     }
-    if (newWanted > G.wanted) {
-      G.wanted = newWanted;
-      HUD.bigMsg("WANTED LEVEL UP: " + "★".repeat(G.wanted) + "☆".repeat(5 - G.wanted));
+    if (nw > G.wanted) {
+      G.wanted = nw;
+      HUD.bigMsg("WANTED: " + "★".repeat(G.wanted) + "☆".repeat(5 - G.wanted));
       Audio.comboLevelUp(2);
     }
   }
-
   function spawnCop() {
     const { w, h } = World.size();
-    let tries = 20, x = 0, y = 0;
+    let tries = 20, x = 0, z = 0;
     while (tries-- > 0) {
-      x = U.rand(40, w - 40);
-      y = U.rand(40, h - 40);
-      if (World.isRoadAt(x, y) && U.dist(x, y, G.player.car.x, G.player.car.y) > 400) break;
+      x = U.rand(-w/2 + 4, w/2 - 4);
+      z = U.rand(-h/2 + 4, h/2 - 4);
+      if (World.isRoadAt(x, z) && U.dist(x, z, G.player.car.x, G.player.car.y) > 60) break;
     }
-    const cop = Enemy.make(x, y, "cop");
+    const cop = Enemy.make(x, z, "cop");
+    scene.add(cop.car.mesh);
     G.enemies.push(cop);
   }
 
+  // --- World bounds --------------------------------------------------
   function clampToWorld(car) {
     const { w, h } = World.size();
-    const m = 24;
-    if (car.x < m) { car.x = m; if (car.vx < 0) car.speed *= 0.5; }
-    if (car.y < m) { car.y = m; if (car.vy < 0) car.speed *= 0.5; }
-    if (car.x > w - m) { car.x = w - m; car.speed *= 0.5; }
-    if (car.y > h - m) { car.y = h - m; car.speed *= 0.5; }
+    const mx = w / 2 - 3, mz = h / 2 - 3;
+    if (car.x < -mx) { car.x = -mx; car.speed *= 0.5; }
+    if (car.y < -mz) { car.y = -mz; car.speed *= 0.5; }
+    if (car.x >  mx) { car.x =  mx; car.speed *= 0.5; }
+    if (car.y >  mz) { car.y =  mz; car.speed *= 0.5; }
+    Car.syncMesh(car);
   }
   function clampPed(p) {
     const { w, h } = World.size();
-    p.x = U.clamp(p.x, 4, w - 4);
-    p.y = U.clamp(p.y, 4, h - 4);
+    const mx = w / 2 - 1, mz = h / 2 - 1;
+    p.x = U.clamp(p.x, -mx, mx);
+    p.y = U.clamp(p.y, -mz, mz);
+    Pedestrian.syncMesh(p);
   }
 
-  // ---- COLLISIONS ----------------------------------------------------
+  // --- Collisions ----------------------------------------------------
   function collidePedestrians() {
-    const c = G.player.car;
-    const speed = Math.abs(c.speed);
-    // Player vs peds
+    const pc = G.player.car;
+    const speed = Math.abs(pc.speed);
+    const pr = Car.radius(pc);
     for (const p of G.peds) {
       if (p.dead) continue;
-      const carR = Car.radius(c);
-      if (U.circleOverlap(c.x, c.y, carR, p.x, p.y, p.r, 1)) {
-        // Need some forward motion to actually run someone over.
-        if (speed > 24) {
-          handlePedKill(p, c, "player");
-        } else {
-          // Slow nudge: small push.
-          const ang = U.angleTo(c.x, c.y, p.x, p.y);
-          p.x += Math.cos(ang) * 1.2;
-          p.y += Math.sin(ang) * 1.2;
+      if (U.circleOverlap(pc.x, pc.y, pr, p.x, p.y, p.r, 0.2)) {
+        if (speed > 2) handlePedKill(p, pc, "player");
+        else { // gentle nudge
+          const ang = U.angleTo(pc.x, pc.y, p.x, p.y);
+          p.x += Math.cos(ang) * 0.1;
+          p.y += Math.sin(ang) * 0.1;
         }
       }
     }
-    // Enemies vs peds
     for (const e of G.enemies) {
       if (e.dead) continue;
-      const carR = Car.radius(e.car);
+      const r = Car.radius(e.car);
       for (const p of G.peds) {
         if (p.dead) continue;
-        if (U.circleOverlap(e.car.x, e.car.y, carR, p.x, p.y, p.r, 1)) {
-          if (Math.abs(e.car.speed) > 60) {
-            handlePedKill(p, e.car, "enemy");
-          }
+        if (U.circleOverlap(e.car.x, e.car.y, r, p.x, p.y, p.r, 0.2)) {
+          if (Math.abs(e.car.speed) > 5) handlePedKill(p, e.car, "enemy");
+        }
+      }
+    }
+    for (const t of G.traffic) {
+      if (t.dead) continue;
+      const r = Car.radius(t.car);
+      for (const p of G.peds) {
+        if (p.dead) continue;
+        if (U.circleOverlap(t.car.x, t.car.y, r, p.x, p.y, p.r, 0.2)) {
+          if (Math.abs(t.car.speed) > 5) handlePedKill(p, t.car, "enemy");
         }
       }
     }
   }
-
   function handlePedKill(p, killerCar, who) {
     const speed = Math.abs(killerCar.speed);
-    const bonus = (who === "player" && G.player.powerups.bloodlust > 0) ? 2 : 1;
-    const spikeBonus = (who === "player" && G.player.powerups.spike > 0) ? 1.5 : 1;
-    Pedestrian.kill(p, speed, killerCar.x, killerCar.y, bonus * spikeBonus);
+    const bonus     = (who === "player" && G.player.powerups.bloodlust > 0) ? 2 : 1;
+    const spikeMul  = (who === "player" && G.player.powerups.spike > 0) ? 1.5 : 1;
+    Pedestrian.kill(p, speed, killerCar.x, killerCar.y, bonus * spikeMul);
 
     if (who !== "player") return;
 
     G.kills += 1;
     G.combo = Math.min(64, G.combo + 1);
-    G.comboTimer = 3.0;
+    G.comboTimer = 3;
     G.multiKillCount += 1;
-    G.multiKillWindow = 0.6;
-
     const base = 100;
-    const speedMul = U.clamp(speed / 200, 0.5, 3);
-    const points = Math.floor(base * speedMul * G.combo * bonus * spikeBonus);
+    const speedMul = U.clamp(speed / 15, 0.5, 3);
+    const points = Math.floor(base * speedMul * G.combo * bonus * spikeMul);
     G.score += points;
+    popups.push({ x: p.x, y: 2, z: p.y, life: 1.2, text: "+" + points, color: "#ffdd00" });
 
-    pushPopup(p.x, p.y - 14, "+" + points, "#ffdd00");
-
-    // Multi-kill messages.
     if (G.multiKillCount === 2) { HUD.flashCombo("DOUBLE KILL!"); Audio.comboLevelUp(1); }
     else if (G.multiKillCount === 3) { HUD.flashCombo("TRIPLE KILL!", "#ff8800"); Audio.comboLevelUp(2); }
     else if (G.multiKillCount === 5) { HUD.flashCombo("MASSACRE!", "#ff00ff"); Audio.comboLevelUp(3); slowMo(0.5, 0.5); }
-    else if (G.multiKillCount === 8) { HUD.flashCombo("BLOODBATH!", "#ff0000"); Audio.comboLevelUp(4); slowMo(0.3, 0.7); shake(20); }
-    else if (G.multiKillCount === 12){ HUD.flashCombo("UNHINGED!", "#ffaa00"); Audio.comboLevelUp(5); slowMo(0.25, 1.0); shake(28); }
+    else if (G.multiKillCount === 8) { HUD.flashCombo("BLOODBATH!", "#ff0000"); Audio.comboLevelUp(4); slowMo(0.3, 0.7); shake = 5; }
+    else if (G.multiKillCount === 12){ HUD.flashCombo("UNHINGED!", "#ffaa00"); Audio.comboLevelUp(5); slowMo(0.25, 1); shake = 7; }
 
-    shake(U.clamp(speed * 0.025, 2, 8));
-
-    // Add some bonus time on kills in carnage mode.
+    shake = Math.max(shake, U.clamp(speed * 0.04, 0.6, 2.2));
     if (mode === "carnage") G.timeLeft += 0.6;
-
-    // Killing draws police heat.
     raiseHeat(0.6);
   }
 
-  function collideEnemies() {
-    // Player vs enemy (cops + rivals + traffic all flow through here)
+  function collideOpponents() {
     const pc = G.player.car;
     const pr = Car.radius(pc);
-    const allOpponents = G.enemies.concat(G.traffic);
-    for (const e of allOpponents) {
+    const all = G.enemies.concat(G.traffic);
+    for (const e of all) {
       if (e.dead) continue;
       const er = Car.radius(e.car);
       if (U.circleOverlap(pc.x, pc.y, pr, e.car.x, e.car.y, er, 0)) {
-        // Resolve overlap.
         const ang = U.angleTo(pc.x, pc.y, e.car.x, e.car.y);
         const overlap = (pr + er) - U.dist(pc.x, pc.y, e.car.x, e.car.y);
-        const push = overlap / 2 + 0.5;
-        pc.x -= Math.cos(ang) * push;
-        pc.y -= Math.sin(ang) * push;
-        e.car.x += Math.cos(ang) * push;
-        e.car.y += Math.sin(ang) * push;
-        const rel = Math.abs(pc.speed - e.car.speed) + 50;
-
-        const playerInvincible = Player.isInvincible(G.player) || G.player.powerups.bigwheels > 0;
-        const dmgToPlayer = playerInvincible ? 0 : rel * 0.04;
-        const dmgToEnemy = (G.player.powerups.bigwheels > 0 ? 2 : 1) * rel * 0.05;
-
-        pc.hp -= dmgToPlayer;
-        e.car.hp -= dmgToEnemy;
+        pc.x -= Math.cos(ang) * (overlap/2 + 0.05);
+        pc.y -= Math.sin(ang) * (overlap/2 + 0.05);
+        e.car.x += Math.cos(ang) * (overlap/2 + 0.05);
+        e.car.y += Math.sin(ang) * (overlap/2 + 0.05);
+        const rel = Math.abs(pc.speed - e.car.speed) + 5;
+        const playerInv = Player.isInvincible(G.player) || G.player.powerups.bigwheels > 0;
+        const dmgP = playerInv ? 0 : rel * 0.3;
+        const dmgE = (G.player.powerups.bigwheels > 0 ? 2 : 1) * rel * 0.4;
+        pc.hp -= dmgP;
+        e.car.hp -= dmgE;
         Audio.crash();
         Car.impact(pc, e.car.x, e.car.y, rel);
         Car.impact(e.car, pc.x, pc.y, rel);
-        for (let i = 0; i < 6; i++) Particles.spark((pc.x + e.car.x)/2, (pc.y + e.car.y)/2);
-        shake(U.clamp(rel * 0.03, 3, 10));
-
-        if (e.car.hp <= 0) {
-          wreckEnemy(e);
-        }
+        for (let i = 0; i < 6; i++) Particles.spark((pc.x + e.car.x)/2, 1.2, (pc.y + e.car.y)/2);
+        shake = Math.max(shake, U.clamp(rel * 0.3, 1, 3));
+        if (e.car.hp <= 0) wreckOpponent(e);
       }
     }
-
-    // Cross-faction (enemy vs enemy / traffic) just pushes them apart so
-    // they don't pile up in the same tile.
-    const all = G.enemies.concat(G.traffic);
+    // Resolve overlaps between non-player cars.
     for (let i = 0; i < all.length; i++) {
       for (let j = i + 1; j < all.length; j++) {
         const a = all[i], b = all[j];
@@ -524,120 +474,109 @@ const Game = (() => {
         if (U.circleOverlap(a.car.x, a.car.y, ar, b.car.x, b.car.y, br, 0)) {
           const ang = U.angleTo(a.car.x, a.car.y, b.car.x, b.car.y);
           const overlap = (ar + br) - U.dist(a.car.x, a.car.y, b.car.x, b.car.y);
-          a.car.x -= Math.cos(ang) * (overlap/2 + 0.5);
-          a.car.y -= Math.sin(ang) * (overlap/2 + 0.5);
-          b.car.x += Math.cos(ang) * (overlap/2 + 0.5);
-          b.car.y += Math.sin(ang) * (overlap/2 + 0.5);
+          a.car.x -= Math.cos(ang) * (overlap/2 + 0.05);
+          a.car.y -= Math.sin(ang) * (overlap/2 + 0.05);
+          b.car.x += Math.cos(ang) * (overlap/2 + 0.05);
+          b.car.y += Math.sin(ang) * (overlap/2 + 0.05);
           a.car.speed *= 0.85; b.car.speed *= 0.85;
         }
       }
     }
   }
-
-  function wreckEnemy(e) {
+  function wreckOpponent(e) {
     e.dead = true;
-    Particles.explosion(e.car.x, e.car.y);
+    Particles.explosion(e.car.x, 1.2, e.car.y);
     Audio.explosion();
-    shake(18);
+    shake = Math.max(shake, 4);
     const reward = e.kind === "cop" ? 800 : (e.civilian ? 300 : 500);
     G.score += reward;
-    pushPopup(e.car.x, e.car.y - 14, "+" + reward, "#ff8800");
+    popups.push({ x: e.car.x, y: 2, z: e.car.y, life: 1.4, text: "+" + reward, color: "#ff8800" });
     HUD.bigMsg(e.kind === "cop" ? "COP DOWN" : e.civilian ? "CIVILIAN WASTED" : "RIVAL WASTED");
     slowMo(0.4, 0.4);
-    // Big heat consequences for killing the law or a civilian.
     if (e.kind === "cop") raiseHeat(6);
     else if (e.civilian) raiseHeat(2);
+    // Visually wreck the car: tilt + black smoke.
+    e.car.mesh.rotation.z = U.rand(-0.6, 0.6);
+    e.car.mesh.traverse((m) => {
+      if (m.material && m.material.color && m.material !== m.material.transparent) {
+        m.material.color.multiplyScalar(0.3);
+      }
+    });
   }
 
   function collideObstacles() {
     for (const o of World.getObstacles()) {
       if (o.destroyed) continue;
       checkCarVsObstacle(G.player.car, o, "player");
-      for (const e of G.enemies) {
-        if (!e.dead) checkCarVsObstacle(e.car, o, "enemy");
-      }
-      for (const t of G.traffic) {
-        if (!t.dead) checkCarVsObstacle(t.car, o, "enemy");
-      }
+      for (const e of G.enemies) if (!e.dead) checkCarVsObstacle(e.car, o, "enemy");
+      for (const t of G.traffic) if (!t.dead) checkCarVsObstacle(t.car, o, "enemy");
     }
   }
-
   function checkCarVsObstacle(car, o, who) {
     const cr = Car.radius(car);
     if (!U.circleOverlap(car.x, car.y, cr, o.x, o.y, o.r, 0)) return;
     const ang = U.angleTo(car.x, car.y, o.x, o.y);
-
     if (o.ramp) {
-      // No collision — give a forward speed boost + bounce.
-      car.speed = Math.min(car.maxSpeed * 1.1, car.speed + 200);
-      Car.setBounce(car, 6);
-      Particles.spark(o.x, o.y);
+      car.speed = Math.min(car.maxSpeed * 1.1, car.speed + 14);
+      Car.setBounce(car, 3);
+      car.airborne = 0.6;
+      Particles.spark(o.x, 1, o.y);
       return;
     }
-
     const overlap = (cr + o.r) - U.dist(car.x, car.y, o.x, o.y);
-    car.x -= Math.cos(ang) * (overlap + 0.5);
-    car.y -= Math.sin(ang) * (overlap + 0.5);
+    car.x -= Math.cos(ang) * (overlap + 0.05);
+    car.y -= Math.sin(ang) * (overlap + 0.05);
     const speed = Math.abs(car.speed);
-    const dmgToCar = (who === "player" && Player.isInvincible(G.player)) ? 0 : speed * 0.04;
-    car.hp -= dmgToCar;
+    const dmg = (who === "player" && Player.isInvincible(G.player)) ? 0 : speed * 0.4;
+    car.hp -= dmg;
     car.speed *= 0.55;
-    Car.impact(car, o.x, o.y, speed + 50);
-    for (let i = 0; i < 4; i++) Particles.spark(o.x, o.y);
+    Car.impact(car, o.x, o.y, speed + 5);
+    for (let i = 0; i < 4; i++) Particles.spark(o.x, 1, o.y);
     Audio.crash();
-    if (speed > 80) shake(U.clamp(speed * 0.02, 2, 8));
-
+    if (speed > 8) shake = Math.max(shake, U.clamp(speed * 0.2, 1, 2.5));
     if (o.hp < 999) {
       o.hp -= 1;
       if (o.hp <= 0) destroyObstacle(o, who);
     }
   }
-
   function destroyObstacle(o, who) {
     o.destroyed = true;
     if (who === "player") {
       G.score += o.score;
-      pushPopup(o.x, o.y - 8, "+" + o.score, "#ffaa66");
+      if (o.score > 0) popups.push({ x: o.x, y: 1.5, z: o.y, life: 1.2, text: "+" + o.score, color: "#ffaa66" });
     }
-    Particles.spark(o.x, o.y);
-    for (let i = 0; i < 6; i++) Particles.spark(o.x, o.y);
-
-    if (o.kind === "hydrant") {
-      o.spewing = true;
-      o.solid = false;
-    }
+    for (let i = 0; i < 6; i++) Particles.spark(o.x, 1, o.y);
+    World.destroyObstacleVisual(o);
+    if (o.kind === "hydrant") { o.spewing = true; o.solid = false; }
     if (o.explosive) {
-      Particles.explosion(o.x, o.y);
+      Particles.explosion(o.x, 1, o.y);
       Audio.explosion();
-      shake(14);
-      // Splash damage to nearby cars and peds.
-      const RANGE = 90;
+      shake = Math.max(shake, 4);
+      const RANGE = 12;
       if (U.dist(o.x, o.y, G.player.car.x, G.player.car.y) < RANGE && !Player.isInvincible(G.player)) {
         G.player.car.hp -= 40;
-        Car.impact(G.player.car, o.x, o.y, 200);
+        Car.impact(G.player.car, o.x, o.y, 30);
       }
       for (const e of G.enemies) {
         if (e.dead) continue;
         if (U.dist(o.x, o.y, e.car.x, e.car.y) < RANGE) {
           e.car.hp -= 60;
-          Car.impact(e.car, o.x, o.y, 200);
-          if (e.car.hp <= 0) wreckEnemy(e);
+          Car.impact(e.car, o.x, o.y, 30);
+          if (e.car.hp <= 0) wreckOpponent(e);
         }
       }
       for (const p of G.peds) {
         if (p.dead) continue;
         if (U.dist(o.x, o.y, p.x, p.y) < RANGE) {
-          Pedestrian.kill(p, 250, o.x, o.y);
-          if (who === "player") {
-            G.kills += 1; G.score += 120; G.combo = Math.min(64, G.combo + 1); G.comboTimer = 3;
-          }
+          Pedestrian.kill(p, 25, o.x, o.y);
+          if (who === "player") { G.kills++; G.score += 120; G.combo = Math.min(64, G.combo + 1); G.comboTimer = 3; }
         }
       }
     }
     if (o.kind === "parked_car") {
-      Particles.explosion(o.x, o.y);
+      Particles.explosion(o.x, 1, o.y);
       Audio.explosion();
-      shake(10);
+      shake = Math.max(shake, 3);
     }
   }
 
@@ -647,180 +586,66 @@ const Game = (() => {
     for (const u of G.powerups) {
       if (u.taken) continue;
       if (U.circleOverlap(pc.x, pc.y, pr, u.x, u.y, u.r, 0)) {
-        u.taken = true;
+        Powerup.take(u);
         Audio.powerupGet();
         Player.applyPickup(G.player, u.kind);
         HUD.bigMsg(u.label);
-        pushPopup(u.x, u.y - 12, u.label, "#ffd700");
       }
     }
-    // Drip new powerups in as old ones get taken.
-    const remaining = G.powerups.filter(u => !u.taken).length;
+    const remaining = G.powerups.reduce((a, u) => a + (u.taken ? 0 : 1), 0);
     if (remaining < 8 && Math.random() < 0.02) {
       const { w, h } = World.size();
-      let tries = 12, x = 0, y = 0;
+      let tries = 12, x = 0, z = 0;
       while (tries-- > 0) {
-        x = U.rand(60, w - 60);
-        y = U.rand(60, h - 60);
-        const t = World.tileAt(x, y);
+        x = U.rand(-w/2 + 6, w/2 - 6);
+        z = U.rand(-h/2 + 6, h/2 - 6);
+        const t = World.tileAt(x, z);
         if ((t === World.T.ROAD || t === World.T.SIDEWALK) &&
-            U.dist(x, y, G.player.car.x, G.player.car.y) > 200) break;
+            U.dist(x, z, G.player.car.x, G.player.car.y) > 25) break;
       }
-      G.powerups.push(Powerup.make(x, y));
+      const u = Powerup.make(x, z);
+      u.mesh.position.set(x, 0, z);
+      scene.add(u.mesh);
+      G.powerups.push(u);
     }
   }
 
-  // ---- CAMERA --------------------------------------------------------
-  function updateCamera(dt) {
-    const pc = G.player.car;
-    // Look-ahead: aim the camera slightly in the direction of motion.
-    const ahead = 90;
-    const tx = pc.x + (pc.vx / Math.max(1, Math.abs(pc.speed))) * ahead;
-    const ty = pc.y + (pc.vy / Math.max(1, Math.abs(pc.speed))) * ahead;
-    const targetX = tx - canvas.width / 2;
-    const targetY = ty - canvas.height / 2;
-    cam.x = U.lerp(cam.x, targetX, U.clamp(dt * 6, 0, 1));
-    cam.y = U.lerp(cam.y, targetY, U.clamp(dt * 6, 0, 1));
-    const { w, h } = World.size();
-    cam.x = U.clamp(cam.x, 0, w - canvas.width);
-    cam.y = U.clamp(cam.y, 0, h - canvas.height);
-    cam.shake *= Math.exp(-8 * dt);
-  }
-
-  function shake(amount) { cam.shake = Math.max(cam.shake, amount); }
   function slowMo(scale, duration) {
     timeScale = Math.min(timeScale, scale);
     setTimeout(() => { timeScale = 1; }, duration * 1000);
   }
 
-  // ---- RENDER --------------------------------------------------------
-  function render() {
-    if (state === STATE.MENU) {
-      // Render a slow, dim "demo" view as the menu backdrop.
-      ctx.fillStyle = "#0a0a0a";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      drawTitleBg();
-      return;
-    }
-
-    if (!G) return;
-    ctx.save();
-
-    const shakeX = (Math.random() - 0.5) * cam.shake;
-    const shakeY = (Math.random() - 0.5) * cam.shake;
-    ctx.translate(-cam.x + shakeX, -cam.y + shakeY);
-
-    // Background tiles
-    World.draw(ctx, { x: 0, y: 0 });
-    Particles.drawDecals(ctx, { x: 0, y: 0 });
-
-    // Obstacles
-    World.drawObstacles(ctx);
-
-    // Power-ups
-    for (const u of G.powerups) Powerup.draw(ctx, u);
-
-    // Pedestrians (sorted by y for vague depth)
-    const sortedPeds = G.peds.slice().sort((a, b) => a.y - b.y);
-    for (const p of sortedPeds) Pedestrian.draw(ctx, p);
-
-    // Traffic (drawn under enemies — they're background filler)
-    for (const t of G.traffic) Enemy.draw(ctx, t);
-    // Enemies
-    for (const e of G.enemies) Enemy.draw(ctx, e);
-
-    // Player
-    Player.draw(ctx, G.player);
-
-    // Particles on top
-    Particles.draw(ctx);
-
-    // Score popups
-    for (const pp of popups) {
-      const a = U.clamp(pp.life / 1.2, 0, 1);
-      ctx.globalAlpha = a;
-      ctx.fillStyle = pp.color;
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 3;
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.strokeText(pp.text, pp.x, pp.y);
-      ctx.fillText(pp.text, pp.x, pp.y);
-      ctx.globalAlpha = 1;
-    }
-    ctx.restore();
-
-    // Vignette
-    const grad = ctx.createRadialGradient(
-      canvas.width/2, canvas.height/2, canvas.height * 0.3,
-      canvas.width/2, canvas.height/2, canvas.height * 0.8);
-    grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(1, "rgba(0,0,0,0.6)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Red flash when player just took damage
-    if (G.player.car.hp / G.player.car.maxHp < 0.3) {
-      const pulse = (Math.sin(performance.now() / 120) + 1) / 2;
-      ctx.fillStyle = "rgba(255,0,0," + (0.04 + pulse * 0.07) + ")";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-  }
-
-  function drawTitleBg() {
-    // Animated specks of "blood" drifting upward — pure decoration.
-    const t = performance.now() / 1000;
-    ctx.fillStyle = "#150505";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < 60; i++) {
-      const x = ((i * 137 + t * 30) % canvas.width);
-      const y = (canvas.height - (i * 87 + t * 50) % canvas.height);
-      const a = ((Math.sin(i + t) + 1) / 2) * 0.4;
-      ctx.fillStyle = `rgba(180,0,0,${a})`;
-      ctx.beginPath();
-      ctx.arc(x, y, 2 + (i % 3), 0, U.TAU);
-      ctx.fill();
-    }
-  }
-
-  // ---- ENDGAME -------------------------------------------------------
+  // --- Endgame -------------------------------------------------------
   function gameOver() {
     state = STATE.GAMEOVER;
-    Particles.explosion(G.player.car.x, G.player.car.y);
+    Particles.explosion(G.player.car.x, 1, G.player.car.y);
     Audio.explosion();
-    Audio.stopEngine();
-    Audio.stopMusic();
-    shake(30);
-
-    const hi = loadHighScores();
-    let recordScore = false, recordKills = false;
-    if (G.score > hi.score) { hi.score = G.score; recordScore = true; }
-    if (G.kills > hi.kills) { hi.kills = G.kills; recordKills = true; }
-    saveHighScores(hi);
+    Audio.stopEngine(); Audio.stopMusic();
+    shake = 8;
+    const hi = loadHi();
+    let recScore = false, recKills = false;
+    if (G.score > hi.score) { hi.score = G.score; recScore = true; }
+    if (G.kills > hi.kills) { hi.kills = G.kills; recKills = true; }
+    saveHi(hi);
     document.getElementById("hi-score").textContent = hi.score.toLocaleString();
     document.getElementById("hi-kills").textContent = hi.kills.toString();
-
-    const stats = document.getElementById("gameover-stats");
-    stats.innerHTML = `
-      <div><b>SCORE</b>${G.score.toLocaleString()}${recordScore ? "  <span style='color:#ffd700'>NEW RECORD!</span>" : ""}</div>
-      <div><b>KILLS</b>${G.kills}${recordKills ? "  <span style='color:#ffd700'>NEW RECORD!</span>" : ""}</div>
+    document.getElementById("gameover-stats").innerHTML = `
+      <div><b>SCORE</b>${G.score.toLocaleString()}${recScore ? "  <span style='color:#ffd700'>NEW RECORD!</span>" : ""}</div>
+      <div><b>KILLS</b>${G.kills}${recKills ? "  <span style='color:#ffd700'>NEW RECORD!</span>" : ""}</div>
       <div><b>TIME</b>${U.formatTime(G.totalTime)}</div>
       <div><b>LEVEL</b>${G.level + 1}</div>
     `;
     HUD.show("gameover");
   }
-
   function finishLevel() {
     state = STATE.VICTORY;
-    const hi = loadHighScores();
-    if (G.score > hi.score) { hi.score = G.score; }
-    if (G.kills > hi.kills) { hi.kills = G.kills; }
-    saveHighScores(hi);
+    const hi = loadHi();
+    if (G.score > hi.score) hi.score = G.score;
+    if (G.kills > hi.kills) hi.kills = G.kills;
+    saveHi(hi);
     document.getElementById("hi-score").textContent = hi.score.toLocaleString();
     document.getElementById("hi-kills").textContent = hi.kills.toString();
-
-    const stats = document.getElementById("victory-stats");
-    stats.innerHTML = `
+    document.getElementById("victory-stats").innerHTML = `
       <div><b>SCORE</b>${G.score.toLocaleString()}</div>
       <div><b>KILLS</b>${G.kills}</div>
       <div><b>TIME LEFT</b>${U.formatTime(G.timeLeft)}</div>
@@ -828,35 +653,26 @@ const Game = (() => {
     `;
     HUD.show("victory");
   }
-
   function nextLevel() {
     levelIndex += 1;
     setupLevel(levelIndex);
     state = STATE.PLAYING;
     HUD.hide("victory");
   }
-
-  function quitToMenu() {
-    state = STATE.MENU;
-    Audio.stopEngine();
-    Audio.stopMusic();
-    HUD.hideHUD();
-    HUD.hide("pause");
-    HUD.hide("gameover");
-    HUD.hide("victory");
-    HUD.show("menu");
-  }
-
   function retry() {
     setupLevel(levelIndex);
     state = STATE.PLAYING;
     HUD.hide("gameover");
-    Audio.startEngine();
-    Audio.startMusic();
+    Audio.startEngine(); Audio.startMusic();
+  }
+  function quitToMenu() {
+    state = STATE.MENU;
+    Audio.stopEngine(); Audio.stopMusic();
+    HUD.hideHUD();
+    HUD.hide("pause"); HUD.hide("gameover"); HUD.hide("victory");
+    HUD.show("menu");
   }
 
-  return {
-    start, newGame, nextLevel, quitToMenu, retry,
-    getState: () => state, STATE,
-  };
+  return { start, newGame, nextLevel, quitToMenu, retry,
+           getState: () => state, getCamera: () => camera, getScene: () => scene };
 })();

@@ -28,6 +28,17 @@ const Touch = (() => {
     bindButton("touch-nitro",     (v) => intent.nitro = v);
     bindButton("touch-handbrake", (v) => intent.handbrake = v);
     bindPause();
+    bindCam();
+  }
+
+  function bindCam() {
+    const el = document.getElementById("touch-cam");
+    if (!el) return;
+    el.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "c", bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keyup",   { key: "c", bubbles: true }));
+    }, { passive: false });
   }
 
   function enable() {
