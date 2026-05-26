@@ -237,6 +237,7 @@
     overflow: visible;
     -webkit-tap-highlight-color: transparent;
     transition: transform 0.2s ease;
+    touch-action: none;
   }
   .pad:nth-child(2)::before,
   .pad:nth-child(3)::before { transform: scaleY(-1); }
@@ -313,6 +314,67 @@
   }
   .pad.active img { filter: saturate(1.1) brightness(1.02); }
   .pad.active .stage-shadow { opacity: 0.85; }
+
+  /* === Volume fader === */
+  .pad .fader {
+    position: absolute;
+    right: 7px;
+    top: 22%;
+    bottom: 26%;
+    width: 5px;
+    background: rgba(43,32,24,0.16);
+    border-radius: 3px;
+    z-index: 4;
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.2s ease;
+    pointer-events: none;
+  }
+  .pad .fader::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1.5px solid var(--ink);
+    border-radius: 3px;
+    filter: url(#wobble);
+    pointer-events: none;
+  }
+  .pad.active .fader { opacity: 1; }
+  .pad.dragging .fader {
+    opacity: 1;
+    transform: scaleX(1.6);
+  }
+  .pad .fader-fill {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 0%;
+    border-radius: 3px;
+    transition: height 0.06s linear;
+  }
+  .pad.rox .fader-fill { background: var(--rox); }
+  .pad.jas .fader-fill { background: var(--jas); }
+  .pad.dragging::before {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 4px rgba(43,32,24,0.08);
+  }
+  .pad .level-bubble {
+    position: absolute;
+    right: 18px;
+    font-family: 'Caveat', cursive;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+    background: #fffaee;
+    border: 2px solid var(--ink);
+    border-radius: 14px;
+    padding: 1px 8px;
+    transform: translateY(-50%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 6;
+    transition: opacity 0.15s ease;
+    filter: url(#wobble);
+  }
+  .pad.dragging .level-bubble { opacity: 1; }
 
   /* Sketchy "active" stars around the pad */
   .pad .stars {
@@ -638,6 +700,8 @@
         <img src="${t.id}.png" alt="${t.name}" draggable="false">
         <div class="label">${t.name}</div>
       </div>
+      <div class="fader"><div class="fader-fill"></div></div>
+      <div class="level-bubble">0</div>
       <div class="notes"></div>
     `;
     (t.team === 'rox' ? rowRox : rowJas).appendChild(el);
@@ -645,6 +709,9 @@
   });
   const padImgs = pads.map(p => p.querySelector('img'));
   const padNoteContainers = pads.map(p => p.querySelector('.notes'));
+  const padFaderFills = pads.map(p => p.querySelector('.fader-fill'));
+  const padFaders = pads.map(p => p.querySelector('.fader'));
+  const padLevelBubbles = pads.map(p => p.querySelector('.level-bubble'));
 
   // --- Audio engine ---
   let ctx = null;
@@ -653,12 +720,34 @@
   let gains = [];
   let analysers = [];
   let analyserData = [];
-  const active = new Array(TRACKS.length).fill(false);
-  const padLevel = new Array(TRACKS.length).fill(0);
+  // Mix level per pad (0..1). Replaces binary active[].
+  const levels = new Array(TRACKS.length).fill(0);
+  // Remembered level for tap-to-restore after muting.
+  const restoreLevel = new Array(TRACKS.length).fill(1);
+  // Derived flag for analyser readout (level > 0.02).
+  const isActive = (i) => levels[i] > 0.02;
+  const padLevel = new Array(TRACKS.length).fill(0); // audio-analyser smoothed level
   let started = false;
   let startTime = 0;
   let loopDuration = 0;
   const FADE = 0.06;
+
+  // --- Mobile polish helpers ---
+  function haptic(pattern) {
+    if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch {} }
+  }
+  let wakeLock = null;
+  async function acquireWakeLock() {
+    if (!('wakeLock' in navigator) || wakeLock) return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); }
+    catch {}
+  }
+  function releaseWakeLock() {
+    if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (started && document.visibilityState === 'visible') acquireWakeLock();
+  });
 
   async function preload() {
     const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -688,9 +777,10 @@
     ctx = new (window.AudioContext || window.webkitAudioContext)();
   }
 
-  function startAll(initialIdx) {
+  function startAll(initialIdx, initialLevel) {
     ensureContext();
     if (ctx.state === 'suspended') ctx.resume();
+    acquireWakeLock();
 
     sources = []; gains = []; analysers = []; analyserData = [];
     const t0 = ctx.currentTime + 0.05;
@@ -701,7 +791,9 @@
       src.buffer = buffers[i];
       src.loop = true;
       const g = ctx.createGain();
-      g.gain.value = (i === initialIdx) ? 1 : 0;
+      const initial = (i === initialIdx) ? (initialLevel ?? 1) : 0;
+      g.gain.value = initial;
+      levels[i] = initial;
       const an = ctx.createAnalyser();
       an.fftSize = 256;
       an.smoothingTimeConstant = 0.6;
@@ -709,7 +801,6 @@
       src.start(t0);
       sources.push(src); gains.push(g); analysers.push(an);
       analyserData.push(new Uint8Array(an.frequencyBinCount));
-      active[i] = (i === initialIdx);
     }
     started = true;
     updateActivity();
@@ -728,34 +819,59 @@
       analysers[i].disconnect();
     }
     sources = []; gains = []; analysers = []; analyserData = [];
-    active.fill(false);
+    levels.fill(0);
     padLevel.fill(0);
     started = false;
+    releaseWakeLock();
     updateActivity();
     setRingDash(ringLoop, 0, RING_LOOP_CIRC);
     padImgs.forEach(img => { img.style.transform = ''; });
     startOverlay.classList.remove('hidden');
+    haptic(30);
   }
 
-  function toggle(idx) {
-    if (!buffers.length) return;
-    if (!started) { startAll(idx); return; }
-    active[idx] = !active[idx];
-    const turningOn = active[idx];
-    const target = turningOn ? 1 : 0;
-    const g = gains[idx].gain;
-    const now = ctx.currentTime;
-    g.cancelScheduledValues(now);
-    g.setValueAtTime(g.value, now);
-    g.linearRampToValueAtTime(target, now + FADE);
+  function setLevel(idx, level, ramp = true) {
+    level = Math.max(0, Math.min(1, level));
+    levels[idx] = level;
+    if (started && gains[idx]) {
+      const g = gains[idx].gain;
+      const now = ctx.currentTime;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      if (ramp) g.linearRampToValueAtTime(level, now + FADE);
+      else      g.setValueAtTime(level, now);
+    }
+    updatePadFader(idx);
+  }
 
-    pads[idx].classList.add('punch');
-    setTimeout(() => pads[idx].classList.remove('punch'), 340);
-    if (!turningOn) {
+  function updatePadFader(idx) {
+    const lvl = levels[idx];
+    padFaderFills[idx].style.height = (lvl * 100) + '%';
+    padLevelBubbles[idx].textContent = Math.round(lvl * 100);
+    // position the bubble alongside the current fader fill
+    const f = padFaders[idx];
+    const bubbleY = f.offsetTop + f.offsetHeight * (1 - lvl);
+    padLevelBubbles[idx].style.top = bubbleY + 'px';
+  }
+
+  function handleTap(idx) {
+    if (!started) {
+      startAll(idx);
+      haptic(15);
+      return;
+    }
+    if (isActive(idx)) {
+      restoreLevel[idx] = Math.max(0.25, levels[idx]); // remember
+      setLevel(idx, 0);
       pads[idx].classList.add('wiggle');
       setTimeout(() => pads[idx].classList.remove('wiggle'), 360);
+    } else {
+      setLevel(idx, restoreLevel[idx] ?? 1);
     }
+    pads[idx].classList.add('punch');
+    setTimeout(() => pads[idx].classList.remove('punch'), 340);
     updateActivity();
+    haptic(15);
   }
 
   function setRingDash(circle, fraction, circumference) {
@@ -765,13 +881,20 @@
 
   let lastFullState = false;
   function updateActivity() {
-    const n = active.reduce((s, v) => s + (v ? 1 : 0), 0);
+    let n = 0;
+    for (let i = 0; i < TRACKS.length; i++) if (isActive(i)) n++;
     activeCountEl.textContent = n;
     setRingDash(ringFill, n / 8, RING_FILL_CIRC);
-    pads.forEach((p, i) => p.classList.toggle('active', active[i]));
+    pads.forEach((p, i) => {
+      p.classList.toggle('active', isActive(i));
+      updatePadFader(i);
+    });
     const isFull = n === 8;
     gauge.classList.toggle('full', isFull);
-    if (isFull && !lastFullState) burstConfetti();
+    if (isFull && !lastFullState) {
+      burstConfetti();
+      haptic([20, 50, 20, 50, 30]);
+    }
     lastFullState = isFull;
   }
 
@@ -880,7 +1003,7 @@
       const now = performance.now();
       for (let i = 0; i < TRACKS.length; i++) {
         let level = 0;
-        if (active[i]) {
+        if (isActive(i)) {
           analysers[i].getByteFrequencyData(analyserData[i]);
           let sum = 0;
           const N = analyserData[i].length;
@@ -893,7 +1016,7 @@
         const lift = -lvl * 5;
         padImgs[i].style.transform = `translateY(${lift}px) scale(${scale})`;
 
-        if (active[i] && lvl > 0.22 && now - lastNoteAt[i] > 280 + Math.random() * 200) {
+        if (isActive(i) && lvl > 0.22 && now - lastNoteAt[i] > 280 + Math.random() * 200) {
           spawnNote(i);
           lastNoteAt[i] = now;
         }
@@ -904,9 +1027,68 @@
   }
   requestAnimationFrame(tick);
 
-  pads.forEach((p, i) => {
-    p.addEventListener('click', (e) => { e.preventDefault(); toggle(i); });
-  });
+  // --- Pointer gesture: tap toggles, vertical drag sets level ---
+  function attachGesture(pad, idx) {
+    const DRAG_THRESH = 9;
+    const DRAG_RANGE = 110; // px from 0..1
+    let pointerId = null;
+    let startY = 0;
+    let startLevel = 0;
+    let dragging = false;
+    let lastHapticLevel = 0;
+
+    pad.addEventListener('pointerdown', (e) => {
+      if (!buffers.length) return;
+      if (pointerId !== null) return;
+      pointerId = e.pointerId;
+      startY = e.clientY;
+      startLevel = levels[idx];
+      dragging = false;
+      lastHapticLevel = startLevel;
+      try { pad.setPointerCapture(pointerId); } catch {}
+      e.preventDefault();
+    });
+
+    pad.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== pointerId) return;
+      const dy = startY - e.clientY;
+      if (!dragging && Math.abs(dy) > DRAG_THRESH) {
+        dragging = true;
+        pad.classList.add('dragging');
+        if (!started) {
+          const triggerLevel = Math.max(0.05, Math.min(1, startLevel + dy / DRAG_RANGE));
+          startAll(idx, triggerLevel);
+          startLevel = levels[idx];
+          return;
+        }
+      }
+      if (dragging) {
+        const newLevel = startLevel + dy / DRAG_RANGE;
+        setLevel(idx, newLevel, true);
+        if (Math.abs(levels[idx] - lastHapticLevel) > 0.12) {
+          haptic(8);
+          lastHapticLevel = levels[idx];
+        }
+      }
+    });
+
+    function endPointer(e) {
+      if (e.pointerId !== pointerId) return;
+      try { pad.releasePointerCapture(pointerId); } catch {}
+      if (!dragging) {
+        handleTap(idx);
+      } else {
+        updateActivity();
+        haptic(12);
+      }
+      pad.classList.remove('dragging');
+      pointerId = null;
+      dragging = false;
+    }
+    pad.addEventListener('pointerup', endPointer);
+    pad.addEventListener('pointercancel', endPointer);
+  }
+  pads.forEach((p, i) => attachGesture(p, i));
   stopAllBtn.addEventListener('click', stopAll);
 
   preload().catch(err => {
