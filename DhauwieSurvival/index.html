@@ -1167,7 +1167,7 @@ function makeCar(x, z, rot) {
   g.rotation.y = rot;
   g.rotation.z = (Math.random() - 0.5) * 0.05;
   scene.add(g);
-  obstacles.push({ mesh: g, box: new THREE.Box3().setFromObject(g) });
+  obstacles.push({ mesh: g, box: new THREE.Box3().setFromObject(g), isCar: true, hp: 100 });
 }
 
 // --- Streetlamp with point light ---
@@ -1623,30 +1623,9 @@ function damageVehicle(dmg) {
   }
 }
 
-// === Tag abandoned cars as drivable ===
-for (const o of obstacles) {
-  // Only the abandoned cars are top-level Groups with multiple children
-  // and are at ground level — detect by box height ~1.7 and not building
-  // (existing cars are pushed with a Group; they're the only ones with no
-  // explicit isCar tag). We'll mark every group with a chassis-sized box.
-}
-// Cleaner: re-walk obstacles, mark ones whose mesh.children.length >= 5 and
-// whose box width is ~1.8 (car-shaped)
-for (const o of obstacles) {
-  if (o.isCar) continue;
-  const size = new THREE.Vector3();
-  o.box.getSize(size);
-  // Cars: ~1.8 x ~1.5 x ~4.2
-  if (size.x > 1.6 && size.x < 2.2 && size.z > 3.5 && size.z < 4.8 && size.y < 2.0) {
-    o.isCar = true;
-    o.hp = 100;
-  }
-  // Or rotated 90deg
-  if (!o.isCar && size.z > 1.6 && size.z < 2.2 && size.x > 3.5 && size.x < 4.8 && size.y < 2.0) {
-    o.isCar = true;
-    o.hp = 100;
-  }
-}
+// Cars are tagged as drivable directly in makeCar() — no AABB heuristic
+// is reliable here because cars spawn at random rotations and the axis-
+// aligned bounding box of a rotated car is much larger than its real size.
 
 // --- Flow-field pathfinding (BFS from player on a coarse grid) ---
 const CELL_SIZE = 4;
