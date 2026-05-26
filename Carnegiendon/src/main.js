@@ -28,5 +28,6 @@
     Audio.resume();
   }, { once: false });
 
+  Touch.init();
   Game.start(canvas);
 })();

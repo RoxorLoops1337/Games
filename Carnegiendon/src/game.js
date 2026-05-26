@@ -184,11 +184,19 @@ const Game = (() => {
     if (Input.isDown("DOWN")) throttle -= 1;
     if (Input.isDown("LEFT")) steer -= 1;
     if (Input.isDown("RIGHT")) steer += 1;
-    return {
-      throttle, steer,
-      handbrake: Input.isDown("SPACE"),
-      nitro: Input.isDown("SHIFT"),
-    };
+    let handbrake = Input.isDown("SPACE");
+    let nitro = Input.isDown("SHIFT");
+
+    // Touch overrides — only apply when the touch UI is active so we don't
+    // zero out a keyboard input that happens to be at rest.
+    const t = Touch.getOverride();
+    if (t) {
+      if (t.throttle !== 0) throttle = t.throttle;
+      if (t.steer !== 0)    steer    = t.steer;
+      if (t.handbrake)      handbrake = true;
+      if (t.nitro)          nitro    = true;
+    }
+    return { throttle, steer, handbrake, nitro };
   }
 
   let last = performance.now();
