@@ -2362,7 +2362,31 @@ class Zombie {
   }
 
   update(dt) {
-    if (this.dead) return;
+    if (this.dead) {
+      this.updateRagdoll(dt);
+      return;
+    }
+    // Knockback / stun integration: while stunned, the zombie can't chase
+    // (just gets pushed). Knockback decays exponentially.
+    if (this.knockback && this.knockback.lengthSq() > 0.0001) {
+      const move = this.knockback.clone().multiplyScalar(dt);
+      const next = this.mesh.position.clone().add(move);
+      let blockedKB = false;
+      for (const o of obstacles) {
+        if (o.box.distanceToPoint(next) < 0.5) { blockedKB = true; break; }
+      }
+      if (!blockedKB) this.mesh.position.copy(next);
+      this.knockback.multiplyScalar(Math.pow(0.001, dt));
+      if (this.knockback.lengthSq() < 0.04) this.knockback.set(0, 0, 0);
+    }
+    if (this.flinch > 0) this.flinch = Math.max(0, this.flinch - dt * 2);
+    if (this.stunTimer > 0) {
+      this.stunTimer -= dt;
+      this.mesh.rotation.y = Math.atan2(player.pos.x - this.mesh.position.x, player.pos.z - this.mesh.position.z) + (this.transformed ? Math.PI : 0);
+      this.mesh.rotation.x = -this.flinch;
+      this.mesh.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.05;
+      return;
+    }
     const toPlayer = new THREE.Vector3().subVectors(player.pos, this.mesh.position);
     toPlayer.y = 0;
     const dist = toPlayer.length();
@@ -2429,7 +2453,7 @@ class Zombie {
     this.legL.rotation.x = -swing;
     this.legR.rotation.x = swing;
     this.mesh.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.05;
-    this.mesh.rotation.x = dist < 5 ? -0.12 : 0;
+    this.mesh.rotation.x = (dist < 5 ? -0.12 : 0) - (this.flinch || 0);
 
     this.attackCooldown -= dt;
     if (!this.transformed && dist < 1.5 && this.attackCooldown <= 0) {
@@ -2438,7 +2462,70 @@ class Zombie {
     }
   }
 
-  takeDamage(dmg) {
+  updateRagdoll(dt) {
+    if (!this.ragVel) return;
+    this.deathTimer += dt;
+    // Gravity + position integration
+    this.ragVel.y -= 22 * dt;
+    this.mesh.position.x += this.ragVel.x * dt;
+    this.mesh.position.y += this.ragVel.y * dt;
+    this.mesh.position.z += this.ragVel.z * dt;
+    if (this.mesh.position.y < 0.05) {
+      this.mesh.position.y = 0.05;
+      // Bounce + friction on impact
+      this.ragVel.y *= -0.25;
+      this.ragVel.x *= 0.45;
+      this.ragVel.z *= 0.45;
+      if (Math.abs(this.ragVel.y) < 0.6) this.ragVel.y = 0;
+      // Spit a bit of dust/blood on the first ground impact
+      if (!this._impacted) {
+        this._impacted = true;
+        spawnBloodBurst(this.mesh.position.clone().add(new THREE.Vector3(0, 0.2, 0)), 0x6a3018);
+        if (this.deathStyle === 'headshot') addShake(0.08);
+      }
+      this.spinVel *= 0.7;
+    }
+    // Style-specific orientation
+    const t = Math.min(1, this.deathTimer / this.deathTotal);
+    if (this.deathStyle === 'headshot') {
+      // Tumble end-over-end while airborne, settle face-up after landing
+      this.mesh.rotation.x += (this.spinVel || 0) * dt;
+      this.mesh.rotation.z = Math.sin(this.deathTimer * 4) * 0.6 * (1 - t);
+      // After settling, lock to face-up
+      if (this._impacted && Math.abs(this.ragVel.y) < 0.1) {
+        const target = -Math.PI / 2;
+        this.mesh.rotation.x += (target - this.mesh.rotation.x) * Math.min(1, dt * 6);
+        this.mesh.rotation.z *= Math.pow(0.001, dt);
+      }
+    } else if (this.deathStyle === 'backward') {
+      // Fall on back
+      const target = -Math.PI / 2;
+      this.mesh.rotation.x += (target - this.mesh.rotation.x) * Math.min(1, dt * 5);
+    } else if (this.deathStyle === 'spin') {
+      this.mesh.rotation.y += (this.spinVel || 0) * dt;
+      const target = Math.PI / 2;
+      this.mesh.rotation.x += (target - this.mesh.rotation.x) * Math.min(1, dt * 4);
+    } else if (this.deathStyle === 'crumple') {
+      // Knees buckle, collapse forward and to the side
+      const target = Math.PI / 2;
+      this.mesh.rotation.x += (target - this.mesh.rotation.x) * Math.min(1, dt * 3);
+      this.mesh.rotation.z += (0.4 - this.mesh.rotation.z) * Math.min(1, dt * 3);
+    } else {
+      // 'forward' default — pitch forward
+      const target = Math.PI / 2;
+      this.mesh.rotation.x += (target - this.mesh.rotation.x) * Math.min(1, dt * 5);
+    }
+    // Limp arms/legs swing while in the air
+    const limp = 1 - t;
+    if (this.armL) {
+      this.armL.rotation.x = -1.15 + Math.sin(this.deathTimer * 8) * 0.5 * limp;
+      this.armR.rotation.x = -1.15 - Math.sin(this.deathTimer * 8) * 0.5 * limp;
+      this.legL.rotation.x = Math.sin(this.deathTimer * 6 + 1) * 0.3 * limp;
+      this.legR.rotation.x = -Math.sin(this.deathTimer * 6 + 1) * 0.3 * limp;
+    }
+  }
+
+  takeDamage(dmg, hitDir, isHeadshot) {
     if (this.dead || this.transformed) return false;
     this.hp -= dmg;
     const orig = this.torsoMat.color.getHex();
@@ -2451,20 +2538,74 @@ class Zombie {
       this.armMat.color.setHex(orig);
       this.headMat.color.setHex(orig);
     }, 80);
+    // Knockback: shove the zombie away from the bullet direction. Heavier
+    // zombies (higher tier) take less push.
+    if (hitDir) {
+      const massFactor = 1 / (1 + this.tier * 0.6);
+      const force = (isHeadshot ? 4.2 : 2.6) * massFactor;
+      if (!this.knockback) this.knockback = new THREE.Vector3();
+      this.knockback.add(new THREE.Vector3(hitDir.x, 0, hitDir.z).normalize().multiplyScalar(force));
+      // Brief stun so the knockback actually moves them
+      this.stunTimer = Math.max(this.stunTimer || 0, isHeadshot ? 0.20 : 0.10);
+      // Small flinch tilt
+      this.flinch = (this.flinch || 0) + (isHeadshot ? 0.25 : 0.12);
+    }
     if (this.hp <= 0) {
-      this.die();
+      this.die(isHeadshot, hitDir);
       return true;
     }
     return false;
   }
 
-  die() {
+  die(isHeadshot, hitDir) {
     this.dead = true;
-    this.mesh.rotation.x = Math.PI / 2;
-    this.mesh.position.y = 0.3;
-    setTimeout(() => { scene.remove(this.mesh); }, 1500);
+    this.deathTimer = 0;
+    this.deathTotal = 1.6;
+    // Pick a death animation style. Headshot kills always do the CS-style
+    // ragdoll fly-back. Otherwise random variety.
+    if (isHeadshot) {
+      this.deathStyle = 'headshot';
+    } else {
+      const styles = ['forward', 'backward', 'spin', 'crumple'];
+      this.deathStyle = styles[(Math.random() * styles.length) | 0];
+    }
+    // Ragdoll velocity: keep alive-frame knockback, add a launch impulse on
+    // headshot kills. Direction is along the bullet (away from player).
+    if (!this.ragVel) this.ragVel = new THREE.Vector3();
+    const dir = hitDir
+      ? new THREE.Vector3(hitDir.x, 0, hitDir.z).normalize()
+      : new THREE.Vector3(0, 0, 1);
+    if (this.deathStyle === 'headshot') {
+      // Big launch up + back
+      this.ragVel.set(dir.x * 10, 9, dir.z * 10);
+      this.spinVel = (Math.random() - 0.5) * 12;
+      playTone(880, 0.10, 'square', 0.16);
+      playTone(220, 0.20, 'sawtooth', 0.12);
+      addKillFeed('HEADSHOT!', 'holy');
+      // Extra blood plume from the head
+      const headPos = this.mesh.position.clone();
+      headPos.y += 1.7 * this.scale;
+      for (let i = 0; i < 3; i++) spawnBloodBurst(headPos);
+    } else if (this.deathStyle === 'backward') {
+      this.ragVel.set(dir.x * 2.5, 3, dir.z * 2.5);
+      this.spinVel = -3 - Math.random() * 2;
+    } else if (this.deathStyle === 'spin') {
+      this.ragVel.set(dir.x * 1.5, 2, dir.z * 1.5);
+      this.spinVel = (Math.random() < 0.5 ? -1 : 1) * (5 + Math.random() * 3);
+    } else if (this.deathStyle === 'crumple') {
+      this.ragVel.set(0, 0.5, 0);
+      this.spinVel = 0;
+    } else {
+      // 'forward' default
+      this.ragVel.set(dir.x * 1.2, 1.5, dir.z * 1.2);
+      this.spinVel = 4 + Math.random() * 2;
+    }
+    // Cleanup after corpse lingers a while (headshot bodies persist longer
+    // so the launch looks satisfying)
+    const lingerMs = this.deathStyle === 'headshot' ? 4500 : 2500;
+    setTimeout(() => { scene.remove(this.mesh); }, lingerMs);
     player.kills++;
-    const rawScore = (10 + this.tier * 10) * (this.subtype === 'runner' ? 2 : 1);
+    const rawScore = (10 + this.tier * 10) * (this.subtype === 'runner' ? 2 : 1) * (isHeadshot ? 1.5 : 1);
     const scoreAdd = Math.round(rawScore * playerStats.scoreMul);
     player.score += scoreAdd;
     if (playerStats.killHeal > 0 && player.alive) {
@@ -2478,7 +2619,8 @@ class Zombie {
     const names = ['Shambler', 'Rotter', 'Hulk', 'DEMON BOSS'];
     let nm = names[this.tier];
     if (this.subtype === 'runner') nm = 'Runner';
-    addKillFeed('Killed ' + nm + ' +' + scoreAdd, this.tier === 3 ? 'boss' : null);
+    const tag = isHeadshot ? ' [HEAD]' : '';
+    addKillFeed('Killed ' + nm + tag + ' +' + scoreAdd, this.tier === 3 ? 'boss' : null);
     recordKill();
     const r = Math.random();
     if (this.tier === 3 || r < playerStats.powerupDropChance) spawnPowerupPickup(this.mesh.position.clone());
@@ -2771,23 +2913,42 @@ function shoot() {
     let remainingRange = w.range;
     const hitSet = new Set();
     let endPoint = null;
-    let firstHitPos = null, firstKilled = false, firstDmg = 0;
+    let firstHitPos = null, firstKilled = false, firstDmg = 0, firstWasHead = false;
 
     for (let h = 0; h < maxHits; h++) {
       let hitDist = remainingRange;
       let hitZombie = null;
+      let hitIsHead = false;
       for (const z of zombies) {
         if (z.dead || z.transformed || hitSet.has(z)) continue;
-        const sphereCenter = z.mesh.position.clone();
-        sphereCenter.y += 1.3 * z.scale;
-        const sphereR = 0.95 * z.scale;
-        const v = sphereCenter.clone().sub(curOrigin);
+        // Head sphere (smaller, higher) — check first; hits here are headshots
+        const headCenter = z.mesh.position.clone();
+        headCenter.y += 1.7 * z.scale;
+        const headR = 0.34 * z.scale;
+        {
+          const v = headCenter.clone().sub(curOrigin);
+          const proj = v.dot(dir);
+          if (proj > 0) {
+            const closestDist2 = v.lengthSq() - proj * proj;
+            if (closestDist2 < headR * headR && proj < hitDist) {
+              hitDist = proj;
+              hitZombie = z;
+              hitIsHead = true;
+            }
+          }
+        }
+        // Body sphere
+        const bodyCenter = z.mesh.position.clone();
+        bodyCenter.y += 1.1 * z.scale;
+        const bodyR = 0.7 * z.scale;
+        const v = bodyCenter.clone().sub(curOrigin);
         const proj = v.dot(dir);
         if (proj < 0) continue;
         const closestDist2 = v.lengthSq() - proj * proj;
-        if (closestDist2 < sphereR * sphereR && proj < hitDist) {
+        if (closestDist2 < bodyR * bodyR && proj < hitDist) {
           hitDist = proj;
           hitZombie = z;
+          hitIsHead = false;
         }
       }
       for (const o of obstacles) {
@@ -2805,11 +2966,19 @@ function shoot() {
       }
       hitSet.add(hitZombie);
       const hitPos = curOrigin.clone().add(dir.clone().multiplyScalar(hitDist));
-      const dmgVal = Math.round(weaponDamage(currentWeaponKey) * dmgMul);
-      const killed = hitZombie.takeDamage(dmgVal);
+      // Headshots do bonus damage (1.8x); other hits unchanged
+      const baseDmg = Math.round(weaponDamage(currentWeaponKey) * dmgMul);
+      const dmgVal = hitIsHead ? Math.round(baseDmg * 1.8) : baseDmg;
+      const killed = hitZombie.takeDamage(dmgVal, dir, hitIsHead);
       if (killed) showHitMarker();
-      spawnBloodBurst(hitPos);
-      if (h === 0) { firstHitPos = hitPos; firstKilled = killed; firstDmg = dmgVal; }
+      spawnBloodBurst(hitPos, hitIsHead ? 0xff2222 : 0xa01818);
+      if (hitIsHead) spawnBloodBurst(hitPos, 0xff4444);
+      if (h === 0) {
+        firstHitPos = hitPos;
+        firstKilled = killed;
+        firstDmg = dmgVal;
+        firstWasHead = hitIsHead;
+      }
       curOrigin = hitPos.clone().add(dir.clone().multiplyScalar(0.5));
       remainingRange -= hitDist + 0.5;
       if (remainingRange <= 0) { endPoint = curOrigin.clone(); break; }
@@ -2817,7 +2986,11 @@ function shoot() {
     }
     if (!endPoint) endPoint = curOrigin.clone();
     addTracer(origin.clone().add(dir.clone().multiplyScalar(0.6)), endPoint, currentWeaponKey === 'shotgun' ? 0xffaa66 : 0xffff66);
-    if (p === 0 && firstHitPos) spawnDmgNumber(firstHitPos, firstKilled ? '-' + firstDmg + ' KILL' : '-' + firstDmg, firstKilled);
+    if (p === 0 && firstHitPos) {
+      const txt = (firstWasHead ? 'HS ' : '') +
+                  (firstKilled ? '-' + firstDmg + ' KILL' : '-' + firstDmg);
+      spawnDmgNumber(firstHitPos, txt, firstKilled);
+    }
   }
 
   updateHud();
