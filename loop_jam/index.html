@@ -716,10 +716,11 @@
   // --- Audio engine ---
   let ctx = null;
   let buffers = [];
-  let sources = [];
   let gains = [];
   let analysers = [];
   let analyserData = [];
+  let mixBuffer = null;     // Single 16-channel buffer containing all 8 stereo loops
+  let mainSource = null;    // The one looping BufferSource that feeds every pad
   // Mix level per pad (0..1). Replaces binary active[].
   const levels = new Array(TRACKS.length).fill(0);
   // Remembered level for tap-to-restore after muting.
@@ -784,35 +785,68 @@
     ctx = new (window.AudioContext || window.webkitAudioContext)();
   }
 
+  // Pack all 8 stereo loops into a single 16-channel AudioBuffer.
+  // A single looping source means one playback clock — no possibility of
+  // drift between tracks, and the audio thread only does one source's
+  // worth of work instead of eight.
+  function buildMixBuffer() {
+    const sr = ctx.sampleRate;
+    let len = buffers[0].length;
+    for (const b of buffers) if (b.length < len) len = b.length;
+    const mix = ctx.createBuffer(16, len, sr);
+    for (let i = 0; i < 8; i++) {
+      const b = buffers[i];
+      const L = b.getChannelData(0);
+      const R = b.numberOfChannels > 1 ? b.getChannelData(1) : L;
+      mix.copyToChannel(L.length === len ? L : L.subarray(0, len), i * 2);
+      mix.copyToChannel(R.length === len ? R : R.subarray(0, len), i * 2 + 1);
+    }
+    return mix;
+  }
+
   function startAll(initialIdx, initialLevel) {
     ensureContext();
     if (ctx.state === 'suspended') ctx.resume();
     acquireWakeLock();
+    if (!mixBuffer) mixBuffer = buildMixBuffer();
 
-    sources = []; gains = []; analysers = []; analyserData = [];
-    const t0 = ctx.currentTime + 0.05;
-    startTime = t0;
+    gains = []; analysers = []; analyserData = [];
 
-    for (let i = 0; i < TRACKS.length; i++) {
-      const src = ctx.createBufferSource();
-      src.buffer = buffers[i];
-      src.loop = true;
-      // Pin loop boundaries to the buffer's exact sample length so the
-      // wrap point is identical across all 8 sources.
-      src.loopStart = 0;
-      src.loopEnd = buffers[i].length / ctx.sampleRate;
+    const splitter = ctx.createChannelSplitter(16);
+    for (let i = 0; i < 8; i++) {
+      const merger = ctx.createChannelMerger(2);
+      splitter.connect(merger, i * 2, 0);
+      splitter.connect(merger, i * 2 + 1, 1);
+
       const g = ctx.createGain();
       const initial = (i === initialIdx) ? (initialLevel ?? 1) : 0;
       g.gain.value = initial;
       levels[i] = initial;
+
       const an = ctx.createAnalyser();
-      an.fftSize = 256;
-      an.smoothingTimeConstant = 0.6;
-      src.connect(g).connect(an).connect(ctx.destination);
-      src.start(t0);
-      sources.push(src); gains.push(g); analysers.push(an);
+      an.fftSize = 64;
+      an.smoothingTimeConstant = 0.5;
+
+      merger.connect(g);
+      g.connect(an);
+      g.connect(ctx.destination); // analyser is a sidechain; don't add latency
+      gains.push(g);
+      analysers.push(an);
       analyserData.push(new Uint8Array(an.frequencyBinCount));
     }
+
+    const src = ctx.createBufferSource();
+    src.buffer = mixBuffer;
+    src.loop = true;
+    src.loopStart = 0;
+    src.loopEnd = mixBuffer.length / ctx.sampleRate;
+    src.connect(splitter);
+
+    const t0 = ctx.currentTime + 0.05;
+    startTime = t0;
+    src.start(t0);
+    mainSource = src;
+
     started = true;
     updateActivity();
     startOverlay.classList.add('hidden');
@@ -823,13 +857,14 @@
 
   function stopAll() {
     if (!started) return;
-    for (let i = 0; i < sources.length; i++) {
-      try { sources[i].stop(); } catch {}
-      sources[i].disconnect();
-      gains[i].disconnect();
-      analysers[i].disconnect();
+    try { mainSource.stop(); } catch {}
+    try { mainSource.disconnect(); } catch {}
+    for (let i = 0; i < gains.length; i++) {
+      try { gains[i].disconnect(); } catch {}
+      try { analysers[i].disconnect(); } catch {}
     }
-    sources = []; gains = []; analysers = []; analyserData = [];
+    mainSource = null;
+    gains = []; analysers = []; analyserData = [];
     levels.fill(0);
     padLevel.fill(0);
     started = false;
@@ -847,22 +882,38 @@
     if (started && gains[idx]) {
       const g = gains[idx].gain;
       const now = ctx.currentTime;
-      g.cancelScheduledValues(now);
-      g.setValueAtTime(g.value, now);
-      if (ramp) g.linearRampToValueAtTime(level, now + FADE);
-      else      g.setValueAtTime(level, now);
+      if (ramp) {
+        // setTargetAtTime is designed for live tracking — no cancel/reschedule
+        // churn on the audio thread, so no crackle during drag.
+        g.setTargetAtTime(level, now, 0.025);
+      } else {
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(level, now);
+      }
     }
     updatePadFader(idx);
   }
+
+  // Layout reads are expensive; cache once and refresh on resize.
+  const padFaderMetrics = new Array(TRACKS.length).fill(null).map(() => ({ top: 0, height: 0 }));
+  function cacheFaderMetrics() {
+    for (let i = 0; i < TRACKS.length; i++) {
+      const f = padFaders[i];
+      padFaderMetrics[i].top = f.offsetTop;
+      padFaderMetrics[i].height = f.offsetHeight;
+    }
+  }
+  window.addEventListener('resize', cacheFaderMetrics);
 
   function updatePadFader(idx) {
     const lvl = levels[idx];
     padFaderFills[idx].style.height = (lvl * 100) + '%';
     padLevelBubbles[idx].textContent = Math.round(lvl * 100);
-    // position the bubble alongside the current fader fill
-    const f = padFaders[idx];
-    const bubbleY = f.offsetTop + f.offsetHeight * (1 - lvl);
-    padLevelBubbles[idx].style.top = bubbleY + 'px';
+    const m = padFaderMetrics[idx];
+    if (m.height === 0) { // first time / no metrics yet
+      cacheFaderMetrics();
+    }
+    padLevelBubbles[idx].style.top = (m.top + m.height * (1 - lvl)) + 'px';
   }
 
   function handleTap(idx) {
