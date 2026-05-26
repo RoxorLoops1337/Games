@@ -202,10 +202,78 @@ const Audio = (() => {
     engineNode = null;
   }
 
+  // --- Background music --------------------------------------------------
+  // A loop-based driving rhythm: kick on every beat, snare on 2/4, a moving
+  // bassline picked from a small set of menacing intervals. Lives in its
+  // own scheduler so it can be started/stopped independently of SFX.
+  let musicHandle = null;
+  let musicStep = 0;
+  function startMusic() {
+    if (!ctx || musicHandle) return;
+    const bpm = 132;
+    const stepMs = (60 / bpm / 2) * 1000; // 8th notes
+    const bassPattern = [
+      55, 0, 55, 0, 73, 0, 55, 0,
+      55, 0, 55, 0, 65, 0, 49, 0,
+    ];
+    function step() {
+      const i = musicStep % 16;
+      const t = ctx.currentTime;
+      // Kick on each downbeat (every 2 steps)
+      if (i % 4 === 0) {
+        const o = ctx.createOscillator();
+        o.type = "sine";
+        o.frequency.value = 110;
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+        const g = envGain(0.001, 0.18, 0.55);
+        o.connect(g).connect(masterGain);
+        o.start(); o.stop(t + 0.22);
+      }
+      // Snare on beats 2 and 4
+      if (i === 4 || i === 12) {
+        const n = noise();
+        const f = ctx.createBiquadFilter();
+        f.type = "highpass";
+        f.frequency.value = 1200;
+        const g = envGain(0.001, 0.12, 0.22);
+        n.connect(f).connect(g).connect(masterGain);
+        n.start(); n.stop(t + 0.15);
+      }
+      // Hat on every step (low volume)
+      const hn = noise();
+      const hf = ctx.createBiquadFilter();
+      hf.type = "highpass";
+      hf.frequency.value = 6000;
+      const hg = envGain(0.001, 0.04, 0.05);
+      hn.connect(hf).connect(hg).connect(masterGain);
+      hn.start(); hn.stop(t + 0.06);
+      // Bass note
+      const bf = bassPattern[i];
+      if (bf > 0) {
+        const b = ctx.createOscillator();
+        b.type = "sawtooth";
+        b.frequency.value = bf;
+        const bg = envGain(0.005, stepMs / 1000 * 0.8, 0.07);
+        const bfilter = ctx.createBiquadFilter();
+        bfilter.type = "lowpass";
+        bfilter.frequency.value = 600;
+        b.connect(bfilter).connect(bg).connect(masterGain);
+        b.start(); b.stop(t + stepMs / 1000);
+      }
+      musicStep++;
+    }
+    musicHandle = setInterval(step, stepMs);
+  }
+  function stopMusic() {
+    if (musicHandle) clearInterval(musicHandle);
+    musicHandle = null;
+  }
+
   return {
     init, resume, setMuted, isMuted, toggleMuted,
     splat, scream, crash, explosion, pickup, powerupGet,
     nitroBoost, honk, comboLevelUp, siren,
     startEngine, updateEngine, stopEngine,
+    startMusic, stopMusic,
   };
 })();

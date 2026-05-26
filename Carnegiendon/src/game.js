@@ -67,6 +67,7 @@ const Game = (() => {
     Audio.init();
     Audio.resume();
     Audio.startEngine();
+    Audio.startMusic();
     const intro = mode === "carnage"  ? `KILL ${G.targetKills} TO ESCAPE` :
                   mode === "survival" ? "SURVIVE THE STREETS" :
                                         "ENJOY YOURSELF";
@@ -780,6 +781,7 @@ const Game = (() => {
     Particles.explosion(G.player.car.x, G.player.car.y);
     Audio.explosion();
     Audio.stopEngine();
+    Audio.stopMusic();
     shake(30);
 
     const hi = loadHighScores();
@@ -829,6 +831,7 @@ const Game = (() => {
   function quitToMenu() {
     state = STATE.MENU;
     Audio.stopEngine();
+    Audio.stopMusic();
     HUD.hideHUD();
     HUD.hide("pause");
     HUD.hide("gameover");
@@ -841,6 +844,7 @@ const Game = (() => {
     state = STATE.PLAYING;
     HUD.hide("gameover");
     Audio.startEngine();
+    Audio.startMusic();
   }
 
   return {
