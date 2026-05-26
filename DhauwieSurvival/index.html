@@ -1366,6 +1366,9 @@ function showPerkPicker(waveJustCleared) {
 }
 
 // === Safehouses: enterable buildings with supply crates + survivors ===
+// (pickups array is declared early because makeSafehouse() pushes to it
+// during initial scene setup — must exist before the calls below.)
+const pickups = [];
 function makeSafehouse(cx, cz, doorDir) {
   // doorDir: 0 south, 1 east, 2 north, 3 west
   const HALF = 4.5;
@@ -2480,7 +2483,6 @@ class Zombie {
   }
 }
 
-const pickups = [];
 function spawnPickup(pos, type, weaponKey = null) {
   const g = new THREE.Group();
   let color = 0xffffff;
