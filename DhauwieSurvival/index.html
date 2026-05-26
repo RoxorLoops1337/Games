@@ -2048,13 +2048,21 @@ function enableTouchMode() {
   document.body.classList.add('touch');
 }
 window.addEventListener('touchstart', enableTouchMode, { capture: true, passive: true });
+// pointerdown fires before touchstart on most mobile browsers — promote
+// pointerType='touch' to touch mode here so startGame() sees isTouch=true.
+window.addEventListener('pointerdown', e => {
+  if (e && e.pointerType === 'touch') enableTouchMode();
+}, { capture: true, passive: true });
 
 canvas.addEventListener('click', () => {
   // Always try to lock when the user clicks the canvas after game start.
   // On a pure touch device this silently no-ops; on mouse / hybrid devices
   // this is the user's explicit signal to capture the cursor.
   if (gameStarted && !gameOver && document.pointerLockElement !== canvas) {
-    try { canvas.requestPointerLock(); } catch (_) {}
+    try {
+      const p = canvas.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) {}
   }
 });
 
@@ -3890,7 +3898,11 @@ window.addEventListener('error', e => {
 });
 window.addEventListener('unhandledrejection', e => {
   const r = e.reason;
-  showFatal('PROMISE ERR ' + (r && r.message ? r.message : r));
+  const msg = r && r.message ? r.message : String(r);
+  // Pointer Lock can fail for benign reasons (mobile, user gesture lost,
+  // etc.) — never worth interrupting the player with a fatal banner.
+  if (/pointer\s*lock/i.test(msg)) { e.preventDefault && e.preventDefault(); return; }
+  showFatal('PROMISE ERR ' + msg);
 });
 
 function startGame() {
@@ -3904,7 +3916,13 @@ function startGame() {
     step = 'flowField';      recomputeFlowField();
     step = 'startWave';      startWave(1);
     step = 'updateHud';      updateHud();
-    step = 'pointerLock';    if (!isTouch) canvas.requestPointerLock();
+    step = 'pointerLock';
+    if (!isTouch) {
+      try {
+        const p = canvas.requestPointerLock();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch (_) {}
+    }
     step = 'showMessage';    showMessage('Find the LAB (green beacon NE) for the Antidote!', 4000);
   } catch (err) {
     showFatal('startGame failed at [' + step + ']\n' + (err && err.message ? err.message : err) + '\n' + (err && err.stack ? err.stack.split('\n').slice(0,5).join('\n') : ''));
