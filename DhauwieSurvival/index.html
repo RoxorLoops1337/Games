@@ -400,6 +400,106 @@
   .pup-badge.spd { border-color: #66ccff; color: #66ccff; box-shadow: 0 0 8px rgba(102,204,255,0.5); }
   .pup-badge.shd { border-color: #88ffaa; color: #88ffaa; box-shadow: 0 0 8px rgba(136,255,170,0.5); }
   body.touch #compass { display: none !important; }
+
+  /* Perk picker panel (shown between waves) */
+  #perk-panel {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.94);
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  #perk-title {
+    color: #00ff88;
+    font-size: 30px;
+    letter-spacing: 3px;
+    text-shadow: 0 0 12px #00ff88, 0 0 24px rgba(0,255,136,0.4);
+    margin: 0 0 8px 0;
+    text-align: center;
+  }
+  #perk-sub {
+    color: #88ffaa; font-size: 13px; letter-spacing: 1px; margin: 0 0 20px 0;
+  }
+  body.touch #perk-title { font-size: 20px; letter-spacing: 2px; }
+  body.touch #perk-sub { font-size: 11px; }
+  #perk-cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .perk-card {
+    width: 200px;
+    padding: 18px 14px;
+    background: rgba(0,255,136,0.06);
+    border: 2px solid #00ff88;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+    text-align: center;
+    color: #fff;
+    border-radius: 6px;
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .perk-card:hover, .perk-card:active {
+    background: rgba(0,255,136,0.22);
+    transform: translateY(-4px);
+    box-shadow: 0 6px 18px rgba(0,255,136,0.25);
+  }
+  .perk-card h3 { color: #00ff88; margin: 0 0 8px 0; font-size: 15px; letter-spacing: 2px; font-family: inherit; }
+  .perk-card p { color: #ccc; font-size: 12px; line-height: 1.5; margin: 0; }
+  body.touch .perk-card { width: 138px; padding: 12px 8px; }
+  body.touch .perk-card h3 { font-size: 12px; letter-spacing: 1px; }
+  body.touch .perk-card p { font-size: 11px; }
+
+  /* Interact prompt (entering cars, supply crates, etc) */
+  #interact-prompt {
+    position: fixed;
+    top: 60%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.72);
+    border: 1px solid #ffe066;
+    color: #ffe066;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    pointer-events: none;
+    z-index: 5;
+    letter-spacing: 1px;
+  }
+  body.touch #interact-prompt { font-size: 12px; top: 55%; }
+
+  /* Drive HUD overlay (Car HP bar at the top while driving) */
+  #drive-hud {
+    position: fixed;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    pointer-events: none;
+    text-align: center;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid #ffaa44;
+    padding: 6px 14px;
+    border-radius: 4px;
+    color: #ffd089;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+  #drive-hud .bar {
+    width: 160px; height: 8px; background: #222; border: 1px solid #555;
+    margin-top: 4px; border-radius: 2px; overflow: hidden;
+  }
+  #drive-hud .bar > div {
+    height: 100%; background: linear-gradient(90deg, #ff8844, #ffe066);
+    transition: width 0.15s linear;
+  }
+  body.touch #drive-hud { top: 36px; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -432,7 +532,19 @@
   <div id="kill-feed"></div>
   <div id="streak"></div>
   <div id="powerup-bar"></div>
+  <div id="interact-prompt" class="hidden"></div>
+  <div id="drive-hud" class="hidden">
+    DRIVING &nbsp;|&nbsp; <span id="drive-speed">0</span> km/h<br>
+    Car HP <span id="drive-hp">100</span>/100
+    <div class="bar"><div id="drive-hpfill" style="width:100%"></div></div>
+    <span style="font-size:11px;color:#aaa;">[E] exit</span>
+  </div>
   <div id="message"></div>
+  <div id="perk-panel" class="hidden">
+    <h2 id="perk-title">WAVE CLEARED</h2>
+    <div id="perk-sub">choose a perk to push deeper</div>
+    <div id="perk-cards"></div>
+  </div>
 
   <div id="mobile-controls">
     <div id="look-pad"></div>
@@ -468,13 +580,15 @@
     Move: <b>W A S D</b> &nbsp;&middot;&nbsp; Look: <b>Mouse</b><br>
     Shoot: <b>Left Click</b> &nbsp;&middot;&nbsp; Reload: <b>R</b><br>
     Switch weapons: <b>1 2 3 4</b> &nbsp;&middot;&nbsp; Sprint: <b>Shift</b><br>
-    Jump: <b>Space</b><br>
+    Jump: <b>Space</b> &nbsp;&middot;&nbsp; Drive a car: <b>E</b><br>
     <br>
     <b style="color:#00ff88">MOBILE</b><br>
     Move: <b>Left joystick</b> &nbsp;&middot;&nbsp; Look: <b>Drag right side</b><br>
     Tap <b>FIRE / JUMP / RELOAD</b> &nbsp;&middot;&nbsp; Switch via <b>1-4</b> bar<br>
     <br>
-    Pick up weapon crates by walking over them.
+    Pick up weapon crates by walking over them.<br>
+    Look for <b style="color:#00ff88">green-trimmed safehouses</b> — supply crates inside heal, refill ammo, and rescue a survivor.<br>
+    Every cleared wave lets you pick one of three <b style="color:#ffe066">perks</b>.
   </div>
   <button id="start-btn">BEGIN</button>
   <div style="margin-top:16px;font-size:12px;color:#666;">Desktop: click in-game to enable mouse look. Mobile: rotate to landscape for best play.</div>
@@ -1115,6 +1229,316 @@ function updateDust(dt) {
   dustGeo.attributes.position.needsUpdate = true;
 }
 
+// === Perk / progression stats ===
+const playerStats = {
+  reloadMul: 1,
+  pierceBonus: 0,
+  dmgMul: 1,
+  speedMul: 1,
+  killHeal: 0,
+  magMul: 1,
+  powerupDropChance: 0.06,
+  startShield: false,
+  fireRateMul: 1,
+  dmgTakenMul: 1,
+  scoreMul: 1,
+  rescued: 0
+};
+const takenPerks = new Set();
+const PERKS = [
+  { id:'reload', name:'STEADY HANDS',    desc:'-30% reload time on all weapons',  apply:()=>{ playerStats.reloadMul *= 0.7; } },
+  { id:'stim',   name:'COMBAT STIM',     desc:'+25 max HP and fully heal',        apply:()=>{ player.hpMax += 25; player.hp = player.hpMax; updateHud(); } },
+  { id:'pierce', name:'PIERCING ROUNDS', desc:'Bullets pierce +1 zombie',         apply:()=>{ playerStats.pierceBonus += 1; } },
+  { id:'dmg',    name:'HOLLOW POINTS',   desc:'+20% weapon damage',               apply:()=>{ playerStats.dmgMul *= 1.2; } },
+  { id:'speed',  name:'LIGHT STEP',      desc:'+15% movement speed',              apply:()=>{ playerStats.speedMul *= 1.15; } },
+  { id:'adren',  name:'ADRENALINE',      desc:'Each kill restores 3 HP',          apply:()=>{ playerStats.killHeal += 3; } },
+  { id:'mag',    name:'MAGNUM MAG',      desc:'+50% magazine size',               apply:()=>{ playerStats.magMul *= 1.5; } },
+  { id:'lucky',  name:'LUCKY FIND',      desc:'3x power-up drop rate',            apply:()=>{ playerStats.powerupDropChance *= 3; } },
+  { id:'rapid',  name:'RAPID FIRE',      desc:'+25% fire rate',                   apply:()=>{ playerStats.fireRateMul *= 0.8; } },
+  { id:'tough',  name:'HEAVY ARMOR',     desc:'Take 20% less damage',             apply:()=>{ playerStats.dmgTakenMul *= 0.8; } },
+  { id:'score',  name:'BOUNTY HUNTER',   desc:'+40% score per kill',              apply:()=>{ playerStats.scoreMul *= 1.4; } },
+  { id:'shield', name:'BLESSED START',   desc:'Start each wave with 8s shield',   apply:()=>{ playerStats.startShield = true; } },
+];
+
+let paused = false;
+function showPerkPicker(waveJustCleared) {
+  const panel = document.getElementById('perk-panel');
+  const cards = document.getElementById('perk-cards');
+  const title = document.getElementById('perk-title');
+  title.textContent = 'WAVE ' + waveJustCleared + ' CLEARED';
+  cards.innerHTML = '';
+  // Pool of perks not yet taken (re-allow taking the same one if we run out)
+  let pool = PERKS.filter(p => !takenPerks.has(p.id));
+  if (pool.length < 3) pool = PERKS.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const chosen = pool.slice(0, 3);
+  chosen.forEach(perk => {
+    const card = document.createElement('div');
+    card.className = 'perk-card';
+    card.innerHTML = '<h3>' + perk.name + '</h3><p>' + perk.desc + '</p>';
+    const pick = () => {
+      perk.apply();
+      takenPerks.add(perk.id);
+      panel.classList.add('hidden');
+      paused = false;
+      playTone(880, 0.10, 'square', 0.10);
+      playTone(1320, 0.12, 'square', 0.10);
+    };
+    card.addEventListener('click', pick);
+    card.addEventListener('touchstart', e => { e.preventDefault(); pick(); }, { passive: false });
+    cards.appendChild(card);
+  });
+  panel.classList.remove('hidden');
+  paused = true;
+}
+
+// === Safehouses: enterable buildings with supply crates + survivors ===
+function makeSafehouse(cx, cz, doorDir) {
+  // doorDir: 0 south, 1 east, 2 north, 3 west
+  const HALF = 4.5;
+  const HEIGHT = 3.4;
+  const TH = 0.4;     // wall thickness
+  const DOOR_W = 2.0;
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x7a826e, roughness: 0.7 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.6 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x252225, roughness: 0.6 });
+  const interiorLight = new THREE.PointLight(0xffd49a, 1.5, 12);
+  interiorLight.position.set(cx, 2.6, cz);
+  scene.add(interiorLight);
+
+  function addPanel(x, y, z, w, h, d, isObs) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    scene.add(m);
+    if (isObs) obstacles.push({ mesh: m, box: new THREE.Box3().setFromObject(m) });
+  }
+  // Build 4 walls; the door wall has a gap
+  const walls = ['+z', '+x', '-z', '-x']; // south, east, north, west
+  const doorSide = walls[doorDir];
+  function buildWall(side) {
+    const hasDoor = (side === doorSide);
+    if (side === '+z') {
+      const z = cz + HALF;
+      if (hasDoor) {
+        const sideW = (HALF * 2 - DOOR_W) / 2;
+        addPanel(cx - HALF + sideW / 2, HEIGHT / 2, z, sideW, HEIGHT, TH, true);
+        addPanel(cx + HALF - sideW / 2, HEIGHT / 2, z, sideW, HEIGHT, TH, true);
+        // Lintel above door
+        addPanel(cx, HEIGHT - 0.3, z, DOOR_W, 0.6, TH, false);
+      } else {
+        addPanel(cx, HEIGHT / 2, z, HALF * 2, HEIGHT, TH, true);
+      }
+    } else if (side === '-z') {
+      const z = cz - HALF;
+      if (hasDoor) {
+        const sideW = (HALF * 2 - DOOR_W) / 2;
+        addPanel(cx - HALF + sideW / 2, HEIGHT / 2, z, sideW, HEIGHT, TH, true);
+        addPanel(cx + HALF - sideW / 2, HEIGHT / 2, z, sideW, HEIGHT, TH, true);
+        addPanel(cx, HEIGHT - 0.3, z, DOOR_W, 0.6, TH, false);
+      } else {
+        addPanel(cx, HEIGHT / 2, z, HALF * 2, HEIGHT, TH, true);
+      }
+    } else if (side === '+x') {
+      const x = cx + HALF;
+      if (hasDoor) {
+        const sideD = (HALF * 2 - DOOR_W) / 2;
+        addPanel(x, HEIGHT / 2, cz - HALF + sideD / 2, TH, HEIGHT, sideD, true);
+        addPanel(x, HEIGHT / 2, cz + HALF - sideD / 2, TH, HEIGHT, sideD, true);
+        addPanel(x, HEIGHT - 0.3, cz, TH, 0.6, DOOR_W, false);
+      } else {
+        addPanel(x, HEIGHT / 2, cz, TH, HEIGHT, HALF * 2, true);
+      }
+    } else if (side === '-x') {
+      const x = cx - HALF;
+      if (hasDoor) {
+        const sideD = (HALF * 2 - DOOR_W) / 2;
+        addPanel(x, HEIGHT / 2, cz - HALF + sideD / 2, TH, HEIGHT, sideD, true);
+        addPanel(x, HEIGHT / 2, cz + HALF - sideD / 2, TH, HEIGHT, sideD, true);
+        addPanel(x, HEIGHT - 0.3, cz, TH, 0.6, DOOR_W, false);
+      } else {
+        addPanel(x, HEIGHT / 2, cz, TH, HEIGHT, HALF * 2, true);
+      }
+    }
+  }
+  walls.forEach(buildWall);
+
+  // Roof
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + TH * 2, 0.25, HALF * 2 + TH * 2), roofMat);
+  roof.position.set(cx, HEIGHT + 0.12, cz);
+  roof.castShadow = true;
+  scene.add(roof);
+  // Glowing green trim along the door (so player can spot it)
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(DOOR_W + 0.4, 0.15, 0.15), trimMat);
+  if (doorSide === '+z')      trim.position.set(cx, 0.08, cz + HALF + TH/2 + 0.05);
+  else if (doorSide === '-z') trim.position.set(cx, 0.08, cz - HALF - TH/2 - 0.05);
+  else if (doorSide === '+x') { trim.rotation.y = Math.PI/2; trim.position.set(cx + HALF + TH/2 + 0.05, 0.08, cz); }
+  else                          { trim.rotation.y = Math.PI/2; trim.position.set(cx - HALF - TH/2 - 0.05, 0.08, cz); }
+  scene.add(trim);
+
+  // Supply crate inside (glowing green)
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x66ff99, emissive: 0x00ff88, emissiveIntensity: 0.8, roughness: 0.4 });
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), crateMat);
+  crate.position.set(cx + 1.2, 0.35, cz);
+  crate.castShadow = true;
+  scene.add(crate);
+  // Glow beam above the crate
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 4, 8),
+    new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.45 })
+  );
+  beam.position.set(cx + 1.2, 2.3, cz);
+  scene.add(beam);
+
+  // Survivor inside (a simple humanoid figure)
+  const survivor = new THREE.Group();
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9a07a, roughness: 0.85 });
+  const clothMat = new THREE.MeshStandardMaterial({ color: 0x336688, roughness: 0.8 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.85 });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.8, 0.36), clothMat);
+  torso.position.y = 0.95;
+  torso.castShadow = true;
+  survivor.add(torso);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.36), skinMat);
+  head.position.y = 1.55;
+  head.castShadow = true;
+  survivor.add(head);
+  // Eyes
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x222244 });
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.04), eyeMat);
+  eyeL.position.set(-0.08, 1.6, 0.18);
+  survivor.add(eyeL);
+  const eyeR = eyeL.clone();
+  eyeR.position.x = 0.08;
+  survivor.add(eyeR);
+  // Arms hugging chest
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.6, 0.16), clothMat);
+  armL.position.set(-0.35, 0.95, 0.14);
+  armL.rotation.x = -0.4;
+  survivor.add(armL);
+  const armR = armL.clone();
+  armR.position.x = 0.35;
+  survivor.add(armR);
+  // Legs
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.6, 0.20), pantsMat);
+  legL.position.set(-0.12, 0.3, 0);
+  survivor.add(legL);
+  const legR = legL.clone();
+  legR.position.x = 0.12;
+  survivor.add(legR);
+
+  survivor.position.set(cx - 1.5, 0, cz - 0.5);
+  survivor.rotation.y = Math.atan2(1.2 - (-1.5), 0); // face the crate
+  scene.add(survivor);
+
+  pickups.push({
+    mesh: crate, type: 'supply', spinPhase: 0, weaponKey: null,
+    survivor: survivor, survivorPos: survivor.position.clone()
+  });
+}
+
+makeSafehouse(-46, 38, 0); // door south
+makeSafehouse(46, 38, 0);
+makeSafehouse(-46, -38, 2); // door north
+makeSafehouse(60, -28, 3); // door west
+
+// === Vehicle (drivable car) state ===
+let inVehicle = false;
+let currentVehicle = null;
+let nearestCar = null;
+let nearestInteractCrate = null;
+let vehicleSpeed = 0;
+let vehicleHeading = 0;
+const interactPromptEl = document.getElementById('interact-prompt');
+const driveHudEl = document.getElementById('drive-hud');
+const driveSpeedEl = document.getElementById('drive-speed');
+const driveHpEl = document.getElementById('drive-hp');
+const driveHpFillEl = document.getElementById('drive-hpfill');
+
+function enterVehicle(car) {
+  inVehicle = true;
+  currentVehicle = car;
+  vehicleHeading = car.mesh.rotation.y;
+  vehicleSpeed = 0;
+  weaponGroup.visible = false;
+  driveHudEl.classList.remove('hidden');
+  interactPromptEl.classList.add('hidden');
+  addKillFeed('Hopped in a car!', 'holy');
+  playTone(440, 0.10, 'square', 0.12);
+  playTone(660, 0.10, 'square', 0.10);
+}
+function exitVehicle() {
+  if (!currentVehicle) return;
+  const offX = Math.cos(vehicleHeading + Math.PI / 2) * 2.4;
+  const offZ = -Math.sin(vehicleHeading + Math.PI / 2) * 2.4;
+  player.pos.set(
+    currentVehicle.mesh.position.x + offX,
+    PLAYER_HEIGHT,
+    currentVehicle.mesh.position.z + offZ
+  );
+  // Clamp player inside boundary
+  if (Math.abs(player.pos.x) > HW - 1) player.pos.x = Math.sign(player.pos.x) * (HW - 1);
+  if (Math.abs(player.pos.z) > HW - 1) player.pos.z = Math.sign(player.pos.z) * (HW - 1);
+  inVehicle = false;
+  currentVehicle = null;
+  vehicleSpeed = 0;
+  weaponGroup.visible = true;
+  driveHudEl.classList.add('hidden');
+  playTone(300, 0.10, 'square', 0.10);
+}
+function damageVehicle(dmg) {
+  if (!currentVehicle) return;
+  currentVehicle.hp = Math.max(0, currentVehicle.hp - dmg);
+  if (currentVehicle.hp <= 0) {
+    // Explode
+    const pos = currentVehicle.mesh.position.clone();
+    pos.y = 0.8;
+    for (let i = 0; i < 5; i++) spawnBloodBurst(pos, 0xff7733);
+    for (let i = 0; i < 3; i++) spawnBloodBurst(pos, 0xffcc44);
+    playTone(60, 0.5, 'sawtooth', 0.25);
+    playTone(120, 0.4, 'sawtooth', 0.20);
+    addShake(0.32);
+    damagePlayer(40);
+    // Kill nearby zombies (boom radius)
+    for (const z of zombies) {
+      if (z.dead || z.transformed) continue;
+      if (z.mesh.position.distanceTo(pos) < 6) {
+        spawnBloodBurst(z.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)));
+        z.die();
+      }
+    }
+    exitVehicle();
+  }
+}
+
+// === Tag abandoned cars as drivable ===
+for (const o of obstacles) {
+  // Only the abandoned cars are top-level Groups with multiple children
+  // and are at ground level — detect by box height ~1.7 and not building
+  // (existing cars are pushed with a Group; they're the only ones with no
+  // explicit isCar tag). We'll mark every group with a chassis-sized box.
+}
+// Cleaner: re-walk obstacles, mark ones whose mesh.children.length >= 5 and
+// whose box width is ~1.8 (car-shaped)
+for (const o of obstacles) {
+  if (o.isCar) continue;
+  const size = new THREE.Vector3();
+  o.box.getSize(size);
+  // Cars: ~1.8 x ~1.5 x ~4.2
+  if (size.x > 1.6 && size.x < 2.2 && size.z > 3.5 && size.z < 4.8 && size.y < 2.0) {
+    o.isCar = true;
+    o.hp = 100;
+  }
+  // Or rotated 90deg
+  if (!o.isCar && size.z > 1.6 && size.z < 2.2 && size.x > 3.5 && size.x < 4.8 && size.y < 2.0) {
+    o.isCar = true;
+    o.hp = 100;
+  }
+}
+
 // --- Flow-field pathfinding (BFS from player on a coarse grid) ---
 const CELL_SIZE = 4;
 const GRID_W = Math.ceil((HW * 2) / CELL_SIZE);
@@ -1256,12 +1680,14 @@ let currentWeaponKey = 'pistol';
 function weaponDamage(key) {
   const w = WEAPONS[key];
   const lv = inventory[key].level;
-  return w.damage + (lv - 1) * Math.round(w.damage * 0.4);
+  const base = w.damage + (lv - 1) * Math.round(w.damage * 0.4);
+  return Math.round(base * playerStats.dmgMul);
 }
 function weaponMag(key) {
   const w = WEAPONS[key];
   const lv = inventory[key].level;
-  return w.mag + (lv - 1) * Math.ceil(w.mag * 0.25);
+  const base = w.mag + (lv - 1) * Math.ceil(w.mag * 0.25);
+  return Math.max(1, Math.round(base * playerStats.magMul));
 }
 
 const weaponGroup = new THREE.Group();
@@ -1510,6 +1936,10 @@ addEventListener('keydown', e => {
   if (e.code === 'Digit2') switchWeapon('shotgun');
   if (e.code === 'Digit3') switchWeapon('smg');
   if (e.code === 'Digit4') switchWeapon('antidote');
+  if (e.code === 'KeyE') {
+    if (inVehicle) exitVehicle();
+    else if (nearestCar) enterVehicle(nearestCar);
+  }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('mousedown', e => { if (e.button === 0) mouseDown = true; });
@@ -1937,8 +2367,12 @@ class Zombie {
     this.mesh.position.y = 0.3;
     setTimeout(() => { scene.remove(this.mesh); }, 1500);
     player.kills++;
-    const scoreAdd = (10 + this.tier * 10) * (this.subtype === 'runner' ? 2 : 1);
+    const rawScore = (10 + this.tier * 10) * (this.subtype === 'runner' ? 2 : 1);
+    const scoreAdd = Math.round(rawScore * playerStats.scoreMul);
     player.score += scoreAdd;
+    if (playerStats.killHeal > 0 && player.alive) {
+      player.hp = Math.min(player.hpMax, player.hp + playerStats.killHeal);
+    }
     playTone(160, 0.2, 'sawtooth', 0.1);
     const deathPos = this.mesh.position.clone();
     deathPos.y += 1.2 * this.scale;
@@ -1950,7 +2384,7 @@ class Zombie {
     addKillFeed('Killed ' + nm + ' +' + scoreAdd, this.tier === 3 ? 'boss' : null);
     recordKill();
     const r = Math.random();
-    if (this.tier === 3 || r < 0.06) spawnPowerupPickup(this.mesh.position.clone());
+    if (this.tier === 3 || r < playerStats.powerupDropChance) spawnPowerupPickup(this.mesh.position.clone());
     else if (r < 0.26) spawnPickup(this.mesh.position.clone(), 'health');
     else if (r < 0.50) spawnPickup(this.mesh.position.clone(), 'ammo');
   }
@@ -2074,7 +2508,7 @@ function shoot() {
   }
 
   inv.ammoInMag--;
-  player.fireCooldown = w.fireRate;
+  player.fireCooldown = w.fireRate * playerStats.fireRateMul;
   player.recoil = Math.min(player.recoil + 0.06, 0.18);
   w.sound();
   muzzleFlash();
@@ -2083,6 +2517,7 @@ function shoot() {
   const origin = camera.getWorldPosition(new THREE.Vector3());
   const baseDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
   const dmgMul = powerups.dmg.active > 0 ? powerups.dmg.mul : 1;
+  const maxHits = 1 + playerStats.pierceBonus;
   for (let p = 0; p < w.pellets; p++) {
     const dir = baseDir.clone();
     dir.x += (Math.random() - 0.5) * w.spread;
@@ -2090,42 +2525,57 @@ function shoot() {
     dir.z += (Math.random() - 0.5) * w.spread;
     dir.normalize();
 
-    raycaster.set(origin, dir);
-    raycaster.far = w.range;
+    let curOrigin = origin.clone();
+    let remainingRange = w.range;
+    const hitSet = new Set();
+    let endPoint = null;
+    let firstHitPos = null, firstKilled = false, firstDmg = 0;
 
-    let hitDist = w.range;
-    let hitZombie = null;
-    for (const z of zombies) {
-      if (z.dead || z.transformed) continue;
-      const sphereCenter = z.mesh.position.clone();
-      sphereCenter.y += 1.3 * z.scale;
-      const sphereR = 0.95 * z.scale;
-      const v = sphereCenter.clone().sub(origin);
-      const proj = v.dot(dir);
-      if (proj < 0) continue;
-      const closestDist2 = v.lengthSq() - proj * proj;
-      if (closestDist2 < sphereR * sphereR && proj < hitDist) {
-        hitDist = proj;
-        hitZombie = z;
+    for (let h = 0; h < maxHits; h++) {
+      let hitDist = remainingRange;
+      let hitZombie = null;
+      for (const z of zombies) {
+        if (z.dead || z.transformed || hitSet.has(z)) continue;
+        const sphereCenter = z.mesh.position.clone();
+        sphereCenter.y += 1.3 * z.scale;
+        const sphereR = 0.95 * z.scale;
+        const v = sphereCenter.clone().sub(curOrigin);
+        const proj = v.dot(dir);
+        if (proj < 0) continue;
+        const closestDist2 = v.lengthSq() - proj * proj;
+        if (closestDist2 < sphereR * sphereR && proj < hitDist) {
+          hitDist = proj;
+          hitZombie = z;
+        }
       }
-    }
-    for (const o of obstacles) {
-      const t = rayBoxIntersect(origin, dir, o.box);
-      if (t !== null && t < hitDist) {
-        hitDist = t;
-        hitZombie = null;
+      for (const o of obstacles) {
+        // Don't block ray with the car you're driving
+        if (inVehicle && o === currentVehicle) continue;
+        const t = rayBoxIntersect(curOrigin, dir, o.box);
+        if (t !== null && t < hitDist) {
+          hitDist = t;
+          hitZombie = null;
+        }
       }
-    }
-    const endPoint = origin.clone().add(dir.clone().multiplyScalar(Math.min(hitDist, w.range)));
-    addTracer(origin.clone().add(dir.clone().multiplyScalar(0.6)), endPoint, currentWeaponKey === 'shotgun' ? 0xffaa66 : 0xffff66);
-    if (hitZombie) {
+      if (!hitZombie) {
+        endPoint = curOrigin.clone().add(dir.clone().multiplyScalar(Math.min(hitDist, remainingRange)));
+        break;
+      }
+      hitSet.add(hitZombie);
+      const hitPos = curOrigin.clone().add(dir.clone().multiplyScalar(hitDist));
       const dmgVal = Math.round(weaponDamage(currentWeaponKey) * dmgMul);
       const killed = hitZombie.takeDamage(dmgVal);
       if (killed) showHitMarker();
-      const hitPos = origin.clone().add(dir.clone().multiplyScalar(hitDist));
       spawnBloodBurst(hitPos);
-      if (p === 0) spawnDmgNumber(hitPos, killed ? '-' + dmgVal + ' KILL' : '-' + dmgVal, killed);
+      if (h === 0) { firstHitPos = hitPos; firstKilled = killed; firstDmg = dmgVal; }
+      curOrigin = hitPos.clone().add(dir.clone().multiplyScalar(0.5));
+      remainingRange -= hitDist + 0.5;
+      if (remainingRange <= 0) { endPoint = curOrigin.clone(); break; }
+      if (h === maxHits - 1) endPoint = curOrigin.clone();
     }
+    if (!endPoint) endPoint = curOrigin.clone();
+    addTracer(origin.clone().add(dir.clone().multiplyScalar(0.6)), endPoint, currentWeaponKey === 'shotgun' ? 0xffaa66 : 0xffff66);
+    if (p === 0 && firstHitPos) spawnDmgNumber(firstHitPos, firstKilled ? '-' + firstDmg + ' KILL' : '-' + firstDmg, firstKilled);
   }
 
   updateHud();
@@ -2205,6 +2655,7 @@ function antidoteExplode(pos) {
 
 function damagePlayer(amount) {
   if (!player.alive) return;
+  amount *= playerStats.dmgTakenMul;
   if (powerups.shield.active > 0) {
     addShake(amount * 0.005);
     return;
@@ -2285,13 +2736,14 @@ function tryReload() {
   if (player.reloading > 0) return;
   const cap = weaponMag(currentWeaponKey);
   if (inv.ammoInMag >= cap) return;
+  const reloadTime = w.reload * playerStats.reloadMul;
   if (currentWeaponKey === 'pistol') {
-    player.reloading = w.reload;
+    player.reloading = reloadTime;
     showMessage('Reloading...', 800);
     return;
   }
   if (inv.reserve <= 0) { showMessage('No reserve ammo!', 600); return; }
-  player.reloading = w.reload;
+  player.reloading = reloadTime;
   showMessage('Reloading...', 800);
 }
 
@@ -2346,6 +2798,10 @@ function startWave(n) {
     showMessage('Wave ' + n + ' - ' + count + ' incoming', 2200);
     playTone(220, 0.4, 'square', 0.12);
     setTimeout(() => playTone(180, 0.4, 'square', 0.12), 200);
+  }
+  if (playerStats.startShield) {
+    powerups.shield.active = Math.max(powerups.shield.active, 8);
+    refreshPowerupBar();
   }
 }
 
@@ -2429,6 +2885,33 @@ function checkPickups(dt) {
         playTone(540, 0.1, 'square', 0.1);
       } else if (p.type === 'powerup') {
         activatePowerup(p.powerupType);
+      } else if (p.type === 'supply') {
+        // Big safehouse supply crate: full heal, refill all reserves,
+        // bump every owned weapon's level, +500 score, +1 rescued survivor
+        player.hp = player.hpMax;
+        for (const k of ['shotgun', 'smg']) {
+          if (inventory[k].has) {
+            if (inventory[k].level < 5) inventory[k].level++;
+            inventory[k].reserve += WEAPONS[k].mag * 4;
+            inventory[k].ammoInMag = weaponMag(k);
+          }
+        }
+        // Pistol gets the level bump even though it has infinite reserve
+        if (inventory.pistol.level < 5) inventory.pistol.level++;
+        inventory.pistol.ammoInMag = weaponMag('pistol');
+        // Mark survivor as rescued: lift the body up and out
+        if (p.survivor) {
+          playerStats.rescued++;
+          // Animate survivor "walking away" by removing them after a moment
+          scene.remove(p.survivor);
+        }
+        const bonus = Math.round(500 * playerStats.scoreMul);
+        player.score += bonus;
+        showMessage('+SURVIVOR RESCUED  +' + bonus + '  weapons +1', 3000);
+        addKillFeed('Rescued a survivor!', 'holy');
+        playTone(660, 0.18, 'sine', 0.18);
+        setTimeout(() => playTone(990, 0.22, 'sine', 0.18), 120);
+        setTimeout(() => playTone(1320, 0.25, 'sine', 0.18), 260);
       }
       scene.remove(p.mesh);
       pickups.splice(i, 1);
@@ -2884,17 +3367,20 @@ function endGame(victory) {
   document.exitPointerLock();
   const overlay = document.getElementById('overlay');
   overlay.classList.remove('hidden');
+  const survivorLine = playerStats.rescued > 0
+    ? ' &nbsp; <b>Survivors saved:</b> ' + playerStats.rescued
+    : '';
   if (victory) {
     overlay.innerHTML = '<h1 style="color:#ffe066">DHAUWIE WINS!</h1>' +
       '<h2>The world is reborn</h2>' +
       '<div class="story">You hurled the Antidote Grenade into the horde. The infected fell to their knees, robes of light enveloping them. Where there were once zombies - now wander a thousand peaceful Jesuses.<br><br>' +
-      '<b>Score:</b> ' + player.score + ' &nbsp; <b>Kills:</b> ' + player.kills + ' &nbsp; <b>Wave:</b> ' + currentWave + '</div>' +
+      '<b>Score:</b> ' + player.score + ' &nbsp; <b>Kills:</b> ' + player.kills + ' &nbsp; <b>Wave:</b> ' + currentWave + survivorLine + '</div>' +
       '<button onclick="location.reload()">PLAY AGAIN</button>';
   } else {
     overlay.innerHTML = '<h1 style="color:#ff4444">DHAUWIE FELL</h1>' +
       '<h2>Humanity is gone</h2>' +
       '<div class="story">The horde overwhelmed the last survivor. Without Dhauwie, the antidote sits untouched, and the world remains a wasteland of moans...<br><br>' +
-      '<b>Score:</b> ' + player.score + ' &nbsp; <b>Kills:</b> ' + player.kills + ' &nbsp; <b>Wave:</b> ' + currentWave + '</div>' +
+      '<b>Score:</b> ' + player.score + ' &nbsp; <b>Kills:</b> ' + player.kills + ' &nbsp; <b>Wave:</b> ' + currentWave + survivorLine + '</div>' +
       '<button onclick="location.reload()">TRY AGAIN</button>';
   }
 }
@@ -2904,66 +3390,185 @@ document.getElementById('start-btn').addEventListener('touchstart', e => { e.pre
 
 function update(dt) {
   if (!gameStarted || gameOver) return;
-
-  const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-  const right   = new THREE.Vector3( Math.cos(player.yaw), 0, -Math.sin(player.yaw));
-  const moveDir = new THREE.Vector3();
-  if (keys['KeyW']) moveDir.add(forward);
-  if (keys['KeyS']) moveDir.sub(forward);
-  if (keys['KeyD']) moveDir.add(right);
-  if (keys['KeyA']) moveDir.sub(right);
-  if (Math.abs(touchMove.x) > 0.05 || Math.abs(touchMove.y) > 0.05) {
-    moveDir.add(forward.clone().multiplyScalar(-touchMove.y));
-    moveDir.add(right.clone().multiplyScalar(touchMove.x));
+  if (paused) {
+    // Still rotate decorative things, keep the world alive
+    drawMinimap();
+    return;
   }
-  if (moveDir.lengthSq() > 0) moveDir.normalize();
-  let speed = MOVE_SPEED * (keys['ShiftLeft'] || keys['ShiftRight'] ? SPRINT_MULT : 1);
-  if (powerups.speed.active > 0) speed *= powerups.speed.mul;
-  const delta = new THREE.Vector3(moveDir.x * speed * dt, 0, moveDir.z * speed * dt);
 
-  if ((keys['Space']) && player.onGround) {
-    player.vel.y = JUMP_VELOCITY;
-    player.onGround = false;
+  if (inVehicle) {
+    // === Vehicle drive update ===
+    let accel = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
+    let steer = (keys['KeyA'] ? 1 : 0) - (keys['KeyD'] ? 1 : 0);
+    if (Math.abs(touchMove.y) > 0.05) accel = -touchMove.y;
+    if (Math.abs(touchMove.x) > 0.05) steer = -touchMove.x;
+
+    vehicleSpeed += accel * 22 * dt;
+    // Drag
+    const dragMul = (Math.abs(accel) < 0.01) ? (1 - 1.2 * dt) : (1 - 0.35 * dt);
+    vehicleSpeed *= dragMul;
+    const MAX_SPEED = 30, MAX_REV = -12;
+    if (vehicleSpeed > MAX_SPEED) vehicleSpeed = MAX_SPEED;
+    if (vehicleSpeed < MAX_REV)   vehicleSpeed = MAX_REV;
+    // Steering scales with speed; reverses when in reverse
+    const steerEffect = Math.min(1, Math.abs(vehicleSpeed) / 4) * (vehicleSpeed >= 0 ? 1 : -1);
+    vehicleHeading += steer * 1.7 * dt * steerEffect;
+
+    // Move car
+    const dir = new THREE.Vector3(-Math.sin(vehicleHeading), 0, -Math.cos(vehicleHeading));
+    const desired = currentVehicle.mesh.position.clone().add(dir.clone().multiplyScalar(vehicleSpeed * dt));
+
+    // Clamp to world
+    if (Math.abs(desired.x) > HW - 3) { desired.x = Math.sign(desired.x) * (HW - 3); vehicleSpeed *= -0.5; }
+    if (Math.abs(desired.z) > HW - 3) { desired.z = Math.sign(desired.z) * (HW - 3); vehicleSpeed *= -0.5; }
+
+    let crashed = false;
+    for (const o of obstacles) {
+      if (o === currentVehicle) continue;
+      // Skip other cars too (push them later) — actually treat them as walls for now
+      if (o.box.distanceToPoint(desired) < 1.7) {
+        if (Math.abs(vehicleSpeed) > 6) {
+          damageVehicle(Math.abs(vehicleSpeed) * 0.6);
+          addShake(0.18);
+        }
+        vehicleSpeed *= -0.3;
+        crashed = true;
+        break;
+      }
+    }
+    if (!crashed) currentVehicle.mesh.position.copy(desired);
+    currentVehicle.mesh.rotation.y = vehicleHeading;
+    currentVehicle.box.setFromObject(currentVehicle.mesh);
+
+    // Ram zombies
+    if (Math.abs(vehicleSpeed) > 5) {
+      for (const z of zombies) {
+        if (z.dead || z.transformed) continue;
+        const d = Math.hypot(z.mesh.position.x - currentVehicle.mesh.position.x, z.mesh.position.z - currentVehicle.mesh.position.z);
+        if (d < 2.6) {
+          const pos = z.mesh.position.clone().add(new THREE.Vector3(0, 1.2 * z.scale, 0));
+          spawnBloodBurst(pos);
+          spawnBloodBurst(pos);
+          z.die();
+          damageVehicle(2);
+          addShake(0.06);
+        }
+      }
+    }
+
+    // Mirror player pos to car for HUD / audio
+    player.pos.x = currentVehicle.mesh.position.x;
+    player.pos.z = currentVehicle.mesh.position.z;
+
+    // Camera: first-person from driver's seat
+    const cabHt = 1.35;
+    const camOffsetVec = new THREE.Vector3(0, cabHt, 0).add(
+      new THREE.Vector3(0.0, 0, -0.15).applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicleHeading)
+    );
+    camera.position.copy(currentVehicle.mesh.position).add(camOffsetVec);
+    if (shakeAmt > 0.001) {
+      camera.position.x += (Math.random() - 0.5) * shakeAmt;
+      camera.position.y += (Math.random() - 0.5) * shakeAmt;
+      camera.position.z += (Math.random() - 0.5) * shakeAmt;
+      shakeAmt *= Math.pow(0.0008, dt);
+    }
+    camera.rotation.order = 'YXZ';
+    // Look stays free (mouse), but yaw is biased toward vehicle direction
+    camera.rotation.y = vehicleHeading + (player.yaw - (player._lastVehicleYaw || vehicleHeading)) * 0; // lock yaw to vehicle
+    camera.rotation.x = player.pitch;
+    player.yaw = vehicleHeading; // keep player.yaw synced so mouse delta works on exit
+
+    // Flashlight forward
+    flashlight.position.copy(camera.position);
+    const fdir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    flashlight.target.position.copy(camera.position).add(fdir);
+
+    // Drive HUD update
+    const kmh = Math.round(Math.abs(vehicleSpeed) * 3.6);
+    driveSpeedEl.textContent = kmh;
+    driveHpEl.textContent = Math.round(currentVehicle.hp);
+    driveHpFillEl.style.width = Math.max(0, currentVehicle.hp) + '%';
+  } else {
+    // === On-foot update ===
+    const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    const right   = new THREE.Vector3( Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    const moveDir = new THREE.Vector3();
+    if (keys['KeyW']) moveDir.add(forward);
+    if (keys['KeyS']) moveDir.sub(forward);
+    if (keys['KeyD']) moveDir.add(right);
+    if (keys['KeyA']) moveDir.sub(right);
+    if (Math.abs(touchMove.x) > 0.05 || Math.abs(touchMove.y) > 0.05) {
+      moveDir.add(forward.clone().multiplyScalar(-touchMove.y));
+      moveDir.add(right.clone().multiplyScalar(touchMove.x));
+    }
+    if (moveDir.lengthSq() > 0) moveDir.normalize();
+    let speed = MOVE_SPEED * (keys['ShiftLeft'] || keys['ShiftRight'] ? SPRINT_MULT : 1);
+    if (powerups.speed.active > 0) speed *= powerups.speed.mul;
+    speed *= playerStats.speedMul;
+    const delta = new THREE.Vector3(moveDir.x * speed * dt, 0, moveDir.z * speed * dt);
+
+    if ((keys['Space']) && player.onGround) {
+      player.vel.y = JUMP_VELOCITY;
+      player.onGround = false;
+    }
+    player.vel.y -= GRAVITY * dt;
+    delta.y = player.vel.y * dt;
+
+    tryMove(delta);
+
+    const moving = moveDir.lengthSq() > 0 && player.onGround;
+    if (moving) player.weaponBob += dt * (keys['ShiftLeft'] ? 12 : 8);
+    if (weaponMesh) {
+      weaponMesh.position.x = 0.22 + Math.sin(player.weaponBob) * 0.012;
+      weaponMesh.position.y = -0.22 + Math.abs(Math.sin(player.weaponBob)) * 0.012;
+      weaponMesh.position.z = -0.4 + player.recoil;
+      weaponMesh.rotation.x = -player.recoil * 1.5;
+    }
+    player.recoil *= Math.pow(0.001, dt);
+
+    if (moveDir.lengthSq() > 0 && player.onGround) {
+      footstepTimer -= dt;
+      if (footstepTimer <= 0) {
+        footstep();
+        footstepTimer = 0.42 / (keys['ShiftLeft'] || keys['ShiftRight'] || powerups.speed.active > 0 ? 1.5 : 1);
+      }
+    }
+
+    camera.position.copy(player.pos);
+    if (shakeAmt > 0.001) {
+      camera.position.x += (Math.random() - 0.5) * shakeAmt;
+      camera.position.y += (Math.random() - 0.5) * shakeAmt;
+      camera.position.z += (Math.random() - 0.5) * shakeAmt;
+      shakeAmt *= Math.pow(0.0008, dt);
+    }
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = player.yaw;
+    camera.rotation.x = player.pitch;
+
+    flashlight.position.copy(camera.position);
+    const fdir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    flashlight.target.position.copy(camera.position).add(fdir);
+
+    if (mouseDown) shoot();
   }
-  player.vel.y -= GRAVITY * dt;
-  delta.y = player.vel.y * dt;
 
-  tryMove(delta);
-
-  const moving = moveDir.lengthSq() > 0 && player.onGround;
-  if (moving) player.weaponBob += dt * (keys['ShiftLeft'] ? 12 : 8);
-  if (weaponMesh) {
-    weaponMesh.position.x = 0.22 + Math.sin(player.weaponBob) * 0.012;
-    weaponMesh.position.y = -0.22 + Math.abs(Math.sin(player.weaponBob)) * 0.012;
-    weaponMesh.position.z = -0.4 + player.recoil;
-    weaponMesh.rotation.x = -player.recoil * 1.5;
-  }
-  player.recoil *= Math.pow(0.001, dt);
-
-  if (moveDir.lengthSq() > 0 && player.onGround) {
-    footstepTimer -= dt;
-    if (footstepTimer <= 0) {
-      footstep();
-      footstepTimer = 0.42 / (keys['ShiftLeft'] || keys['ShiftRight'] || powerups.speed.active > 0 ? 1.5 : 1);
+  // Find nearest interactable car (on foot only)
+  if (!inVehicle) {
+    nearestCar = null;
+    let bestD = 3.2;
+    for (const o of obstacles) {
+      if (!o.isCar) continue;
+      const d = Math.hypot(player.pos.x - o.mesh.position.x, player.pos.z - o.mesh.position.z);
+      if (d < bestD) { bestD = d; nearestCar = o; }
+    }
+    if (nearestCar) {
+      interactPromptEl.textContent = 'Press [E] to drive  (Car HP ' + Math.round(nearestCar.hp) + ')';
+      interactPromptEl.classList.remove('hidden');
+    } else {
+      interactPromptEl.classList.add('hidden');
     }
   }
 
-  camera.position.copy(player.pos);
-  if (shakeAmt > 0.001) {
-    camera.position.x += (Math.random() - 0.5) * shakeAmt;
-    camera.position.y += (Math.random() - 0.5) * shakeAmt;
-    camera.position.z += (Math.random() - 0.5) * shakeAmt;
-    shakeAmt *= Math.pow(0.0008, dt);
-  }
-  camera.rotation.order = 'YXZ';
-  camera.rotation.y = player.yaw;
-  camera.rotation.x = player.pitch;
-
-  flashlight.position.copy(camera.position);
-  const fdir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  flashlight.target.position.copy(camera.position).add(fdir);
-
-  if (mouseDown) shoot();
   player.fireCooldown -= dt;
   if (player.reloading > 0) {
     player.reloading -= dt;
@@ -2979,7 +3584,7 @@ function update(dt) {
     const aliveCount = zombies.filter(z => !z.dead && !z.transformed).length;
     if (waveSpawnQueue <= 0 && aliveCount === 0) {
       waveActive = false;
-      intermissionTimer = 4;
+      intermissionTimer = 5;
       showMessage('Wave ' + currentWave + ' cleared!', 2000);
       player.hp = Math.min(player.hpMax, player.hp + 20);
       if (Math.random() < 0.7) {
@@ -2987,10 +3592,15 @@ function update(dt) {
         spawnPickup(new THREE.Vector3(player.pos.x + Math.cos(a) * 5, 0, player.pos.z + Math.sin(a) * 5),
                     Math.random() < 0.5 ? 'health' : 'ammo');
       }
+      // Show perk picker after a short delay (1.4s)
+      const clearedWave = currentWave;
+      setTimeout(() => {
+        if (!gameOver) showPerkPicker(clearedWave);
+      }, 1400);
     }
   } else {
     intermissionTimer -= dt;
-    if (intermissionTimer <= 0) startWave(currentWave + 1);
+    if (intermissionTimer <= 0 && !paused) startWave(currentWave + 1);
   }
 
   flowFieldTimer -= dt;
