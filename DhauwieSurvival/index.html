@@ -640,6 +640,7 @@
     padding: 6px 10px; font: 12px monospace;
     text-align: center; z-index: 99;
     border-bottom: 1px solid #00ff88;
+    pointer-events: none;
   }
   #boot-status.ok { background: #042; color: #88ffaa; }
   #boot-status.err { background: #c00; color: #fff; }
@@ -2037,13 +2038,23 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('mousedown', e => { if (e.button === 0) mouseDown = true; });
 addEventListener('mouseup',   e => { if (e.button === 0) mouseDown = false; });
 
-const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-if (isTouch) document.body.classList.add('touch');
+// Lazy touch detection: a touchscreen laptop reports maxTouchPoints > 0
+// even when the user is on mouse+keyboard, which would block pointer lock.
+// Start in mouse mode and switch to touch mode only after a real touch.
+let isTouch = false;
+function enableTouchMode() {
+  if (isTouch) return;
+  isTouch = true;
+  document.body.classList.add('touch');
+}
+window.addEventListener('touchstart', enableTouchMode, { capture: true, passive: true });
 
 canvas.addEventListener('click', () => {
-  if (isTouch) return;
+  // Always try to lock when the user clicks the canvas after game start.
+  // On a pure touch device this silently no-ops; on mouse / hybrid devices
+  // this is the user's explicit signal to capture the cursor.
   if (gameStarted && !gameOver && document.pointerLockElement !== canvas) {
-    canvas.requestPointerLock();
+    try { canvas.requestPointerLock(); } catch (_) {}
   }
 });
 
