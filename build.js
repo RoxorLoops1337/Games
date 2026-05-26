@@ -29,6 +29,7 @@ const STATIC_PATHS = [
   'decktest',
   'pitchdeck',
   'DhauwieSurvival',
+  'Carnegiendon',
   'loop_jam',
   'tools',
 ];
