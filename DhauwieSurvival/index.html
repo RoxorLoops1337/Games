@@ -201,7 +201,8 @@
     letter-spacing: 2px;
   }
   #overlay button:hover { background: #44ffaa; }
-  #overlay button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  #overlay button:active { background: #ffcc66; transform: scale(0.97); }
+  #overlay button { touch-action: manipulation; }
   .hidden { display: none !important; }
   .pulse { animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
@@ -612,7 +613,7 @@
     </div>
   </div>
   <div id="overlay-foot">
-    <button id="start-btn">BEGIN</button>
+    <button id="start-btn" onclick="window.__startDhauwie && window.__startDhauwie()">BEGIN</button>
     <div class="hint" style="font-size:12px;color:#666;">Desktop: click in-game for mouse look. Mobile: rotate to landscape.</div>
   </div>
 </div>
@@ -3411,31 +3412,17 @@ function endGame(victory) {
   again.addEventListener('touchstart', e => { e.preventDefault(); reload(); }, { passive: false });
 }
 
-let _startedOnce = false;
-function safeStartGame(e) {
-  if (_startedOnce) return;
-  _startedOnce = true;
-  if (e && e.preventDefault) { try { e.preventDefault(); } catch (_) {} }
-  try {
-    startGame();
-  } catch (err) {
-    _startedOnce = false;
-    alert('Start failed: ' + (err && err.message ? err.message : err));
-    throw err;
+// Expose startGame globally so the inline onclick on #start-btn can call it
+// even though the rest of the script lives inside a module.
+window.__startDhauwie = startGame;
+// Also bind via JS directly to the button as a redundant safety net.
+{
+  const btn = document.getElementById('start-btn');
+  if (btn) {
+    btn.addEventListener('click', () => startGame());
+    btn.addEventListener('touchend', e => { e.preventDefault(); startGame(); }, { passive: false });
   }
 }
-// Event delegation: any tap/click on the start button (or inside it) triggers
-// startGame. Works for click, touch, and pointer events across browsers.
-function isStartTarget(t) {
-  while (t) {
-    if (t.id === 'start-btn') return true;
-    t = t.parentNode;
-  }
-  return false;
-}
-document.addEventListener('click',      e => { if (isStartTarget(e.target)) safeStartGame(e); });
-document.addEventListener('touchend',   e => { if (isStartTarget(e.target)) safeStartGame(e); }, { passive: false });
-document.addEventListener('pointerup',  e => { if (isStartTarget(e.target)) safeStartGame(e); });
 
 function update(dt) {
   if (!gameStarted || gameOver) return;
