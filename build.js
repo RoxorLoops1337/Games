@@ -32,6 +32,7 @@ const STATIC_PATHS = [
   'Carnegiendon',
   'loop_jam',
   'gamedevloop',
+  'verb_collector',
   'tools',
 ];
 

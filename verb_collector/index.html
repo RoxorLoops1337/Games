@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verb Collector</title>
+<style>
+  :root {
+    --paper: #f4ecd8;
+    --ink: #1f1a14;
+    --ink-soft: #6b5d49;
+    --rule: #c9bda1;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Courier New', ui-monospace, monospace;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+    box-sizing: border-box;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 2rem;
+    letter-spacing: 6px;
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    color: var(--ink-soft);
+    letter-spacing: 2px;
+    margin-bottom: 32px;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+  }
+  .rule {
+    width: 60%;
+    max-width: 480px;
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 24px 0;
+  }
+  .sentence {
+    font-size: 1.1rem;
+    max-width: 520px;
+    text-align: center;
+    line-height: 1.6;
+    margin: 0 0 32px 0;
+  }
+  .sentence em {
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+  .status {
+    color: var(--ink-soft);
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  nav {
+    margin-top: 48px;
+  }
+  nav a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--ink);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    padding-bottom: 2px;
+  }
+  nav a:hover { color: var(--ink-soft); border-color: var(--ink-soft); }
+</style>
+</head>
+<body>
+  <h1>Verb Collector</h1>
+  <div class="subtitle">A roguelike deckbuilder of sentences</div>
+  <hr class="rule">
+  <p class="sentence">THE HERO ENTERED THE FOREST AND <em>___</em></p>
+  <div class="status">v1 in development</div>
+  <nav><a href="/">← back to games</a></nav>
+</body>
+</html>
