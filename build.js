@@ -36,11 +36,15 @@ const STATIC_PATHS = [
   'tools',
 ];
 
-// JSX entry points to bundle. Output paths are relative to dist/.
+// JSX/TSX entry points to bundle. Output paths are relative to dist/.
 const BUNDLES = [
   {
     entryPoints: [path.join('beatbox_story', 'main.jsx')],
     outfile: path.join(DIST, 'beatbox_story', 'beatbox-story.bundle.js'),
+  },
+  {
+    entryPoints: [path.join('verb_collector', 'main.tsx')],
+    outfile: path.join(DIST, 'verb_collector', 'verb-collector.bundle.js'),
   },
 ];
 
@@ -50,7 +54,7 @@ const buildOpts = (target) => ({
   bundle: true,
   format: 'iife',
   target: ['es2020'],
-  loader: { '.jsx': 'jsx', '.js': 'jsx' },
+  loader: { '.jsx': 'jsx', '.js': 'jsx', '.ts': 'ts', '.tsx': 'tsx' },
   jsx: 'transform',
   minify: !watch,
   sourcemap: watch ? 'inline' : false,
