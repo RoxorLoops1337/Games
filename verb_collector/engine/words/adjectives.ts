@@ -8,7 +8,7 @@ export const ADJECTIVES: Record<AdjectiveId, Adjective> = {
   WEAK:    { kind: 'adjective', id: 'WEAK',    category: 'state', timer: 'permanent', opposite: 'STRONG',
     desc: '-50% damage dealt.' },
   STRONG:  { kind: 'adjective', id: 'STRONG',  category: 'state', timer: 'permanent', opposite: 'WEAK',
-    desc: '+50% damage dealt.' },
+    desc: '+50% damage dealt and -25% damage taken.' },
   FAST:    { kind: 'adjective', id: 'FAST',    category: 'state', timer: 'permanent', opposite: 'SLOW',
     desc: 'Acts first in turn order.' },
   SLOW:    { kind: 'adjective', id: 'SLOW',    category: 'state', timer: 'permanent', opposite: 'FAST',
