@@ -33,6 +33,7 @@ const STATIC_PATHS = [
   'loop_jam',
   'gamedevloop',
   'verb_collector',
+  'thieu_excuses_app',
   'tools',
 ];
 

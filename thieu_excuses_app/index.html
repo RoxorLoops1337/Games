@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thieu Excuses App</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a0d2e 0%, #2d1b4e 50%, #1a0d2e 100%);
+    color: #f5e9c9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  h1 {
+    margin: 0 0 8px 0;
+    font-size: 2.4rem;
+    text-align: center;
+    color: #ffd166;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .subtitle {
+    margin: 0 0 28px 0;
+    font-size: 0.95rem;
+    opacity: 0.7;
+    text-align: center;
+  }
+  .card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 520px;
+    width: 100%;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    backdrop-filter: blur(10px);
+    box-sizing: border-box;
+  }
+  #excuse {
+    font-size: 1.4rem;
+    line-height: 1.5;
+    min-height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 18px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 12px;
+    margin-bottom: 22px;
+    transition: opacity 0.2s ease;
+  }
+  .buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  button {
+    flex: 1;
+    min-width: 140px;
+    padding: 14px 18px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
+    font-family: inherit;
+  }
+  button:active { transform: translateY(1px); }
+  #newBtn {
+    background: #ffd166;
+    color: #1a0d2e;
+  }
+  #newBtn:hover { background: #ffdb85; }
+  #copyBtn {
+    background: rgba(255,255,255,0.12);
+    color: #f5e9c9;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  #copyBtn:hover { background: rgba(255,255,255,0.2); }
+  #copyBtn.copied {
+    background: #4ade80;
+    color: #14532d;
+    border-color: #4ade80;
+  }
+  .back {
+    margin-top: 24px;
+    color: #f5e9c9;
+    opacity: 0.6;
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+  .back:hover { opacity: 1; }
+</style>
+</head>
+<body>
+  <h1>🦊 Thieu Excuses</h1>
+  <p class="subtitle">Een goeie smoes voor elk moment</p>
+
+  <div class="card">
+    <div id="excuse">Druk op de knop voor een excuus 👇</div>
+    <div class="buttons">
+      <button id="newBtn">🎲 Nieuw excuus</button>
+      <button id="copyBtn">📋 Kopieer</button>
+    </div>
+  </div>
+
+  <a class="back" href="/">← terug</a>
+
+<script>
+  const excuses = [
+    "ik kan dan niet want ik zit aan zee",
+    "ik moet dit weekend op de kindjes passen.",
+    "Sorry, Dora is niet thuis, dus ik moet thuis blijven 😔",
+    "ik heb al Karate, wanneer komde hij me keer mee doen @sim?",
+    "ik ben dit weekend te lang blijven plakken. ik zen keis.",
+    "ik ben al een hele week ziekskes.",
+    "ik moe vroeg up morgen, sorry mannen.",
+    "min auto staat in panne, ik geraak ni weg.",
+    "ik moe noar et trouwfeest van een nicht, anders was ik der bij.",
+    "Dora wilt nie dak ga, gij kent dat.",
+    "ik heb mijn rug verzwikt bij et opstaan, ik kan amper bewegen.",
+    "mijn wasmachine is just kapot gegaan, ik moe wachten op de hersteller.",
+    "ik zen et helemoal vergeten in mijne agenda te zetten, sorry!",
+    "ik moe noar mijn moeders verjoardag, anders krijg ik er ruzie mee.",
+    "ik en bin nog ni thuis van et werk, ze maken et hier weeral loat.",
+    "ik moe morgenvroeg vroeg op, ik zen kapot.",
+    "de batterij van mijn telefoon was leeg, daarom kan ik nu pas antwoorden.",
+    "ik zit nog vast in de file, dat goa nie meer lukken vandoag.",
+    "ik moe ne vriend helpen verhuizen, ist al een tijd geleden afgesproken.",
+    "ik zen verkouden, ik wil et ni doorgeven an de rest.",
+    "mijn schoonmoeder komt eten, ik kan der ni onderuit.",
+    "ik moe goan voetballen met de mannen van et werk, teambuilding zeggen ze.",
+    "mijn kat is ziek, ik moe noar de dierenarts.",
+    "ik heb just een pintje te veel gepakt, ik kom beter ni meer buiten.",
+    "ik moe noar de mutualiteit, dat duurt altijd uren.",
+    "Dora heeft iets geplanned zonder et te zeggen, ik kom der just achter.",
+    "ik moe nog dringend de gazon doen voor da de buren klagen.",
+    "ik heb beloofd om met de kindjes noar de speeltuin te goan.",
+    "ik en heb gjin goesting, om eerlijk te zijn.",
+    "ik zen aan et koken voor heel et gezin, kan nie weg.",
+    "ik wachte op een pakje da elk moment kan toekomen.",
+    "ik zen ekik vergeten ne cadeau te kopen, dan kom ik beter ni.",
+    "ik moe nog wassen draaien, anders heb ik morgen niks om aan te doen.",
+    "ik zit zonder benzine en de tankstation is al toe.",
+    "mijn schoonbroer komt langs, ik kan em ni alleen loaten met Dora.",
+    "ik heb een migraine, ik goa best ni meer buiten vandoag.",
+  ];
+
+  const excuseEl = document.getElementById('excuse');
+  const newBtn = document.getElementById('newBtn');
+  const copyBtn = document.getElementById('copyBtn');
+
+  let current = null;
+  let last = null;
+
+  function pickExcuse() {
+    let next;
+    do {
+      next = excuses[Math.floor(Math.random() * excuses.length)];
+    } while (next === last && excuses.length > 1);
+    last = next;
+    current = next;
+    excuseEl.style.opacity = '0';
+    setTimeout(() => {
+      excuseEl.textContent = next;
+      excuseEl.style.opacity = '1';
+    }, 120);
+  }
+
+  async function copyExcuse() {
+    if (!current) return;
+    try {
+      await navigator.clipboard.writeText(current);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = current;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    const original = copyBtn.textContent;
+    copyBtn.textContent = '✅ Gekopieerd!';
+    copyBtn.classList.add('copied');
+    setTimeout(() => {
+      copyBtn.textContent = original;
+      copyBtn.classList.remove('copied');
+    }, 1500);
+  }
+
+  newBtn.addEventListener('click', pickExcuse);
+  copyBtn.addEventListener('click', copyExcuse);
+
+  pickExcuse();
+</script>
+</body>
+</html>
