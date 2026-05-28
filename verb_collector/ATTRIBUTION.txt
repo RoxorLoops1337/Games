@@ -1,0 +1,20 @@
+Verb Collector — third-party asset credits
+
+Enemy icons (verb_collector/assets/icons/*.svg) are derived from game-icons.net,
+licensed under Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/).
+
+- goblin.svg      — "Goblin head" by Delapouite
+- wolf.svg        — "Wolf howl" by Lorc
+- mushroom.svg    — "Mushroom" by Lorc
+- tree.svg        — "Oak" by Lorc
+- thorn.svg       — "Thorn helix" by Lorc
+- big_goblin.svg  — "Orc head" by Delapouite
+- green_knight.svg — "Knight banner" by Delapouite
+
+Modifications: background rect removed, fill set to currentColor.
+Source: https://github.com/game-icons/icons
+
+Web fonts:
+- IM Fell English (SIL Open Font License) — Igino Marini
+- Special Elite (SIL Open Font License) — Astigmatic
+Loaded at runtime from Google Fonts.
