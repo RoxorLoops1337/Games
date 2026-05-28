@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
+import { Heart, Zap, Shield, Sword, Eye, Layers, Trash2 } from 'lucide-react';
 import { VERBS, ADJECTIVES, STARTER_CONNECTORS, NOUNS } from '../engine/words';
 import { parse } from '../engine/parser/grammar';
 import { resolve } from '../engine/resolver/resolve';
 import { intentLabel } from '../engine/combat/enemies';
 import { Action } from '../engine/combat/reducer';
 import { Card, Enemy, GameState } from '../engine/combat/state';
+import { EnemyIcon } from './EnemyIcon';
 
 interface Props {
   state: GameState;
@@ -16,8 +18,6 @@ const PERMANENT_NOUNS: Array<'SELF' | 'ENEMY' | 'ROOM' | 'IT'> = ['SELF', 'ENEMY
 export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
   const preview = useMemo(() => buildPreview(state), [state]);
 
-  // Collected enemy nouns that the player has unlocked (defeated at least
-  // once). Used as additional tappable nouns in the strip.
   const collectedNouns = state.unlockedNouns.filter(
     (n) => !PERMANENT_NOUNS.includes(n as never),
   );
@@ -38,9 +38,10 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
             <span className="hp-text">{state.player.hp} / {state.player.maxHp}</span>
           </div>
           <div className="stats-row">
-            <span>energy {state.player.energy}/{state.player.maxEnergy}</span>
-            <span>block {state.player.block}</span>
-            <span>attack {state.player.attack}</span>
+            <span className="stat-pill"><Heart size={12} strokeWidth={2} /> {state.player.hp}</span>
+            <span className="stat-pill"><Zap size={12} strokeWidth={2} /> {state.player.energy}/{state.player.maxEnergy}</span>
+            <span className="stat-pill"><Shield size={12} strokeWidth={2} /> {state.player.block}</span>
+            <span className="stat-pill"><Sword size={12} strokeWidth={2} /> {state.player.attack}</span>
           </div>
           {state.player.adjectives.length > 0 && (
             <div className="adj-tags">
@@ -120,8 +121,8 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
           end turn
         </button>
         <div className="piles">
-          <span>deck {state.deck.length}</span>
-          <span>discard {state.discard.length}</span>
+          <span className="pile"><Layers size={12} strokeWidth={2} /> deck {state.deck.length}</span>
+          <span className="pile"><Trash2 size={12} strokeWidth={2} /> discard {state.discard.length}</span>
         </div>
       </section>
 
@@ -140,25 +141,31 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
 function EnemyPortrait({ enemy, dispatch }: { enemy: Enemy; dispatch: (a: Action) => void }) {
   return (
     <div
-      className="portrait enemy"
+      className={`portrait enemy${enemy.revealed ? ' revealed' : ''}`}
       onClick={() => dispatch({ type: 'add_to_sentence', token: enemy.noun })}
       title={`tap to add ${enemy.noun} to the sentence`}
     >
-      <div className="portrait-name">{enemy.displayName}</div>
-      <div className="hp-bar">
-        <div className="hp-fill" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
-        <span className="hp-text">{enemy.hp} / {enemy.maxHp}</span>
+      <div className="enemy-art">
+        <EnemyIcon noun={enemy.noun} size={56} />
+        {enemy.revealed && <Eye className="reveal-glyph" size={14} strokeWidth={2} />}
       </div>
-      <div className="intent">Intent: {intentLabel(enemy.intent)}</div>
-      {enemy.adjectives.length > 0 && (
-        <div className="adj-tags">
-          {enemy.adjectives.map((a) => (
-            <span key={a.id} className="tag">
-              {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
-            </span>
-          ))}
+      <div className="enemy-body">
+        <div className="portrait-name">{enemy.displayName}</div>
+        <div className="hp-bar">
+          <div className="hp-fill" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
+          <span className="hp-text">{enemy.hp} / {enemy.maxHp}</span>
         </div>
-      )}
+        <div className="intent"><Sword size={11} strokeWidth={2} /> {intentLabel(enemy.intent)}</div>
+        {enemy.adjectives.length > 0 && (
+          <div className="adj-tags">
+            {enemy.adjectives.map((a) => (
+              <span key={a.id} className="tag">
+                {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -168,7 +175,7 @@ function CardView({ card, disabled, onClick }: { card: Card; disabled: boolean; 
     const v = VERBS[card.word];
     return (
       <button className={`card verb ${disabled ? 'disabled' : ''}`} onClick={onClick} title={v.desc} disabled={disabled}>
-        <div className="card-cost">{v.cost}</div>
+        <div className="card-cost"><Zap size={10} strokeWidth={2.5} />{v.cost}</div>
         <div className="card-name">{v.id}</div>
         <div className="card-desc">{v.desc}</div>
       </button>

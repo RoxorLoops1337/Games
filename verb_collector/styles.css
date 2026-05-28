@@ -1,14 +1,19 @@
 :root {
-  --paper: #f4ecd8;
-  --paper-soft: #ece2c9;
-  --ink: #1f1a14;
-  --ink-soft: #6b5d49;
-  --ink-faint: #9a8e76;
-  --rule: #c9bda1;
-  --accent: #8b2e1f;
-  --accent-soft: #b15240;
-  --bg-card: #fbf6e7;
-  --bg-card-disabled: #e6dcc2;
+  --paper:        #efe6cf;
+  --paper-soft:   #e7dcbf;
+  --paper-deep:   #d8caa4;
+  --ink:          #1f1a14;
+  --ink-soft:     #5a4e3b;
+  --ink-faint:    #8a7d65;
+  --rule:         #b8a988;
+  --accent:       #8b2e1f;
+  --accent-soft:  #b15240;
+  --bg-card:      #f7eed7;
+  --bg-card-disabled: #ddd1b3;
+  --shadow:       rgba(50, 38, 22, 0.18);
+
+  --font-display: 'IM Fell English', 'Georgia', serif;
+  --font-body:    'Special Elite', 'Courier New', ui-monospace, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -18,44 +23,69 @@ html, body, #root {
   padding: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: 'Courier New', ui-monospace, monospace;
+  font-family: var(--font-body);
   min-height: 100vh;
 }
 
+/* Subtle paper grain + edge-darkening vignette. The grain is an inline SVG
+   fractal noise layer; the vignette is a radial gradient. Both are static
+   and pointer-events: none so they don't intercept clicks. */
 body {
-  padding: 16px;
+  position: relative;
+  padding: 18px;
+  background-image:
+    radial-gradient(ellipse 80% 80% at center, transparent 55%, rgba(80,60,30,0.18) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.10  0 0 0 0 0.06  0 0 0 0.45 0'/></filter><rect width='260' height='260' filter='url(%23n)' opacity='0.55'/></svg>");
+  background-size: auto, 260px 260px;
 }
 
 .app {
-  max-width: 960px;
+  max-width: 980px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  position: relative;
 }
+
+/* ---------- Run sentence ------------------------------------------------ */
 
 .run-sentence {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 16px;
-  font-size: 0.95rem;
-  letter-spacing: 1px;
   border-bottom: 1px solid var(--rule);
-  padding-bottom: 12px;
+  padding: 4px 0 12px 0;
   color: var(--ink);
+  position: relative;
+}
+.run-sentence::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  border-bottom: 1px solid var(--rule);
 }
 .run-sentence .run-text {
+  font-family: var(--font-display);
   font-style: italic;
+  font-size: 1.15rem;
+  letter-spacing: 0.5px;
+  line-height: 1.45;
   flex: 1;
 }
 .run-sentence .run-progress {
+  font-family: var(--font-body);
   color: var(--ink-faint);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   letter-spacing: 2px;
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* ---------- Combat grid ------------------------------------------------- */
 
 .combat {
   display: grid;
@@ -69,40 +99,73 @@ body {
   gap: 14px;
 }
 
-.enemies { grid-area: enemies; display: flex; gap: 12px; flex-wrap: wrap; }
-.player  { grid-area: player; }
-.log     { grid-area: log; min-height: 80px; }
-.sentence-area { grid-area: sentence; }
-.permanent-strip { grid-area: permanent; }
-.hand    { grid-area: hand; }
-.footer  { grid-area: footer; }
+.enemies        { grid-area: enemies; display: flex; gap: 14px; flex-wrap: wrap; }
+.player         { grid-area: player; }
+.log            { grid-area: log; min-height: 90px; }
+.sentence-area  { grid-area: sentence; }
+.permanent-strip{ grid-area: permanent; }
+.hand           { grid-area: hand; }
+.footer         { grid-area: footer; }
+
+/* ---------- Portraits --------------------------------------------------- */
 
 .portrait {
   background: var(--paper-soft);
   border: 1px solid var(--rule);
-  padding: 10px 14px;
-  min-width: 200px;
+  padding: 12px 14px;
+  min-width: 220px;
+  box-shadow: 0 1px 2px var(--shadow);
+  position: relative;
 }
 .portrait.enemy {
   cursor: pointer;
-  transition: background 100ms ease, border-color 100ms ease;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 .portrait.enemy:hover {
   background: var(--bg-card);
   border-color: var(--ink);
+  transform: translateY(-1px);
 }
+.portrait.enemy.revealed {
+  border-color: var(--accent-soft);
+}
+.enemy-art {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  position: relative;
+  color: var(--ink);
+}
+.reveal-glyph {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  color: var(--accent);
+  background: var(--paper);
+  border-radius: 50%;
+  padding: 2px;
+}
+.enemy-body { flex: 1 1 auto; min-width: 0; }
 .portrait-name {
-  font-weight: bold;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
   letter-spacing: 2px;
   text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  line-height: 1.1;
 }
+
+/* HP bar */
 .hp-bar {
   position: relative;
   background: var(--paper);
   border: 1px solid var(--ink);
   height: 16px;
   margin: 4px 0;
+  overflow: hidden;
 }
 .hp-fill {
   position: absolute;
@@ -114,23 +177,44 @@ body {
   position: relative;
   display: block;
   text-align: center;
+  font-family: var(--font-body);
   font-size: 0.75rem;
   color: var(--paper);
   mix-blend-mode: difference;
   line-height: 16px;
 }
+
 .intent {
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
   color: var(--ink-soft);
   letter-spacing: 1px;
+  margin-top: 2px;
 }
 .stats-row {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   font-size: 0.85rem;
   color: var(--ink-soft);
-  margin-top: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
 }
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+  color: var(--ink-soft);
+}
+.stat-pill svg { color: var(--accent); }
+
 .adj-tags {
   margin-top: 6px;
   display: flex;
@@ -145,59 +229,71 @@ body {
   background: var(--paper);
 }
 
-.sentence-area {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+/* ---------- Sentence bar ------------------------------------------------ */
+
+.sentence-area { display: flex; flex-direction: column; gap: 6px; }
 .sentence-bar {
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
-  padding: 14px 8px;
-  min-height: 56px;
+  padding: 16px 8px;
+  min-height: 60px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+  background:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent 24px,
+      var(--paper-deep) 24px,
+      var(--paper-deep) 25px,
+      transparent 25px
+    );
 }
 .placeholder {
   color: var(--ink-faint);
   letter-spacing: 1px;
   font-style: italic;
+  font-family: var(--font-display);
+  font-size: 1rem;
 }
 .token {
-  font-family: inherit;
-  font-size: 1.1rem;
+  font-family: var(--font-body);
+  font-size: 1.05rem;
   background: var(--bg-card);
   color: var(--ink);
   border: 1px solid var(--ink);
   padding: 6px 12px;
   cursor: pointer;
   letter-spacing: 1.5px;
+  box-shadow: 0 1px 2px var(--shadow);
+  transition: transform 80ms ease, background 80ms ease;
 }
-.token:hover { background: var(--paper-soft); }
+.token:hover { background: var(--paper-soft); transform: translateY(-1px); }
 .preview {
   font-size: 0.85rem;
   color: var(--ink-soft);
   letter-spacing: 0.5px;
   min-height: 1.2em;
   padding: 0 4px;
+  font-style: italic;
 }
-.sentence-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
+.sentence-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .sentence-actions button {
-  font-family: inherit;
+  font-family: var(--font-body);
   background: transparent;
   border: 1px solid var(--ink);
   color: var(--ink);
-  padding: 6px 16px;
+  padding: 7px 18px;
   letter-spacing: 2px;
   text-transform: uppercase;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   cursor: pointer;
+  transition: background 80ms ease;
+}
+.sentence-actions button:hover:not(:disabled) {
+  background: var(--paper-soft);
 }
 .sentence-actions button:disabled {
   color: var(--ink-faint);
@@ -208,22 +304,29 @@ body {
   background: var(--ink);
   color: var(--paper);
 }
+.sentence-actions .primary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+}
 .sentence-actions .primary:disabled {
   background: var(--ink-faint);
   border-color: var(--ink-faint);
   color: var(--paper);
 }
 
+/* ---------- Permanent strip --------------------------------------------- */
+
 .permanent-strip {
   display: flex;
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 6px 0;
+  padding: 8px 0;
+  border-top: 1px dashed var(--rule);
   border-bottom: 1px dashed var(--rule);
 }
 .strip-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -236,63 +339,80 @@ body {
   margin: 0 6px;
 }
 .word {
-  font-family: inherit;
+  font-family: var(--font-body);
   border: 1px solid var(--ink-soft);
   background: transparent;
   color: var(--ink-soft);
-  padding: 3px 8px;
-  font-size: 0.8rem;
+  padding: 3px 9px;
+  font-size: 0.78rem;
   letter-spacing: 1.5px;
   cursor: pointer;
+  transition: color 80ms ease, border-color 80ms ease, background 80ms ease;
 }
-.word:hover { color: var(--ink); border-color: var(--ink); }
+.word:hover { color: var(--ink); border-color: var(--ink); background: var(--paper-soft); }
 .word.noun.collected {
   border-style: dashed;
   color: var(--ink);
   border-color: var(--ink);
 }
 
+/* ---------- Hand of cards ----------------------------------------------- */
+
 .hand {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  min-height: 120px;
+  min-height: 130px;
   padding: 8px 0;
 }
 .card {
-  font-family: inherit;
+  font-family: var(--font-body);
   background: var(--bg-card);
   border: 1px solid var(--ink);
-  width: 130px;
-  padding: 8px;
+  width: 140px;
+  padding: 10px 9px;
   text-align: left;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 4px;
   position: relative;
+  box-shadow: 0 2px 4px var(--shadow);
+  transition: transform 120ms ease, box-shadow 120ms ease;
 }
 .card:hover:not(.disabled) {
-  background: var(--paper-soft);
-  transform: translateY(-2px);
-  transition: transform 100ms ease;
+  transform: translateY(-3px);
+  box-shadow: 0 5px 10px var(--shadow);
 }
 .card.disabled {
   background: var(--bg-card-disabled);
   color: var(--ink-faint);
   cursor: not-allowed;
+  box-shadow: none;
 }
 .card-cost {
   position: absolute;
   top: 6px;
   right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-weight: bold;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  line-height: 1.2;
 }
+.card.disabled .card-cost { background: var(--ink-faint); }
 .card-name {
+  font-family: var(--font-display);
   font-weight: bold;
   letter-spacing: 2px;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  padding-right: 28px;
 }
 .card-desc {
   font-size: 0.7rem;
@@ -300,8 +420,11 @@ body {
   line-height: 1.3;
 }
 .card.adjective {
-  background: #efe6cf;
+  background: #ecdfbf;
   border-style: dashed;
+}
+.card.adjective .card-cost {
+  background: var(--accent);
 }
 .empty-hand {
   color: var(--ink-faint);
@@ -310,91 +433,114 @@ body {
   padding: 20px;
 }
 
+/* ---------- Footer ------------------------------------------------------ */
+
 .footer {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-top: 8px;
+  padding-top: 10px;
   border-top: 1px solid var(--rule);
 }
 .end-turn {
-  font-family: inherit;
+  font-family: var(--font-body);
   background: var(--ink);
   color: var(--paper);
   border: 1px solid var(--ink);
-  padding: 8px 20px;
+  padding: 9px 22px;
   letter-spacing: 2px;
   text-transform: uppercase;
   font-size: 0.85rem;
   cursor: pointer;
+  transition: background 100ms ease;
 }
-.end-turn:hover { background: var(--accent); }
+.end-turn:hover { background: var(--accent); border-color: var(--accent); }
 .piles {
   display: flex;
   gap: 12px;
   color: var(--ink-soft);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   letter-spacing: 1px;
 }
-.revealed {
-  margin-left: auto;
-  color: var(--ink-soft);
-  font-size: 0.85rem;
-}
+.pile { display: inline-flex; align-items: center; gap: 4px; }
+.pile svg { color: var(--ink-faint); }
+
+/* ---------- Log --------------------------------------------------------- */
 
 .log {
   background: var(--paper-soft);
   border: 1px solid var(--rule);
   padding: 8px 10px;
   font-size: 0.8rem;
-  line-height: 1.5;
+  line-height: 1.55;
   overflow-y: auto;
   max-height: 180px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
 }
-.log-line {
-  display: flex;
-  gap: 8px;
-}
+.log-line { display: flex; gap: 8px; }
 .log-turn {
   color: var(--ink-faint);
-  min-width: 28px;
+  min-width: 32px;
+  font-size: 0.7rem;
+  letter-spacing: 1px;
 }
 .log-text { color: var(--ink); }
 
+/* ---------- End-game / reward / run-end --------------------------------- */
+
 .endgame {
   text-align: center;
-  padding: 60px 20px;
+  padding: 50px 20px;
 }
 .endgame h2 {
-  letter-spacing: 6px;
-  font-size: 2rem;
+  font-family: var(--font-display);
+  letter-spacing: 7px;
+  font-size: 2.4rem;
   margin: 0 0 12px 0;
+  font-weight: 400;
 }
 .end-flavor {
   color: var(--ink-soft);
+  font-family: var(--font-display);
   font-style: italic;
-  margin-bottom: 24px;
+  font-size: 1.05rem;
+  margin-bottom: 28px;
 }
 .endgame .primary {
-  font-family: inherit;
+  font-family: var(--font-body);
   background: var(--ink);
   color: var(--paper);
   border: 1px solid var(--ink);
-  padding: 10px 24px;
+  padding: 11px 26px;
   letter-spacing: 2px;
   text-transform: uppercase;
   cursor: pointer;
   font-size: 0.85rem;
+  transition: background 100ms ease;
 }
+.endgame .primary:hover { background: var(--accent); border-color: var(--accent); }
 .final-sentence {
-  max-width: 640px;
-  margin: 0 auto 32px auto;
-  padding: 16px 20px;
+  max-width: 680px;
+  margin: 0 auto 36px auto;
+  padding: 22px 28px;
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
+  font-family: var(--font-display);
   font-style: italic;
-  line-height: 1.6;
+  font-size: 1.15rem;
+  line-height: 1.65;
   color: var(--ink);
+  background: linear-gradient(to bottom, var(--paper-soft), transparent);
+}
+.final-sentence::first-letter {
+  font-family: var(--font-display);
+  font-size: 2.4em;
+  font-style: normal;
+  float: left;
+  line-height: 1;
+  padding-right: 8px;
+  padding-top: 4px;
+  color: var(--accent);
 }
 
 .reward-screen {
@@ -402,35 +548,33 @@ body {
   padding: 40px 20px;
 }
 .reward-screen h2 {
+  font-family: var(--font-display);
   letter-spacing: 6px;
-  font-size: 1.6rem;
+  font-size: 1.8rem;
   margin: 0 0 8px 0;
+  font-weight: 400;
 }
 .reward-flavor {
   color: var(--ink-soft);
+  font-family: var(--font-display);
   font-style: italic;
-  margin-bottom: 32px;
+  font-size: 1rem;
+  margin-bottom: 30px;
 }
 .reward-cards {
   display: flex;
   justify-content: center;
-  gap: 16px;
+  gap: 18px;
   flex-wrap: wrap;
   margin-bottom: 24px;
 }
 .reward-card {
-  width: 160px;
-  min-height: 110px;
+  width: 175px;
+  min-height: 120px;
 }
-.reward-card:hover {
-  background: var(--paper-soft);
-  transform: translateY(-2px);
-}
-.reward-skip {
-  margin-top: 16px;
-}
+.reward-skip { margin-top: 16px; }
 .reward-skip .skip {
-  font-family: inherit;
+  font-family: var(--font-body);
   background: transparent;
   border: 1px solid var(--ink-faint);
   color: var(--ink-faint);
@@ -440,10 +584,20 @@ body {
   font-size: 0.75rem;
   cursor: pointer;
 }
-.reward-skip .skip:hover {
-  border-color: var(--ink);
-  color: var(--ink);
+.reward-skip .skip:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ---------- Decorative dividers ----------------------------------------- */
+
+.flourish {
+  display: block;
+  margin: 12px auto;
+  height: 12px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' width='200' height='12'><path fill='%235a4e3b' d='M100 0c-3 0-6 2-7 5-1 2-2 3-3 3-4 0-8-2-12-2-3 0-7 1-10 3l-2 1c-3 1-6 1-8-1L0 8v1l59 2c3 0 5-1 6-3 1-1 3-2 5-2l5 1 7 1c2 0 4-1 5-2 1-2 3-3 5-3h16c2 0 4 1 5 3 1 1 3 2 5 2l7-1 5-1c2 0 4 1 5 2 1 2 3 3 6 3l59-2V8l-58 1c-2 2-5 2-8 1l-2-1c-3-2-7-3-10-3-4 0-8 2-12 2-1 0-2-1-3-3-1-3-4-5-7-5h-7z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
 }
+
+/* ---------- Mobile ------------------------------------------------------ */
 
 @media (max-width: 720px) {
   body { padding: 10px; }
@@ -458,27 +612,33 @@ body {
       "log";
     grid-template-columns: 1fr;
   }
-  .run-sentence { font-size: 0.8rem; }
-  .run-sentence .run-progress { font-size: 0.65rem; }
+  .run-sentence .run-text { font-size: 0.95rem; }
+  .run-sentence .run-progress { font-size: 0.62rem; }
   .portrait { min-width: 0; padding: 8px 10px; }
-  .portrait-name { font-size: 0.85rem; }
-  .stats-row { font-size: 0.75rem; gap: 8px; flex-wrap: wrap; }
-  .intent { font-size: 0.75rem; }
+  .portrait.enemy { gap: 10px; }
+  .enemy-art { width: 48px; height: 48px; }
+  .portrait-name { font-size: 0.9rem; }
+  .stats-row { font-size: 0.72rem; gap: 6px; }
+  .stat-pill { font-size: 0.65rem; padding: 0 5px; }
+  .intent { font-size: 0.72rem; }
   .tag { font-size: 0.65rem; padding: 1px 4px; }
-  .sentence-bar { padding: 10px 6px; min-height: 48px; }
-  .token { font-size: 0.95rem; padding: 4px 9px; }
-  .placeholder { font-size: 0.8rem; }
-  .preview { font-size: 0.75rem; }
-  .sentence-actions button { padding: 5px 12px; font-size: 0.7rem; }
-  .permanent-strip { gap: 4px; padding: 4px 0; }
+  .sentence-bar { padding: 12px 6px; min-height: 52px; }
+  .token { font-size: 1rem; padding: 5px 10px; }
+  .placeholder { font-size: 0.9rem; }
+  .preview { font-size: 0.72rem; }
+  .sentence-actions button { padding: 6px 14px; font-size: 0.7rem; }
+  .permanent-strip { gap: 4px; padding: 6px 0; }
   .strip-label { font-size: 0.6rem; }
-  .word { padding: 2px 6px; font-size: 0.72rem; letter-spacing: 1px; }
-  .hand { gap: 6px; min-height: 0; padding: 4px 0; }
-  .card { width: calc(50% - 4px); font-size: 0.8rem; padding: 6px; }
-  .card-name { font-size: 0.85rem; letter-spacing: 1.5px; }
+  .word { padding: 2px 7px; font-size: 0.72rem; letter-spacing: 1px; }
+  .hand { gap: 8px; min-height: 0; padding: 4px 0; }
+  .card { width: calc(50% - 4px); padding: 8px; }
+  .card-name { font-size: 0.95rem; letter-spacing: 1.5px; padding-right: 26px; }
   .card-desc { font-size: 0.65rem; }
+  .card-cost { font-size: 0.85rem; padding: 0 5px; }
   .end-turn { padding: 8px 14px; font-size: 0.75rem; }
-  .piles { font-size: 0.75rem; gap: 8px; }
-  .log { max-height: 120px; font-size: 0.7rem; }
-  .reward-card { width: 45%; max-width: 200px; }
+  .piles { font-size: 0.72rem; gap: 8px; }
+  .log { max-height: 130px; font-size: 0.72rem; }
+  .reward-card { width: 45%; max-width: 220px; }
+  .endgame h2 { font-size: 1.8rem; letter-spacing: 5px; }
+  .final-sentence { font-size: 1rem; padding: 16px 18px; }
 }
