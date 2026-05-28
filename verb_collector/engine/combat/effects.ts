@@ -59,7 +59,7 @@ export function damageMultiplier(adjs: AdjectiveInstance[]): { dealt: number; ta
   let taken = 1;
   for (const a of adjs) {
     if (a.id === 'WEAK')   dealt *= 0.5;
-    if (a.id === 'STRONG') dealt *= 1.5;
+    if (a.id === 'STRONG') { dealt *= 1.5; taken *= 0.75; }
     if (a.id === 'BIG')    { dealt *= 1.25; taken *= 1.25; }
     if (a.id === 'SMALL')  dealt *= 0.75;
   }

@@ -355,6 +355,14 @@ body {
   color: var(--ink);
   border-color: var(--ink);
 }
+.word.noun.taxed {
+  color: var(--accent);
+  border-color: var(--accent);
+  border-style: dotted;
+}
+.word.noun.taxed:hover {
+  background: rgba(139, 46, 31, 0.08);
+}
 
 /* ---------- Hand of cards ----------------------------------------------- */
 

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Heart, Zap, Shield, Sword, Eye, Layers, Trash2 } from 'lucide-react';
-import { VERBS, ADJECTIVES, STARTER_CONNECTORS, NOUNS } from '../engine/words';
+import { VERBS, ADJECTIVES, STARTER_CONNECTORS, NOUNS, CONNECTORS } from '../engine/words';
 import { parse } from '../engine/parser/grammar';
 import { resolve } from '../engine/resolver/resolve';
 import { intentLabel } from '../engine/combat/enemies';
@@ -18,9 +18,14 @@ const PERMANENT_NOUNS: Array<'SELF' | 'ENEMY' | 'ROOM' | 'IT'> = ['SELF', 'ENEMY
 export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
   const preview = useMemo(() => buildPreview(state), [state]);
 
+  // Collected nouns only appear when there's a live enemy in this combat that
+  // matches — keeps the strip situational instead of a permanent collection
+  // display. The strip is for what you can target NOW.
+  const liveNouns = new Set(state.enemies.filter((e) => e.hp > 0).map((e) => e.noun));
   const collectedNouns = state.unlockedNouns.filter(
-    (n) => !PERMANENT_NOUNS.includes(n as never),
+    (n) => !PERMANENT_NOUNS.includes(n as never) && liveNouns.has(n),
   );
+  const aliveCount = state.enemies.filter((e) => e.hp > 0).length;
 
   return (
     <div className="combat">
@@ -85,20 +90,38 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
 
       <section className="permanent-strip">
         <div className="strip-label">nouns</div>
-        {PERMANENT_NOUNS.map((n) => (
-          <button key={n} className="word noun" onClick={() => dispatch({ type: 'add_to_sentence', token: n })}>
-            {n}
-          </button>
-        ))}
+        {PERMANENT_NOUNS.map((n) => {
+          const tax = n === 'ENEMY' && aliveCount > 1;
+          return (
+            <button
+              key={n}
+              className={`word noun${tax ? ' taxed' : ''}`}
+              onClick={() => dispatch({ type: 'add_to_sentence', token: n })}
+              title={tax ? 'ENEMY costs +1 energy while multiple enemies are alive — name a specific one to skip the tax' : undefined}
+            >
+              {n}{tax ? ' +1' : ''}
+            </button>
+          );
+        })}
         {collectedNouns.map((n) => (
-          <button key={n} className="word noun collected" onClick={() => dispatch({ type: 'add_to_sentence', token: n })}>
+          <button
+            key={n}
+            className="word noun collected"
+            onClick={() => dispatch({ type: 'add_to_sentence', token: n })}
+            title={`specific name — no ambiguity tax`}
+          >
             {n}
           </button>
         ))}
         <div className="strip-divider" />
         <div className="strip-label">conn</div>
         {STARTER_CONNECTORS.map((c) => (
-          <button key={c} className="word connector" onClick={() => dispatch({ type: 'add_to_sentence', token: c })}>
+          <button
+            key={c}
+            className="word connector"
+            onClick={() => dispatch({ type: 'add_to_sentence', token: c })}
+            title={`${CONNECTORS[c].desc} (each connector adds +1 eloquence, max +3)`}
+          >
             {c}
           </button>
         ))}
@@ -220,7 +243,12 @@ function buildPreview(state: GameState): string {
   const target = describeTarget(state, parsed.sentence.first.object?.noun);
   const prefix = target ? `→ ${target}: ` : '→ ';
   const affordable = cost <= state.player.energy ? '' : ' (NOT ENOUGH ENERGY)';
-  return `${prefix}${pieces.join(', ') || 'no effect'} · costs ${cost}${affordable}`;
+  const bonusBits: string[] = [];
+  if (result.bonuses.eloquence > 0) bonusBits.push(`eloquence +${result.bonuses.eloquence}`);
+  if (result.bonuses.itChainApplied) bonusBits.push('IT chain ×1.5');
+  if (result.bonuses.enemyAmbiguityTax > 0) bonusBits.push(`ENEMY tax +${result.bonuses.enemyAmbiguityTax}⚡`);
+  const bonusText = bonusBits.length > 0 ? ` · ${bonusBits.join(', ')}` : '';
+  return `${prefix}${pieces.join(', ') || 'no effect'} · costs ${cost}${affordable}${bonusText}`;
 }
 
 function describeTarget(state: GameState, nounId?: string): string | null {

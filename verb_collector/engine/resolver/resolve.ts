@@ -1,27 +1,47 @@
-import { Clause, NounId, Sentence, VerbId } from '../types';
+import { Clause, ConnectorId, NounId, Sentence, VerbId } from '../types';
 import { VERBS } from '../words';
 import { Card, GameState } from '../combat/state';
 import { Effect, TargetRef, damageMultiplier } from '../combat/effects';
+
+export interface BonusBreakdown {
+  eloquence: number;            // +N from connectors (max 3)
+  itChainApplied: boolean;      // true if any second clause used IT
+  enemyAmbiguityTax: number;    // +N energy from using ENEMY with multiple alive
+}
 
 export interface ResolveResult {
   effects: Effect[];
   energyCost: number;
   consumedCardIds: string[];
   newLastNounUsed: NounId | null;
+  bonuses: BonusBreakdown;
 }
+
+const ELOQUENCE_CAP = 3;
+const IT_CHAIN_MULTIPLIER = 1.5;
 
 export function resolve(sentence: Sentence, state: GameState): ResolveResult {
   const effects: Effect[] = [];
-  let energyCost = 0;
+  let baseEnergyCost = 0;
   const consumedCardIds: string[] = [];
   let lastNoun: NounId | null = state.lastNounUsed;
 
   const clauses: Clause[] = [sentence.first];
   if (sentence.conjunction) clauses.push(sentence.conjunction.second);
 
-  for (const clause of clauses) {
+  const aliveCount = state.enemies.filter((e) => e.hp > 0).length;
+  let enemyAmbiguityTax = 0;
+  let itChainApplied = false;
+
+  for (let ci = 0; ci < clauses.length; ci++) {
+    const clause = clauses[ci]!;
     const verbDef = VERBS[clause.verb];
-    energyCost += verbDef.cost;
+    baseEnergyCost += verbDef.cost;
+
+    // ENEMY ambiguity: using ENEMY when >1 enemies are alive costs +1 energy.
+    if (clause.object?.noun === 'ENEMY' && aliveCount > 1) {
+      enemyAmbiguityTax += 1;
+    }
 
     const usedSoFar = new Set(consumedCardIds);
     const verbCard = state.hand.find(
@@ -42,10 +62,72 @@ export function resolve(sentence: Sentence, state: GameState): ResolveResult {
     const target = clause.object ? resolveTarget(clause.object.noun, state, lastNoun) : null;
     if (clause.object) lastNoun = clause.object.noun === 'IT' ? lastNoun : clause.object.noun;
 
-    effects.push(...verbEffects(clause.verb, target, clause, state));
+    let clauseEffects = verbEffects(clause.verb, target, clause, state);
+
+    // IT chain: second clause's object refers to the prior noun via IT.
+    // Amplify the clause's primary numeric effects by 1.5x.
+    const isItChain = ci > 0 && clause.object?.noun === 'IT';
+    if (isItChain && target !== null) {
+      clauseEffects = scaleNumericEffects(clauseEffects, IT_CHAIN_MULTIPLIER);
+      itChainApplied = true;
+    }
+
+    effects.push(...clauseEffects);
   }
 
-  return { effects, energyCost, consumedCardIds, newLastNounUsed: lastNoun };
+  // Eloquence: count connectors in the sentence, each adds +1 to the
+  // primary numeric effect, capped at ELOQUENCE_CAP.
+  const eloquence = Math.min(ELOQUENCE_CAP, countConnectors(sentence));
+  if (eloquence > 0) {
+    addEloquenceBonus(effects, eloquence);
+  }
+
+  return {
+    effects,
+    energyCost: baseEnergyCost + enemyAmbiguityTax,
+    consumedCardIds,
+    newLastNounUsed: lastNoun,
+    bonuses: { eloquence, itChainApplied, enemyAmbiguityTax },
+  };
+}
+
+function countConnectors(sentence: Sentence): number {
+  let n = 0;
+  if (sentence.first.extra) n++;
+  if (sentence.conjunction) n++;
+  if (sentence.conjunction?.second.extra) n++;
+  return n;
+}
+
+// Returns a new effect list with the primary numeric effect (damage > heal > block)
+// scaled by `factor`. Mutates copies, not the input.
+function scaleNumericEffects(effects: Effect[], factor: number): Effect[] {
+  return effects.map((e) => {
+    if (e.kind === 'damage') return { ...e, amount: Math.max(1, Math.round(e.amount * factor)) };
+    if (e.kind === 'heal')   return { ...e, amount: Math.max(1, Math.round(e.amount * factor)) };
+    if (e.kind === 'gain_block') return { ...e, amount: Math.max(1, Math.round(e.amount * factor)) };
+    return e;
+  });
+}
+
+// Adds `bonus` to the first damage effect; if none, to the first heal; else to the first block.
+// Mutates in place (cheap; effects list is fresh for this call).
+function addEloquenceBonus(effects: Effect[], bonus: number): void {
+  let target: 'damage' | 'heal' | 'gain_block' | null = null;
+  if (effects.some((e) => e.kind === 'damage')) target = 'damage';
+  else if (effects.some((e) => e.kind === 'heal')) target = 'heal';
+  else if (effects.some((e) => e.kind === 'gain_block')) target = 'gain_block';
+  if (!target) return;
+  for (let i = 0; i < effects.length; i++) {
+    const e = effects[i]!;
+    if (e.kind === target) {
+      // narrow types: damage/heal/gain_block all have `amount: number`
+      if (e.kind === 'damage' || e.kind === 'heal' || e.kind === 'gain_block') {
+        effects[i] = { ...e, amount: e.amount + bonus };
+      }
+      return;
+    }
+  }
 }
 
 function resolveTarget(noun: NounId, state: GameState, lastNoun: NounId | null): TargetRef | null {
@@ -76,8 +158,6 @@ function verbEffects(
       const dealt = damageMultiplier(state.player.adjectives).dealt;
       const amount = Math.round(state.player.attack * dealt);
       const out: Effect[] = [{ kind: 'damage', target, amount }];
-      // Thorn reflect: if target is an enemy with reflect_hit trait, reflect
-      // half the damage back to the player.
       if (target.kind === 'enemy') {
         const enemy = state.enemies.find((e) => e.id === target.id);
         if (enemy && enemy.traits.includes('reflect_hit')) {
@@ -138,3 +218,7 @@ function verbEffects(
     case 'GRAB': return [{ kind: 'log', text: 'GRAB is not implemented in v0.' }];
   }
 }
+
+// `ConnectorId` is unused here directly but kept exported via re-importing for
+// possible future use (currently unused — silence lint by re-exposing).
+export type { ConnectorId };
