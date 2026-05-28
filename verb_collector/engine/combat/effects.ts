@@ -79,7 +79,7 @@ function applyDamage(state: GameState, target: TargetRef, baseAmount: number): G
       block: Math.max(0, state.player.block - baseAmount),
     };
     const next: GameState = { ...state, player: newPlayer };
-    const phaseAdvanced: GameState = newPlayer.hp <= 0 ? { ...next, phase: 'loss' } : next;
+    const phaseAdvanced: GameState = newPlayer.hp <= 0 ? { ...next, phase: 'lost_run' } : next;
     return log(phaseAdvanced, `You take ${incoming} damage${absorbed > 0 ? ` (${absorbed} blocked)` : ''}.`);
   }
 
@@ -102,7 +102,9 @@ function applyDamage(state: GameState, target: TargetRef, baseAmount: number): G
 
   let next: GameState = log({ ...state, enemies }, `${enemy.displayName} takes ${dmg} damage.`);
   if (newHp === 0) next = log(next, `${enemy.displayName} is defeated.`);
-  if (next.enemies.every((en) => en.hp === 0)) next = { ...next, phase: 'win' };
+  // Per-combat win is detected by the reducer (which transitions to 'reward'),
+  // not here — applyDamage is also called by enemy attacks during their turn,
+  // where overshooting the phase would skip reward setup.
   return next;
 }
 

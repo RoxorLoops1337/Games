@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { VERBS, ADJECTIVES, STARTER_CONNECTORS, NOUNS } from '../engine/words';
 import { parse } from '../engine/parser/grammar';
 import { resolve } from '../engine/resolver/resolve';
+import { intentLabel } from '../engine/combat/enemies';
 import { Action } from '../engine/combat/reducer';
-import { Card, GameState } from '../engine/combat/state';
+import { Card, Enemy, GameState } from '../engine/combat/state';
 
 interface Props {
   state: GameState;
@@ -15,54 +16,17 @@ const PERMANENT_NOUNS: Array<'SELF' | 'ENEMY' | 'ROOM' | 'IT'> = ['SELF', 'ENEMY
 export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
   const preview = useMemo(() => buildPreview(state), [state]);
 
-  if (state.phase === 'win') {
-    return (
-      <div className="endgame">
-        <h2>YOU WIN</h2>
-        <p className="end-flavor">The goblin lies still. The forest goes quiet.</p>
-        <button className="primary" onClick={() => dispatch({ type: 'new_combat' })}>
-          fight again
-        </button>
-      </div>
-    );
-  }
-  if (state.phase === 'loss') {
-    return (
-      <div className="endgame">
-        <h2>YOU FELL</h2>
-        <p className="end-flavor">The story ends mid-sentence.</p>
-        <button className="primary" onClick={() => dispatch({ type: 'new_combat' })}>
-          start over
-        </button>
-      </div>
-    );
-  }
+  // Collected enemy nouns that the player has unlocked (defeated at least
+  // once). Used as additional tappable nouns in the strip.
+  const collectedNouns = state.unlockedNouns.filter(
+    (n) => !PERMANENT_NOUNS.includes(n as never),
+  );
 
   return (
     <div className="combat">
       <section className="enemies">
         {state.enemies.map((e) =>
-          e.hp <= 0 ? null : (
-            <div key={e.id} className="portrait enemy">
-              <div className="portrait-name">{e.displayName}</div>
-              <div className="hp-bar">
-                <div className="hp-fill" style={{ width: `${(e.hp / e.maxHp) * 100}%` }} />
-                <span className="hp-text">{e.hp} / {e.maxHp}</span>
-              </div>
-              <div className="intent">
-                Intent: {e.intent.kind === 'attack' ? `attack ${e.intent.damage}` : 'wait'}
-              </div>
-              {e.adjectives.length > 0 && (
-                <div className="adj-tags">
-                  {e.adjectives.map((a) => (
-                    <span key={a.id} className="tag">
-                      {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ),
+          e.hp <= 0 ? null : <EnemyPortrait key={e.id} enemy={e} dispatch={dispatch} />,
         )}
       </section>
 
@@ -125,8 +89,13 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
             {n}
           </button>
         ))}
+        {collectedNouns.map((n) => (
+          <button key={n} className="word noun collected" onClick={() => dispatch({ type: 'add_to_sentence', token: n })}>
+            {n}
+          </button>
+        ))}
         <div className="strip-divider" />
-        <div className="strip-label">connectors</div>
+        <div className="strip-label">conn</div>
         {STARTER_CONNECTORS.map((c) => (
           <button key={c} className="word connector" onClick={() => dispatch({ type: 'add_to_sentence', token: c })}>
             {c}
@@ -154,7 +123,6 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
           <span>deck {state.deck.length}</span>
           <span>discard {state.discard.length}</span>
         </div>
-        {state.enemies.some((e) => e.revealed) && <RevealedInfo state={state} />}
       </section>
 
       <section className="log">
@@ -165,6 +133,32 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
           </div>
         ))}
       </section>
+    </div>
+  );
+}
+
+function EnemyPortrait({ enemy, dispatch }: { enemy: Enemy; dispatch: (a: Action) => void }) {
+  return (
+    <div
+      className="portrait enemy"
+      onClick={() => dispatch({ type: 'add_to_sentence', token: enemy.noun })}
+      title={`tap to add ${enemy.noun} to the sentence`}
+    >
+      <div className="portrait-name">{enemy.displayName}</div>
+      <div className="hp-bar">
+        <div className="hp-fill" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
+        <span className="hp-text">{enemy.hp} / {enemy.maxHp}</span>
+      </div>
+      <div className="intent">Intent: {intentLabel(enemy.intent)}</div>
+      {enemy.adjectives.length > 0 && (
+        <div className="adj-tags">
+          {enemy.adjectives.map((a) => (
+            <span key={a.id} className="tag">
+              {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -190,24 +184,13 @@ function CardView({ card, disabled, onClick }: { card: Card; disabled: boolean; 
   );
 }
 
-function RevealedInfo({ state }: { state: GameState }) {
-  const enemy = state.enemies.find((e) => e.revealed && e.hp > 0);
-  if (!enemy) return null;
-  return (
-    <div className="revealed">
-      <strong>{enemy.displayName}</strong> · attack {enemy.attack} · {enemy.maxHp} max HP
-    </div>
-  );
-}
-
 function canAfford(card: Card, state: GameState): boolean {
   if (card.kind !== 'verb') return true;
   return VERBS[card.word].cost <= state.player.energy;
 }
 
-// Live preview: try to parse the composing tokens and describe what would happen.
 function buildPreview(state: GameState): string {
-  if (state.composing.length === 0) return ' ';
+  if (state.composing.length === 0) return ' ';
   const parsed = parse(state.composing);
   if (!parsed.ok) return `· ${parsed.reason}`;
   const result = resolve(parsed.sentence, state);
@@ -216,7 +199,7 @@ function buildPreview(state: GameState): string {
   let heal = 0;
   const adjs: string[] = [];
   for (const e of result.effects) {
-    if (e.kind === 'damage') damage += e.amount;
+    if (e.kind === 'damage' && e.target.kind !== 'self') damage += e.amount;
     if (e.kind === 'heal') heal += e.amount;
     if (e.kind === 'add_adjective') adjs.push(`apply ${e.adjective}`);
     if (e.kind === 'gain_block') pieces.push(`gain ${e.amount} block`);

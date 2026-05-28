@@ -35,15 +35,26 @@ body {
 }
 
 .run-sentence {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
   font-size: 0.95rem;
   letter-spacing: 1px;
   border-bottom: 1px solid var(--rule);
   padding-bottom: 12px;
   color: var(--ink);
 }
-.run-sentence .blank {
-  color: var(--accent);
-  font-weight: bold;
+.run-sentence .run-text {
+  font-style: italic;
+  flex: 1;
+}
+.run-sentence .run-progress {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .combat {
@@ -71,6 +82,14 @@ body {
   border: 1px solid var(--rule);
   padding: 10px 14px;
   min-width: 200px;
+}
+.portrait.enemy {
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+.portrait.enemy:hover {
+  background: var(--bg-card);
+  border-color: var(--ink);
 }
 .portrait-name {
   font-weight: bold;
@@ -227,6 +246,11 @@ body {
   cursor: pointer;
 }
 .word:hover { color: var(--ink); border-color: var(--ink); }
+.word.noun.collected {
+  border-style: dashed;
+  color: var(--ink);
+  border-color: var(--ink);
+}
 
 .hand {
   display: flex;
@@ -339,7 +363,7 @@ body {
 
 .endgame {
   text-align: center;
-  padding: 80px 20px;
+  padding: 60px 20px;
 }
 .endgame h2 {
   letter-spacing: 6px;
@@ -349,7 +373,7 @@ body {
 .end-flavor {
   color: var(--ink-soft);
   font-style: italic;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 .endgame .primary {
   font-family: inherit;
@@ -362,8 +386,67 @@ body {
   cursor: pointer;
   font-size: 0.85rem;
 }
+.final-sentence {
+  max-width: 640px;
+  margin: 0 auto 32px auto;
+  padding: 16px 20px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.reward-screen {
+  text-align: center;
+  padding: 40px 20px;
+}
+.reward-screen h2 {
+  letter-spacing: 6px;
+  font-size: 1.6rem;
+  margin: 0 0 8px 0;
+}
+.reward-flavor {
+  color: var(--ink-soft);
+  font-style: italic;
+  margin-bottom: 32px;
+}
+.reward-cards {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.reward-card {
+  width: 160px;
+  min-height: 110px;
+}
+.reward-card:hover {
+  background: var(--paper-soft);
+  transform: translateY(-2px);
+}
+.reward-skip {
+  margin-top: 16px;
+}
+.reward-skip .skip {
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid var(--ink-faint);
+  color: var(--ink-faint);
+  padding: 8px 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.reward-skip .skip:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
 
 @media (max-width: 720px) {
+  body { padding: 10px; }
   .combat {
     grid-template-areas:
       "enemies"
@@ -375,5 +458,27 @@ body {
       "log";
     grid-template-columns: 1fr;
   }
-  .card { width: 110px; font-size: 0.85rem; }
+  .run-sentence { font-size: 0.8rem; }
+  .run-sentence .run-progress { font-size: 0.65rem; }
+  .portrait { min-width: 0; padding: 8px 10px; }
+  .portrait-name { font-size: 0.85rem; }
+  .stats-row { font-size: 0.75rem; gap: 8px; flex-wrap: wrap; }
+  .intent { font-size: 0.75rem; }
+  .tag { font-size: 0.65rem; padding: 1px 4px; }
+  .sentence-bar { padding: 10px 6px; min-height: 48px; }
+  .token { font-size: 0.95rem; padding: 4px 9px; }
+  .placeholder { font-size: 0.8rem; }
+  .preview { font-size: 0.75rem; }
+  .sentence-actions button { padding: 5px 12px; font-size: 0.7rem; }
+  .permanent-strip { gap: 4px; padding: 4px 0; }
+  .strip-label { font-size: 0.6rem; }
+  .word { padding: 2px 6px; font-size: 0.72rem; letter-spacing: 1px; }
+  .hand { gap: 6px; min-height: 0; padding: 4px 0; }
+  .card { width: calc(50% - 4px); font-size: 0.8rem; padding: 6px; }
+  .card-name { font-size: 0.85rem; letter-spacing: 1.5px; }
+  .card-desc { font-size: 0.65rem; }
+  .end-turn { padding: 8px 14px; font-size: 0.75rem; }
+  .piles { font-size: 0.75rem; gap: 8px; }
+  .log { max-height: 120px; font-size: 0.7rem; }
+  .reward-card { width: 45%; max-width: 200px; }
 }
