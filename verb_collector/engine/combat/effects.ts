@@ -16,6 +16,7 @@ export type Effect =
   | { kind: 'reveal'; target: TargetRef }
   | { kind: 'queue_next_turn_bonus'; energy: number; draw: number }
   | { kind: 'discard_card'; cardId: CardId }
+  | { kind: 'compel_skip'; target: TargetRef }
   | { kind: 'log'; text: string };
 
 export function applyEffects(state: GameState, effects: Effect[]): GameState {
@@ -44,6 +45,7 @@ function applyEffect(state: GameState, e: Effect): GameState {
         },
       };
     case 'discard_card':     return applyDiscardCard(state, e.cardId);
+    case 'compel_skip':      return applyCompelSkip(state, e.target);
     case 'log':              return log(state, e.text);
   }
 }
@@ -218,6 +220,20 @@ function applyReveal(state: GameState, target: TargetRef): GameState {
   const enemies = [...state.enemies];
   enemies[idx] = { ...enemy, revealed: true };
   return log({ ...state, enemies }, `You study ${enemy.displayName}.`);
+}
+
+// ---- compel ---------------------------------------------------------------
+
+// Sets the target enemy's intent to 'wait' for the next enemy turn — they
+// skip their attack. Has no effect on SELF / ROOM.
+function applyCompelSkip(state: GameState, target: TargetRef): GameState {
+  if (target.kind !== 'enemy') return state;
+  const idx = state.enemies.findIndex((en) => en.id === target.id);
+  const enemy = state.enemies[idx];
+  if (enemy === undefined) return state;
+  const enemies = [...state.enemies];
+  enemies[idx] = { ...enemy, intent: { kind: 'wait' } };
+  return { ...state, enemies };
 }
 
 // ---- card consumption -----------------------------------------------------

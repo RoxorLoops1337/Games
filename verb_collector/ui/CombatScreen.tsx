@@ -82,8 +82,13 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
           <button onClick={() => dispatch({ type: 'clear_sentence' })} disabled={state.composing.length === 0}>
             clear
           </button>
-          <button className="primary" onClick={() => dispatch({ type: 'cast_sentence' })} disabled={state.composing.length === 0}>
-            cast
+          <button
+            className="primary"
+            onClick={() => dispatch({ type: 'cast_sentence' })}
+            disabled={state.composing.length === 0}
+            title="casts the sentence — ends your turn (one sentence per round)"
+          >
+            cast &amp; end turn
           </button>
         </div>
       </section>
@@ -140,8 +145,12 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
       </section>
 
       <section className="footer">
-        <button className="primary end-turn" onClick={() => dispatch({ type: 'end_turn' })}>
-          end turn
+        <button
+          className="primary end-turn"
+          onClick={() => dispatch({ type: 'end_turn' })}
+          title="end your turn without casting"
+        >
+          pass
         </button>
         <div className="piles">
           <span className="pile"><Layers size={12} strokeWidth={2} /> deck {state.deck.length}</span>
@@ -245,7 +254,7 @@ function buildPreview(state: GameState): string {
   const affordable = cost <= state.player.energy ? '' : ' (NOT ENOUGH ENERGY)';
   const bonusBits: string[] = [];
   if (result.bonuses.eloquence > 0) bonusBits.push(`eloquence +${result.bonuses.eloquence}`);
-  if (result.bonuses.itChainApplied) bonusBits.push('IT chain ×1.5');
+  if (result.bonuses.itChainsApplied > 0) bonusBits.push(`IT chain ×1.5 (${result.bonuses.itChainsApplied})`);
   if (result.bonuses.enemyAmbiguityTax > 0) bonusBits.push(`ENEMY tax +${result.bonuses.enemyAmbiguityTax}⚡`);
   const bonusText = bonusBits.length > 0 ? ` · ${bonusBits.join(', ')}` : '';
   return `${prefix}${pieces.join(', ') || 'no effect'} · costs ${cost}${affordable}${bonusText}`;

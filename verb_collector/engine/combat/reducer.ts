@@ -204,8 +204,12 @@ function castSentence(state: GameState): GameState {
   const tokensText = state.composing.join(' ');
   const withLog = appendLog(afterEnergy, `▶ ${tokensText}`);
   const afterEffects = applyEffects(withLog, result.effects);
+  const afterCombatCheck = checkCombatEnd(afterEffects);
+  if (afterCombatCheck.phase !== 'combat') return afterCombatCheck;
 
-  return checkCombatEnd(afterEffects);
+  // One sentence per turn: a successful cast immediately ends the player
+  // turn. End-turn button is only used to "pass" without casting.
+  return endTurn(afterCombatCheck);
 }
 
 // ---------------------------------------------------------------------------
