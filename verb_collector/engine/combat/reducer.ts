@@ -13,7 +13,7 @@ import {
   RUN_LENGTH, generateSceneOffers, runSentenceFragment,
 } from '../run/scenes';
 import { hasSave, loadState, saveState, finalizeRun, clearSave } from '../save/storage';
-import { RelicId, RELICS, relicHook } from '../relics/relics';
+import { RelicId, RELICS, relicHook, RELIC_HOOKS } from '../relics/relics';
 import { PotionId, POTIONS, POTION_SLOT_COUNT } from '../potions/potions';
 
 const HAND_SIZE = 5;
@@ -61,6 +61,28 @@ export type Action =
   | { type: 'mirror_duplicate'; cardId: string };
 
 let currentRng: () => number = makeRng(Date.now());
+
+// Initialize per-relic state on acquisition. No-op if the relic has no
+// initialState() or if it has already been initialized for this run.
+function initRelicState(
+  prev: Record<string, Record<string, unknown>>,
+  relic: RelicId,
+): Record<string, Record<string, unknown>> {
+  if (prev[relic] !== undefined) return prev;
+  const def = RELICS[relic];
+  if (!def?.initialState) return prev;
+  return { ...prev, [relic]: def.initialState() };
+}
+
+// Walk every relic the player owns and ensure relicState has an entry for any
+// relic whose def declares initialState. Cheap to call after any relics-list
+// mutation (acquisition, run start) — idempotent for already-seen relics.
+function ensureRelicStateForAll(state: GameState): GameState {
+  let rs = state.relicState;
+  for (const r of state.relics) rs = initRelicState(rs, r);
+  if (rs === state.relicState) return state;
+  return { ...state, relicState: rs };
+}
 
 export function reducer(state: GameState, action: Action): GameState {
   const next = reduce(state, action);
@@ -166,7 +188,7 @@ export function startNewRun(): GameState {
     announcedThisTurn: [],
     encounterName: '',
   };
-  return base;
+  return ensureRelicStateForAll(base);
 }
 
 function makeFreshPlayer(): Player {
@@ -270,8 +292,18 @@ function advanceToNextNode(state: GameState, sceneCompleted: boolean): GameState
     return finalizeWonRun(withHide);
   }
   const offers = generateSceneOffers(effectiveIndex, currentRng);
+
+  // Relic per-scene ink (e.g. THE INKWELL): sum every relic's inkPerScene.
+  let bonusInk = 0;
+  for (const hook of relicHook(withHide, 'inkPerScene')) {
+    bonusInk += hook();
+  }
+  const inkAdjusted = bonusInk > 0
+    ? appendLog({ ...withHide, ink: withHide.ink + bonusInk }, `Your relics drip ${bonusInk} ink.`)
+    : withHide;
+
   return {
-    ...withHide,
+    ...inkAdjusted,
     phase: 'map',
     sceneIndex: effectiveIndex,
     sceneOptions: offers,
@@ -325,14 +357,39 @@ function spendInk(state: GameState, kind: 'peek' | 'hide'): GameState {
 
 function startCombat(runState: GameState, encounter: Encounter): GameState {
   const deck = shuffle(runState.permanentDeck, currentRng);
+
+  // Sum permanent max-energy bonuses from relics (e.g. THE SEMICOLON).
+  let energyBonus = 0;
+  for (const hook of relicHook(runState, 'maxEnergyBonus')) {
+    energyBonus += hook(runState);
+  }
+  const startingMaxEnergy = PLAYER_ENERGY + energyBonus;
+
+  // Reset per-combat relic flags so ASTERISK / EXCLAMATION_POINT fire again.
+  const refreshedRelicState: Record<string, Record<string, unknown>> = {
+    ...runState.relicState,
+  };
+  for (const r of runState.relics) {
+    const cur = refreshedRelicState[r];
+    if (cur && 'usedThisCombat' in cur) {
+      refreshedRelicState[r] = { ...cur, usedThisCombat: false };
+    }
+    // MULLIGAN_STONE: refresh its one use per combat.
+    if (r === 'MULLIGAN_STONE') {
+      refreshedRelicState[r] = { ...(cur ?? {}), usesRemaining: 1 };
+    }
+  }
+
   // Per-turn draw bonus from relics (e.g. THE COMMA) applies here too.
   const base: GameState = {
     ...runState,
+    relicState: refreshedRelicState,
     phase: 'combat',
     turn: 1,
     player: {
       ...runState.player,
-      energy: PLAYER_ENERGY,
+      energy: startingMaxEnergy,
+      maxEnergy: startingMaxEnergy,
       block: 0,
       adjectives: [],
       nextTurnEnergyBonus: 0,
@@ -458,17 +515,63 @@ function castSentence(state: GameState): GameState {
   const tokensText = state.composing.join(' ');
   const withLog = appendLog(afterEnergy, `▶ ${tokensText}`);
 
-  // Relics can inject extra effects after a cast (e.g. EXCLAMATION_POINT
-  // adds bonus damage to the first sentence).
-  let withEffects = applyEffects(withLog, result.effects);
+  // Scale outgoing damage effects via relic hooks (e.g. EXCLAMATION_POINT's
+  // first-sentence +50%). Only enemy-targeted damage from the sentence is
+  // boosted — self-damage from reflect_hit traits etc. is left alone.
+  const outgoingHooks = relicHook(withLog, 'onPlayerOutgoingDamage');
+  const scaledEffects = outgoingHooks.length === 0
+    ? result.effects
+    : result.effects.map((e) => {
+        if (e.kind !== 'damage' || e.target.kind !== 'enemy') return e;
+        let amount = e.amount;
+        for (const hook of outgoingHooks) amount = hook(withLog, amount);
+        return { ...e, amount };
+      });
+
+  // Relics can inject extra effects after a cast (e.g. FOOTNOTE spreads
+  // damage to other enemies; ASTERISK adds +1 to the primary effect).
+  let withEffects = applyEffects(withLog, scaledEffects);
   for (const hook of relicHook(withEffects, 'onAfterCast')) {
     withEffects = applyEffects(withEffects, hook(withEffects, state.composing));
+  }
+
+  // Mark relics whose effect was just consumed.
+  withEffects = markUsedThisCombat(withEffects, ['ASTERISK', 'EXCLAMATION_POINT']);
+
+  // ELLIPSIS ink gain (25% chance). The relic's onAfterCast hook already
+  // logged the trail-off; we apply the +1 ink here because there's no
+  // gain_ink Effect kind.
+  if (
+    withEffects.relics.includes('ELLIPSIS') &&
+    RELIC_HOOKS['ELLIPSIS']?.onAfterCast &&
+    // Re-roll using the same 25% probability used in the hook? No — we'd
+    // double-roll. Instead we look at the log: if the trail-off line is the
+    // most recent log entry from this cast, the hook fired and we award ink.
+    withEffects.log.length > 0 &&
+    withEffects.log[withEffects.log.length - 1]?.text.startsWith('The Ellipsis')
+  ) {
+    withEffects = { ...withEffects, ink: withEffects.ink + 1 };
   }
 
   const afterCombatCheck = checkCombatEnd(withEffects);
   if (afterCombatCheck.phase !== 'combat') return afterCombatCheck;
 
   return endTurn(afterCombatCheck);
+}
+
+// Mark the given relics' `usedThisCombat` flag in relicState. Idempotent for
+// relics that aren't owned or that don't carry that flag.
+function markUsedThisCombat(state: GameState, relics: RelicId[]): GameState {
+  let rs = state.relicState;
+  let changed = false;
+  for (const r of relics) {
+    if (!state.relics.includes(r)) continue;
+    const cur = rs[r];
+    if (!cur || !('usedThisCombat' in cur) || cur['usedThisCombat'] === true) continue;
+    rs = { ...rs, [r]: { ...cur, usedThisCombat: true } };
+    changed = true;
+  }
+  return changed ? { ...state, relicState: rs } : state;
 }
 
 // ---------------------------------------------------------------------------
@@ -782,11 +885,12 @@ function shopBuyRelic(state: GameState, relic: RelicId, price: number): GameStat
   if (state.phase !== 'shop') return state;
   if (state.ink < price) return appendLog(state, 'Not enough ink.');
   if (state.relics.includes(relic)) return appendLog(state, 'Already have that relic.');
-  return appendLog({
+  const withRelic = ensureRelicStateForAll({
     ...state,
     ink: state.ink - price,
     relics: [...state.relics, relic],
-  }, `Bought ${RELICS[relic]?.name ?? relic}.`);
+  });
+  return appendLog(withRelic, `Bought ${RELICS[relic]?.name ?? relic}.`);
 }
 
 function shrineUpgrade(state: GameState, cardId: string, mode: 'cost' | 'effect'): GameState {
@@ -820,10 +924,11 @@ function fireHeal(state: GameState): GameState {
 function fireTakeRelic(state: GameState, relic: RelicId): GameState {
   if (state.phase !== 'fire') return state;
   if (state.relics.includes(relic)) return state;
-  return appendLog({
+  const withRelic = ensureRelicStateForAll({
     ...state,
     relics: [...state.relics, relic],
-  }, `You pocket the ${RELICS[relic]?.name ?? relic}.`);
+  });
+  return appendLog(withRelic, `You pocket the ${RELICS[relic]?.name ?? relic}.`);
 }
 
 function mirrorDuplicate(state: GameState, cardId: string): GameState {
