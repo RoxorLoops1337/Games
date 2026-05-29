@@ -11,6 +11,7 @@ function iconSlug(noun: NounId): string | null {
     case 'THORN':        return 'thorn';
     case 'BIG_GOBLIN':   return 'big_goblin';
     case 'GREEN_KNIGHT': return 'green_knight';
+    case 'GOBLIN_SHAMAN': return 'goblin';
     default:             return null;
   }
 }

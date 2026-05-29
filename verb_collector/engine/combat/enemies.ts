@@ -57,6 +57,13 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     displayName: 'THE GREEN KNIGHT',
     maxHp: 60,
     attack: 8,
+    traits: ['honor'],
+  },
+  GOBLIN_SHAMAN: {
+    noun: 'GOBLIN_SHAMAN',
+    displayName: 'A GOBLIN SHAMAN',
+    maxHp: 8,
+    attack: 0,
   },
 };
 
@@ -84,6 +91,7 @@ export function spawnEnemy(templateKey: keyof typeof ENEMY_TEMPLATES): Enemy {
 function chooseInitialIntent(key: string, t: EnemyTemplate): Enemy['intent'] {
   if (key === 'MUSHROOM') return { kind: 'spore', damage: t.attack };
   if (key === 'THORN')    return { kind: 'thorns' };
+  if (key === 'GOBLIN_SHAMAN') return { kind: 'reapply_big_to_partner' };
   return { kind: 'attack', damage: t.attack };
 }
 
@@ -101,6 +109,11 @@ export function chooseNextIntent(enemy: Enemy): Enemy['intent'] {
     if (enemy.turnsAlive % 2 === 1) return { kind: 'reapply_big' };
     return { kind: 'attack', damage: enemy.attack };
   }
+  if (enemy.noun === 'GOBLIN_SHAMAN') {
+    // Rotate between casting BIG on its partner and resting.
+    if (enemy.turnsAlive % 2 === 1) return { kind: 'wait' };
+    return { kind: 'reapply_big_to_partner' };
+  }
   return { kind: 'attack', damage: enemy.attack };
 }
 
@@ -113,5 +126,6 @@ export function intentLabel(intent: Enemy['intent']): string {
     case 'thorns':         return 'reflects HIT';
     case 'multiply':       return 'multiply';
     case 'reapply_big':    return 'reapply BIG';
+    case 'reapply_big_to_partner': return 'cast BIG on partner';
   }
 }

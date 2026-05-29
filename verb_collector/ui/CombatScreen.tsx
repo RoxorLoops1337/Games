@@ -189,6 +189,9 @@ function EnemyPortrait({ enemy, dispatch }: { enemy: Enemy; dispatch: (a: Action
           <span className="hp-text">{enemy.hp} / {enemy.maxHp}</span>
         </div>
         <div className="intent"><Sword size={11} strokeWidth={2} /> {intentLabel(enemy.intent)}</div>
+        {enemy.traits.includes('honor') && (
+          <div className="honor-active">HONOR ACTIVE — announce your attack first</div>
+        )}
         {enemy.adjectives.length > 0 && (
           <div className="adj-tags">
             {enemy.adjectives.map((a) => (

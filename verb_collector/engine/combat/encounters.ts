@@ -18,7 +18,7 @@ export const NORMAL_ENCOUNTERS: Encounter[] = [
 ];
 
 export const ELITE_ENCOUNTERS: Encounter[] = [
-  { name: 'A BIG GOBLIN',          enemies: ['BIG_GOBLIN'],          difficulty: 'elite' },
+  { name: 'A BIG GOBLIN AND A SHAMAN', enemies: ['BIG_GOBLIN', 'GOBLIN_SHAMAN'], difficulty: 'elite' },
 ];
 
 export const BOSS_ENCOUNTERS: Encounter[] = [
