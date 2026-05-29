@@ -31,7 +31,9 @@ export function App(): React.ReactElement {
       <span className="corner br" aria-hidden="true" />
 
       <header className="run-sentence">
-        <div className="run-text">
+        {/* Keyed on the sentence text so the write-in animation replays each
+            time a new scene extends the chronicle. */}
+        <div className="run-text" key={runText}>
           <span className="drop">{first}</span>{rest}…
         </div>
         <div className="run-progress">Folio {toRoman(sceneNum)} of {toRoman(RUN_LENGTH)}</div>

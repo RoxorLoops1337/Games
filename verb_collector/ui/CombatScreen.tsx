@@ -77,7 +77,7 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
             ))
           )}
         </div>
-        <div className="preview">{preview}</div>
+        <div className="preview"><span className="preview-ink" key={preview}>{preview}</span></div>
         <div className="sentence-actions">
           <button onClick={() => dispatch({ type: 'clear_sentence' })} disabled={state.composing.length === 0}>
             clear
