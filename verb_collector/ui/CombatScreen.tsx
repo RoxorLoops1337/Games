@@ -1,12 +1,14 @@
 import React, { useMemo } from 'react';
-import { Heart, Zap, Shield, Sword, Eye, Layers, Trash2 } from 'lucide-react';
+import { Heart, Zap, Shield, Sword, Eye, Layers, Trash2, Coins } from 'lucide-react';
 import { VERBS, ADJECTIVES, STARTER_CONNECTORS, NOUNS, CONNECTORS } from '../engine/words';
 import { parse } from '../engine/parser/grammar';
 import { resolve } from '../engine/resolver/resolve';
 import { intentLabel } from '../engine/combat/enemies';
 import { Action } from '../engine/combat/reducer';
 import { Card, Enemy, GameState } from '../engine/combat/state';
+import { RELICS } from '../engine/relics/relics';
 import { EnemyIcon } from './EnemyIcon';
+import { PotionTray } from './PotionTray';
 
 interface Props {
   state: GameState;
@@ -57,6 +59,27 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
               ))}
             </div>
           )}
+          {state.relics.length > 0 && (
+            <div className="relic-strip" aria-label="Relics held">
+              {state.relics.map((r) => {
+                const def = RELICS[r];
+                return (
+                  <span key={r} className="relic-chip" title={def ? `${def.name} — ${def.desc}` : r}>
+                    {def?.name ?? r}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <div className="player-tray">
+            <div className="ink-amount">
+              <Coins size={12} strokeWidth={2} /> {state.ink} ink
+            </div>
+            <PotionTray
+              potions={state.potions}
+              onUse={(slot) => dispatch({ type: 'use_potion', slot })}
+            />
+          </div>
         </div>
       </section>
 
