@@ -106,11 +106,12 @@ export function chooseNextIntent(enemy: Enemy): Enemy['intent'] {
 
 export function intentLabel(intent: Enemy['intent']): string {
   switch (intent.kind) {
-    case 'attack':       return `attack ${intent.damage}`;
-    case 'wait':         return 'wait';
-    case 'spore':        return `spore burst ${intent.damage}`;
-    case 'thorns':       return 'reflects HIT';
-    case 'multiply':     return 'multiply';
-    case 'reapply_big':  return 'reapply BIG';
+    case 'attack':         return `attack ${intent.damage}`;
+    case 'double_attack':  return `attack ${intent.damage} ×2`;
+    case 'wait':           return 'wait';
+    case 'spore':          return `spore burst ${intent.damage}`;
+    case 'thorns':         return 'reflects HIT';
+    case 'multiply':       return 'multiply';
+    case 'reapply_big':    return 'reapply BIG';
   }
 }
