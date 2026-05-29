@@ -1862,3 +1862,48 @@ body::after {
 }
 .potion-slot-filled:hover:not(:disabled) { filter: brightness(1.1); }
 .potion-slot-filled:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ============================================================
+   Phase C wiring — relic strip + player tray
+   ============================================================ */
+.relic-strip {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.relic-chip {
+  font-family: var(--font-smallcap);
+  font-size: 0.62rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid var(--gilt);
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 0, rgba(255,225,160,0.5), transparent),
+    var(--vellum);
+  color: var(--ink-soft);
+  cursor: help;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px var(--shadow-soft);
+}
+.player-tray {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--rule);
+}
+.player-tray .ink-amount {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--wax);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+@media (max-width: 720px) {
+  .relic-chip { font-size: 0.55rem; padding: 1px 6px; }
+}
