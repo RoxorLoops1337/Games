@@ -24,7 +24,69 @@ export interface PotionDef {
 }
 
 // Populated by potions-system agent.
-export const POTIONS: Partial<Record<PotionId, PotionDef>> = {};
+export const POTIONS: Partial<Record<PotionId, PotionDef>> = {
+  BURN_ALL: {
+    id: 'BURN_ALL',
+    label: 'Vial of "BURN ALL"',
+    sentence: 'BURN ALL',
+    cast: (state: GameState): Effect[] => {
+      const effects: Effect[] = [{ kind: 'log', text: 'The vial ignites — every foe blazes.' }];
+      for (const enemy of state.enemies) {
+        if (enemy.hp <= 0) continue;
+        effects.push({
+          kind: 'damage',
+          target: { kind: 'enemy', id: enemy.id },
+          amount: 4,
+        });
+        effects.push({
+          kind: 'add_adjective',
+          target: { kind: 'enemy', id: enemy.id },
+          adjective: 'BURNING',
+          turns: 3,
+        });
+      }
+      return effects;
+    },
+  },
+  FORGET_PAIN: {
+    id: 'FORGET_PAIN',
+    label: 'Vial of "FORGET PAIN"',
+    sentence: 'FORGET PAIN',
+    cast: (state: GameState): Effect[] => {
+      const missing = state.player.maxHp - state.player.hp;
+      return [
+        { kind: 'log', text: 'You FORGET PAIN — the wound was only a memory.' },
+        { kind: 'heal', target: { kind: 'self' }, amount: missing },
+      ];
+    },
+  },
+  REMEMBER_EVERYTHING: {
+    id: 'REMEMBER_EVERYTHING',
+    label: 'Vial of "REMEMBER EVERYTHING"',
+    sentence: 'REMEMBER EVERYTHING',
+    cast: (_state: GameState): Effect[] => [
+      { kind: 'reshuffle_discard' },
+    ],
+  },
+  MAKE_SELF_INVISIBLE: {
+    id: 'MAKE_SELF_INVISIBLE',
+    label: 'Vial of "MAKE SELF INVISIBLE"',
+    sentence: 'MAKE SELF INVISIBLE',
+    cast: (state: GameState): Effect[] => {
+      const effects: Effect[] = [
+        { kind: 'log', text: 'You vanish from the page — eyes slide off you.' },
+      ];
+      for (const enemy of state.enemies) {
+        if (enemy.hp <= 0) continue;
+        effects.push({
+          kind: 'compel_skip',
+          target: { kind: 'enemy', id: enemy.id },
+        });
+      }
+      return effects;
+    },
+  },
+};
 
 export function potionLabel(id: PotionId): string {
   return POTIONS[id]?.label ?? `Vial of "${id}"`;
