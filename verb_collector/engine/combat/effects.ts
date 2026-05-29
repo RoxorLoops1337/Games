@@ -1,5 +1,6 @@
 import { ADJECTIVES, findInteraction } from '../words';
 import { AdjectiveId } from '../types';
+import { shuffle } from '../deck/deck';
 import { AdjectiveInstance, CardId, Enemy, GameState, Player } from './state';
 
 export type TargetRef =
@@ -17,6 +18,7 @@ export type Effect =
   | { kind: 'queue_next_turn_bonus'; energy: number; draw: number }
   | { kind: 'discard_card'; cardId: CardId }
   | { kind: 'compel_skip'; target: TargetRef }
+  | { kind: 'reshuffle_discard' }
   | { kind: 'log'; text: string };
 
 export function applyEffects(state: GameState, effects: Effect[]): GameState {
@@ -46,6 +48,7 @@ function applyEffect(state: GameState, e: Effect): GameState {
       };
     case 'discard_card':     return applyDiscardCard(state, e.cardId);
     case 'compel_skip':      return applyCompelSkip(state, e.target);
+    case 'reshuffle_discard': return applyReshuffleDiscard(state);
     case 'log':              return log(state, e.text);
   }
 }
@@ -245,6 +248,19 @@ function applyDiscardCard(state: GameState, cardId: CardId): GameState {
   if (card === undefined) return state;
   const hand = state.hand.filter((_, i) => i !== cardIdx);
   return { ...state, hand, discard: [...state.discard, card] };
+}
+
+// Shuffles the discard pile back into the deck. Used by the
+// REMEMBER EVERYTHING potion. No-op when there's nothing to recall.
+function applyReshuffleDiscard(state: GameState): GameState {
+  if (state.discard.length === 0) {
+    return log(state, 'Nothing to remember — the discard pile is empty.');
+  }
+  const reshuffled = shuffle([...state.deck, ...state.discard], Math.random);
+  return log(
+    { ...state, deck: reshuffled, discard: [] },
+    'You REMEMBER EVERYTHING — the discarded words flock back into your deck.',
+  );
 }
 
 // ---- end-of-round ticks ---------------------------------------------------
