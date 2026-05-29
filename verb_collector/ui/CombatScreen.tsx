@@ -87,8 +87,9 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
             onClick={() => dispatch({ type: 'cast_sentence' })}
             disabled={state.composing.length === 0}
             title="casts the sentence — ends your turn (one sentence per round)"
+            aria-label="cast sentence and end turn"
           >
-            cast &amp; end turn
+            <span>cast<br />&amp; seal</span>
           </button>
         </div>
       </section>
