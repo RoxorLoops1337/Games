@@ -235,6 +235,9 @@ body::after {
   flex: 1;
   color: var(--ink);
   text-shadow: 0 1px 0 rgba(255, 240, 200, 0.5), 0 2px 6px rgba(70, 40, 10, 0.18);
+  /* The chronicle writes itself in — on first load, and again whenever a new
+     scene extends the run sentence (the element is re-keyed in App.tsx). */
+  animation: ink-write 1300ms cubic-bezier(0.45, 0, 0.55, 1) both;
 }
 .run-text .drop {
   font-family: var(--font-blackletter);
@@ -572,6 +575,7 @@ body::after {
   font-size: 1.1rem;
 }
 .token {
+  position: relative;
   font-family: var(--font-body);
   font-size: 1.05rem;
   background:
@@ -584,11 +588,45 @@ body::after {
   text-transform: uppercase;
   box-shadow: 0 2px 3px var(--shadow-soft), inset 0 1px 0 rgba(255,240,200,0.5);
   transition: transform 100ms ease, background 100ms ease, box-shadow 100ms ease;
+  /* Each freshly-tapped word is inked onto the page left-to-right. Because
+     React keeps existing token nodes mounted (keys are positional), only the
+     newly appended token runs this on mount. */
+  animation: ink-write 420ms cubic-bezier(0.5, 0, 0.5, 1) both;
+}
+/* The wet nib: a dark ink edge that rides the reveal as the word is written,
+   then lifts off the page. */
+.token::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 6px;
+  height: calc(100% + 6px);
+  pointer-events: none;
+  border-radius: 60% 60% 50% 50%;
+  background: radial-gradient(ellipse at 50% 30%, rgba(26, 20, 10, 0.85), rgba(26, 20, 10, 0.15) 70%, transparent);
+  filter: blur(1px);
+  animation: nib-travel 420ms cubic-bezier(0.5, 0, 0.5, 1) both;
 }
 .token:hover {
   background: linear-gradient(180deg, var(--vellum) 0%, var(--vellum) 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 6px var(--shadow-soft), inset 0 1px 0 rgba(255,240,200,0.7);
+}
+
+/* Handwriting: ink laid down left-to-right, wet then settling sharp/dark.
+   Extra bottom room in the clip avoids shearing descenders mid-stroke. */
+@keyframes ink-write {
+  0%   { clip-path: inset(0 100% -20% 0); filter: blur(0.8px); opacity: 0.3; }
+  55%  { filter: blur(0.3px); opacity: 1; }
+  100% { clip-path: inset(0 0 -20% 0); filter: blur(0); opacity: 1; }
+}
+/* The nib rides the writing edge and lifts away at the end. */
+@keyframes nib-travel {
+  0%   { left: 0;          opacity: 0; }
+  12%  { opacity: 0.9; }
+  85%  { opacity: 0.9; }
+  100% { left: calc(100% - 6px); opacity: 0; }
 }
 .preview {
   font-size: 0.9rem;
@@ -598,6 +636,26 @@ body::after {
   padding: 0 4px 0 36px;
   font-family: var(--font-script);
   font-style: italic;
+}
+/* The live prediction re-inks whenever the composed sentence changes
+   (the inner span is re-keyed on its text in CombatScreen). */
+.preview-ink {
+  display: inline-block;
+  animation: ink-fade 260ms ease-out both;
+}
+@keyframes ink-fade {
+  0%   { opacity: 0; filter: blur(1.2px); transform: translateY(1px); }
+  100% { opacity: 1; filter: blur(0); transform: translateY(0); }
+}
+
+/* Respect reduced-motion: drop the handwriting + candle animations and just
+   show the finished ink. */
+@media (prefers-reduced-motion: reduce) {
+  .token,
+  .run-text,
+  .preview-ink { animation: none !important; }
+  .token::after { display: none !important; }
+  body::after { animation: none !important; }
 }
 .sentence-actions {
   display: flex;
