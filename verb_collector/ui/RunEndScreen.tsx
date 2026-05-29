@@ -18,7 +18,7 @@ export function RunEndScreen({ state, dispatch }: Props): React.ReactElement {
           : 'The story ends mid-sentence.'}
       </p>
       <div className="final-sentence">{state.runSentence}.</div>
-      <button className="primary" onClick={() => dispatch({ type: 'new_run' })}>
+      <button className="primary" onClick={() => dispatch({ type: 'start_new_run' })}>
         new run
       </button>
     </div>

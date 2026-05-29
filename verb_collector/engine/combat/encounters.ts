@@ -24,19 +24,3 @@ export const ELITE_ENCOUNTERS: Encounter[] = [
 export const BOSS_ENCOUNTERS: Encounter[] = [
   { name: 'THE GREEN KNIGHT',      enemies: ['GREEN_KNIGHT'],        difficulty: 'boss' },
 ];
-
-export function pickEncounter(combatsWon: number, rng: () => number): Encounter {
-  // Simple pacing for v0: first 3 are normals, 4th is elite, 5th is boss.
-  if (combatsWon === 4) {
-    const pool = BOSS_ENCOUNTERS;
-    return pool[Math.floor(rng() * pool.length)]!;
-  }
-  if (combatsWon === 3) {
-    const pool = ELITE_ENCOUNTERS;
-    return pool[Math.floor(rng() * pool.length)]!;
-  }
-  const pool = NORMAL_ENCOUNTERS;
-  return pool[Math.floor(rng() * pool.length)]!;
-}
-
-export const RUN_LENGTH = 5; // total combats per run before "won_run"

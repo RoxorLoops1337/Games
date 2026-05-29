@@ -1313,3 +1313,509 @@ body::after {
   .final-sentence { font-size: 1.05rem; padding: 18px 20px; }
   .final-sentence::first-letter { font-size: 2.6em; }
 }
+
+/* ============================================================
+   Title / Map / Scene screens (Phase A foundation)
+   ============================================================ */
+
+.title-app {
+  max-width: 720px;
+  text-align: center;
+  padding-top: 80px;
+  padding-bottom: 80px;
+}
+.title-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px 30px;
+}
+.title-mark { color: var(--wax); opacity: 0.85; }
+.title-name {
+  font-family: var(--font-display);
+  font-size: 3.2rem;
+  letter-spacing: 9px;
+  margin: 0;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255,240,200,0.5), 0 3px 8px rgba(50,30,5,0.25);
+}
+.title-flavor {
+  font-family: var(--font-script);
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  margin: 0 0 20px;
+  letter-spacing: 1px;
+}
+.title-actions { display: flex; gap: 14px; }
+.title-btn {
+  font-family: var(--font-smallcap);
+  font-size: 0.95rem;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  padding: 12px 32px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 80ms ease;
+}
+.title-btn:hover { background: var(--vellum-soft); }
+.title-btn:active { transform: translateY(1px); }
+.title-btn.primary {
+  background: var(--ink);
+  color: var(--vellum);
+  box-shadow: 0 2px 4px var(--shadow-soft), inset 0 -2px 0 rgba(0,0,0,0.3);
+}
+.title-btn.primary:hover { background: var(--wax); border-color: var(--wax); }
+.title-meta {
+  margin-top: 28px;
+  display: flex;
+  gap: 28px;
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+}
+.title-meta-label {
+  font-family: var(--font-smallcap);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-right: 6px;
+}
+
+/* ---- Map ---- */
+.map-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: center;
+  padding: 8px 0 24px;
+}
+.map-intro {
+  font-family: var(--font-script);
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: 1.1rem;
+  letter-spacing: 2px;
+}
+.map-prompt { padding: 4px 12px; border-bottom: 1px dashed var(--rule); }
+.map-offers {
+  display: flex;
+  gap: 22px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.scene-card {
+  font-family: var(--font-body);
+  background:
+    radial-gradient(ellipse 80% 45% at 50% 0%, rgba(255,240,200,0.45), transparent),
+    var(--bg-card);
+  border: 1px solid var(--ink);
+  width: 220px;
+  min-height: 180px;
+  padding: 18px 16px 20px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 3px 8px var(--shadow);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.scene-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 18px var(--shadow);
+}
+.scene-card.scene-combat_elite { border-color: var(--wax); }
+.scene-card.scene-combat_boss { border-color: var(--wax-dark); box-shadow: 0 4px 16px rgba(120,20,33,0.4); }
+.scene-art {
+  width: 70px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  background: var(--vellum-soft);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.scene-glyph {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  color: var(--wax);
+}
+.scene-lead {
+  font-family: var(--font-smallcap);
+  font-size: 0.7rem;
+  letter-spacing: 3px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.scene-label {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-align: center;
+}
+.map-ink-bar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 8px 16px;
+  border-top: 1px dashed var(--rule);
+  border-bottom: 1px dashed var(--rule);
+}
+.ink-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+.ink-amount svg { color: var(--wax); }
+.ink-action {
+  font-family: var(--font-smallcap);
+  font-size: 0.72rem;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border: 1px solid var(--ink-soft);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ink-action:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--vellum-soft);
+}
+.ink-action:disabled { opacity: 0.4; cursor: not-allowed; }
+.ink-action .cost {
+  color: var(--wax);
+  font-family: var(--font-body);
+  font-weight: bold;
+}
+.peek-panel {
+  margin-top: 6px;
+  padding: 10px 16px;
+  background: rgba(255,240,200,0.4);
+  border: 1px dashed var(--rule);
+}
+.peek-label {
+  font-family: var(--font-smallcap);
+  font-size: 0.72rem;
+  letter-spacing: 2.5px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.peek-list { display: flex; gap: 8px; flex-wrap: wrap; }
+.peek-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  background: var(--vellum);
+}
+.peek-glyph { color: var(--wax); font-family: var(--font-display); }
+.hide-banner {
+  font-family: var(--font-script);
+  font-style: italic;
+  color: var(--wax);
+  font-size: 0.95rem;
+  padding: 8px;
+  letter-spacing: 1px;
+}
+.map-progress {
+  margin-top: 6px;
+  font-family: var(--font-smallcap);
+  letter-spacing: 3px;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+.title-link {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  margin-left: 10px;
+  font-size: 0.85rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+.title-link:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ---- Generic scene screen frame ---- */
+.scene-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 0;
+}
+.scene-header { text-align: center; padding: 8px 4px 16px; }
+.scene-header h2 {
+  font-family: var(--font-display);
+  letter-spacing: 7px;
+  font-size: 1.9rem;
+  margin: 0 0 8px;
+  color: var(--ink);
+}
+.scene-flavor {
+  font-family: var(--font-script);
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+  max-width: 560px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+.scene-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+.scene-leave, .scene-confirm {
+  font-family: var(--font-smallcap);
+  font-size: 0.85rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 10px 28px;
+  background: transparent;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  cursor: pointer;
+}
+.scene-confirm { background: var(--ink); color: var(--vellum); }
+.scene-leave:hover { background: var(--vellum-soft); }
+.scene-confirm:hover { background: var(--wax); border-color: var(--wax); }
+
+/* ---- Shop ---- */
+.ink-balance {
+  margin-top: 10px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--wax);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.shop-section { padding: 12px 0; border-top: 1px dashed var(--rule); }
+.shop-section:first-of-type { border-top: none; padding-top: 0; }
+.shop-section-label {
+  font-family: var(--font-smallcap);
+  font-size: 0.75rem;
+  letter-spacing: 3px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.shop-items {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.shop-item {
+  width: 200px;
+  min-height: 120px;
+  background: var(--bg-card);
+  border: 1px solid var(--ink);
+  padding: 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.shop-item:hover:not(.unaffordable) { transform: translateY(-2px); box-shadow: 0 4px 8px var(--shadow); }
+.shop-item.unaffordable { opacity: 0.5; cursor: not-allowed; }
+.shop-item-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.shop-item-desc {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  line-height: 1.3;
+  flex: 1;
+}
+.shop-item-price {
+  font-family: var(--font-body);
+  color: var(--wax);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+/* ---- Shrine ---- */
+.shrine-deck { padding: 0 8px; }
+.shrine-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.shrine-card {
+  width: 150px;
+  background: var(--bg-card);
+  border: 1px solid var(--ink);
+  padding: 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  position: relative;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+.shrine-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px var(--shadow); }
+.shrine-card.picked { border-color: var(--wax); box-shadow: 0 0 0 2px var(--wax-bright); }
+.shrine-card-cost {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: var(--ink);
+  color: var(--vellum);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+.shrine-card-name {
+  font-family: var(--font-display);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.shrine-card-desc {
+  font-size: 0.68rem;
+  color: var(--ink-soft);
+  margin-top: 4px;
+  line-height: 1.3;
+}
+.shrine-modes {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.shrine-mode {
+  width: 200px;
+  padding: 14px;
+  background: var(--vellum);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+}
+.shrine-mode:hover { background: var(--vellum-soft); }
+.shrine-mode-label {
+  font-family: var(--font-smallcap);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.shrine-mode-desc { font-size: 0.78rem; color: var(--ink-soft); margin-top: 4px; }
+
+/* ---- Fire ---- */
+.fire-choices, .fire-relic-list {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.fire-choice, .fire-relic {
+  width: 220px;
+  padding: 16px;
+  background: var(--vellum);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  text-align: center;
+  font-family: var(--font-body);
+}
+.fire-choice:hover, .fire-relic:hover { background: var(--vellum-soft); }
+.fire-choice-label, .fire-relic-name {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.fire-choice-desc, .fire-relic-desc {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+/* ---- Mirror ---- */
+.mirror-cards {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 10px 4px;
+}
+.mirror-card {
+  width: 140px;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  font-family: var(--font-body);
+  text-align: left;
+}
+.mirror-card.adjective { border-style: dashed; }
+.mirror-card.picked {
+  border-color: var(--wax);
+  box-shadow: 0 0 0 2px var(--wax-bright), 0 4px 8px var(--shadow);
+}
+.mirror-card-name {
+  font-family: var(--font-display);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.mirror-card-desc { font-size: 0.68rem; color: var(--ink-soft); margin-top: 4px; line-height: 1.3; }
+
+.empty {
+  font-family: var(--font-script);
+  font-style: italic;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+/* mobile tweaks for the new screens */
+@media (max-width: 720px) {
+  .title-name { font-size: 2.2rem; letter-spacing: 6px; }
+  .scene-card { width: calc(50% - 12px); min-height: 150px; padding: 12px 10px; }
+  .scene-art { width: 56px; height: 56px; }
+  .scene-label { font-size: 0.95rem; }
+  .shop-item, .shrine-card, .fire-choice, .fire-relic { width: calc(50% - 8px); }
+  .mirror-card { width: calc(50% - 6px); }
+}
