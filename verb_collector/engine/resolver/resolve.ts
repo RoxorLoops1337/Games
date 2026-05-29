@@ -4,9 +4,9 @@ import { Card, GameState } from '../combat/state';
 import { Effect, TargetRef, damageMultiplier } from '../combat/effects';
 
 export interface BonusBreakdown {
-  eloquence: number;            // +N from connectors (max 3)
-  itChainApplied: boolean;      // true if any second clause used IT
-  enemyAmbiguityTax: number;    // +N energy from using ENEMY with multiple alive
+  eloquence: number;
+  itChainsApplied: number;     // how many clauses got the IT-chain bonus
+  enemyAmbiguityTax: number;
 }
 
 export interface ResolveResult {
@@ -17,7 +17,6 @@ export interface ResolveResult {
   bonuses: BonusBreakdown;
 }
 
-const ELOQUENCE_CAP = 3;
 const IT_CHAIN_MULTIPLIER = 1.5;
 
 export function resolve(sentence: Sentence, state: GameState): ResolveResult {
@@ -26,19 +25,17 @@ export function resolve(sentence: Sentence, state: GameState): ResolveResult {
   const consumedCardIds: string[] = [];
   let lastNoun: NounId | null = state.lastNounUsed;
 
-  const clauses: Clause[] = [sentence.first];
-  if (sentence.conjunction) clauses.push(sentence.conjunction.second);
+  const allClauses: Clause[] = [sentence.first, ...sentence.rest.map((r) => r.clause)];
 
   const aliveCount = state.enemies.filter((e) => e.hp > 0).length;
   let enemyAmbiguityTax = 0;
-  let itChainApplied = false;
+  let itChainsApplied = 0;
 
-  for (let ci = 0; ci < clauses.length; ci++) {
-    const clause = clauses[ci]!;
+  for (let ci = 0; ci < allClauses.length; ci++) {
+    const clause = allClauses[ci]!;
     const verbDef = VERBS[clause.verb];
     baseEnergyCost += verbDef.cost;
 
-    // ENEMY ambiguity: using ENEMY when >1 enemies are alive costs +1 energy.
     if (clause.object?.noun === 'ENEMY' && aliveCount > 1) {
       enemyAmbiguityTax += 1;
     }
@@ -49,6 +46,8 @@ export function resolve(sentence: Sentence, state: GameState): ResolveResult {
     );
     if (verbCard) consumedCardIds.push(verbCard.id);
 
+    // Adjective card consumption only for the MAKE-apply form (trailingAdjective).
+    // MAKE-compel (trailingVerb) does NOT consume a verb card from hand.
     if (clause.trailingAdjective !== undefined) {
       const adjCard = state.hand.find(
         (c) =>
@@ -64,43 +63,37 @@ export function resolve(sentence: Sentence, state: GameState): ResolveResult {
 
     let clauseEffects = verbEffects(clause.verb, target, clause, state);
 
-    // IT chain: second clause's object refers to the prior noun via IT.
-    // Amplify the clause's primary numeric effects by 1.5x.
+    // IT chain: any non-first clause whose object is IT gets +50% on numerics.
     const isItChain = ci > 0 && clause.object?.noun === 'IT';
     if (isItChain && target !== null) {
       clauseEffects = scaleNumericEffects(clauseEffects, IT_CHAIN_MULTIPLIER);
-      itChainApplied = true;
+      itChainsApplied += 1;
     }
 
     effects.push(...clauseEffects);
   }
 
-  // Eloquence: count connectors in the sentence, each adds +1 to the
-  // primary numeric effect, capped at ELOQUENCE_CAP.
-  const eloquence = Math.min(ELOQUENCE_CAP, countConnectors(sentence));
-  if (eloquence > 0) {
-    addEloquenceBonus(effects, eloquence);
-  }
+  // Eloquence: every connector in the sentence adds +1 to the dominant numeric
+  // effect. No cap now — the user explicitly wanted long sentences to matter.
+  const eloquence = countConnectors(sentence);
+  if (eloquence > 0) addEloquenceBonus(effects, eloquence);
 
   return {
     effects,
     energyCost: baseEnergyCost + enemyAmbiguityTax,
     consumedCardIds,
     newLastNounUsed: lastNoun,
-    bonuses: { eloquence, itChainApplied, enemyAmbiguityTax },
+    bonuses: { eloquence, itChainsApplied, enemyAmbiguityTax },
   };
 }
 
 function countConnectors(sentence: Sentence): number {
-  let n = 0;
+  let n = sentence.rest.length;
   if (sentence.first.extra) n++;
-  if (sentence.conjunction) n++;
-  if (sentence.conjunction?.second.extra) n++;
+  for (const r of sentence.rest) if (r.clause.extra) n++;
   return n;
 }
 
-// Returns a new effect list with the primary numeric effect (damage > heal > block)
-// scaled by `factor`. Mutates copies, not the input.
 function scaleNumericEffects(effects: Effect[], factor: number): Effect[] {
   return effects.map((e) => {
     if (e.kind === 'damage') return { ...e, amount: Math.max(1, Math.round(e.amount * factor)) };
@@ -110,8 +103,6 @@ function scaleNumericEffects(effects: Effect[], factor: number): Effect[] {
   });
 }
 
-// Adds `bonus` to the first damage effect; if none, to the first heal; else to the first block.
-// Mutates in place (cheap; effects list is fresh for this call).
 function addEloquenceBonus(effects: Effect[], bonus: number): void {
   let target: 'damage' | 'heal' | 'gain_block' | null = null;
   if (effects.some((e) => e.kind === 'damage')) target = 'damage';
@@ -121,7 +112,6 @@ function addEloquenceBonus(effects: Effect[], bonus: number): void {
   for (let i = 0; i < effects.length; i++) {
     const e = effects[i]!;
     if (e.kind === target) {
-      // narrow types: damage/heal/gain_block all have `amount: number`
       if (e.kind === 'damage' || e.kind === 'heal' || e.kind === 'gain_block') {
         effects[i] = { ...e, amount: e.amount + bonus };
       }
@@ -182,14 +172,23 @@ function verbEffects(
       return [{ kind: 'heal', target, amount: 6 }];
     }
     case 'MAKE': {
-      if (!target || clause.trailingAdjective === undefined) {
-        return [{ kind: 'log', text: 'MAKE needs a noun and an adjective in hand.' }];
+      if (!target) return [{ kind: 'log', text: 'MAKE needs a target.' }];
+
+      // MAKE-apply form: trailing adjective applied to target.
+      if (clause.trailingAdjective !== undefined) {
+        const has = state.hand.some(
+          (c: Card) => c.kind === 'adjective' && c.word === clause.trailingAdjective,
+        );
+        if (!has) return [{ kind: 'log', text: `No ${clause.trailingAdjective} card in hand.` }];
+        return [{ kind: 'add_adjective', target, adjective: clause.trailingAdjective, turns: 'permanent' }];
       }
-      const has = state.hand.some(
-        (c: Card) => c.kind === 'adjective' && c.word === clause.trailingAdjective,
-      );
-      if (!has) return [{ kind: 'log', text: `No ${clause.trailingAdjective} card in hand.` }];
-      return [{ kind: 'add_adjective', target, adjective: clause.trailingAdjective, turns: 'permanent' }];
+
+      // MAKE-compel form: target performs the trailing verb on itself.
+      if (clause.trailingVerb !== undefined) {
+        return compelEffects(target, clause.trailingVerb, state);
+      }
+
+      return [{ kind: 'log', text: 'MAKE needs an adjective or verb after the noun.' }];
     }
     case 'WAIT': return [
       { kind: 'queue_next_turn_bonus', energy: 1, draw: 1 },
@@ -219,6 +218,63 @@ function verbEffects(
   }
 }
 
-// `ConnectorId` is unused here directly but kept exported via re-importing for
-// possible future use (currently unused — silence lint by re-exposing).
+// MAKE NOUN VERB — the target is compelled to perform `verb` on itself.
+// The verb card does NOT need to be in hand; MAKE alone (2 energy) is enough.
+function compelEffects(target: TargetRef, verb: VerbId, state: GameState): Effect[] {
+  const label = describeTarget(state, target);
+  switch (verb) {
+    // Compels that skip the target's next action.
+    case 'WALK':
+    case 'WAIT':
+    case 'BLOCK':
+    case 'LOOK':
+    case 'PUSH':
+      return [
+        { kind: 'compel_skip', target },
+        { kind: 'log', text: `${label} is compelled to ${verb.toLowerCase()}.` },
+      ];
+    case 'BURN':
+      return [
+        { kind: 'damage', target, amount: 3 },
+        { kind: 'add_adjective', target, adjective: 'BURNING', turns: 3 },
+        { kind: 'log', text: `${label} burns themselves.` },
+      ];
+    case 'FREEZE':
+      return [
+        { kind: 'add_adjective', target, adjective: 'FROZEN', turns: 'permanent' },
+        { kind: 'log', text: `${label} freezes themselves.` },
+      ];
+    case 'HEAL':
+      return [
+        { kind: 'heal', target, amount: 4 },
+        { kind: 'log', text: `${label} heals.` },
+      ];
+    case 'HIT': {
+      // Target uses its OWN attack stat against itself.
+      const selfDmg = target.kind === 'enemy'
+        ? (state.enemies.find((e) => e.id === target.id)?.attack ?? 3)
+        : state.player.attack;
+      return [
+        { kind: 'damage', target, amount: selfDmg },
+        { kind: 'log', text: `${label} hits themselves for ${selfDmg}.` },
+      ];
+    }
+    case 'BREAK':
+      return [
+        { kind: 'damage', target, amount: 6 },
+        { kind: 'log', text: `${label} breaks themselves.` },
+      ];
+    case 'MAKE':
+    case 'GRAB':
+      return [{ kind: 'log', text: `${label} doesn't understand how to ${verb.toLowerCase()}.` }];
+  }
+}
+
+function describeTarget(state: GameState, target: TargetRef): string {
+  if (target.kind === 'self') return 'YOU';
+  if (target.kind === 'room') return 'the room';
+  const enemy = state.enemies.find((e) => e.id === target.id);
+  return enemy ? enemy.displayName : 'target';
+}
+
 export type { ConnectorId };

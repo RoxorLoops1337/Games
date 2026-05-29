@@ -109,13 +109,14 @@ export type Word = Verb | Noun | Adjective | Connector;
 
 // ---- Sentence AST ---------------------------------------------------------
 //
-// Grammar (v1):
-//   Sentence := Clause [Connector Clause]?
-//   Clause   := Verb [Adjective] Noun [Connector [Adjective] Noun]?
-//            |  Verb                                            (target='none')
-//            |  Verb Noun Adjective                             (target='noun_adj')
+// Grammar:
+//   Sentence := Clause (Connector Clause)*
+//   Clause   := Verb [Adj] Noun [Connector [Adj] Noun]
+//            |  Verb
+//            |  Verb Noun Adjective                       (MAKE-apply form)
+//            |  Verb Noun Verb                            (MAKE-compel form)
 //
-// Hard caps enforced by the parser: ≤7 total tokens, ≤2 verbs.
+// No hard cap on tokens or clauses — energy is the practical limit.
 
 export interface NounPhrase {
   adjective?: AdjectiveId;
@@ -126,18 +127,27 @@ export interface Clause {
   verb: VerbId;
   // Optional because target='none' verbs (WAIT, BLOCK) have no object.
   object?: NounPhrase;
-  // Trailing adjective for noun_adj-shaped verbs (MAKE GOBLIN WEAK).
+  // Trailing adjective for noun_adj-shaped verbs: MAKE GOBLIN WEAK applies
+  // the adjective to the noun, consuming an adjective card from hand.
   trailingAdjective?: AdjectiveId;
+  // Trailing verb for the MAKE-compel form: MAKE GOBLIN WALK compels the
+  // noun to perform that verb on itself. Does NOT require the verb card in
+  // hand — only MAKE is needed.
+  trailingVerb?: VerbId;
   // Noun-phrase tail joined to this clause by a connector — does NOT
-  // introduce a second verb. Example: HIT GOBLIN WITH WOOD.
+  // introduce a second clause. Example: HIT GOBLIN WITH WOOD.
   extra?: { connector: ConnectorId; right: NounPhrase };
+}
+
+export interface ConjunctionEntry {
+  connector: ConnectorId;
+  clause: Clause;
 }
 
 export interface Sentence {
   first: Clause;
-  // Conjoined second clause introduces a second verb. Example:
-  // HIT ENEMY THEN HEAL SELF.
-  conjunction?: { connector: ConnectorId; second: Clause };
+  // Additional clauses joined by connectors. Empty for single-clause sentences.
+  rest: ConjunctionEntry[];
 }
 
 // ---- Parse result ---------------------------------------------------------

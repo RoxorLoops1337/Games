@@ -1,13 +1,23 @@
 // Tokenizes + validates a sentence into a Sentence AST. The parser is the
 // gatekeeper for combat: a valid parse is required before resolve() runs.
 //
-// Disambiguation rule for `clause CONNECTOR ...`:
-//   - if the token after the connector is a verb → second clause
+// Grammar:
+//   Sentence := Clause (Connector Clause)*
+//   Clause   := Verb [Adj] Noun [Connector [Adj] Noun]
+//            |  Verb                                       (target='none')
+//            |  Verb Noun Adjective                        (MAKE-apply form)
+//            |  Verb Noun Verb                             (MAKE-compel form)
+//
+// No hard length cap — energy budget bounds what a sentence can do.
+//
+// Disambiguation for `clause CONNECTOR ...`:
+//   - if the token after the connector is a verb → start of a new clause
 //   - otherwise (adjective/noun)                 → extra noun phrase tail
 
 import {
   AdjectiveId,
   Clause,
+  ConjunctionEntry,
   ConnectorId,
   NounId,
   NounPhrase,
@@ -16,49 +26,32 @@ import {
 } from '../types';
 import { VERBS, lookup, wordKind } from '../words';
 
-const MAX_TOKENS = 7;
-const MAX_VERBS = 2;
-
 export function parse(rawTokens: string[]): ParseResult {
   const tokens = rawTokens.map((t) => t.toUpperCase());
 
   if (tokens.length === 0) return reject('empty sentence', tokens);
-  if (tokens.length > MAX_TOKENS) return reject(`too long (max ${MAX_TOKENS} words)`, tokens);
 
   for (const t of tokens) {
     if (lookup(t) === null) return reject(`unknown word: ${t}`, tokens);
   }
 
-  const verbCount = tokens.filter((t) => wordKind(t) === 'verb').length;
-  if (verbCount === 0) return reject('sentence must contain a verb', tokens);
-  if (verbCount > MAX_VERBS) return reject(`too many verbs (max ${MAX_VERBS})`, tokens);
-
   const first = parseClause(tokens, 0);
   if (!first.ok) return reject(first.reason, tokens);
 
-  if (first.consumed >= tokens.length) {
-    return { ok: true, sentence: { first: first.clause }, tokens };
+  const rest: ConjunctionEntry[] = [];
+  let cursor = first.consumed;
+  while (cursor < tokens.length) {
+    const connTok = tokens[cursor];
+    if (connTok === undefined || wordKind(connTok) !== 'connector') {
+      return reject(`expected connector between clauses, got ${connTok ?? 'nothing'}`, tokens);
+    }
+    const nextClause = parseClause(tokens, cursor + 1);
+    if (!nextClause.ok) return reject(nextClause.reason, tokens);
+    rest.push({ connector: connTok as ConnectorId, clause: nextClause.clause });
+    cursor = nextClause.consumed;
   }
 
-  const connTok = tokens[first.consumed];
-  if (connTok === undefined || wordKind(connTok) !== 'connector') {
-    return reject(`expected connector after first clause, got ${connTok ?? 'nothing'}`, tokens);
-  }
-
-  const second = parseClause(tokens, first.consumed + 1);
-  if (!second.ok) return reject(second.reason, tokens);
-  if (second.consumed < tokens.length) {
-    return reject('trailing tokens after second clause', tokens);
-  }
-
-  return {
-    ok: true,
-    sentence: {
-      first: first.clause,
-      conjunction: { connector: connTok as ConnectorId, second: second.clause },
-    },
-    tokens,
-  };
+  return { ok: true, sentence: { first: first.clause, rest }, tokens };
 }
 
 type ClauseParse =
@@ -93,16 +86,30 @@ function parseClause(tokens: string[], start: number): ClauseParse {
   const noun = nounTok as NounId;
   i++;
 
+  // For noun_adj-shaped verbs (MAKE), the trailing token can be either an
+  // adjective (apply form) or a verb (compel form).
   let trailingAdj: AdjectiveId | undefined;
+  let trailingVerb: VerbId | undefined;
   if (verb.target === 'noun_adj') {
     const t = tokens[i];
-    if (t === undefined || wordKind(t) !== 'adjective') {
-      return { ok: false, reason: `${verb.id} needs an adjective after the noun (e.g. MAKE ENEMY WEAK)` };
+    const k = t === undefined ? null : wordKind(t);
+    if (k === 'adjective') {
+      trailingAdj = t as AdjectiveId;
+      i++;
+    } else if (k === 'verb') {
+      trailingVerb = t as VerbId;
+      i++;
+    } else {
+      return {
+        ok: false,
+        reason: `${verb.id} needs an adjective or verb after the noun (e.g. MAKE ENEMY WEAK or MAKE ENEMY WALK)`,
+      };
     }
-    trailingAdj = t as AdjectiveId;
-    i++;
   }
 
+  // Optional extra noun-phrase tail joined by a connector.
+  // Heuristic: a connector followed by a verb starts a new clause; a
+  // connector followed by an adjective/noun is an in-clause noun tail.
   let extra: { connector: ConnectorId; right: NounPhrase } | undefined;
   const connTok = tokens[i];
   const lookahead = tokens[i + 1];
@@ -136,6 +143,7 @@ function parseClause(tokens: string[], start: number): ClauseParse {
 
   const clause: Clause = { verb: verb.id, object };
   if (trailingAdj !== undefined) clause.trailingAdjective = trailingAdj;
+  if (trailingVerb !== undefined) clause.trailingVerb = trailingVerb;
   if (extra !== undefined) clause.extra = extra;
 
   return { ok: true, clause, consumed: i };
