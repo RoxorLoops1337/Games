@@ -91,6 +91,16 @@ function applyDamage(state: GameState, target: TargetRef, baseAmount: number): G
   const enemy = state.enemies[enemyIdx];
   if (enemy === undefined) return state;
 
+  // HONOR gate: an enemy with the 'honor' trait (the Green Knight during his
+  // protected window) takes 0 damage unless the player has announced him this
+  // turn (via LOOK / a noun reference that resolves to him).
+  if (
+    enemy.traits.includes('honor') &&
+    !state.announcedThisTurn.includes(enemy.id)
+  ) {
+    return log(state, `${enemy.displayName} brushes off your unannounced strike.`);
+  }
+
   const taken = damageMultiplier(enemy.adjectives).taken;
   const dmg = Math.max(0, Math.round(baseAmount * taken));
   const newHp = Math.max(0, enemy.hp - dmg);

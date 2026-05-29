@@ -16,7 +16,7 @@ export type Card =
 
 export type EnemyId = string;
 
-export type EnemyIntentKind = 'attack' | 'wait' | 'spore' | 'thorns' | 'multiply' | 'reapply_big' | 'double_attack';
+export type EnemyIntentKind = 'attack' | 'wait' | 'spore' | 'thorns' | 'multiply' | 'reapply_big' | 'reapply_big_to_partner' | 'double_attack';
 
 export type EnemyIntent =
   | { kind: 'attack'; damage: number }
@@ -25,7 +25,8 @@ export type EnemyIntent =
   | { kind: 'spore'; damage: number }
   | { kind: 'thorns' }
   | { kind: 'multiply' }
-  | { kind: 'reapply_big' };
+  | { kind: 'reapply_big' }
+  | { kind: 'reapply_big_to_partner' };
 
 export type EnemyTrait =
   | 'reflect_hit'

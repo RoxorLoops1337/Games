@@ -20,7 +20,7 @@ export type PermanentNounId = 'SELF' | 'ENEMY' | 'ROOM' | 'IT';
 
 export type CollectibleNounId =
   | 'GOBLIN' | 'WOLF' | 'MUSHROOM' | 'TREE' | 'THORN' | 'WOOD'
-  | 'BIG_GOBLIN' | 'GREEN_KNIGHT';
+  | 'BIG_GOBLIN' | 'GREEN_KNIGHT' | 'GOBLIN_SHAMAN';
 
 export type NounId = PermanentNounId | CollectibleNounId;
 

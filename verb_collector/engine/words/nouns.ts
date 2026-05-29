@@ -30,4 +30,6 @@ export const NOUNS: Record<NounId, Noun> = {
     desc: 'Elite goblin. Starts BIG; a shaman re-applies BIG every turn.' },
   GREEN_KNIGHT: { kind: 'noun', id: 'GREEN_KNIGHT', nounKind: 'enemy', addressable: false,
     desc: 'Act 1 boss. Only takes damage from announced attacks.' },
+  GOBLIN_SHAMAN: { kind: 'noun', id: 'GOBLIN_SHAMAN', nounKind: 'enemy', addressable: true,
+    desc: 'A small green caster. Re-applies BIG to its partner every turn.' },
 };

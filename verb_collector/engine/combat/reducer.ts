@@ -643,6 +643,22 @@ function resolveEnemyTurn(state: GameState): GameState {
           { kind: 'add_adjective', target: { kind: 'enemy', id: live.id }, adjective: 'BIG', turns: 'permanent' },
         ]);
         break;
+      case 'reapply_big_to_partner': {
+        // Find a live partner (any non-shaman, non-self) to keep BIG on.
+        // Preference: BIG_GOBLIN sibling; fallback: any live enemy other than self.
+        const partner =
+          next.enemies.find((e) => e.id !== live.id && e.hp > 0 && e.noun === 'BIG_GOBLIN')
+          ?? next.enemies.find((e) => e.id !== live.id && e.hp > 0);
+        if (partner) {
+          next = applyEffects(next, [
+            { kind: 'log', text: `${live.displayName} chants BIG over ${partner.displayName}.` },
+            { kind: 'add_adjective', target: { kind: 'enemy', id: partner.id }, adjective: 'BIG', turns: 'permanent' },
+          ]);
+        } else {
+          next = appendLog(next, `${live.displayName} chants, but no partner remains.`);
+        }
+        break;
+      }
       case 'wait':
         next = appendLog(next, `${live.displayName} waits.`);
         break;
