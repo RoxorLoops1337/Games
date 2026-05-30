@@ -3,12 +3,15 @@
 //
 // Grammar:
 //   Sentence := Clause (Connector Clause)*
-//   Clause   := Verb [Adj] Noun [Connector [Adj] Noun]
+//   Clause   := Verb [AT] Noun [Connector [Adj] Noun]
 //            |  Verb                                       (target='none')
-//            |  Verb Noun Adjective                        (MAKE-apply form)
-//            |  Verb Noun Verb                             (MAKE-compel form)
+//            |  Verb [AT] Noun Adjective                   (MAKE-apply form)
+//            |  Verb [AT] Noun Verb                        (MAKE-compel form)
+//            |  Verb [AT] Adjective                        (noun_or_adj — LOOK STRONG)
 //
-// No hard length cap — energy budget bounds what a sentence can do.
+// `AT` is a prepositional particle that can sit between a verb and its
+// object ("LOOK AT ROOM"). It is consumed silently and never grants
+// eloquence.
 //
 // Disambiguation for `clause CONNECTOR ...`:
 //   - if the token after the connector is a verb → start of a new clause
@@ -58,6 +61,13 @@ type ClauseParse =
   | { ok: true; clause: Clause; consumed: number }
   | { ok: false; reason: string };
 
+// Skips an optional 'AT' prepositional particle, returning the new cursor.
+// AT is grammar sugar — it lets the player write "LOOK AT ROOM" instead of
+// "LOOK ROOM" without changing the resolution or granting eloquence.
+function skipAt(tokens: string[], i: number): number {
+  return tokens[i] === 'AT' ? i + 1 : i;
+}
+
 function parseClause(tokens: string[], start: number): ClauseParse {
   const verbTok = tokens[start];
   if (verbTok === undefined) return { ok: false, reason: 'expected verb' };
@@ -69,7 +79,7 @@ function parseClause(tokens: string[], start: number): ClauseParse {
     return { ok: true, clause: { verb: verb.id }, consumed: start + 1 };
   }
 
-  let i = start + 1;
+  let i = skipAt(tokens, start + 1);
   let leadingAdj: AdjectiveId | undefined;
   if (verb.target === 'adj_noun') {
     const t = tokens[i];
@@ -79,8 +89,22 @@ function parseClause(tokens: string[], start: number): ClauseParse {
     }
   }
 
+  // `noun_or_adj` (LOOK): accept an adjective in the noun slot, with no
+  // noun, meaning "apply that adjective to SELF for the turn".
+  if (verb.target === 'noun_or_adj') {
+    const t = tokens[i];
+    if (t !== undefined && wordKind(t) === 'adjective') {
+      const clause: Clause = { verb: verb.id, selfAdjective: t as AdjectiveId };
+      return { ok: true, clause, consumed: i + 1 };
+    }
+    // Otherwise fall through and parse a noun like the standard form.
+  }
+
   const nounTok = tokens[i];
   if (nounTok === undefined || wordKind(nounTok) !== 'noun') {
+    if (verb.target === 'noun_or_adj') {
+      return { ok: false, reason: `${verb.id} needs a noun or an adjective (e.g. LOOK ENEMY or LOOK STRONG)` };
+    }
     return { ok: false, reason: `${verb.id} needs a noun` };
   }
   const noun = nounTok as NounId;

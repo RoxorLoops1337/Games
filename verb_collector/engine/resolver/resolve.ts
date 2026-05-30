@@ -46,13 +46,14 @@ export function resolve(sentence: Sentence, state: GameState): ResolveResult {
     );
     if (verbCard) consumedCardIds.push(verbCard.id);
 
-    // Adjective card consumption only for the MAKE-apply form (trailingAdjective).
-    // MAKE-compel (trailingVerb) does NOT consume a verb card from hand.
-    if (clause.trailingAdjective !== undefined) {
+    // Adjective card consumption: MAKE-apply (trailingAdjective) and the
+    // LOOK <adj> "self-perception" form (selfAdjective). Both spend the card.
+    const consumedAdj = clause.trailingAdjective ?? clause.selfAdjective;
+    if (consumedAdj !== undefined) {
       const adjCard = state.hand.find(
         (c) =>
           c.kind === 'adjective' &&
-          c.word === clause.trailingAdjective &&
+          c.word === consumedAdj &&
           !usedSoFar.has(c.id),
       );
       if (adjCard) consumedCardIds.push(adjCard.id);
@@ -73,9 +74,10 @@ export function resolve(sentence: Sentence, state: GameState): ResolveResult {
     effects.push(...clauseEffects);
   }
 
-  // Eloquence: every connector in the sentence adds +1 to the dominant numeric
-  // effect. No cap now — the user explicitly wanted long sentences to matter.
-  const eloquence = countConnectors(sentence);
+  // Eloquence: every connector between *unique* clauses adds +1 to the
+  // dominant numeric effect. Repetition (LOOK ROOM AND LOOK ROOM …) grants
+  // nothing — the parser rewards composition, not loops.
+  const eloquence = countEloquentConnectors(sentence);
   if (eloquence > 0) addEloquenceBonus(effects, eloquence);
 
   return {
@@ -87,10 +89,31 @@ export function resolve(sentence: Sentence, state: GameState): ResolveResult {
   };
 }
 
-function countConnectors(sentence: Sentence): number {
-  let n = sentence.rest.length;
-  if (sentence.first.extra) n++;
-  for (const r of sentence.rest) if (r.clause.extra) n++;
+// Dedup-aware connector count. A clause's "signature" is verb + primary noun
+// + trailing word; if a later clause repeats a signature already used, its
+// joining connector grants no eloquence. Extras (in-clause noun-phrase tails)
+// still count once per clause but not for repeated extras inside the same
+// clause shape.
+function clauseSignature(c: Clause): string {
+  const noun = c.object?.noun ?? '_';
+  const adj = c.object?.adjective ?? '_';
+  const trail = c.trailingAdjective ?? c.trailingVerb ?? c.selfAdjective ?? '_';
+  return `${c.verb}|${adj}|${noun}|${trail}`;
+}
+
+function countEloquentConnectors(sentence: Sentence): number {
+  const seen = new Set<string>();
+  seen.add(clauseSignature(sentence.first));
+  let n = 0;
+  if (sentence.first.extra) n += 1;
+  for (const entry of sentence.rest) {
+    const sig = clauseSignature(entry.clause);
+    if (!seen.has(sig)) {
+      n += 1;
+      seen.add(sig);
+    }
+    if (entry.clause.extra) n += 1;
+  }
   return n;
 }
 
@@ -195,6 +218,19 @@ function verbEffects(
       { kind: 'log', text: 'You wait.' },
     ];
     case 'LOOK': {
+      // LOOK <adj> — self-perception: apply the adjective to SELF for one turn.
+      // Cheap (1 energy) and consumes the adj card, distinct from MAKE SELF X
+      // (2 energy, permanent).
+      if (clause.selfAdjective !== undefined) {
+        const has = state.hand.some(
+          (c: Card) => c.kind === 'adjective' && c.word === clause.selfAdjective,
+        );
+        if (!has) return [{ kind: 'log', text: `No ${clause.selfAdjective} card in hand.` }];
+        return [
+          { kind: 'add_adjective', target: { kind: 'self' }, adjective: clause.selfAdjective, turns: 1 },
+          { kind: 'log', text: `You look ${clause.selfAdjective.toLowerCase()}.` },
+        ];
+      }
       if (!target) return [{ kind: 'log', text: 'LOOK needs a target.' }];
       return [{ kind: 'reveal', target }];
     }

@@ -41,10 +41,11 @@ export type VerbRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 // Sentence shape a verb expects. The parser uses this to decide whether a
 // composed phrase is valid before resolution runs.
 export type TargetShape =
-  | 'none'       // VERB                (WAIT, BLOCK)
-  | 'noun'       // VERB NOUN           (HIT ENEMY)
-  | 'adj_noun'   // VERB ADJ NOUN       (reserved; no v1 verb uses this yet)
-  | 'noun_adj';  // VERB NOUN ADJ       (MAKE — "MAKE ENEMY WEAK" reads better in English than "MAKE WEAK ENEMY")
+  | 'none'         // VERB                (WAIT, BLOCK)
+  | 'noun'         // VERB NOUN           (HIT ENEMY)
+  | 'noun_or_adj'  // VERB NOUN | VERB ADJ — adj form applies to SELF (LOOK STRONG = look strong)
+  | 'adj_noun'     // VERB ADJ NOUN       (reserved; no v1 verb uses this yet)
+  | 'noun_adj';    // VERB NOUN ADJ       (MAKE — "MAKE ENEMY WEAK" reads better than "MAKE WEAK ENEMY")
 
 export interface Verb {
   kind: 'verb';
@@ -134,6 +135,9 @@ export interface Clause {
   // noun to perform that verb on itself. Does NOT require the verb card in
   // hand — only MAKE is needed.
   trailingVerb?: VerbId;
+  // Self-applied adjective for noun_or_adj-shaped verbs (LOOK STRONG = look
+  // strong = apply STRONG to SELF for one turn). When set, `object` is unset.
+  selfAdjective?: AdjectiveId;
   // Noun-phrase tail joined to this clause by a connector — does NOT
   // introduce a second clause. Example: HIT GOBLIN WITH WOOD.
   extra?: { connector: ConnectorId; right: NounPhrase };
