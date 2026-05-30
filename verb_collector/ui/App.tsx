@@ -10,6 +10,8 @@ import { ShopScreen } from './ShopScreen';
 import { ShrineScreen } from './ShrineScreen';
 import { FireScreen } from './FireScreen';
 import { MirrorScreen } from './MirrorScreen';
+import { AudioController } from './AudioController';
+import { AudioSettings } from './AudioSettings';
 import { hasSave } from '../engine/save/storage';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
@@ -32,6 +34,7 @@ export function App(): React.ReactElement {
   if (state.phase === 'title') {
     return (
       <div className="app title-app">
+        <AudioController state={state} />
         <TitleScreen dispatch={onAction} />
       </div>
     );
@@ -62,8 +65,11 @@ export function App(): React.ReactElement {
           >
             ⌂
           </button>
+          <AudioSettings />
         </div>
       </header>
+
+      <AudioController state={state} />
 
       {state.phase === 'map'    && <MapScreen state={state} dispatch={onAction} />}
       {state.phase === 'combat' && <CombatScreen state={state} dispatch={onAction} />}
