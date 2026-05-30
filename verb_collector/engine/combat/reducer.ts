@@ -185,6 +185,8 @@ export function startNewRun(): GameState {
     composing: [],
     lastNounUsed: null,
     log: [{ turn: 0, text: 'A path opens through the forest.' }],
+    inventory: [],
+    blockAgainst: null,
     announcedThisTurn: [],
     encounterName: '',
   };
@@ -238,6 +240,8 @@ function titleState(): GameState {
     composing: [],
     lastNounUsed: null,
     log: [],
+    inventory: [],
+    blockAgainst: null,
     announcedThisTurn: [],
     encounterName: '',
   };
@@ -409,6 +413,8 @@ function startCombat(runState: GameState, encounter: Encounter): GameState {
     composing: [],
     lastNounUsed: null,
     log: [{ turn: 1, text: `You encounter ${encounter.name.toLowerCase()}.` }],
+    inventory: [],
+    blockAgainst: null,
     announcedThisTurn: [],
     encounterName: encounter.name,
   };
@@ -717,17 +723,17 @@ function resolveEnemyTurn(state: GameState): GameState {
 
     switch (live.intent.kind) {
       case 'attack':
-        next = applyIncomingDamage(next, live.intent.damage);
+        next = applyIncomingDamage(next, live.intent.damage, live.id);
         break;
       case 'double_attack':
-        next = applyIncomingDamage(next, live.intent.damage);
+        next = applyIncomingDamage(next, live.intent.damage, live.id);
         if (next.phase === 'lost_run') return next;
         next = applyEffects(next, [{ kind: 'log', text: `${live.displayName} attacks again!` }]);
-        next = applyIncomingDamage(next, live.intent.damage);
+        next = applyIncomingDamage(next, live.intent.damage, live.id);
         break;
       case 'spore':
         next = applyEffects(next, [{ kind: 'log', text: `${live.displayName} releases spores.` }]);
-        next = applyIncomingDamage(next, live.intent.damage);
+        next = applyIncomingDamage(next, live.intent.damage, live.id);
         break;
       case 'thorns':
         next = appendLog(next, `${live.displayName} bristles.`);
@@ -772,7 +778,17 @@ function resolveEnemyTurn(state: GameState): GameState {
   return next;
 }
 
-function applyIncomingDamage(state: GameState, base: number): GameState {
+function applyIncomingDamage(state: GameState, base: number, sourceEnemyId?: string): GameState {
+  // BLOCK AGAINST <enemy>: if the source matches the prepped block, fully
+  // negate the strike and clear the flag.
+  if (
+    sourceEnemyId !== undefined &&
+    state.blockAgainst === sourceEnemyId
+  ) {
+    return applyEffects({ ...state, blockAgainst: null }, [
+      { kind: 'log', text: 'Your prepared guard turns the strike aside.' },
+    ]);
+  }
   let amount = base;
   for (const hook of relicHook(state, 'onPlayerIncomingDamage')) {
     amount = hook(state, amount);

@@ -27,4 +27,6 @@ export const VERBS: Record<VerbId, Verb> = {
     desc: 'Apply FROZEN to the target (skips next turn).' },
   HEAL:   { kind: 'verb', id: 'HEAL',   cost: 2, rarity: 'uncommon', target: 'noun',
     desc: 'Restore HP to a target.' },
+  THROW:  { kind: 'verb', id: 'THROW',  cost: 1, rarity: 'common',   target: 'noun_at_noun',
+    desc: 'Throw a held noun at a target. Consumes the projectile from inventory.' },
 };

@@ -104,6 +104,12 @@ export type GameState = {
   composing: string[];
   lastNounUsed: NounId | null;
   log: LogEntry[];
+  // Nouns the player is holding — populated by GRAB, consumed by THROW or by
+  // WITH-instrument tails. Capped at 3. Reset per combat.
+  inventory: NounId[];
+  // BLOCK AGAINST <enemy> sets this; the next attack from that enemy is
+  // fully prevented and the flag clears. Reset per combat.
+  blockAgainst: EnemyId | null;
   // Targets the player has announced this turn (via LOOK / NAME). Used by
   // the Green Knight HONOR mechanic — without an announcement the boss takes
   // 0 damage during the protected turns.

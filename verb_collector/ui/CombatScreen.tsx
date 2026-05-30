@@ -71,6 +71,16 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
               })}
             </div>
           )}
+          {state.inventory.length > 0 && (
+            <div className="inventory-strip" aria-label="Held nouns">
+              <span className="inventory-label">holding</span>
+              {state.inventory.map((n, i) => (
+                <span key={`${n}_${i}`} className="inventory-chip" title={`Use with WITH ${n} or THROW ${n} AT <target>`}>
+                  {n}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="player-tray">
             <div className="ink-amount">
               <Coins size={12} strokeWidth={2} /> {state.ink} ink
