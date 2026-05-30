@@ -19,6 +19,9 @@ export type Effect =
   | { kind: 'discard_card'; cardId: CardId }
   | { kind: 'compel_skip'; target: TargetRef }
   | { kind: 'reshuffle_discard' }
+  | { kind: 'inventory_add'; noun: string }
+  | { kind: 'inventory_remove'; noun: string }
+  | { kind: 'set_block_against'; enemyId: string }
   | { kind: 'log'; text: string };
 
 export function applyEffects(state: GameState, effects: Effect[]): GameState {
@@ -49,6 +52,27 @@ function applyEffect(state: GameState, e: Effect): GameState {
     case 'discard_card':     return applyDiscardCard(state, e.cardId);
     case 'compel_skip':      return applyCompelSkip(state, e.target);
     case 'reshuffle_discard': return applyReshuffleDiscard(state);
+    case 'inventory_add': {
+      if (state.inventory.length >= 3) {
+        return log(state, 'Your hands are full — that noun slips away.');
+      }
+      return log(
+        { ...state, inventory: [...state.inventory, e.noun as never] },
+        `You pick up ${e.noun}.`,
+      );
+    }
+    case 'inventory_remove': {
+      const idx = state.inventory.indexOf(e.noun as never);
+      if (idx < 0) return state;
+      const next = [...state.inventory];
+      next.splice(idx, 1);
+      return { ...state, inventory: next };
+    }
+    case 'set_block_against':
+      return log(
+        { ...state, blockAgainst: e.enemyId },
+        `You ready a block against the next strike.`,
+      );
     case 'log':              return log(state, e.text);
   }
 }

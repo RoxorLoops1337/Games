@@ -1907,3 +1907,30 @@ body::after {
 @media (max-width: 720px) {
   .relic-chip { font-size: 0.55rem; padding: 1px 6px; }
 }
+
+/* Inventory chips for held nouns (GRAB / drops). */
+.inventory-strip {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.inventory-label {
+  font-family: var(--font-smallcap);
+  font-size: 0.6rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-right: 2px;
+}
+.inventory-chip {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border: 1px dashed var(--ink-soft);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: help;
+}

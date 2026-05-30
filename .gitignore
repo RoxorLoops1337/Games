@@ -2,3 +2,5 @@ node_modules/
 dist/
 beatbox_story/beatbox-story.bundle.js.map
 .DS_Store
+.claude/
+

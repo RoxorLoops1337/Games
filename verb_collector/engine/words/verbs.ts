@@ -7,8 +7,8 @@ export const VERBS: Record<VerbId, Verb> = {
     desc: "Deal damage equal to the player's attack stat." },
   WALK:   { kind: 'verb', id: 'WALK',   cost: 0, rarity: 'common',   target: 'noun',
     desc: 'Reposition toward a noun. Enables some positional verbs.' },
-  LOOK:   { kind: 'verb', id: 'LOOK',   cost: 0, rarity: 'common',   target: 'noun',
-    desc: "Reveal a noun's stats, intent, and hidden adjectives." },
+  LOOK:   { kind: 'verb', id: 'LOOK',   cost: 0, rarity: 'common',   target: 'noun_or_adj',
+    desc: "Reveal a noun. LOOK <adjective> applies that adjective to yourself for one turn." },
   GRAB:   { kind: 'verb', id: 'GRAB',   cost: 1, rarity: 'common',   target: 'noun',
     desc: 'Pick up a noun, adding it to hand for this combat.' },
   MAKE:   { kind: 'verb', id: 'MAKE',   cost: 2, rarity: 'common',   target: 'noun_adj',
@@ -27,4 +27,6 @@ export const VERBS: Record<VerbId, Verb> = {
     desc: 'Apply FROZEN to the target (skips next turn).' },
   HEAL:   { kind: 'verb', id: 'HEAL',   cost: 2, rarity: 'uncommon', target: 'noun',
     desc: 'Restore HP to a target.' },
+  THROW:  { kind: 'verb', id: 'THROW',  cost: 1, rarity: 'common',   target: 'noun_at_noun',
+    desc: 'Throw a held noun at a target. Consumes the projectile from inventory.' },
 };

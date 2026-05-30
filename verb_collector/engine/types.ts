@@ -10,7 +10,8 @@ export type WordKind = 'verb' | 'noun' | 'adjective' | 'connector';
 
 export type VerbId =
   | 'HIT' | 'WALK' | 'LOOK' | 'GRAB' | 'MAKE' | 'WAIT'
-  | 'PUSH' | 'BURN' | 'BLOCK' | 'BREAK' | 'FREEZE' | 'HEAL';
+  | 'PUSH' | 'BURN' | 'BLOCK' | 'BREAK' | 'FREEZE' | 'HEAL'
+  | 'THROW';
 
 export type AdjectiveId =
   | 'BIG' | 'SMALL' | 'WEAK' | 'STRONG'
@@ -41,10 +42,12 @@ export type VerbRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 // Sentence shape a verb expects. The parser uses this to decide whether a
 // composed phrase is valid before resolution runs.
 export type TargetShape =
-  | 'none'       // VERB                (WAIT, BLOCK)
-  | 'noun'       // VERB NOUN           (HIT ENEMY)
-  | 'adj_noun'   // VERB ADJ NOUN       (reserved; no v1 verb uses this yet)
-  | 'noun_adj';  // VERB NOUN ADJ       (MAKE — "MAKE ENEMY WEAK" reads better in English than "MAKE WEAK ENEMY")
+  | 'none'         // VERB                (WAIT, BLOCK)
+  | 'noun'         // VERB NOUN           (HIT ENEMY)
+  | 'noun_or_adj'  // VERB NOUN | VERB ADJ — adj form applies to SELF (LOOK STRONG = look strong)
+  | 'adj_noun'     // VERB ADJ NOUN       (reserved; no v1 verb uses this yet)
+  | 'noun_adj'     // VERB NOUN ADJ       (MAKE — "MAKE ENEMY WEAK" reads better than "MAKE WEAK ENEMY")
+  | 'noun_at_noun';// VERB NOUN [AT] NOUN  (THROW — first noun consumed from inventory, second is target)
 
 export interface Verb {
   kind: 'verb';
@@ -123,6 +126,12 @@ export interface NounPhrase {
   noun: NounId;
 }
 
+// A predicate gating whether a clause actually resolves. Built from
+// `IF <adjective>` suffixes — checks the clause's object (or SELF when no
+// object). Falls through to a log when false.
+export type Condition =
+  | { kind: 'has_adjective'; adjective: AdjectiveId };
+
 export interface Clause {
   verb: VerbId;
   // Optional because target='none' verbs (WAIT, BLOCK) have no object.
@@ -134,9 +143,20 @@ export interface Clause {
   // noun to perform that verb on itself. Does NOT require the verb card in
   // hand — only MAKE is needed.
   trailingVerb?: VerbId;
-  // Noun-phrase tail joined to this clause by a connector — does NOT
-  // introduce a second clause. Example: HIT GOBLIN WITH WOOD.
+  // Self-applied adjective for noun_or_adj-shaped verbs (LOOK STRONG = look
+  // strong = apply STRONG to SELF for one turn). When set, `object` is unset.
+  selfAdjective?: AdjectiveId;
+  // Noun-phrase tail joined to this clause by a connector. Different
+  // connectors carry different mechanics — WITH/AGAINST/OR/IN/ON/NEAR/
+  // UNDER/BEHIND/AT each have their own resolver path.
   extra?: { connector: ConnectorId; right: NounPhrase };
+  // For THROW: the second noun is the projectile target (THROW WOOD AT GOBLIN
+  // parses object=WOOD, throwTarget=GOBLIN).
+  throwTarget?: NounId;
+  // For BLOCK AGAINST <enemy>: directs the block at one specific foe.
+  againstNoun?: NounId;
+  // IF <adj> condition gating the clause — only resolves when the test passes.
+  condition?: Condition;
 }
 
 export interface ConjunctionEntry {
