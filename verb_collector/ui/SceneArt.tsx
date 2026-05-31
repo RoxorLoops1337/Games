@@ -1297,3 +1297,130 @@ export function ShrineStone(): React.ReactElement {
     </svg>
   );
 }
+
+// --------------------------------------------------------------------------
+// Reward laurel — a watercolor laurel wreath with an open book + quill at
+// center and a small ribbon at the bottom. Sits above the VICTORY heading.
+// --------------------------------------------------------------------------
+export function RewardLaurel(): React.ReactElement {
+  return (
+    <svg className="reward-laurel" viewBox="0 0 240 140" aria-hidden="true">
+      <defs>
+        <radialGradient id="rl-glow" cx="0.5" cy="0.5" r="0.55">
+          <stop offset="0%"   stopColor="#fff2c4" stopOpacity="0.8" />
+          <stop offset="60%"  stopColor="#f4d28a" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#f4d28a" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="rl-leaf" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#6a8a3a" />
+          <stop offset="100%" stopColor="#3a521c" />
+        </linearGradient>
+        <linearGradient id="rl-leaf2" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#7a9a4a" />
+          <stop offset="100%" stopColor="#4a6a2c" />
+        </linearGradient>
+        <linearGradient id="rl-ribbon" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#a72131" />
+          <stop offset="100%" stopColor="#581018" />
+        </linearGradient>
+        <filter id="rl-bleed"><feGaussianBlur stdDeviation="0.7" /></filter>
+      </defs>
+
+      {/* central glow */}
+      <ellipse cx="120" cy="70" rx="68" ry="44" fill="url(#rl-glow)" />
+
+      {/* left half of laurel wreath — leaves curling around */}
+      <g filter="url(#rl-bleed)">
+        {[
+          { x: 56, y: 110, r: 30 },  { x: 44, y: 96, r: 20 },
+          { x: 36, y: 80, r: 10 },   { x: 34, y: 64, r: 0 },
+          { x: 38, y: 48, r: -10 },  { x: 48, y: 34, r: -22 },
+          { x: 62, y: 24, r: -36 },  { x: 80, y: 18, r: -52 },
+        ].map((p, i) => (
+          <g key={`l${i}`} transform={`translate(${p.x}, ${p.y}) rotate(${p.r})`}>
+            <path
+              d="M0 0 C -3 -8 -3 -16 0 -22 C 3 -16 3 -8 0 0 Z"
+              fill={i % 2 ? 'url(#rl-leaf2)' : 'url(#rl-leaf)'}
+              stroke="#1a2010" strokeWidth="0.5"
+            />
+            <line x1="0" y1="-1" x2="0" y2="-20" stroke="#1a2010" strokeWidth="0.4" opacity="0.6" />
+          </g>
+        ))}
+      </g>
+      {/* right half of laurel wreath */}
+      <g filter="url(#rl-bleed)">
+        {[
+          { x: 184, y: 110, r: -30 }, { x: 196, y: 96, r: -20 },
+          { x: 204, y: 80, r: -10 },  { x: 206, y: 64, r: 0 },
+          { x: 202, y: 48, r: 10 },   { x: 192, y: 34, r: 22 },
+          { x: 178, y: 24, r: 36 },   { x: 160, y: 18, r: 52 },
+        ].map((p, i) => (
+          <g key={`r${i}`} transform={`translate(${p.x}, ${p.y}) rotate(${p.r})`}>
+            <path
+              d="M0 0 C -3 -8 -3 -16 0 -22 C 3 -16 3 -8 0 0 Z"
+              fill={i % 2 ? 'url(#rl-leaf2)' : 'url(#rl-leaf)'}
+              stroke="#1a2010" strokeWidth="0.5"
+            />
+            <line x1="0" y1="-1" x2="0" y2="-20" stroke="#1a2010" strokeWidth="0.4" opacity="0.6" />
+          </g>
+        ))}
+      </g>
+
+      {/* open book in the centre */}
+      <g>
+        <path
+          d="M88 78 Q 92 70 102 70 L 120 72 L 120 100 L 102 98 Q 92 98 88 104 Z"
+          fill="#e9d9b0" stroke="#0d0a06" strokeWidth="1" strokeLinejoin="round"
+        />
+        <path
+          d="M120 72 L 120 100 L 138 98 Q 148 98 152 104 L 152 78 Q 148 70 138 70 Z"
+          fill="#d6c294" stroke="#0d0a06" strokeWidth="1" strokeLinejoin="round"
+        />
+        {/* gold page edges */}
+        <line x1="120" y1="72" x2="120" y2="100" stroke="#b9893a" strokeWidth="0.7" />
+        {/* text lines */}
+        <g stroke="#3a2a18" strokeWidth="0.4" opacity="0.7">
+          <line x1="94" y1="78" x2="116" y2="79" />
+          <line x1="94" y1="82" x2="116" y2="83" />
+          <line x1="94" y1="86" x2="114" y2="87" />
+          <line x1="94" y1="90" x2="112" y2="91" />
+          <line x1="124" y1="77" x2="146" y2="78" />
+          <line x1="124" y1="81" x2="148" y2="82" />
+          <line x1="124" y1="85" x2="146" y2="86" />
+          <line x1="124" y1="89" x2="144" y2="90" />
+        </g>
+      </g>
+
+      {/* quill standing in an inkwell behind the book */}
+      <g>
+        {/* inkwell */}
+        <ellipse cx="120" cy="106" rx="10" ry="3" fill="#1a140a" />
+        <path d="M112 106 L 110 116 Q 110 122 120 122 Q 130 122 130 116 L 128 106 Z"
+          fill="#3a2a18" stroke="#0d0a06" strokeWidth="0.8" />
+        {/* quill shaft */}
+        <path d="M120 100 L 152 36" stroke="#1a140a" strokeWidth="1.4" />
+        {/* feather */}
+        <path
+          d="M148 38 C 144 32 144 22 148 16 C 152 10 158 8 162 14 C 166 22 162 32 156 38 Q 152 40 148 38 Z"
+          fill="#e9d9b0" stroke="#0d0a06" strokeWidth="0.8"
+        />
+        {/* feather barbs */}
+        <g stroke="#0d0a06" strokeWidth="0.4" opacity="0.6">
+          <line x1="149" y1="22" x2="158" y2="24" />
+          <line x1="149" y1="28" x2="158" y2="30" />
+          <line x1="149" y1="34" x2="156" y2="36" />
+        </g>
+        {/* nib */}
+        <circle cx="120" cy="100" r="1.4" fill="#0d0a06" />
+      </g>
+
+      {/* red ribbon below */}
+      <g>
+        <path d="M104 116 L 100 130 L 110 126 L 114 138 L 118 124 L 122 138 L 126 126 L 136 130 L 132 116 Z"
+          fill="url(#rl-ribbon)" stroke="#1a0a08" strokeWidth="0.7" />
+        {/* a tiny gold accent on the ribbon */}
+        <circle cx="120" cy="124" r="2" fill="#b9893a" stroke="#0d0a06" strokeWidth="0.4" />
+      </g>
+    </svg>
+  );
+}

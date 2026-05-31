@@ -2775,3 +2775,14 @@ body::after {
 @media (max-width: 720px) {
   .hero-svg { max-width: 150px; }
 }
+
+/* Reward laurel illustration above the VICTORY heading */
+.reward-laurel-wrap {
+  width: 220px;
+  margin: 0 auto -6px;
+  filter: drop-shadow(0 4px 10px rgba(20, 12, 4, 0.35));
+}
+.reward-laurel { display: block; width: 100%; height: auto; }
+@media (max-width: 720px) {
+  .reward-laurel-wrap { width: 180px; margin-bottom: -10px; }
+}
