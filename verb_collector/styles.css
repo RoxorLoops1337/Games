@@ -2524,6 +2524,19 @@ body::after {
   color: var(--ink);
   /* a soft shadow under the figure, sitting on the ground */
   filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.45));
+  animation: enemy-idle 4.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+/* Stagger each enemy's idle so the row doesn't move in lockstep. */
+.scene-enemy:nth-child(odd)  .scene-enemy-figure { animation-delay: -1.6s; animation-duration: 5.4s; }
+.scene-enemy:nth-child(3n)   .scene-enemy-figure { animation-delay: -3.0s; animation-duration: 6.2s; }
+.scene-enemy:hover .scene-enemy-figure { animation-play-state: paused; }
+@keyframes enemy-idle {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-1.5px) scale(1.012); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-enemy-figure { animation: none; }
 }
 .scene-enemy-figure .enemy-icon {
   width: 100%;
