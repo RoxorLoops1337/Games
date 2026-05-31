@@ -802,6 +802,38 @@ body::after {
   cursor: not-allowed;
   filter: grayscale(0.45);
   opacity: 0.7;
+  animation: none;
+}
+
+/* When the seal is armed (sentence composed, not yet cast), give it a
+   slow breathing glow so the eye is gently drawn to the action. */
+.sentence-actions .primary:not(:disabled) {
+  animation: seal-breathe 3.4s ease-in-out infinite;
+}
+@keyframes seal-breathe {
+  0%, 100% {
+    box-shadow:
+      0 6px 10px rgba(40, 0, 4, 0.55),
+      0 2px 3px rgba(0, 0, 0, 0.4),
+      inset 0 -4px 8px rgba(0, 0, 0, 0.45),
+      inset 0 4px 8px rgba(255, 200, 170, 0.32),
+      inset 0 0 0 2px rgba(60, 8, 14, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 6px 14px rgba(160, 30, 40, 0.55),
+      0 2px 3px rgba(0, 0, 0, 0.4),
+      inset 0 -4px 8px rgba(0, 0, 0, 0.45),
+      inset 0 4px 10px rgba(255, 200, 170, 0.45),
+      inset 0 0 0 2px rgba(60, 8, 14, 0.5);
+  }
+}
+.sentence-actions .primary:hover:not(:disabled),
+.sentence-actions .primary:active:not(:disabled) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sentence-actions .primary:not(:disabled) { animation: none; }
 }
 
 /* ----------------------------------------------------------------
