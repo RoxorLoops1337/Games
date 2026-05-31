@@ -36,6 +36,7 @@ const STATIC_PATHS = [
   'thieu_excuses_app',
   'mazekeep',
   'ralpherizer',
+  'cutie_merge',
   'tools',
 ];
 

@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Cutie Merge 🌸 Fluffle Friends</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pink:      #ff8fc7;
+    --pink-soft: #ffd1e8;
+    --purple:    #b58cff;
+    --lav:       #e6d6ff;
+    --turq:      #8ee6df;
+    --yellow:    #ffe89a;
+    --cream:     #fff6fb;
+    --ink:       #6b4a63;
+    --ink-soft:  #a07e98;
+    --shadow:    0 10px 30px rgba(193, 120, 175, 0.30);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    font-family: "Quicksand", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #ffe3f3 0%, rgba(255,227,243,0) 60%),
+      radial-gradient(1000px 700px at 100% 0%, #e7dbff 0%, rgba(231,219,255,0) 55%),
+      radial-gradient(900px 700px at 50% 120%, #d6fff6 0%, rgba(214,255,246,0) 55%),
+      linear-gradient(160deg, #fff1f8 0%, #f4ecff 50%, #ecfbff 100%);
+    background-attachment: fixed;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* floating background sparkles */
+  .bg-deco { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-deco span {
+    position: absolute; font-size: 22px; opacity: .5;
+    animation: floaty linear infinite;
+    filter: drop-shadow(0 3px 6px rgba(180,120,200,.25));
+  }
+  @keyframes floaty {
+    from { transform: translateY(110vh) rotate(0deg); }
+    to   { transform: translateY(-15vh) rotate(360deg); }
+  }
+
+  .wrap {
+    position: relative; z-index: 1;
+    width: 100%;
+    max-width: 460px;
+    padding: 14px 14px 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  h1 {
+    font-family: "Fredoka", sans-serif;
+    font-weight: 700;
+    font-size: 30px;
+    margin: 6px 0 0;
+    letter-spacing: .5px;
+    background: linear-gradient(90deg, #ff6fb5, #b06bff 55%, #5ec8c0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 2px 0 rgba(255,255,255,.5);
+  }
+  .tagline { margin: -2px 0 0; font-size: 13px; color: var(--ink-soft); font-weight: 600; letter-spacing: .3px; }
+
+  /* score row */
+  .stats {
+    display: flex; gap: 10px; width: 100%; justify-content: center; flex-wrap: wrap;
+  }
+  .pill {
+    background: rgba(255,255,255,.72);
+    border: 2px solid #ffffff;
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 8px 16px;
+    display: flex; flex-direction: column; align-items: center;
+    min-width: 92px;
+    backdrop-filter: blur(6px);
+  }
+  .pill .label { font-size: 11px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
+  .pill .value { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 22px; color: var(--ink); line-height: 1.1; }
+  .pill.next .value, .pill.wand .value { font-size: 26px; }
+
+  .wand-btn {
+    cursor: pointer; transition: transform .12s ease, filter .12s ease;
+    user-select: none;
+  }
+  .wand-btn:hover { transform: translateY(-2px) scale(1.04); }
+  .wand-btn.ready { animation: wandGlow 1.4s ease-in-out infinite; }
+  .wand-btn.armed { background: linear-gradient(135deg,#fff0b3,#ffd1e8); border-color:#ffd34d; }
+  .wand-btn.dim { opacity: .45; filter: grayscale(.4); cursor: default; }
+  @keyframes wandGlow {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,180,80,.0), var(--shadow); }
+    50%     { box-shadow: 0 0 18px 4px rgba(255,196,90,.55), var(--shadow); }
+  }
+
+  /* play board */
+  .board-frame {
+    position: relative;
+    border-radius: 28px;
+    padding: 10px;
+    background: linear-gradient(160deg, #ffffff 0%, #fff4fb 100%);
+    box-shadow: var(--shadow), inset 0 0 0 3px rgba(255,255,255,.9);
+    touch-action: none;
+  }
+  canvas#game {
+    display: block;
+    border-radius: 20px;
+    cursor: pointer;
+    background:
+      radial-gradient(120% 80% at 50% 0%, #fff8fd 0%, #ffeaf6 55%, #f3e4ff 100%);
+    box-shadow: inset 0 6px 18px rgba(200,140,190,.18);
+  }
+
+  .controls-hint {
+    font-size: 12.5px; color: var(--ink-soft); font-weight: 600; text-align: center;
+    margin-top: -2px;
+  }
+
+  /* discovery strip */
+  .collection {
+    width: 100%;
+    background: rgba(255,255,255,.66);
+    border: 2px solid #fff;
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 10px 10px 12px;
+  }
+  .collection h2 {
+    font-family: "Fredoka", sans-serif; font-size: 14px; margin: 0 0 8px; color: var(--ink);
+    display: flex; align-items: center; gap: 6px; letter-spacing: .4px;
+  }
+  .coll-grid { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+  .coll-cell {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 21px; position: relative;
+    background: #f3e9f4; color: transparent; text-shadow: none;
+    border: 2px solid rgba(255,255,255,.7);
+    transition: transform .2s ease;
+  }
+  .coll-cell.found { color: inherit; }
+  .coll-cell.found.pop { animation: cellPop .5s ease; }
+  @keyframes cellPop { 0%{transform:scale(1)} 40%{transform:scale(1.45) rotate(8deg)} 100%{transform:scale(1)} }
+  .coll-cell .lock { position: absolute; font-size: 14px; opacity: .55; }
+  .coll-cell.found .lock { display: none; }
+
+  /* overlay */
+  .overlay {
+    position: absolute; inset: 0; border-radius: 20px;
+    background: linear-gradient(160deg, rgba(255,225,242,.92), rgba(231,219,255,.92));
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; text-align: center; padding: 20px;
+    backdrop-filter: blur(3px);
+    opacity: 0; pointer-events: none; transition: opacity .25s ease;
+  }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+  .overlay h2 { font-family:"Fredoka",sans-serif; font-size: 30px; margin: 0; color: #c44d96; }
+  .overlay p { margin: 0; font-weight: 600; color: var(--ink); font-size: 15px; }
+  .overlay .big { font-size: 46px; margin: 4px 0; }
+  .btn {
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 18px;
+    border: none; cursor: pointer; color: #fff;
+    background: linear-gradient(135deg, #ff7ec0, #b06bff);
+    padding: 12px 28px; border-radius: 999px;
+    box-shadow: 0 8px 20px rgba(176,107,255,.4);
+    transition: transform .12s ease, box-shadow .12s ease;
+    margin-top: 6px;
+  }
+  .btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 26px rgba(176,107,255,.5); }
+  .btn:active { transform: translateY(0) scale(.98); }
+
+  .toolbar { display:flex; gap:8px; }
+  .mini {
+    font-family:"Quicksand",sans-serif; font-weight:700; font-size:13px;
+    background: rgba(255,255,255,.8); color: var(--ink);
+    border: 2px solid #fff; border-radius: 14px; padding: 7px 13px; cursor: pointer;
+    box-shadow: var(--shadow); transition: transform .12s ease;
+  }
+  .mini:hover { transform: translateY(-1px); }
+
+  nav#nav { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  nav#nav a {
+    color: var(--purple); text-decoration: none; font-weight: 700; font-size: 12px;
+    border: 2px solid #fff; background: rgba(255,255,255,.6);
+    padding: 6px 12px; border-radius: 999px; transition: background .15s ease;
+  }
+  nav#nav a:hover { background: #fff; }
+</style>
+</head>
+<body>
+<div class="bg-deco" id="bgDeco"></div>
+
+<div class="wrap">
+  <h1>Cutie Merge</h1>
+  <p class="tagline">🌸 Fluffle Friends — drop &amp; merge the cuties! 🌸</p>
+
+  <div class="stats">
+    <div class="pill"><span class="label">Score</span><span class="value" id="score">0</span></div>
+    <div class="pill"><span class="label">Best</span><span class="value" id="best">0</span></div>
+    <div class="pill next"><span class="label">Next</span><span class="value" id="next">🥚</span></div>
+    <div class="pill wand wand-btn dim" id="wandBtn" title="Magic wand: pop one cutie!">
+      <span class="label">Wand</span><span class="value" id="wandCount">🪄0</span>
+    </div>
+  </div>
+
+  <div class="board-frame">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="big" id="ovBig">🌸</div>
+      <h2 id="ovTitle">Cutie Merge</h2>
+      <p id="ovText">Match two of the same cutie to merge them into something even cuter!</p>
+      <button class="btn" id="startBtn">Play 💕</button>
+    </div>
+  </div>
+
+  <div class="controls-hint">🖱️ Move to aim &nbsp;•&nbsp; Click / Tap or Space to drop &nbsp;•&nbsp; 🪄 pops a cutie</div>
+
+  <div class="toolbar">
+    <button class="mini" id="muteBtn">🔊 Sound</button>
+    <button class="mini" id="restartBtn">🔄 Restart</button>
+  </div>
+
+  <div class="collection">
+    <h2>✨ Discovery Book</h2>
+    <div class="coll-grid" id="collGrid"></div>
+  </div>
+
+  <nav id="nav">
+    <a href="/">🏠 Home</a>
+    <a href="/verb_collector/">▶ Verb Collector</a>
+    <a href="/mazekeep/">▶ Mazekeep</a>
+    <a href="/ralpherizer/">▶ Ralpherizer</a>
+  </nav>
+</div>
+
+<script>
+/* ============================================================
+   Cutie Merge — a pastel Suika-style drop & merge game.
+   Self-contained vanilla JS + canvas. No build step needed.
+   ============================================================ */
+(function () {
+  "use strict";
+
+  /* ---------- the cutie ladder ---------- */
+  const TIERS = [
+    { name: "Egg",      emoji: "🥚", r: 17,  c1: "#fff6fb", c2: "#ffd9ea" },
+    { name: "Chick",    emoji: "🐤", r: 23,  c1: "#fff6cf", c2: "#ffe07a" },
+    { name: "Hamster",  emoji: "🐹", r: 30,  c1: "#ffe7cf", c2: "#ffc89a" },
+    { name: "Kitten",   emoji: "🐱", r: 38,  c1: "#ffe2f0", c2: "#ffb3d9" },
+    { name: "Puppy",    emoji: "🐶", r: 47,  c1: "#f3e6d2", c2: "#e0bd92" },
+    { name: "Bunny",    emoji: "🐰", r: 56,  c1: "#f3eaff", c2: "#d6b8ff" },
+    { name: "Fox",      emoji: "🦊", r: 66,  c1: "#ffe0d0", c2: "#ff9e7a" },
+    { name: "Panda",    emoji: "🐼", r: 77,  c1: "#eef3ff", c2: "#cfd8ff" },
+    { name: "Unicorn",  emoji: "🦄", r: 90,  c1: "#ffe3f6", c2: "#f0a8ff" },
+    { name: "Dragon",   emoji: "🐉", r: 104, c1: "#d9fff0", c2: "#8ee6c4" },
+    { name: "Rainbow",  emoji: "🌈", r: 120, c1: "#fff0f8", c2: "#ffd36e" },
+  ];
+  const MAX_TIER = TIERS.length - 1;
+  // tiers that can be dropped by the player (small ones only)
+  const DROP_TIERS = [0, 1, 2, 3, 4];
+  const DROP_WEIGHTS = [34, 28, 20, 12, 6];
+
+  /* ---------- canvas / world setup ---------- */
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  // logical play-field dimensions (CSS pixels)
+  const W = 360, H = 540;
+  const WALL = 0;                 // inner play area starts at x=0..W
+  const FLOOR = H;                // floor at bottom
+  const SPAWN_Y = 46;             // where the held cutie sits
+  const DANGER_Y = 92;            // overflow line
+
+  function fitCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  fitCanvas();
+  window.addEventListener("resize", fitCanvas);
+
+  /* ---------- game state ---------- */
+  let balls = [];
+  let particles = [];
+  let floaters = [];
+  let score = 0;
+  let best = +(localStorage.getItem("cutieMergeBest") || 0);
+  let wands = 0;
+  let wandArmed = false;
+  let discovered = JSON.parse(localStorage.getItem("cutieMergeFound") || "[]");
+  let running = false;
+  let gameOver = false;
+  let held = null;            // the cutie waiting to drop {tier}
+  let nextTier = randDropTier();
+  let dropCooldown = 0;       // frames until next drop allowed
+  let aimX = W / 2;
+  let combo = 0;
+  let comboTimer = 0;
+  let overflowTimer = 0;
+  let muted = false;
+  let mergesSinceWand = 0;
+  let shake = 0;
+  let rainbowMade = false;
+
+  const G = 0.55;             // gravity per frame
+  const REST = 0.18;          // bounciness
+  const FRICTION = 0.86;      // floor friction
+  const AIR = 0.995;
+  const WAND_EVERY = 6;       // merges needed to earn a wand
+
+  let idc = 1;
+  function makeBall(x, y, tier, vx, vy) {
+    return { id: idc++, x, y, vx: vx || 0, vy: vy || 0, tier,
+             r: TIERS[tier].r, merging: false, born: performance.now(), pop: 0 };
+  }
+
+  function randDropTier() {
+    let total = DROP_WEIGHTS.reduce((a, b) => a + b, 0);
+    let roll = Math.random() * total;
+    for (let i = 0; i < DROP_TIERS.length; i++) {
+      roll -= DROP_WEIGHTS[i];
+      if (roll <= 0) return DROP_TIERS[i];
+    }
+    return 0;
+  }
+
+  /* ---------- audio (tiny WebAudio synth) ---------- */
+  let actx = null;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (actx && actx.state === "suspended") actx.resume();
+  }
+  function blip(freq, dur, type, vol) {
+    if (muted || !actx) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || "sine";
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol || 0.16, actx.currentTime + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + dur + 0.02);
+  }
+  function mergeSound(tier) {
+    const base = 320 + tier * 70;
+    blip(base, 0.18, "sine", 0.18);
+    setTimeout(() => blip(base * 1.5, 0.16, "triangle", 0.12), 45);
+  }
+  function dropSound() { blip(210, 0.10, "sine", 0.10); }
+  function sparkleSound() { blip(900, 0.10, "triangle", 0.08); setTimeout(()=>blip(1300,0.08,"triangle",0.06),50); }
+
+  /* ---------- effects ---------- */
+  function burst(x, y, color, n, emoji) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1.5 + Math.random() * 4;
+      particles.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5,
+        life: 1, decay: 0.015 + Math.random() * 0.02,
+        size: 4 + Math.random() * 5, color,
+        emoji: emoji && Math.random() < 0.5 ? emoji : null,
+        rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3,
+      });
+    }
+  }
+  function addFloater(x, y, text, color) {
+    floaters.push({ x, y, text, color, life: 1, vy: -0.9 });
+  }
+
+  /* ---------- physics ---------- */
+  function step() {
+    // integrate
+    for (const b of balls) {
+      b.vy += G;
+      b.vx *= AIR; b.vy *= AIR;
+      b.x += b.vx; b.y += b.vy;
+      if (b.pop > 0) b.pop -= 0.08;
+    }
+
+    // resolve collisions + walls (several relaxation iterations for stable stacks)
+    for (let iter = 0; iter < 6; iter++) {
+      // walls + floor
+      for (const b of balls) {
+        if (b.x - b.r < WALL)      { b.x = WALL + b.r;  b.vx = Math.abs(b.vx) * REST; }
+        if (b.x + b.r > W)         { b.x = W - b.r;     b.vx = -Math.abs(b.vx) * REST; }
+        if (b.y + b.r > FLOOR)     { b.y = FLOOR - b.r; b.vy = -Math.abs(b.vy) * REST; b.vx *= FRICTION; }
+      }
+      // pairs
+      for (let i = 0; i < balls.length; i++) {
+        for (let j = i + 1; j < balls.length; j++) {
+          const a = balls[i], b = balls[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          let dist = Math.hypot(dx, dy);
+          const min = a.r + b.r;
+          if (dist === 0) { dx = 0.01; dy = 0.01; dist = 0.014; }
+          if (dist < min) {
+            const nx = dx / dist, ny = dy / dist;
+            const overlap = min - dist;
+            // positional separation (equal mass)
+            const push = overlap / 2;
+            a.x -= nx * push; a.y -= ny * push;
+            b.x += nx * push; b.y += ny * push;
+            // velocity impulse
+            const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+            const sep = rvx * nx + rvy * ny;
+            if (sep < 0) {
+              const imp = -(1 + REST) * sep / 2;
+              a.vx -= imp * nx; a.vy -= imp * ny;
+              b.vx += imp * nx; b.vy += imp * ny;
+            }
+          }
+        }
+      }
+    }
+
+    // merge detection (same tier, touching, neither already consumed)
+    for (let i = 0; i < balls.length; i++) {
+      const a = balls[i];
+      if (a.merging) continue;
+      for (let j = i + 1; j < balls.length; j++) {
+        const b = balls[j];
+        if (b.merging || b.tier !== a.tier) continue;
+        const dist = Math.hypot(b.x - a.x, b.y - a.y);
+        if (dist < a.r + b.r - 2) { doMerge(a, b); break; }
+      }
+    }
+    if (balls.some(b => b.merging)) balls = balls.filter(b => !b.merging);
+
+    // clamp crazy velocities (anti-tunnel)
+    for (const b of balls) {
+      const sp = Math.hypot(b.vx, b.vy);
+      if (sp > 22) { b.vx = b.vx / sp * 22; b.vy = b.vy / sp * 22; }
+    }
+
+    // combo decay
+    if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) combo = 0; }
+
+    // overflow check
+    let over = false;
+    for (const b of balls) {
+      if (b.y - b.r < DANGER_Y && Math.hypot(b.vx, b.vy) < 0.8 && performance.now() - b.born > 600) {
+        over = true; break;
+      }
+    }
+    if (over) {
+      overflowTimer++;
+      if (overflowTimer > 90) endGame();
+    } else {
+      overflowTimer = Math.max(0, overflowTimer - 3);
+    }
+  }
+
+  function doMerge(a, b) {
+    a.merging = true; b.merging = true;
+    const nt = Math.min(a.tier + 1, MAX_TIER);
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+
+    // scoring with combo
+    combo++; comboTimer = 90;
+    const base = (a.tier + 1) * 10;
+    const mult = 1 + (combo - 1) * 0.5;
+    const gained = Math.round(base * mult);
+    score += gained;
+    addFloater(mx, my - 10, "+" + gained, "#c44d96");
+    if (combo > 1) addFloater(mx, my - 32, "combo x" + combo + "!", "#7c5cff");
+
+    discover(a.tier);
+    mergeSound(a.tier);
+    burst(mx, my, TIERS[a.tier].c2, 12, "✨");
+
+    if (a.tier < MAX_TIER) {
+      const nb = makeBall(mx, my, nt, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2 - 1.5);
+      nb.pop = 1;
+      balls.push(nb);
+      discover(nt);
+      if (nt === MAX_TIER && !rainbowMade) {
+        rainbowMade = true;
+        celebrateRainbow(mx, my);
+      }
+    } else {
+      // two rainbows merged -> mega bonus + clear nearby
+      score += 500;
+      addFloater(mx, my, "🌈 +500!", "#ff5fa8");
+      burst(mx, my, "#ffd36e", 40, "🌈");
+      sparkleSound();
+      shake = 14;
+      balls = balls.filter(o => Math.hypot(o.x - mx, o.y - my) > 130);
+    }
+
+    // earn wands
+    mergesSinceWand++;
+    if (mergesSinceWand >= WAND_EVERY) {
+      mergesSinceWand = 0;
+      wands++;
+      updateWand();
+      addFloater(mx, my - 50, "🪄 wand!", "#ff9e3d");
+      sparkleSound();
+    }
+
+    if (score > best) { best = score; localStorage.setItem("cutieMergeBest", best); }
+    updateHud();
+  }
+
+  function celebrateRainbow(x, y) {
+    burst(x, y, "#ff8fc7", 50, "🌈");
+    sparkleSound();
+    shake = 10;
+    addFloater(x, y - 60, "RAINBOW! 🌈", "#ff5fa8");
+  }
+
+  /* ---------- discovery book ---------- */
+  function discover(tier) {
+    if (!discovered.includes(tier)) {
+      discovered.push(tier);
+      localStorage.setItem("cutieMergeFound", JSON.stringify(discovered));
+      renderCollection(tier);
+    }
+  }
+
+  function renderCollection(popTier) {
+    const grid = document.getElementById("collGrid");
+    grid.innerHTML = "";
+    TIERS.forEach((t, i) => {
+      const cell = document.createElement("div");
+      cell.className = "coll-cell" + (discovered.includes(i) ? " found" : "");
+      if (popTier === i) cell.classList.add("pop");
+      cell.textContent = discovered.includes(i) ? t.emoji : "";
+      cell.title = discovered.includes(i) ? t.name : "??? keep merging!";
+      if (!discovered.includes(i)) {
+        const lock = document.createElement("span");
+        lock.className = "lock"; lock.textContent = "❔";
+        cell.appendChild(lock);
+      }
+      grid.appendChild(cell);
+    });
+  }
+
+  /* ---------- rendering ---------- */
+  function drawBall(b, ghost) {
+    const t = TIERS[b.tier];
+    const squish = b.pop > 0 ? 1 + Math.sin(b.pop * Math.PI) * 0.16 : 1;
+    const r = b.r * squish;
+    ctx.save();
+    ctx.globalAlpha = ghost ? 0.55 : 1;
+    // soft drop shadow
+    if (!ghost) {
+      ctx.beginPath();
+      ctx.ellipse(b.x, b.y + r * 0.72, r * 0.82, r * 0.32, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(150,90,140,0.12)";
+      ctx.fill();
+    }
+    // body gradient
+    const g = ctx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.35, r * 0.2, b.x, b.y, r);
+    g.addColorStop(0, "#ffffff");
+    g.addColorStop(0.35, t.c1);
+    g.addColorStop(1, t.c2);
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    // glossy ring
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.stroke();
+    // top highlight
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.32, b.y - r * 0.42, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.fill();
+    // emoji
+    ctx.font = (r * 1.15) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t.emoji, b.x, b.y + r * 0.06);
+    ctx.restore();
+  }
+
+  function render() {
+    let sx = 0, sy = 0;
+    if (shake > 0) { sx = (Math.random() - 0.5) * shake; sy = (Math.random() - 0.5) * shake; shake *= 0.85; if (shake < 0.5) shake = 0; }
+    ctx.save();
+    ctx.clearRect(0, 0, W, H);
+    ctx.translate(sx, sy);
+
+    // danger line
+    ctx.save();
+    ctx.setLineDash([7, 7]);
+    ctx.strokeStyle = overflowTimer > 0 ? "rgba(255,90,150,0.85)" : "rgba(200,150,200,0.45)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(W, DANGER_Y); ctx.stroke();
+    ctx.restore();
+
+    // aim guide + held cutie
+    if (running && !gameOver && held && dropCooldown <= 0) {
+      const t = TIERS[held.tier];
+      ctx.save();
+      ctx.setLineDash([4, 8]);
+      ctx.strokeStyle = "rgba(180,120,200,0.35)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(aimX, SPAWN_Y + t.r); ctx.lineTo(aimX, H); ctx.stroke();
+      ctx.restore();
+      drawBall({ x: aimX, y: SPAWN_Y, r: t.r, tier: held.tier, pop: 0 }, true);
+    }
+
+    for (const b of balls) drawBall(b, false);
+
+    // particles
+    for (const p of particles) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life);
+      if (p.emoji) {
+        ctx.font = p.size * 2.4 + "px serif";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillText(p.emoji, 0, 0);
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color; ctx.fill();
+      }
+      ctx.restore();
+    }
+    // floaters
+    for (const f of floaters) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, f.life);
+      ctx.font = "700 17px 'Fredoka', sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function updateFx() {
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.vx *= 0.99;
+      p.rot += p.vr; p.life -= p.decay;
+    }
+    particles = particles.filter(p => p.life > 0);
+    for (const f of floaters) { f.y += f.vy; f.vy *= 0.96; f.life -= 0.018; }
+    floaters = floaters.filter(f => f.life > 0);
+  }
+
+  /* ---------- main loop ---------- */
+  let raf = null;
+  function loop() {
+    if (running && !gameOver) {
+      step();
+      if (dropCooldown > 0) {
+        dropCooldown--;
+        if (dropCooldown === 0 && !held) { held = { tier: nextTier }; nextTier = randDropTier(); updateHud(); }
+      }
+    }
+    updateFx();
+    render();
+    raf = requestAnimationFrame(loop);
+  }
+
+  /* ---------- input ---------- */
+  function pointerX(e) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    return Math.max(0, Math.min(W, cx * (W / rect.width)));
+  }
+  function pointerY(e) {
+    const rect = canvas.getBoundingClientRect();
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return cy * (H / rect.height);
+  }
+
+  function onMove(e) {
+    if (!running) return;
+    aimX = pointerX(e);
+  }
+  function onDown(e) {
+    ensureAudio();
+    if (!running || gameOver) return;
+    e.preventDefault();
+    const px = pointerX(e), py = pointerY(e);
+    if (wandArmed) { tryWand(px, py); return; }
+    aimX = px;
+    drop();
+  }
+
+  function drop() {
+    if (!held || dropCooldown > 0) return;
+    const t = held.tier;
+    const r = TIERS[t].r;
+    const x = Math.max(r, Math.min(W - r, aimX));
+    balls.push(makeBall(x, SPAWN_Y, t, 0, 1));
+    dropSound();
+    held = null;
+    dropCooldown = 24; // ~0.4s
+    updateHud();
+  }
+
+  canvas.addEventListener("mousemove", onMove);
+  canvas.addEventListener("mousedown", onDown);
+  canvas.addEventListener("touchmove", (e) => { onMove(e); e.preventDefault(); }, { passive: false });
+  canvas.addEventListener("touchstart", onDown, { passive: false });
+
+  document.addEventListener("keydown", (e) => {
+    if (!running) return;
+    if (e.key === "ArrowLeft") { aimX = Math.max(0, aimX - 18); e.preventDefault(); }
+    else if (e.key === "ArrowRight") { aimX = Math.min(W, aimX + 18); e.preventDefault(); }
+    else if (e.key === " ") { ensureAudio(); drop(); e.preventDefault(); }
+    else if (e.key.toLowerCase() === "w") { armWand(); }
+  });
+
+  /* ---------- magic wand ---------- */
+  function armWand() {
+    if (wands <= 0 || !running || gameOver) return;
+    wandArmed = !wandArmed;
+    updateWand();
+  }
+  function tryWand(px, py) {
+    // pop the cutie under the pointer (smallest tier preference among hits)
+    let hit = null;
+    for (const b of balls) {
+      if (Math.hypot(b.x - px, b.y - py) <= b.r) {
+        if (!hit || b.tier < hit.tier) hit = b;
+      }
+    }
+    if (hit) {
+      burst(hit.x, hit.y, TIERS[hit.tier].c2, 16, "✨");
+      sparkleSound();
+      balls = balls.filter(b => b !== hit);
+      wands--; wandArmed = false;
+      updateWand();
+    }
+  }
+  document.getElementById("wandBtn").addEventListener("click", () => { ensureAudio(); armWand(); });
+
+  function updateWand() {
+    const btn = document.getElementById("wandBtn");
+    document.getElementById("wandCount").textContent = "🪄" + wands;
+    btn.classList.toggle("dim", wands <= 0);
+    btn.classList.toggle("ready", wands > 0 && !wandArmed);
+    btn.classList.toggle("armed", wandArmed);
+    canvas.style.cursor = wandArmed ? "crosshair" : "pointer";
+  }
+
+  /* ---------- hud ---------- */
+  function updateHud() {
+    document.getElementById("score").textContent = score;
+    document.getElementById("best").textContent = best;
+    document.getElementById("next").textContent = TIERS[nextTier].emoji;
+  }
+
+  /* ---------- game flow ---------- */
+  function resetGame() {
+    balls = []; particles = []; floaters = [];
+    score = 0; combo = 0; comboTimer = 0; overflowTimer = 0;
+    wands = 0; wandArmed = false; mergesSinceWand = 0; rainbowMade = false;
+    nextTier = randDropTier();
+    held = { tier: randDropTier() };
+    dropCooldown = 0; gameOver = false;
+    updateHud(); updateWand();
+  }
+  function startGame() {
+    ensureAudio();
+    resetGame();
+    running = true;
+    document.getElementById("overlay").classList.remove("show");
+  }
+  function endGame() {
+    gameOver = true; running = false;
+    shake = 8;
+    if (score > best) { best = score; localStorage.setItem("cutieMergeBest", best); }
+    const ov = document.getElementById("overlay");
+    document.getElementById("ovBig").textContent = "🌷";
+    document.getElementById("ovTitle").textContent = "Cuties Overflowed!";
+    document.getElementById("ovText").innerHTML =
+      "You scored <b>" + score + "</b> points 💕<br>Best: " + best;
+    document.getElementById("startBtn").textContent = "Play again 🌸";
+    ov.classList.add("show");
+    updateHud();
+  }
+
+  document.getElementById("startBtn").addEventListener("click", startGame);
+  document.getElementById("restartBtn").addEventListener("click", () => { startGame(); });
+  document.getElementById("muteBtn").addEventListener("click", function () {
+    muted = !muted;
+    this.textContent = muted ? "🔇 Muted" : "🔊 Sound";
+    if (!muted) ensureAudio();
+  });
+
+  /* ---------- background deco ---------- */
+  (function deco() {
+    const wrap = document.getElementById("bgDeco");
+    const cuties = ["🌸","💕","✨","🦄","🐱","🌷","💜","🐰","⭐","🍬"];
+    for (let i = 0; i < 16; i++) {
+      const s = document.createElement("span");
+      s.textContent = cuties[i % cuties.length];
+      s.style.left = Math.random() * 100 + "vw";
+      s.style.fontSize = (14 + Math.random() * 20) + "px";
+      const dur = 14 + Math.random() * 18;
+      s.style.animationDuration = dur + "s";
+      s.style.animationDelay = (-Math.random() * dur) + "s";
+      wrap.appendChild(s);
+    }
+  })();
+
+  /* ---------- boot ---------- */
+  renderCollection();
+  updateHud();
+  updateWand();
+  loop();
+})();
+</script>
+</body>
+</html>
