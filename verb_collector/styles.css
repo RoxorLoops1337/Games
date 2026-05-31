@@ -2424,6 +2424,16 @@ body::after {
   max-width: 200px;
   height: auto;
   filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45));
+  animation: hero-idle 5.6s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+.scene-hero:hover .hero-svg { animation-play-state: paused; }
+@keyframes hero-idle {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-svg { animation: none; }
 }
 .hero-stamps {
   display: flex;
