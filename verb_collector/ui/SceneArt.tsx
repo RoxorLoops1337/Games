@@ -839,3 +839,229 @@ export function EndVignette({ won }: { won: boolean }): React.ReactElement {
     </svg>
   );
 }
+
+// --------------------------------------------------------------------------
+// Title-screen banner — painted forest scene with a small cloaked figure
+// walking toward a glowing horizon. Sits above the wordmark.
+// --------------------------------------------------------------------------
+export function TitleBanner(): React.ReactElement {
+  return (
+    <svg className="title-banner" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="tb-sky" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#5a6e85" />
+          <stop offset="55%" stopColor="#cf9858" />
+          <stop offset="100%" stopColor="#4a2818" />
+        </linearGradient>
+        <radialGradient id="tb-sun" cx="0.5" cy="0.62" r="0.32">
+          <stop offset="0%" stopColor="#fff2c4" stopOpacity="0.95" />
+          <stop offset="60%" stopColor="#f4d28a" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#f4d28a" stopOpacity="0" />
+        </radialGradient>
+        <filter id="tb-bleed" x="-5%" y="-5%" width="110%" height="110%">
+          <feGaussianBlur stdDeviation="1.4" />
+        </filter>
+        <filter id="tb-grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" /><feColorMatrix values="0 0 0 0 0.12  0 0 0 0 0.08  0 0 0 0 0.04  0 0 0 0.32 0" /></filter>
+      </defs>
+      <rect x="0" y="0" width="600" height="240" fill="url(#tb-sky)" />
+      <rect x="0" y="0" width="600" height="240" fill="url(#tb-sun)" />
+      <circle cx="300" cy="148" r="28" fill="#fff2c4" opacity="0.9" />
+      <circle cx="300" cy="148" r="18" fill="#ffeac0" />
+
+      {/* distant mountains */}
+      <path d="M0 158 L70 138 L160 152 L240 130 L320 150 L400 132 L480 152 L560 138 L600 148 L600 240 L0 240 Z"
+        fill="#5a6a7a" opacity="0.65" filter="url(#tb-bleed)" />
+      {/* nearer hills */}
+      <path d="M0 190 Q120 170 240 188 T440 188 T600 184 L600 240 L0 240 Z"
+        fill="#3f4a32" opacity="0.85" />
+      {/* tree silhouettes */}
+      <g color="#1a2010" opacity="0.92">
+        {[40, 105, 165, 220, 370, 432, 490, 555].map((x, i) => (
+          <g key={i} transform={`translate(${x}, ${188 + (i % 3) * 2})`}>
+            <path d="M0 0 L-5 -22 L-2 -22 L-6 -32 L0 -38 L6 -32 L2 -22 L5 -22 Z" fill="currentColor" />
+          </g>
+        ))}
+      </g>
+      {/* path */}
+      <path d="M270 240 L292 200 L308 200 L330 240 Z" fill="#c7ad7c" opacity="0.85" />
+      <path d="M278 232 L296 208 L304 208 L322 232" stroke="#7a5a30" strokeWidth="0.6" fill="none" opacity="0.55" />
+
+      {/* small cloaked figure walking the path */}
+      <g transform="translate(296, 198)" filter="url(#tb-bleed)">
+        <path d="M0 0 C -3 0 -5 2 -5 5 L -5 10 C -5 14 -3 18 0 22 L 0 26 L 6 26 L 6 22 C 9 18 11 14 11 10 L 11 5 C 11 2 9 0 6 0 Z"
+          fill="#1a140a" />
+      </g>
+      <g transform="translate(296, 198)">
+        {/* ink outline */}
+        <path d="M0 0 C -3 0 -5 2 -5 5 L -5 10 C -5 14 -3 18 0 22 L 0 26 L 6 26 L 6 22 C 9 18 11 14 11 10 L 11 5 C 11 2 9 0 6 0 Z"
+          stroke="#0a0604" strokeWidth="0.4" fill="none" />
+        {/* tiny gold clasp */}
+        <circle cx="3" cy="6" r="0.8" fill="#b9893a" />
+      </g>
+
+      {/* a couple of distant birds */}
+      <g stroke="#1a140a" strokeWidth="1" fill="none" opacity="0.6" strokeLinecap="round">
+        <path d="M170 92 Q174 88 178 92 Q182 88 186 92" />
+        <path d="M420 78 Q424 74 428 78 Q432 74 436 78" />
+        <path d="M460 100 Q463 97 466 100 Q469 97 472 100" />
+      </g>
+
+      {/* paper grain + frame vignette */}
+      <rect x="0" y="0" width="600" height="240" filter="url(#tb-grain)" opacity="0.4" />
+      <radialGradient id="tb-vignette" cx="0.5" cy="0.5" r="0.85">
+        <stop offset="55%" stopColor="#1a140a" stopOpacity="0" />
+        <stop offset="100%" stopColor="#1a140a" stopOpacity="0.55" />
+      </radialGradient>
+      <rect x="0" y="0" width="600" height="240" fill="url(#tb-vignette)" />
+    </svg>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Fire scene — a small campfire with stacked logs, ember-glow, flames as
+// layered watercolor shapes, smoke wisping up.
+// --------------------------------------------------------------------------
+export function FireBlaze(): React.ReactElement {
+  return (
+    <svg className="fire-blaze" viewBox="0 0 240 240" aria-hidden="true">
+      <defs>
+        <radialGradient id="fb-glow" cx="0.5" cy="0.55" r="0.5">
+          <stop offset="0%"   stopColor="#ffe09a" stopOpacity="0.95" />
+          <stop offset="45%"  stopColor="#f4a44a" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#f4a44a" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="fb-outer" x1="0.5" x2="0.5" y1="1" y2="0">
+          <stop offset="0%"   stopColor="#cc4a18" />
+          <stop offset="60%"  stopColor="#e87b1a" />
+          <stop offset="100%" stopColor="#f4d28a" />
+        </linearGradient>
+        <linearGradient id="fb-inner" x1="0.5" x2="0.5" y1="1" y2="0">
+          <stop offset="0%"   stopColor="#f0a040" />
+          <stop offset="60%"  stopColor="#fff2c4" />
+          <stop offset="100%" stopColor="#ffffff" />
+        </linearGradient>
+        <filter id="fb-bleed"><feGaussianBlur stdDeviation="1.6" /></filter>
+        <linearGradient id="fb-log" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#6a3a18" />
+          <stop offset="100%" stopColor="#3a1d0a" />
+        </linearGradient>
+      </defs>
+      {/* glow halo */}
+      <circle cx="120" cy="155" r="110" fill="url(#fb-glow)" />
+      {/* outer flame */}
+      <path
+        d="M120 50
+           C 96 70 84 100 88 130
+           C 90 150 102 168 102 184
+           C 102 196 110 204 120 204
+           C 130 204 138 196 138 184
+           C 138 168 150 150 152 130
+           C 156 100 144 70 120 50 Z"
+        fill="url(#fb-outer)" filter="url(#fb-bleed)"
+      />
+      {/* inner flame */}
+      <path
+        d="M120 90
+           C 108 102 102 122 106 140
+           C 108 152 116 162 116 174
+           C 116 184 122 188 120 188
+           C 122 188 124 184 124 174
+           C 124 162 132 152 134 140
+           C 138 122 132 102 120 90 Z"
+        fill="url(#fb-inner)" filter="url(#fb-bleed)" opacity="0.95"
+      />
+      {/* logs at the bottom */}
+      <g>
+        <ellipse cx="120" cy="200" rx="80" ry="14" fill="#2a160a" opacity="0.7" />
+        <rect x="58" y="186" width="124" height="14" rx="6" fill="url(#fb-log)" stroke="#1a0a04" strokeWidth="1" />
+        <rect x="70" y="172" width="100" height="14" rx="6" fill="url(#fb-log)" stroke="#1a0a04" strokeWidth="1" transform="rotate(-7 120 179)" />
+        {/* log end grain */}
+        <circle cx="58" cy="193" r="4" fill="#7a4220" stroke="#1a0a04" strokeWidth="0.6" />
+        <circle cx="182" cy="193" r="4" fill="#7a4220" stroke="#1a0a04" strokeWidth="0.6" />
+      </g>
+      {/* sparks */}
+      <g fill="#fff2c4" opacity="0.9">
+        <circle cx="92" cy="84"  r="1.4" />
+        <circle cx="146" cy="70" r="1.2" />
+        <circle cx="80" cy="120" r="1" opacity="0.7" />
+        <circle cx="160" cy="110" r="1.4" />
+        <circle cx="138" cy="42" r="0.9" opacity="0.7" />
+      </g>
+      {/* smoke wisps */}
+      <g stroke="#7a6a55" strokeWidth="1.2" fill="none" opacity="0.5" strokeLinecap="round">
+        <path d="M118 50 Q 110 30 118 12 Q 126 -2 120 -20" />
+        <path d="M128 56 Q 138 38 132 22" />
+      </g>
+    </svg>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Mirror plate — an oval mirror in a carved oak frame, with a faint
+// reflection visible in the glass.
+// --------------------------------------------------------------------------
+export function MirrorPlate(): React.ReactElement {
+  return (
+    <svg className="mirror-plate" viewBox="0 0 240 280" aria-hidden="true">
+      <defs>
+        <linearGradient id="mp-frame" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#6a4a26" />
+          <stop offset="50%" stopColor="#3a2a14" />
+          <stop offset="100%" stopColor="#5a3a1c" />
+        </linearGradient>
+        <radialGradient id="mp-glass" cx="0.45" cy="0.4" r="0.7">
+          <stop offset="0%" stopColor="#dee8f0" stopOpacity="0.9" />
+          <stop offset="45%" stopColor="#a8b5c4" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#3a4a5a" stopOpacity="0.9" />
+        </radialGradient>
+        <linearGradient id="mp-sheen" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+          <stop offset="45%" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.2" />
+        </linearGradient>
+        <filter id="mp-shadow"><feGaussianBlur stdDeviation="2" /></filter>
+      </defs>
+
+      {/* shadow under the mirror */}
+      <ellipse cx="120" cy="260" rx="80" ry="8" fill="#1a140a" opacity="0.55" filter="url(#mp-shadow)" />
+
+      {/* outer carved frame */}
+      <ellipse cx="120" cy="130" rx="98" ry="124" fill="url(#mp-frame)" stroke="#0d0a06" strokeWidth="2" />
+      {/* frame carving — vine and leaf motif */}
+      <g stroke="#b9893a" strokeWidth="1.2" fill="none" opacity="0.85">
+        <path d="M120 8 Q 100 28 90 50" />
+        <path d="M120 8 Q 140 28 150 50" />
+        <path d="M120 252 Q 100 232 90 210" />
+        <path d="M120 252 Q 140 232 150 210" />
+        <path d="M22 130 Q 36 110 50 100" />
+        <path d="M218 130 Q 204 110 190 100" />
+        <path d="M22 130 Q 36 150 50 160" />
+        <path d="M218 130 Q 204 150 190 160" />
+      </g>
+      {/* gold corner accents at cardinal points */}
+      <g fill="#b9893a" stroke="#0d0a06" strokeWidth="0.7">
+        <circle cx="120" cy="8" r="4" />
+        <circle cx="120" cy="252" r="4" />
+        <circle cx="22" cy="130" r="4" />
+        <circle cx="218" cy="130" r="4" />
+      </g>
+
+      {/* inner gold bezel */}
+      <ellipse cx="120" cy="130" rx="80" ry="106" fill="none" stroke="#b9893a" strokeWidth="1.6" />
+
+      {/* glass */}
+      <ellipse cx="120" cy="130" rx="78" ry="104" fill="url(#mp-glass)" />
+      {/* faint reflection — a tiny figure with a glow */}
+      <g opacity="0.55">
+        <ellipse cx="120" cy="200" rx="22" ry="3" fill="#1a140a" opacity="0.5" />
+        <path d="M120 130 C 110 130 104 138 104 148 L 104 188 C 104 196 110 200 120 200 L 136 200 C 136 200 136 196 136 188 L 136 148 C 136 138 130 130 120 130 Z"
+          fill="#3a2c1a" />
+        <circle cx="120" cy="142" r="2.6" fill="#b9893a" />
+      </g>
+      {/* glass sheen overlay */}
+      <ellipse cx="120" cy="130" rx="78" ry="104" fill="url(#mp-sheen)" opacity="0.5" />
+      {/* a soft highlight crescent */}
+      <path d="M68 80 Q 88 60 120 56" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.45" />
+    </svg>
+  );
+}
