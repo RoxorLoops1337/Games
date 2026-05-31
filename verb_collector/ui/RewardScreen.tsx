@@ -2,6 +2,7 @@ import React from 'react';
 import { VERBS } from '../engine/words';
 import { Action } from '../engine/combat/reducer';
 import { GameState } from '../engine/combat/state';
+import { RewardLaurel } from './SceneArt';
 
 interface Props {
   state: GameState;
@@ -11,6 +12,9 @@ interface Props {
 export function RewardScreen({ state, dispatch }: Props): React.ReactElement {
   return (
     <div className="reward-screen">
+      <div className="reward-laurel-wrap" aria-hidden="true">
+        <RewardLaurel />
+      </div>
       <h2>VICTORY</h2>
       <p className="reward-flavor">
         You defeated {state.encounterName ? state.encounterName.toLowerCase() : 'your foe'}. The forest offers a word.
