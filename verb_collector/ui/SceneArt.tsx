@@ -1065,3 +1065,235 @@ export function MirrorPlate(): React.ReactElement {
     </svg>
   );
 }
+
+// --------------------------------------------------------------------------
+// Merchant stall — a cloaked figure sitting beside a small lantern with a
+// pouch of bottled words on a stone. Painted in dusk tones.
+// --------------------------------------------------------------------------
+export function MerchantStall(): React.ReactElement {
+  return (
+    <svg className="merchant-stall" viewBox="0 0 280 200" aria-hidden="true">
+      <defs>
+        <linearGradient id="ms-bg" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#3a4254" />
+          <stop offset="55%" stopColor="#a8754a" />
+          <stop offset="100%" stopColor="#3a200e" />
+        </linearGradient>
+        <radialGradient id="ms-lantern" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0%"  stopColor="#fff2c4" stopOpacity="0.95" />
+          <stop offset="55%" stopColor="#f4ba6c" stopOpacity="0.6" />
+          <stop offset="100%" stopColor="#f4ba6c" stopOpacity="0" />
+        </radialGradient>
+        <filter id="ms-bleed"><feGaussianBlur stdDeviation="1.2" /></filter>
+        <linearGradient id="ms-cloak" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#4a2a18" />
+          <stop offset="100%" stopColor="#1a0a04" />
+        </linearGradient>
+        <linearGradient id="ms-pouch" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#a8743a" />
+          <stop offset="100%" stopColor="#5a3a18" />
+        </linearGradient>
+      </defs>
+
+      {/* sky / dusk background */}
+      <rect x="0" y="0" width="280" height="200" fill="url(#ms-bg)" />
+
+      {/* lantern halo */}
+      <ellipse cx="186" cy="106" rx="100" ry="80" fill="url(#ms-lantern)" />
+
+      {/* ground */}
+      <path d="M0 160 Q 140 152 280 158 L 280 200 L 0 200 Z" fill="#2a1810" opacity="0.85" />
+
+      {/* distant trees behind */}
+      <g color="#1a1208" opacity="0.7">
+        {[10, 40, 70, 235, 260].map((x, i) => (
+          <g key={i} transform={`translate(${x}, ${160 + (i % 2) * 2})`}>
+            <path d="M0 0 L-5 -22 L-2 -22 L-6 -32 L0 -38 L6 -32 L2 -22 L5 -22 Z" fill="currentColor" />
+          </g>
+        ))}
+      </g>
+
+      {/* the merchant — cloaked figure on a stool */}
+      <g filter="url(#ms-bleed)">
+        {/* cloak body */}
+        <path d="M70 100 C 60 100 54 110 56 122 C 56 134 60 144 62 152 L 102 152 C 104 144 108 134 108 122 C 110 110 104 100 94 100 Q 90 92 92 84 Q 88 78 82 78 Q 76 78 72 84 Q 74 92 70 100 Z"
+          fill="url(#ms-cloak)" />
+      </g>
+      {/* hood opening — shadowed face */}
+      <ellipse cx="82" cy="82" rx="7" ry="9" fill="#0a0604" />
+      {/* faint hint of eyes */}
+      <circle cx="79" cy="83" r="0.6" fill="#d9bf86" opacity="0.7" />
+      <circle cx="85" cy="83" r="0.6" fill="#d9bf86" opacity="0.7" />
+      {/* gold clasp */}
+      <circle cx="82" cy="98" r="1.6" fill="#b9893a" stroke="#0d0a06" strokeWidth="0.5" />
+      {/* cloak ink outline */}
+      <path d="M70 100 C 60 100 54 110 56 122 C 56 134 60 144 62 152 L 102 152 C 104 144 108 134 108 122 C 110 110 104 100 94 100"
+        stroke="#0d0a06" strokeWidth="1" fill="none" />
+      {/* hood crease */}
+      <path d="M72 86 Q 82 90 92 86" stroke="#0d0a06" strokeWidth="0.6" fill="none" opacity="0.6" />
+
+      {/* stone the pouch sits on */}
+      <path d="M140 144 Q 130 142 124 152 L 200 152 Q 198 142 190 142 Z"
+        fill="#7a6a55" stroke="#1a140a" strokeWidth="1" />
+      <path d="M126 150 L 198 150" stroke="#0d0a06" strokeWidth="0.6" opacity="0.4" />
+
+      {/* pouch with bottles */}
+      <g>
+        <path d="M150 142 C 146 138 148 130 156 130 L 178 130 C 186 130 188 138 184 142 Z"
+          fill="url(#ms-pouch)" stroke="#0d0a06" strokeWidth="1" />
+        {/* drawstring */}
+        <path d="M156 130 Q 158 124 162 124 Q 166 124 168 128" stroke="#1a0a04" strokeWidth="0.8" fill="none" />
+        <path d="M172 128 Q 174 124 178 124 Q 182 124 178 132" stroke="#1a0a04" strokeWidth="0.8" fill="none" />
+        {/* a couple of bottles peeking out */}
+        <rect x="156" y="120" width="4" height="14" rx="1" fill="#a8b5c4" stroke="#0d0a06" strokeWidth="0.6" />
+        <rect x="164" y="118" width="4" height="16" rx="1" fill="#7a3a20" stroke="#0d0a06" strokeWidth="0.6" />
+        <rect x="172" y="122" width="4" height="12" rx="1" fill="#4a6a3a" stroke="#0d0a06" strokeWidth="0.6" />
+        {/* cork tops */}
+        <rect x="156" y="118" width="4" height="2" fill="#3a200e" />
+        <rect x="164" y="116" width="4" height="2" fill="#3a200e" />
+        <rect x="172" y="120" width="4" height="2" fill="#3a200e" />
+      </g>
+
+      {/* lantern on a post */}
+      <g>
+        {/* post */}
+        <rect x="184" y="100" width="3" height="50" fill="#2a1810" />
+        {/* arm */}
+        <path d="M184 102 L 174 100" stroke="#2a1810" strokeWidth="2" />
+        {/* lantern body */}
+        <path d="M168 100 L 172 92 L 184 92 L 188 100 L 184 116 L 172 116 Z"
+          fill="#3a2614" stroke="#0d0a06" strokeWidth="1" />
+        {/* lantern glass */}
+        <path d="M172 100 L 184 100 L 182 114 L 174 114 Z"
+          fill="#fff2c4" opacity="0.85" />
+        {/* flame inside */}
+        <path d="M178 106 Q 176 110 178 113 Q 180 110 178 106 Z" fill="#f4a44a" />
+        <path d="M178 108 Q 177 110 178 112 Q 179 110 178 108 Z" fill="#fff2c4" />
+        {/* lantern top ring */}
+        <circle cx="178" cy="90" r="2.5" fill="none" stroke="#1a140a" strokeWidth="1" />
+      </g>
+
+      {/* a couple of motes drifting from the lantern */}
+      <g fill="#fff2c4" opacity="0.85">
+        <circle cx="196" cy="74" r="1" />
+        <circle cx="206" cy="56" r="0.8" opacity="0.6" />
+        <circle cx="160" cy="64" r="1" opacity="0.5" />
+      </g>
+    </svg>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Shrine stone — a moss-covered standing stone in a clearing, runes carved
+// into its face, a small candle at its base, light dappling through trees.
+// --------------------------------------------------------------------------
+export function ShrineStone(): React.ReactElement {
+  return (
+    <svg className="shrine-stone" viewBox="0 0 240 240" aria-hidden="true">
+      <defs>
+        <linearGradient id="ss-sky" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#6a7d8a" />
+          <stop offset="55%" stopColor="#a89870" />
+          <stop offset="100%" stopColor="#3f4a32" />
+        </linearGradient>
+        <radialGradient id="ss-light" cx="0.5" cy="0.32" r="0.45">
+          <stop offset="0%" stopColor="#fff2c4" stopOpacity="0.75" />
+          <stop offset="100%" stopColor="#fff2c4" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="ss-stone" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#a89884" />
+          <stop offset="100%" stopColor="#4a4036" />
+        </linearGradient>
+        <linearGradient id="ss-moss" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#6a7a3a" />
+          <stop offset="100%" stopColor="#3a4a1c" />
+        </linearGradient>
+        <filter id="ss-bleed"><feGaussianBlur stdDeviation="1.2" /></filter>
+      </defs>
+
+      {/* clearing background */}
+      <rect x="0" y="0" width="240" height="240" fill="url(#ss-sky)" />
+      <ellipse cx="120" cy="80" rx="120" ry="80" fill="url(#ss-light)" />
+
+      {/* tree trunks framing the clearing */}
+      <g stroke="#1a140a" strokeWidth="2.2" fill="none" opacity="0.85">
+        <path d="M16 240 L 20 60 Q 22 40 18 28" />
+        <path d="M224 240 L 220 56 Q 218 38 222 26" />
+        <path d="M40 240 L 38 110" strokeWidth="1.4" opacity="0.6" />
+        <path d="M200 240 L 202 105" strokeWidth="1.4" opacity="0.6" />
+      </g>
+      {/* foliage blobs */}
+      <g filter="url(#ss-bleed)" opacity="0.85">
+        <ellipse cx="18" cy="40" rx="38" ry="32" fill="#3a4a26" />
+        <ellipse cx="222" cy="36" rx="40" ry="32" fill="#3a4a26" />
+        <ellipse cx="40" cy="100" rx="22" ry="16" fill="#3a4a26" opacity="0.7" />
+        <ellipse cx="200" cy="98" rx="24" ry="18" fill="#3a4a26" opacity="0.7" />
+      </g>
+
+      {/* ground */}
+      <path d="M0 190 Q 120 178 240 190 L 240 240 L 0 240 Z" fill="#3a2c14" opacity="0.85" />
+      {/* grass tufts */}
+      <g stroke="#3a4a1c" strokeWidth="1.2" strokeLinecap="round" opacity="0.85">
+        {[40, 70, 96, 156, 184, 210].map((x, i) => (
+          <g key={i} transform={`translate(${x}, ${198 + (i % 3) * 2})`}>
+            <path d="M0 0 L-2 -7" />
+            <path d="M0 0 L0 -9" />
+            <path d="M0 0 L2 -6" />
+          </g>
+        ))}
+      </g>
+
+      {/* shrine stone — tall, rough rectangle */}
+      <g>
+        <path d="M96 196
+                 Q 96 88 102 70
+                 Q 106 56 120 56
+                 Q 134 56 138 70
+                 Q 144 88 144 196 Z"
+          fill="url(#ss-stone)" stroke="#1a140a" strokeWidth="1.5" />
+        {/* crack lines */}
+        <path d="M104 100 Q 106 130 102 170" stroke="#2a1810" strokeWidth="0.6" fill="none" opacity="0.55" />
+        <path d="M138 130 Q 136 150 140 180" stroke="#2a1810" strokeWidth="0.6" fill="none" opacity="0.55" />
+        {/* moss cap */}
+        <path d="M96 78 Q 100 64 120 62 Q 140 64 144 78 Q 138 92 120 90 Q 102 92 96 78 Z"
+          fill="url(#ss-moss)" stroke="#1a140a" strokeWidth="1" />
+        <path d="M100 84 Q 110 78 120 80 Q 130 78 140 84" stroke="#2c3a1c" strokeWidth="0.6" fill="none" opacity="0.6" />
+        {/* moss patches lower */}
+        <path d="M100 196 Q 105 180 108 196 Z" fill="url(#ss-moss)" />
+        <path d="M132 196 Q 138 178 142 196 Z" fill="url(#ss-moss)" />
+        {/* carved runes — three symbols stacked */}
+        <g stroke="#1a140a" strokeWidth="1.4" fill="none" strokeLinecap="round">
+          {/* vertical with crossbar */}
+          <path d="M114 108 L 114 124 M114 116 L 122 116" />
+          {/* triangle */}
+          <path d="M120 138 L 114 148 L 126 148 Z" />
+          {/* spiral-ish wheel */}
+          <circle cx="120" cy="166" r="6" />
+          <path d="M120 160 L 120 172 M114 166 L 126 166" />
+        </g>
+      </g>
+
+      {/* candle at the base */}
+      <g>
+        {/* candle stub */}
+        <rect x="158" y="184" width="6" height="10" fill="#e9d4a8" stroke="#0d0a06" strokeWidth="0.7" />
+        {/* wick */}
+        <line x1="161" y1="184" x2="161" y2="180" stroke="#1a140a" strokeWidth="0.7" />
+        {/* flame */}
+        <path d="M161 180 Q 159 176 161 172 Q 163 176 161 180 Z" fill="#f4a44a" />
+        <path d="M161 178 Q 160 176 161 174 Q 162 176 161 178 Z" fill="#fff2c4" />
+        {/* wax pool */}
+        <ellipse cx="161" cy="195" rx="6" ry="2" fill="#cfa66a" opacity="0.7" />
+        {/* faint glow */}
+        <circle cx="161" cy="180" r="14" fill="#fff2c4" opacity="0.18" />
+      </g>
+
+      {/* a few floating motes near the candle */}
+      <g fill="#fff2c4" opacity="0.7">
+        <circle cx="172" cy="170" r="0.8" />
+        <circle cx="148" cy="166" r="0.7" opacity="0.6" />
+        <circle cx="166" cy="156" r="0.7" />
+      </g>
+    </svg>
+  );
+}
