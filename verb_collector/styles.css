@@ -3183,6 +3183,41 @@ body::after {
   .title-birds, .title-sun-halo { animation: none; }
 }
 
+/* Campfire flame — outer + inner flame stretch/squeeze with offset
+   timings, glow halo throbs gently. Two different durations so they
+   don't sync up. transform-origin sits at the base of the flame so
+   the squash reads as licking upward. */
+.fb-outer {
+  animation: fire-flicker 1.7s ease-in-out infinite;
+  transform-origin: 120px 204px;
+}
+.fb-inner {
+  animation: fire-flicker-inner 1.1s ease-in-out infinite;
+  transform-origin: 120px 188px;
+}
+.fb-glow {
+  animation: fire-glow-pulse 3.1s ease-in-out infinite;
+  transform-origin: 120px 155px;
+}
+@keyframes fire-flicker {
+  0%, 100% { transform: scale(1, 1)       skewX(0deg); }
+  25%      { transform: scale(1.02, 0.97) skewX(-0.6deg); }
+  50%      { transform: scale(0.98, 1.03) skewX(0.4deg); }
+  75%      { transform: scale(1.01, 0.98) skewX(-0.2deg); }
+}
+@keyframes fire-flicker-inner {
+  0%, 100% { transform: scale(1, 1)       translateY(0); opacity: 0.95; }
+  40%      { transform: scale(1.04, 0.94) translateY(-2px); opacity: 1; }
+  70%      { transform: scale(0.96, 1.05) translateY(1px); opacity: 0.9; }
+}
+@keyframes fire-glow-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.05); opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fb-outer, .fb-inner, .fb-glow { animation: none; }
+}
+
 /* Permanent-strip noun/connector chips — make them feel like inked stamps
    on the page. Add hover lift, sharper border, slight ink-bleed shadow. */
 .permanent-strip .word {
