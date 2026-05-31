@@ -1101,7 +1101,7 @@ export function MerchantStall(): React.ReactElement {
       <rect x="0" y="0" width="280" height="200" fill="url(#ms-bg)" />
 
       {/* lantern halo */}
-      <ellipse cx="186" cy="106" rx="100" ry="80" fill="url(#ms-lantern)" />
+      <ellipse className="ms-halo" cx="186" cy="106" rx="100" ry="80" fill="url(#ms-lantern)" />
 
       {/* ground */}
       <path d="M0 160 Q 140 152 280 158 L 280 200 L 0 200 Z" fill="#2a1810" opacity="0.85" />
@@ -1169,8 +1169,8 @@ export function MerchantStall(): React.ReactElement {
         <path d="M172 100 L 184 100 L 182 114 L 174 114 Z"
           fill="#fff2c4" opacity="0.85" />
         {/* flame inside */}
-        <path d="M178 106 Q 176 110 178 113 Q 180 110 178 106 Z" fill="#f4a44a" />
-        <path d="M178 108 Q 177 110 178 112 Q 179 110 178 108 Z" fill="#fff2c4" />
+        <path className="ms-flame-outer" d="M178 106 Q 176 110 178 113 Q 180 110 178 106 Z" fill="#f4a44a" />
+        <path className="ms-flame-inner" d="M178 108 Q 177 110 178 112 Q 179 110 178 108 Z" fill="#fff2c4" />
         {/* lantern top ring */}
         <circle cx="178" cy="90" r="2.5" fill="none" stroke="#1a140a" strokeWidth="1" />
       </g>
