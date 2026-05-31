@@ -18,107 +18,164 @@ export function SceneBackdrop(): React.ReactElement {
   return (
     <svg
       className="scene-backdrop"
-      viewBox="0 0 1000 320"
+      viewBox="0 0 1000 360"
       preserveAspectRatio="xMidYMid slice"
       aria-hidden="true"
     >
       <defs>
-        {/* Sky / canopy wash — dusky blue fading down into warm forest */}
+        {/* Sky — proper dusk: cool blue up top dropping into warm gold at horizon */}
         <linearGradient id="sky-wash" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%"   stopColor="#6e7d8a" stopOpacity="0.85" />
-          <stop offset="45%"  stopColor="#a89870" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#3d2a18" stopOpacity="0.75" />
+          <stop offset="0%"   stopColor="#5a6e85" />
+          <stop offset="35%"  stopColor="#8e8b7a" />
+          <stop offset="58%"  stopColor="#d6a868" />
+          <stop offset="72%"  stopColor="#c9844a" />
+          <stop offset="100%" stopColor="#5e3a22" />
         </linearGradient>
-        {/* Golden god-ray pool */}
-        <radialGradient id="sun-shaft" cx="0.62" cy="0.18" r="0.55">
-          <stop offset="0%"   stopColor="#f4d28a" stopOpacity="0.85" />
-          <stop offset="55%"  stopColor="#d6a05a" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#d6a05a" stopOpacity="0" />
+        {/* Setting-sun glow on the right */}
+        <radialGradient id="sun-glow" cx="0.74" cy="0.55" r="0.4">
+          <stop offset="0%"   stopColor="#ffe6a8" stopOpacity="0.95" />
+          <stop offset="35%"  stopColor="#f4ba6c" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#f4ba6c" stopOpacity="0" />
         </radialGradient>
-        {/* Ground fog */}
+        {/* Soft cloud streaks across the sky */}
+        <linearGradient id="cloud-wash" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor="#e9d4a8" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#e9d4a8" stopOpacity="0" />
+        </linearGradient>
+        {/* Distance haze sitting in front of the far mountains */}
+        <linearGradient id="haze" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor="#dec79a" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#dec79a" stopOpacity="0" />
+        </linearGradient>
+        {/* Ground fog drifting along the meadow */}
         <linearGradient id="ground-fog" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%"   stopColor="#dccaa0" stopOpacity="0" />
-          <stop offset="60%"  stopColor="#dccaa0" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="#bfa676" stopOpacity="0.85" />
+          <stop offset="55%"  stopColor="#dccaa0" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#a8966a" stopOpacity="0.65" />
         </linearGradient>
-        {/* Paper-grain noise overlay tying watercolor to vellum */}
-        <filter id="paper-grain" x="0" y="0">
-          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+        {/* Foreground grass */}
+        <linearGradient id="grass" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor="#6c7a48" />
+          <stop offset="60%"  stopColor="#4a5a32" />
+          <stop offset="100%" stopColor="#2c3618" />
+        </linearGradient>
+        {/* Distant mountain — cool blue-grey */}
+        <linearGradient id="far-mtn" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor="#6e7d8a" />
+          <stop offset="100%" stopColor="#445162" />
+        </linearGradient>
+        {/* Watercolor bleed */}
+        <filter id="wet-edge" x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur stdDeviation="1.2" />
+        </filter>
+        {/* Paper grain on top */}
+        <filter id="paper-grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="2" stitchTiles="stitch" />
           <feColorMatrix values="0 0 0 0 0.14
                                   0 0 0 0 0.09
                                   0 0 0 0 0.05
-                                  0 0 0 0.35 0" />
+                                  0 0 0 0.32 0" />
         </filter>
-        {/* Wet-edge watercolor bleed */}
-        <filter id="wet-edge" x="-10%" y="-10%" width="120%" height="120%">
-          <feGaussianBlur stdDeviation="1.4" />
-        </filter>
-        {/* darker ink wash at lower corners */}
-        <radialGradient id="corner-dark" cx="0.5" cy="1" r="0.7">
-          <stop offset="0%" stopColor="#1a140a" stopOpacity="0" />
-          <stop offset="100%" stopColor="#1a140a" stopOpacity="0.55" />
-        </radialGradient>
+        {/* Pine-tree shape — used repeatedly */}
+        <g id="pine">
+          <path d="M0 0 L-5 -10 L-2 -10 L-7 -22 L-3 -22 L-9 -36 L0 -42 L9 -36 L3 -22 L7 -22 L2 -10 L5 -10 Z"
+            fill="currentColor" />
+        </g>
       </defs>
 
-      {/* base sky wash */}
-      <rect x="0" y="0" width="1000" height="320" fill="url(#sky-wash)" />
-      {/* god-ray */}
-      <rect x="0" y="0" width="1000" height="320" fill="url(#sun-shaft)" />
+      {/* Sky base */}
+      <rect x="0" y="0" width="1000" height="360" fill="url(#sky-wash)" />
+      {/* Sun glow on the right */}
+      <rect x="0" y="0" width="1000" height="360" fill="url(#sun-glow)" />
 
-      {/* far hills — soft moss-green silhouette */}
+      {/* Cloud streaks (low opacity ellipses) */}
+      <g fill="url(#cloud-wash)" opacity="0.85">
+        <ellipse cx="220" cy="70" rx="180" ry="14" />
+        <ellipse cx="640" cy="55" rx="220" ry="11" />
+        <ellipse cx="430" cy="98" rx="150" ry="9" />
+        <ellipse cx="820" cy="105" rx="120" ry="7" />
+      </g>
+
+      {/* Setting sun (visible disc behind everything) */}
+      <circle cx="740" cy="190" r="36" fill="#ffe7a4" opacity="0.85" filter="url(#wet-edge)" />
+      <circle cx="740" cy="190" r="22" fill="#fff2c8" opacity="0.9" />
+
+      {/* Distant mountain ridge — cool blue */}
       <path
-        d="M0 200 Q120 150 220 175 T420 165 T620 180 T820 160 T1000 175 L1000 320 L0 320 Z"
-        fill="#5c6a4a"
-        opacity="0.55"
+        d="M0 200 L60 180 L130 195 L210 160 L300 185 L370 168 L460 190 L540 175 L640 200 L740 178 L830 200 L920 185 L1000 195 L1000 360 L0 360 Z"
+        fill="url(#far-mtn)"
+        opacity="0.78"
         filter="url(#wet-edge)"
       />
-      {/* near hills — deeper moss */}
+      {/* Haze on top of far mountains */}
+      <rect x="0" y="180" width="1000" height="80" fill="url(#haze)" />
+
+      {/* Mid hills — moss green wash */}
       <path
-        d="M0 235 Q140 200 260 220 T500 215 T740 225 T1000 218 L1000 320 L0 320 Z"
-        fill="#3f4a32"
-        opacity="0.7"
+        d="M0 240 Q150 215 280 235 T520 230 T780 240 T1000 232 L1000 360 L0 360 Z"
+        fill="#5c6a4a"
+        opacity="0.85"
+        filter="url(#wet-edge)"
+      />
+      {/* Mid-distance pines on the ridge */}
+      <g color="#2f3d22" opacity="0.85">
+        {[50, 130, 220, 310, 420, 510, 600, 680, 790, 880, 960].map((x, i) => (
+          <use key={i} href="#pine" x={x} y={232 + (i % 4) * 3} />
+        ))}
+      </g>
+
+      {/* Near hills — deeper green */}
+      <path
+        d="M0 280 Q150 260 290 275 T560 275 T820 280 T1000 274 L1000 360 L0 360 Z"
+        fill="#3f4a2a"
+        opacity="0.95"
       />
 
-      {/* distant tree silhouettes (groups) */}
-      <g opacity="0.55">
-        {[80, 165, 260, 360, 470, 580, 690, 800, 905].map((x, i) => (
-          <g key={i} transform={`translate(${x}, ${190 + (i % 3) * 6})`}>
-            <path
-              d="M0 0 L-3 -34 L-7 -42 L-3 -50 L0 -56 L3 -50 L7 -42 L3 -34 Z"
-              fill="#2a341e"
-            />
+      {/* Ground fog band */}
+      <rect x="0" y="245" width="1000" height="90" fill="url(#ground-fog)" />
+
+      {/* Foreground grass */}
+      <path
+        d="M0 320 Q200 305 380 315 T720 318 T1000 312 L1000 360 L0 360 Z"
+        fill="url(#grass)"
+      />
+      {/* Grass tufts */}
+      <g stroke="#2c3618" strokeWidth="1.2" strokeLinecap="round" opacity="0.7">
+        {[40, 95, 170, 240, 320, 410, 480, 560, 640, 740, 820, 900, 970].map((x, i) => (
+          <g key={i} transform={`translate(${x}, ${328 + (i % 3) * 4})`}>
+            <path d="M0 0 L-2 -8" />
+            <path d="M0 0 L0 -10" />
+            <path d="M0 0 L3 -7" />
           </g>
         ))}
       </g>
 
-      {/* nearer trunks — inky vertical strokes */}
-      <g stroke="#1a140a" strokeWidth="2.2" fill="none" opacity="0.78">
-        <path d="M70 320 L62 130 Q60 110 64 95" />
-        <path d="M70 320 Q66 220 58 180" strokeWidth="1.2" opacity="0.6" />
-        <path d="M920 320 L928 110 Q930 95 924 85" />
-        <path d="M920 320 Q924 200 932 170" strokeWidth="1.2" opacity="0.6" />
-        <path d="M180 320 L176 175 Q174 158 178 145" strokeWidth="1.4" opacity="0.55" />
-        <path d="M820 320 L824 188 Q826 168 822 155" strokeWidth="1.4" opacity="0.55" />
+      {/* Foreground tree on the left edge — frames the scene */}
+      <g color="#1d1308" opacity="0.92">
+        <path d="M-8 360 L-6 250 Q-4 220 -2 200 L4 198 Q8 220 10 250 L12 360 Z" fill="currentColor" />
+        {/* foliage clusters */}
+        <g filter="url(#wet-edge)">
+          <ellipse cx="2"  cy="170" rx="56" ry="42" fill="#3a4a26" />
+          <ellipse cx="-12" cy="220" rx="40" ry="32" fill="#2c3a1c" opacity="0.85" />
+          <ellipse cx="20"  cy="195" rx="36" ry="28" fill="#4d5e2f" opacity="0.7" />
+        </g>
       </g>
 
-      {/* canopy splotches — watercolor wash for foliage */}
-      <g filter="url(#wet-edge)" opacity="0.7">
-        <ellipse cx="65"  cy="80"  rx="58" ry="42" fill="#4a5a32" />
-        <ellipse cx="48"  cy="120" rx="50" ry="32" fill="#5d6f3e" opacity="0.7" />
-        <ellipse cx="930" cy="70"  rx="62" ry="44" fill="#4a5a32" />
-        <ellipse cx="950" cy="115" rx="48" ry="30" fill="#5d6f3e" opacity="0.7" />
-        <ellipse cx="180" cy="125" rx="38" ry="22" fill="#3f4a2a" opacity="0.6" />
-        <ellipse cx="820" cy="130" rx="38" ry="22" fill="#3f4a2a" opacity="0.6" />
+      {/* A few birds in the distance — small V-shapes */}
+      <g stroke="#1a140a" strokeWidth="1.2" fill="none" opacity="0.6" strokeLinecap="round">
+        <path d="M380 110 Q384 106 388 110 Q392 106 396 110" />
+        <path d="M430 130 Q433 127 436 130 Q439 127 442 130" />
+        <path d="M560 92  Q564 88  568 92  Q572 88  576 92" />
       </g>
 
-      {/* ground fog */}
-      <rect x="0" y="200" width="1000" height="120" fill="url(#ground-fog)" />
-
-      {/* paper grain on top */}
-      <rect x="0" y="0" width="1000" height="320" filter="url(#paper-grain)" opacity="0.4" />
-
-      {/* darker ink wash at lower corners */}
-      <rect x="0" y="0" width="1000" height="320" fill="url(#corner-dark)" />
+      {/* Paper grain over everything */}
+      <rect x="0" y="0" width="1000" height="360" filter="url(#paper-grain)" opacity="0.4" />
+      {/* Vignette to ground the scene */}
+      <radialGradient id="corner-dark" cx="0.5" cy="1" r="0.85">
+        <stop offset="0%"   stopColor="#1a140a" stopOpacity="0" />
+        <stop offset="100%" stopColor="#1a140a" stopOpacity="0.5" />
+      </radialGradient>
+      <rect x="0" y="0" width="1000" height="360" fill="url(#corner-dark)" />
     </svg>
   );
 }
