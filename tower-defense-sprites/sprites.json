@@ -1,0 +1,1031 @@
+[
+ {
+  "file": "effects/effects_01.png",
+  "x": 24,
+  "y": 705,
+  "w": 931,
+  "h": 172
+ },
+ {
+  "file": "effects/effects_02.png",
+  "x": 325,
+  "y": 734,
+  "w": 25,
+  "h": 38
+ },
+ {
+  "file": "effects/effects_03.png",
+  "x": 402,
+  "y": 705,
+  "w": 896,
+  "h": 283
+ },
+ {
+  "file": "effects/effects_04.png",
+  "x": 661,
+  "y": 732,
+  "w": 85,
+  "h": 125
+ },
+ {
+  "file": "effects/effects_05.png",
+  "x": 39,
+  "y": 779,
+  "w": 80,
+  "h": 71
+ },
+ {
+  "file": "effects/effects_06.png",
+  "x": 70,
+  "y": 757,
+  "w": 14,
+  "h": 24
+ },
+ {
+  "file": "effects/effects_07.png",
+  "x": 156,
+  "y": 756,
+  "w": 20,
+  "h": 32
+ },
+ {
+  "file": "effects/effects_08.png",
+  "x": 216,
+  "y": 777,
+  "w": 68,
+  "h": 74
+ },
+ {
+  "file": "effects/effects_09.png",
+  "x": 242,
+  "y": 747,
+  "w": 16,
+  "h": 23
+ },
+ {
+  "file": "effects/effects_10.png",
+  "x": 301,
+  "y": 767,
+  "w": 74,
+  "h": 86
+ },
+ {
+  "file": "effects/effects_11.png",
+  "x": 424,
+  "y": 759,
+  "w": 61,
+  "h": 94
+ },
+ {
+  "file": "effects/effects_12.png",
+  "x": 505,
+  "y": 751,
+  "w": 60,
+  "h": 102
+ },
+ {
+  "file": "effects/effects_13.png",
+  "x": 585,
+  "y": 756,
+  "w": 61,
+  "h": 97
+ },
+ {
+  "file": "effects/effects_14.png",
+  "x": 797,
+  "y": 775,
+  "w": 13,
+  "h": 14
+ },
+ {
+  "file": "effects/effects_15.png",
+  "x": 813,
+  "y": 759,
+  "w": 13,
+  "h": 16
+ },
+ {
+  "file": "effects/effects_16.png",
+  "x": 831,
+  "y": 771,
+  "w": 12,
+  "h": 18
+ },
+ {
+  "file": "effects/effects_17.png",
+  "x": 898,
+  "y": 778,
+  "w": 16,
+  "h": 18
+ },
+ {
+  "file": "effects/effects_18.png",
+  "x": 135,
+  "y": 784,
+  "w": 63,
+  "h": 66
+ },
+ {
+  "file": "effects/effects_19.png",
+  "x": 792,
+  "y": 785,
+  "w": 56,
+  "h": 62
+ },
+ {
+  "file": "effects/effects_20.png",
+  "x": 864,
+  "y": 793,
+  "w": 79,
+  "h": 66
+ },
+ {
+  "file": "enemies/enemies_01.png",
+  "x": 324,
+  "y": 215,
+  "w": 62,
+  "h": 67
+ },
+ {
+  "file": "enemies/enemies_02.png",
+  "x": 402,
+  "y": 211,
+  "w": 67,
+  "h": 71
+ },
+ {
+  "file": "enemies/enemies_03.png",
+  "x": 31,
+  "y": 237,
+  "w": 43,
+  "h": 45
+ },
+ {
+  "file": "enemies/enemies_04.png",
+  "x": 99,
+  "y": 234,
+  "w": 48,
+  "h": 48
+ },
+ {
+  "file": "enemies/enemies_05.png",
+  "x": 170,
+  "y": 231,
+  "w": 52,
+  "h": 51
+ },
+ {
+  "file": "enemies/enemies_06.png",
+  "x": 245,
+  "y": 224,
+  "w": 57,
+  "h": 58
+ },
+ {
+  "file": "enemies/enemies_07.png",
+  "x": 240,
+  "y": 298,
+  "w": 64,
+  "h": 66
+ },
+ {
+  "file": "enemies/enemies_08.png",
+  "x": 321,
+  "y": 295,
+  "w": 68,
+  "h": 69
+ },
+ {
+  "file": "enemies/enemies_09.png",
+  "x": 405,
+  "y": 290,
+  "w": 68,
+  "h": 74
+ },
+ {
+  "file": "enemies/enemies_10.png",
+  "x": 27,
+  "y": 311,
+  "w": 49,
+  "h": 51
+ },
+ {
+  "file": "enemies/enemies_11.png",
+  "x": 97,
+  "y": 310,
+  "w": 51,
+  "h": 53
+ },
+ {
+  "file": "enemies/enemies_12.png",
+  "x": 167,
+  "y": 308,
+  "w": 56,
+  "h": 56
+ },
+ {
+  "file": "enemies/enemies_13.png",
+  "x": 399,
+  "y": 374,
+  "w": 73,
+  "h": 72
+ },
+ {
+  "file": "enemies/enemies_14.png",
+  "x": 21,
+  "y": 393,
+  "w": 52,
+  "h": 45
+ },
+ {
+  "file": "enemies/enemies_15.png",
+  "x": 91,
+  "y": 391,
+  "w": 55,
+  "h": 49
+ },
+ {
+  "file": "enemies/enemies_16.png",
+  "x": 164,
+  "y": 390,
+  "w": 58,
+  "h": 52
+ },
+ {
+  "file": "enemies/enemies_17.png",
+  "x": 238,
+  "y": 387,
+  "w": 63,
+  "h": 56
+ },
+ {
+  "file": "enemies/enemies_18.png",
+  "x": 313,
+  "y": 383,
+  "w": 72,
+  "h": 62
+ },
+ {
+  "file": "enemies/enemies_19.png",
+  "x": 165,
+  "y": 459,
+  "w": 57,
+  "h": 61
+ },
+ {
+  "file": "enemies/enemies_20.png",
+  "x": 240,
+  "y": 457,
+  "w": 61,
+  "h": 64
+ },
+ {
+  "file": "enemies/enemies_21.png",
+  "x": 319,
+  "y": 455,
+  "w": 69,
+  "h": 67
+ },
+ {
+  "file": "enemies/enemies_22.png",
+  "x": 405,
+  "y": 452,
+  "w": 73,
+  "h": 71
+ },
+ {
+  "file": "enemies/enemies_23.png",
+  "x": 23,
+  "y": 460,
+  "w": 55,
+  "h": 58
+ },
+ {
+  "file": "enemies/enemies_24.png",
+  "x": 92,
+  "y": 460,
+  "w": 55,
+  "h": 60
+ },
+ {
+  "file": "enemies/enemies_25.png",
+  "x": 96,
+  "y": 539,
+  "w": 50,
+  "h": 53
+ },
+ {
+  "file": "enemies/enemies_26.png",
+  "x": 167,
+  "y": 539,
+  "w": 55,
+  "h": 55
+ },
+ {
+  "file": "enemies/enemies_27.png",
+  "x": 245,
+  "y": 537,
+  "w": 58,
+  "h": 58
+ },
+ {
+  "file": "enemies/enemies_28.png",
+  "x": 323,
+  "y": 533,
+  "w": 67,
+  "h": 63
+ },
+ {
+  "file": "enemies/enemies_29.png",
+  "x": 404,
+  "y": 530,
+  "w": 78,
+  "h": 67
+ },
+ {
+  "file": "enemies/enemies_30.png",
+  "x": 25,
+  "y": 540,
+  "w": 47,
+  "h": 52
+ },
+ {
+  "file": "enemies/enemies_31.png",
+  "x": 14,
+  "y": 613,
+  "w": 112,
+  "h": 79
+ },
+ {
+  "file": "enemies/enemies_32.png",
+  "x": 149,
+  "y": 610,
+  "w": 93,
+  "h": 78
+ },
+ {
+  "file": "enemies/enemies_33.png",
+  "x": 262,
+  "y": 614,
+  "w": 108,
+  "h": 75
+ },
+ {
+  "file": "enemies/enemies_34.png",
+  "x": 385,
+  "y": 604,
+  "w": 119,
+  "h": 91
+ },
+ {
+  "file": "health-bars/health-bars_01.png",
+  "x": 24,
+  "y": 887,
+  "w": 375,
+  "h": 101
+ },
+ {
+  "file": "health-bars/health-bars_02.png",
+  "x": 39,
+  "y": 936,
+  "w": 83,
+  "h": 24
+ },
+ {
+  "file": "health-bars/health-bars_03.png",
+  "x": 129,
+  "y": 936,
+  "w": 82,
+  "h": 24
+ },
+ {
+  "file": "health-bars/health-bars_04.png",
+  "x": 218,
+  "y": 936,
+  "w": 81,
+  "h": 24
+ },
+ {
+  "file": "health-bars/health-bars_05.png",
+  "x": 306,
+  "y": 936,
+  "w": 80,
+  "h": 24
+ },
+ {
+  "file": "misc/misc_01.png",
+  "x": 420,
+  "y": 932,
+  "w": 43,
+  "h": 40
+ },
+ {
+  "file": "misc/misc_02.png",
+  "x": 481,
+  "y": 929,
+  "w": 48,
+  "h": 45
+ },
+ {
+  "file": "misc/misc_03.png",
+  "x": 547,
+  "y": 930,
+  "w": 38,
+  "h": 43
+ },
+ {
+  "file": "misc/misc_04.png",
+  "x": 604,
+  "y": 935,
+  "w": 41,
+  "h": 36
+ },
+ {
+  "file": "misc/misc_05.png",
+  "x": 662,
+  "y": 931,
+  "w": 43,
+  "h": 41
+ },
+ {
+  "file": "misc/misc_06.png",
+  "x": 724,
+  "y": 926,
+  "w": 58,
+  "h": 48
+ },
+ {
+  "file": "misc/misc_07.png",
+  "x": 803,
+  "y": 905,
+  "w": 55,
+  "h": 71
+ },
+ {
+  "file": "misc/misc_08.png",
+  "x": 876,
+  "y": 924,
+  "w": 48,
+  "h": 51
+ },
+ {
+  "file": "misc/misc_09.png",
+  "x": 943,
+  "y": 926,
+  "w": 50,
+  "h": 49
+ },
+ {
+  "file": "projectiles/projectiles_01.png",
+  "x": 520,
+  "y": 242,
+  "w": 35,
+  "h": 36
+ },
+ {
+  "file": "projectiles/projectiles_02.png",
+  "x": 568,
+  "y": 242,
+  "w": 38,
+  "h": 35
+ },
+ {
+  "file": "projectiles/projectiles_03.png",
+  "x": 616,
+  "y": 239,
+  "w": 45,
+  "h": 41
+ },
+ {
+  "file": "projectiles/projectiles_04.png",
+  "x": 678,
+  "y": 240,
+  "w": 47,
+  "h": 43
+ },
+ {
+  "file": "projectiles/projectiles_05.png",
+  "x": 741,
+  "y": 228,
+  "w": 73,
+  "h": 58
+ },
+ {
+  "file": "projectiles/projectiles_06.png",
+  "x": 514,
+  "y": 328,
+  "w": 40,
+  "h": 37
+ },
+ {
+  "file": "projectiles/projectiles_07.png",
+  "x": 574,
+  "y": 328,
+  "w": 39,
+  "h": 37
+ },
+ {
+  "file": "projectiles/projectiles_08.png",
+  "x": 632,
+  "y": 327,
+  "w": 40,
+  "h": 38
+ },
+ {
+  "file": "projectiles/projectiles_09.png",
+  "x": 681,
+  "y": 328,
+  "w": 79,
+  "h": 37
+ },
+ {
+  "file": "projectiles/projectiles_10.png",
+  "x": 771,
+  "y": 327,
+  "w": 41,
+  "h": 40
+ },
+ {
+  "file": "projectiles/projectiles_11.png",
+  "x": 519,
+  "y": 401,
+  "w": 70,
+  "h": 50
+ },
+ {
+  "file": "projectiles/projectiles_12.png",
+  "x": 610,
+  "y": 400,
+  "w": 61,
+  "h": 50
+ },
+ {
+  "file": "projectiles/projectiles_13.png",
+  "x": 686,
+  "y": 402,
+  "w": 47,
+  "h": 43
+ },
+ {
+  "file": "projectiles/projectiles_14.png",
+  "x": 747,
+  "y": 401,
+  "w": 59,
+  "h": 50
+ },
+ {
+  "file": "projectiles/projectiles_15.png",
+  "x": 523,
+  "y": 496,
+  "w": 33,
+  "h": 28
+ },
+ {
+  "file": "projectiles/projectiles_16.png",
+  "x": 585,
+  "y": 495,
+  "w": 33,
+  "h": 28
+ },
+ {
+  "file": "projectiles/projectiles_17.png",
+  "x": 650,
+  "y": 498,
+  "w": 25,
+  "h": 21
+ },
+ {
+  "file": "projectiles/projectiles_18.png",
+  "x": 737,
+  "y": 496,
+  "w": 19,
+  "h": 17
+ },
+ {
+  "file": "projectiles/projectiles_19.png",
+  "x": 778,
+  "y": 484,
+  "w": 66,
+  "h": 52
+ },
+ {
+  "file": "projectiles/projectiles_20.png",
+  "x": 694,
+  "y": 508,
+  "w": 19,
+  "h": 15
+ },
+ {
+  "file": "projectiles/projectiles_21.png",
+  "x": 530,
+  "y": 573,
+  "w": 30,
+  "h": 35
+ },
+ {
+  "file": "projectiles/projectiles_22.png",
+  "x": 584,
+  "y": 572,
+  "w": 37,
+  "h": 38
+ },
+ {
+  "file": "projectiles/projectiles_23.png",
+  "x": 649,
+  "y": 564,
+  "w": 51,
+  "h": 56
+ },
+ {
+  "file": "projectiles/projectiles_24.png",
+  "x": 723,
+  "y": 571,
+  "w": 36,
+  "h": 52
+ },
+ {
+  "file": "tiles/tiles_01.png",
+  "x": 817,
+  "y": 247,
+  "w": 45,
+  "h": 39
+ },
+ {
+  "file": "tiles/tiles_02.png",
+  "x": 876,
+  "y": 224,
+  "w": 77,
+  "h": 71
+ },
+ {
+  "file": "tiles/tiles_03.png",
+  "x": 1004,
+  "y": 256,
+  "w": 73,
+  "h": 75
+ },
+ {
+  "file": "tiles/tiles_04.png",
+  "x": 1091,
+  "y": 256,
+  "w": 71,
+  "h": 75
+ },
+ {
+  "file": "tiles/tiles_05.png",
+  "x": 1174,
+  "y": 254,
+  "w": 128,
+  "h": 125
+ },
+ {
+  "file": "tiles/tiles_06.png",
+  "x": 1341,
+  "y": 257,
+  "w": 72,
+  "h": 74
+ },
+ {
+  "file": "tiles/tiles_07.png",
+  "x": 1427,
+  "y": 257,
+  "w": 73,
+  "h": 74
+ },
+ {
+  "file": "tiles/tiles_08.png",
+  "x": 818,
+  "y": 308,
+  "w": 146,
+  "h": 71
+ },
+ {
+  "file": "tiles/tiles_09.png",
+  "x": 1004,
+  "y": 352,
+  "w": 111,
+  "h": 145
+ },
+ {
+  "file": "tiles/tiles_10.png",
+  "x": 1133,
+  "y": 352,
+  "w": 168,
+  "h": 146
+ },
+ {
+  "file": "tiles/tiles_11.png",
+  "x": 1341,
+  "y": 346,
+  "w": 73,
+  "h": 72
+ },
+ {
+  "file": "tiles/tiles_12.png",
+  "x": 1428,
+  "y": 347,
+  "w": 71,
+  "h": 70
+ },
+ {
+  "file": "tiles/tiles_13.png",
+  "x": 817,
+  "y": 405,
+  "w": 43,
+  "h": 45
+ },
+ {
+  "file": "tiles/tiles_14.png",
+  "x": 876,
+  "y": 390,
+  "w": 88,
+  "h": 75
+ },
+ {
+  "file": "tiles/tiles_15.png",
+  "x": 861,
+  "y": 476,
+  "w": 109,
+  "h": 70
+ },
+ {
+  "file": "tiles/tiles_16.png",
+  "x": 785,
+  "y": 565,
+  "w": 64,
+  "h": 58
+ },
+ {
+  "file": "tiles/tiles_17.png",
+  "x": 860,
+  "y": 559,
+  "w": 112,
+  "h": 85
+ },
+ {
+  "file": "tiles/tiles_18.png",
+  "x": 1020,
+  "y": 572,
+  "w": 62,
+  "h": 51
+ },
+ {
+  "file": "tiles/tiles_19.png",
+  "x": 1112,
+  "y": 565,
+  "w": 73,
+  "h": 69
+ },
+ {
+  "file": "tiles/tiles_20.png",
+  "x": 1210,
+  "y": 553,
+  "w": 56,
+  "h": 78
+ },
+ {
+  "file": "tiles/tiles_21.png",
+  "x": 1295,
+  "y": 563,
+  "w": 83,
+  "h": 62
+ },
+ {
+  "file": "tiles/tiles_22.png",
+  "x": 1400,
+  "y": 541,
+  "w": 112,
+  "h": 90
+ },
+ {
+  "file": "towers/towers_01.png",
+  "x": 27,
+  "y": 87,
+  "w": 47,
+  "h": 67
+ },
+ {
+  "file": "towers/towers_02.png",
+  "x": 94,
+  "y": 83,
+  "w": 51,
+  "h": 72
+ },
+ {
+  "file": "towers/towers_03.png",
+  "x": 161,
+  "y": 71,
+  "w": 61,
+  "h": 86
+ },
+ {
+  "file": "towers/towers_04.png",
+  "x": 249,
+  "y": 81,
+  "w": 61,
+  "h": 79
+ },
+ {
+  "file": "towers/towers_05.png",
+  "x": 322,
+  "y": 75,
+  "w": 61,
+  "h": 86
+ },
+ {
+  "file": "towers/towers_06.png",
+  "x": 393,
+  "y": 69,
+  "w": 63,
+  "h": 93
+ },
+ {
+  "file": "towers/towers_07.png",
+  "x": 491,
+  "y": 82,
+  "w": 61,
+  "h": 79
+ },
+ {
+  "file": "towers/towers_08.png",
+  "x": 560,
+  "y": 76,
+  "w": 65,
+  "h": 88
+ },
+ {
+  "file": "towers/towers_09.png",
+  "x": 631,
+  "y": 60,
+  "w": 71,
+  "h": 105
+ },
+ {
+  "file": "towers/towers_10.png",
+  "x": 732,
+  "y": 66,
+  "w": 67,
+  "h": 99
+ },
+ {
+  "file": "towers/towers_11.png",
+  "x": 830,
+  "y": 63,
+  "w": 72,
+  "h": 104
+ },
+ {
+  "file": "towers/towers_12.png",
+  "x": 934,
+  "y": 83,
+  "w": 66,
+  "h": 81
+ },
+ {
+  "file": "towers/towers_13.png",
+  "x": 1007,
+  "y": 72,
+  "w": 70,
+  "h": 94
+ },
+ {
+  "file": "towers/towers_14.png",
+  "x": 1082,
+  "y": 70,
+  "w": 75,
+  "h": 97
+ },
+ {
+  "file": "towers/towers_15.png",
+  "x": 1193,
+  "y": 72,
+  "w": 71,
+  "h": 90
+ },
+ {
+  "file": "towers/towers_16.png",
+  "x": 1276,
+  "y": 70,
+  "w": 74,
+  "h": 92
+ },
+ {
+  "file": "towers/towers_17.png",
+  "x": 1364,
+  "y": 64,
+  "w": 79,
+  "h": 100
+ },
+ {
+  "file": "ui-icons/ui-icons_01.png",
+  "x": 983,
+  "y": 741,
+  "w": 302,
+  "h": 5
+ },
+ {
+  "file": "ui-icons/ui-icons_02.png",
+  "x": 986,
+  "y": 753,
+  "w": 61,
+  "h": 30
+ },
+ {
+  "file": "ui-icons/ui-icons_03.png",
+  "x": 1056,
+  "y": 752,
+  "w": 72,
+  "h": 32
+ },
+ {
+  "file": "ui-icons/ui-icons_04.png",
+  "x": 1137,
+  "y": 752,
+  "w": 75,
+  "h": 32
+ },
+ {
+  "file": "ui-icons/ui-icons_05.png",
+  "x": 1222,
+  "y": 752,
+  "w": 62,
+  "h": 32
+ },
+ {
+  "file": "ui-icons/ui-icons_06.png",
+  "x": 984,
+  "y": 798,
+  "w": 54,
+  "h": 53
+ },
+ {
+  "file": "ui-icons/ui-icons_07.png",
+  "x": 1046,
+  "y": 798,
+  "w": 53,
+  "h": 53
+ },
+ {
+  "file": "ui-icons/ui-icons_08.png",
+  "x": 1107,
+  "y": 798,
+  "w": 54,
+  "h": 53
+ },
+ {
+  "file": "ui-icons/ui-icons_09.png",
+  "x": 1169,
+  "y": 798,
+  "w": 54,
+  "h": 53
+ },
+ {
+  "file": "ui-icons/ui-icons_10.png",
+  "x": 1231,
+  "y": 798,
+  "w": 53,
+  "h": 53
+ },
+ {
+  "file": "ui-icons/ui-icons_11.png",
+  "x": 1054,
+  "y": 861,
+  "w": 61,
+  "h": 59
+ },
+ {
+  "file": "ui-icons/ui-icons_12.png",
+  "x": 1124,
+  "y": 861,
+  "w": 60,
+  "h": 59
+ },
+ {
+  "file": "wave-indicators/wave-indicators_01.png",
+  "x": 1307,
+  "y": 704,
+  "w": 206,
+  "h": 227
+ },
+ {
+  "file": "wave-indicators/wave-indicators_02.png",
+  "x": 1321,
+  "y": 750,
+  "w": 171,
+  "h": 42
+ },
+ {
+  "file": "wave-indicators/wave-indicators_03.png",
+  "x": 1321,
+  "y": 808,
+  "w": 171,
+  "h": 43
+ },
+ {
+  "file": "wave-indicators/wave-indicators_04.png",
+  "x": 1321,
+  "y": 866,
+  "w": 172,
+  "h": 50
+ }
+]
