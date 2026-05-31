@@ -2282,13 +2282,33 @@ body::after {
     inset 0 1px 0 rgba(255, 240, 200, 0.6),
     inset 0 -1px 0 rgba(0, 0, 0, 0.1),
     0 6px 22px var(--shadow);
-  padding: 12px 14px;
+  padding: 28px 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-family: var(--font-body);
   color: var(--ink);
   text-align: left;
+}
+.audio-popover .audio-popover-title,
+.audio-popover::before {
+  display: none;
+}
+/* Manuscript header — small caps with ❧ flourishes either side. */
+.audio-popover::after {
+  content: '\2767  scribe\2019s tools  \2767';
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-smallcap);
+  font-size: 0.62rem;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--wax);
+  opacity: 0.85;
+  pointer-events: none;
 }
 .audio-popover::before {
   /* tiny wax-coloured tab pointing at the trigger */
