@@ -2747,3 +2747,31 @@ body::after {
 @media (max-width: 720px) {
   .endgame-banner .end-vignette { height: 140px; }
 }
+
+/* Merchant + Shrine illustration sizing */
+.merchant-stall {
+  width: 220px;
+  height: 160px;
+  filter: drop-shadow(0 6px 14px rgba(20, 12, 4, 0.45));
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--vellum-soft), inset 0 0 0 3px var(--gold-leaf), inset 0 0 0 4px var(--vellum-soft);
+}
+.shrine-stone {
+  width: 200px;
+  height: 200px;
+  filter: drop-shadow(0 6px 14px rgba(20, 12, 4, 0.45));
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--vellum-soft), inset 0 0 0 3px var(--gold-leaf), inset 0 0 0 4px var(--vellum-soft);
+}
+@media (max-width: 720px) {
+  .merchant-stall { width: 180px; height: 130px; }
+  .shrine-stone   { width: 160px; height: 160px; }
+}
+
+/* Hero scale bump — give the figure more presence in the scene */
+.hero-svg { max-width: 220px; }
+@media (max-width: 720px) {
+  .hero-svg { max-width: 150px; }
+}

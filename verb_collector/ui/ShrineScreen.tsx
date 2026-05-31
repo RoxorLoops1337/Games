@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Action } from '../engine/combat/reducer';
 import { GameState, Card } from '../engine/combat/state';
 import { VERBS } from '../engine/words';
+import { ShrineStone } from './SceneArt';
 
 interface Props {
   state: GameState;
@@ -15,6 +16,9 @@ export function ShrineScreen({ state, dispatch }: Props): React.ReactElement {
   return (
     <div className="scene-screen shrine-screen">
       <header className="scene-header">
+        <div className="scene-illustration" aria-hidden="true">
+          <ShrineStone />
+        </div>
         <h2>THE SHRINE</h2>
         <p className="scene-flavor">
           A flat stone in a grove. Older than the trees. Lay one word upon it

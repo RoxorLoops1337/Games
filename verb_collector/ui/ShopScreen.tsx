@@ -7,6 +7,7 @@ import { VerbId } from '../engine/types';
 import { commonRelicIds, uncommonRelicIds, RELICS } from '../engine/relics/relics';
 import { POTIONS, V1_POTION_IDS, PotionId } from '../engine/potions/potions';
 import { makeRng } from '../engine/deck/deck';
+import { MerchantStall } from './SceneArt';
 
 interface Props {
   state: GameState;
@@ -56,6 +57,9 @@ export function ShopScreen({ state, dispatch }: Props): React.ReactElement {
   return (
     <div className="scene-screen shop-screen">
       <header className="scene-header">
+        <div className="scene-illustration" aria-hidden="true">
+          <MerchantStall />
+        </div>
         <h2>THE MERCHANT</h2>
         <p className="scene-flavor">
           A figure in a heavy cloak unrolls a pouch of bottled words.
