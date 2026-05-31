@@ -4,6 +4,7 @@ import { Action } from '../engine/combat/reducer';
 import { GameState } from '../engine/combat/state';
 import { RUN_LENGTH, SceneOffer } from '../engine/run/scenes';
 import { EnemyIcon } from './EnemyIcon';
+import { MapScenePreview } from './SceneArt';
 
 interface Props {
   state: GameState;
@@ -105,13 +106,19 @@ function SceneCard({ offer, isFinal, onPick }: { offer: SceneOffer; isFinal: boo
   const enemyNoun = offer.encounter?.enemies[0];
   return (
     <button className={`scene-card scene-${offer.kind}`} onClick={onPick}>
-      <div className="scene-art">
-        {isCombat && enemyNoun ? (
-          <EnemyIcon noun={enemyNoun as never} size={64} />
-        ) : (
+      {/* watercolor scene preview — Tolkien-tinted thumbnail */}
+      <MapScenePreview kind={offer.kind} />
+      {/* small enemy silhouette overlay for combat scenes */}
+      {isCombat && enemyNoun && (
+        <div className="scene-card-enemy" aria-hidden="true">
+          <EnemyIcon noun={enemyNoun as never} size={38} />
+        </div>
+      )}
+      {!isCombat && (
+        <div className="scene-card-glyph" aria-hidden="true">
           <span className="scene-glyph">{glyph}</span>
-        )}
-      </div>
+        </div>
+      )}
       <div className="scene-lead">
         {isFinal ? 'STOOD AGAINST' : lead}
       </div>

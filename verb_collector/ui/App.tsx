@@ -13,10 +13,26 @@ import { MirrorScreen } from './MirrorScreen';
 import { AudioController } from './AudioController';
 import { AudioSettings } from './AudioSettings';
 import { hasSave } from '../engine/save/storage';
+import { PhaseVignette, VignetteKind, MarginVine, MarginBird, MarginFlourish } from './SceneArt';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 function toRoman(n: number): string {
   return ROMAN[n] ?? String(n);
+}
+
+function vignetteForPhase(phase: string): VignetteKind {
+  switch (phase) {
+    case 'combat':   return 'sword';
+    case 'fire':     return 'flame';
+    case 'shop':     return 'coin';
+    case 'shrine':   return 'star';
+    case 'mirror':   return 'mirror';
+    case 'map':      return 'vine';
+    case 'reward':   return 'star';
+    case 'won_run':  return 'sunrise';
+    case 'lost_run': return 'crow';
+    default:         return 'vine';
+  }
 }
 
 export function App(): React.ReactElement {
@@ -45,6 +61,8 @@ export function App(): React.ReactElement {
   const rest = runText.slice(1);
   const sceneNum = Math.min(state.sceneIndex + 1, RUN_LENGTH);
 
+  const vignette = vignetteForPhase(state.phase);
+
   return (
     <div className="app">
       <span className="corner tl" aria-hidden="true" />
@@ -52,9 +70,22 @@ export function App(): React.ReactElement {
       <span className="corner bl" aria-hidden="true" />
       <span className="corner br" aria-hidden="true" />
 
+      {/* Marginalia — vines, birds, flourishes in the page margins */}
+      <MarginVine side="left" />
+      <MarginVine side="right" />
+      <MarginBird side="tr" />
+      <MarginBird side="bl" />
+      <MarginFlourish side="tl" />
+      <MarginFlourish side="tr" />
+      <MarginFlourish side="bl" />
+      <MarginFlourish side="br" />
+
       <header className="run-sentence">
         <div className="run-text" key={runText}>
-          <span className="drop">{first}</span>{rest}…
+          <span className="drop-wrap">
+            <PhaseVignette kind={vignette} size={88} />
+            <span className="drop">{first}</span>
+          </span>{rest}…
         </div>
         <div className="run-progress">
           Folio {toRoman(sceneNum)} of {toRoman(RUN_LENGTH)}

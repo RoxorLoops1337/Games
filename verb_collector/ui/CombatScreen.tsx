@@ -9,6 +9,7 @@ import { Card, Enemy, GameState } from '../engine/combat/state';
 import { RELICS } from '../engine/relics/relics';
 import { EnemyIcon } from './EnemyIcon';
 import { PotionTray } from './PotionTray';
+import { SceneBackdrop, HeroFigure, CardGlyph } from './SceneArt';
 
 interface Props {
   state: GameState;
@@ -29,12 +30,27 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
   );
   const aliveCount = state.enemies.filter((e) => e.hp > 0).length;
 
+  const liveEnemies = state.enemies.filter((e) => e.hp > 0);
+
   return (
     <div className="combat">
-      <section className="enemies">
-        {state.enemies.map((e) =>
-          e.hp <= 0 ? null : <EnemyPortrait key={e.id} enemy={e} dispatch={dispatch} />,
-        )}
+      <section className="scene-panel" aria-label="scene">
+        <SceneBackdrop />
+        <div className="scene-figures">
+          <HeroFigure
+            hp={state.player.hp}
+            maxHp={state.player.maxHp}
+            energy={state.player.energy}
+            maxEnergy={state.player.maxEnergy}
+            block={state.player.block}
+            onClick={() => dispatch({ type: 'add_to_sentence', token: 'SELF' })}
+          />
+          <div className="scene-enemies">
+            {liveEnemies.map((e) => (
+              <SceneEnemy key={e.id} enemy={e} dispatch={dispatch} />
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="player">
@@ -204,46 +220,50 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
   );
 }
 
-function EnemyPortrait({ enemy, dispatch }: { enemy: Enemy; dispatch: (a: Action) => void }) {
+function SceneEnemy({ enemy, dispatch }: { enemy: Enemy; dispatch: (a: Action) => void }) {
   return (
     <div
-      className={`portrait enemy${enemy.revealed ? ' revealed' : ''}`}
+      className={`scene-enemy${enemy.revealed ? ' revealed' : ''}`}
       onClick={() => dispatch({ type: 'add_to_sentence', token: enemy.noun })}
       title={`tap to add ${enemy.noun} to the sentence`}
+      role="button"
     >
-      <div className="enemy-art">
-        <EnemyIcon noun={enemy.noun} size={56} />
+      <div className="scene-enemy-art">
+        <EnemyIcon noun={enemy.noun} size={104} />
         {enemy.revealed && <Eye className="reveal-glyph" size={14} strokeWidth={2} />}
       </div>
-      <div className="enemy-body">
-        <div className="portrait-name">{enemy.displayName}</div>
-        <div className="hp-bar">
-          <div className="hp-fill" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
-          <span className="hp-text">{enemy.hp} / {enemy.maxHp}</span>
-        </div>
-        <div className="intent"><Sword size={11} strokeWidth={2} /> {intentLabel(enemy.intent)}</div>
-        {enemy.traits.includes('honor') && (
-          <div className="honor-active">HONOR ACTIVE — announce your attack first</div>
-        )}
-        {enemy.adjectives.length > 0 && (
-          <div className="adj-tags">
-            {enemy.adjectives.map((a) => (
-              <span key={a.id} className="tag">
-                {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
-              </span>
-            ))}
-          </div>
-        )}
+      <div className="scene-enemy-name">{enemy.displayName}</div>
+      <div className="scene-enemy-hp">
+        <div
+          className="scene-enemy-hp-fill"
+          style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }}
+        />
+        <span className="scene-enemy-hp-text">{enemy.hp} / {enemy.maxHp}</span>
       </div>
+      <div className="scene-enemy-intent">
+        <Sword size={9} strokeWidth={2} /> {intentLabel(enemy.intent)}
+      </div>
+      {enemy.adjectives.length > 0 && (
+        <div className="adj-tags">
+          {enemy.adjectives.map((a) => (
+            <span key={a.id} className="tag">
+              {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
 
 function CardView({ card, disabled, onClick }: { card: Card; disabled: boolean; onClick: () => void }) {
   if (card.kind === 'verb') {
     const v = VERBS[card.word];
     return (
       <button className={`card verb ${disabled ? 'disabled' : ''}`} onClick={onClick} title={v.desc} disabled={disabled}>
+        <div className={`card-stripe rare-${v.rarity}`} aria-hidden="true" />
+        <div className="card-glyph-corner" aria-hidden="true"><CardGlyph word={v.id} size={22} /></div>
         <div className="card-cost"><Zap size={10} strokeWidth={2.5} />{v.cost}</div>
         <div className="card-name">{v.id}</div>
         <div className="card-desc">{v.desc}</div>
@@ -253,6 +273,8 @@ function CardView({ card, disabled, onClick }: { card: Card; disabled: boolean; 
   const a = ADJECTIVES[card.word];
   return (
     <button className={`card adjective ${disabled ? 'disabled' : ''}`} onClick={onClick} title={a.desc} disabled={disabled}>
+      <div className="card-stripe rare-common" aria-hidden="true" />
+      <div className="card-glyph-corner" aria-hidden="true"><CardGlyph word={a.id} size={22} /></div>
       <div className="card-cost">·</div>
       <div className="card-name">{a.id}</div>
       <div className="card-desc">{a.desc}</div>
