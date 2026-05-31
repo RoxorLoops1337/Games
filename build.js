@@ -35,6 +35,7 @@ const STATIC_PATHS = [
   'verb_collector',
   'thieu_excuses_app',
   'mazekeep',
+  'ralpherizer',
   'tools',
 ];
 
