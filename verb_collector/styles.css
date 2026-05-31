@@ -1280,8 +1280,8 @@ body::after {
   .app::after { font-size: 1.4rem; letter-spacing: 3px; }
   .combat {
     grid-template-areas:
-      "enemies"
-      "player"
+      "scene"
+      "strip"
       "sentence"
       "permanent"
       "hand"
@@ -2642,7 +2642,7 @@ body::after {
   .combat {
     grid-template-areas:
       "scene"
-      "player"
+      "strip"
       "sentence"
       "permanent"
       "hand"
