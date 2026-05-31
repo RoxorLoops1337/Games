@@ -1282,12 +1282,12 @@ export function ShrineStone(): React.ReactElement {
         {/* wick */}
         <line x1="161" y1="184" x2="161" y2="180" stroke="#1a140a" strokeWidth="0.7" />
         {/* flame */}
-        <path d="M161 180 Q 159 176 161 172 Q 163 176 161 180 Z" fill="#f4a44a" />
-        <path d="M161 178 Q 160 176 161 174 Q 162 176 161 178 Z" fill="#fff2c4" />
+        <path className="ss-flame-outer" d="M161 180 Q 159 176 161 172 Q 163 176 161 180 Z" fill="#f4a44a" />
+        <path className="ss-flame-inner" d="M161 178 Q 160 176 161 174 Q 162 176 161 178 Z" fill="#fff2c4" />
         {/* wax pool */}
         <ellipse cx="161" cy="195" rx="6" ry="2" fill="#cfa66a" opacity="0.7" />
         {/* faint glow */}
-        <circle cx="161" cy="180" r="14" fill="#fff2c4" opacity="0.18" />
+        <circle className="ss-flame-glow" cx="161" cy="180" r="14" fill="#fff2c4" opacity="0.18" />
       </g>
 
       {/* a few floating motes near the candle */}
