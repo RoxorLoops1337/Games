@@ -3266,6 +3266,27 @@ body::after {
   .mp-sheen, .mp-highlight { animation: none; }
 }
 
+/* Shrine candle — same offset-flicker pattern as the lantern. */
+.ss-flame-outer {
+  animation: lantern-flicker 1.1s ease-in-out infinite;
+  transform-origin: 161px 180px;
+}
+.ss-flame-inner {
+  animation: lantern-flicker 0.8s ease-in-out infinite reverse;
+  transform-origin: 161px 178px;
+}
+.ss-flame-glow {
+  animation: shrine-glow 2.9s ease-in-out infinite;
+  transform-origin: 161px 180px;
+}
+@keyframes shrine-glow {
+  0%, 100% { opacity: 0.18; transform: scale(1); }
+  50%      { opacity: 0.28; transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-flame-outer, .ss-flame-inner, .ss-flame-glow { animation: none; }
+}
+
 /* Permanent-strip noun/connector chips — make them feel like inked stamps
    on the page. Add hover lift, sharper border, slight ink-bleed shadow. */
 .permanent-strip .word {
