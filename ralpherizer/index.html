@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ralpherizer</title>
+<style>
+  :root {
+    --bg0: #07060f;
+    --bg1: #100a26;
+    --accent: #ff3d7f;
+    --accent2: #7c5cff;
+    --accent3: #18e0c8;
+    --glass: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --text: #f3f0ff;
+    --muted: #9d96c4;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--bg0);
+    color: var(--text);
+    font-family: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* animated aurora background */
+  body {
+    position: relative;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6vh 20px 60px;
+    min-height: 100vh;
+  }
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    inset: -30vmax;
+    z-index: -2;
+    background:
+      radial-gradient(40vmax 40vmax at 20% 25%, rgba(124,92,255,0.55), transparent 60%),
+      radial-gradient(45vmax 45vmax at 80% 30%, rgba(255,61,127,0.45), transparent 60%),
+      radial-gradient(40vmax 40vmax at 50% 85%, rgba(24,224,200,0.40), transparent 60%);
+    filter: blur(20px) saturate(140%);
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  body::after {
+    animation-duration: 30s;
+    animation-direction: alternate-reverse;
+    opacity: 0.7;
+  }
+  @keyframes drift {
+    0%   { transform: translate3d(-4%, -2%, 0) rotate(0deg)   scale(1.05); }
+    50%  { transform: translate3d(3%, 4%, 0)   rotate(8deg)   scale(1.15); }
+    100% { transform: translate3d(5%, -3%, 0)  rotate(-6deg)  scale(1.08); }
+  }
+  /* grain / vignette overlay */
+  .vignette {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(3,2,8,0.8) 100%);
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header { text-align: center; margin-bottom: 26px; }
+
+  .logo {
+    font-size: clamp(42px, 9vw, 78px);
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin: 0;
+    background: linear-gradient(100deg, var(--accent3), var(--accent2) 45%, var(--accent) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    position: relative;
+    filter: drop-shadow(0 6px 30px rgba(124,92,255,0.45));
+  }
+  .logo::after {
+    content: "Ralpherizer";
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%;
+    background: linear-gradient(100deg, var(--accent3), var(--accent2) 45%, var(--accent) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    mix-blend-mode: screen;
+    opacity: 0;
+    animation: glitch 6s infinite steps(1);
+  }
+  @keyframes glitch {
+    0%, 92%, 100% { opacity: 0; transform: none; }
+    93% { opacity: 0.8; transform: translate(-3px, 1px); clip-path: inset(0 0 70% 0); }
+    95% { opacity: 0.8; transform: translate(3px, -2px); clip-path: inset(60% 0 0 0); }
+    97% { opacity: 0.6; transform: translate(-2px, 0); clip-path: inset(30% 0 40% 0); }
+  }
+
+  .tagline {
+    margin: 12px auto 0;
+    max-width: 460px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .tagline b { color: var(--text); font-weight: 600; }
+
+  .card {
+    width: 100%;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 22px;
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow:
+      0 30px 80px -30px rgba(0,0,0,0.8),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  label.field-label {
+    display: block;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+    background: rgba(0,0,0,0.32);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 16px;
+    color: var(--text);
+    font-size: 17px;
+    line-height: 1.5;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  textarea::placeholder { color: #6c648f; }
+  textarea:focus {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 4px rgba(124,92,255,0.18);
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .ralph-btn {
+    flex: 1 1 auto;
+    min-width: 180px;
+    border: none;
+    cursor: pointer;
+    padding: 16px 26px;
+    border-radius: 14px;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #fff;
+    background: linear-gradient(100deg, var(--accent2), var(--accent));
+    background-size: 180% 180%;
+    box-shadow: 0 12px 30px -8px rgba(255,61,127,0.6);
+    transition: transform 0.12s ease, box-shadow 0.2s ease, background-position 0.5s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .ralph-btn:hover {
+    transform: translateY(-2px);
+    background-position: 100% 0;
+    box-shadow: 0 18px 40px -10px rgba(124,92,255,0.7);
+  }
+  .ralph-btn:active { transform: translateY(0) scale(0.99); }
+  .ralph-btn::after {
+    content: "";
+    position: absolute;
+    top: 0; left: -120%;
+    width: 60%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.45), transparent);
+    transform: skewX(-20deg);
+    transition: left 0.6s ease;
+  }
+  .ralph-btn:hover::after { left: 140%; }
+
+  .ghost-btn {
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    padding: 14px 18px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s, transform 0.1s;
+  }
+  .ghost-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--accent3); }
+  .ghost-btn:active { transform: scale(0.97); }
+
+  .output-block {
+    margin-top: 20px;
+    border-top: 1px dashed var(--glass-border);
+    padding-top: 20px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .output-block.show { opacity: 1; transform: none; }
+
+  .output-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+  }
+  .output-head .field-label { margin: 0; }
+
+  .stat {
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(255,61,127,0.12);
+    border: 1px solid rgba(255,61,127,0.3);
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  #output {
+    font-size: 19px;
+    line-height: 1.7;
+    background: rgba(0,0,0,0.28);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 18px;
+    min-height: 60px;
+    word-break: break-word;
+  }
+
+  .mangled {
+    position: relative;
+    color: #fff;
+    font-weight: 700;
+    background: linear-gradient(100deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-decoration: underline wavy rgba(255,61,127,0.8);
+    text-underline-offset: 4px;
+    animation: pop 0.4s ease both;
+  }
+  @keyframes pop {
+    0% { opacity: 0; transform: translateY(-4px) scale(0.9); filter: blur(2px); }
+    100% { opacity: 1; transform: none; filter: none; }
+  }
+
+  .copied-toast {
+    position: fixed;
+    bottom: 28px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--accent3);
+    color: #04211d;
+    font-weight: 700;
+    padding: 12px 22px;
+    border-radius: 999px;
+    box-shadow: 0 14px 30px -8px rgba(24,224,200,0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 50;
+  }
+  .copied-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  nav {
+    margin-top: 40px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    border: 1px solid var(--glass-border);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  nav a:hover { color: var(--text); border-color: var(--accent2); background: rgba(124,92,255,0.12); }
+</style>
+</head>
+<body>
+  <div class="vignette"></div>
+  <div class="wrap">
+    <header>
+      <h1 class="logo">Ralpherizer</h1>
+      <p class="tagline">Type a sentence. We'll <b>"autocorrect"</b> 2 out of every 5 words into the
+      wrong words &mdash; turning your perfectly clear thought into glorious nonsense.</p>
+    </header>
+
+    <main class="card">
+      <label class="field-label" for="input">Your sentence</label>
+      <textarea id="input" placeholder="Let's meet at the coffee shop tomorrow morning to talk about the project."></textarea>
+
+      <div class="controls">
+        <button class="ralph-btn" id="ralphBtn">⚡ Ralpherize</button>
+        <button class="ghost-btn" id="clearBtn">Clear</button>
+      </div>
+
+      <div class="output-block" id="outputBlock">
+        <div class="output-head">
+          <span class="field-label">Ralpherized</span>
+          <span class="stat" id="stat"></span>
+        </div>
+        <div id="output"></div>
+        <div class="controls">
+          <button class="ghost-btn" id="copyBtn">Copy result</button>
+          <button class="ghost-btn" id="reRalphBtn">Ralpherize again</button>
+        </div>
+      </div>
+    </main>
+
+    <nav>
+      <a href="/">▶ Home</a>
+      <a href="/verb_collector/">▶ Verb Collector</a>
+      <a href="/mazekeep/">▶ Mazekeep</a>
+      <a href="/thieu_excuses_app/">▶ Thieu Excuses</a>
+    </nav>
+  </div>
+
+  <div class="copied-toast" id="toast">Copied!</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Curated "autocorrect" swaps: real-ish words a phone keyboard might
+  // wrongly "fix" your word into. Keep it phonetically/visually plausible.
+  var MAP = {
+    the: "thee", and: "anf", you: "yolk", your: "yodel", are: "arf",
+    now: "nope", here: "herd", there: "throne", where: "weird", what: "wheat",
+    when: "wren", will: "wail", can: "cane", going: "gonging", go: "goo",
+    today: "toad", tomorrow: "tornado", tonight: "toenail", yesterday: "yeasty",
+    morning: "mooring", evening: "evergreen", night: "nougat", soon: "spoon",
+    later: "litter", time: "tomb", meet: "melt", meeting: "melting",
+    talk: "tank", talking: "tanking", call: "cult", text: "test",
+    send: "sand", phone: "phony", email: "enamel", message: "massage",
+    please: "pleats", sorry: "soggy", thanks: "thinks", thank: "thank",
+    love: "lobe", like: "lick", hate: "haste", good: "god", great: "grease",
+    nice: "mince", cool: "coal", awesome: "awful", amazing: "amassing",
+    work: "worm", working: "worming", home: "hose", house: "horse",
+    office: "orifice", school: "spool", money: "monkey", food: "fool",
+    water: "waiter", coffee: "toffee", lunch: "lurch", dinner: "dingo",
+    breakfast: "breakfist", party: "pantry", friend: "fiend", family: "fanmail",
+    people: "pebble", person: "parsnip", happy: "hippo", sad: "salad",
+    tired: "tiered", ready: "reedy", busy: "buoy", late: "latte",
+    early: "eerily", think: "thank", thought: "throat", know: "knot",
+    need: "knead", want: "wand", make: "mace", made: "mead", take: "tame",
+    give: "gave", get: "geld", got: "goat", see: "sea", saw: "spaw",
+    look: "loon", come: "comb", came: "clam", leave: "leaf", start: "stork",
+    stop: "stomp", finish: "finch", drive: "drove", walk: "wack",
+    run: "rune", sleep: "sheep", dream: "drum", read: "reef", write: "writhe",
+    beautiful: "bountiful", important: "importing", because: "beekeeper",
+    about: "abort", again: "agony", before: "bee-fore", after: "aphid",
+    always: "walrus", never: "nectar", every: "emery", maybe: "mayo",
+    okay: "oboe", yes: "yeti", really: "rectally", very: "vary",
+    with: "wig", from: "foam", this: "thistle", that: "thaw", they: "theory",
+    them: "thumb", then: "thane", than: "thane", into: "indigo",
+    project: "projectile", plan: "plankton", idea: "ideal", problem: "plumbob",
+    weekend: "weakened", holiday: "hollyhock", birthday: "birdbath",
+    happy: "hippo", money: "monkey", number: "numbat", address: "adders",
+    minute: "minuet", second: "seconal", hour: "honor", week: "weak",
+    month: "mouth", year: "yearn", today: "toad", weather: "weathervane"
+  };
+
+  // Fallback funny words, grouped by first letter at runtime, so unknown
+  // words still get swapped for something same-ish-sounding and wrong.
+  var BANK = (
+    "aardvark anchovy avocado armadillo bagel bramble baboon bobsled clarinet " +
+    "crumpet cactus cobra dingo dumpling doorknob durian eggplant eyeball elbow " +
+    "ferret fondue flamingo gargoyle gravy goblin gherkin hamster hubcap haddock " +
+    "iguana igloo inkblot jellybean jackrabbit juniper kazoo kumquat kettlebell " +
+    "lemur llama lasagna licorice marmot meatloaf mongoose narwhal noodle nutmeg " +
+    "octopus oatmeal ostrich pickle platypus pretzel quokka quiche quasar raccoon " +
+    "rutabaga radish salamander snorkel sasquatch turnip toaster tarantula umbrella " +
+    "ukulele urchin vulture velcro waffle walrus wombat xylophone yodel yam yeti " +
+    "zucchini zeppelin zamboni"
+  ).split(" ");
+
+  var bankByLetter = {};
+  BANK.forEach(function (w) {
+    var k = w[0];
+    (bankByLetter[k] = bankByLetter[k] || []).push(w);
+  });
+
+  function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // Match capitalization style of the source word onto the replacement.
+  function matchCase(src, repl) {
+    if (src === src.toUpperCase() && src.length > 1) return repl.toUpperCase();
+    if (src[0] === src[0].toUpperCase()) return repl[0].toUpperCase() + repl.slice(1);
+    return repl;
+  }
+
+  function pickReplacement(core) {
+    var lower = core.toLowerCase();
+    var options = [];
+    if (MAP[lower] && MAP[lower] !== lower) options.push(MAP[lower]);
+    var bank = bankByLetter[lower[0]];
+    if (bank) {
+      // prefer a bank word that isn't identical to the source
+      var filtered = bank.filter(function (w) { return w !== lower; });
+      if (filtered.length) options.push(rand(filtered));
+    }
+    if (!options.length) {
+      // last resort: any bank word
+      options.push(rand(BANK));
+    }
+    var choice = rand(options);
+    return matchCase(core, choice);
+  }
+
+  // A token is the alphabetic core plus any surrounding punctuation.
+  // We only mangle the core so spacing/punctuation is preserved exactly.
+  var WORD_RE = /^([^A-Za-z']*)([A-Za-z][A-Za-z']*)([^A-Za-z']*)$/;
+
+  function ralpherize(text) {
+    var tokens = text.split(/(\s+)/); // keep whitespace tokens
+    // Find indices of tokens that are real, mangle-worthy words (len >= 2).
+    var wordIdx = [];
+    tokens.forEach(function (tok, i) {
+      var m = tok.match(WORD_RE);
+      if (m && m[2].length >= 2) wordIdx.push(i);
+    });
+
+    // Choose 2 out of every 5 words (40%), distributed in chunks of 5.
+    var chosen = {};
+    for (var s = 0; s < wordIdx.length; s += 5) {
+      var chunk = wordIdx.slice(s, s + 5);
+      var pickCount = Math.round(chunk.length * 0.4);
+      if (chunk.length >= 2 && pickCount < 1) pickCount = 1; // never skip a full-ish chunk
+      // shuffle chunk and take pickCount
+      var pool = chunk.slice();
+      for (var k = pool.length - 1; k > 0; k--) {
+        var j = Math.floor(Math.random() * (k + 1));
+        var t = pool[k]; pool[k] = pool[j]; pool[j] = t;
+      }
+      pool.slice(0, pickCount).forEach(function (idx) { chosen[idx] = true; });
+    }
+
+    var count = 0;
+    var htmlParts = tokens.map(function (tok, i) {
+      if (chosen[i]) {
+        var m = tok.match(WORD_RE);
+        var repl = pickReplacement(m[2]);
+        count++;
+        return escapeHtml(m[1]) + '<span class="mangled">' + escapeHtml(repl) + '</span>' + escapeHtml(m[3]);
+      }
+      return escapeHtml(tok);
+    });
+
+    return { html: htmlParts.join(""), count: count, total: wordIdx.length };
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  // --- wire up the UI ---------------------------------------------------
+  var input = document.getElementById("input");
+  var output = document.getElementById("output");
+  var outputBlock = document.getElementById("outputBlock");
+  var stat = document.getElementById("stat");
+  var toast = document.getElementById("toast");
+  var lastPlain = "";
+
+  function run() {
+    var text = input.value.trim();
+    if (!text) {
+      input.focus();
+      return;
+    }
+    var result = ralpherize(text);
+    output.innerHTML = result.html;
+    lastPlain = output.textContent;
+    stat.textContent = result.count + " of " + result.total + " words mangled";
+    outputBlock.classList.add("show");
+    outputBlock.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  document.getElementById("ralphBtn").addEventListener("click", run);
+  document.getElementById("reRalphBtn").addEventListener("click", run);
+
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    input.value = "";
+    outputBlock.classList.remove("show");
+    input.focus();
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", function () {
+    if (!lastPlain) return;
+    navigator.clipboard.writeText(lastPlain).then(function () {
+      toast.classList.add("show");
+      setTimeout(function () { toast.classList.remove("show"); }, 1400);
+    });
+  });
+
+  // Ctrl/Cmd+Enter to Ralpherize from the textarea.
+  input.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      run();
+    }
+  });
+})();
+</script>
+</body>
+</html>
