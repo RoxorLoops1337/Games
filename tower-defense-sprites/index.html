@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tower Defense Sprites</title>
+<style>
+  :root { --bg:#0b1016; --panel:#151c26; --line:#26303d; --txt:#e7eef7; --mut:#8aa0b8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif; }
+  header { padding:24px 20px 8px; }
+  h1 { margin:0 0 4px; font-size:22px; }
+  p.sub { margin:0; color:var(--mut); }
+  .controls { padding:12px 20px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .controls button { background:var(--panel); color:var(--txt); border:1px solid var(--line); padding:6px 12px; border-radius:8px; cursor:pointer; }
+  .controls button.active { border-color:#4a90e2; color:#9cc4ff; }
+  .controls label { color:var(--mut); display:flex; align-items:center; gap:6px; }
+  section { padding:8px 20px 24px; }
+  h2 { font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:#9cc4ff; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; margin-top:12px; }
+  .cell { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; }
+  .cell a { display:block; }
+  .thumb { height:72px; display:flex; align-items:center; justify-content:center;
+    background-image:linear-gradient(45deg,#1c242f 25%,transparent 25%),linear-gradient(-45deg,#1c242f 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#1c242f 75%),linear-gradient(-45deg,transparent 75%,#1c242f 75%);
+    background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; border-radius:6px; }
+  .thumb img { max-width:64px; max-height:64px; image-rendering:pixelated; }
+  .name { color:var(--mut); font-size:11px; margin-top:6px; word-break:break-all; }
+  footer { padding:20px; color:var(--mut); }
+  a { color:#9cc4ff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tower Defense Sprites</h1>
+  <p class="sub">147 individual sprites sliced from the source sheet. Each is a trimmed, transparent PNG. Click any sprite to open / download.</p>
+</header>
+<div class="controls" id="filters"></div>
+<main id="app"></main>
+<footer>
+  Source sheet: <a href="spritesheet.png">spritesheet.png</a> &middot;
+  Detection overlay: <a href="_overlay.png">_overlay.png</a> &middot;
+  Coordinates: <a href="sprites.json">sprites.json</a> &middot;
+  Re-slice: <code>python3 slice.py</code>
+</footer>
+<script>
+const ORDER=['towers','enemies','projectiles','tiles','effects','ui-icons','wave-indicators','health-bars','misc'];
+fetch('sprites.json').then(r=>r.json()).then(list=>{
+  const byCat={};
+  list.forEach(s=>{ const c=s.file.split('/')[0]; (byCat[c]=byCat[c]||[]).push(s); });
+  const cats=ORDER.filter(c=>byCat[c]);
+  const app=document.getElementById('app');
+  const filt=document.getElementById('filters');
+  const mk=(label,cat)=>{const b=document.createElement('button');b.textContent=label;b.onclick=()=>{document.querySelectorAll('#filters button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('section').forEach(s=>{s.style.display=(cat==='all'||s.dataset.cat===cat)?'':'none';});};return b;};
+  const allBtn=mk('All','all');allBtn.classList.add('active');filt.appendChild(allBtn);
+  cats.forEach(c=>filt.appendChild(mk(`${c} (${byCat[c].length})`,c)));
+  cats.forEach(c=>{
+    const sec=document.createElement('section');sec.dataset.cat=c;
+    sec.innerHTML=`<h2>${c} &middot; ${byCat[c].length}</h2>`;
+    const g=document.createElement('div');g.className='grid';
+    byCat[c].forEach(s=>{
+      const name=s.file.split('/')[1];
+      const cell=document.createElement('div');cell.className='cell';
+      cell.innerHTML=`<a href="${s.file}" target="_blank"><div class="thumb"><img src="${s.file}" alt="${name}"></div></a><div class="name">${name}<br>${s.w}&times;${s.h}</div>`;
+      g.appendChild(cell);
+    });
+    sec.appendChild(g);app.appendChild(sec);
+  });
+});
+</script>
+</body>
+</html>
