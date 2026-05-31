@@ -30,6 +30,7 @@ export function EnemyIcon({ noun, size = 64 }: Props): React.ReactElement | null
   return (
     <div
       className="enemy-icon"
+      data-noun={noun}
       role="img"
       aria-label={noun.toLowerCase()}
       style={{

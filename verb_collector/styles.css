@@ -1289,10 +1289,20 @@ body::after {
       "log";
     grid-template-columns: 1fr;
   }
-  .run-sentence { padding: 4px 0 18px; gap: 12px; flex-wrap: wrap; }
+  .run-sentence {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 4px 0 18px;
+    gap: 6px;
+  }
   .run-text { font-size: 1.05rem; letter-spacing: 1px; }
   .run-text .drop { font-size: 2.2rem; margin-right: 6px; }
-  .run-progress { font-size: 0.62rem; letter-spacing: 2px; padding: 3px 6px; }
+  .run-progress {
+    align-self: flex-start;
+    font-size: 0.62rem;
+    letter-spacing: 2px;
+    padding: 2px 8px;
+  }
   .portrait { min-width: 0; padding: 10px 12px; }
   .portrait.enemy { gap: 10px; }
   .enemy-art { width: 60px; height: 60px; padding: 6px; }
@@ -1315,9 +1325,9 @@ body::after {
   .word { padding: 3px 8px; font-size: 0.72rem; letter-spacing: 1.5px; }
   .hand { gap: 10px; min-height: 0; padding: 8px 0 4px; }
   .card { width: calc(50% - 5px); padding: 12px 9px 10px; min-height: 130px; }
-  .card-name { font-size: 0.95rem; letter-spacing: 1.5px; padding-right: 30px; }
+  .card-name { font-size: 0.82rem; letter-spacing: 0.8px; padding-right: 22px; }
   .card-desc { font-size: 0.72rem; }
-  .card-cost { font-size: 0.85rem; width: 24px; height: 24px; }
+  .card-cost { font-size: 0.7rem; width: 18px; height: 18px; }
   .end-turn { padding: 9px 16px; font-size: 0.75rem; letter-spacing: 2.5px; }
   .piles { font-size: 0.72rem; gap: 10px; letter-spacing: 1.5px; }
   .log { max-height: 140px; font-size: 0.74rem; padding: 10px 12px; }
@@ -2235,7 +2245,18 @@ body::after {
 .scene-enemy-figure .enemy-icon {
   width: 100%;
   height: 100%;
+  color: var(--ink);
 }
+/* Per-creature color tinting. The EnemyIcon uses currentColor as the mask
+   fill, so changing color here paints the silhouette. */
+.scene-enemy-figure .enemy-icon[data-noun="GOBLIN"]        { color: #506d2f; }
+.scene-enemy-figure .enemy-icon[data-noun="GOBLIN_SHAMAN"] { color: #6e8a44; }
+.scene-enemy-figure .enemy-icon[data-noun="BIG_GOBLIN"]    { color: #3d5421; }
+.scene-enemy-figure .enemy-icon[data-noun="WOLF"]          { color: #3d3a36; }
+.scene-enemy-figure .enemy-icon[data-noun="MUSHROOM"]      { color: #8c2f24; }
+.scene-enemy-figure .enemy-icon[data-noun="TREE"]          { color: #3a2a14; }
+.scene-enemy-figure .enemy-icon[data-noun="THORN"]         { color: #2c241a; }
+.scene-enemy-figure .enemy-icon[data-noun="GREEN_KNIGHT"]  { color: #1d3318; }
 .scene-enemy-figure .reveal-glyph {
   position: absolute;
   top: -4px;
@@ -2645,7 +2666,7 @@ body::after {
   .scene-enemy-hp { height: 7px; }
   .scene-enemy-hp-text { font-size: 0.55rem; line-height: 7px; }
   .scene-panel::before, .scene-panel::after { width: 16px; height: 16px; }
-  .run-text .drop-wrap .phase-vignette { width: 60px; height: 60px; opacity: 0.45; }
+  .run-text .drop-wrap .phase-vignette { width: 50px; height: 50px; opacity: 0.45; }
   .margin-vine, .margin-bird, .margin-flourish { display: none; }
   .scene-card .map-preview { height: 56px; }
   .card { padding-top: 22px; }

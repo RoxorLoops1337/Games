@@ -333,8 +333,45 @@ export function HeroFigure({ onClick, hp, maxHp, energy, maxEnergy, block }: Her
           <circle cx="126" cy="90" r="1.6" fill="#1a140a" />
         </g>
 
+        {/* gold-leaf trim along the cloak hem */}
+        <path
+          d="M32 212 L 128 212"
+          stroke="#b9893a" strokeWidth="1.4" strokeLinecap="round" fill="none"
+        />
+        <path
+          d="M34 209 Q 36 207 38 209 T 42 209 T 46 209 T 50 209 T 54 209 T 58 209 T 62 209 T 66 209 T 70 209 T 74 209 T 78 209 T 82 209 T 86 209 T 90 209 T 94 209 T 98 209 T 102 209 T 106 209 T 110 209 T 114 209 T 118 209 T 122 209 T 126 209"
+          stroke="#b9893a" strokeWidth="0.6" fill="none" opacity="0.7"
+        />
+
+        {/* boots peeking out under the cloak */}
+        <g>
+          {/* left boot */}
+          <path d="M58 212 L58 220 Q58 224 64 224 L72 224 L72 218 L66 218 L66 212 Z"
+            fill="#3a2a18" stroke="#0d0a06" strokeWidth="1" strokeLinejoin="round" />
+          <path d="M58 217 L72 217" stroke="#b9893a" strokeWidth="0.5" opacity="0.7" />
+          {/* right boot */}
+          <path d="M88 212 L88 218 L94 218 L94 224 L102 224 Q108 224 108 220 L108 212 Z"
+            fill="#3a2a18" stroke="#0d0a06" strokeWidth="1" strokeLinejoin="round" />
+          <path d="M94 217 L108 217" stroke="#b9893a" strokeWidth="0.5" opacity="0.7" />
+        </g>
+
+        {/* belt with gold buckle around the waist */}
+        <path d="M48 138 Q 80 144 112 138 L 112 144 Q 80 150 48 144 Z"
+          fill="#3a2a18" stroke="#0d0a06" strokeWidth="0.8" />
+        <rect x="76" y="139" width="8" height="8" fill="#b9893a" stroke="#0d0a06" strokeWidth="0.6" rx="1" />
+        <line x1="80" y1="139" x2="80" y2="147" stroke="#0d0a06" strokeWidth="0.6" />
+
         {/* tiny gold clasp at neck */}
-        <circle cx="80" cy="66" r="2.2" fill="#b9893a" stroke="#0d0a06" strokeWidth="0.6" />
+        <circle cx="80" cy="66" r="2.6" fill="#b9893a" stroke="#0d0a06" strokeWidth="0.6" />
+        <circle cx="80" cy="66" r="1" fill="#5e4a30" />
+
+        {/* hood inner shading — gives depth to the cowl */}
+        <path d="M67 42 Q 67 56 80 62 Q 93 56 93 42"
+          fill="none" stroke="#0d0a06" strokeWidth="0.7" opacity="0.6" />
+
+        {/* highlight on left shoulder — catching the sun glow */}
+        <path d="M52 72 Q 56 96 56 130"
+          stroke="#d6a55a" strokeWidth="0.7" fill="none" opacity="0.4" />
       </svg>
 
       <div className="hero-stamps">
