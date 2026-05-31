@@ -34,6 +34,7 @@ const STATIC_PATHS = [
   'gamedevloop',
   'verb_collector',
   'thieu_excuses_app',
+  'mazekeep',
   'tools',
 ];
 
