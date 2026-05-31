@@ -1687,14 +1687,47 @@ body::after {
   letter-spacing: 3px;
   text-transform: uppercase;
   padding: 10px 28px;
-  background: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 240, 200, 0.45) 0%, transparent 60%),
+    var(--vellum);
   border: 1px solid var(--ink);
   color: var(--ink);
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 2px 3px var(--shadow-soft);
+  transition: transform 100ms ease, box-shadow 100ms ease, background 100ms ease;
 }
-.scene-confirm { background: var(--ink); color: var(--vellum); }
-.scene-leave:hover { background: var(--vellum-soft); }
-.scene-confirm:hover { background: var(--wax); border-color: var(--wax); }
+.scene-confirm {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(60, 40, 20, 0.4), transparent 70%),
+    linear-gradient(180deg, var(--ink) 0%, var(--night-mid) 100%);
+  color: var(--vellum);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.12),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 3px 6px rgba(20, 10, 0, 0.45);
+}
+.scene-leave:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 4px 6px var(--shadow-soft);
+}
+.scene-confirm:hover {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(255, 180, 140, 0.5), transparent 70%),
+    linear-gradient(180deg, var(--wax) 0%, var(--wax-dark) 100%);
+  border-color: var(--wax-dark);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 200, 170, 0.4),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 4px 8px rgba(80, 20, 0, 0.55);
+}
 
 /* ---- Shop ---- */
 .ink-balance {
@@ -1805,17 +1838,36 @@ body::after {
 }
 .shrine-card {
   width: 150px;
-  background: var(--bg-card);
+  background:
+    radial-gradient(ellipse 70% 35% at 50% 0%, rgba(255, 240, 200, 0.55), transparent 70%),
+    linear-gradient(165deg, var(--bg-card) 0%, var(--vellum-soft) 100%);
   border: 1px solid var(--ink);
   padding: 10px;
   cursor: pointer;
   text-align: left;
   font-family: var(--font-body);
   position: relative;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    inset 0 0 0 1px rgba(255, 240, 200, 0.3),
+    0 2px 4px var(--shadow-soft);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 120ms ease;
 }
-.shrine-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px var(--shadow); }
-.shrine-card.picked { border-color: var(--wax); box-shadow: 0 0 0 2px var(--wax-bright); }
+.shrine-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    inset 0 0 0 1px rgba(255, 240, 200, 0.5),
+    0 6px 10px var(--shadow);
+}
+.shrine-card.picked {
+  border-color: var(--wax);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    inset 0 0 0 1px rgba(255, 240, 200, 0.5),
+    0 0 0 2px var(--wax-bright),
+    0 4px 10px rgba(120, 20, 33, 0.35);
+}
 .shrine-card-cost {
   position: absolute;
   top: 6px;
@@ -1851,13 +1903,26 @@ body::after {
 .shrine-mode {
   width: 200px;
   padding: 14px;
-  background: var(--vellum);
+  background:
+    radial-gradient(ellipse 70% 35% at 50% 0%, rgba(255, 240, 200, 0.5), transparent 70%),
+    linear-gradient(165deg, var(--vellum) 0%, var(--vellum-soft) 100%);
   border: 1px solid var(--ink);
   cursor: pointer;
   text-align: left;
   font-family: var(--font-body);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.55),
+    inset 0 0 0 1px rgba(255, 240, 200, 0.3),
+    0 2px 4px var(--shadow-soft);
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
-.shrine-mode:hover { background: var(--vellum-soft); }
+.shrine-mode:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.55),
+    inset 0 0 0 1px rgba(255, 240, 200, 0.5),
+    0 6px 10px var(--shadow);
+}
 .shrine-mode-label {
   font-family: var(--font-smallcap);
   letter-spacing: 3px;
@@ -1875,13 +1940,26 @@ body::after {
 .fire-choice, .fire-relic {
   width: 220px;
   padding: 16px;
-  background: var(--vellum);
+  background:
+    radial-gradient(ellipse 70% 35% at 50% 0%, rgba(255, 200, 140, 0.5), transparent 70%),
+    linear-gradient(165deg, var(--vellum) 0%, var(--vellum-soft) 100%);
   border: 1px solid var(--ink);
   cursor: pointer;
   text-align: center;
   font-family: var(--font-body);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.55),
+    inset 0 0 0 1px rgba(255, 220, 170, 0.35),
+    0 2px 4px var(--shadow-soft);
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
-.fire-choice:hover, .fire-relic:hover { background: var(--vellum-soft); }
+.fire-choice:hover, .fire-relic:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.55),
+    inset 0 0 0 1px rgba(255, 220, 170, 0.55),
+    0 6px 12px rgba(255, 100, 30, 0.25);
+}
 .fire-choice-label, .fire-relic-name {
   font-family: var(--font-display);
   font-size: 1.1rem;
