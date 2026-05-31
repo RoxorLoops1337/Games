@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Heart, Zap, Shield, Sword, Eye, Layers, Trash2, Coins } from 'lucide-react';
+import { Zap, Shield, Sword, Eye, Layers, Trash2, Coins } from 'lucide-react';
 import { VERBS, ADJECTIVES, STARTER_CONNECTORS, NOUNS, CONNECTORS } from '../engine/words';
 import { parse } from '../engine/parser/grammar';
 import { resolve } from '../engine/resolver/resolve';
@@ -53,60 +53,41 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
         </div>
       </section>
 
-      <section className="player">
-        <div className="portrait you">
-          <div className="portrait-name">YOU</div>
-          <div className="hp-bar">
-            <div className="hp-fill" style={{ width: `${(state.player.hp / state.player.maxHp) * 100}%` }} />
-            <span className="hp-text">{state.player.hp} / {state.player.maxHp}</span>
-          </div>
-          <div className="stats-row">
-            <span className="stat-pill"><Heart size={12} strokeWidth={2} /> {state.player.hp}</span>
-            <span className="stat-pill"><Zap size={12} strokeWidth={2} /> {state.player.energy}/{state.player.maxEnergy}</span>
-            <span className="stat-pill"><Shield size={12} strokeWidth={2} /> {state.player.block}</span>
-            <span className="stat-pill"><Sword size={12} strokeWidth={2} /> {state.player.attack}</span>
-          </div>
-          {state.player.adjectives.length > 0 && (
-            <div className="adj-tags">
-              {state.player.adjectives.map((a) => (
-                <span key={a.id} className="tag">
-                  {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
-                </span>
-              ))}
-            </div>
+      <section className="stat-strip" aria-label="player status">
+        <div className="strip-pills">
+          <span className="stat-pill"><Zap size={11} strokeWidth={2.2} /> {state.player.energy}/{state.player.maxEnergy}</span>
+          {state.player.block > 0 && (
+            <span className="stat-pill"><Shield size={11} strokeWidth={2.2} /> {state.player.block}</span>
           )}
-          {state.relics.length > 0 && (
-            <div className="relic-strip" aria-label="Relics held">
-              {state.relics.map((r) => {
-                const def = RELICS[r];
-                return (
-                  <span key={r} className="relic-chip" title={def ? `${def.name} — ${def.desc}` : r}>
-                    {def?.name ?? r}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-          {state.inventory.length > 0 && (
-            <div className="inventory-strip" aria-label="Held nouns">
-              <span className="inventory-label">holding</span>
-              {state.inventory.map((n, i) => (
-                <span key={`${n}_${i}`} className="inventory-chip" title={`Use with WITH ${n} or THROW ${n} AT <target>`}>
-                  {n}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="player-tray">
-            <div className="ink-amount">
-              <Coins size={12} strokeWidth={2} /> {state.ink} ink
-            </div>
-            <PotionTray
-              potions={state.potions}
-              onUse={(slot) => dispatch({ type: 'use_potion', slot })}
-            />
-          </div>
+          <span className="stat-pill"><Sword size={11} strokeWidth={2.2} /> {state.player.attack}</span>
+          <span className="stat-pill ink"><Coins size={11} strokeWidth={2.2} /> {state.ink}</span>
+          {state.player.adjectives.map((a) => (
+            <span key={a.id} className="tag">
+              {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
+            </span>
+          ))}
         </div>
+        {(state.relics.length > 0 || state.inventory.length > 0) && (
+          <div className="strip-relics">
+            {state.relics.map((r) => {
+              const def = RELICS[r];
+              return (
+                <span key={r} className="relic-chip" title={def ? `${def.name} — ${def.desc}` : r}>
+                  {def?.name ?? r}
+                </span>
+              );
+            })}
+            {state.inventory.map((n, i) => (
+              <span key={`${n}_${i}`} className="inventory-chip" title={`WITH ${n} or THROW ${n} AT <target>`}>
+                {n}
+              </span>
+            ))}
+          </div>
+        )}
+        <PotionTray
+          potions={state.potions}
+          onUse={(slot) => dispatch({ type: 'use_potion', slot })}
+        />
       </section>
 
       <section className="sentence-area">
@@ -221,38 +202,39 @@ export function CombatScreen({ state, dispatch }: Props): React.ReactElement {
 }
 
 function SceneEnemy({ enemy, dispatch }: { enemy: Enemy; dispatch: (a: Action) => void }) {
+  const hpPct = Math.max(0, Math.min(1, enemy.hp / Math.max(1, enemy.maxHp)));
   return (
-    <div
+    <button
+      type="button"
       className={`scene-enemy${enemy.revealed ? ' revealed' : ''}`}
       onClick={() => dispatch({ type: 'add_to_sentence', token: enemy.noun })}
       title={`tap to add ${enemy.noun} to the sentence`}
-      role="button"
+      aria-label={enemy.displayName}
     >
-      <div className="scene-enemy-art">
-        <EnemyIcon noun={enemy.noun} size={104} />
-        {enemy.revealed && <Eye className="reveal-glyph" size={14} strokeWidth={2} />}
+      <div className="scene-enemy-figure">
+        <EnemyIcon noun={enemy.noun} size={96} />
+        {enemy.revealed && <Eye className="reveal-glyph" size={13} strokeWidth={2} />}
       </div>
-      <div className="scene-enemy-name">{enemy.displayName}</div>
-      <div className="scene-enemy-hp">
-        <div
-          className="scene-enemy-hp-fill"
-          style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }}
-        />
-        <span className="scene-enemy-hp-text">{enemy.hp} / {enemy.maxHp}</span>
-      </div>
-      <div className="scene-enemy-intent">
-        <Sword size={9} strokeWidth={2} /> {intentLabel(enemy.intent)}
-      </div>
-      {enemy.adjectives.length > 0 && (
-        <div className="adj-tags">
-          {enemy.adjectives.map((a) => (
-            <span key={a.id} className="tag">
-              {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
-            </span>
-          ))}
+      <div className="scene-enemy-meta">
+        <div className="scene-enemy-name">{enemy.displayName}</div>
+        <div className="scene-enemy-hpbar" aria-label={`${enemy.hp} of ${enemy.maxHp} HP`}>
+          <div className="scene-enemy-hpfill" style={{ width: `${hpPct * 100}%` }} />
+          <span className="scene-enemy-hptext">{enemy.hp}/{enemy.maxHp}</span>
         </div>
-      )}
-    </div>
+        <div className="scene-enemy-intent">
+          <Sword size={9} strokeWidth={2.2} /> {intentLabel(enemy.intent)}
+        </div>
+        {enemy.adjectives.length > 0 && (
+          <div className="adj-tags scene-enemy-adjs">
+            {enemy.adjectives.map((a) => (
+              <span key={a.id} className="tag">
+                {a.id}{a.turns !== 'permanent' ? `·${a.turns}` : ''}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </button>
   );
 }
 
