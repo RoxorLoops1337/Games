@@ -13,7 +13,7 @@ export function RewardScreen({ state, dispatch }: Props): React.ReactElement {
     <div className="reward-screen">
       <h2>VICTORY</h2>
       <p className="reward-flavor">
-        You defeated {state.encounterName.toLowerCase()}. The forest offers a word.
+        You defeated {state.encounterName ? state.encounterName.toLowerCase() : 'your foe'}. The forest offers a word.
       </p>
 
       <div className="reward-cards">
