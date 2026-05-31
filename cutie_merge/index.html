@@ -290,14 +290,29 @@
 
   function fitCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Scale the whole board so it always fits the screen — width AND height —
+    // so the floor (where cuties merge) is always visible, no scrolling needed.
+    const wrapPad = 28;                 // .wrap left+right padding
+    const framePad = 20;                // .board-frame left+right padding
+    const availW = Math.min(440, window.innerWidth) - wrapPad - framePad;
+    // Reserve vertical space for the header above and the hint below the board.
+    const reserveTop = 150, reserveBottom = 60;
+    const availH = (window.visualViewport ? window.visualViewport.height : window.innerHeight)
+                   - reserveTop - reserveBottom;
+    let scale = Math.min(availW / W, availH / H);
+    scale = Math.max(0.45, Math.min(scale, 1)); // never upscale past 1
+    const dispW = W * scale, dispH = H * scale;
+    canvas.style.width = dispW + "px";
+    canvas.style.height = dispH + "px";
+    canvas.width = Math.round(dispW * dpr);
+    canvas.height = Math.round(dispH * dpr);
+    // Draw in logical W×H coordinates; this transform maps them to scaled pixels.
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
   }
   fitCanvas();
   window.addEventListener("resize", fitCanvas);
+  window.addEventListener("orientationchange", fitCanvas);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", fitCanvas);
 
   /* ---------- game state ---------- */
   let balls = [];
