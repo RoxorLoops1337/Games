@@ -1460,17 +1460,33 @@ body::after {
   pointer-events: none;
 }
 .title-meta {
-  margin-top: 28px;
+  margin-top: 36px;
   display: flex;
-  gap: 28px;
+  gap: 24px;
   color: var(--ink-soft);
   font-family: var(--font-body);
   font-size: 0.82rem;
+  align-items: center;
+  position: relative;
+}
+.title-meta::before,
+.title-meta::after {
+  content: '';
+  flex: 0 0 60px;
+  height: 1px;
+  background:
+    linear-gradient(90deg, transparent 0%, var(--rule) 50%, transparent 100%);
+  opacity: 0.6;
+}
+.title-meta > div {
+  font-style: italic;
+  font-family: var(--font-script);
 }
 .title-meta-label {
   font-family: var(--font-smallcap);
   letter-spacing: 2px;
   text-transform: uppercase;
+  font-style: normal;
   color: var(--ink-faint);
   margin-right: 6px;
 }
@@ -1986,16 +2002,34 @@ body::after {
 .mirror-card {
   width: 140px;
   padding: 10px;
-  background: var(--bg-card);
+  background:
+    radial-gradient(ellipse 70% 35% at 50% 0%, rgba(180, 220, 240, 0.35), transparent 70%),
+    linear-gradient(165deg, var(--bg-card) 0%, var(--vellum-soft) 100%);
   border: 1px solid var(--ink);
   cursor: pointer;
   font-family: var(--font-body);
   text-align: left;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    inset 0 0 0 1px rgba(180, 220, 240, 0.25),
+    0 2px 4px var(--shadow-soft);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 120ms ease;
+}
+.mirror-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    inset 0 0 0 1px rgba(180, 220, 240, 0.55),
+    0 6px 12px rgba(40, 80, 120, 0.25);
 }
 .mirror-card.adjective { border-style: dashed; }
 .mirror-card.picked {
   border-color: var(--wax);
-  box-shadow: 0 0 0 2px var(--wax-bright), 0 4px 8px var(--shadow);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    inset 0 0 0 1px rgba(180, 220, 240, 0.55),
+    0 0 0 2px var(--wax-bright),
+    0 4px 10px rgba(120, 20, 33, 0.35);
 }
 .mirror-card-name {
   font-family: var(--font-display);
