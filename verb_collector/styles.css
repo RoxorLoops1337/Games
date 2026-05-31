@@ -2969,6 +2969,55 @@ body::after {
     0 2px 3px var(--shadow-soft);
 }
 
+/* Preview line — a subtle ruled writing-guide under the predicted
+   sentence so the empty page actually looks like a page. */
+.preview {
+  position: relative;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+.preview::after {
+  content: '';
+  position: absolute;
+  left: 36px;
+  right: 4px;
+  bottom: 0;
+  height: 1px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      var(--rule) 0 6px,
+      transparent 6px 10px
+    );
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* CLEAR + the implicit "secondary" sentence-action button — inked-stamp
+   so it doesn't read as a flat outlined rectangle next to the wax seal. */
+.sentence-actions button:not(.primary) {
+  background:
+    linear-gradient(180deg, rgba(255, 240, 200, 0.5) 0%, transparent 60%),
+    var(--vellum);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 1px 2px var(--shadow-soft);
+  transition: transform 100ms ease, background 100ms ease, color 100ms ease,
+              box-shadow 100ms ease;
+}
+.sentence-actions button:not(.primary):hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 3px 5px var(--shadow-soft);
+}
+.sentence-actions button:not(.primary):disabled {
+  background: transparent;
+  box-shadow: none;
+}
+
 /* Deck / discard piles — read as small stacks of folios, not bare text.
    The double border-bottom hints at sheets layered underneath. */
 .pile {
