@@ -947,9 +947,10 @@ export function FireBlaze(): React.ReactElement {
         </linearGradient>
       </defs>
       {/* glow halo */}
-      <circle cx="120" cy="155" r="110" fill="url(#fb-glow)" />
+      <circle className="fb-glow" cx="120" cy="155" r="110" fill="url(#fb-glow)" />
       {/* outer flame */}
       <path
+        className="fb-outer"
         d="M120 50
            C 96 70 84 100 88 130
            C 90 150 102 168 102 184
@@ -961,6 +962,7 @@ export function FireBlaze(): React.ReactElement {
       />
       {/* inner flame */}
       <path
+        className="fb-inner"
         d="M120 90
            C 108 102 102 122 106 140
            C 108 152 116 162 116 174
