@@ -3218,6 +3218,33 @@ body::after {
   .fb-outer, .fb-inner, .fb-glow { animation: none; }
 }
 
+/* Merchant lantern — tiny flame flickers, halo throbs softly. The
+   flame is centred at the lantern glass (178,110), the halo at the
+   stall (186,106). */
+.ms-flame-outer {
+  animation: lantern-flicker 0.9s ease-in-out infinite;
+  transform-origin: 178px 113px;
+}
+.ms-flame-inner {
+  animation: lantern-flicker 0.7s ease-in-out infinite reverse;
+  transform-origin: 178px 112px;
+}
+.ms-halo {
+  animation: lantern-halo 2.6s ease-in-out infinite;
+  transform-origin: 186px 106px;
+}
+@keyframes lantern-flicker {
+  0%, 100% { transform: scaleY(1)    translateY(0); }
+  50%      { transform: scaleY(1.18) translateY(-0.5px); }
+}
+@keyframes lantern-halo {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.04); opacity: 0.88; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-flame-outer, .ms-flame-inner, .ms-halo { animation: none; }
+}
+
 /* Permanent-strip noun/connector chips — make them feel like inked stamps
    on the page. Add hover lift, sharper border, slight ink-bleed shadow. */
 .permanent-strip .word {
