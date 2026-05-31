@@ -1061,9 +1061,9 @@ export function MirrorPlate(): React.ReactElement {
         <circle cx="120" cy="142" r="2.6" fill="#b9893a" />
       </g>
       {/* glass sheen overlay */}
-      <ellipse cx="120" cy="130" rx="78" ry="104" fill="url(#mp-sheen)" opacity="0.5" />
+      <ellipse className="mp-sheen" cx="120" cy="130" rx="78" ry="104" fill="url(#mp-sheen)" opacity="0.5" />
       {/* a soft highlight crescent */}
-      <path d="M68 80 Q 88 60 120 56" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.45" />
+      <path className="mp-highlight" d="M68 80 Q 88 60 120 56" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.45" />
     </svg>
   );
 }

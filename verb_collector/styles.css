@@ -3245,6 +3245,27 @@ body::after {
   .ms-flame-outer, .ms-flame-inner, .ms-halo { animation: none; }
 }
 
+/* Mirror plate — glass sheen drifts slowly and the highlight crescent
+   breathes in/out, so the surface looks reflective instead of painted. */
+.mp-sheen {
+  animation: mirror-sheen 7.4s ease-in-out infinite;
+  transform-origin: 120px 130px;
+}
+.mp-highlight {
+  animation: mirror-highlight 4.8s ease-in-out infinite;
+}
+@keyframes mirror-sheen {
+  0%, 100% { opacity: 0.5; transform: translateX(0); }
+  50%      { opacity: 0.7; transform: translateX(3px); }
+}
+@keyframes mirror-highlight {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.72; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-sheen, .mp-highlight { animation: none; }
+}
+
 /* Permanent-strip noun/connector chips — make them feel like inked stamps
    on the page. Add hover lift, sharper border, slight ink-bleed shadow. */
 .permanent-strip .word {
