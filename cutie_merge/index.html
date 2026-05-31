@@ -395,13 +395,16 @@
   function sparkleSound() { blip(900, 0.10, "triangle", 0.08); setTimeout(()=>blip(1300,0.08,"triangle",0.06),50); }
 
   /* ---------- effects ---------- */
-  const KAWAII  = ["✨","💕","⭐","🌸","🩷","🎀","💫","🧁","🍭","💖","🌟","🦋","🌷","🍬"];
-  const FACES   = ["♡","ᰔ","ꨄ","✿","❀","♥","˚"];
+  // Only widely-supported COLOR emoji here — avoids black "tofu" on older devices.
+  const KAWAII  = ["✨","💕","⭐","🌸","💗","🎀","💫","🧁","🍭","💖","🌟","🦋","🌷","🍬"];
+  const FACES   = ["💕","✨","💖","🌸","⭐","💫","💗","🎀","🌟","🌸"];
   const PASTELS = ["#ff8fc7","#b58cff","#8ee6df","#ffe89a","#ff5fa8","#c8a2e8","#a0e7e5","#ffd36e"];
   const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const MAX_PARTICLES = 280;  // hard cap so heavy combos can't tank the framerate
 
   function burst(x, y, color, n, emoji) {
     for (let i = 0; i < n; i++) {
+      if (particles.length >= MAX_PARTICLES) break;
       const a = Math.random() * Math.PI * 2;
       const sp = 1.5 + Math.random() * 4;
       particles.push({
@@ -416,6 +419,7 @@
   // pastel paper confetti that flutters as it falls
   function confetti(x, y, n) {
     for (let i = 0; i < n; i++) {
+      if (particles.length >= MAX_PARTICLES) break;
       const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5.5;
       particles.push({
         x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2.5,
@@ -437,6 +441,7 @@
   }
   // gentle ambient sparkle drifting up inside the board
   function spawnAmbient() {
+    if (particles.length >= 160) return;
     particles.push({
       x: 14 + Math.random() * (W - 28), y: H - 6,
       vx: (Math.random() - 0.5) * 0.4, vy: -0.55 - Math.random() * 0.7,
@@ -559,7 +564,7 @@
     ring(mx, my, TIERS[nt].c2, 26 + nt * 8);
     sticker(mx, my - 14, pick(FACES), 22 + nt);
     pulseScore();
-    if (combo >= 3) { confetti(mx, my, 8 + combo * 2); shake = Math.max(shake, 4); }
+    if (combo >= 3) { confetti(mx, my, Math.min(8 + combo * 2, 22)); shake = Math.max(shake, 4); }
 
     if (a.tier < MAX_TIER) {
       const nb = makeBall(mx, my, nt, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2 - 1.5);
@@ -684,6 +689,9 @@
     ctx.save();
     ctx.clearRect(0, 0, W, H);
     ctx.translate(sx, sy);
+    // set text alignment once for the whole frame (cheaper than per-particle)
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
 
     // danger line
     ctx.save();
@@ -730,8 +738,7 @@
       ctx.save();
       ctx.globalAlpha = Math.max(0, p.life) * (p.ambient ? 0.6 : 1);
       if (p.emoji) {
-        ctx.font = p.size * 2.4 + "px serif";
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = ((p.size * 2.4) | 0) + "px serif";
         ctx.translate(p.x, p.y); ctx.rotate(p.rot);
         ctx.fillText(p.emoji, 0, 0);
       } else if (p.confetti) {
@@ -752,7 +759,6 @@
       ctx.globalAlpha = Math.max(0, f.life);
       ctx.translate(f.x, f.y); ctx.scale(f.scale, f.scale);
       ctx.font = "700 17px 'Fredoka', sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255,0.9)";
       ctx.strokeText(f.text, 0, 0);
       ctx.fillStyle = f.color; ctx.fillText(f.text, 0, 0);
@@ -764,7 +770,7 @@
       ctx.globalAlpha = Math.max(0, s.life);
       ctx.translate(s.x, s.y); ctx.rotate(s.rot * (1 - s.life)); ctx.scale(s.scale, s.scale);
       ctx.font = s.size + "px 'Segoe UI Emoji', serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = "#ff7ec0";  // pastel fallback so any non-color glyph isn't black
       ctx.fillText(s.text, 0, 0);
       ctx.restore();
     }
