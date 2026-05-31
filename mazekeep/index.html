@@ -148,12 +148,21 @@
   .res-shards { color: var(--gold); font-size: 19px; margin-bottom: 22px; }
   .res-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
-  /* Mobile: sidebar below the board */
+  /* Mobile: stack the sidebar below the board and let the page scroll. The
+     desktop layout pins everything to 100vh (canvas + fixed sidebar); on a
+     phone that hides the omen list and Send Wave button below the fold, so we
+     switch the game screen to natural height + vertical scrolling. */
   @media (max-width: 760px) {
-    .play-area { flex-direction: column; }
-    .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--line); flex-direction: column; }
-    .canvas-wrap { padding: 6px; }
+    html, body { overflow-y: auto; overflow-x: hidden; }
+    .screen { height: auto; min-height: 100%; }
+    .game-screen { height: auto; min-height: 100%; }
+    .topbar { position: sticky; top: 0; z-index: 10; }
+    .play-area { flex-direction: column; flex: none; }
+    .canvas-wrap { flex: none; padding: 6px; }
+    canvas#game { width: 100%; height: auto; max-height: 56vh; }
+    .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--line); flex-direction: column; overflow: visible; }
     .palette { grid-template-columns: repeat(5, 1fr); }
+    .menu.wide { height: auto; min-height: 100%; }
   }
 </style>
 </head>
