@@ -2786,3 +2786,65 @@ body::after {
 @media (max-width: 720px) {
   .reward-laurel-wrap { width: 180px; margin-bottom: -10px; }
 }
+
+/* Slow drift on the scene-backdrop clouds + ground fog — brings the static
+   painting to life without being distracting. Respect reduced-motion. */
+.scene-clouds {
+  animation: cloud-drift 90s linear infinite;
+  transform-origin: center;
+}
+.scene-fog {
+  animation: fog-drift 60s ease-in-out infinite alternate;
+}
+@keyframes cloud-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-180px); }
+}
+@keyframes fog-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(40px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-clouds, .scene-fog { animation: none; }
+}
+
+/* Permanent-strip noun/connector chips — make them feel like inked stamps
+   on the page. Add hover lift, sharper border, slight ink-bleed shadow. */
+.permanent-strip .word {
+  position: relative;
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 0%, rgba(255,240,200,0.45), transparent 80%),
+    var(--vellum);
+  border: 1px solid var(--ink);
+  box-shadow:
+    0 1px 2px var(--shadow-soft),
+    inset 0 -1px 0 rgba(0,0,0,0.12);
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.permanent-strip .word:hover {
+  transform: translateY(-1px);
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 0%, rgba(255,240,200,0.7), transparent 80%),
+    var(--vellum);
+  box-shadow:
+    0 3px 5px var(--shadow-soft),
+    inset 0 -1px 0 rgba(0,0,0,0.12);
+}
+.permanent-strip .word.connector {
+  font-style: italic;
+  letter-spacing: 1px;
+  color: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+.permanent-strip .word.connector:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.permanent-strip .word.collected {
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 0%, rgba(255,225,170,0.55), transparent 80%),
+    var(--vellum-soft);
+  border-color: var(--gold-leaf);
+  color: var(--ink);
+  font-weight: 700;
+}

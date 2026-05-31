@@ -88,8 +88,8 @@ export function SceneBackdrop(): React.ReactElement {
       {/* Sun glow on the right */}
       <rect x="0" y="0" width="1000" height="360" fill="url(#sun-glow)" />
 
-      {/* Cloud streaks (low opacity ellipses) */}
-      <g fill="url(#cloud-wash)" opacity="0.85">
+      {/* Cloud streaks (low opacity ellipses) — drift slowly across */}
+      <g className="scene-clouds" fill="url(#cloud-wash)" opacity="0.85">
         <ellipse cx="220" cy="70" rx="180" ry="14" />
         <ellipse cx="640" cy="55" rx="220" ry="11" />
         <ellipse cx="430" cy="98" rx="150" ry="9" />
@@ -131,8 +131,8 @@ export function SceneBackdrop(): React.ReactElement {
         opacity="0.95"
       />
 
-      {/* Ground fog band */}
-      <rect x="0" y="245" width="1000" height="90" fill="url(#ground-fog)" />
+      {/* Ground fog band — drifts slowly */}
+      <rect className="scene-fog" x="-100" y="245" width="1200" height="90" fill="url(#ground-fog)" />
 
       {/* Foreground grass */}
       <path
