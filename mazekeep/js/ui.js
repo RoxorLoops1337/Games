@@ -163,6 +163,10 @@
     ].map((t) => el('p', { text: t }))));
     body.appendChild(section('Towers', DATA.TOWERS.map((t) => entry(t.glyph, t.name, `◈${t.cost} — ${t.desc}`, t.color))));
     body.appendChild(section('Foes', Object.values(DATA.ENEMIES).map((e) => entry(e.glyph, e.name, traitText(e), e.color))));
+    body.appendChild(section('Credits', [
+      el('p', { html: 'Fonts: <b>Press Start 2P</b> and <b>Silkscreen</b> — SIL Open Font License (OFL), bundled in assets/fonts/.' }),
+      el('p', { text: 'Everything else — art, music and sound — is generated procedurally in the browser (canvas + WebAudio).' }),
+    ]));
     return el('div', { class: 'menu wide' }, [
       el('button', { class: 'btn back', onclick: () => { click(); showScreen('title'); } }, '← Back'),
       el('h2', { text: '📖 Codex' }), body,

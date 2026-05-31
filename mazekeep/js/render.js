@@ -228,7 +228,8 @@
     const b = G.banner; const a = clamp01(b.t / 1.6);
     ctx.save();
     ctx.globalAlpha = Math.min(1, a * 2);
-    ctx.font = `bold ${Math.min(46, canvas.width * 0.07)}px sans-serif`;
+    // Arcade banner uses the bundled pixel font (falls back to sans before load).
+    ctx.font = `${Math.min(34, canvas.width * 0.052)}px 'Silkscreen', sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const y = canvas.height * 0.32;
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillText(b.text, canvas.width / 2 + 2, y + 2);
