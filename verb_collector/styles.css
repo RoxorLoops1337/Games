@@ -2370,7 +2370,40 @@ body::after {
 }
 .audio-mute-row input[type="checkbox"] {
   justify-self: start;
-  accent-color: var(--wax);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255, 240, 200, 0.55) 0%, transparent 70%),
+    var(--vellum);
+  cursor: pointer;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 1px 1px var(--shadow-soft);
+  transition: background 100ms ease, border-color 100ms ease;
+}
+.audio-mute-row input[type="checkbox"]:hover { border-color: var(--ink); }
+.audio-mute-row input[type="checkbox"]:checked {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 200, 170, 0.55), transparent 60%),
+    linear-gradient(180deg, var(--wax) 0%, var(--wax-dark) 100%);
+  border-color: var(--wax-dark);
+}
+.audio-mute-row input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: -1px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--vellum);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 
