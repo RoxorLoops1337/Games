@@ -3,6 +3,7 @@ import { Action } from '../engine/combat/reducer';
 import { GameState } from '../engine/combat/state';
 import { commonRelicIds, uncommonRelicIds, RELICS, RelicId } from '../engine/relics/relics';
 import { makeRng } from '../engine/deck/deck';
+import { FireBlaze } from './SceneArt';
 
 interface Props {
   state: GameState;
@@ -78,6 +79,9 @@ export function FireScreen({ state, dispatch }: Props): React.ReactElement {
   return (
     <div className="scene-screen fire-screen">
       <header className="scene-header">
+        <div className="scene-illustration" aria-hidden="true">
+          <FireBlaze />
+        </div>
         <h2>THE FIRE</h2>
         <p className="scene-flavor">
           A small blaze of brittle wood. You can warm yourself or sift the ash

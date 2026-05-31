@@ -2676,3 +2676,74 @@ body::after {
   .card .card-cost { top: 12px; }
   .end-vignette { height: 130px; margin-bottom: 16px; }
 }
+
+/* ============================================================
+   Scene illustrations — title banner, fire blaze, mirror plate
+   ============================================================ */
+.title-banner-wrap {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto 18px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow:
+    0 4px 14px rgba(20, 12, 4, 0.45),
+    inset 0 0 0 1px var(--vellum-soft),
+    inset 0 0 0 3px var(--gold-leaf),
+    inset 0 0 0 4px var(--vellum-soft);
+}
+.title-banner {
+  display: block;
+  width: 100%;
+  height: 180px;
+}
+@media (max-width: 720px) {
+  .title-banner { height: 130px; }
+  .title-banner-wrap { margin-bottom: 12px; }
+}
+
+.scene-illustration {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 14px;
+  width: 100%;
+}
+.fire-blaze {
+  width: 180px;
+  height: 180px;
+  filter: drop-shadow(0 8px 18px rgba(255, 120, 30, 0.35));
+}
+.mirror-plate {
+  width: 160px;
+  height: 200px;
+  filter: drop-shadow(0 6px 14px rgba(20, 12, 4, 0.5));
+}
+@media (max-width: 720px) {
+  .fire-blaze   { width: 140px; height: 140px; }
+  .mirror-plate { width: 120px; height: 150px; }
+  .scene-illustration { margin-bottom: 8px; }
+}
+
+.endgame-banner {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto 18px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow:
+    0 6px 18px rgba(20, 12, 4, 0.45),
+    inset 0 0 0 1px var(--vellum-soft),
+    inset 0 0 0 3px var(--gold-leaf),
+    inset 0 0 0 4px var(--vellum-soft);
+}
+.endgame-banner .end-vignette {
+  width: 100%;
+  height: 180px;
+  display: block;
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .endgame-banner .end-vignette { height: 140px; }
+}
