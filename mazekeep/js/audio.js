@@ -82,6 +82,7 @@
         musicBus.connect(masterGain);
 
         noiseBuffer = makeNoiseBuffer();
+        loadSamples();
       }
       // Resume if a gesture unlocked us.
       if (ctx && ctx.state === 'suspended' && ctx.resume) {
@@ -335,6 +336,57 @@
     }
   };
 
+  // ---- Real sound samples (Kenney Interface Sounds, CC0) -------------------
+  // These genuine .wav assets override the procedural synth for the named
+  // events. They are fetched + decoded lazily on init; until a sample is ready
+  // (or if a fetch/decode fails, e.g. offline) the procedural fallback plays,
+  // so audio never silently breaks.
+  var SAMPLE_URLS = {
+    uiClick: 'assets/sfx/uiClick.wav',
+    place: 'assets/sfx/place.wav',
+    upgrade: 'assets/sfx/upgrade.wav',
+    sell: 'assets/sfx/sell.wav',
+    coin: 'assets/sfx/coin.wav',
+    cardPick: 'assets/sfx/cardPick.wav',
+    bargain: 'assets/sfx/bargain.wav',
+    error: 'assets/sfx/error.wav',
+    waveStart: 'assets/sfx/waveStart.wav',
+    lifeLost: 'assets/sfx/lifeLost.wav'
+  };
+  var sampleBuffers = {};      // name -> decoded AudioBuffer
+  var samplesRequested = false;
+
+  function loadSamples() {
+    if (samplesRequested || !ctx || typeof fetch !== 'function') return;
+    samplesRequested = true;
+    Object.keys(SAMPLE_URLS).forEach(function (name) {
+      try {
+        fetch(SAMPLE_URLS[name])
+          .then(function (r) { return r.ok ? r.arrayBuffer() : Promise.reject(); })
+          .then(function (buf) {
+            return new Promise(function (res, rej) {
+              // callback form for broad Safari support
+              ctx.decodeAudioData(buf, res, rej);
+            });
+          })
+          .then(function (decoded) { sampleBuffers[name] = decoded; })
+          .catch(function () { /* keep procedural fallback */ });
+      } catch (e) {}
+    });
+  }
+
+  function playSample(name) {
+    var buf = sampleBuffers[name];
+    if (!buf || !ctx || !sfxBus) return false;
+    try {
+      var src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(sfxBus);
+      src.start();
+      return true;
+    } catch (e) { return false; }
+  }
+
   // Play a one-shot SFX by name. Unknown names no-op. Never throws.
   function play(name) {
     if (!supported || !sfxEnabled) return;
@@ -342,8 +394,9 @@
       init();
       if (!ctx) return;
       if (ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (e) {} }
+      if (playSample(name)) return;          // prefer the real CC0 sample
       var fn = SFX[name];
-      if (typeof fn === 'function') fn();
+      if (typeof fn === 'function') fn();     // else fall back to the synth
     } catch (e) { /* swallow: a bad sound must never break the game */ }
   }
 
