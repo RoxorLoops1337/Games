@@ -429,6 +429,9 @@
           const min = a.r + b.r;
           if (dist === 0) { dx = 0.01; dy = 0.01; dist = 0.014; }
           if (dist < min) {
+            // Same-type cuties: don't push apart — let them sink together so the
+            // overlap accumulates and the merge check below can fire.
+            if (a.tier === b.tier && !a.merging && !b.merging) continue;
             const nx = dx / dist, ny = dy / dist;
             const overlap = min - dist;
             // positional separation (equal mass)
@@ -456,7 +459,7 @@
         const b = balls[j];
         if (b.merging || b.tier !== a.tier) continue;
         const dist = Math.hypot(b.x - a.x, b.y - a.y);
-        if (dist < a.r + b.r - 2) { doMerge(a, b); break; }
+        if (dist < a.r + b.r - 0.5) { doMerge(a, b); break; }
       }
     }
     if (balls.some(b => b.merging)) balls = balls.filter(b => !b.merging);
