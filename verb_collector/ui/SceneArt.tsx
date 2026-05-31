@@ -887,11 +887,11 @@ export function TitleBanner(): React.ReactElement {
       <path d="M278 232 L296 208 L304 208 L322 232" stroke="#7a5a30" strokeWidth="0.6" fill="none" opacity="0.55" />
 
       {/* small cloaked figure walking the path */}
-      <g transform="translate(296, 198)" filter="url(#tb-bleed)">
-        <path d="M0 0 C -3 0 -5 2 -5 5 L -5 10 C -5 14 -3 18 0 22 L 0 26 L 6 26 L 6 22 C 9 18 11 14 11 10 L 11 5 C 11 2 9 0 6 0 Z"
-          fill="#1a140a" />
-      </g>
-      <g transform="translate(296, 198)">
+      <g className="title-figure" transform="translate(296, 198)">
+        <g filter="url(#tb-bleed)">
+          <path d="M0 0 C -3 0 -5 2 -5 5 L -5 10 C -5 14 -3 18 0 22 L 0 26 L 6 26 L 6 22 C 9 18 11 14 11 10 L 11 5 C 11 2 9 0 6 0 Z"
+            fill="#1a140a" />
+        </g>
         {/* ink outline */}
         <path d="M0 0 C -3 0 -5 2 -5 5 L -5 10 C -5 14 -3 18 0 22 L 0 26 L 6 26 L 6 22 C 9 18 11 14 11 10 L 11 5 C 11 2 9 0 6 0 Z"
           stroke="#0a0604" strokeWidth="0.4" fill="none" />

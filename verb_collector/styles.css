@@ -3183,6 +3183,20 @@ body::after {
   .title-birds, .title-sun-halo { animation: none; }
 }
 
+/* Tiny cloaked figure on the title banner — bob with each step. */
+.title-figure {
+  animation: title-figure-walk 1.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+@keyframes title-figure-walk {
+  0%, 100% { transform: translate(296px, 198px); }
+  50%      { transform: translate(296px, 197px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-figure { animation: none; }
+}
+
 /* Campfire flame — outer + inner flame stretch/squeeze with offset
    timings, glow halo throbs gently. Two different durations so they
    don't sync up. transform-origin sits at the base of the flame so
