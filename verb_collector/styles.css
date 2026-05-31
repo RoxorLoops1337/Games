@@ -3049,6 +3049,29 @@ body::after {
   .scene-clouds, .scene-fog { animation: none; }
 }
 
+/* Title banner: birds drift slowly across the sky and the sun glows
+   softly. Subtle enough to feel like a still landscape, not a busy GIF. */
+.title-birds {
+  animation: title-birds-drift 38s linear infinite;
+  transform-origin: center;
+}
+.title-sun-halo {
+  animation: title-sun-pulse 9s ease-in-out infinite;
+  transform-origin: 300px 148px;
+}
+@keyframes title-birds-drift {
+  0%   { transform: translate(0, 0); }
+  50%  { transform: translate(-30px, -4px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes title-sun-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-birds, .title-sun-halo { animation: none; }
+}
+
 /* Permanent-strip noun/connector chips — make them feel like inked stamps
    on the page. Add hover lift, sharper border, slight ink-bleed shadow. */
 .permanent-strip .word {

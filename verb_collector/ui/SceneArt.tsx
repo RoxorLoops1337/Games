@@ -865,7 +865,7 @@ export function TitleBanner(): React.ReactElement {
       </defs>
       <rect x="0" y="0" width="600" height="240" fill="url(#tb-sky)" />
       <rect x="0" y="0" width="600" height="240" fill="url(#tb-sun)" />
-      <circle cx="300" cy="148" r="28" fill="#fff2c4" opacity="0.9" />
+      <circle className="title-sun-halo" cx="300" cy="148" r="28" fill="#fff2c4" opacity="0.9" />
       <circle cx="300" cy="148" r="18" fill="#ffeac0" />
 
       {/* distant mountains */}
@@ -899,8 +899,8 @@ export function TitleBanner(): React.ReactElement {
         <circle cx="3" cy="6" r="0.8" fill="#b9893a" />
       </g>
 
-      {/* a couple of distant birds */}
-      <g stroke="#1a140a" strokeWidth="1" fill="none" opacity="0.6" strokeLinecap="round">
+      {/* a couple of distant birds, drifting slowly across the sky */}
+      <g className="title-birds" stroke="#1a140a" strokeWidth="1" fill="none" opacity="0.6" strokeLinecap="round">
         <path d="M170 92 Q174 88 178 92 Q182 88 186 92" />
         <path d="M420 78 Q424 74 428 78 Q432 74 436 78" />
         <path d="M460 100 Q463 97 466 100 Q469 97 472 100" />
