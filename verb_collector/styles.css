@@ -30,6 +30,20 @@
   --wax-bright:    #a72131;
   --wax-dark:      #4a0b14;
 
+  /* Tolkien storybook palette — forest, sky, gold leaf.
+     These augment (not replace) the vellum/ink/wax world above. */
+  --moss:          #5d6f3e;
+  --moss-deep:     #2a341e;
+  --moss-soft:     #8a9466;
+  --sky:           #6e7d8a;
+  --sky-deep:      #3a4a5a;
+  --sky-soft:      #a8b8c4;
+  --gold-leaf:     #c8932e;
+  --gold-leaf-soft: #f4d28a;
+  --blood:         #5a1018;       /* oxblood — darker alt to wax */
+  --rust:          #9a4a1c;       /* burnt umber */
+  --dawn:          #f0c080;       /* dawn / illuminated highlight */
+
   /* Outside the page — midnight scriptorium */
   --night:         #0e0a12;
   --night-mid:     #1a1320;
@@ -272,8 +286,8 @@ body::after {
 .combat {
   display: grid;
   grid-template-areas:
-    "enemies enemies"
-    "player  log"
+    "scene    scene"
+    "player   log"
     "sentence sentence"
     "permanent permanent"
     "hand hand"
@@ -282,13 +296,15 @@ body::after {
   position: relative;
 }
 
-.enemies        { grid-area: enemies; display: flex; gap: 16px; flex-wrap: wrap; }
+.scene-panel    { grid-area: scene; }
 .player         { grid-area: player; }
 .log            { grid-area: log; min-height: 100px; }
 .sentence-area  { grid-area: sentence; }
 .permanent-strip{ grid-area: permanent; }
 .hand           { grid-area: hand; }
 .footer         { grid-area: footer; }
+/* legacy enemies area kept hidden — scene-panel now hosts the enemy portraits */
+.enemies        { display: none; }
 
 /* ----------------------------------------------------------------
    Portraits — illuminated panels.
@@ -2050,3 +2066,495 @@ body::after {
   accent-color: var(--wax);
 }
 
+
+/* ============================================================
+   Tolkien storybook redesign — scene panel, hero figure, scene
+   enemy portraits, marginalia, card stripes, map previews, and
+   end-screen vignettes. Layered ON TOP of the existing vellum
+   manuscript palette, not a replacement.
+   ============================================================ */
+
+/* ---- Scene panel — illustrated tableau above combat ---- */
+.scene-panel {
+  position: relative;
+  min-height: 320px;
+  border: 1px solid var(--ink);
+  overflow: hidden;
+  background: linear-gradient(165deg, #cdb98a 0%, #b8a072 100%);
+  box-shadow:
+    0 4px 14px var(--shadow),
+    inset 0 0 0 1px var(--vellum-soft),
+    inset 0 0 0 5px var(--vellum-deep),
+    inset 0 0 0 6px var(--ink-soft),
+    inset 0 0 32px rgba(60, 40, 14, 0.45);
+}
+.scene-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+.scene-figures {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(150px, 230px) 1fr;
+  gap: 22px;
+  padding: 16px 22px;
+  align-items: end;
+  min-height: 320px;
+}
+/* gold border ornament on each corner of the scene panel */
+.scene-panel::before,
+.scene-panel::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+  z-index: 3;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26' fill='none' stroke='%23c8932e' stroke-width='1.4' stroke-linecap='round'><path d='M2 14 V8 c0 -3 3 -6 6 -6 H14'/><path d='M6 12 V10 c0 -2 1 -3 3 -3 H11'/><circle cx='8' cy='8' r='1.5' fill='%23c8932e'/></svg>");
+}
+.scene-panel::before { left: 6px; }
+.scene-panel::after  { right: 6px; transform: scaleX(-1); }
+
+/* ---- Hero figure (left side of scene panel) ---- */
+.scene-hero {
+  position: relative;
+  cursor: pointer;
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 8px;
+  transition: transform 200ms ease, filter 200ms ease;
+}
+.scene-hero:hover { transform: translateY(-3px); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
+.hero-svg {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45));
+}
+.hero-stamps {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.hero-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-family: var(--font-smallcap);
+  font-size: 0.7rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: bold;
+  border: 1px solid var(--ink);
+  box-shadow: 0 2px 3px var(--shadow), inset 0 1px 0 rgba(255,240,200,0.4);
+}
+.hero-stamp.hero-hp {
+  background: linear-gradient(180deg, var(--wax-bright) 0%, var(--wax-dark) 100%);
+  color: var(--vellum);
+}
+.hero-stamp.hero-en {
+  background: linear-gradient(180deg, var(--gold-leaf-soft) 0%, var(--gold-leaf) 100%);
+  color: var(--ink);
+}
+.hero-stamp.hero-bk {
+  background: linear-gradient(180deg, var(--sky-soft) 0%, var(--sky-deep) 100%);
+  color: var(--vellum);
+}
+.hero-hpbar {
+  position: relative;
+  width: 92%;
+  max-width: 180px;
+  height: 6px;
+  background: rgba(40, 20, 4, 0.55);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.45);
+}
+.hero-hpbar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(180deg, var(--wax-bright) 0%, var(--wax) 60%, var(--wax-dark) 100%);
+  transition: width 300ms ease;
+}
+
+/* ---- Scene enemies (right side of scene panel) ---- */
+.scene-enemies {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.scene-enemy {
+  position: relative;
+  width: 132px;
+  cursor: pointer;
+  text-align: center;
+  padding: 6px 6px 8px;
+  background:
+    radial-gradient(ellipse 80% 35% at 50% 100%, rgba(40, 20, 4, 0.35), transparent 70%);
+  transition: transform 180ms ease;
+}
+.scene-enemy:hover { transform: translateY(-3px); }
+.scene-enemy-art {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 6px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  padding: 8px;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 240, 200, 0.55), transparent 60%),
+    linear-gradient(165deg, var(--vellum) 0%, var(--vellum-deep) 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--vellum),
+    inset 0 0 0 2px var(--gold-leaf),
+    inset 0 0 0 3px var(--vellum-soft),
+    inset 0 0 18px rgba(40, 20, 4, 0.45),
+    0 4px 8px rgba(0, 0, 0, 0.4);
+}
+.scene-enemy-art .enemy-icon {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+.scene-enemy-art .reveal-glyph { position: absolute; top: -6px; right: -6px; }
+/* gold corner ornaments on the enemy portrait */
+.scene-enemy-art::before,
+.scene-enemy-art::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='%23c8932e'><path d='M0 0 L14 0 L14 3 L4 3 L4 5 L2 5 L2 14 L0 14 Z'/></svg>");
+}
+.scene-enemy-art::before { top: 2px; left: 2px; }
+.scene-enemy-art::after  { bottom: 2px; right: 2px; transform: rotate(180deg); }
+.scene-enemy-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--vellum);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.6);
+  margin: 4px 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scene-enemy-hp {
+  position: relative;
+  height: 9px;
+  background: rgba(20, 12, 4, 0.55);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 6px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.45);
+}
+.scene-enemy-hp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(180deg, var(--wax-bright) 0%, var(--wax) 60%, var(--wax-dark) 100%);
+  transition: width 300ms ease;
+}
+.scene-enemy-hp-text {
+  position: absolute;
+  inset: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  line-height: 9px;
+  color: var(--vellum);
+  letter-spacing: 1px;
+  mix-blend-mode: difference;
+}
+.scene-enemy-intent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-smallcap);
+  font-size: 0.65rem;
+  color: var(--vellum);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-top: 4px;
+  padding: 2px 8px;
+  background: rgba(20, 12, 4, 0.55);
+  border-radius: 9999px;
+  border: 1px solid rgba(184, 137, 58, 0.6);
+}
+.scene-enemy-intent svg { color: var(--gold-leaf-soft); }
+.scene-enemy.revealed .scene-enemy-art {
+  box-shadow:
+    inset 0 0 0 1px var(--vellum),
+    inset 0 0 0 2px var(--wax),
+    inset 0 0 0 3px var(--vellum-soft),
+    inset 0 0 18px rgba(120, 50, 30, 0.5),
+    0 0 14px rgba(167, 33, 49, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.4);
+}
+.scene-enemy .adj-tags {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+/* ---- Phase vignette behind the run-sentence drop cap ---- */
+.run-text { position: relative; }
+.run-text .drop-wrap {
+  position: relative;
+  float: left;
+  margin: 4px 12px 0 0;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.run-text .drop-wrap .phase-vignette {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 88px;
+  height: 88px;
+  transform: translate(-50%, -50%);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+}
+.run-text .drop-wrap .drop {
+  position: relative;
+  z-index: 1;
+  float: none;
+  margin: 0;
+  padding: 0 4px;
+}
+
+/* ---- Marginalia decorations on the .app container ---- */
+.margin-vine {
+  position: absolute;
+  top: 80px;
+  bottom: 80px;
+  width: 38px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.65;
+}
+.margin-vine-left  { left: 6px; }
+.margin-vine-right { right: 6px; transform: scaleX(-1); }
+.margin-bird {
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.7;
+}
+.margin-bird-tr { top: 60px; right: 56px; }
+.margin-bird-bl { bottom: 56px; left: 56px; transform: scaleX(-1); }
+.margin-flourish {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  pointer-events: none;
+  z-index: 0;
+}
+.margin-flourish-tl { top: 70px; left: 70px; }
+.margin-flourish-tr { top: 70px; right: 70px; transform: scaleX(-1); }
+.margin-flourish-bl { bottom: 70px; left: 70px; transform: scaleY(-1); }
+.margin-flourish-br { bottom: 70px; right: 70px; transform: scale(-1, -1); }
+
+/* ---- Cards: rarity stripe + verb glyph corner ---- */
+.card {
+  padding-top: 26px;             /* room for rarity stripe */
+  position: relative;
+  overflow: hidden;
+}
+.card-stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 16px;
+  z-index: 1;
+  border-bottom: 1px solid var(--ink-soft);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 12px,
+      rgba(0,0,0,0.06) 12px 13px
+    ),
+    linear-gradient(180deg, var(--moss-soft) 0%, var(--moss) 100%);
+}
+.card-stripe.rare-common {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 12px, rgba(0,0,0,0.06) 12px 13px),
+    linear-gradient(180deg, #e6c98a 0%, #c8a466 100%);
+}
+.card-stripe.rare-uncommon {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 12px, rgba(0,0,0,0.06) 12px 13px),
+    linear-gradient(180deg, var(--moss-soft) 0%, var(--moss-deep) 100%);
+}
+.card-stripe.rare-rare {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 12px, rgba(0,0,0,0.06) 12px 13px),
+    linear-gradient(180deg, var(--rust) 0%, var(--blood) 100%);
+}
+.card-stripe.rare-legendary {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 12px, rgba(0,0,0,0.06) 12px 13px),
+    linear-gradient(180deg, var(--gold-leaf-soft) 0%, var(--gold-leaf) 100%);
+}
+.card-glyph-corner {
+  position: absolute;
+  top: 18px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  z-index: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3));
+}
+.card .card-name {
+  padding-left: 30px;
+}
+/* card-cost stays in top-right but needs to sit above the stripe */
+.card .card-cost { top: 16px; z-index: 2; }
+
+/* ---- Map screen scene previews ---- */
+.scene-card {
+  padding-top: 14px;
+  overflow: hidden;
+}
+.scene-card .map-preview {
+  width: 100%;
+  max-width: 180px;
+  height: 80px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 240, 200, 0.4),
+    inset 0 0 10px rgba(40, 20, 4, 0.3),
+    0 2px 4px var(--shadow-soft);
+  background: var(--vellum-soft);
+  margin-bottom: 4px;
+}
+.scene-card {
+  transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1.08),
+              box-shadow 180ms ease,
+              border-color 180ms ease;
+}
+.scene-card:hover {
+  transform: translateY(-6px) rotate(-0.6deg);
+  border-color: var(--ink);
+}
+.scene-card.scene-combat_normal:hover { border-color: var(--moss-deep); }
+.scene-card.scene-combat_elite:hover  { border-color: var(--wax); }
+.scene-card.scene-combat_boss:hover   { border-color: var(--blood); }
+.scene-card.scene-shop:hover          { border-color: var(--gold-leaf); }
+.scene-card.scene-fire:hover          { border-color: var(--rust); }
+.scene-card.scene-shrine:hover        { border-color: var(--sky-deep); }
+.scene-card.scene-mirror:hover        { border-color: var(--sky); }
+/* hide the original scene-art block now that we have the map-preview */
+.scene-card .scene-art { display: none; }
+.scene-card-enemy {
+  margin-top: -36px;
+  margin-bottom: 4px;
+  z-index: 1;
+  color: var(--ink);
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
+}
+.scene-card-glyph {
+  margin-top: -28px;
+  margin-bottom: 4px;
+  z-index: 1;
+}
+.scene-card-glyph .scene-glyph {
+  display: inline-block;
+  background: var(--vellum-soft);
+  border: 1px solid var(--gold-leaf);
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  line-height: 36px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--wax);
+  box-shadow: 0 2px 4px var(--shadow-soft);
+}
+
+/* ---- End-screen vignettes ---- */
+.end-vignette {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  height: 200px;
+  margin: 0 auto 24px;
+  border: 1px solid var(--ink);
+  box-shadow:
+    0 6px 14px var(--shadow),
+    inset 0 0 0 1px var(--vellum-soft),
+    inset 0 0 0 3px var(--gold-leaf),
+    inset 0 0 0 4px var(--vellum-soft);
+}
+.end-vignette-loss { filter: grayscale(0.5) brightness(0.85); }
+
+/* ---- Mobile (≤720px) tweaks for the storybook layer ---- */
+@media (max-width: 720px) {
+  .combat {
+    grid-template-areas:
+      "scene"
+      "player"
+      "sentence"
+      "permanent"
+      "hand"
+      "footer"
+      "log";
+    grid-template-columns: 1fr;
+  }
+  .scene-panel { min-height: 240px; }
+  .scene-figures {
+    grid-template-columns: 110px 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    min-height: 240px;
+  }
+  .hero-svg { max-width: 110px; }
+  .hero-stamp { font-size: 0.6rem; padding: 2px 6px; letter-spacing: 1px; }
+  .scene-enemy { width: 88px; }
+  .scene-enemy-art { width: 80px; height: 80px; padding: 5px; }
+  .scene-enemy-name { font-size: 0.65rem; letter-spacing: 1px; }
+  .scene-enemy-intent { font-size: 0.55rem; padding: 1px 5px; letter-spacing: 1px; }
+  .scene-enemy-hp { height: 7px; }
+  .scene-enemy-hp-text { font-size: 0.55rem; line-height: 7px; }
+  .scene-panel::before, .scene-panel::after { width: 16px; height: 16px; }
+  .run-text .drop-wrap .phase-vignette { width: 60px; height: 60px; opacity: 0.45; }
+  .margin-vine, .margin-bird, .margin-flourish { display: none; }
+  .scene-card .map-preview { height: 56px; }
+  .card { padding-top: 22px; }
+  .card .card-name { padding-left: 24px; }
+  .card-glyph-corner { width: 16px; height: 16px; top: 16px; left: 6px; }
+  .card-stripe { height: 12px; }
+  .card .card-cost { top: 12px; }
+  .end-vignette { height: 130px; margin-bottom: 16px; }
+}

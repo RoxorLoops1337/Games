@@ -1,0 +1,747 @@
+import React from 'react';
+
+/**
+ * Tolkien-storybook scene artwork.
+ *
+ * All inline SVG. No external assets. The intent is Alan Lee watercolor over
+ * John Howe ink-line: a forest tableau behind the hero figure, soft golden
+ * light filtering through trunks, fog at the floor. This is presentation
+ * only — see CombatScreen for the click/tap wiring.
+ */
+
+// --------------------------------------------------------------------------
+// Background — distant forest, mist, golden light. Pure SVG so the layer
+// scales and stays crisp on retina. Sits behind everything in the scene
+// panel as a position:absolute layer.
+// --------------------------------------------------------------------------
+export function SceneBackdrop(): React.ReactElement {
+  return (
+    <svg
+      className="scene-backdrop"
+      viewBox="0 0 1000 320"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+    >
+      <defs>
+        {/* Sky / canopy wash — dusky blue fading down into warm forest */}
+        <linearGradient id="sky-wash" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor="#6e7d8a" stopOpacity="0.85" />
+          <stop offset="45%"  stopColor="#a89870" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#3d2a18" stopOpacity="0.75" />
+        </linearGradient>
+        {/* Golden god-ray pool */}
+        <radialGradient id="sun-shaft" cx="0.62" cy="0.18" r="0.55">
+          <stop offset="0%"   stopColor="#f4d28a" stopOpacity="0.85" />
+          <stop offset="55%"  stopColor="#d6a05a" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#d6a05a" stopOpacity="0" />
+        </radialGradient>
+        {/* Ground fog */}
+        <linearGradient id="ground-fog" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor="#dccaa0" stopOpacity="0" />
+          <stop offset="60%"  stopColor="#dccaa0" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#bfa676" stopOpacity="0.85" />
+        </linearGradient>
+        {/* Paper-grain noise overlay tying watercolor to vellum */}
+        <filter id="paper-grain" x="0" y="0">
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+          <feColorMatrix values="0 0 0 0 0.14
+                                  0 0 0 0 0.09
+                                  0 0 0 0 0.05
+                                  0 0 0 0.35 0" />
+        </filter>
+        {/* Wet-edge watercolor bleed */}
+        <filter id="wet-edge" x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur stdDeviation="1.4" />
+        </filter>
+        {/* darker ink wash at lower corners */}
+        <radialGradient id="corner-dark" cx="0.5" cy="1" r="0.7">
+          <stop offset="0%" stopColor="#1a140a" stopOpacity="0" />
+          <stop offset="100%" stopColor="#1a140a" stopOpacity="0.55" />
+        </radialGradient>
+      </defs>
+
+      {/* base sky wash */}
+      <rect x="0" y="0" width="1000" height="320" fill="url(#sky-wash)" />
+      {/* god-ray */}
+      <rect x="0" y="0" width="1000" height="320" fill="url(#sun-shaft)" />
+
+      {/* far hills — soft moss-green silhouette */}
+      <path
+        d="M0 200 Q120 150 220 175 T420 165 T620 180 T820 160 T1000 175 L1000 320 L0 320 Z"
+        fill="#5c6a4a"
+        opacity="0.55"
+        filter="url(#wet-edge)"
+      />
+      {/* near hills — deeper moss */}
+      <path
+        d="M0 235 Q140 200 260 220 T500 215 T740 225 T1000 218 L1000 320 L0 320 Z"
+        fill="#3f4a32"
+        opacity="0.7"
+      />
+
+      {/* distant tree silhouettes (groups) */}
+      <g opacity="0.55">
+        {[80, 165, 260, 360, 470, 580, 690, 800, 905].map((x, i) => (
+          <g key={i} transform={`translate(${x}, ${190 + (i % 3) * 6})`}>
+            <path
+              d="M0 0 L-3 -34 L-7 -42 L-3 -50 L0 -56 L3 -50 L7 -42 L3 -34 Z"
+              fill="#2a341e"
+            />
+          </g>
+        ))}
+      </g>
+
+      {/* nearer trunks — inky vertical strokes */}
+      <g stroke="#1a140a" strokeWidth="2.2" fill="none" opacity="0.78">
+        <path d="M70 320 L62 130 Q60 110 64 95" />
+        <path d="M70 320 Q66 220 58 180" strokeWidth="1.2" opacity="0.6" />
+        <path d="M920 320 L928 110 Q930 95 924 85" />
+        <path d="M920 320 Q924 200 932 170" strokeWidth="1.2" opacity="0.6" />
+        <path d="M180 320 L176 175 Q174 158 178 145" strokeWidth="1.4" opacity="0.55" />
+        <path d="M820 320 L824 188 Q826 168 822 155" strokeWidth="1.4" opacity="0.55" />
+      </g>
+
+      {/* canopy splotches — watercolor wash for foliage */}
+      <g filter="url(#wet-edge)" opacity="0.7">
+        <ellipse cx="65"  cy="80"  rx="58" ry="42" fill="#4a5a32" />
+        <ellipse cx="48"  cy="120" rx="50" ry="32" fill="#5d6f3e" opacity="0.7" />
+        <ellipse cx="930" cy="70"  rx="62" ry="44" fill="#4a5a32" />
+        <ellipse cx="950" cy="115" rx="48" ry="30" fill="#5d6f3e" opacity="0.7" />
+        <ellipse cx="180" cy="125" rx="38" ry="22" fill="#3f4a2a" opacity="0.6" />
+        <ellipse cx="820" cy="130" rx="38" ry="22" fill="#3f4a2a" opacity="0.6" />
+      </g>
+
+      {/* ground fog */}
+      <rect x="0" y="200" width="1000" height="120" fill="url(#ground-fog)" />
+
+      {/* paper grain on top */}
+      <rect x="0" y="0" width="1000" height="320" filter="url(#paper-grain)" opacity="0.4" />
+
+      {/* darker ink wash at lower corners */}
+      <rect x="0" y="0" width="1000" height="320" fill="url(#corner-dark)" />
+    </svg>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Hero — the cloaked traveller with quill and open book. Iconic line-drawn
+// silhouette, watercolor wash for the cloak, gold leaf for the book edge.
+// --------------------------------------------------------------------------
+interface HeroProps {
+  onClick?: () => void;
+  hp: number;
+  maxHp: number;
+  energy: number;
+  maxEnergy: number;
+  block: number;
+}
+
+export function HeroFigure({ onClick, hp, maxHp, energy, maxEnergy, block }: HeroProps): React.ReactElement {
+  const hpPct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+  return (
+    <div
+      className="scene-hero"
+      onClick={onClick}
+      title="add SELF to the sentence"
+      role="button"
+    >
+      <svg viewBox="0 0 160 220" aria-label="hero" className="hero-svg">
+        <defs>
+          <linearGradient id="cloak-wash" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%"   stopColor="#4a3a2a" />
+            <stop offset="55%"  stopColor="#2c2218" />
+            <stop offset="100%" stopColor="#1a140a" />
+          </linearGradient>
+          <linearGradient id="cloak-side" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%"   stopColor="#5e4a30" stopOpacity="0.7" />
+            <stop offset="60%"  stopColor="#2c2218" stopOpacity="0" />
+          </linearGradient>
+          <radialGradient id="hero-glow" cx="0.5" cy="0.85" r="0.6">
+            <stop offset="0%"   stopColor="#f4d28a" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#f4d28a" stopOpacity="0" />
+          </radialGradient>
+          <filter id="hero-bleed" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="0.7" />
+          </filter>
+        </defs>
+
+        {/* glow at feet — campfire / scene light catching the cloak */}
+        <ellipse cx="80" cy="200" rx="58" ry="14" fill="url(#hero-glow)" />
+
+        {/* cloak silhouette — watercolor blob first */}
+        <g filter="url(#hero-bleed)">
+          <path
+            d="M80 22
+               C 66 22 55 30 52 45
+               C 50 56 54 64 58 70
+               C 50 78 38 92 32 112
+               C 26 134 22 158 24 188
+               C 26 200 28 208 32 212
+               L 128 212
+               C 132 208 134 200 136 188
+               C 138 158 134 134 128 112
+               C 122 92 110 78 102 70
+               C 106 64 110 56 108 45
+               C 105 30 94 22 80 22 Z"
+            fill="url(#cloak-wash)"
+          />
+        </g>
+        {/* warm rim light on left side of cloak */}
+        <path
+          d="M80 22 C 66 22 55 30 52 45 C 50 56 54 64 58 70 C 50 78 38 92 32 112 C 26 134 22 158 24 188 L 50 188 C 50 158 56 134 60 112 C 64 92 70 76 76 68 C 72 60 74 50 78 42 Z"
+          fill="url(#cloak-side)"
+        />
+
+        {/* hood opening — face shadow */}
+        <ellipse cx="80" cy="48" rx="13" ry="16" fill="#0d0a06" />
+        {/* a faint hint of a face — just enough to read as someone */}
+        <circle cx="76" cy="50" r="0.9" fill="#d9bf86" opacity="0.7" />
+        <circle cx="84" cy="50" r="0.9" fill="#d9bf86" opacity="0.7" />
+
+        {/* ink outline over the wash — Howe-style */}
+        <path
+          d="M80 22
+             C 66 22 55 30 52 45
+             C 50 56 54 64 58 70
+             C 50 78 38 92 32 112
+             C 26 134 22 158 24 188
+             C 26 200 28 208 32 212
+             L 128 212
+             C 132 208 134 200 136 188
+             C 138 158 134 134 128 112
+             C 122 92 110 78 102 70
+             C 106 64 110 56 108 45
+             C 105 30 94 22 80 22 Z"
+          fill="none"
+          stroke="#0d0a06"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        {/* cloak fold creases */}
+        <path d="M62 100 Q 60 140 56 200" stroke="#0d0a06" strokeWidth="1" fill="none" opacity="0.55" />
+        <path d="M98 100 Q 100 140 104 200" stroke="#0d0a06" strokeWidth="1" fill="none" opacity="0.55" />
+        <path d="M80 80 Q 78 130 80 200" stroke="#0d0a06" strokeWidth="0.8" fill="none" opacity="0.35" />
+
+        {/* left arm — holding open book */}
+        <g>
+          {/* book — open vellum */}
+          <path
+            d="M30 130 Q34 122 44 122 L60 124 L60 148 L44 146 Q34 146 30 152 Z"
+            fill="#e9d9b0"
+            stroke="#0d0a06"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M60 124 L60 148 L76 146 Q82 146 84 142 L84 122 Q82 124 76 124 Z"
+            fill="#d6c294"
+            stroke="#0d0a06"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+          {/* gold page edge */}
+          <line x1="60" y1="124" x2="60" y2="148" stroke="#b9893a" strokeWidth="0.8" />
+          {/* tiny ink lines = text */}
+          <line x1="36" y1="130" x2="56" y2="131" stroke="#3a2a18" strokeWidth="0.5" opacity="0.7" />
+          <line x1="36" y1="134" x2="56" y2="135" stroke="#3a2a18" strokeWidth="0.5" opacity="0.7" />
+          <line x1="36" y1="138" x2="54" y2="139" stroke="#3a2a18" strokeWidth="0.5" opacity="0.7" />
+          <line x1="64" y1="129" x2="80" y2="130" stroke="#3a2a18" strokeWidth="0.5" opacity="0.7" />
+          <line x1="64" y1="133" x2="82" y2="134" stroke="#3a2a18" strokeWidth="0.5" opacity="0.7" />
+          <line x1="64" y1="137" x2="78" y2="138" stroke="#3a2a18" strokeWidth="0.5" opacity="0.7" />
+        </g>
+
+        {/* right arm — holding quill aloft */}
+        <g>
+          {/* hand emerging from cloak */}
+          <path d="M118 110 Q124 100 126 90" stroke="#0d0a06" strokeWidth="1.4" fill="none" />
+          {/* quill shaft */}
+          <path d="M126 90 L142 30" stroke="#0d0a06" strokeWidth="1.4" />
+          {/* feather */}
+          <path
+            d="M140 32
+               C 138 28 138 22 140 18
+               C 142 14 146 12 150 14
+               C 154 16 156 22 154 28
+               C 152 34 148 38 144 38
+               Q 142 36 140 32 Z"
+            fill="#e9d9b0"
+            stroke="#0d0a06"
+            strokeWidth="1"
+          />
+          {/* feather barbs */}
+          <line x1="141" y1="20" x2="148" y2="24" stroke="#0d0a06" strokeWidth="0.5" opacity="0.6" />
+          <line x1="140" y1="25" x2="148" y2="28" stroke="#0d0a06" strokeWidth="0.5" opacity="0.6" />
+          <line x1="140" y1="30" x2="146" y2="33" stroke="#0d0a06" strokeWidth="0.5" opacity="0.6" />
+          {/* drop of ink at nib */}
+          <circle cx="126" cy="90" r="1.6" fill="#1a140a" />
+        </g>
+
+        {/* tiny gold clasp at neck */}
+        <circle cx="80" cy="66" r="2.2" fill="#b9893a" stroke="#0d0a06" strokeWidth="0.6" />
+      </svg>
+
+      <div className="hero-stamps">
+        <span className="hero-stamp hero-hp" title="health">
+          <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+            <path d="M5.5 9.5 L1.5 5 Q0.5 3 2 1.8 Q3.6 0.7 5.5 3 Q7.4 0.7 9 1.8 Q10.5 3 9.5 5 Z"
+              fill="currentColor" stroke="#0d0a06" strokeWidth="0.6" />
+          </svg>
+          {hp}/{maxHp}
+        </span>
+        <span className="hero-stamp hero-en" title="energy">
+          <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+            <path d="M6 0 L1 6.5 L4.5 6.5 L3 11 L9 4 L5.5 4 Z" fill="currentColor" />
+          </svg>
+          {energy}/{maxEnergy}
+        </span>
+        {block > 0 && (
+          <span className="hero-stamp hero-bk" title="block">
+            <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+              <path d="M5.5 0.5 L10 2.5 L10 6 Q10 9 5.5 10.5 Q1 9 1 6 L1 2.5 Z"
+                fill="currentColor" stroke="#0d0a06" strokeWidth="0.6" />
+            </svg>
+            {block}
+          </span>
+        )}
+      </div>
+      {/* tiny health bar arc beneath hero */}
+      <div className="hero-hpbar" aria-hidden="true">
+        <div className="hero-hpbar-fill" style={{ width: `${hpPct * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Phase vignette — a small painted illustration sitting behind the drop cap
+// of the run-sentence header. Picks an icon per phase: sword for combat,
+// flame for fire, coin for shop, star for shrine, mirror for mirror, vine
+// for the map between scenes.
+// --------------------------------------------------------------------------
+export type VignetteKind =
+  | 'sword' | 'flame' | 'coin' | 'star' | 'mirror' | 'vine' | 'sunrise' | 'crow';
+
+export function PhaseVignette({ kind, size = 100 }: { kind: VignetteKind; size?: number }): React.ReactElement {
+  const glowId = `vg-glow-${kind}`;
+  return (
+    <svg className="phase-vignette" width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <radialGradient id={glowId} cx="0.5" cy="0.5" r="0.6">
+          <stop offset="0%" stopColor="#f4d28a" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#f4d28a" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="50" cy="50" r="42" fill={`url(#${glowId})`} />
+      {kind === 'sword' && (
+        <g stroke="#1a140a" strokeWidth="1.6" fill="#7a1a1f" strokeLinejoin="round">
+          <path d="M50 12 L54 60 L50 72 L46 60 Z" />
+          <path d="M38 60 L62 60" strokeWidth="2.4" />
+          <rect x="48" y="72" width="4" height="12" fill="#3a2a18" />
+          <circle cx="50" cy="88" r="3" fill="#b9893a" />
+        </g>
+      )}
+      {kind === 'flame' && (
+        <g stroke="#3a1208" strokeWidth="1.4" strokeLinejoin="round">
+          <path d="M50 16 Q42 30 38 46 Q34 64 50 84 Q66 64 62 46 Q58 30 50 16 Z" fill="#c64a18" />
+          <path d="M50 30 Q44 44 44 56 Q46 70 50 78 Q54 70 56 56 Q56 44 50 30 Z" fill="#f0a040" />
+          <path d="M50 46 Q47 56 48 66 Q50 72 50 72 Q52 66 50 56 Q49 50 50 46 Z" fill="#f4d28a" />
+        </g>
+      )}
+      {kind === 'coin' && (
+        <g stroke="#1a140a" strokeWidth="1.4">
+          <circle cx="50" cy="50" r="26" fill="#c8932e" />
+          <circle cx="50" cy="50" r="20" fill="none" stroke="#7a5a20" strokeWidth="1" />
+          <path d="M44 40 L44 60 M50 36 L50 64 M56 40 L56 60" stroke="#7a5a20" strokeWidth="1.4" />
+          <ellipse cx="44" cy="44" rx="4" ry="2" fill="#f4d28a" opacity="0.7" />
+        </g>
+      )}
+      {kind === 'star' && (
+        <g stroke="#1a140a" strokeWidth="1.2" strokeLinejoin="round">
+          <path d="M50 14 L56 40 L82 44 L62 60 L70 86 L50 70 L30 86 L38 60 L18 44 L44 40 Z"
+            fill="#d6a05a" />
+          <circle cx="50" cy="50" r="6" fill="#f4d28a" />
+        </g>
+      )}
+      {kind === 'mirror' && (
+        <g stroke="#1a140a" strokeWidth="1.4">
+          <ellipse cx="50" cy="48" rx="22" ry="30" fill="#6e7d8a" />
+          <ellipse cx="44" cy="42" rx="8" ry="14" fill="#a8b8c4" opacity="0.6" />
+          <path d="M28 78 Q40 80 50 78 Q60 80 72 78 L70 86 L30 86 Z" fill="#b9893a" />
+        </g>
+      )}
+      {kind === 'vine' && (
+        <g stroke="#2a3418" strokeWidth="1.6" fill="none">
+          <path d="M20 84 Q30 70 28 56 Q26 42 40 36 Q54 32 56 22" />
+          <path d="M40 36 Q48 38 50 46" />
+          <ellipse cx="38" cy="32" rx="6" ry="3" fill="#4a5a32" transform="rotate(-30 38 32)" />
+          <ellipse cx="32" cy="50" rx="6" ry="3" fill="#4a5a32" transform="rotate(40 32 50)" />
+          <ellipse cx="50" cy="48" rx="6" ry="3" fill="#4a5a32" transform="rotate(-20 50 48)" />
+          <ellipse cx="56" cy="20" rx="5" ry="2.5" fill="#4a5a32" transform="rotate(60 56 20)" />
+        </g>
+      )}
+      {kind === 'sunrise' && (
+        <g>
+          <circle cx="50" cy="58" r="22" fill="#f4d28a" />
+          <g stroke="#d6a05a" strokeWidth="2" strokeLinecap="round">
+            <line x1="50" y1="20" x2="50" y2="30" />
+            <line x1="24" y1="58" x2="34" y2="58" />
+            <line x1="66" y1="58" x2="76" y2="58" />
+            <line x1="30" y1="34" x2="38" y2="42" />
+            <line x1="70" y1="34" x2="62" y2="42" />
+          </g>
+          <path d="M14 78 Q30 70 50 72 Q70 70 86 78 L86 92 L14 92 Z" fill="#3f4a32" stroke="#1a140a" strokeWidth="1" />
+        </g>
+      )}
+      {kind === 'crow' && (
+        <g stroke="#0d0a06" strokeWidth="1.2" fill="#1a140a">
+          <path d="M30 50 Q44 36 60 40 Q72 44 76 56 Q72 60 60 56 Q48 56 30 50 Z" />
+          <path d="M76 56 L86 48 L82 60 Z" />
+          <circle cx="68" cy="50" r="1.4" fill="#f4d28a" />
+          <path d="M40 60 Q42 80 38 90" stroke="#0d0a06" strokeWidth="0.8" fill="none" />
+          <path d="M50 60 Q52 80 48 90" stroke="#0d0a06" strokeWidth="0.8" fill="none" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Card glyphs — small ink-and-wash icons at the top corner of each card.
+// One per verb id with a sensible default. Rendered at ~22px.
+// --------------------------------------------------------------------------
+export function CardGlyph({ word, size = 22 }: { word: string; size?: number }): React.ReactElement {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="card-glyph">
+      {glyphPath(word)}
+    </svg>
+  );
+}
+
+function glyphPath(word: string): React.ReactElement {
+  switch (word) {
+    case 'HIT':
+    case 'BREAK':
+    case 'PUSH':
+      // sword
+      return (
+        <g stroke="#1a140a" strokeWidth="1.2" strokeLinejoin="round" fill="#7a1a1f">
+          <path d="M12 2 L13.5 14 L12 17 L10.5 14 Z" />
+          <path d="M8 14 L16 14" strokeWidth="1.6" />
+          <rect x="11" y="17" width="2" height="4" fill="#3a2a18" />
+        </g>
+      );
+    case 'BURN':
+      // flame
+      return (
+        <g stroke="#3a1208" strokeWidth="1" strokeLinejoin="round">
+          <path d="M12 3 Q9 8 8 13 Q7 18 12 22 Q17 18 16 13 Q15 8 12 3 Z" fill="#c64a18" />
+          <path d="M12 8 Q10 13 11 17 Q12 20 12 20 Q13 17 13 13 Q13 10 12 8 Z" fill="#f0a040" />
+        </g>
+      );
+    case 'HEAL':
+      // drop / leaf
+      return (
+        <g stroke="#1a140a" strokeWidth="1" strokeLinejoin="round">
+          <path d="M12 3 Q7 11 7 15 Q7 20 12 21 Q17 20 17 15 Q17 11 12 3 Z" fill="#5d6f3e" />
+          <path d="M10 12 Q9 15 10 18" stroke="#e9d9b0" strokeWidth="1" fill="none" opacity="0.7" />
+        </g>
+      );
+    case 'FREEZE':
+      // snowflake
+      return (
+        <g stroke="#3a4a5a" strokeWidth="1.4" strokeLinecap="round" fill="none">
+          <line x1="12" y1="3" x2="12" y2="21" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="5.5" y1="5.5" x2="18.5" y2="18.5" />
+          <line x1="5.5" y1="18.5" x2="18.5" y2="5.5" />
+          <circle cx="12" cy="12" r="2" fill="#a8c4d8" />
+        </g>
+      );
+    case 'BLOCK':
+      // shield
+      return (
+        <g stroke="#1a140a" strokeWidth="1" strokeLinejoin="round">
+          <path d="M12 3 L20 6 L20 13 Q20 19 12 22 Q4 19 4 13 L4 6 Z" fill="#6e7d8a" />
+          <path d="M12 7 L12 18" stroke="#3a4a5a" strokeWidth="1" />
+          <path d="M7 10 L17 10" stroke="#3a4a5a" strokeWidth="0.8" />
+        </g>
+      );
+    case 'GRAB':
+      // hand
+      return (
+        <g stroke="#1a140a" strokeWidth="1" fill="#d6a05a" strokeLinejoin="round">
+          <path d="M8 12 L8 6 Q8 4 10 4 Q12 4 12 6 L12 11 L12 5 Q12 3 14 3 Q16 3 16 5 L16 12 Q18 13 18 17 Q18 21 13 21 Q8 21 6 18 L4 14 Q3 12 5 11 Q6 11 7 12 Z" />
+        </g>
+      );
+    case 'WALK':
+      // boot
+      return (
+        <g stroke="#1a140a" strokeWidth="1" fill="#3a2a18" strokeLinejoin="round">
+          <path d="M8 3 L12 3 L12 14 L18 14 Q20 14 20 16 L20 19 Q20 21 18 21 L6 21 Q4 21 4 19 L4 14 Q4 12 6 12 L8 12 Z" />
+        </g>
+      );
+    case 'LOOK':
+      // eye
+      return (
+        <g stroke="#1a140a" strokeWidth="1.2" fill="none">
+          <path d="M3 12 Q8 5 12 5 Q16 5 21 12 Q16 19 12 19 Q8 19 3 12 Z" fill="#e9d9b0" />
+          <circle cx="12" cy="12" r="3.5" fill="#3a4a5a" />
+          <circle cx="12" cy="12" r="1.4" fill="#0d0a06" />
+        </g>
+      );
+    case 'MAKE':
+      // star
+      return (
+        <g stroke="#1a140a" strokeWidth="1" strokeLinejoin="round" fill="#b9893a">
+          <path d="M12 3 L14 9 L20 9 L15 13 L17 19 L12 16 L7 19 L9 13 L4 9 L10 9 Z" />
+        </g>
+      );
+    case 'WAIT':
+      // hourglass
+      return (
+        <g stroke="#1a140a" strokeWidth="1" strokeLinejoin="round">
+          <path d="M6 3 L18 3 L18 6 Q18 9 14 12 Q18 15 18 18 L18 21 L6 21 L6 18 Q6 15 10 12 Q6 9 6 6 Z" fill="#e9d9b0" />
+          <path d="M12 12 L12 18 L14 21 L10 21 Z" fill="#b9893a" />
+        </g>
+      );
+    case 'THROW':
+      // arc + stone
+      return (
+        <g stroke="#1a140a" strokeWidth="1.2" fill="none">
+          <path d="M4 18 Q12 3 20 12" />
+          <circle cx="4" cy="18" r="2.4" fill="#5e4a30" />
+        </g>
+      );
+    default:
+      // generic quill
+      return (
+        <g stroke="#1a140a" strokeWidth="1" fill="#e9d9b0">
+          <path d="M4 20 L18 6 Q21 3 21 6 Q19 12 14 14 L8 18 Z" />
+          <line x1="4" y1="20" x2="9" y2="15" strokeWidth="1.2" />
+        </g>
+      );
+  }
+}
+
+// --------------------------------------------------------------------------
+// Marginalia — vines, birds, flourishes for the page margins. Placed in App
+// container; SVGs are absolute-positioned via CSS classes.
+// --------------------------------------------------------------------------
+export function MarginVine({ side = 'left' }: { side?: 'left' | 'right' } = {}): React.ReactElement {
+  return (
+    <svg
+      className={`margin-vine margin-vine-${side}`}
+      viewBox="0 0 60 600"
+      aria-hidden="true"
+      preserveAspectRatio="none"
+    >
+      <g stroke="#2a3418" strokeWidth="1.4" fill="none" opacity="0.55">
+        <path d="M30 0 Q20 60 30 120 Q40 180 30 240 Q20 300 30 360 Q40 420 30 480 Q20 540 30 600" />
+        <path d="M30 60 Q14 70 12 84" />
+        <path d="M30 180 Q46 192 48 206" />
+        <path d="M30 300 Q14 310 12 326" />
+        <path d="M30 420 Q46 432 48 446" />
+      </g>
+      <g fill="#3f4a2a" opacity="0.55">
+        <ellipse cx="12" cy="86" rx="8" ry="3.5" transform="rotate(-30 12 86)" />
+        <ellipse cx="48" cy="208" rx="8" ry="3.5" transform="rotate(40 48 208)" />
+        <ellipse cx="12" cy="328" rx="8" ry="3.5" transform="rotate(-30 12 328)" />
+        <ellipse cx="48" cy="448" rx="8" ry="3.5" transform="rotate(40 48 448)" />
+      </g>
+      <g fill="#7a1a1f" opacity="0.5">
+        <circle cx="30" cy="120" r="2.2" />
+        <circle cx="30" cy="360" r="2.2" />
+        <circle cx="30" cy="540" r="2.2" />
+      </g>
+    </svg>
+  );
+}
+
+export function MarginBird({ side = 'tr' }: { side?: 'tr' | 'bl' } = {}): React.ReactElement {
+  return (
+    <svg className={`margin-bird margin-bird-${side}`} viewBox="0 0 80 80" aria-hidden="true">
+      <g stroke="#1a140a" strokeWidth="1.2" fill="none" opacity="0.65">
+        {/* branch */}
+        <path d="M2 60 Q22 56 40 60 Q58 64 78 60" strokeWidth="1.4" />
+        <path d="M20 60 Q16 50 12 46" />
+        <path d="M52 60 Q56 52 62 46" />
+        {/* leaves */}
+        <ellipse cx="14" cy="46" rx="4" ry="2" fill="#3f4a2a" transform="rotate(-30 14 46)" />
+        <ellipse cx="62" cy="46" rx="4" ry="2" fill="#3f4a2a" transform="rotate(30 62 46)" />
+        {/* bird body */}
+        <path d="M34 40 Q38 30 50 32 Q58 34 58 42 Q56 48 48 48 Q40 48 34 40 Z" fill="#1a140a" />
+        <path d="M58 38 L66 36 L62 44 Z" fill="#1a140a" />
+        <circle cx="54" cy="38" r="1" fill="#f4d28a" />
+        {/* tail */}
+        <path d="M34 42 L26 46 L34 46 Z" fill="#1a140a" />
+      </g>
+    </svg>
+  );
+}
+
+export function MarginFlourish({ side }: { side: 'tl' | 'tr' | 'bl' | 'br' }): React.ReactElement {
+  return (
+    <svg className={`margin-flourish margin-flourish-${side}`} viewBox="0 0 80 80" aria-hidden="true">
+      <g stroke="#4a3c25" strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round">
+        <path d="M4 40 Q20 20 40 24 Q30 30 32 40 Q38 36 44 40" />
+        <path d="M40 24 Q44 14 54 12" />
+        <circle cx="40" cy="24" r="1.6" fill="#7a1a1f" />
+        <path d="M52 12 Q60 8 70 12" />
+      </g>
+    </svg>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Map scene previews — tiny inline watercolor tableaux for each scene kind
+// on the map screen. Forest path for combat, coin pouch for shop, fire for
+// campfire, etc.
+// --------------------------------------------------------------------------
+export function MapScenePreview({ kind }: { kind: string }): React.ReactElement {
+  switch (kind) {
+    case 'combat_normal':
+    case 'combat_elite':
+    case 'combat_boss':
+      return (
+        <svg viewBox="0 0 80 70" className="map-preview" aria-hidden="true">
+          {/* sky */}
+          <rect x="0" y="0" width="80" height="40" fill="#a89870" opacity="0.55" />
+          {/* path */}
+          <path d="M0 70 L30 38 L50 38 L80 70 Z" fill="#c7ad7c" />
+          <path d="M0 70 L30 38 L50 38 L80 70 Z" fill="none" stroke="#4a3c25" strokeWidth="0.6" />
+          {/* trees */}
+          <path d="M14 50 L10 30 L18 30 Z" fill="#3f4a32" />
+          <path d="M28 46 L24 22 L32 22 Z" fill="#2a341e" />
+          <path d="M62 50 L58 28 L66 28 Z" fill="#3f4a32" />
+          <path d="M50 46 L46 24 L54 24 Z" fill="#2a341e" />
+          {/* tiny silhouette afar */}
+          <path d="M40 38 L40 28 M38 32 L42 32" stroke="#1a140a" strokeWidth="1" />
+        </svg>
+      );
+    case 'shop':
+      return (
+        <svg viewBox="0 0 80 70" className="map-preview" aria-hidden="true">
+          <rect x="0" y="0" width="80" height="70" fill="#3d2a18" opacity="0.35" />
+          {/* coin pouch */}
+          <path d="M22 28 Q20 22 26 20 L54 20 Q60 22 58 28 L62 60 Q62 66 56 66 L24 66 Q18 66 18 60 Z"
+            fill="#7a5a30" stroke="#1a140a" strokeWidth="1" strokeLinejoin="round" />
+          {/* drawstring */}
+          <path d="M22 22 Q40 16 58 22" stroke="#1a140a" strokeWidth="1" fill="none" />
+          {/* coins */}
+          <circle cx="34" cy="44" r="6" fill="#c8932e" stroke="#7a5a20" strokeWidth="0.6" />
+          <circle cx="46" cy="48" r="6" fill="#c8932e" stroke="#7a5a20" strokeWidth="0.6" />
+          <circle cx="40" cy="38" r="5" fill="#f4d28a" stroke="#7a5a20" strokeWidth="0.6" />
+        </svg>
+      );
+    case 'fire':
+      return (
+        <svg viewBox="0 0 80 70" className="map-preview" aria-hidden="true">
+          <rect x="0" y="0" width="80" height="70" fill="#1a140a" opacity="0.5" />
+          <radialGradient id="fire-glow" cx="0.5" cy="0.6" r="0.5">
+            <stop offset="0%" stopColor="#f4d28a" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#f4d28a" stopOpacity="0" />
+          </radialGradient>
+          <ellipse cx="40" cy="50" rx="34" ry="20" fill="url(#fire-glow)" />
+          {/* logs */}
+          <rect x="20" y="50" width="40" height="5" fill="#3a2a18" stroke="#1a140a" strokeWidth="0.6" rx="2" />
+          <rect x="16" y="55" width="48" height="5" fill="#4a3a2a" stroke="#1a140a" strokeWidth="0.6" rx="2" />
+          {/* flame */}
+          <path d="M40 18 Q32 30 30 40 Q28 52 40 56 Q52 52 50 40 Q48 30 40 18 Z" fill="#c64a18" stroke="#3a1208" strokeWidth="0.6" />
+          <path d="M40 26 Q36 36 36 44 Q38 52 40 54 Q42 52 44 44 Q44 36 40 26 Z" fill="#f0a040" />
+        </svg>
+      );
+    case 'shrine':
+      return (
+        <svg viewBox="0 0 80 70" className="map-preview" aria-hidden="true">
+          <rect x="0" y="0" width="80" height="70" fill="#3a4a5a" opacity="0.35" />
+          {/* stone */}
+          <path d="M30 60 L24 30 L36 14 L48 14 L56 30 L52 60 Z" fill="#8a8478" stroke="#1a140a" strokeWidth="1" strokeLinejoin="round" />
+          {/* runes */}
+          <path d="M36 28 L44 28 M40 26 L40 36 M38 38 L42 38" stroke="#3a2a18" strokeWidth="1" />
+          {/* star */}
+          <path d="M40 8 L42 13 L47 13 L43 16 L45 21 L40 18 L35 21 L37 16 L33 13 L38 13 Z" fill="#f4d28a" stroke="#1a140a" strokeWidth="0.6" />
+        </svg>
+      );
+    case 'mirror':
+      return (
+        <svg viewBox="0 0 80 70" className="map-preview" aria-hidden="true">
+          <rect x="0" y="0" width="80" height="70" fill="#3a4a5a" opacity="0.45" />
+          <ellipse cx="40" cy="34" rx="22" ry="28" fill="#6e7d8a" stroke="#1a140a" strokeWidth="1" />
+          <ellipse cx="32" cy="26" rx="8" ry="14" fill="#c8d4dc" opacity="0.55" />
+          <path d="M16 60 Q40 64 64 60 L60 68 L20 68 Z" fill="#b9893a" stroke="#1a140a" strokeWidth="0.6" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 80 70" className="map-preview" aria-hidden="true">
+          <rect x="0" y="0" width="80" height="70" fill="#c7ad7c" />
+          <circle cx="40" cy="35" r="20" fill="#7a1a1f" opacity="0.6" />
+        </svg>
+      );
+  }
+}
+
+// --------------------------------------------------------------------------
+// End-screen vignettes
+// --------------------------------------------------------------------------
+export function EndVignette({ won }: { won: boolean }): React.ReactElement {
+  if (won) {
+    return (
+      <svg className="end-vignette end-vignette-win" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="dawn" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#f0c080" />
+            <stop offset="35%" stopColor="#d6a05a" />
+            <stop offset="65%" stopColor="#a89870" />
+            <stop offset="100%" stopColor="#3f4a32" />
+          </linearGradient>
+          <radialGradient id="sun" cx="0.5" cy="0.55" r="0.4">
+            <stop offset="0%" stopColor="#fff2c4" />
+            <stop offset="60%" stopColor="#f4d28a" stopOpacity="0.7" />
+            <stop offset="100%" stopColor="#f4d28a" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect x="0" y="0" width="600" height="240" fill="url(#dawn)" />
+        <ellipse cx="300" cy="160" rx="220" ry="100" fill="url(#sun)" />
+        <circle cx="300" cy="150" r="36" fill="#fff2c4" />
+        {/* distant hills */}
+        <path d="M0 180 Q120 150 240 165 T480 160 T600 168 L600 240 L0 240 Z" fill="#5c6a4a" opacity="0.7" />
+        <path d="M0 200 Q140 180 260 195 T500 195 T600 198 L600 240 L0 240 Z" fill="#3f4a32" />
+        {/* path forward */}
+        <path d="M260 240 L290 200 L310 200 L340 240 Z" fill="#c7ad7c" stroke="#4a3c25" strokeWidth="1" opacity="0.85" />
+        {/* trees */}
+        <path d="M70 200 L60 150 L80 150 Z" fill="#2a341e" opacity="0.85" />
+        <path d="M520 200 L510 150 L530 150 Z" fill="#2a341e" opacity="0.85" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="end-vignette end-vignette-loss" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="dusk" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#3a4a5a" />
+          <stop offset="50%" stopColor="#2a2218" />
+          <stop offset="100%" stopColor="#0e0a06" />
+        </linearGradient>
+        <radialGradient id="fade-edges" cx="0.5" cy="0.5" r="0.7">
+          <stop offset="50%" stopColor="#000" stopOpacity="0" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0.85" />
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width="600" height="240" fill="url(#dusk)" />
+      {/* dead trees as silhouettes */}
+      <g stroke="#1a140a" strokeWidth="1.6" fill="none" opacity="0.85">
+        <path d="M120 240 L116 100 M116 130 L100 110 M116 150 L132 130 M116 170 L96 160" />
+        <path d="M480 240 L484 110 M484 140 L498 120 M484 160 L468 144 M484 175 L500 165" />
+        <path d="M300 240 L298 60 M298 90 L280 70 M298 110 L320 90 M298 130 L278 116 M298 150 L322 134" />
+      </g>
+      {/* a crow on a branch */}
+      <g fill="#0a0604" opacity="0.85">
+        <path d="M380 90 Q392 80 408 84 Q418 88 418 96 Q416 102 408 100 Q396 100 380 90 Z" />
+        <path d="M418 92 L428 86 L424 100 Z" />
+      </g>
+      {/* dark corners */}
+      <rect x="0" y="0" width="600" height="240" fill="url(#fade-edges)" />
+    </svg>
+  );
+}
