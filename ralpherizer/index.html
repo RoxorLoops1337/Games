@@ -324,7 +324,8 @@
     <header>
       <h1 class="logo">Ralpherizer</h1>
       <p class="tagline">Type a sentence. We'll <b>"autocorrect"</b> 2 out of every 5 words into the
-      wrong words &mdash; turning your perfectly clear thought into glorious nonsense.</p>
+      wrong words &mdash; now in <b>English, French &amp; Dutch</b> &mdash; turning your perfectly
+      clear thought into glorious multilingual nonsense.</p>
     </header>
 
     <main class="card">
@@ -402,8 +403,40 @@
     month: "mouth", year: "yearn", today: "toad", weather: "weathervane"
   };
 
+  // French "autocorrect" swaps: real French words a keyboard might wrongly
+  // "fix" your English word into, picked to look/sound vaguely similar.
+  var MAP_FR = {
+    the: "thé", and: "âne", you: "joue", yes: "yeux", no: "nez",
+    here: "hier", there: "terre", where: "verre", what: "chat", when: "vent",
+    now: "nous", good: "goût", nice: "niche", cool: "coule", love: "louve",
+    like: "lac", time: "timbre", today: "toupie", morning: "morue",
+    night: "nuit", food: "fou", work: "orque", money: "momie",
+    friend: "fromage", happy: "nappe", okay: "oie", please: "pleine",
+    sorry: "souris", thanks: "tanche", people: "peuple", water: "vase",
+    house: "housse", dog: "dogue", cat: "château", car: "carafe",
+    hello: "hélas", really: "rillettes", with: "vigne", this: "tisse",
+    great: "grille", make: "macque", think: "tinte", because: "bécane",
+    important: "importun", beautiful: "betterave", project: "projecteur"
+  };
+
+  // Dutch "autocorrect" swaps in the same spirit.
+  var MAP_NL = {
+    the: "thee", and: "hand", you: "jou", yes: "jas", no: "neus",
+    water: "kater", good: "goud", nice: "nicht", cool: "koel", love: "lof",
+    like: "lijk", time: "teen", here: "haar", there: "deur", where: "weer",
+    what: "watten", when: "wang", now: "noot", today: "tafel",
+    morning: "mossel", night: "nicht", food: "voet", work: "wortel",
+    money: "maan", friend: "friet", happy: "hapje", okay: "okapi",
+    please: "plas", sorry: "saai", thanks: "tanks", people: "peper",
+    house: "haas", dog: "dak", cat: "kaas", beer: "beer", car: "kar",
+    hello: "hallo", really: "reiger", with: "wit", this: "vis",
+    great: "graat", make: "maak", think: "tank", because: "beker",
+    important: "importeur", beautiful: "boterham", project: "projectie"
+  };
+
   // Fallback funny words, grouped by first letter at runtime, so unknown
   // words still get swapped for something same-ish-sounding and wrong.
+  // Mixes English, French and Dutch nonsense for extra cross-language chaos.
   var BANK = (
     "aardvark anchovy avocado armadillo bagel bramble baboon bobsled clarinet " +
     "crumpet cactus cobra dingo dumpling doorknob durian eggplant eyeball elbow " +
@@ -413,7 +446,15 @@
     "octopus oatmeal ostrich pickle platypus pretzel quokka quiche quasar raccoon " +
     "rutabaga radish salamander snorkel sasquatch turnip toaster tarantula umbrella " +
     "ukulele urchin vulture velcro waffle walrus wombat xylophone yodel yam yeti " +
-    "zucchini zeppelin zamboni"
+    "zucchini zeppelin zamboni " +
+    // French
+    "baguette croissant fromage escargot parapluie chaussette grenouille tournevis " +
+    "ananas citrouille moustache nuage oignon pantoufle quenelle raclette saucisson " +
+    "tortue chapeau canard cochon mouette papillon fourchette vélomoteur " +
+    // Dutch
+    "stroopwafel fiets kabouter pannenkoek hagelslag eekhoorn paraplu koekje wortel " +
+    "snoep vogel sneeuwbui drop muts klomp molen gracht beschuit knuffel slurf mier " +
+    "vlinder pinguin tandwiel"
   ).split(" ");
 
   var bankByLetter = {};
@@ -434,7 +475,9 @@
   function pickReplacement(core) {
     var lower = core.toLowerCase();
     var options = [];
-    if (MAP[lower] && MAP[lower] !== lower) options.push(MAP[lower]);
+    [MAP, MAP_FR, MAP_NL].forEach(function (table) {
+      if (table[lower] && table[lower] !== lower) options.push(table[lower]);
+    });
     var bank = bankByLetter[lower[0]];
     if (bank) {
       // prefer a bank word that isn't identical to the source
