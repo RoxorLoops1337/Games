@@ -272,6 +272,18 @@
   body.dark .av-chip { color: #efe6ff; }
   .avatar { position: relative; display: inline-block; vertical-align: middle; }
   .avatar .layer { position: absolute; transform: translate(-50%,-50%); line-height: 1; filter: drop-shadow(0 1px 1px rgba(150,90,140,.25)); }
+  .avatar .layer.sel { outline: 2px dashed #ff7ec0; outline-offset: 3px; border-radius: 8px; }
+  #studioPreview { touch-action: none; cursor: grab; }
+  #studioPreview.dragging { cursor: grabbing; }
+  .editor-tools { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 0 0 10px; }
+  .edit-lbl { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); text-align: center; }
+  body.dark .edit-lbl { color: #cbb8ec; }
+  .edit-parts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .edit-chip { width: 38px; height: 38px; border-radius: 10px; border: 2px solid #ffe1f0; background: #fff; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .1s ease; }
+  .edit-chip:hover { transform: translateY(-1px); }
+  .edit-chip.active { border-color: #ff7ec0; box-shadow: 0 0 0 3px rgba(255,126,192,.25); background: #fff0f7; }
+  .edit-row { display: flex; align-items: center; gap: 8px; }
+  .edit-row input[type=range] { width: 150px; accent-color: #ff7ec0; }
   .ov-avatar { margin-bottom: 2px; }
   .ov-hi { font-weight: 700; color: #c44d96; font-size: 13.5px; margin-top: -2px; }
   .studio-preview { display: flex; justify-content: center; margin: 6px 0 10px; }
@@ -405,6 +417,16 @@
       <button class="shop-x" id="studioClose">✕</button>
     </div>
     <div class="studio-preview"><div id="studioPreview"></div></div>
+    <div class="editor-tools">
+      <div class="edit-lbl" id="editLabel">Tap a part, then drag it on the cutie ✨</div>
+      <div class="edit-parts" id="editParts"></div>
+      <div class="edit-row">
+        <button class="mini" id="editMinus">🔍−</button>
+        <input type="range" id="editSize" min="0.4" max="2" step="0.05" value="1" aria-label="resize part">
+        <button class="mini" id="editPlus">🔍+</button>
+        <button class="mini" id="editReset">↺</button>
+      </div>
+    </div>
     <input id="avName" class="av-name" maxlength="12" placeholder="name your cutie ♡" autocomplete="off">
     <div class="studio-actions">
       <button class="mini" id="avDrop">🫧 Drop my cutie: On</button>
@@ -1225,20 +1247,41 @@
   const saveAvatar = () => LS.set("cutieMergeAvatar", avatar);
   const updateAvBal = () => { const e = document.getElementById("avBal"); if (e) e.textContent = "💖 " + hearts; };
 
-  function renderAvatar(el, av, size) {
+  // default layer placement (l/t = % center, f = font size as fraction of box).
+  // The editor lets players nudge each part via avatar.adj[slot] = {x, y, s}.
+  const LAYOUT = {
+    base:   { l: 50, t: 50, f: 0.60 },
+    outfit: { l: 50, t: 99, f: 0.52 },
+    face:   { l: 50, t: 67, f: 0.40 },
+    hat:    { l: 50, t: 16, f: 0.34 },
+    item:   { l: 84, t: 76, f: 0.30 },
+  };
+  const LAYER_ORDER = ["base", "outfit", "face", "hat", "item"]; // back → front
+  const PREVIEW = 160;
+  if (!avatar.adj) avatar.adj = {};
+  let editSlot = "base";
+  const slotEmoji = (s) => (s === "base" ? (avatar.base || "🐱") : avatar[s]);
+  const visibleSlots = () => LAYER_ORDER.filter(s => s === "base" || !!avatar[s]);
+  function ensureAdj(slot) { if (!avatar.adj) avatar.adj = {}; if (!avatar.adj[slot]) avatar.adj[slot] = { x: 0, y: 0, s: 1 }; return avatar.adj[slot]; }
+
+  function renderAvatar(el, av, size, selSlot) {
     el.className = "avatar";
     el.style.width = size + "px"; el.style.height = size + "px";
     el.style.background = av.bg || "#ffe3f3"; el.style.borderRadius = "50%";
     el.style.boxShadow = "inset 0 -6px 14px rgba(180,120,170,.18), 0 6px 16px rgba(190,120,175,.22)";
+    const adj = av.adj || {};
     const L = [];
-    const lay = (emoji, leftPct, topPct, fs) => { if (emoji) L.push('<span class="layer" style="left:' + leftPct + '%;top:' + topPct + '%;font-size:' + ((size * fs) | 0) + 'px">' + emoji + '</span>'); };
-    lay(av.base || "🐱", 50, 50, 0.60);
-    lay(av.outfit, 50, 99, 0.52);
-    lay(av.face, 50, 67, 0.40);
-    lay(av.hat, 50, 16, 0.34);
-    lay(av.item, 84, 76, 0.30);
+    for (const slot of LAYER_ORDER) {
+      const emoji = slot === "base" ? (av.base || "🐱") : av[slot];
+      if (!emoji) continue;
+      const b = LAYOUT[slot], a = adj[slot] || {};
+      const left = b.l + (a.x || 0), top = b.t + (a.y || 0), fs = ((size * b.f * (a.s || 1)) | 0);
+      L.push('<span class="layer' + (slot === selSlot ? " sel" : "") + '" data-slot="' + slot +
+             '" style="left:' + left + '%;top:' + top + '%;font-size:' + fs + 'px">' + emoji + '</span>');
+    }
     el.innerHTML = L.join("");
   }
+  function renderEditorPreview() { renderAvatar(document.getElementById("studioPreview"), avatar, PREVIEW, editSlot); }
 
   function refreshAvatarViews() {
     renderAvatar(document.getElementById("avatarChipFace"), avatar, 30);
@@ -1277,13 +1320,67 @@
       sparkleSound(); toast("✨", "Unlocked " + v + "!");
     }
     avatar[slot] = v; saveAvatar();
-    buildStudio();
-    renderAvatar(document.getElementById("studioPreview"), avatar, 130);
+    buildStudio(); buildEditChips();
+    if (visibleSlots().indexOf(editSlot) < 0) editSlot = "base";
+    setEditSlot(editSlot);
     refreshAvatarViews(); updateAvBal(); updateHud();
   }
+  /* ----- layout editor (drag to move, slider to resize) ----- */
+  function buildEditChips() {
+    const host = document.getElementById("editParts"); host.innerHTML = "";
+    for (const s of visibleSlots()) {
+      const c = document.createElement("button");
+      c.className = "edit-chip" + (s === editSlot ? " active" : "");
+      c.dataset.slot = s; c.textContent = slotEmoji(s); c.title = "Edit this part";
+      c.addEventListener("click", () => setEditSlot(s));
+      host.appendChild(c);
+    }
+  }
+  function setEditSlot(slot) {
+    editSlot = slot;
+    const a = ensureAdj(slot);
+    const sl = document.getElementById("editSize"); if (sl) sl.value = a.s;
+    document.getElementById("editLabel").textContent = "Editing " + slotEmoji(slot) + " — drag it, slider resizes";
+    document.querySelectorAll("#editParts .edit-chip").forEach(c => c.classList.toggle("active", c.dataset.slot === slot));
+    renderEditorPreview();
+  }
+  function setupEditor() {
+    const prev = document.getElementById("studioPreview");
+    let dragging = false, dsx = 0, dsy = 0, dax = 0, day = 0;
+    const centers = () => { const adj = avatar.adj || {}; return visibleSlots().map(s => { const b = LAYOUT[s], a = adj[s] || {}; return { slot: s, l: b.l + (a.x || 0), t: b.t + (a.y || 0) }; }); };
+    prev.addEventListener("pointerdown", (e) => {
+      const rect = prev.getBoundingClientRect();
+      const px = (e.clientX - rect.left) / rect.width * 100, py = (e.clientY - rect.top) / rect.height * 100;
+      let best = null, bd = 1e9;
+      for (const c of centers()) { const d = Math.hypot(c.l - px, c.t - py); if (d < bd) { bd = d; best = c; } }
+      if (best && bd < 45) setEditSlot(best.slot);
+      const a = ensureAdj(editSlot); dax = a.x; day = a.y; dsx = e.clientX; dsy = e.clientY;
+      dragging = true; prev.classList.add("dragging");
+      try { prev.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    prev.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const rect = prev.getBoundingClientRect(), a = ensureAdj(editSlot);
+      a.x = Math.max(-70, Math.min(70, dax + (e.clientX - dsx) / rect.width * 100));
+      a.y = Math.max(-70, Math.min(85, day + (e.clientY - dsy) / rect.height * 100));
+      renderEditorPreview();
+    });
+    const end = () => { if (dragging) { dragging = false; prev.classList.remove("dragging"); saveAvatar(); refreshAvatarViews(); } };
+    prev.addEventListener("pointerup", end);
+    prev.addEventListener("pointercancel", end);
+    const sizeEl = document.getElementById("editSize");
+    sizeEl.addEventListener("input", () => { ensureAdj(editSlot).s = parseFloat(sizeEl.value); renderEditorPreview(); });
+    sizeEl.addEventListener("change", () => { saveAvatar(); refreshAvatarViews(); });
+    const bump = (d) => { const a = ensureAdj(editSlot); a.s = Math.max(0.4, Math.min(2, +(a.s + d).toFixed(2))); sizeEl.value = a.s; renderEditorPreview(); saveAvatar(); refreshAvatarViews(); };
+    document.getElementById("editMinus").addEventListener("click", () => bump(-0.1));
+    document.getElementById("editPlus").addEventListener("click", () => bump(0.1));
+    document.getElementById("editReset").addEventListener("click", () => { ensureAdj(editSlot); avatar.adj[editSlot] = { x: 0, y: 0, s: 1 }; sizeEl.value = 1; renderEditorPreview(); saveAvatar(); refreshAvatarViews(); });
+  }
   function openStudio() {
-    buildStudio();
-    renderAvatar(document.getElementById("studioPreview"), avatar, 130);
+    buildStudio(); buildEditChips();
+    if (visibleSlots().indexOf(editSlot) < 0) editSlot = "base";
+    setEditSlot(editSlot);
     document.getElementById("avName").value = avatar.name || "";
     updateAvBal(); updateDropBtn();
     paused = true;
@@ -1317,8 +1414,9 @@
       const vals = (cat.none && Math.random() < 0.25) ? [""] : (pool.length ? pool : cat.opts.filter(isOwned).concat([""]));
       avatar[cat.slot] = vals[(Math.random() * vals.length) | 0];
     }
-    saveAvatar(); buildStudio();
-    renderAvatar(document.getElementById("studioPreview"), avatar, 130);
+    saveAvatar(); buildStudio(); buildEditChips();
+    if (visibleSlots().indexOf(editSlot) < 0) editSlot = "base";
+    setEditSlot(editSlot);
     refreshAvatarViews(); updateHud(); sparkleSound();
   });
   document.getElementById("avDrop").addEventListener("click", function () {
@@ -1388,7 +1486,7 @@
   /* ---------- boot ---------- */
   applyTheme(themeId);
   renderCollection(); renderMissions();
-  buildStudio(); refreshAvatarViews(); updateDropBtn();
+  buildStudio(); buildEditChips(); setupEditor(); refreshAvatarViews(); updateDropBtn();
   updateHud(); refreshPowerBar(); updateZenBtn();
   document.getElementById("muteBtn").textContent = muted ? "🔇 SFX" : "🔊 SFX";
   document.getElementById("muteBtn").classList.toggle("off", muted);
