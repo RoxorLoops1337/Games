@@ -125,14 +125,21 @@
     const S = TD.sprites;
     for (const t of Object.values(G.towers)) {
       const x = px(t.x), y = px(t.y), d = t.def;
-      const sprite = S ? S.towerImg(t.id, t.tier) : null;
-      if (sprite) {
-        // Painted sprite: optional rotation for turrets, drawn to fill the tile.
-        const sz = T * 1.18;
+      const cell = S ? S.towerCell(t.id, t.tier) : null;
+      if (cell) {
+        // Front-view painted tower drawn to fill the tile. We never rotate the
+        // whole sprite (it would tip the tower over); instead attacking turrets
+        // flip horizontally to face whichever side the target is on, so they
+        // visibly "turn" as enemies pass by.
+        const sz = T * 1.2;
         ctx.save(); ctx.translate(x, y);
-        if (d.attacks && S.towerRotates(t.id)) ctx.rotate(t.angle + Math.PI / 2);
+        if (d.attacks && S.towerFlips(t.id) && Math.cos(t.angle) < 0) ctx.scale(-1, 1);
         if (t.buffed) { ctx.shadowColor = '#fde047'; ctx.shadowBlur = 10; }
-        ctx.drawImage(sprite, -sz / 2, -sz / 2 - T * 0.08, sz, sz);
+        // Aspect-correct: keep the cell's proportions, anchored to the tile.
+        const ar = cell.sw / cell.sh;
+        const dw = ar >= 1 ? sz : sz * ar;
+        const dh = ar >= 1 ? sz / ar : sz;
+        ctx.drawImage(cell.img, cell.sx, cell.sy, cell.sw, cell.sh, -dw / 2, -dh / 2 - T * 0.08, dw, dh);
         ctx.restore();
       } else {
         // Vector fallback (wall/pylon/mint and any unmapped tower).
