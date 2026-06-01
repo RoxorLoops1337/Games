@@ -122,20 +122,31 @@
   }
 
   function drawTowers(G) {
+    const S = TD.sprites;
     for (const t of Object.values(G.towers)) {
       const x = px(t.x), y = px(t.y), d = t.def;
-      // base
-      ctx.fillStyle = shade(d.color, -0.45);
-      roundRect(t.x * T + 4, t.y * T + 4, T - 8, T - 8, 7); ctx.fill();
-      ctx.fillStyle = d.color;
-      roundRect(t.x * T + 6, t.y * T + 6, T - 12, T - 12, 5); ctx.fill();
-      if (t.buffed) { ctx.strokeStyle = '#fde047'; ctx.lineWidth = 2; roundRect(t.x * T + 4, t.y * T + 4, T - 8, T - 8, 7); ctx.stroke(); }
-      // glyph (rotate attackers toward target)
-      ctx.save(); ctx.translate(x, y);
-      if (d.attacks && d.projSpeed !== undefined) ctx.rotate(t.angle + Math.PI / 2);
-      ctx.fillStyle = '#0a0a0a'; ctx.font = `${T * 0.46}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(d.glyph, 0, 0);
-      ctx.restore();
+      const sprite = S ? S.towerImg(t.id, t.tier) : null;
+      if (sprite) {
+        // Painted sprite: optional rotation for turrets, drawn to fill the tile.
+        const sz = T * 1.18;
+        ctx.save(); ctx.translate(x, y);
+        if (d.attacks && S.towerRotates(t.id)) ctx.rotate(t.angle + Math.PI / 2);
+        if (t.buffed) { ctx.shadowColor = '#fde047'; ctx.shadowBlur = 10; }
+        ctx.drawImage(sprite, -sz / 2, -sz / 2 - T * 0.08, sz, sz);
+        ctx.restore();
+      } else {
+        // Vector fallback (wall/pylon/mint and any unmapped tower).
+        ctx.fillStyle = shade(d.color, -0.45);
+        roundRect(t.x * T + 4, t.y * T + 4, T - 8, T - 8, 7); ctx.fill();
+        ctx.fillStyle = d.color;
+        roundRect(t.x * T + 6, t.y * T + 6, T - 12, T - 12, 5); ctx.fill();
+        if (t.buffed) { ctx.strokeStyle = '#fde047'; ctx.lineWidth = 2; roundRect(t.x * T + 4, t.y * T + 4, T - 8, T - 8, 7); ctx.stroke(); }
+        ctx.save(); ctx.translate(x, y);
+        if (d.attacks && d.projSpeed !== undefined) ctx.rotate(t.angle + Math.PI / 2);
+        ctx.fillStyle = '#0a0a0a'; ctx.font = `${T * 0.46}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(d.glyph, 0, 0);
+        ctx.restore();
+      }
       // tier pips
       for (let p = 0; p < t.tier; p++) { ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(t.x * T + 9 + p * 7, t.y * T + T - 7, 2.4, 0, Math.PI * 2); ctx.fill(); }
       // pylon aura
@@ -158,16 +169,29 @@
       // spawn pop-in
       const sc = e.spawnT < 0.25 ? e.spawnT / 0.25 : 1;
       const rr = r * sc;
-      // body
-      ctx.save();
-      if (e.isBoss) { ctx.shadowColor = e.color; ctx.shadowBlur = 16; }
-      ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.color;
-      ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-      // glyph
-      ctx.fillStyle = e.flying ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.6)';
-      ctx.font = `${rr * 1.3}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(e.glyph, x, y);
+      const eimg = TD.sprites ? TD.sprites.enemyImg(e.def) : null;
+      if (eimg) {
+        // Painted enemy sprite, scaled to ~2.6× the logical radius. White flash
+        // on hit + ground shadow / glow are kept for game feel.
+        const sz = rr * 2.7;
+        if (e.flying) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(x, y + rr + 5, rr * 0.8, rr * 0.32, 0, 0, Math.PI * 2); ctx.fill(); }
+        ctx.save();
+        if (e.isBoss) { ctx.shadowColor = e.color; ctx.shadowBlur = 18; }
+        ctx.drawImage(eimg, x - sz / 2, y - sz / 2, sz, sz);
+        if (e.hitFlash > 0) { ctx.globalAlpha = 0.55; ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(eimg, x - sz / 2, y - sz / 2, sz, sz); }
+        ctx.restore();
+      } else {
+        // body
+        ctx.save();
+        if (e.isBoss) { ctx.shadowColor = e.color; ctx.shadowBlur = 16; }
+        ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.color;
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        // glyph
+        ctx.fillStyle = e.flying ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.6)';
+        ctx.font = `${rr * 1.3}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(e.glyph, x, y);
+      }
       // status rings
       if (e.slowT > 0) { ctx.strokeStyle = '#67e8f9'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, rr + 2, 0, Math.PI * 2); ctx.stroke(); }
       if (e.burn) { ctx.fillStyle = 'rgba(249,115,22,0.6)'; ctx.beginPath(); ctx.arc(x + rr * 0.6, y - rr * 0.6, 2.5, 0, Math.PI * 2); ctx.fill(); }
@@ -186,9 +210,17 @@
 
   function drawProjectiles(G) {
     for (const p of G.projectiles) {
+      const pimg = (TD.sprites && p.def) ? TD.sprites.projectileImg(p.def.id) : null;
       ctx.save(); ctx.translate(px(p.x), px(p.y));
-      if (p.splash > 0) { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill(); }
-      else { ctx.rotate(p.angle || 0); ctx.fillStyle = p.color; ctx.fillRect(-5, -1.6, 10, 3.2); ctx.fillStyle = '#fff'; ctx.fillRect(2, -1, 4, 2); }
+      if (pimg) {
+        const sz = (p.splash > 0 ? 26 : 22);
+        ctx.rotate((p.angle || 0) + Math.PI / 2);
+        ctx.drawImage(pimg, -sz / 2, -sz / 2, sz, sz);
+      } else if (p.splash > 0) {
+        ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.rotate(p.angle || 0); ctx.fillStyle = p.color; ctx.fillRect(-5, -1.6, 10, 3.2); ctx.fillStyle = '#fff'; ctx.fillRect(2, -1, 4, 2);
+      }
       ctx.restore();
     }
   }
