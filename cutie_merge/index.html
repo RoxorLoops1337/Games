@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Cutie Merge 🌸 Fluffle Friends</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1230,8 +1233,8 @@
     const L = [];
     const lay = (emoji, leftPct, topPct, fs) => { if (emoji) L.push('<span class="layer" style="left:' + leftPct + '%;top:' + topPct + '%;font-size:' + ((size * fs) | 0) + 'px">' + emoji + '</span>'); };
     lay(av.base || "🐱", 50, 50, 0.60);
-    lay(av.outfit, 50, 96, 0.52);
-    lay(av.face, 50, 62, 0.40);
+    lay(av.outfit, 50, 99, 0.52);
+    lay(av.face, 50, 67, 0.40);
     lay(av.hat, 50, 16, 0.34);
     lay(av.item, 84, 76, 0.30);
     el.innerHTML = L.join("");
