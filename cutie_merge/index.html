@@ -1230,8 +1230,8 @@
     const L = [];
     const lay = (emoji, leftPct, topPct, fs) => { if (emoji) L.push('<span class="layer" style="left:' + leftPct + '%;top:' + topPct + '%;font-size:' + ((size * fs) | 0) + 'px">' + emoji + '</span>'); };
     lay(av.base || "🐱", 50, 50, 0.60);
-    lay(av.outfit, 50, 89, 0.52);
-    lay(av.face, 50, 56, 0.40);
+    lay(av.outfit, 50, 96, 0.52);
+    lay(av.face, 50, 62, 0.40);
     lay(av.hat, 50, 16, 0.34);
     lay(av.item, 84, 76, 0.30);
     el.innerHTML = L.join("");
