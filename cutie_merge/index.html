@@ -814,36 +814,65 @@
   }
 
   /* ---------- rendering ---------- */
+  // Pre-render each cutie tier once to an offscreen canvas, then just blit it.
+  // Rebuilding a radial gradient + setting the emoji font for every ball every
+  // frame was the main cause of slowdown once the board filled up.
+  const sprites = {};
+  function buildSprite(tier) {
+    const isWild = tier === WILD;
+    const baseR = isWild ? WILD_R : TIERS[tier].r;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const pad = 4, half = baseR + pad, D = Math.ceil(half * 2 * dpr);
+    const cv = document.createElement("canvas"); cv.width = D; cv.height = D;
+    const c = cv.getContext("2d"); c.scale(dpr, dpr);
+    const cx = half, cy = half, r = baseR;
+    const g = c.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.2, cx, cy, r);
+    if (isWild) { g.addColorStop(0, "#ffffff"); g.addColorStop(0.4, "#ffd1e8"); g.addColorStop(0.7, "#c8a2e8"); g.addColorStop(1, "#8ee6df"); }
+    else { g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, TIERS[tier].c1); g.addColorStop(1, TIERS[tier].c2); }
+    c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fillStyle = g; c.fill();
+    c.lineWidth = 2.5; c.strokeStyle = "rgba(255,255,255,0.85)"; c.stroke();
+    c.beginPath(); c.ellipse(cx - r * 0.32, cy - r * 0.42, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2); c.fillStyle = "rgba(255,255,255,0.55)"; c.fill();
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.font = (r * 1.15) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+    c.fillText(isWild ? "🌈" : TIERS[tier].emoji, cx, cy + r * 0.06);
+    cv._half = half; cv._baseR = baseR;
+    return cv;
+  }
+  function getSprite(tier) { const k = tier === WILD ? "wild" : tier; return sprites[k] || (sprites[k] = buildSprite(tier)); }
+
   function drawBall(b, ghost) {
     const isWild = b.tier === WILD;
-    const t = isWild ? null : TIERS[b.tier];
     const squish = b.pop > 0 ? 1 + Math.sin(b.pop * Math.PI) * 0.16 : 1;
     const breathe = 1 + Math.sin(frame * 0.06 + (b.id || 0)) * 0.02;
     const petBoost = b.pet > 0 ? 1 + Math.sin(b.pet * Math.PI) * 0.12 : 1;
     const r = b.r * squish * breathe * petBoost;
     const wobble = b.pet > 0 ? Math.sin(b.pet * Math.PI * 3) * 0.22 * b.petDir : 0;
+    const asMe = !isWild && b.tier === 0 && avatar.asDrop;
     ctx.save();
     ctx.globalAlpha = ghost ? 0.55 : 1;
     if (!ghost) {
       ctx.beginPath(); ctx.ellipse(b.x, b.y + r * 0.72, r * 0.82, r * 0.32, 0, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(150,90,140,0.12)"; ctx.fill();
     }
-    const g = ctx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.35, r * 0.2, b.x, b.y, r);
-    if (isWild) { g.addColorStop(0, "#ffffff"); g.addColorStop(0.4, "#ffd1e8"); g.addColorStop(0.7, "#c8a2e8"); g.addColorStop(1, "#8ee6df"); }
-    else { g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, t.c1); g.addColorStop(1, t.c2); }
-    ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(b.x - r * 0.32, b.y - r * 0.42, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fill();
-    // emoji (rotates a touch when petted). Tier-0 can wear the player's chosen cutie.
-    const asMe = !isWild && b.tier === 0 && avatar.asDrop;
-    const glyph = isWild ? "🌈" : asMe ? (avatar.base || "🐱") : t.emoji;
-    ctx.save();
-    ctx.translate(b.x, b.y + r * 0.06); ctx.rotate(wobble);
-    ctx.font = (r * 1.15) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
-    ctx.fillText(glyph, 0, 0);
-    if (asMe && avatar.hat) { ctx.font = (r * 0.66) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"; ctx.fillText(avatar.hat, 0, -r * 0.66); }
-    ctx.restore();
+    if (asMe) {
+      // tier-0 wears the player's chosen cutie (depends on the avatar, so drawn live)
+      const t0 = TIERS[0];
+      const g = ctx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.35, r * 0.2, b.x, b.y, r);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, t0.c1); g.addColorStop(1, t0.c2);
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
+      ctx.save(); ctx.translate(b.x, b.y + r * 0.06); ctx.rotate(wobble);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = (r * 1.15) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+      ctx.fillText(avatar.base || "🐱", 0, 0);
+      if (avatar.hat) { ctx.font = (r * 0.66) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"; ctx.fillText(avatar.hat, 0, -r * 0.66); }
+      ctx.restore();
+    } else {
+      const sp = getSprite(b.tier), dh = sp._half * (r / sp._baseR);
+      ctx.save(); ctx.translate(b.x, b.y); if (wobble) ctx.rotate(wobble);
+      ctx.drawImage(sp, -dh, -dh, dh * 2, dh * 2);
+      ctx.restore();
+    }
     ctx.restore();
   }
 
