@@ -272,6 +272,10 @@
   body.dark .av-chip { color: #efe6ff; }
   .avatar { position: relative; display: inline-block; vertical-align: middle; }
   .avatar .layer { position: absolute; transform: translate(-50%,-50%); line-height: 1; filter: drop-shadow(0 1px 1px rgba(150,90,140,.25)); }
+  /* keep the little header badge tidy so a big dressed cutie can't spill onto the text */
+  #avatarChipFace { overflow: hidden; flex: 0 0 auto; }
+  /* give the start/game-over greeter room so an overflowing outfit clears the text */
+  #ovAvatar { margin: 2px 0 20px; }
   .avatar .layer.sel { outline: 2px dashed #ff7ec0; outline-offset: 3px; border-radius: 8px; }
   #studioPreview { touch-action: none; cursor: grab; }
   #studioPreview.dragging { cursor: grabbing; }
@@ -593,7 +597,7 @@
   const PASTELS = ["#ff8fc7","#b58cff","#8ee6df","#ffe89a","#ff5fa8","#c8a2e8","#a0e7e5","#ffd36e"];
   const SAYINGS = ["uwu","♡","hi!","boop?","merge me!","so cozy~","nya~","yip!","squee","✨","pet me!","hehe","☆"];
   const pick = (a) => a[(Math.random() * a.length) | 0];
-  const MAX_PARTICLES = 280;
+  const MAX_PARTICLES = 220;
 
   function burst(x, y, color, n, emoji) {
     for (let i = 0; i < n; i++) {
@@ -739,7 +743,7 @@
     ring(mx, my, TIERS[nt].c2, 26 + nt * 8);
     sticker(mx, my - 14, pick(FACES), 22 + nt);
     pulseScore();
-    if (combo >= 3) { confetti(mx, my, Math.min(8 + combo * 2, 22)); shake = Math.max(shake, 4); }
+    if (combo >= 3) { confetti(mx, my, Math.min(6 + combo, 16)); shake = Math.max(shake, 4); }
     if (combo >= 4) mascotCheer("x" + combo + "! 💖");
 
     const nb = makeBall(mx, my, nt, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2 - 1.5);
@@ -840,6 +844,22 @@
   }
   function getSprite(tier) { const k = tier === WILD ? "wild" : tier; return sprites[k] || (sprites[k] = buildSprite(tier)); }
 
+  // Cache each particle emoji as a small bitmap so we don't set the canvas font
+  // (and re-rasterize the glyph) for every particle every frame — this is what
+  // made heavy combo showers stutter.
+  const glyphs = {};
+  function getGlyph(emoji) {
+    let g = glyphs[emoji];
+    if (g) return g;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5), S = 40;
+    const cv = document.createElement("canvas"); cv.width = cv.height = Math.ceil(S * dpr);
+    const c = cv.getContext("2d"); c.scale(dpr, dpr);
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.font = (S * 0.86) + "px 'Segoe UI Emoji', 'Noto Color Emoji', serif";
+    c.fillText(emoji, S / 2, S / 2);
+    cv._S = S; glyphs[emoji] = cv; return cv;
+  }
+
   function drawBall(b, ghost) {
     const isWild = b.tier === WILD;
     const squish = b.pop > 0 ? 1 + Math.sin(b.pop * Math.PI) * 0.16 : 1;
@@ -939,7 +959,7 @@
 
     for (const p of particles) {
       ctx.save(); ctx.globalAlpha = Math.max(0, p.life) * (p.ambient ? 0.6 : 1);
-      if (p.emoji) { ctx.font = ((p.size * 2.4) | 0) + "px serif"; ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillText(p.emoji, 0, 0); }
+      if (p.emoji) { const gl = getGlyph(p.emoji), d = p.size * 2.6; ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.drawImage(gl, -d / 2, -d / 2, d, d); }
       else if (p.confetti) { ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color; const s = p.size; ctx.fillRect(-s / 2, -s / 3, s, s * 0.66); }
       else { ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); }
       ctx.restore();
