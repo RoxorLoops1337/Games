@@ -13,27 +13,18 @@
   const TD = (window.TD = window.TD || {});
   const BASE = 'assets/sprites/';
 
-  // Tower families: [tier1, tier2, tier3] sprite files (Ice has only 2 → repeat).
-  const FAM = {
-    archer: ['towers/towers_01.png', 'towers/towers_02.png', 'towers/towers_03.png'],
-    cannon: ['towers/towers_04.png', 'towers/towers_05.png', 'towers/towers_06.png'],
-    magic:  ['towers/towers_07.png', 'towers/towers_08.png', 'towers/towers_09.png'],
-    fire:   ['towers/towers_10.png', 'towers/towers_11.png', 'towers/towers_12.png'],
-    poison: ['towers/towers_13.png', 'towers/towers_14.png', 'towers/towers_15.png'],
-    ice:    ['towers/towers_16.png', 'towers/towers_17.png', 'towers/towers_17.png'],
-  };
-  // Mazekeep tower id → family (towers without a clean match stay on vector art).
-  const TOWER_FAMILY = {
-    arrow: 'archer', sniper: 'archer',
-    cannon: 'cannon',
-    frost: 'ice',
-    tesla: 'magic',
-    venom: 'poison',
-    flame: 'fire',
-    // wall, pylon, mint → no sprite (rendered as styled blocks)
-  };
-  // Attacking turrets rotate toward their target; utility/blocker art stays upright.
-  const TOWER_ROTATES = { arrow: 1, sniper: 1, cannon: 1, frost: 0, tesla: 0, venom: 1, flame: 1 };
+  // Custom 10-tower sheet: 10 columns (one per tower, in this id order) × 3 rows
+  // (tier 1/2/3). Cells are sliced by fractional size so it survives the sheet
+  // not being an exact multiple of the grid.
+  const TOWER_SHEET = 'towers_sheet.png';
+  const TOWER_COLS = ['wall', 'arrow', 'cannon', 'frost', 'tesla', 'venom', 'sniper', 'flame', 'pylon', 'mint'];
+  const SHEET_COLS = 10, SHEET_ROWS = 3;
+  const TOWER_COL = {}; TOWER_COLS.forEach((id, i) => { TOWER_COL[id] = i; });
+
+  // Front-view illustrated towers: instead of spinning the whole sprite (which
+  // would tip it over), attacking turrets just mirror horizontally to "face"
+  // whichever side the target is on.
+  const TOWER_FLIPS = { arrow: 1, sniper: 1, cannon: 1, venom: 1, flame: 1, frost: 1, tesla: 1 };
 
   // Enemy id → sprite file (chosen by vibe; emoji fallback otherwise).
   const ENEMY_SPRITE = {
@@ -85,28 +76,31 @@
   function load() {
     if (started) return; started = true;
     try {
-      const all = new Set();
-      for (const k in FAM) FAM[k].forEach((p) => all.add(p));
-      for (const k in ENEMY_SPRITE) all.add(ENEMY_SPRITE[k]);
-      for (const k in PROJECTILE_SPRITE) all.add(PROJECTILE_SPRITE[k]);
-      all.forEach(loadOne);
+      loadOne(TOWER_SHEET);
+      for (const k in ENEMY_SPRITE) loadOne(ENEMY_SPRITE[k]);
+      for (const k in PROJECTILE_SPRITE) loadOne(PROJECTILE_SPRITE[k]);
     } catch (e) {}
   }
 
   // Return a ready <img> for a path, or null if not loaded/failed.
   function ready(path) { const r = path && images[path]; return r && r.ok ? r.img : null; }
 
-  function towerImg(id, tier) {
-    const fam = TOWER_FAMILY[id]; if (!fam) return null;
-    const files = FAM[fam]; if (!files) return null;
-    return ready(files[Math.max(0, Math.min(2, tier | 0))]);
+  // Source rect (in sheet pixels) for a tower's [column,tier] cell, or null.
+  function towerCell(id, tier) {
+    const sheet = ready(TOWER_SHEET);
+    const col = TOWER_COL[id];
+    if (!sheet || col == null) return null;
+    const cw = sheet.naturalWidth / SHEET_COLS;
+    const ch = sheet.naturalHeight / SHEET_ROWS;
+    const row = Math.max(0, Math.min(SHEET_ROWS - 1, tier | 0));
+    return { img: sheet, sx: col * cw, sy: row * ch, sw: cw, sh: ch };
   }
-  function towerRotates(id) { return !!TOWER_ROTATES[id]; }
+  function towerFlips(id) { return !!TOWER_FLIPS[id]; }
   function enemyImg(idOrDef) {
     const id = typeof idOrDef === 'string' ? idOrDef : (idOrDef && idOrDef.id);
     return ready(ENEMY_SPRITE[id]);
   }
   function projectileImg(id) { return ready(PROJECTILE_SPRITE[id]); }
 
-  TD.sprites = { load, ready, towerImg, towerRotates, enemyImg, projectileImg, TOWER_FAMILY };
+  TD.sprites = { load, ready, towerCell, towerFlips, enemyImg, projectileImg };
 })();
