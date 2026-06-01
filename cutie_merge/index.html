@@ -24,9 +24,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   html, body {
-    margin: 0;
-    padding: 0;
-    min-height: 100%;
+    margin: 0; padding: 0; min-height: 100%;
     font-family: "Quicksand", "Segoe UI", system-ui, sans-serif;
     color: var(--ink);
     background:
@@ -35,14 +33,14 @@
       radial-gradient(900px 700px at 50% 120%, #d6fff6 0%, rgba(214,255,246,0) 55%),
       linear-gradient(160deg, #fff1f8 0%, #f4ecff 50%, #ecfbff 100%);
     background-attachment: fixed;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    display: flex; flex-direction: column; align-items: center;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+    transition: background .4s ease;
   }
+  body.dark { color: #efe6ff; }
+  body.dark .tagline { color: #d3c4f5; }
+  body.dark .controls-hint { color: #c6b6ec; }
 
-  /* floating background sparkles */
   .bg-deco { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
   .bg-deco span {
     position: absolute; font-size: 22px; opacity: .5;
@@ -55,157 +53,207 @@
   }
 
   .wrap {
-    position: relative; z-index: 1;
-    width: 100%;
-    max-width: 460px;
-    padding: 14px 14px 30px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
+    position: relative; z-index: 1; width: 100%; max-width: 460px;
+    padding: 12px 14px 30px; display: flex; flex-direction: column;
+    align-items: center; gap: 11px;
   }
 
   h1 {
-    font-family: "Fredoka", sans-serif;
-    font-weight: 700;
-    font-size: 30px;
-    margin: 6px 0 0;
-    letter-spacing: .5px;
+    font-family: "Fredoka", sans-serif; font-weight: 700; font-size: 30px;
+    margin: 4px 0 0; letter-spacing: .5px;
     background: linear-gradient(90deg, #ff6fb5, #b06bff 55%, #5ec8c0);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
     text-shadow: 0 2px 0 rgba(255,255,255,.5);
   }
   .tagline { margin: -2px 0 0; font-size: 13px; color: var(--ink-soft); font-weight: 600; letter-spacing: .3px; }
 
-  /* score row */
-  .stats {
-    display: flex; gap: 10px; width: 100%; justify-content: center; flex-wrap: wrap;
-  }
+  .stats { display: flex; gap: 8px; width: 100%; justify-content: center; flex-wrap: wrap; }
   .pill {
-    background: rgba(255,255,255,.72);
-    border: 2px solid #ffffff;
-    border-radius: 18px;
-    box-shadow: var(--shadow);
-    padding: 8px 16px;
-    display: flex; flex-direction: column; align-items: center;
-    min-width: 92px;
+    background: rgba(255,255,255,.72); border: 2px solid #ffffff; border-radius: 16px;
+    box-shadow: var(--shadow); padding: 7px 14px;
+    display: flex; flex-direction: column; align-items: center; min-width: 78px;
     backdrop-filter: blur(6px);
   }
-  .pill .label { font-size: 11px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
-  .pill .value { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 22px; color: var(--ink); line-height: 1.1; }
+  .pill .label { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
+  .pill .value { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 21px; color: var(--ink); line-height: 1.1; }
   .pill .value.pop { animation: scorePop .42s cubic-bezier(.3,1.6,.5,1); }
   @keyframes scorePop {
     0% { transform: scale(1); color: var(--ink); }
     35% { transform: scale(1.45); color: #ff5fa8; }
     100% { transform: scale(1); color: var(--ink); }
   }
-  .pill.next .value, .pill.wand .value { font-size: 26px; }
-
-  .wand-btn {
-    cursor: pointer; transition: transform .12s ease, filter .12s ease;
-    user-select: none;
-  }
-  .wand-btn:hover { transform: translateY(-2px) scale(1.04); }
-  .wand-btn.ready { animation: wandGlow 1.4s ease-in-out infinite; }
-  .wand-btn.armed { background: linear-gradient(135deg,#fff0b3,#ffd1e8); border-color:#ffd34d; }
-  .wand-btn.dim { opacity: .45; filter: grayscale(.4); cursor: default; }
-  @keyframes wandGlow {
-    0%,100% { box-shadow: 0 0 0 0 rgba(255,180,80,.0), var(--shadow); }
-    50%     { box-shadow: 0 0 18px 4px rgba(255,196,90,.55), var(--shadow); }
-  }
+  .pill.next .value { font-size: 25px; }
+  .pill.hearts .value { color: #ff5fa8; }
 
   /* play board */
   .board-frame {
-    position: relative;
-    border-radius: 28px;
-    padding: 10px;
+    position: relative; border-radius: 28px; padding: 10px;
     background: linear-gradient(160deg, #ffffff 0%, #fff4fb 100%);
     box-shadow: var(--shadow), inset 0 0 0 3px rgba(255,255,255,.9);
     touch-action: none;
   }
   canvas#game {
-    display: block;
-    border-radius: 20px;
-    cursor: pointer;
-    background:
-      radial-gradient(120% 80% at 50% 0%, #fff8fd 0%, #ffeaf6 55%, #f3e4ff 100%);
+    display: block; border-radius: 20px; cursor: pointer;
+    background: radial-gradient(120% 80% at 50% 0%, #fff8fd 0%, #ffeaf6 55%, #f3e4ff 100%);
     box-shadow: inset 0 6px 18px rgba(200,140,190,.18);
+    transition: background .4s ease;
   }
 
-  .controls-hint {
-    font-size: 12.5px; color: var(--ink-soft); font-weight: 600; text-align: center;
-    margin-top: -2px;
-  }
+  .controls-hint { font-size: 12px; color: var(--ink-soft); font-weight: 600; text-align: center; margin-top: -2px; }
 
-  /* discovery strip */
-  .collection {
-    width: 100%;
-    background: rgba(255,255,255,.66);
-    border: 2px solid #fff;
-    border-radius: 18px;
-    box-shadow: var(--shadow);
-    padding: 10px 10px 12px;
+  /* power-up bar */
+  .power-bar { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
+  .pw {
+    position: relative; font-family: "Quicksand", sans-serif; cursor: pointer;
+    background: rgba(255,255,255,.82); border: 2px solid #fff; border-radius: 16px;
+    box-shadow: var(--shadow); padding: 6px 10px 5px; min-width: 52px;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    transition: transform .12s ease, filter .12s ease;
   }
-  .collection h2 {
-    font-family: "Fredoka", sans-serif; font-size: 14px; margin: 0 0 8px; color: var(--ink);
-    display: flex; align-items: center; gap: 6px; letter-spacing: .4px;
+  .pw:hover { transform: translateY(-2px); }
+  .pw .pw-ic { font-size: 22px; line-height: 1; }
+  .pw .pw-nm { font-size: 9.5px; font-weight: 700; color: var(--ink-soft); letter-spacing: .2px; }
+  .pw .pw-ct {
+    position: absolute; top: -7px; right: -6px; min-width: 19px; height: 19px;
+    background: linear-gradient(135deg,#ff7ec0,#b06bff); color: #fff;
+    border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 19px;
+    text-align: center; padding: 0 4px; box-shadow: 0 2px 6px rgba(176,107,255,.5);
   }
-  .coll-grid { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
-  .coll-cell {
-    width: 40px; height: 40px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 21px; position: relative;
-    background: #f3e9f4; color: transparent; text-shadow: none;
-    border: 2px solid rgba(255,255,255,.7);
-    transition: transform .2s ease;
-  }
-  .coll-cell.found { color: inherit; }
-  .coll-cell.found.pop { animation: cellPop .5s ease; }
-  @keyframes cellPop { 0%{transform:scale(1)} 40%{transform:scale(1.45) rotate(8deg)} 100%{transform:scale(1)} }
-  .coll-cell .lock { position: absolute; font-size: 14px; opacity: .55; }
-  .coll-cell.found .lock { display: none; }
+  .pw.dim { opacity: .5; filter: grayscale(.4); }
+  .pw.armed { background: linear-gradient(135deg,#fff0b3,#ffd1e8); border-color: #ffd34d; animation: pulseGlow 1s ease-in-out infinite; }
+  @keyframes pulseGlow { 0%,100%{ box-shadow: var(--shadow);} 50%{ box-shadow: 0 0 16px 3px rgba(255,196,90,.6), var(--shadow);} }
 
-  /* overlay */
-  .overlay {
-    position: absolute; inset: 0; border-radius: 20px;
-    background: linear-gradient(160deg, rgba(255,225,242,.92), rgba(231,219,255,.92));
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 10px; text-align: center; padding: 20px;
-    backdrop-filter: blur(3px);
-    opacity: 0; pointer-events: none; transition: opacity .25s ease;
-  }
-  .overlay.show { opacity: 1; pointer-events: auto; }
-  .overlay h2 { font-family:"Fredoka",sans-serif; font-size: 30px; margin: 0; color: #c44d96; }
-  .overlay p { margin: 0; font-weight: 600; color: var(--ink); font-size: 15px; }
-  .overlay .big { font-size: 46px; margin: 4px 0; }
-  .btn {
-    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 18px;
-    border: none; cursor: pointer; color: #fff;
-    background: linear-gradient(135deg, #ff7ec0, #b06bff);
-    padding: 12px 28px; border-radius: 999px;
-    box-shadow: 0 8px 20px rgba(176,107,255,.4);
-    transition: transform .12s ease, box-shadow .12s ease;
-    margin-top: 6px;
-  }
-  .btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 26px rgba(176,107,255,.5); }
-  .btn:active { transform: translateY(0) scale(.98); }
-
-  .toolbar { display:flex; gap:8px; }
+  .toolbar { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
   .mini {
-    font-family:"Quicksand",sans-serif; font-weight:700; font-size:13px;
-    background: rgba(255,255,255,.8); color: var(--ink);
-    border: 2px solid #fff; border-radius: 14px; padding: 7px 13px; cursor: pointer;
+    font-family: "Quicksand", sans-serif; font-weight: 700; font-size: 12.5px;
+    background: rgba(255,255,255,.82); color: var(--ink);
+    border: 2px solid #fff; border-radius: 14px; padding: 7px 12px; cursor: pointer;
     box-shadow: var(--shadow); transition: transform .12s ease;
   }
   .mini:hover { transform: translateY(-1px); }
+  .mini.off { opacity: .5; }
 
-  nav#nav { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  /* panels */
+  .panel {
+    width: 100%; background: rgba(255,255,255,.66); border: 2px solid #fff;
+    border-radius: 18px; box-shadow: var(--shadow); padding: 10px 11px 12px;
+  }
+  .panel h2 {
+    font-family: "Fredoka", sans-serif; font-size: 14px; margin: 0 0 8px; color: var(--ink);
+    display: flex; align-items: center; gap: 6px; letter-spacing: .4px;
+  }
+  body.dark .panel { background: rgba(60,46,92,.66); }
+  body.dark .panel h2 { color: #f3ecff; }
+
+  /* missions */
+  .mission { display: flex; align-items: center; gap: 9px; padding: 5px 2px; }
+  .mission + .mission { border-top: 1px dashed rgba(180,140,190,.3); }
+  .mission .m-ic { font-size: 19px; }
+  .mission .m-body { flex: 1; min-width: 0; }
+  .mission .m-text { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  body.dark .mission .m-text { color: #efe6ff; }
+  .mission .m-bar { height: 7px; background: rgba(180,140,190,.25); border-radius: 999px; margin-top: 4px; overflow: hidden; }
+  .mission .m-fill { height: 100%; background: linear-gradient(90deg,#ff8fc7,#b58cff); border-radius: 999px; transition: width .35s ease; }
+  .mission .m-rw { font-size: 12px; font-weight: 700; color: #ff5fa8; white-space: nowrap; }
+  .mission.done .m-fill { background: linear-gradient(90deg,#7fe3b0,#8ee6df); }
+
+  /* discovery strip */
+  .coll-grid { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+  .coll-cell {
+    width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; position: relative; background: #f3e9f4; color: transparent;
+    border: 2px solid rgba(255,255,255,.7); transition: transform .2s ease;
+  }
+  body.dark .coll-cell { background: rgba(255,255,255,.14); }
+  .coll-cell.found { color: inherit; }
+  .coll-cell.found.pop { animation: cellPop .5s ease; }
+  @keyframes cellPop { 0%{transform:scale(1)} 40%{transform:scale(1.45) rotate(8deg)} 100%{transform:scale(1)} }
+  .coll-cell .lock { position: absolute; font-size: 13px; opacity: .55; }
+  .coll-cell.found .lock { display: none; }
+
+  /* overlay (start / game over) */
+  .overlay {
+    position: absolute; inset: 0; border-radius: 20px;
+    background: linear-gradient(160deg, rgba(255,225,242,.94), rgba(231,219,255,.94));
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 9px; text-align: center; padding: 20px; backdrop-filter: blur(3px);
+    opacity: 0; pointer-events: none; transition: opacity .25s ease;
+  }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+  .overlay h2 { font-family:"Fredoka",sans-serif; font-size: 28px; margin: 0; color: #c44d96; }
+  .overlay p { margin: 0; font-weight: 600; color: var(--ink); font-size: 14.5px; }
+  .overlay .big { font-size: 44px; margin: 2px 0; }
+  .btn {
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 18px; border: none; cursor: pointer; color: #fff;
+    background: linear-gradient(135deg, #ff7ec0, #b06bff); padding: 12px 28px; border-radius: 999px;
+    box-shadow: 0 8px 20px rgba(176,107,255,.4); transition: transform .12s ease, box-shadow .12s ease; margin-top: 4px;
+  }
+  .btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 26px rgba(176,107,255,.5); }
+  .btn:active { transform: translateY(0) scale(.98); }
+  .zen-btn {
+    font-family:"Quicksand",sans-serif; font-weight:700; font-size:13px; cursor:pointer;
+    background: rgba(255,255,255,.7); color: var(--ink); border: 2px solid #fff;
+    border-radius: 999px; padding: 7px 16px; transition: transform .12s ease;
+  }
+  .zen-btn.on { background: linear-gradient(135deg,#c8b3ff,#8ee6df); color:#fff; }
+
+  /* shop modal */
+  .shop {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    background: rgba(120,80,130,.4); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .shop.show { display: flex; }
+  .shop-inner {
+    width: 100%; max-width: 440px; max-height: 88vh; overflow-y: auto;
+    background: linear-gradient(160deg,#fff6fb,#f3ecff); border: 3px solid #fff;
+    border-radius: 24px; box-shadow: 0 20px 60px rgba(150,90,160,.45); padding: 16px 16px 22px;
+  }
+  .shop-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .shop-top h2 { font-family:"Fredoka",sans-serif; margin: 0; font-size: 22px; color:#c44d96; }
+  .shop-bal { font-family:"Fredoka",sans-serif; font-weight:600; color:#ff5fa8; font-size:18px; background:#fff; border:2px solid #ffd1e8; border-radius:999px; padding:4px 12px; }
+  .shop-x { cursor:pointer; border:none; background:#ffd1e8; color:#c44d96; font-weight:700; border-radius:999px; width:34px; height:34px; font-size:18px; }
+  .shop h3 { font-family:"Fredoka",sans-serif; font-size:15px; color:var(--ink); margin: 14px 0 8px; }
+  .shop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .card {
+    background:#fff; border:2px solid #ffe1f0; border-radius:16px; padding:10px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .card .c-ic { font-size: 28px; }
+  .card .c-nm { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .card .c-ds { font-size: 10.5px; color: var(--ink-soft); line-height: 1.2; min-height: 26px; }
+  .card .c-buy {
+    margin-top: 4px; border: none; cursor: pointer; font-family:"Quicksand",sans-serif; font-weight:700; font-size:12.5px;
+    background: linear-gradient(135deg,#ff8fc7,#b58cff); color:#fff; border-radius:999px; padding:6px 12px;
+  }
+  .card .c-buy:disabled { opacity:.45; cursor:default; filter:grayscale(.3); }
+  .card .c-buy.equipped { background: linear-gradient(135deg,#7fe3b0,#8ee6df); }
+  .card.locked { opacity:.7; }
+  .ach { display:flex; align-items:center; gap:9px; padding:6px 4px; }
+  .ach + .ach { border-top: 1px dashed rgba(180,140,190,.3); }
+  .ach .a-ic { font-size: 22px; filter: grayscale(1) opacity(.5); }
+  .ach.got .a-ic { filter: none; }
+  .ach .a-nm { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .ach .a-ds { font-size: 11px; color: var(--ink-soft); }
+  .ach .a-rw { margin-left:auto; font-size:12px; font-weight:700; color:#ff5fa8; }
+  .ach.got .a-rw { color:#7fc8a0; }
+
+  /* toasts */
+  #toasts { position: fixed; top: 12px; left: 0; right: 0; z-index: 80; display:flex; flex-direction:column; align-items:center; gap:7px; pointer-events:none; }
+  .toast {
+    background: linear-gradient(135deg,#fff,#fff0f7); border:2px solid #ffd1e8; color:var(--ink);
+    font-weight:700; font-size:13.5px; padding:9px 16px; border-radius:999px;
+    box-shadow:0 10px 28px rgba(180,110,170,.35); display:flex; align-items:center; gap:8px;
+    animation: toastIn .35s ease, toastOut .4s ease 2.6s forwards;
+  }
+  .toast .t-ic { font-size:18px; }
+  @keyframes toastIn { from{opacity:0; transform: translateY(-16px) scale(.9);} to{opacity:1; transform:none;} }
+  @keyframes toastOut { to{opacity:0; transform: translateY(-12px) scale(.95);} }
+
+  nav#nav { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   nav#nav a {
     color: var(--purple); text-decoration: none; font-weight: 700; font-size: 12px;
-    border: 2px solid #fff; background: rgba(255,255,255,.6);
-    padding: 6px 12px; border-radius: 999px; transition: background .15s ease;
+    border: 2px solid #fff; background: rgba(255,255,255,.6); padding: 6px 12px; border-radius: 999px; transition: background .15s ease;
   }
   nav#nav a:hover { background: #fff; }
 </style>
@@ -215,15 +263,13 @@
 
 <div class="wrap">
   <h1>Cutie Merge</h1>
-  <p class="tagline">🌸 Fluffle Friends — drop &amp; merge the cuties! 🌸</p>
+  <p class="tagline">🌸 Fluffle Friends — drop, merge &amp; pet the cuties! 🌸</p>
 
   <div class="stats">
     <div class="pill"><span class="label">Score</span><span class="value" id="score">0</span></div>
     <div class="pill"><span class="label">Best</span><span class="value" id="best">0</span></div>
+    <div class="pill hearts"><span class="label">Hearts</span><span class="value" id="hearts">0</span></div>
     <div class="pill next"><span class="label">Next</span><span class="value" id="next">🥚</span></div>
-    <div class="pill wand wand-btn dim" id="wandBtn" title="Magic wand: pop one cutie!">
-      <span class="label">Wand</span><span class="value" id="wandCount">🪄0</span>
-    </div>
   </div>
 
   <div class="board-frame">
@@ -231,19 +277,30 @@
     <div class="overlay show" id="overlay">
       <div class="big" id="ovBig">🌸</div>
       <h2 id="ovTitle">Cutie Merge</h2>
-      <p id="ovText">Match two of the same cutie to merge them into something even cuter!</p>
+      <p id="ovText">Match two of the same cutie to merge them into something cuter — and tap a cutie to give it a pet! 🫶</p>
+      <button class="zen-btn" id="zenBtn">🌙 Zen Mode: Off</button>
       <button class="btn" id="startBtn">Play 💕</button>
     </div>
   </div>
 
-  <div class="controls-hint">🖱️ Move to aim &nbsp;•&nbsp; Click / Tap or Space to drop &nbsp;•&nbsp; 🪄 pops a cutie</div>
+  <div class="controls-hint">Move to aim • tap empty space to <b>drop</b> • tap a cutie to <b>pet</b> 🫶</div>
+
+  <div class="power-bar" id="powerBar"></div>
 
   <div class="toolbar">
-    <button class="mini" id="muteBtn">🔊 Sound</button>
+    <button class="mini" id="shopBtn">🛍️ Shop</button>
+    <button class="mini" id="muteBtn">🔊 SFX</button>
+    <button class="mini" id="musicBtn">🎵 Music</button>
+    <button class="mini" id="hapticBtn">📳 Buzz</button>
     <button class="mini" id="restartBtn">🔄 Restart</button>
   </div>
 
-  <div class="collection">
+  <div class="panel">
+    <h2>🎯 Missions</h2>
+    <div id="missionList"></div>
+  </div>
+
+  <div class="panel">
     <h2>✨ Discovery Book</h2>
     <div class="coll-grid" id="collGrid"></div>
   </div>
@@ -256,13 +313,38 @@
   </nav>
 </div>
 
+<!-- shop modal -->
+<div class="shop" id="shop">
+  <div class="shop-inner">
+    <div class="shop-top">
+      <h2>🛍️ Cutie Shop</h2>
+      <span class="shop-bal" id="shopBal">💖 0</span>
+      <button class="shop-x" id="shopClose">✕</button>
+    </div>
+    <h3>✨ Power-ups</h3>
+    <div class="shop-grid" id="shopPowers"></div>
+    <h3>🎨 Board Themes</h3>
+    <div class="shop-grid" id="shopThemes"></div>
+    <h3>🏆 Trophy Shelf</h3>
+    <div id="shopAch"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
 <script>
 /* ============================================================
-   Cutie Merge — a pastel Suika-style drop & merge game.
+   Cutie Merge — a pastel Suika-style drop, merge & pet game.
    Self-contained vanilla JS + canvas. No build step needed.
    ============================================================ */
 (function () {
   "use strict";
+
+  /* ---------- tiny localStorage helper ---------- */
+  const LS = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
 
   /* ---------- the cutie ladder ---------- */
   const TIERS = [
@@ -279,40 +361,26 @@
     { name: "Rainbow",  emoji: "🌈", r: 120, c1: "#fff0f8", c2: "#ffd36e" },
   ];
   const MAX_TIER = TIERS.length - 1;
-  // tiers that can be dropped by the player (small ones only)
+  const WILD = -1;                 // rainbow wildcard cutie
+  const WILD_R = 40;
   const DROP_TIERS = [0, 1, 2, 3, 4];
   const DROP_WEIGHTS = [34, 28, 20, 12, 6];
 
-  /* ---------- canvas / world setup ---------- */
+  /* ---------- canvas / world ---------- */
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
-
-  // logical play-field dimensions (CSS pixels)
   const W = 360, H = 540;
-  const WALL = 0;                 // inner play area starts at x=0..W
-  const FLOOR = H;                // floor at bottom
-  const SPAWN_Y = 46;             // where the held cutie sits
-  const DANGER_Y = 92;            // overflow line
+  const WALL = 0, FLOOR = H, SPAWN_Y = 46, DANGER_Y = 92;
 
   function fitCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    // Scale the whole board so it always fits the screen — width AND height —
-    // so the floor (where cuties merge) is always visible, no scrolling needed.
-    const wrapPad = 28;                 // .wrap left+right padding
-    const framePad = 20;                // .board-frame left+right padding
-    const availW = Math.min(440, window.innerWidth) - wrapPad - framePad;
-    // Reserve vertical space for the header above and the hint below the board.
-    const reserveTop = 150, reserveBottom = 60;
-    const availH = (window.visualViewport ? window.visualViewport.height : window.innerHeight)
-                   - reserveTop - reserveBottom;
+    const availW = Math.min(440, window.innerWidth) - 28 - 20;
+    const availH = (window.visualViewport ? window.visualViewport.height : window.innerHeight) - 150 - 60;
     let scale = Math.min(availW / W, availH / H);
-    scale = Math.max(0.45, Math.min(scale, 1)); // never upscale past 1
+    scale = Math.max(0.45, Math.min(scale, 1));
     const dispW = W * scale, dispH = H * scale;
-    canvas.style.width = dispW + "px";
-    canvas.style.height = dispH + "px";
-    canvas.width = Math.round(dispW * dpr);
-    canvas.height = Math.round(dispH * dpr);
-    // Draw in logical W×H coordinates; this transform maps them to scaled pixels.
+    canvas.style.width = dispW + "px"; canvas.style.height = dispH + "px";
+    canvas.width = Math.round(dispW * dpr); canvas.height = Math.round(dispH * dpr);
     ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
   }
   fitCanvas();
@@ -320,366 +388,372 @@
   window.addEventListener("orientationchange", fitCanvas);
   if (window.visualViewport) window.visualViewport.addEventListener("resize", fitCanvas);
 
-  /* ---------- game state ---------- */
-  let balls = [];
-  let particles = [];
-  let floaters = [];
-  let rings = [];             // expanding merge shockwaves
-  let stickers = [];          // pop-in kawaii face stickers
-  let frame = 0;              // global animation tick
-  let ambientTimer = 0;       // drip-feed of ambient sparkles
-  let score = 0;
-  let best = +(localStorage.getItem("cutieMergeBest") || 0);
-  let wands = 0;
-  let wandArmed = false;
-  let discovered = JSON.parse(localStorage.getItem("cutieMergeFound") || "[]");
-  let running = false;
-  let gameOver = false;
-  let held = null;            // the cutie waiting to drop {tier}
-  let nextTier = randDropTier();
-  let dropCooldown = 0;       // frames until next drop allowed
-  let aimX = W / 2;
-  let combo = 0;
-  let comboTimer = 0;
-  let overflowTimer = 0;
-  let muted = false;
-  let mergesSinceWand = 0;
-  let shake = 0;
-  let rainbowMade = false;
+  /* ---------- persistent player data ---------- */
+  let best       = LS.get("cutieMergeBest", 0);
+  let hearts     = LS.get("cutieMergeHearts", 0);
+  let discovered = LS.get("cutieMergeFound", []);
+  const inv      = Object.assign({ wand: 0, bomb: 0, rainbow: 0, swap: 0, slow: 0 }, LS.get("cutieMergeInv", {}));
+  const stats    = Object.assign({ merges: 0, maxTier: 0, bestCombo: 0, pets: 0, games: 0 }, LS.get("cutieMergeStats", {}));
+  let achUnlocked = LS.get("cutieMergeAch", []);
+  let ownedThemes = LS.get("cutieMergeThemes", ["candy"]);
+  let themeId    = LS.get("cutieMergeTheme", "candy");
+  let muted      = LS.get("cutieMergeMuted", false);
+  let musicOn    = LS.get("cutieMergeMusic", false);
+  let haptics    = LS.get("cutieMergeHaptics", true);
+  let zenPref    = LS.get("cutieMergeZen", false);
 
-  const G = 0.55;             // gravity per frame
-  const REST = 0.18;          // bounciness
-  const FRICTION = 0.86;      // floor friction
-  const AIR = 0.995;
-  const WAND_EVERY = 6;       // merges needed to earn a wand
+  /* ---------- run state ---------- */
+  let balls = [], particles = [], floaters = [], rings = [], stickers = [], speeches = [];
+  let frame = 0, ambientTimer = 0, moodTimer = 0, speechTimer = 240;
+  let score = 0, combo = 0, comboTimer = 0, overflowTimer = 0, shake = 0, slowTimer = 0;
+  let running = false, gameOver = false, zen = false;
+  let held = null, nextTier = randDropTier(), dropCooldown = 0, aimX = W / 2;
+  let mergesSinceWand = 0, rainbowMade = false, fluff = 0;
+  let armedPower = null;
+
+  const G = 0.55, REST = 0.18, FRICTION = 0.86, AIR = 0.995;
+  const WAND_EVERY = 6;      // merges per earned wand
+  const FLUFF_PER_HEART = 8; // pets per bonus heart
 
   let idc = 1;
   function makeBall(x, y, tier, vx, vy) {
     return { id: idc++, x, y, vx: vx || 0, vy: vy || 0, tier,
-             r: TIERS[tier].r, merging: false, born: performance.now(), pop: 0 };
+             r: tier === WILD ? WILD_R : TIERS[tier].r,
+             merging: false, born: performance.now(), pop: 0, pet: 0, petDir: 1, still: 0 };
   }
-
   function randDropTier() {
-    let total = DROP_WEIGHTS.reduce((a, b) => a + b, 0);
+    const total = DROP_WEIGHTS.reduce((a, b) => a + b, 0);
     let roll = Math.random() * total;
-    for (let i = 0; i < DROP_TIERS.length; i++) {
-      roll -= DROP_WEIGHTS[i];
-      if (roll <= 0) return DROP_TIERS[i];
-    }
+    for (let i = 0; i < DROP_TIERS.length; i++) { roll -= DROP_WEIGHTS[i]; if (roll <= 0) return DROP_TIERS[i]; }
     return 0;
   }
 
-  /* ---------- audio (tiny WebAudio synth) ---------- */
+  /* ---------- audio ---------- */
   let actx = null;
   function ensureAudio() {
     if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
     if (actx && actx.state === "suspended") actx.resume();
+    if (musicOn) startMusic();
   }
   function blip(freq, dur, type, vol) {
     if (muted || !actx) return;
     const o = actx.createOscillator(), g = actx.createGain();
-    o.type = type || "sine";
-    o.frequency.value = freq;
+    o.type = type || "sine"; o.frequency.value = freq;
     g.gain.setValueAtTime(0.0001, actx.currentTime);
     g.gain.exponentialRampToValueAtTime(vol || 0.16, actx.currentTime + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
     o.connect(g); g.connect(actx.destination);
     o.start(); o.stop(actx.currentTime + dur + 0.02);
   }
-  function mergeSound(tier) {
-    const base = 320 + tier * 70;
-    blip(base, 0.18, "sine", 0.18);
-    setTimeout(() => blip(base * 1.5, 0.16, "triangle", 0.12), 45);
-  }
+  function mergeSound(tier) { const base = 320 + tier * 70; blip(base, 0.18, "sine", 0.18); setTimeout(() => blip(base * 1.5, 0.16, "triangle", 0.12), 45); }
   function dropSound() { blip(210, 0.10, "sine", 0.10); }
-  function sparkleSound() { blip(900, 0.10, "triangle", 0.08); setTimeout(()=>blip(1300,0.08,"triangle",0.06),50); }
+  function sparkleSound() { blip(900, 0.10, "triangle", 0.08); setTimeout(() => blip(1300, 0.08, "triangle", 0.06), 50); }
+  function boopSound(tier) { const f = 520 + (MAX_TIER - tier) * 40; blip(f, 0.09, "sine", 0.14); setTimeout(() => blip(f * 1.4, 0.08, "sine", 0.10), 35); }
+
+  /* gentle kawaii background music (synth, very soft) */
+  const MEL = [0, 4, 7, 12, 7, 4, 2, 5, 9, 14, 9, 5, 0, 4, 7, 11];
+  let musicTimer = null, mi = 0;
+  function startMusic() {
+    if (!musicOn || !actx || musicTimer) return;
+    const step = () => {
+      if (!musicOn || !actx) { musicTimer = null; return; }
+      const semi = MEL[mi % MEL.length]; mi++;
+      const t = actx.currentTime, f = 392 * Math.pow(2, semi / 12);
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.05, t + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.55);
+      if (mi % 4 === 1) {
+        const b = actx.createOscillator(), bg = actx.createGain();
+        b.type = "triangle"; b.frequency.value = 392 * Math.pow(2, (semi - 24) / 12);
+        bg.gain.setValueAtTime(0.0001, t);
+        bg.gain.exponentialRampToValueAtTime(0.04, t + 0.06);
+        bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+        b.connect(bg); bg.connect(actx.destination); b.start(t); b.stop(t + 0.85);
+      }
+      musicTimer = setTimeout(step, 320);
+    };
+    step();
+  }
+  function stopMusic() { if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; } }
+  function buzz(ms) { if (haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 
   /* ---------- effects ---------- */
-  // Only widely-supported COLOR emoji here — avoids black "tofu" on older devices.
   const KAWAII  = ["✨","💕","⭐","🌸","💗","🎀","💫","🧁","🍭","💖","🌟","🦋","🌷","🍬"];
   const FACES   = ["💕","✨","💖","🌸","⭐","💫","💗","🎀","🌟","🌸"];
   const PASTELS = ["#ff8fc7","#b58cff","#8ee6df","#ffe89a","#ff5fa8","#c8a2e8","#a0e7e5","#ffd36e"];
-  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
-  const MAX_PARTICLES = 280;  // hard cap so heavy combos can't tank the framerate
+  const SAYINGS = ["uwu","♡","hi!","boop?","merge me!","so cozy~","nya~","yip!","squee","✨","pet me!","hehe","☆"];
+  const pick = (a) => a[(Math.random() * a.length) | 0];
+  const MAX_PARTICLES = 280;
 
   function burst(x, y, color, n, emoji) {
     for (let i = 0; i < n; i++) {
       if (particles.length >= MAX_PARTICLES) break;
-      const a = Math.random() * Math.PI * 2;
-      const sp = 1.5 + Math.random() * 4;
-      particles.push({
-        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5,
-        life: 1, decay: 0.015 + Math.random() * 0.02,
-        size: 4 + Math.random() * 5, color,
+      const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4;
+      particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5,
+        life: 1, decay: 0.015 + Math.random() * 0.02, size: 4 + Math.random() * 5, color,
         emoji: emoji && Math.random() < 0.65 ? (Math.random() < 0.5 ? emoji : pick(KAWAII)) : null,
-        rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3,
-      });
+        rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3 });
     }
   }
-  // pastel paper confetti that flutters as it falls
   function confetti(x, y, n) {
     for (let i = 0; i < n; i++) {
       if (particles.length >= MAX_PARTICLES) break;
       const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5.5;
-      particles.push({
-        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2.5,
-        life: 1, decay: 0.008 + Math.random() * 0.012,
-        size: 4 + Math.random() * 5, color: pick(PASTELS), confetti: true,
-        emoji: Math.random() < 0.4 ? pick(KAWAII) : null,
-        rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.45,
-      });
+      particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2.5,
+        life: 1, decay: 0.008 + Math.random() * 0.012, size: 4 + Math.random() * 5, color: pick(PASTELS), confetti: true,
+        emoji: Math.random() < 0.4 ? pick(KAWAII) : null, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.45 });
     }
   }
-  // expanding shockwave ring
-  function ring(x, y, color, max) {
-    rings.push({ x, y, r: 6, max: max || 60, life: 1, color });
+  function heartPuff(x, y, n) {
+    for (let i = 0; i < (n || 4); i++) {
+      if (particles.length >= MAX_PARTICLES) break;
+      particles.push({ x: x + (Math.random() - 0.5) * 16, y, vx: (Math.random() - 0.5) * 1.4, vy: -1.4 - Math.random() * 1.2,
+        life: 1, decay: 0.018, size: 4 + Math.random() * 3, color: "#ff7ec0",
+        emoji: pick(["💕","💗","💖","♡","✨"]), rot: 0, vr: (Math.random() - 0.5) * 0.2 });
+    }
   }
-  // little kawaii face/symbol that pops in and floats up
-  function sticker(x, y, text, size) {
-    stickers.push({ x, y, text, size: size || 26, life: 1, scale: 0,
-                    vy: -0.7, rot: (Math.random() - 0.5) * 0.4 });
-  }
-  // gentle ambient sparkle drifting up inside the board
+  function ring(x, y, color, max) { rings.push({ x, y, r: 6, max: max || 60, life: 1, color }); }
+  function sticker(x, y, text, size) { stickers.push({ x, y, text, size: size || 26, life: 1, scale: 0, vy: -0.7, rot: (Math.random() - 0.5) * 0.4 }); }
   function spawnAmbient() {
     if (particles.length >= 160) return;
-    particles.push({
-      x: 14 + Math.random() * (W - 28), y: H - 6,
-      vx: (Math.random() - 0.5) * 0.4, vy: -0.55 - Math.random() * 0.7,
-      life: 1, decay: 0.009, size: 3 + Math.random() * 2.5, color: "#ffffff",
-      emoji: Math.random() < 0.8 ? pick(KAWAII) : null, ambient: true,
-      rot: 0, vr: (Math.random() - 0.5) * 0.1,
-    });
+    particles.push({ x: 14 + Math.random() * (W - 28), y: H - 6, vx: (Math.random() - 0.5) * 0.4, vy: -0.55 - Math.random() * 0.7,
+      life: 1, decay: 0.009, size: 3 + Math.random() * 2.5, color: "#ffffff", emoji: Math.random() < 0.8 ? pick(KAWAII) : null, ambient: true, rot: 0, vr: (Math.random() - 0.5) * 0.1 });
   }
-  function addFloater(x, y, text, color) {
-    floaters.push({ x, y, text, color, life: 1, vy: -0.9, scale: 0 });
-  }
-  function pulseScore() {
-    const el = document.getElementById("score");
-    el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
-  }
+  function addFloater(x, y, text, color) { floaters.push({ x, y, text, color, life: 1, vy: -0.9, scale: 0 }); }
+  function pulseScore() { const el = document.getElementById("score"); el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
 
   /* ---------- physics ---------- */
   function step() {
-    // integrate
+    const grav = slowTimer > 0 ? G * 0.32 : G;
+    if (slowTimer > 0) slowTimer--;
     for (const b of balls) {
-      b.vy += G;
-      b.vx *= AIR; b.vy *= AIR;
+      b.vy += grav; b.vx *= AIR; b.vy *= AIR;
       b.x += b.vx; b.y += b.vy;
       if (b.pop > 0) b.pop -= 0.08;
+      if (b.pet > 0) b.pet -= 0.045;
+      b.still = Math.hypot(b.vx, b.vy) < 0.4 ? b.still + 1 : 0;
     }
 
-    // resolve collisions + walls (several relaxation iterations for stable stacks)
     for (let iter = 0; iter < 6; iter++) {
-      // walls + floor
       for (const b of balls) {
-        if (b.x - b.r < WALL)      { b.x = WALL + b.r;  b.vx = Math.abs(b.vx) * REST; }
-        if (b.x + b.r > W)         { b.x = W - b.r;     b.vx = -Math.abs(b.vx) * REST; }
-        if (b.y + b.r > FLOOR)     { b.y = FLOOR - b.r; b.vy = -Math.abs(b.vy) * REST; b.vx *= FRICTION; }
+        if (b.x - b.r < WALL)  { b.x = WALL + b.r; b.vx = Math.abs(b.vx) * REST; }
+        if (b.x + b.r > W)     { b.x = W - b.r;    b.vx = -Math.abs(b.vx) * REST; }
+        if (b.y + b.r > FLOOR) { b.y = FLOOR - b.r; b.vy = -Math.abs(b.vy) * REST; b.vx *= FRICTION; }
       }
-      // pairs
       for (let i = 0; i < balls.length; i++) {
         for (let j = i + 1; j < balls.length; j++) {
           const a = balls[i], b = balls[j];
-          let dx = b.x - a.x, dy = b.y - a.y;
-          let dist = Math.hypot(dx, dy);
+          let dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
           const min = a.r + b.r;
           if (dist === 0) { dx = 0.01; dy = 0.01; dist = 0.014; }
           if (dist < min) {
-            // Same-type cuties: don't push apart — let them sink together so the
-            // overlap accumulates and the merge check below can fire.
-            if (a.tier === b.tier && !a.merging && !b.merging) continue;
-            const nx = dx / dist, ny = dy / dist;
-            const overlap = min - dist;
-            // positional separation (equal mass)
-            const push = overlap / 2;
-            a.x -= nx * push; a.y -= ny * push;
-            b.x += nx * push; b.y += ny * push;
-            // velocity impulse
-            const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
-            const sep = rvx * nx + rvy * ny;
-            if (sep < 0) {
-              const imp = -(1 + REST) * sep / 2;
-              a.vx -= imp * nx; a.vy -= imp * ny;
-              b.vx += imp * nx; b.vy += imp * ny;
-            }
+            // matching (or wildcard) cuties don't push apart — they sink & merge
+            if ((a.tier === b.tier || a.tier === WILD || b.tier === WILD) && !a.merging && !b.merging) continue;
+            const nx = dx / dist, ny = dy / dist, push = (min - dist) / 2;
+            a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+            const sep = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+            if (sep < 0) { const imp = -(1 + REST) * sep / 2; a.vx -= imp * nx; a.vy -= imp * ny; b.vx += imp * nx; b.vy += imp * ny; }
           }
         }
       }
     }
 
-    // merge detection (same tier, touching, neither already consumed)
+    // merge detection (matching tiers OR any pair involving a wildcard)
     for (let i = 0; i < balls.length; i++) {
       const a = balls[i];
       if (a.merging) continue;
       for (let j = i + 1; j < balls.length; j++) {
         const b = balls[j];
-        if (b.merging || b.tier !== a.tier) continue;
-        const dist = Math.hypot(b.x - a.x, b.y - a.y);
-        if (dist < a.r + b.r - 0.5) { doMerge(a, b); break; }
+        if (b.merging) continue;
+        const canMerge = a.tier === b.tier || a.tier === WILD || b.tier === WILD;
+        if (!canMerge) continue;
+        if (Math.hypot(b.x - a.x, b.y - a.y) < a.r + b.r - 0.5) { doMerge(a, b); break; }
       }
     }
     if (balls.some(b => b.merging)) balls = balls.filter(b => !b.merging);
 
-    // clamp crazy velocities (anti-tunnel)
-    for (const b of balls) {
-      const sp = Math.hypot(b.vx, b.vy);
-      if (sp > 22) { b.vx = b.vx / sp * 22; b.vy = b.vy / sp * 22; }
-    }
+    for (const b of balls) { const sp = Math.hypot(b.vx, b.vy); if (sp > 22) { b.vx = b.vx / sp * 22; b.vy = b.vy / sp * 22; } }
 
-    // combo decay
     if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) combo = 0; }
 
-    // overflow check
-    let over = false;
-    for (const b of balls) {
-      if (b.y - b.r < DANGER_Y && Math.hypot(b.vx, b.vy) < 0.8 && performance.now() - b.born > 600) {
-        over = true; break;
-      }
+    // idle moods + speech bubbles
+    if (--moodTimer <= 0) {
+      moodTimer = 70 + Math.random() * 80;
+      const sleepy = balls.filter(b => b.still > 150);
+      if (sleepy.length) { const b = pick(sleepy); sticker(b.x, b.y - b.r - 6, pick(["💤","💗","🎵","☁️"]), 18); }
     }
-    if (over) {
-      overflowTimer++;
-      if (overflowTimer > 90) endGame();
-    } else {
-      overflowTimer = Math.max(0, overflowTimer - 3);
+    if (--speechTimer <= 0) {
+      speechTimer = 200 + Math.random() * 220;
+      const calm = balls.filter(b => b.still > 60 && b.y > DANGER_Y && !speeches.some(s => s.id === b.id));
+      if (calm.length && speeches.length < 2) speeches.push({ id: pick(calm).id, text: pick(SAYINGS), life: 1 });
+    }
+
+    if (!zen) {
+      let over = false;
+      for (const b of balls) if (b.y - b.r < DANGER_Y && Math.hypot(b.vx, b.vy) < 0.8 && performance.now() - b.born > 600) { over = true; break; }
+      if (over) { overflowTimer++; if (overflowTimer > 90) endGame(); }
+      else overflowTimer = Math.max(0, overflowTimer - 3);
     }
   }
 
   function doMerge(a, b) {
     a.merging = true; b.merging = true;
-    const nt = Math.min(a.tier + 1, MAX_TIER);
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const aw = a.tier === WILD, bw = b.tier === WILD;
 
-    // scoring with combo
+    // two real rainbows -> mega bonus + area clear
+    if (!aw && !bw && a.tier === MAX_TIER && b.tier === MAX_TIER) {
+      combo++; comboTimer = 90;
+      score += 500; addFloater(mx, my, "🌈 +500!", "#ff5fa8");
+      burst(mx, my, "#ffd36e", 40, "🌈"); confetti(mx, my, 40); sparkleSound(); shake = 14; buzz(30);
+      balls = balls.filter(o => Math.hypot(o.x - mx, o.y - my) > 130);
+      onMergeEvents(MAX_TIER); afterScore(); return;
+    }
+
+    let baseTier, nt;
+    if (aw && bw) { baseTier = 0; nt = 1; }
+    else if (aw || bw) { const o = aw ? b : a; baseTier = o.tier; nt = Math.min(o.tier + 1, MAX_TIER); }
+    else { baseTier = a.tier; nt = Math.min(a.tier + 1, MAX_TIER); }
+
     combo++; comboTimer = 90;
-    const base = (a.tier + 1) * 10;
-    const mult = 1 + (combo - 1) * 0.5;
-    const gained = Math.round(base * mult);
+    if (combo > stats.bestCombo) { stats.bestCombo = combo; saveStats(); }
+    const gained = Math.round((baseTier + 1) * 10 * (1 + (combo - 1) * 0.5));
     score += gained;
     addFloater(mx, my - 10, "+" + gained, "#c44d96");
     if (combo > 1) addFloater(mx, my - 32, "combo x" + combo + "!", "#7c5cff");
 
-    discover(a.tier);
-    mergeSound(a.tier);
-    burst(mx, my, TIERS[a.tier].c2, 14, "✨");
+    discover(baseTier);
+    mergeSound(baseTier); buzz(12);
+    burst(mx, my, TIERS[Math.max(0, baseTier)].c2, 14, "✨");
     ring(mx, my, TIERS[nt].c2, 26 + nt * 8);
     sticker(mx, my - 14, pick(FACES), 22 + nt);
     pulseScore();
     if (combo >= 3) { confetti(mx, my, Math.min(8 + combo * 2, 22)); shake = Math.max(shake, 4); }
 
-    if (a.tier < MAX_TIER) {
-      const nb = makeBall(mx, my, nt, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2 - 1.5);
-      nb.pop = 1;
-      balls.push(nb);
-      discover(nt);
-      if (nt === MAX_TIER && !rainbowMade) {
-        rainbowMade = true;
-        celebrateRainbow(mx, my);
-      }
-    } else {
-      // two rainbows merged -> mega bonus + clear nearby
-      score += 500;
-      addFloater(mx, my, "🌈 +500!", "#ff5fa8");
-      burst(mx, my, "#ffd36e", 40, "🌈");
-      sparkleSound();
-      shake = 14;
-      balls = balls.filter(o => Math.hypot(o.x - mx, o.y - my) > 130);
-    }
+    const nb = makeBall(mx, my, nt, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2 - 1.5);
+    nb.pop = 1; balls.push(nb);
+    discover(nt);
+    if (nt > stats.maxTier) { stats.maxTier = nt; saveStats(); }
+    if (nt === MAX_TIER && !rainbowMade) { rainbowMade = true; celebrateRainbow(mx, my); }
 
-    // earn wands
+    // earn a wand every few merges
     mergesSinceWand++;
-    if (mergesSinceWand >= WAND_EVERY) {
-      mergesSinceWand = 0;
-      wands++;
-      updateWand();
-      addFloater(mx, my - 50, "🪄 wand!", "#ff9e3d");
-      sparkleSound();
-    }
+    if (mergesSinceWand >= WAND_EVERY) { mergesSinceWand = 0; inv.wand++; saveInv(); refreshPowerBar(); addFloater(mx, my - 50, "🪄 wand!", "#ff9e3d"); sparkleSound(); }
 
-    if (score > best) { best = score; localStorage.setItem("cutieMergeBest", best); }
+    addHearts(1, false);             // a heart per merge
+    onMergeEvents(baseTier, nt);
+    afterScore();
+  }
+
+  function afterScore() {
+    if (score > best) { best = score; LS.set("cutieMergeBest", best); }
     updateHud();
+  }
+  function onMergeEvents(baseTier, createdTier) {
+    stats.merges++; saveStats();
+    missionEvent("merge", baseTier);
+    if (createdTier != null) missionEvent("create", createdTier);
+    missionEvent("combo", combo);
+    missionEvent("score", best);
+    checkAchievements();
+    renderMissions();
   }
 
   function celebrateRainbow(x, y) {
-    burst(x, y, "#ff8fc7", 50, "🌈");
-    confetti(x, y, 60);
+    burst(x, y, "#ff8fc7", 50, "🌈"); confetti(x, y, 60);
     for (let i = 0; i < 6; i++) ring(x, y, pick(PASTELS), 70 + i * 22);
-    sticker(x, y - 30, "🌈", 40);
-    sparkleSound();
-    shake = 10;
+    sticker(x, y - 30, "🌈", 40); sparkleSound(); shake = 10; buzz(40);
     addFloater(x, y - 60, "RAINBOW! 🌈", "#ff5fa8");
+    toast("🌈", "You made a Rainbow!!");
   }
 
-  /* ---------- discovery book ---------- */
+  /* ---------- hearts ---------- */
+  function addHearts(n, announce) {
+    hearts += n; LS.set("cutieMergeHearts", hearts);
+    document.getElementById("hearts").textContent = hearts;
+    document.getElementById("shopBal").textContent = "💖 " + hearts;
+    if (announce) toast("💖", "+" + n + " hearts");
+  }
+
+  /* ---------- discovery ---------- */
   function discover(tier) {
+    if (tier < 0 || tier > MAX_TIER) return;
     if (!discovered.includes(tier)) {
-      discovered.push(tier);
-      localStorage.setItem("cutieMergeFound", JSON.stringify(discovered));
+      discovered.push(tier); LS.set("cutieMergeFound", discovered);
       renderCollection(tier);
-      // first-time celebration!
-      confetti(W / 2, H / 2, 28);
-      sticker(W / 2, H / 2 - 24, "🎀", 36);
-      addFloater(W / 2, H / 2 - 4, "NEW! " + TIERS[tier].name, "#c44d96");
-      sparkleSound();
+      confetti(W / 2, H / 2, 28); sticker(W / 2, H / 2 - 24, "🎀", 36);
+      addFloater(W / 2, H / 2 - 4, "NEW! " + TIERS[tier].name, "#c44d96"); sparkleSound();
+      addHearts(5, false);
+      toast(TIERS[tier].emoji, "New cutie: " + TIERS[tier].name + "!  +5💖");
     }
   }
-
   function renderCollection(popTier) {
-    const grid = document.getElementById("collGrid");
-    grid.innerHTML = "";
+    const grid = document.getElementById("collGrid"); grid.innerHTML = "";
     TIERS.forEach((t, i) => {
+      const found = discovered.includes(i);
       const cell = document.createElement("div");
-      cell.className = "coll-cell" + (discovered.includes(i) ? " found" : "");
-      if (popTier === i) cell.classList.add("pop");
-      cell.textContent = discovered.includes(i) ? t.emoji : "";
-      cell.title = discovered.includes(i) ? t.name : "??? keep merging!";
-      if (!discovered.includes(i)) {
-        const lock = document.createElement("span");
-        lock.className = "lock"; lock.textContent = "❔";
-        cell.appendChild(lock);
-      }
+      cell.className = "coll-cell" + (found ? " found" : "") + (popTier === i ? " pop" : "");
+      cell.textContent = found ? t.emoji : "";
+      cell.title = found ? t.name : "??? keep merging!";
+      if (!found) { const lock = document.createElement("span"); lock.className = "lock"; lock.textContent = "❔"; cell.appendChild(lock); }
       grid.appendChild(cell);
     });
   }
 
   /* ---------- rendering ---------- */
   function drawBall(b, ghost) {
-    const t = TIERS[b.tier];
+    const isWild = b.tier === WILD;
+    const t = isWild ? null : TIERS[b.tier];
     const squish = b.pop > 0 ? 1 + Math.sin(b.pop * Math.PI) * 0.16 : 1;
-    // tiny idle "breathing" so resting cuties feel alive (visual only)
     const breathe = 1 + Math.sin(frame * 0.06 + (b.id || 0)) * 0.02;
-    const r = b.r * squish * breathe;
+    const petBoost = b.pet > 0 ? 1 + Math.sin(b.pet * Math.PI) * 0.12 : 1;
+    const r = b.r * squish * breathe * petBoost;
+    const wobble = b.pet > 0 ? Math.sin(b.pet * Math.PI * 3) * 0.22 * b.petDir : 0;
     ctx.save();
     ctx.globalAlpha = ghost ? 0.55 : 1;
-    // soft drop shadow
     if (!ghost) {
-      ctx.beginPath();
-      ctx.ellipse(b.x, b.y + r * 0.72, r * 0.82, r * 0.32, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(150,90,140,0.12)";
-      ctx.fill();
+      ctx.beginPath(); ctx.ellipse(b.x, b.y + r * 0.72, r * 0.82, r * 0.32, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(150,90,140,0.12)"; ctx.fill();
     }
-    // body gradient
     const g = ctx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.35, r * 0.2, b.x, b.y, r);
-    g.addColorStop(0, "#ffffff");
-    g.addColorStop(0.35, t.c1);
-    g.addColorStop(1, t.c2);
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = g;
-    ctx.fill();
-    // glossy ring
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
-    ctx.stroke();
-    // top highlight
-    ctx.beginPath();
-    ctx.ellipse(b.x - r * 0.32, b.y - r * 0.42, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.fill();
-    // emoji
+    if (isWild) { g.addColorStop(0, "#ffffff"); g.addColorStop(0.4, "#ffd1e8"); g.addColorStop(0.7, "#c8a2e8"); g.addColorStop(1, "#8ee6df"); }
+    else { g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, t.c1); g.addColorStop(1, t.c2); }
+    ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(b.x - r * 0.32, b.y - r * 0.42, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fill();
+    // emoji (rotates a touch when petted)
+    ctx.save();
+    ctx.translate(b.x, b.y + r * 0.06); ctx.rotate(wobble);
     ctx.font = (r * 1.15) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(t.emoji, b.x, b.y + r * 0.06);
+    ctx.fillText(isWild ? "🌈" : t.emoji, 0, 0);
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawSpeech(b, sp) {
+    ctx.save();
+    ctx.font = "600 12px 'Quicksand', sans-serif";
+    const w = Math.max(34, ctx.measureText(sp.text).width + 16), h = 22;
+    let bx = b.x, by = b.y - b.r - 16;
+    bx = Math.max(w / 2 + 2, Math.min(W - w / 2 - 2, bx));
+    by = Math.max(h / 2 + 2, by);
+    ctx.globalAlpha = Math.min(1, sp.life * 3) * Math.min(1, (1 - sp.life) * 6 + 0.2);
+    ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "rgba(180,120,200,.35)"; ctx.lineWidth = 1.5;
+    const rr = 11, x0 = bx - w / 2, y0 = by - h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x0 + rr, y0);
+    ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, rr);
+    ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, rr);
+    ctx.arcTo(x0, y0 + h, x0, y0, rr);
+    ctx.arcTo(x0, y0, x0 + w, y0, rr);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // tail
+    ctx.beginPath(); ctx.moveTo(bx - 5, y0 + h - 1); ctx.lineTo(bx, y0 + h + 7); ctx.lineTo(bx + 5, y0 + h - 1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#a65a92"; ctx.fillText(sp.text, bx, by + 1);
     ctx.restore();
   }
 
@@ -689,100 +763,61 @@
     ctx.save();
     ctx.clearRect(0, 0, W, H);
     ctx.translate(sx, sy);
-    // set text alignment once for the whole frame (cheaper than per-particle)
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
 
-    // danger line
-    ctx.save();
-    ctx.setLineDash([7, 7]);
-    ctx.strokeStyle = overflowTimer > 0 ? "rgba(255,90,150,0.85)" : "rgba(200,150,200,0.45)";
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(W, DANGER_Y); ctx.stroke();
-    ctx.restore();
+    if (slowTimer > 0) { ctx.save(); ctx.globalAlpha = 0.10; ctx.fillStyle = "#8ecbff"; ctx.fillRect(0, 0, W, H); ctx.restore(); }
 
-    // expanding merge rings (behind the cuties so they glow from under)
-    for (const rg of rings) {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, rg.life) * 0.55;
-      ctx.lineWidth = 2 + 3 * rg.life;
-      ctx.strokeStyle = rg.color;
-      ctx.beginPath(); ctx.arc(rg.x, rg.y, rg.r, 0, Math.PI * 2); ctx.stroke();
-      ctx.restore();
+    if (!zen) {
+      ctx.save(); ctx.setLineDash([7, 7]);
+      ctx.strokeStyle = overflowTimer > 0 ? "rgba(255,90,150,0.85)" : "rgba(200,150,200,0.45)";
+      ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(W, DANGER_Y); ctx.stroke(); ctx.restore();
     }
 
-    // aim guide + held cutie (with a gentle idle bob + orbiting sparkle)
+    for (const rg of rings) {
+      ctx.save(); ctx.globalAlpha = Math.max(0, rg.life) * 0.55; ctx.lineWidth = 2 + 3 * rg.life;
+      ctx.strokeStyle = rg.color; ctx.beginPath(); ctx.arc(rg.x, rg.y, rg.r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+
     if (running && !gameOver && held && dropCooldown <= 0) {
-      const t = TIERS[held.tier];
+      const isWild = held.tier === WILD;
+      const hr = isWild ? WILD_R : TIERS[held.tier].r;
       const bob = Math.sin(frame * 0.09) * 3;
-      ctx.save();
-      ctx.setLineDash([4, 8]);
-      ctx.strokeStyle = "rgba(180,120,200,0.35)";
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(aimX, SPAWN_Y + t.r); ctx.lineTo(aimX, H); ctx.stroke();
-      ctx.restore();
-      drawBall({ x: aimX, y: SPAWN_Y + bob, r: t.r, tier: held.tier, pop: 0 }, true);
-      // orbiting sparkle
+      ctx.save(); ctx.setLineDash([4, 8]); ctx.strokeStyle = "rgba(180,120,200,0.35)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(aimX, SPAWN_Y + hr); ctx.lineTo(aimX, H); ctx.stroke(); ctx.restore();
+      drawBall({ x: aimX, y: SPAWN_Y + bob, r: hr, tier: held.tier, pop: 0, pet: 0 }, true);
       const oa = frame * 0.08;
-      ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.font = "14px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("✨", aimX + Math.cos(oa) * (t.r + 8), SPAWN_Y + bob + Math.sin(oa) * (t.r + 8));
-      ctx.restore();
+      ctx.save(); ctx.globalAlpha = 0.85; ctx.font = "14px serif";
+      ctx.fillText("✨", aimX + Math.cos(oa) * (hr + 8), SPAWN_Y + bob + Math.sin(oa) * (hr + 8)); ctx.restore();
     }
 
     for (const b of balls) drawBall(b, false);
 
-    // particles
+    // speech bubbles above their cuties
+    for (const sp of speeches) { const b = balls.find(x => x.id === sp.id); if (b) drawSpeech(b, sp); }
+
     for (const p of particles) {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, p.life) * (p.ambient ? 0.6 : 1);
-      if (p.emoji) {
-        ctx.font = ((p.size * 2.4) | 0) + "px serif";
-        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-        ctx.fillText(p.emoji, 0, 0);
-      } else if (p.confetti) {
-        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-        ctx.fillStyle = p.color;
-        const s = p.size;
-        ctx.fillRect(-s / 2, -s / 3, s, s * 0.66);
-      } else {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color; ctx.fill();
-      }
+      ctx.save(); ctx.globalAlpha = Math.max(0, p.life) * (p.ambient ? 0.6 : 1);
+      if (p.emoji) { ctx.font = ((p.size * 2.4) | 0) + "px serif"; ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillText(p.emoji, 0, 0); }
+      else if (p.confetti) { ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color; const s = p.size; ctx.fillRect(-s / 2, -s / 3, s, s * 0.66); }
+      else { ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); }
       ctx.restore();
     }
-    // floaters (with a little pop-in scale)
     for (const f of floaters) {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, f.life);
-      ctx.translate(f.x, f.y); ctx.scale(f.scale, f.scale);
-      ctx.font = "700 17px 'Fredoka', sans-serif";
-      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      ctx.strokeText(f.text, 0, 0);
-      ctx.fillStyle = f.color; ctx.fillText(f.text, 0, 0);
-      ctx.restore();
+      ctx.save(); ctx.globalAlpha = Math.max(0, f.life); ctx.translate(f.x, f.y); ctx.scale(f.scale, f.scale);
+      ctx.font = "700 17px 'Fredoka', sans-serif"; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.strokeText(f.text, 0, 0); ctx.fillStyle = f.color; ctx.fillText(f.text, 0, 0); ctx.restore();
     }
-    // kawaii pop-in stickers
     for (const s of stickers) {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, s.life);
-      ctx.translate(s.x, s.y); ctx.rotate(s.rot * (1 - s.life)); ctx.scale(s.scale, s.scale);
-      ctx.font = s.size + "px 'Segoe UI Emoji', serif";
-      ctx.fillStyle = "#ff7ec0";  // pastel fallback so any non-color glyph isn't black
-      ctx.fillText(s.text, 0, 0);
-      ctx.restore();
+      ctx.save(); ctx.globalAlpha = Math.max(0, s.life); ctx.translate(s.x, s.y); ctx.rotate(s.rot * (1 - s.life)); ctx.scale(s.scale, s.scale);
+      ctx.font = s.size + "px 'Segoe UI Emoji', serif"; ctx.fillStyle = "#ff7ec0"; ctx.fillText(s.text, 0, 0); ctx.restore();
     }
     ctx.restore();
   }
 
   function updateFx() {
     for (const p of particles) {
-      p.x += p.vx; p.y += p.vy;
-      p.vy += p.ambient ? 0 : (p.confetti ? 0.07 : 0.12);
-      p.vx *= 0.99;
-      if (p.confetti) p.vx += Math.sin((frame + p.rot * 9) * 0.12) * 0.09; // flutter
+      p.x += p.vx; p.y += p.vy; p.vy += p.ambient ? 0 : (p.confetti ? 0.07 : 0.12); p.vx *= 0.99;
+      if (p.confetti) p.vx += Math.sin((frame + p.rot * 9) * 0.12) * 0.09;
       p.rot += p.vr; p.life -= p.decay;
     }
     particles = particles.filter(p => p.life > 0 && p.y > -20);
@@ -792,62 +827,56 @@
     rings = rings.filter(r => r.life > 0);
     for (const s of stickers) { s.y += s.vy; s.vy *= 0.95; s.life -= 0.011; s.scale += (1.1 - s.scale) * 0.25; }
     stickers = stickers.filter(s => s.life > 0);
+    for (const sp of speeches) sp.life -= 0.006;
+    speeches = speeches.filter(sp => sp.life > 0 && balls.some(b => b.id === sp.id));
   }
 
   /* ---------- main loop ---------- */
-  let raf = null;
   function loop() {
     frame++;
     if (running && !gameOver) {
       step();
-      if (dropCooldown > 0) {
-        dropCooldown--;
-        if (dropCooldown === 0 && !held) { held = { tier: nextTier }; nextTier = randDropTier(); updateHud(); }
-      }
-      // drip-feed gentle ambient sparkles floating up the board
+      if (dropCooldown > 0) { dropCooldown--; if (dropCooldown === 0 && !held) { held = { tier: nextTier }; nextTier = randDropTier(); updateHud(); } }
       if (--ambientTimer <= 0) { ambientTimer = 20 + Math.random() * 28; spawnAmbient(); }
     }
     updateFx();
     render();
-    raf = requestAnimationFrame(loop);
+    requestAnimationFrame(loop);
   }
 
   /* ---------- input ---------- */
-  function pointerX(e) {
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    return Math.max(0, Math.min(W, cx * (W / rect.width)));
-  }
-  function pointerY(e) {
-    const rect = canvas.getBoundingClientRect();
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    return cy * (H / rect.height);
-  }
+  function pointerX(e) { const r = canvas.getBoundingClientRect(); const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left; return Math.max(0, Math.min(W, cx * (W / r.width))); }
+  function pointerY(e) { const r = canvas.getBoundingClientRect(); const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top; return cy * (H / r.height); }
+  function ballAt(px, py) { for (let i = balls.length - 1; i >= 0; i--) { const b = balls[i]; if (Math.hypot(b.x - px, b.y - py) <= b.r) return b; } return null; }
 
-  function onMove(e) {
-    if (!running) return;
-    aimX = pointerX(e);
-  }
+  function onMove(e) { if (running) aimX = pointerX(e); }
   function onDown(e) {
     ensureAudio();
     if (!running || gameOver) return;
     e.preventDefault();
     const px = pointerX(e), py = pointerY(e);
-    if (wandArmed) { tryWand(px, py); return; }
-    aimX = px;
-    drop();
+    if (armedPower) { usePowerAt(px, py); return; }
+    // tap a settled cutie to PET it; tap empty space (or near top) to DROP
+    const hit = ballAt(px, py);
+    if (hit && hit.y > DANGER_Y + 6 && Math.hypot(hit.vx, hit.vy) < 1.4) { petCutie(hit); return; }
+    aimX = px; drop();
   }
-
   function drop() {
     if (!held || dropCooldown > 0) return;
-    const t = held.tier;
-    const r = TIERS[t].r;
+    const r = held.tier === WILD ? WILD_R : TIERS[held.tier].r;
     const x = Math.max(r, Math.min(W - r, aimX));
-    balls.push(makeBall(x, SPAWN_Y, t, 0, 1));
-    dropSound();
-    held = null;
-    dropCooldown = 24; // ~0.4s
-    updateHud();
+    balls.push(makeBall(x, SPAWN_Y, held.tier, 0, 1));
+    dropSound(); held = null; dropCooldown = 24; updateHud();
+  }
+  function petCutie(b) {
+    b.pet = 1; b.petDir = Math.random() < 0.5 ? -1 : 1; b.still = 0;
+    heartPuff(b.x, b.y - b.r * 0.4, 4);
+    boopSound(b.tier === WILD ? 0 : b.tier); buzz(8);
+    stats.pets++; saveStats();
+    fluff++;
+    if (fluff >= FLUFF_PER_HEART) { fluff = 0; addHearts(1, false); sticker(b.x, b.y - b.r - 8, "💖", 22); }
+    if (Math.random() < 0.5 && !speeches.some(s => s.id === b.id) && speeches.length < 2) speeches.push({ id: b.id, text: pick(["♡","uwu","hehe","💕","nya~"]), life: 1 });
+    checkAchievements();
   }
 
   canvas.addEventListener("mousemove", onMove);
@@ -860,94 +889,181 @@
     if (e.key === "ArrowLeft") { aimX = Math.max(0, aimX - 18); e.preventDefault(); }
     else if (e.key === "ArrowRight") { aimX = Math.min(W, aimX + 18); e.preventDefault(); }
     else if (e.key === " ") { ensureAudio(); drop(); e.preventDefault(); }
-    else if (e.key.toLowerCase() === "w") { armWand(); }
+    else if (e.key >= "1" && e.key <= "5") { ensureAudio(); armPower(POWERS[+e.key - 1].id); }
   });
 
-  /* ---------- magic wand ---------- */
-  function armWand() {
-    if (wands <= 0 || !running || gameOver) return;
-    wandArmed = !wandArmed;
-    updateWand();
+  /* ---------- power-ups ---------- */
+  const POWERS = [
+    { id: "wand",    icon: "🪄", name: "Wand",    desc: "Pop any one cutie.",            price: 15, arm: true },
+    { id: "bomb",    icon: "💋", name: "Kiss",    desc: "Clear a little cluster.",       price: 25, arm: true },
+    { id: "rainbow", icon: "🌈", name: "Wish",    desc: "Next drop merges with anything!",price: 30, arm: false },
+    { id: "swap",    icon: "🔄", name: "Swap",    desc: "Shuffle current & next cutie.",  price: 10, arm: false },
+    { id: "slow",    icon: "❄️", name: "Slow",    desc: "Gentle gravity for a while.",    price: 20, arm: false },
+  ];
+  const saveInv = () => LS.set("cutieMergeInv", inv);
+  const saveStats = () => LS.set("cutieMergeStats", stats);
+
+  function armPower(id) {
+    if (!running || gameOver) return;
+    if (inv[id] <= 0) { openShop(); return; }
+    const p = POWERS.find(x => x.id === id);
+    if (p.arm) armedPower = armedPower === id ? null : id;
+    else usePowerInstant(id);
+    refreshPowerBar();
   }
-  function tryWand(px, py) {
-    // pop the cutie under the pointer (smallest tier preference among hits)
-    let hit = null;
-    for (const b of balls) {
-      if (Math.hypot(b.x - px, b.y - py) <= b.r) {
-        if (!hit || b.tier < hit.tier) hit = b;
+  function usePowerInstant(id) {
+    if (inv[id] <= 0) return;
+    if (id === "rainbow") { held = { tier: WILD }; dropCooldown = 0; addFloater(aimX, SPAWN_Y + 40, "🌈 Wish!", "#ff5fa8"); }
+    else if (id === "swap") { if (held && held.tier !== WILD) held.tier = randDropTier(); nextTier = randDropTier(); sticker(W / 2, SPAWN_Y, "🔄", 26); }
+    else if (id === "slow") { slowTimer = 360; sticker(W / 2, H / 2, "❄️", 40); }
+    inv[id]--; saveInv(); sparkleSound(); updateHud(); refreshPowerBar();
+  }
+  function usePowerAt(px, py) {
+    if (armedPower === "wand") {
+      let hit = null; for (const b of balls) if (Math.hypot(b.x - px, b.y - py) <= b.r) { if (!hit || b.tier < hit.tier) hit = b; }
+      if (hit) { burst(hit.x, hit.y, hit.tier === WILD ? "#ffd1e8" : TIERS[hit.tier].c2, 16, "✨"); sparkleSound(); balls = balls.filter(b => b !== hit); inv.wand--; saveInv(); }
+    } else if (armedPower === "bomb") {
+      const R = 72, victims = balls.filter(b => Math.hypot(b.x - px, b.y - py) <= R);
+      if (victims.length) { for (const v of victims) burst(v.x, v.y, "#ff8fc7", 10, "💕"); ring(px, py, "#ff5fa8", R * 1.6); confetti(px, py, 18); sparkleSound(); shake = 8; buzz(20); balls = balls.filter(b => victims.indexOf(b) < 0); inv.bomb--; saveInv(); }
+    }
+    armedPower = null; refreshPowerBar();
+  }
+
+  const powerBar = document.getElementById("powerBar");
+  POWERS.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.className = "pw"; btn.id = "pw-" + p.id;
+    btn.innerHTML = '<span class="pw-ic">' + p.icon + '</span><span class="pw-nm">' + p.name + '</span><span class="pw-ct" id="pwct-' + p.id + '">0</span>';
+    btn.title = p.name + ": " + p.desc;
+    btn.addEventListener("click", () => { ensureAudio(); armPower(p.id); });
+    powerBar.appendChild(btn);
+  });
+  function refreshPowerBar() {
+    for (const p of POWERS) {
+      document.getElementById("pwct-" + p.id).textContent = inv[p.id];
+      const btn = document.getElementById("pw-" + p.id);
+      btn.classList.toggle("dim", inv[p.id] <= 0);
+      btn.classList.toggle("armed", armedPower === p.id);
+    }
+    canvas.style.cursor = armedPower ? "crosshair" : "pointer";
+  }
+
+  /* ---------- missions ---------- */
+  let missions = LS.get("cutieMergeMissions", null);
+  function genMission(avoidTexts) {
+    const makers = [
+      () => { const t = 1 + ((Math.random() * 6) | 0), n = 4 + ((Math.random() * 8) | 0); return { type: "merge", t, target: n, progress: 0, reward: 6 + t * 2, text: "Merge " + n + " " + TIERS[t].name + "s " + TIERS[t].emoji }; },
+      () => { const n = 12 + ((Math.random() * 25) | 0); return { type: "mergeAny", target: n, progress: 0, reward: 10, text: "Do " + n + " merges ✨" }; },
+      () => { const t = 4 + ((Math.random() * 5) | 0); return { type: "create", t, target: 1, progress: 0, reward: 8 + t * 2, text: "Create a " + TIERS[t].name + " " + TIERS[t].emoji }; },
+      () => { const n = 800 + ((Math.random() * 18) | 0) * 150; return { type: "score", target: n, progress: 0, reward: 12, text: "Reach " + n + " best score 🏆" }; },
+      () => { const n = 3 + ((Math.random() * 4) | 0); return { type: "combo", target: n, progress: 0, reward: 10, text: "Hit a x" + n + " combo 💥" }; },
+    ];
+    for (let tries = 0; tries < 20; tries++) { const m = pick(makers)(); if (!avoidTexts || avoidTexts.indexOf(m.text) < 0) return m; }
+    return makers[0]();
+  }
+  if (!Array.isArray(missions) || missions.length !== 3) {
+    missions = []; const seen = []; for (let i = 0; i < 3; i++) { const m = genMission(seen); seen.push(m.text); missions.push(m); }
+    LS.set("cutieMergeMissions", missions);
+  }
+  function missionEvent(type, val) {
+    let changed = false;
+    for (const m of missions) {
+      if (m.done) continue;
+      if (type === "merge" && m.type === "merge" && val === m.t) { m.progress++; changed = true; }
+      else if (type === "merge" && m.type === "mergeAny") { m.progress++; changed = true; }
+      else if (type === "create" && m.type === "create" && val >= m.t) { m.progress = 1; changed = true; }
+      else if (type === "combo" && m.type === "combo") { m.progress = Math.max(m.progress, val); changed = true; }
+      else if (type === "score" && m.type === "score") { m.progress = Math.max(m.progress, val); changed = true; }
+      if (m.progress >= m.target && !m.done) { m.done = true; addHearts(m.reward, false); toast("🎯", "Mission done! +" + m.reward + "💖"); }
+    }
+    if (changed) {
+      missions = missions.map(m => m.done ? null : m);
+      const seen = missions.filter(Boolean).map(m => m.text);
+      missions = missions.map(m => { if (m) return m; const nm = genMission(seen); seen.push(nm.text); return nm; });
+      LS.set("cutieMergeMissions", missions);
+    }
+  }
+  function renderMissions() {
+    const list = document.getElementById("missionList"); list.innerHTML = "";
+    for (const m of missions) {
+      const pct = Math.min(100, Math.round(100 * m.progress / m.target));
+      const row = document.createElement("div");
+      row.className = "mission" + (m.done ? " done" : "");
+      row.innerHTML =
+        '<span class="m-ic">🎀</span>' +
+        '<div class="m-body"><div class="m-text">' + m.text + '</div>' +
+        '<div class="m-bar"><div class="m-fill" style="width:' + pct + '%"></div></div></div>' +
+        '<span class="m-rw">' + Math.min(m.progress, m.target) + '/' + m.target + ' · ' + m.reward + '💖</span>';
+      list.appendChild(row);
+    }
+  }
+
+  /* ---------- achievements ---------- */
+  const ACH = [
+    { id: "firstmerge", icon: "🥚", name: "First Merge",     desc: "Merge your first pair",  reward: 5,  test: () => stats.merges >= 1 },
+    { id: "kitten",     icon: "🐱", name: "Kitten Cuddle",   desc: "Create a Kitten",        reward: 8,  test: () => stats.maxTier >= 3 },
+    { id: "unicorn",    icon: "🦄", name: "Unicorn Magic",   desc: "Create a Unicorn",       reward: 20, test: () => stats.maxTier >= 8 },
+    { id: "rainbow",    icon: "🌈", name: "Over the Rainbow",desc: "Create a Rainbow",       reward: 40, test: () => stats.maxTier >= 10 },
+    { id: "combo5",     icon: "💥", name: "Combo Cutie",     desc: "Hit a x5 combo",         reward: 15, test: () => stats.bestCombo >= 5 },
+    { id: "merges100",  icon: "💯", name: "Century Snuggles",desc: "100 lifetime merges",    reward: 25, test: () => stats.merges >= 100 },
+    { id: "pet50",      icon: "🫶", name: "Best Friend",     desc: "Pet cuties 50 times",    reward: 15, test: () => stats.pets >= 50 },
+    { id: "collector",  icon: "📖", name: "Collector",       desc: "Discover every cutie",   reward: 50, test: () => discovered.length >= TIERS.length },
+  ];
+  function checkAchievements() {
+    for (const a of ACH) {
+      if (achUnlocked.indexOf(a.id) < 0 && a.test()) {
+        achUnlocked.push(a.id); LS.set("cutieMergeAch", achUnlocked);
+        addHearts(a.reward, false); toast(a.icon, "Achievement: " + a.name + "! +" + a.reward + "💖");
+        confetti(W / 2, H / 2, 24);
       }
     }
-    if (hit) {
-      burst(hit.x, hit.y, TIERS[hit.tier].c2, 16, "✨");
-      sparkleSound();
-      balls = balls.filter(b => b !== hit);
-      wands--; wandArmed = false;
-      updateWand();
-    }
-  }
-  document.getElementById("wandBtn").addEventListener("click", () => { ensureAudio(); armWand(); });
-
-  function updateWand() {
-    const btn = document.getElementById("wandBtn");
-    document.getElementById("wandCount").textContent = "🪄" + wands;
-    btn.classList.toggle("dim", wands <= 0);
-    btn.classList.toggle("ready", wands > 0 && !wandArmed);
-    btn.classList.toggle("armed", wandArmed);
-    canvas.style.cursor = wandArmed ? "crosshair" : "pointer";
   }
 
-  /* ---------- hud ---------- */
-  function updateHud() {
-    document.getElementById("score").textContent = score;
-    document.getElementById("best").textContent = best;
-    document.getElementById("next").textContent = TIERS[nextTier].emoji;
+  /* ---------- toasts ---------- */
+  function toast(icon, text) {
+    const box = document.getElementById("toasts");
+    const el = document.createElement("div");
+    el.className = "toast"; el.innerHTML = '<span class="t-ic">' + icon + '</span><span>' + text + '</span>';
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
   }
 
-  /* ---------- game flow ---------- */
-  function resetGame() {
-    balls = []; particles = []; floaters = []; rings = []; stickers = [];
-    score = 0; combo = 0; comboTimer = 0; overflowTimer = 0;
-    wands = 0; wandArmed = false; mergesSinceWand = 0; rainbowMade = false;
-    nextTier = randDropTier();
-    held = { tier: randDropTier() };
-    dropCooldown = 0; gameOver = false;
-    updateHud(); updateWand();
+  /* ---------- themes ---------- */
+  const THEMES = [
+    { id: "candy", name: "Cotton Candy", price: 0, dark: false,
+      page: "radial-gradient(1200px 600px at 15% -10%, #ffe3f3 0%, rgba(255,227,243,0) 60%),radial-gradient(1000px 700px at 100% 0%, #e7dbff 0%, rgba(231,219,255,0) 55%),radial-gradient(900px 700px at 50% 120%, #d6fff6 0%, rgba(214,255,246,0) 55%),linear-gradient(160deg, #fff1f8 0%, #f4ecff 50%, #ecfbff 100%)",
+      board: "radial-gradient(120% 80% at 50% 0%, #fff8fd 0%, #ffeaf6 55%, #f3e4ff 100%)",
+      deco: ["🌸","💕","✨","🦄","🐱","🌷","💜","🐰","⭐","🍬"] },
+    { id: "mint", name: "Mint Dream", price: 40, dark: false,
+      page: "linear-gradient(160deg,#eafff7 0%,#e4fbff 50%,#f0fff4 100%)",
+      board: "radial-gradient(120% 80% at 50% 0%, #f5fffb 0%, #d9fff0 55%, #d6f5ff 100%)",
+      deco: ["🌿","💚","✨","🐢","🍀","🦋","💎","🐰","⭐","🫧"] },
+    { id: "peach", name: "Sunny Peach", price: 40, dark: false,
+      page: "linear-gradient(160deg,#fff6e6 0%,#fff0f0 50%,#fffbe6 100%)",
+      board: "radial-gradient(120% 80% at 50% 0%, #fffaf0 0%, #ffe6cf 55%, #ffe0ec 100%)",
+      deco: ["🌻","🍑","✨","🐥","🌼","🧡","🍊","🐝","⭐","🍮"] },
+    { id: "sakura", name: "Sakura", price: 80, dark: false,
+      page: "linear-gradient(160deg,#ffeaf3 0%,#ffe0ee 50%,#fff0f6 100%)",
+      board: "radial-gradient(120% 80% at 50% 0%, #fff5fa 0%, #ffd9ea 55%, #ffc2dd 100%)",
+      deco: ["🌸","🌸","💗","🌷","✨","🍡","🎀","🌸","💮","🌸"] },
+    { id: "night", name: "Lavender Night", price: 120, dark: true,
+      page: "linear-gradient(160deg,#2a2140 0%,#3a2a55 50%,#241b3a 100%)",
+      board: "radial-gradient(120% 80% at 50% 0%, #4a3a6e 0%, #3a2c59 55%, #2a1f44 100%)",
+      deco: ["🌙","⭐","✨","💜","🌟","🔮","💫","🦄","☁️","💤"] },
+  ];
+  function applyTheme(id) {
+    const th = THEMES.find(t => t.id === id) || THEMES[0];
+    themeId = th.id; LS.set("cutieMergeTheme", themeId);
+    document.body.style.background = th.page;
+    document.body.classList.toggle("dark", !!th.dark);
+    canvas.style.background = th.board;
+    buildDeco(th.deco);
   }
-  function startGame() {
-    ensureAudio();
-    resetGame();
-    running = true;
-    document.getElementById("overlay").classList.remove("show");
-  }
-  function endGame() {
-    gameOver = true; running = false;
-    shake = 8;
-    if (score > best) { best = score; localStorage.setItem("cutieMergeBest", best); }
-    const ov = document.getElementById("overlay");
-    document.getElementById("ovBig").textContent = "🌷";
-    document.getElementById("ovTitle").textContent = "Cuties Overflowed!";
-    document.getElementById("ovText").innerHTML =
-      "You scored <b>" + score + "</b> points 💕<br>Best: " + best;
-    document.getElementById("startBtn").textContent = "Play again 🌸";
-    ov.classList.add("show");
-    updateHud();
-  }
-
-  document.getElementById("startBtn").addEventListener("click", startGame);
-  document.getElementById("restartBtn").addEventListener("click", () => { startGame(); });
-  document.getElementById("muteBtn").addEventListener("click", function () {
-    muted = !muted;
-    this.textContent = muted ? "🔇 Muted" : "🔊 Sound";
-    if (!muted) ensureAudio();
-  });
-
-  /* ---------- background deco ---------- */
-  (function deco() {
-    const wrap = document.getElementById("bgDeco");
-    const cuties = ["🌸","💕","✨","🦄","🐱","🌷","💜","🐰","⭐","🍬"];
+  function buildDeco(set) {
+    const wrap = document.getElementById("bgDeco"); wrap.innerHTML = "";
     for (let i = 0; i < 16; i++) {
       const s = document.createElement("span");
-      s.textContent = cuties[i % cuties.length];
+      s.textContent = set[i % set.length];
       s.style.left = Math.random() * 100 + "vw";
       s.style.fontSize = (14 + Math.random() * 20) + "px";
       const dur = 14 + Math.random() * 18;
@@ -955,12 +1071,119 @@
       s.style.animationDelay = (-Math.random() * dur) + "s";
       wrap.appendChild(s);
     }
-  })();
+  }
+
+  /* ---------- shop ---------- */
+  const shop = document.getElementById("shop");
+  function openShop() { renderShop(); shop.classList.add("show"); }
+  function closeShop() { shop.classList.remove("show"); }
+  function renderShop() {
+    document.getElementById("shopBal").textContent = "💖 " + hearts;
+    // power-ups
+    const pg = document.getElementById("shopPowers"); pg.innerHTML = "";
+    for (const p of POWERS) {
+      const card = document.createElement("div"); card.className = "card";
+      card.innerHTML = '<div class="c-ic">' + p.icon + '</div><div class="c-nm">' + p.name + ' <span style="color:#a07e98">×' + inv[p.id] + '</span></div>' +
+        '<div class="c-ds">' + p.desc + '</div>';
+      const buy = document.createElement("button"); buy.className = "c-buy"; buy.textContent = "Buy 💖" + p.price;
+      buy.disabled = hearts < p.price;
+      buy.addEventListener("click", () => { if (hearts >= p.price) { addHearts(-p.price); inv[p.id]++; saveInv(); refreshPowerBar(); renderShop(); sparkleSound(); } });
+      card.appendChild(buy); pg.appendChild(card);
+    }
+    // themes
+    const tg = document.getElementById("shopThemes"); tg.innerHTML = "";
+    for (const th of THEMES) {
+      const owned = ownedThemes.indexOf(th.id) >= 0, equipped = themeId === th.id;
+      const card = document.createElement("div"); card.className = "card" + (owned ? "" : " locked");
+      card.innerHTML = '<div class="c-ic">🎨</div><div class="c-nm">' + th.name + '</div><div class="c-ds">' + (owned ? "Owned" : "Unlock this look") + '</div>';
+      const btn = document.createElement("button"); btn.className = "c-buy" + (equipped ? " equipped" : "");
+      btn.textContent = equipped ? "Equipped ✓" : owned ? "Equip" : "Buy 💖" + th.price;
+      btn.disabled = equipped || (!owned && hearts < th.price);
+      btn.addEventListener("click", () => {
+        if (equipped) return;
+        if (owned) { applyTheme(th.id); renderShop(); }
+        else if (hearts >= th.price) { addHearts(-th.price); ownedThemes.push(th.id); LS.set("cutieMergeThemes", ownedThemes); applyTheme(th.id); renderShop(); sparkleSound(); toast("🎨", th.name + " unlocked!"); }
+      });
+      card.appendChild(btn); tg.appendChild(card);
+    }
+    // achievements
+    const ag = document.getElementById("shopAch"); ag.innerHTML = "";
+    for (const a of ACH) {
+      const got = achUnlocked.indexOf(a.id) >= 0;
+      const row = document.createElement("div"); row.className = "ach" + (got ? " got" : "");
+      row.innerHTML = '<span class="a-ic">' + a.icon + '</span><div><div class="a-nm">' + a.name + '</div><div class="a-ds">' + a.desc + '</div></div><span class="a-rw">' + (got ? "✓ " : "") + a.reward + '💖</span>';
+      ag.appendChild(row);
+    }
+  }
+
+  /* ---------- hud ---------- */
+  function updateHud() {
+    document.getElementById("score").textContent = score;
+    document.getElementById("best").textContent = best;
+    document.getElementById("hearts").textContent = hearts;
+    document.getElementById("next").textContent = TIERS[nextTier].emoji;
+  }
+
+  /* ---------- game flow ---------- */
+  function resetGame() {
+    balls = []; particles = []; floaters = []; rings = []; stickers = []; speeches = [];
+    score = 0; combo = 0; comboTimer = 0; overflowTimer = 0; slowTimer = 0; mergesSinceWand = 0; rainbowMade = false;
+    armedPower = null;
+    nextTier = randDropTier(); held = { tier: randDropTier() };
+    dropCooldown = 0; gameOver = false;
+    updateHud(); refreshPowerBar();
+  }
+  function startGame() {
+    ensureAudio(); resetGame(); zen = zenPref; running = true;
+    stats.games++; saveStats();
+    document.getElementById("overlay").classList.remove("show");
+  }
+  function endGame() {
+    gameOver = true; running = false; shake = 8;
+    if (score > best) { best = score; LS.set("cutieMergeBest", best); }
+    const ov = document.getElementById("overlay");
+    document.getElementById("ovBig").textContent = "🌷";
+    document.getElementById("ovTitle").textContent = "Cuties Overflowed!";
+    document.getElementById("ovText").innerHTML = "You scored <b>" + score + "</b> points 💕<br>Best: " + best + " &nbsp;•&nbsp; 💖 " + hearts;
+    document.getElementById("startBtn").textContent = "Play again 🌸";
+    ov.classList.add("show"); updateHud();
+  }
+
+  function updateZenBtn() { const b = document.getElementById("zenBtn"); b.textContent = "🌙 Zen Mode: " + (zenPref ? "On" : "Off"); b.classList.toggle("on", zenPref); }
+
+  document.getElementById("startBtn").addEventListener("click", startGame);
+  document.getElementById("restartBtn").addEventListener("click", startGame);
+  document.getElementById("zenBtn").addEventListener("click", () => { zenPref = !zenPref; LS.set("cutieMergeZen", zenPref); updateZenBtn(); });
+  document.getElementById("shopBtn").addEventListener("click", () => { ensureAudio(); openShop(); });
+  document.getElementById("shopClose").addEventListener("click", closeShop);
+  shop.addEventListener("click", (e) => { if (e.target === shop) closeShop(); });
+  document.getElementById("muteBtn").addEventListener("click", function () { muted = !muted; LS.set("cutieMergeMuted", muted); this.textContent = muted ? "🔇 SFX" : "🔊 SFX"; this.classList.toggle("off", muted); if (!muted) ensureAudio(); });
+  document.getElementById("musicBtn").addEventListener("click", function () { musicOn = !musicOn; LS.set("cutieMergeMusic", musicOn); this.classList.toggle("off", !musicOn); if (musicOn) { ensureAudio(); startMusic(); } else stopMusic(); });
+  document.getElementById("hapticBtn").addEventListener("click", function () { haptics = !haptics; LS.set("cutieMergeHaptics", haptics); this.classList.toggle("off", !haptics); if (haptics) buzz(15); });
+
+  /* ---------- daily reward ---------- */
+  function checkDaily() {
+    const today = new Date().toISOString().slice(0, 10);
+    const d = LS.get("cutieMergeDaily", { last: "", streak: 0 });
+    if (d.last === today) return;
+    const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    d.streak = d.last === y ? (d.streak || 0) + 1 : 1;
+    d.last = today; LS.set("cutieMergeDaily", d);
+    const reward = Math.min(10 + (d.streak - 1) * 3, 40);
+    addHearts(reward, false);
+    setTimeout(() => toast("🎁", "Daily reward! +" + reward + "💖  (streak " + d.streak + ")"), 600);
+  }
 
   /* ---------- boot ---------- */
-  renderCollection();
-  updateHud();
-  updateWand();
+  applyTheme(themeId);
+  renderCollection(); renderMissions();
+  updateHud(); refreshPowerBar(); updateZenBtn();
+  document.getElementById("muteBtn").textContent = muted ? "🔇 SFX" : "🔊 SFX";
+  document.getElementById("muteBtn").classList.toggle("off", muted);
+  document.getElementById("musicBtn").classList.toggle("off", !musicOn);
+  document.getElementById("hapticBtn").classList.toggle("off", !haptics);
+  checkAchievements();
+  checkDaily();
   loop();
 })();
 </script>
