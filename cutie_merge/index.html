@@ -859,6 +859,21 @@
     c.fillText(emoji, S / 2, S / 2);
     cv._S = S; glyphs[emoji] = cv; return cv;
   }
+  // Draw the player's full dressed avatar (all layers + their saved nudges) centered
+  // at the current canvas origin, sized to fit a `box`-wide area. Used for the
+  // "drop as my cutie" tier-0 ball so it shows your actual creation, not just the animal.
+  function drawAvatarLayers(box) {
+    const adj = avatar.adj || {};
+    for (const slot of LAYER_ORDER) {
+      const emoji = slot === "base" ? (avatar.base || "🐱") : avatar[slot];
+      if (!emoji) continue;
+      const Lo = LAYOUT[slot], a = adj[slot] || {};
+      const lx = (((Lo.l - 50) + (a.x || 0)) / 100) * box;
+      const ly = (((Lo.t - 50) + (a.y || 0)) / 100) * box;
+      const dd = box * Lo.f * (a.s || 1) / 0.86;
+      ctx.drawImage(getGlyph(emoji), lx - dd / 2, ly - dd / 2, dd, dd);
+    }
+  }
 
   function drawBall(b, ghost) {
     const isWild = b.tier === WILD;
@@ -875,17 +890,18 @@
       ctx.fillStyle = "rgba(150,90,140,0.12)"; ctx.fill();
     }
     if (asMe) {
-      // tier-0 wears the player's chosen cutie (depends on the avatar, so drawn live)
-      const t0 = TIERS[0];
+      // tier-0 IS the player's full dressed cutie (depends on the avatar, so drawn live)
+      const bg = avatar.bg || TIERS[0].c2;
       const g = ctx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.35, r * 0.2, b.x, b.y, r);
-      g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, t0.c1); g.addColorStop(1, t0.c2);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.5, bg); g.addColorStop(1, bg);
       ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
       ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
-      ctx.save(); ctx.translate(b.x, b.y + r * 0.06); ctx.rotate(wobble);
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = (r * 1.15) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
-      ctx.fillText(avatar.base || "🐱", 0, 0);
-      if (avatar.hat) { ctx.font = (r * 0.66) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"; ctx.fillText(avatar.hat, 0, -r * 0.66); }
+      ctx.beginPath(); ctx.ellipse(b.x - r * 0.32, b.y - r * 0.42, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fill();
+      ctx.save();
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.clip();   // keep layers tidy inside the ball
+      ctx.translate(b.x, b.y); if (wobble) ctx.rotate(wobble);
+      drawAvatarLayers(r * 2);
       ctx.restore();
     } else {
       const sp = getSprite(b.tier), dh = sp._half * (r / sp._baseR);
