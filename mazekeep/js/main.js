@@ -77,6 +77,7 @@
     // Kick the audio context alive on first interaction (autoplay policy).
     const wake = () => { if (TD.audio) TD.audio.init(); window.removeEventListener('pointerdown', wake); };
     window.addEventListener('pointerdown', wake);
+    if (TD.sprites) TD.sprites.load(); // start fetching sprite art immediately
     TD.ui.init(canvas);
     requestAnimationFrame(loop);
   }
