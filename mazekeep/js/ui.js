@@ -17,6 +17,7 @@
       else if (k === 'text') n.textContent = props[k];
       else if (k.startsWith('on') && typeof props[k] === 'function') n.addEventListener(k.slice(2), props[k]);
       else if (k === 'style' && typeof props[k] === 'object') Object.assign(n.style, props[k]);
+      else if (props[k] == null || props[k] === false) continue; // skip absent attrs (e.g. disabled:null) — setAttribute would stringify to "null" and still apply
       else n.setAttribute(k, props[k]);
     }
     if (kids) for (const c of [].concat(kids)) if (c != null) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
