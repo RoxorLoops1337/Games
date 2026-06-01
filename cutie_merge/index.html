@@ -256,6 +256,38 @@
     border: 2px solid #fff; background: rgba(255,255,255,.6); padding: 6px 12px; border-radius: 999px; transition: background .15s ease;
   }
   nav#nav a:hover { background: #fff; }
+
+  /* cutie studio (dress-up) */
+  .av-chip {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    background: rgba(255,255,255,.72); border: 2px solid #fff; border-radius: 999px;
+    box-shadow: var(--shadow); padding: 4px 13px 4px 4px;
+    font-family: "Quicksand", sans-serif; font-weight: 700; font-size: 12.5px; color: var(--ink);
+    transition: transform .12s ease;
+  }
+  .av-chip:hover { transform: translateY(-1px); }
+  body.dark .av-chip { color: #efe6ff; }
+  .avatar { position: relative; display: inline-block; vertical-align: middle; }
+  .avatar .layer { position: absolute; transform: translate(-50%,-50%); line-height: 1; filter: drop-shadow(0 1px 1px rgba(150,90,140,.25)); }
+  .ov-avatar { margin-bottom: 2px; }
+  .ov-hi { font-weight: 700; color: #c44d96; font-size: 13.5px; margin-top: -2px; }
+  .studio-preview { display: flex; justify-content: center; margin: 6px 0 10px; }
+  .av-name {
+    display: block; width: 100%; max-width: 240px; margin: 0 auto 10px; text-align: center;
+    font-family: "Quicksand", sans-serif; font-weight: 700; color: var(--ink);
+    border: 2px solid #ffd1e8; border-radius: 999px; padding: 8px 14px; font-size: 14px; background: #fff;
+  }
+  .studio-actions { display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 4px; }
+  .opt-sec { margin-top: 10px; }
+  .opt-lbl { font-family: "Fredoka", sans-serif; font-size: 13px; color: var(--ink); margin-bottom: 6px; }
+  body.dark .opt-lbl { color: #f3ecff; }
+  .opt-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .opt {
+    width: 42px; height: 42px; border-radius: 12px; border: 2px solid #ffe1f0; background: #fff;
+    cursor: pointer; font-size: 22px; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .1s ease;
+  }
+  .opt:hover { transform: translateY(-1px); }
+  .opt.sel { border-color: #ff7ec0; box-shadow: 0 0 0 3px rgba(255,126,192,.25); background: #fff0f7; }
 </style>
 </head>
 <body>
@@ -264,6 +296,10 @@
 <div class="wrap">
   <h1>Cutie Merge</h1>
   <p class="tagline">🌸 Fluffle Friends — drop, merge &amp; pet the cuties! 🌸</p>
+
+  <button class="av-chip" id="avatarChip" title="Open the Cutie Studio">
+    <span id="avatarChipFace"></span><span id="avatarChipName">Your cutie ✨</span>
+  </button>
 
   <div class="stats">
     <div class="pill"><span class="label">Score</span><span class="value" id="score">0</span></div>
@@ -275,7 +311,9 @@
   <div class="board-frame">
     <canvas id="game"></canvas>
     <div class="overlay show" id="overlay">
-      <div class="big" id="ovBig">🌸</div>
+      <div id="ovAvatar" class="ov-avatar"></div>
+      <div class="big" id="ovBig" style="display:none">🌸</div>
+      <div class="ov-hi" id="ovHi"></div>
       <h2 id="ovTitle">Cutie Merge</h2>
       <p id="ovText">Match two of the same cutie to merge them into something cuter — and tap a cutie to give it a pet! 🫶</p>
       <button class="zen-btn" id="zenBtn">🌙 Zen Mode: Off</button>
@@ -288,6 +326,7 @@
   <div class="power-bar" id="powerBar"></div>
 
   <div class="toolbar">
+    <button class="mini" id="studioBtn">👗 Studio</button>
     <button class="mini" id="shopBtn">🛍️ Shop</button>
     <button class="mini" id="muteBtn">🔊 SFX</button>
     <button class="mini" id="musicBtn">🎵 Music</button>
@@ -327,6 +366,23 @@
     <div class="shop-grid" id="shopThemes"></div>
     <h3>🏆 Trophy Shelf</h3>
     <div id="shopAch"></div>
+  </div>
+</div>
+
+<!-- cutie studio (dress-up) modal -->
+<div class="shop" id="studio">
+  <div class="shop-inner">
+    <div class="shop-top">
+      <h2>👗 Cutie Studio</h2>
+      <button class="shop-x" id="studioClose">✕</button>
+    </div>
+    <div class="studio-preview"><div id="studioPreview"></div></div>
+    <input id="avName" class="av-name" maxlength="12" placeholder="name your cutie ♡" autocomplete="off">
+    <div class="studio-actions">
+      <button class="mini" id="avRandom">🎲 Surprise me</button>
+      <button class="btn" id="studioDone" style="margin-top:0">Done 💕</button>
+    </div>
+    <div id="studioCats"></div>
   </div>
 </div>
 
@@ -1116,6 +1172,90 @@
     }
   }
 
+  /* ---------- cutie studio (dress-up) ---------- */
+  const DEF_AV = { base: "🐱", hat: "🎀", face: "", outfit: "👗", item: "", bg: "#ffe3f3", name: "" };
+  const avatar = Object.assign({}, DEF_AV, LS.get("cutieMergeAvatar", {}));
+  const AV_CATS = [
+    { slot: "base",   label: "🐾 Animal",     opts: ["🐱","🐶","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐹","🐧","🦄","🐲"] },
+    { slot: "hat",    label: "🎩 Hat",        none: true, opts: ["🎀","👑","🎩","🧢","👒","🌸","🍓","🧁","⭐","🍄","🎓","🌟"] },
+    { slot: "face",   label: "👓 Face",       none: true, opts: ["🕶️","👓","🥽","😎"] },
+    { slot: "outfit", label: "👗 Outfit",     none: true, opts: ["👗","👕","👚","🧥","🧣","🎽","👔","🦺","🥋"] },
+    { slot: "item",   label: "🧸 Bestie",     none: true, opts: ["🌈","🍭","🎈","🧸","⭐","🪄","🌷","💐","🍰","🎁","☂️","🎤"] },
+    { slot: "bg",     label: "🎨 Background",  color: true, opts: ["#ffe3f3","#ffd9ea","#e7dbff","#d9fff0","#d6f5ff","#fff3c4","#ffe0cf","#f0d9ff","#c8f7e6","#ffd1e8"] },
+  ];
+  const saveAvatar = () => LS.set("cutieMergeAvatar", avatar);
+
+  function renderAvatar(el, av, size) {
+    el.className = "avatar";
+    el.style.width = size + "px"; el.style.height = size + "px";
+    el.style.background = av.bg || "#ffe3f3"; el.style.borderRadius = "50%";
+    el.style.boxShadow = "inset 0 -6px 14px rgba(180,120,170,.18), 0 6px 16px rgba(190,120,175,.22)";
+    const L = [];
+    const lay = (emoji, leftPct, topPct, fs) => { if (emoji) L.push('<span class="layer" style="left:' + leftPct + '%;top:' + topPct + '%;font-size:' + ((size * fs) | 0) + 'px">' + emoji + '</span>'); };
+    lay(av.base || "🐱", 50, 53, 0.60);
+    lay(av.outfit, 50, 77, 0.34);
+    lay(av.face, 50, 47, 0.26);
+    lay(av.hat, 50, 17, 0.34);
+    lay(av.item, 82, 73, 0.30);
+    el.innerHTML = L.join("");
+  }
+
+  function refreshAvatarViews() {
+    renderAvatar(document.getElementById("avatarChipFace"), avatar, 30);
+    document.getElementById("avatarChipName").textContent = avatar.name ? avatar.name : "Your cutie ✨";
+    renderAvatar(document.getElementById("ovAvatar"), avatar, 92);
+    if (!gameOver) document.getElementById("ovHi").textContent = (avatar.name ? avatar.name + " is ready! " : "Meet your cutie! ") + "🎀";
+  }
+
+  function buildStudio() {
+    const host = document.getElementById("studioCats"); host.innerHTML = "";
+    for (const cat of AV_CATS) {
+      const sec = document.createElement("div"); sec.className = "opt-sec";
+      const lbl = document.createElement("div"); lbl.className = "opt-lbl"; lbl.textContent = cat.label;
+      const grid = document.createElement("div"); grid.className = "opt-grid"; grid.id = "optgrid-" + cat.slot;
+      sec.appendChild(lbl); sec.appendChild(grid); host.appendChild(sec);
+      const values = cat.none ? [""].concat(cat.opts) : cat.opts.slice();
+      for (const v of values) {
+        const cell = document.createElement("button");
+        cell.className = "opt" + (avatar[cat.slot] === v ? " sel" : "");
+        cell.dataset.slot = cat.slot; cell.dataset.val = v;
+        if (cat.color) { cell.style.background = v; cell.style.fontSize = "0"; }
+        else cell.textContent = v === "" ? "🚫" : v;
+        cell.title = v === "" ? "none" : v;
+        cell.addEventListener("click", () => {
+          avatar[cat.slot] = v; saveAvatar();
+          grid.querySelectorAll(".opt").forEach(c => c.classList.toggle("sel", c.dataset.val === v));
+          renderAvatar(document.getElementById("studioPreview"), avatar, 130);
+          refreshAvatarViews();
+        });
+        grid.appendChild(cell);
+      }
+    }
+  }
+  function openStudio() {
+    renderAvatar(document.getElementById("studioPreview"), avatar, 130);
+    document.getElementById("avName").value = avatar.name || "";
+    document.getElementById("studio").querySelectorAll(".opt").forEach(c => c.classList.toggle("sel", avatar[c.dataset.slot] === c.dataset.val));
+    document.getElementById("studio").classList.add("show");
+  }
+  function closeStudio() { document.getElementById("studio").classList.remove("show"); }
+
+  document.getElementById("avatarChip").addEventListener("click", () => { ensureAudio(); openStudio(); });
+  document.getElementById("studioBtn").addEventListener("click", () => { ensureAudio(); openStudio(); });
+  document.getElementById("studioClose").addEventListener("click", closeStudio);
+  document.getElementById("studioDone").addEventListener("click", closeStudio);
+  document.getElementById("studio").addEventListener("click", (e) => { if (e.target.id === "studio") closeStudio(); });
+  document.getElementById("avName").addEventListener("input", function () { avatar.name = this.value.replace(/\s+/g, " ").trim(); saveAvatar(); refreshAvatarViews(); });
+  document.getElementById("avRandom").addEventListener("click", () => {
+    for (const cat of AV_CATS) {
+      const vals = (cat.none && Math.random() < 0.25) ? [""] : cat.opts;
+      avatar[cat.slot] = vals[(Math.random() * vals.length) | 0];
+    }
+    saveAvatar(); buildStudio();
+    renderAvatar(document.getElementById("studioPreview"), avatar, 130);
+    refreshAvatarViews(); sparkleSound();
+  });
+
   /* ---------- hud ---------- */
   function updateHud() {
     document.getElementById("score").textContent = score;
@@ -1142,8 +1282,8 @@
     gameOver = true; running = false; shake = 8;
     if (score > best) { best = score; LS.set("cutieMergeBest", best); }
     const ov = document.getElementById("overlay");
-    document.getElementById("ovBig").textContent = "🌷";
     document.getElementById("ovTitle").textContent = "Cuties Overflowed!";
+    document.getElementById("ovHi").textContent = (avatar.name ? avatar.name + " is proud of you! " : "Your cutie is proud! ") + "💖";
     document.getElementById("ovText").innerHTML = "You scored <b>" + score + "</b> points 💕<br>Best: " + best + " &nbsp;•&nbsp; 💖 " + hearts;
     document.getElementById("startBtn").textContent = "Play again 🌸";
     ov.classList.add("show"); updateHud();
@@ -1177,6 +1317,7 @@
   /* ---------- boot ---------- */
   applyTheme(themeId);
   renderCollection(); renderMissions();
+  buildStudio(); refreshAvatarViews();
   updateHud(); refreshPowerBar(); updateZenBtn();
   document.getElementById("muteBtn").textContent = muted ? "🔇 SFX" : "🔊 SFX";
   document.getElementById("muteBtn").classList.toggle("off", muted);
