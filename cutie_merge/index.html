@@ -173,7 +173,7 @@
 
   /* overlay (start / game over) */
   .overlay {
-    position: absolute; inset: 0; border-radius: 20px;
+    position: absolute; inset: 0; border-radius: 20px; z-index: 5;
     background: linear-gradient(160deg, rgba(255,225,242,.94), rgba(231,219,255,.94));
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 9px; text-align: center; padding: 20px; backdrop-filter: blur(3px);
@@ -283,11 +283,34 @@
   body.dark .opt-lbl { color: #f3ecff; }
   .opt-grid { display: flex; flex-wrap: wrap; gap: 6px; }
   .opt {
+    position: relative;
     width: 42px; height: 42px; border-radius: 12px; border: 2px solid #ffe1f0; background: #fff;
     cursor: pointer; font-size: 22px; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .1s ease;
   }
   .opt:hover { transform: translateY(-1px); }
   .opt.sel { border-color: #ff7ec0; box-shadow: 0 0 0 3px rgba(255,126,192,.25); background: #fff0f7; }
+  .opt.locked { opacity: .8; }
+  .opt .price {
+    position: absolute; bottom: -5px; right: -5px; background: linear-gradient(135deg,#ff7ec0,#b06bff);
+    color: #fff; font-size: 8.5px; font-weight: 700; border-radius: 999px; padding: 1px 4px; line-height: 1.35;
+    box-shadow: 0 1px 4px rgba(176,107,255,.5);
+  }
+
+  /* corner mascot */
+  .mascot {
+    position: absolute; left: 7px; bottom: 7px; width: 46px; height: 46px; pointer-events: none; z-index: 3;
+    opacity: 0; transform: translateY(12px) scale(.6); transition: opacity .3s ease, transform .3s ease;
+  }
+  .mascot.show { opacity: .96; transform: translateY(0) scale(1); animation: mascotBob 2.4s ease-in-out infinite; }
+  @keyframes mascotBob { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-4px) rotate(2deg); } }
+  .mascot.cheer { animation: mascotCheer .6s ease; }
+  @keyframes mascotCheer { 0%{transform:translateY(0) scale(1);} 30%{transform:translateY(-18px) scale(1.18) rotate(-8deg);} 60%{transform:translateY(-6px) scale(1.08) rotate(7deg);} 100%{transform:translateY(0) scale(1);} }
+  .mascot-bubble {
+    position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%) scale(0); transform-origin: bottom center;
+    background: #fff; border: 2px solid #ffd1e8; color: #c44d96; font-family: "Quicksand", sans-serif; font-weight: 700;
+    font-size: 11px; padding: 3px 8px; border-radius: 12px; white-space: nowrap; box-shadow: 0 4px 12px rgba(180,110,170,.3); transition: transform .2s ease;
+  }
+  .mascot-bubble.show { transform: translateX(-50%) scale(1); }
 </style>
 </head>
 <body>
@@ -310,6 +333,7 @@
 
   <div class="board-frame">
     <canvas id="game"></canvas>
+    <div class="mascot" id="mascot"><div class="mascot-bubble" id="mascotBubble"></div><div id="mascotFace"></div></div>
     <div class="overlay show" id="overlay">
       <div id="ovAvatar" class="ov-avatar"></div>
       <div class="big" id="ovBig" style="display:none">🌸</div>
@@ -374,11 +398,13 @@
   <div class="shop-inner">
     <div class="shop-top">
       <h2>👗 Cutie Studio</h2>
+      <span class="shop-bal" id="avBal">💖 0</span>
       <button class="shop-x" id="studioClose">✕</button>
     </div>
     <div class="studio-preview"><div id="studioPreview"></div></div>
     <input id="avName" class="av-name" maxlength="12" placeholder="name your cutie ♡" autocomplete="off">
     <div class="studio-actions">
+      <button class="mini" id="avDrop">🫧 Drop my cutie: On</button>
       <button class="mini" id="avRandom">🎲 Surprise me</button>
       <button class="btn" id="studioDone" style="margin-top:0">Done 💕</button>
     </div>
@@ -462,7 +488,7 @@
   let balls = [], particles = [], floaters = [], rings = [], stickers = [], speeches = [];
   let frame = 0, ambientTimer = 0, moodTimer = 0, speechTimer = 240;
   let score = 0, combo = 0, comboTimer = 0, overflowTimer = 0, shake = 0, slowTimer = 0;
-  let running = false, gameOver = false, zen = false;
+  let running = false, gameOver = false, zen = false, paused = false;
   let held = null, nextTier = randDropTier(), dropCooldown = 0, aimX = W / 2;
   let mergesSinceWand = 0, rainbowMade = false, fluff = 0;
   let armedPower = null;
@@ -666,6 +692,7 @@
       score += 500; addFloater(mx, my, "🌈 +500!", "#ff5fa8");
       burst(mx, my, "#ffd36e", 40, "🌈"); confetti(mx, my, 40); sparkleSound(); shake = 14; buzz(30);
       balls = balls.filter(o => Math.hypot(o.x - mx, o.y - my) > 130);
+      mascotCheer("MEGA! 🌈");
       onMergeEvents(MAX_TIER); afterScore(); return;
     }
 
@@ -688,6 +715,7 @@
     sticker(mx, my - 14, pick(FACES), 22 + nt);
     pulseScore();
     if (combo >= 3) { confetti(mx, my, Math.min(8 + combo * 2, 22)); shake = Math.max(shake, 4); }
+    if (combo >= 4) mascotCheer("x" + combo + "! 💖");
 
     const nb = makeBall(mx, my, nt, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2 - 1.5);
     nb.pop = 1; balls.push(nb);
@@ -723,7 +751,7 @@
     for (let i = 0; i < 6; i++) ring(x, y, pick(PASTELS), 70 + i * 22);
     sticker(x, y - 30, "🌈", 40); sparkleSound(); shake = 10; buzz(40);
     addFloater(x, y - 60, "RAINBOW! 🌈", "#ff5fa8");
-    toast("🌈", "You made a Rainbow!!");
+    toast("🌈", "You made a Rainbow!!"); mascotCheer("RAINBOW!! 🌈");
   }
 
   /* ---------- hearts ---------- */
@@ -731,6 +759,7 @@
     hearts += n; LS.set("cutieMergeHearts", hearts);
     document.getElementById("hearts").textContent = hearts;
     document.getElementById("shopBal").textContent = "💖 " + hearts;
+    const ab = document.getElementById("avBal"); if (ab) ab.textContent = "💖 " + hearts;
     if (announce) toast("💖", "+" + n + " hearts");
   }
 
@@ -781,11 +810,14 @@
     ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
     ctx.beginPath(); ctx.ellipse(b.x - r * 0.32, b.y - r * 0.42, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fill();
-    // emoji (rotates a touch when petted)
+    // emoji (rotates a touch when petted). Tier-0 can wear the player's chosen cutie.
+    const asMe = !isWild && b.tier === 0 && avatar.asDrop;
+    const glyph = isWild ? "🌈" : asMe ? (avatar.base || "🐱") : t.emoji;
     ctx.save();
     ctx.translate(b.x, b.y + r * 0.06); ctx.rotate(wobble);
     ctx.font = (r * 1.15) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
-    ctx.fillText(isWild ? "🌈" : t.emoji, 0, 0);
+    ctx.fillText(glyph, 0, 0);
+    if (asMe && avatar.hat) { ctx.font = (r * 0.66) + "px 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"; ctx.fillText(avatar.hat, 0, -r * 0.66); }
     ctx.restore();
     ctx.restore();
   }
@@ -890,7 +922,7 @@
   /* ---------- main loop ---------- */
   function loop() {
     frame++;
-    if (running && !gameOver) {
+    if (running && !gameOver && !paused) {
       step();
       if (dropCooldown > 0) { dropCooldown--; if (dropCooldown === 0 && !held) { held = { tier: nextTier }; nextTier = randDropTier(); updateHud(); } }
       if (--ambientTimer <= 0) { ambientTimer = 20 + Math.random() * 28; spawnAmbient(); }
@@ -1070,7 +1102,7 @@
       if (achUnlocked.indexOf(a.id) < 0 && a.test()) {
         achUnlocked.push(a.id); LS.set("cutieMergeAch", achUnlocked);
         addHearts(a.reward, false); toast(a.icon, "Achievement: " + a.name + "! +" + a.reward + "💖");
-        confetti(W / 2, H / 2, 24);
+        confetti(W / 2, H / 2, 24); mascotCheer(a.name + "! 🏆");
       }
     }
   }
@@ -1131,8 +1163,8 @@
 
   /* ---------- shop ---------- */
   const shop = document.getElementById("shop");
-  function openShop() { renderShop(); shop.classList.add("show"); }
-  function closeShop() { shop.classList.remove("show"); }
+  function openShop() { renderShop(); paused = true; shop.classList.add("show"); }
+  function closeShop() { paused = false; shop.classList.remove("show"); }
   function renderShop() {
     document.getElementById("shopBal").textContent = "💖 " + hearts;
     // power-ups
@@ -1173,7 +1205,7 @@
   }
 
   /* ---------- cutie studio (dress-up) ---------- */
-  const DEF_AV = { base: "🐱", hat: "🎀", face: "", outfit: "👗", item: "", bg: "#ffe3f3", name: "" };
+  const DEF_AV = { base: "🐱", hat: "🎀", face: "", outfit: "👗", item: "", bg: "#ffe3f3", name: "", asDrop: true };
   const avatar = Object.assign({}, DEF_AV, LS.get("cutieMergeAvatar", {}));
   const AV_CATS = [
     { slot: "base",   label: "🐾 Animal",     opts: ["🐱","🐶","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐹","🐧","🦄","🐲"] },
@@ -1183,7 +1215,12 @@
     { slot: "item",   label: "🧸 Bestie",     none: true, opts: ["🌈","🍭","🎈","🧸","⭐","🪄","🌷","💐","🍰","🎁","☂️","🎤"] },
     { slot: "bg",     label: "🎨 Background",  color: true, opts: ["#ffe3f3","#ffd9ea","#e7dbff","#d9fff0","#d6f5ff","#fff3c4","#ffe0cf","#f0d9ff","#c8f7e6","#ffd1e8"] },
   ];
+  // fancy items cost hearts to unlock (everything else is free)
+  const PRICES = { "🦄":20,"🐲":25,"🦁":12,"🐯":12, "👑":15,"🎩":10,"🎓":12,"🧁":8,"🌟":6, "🥽":8,"😎":6, "🧥":12,"👔":10,"🦺":8,"🥋":10, "🌈":15,"🪄":12,"🎤":10,"🍰":8,"🎁":8,"💐":6 };
+  let ownedItems = LS.get("cutieMergeOwnedItems", []);
+  const isOwned = (v) => v === "" || !PRICES[v] || ownedItems.indexOf(v) >= 0;
   const saveAvatar = () => LS.set("cutieMergeAvatar", avatar);
+  const updateAvBal = () => { const e = document.getElementById("avBal"); if (e) e.textContent = "💖 " + hearts; };
 
   function renderAvatar(el, av, size) {
     el.className = "avatar";
@@ -1192,11 +1229,11 @@
     el.style.boxShadow = "inset 0 -6px 14px rgba(180,120,170,.18), 0 6px 16px rgba(190,120,175,.22)";
     const L = [];
     const lay = (emoji, leftPct, topPct, fs) => { if (emoji) L.push('<span class="layer" style="left:' + leftPct + '%;top:' + topPct + '%;font-size:' + ((size * fs) | 0) + 'px">' + emoji + '</span>'); };
-    lay(av.base || "🐱", 50, 53, 0.60);
-    lay(av.outfit, 50, 77, 0.34);
-    lay(av.face, 50, 47, 0.26);
+    lay(av.base || "🐱", 50, 52, 0.60);
+    lay(av.outfit, 50, 82, 0.42);
+    lay(av.face, 50, 51, 0.32);
     lay(av.hat, 50, 17, 0.34);
-    lay(av.item, 82, 73, 0.30);
+    lay(av.item, 83, 74, 0.30);
     el.innerHTML = L.join("");
   }
 
@@ -1204,6 +1241,7 @@
     renderAvatar(document.getElementById("avatarChipFace"), avatar, 30);
     document.getElementById("avatarChipName").textContent = avatar.name ? avatar.name : "Your cutie ✨";
     renderAvatar(document.getElementById("ovAvatar"), avatar, 92);
+    renderAvatar(document.getElementById("mascotFace"), avatar, 46);
     if (!gameOver) document.getElementById("ovHi").textContent = (avatar.name ? avatar.name + " is ready! " : "Meet your cutie! ") + "🎀";
   }
 
@@ -1216,29 +1254,53 @@
       sec.appendChild(lbl); sec.appendChild(grid); host.appendChild(sec);
       const values = cat.none ? [""].concat(cat.opts) : cat.opts.slice();
       for (const v of values) {
+        const owned = cat.color ? true : isOwned(v);
         const cell = document.createElement("button");
-        cell.className = "opt" + (avatar[cat.slot] === v ? " sel" : "");
+        cell.className = "opt" + (avatar[cat.slot] === v ? " sel" : "") + (owned ? "" : " locked");
         cell.dataset.slot = cat.slot; cell.dataset.val = v;
         if (cat.color) { cell.style.background = v; cell.style.fontSize = "0"; }
         else cell.textContent = v === "" ? "🚫" : v;
-        cell.title = v === "" ? "none" : v;
-        cell.addEventListener("click", () => {
-          avatar[cat.slot] = v; saveAvatar();
-          grid.querySelectorAll(".opt").forEach(c => c.classList.toggle("sel", c.dataset.val === v));
-          renderAvatar(document.getElementById("studioPreview"), avatar, 130);
-          refreshAvatarViews();
-        });
+        if (!owned) { const pr = document.createElement("span"); pr.className = "price"; pr.textContent = "💖" + PRICES[v]; cell.appendChild(pr); }
+        cell.title = v === "" ? "none" : (owned ? v : "Unlock for " + PRICES[v] + " hearts");
+        cell.addEventListener("click", () => applyChoice(cat.slot, v));
         grid.appendChild(cell);
       }
     }
   }
+  function applyChoice(slot, v) {
+    if (v !== "" && PRICES[v] && ownedItems.indexOf(v) < 0) {
+      if (hearts < PRICES[v]) { toast("💖", "Need " + PRICES[v] + " hearts for that!"); return; }
+      addHearts(-PRICES[v]); ownedItems.push(v); LS.set("cutieMergeOwnedItems", ownedItems);
+      sparkleSound(); toast("✨", "Unlocked " + v + "!");
+    }
+    avatar[slot] = v; saveAvatar();
+    buildStudio();
+    renderAvatar(document.getElementById("studioPreview"), avatar, 130);
+    refreshAvatarViews(); updateAvBal(); updateHud();
+  }
   function openStudio() {
+    buildStudio();
     renderAvatar(document.getElementById("studioPreview"), avatar, 130);
     document.getElementById("avName").value = avatar.name || "";
-    document.getElementById("studio").querySelectorAll(".opt").forEach(c => c.classList.toggle("sel", avatar[c.dataset.slot] === c.dataset.val));
+    updateAvBal(); updateDropBtn();
+    paused = true;
     document.getElementById("studio").classList.add("show");
   }
-  function closeStudio() { document.getElementById("studio").classList.remove("show"); }
+  function closeStudio() { paused = false; document.getElementById("studio").classList.remove("show"); updateHud(); }
+  function updateDropBtn() {
+    const b = document.getElementById("avDrop");
+    b.textContent = "🫧 Drop my cutie: " + (avatar.asDrop ? "On" : "Off");
+    b.classList.toggle("off", !avatar.asDrop);
+  }
+  function mascotCheer(text) {
+    const m = document.getElementById("mascot");
+    if (!m.classList.contains("show")) return;
+    m.classList.remove("cheer"); void m.offsetWidth; m.classList.add("cheer");
+    const bub = document.getElementById("mascotBubble");
+    bub.textContent = text || pick(["yay!", "wow!", "💖", "so cute!", "go go!", "✨"]);
+    bub.classList.add("show");
+    clearTimeout(m._t); m._t = setTimeout(() => { m.classList.remove("cheer"); bub.classList.remove("show"); }, 1300);
+  }
 
   document.getElementById("avatarChip").addEventListener("click", () => { ensureAudio(); openStudio(); });
   document.getElementById("studioBtn").addEventListener("click", () => { ensureAudio(); openStudio(); });
@@ -1248,12 +1310,16 @@
   document.getElementById("avName").addEventListener("input", function () { avatar.name = this.value.replace(/\s+/g, " ").trim(); saveAvatar(); refreshAvatarViews(); });
   document.getElementById("avRandom").addEventListener("click", () => {
     for (const cat of AV_CATS) {
-      const vals = (cat.none && Math.random() < 0.25) ? [""] : cat.opts;
+      const pool = cat.color ? cat.opts : cat.opts.filter(isOwned);
+      const vals = (cat.none && Math.random() < 0.25) ? [""] : (pool.length ? pool : cat.opts.filter(isOwned).concat([""]));
       avatar[cat.slot] = vals[(Math.random() * vals.length) | 0];
     }
     saveAvatar(); buildStudio();
     renderAvatar(document.getElementById("studioPreview"), avatar, 130);
-    refreshAvatarViews(); sparkleSound();
+    refreshAvatarViews(); updateHud(); sparkleSound();
+  });
+  document.getElementById("avDrop").addEventListener("click", function () {
+    avatar.asDrop = !avatar.asDrop; saveAvatar(); updateDropBtn(); updateHud();
   });
 
   /* ---------- hud ---------- */
@@ -1261,7 +1327,7 @@
     document.getElementById("score").textContent = score;
     document.getElementById("best").textContent = best;
     document.getElementById("hearts").textContent = hearts;
-    document.getElementById("next").textContent = TIERS[nextTier].emoji;
+    document.getElementById("next").textContent = (nextTier === 0 && avatar.asDrop) ? (avatar.base || "🐱") : TIERS[nextTier].emoji;
   }
 
   /* ---------- game flow ---------- */
@@ -1274,12 +1340,14 @@
     updateHud(); refreshPowerBar();
   }
   function startGame() {
-    ensureAudio(); resetGame(); zen = zenPref; running = true;
+    ensureAudio(); resetGame(); zen = zenPref; running = true; paused = false;
     stats.games++; saveStats();
+    document.getElementById("mascot").classList.add("show");
     document.getElementById("overlay").classList.remove("show");
   }
   function endGame() {
     gameOver = true; running = false; shake = 8;
+    document.getElementById("mascot").classList.remove("show");
     if (score > best) { best = score; LS.set("cutieMergeBest", best); }
     const ov = document.getElementById("overlay");
     document.getElementById("ovTitle").textContent = "Cuties Overflowed!";
@@ -1317,7 +1385,7 @@
   /* ---------- boot ---------- */
   applyTheme(themeId);
   renderCollection(); renderMissions();
-  buildStudio(); refreshAvatarViews();
+  buildStudio(); refreshAvatarViews(); updateDropBtn();
   updateHud(); refreshPowerBar(); updateZenBtn();
   document.getElementById("muteBtn").textContent = muted ? "🔇 SFX" : "🔊 SFX";
   document.getElementById("muteBtn").classList.toggle("off", muted);
