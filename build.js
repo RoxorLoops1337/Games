@@ -37,6 +37,7 @@ const STATIC_PATHS = [
   'mazekeep',
   'ralpherizer',
   'cutie_merge',
+  'evolve_and_conquer',
   'tower-defense-sprites',
   'tools',
 ];

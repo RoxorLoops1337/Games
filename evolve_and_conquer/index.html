@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evolve &amp; Conquer</title>
+<style>
+  :root{
+    --bg:#05080c; --bg2:#0a121a; --panel:#0d1822; --panel2:#11202d;
+    --ink:#cfeee6; --dim:#7fa6a0; --line:#1d3340;
+    --bio:#33ffc8; --bio2:#16d6ff; --toxic:#9cff4d; --fire:#ff7a3c;
+    --shock:#ffe14d; --acid:#caff5e; --venom:#b46bff; --bone:#e9e2c8;
+    --rare:#ffb454; --uncommon:#7ad7ff; --common:#9fb6b0; --danger:#ff5566;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:radial-gradient(1200px 700px at 50% -10%,#0c1a22,#05080c 60%);color:var(--ink);
+    font-family:"Trebuchet MS",system-ui,monospace;overflow:hidden;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;}
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:flex-start;
+    padding:18px;overflow:auto;}
+  .screen.active{display:flex;animation:fade .35s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  h1{font-size:42px;letter-spacing:6px;margin:6px 0 0;color:var(--bio);
+    text-shadow:0 0 18px rgba(51,255,200,.5);font-weight:700;}
+  h1 .amp{color:var(--venom);text-shadow:0 0 18px rgba(180,107,255,.6);}
+  .tag{color:var(--dim);letter-spacing:3px;font-size:13px;margin-top:2px;text-transform:uppercase;}
+  button{font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    padding:9px 16px;border-radius:8px;letter-spacing:1px;transition:.12s;font-size:14px;}
+  button:hover:not(:disabled){border-color:var(--bio);box-shadow:0 0 12px rgba(51,255,200,.25);transform:translateY(-1px);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button.primary{background:linear-gradient(180deg,#0e3b34,#0a241f);border-color:var(--bio);color:var(--bio);font-weight:bold;}
+  button.danger{border-color:var(--danger);color:var(--danger);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+  .muted{color:var(--dim);}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:left;}
+
+  /* resources bar */
+  #resbar{display:flex;gap:18px;align-items:center;background:var(--panel);border:1px solid var(--line);
+    border-radius:30px;padding:8px 20px;margin:6px 0 2px;font-size:15px;flex-wrap:wrap;justify-content:center;}
+  .res{display:flex;gap:6px;align-items:center;}
+  .res b{font-size:16px;}
+  .biomass b{color:var(--toxic);} .dna b{color:var(--bio2);} .insta b{color:var(--venom);}
+  .insta.warn b{color:var(--danger);}
+  .depth b{color:var(--bio);}
+
+  /* TITLE */
+  #genusGrid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:14px;max-width:720px;margin-top:18px;}
+  .genus{cursor:pointer;}
+  .genus.locked{opacity:.45;cursor:not-allowed;}
+  .genus h3{margin:0 0 4px;color:var(--bio2);letter-spacing:1px;}
+  .genus .gicon{font-size:34px;}
+  .genus .gtrait{color:var(--toxic);font-size:13px;margin-top:6px;}
+
+  /* MAP */
+  #mapWrap{max-width:760px;width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .nodeRow{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
+  .node{width:230px;cursor:pointer;position:relative;}
+  .node:hover{border-color:var(--bio);box-shadow:0 0 16px rgba(51,255,200,.25);}
+  .node .ntype{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);}
+  .node .nname{font-size:18px;color:var(--ink);margin:4px 0;font-weight:bold;}
+  .node .nicon{font-size:30px;}
+  .node.predator .nname{color:var(--danger);}
+  .node.prey .nname{color:var(--toxic);}
+  .node.event .nname{color:var(--shock);}
+  .node.apex{border-color:var(--venom);box-shadow:0 0 18px rgba(180,107,255,.3);}
+  .node.apex .nname{color:var(--venom);}
+  .scoutline{font-size:12px;color:var(--dim);margin-top:6px;line-height:1.5;}
+  .chip{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:1px 7px;margin:2px 2px 0 0;font-size:11px;}
+
+  /* LAB */
+  #labWrap{display:flex;gap:18px;width:100%;max-width:1180px;margin-top:8px;align-items:flex-start;}
+  #bodyPanel{flex:0 0 430px;}
+  #labRight{flex:1;min-width:340px;display:flex;flex-direction:column;gap:12px;}
+  #bodyCanvas{background:radial-gradient(420px 360px at 50% 45%,#0a1c1a,#070d12);border:1px solid var(--line);
+    border-radius:14px;display:block;width:430px;height:420px;}
+  .labsec h3{margin:0 0 8px;color:var(--bio2);letter-spacing:1px;font-size:15px;display:flex;justify-content:space-between;}
+  .geneCards{display:flex;gap:10px;flex-wrap:wrap;}
+  .gene{width:172px;border-radius:10px;padding:10px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:12px;}
+  .gene:hover{border-color:var(--bio);}
+  .gene.sel{border-color:var(--bio);box-shadow:0 0 12px rgba(51,255,200,.4);}
+  .gene .gname{font-weight:bold;font-size:13px;}
+  .gene .gslot{float:right;color:var(--dim);font-size:10px;letter-spacing:1px;}
+  .gene .stats{margin-top:5px;color:var(--dim);line-height:1.5;}
+  .gene.common .gname{color:var(--common);} .gene.uncommon .gname{color:var(--uncommon);}
+  .gene.rare .gname{color:var(--rare);} .gene.hybrid .gname{color:var(--bio);}
+  .types span{font-size:10px;padding:0 5px;border-radius:8px;margin-right:3px;background:#0c1822;border:1px solid var(--line);}
+  .partInfo{min-height:42px;font-size:12px;color:var(--dim);border-top:1px dashed var(--line);margin-top:6px;padding-top:6px;}
+  .hint{font-size:12px;color:var(--bio);min-height:16px;}
+  .pill{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:20px;padding:2px 9px;}
+
+  /* BATTLE */
+  #battleCanvas{background:radial-gradient(700px 380px at 50% 40%,#0b1a20,#05080c);border:1px solid var(--line);
+    border-radius:14px;display:block;max-width:96vw;}
+  #battleHud{display:flex;gap:12px;margin-top:10px;align-items:center;}
+  #battleLog{height:96px;overflow:auto;width:min(900px,96vw);background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.55;margin-top:8px;color:var(--dim);}
+  #battleLog b{color:var(--ink);}
+  .logkill{color:var(--danger);} .logcrit{color:var(--shock);} .logwin{color:var(--bio);}
+
+  /* RESULT / banners */
+  .bigmsg{font-size:30px;letter-spacing:3px;margin-top:14px;}
+  .banner{background:linear-gradient(90deg,rgba(180,107,255,.12),rgba(180,107,255,.02));border:1px solid var(--venom);
+    color:var(--venom);border-radius:10px;padding:8px 16px;margin:8px 0;font-size:13px;letter-spacing:1px;max-width:680px;text-align:center;}
+  .eventbox{max-width:620px;}
+  .eventopt{display:block;width:100%;text-align:left;margin-top:8px;}
+  #nav{margin-top:auto;padding-top:18px;}
+  #nav a{color:var(--dim);text-decoration:none;border:1px solid var(--line);padding:6px 12px;border-radius:6px;font-size:12px;letter-spacing:2px;}
+  #nav a:hover{color:var(--bio);border-color:var(--bio);}
+  .small{font-size:12px;}
+  .center{text-align:center;}
+  .codex{font-size:12px;color:var(--dim);max-width:560px;text-align:center;margin-top:8px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE -->
+  <section id="screen-title" class="screen active">
+    <h1>EVOLVE <span class="amp">&amp;</span> CONQUER</h1>
+    <div class="tag">one cell · one climb up the food chain · a thousand monsters</div>
+    <p class="muted center" style="max-width:560px;margin-top:14px">
+      You don't control the fight. You <b>build the animal that wins it.</b><br>
+      Mutate part by part, feed your metabolism, court instability — then zip up your genome and watch it brawl up the ecosystem.
+    </p>
+    <p class="tag">choose your genus</p>
+    <div id="genusGrid"></div>
+    <div id="nav"><a href="../index.html">◂ all games</a></div>
+  </section>
+
+  <!-- MAP -->
+  <section id="screen-map" class="screen">
+    <div id="resbar"></div>
+    <div id="mapWrap">
+      <div class="bigmsg" style="font-size:22px;letter-spacing:2px">Choose your path</div>
+      <div class="muted small">The ecosystem branches. Scout a predator before you commit.</div>
+      <div id="ecoBanner"></div>
+      <div id="nodeRow" class="nodeRow"></div>
+    </div>
+  </section>
+
+  <!-- LAB -->
+  <section id="screen-lab" class="screen">
+    <div id="resbar2"></div>
+    <div id="labWrap">
+      <div id="bodyPanel" class="card">
+        <h3 class="labsec" style="color:var(--bio2)">YOUR ORGANISM <span id="orgStats" class="muted small"></span></h3>
+        <canvas id="bodyCanvas" width="430" height="420"></canvas>
+        <div id="partInfo" class="partInfo">Click a body part to inspect, atrophy, or select for splicing.</div>
+        <div id="labHint" class="hint"></div>
+      </div>
+      <div id="labRight"></div>
+    </div>
+  </section>
+
+  <!-- BATTLE -->
+  <section id="screen-battle" class="screen">
+    <div class="row" style="margin-bottom:6px"><div id="battleTitle" class="tag"></div></div>
+    <canvas id="battleCanvas" width="940" height="470"></canvas>
+    <div id="battleHud" class="row">
+      <button id="btnSpeed">▶ 1×</button>
+      <button id="btnSkip">⏭ skip</button>
+    </div>
+    <div id="battleLog"></div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="screen-result" class="screen">
+    <div id="resultBody" class="center"></div>
+  </section>
+
+  <!-- EVENT -->
+  <section id="screen-event" class="screen">
+    <div id="resbar3"></div>
+    <div class="card eventbox" style="margin-top:20px"><div id="eventBody"></div></div>
+  </section>
+
+  <!-- END -->
+  <section id="screen-end" class="screen">
+    <div id="endBody" class="center"></div>
+  </section>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   EVOLVE & CONQUER  —  roguelike auto-battler (vertical slice)
+   Architecture: simulate-then-animate. simulate() runs the whole fight as
+   pure math and returns a timestamped event log; the animator just plays the
+   log back on canvas, so the spectacle always matches the outcome.
+   ========================================================================= */
+
+const $ = id => document.getElementById(id);
+const rand = (a,b)=>a+Math.random()*(b-a);
+const irand = (a,b)=>Math.floor(rand(a,b+1));
+const pick = arr=>arr[Math.floor(Math.random()*arr.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const cap = s=>s[0].toUpperCase()+s.slice(1);
+
+/* ---------- config / balance ---------- */
+const CFG = {
+  BASE_ENERGY: 7,        // free metabolic budget before organs
+  CORE_BASE_HP: 120,
+  MAX_BEATS: 46,
+  SPB: 0.5,              // seconds per beat (animation pace)
+  POISON_DMG: 1.4,       // per stack per beat (bypasses integ); decays multiplicatively
+  BLEED_DMG: 2,          // flat per stack per beat (decays 1 stack/beat)
+  INSTA_WARN: 6,
+  REROLL_COST: 3,
+  STABILIZE_COST: 4,
+  REGROW_COST: 6,
+};
+
+/* ---------- keyword types & conflicts ---------- */
+const KW = ['Chitin','Venom','Bone','Electric','Fungal','Bioluminescent','Vascular','Crystalline','Symbiotic','Aberrant'];
+const KW_COLOR = {Chitin:'#caa86a',Venom:'#b46bff',Bone:'#e9e2c8',Electric:'#ffe14d',Fungal:'#9cff4d',
+  Bioluminescent:'#16d6ff',Vascular:'#ff6b8a',Crystalline:'#9fd8ff',Symbiotic:'#33ffc8',Aberrant:'#ff5566'};
+const CONFLICTS = [['Venom','Fire'],['Crystalline','Fungal'],['Electric','Vascular'],['Bone','Aberrant'],['Chitin','Bioluminescent']];
+const DMG_COLOR = {slash:'#dfe9e6',pierce:'#bfe9ff',blunt:'#e9e2c8',venom:'#b46bff',fire:'#ff7a3c',shock:'#ffe14d',acid:'#caff5e'};
+
+/* ---------- body slots (Bilaterian plan) ---------- */
+const SLOTS = [
+  {key:'head',  cat:'HEAD',     label:'Head',       off:{x:0,  y:-96}},
+  {key:'foreL', cat:'FORELIMB', label:'L forelimb', off:{x:-66,y:-26}},
+  {key:'foreR', cat:'FORELIMB', label:'R forelimb', off:{x:66, y:-26}},
+  {key:'integ', cat:'INTEG',    label:'Integument', off:{x:0,  y:0}},
+  {key:'core',  cat:'CORE',     label:'Core',       off:{x:0,  y:0}},
+  {key:'organA',cat:'ORGAN',    label:'Organ',      off:{x:-20,y:6}},
+  {key:'organB',cat:'ORGAN',    label:'Organ',      off:{x:20, y:6}},
+  {key:'hindL', cat:'HINDLIMB', label:'L hindlimb', off:{x:-60,y:70}},
+  {key:'hindR', cat:'HINDLIMB', label:'R hindlimb', off:{x:60, y:70}},
+  {key:'tail',  cat:'TAIL',     label:'Tail',       off:{x:0,  y:104}},
+];
+const slotByKey = k=>SLOTS.find(s=>s.key===k);
+const PAIR_CATS = {FORELIMB:['foreL','foreR'],HINDLIMB:['hindL','hindR']};
+
+/* =========================================================================
+   MUTATION LIBRARY
+   fields: id,name,icon,cat,rarity,types,hp,mass,upkeep,produce
+   weapon: atk,dmgType,cd,range,onHit{},crit
+   defense: block(0-1 vs core/organ),dodge,speed
+   tags: passive hooks (lifesteal,adrenal,regen,photosynth,thorns,venomSac,
+         firststrike,secondheart,brood,carnivore,parasite,crystal)
+   ========================================================================= */
+const M = (o)=>({rarity:'common',types:[],hp:14,mass:1,upkeep:1,produce:0,tags:[],onHit:{},...o});
+const LIB = [
+  // ---- HEAD ----
+  M({id:'mandibles',name:'Crushing Mandibles',icon:'🦷',cat:'HEAD',types:['Bone'],hp:18,mass:2,upkeep:2,
+     atk:8,dmgType:'blunt',cd:2.6,range:'melee',onHit:{}, desc:'Heavy bite. Slow but smashes armor plating.', dismember:1.6}),
+  M({id:'compound_eyes',name:'Compound Eyes',icon:'👁️',cat:'HEAD',rarity:'uncommon',types:['Bioluminescent'],hp:10,upkeep:1,
+     speed:5,dodge:.05, desc:'Sharper initiative and a little dodge. Targeting brain.'}),
+  M({id:'venom_fangs',name:'Venom Fangs',icon:'🐍',cat:'HEAD',rarity:'uncommon',types:['Venom'],hp:12,upkeep:2,
+     atk:5,dmgType:'venom',cd:1.9,range:'melee',onHit:{poison:2}, desc:'Quick bite that injects poison.'}),
+  M({id:'maw',name:'Devouring Maw',icon:'😈',cat:'HEAD',rarity:'rare',types:['Aberrant'],hp:16,mass:2,upkeep:3,
+     atk:9,dmgType:'slash',cd:2.4,range:'melee',tags:['lifesteal'], desc:'Bites and heals your core for 40% of damage dealt.'}),
+
+  // ---- FORELIMB (pairs) ----
+  M({id:'claws',name:'Serrated Claws',icon:'🦅',cat:'FORELIMB',pair:true,types:['Bone'],hp:12,mass:1,upkeep:1,
+     atk:5,dmgType:'slash',cd:1.5,range:'melee',onHit:{bleed:1}, desc:'Fast paired slashers that cause bleeding.'}),
+  M({id:'scythes',name:'Mantis Scythes',icon:'🗡️',cat:'FORELIMB',pair:true,rarity:'uncommon',types:['Chitin'],hp:10,mass:1,upkeep:2,
+     atk:9,dmgType:'pierce',cd:2.0,range:'melee',crit:.3, desc:'High crit, pierces integument. Fragile.'}),
+  M({id:'bonespear',name:'Bone Spears',icon:'🦴',cat:'FORELIMB',pair:true,rarity:'uncommon',types:['Bone'],hp:13,mass:2,upkeep:2,
+     atk:7,dmgType:'pierce',cd:2.2,range:'melee', desc:'Pierce ignores armor blocking — anti-tank.'}),
+  M({id:'crabclaw',name:'Titan Claw',icon:'🦀',cat:'FORELIMB',pair:false,rarity:'rare',types:['Chitin','Aberrant'],hp:28,mass:4,upkeep:3,
+     atk:16,dmgType:'blunt',cd:3.0,range:'melee',dismember:2.0, desc:'ASYMMETRIC: one monstrous claw. Huge hits, single point of failure.'}),
+
+  // ---- HINDLIMB (mobility, pairs) ----
+  M({id:'sprint',name:'Sprinter Legs',icon:'🦵',cat:'HINDLIMB',pair:true,types:['Vascular'],hp:12,mass:1,upkeep:1,
+     speed:10,dodge:.06, desc:'Initiative + dodge. Strike first.'}),
+  M({id:'wings',name:'Membrane Wings',icon:'🦋',cat:'HINDLIMB',pair:true,rarity:'uncommon',types:['Bioluminescent'],hp:9,mass:0,upkeep:2,
+     speed:8,dodge:.10,tags:['firststrike'], desc:'Good dodge + first-strike. Flimsy.'}),
+  M({id:'burrow',name:'Burrow Claws',icon:'🪱',cat:'HINDLIMB',pair:true,rarity:'uncommon',types:['Chitin'],hp:14,mass:2,upkeep:1,
+     speed:3,dodge:.05,tags:['ambush'], desc:'Ambush: untouchable for the first 2 beats, then erupts.'}),
+  M({id:'fins',name:'Powerful Fins',icon:'🐟',cat:'HINDLIMB',pair:true,types:['Vascular'],hp:13,mass:1,upkeep:1,
+     speed:5,dodge:.05,biome:'tidepool', desc:'Surges in aquatic biomes (Tidepool): doubled speed there.'}),
+
+  // ---- INTEGUMENT (global skin) ----
+  M({id:'chitin',name:'Chitin Plates',icon:'🛡️',cat:'INTEG',types:['Chitin'],hp:30,mass:3,upkeep:1,
+     block:.45, desc:'Flat 45% reduction to core/organ hits (pierce & acid bypass).'}),
+  M({id:'mucus',name:'Mucus Coat',icon:'🫧',cat:'INTEG',rarity:'uncommon',types:['Symbiotic'],hp:20,mass:1,upkeep:2,
+     block:.2,tags:['dotward'], desc:'25% reduction + 35% chance to cleanse incoming poison each beat.'}),
+  M({id:'mirror',name:'Mirror Scales',icon:'🪞',cat:'INTEG',rarity:'rare',types:['Crystalline'],hp:24,mass:2,upkeep:2,
+     block:.3,tags:['reflect'], desc:'30% reduction and reflects 15% of damage taken back.'}),
+  M({id:'glowhide',name:'Bioluminescent Hide',icon:'✨',cat:'INTEG',rarity:'uncommon',types:['Bioluminescent'],hp:22,mass:1,upkeep:2,
+     block:.15,tags:['blind'], desc:'Light blinds attackers: +18% miss chance against you.'}),
+
+  // ---- TAIL (spice) ----
+  M({id:'stinger',name:'Venom Stinger',icon:'🦂',cat:'TAIL',rarity:'uncommon',types:['Venom'],hp:12,upkeep:2,
+     atk:4,dmgType:'venom',cd:1.7,range:'melee',onHit:{poison:2}, desc:'Stacks heavy poison.'}),
+  M({id:'sporecannon',name:'Spore Cannon',icon:'🍄',cat:'TAIL',rarity:'uncommon',types:['Fungal'],hp:11,upkeep:2,
+     atk:5,dmgType:'acid',cd:2.3,range:'ranged',onHit:{poison:2}, desc:'Ranged glob of corrosive spores.'}),
+  M({id:'electricorgan',name:'Electric Tail',icon:'⚡',cat:'TAIL',rarity:'rare',types:['Electric'],hp:12,upkeep:3,
+     atk:6,dmgType:'shock',cd:2.0,range:'ranged',onHit:{stun:.2}, desc:'Ranged shock with 20% chance to stun a beat.'}),
+  M({id:'spikefan',name:'Spike Fan',icon:'🌵',cat:'TAIL',types:['Bone'],hp:16,mass:1,upkeep:1,
+     atk:3,dmgType:'pierce',cd:1.4,range:'melee', desc:'Rapid little pierces.'}),
+
+  // ---- ORGANS (internal engine) ----
+  M({id:'heart',name:'Beating Heart',icon:'❤️',cat:'ORGAN',types:['Vascular'],hp:14,upkeep:0,produce:3,
+     desc:'+3 energy. The basic engine.'}),
+  M({id:'secondheart',name:'Redundant Heart',icon:'❤️‍🩹',cat:'ORGAN',rarity:'uncommon',types:['Vascular'],hp:16,upkeep:0,produce:2,
+     tags:['secondheart'], desc:'+2 energy and +24 core HP. Redundancy against finishers.'}),
+  M({id:'adrenal',name:'Adrenal Gland',icon:'🔥',cat:'ORGAN',rarity:'uncommon',types:['Vascular'],hp:10,upkeep:1,produce:1,
+     tags:['adrenal'], desc:'Below 50% core HP: +40% attack & +50% speed. Comeback engine.'}),
+  M({id:'chloroplast',name:'Chloroplasts',icon:'🌿',cat:'ORGAN',types:['Symbiotic'],hp:12,upkeep:0,produce:5,
+     tags:['photosynth'], desc:'+5 energy (free metabolism) but you can\'t gain biomass from kills.'}),
+  M({id:'venomsac',name:'Venom Sac',icon:'🧪',cat:'ORGAN',rarity:'rare',types:['Venom'],hp:10,upkeep:2,produce:1,
+     tags:['venomSac'], desc:'Every one of your attacks also applies +1 poison.'}),
+  M({id:'regenflesh',name:'Regenerating Flesh',icon:'🩸',cat:'ORGAN',rarity:'uncommon',types:['Vascular'],hp:12,upkeep:3,produce:1,
+     tags:['regen'], desc:'Heal 3 core HP per beat. Very hungry.'}),
+  M({id:'broodsac',name:'Brood Sac',icon:'🥚',cat:'ORGAN',rarity:'rare',types:['Symbiotic'],hp:12,upkeep:2,produce:1,
+     tags:['brood'], desc:'Spawns a biting larva at beat 3 that fights beside you.'}),
+  M({id:'crystallattice',name:'Crystal Lattice',icon:'💎',cat:'ORGAN',rarity:'rare',types:['Crystalline'],hp:14,upkeep:1,produce:2,
+     tags:['crystal'], desc:'Turns instability into armor: +3% core/organ block per instability point. No more curses.'}),
+];
+const byId = id=>LIB.find(m=>m.id===id);
+
+/* ---------- starting genera ---------- */
+const GENERA = [
+  {id:'bilaterian',name:'Bilaterian',icon:'🦎',trait:'Balanced, symmetric body — flexible and forgiving.',locked:false,
+    start:{head:'venom_fangs',foreL:'claws',foreR:'claws',hindL:'sprint',hindR:'sprint',integ:'chitin',core:'core',organA:'heart'}},
+  {id:'radial',name:'Radial',icon:'🌟',trait:'Weapons everywhere, no legs to cripple — but no initiative tricks. (locked)',locked:true},
+  {id:'vermiform',name:'Vermiform',icon:'🪱',trait:'Segmented worm that grows by adding segments. (locked)',locked:true},
+  {id:'colonial',name:'Colonial',icon:'🐜',trait:'A swarm in a trenchcoat — every part is a sub-creature. (locked)',locked:true},
+];
+
+/* =========================================================================
+   GAME STATE
+   ========================================================================= */
+let G = null;
+function newGame(genus){
+  G = {
+    genus, body:{}, biomass:6, dna:0, instability:0, depth:0,
+    typeTally:{}, ecoResist:null, ecoTier:0,
+    options:[], current:null, lab:{draft:[],corpse:null,sel:null,mode:'idle',spliceSel:[]},
+    lastResult:null, pendingEnd:null, wins:0,
+  };
+  // build starting body
+  const st = genus.start || GENERA[0].start;
+  for(const k in st){
+    if(k==='core'){ G.body.core = inst({id:'__core',name:'Vital Core',icon:'🧠',cat:'CORE',hp:CFG.CORE_BASE_HP,mass:2,upkeep:0,produce:0,types:['Vascular'],desc:'If this dies, the lineage ends.'}); continue;}
+    equip(st[k], k, true);
+  }
+  buildMap();
+}
+function inst(def, slotKey){ return {def, slot:slotKey, hp:def.hp, maxHp:def.hp, dead:false}; }
+function equip(defId, slotKey, free){
+  const def = byId(defId) || (typeof defId==='object'?defId:null);
+  if(!def) return;
+  const cat = slotByKey(slotKey).cat;
+  if(def.pair && PAIR_CATS[cat]){
+    for(const k of PAIR_CATS[cat]) G.body[k] = inst(def,k);
+  } else {
+    G.body[slotKey] = inst(def,slotKey);
+  }
+}
+function atrophy(slotKey){
+  const it = G.body[slotKey]; if(!it) return;
+  const cat = slotByKey(slotKey).cat;
+  if(it.def.pair && PAIR_CATS[cat]){ for(const k of PAIR_CATS[cat]) delete G.body[k]; }
+  else delete G.body[slotKey];
+}
+
+/* ---------- derived stats for the player organism (lab display) ---------- */
+function organism(){
+  const parts = Object.values(G.body);
+  let mass=0,upkeep=0,produce=CFG.BASE_ENERGY,speed=0,instab=0,coreHp=CFG.CORE_BASE_HP;
+  const types={};
+  for(const p of parts){
+    const d=p.def; mass+=d.mass||0; upkeep+=d.upkeep||0; produce+=d.produce||0; speed+=d.speed||0;
+    if(d.tags?.includes('secondheart')) coreHp+=24;
+    for(const t of d.types) types[t]=(types[t]||0)+1;
+  }
+  instab = computeInstability();
+  return {parts,mass,upkeep,produce,speed,instab,coreHp,types,energy:produce-upkeep};
+}
+function computeInstability(){
+  const parts=Object.values(G.body); let ins=0; const types={};
+  for(const p of parts){ ins += rarityIns(p.def.rarity)+(p.def.unstable||0); for(const t of p.def.types) types[t]=(types[t]||0)+1; }
+  for(const [a,b] of CONFLICTS){ if(types[a]&&types[b]) ins += 3; }
+  // crystal lattice converts curses off but instability still counts toward its armor
+  return ins;
+}
+function rarityIns(r){ return r==='rare'?3:r==='uncommon'?1.5:r==='hybrid'?4:0.5; }
+
+/* =========================================================================
+   ENEMY GENERATION + ECOSYSTEM
+   ========================================================================= */
+const ENEMY_ARCH = [
+  {id:'snapper',name:'Tidewater Snapper',icon:'🐊',instinct:'hunter',types:['Bone'],resist:{blunt:.2},
+   parts:[['head','mandibles'],['foreL','claws'],['foreR','claws'],['hindL','sprint'],['hindR','sprint'],['integ','chitin']]},
+  {id:'beetle',name:'Tank Beetle',icon:'🪲',instinct:'brute',types:['Chitin'],resist:{slash:.4,blunt:.3,shock:.2},
+   parts:[['head','mandibles'],['foreL','bonespear'],['foreR','bonespear'],['integ','chitin'],['hindL','burrow'],['hindR','burrow']]},
+  {id:'spitter',name:'Acid Spitter',icon:'🐸',instinct:'feral',types:['Fungal'],resist:{acid:.5,venom:.3},
+   parts:[['tail','sporecannon'],['head','venom_fangs'],['hindL','sprint'],['hindR','sprint'],['integ','mucus']]},
+  {id:'stinglord',name:'Stinglord',icon:'🦂',instinct:'hunter',types:['Venom'],resist:{venom:.6},
+   parts:[['tail','stinger'],['foreL','claws'],['hindL','sprint'],['hindR','sprint']]},
+  {id:'sparkfin',name:'Sparkfin Eel',icon:'⚡',instinct:'feral',types:['Electric'],resist:{shock:.6,pierce:.2},
+   parts:[['tail','electricorgan'],['foreL','claws'],['head','compound_eyes'],['hindL','sprint'],['hindR','sprint']]},
+];
+const APEX = {id:'inheritor',name:'The Inheritor',icon:'👑',instinct:'brute',types:['Aberrant','Crystalline'],
+   resist:{slash:.25,blunt:.2,pierce:.15},apex:true,
+   parts:[['foreL','crabclaw'],['head','maw'],['integ','mirror'],['hindL','sprint'],['hindR','sprint']]};
+
+const ES = {coreBase:64, coreGrow:13, sd:0.18, apexScale:0.3, apexCore:1.15, hpMul:1.4, atkMul:1.0};
+function makeEnemy(arch, depth){
+  const scale = 1 + depth*ES.sd + (arch.apex?ES.apexScale:0);
+  const body = {};
+  const coreHp = Math.round((ES.coreBase + depth*ES.coreGrow)*(arch.apex?ES.apexCore:1));
+  body.core = inst({id:'__ecore',name:'Core',icon:'🧠',cat:'CORE',hp:coreHp,mass:2,types:['Vascular']},'core');
+  for(const [slot,defId] of arch.parts) equipEnemy(body, defId, slot, scale);
+  const resist={...arch.resist};
+  if(G && G.ecoResist){ resist[G.ecoResist]=(resist[G.ecoResist]||0)+0.18*G.ecoTier; }
+  return {name:arch.name,icon:arch.icon,instinct:arch.instinct,types:arch.types,body,resist,
+          signature:arch.parts.find(p=>byId(p[1]).atk)?.[1]||arch.parts[0][1], apex:!!arch.apex};
+}
+function equipEnemy(body, defId, slotKey, scale){
+  const base=byId(defId);
+  const d={...base,hp:Math.round(base.hp*scale*ES.hpMul),atk:base.atk?Math.max(1,Math.round(base.atk*scale*ES.atkMul)):base.atk};
+  const cat=slotByKey(slotKey).cat;
+  if(base.pair && PAIR_CATS[cat]){ for(const k of PAIR_CATS[cat]) body[k]=inst(d,k); }
+  else body[slotKey]=inst(d,slotKey);
+}
+
+function updateEcosystem(){
+  // dominant damage type from equipped weapons → world adapts
+  const t={};
+  for(const p of Object.values(G.body)){ if(p.def.atk) t[p.def.dmgType]=(t[p.def.dmgType]||0)+1; }
+  let dom=null,max=0; for(const k in t){ if(t[k]>max){max=t[k];dom=k;} }
+  if(dom && max>=2){ G.ecoResist=dom; G.ecoTier=Math.min(3,Math.floor(G.depth/2)+1); }
+}
+
+/* =========================================================================
+   MAP
+   ========================================================================= */
+const TOTAL_DEPTH = 7; // depths 0..5 normal, 6 = apex
+const BIOMES = ['Tidepool','Fungal Caverns','Tar Pits','Thermal Vents','Sunlit Canopy','Bonefields'];
+function biomeName(){ return BIOMES[Math.min(G.depth,BIOMES.length-1)]; }
+function buildMap(){
+  if(G.depth>=TOTAL_DEPTH-1){ G.options=[{type:'apex',arch:APEX}]; return; }
+  const opts=[];
+  const n = 2;
+  const used=new Set();
+  for(let i=0;i<n;i++){
+    const r=Math.random();
+    let type = r<0.62?'predator': r<0.82?'prey':'event';
+    if(type==='event'){ opts.push({type:'event',event:pick(EVENTS)}); continue; }
+    let arch; do{ arch=pick(ENEMY_ARCH); }while(used.has(arch.id)&&used.size<ENEMY_ARCH.length); used.add(arch.id);
+    opts.push({type,arch,prey:type==='prey'});
+  }
+  G.options=opts;
+}
+
+const EVENTS=[
+  {name:'Radiant Spore Cloud',icon:'☢️',text:'A meteorite spore-cloud bathes you in mutagens. Bask in it?',
+   opts:[{t:'Bask (+1 random rare gene, +3 instability)',f:()=>{ G.instability+=3; offerFreeGene('rare'); }},
+         {t:'Shelter (+4 biomass)',f:()=>{ G.biomass+=4; advanceEvent(); }}]},
+  {name:'Carcass Field',icon:'🦴',text:'A field of fresh carcasses. Gorge or harvest?',
+   opts:[{t:'Gorge (heal all parts, +8 max core HP)',f:()=>{ healAll(); G.body.core.maxHp+=8; G.body.core.hp=G.body.core.maxHp; advanceEvent(); }},
+         {t:'Harvest genome (+5 biomass, +1 DNA)',f:()=>{ G.biomass+=5; G.dna+=1; advanceEvent(); }}]},
+  {name:'Symbiotic Pool',icon:'🫧',text:'Strange microbes offer a bargain.',
+   opts:[{t:'Bond (−4 instability)',f:()=>{ G.instability=Math.max(0,G.instability-4); advanceEvent(); }},
+         {t:'Devour them (+6 biomass, +2 instability)',f:()=>{ G.biomass+=6; G.instability+=2; advanceEvent(); }}]},
+];
+function advanceEvent(){ G.depth++; toMap(); }
+
+/* =========================================================================
+   SCREEN ROUTER
+   ========================================================================= */
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); $('screen-'+id).classList.add('active'); }
+
+/* ---------- resource bar ---------- */
+function resbarHTML(){
+  const o=organism();
+  const warn = G.instability>=CFG.INSTA_WARN?' warn':'';
+  const eDef = o.energy<0?`<span style="color:var(--danger)">${o.energy}</span>`:`<b>+${o.energy}</b>`;
+  return `<div class="res biomass" title="Spend on mutations">🩸 biomass <b>${G.biomass}</b></div>
+    <div class="res dna" title="Earned per fight">🧬 DNA <b>${G.dna}</b></div>
+    <div class="res" title="Metabolism: produced − upkeep. Negative starves your weapons.">⚡ energy ${eDef} <span class="muted small">(${o.produce}/${o.upkeep})</span></div>
+    <div class="res insta${warn}" title="Greed breeds cancer.">☣️ instability <b>${G.instability.toFixed(0)}</b></div>
+    <div class="res depth">🌋 ${biomeName()} <b>${G.depth+1}/${TOTAL_DEPTH}</b></div>`;
+}
+function paintRes(){ ['resbar','resbar2','resbar3'].forEach(id=>{const e=$(id); if(e)e.innerHTML=resbarHTML();}); }
+
+/* =========================================================================
+   TITLE
+   ========================================================================= */
+function renderTitle(){
+  $('genusGrid').innerHTML = GENERA.map(g=>`
+    <div class="card genus ${g.locked?'locked':''}" data-g="${g.id}">
+      <div class="gicon">${g.icon}</div>
+      <h3>${g.name}</h3>
+      <div class="muted small">${g.locked?'':'A standard, forgiving body plan.'}</div>
+      <div class="gtrait">${g.trait}</div>
+    </div>`).join('');
+  $('genusGrid').querySelectorAll('.genus').forEach(el=>{
+    el.onclick=()=>{ const g=GENERA.find(x=>x.id===el.dataset.g); if(g.locked) return; newGame(g); toMap(); };
+  });
+}
+
+/* =========================================================================
+   MAP SCREEN
+   ========================================================================= */
+function toMap(){
+  buildMap(); updateEcosystem(); show('map'); paintRes();
+  $('ecoBanner').innerHTML = G.ecoResist ? `<div class="banner">🧬 Convergent evolution: predators are adapting <b>resistance to ${G.ecoResist.toUpperCase()}</b> (tier ${G.ecoTier}). Diversify or break through.</div>`:'';
+  const row=$('nodeRow'); row.innerHTML='';
+  G.options.forEach((opt,i)=>{
+    const el=document.createElement('div'); el.className='card node '+opt.type;
+    if(opt.type==='event'){
+      el.innerHTML=`<div class="ntype">event</div><div class="nicon">${opt.event.icon}</div><div class="nname">${opt.event.name}</div><div class="scoutline">A choice in the dark.</div>`;
+      el.onclick=()=>runEvent(opt.event);
+    } else if(opt.type==='apex'){
+      el.innerHTML=`<div class="ntype">apex predator</div><div class="nicon">${opt.arch.icon}</div><div class="nname">${opt.arch.name}</div><div class="scoutline">The top of the food chain. Survive it and the ecosystem is yours.</div>`;
+      el.onclick=()=>startFight(opt);
+    } else {
+      const e=makeEnemy(opt.arch,G.depth);
+      el.innerHTML=`<div class="ntype">${opt.prey?'prey · easy':'predator'}</div><div class="nicon">${opt.arch.icon}</div><div class="nname">${opt.arch.name}</div>
+        <div class="scoutline" id="scout-${i}"><button class="pill" data-i="${i}">🔍 scout</button></div>`;
+      el.onclick=(ev)=>{ if(ev.target.dataset.i!==undefined) return; startFight(opt); };
+      setTimeout(()=>{ const b=el.querySelector('button'); if(b) b.onclick=(ev)=>{ ev.stopPropagation(); scout(i,e,opt); }; },0);
+    }
+    row.appendChild(el);
+  });
+}
+function scout(i,e,opt){
+  const instinctTxt={hunter:'Hunter — goes for your legs',brute:'Brute — hammers your core',feral:'Feral — strikes anywhere'}[e.instinct];
+  const weaps=Object.values(e.body).filter(p=>p.def.atk).map(p=>`<span class="chip" style="border-color:${DMG_COLOR[p.def.dmgType]}">${p.def.icon} ${p.def.dmgType}</span>`).join('');
+  const res=Object.entries(e.resist).map(([k,v])=>`<span class="chip">${k} −${Math.round(v*100)}%</span>`).join('');
+  $('scout-'+i).innerHTML=`<b style="color:var(--shock)">${instinctTxt}</b><br>weapons: ${weaps}<br>resists: ${res||'none'}`;
+}
+
+/* =========================================================================
+   EVENT SCREEN
+   ========================================================================= */
+function runEvent(ev){
+  show('event'); paintRes();
+  $('eventBody').innerHTML=`<div style="font-size:34px">${ev.icon}</div><h3 style="color:var(--shock)">${ev.name}</h3>
+    <p class="muted">${ev.text}</p>`+ev.opts.map((o,i)=>`<button class="eventopt" data-i="${i}">${o.t}</button>`).join('');
+  $('eventBody').querySelectorAll('.eventopt').forEach((b,i)=>b.onclick=()=>{ ev.opts[i].f(); });
+}
+function offerFreeGene(rarity){
+  G.depth++; // the event node itself is consumed
+  G.lab.draft=[rollGene(rarity)]; G.lab.corpse=null; G.lab.fromEvent=true; G.lab.refreshed=G.depth; openLab(true);
+}
+function healAll(){ for(const p of Object.values(G.body)){ p.hp=p.maxHp; p.dead=false; } }
+
+/* =========================================================================
+   COMBAT SIMULATION  (pure math → event log)
+   ========================================================================= */
+function buildCombatant(body, side, opts={}){
+  const parts={};
+  for(const k in body){ const src=body[k]; parts[k]=inst(src.def,k); parts[k].maxHp=src.maxHp||src.def.hp; parts[k].hp=parts[k].maxHp; }
+  const c={side, parts, resist:opts.resist||{}, instinct:opts.instinct||'predator',
+    poison:0, bleed:0, corrode:0, skip:0, larva:null, broodAt:null,
+    typesCount:opts.typesCount||{}};
+  // bake second-heart HP into the actual core for combat
+  if(parts.core){ const hearts=Object.values(parts).filter(p=>!p.dead&&p.def.tags?.includes('secondheart')).length;
+    if(hearts){ parts.core.maxHp+=24*hearts; parts.core.hp=parts.core.maxHp; } }
+  // evolution scaling: the player's lineage hardens with every kill it survives
+  c.evoAtk=1;
+  if(side==='P'){ const lvl=(typeof G!=='undefined'&&G&&G.wins)?G.wins:0;
+    c.evoAtk=1+0.09*lvl;
+    if(parts.core){ parts.core.maxHp=Math.round(parts.core.maxHp*(1+0.08*lvl)); parts.core.hp=parts.core.maxHp; } }
+  return c;
+}
+function aliveParts(c){ return Object.values(c.parts).filter(p=>!p.dead); }
+function partAlive(c,key){ return c.parts[key] && !c.parts[key].dead; }
+function deriveCombat(c){
+  let speed=0,produce=CFG.BASE_ENERGY,upkeep=0,coreBonus=0,dodge=0;
+  c.venomSac=false; c.regen=0; c.adrenal=false; c.lifesteal=false; c.crystal=false;
+  c.reflect=0; c.blind=0; c.dotward=false; c.firststrike=false; c.brood=false;
+  c.block=0; c.tags=new Set();
+  for(const p of aliveParts(c)){
+    const d=p.def; speed+=d.speed||0; produce+=d.produce||0; upkeep+=d.upkeep||0;
+    if(d.cat==='HINDLIMB'||d.cat==='HEAD') dodge+=d.dodge||0;
+    if(d.cat==='INTEG'){ c.block=Math.max(c.block,d.block||0);
+      if(d.tags.includes('reflect')) c.reflect=.15;
+      if(d.tags.includes('blind')) c.blind=.18;
+      if(d.tags.includes('dotward')) c.dotward=true; }
+    for(const t of (d.tags||[])) c.tags.add(t);
+  }
+  c.tags.forEach(t=>{ if(t==='venomSac')c.venomSac=true; if(t==='adrenal')c.adrenal=true;
+    if(t==='lifesteal')c.lifesteal=true; if(t==='crystal')c.crystal=true; if(t==='firststrike')c.firststrike=true;
+    if(t==='brood')c.brood=true; });
+  for(const p of aliveParts(c)) if(p.def.tags?.includes('regen')) c.regen+=3;
+  c.speed=speed; c.dodge=clamp(dodge,0,0.5); c.energy=produce-upkeep;
+  c.coreMax=c.parts.core?c.parts.core.maxHp:50;
+  // energy brownout is a PLAYER-only constraint; wild predators have their own metabolism
+  c.dormant=new Set();
+  if(c.energy<0 && c.side==='P'){
+    const weaps=aliveParts(c).filter(p=>p.def.atk).sort((a,b)=>(b.def.upkeep||0)-(a.def.upkeep||0));
+    let up=upkeep;
+    for(const w of weaps){ if(up<=produce)break; c.dormant.add(w.slot); up-=w.def.upkeep||0; }
+  }
+}
+function instaArmor(c){ return c.crystal? Math.min(0.5, 0.03*G.instability):0; }
+
+function simulate(playerBody, enemy){
+  const P=buildCombatant(playerBody,'P',{instinct:'predator'});
+  const E=buildCombatant(enemy.body,'E',{instinct:enemy.instinct,resist:enemy.resist});
+  deriveCombat(P); deriveCombat(E);
+  const log=[]; let t=0;
+  const ev=(o)=>log.push({t:+t.toFixed(3),...o});
+  ev({k:'start',P:snapshot(P),E:snapshot(E),pInfo:{dormant:[...P.dormant],energy:P.energy}});
+
+  // schedule weapons
+  const queue=[]; // {time,c,foe,key}
+  function schedule(c,foe){
+    for(const p of aliveParts(c)){
+      if(!p.def.atk||c.dormant.has(p.slot))continue;
+      let first=p.def.cd;
+      if(c.firststrike) first*=0.5;
+      if(p.def.tags?.includes('ambush')) first=2.0+0.2;
+      // initiative head start
+      const init=clamp((c.speed-foe.speed)*0.012,-0.4,0.5);
+      first=Math.max(0.15, first-init);
+      queue.push({time:first,c,foe,key:p.slot});
+    }
+  }
+  schedule(P,E); schedule(E,P);
+
+  let beat=1; let dead=null;
+  let guard=0;
+  while(t<CFG.MAX_BEATS && !dead && guard<4000){
+    guard++;
+    // next event: earliest weapon OR next beat tick
+    queue.sort((a,b)=>a.time-b.time);
+    const nextW=queue[0];
+    const nextTick=beat;
+    if(nextW && nextW.time<=nextTick){
+      t=nextW.time; queue.shift();
+      const {c,foe,key}=nextW;
+      if(c.parts[key] && !c.parts[key].dead && !c.dormant.has(key)){
+        let cd=c.parts[key].def.cd;
+        if(c.skip>0){ // stunned: lose this activation
+          c.skip--; ev({k:'stun',side:c.side}); queue.push({time:t+cd,c,foe,key});
+        } else {
+          doAttack(t,c,foe,key,ev);
+          if(checkDead(foe)){ dead={winner:c.side}; ev({k:'end',winner:c.side}); break; }
+          if(checkDead(c)){ dead={winner:foe.side}; ev({k:'end',winner:foe.side}); break; } // self-death (reflect)
+          if(c.adrenal && c.parts.core && c.parts.core.hp< c.coreMax*0.5) cd*=0.67;
+          queue.push({time:t+cd,c,foe,key});
+        }
+      }
+    } else {
+      // beat tick: DoTs, regen, brood
+      t=nextTick;
+      for(const c of [P,E]){
+        const foe = c===P?E:P;
+        // brood spawn
+        if(c.brood && !c.larva && beat>=3){ c.larva=true; ev({k:'spawn',side:c.side}); }
+        if(c.larva){ // larva bites foe core
+          applyCoreDmg(foe, 4, 'slash'); ev({k:'larva',side:c.side,to:foe.side,dmg:4});
+          if(checkDead(foe)){dead={winner:c.side};ev({k:'end',winner:c.side});break;}
+        }
+        if(c.poison>0){ const dmg=Math.max(1,Math.round(c.poison*CFG.POISON_DMG)); applyCoreDmg(c,dmg,'venom',true); ev({k:'dot',side:c.side,dmg,dt:'venom',stacks:c.poison});
+          c.poison=Math.round(c.poison*0.7);                                 // multiplicative decay → plateaus
+          if(c.dotward && Math.random()<0.5){ c.poison=Math.round(c.poison*0.5); }
+          if(checkDead(c)){dead={winner:foe.side};ev({k:'end',winner:foe.side});break;} }
+        if(c.bleed>0){ const dmg=c.bleed*CFG.BLEED_DMG; applyCoreDmg(c,dmg,'bleed',true); ev({k:'dot',side:c.side,dmg,dt:'bleed',stacks:c.bleed});
+          c.bleed=Math.max(0,c.bleed-1);
+          if(checkDead(c)){dead={winner:foe.side};ev({k:'end',winner:foe.side});break;} }
+        if(c.regen>0 && c.parts.core && c.parts.core.hp<c.coreMax){ const h=Math.min(c.regen,c.coreMax-c.parts.core.hp); c.parts.core.hp+=h; ev({k:'heal',side:c.side,amount:h}); }
+        if(c.corrode>0) c.corrode=Math.max(0,c.corrode-1);
+      }
+      if(dead)break;
+      beat++;
+    }
+  }
+  if(!dead){
+    // sudden death: higher core hp% wins
+    const pf=P.parts.core.hp/P.coreMax, ef=E.parts.core.hp/E.coreMax;
+    const w = pf>=ef?'P':'E'; ev({k:'end',winner:w,sudden:true}); dead={winner:w};
+  }
+  return {log,winner:dead.winner,pCore:P.parts.core.hp,eCore:E.parts.core.hp,beats:+t.toFixed(1),sudden:!!dead.sudden};
+}
+function snapshot(c){ const o={}; for(const k in c.parts){ const p=c.parts[k]; o[k]={hp:p.hp,maxHp:p.maxHp,dead:p.dead,id:p.def.id,icon:p.def.icon,name:p.def.name,dmgType:p.def.dmgType,cat:p.def.cat}; } return o; }
+
+function chooseTarget(c,foe,part){
+  const live=aliveParts(foe);
+  const core=foe.parts.core;
+  const limbs=live.filter(p=>['HEAD','FORELIMB','HINDLIMB','TAIL'].includes(p.def.cat));
+  const legs=live.filter(p=>p.def.cat==='HINDLIMB');
+  const weaps=limbs.filter(p=>p.def.atk);
+  // crusher weapons (dismember) prefer to chew a limb off
+  if(part && part.def.dismember && limbs.length && Math.random()<0.6){
+    return (weaps.length&&Math.random()<0.6)?pick(weaps):pick(limbs);
+  }
+  const inst=c.instinct;
+  if(inst==='hunter'){ if(legs.length && Math.random()<0.55) return pick(legs); return core; }
+  if(inst==='brute'){ return core; }
+  if(inst==='feral'){ return (limbs.length && Math.random()<0.45) ? pick(limbs) : core; }
+  // predator (player): race the core, but opportunistically finish a wounded enemy weapon
+  if(weaps.length){ const weak=weaps.find(p=>p.hp<=p.maxHp*0.35); if(weak && Math.random()<0.5) return weak; }
+  return core;
+}
+function doAttack(t,c,foe,key,ev){
+  const p=c.parts[key], d=p.def;
+  let target=chooseTarget(c,foe,p);
+  if(!target) return;
+  // dodge / blind
+  let missChance=foe.dodge+foe.blind;
+  if(Math.random()<missChance){ ev({k:'attack',from:c.side,fromKey:key,to:foe.side,toKey:target.slot,miss:true,range:d.range,dt:d.dmgType,icon:d.icon}); return; }
+  let dmg=d.atk*(c.evoAtk||1);
+  // adrenal
+  if(c.adrenal && c.parts.core && c.parts.core.hp<c.coreMax*0.5) dmg*=1.4;
+  // crit
+  let crit=false; if(d.crit && Math.random()<d.crit){ dmg*=1.8; crit=true; }
+  // resist
+  const r=foe.resist[d.dmgType]||0; dmg*=(1-r);
+  // integ as wearing armor: absorbs a % of core damage and degrades as it does.
+  // pierce bypasses; acid bypasses AND melts the integ directly.
+  const bypass = d.dmgType==='pierce'||d.dmgType==='acid';
+  if(target.def.cat==='CORE'){
+    if(partAlive(foe,'integ') && !bypass){
+      const blk=clamp(foe.parts.integ.def.block - foe.corrode*0.06 + instaArmor(foe),0,0.85);
+      const absorbed=dmg*blk; dmg-=absorbed;
+      foe.parts.integ.hp-=absorbed*0.6;
+      if(foe.parts.integ.hp<=0){ foe.parts.integ.dead=true; ev({k:'attack',from:c.side,fromKey:key,to:foe.side,toKey:'integ',dmg:0,dt:d.dmgType,range:d.range,destroyed:true,icon:d.icon}); deriveCombat(foe); }
+    } else {
+      dmg*=(1-instaArmor(foe));
+    }
+    if(d.dmgType==='acid' && partAlive(foe,'integ')){ foe.parts.integ.hp-=dmg*0.5; if(foe.parts.integ.hp<=0){ foe.parts.integ.dead=true; deriveCombat(foe); } }
+  }
+  // dismember multiplier vs limbs/parts
+  if(d.dismember && target.def.cat!=='CORE') dmg*=d.dismember;
+  dmg=Math.max(1,Math.round(dmg));
+  target.hp-=dmg;
+  let destroyed=false;
+  if(target.hp<=0 && !target.dead){ target.dead=true; destroyed=true; if(target.def.cat==='INTEG'||target.def.cat==='ORGAN'){ deriveCombat(foe);} else deriveCombat(foe); }
+  // statuses
+  const oh=d.onHit||{};
+  if(oh.poison) foe.poison+=oh.poison;
+  if(c.venomSac) foe.poison+=1;
+  if(oh.bleed) foe.bleed+=oh.bleed;
+  if(oh.corrode) foe.corrode+=oh.corrode;
+  let stunned=false; if(oh.stun && Math.random()<oh.stun){ foe.skip+=1; stunned=true; }
+  // lifesteal
+  if(c.lifesteal && c.parts.core){ const heal=Math.round(dmg*0.4); c.parts.core.hp=Math.min(c.coreMax,c.parts.core.hp+heal); ev({k:'heal',side:c.side,amount:heal}); }
+  // reflect
+  if(foe.reflect && c.parts.core){ const rf=Math.round(dmg*foe.reflect); c.parts.core.hp-=rf; ev({k:'reflect',side:foe.side,to:c.side,dmg:rf}); }
+  ev({k:'attack',from:c.side,fromKey:key,to:foe.side,toKey:target.slot,dmg,dt:d.dmgType,range:d.range,crit,destroyed,stunned,icon:d.icon,
+      toHp:target.hp,toMax:target.maxHp,poison:foe.poison,bleed:foe.bleed});
+}
+function applyCoreDmg(c,dmg,dt,bypassInteg){
+  if(!c.parts.core) return; c.parts.core.hp-=dmg;
+}
+function checkDead(c){ return !c.parts.core || c.parts.core.hp<=0 || c.parts.core.dead; }
+
+/* =========================================================================
+   BATTLE ANIMATION (plays the log)
+   ========================================================================= */
+const bc=$('battleCanvas'), bx=bc.getContext('2d');
+let anim=null;
+function startFight(opt){
+  const enemy = opt.type==='apex'?makeEnemy(opt.arch,G.depth):makeEnemy(opt.arch,G.depth);
+  if(opt.prey){ for(const k in enemy.body){ if(k!=='core'){ enemy.body[k].maxHp=Math.round(enemy.body[k].maxHp*0.7); } } enemy.body.core.maxHp=Math.round(enemy.body.core.maxHp*0.65); enemy.body.core.hp=enemy.body.core.maxHp; }
+  const sim=simulate(G.body, enemy);
+  G.current={opt,enemy,sim};
+  show('battle');
+  $('battleTitle').textContent = `${biomeName()} — your organism  vs  ${enemy.icon} ${enemy.name}`;
+  $('battleLog').innerHTML='';
+  setupAnim(sim,enemy);
+}
+
+let animState;
+function setupAnim(sim,enemy){
+  // use the sim's start snapshot for hp/maxHp so bars match combat (evolution &
+  // second-heart bonuses live in the sim, not on the raw body)
+  const start=sim.log[0]||{};
+  const mk=(body,side,snap)=>{ const parts={}; for(const k in body){ const s=snap&&snap[k];
+      const mh = s?s.maxHp : (body[k].maxHp||body[k].def.hp);
+      parts[k]={hp:mh,maxHp:mh,dead:false,def:body[k].def,flash:0,debris:null}; }
+    return {side,parts,poison:0,bleed:0,lunge:0,larva:false}; };
+  animState={
+    P:mk(G.body,'P',start.P), E:mk(enemy.body,'E',start.E),
+    log:sim.log, idx:0, time:0, speed:1, fx:[], floats:[], done:false, winner:sim.winner, enemy,
+    shake:0,
+  };
+  anim=requestAnimationFrame(loopAnim);
+  $('btnSpeed').onclick=()=>{ animState.speed=animState.speed===1?2:1; $('btnSpeed').textContent=`▶ ${animState.speed}×`; };
+  $('btnSkip').onclick=()=>{ finishFight(); };
+}
+let lastTs=0;
+function loopAnim(ts){
+  if(!animState){return;}
+  const dt=Math.min(0.05,(ts-lastTs)/1000||0); lastTs=ts;
+  if(!animState.done){
+    animState.time+=dt*animState.speed/CFG.SPB; // in beats
+    // fire events up to time
+    while(animState.idx<animState.log.length && animState.log[animState.idx].t<=animState.time){
+      handleEvent(animState.log[animState.idx++]);
+    }
+    if(animState.idx>=animState.log.length){ animState.done=true; setTimeout(()=>finishFight(), 700); }
+  }
+  // decay fx
+  for(const s of [animState.P,animState.E]){ s.lunge*=0.85; for(const k in s.parts){ const p=s.parts[k]; if(p.flash>0)p.flash-=dt*3; if(p.debris){ p.debris.vy+=300*dt; p.debris.y+=p.debris.vy*dt; p.debris.x+=p.debris.vx*dt; p.debris.rot+=p.debris.vr*dt; p.debris.life-=dt; } } }
+  animState.fx=animState.fx.filter(f=>{ f.t+=dt; return f.t<f.dur; });
+  animState.floats=animState.floats.filter(f=>{ f.t+=dt; f.y-=24*dt; return f.t<1.1; });
+  if(animState.shake>0) animState.shake*=0.86;
+  drawBattle();
+  anim=requestAnimationFrame(loopAnim);
+}
+function handleEvent(e){
+  const S=animState; const me = e.from? (e.from==='P'?S.P:S.E):null; const foe=e.to?(e.to==='P'?S.P:S.E):null;
+  const sideS = e.side?(e.side==='P'?S.P:S.E):null;
+  if(e.k==='attack'){
+    const f=e.from==='P'?S.P:S.E, tgt=e.to==='P'?S.P:S.E;
+    // synthetic integ-shatter notification (carries dmg 0) — no slash/number
+    if(e.toKey==='integ' && !e.dmg && e.destroyed){ const ip=tgt.parts.integ; if(ip){ip.dead=true;} logLine(`${e.to==='P'?'Your':"The "+S.enemy.name+"'s"} integument <span class="logkill">shatters!</span>`); return; }
+    f.lunge = e.from==='P'?16:-16;
+    const from=partPos(f,e.fromKey), to=partPos(tgt,e.toKey);
+    if(e.miss){ S.floats.push({x:to.x,y:to.y-20,txt:'miss',col:'#7fa6a0',t:0}); logLine(`${f===S.P?'You':S.enemy.name} ${e.icon} miss.`); return; }
+    if(e.range==='ranged'){ S.fx.push({type:'proj',x:from.x,y:from.y,tx:to.x,ty:to.y,col:DMG_COLOR[e.dt],t:0,dur:0.22,onArr:()=>impact(tgt,e)}); }
+    else { S.fx.push({type:'slash',x:to.x,y:to.y,col:DMG_COLOR[e.dt],t:0,dur:0.25}); impact(tgt,e); }
+  } else if(e.k==='dot'){
+    const s=sideS; if(e.dt==='venom'){s.poison=e.stacks;}
+    s.parts.core && (s.parts.core.hp=Math.max(0,s.parts.core.hp-e.dmg));
+    S.floats.push({x:sideCx(e.side),y:120,txt:'-'+e.dmg,col:e.dt==='venom'?DMG_COLOR.venom:'#ff6b8a',t:0});
+    logLine(`${e.side==='P'?'You take':S.enemy.name+' takes'} <b>${e.dmg}</b> ${e.dt}.`);
+  } else if(e.k==='heal'){ sideS.parts.core && (sideS.parts.core.hp=Math.min(sideS.parts.core.maxHp,sideS.parts.core.hp+e.amount)); S.floats.push({x:sideCx(e.side),y:140,txt:'+'+e.amount,col:'#33ffc8',t:0}); }
+  else if(e.k==='reflect'){ const s=e.side==='P'?S.P:S.E; const o=e.to==='P'?S.P:S.E; o.parts.core&&(o.parts.core.hp-=e.dmg); S.floats.push({x:sideCx(e.to),y:150,txt:'-'+e.dmg,col:'#9fd8ff',t:0}); logLine(`Mirror scales reflect <b>${e.dmg}</b>.`); }
+  else if(e.k==='spawn'){ (e.side==='P'?S.P:S.E).larva=true; logLine(`${e.side==='P'?'You':S.enemy.name} hatch a larva! 🥚`); }
+  else if(e.k==='larva'){ const o=e.to==='P'?S.P:S.E; o.parts.core&&(o.parts.core.hp-=e.dmg); S.floats.push({x:sideCx(e.to),y:160,txt:'-'+e.dmg,col:'#9cff4d',t:0}); }
+  else if(e.k==='stun'){ logLine(`${e.side==='P'?'You are':S.enemy.name+' is'} <span class="logcrit">stunned</span> — a beat lost.`); }
+  else if(e.k==='end'){ logLine(`<span class="logwin">${e.winner==='P'?'★ YOUR ORGANISM PREVAILS':'✖ your lineage is devoured'}${e.sudden?' (attrition)':''}</span>`); }
+}
+function impact(tgt,e){
+  const p=tgt.parts[e.toKey]; if(p){ p.flash=1; if(e.toMax!==undefined) p.maxHp=e.toMax; if(e.toHp!==undefined){ p.hp=Math.max(0,e.toHp);} else { p.hp=Math.max(0,p.hp-e.dmg);} if(e.destroyed){ p.dead=true; p.debris={x:0,y:0,vx:(Math.random()-0.5)*120,vy:-120,rot:0,vr:rand(-6,6),life:2}; } }
+  animState.shake=e.crit?9:4;
+  animState.floats.push({x:partPos(tgt,e.toKey).x,y:partPos(tgt,e.toKey).y-18,txt:(e.crit?'✦':'')+'-'+e.dmg,col:e.crit?'#ffe14d':DMG_COLOR[e.dt],t:0,big:e.crit});
+  if(e.poison!==undefined) tgt.poison=e.poison;
+  let line=`${e.from==='P'?'You':animState.enemy.name} ${e.icon} hit ${e.to==='P'?'your':"the "+animState.enemy.name+"'s"} ${tgt.parts[e.toKey].def.name} for <b>${e.dmg}</b>${e.crit?' <span class="logcrit">CRIT</span>':''}.`;
+  if(e.destroyed) line+=` <span class="logkill">${tgt.parts[e.toKey].def.name} destroyed!</span>`;
+  if(e.stunned) line+=` <span class="logcrit">STUNNED</span>`;
+  logLine(line);
+}
+function logLine(html){ const l=$('battleLog'); l.innerHTML+=`<div>${html}</div>`; l.scrollTop=l.scrollHeight; }
+
+/* ---- battle rendering ---- */
+function sideCx(side){ return side==='P'?250:690; }
+function partPos(s,key){ const slot=slotByKey(key); const cx=s.side==='P'?250:690; const cy=250;
+  const mx = s.side==='P'?1:-1; return {x:cx+slot.off.x*mx, y:cy+slot.off.y}; }
+function drawBattle(){
+  const S=animState; bx.clearRect(0,0,bc.width,bc.height);
+  bx.save();
+  if(S.shake>0.3) bx.translate((Math.random()-0.5)*S.shake,(Math.random()-0.5)*S.shake);
+  // ground glow
+  const g=bx.createLinearGradient(0,0,bc.width,0); g.addColorStop(0,'rgba(51,255,200,.05)'); g.addColorStop(1,'rgba(180,107,255,.05)');
+  bx.fillStyle=g; bx.fillRect(0,0,bc.width,bc.height);
+  drawCreature(S.P,'You','#33ffc8'); drawCreature(S.E,S.enemy.icon+' '+S.enemy.name,'#ff5566');
+  // projectiles & fx
+  for(const f of S.fx){
+    if(f.type==='proj'){ const k=Math.min(1,f.t/f.dur); const x=f.x+(f.tx-f.x)*k, y=f.y+(f.ty-f.y)*k;
+      bx.fillStyle=f.col; bx.beginPath(); bx.arc(x,y,5,0,7); bx.fill();
+      bx.globalAlpha=.4; bx.beginPath(); bx.arc(f.x+(f.tx-f.x)*Math.max(0,k-.12),f.y+(f.ty-f.y)*Math.max(0,k-.12),3,0,7); bx.fill(); bx.globalAlpha=1;
+      if(k>=1 && !f._d){ f._d=true; f.onArr&&f.onArr(); }
+    } else if(f.type==='slash'){ const k=f.t/f.dur; bx.strokeStyle=f.col; bx.globalAlpha=1-k; bx.lineWidth=3;
+      bx.beginPath(); bx.moveTo(f.x-18+k*30,f.y-18); bx.lineTo(f.x+18,f.y+18-k*30); bx.stroke(); bx.globalAlpha=1; }
+  }
+  // floats
+  for(const f of S.floats){ bx.globalAlpha=clamp(1.1-f.t,0,1); bx.fillStyle=f.col; bx.font=(f.big?'bold 22px':'bold 16px')+' monospace'; bx.textAlign='center'; bx.fillText(f.txt,f.x,f.y); }
+  bx.globalAlpha=1; bx.restore();
+}
+function drawCreature(s,label,col){
+  const cx=s.side==='P'?250:690, cy=250, mx=s.side==='P'?1:-1;
+  const lunge=s.lunge;
+  // limb connectors
+  bx.strokeStyle='rgba(120,180,170,.25)'; bx.lineWidth=4;
+  for(const slot of SLOTS){ if(slot.cat==='CORE'||slot.cat==='INTEG'||slot.cat==='ORGAN')continue; const p=s.parts[slot.key]; if(!p)continue;
+    bx.beginPath(); bx.moveTo(cx+lunge,cy); bx.lineTo(cx+slot.off.x*mx+lunge,cy+slot.off.y); bx.stroke(); }
+  // integ ring
+  const integ=s.parts.integ;
+  if(integ && !integ.dead){ bx.strokeStyle=KW_COLOR[integ.def.types[0]]||'#888'; bx.globalAlpha=.5+0.4*(integ.hp/integ.maxHp); bx.lineWidth=8;
+    bx.beginPath(); bx.arc(cx+lunge,cy,52,0,7); bx.stroke(); bx.globalAlpha=1; }
+  // core
+  const core=s.parts.core; const chp=core?core.hp/core.maxHp:0;
+  bx.fillStyle=core&&core.hp>0?'#0e2a26':'#2a0e12'; bx.beginPath(); bx.arc(cx+lunge,cy,38,0,7); bx.fill();
+  bx.strokeStyle=col; bx.lineWidth=3; bx.beginPath(); bx.arc(cx+lunge,cy,38,-Math.PI/2,-Math.PI/2+chp*Math.PI*2); bx.stroke();
+  bx.fillStyle=col; bx.font='22px serif'; bx.textAlign='center'; bx.textBaseline='middle'; bx.fillText('🧠',cx+lunge,cy);
+  if(s.larva){ bx.font='16px serif'; bx.fillText('🐛',cx+lunge+ (s.side==='P'?70:-70), cy+30); }
+  // peripheral parts
+  for(const slot of SLOTS){ if(['CORE','INTEG','ORGAN'].includes(slot.cat))continue; const p=s.parts[slot.key]; if(!p)continue;
+    const x=cx+slot.off.x*mx+lunge, y=cy+slot.off.y;
+    if(p.dead){ if(p.debris&&p.debris.life>0){ bx.save(); bx.globalAlpha=clamp(p.debris.life/2,0,1); bx.translate(x+p.debris.x,y+p.debris.y); bx.rotate(p.debris.rot); bx.font='20px serif'; bx.fillText(p.def.icon,0,0); bx.restore(); } else { bx.globalAlpha=.25; bx.font='18px serif'; bx.fillText('✖',x,y); bx.globalAlpha=1; } continue; }
+    // body
+    bx.save(); if(p.flash>0){ bx.shadowColor='#fff'; bx.shadowBlur=18*p.flash; }
+    bx.font='26px serif'; bx.fillText(p.def.icon,x,y); bx.restore();
+    // part hp bar
+    const w=30,h=4; const f=p.hp/p.maxHp;
+    bx.fillStyle='rgba(0,0,0,.5)'; bx.fillRect(x-w/2,y+16,w,h);
+    bx.fillStyle=f>.5?'#33ffc8':f>.25?'#ffe14d':'#ff5566'; bx.fillRect(x-w/2,y+16,w*f,h);
+  }
+  // label + core hp + status
+  bx.fillStyle=col; bx.font='bold 14px monospace'; bx.textBaseline='alphabetic';
+  bx.fillText(label, cx, cy-150);
+  bx.fillStyle='rgba(0,0,0,.4)'; bx.fillRect(cx-70,cy-142,140,9);
+  bx.fillStyle=col; bx.fillRect(cx-70,cy-142,140*clamp(chp,0,1),9);
+  bx.fillStyle='#cfeee6'; bx.font='11px monospace'; bx.fillText(`${Math.max(0,Math.round(core?core.hp:0))}/${core?core.maxHp:0}`,cx,cy-145+22);
+  let sx=cx-60;
+  if(s.poison>0){ bx.fillStyle=DMG_COLOR.venom; bx.fillText('☠'+s.poison,cx-60,cy-118); }
+}
+function finishFight(){
+  if(!animState) return; if(anim) cancelAnimationFrame(anim);
+  const win = G.current.sim.winner==='P';
+  // apply destroyed parts back to real body (scars)
+  const finalP={}; // recompute from sim by replaying part deaths
+  for(const k in G.body){ finalP[k]=false; }
+  for(const e of G.current.sim.log){ if(e.k==='attack'&&e.destroyed&&e.to==='P'){ finalP[e.toKey]=true; } }
+  if(win){
+    G.wins=(G.wins||0)+1;
+    for(const k in finalP){ if(finalP[k] && G.body[k]){ G.body[k].dead=true; G.body[k].hp=0; } }
+    // heal surviving (alive) parts to full
+    for(const p of Object.values(G.body)){ if(!p.dead){ p.hp=p.maxHp; } }
+  }
+  animState=null;
+  showResult(win);
+}
+
+/* =========================================================================
+   RESULT
+   ========================================================================= */
+function showResult(win){
+  show('result');
+  const enemy=G.current.enemy, opt=G.current.opt;
+  if(!win){
+    G.pendingEnd='dead';
+    $('resultBody').innerHTML=`<div style="font-size:40px">☠️</div><div class="bigmsg" style="color:var(--danger)">EXTINCTION</div>
+      <p class="muted">Your lineage was devoured by ${enemy.icon} ${enemy.name} in the ${biomeName()}.<br>You reached depth ${G.depth+1} of ${TOTAL_DEPTH}.</p>
+      <div class="row" style="margin-top:14px"><button class="primary" onclick="restart()">↺ evolve anew</button></div>`;
+    return;
+  }
+  if(opt.type==='apex'){
+    show('end');
+    $('endBody').innerHTML=`<div style="font-size:46px">👑🧬</div><div class="bigmsg" style="color:var(--bio)">APEX PREDATOR</div>
+      <p class="muted" style="max-width:520px">You climbed the entire food chain and dethroned ${enemy.name}. The ecosystem is yours — for now. Each victory seeds harsher worlds.</p>
+      <div class="row" style="margin-top:14px"><button class="primary" onclick="restart()">↺ new lineage</button></div>`;
+    return;
+  }
+  // rewards
+  const photosynth = Object.values(G.body).some(p=>p.def.tags?.includes('photosynth'));
+  const bm = opt.prey?5:4;
+  const gain = photosynth?Math.round(bm*0.5):bm;
+  G.biomass+=gain; G.dna+=1;
+  const lostParts=[]; for(const k in G.body){ if(G.body[k].dead) lostParts.push(G.body[k].def.name); }
+  G.lab.corpse = enemy.signature;
+  $('resultBody').innerHTML=`<div style="font-size:40px">${enemy.icon}💥</div><div class="bigmsg">PREY DOWN</div>
+    <p class="muted">You defeated ${enemy.name}. +${gain} 🩸 biomass, +1 🧬 DNA.${photosynth?' <span class="small">(photosynth halves kill-biomass)</span>':''}
+    ${lostParts.length?`<br><span style="color:var(--danger)">Lost in battle: ${lostParts.join(', ')}</span> — regrow in the lab.`:''}</p>
+    <div class="row" style="margin-top:14px"><button class="primary" onclick="openLab()">🧬 enter Gene Lab</button></div>`;
+}
+function restart(){ renderTitle(); show('title'); }
+
+/* =========================================================================
+   GENE LAB
+   ========================================================================= */
+function rollGene(forceRarity){
+  const biome=biomeName();
+  const roll=Math.random();
+  let rarity = forceRarity || (roll<0.6?'common':roll<0.88?'uncommon':'rare');
+  let pool=LIB.filter(m=>m.rarity===rarity && m.id!=='__core');
+  if(!pool.length) pool=LIB.filter(m=>m.id!=='__core');
+  // biome flavour: bias toward matching biome tags occasionally
+  return pick(pool);
+}
+function openLab(freebie){
+  show('lab'); paintRes();
+  if(!freebie){
+    G.lab.fromEvent=false;
+    if(G.lab.refreshed!==G.depth){ // one fresh draft per node — no free re-rolls by emptying it
+      G.lab.draft=[rollGene(),rollGene(),rollGene()]; G.lab.refreshed=G.depth;
+    }
+  }
+  G.lab.mode='idle'; G.lab.sel=null; G.lab.spliceSel=[];
+  // instability curse check
+  const curse=maybeCurse();
+  drawBody(); renderLabRight(curse);
+  $('partInfo').textContent='Click a body part to inspect, atrophy, or select for splicing.';
+  $('labHint').textContent='';
+}
+function maybeCurse(){
+  const crystal=Object.values(G.body).some(p=>p.def.tags?.includes('crystal'));
+  if(crystal) return null;            // Crystal Lattice immunizes you
+  if(G.lab.cursedAt===G.depth) return null; // at most one curse roll per node
+  if(G.instability>=CFG.INSTA_WARN && Math.random()<0.45){
+    G.lab.cursedAt=G.depth;
+    const tier=Math.floor(G.instability/CFG.INSTA_WARN);
+    const targets=Object.values(G.body).filter(p=>p.def.cat!=='CORE');
+    if(!targets.length) return null;
+    const r=Math.random();
+    if(r<0.45){ const t=pick(targets); const loss=Math.round(t.maxHp*0.3); t.maxHp-=loss; t.hp=Math.min(t.hp,t.maxHp);
+      return `☣️ Tumor: ${t.def.name} loses ${loss} max HP to a cancerous growth.`; }
+    else if(r<0.8){ const ws=targets.filter(p=>p.def.atk); if(ws.length){ const w=pick(ws); w.def={...w.def,atk:Math.max(1,w.def.atk-2)}; return `☣️ Atavism: ${w.def.name} degenerates, −2 attack.`; } return null; }
+    else { const t=pick(targets); atrophy(t.slot); return `☣️ Necrosis (instability tier ${tier}): your ${t.def.name} rots away entirely.`; }
+  }
+  return null;
+}
+function drawBody(){
+  const cv=$('bodyCanvas'), x=cv.getContext('2d'); x.clearRect(0,0,cv.width,cv.height);
+  const cx=215,cy=200;
+  // connectors
+  x.strokeStyle='rgba(120,180,170,.25)'; x.lineWidth=4;
+  for(const slot of SLOTS){ if(['CORE','INTEG','ORGAN'].includes(slot.cat))continue; if(!G.body[slot.key])continue;
+    x.beginPath(); x.moveTo(cx,cy); x.lineTo(cx+slot.off.x,cy+slot.off.y); x.stroke(); }
+  const integ=G.body.integ;
+  if(integ){ x.strokeStyle=KW_COLOR[integ.def.types[0]]||'#888'; x.globalAlpha=.6; x.lineWidth=8; x.beginPath(); x.arc(cx,cy,52,0,7); x.stroke(); x.globalAlpha=1; }
+  x.fillStyle='#0e2a26'; x.beginPath(); x.arc(cx,cy,38,0,7); x.fill(); x.strokeStyle='#33ffc8'; x.lineWidth=2; x.stroke();
+  x.font='24px serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('🧠',cx,cy);
+  // empty-slot ghosts + parts
+  for(const slot of SLOTS){ if(['CORE','INTEG'].includes(slot.cat))continue;
+    const p=G.body[slot.key]; const px=cx+slot.off.x, py=cy+slot.off.y;
+    const compat = G.lab.mode==='placing' && G.lab.sel && canPlace(G.lab.sel,slot.key);
+    const spliced = G.lab.mode==='splice' && p && G.lab.spliceSel.includes(slot.key);
+    if(!p){ if(slot.cat==='ORGAN'){ /* drawn small */ }
+      x.setLineDash([4,4]); x.strokeStyle=compat?'#33ffc8':'rgba(120,150,150,.35)'; x.lineWidth=compat?2:1;
+      x.beginPath(); x.arc(px,py,16,0,7); x.stroke(); x.setLineDash([]);
+      if(compat){ x.fillStyle='#33ffc8'; x.font='12px monospace'; x.fillText('+',px,py); }
+      continue; }
+    if(p.dead){ x.globalAlpha=.3; x.font='20px serif'; x.fillText('✖',px,py); x.globalAlpha=1;
+      x.fillStyle='#ff5566'; x.font='9px monospace'; x.fillText('crippled',px,py+22); continue; }
+    if(spliced){ x.fillStyle='rgba(51,255,200,.18)'; x.beginPath(); x.arc(px,py,22,0,7); x.fill(); }
+    if(compat){ x.strokeStyle='#33ffc8'; x.lineWidth=2; x.beginPath(); x.arc(px,py,22,0,7); x.stroke(); }
+    x.font='26px serif'; x.fillText(p.def.icon,px,py);
+  }
+  // store hit positions
+  cv.onclick=(e)=>{ const r=cv.getBoundingClientRect(); const mx=(e.clientX-r.left)*(cv.width/r.width), my=(e.clientY-r.top)*(cv.height/r.height);
+    for(const slot of SLOTS){ if(slot.cat==='INTEG'&&G.body.integ){} const px=cx+slot.off.x,py=cy+slot.off.y;
+      if((mx-px)**2+(my-py)**2 < 26*26){ onSlotClick(slot.key); return; } }
+    // integ hit (center ring)
+    if(Math.abs(((mx-cx)**2+(my-cy)**2)**0.5 - 52)<14){ onSlotClick('integ'); }
+  };
+}
+function canPlace(def,slotKey){ const cat=slotByKey(slotKey).cat; if(def.cat!==cat) return false;
+  if(def.pair && PAIR_CATS[cat]) return true; return true; }
+function onSlotClick(slotKey){
+  if(G.lab.mode==='placing' && G.lab.sel){
+    if(canPlace(G.lab.sel,slotKey)){ doPlace(G.lab.sel,slotKey); return; }
+    else { $('labHint').textContent=`${G.lab.sel.name} can't grow in a ${slotByKey(slotKey).cat.toLowerCase()} socket.`; return; }
+  }
+  if(G.lab.mode==='splice'){
+    const p=G.body[slotKey]; if(!p||p.def.id==='__core'){ return; }
+    const i=G.lab.spliceSel.indexOf(slotKey);
+    if(i>=0) G.lab.spliceSel.splice(i,1); else if(G.lab.spliceSel.length<2) G.lab.spliceSel.push(slotKey);
+    if(G.lab.spliceSel.length===2){ confirmSplice(); return; }
+    drawBody(); renderLabRight(); $('labHint').textContent='Select a second gene to splice.';
+    return;
+  }
+  // inspect
+  const p=G.body[slotKey]; if(!p){ $('partInfo').textContent=`Empty ${slotByKey(slotKey).label} socket.`; return; }
+  showPartInfo(p);
+}
+function showPartInfo(p){
+  const d=p.def;
+  const lines=[];
+  if(d.atk) lines.push(`atk ${d.atk} ${d.dmgType} · cd ${d.cd} · ${d.range}`);
+  if(d.block) lines.push(`block ${Math.round(d.block*100)}%`);
+  if(d.speed) lines.push(`speed +${d.speed}`); if(d.dodge) lines.push(`dodge +${Math.round(d.dodge*100)}%`);
+  if(d.produce) lines.push(`+${d.produce} energy`); if(d.upkeep) lines.push(`−${d.upkeep} upkeep`);
+  if(p.dead) lines.push('CRIPPLED — regrow to restore');
+  $('partInfo').innerHTML=`<b>${d.icon} ${d.name}</b> <span class="muted">[${d.cat}]</span><br>
+    <span class="muted">${d.desc||''}</span><br>${lines.join(' · ')}
+    <div class="types" style="margin-top:4px">${d.types.map(t=>`<span style="color:${KW_COLOR[t]}">${t}</span>`).join('')}</div>`;
+  // action buttons via hint area
+  const hint=$('labHint'); hint.innerHTML='';
+  if(d.id!=='__core'){
+    const aBtn=document.createElement('button'); aBtn.className='pill'; aBtn.textContent='atrophy (free slot)'; aBtn.onclick=()=>{ atrophy(p.slot); drawBody(); renderLabRight(); $('partInfo').textContent='Atrophied.'; };
+    hint.appendChild(aBtn);
+    if(p.dead){ const rBtn=document.createElement('button'); rBtn.className='pill'; rBtn.textContent=`regrow (${CFG.REGROW_COST}🩸)`; rBtn.disabled=G.biomass<CFG.REGROW_COST; rBtn.onclick=()=>{ G.biomass-=CFG.REGROW_COST; p.dead=false; p.hp=p.maxHp; openLab(); }; hint.appendChild(rBtn); }
+  }
+}
+function doPlace(def,slotKey){
+  const cost=def.__corpse?0:geneCost(def);   // devoured corpse genes are free
+  if(G.biomass<cost){ $('labHint').textContent=`Need ${cost} biomass.`; return; }
+  G.biomass-=cost;
+  const cat=slotByKey(slotKey).cat;
+  if(def.pair && PAIR_CATS[cat]){ for(const k of PAIR_CATS[cat]) G.body[k]=inst(def,k); }
+  else G.body[slotKey]=inst(def,slotKey);
+  G.lab.draft=G.lab.draft.filter(g=>g!==def);   // drafted genes are consumed
+  if(def.__corpse) G.lab.corpse=null;            // corpse gene is one-shot
+  const open=()=>openLab(G.lab.fromEvent); G.lab.mode='idle'; G.lab.sel=null; open();
+}
+function geneCost(def){ return def.rarity==='rare'?6:def.rarity==='uncommon'?4:def.rarity==='hybrid'?7:2; }
+
+function renderLabRight(curse){
+  const R=$('labRight');
+  const o=organism();
+  const setBadge = o.energy<0?`<span style="color:var(--danger)">⚠ energy deficit ${o.energy}: weakest weapon goes dormant in battle</span>`:`<span class="muted">metabolism stable</span>`;
+  $('orgStats').textContent=`mass ${o.mass} · spd ${o.speed} · core ${o.coreHp}hp`;
+  let html='';
+  if(curse) html+=`<div class="banner" style="border-color:var(--danger);color:var(--danger)">${curse}</div>`;
+  html+=`<div class="card labsec"><h3>🩸 Draft a mutation <span class="muted small">${setBadge}</span></h3>
+    <div class="geneCards" id="draftCards"></div>
+    <div class="row" style="margin-top:8px;justify-content:flex-start">
+      <button id="rerollBtn">↻ reroll (${CFG.REROLL_COST}🩸)</button>
+      ${G.lab.corpse?`<button id="devourBtn">🍖 devour ${byId(G.lab.corpse).name} (free)</button>`:''}
+    </div></div>`;
+  html+=`<div class="card labsec"><h3>🧬 Splice <span class="muted small">fuse two genes into a hybrid</span></h3>
+    <div class="small muted">Hybrids are powerful but raise instability. Select two equipped parts on your body.</div>
+    <div class="row" style="margin-top:8px;justify-content:flex-start">
+      <button id="spliceBtn">${G.lab.mode==='splice'?'cancel splice':'⟡ begin splice'}</button>
+      <span class="pill" id="spliceStatus"></span>
+    </div></div>`;
+  html+=`<div class="card labsec"><h3>⚖️ Stabilize &amp; march</h3>
+    <div class="row" style="justify-content:flex-start">
+      <button id="stabBtn" ${G.biomass<CFG.STABILIZE_COST||G.instability<=0?'disabled':''}>−3 instability (${CFG.STABILIZE_COST}🩸)</button>
+      <button class="primary" id="marchBtn">march onward ▸</button>
+    </div></div>`;
+  R.innerHTML=html;
+  // draft cards
+  const dc=$('draftCards');
+  if(!G.lab.draft.length) dc.innerHTML='<span class="muted small">No genes left — march onward.</span>';
+  G.lab.draft.forEach(def=>{ dc.appendChild(geneCard(def)); });
+  $('rerollBtn') && ($('rerollBtn').onclick=()=>{ if(G.biomass<CFG.REROLL_COST)return; G.biomass-=CFG.REROLL_COST; G.lab.draft=[rollGene(),rollGene(),rollGene()]; openLab(); });
+  $('devourBtn') && ($('devourBtn').onclick=()=>{ const def={...byId(G.lab.corpse),__corpse:true}; G.lab.sel=def; G.lab.mode='placing'; $('labHint').textContent=`Devour: click a compatible ${def.cat.toLowerCase()} socket to graft ${def.name}.`; drawBody(); });
+  $('spliceBtn').onclick=()=>{ if(G.lab.mode==='splice'){ G.lab.mode='idle'; G.lab.spliceSel=[]; } else { G.lab.mode='splice'; G.lab.spliceSel=[]; $('labHint').textContent='Select two equipped genes on your body to fuse.'; } drawBody(); renderLabRight(); };
+  $('spliceStatus').textContent = G.lab.mode==='splice'?`${G.lab.spliceSel.length}/2 selected`:'';
+  $('stabBtn') && ($('stabBtn').onclick=()=>{ if(G.biomass<CFG.STABILIZE_COST)return; G.biomass-=CFG.STABILIZE_COST; G.instability=Math.max(0,G.instability-3); openLab(); });
+  $('marchBtn').onclick=()=>{ if(!G.lab.fromEvent) G.depth++; G.lab.fromEvent=false; G.lab.draft=[]; G.lab.corpse=null; G.lab.refreshed=-1; toMap(); };
+}
+function geneCard(def){
+  const el=document.createElement('div'); el.className='gene '+(def.rarity||'common');
+  if(G.lab.sel===def) el.classList.add('sel');
+  const stats=[];
+  if(def.atk) stats.push(`⚔ ${def.atk} ${def.dmgType} cd${def.cd}`);
+  if(def.block) stats.push(`🛡 ${Math.round(def.block*100)}%`);
+  if(def.speed) stats.push(`💨 +${def.speed}`); if(def.dodge) stats.push(`~${Math.round(def.dodge*100)}%dodge`);
+  if(def.produce) stats.push(`⚡+${def.produce}`); if(def.upkeep) stats.push(`⛽${def.upkeep}`);
+  el.innerHTML=`<span class="gslot">${def.cat}</span><div class="gname">${def.icon} ${def.name}</div>
+    <div class="types">${def.types.map(t=>`<span style="color:${KW_COLOR[t]}">${t}</span>`).join('')}</div>
+    <div class="stats">${stats.join(' · ')}<br>${def.desc||''}</div>
+    <div class="muted small" style="margin-top:5px">cost ${geneCost(def)}🩸 · +${rarityIns(def.rarity).toFixed(1)} instability</div>`;
+  el.onclick=()=>{ G.lab.sel=def; G.lab.mode='placing'; G.lab.spliceSel=[];
+    $('labHint').textContent=`Click a compatible ${def.cat.toLowerCase()} socket to grow ${def.name}. (cost ${geneCost(def)}🩸)`;
+    drawBody(); renderLabRight(); el.classList.add('sel'); };
+  return el;
+}
+
+/* ---- splice ---- */
+function confirmSplice(){
+  const [k1,k2]=G.lab.spliceSel; const a=G.body[k1].def, b=G.body[k2].def;
+  const cost=7; if(G.biomass<cost){ $('labHint').textContent=`Splicing costs ${cost} biomass.`; G.lab.spliceSel=[]; G.lab.mode='idle'; drawBody(); renderLabRight(); return; }
+  G.biomass-=cost;
+  const hy=makeHybrid(a,b);
+  // place into k1's slot, atrophy both originals
+  const cat1=slotByKey(k1).cat;
+  atrophy(k1); if(G.body[k2]) atrophy(k2);
+  // ensure target slot category matches hybrid; if not, find a slot of hy.cat
+  let target=k1;
+  if(slotByKey(k1).cat!==hy.cat){ const s=SLOTS.find(s=>s.cat===hy.cat && !G.body[s.key]); target=s?s.key:k1; }
+  if(hy.pair && PAIR_CATS[hy.cat]){ for(const k of PAIR_CATS[hy.cat]) G.body[k]=inst(hy,k); }
+  else G.body[target]=inst(hy,target);
+  G.instability += 2;
+  G.lab.mode='idle'; G.lab.spliceSel=[];
+  $('labHint').textContent=`Spliced into ${hy.name}!`;
+  openLab();
+}
+function makeHybrid(a,b){
+  const weaponBase = a.atk? a : (b.atk? b : a);
+  const cat = a.atk? a.cat : (b.atk? b.cat : a.cat);
+  const types=[...new Set([...a.types,...b.types])];
+  let unstable=1; for(const [x,y] of CONFLICTS){ if(types.includes(x)&&types.includes(y)) unstable+=2; }
+  const nameA=a.name.split(' ')[0], nameB=b.name.split(' ').slice(-1)[0];
+  const hy={__hybrid:true,id:'hy_'+Date.now(),name:`${nameA}-${nameB}`,icon:a.atk?a.icon:b.icon,cat,rarity:'hybrid',
+    types, hp:Math.round((a.hp+b.hp)/2)+6, mass:Math.round(((a.mass||0)+(b.mass||0))/2),
+    upkeep:Math.round(((a.upkeep||0)+(b.upkeep||0))*0.8), produce:(a.produce||0)+(b.produce||0),
+    tags:[...new Set([...(a.tags||[]),...(b.tags||[])])], unstable,
+    pair: a.pair&&b.pair, desc:`Spliced hybrid of ${a.name} + ${b.name}.`};
+  if(weaponBase.atk){ hy.atk=Math.round(Math.max(a.atk||0,b.atk||0)*1.1)+2; hy.dmgType=weaponBase.dmgType; hy.cd=+(((a.cd||2.5)+(b.cd||2.5))/2).toFixed(1); hy.range=weaponBase.range; hy.crit=Math.max(a.crit||0,b.crit||0); }
+  const onHit={}; for(const src of [a,b]) for(const key in (src.onHit||{})) onHit[key]=(onHit[key]||0)+src.onHit[key]; hy.onHit=onHit;
+  if(a.block||b.block) hy.block=Math.max(a.block||0,b.block||0);
+  if(a.speed||b.speed) hy.speed=(a.speed||0)+(b.speed||0);
+  if(a.dodge||b.dodge) hy.dodge=Math.max(a.dodge||0,b.dodge||0);
+  if(a.dismember||b.dismember) hy.dismember=Math.max(a.dismember||0,b.dismember||0);
+  return hy;
+}
+
+/* =========================================================================
+   BOOT
+   ========================================================================= */
+renderTitle();
+window.restart=restart; window.openLab=openLab;
+if(typeof global!=='undefined') global.__EXPORT={byId,inst,slotByKey,PAIR_CATS,CFG,SLOTS,equip,newGame,simulate,makeEnemy,organism,GENERA,ENEMY_ARCH,APEX,ES,getG:()=>G};
+</script>
+</body>
+</html>
