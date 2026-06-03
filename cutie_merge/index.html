@@ -193,12 +193,19 @@
   }
   .btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 26px rgba(176,107,255,.5); }
   .btn:active { transform: translateY(0) scale(.98); }
-  .zen-btn {
-    font-family:"Quicksand",sans-serif; font-weight:700; font-size:13px; cursor:pointer;
-    background: rgba(255,255,255,.7); color: var(--ink); border: 2px solid #fff;
-    border-radius: 999px; padding: 7px 16px; transition: transform .12s ease;
+  .mode-pick { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .mode-opt {
+    font-family:"Quicksand",sans-serif; font-weight:700; font-size:12.5px; cursor:pointer;
+    background: rgba(255,255,255,.72); color: var(--ink); border: 2px solid #fff;
+    border-radius: 999px; padding: 7px 13px; transition: transform .12s ease;
   }
-  .zen-btn.on { background: linear-gradient(135deg,#c8b3ff,#8ee6df); color:#fff; }
+  .mode-opt:hover { transform: translateY(-1px); }
+  .mode-opt.active { background: linear-gradient(135deg,#ff8fc7,#b58cff); color:#fff; border-color:#fff; }
+  .mode-badge {
+    font-family:"Fredoka",sans-serif; font-weight:600; font-size:14px; color:#c44d96;
+    min-height: 16px; text-align:center; margin-top:-4px;
+  }
+  body.dark .mode-badge { color:#ffc4ec; }
 
   /* shop modal */
   .shop {
@@ -359,12 +366,13 @@
       <div class="ov-hi" id="ovHi"></div>
       <h2 id="ovTitle">Cutie Merge</h2>
       <p id="ovText">Match two of the same cutie to merge them into something cuter — and tap a cutie to give it a pet! 🫶</p>
-      <button class="zen-btn" id="zenBtn">🌙 Zen Mode: Off</button>
+      <div class="mode-pick" id="modePick"></div>
       <button class="btn" id="startBtn">Play 💕</button>
     </div>
   </div>
 
   <div class="controls-hint">Move to aim • tap empty space to <b>drop</b> • tap a cutie to <b>pet</b> 🫶</div>
+  <div class="mode-badge" id="modeBadge"></div>
 
   <div class="power-bar" id="powerBar"></div>
 
@@ -511,16 +519,18 @@
   let muted      = LS.get("cutieMergeMuted", false);
   let musicOn    = LS.get("cutieMergeMusic", false);
   let haptics    = LS.get("cutieMergeHaptics", true);
-  let zenPref    = LS.get("cutieMergeZen", false);
+  let mode       = LS.get("cutieMergeMode", "classic");  // classic | zen | blitz | daily
 
   /* ---------- run state ---------- */
   let balls = [], particles = [], floaters = [], rings = [], stickers = [], speeches = [];
   let frame = 0, ambientTimer = 0, moodTimer = 0, speechTimer = 240;
   let score = 0, combo = 0, comboTimer = 0, overflowTimer = 0, shake = 0, slowTimer = 0;
   let running = false, gameOver = false, zen = false, paused = false;
-  let held = null, nextTier = randDropTier(), dropCooldown = 0, aimX = W / 2;
+  let held = null, dropCooldown = 0, aimX = W / 2;
   let mergesSinceWand = 0, rainbowMade = false, fluff = 0;
   let armedPower = null;
+  let rng = Math.random, dropDelay = 24, blitzTimer = 0, lastBadge = "";
+  let nextTier = randDropTier();
 
   const G = 0.55, REST = 0.18, FRICTION = 0.86, AIR = 0.995;
   const WAND_EVERY = 6;      // merges per earned wand
@@ -530,14 +540,17 @@
   function makeBall(x, y, tier, vx, vy) {
     return { id: idc++, x, y, vx: vx || 0, vy: vy || 0, tier,
              r: tier === WILD ? WILD_R : TIERS[tier].r,
-             merging: false, born: performance.now(), pop: 0, pet: 0, petDir: 1, still: 0 };
+             merging: false, born: performance.now(), pop: 0, pet: 0, petDir: 1, still: 0, react: 0, reactEmoji: null };
   }
   function randDropTier() {
     const total = DROP_WEIGHTS.reduce((a, b) => a + b, 0);
-    let roll = Math.random() * total;
+    let roll = rng() * total;
     for (let i = 0; i < DROP_TIERS.length; i++) { roll -= DROP_WEIGHTS[i]; if (roll <= 0) return DROP_TIERS[i]; }
     return 0;
   }
+  // deterministic RNG for the Daily Challenge (same drops for everyone, per day)
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function daySeed() { const s = new Date().toISOString().slice(0, 10); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h >>> 0; }
 
   /* ---------- audio ---------- */
   let actx = null;
@@ -645,6 +658,7 @@
       b.x += b.vx; b.y += b.vy;
       if (b.pop > 0) b.pop -= 0.08;
       if (b.pet > 0) b.pet -= 0.045;
+      if (b.react > 0) b.react -= 0.02;
       b.still = Math.hypot(b.vx, b.vy) < 0.4 ? b.still + 1 : 0;
     }
 
@@ -747,7 +761,7 @@
     if (combo >= 4) mascotCheer("x" + combo + "! 💖");
 
     const nb = makeBall(mx, my, nt, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2 - 1.5);
-    nb.pop = 1; balls.push(nb);
+    nb.pop = 1; nb.react = 1; nb.reactEmoji = pick(["😊","🥰","😆","💕","✨","💖"]); balls.push(nb);
     discover(nt);
     if (nt > stats.maxTier) { stats.maxTier = nt; saveStats(); }
     if (nt === MAX_TIER && !rainbowMade) { rainbowMade = true; celebrateRainbow(mx, my); }
@@ -970,6 +984,16 @@
 
     for (const b of balls) drawBall(b, false);
 
+    // happy reaction popping above a freshly-merged cutie
+    for (const b of balls) {
+      if (b.react > 0 && b.reactEmoji) {
+        const d = b.r * 0.75;
+        ctx.save(); ctx.globalAlpha = Math.min(1, b.react * 2.2);
+        ctx.drawImage(getGlyph(b.reactEmoji), b.x - d / 2, b.y - b.r - d * 0.9, d, d);
+        ctx.restore();
+      }
+    }
+
     // speech bubbles above their cuties
     for (const sp of speeches) { const b = balls.find(x => x.id === sp.id); if (b) drawSpeech(b, sp); }
 
@@ -1016,6 +1040,8 @@
       step();
       if (dropCooldown > 0) { dropCooldown--; if (dropCooldown === 0 && !held) { held = { tier: nextTier }; nextTier = randDropTier(); updateHud(); } }
       if (--ambientTimer <= 0) { ambientTimer = 20 + Math.random() * 28; spawnAmbient(); }
+      if (blitzTimer > 0) { blitzTimer--; if (blitzTimer <= 0) endGame(); }
+      updateModeBadge();
     }
     updateFx();
     render();
@@ -1044,7 +1070,7 @@
     const r = held.tier === WILD ? WILD_R : TIERS[held.tier].r;
     const x = Math.max(r, Math.min(W - r, aimX));
     balls.push(makeBall(x, SPAWN_Y, held.tier, 0, 1));
-    dropSound(); held = null; dropCooldown = 24; updateHud();
+    dropSound(); held = null; dropCooldown = dropDelay; updateHud();
   }
   function petCutie(b) {
     b.pet = 1; b.petDir = Math.random() < 0.5 ? -1 : 1; b.still = 0;
@@ -1229,13 +1255,21 @@
       board: "radial-gradient(120% 80% at 50% 0%, #4a3a6e 0%, #3a2c59 55%, #2a1f44 100%)",
       deco: ["🌙","⭐","✨","💜","🌟","🔮","💫","🦄","☁️","💤"] },
   ];
+  // seasonal flair — floating decor + greeting change automatically by date
+  const SEASONS = [
+    { mo: [2, 3, 4],   name: "Spring", deco: ["🌸","🌷","🐝","🦋","🌼","💐","🐰","🌱","☀️","🍓"], hi: "🌸 Happy Spring!" },
+    { mo: [5, 6, 7],   name: "Summer", deco: ["☀️","🌻","🍉","🐚","🍦","🌴","🦩","⭐","🏖️","🍧"], hi: "☀️ Sunny summer vibes!" },
+    { mo: [8, 9, 10],  name: "Autumn", deco: ["🍂","🍁","🎃","🌰","🍄","🦊","🧣","🌙","⭐","🍮"], hi: "🍂 Cozy autumn!" },
+    { mo: [11, 0, 1],  name: "Winter", deco: ["❄️","⛄","🎀","🌟","🧣","🍫","🦌","💙","✨","🍭"], hi: "❄️ Winter wonderland!" },
+  ];
+  const SEASON = SEASONS.find(s => s.mo.indexOf(new Date().getMonth()) >= 0) || null;
   function applyTheme(id) {
     const th = THEMES.find(t => t.id === id) || THEMES[0];
     themeId = th.id; LS.set("cutieMergeTheme", themeId);
     document.body.style.background = th.page;
     document.body.classList.toggle("dark", !!th.dark);
     canvas.style.background = th.board;
-    buildDeco(th.deco);
+    buildDeco(SEASON ? SEASON.deco : th.deco);
   }
   function buildDeco(set) {
     const wrap = document.getElementById("bgDeco"); wrap.innerHTML = "";
@@ -1298,8 +1332,8 @@
   const DEF_AV = { base: "🐱", hat: "🎀", face: "", outfit: "👗", item: "", bg: "#ffe3f3", name: "", asDrop: true };
   const avatar = Object.assign({}, DEF_AV, LS.get("cutieMergeAvatar", {}));
   const AV_CATS = [
-    { slot: "base",   label: "🐾 Animal",     opts: ["🐱","🐶","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐹","🐧","🦄","🐲"] },
-    { slot: "hat",    label: "🎩 Hat",        none: true, opts: ["🎀","👑","🎩","🧢","👒","🌸","🍓","🧁","⭐","🍄","🎓","🌟"] },
+    { slot: "base",   label: "🐾 Animal",     opts: ["🐱","🐶","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐹","🐧","🦄","🐲","🦝","🦔","🐥","🐙"] },
+    { slot: "hat",    label: "🎩 Hat",        none: true, opts: ["🎀","👑","🎩","🧢","👒","🌸","🍓","🧁","⭐","🍄","🎓","🌟","🍦","🌺","🪅"] },
     { slot: "face",   label: "👓 Face",       none: true, opts: ["🕶️","👓","🥽","😎"] },
     { slot: "outfit", label: "👗 Outfit",     none: true, opts: ["👗","👕","👚","🧥","🧣","🎽","👔","🦺","🥋"] },
     { slot: "item",   label: "🧸 Bestie",     none: true, opts: ["🌈","🍭","🎈","🧸","⭐","🪄","🌷","💐","🍰","🎁","☂️","🎤"] },
@@ -1505,29 +1539,73 @@
     dropCooldown = 0; gameOver = false;
     updateHud(); refreshPowerBar();
   }
+  /* ---------- modes ---------- */
+  const MODES = [
+    { id: "classic", icon: "🌼", name: "Classic", desc: "Drop &amp; merge — don't overflow the top!" },
+    { id: "zen",     icon: "🌙", name: "Zen",     desc: "Relax — no game over, just merge. 🌙" },
+    { id: "blitz",   icon: "⚡", name: "Blitz",   desc: "90 seconds — score as much as you can! ⚡" },
+    { id: "daily",   icon: "📅", name: "Daily",   desc: "Same drops for everyone today — beat your best! 📅" },
+  ];
+  function buildModePick() {
+    const host = document.getElementById("modePick"); host.innerHTML = "";
+    for (const m of MODES) {
+      const b = document.createElement("button");
+      b.className = "mode-opt" + (m.id === mode ? " active" : "");
+      b.dataset.mode = m.id; b.innerHTML = m.icon + " " + m.name;
+      b.addEventListener("click", () => setMode(m.id));
+      host.appendChild(b);
+    }
+  }
+  function setMode(id) {
+    mode = id; LS.set("cutieMergeMode", id);
+    document.querySelectorAll("#modePick .mode-opt").forEach(b => b.classList.toggle("active", b.dataset.mode === id));
+    document.getElementById("ovText").innerHTML = MODES.find(x => x.id === id).desc;
+  }
+  function dailyKey() { return "cutieMergeDailyBest:" + new Date().toISOString().slice(0, 10); }
+  function updateModeBadge() {
+    let t = "";
+    if (mode === "blitz") { const s = Math.max(0, Math.ceil(blitzTimer / 60)); t = "⚡ " + Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
+    else if (mode === "daily") t = "📅 Daily Challenge";
+    else if (mode === "zen") t = "🌙 Zen — relax";
+    if (t !== lastBadge) { document.getElementById("modeBadge").textContent = t; lastBadge = t; }
+  }
+
+  /* ---------- game flow ---------- */
   function startGame() {
-    ensureAudio(); resetGame(); zen = zenPref; running = true; paused = false;
+    ensureAudio();
+    rng = (mode === "daily") ? mulberry32(daySeed()) : Math.random;
+    resetGame();
+    zen = (mode === "zen");
+    dropDelay = (mode === "blitz") ? 13 : 24;
+    blitzTimer = (mode === "blitz") ? 90 * 60 : 0;
+    lastBadge = "";
+    running = true; paused = false;
     stats.games++; saveStats();
     document.getElementById("mascot").classList.add("show");
     document.getElementById("overlay").classList.remove("show");
   }
   function endGame() {
-    gameOver = true; running = false; shake = 8;
+    gameOver = true; running = false; shake = 8; lastBadge = "";
     document.getElementById("mascot").classList.remove("show");
+    document.getElementById("modeBadge").textContent = "";
     if (score > best) { best = score; LS.set("cutieMergeBest", best); }
+    let extra = "";
+    if (mode === "daily") {
+      const db = LS.get(dailyKey(), 0);
+      if (score > db) { LS.set(dailyKey(), score); extra = "<br>📅 New daily best! 🎉"; }
+      else extra = "<br>📅 Today's best: " + db;
+    }
     const ov = document.getElementById("overlay");
-    document.getElementById("ovTitle").textContent = "Cuties Overflowed!";
+    document.getElementById("ovTitle").textContent = (mode === "blitz") ? "Time's up! ⚡" : "Cuties Overflowed!";
     document.getElementById("ovHi").textContent = (avatar.name ? avatar.name + " is proud of you! " : "Your cutie is proud! ") + "💖";
-    document.getElementById("ovText").innerHTML = "You scored <b>" + score + "</b> points 💕<br>Best: " + best + " &nbsp;•&nbsp; 💖 " + hearts;
+    document.getElementById("ovText").innerHTML = "You scored <b>" + score + "</b> points 💕<br>Best: " + best + " &nbsp;•&nbsp; 💖 " + hearts + extra;
     document.getElementById("startBtn").textContent = "Play again 🌸";
+    buildModePick();
     ov.classList.add("show"); updateHud();
   }
 
-  function updateZenBtn() { const b = document.getElementById("zenBtn"); b.textContent = "🌙 Zen Mode: " + (zenPref ? "On" : "Off"); b.classList.toggle("on", zenPref); }
-
   document.getElementById("startBtn").addEventListener("click", startGame);
   document.getElementById("restartBtn").addEventListener("click", startGame);
-  document.getElementById("zenBtn").addEventListener("click", () => { zenPref = !zenPref; LS.set("cutieMergeZen", zenPref); updateZenBtn(); });
   document.getElementById("shopBtn").addEventListener("click", () => { ensureAudio(); openShop(); });
   document.getElementById("shopClose").addEventListener("click", closeShop);
   shop.addEventListener("click", (e) => { if (e.target === shop) closeShop(); });
@@ -1552,13 +1630,14 @@
   applyTheme(themeId);
   renderCollection(); renderMissions();
   buildStudio(); buildEditChips(); setupEditor(); refreshAvatarViews(); updateDropBtn();
-  updateHud(); refreshPowerBar(); updateZenBtn();
+  updateHud(); refreshPowerBar(); buildModePick();
   document.getElementById("muteBtn").textContent = muted ? "🔇 SFX" : "🔊 SFX";
   document.getElementById("muteBtn").classList.toggle("off", muted);
   document.getElementById("musicBtn").classList.toggle("off", !musicOn);
   document.getElementById("hapticBtn").classList.toggle("off", !haptics);
   checkAchievements();
   checkDaily();
+  if (SEASON) setTimeout(() => toast(SEASON.deco[0], SEASON.hi), 1400);
   loop();
 })();
 </script>
