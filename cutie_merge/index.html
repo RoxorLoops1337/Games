@@ -295,6 +295,19 @@
   .edit-chip.active { border-color: #ff7ec0; box-shadow: 0 0 0 3px rgba(255,126,192,.25); background: #fff0f7; }
   .edit-row { display: flex; align-items: center; gap: 8px; }
   .edit-row input[type=range] { width: 150px; accent-color: #ff7ec0; }
+  .wardrobe { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .ward-slot {
+    position: relative; width: 50px; height: 50px; border-radius: 14px; border: 2px dashed #e3b8d6;
+    background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: #d99cc6;
+  }
+  .ward-slot.filled { border-style: solid; border-color: #ffd1e8; }
+  .ward-slot .ward-x {
+    position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 999px;
+    background: #ff7ec0; color: #fff; font-size: 12px; line-height: 18px; text-align: center; border: none; cursor: pointer;
+  }
+  .room-canvas { width: 100%; display: block; border-radius: 16px; box-shadow: inset 0 6px 18px rgba(150,90,140,.18); }
+  .room-hint { text-align: center; font-size: 12px; color: var(--ink-soft); font-weight: 600; margin: 8px 0 0; }
   .ov-avatar { margin-bottom: 2px; }
   .ov-hi { font-weight: 700; color: #c44d96; font-size: 13.5px; margin-top: -2px; }
   .studio-preview { display: flex; justify-content: center; margin: 6px 0 10px; }
@@ -378,6 +391,7 @@
 
   <div class="toolbar">
     <button class="mini" id="studioBtn">👗 Studio</button>
+    <button class="mini" id="roomBtn">🏡 Room</button>
     <button class="mini" id="shopBtn">🛍️ Shop</button>
     <button class="mini" id="muteBtn">🔊 SFX</button>
     <button class="mini" id="musicBtn">🎵 Music</button>
@@ -443,9 +457,29 @@
     <div class="studio-actions">
       <button class="mini" id="avDrop">🫧 Drop my cutie: On</button>
       <button class="mini" id="avRandom">🎲 Surprise me</button>
+      <button class="mini" id="avSave">📷 Save</button>
       <button class="btn" id="studioDone" style="margin-top:0">Done 💕</button>
     </div>
+    <div class="opt-lbl" style="margin-top:6px">👚 Wardrobe — save &amp; swap outfits</div>
+    <div class="wardrobe" id="wardrobe"></div>
     <div id="studioCats"></div>
+  </div>
+</div>
+
+<!-- cutie room / nursery modal -->
+<div class="shop" id="room">
+  <div class="shop-inner">
+    <div class="shop-top">
+      <h2>🏡 Cutie Room</h2>
+      <span class="shop-bal" id="roomBal">💖 0</span>
+      <button class="shop-x" id="roomClose">✕</button>
+    </div>
+    <canvas id="roomCanvas" class="room-canvas"></canvas>
+    <p class="room-hint">Your discovered cuties hang out here — tap them to say hi! 🫶</p>
+    <h3>🖼️ Wallpaper</h3>
+    <div class="shop-grid" id="roomWalls"></div>
+    <h3>🪴 Furniture</h3>
+    <div class="shop-grid" id="roomFurn"></div>
   </div>
 </div>
 
@@ -803,6 +837,7 @@
     document.getElementById("hearts").textContent = hearts;
     document.getElementById("shopBal").textContent = "💖 " + hearts;
     const ab = document.getElementById("avBal"); if (ab) ab.textContent = "💖 " + hearts;
+    const rb = document.getElementById("roomBal"); if (rb) rb.textContent = "💖 " + hearts;
     if (announce) toast("💖", "+" + n + " hearts");
   }
 
@@ -1045,6 +1080,7 @@
     }
     updateFx();
     render();
+    if (roomOpen) renderRoom();
     requestAnimationFrame(loop);
   }
 
@@ -1477,7 +1513,7 @@
     document.getElementById("editReset").addEventListener("click", () => { ensureAdj(editSlot); avatar.adj[editSlot] = { x: 0, y: 0, s: 1 }; sizeEl.value = 1; renderEditorPreview(); saveAvatar(); refreshAvatarViews(); });
   }
   function openStudio() {
-    buildStudio(); buildEditChips();
+    buildStudio(); buildEditChips(); buildWardrobe();
     if (visibleSlots().indexOf(editSlot) < 0) editSlot = "base";
     setEditSlot(editSlot);
     document.getElementById("avName").value = avatar.name || "";
@@ -1521,6 +1557,174 @@
   document.getElementById("avDrop").addEventListener("click", function () {
     avatar.asDrop = !avatar.asDrop; saveAvatar(); updateDropBtn(); updateHud();
   });
+
+  /* ---------- wardrobe (save & swap outfits) ---------- */
+  const WARD_SLOTS = 4;
+  let wardrobe = LS.get("cutieMergeWardrobe", []);
+  const cloneAvatar = () => JSON.parse(JSON.stringify({ base: avatar.base, hat: avatar.hat, face: avatar.face, outfit: avatar.outfit, item: avatar.item, bg: avatar.bg, name: avatar.name, asDrop: avatar.asDrop, adj: avatar.adj }));
+  function buildWardrobe() {
+    const host = document.getElementById("wardrobe"); host.innerHTML = "";
+    for (let i = 0; i < WARD_SLOTS; i++) {
+      const slot = document.createElement("div"); slot.className = "ward-slot" + (wardrobe[i] ? " filled" : "");
+      if (wardrobe[i]) {
+        const mini = document.createElement("div"); renderAvatar(mini, wardrobe[i], 42); slot.appendChild(mini);
+        const x = document.createElement("button"); x.className = "ward-x"; x.textContent = "✕";
+        x.addEventListener("click", (e) => { e.stopPropagation(); wardrobe[i] = null; LS.set("cutieMergeWardrobe", wardrobe); buildWardrobe(); });
+        slot.appendChild(x);
+        slot.title = "Wear this outfit";
+        slot.addEventListener("click", () => {
+          Object.assign(avatar, JSON.parse(JSON.stringify(wardrobe[i]))); saveAvatar();
+          buildStudio(); buildEditChips(); if (visibleSlots().indexOf(editSlot) < 0) editSlot = "base"; setEditSlot(editSlot);
+          document.getElementById("avName").value = avatar.name || ""; updateDropBtn();
+          refreshAvatarViews(); updateHud(); sparkleSound();
+        });
+      } else {
+        slot.textContent = "💾"; slot.title = "Save current outfit here";
+        slot.addEventListener("click", () => { wardrobe[i] = cloneAvatar(); LS.set("cutieMergeWardrobe", wardrobe); buildWardrobe(); sparkleSound(); toast("👚", "Outfit saved!"); });
+      }
+      host.appendChild(slot);
+    }
+  }
+
+  /* ---------- save your cutie as an image ---------- */
+  function drawAvatarComposite(c, size) {
+    const adj = avatar.adj || {};
+    c.fillStyle = avatar.bg || "#ffe3f3";
+    c.beginPath(); c.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); c.fill();
+    for (const slot of LAYER_ORDER) {
+      const emoji = slot === "base" ? (avatar.base || "🐱") : avatar[slot];
+      if (!emoji) continue;
+      const Lo = LAYOUT[slot], a = adj[slot] || {};
+      const lx = ((Lo.l + (a.x || 0)) / 100) * size;
+      const ly = ((Lo.t + (a.y || 0)) / 100) * size;
+      const dd = size * Lo.f * (a.s || 1) / 0.86;
+      c.drawImage(getGlyph(emoji), lx - dd / 2, ly - dd / 2, dd, dd);
+    }
+  }
+  function saveAvatarImage() {
+    const S = 512, cv = document.createElement("canvas"); cv.width = cv.height = S;
+    drawAvatarComposite(cv.getContext("2d"), S);
+    const fname = ((avatar.name || "my-cutie").replace(/[^a-z0-9_-]+/gi, "_") || "my-cutie") + ".png";
+    cv.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], fname, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: "My Cutie 🌸" }).catch(() => {});
+      } else {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname;
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        toast("📷", "Saved your cutie!");
+      }
+    }, "image/png");
+  }
+  document.getElementById("avSave").addEventListener("click", () => { ensureAudio(); saveAvatarImage(); });
+
+  /* ---------- cutie room / nursery ---------- */
+  const RW = 340, RH = 200;
+  const roomCv = document.getElementById("roomCanvas");
+  const roomCtx = roomCv.getContext("2d");
+  const ROOM_WALLS = [
+    { id: "nursery", name: "Nursery", price: 0,  top: "#fff3fb", bot: "#ffdcef" },
+    { id: "mint",    name: "Mint",    price: 30, top: "#eafff7", bot: "#c8eede" },
+    { id: "sky",     name: "Sky",     price: 30, top: "#eaf4ff", bot: "#d2e6ff" },
+    { id: "sunset",  name: "Sunset",  price: 50, top: "#fff0e6", bot: "#ffd2bd" },
+    { id: "starry",  name: "Starry",  price: 80, top: "#3a2c59", bot: "#241b3a" },
+  ];
+  const FURN = [
+    { id: "rug",   emoji: "🟫", price: 0 }, { id: "plant", emoji: "🪴", price: 12 },
+    { id: "teddy", emoji: "🧸", price: 15 }, { id: "cake",  emoji: "🎂", price: 18 },
+    { id: "lamp",  emoji: "🪔", price: 14 }, { id: "gift",  emoji: "🎁", price: 16 },
+    { id: "music", emoji: "🎵", price: 10 }, { id: "ball",  emoji: "🧶", price: 10 },
+  ];
+  let roomOpen = false, roomBalls = [], roomHearts = [];
+  let roomWall = LS.get("cutieMergeRoomWall", "nursery");
+  let roomWallsOwned = LS.get("cutieMergeRoomWalls", ["nursery"]);
+  let roomFurn = LS.get("cutieMergeRoomFurn", []);
+
+  function fitRoomCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    roomCv.width = Math.round(RW * dpr); roomCv.height = Math.round(RH * dpr);
+    roomCtx.setTransform(dpr, 0, 0, dpr, 0, 0); // CSS scales the canvas uniformly (intrinsic 340:200)
+  }
+  function applyRoomWall() {
+    const w = ROOM_WALLS.find(x => x.id === roomWall) || ROOM_WALLS[0];
+    roomCv.style.background = "linear-gradient(180deg," + w.top + " 0%," + w.bot + " 100%)";
+  }
+  function initRoomBalls() {
+    roomBalls = [];
+    const seen = discovered.slice().sort((a, b) => a - b);
+    for (const t of seen) {
+      const r = Math.max(11, Math.min(30, TIERS[t].r * 0.42));
+      roomBalls.push({ tier: t, r, x: r + Math.random() * (RW - 2 * r), y: RH - r - 10 - Math.random() * 40, vx: (Math.random() - 0.5) * 1.5, vy: 0, hop: Math.random() * 200 });
+    }
+  }
+  function renderRoom() {
+    const floor = RH - 8;
+    for (const b of roomBalls) {
+      b.vy += 0.4; b.x += b.vx; b.y += b.vy; b.vx *= 0.99;
+      if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx) * 0.6; }
+      if (b.x > RW - b.r) { b.x = RW - b.r; b.vx = -Math.abs(b.vx) * 0.6; }
+      if (b.y > floor - b.r) { b.y = floor - b.r; b.vy *= -0.45; b.vx *= 0.86; if (Math.abs(b.vy) < 0.6) b.vy = 0; }
+      if (--b.hop <= 0) { b.hop = 120 + Math.random() * 220; if (b.y > floor - b.r - 2) { b.vy = -4.5 - Math.random() * 2; b.vx += (Math.random() - 0.5) * 2.5; } }
+    }
+    roomCtx.clearRect(0, 0, RW, RH);
+    // furniture along the floor
+    let fx = 22;
+    for (const f of FURN) { if (roomFurn.indexOf(f.id) < 0) continue; roomCtx.drawImage(getGlyph(f.emoji), fx - 16, floor - 30, 32, 32); fx += 40; if (fx > RW - 24) fx = 22; }
+    // cuties
+    for (const b of roomBalls) { const sp = getSprite(b.tier), dh = sp._half * (b.r / sp._baseR); roomCtx.drawImage(sp, b.x - dh, b.y - dh, dh * 2, dh * 2); }
+    // hearts from petting
+    for (const h of roomHearts) { h.y += h.vy; h.life -= 0.02; roomCtx.save(); roomCtx.globalAlpha = Math.max(0, h.life); roomCtx.drawImage(getGlyph("💕"), h.x - 9, h.y - 9, 18, 18); roomCtx.restore(); }
+    roomHearts = roomHearts.filter(h => h.life > 0);
+  }
+  function roomTap(e) {
+    const rect = roomCv.getBoundingClientRect();
+    const px = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / rect.width * RW;
+    const py = ((e.touches ? e.touches[0].clientY : e.clientY) - rect.top) / rect.height * RH;
+    let hit = null, bd = 1e9;
+    for (const b of roomBalls) { const d = Math.hypot(b.x - px, b.y - py); if (d < b.r + 6 && d < bd) { bd = d; hit = b; } }
+    if (hit) { hit.vy = -6; hit.vx += (Math.random() - 0.5) * 3; boopSound(hit.tier); roomHearts.push({ x: hit.x, y: hit.y - hit.r, vy: -1, life: 1 }); }
+    e.preventDefault();
+  }
+  roomCv.addEventListener("mousedown", roomTap);
+  roomCv.addEventListener("touchstart", roomTap, { passive: false });
+
+  function renderRoomShop() {
+    document.getElementById("roomBal").textContent = "💖 " + hearts;
+    const wg = document.getElementById("roomWalls"); wg.innerHTML = "";
+    for (const w of ROOM_WALLS) {
+      const owned = roomWallsOwned.indexOf(w.id) >= 0, eq = roomWall === w.id;
+      const card = document.createElement("div"); card.className = "card" + (owned ? "" : " locked");
+      card.innerHTML = '<div class="c-ic" style="width:34px;height:22px;border-radius:6px;background:linear-gradient(180deg,' + w.top + ',' + w.bot + ')"></div><div class="c-nm">' + w.name + '</div><div class="c-ds">' + (owned ? "Owned" : "Cozy wallpaper") + '</div>';
+      const btn = document.createElement("button"); btn.className = "c-buy" + (eq ? " equipped" : "");
+      btn.textContent = eq ? "On ✓" : owned ? "Use" : "💖" + w.price; btn.disabled = eq;
+      btn.addEventListener("click", () => {
+        if (eq) return;
+        if (owned) { roomWall = w.id; LS.set("cutieMergeRoomWall", roomWall); applyRoomWall(); renderRoomShop(); }
+        else if (hearts >= w.price) { addHearts(-w.price); roomWallsOwned.push(w.id); LS.set("cutieMergeRoomWalls", roomWallsOwned); roomWall = w.id; LS.set("cutieMergeRoomWall", roomWall); applyRoomWall(); renderRoomShop(); sparkleSound(); }
+      });
+      card.appendChild(btn); wg.appendChild(card);
+    }
+    const fg = document.getElementById("roomFurn"); fg.innerHTML = "";
+    for (const f of FURN) {
+      const owned = roomFurn.indexOf(f.id) >= 0;
+      const card = document.createElement("div"); card.className = "card" + (owned ? "" : " locked");
+      card.innerHTML = '<div class="c-ic">' + f.emoji + '</div>';
+      const btn = document.createElement("button"); btn.className = "c-buy" + (owned ? " equipped" : "");
+      btn.textContent = owned ? "Owned ✓" : "💖" + f.price; btn.disabled = owned || hearts < f.price;
+      btn.addEventListener("click", () => { if (!owned && hearts >= f.price) { addHearts(-f.price); roomFurn.push(f.id); LS.set("cutieMergeRoomFurn", roomFurn); renderRoomShop(); sparkleSound(); toast("🪴", "Added to your room!"); } });
+      card.appendChild(btn); fg.appendChild(card);
+    }
+  }
+  function openRoom() {
+    paused = true; roomOpen = true;
+    document.getElementById("room").classList.add("show");
+    fitRoomCanvas(); applyRoomWall(); initRoomBalls(); renderRoomShop();
+  }
+  function closeRoom() { roomOpen = false; paused = false; document.getElementById("room").classList.remove("show"); }
+  document.getElementById("roomBtn").addEventListener("click", () => { ensureAudio(); openRoom(); });
+  document.getElementById("roomClose").addEventListener("click", closeRoom);
+  document.getElementById("room").addEventListener("click", (e) => { if (e.target.id === "room") closeRoom(); });
 
   /* ---------- hud ---------- */
   function updateHud() {
