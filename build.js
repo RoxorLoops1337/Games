@@ -40,6 +40,7 @@ const STATIC_PATHS = [
   'evolve_and_conquer',
   'tower-defense-sprites',
   'night_shift',
+  'boss_monster',
   'tools',
 ];
 
