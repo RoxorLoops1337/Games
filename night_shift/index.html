@@ -187,6 +187,44 @@
 
   .pop { position:absolute; z-index:30; font-weight:800; font-size:16px; pointer-events:none; animation:popUp .8s ease forwards; text-shadow:0 2px 4px rgba(0,0,0,.5); }
   @keyframes popUp { 0%{opacity:0; transform:translate(-50%,0) scale(.6)} 20%{opacity:1} 100%{opacity:0; transform:translate(-50%,-42px) scale(1.15)} }
+
+  /* intro scene */
+  .overlay.intro { justify-content:flex-start; padding:0; gap:0; overflow:hidden; }
+  #introSkip { position:absolute; top:10px; right:12px; z-index:8; background:rgba(255,255,255,.1); color:var(--ink);
+    border:1px solid rgba(255,255,255,.2); border-radius:20px; padding:6px 14px; font-size:12px; font-weight:800; cursor:pointer; }
+  #introStage { position:relative; flex:1 1 auto; width:100%; overflow:hidden;
+    background:linear-gradient(180deg,#0a1030 0%, #13204a 70%, #1c2c5a 100%); }
+  #introStage.shake { animation:shake .4s ease; }
+  #introStage:after { content:""; position:absolute; left:0; right:0; bottom:0; height:26%;
+    background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02)); border-top:2px solid rgba(255,255,255,.12); }
+  #introMoon { position:absolute; top:10%; right:14%; font-size:40px; filter:drop-shadow(0 0 14px rgba(255,255,200,.5)); }
+  #introDoor { position:absolute; bottom:26%; left:8%; font-size:50px; opacity:.85; }
+  #introName { position:absolute; top:16%; left:50%; transform:translate(-50%,0) scale(.6); opacity:0;
+    transition:.45s cubic-bezier(.2,1.4,.4,1); font-size:30px; font-weight:900; letter-spacing:1px; text-align:center;
+    background:linear-gradient(90deg,var(--teal),var(--blue) 60%,var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #introName.show { opacity:1; transform:translate(-50%,0) scale(1); }
+  #introNurse { position:absolute; bottom:24%; left:-22%; transform:translateX(-50%); transition:left 1.15s ease; z-index:3; }
+  #introNurse .ib { font-size:62px; line-height:1; display:inline-block; filter:drop-shadow(0 6px 8px rgba(0,0,0,.5)); }
+  #introNurse.walk .ib { animation:bob .3s ease-in-out infinite; }
+  #introNurse.center { left:50%; }
+  #introReact { position:absolute; top:-4px; right:-16px; font-size:26px; opacity:0; transition:.2s; }
+  #introReact.show { opacity:1; }
+  #introSpeech { position:absolute; bottom:80px; left:50%; transform:translateX(-50%); background:#fff; color:#16203c;
+    font-size:13px; font-weight:800; white-space:nowrap; padding:7px 12px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.5); opacity:0; transition:.25s; }
+  #introSpeech:after { content:""; position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#fff; }
+  #introSpeech.show { opacity:1; }
+  #introSpeech b { color:#0e7d6b; }
+  #introChaos { position:absolute; bottom:26%; left:0; right:0; display:flex; justify-content:space-around; align-items:flex-end;
+    padding:0 6%; opacity:0; transform:translateY(8px); transition:.3s; z-index:2; }
+  #introChaos.show { opacity:1; transform:translateY(0); }
+  #introChaos .pt { position:relative; font-size:30px; }
+  #introChaos .pt .b { position:absolute; top:-20px; left:50%; transform:translateX(-50%); font-size:15px; background:#fff;
+    border-radius:50%; width:25px; height:25px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,.4); animation:urgent .5s ease infinite; }
+  #introCap { flex:0 0 auto; min-height:80px; display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:14px 22px; font-size:15px; line-height:1.5; color:var(--ink); background:rgba(8,12,28,.62); }
+  #introCap b { color:var(--amber); }
+  #introHint { position:absolute; bottom:6px; right:14px; font-size:11px; color:var(--ink-soft); animation:hintBlink 1.1s ease infinite; }
+  @keyframes hintBlink { 0%,100%{opacity:.3} 50%{opacity:1} }
 </style>
 </head>
 <body>
@@ -216,8 +254,22 @@
     <div id="vignette"></div>
     <div id="banner"></div>
 
+    <!-- Intro -->
+    <div class="overlay intro" id="introOv">
+      <button id="introSkip">Skip ▸</button>
+      <div id="introStage">
+        <div id="introMoon">🌙</div>
+        <div id="introDoor">🚪</div>
+        <div id="introChaos"></div>
+        <div id="introName">NURSE TOOMPIE 🩺</div>
+        <div id="introNurse"><span class="ib">👨‍⚕️</span><span id="introReact"></span><div id="introSpeech"></div></div>
+      </div>
+      <div id="introCap"></div>
+      <div id="introHint">tap ▸</div>
+    </div>
+
     <!-- Start -->
-    <div class="overlay" id="startOv">
+    <div class="overlay hidden" id="startOv">
       <h1>NIGHT SHIFT</h1>
       <div class="big">👨‍⚕️🏥</div>
       <p>You're the only nurse on the ward. <b>Load your tray</b> at the supply stations, then <b>sweep the beds</b> before patients lose patience. Chain saves for <b>combo bonuses</b>!</p>
@@ -650,6 +702,34 @@
   $("startBtn").addEventListener("click",newGame);
   $("retryBtn").addEventListener("click",newGame);
   $("winBtn").addEventListener("click",newGame);
+
+  // ---- intro scene ----
+  const introOv=$("introOv"), introCap=$("introCap"), introName=$("introName"),
+        introNurse=$("introNurse"), introChaos=$("introChaos"), introSpeech=$("introSpeech"),
+        introReact=$("introReact"), introHint=$("introHint"), introStageEl=$("introStage");
+  const CHAOS=[["🧓","🔔"],["👵","💩"],["👴","💉"],["🧑","🤒"],["👩","🩸"]];
+  function speakIntro(html){ introSpeech.innerHTML=html; introSpeech.classList.add("show"); }
+  function shakeIntro(){ introStageEl.classList.remove("shake"); void introStageEl.offsetWidth; introStageEl.classList.add("shake"); }
+  const BEATS=[
+    ()=>{ introCap.innerHTML="🌙 <b>Sint Pukkel Hospital</b> — 03:00.<br>The night shift begins…"; },
+    ()=>{ introCap.innerHTML="A lone hero clocks in for duty."; introNurse.classList.add("walk","center"); setTimeout(()=>introNurse.classList.remove("walk"),1200); },
+    ()=>{ introCap.innerHTML="Meet <b>Nurse Toompie</b>. 🩺"; introName.classList.add("show"); sfx.save(); },
+    ()=>{ introCap.innerHTML="📟 The matron radios in…"; speakIntro("“Toompie! The whole ward is <b>yours</b> tonight.”"); sfx.pick(); },
+    ()=>{ introCap.innerHTML="Toompie, with great confidence:"; speakIntro("“Alone? Pfff. How hard can it b—”"); },
+    ()=>{ introCap.innerHTML="🔔💩💉🤒 …and then <b>everybody woke up.</b>";
+          introSpeech.classList.remove("show");
+          introChaos.innerHTML=CHAOS.map(c=>`<div class="pt">${c[0]}<span class="b">${c[1]}</span></div>`).join("");
+          introChaos.classList.add("show");
+          introReact.textContent="💦"; introReact.classList.add("show");
+          shakeIntro(); sfx.buzz(); buzz([40,30,40,30,90]); setTimeout(()=>sfx.buzz(),200); setTimeout(()=>sfx.buzz(),420); },
+    ()=>{ introCap.innerHTML="Keep them smiling till sunrise.<br><b>Good luck, Toompie!</b> 🌅"; introHint.textContent="tap to begin ▶"; },
+  ];
+  let beatIdx=0;
+  function advanceIntro(){ beatIdx++; if(beatIdx>=BEATS.length){ endIntro(); } else { sfx.pick(); BEATS[beatIdx](); } }
+  function endIntro(){ introOv.classList.add("hidden"); $("startOv").classList.remove("hidden"); }
+  introOv.addEventListener("pointerdown",()=>{ audio(); advanceIntro(); });
+  $("introSkip").addEventListener("pointerdown",e=>{ e.stopPropagation(); audio(); endIntro(); });
+  BEATS[0]();
 
   // initial idle scene
   buildStations(); buildBeds(3);
