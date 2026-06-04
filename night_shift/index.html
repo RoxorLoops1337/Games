@@ -10,264 +10,183 @@
 <title>Night Shift 🏥 — Nurse Rush</title>
 <style>
   :root {
-    --bg0:   #0c1226;
-    --bg1:   #131d3d;
-    --panel: #182b4f;
-    --ink:   #eaf1ff;
-    --ink-soft: #9fb0d8;
-    --teal:  #38e1c9;
-    --teal-d:#16b59c;
-    --blue:  #5b8cff;
-    --pink:  #ff7eb6;
-    --amber: #ffcf5c;
-    --red:   #ff5d6c;
-    --green: #58e08a;
-    --bed:   #1d2a51;
-    --bed2:  #243466;
-    --good:  #58e08a;
-    --warn:  #ffcf5c;
-    --bad:   #ff5d6c;
-    --shadow: 0 10px 30px rgba(0,0,0,.45);
+    --bg0:#0c1226; --bg1:#131d3d; --ink:#eaf1ff; --ink-soft:#9fb0d8;
+    --teal:#38e1c9; --teal-d:#16b59c; --blue:#5b8cff; --pink:#ff7eb6;
+    --amber:#ffcf5c; --red:#ff5d6c; --green:#58e08a; --gold:#ffd34d;
+    --bed:#1d2a51; --bed2:#243466;
+    --good:#58e08a; --warn:#ffcf5c; --bad:#ff5d6c;
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
   html, body {
-    margin: 0; padding: 0; height: 100%; width: 100%;
-    overflow: hidden;
-    font-family: "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif;
-    color: var(--ink);
+    margin:0; padding:0; height:100%; width:100%; overflow:hidden;
+    font-family:"Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;
+    color:var(--ink);
     background:
       radial-gradient(900px 500px at 20% -10%, #1c2c5a 0%, rgba(28,44,90,0) 60%),
       radial-gradient(800px 600px at 100% 110%, #16314a 0%, rgba(22,49,74,0) 55%),
-      linear-gradient(165deg, var(--bg0) 0%, var(--bg1) 100%);
-    background-attachment: fixed;
-    touch-action: manipulation;
+      linear-gradient(165deg, var(--bg0), var(--bg1));
+    background-attachment:fixed; touch-action:manipulation;
   }
   #app {
-    position: relative;
-    height: 100%; width: 100%;
-    max-width: 520px;
-    margin: 0 auto;
-    display: flex; flex-direction: column;
-    padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px);
+    position:relative; height:100%; width:100%; max-width:520px; margin:0 auto;
+    display:flex; flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px);
   }
 
-  /* ---------- HUD ---------- */
-  #hud {
-    flex: 0 0 auto;
-    display: flex; flex-direction: column; gap: 6px;
-    margin-bottom: 8px;
-  }
-  .hud-row { display: flex; align-items: center; gap: 8px; }
+  /* HUD */
+  #hud { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+  .hud-row { display:flex; align-items:center; gap:8px; }
   .badge {
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.10);
-    border-radius: 12px;
-    padding: 6px 10px;
-    font-size: 13px; font-weight: 700;
-    display: flex; align-items: center; gap: 6px;
-    white-space: nowrap;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.10);
+    border-radius:12px; padding:6px 10px; font-size:13px; font-weight:700;
+    display:flex; align-items:center; gap:6px; white-space:nowrap;
   }
-  .badge .lbl { color: var(--ink-soft); font-weight: 600; font-size: 11px; }
-  #score { color: var(--teal); }
-  #day   { color: var(--amber); }
-  .grow { flex: 1 1 auto; }
+  .badge .lbl { color:var(--ink-soft); font-weight:600; font-size:11px; }
+  #scoreVal { color:var(--teal); }
+  #dayName { color:var(--amber); }
+  .grow { flex:1 1 auto; }
+  #combo {
+    background:linear-gradient(90deg,#3a2a10,#5a3d12); border-color:rgba(255,211,77,.4);
+    color:var(--gold); transition:transform .12s ease;
+  }
+  #combo.hot { animation:comboPulse .4s ease; }
+  #combo.dim { opacity:.45; }
+  @keyframes comboPulse { 0%{transform:scale(1)} 40%{transform:scale(1.18)} 100%{transform:scale(1)} }
 
-  /* rating bar */
   #ratingWrap {
-    flex: 1 1 auto;
-    height: 16px; border-radius: 10px;
-    background: rgba(255,255,255,.08);
-    overflow: hidden; position: relative;
-    border: 1px solid rgba(255,255,255,.10);
+    flex:1 1 auto; height:16px; border-radius:10px; background:rgba(255,255,255,.08);
+    overflow:hidden; position:relative; border:1px solid rgba(255,255,255,.10);
   }
-  #ratingBar {
-    height: 100%; width: 100%;
-    background: linear-gradient(90deg, var(--teal-d), var(--teal));
-    transition: width .25s ease, background .3s ease;
-  }
-  #ratingWrap .cap {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 800; letter-spacing: .5px; color: #06222a; text-shadow: 0 1px 0 rgba(255,255,255,.25);
-  }
-  /* clock bar */
-  #clockWrap {
-    height: 8px; border-radius: 6px; background: rgba(255,255,255,.08);
-    overflow: hidden; border: 1px solid rgba(255,255,255,.08);
-  }
-  #clockBar { height: 100%; width: 100%; background: linear-gradient(90deg,var(--blue),#9bb4ff); transition: width .2s linear; }
+  #ratingBar { height:100%; width:100%; background:linear-gradient(90deg,var(--teal-d),var(--teal)); transition:width .25s ease, background .3s ease; }
+  #ratingWrap .cap { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:800; letter-spacing:.5px; color:#06222a; text-shadow:0 1px 0 rgba(255,255,255,.25); }
+  #clockWrap { height:8px; border-radius:6px; background:rgba(255,255,255,.08); overflow:hidden; border:1px solid rgba(255,255,255,.08); }
+  #clockBar { height:100%; width:100%; background:linear-gradient(90deg,var(--blue),#9bb4ff); transition:width .2s linear; }
 
-  /* ---------- PLAY AREA ---------- */
+  /* PLAY */
   #play {
-    position: relative;
-    flex: 1 1 auto;
-    border-radius: 18px;
+    position:relative; flex:1 1 auto; border-radius:18px;
     background:
       linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)),
       repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 2px, transparent 2px 26px),
       #0e1730;
-    border: 1px solid rgba(255,255,255,.08);
-    box-shadow: inset 0 2px 20px rgba(0,0,0,.35);
-    overflow: hidden;
-    display: flex; flex-direction: column;
-    padding: 10px;
+    border:1px solid rgba(255,255,255,.08); box-shadow:inset 0 2px 20px rgba(0,0,0,.35);
+    overflow:hidden; display:flex; flex-direction:column; padding:10px;
   }
-  #beds {
-    flex: 1 1 auto;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    align-content: start;
-  }
-  #beds.cols3 { grid-template-columns: repeat(2, 1fr); }
+  #play.shake { animation:shake .4s ease; }
+  @keyframes shake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-5px,3px)} 40%{transform:translate(5px,-3px)} 60%{transform:translate(-4px,-2px)} 80%{transform:translate(4px,2px)} }
+
+  #beds { flex:1 1 auto; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; align-content:start; }
 
   .bed {
-    position: relative;
-    border-radius: 14px;
-    background: linear-gradient(180deg, var(--bed2), var(--bed));
-    border: 1px solid rgba(255,255,255,.08);
-    min-height: 84px;
-    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-    padding: 8px 6px 6px;
-    overflow: visible;
-    transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
-    cursor: pointer;
+    position:relative; border-radius:14px; background:linear-gradient(180deg,var(--bed2),var(--bed));
+    border:1px solid rgba(255,255,255,.08); min-height:80px;
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+    padding:8px 6px 6px; overflow:visible; cursor:pointer;
+    transition:transform .12s ease, box-shadow .2s ease, border-color .2s ease;
   }
-  .bed .pillow {
-    position: absolute; top: 6px; left: 8px; right: 8px; height: 10px;
-    border-radius: 6px; background: rgba(255,255,255,.14);
-  }
-  .bed .face {
-    font-size: 30px; line-height: 1; margin-bottom: 2px;
-    filter: drop-shadow(0 2px 3px rgba(0,0,0,.4));
-    transition: transform .15s ease;
-  }
-  .bed .pname { font-size: 10px; color: var(--ink-soft); font-weight: 700; }
-  .bed.tap { transform: scale(.96); }
-  .bed.treating { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(56,225,201,.5), 0 0 22px rgba(56,225,201,.35); }
-  .bed.happy .face { transform: translateY(-4px) scale(1.12); }
-  .bed.angry { animation: bedShake .35s ease; }
+  .bed .pillow { position:absolute; top:6px; left:8px; right:8px; height:10px; border-radius:6px; background:rgba(255,255,255,.14); }
+  .bed .face { font-size:30px; line-height:1; margin-bottom:2px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.4)); transition:transform .15s ease; }
+  .bed .pname { font-size:10px; color:var(--ink-soft); font-weight:700; }
+  .bed.tap { transform:scale(.96); }
+  .bed.treating { border-color:var(--teal); box-shadow:0 0 0 2px rgba(56,225,201,.5), 0 0 22px rgba(56,225,201,.35); }
+  .bed.happy .face { transform:translateY(-4px) scale(1.14); }
+  .bed.angry { animation:bedShake .35s ease; }
+  .bed.code { border-color:var(--red); box-shadow:0 0 0 2px var(--red), 0 0 26px rgba(255,93,108,.6); animation:codeFlash .6s ease infinite; }
   @keyframes bedShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+  @keyframes codeFlash { 0%,100%{box-shadow:0 0 0 2px var(--red),0 0 10px rgba(255,93,108,.4)} 50%{box-shadow:0 0 0 3px var(--red),0 0 30px rgba(255,93,108,.85)} }
 
-  /* need bubble */
-  .need {
-    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center; z-index: 4;
-    pointer-events: none;
-  }
-  .need .bubble {
-    font-size: 22px; line-height: 1;
-    background: #fff; color: #111;
-    width: 38px; height: 38px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,.45);
-    border: 2px solid #fff;
-    animation: pop .25s ease;
-  }
-  .need.urgent .bubble { animation: urgent .5s ease infinite; border-color: var(--red); }
-  @keyframes urgent { 0%,100%{transform:scale(1)} 50%{transform:scale(1.14)} }
+  .need { position:absolute; top:-14px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; z-index:4; pointer-events:none; }
+  .need .bubble { font-size:22px; line-height:1; background:#fff; color:#111; width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,.45); border:2px solid #fff; animation:pop .25s ease; }
+  .need.urgent .bubble { animation:urgent .5s ease infinite; border-color:var(--red); }
+  .need.code .bubble { border-color:var(--red); background:#ffe3e6; animation:urgent .35s ease infinite; }
+  @keyframes urgent { 0%,100%{transform:scale(1)} 50%{transform:scale(1.16)} }
   @keyframes pop { from{transform:scale(0)} 70%{transform:scale(1.18)} to{transform:scale(1)} }
-  .need .pbar {
-    margin-top: 3px; width: 40px; height: 5px; border-radius: 3px;
-    background: rgba(255,255,255,.18); overflow: hidden;
-  }
-  .need .pfill { height: 100%; width: 100%; background: var(--good); transition: background .2s; }
+  .need .pbar { margin-top:3px; width:40px; height:5px; border-radius:3px; background:rgba(255,255,255,.18); overflow:hidden; }
+  .need .pfill { height:100%; width:100%; background:var(--good); }
 
-  .thought {
-    position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
-    font-size: 20px; z-index: 6; pointer-events: none;
-    animation: floatUp 1s ease forwards;
+  .speech {
+    position:absolute; top:-30px; left:50%; transform:translateX(-50%);
+    background:#fff; color:#16203c; font-size:10px; font-weight:700; white-space:nowrap;
+    padding:3px 7px; border-radius:9px; z-index:7; pointer-events:none;
+    box-shadow:0 3px 8px rgba(0,0,0,.4); animation:speech 1.6s ease forwards;
   }
+  .speech:after { content:""; position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#fff; }
+  @keyframes speech { 0%{opacity:0; transform:translate(-50%,6px) scale(.7)} 15%{opacity:1; transform:translate(-50%,0) scale(1)} 80%{opacity:1} 100%{opacity:0; transform:translate(-50%,-8px)} }
+
+  .thought { position:absolute; top:-26px; left:50%; transform:translateX(-50%); font-size:20px; z-index:6; pointer-events:none; animation:floatUp 1s ease forwards; }
   @keyframes floatUp { 0%{opacity:0; transform:translate(-50%,6px) scale(.6)} 20%{opacity:1} 100%{opacity:0; transform:translate(-50%,-26px) scale(1.1)} }
 
-  /* ---------- nurse ---------- */
-  #nurse {
-    position: absolute; left: 50%; top: 80%;
-    transform: translate(-50%,-50%);
-    z-index: 20; pointer-events: none;
-    width: 44px; height: 44px;
-    display: flex; align-items: center; justify-content: center;
-    will-change: left, top;
-  }
-  #nurse .body { font-size: 34px; line-height: 1; filter: drop-shadow(0 4px 5px rgba(0,0,0,.5)); }
-  #nurse.walking .body { animation: bob .35s ease-in-out infinite; }
-  @keyframes bob { 0%,100%{transform:translateY(0) rotate(-3deg)} 50%{transform:translateY(-3px) rotate(3deg)} }
-  #carry {
-    position: absolute; top: -10px; right: -6px;
-    font-size: 18px;
-    background: rgba(255,255,255,.95); color:#111;
-    border-radius: 50%; width: 26px; height: 26px;
-    display: none; align-items: center; justify-content: center;
-    box-shadow: 0 3px 8px rgba(0,0,0,.5);
-  }
-  #carry.show { display: flex; }
+  .puddle { position:absolute; z-index:2; font-size:22px; pointer-events:none; transform:translate(-50%,-50%); animation:puddleIn .3s ease; filter:drop-shadow(0 2px 4px rgba(0,0,0,.4)); }
+  @keyframes puddleIn { from{transform:translate(-50%,-50%) scale(0)} to{transform:translate(-50%,-50%) scale(1)} }
 
-  /* ---------- stations ---------- */
-  #stations {
-    flex: 0 0 auto;
-    display: flex; gap: 8px; margin-top: 10px;
-    justify-content: space-between;
-  }
-  .station {
-    flex: 1 1 0;
-    background: linear-gradient(180deg, #20305c, #18254a);
-    border: 1px solid rgba(255,255,255,.10);
-    border-radius: 12px;
-    padding: 8px 2px 6px;
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
-    cursor: pointer;
-    transition: transform .1s ease, box-shadow .2s ease, border-color .2s;
-  }
-  .station .ic { font-size: 24px; line-height: 1; }
-  .station .nm { font-size: 9px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
-  .station.tap { transform: scale(.93); }
-  .station.armed { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(56,225,201,.45); }
-  .station.hint { animation: hintPulse 1s ease infinite; }
-  @keyframes hintPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,207,92,0)} 50%{box-shadow:0 0 0 3px rgba(255,207,92,.5)} }
+  /* nurse */
+  #nurse { position:absolute; left:50%; top:80%; transform:translate(-50%,-50%); z-index:20; pointer-events:none; width:44px; height:44px; display:flex; align-items:center; justify-content:center; }
+  #nurse .body { font-size:34px; line-height:1; filter:drop-shadow(0 4px 5px rgba(0,0,0,.5)); }
+  #nurse.walking .body { animation:bob .32s ease-in-out infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-3px) rotate(4deg)} }
+  #nurseTray { position:absolute; top:-12px; left:50%; transform:translateX(-50%); display:flex; gap:1px; }
+  #nurseTray span { font-size:14px; background:rgba(255,255,255,.95); border-radius:6px; padding:0 1px; box-shadow:0 2px 5px rgba(0,0,0,.5); }
 
-  /* ---------- overlays ---------- */
-  .overlay {
-    position: absolute; inset: 0; z-index: 50;
-    background: rgba(8,12,28,.86);
-    backdrop-filter: blur(6px);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: 24px; gap: 14px;
-    border-radius: 18px;
-  }
-  .overlay.hidden { display: none; }
-  .overlay h1 { margin: 0; font-size: 30px; letter-spacing: 1px;
-    background: linear-gradient(90deg, var(--teal), var(--blue) 60%, var(--pink));
-    -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .overlay h2 { margin: 0; font-size: 22px; color: var(--ink); }
-  .overlay p { margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 1.5; max-width: 340px; }
-  .overlay .big { font-size: 46px; margin: 4px 0; }
-  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 12px; color: var(--ink-soft); text-align: left; max-width: 320px; }
-  .legend b { color: var(--ink); }
-  .btn {
-    margin-top: 6px;
-    border: none; cursor: pointer;
-    background: linear-gradient(90deg, var(--teal-d), var(--teal));
-    color: #052b25; font-weight: 800; font-size: 17px; letter-spacing: .5px;
-    padding: 13px 30px; border-radius: 30px;
-    box-shadow: 0 8px 22px rgba(56,225,201,.35);
-    transition: transform .1s ease;
-  }
-  .btn:active { transform: scale(.95); }
-  .btn.alt { background: rgba(255,255,255,.1); color: var(--ink); box-shadow: none; border: 1px solid rgba(255,255,255,.18); }
-  .stat-line { font-size: 15px; }
-  .stat-line b { color: var(--amber); }
-  .muted { font-size: 12px; color: var(--ink-soft); }
-  #backLink {
-    position: absolute; top: calc(env(safe-area-inset-top) + 4px); right: 12px;
-    z-index: 60; font-size: 11px; color: var(--ink-soft); text-decoration: none;
-    background: rgba(255,255,255,.06); padding: 4px 9px; border-radius: 10px;
-    border: 1px solid rgba(255,255,255,.10);
-  }
-  /* floating score popups */
-  .pop {
-    position: absolute; z-index: 30; font-weight: 800; font-size: 16px; pointer-events: none;
-    animation: popUp 0.8s ease forwards; text-shadow: 0 2px 4px rgba(0,0,0,.5);
-  }
-  @keyframes popUp { 0%{opacity:0; transform: translate(-50%,0) scale(.6)} 20%{opacity:1} 100%{opacity:0; transform:translate(-50%,-40px) scale(1.1)} }
+  /* tray bar */
+  #trayBar { flex:0 0 auto; display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:var(--ink-soft); font-weight:700; }
+  #traySlots { display:flex; gap:5px; }
+  .slot { width:26px; height:26px; border-radius:8px; background:rgba(255,255,255,.05); border:1px dashed rgba(255,255,255,.18);
+    display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .slot.full { border-style:solid; border-color:var(--teal); background:rgba(56,225,201,.12); }
+
+  /* stations */
+  #stations { flex:0 0 auto; display:flex; gap:8px; margin-top:8px; justify-content:space-between; }
+  .station { flex:1 1 0; background:linear-gradient(180deg,#20305c,#18254a); border:1px solid rgba(255,255,255,.10);
+    border-radius:12px; padding:8px 2px 6px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer;
+    transition:transform .1s ease, box-shadow .2s ease, border-color .2s; }
+  .station .ic { font-size:24px; line-height:1; }
+  .station .nm { font-size:9px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+  .station.tap { transform:scale(.93); }
+  .station.hint { animation:hintPulse 1s ease infinite; }
+  @keyframes hintPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,207,92,0)} 50%{box-shadow:0 0 0 3px rgba(255,207,92,.6)} }
+
+  /* code-blue vignette */
+  #vignette { position:absolute; inset:0; z-index:15; pointer-events:none; border-radius:18px; box-shadow:inset 0 0 60px 10px rgba(255,40,60,.55); opacity:0; transition:opacity .2s; }
+  #vignette.on { animation:vig .7s ease infinite; }
+  @keyframes vig { 0%,100%{opacity:.25} 50%{opacity:.8} }
+
+  /* banner */
+  #banner { position:absolute; top:34%; left:50%; transform:translate(-50%,-50%); z-index:40; pointer-events:none;
+    font-size:30px; font-weight:900; letter-spacing:1px; text-align:center; opacity:0; }
+  #banner.show { animation:bannerShow 1.6s ease forwards; }
+  @keyframes bannerShow { 0%{opacity:0; transform:translate(-50%,-50%) scale(.6)} 20%{opacity:1; transform:translate(-50%,-50%) scale(1.05)} 80%{opacity:1} 100%{opacity:0; transform:translate(-50%,-50%) scale(1.1)} }
+
+  /* overlays */
+  .overlay { position:absolute; inset:0; z-index:50; background:rgba(8,12,28,.88); backdrop-filter:blur(6px);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; gap:13px; border-radius:18px; }
+  .overlay.hidden { display:none; }
+  .overlay h1 { margin:0; font-size:30px; letter-spacing:1px; background:linear-gradient(90deg,var(--teal),var(--blue) 60%,var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .overlay h2 { margin:0; font-size:22px; }
+  .overlay p { margin:0; color:var(--ink-soft); font-size:14px; line-height:1.5; max-width:340px; }
+  .overlay .big { font-size:46px; margin:2px 0; }
+  .legend { display:grid; grid-template-columns:1fr 1fr; gap:5px 14px; font-size:12px; color:var(--ink-soft); text-align:left; max-width:330px; }
+  .legend b { color:var(--ink); }
+  .btn { margin-top:4px; border:none; cursor:pointer; background:linear-gradient(90deg,var(--teal-d),var(--teal)); color:#052b25;
+    font-weight:800; font-size:17px; letter-spacing:.5px; padding:13px 30px; border-radius:30px; box-shadow:0 8px 22px rgba(56,225,201,.35); transition:transform .1s ease; }
+  .btn:active { transform:scale(.95); }
+  .stat-line { font-size:15px; } .stat-line b { color:var(--amber); }
+  .muted { font-size:12px; color:var(--ink-soft); }
+
+  /* perk cards */
+  #perkCards { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .perk { width:150px; background:linear-gradient(180deg,#20305c,#18254a); border:1px solid rgba(255,255,255,.12); border-radius:14px;
+    padding:14px 10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; transition:transform .1s ease, border-color .2s, box-shadow .2s; }
+  .perk:active { transform:scale(.95); }
+  .perk:hover { border-color:var(--teal); box-shadow:0 0 0 2px rgba(56,225,201,.35); }
+  .perk .pic { font-size:34px; } .perk .pn { font-weight:800; font-size:14px; } .perk .pd { font-size:11px; color:var(--ink-soft); line-height:1.35; }
+
+  #backLink { position:absolute; top:calc(env(safe-area-inset-top) + 4px); right:12px; z-index:60; font-size:11px; color:var(--ink-soft);
+    text-decoration:none; background:rgba(255,255,255,.06); padding:4px 9px; border-radius:10px; border:1px solid rgba(255,255,255,.10); }
+
+  .pop { position:absolute; z-index:30; font-weight:800; font-size:16px; pointer-events:none; animation:popUp .8s ease forwards; text-shadow:0 2px 4px rgba(0,0,0,.5); }
+  @keyframes popUp { 0%{opacity:0; transform:translate(-50%,0) scale(.6)} 20%{opacity:1} 100%{opacity:0; transform:translate(-50%,-42px) scale(1.15)} }
 </style>
 </head>
 <body>
@@ -276,10 +195,10 @@
 
   <div id="hud">
     <div class="hud-row">
-      <div class="badge" id="day"><span class="lbl">SHIFT</span> <span id="dayName">Mon</span></div>
-      <div class="badge" id="score"><span class="lbl">SCORE</span> <span id="scoreVal">0</span></div>
+      <div class="badge"><span class="lbl">SHIFT</span> <span id="dayName">Mon</span></div>
+      <div class="badge"><span class="lbl">SCORE</span> <span id="scoreVal">0</span></div>
       <div class="grow"></div>
-      <div class="badge"><span id="carrying">🖐️ empty</span></div>
+      <div class="badge dim" id="combo">🔥 <span id="comboVal">x0</span> <span class="lbl" id="multVal">×1</span></div>
     </div>
     <div class="hud-row">
       <span style="font-size:14px">😊</span>
@@ -290,38 +209,36 @@
 
   <div id="play">
     <div id="beds"></div>
+    <div id="trayBar"><span>🩺 TRAY</span><div id="traySlots"></div></div>
     <div id="stations"></div>
 
-    <div id="nurse"><span class="body">👨‍⚕️</span><span id="carry"></span></div>
+    <div id="nurse"><div id="nurseTray"></div><span class="body">👨‍⚕️</span></div>
+    <div id="vignette"></div>
+    <div id="banner"></div>
 
-    <!-- Start overlay -->
+    <!-- Start -->
     <div class="overlay" id="startOv">
       <h1>NIGHT SHIFT</h1>
       <div class="big">👨‍⚕️🏥</div>
-      <p>You're the only nurse on the ward. Patients buzz with needs — meds, fevers, IVs, toilet runs… and worse. Keep the <b>ward mood</b> up till your shift ends!</p>
+      <p>You're the only nurse on the ward. <b>Load your tray</b> at the supply stations, then <b>sweep the beds</b> before patients lose patience. Chain saves for <b>combo bonuses</b>!</p>
       <div class="legend">
-        <div>💩 <b>mess</b> → grab 🧤 gloves</div>
-        <div>💉 <b>meds</b> → grab 💉 syringe</div>
-        <div>🤒 <b>fever</b> → grab 🌡️ thermo</div>
-        <div>🩸 <b>IV beep</b> → grab 🩸 bag</div>
-        <div>🚽 <b>toilet</b> → grab 🦽 chair</div>
-        <div>🔔 <b>lonely</b> → just visit</div>
+        <div>💩 mess → 🧤 gloves</div><div>💉 meds → 💉 syringe</div>
+        <div>🤒 fever → 🌡️ thermo</div><div>🩸 IV → 🩸 bag</div>
+        <div>🚽 toilet → 🦽 chair</div><div>🔔 lonely → just visit</div>
       </div>
-      <p class="muted">Tap a <b>station</b> (bottom) to pick up a tool, then tap the matching <b>patient</b>. You carry one thing at a time — plan your trips!</p>
+      <p class="muted">Tap stations to <b>stack tools in your tray</b> (carry several!). Tap patients to treat. Tap anywhere to redirect — no waiting. 🫀 <b>Code blues</b> need you NOW.</p>
       <button class="btn" id="startBtn">Start Shift ▶</button>
     </div>
 
-    <!-- Day complete overlay -->
-    <div class="overlay hidden" id="dayOv">
-      <h2 id="dayTitle">Shift Complete!</h2>
-      <div class="big">🎉</div>
-      <div class="stat-line">Ward mood held at <b id="dayMood">100%</b></div>
-      <div class="stat-line">Score: <b id="dayScore">0</b></div>
-      <p class="muted" id="dayNext">Next up: Tuesday — more beds, faster buzzers.</p>
-      <button class="btn" id="nextBtn">Next Shift ▶</button>
+    <!-- Perk draft -->
+    <div class="overlay hidden" id="perkOv">
+      <h2 id="perkTitle">Shift Complete! 🎉</h2>
+      <div class="stat-line">Mood <b id="perkMood">100%</b> · Score <b id="perkScore">0</b></div>
+      <p class="muted">Grab a perk before your next shift:</p>
+      <div id="perkCards"></div>
     </div>
 
-    <!-- Game over overlay -->
+    <!-- Game over -->
     <div class="overlay hidden" id="overOv">
       <h2>Ward in Chaos 😵</h2>
       <div class="big">🚑</div>
@@ -332,11 +249,11 @@
       <button class="btn" id="retryBtn">New Shift ▶</button>
     </div>
 
-    <!-- Win overlay -->
+    <!-- Win -->
     <div class="overlay hidden" id="winOv">
       <h1>WEEK SURVIVED!</h1>
       <div class="big">🏆👨‍⚕️</div>
-      <p>You made it through Friday night. You are an absolute legend of the ward.</p>
+      <p>You made it through Friday night. A legend of the ward.</p>
       <div class="stat-line">Final score: <b id="winScore">0</b></div>
       <button class="btn" id="winBtn">Play Again ▶</button>
     </div>
@@ -347,25 +264,23 @@
 (() => {
   "use strict";
 
-  // ---------- config ----------
   const DAYS = ["Mon","Tue","Wed","Thu","Fri"];
   const DAY_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
-  const SHIFT_SECONDS = 70;
-  const NURSE_SPEED = 560; // px / second
+  const SHIFT_SECONDS = 72;
 
   const FACES = ["🧓","👵","👴","🧑","👩","👨","🧔","👱‍♀️","👩‍🦰","🧑‍🦱","👨‍🦳","👩‍🦳"];
   const PNAMES = ["Mr. K","Mrs. P","Ms. R","Mr. T","Bep","Henk","Ms. L","Opa","Oma","Mr. V","Saar","Joep"];
 
-  // need type -> tool required (null = just presence), icon, base patience(s), action time(s)
   const NEEDS = {
-    poo:     { tool:"gloves",     icon:"💩", patience:15, action:1.1, score:14 },
-    med:     { tool:"syringe",    icon:"💉", patience:13, action:0.9, score:10 },
-    fever:   { tool:"thermo",     icon:"🤒", patience:16, action:0.9, score:10 },
-    iv:      { tool:"ivbag",      icon:"🩸", patience:11, action:0.8, score:12 },
-    toilet:  { tool:"wheelchair", icon:"🚽", patience:14, action:1.2, score:13 },
-    comfort: { tool:null,         icon:"🔔", patience:18, action:0.6, score:7  },
+    poo:     { tool:"gloves",     icon:"💩", patience:15, action:1.0, score:14 },
+    med:     { tool:"syringe",    icon:"💉", patience:13, action:0.8, score:10 },
+    fever:   { tool:"thermo",     icon:"🤒", patience:16, action:0.8, score:10 },
+    iv:      { tool:"ivbag",      icon:"🩸", patience:11, action:0.7, score:12 },
+    toilet:  { tool:"wheelchair", icon:"🚽", patience:14, action:1.1, score:13 },
+    comfort: { tool:null,         icon:"🔔", patience:18, action:0.5, score:7  },
+    codeblue:{ tool:null,         icon:"🫀", patience:7,  action:0.5, score:40 },
   };
-  const NEED_KEYS = Object.keys(NEEDS);
+  const SPAWNABLE = ["poo","med","fever","iv","toilet","comfort"];
 
   const STATIONS = [
     { tool:"gloves",     ic:"🧤", nm:"Gloves" },
@@ -376,370 +291,370 @@
   ];
   const TOOL_IC = {gloves:"🧤",syringe:"💉",thermo:"🌡️",ivbag:"🩸",wheelchair:"🦽"};
 
-  // ---------- dom ----------
+  const SPAWN_QUIPS = ["Nurse!","Over here!","Hello?","Help!","Yoohoo!","Buzz buzz 🔔","Pssst"];
+  const MALE_QUIPS  = ["A male nurse? 😯","Strong hands!","You're new!","Such a gentleman"];
+  const TREAT_QUIPS = ["Bless you!","My hero!","Dankjewel!","You're an angel","Ahh, better","So gentle!","Thank you dear"];
+  const DOCTOR_GAG  = "I'm your nurse 👍";
+
+  const PERK_POOL = [
+    { id:"speed", ic:"👟", nm:"Speedy Crocs", pd:"+20% move speed",        apply:p=>p.speed*=1.2 },
+    { id:"cap",   ic:"🎒", nm:"Bigger Tray",  pd:"+1 carry slot",          apply:p=>p.cap+=1 },
+    { id:"treat", ic:"⚡", nm:"Steady Hands", pd:"-25% treatment time",     apply:p=>p.treat*=0.75 },
+    { id:"pat",   ic:"💖", nm:"Bedside Manner",pd:"+18% patient patience",  apply:p=>p.pat*=1.18 },
+    { id:"time",  ic:"☕", nm:"Double Espresso",pd:"+8s on every shift",    apply:p=>p.time+=8 },
+    { id:"heal",  ic:"🧖", nm:"Spa Cart",     pd:"saves restore more mood", apply:p=>p.heal+=2 },
+  ];
+
   const $ = id => document.getElementById(id);
-  const playEl = $("play");
-  const bedsEl = $("beds");
-  const stationsEl = $("stations");
-  const nurseEl = $("nurse");
-  const carryEl = $("carry");
-  const ratingBar = $("ratingBar");
-  const ratingCap = $("ratingCap");
-  const clockBar = $("clockBar");
-  const scoreValEl = $("scoreVal");
-  const dayNameEl = $("dayName");
-  const carryingEl = $("carrying");
+  const playEl=$("play"), bedsEl=$("beds"), stationsEl=$("stations"), nurseEl=$("nurse"),
+        nurseTrayEl=$("nurseTray"), ratingBar=$("ratingBar"), ratingCap=$("ratingCap"),
+        clockBar=$("clockBar"), scoreValEl=$("scoreVal"), dayNameEl=$("dayName"),
+        comboEl=$("combo"), comboValEl=$("comboVal"), multValEl=$("multVal"),
+        traySlotsEl=$("traySlots"), vignetteEl=$("vignette"), bannerEl=$("banner");
 
-  // ---------- state ----------
-  let beds = [];        // {el, faceEl, nameEl, need, needEl, pfillEl, idx}
-  let stationObjs = []; // {el, tool}
-  let nurse = { x:0, y:0, carrying:null, busy:false };
-  let dayIdx = 0;
-  let rating = 100;
-  let score = 0;
-  let timeLeft = SHIFT_SECONDS;
-  let running = false;
-  let spawnTimer = 0, spawnInterval = 4;
-  let lastTs = 0, rafId = 0;
-  let moveTimeout = 0;
+  let beds=[], stationObjs=[], puddles=[];
+  let nurse = { x:0,y:0, tray:[], target:null, state:"idle", treatBed:null, treatT:0 };
+  let perks = { speed:1, cap:2, treat:1, pat:1, time:0, heal:0 };
+  let dayIdx=0, rating=100, score=0, combo=0, timeLeft=SHIFT_SECONDS;
+  let running=false, lastTs=0, rafId=0;
+  let spawnTimer=0, spawnInterval=2.2, elapsed=0;
+  let codeTimes=[], rushTime=-1, codeActive=0, codeBeepT=0;
+  const NURSE_SPEED = 580;
 
-  const best = {
-    score: +(localStorage.getItem("ns_best_score")||0),
-    day:   +(localStorage.getItem("ns_best_day")||0),
-  };
+  const best = { score:+(localStorage.getItem("ns_best_score")||0), day:+(localStorage.getItem("ns_best_day")||0) };
 
-  // ---------- audio ----------
-  let actx = null;
-  function audio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
-  function beep(freq, dur=0.1, type="sine", vol=0.12, when=0){
-    const a = audio(); if(!a) return;
-    const t = a.currentTime + when;
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = type; o.frequency.value = freq;
-    o.connect(g); g.connect(a.destination);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(vol, t+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
-    o.start(t); o.stop(t+dur+0.02);
+  // ---- audio ----
+  let actx=null;
+  function audio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+  function beep(freq,dur=0.1,type="sine",vol=0.12,when=0){
+    const a=audio(); if(!a) return;
+    const t=a.currentTime+when, o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.value=freq; o.connect(g); g.connect(a.destination);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.start(t); o.stop(t+dur+0.02);
+  }
+  function noise(dur=0.18,vol=0.10){ // squelch for poo
+    const a=audio(); if(!a) return;
+    const n=a.sampleRate*dur, buf=a.createBuffer(1,n,a.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=a.createBufferSource(), g=a.createGain(), f=a.createBiquadFilter();
+    f.type="lowpass"; f.frequency.value=600; s.buffer=buf; s.connect(f); f.connect(g); g.connect(a.destination);
+    g.gain.value=vol; s.start();
   }
   const sfx = {
-    pick:  ()=>beep(520,0.08,"triangle",0.10),
-    good:  ()=>{ beep(660,0.09,"sine",0.12); beep(990,0.12,"sine",0.12,0.08); },
-    fail:  ()=>{ beep(180,0.18,"sawtooth",0.10); },
-    wrong: ()=>beep(220,0.10,"square",0.08),
-    buzz:  ()=>beep(140,0.16,"square",0.06),
-    win:   ()=>{ [523,659,784,1046].forEach((f,i)=>beep(f,0.16,"sine",0.12,i*0.1)); },
+    pick:()=>beep(520,0.07,"triangle",0.10),
+    good:()=>{ beep(660,0.08,"sine",0.12); beep(990,0.11,"sine",0.12,0.07); },
+    combo:(n)=>beep(700+Math.min(n,12)*40,0.09,"triangle",0.12),
+    fail:()=>beep(170,0.2,"sawtooth",0.11),
+    wrong:()=>beep(220,0.1,"square",0.08),
+    buzz:()=>beep(150,0.14,"square",0.06),
+    code:()=>{ beep(880,0.12,"square",0.13); beep(880,0.12,"square",0.13,0.18); },
+    save:()=>{ [523,659,784,1046].forEach((f,i)=>beep(f,0.12,"sine",0.12,i*0.06)); },
+    squelch:()=>noise(),
+    win:()=>{ [523,659,784,1046,1318].forEach((f,i)=>beep(f,0.16,"sine",0.12,i*0.1)); },
   };
-  function buzz(ms){ if(navigator.vibrate) try{ navigator.vibrate(ms); }catch(e){} }
+  function buzz(p){ if(navigator.vibrate) try{ navigator.vibrate(p); }catch(e){} }
 
-  // ---------- helpers ----------
-  function centerOf(el){
-    const pr = playEl.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    return { x: r.left - pr.left + r.width/2, y: r.top - pr.top + r.height/2 };
+  // ---- layout ----
+  function rect(el){ const pr=playEl.getBoundingClientRect(), r=el.getBoundingClientRect(); return {x:r.left-pr.left+r.width/2, y:r.top-pr.top+r.height/2}; }
+  function computePositions(){
+    beds.forEach(b=>{ const c=rect(b.el); b.cx=c.x; b.cy=c.y; });
+    stationObjs.forEach(s=>{ const c=rect(s.el); s.cx=c.x; s.cy=c.y; });
   }
-  function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  function rand(a){ return a[Math.floor(Math.random()*a.length)]; }
 
-  // ---------- build ward ----------
   function buildBeds(n){
-    bedsEl.innerHTML = "";
-    beds = [];
+    bedsEl.innerHTML=""; beds=[];
     for(let i=0;i<n;i++){
-      const el = document.createElement("div");
-      el.className = "bed";
-      el.innerHTML = `<div class="pillow"></div><div class="face">${rand(FACES)}</div><div class="pname">${PNAMES[i%PNAMES.length]}</div>`;
+      const el=document.createElement("div"); el.className="bed";
+      el.innerHTML=`<div class="pillow"></div><div class="face">${rand(FACES)}</div><div class="pname">${PNAMES[i%PNAMES.length]}</div>`;
       bedsEl.appendChild(el);
-      const bed = {
-        idx:i, el,
-        faceEl: el.querySelector(".face"),
-        face: el.querySelector(".face").textContent,
-        need: null, needEl: null, pfillEl: null, needBubble:null,
-      };
-      el.addEventListener("pointerdown", (e)=>{ e.preventDefault(); onBedTap(bed); });
+      const bed={ idx:i, el, faceEl:el.querySelector(".face"), face:el.querySelector(".face").textContent, need:null, needEl:null, pfillEl:null, cx:0, cy:0 };
+      el.addEventListener("pointerdown",e=>{ e.preventDefault(); onTapBed(bed); });
       beds.push(bed);
     }
   }
   function buildStations(){
-    stationsEl.innerHTML = "";
-    stationObjs = [];
-    STATIONS.forEach(s => {
-      const el = document.createElement("div");
-      el.className = "station";
-      el.innerHTML = `<div class="ic">${s.ic}</div><div class="nm">${s.nm}</div>`;
-      el.addEventListener("pointerdown",(e)=>{ e.preventDefault(); onStationTap(s, el); });
+    stationsEl.innerHTML=""; stationObjs=[];
+    STATIONS.forEach(s=>{
+      const el=document.createElement("div"); el.className="station";
+      el.innerHTML=`<div class="ic">${s.ic}</div><div class="nm">${s.nm}</div>`;
+      el.addEventListener("pointerdown",e=>{ e.preventDefault(); onTapStation(s,el); });
       stationsEl.appendChild(el);
-      stationObjs.push({ el, tool:s.tool });
+      stationObjs.push({ el, tool:s.tool, cx:0, cy:0 });
     });
   }
 
-  // ---------- nurse movement ----------
-  function placeNurse(x,y){ nurse.x=x; nurse.y=y; nurseEl.style.left=x+"px"; nurseEl.style.top=y+"px"; }
-  function moveNurseTo(target, cb){
-    const c = centerOf(target);
-    const dist = Math.hypot(c.x-nurse.x, c.y-nurse.y);
-    const dur = Math.min(950, Math.max(180, dist / NURSE_SPEED * 1000));
-    nurseEl.classList.add("walking");
-    nurseEl.style.transition = `left ${dur}ms ease-in-out, top ${dur}ms ease-in-out`;
-    requestAnimationFrame(()=>{ placeNurse(c.x, c.y); });
-    clearTimeout(moveTimeout);
-    moveTimeout = setTimeout(()=>{ nurseEl.classList.remove("walking"); cb && cb(); }, dur+10);
+  // ---- nurse ----
+  function placeNurse(){ nurseEl.style.left=nurse.x+"px"; nurseEl.style.top=nurse.y+"px"; }
+  function renderTray(){
+    nurseTrayEl.innerHTML = nurse.tray.map(t=>`<span>${TOOL_IC[t]}</span>`).join("");
+    let html="";
+    for(let i=0;i<perks.cap;i++){ const t=nurse.tray[i]; html+=`<div class="slot ${t?'full':''}">${t?TOOL_IC[t]:""}</div>`; }
+    traySlotsEl.innerHTML=html;
+  }
+  function slipFactor(){
+    for(const p of puddles){ if(Math.hypot(p.x-nurse.x,p.y-nurse.y) < 46) return 0.5; }
+    return 1;
   }
 
-  // ---------- carry ----------
-  function setCarry(tool){
-    nurse.carrying = tool;
-    if(tool){ carryEl.textContent = TOOL_IC[tool]; carryEl.classList.add("show"); carryingEl.textContent = TOOL_IC[tool]+" "+tool; }
-    else { carryEl.classList.remove("show"); carryingEl.textContent = "🖐️ empty"; }
-    updateStationArm();
-  }
-  function updateStationArm(){
-    stationObjs.forEach(s => s.el.classList.toggle("armed", s.tool === nurse.carrying));
-  }
-
-  // ---------- needs ----------
-  function patienceScale(){ return Math.max(0.55, 1 - dayIdx*0.08); }
-  function spawnNeed(forceBed){
-    const free = forceBed ? [forceBed] : beds.filter(b=>!b.need);
-    if(!free.length) return;
-    const bed = rand(free);
-    if(bed.need) return;
-    const key = rand(NEED_KEYS);
-    const cfg = NEEDS[key];
-    const max = cfg.patience * patienceScale();
-    bed.need = { key, tool:cfg.tool, icon:cfg.icon, t:max, max, lastBeep:0 };
-    const wrap = document.createElement("div");
-    wrap.className = "need";
-    wrap.innerHTML = `<div class="bubble">${cfg.icon}</div><div class="pbar"><div class="pfill"></div></div>`;
-    bed.el.appendChild(wrap);
-    bed.needEl = wrap;
-    bed.needBubble = wrap.querySelector(".bubble");
-    bed.pfillEl = wrap.querySelector(".pfill");
-    sfx.buzz();
-  }
-  function clearNeed(bed){
-    if(bed.needEl){ bed.needEl.remove(); }
-    bed.need = null; bed.needEl = null; bed.pfillEl = null; bed.needBubble=null;
-  }
-
-  function thought(bed, txt){
-    const t = document.createElement("div");
-    t.className = "thought"; t.textContent = txt;
-    bed.el.appendChild(t);
-    setTimeout(()=>t.remove(), 1000);
-  }
-  function popText(target, txt, color){
-    const c = centerOf(target);
-    const p = document.createElement("div");
-    p.className = "pop"; p.textContent = txt; p.style.color = color||"var(--teal)";
-    p.style.left = c.x+"px"; p.style.top = (c.y-10)+"px";
-    playEl.appendChild(p);
-    setTimeout(()=>p.remove(), 800);
-  }
-
-  // ---------- interactions ----------
-  function onStationTap(s, el){
-    if(!running || nurse.busy) return;
+  function onTapStation(s,el){
+    if(!running) return;
     el.classList.add("tap"); setTimeout(()=>el.classList.remove("tap"),120);
-    nurse.busy = true;
-    moveNurseTo(el, ()=>{
-      setCarry(s.tool);
-      sfx.pick(); buzz(15);
-      nurse.busy = false;
-    });
+    cancelTreat();
+    nurse.target={type:"station", st:stationObjs.find(o=>o.tool===s.tool)};
+    nurse.state="moving";
   }
-
-  function onBedTap(bed){
-    if(!running || nurse.busy) return;
+  function onTapBed(bed){
+    if(!running) return;
     bed.el.classList.add("tap"); setTimeout(()=>bed.el.classList.remove("tap"),120);
-    nurse.busy = true;
-    moveNurseTo(bed.el, ()=>{
-      if(!bed.need){ nurse.busy=false; return; }
-      const cfg = NEEDS[bed.need.key];
-      const ok = (bed.need.tool === null) || (nurse.carrying === bed.need.tool);
-      if(!ok){
-        // wasted trip — wrong/empty hands
-        thought(bed, bed.need.tool ? TOOL_IC[bed.need.tool] : "❓");
-        sfx.wrong(); buzz(40);
-        // hint: pulse the right station
-        const st = stationObjs.find(s=>s.tool===bed.need.tool);
-        if(st){ st.el.classList.add("hint"); setTimeout(()=>st.el.classList.remove("hint"),1500); }
-        nurse.busy = false;
-        return;
+    if(nurse.treatBed && nurse.treatBed!==bed) cancelTreat();
+    nurse.target={type:"bed", bed};
+    if(nurse.state!=="treating") nurse.state="moving";
+  }
+  function cancelTreat(){
+    if(nurse.treatBed){ nurse.treatBed.el.classList.remove("treating"); }
+    nurse.treatBed=null; if(nurse.state==="treating") nurse.state="moving";
+  }
+
+  function arrive(t){
+    if(t.type==="station"){
+      if(nurse.tray.length < perks.cap){ nurse.tray.push(t.st.tool); renderTray(); sfx.pick(); buzz(12); }
+      else { popAt(t.st.cx,t.st.cy,"full!","var(--warn)"); }
+      nurse.target=null; nurse.state="idle";
+    } else {
+      const bed=t.bed;
+      if(!bed.need){ nurse.target=null; nurse.state="idle"; return; }
+      const tool=bed.need.tool;
+      if(tool===null || nurse.tray.includes(tool)){
+        nurse.state="treating"; nurse.treatBed=bed; nurse.treatT=NEEDS[bed.need.key].action*perks.treat;
+        bed.el.classList.add("treating");
+      } else {
+        thought(bed, TOOL_IC[tool]); sfx.wrong(); buzz(40); hintStation(tool);
+        nurse.target=null; nurse.state="idle";
       }
-      // perform treatment
-      bed.el.classList.add("treating");
-      setTimeout(()=>{
-        bed.el.classList.remove("treating");
-        bed.el.classList.add("happy");
-        bed.faceEl.textContent = "😊";
-        popText(bed.el, "+"+cfg.score, "var(--good)");
-        score += cfg.score;
-        rating = Math.min(100, rating + 3);
-        if(bed.need.tool) setCarry(null); // tool consumed
-        clearNeed(bed);
-        sfx.good(); buzz(25);
-        updateHud();
-        setTimeout(()=>{ bed.el.classList.remove("happy"); bed.faceEl.textContent = bed.face; }, 900);
-        nurse.busy = false;
-      }, cfg.action*1000);
-    });
+    }
+  }
+  function hintStation(tool){ const s=stationObjs.find(o=>o.tool===tool); if(s){ s.el.classList.add("hint"); setTimeout(()=>s.el.classList.remove("hint"),1400); } }
+
+  function completeTreat(bed){
+    bed.el.classList.remove("treating"); bed.el.classList.remove("code");
+    const need=bed.need, cfg=NEEDS[need.key], isCode=need.key==="codeblue";
+    if(need.tool){ const i=nurse.tray.indexOf(need.tool); if(i>=0) nurse.tray.splice(i,1); renderTray(); }
+    combo++;
+    const mult=comboMult();
+    const gain=Math.round(cfg.score*mult);
+    score+=gain; rating=Math.min(100, rating + 3 + perks.heal + Math.min(combo,8)*0.3 + (isCode?6:0));
+    popAt(bed.cx,bed.cy-6,"+"+gain, isCode?"var(--gold)":"var(--good)");
+    // charm
+    bed.faceEl.textContent="😊"; bed.el.classList.add("happy");
+    if(need.key==="poo") sfx.squelch();
+    if(isCode){ sfx.save(); shake(); }
+    else { sfx.good(); sfx.combo(combo); }
+    if(Math.random()<0.16) speak(bed, DOCTOR_GAG); else if(Math.random()<0.5) speak(bed, rand(TREAT_QUIPS));
+    buzz(22);
+    if(isCode){ codeActive=Math.max(0,codeActive-1); if(codeActive===0) endCodeAlarm(); }
+    clearNeed(bed);
+    nurse.state="idle"; nurse.target=null; nurse.treatBed=null;
+    setTimeout(()=>{ bed.el.classList.remove("happy"); if(!bed.need) bed.faceEl.textContent=bed.face; }, 850);
+    updateCombo(); updateHud();
+  }
+  function comboMult(){ return 1 + Math.min(combo,15)*0.12; }
+
+  // ---- needs ----
+  function spawnNeed(forceBed, key){
+    const free = forceBed ? (forceBed.need?[]:[forceBed]) : beds.filter(b=>!b.need);
+    if(!free.length) return null;
+    const bed=rand(free);
+    key = key || rand(SPAWNABLE);
+    const cfg=NEEDS[key];
+    const max = cfg.patience * (key==="codeblue"?1:patScale()) * (key==="codeblue"?1:perks.pat);
+    bed.need={ key, tool:cfg.tool, t:max, max, beepT:0 };
+    const wrap=document.createElement("div"); wrap.className="need"+(key==="codeblue"?" code":"");
+    wrap.innerHTML=`<div class="bubble">${cfg.icon}</div><div class="pbar"><div class="pfill"></div></div>`;
+    bed.el.appendChild(wrap); bed.needEl=wrap; bed.pfillEl=wrap.querySelector(".pfill");
+    if(key==="codeblue"){ bed.el.classList.add("code"); }
+    else { sfx.buzz(); if(Math.random()<0.5) speak(bed, Math.random()<0.25?rand(MALE_QUIPS):rand(SPAWN_QUIPS)); }
+    return bed;
+  }
+  function patScale(){ return Math.max(0.6, 1 - dayIdx*0.07); }
+  function clearNeed(bed){ if(bed.needEl) bed.needEl.remove(); bed.need=null; bed.needEl=null; bed.pfillEl=null; }
+
+  function expireNeed(bed){
+    const isCode=bed.need.key==="codeblue", isPoo=bed.need.key==="poo";
+    const pen = isCode?28:12;
+    rating-=pen; popAt(bed.cx,bed.cy,"-"+pen,"var(--bad)");
+    bed.el.classList.add("angry"); bed.el.classList.remove("code"); bed.faceEl.textContent= isCode?"😵":"😠";
+    setTimeout(()=>{ bed.el.classList.remove("angry"); if(!bed.need) bed.faceEl.textContent=bed.face; }, 600);
+    if(isPoo) makePuddle(bed.cx, bed.cy+8);
+    if(isCode){ codeActive=Math.max(0,codeActive-1); if(codeActive===0) endCodeAlarm(); }
+    combo=0; updateCombo();
+    sfx.fail(); buzz([60,40,60]);
+    if(nurse.treatBed===bed) cancelTreat();
+    clearNeed(bed);
+    if(Math.random()<0.3) spawnNeed(null);
+    updateHud();
   }
 
-  // ---------- HUD ----------
+  function makePuddle(x,y){
+    if(puddles.length>=5) return;
+    const el=document.createElement("div"); el.className="puddle"; el.textContent="💧"; el.style.left=x+"px"; el.style.top=y+"px";
+    playEl.appendChild(el);
+    puddles.push({x,y,el,t:8});
+  }
+
+  // ---- code blue / events ----
+  function triggerCodeBlue(){
+    const b = spawnNeed(beds.find(x=>!x.need)||rand(beds), "codeblue");
+    // if chosen bed had a need, override:
+    if(!b){ const bed=rand(beds); clearNeed(bed); spawnNeed(bed,"codeblue"); }
+    codeActive++; startCodeAlarm(); shake(); sfx.code(); buzz([40,30,40,30,80]);
+    banner("🫀 CODE BLUE!","var(--red)");
+  }
+  function startCodeAlarm(){ vignetteEl.classList.add("on"); }
+  function endCodeAlarm(){ vignetteEl.classList.remove("on"); }
+  function banner(txt,color){ bannerEl.textContent=txt; bannerEl.style.color=color||"var(--amber)"; bannerEl.classList.remove("show"); void bannerEl.offsetWidth; bannerEl.classList.add("show"); }
+  function shake(){ playEl.classList.remove("shake"); void playEl.offsetWidth; playEl.classList.add("shake"); }
+
+  // ---- fx ----
+  function speak(bed,txt){ const s=document.createElement("div"); s.className="speech"; s.textContent=txt; bed.el.appendChild(s); setTimeout(()=>s.remove(),1600); }
+  function thought(bed,txt){ const t=document.createElement("div"); t.className="thought"; t.textContent=txt; bed.el.appendChild(t); setTimeout(()=>t.remove(),1000); }
+  function popAt(x,y,txt,color){ const p=document.createElement("div"); p.className="pop"; p.textContent=txt; p.style.color=color||"var(--teal)"; p.style.left=x+"px"; p.style.top=y+"px"; playEl.appendChild(p); setTimeout(()=>p.remove(),800); }
+
+  // ---- HUD ----
+  function updateCombo(){
+    comboValEl.textContent="x"+combo;
+    multValEl.textContent="×"+comboMult().toFixed(1);
+    comboEl.classList.toggle("dim", combo<2);
+    if(combo>=2){ comboEl.classList.remove("hot"); void comboEl.offsetWidth; comboEl.classList.add("hot"); }
+  }
   function updateHud(){
-    scoreValEl.textContent = score;
-    const r = Math.max(0, Math.round(rating));
-    ratingBar.style.width = r+"%";
-    ratingCap.textContent = "WARD MOOD "+r+"%";
-    let col = "linear-gradient(90deg,var(--teal-d),var(--teal))";
-    if(r < 30) col = "linear-gradient(90deg,#c9303d,var(--bad))";
-    else if(r < 55) col = "linear-gradient(90deg,#d99a1e,var(--warn))";
-    ratingBar.style.background = col;
-    clockBar.style.width = Math.max(0, (timeLeft/SHIFT_SECONDS*100))+"%";
+    scoreValEl.textContent=score;
+    const r=Math.max(0,Math.round(rating));
+    ratingBar.style.width=r+"%"; ratingCap.textContent="WARD MOOD "+r+"%";
+    ratingBar.style.background = r<30?"linear-gradient(90deg,#c9303d,var(--bad))":r<55?"linear-gradient(90deg,#d99a1e,var(--warn))":"linear-gradient(90deg,var(--teal-d),var(--teal))";
+    clockBar.style.width=Math.max(0,(timeLeft/(SHIFT_SECONDS+perks.time)*100))+"%";
   }
 
-  // ---------- loop ----------
+  // ---- loop ----
   function loop(ts){
     if(!running) return;
-    if(!lastTs) lastTs = ts;
-    let dt = (ts - lastTs)/1000; lastTs = ts;
-    if(dt > 0.1) dt = 0.1; // clamp tab-switch jumps
+    if(!lastTs) lastTs=ts;
+    let dt=(ts-lastTs)/1000; lastTs=ts; if(dt>0.1) dt=0.1;
+    elapsed+=dt; timeLeft-=dt;
+    if(timeLeft<=0){ timeLeft=0; updateHud(); return endDay(); }
 
-    timeLeft -= dt;
-    if(timeLeft <= 0){ timeLeft = 0; updateHud(); return endDay(true); }
+    // movement
+    stepNurse(dt);
 
-    // spawn
-    spawnTimer += dt;
-    if(spawnTimer >= spawnInterval){
-      spawnTimer = 0;
-      spawnInterval = Math.max(1.5, (4.4 - dayIdx*0.45)) * (0.8 + Math.random()*0.5);
-      spawnNeed(null);
-    }
+    // puddles decay
+    for(let i=puddles.length-1;i>=0;i--){ puddles[i].t-=dt; if(puddles[i].t<=0){ puddles[i].el.remove(); puddles.splice(i,1); } }
+
+    // scheduled events
+    while(codeTimes.length && elapsed>=codeTimes[0]){ codeTimes.shift(); triggerCodeBlue(); }
+    if(rushTime>=0 && elapsed>=rushTime){ rushTime=-1; banner("🚨 RUSH HOUR!","var(--amber)"); const n=2+dayIdx; for(let i=0;i<n;i++) setTimeout(()=>running&&spawnNeed(null),i*180); }
+
+    // normal spawns
+    spawnTimer+=dt;
+    if(spawnTimer>=spawnInterval){ spawnTimer=0; spawnInterval=Math.max(1.4,(4.2-dayIdx*0.42))*(0.8+Math.random()*0.5); spawnNeed(null); }
+
+    // code alarm beep
+    if(codeActive>0){ codeBeepT+=dt; if(codeBeepT>0.8){ codeBeepT=0; sfx.code(); } }
 
     // tick needs
     for(const bed of beds){
       if(!bed.need) continue;
-      bed.need.t -= dt;
-      const frac = Math.max(0, bed.need.t / bed.need.max);
-      if(bed.pfillEl){
-        bed.pfillEl.style.width = (frac*100)+"%";
-        bed.pfillEl.style.background = frac<0.3 ? "var(--bad)" : frac<0.6 ? "var(--warn)" : "var(--good)";
-      }
-      const urgent = frac < 0.3;
-      bed.needEl && bed.needEl.classList.toggle("urgent", urgent);
-      if(urgent){
-        bed.need.lastBeep += dt;
-        if(bed.need.lastBeep > 0.9){ bed.need.lastBeep = 0; sfx.buzz(); }
-      }
-      if(bed.need.t <= 0){
-        // neglected!
-        rating -= 12;
-        popText(bed.el, "-12", "var(--bad)");
-        bed.el.classList.add("angry");
-        bed.faceEl.textContent = "😠";
-        setTimeout(()=>{ bed.el.classList.remove("angry"); if(!bed.need) bed.faceEl.textContent = bed.face; }, 600);
-        clearNeed(bed);
-        sfx.fail(); buzz([60,40,60]);
-        // acting out: chance to spawn an extra mess somewhere
-        if(Math.random() < 0.3) spawnNeed(null);
-        updateHud();
-        if(rating <= 0){ rating = 0; updateHud(); return gameOver(); }
-      }
+      bed.need.t-=dt;
+      const frac=Math.max(0,bed.need.t/bed.need.max);
+      if(bed.pfillEl){ bed.pfillEl.style.width=(frac*100)+"%"; bed.pfillEl.style.background=frac<0.3?"var(--bad)":frac<0.6?"var(--warn)":"var(--good)"; }
+      const urgent=frac<0.3 && bed.need.key!=="codeblue";
+      bed.needEl && bed.needEl.classList.toggle("urgent",urgent);
+      if(urgent){ bed.need.beepT+=dt; if(bed.need.beepT>0.9){ bed.need.beepT=0; sfx.buzz(); } }
+      if(bed.need.t<=0){ expireNeed(bed); if(rating<=0){ rating=0; updateHud(); return gameOver(); } }
     }
-
     updateHud();
-    rafId = requestAnimationFrame(loop);
+    rafId=requestAnimationFrame(loop);
   }
 
-  // ---------- flow ----------
+  function stepNurse(dt){
+    if(nurse.state==="treating"){
+      const bed=nurse.treatBed;
+      if(!bed || !bed.need){ cancelTreat(); nurse.state="idle"; nurse.target=null; return; }
+      nurse.treatT-=dt;
+      if(nurse.treatT<=0) completeTreat(bed);
+      nurseEl.classList.remove("walking");
+      return;
+    }
+    const t=nurse.target;
+    if(!t){ nurseEl.classList.remove("walking"); return; }
+    const tx = t.type==="bed"?t.bed.cx:t.st.cx, ty=t.type==="bed"?t.bed.cy:t.st.cy;
+    const dx=tx-nurse.x, dy=ty-nurse.y, d=Math.hypot(dx,dy);
+    const step=NURSE_SPEED*perks.speed*slipFactor()*dt;
+    if(d<=Math.max(6,step)){ nurse.x=tx; nurse.y=ty; placeNurse(); arrive(t); }
+    else { nurse.x+=dx/d*step; nurse.y+=dy/d*step; placeNurse(); nurseEl.classList.add("walking"); }
+  }
+
+  // ---- flow ----
   function startDay(){
-    rating = Math.max(rating, 60); // breathing room each new shift but keep some pressure
-    if(dayIdx === 0) rating = 100;
-    timeLeft = SHIFT_SECONDS;
-    spawnTimer = 0; spawnInterval = 2.2;
-    const nBeds = Math.min(2 + dayIdx, 6);
-    buildBeds(nBeds);
-    setCarry(null);
-    dayNameEl.textContent = DAYS[dayIdx];
-    updateHud();
-    // park nurse bottom-center
-    requestAnimationFrame(()=>{
-      const pr = playEl.getBoundingClientRect();
-      placeNurse(pr.width/2, pr.height*0.72);
-      nurseEl.style.transition = "none";
-    });
-    hideOverlays();
-    running = true; lastTs = 0; nurse.busy = false;
-    // seed a couple of needs after a beat
-    setTimeout(()=>{ if(running) spawnNeed(null); }, 700);
-    setTimeout(()=>{ if(running) spawnNeed(null); }, 1900);
-    rafId = requestAnimationFrame(loop);
+    if(dayIdx===0){ rating=100; perks={speed:1,cap:2,treat:1,pat:1,time:0,heal:0}; }
+    else rating=Math.max(rating,55);
+    timeLeft=SHIFT_SECONDS+perks.time; elapsed=0; spawnTimer=0; spawnInterval=2.0;
+    combo=0; codeActive=0; codeBeepT=0; endCodeAlarm();
+    puddles.forEach(p=>p.el.remove()); puddles=[];
+    buildBeds(Math.min(3+dayIdx,6));
+    nurse.tray=[]; nurse.target=null; nurse.state="idle"; nurse.treatBed=null; renderTray();
+    dayNameEl.textContent=DAYS[dayIdx];
+    // schedule events (from Tue on)
+    codeTimes=[]; rushTime=-1;
+    if(dayIdx>=1){ const n=dayIdx; for(let i=0;i<n;i++) codeTimes.push(12 + Math.random()*(timeLeft-22)); codeTimes.sort((a,b)=>a-b); rushTime=timeLeft*0.5; }
+    updateCombo(); updateHud(); hideOverlays();
+    requestAnimationFrame(()=>{ computePositions(); const pr=playEl.getBoundingClientRect(); nurse.x=pr.width/2; nurse.y=pr.height*0.72; placeNurse(); });
+    running=true; lastTs=0;
+    setTimeout(()=>running&&spawnNeed(null),700);
+    setTimeout(()=>running&&spawnNeed(null),1900);
+    rafId=requestAnimationFrame(loop);
   }
+  function stopLoop(){ running=false; cancelAnimationFrame(rafId); endCodeAlarm(); nurseEl.classList.remove("walking"); }
 
-  function stopLoop(){ running = false; cancelAnimationFrame(rafId); clearTimeout(moveTimeout); nurseEl.classList.remove("walking"); }
-
-  function endDay(success){
-    stopLoop();
-    if(dayIdx >= DAYS.length-1){ return winGame(); }
-    saveBest();
-    $("dayTitle").textContent = DAY_FULL[dayIdx] + " — done!";
-    $("dayMood").textContent = Math.round(rating)+"%";
-    $("dayScore").textContent = score;
-    $("dayNext").textContent = "Next up: "+DAY_FULL[dayIdx+1]+" — more beds, faster buzzers.";
-    show("dayOv");
-  }
-
-  function gameOver(){
-    stopLoop();
-    saveBest();
-    $("overDay").textContent = DAY_FULL[dayIdx];
-    $("overScore").textContent = score;
-    $("bestScore").textContent = best.score;
-    $("bestDay").textContent = best.day ? DAY_FULL[Math.min(best.day-1, DAYS.length-1)] : "—";
-    sfx.fail();
-    show("overOv");
-  }
-
-  function winGame(){
+  function endDay(){
     stopLoop(); saveBest();
-    $("winScore").textContent = score;
-    sfx.win();
-    show("winOv");
+    if(dayIdx>=DAYS.length-1) return winGame();
+    $("perkTitle").textContent=DAY_FULL[dayIdx]+" — done! 🎉";
+    $("perkMood").textContent=Math.round(rating)+"%"; $("perkScore").textContent=score;
+    renderPerks(); show("perkOv");
   }
-
-  function saveBest(){
-    if(score > best.score){ best.score = score; localStorage.setItem("ns_best_score", score); }
-    const reached = dayIdx+1;
-    if(reached > best.day){ best.day = reached; localStorage.setItem("ns_best_day", reached); }
+  function renderPerks(){
+    const pool=[...PERK_POOL].sort(()=>Math.random()-0.5).slice(0,3);
+    const wrap=$("perkCards"); wrap.innerHTML="";
+    pool.forEach(pk=>{
+      const el=document.createElement("div"); el.className="perk";
+      el.innerHTML=`<div class="pic">${pk.ic}</div><div class="pn">${pk.nm}</div><div class="pd">${pk.pd}</div>`;
+      el.addEventListener("click",()=>{ pk.apply(perks); sfx.pick(); dayIdx++; startDay(); });
+      wrap.appendChild(el);
+    });
   }
+  function gameOver(){
+    stopLoop(); saveBest();
+    $("overDay").textContent=DAY_FULL[dayIdx]; $("overScore").textContent=score;
+    $("bestScore").textContent=best.score; $("bestDay").textContent=best.day?DAY_FULL[Math.min(best.day-1,DAYS.length-1)]:"—";
+    sfx.fail(); show("overOv");
+  }
+  function winGame(){ stopLoop(); saveBest(); $("winScore").textContent=score; sfx.win(); show("winOv"); }
+  function saveBest(){ if(score>best.score){ best.score=score; localStorage.setItem("ns_best_score",score); } const r=dayIdx+1; if(r>best.day){ best.day=r; localStorage.setItem("ns_best_day",r); } }
 
-  // ---------- overlays ----------
-  const OVERLAYS = ["startOv","dayOv","overOv","winOv"];
+  const OVERLAYS=["startOv","perkOv","overOv","winOv"];
   function hideOverlays(){ OVERLAYS.forEach(id=>$(id).classList.add("hidden")); }
   function show(id){ hideOverlays(); $(id).classList.remove("hidden"); }
+  function newGame(){ audio(); dayIdx=0; score=0; startDay(); }
 
-  function newGame(){
-    dayIdx = 0; score = 0; rating = 100;
-    audio(); // unlock on gesture
-    startDay();
-  }
+  $("startBtn").addEventListener("click",newGame);
+  $("retryBtn").addEventListener("click",newGame);
+  $("winBtn").addEventListener("click",newGame);
 
-  // ---------- buttons ----------
-  $("startBtn").addEventListener("click", newGame);
-  $("retryBtn").addEventListener("click", newGame);
-  $("winBtn").addEventListener("click", newGame);
-  $("nextBtn").addEventListener("click", ()=>{ dayIdx++; audio(); startDay(); });
-
-  // build initial empty ward behind start overlay for visual
-  buildStations();
-  buildBeds(3);
-  requestAnimationFrame(()=>{ const pr=playEl.getBoundingClientRect(); placeNurse(pr.width/2, pr.height*0.72); });
-
-  // keep nurse on-screen if layout shifts
-  window.addEventListener("resize", ()=>{
-    const pr = playEl.getBoundingClientRect();
-    if(nurse.x > pr.width) placeNurse(pr.width/2, pr.height*0.72);
-  });
+  // initial idle scene
+  buildStations(); buildBeds(3);
+  requestAnimationFrame(()=>{ computePositions(); const pr=playEl.getBoundingClientRect(); nurse.x=pr.width/2; nurse.y=pr.height*0.72; placeNurse(); renderTray(); });
+  window.addEventListener("resize",()=>{ computePositions(); const pr=playEl.getBoundingClientRect(); if(nurse.x>pr.width){ nurse.x=pr.width/2; nurse.y=pr.height*0.72; placeNurse(); } });
 
 })();
 </script>
