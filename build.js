@@ -39,6 +39,7 @@ const STATIC_PATHS = [
   'cutie_merge',
   'evolve_and_conquer',
   'tower-defense-sprites',
+  'night_shift',
   'tools',
 ];
 
