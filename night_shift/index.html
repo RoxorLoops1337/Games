@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="theme-color" content="#0f1830">
+<title>Night Shift 🏥 — Nurse Rush</title>
+<style>
+  :root {
+    --bg0:   #0c1226;
+    --bg1:   #131d3d;
+    --panel: #182b4f;
+    --ink:   #eaf1ff;
+    --ink-soft: #9fb0d8;
+    --teal:  #38e1c9;
+    --teal-d:#16b59c;
+    --blue:  #5b8cff;
+    --pink:  #ff7eb6;
+    --amber: #ffcf5c;
+    --red:   #ff5d6c;
+    --green: #58e08a;
+    --bed:   #1d2a51;
+    --bed2:  #243466;
+    --good:  #58e08a;
+    --warn:  #ffcf5c;
+    --bad:   #ff5d6c;
+    --shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    overflow: hidden;
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 500px at 20% -10%, #1c2c5a 0%, rgba(28,44,90,0) 60%),
+      radial-gradient(800px 600px at 100% 110%, #16314a 0%, rgba(22,49,74,0) 55%),
+      linear-gradient(165deg, var(--bg0) 0%, var(--bg1) 100%);
+    background-attachment: fixed;
+    touch-action: manipulation;
+  }
+  #app {
+    position: relative;
+    height: 100%; width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    display: flex; flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px);
+  }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    flex: 0 0 auto;
+    display: flex; flex-direction: column; gap: 6px;
+    margin-bottom: 8px;
+  }
+  .hud-row { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 12px;
+    padding: 6px 10px;
+    font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .badge .lbl { color: var(--ink-soft); font-weight: 600; font-size: 11px; }
+  #score { color: var(--teal); }
+  #day   { color: var(--amber); }
+  .grow { flex: 1 1 auto; }
+
+  /* rating bar */
+  #ratingWrap {
+    flex: 1 1 auto;
+    height: 16px; border-radius: 10px;
+    background: rgba(255,255,255,.08);
+    overflow: hidden; position: relative;
+    border: 1px solid rgba(255,255,255,.10);
+  }
+  #ratingBar {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, var(--teal-d), var(--teal));
+    transition: width .25s ease, background .3s ease;
+  }
+  #ratingWrap .cap {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; letter-spacing: .5px; color: #06222a; text-shadow: 0 1px 0 rgba(255,255,255,.25);
+  }
+  /* clock bar */
+  #clockWrap {
+    height: 8px; border-radius: 6px; background: rgba(255,255,255,.08);
+    overflow: hidden; border: 1px solid rgba(255,255,255,.08);
+  }
+  #clockBar { height: 100%; width: 100%; background: linear-gradient(90deg,var(--blue),#9bb4ff); transition: width .2s linear; }
+
+  /* ---------- PLAY AREA ---------- */
+  #play {
+    position: relative;
+    flex: 1 1 auto;
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 2px, transparent 2px 26px),
+      #0e1730;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: inset 0 2px 20px rgba(0,0,0,.35);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    padding: 10px;
+  }
+  #beds {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    align-content: start;
+  }
+  #beds.cols3 { grid-template-columns: repeat(2, 1fr); }
+
+  .bed {
+    position: relative;
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--bed2), var(--bed));
+    border: 1px solid rgba(255,255,255,.08);
+    min-height: 84px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    padding: 8px 6px 6px;
+    overflow: visible;
+    transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+    cursor: pointer;
+  }
+  .bed .pillow {
+    position: absolute; top: 6px; left: 8px; right: 8px; height: 10px;
+    border-radius: 6px; background: rgba(255,255,255,.14);
+  }
+  .bed .face {
+    font-size: 30px; line-height: 1; margin-bottom: 2px;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.4));
+    transition: transform .15s ease;
+  }
+  .bed .pname { font-size: 10px; color: var(--ink-soft); font-weight: 700; }
+  .bed.tap { transform: scale(.96); }
+  .bed.treating { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(56,225,201,.5), 0 0 22px rgba(56,225,201,.35); }
+  .bed.happy .face { transform: translateY(-4px) scale(1.12); }
+  .bed.angry { animation: bedShake .35s ease; }
+  @keyframes bedShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+
+  /* need bubble */
+  .need {
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; z-index: 4;
+    pointer-events: none;
+  }
+  .need .bubble {
+    font-size: 22px; line-height: 1;
+    background: #fff; color: #111;
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,.45);
+    border: 2px solid #fff;
+    animation: pop .25s ease;
+  }
+  .need.urgent .bubble { animation: urgent .5s ease infinite; border-color: var(--red); }
+  @keyframes urgent { 0%,100%{transform:scale(1)} 50%{transform:scale(1.14)} }
+  @keyframes pop { from{transform:scale(0)} 70%{transform:scale(1.18)} to{transform:scale(1)} }
+  .need .pbar {
+    margin-top: 3px; width: 40px; height: 5px; border-radius: 3px;
+    background: rgba(255,255,255,.18); overflow: hidden;
+  }
+  .need .pfill { height: 100%; width: 100%; background: var(--good); transition: background .2s; }
+
+  .thought {
+    position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+    font-size: 20px; z-index: 6; pointer-events: none;
+    animation: floatUp 1s ease forwards;
+  }
+  @keyframes floatUp { 0%{opacity:0; transform:translate(-50%,6px) scale(.6)} 20%{opacity:1} 100%{opacity:0; transform:translate(-50%,-26px) scale(1.1)} }
+
+  /* ---------- nurse ---------- */
+  #nurse {
+    position: absolute; left: 50%; top: 80%;
+    transform: translate(-50%,-50%);
+    z-index: 20; pointer-events: none;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    will-change: left, top;
+  }
+  #nurse .body { font-size: 34px; line-height: 1; filter: drop-shadow(0 4px 5px rgba(0,0,0,.5)); }
+  #nurse.walking .body { animation: bob .35s ease-in-out infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0) rotate(-3deg)} 50%{transform:translateY(-3px) rotate(3deg)} }
+  #carry {
+    position: absolute; top: -10px; right: -6px;
+    font-size: 18px;
+    background: rgba(255,255,255,.95); color:#111;
+    border-radius: 50%; width: 26px; height: 26px;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 3px 8px rgba(0,0,0,.5);
+  }
+  #carry.show { display: flex; }
+
+  /* ---------- stations ---------- */
+  #stations {
+    flex: 0 0 auto;
+    display: flex; gap: 8px; margin-top: 10px;
+    justify-content: space-between;
+  }
+  .station {
+    flex: 1 1 0;
+    background: linear-gradient(180deg, #20305c, #18254a);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 12px;
+    padding: 8px 2px 6px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    cursor: pointer;
+    transition: transform .1s ease, box-shadow .2s ease, border-color .2s;
+  }
+  .station .ic { font-size: 24px; line-height: 1; }
+  .station .nm { font-size: 9px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+  .station.tap { transform: scale(.93); }
+  .station.armed { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(56,225,201,.45); }
+  .station.hint { animation: hintPulse 1s ease infinite; }
+  @keyframes hintPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,207,92,0)} 50%{box-shadow:0 0 0 3px rgba(255,207,92,.5)} }
+
+  /* ---------- overlays ---------- */
+  .overlay {
+    position: absolute; inset: 0; z-index: 50;
+    background: rgba(8,12,28,.86);
+    backdrop-filter: blur(6px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 24px; gap: 14px;
+    border-radius: 18px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h1 { margin: 0; font-size: 30px; letter-spacing: 1px;
+    background: linear-gradient(90deg, var(--teal), var(--blue) 60%, var(--pink));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .overlay h2 { margin: 0; font-size: 22px; color: var(--ink); }
+  .overlay p { margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 1.5; max-width: 340px; }
+  .overlay .big { font-size: 46px; margin: 4px 0; }
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 12px; color: var(--ink-soft); text-align: left; max-width: 320px; }
+  .legend b { color: var(--ink); }
+  .btn {
+    margin-top: 6px;
+    border: none; cursor: pointer;
+    background: linear-gradient(90deg, var(--teal-d), var(--teal));
+    color: #052b25; font-weight: 800; font-size: 17px; letter-spacing: .5px;
+    padding: 13px 30px; border-radius: 30px;
+    box-shadow: 0 8px 22px rgba(56,225,201,.35);
+    transition: transform .1s ease;
+  }
+  .btn:active { transform: scale(.95); }
+  .btn.alt { background: rgba(255,255,255,.1); color: var(--ink); box-shadow: none; border: 1px solid rgba(255,255,255,.18); }
+  .stat-line { font-size: 15px; }
+  .stat-line b { color: var(--amber); }
+  .muted { font-size: 12px; color: var(--ink-soft); }
+  #backLink {
+    position: absolute; top: calc(env(safe-area-inset-top) + 4px); right: 12px;
+    z-index: 60; font-size: 11px; color: var(--ink-soft); text-decoration: none;
+    background: rgba(255,255,255,.06); padding: 4px 9px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.10);
+  }
+  /* floating score popups */
+  .pop {
+    position: absolute; z-index: 30; font-weight: 800; font-size: 16px; pointer-events: none;
+    animation: popUp 0.8s ease forwards; text-shadow: 0 2px 4px rgba(0,0,0,.5);
+  }
+  @keyframes popUp { 0%{opacity:0; transform: translate(-50%,0) scale(.6)} 20%{opacity:1} 100%{opacity:0; transform:translate(-50%,-40px) scale(1.1)} }
+</style>
+</head>
+<body>
+<div id="app">
+  <a id="backLink" href="/">‹ arcade</a>
+
+  <div id="hud">
+    <div class="hud-row">
+      <div class="badge" id="day"><span class="lbl">SHIFT</span> <span id="dayName">Mon</span></div>
+      <div class="badge" id="score"><span class="lbl">SCORE</span> <span id="scoreVal">0</span></div>
+      <div class="grow"></div>
+      <div class="badge"><span id="carrying">🖐️ empty</span></div>
+    </div>
+    <div class="hud-row">
+      <span style="font-size:14px">😊</span>
+      <div id="ratingWrap"><div id="ratingBar"></div><div class="cap" id="ratingCap">WARD MOOD 100%</div></div>
+    </div>
+    <div id="clockWrap"><div id="clockBar"></div></div>
+  </div>
+
+  <div id="play">
+    <div id="beds"></div>
+    <div id="stations"></div>
+
+    <div id="nurse"><span class="body">👨‍⚕️</span><span id="carry"></span></div>
+
+    <!-- Start overlay -->
+    <div class="overlay" id="startOv">
+      <h1>NIGHT SHIFT</h1>
+      <div class="big">👨‍⚕️🏥</div>
+      <p>You're the only nurse on the ward. Patients buzz with needs — meds, fevers, IVs, toilet runs… and worse. Keep the <b>ward mood</b> up till your shift ends!</p>
+      <div class="legend">
+        <div>💩 <b>mess</b> → grab 🧤 gloves</div>
+        <div>💉 <b>meds</b> → grab 💉 syringe</div>
+        <div>🤒 <b>fever</b> → grab 🌡️ thermo</div>
+        <div>🩸 <b>IV beep</b> → grab 🩸 bag</div>
+        <div>🚽 <b>toilet</b> → grab 🦽 chair</div>
+        <div>🔔 <b>lonely</b> → just visit</div>
+      </div>
+      <p class="muted">Tap a <b>station</b> (bottom) to pick up a tool, then tap the matching <b>patient</b>. You carry one thing at a time — plan your trips!</p>
+      <button class="btn" id="startBtn">Start Shift ▶</button>
+    </div>
+
+    <!-- Day complete overlay -->
+    <div class="overlay hidden" id="dayOv">
+      <h2 id="dayTitle">Shift Complete!</h2>
+      <div class="big">🎉</div>
+      <div class="stat-line">Ward mood held at <b id="dayMood">100%</b></div>
+      <div class="stat-line">Score: <b id="dayScore">0</b></div>
+      <p class="muted" id="dayNext">Next up: Tuesday — more beds, faster buzzers.</p>
+      <button class="btn" id="nextBtn">Next Shift ▶</button>
+    </div>
+
+    <!-- Game over overlay -->
+    <div class="overlay hidden" id="overOv">
+      <h2>Ward in Chaos 😵</h2>
+      <div class="big">🚑</div>
+      <p>The ward mood bottomed out. Matron sent you home early.</p>
+      <div class="stat-line">You reached <b id="overDay">Monday</b></div>
+      <div class="stat-line">Final score: <b id="overScore">0</b></div>
+      <div class="stat-line muted">Best: <span id="bestScore">0</span> · furthest <span id="bestDay">—</span></div>
+      <button class="btn" id="retryBtn">New Shift ▶</button>
+    </div>
+
+    <!-- Win overlay -->
+    <div class="overlay hidden" id="winOv">
+      <h1>WEEK SURVIVED!</h1>
+      <div class="big">🏆👨‍⚕️</div>
+      <p>You made it through Friday night. You are an absolute legend of the ward.</p>
+      <div class="stat-line">Final score: <b id="winScore">0</b></div>
+      <button class="btn" id="winBtn">Play Again ▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- config ----------
+  const DAYS = ["Mon","Tue","Wed","Thu","Fri"];
+  const DAY_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
+  const SHIFT_SECONDS = 70;
+  const NURSE_SPEED = 560; // px / second
+
+  const FACES = ["🧓","👵","👴","🧑","👩","👨","🧔","👱‍♀️","👩‍🦰","🧑‍🦱","👨‍🦳","👩‍🦳"];
+  const PNAMES = ["Mr. K","Mrs. P","Ms. R","Mr. T","Bep","Henk","Ms. L","Opa","Oma","Mr. V","Saar","Joep"];
+
+  // need type -> tool required (null = just presence), icon, base patience(s), action time(s)
+  const NEEDS = {
+    poo:     { tool:"gloves",     icon:"💩", patience:15, action:1.1, score:14 },
+    med:     { tool:"syringe",    icon:"💉", patience:13, action:0.9, score:10 },
+    fever:   { tool:"thermo",     icon:"🤒", patience:16, action:0.9, score:10 },
+    iv:      { tool:"ivbag",      icon:"🩸", patience:11, action:0.8, score:12 },
+    toilet:  { tool:"wheelchair", icon:"🚽", patience:14, action:1.2, score:13 },
+    comfort: { tool:null,         icon:"🔔", patience:18, action:0.6, score:7  },
+  };
+  const NEED_KEYS = Object.keys(NEEDS);
+
+  const STATIONS = [
+    { tool:"gloves",     ic:"🧤", nm:"Gloves" },
+    { tool:"syringe",    ic:"💉", nm:"Meds" },
+    { tool:"thermo",     ic:"🌡️", nm:"Thermo" },
+    { tool:"ivbag",      ic:"🩸", nm:"IV" },
+    { tool:"wheelchair", ic:"🦽", nm:"Chair" },
+  ];
+  const TOOL_IC = {gloves:"🧤",syringe:"💉",thermo:"🌡️",ivbag:"🩸",wheelchair:"🦽"};
+
+  // ---------- dom ----------
+  const $ = id => document.getElementById(id);
+  const playEl = $("play");
+  const bedsEl = $("beds");
+  const stationsEl = $("stations");
+  const nurseEl = $("nurse");
+  const carryEl = $("carry");
+  const ratingBar = $("ratingBar");
+  const ratingCap = $("ratingCap");
+  const clockBar = $("clockBar");
+  const scoreValEl = $("scoreVal");
+  const dayNameEl = $("dayName");
+  const carryingEl = $("carrying");
+
+  // ---------- state ----------
+  let beds = [];        // {el, faceEl, nameEl, need, needEl, pfillEl, idx}
+  let stationObjs = []; // {el, tool}
+  let nurse = { x:0, y:0, carrying:null, busy:false };
+  let dayIdx = 0;
+  let rating = 100;
+  let score = 0;
+  let timeLeft = SHIFT_SECONDS;
+  let running = false;
+  let spawnTimer = 0, spawnInterval = 4;
+  let lastTs = 0, rafId = 0;
+  let moveTimeout = 0;
+
+  const best = {
+    score: +(localStorage.getItem("ns_best_score")||0),
+    day:   +(localStorage.getItem("ns_best_day")||0),
+  };
+
+  // ---------- audio ----------
+  let actx = null;
+  function audio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+  function beep(freq, dur=0.1, type="sine", vol=0.12, when=0){
+    const a = audio(); if(!a) return;
+    const t = a.currentTime + when;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.value = freq;
+    o.connect(g); g.connect(a.destination);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.start(t); o.stop(t+dur+0.02);
+  }
+  const sfx = {
+    pick:  ()=>beep(520,0.08,"triangle",0.10),
+    good:  ()=>{ beep(660,0.09,"sine",0.12); beep(990,0.12,"sine",0.12,0.08); },
+    fail:  ()=>{ beep(180,0.18,"sawtooth",0.10); },
+    wrong: ()=>beep(220,0.10,"square",0.08),
+    buzz:  ()=>beep(140,0.16,"square",0.06),
+    win:   ()=>{ [523,659,784,1046].forEach((f,i)=>beep(f,0.16,"sine",0.12,i*0.1)); },
+  };
+  function buzz(ms){ if(navigator.vibrate) try{ navigator.vibrate(ms); }catch(e){} }
+
+  // ---------- helpers ----------
+  function centerOf(el){
+    const pr = playEl.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return { x: r.left - pr.left + r.width/2, y: r.top - pr.top + r.height/2 };
+  }
+  function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  // ---------- build ward ----------
+  function buildBeds(n){
+    bedsEl.innerHTML = "";
+    beds = [];
+    for(let i=0;i<n;i++){
+      const el = document.createElement("div");
+      el.className = "bed";
+      el.innerHTML = `<div class="pillow"></div><div class="face">${rand(FACES)}</div><div class="pname">${PNAMES[i%PNAMES.length]}</div>`;
+      bedsEl.appendChild(el);
+      const bed = {
+        idx:i, el,
+        faceEl: el.querySelector(".face"),
+        face: el.querySelector(".face").textContent,
+        need: null, needEl: null, pfillEl: null, needBubble:null,
+      };
+      el.addEventListener("pointerdown", (e)=>{ e.preventDefault(); onBedTap(bed); });
+      beds.push(bed);
+    }
+  }
+  function buildStations(){
+    stationsEl.innerHTML = "";
+    stationObjs = [];
+    STATIONS.forEach(s => {
+      const el = document.createElement("div");
+      el.className = "station";
+      el.innerHTML = `<div class="ic">${s.ic}</div><div class="nm">${s.nm}</div>`;
+      el.addEventListener("pointerdown",(e)=>{ e.preventDefault(); onStationTap(s, el); });
+      stationsEl.appendChild(el);
+      stationObjs.push({ el, tool:s.tool });
+    });
+  }
+
+  // ---------- nurse movement ----------
+  function placeNurse(x,y){ nurse.x=x; nurse.y=y; nurseEl.style.left=x+"px"; nurseEl.style.top=y+"px"; }
+  function moveNurseTo(target, cb){
+    const c = centerOf(target);
+    const dist = Math.hypot(c.x-nurse.x, c.y-nurse.y);
+    const dur = Math.min(950, Math.max(180, dist / NURSE_SPEED * 1000));
+    nurseEl.classList.add("walking");
+    nurseEl.style.transition = `left ${dur}ms ease-in-out, top ${dur}ms ease-in-out`;
+    requestAnimationFrame(()=>{ placeNurse(c.x, c.y); });
+    clearTimeout(moveTimeout);
+    moveTimeout = setTimeout(()=>{ nurseEl.classList.remove("walking"); cb && cb(); }, dur+10);
+  }
+
+  // ---------- carry ----------
+  function setCarry(tool){
+    nurse.carrying = tool;
+    if(tool){ carryEl.textContent = TOOL_IC[tool]; carryEl.classList.add("show"); carryingEl.textContent = TOOL_IC[tool]+" "+tool; }
+    else { carryEl.classList.remove("show"); carryingEl.textContent = "🖐️ empty"; }
+    updateStationArm();
+  }
+  function updateStationArm(){
+    stationObjs.forEach(s => s.el.classList.toggle("armed", s.tool === nurse.carrying));
+  }
+
+  // ---------- needs ----------
+  function patienceScale(){ return Math.max(0.55, 1 - dayIdx*0.08); }
+  function spawnNeed(forceBed){
+    const free = forceBed ? [forceBed] : beds.filter(b=>!b.need);
+    if(!free.length) return;
+    const bed = rand(free);
+    if(bed.need) return;
+    const key = rand(NEED_KEYS);
+    const cfg = NEEDS[key];
+    const max = cfg.patience * patienceScale();
+    bed.need = { key, tool:cfg.tool, icon:cfg.icon, t:max, max, lastBeep:0 };
+    const wrap = document.createElement("div");
+    wrap.className = "need";
+    wrap.innerHTML = `<div class="bubble">${cfg.icon}</div><div class="pbar"><div class="pfill"></div></div>`;
+    bed.el.appendChild(wrap);
+    bed.needEl = wrap;
+    bed.needBubble = wrap.querySelector(".bubble");
+    bed.pfillEl = wrap.querySelector(".pfill");
+    sfx.buzz();
+  }
+  function clearNeed(bed){
+    if(bed.needEl){ bed.needEl.remove(); }
+    bed.need = null; bed.needEl = null; bed.pfillEl = null; bed.needBubble=null;
+  }
+
+  function thought(bed, txt){
+    const t = document.createElement("div");
+    t.className = "thought"; t.textContent = txt;
+    bed.el.appendChild(t);
+    setTimeout(()=>t.remove(), 1000);
+  }
+  function popText(target, txt, color){
+    const c = centerOf(target);
+    const p = document.createElement("div");
+    p.className = "pop"; p.textContent = txt; p.style.color = color||"var(--teal)";
+    p.style.left = c.x+"px"; p.style.top = (c.y-10)+"px";
+    playEl.appendChild(p);
+    setTimeout(()=>p.remove(), 800);
+  }
+
+  // ---------- interactions ----------
+  function onStationTap(s, el){
+    if(!running || nurse.busy) return;
+    el.classList.add("tap"); setTimeout(()=>el.classList.remove("tap"),120);
+    nurse.busy = true;
+    moveNurseTo(el, ()=>{
+      setCarry(s.tool);
+      sfx.pick(); buzz(15);
+      nurse.busy = false;
+    });
+  }
+
+  function onBedTap(bed){
+    if(!running || nurse.busy) return;
+    bed.el.classList.add("tap"); setTimeout(()=>bed.el.classList.remove("tap"),120);
+    nurse.busy = true;
+    moveNurseTo(bed.el, ()=>{
+      if(!bed.need){ nurse.busy=false; return; }
+      const cfg = NEEDS[bed.need.key];
+      const ok = (bed.need.tool === null) || (nurse.carrying === bed.need.tool);
+      if(!ok){
+        // wasted trip — wrong/empty hands
+        thought(bed, bed.need.tool ? TOOL_IC[bed.need.tool] : "❓");
+        sfx.wrong(); buzz(40);
+        // hint: pulse the right station
+        const st = stationObjs.find(s=>s.tool===bed.need.tool);
+        if(st){ st.el.classList.add("hint"); setTimeout(()=>st.el.classList.remove("hint"),1500); }
+        nurse.busy = false;
+        return;
+      }
+      // perform treatment
+      bed.el.classList.add("treating");
+      setTimeout(()=>{
+        bed.el.classList.remove("treating");
+        bed.el.classList.add("happy");
+        bed.faceEl.textContent = "😊";
+        popText(bed.el, "+"+cfg.score, "var(--good)");
+        score += cfg.score;
+        rating = Math.min(100, rating + 3);
+        if(bed.need.tool) setCarry(null); // tool consumed
+        clearNeed(bed);
+        sfx.good(); buzz(25);
+        updateHud();
+        setTimeout(()=>{ bed.el.classList.remove("happy"); bed.faceEl.textContent = bed.face; }, 900);
+        nurse.busy = false;
+      }, cfg.action*1000);
+    });
+  }
+
+  // ---------- HUD ----------
+  function updateHud(){
+    scoreValEl.textContent = score;
+    const r = Math.max(0, Math.round(rating));
+    ratingBar.style.width = r+"%";
+    ratingCap.textContent = "WARD MOOD "+r+"%";
+    let col = "linear-gradient(90deg,var(--teal-d),var(--teal))";
+    if(r < 30) col = "linear-gradient(90deg,#c9303d,var(--bad))";
+    else if(r < 55) col = "linear-gradient(90deg,#d99a1e,var(--warn))";
+    ratingBar.style.background = col;
+    clockBar.style.width = Math.max(0, (timeLeft/SHIFT_SECONDS*100))+"%";
+  }
+
+  // ---------- loop ----------
+  function loop(ts){
+    if(!running) return;
+    if(!lastTs) lastTs = ts;
+    let dt = (ts - lastTs)/1000; lastTs = ts;
+    if(dt > 0.1) dt = 0.1; // clamp tab-switch jumps
+
+    timeLeft -= dt;
+    if(timeLeft <= 0){ timeLeft = 0; updateHud(); return endDay(true); }
+
+    // spawn
+    spawnTimer += dt;
+    if(spawnTimer >= spawnInterval){
+      spawnTimer = 0;
+      spawnInterval = Math.max(1.5, (4.4 - dayIdx*0.45)) * (0.8 + Math.random()*0.5);
+      spawnNeed(null);
+    }
+
+    // tick needs
+    for(const bed of beds){
+      if(!bed.need) continue;
+      bed.need.t -= dt;
+      const frac = Math.max(0, bed.need.t / bed.need.max);
+      if(bed.pfillEl){
+        bed.pfillEl.style.width = (frac*100)+"%";
+        bed.pfillEl.style.background = frac<0.3 ? "var(--bad)" : frac<0.6 ? "var(--warn)" : "var(--good)";
+      }
+      const urgent = frac < 0.3;
+      bed.needEl && bed.needEl.classList.toggle("urgent", urgent);
+      if(urgent){
+        bed.need.lastBeep += dt;
+        if(bed.need.lastBeep > 0.9){ bed.need.lastBeep = 0; sfx.buzz(); }
+      }
+      if(bed.need.t <= 0){
+        // neglected!
+        rating -= 12;
+        popText(bed.el, "-12", "var(--bad)");
+        bed.el.classList.add("angry");
+        bed.faceEl.textContent = "😠";
+        setTimeout(()=>{ bed.el.classList.remove("angry"); if(!bed.need) bed.faceEl.textContent = bed.face; }, 600);
+        clearNeed(bed);
+        sfx.fail(); buzz([60,40,60]);
+        // acting out: chance to spawn an extra mess somewhere
+        if(Math.random() < 0.3) spawnNeed(null);
+        updateHud();
+        if(rating <= 0){ rating = 0; updateHud(); return gameOver(); }
+      }
+    }
+
+    updateHud();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ---------- flow ----------
+  function startDay(){
+    rating = Math.max(rating, 60); // breathing room each new shift but keep some pressure
+    if(dayIdx === 0) rating = 100;
+    timeLeft = SHIFT_SECONDS;
+    spawnTimer = 0; spawnInterval = 2.2;
+    const nBeds = Math.min(2 + dayIdx, 6);
+    buildBeds(nBeds);
+    setCarry(null);
+    dayNameEl.textContent = DAYS[dayIdx];
+    updateHud();
+    // park nurse bottom-center
+    requestAnimationFrame(()=>{
+      const pr = playEl.getBoundingClientRect();
+      placeNurse(pr.width/2, pr.height*0.72);
+      nurseEl.style.transition = "none";
+    });
+    hideOverlays();
+    running = true; lastTs = 0; nurse.busy = false;
+    // seed a couple of needs after a beat
+    setTimeout(()=>{ if(running) spawnNeed(null); }, 700);
+    setTimeout(()=>{ if(running) spawnNeed(null); }, 1900);
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function stopLoop(){ running = false; cancelAnimationFrame(rafId); clearTimeout(moveTimeout); nurseEl.classList.remove("walking"); }
+
+  function endDay(success){
+    stopLoop();
+    if(dayIdx >= DAYS.length-1){ return winGame(); }
+    saveBest();
+    $("dayTitle").textContent = DAY_FULL[dayIdx] + " — done!";
+    $("dayMood").textContent = Math.round(rating)+"%";
+    $("dayScore").textContent = score;
+    $("dayNext").textContent = "Next up: "+DAY_FULL[dayIdx+1]+" — more beds, faster buzzers.";
+    show("dayOv");
+  }
+
+  function gameOver(){
+    stopLoop();
+    saveBest();
+    $("overDay").textContent = DAY_FULL[dayIdx];
+    $("overScore").textContent = score;
+    $("bestScore").textContent = best.score;
+    $("bestDay").textContent = best.day ? DAY_FULL[Math.min(best.day-1, DAYS.length-1)] : "—";
+    sfx.fail();
+    show("overOv");
+  }
+
+  function winGame(){
+    stopLoop(); saveBest();
+    $("winScore").textContent = score;
+    sfx.win();
+    show("winOv");
+  }
+
+  function saveBest(){
+    if(score > best.score){ best.score = score; localStorage.setItem("ns_best_score", score); }
+    const reached = dayIdx+1;
+    if(reached > best.day){ best.day = reached; localStorage.setItem("ns_best_day", reached); }
+  }
+
+  // ---------- overlays ----------
+  const OVERLAYS = ["startOv","dayOv","overOv","winOv"];
+  function hideOverlays(){ OVERLAYS.forEach(id=>$(id).classList.add("hidden")); }
+  function show(id){ hideOverlays(); $(id).classList.remove("hidden"); }
+
+  function newGame(){
+    dayIdx = 0; score = 0; rating = 100;
+    audio(); // unlock on gesture
+    startDay();
+  }
+
+  // ---------- buttons ----------
+  $("startBtn").addEventListener("click", newGame);
+  $("retryBtn").addEventListener("click", newGame);
+  $("winBtn").addEventListener("click", newGame);
+  $("nextBtn").addEventListener("click", ()=>{ dayIdx++; audio(); startDay(); });
+
+  // build initial empty ward behind start overlay for visual
+  buildStations();
+  buildBeds(3);
+  requestAnimationFrame(()=>{ const pr=playEl.getBoundingClientRect(); placeNurse(pr.width/2, pr.height*0.72); });
+
+  // keep nurse on-screen if layout shifts
+  window.addEventListener("resize", ()=>{
+    const pr = playEl.getBoundingClientRect();
+    if(nurse.x > pr.width) placeNurse(pr.width/2, pr.height*0.72);
+  });
+
+})();
+</script>
+</body>
+</html>
