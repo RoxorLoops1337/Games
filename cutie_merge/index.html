@@ -207,6 +207,26 @@
   }
   body.dark .mode-badge { color:#ffc4ec; }
 
+  /* Fever meter */
+  .fever-wrap {
+    position: relative; width: 100%; max-width: 320px; height: 16px; border-radius: 999px;
+    background: rgba(255,255,255,.6); border: 2px solid #fff; box-shadow: var(--shadow);
+    overflow: hidden; margin-top: -4px;
+  }
+  .fever-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg,#ffd36e,#ff8fc7,#b58cff); transition: width .12s linear; }
+  .fever-lbl {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family:"Fredoka",sans-serif; font-weight:600; font-size:10px; letter-spacing:1px; color:#a6638f;
+  }
+  .fever-wrap.active { animation: feverPulse .6s ease-in-out infinite; }
+  .fever-wrap.active .fever-lbl { color:#fff; text-shadow:0 1px 2px rgba(180,80,140,.6); }
+  @keyframes feverPulse { 0%,100%{ box-shadow: var(--shadow);} 50%{ box-shadow: 0 0 16px 3px rgba(255,120,180,.7), var(--shadow);} }
+  .board-frame.fever { animation: boardFever 1s ease-in-out infinite; }
+  @keyframes boardFever {
+    0%,100% { box-shadow: 0 0 0 3px rgba(255,143,199,.6), var(--shadow); }
+    50%     { box-shadow: 0 0 28px 8px rgba(181,140,255,.7), 0 0 0 3px rgba(255,211,110,.8), var(--shadow); }
+  }
+
   /* shop modal */
   .shop {
     position: fixed; inset: 0; z-index: 50; display: none;
@@ -370,7 +390,7 @@
     <div class="pill next"><span class="label">Next</span><span class="value" id="next">🥚</span></div>
   </div>
 
-  <div class="board-frame">
+  <div class="board-frame" id="board">
     <canvas id="game"></canvas>
     <div class="mascot" id="mascot"><div class="mascot-bubble" id="mascotBubble"></div><div id="mascotFace"></div></div>
     <div class="overlay show" id="overlay">
@@ -386,6 +406,7 @@
 
   <div class="controls-hint">Move to aim • tap empty space to <b>drop</b> • tap a cutie to <b>pet</b> 🫶</div>
   <div class="mode-badge" id="modeBadge"></div>
+  <div class="fever-wrap" id="feverWrap"><div class="fever-fill" id="feverFill"></div><span class="fever-lbl" id="feverLbl">FEVER</span></div>
 
   <div class="power-bar" id="powerBar"></div>
 
@@ -565,6 +586,8 @@
   let armedPower = null;
   let rng = Math.random, dropDelay = 24, blitzTimer = 0, lastBadge = "";
   let nextTier = randDropTier();
+  let feverFill = 0, feverTimer = 0;          // chain-merge "Fever" (x2 score)
+  let balloons = [], balloonTimer = 360;      // tappable bonus balloons
 
   const G = 0.55, REST = 0.18, FRICTION = 0.86, AIR = 0.995;
   const WAND_EVERY = 6;      // merges per earned wand
@@ -683,6 +706,50 @@
   function addFloater(x, y, text, color) { floaters.push({ x, y, text, color, life: 1, vy: -0.9, scale: 0 }); }
   function pulseScore() { const el = document.getElementById("score"); el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
 
+  /* ---------- Fever (chain merges → x2 score) ---------- */
+  function addFever(amount) {
+    if (feverTimer > 0) return;                 // already in fever, ignore fill
+    feverFill = Math.min(1, feverFill + amount);
+    if (feverFill >= 1) {
+      feverTimer = 8 * 60; feverFill = 1;
+      document.getElementById("feverWrap").classList.add("active");
+      document.getElementById("feverLbl").textContent = "FEVER! ×2";
+      document.getElementById("board").classList.add("fever");
+      confetti(W / 2, H / 2, 40); burst(W / 2, H / 2, "#ff5fa8", 24, "💖");
+      sparkleSound(); shake = Math.max(shake, 8); buzz(30);
+      toast("🔥", "FEVER TIME! Score ×2");
+      mascotCheer("FEVER! 🔥");
+    }
+  }
+  function tickFever() {
+    if (feverTimer > 0) {
+      feverTimer--;
+      if (feverTimer === 0) { feverFill = 0; document.getElementById("feverWrap").classList.remove("active"); document.getElementById("feverLbl").textContent = "FEVER"; document.getElementById("board").classList.remove("fever"); }
+    } else if (feverFill > 0) {
+      feverFill = Math.max(0, feverFill - 0.0006);
+    }
+    const pct = (feverTimer > 0 ? 1 : feverFill) * 100;
+    document.getElementById("feverFill").style.width = pct.toFixed(1) + "%";
+  }
+
+  /* ---------- bonus balloons ---------- */
+  const BALLOON_KINDS = [
+    { type: "heart", e: "💖", col: "#ff8fc7" },
+    { type: "star",  e: "⭐", col: "#ffd36e" },
+    { type: "gift",  e: "🎁", col: "#b58cff" },
+  ];
+  function spawnBalloon() {
+    const k = BALLOON_KINDS[(Math.random() * BALLOON_KINDS.length) | 0];
+    balloons.push({ k, x: 40 + Math.random() * (W - 80), y: H + 26, vy: -(0.9 + Math.random() * 0.7), ph: Math.random() * 6.28, r: 20 });
+  }
+  function popBalloon(b) {
+    confetti(b.x, b.y, 16); burst(b.x, b.y, b.k.col, 12, b.k.e); sparkleSound(); buzz(15);
+    if (b.k.type === "heart") { addHearts(3, false); addFloater(b.x, b.y, "+3 💖", "#ff5fa8"); }
+    else if (b.k.type === "star") { const pts = 150 * (feverTimer > 0 ? 2 : 1); score += pts; addFloater(b.x, b.y, "+" + pts, "#e0a000"); pulseScore(); if (score > best) { best = score; LS.set("cutieMergeBest", best); } updateHud(); }
+    else { const id = pick(["wand", "bomb", "rainbow", "swap", "slow"]); inv[id]++; saveInv(); refreshPowerBar(); addFloater(b.x, b.y, "🎁 " + id + "!", "#7c5cff"); toast("🎁", "Free " + id + " power-up!"); }
+    balloons = balloons.filter(x => x !== b);
+  }
+
   /* ---------- physics ---------- */
   function step() {
     const grav = slowTimer > 0 ? G * 0.32 : G;
@@ -766,7 +833,7 @@
     // two real rainbows -> mega bonus + area clear
     if (!aw && !bw && a.tier === MAX_TIER && b.tier === MAX_TIER) {
       combo++; comboTimer = 90;
-      score += 500; addFloater(mx, my, "🌈 +500!", "#ff5fa8");
+      score += 500 * (feverTimer > 0 ? 2 : 1); addFloater(mx, my, "🌈 +500!", "#ff5fa8"); addFever(0.5);
       burst(mx, my, "#ffd36e", 40, "🌈"); confetti(mx, my, 40); sparkleSound(); shake = 14; buzz(30);
       balls = balls.filter(o => Math.hypot(o.x - mx, o.y - my) > 130);
       mascotCheer("MEGA! 🌈");
@@ -780,9 +847,10 @@
 
     combo++; comboTimer = 90;
     if (combo > stats.bestCombo) { stats.bestCombo = combo; saveStats(); }
-    const gained = Math.round((baseTier + 1) * 10 * (1 + (combo - 1) * 0.5));
+    const gained = Math.round((baseTier + 1) * 10 * (1 + (combo - 1) * 0.5) * (feverTimer > 0 ? 2 : 1));
     score += gained;
-    addFloater(mx, my - 10, "+" + gained, "#c44d96");
+    addFever(0.10 + combo * 0.015);
+    addFloater(mx, my - 10, "+" + gained, feverTimer > 0 ? "#ff3d9a" : "#c44d96");
     if (combo > 1) addFloater(mx, my - 32, "combo x" + combo + "!", "#7c5cff");
 
     discover(baseTier);
@@ -1029,6 +1097,19 @@
       }
     }
 
+    // bonus balloons floating up
+    for (const bl of balloons) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(150,110,150,0.4)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(bl.x, bl.y + bl.r); ctx.lineTo(bl.x - 3, bl.y + bl.r + 14); ctx.stroke();
+      const g = ctx.createRadialGradient(bl.x - bl.r * 0.3, bl.y - bl.r * 0.4, bl.r * 0.2, bl.x, bl.y, bl.r);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.5, bl.k.col); g.addColorStop(1, bl.k.col);
+      ctx.beginPath(); ctx.ellipse(bl.x, bl.y, bl.r * 0.92, bl.r, 0, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.stroke();
+      ctx.drawImage(getGlyph(bl.k.e), bl.x - bl.r * 0.6, bl.y - bl.r * 0.6, bl.r * 1.2, bl.r * 1.2);
+      ctx.restore();
+    }
+
     // speech bubbles above their cuties
     for (const sp of speeches) { const b = balls.find(x => x.id === sp.id); if (b) drawSpeech(b, sp); }
 
@@ -1075,6 +1156,10 @@
       step();
       if (dropCooldown > 0) { dropCooldown--; if (dropCooldown === 0 && !held) { held = { tier: nextTier }; nextTier = randDropTier(); updateHud(); } }
       if (--ambientTimer <= 0) { ambientTimer = 20 + Math.random() * 28; spawnAmbient(); }
+      if (--balloonTimer <= 0) { balloonTimer = 380 + Math.random() * 460; spawnBalloon(); }
+      for (const bl of balloons) { bl.y += bl.vy; bl.ph += 0.05; bl.x += Math.sin(bl.ph) * 0.5; }
+      balloons = balloons.filter(bl => bl.y > -36);
+      tickFever();
       if (blitzTimer > 0) { blitzTimer--; if (blitzTimer <= 0) endGame(); }
       updateModeBadge();
     }
@@ -1096,6 +1181,8 @@
     e.preventDefault();
     const px = pointerX(e), py = pointerY(e);
     if (armedPower) { usePowerAt(px, py); return; }
+    // pop a bonus balloon if tapped
+    for (const bl of balloons) { if (Math.hypot(bl.x - px, bl.y - py) <= bl.r + 8) { popBalloon(bl); return; } }
     // tap a settled cutie to PET it; tap empty space (or near top) to DROP
     const hit = ballAt(px, py);
     if (hit && hit.y > DANGER_Y + 6 && Math.hypot(hit.vx, hit.vy) < 1.4) { petCutie(hit); return; }
@@ -1736,9 +1823,14 @@
 
   /* ---------- game flow ---------- */
   function resetGame() {
-    balls = []; particles = []; floaters = []; rings = []; stickers = []; speeches = [];
+    balls = []; particles = []; floaters = []; rings = []; stickers = []; speeches = []; balloons = [];
     score = 0; combo = 0; comboTimer = 0; overflowTimer = 0; slowTimer = 0; mergesSinceWand = 0; rainbowMade = false;
-    armedPower = null;
+    armedPower = null; balloonTimer = 380;
+    feverFill = 0; feverTimer = 0;
+    document.getElementById("feverWrap").classList.remove("active");
+    document.getElementById("feverLbl").textContent = "FEVER";
+    document.getElementById("feverFill").style.width = "0%";
+    document.getElementById("board").classList.remove("fever");
     nextTier = randDropTier(); held = { tier: randDropTier() };
     dropCooldown = 0; gameOver = false;
     updateHud(); refreshPowerBar();
@@ -1790,7 +1882,10 @@
   }
   function endGame() {
     gameOver = true; running = false; shake = 8; lastBadge = "";
+    feverTimer = 0; balloons = [];
     document.getElementById("mascot").classList.remove("show");
+    document.getElementById("board").classList.remove("fever");
+    document.getElementById("feverWrap").classList.remove("active");
     document.getElementById("modeBadge").textContent = "";
     if (score > best) { best = score; LS.set("cutieMergeBest", best); }
     let extra = "";
