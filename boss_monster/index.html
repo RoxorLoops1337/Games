@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Boss Monster — Build the Dungeon</title>
+<style>
+  :root{
+    --ink:#e9e0ff; --gold:#ffd34d; --hp:#ff4d6d; --mana:#4dc3ff; --xp:#7bdc6b;
+    --panel:#1b1530; --panel2:#241a40; --line:#6b4fb0; --accent:#b985ff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:#0c0916;color:var(--ink);
+    font-family:'Trebuchet MS',system-ui,sans-serif;overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+  #app{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;
+    max-width:1100px;margin:0 auto;}
+  /* Top status bar */
+  #topbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#140f24;
+    border-bottom:2px solid var(--line);font-size:13px;flex-wrap:wrap;}
+  .stat{display:flex;align-items:center;gap:5px;background:#221a3c;border:1px solid #3a2c66;
+    padding:3px 8px;border-radius:6px;white-space:nowrap;}
+  .stat b{font-size:14px;}
+  .bar{position:relative;width:140px;height:14px;background:#0a0716;border:1px solid #3a2c66;
+    border-radius:7px;overflow:hidden;}
+  .bar > i{position:absolute;left:0;top:0;bottom:0;border-radius:7px;transition:width .2s;}
+  .bar > span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:14px;
+    text-shadow:0 1px 1px #000;font-weight:bold;}
+  .gold{color:var(--gold);} .small{font-size:11px;opacity:.85;}
+  /* Canvas */
+  #stage{flex:1;position:relative;min-height:0;background:#0c0916;}
+  canvas{display:block;width:100%;height:100%;image-rendering:pixelated;
+    image-rendering:crisp-edges;touch-action:none;}
+  #hint{position:absolute;left:50%;top:8px;transform:translateX(-50%);
+    background:rgba(10,7,22,.85);border:1px solid var(--line);padding:4px 12px;border-radius:8px;
+    font-size:12px;pointer-events:none;opacity:0;transition:opacity .25s;max-width:90%;text-align:center;}
+  #hint.show{opacity:1;}
+  /* Floaty combat text */
+  /* Bottom control panels */
+  #panel{background:#140f24;border-top:2px solid var(--line);padding:7px 8px;min-height:74px;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  button{font-family:inherit;cursor:pointer;color:var(--ink);background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:bold;
+    transition:transform .05s,background .15s;}
+  button:hover:not(:disabled){background:#34265e;}
+  button:active:not(:disabled){transform:translateY(1px);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button.go{background:#2c8a4a;border-color:#52d97e;}
+  button.go:hover:not(:disabled){background:#36a558;}
+  button.buy{background:#5a4a18;border-color:var(--gold);}
+  .cards{display:flex;gap:6px;flex-wrap:wrap;flex:1;}
+  .card{position:relative;width:78px;min-height:62px;border-radius:8px;border:2px solid var(--line);
+    background:linear-gradient(160deg,#2a2046,#1a1330);padding:5px 4px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;cursor:pointer;transition:transform .08s,border-color .15s;}
+  .card:hover{transform:translateY(-3px);}
+  .card.sel{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold);}
+  .card .ic{font-size:24px;line-height:1;}
+  .card .nm{font-size:10px;margin-top:3px;font-weight:bold;}
+  .card .lv{position:absolute;top:2px;right:4px;font-size:9px;color:var(--gold);}
+  .card .x{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;
+    background:#a02040;border:1px solid #ff6b8a;font-size:11px;line-height:16px;text-align:center;color:#fff;}
+  .abil{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:74px;padding:6px 8px;}
+  .abil .c{font-size:10px;color:var(--mana);}
+  .abil:disabled .c{color:#888;}
+  .pill{font-size:11px;padding:2px 8px;border-radius:10px;background:#2a2046;border:1px solid #3a2c66;}
+  /* Overlay screens */
+  #overlay{position:absolute;inset:0;background:rgba(8,6,16,.93);z-index:50;display:none;
+    flex-direction:column;align-items:center;justify-content:center;padding:18px;text-align:center;overflow:auto;}
+  #overlay.show{display:flex;}
+  #overlay h1{font-size:34px;margin:0 0 4px;color:var(--gold);letter-spacing:1px;
+    text-shadow:0 2px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);}
+  #overlay h2{font-size:20px;margin:6px 0;color:var(--accent);}
+  #overlay p{max-width:620px;line-height:1.5;font-size:14px;opacity:.92;margin:6px 0;}
+  .choices{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
+  .choice{width:160px;background:linear-gradient(160deg,#241a40,#15102a);border:2px solid var(--line);
+    border-radius:12px;padding:12px;cursor:pointer;transition:transform .1s,border-color .15s;}
+  .choice:hover{transform:translateY(-4px);border-color:var(--gold);}
+  .choice .big{font-size:40px;}
+  .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
+  .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
+  .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
+  .menu-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:14px;}
+  .menu-btns button{font-size:16px;padding:12px 22px;}
+  .ko{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:13px;opacity:.85;}
+  a.back{position:absolute;top:8px;left:10px;color:var(--accent);font-size:12px;text-decoration:none;
+    border:1px solid var(--line);padding:3px 8px;border-radius:6px;z-index:60;}
+  .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#2a2046;margin:2px;}
+  @media (max-width:560px){
+    .bar{width:96px;} #overlay h1{font-size:26px;} .choice{width:140px;}
+    .card{width:64px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <a class="back" href="/">← Games</a>
+  <div id="topbar"></div>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="hint"></div>
+  </div>
+  <div id="panel"></div>
+  <div id="overlay"></div>
+</div>
+<script>
+"use strict";
+/* ============================================================================
+   BOSS MONSTER — build a reverse dungeon. Heroes walk in from the left toward
+   your boss on the right; kill them with trap rooms, monster rooms and a shop
+   that arms them (so you can loot it all back). Auto-resolve combat + manual
+   boss abilities. Campaign + Endless.
+   ========================================================================== */
+
+const CV = document.getElementById('cv');
+const X = CV.getContext('2d');
+const topbar = document.getElementById('topbar');
+const panel = document.getElementById('panel');
+const overlay = document.getElementById('overlay');
+const hintEl = document.getElementById('hint');
+
+// Internal render resolution (kept fixed; CSS scales it, pixelated).
+const VW = 960, VH = 420;
+CV.width = VW; CV.height = VH;
+const FLOOR = 330;          // y of the floor line
+const ROOM_W = 200;         // pixel width of one room/cell
+
+/* ----------------------------- content tables ---------------------------- */
+// Room cards. type = id. "trap" rooms hit passing heroes; "monster" rooms
+// spawn a blocker that must be killed; "shop" arms heroes (you profit).
+const ROOMS = {
+  spike:    {kind:'trap',   name:'Spike Pit',  ic:'🦷', col:'#9aa4b2', dmg:6,  rate:0.45, desc:'Fast cheap spikes.'},
+  flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, desc:'Hits hard + burns.'},
+  arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:5,  rate:0.3,  desc:'Very rapid, pierces armor.'},
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:4,  desc:'Cheap swarming blocker.'},
+  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:6,  desc:'Sturdy undead guard.'},
+  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:10, desc:'Huge HP, big hits.'},
+  shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold.'},
+};
+const ROOM_KEYS = Object.keys(ROOMS);
+
+// Shop stock items: arm the heroes (makes them stronger) for instant gold.
+const ITEMS = {
+  sword:  {name:'Sword',  ic:'🗡️', price:14, atk:4,  desc:'+4 hero ATK'},
+  armor:  {name:'Armor',  ic:'🛡️', price:16, def:3,  desc:'+3 hero armor'},
+  potion: {name:'Potion', ic:'🧪', price:12, heal:0.5, desc:'Hero heals mid-fight'},
+  great:  {name:'Greatsword', ic:'⚔️', price:30, atk:9, desc:'+9 hero ATK'},
+};
+
+// Hero classes (scaled by difficulty + index at spawn).
+const CLASSES = {
+  warrior:{name:'Warrior', ic:'⚔️', hp:1.35, atk:1.0, armor:2, spd:46, col:'#c45a4a', tint:'#e8c07a'},
+  rogue:  {name:'Rogue',   ic:'🗡️', hp:0.85, atk:1.1, armor:0, spd:74, col:'#4a8c5a', tint:'#caa', dodge:0.35},
+  mage:   {name:'Mage',    ic:'✨', hp:0.7,  atk:1.45,armor:0, spd:50, col:'#5a6cc4', tint:'#9ad'},
+  cleric: {name:'Cleric',  ic:'✝️', hp:1.0,  atk:0.8, armor:1, spd:48, col:'#c9c46a', tint:'#fff', selfheal:true},
+};
+const CLASS_KEYS = Object.keys(CLASSES);
+
+// Bosses: differing stats + three abilities each.
+const BOSSES = {
+  dragon: {name:'Ignar the Dragon', ic:'🐉', col:'#c43a3a', maxHp:140, atk:16,
+    blurb:'High HP bruiser. Breathe fire on the brave.',
+    abilities:['slam','breath','mend']},
+  lich:   {name:'Mortis the Lich', ic:'☠️', col:'#7ad0c0', maxHp:105, atk:12,
+    blurb:'Frail but cruel. Weaken and freeze intruders.',
+    abilities:['bolt','curse','freeze']},
+  demon:  {name:'Azzaroth the Demon', ic:'😈', col:'#a23bd0', maxHp:120, atk:18,
+    blurb:'Aggressive. Drains the living to heal himself.',
+    abilities:['slam','drain','dread']},
+};
+const BOSS_KEYS = Object.keys(BOSSES);
+
+// Boss abilities. cost = mana, cd seconds. run(hero) applies effect.
+const ABIL = {
+  slam:   {name:'Slam',    ic:'💥', cost:22, cd:3,  desc:'Heavy blow to the hero.',
+           run:h=>dealToHero(h, 26+G.boss.lvl*4, 'SLAM')},
+  breath: {name:'Fire Breath',ic:'🔥',cost:36, cd:6, desc:'Big fire damage + burn.',
+           run:h=>{dealToHero(h, 34+G.boss.lvl*5,'BURN'); h.burn=(h.burn||0)+6; h.burnT=4;}},
+  bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged hit.',
+           run:h=>dealToHero(h, 18+G.boss.lvl*3,'HIT')},
+  curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
+           run:h=>{h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
+  freeze: {name:'Freeze',  ic:'❄️', cost:20, cd:6,  desc:'Freezes the hero in place.',
+           run:h=>{h.freeze=2.2; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
+  drain:  {name:'Drain',   ic:'🩸', cost:28, cd:5,  desc:'Damage hero, heal boss.',
+           run:h=>{dealToHero(h, 22+G.boss.lvl*3,'DRAIN'); healBoss(16+G.boss.lvl*3);}},
+  dread:  {name:'Dread',   ic:'👁️', cost:30, cd:9,  desc:'Slows + weakens the hero.',
+           run:h=>{h.spd*=0.5; h.atk*=0.7; floater(h.x,h.y-60,'DREAD','#a23bd0');}},
+  mend:   {name:'Mend',    ic:'💚', cost:46, cd:10, desc:'Heal the boss (costly).',
+           run:()=>healBoss(30+G.boss.lvl*5)},
+};
+
+// Campaign: keep your dungeon between levels; targets + difficulty ramp up.
+const CAMPAIGN = [
+  {target:5,  diff:1.0,  reward:60, name:'The First Trespassers'},
+  {target:7,  diff:1.35, reward:80, name:'Word Spreads'},
+  {target:9,  diff:1.8,  reward:110,name:'The Guild Responds'},
+  {target:11, diff:2.4,  reward:150,name:'Champions Arrive'},
+  {target:13, diff:3.2,  reward:0,  name:'The Final Crusade'},
+];
+
+/* -------------------------------- state ---------------------------------- */
+let G = null;        // active game object
+let last = 0;        // rAF timestamp
+let floats = [];     // floating combat texts
+let particles = [];
+let camX = 0;        // camera offset (world px)
+let buildScale = 1;  // fit-to-view scale during build
+let selCard = -1;    // selected hand card index in build
+let speedMul = 1;    // run speed multiplier
+
+function freshGame(mode){
+  return {
+    mode,                 // 'campaign' | 'endless'
+    levelIdx:0,
+    phase:'menu',
+    boss:null,            // {key,..stats, hp, maxHp, atk, lvl, mana, maxMana, abil:[{id,cd}]}
+    slots:1,              // buildable room slots (left of boss)
+    rooms:[],             // length === slots, entries are room objects or null
+    hand:[],              // {type, lvl}
+    gold:30,
+    survived:0,           // heroes killed this level / run
+    heroNum:0,            // total heroes spawned (scaling)
+    hero:null,            // active hero during run
+    drafts:[],            // current reward choices
+    cells:[],             // built each run: rooms + boss room with geometry
+    msg:'',
+  };
+}
+
+/* ------------------------------ utilities -------------------------------- */
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const ri=(a,b)=>Math.floor(rnd(a,b+1));
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+function showHint(t){ hintEl.textContent=t; hintEl.classList.add('show');
+  clearTimeout(showHint._t); showHint._t=setTimeout(()=>hintEl.classList.remove('show'),2200); }
+function floater(x,y,txt,col){ floats.push({x,y,txt,col,life:1,vy:-34}); }
+function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
+  {x,y,vx:rnd(-90,90),vy:rnd(-150,-20),life:rnd(.4,.9),col,sz:rnd(2,5)}); }
+
+const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
+function difficulty(){
+  if(G.mode==='campaign') return CAMPAIGN[G.levelIdx].diff;
+  return 1 + G.survived*0.07;             // endless ramp
+}
+
+/* ============================== PHASE: MENU =============================== */
+function gotoMenu(){
+  G = freshGame('campaign'); G.phase='menu'; render();
+  overlay.classList.add('show');
+  overlay.innerHTML = `
+    <h1>BOSS&nbsp;MONSTER</h1>
+    <h2>Build the dungeon. Bury the heroes.</h2>
+    <p>You are the final boss. Heroes raid from the left toward your throne on the
+       right — line the hall with <b>trap rooms</b>, <b>monster rooms</b> and a
+       <b>shop</b> that sells them gear you loot right back. Every kill earns a
+       <b>room card</b>; matching cards <b>upgrade</b> a room. Fights auto-resolve,
+       but your <b>boss abilities</b> are yours to fire.</p>
+    <div class="menu-btns">
+      <button class="go" onclick="startCampaign()">⚔️ Campaign</button>
+      <button onclick="startEndless()">♾️ Endless</button>
+      <button onclick="showHelp()">❓ How to play</button>
+    </div>
+    <div class="ko">
+      <span class="tag">🦷 Traps</span><span class="tag">👹 Monsters</span>
+      <span class="tag">🛒 Shop economy</span><span class="tag">🃏 Card upgrades</span>
+      <span class="tag">🐉 3 bosses</span>
+    </div>`;
+}
+function showHelp(){
+  overlay.innerHTML = `
+    <h1>How to play</h1>
+    <p style="text-align:left">
+      <b>1. Pick a boss.</b> He guards the rightmost room — protect his HP.<br>
+      <b>2. Build phase.</b> Tap a <b>room card</b> in your hand, then tap an empty
+        slot to place it. Tap a matching room to <b>upgrade</b> it. Buy more slots
+        and stock your shop with gold.<br>
+      <b>3. Start the wave.</b> A hero walks in from the left. Traps fire, monsters
+        block, the shop arms them. Fire <b>boss abilities</b> (mana) any time.<br>
+      <b>4. Loot.</b> When the hero dies you take their gold and draft a new card.<br>
+      <b>Lose</b> if a hero reaches the throne and drops the boss to 0 HP.
+        Boss HP barely heals — only <b>Mend/Drain</b> abilities restore it, so don't
+        let anyone through.
+    </p>
+    <div class="menu-btns"><button class="go" onclick="gotoMenu()">Back</button></div>`;
+}
+function startCampaign(){ G=freshGame('campaign'); gotoBossSelect(); }
+function startEndless(){ G=freshGame('endless'); gotoBossSelect(); }
+
+/* =========================== PHASE: BOSS SELECT ========================== */
+function gotoBossSelect(){
+  G.phase='bossSelect'; overlay.classList.add('show');
+  overlay.innerHTML = `<h1>Choose your Boss</h1>
+    <p>${G.mode==='campaign'?'Campaign — survive 5 escalating chapters.':'Endless — how long can you reign?'}</p>
+    <div class="choices">${BOSS_KEYS.map(k=>{
+      const b=BOSSES[k];
+      return `<div class="choice" onclick="chooseBoss('${k}')">
+        <div class="big">${b.ic}</div><h3>${b.name}</h3>
+        <div class="desc">${b.blurb}</div>
+        <div class="stats">❤️ ${b.maxHp} HP · 🗡️ ${b.atk} ATK<br>
+          ${b.abilities.map(a=>ABIL[a].ic+' '+ABIL[a].name).join(' · ')}</div>
+      </div>`;}).join('')}</div>`;
+}
+function chooseBoss(key){
+  const b=BOSSES[key];
+  G.boss={ key, ...b, hp:b.maxHp, maxHp:b.maxHp, lvl:1,
+    mana:60, maxMana:100,
+    abil:b.abilities.map(id=>({id,cd:0})) };
+  // starter dungeon: one empty slot already available.
+  G.rooms=[null];
+  G.slots=1;
+  overlay.classList.remove('show');
+  gotoBuild(true);
+}
+
+/* ============================== PHASE: BUILD ============================= */
+function gotoBuild(first){
+  G.phase='build'; G.hero=null; selCard=-1; camX=0;
+  if(first) showHint('Tap a card, then tap a slot to build. Then ⚔️ Start Wave.');
+  render();
+}
+
+// Geometry helper: corridor = slots (left→right) then boss room (rightmost).
+function corridorWidth(){ return (G.slots+1)*ROOM_W; }
+function cellX(i){ return i*ROOM_W; }        // left edge of cell i (0..slots-1 rooms, slots=boss)
+
+function slotCost(){ return 25 + G.slots*20; }
+
+function buySlot(){
+  const c=slotCost();
+  if(G.gold<c){ showHint('Not enough gold.'); return; }
+  G.gold-=c; G.slots++; G.rooms.unshift(null);   // new slot extends to the LEFT
+  // existing rooms keep their objects; unshift(null) puts new empty slot far left
+  render();
+}
+
+function selectCard(i){
+  selCard = (selCard===i?-1:i);
+  render();
+}
+function discardCard(i){
+  G.hand.splice(i,1); if(selCard===i)selCard=-1; else if(selCard>i)selCard--;
+  render();
+}
+
+// Place / upgrade by tapping a slot index (0..slots-1).
+function tapSlot(idx){
+  if(selCard<0){ showHint('Select a card first.'); return; }
+  const card=G.hand[selCard];
+  const room=G.rooms[idx];
+  if(!room){
+    // build new room here
+    G.rooms[idx]=makeRoom(card.type, card.lvl);
+    G.hand.splice(selCard,1); selCard=-1;
+    burst(cellX(idx)+ROOM_W/2, FLOOR-30, ROOMS[card.type].col, 14);
+    showHint(ROOMS[card.type].name+' built!');
+  } else if(room.type===card.type){
+    // upgrade matching room
+    room.lvl++;
+    G.hand.splice(selCard,1); selCard=-1;
+    burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
+    floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
+    showHint(ROOMS[room.type].name+' upgraded to Lv '+room.lvl+'!');
+  } else {
+    showHint('That slot holds a '+ROOMS[room.type].name+' — only a matching card upgrades it.');
+    return;
+  }
+  render();
+}
+
+function makeRoom(type,lvl){
+  const def=ROOMS[type];
+  const r={type,lvl,def};
+  if(def.kind==='shop') r.stock=[];
+  return r;
+}
+
+// Stock the shop (build phase). Adds item to first shop room.
+function stockShop(itemKey){
+  const it=ITEMS[itemKey];
+  if(G.gold<it.price){ showHint('Not enough gold to stock that.'); return; }
+  const shop=G.rooms.find(r=>r&&r.type==='shop');
+  if(!shop){ showHint('Build a Shop room first.'); return; }
+  G.gold-=it.price; shop.stock.push({key:itemKey, sold:false, price:Math.round(it.price*1.6)});
+  showHint(it.name+' stocked. Heroes pay '+Math.round(it.price*1.6)+'g for it.');
+  render();
+}
+
+// Begin a wave: build cells geometry, spawn hero, switch to run.
+function startWave(){
+  buildCells();
+  spawnHero();
+  G.phase='run'; speedMul=1; camX=0;
+  // refill some mana each wave
+  G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
+  render();
+}
+
+function buildCells(){
+  G.cells=[];
+  for(let i=0;i<G.slots;i++){
+    const r=G.rooms[i];
+    const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:r?r.def.kind:'empty'};
+    if(r){
+      if(r.def.kind==='monster'){
+        const hp=Math.round((r.def.hp + r.lvl*r.def.hp*0.7));
+        cell.mon={hp, maxHp:hp, atk:r.def.atk+(r.lvl-1)*Math.ceil(r.def.atk*0.6), atkT:0, alive:true};
+      } else if(r.def.kind==='trap'){
+        cell.fireT=0;
+      } else if(r.def.kind==='shop'){
+        r.stock.forEach(s=>s.sold=false);
+      }
+    }
+    G.cells.push(cell);
+  }
+  // boss cell
+  G.cells.push({index:G.slots, x0:cellX(G.slots), x1:cellX(G.slots)+ROOM_W, kind:'boss'});
+}
+
+/* ============================== PHASE: RUN =============================== */
+function spawnHero(){
+  G.heroNum++;
+  const d=difficulty();
+  const cls=pickHeroClass();
+  const c=CLASSES[cls];
+  const n=G.survived; // within-level index
+  const baseHp=Math.round((30 + n*7) * c.hp * d);
+  const h={
+    cls, ...c, name:cls,
+    maxHp:baseHp, hp:baseHp,
+    atk: +( (5 + n*1.4) * c.atk * d ).toFixed(1),
+    armor: c.armor + Math.floor(n*0.4),
+    spd: c.spd,
+    gold: Math.round((12 + n*5)*d),
+    bounty: Math.round((8 + n*4)*d),
+    x: 8, y: FLOOR-34,
+    state:'walking',         // walking | fighting | shopping | boss | dead
+    cellIndex:-1,
+    atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
+    freeze:0, shopT:0, walkAnim:0,
+  };
+  G.hero=h;
+}
+function pickHeroClass(){
+  // mild weighting so warriors common early, mages/clerics later
+  const r=Math.random();
+  if(r<0.4) return 'warrior';
+  if(r<0.65) return 'rogue';
+  if(r<0.85) return 'mage';
+  return 'cleric';
+}
+
+function heroDmg(raw, pierce){
+  const h=G.hero;
+  let armor = pierce ? Math.max(0,h.armor-3) : h.armor;
+  return Math.max(1, Math.round(raw - armor));
+}
+function dealToHero(h, raw, label, pierce){
+  if(!h||h.state==='dead') return;
+  // rogue dodge
+  if(h.dodge && Math.random()<h.dodge){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
+  const dmg=heroDmg(raw,pierce);
+  h.hp-=dmg;
+  floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
+  burst(h.x, h.y-20, '#ff4d6d', 6);
+  if(h.hp<=0){ h.hp=0; heroDies(); }
+}
+function healBoss(amt){
+  const b=G.boss; const before=b.hp;
+  b.hp=Math.min(b.maxHp,b.hp+amt);
+  if(b.hp>before){ floater(bossX(), FLOOR-90, '+'+Math.round(b.hp-before), '#7bdc6b');
+    burst(bossX(), FLOOR-50, '#7bdc6b', 8); }
+}
+function bossX(){ return cellX(G.slots)+ROOM_W*0.6; }
+
+function castAbility(slot){
+  if(G.phase!=='run'||!G.hero||G.hero.state==='dead') return;
+  const a=G.boss.abil[slot]; const def=ABIL[a.id];
+  if(a.cd>0){ showHint(def.name+' on cooldown.'); return; }
+  if(G.boss.mana<def.cost){ showHint('Not enough mana.'); return; }
+  G.boss.mana-=def.cost; a.cd=def.cd;
+  def.run(G.hero);
+  burst(bossX(), FLOOR-40, G.boss.col, 10);
+  render();
+}
+
+function heroDies(){
+  const h=G.hero; if(h.state==='dead') return;
+  h.state='dead';
+  // loot: carried gold + bounty
+  const loot=h.gold + h.bounty;
+  G.gold+=loot;
+  G.survived++;
+  burst(h.x, h.y-20, '#ffd34d', 22);
+  floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
+  showHint(CLASSES[h.cls].name+' slain! +'+loot+' gold looted.');
+  setTimeout(afterKill, 950);
+}
+
+function afterKill(){
+  // campaign win check
+  if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
+  gotoReward();
+}
+
+function heroReachesThrone(){
+  // hero now fights the boss; handled in update. nothing here.
+}
+function bossDies(){
+  G.phase='lose'; overlay.classList.add('show');
+  const score = G.mode==='campaign'
+    ? `You fell on Chapter ${G.levelIdx+1} after slaying ${totalKills()} heroes.`
+    : `You reigned ${G.survived} heroes before the throne fell.`;
+  overlay.innerHTML=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
+    <div style="font-size:54px">${G.boss.ic}💔</div>
+    <p>${G.boss.name} was struck down by a hero who reached the throne.</p>
+    <p>${score}</p>
+    <div class="menu-btns">
+      <button class="go" onclick="retryWave()">↺ Try this wave again</button>
+      <button onclick="gotoMenu()">Main menu</button>
+    </div>`;
+}
+let _campaignKills=0;
+function totalKills(){ return _campaignKills + G.survived; }
+
+function retryWave(){
+  // soft retry: restore boss a bit, rebuild same dungeon, don't advance hero count badly
+  overlay.classList.remove('show');
+  G.boss.hp=Math.max(1,Math.round(G.boss.maxHp*0.5));
+  G.boss.mana=G.boss.maxMana;
+  G.phase='build'; G.hero=null;
+  showHint('You rally. Boss restored to half HP — fortify and try again.');
+  render();
+}
+
+/* ============================= PHASE: REWARD ============================= */
+function gotoReward(){
+  G.phase='reward';
+  // draft 3 room cards, weighted by what helps (slightly favor what you own to enable upgrades)
+  const owned = new Set(G.rooms.filter(Boolean).map(r=>r.type));
+  G.drafts=[];
+  const pool=[...ROOM_KEYS];
+  for(let i=0;i<3;i++){
+    let t;
+    if(Math.random()<0.45 && owned.size){ t=pick([...owned]); }
+    else t=pick(pool);
+    G.drafts.push({type:t, lvl:1});
+  }
+  overlay.classList.add('show');
+  overlay.innerHTML=`<h1>Spoils of War</h1>
+    <p>Draft one room card. ${G.hand.length>=5?'<b style="color:#ff8a8a">Hand full (5) — picking will need a discard, or skip.</b>':'Hold up to 5.'}</p>
+    <div class="choices">${G.drafts.map((c,i)=>{
+      const d=ROOMS[c.type];
+      return `<div class="choice" onclick="takeDraft(${i})">
+        <div class="big">${d.ic}</div><h3>${d.name}</h3>
+        <div class="desc">${d.desc}</div>
+        <div class="stats">${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>
+    <div class="menu-btns"><button onclick="skipDraft()">Skip draft</button></div>`;
+}
+function takeDraft(i){
+  if(G.hand.length>=5){
+    showHint('Hand full — discard a card in build, or skip.'); return;
+  }
+  G.hand.push(G.drafts[i]);
+  overlay.classList.remove('show');
+  gotoBuild(false);
+}
+function skipDraft(){ overlay.classList.remove('show'); gotoBuild(false); }
+
+/* ============================== PHASE: WIN =============================== */
+function winLevel(){
+  if(G.mode!=='campaign'){ return; }
+  const lvl=curLevel();
+  G.gold+=lvl.reward;
+  _campaignKills+=G.survived;
+  if(G.levelIdx>=CAMPAIGN.length-1){
+    // game complete
+    G.phase='win'; overlay.classList.add('show');
+    overlay.innerHTML=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
+      <div style="font-size:60px">${G.boss.ic}👑</div>
+      <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
+         having buried <b>${_campaignKills}</b> heroes.</p>
+      <div class="menu-btns">
+        <button class="go" onclick="gotoMenu()">★ Main menu</button>
+        <button onclick="startEndless()">Try Endless</button></div>`;
+    return;
+  }
+  G.phase='levelWin'; overlay.classList.add('show');
+  // heal boss 30% as a chapter reward
+  const heal=Math.round(G.boss.maxHp*0.3);
+  G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+heal);
+  overlay.innerHTML=`<h1 style="color:#7bdc6b">Chapter Survived!</h1>
+    <p><b>${lvl.name}</b> — you slew all ${lvl.target} heroes.</p>
+    <p class="gold">+${lvl.reward} gold reward · boss recovers +${heal} HP</p>
+    <p>Next: <b>${CAMPAIGN[G.levelIdx+1].name}</b> — survive
+       ${CAMPAIGN[G.levelIdx+1].target} tougher heroes.</p>
+    <div class="menu-btns"><button class="go" onclick="nextLevel()">Fortify & continue →</button></div>`;
+}
+function nextLevel(){
+  G.levelIdx++; G.survived=0;
+  overlay.classList.remove('show');
+  gotoBuild(false);
+  render();
+}
+
+/* ============================ UPDATE / SIM ============================== */
+function update(dt){
+  // animate floaters/particles always
+  floats.forEach(f=>{ f.y+=f.vy*dt; f.life-=dt*0.9; });
+  floats=floats.filter(f=>f.life>0);
+  particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt; });
+  particles=particles.filter(p=>p.life>0);
+
+  if(G.phase!=='run'||!G.hero) return;
+  const steps=speedMul; // scale sim by running update multiple conceptual times
+  for(let s=0;s<steps;s++) simStep(dt);
+
+  // ability cooldowns + mana regen
+  G.boss.abil.forEach(a=>{ if(a.cd>0)a.cd=Math.max(0,a.cd-dt*speedMul); });
+  G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana + dt*speedMul*6);
+
+  // camera follows hero
+  const target=clamp(G.hero.x - VW*0.42, 0, Math.max(0,corridorWidth()-VW));
+  camX += (target-camX)*Math.min(1,dt*6);
+}
+
+function simStep(dt){
+  const h=G.hero; if(!h||h.state==='dead') return;
+
+  // status: burn
+  if(h.burn>0 && h.burnT>0){
+    h._burnAcc=(h._burnAcc||0)+dt;
+    if(h._burnAcc>=0.5){ h._burnAcc=0; h.hp-=h.burn; floater(h.x,h.y-50,'-'+h.burn,'#ff9a3a');
+      if(h.hp<=0){h.hp=0;heroDies();return;} }
+    h.burnT-=dt;
+  }
+  // cleric self-heal trickle while not at boss
+  if(h.selfheal && h.state!=='dead' && h.hp<h.maxHp){
+    h.hp=Math.min(h.maxHp, h.hp + h.maxHp*0.02*dt);
+  }
+  // freeze
+  if(h.freeze>0){ h.freeze-=dt; return; }
+
+  const cell=cellAt(h.x);
+  if(cell && cell.index!==h.cellIndex && h.state==='walking'){
+    h.cellIndex=cell.index; onEnterCell(h,cell);
+  }
+
+  if(h.state==='walking'){
+    h.x += h.spd*dt;
+    h.walkAnim+=dt*10;
+    // trap fire while inside a trap cell
+    if(cell && cell.kind==='trap') trapTick(h,cell,dt);
+    // reached boss room?
+    if(h.x >= cellX(G.slots)+ROOM_W*0.32){ h.state='boss'; h.x=cellX(G.slots)+ROOM_W*0.32; }
+  }
+  else if(h.state==='fighting'){
+    const cellM=G.cells[h.cellIndex];
+    if(!cellM||!cellM.mon||!cellM.mon.alive){ h.state='walking'; return; }
+    fightTick(h, cellM.mon, dt, cellM);
+  }
+  else if(h.state==='shopping'){
+    h.shopT-=dt;
+    if(h.shopT<=0){ doShopping(h, G.cells[h.cellIndex]); h.state='walking'; }
+  }
+  else if(h.state==='boss'){
+    bossFightTick(h,dt);
+  }
+}
+
+function cellAt(x){
+  for(const c of G.cells){ if(x>=c.x0 && x<c.x1) return c; }
+  return G.cells[G.cells.length-1];
+}
+function onEnterCell(h,cell){
+  if(cell.kind==='monster' && cell.mon && cell.mon.alive){
+    h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
+  } else if(cell.kind==='shop' && cell.room.stock.some(s=>!s.sold)){
+    h.state='shopping'; h.x=cell.x0+ROOM_W*0.5; h.shopT=0.8;
+  } else if(cell.kind==='boss'){
+    h.state='boss';
+  }
+}
+
+function trapTick(h,cell,dt){
+  const r=cell.room; const def=r.def;
+  cell.fireT-=dt;
+  if(cell.fireT<=0){
+    cell.fireT=def.rate;
+    const dmg=def.dmg + (r.lvl-1)*Math.ceil(def.dmg*0.75);
+    dealToHero(h, dmg, 'HIT', def.name==='Dart Wall');
+    if(def.burn){ h.burn=def.burn+(r.lvl-1)*2; h.burnT=3; }
+    burst(h.x, h.y-20, def.col, 5);
+  }
+}
+
+function fightTick(h, mon, dt, cell){
+  // hero attacks monster
+  h.atkT-=dt;
+  if(h.atkT<=0){
+    h.atkT=0.7;
+    mon.hp-=Math.max(1,Math.round(h.atk));
+    floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+Math.round(h.atk),'#fff');
+    if(mon.hp<=0){ mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
+      floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
+      // potion heal trigger if hero hurt
+      return; }
+  }
+  // monster attacks hero
+  mon.atkT-=dt;
+  if(mon.atkT<=0){
+    mon.atkT=0.9;
+    dealToHero(h, mon.atk, 'HIT');
+    maybePotion(h);
+  }
+}
+
+function maybePotion(h){
+  if(h.hasPotion && h.hp < h.maxHp*0.4){
+    h.hasPotion=false;
+    const heal=Math.round(h.maxHp*0.5);
+    h.hp=Math.min(h.maxHp,h.hp+heal);
+    floater(h.x,h.y-56,'+'+heal,'#7bdc6b');
+  }
+}
+
+function doShopping(h, cell){
+  // buy affordable, unsold items; pay YOU the markup price
+  for(const s of cell.room.stock){
+    if(s.sold) continue;
+    if(h.gold>=s.price){
+      h.gold-=s.price; G.gold+=s.price; s.sold=true;
+      const it=ITEMS[s.key];
+      if(it.atk) h.atk+=it.atk;
+      if(it.def) h.armor+=it.def;
+      if(it.heal) h.hasPotion=true;
+      floater(cell.x0+ROOM_W*0.5, FLOOR-70, '+'+s.price+'g', '#ffd34d');
+      floater(h.x, h.y-44, it.ic+' bought', '#caa15e');
+    }
+  }
+}
+
+function bossFightTick(h,dt){
+  const b=G.boss;
+  // hero attacks boss
+  h.atkT-=dt;
+  if(h.atkT<=0){
+    h.atkT=0.8;
+    const dmg=Math.max(1,Math.round(h.atk));
+    b.hp-=dmg;
+    floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
+    burst(bossX(), FLOOR-50, '#ff4d6d', 6);
+    if(b.hp<=0){ b.hp=0; bossDies(); return; }
+  }
+  // boss auto-attacks hero
+  h._batk=(h._batk||0)-dt;
+  if(h._batk<=0){
+    h._batk=1.0;
+    dealToHero(h, b.atk, 'SLAM');
+    maybePotion(h);
+  }
+}
+
+/* ============================== RENDER =================================== */
+function draw(){
+  X.imageSmoothingEnabled=false;
+  // background gradient sky/cave
+  const g=X.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,'#1a1230'); g.addColorStop(1,'#0c0916');
+  X.fillStyle=g; X.fillRect(0,0,VW,VH);
+
+  if(G.phase==='menu'||G.phase==='bossSelect'){ drawIdleScene(); return; }
+
+  let scale=1, ox=0;
+  if(G.phase==='build'||G.phase==='reward'||G.phase==='levelWin'){
+    // fit whole corridor to view
+    const cw=corridorWidth();
+    scale=Math.min(1, VW/cw);
+    buildScale=scale;
+    ox=0;
+  } else {
+    scale=1; ox=-camX;
+  }
+  // Render with a manual world→screen X transform (we only scale horizontally).
+  const tx = (G.phase==='build'||G.phase==='reward'||G.phase==='levelWin')
+    ? (wx)=>wx*scale : (wx)=>wx-camX;
+  drawDungeon(tx, scale, G.phase==='build'||G.phase==='reward'||G.phase==='levelWin');
+
+  // floaters & particles (world space)
+  particles.forEach(p=>{ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
+    const sx=tx(p.x); X.fillRect(sx, p.y, p.sz, p.sz); });
+  X.globalAlpha=1;
+  floats.forEach(f=>{ X.globalAlpha=clamp(f.life,0,1); X.fillStyle=f.col;
+    X.font='bold 16px Trebuchet MS'; X.textAlign='center';
+    X.fillText(f.txt, tx(f.x), f.y); });
+  X.globalAlpha=1; X.textAlign='left';
+}
+
+function drawDungeon(tx, scale, isBuild){
+  // floor
+  X.fillStyle='#241a3a';
+  X.fillRect(0,FLOOR, VW, VH-FLOOR);
+  X.fillStyle='#2e2350';
+  X.fillRect(0,FLOOR, VW, 6);
+
+  // each cell
+  for(let i=0;i<G.slots+1;i++){
+    const isBoss=(i===G.slots);
+    const x0=tx(cellX(i)); const w=ROOM_W*scale;
+    drawRoomBg(x0,w,isBoss,i);
+    if(isBoss){ drawBoss(x0+w*0.6); continue; }
+    const room=G.rooms[i];
+    if(!room){
+      // empty slot
+      X.strokeStyle=(isBuild&&selCard>=0)?'#ffd34d':'#4a3a72';
+      X.setLineDash([6,5]); X.lineWidth=2;
+      X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
+      X.fillStyle='#6a5a9a'; X.font='12px Trebuchet MS'; X.textAlign='center';
+      X.fillText('empty', x0+w/2, FLOOR-58); X.textAlign='left';
+    } else {
+      drawRoomContents(x0, w, room, i);
+    }
+    // slot number tag in build
+    if(isBuild){
+      X.fillStyle='rgba(0,0,0,.4)'; X.fillRect(x0+4, FLOOR-138, 22,16);
+      X.fillStyle='#cdbaff'; X.font='11px Trebuchet MS';
+      X.fillText(i+1, x0+10, FLOOR-126);
+    }
+  }
+  // hero
+  if(G.hero && G.hero.state!=='dead') drawHero(tx(G.hero.x), G.hero);
+  else if(G.hero && G.hero.state==='dead') drawHeroDead(tx(G.hero.x), G.hero);
+}
+
+function drawRoomBg(x0,w,isBoss,i){
+  X.fillStyle=isBoss?'#2a1530':'#191230';
+  X.fillRect(x0, FLOOR-150, w, 150);
+  // wall pillars
+  X.fillStyle='#120c24';
+  X.fillRect(x0, FLOOR-150, 4, 150);
+  X.fillStyle=isBoss?'#5a2a4a':'#251b44';
+  X.fillRect(x0, FLOOR-150, w, 5);
+  if(isBoss){
+    // throne glow
+    const gg=X.createRadialGradient(x0+w*0.6,FLOOR-70,8,x0+w*0.6,FLOOR-70,90);
+    gg.addColorStop(0,'rgba(180,60,140,.35)'); gg.addColorStop(1,'rgba(0,0,0,0)');
+    X.fillStyle=gg; X.fillRect(x0,FLOOR-150,w,150);
+  }
+}
+
+// chunky pixel rect helper
+function px(x,y,w,h,c){ X.fillStyle=c; X.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
+
+function drawRoomContents(x0,w,room,i){
+  const cx=x0+w/2; const def=room.def;
+  if(def.kind==='trap'){
+    if(room.type==='spike'){
+      for(let s=0;s<5;s++){ const sx=x0+18+s*((w-36)/4);
+        px(sx,FLOOR-14,10,14,'#cfd6e0'); px(sx+2,FLOOR-14,6,8,'#9aa4b2'); }
+    } else if(room.type==='flame'){
+      px(cx-26,FLOOR-10,52,10,'#3a2a1a');
+      for(let f=0;f<3;f++){ const fx=cx-20+f*20;
+        px(fx,FLOOR-34,8,24,'#ff7a2e'); px(fx+1,FLOOR-26,6,16,'#ffd34d'); }
+    } else { // arrow / dart wall
+      px(x0+8,FLOOR-90,8,80,'#3a2c1a');
+      for(let a=0;a<4;a++){ px(x0+16,FLOOR-80+a*18,18,3,'#caa15e'); }
+    }
+    drawLvlBadge(cx,FLOOR-128,room.lvl,def.col);
+  }
+  else if(def.kind==='monster'){
+    const cell=G.cells[i];
+    // Only show a slain monster during the active wave; in build it's fresh.
+    const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
+    if(alive) drawMonster(cx, room.type, def.col);
+    else { X.globalAlpha=0.35; drawMonster(cx, room.type, def.col); X.globalAlpha=1;
+           px(cx-12,FLOOR-10,24,6,'#3a3a3a'); }
+    // monster hp bar during run
+    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run'){
+      bar(cx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
+    }
+    drawLvlBadge(cx,FLOOR-128,room.lvl,def.col);
+  }
+  else if(def.kind==='shop'){
+    // counter
+    px(cx-34,FLOOR-40,68,40,'#5a4326'); px(cx-34,FLOOR-44,68,6,'#caa15e');
+    // shopkeeper
+    px(cx-6,FLOOR-70,12,16,'#3a6a8a'); px(cx-5,FLOOR-82,10,12,'#e8c07a');
+    // item icons
+    const unsold=room.stock.filter(s=>!s.sold);
+    X.font='14px Trebuchet MS'; X.textAlign='center';
+    unsold.slice(0,4).forEach((s,k)=>{ X.fillText(ITEMS[s.key].ic, cx-24+k*16, FLOOR-46); });
+    X.textAlign='left';
+    if(room.stock.length===0){
+      X.fillStyle='#8a7aa8'; X.font='10px Trebuchet MS'; X.textAlign='center';
+      X.fillText('(empty — stock it)', cx, FLOOR-92); X.textAlign='left';
+    }
+  }
+}
+
+function drawLvlBadge(cx,y,lvl,col){
+  X.fillStyle='rgba(0,0,0,.5)'; X.beginPath();
+  X.arc(cx, y, 11, 0, 7); X.fill();
+  X.strokeStyle=col; X.lineWidth=2; X.stroke();
+  X.fillStyle='#ffd34d'; X.font='bold 12px Trebuchet MS'; X.textAlign='center';
+  X.fillText(lvl, cx, y+4); X.textAlign='left';
+}
+
+function bar(x,y,w,h,frac,col){
+  px(x,y,w,h,'#000'); px(x,y,Math.max(0,w*clamp(frac,0,1)),h,col);
+  X.strokeStyle='rgba(255,255,255,.25)'; X.lineWidth=1; X.strokeRect(x+.5,y+.5,w-1,h-1);
+}
+
+// ---- pixel creatures (procedural) ----
+function drawMonster(cx,type,col){
+  const y=FLOOR;
+  if(type==='goblin'){
+    px(cx-10,y-30,20,22,'#3f7a35'); px(cx-12,y-40,24,14,col); // body/head
+    px(cx-8,y-36,5,5,'#fff'); px(cx+3,y-36,5,5,'#fff');
+    px(cx-7,y-35,3,3,'#000'); px(cx+4,y-35,3,3,'#000');
+    px(cx-12,y-8,8,8,'#2f5a28'); px(cx+4,y-8,8,8,'#2f5a28');
+    px(cx+10,y-30,5,16,'#8a8a8a'); // little blade
+  } else if(type==='skeleton'){
+    px(cx-9,y-30,18,22,'#d8d2c2'); px(cx-10,y-44,20,16,col);
+    px(cx-6,y-40,5,6,'#000'); px(cx+2,y-40,5,6,'#000');
+    px(cx-9,y-8,7,8,'#bdb7a7'); px(cx+3,y-8,7,8,'#bdb7a7');
+    px(cx-9,y-22,18,3,'#9a9484');
+  } else { // ogre
+    px(cx-16,y-40,32,32,'#a84e34'); px(cx-14,y-54,28,18,col);
+    px(cx-9,y-50,6,6,'#ffec99'); px(cx+4,y-50,6,6,'#ffec99');
+    px(cx-9,y-49,3,3,'#000'); px(cx+5,y-49,3,3,'#000');
+    px(cx-18,y-8,12,8,'#7a3826'); px(cx+6,y-8,12,8,'#7a3826');
+    px(cx+14,y-44,8,30,'#6a4a2a'); // club handle
+    px(cx+10,y-48,16,12,'#8a6a3a');
+  }
+}
+
+function drawHero(sx,h){
+  const y=FLOOR; const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
+  const yy=y+bob;
+  // shadow
+  X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,14,4,0,0,7); X.fill();
+  // legs
+  px(sx-7,yy-14,5,14,'#3a3050'); px(sx+2,yy-14,5,14,'#3a3050');
+  // body
+  px(sx-9,yy-34,18,22,c.col);
+  // head
+  px(sx-7,yy-46,14,14,c.tint);
+  px(sx-4,yy-42,3,3,'#000'); px(sx+2,yy-42,3,3,'#000');
+  // class flair
+  if(h.cls==='warrior'){ px(sx+9,yy-40,4,30,'#cfd6e0'); px(sx+8,yy-44,6,8,'#9aa4b2'); } //sword
+  if(h.cls==='mage'){ px(sx+9,yy-48,4,34,'#7a5a3a'); px(sx+7,yy-52,8,8,'#9adfff'); } //staff
+  if(h.cls==='rogue'){ px(sx+9,yy-30,5,16,'#cfd6e0'); } //dagger
+  if(h.cls==='cleric'){ px(sx-2,yy-58,4,10,'#ffec99'); px(sx-5,yy-54,10,4,'#ffec99'); } //cross
+  // frozen tint
+  if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
+  // hp bar
+  bar(sx-18, yy-60, 36, 6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d');
+  // class icon + gold
+  X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
+  X.fillText('💰'+h.gold, sx, yy-64); X.textAlign='left';
+}
+function drawHeroDead(sx,h){
+  const y=FLOOR;
+  X.globalAlpha=0.8;
+  px(sx-16,y-8,32,8,h.col); px(sx-20,y-12,12,8,h.tint); // fallen
+  X.globalAlpha=1;
+  X.font='16px Trebuchet MS'; X.textAlign='center'; X.fillText('💀',sx,y-14); X.textAlign='left';
+}
+
+function drawBoss(cx){
+  const y=FLOOR; const b=G.boss; const c=b.col;
+  // throne
+  px(cx-30,y-70,60,70,'#3a2440'); px(cx-34,y-86,68,20,'#5a2a4a');
+  px(cx-30,y-86,8,86,'#6a3a5a'); px(cx+22,y-86,8,86,'#6a3a5a');
+  // boss body big
+  px(cx-22,y-58,44,50,c);
+  px(cx-18,y-78,36,24,c);
+  // eyes
+  px(cx-12,y-72,7,7,'#ffec3a'); px(cx+5,y-72,7,7,'#ffec3a');
+  px(cx-10,y-70,3,3,'#000'); px(cx+7,y-70,3,3,'#000');
+  // type flair
+  if(b.key==='dragon'){ px(cx-26,y-86,8,10,c); px(cx+18,y-86,8,10,c);  // horns
+    px(cx-30,y-40,10,18,c); px(cx+20,y-40,10,18,c); }                  // wings
+  if(b.key==='lich'){ px(cx-20,y-90,40,6,'#cde'); px(cx-6,y-94,12,6,'#9adfff'); } // crown
+  if(b.key==='demon'){ px(cx-22,y-90,8,12,'#6a1a2a'); px(cx+14,y-90,8,12,'#6a1a2a'); } // horns
+  // big icon overlay for clarity
+  X.font='26px Trebuchet MS'; X.textAlign='center'; X.fillText(b.ic, cx, y-30); X.textAlign='left';
+  // boss hp bar (always)
+  bar(cx-40, y-104, 80, 8, b.hp/b.maxHp, '#ff4d6d');
+  X.fillStyle='#fff'; X.font='10px Trebuchet MS'; X.textAlign='center';
+  X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-106); X.textAlign='left';
+}
+
+function drawIdleScene(){
+  // subtle animated torches for the menu backdrop
+  const t=performance.now()/300;
+  for(let i=0;i<6;i++){ const x=80+i*150;
+    px(x,FLOOR-60,8,60,'#3a2c1a');
+    const fl=Math.sin(t+i)*3;
+    px(x-3,FLOOR-78+fl,14,20,'#ff7a2e'); px(x,FLOOR-72+fl,8,12,'#ffd34d'); }
+  X.fillStyle='#241a3a'; X.fillRect(0,FLOOR,VW,VH-FLOOR);
+}
+
+/* ============================== TOP BAR / UI ============================ */
+function render(){
+  renderTop();
+  renderPanel();
+  draw();
+}
+function renderTop(){
+  if(!G||G.phase==='menu'){ topbar.innerHTML=`<div class="stat">🐉 <b>BOSS MONSTER</b></div>`; return; }
+  if(!G.boss){ topbar.innerHTML=''; return; }
+  const b=G.boss;
+  const modeLbl = G.mode==='campaign'
+    ? `Ch.${G.levelIdx+1}/5 · ${G.survived}/${curLevel().target} slain`
+    : `Endless · ${G.survived} slain`;
+  topbar.innerHTML=`
+    <div class="stat">${b.ic}<span class="small">${b.name.split(' ')[0]}</span></div>
+    <div class="stat">❤️<div class="bar"><i style="width:${b.hp/b.maxHp*100}%;background:linear-gradient(90deg,#ff4d6d,#ff8a8a)"></i>
+      <span>${Math.ceil(b.hp)}/${b.maxHp}</span></div></div>
+    <div class="stat">🔷<div class="bar"><i style="width:${b.mana/b.maxMana*100}%;background:linear-gradient(90deg,#2a7adf,#4dc3ff)"></i>
+      <span>${Math.floor(b.mana)}/${b.maxMana}</span></div></div>
+    <div class="stat gold">💰<b>${G.gold}</b></div>
+    <div class="stat small">${modeLbl}</div>`;
+}
+
+function renderPanel(){
+  if(!G||G.phase==='menu'||G.phase==='bossSelect'){ panel.innerHTML=''; return; }
+
+  if(G.phase==='build'){
+    const shopExists=G.rooms.some(r=>r&&r.type==='shop');
+    panel.innerHTML=`
+      <div class="row" style="margin-bottom:6px">
+        <button class="buy" onclick="buySlot()" ${G.gold<slotCost()?'disabled':''}>➕ Slot (${slotCost()}g)</button>
+        ${shopExists?`<span class="pill">🛒 Stock:</span>`+Object.keys(ITEMS).map(k=>{
+          const it=ITEMS[k];
+          return `<button onclick="stockShop('${k}')" ${G.gold<it.price?'disabled':''}
+            style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join('')
+          :`<span class="small">Build a 🛒 Shop to sell gear for gold.</span>`}
+        <span style="flex:1"></span>
+        <button class="go" onclick="startWave()">⚔️ Start Wave</button>
+      </div>
+      <div class="row">
+        <span class="small" style="min-width:46px">Hand:</span>
+        <div class="cards">${G.hand.length? G.hand.map((c,i)=>{
+          const d=ROOMS[c.type];
+          return `<div class="card ${selCard===i?'sel':''}" onclick="selectCard(${i})">
+            <div class="x" onclick="event.stopPropagation();discardCard(${i})">✕</div>
+            <div class="ic">${d.ic}</div><div class="nm">${d.name}</div></div>`;}).join('')
+          :`<span class="small" style="opacity:.6;align-self:center">No cards — survive a hero to draft one.</span>`}
+        </div>
+      </div>`;
+  }
+  else if(G.phase==='run'){
+    panel.innerHTML=`<div class="row">
+      ${G.boss.abil.map((a,i)=>{ const def=ABIL[a.id];
+        const dis=(a.cd>0||G.boss.mana<def.cost);
+        return `<button class="abil" onclick="castAbility(${i})" ${dis?'disabled':''}
+          title="${def.desc}">
+          <span style="font-size:18px">${def.ic}</span>
+          <span style="font-size:11px">${def.name}</span>
+          <span class="c">${a.cd>0?'⏳'+a.cd.toFixed(1)+'s':'🔷'+def.cost}</span>
+        </button>`;}).join('')}
+      <span style="flex:1"></span>
+      <button onclick="toggleSpeed()">⏩ ${speedMul}×</button>
+    </div>`;
+  }
+  else { panel.innerHTML=`<div class="row"><span class="small">…</span></div>`; }
+}
+function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel(); }
+
+/* ============================ CANVAS INPUT =============================== */
+CV.addEventListener('pointerdown', e=>{
+  if(!G||G.phase!=='build') return;
+  const rect=CV.getBoundingClientRect();
+  const ix=(e.clientX-rect.left)*(VW/rect.width);
+  // build uses fit scale, camX=0 => worldX = ix/buildScale
+  const wx=ix/buildScale;
+  const idx=Math.floor(wx/ROOM_W);
+  if(idx>=0 && idx<G.slots) tapSlot(idx);
+});
+
+/* keyboard: ability hotkeys + space=start/speed */
+window.addEventListener('keydown', e=>{
+  if(!G) return;
+  if(G.phase==='run'){
+    if(e.key>='1'&&e.key<='3'){ const i=+e.key-1; if(i<G.boss.abil.length) castAbility(i); }
+    if(e.key===' '){ e.preventDefault(); toggleSpeed(); }
+  } else if(G.phase==='build' && e.key===' '){ e.preventDefault(); startWave(); }
+});
+
+/* ================================ LOOP ================================== */
+function frame(ts){
+  const dt=Math.min(0.05,(ts-last)/1000)||0; last=ts;
+  if(G && G.phase==='run'){ update(dt); renderTop(); }
+  else { update(dt); }
+  draw();
+  // keep run panel cooldowns fresh
+  if(G&&G.phase==='run'){ renderPanelLite(); }
+  requestAnimationFrame(frame);
+}
+// lightweight cooldown refresh without rebuilding DOM every frame
+let _panelTick=0;
+function renderPanelLite(){
+  _panelTick++; if(_panelTick%6!==0) return; renderPanel();
+}
+
+/* handle resize for crisp canvas height vs width ratio */
+function fit(){ /* CSS handles scaling; nothing needed but keep hook */ }
+window.addEventListener('resize',fit);
+
+gotoMenu();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
