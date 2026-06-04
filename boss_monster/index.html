@@ -29,8 +29,9 @@
     text-shadow:0 1px 1px #000;font-weight:bold;}
   .gold{color:var(--gold);} .small{font-size:11px;opacity:.85;}
   /* Canvas */
-  #stage{flex:1;position:relative;min-height:0;background:#0c0916;}
-  canvas{display:block;width:100%;height:100%;image-rendering:pixelated;
+  #stage{flex:1;position:relative;min-height:0;overflow:hidden;background:#0c0916;
+    display:flex;line-height:0;}
+  canvas{display:block;image-rendering:pixelated;
     image-rendering:crisp-edges;touch-action:none;}
   #hint{position:absolute;left:50%;top:8px;transform:translateX(-50%);
     background:rgba(10,7,22,.85);border:1px solid var(--line);padding:4px 12px;border-radius:8px;
@@ -38,18 +39,22 @@
   #hint.show{opacity:1;}
   /* Floaty combat text */
   /* Bottom control panels */
-  #panel{background:#140f24;border-top:2px solid var(--line);padding:7px 8px;min-height:74px;}
+  #panel{background:#140f24;border-top:2px solid var(--line);padding:7px 8px;
+    min-height:74px;flex:0 0 auto;}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   button{font-family:inherit;cursor:pointer;color:var(--ink);background:var(--panel2);
-    border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:bold;
-    transition:transform .05s,background .15s;}
+    border:1px solid var(--line);border-radius:8px;padding:9px 13px;font-size:13px;font-weight:bold;
+    min-height:42px;touch-action:manipulation;transition:transform .05s,background .15s;}
   button:hover:not(:disabled){background:#34265e;}
   button:active:not(:disabled){transform:translateY(1px);}
   button:disabled{opacity:.4;cursor:not-allowed;}
   button.go{background:#2c8a4a;border-color:#52d97e;}
   button.go:hover:not(:disabled){background:#36a558;}
   button.buy{background:#5a4a18;border-color:var(--gold);}
-  .cards{display:flex;gap:6px;flex-wrap:wrap;flex:1;}
+  /* hand scrolls horizontally so it never shoves the action buttons away */
+  .cards{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;padding-bottom:2px;
+    -webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+  .cards .card{flex:0 0 auto;}
   .card{position:relative;width:78px;min-height:62px;border-radius:8px;border:2px solid var(--line);
     background:linear-gradient(160deg,#2a2046,#1a1330);padding:5px 4px;display:flex;flex-direction:column;
     align-items:center;justify-content:center;text-align:center;cursor:pointer;transition:transform .08s,border-color .15s;}
@@ -87,9 +92,15 @@
     border:1px solid var(--line);padding:3px 8px;border-radius:6px;z-index:60;}
   .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#2a2046;margin:2px;}
   @media (max-width:560px){
-    .bar{width:96px;} #overlay h1{font-size:26px;} .choice{width:140px;}
-    .card{width:64px;}
+    #topbar{font-size:11px;gap:5px;padding:5px 7px;}
+    .stat{padding:2px 6px;gap:3px;}
+    .bar{width:80px;height:13px;}
+    #overlay h1{font-size:26px;} .choice{width:140px;}
+    .card{width:66px;min-height:58px;}
+    .abil{min-width:62px;padding:5px 6px;}
+    button{padding:8px 10px;}
   }
+  @media (max-width:380px){ .bar{width:64px;} #topbar{font-size:10px;} }
 </style>
 </head>
 <body>
@@ -114,14 +125,18 @@
 
 const CV = document.getElementById('cv');
 const X = CV.getContext('2d');
+const stage = document.getElementById('stage');
 const topbar = document.getElementById('topbar');
 const panel = document.getElementById('panel');
 const overlay = document.getElementById('overlay');
 const hintEl = document.getElementById('hint');
 
-// Internal render resolution (kept fixed; CSS scales it, pixelated).
-const VW = 960, VH = 420;
-CV.width = VW; CV.height = VH;
+// Virtual render space. VH is fixed so sprites stay a constant size; VW is
+// derived from the live screen aspect each resize, so the canvas is crisp and
+// undistorted in any orientation (portrait shows fewer rooms, camera follows).
+let VW = 960, VH = 420;          // virtual units (recomputed in resize())
+let baseK = 1;                   // virtual→device-pixel scale
+let cssW = 960, cssH = 420;      // canvas CSS size in px
 const FLOOR = 330;          // y of the floor line
 const ROOM_W = 200;         // pixel width of one room/cell
 
@@ -206,8 +221,24 @@ let floats = [];     // floating combat texts
 let particles = [];
 let camX = 0;        // camera offset (world px)
 let buildScale = 1;  // fit-to-view scale during build
+let buildOX = 0;     // horizontal offset to centre the corridor in build
 let selCard = -1;    // selected hand card index in build
 let speedMul = 1;    // run speed multiplier
+
+// Size the canvas backing store to the stage, derive VW from the real aspect.
+function resize(){
+  const r = stage.getBoundingClientRect();
+  if(r.width<2 || r.height<2) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cssW = r.width; cssH = r.height;
+  VH = 420;                                   // fixed virtual height
+  VW = Math.max(360, Math.round(VH * cssW / cssH));
+  CV.width  = Math.round(cssW * dpr);
+  CV.height = Math.round(cssH * dpr);
+  CV.style.width = cssW + 'px';
+  CV.style.height = cssH + 'px';
+  baseK = CV.height / VH;                      // == CV.width / VW
+}
 
 function freshGame(mode){
   return {
@@ -317,7 +348,10 @@ function chooseBoss(key){
 /* ============================== PHASE: BUILD ============================= */
 function gotoBuild(first){
   G.phase='build'; G.hero=null; selCard=-1; camX=0;
-  if(first) showHint('Tap a card, then tap a slot to build. Then ⚔️ Start Wave.');
+  if(first){
+    showHint('Tap a card, then tap a slot to build. Then ⚔️ Start Wave.');
+    if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2600);
+  }
   render();
 }
 
@@ -764,6 +798,9 @@ function bossFightTick(h,dt){
 
 /* ============================== RENDER =================================== */
 function draw(){
+  // Map the whole virtual viewport onto the device-pixel backing store. With
+  // VW derived from the screen aspect this fills the canvas with no distortion.
+  X.setTransform(baseK,0,0,baseK,0,0);
   X.imageSmoothingEnabled=false;
   // background gradient sky/cave
   const g=X.createLinearGradient(0,0,0,VH);
@@ -772,20 +809,18 @@ function draw(){
 
   if(G.phase==='menu'||G.phase==='bossSelect'){ drawIdleScene(); return; }
 
-  let scale=1, ox=0;
-  if(G.phase==='build'||G.phase==='reward'||G.phase==='levelWin'){
-    // fit whole corridor to view
+  const isBuild = (G.phase==='build'||G.phase==='reward'||G.phase==='levelWin');
+  let scale=1;
+  if(isBuild){
+    // fit whole corridor to view, centred horizontally
     const cw=corridorWidth();
     scale=Math.min(1, VW/cw);
     buildScale=scale;
-    ox=0;
-  } else {
-    scale=1; ox=-camX;
+    buildOX=Math.max(0,(VW - cw*scale)/2);
   }
   // Render with a manual world→screen X transform (we only scale horizontally).
-  const tx = (G.phase==='build'||G.phase==='reward'||G.phase==='levelWin')
-    ? (wx)=>wx*scale : (wx)=>wx-camX;
-  drawDungeon(tx, scale, G.phase==='build'||G.phase==='reward'||G.phase==='levelWin');
+  const tx = isBuild ? (wx)=>wx*scale+buildOX : (wx)=>wx-camX;
+  drawDungeon(tx, scale, isBuild);
 
   // floaters & particles (world space)
   particles.forEach(p=>{ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
@@ -1073,13 +1108,13 @@ function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel
 /* ============================ CANVAS INPUT =============================== */
 CV.addEventListener('pointerdown', e=>{
   if(!G||G.phase!=='build') return;
+  e.preventDefault();
   const rect=CV.getBoundingClientRect();
-  const ix=(e.clientX-rect.left)*(VW/rect.width);
-  // build uses fit scale, camX=0 => worldX = ix/buildScale
-  const wx=ix/buildScale;
+  const ix=(e.clientX-rect.left)*(VW/rect.width);   // client px → virtual px
+  const wx=(ix-buildOX)/buildScale;                 // virtual → world (centred fit)
   const idx=Math.floor(wx/ROOM_W);
   if(idx>=0 && idx<G.slots) tapSlot(idx);
-});
+}, {passive:false});
 
 /* keyboard: ability hotkeys + space=start/speed */
 window.addEventListener('keydown', e=>{
@@ -1106,10 +1141,12 @@ function renderPanelLite(){
   _panelTick++; if(_panelTick%6!==0) return; renderPanel();
 }
 
-/* handle resize for crisp canvas height vs width ratio */
-function fit(){ /* CSS handles scaling; nothing needed but keep hook */ }
-window.addEventListener('resize',fit);
+/* keep the canvas matched to the stage (rotation, panel-height changes, etc.) */
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
+if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 
+resize();
 gotoMenu();
 requestAnimationFrame(frame);
 </script>
