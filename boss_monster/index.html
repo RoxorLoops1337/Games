@@ -758,15 +758,43 @@ function sfx(name){
 }
 function startMusic(){
   if(!AC||_musicTimer) return;
-  const chords=[[196,247,294],[220,277,330],[174,220,262],[165,196,247]]; // gentle i–VI–IV–V pad
-  let step=0;
+  // Procedurally varied ambient: pad chords that drift between a few
+  // progressions, a light bass, and a wandering pentatonic melody with rests.
+  const PENTA=[220,262,294,330,392,440,523,587];   // A-minor pentatonic, 2 octaves
+  const PROGS=[
+    [[220,262,330],[196,247,294],[174,220,262],[165,208,247]], // Am G F  E
+    [[220,262,330],[174,220,262],[196,247,294],[220,262,330]], // Am F G  Am
+    [[174,220,262],[196,247,294],[220,262,330],[247,294,349]], // F  G Am  Bdim
+    [[220,262,330],[247,294,349],[262,330,392],[196,247,294]], // Am Bdim C  G
+  ];
+  let beat=0, prog=0, melodyOn=true, density=0.5;
   _musicTimer=setInterval(()=>{
     if(!audioOn||!AC) return;
-    const ch=chords[step%chords.length];
-    ch.forEach(f=>tone(f,1.6,'sine',0.035,f));
-    tone(ch[0]/2,1.9,'triangle',0.03);
-    step++;
-  }, 720);
+    try{
+      const bar=Math.floor(beat/4)%4;
+      const chord=PROGS[prog][bar];
+      if(beat%4===0){
+        // new bar: pad + bass
+        chord.forEach(f=>tone(f, 1.7, 'sine', 0.028, f));
+        tone(chord[0]/2, 2.0, 'triangle', 0.026);
+        if(bar===0){                       // top of a 4-bar phrase: shake it up
+          if(Math.random()<0.55) prog=(prog+1)%PROGS.length;
+          melodyOn = Math.random()<0.82;
+          density = 0.35 + Math.random()*0.4;
+        }
+      } else if(beat%2===0){
+        tone(chord[0]/2, 0.5, 'triangle', 0.02);   // gentle off-beat bass pulse
+      }
+      // wandering melody with rests + the odd eighth-note flourish
+      if(melodyOn && Math.random()<density){
+        const n=PENTA[ri(0,PENTA.length-1)];
+        tone(n, 0.34, 'triangle', 0.03, n);
+        if(Math.random()<0.33){ const n2=PENTA[ri(0,PENTA.length-1)];
+          setTimeout(()=>{ if(audioOn&&AC) try{ tone(n2,0.26,'triangle',0.026,n2); }catch(_){ } }, 190); }
+      }
+      beat++;
+    }catch(_){ }
+  }, 380);
 }
 function toggleAudio(){
   audioOn=!audioOn; saveAudioPref();
