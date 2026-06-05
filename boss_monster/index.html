@@ -463,12 +463,116 @@ function runeBonuses(){
   b.townDisc=Math.min(0.7, b.townDisc);
   return b;
 }
-function applyRunes(){ RB=runeBonuses(); }
+function applyRunes(){ RUNE_RB=runeBonuses(); recomputeRB(); }
 function runeAvailable(n){
   if(RUNES.owned.has(n.id)) return false;
   return n.req.every(r=>RUNES.owned.has(r));
 }
 RB=blankRB();
+
+/* ============================== RELICS =================================
+   Per-run collectibles in six rarity tiers, drafted on chapter "Fortify"
+   screens (and every 10 kills in Endless). Passive %-bonuses fold into RB
+   live; flat boons (HP/gold/dread) are applied the moment you pick one.     */
+let RUNE_RB=blankRB();                 // rune part of RB (fixed for the run)
+function relicRB(){
+  const b=blankRB();
+  for(const id of (G&&G.relics||[])){ const r=RELICS[id]; if(r&&r.rb){ for(const k in r.rb) b[k]=(b[k]||0)+r.rb[k]; } }
+  return b;
+}
+function recomputeRB(){
+  const rl=relicRB(); const o=blankRB();
+  for(const k in o) o[k]=(RUNE_RB[k]||0)+(rl[k]||0);
+  o.bossDR=Math.min(0.75,o.bossDR); o.abilCost=Math.min(0.8,o.abilCost);
+  o.slotCost=Math.min(0.8,o.slotCost); o.townDisc=Math.min(0.8,o.townDisc);
+  RB=o;
+}
+function addRelic(id){
+  const r=RELICS[id]; if(!r) return;
+  G.relics.push(id);
+  if(r.hp){ G.boss.maxHp+=r.hp; G.boss.hp+=r.hp; }
+  if(r.gold) G.gold+=r.gold;
+  if(r.dread) G.dread+=r.dread;
+  recomputeRB();
+}
+
+const RELIC_TIERS={
+  common:   {name:'Common',    col:'#b8b8c8'},
+  special:  {name:'Special',   col:'#5fd17a'},
+  rare:     {name:'Rare',      col:'#4da3ff'},
+  epic:     {name:'Epic',      col:'#b163ff'},
+  legendary:{name:'Legendary', col:'#ffb13d'},
+  mythic:   {name:'Mythic',    col:'#ff5470'},
+};
+const TIER_ORDER=['common','special','rare','epic','legendary','mythic'];
+// relic = {tier,name,ic,desc, rb:{passive %/flat bonuses}, hp/gold/dread:instant}
+const RELICS={
+  // ---- common ----
+  cFang:  {tier:'common',name:'Cracked Fang',ic:'🦷',desc:'+10% trap damage',rb:{trapDmg:.10}},
+  cShackle:{tier:'common',name:'Rusty Shackle',ic:'⛓️',desc:'+10% monster damage',rb:{monDmg:.10}},
+  cCoin:  {tier:'common',name:'Worn Coin',ic:'🪙',desc:'+12% loot',rb:{loot:.12}},
+  cIdol:  {tier:'common',name:'Dull Idol',ic:'🗿',desc:'+25 max HP (healed)',hp:25},
+  cEmber: {tier:'common',name:'Ember',ic:'🔥',desc:'+8% ability damage',rb:{abilDmg:.08}},
+  cScrap: {tier:'common',name:'Iron Scrap',ic:'⚙️',desc:'+6% boss damage reduction',rb:{bossDR:.06}},
+  // ---- special ----
+  sTooth: {tier:'special',name:'Serpent Tooth',ic:'🐍',desc:'+16% trap damage',rb:{trapDmg:.16}},
+  sCharm: {tier:'special',name:'Bone Charm',ic:'💀',desc:'+16% monster HP',rb:{monHp:.16}},
+  sPouch: {tier:'special',name:'Greedy Pouch',ic:'👛',desc:'+2 gold/kill, +10% loot',rb:{goldKill:2,loot:.10}},
+  sWard:  {tier:'special',name:'Warding Stone',ic:'🪨',desc:'+8% DR, +6 HP/wave',rb:{bossDR:.08,bossRegen:6}},
+  sMana:  {tier:'special',name:'Mana Crystal',ic:'🔷',desc:'+25 mana, +2 regen',rb:{manaFlat:25,manaRegen:2}},
+  sCollar:{tier:'special',name:'Spiked Collar',ic:'🦮',desc:'+16% monster damage',rb:{monDmg:.16}},
+  // ---- rare ----
+  rScale: {tier:'rare',name:'Dragonscale',ic:'🐲',desc:'+12% DR, +60 max HP',rb:{bossDR:.12},hp:60},
+  rBlood: {tier:'rare',name:'Bloodstone',ic:'🩸',desc:'+20% trap & monster damage',rb:{trapDmg:.20,monDmg:.20}},
+  rTome:  {tier:'rare',name:'Tome of Power',ic:'📖',desc:'+20% ability dmg, 12% cheaper',rb:{abilDmg:.20,abilCost:.12}},
+  rBanner:{tier:'rare',name:'War Banner',ic:'🚩',desc:'+18% boss attack',rb:{bossAtk:.18}},
+  rEye:   {tier:'rare',name:"Hoarder's Eye",ic:'👁️',desc:'+4 gold/kill, +18% loot',rb:{goldKill:4,loot:.18}},
+  rFrost: {tier:'rare',name:'Frost Heart',ic:'❄️',desc:'+25% ability damage',rb:{abilDmg:.25}},
+  // ---- epic ----
+  eForge: {tier:'epic',name:'Soulforge',ic:'🔨',desc:'+30% monster damage & HP',rb:{monDmg:.30,monHp:.30}},
+  eCore:  {tier:'epic',name:'Infernal Core',ic:'🌋',desc:'+30% trap damage',rb:{trapDmg:.30}},
+  eThrone:{tier:'epic',name:'Throne of Bone',ic:'🦴',desc:'+18% DR, +12 HP/wave',rb:{bossDR:.18,bossRegen:12}},
+  eStaff: {tier:'epic',name:'Archmage Staff',ic:'🪄',desc:'+30% ability dmg, +40 mana, 15% cheaper',rb:{abilDmg:.30,manaFlat:40,abilCost:.15}},
+  eHorn:  {tier:'epic',name:"Warlord's Horn",ic:'📯',desc:'+25% boss atk, +15% monster dmg',rb:{bossAtk:.25,monDmg:.15}},
+  eMidas: {tier:'epic',name:'Midas Relic',ic:'🤑',desc:'+6 gold/kill, +30% loot',rb:{goldKill:6,loot:.30}},
+  // ---- legendary ----
+  lHeart: {tier:'legendary',name:'Heart of the Mountain',ic:'🏔️',desc:'+150 max HP, +15% DR',hp:150,rb:{bossDR:.15}},
+  lBlade: {tier:'legendary',name:'Worldender Blade',ic:'⚔️',desc:'+40% ALL damage',rb:{trapDmg:.40,monDmg:.40,abilDmg:.40,bossAtk:.40}},
+  lPhyl:  {tier:'legendary',name:'Phylactery',ic:'💜',desc:'+25 HP/wave, +12% DR, +20% ability dmg',rb:{bossRegen:25,bossDR:.12,abilDmg:.20}},
+  lCrown: {tier:'legendary',name:'Crown of Avarice',ic:'👑',desc:'+10 gold/kill, +50% loot, +3 dread/kill',rb:{goldKill:10,loot:.50,dreadKill:3}},
+  // ---- mythic ----
+  mRuin:  {tier:'mythic',name:'Avatar of Ruin',ic:'😈',desc:'+60% all damage, +100 max HP',hp:100,rb:{trapDmg:.60,monDmg:.60,abilDmg:.60,bossAtk:.60}},
+  mEtern: {tier:'mythic',name:'Eternity Stone',ic:'♾️',desc:'+20% DR, +30 HP/wave, +30% ability dmg, +80 HP',hp:80,rb:{bossDR:.20,bossRegen:30,abilDmg:.30}},
+  mGod:   {tier:'mythic',name:"God's Eye",ic:'🌟',desc:'+40% everything, +5 gold & +2 dread/kill',rb:{trapDmg:.40,monDmg:.40,monHp:.40,abilDmg:.40,bossAtk:.40,goldKill:5,dreadKill:2}},
+};
+const RELIC_BY_TIER={};
+TIER_ORDER.forEach(t=>RELIC_BY_TIER[t]=Object.keys(RELICS).filter(k=>RELICS[k].tier===t));
+
+function tierWeights(L){
+  return { common:Math.max(2,28-L*4), special:18, rare:6+L*1.6,
+    epic:2+L*1.3, legendary:.4+L*.7, mythic:.08+L*.3 };
+}
+function rollTier(L){
+  const w=tierWeights(L); let tot=0; for(const t in w) tot+=w[t];
+  let r=Math.random()*tot;
+  for(const t of TIER_ORDER){ r-=w[t]; if(r<=0) return t; }
+  return 'common';
+}
+function rollRelicChoices(n){
+  const L = G.mode==='campaign' ? G.levelIdx*1.3 : G.totalSlain/12;
+  const owned=new Set(G.relics);
+  const picks=[]; let guard=0;
+  while(picks.length<n && guard++<200){
+    let t=rollTier(L);
+    let pool=RELIC_BY_TIER[t].filter(id=>!owned.has(id)&&!picks.includes(id));
+    if(!pool.length){ // fall back across tiers
+      pool=Object.keys(RELICS).filter(id=>!owned.has(id)&&!picks.includes(id));
+      if(!pool.length) break;
+    }
+    picks.push(pool[ri(0,pool.length-1)]);
+  }
+  return picks;
+}
 
 /* -------------------------------- state ---------------------------------- */
 let G = null;        // active game object
@@ -522,6 +626,8 @@ function freshGame(mode){
     waveStartSlain:0,     // totalSlain at wave start (to detect 5-kill towns)
     waveEnding:false,     // guard so afterWave runs once
     runesBanked:0,        // rune points already credited from this run
+    relics:[],            // relic ids collected this run
+    relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
     hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
@@ -1029,6 +1135,9 @@ function afterWave(){
   if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
   // a town is due if the party's kills crossed a 5-kill boundary
   G.townDue = Math.floor(G.waveStartSlain/5) !== Math.floor(G.totalSlain/5);
+  // Endless earns a relic draft every 10 kills (campaign gets one per chapter)
+  if(G.mode!=='campaign')
+    G.relicDue = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
   gotoReward();
 }
 
@@ -1108,8 +1217,35 @@ function takeDraft(i){
 function skipDraft(){ overlay.classList.remove('show'); afterReward(); }
 // After the card draft, drop into the town if a 5-kill interlude is due.
 function afterReward(){
-  if(G.townDue){ G.townDue=false; gotoTown(); }
-  else gotoBuild(false);
+  if(G.relicDue){ G.relicDue=false;
+    gotoRelicChoice('Relic Unearthed', 'A power stirs in the deep — claim one.', townOrBuild); return; }
+  townOrBuild();
+}
+function townOrBuild(){ if(G.townDue){ G.townDue=false; gotoTown(); } else gotoBuild(false); }
+
+/* ============================== RELIC DRAFT ============================= */
+function gotoRelicChoice(title, subHtml, onPick){
+  G.phase='relic'; G._relicPick=onPick||null;
+  const choices=rollRelicChoices(3); G._relicChoices=choices;
+  overlay.classList.add('show');
+  overlay.innerHTML=`<h1 style="color:#b163ff">🏺 ${title}</h1>
+    <p>${subHtml||'Choose a relic to empower your dungeon.'}</p>
+    <div class="choices">${choices.map((id,i)=>{ const r=RELICS[id]; const tc=RELIC_TIERS[r.tier];
+      return `<div class="choice" style="width:208px;border-color:${tc.col}" onclick="pickRelic(${i})">
+        <div class="big">${r.ic}</div>
+        <div class="small" style="color:${tc.col};font-weight:bold;letter-spacing:1px">${tc.name.toUpperCase()}</div>
+        <h3 style="margin:4px 0">${r.name}</h3>
+        <div class="desc">${r.desc}</div></div>`;}).join('')}</div>
+    ${G.relics.length?`<p class="small" style="opacity:.75">Held: ${G.relics.map(id=>RELICS[id].ic).join(' ')}</p>`:''}`;
+}
+function pickRelic(i){
+  if(G.phase!=='relic') return;
+  const id=G._relicChoices && G._relicChoices[i]; if(!id) return;
+  addRelic(id);
+  const r=RELICS[id]; showHint(r.ic+' '+r.name+' ('+RELIC_TIERS[r.tier].name+') claimed!');
+  const done=G._relicPick; G._relicChoices=null; G._relicPick=null;
+  overlay.classList.remove('show');
+  if(done) done(); else gotoBuild(false);
 }
 
 /* ============================== PHASE: WIN =============================== */
@@ -1132,16 +1268,13 @@ function winLevel(){
         <button onclick="startEndless()">Try Endless</button></div>`;
     return;
   }
-  G.phase='levelWin'; overlay.classList.add('show');
-  // heal boss 30% as a chapter reward
+  // heal boss 30% as a chapter reward, then draft a relic before continuing
   const heal=Math.round(G.boss.maxHp*0.3);
   G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+heal);
-  overlay.innerHTML=`<h1 style="color:#7bdc6b">Chapter Survived!</h1>
-    <p><b>${lvl.name}</b> — you slew all ${lvl.target} heroes.</p>
-    <p class="gold">+${lvl.reward} gold reward · boss recovers +${heal} HP</p>
-    <p>Next: <b>${CAMPAIGN[G.levelIdx+1].name}</b> — survive
-       ${CAMPAIGN[G.levelIdx+1].target} tougher heroes.</p>
-    <div class="menu-btns"><button class="go" onclick="nextLevel()">Fortify & continue →</button></div>`;
+  gotoRelicChoice('Chapter Survived!',
+    `<b>${lvl.name}</b> cleared · <span class="gold">+${lvl.reward}g</span> · boss recovers +${heal} HP.<br>`+
+    `Fortify with a relic, then face <b>${CAMPAIGN[G.levelIdx+1].name}</b> (${CAMPAIGN[G.levelIdx+1].target} heroes).`,
+    nextLevel);
 }
 function nextLevel(){
   G.levelIdx++; G.survived=0;
@@ -1836,6 +1969,7 @@ function renderTop(){
     <div class="stat gold">💰<b>${G.gold}</b></div>
     <div class="stat" style="color:#b985ff">☠<b>${G.dread}</b></div>
     ${G.bounty?`<div class="stat small" title="threat dial">${G.bounty>0?'🔥':'🌫'} ${G.bounty>0?'+':''}${G.bounty}</div>`:''}
+    ${G.relics&&G.relics.length?`<div class="stat small" title="relics">🏺 ${G.relics.map(id=>RELICS[id].ic).join('')}</div>`:''}
     <div class="stat small">${modeLbl}</div>`;
 }
 
@@ -1944,6 +2078,8 @@ function describeBoss(){
     `❤️ <b>${Math.ceil(b.hp)}</b>/${b.maxHp} HP · 🗡️ ${b.atk} atk · 🔷 ${Math.floor(b.mana)}/${b.maxMana} mana`,
     'Abilities: '+b.abil.map(a=>ABIL[a.id].ic+' '+ABIL[a.id].name).join(', ')];
   if(RB.bossDR) lines.push(`Damage reduction: ${Math.round(RB.bossDR*100)}%`);
+  if(G.relics&&G.relics.length)
+    lines.push('Relics: '+G.relics.map(id=>{const r=RELICS[id];return `<span style="color:${RELIC_TIERS[r.tier].col}">${r.ic}${r.name}</span>`;}).join(', '));
   return lines.join('<br>');
 }
 
