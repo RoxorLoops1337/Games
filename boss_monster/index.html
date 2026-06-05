@@ -156,6 +156,30 @@ const ROOMS = {
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
+const FUSE_KILLS = 3;  // hero deaths in a room before it can fuse a 2nd part
+
+// Fusing two components yields a synergy multiplier on the room's output.
+// Some pairs are great, some are duds (diminishing returns).
+const SYNERGY_PAIRS = {
+  'flame+skeleton':{m:1.35,name:'Funeral Pyre'},
+  'flame+goblin':  {m:1.25,name:'Roasting Pit'},
+  'ogre+spike':    {m:1.30,name:'Impaler'},
+  'arrow+goblin':  {m:1.25,name:'Ambush'},
+  'arrow+skeleton':{m:1.20,name:'Bone Volley'},
+  'flame+spike':   {m:1.20,name:'Searing Pit'},
+};
+function roomParts(r){ return r.part2 ? [r.type, r.part2] : [r.type]; }
+function synergyInfo(parts){
+  if(parts.length<2) return {m:1, name:'', tone:'neutral'};
+  const key=[...parts].sort().join('+');
+  if(SYNERGY_PAIRS[key]) return {...SYNERGY_PAIRS[key], tone:'good'};
+  const kinds=parts.map(t=>ROOMS[t].kind);
+  if(kinds[0]==='monster'&&kinds[1]==='monster') return {m:0.8, name:'Overcrowded', tone:'bad'};
+  if(kinds.includes('monster')&&kinds.includes('trap')) return {m:1.18, name:'Pinned Down', tone:'good'};
+  if(kinds[0]==='trap'&&kinds[1]==='trap') return {m:1.08, name:'Hazard Field', tone:'good'};
+  return {m:1, name:'Unstable', tone:'bad'};
+}
+function comboName(r){ return roomParts(r).map(t=>ROOMS[t].name).join(' + '); }
 
 // Shop stock items: arm the heroes (makes them stronger) for instant gold.
 const ITEMS = {
@@ -441,6 +465,11 @@ function discardCard(i){
   render();
 }
 function roomName(r){ return r?(r.type==='minion'?(r.label||'Corrupted'):ROOMS[r.type].name):'empty'; }
+function canFuse(room,card){
+  return (room.kills||0)>=FUSE_KILLS && !room.part2
+    && room.def.kind!=='shop' && ROOMS[card.type].kind!=='shop'
+    && card.type!==room.type;
+}
 
 // Place / upgrade by tapping a slot index (0..slots-1).
 function tapSlot(idx){
@@ -464,16 +493,27 @@ function tapSlot(idx){
     G.hand.splice(selCard,1); selCard=-1;
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, ROOMS[card.type].col, 14);
     showHint(ROOMS[card.type].name+' built!');
-  } else if(room.type===card.type){
-    // upgrade matching room (capped)
-    if(room.lvl>=MAX_LEVEL){ showHint(ROOMS[room.type].name+' is already max level ('+MAX_LEVEL+').'); return; }
+  } else if(room.type===card.type || room.part2===card.type){
+    // upgrade matching room/part (capped)
+    if(room.lvl>=MAX_LEVEL){ showHint(comboName(room)+' is already max level ('+MAX_LEVEL+').'); return; }
     room.lvl++;
     G.hand.splice(selCard,1); selCard=-1;
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
     floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
-    showHint(ROOMS[room.type].name+' upgraded to Lv '+room.lvl+(room.lvl>=MAX_LEVEL?' (max)':'')+'!');
+    showHint(comboName(room)+' upgraded to Lv '+room.lvl+(room.lvl>=MAX_LEVEL?' (max)':'')+'!');
+  } else if(canFuse(room,card)){
+    // fuse a second trap/monster into this room
+    room.part2=card.type;
+    G.hand.splice(selCard,1); selCard=-1;
+    const info=synergyInfo(roomParts(room));
+    burst(cellX(idx)+ROOM_W/2, FLOOR-40, '#9a5cff', 20);
+    floater(cellX(idx)+ROOM_W/2, FLOOR-80, info.name||'COMBO', info.tone==='bad'?'#ff7a8a':'#7bdc6b');
+    showHint('Fused → '+comboName(room)+(info.name?' ('+info.name+', ×'+info.m.toFixed(2)+')':'')+'!');
+  } else if(room.def.kind!=='shop' && ROOMS[card.type].kind!=='shop' && !room.part2){
+    showHint(ROOMS[room.type].name+' needs '+FUSE_KILLS+' kills before it can fuse a 2nd part ('+(room.kills||0)+'/'+FUSE_KILLS+').');
+    return;
   } else {
-    showHint('That slot holds a '+ROOMS[room.type].name+' — only a matching card upgrades it.');
+    showHint('Can\'t place that here.');
     return;
   }
   render();
@@ -481,7 +521,7 @@ function tapSlot(idx){
 
 function makeRoom(type,lvl,card){
   const def=ROOMS[type];
-  const r={type,lvl,def};
+  const r={type,lvl,def,kills:0,part2:null};
   if(def.kind==='shop') r.stock=[];
   if(type==='minion'){            // carry the corrupted hero's stats + name
     r.minHp = card?.minHp || def.hp;
@@ -516,25 +556,36 @@ function buildCells(){
   G.cells=[];
   for(let i=0;i<G.slots;i++){
     const r=G.rooms[i];
-    const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:r?r.def.kind:'empty'};
+    const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:'empty', traps:[], mon:null, shop:false};
     if(r){
-      if(r.def.kind==='monster'){
-        const bHp = r.type==='minion'? r.minHp : r.def.hp;
-        const bAtk= r.type==='minion'? r.minAtk : r.def.atk;
-        // Monsters scale HARD: weak at Lv1, brutal at high level.
-        const hp =Math.round(bHp  * (0.9 + (r.lvl-1)*0.85));
-        const atk=Math.round(bAtk * (1.0 + (r.lvl-1)*0.9));
-        cell.mon={hp, maxHp:hp, atk, atkT:0, alive:true};
-      } else if(r.def.kind==='trap'){
-        cell.fireT=0;
-      } else if(r.def.kind==='shop'){
-        r.stock.forEach(s=>s.sold=false);
+      const parts=roomParts(r);
+      const syn=synergyInfo(parts).m;
+      cell.syn=syn;
+      let monHp=0, monAtk=0, hasMon=false, hasShop=false;
+      for(const p of parts){
+        const def=ROOMS[p];
+        if(def.kind==='trap'){
+          cell.traps.push({type:p, def, fireT:0});
+        } else if(def.kind==='monster'){
+          hasMon=true;
+          const bHp = p==='minion'? r.minHp : def.hp;
+          const bAtk= p==='minion'? r.minAtk : def.atk;
+          // Monsters scale HARD: weak at Lv1, brutal at high level.
+          monHp += bHp  * (0.9 + (r.lvl-1)*0.85);
+          monAtk+= bAtk * (1.0 + (r.lvl-1)*0.9);
+        } else if(def.kind==='shop'){
+          hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
+        }
       }
+      if(hasMon){ const hp=Math.round(monHp*syn);
+        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn), atkT:0, alive:true}; }
+      cell.shop=hasShop;
+      cell.kind = hasMon ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
     }
     G.cells.push(cell);
   }
   // boss cell
-  G.cells.push({index:G.slots, x0:cellX(G.slots), x1:cellX(G.slots)+ROOM_W, kind:'boss'});
+  G.cells.push({index:G.slots, x0:cellX(G.slots), x1:cellX(G.slots)+ROOM_W, kind:'boss', traps:[]});
 }
 
 /* ============================== PHASE: RUN =============================== */
@@ -690,6 +741,13 @@ function heroDies(){
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
+  // room XP: credit the room the hero fell in (toward fusing a 2nd part)
+  const dcell=cellAt(h.x);
+  if(dcell && dcell.room && dcell.room.def.kind!=='shop'){
+    dcell.room.kills=(dcell.room.kills||0)+1;
+    if(dcell.room.kills===FUSE_KILLS && !dcell.room.part2)
+      floater(dcell.x0+ROOM_W/2, FLOOR-96, 'FUSE READY!', '#ffd34d');
+  }
   // a hero who touched the throne returns with a grudge
   if(h.reachedThrone) makeRival(h);
   burst(h.x, h.y-20, '#ffd34d', 22);
@@ -1028,13 +1086,16 @@ function simStep(dt){
   if(h.state==='walking'){
     h.x += h.spd*dt;
     h.walkAnim+=dt*10;
-    // trap fire while inside a trap cell
-    if(cell && cell.kind==='trap') trapTick(h,cell,dt);
+    // traps fire while inside a cell that has any traps (works for combos)
+    if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     // reached boss room?
     if(h.x >= cellX(G.slots)+ROOM_W*0.32){ h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.32; }
   }
   else if(h.state==='fighting'){
     const cellM=G.cells[h.cellIndex];
+    // combo synergy: traps keep chipping while the monster pins the hero
+    if(cellM && cellM.traps && cellM.traps.length) trapTick(h,cellM,dt);
+    if(h.state==='dead') return;
     if(!cellM||!cellM.mon||!cellM.mon.alive){ h.state='walking'; return; }
     fightTick(h, cellM.mon, dt, cellM);
   }
@@ -1052,25 +1113,28 @@ function cellAt(x){
   return G.cells[G.cells.length-1];
 }
 function onEnterCell(h,cell){
-  if(cell.kind==='monster' && cell.mon && cell.mon.alive){
+  if(cell.mon && cell.mon.alive){
     h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
-  } else if(cell.kind==='shop' && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
+  } else if(cell.shop && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
     h.state='shopping'; h.x=cell.x0+ROOM_W*0.5; h.shopT=0.8;
   } else if(cell.kind==='boss'){
     h.state='boss'; h.reachedThrone=true;
   }
 }
 
+// Fire every trap in the cell (a combo room can hold two), scaled by synergy.
 function trapTick(h,cell,dt){
-  const r=cell.room; const def=r.def;
-  cell.fireT-=dt;
-  if(cell.fireT<=0){
-    cell.fireT=def.rate;
-    // Traps are strong early but scale GENTLY (the opposite of monsters).
-    const dmg=Math.round(def.dmg * (1 + (r.lvl-1)*0.4));
-    dealToHero(h, dmg, 'HIT', def.name==='Dart Wall');
-    if(def.burn){ h.burn=def.burn+(r.lvl-1)*2; h.burnT=3; }
-    burst(h.x, h.y-20, def.col, 5);
+  const r=cell.room; const syn=cell.syn||1;
+  for(const tr of cell.traps){
+    tr.fireT-=dt;
+    if(tr.fireT<=0){
+      tr.fireT=tr.def.rate;
+      const dmg=Math.round(tr.def.dmg * (1 + (r.lvl-1)*0.4) * syn);
+      dealToHero(h, dmg, 'HIT', tr.def.name==='Dart Wall');
+      if(tr.def.burn){ h.burn=tr.def.burn+(r.lvl-1)*2; h.burnT=3; }
+      burst(h.x, h.y-20, tr.def.col, 5);
+      if(h.state==='dead') return;
+    }
   }
 }
 
@@ -1241,48 +1305,65 @@ function drawRoomBg(x0,w,isBoss,i){
 // chunky pixel rect helper
 function px(x,y,w,h,c){ X.fillStyle=c; X.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
 
+function drawTrapProp(x0,w,cx,type){
+  if(type==='spike'){
+    for(let s=0;s<5;s++){ const sx=x0+18+s*((w-36)/4);
+      px(sx,FLOOR-14,10,14,'#cfd6e0'); px(sx+2,FLOOR-14,6,8,'#9aa4b2'); }
+  } else if(type==='flame'){
+    px(cx-26,FLOOR-10,52,10,'#3a2a1a');
+    for(let f=0;f<3;f++){ const fx=cx-20+f*20;
+      px(fx,FLOOR-34,8,24,'#ff7a2e'); px(fx+1,FLOOR-26,6,16,'#ffd34d'); }
+  } else if(type==='arrow'){
+    px(x0+8,FLOOR-90,8,80,'#3a2c1a');
+    for(let a=0;a<4;a++){ px(x0+16,FLOOR-80+a*18,18,3,'#caa15e'); }
+  }
+}
+function drawShopProp(cx,room){
+  px(cx-34,FLOOR-40,68,40,'#5a4326'); px(cx-34,FLOOR-44,68,6,'#caa15e');
+  px(cx-6,FLOOR-70,12,16,'#3a6a8a'); px(cx-5,FLOOR-82,10,12,'#e8c07a');
+  const unsold=(room.stock||[]).filter(s=>!s.sold);
+  X.font='14px Trebuchet MS'; X.textAlign='center';
+  unsold.slice(0,4).forEach((s,k)=>{ X.fillText(ITEMS[s.key].ic, cx-24+k*16, FLOOR-46); });
+  X.textAlign='left';
+  if((room.stock||[]).length===0){
+    X.fillStyle='#8a7aa8'; X.font='10px Trebuchet MS'; X.textAlign='center';
+    X.fillText('(empty — stock it)', cx, FLOOR-92); X.textAlign='left';
+  }
+}
+
 function drawRoomContents(x0,w,room,i){
-  const cx=x0+w/2; const def=room.def;
-  if(def.kind==='trap'){
-    if(room.type==='spike'){
-      for(let s=0;s<5;s++){ const sx=x0+18+s*((w-36)/4);
-        px(sx,FLOOR-14,10,14,'#cfd6e0'); px(sx+2,FLOOR-14,6,8,'#9aa4b2'); }
-    } else if(room.type==='flame'){
-      px(cx-26,FLOOR-10,52,10,'#3a2a1a');
-      for(let f=0;f<3;f++){ const fx=cx-20+f*20;
-        px(fx,FLOOR-34,8,24,'#ff7a2e'); px(fx+1,FLOOR-26,6,16,'#ffd34d'); }
-    } else { // arrow / dart wall
-      px(x0+8,FLOOR-90,8,80,'#3a2c1a');
-      for(let a=0;a<4;a++){ px(x0+16,FLOOR-80+a*18,18,3,'#caa15e'); }
-    }
-    drawLvlBadge(cx,FLOOR-128,room.lvl,def.col);
-  }
-  else if(def.kind==='monster'){
-    const cell=G.cells[i];
-    // Only show a slain monster during the active wave; in build it's fresh.
+  const cx=x0+w/2; const cell=G.cells[i]; const parts=roomParts(room);
+  // traps
+  for(const p of parts){ if(ROOMS[p].kind==='trap') drawTrapProp(x0,w,cx,p); }
+  // a monster (combined into cell.mon)
+  const monPart=parts.find(p=>ROOMS[p].kind==='monster');
+  if(monPart){
+    const def=ROOMS[monPart];
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
-    if(alive) drawMonster(cx, room.type, def.col);
-    else { X.globalAlpha=0.35; drawMonster(cx, room.type, def.col); X.globalAlpha=1;
+    const sprite = monPart==='minion'?'minion':monPart;
+    if(alive) drawMonster(cx, sprite, def.col);
+    else { X.globalAlpha=0.35; drawMonster(cx, sprite, def.col); X.globalAlpha=1;
            px(cx-12,FLOOR-10,24,6,'#3a3a3a'); }
-    // monster hp bar during run
-    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run'){
+    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
       bar(cx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
-    }
-    drawLvlBadge(cx,FLOOR-128,room.lvl,def.col);
   }
-  else if(def.kind==='shop'){
-    // counter
-    px(cx-34,FLOOR-40,68,40,'#5a4326'); px(cx-34,FLOOR-44,68,6,'#caa15e');
-    // shopkeeper
-    px(cx-6,FLOOR-70,12,16,'#3a6a8a'); px(cx-5,FLOOR-82,10,12,'#e8c07a');
-    // item icons
-    const unsold=room.stock.filter(s=>!s.sold);
-    X.font='14px Trebuchet MS'; X.textAlign='center';
-    unsold.slice(0,4).forEach((s,k)=>{ X.fillText(ITEMS[s.key].ic, cx-24+k*16, FLOOR-46); });
-    X.textAlign='left';
-    if(room.stock.length===0){
-      X.fillStyle='#8a7aa8'; X.font='10px Trebuchet MS'; X.textAlign='center';
-      X.fillText('(empty — stock it)', cx, FLOOR-92); X.textAlign='left';
+  // shop counter
+  if(parts.includes('shop')) drawShopProp(cx,room);
+
+  drawLvlBadge(cx,FLOOR-128,room.lvl,ROOMS[room.type].col);
+
+  // build-time room info: XP pips, fuse-ready, combo synergy
+  if(G.phase!=='run' && ROOMS[room.type].kind!=='shop'){
+    const k=Math.min(FUSE_KILLS, room.kills||0);
+    for(let p=0;p<FUSE_KILLS;p++) px(cx-16+p*11, FLOOR-118, 8,5, p<k?'#ffd34d':'#3a2c5a');
+    if(room.part2){
+      const info=synergyInfo(parts);
+      X.fillStyle=info.tone==='good'?'#7bdc6b':info.tone==='bad'?'#ff7a8a':'#cdbaff';
+      X.font='bold 9px Trebuchet MS'; X.textAlign='center';
+      X.fillText((info.name||'Combo')+' ×'+info.m.toFixed(2), cx, FLOOR-104); X.textAlign='left';
+    } else if((room.kills||0)>=FUSE_KILLS){
+      X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
+      X.fillText('⚡ FUSE READY', cx, FLOOR-104); X.textAlign='left';
     }
   }
 }
