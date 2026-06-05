@@ -521,7 +521,7 @@ const RUNE_BRANCHES=[
 ];
 
 // Persistent rune state (localStorage). ranks = {nodeId: ranksBought}.
-let RUNES={ points:0, ranks:{}, kills:0 };   // kills = lifetime, drives unlocks
+let RUNES={ points:0, ranks:{}, kills:0, bossXp:{} };   // kills=lifetime (unlocks); bossXp per boss
 let RB={};   // aggregated bonuses for the active run
 function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
@@ -529,12 +529,23 @@ function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadK
   synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
 function loadRunes(){
   try{ const s=JSON.parse(localStorage.getItem('bossmonster_runes')||'{}');
-    RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{}, kills:s.kills||0 }; }
-  catch(_){ RUNES={ points:0, ranks:{}, kills:0 }; }
+    RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{}, kills:s.kills||0,
+            bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{} }; }
+  catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{} }; }
 }
 function saveRunes(){
-  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills})); }catch(_){ }
+  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp})); }catch(_){ }
 }
+// ---- Boss mastery: each boss earns XP from kills made while playing it and
+// levels up, gaining a permanent +HP/+ATK bonus. ----
+const BOSS_XP_PER_LVL=12, BOSS_LVL_MAX=20;
+function bossXpOf(key){ return (RUNES.bossXp && RUNES.bossXp[key]) || 0; }
+function bossLevelOf(key){ return Math.min(BOSS_LVL_MAX, 1 + Math.floor(bossXpOf(key)/BOSS_XP_PER_LVL)); }
+function bossXpInfo(key){ const lvl=bossLevelOf(key);
+  const into = lvl>=BOSS_LVL_MAX ? BOSS_XP_PER_LVL : bossXpOf(key) - (lvl-1)*BOSS_XP_PER_LVL;
+  return { lvl, into, need:BOSS_XP_PER_LVL, max:lvl>=BOSS_LVL_MAX }; }
+function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per level
+function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
 const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100 };
@@ -728,7 +739,7 @@ function freshGame(mode){
     relics:[],            // relic ids collected this run
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
     combo:0,              // kill streak (resets when a hero strikes the boss)
-    killsBanked:0, newUnlocks:[],            // lifetime-kill banking + unlock toasts
+    killsBanked:0, bossXpBanked:0, newUnlocks:[],   // lifetime-kill + boss-XP banking, unlock toasts
     tutorial:false, tutStep:0, tutHi:null,   // guided tutorial state
     hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
@@ -1072,20 +1083,24 @@ function gotoBossSelect(){
     <p>${G.mode==='campaign'?'Campaign — survive 5 escalating chapters.':'Endless — how long can you reign?'}</p>
     <div class="choices">${BOSS_KEYS.map(k=>{
       const b=BOSSES[k]; const lk=!bossUnlocked(k);
+      const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
       return `<div class="choice${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="width:200px">
         <div class="big">${lk?'🔒':b.ic}</div><h3>${b.name}</h3>
         ${lk?`<div class="desc">🔒 Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills (you: ${RUNES.kills})</div>`
-            :`<div class="desc">${b.blurb}</div>
+            :`<div class="small" style="color:var(--gold);font-weight:bold">★ Mastery Lv ${xi.lvl}${xi.max?' (MAX)':''}</div>
+        <div class="bar" style="width:90%;height:8px;margin:3px auto"><i style="width:${Math.round(xi.into/xi.need*100)}%;background:linear-gradient(90deg,#caa15e,#ffd34d)"></i><span style="font-size:8px">${xi.max?'MAX':xi.into+'/'+xi.need+' XP'}</span></div>
+        <div class="desc">${b.blurb}</div>
         <div class="small" style="color:${b.col};margin:3px 0"><b>✦ ${PASSIVES[b.passive].name}</b><br>${PASSIVES[b.passive].desc}</div>
-        <div class="stats">❤️ ${b.maxHp} HP · 🗡️ ${b.atk} ATK</div>`}
+        <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
       </div>`;}).join('')}</div>`;
 }
 function chooseBoss(key){
   applyRunes();                                  // lock in this run's rune bonuses
   const b=BOSSES[key];
-  const maxHp=Math.round(b.maxHp*(1+RB.bossHp)) + RB.bossHpFlat;
-  const atk=Math.round(b.atk*(1+RB.bossAtk)) + RB.bossAtkFlat;
-  G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1,
+  const mLvl=bossLevelOf(key);                    // boss mastery: permanent +HP/+ATK
+  const maxHp=Math.round(b.maxHp*(1+RB.bossHp)*bossMasteryHp(mLvl)) + RB.bossHpFlat;
+  const atk=Math.round(b.atk*(1+RB.bossAtk)*bossMasteryAtk(mLvl)) + RB.bossAtkFlat;
+  G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1, masteryLvl:mLvl,
     mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
     abil:b.abilities.map(id=>({id,cd:0})) };
   applyBossPassive(G.boss);                       // signature passive effects
@@ -1634,6 +1649,15 @@ function awardRunes(){
   G.newUnlocks=[];
   for(const k in UNLOCK_BOSS){ if(UNLOCK_BOSS[k]>before && UNLOCK_BOSS[k]<=after) G.newUnlocks.push(BOSSES[k].ic+' '+BOSSES[k].name); }
   for(const k in UNLOCK_CARD){ if(UNLOCK_CARD[k]>before && UNLOCK_CARD[k]<=after) G.newUnlocks.push(ROOMS[k].ic+' '+ROOMS[k].name); }
+  // bank boss mastery XP for the boss you played + detect a level-up
+  if(G.boss && G.boss.key){
+    if(!RUNES.bossXp) RUNES.bossXp={};
+    const bk=G.boss.key, lvlBefore=bossLevelOf(bk);
+    const bd=Math.max(0, G.totalSlain - (G.bossXpBanked||0)); G.bossXpBanked=G.totalSlain;
+    RUNES.bossXp[bk]=(RUNES.bossXp[bk]||0)+bd;
+    const lvlAfter=bossLevelOf(bk);
+    if(lvlAfter>lvlBefore) G.newUnlocks.push(`${BOSSES[bk].ic} ${BOSSES[bk].name.split(' ')[0]} → Mastery Lv ${lvlAfter}`);
+  }
   saveRunes();
   return delta;
 }
@@ -2766,7 +2790,7 @@ function describeHero(h){
 }
 function describeBoss(){
   const b=G.boss;
-  const lines=[`<b>${b.ic} ${b.name}</b> · Lv ${b.lvl}`,
+  const lines=[`<b>${b.ic} ${b.name}</b> · Lv ${b.lvl}${b.masteryLvl>1?` · ★ Mastery ${b.masteryLvl}`:''}`,
     `❤️ <b>${Math.ceil(b.hp)}</b>/${b.maxHp} HP · 🗡️ ${b.atk} atk · 🔷 ${Math.floor(b.mana)}/${b.maxMana} mana`,
     'Abilities: '+b.abil.map(a=>ABIL[a.id].ic+' '+ABIL[a.id].name).join(', ')];
   if(b.passive&&PASSIVES[b.passive]) lines.push(`<span style="color:${b.col}">✦ ${PASSIVES[b.passive].name}</span> — ${PASSIVES[b.passive].desc}`);
