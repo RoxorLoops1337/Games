@@ -101,6 +101,14 @@
     button{padding:8px 10px;}
   }
   @media (max-width:380px){ .bar{width:64px;} #topbar{font-size:10px;} }
+  /* inspection tooltip */
+  #inspect{position:absolute;left:8px;bottom:8px;max-width:min(340px,calc(100% - 16px));
+    background:rgba(12,9,22,.94);border:1.5px solid var(--accent);border-radius:10px;
+    padding:8px 26px 8px 10px;font-size:12px;line-height:1.5;z-index:20;
+    opacity:0;transform:translateY(6px);transition:opacity .12s,transform .12s;pointer-events:none;}
+  #inspect.show{opacity:1;transform:translateY(0);pointer-events:auto;}
+  #inspect b{color:var(--gold);}
+  #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
 </style>
 </head>
 <body>
@@ -110,6 +118,7 @@
   <div id="stage">
     <canvas id="cv"></canvas>
     <div id="hint"></div>
+    <div id="inspect"></div>
   </div>
   <div id="panel"></div>
   <div id="overlay"></div>
@@ -130,6 +139,8 @@ const topbar = document.getElementById('topbar');
 const panel = document.getElementById('panel');
 const overlay = document.getElementById('overlay');
 const hintEl = document.getElementById('hint');
+const inspectEl = document.getElementById('inspect');
+let inspectHover = false;
 
 // Virtual render space. VH is fixed so sprites stay a constant size; VW is
 // derived from the live screen aspect each resize, so the canvas is crisp and
@@ -1230,9 +1241,10 @@ function sabotage(idx,key){
 
 // ---- corruption: turn a previewed hero into a placeable minion card ----
 function minionCardFromSpec(spec){
+  // A corrupted hero should defend with most of their former might.
   const ps=previewStats(spec);
-  return { type:'minion', lvl:1, minHp:Math.round(ps.hp*0.5),
-           minAtk:Math.max(2,Math.round(ps.atk*0.8)), label:(spec.name||'Thrall') };
+  return { type:'minion', lvl:1, minHp:Math.round(ps.hp*0.9),
+           minAtk:Math.max(3,Math.round(ps.atk*0.9)), label:(spec.name||'Thrall') };
 }
 function grantMinionCard(power){
   if(G.hand.length>=handCap()){ showHint('Hand full — make room first.'); return false; }
@@ -1795,6 +1807,7 @@ function drawIdleScene(){
 
 /* ============================== TOP BAR / UI ============================ */
 function render(){
+  if(!G || (G.phase!=='build' && G.phase!=='run')) hideInspect();
   renderTop();
   renderPanel();
   draw();
@@ -1863,6 +1876,69 @@ function renderPanel(){
 }
 function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel(); }
 
+/* ============================== INSPECTION ============================== */
+// Hover (desktop) or tap (mobile/run) a room, hero or the boss to read its stats.
+function hideInspect(){ inspectEl.classList.remove('show'); }
+function showInspectEntity(ent, hover){
+  if(!ent || ent.kind==='empty'){ hideInspect(); return; }
+  let html='';
+  if(ent.kind==='hero') html=describeHero(ent.h);
+  else if(ent.kind==='boss') html=describeBoss();
+  else if(ent.kind==='room') html=describeRoom(ent.room);
+  else return;
+  inspectEl.innerHTML=html+'<span class="ix" onclick="hideInspect()">✕</span>';
+  inspectEl.classList.add('show'); inspectHover=!!hover;
+}
+function entityAt(wx){
+  if(G.phase==='run' && G.heroes){
+    let best=null,bd=26;
+    for(const h of G.heroes){ if(h.state==='dead')continue; const d=Math.abs(h.x-wx); if(d<bd){bd=d;best=h;} }
+    if(best) return {kind:'hero',h:best};
+  }
+  const idx=Math.floor(wx/ROOM_W);
+  if(idx===G.slots) return {kind:'boss'};
+  if(idx>=0 && idx<G.slots){ const r=G.rooms[idx]; return r?{kind:'room',room:r}:{kind:'empty'}; }
+  return null;
+}
+function describeRoom(room){
+  const parts=roomParts(room);
+  const synI=synergyInfo(parts); const syn=synI.m + (parts.length>1?(RB.synergy||0):0);
+  const title = parts.length>1 ? comboName(room) : roomName(room);
+  const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}`];
+  parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
+    const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*(1+(RB.trapDmg||0)));
+    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`); });
+  const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
+  if(monParts.length){ let hp=0,atk=0;
+    monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?room.minHp:def.hp, bAtk=p==='minion'?room.minAtk:def.atk;
+      hp+=bHp*(0.9+(room.lvl-1)*0.85); atk+=bAtk*(1.0+(room.lvl-1)*0.9); });
+    lines.push(`👹 Guard: <b>${Math.round(hp*syn*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*(1+(RB.monDmg||0)))}</b> atk /0.9s`); }
+  if(parts.includes('shop')) lines.push(`🛒 Shop: ${(room.stock||[]).filter(s=>!s.sold).length} item(s) in stock`);
+  if(parts.length>1) lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
+  else if(ROOMS[room.type].kind!=='shop'){ const k=room.kills||0;
+    lines.push(k>=fuseKills()?'⚡ <b>Ready to fuse</b> a 2nd part':`XP: ${k}/${fuseKills()} kills to fuse`); }
+  return lines.join('<br>');
+}
+function describeHero(h){
+  const C=CLASSES[h.cls];
+  const nm=h.heroName?`${h.heroName}${h.title?' '+h.title:''}`:C.name;
+  const lines=[`<b>${C.ic} ${nm}</b> · ${C.name}${h.rival?' · ⚔️ rival':''}${h.elite?' · ⭐ elite':''}`,
+    `❤️ <b>${Math.ceil(h.hp)}</b>/${h.maxHp} HP · 🗡️ <b>${(+h.atk).toFixed(1)}</b> atk · 🛡 ${h.armor} armor`,
+    `🏃 speed ${Math.round(h.spd)} · 💰 ${h.gold}${h.dodge?' · 35% dodge':''}`];
+  if(h.traits&&h.traits.length) lines.push('Traits: '+h.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name).join(', '));
+  const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
+  if(fx) lines.push(fx);
+  return lines.join('<br>');
+}
+function describeBoss(){
+  const b=G.boss;
+  const lines=[`<b>${b.ic} ${b.name}</b> · Lv ${b.lvl}`,
+    `❤️ <b>${Math.ceil(b.hp)}</b>/${b.maxHp} HP · 🗡️ ${b.atk} atk · 🔷 ${Math.floor(b.mana)}/${b.maxMana} mana`,
+    'Abilities: '+b.abil.map(a=>ABIL[a.id].ic+' '+ABIL[a.id].name).join(', ')];
+  if(RB.bossDR) lines.push(`Damage reduction: ${Math.round(RB.bossDR*100)}%`);
+  return lines.join('<br>');
+}
+
 /* ============================ CANVAS INPUT =============================== */
 // Drag to pan the dungeon (build + run); a tap (no drag) places/upgrades a room
 // in the build phase. Panning during a run temporarily suspends auto-follow.
@@ -1889,15 +1965,27 @@ CV.addEventListener('pointermove', e=>{
 
 function endDrag(e){
   if(!drag || (e && e.pointerId!==drag.id)) return;
-  if(G.phase==='build' && !drag.moved){      // a clean tap → place/upgrade
+  if(!drag.moved){                              // a clean tap
     const wx=clientToVX(e)+camX;
     const idx=Math.floor(wx/ROOM_W);
-    if(idx>=0 && idx<G.slots) tapSlot(idx);
+    if(G.phase==='build' && idx>=0 && idx<G.slots){
+      tapSlot(idx);
+      const r=G.rooms[idx]; showInspectEntity(r?{kind:'room',room:r}:{kind:'empty'});
+    } else {
+      showInspectEntity(entityAt(wx));          // boss in build, or hero/room/boss in run
+    }
   }
   drag=null; panning=false;
 }
 CV.addEventListener('pointerup', endDrag);
 CV.addEventListener('pointercancel', endDrag);
+
+// Desktop hover inspection
+CV.addEventListener('mousemove', e=>{
+  if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
+  showInspectEntity(entityAt(clientToVX(e)+camX), true);
+});
+CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspect(); });
 
 /* keyboard: ability hotkeys + space=start/speed */
 window.addEventListener('keydown', e=>{
