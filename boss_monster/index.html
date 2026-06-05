@@ -1842,6 +1842,11 @@ function simStep(h,dt){
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1);   // oil & chill slow movement
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
+    // a living monster blocks: walk up to it (through the trap), THEN fight
+    if(cell && cell.mon && cell.mon.alive && h.x >= cell.x0+ROOM_W*0.5){
+      h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
+      return;
+    }
     // reached boss room?
     if(h.x >= cellX(G.slots)+ROOM_W*0.32){
       if(h.champion==='thief'){ thiefSteal(h); return; }   // robs you instead of fighting
@@ -1873,9 +1878,9 @@ function cellAt(x){
   return x<0 ? G.cells[0] : G.cells[G.cells.length-1];
 }
 function onEnterCell(h,cell){
-  if(cell.mon && cell.mon.alive){
-    h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
-  } else if(cell.shop && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
+  // Monsters are handled by the walking branch: the hero walks up to the
+  // blocker (passing through any trap in the room) before the fight starts.
+  if(cell.shop && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
     h.state='shopping'; h.x=cell.x0+ROOM_W*0.5; h.shopT=0.8;
   } else if(cell.kind==='boss'){
     if(h.champion==='thief'){ thiefSteal(h); return; }
