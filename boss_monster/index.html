@@ -31,6 +31,13 @@
   .bar > span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:14px;
     text-shadow:0 1px 1px #000;font-weight:bold;}
   .gold{color:var(--gold);} .small{font-size:11px;opacity:.85;}
+  /* boss HP+mana readout beside the run abilities */
+  .bossmini{display:flex;align-items:center;gap:5px;padding:3px 7px;border-radius:9px;
+    background:#140f24;border:1px solid var(--line);}
+  .bossmini > span{font-size:20px;}
+  .bmbars{display:flex;flex-direction:column;gap:2px;}
+  .bmbars .bar{width:88px;height:11px;}
+  .bmbars .bar > span{line-height:11px;font-size:9px;}
   /* Canvas */
   #stage{flex:1;position:relative;min-height:0;overflow:hidden;background:#0c0916;
     display:flex;line-height:0;}
@@ -148,6 +155,13 @@
   .rn-lock .ric{filter:grayscale(1);opacity:.55;}
   .rn-lock .rcnt{color:#8a7aa8;border-color:#3a3450;}
   @keyframes runepulse{0%,100%{box-shadow:0 0 9px #ffd34d88,inset 0 0 8px #0006;}50%{box-shadow:0 0 18px #ffd34d,inset 0 0 8px #0006;}}
+  .rnode.rn-sel{outline:3px solid #fff;outline-offset:1px;transform:scale(1.08);z-index:3;}
+  .rbview{padding-bottom:74px;}
+  .rbdetail{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px));
+    z-index:7;display:flex;align-items:center;gap:10px;width:min(560px,calc(100% - 20px));
+    padding:8px 12px;border-radius:12px;background:rgba(16,11,30,.96);border:2px solid var(--accent);
+    box-shadow:0 6px 24px rgba(0,0,0,.6);}
+  .rbdetail button.go{white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -839,24 +853,24 @@ function startCampaign(){ G=freshGame('campaign'); gotoBossSelect(); }
 function startEndless(){ G=freshGame('endless'); gotoBossSelect(); }
 
 /* ============================== RUNE PAGE UI ============================= */
-function openRunes(){ overlay.classList.add('show'); renderRunes(); }
-// Tap a node: buy the next rank if you can, otherwise explain why.
+let runeSel=null;
+function openRunes(){ runeSel=null; overlay.classList.add('show'); renderRunes(); }
+// First tap a node to inspect it (detail bar appears); tap it again — or the
+// Buy button — to spend a point on the next rank.
 function tapRune(id){
   const n=RUNE_NODES[id]; if(!n) return;
-  const r=ranksOf(id);
-  if(!runeUnlocked(n)){ const p=RUNE_NODES[n.req]; showHint('🔒 '+n.ic+' '+n.name+' — unlock '+(p?p.name:'the rune above')+' first.'); return; }
-  if(r>=n.maxRank){ showHint('✔ '+n.ic+' '+n.name+' (max '+n.maxRank+') — '+n.desc); return; }
-  const cost=runeCost(n);
-  if(RUNES.points<cost){ showHint(n.ic+' '+n.name+' — '+n.desc+' · '+cost+'◆ (you have '+RUNES.points+')'); return; }
-  buyRune(id);
+  if(runeSel!==id){ runeSel=id; sfx('buy'); renderRunes(); return; }   // 1st tap: select+inspect
+  buyRune(id);                                                          // 2nd tap: buy
 }
 function buyRune(id){
   const n=RUNE_NODES[id]; if(!n) return;
-  if(!runeAvailable(n)) return;
+  runeSel=id;
+  if(!runeUnlocked(n)){ const p=RUNE_NODES[n.req]; showHint('🔒 Unlock '+(p?p.name:'the rune above')+' first.'); renderRunes(); return; }
+  if(ranksOf(id)>=n.maxRank){ showHint('✔ '+n.name+' is maxed.'); renderRunes(); return; }
   const cost=runeCost(n);
-  if(RUNES.points<cost) return;
+  if(RUNES.points<cost){ showHint('Need '+cost+'◆ (you have '+RUNES.points+').'); renderRunes(); return; }
   RUNES.points-=cost; RUNES.ranks[id]=ranksOf(id)+1; saveRunes();
-  sfx('upgrade'); showHint(n.ic+' '+n.name+' → rank '+ranksOf(id)+'/'+n.maxRank+' · '+n.desc);
+  sfx('upgrade'); showHint(n.ic+' '+n.name+' → rank '+ranksOf(id)+'/'+n.maxRank);
   renderRunes();
 }
 function renderRunes(){
@@ -871,12 +885,28 @@ function renderRunes(){
     paths+=`<path d="M${x1} ${y1} V${my} H${x2} V${y2}" stroke="${lit?'#e8c06a':'#7a6038'}" stroke-width="${lit?5:3}" fill="none" opacity="${lit?0.95:0.5}" stroke-linejoin="round"/>`; });
   const nodes=RUNE_LIST.map(n=>{
     const r=ranksOf(n.id), maxed=r>=n.maxRank, unlocked=runeUnlocked(n), cost=runeCost(n), afford=RUNES.points>=cost;
-    const cls = maxed?'rn-max':(unlocked?(afford?'rn-buy':'rn-cost'):'rn-lock');
+    const cls = (maxed?'rn-max':(unlocked?(afford?'rn-buy':'rn-cost'):'rn-lock')) + (n.id===runeSel?' rn-sel':'');
     const x=Math.round(PAD+n.col*COLW), y=Math.round(PAD+n.row*ROWH);
     const ic = unlocked? n.ic : '🔒';
     return `<div class="rnode ${cls}" style="left:${x}px;top:${y}px;width:${NODE}px;height:${NODE}px"
       onclick="tapRune('${n.id}')" title="${n.name}: ${n.desc} (${cost}◆/rank)">
       <span class="ric">${ic}</span><span class="rcnt">${r}/${n.maxRank}</span></div>`;}).join('');
+  // detail bar for the selected node
+  let detail='';
+  const s=runeSel?RUNE_NODES[runeSel]:null;
+  if(s){ const r=ranksOf(s.id), maxed=r>=s.maxRank, unlocked=runeUnlocked(s), cost=runeCost(s), afford=RUNES.points>=cost;
+    const action = maxed ? '<span style="color:#7bdc6b;font-weight:bold">✔ MAXED</span>'
+      : !unlocked ? `<span style="color:#ff9aae;font-size:12px">🔒 unlock ${RUNE_NODES[s.req].name} first</span>`
+      : `<button class="go" ${afford?'':'disabled'} onclick="buyRune('${s.id}')">Buy · ${cost}◆</button>`;
+    detail=`<div class="rbdetail">
+      <span style="font-size:26px">${unlocked?s.ic:'🔒'}</span>
+      <div style="flex:1;text-align:left;min-width:0">
+        <b>${s.name}</b> <span class="small">· rank ${r}/${s.maxRank} · ${cost}◆/rank</span><br>
+        <span class="small" style="opacity:.9">${s.desc}</span>
+      </div>${action}</div>`;
+  } else {
+    detail=`<div class="rbdetail" style="justify-content:center"><span class="small" style="opacity:.8">Tap a rune to inspect it · tap again (or Buy) to spend a point.</span></div>`;
+  }
   overlay.innerHTML=`<div class="runebook">
     <button class="rbback" onclick="gotoMenu()">‹ BACK</button>
     <div class="rbpts">${RUNES.points} <span class="rbscroll-ic">📜</span></div>
@@ -884,6 +914,7 @@ function renderRunes(){
       <svg width="${W}" height="${H}" style="position:absolute;left:0;top:0;pointer-events:none">${paths}</svg>
       ${nodes}
     </div></div>
+    ${detail}
   </div>`;
 }
 
@@ -1762,9 +1793,10 @@ function update(dt){
     G.waveEnding=true; setTimeout(afterWave, 850);
   }
 
-  // camera follows the lead hero (unless the player is dragging to look around)
+  // camera follows the lead hero — but pause the auto-follow for a moment after
+  // you pan, so you can scroll over to inspect the boss on the right.
   const lead=G.hero;
-  if(!panning && lead){
+  if(!panning && performance.now()>panHoldUntil && lead){
     const target=clamp(lead.x - VW*0.42, 0, Math.max(0,corridorWidth()-VW));
     camX += (target-camX)*Math.min(1,dt*6);
   }
@@ -2355,7 +2387,15 @@ function renderPanel(){
       </div>`;
   }
   else if(G.phase==='run'){
-    panel.innerHTML=`<div class="row">
+    const b=G.boss;
+    panel.innerHTML=`<div class="row" style="align-items:center">
+      <div class="bossmini" title="your boss">
+        <span>${b.ic}</span>
+        <div class="bmbars">
+          <div class="bar bmhp"><i id="pbhp" style="background:linear-gradient(90deg,#ff4d6d,#ff8a8a)"></i><span id="pbhpT"></span></div>
+          <div class="bar bmmana"><i id="pbmana" style="background:linear-gradient(90deg,#2a7adf,#4dc3ff)"></i><span id="pbmanaT"></span></div>
+        </div>
+      </div>
       ${G.boss.abil.map((a,i)=>{ const def=ABIL[a.id]; const cost=abilCost(def.cost);
         const dis=(a.cd>0||G.boss.mana<cost);
         return `<button class="abil" onclick="castAbility(${i})" ${dis?'disabled':''}
@@ -2367,6 +2407,7 @@ function renderPanel(){
       <span style="flex:1"></span>
       <button onclick="toggleSpeed()">⏩ ${speedMul}×</button>
     </div>`;
+    updateRunPanel();
   }
   else { panel.innerHTML=`<div class="row"><span class="small">…</span></div>`; }
 }
@@ -2478,7 +2519,7 @@ function describeBoss(){
 /* ============================ CANVAS INPUT =============================== */
 // Drag to pan the dungeon (build + run); a tap (no drag) places/upgrades a room
 // in the build phase. Panning during a run temporarily suspends auto-follow.
-let drag=null, panning=false;
+let drag=null, panning=false, panHoldUntil=0;
 function clientToVX(e){ const rect=CV.getBoundingClientRect();
   return (e.clientX-rect.left)*(VW/rect.width); }
 
@@ -2510,6 +2551,8 @@ function endDrag(e){
     } else {
       showInspectEntity(entityAt(wx));          // boss in build, or hero/room/boss in run
     }
+  } else if(G.phase==='run'){
+    panHoldUntil = performance.now()+3500;       // keep your panned view for a bit
   }
   drag=null; panning=false;
 }
@@ -2556,6 +2599,14 @@ function updateRunPanel(){
     const c=btns[i].querySelector('.c');
     if(c) c.textContent = a.cd>0 ? ('⏳'+a.cd.toFixed(1)+'s') : ('🔷'+cost);
   });
+  // live boss HP + mana readout next to the abilities
+  const b=G.boss;
+  const hp=document.getElementById('pbhp'), hpT=document.getElementById('pbhpT');
+  const mn=document.getElementById('pbmana'), mnT=document.getElementById('pbmanaT');
+  if(hp) hp.style.width=(b.hp/b.maxHp*100)+'%';
+  if(hpT) hpT.textContent=Math.ceil(b.hp)+'/'+b.maxHp;
+  if(mn) mn.style.width=(b.mana/b.maxMana*100)+'%';
+  if(mnT) mnT.textContent=Math.floor(b.mana)+'/'+b.maxMana;
 }
 
 /* keep the canvas matched to the stage (rotation, panel-height changes, etc.) */
