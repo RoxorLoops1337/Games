@@ -756,45 +756,75 @@ function sfx(name){
   if(now-(_sfxLast[name]||0)<55) return;        // throttle so rapid hits don't buzz
   _sfxLast[name]=now; try{ f(); }catch(_){ }
 }
-function startMusic(){
-  if(!AC||_musicTimer) return;
-  // Procedurally varied ambient: pad chords that drift between a few
-  // progressions, a light bass, and a wandering pentatonic melody with rests.
-  const PENTA=[220,262,294,330,392,440,523,587];   // A-minor pentatonic, 2 octaves
-  const PROGS=[
-    [[220,262,330],[196,247,294],[174,220,262],[165,208,247]], // Am G F  E
-    [[220,262,330],[174,220,262],[196,247,294],[220,262,330]], // Am F G  Am
-    [[174,220,262],[196,247,294],[220,262,330],[247,294,349]], // F  G Am  Bdim
-    [[220,262,330],[247,294,349],[262,330,392],[196,247,294]], // Am Bdim C  G
-  ];
-  let beat=0, prog=0, melodyOn=true, density=0.5;
-  _musicTimer=setInterval(()=>{
-    if(!audioOn||!AC) return;
-    try{
-      const bar=Math.floor(beat/4)%4;
-      const chord=PROGS[prog][bar];
-      if(beat%4===0){
-        // new bar: pad + bass
-        chord.forEach(f=>tone(f, 1.7, 'sine', 0.028, f));
-        tone(chord[0]/2, 2.0, 'triangle', 0.026);
-        if(bar===0){                       // top of a 4-bar phrase: shake it up
-          if(Math.random()<0.55) prog=(prog+1)%PROGS.length;
-          melodyOn = Math.random()<0.82;
-          density = 0.35 + Math.random()*0.4;
-        }
-      } else if(beat%2===0){
-        tone(chord[0]/2, 0.5, 'triangle', 0.02);   // gentle off-beat bass pulse
-      }
-      // wandering melody with rests + the odd eighth-note flourish
-      if(melodyOn && Math.random()<density){
-        const n=PENTA[ri(0,PENTA.length-1)];
-        tone(n, 0.34, 'triangle', 0.03, n);
-        if(Math.random()<0.33){ const n2=PENTA[ri(0,PENTA.length-1)];
-          setTimeout(()=>{ if(audioOn&&AC) try{ tone(n2,0.26,'triangle',0.026,n2); }catch(_){ } }, 190); }
-      }
-      beat++;
-    }catch(_){ }
-  }, 380);
+// Dynamic ambient music: each MOOD has its own tempo, chord progressions,
+// melody scale, timbre and intensity. The active mood follows the game state
+// (calm menu/build, brighter town, driving wave, tense champion, urgent danger).
+const _BASE_PENTA=[220,262,294,330,392,440,523,587];   // A-minor pentatonic
+const MOODS={
+  calm:    {ms:440, density:0.40, pad:'sine',     mel:'triangle', padVol:0.028, melVol:0.028, bassEvery:2,
+    progs:[ [[220,262,330],[196,247,294],[174,220,262],[165,208,247]],
+            [[220,262,330],[174,220,262],[196,247,294],[247,294,349]] ]},
+  town:    {ms:400, density:0.58, pad:'triangle', mel:'square',   padVol:0.024, melVol:0.030, bassEvery:2,
+    // brighter, market-ish — C major flavour
+    progs:[ [[262,330,392],[349,440,523],[392,494,587],[440,523,659]],
+            [[262,330,392],[294,370,440],[349,440,523],[392,494,587]] ],
+    penta:[294,330,392,440,494,587,659,784]},
+  fight:   {ms:360, density:0.62, pad:'sine',     mel:'triangle', padVol:0.028, melVol:0.030, bassEvery:1,
+    progs:[ [[220,262,330],[196,247,294],[233,277,349],[220,262,330]],
+            [[220,262,330],[174,220,262],[233,277,349],[247,294,370]] ]},
+  champion:{ms:300, density:0.82, pad:'sawtooth', mel:'square',   padVol:0.020, melVol:0.034, bassEvery:1,
+    // tense, low, tritone-tinged
+    progs:[ [[147,175,220],[156,196,233],[147,175,220],[165,196,247]],
+            [[147,185,220],[138,175,220],[147,175,233],[156,196,247]] ],
+    penta:[220,262,311,349,415,466,523,622]},
+  danger:  {ms:330, density:0.72, pad:'sawtooth', mel:'triangle', padVol:0.022, melVol:0.032, bassEvery:1,
+    progs:[ [[165,196,247],[156,196,233],[147,175,220],[138,165,208]] ],
+    penta:[165,196,233,247,294,330,392,440]},
+};
+let musicMood='calm', _musicMs=440, _mBeat=0, _mProg=0, _mMelOn=true, _mDensity=0.5;
+function musicTick(){
+  if(!audioOn||!AC) return;
+  try{
+    const M=MOODS[musicMood]||MOODS.calm; const progs=M.progs;
+    if(_mProg>=progs.length) _mProg=0;
+    const bar=Math.floor(_mBeat/4)%4;
+    const chord=progs[_mProg][bar];
+    if(_mBeat%4===0){
+      chord.forEach(f=>tone(f,1.6,M.pad,M.padVol,f));
+      tone(chord[0]/2,1.9,'triangle',M.padVol*0.9);
+      if(bar===0){ if(Math.random()<0.55) _mProg=(_mProg+1)%progs.length;
+        _mMelOn=Math.random()<0.85; _mDensity=M.density*(0.7+Math.random()*0.5); }
+    } else if(_mBeat % M.bassEvery===0){
+      tone(chord[0]/2,0.45,'triangle',M.padVol*0.8);
+    }
+    if(_mMelOn && Math.random()<_mDensity){
+      const scale=M.penta||_BASE_PENTA; const n=scale[ri(0,scale.length-1)];
+      tone(n,0.32,M.mel,M.melVol,n);
+      if(Math.random()<0.33){ const n2=scale[ri(0,scale.length-1)];
+        setTimeout(()=>{ if(audioOn&&AC) try{ tone(n2,0.24,M.mel,M.melVol*0.85,n2); }catch(_){ } }, Math.floor(_musicMs/2)); }
+    }
+    _mBeat++;
+  }catch(_){ }
+}
+function scheduleMusic(ms){ if(_musicTimer) clearInterval(_musicTimer); _musicMs=ms; _musicTimer=setInterval(musicTick, ms); }
+function startMusic(){ if(!AC||_musicTimer) return; _mBeat=0; _mProg=0; scheduleMusic(MOODS[musicMood].ms); }
+function setMusicMood(mood){
+  if(!MOODS[mood] || mood===musicMood) return;
+  musicMood=mood;
+  if(AC && MOODS[mood].ms!==_musicMs) scheduleMusic(MOODS[mood].ms);
+}
+// Pick the mood from the current game state (called each frame; no-ops if same).
+function updateMusicMood(){
+  let mood='calm';
+  if(G){
+    if(G.phase==='town') mood='town';
+    else if(G.phase==='run'){
+      if(G.heroes && G.heroes.some(h=>h.champion && h.state!=='dead')) mood='champion';
+      else if(G.boss && G.boss.hp/G.boss.maxHp < 0.30) mood='danger';
+      else mood='fight';
+    }
+  }
+  setMusicMood(mood);
 }
 function toggleAudio(){
   audioOn=!audioOn; saveAudioPref();
@@ -2503,6 +2533,7 @@ function frame(ts){
   if(G && G.phase==='run'){ update(dt); renderTop(); }
   else { update(dt); }
   draw();
+  if(AC) updateMusicMood();   // music follows the game state
   // keep run panel cooldowns fresh
   if(G&&G.phase==='run'){ updateRunPanel(); }
   requestAnimationFrame(frame);
