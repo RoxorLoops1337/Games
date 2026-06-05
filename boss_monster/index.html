@@ -115,6 +115,8 @@
   #inspect.show{opacity:1;transform:translateY(0);pointer-events:auto;}
   #inspect b{color:var(--gold);}
   #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
+  #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
+    font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
 </style>
 </head>
 <body>
@@ -125,6 +127,7 @@
     <canvas id="cv"></canvas>
     <div id="hint"></div>
     <div id="inspect"></div>
+    <button id="audiobtn" title="Sound on/off">🔊</button>
   </div>
   <div id="panel"></div>
   <div id="overlay"></div>
@@ -631,6 +634,7 @@ function freshGame(mode){
     runesBanked:0,        // rune points already credited from this run
     relics:[],            // relic ids collected this run
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
+    combo:0,              // kill streak (resets when a hero strikes the boss)
     hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
@@ -648,6 +652,75 @@ function showHint(t){ hintEl.textContent=t; hintEl.classList.add('show');
 function floater(x,y,txt,col){ floats.push({x,y,txt,col,life:1,vy:-34}); }
 function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
   {x,y,vx:rnd(-90,90),vy:rnd(-150,-20),life:rnd(.4,.9),col,sz:rnd(2,5)}); }
+
+/* ====================== AUDIO + GAME FEEL (juice) ====================== */
+// Procedural WebAudio SFX + a soft ambient loop — no asset files. Plus screen
+// shake, hit-pause and crits to make every hit land.
+let AC=null, audioOn=true, _musicTimer=null, _sfxLast={};
+let shakeT=0, shakeMag=0, hitStop=0;
+function shake(mag){ shakeMag=Math.max(shakeMag,mag); shakeT=0.22; }
+function loadAudioPref(){ try{ audioOn = localStorage.getItem('bm_audio')!=='off'; }catch(_){ } }
+function saveAudioPref(){ try{ localStorage.setItem('bm_audio', audioOn?'on':'off'); }catch(_){ } }
+function initAudio(){
+  if(AC){ if(AC.state==='suspended') AC.resume(); return; }
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); startMusic(); }catch(_){ AC=null; }
+}
+function tone(freq,dur,type,vol,slideTo){
+  if(!AC||!audioOn) return;
+  const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||'square'; o.frequency.setValueAtTime(freq,t);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1,slideTo),t+dur);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.18,t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+dur+0.02);
+}
+function noiseBurst(dur,vol,cut){
+  if(!AC||!audioOn) return;
+  const t=AC.currentTime, n=Math.max(1,Math.floor(AC.sampleRate*dur));
+  const buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+  const s=AC.createBufferSource(); s.buffer=buf;
+  const g=AC.createGain(); g.gain.value=vol||0.18;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=cut||2600;
+  s.connect(f); f.connect(g); g.connect(AC.destination); s.start();
+}
+const SFX={
+  hit:()=>noiseBurst(0.05,0.10,3200),
+  crit:()=>{ tone(900,0.12,'sawtooth',0.18,300); noiseBurst(0.08,0.14,5200); },
+  cast:()=>tone(300,0.22,'sawtooth',0.15,920),
+  boss:()=>tone(150,0.1,'square',0.16,80),
+  kill:()=>{ tone(680,0.09,'square',0.15,1000); setTimeout(()=>tone(1150,0.08,'triangle',0.12,1500),55); },
+  upgrade:()=>{ tone(523,0.1,'triangle',0.15); setTimeout(()=>tone(784,0.13,'triangle',0.15),80); },
+  relic:()=>[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.16,'triangle',0.15),i*70)),
+  buy:()=>tone(1000,0.06,'triangle',0.12,1500),
+  lose:()=>[392,330,262].forEach((f,i)=>setTimeout(()=>tone(f,0.3,'sawtooth',0.17),i*170)),
+  win:()=>[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'square',0.15),i*120)),
+  combo:()=>tone(880,0.08,'square',0.13,1320),
+};
+function sfx(name){
+  const f=SFX[name]; if(!f) return;
+  const now=(typeof performance!=='undefined'?performance.now():Date.now());
+  if(now-(_sfxLast[name]||0)<55) return;        // throttle so rapid hits don't buzz
+  _sfxLast[name]=now; try{ f(); }catch(_){ }
+}
+function startMusic(){
+  if(!AC||_musicTimer) return;
+  const chords=[[196,247,294],[220,277,330],[174,220,262],[165,196,247]]; // gentle i–VI–IV–V pad
+  let step=0;
+  _musicTimer=setInterval(()=>{
+    if(!audioOn||!AC) return;
+    const ch=chords[step%chords.length];
+    ch.forEach(f=>tone(f,1.6,'sine',0.035,f));
+    tone(ch[0]/2,1.9,'triangle',0.03);
+    step++;
+  }, 720);
+}
+function toggleAudio(){
+  audioOn=!audioOn; saveAudioPref();
+  if(audioOn) initAudio();
+  const b=document.getElementById('audiobtn'); if(b) b.textContent=audioOn?'🔊':'🔇';
+  showHint(audioOn?'🔊 Sound on':'🔇 Muted');
+}
 
 const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
 function difficulty(){
@@ -862,6 +935,7 @@ function tapSlot(idx){
     showHint('Can\'t place that here.');
     return;
   }
+  sfx('upgrade');
   render();
 }
 
@@ -1077,10 +1151,14 @@ function dealToHero(h, raw, label, pierce){
   if(!h||h.state==='dead') return;
   // rogue dodge
   if(h.dodge && Math.random()<h.dodge){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
-  const dmg=heroDmg(h,raw,pierce);
+  let dmg=heroDmg(h,raw,pierce);
+  const crit = Math.random()<0.12;              // your dungeon can land critical hits
+  if(crit) dmg*=2;
   h.hp-=dmg;
-  floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
-  burst(h.x, h.y-20, '#ff4d6d', 6);
+  if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
+    shake(6); hitStop=0.05; sfx('crit'); }
+  else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
+    burst(h.x, h.y-20, '#ff4d6d', 6); sfx('hit'); }
   if(h.hp<=0){ h.hp=0; heroDies(h); }
 }
 function healBoss(amt){
@@ -1102,6 +1180,7 @@ function castAbility(slot){
   G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
   def.run(target);
   burst(bossX(), FLOOR-40, G.boss.col, 10);
+  shake(5); sfx('cast');
   render();
 }
 
@@ -1116,6 +1195,11 @@ function heroDies(h){
     + (RB.dreadKill||0) + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
+  // kill streak: rewards an airtight dungeon (resets if a hero strikes the boss)
+  G.combo=(G.combo||0)+1;
+  let comboBonus=0;
+  if(G.combo>=3){ comboBonus=G.combo; G.gold+=comboBonus;
+    floater(h.x, h.y-78, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
   // room XP: credit the room the hero fell in (toward fusing a 2nd part)
   const dcell=cellAt(h.x);
   if(dcell && dcell.room && dcell.room.def.kind!=='shop'){
@@ -1128,6 +1212,7 @@ function heroDies(h){
   burst(h.x, h.y-20, '#ffd34d', 22);
   floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
   floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
+  shake(4); sfx('kill');
   const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
   showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
 }
@@ -1149,6 +1234,7 @@ function heroReachesThrone(){
 }
 function bossDies(){
   G.phase='lose'; overlay.classList.add('show');
+  shake(12); sfx('lose');
   const earned=awardRunes();
   const score = G.mode==='campaign'
     ? `You fell on Chapter ${G.levelIdx+1} after slaying ${totalKills()} heroes.`
@@ -1235,7 +1321,7 @@ function gotoRelicChoice(title, subHtml, onPick){
 function pickRelic(i){
   if(G.phase!=='relic') return;
   const id=G._relicChoices && G._relicChoices[i]; if(!id) return;
-  addRelic(id);
+  addRelic(id); sfx('relic');
   const r=RELICS[id]; showHint(r.ic+' '+r.name+' ('+RELIC_TIERS[r.tier].name+') claimed!');
   const done=G._relicPick; G._relicChoices=null; G._relicPick=null;
   overlay.classList.remove('show');
@@ -1250,6 +1336,7 @@ function winLevel(){
   if(G.levelIdx>=CAMPAIGN.length-1){
     // game complete
     G.phase='win'; overlay.classList.add('show');
+    sfx('win');
     const earned=awardRunes();
     overlay.innerHTML=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
       <div style="font-size:60px">${G.boss.ic}👑</div>
@@ -1475,8 +1562,11 @@ function update(dt){
   floats=floats.filter(f=>f.life>0);
   particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt; });
   particles=particles.filter(p=>p.life>0);
+  if(shakeT>0) shakeT=Math.max(0,shakeT-dt);   // screen-shake decay
 
   if(G.phase!=='run' || !G.heroes.length) return;
+  // hit-pause: briefly freeze the sim on big hits for impact
+  if(hitStop>0){ hitStop=Math.max(0,hitStop-dt); return; }
   const steps=speedMul; // scale sim by running update multiple conceptual times
   for(let s=0;s<steps && G.phase==='run';s++){
     for(const h of G.heroes){ if(G.phase!=='run') break; if(h.state!=='dead') simStep(h,dt); }
@@ -1631,6 +1721,7 @@ function doShopping(h, cell){
       if(it.heal) h.hasPotion=true;
       floater(cell.x0+ROOM_W*0.5, FLOOR-70, '+'+price+'g', '#ffd34d');
       floater(h.x, h.y-44, it.ic+' bought', '#caa15e');
+      sfx('buy');
     }
   }
 }
@@ -1643,9 +1734,11 @@ function bossFightTick(h,dt,isFront){
     h.atkT=0.8*h.atkSpeed;
     const dmg=Math.max(1,Math.round(h.atk*(1-(RB.bossDR||0))));
     b.hp-=dmg;
+    if(G.combo>0) G.combo=0;                 // defense breached — streak broken
     if(h.vampiric) healHero(h, dmg*0.4);
     floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
     burst(bossX(), FLOOR-50, '#ff4d6d', 6);
+    shake(3); sfx('boss');
     if(b.hp<=0){ b.hp=0; bossDies(); return; }
   }
   // boss only swings at the front hero
@@ -1663,7 +1756,10 @@ function bossFightTick(h,dt,isFront){
 function draw(){
   // Map the whole virtual viewport onto the device-pixel backing store. With
   // VW derived from the screen aspect this fills the canvas with no distortion.
-  X.setTransform(baseK,0,0,baseK,0,0);
+  // A decaying random offset gives screen-shake on big hits.
+  const sh = shakeT>0 ? shakeMag*(shakeT/0.22) : 0;
+  const ox = sh? (Math.random()*2-1)*sh : 0, oy = sh? (Math.random()*2-1)*sh : 0;
+  X.setTransform(baseK,0,0,baseK, ox*baseK, oy*baseK);
   X.imageSmoothingEnabled=false;
   // background gradient sky/cave
   const g=X.createLinearGradient(0,0,0,VH);
@@ -1965,6 +2061,7 @@ function renderTop(){
     <div class="stat" style="color:#b985ff">☠<b>${G.dread}</b></div>
     ${G.bounty?`<div class="stat small" title="threat dial">${G.bounty>0?'🔥':'🌫'} ${G.bounty>0?'+':''}${G.bounty}</div>`:''}
     ${G.relics&&G.relics.length?`<div class="stat small" title="relics">🏺 ${G.relics.map(id=>RELICS[id].ic).join('')}</div>`:''}
+    ${G.combo>=3?`<div class="stat small" title="kill streak" style="color:#ff9a3a">🔥x${G.combo}</div>`:''}
     <div class="stat small">${modeLbl}</div>`;
 }
 
@@ -2171,6 +2268,13 @@ window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
 if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 
 loadRunes();
+loadAudioPref();
+// Audio can only start after a user gesture; wake it on the first interaction.
+window.addEventListener('pointerdown', ()=>{ if(audioOn) initAudio(); }, {once:false});
+window.addEventListener('keydown', ()=>{ if(audioOn) initAudio(); }, {once:false});
+{ const ab=document.getElementById('audiobtn');
+  if(ab){ ab.textContent=audioOn?'🔊':'🔇';
+    ab.addEventListener('click', e=>{ e.stopPropagation(); toggleAudio(); }); } }
 resize();
 gotoMenu();
 requestAnimationFrame(frame);
