@@ -123,6 +123,8 @@
   #inspect.show{opacity:1;transform:translateY(0);pointer-events:auto;}
   #inspect b{color:var(--gold);}
   #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
+  #inspect button{margin-top:6px;padding:6px 10px;min-height:34px;font-size:12px;}
+  #inspect .small{opacity:.7;font-size:11px;}
   #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
   #relicbar{position:absolute;top:5px;left:5px;z-index:21;display:flex;gap:3px;flex-wrap:wrap;
@@ -316,6 +318,25 @@ function synergyInfo(parts){
   return {m:1, name:'Unstable', tone:'bad'};
 }
 function comboName(r){ return roomParts(r).map(t=>ROOMS[t].name).join(' + '); }
+
+// ---- Aging dungeon: veteran rooms, merging & corruption ----------------
+// Rooms that have killed a lot of heroes become "veterans": they hit harder
+// AND bite a % of the hero's max HP every strike, so they never fall off vs
+// late-game tanks. The kill count that already drives fusing also drives this.
+const VET_KILLS = 6;     // hero deaths in a room per veteran rank
+const VET_MAX   = 8;     // rank cap
+const VET_DMG   = 0.12;  // +12% trap/monster output per rank
+const VET_BITE  = 0.012; // + this fraction of the hero's MAX HP per rank, every hit
+const CORRUPT_PCT  = 0.015; // toll: drain this % of max HP each populated room a hero passes
+const CORRUPT_BOSS = 0.06;  // the boss strikes +6% harder per corruption stack a hero carries
+function vetRank(room){ return room ? Math.min(VET_MAX, Math.floor((room.kills||0)/VET_KILLS)) : 0; }
+function vetMul(room){ return 1 + vetRank(room)*VET_DMG; }
+function roomUpgradeCost(room){ return Math.max(1, Math.round((25 + 22*room.lvl) * (room.part2?1.4:1) * (1-(RB.townDisc||0)))); }
+// Can room `from` be merged INTO room `into` (turning `into` into a combo)?
+function canFuseRooms(into, from){
+  return !!(into && from && (into.kills||0)>=fuseKills() && !into.part2 && !from.part2
+    && into.def.kind!=='shop' && from.def.kind!=='shop' && from.type!==into.type);
+}
 
 // Shop stock items: arm the heroes (makes them stronger) for instant gold.
 const ITEMS = {
@@ -1296,6 +1317,7 @@ function buildCells(){
       const parts=roomParts(r);
       const syn=synergyInfo(parts).m + (parts.length>1?(RB.synergy||0):0);
       cell.syn=syn;
+      const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank powers this cell
       let monHp=0, monAtk=0, hasMon=false, hasShop=false;
       for(const p of parts){
         const def=ROOMS[p];
@@ -1314,8 +1336,8 @@ function buildCells(){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
       }
-      if(hasMon){ const hp=Math.round(monHp*syn*(1+(RB.monHp||0)));
-        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*(1+(RB.monDmg||0))), atkT:0, alive:true}; }
+      if(hasMon){ const hp=Math.round(monHp*syn*vm*(1+(RB.monHp||0)));
+        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*vm*(1+(RB.monDmg||0))), atkT:0, alive:true}; }
       cell.shop=hasShop;
       cell.kind = hasMon ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
     }
@@ -2073,6 +2095,16 @@ function cellAt(x){
   return x<0 ? G.cells[0] : G.cells[G.cells.length-1];
 }
 function onEnterCell(h,cell){
+  // Corruption toll: every populated room a hero walks through drains a slice of
+  // their MAX HP and leaves a corruption stack. Even a worthless early room still
+  // softens the raider — and the deeper the dungeon, the more stacks pile up,
+  // which the boss cashes in (see bossFightTick).
+  if(cell.room && cell.kind!=='boss'){
+    h.corrupt=(h.corrupt||0)+1;
+    const toll=Math.round(CORRUPT_PCT*h.maxHp);
+    if(toll>0){ h.hp-=toll; floater(h.x, h.y-58, '☣ -'+toll, '#b06bff'); burst(h.x,h.y-22,'#9a5cff',5);
+      if(h.hp<=0){ h.hp=0; heroDies(h); return; } }
+  }
   // Monsters are handled by the walking branch: the hero walks up to the
   // blocker (passing through any trap in the room) before the fight starts.
   if(cell.shop && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
@@ -2126,6 +2158,8 @@ function trapTick(h,cell,dt){
       if(d.vsClass && d.vsClass.includes(h.cls)) dmg*=d.vsMult;
       if(d.vsElite && h.elite) dmg*=d.vsMult;
       if(d.vsLowHp && h.hp < h.maxHp*d.vsLowHp) dmg*=d.vsMult;
+      // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
+      const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
       const pierce = d.pierceAll ? 'full' : !!d.pierce;
       dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem);
       if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
@@ -2155,7 +2189,8 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
     mon.atkT-=dt;
     if(mon.atkT<=0){
       mon.atkT=0.9;
-      dealToHero(h, mon.atk, 'HIT');
+      const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*h.maxHp):0;
+      dealToHero(h, mon.atk+bite, 'HIT');
       maybePotion(h);
     }
   }
@@ -2217,7 +2252,8 @@ function bossFightTick(h,dt,isFront,frozen){
     h._batk=(h._batk||0)-dt;
     if(h._batk<=0){
       h._batk=1.0;
-      dealToHero(h, b.atk, 'SLAM');
+      const cm=1+(h.corrupt||0)*CORRUPT_BOSS;          // corruption empowers the boss
+      dealToHero(h, Math.round(b.atk*cm), 'SLAM');
       maybePotion(h);
     }
   }
@@ -2298,11 +2334,14 @@ function drawDungeon(tx, scale, isBuild){
       X.strokeStyle='#ffd34d'; X.setLineDash([4,4]); X.lineWidth=3;
       X.strokeRect(x0+3, FLOOR-150, w-6, 150); X.setLineDash([]);
     }
-    // drop-target highlight (dragging a card OR re-ordering a room here)
+    // drop-target highlight (dragging a card OR re-ordering/merging a room here)
     if(isBuild && (i===cardDragSlot || (roomDrag && roomDrag.dragging && i===roomDragTo))){
+      const merge = roomDrag && roomDrag.dragging && i===roomDragTo && roomDragMerge;
       const pu=0.5+0.5*Math.sin(performance.now()/160);
-      X.strokeStyle='#7bdc6b'; X.globalAlpha=0.5+0.5*pu; X.lineWidth=4; X.setLineDash([]);
+      X.strokeStyle=merge?'#b06bff':'#7bdc6b'; X.globalAlpha=0.5+0.5*pu; X.lineWidth=4; X.setLineDash([]);
       X.strokeRect(x0+2, FLOOR-152, w-4, 152); X.globalAlpha=1;
+      if(merge){ X.fillStyle='#e0c2ff'; X.font='bold 12px Trebuchet MS'; X.textAlign='center';
+        X.fillText('⊕ MERGE', x0+w/2, FLOOR-160); X.textAlign='left'; }
     }
     // slot number tag in build
     if(isBuild){
@@ -2428,6 +2467,12 @@ function drawRoomContents(x0,w,room,i){
   if(parts.includes('shop')) drawShopProp(cx,room);
 
   drawLvlBadge(cx,FLOOR-128,room.lvl,ROOMS[room.type].col);
+  // veteran rank badge: a gold star with the rank, shown in build AND run
+  const vr=vetRank(room);
+  if(vr>0){
+    X.fillStyle='#ffd34d'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
+    X.fillText('⭐'+vr, cx+26, FLOOR-124); X.textAlign='left';
+  }
 
   // build-time room info: XP pips, fuse-ready, combo synergy
   if(G.phase!=='run' && ROOMS[room.type].kind!=='shop'){
@@ -2753,17 +2798,18 @@ function entityAt(wx){
 function describeRoom(room){
   const parts=roomParts(room);
   const synI=synergyInfo(parts); const syn=synI.m + (parts.length>1?(RB.synergy||0):0);
+  const vr=vetRank(room); const vm=vetMul(room);
   const title = parts.length>1 ? comboName(room) : roomName(room);
-  const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}`];
+  const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`];
   parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
-    const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*(1+(RB.trapDmg||0)));
+    const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0)));
     lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){ let hp=0,atk=0, fed=false;
     monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?room.minHp:def.hp, bAtk=p==='minion'?room.minAtk:def.atk;
       const feed=def.feeds?(1+Math.min(12,(room.kills||0))*0.10):1; if(def.feeds)fed=true;
       hp+=bHp*(0.9+(room.lvl-1)*0.85)*feed; atk+=bAtk*(1.0+(room.lvl-1)*0.9)*feed; });
-    lines.push(`👹 Guard: <b>${Math.round(hp*syn*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*(1+(RB.monDmg||0)))}</b> atk /0.9s`);
+    lines.push(`👹 Guard: <b>${Math.round(hp*syn*vm*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*vm*(1+(RB.monDmg||0)))}</b> atk /0.9s`);
     if(fed) lines.push(`🍖 Fed: <b>${Math.min(12,room.kills||0)}</b> corpses · +${Math.min(12,room.kills||0)*10}% (max +120%)`); }
   if(parts.includes('shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
@@ -2772,8 +2818,20 @@ function describeRoom(room){
     else lines.push('<span style="opacity:.7">empty — stock it in build</span>');
   }
   if(parts.length>1) lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
-  else if(ROOMS[room.type].kind!=='shop'){ const k=room.kills||0;
-    lines.push(k>=fuseKills()?'⚡ <b>Ready to fuse</b> a 2nd part':`XP: ${k}/${fuseKills()} kills to fuse`); }
+  if(ROOMS[room.type].kind!=='shop'){
+    const k=room.kills||0;
+    if(vr) lines.push(`⭐ <b>Veteran ${vr}/${VET_MAX}</b>: +${Math.round(vr*VET_DMG*100)}% output · bites +${(vr*VET_BITE*100).toFixed(1)}% of hero HP/hit`);
+    if(!room.part2) lines.push(k>=fuseKills()
+      ? '⚡ <b>Ready to fuse</b> — drag another room onto it to merge'
+      : `Fuse XP: ${k}/${fuseKills()} kills`);
+    if(vr<VET_MAX){ const next=(vr+1)*VET_KILLS; lines.push(`<span class="small">⭐ next veteran rank at ${next} kills (${k}/${next})</span>`); }
+  }
+  if(G && G.phase==='build'){
+    const idx=G.rooms.indexOf(room);
+    if(idx>=0){ lines.push(room.lvl<maxLevel()
+      ? `<button onclick="upgradeRoomGold(${idx})">⬆ Upgrade → Lv ${room.lvl+1} · ${roomUpgradeCost(room)}g</button>`
+      : '<span class="small">Max level — train it with kills for veteran ranks</span>'); }
+  }
   return lines.join('<br>');
 }
 function describeHero(h){
@@ -2786,7 +2844,7 @@ function describeHero(h){
   if(ch) lines.push(`<span style="color:${ch.col}">${ch.desc}</span>`+(h.shieldT>0?' · 🛡 shielded':''));
   if(h.traits&&h.traits.length) lines.push('Traits: '+h.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name).join(', '));
   const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.chill>0?'❄️ chilled':'',
-    h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
+    h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.corrupt>0?'☣ corrupt ×'+h.corrupt:'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
   if(fx) lines.push(fx);
   return lines.join('<br>');
 }
@@ -2808,7 +2866,7 @@ function describeBoss(){
 // in the build phase. Panning during a run temporarily suspends auto-follow.
 let drag=null, panning=false, panHoldUntil=0;
 let pointers={}, pinch=null;
-let roomDrag=null, roomDragTo=-1, roomDragX=0;
+let roomDrag=null, roomDragTo=-1, roomDragX=0, roomDragMerge=false;
 function clientToVX(e){ const rect=CV.getBoundingClientRect();
   return (e.clientX-rect.left)*(VW/rect.width); }
 function clientToWorldX(e){ return camX + clientToVX(e)/zoom; }
@@ -2821,6 +2879,34 @@ function moveRoom(from,to){
   if(from===to || from<0 || to<0 || from>=G.slots || to>=G.slots) return;
   const [r]=G.rooms.splice(from,1); G.rooms.splice(to,0,r);
   sfx('upgrade'); showHint('Rooms rearranged.'); render();
+}
+// Merge built room `from` INTO `to`, recycling an old room into a combo.
+function fuseRooms(from,to){
+  const a=G.rooms[from], b=G.rooms[to];
+  if(!canFuseRooms(b,a)) return;
+  b.part2=a.type;
+  b.kills=(b.kills||0)+(a.kills||0);   // carry the absorbed room's veteran progress
+  b.lvl=Math.min(maxLevel(), Math.max(b.lvl, a.lvl));
+  G.rooms[from]=null;                  // the absorbed room's slot opens up
+  if(selCard>=0) selCard=-1; pickupIdx=-1;
+  const info=synergyInfo(roomParts(b));
+  burst(cellX(to)+ROOM_W/2, FLOOR-40, '#9a5cff', 24);
+  floater(cellX(to)+ROOM_W/2, FLOOR-86, info.name||'MERGED', info.tone==='bad'?'#ff7a8a':'#7bdc6b');
+  sfx('upgrade'); showHint('Merged → '+comboName(b)+(info.name?' ('+info.name+' ×'+info.m.toFixed(2)+')':'')+'!');
+  render(); showInspectEntity({kind:'room',room:b});
+}
+// Spend gold to level a room up (alternative to drawing a matching card).
+function upgradeRoomGold(idx){
+  if(!G || G.phase!=='build') return;
+  const room=G.rooms[idx]; if(!room) return;
+  if(room.lvl>=maxLevel()){ showHint(comboName(room)+' is already max level.'); return; }
+  const cost=roomUpgradeCost(room);
+  if(G.gold<cost){ showHint('Not enough gold — need '+cost+'g.'); return; }
+  G.gold-=cost; room.lvl++;
+  burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
+  floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
+  sfx('upgrade'); showHint(comboName(room)+' upgraded to Lv '+room.lvl+' for '+cost+'g.');
+  render(); showInspectEntity({kind:'room',room});
 }
 function setZoom(z){ zoom=clamp(z, ZMIN, ZMAX); }
 function zoomBy(f){ setZoom(zoom*f); draw(); }
@@ -2858,6 +2944,10 @@ CV.addEventListener('pointermove', e=>{
     if(roomDrag.dragging){ e.preventDefault();
       roomDragX=clientToWorldX(e);
       roomDragTo=clamp(Math.floor(roomDragX/ROOM_W), 0, G.slots-1);
+      // dropping onto the CENTRE of another (fusable) room merges; edges reorder
+      const frac=roomDragX/ROOM_W - roomDragTo;
+      roomDragMerge = roomDragTo!==roomDrag.from && frac>0.28 && frac<0.72
+        && canFuseRooms(G.rooms[roomDragTo], G.rooms[roomDrag.from]);
       draw();
     }
     return;
@@ -2878,11 +2968,13 @@ function endDrag(e){
   if(e){ delete pointers[e.pointerId]; if(Object.keys(pointers).length<2) pinch=null; }
   if(roomDrag && (!e || e.pointerId===roomDrag.id)){
     if(roomDrag.dragging && roomDragTo>=0 && roomDragTo!==roomDrag.from){
-      moveRoom(roomDrag.from, roomDragTo);
+      if(roomDragMerge && canFuseRooms(G.rooms[roomDragTo], G.rooms[roomDrag.from]))
+        fuseRooms(roomDrag.from, roomDragTo);
+      else moveRoom(roomDrag.from, roomDragTo);
     } else if(!roomDrag.dragging){
       const r=G.rooms[roomDrag.from]; if(r) showInspectEntity({kind:'room',room:r});   // tap = inspect
     }
-    roomDrag=null; roomDragTo=-1; draw(); return;
+    roomDrag=null; roomDragTo=-1; roomDragMerge=false; draw(); return;
   }
   if(!drag || (e && e.pointerId!==drag.id)) return;
   if(!drag.moved){                              // a clean tap
