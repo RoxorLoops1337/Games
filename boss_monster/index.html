@@ -127,6 +127,9 @@
   #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
   #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
+  #zoomctl{position:absolute;right:6px;bottom:6px;z-index:21;display:flex;flex-direction:column;gap:4px;}
+  #zoomctl button{width:34px;height:34px;padding:0;font-size:18px;font-weight:bold;border-radius:8px;
+    background:rgba(20,15,36,.8);border:1px solid var(--line);color:var(--ink);}
   /* ---- Rune Page: spellbook skill tree ---- */
   .runebook{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
   .rbback{position:absolute;top:10px;left:10px;z-index:6;font-weight:bold;letter-spacing:1px;
@@ -196,6 +199,11 @@
     <div id="inspect"></div>
     <div id="tutbar"></div>
     <button id="audiobtn" title="Sound on/off">🔊</button>
+    <div id="zoomctl">
+      <button onclick="zoomBy(1.2)" title="Zoom in">＋</button>
+      <button onclick="zoomFit()" title="Fit dungeon">⤢</button>
+      <button onclick="zoomBy(0.83)" title="Zoom out">－</button>
+    </div>
   </div>
   <div id="panel"></div>
   <div id="overlay"></div>
@@ -226,6 +234,8 @@ let inspectHover = false;
 let VW = 960, VH = 420;          // virtual units (recomputed in resize())
 let baseK = 1;                   // virtual→device-pixel scale
 let cssW = 960, cssH = 420;      // canvas CSS size in px
+let zoom = 1;                    // dungeon zoom (pinch / buttons / wheel)
+const ZMIN = 0.45, ZMAX = 1.7;
 const FLOOR = 330;          // y of the floor line
 const ROOM_W = 200;         // pixel width of one room/cell
 
@@ -1050,6 +1060,7 @@ function chooseBoss(key){
   G.gold=30+RB.gold0;
   G.dread=RB.dread0;
   G.guildLvl=Math.min(GUILD_MAX, RB.guild0);
+  zoom=1; camX=0;
   for(let i=0;i<RB.cards0;i++) G.hand.push({type:pick(unlockedRoomKeys()), lvl:1});
   gotoLoadout();                                  // pick your 3 abilities
 }
@@ -2147,23 +2158,25 @@ function bossFightTick(h,dt,isFront,frozen){
 
 /* ============================== RENDER =================================== */
 function draw(){
-  // Map the whole virtual viewport onto the device-pixel backing store. With
-  // VW derived from the screen aspect this fills the canvas with no distortion.
-  // A decaying random offset gives screen-shake on big hits.
   const sh = shakeT>0 ? shakeMag*(shakeT/0.22) : 0;
   const ox = sh? (Math.random()*2-1)*sh : 0, oy = sh? (Math.random()*2-1)*sh : 0;
-  X.setTransform(baseK,0,0,baseK, ox*baseK, oy*baseK);
-  X.imageSmoothingEnabled=false;
-  // background gradient sky/cave
-  const g=X.createLinearGradient(0,0,0,VH);
+  // background fills the WHOLE canvas at any zoom (device space)
+  X.setTransform(1,0,0,1,0,0); X.imageSmoothingEnabled=false;
+  const g=X.createLinearGradient(0,0,0,CV.height);
   g.addColorStop(0,'#1a1230'); g.addColorStop(1,'#0c0916');
-  X.fillStyle=g; X.fillRect(0,0,VW,VH);
+  X.fillStyle=g; X.fillRect(0,0,CV.width,CV.height);
 
-  if(G.phase==='menu'||G.phase==='bossSelect'){ drawIdleScene(); return; }
+  if(!G) return;
+  if(G.phase==='menu'||G.phase==='bossSelect'){ X.setTransform(baseK,0,0,baseK,0,0); drawIdleScene(); return; }
 
-  // Camera: in run it follows the hero (set in update); in build/other phases
-  // the player drags to pan. Rooms render at full size; clamp to the corridor.
-  const maxCam=Math.max(0, corridorWidth()-VW);
+  // Zoom: scale the world about the floor line so it stays pinned to the bottom.
+  const z = (G.phase==='build'||G.phase==='run') ? zoom : 1;
+  const k = baseK*z, tY = FLOOR*baseK*(1-z);
+  X.setTransform(k,0,0,k, ox*baseK, tY+oy*baseK);
+
+  // Camera: follows the hero in run; drag to pan in build. Visible world width
+  // grows when zoomed out (VW/z), so the whole dungeon can fit on screen.
+  const maxCam=Math.max(0, corridorWidth()-VW/z);
   camX=clamp(camX,0,maxCam);
   const tx = (wx)=>wx-camX;
   const isBuild = (G.phase==='build');
@@ -2180,11 +2193,11 @@ function draw(){
 }
 
 function drawDungeon(tx, scale, isBuild){
-  // floor
+  // floor (drawn wide/tall so it still covers the screen when zoomed out)
   X.fillStyle='#241a3a';
-  X.fillRect(0,FLOOR, VW, VH-FLOOR);
+  X.fillRect(-VW, FLOOR, VW*4, VH);
   X.fillStyle='#2e2350';
-  X.fillRect(0,FLOOR, VW, 6);
+  X.fillRect(-VW, FLOOR, VW*4, 6);
 
   // each cell
   for(let i=0;i<G.slots+1;i++){
@@ -2507,7 +2520,7 @@ function renderPanel(){
         <button class="buy" onclick="buySlot()" ${G.gold<slotCost()?'disabled':''}>➕ Slot (${slotCost()}g)</button>
         ${shopExists?`<span class="pill">🛒 Stock:</span>`+Object.keys(ITEMS).map(k=>{
           const it=ITEMS[k];
-          return `<button onclick="stockShop('${k}')" ${G.gold<it.price?'disabled':''}
+          return `<button onclick="stockShop('${k}')" title="${it.name} — ${it.desc}. You pay ${it.price}g to stock it; heroes buy it for more (your profit)." ${G.gold<it.price?'disabled':''}
             style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join('')
           :`<span class="small">Build a 🛒 Shop to sell gear for gold.</span>`}
         <span style="flex:1"></span>
@@ -2619,7 +2632,7 @@ function describeRoom(room){
   if(parts.includes('shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
     lines.push(`🛒 Shop Lv ${room.lvl}: ×${shopMarkup(room.lvl).toFixed(2)} markup`);
-    if(unsold.length) lines.push('Selling: '+unsold.map(s=>`${ITEMS[s.key].ic} <b>${salePrice(room,s.key)}g</b>`).join(', '));
+    if(unsold.length) unsold.forEach(s=>lines.push(`${ITEMS[s.key].ic} ${ITEMS[s.key].name} (${ITEMS[s.key].desc}) — sells <b>${salePrice(room,s.key)}g</b>`));
     else lines.push('<span style="opacity:.7">empty — stock it in build</span>');
   }
   if(parts.length>1) lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
@@ -2658,30 +2671,49 @@ function describeBoss(){
 // Drag to pan the dungeon (build + run); a tap (no drag) places/upgrades a room
 // in the build phase. Panning during a run temporarily suspends auto-follow.
 let drag=null, panning=false, panHoldUntil=0;
+let pointers={}, pinch=null;
 function clientToVX(e){ const rect=CV.getBoundingClientRect();
   return (e.clientX-rect.left)*(VW/rect.width); }
+function clientToWorldX(e){ return camX + clientToVX(e)/zoom; }
+function setZoom(z){ zoom=clamp(z, ZMIN, ZMAX); }
+function zoomBy(f){ setZoom(zoom*f); draw(); }
+function zoomFit(){ if(!G) return; zoom=clamp(VW/Math.max(1,corridorWidth()), ZMIN, 1.2); camX=0; draw(); }
 
 CV.addEventListener('pointerdown', e=>{
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
   e.preventDefault();
+  pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+  if(Object.keys(pointers).length===2){           // begin pinch-zoom
+    const v=Object.values(pointers);
+    pinch={ d0:Math.hypot(v[0].x-v[1].x, v[0].y-v[1].y)||1, z0:zoom };
+    drag=null; panning=false; cardDrag=null; endCardGhost(); return;
+  }
   try{ CV.setPointerCapture(e.pointerId); }catch(_){}
   drag={ id:e.pointerId, startCX:e.clientX, cam0:camX, moved:false };
   panning=true;
 }, {passive:false});
 
 CV.addEventListener('pointermove', e=>{
+  if(pointers[e.pointerId]) pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+  if(pinch){ const v=Object.values(pointers); if(v.length>=2){
+    const d=Math.hypot(v[0].x-v[1].x, v[0].y-v[1].y); setZoom(pinch.z0*(d/pinch.d0)); } return; }
   if(!drag || e.pointerId!==drag.id) return;
   const rect=CV.getBoundingClientRect();
   const dxV=(e.clientX-drag.startCX)*(VW/rect.width);
   if(Math.abs(e.clientX-drag.startCX)>6) drag.moved=true;
-  const maxCam=Math.max(0, corridorWidth()-VW);
-  camX=clamp(drag.cam0 - dxV, 0, maxCam);
+  const maxCam=Math.max(0, corridorWidth()-VW/zoom);
+  camX=clamp(drag.cam0 - dxV/zoom, 0, maxCam);
 });
+CV.addEventListener('wheel', e=>{
+  if(!G || (G.phase!=='build' && G.phase!=='run')) return;
+  e.preventDefault(); zoomBy(e.deltaY<0 ? 1.12 : 0.9);
+}, {passive:false});
 
 function endDrag(e){
+  if(e){ delete pointers[e.pointerId]; if(Object.keys(pointers).length<2) pinch=null; }
   if(!drag || (e && e.pointerId!==drag.id)) return;
   if(!drag.moved){                              // a clean tap
-    const wx=clientToVX(e)+camX;
+    const wx=clientToWorldX(e);
     const idx=Math.floor(wx/ROOM_W);
     if(G.phase==='build' && idx>=0 && idx<G.slots){
       tapSlot(idx);
@@ -2700,7 +2732,7 @@ CV.addEventListener('pointercancel', endDrag);
 // Desktop hover inspection
 CV.addEventListener('mousemove', e=>{
   if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
-  showInspectEntity(entityAt(clientToVX(e)+camX), true);
+  showInspectEntity(entityAt(clientToWorldX(e)), true);
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspect(); });
 
@@ -2709,8 +2741,7 @@ let cardDrag=null, cardDragSlot=-1, cardGhost=null;
 function slotUnderPointer(e){
   const rect=CV.getBoundingClientRect();
   if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom) return -1;
-  const worldX=(e.clientX-rect.left)*(VW/rect.width)+camX;
-  const idx=Math.floor(worldX/ROOM_W);
+  const idx=Math.floor(clientToWorldX(e)/ROOM_W);
   return (idx>=0 && idx<G.slots) ? idx : -1;
 }
 function startCardGhost(ci){
