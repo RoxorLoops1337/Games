@@ -147,14 +147,15 @@ const ROOMS = {
   spike:    {kind:'trap',   name:'Spike Pit',  ic:'🦷', col:'#9aa4b2', dmg:6,  rate:0.45, desc:'Fast cheap spikes.'},
   flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, desc:'Hits hard + burns.'},
   arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:5,  rate:0.3,  desc:'Very rapid, pierces armor.'},
-  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:4,  desc:'Cheap swarming blocker.'},
-  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:6,  desc:'Sturdy undead guard.'},
-  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:10, desc:'Huge HP, big hits.'},
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6,  desc:'Weak early, vicious once fed.'},
+  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
+  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
 };
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
+const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
 
 // Shop stock items: arm the heroes (makes them stronger) for instant gold.
 const ITEMS = {
@@ -267,6 +268,7 @@ let floats = [];     // floating combat texts
 let particles = [];
 let camX = 0;        // camera offset (world px)
 let selCard = -1;    // selected hand card index in build
+let pickupIdx = -1;  // slot picked up for rearranging (no card selected)
 let speedMul = 1;    // run speed multiplier
 
 // Size the canvas backing store to the stage, derive VW from the real aspect.
@@ -304,6 +306,7 @@ function freshGame(mode){
     bounty:0,             // threat dial: higher = tougher heroes, more reward
     fx:{well:0, smith:0, temple:0},  // active town-wide schemes (waves left)
     pendingRivals:[],     // {eta, spec} grudge-bearers returning to the queue
+    townDue:false,        // a town interlude is queued after the next reward
     townEvent:null,       // the dilemma shown this town visit
     hero:null,            // active hero during run
     drafts:[],            // current reward choices
@@ -404,9 +407,9 @@ function chooseBoss(key){
 
 /* ============================== PHASE: BUILD ============================= */
 function gotoBuild(first){
-  G.phase='build'; G.hero=null; selCard=-1; camX=0;
+  G.phase='build'; G.hero=null; selCard=-1; pickupIdx=-1; camX=0;
   if(first){
-    showHint('Tap a card then a slot to build · drag to pan · ⚔️ Start Wave.');
+    showHint('Tap a card then a slot to build · tap a room to move it · drag to pan.');
     if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2800);
   }
   render();
@@ -423,23 +426,36 @@ function buySlot(){
   if(G.gold<c){ showHint('Not enough gold.'); return; }
   G.gold-=c; G.slots++; G.rooms.unshift(null);   // new slot extends to the LEFT
   // existing rooms keep their objects; unshift(null) puts new empty slot far left
-  camX=0;                                         // pan to reveal the new slot
+  pickupIdx=-1; camX=0;                           // pan to reveal the new slot
   showHint('New slot added on the far left. Drag to pan the dungeon.');
   render();
 }
 
 function selectCard(i){
   selCard = (selCard===i?-1:i);
+  pickupIdx=-1;
   render();
 }
 function discardCard(i){
   G.hand.splice(i,1); if(selCard===i)selCard=-1; else if(selCard>i)selCard--;
   render();
 }
+function roomName(r){ return r?(r.type==='minion'?(r.label||'Corrupted'):ROOMS[r.type].name):'empty'; }
 
 // Place / upgrade by tapping a slot index (0..slots-1).
 function tapSlot(idx){
-  if(selCard<0){ showHint('Select a card first.'); return; }
+  // No card selected → REARRANGE mode: tap a room to pick up, tap a slot to drop.
+  if(selCard<0){
+    const here=G.rooms[idx];
+    if(pickupIdx<0){
+      if(!here){ showHint('Pick a card to build, or tap a room to move it.'); return; }
+      pickupIdx=idx; showHint('Moving '+roomName(here)+' — tap any slot to drop (swaps if full).');
+      render(); return;
+    }
+    if(pickupIdx===idx){ pickupIdx=-1; showHint('Move cancelled.'); render(); return; }
+    const tmp=G.rooms[pickupIdx]; G.rooms[pickupIdx]=G.rooms[idx]; G.rooms[idx]=tmp;
+    pickupIdx=-1; showHint('Rooms rearranged.'); render(); return;
+  }
   const card=G.hand[selCard];
   const room=G.rooms[idx];
   if(!room){
@@ -449,12 +465,13 @@ function tapSlot(idx){
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, ROOMS[card.type].col, 14);
     showHint(ROOMS[card.type].name+' built!');
   } else if(room.type===card.type){
-    // upgrade matching room
+    // upgrade matching room (capped)
+    if(room.lvl>=MAX_LEVEL){ showHint(ROOMS[room.type].name+' is already max level ('+MAX_LEVEL+').'); return; }
     room.lvl++;
     G.hand.splice(selCard,1); selCard=-1;
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
     floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
-    showHint(ROOMS[room.type].name+' upgraded to Lv '+room.lvl+'!');
+    showHint(ROOMS[room.type].name+' upgraded to Lv '+room.lvl+(room.lvl>=MAX_LEVEL?' (max)':'')+'!');
   } else {
     showHint('That slot holds a '+ROOMS[room.type].name+' — only a matching card upgrades it.');
     return;
@@ -504,8 +521,10 @@ function buildCells(){
       if(r.def.kind==='monster'){
         const bHp = r.type==='minion'? r.minHp : r.def.hp;
         const bAtk= r.type==='minion'? r.minAtk : r.def.atk;
-        const hp=Math.round(bHp + r.lvl*bHp*0.7);
-        cell.mon={hp, maxHp:hp, atk:bAtk+(r.lvl-1)*Math.ceil(bAtk*0.6), atkT:0, alive:true};
+        // Monsters scale HARD: weak at Lv1, brutal at high level.
+        const hp =Math.round(bHp  * (0.9 + (r.lvl-1)*0.85));
+        const atk=Math.round(bAtk * (1.0 + (r.lvl-1)*0.9));
+        cell.mon={hp, maxHp:hp, atk, atkT:0, alive:true};
       } else if(r.def.kind==='trap'){
         cell.fireT=0;
       } else if(r.def.kind==='shop'){
@@ -684,8 +703,8 @@ function heroDies(){
 function afterKill(){
   // campaign chapter win takes priority
   if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
-  // town interlude every 5 cumulative kills
-  if(G.totalSlain>0 && G.totalSlain%5===0){ gotoTown(); return; }
+  // queue a town interlude every 5 kills — it opens AFTER the card draft
+  G.townDue = (G.totalSlain>0 && G.totalSlain%5===0);
   gotoReward();
 }
 
@@ -748,9 +767,14 @@ function takeDraft(i){
   }
   G.hand.push(G.drafts[i]);
   overlay.classList.remove('show');
-  gotoBuild(false);
+  afterReward();
 }
-function skipDraft(){ overlay.classList.remove('show'); gotoBuild(false); }
+function skipDraft(){ overlay.classList.remove('show'); afterReward(); }
+// After the card draft, drop into the town if a 5-kill interlude is due.
+function afterReward(){
+  if(G.townDue){ G.townDue=false; gotoTown(); }
+  else gotoBuild(false);
+}
 
 /* ============================== PHASE: WIN =============================== */
 function winLevel(){
@@ -890,7 +914,7 @@ function corruptHero(idx){
   showHint((spec.name||'A hero')+' is corrupted into a minion!'); renderTown(); renderTop();
 }
 
-function leaveTown(){ overlay.classList.remove('show'); gotoReward(); }
+function leaveTown(){ overlay.classList.remove('show'); gotoBuild(false); }
 
 function renderTown(){
   overlay.classList.add('show');
@@ -1042,7 +1066,8 @@ function trapTick(h,cell,dt){
   cell.fireT-=dt;
   if(cell.fireT<=0){
     cell.fireT=def.rate;
-    const dmg=def.dmg + (r.lvl-1)*Math.ceil(def.dmg*0.75);
+    // Traps are strong early but scale GENTLY (the opposite of monsters).
+    const dmg=Math.round(def.dmg * (1 + (r.lvl-1)*0.4));
     dealToHero(h, dmg, 'HIT', def.name==='Dart Wall');
     if(def.burn){ h.burn=def.burn+(r.lvl-1)*2; h.burnT=3; }
     burst(h.x, h.y-20, def.col, 5);
@@ -1169,15 +1194,21 @@ function drawDungeon(tx, scale, isBuild){
     drawRoomBg(x0,w,isBoss,i);
     if(isBoss){ drawBoss(x0+w*0.6); continue; }
     const room=G.rooms[i];
+    const dropTarget = isBuild && pickupIdx>=0;   // we're holding a room to move
     if(!room){
       // empty slot
-      X.strokeStyle=(isBuild&&selCard>=0)?'#ffd34d':'#4a3a72';
+      X.strokeStyle=(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
       X.setLineDash([6,5]); X.lineWidth=2;
       X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
       X.fillStyle='#6a5a9a'; X.font='12px Trebuchet MS'; X.textAlign='center';
-      X.fillText('empty', x0+w/2, FLOOR-58); X.textAlign='left';
+      X.fillText(dropTarget?'drop here':'empty', x0+w/2, FLOOR-58); X.textAlign='left';
     } else {
       drawRoomContents(x0, w, room, i);
+    }
+    // picked-up room highlight
+    if(isBuild && i===pickupIdx){
+      X.strokeStyle='#ffd34d'; X.setLineDash([4,4]); X.lineWidth=3;
+      X.strokeRect(x0+3, FLOOR-150, w-6, 150); X.setLineDash([]);
     }
     // slot number tag in build
     if(isBuild){
@@ -1503,13 +1534,21 @@ function frame(ts){
   else { update(dt); }
   draw();
   // keep run panel cooldowns fresh
-  if(G&&G.phase==='run'){ renderPanelLite(); }
+  if(G&&G.phase==='run'){ updateRunPanel(); }
   requestAnimationFrame(frame);
 }
-// lightweight cooldown refresh without rebuilding DOM every frame
-let _panelTick=0;
-function renderPanelLite(){
-  _panelTick++; if(_panelTick%6!==0) return; renderPanel();
+// Update ability buttons WITHOUT rebuilding the DOM — rebuilding mid-tap was
+// destroying the button between touchstart/touchend, eating the click.
+function updateRunPanel(){
+  if(!G||G.phase!=='run') return;
+  const btns=panel.querySelectorAll('.abil');
+  if(btns.length!==G.boss.abil.length){ renderPanel(); return; }
+  G.boss.abil.forEach((a,i)=>{
+    const def=ABIL[a.id];
+    btns[i].disabled = (a.cd>0 || G.boss.mana<def.cost);
+    const c=btns[i].querySelector('.c');
+    if(c) c.textContent = a.cd>0 ? ('⏳'+a.cd.toFixed(1)+'s') : ('🔷'+def.cost);
+  });
 }
 
 /* keep the canvas matched to the stage (rotation, panel-height changes, etc.) */
