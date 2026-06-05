@@ -164,9 +164,12 @@ const ROOM_W = 200;         // pixel width of one room/cell
 // Room cards. type = id. "trap" rooms hit passing heroes; "monster" rooms
 // spawn a blocker that must be killed; "shop" arms heroes (you profit).
 const ROOMS = {
-  spike:    {kind:'trap',   name:'Spike Pit',  ic:'🦷', col:'#9aa4b2', dmg:6,  rate:0.45, desc:'Fast cheap spikes.'},
-  flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, desc:'Hits hard + burns.'},
-  arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:5,  rate:0.3,  desc:'Very rapid, pierces armor.'},
+  spike:    {kind:'trap',   name:'Spike Pit',  ic:'🦷', col:'#9aa4b2', dmg:6,  rate:0.45, elem:'phys', desc:'Fast cheap spikes. Shatters frozen heroes.'},
+  flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, elem:'fire', desc:'Hits hard + burns. Ignites oiled heroes.'},
+  arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:5,  rate:0.3,  elem:'phys', desc:'Very rapid, pierces armor.'},
+  oil:      {kind:'trap',   name:'Oil Slick',  ic:'🛢️', col:'#3a3a2a', dmg:3,  rate:0.7,  elem:'oil',  desc:'Coats heroes in oil — slows them, primes fire & lightning.'},
+  frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). Then any hit SHATTERS for a burst.'},
+  tesla:    {kind:'trap',   name:'Tesla Coil', ic:'⚡', col:'#fff34d', dmg:9,  rate:0.7,  elem:'shock',desc:'Lightning. Chains across the party if they are oiled.'},
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6,  desc:'Weak early, vicious once fed.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
@@ -197,6 +200,13 @@ const SYNERGY_PAIRS = {
   'arrow+goblin':  {m:1.25,name:'Ambush'},
   'arrow+skeleton':{m:1.20,name:'Bone Volley'},
   'flame+spike':   {m:1.20,name:'Searing Pit'},
+  // elemental reaction combos
+  'flame+oil':     {m:1.45,name:'Inferno'},      // oil then ignite
+  'oil+tesla':     {m:1.40,name:'Conduction'},   // wet then chain lightning
+  'frost+spike':   {m:1.35,name:'Flash Freeze'}, // chill then shatter
+  'frost+tesla':   {m:1.30,name:'Superconductor'},
+  'arrow+frost':   {m:1.30,name:'Brittle Bones'},
+  'oil+spike':     {m:1.15,name:'Slippery'},
 };
 function roomParts(r){ return r.part2 ? [r.type, r.part2] : [r.type]; }
 function synergyInfo(parts){
@@ -332,17 +342,17 @@ function applyBossPassive(b){
 // Boss abilities. cost = mana, cd seconds. run(hero) applies effect.
 const ABIL = {
   slam:   {name:'Slam',    ic:'💥', cost:22, cd:3,  desc:'Heavy blow to the hero.',
-           run:h=>dealToHero(h, abilDmg(26+G.boss.lvl*4), 'SLAM')},
-  breath: {name:'Fire Breath',ic:'🔥',cost:36, cd:6, desc:'Big fire damage + burn.',
-           run:h=>{dealToHero(h, abilDmg(34+G.boss.lvl*5),'BURN'); h.burn=(h.burn||0)+6; h.burnT=4;}},
-  bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged hit.',
-           run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT')},
+           run:h=>dealToHero(h, abilDmg(26+G.boss.lvl*4), 'SLAM', false, 'phys')},
+  breath: {name:'Fire Breath',ic:'🔥',cost:36, cd:6, desc:'Big fire damage + burn. Ignites oil.',
+           run:h=>{dealToHero(h, abilDmg(34+G.boss.lvl*5),'BURN', false, 'fire'); h.burn=(h.burn||0)+6; h.burnT=4;}},
+  bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged shock. Chains off oil.',
+           run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT', false, 'shock')},
   curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
            run:h=>{h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
-  freeze: {name:'Freeze',  ic:'❄️', cost:20, cd:6,  desc:'Freezes the hero in place.',
-           run:h=>{h.freeze=2.2; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
+  freeze: {name:'Freeze',  ic:'❄️', cost:20, cd:6,  desc:'Freezes in place — primes SHATTER.',
+           run:h=>{h.freeze=2.2; h.chill=2.6; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
   drain:  {name:'Drain',   ic:'🩸', cost:28, cd:5,  desc:'Damage hero, heal boss.',
-           run:h=>{dealToHero(h, abilDmg(22+G.boss.lvl*3),'DRAIN'); healBoss(16+G.boss.lvl*3);}},
+           run:h=>{dealToHero(h, abilDmg(22+G.boss.lvl*3),'DRAIN', false, 'phys'); healBoss(16+G.boss.lvl*3);}},
   dread:  {name:'Dread',   ic:'👁️', cost:30, cd:9,  desc:'Slows + weakens the hero.',
            run:h=>{h.spd*=0.5; h.atk*=0.7; floater(h.x,h.y-60,'DREAD','#a23bd0');}},
   mend:   {name:'Mend',    ic:'💚', cost:46, cd:10, desc:'Heal the boss (costly).',
@@ -1241,7 +1251,7 @@ function heroDmg(h, raw, pierce){
   let armor = pierce ? Math.max(0,h.armor-3) : h.armor;
   return Math.max(1, Math.round(raw - armor));
 }
-function dealToHero(h, raw, label, pierce){
+function dealToHero(h, raw, label, pierce, elem){
   if(!h||h.state==='dead') return;
   // rogue dodge
   if(h.dodge && Math.random()<h.dodge){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
@@ -1254,7 +1264,36 @@ function dealToHero(h, raw, label, pierce){
     shake(6); hitStop=0.05; sfx('crit'); }
   else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
     burst(h.x, h.y-20, '#ff4d6d', 6); sfx('hit'); }
-  if(h.hp<=0){ h.hp=0; heroDies(h); }
+  if(h.hp<=0){ h.hp=0; heroDies(h); return; }
+  elementReact(h, elem||'phys', dmg);           // elemental status + reactions
+}
+// Apply an element's status to a hero and resolve reactions with existing ones.
+function elementReact(h, elem, baseDmg){
+  if(!h || h.state==='dead') return;
+  // priming statuses
+  if(elem==='oil')  h.oil=4;
+  else if(elem==='ice')  h.chill=2.6;
+  else if(elem==='shock') h.shock=2.2;
+  // IGNITE: fire on an oiled hero
+  if(elem==='fire' && h.oil>0){
+    h.oil=0; const x=Math.round(baseDmg*1.2)+15; h.hp-=x; h.burn=(h.burn||0)+8; h.burnT=4;
+    floater(h.x,h.y-66,'🔥 IGNITE -'+x,'#ff7a2e'); burst(h.x,h.y-24,'#ff7a2e',16); shake(6); sfx('crit');
+    if(h.hp<=0){h.hp=0;heroDies(h);return;}
+  }
+  // SHATTER: any non-ice hit on a chilled/frozen hero
+  if((elem==='phys'||elem==='fire'||elem==='shock') && (h.chill>0||h.freeze>0)){
+    h.chill=0; const x=Math.round(baseDmg*0.8)+10; h.hp-=x;
+    floater(h.x,h.y-66,'❄ SHATTER -'+x,'#9adfff'); burst(h.x,h.y-24,'#9adfff',16); shake(6); sfx('crit');
+    if(h.hp<=0){h.hp=0;heroDies(h);return;}
+  }
+  // CHAIN: lightning on an oiled (conductive) hero arcs to the rest of the party
+  if(elem==='shock' && h.oil>0){
+    let arced=0;
+    for(const o of G.heroes){ if(o===h||o.state==='dead') continue;
+      const cd=Math.round(baseDmg*0.6); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
+      arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
+    if(arced){ floater(h.x,h.y-66,'⚡ CHAIN x'+arced,'#fff34d'); shake(5); sfx('crit'); }
+  }
 }
 function healBoss(amt){
   const b=G.boss; const before=b.hp;
@@ -1722,6 +1761,10 @@ function simStep(h,dt){
   }
   // champion mini-boss specials
   if(h.champion) championTick(h,dt);
+  // elemental status timers
+  if(h.oil>0) h.oil-=dt;
+  if(h.chill>0) h.chill-=dt;
+  if(h.shock>0) h.shock-=dt;
   // freeze
   if(h.freeze>0){ h.freeze-=dt; return; }
 
@@ -1731,7 +1774,8 @@ function simStep(h,dt){
   }
 
   if(h.state==='walking'){
-    h.x += h.spd*dt;
+    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1);   // oil & chill slow movement
+    h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
     // traps fire while inside a cell that has any traps (works for combos)
     if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
@@ -1812,7 +1856,7 @@ function trapTick(h,cell,dt){
     if(tr.fireT<=0){
       tr.fireT=tr.def.rate;
       const dmg=Math.round(tr.def.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0)));
-      dealToHero(h, dmg, 'HIT', tr.def.name==='Dart Wall');
+      dealToHero(h, dmg, 'HIT', tr.def.name==='Dart Wall', tr.def.elem);
       if(tr.def.burn){ h.burn=tr.def.burn+(r.lvl-1)*2; h.burnT=3; }
       burst(h.x, h.y-20, tr.def.col, 5);
       if(h.state==='dead') return;
@@ -2012,6 +2056,20 @@ function drawTrapProp(x0,w,cx,type){
   } else if(type==='arrow'){
     px(x0+8,FLOOR-90,8,80,'#3a2c1a');
     for(let a=0;a<4;a++){ px(x0+16,FLOOR-80+a*18,18,3,'#caa15e'); }
+  } else if(type==='oil'){
+    px(cx-28,FLOOR-7,56,7,'#23231a');                       // slick puddle
+    X.globalAlpha=0.5; px(cx-20,FLOOR-9,40,4,'#4a4a2a'); X.globalAlpha=1;
+    px(cx-10,FLOOR-22,8,15,'#1a1a12'); px(cx-9,FLOOR-30,6,8,'#2a2a1a'); // barrel
+  } else if(type==='frost'){
+    for(let s=0;s<4;s++){ const sx=cx-21+s*14;
+      px(sx,FLOOR-20,6,20,'#bfefff'); px(sx+1,FLOOR-26,4,8,'#9adfff'); }
+    X.globalAlpha=0.25; px(cx-26,FLOOR-12,52,12,'#9adfff'); X.globalAlpha=1;
+  } else if(type==='tesla'){
+    px(cx-3,FLOOR-40,6,40,'#6a6a7a'); px(cx-9,FLOOR-46,18,8,'#caa15e');  // coil
+    const t=performance.now()/120;
+    X.strokeStyle='#fff34d'; X.lineWidth=2; X.globalAlpha=0.6+0.4*Math.sin(t);
+    X.beginPath(); X.moveTo(cx-9,FLOOR-44); X.lineTo(cx-2,FLOOR-52); X.lineTo(cx+6,FLOOR-46); X.lineTo(cx+10,FLOOR-54); X.stroke();
+    X.globalAlpha=1;
   }
 }
 function drawShopProp(cx,room){
@@ -2137,8 +2195,11 @@ function drawHero(sx,h){
   if(h.cls==='mage'){ px(sx+9,yy-48,4,34,'#7a5a3a'); px(sx+7,yy-52,8,8,'#9adfff'); } //staff
   if(h.cls==='rogue'){ px(sx+9,yy-30,5,16,'#cfd6e0'); } //dagger
   if(h.cls==='cleric'){ px(sx-2,yy-58,4,10,'#ffec99'); px(sx-5,yy-54,10,4,'#ffec99'); } //cross
-  // frozen tint
+  // frozen / elemental status tints
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
+  else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
+  if(h.oil>0){ X.globalAlpha=.3; px(sx-10,yy-46,20,46,'#0a0a06'); X.globalAlpha=1; }
+  if(h.shock>0){ X.globalAlpha=.3+0.2*Math.sin(performance.now()/70); px(sx-10,yy-48,20,48,'#fff34d'); X.globalAlpha=1; }
   // champion shield bubble
   if(h.shieldT>0){ X.globalAlpha=0.35+0.1*Math.sin(performance.now()/90);
     X.strokeStyle='#ffd34d'; X.lineWidth=2; X.beginPath(); X.ellipse(sx,yy-26,18,28,0,0,7); X.stroke();
@@ -2329,7 +2390,8 @@ function describeHero(h){
     `🏃 speed ${Math.round(h.spd)} · 💰 ${h.gold}${h.dodge?' · 35% dodge':''}`];
   if(ch) lines.push(`<span style="color:${ch.col}">${ch.desc}</span>`+(h.shieldT>0?' · 🛡 shielded':''));
   if(h.traits&&h.traits.length) lines.push('Traits: '+h.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name).join(', '));
-  const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
+  const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.chill>0?'❄️ chilled':'',
+    h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
   if(fx) lines.push(fx);
   return lines.join('<br>');
 }
