@@ -68,9 +68,12 @@
   .cards .card{flex:0 0 auto;}
   .card{position:relative;width:78px;min-height:62px;border-radius:8px;border:2px solid var(--line);
     background:linear-gradient(160deg,#2a2046,#1a1330);padding:5px 4px;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;text-align:center;cursor:pointer;transition:transform .08s,border-color .15s;}
+    align-items:center;justify-content:center;text-align:center;cursor:grab;touch-action:none;
+    transition:transform .08s,border-color .15s;}
   .card:hover{transform:translateY(-3px);}
   .card.sel{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold);}
+  .cardghost{position:fixed;left:0;top:0;transform:translate(-50%,-65%);z-index:60;pointer-events:none;
+    opacity:.92;cursor:grabbing;box-shadow:0 8px 22px rgba(0,0,0,.6);border-color:var(--gold);}
   .card .ic{font-size:24px;line-height:1;}
   .card .nm{font-size:10px;margin-top:3px;font-weight:bold;}
   .card .lv{position:absolute;top:2px;right:4px;font-size:9px;color:var(--gold);}
@@ -1141,39 +1144,44 @@ function tapSlot(idx){
     const tmp=G.rooms[pickupIdx]; G.rooms[pickupIdx]=G.rooms[idx]; G.rooms[idx]=tmp;
     pickupIdx=-1; showHint('Rooms rearranged.'); render(); return;
   }
-  const card=G.hand[selCard];
+  placeCard(selCard, idx);
+}
+// Apply hand card `ci` to slot `idx` (build / upgrade / fuse). Returns true on success.
+function placeCard(ci, idx){
+  const card=G.hand[ci]; if(!card) return false;
   const room=G.rooms[idx];
   if(!room){
     // build new room here
     G.rooms[idx]=makeRoom(card.type, card.lvl, card);
-    G.hand.splice(selCard,1); selCard=-1;
+    G.hand.splice(ci,1);
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, ROOMS[card.type].col, 14);
     showHint(ROOMS[card.type].name+' built!'); tutEvent('place');
   } else if(room.type===card.type || room.part2===card.type){
     // upgrade matching room/part (capped)
-    if(room.lvl>=maxLevel()){ showHint(comboName(room)+' is already max level ('+maxLevel()+').'); return; }
+    if(room.lvl>=maxLevel()){ showHint(comboName(room)+' is already max level ('+maxLevel()+').'); return false; }
     room.lvl++;
-    G.hand.splice(selCard,1); selCard=-1;
+    G.hand.splice(ci,1);
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
     floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
     showHint(comboName(room)+' upgraded to Lv '+room.lvl+(room.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('upgrade');
   } else if(canFuse(room,card)){
     // fuse a second trap/monster into this room
     room.part2=card.type;
-    G.hand.splice(selCard,1); selCard=-1;
+    G.hand.splice(ci,1);
     const info=synergyInfo(roomParts(room));
     burst(cellX(idx)+ROOM_W/2, FLOOR-40, '#9a5cff', 20);
     floater(cellX(idx)+ROOM_W/2, FLOOR-80, info.name||'COMBO', info.tone==='bad'?'#ff7a8a':'#7bdc6b');
     showHint('Fused → '+comboName(room)+(info.name?' ('+info.name+', ×'+info.m.toFixed(2)+')':'')+'!');
   } else if(room.def.kind!=='shop' && ROOMS[card.type].kind!=='shop' && !room.part2){
     showHint(ROOMS[room.type].name+' needs '+fuseKills()+' kills before it can fuse a 2nd part ('+(room.kills||0)+'/'+fuseKills()+').');
-    return;
+    return false;
   } else {
     showHint('Can\'t place that here.');
-    return;
+    return false;
   }
-  sfx('upgrade');
+  selCard=-1; sfx('upgrade');
   render();
+  return true;
 }
 
 function makeRoom(type,lvl,card){
@@ -2207,6 +2215,12 @@ function drawDungeon(tx, scale, isBuild){
       X.strokeStyle='#ffd34d'; X.setLineDash([4,4]); X.lineWidth=3;
       X.strokeRect(x0+3, FLOOR-150, w-6, 150); X.setLineDash([]);
     }
+    // drop-target highlight while dragging a card here
+    if(isBuild && i===cardDragSlot){
+      const pu=0.5+0.5*Math.sin(performance.now()/160);
+      X.strokeStyle='#7bdc6b'; X.globalAlpha=0.5+0.5*pu; X.lineWidth=4; X.setLineDash([]);
+      X.strokeRect(x0+2, FLOOR-152, w-4, 152); X.globalAlpha=1;
+    }
     // slot number tag in build
     if(isBuild){
       X.fillStyle='rgba(0,0,0,.4)'; X.fillRect(x0+4, FLOOR-138, 22,16);
@@ -2503,7 +2517,7 @@ function renderPanel(){
         <span class="small" style="min-width:46px">Hand:</span>
         <div class="cards${G&&G.tutHi==='hand'?' tut-pulse':''}">${G.hand.length? G.hand.map((c,i)=>{
           const d=ROOMS[c.type];
-          return `<div class="card ${selCard===i?'sel':''}" onclick="selectCard(${i})"
+          return `<div class="card ${selCard===i?'sel':''}" data-ci="${i}"
             onmouseenter="cardHover(${i})" onmouseleave="cardHoverOut()"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
             <div class="x" onclick="event.stopPropagation();discardCard(${i})">✕</div>
             <div class="ic">${d.ic}</div><div class="nm">${c.label||d.name}</div></div>`;}).join('')
@@ -2689,6 +2703,56 @@ CV.addEventListener('mousemove', e=>{
   showInspectEntity(entityAt(clientToVX(e)+camX), true);
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspect(); });
+
+/* ---- Drag a hand card onto a room slot to build/upgrade/fuse ---- */
+let cardDrag=null, cardDragSlot=-1, cardGhost=null;
+function slotUnderPointer(e){
+  const rect=CV.getBoundingClientRect();
+  if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom) return -1;
+  const worldX=(e.clientX-rect.left)*(VW/rect.width)+camX;
+  const idx=Math.floor(worldX/ROOM_W);
+  return (idx>=0 && idx<G.slots) ? idx : -1;
+}
+function startCardGhost(ci){
+  const c=G.hand[ci]; if(!c) return; const d=ROOMS[c.type];
+  cardGhost=document.createElement('div'); cardGhost.className='card cardghost';
+  cardGhost.innerHTML=`<div class="ic">${d.ic}</div><div class="nm">${c.label||d.name}</div>`;
+  document.body.appendChild(cardGhost);
+}
+function moveCardGhost(x,y){ if(cardGhost){ cardGhost.style.left=x+'px'; cardGhost.style.top=y+'px'; } }
+function endCardGhost(){ if(cardGhost){ cardGhost.remove(); cardGhost=null; } }
+panel.addEventListener('pointerdown', e=>{
+  if(!G || G.phase!=='build') return;
+  if(e.target.closest('.x')) return;                 // discard button
+  const cardEl=e.target.closest('.card'); if(!cardEl) return;
+  cardDrag={ id:e.pointerId, ci:+cardEl.dataset.ci, sx:e.clientX, sy:e.clientY, dragging:false };
+});
+window.addEventListener('pointermove', e=>{
+  if(!cardDrag || e.pointerId!==cardDrag.id) return;
+  const dx=e.clientX-cardDrag.sx, dy=e.clientY-cardDrag.sy;
+  if(!cardDrag.dragging && Math.hypot(dx,dy)>8){ cardDrag.dragging=true; startCardGhost(cardDrag.ci); hideInspect(); }
+  if(cardDrag.dragging){
+    e.preventDefault();
+    moveCardGhost(e.clientX,e.clientY);
+    const s=slotUnderPointer(e);
+    if(s!==cardDragSlot){ cardDragSlot=s; draw(); }
+  }
+}, {passive:false});
+function endCardDrag(e){
+  if(!cardDrag || (e && e.pointerId!==cardDrag.id)) return;
+  if(cardDrag.dragging){
+    const slot=slotUnderPointer(e);
+    endCardGhost();
+    if(slot>=0) placeCard(cardDrag.ci, slot);
+    else showHint('Drop a card onto a room slot to build there.');
+  } else {
+    selectCard(cardDrag.ci);                          // it was a tap, not a drag
+  }
+  cardDrag=null; cardDragSlot=-1;
+  if(G && (G.phase==='build')) draw();
+}
+window.addEventListener('pointerup', endCardDrag);
+window.addEventListener('pointercancel', e=>{ endCardGhost(); cardDrag=null; cardDragSlot=-1; });
 
 /* keyboard: ability hotkeys + space=start/speed */
 window.addEventListener('keydown', e=>{
