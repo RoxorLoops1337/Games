@@ -181,8 +181,8 @@ const FUSE_KILLS = 3;  // hero deaths in a room before it can fuse a 2nd part
 function maxLevel(){ return MAX_LEVEL + (RB.upCap||0); }
 function fuseKills(){ return Math.max(1, FUSE_KILLS - (RB.fuseFast||0)); }
 function handCap(){ return 5 + (RB.hand||0); }
-function abilCost(c){ return Math.max(1, Math.round(c*(1-(RB.abilCost||0)))); }
-function abilDmg(x){ return Math.round(x*(1+(RB.abilDmg||0))); }
+function abilCost(c){ const p=G.boss?G.boss.pAbilCost||0:0; return Math.max(1, Math.round(c*(1-Math.min(0.8,(RB.abilCost||0)+p)))); }
+function abilDmg(x){ const p=G.boss?G.boss.pAbilDmg||0:0; return Math.round(x*(1+(RB.abilDmg||0)+p)); }
 function townCost(c){ return Math.max(1, Math.round(c*(1-(RB.townDisc||0)))); }
 // Shop sale price scales with the shop room's level (+40% markup per level).
 function shopMarkup(lvl){ return 1.6 + ((lvl||1)-1)*0.4; }
@@ -286,19 +286,48 @@ const CHAMPIONS = {
 const CHAMP_KEYS = Object.keys(CHAMPIONS);
 const CHAMP_EVERY = 8;   // every Nth arrival is a champion (mini-boss)
 
-// Bosses: differing stats + three abilities each.
+// Boss signature passives (always on). Applied in applyBossPassive() + combat hooks.
+const PASSIVES = {
+  scaled:  {name:'Dragonscale Hide', desc:'Takes 12% less damage.'},
+  undying: {name:'Phylactery',       desc:'Revives once at 35% HP when slain.'},
+  arcane:  {name:'Arcane Mastery',   desc:'Abilities cost 20% less; faster mana.'},
+  feed:    {name:'Devour',           desc:'Heals 4% max HP each hero slain.'},
+  thorns:  {name:'Spiked Throne',    desc:'Reflects 50% of melee back at attackers.'},
+  titan:   {name:"Titan's Might",    desc:'+30% ability damage.'},
+};
+// Bosses: differing stats, a passive, and a default 3-ability kit (customisable).
 const BOSSES = {
   dragon: {name:'Ignar the Dragon', ic:'🐉', col:'#c43a3a', maxHp:140, atk:16,
-    blurb:'High HP bruiser. Breathe fire on the brave.',
+    blurb:'High HP bruiser. Breathe fire on the brave.', passive:'scaled',
     abilities:['slam','breath','mend']},
   lich:   {name:'Mortis the Lich', ic:'☠️', col:'#7ad0c0', maxHp:105, atk:12,
-    blurb:'Frail but cruel. Weaken and freeze intruders.',
+    blurb:'Frail but cruel — and hard to keep dead.', passive:'undying',
     abilities:['bolt','curse','freeze']},
   demon:  {name:'Azzaroth the Demon', ic:'😈', col:'#a23bd0', maxHp:120, atk:18,
-    blurb:'Aggressive. Drains the living to heal himself.',
+    blurb:'Aggressive caster who drains the living.', passive:'arcane',
     abilities:['slam','drain','dread']},
+  ogre:   {name:'Gormauth the Devourer', ic:'👹', col:'#b0563a', maxHp:185, atk:20,
+    blurb:'Colossal glutton who feasts on the fallen.', passive:'feed',
+    abilities:['slam','drain','mend']},
+  ent:    {name:'Thornheart', ic:'🌳', col:'#5fae54', maxHp:130, atk:14,
+    blurb:'A bramble-throne that punishes melee.', passive:'thorns',
+    abilities:['curse','freeze','bolt']},
+  golem:  {name:'Karnak the Colossus', ic:'🗿', col:'#9aa4b2', maxHp:170, atk:15,
+    blurb:'Living siege engine — ability damage incarnate.', passive:'titan',
+    abilities:['slam','breath','bolt']},
 };
 const BOSS_KEYS = Object.keys(BOSSES);
+function applyBossPassive(b){
+  b.passiveDR=0; b.reviveHp=0; b.feed=0; b.thorns=0; b.pAbilDmg=0; b.pAbilCost=0; b.revived=false;
+  switch(b.passive){
+    case 'scaled':  b.passiveDR=0.12; break;
+    case 'undying': b.reviveHp=0.35; break;
+    case 'arcane':  b.pAbilCost=0.20; b.manaRegen=(b.manaRegen||6)+3; break;
+    case 'feed':    b.feed=0.04; break;
+    case 'thorns':  b.thorns=0.5; break;
+    case 'titan':   b.pAbilDmg=0.30; break;
+  }
+}
 
 // Boss abilities. cost = mana, cd seconds. run(hero) applies effect.
 const ABIL = {
@@ -836,11 +865,11 @@ function gotoBossSelect(){
     <p>${G.mode==='campaign'?'Campaign — survive 5 escalating chapters.':'Endless — how long can you reign?'}</p>
     <div class="choices">${BOSS_KEYS.map(k=>{
       const b=BOSSES[k];
-      return `<div class="choice" onclick="chooseBoss('${k}')">
+      return `<div class="choice" onclick="chooseBoss('${k}')" style="width:200px">
         <div class="big">${b.ic}</div><h3>${b.name}</h3>
         <div class="desc">${b.blurb}</div>
-        <div class="stats">❤️ ${b.maxHp} HP · 🗡️ ${b.atk} ATK<br>
-          ${b.abilities.map(a=>ABIL[a].ic+' '+ABIL[a].name).join(' · ')}</div>
+        <div class="small" style="color:${b.col};margin:3px 0"><b>✦ ${PASSIVES[b.passive].name}</b><br>${PASSIVES[b.passive].desc}</div>
+        <div class="stats">❤️ ${b.maxHp} HP · 🗡️ ${b.atk} ATK</div>
       </div>`;}).join('')}</div>`;
 }
 function chooseBoss(key){
@@ -851,6 +880,7 @@ function chooseBoss(key){
   G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1,
     mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
     abil:b.abilities.map(id=>({id,cd:0})) };
+  applyBossPassive(G.boss);                       // signature passive effects
   // starter dungeon + rune head-starts
   G.slots=1+RB.slot0;
   G.rooms=Array(G.slots).fill(null);
@@ -858,8 +888,39 @@ function chooseBoss(key){
   G.dread=RB.dread0;
   G.guildLvl=Math.min(GUILD_MAX, RB.guild0);
   for(let i=0;i<RB.cards0;i++) G.hand.push({type:pick(ROOM_KEYS), lvl:1});
+  gotoLoadout();                                  // pick your 3 abilities
+}
+
+/* ====================== PHASE: ABILITY LOADOUT ========================= */
+let loadoutSel=[];
+function gotoLoadout(){ G.phase='loadout'; loadoutSel=[...G.boss.abilities]; renderLoadout(); }
+function toggleLoadout(id){
+  const i=loadoutSel.indexOf(id);
+  if(i>=0) loadoutSel.splice(i,1);
+  else { if(loadoutSel.length>=3){ showHint('Pick exactly 3 — deselect one first.'); return; } loadoutSel.push(id); }
+  sfx('buy'); renderLoadout();
+}
+function confirmLoadout(){
+  if(loadoutSel.length!==3) return;
+  G.boss.abil=loadoutSel.map(id=>({id,cd:0}));
   overlay.classList.remove('show');
   gotoBuild(true);
+}
+function renderLoadout(){
+  G.phase='loadout'; overlay.classList.add('show');
+  const b=G.boss;
+  const cards=Object.keys(ABIL).map(id=>{ const d=ABIL[id]; const on=loadoutSel.includes(id);
+    return `<div class="choice" style="width:150px;cursor:pointer;${on?'border-color:#ffd34d;box-shadow:0 0 8px #ffd34d':''}" onclick="toggleLoadout('${id}')">
+      <div class="big">${d.ic}</div><h3 style="font-size:13px;margin:2px 0">${d.name}</h3>
+      <div class="small" style="opacity:.85">${d.desc}</div>
+      <div class="small" style="color:#4dc3ff">🔷${d.cost} · ${d.cd}s</div>
+      <div class="small" style="color:${on?'#ffd34d':'#6a5a9a'}">${on?'✔ equipped':'tap to equip'}</div>
+    </div>`;}).join('');
+  overlay.innerHTML=`<h1>${b.ic} ${b.name}</h1>
+    <p>Passive: <b style="color:${b.col}">✦ ${PASSIVES[b.passive].name}</b> — ${PASSIVES[b.passive].desc}</p>
+    <p>Equip <b>3 abilities</b> for this run — <b>${loadoutSel.length}/3</b> chosen.</p>
+    <div class="choices" style="max-width:700px">${cards}</div>
+    <div class="menu-btns"><button class="go" ${loadoutSel.length!==3?'disabled':''} onclick="confirmLoadout()">⚔️ Enter the dungeon →</button></div>`;
 }
 
 /* ============================== PHASE: BUILD ============================= */
@@ -1229,6 +1290,8 @@ function heroDies(h){
     + (RB.dreadKill||0) + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
+  // Devour passive: the boss feasts on the fallen
+  if(G.boss.feed) healBoss(Math.round(G.boss.maxHp*G.boss.feed));
   // kill streak: rewards an airtight dungeon (resets if a hero strikes the boss)
   G.combo=(G.combo||0)+1;
   let comboBonus=0;
@@ -1275,6 +1338,14 @@ function heroReachesThrone(){
   // hero now fights the boss; handled in update. nothing here.
 }
 function bossDies(){
+  const b=G.boss;
+  // Phylactery: rise once instead of falling
+  if(b.reviveHp && !b.revived){
+    b.revived=true; b.hp=Math.round(b.maxHp*b.reviveHp); b.mana=b.maxMana;
+    floater(bossX(), FLOOR-100, '☠️ THE LICH RISES!', '#7ad0c0'); burst(bossX(),FLOOR-50,'#7ad0c0',30);
+    shake(10); sfx('relic'); showHint('Phylactery! '+b.name+' claws back from death.');
+    return;
+  }
   G.phase='lose'; overlay.classList.add('show');
   shake(12); sfx('lose');
   const earned=awardRunes();
@@ -1811,10 +1882,12 @@ function bossFightTick(h,dt,isFront){
   h.atkT-=dt;
   if(h.atkT<=0){
     h.atkT=0.8*h.atkSpeed;
-    const dmg=Math.max(1,Math.round(h.atk*(1-(RB.bossDR||0))));
+    const dr=Math.min(0.85,(RB.bossDR||0)+(b.passiveDR||0));
+    const dmg=Math.max(1,Math.round(h.atk*(1-dr)));
     b.hp-=dmg;
     if(G.combo>0) G.combo=0;                 // defense breached — streak broken
     if(h.vampiric) healHero(h, dmg*0.4);
+    if(b.thorns){ dealToHero(h, Math.round(dmg*b.thorns), 'THORNS'); }  // Spiked Throne reflect
     floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
     burst(bossX(), FLOOR-50, '#ff4d6d', 6);
     shake(3); sfx('boss');
@@ -2265,7 +2338,9 @@ function describeBoss(){
   const lines=[`<b>${b.ic} ${b.name}</b> · Lv ${b.lvl}`,
     `❤️ <b>${Math.ceil(b.hp)}</b>/${b.maxHp} HP · 🗡️ ${b.atk} atk · 🔷 ${Math.floor(b.mana)}/${b.maxMana} mana`,
     'Abilities: '+b.abil.map(a=>ABIL[a.id].ic+' '+ABIL[a.id].name).join(', ')];
-  if(RB.bossDR) lines.push(`Damage reduction: ${Math.round(RB.bossDR*100)}%`);
+  if(b.passive&&PASSIVES[b.passive]) lines.push(`<span style="color:${b.col}">✦ ${PASSIVES[b.passive].name}</span> — ${PASSIVES[b.passive].desc}`);
+  const totalDR=Math.min(0.85,(RB.bossDR||0)+(b.passiveDR||0));
+  if(totalDR) lines.push(`Damage reduction: ${Math.round(totalDR*100)}%`);
   if(G.relics&&G.relics.length)
     lines.push('Relics: '+G.relics.map(id=>{const r=RELICS[id];return `<span style="color:${RELIC_TIERS[r.tier].col}">${r.ic}${r.name}</span>`;}).join(', '));
   return lines.join('<br>');
