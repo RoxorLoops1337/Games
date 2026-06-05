@@ -1189,7 +1189,9 @@ function gotoBuild(first){
 function corridorWidth(){ return (G.slots+1)*ROOM_W; }
 function cellX(i){ return i*ROOM_W; }        // left edge of cell i (0..slots-1 rooms, slots=boss)
 
-function slotCost(){ return Math.max(1, Math.round((25 + G.slots*20)*(1-(RB.slotCost||0)))); }
+// Slots get steeply more expensive the longer your dungeon already is, so
+// stretching the corridor is a real escalating investment (≈40,64,102,164,…).
+function slotCost(){ return Math.max(1, Math.round(25*Math.pow(1.6,G.slots)*(1-(RB.slotCost||0)))); }
 
 function buySlot(){
   const c=slotCost();
@@ -1834,7 +1836,8 @@ function chooseEvent(i){
   showHint(ev.outcome); renderTown(); renderTop();
 }
 
-function upgradeCost(key){ return townCost(Math.round(TOWN_UPGRADES[key].base * Math.pow(1.5, G.townBuys[key]||0))); }
+// Boss empowerments are repeatable — each level costs ~40% more than the last.
+function upgradeCost(key){ return townCost(Math.round(TOWN_UPGRADES[key].base * Math.pow(1.4, G.townBuys[key]||0))); }
 function buyUpgrade(key){
   const cost=upgradeCost(key);
   if(G.dread<cost){ showHint('Not enough dread.'); return; }
@@ -1930,12 +1933,12 @@ function renderTown(){
       <button onclick="setThreat(-1)" ${G.bounty<=-2?'disabled':''} style="padding:5px 9px;min-height:0">Lie low ▼</button>
     </div>`;
   const ups=Object.keys(TOWN_UPGRADES).map(k=>{
-    const u=TOWN_UPGRADES[k]; const cost=upgradeCost(k); const can=G.dread>=cost;
+    const u=TOWN_UPGRADES[k]; const n=G.townBuys[k]||0; const cost=upgradeCost(k); const can=G.dread>=cost;
     return `<button ${can?'':'disabled'} onclick="buyUpgrade('${k}')"
       style="display:flex;flex-direction:column;align-items:center;min-width:112px;gap:1px;height:auto;padding:7px;border-color:var(--accent)">
-      <span style="font-size:20px">${u.ic}</span><span>${u.name}</span>
+      <span style="font-size:20px">${u.ic}</span><span>${u.name}${n>0?` <span style="color:#ffd34d">Lv ${n}</span>`:''}</span>
       <span class="small" style="opacity:.8;font-weight:normal">${u.desc}</span>
-      <span style="color:#b985ff">${cost} ☠</span></button>`;}).join('');
+      <span style="color:#b985ff">→ Lv ${n+1} · ${cost} ☠</span></button>`;}).join('');
   const schemes=Object.keys(TOWN_SCHEMES).map(k=>{
     const s=TOWN_SCHEMES[k]; const sc=schemeCost(k); const active=G.fx[k]>0; const can=!active&&G.dread>=sc;
     return `<button ${can?'':'disabled'} onclick="buyScheme('${k}')"
