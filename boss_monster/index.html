@@ -157,6 +157,13 @@ const ROOMS = {
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
 const FUSE_KILLS = 3;  // hero deaths in a room before it can fuse a 2nd part
+// Effective values after rune bonuses (RB):
+function maxLevel(){ return MAX_LEVEL + (RB.upCap||0); }
+function fuseKills(){ return Math.max(1, FUSE_KILLS - (RB.fuseFast||0)); }
+function handCap(){ return 5 + (RB.hand||0); }
+function abilCost(c){ return Math.max(1, Math.round(c*(1-(RB.abilCost||0)))); }
+function abilDmg(x){ return Math.round(x*(1+(RB.abilDmg||0))); }
+function townCost(c){ return Math.max(1, Math.round(c*(1-(RB.townDisc||0)))); }
 
 // Fusing two components yields a synergy multiplier on the room's output.
 // Some pairs are great, some are duds (diminishing returns).
@@ -259,17 +266,17 @@ const BOSS_KEYS = Object.keys(BOSSES);
 // Boss abilities. cost = mana, cd seconds. run(hero) applies effect.
 const ABIL = {
   slam:   {name:'Slam',    ic:'💥', cost:22, cd:3,  desc:'Heavy blow to the hero.',
-           run:h=>dealToHero(h, 26+G.boss.lvl*4, 'SLAM')},
+           run:h=>dealToHero(h, abilDmg(26+G.boss.lvl*4), 'SLAM')},
   breath: {name:'Fire Breath',ic:'🔥',cost:36, cd:6, desc:'Big fire damage + burn.',
-           run:h=>{dealToHero(h, 34+G.boss.lvl*5,'BURN'); h.burn=(h.burn||0)+6; h.burnT=4;}},
+           run:h=>{dealToHero(h, abilDmg(34+G.boss.lvl*5),'BURN'); h.burn=(h.burn||0)+6; h.burnT=4;}},
   bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged hit.',
-           run:h=>dealToHero(h, 18+G.boss.lvl*3,'HIT')},
+           run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT')},
   curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
            run:h=>{h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
   freeze: {name:'Freeze',  ic:'❄️', cost:20, cd:6,  desc:'Freezes the hero in place.',
            run:h=>{h.freeze=2.2; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
   drain:  {name:'Drain',   ic:'🩸', cost:28, cd:5,  desc:'Damage hero, heal boss.',
-           run:h=>{dealToHero(h, 22+G.boss.lvl*3,'DRAIN'); healBoss(16+G.boss.lvl*3);}},
+           run:h=>{dealToHero(h, abilDmg(22+G.boss.lvl*3),'DRAIN'); healBoss(16+G.boss.lvl*3);}},
   dread:  {name:'Dread',   ic:'👁️', cost:30, cd:9,  desc:'Slows + weakens the hero.',
            run:h=>{h.spd*=0.5; h.atk*=0.7; floater(h.x,h.y-60,'DREAD','#a23bd0');}},
   mend:   {name:'Mend',    ic:'💚', cost:46, cd:10, desc:'Heal the boss (costly).',
@@ -284,6 +291,167 @@ const CAMPAIGN = [
   {target:11, diff:2.4,  reward:150,name:'Champions Arrive'},
   {target:13, diff:3.2,  reward:0,  name:'The Final Crusade'},
 ];
+
+/* ========================= RUNE PAGE (meta progression) =================
+   Persistent skill tree. Rune points are earned per run and banked on death,
+   then spent on permanent buffs that apply at the start of every future run.
+   Each branch is a linear chain — unlock shallow nodes before deep ones.     */
+function rbranch(key,name,icon,color,rows){
+  return {key,name,icon,color,nodes:rows.map((r,i)=>({
+    id:key+i, branch:key, tier:i, name:r[0], desc:r[1], cost:r[2], eff:r[3]||{},
+    req: i>0?[key+(i-1)]:[] }))};
+}
+const RUNE_TREE=[
+  rbranch('eco','Treasury','💰','#ffd34d',[
+    ['Seed Coins','+20 starting gold',1,{gold0:20}],
+    ['Pickpocket','+1 gold per kill',1,{goldKill:1}],
+    ['Deeper Pockets','+25 starting gold',2,{gold0:25}],
+    ['Looter I','+6% loot from kills',2,{loot:0.06}],
+    ['Cheap Labor','room slots cost 8% less',3,{slotCost:0.08}],
+    ['Pickpocket II','+2 gold per kill',3,{goldKill:2}],
+    ['Looter II','+8% loot',4,{loot:0.08}],
+    ['War Chest','+40 starting gold',4,{gold0:40}],
+    ['Dread Tithe','+2 starting dread',4,{dread0:2}],
+    ['Hoarded Fear','+3 starting dread',5,{dread0:3}],
+    ['Looter III','+10% loot',5,{loot:0.10}],
+    ['Cheap Labor II','room slots cost 12% less',5,{slotCost:0.12}],
+    ['Merchant Prince','+60 starting gold',6,{gold0:60}],
+    ['Golden Touch','+3 gold per kill',6,{goldKill:3}],
+    ['Looter IV','+12% loot',7,{loot:0.12}],
+    ["Dragon's Hoard",'+100 starting gold',8,{gold0:100}],
+    ['Avarice','keystone: +1 dread per kill',10,{dreadKill:1}],
+  ]),
+  rbranch('def','Bulwark','🛡','#7bdc6b',[
+    ['Thick Hide','+20 boss max HP',1,{bossHpFlat:20}],
+    ['Stoneskin I','boss takes 4% less hero damage',2,{bossDR:0.04}],
+    ['Iron Heart','+6% boss max HP',2,{bossHp:0.06}],
+    ['Thick Hide II','+30 boss max HP',3,{bossHpFlat:30}],
+    ['Mending','boss recovers 6 HP each wave',3,{bossRegen:6}],
+    ['Stoneskin II','6% less hero damage',4,{bossDR:0.06}],
+    ['Iron Heart II','+8% boss max HP',4,{bossHp:0.08}],
+    ['Resilient','+40 boss max HP',5,{bossHpFlat:40}],
+    ['Mending II','+8 HP each wave',5,{bossRegen:8}],
+    ['Stoneskin III','8% less hero damage',6,{bossDR:0.08}],
+    ['Adamant','+12% boss max HP',6,{bossHp:0.12}],
+    ['Colossal Frame','+60 boss max HP',7,{bossHpFlat:60}],
+    ['Mending III','+12 HP each wave',7,{bossRegen:12}],
+    ['Stoneskin IV','10% less hero damage',8,{bossDR:0.10}],
+    ['Titanic','+18% boss max HP',8,{bossHp:0.18}],
+    ['Bastion','+90 boss max HP',9,{bossHpFlat:90}],
+    ['Immortal Coil','keystone: 12% less damage + 15 HP/wave',12,{bossDR:0.12,bossRegen:15}],
+  ]),
+  rbranch('off','Wrath','⚔️','#ff7a8a',[
+    ['Sharper Claws','+3 boss attack',1,{bossAtkFlat:3}],
+    ['Focus','+15 max mana',2,{manaFlat:15}],
+    ['Cruelty I','+6% ability damage',2,{abilDmg:0.06}],
+    ['Sharper Claws II','+4 boss attack',3,{bossAtkFlat:4}],
+    ['Channeling','+2 mana regen / sec',3,{manaRegen:2}],
+    ['Cruelty II','+8% ability damage',4,{abilDmg:0.08}],
+    ['Efficient','abilities cost 8% less',4,{abilCost:0.08}],
+    ['Brutal','+8% boss attack',5,{bossAtk:0.08}],
+    ['Quickened','abilities cool down 8% faster',5,{abilCd:0.08}],
+    ['Cruelty III','+10% ability damage',6,{abilDmg:0.10}],
+    ['Focus II','+25 max mana',6,{manaFlat:25}],
+    ['Sharper Claws III','+6 boss attack',7,{bossAtkFlat:6}],
+    ['Efficient II','abilities cost 12% less',7,{abilCost:0.12}],
+    ['Cruelty IV','+14% ability damage',8,{abilDmg:0.14}],
+    ['Overcharged','+4 mana regen / sec',8,{manaRegen:4}],
+    ['Tyrant','+14% boss attack',9,{bossAtk:0.14}],
+    ['Cataclysm','keystone: +20% ability dmg, 15% cheaper',12,{abilDmg:0.20,abilCost:0.15}],
+  ]),
+  rbranch('room','Dungeoneer','🏰','#9a5cff',[
+    ['Sharp Spikes','+6% trap damage',1,{trapDmg:0.06}],
+    ['Feral','+6% monster damage',1,{monDmg:0.06}],
+    ['Reinforced Walls','+6% monster HP',2,{monHp:0.06}],
+    ['Sharp Spikes II','+8% trap damage',2,{trapDmg:0.08}],
+    ['Extra Wing','start with +1 room slot',3,{slot0:1}],
+    ['Feral II','+8% monster damage',3,{monDmg:0.08}],
+    ['Reinforced II','+8% monster HP',4,{monHp:0.08}],
+    ['Master Builder','room level cap +1',4,{upCap:1}],
+    ['Sharp Spikes III','+12% trap damage',5,{trapDmg:0.12}],
+    ['Feral III','+12% monster damage',5,{monDmg:0.12}],
+    ['Fortified','+12% monster HP',6,{monHp:0.12}],
+    ['Quick Fusion','rooms fuse after 2 kills',6,{fuseFast:1}],
+    ['Architect','start with another +1 slot',7,{slot0:1}],
+    ['Synergist','combos get +0.10 synergy',7,{synergy:0.10}],
+    ['Sharp Spikes IV','+16% trap damage',8,{trapDmg:0.16}],
+    ['Feral IV','+16% monster damage',8,{monDmg:0.16}],
+    ['Grand Design','keystone: cap +1, +0.15 synergy, +1 slot',12,{upCap:1,synergy:0.15,slot0:1}],
+  ]),
+  rbranch('town','Warden','🧛','#4dc3ff',[
+    ['Negotiator','town costs 8% less dread',1,{townDisc:0.08}],
+    ['Headhunter','+1 dread from elite kills',2,{eliteDread:1}],
+    ['Foresight','draft 1 of 4 cards',3,{draft:1}],
+    ['Big Hands','+1 hand size',2,{hand:1}],
+    ['Negotiator II','town costs 12% less',3,{townDisc:0.12}],
+    ['Interrogator','+1 dread per throne-reacher',3,{throneDread:1}],
+    ['Big Hands II','+1 hand size',4,{hand:1}],
+    ['Foresight II','draft 1 of 5 cards',5,{draft:1}],
+    ['Conscription','start at Guild Lv1 (parties of 2)',6,{guild0:1}],
+    ['Negotiator III','town costs 16% less',5,{townDisc:0.16}],
+    ['Opening Hand','start with a random card',4,{cards0:1}],
+    ['Headhunter II','+2 dread from elites',6,{eliteDread:2}],
+    ['Opening Hand II','start with +1 card',6,{cards0:1}],
+    ['Warlord','start at Guild Lv2 (parties of 3)',9,{guild0:1}],
+    ['Big Hands III','+1 hand size',7,{hand:1}],
+    ['Foresight III','draft 1 of 6 cards',7,{draft:1}],
+    ['Overlord','keystone: +1 Guild Lv, start with 2 cards',12,{guild0:1,cards0:2}],
+  ]),
+  rbranch('asc','Ascendant','🐲','#ff9a3a',[
+    ['Bloodlust','+4% all boss & room damage',2,{trapDmg:0.04,monDmg:0.04,abilDmg:0.04,bossAtk:0.04}],
+    ['Endure','+25 boss HP & 4% damage reduction',3,{bossHpFlat:25,bossDR:0.04}],
+    ['Prosper','+30 gold & +2 dread',3,{gold0:30,dread0:2}],
+    ['Bloodlust II','+5% all damage',4,{trapDmg:0.05,monDmg:0.05,abilDmg:0.05,bossAtk:0.05}],
+    ['Fortune','+8% loot & +2 gold/kill',4,{loot:0.08,goldKill:2}],
+    ['Warmind','+20 mana, +2 regen, 8% cheaper',5,{manaFlat:20,manaRegen:2,abilCost:0.08}],
+    ['Aegis','+40 HP, 6% DR, +8 HP/wave',5,{bossHpFlat:40,bossDR:0.06,bossRegen:8}],
+    ['Bloodlust III','+6% all damage',6,{trapDmg:0.06,monDmg:0.06,abilDmg:0.06,bossAtk:0.06}],
+    ['Dungeon Lord','+10% trap & monster dmg, +1 slot',7,{trapDmg:0.10,monDmg:0.10,slot0:1}],
+    ['Tactician','draft 1 of 4 & +1 hand',6,{draft:1,hand:1}],
+    ['Overpower','+12% boss atk & +12% ability dmg',7,{bossAtk:0.12,abilDmg:0.12}],
+    ['Juggernaut','+60 HP & 8% DR',8,{bossHpFlat:60,bossDR:0.08}],
+    ['Plutocrat','+120 gold & +3 dread',8,{gold0:120,dread0:3}],
+    ['Bloodlust IV','+8% all damage',9,{trapDmg:0.08,monDmg:0.08,abilDmg:0.08,bossAtk:0.08}],
+    ['Warbringer','+1 Guild Lv & +14% monster dmg',10,{guild0:1,monDmg:0.14}],
+    ['Apotheosis','+15% boss HP, atk & ability dmg',12,{bossHp:0.15,bossAtk:0.15,abilDmg:0.15}],
+    ['GODKING','capstone: +20% all dmg, +100 HP, 10% DR, +1 Guild, 2 cards',18,
+      {trapDmg:0.20,monDmg:0.20,abilDmg:0.20,bossAtk:0.20,bossHpFlat:100,bossDR:0.10,guild0:1,cards0:2}],
+  ]),
+];
+const RUNE_NODES={}; RUNE_TREE.forEach(b=>b.nodes.forEach(n=>RUNE_NODES[n.id]=n));
+const RUNE_COUNT=Object.keys(RUNE_NODES).length;
+
+// Persistent rune state (localStorage).
+let RUNES={ points:0, owned:new Set() };
+let RB={};   // aggregated bonuses for the active run
+function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
+  bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
+  abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,upCap:0,fuseFast:0,
+  synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
+function loadRunes(){
+  try{ const s=JSON.parse(localStorage.getItem('bossmonster_runes')||'{}');
+    RUNES={ points:s.points||0, owned:new Set(s.owned||[]) }; }
+  catch(_){ RUNES={ points:0, owned:new Set() }; }
+}
+function saveRunes(){
+  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, owned:[...RUNES.owned]})); }catch(_){}
+}
+function runeBonuses(){
+  const b=blankRB();
+  for(const id of RUNES.owned){ const n=RUNE_NODES[id]; if(!n) continue;
+    for(const k in n.eff) b[k]=(b[k]||0)+n.eff[k]; }
+  b.bossDR=Math.min(0.6, b.bossDR);            // cap damage reduction
+  b.abilCost=Math.min(0.7, b.abilCost);
+  b.slotCost=Math.min(0.7, b.slotCost);
+  b.townDisc=Math.min(0.7, b.townDisc);
+  return b;
+}
+function applyRunes(){ RB=runeBonuses(); }
+function runeAvailable(n){
+  if(RUNES.owned.has(n.id)) return false;
+  return n.req.every(r=>RUNES.owned.has(r));
+}
+RB=blankRB();
 
 /* -------------------------------- state ---------------------------------- */
 let G = null;        // active game object
@@ -336,6 +504,7 @@ function freshGame(mode){
     heroes:[],            // active raiding party this wave
     waveStartSlain:0,     // totalSlain at wave start (to detect 5-kill towns)
     waveEnding:false,     // guard so afterWave runs once
+    runesBanked:0,        // rune points already credited from this run
     hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
@@ -379,6 +548,7 @@ function gotoMenu(){
     <div class="menu-btns">
       <button class="go" onclick="startCampaign()">⚔️ Campaign</button>
       <button onclick="startEndless()">♾️ Endless</button>
+      <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
       <button onclick="showHelp()">❓ How to play</button>
     </div>
     <div class="ko">
@@ -407,6 +577,45 @@ function showHelp(){
 function startCampaign(){ G=freshGame('campaign'); gotoBossSelect(); }
 function startEndless(){ G=freshGame('endless'); gotoBossSelect(); }
 
+/* ============================== RUNE PAGE UI ============================= */
+let runeTab='eco';
+function openRunes(){ overlay.classList.add('show'); renderRunes(); }
+function buyRune(id){
+  const n=RUNE_NODES[id]; if(!n) return;
+  if(RUNES.owned.has(n.id)) return;
+  if(!runeAvailable(n)){ showHint('Locked — unlock the rune above it first.'); return; }
+  if(RUNES.points<n.cost){ showHint('Not enough rune points.'); return; }
+  RUNES.points-=n.cost; RUNES.owned.add(id); saveRunes();
+  burst(VW/2, VH/2, RUNE_TREE.find(b=>b.key===n.branch).color, 12);
+  renderRunes();
+}
+function renderRunes(){
+  overlay.classList.add('show');
+  const tabs=RUNE_TREE.map(b=>{
+    const have=b.nodes.filter(n=>RUNES.owned.has(n.id)).length;
+    return `<button onclick="runeTab='${b.key}';renderRunes()" style="padding:6px 9px;min-height:0;font-size:12px;${runeTab===b.key?'border-color:'+b.color+';background:#34265e':''}">${b.icon} ${b.name} <span class="small">${have}/${b.nodes.length}</span></button>`;}).join('');
+  const br=RUNE_TREE.find(b=>b.key===runeTab);
+  const nodes=br.nodes.map(n=>{
+    const owned=RUNES.owned.has(n.id);
+    const avail=runeAvailable(n);
+    const afford=RUNES.points>=n.cost;
+    const bg=owned?'#1f3a26':avail?(afford?'#241a40':'#1d1530'):'#15111f';
+    const bord=owned?'#52d97e':avail?br.color:'#34284e';
+    const clickable=!owned&&avail;
+    return `<div ${clickable?`onclick="buyRune('${n.id}')"`:''} style="display:flex;align-items:center;gap:8px;text-align:left;
+       padding:7px 9px;border:1.5px solid ${bord};border-radius:8px;background:${bg};${clickable?'cursor:pointer;':''}opacity:${owned||avail?1:0.5}">
+       <div style="font-size:10px;min-width:26px;color:${br.color};font-weight:bold">T${n.tier+1}</div>
+       <div style="flex:1"><b style="font-size:13px">${n.name}</b><div class="small" style="opacity:.85">${n.desc}</div></div>
+       <div style="min-width:58px;text-align:right;font-size:12px">${owned?'<span style="color:#7bdc6b">✔ owned</span>':`<span style="color:${afford&&avail?'#ffd34d':'#8a7aa8'}">${n.cost}◆</span>`}</div>
+    </div>`;}).join('');
+  overlay.innerHTML=`<h1 style="margin-bottom:0">🔮 Rune Page</h1>
+    <p style="margin:4px 0"><b style="color:#ffd34d">${RUNES.points} ◆</b> rune points · ${RUNES.owned.size}/${RUNE_COUNT} runes</p>
+    <p class="small" style="opacity:.75;max-width:520px">Earn rune points by slaying heroes; they bank when a run ends. Spend them on permanent buffs — unlock each branch top-to-bottom.</p>
+    <div class="row" style="justify-content:center;gap:5px;flex-wrap:wrap;margin-bottom:8px">${tabs}</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-width:540px;width:100%;margin:0 auto">${nodes}</div>
+    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Done</button></div>`;
+}
+
 /* =========================== PHASE: BOSS SELECT ========================== */
 function gotoBossSelect(){
   G.phase='bossSelect'; overlay.classList.add('show');
@@ -422,13 +631,20 @@ function gotoBossSelect(){
       </div>`;}).join('')}</div>`;
 }
 function chooseBoss(key){
+  applyRunes();                                  // lock in this run's rune bonuses
   const b=BOSSES[key];
-  G.boss={ key, ...b, hp:b.maxHp, maxHp:b.maxHp, lvl:1,
-    mana:60, maxMana:100, manaRegen:6,
+  const maxHp=Math.round(b.maxHp*(1+RB.bossHp)) + RB.bossHpFlat;
+  const atk=Math.round(b.atk*(1+RB.bossAtk)) + RB.bossAtkFlat;
+  G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1,
+    mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
     abil:b.abilities.map(id=>({id,cd:0})) };
-  // starter dungeon: one empty slot already available.
-  G.rooms=[null];
-  G.slots=1;
+  // starter dungeon + rune head-starts
+  G.slots=1+RB.slot0;
+  G.rooms=Array(G.slots).fill(null);
+  G.gold=30+RB.gold0;
+  G.dread=RB.dread0;
+  G.guildLvl=Math.min(GUILD_MAX, RB.guild0);
+  for(let i=0;i<RB.cards0;i++) G.hand.push({type:pick(ROOM_KEYS), lvl:1});
   overlay.classList.remove('show');
   gotoBuild(true);
 }
@@ -447,7 +663,7 @@ function gotoBuild(first){
 function corridorWidth(){ return (G.slots+1)*ROOM_W; }
 function cellX(i){ return i*ROOM_W; }        // left edge of cell i (0..slots-1 rooms, slots=boss)
 
-function slotCost(){ return 25 + G.slots*20; }
+function slotCost(){ return Math.max(1, Math.round((25 + G.slots*20)*(1-(RB.slotCost||0)))); }
 
 function buySlot(){
   const c=slotCost();
@@ -470,7 +686,7 @@ function discardCard(i){
 }
 function roomName(r){ return r?(r.type==='minion'?(r.label||'Corrupted'):ROOMS[r.type].name):'empty'; }
 function canFuse(room,card){
-  return (room.kills||0)>=FUSE_KILLS && !room.part2
+  return (room.kills||0)>=fuseKills() && !room.part2
     && room.def.kind!=='shop' && ROOMS[card.type].kind!=='shop'
     && card.type!==room.type;
 }
@@ -499,12 +715,12 @@ function tapSlot(idx){
     showHint(ROOMS[card.type].name+' built!');
   } else if(room.type===card.type || room.part2===card.type){
     // upgrade matching room/part (capped)
-    if(room.lvl>=MAX_LEVEL){ showHint(comboName(room)+' is already max level ('+MAX_LEVEL+').'); return; }
+    if(room.lvl>=maxLevel()){ showHint(comboName(room)+' is already max level ('+maxLevel()+').'); return; }
     room.lvl++;
     G.hand.splice(selCard,1); selCard=-1;
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
     floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
-    showHint(comboName(room)+' upgraded to Lv '+room.lvl+(room.lvl>=MAX_LEVEL?' (max)':'')+'!');
+    showHint(comboName(room)+' upgraded to Lv '+room.lvl+(room.lvl>=maxLevel()?' (max)':'')+'!');
   } else if(canFuse(room,card)){
     // fuse a second trap/monster into this room
     room.part2=card.type;
@@ -514,7 +730,7 @@ function tapSlot(idx){
     floater(cellX(idx)+ROOM_W/2, FLOOR-80, info.name||'COMBO', info.tone==='bad'?'#ff7a8a':'#7bdc6b');
     showHint('Fused → '+comboName(room)+(info.name?' ('+info.name+', ×'+info.m.toFixed(2)+')':'')+'!');
   } else if(room.def.kind!=='shop' && ROOMS[card.type].kind!=='shop' && !room.part2){
-    showHint(ROOMS[room.type].name+' needs '+FUSE_KILLS+' kills before it can fuse a 2nd part ('+(room.kills||0)+'/'+FUSE_KILLS+').');
+    showHint(ROOMS[room.type].name+' needs '+fuseKills()+' kills before it can fuse a 2nd part ('+(room.kills||0)+'/'+fuseKills()+').');
     return;
   } else {
     showHint('Can\'t place that here.');
@@ -551,8 +767,9 @@ function startWave(){
   buildCells();
   spawnGroup(G.guildLvl+1);
   G.phase='run'; speedMul=1; camX=0;
-  // refill some mana each wave
+  // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
+  if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
   render();
 }
 
@@ -563,7 +780,7 @@ function buildCells(){
     const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:'empty', traps:[], mon:null, shop:false};
     if(r){
       const parts=roomParts(r);
-      const syn=synergyInfo(parts).m;
+      const syn=synergyInfo(parts).m + (parts.length>1?(RB.synergy||0):0);
       cell.syn=syn;
       let monHp=0, monAtk=0, hasMon=false, hasShop=false;
       for(const p of parts){
@@ -581,8 +798,8 @@ function buildCells(){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
       }
-      if(hasMon){ const hp=Math.round(monHp*syn);
-        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn), atkT:0, alive:true}; }
+      if(hasMon){ const hp=Math.round(monHp*syn*(1+(RB.monHp||0)));
+        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*(1+(RB.monDmg||0))), atkT:0, alive:true}; }
       cell.shop=hasShop;
       cell.kind = hasMon ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
     }
@@ -753,9 +970,10 @@ function castAbility(slot){
   const target=leadHero();
   if(!target){ return; }
   const a=G.boss.abil[slot]; const def=ABIL[a.id];
+  const cost=abilCost(def.cost);
   if(a.cd>0){ showHint(def.name+' on cooldown.'); return; }
-  if(G.boss.mana<def.cost){ showHint('Not enough mana.'); return; }
-  G.boss.mana-=def.cost; a.cd=def.cd;
+  if(G.boss.mana<cost){ showHint('Not enough mana.'); return; }
+  G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
   def.run(target);
   burst(bossX(), FLOOR-40, G.boss.col, 10);
   render();
@@ -764,18 +982,19 @@ function castAbility(slot){
 function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead';
-  // loot: carried gold + bounty (scaled a little by your threat dial)
-  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12));
+  // loot: carried gold + bounty (threat dial + rune bonuses)
+  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0))) + (RB.goldKill||0);
   G.gold+=loot;
-  // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers
-  const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0);
+  // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
+  const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
+    + (RB.dreadKill||0) + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
   // room XP: credit the room the hero fell in (toward fusing a 2nd part)
   const dcell=cellAt(h.x);
   if(dcell && dcell.room && dcell.room.def.kind!=='shop'){
     dcell.room.kills=(dcell.room.kills||0)+1;
-    if(dcell.room.kills===FUSE_KILLS && !dcell.room.part2)
+    if(dcell.room.kills===fuseKills() && !dcell.room.part2)
       floater(dcell.x0+ROOM_W/2, FLOOR-96, 'FUSE READY!', '#ffd34d');
   }
   // a hero who touched the throne returns with a grudge
@@ -801,6 +1020,7 @@ function heroReachesThrone(){
 }
 function bossDies(){
   G.phase='lose'; overlay.classList.add('show');
+  const earned=awardRunes();
   const score = G.mode==='campaign'
     ? `You fell on Chapter ${G.levelIdx+1} after slaying ${totalKills()} heroes.`
     : `You reigned ${G.survived} heroes before the throne fell.`;
@@ -808,12 +1028,22 @@ function bossDies(){
     <div style="font-size:54px">${G.boss.ic}💔</div>
     <p>${G.boss.name} was struck down by a hero who reached the throne.</p>
     <p>${score}</p>
+    <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     <div class="menu-btns">
       <button class="go" onclick="retryWave()">↺ Try this wave again</button>
+      <button onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
 }
 function totalKills(){ return G.totalSlain; }
+// Bank this run's rune points (delta since last banking) into the pool.
+function awardRunes(){
+  const total = G.totalSlain + (G.mode==='campaign'? G.levelIdx*3 : 0);
+  const delta = Math.max(0, total - (G.runesBanked||0));
+  G.runesBanked = total;
+  RUNES.points += delta; saveRunes();
+  return delta;
+}
 
 function retryWave(){
   // soft retry: restore boss a bit, rebuild same dungeon, don't advance hero count badly
@@ -832,7 +1062,8 @@ function gotoReward(){
   const owned = new Set(G.rooms.filter(Boolean).map(r=>r.type).filter(t=>t!=='minion'));
   G.drafts=[];
   const pool=[...ROOM_KEYS];
-  for(let i=0;i<3;i++){
+  const choices=3+(RB.draft||0);
+  for(let i=0;i<choices;i++){
     let t;
     if(Math.random()<0.45 && owned.size){ t=pick([...owned]); }
     else t=pick(pool);
@@ -840,7 +1071,7 @@ function gotoReward(){
   }
   overlay.classList.add('show');
   overlay.innerHTML=`<h1>Spoils of War</h1>
-    <p>Draft one room card. ${G.hand.length>=5?'<b style="color:#ff8a8a">Hand full (5) — picking will need a discard, or skip.</b>':'Hold up to 5.'}</p>
+    <p>Draft one room card. ${G.hand.length>=handCap()?`<b style="color:#ff8a8a">Hand full (${handCap()}) — picking will need a discard, or skip.</b>`:`Hold up to ${handCap()}.`}</p>
     <div class="choices">${G.drafts.map((c,i)=>{
       const d=ROOMS[c.type];
       return `<div class="choice" onclick="takeDraft(${i})">
@@ -850,7 +1081,7 @@ function gotoReward(){
     <div class="menu-btns"><button onclick="skipDraft()">Skip draft</button></div>`;
 }
 function takeDraft(i){
-  if(G.hand.length>=5){
+  if(G.hand.length>=handCap()){
     showHint('Hand full — discard a card in build, or skip.'); return;
   }
   G.hand.push(G.drafts[i]);
@@ -872,12 +1103,15 @@ function winLevel(){
   if(G.levelIdx>=CAMPAIGN.length-1){
     // game complete
     G.phase='win'; overlay.classList.add('show');
+    const earned=awardRunes();
     overlay.innerHTML=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
       <div style="font-size:60px">${G.boss.ic}👑</div>
       <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
          having buried <b>${G.totalSlain}</b> heroes.</p>
+      <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
       <div class="menu-btns">
         <button class="go" onclick="gotoMenu()">★ Main menu</button>
+        <button onclick="openRunes()">🔮 Rune Page</button>
         <button onclick="startEndless()">Try Endless</button></div>`;
     return;
   }
@@ -942,7 +1176,7 @@ function chooseEvent(i){
   showHint(ev.outcome); renderTown(); renderTop();
 }
 
-function upgradeCost(key){ return Math.round(TOWN_UPGRADES[key].base * Math.pow(1.5, G.townBuys[key]||0)); }
+function upgradeCost(key){ return townCost(Math.round(TOWN_UPGRADES[key].base * Math.pow(1.5, G.townBuys[key]||0))); }
 function buyUpgrade(key){
   const cost=upgradeCost(key);
   if(G.dread<cost){ showHint('Not enough dread.'); return; }
@@ -955,17 +1189,18 @@ function buyUpgrade(key){
   showHint(TOWN_UPGRADES[key].name+'!'); renderTown(); renderTop();
 }
 
+function schemeCost(key){ return townCost(TOWN_SCHEMES[key].cost); }
 function buyScheme(key){
-  const s=TOWN_SCHEMES[key];
+  const s=TOWN_SCHEMES[key]; const c=schemeCost(key);
   if(G.fx[key]>0){ showHint('Already active.'); return; }
-  if(G.dread<s.cost){ showHint('Not enough dread.'); return; }
-  G.dread-=s.cost; G.fx[key]=s.waves;
+  if(G.dread<c){ showHint('Not enough dread.'); return; }
+  G.dread-=c; G.fx[key]=s.waves;
   showHint(s.name+' — active '+s.waves+' waves.'); renderTown(); renderTop();
 }
 function setThreat(d){ G.bounty=clamp(G.bounty+d,-2,3); renderTown(); renderTop(); }
 
 const GUILD_MAX=3;   // party of up to 4
-function guildCost(){ return 9 + G.guildLvl*7; }
+function guildCost(){ return townCost(9 + G.guildLvl*7); }
 function buyGuild(){
   if(G.guildLvl>=GUILD_MAX){ showHint('Guild house is at max level.'); return; }
   const cost=guildCost();
@@ -975,7 +1210,7 @@ function buyGuild(){
   renderTown(); renderTop();
 }
 
-function sabotageCost(spec,key){ return TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3); }
+function sabotageCost(spec,key){ return townCost(TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3)); }
 function sabotage(idx,key){
   const spec=G.queue[idx]; if(!spec) return;
   const cost=sabotageCost(spec,key);
@@ -1000,15 +1235,16 @@ function minionCardFromSpec(spec){
            minAtk:Math.max(2,Math.round(ps.atk*0.8)), label:(spec.name||'Thrall') };
 }
 function grantMinionCard(power){
-  if(G.hand.length>=5){ showHint('Hand full — make room first.'); return false; }
+  if(G.hand.length>=handCap()){ showHint('Hand full — make room first.'); return false; }
   const spec={cls:pick(CLASS_KEYS), power, traits:[], name:rollName(), debuff:{atkMul:1,burn:0,robbed:false}};
   G.hand.push(minionCardFromSpec(spec)); return true;
 }
 function corruptHero(idx){
   const spec=G.queue[idx]; if(!spec) return;
-  if(G.dread<CORRUPT_COST){ showHint('Not enough dread.'); return; }
-  if(G.hand.length>=5){ showHint('Hand full — play a card first.'); return; }
-  G.dread-=CORRUPT_COST; G.queue.splice(idx,1);
+  const cc=townCost(CORRUPT_COST);
+  if(G.dread<cc){ showHint('Not enough dread.'); return; }
+  if(G.hand.length>=handCap()){ showHint('Hand full — play a card first.'); return; }
+  G.dread-=cc; G.queue.splice(idx,1);
   G.hand.push(minionCardFromSpec(spec)); ensureQueue(3);
   showHint((spec.name||'A hero')+' is corrupted into a minion!'); renderTown(); renderTop();
 }
@@ -1040,12 +1276,12 @@ function renderTown(){
       <span class="small" style="opacity:.8;font-weight:normal">${u.desc}</span>
       <span style="color:#b985ff">${cost} ☠</span></button>`;}).join('');
   const schemes=Object.keys(TOWN_SCHEMES).map(k=>{
-    const s=TOWN_SCHEMES[k]; const active=G.fx[k]>0; const can=!active&&G.dread>=s.cost;
+    const s=TOWN_SCHEMES[k]; const sc=schemeCost(k); const active=G.fx[k]>0; const can=!active&&G.dread>=sc;
     return `<button ${can?'':'disabled'} onclick="buyScheme('${k}')"
       style="display:flex;flex-direction:column;align-items:center;min-width:112px;gap:1px;height:auto;padding:7px">
       <span style="font-size:20px">${s.ic}</span><span>${s.name}</span>
       <span class="small" style="opacity:.8;font-weight:normal">${s.desc}</span>
-      <span style="color:#b985ff">${active?('active '+G.fx[k]+'w'):s.cost+' ☠'}</span></button>`;}).join('');
+      <span style="color:#b985ff">${active?('active '+G.fx[k]+'w'):sc+' ☠'}</span></button>`;}).join('');
   const roster=G.queue.slice(0,3).map((spec,i)=>{
     const c=CLASSES[spec.cls]; const ps=previewStats(spec);
     const nm = spec.name ? `${spec.name}${spec.title?' '+spec.title:''}` : c.name;
@@ -1056,7 +1292,7 @@ function renderTown(){
       const dis=done||G.dread<cost;
       return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
         ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
-    const corruptDis = G.dread<CORRUPT_COST || G.hand.length>=5;
+    const corruptDis = G.dread<townCost(CORRUPT_COST) || G.hand.length>=handCap();
     return `<div class="choice" style="width:208px;${spec.rival?'border-color:#ff6b8a':''}">
       <div class="big">${c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
       <h3 style="font-size:14px">${nm}</h3>
@@ -1064,7 +1300,7 @@ function renderTown(){
       <div style="min-height:20px;margin:3px 0">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
       <div class="stats">❤️ ${ps.hp} · 🗡️ ${ps.atk} · 💰 ${ps.gold}</div>
       <div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
-      <button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">🧟 Corrupt ${CORRUPT_COST}☠</button>
+      <button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">🧟 Corrupt ${townCost(CORRUPT_COST)}☠</button>
     </div>`;}).join('');
   overlay.innerHTML=`<h1 style="margin-bottom:2px">🏚️ Hero Town</h1>
     <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span></p>
@@ -1188,7 +1424,7 @@ function trapTick(h,cell,dt){
     tr.fireT-=dt;
     if(tr.fireT<=0){
       tr.fireT=tr.def.rate;
-      const dmg=Math.round(tr.def.dmg * (1 + (r.lvl-1)*0.4) * syn);
+      const dmg=Math.round(tr.def.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0)));
       dealToHero(h, dmg, 'HIT', tr.def.name==='Dart Wall');
       if(tr.def.burn){ h.burn=tr.def.burn+(r.lvl-1)*2; h.burnT=3; }
       burst(h.x, h.y-20, tr.def.col, 5);
@@ -1257,7 +1493,7 @@ function bossFightTick(h,dt,isFront){
   h.atkT-=dt;
   if(h.atkT<=0){
     h.atkT=0.8*h.atkSpeed;
-    const dmg=Math.max(1,Math.round(h.atk));
+    const dmg=Math.max(1,Math.round(h.atk*(1-(RB.bossDR||0))));
     b.hp-=dmg;
     if(h.vampiric) healHero(h, dmg*0.4);
     floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
@@ -1418,14 +1654,14 @@ function drawRoomContents(x0,w,room,i){
 
   // build-time room info: XP pips, fuse-ready, combo synergy
   if(G.phase!=='run' && ROOMS[room.type].kind!=='shop'){
-    const k=Math.min(FUSE_KILLS, room.kills||0);
-    for(let p=0;p<FUSE_KILLS;p++) px(cx-16+p*11, FLOOR-118, 8,5, p<k?'#ffd34d':'#3a2c5a');
+    const fk=fuseKills(); const k=Math.min(fk, room.kills||0);
+    for(let p=0;p<fk;p++) px(cx-16+p*11, FLOOR-118, 8,5, p<k?'#ffd34d':'#3a2c5a');
     if(room.part2){
       const info=synergyInfo(parts);
       X.fillStyle=info.tone==='good'?'#7bdc6b':info.tone==='bad'?'#ff7a8a':'#cdbaff';
       X.font='bold 9px Trebuchet MS'; X.textAlign='center';
       X.fillText((info.name||'Combo')+' ×'+info.m.toFixed(2), cx, FLOOR-104); X.textAlign='left';
-    } else if((room.kills||0)>=FUSE_KILLS){
+    } else if((room.kills||0)>=fuseKills()){
       X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
       X.fillText('⚡ FUSE READY', cx, FLOOR-104); X.textAlign='left';
     }
@@ -1611,13 +1847,13 @@ function renderPanel(){
   }
   else if(G.phase==='run'){
     panel.innerHTML=`<div class="row">
-      ${G.boss.abil.map((a,i)=>{ const def=ABIL[a.id];
-        const dis=(a.cd>0||G.boss.mana<def.cost);
+      ${G.boss.abil.map((a,i)=>{ const def=ABIL[a.id]; const cost=abilCost(def.cost);
+        const dis=(a.cd>0||G.boss.mana<cost);
         return `<button class="abil" onclick="castAbility(${i})" ${dis?'disabled':''}
           title="${def.desc}">
           <span style="font-size:18px">${def.ic}</span>
           <span style="font-size:11px">${def.name}</span>
-          <span class="c">${a.cd>0?'⏳'+a.cd.toFixed(1)+'s':'🔷'+def.cost}</span>
+          <span class="c">${a.cd>0?'⏳'+a.cd.toFixed(1)+'s':'🔷'+cost}</span>
         </button>`;}).join('')}
       <span style="flex:1"></span>
       <button onclick="toggleSpeed()">⏩ ${speedMul}×</button>
@@ -1690,9 +1926,10 @@ function updateRunPanel(){
   if(btns.length!==G.boss.abil.length){ renderPanel(); return; }
   G.boss.abil.forEach((a,i)=>{
     const def=ABIL[a.id];
-    btns[i].disabled = (a.cd>0 || G.boss.mana<def.cost);
+    const cost=abilCost(def.cost);
+    btns[i].disabled = (a.cd>0 || G.boss.mana<cost);
     const c=btns[i].querySelector('.c');
-    if(c) c.textContent = a.cd>0 ? ('⏳'+a.cd.toFixed(1)+'s') : ('🔷'+def.cost);
+    if(c) c.textContent = a.cd>0 ? ('⏳'+a.cd.toFixed(1)+'s') : ('🔷'+cost);
   });
 }
 
@@ -1701,6 +1938,7 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
 if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 
+loadRunes();
 resize();
 gotoMenu();
 requestAnimationFrame(frame);
