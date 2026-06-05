@@ -170,7 +170,7 @@ const ROOMS = {
   oil:      {kind:'trap',   name:'Oil Slick',  ic:'🛢️', col:'#3a3a2a', dmg:3,  rate:0.7,  elem:'oil',  desc:'Coats heroes in oil — slows them, primes fire & lightning.'},
   frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). Then any hit SHATTERS for a burst.'},
   tesla:    {kind:'trap',   name:'Tesla Coil', ic:'⚡', col:'#fff34d', dmg:9,  rate:0.7,  elem:'shock',desc:'Lightning. Chains across the party if they are oiled.'},
-  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6,  desc:'Weak early, vicious once fed.'},
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Weak early — but grows +10% stronger for every hero that dies in this room.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
@@ -284,13 +284,13 @@ function rollName(){ return pick(HERO_NAMES); }
 
 // Champion heroes: periodic named mini-bosses that arrive solo with a special.
 const CHAMPIONS = {
-  paladin:    {cls:'warrior', title:'the Shieldbearer', ic:'🛡️', col:'#ffd34d', hpMul:7.0, atkMul:1.30,
-               desc:'Raises a shield (−70% damage) every few seconds.'},
-  thief:      {cls:'rogue',   title:'the Gold Thief',   ic:'🗝️', col:'#5fd17a', hpMul:4.5, atkMul:1.10,
+  paladin:    {cls:'warrior', title:'the Shieldbearer', ic:'🛡️', col:'#ffd34d', hpMul:4.2, atkMul:1.15,
+               desc:'Raises a shield (−60% damage) every few seconds.'},
+  thief:      {cls:'rogue',   title:'the Gold Thief',   ic:'🗝️', col:'#5fd17a', hpMul:3.0, atkMul:1.05,
                desc:'Robs your gold and flees if it reaches the throne.'},
-  berserker:  {cls:'warrior', title:'the Bloodraged',   ic:'😤', col:'#ff5470', hpMul:6.0, atkMul:1.20,
+  berserker:  {cls:'warrior', title:'the Bloodraged',   ic:'😤', col:'#ff5470', hpMul:3.8, atkMul:1.10,
                desc:'Grows stronger as its HP falls.'},
-  necromancer:{cls:'mage',    title:'the Deathless',    ic:'💀', col:'#b163ff', hpMul:6.5, atkMul:1.15,
+  necromancer:{cls:'mage',    title:'the Deathless',    ic:'💀', col:'#b163ff', hpMul:4.0, atkMul:1.10,
                desc:'Siphons life to heal itself.'},
 };
 const CHAMP_KEYS = Object.keys(CHAMPIONS);
@@ -307,22 +307,22 @@ const PASSIVES = {
 };
 // Bosses: differing stats, a passive, and a default 3-ability kit (customisable).
 const BOSSES = {
-  dragon: {name:'Ignar the Dragon', ic:'🐉', col:'#c43a3a', maxHp:140, atk:16,
+  dragon: {name:'Ignar the Dragon', ic:'🐉', col:'#c43a3a', maxHp:175, atk:20,
     blurb:'High HP bruiser. Breathe fire on the brave.', passive:'scaled',
     abilities:['slam','breath','mend']},
-  lich:   {name:'Mortis the Lich', ic:'☠️', col:'#7ad0c0', maxHp:105, atk:12,
+  lich:   {name:'Mortis the Lich', ic:'☠️', col:'#7ad0c0', maxHp:135, atk:15,
     blurb:'Frail but cruel — and hard to keep dead.', passive:'undying',
     abilities:['bolt','curse','freeze']},
-  demon:  {name:'Azzaroth the Demon', ic:'😈', col:'#a23bd0', maxHp:120, atk:18,
+  demon:  {name:'Azzaroth the Demon', ic:'😈', col:'#a23bd0', maxHp:150, atk:22,
     blurb:'Aggressive caster who drains the living.', passive:'arcane',
     abilities:['slam','drain','dread']},
-  ogre:   {name:'Gormauth the Devourer', ic:'👹', col:'#b0563a', maxHp:185, atk:20,
+  ogre:   {name:'Gormauth the Devourer', ic:'👹', col:'#b0563a', maxHp:230, atk:25,
     blurb:'Colossal glutton who feasts on the fallen.', passive:'feed',
     abilities:['slam','drain','mend']},
-  ent:    {name:'Thornheart', ic:'🌳', col:'#5fae54', maxHp:130, atk:14,
+  ent:    {name:'Thornheart', ic:'🌳', col:'#5fae54', maxHp:165, atk:18,
     blurb:'A bramble-throne that punishes melee.', passive:'thorns',
     abilities:['curse','freeze','bolt']},
-  golem:  {name:'Karnak the Colossus', ic:'🗿', col:'#9aa4b2', maxHp:170, atk:15,
+  golem:  {name:'Karnak the Colossus', ic:'🗿', col:'#9aa4b2', maxHp:210, atk:19,
     blurb:'Living siege engine — ability damage incarnate.', passive:'titan',
     abilities:['slam','breath','bolt']},
 };
@@ -1076,9 +1076,11 @@ function buildCells(){
           hasMon=true;
           const bHp = p==='minion'? r.minHp : def.hp;
           const bAtk= p==='minion'? r.minAtk : def.atk;
+          // "Fed" monsters (goblins) grow with every hero that died in this room.
+          const feed = def.feeds ? (1 + Math.min(12,(r.kills||0))*0.10) : 1;
           // Monsters scale HARD: weak at Lv1, brutal at high level.
-          monHp += bHp  * (0.9 + (r.lvl-1)*0.85);
-          monAtk+= bAtk * (1.0 + (r.lvl-1)*0.9);
+          monHp += bHp  * (0.9 + (r.lvl-1)*0.85) * feed;
+          monAtk+= bAtk * (1.0 + (r.lvl-1)*0.9)  * feed;
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
@@ -1184,7 +1186,7 @@ function buildHeroFromSpec(spec){
   // ---- champion mini-boss ----
   const champ = spec.champion ? CHAMPIONS[spec.champion] : null;
   let gold=heroGold(n,d,spec.debuff.robbed), bounty=heroBounty(n,d);
-  if(champ){ hp*=champ.hpMul; atk*=champ.atkMul; armor+=4; gold=Math.round(gold*3); bounty=Math.round(bounty*4); }
+  if(champ){ hp*=champ.hpMul; atk*=champ.atkMul; armor+=2; gold=Math.round(gold*2.5); bounty=Math.round(bounty*3); }
   hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
     cls, ...c, name:cls, traits:tr,
@@ -1258,7 +1260,7 @@ function dealToHero(h, raw, label, pierce, elem){
   let dmg=heroDmg(h,raw,pierce);
   const crit = Math.random()<0.12;              // your dungeon can land critical hits
   if(crit) dmg*=2;
-  if(h.shieldT>0){ dmg=Math.max(1,Math.round(dmg*0.3)); }   // champion shield (−70%)
+  if(h.shieldT>0){ dmg=Math.max(1,Math.round(dmg*0.4)); }   // champion shield (−60%)
   h.hp-=dmg;
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
     shake(6); hitStop=0.05; sfx('crit'); }
@@ -1823,16 +1825,16 @@ function onEnterCell(h,cell){
 function championTick(h,dt){
   if(h.shieldT>0) h.shieldT-=dt;
   if(h.champion==='berserker'){
-    h.atk = +(h._atkBase*(1 + (1 - h.hp/h.maxHp)*1.1)).toFixed(1);   // enrage as HP drops
+    h.atk = +(h._atkBase*(1 + (1 - h.hp/h.maxHp)*0.6)).toFixed(1);   // enrage as HP drops (max +60%)
     return;
   }
   h.specialT-=dt;
   if(h.specialT>0) return;
   if(h.champion==='paladin'){
-    h.specialT=5; h.shieldT=2.2;
+    h.specialT=6; h.shieldT=1.8;
     floater(h.x, h.y-72, '🛡 SHIELD UP', '#ffd34d'); sfx('cast');
   } else if(h.champion==='necromancer'){
-    h.specialT=5; const heal=Math.round(h.maxHp*0.15);
+    h.specialT=6; const heal=Math.round(h.maxHp*0.10);
     h.hp=Math.min(h.maxHp, h.hp+heal);
     floater(h.x, h.y-72, '💀 SIPHON +'+heal, '#b163ff'); healHero(h,0); sfx('cast');
   }
@@ -1840,7 +1842,7 @@ function championTick(h,dt){
 // The gold thief reaches the throne and escapes with your gold (no loot, no kill).
 function thiefSteal(h){
   if(h.state==='dead') return;
-  const stolen=Math.round(G.gold*0.30)+40;
+  const stolen=Math.round(G.gold*0.20)+30;
   G.gold=Math.max(0, G.gold-stolen);
   floater(bossX(), FLOOR-92, h.heroName+' ROBBED you −'+stolen+'g', '#ff7a8a');
   showHint('💰 '+h.heroName+' '+(h.title||'the Gold Thief')+' escaped with '+stolen+' gold!');
@@ -2366,10 +2368,12 @@ function describeRoom(room){
     const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*(1+(RB.trapDmg||0)));
     lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  if(monParts.length){ let hp=0,atk=0;
+  if(monParts.length){ let hp=0,atk=0, fed=false;
     monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?room.minHp:def.hp, bAtk=p==='minion'?room.minAtk:def.atk;
-      hp+=bHp*(0.9+(room.lvl-1)*0.85); atk+=bAtk*(1.0+(room.lvl-1)*0.9); });
-    lines.push(`👹 Guard: <b>${Math.round(hp*syn*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*(1+(RB.monDmg||0)))}</b> atk /0.9s`); }
+      const feed=def.feeds?(1+Math.min(12,(room.kills||0))*0.10):1; if(def.feeds)fed=true;
+      hp+=bHp*(0.9+(room.lvl-1)*0.85)*feed; atk+=bAtk*(1.0+(room.lvl-1)*0.9)*feed; });
+    lines.push(`👹 Guard: <b>${Math.round(hp*syn*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*(1+(RB.monDmg||0)))}</b> atk /0.9s`);
+    if(fed) lines.push(`🍖 Fed: <b>${Math.min(12,room.kills||0)}</b> corpses · +${Math.min(12,room.kills||0)*10}% (max +120%)`); }
   if(parts.includes('shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
     lines.push(`🛒 Shop Lv ${room.lvl}: ×${shopMarkup(room.lvl).toFixed(2)} markup`);
