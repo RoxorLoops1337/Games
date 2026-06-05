@@ -1161,7 +1161,9 @@ function gotoBossSelect(){
         <div class="big">${lk?'🔒':b.ic}</div><h3>${b.name}</h3>
         ${lk?`<div class="desc">🔒 Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills (you: ${RUNES.kills})</div>`
             :`<div class="small" style="color:var(--gold);font-weight:bold">★ Mastery Lv ${xi.lvl}${xi.max?' (MAX)':''}</div>
-        <div class="bar" style="width:90%;height:8px;margin:3px auto"><i style="width:${Math.round(xi.into/xi.need*100)}%;background:linear-gradient(90deg,#caa15e,#ffd34d)"></i><span style="font-size:8px">${xi.max?'MAX':xi.into+'/'+xi.need+' XP'}</span></div>
+        <div class="bar" style="width:96%;height:16px;margin:4px auto;background:#2a2046">
+          <i style="width:${xi.max?100:Math.max(4,Math.round(xi.into/xi.need*100))}%;background:linear-gradient(90deg,#caa15e,#ffd34d)"></i>
+          <span style="line-height:16px">${xi.max?'★ MAX':xi.into+' / '+xi.need+' XP'}</span></div>
         <div class="desc">${b.blurb}</div>
         <div class="small" style="color:${b.col};margin:3px 0"><b>✦ ${PASSIVES[b.passive].name}</b><br>${PASSIVES[b.passive].desc}</div>
         <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
