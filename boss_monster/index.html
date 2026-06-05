@@ -127,8 +127,13 @@
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
   #relicbar{position:absolute;top:5px;left:5px;z-index:21;display:flex;gap:3px;flex-wrap:wrap;
     max-width:calc(100% - 84px);}
-  .relicchip{width:30px;height:30px;border-radius:7px;border:2px solid;background:rgba(16,11,30,.85);
-    display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;}
+  .relicchip{width:32px;height:32px;border-radius:7px;border:2px solid;
+    background:radial-gradient(circle at 50% 38%, rgba(60,52,86,.95), rgba(20,15,34,.95));
+    display:flex;align-items:center;justify-content:center;line-height:1;cursor:pointer;
+    font-size:19px;
+    font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla","EmojiOne Color","Android Emoji",sans-serif;
+    text-shadow:0 1px 2px rgba(0,0,0,.6);overflow:hidden;}
+  .relicchip .ric{display:block;transform:translateY(.5px);}
   #zoomctl{position:absolute;right:6px;bottom:6px;z-index:21;display:flex;flex-direction:column;gap:4px;}
   #zoomctl button{width:34px;height:34px;padding:0;font-size:18px;font-weight:bold;border-radius:8px;
     background:rgba(20,15,36,.8);border:1px solid var(--line);color:var(--ink);}
@@ -2724,7 +2729,7 @@ function renderRelicBar(){
   if(!G || !G.relics || !G.relics.length || (G.phase!=='build' && G.phase!=='run')){ relicBar.innerHTML=''; return; }
   relicBar.innerHTML=G.relics.map(id=>{ const r=RELICS[id]; const tc=RELIC_TIERS[r.tier];
     return `<div class="relicchip" style="border-color:${tc.col};box-shadow:0 0 6px ${tc.col}66"
-      title="${r.name}: ${r.desc}" onmouseenter="relicHover('${id}')" onmouseleave="cardHoverOut()" onclick="relicTap('${id}')">${r.ic}</div>`;}).join('');
+      title="${r.name}: ${r.desc}" onmouseenter="relicHover('${id}')" onmouseleave="cardHoverOut()" onclick="relicTap('${id}')"><span class="ric">${r.ic}</span></div>`;}).join('');
 }
 function entityAt(wx){
   if(G.phase==='run' && G.heroes){
