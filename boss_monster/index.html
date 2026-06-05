@@ -511,6 +511,12 @@ function pickHeroClass(){
   return 'cleric';
 }
 
+// Loot economy. Gold scales gently (softened difficulty) so income doesn't
+// balloon as heroes get stronger — power should outpace your purse.
+function softGoldD(d){ return 1 + (d-1)*0.45; }
+function heroGold(n,d,robbed){ return Math.round((7 + n*2.2)*softGoldD(d)*(robbed?0.35:1)); }
+function heroBounty(n,d){ return Math.round((4 + n*1.2)*softGoldD(d)); }
+
 // Preview a spec's headline stats (for the town roster) without instantiating.
 function previewStats(spec){
   const c=CLASSES[spec.cls]; const n=spec.power; const d=difficulty();
@@ -518,8 +524,7 @@ function previewStats(spec){
   if(spec.traits.includes('hardy')) hp*=1.6;
   if(spec.traits.includes('berserk')) atk*=1.4;
   atk*=spec.debuff.atkMul;
-  const gold=Math.round((12 + n*5)*d * (spec.debuff.robbed?0.35:1));
-  return {hp:Math.round(hp), atk:+atk.toFixed(1), gold};
+  return {hp:Math.round(hp), atk:+atk.toFixed(1), gold:heroGold(n,d,spec.debuff.robbed)};
 }
 
 function spawnHero(){
@@ -545,8 +550,8 @@ function spawnHero(){
     cls:spec.cls, ...c, name:spec.cls, traits:tr,
     elite: tr.length>0,
     maxHp:hp, hp:hp, atk, armor, spd, atkSpeed,
-    gold: Math.round((12 + n*5)*d * (spec.debuff.robbed?0.35:1)),
-    bounty: Math.round((8 + n*4)*d),
+    gold: heroGold(n, d, spec.debuff.robbed),
+    bounty: heroBounty(n, d),
     vampiric: tr.includes('vampiric'),
     regen: tr.includes('zealot') || c.selfheal,
     x: 8, y: FLOOR-34,
