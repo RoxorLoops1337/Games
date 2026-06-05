@@ -167,7 +167,7 @@ const ROOMS = {
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6,  desc:'Weak early, vicious once fed.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
-  shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold.'},
+  shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
 };
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
@@ -181,6 +181,9 @@ function handCap(){ return 5 + (RB.hand||0); }
 function abilCost(c){ return Math.max(1, Math.round(c*(1-(RB.abilCost||0)))); }
 function abilDmg(x){ return Math.round(x*(1+(RB.abilDmg||0))); }
 function townCost(c){ return Math.max(1, Math.round(c*(1-(RB.townDisc||0)))); }
+// Shop sale price scales with the shop room's level (+40% markup per level).
+function shopMarkup(lvl){ return 1.6 + ((lvl||1)-1)*0.4; }
+function salePrice(room, key){ return Math.round(ITEMS[key].price * shopMarkup(room?room.lvl:1)); }
 
 // Fusing two components yields a synergy multiplier on the room's output.
 // Some pairs are great, some are duds (diminishing returns).
@@ -880,8 +883,8 @@ function stockShop(itemKey){
   if(G.gold<it.price){ showHint('Not enough gold to stock that.'); return; }
   const shop=G.rooms.find(r=>r&&r.type==='shop');
   if(!shop){ showHint('Build a Shop room first.'); return; }
-  G.gold-=it.price; shop.stock.push({key:itemKey, sold:false, price:Math.round(it.price*1.6)});
-  showHint(it.name+' stocked. Heroes pay '+Math.round(it.price*1.6)+'g for it.');
+  G.gold-=it.price; shop.stock.push({key:itemKey, sold:false});
+  showHint(it.name+' stocked. Heroes pay '+salePrice(shop,itemKey)+'g (Lv '+shop.lvl+' shop).');
   render();
 }
 
@@ -1154,31 +1157,22 @@ function bossDies(){
     <div style="font-size:54px">${G.boss.ic}💔</div>
     <p>${G.boss.name} was struck down by a hero who reached the throne.</p>
     <p>${score}</p>
+    <p style="opacity:.7">Dead is dead — this run is over.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     <div class="menu-btns">
-      <button class="go" onclick="retryWave()">↺ Try this wave again</button>
-      <button onclick="openRunes()">🔮 Rune Page</button>
+      <button class="go" onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
 }
 function totalKills(){ return G.totalSlain; }
 // Bank this run's rune points (delta since last banking) into the pool.
+// Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
 function awardRunes(){
-  const total = G.totalSlain + (G.mode==='campaign'? G.levelIdx*3 : 0);
+  const total = Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0);
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta; saveRunes();
   return delta;
-}
-
-function retryWave(){
-  // soft retry: restore boss a bit, rebuild same dungeon, don't advance hero count badly
-  overlay.classList.remove('show');
-  G.boss.hp=Math.max(1,Math.round(G.boss.maxHp*0.5));
-  G.boss.mana=G.boss.maxMana;
-  G.phase='build'; G.hero=null; G.heroes=[];
-  showHint('You rally. Boss restored to half HP — fortify and try again.');
-  render();
 }
 
 /* ============================= PHASE: REWARD ============================= */
@@ -1625,16 +1619,17 @@ function maybePotion(h){
 }
 
 function doShopping(h, cell){
-  // buy affordable, unsold items; pay YOU the markup price
+  // buy affordable, unsold items; price scales with the shop's level → you profit
   for(const s of cell.room.stock){
     if(s.sold) continue;
-    if(h.gold>=s.price){
-      h.gold-=s.price; G.gold+=s.price; s.sold=true;
+    const price=salePrice(cell.room, s.key);
+    if(h.gold>=price){
+      h.gold-=price; G.gold+=price; s.sold=true;
       const it=ITEMS[s.key];
       if(it.atk) h.atk+=it.atk;
       if(it.def) h.armor+=it.def;
       if(it.heal) h.hasPotion=true;
-      floater(cell.x0+ROOM_W*0.5, FLOOR-70, '+'+s.price+'g', '#ffd34d');
+      floater(cell.x0+ROOM_W*0.5, FLOOR-70, '+'+price+'g', '#ffd34d');
       floater(h.x, h.y-44, it.ic+' bought', '#caa15e');
     }
   }
@@ -2055,7 +2050,12 @@ function describeRoom(room){
     monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?room.minHp:def.hp, bAtk=p==='minion'?room.minAtk:def.atk;
       hp+=bHp*(0.9+(room.lvl-1)*0.85); atk+=bAtk*(1.0+(room.lvl-1)*0.9); });
     lines.push(`👹 Guard: <b>${Math.round(hp*syn*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*(1+(RB.monDmg||0)))}</b> atk /0.9s`); }
-  if(parts.includes('shop')) lines.push(`🛒 Shop: ${(room.stock||[]).filter(s=>!s.sold).length} item(s) in stock`);
+  if(parts.includes('shop')){
+    const unsold=(room.stock||[]).filter(s=>!s.sold);
+    lines.push(`🛒 Shop Lv ${room.lvl}: ×${shopMarkup(room.lvl).toFixed(2)} markup`);
+    if(unsold.length) lines.push('Selling: '+unsold.map(s=>`${ITEMS[s.key].ic} <b>${salePrice(room,s.key)}g</b>`).join(', '));
+    else lines.push('<span style="opacity:.7">empty — stock it in build</span>');
+  }
   if(parts.length>1) lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
   else if(ROOMS[room.type].kind!=='shop'){ const k=room.kills||0;
     lines.push(k>=fuseKills()?'⚡ <b>Ready to fuse</b> a 2nd part':`XP: ${k}/${fuseKills()} kills to fuse`); }
