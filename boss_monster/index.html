@@ -162,6 +162,16 @@
     padding:8px 12px;border-radius:12px;background:rgba(16,11,30,.96);border:2px solid var(--accent);
     box-shadow:0 6px 24px rgba(0,0,0,.6);}
   .rbdetail button.go{white-space:nowrap;}
+  /* ---- Tutorial coach banner + highlights ---- */
+  #tutbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:22;
+    width:min(520px,calc(100% - 56px));display:none;align-items:center;gap:10px;
+    padding:9px 12px;border-radius:12px;background:rgba(20,14,40,.96);
+    border:2px solid var(--accent);box-shadow:0 6px 22px rgba(0,0,0,.6);}
+  #tutbar.show{display:flex;}
+  #tutbar .tuttext{flex:1;font-size:13px;line-height:1.4;text-align:left;}
+  #tutbar .tutskip{font-size:11px;padding:5px 8px;min-height:0;background:#2a2040;border-color:#4a3a72;}
+  @keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 #ffd34d00;}50%{box-shadow:0 0 0 4px #ffd34d99;}}
+  .tut-pulse{animation:tutpulse 1s ease-in-out infinite;border-color:var(--gold)!important;}
 </style>
 </head>
 <body>
@@ -172,6 +182,7 @@
     <canvas id="cv"></canvas>
     <div id="hint"></div>
     <div id="inspect"></div>
+    <div id="tutbar"></div>
     <button id="audiobtn" title="Sound on/off">🔊</button>
   </div>
   <div id="panel"></div>
@@ -194,6 +205,7 @@ const panel = document.getElementById('panel');
 const overlay = document.getElementById('overlay');
 const hintEl = document.getElementById('hint');
 const inspectEl = document.getElementById('inspect');
+const tutBar = document.getElementById('tutbar');
 let inspectHover = false;
 
 // Virtual render space. VH is fixed so sprites stay a constant size; VW is
@@ -653,6 +665,7 @@ function freshGame(mode){
     relics:[],            // relic ids collected this run
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
     combo:0,              // kill streak (resets when a hero strikes the boss)
+    tutorial:false, tutStep:0, tutHi:null,   // guided tutorial state
     hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
@@ -811,6 +824,7 @@ function difficulty(){
 /* ============================== PHASE: MENU =============================== */
 function gotoMenu(){
   G = freshGame('campaign'); G.phase='menu'; render();
+  tutBar.classList.remove('show');
   overlay.classList.add('show');
   overlay.innerHTML = `
     <h1>BOSS&nbsp;MONSTER</h1>
@@ -823,6 +837,7 @@ function gotoMenu(){
     <div class="menu-btns">
       <button class="go" onclick="startCampaign()">⚔️ Campaign</button>
       <button onclick="startEndless()">♾️ Endless</button>
+      <button onclick="startTutorial()" class="${tutDoneGet()?'':'tut-pulse'}">📖 Tutorial</button>
       <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
       <button onclick="showHelp()">❓ How to play</button>
     </div>
@@ -851,6 +866,52 @@ function showHelp(){
 }
 function startCampaign(){ G=freshGame('campaign'); gotoBossSelect(); }
 function startEndless(){ G=freshGame('endless'); gotoBossSelect(); }
+
+/* ============================== TUTORIAL =============================== */
+// A guided first run: contextual coach steps that advance as you actually
+// select a card, place it, start a wave, slay a hero, and level a room.
+const TUT_STEPS=[
+  {adv:'select', hi:'hand',  text:"👋 Welcome, Boss! You build a dungeon to stop heroes reaching your throne (far right). Tap a <b>room card</b> below to pick it."},
+  {adv:'place',  hi:'slot',  text:"Now tap a glowing <b>empty slot</b> to build your room there."},
+  {adv:'wave',   hi:'start', text:"Your dungeon is armed! Tap <b>⚔️ Start Wave</b> — a hero marches in and your rooms fight automatically."},
+  {adv:'kill',   hi:'abil',  text:"Blast the intruder with a <b>boss ability</b> (bottom-left) — they cost 🔷 mana. Slay them before they reach the throne!"},
+  {adv:'upgrade',hi:'hand',  text:"Every kill earns a card. Got two of the <b>same</b> room? Select that card, then tap the matching room to <b>level it up</b> — it gets stronger."},
+  {adv:null,     hi:null, final:true, text:"You're ready! 👑 Tip: tap any room, card, hero or your boss to inspect it. Build, upgrade and fuse rooms — and don't let anyone through. Good luck!"},
+];
+function tutDoneGet(){ try{ return localStorage.getItem('bm_tut_done')==='1'; }catch(_){ return false; } }
+function tutDoneSet(){ try{ localStorage.setItem('bm_tut_done','1'); }catch(_){ } }
+function startTutorial(){
+  G=freshGame('campaign');
+  chooseBoss('dragon');          // pick a starter boss + default kit (skip the menus)
+  confirmLoadout();              // -> build phase
+  G.tutorial=true; G.tutStep=0;
+  G.slots=2; G.rooms=[null,null];
+  G.hand=[{type:'spike',lvl:1},{type:'spike',lvl:1},{type:'goblin',lvl:1}];
+  selCard=-1; pickupIdx=-1;
+  tutShow(); render();
+}
+function tutShow(){
+  if(!G||!G.tutorial){ tutBar.classList.remove('show'); return; }
+  const st=TUT_STEPS[G.tutStep];
+  G.tutHi = st?st.hi:null;
+  if(!st){ tutBar.classList.remove('show'); return; }
+  tutBar.innerHTML=`<div class="tuttext">${st.text}</div>`+
+    (st.final ? `<button class="go" onclick="tutFinish()">Got it ✓</button>`
+              : `<button class="tutskip" onclick="tutSkip()">Skip ✕</button>`);
+  tutBar.classList.add('show');
+}
+function tutEvent(ev){
+  if(!G||!G.tutorial) return;
+  const st=TUT_STEPS[G.tutStep];
+  if(st && st.adv===ev){ G.tutStep++; tutShow(); renderPanel(); }
+}
+function tutSkip(){ tutEnd(); }
+function tutFinish(){ tutEnd(); }
+function tutEnd(){
+  if(G) { G.tutorial=false; G.tutHi=null; }
+  tutBar.classList.remove('show'); tutDoneSet();
+  if(G && (G.phase==='build'||G.phase==='run')) renderPanel();
+}
 
 /* ============================== RUNE PAGE UI ============================= */
 let runeSel=null;
@@ -1012,7 +1073,7 @@ function buySlot(){
 function selectCard(i){
   selCard = (selCard===i?-1:i);
   pickupIdx=-1;
-  if(selCard>=0 && G.hand[selCard]) showInspect(describeCard(G.hand[selCard]), false);
+  if(selCard>=0 && G.hand[selCard]){ showInspect(describeCard(G.hand[selCard]), false); tutEvent('select'); }
   else hideInspect();
   render();
 }
@@ -1048,7 +1109,7 @@ function tapSlot(idx){
     G.rooms[idx]=makeRoom(card.type, card.lvl, card);
     G.hand.splice(selCard,1); selCard=-1;
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, ROOMS[card.type].col, 14);
-    showHint(ROOMS[card.type].name+' built!');
+    showHint(ROOMS[card.type].name+' built!'); tutEvent('place');
   } else if(room.type===card.type || room.part2===card.type){
     // upgrade matching room/part (capped)
     if(room.lvl>=maxLevel()){ showHint(comboName(room)+' is already max level ('+maxLevel()+').'); return; }
@@ -1056,7 +1117,7 @@ function tapSlot(idx){
     G.hand.splice(selCard,1); selCard=-1;
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
     floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
-    showHint(comboName(room)+' upgraded to Lv '+room.lvl+(room.lvl>=maxLevel()?' (max)':'')+'!');
+    showHint(comboName(room)+' upgraded to Lv '+room.lvl+(room.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('upgrade');
   } else if(canFuse(room,card)){
     // fuse a second trap/monster into this room
     room.part2=card.type;
@@ -1107,6 +1168,7 @@ function startWave(){
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
   if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
+  tutEvent('wave');
   render();
 }
 
@@ -1413,6 +1475,7 @@ function heroDies(h){
   } else {
     showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
   }
+  tutEvent('kill');
 }
 
 // Called once after the whole raiding party is wiped out.
@@ -2074,6 +2137,12 @@ function drawDungeon(tx, scale, isBuild){
       X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
       X.fillStyle='#6a5a9a'; X.font='12px Trebuchet MS'; X.textAlign='center';
       X.fillText(dropTarget?'drop here':'empty', x0+w/2, FLOOR-58); X.textAlign='left';
+      // tutorial: pulse the first empty slot during the "place" step
+      if(isBuild && G && G.tutHi==='slot' && i===G.rooms.findIndex(r=>!r)){
+        const pu=0.5+0.5*Math.sin(performance.now()/220);
+        X.strokeStyle='#ffd34d'; X.globalAlpha=0.5+0.5*pu; X.lineWidth=3; X.setLineDash([]);
+        X.strokeRect(x0+3, FLOOR-126, w-6, 122); X.globalAlpha=1;
+      }
     } else {
       drawRoomContents(x0, w, room, i);
     }
@@ -2372,11 +2441,11 @@ function renderPanel(){
             style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join('')
           :`<span class="small">Build a 🛒 Shop to sell gear for gold.</span>`}
         <span style="flex:1"></span>
-        <button class="go" onclick="startWave()">⚔️ Start Wave</button>
+        <button class="go${G&&G.tutHi==='start'?' tut-pulse':''}" onclick="startWave()">⚔️ Start Wave</button>
       </div>
       <div class="row">
         <span class="small" style="min-width:46px">Hand:</span>
-        <div class="cards">${G.hand.length? G.hand.map((c,i)=>{
+        <div class="cards${G&&G.tutHi==='hand'?' tut-pulse':''}">${G.hand.length? G.hand.map((c,i)=>{
           const d=ROOMS[c.type];
           return `<div class="card ${selCard===i?'sel':''}" onclick="selectCard(${i})"
             onmouseenter="cardHover(${i})" onmouseleave="cardHoverOut()"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
@@ -2392,13 +2461,13 @@ function renderPanel(){
       <div class="bossmini" title="your boss">
         <span>${b.ic}</span>
         <div class="bmbars">
-          <div class="bar bmhp"><i id="pbhp" style="background:linear-gradient(90deg,#ff4d6d,#ff8a8a)"></i><span id="pbhpT"></span></div>
-          <div class="bar bmmana"><i id="pbmana" style="background:linear-gradient(90deg,#2a7adf,#4dc3ff)"></i><span id="pbmanaT"></span></div>
+          <div class="bar bmhp"><i id="pbhp" style="background:linear-gradient(90deg,#ff4d6d,#ff8a8a);width:${b.hp/b.maxHp*100}%"></i><span id="pbhpT">${Math.ceil(b.hp)}/${b.maxHp}</span></div>
+          <div class="bar bmmana"><i id="pbmana" style="background:linear-gradient(90deg,#2a7adf,#4dc3ff);width:${b.mana/b.maxMana*100}%"></i><span id="pbmanaT">${Math.floor(b.mana)}/${b.maxMana}</span></div>
         </div>
       </div>
       ${G.boss.abil.map((a,i)=>{ const def=ABIL[a.id]; const cost=abilCost(def.cost);
         const dis=(a.cd>0||G.boss.mana<cost);
-        return `<button class="abil" onclick="castAbility(${i})" ${dis?'disabled':''}
+        return `<button class="abil${i===0&&G.tutHi==='abil'?' tut-pulse':''}" onclick="castAbility(${i})" ${dis?'disabled':''}
           title="${def.desc}">
           <span style="font-size:18px">${def.ic}</span>
           <span style="font-size:11px">${def.name}</span>
@@ -2407,7 +2476,6 @@ function renderPanel(){
       <span style="flex:1"></span>
       <button onclick="toggleSpeed()">⏩ ${speedMul}×</button>
     </div>`;
-    updateRunPanel();
   }
   else { panel.innerHTML=`<div class="row"><span class="small">…</span></div>`; }
 }
