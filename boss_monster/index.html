@@ -220,8 +220,6 @@ let last = 0;        // rAF timestamp
 let floats = [];     // floating combat texts
 let particles = [];
 let camX = 0;        // camera offset (world px)
-let buildScale = 1;  // fit-to-view scale during build
-let buildOX = 0;     // horizontal offset to centre the corridor in build
 let selCard = -1;    // selected hand card index in build
 let speedMul = 1;    // run speed multiplier
 
@@ -349,8 +347,8 @@ function chooseBoss(key){
 function gotoBuild(first){
   G.phase='build'; G.hero=null; selCard=-1; camX=0;
   if(first){
-    showHint('Tap a card, then tap a slot to build. Then ⚔️ Start Wave.');
-    if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2600);
+    showHint('Tap a card then a slot to build · drag to pan · ⚔️ Start Wave.');
+    if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2800);
   }
   render();
 }
@@ -366,6 +364,8 @@ function buySlot(){
   if(G.gold<c){ showHint('Not enough gold.'); return; }
   G.gold-=c; G.slots++; G.rooms.unshift(null);   // new slot extends to the LEFT
   // existing rooms keep their objects; unshift(null) puts new empty slot far left
+  camX=0;                                         // pan to reveal the new slot
+  showHint('New slot added on the far left. Drag to pan the dungeon.');
   render();
 }
 
@@ -654,9 +654,11 @@ function update(dt){
   G.boss.abil.forEach(a=>{ if(a.cd>0)a.cd=Math.max(0,a.cd-dt*speedMul); });
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana + dt*speedMul*6);
 
-  // camera follows hero
-  const target=clamp(G.hero.x - VW*0.42, 0, Math.max(0,corridorWidth()-VW));
-  camX += (target-camX)*Math.min(1,dt*6);
+  // camera follows hero (unless the player is dragging to look around)
+  if(!panning){
+    const target=clamp(G.hero.x - VW*0.42, 0, Math.max(0,corridorWidth()-VW));
+    camX += (target-camX)*Math.min(1,dt*6);
+  }
 }
 
 function simStep(dt){
@@ -809,18 +811,13 @@ function draw(){
 
   if(G.phase==='menu'||G.phase==='bossSelect'){ drawIdleScene(); return; }
 
-  const isBuild = (G.phase==='build'||G.phase==='reward'||G.phase==='levelWin');
-  let scale=1;
-  if(isBuild){
-    // fit whole corridor to view, centred horizontally
-    const cw=corridorWidth();
-    scale=Math.min(1, VW/cw);
-    buildScale=scale;
-    buildOX=Math.max(0,(VW - cw*scale)/2);
-  }
-  // Render with a manual world→screen X transform (we only scale horizontally).
-  const tx = isBuild ? (wx)=>wx*scale+buildOX : (wx)=>wx-camX;
-  drawDungeon(tx, scale, isBuild);
+  // Camera: in run it follows the hero (set in update); in build/other phases
+  // the player drags to pan. Rooms render at full size; clamp to the corridor.
+  const maxCam=Math.max(0, corridorWidth()-VW);
+  camX=clamp(camX,0,maxCam);
+  const tx = (wx)=>wx-camX;
+  const isBuild = (G.phase==='build');
+  drawDungeon(tx, 1, isBuild);
 
   // floaters & particles (world space)
   particles.forEach(p=>{ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
@@ -1106,15 +1103,40 @@ function renderPanel(){
 function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel(); }
 
 /* ============================ CANVAS INPUT =============================== */
+// Drag to pan the dungeon (build + run); a tap (no drag) places/upgrades a room
+// in the build phase. Panning during a run temporarily suspends auto-follow.
+let drag=null, panning=false;
+function clientToVX(e){ const rect=CV.getBoundingClientRect();
+  return (e.clientX-rect.left)*(VW/rect.width); }
+
 CV.addEventListener('pointerdown', e=>{
-  if(!G||G.phase!=='build') return;
+  if(!G || (G.phase!=='build' && G.phase!=='run')) return;
   e.preventDefault();
-  const rect=CV.getBoundingClientRect();
-  const ix=(e.clientX-rect.left)*(VW/rect.width);   // client px → virtual px
-  const wx=(ix-buildOX)/buildScale;                 // virtual → world (centred fit)
-  const idx=Math.floor(wx/ROOM_W);
-  if(idx>=0 && idx<G.slots) tapSlot(idx);
+  try{ CV.setPointerCapture(e.pointerId); }catch(_){}
+  drag={ id:e.pointerId, startCX:e.clientX, cam0:camX, moved:false };
+  panning=true;
 }, {passive:false});
+
+CV.addEventListener('pointermove', e=>{
+  if(!drag || e.pointerId!==drag.id) return;
+  const rect=CV.getBoundingClientRect();
+  const dxV=(e.clientX-drag.startCX)*(VW/rect.width);
+  if(Math.abs(e.clientX-drag.startCX)>6) drag.moved=true;
+  const maxCam=Math.max(0, corridorWidth()-VW);
+  camX=clamp(drag.cam0 - dxV, 0, maxCam);
+});
+
+function endDrag(e){
+  if(!drag || (e && e.pointerId!==drag.id)) return;
+  if(G.phase==='build' && !drag.moved){      // a clean tap → place/upgrade
+    const wx=clientToVX(e)+camX;
+    const idx=Math.floor(wx/ROOM_W);
+    if(idx>=0 && idx<G.slots) tapSlot(idx);
+  }
+  drag=null; panning=false;
+}
+CV.addEventListener('pointerup', endDrag);
+CV.addEventListener('pointercancel', endDrag);
 
 /* keyboard: ability hotkeys + space=start/speed */
 window.addEventListener('keydown', e=>{
