@@ -127,6 +127,10 @@
   #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
   #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
+  #relicbar{position:absolute;top:5px;left:5px;z-index:21;display:flex;gap:3px;flex-wrap:wrap;
+    max-width:calc(100% - 84px);}
+  .relicchip{width:30px;height:30px;border-radius:7px;border:2px solid;background:rgba(16,11,30,.85);
+    display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;}
   #zoomctl{position:absolute;right:6px;bottom:6px;z-index:21;display:flex;flex-direction:column;gap:4px;}
   #zoomctl button{width:34px;height:34px;padding:0;font-size:18px;font-weight:bold;border-radius:8px;
     background:rgba(20,15,36,.8);border:1px solid var(--line);color:var(--ink);}
@@ -198,6 +202,7 @@
     <div id="hint"></div>
     <div id="inspect"></div>
     <div id="tutbar"></div>
+    <div id="relicbar"></div>
     <button id="audiobtn" title="Sound on/off">🔊</button>
     <div id="zoomctl">
       <button onclick="zoomBy(1.2)" title="Zoom in">＋</button>
@@ -226,6 +231,7 @@ const overlay = document.getElementById('overlay');
 const hintEl = document.getElementById('hint');
 const inspectEl = document.getElementById('inspect');
 const tutBar = document.getElementById('tutbar');
+const relicBar = document.getElementById('relicbar');
 let inspectHover = false;
 
 // Virtual render space. VH is fixed so sprites stay a constant size; VW is
@@ -236,6 +242,7 @@ let baseK = 1;                   // virtual→device-pixel scale
 let cssW = 960, cssH = 420;      // canvas CSS size in px
 let zoom = 1;                    // dungeon zoom (pinch / buttons / wheel)
 const ZMIN = 0.45, ZMAX = 1.7;
+const STAGEW = 132;              // staging area (left of the entrance) for waiting heroes
 const FLOOR = 330;          // y of the floor line
 const ROOM_W = 200;         // pixel width of one room/cell
 
@@ -563,6 +570,7 @@ function addRelic(id){
   if(r.gold) G.gold+=r.gold;
   if(r.dread) G.dread+=r.dread;
   recomputeRB();
+  if(typeof renderRelicBar==='function') renderRelicBar();
 }
 
 const RELIC_TIERS={
@@ -1098,8 +1106,13 @@ function renderLoadout(){
 }
 
 /* ============================== PHASE: BUILD ============================= */
+// In build, allow the camera a little past the entrance so the upcoming heroes
+// waiting at the gate are visible.
+function minCam(){ return (G && G.phase==='build' && G.queue && G.queue.length) ? -STAGEW : 0; }
 function gotoBuild(first){
-  G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1; camX=0;
+  G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
+  ensureQueue(Math.max(3, G.guildLvl+1));        // pre-roll the next arrivals to preview
+  camX=minCam();                                  // reveal the staging area
   if(first){
     showHint('Tap a card then a slot to build · tap a room to move it · drag to pan.');
     if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2800);
@@ -2177,7 +2190,7 @@ function draw(){
   // Camera: follows the hero in run; drag to pan in build. Visible world width
   // grows when zoomed out (VW/z), so the whole dungeon can fit on screen.
   const maxCam=Math.max(0, corridorWidth()-VW/z);
-  camX=clamp(camX,0,maxCam);
+  camX=clamp(camX,minCam(),maxCam);
   const tx = (wx)=>wx-camX;
   const isBuild = (G.phase==='build');
   drawDungeon(tx, 1, isBuild);
@@ -2241,11 +2254,42 @@ function drawDungeon(tx, scale, isBuild){
       X.fillText(i+1, x0+10, FLOOR-126);
     }
   }
+  // upcoming heroes waiting at the gate (build only)
+  if(isBuild) drawWaitingHeroes(tx);
   // hero
   // draw the whole raiding party (dead first so living draw on top)
   const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
   party.filter(h=>h.state==='dead').forEach(h=>drawHeroDead(tx(h.x), h));
   party.filter(h=>h.state!=='dead').forEach(h=>drawHero(tx(h.x), h));
+}
+// Build a lightweight hero object from a queued spec for drawing/preview.
+function previewHeroObj(spec){
+  let cls=spec.cls; if(G.fx.temple>0 && cls==='cleric') cls='warrior';
+  const c=CLASSES[cls]; const ps=previewStats(spec);
+  const champ=spec.champion?CHAMPIONS[spec.champion]:null;
+  return { cls, ...c, traits:spec.traits, elite:(spec.traits.length>0)||!!champ,
+    champion:spec.champion||null, champIc:champ?champ.ic:null, champCol:champ?champ.col:null,
+    heroName:spec.name, title:spec.title||(champ?champ.title:null),
+    hp:ps.hp, maxHp:ps.hp, gold:ps.gold, state:'idle', walkAnim:0, yOff:0,
+    shieldT:0, freeze:0, chill:0, oil:0, shock:0 };
+}
+// Show the next wave standing ready in the staging zone left of the entrance.
+function drawWaitingHeroes(tx){
+  if(!G.queue || !G.queue.length) return;
+  const champ=!!G.queue[0].champion;
+  const n=champ?1:Math.min(G.queue.length, G.guildLvl+1);
+  // gate line at the entrance
+  X.strokeStyle='rgba(120,100,170,.5)'; X.setLineDash([4,5]); X.lineWidth=2;
+  X.beginPath(); X.moveTo(tx(0), FLOOR-150); X.lineTo(tx(0), FLOOR); X.stroke(); X.setLineDash([]);
+  for(let k=0;k<n;k++){
+    const h=previewHeroObj(G.queue[k]);
+    const wx = -STAGEW*0.62 + k*14;
+    h.yOff = (k-(n-1)/2)*13;
+    X.globalAlpha=0.92; drawHero(tx(wx), h); X.globalAlpha=1;
+  }
+  X.fillStyle=champ?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
+  X.fillText(champ?'⚔️ CHAMPION!':'⏳ Next wave →', tx(-STAGEW*0.5), FLOOR-128);
+  X.textAlign='left';
 }
 
 function drawRoomBg(x0,w,isBoss,i){
@@ -2486,6 +2530,7 @@ function drawIdleScene(){
 function render(){
   if(!G || (G.phase!=='build' && G.phase!=='run')) hideInspect();
   renderTop();
+  renderRelicBar();
   renderPanel();
   draw();
 }
@@ -2505,7 +2550,6 @@ function renderTop(){
     <div class="stat gold">💰<b>${G.gold}</b></div>
     <div class="stat" style="color:#b985ff">☠<b>${G.dread}</b></div>
     ${G.bounty?`<div class="stat small" title="threat dial">${G.bounty>0?'🔥':'🌫'} ${G.bounty>0?'+':''}${G.bounty}</div>`:''}
-    ${G.relics&&G.relics.length?`<div class="stat small" title="relics">🏺 ${G.relics.map(id=>RELICS[id].ic).join('')}</div>`:''}
     ${G.combo>=3?`<div class="stat small" title="kill streak" style="color:#ff9a3a">🔥x${G.combo}</div>`:''}
     <div class="stat small">${modeLbl}</div>`;
 }
@@ -2603,6 +2647,19 @@ function describeCard(card){
 }
 function cardHover(i){ const c=G.hand[i]; if(c) showInspect(describeCard(c), true); }
 function cardHoverOut(){ if(inspectHover) hideInspect(); }
+// Slay-the-Spire-style relic bar at the top; hover (desktop) / tap (mobile) for info.
+function describeRelic(id){ const r=RELICS[id]; if(!r) return '';
+  const tc=RELIC_TIERS[r.tier];
+  return `<b>${r.ic} ${r.name}</b> · <span style="color:${tc.col}">${tc.name.toUpperCase()}</span><br><span style="opacity:.9">${r.desc}</span>`; }
+function relicHover(id){ showInspect(describeRelic(id), true); }
+function relicTap(id){ showInspect(describeRelic(id), false); }
+function renderRelicBar(){
+  if(!relicBar) return;
+  if(!G || !G.relics || !G.relics.length || (G.phase!=='build' && G.phase!=='run')){ relicBar.innerHTML=''; return; }
+  relicBar.innerHTML=G.relics.map(id=>{ const r=RELICS[id]; const tc=RELIC_TIERS[r.tier];
+    return `<div class="relicchip" style="border-color:${tc.col};box-shadow:0 0 6px ${tc.col}66"
+      title="${r.name}: ${r.desc}" onmouseenter="relicHover('${id}')" onmouseleave="cardHoverOut()" onclick="relicTap('${id}')">${r.ic}</div>`;}).join('');
+}
 function entityAt(wx){
   if(G.phase==='run' && G.heroes){
     let best=null,bd=26;
@@ -2702,7 +2759,7 @@ CV.addEventListener('pointermove', e=>{
   const dxV=(e.clientX-drag.startCX)*(VW/rect.width);
   if(Math.abs(e.clientX-drag.startCX)>6) drag.moved=true;
   const maxCam=Math.max(0, corridorWidth()-VW/zoom);
-  camX=clamp(drag.cam0 - dxV/zoom, 0, maxCam);
+  camX=clamp(drag.cam0 - dxV/zoom, minCam(), maxCam);
 });
 CV.addEventListener('wheel', e=>{
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
