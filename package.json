@@ -5,7 +5,8 @@
   "description": "Static games site (Beatbox Story etc.) bundled with esbuild for Cloudflare Pages.",
   "scripts": {
     "build": "node build.js",
-    "watch": "node build.js --watch"
+    "watch": "node build.js --watch",
+    "test:relics": "node tests/boss_monster_relics.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
