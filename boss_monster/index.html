@@ -1989,10 +1989,10 @@ function simStep(h,dt){
       h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
       return;
     }
-    // reached boss room?
-    if(h.x >= cellX(G.slots)+ROOM_W*0.32){
+    // reached boss room? stand INSIDE it (in front of the boss), not at the door
+    if(h.x >= cellX(G.slots)+ROOM_W*0.30){
       if(h.champion==='thief'){ thiefSteal(h); return; }   // robs you instead of fighting
-      h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.32;
+      h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.44;
     }
   }
   else if(h.state==='fighting'){
@@ -2026,7 +2026,8 @@ function onEnterCell(h,cell){
     h.state='shopping'; h.x=cell.x0+ROOM_W*0.5; h.shopT=0.8;
   } else if(cell.kind==='boss'){
     if(h.champion==='thief'){ thiefSteal(h); return; }
-    h.state='boss'; h.reachedThrone=true;
+    // step inside the throne room rather than stopping at the door
+    h.state='boss'; h.reachedThrone=true; h.x=cell.x0+ROOM_W*0.44;
   }
 }
 
@@ -2233,6 +2234,9 @@ function drawDungeon(tx, scale, isBuild){
         X.strokeStyle='#ffd34d'; X.globalAlpha=0.5+0.5*pu; X.lineWidth=3; X.setLineDash([]);
         X.strokeRect(x0+3, FLOOR-126, w-6, 122); X.globalAlpha=1;
       }
+    } else if(roomDrag && roomDrag.dragging && i===roomDrag.from){
+      // the room being dragged: lifted + faded
+      X.save(); X.globalAlpha=0.5; X.translate(0,-48); drawRoomContents(x0, w, room, i); X.restore();
     } else {
       drawRoomContents(x0, w, room, i);
     }
@@ -2241,8 +2245,8 @@ function drawDungeon(tx, scale, isBuild){
       X.strokeStyle='#ffd34d'; X.setLineDash([4,4]); X.lineWidth=3;
       X.strokeRect(x0+3, FLOOR-150, w-6, 150); X.setLineDash([]);
     }
-    // drop-target highlight while dragging a card here
-    if(isBuild && i===cardDragSlot){
+    // drop-target highlight (dragging a card OR re-ordering a room here)
+    if(isBuild && (i===cardDragSlot || (roomDrag && roomDrag.dragging && i===roomDragTo))){
       const pu=0.5+0.5*Math.sin(performance.now()/160);
       X.strokeStyle='#7bdc6b'; X.globalAlpha=0.5+0.5*pu; X.lineWidth=4; X.setLineDash([]);
       X.strokeRect(x0+2, FLOOR-152, w-4, 152); X.globalAlpha=1;
@@ -2729,9 +2733,20 @@ function describeBoss(){
 // in the build phase. Panning during a run temporarily suspends auto-follow.
 let drag=null, panning=false, panHoldUntil=0;
 let pointers={}, pinch=null;
+let roomDrag=null, roomDragTo=-1, roomDragX=0;
 function clientToVX(e){ const rect=CV.getBoundingClientRect();
   return (e.clientX-rect.left)*(VW/rect.width); }
 function clientToWorldX(e){ return camX + clientToVX(e)/zoom; }
+function clientToVY(e){ const rect=CV.getBoundingClientRect();
+  const deviceY=(e.clientY-rect.top)*(CV.height/rect.height);
+  const z=(G&&(G.phase==='build'||G.phase==='run'))?zoom:1; const k=baseK*z; const tY=FLOOR*baseK*(1-z);
+  return (deviceY - tY)/k; }
+// Move a room from one slot to another, pushing the rooms in between over.
+function moveRoom(from,to){
+  if(from===to || from<0 || to<0 || from>=G.slots || to>=G.slots) return;
+  const [r]=G.rooms.splice(from,1); G.rooms.splice(to,0,r);
+  sfx('upgrade'); showHint('Rooms rearranged.'); render();
+}
 function setZoom(z){ zoom=clamp(z, ZMIN, ZMAX); }
 function zoomBy(f){ setZoom(zoom*f); draw(); }
 function zoomFit(){ if(!G) return; zoom=clamp(VW/Math.max(1,corridorWidth()), ZMIN, 1.2); camX=0; draw(); }
@@ -2746,6 +2761,14 @@ CV.addEventListener('pointerdown', e=>{
     drag=null; panning=false; cardDrag=null; endCardGhost(); return;
   }
   try{ CV.setPointerCapture(e.pointerId); }catch(_){}
+  // In build, pressing ON a placed room (no card selected) picks it up to drag.
+  if(G.phase==='build' && selCard<0){
+    const slot=Math.floor(clientToWorldX(e)/ROOM_W); const vy=clientToVY(e);
+    if(slot>=0 && slot<G.slots && G.rooms[slot] && vy>FLOOR-152 && vy<FLOOR+16){
+      roomDrag={ id:e.pointerId, from:slot, sx:e.clientX, sy:e.clientY, dragging:false };
+      return;
+    }
+  }
   drag={ id:e.pointerId, startCX:e.clientX, cam0:camX, moved:false };
   panning=true;
 }, {passive:false});
@@ -2754,6 +2777,16 @@ CV.addEventListener('pointermove', e=>{
   if(pointers[e.pointerId]) pointers[e.pointerId]={x:e.clientX,y:e.clientY};
   if(pinch){ const v=Object.values(pointers); if(v.length>=2){
     const d=Math.hypot(v[0].x-v[1].x, v[0].y-v[1].y); setZoom(pinch.z0*(d/pinch.d0)); } return; }
+  if(roomDrag && e.pointerId===roomDrag.id){
+    const dx=e.clientX-roomDrag.sx, dy=e.clientY-roomDrag.sy;
+    if(!roomDrag.dragging && Math.hypot(dx,dy)>8){ roomDrag.dragging=true; hideInspect(); }
+    if(roomDrag.dragging){ e.preventDefault();
+      roomDragX=clientToWorldX(e);
+      roomDragTo=clamp(Math.floor(roomDragX/ROOM_W), 0, G.slots-1);
+      draw();
+    }
+    return;
+  }
   if(!drag || e.pointerId!==drag.id) return;
   const rect=CV.getBoundingClientRect();
   const dxV=(e.clientX-drag.startCX)*(VW/rect.width);
@@ -2768,6 +2801,14 @@ CV.addEventListener('wheel', e=>{
 
 function endDrag(e){
   if(e){ delete pointers[e.pointerId]; if(Object.keys(pointers).length<2) pinch=null; }
+  if(roomDrag && (!e || e.pointerId===roomDrag.id)){
+    if(roomDrag.dragging && roomDragTo>=0 && roomDragTo!==roomDrag.from){
+      moveRoom(roomDrag.from, roomDragTo);
+    } else if(!roomDrag.dragging){
+      const r=G.rooms[roomDrag.from]; if(r) showInspectEntity({kind:'room',room:r});   // tap = inspect
+    }
+    roomDrag=null; roomDragTo=-1; draw(); return;
+  }
   if(!drag || (e && e.pointerId!==drag.id)) return;
   if(!drag.moved){                              // a clean tap
     const wx=clientToWorldX(e);
