@@ -272,6 +272,20 @@ const RIVAL_TITLES = ['the Returned','the Vengeful','the Unbroken','the Wrathful
 
 function rollName(){ return pick(HERO_NAMES); }
 
+// Champion heroes: periodic named mini-bosses that arrive solo with a special.
+const CHAMPIONS = {
+  paladin:    {cls:'warrior', title:'the Shieldbearer', ic:'🛡️', col:'#ffd34d', hpMul:7.0, atkMul:1.30,
+               desc:'Raises a shield (−70% damage) every few seconds.'},
+  thief:      {cls:'rogue',   title:'the Gold Thief',   ic:'🗝️', col:'#5fd17a', hpMul:4.5, atkMul:1.10,
+               desc:'Robs your gold and flees if it reaches the throne.'},
+  berserker:  {cls:'warrior', title:'the Bloodraged',   ic:'😤', col:'#ff5470', hpMul:6.0, atkMul:1.20,
+               desc:'Grows stronger as its HP falls.'},
+  necromancer:{cls:'mage',    title:'the Deathless',    ic:'💀', col:'#b163ff', hpMul:6.5, atkMul:1.15,
+               desc:'Siphons life to heal itself.'},
+};
+const CHAMP_KEYS = Object.keys(CHAMPIONS);
+const CHAMP_EVERY = 8;   // every Nth arrival is a champion (mini-boss)
+
 // Bosses: differing stats + three abilities each.
 const BOSSES = {
   dragon: {name:'Ignar the Dragon', ic:'🐉', col:'#c43a3a', maxHp:140, atk:16,
@@ -1014,6 +1028,12 @@ function buildCells(){
 // next arrivals. A spec is a lightweight seed; buildHero turns it into a unit.
 function genHeroSpec(){
   const power=G.heroSeq++;
+  // every CHAMP_EVERY-th arrival (after the early game) is a champion mini-boss
+  if(power>0 && power%CHAMP_EVERY===0){
+    const type=pick(CHAMP_KEYS);
+    return {cls:CHAMPIONS[type].cls, power, traits:[], name:rollName(), champion:type, rivalGen:0,
+            debuff:{atkMul:1, burn:0, robbed:false}};
+  }
   const cls=pickHeroClass();
   // elite chance climbs with progress; later heroes can roll two traits.
   const eliteChance=clamp(0.06 + power*0.02, 0, 0.7);
@@ -1068,6 +1088,7 @@ function previewStats(spec){
   if(spec.traits.includes('hardy')) hp*=1.6;
   if(spec.traits.includes('berserk')) atk*=1.4;
   atk*=spec.debuff.atkMul;
+  if(spec.champion){ const ch=CHAMPIONS[spec.champion]; hp*=ch.hpMul; atk*=ch.atkMul; }
   return {hp:Math.round(hp), atk:+atk.toFixed(1), gold:heroGold(n,d,spec.debuff.robbed)};
 }
 
@@ -1089,16 +1110,20 @@ function buildHeroFromSpec(spec){
   if(tr.includes('swift')){ spd*=1.5; atkSpeed*=0.8; }
   // ---- town sabotage ----
   atk*=spec.debuff.atkMul;
+  // ---- champion mini-boss ----
+  const champ = spec.champion ? CHAMPIONS[spec.champion] : null;
+  let gold=heroGold(n,d,spec.debuff.robbed), bounty=heroBounty(n,d);
+  if(champ){ hp*=champ.hpMul; atk*=champ.atkMul; armor+=4; gold=Math.round(gold*3); bounty=Math.round(bounty*4); }
   hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
     cls, ...c, name:cls, traits:tr,
-    elite: tr.length>0,
-    heroName: spec.name, title: spec.title||null,
+    elite: tr.length>0 || !!champ,
+    heroName: spec.name, title: spec.title || (champ?champ.title:null),
+    champion: spec.champion||null, champIc: champ?champ.ic:null, champCol: champ?champ.col:null,
     rival: !!spec.rival, rivalGen: spec.rivalGen||0,
     specPower: n, specTraits: tr,
-    maxHp:hp, hp:hp, atk, armor, spd, atkSpeed,
-    gold: heroGold(n, d, spec.debuff.robbed),
-    bounty: heroBounty(n, d),
+    maxHp:hp, hp:hp, atk, _atkBase:atk, armor, spd, atkSpeed,
+    gold, bounty,
     vampiric: tr.includes('vampiric'),
     regen: tr.includes('zealot') || c.selfheal,
     reachedThrone:false,
@@ -1107,6 +1132,7 @@ function buildHeroFromSpec(spec){
     cellIndex:-1,
     atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
     freeze:0, shopT:0, walkAnim:0,
+    shieldT:0, specialT:5,   // champion special timers
   };
   let startBurn=spec.debuff.burn + (G.fx.well>0 ? 5+Math.floor(n*0.5) : 0);
   if(startBurn>0){ h.burn=startBurn; h.burnT=6; }
@@ -1114,15 +1140,22 @@ function buildHeroFromSpec(spec){
 }
 
 // Spawn a raiding party of n heroes (guild house size) that enter together.
+// A champion arrives ALONE — a dramatic mini-boss duel.
 function spawnGroup(n){
-  ensureQueue(n);
+  ensureQueue(1);
+  const champ = !!(G.queue[0] && G.queue[0].champion);
+  const count = champ ? 1 : n;
+  ensureQueue(count);
   G.heroes=[];
-  for(let k=0;k<n;k++){
+  for(let k=0;k<count;k++){
     const h=buildHeroFromSpec(G.queue.shift());
     h.x = 8 - k*46;                       // stagger entry from the left
-    h.yOff = (k - (n-1)/2) * 8;           // slight vertical offset so they don't fully overlap
+    h.yOff = (k - (count-1)/2) * 8;       // slight vertical offset so they don't fully overlap
     G.heroes.push(h); G.heroNum++;
   }
+  if(champ){ const h=G.heroes[0];
+    showHint('⚔️ CHAMPION APPROACHES: '+h.heroName+' '+h.title+'!');
+    shake(8); sfx('boss'); }
   // town-wide schemes last per WAVE, not per hero
   if(G.fx.well>0) G.fx.well--; if(G.fx.smith>0) G.fx.smith--; if(G.fx.temple>0) G.fx.temple--;
   G.waveStartSlain=G.totalSlain; G.waveEnding=false;
@@ -1154,6 +1187,7 @@ function dealToHero(h, raw, label, pierce){
   let dmg=heroDmg(h,raw,pierce);
   const crit = Math.random()<0.12;              // your dungeon can land critical hits
   if(crit) dmg*=2;
+  if(h.shieldT>0){ dmg=Math.max(1,Math.round(dmg*0.3)); }   // champion shield (−70%)
   h.hp-=dmg;
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
     shake(6); hitStop=0.05; sfx('crit'); }
@@ -1214,7 +1248,15 @@ function heroDies(h){
   floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
   shake(4); sfx('kill');
   const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
-  showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
+  if(h.champion){
+    // a felled champion is a big payday + a guaranteed relic
+    G.dread+=6; G.relicDue=true;
+    floater(h.x, h.y-92, 'CHAMPION SLAIN! 🏺', '#ffd34d'); burst(h.x,h.y-30,h.champCol||'#ffd34d',30);
+    shake(10); sfx('relic');
+    showHint('🏆 '+nm+' is slain! Big loot + a relic awaits.');
+  } else {
+    showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
+  }
 }
 
 // Called once after the whole raiding party is wiped out.
@@ -1525,10 +1567,12 @@ function renderTown(){
       return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
         ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
     const corruptDis = G.dread<townCost(CORRUPT_COST) || G.hand.length>=handCap();
-    return `<div class="choice" style="width:208px;${spec.rival?'border-color:#ff6b8a':''}">
-      <div class="big">${c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
+    const ch = spec.champion ? CHAMPIONS[spec.champion] : null;
+    return `<div class="choice" style="width:208px;${ch?'border-color:'+ch.col+';box-shadow:0 0 10px '+ch.col:spec.rival?'border-color:#ff6b8a':''}">
+      <div class="big">${ch?ch.ic+'👑':c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
+      ${ch?`<div class="small" style="color:${ch.col};font-weight:bold;letter-spacing:1px">CHAMPION</div>`:''}
       <h3 style="font-size:14px">${nm}</h3>
-      <div class="small" style="opacity:.6">${c.name} · power ${spec.power+1}</div>
+      <div class="small" style="opacity:.6">${ch?ch.desc:c.name+' · power '+(spec.power+1)}</div>
       <div style="min-height:20px;margin:3px 0">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
       <div class="stats">❤️ ${ps.hp} · 🗡️ ${ps.atk} · 💰 ${ps.gold}</div>
       <div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
@@ -1605,6 +1649,8 @@ function simStep(h,dt){
   if(h.regen && h.state!=='dead' && h.hp<h.maxHp){
     h.hp=Math.min(h.maxHp, h.hp + h.maxHp*0.025*dt);
   }
+  // champion mini-boss specials
+  if(h.champion) championTick(h,dt);
   // freeze
   if(h.freeze>0){ h.freeze-=dt; return; }
 
@@ -1619,7 +1665,10 @@ function simStep(h,dt){
     // traps fire while inside a cell that has any traps (works for combos)
     if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     // reached boss room?
-    if(h.x >= cellX(G.slots)+ROOM_W*0.32){ h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.32; }
+    if(h.x >= cellX(G.slots)+ROOM_W*0.32){
+      if(h.champion==='thief'){ thiefSteal(h); return; }   // robs you instead of fighting
+      h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.32;
+    }
   }
   else if(h.state==='fighting'){
     const cellM=G.cells[h.cellIndex];
@@ -1650,8 +1699,38 @@ function onEnterCell(h,cell){
   } else if(cell.shop && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
     h.state='shopping'; h.x=cell.x0+ROOM_W*0.5; h.shopT=0.8;
   } else if(cell.kind==='boss'){
+    if(h.champion==='thief'){ thiefSteal(h); return; }
     h.state='boss'; h.reachedThrone=true;
   }
+}
+
+// Champion specials, ticked each frame for champion heroes.
+function championTick(h,dt){
+  if(h.shieldT>0) h.shieldT-=dt;
+  if(h.champion==='berserker'){
+    h.atk = +(h._atkBase*(1 + (1 - h.hp/h.maxHp)*1.1)).toFixed(1);   // enrage as HP drops
+    return;
+  }
+  h.specialT-=dt;
+  if(h.specialT>0) return;
+  if(h.champion==='paladin'){
+    h.specialT=5; h.shieldT=2.2;
+    floater(h.x, h.y-72, '🛡 SHIELD UP', '#ffd34d'); sfx('cast');
+  } else if(h.champion==='necromancer'){
+    h.specialT=5; const heal=Math.round(h.maxHp*0.15);
+    h.hp=Math.min(h.maxHp, h.hp+heal);
+    floater(h.x, h.y-72, '💀 SIPHON +'+heal, '#b163ff'); healHero(h,0); sfx('cast');
+  }
+}
+// The gold thief reaches the throne and escapes with your gold (no loot, no kill).
+function thiefSteal(h){
+  if(h.state==='dead') return;
+  const stolen=Math.round(G.gold*0.30)+40;
+  G.gold=Math.max(0, G.gold-stolen);
+  floater(bossX(), FLOOR-92, h.heroName+' ROBBED you −'+stolen+'g', '#ff7a8a');
+  showHint('💰 '+h.heroName+' '+(h.title||'the Gold Thief')+' escaped with '+stolen+' gold!');
+  shake(8); sfx('lose');
+  G.combo=0; h.state='dead'; h.escaped=true;   // gone — no loot, no kill credit
 }
 
 // Fire every trap in the cell (a combo room can hold two), scaled by synergy.
@@ -1962,16 +2041,17 @@ function drawMonster(cx,type,col){
 function drawHero(sx,h){
   const y=FLOOR+(h.yOff||0); const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
   const yy=y+bob;
-  // elite aura
-  if(h.elite){
+  const champ=!!h.champion;
+  // aura (champion = its colour, bigger/brighter; elite = trait colour)
+  if(champ || h.elite){
     const t=performance.now()/200;
-    const col=h.traits.length?TRAITS[h.traits[0]].col:'#ffd34d';
-    X.globalAlpha=0.18+0.06*Math.sin(t);
-    X.fillStyle=col; X.beginPath(); X.ellipse(sx,yy-26,20,30,0,0,7); X.fill();
+    const col=champ?(h.champCol||'#ffd34d'):(h.traits.length?TRAITS[h.traits[0]].col:'#ffd34d');
+    X.globalAlpha=(champ?0.30:0.18)+0.08*Math.sin(t);
+    X.fillStyle=col; X.beginPath(); X.ellipse(sx,yy-26,champ?30:20,champ?42:30,0,0,7); X.fill();
     X.globalAlpha=1;
   }
   // shadow
-  X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,14,4,0,0,7); X.fill();
+  X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,champ?20:14,4,0,0,7); X.fill();
   // legs
   px(sx-7,yy-14,5,14,'#3a3050'); px(sx+2,yy-14,5,14,'#3a3050');
   // body
@@ -1986,12 +2066,21 @@ function drawHero(sx,h){
   if(h.cls==='cleric'){ px(sx-2,yy-58,4,10,'#ffec99'); px(sx-5,yy-54,10,4,'#ffec99'); } //cross
   // frozen tint
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
-  // hp bar
-  bar(sx-18, yy-60, 36, 6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d');
+  // champion shield bubble
+  if(h.shieldT>0){ X.globalAlpha=0.35+0.1*Math.sin(performance.now()/90);
+    X.strokeStyle='#ffd34d'; X.lineWidth=2; X.beginPath(); X.ellipse(sx,yy-26,18,28,0,0,7); X.stroke();
+    X.globalAlpha=1; }
+  // hp bar (wider for champions)
+  const bw=champ?52:36;
+  bar(sx-bw/2, yy-(champ?66:60), bw, champ?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d');
   // gold + elite trait markers
   X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
   X.fillText('💰'+h.gold, sx, yy-64);
-  if(h.elite){ X.font='11px Trebuchet MS';
+  if(champ){
+    X.font='18px Trebuchet MS'; X.fillText('👑', sx, yy-78);          // crown above head
+    X.font='bold 10px Trebuchet MS'; X.fillStyle=h.champCol||'#ffd34d';
+    X.fillText((h.champIc||'')+' '+h.heroName, sx, yy-90);            // name banner
+  } else if(h.elite){ X.font='11px Trebuchet MS';
     X.fillText(h.traits.map(t=>TRAITS[t].ic).join(''), sx, yy-74); }
   X.textAlign='left';
 }
@@ -2161,9 +2250,11 @@ function describeRoom(room){
 function describeHero(h){
   const C=CLASSES[h.cls];
   const nm=h.heroName?`${h.heroName}${h.title?' '+h.title:''}`:C.name;
-  const lines=[`<b>${C.ic} ${nm}</b> · ${C.name}${h.rival?' · ⚔️ rival':''}${h.elite?' · ⭐ elite':''}`,
+  const ch=h.champion?CHAMPIONS[h.champion]:null;
+  const lines=[`<b>${ch?ch.ic+' 👑 ':C.ic+' '}${nm}</b> · ${ch?'<span style="color:'+ch.col+'">CHAMPION</span>':C.name}${h.rival?' · ⚔️ rival':''}${!ch&&h.elite?' · ⭐ elite':''}`,
     `❤️ <b>${Math.ceil(h.hp)}</b>/${h.maxHp} HP · 🗡️ <b>${(+h.atk).toFixed(1)}</b> atk · 🛡 ${h.armor} armor`,
     `🏃 speed ${Math.round(h.spd)} · 💰 ${h.gold}${h.dodge?' · 35% dodge':''}`];
+  if(ch) lines.push(`<span style="color:${ch.col}">${ch.desc}</span>`+(h.shieldT>0?' · 🛡 shielded':''));
   if(h.traits&&h.traits.length) lines.push('Traits: '+h.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name).join(', '));
   const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
   if(fx) lines.push(fx);
