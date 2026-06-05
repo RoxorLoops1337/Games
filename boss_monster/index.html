@@ -75,7 +75,8 @@
   .pill{font-size:11px;padding:2px 8px;border-radius:10px;background:#2a2046;border:1px solid #3a2c66;}
   /* Overlay screens */
   #overlay{position:absolute;inset:0;background:rgba(8,6,16,.93);z-index:50;display:none;
-    flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:auto;
+    flex-direction:column;align-items:center;justify-content:safe center;text-align:center;overflow:auto;
+    -webkit-overflow-scrolling:touch;
     padding:calc(18px + env(safe-area-inset-top,0px)) 18px calc(18px + env(safe-area-inset-bottom,0px));}
   #overlay.show{display:flex;}
   #overlay h1{font-size:34px;margin:0 0 4px;color:var(--gold);letter-spacing:1px;
