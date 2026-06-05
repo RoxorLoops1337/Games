@@ -117,6 +117,37 @@
   #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
   #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
+  /* ---- Rune Page: spellbook skill tree ---- */
+  .runebook{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+  .rbback{position:absolute;top:10px;left:10px;z-index:6;font-weight:bold;letter-spacing:1px;
+    padding:8px 16px;border-radius:9px;background:linear-gradient(#5a4326,#3a2a16);
+    border:2px solid #caa15e;color:#ffe9b8;box-shadow:0 3px 0 #2a1d0e;}
+  .rbpts{position:absolute;top:12px;right:16px;z-index:6;font-size:26px;font-weight:bold;
+    color:#ffe9a8;text-shadow:0 2px 4px #000,0 0 10px #c9881f;display:flex;align-items:center;gap:4px;}
+  .rbpts .rbscroll-ic{font-size:22px}
+  .rbview{max-width:100%;max-height:100%;overflow:auto;-webkit-overflow-scrolling:touch;
+    padding:54px 14px 16px;}
+  .rtree{position:relative;margin:0 auto;border-radius:16px;
+    background:radial-gradient(ellipse at 50% 28%,#f0e3c2 0%,#e0c99e 62%,#cdb487 100%);
+    border:7px solid #6a4a2a;
+    box-shadow:inset 0 0 46px rgba(110,74,30,.45),inset 0 0 0 3px #b58a52,0 10px 34px rgba(0,0,0,.55);}
+  .rnode{position:absolute;border-radius:12px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;cursor:pointer;border:2.5px solid;box-sizing:border-box;
+    transition:transform .08s;}
+  .rnode:active{transform:scale(.92);}
+  .rnode .ric{font-size:27px;line-height:1;}
+  .rnode .rcnt{position:absolute;bottom:-10px;font-size:11px;font-weight:bold;line-height:1;
+    background:#171024;border:1.5px solid;border-radius:7px;padding:1px 5px;white-space:nowrap;}
+  .rn-max{background:linear-gradient(#2e6a3c,#1c3f25);border-color:#6ad97e;box-shadow:0 0 12px #6ad97e88,inset 0 0 8px #0006;}
+  .rn-max .rcnt{color:#abf3b4;border-color:#6ad97e;}
+  .rn-buy{background:linear-gradient(#4a3a14,#2c2410);border-color:#ffd34d;box-shadow:0 0 13px #ffd34daa,inset 0 0 8px #0006;animation:runepulse 1.3s ease-in-out infinite;}
+  .rn-buy .rcnt{color:#ffe9a8;border-color:#ffd34d;}
+  .rn-cost{background:linear-gradient(#3a241a,#241812);border-color:#b0563a;box-shadow:inset 0 0 8px #0007;}
+  .rn-cost .rcnt{color:#e0a98c;border-color:#b0563a;}
+  .rn-lock{background:linear-gradient(#211b30,#15111f);border-color:#3a3450;opacity:.78;}
+  .rn-lock .ric{filter:grayscale(1);opacity:.55;}
+  .rn-lock .rcnt{color:#8a7aa8;border-color:#3a3450;}
+  @keyframes runepulse{0%,100%{box-shadow:0 0 9px #ffd34d88,inset 0 0 8px #0006;}50%{box-shadow:0 0 18px #ffd34d,inset 0 0 8px #0006;}}
 </style>
 </head>
 <body>
@@ -369,136 +400,56 @@ const CAMPAIGN = [
 ];
 
 /* ========================= RUNE PAGE (meta progression) =================
-   Persistent skill tree. Rune points are earned per run and banked on death,
-   then spent on permanent buffs that apply at the start of every future run.
-   Each branch is a linear chain — unlock shallow nodes before deep ones.     */
-function rbranch(key,name,icon,color,rows){
-  return {key,name,icon,color,nodes:rows.map((r,i)=>({
-    id:key+i, branch:key, tier:i, name:r[0], desc:r[1], cost:r[2], eff:r[3]||{},
-    req: i>0?[key+(i-1)]:[] }))};
+   Persistent skill tree drawn as a branching spellbook. Each node has RANKS
+   (buy it up to maxRank times); ranks stack their effect. Nodes unlock once
+   the rune above them has at least one rank. Rune points are earned per run.  */
+function rn(id,name,ic,desc,col,row,maxRank,cost,eff,req){
+  return {id,name,ic,desc,col,row,maxRank,cost,eff,req:req||null};
 }
-const RUNE_TREE=[
-  rbranch('eco','Treasury','💰','#ffd34d',[
-    ['Seed Coins','+20 starting gold',1,{gold0:20}],
-    ['Pickpocket','+1 gold per kill',1,{goldKill:1}],
-    ['Deeper Pockets','+25 starting gold',2,{gold0:25}],
-    ['Looter I','+6% loot from kills',2,{loot:0.06}],
-    ['Cheap Labor','room slots cost 8% less',3,{slotCost:0.08}],
-    ['Pickpocket II','+2 gold per kill',3,{goldKill:2}],
-    ['Looter II','+8% loot',4,{loot:0.08}],
-    ['War Chest','+40 starting gold',4,{gold0:40}],
-    ['Dread Tithe','+2 starting dread',4,{dread0:2}],
-    ['Hoarded Fear','+3 starting dread',5,{dread0:3}],
-    ['Looter III','+10% loot',5,{loot:0.10}],
-    ['Cheap Labor II','room slots cost 12% less',5,{slotCost:0.12}],
-    ['Merchant Prince','+60 starting gold',6,{gold0:60}],
-    ['Golden Touch','+3 gold per kill',6,{goldKill:3}],
-    ['Looter IV','+12% loot',7,{loot:0.12}],
-    ["Dragon's Hoard",'+100 starting gold',8,{gold0:100}],
-    ['Avarice','keystone: +1 dread per kill',10,{dreadKill:1}],
-  ]),
-  rbranch('def','Bulwark','🛡','#7bdc6b',[
-    ['Thick Hide','+20 boss max HP',1,{bossHpFlat:20}],
-    ['Stoneskin I','boss takes 4% less hero damage',2,{bossDR:0.04}],
-    ['Iron Heart','+6% boss max HP',2,{bossHp:0.06}],
-    ['Thick Hide II','+30 boss max HP',3,{bossHpFlat:30}],
-    ['Mending','boss recovers 6 HP each wave',3,{bossRegen:6}],
-    ['Stoneskin II','6% less hero damage',4,{bossDR:0.06}],
-    ['Iron Heart II','+8% boss max HP',4,{bossHp:0.08}],
-    ['Resilient','+40 boss max HP',5,{bossHpFlat:40}],
-    ['Mending II','+8 HP each wave',5,{bossRegen:8}],
-    ['Stoneskin III','8% less hero damage',6,{bossDR:0.08}],
-    ['Adamant','+12% boss max HP',6,{bossHp:0.12}],
-    ['Colossal Frame','+60 boss max HP',7,{bossHpFlat:60}],
-    ['Mending III','+12 HP each wave',7,{bossRegen:12}],
-    ['Stoneskin IV','10% less hero damage',8,{bossDR:0.10}],
-    ['Titanic','+18% boss max HP',8,{bossHp:0.18}],
-    ['Bastion','+90 boss max HP',9,{bossHpFlat:90}],
-    ['Immortal Coil','keystone: 12% less damage + 15 HP/wave',12,{bossDR:0.12,bossRegen:15}],
-  ]),
-  rbranch('off','Wrath','⚔️','#ff7a8a',[
-    ['Sharper Claws','+3 boss attack',1,{bossAtkFlat:3}],
-    ['Focus','+15 max mana',2,{manaFlat:15}],
-    ['Cruelty I','+6% ability damage',2,{abilDmg:0.06}],
-    ['Sharper Claws II','+4 boss attack',3,{bossAtkFlat:4}],
-    ['Channeling','+2 mana regen / sec',3,{manaRegen:2}],
-    ['Cruelty II','+8% ability damage',4,{abilDmg:0.08}],
-    ['Efficient','abilities cost 8% less',4,{abilCost:0.08}],
-    ['Brutal','+8% boss attack',5,{bossAtk:0.08}],
-    ['Quickened','abilities cool down 8% faster',5,{abilCd:0.08}],
-    ['Cruelty III','+10% ability damage',6,{abilDmg:0.10}],
-    ['Focus II','+25 max mana',6,{manaFlat:25}],
-    ['Sharper Claws III','+6 boss attack',7,{bossAtkFlat:6}],
-    ['Efficient II','abilities cost 12% less',7,{abilCost:0.12}],
-    ['Cruelty IV','+14% ability damage',8,{abilDmg:0.14}],
-    ['Overcharged','+4 mana regen / sec',8,{manaRegen:4}],
-    ['Tyrant','+14% boss attack',9,{bossAtk:0.14}],
-    ['Cataclysm','keystone: +20% ability dmg, 15% cheaper',12,{abilDmg:0.20,abilCost:0.15}],
-  ]),
-  rbranch('room','Dungeoneer','🏰','#9a5cff',[
-    ['Sharp Spikes','+6% trap damage',1,{trapDmg:0.06}],
-    ['Feral','+6% monster damage',1,{monDmg:0.06}],
-    ['Reinforced Walls','+6% monster HP',2,{monHp:0.06}],
-    ['Sharp Spikes II','+8% trap damage',2,{trapDmg:0.08}],
-    ['Extra Wing','start with +1 room slot',3,{slot0:1}],
-    ['Feral II','+8% monster damage',3,{monDmg:0.08}],
-    ['Reinforced II','+8% monster HP',4,{monHp:0.08}],
-    ['Master Builder','room level cap +1',4,{upCap:1}],
-    ['Sharp Spikes III','+12% trap damage',5,{trapDmg:0.12}],
-    ['Feral III','+12% monster damage',5,{monDmg:0.12}],
-    ['Fortified','+12% monster HP',6,{monHp:0.12}],
-    ['Quick Fusion','rooms fuse after 2 kills',6,{fuseFast:1}],
-    ['Architect','start with another +1 slot',7,{slot0:1}],
-    ['Synergist','combos get +0.10 synergy',7,{synergy:0.10}],
-    ['Sharp Spikes IV','+16% trap damage',8,{trapDmg:0.16}],
-    ['Feral IV','+16% monster damage',8,{monDmg:0.16}],
-    ['Grand Design','keystone: cap +1, +0.15 synergy, +1 slot',12,{upCap:1,synergy:0.15,slot0:1}],
-  ]),
-  rbranch('town','Warden','🧛','#4dc3ff',[
-    ['Negotiator','town costs 8% less dread',1,{townDisc:0.08}],
-    ['Headhunter','+1 dread from elite kills',2,{eliteDread:1}],
-    ['Foresight','draft 1 of 4 cards',3,{draft:1}],
-    ['Big Hands','+1 hand size',2,{hand:1}],
-    ['Negotiator II','town costs 12% less',3,{townDisc:0.12}],
-    ['Interrogator','+1 dread per throne-reacher',3,{throneDread:1}],
-    ['Big Hands II','+1 hand size',4,{hand:1}],
-    ['Foresight II','draft 1 of 5 cards',5,{draft:1}],
-    ['Conscription','start at Guild Lv1 (parties of 2)',6,{guild0:1}],
-    ['Negotiator III','town costs 16% less',5,{townDisc:0.16}],
-    ['Opening Hand','start with a random card',4,{cards0:1}],
-    ['Headhunter II','+2 dread from elites',6,{eliteDread:2}],
-    ['Opening Hand II','start with +1 card',6,{cards0:1}],
-    ['Warlord','start at Guild Lv2 (parties of 3)',9,{guild0:1}],
-    ['Big Hands III','+1 hand size',7,{hand:1}],
-    ['Foresight III','draft 1 of 6 cards',7,{draft:1}],
-    ['Overlord','keystone: +1 Guild Lv, start with 2 cards',12,{guild0:1,cards0:2}],
-  ]),
-  rbranch('asc','Ascendant','🐲','#ff9a3a',[
-    ['Bloodlust','+4% all boss & room damage',2,{trapDmg:0.04,monDmg:0.04,abilDmg:0.04,bossAtk:0.04}],
-    ['Endure','+25 boss HP & 4% damage reduction',3,{bossHpFlat:25,bossDR:0.04}],
-    ['Prosper','+30 gold & +2 dread',3,{gold0:30,dread0:2}],
-    ['Bloodlust II','+5% all damage',4,{trapDmg:0.05,monDmg:0.05,abilDmg:0.05,bossAtk:0.05}],
-    ['Fortune','+8% loot & +2 gold/kill',4,{loot:0.08,goldKill:2}],
-    ['Warmind','+20 mana, +2 regen, 8% cheaper',5,{manaFlat:20,manaRegen:2,abilCost:0.08}],
-    ['Aegis','+40 HP, 6% DR, +8 HP/wave',5,{bossHpFlat:40,bossDR:0.06,bossRegen:8}],
-    ['Bloodlust III','+6% all damage',6,{trapDmg:0.06,monDmg:0.06,abilDmg:0.06,bossAtk:0.06}],
-    ['Dungeon Lord','+10% trap & monster dmg, +1 slot',7,{trapDmg:0.10,monDmg:0.10,slot0:1}],
-    ['Tactician','draft 1 of 4 & +1 hand',6,{draft:1,hand:1}],
-    ['Overpower','+12% boss atk & +12% ability dmg',7,{bossAtk:0.12,abilDmg:0.12}],
-    ['Juggernaut','+60 HP & 8% DR',8,{bossHpFlat:60,bossDR:0.08}],
-    ['Plutocrat','+120 gold & +3 dread',8,{gold0:120,dread0:3}],
-    ['Bloodlust IV','+8% all damage',9,{trapDmg:0.08,monDmg:0.08,abilDmg:0.08,bossAtk:0.08}],
-    ['Warbringer','+1 Guild Lv & +14% monster dmg',10,{guild0:1,monDmg:0.14}],
-    ['Apotheosis','+15% boss HP, atk & ability dmg',12,{bossHp:0.15,bossAtk:0.15,abilDmg:0.15}],
-    ['GODKING','capstone: +20% all dmg, +100 HP, 10% DR, +1 Guild, 2 cards',18,
-      {trapDmg:0.20,monDmg:0.20,abilDmg:0.20,bossAtk:0.20,bossHpFlat:100,bossDR:0.10,guild0:1,cards0:2}],
-  ]),
+const RUNE_LIST=[
+  rn('root','Dark Awakening','📖','+4% loot',2.5,0, 2,1,{loot:0.04}, null),
+  // 💰 Treasury
+  rn('eco1','Seed Coins','💰','+12 starting gold',0,1, 5,1,{gold0:12},'root'),
+  rn('eco2','Pickpocket','🪙','+1 gold per kill',0,2, 5,1,{goldKill:1},'eco1'),
+  rn('eco3','Looter','💎','+5% loot',0,3, 5,2,{loot:0.05},'eco2'),
+  rn('eco4','Cheap Labor','🔨','room slots 6% cheaper',0,4, 3,2,{slotCost:0.06},'eco3'),
+  rn('eco5','Avarice','😈','+1 dread per kill',0,5, 3,4,{dreadKill:1},'eco4'),
+  // 🛡 Bulwark
+  rn('def1','Thick Hide','🛡️','+15 boss max HP',1,1, 5,1,{bossHpFlat:15},'root'),
+  rn('def2','Stoneskin','🪨','boss takes 3% less damage',1,2, 5,1,{bossDR:0.03},'def1'),
+  rn('def3','Iron Heart','❤️','+5% boss max HP',1,3, 5,2,{bossHp:0.05},'def2'),
+  rn('def4','Mending','💚','+4 boss HP each wave',1,4, 5,2,{bossRegen:4},'def3'),
+  rn('def5','Bastion','🏰','+45 boss max HP',1,5, 3,4,{bossHpFlat:45},'def4'),
+  // ⚔️ Wrath
+  rn('off1','Sharper Claws','🗡️','+3 boss attack',2,1, 5,1,{bossAtkFlat:3},'root'),
+  rn('off2','Cruelty','🔥','+6% ability damage',2,2, 5,1,{abilDmg:0.06},'off1'),
+  rn('off3','Focus','🔷','+12 max mana',2,3, 5,2,{manaFlat:12},'off2'),
+  rn('off4','Efficient','⚡','abilities cost 5% less',2,4, 5,2,{abilCost:0.05},'off3'),
+  rn('off5','Tyrant','👑','+10% boss attack',2,5, 3,4,{bossAtk:0.10},'off4'),
+  // 🏰 Dungeoneer
+  rn('room1','Sharp Spikes','🦷','+6% trap damage',3,1, 5,1,{trapDmg:0.06},'root'),
+  rn('room2','Feral','👹','+6% monster damage',3,2, 5,1,{monDmg:0.06},'room1'),
+  rn('room3','Reinforced','🧱','+6% monster HP',3,3, 5,2,{monHp:0.06},'room2'),
+  rn('room4','Master Builder','📐','+1 room level cap',3,4, 2,3,{upCap:1},'room3'),
+  rn('room5','Synergist','✨','+5% combo synergy',3,5, 3,3,{synergy:0.05},'room4'),
+  // 🧛 Warden
+  rn('town1','Negotiator','🤝','town costs 6% less',4,1, 5,1,{townDisc:0.06},'root'),
+  rn('town2','Big Hands','🖐️','+1 hand size',4,2, 3,2,{hand:1},'town1'),
+  rn('town3','Foresight','🔮','draft 1 more card',4,3, 3,2,{draft:1},'town2'),
+  rn('town4','Opening Hand','🃏','start with +1 card',4,4, 2,3,{cards0:1},'town3'),
+  rn('town5','Conscription','🏛️','start at +1 Guild level',4,5, 3,5,{guild0:1},'town4'),
+  // 🐲 Ascendant
+  rn('asc1','Bloodlust','🩸','+3% all damage',5,1, 5,2,{trapDmg:0.03,monDmg:0.03,abilDmg:0.03,bossAtk:0.03},'root'),
+  rn('asc2','Fortune','🍀','+5% loot & +1 gold/kill',5,2, 5,2,{loot:0.05,goldKill:1},'asc1'),
+  rn('asc3','Warmind','🧠','+1 mana regen, 5% cheaper',5,3, 3,3,{manaRegen:1,abilCost:0.05},'asc2'),
+  rn('asc4','Juggernaut','🦏','+30 HP & 4% damage reduction',5,4, 3,4,{bossHpFlat:30,bossDR:0.04},'asc3'),
+  rn('asc5','GODKING','🌟','+12% all dmg, +50 HP, 5% DR',5,5, 1,8,{trapDmg:0.12,monDmg:0.12,abilDmg:0.12,bossAtk:0.12,bossHpFlat:50,bossDR:0.05},'asc4'),
 ];
-const RUNE_NODES={}; RUNE_TREE.forEach(b=>b.nodes.forEach(n=>RUNE_NODES[n.id]=n));
-const RUNE_COUNT=Object.keys(RUNE_NODES).length;
+const RUNE_NODES={}; RUNE_LIST.forEach(n=>RUNE_NODES[n.id]=n);
+const RUNE_COUNT=RUNE_LIST.length;
 
-// Persistent rune state (localStorage).
-let RUNES={ points:0, owned:new Set() };
+// Persistent rune state (localStorage). ranks = {nodeId: ranksBought}.
+let RUNES={ points:0, ranks:{} };
 let RB={};   // aggregated bonuses for the active run
 function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
@@ -506,27 +457,27 @@ function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadK
   synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
 function loadRunes(){
   try{ const s=JSON.parse(localStorage.getItem('bossmonster_runes')||'{}');
-    RUNES={ points:s.points||0, owned:new Set(s.owned||[]) }; }
-  catch(_){ RUNES={ points:0, owned:new Set() }; }
+    RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{} }; }
+  catch(_){ RUNES={ points:0, ranks:{} }; }
 }
 function saveRunes(){
-  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, owned:[...RUNES.owned]})); }catch(_){}
+  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, ranks:RUNES.ranks})); }catch(_){ }
 }
+function ranksOf(id){ return RUNES.ranks[id]||0; }
+function runeCost(n){ return n.cost; }                       // flat per rank
+function runeUnlocked(n){ return !n.req || ranksOf(n.req)>0; }
+function runeAvailable(n){ return runeUnlocked(n) && ranksOf(n.id) < n.maxRank; }
 function runeBonuses(){
   const b=blankRB();
-  for(const id of RUNES.owned){ const n=RUNE_NODES[id]; if(!n) continue;
-    for(const k in n.eff) b[k]=(b[k]||0)+n.eff[k]; }
-  b.bossDR=Math.min(0.6, b.bossDR);            // cap damage reduction
+  for(const id in RUNES.ranks){ const n=RUNE_NODES[id]; if(!n) continue; const r=RUNES.ranks[id]||0;
+    for(const k in n.eff) b[k]=(b[k]||0)+n.eff[k]*r; }
+  b.bossDR=Math.min(0.6, b.bossDR);
   b.abilCost=Math.min(0.7, b.abilCost);
   b.slotCost=Math.min(0.7, b.slotCost);
   b.townDisc=Math.min(0.7, b.townDisc);
   return b;
 }
 function applyRunes(){ RUNE_RB=runeBonuses(); recomputeRB(); }
-function runeAvailable(n){
-  if(RUNES.owned.has(n.id)) return false;
-  return n.req.every(r=>RUNES.owned.has(r));
-}
 RB=blankRB();
 
 /* ============================== RELICS =================================
@@ -888,42 +839,52 @@ function startCampaign(){ G=freshGame('campaign'); gotoBossSelect(); }
 function startEndless(){ G=freshGame('endless'); gotoBossSelect(); }
 
 /* ============================== RUNE PAGE UI ============================= */
-let runeTab='eco';
 function openRunes(){ overlay.classList.add('show'); renderRunes(); }
+// Tap a node: buy the next rank if you can, otherwise explain why.
+function tapRune(id){
+  const n=RUNE_NODES[id]; if(!n) return;
+  const r=ranksOf(id);
+  if(!runeUnlocked(n)){ const p=RUNE_NODES[n.req]; showHint('🔒 '+n.ic+' '+n.name+' — unlock '+(p?p.name:'the rune above')+' first.'); return; }
+  if(r>=n.maxRank){ showHint('✔ '+n.ic+' '+n.name+' (max '+n.maxRank+') — '+n.desc); return; }
+  const cost=runeCost(n);
+  if(RUNES.points<cost){ showHint(n.ic+' '+n.name+' — '+n.desc+' · '+cost+'◆ (you have '+RUNES.points+')'); return; }
+  buyRune(id);
+}
 function buyRune(id){
   const n=RUNE_NODES[id]; if(!n) return;
-  if(RUNES.owned.has(n.id)) return;
-  if(!runeAvailable(n)){ showHint('Locked — unlock the rune above it first.'); return; }
-  if(RUNES.points<n.cost){ showHint('Not enough rune points.'); return; }
-  RUNES.points-=n.cost; RUNES.owned.add(id); saveRunes();
-  burst(VW/2, VH/2, RUNE_TREE.find(b=>b.key===n.branch).color, 12);
+  if(!runeAvailable(n)) return;
+  const cost=runeCost(n);
+  if(RUNES.points<cost) return;
+  RUNES.points-=cost; RUNES.ranks[id]=ranksOf(id)+1; saveRunes();
+  sfx('upgrade'); showHint(n.ic+' '+n.name+' → rank '+ranksOf(id)+'/'+n.maxRank+' · '+n.desc);
   renderRunes();
 }
 function renderRunes(){
   overlay.classList.add('show');
-  const tabs=RUNE_TREE.map(b=>{
-    const have=b.nodes.filter(n=>RUNES.owned.has(n.id)).length;
-    return `<button onclick="runeTab='${b.key}';renderRunes()" style="padding:6px 9px;min-height:0;font-size:12px;${runeTab===b.key?'border-color:'+b.color+';background:#34265e':''}">${b.icon} ${b.name} <span class="small">${have}/${b.nodes.length}</span></button>`;}).join('');
-  const br=RUNE_TREE.find(b=>b.key===runeTab);
-  const nodes=br.nodes.map(n=>{
-    const owned=RUNES.owned.has(n.id);
-    const avail=runeAvailable(n);
-    const afford=RUNES.points>=n.cost;
-    const bg=owned?'#1f3a26':avail?(afford?'#241a40':'#1d1530'):'#15111f';
-    const bord=owned?'#52d97e':avail?br.color:'#34284e';
-    const clickable=!owned&&avail;
-    return `<div ${clickable?`onclick="buyRune('${n.id}')"`:''} style="display:flex;align-items:center;gap:8px;text-align:left;
-       padding:7px 9px;border:1.5px solid ${bord};border-radius:8px;background:${bg};${clickable?'cursor:pointer;':''}opacity:${owned||avail?1:0.5}">
-       <div style="font-size:10px;min-width:26px;color:${br.color};font-weight:bold">T${n.tier+1}</div>
-       <div style="flex:1"><b style="font-size:13px">${n.name}</b><div class="small" style="opacity:.85">${n.desc}</div></div>
-       <div style="min-width:58px;text-align:right;font-size:12px">${owned?'<span style="color:#7bdc6b">✔ owned</span>':`<span style="color:${afford&&avail?'#ffd34d':'#8a7aa8'}">${n.cost}◆</span>`}</div>
-    </div>`;}).join('');
-  overlay.innerHTML=`<h1 style="margin-bottom:0">🔮 Rune Page</h1>
-    <p style="margin:4px 0"><b style="color:#ffd34d">${RUNES.points} ◆</b> rune points · ${RUNES.owned.size}/${RUNE_COUNT} runes</p>
-    <p class="small" style="opacity:.75;max-width:520px">Earn rune points by slaying heroes; they bank when a run ends. Spend them on permanent buffs — unlock each branch top-to-bottom.</p>
-    <div class="row" style="justify-content:center;gap:5px;flex-wrap:wrap;margin-bottom:8px">${tabs}</div>
-    <div style="display:flex;flex-direction:column;gap:6px;max-width:540px;width:100%;margin:0 auto">${nodes}</div>
-    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Done</button></div>`;
+  const COLW=126, ROWH=104, PAD=26, NODE=58;
+  let maxCol=0,maxRow=0; RUNE_LIST.forEach(n=>{ if(n.col>maxCol)maxCol=n.col; if(n.row>maxRow)maxRow=n.row; });
+  const W=Math.round(PAD*2+maxCol*COLW+NODE), H=Math.round(PAD*2+maxRow*ROWH+NODE);
+  const cx=n=>PAD+n.col*COLW+NODE/2, cy=n=>PAD+n.row*ROWH+NODE/2;
+  let paths='';
+  RUNE_LIST.forEach(n=>{ if(!n.req)return; const p=RUNE_NODES[n.req]; if(!p)return;
+    const lit=ranksOf(p.id)>0; const x1=cx(p),y1=cy(p)+NODE/2-6,x2=cx(n),y2=cy(n)-NODE/2+6, my=(y1+y2)/2;
+    paths+=`<path d="M${x1} ${y1} V${my} H${x2} V${y2}" stroke="${lit?'#e8c06a':'#7a6038'}" stroke-width="${lit?5:3}" fill="none" opacity="${lit?0.95:0.5}" stroke-linejoin="round"/>`; });
+  const nodes=RUNE_LIST.map(n=>{
+    const r=ranksOf(n.id), maxed=r>=n.maxRank, unlocked=runeUnlocked(n), cost=runeCost(n), afford=RUNES.points>=cost;
+    const cls = maxed?'rn-max':(unlocked?(afford?'rn-buy':'rn-cost'):'rn-lock');
+    const x=Math.round(PAD+n.col*COLW), y=Math.round(PAD+n.row*ROWH);
+    const ic = unlocked? n.ic : '🔒';
+    return `<div class="rnode ${cls}" style="left:${x}px;top:${y}px;width:${NODE}px;height:${NODE}px"
+      onclick="tapRune('${n.id}')" title="${n.name}: ${n.desc} (${cost}◆/rank)">
+      <span class="ric">${ic}</span><span class="rcnt">${r}/${n.maxRank}</span></div>`;}).join('');
+  overlay.innerHTML=`<div class="runebook">
+    <button class="rbback" onclick="gotoMenu()">‹ BACK</button>
+    <div class="rbpts">${RUNES.points} <span class="rbscroll-ic">📜</span></div>
+    <div class="rbview"><div class="rtree" style="width:${W}px;height:${H}px">
+      <svg width="${W}" height="${H}" style="position:absolute;left:0;top:0;pointer-events:none">${paths}</svg>
+      ${nodes}
+    </div></div>
+  </div>`;
 }
 
 /* =========================== PHASE: BOSS SELECT ========================== */
