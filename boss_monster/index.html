@@ -172,6 +172,15 @@
   #tutbar .tutskip{font-size:11px;padding:5px 8px;min-height:0;background:#2a2040;border-color:#4a3a72;}
   @keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 #ffd34d00;}50%{box-shadow:0 0 0 4px #ffd34d99;}}
   .tut-pulse{animation:tutpulse 1s ease-in-out infinite;border-color:var(--gold)!important;}
+  /* locked content (boss select / unlocks screen) */
+  .choice.rlocked{opacity:.55;cursor:default;border-color:#3a3450;}
+  .unlockgrid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:680px;margin:0 auto;}
+  .ucard{width:96px;padding:8px 4px;border-radius:10px;border:2px solid #3a3450;background:#1a1430;
+    display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .ucard.uok{border-color:#52d97e;background:#1f3a26;}
+  .ucard .uic{font-size:24px;}
+  .ucard .un{font-size:11px;font-weight:bold;}
+  .ucard .ureq{font-size:10px;opacity:.8;}
 </style>
 </head>
 <body>
@@ -223,10 +232,15 @@ const ROOM_W = 200;         // pixel width of one room/cell
 const ROOMS = {
   spike:    {kind:'trap',   name:'Spike Pit',  ic:'🦷', col:'#9aa4b2', dmg:6,  rate:0.45, elem:'phys', desc:'Fast cheap spikes. Shatters frozen heroes.'},
   flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, elem:'fire', desc:'Hits hard + burns. Ignites oiled heroes.'},
-  arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:5,  rate:0.3,  elem:'phys', desc:'Very rapid, pierces armor.'},
+  arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:5,  rate:0.3,  elem:'phys', pierce:true, desc:'Very rapid, pierces armor.'},
   oil:      {kind:'trap',   name:'Oil Slick',  ic:'🛢️', col:'#3a3a2a', dmg:3,  rate:0.7,  elem:'oil',  desc:'Coats heroes in oil — slows them, primes fire & lightning.'},
   frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). Then any hit SHATTERS for a burst.'},
   tesla:    {kind:'trap',   name:'Tesla Coil', ic:'⚡', col:'#fff34d', dmg:9,  rate:0.7,  elem:'shock',desc:'Lightning. Chains across the party if they are oiled.'},
+  // ---- counter cards (unlockable) ----
+  magebane: {kind:'trap',   name:'Mage-Bane',  ic:'🔮', col:'#b163ff', dmg:7,  rate:0.5,  elem:'phys', vsClass:['mage','cleric'], vsMult:2.6, desc:'2.6× damage to mages & clerics.'},
+  maul:     {kind:'trap',   name:'Armor Crusher',ic:'🔨',col:'#9aa4b2', dmg:13, rate:0.7,  elem:'phys', pierceAll:true, desc:'Ignores ALL armor — crushes armored heroes.'},
+  gallows:  {kind:'trap',   name:'Gallows',    ic:'⚰️', col:'#6a5a8a', dmg:8,  rate:0.6,  elem:'phys', vsLowHp:0.4, vsMult:3, desc:'Executes the wounded: 3× damage under 40% HP.'},
+  hexward:  {kind:'trap',   name:'Hexward',    ic:'🧿', col:'#4dc3ff', dmg:6,  rate:0.45, elem:'phys', vsElite:true, vsMult:2.2, desc:'2.2× damage to elite (trait-bearing) heroes.'},
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Weak early — but grows +10% stronger for every hero that dies in this room.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
@@ -475,7 +489,7 @@ const RUNE_NODES={}; RUNE_LIST.forEach(n=>RUNE_NODES[n.id]=n);
 const RUNE_COUNT=RUNE_LIST.length;
 
 // Persistent rune state (localStorage). ranks = {nodeId: ranksBought}.
-let RUNES={ points:0, ranks:{} };
+let RUNES={ points:0, ranks:{}, kills:0 };   // kills = lifetime, drives unlocks
 let RB={};   // aggregated bonuses for the active run
 function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
@@ -483,12 +497,18 @@ function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadK
   synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
 function loadRunes(){
   try{ const s=JSON.parse(localStorage.getItem('bossmonster_runes')||'{}');
-    RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{} }; }
-  catch(_){ RUNES={ points:0, ranks:{} }; }
+    RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{}, kills:s.kills||0 }; }
+  catch(_){ RUNES={ points:0, ranks:{}, kills:0 }; }
 }
 function saveRunes(){
-  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, ranks:RUNES.ranks})); }catch(_){ }
+  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills})); }catch(_){ }
 }
+// ---- Unlocks: content gated behind lifetime kills ----
+const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
+const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100 };
+function bossUnlocked(k){ return (UNLOCK_BOSS[k]||0) <= RUNES.kills; }
+function cardUnlocked(t){ return (UNLOCK_CARD[t]||0) <= RUNES.kills; }
+function unlockedRoomKeys(){ return ROOM_KEYS.filter(cardUnlocked); }
 function ranksOf(id){ return RUNES.ranks[id]||0; }
 function runeCost(n){ return n.cost; }                       // flat per rank
 function runeUnlocked(n){ return !n.req || ranksOf(n.req)>0; }
@@ -665,6 +685,7 @@ function freshGame(mode){
     relics:[],            // relic ids collected this run
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
     combo:0,              // kill streak (resets when a hero strikes the boss)
+    killsBanked:0, newUnlocks:[],            // lifetime-kill banking + unlock toasts
     tutorial:false, tutStep:0, tutHi:null,   // guided tutorial state
     hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
@@ -839,6 +860,7 @@ function gotoMenu(){
       <button onclick="startEndless()">♾️ Endless</button>
       <button onclick="startTutorial()" class="${tutDoneGet()?'':'tut-pulse'}">📖 Tutorial</button>
       <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
+      <button onclick="openUnlocks()">🔓 Unlocks</button>
       <button onclick="showHelp()">❓ How to play</button>
     </div>
     <div class="ko">
@@ -866,6 +888,22 @@ function showHelp(){
 }
 function startCampaign(){ G=freshGame('campaign'); gotoBossSelect(); }
 function startEndless(){ G=freshGame('endless'); gotoBossSelect(); }
+
+/* ============================== UNLOCKS ================================ */
+// Bosses & cards unlock as your LIFETIME kills climb. Shows progress.
+function openUnlocks(){
+  overlay.classList.add('show');
+  const ucard=(unlocked,ic,name,req)=>`<div class="ucard ${unlocked?'uok':''}">
+    <div class="uic">${unlocked?ic:'🔒'}</div><div class="un">${name}</div>
+    <div class="ureq">${unlocked?'<span style="color:#7bdc6b">unlocked</span>':req+' kills'}</div></div>`;
+  const bosses=BOSS_KEYS.map(k=>ucard(bossUnlocked(k),BOSSES[k].ic,BOSSES[k].name.split(' ')[0],UNLOCK_BOSS[k]||0)).join('');
+  const cards=ROOM_KEYS.map(k=>ucard(cardUnlocked(k),ROOMS[k].ic,ROOMS[k].name,UNLOCK_CARD[k]||0)).join('');
+  overlay.innerHTML=`<h1>🔓 Unlocks</h1>
+    <p>Slay heroes to unlock new bosses & rooms. Lifetime kills: <b style="color:var(--gold)">${RUNES.kills}</b></p>
+    <h2 style="margin:6px 0 4px">Bosses</h2><div class="unlockgrid">${bosses}</div>
+    <h2 style="margin:12px 0 4px">Room Cards</h2><div class="unlockgrid">${cards}</div>
+    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
+}
 
 /* ============================== TUTORIAL =============================== */
 // A guided first run: contextual coach steps that advance as you actually
@@ -985,12 +1023,13 @@ function gotoBossSelect(){
   overlay.innerHTML = `<h1>Choose your Boss</h1>
     <p>${G.mode==='campaign'?'Campaign — survive 5 escalating chapters.':'Endless — how long can you reign?'}</p>
     <div class="choices">${BOSS_KEYS.map(k=>{
-      const b=BOSSES[k];
-      return `<div class="choice" onclick="chooseBoss('${k}')" style="width:200px">
-        <div class="big">${b.ic}</div><h3>${b.name}</h3>
-        <div class="desc">${b.blurb}</div>
+      const b=BOSSES[k]; const lk=!bossUnlocked(k);
+      return `<div class="choice${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="width:200px">
+        <div class="big">${lk?'🔒':b.ic}</div><h3>${b.name}</h3>
+        ${lk?`<div class="desc">🔒 Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills (you: ${RUNES.kills})</div>`
+            :`<div class="desc">${b.blurb}</div>
         <div class="small" style="color:${b.col};margin:3px 0"><b>✦ ${PASSIVES[b.passive].name}</b><br>${PASSIVES[b.passive].desc}</div>
-        <div class="stats">❤️ ${b.maxHp} HP · 🗡️ ${b.atk} ATK</div>
+        <div class="stats">❤️ ${b.maxHp} HP · 🗡️ ${b.atk} ATK</div>`}
       </div>`;}).join('')}</div>`;
 }
 function chooseBoss(key){
@@ -1008,7 +1047,7 @@ function chooseBoss(key){
   G.gold=30+RB.gold0;
   G.dread=RB.dread0;
   G.guildLvl=Math.min(GUILD_MAX, RB.guild0);
-  for(let i=0;i<RB.cards0;i++) G.hand.push({type:pick(ROOM_KEYS), lvl:1});
+  for(let i=0;i<RB.cards0;i++) G.hand.push({type:pick(unlockedRoomKeys()), lvl:1});
   gotoLoadout();                                  // pick your 3 abilities
 }
 
@@ -1364,7 +1403,7 @@ function isFrontHero(h){
 }
 
 function heroDmg(h, raw, pierce){
-  let armor = pierce ? Math.max(0,h.armor-3) : h.armor;
+  let armor = pierce==='full' ? 0 : pierce ? Math.max(0,h.armor-3) : h.armor;
   return Math.max(1, Math.round(raw - armor));
 }
 function dealToHero(h, raw, label, pierce, elem){
@@ -1514,6 +1553,7 @@ function bossDies(){
     <p>${score}</p>
     <p style="opacity:.7">Dead is dead — this run is over.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
+    ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
     <div class="menu-btns">
       <button class="go" onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="gotoMenu()">Main menu</button>
@@ -1526,7 +1566,16 @@ function awardRunes(){
   const total = Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0);
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
-  RUNES.points += delta; saveRunes();
+  RUNES.points += delta;
+  // bank lifetime kills + detect newly-unlocked content
+  const before=RUNES.kills;
+  const kd=Math.max(0, G.totalSlain - (G.killsBanked||0));
+  G.killsBanked=G.totalSlain; RUNES.kills+=kd;
+  const after=RUNES.kills;
+  G.newUnlocks=[];
+  for(const k in UNLOCK_BOSS){ if(UNLOCK_BOSS[k]>before && UNLOCK_BOSS[k]<=after) G.newUnlocks.push(BOSSES[k].ic+' '+BOSSES[k].name); }
+  for(const k in UNLOCK_CARD){ if(UNLOCK_CARD[k]>before && UNLOCK_CARD[k]<=after) G.newUnlocks.push(ROOMS[k].ic+' '+ROOMS[k].name); }
+  saveRunes();
   return delta;
 }
 
@@ -1536,7 +1585,7 @@ function gotoReward(){
   // draft 3 room cards, weighted by what helps (slightly favor what you own to enable upgrades)
   const owned = new Set(G.rooms.filter(Boolean).map(r=>r.type).filter(t=>t!=='minion'));
   G.drafts=[];
-  const pool=[...ROOM_KEYS];
+  const pool=unlockedRoomKeys();
   const choices=3+(RB.draft||0);
   for(let i=0;i<choices;i++){
     let t;
@@ -1612,6 +1661,7 @@ function winLevel(){
       <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
          having buried <b>${G.totalSlain}</b> heroes.</p>
       <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
+      ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
       <div class="menu-btns">
         <button class="go" onclick="gotoMenu()">★ Main menu</button>
         <button onclick="openRunes()">🔮 Rune Page</button>
@@ -1984,10 +2034,16 @@ function trapTick(h,cell,dt){
     tr.fireT-=dt;
     if(tr.fireT<=0){
       tr.fireT=tr.def.rate;
-      const dmg=Math.round(tr.def.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0)));
-      dealToHero(h, dmg, 'HIT', tr.def.name==='Dart Wall', tr.def.elem);
-      if(tr.def.burn){ h.burn=tr.def.burn+(r.lvl-1)*2; h.burnT=3; }
-      burst(h.x, h.y-20, tr.def.col, 5);
+      const d=tr.def;
+      let dmg=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
+      // counter-card bonuses vs certain heroes
+      if(d.vsClass && d.vsClass.includes(h.cls)) dmg*=d.vsMult;
+      if(d.vsElite && h.elite) dmg*=d.vsMult;
+      if(d.vsLowHp && h.hp < h.maxHp*d.vsLowHp) dmg*=d.vsMult;
+      const pierce = d.pierceAll ? 'full' : !!d.pierce;
+      dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem);
+      if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
+      burst(h.x, h.y-20, d.col, 5);
       if(h.state==='dead') return;
     }
   }
