@@ -1825,20 +1825,23 @@ function simStep(h,dt){
   if(h.oil>0) h.oil-=dt;
   if(h.chill>0) h.chill-=dt;
   if(h.shock>0) h.shock-=dt;
-  // freeze
-  if(h.freeze>0){ h.freeze-=dt; return; }
+  // freeze: the HERO is immobilised (can't move or attack) — but the dungeon's
+  // traps and monsters keep punishing the sitting duck.
+  const frozen = h.freeze>0;
+  if(frozen) h.freeze-=dt;
 
   const cell=cellAt(h.x);
-  if(cell && cell.index!==h.cellIndex && h.state==='walking'){
+  if(cell && cell.index!==h.cellIndex && h.state==='walking' && !frozen){
     h.cellIndex=cell.index; onEnterCell(h,cell);
   }
 
   if(h.state==='walking'){
+    // traps still fire on a frozen/standing hero
+    if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
+    if(h.state==='dead' || frozen) return;
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1);   // oil & chill slow movement
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
-    // traps fire while inside a cell that has any traps (works for combos)
-    if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     // reached boss room?
     if(h.x >= cellX(G.slots)+ROOM_W*0.32){
       if(h.champion==='thief'){ thiefSteal(h); return; }   // robs you instead of fighting
@@ -1850,15 +1853,16 @@ function simStep(h,dt){
     // combo synergy: traps keep chipping while the monster pins the hero
     if(cellM && cellM.traps && cellM.traps.length) trapTick(h,cellM,dt);
     if(h.state==='dead') return;
-    if(!cellM||!cellM.mon||!cellM.mon.alive){ h.state='walking'; return; }
-    fightTick(h, cellM.mon, dt, cellM, isFrontHero(h));
+    if(!cellM||!cellM.mon||!cellM.mon.alive){ if(!frozen) h.state='walking'; return; }
+    fightTick(h, cellM.mon, dt, cellM, isFrontHero(h), frozen);
   }
   else if(h.state==='shopping'){
+    if(frozen) return;
     h.shopT-=dt;
     if(h.shopT<=0){ doShopping(h, G.cells[h.cellIndex]); h.state='walking'; }
   }
   else if(h.state==='boss'){
-    bossFightTick(h,dt,isFrontHero(h));
+    bossFightTick(h,dt,isFrontHero(h),frozen);
   }
 }
 
@@ -1924,20 +1928,22 @@ function trapTick(h,cell,dt){
   }
 }
 
-function fightTick(h, mon, dt, cell, isFront){
-  // hero attacks monster (all party members in the room gang up)
-  h.atkT-=dt;
-  if(h.atkT<=0){
-    h.atkT=0.7*h.atkSpeed;
-    const dmg=Math.max(1,Math.round(h.atk));
-    mon.hp-=dmg;
-    if(h.vampiric) healHero(h, dmg*0.4);
-    floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
-    if(mon.hp<=0){ mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
-      floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
-      return; }
+function fightTick(h, mon, dt, cell, isFront, frozen){
+  // hero attacks monster (all party members in the room gang up) — unless frozen
+  if(!frozen){
+    h.atkT-=dt;
+    if(h.atkT<=0){
+      h.atkT=0.7*h.atkSpeed;
+      const dmg=Math.max(1,Math.round(h.atk));
+      mon.hp-=dmg;
+      if(h.vampiric) healHero(h, dmg*0.4);
+      floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
+      if(mon.hp<=0){ mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
+        floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
+        return; }
+    }
   }
-  // monster strikes only the front hero
+  // monster strikes only the front hero (a frozen hero still gets mauled)
   if(isFront){
     mon.atkT-=dt;
     if(mon.atkT<=0){
@@ -1980,22 +1986,24 @@ function doShopping(h, cell){
   }
 }
 
-function bossFightTick(h,dt,isFront){
+function bossFightTick(h,dt,isFront,frozen){
   const b=G.boss;
-  // every hero at the throne hammers the boss
-  h.atkT-=dt;
-  if(h.atkT<=0){
-    h.atkT=0.8*h.atkSpeed;
-    const dr=Math.min(0.85,(RB.bossDR||0)+(b.passiveDR||0));
-    const dmg=Math.max(1,Math.round(h.atk*(1-dr)));
-    b.hp-=dmg;
-    if(G.combo>0) G.combo=0;                 // defense breached — streak broken
-    if(h.vampiric) healHero(h, dmg*0.4);
-    if(b.thorns){ dealToHero(h, Math.round(dmg*b.thorns), 'THORNS'); }  // Spiked Throne reflect
-    floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
-    burst(bossX(), FLOOR-50, '#ff4d6d', 6);
-    shake(3); sfx('boss');
-    if(b.hp<=0){ b.hp=0; bossDies(); return; }
+  // every hero at the throne hammers the boss — unless frozen in place
+  if(!frozen){
+    h.atkT-=dt;
+    if(h.atkT<=0){
+      h.atkT=0.8*h.atkSpeed;
+      const dr=Math.min(0.85,(RB.bossDR||0)+(b.passiveDR||0));
+      const dmg=Math.max(1,Math.round(h.atk*(1-dr)));
+      b.hp-=dmg;
+      if(G.combo>0) G.combo=0;                 // defense breached — streak broken
+      if(h.vampiric) healHero(h, dmg*0.4);
+      if(b.thorns){ dealToHero(h, Math.round(dmg*b.thorns), 'THORNS'); }  // Spiked Throne reflect
+      floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
+      burst(bossX(), FLOOR-50, '#ff4d6d', 6);
+      shake(3); sfx('boss');
+      if(b.hp<=0){ b.hp=0; bossDies(); return; }
+    }
   }
   // boss only swings at the front hero
   if(isFront){
