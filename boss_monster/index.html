@@ -1636,10 +1636,12 @@ function sabotage(idx,key){
 
 // ---- corruption: turn a previewed hero into a placeable minion card ----
 function minionCardFromSpec(spec){
-  // A corrupted hero should defend with most of their former might.
-  const ps=previewStats(spec);
-  return { type:'minion', lvl:1, minHp:Math.round(ps.hp*0.9),
-           minAtk:Math.max(3,Math.round(ps.atk*0.9)), label:(spec.name||'Thrall') };
+  // A corrupted hero defends with a solid chunk of their former might — but a
+  // champion is turned into a normal-scale minion (no boss-tier HP multiplier).
+  const base = spec.champion ? {...spec, champion:null} : spec;
+  const ps=previewStats(base);
+  return { type:'minion', lvl:1, minHp:Math.round(ps.hp*0.6),
+           minAtk:Math.max(3,Math.round(ps.atk*0.65)), label:(spec.name||'Thrall') };
 }
 function grantMinionCard(power){
   if(G.hand.length>=handCap()){ showHint('Hand full — make room first.'); return false; }
