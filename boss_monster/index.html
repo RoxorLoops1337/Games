@@ -1422,7 +1422,9 @@ function simStep(h,dt){
 
 function cellAt(x){
   for(const c of G.cells){ if(x>=c.x0 && x<c.x1) return c; }
-  return G.cells[G.cells.length-1];
+  // Left of the corridor (party members still entering) → first cell, NOT the
+  // boss. Only x past the far end falls through to the boss cell.
+  return x<0 ? G.cells[0] : G.cells[G.cells.length-1];
 }
 function onEnterCell(h,cell){
   if(cell.mon && cell.mon.alive){
