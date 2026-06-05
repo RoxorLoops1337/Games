@@ -151,8 +151,10 @@ const ROOMS = {
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:6,  desc:'Sturdy undead guard.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:10, desc:'Huge HP, big hits.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold.'},
+  minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
 };
-const ROOM_KEYS = Object.keys(ROOMS);
+// Cards you can DRAFT (minions only come from corrupting heroes in town).
+const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 
 // Shop stock items: arm the heroes (makes them stronger) for instant gold.
 const ITEMS = {
@@ -183,19 +185,37 @@ const TRAITS = {
 };
 const TRAIT_KEYS = Object.keys(TRAITS);
 
-// Town interlude — schemes the boss buys to fight back. Permanent boss
-// upgrades plus per-hero sabotage applied to the previewed roster.
+// ===== TOWN INTERLUDE content (every 5 kills) =====
+// The town runs on DREAD (earned per kill), separate from gold (which builds
+// the dungeon). Boss upgrades, sabotage, schemes and corruption all cost dread.
 const TOWN_UPGRADES = {
-  reinforce:{name:'Reinforce Throne', ic:'🏰', base:45, desc:'+30 max HP and heal that much.'},
-  sharpen:  {name:'Sharpen Claws',    ic:'🗡️', base:40, desc:'+5 boss attack.'},
-  attune:   {name:'Dark Attunement',  ic:'🔷', base:38, desc:'+20 max mana & faster regen.'},
-  ascend:   {name:'Empower Boss',     ic:'🐲', base:70, desc:'+1 boss level (stronger abilities).'},
+  reinforce:{name:'Reinforce Throne', ic:'🏰', base:7, desc:'+30 max HP and heal that much.'},
+  sharpen:  {name:'Sharpen Claws',    ic:'🗡️', base:6, desc:'+5 boss attack.'},
+  attune:   {name:'Dark Attunement',  ic:'🔷', base:6, desc:'+20 max mana & faster regen.'},
+  ascend:   {name:'Empower Boss',     ic:'🐲', base:11,desc:'+1 boss level (stronger abilities).'},
 };
 const TOWN_SABOTAGE = {
-  intimidate:{name:'Intimidate', ic:'😱', cost:18, desc:'−30% attack'},
-  poison:    {name:'Poison',     ic:'☠️', cost:20, desc:'arrives burning'},
-  rob:       {name:'Rob',        ic:'💰', cost:14, desc:'steal their gold now'},
+  intimidate:{name:'Intimidate', ic:'😱', cost:3, desc:'−30% attack'},
+  poison:    {name:'Poison',     ic:'☠️', cost:3, desc:'arrives burning'},
+  rob:       {name:'Rob',        ic:'💰', cost:2, desc:'steal their gold now'},
 };
+// Town-wide schemes: broad strategic levers, dread-priced, last several waves.
+const TOWN_SCHEMES = {
+  well:   {name:'Poison the Well',  ic:'🩸', cost:6, waves:5, desc:'Next 5 heroes arrive burning.'},
+  smith:  {name:'Bribe the Smith',  ic:'🔨', cost:5, waves:5, desc:'Disables the hero shop for 5 waves.'},
+  temple: {name:'Burn the Temple',  ic:'🔥', cost:5, waves:5, desc:'No clerics arrive for 5 waves.'},
+};
+// Corrupt a previewed hero into a minion you can place to defend a room.
+const CORRUPT_COST = 6;
+
+// Named adventurers + grudge titles for recurring rivals.
+const HERO_NAMES = ['Aldric','Bryn','Cael','Dara','Edrik','Fenn','Gwen','Hale',
+  'Isolde','Joren','Kara','Lyle','Mira','Nox','Orin','Petra','Quill','Rolf',
+  'Sable','Tamsin','Ulric','Vesna','Wren','Yara','Zane','Brand','Coral','Doran'];
+const RIVAL_TITLES = ['the Returned','the Vengeful','the Unbroken','the Wrathful',
+  'the Undying','the Scarred','the Relentless','the Doombringer'];
+
+function rollName(){ return pick(HERO_NAMES); }
 
 // Bosses: differing stats + three abilities each.
 const BOSSES = {
@@ -280,6 +300,11 @@ function freshGame(mode){
     heroSeq:0,            // power index assigned to each generated hero
     queue:[],             // upcoming hero specs (previewed in town)
     townBuys:{},          // {upgradeKey: timesBought} for rising costs
+    dread:0,              // town currency (earned per kill)
+    bounty:0,             // threat dial: higher = tougher heroes, more reward
+    fx:{well:0, smith:0, temple:0},  // active town-wide schemes (waves left)
+    pendingRivals:[],     // {eta, spec} grudge-bearers returning to the queue
+    townEvent:null,       // the dilemma shown this town visit
     hero:null,            // active hero during run
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
@@ -301,10 +326,11 @@ function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
 const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
 function difficulty(){
   // base ramp from cumulative kills (applies to both modes) ×
-  // campaign chapter multiplier.
+  // campaign chapter multiplier × bounty/threat dial.
   const cumulative = 1 + G.totalSlain*0.05;
-  if(G.mode==='campaign') return cumulative * CAMPAIGN[G.levelIdx].diff;
-  return cumulative + G.survived*0.05;
+  const threat = 1 + G.bounty*0.15;
+  if(G.mode==='campaign') return cumulative * CAMPAIGN[G.levelIdx].diff * threat;
+  return (cumulative + G.survived*0.05) * threat;
 }
 
 /* ============================== PHASE: MENU =============================== */
@@ -418,7 +444,7 @@ function tapSlot(idx){
   const room=G.rooms[idx];
   if(!room){
     // build new room here
-    G.rooms[idx]=makeRoom(card.type, card.lvl);
+    G.rooms[idx]=makeRoom(card.type, card.lvl, card);
     G.hand.splice(selCard,1); selCard=-1;
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, ROOMS[card.type].col, 14);
     showHint(ROOMS[card.type].name+' built!');
@@ -436,10 +462,15 @@ function tapSlot(idx){
   render();
 }
 
-function makeRoom(type,lvl){
+function makeRoom(type,lvl,card){
   const def=ROOMS[type];
   const r={type,lvl,def};
   if(def.kind==='shop') r.stock=[];
+  if(type==='minion'){            // carry the corrupted hero's stats + name
+    r.minHp = card?.minHp || def.hp;
+    r.minAtk = card?.minAtk || def.atk;
+    r.label = card?.label || 'Corrupted';
+  }
   return r;
 }
 
@@ -471,8 +502,10 @@ function buildCells(){
     const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:r?r.def.kind:'empty'};
     if(r){
       if(r.def.kind==='monster'){
-        const hp=Math.round((r.def.hp + r.lvl*r.def.hp*0.7));
-        cell.mon={hp, maxHp:hp, atk:r.def.atk+(r.lvl-1)*Math.ceil(r.def.atk*0.6), atkT:0, alive:true};
+        const bHp = r.type==='minion'? r.minHp : r.def.hp;
+        const bAtk= r.type==='minion'? r.minAtk : r.def.atk;
+        const hp=Math.round(bHp + r.lvl*bHp*0.7);
+        cell.mon={hp, maxHp:hp, atk:bAtk+(r.lvl-1)*Math.ceil(bAtk*0.6), atkT:0, alive:true};
       } else if(r.def.kind==='trap'){
         cell.fireT=0;
       } else if(r.def.kind==='shop'){
@@ -499,9 +532,29 @@ function genHeroSpec(){
     traits.push(pool.splice(ri(0,pool.length-1),1)[0]);
     if(power>=7 && Math.random()<0.35) traits.push(pool.splice(ri(0,pool.length-1),1)[0]);
   }
-  return {cls, power, traits, debuff:{atkMul:1, burn:0, robbed:false}};
+  return {cls, power, traits, name:rollName(), rivalGen:0,
+          debuff:{atkMul:1, burn:0, robbed:false}};
 }
-function ensureQueue(k){ while(G.queue.length<k) G.queue.push(genHeroSpec()); }
+// Pull the next spec, letting a due rival cut the line ahead of fresh heroes.
+function nextSpec(){
+  for(const r of G.pendingRivals) r.eta--;
+  const i=G.pendingRivals.findIndex(r=>r.eta<=0);
+  if(i>=0) return G.pendingRivals.splice(i,1)[0].spec;
+  return genHeroSpec();
+}
+function ensureQueue(k){ while(G.queue.length<k) G.queue.push(nextSpec()); }
+
+// A hero who reached the throne swears revenge and returns stronger.
+function makeRival(h){
+  const gen=(h.rivalGen||0)+1;
+  const traits=[...new Set([...(h.specTraits||[]), pick(TRAIT_KEYS)])];
+  G.pendingRivals.push({ eta: ri(2,4), spec:{
+    cls:h.cls, power:(h.specPower||0)+2+gen, traits,
+    name:h.heroName, rivalGen:gen,
+    title: RIVAL_TITLES[Math.min(gen-1, RIVAL_TITLES.length-1)],
+    rival:true, debuff:{atkMul:1, burn:0, robbed:false}
+  }});
+}
 
 function pickHeroClass(){
   const r=Math.random();
@@ -531,7 +584,10 @@ function spawnHero(){
   ensureQueue(1);
   const spec=G.queue.shift();
   G.heroNum++;
-  const d=difficulty(); const c=CLASSES[spec.cls]; const n=spec.power;
+  // town-wide schemes affecting this arrival
+  let cls=spec.cls;
+  if(G.fx.temple>0 && cls==='cleric') cls='warrior';   // temple burned: no clerics
+  const d=difficulty(); const c=CLASSES[cls]; const n=spec.power;
   const tr=spec.traits;
   let hp=(32 + n*8.5) * c.hp * d;
   let atk=(5 + n*1.6) * c.atk * d;
@@ -547,20 +603,27 @@ function spawnHero(){
   atk*=spec.debuff.atkMul;
   hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
-    cls:spec.cls, ...c, name:spec.cls, traits:tr,
+    cls, ...c, name:cls, traits:tr,
     elite: tr.length>0,
+    heroName: spec.name, title: spec.title||null,
+    rival: !!spec.rival, rivalGen: spec.rivalGen||0,
+    specPower: n, specTraits: tr,
     maxHp:hp, hp:hp, atk, armor, spd, atkSpeed,
     gold: heroGold(n, d, spec.debuff.robbed),
     bounty: heroBounty(n, d),
     vampiric: tr.includes('vampiric'),
     regen: tr.includes('zealot') || c.selfheal,
+    reachedThrone:false,
     x: 8, y: FLOOR-34,
     state:'walking',         // walking | fighting | shopping | boss | dead
     cellIndex:-1,
     atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
     freeze:0, shopT:0, walkAnim:0,
   };
-  if(spec.debuff.burn>0){ h.burn=spec.debuff.burn; h.burnT=6; }
+  let startBurn=spec.debuff.burn + (G.fx.well>0 ? 5+Math.floor(n*0.5) : 0);
+  if(startBurn>0){ h.burn=startBurn; h.burnT=6; }
+  // each scheme lasts a number of waves; tick one off
+  if(G.fx.well>0) G.fx.well--; if(G.fx.smith>0) G.fx.smith--; if(G.fx.temple>0) G.fx.temple--;
   G.hero=h;
 }
 
@@ -601,13 +664,20 @@ function castAbility(slot){
 function heroDies(){
   const h=G.hero; if(h.state==='dead') return;
   h.state='dead';
-  // loot: carried gold + bounty
-  const loot=h.gold + h.bounty;
+  // loot: carried gold + bounty (scaled a little by your threat dial)
+  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12));
   G.gold+=loot;
+  // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers
+  const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0);
+  G.dread+=dread;
   G.survived++; G.totalSlain++;
+  // a hero who touched the throne returns with a grudge
+  if(h.reachedThrone) makeRival(h);
   burst(h.x, h.y-20, '#ffd34d', 22);
   floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
-  showHint(CLASSES[h.cls].name+' slain! +'+loot+' gold looted.');
+  floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
+  const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
+  showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
   setTimeout(afterKill, 950);
 }
 
@@ -652,7 +722,7 @@ function retryWave(){
 function gotoReward(){
   G.phase='reward';
   // draft 3 room cards, weighted by what helps (slightly favor what you own to enable upgrades)
-  const owned = new Set(G.rooms.filter(Boolean).map(r=>r.type));
+  const owned = new Set(G.rooms.filter(Boolean).map(r=>r.type).filter(t=>t!=='minion'));
   G.drafts=[];
   const pool=[...ROOM_KEYS];
   for(let i=0;i<3;i++){
@@ -718,76 +788,170 @@ function nextLevel(){
 }
 
 /* ============================== PHASE: TOWN ============================== */
-// Interlude every 5 kills: fortify the boss and meddle with the heroes who are
-// about to arrive (previewed straight from the spawn queue).
-function gotoTown(){ G.phase='town'; ensureQueue(3); renderTown(); }
+// Interlude every 5 kills. Runs on DREAD (earned per kill). You reach into the
+// hero town to: resolve an EVENT, set your THREAT, empower the boss, buy
+// town-wide SCHEMES, and sabotage/corrupt the previewed arrivals.
 
-function upgradeCost(key){
-  return Math.round(TOWN_UPGRADES[key].base * Math.pow(1.6, G.townBuys[key]||0));
+// Random dilemmas. Each option's run() applies an effect and returns a line.
+const EVENTS = [
+  { t:'Cursed Caravan 🛒', d:'A smuggler will sell the heroes cursed war-gear — for a cut.',
+    opts:[
+      {l:'Take the cut (+6 ☠, next 3 heroes +20% ATK)', run:()=>{ G.dread+=6;
+        G.queue.slice(0,3).forEach(s=>s.debuff.atkMul*=1.2); return 'Blood money taken.'; }},
+      {l:'Burn the caravan', run:()=>'The smuggler flees empty-handed.'} ]},
+  { t:'Plague Rats 🐀', d:'Diseased rats nest beneath the town well.',
+    opts:[
+      {l:'Loose the plague (poison next 5)', run:()=>{ G.fx.well=Math.max(G.fx.well,5); return 'The well runs foul.'; }},
+      {l:'Sell the antidote (+5 ☠)', run:()=>{ G.dread+=5; return 'Coin from the desperate.'; }} ]},
+  { t:'Black Market 💱', d:'A hooded broker trades in gold and dread alike.',
+    opts:[
+      {l:'Gold → Dread (−30g, +6 ☠)', cond:()=>G.gold>=30, run:()=>{ G.gold-=30; G.dread+=6; return 'Gold laundered into fear.'; }},
+      {l:'Dread → Gold (−4 ☠, +45g)', cond:()=>G.dread>=4, run:()=>{ G.dread-=4; G.gold+=45; return 'Fear sold for coin.'; }} ]},
+  { t:'The Deserter 🚪', d:'A frightened recruit will betray his comrades for the right master.',
+    opts:[
+      {l:'Corrupt him (free minion)', cond:()=>G.hand.length<5, run:()=>{ grantMinionCard(G.totalSlain+1); return 'A turncoat joins your halls.'; }},
+      {l:'Make an example (+5 ☠)', run:()=>{ G.dread+=5; return 'His screams spread dread.'; }} ]},
+  { t:"Champion's Vow ⚔️", d:'A famed champion swears to end you and rallies the town.',
+    opts:[
+      {l:'Taunt them (+1 threat, +6 ☠)', run:()=>{ G.bounty=clamp(G.bounty+1,-2,3); G.dread+=6; return 'You raise the stakes.'; }},
+      {l:'Lie low (−1 threat)', run:()=>{ G.bounty=clamp(G.bounty-1,-2,3); return 'You fade into rumor.'; }} ]},
+];
+
+function gotoTown(){
+  G.phase='town'; ensureQueue(3);
+  G.townEvent={ ...pick(EVENTS), done:false, outcome:'' };
+  renderTown();
 }
+function chooseEvent(i){
+  const ev=G.townEvent; if(!ev||ev.done) return;
+  const opt=ev.opts[i];
+  if(opt.cond && !opt.cond()){ showHint('You can\'t do that right now.'); return; }
+  ev.done=true; ev.outcome=opt.run();
+  showHint(ev.outcome); renderTown(); renderTop();
+}
+
+function upgradeCost(key){ return Math.round(TOWN_UPGRADES[key].base * Math.pow(1.5, G.townBuys[key]||0)); }
 function buyUpgrade(key){
   const cost=upgradeCost(key);
-  if(G.gold<cost){ showHint('Not enough gold.'); return; }
-  G.gold-=cost; G.townBuys[key]=(G.townBuys[key]||0)+1;
+  if(G.dread<cost){ showHint('Not enough dread.'); return; }
+  G.dread-=cost; G.townBuys[key]=(G.townBuys[key]||0)+1;
   const b=G.boss;
   if(key==='reinforce'){ b.maxHp+=30; b.hp+=30; }
   else if(key==='sharpen'){ b.atk+=5; }
   else if(key==='attune'){ b.maxMana+=20; b.mana=Math.min(b.maxMana,b.mana+20); b.manaRegen=(b.manaRegen||6)+2; }
   else if(key==='ascend'){ b.lvl+=1; }
-  showHint(TOWN_UPGRADES[key].name+'!');
-  renderTown(); renderTop();
+  showHint(TOWN_UPGRADES[key].name+'!'); renderTown(); renderTop();
 }
-function sabotageCost(spec,key){ return TOWN_SABOTAGE[key].cost + Math.floor(spec.power*1.2); }
+
+function buyScheme(key){
+  const s=TOWN_SCHEMES[key];
+  if(G.fx[key]>0){ showHint('Already active.'); return; }
+  if(G.dread<s.cost){ showHint('Not enough dread.'); return; }
+  G.dread-=s.cost; G.fx[key]=s.waves;
+  showHint(s.name+' — active '+s.waves+' waves.'); renderTown(); renderTop();
+}
+function setThreat(d){ G.bounty=clamp(G.bounty+d,-2,3); renderTown(); renderTop(); }
+
+function sabotageCost(spec,key){ return TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3); }
 function sabotage(idx,key){
   const spec=G.queue[idx]; if(!spec) return;
   const cost=sabotageCost(spec,key);
-  if(G.gold<cost){ showHint('Not enough gold.'); return; }
+  if(G.dread<cost){ showHint('Not enough dread.'); return; }
   if(key==='intimidate'){
     if(spec.debuff.atkMul<1){ showHint('Already intimidated.'); return; }
-    G.gold-=cost; spec.debuff.atkMul=0.7;
+    G.dread-=cost; spec.debuff.atkMul=0.7;
   } else if(key==='poison'){
-    G.gold-=cost; spec.debuff.burn += 6 + Math.floor(spec.power);
+    G.dread-=cost; spec.debuff.burn += 6 + Math.floor(spec.power);
   } else if(key==='rob'){
     if(spec.debuff.robbed){ showHint('Already robbed.'); return; }
-    const g=previewStats(spec).gold; G.gold-=cost; G.gold+=Math.round(g*0.6); spec.debuff.robbed=true;
+    const g=previewStats(spec).gold; G.dread-=cost; G.gold+=Math.round(g*0.6); spec.debuff.robbed=true;
     showHint('Robbed for '+Math.round(g*0.6)+'g — they arrive poorer.');
   }
   renderTown(); renderTop();
 }
+
+// ---- corruption: turn a previewed hero into a placeable minion card ----
+function minionCardFromSpec(spec){
+  const ps=previewStats(spec);
+  return { type:'minion', lvl:1, minHp:Math.round(ps.hp*0.5),
+           minAtk:Math.max(2,Math.round(ps.atk*0.8)), label:(spec.name||'Thrall') };
+}
+function grantMinionCard(power){
+  if(G.hand.length>=5){ showHint('Hand full — make room first.'); return false; }
+  const spec={cls:pick(CLASS_KEYS), power, traits:[], name:rollName(), debuff:{atkMul:1,burn:0,robbed:false}};
+  G.hand.push(minionCardFromSpec(spec)); return true;
+}
+function corruptHero(idx){
+  const spec=G.queue[idx]; if(!spec) return;
+  if(G.dread<CORRUPT_COST){ showHint('Not enough dread.'); return; }
+  if(G.hand.length>=5){ showHint('Hand full — play a card first.'); return; }
+  G.dread-=CORRUPT_COST; G.queue.splice(idx,1);
+  G.hand.push(minionCardFromSpec(spec)); ensureQueue(3);
+  showHint((spec.name||'A hero')+' is corrupted into a minion!'); renderTown(); renderTop();
+}
+
 function leaveTown(){ overlay.classList.remove('show'); gotoReward(); }
 
 function renderTown(){
   overlay.classList.add('show');
+  const ev=G.townEvent;
+  const evHtml = ev ? `<div style="max-width:560px;margin:4px auto 6px;padding:10px 14px;border:2px solid var(--accent);border-radius:12px;background:#1c1438">
+      <h3 style="margin:0 0 4px;color:var(--accent)">${ev.t}</h3>
+      <div class="small" style="opacity:.9">${ev.d}</div>
+      ${ev.done
+        ? `<div style="margin-top:6px;color:#7bdc6b">✔ ${ev.outcome}</div>`
+        : `<div class="row" style="justify-content:center;gap:8px;margin-top:8px">
+            ${ev.opts.map((o,i)=>`<button ${o.cond&&!o.cond()?'disabled':''} onclick="chooseEvent(${i})" style="font-size:12px">${o.l}</button>`).join('')}
+          </div>`}
+    </div>` : '';
+  const threat = `<div class="row" style="justify-content:center;gap:8px;align-items:center">
+      <span class="small">Threat: <b>${G.bounty>0?'+':''}${G.bounty}</b> ${G.bounty>0?'🔥 tougher heroes, richer loot':G.bounty<0?'🌫 weaker heroes, leaner loot':'⚖ neutral'}</span>
+      <button onclick="setThreat(1)" ${G.bounty>=3?'disabled':''} style="padding:5px 9px;min-height:0">Taunt ▲</button>
+      <button onclick="setThreat(-1)" ${G.bounty<=-2?'disabled':''} style="padding:5px 9px;min-height:0">Lie low ▼</button>
+    </div>`;
   const ups=Object.keys(TOWN_UPGRADES).map(k=>{
-    const u=TOWN_UPGRADES[k]; const cost=upgradeCost(k); const can=G.gold>=cost;
-    return `<button class="${can?'buy':''}" ${can?'':'disabled'} onclick="buyUpgrade('${k}')"
-      style="display:flex;flex-direction:column;align-items:center;min-width:118px;gap:2px;height:auto;padding:8px">
-      <span style="font-size:22px">${u.ic}</span><span>${u.name}</span>
+    const u=TOWN_UPGRADES[k]; const cost=upgradeCost(k); const can=G.dread>=cost;
+    return `<button ${can?'':'disabled'} onclick="buyUpgrade('${k}')"
+      style="display:flex;flex-direction:column;align-items:center;min-width:112px;gap:1px;height:auto;padding:7px;border-color:var(--accent)">
+      <span style="font-size:20px">${u.ic}</span><span>${u.name}</span>
       <span class="small" style="opacity:.8;font-weight:normal">${u.desc}</span>
-      <span class="gold">${cost}g</span></button>`;}).join('');
+      <span style="color:#b985ff">${cost} ☠</span></button>`;}).join('');
+  const schemes=Object.keys(TOWN_SCHEMES).map(k=>{
+    const s=TOWN_SCHEMES[k]; const active=G.fx[k]>0; const can=!active&&G.dread>=s.cost;
+    return `<button ${can?'':'disabled'} onclick="buyScheme('${k}')"
+      style="display:flex;flex-direction:column;align-items:center;min-width:112px;gap:1px;height:auto;padding:7px">
+      <span style="font-size:20px">${s.ic}</span><span>${s.name}</span>
+      <span class="small" style="opacity:.8;font-weight:normal">${s.desc}</span>
+      <span style="color:#b985ff">${active?('active '+G.fx[k]+'w'):s.cost+' ☠'}</span></button>`;}).join('');
   const roster=G.queue.slice(0,3).map((spec,i)=>{
     const c=CLASSES[spec.cls]; const ps=previewStats(spec);
+    const nm = spec.name ? `${spec.name}${spec.title?' '+spec.title:''}` : c.name;
     const traits=spec.traits.map(t=>`<span class="tag" style="color:${TRAITS[t].col}">${TRAITS[t].ic}${TRAITS[t].name}</span>`).join('');
     const sab=Object.keys(TOWN_SABOTAGE).map(k=>{
       const s=TOWN_SABOTAGE[k]; const cost=sabotageCost(spec,k);
       const done=(k==='intimidate'&&spec.debuff.atkMul<1)||(k==='rob'&&spec.debuff.robbed);
-      const dis=done||G.gold<cost;
-      return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 7px;font-size:11px;min-height:0">
-        ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'g'}</span></button>`;}).join('');
-    return `<div class="choice" style="width:210px">
-      <div class="big">${c.ic}${spec.debuff.burn>0?'☠️':''}${spec.elite?'⭐':''}</div>
-      <h3>${c.name} <span class="small" style="opacity:.6">#${spec.power+1}</span></h3>
-      <div style="min-height:20px">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
+      const dis=done||G.dread<cost;
+      return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
+        ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
+    const corruptDis = G.dread<CORRUPT_COST || G.hand.length>=5;
+    return `<div class="choice" style="width:208px;${spec.rival?'border-color:#ff6b8a':''}">
+      <div class="big">${c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
+      <h3 style="font-size:14px">${nm}</h3>
+      <div class="small" style="opacity:.6">${c.name} · power ${spec.power+1}</div>
+      <div style="min-height:20px;margin:3px 0">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
       <div class="stats">❤️ ${ps.hp} · 🗡️ ${ps.atk} · 💰 ${ps.gold}</div>
       <div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
+      <button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">🧟 Corrupt ${CORRUPT_COST}☠</button>
     </div>`;}).join('');
-  overlay.innerHTML=`<h1>🏚️ Hero Town</h1>
-    <p>The heroes regroup and grow bolder — <b>${G.totalSlain}</b> slain so far.
-       Spend loot (<span class="gold">${G.gold}g</span>) to empower the boss or
-       sabotage who comes next.</p>
-    <h2>Empower the Boss</h2>
-    <div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap">${ups}</div>
-    <h2 style="margin-top:12px">Next Arrivals — meddle with them</h2>
+  overlay.innerHTML=`<h1 style="margin-bottom:2px">🏚️ Hero Town</h1>
+    <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span></p>
+    ${evHtml}
+    ${threat}
+    <h2 style="margin:8px 0 4px">Empower the Boss <span class="small" style="opacity:.6">(dread)</span></h2>
+    <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${ups}</div>
+    <h2 style="margin:10px 0 4px">Town Schemes</h2>
+    <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${schemes}</div>
+    <h2 style="margin:10px 0 4px">Next Arrivals — meddle &amp; corrupt</h2>
     <div class="choices">${roster}</div>
     <div class="menu-btns"><button class="go" onclick="leaveTown()">⚔️ Back to the dungeon</button></div>`;
 }
@@ -843,7 +1007,7 @@ function simStep(dt){
     // trap fire while inside a trap cell
     if(cell && cell.kind==='trap') trapTick(h,cell,dt);
     // reached boss room?
-    if(h.x >= cellX(G.slots)+ROOM_W*0.32){ h.state='boss'; h.x=cellX(G.slots)+ROOM_W*0.32; }
+    if(h.x >= cellX(G.slots)+ROOM_W*0.32){ h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.32; }
   }
   else if(h.state==='fighting'){
     const cellM=G.cells[h.cellIndex];
@@ -866,10 +1030,10 @@ function cellAt(x){
 function onEnterCell(h,cell){
   if(cell.kind==='monster' && cell.mon && cell.mon.alive){
     h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
-  } else if(cell.kind==='shop' && cell.room.stock.some(s=>!s.sold)){
+  } else if(cell.kind==='shop' && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
     h.state='shopping'; h.x=cell.x0+ROOM_W*0.5; h.shopT=0.8;
   } else if(cell.kind==='boss'){
-    h.state='boss';
+    h.state='boss'; h.reachedThrone=true;
   }
 }
 
@@ -1108,6 +1272,16 @@ function bar(x,y,w,h,frac,col){
 // ---- pixel creatures (procedural) ----
 function drawMonster(cx,type,col){
   const y=FLOOR;
+  if(type==='minion'){           // corrupted hero: purple wraith with glowing eyes
+    px(cx-9,y-14,5,14,'#2a1a40'); px(cx+4,y-14,5,14,'#2a1a40');
+    px(cx-9,y-34,18,22,'#6a3aa0');
+    px(cx-7,y-46,14,14,'#9a5cff');
+    px(cx-5,y-42,4,4,'#d6ff4d'); px(cx+1,y-42,4,4,'#d6ff4d');
+    px(cx+9,y-40,4,28,'#cfd6e0'); px(cx+8,y-44,6,8,'#9a5cff'); // dark blade
+    const t=performance.now()/180; X.globalAlpha=0.2+0.06*Math.sin(t);
+    X.fillStyle='#9a5cff'; X.beginPath(); X.ellipse(cx,y-26,16,24,0,0,7); X.fill(); X.globalAlpha=1;
+    return;
+  }
   if(type==='goblin'){
     px(cx-10,y-30,20,22,'#3f7a35'); px(cx-12,y-40,24,14,col); // body/head
     px(cx-8,y-36,5,5,'#fff'); px(cx+3,y-36,5,5,'#fff');
@@ -1227,6 +1401,8 @@ function renderTop(){
     <div class="stat">🔷<div class="bar"><i style="width:${b.mana/b.maxMana*100}%;background:linear-gradient(90deg,#2a7adf,#4dc3ff)"></i>
       <span>${Math.floor(b.mana)}/${b.maxMana}</span></div></div>
     <div class="stat gold">💰<b>${G.gold}</b></div>
+    <div class="stat" style="color:#b985ff">☠<b>${G.dread}</b></div>
+    ${G.bounty?`<div class="stat small" title="threat dial">${G.bounty>0?'🔥':'🌫'} ${G.bounty>0?'+':''}${G.bounty}</div>`:''}
     <div class="stat small">${modeLbl}</div>`;
 }
 
@@ -1250,9 +1426,9 @@ function renderPanel(){
         <span class="small" style="min-width:46px">Hand:</span>
         <div class="cards">${G.hand.length? G.hand.map((c,i)=>{
           const d=ROOMS[c.type];
-          return `<div class="card ${selCard===i?'sel':''}" onclick="selectCard(${i})">
+          return `<div class="card ${selCard===i?'sel':''}" onclick="selectCard(${i})"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
             <div class="x" onclick="event.stopPropagation();discardCard(${i})">✕</div>
-            <div class="ic">${d.ic}</div><div class="nm">${d.name}</div></div>`;}).join('')
+            <div class="ic">${d.ic}</div><div class="nm">${c.label||d.name}</div></div>`;}).join('')
           :`<span class="small" style="opacity:.6;align-self:center">No cards — survive a hero to draft one.</span>`}
         </div>
       </div>`;
