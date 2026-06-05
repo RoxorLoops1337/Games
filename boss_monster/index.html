@@ -2633,10 +2633,24 @@ function showInspectEntity(ent, hover){
   if(!ent || ent.kind==='empty'){ hideInspect(); return; }
   let html='';
   if(ent.kind==='hero') html=describeHero(ent.h);
+  else if(ent.kind==='queuehero') html=describeQueueHero(ent.spec);
   else if(ent.kind==='boss') html=describeBoss();
   else if(ent.kind==='room') html=describeRoom(ent.room);
   else return;
   showInspect(html, hover);
+}
+// Tooltip for an upcoming hero waiting at the gate (build preview).
+function describeQueueHero(spec){
+  let cls=spec.cls; if(G.fx.temple>0 && cls==='cleric') cls='warrior';
+  const C=CLASSES[cls]; const ps=previewStats(spec); const ch=spec.champion?CHAMPIONS[spec.champion]:null;
+  const nm=spec.name?`${spec.name}${spec.title?' '+spec.title:(ch?' '+ch.title:'')}`:C.name;
+  const lines=[`<b>${ch?ch.ic+' 👑 ':C.ic+' '}${nm}</b> · ${ch?'<span style="color:'+ch.col+'">CHAMPION</span>':C.name}${spec.rival?' · ⚔️ rival':''}${!ch&&spec.traits.length?' · ⭐ elite':''} <span class="small">· incoming</span>`,
+    `❤️ <b>${ps.hp}</b> HP · 🗡️ <b>${ps.atk}</b> atk · 💰 ${ps.gold}`];
+  if(ch) lines.push(`<span style="color:${ch.col}">${ch.desc}</span>`);
+  if(spec.traits&&spec.traits.length) lines.push('Traits: '+spec.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name).join(', '));
+  const st=[spec.debuff.burn>0?'🔥 arrives burning':'', spec.debuff.atkMul<1?'😱 intimidated':'', spec.debuff.robbed?'💰 robbed':''].filter(Boolean).join(' · ');
+  if(st) lines.push(st);
+  return lines.join('<br>');
 }
 // Tooltip for a hand card (hover on desktop, or when you select it).
 function describeCard(card){
@@ -2679,6 +2693,14 @@ function entityAt(wx){
     let best=null,bd=26;
     for(const h of G.heroes){ if(h.state==='dead')continue; const d=Math.abs(h.x-wx); if(d<bd){bd=d;best=h;} }
     if(best) return {kind:'hero',h:best};
+  }
+  // upcoming heroes waiting in the staging zone (build) — match drawWaitingHeroes
+  if(G.phase==='build' && G.queue && G.queue.length && wx<0){
+    const champ=!!G.queue[0].champion;
+    const n=champ?1:Math.min(G.queue.length, G.guildLvl+1);
+    let best=-1,bd=24;
+    for(let k=0;k<n;k++){ const hx=-STAGEW*0.62+k*14; const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
+    if(best>=0) return {kind:'queuehero', spec:G.queue[best]};
   }
   const idx=Math.floor(wx/ROOM_W);
   if(idx===G.slots) return {kind:'boss'};
