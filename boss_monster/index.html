@@ -171,6 +171,32 @@ const CLASSES = {
 };
 const CLASS_KEYS = Object.keys(CLASSES);
 
+// Elite traits ("affixes"). Tougher heroes roll these; chance climbs with
+// progress. Effects are applied in buildHero / combat ticks.
+const TRAITS = {
+  hardy:    {name:'Hardy',    ic:'🛡',  col:'#7bdc6b', desc:'+60% HP'},
+  berserk:  {name:'Berserker',ic:'😤',  col:'#ff7a4d', desc:'+40% ATK, strikes faster'},
+  armored:  {name:'Armored',  ic:'⛨',  col:'#9aa4b2', desc:'+6 armor'},
+  swift:    {name:'Swift',    ic:'💨',  col:'#9adfff', desc:'moves & acts faster'},
+  vampiric: {name:'Vampiric', ic:'🩸',  col:'#d0407a', desc:'heals from the damage it deals'},
+  zealot:   {name:'Zealot',   ic:'✨',  col:'#ffe14d', desc:'regenerates HP constantly'},
+};
+const TRAIT_KEYS = Object.keys(TRAITS);
+
+// Town interlude — schemes the boss buys to fight back. Permanent boss
+// upgrades plus per-hero sabotage applied to the previewed roster.
+const TOWN_UPGRADES = {
+  reinforce:{name:'Reinforce Throne', ic:'🏰', base:45, desc:'+30 max HP and heal that much.'},
+  sharpen:  {name:'Sharpen Claws',    ic:'🗡️', base:40, desc:'+5 boss attack.'},
+  attune:   {name:'Dark Attunement',  ic:'🔷', base:38, desc:'+20 max mana & faster regen.'},
+  ascend:   {name:'Empower Boss',     ic:'🐲', base:70, desc:'+1 boss level (stronger abilities).'},
+};
+const TOWN_SABOTAGE = {
+  intimidate:{name:'Intimidate', ic:'😱', cost:18, desc:'−30% attack'},
+  poison:    {name:'Poison',     ic:'☠️', cost:20, desc:'arrives burning'},
+  rob:       {name:'Rob',        ic:'💰', cost:14, desc:'steal their gold now'},
+};
+
 // Bosses: differing stats + three abilities each.
 const BOSSES = {
   dragon: {name:'Ignar the Dragon', ic:'🐉', col:'#c43a3a', maxHp:140, atk:16,
@@ -250,6 +276,10 @@ function freshGame(mode){
     gold:30,
     survived:0,           // heroes killed this level / run
     heroNum:0,            // total heroes spawned (scaling)
+    totalSlain:0,         // cumulative kills (drives scaling + town breaks)
+    heroSeq:0,            // power index assigned to each generated hero
+    queue:[],             // upcoming hero specs (previewed in town)
+    townBuys:{},          // {upgradeKey: timesBought} for rising costs
     hero:null,            // active hero during run
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
@@ -270,8 +300,11 @@ function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
 
 const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
 function difficulty(){
-  if(G.mode==='campaign') return CAMPAIGN[G.levelIdx].diff;
-  return 1 + G.survived*0.07;             // endless ramp
+  // base ramp from cumulative kills (applies to both modes) ×
+  // campaign chapter multiplier.
+  const cumulative = 1 + G.totalSlain*0.05;
+  if(G.mode==='campaign') return cumulative * CAMPAIGN[G.levelIdx].diff;
+  return cumulative + G.survived*0.05;
 }
 
 /* ============================== PHASE: MENU =============================== */
@@ -334,7 +367,7 @@ function gotoBossSelect(){
 function chooseBoss(key){
   const b=BOSSES[key];
   G.boss={ key, ...b, hp:b.maxHp, maxHp:b.maxHp, lvl:1,
-    mana:60, maxMana:100,
+    mana:60, maxMana:100, manaRegen:6,
     abil:b.abilities.map(id=>({id,cd:0})) };
   // starter dungeon: one empty slot already available.
   G.rooms=[null];
@@ -453,36 +486,77 @@ function buildCells(){
 }
 
 /* ============================== PHASE: RUN =============================== */
-function spawnHero(){
-  G.heroNum++;
-  const d=difficulty();
+// Heroes are pre-generated into a queue so the town can preview & sabotage the
+// next arrivals. A spec is a lightweight seed; buildHero turns it into a unit.
+function genHeroSpec(){
+  const power=G.heroSeq++;
   const cls=pickHeroClass();
-  const c=CLASSES[cls];
-  const n=G.survived; // within-level index
-  const baseHp=Math.round((30 + n*7) * c.hp * d);
+  // elite chance climbs with progress; later heroes can roll two traits.
+  const eliteChance=clamp(0.06 + power*0.02, 0, 0.7);
+  const traits=[];
+  if(Math.random()<eliteChance){
+    const pool=[...TRAIT_KEYS];
+    traits.push(pool.splice(ri(0,pool.length-1),1)[0]);
+    if(power>=7 && Math.random()<0.35) traits.push(pool.splice(ri(0,pool.length-1),1)[0]);
+  }
+  return {cls, power, traits, debuff:{atkMul:1, burn:0, robbed:false}};
+}
+function ensureQueue(k){ while(G.queue.length<k) G.queue.push(genHeroSpec()); }
+
+function pickHeroClass(){
+  const r=Math.random();
+  if(r<0.4) return 'warrior';
+  if(r<0.65) return 'rogue';
+  if(r<0.85) return 'mage';
+  return 'cleric';
+}
+
+// Preview a spec's headline stats (for the town roster) without instantiating.
+function previewStats(spec){
+  const c=CLASSES[spec.cls]; const n=spec.power; const d=difficulty();
+  let hp=(32 + n*8.5)*c.hp*d, atk=(5 + n*1.6)*c.atk*d;
+  if(spec.traits.includes('hardy')) hp*=1.6;
+  if(spec.traits.includes('berserk')) atk*=1.4;
+  atk*=spec.debuff.atkMul;
+  const gold=Math.round((12 + n*5)*d * (spec.debuff.robbed?0.35:1));
+  return {hp:Math.round(hp), atk:+atk.toFixed(1), gold};
+}
+
+function spawnHero(){
+  ensureQueue(1);
+  const spec=G.queue.shift();
+  G.heroNum++;
+  const d=difficulty(); const c=CLASSES[spec.cls]; const n=spec.power;
+  const tr=spec.traits;
+  let hp=(32 + n*8.5) * c.hp * d;
+  let atk=(5 + n*1.6) * c.atk * d;
+  let armor=c.armor + Math.floor(n*0.45);
+  let spd=c.spd;
+  let atkSpeed=1;                       // multiplier on attack interval (<1 faster)
+  // ---- elite traits ----
+  if(tr.includes('hardy'))   hp*=1.6;
+  if(tr.includes('berserk')){ atk*=1.4; atkSpeed*=0.65; }
+  if(tr.includes('armored')) armor+=6;
+  if(tr.includes('swift')){ spd*=1.5; atkSpeed*=0.8; }
+  // ---- town sabotage ----
+  atk*=spec.debuff.atkMul;
+  hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
-    cls, ...c, name:cls,
-    maxHp:baseHp, hp:baseHp,
-    atk: +( (5 + n*1.4) * c.atk * d ).toFixed(1),
-    armor: c.armor + Math.floor(n*0.4),
-    spd: c.spd,
-    gold: Math.round((12 + n*5)*d),
+    cls:spec.cls, ...c, name:spec.cls, traits:tr,
+    elite: tr.length>0,
+    maxHp:hp, hp:hp, atk, armor, spd, atkSpeed,
+    gold: Math.round((12 + n*5)*d * (spec.debuff.robbed?0.35:1)),
     bounty: Math.round((8 + n*4)*d),
+    vampiric: tr.includes('vampiric'),
+    regen: tr.includes('zealot') || c.selfheal,
     x: 8, y: FLOOR-34,
     state:'walking',         // walking | fighting | shopping | boss | dead
     cellIndex:-1,
     atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
     freeze:0, shopT:0, walkAnim:0,
   };
+  if(spec.debuff.burn>0){ h.burn=spec.debuff.burn; h.burnT=6; }
   G.hero=h;
-}
-function pickHeroClass(){
-  // mild weighting so warriors common early, mages/clerics later
-  const r=Math.random();
-  if(r<0.4) return 'warrior';
-  if(r<0.65) return 'rogue';
-  if(r<0.85) return 'mage';
-  return 'cleric';
 }
 
 function heroDmg(raw, pierce){
@@ -525,7 +599,7 @@ function heroDies(){
   // loot: carried gold + bounty
   const loot=h.gold + h.bounty;
   G.gold+=loot;
-  G.survived++;
+  G.survived++; G.totalSlain++;
   burst(h.x, h.y-20, '#ffd34d', 22);
   floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
   showHint(CLASSES[h.cls].name+' slain! +'+loot+' gold looted.');
@@ -533,8 +607,10 @@ function heroDies(){
 }
 
 function afterKill(){
-  // campaign win check
+  // campaign chapter win takes priority
   if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
+  // town interlude every 5 cumulative kills
+  if(G.totalSlain>0 && G.totalSlain%5===0){ gotoTown(); return; }
   gotoReward();
 }
 
@@ -555,8 +631,7 @@ function bossDies(){
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
 }
-let _campaignKills=0;
-function totalKills(){ return _campaignKills + G.survived; }
+function totalKills(){ return G.totalSlain; }
 
 function retryWave(){
   // soft retry: restore boss a bit, rebuild same dungeon, don't advance hero count badly
@@ -607,14 +682,13 @@ function winLevel(){
   if(G.mode!=='campaign'){ return; }
   const lvl=curLevel();
   G.gold+=lvl.reward;
-  _campaignKills+=G.survived;
   if(G.levelIdx>=CAMPAIGN.length-1){
     // game complete
     G.phase='win'; overlay.classList.add('show');
     overlay.innerHTML=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
       <div style="font-size:60px">${G.boss.ic}👑</div>
       <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
-         having buried <b>${_campaignKills}</b> heroes.</p>
+         having buried <b>${G.totalSlain}</b> heroes.</p>
       <div class="menu-btns">
         <button class="go" onclick="gotoMenu()">★ Main menu</button>
         <button onclick="startEndless()">Try Endless</button></div>`;
@@ -638,6 +712,81 @@ function nextLevel(){
   render();
 }
 
+/* ============================== PHASE: TOWN ============================== */
+// Interlude every 5 kills: fortify the boss and meddle with the heroes who are
+// about to arrive (previewed straight from the spawn queue).
+function gotoTown(){ G.phase='town'; ensureQueue(3); renderTown(); }
+
+function upgradeCost(key){
+  return Math.round(TOWN_UPGRADES[key].base * Math.pow(1.6, G.townBuys[key]||0));
+}
+function buyUpgrade(key){
+  const cost=upgradeCost(key);
+  if(G.gold<cost){ showHint('Not enough gold.'); return; }
+  G.gold-=cost; G.townBuys[key]=(G.townBuys[key]||0)+1;
+  const b=G.boss;
+  if(key==='reinforce'){ b.maxHp+=30; b.hp+=30; }
+  else if(key==='sharpen'){ b.atk+=5; }
+  else if(key==='attune'){ b.maxMana+=20; b.mana=Math.min(b.maxMana,b.mana+20); b.manaRegen=(b.manaRegen||6)+2; }
+  else if(key==='ascend'){ b.lvl+=1; }
+  showHint(TOWN_UPGRADES[key].name+'!');
+  renderTown(); renderTop();
+}
+function sabotageCost(spec,key){ return TOWN_SABOTAGE[key].cost + Math.floor(spec.power*1.2); }
+function sabotage(idx,key){
+  const spec=G.queue[idx]; if(!spec) return;
+  const cost=sabotageCost(spec,key);
+  if(G.gold<cost){ showHint('Not enough gold.'); return; }
+  if(key==='intimidate'){
+    if(spec.debuff.atkMul<1){ showHint('Already intimidated.'); return; }
+    G.gold-=cost; spec.debuff.atkMul=0.7;
+  } else if(key==='poison'){
+    G.gold-=cost; spec.debuff.burn += 6 + Math.floor(spec.power);
+  } else if(key==='rob'){
+    if(spec.debuff.robbed){ showHint('Already robbed.'); return; }
+    const g=previewStats(spec).gold; G.gold-=cost; G.gold+=Math.round(g*0.6); spec.debuff.robbed=true;
+    showHint('Robbed for '+Math.round(g*0.6)+'g — they arrive poorer.');
+  }
+  renderTown(); renderTop();
+}
+function leaveTown(){ overlay.classList.remove('show'); gotoReward(); }
+
+function renderTown(){
+  overlay.classList.add('show');
+  const ups=Object.keys(TOWN_UPGRADES).map(k=>{
+    const u=TOWN_UPGRADES[k]; const cost=upgradeCost(k); const can=G.gold>=cost;
+    return `<button class="${can?'buy':''}" ${can?'':'disabled'} onclick="buyUpgrade('${k}')"
+      style="display:flex;flex-direction:column;align-items:center;min-width:118px;gap:2px;height:auto;padding:8px">
+      <span style="font-size:22px">${u.ic}</span><span>${u.name}</span>
+      <span class="small" style="opacity:.8;font-weight:normal">${u.desc}</span>
+      <span class="gold">${cost}g</span></button>`;}).join('');
+  const roster=G.queue.slice(0,3).map((spec,i)=>{
+    const c=CLASSES[spec.cls]; const ps=previewStats(spec);
+    const traits=spec.traits.map(t=>`<span class="tag" style="color:${TRAITS[t].col}">${TRAITS[t].ic}${TRAITS[t].name}</span>`).join('');
+    const sab=Object.keys(TOWN_SABOTAGE).map(k=>{
+      const s=TOWN_SABOTAGE[k]; const cost=sabotageCost(spec,k);
+      const done=(k==='intimidate'&&spec.debuff.atkMul<1)||(k==='rob'&&spec.debuff.robbed);
+      const dis=done||G.gold<cost;
+      return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 7px;font-size:11px;min-height:0">
+        ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'g'}</span></button>`;}).join('');
+    return `<div class="choice" style="width:210px">
+      <div class="big">${c.ic}${spec.debuff.burn>0?'☠️':''}${spec.elite?'⭐':''}</div>
+      <h3>${c.name} <span class="small" style="opacity:.6">#${spec.power+1}</span></h3>
+      <div style="min-height:20px">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
+      <div class="stats">❤️ ${ps.hp} · 🗡️ ${ps.atk} · 💰 ${ps.gold}</div>
+      <div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
+    </div>`;}).join('');
+  overlay.innerHTML=`<h1>🏚️ Hero Town</h1>
+    <p>The heroes regroup and grow bolder — <b>${G.totalSlain}</b> slain so far.
+       Spend loot (<span class="gold">${G.gold}g</span>) to empower the boss or
+       sabotage who comes next.</p>
+    <h2>Empower the Boss</h2>
+    <div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap">${ups}</div>
+    <h2 style="margin-top:12px">Next Arrivals — meddle with them</h2>
+    <div class="choices">${roster}</div>
+    <div class="menu-btns"><button class="go" onclick="leaveTown()">⚔️ Back to the dungeon</button></div>`;
+}
+
 /* ============================ UPDATE / SIM ============================== */
 function update(dt){
   // animate floaters/particles always
@@ -652,7 +801,7 @@ function update(dt){
 
   // ability cooldowns + mana regen
   G.boss.abil.forEach(a=>{ if(a.cd>0)a.cd=Math.max(0,a.cd-dt*speedMul); });
-  G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana + dt*speedMul*6);
+  G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana + dt*speedMul*(G.boss.manaRegen||6));
 
   // camera follows hero (unless the player is dragging to look around)
   if(!panning){
@@ -671,9 +820,9 @@ function simStep(dt){
       if(h.hp<=0){h.hp=0;heroDies();return;} }
     h.burnT-=dt;
   }
-  // cleric self-heal trickle while not at boss
-  if(h.selfheal && h.state!=='dead' && h.hp<h.maxHp){
-    h.hp=Math.min(h.maxHp, h.hp + h.maxHp*0.02*dt);
+  // regeneration trickle (clerics + zealot trait)
+  if(h.regen && h.state!=='dead' && h.hp<h.maxHp){
+    h.hp=Math.min(h.maxHp, h.hp + h.maxHp*0.025*dt);
   }
   // freeze
   if(h.freeze>0){ h.freeze-=dt; return; }
@@ -735,9 +884,11 @@ function fightTick(h, mon, dt, cell){
   // hero attacks monster
   h.atkT-=dt;
   if(h.atkT<=0){
-    h.atkT=0.7;
-    mon.hp-=Math.max(1,Math.round(h.atk));
-    floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+Math.round(h.atk),'#fff');
+    h.atkT=0.7*h.atkSpeed;
+    const dmg=Math.max(1,Math.round(h.atk));
+    mon.hp-=dmg;
+    if(h.vampiric) healHero(h, dmg*0.4);
+    floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
     if(mon.hp<=0){ mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
       floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
       // potion heal trigger if hero hurt
@@ -752,6 +903,11 @@ function fightTick(h, mon, dt, cell){
   }
 }
 
+function healHero(h, amt){
+  if(!h||h.state==='dead'||amt<=0) return;
+  const before=h.hp; h.hp=Math.min(h.maxHp, h.hp+amt);
+  if(Math.round(h.hp)-Math.round(before)>=1) floater(h.x+10, h.y-46, '+'+Math.round(h.hp-before), '#7bdc6b');
+}
 function maybePotion(h){
   if(h.hasPotion && h.hp < h.maxHp*0.4){
     h.hasPotion=false;
@@ -782,9 +938,10 @@ function bossFightTick(h,dt){
   // hero attacks boss
   h.atkT-=dt;
   if(h.atkT<=0){
-    h.atkT=0.8;
+    h.atkT=0.8*h.atkSpeed;
     const dmg=Math.max(1,Math.round(h.atk));
     b.hp-=dmg;
+    if(h.vampiric) healHero(h, dmg*0.4);
     floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
     burst(bossX(), FLOOR-50, '#ff4d6d', 6);
     if(b.hp<=0){ b.hp=0; bossDies(); return; }
@@ -970,6 +1127,14 @@ function drawMonster(cx,type,col){
 function drawHero(sx,h){
   const y=FLOOR; const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
   const yy=y+bob;
+  // elite aura
+  if(h.elite){
+    const t=performance.now()/200;
+    const col=h.traits.length?TRAITS[h.traits[0]].col:'#ffd34d';
+    X.globalAlpha=0.18+0.06*Math.sin(t);
+    X.fillStyle=col; X.beginPath(); X.ellipse(sx,yy-26,20,30,0,0,7); X.fill();
+    X.globalAlpha=1;
+  }
   // shadow
   X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,14,4,0,0,7); X.fill();
   // legs
@@ -988,9 +1153,12 @@ function drawHero(sx,h){
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   // hp bar
   bar(sx-18, yy-60, 36, 6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d');
-  // class icon + gold
+  // gold + elite trait markers
   X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
-  X.fillText('💰'+h.gold, sx, yy-64); X.textAlign='left';
+  X.fillText('💰'+h.gold, sx, yy-64);
+  if(h.elite){ X.font='11px Trebuchet MS';
+    X.fillText(h.traits.map(t=>TRAITS[t].ic).join(''), sx, yy-74); }
+  X.textAlign='left';
 }
 function drawHeroDead(sx,h){
   const y=FLOOR;
