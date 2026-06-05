@@ -981,6 +981,8 @@ function buySlot(){
 function selectCard(i){
   selCard = (selCard===i?-1:i);
   pickupIdx=-1;
+  if(selCard>=0 && G.hand[selCard]) showInspect(describeCard(G.hand[selCard]), false);
+  else hideInspect();
   render();
 }
 function discardCard(i){
@@ -2342,7 +2344,8 @@ function renderPanel(){
         <span class="small" style="min-width:46px">Hand:</span>
         <div class="cards">${G.hand.length? G.hand.map((c,i)=>{
           const d=ROOMS[c.type];
-          return `<div class="card ${selCard===i?'sel':''}" onclick="selectCard(${i})"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
+          return `<div class="card ${selCard===i?'sel':''}" onclick="selectCard(${i})"
+            onmouseenter="cardHover(${i})" onmouseleave="cardHoverOut()"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
             <div class="x" onclick="event.stopPropagation();discardCard(${i})">✕</div>
             <div class="ic">${d.ic}</div><div class="nm">${c.label||d.name}</div></div>`;}).join('')
           :`<span class="small" style="opacity:.6;align-self:center">No cards — survive a hero to draft one.</span>`}
@@ -2370,6 +2373,10 @@ function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel
 /* ============================== INSPECTION ============================== */
 // Hover (desktop) or tap (mobile/run) a room, hero or the boss to read its stats.
 function hideInspect(){ inspectEl.classList.remove('show'); }
+function showInspect(html, hover){
+  inspectEl.innerHTML=html+'<span class="ix" onclick="hideInspect()">✕</span>';
+  inspectEl.classList.add('show'); inspectHover=!!hover;
+}
 function showInspectEntity(ent, hover){
   if(!ent || ent.kind==='empty'){ hideInspect(); return; }
   let html='';
@@ -2377,9 +2384,31 @@ function showInspectEntity(ent, hover){
   else if(ent.kind==='boss') html=describeBoss();
   else if(ent.kind==='room') html=describeRoom(ent.room);
   else return;
-  inspectEl.innerHTML=html+'<span class="ix" onclick="hideInspect()">✕</span>';
-  inspectEl.classList.add('show'); inspectHover=!!hover;
+  showInspect(html, hover);
 }
+// Tooltip for a hand card (hover on desktop, or when you select it).
+function describeCard(card){
+  const def=ROOMS[card.type]; const lvl=card.lvl||1;
+  const name = card.type==='minion' ? (card.label||'Corrupted') : def.name;
+  const lines=[`<b>${def.ic} ${name}</b> · ${def.kind.toUpperCase()}${lvl>1?' · Lv '+lvl:''}`];
+  if(def.kind==='trap'){
+    const dmg=Math.round(def.dmg*(1+(lvl-1)*0.4)*(1+(RB.trapDmg||0)));
+    lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`);
+    if(def.elem && def.elem!=='phys') lines.push('Element: '+def.elem+' (reacts in combos)');
+  } else if(def.kind==='monster'){
+    const bHp=card.type==='minion'?card.minHp:def.hp, bAtk=card.type==='minion'?card.minAtk:def.atk;
+    const hp=Math.round(bHp*(0.9+(lvl-1)*0.85)*(1+(RB.monHp||0)));
+    const atk=Math.round(bAtk*(1.0+(lvl-1)*0.9)*(1+(RB.monDmg||0)));
+    lines.push(`👹 <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s — blocks the corridor`);
+    if(def.feeds) lines.push('🍖 Grows +10% per hero that dies in its room');
+  } else if(def.kind==='shop'){
+    lines.push(`Sells gear at ×${shopMarkup(lvl).toFixed(2)} markup — you keep the gold`);
+  }
+  lines.push(`<span style="opacity:.85">${def.desc}</span>`);
+  return lines.join('<br>');
+}
+function cardHover(i){ const c=G.hand[i]; if(c) showInspect(describeCard(c), true); }
+function cardHoverOut(){ if(inspectHover) hideInspect(); }
 function entityAt(wx){
   if(G.phase==='run' && G.heroes){
     let best=null,bd=26;
