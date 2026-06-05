@@ -1576,31 +1576,68 @@ function dealToHero(h, raw, label, pierce, elem){
   elementReact(h, elem||'phys', dmg);           // elemental status + reactions
 }
 // Apply an element's status to a hero and resolve reactions with existing ones.
+// Elemental priming & reactions are a KEY mechanic: traps coat heroes with a
+// status that PERSISTS as they walk the corridor, so the ORDER of your rooms
+// decides the combo. Oil them first, then a later flame room IGNITES; chill
+// then crush to SHATTER; oil then frost to ENCASE; etc. Each reaction a hero
+// suffers in quick succession escalates the next (reaction chain).
+const PRIME_OIL=12, PRIME_ICE=10, PRIME_SHOCK=9;   // long enough to cross rooms
+// Teach the ordering combos in tooltips. Element → how to chain it across rooms.
+const ELEM_COMBO={
+  oil:  'Coats heroes (slows them) and primes them. Put it <b>before</b> a 🔥flame (Ignite), ⚡tesla (Conduct) or ❄frost (Encase) room.',
+  fire: '🔥 Ignites <b>oiled</b> heroes and 💥 thermal-shocks <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
+  ice:  '❄ Chills (slows); a later phys/shock hit then <b>Shatters</b>. Encases <b>oiled</b> heroes. Put before crushers, or after oil.',
+  shock:'⚡ Conducts through <b>oiled</b> heroes to the whole party. Put it <b>after</b> an oil room.',
+  phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
+};
+function reactMul(h){ return 1 + (h.reactCount||0)*0.25; }   // escalating chain
+function popReact(h,label,col,x){
+  h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
+  floater(h.x,h.y-66, label+(h.reactCount>1?' ×'+h.reactCount:'')+' -'+x, col);
+  burst(h.x,h.y-24,col,16); shake(6); sfx('crit');
+}
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
-  // priming statuses
-  if(elem==='oil')  h.oil=4;
-  else if(elem==='ice')  h.chill=2.6;
-  else if(elem==='shock') h.shock=2.2;
-  // IGNITE: fire on an oiled hero
+  // priming statuses — refreshed while in the room, then carried down the hall
+  if(elem==='oil')  h.oil  =Math.max(h.oil||0,  PRIME_OIL);
+  else if(elem==='ice')  h.chill=Math.max(h.chill||0,PRIME_ICE);
+  else if(elem==='shock') h.shock=Math.max(h.shock||0,PRIME_SHOCK);
+
+  // 🔥 IGNITE — fire on an OILED hero: the oil flashes off in a heavy burst + burn
   if(elem==='fire' && h.oil>0){
-    h.oil=0; const x=Math.round(baseDmg*1.2)+15; h.hp-=x; h.burn=(h.burn||0)+8; h.burnT=4;
-    floater(h.x,h.y-66,'🔥 IGNITE -'+x,'#ff7a2e'); burst(h.x,h.y-24,'#ff7a2e',16); shake(6); sfx('crit');
+    h.oil=0; const x=Math.round((baseDmg*1.3+18)*reactMul(h)); h.hp-=x;
+    h.burn=(h.burn||0)+10; h.burnT=5; popReact(h,'🔥 IGNITE','#ff7a2e',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
-  // SHATTER: any non-ice hit on a chilled/frozen hero
-  if((elem==='phys'||elem==='fire'||elem==='shock') && (h.chill>0||h.freeze>0)){
-    h.chill=0; const x=Math.round(baseDmg*0.8)+10; h.hp-=x;
-    floater(h.x,h.y-66,'❄ SHATTER -'+x,'#9adfff'); burst(h.x,h.y-24,'#9adfff',16); shake(6); sfx('crit');
+  // 🧊 ENCASE — ice on an OILED hero: wet + cold freezes them SOLID (a sitting duck)
+  else if(elem==='ice' && h.oil>0 && !(h.freeze>0)){
+    const x=Math.round((baseDmg*0.7+8)*reactMul(h)); h.hp-=x;
+    h.freeze=2.0; h.chill=PRIME_ICE; popReact(h,'🧊 ENCASE','#bfefff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
-  // CHAIN: lightning on an oiled (conductive) hero arcs to the rest of the party
+  // ❄ SHATTER — a phys/shock impact on a CHILLED/frozen hero cracks the ice
+  if((elem==='phys'||elem==='shock') && (h.chill>0||h.freeze>0)){
+    h.chill=0; const x=Math.round((baseDmg*0.9+12)*reactMul(h)); h.hp-=x;
+    popReact(h,'❄ SHATTER','#9adfff',x);
+    if(h.hp<=0){h.hp=0;heroDies(h);return;}
+  }
+  // 💥 THERMAL SHOCK — opposite temperatures: fire on a CHILLED hero, or ice on a
+  // BURNING hero. The sudden swing cracks them for a burst.
+  if((elem==='fire' && h.chill>0) || (elem==='ice' && h.burn>0)){
+    const x=Math.round((baseDmg*1.0+12)*reactMul(h)); h.hp-=x;
+    if(elem==='fire') h.chill=0; else { h.burn=0; h.burnT=0; }
+    popReact(h,'💥 THERMAL SHOCK','#ff5470',x);
+    if(h.hp<=0){h.hp=0;heroDies(h);return;}
+  }
+  // ⚡ CONDUCT — lightning on an OILED (wet) hero arcs to the rest of the party.
+  // Oil is NOT consumed, so a wet hero can still be ignited afterwards.
   if(elem==='shock' && h.oil>0){
-    let arced=0;
+    const m=reactMul(h); let arced=0;
     for(const o of G.heroes){ if(o===h||o.state==='dead') continue;
-      const cd=Math.round(baseDmg*0.6); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
+      const cd=Math.round(baseDmg*0.6*m); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
-    if(arced){ floater(h.x,h.y-66,'⚡ CHAIN x'+arced,'#fff34d'); shake(5); sfx('crit'); }
+    if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
+      floater(h.x,h.y-66,'⚡ CONDUCT ×'+arced,'#fff34d'); shake(5); sfx('crit'); }
   }
 }
 function healBoss(amt){
@@ -2099,6 +2136,8 @@ function simStep(h,dt){
   if(h.oil>0) h.oil-=dt;
   if(h.chill>0) h.chill-=dt;
   if(h.shock>0) h.shock-=dt;
+  // reaction-chain window: combo decays if no new reaction lands in time
+  if(h.reactT>0){ h.reactT-=dt; if(h.reactT<=0) h.reactCount=0; }
   // freeze: the HERO is immobilised (can't move or attack) — but the dungeon's
   // traps and monsters keep punishing the sitting duck.
   const frozen = h.freeze>0;
@@ -2830,7 +2869,7 @@ function describeCard(card){
   if(def.kind==='trap'){
     const dmg=Math.round(def.dmg*(1+(lvl-1)*0.4)*(1+(RB.trapDmg||0)));
     lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`);
-    if(def.elem && def.elem!=='phys') lines.push('Element: '+def.elem+' (reacts in combos)');
+    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
   } else if(def.kind==='monster'){
     const bHp=card.type==='minion'?card.minHp:def.hp, bAtk=card.type==='minion'?card.minAtk:def.atk;
     const hp=Math.round(bHp*(0.9+(lvl-1)*0.85)*(1+(RB.monHp||0)));
@@ -2885,7 +2924,8 @@ function describeRoom(room){
   const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`];
   parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
     const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0)));
-    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`); });
+    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`);
+    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){ let hp=0,atk=0, fed=false;
     monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
@@ -2926,7 +2966,8 @@ function describeHero(h){
   if(ch) lines.push(`<span style="color:${ch.col}">${ch.desc}</span>`+(h.shieldT>0?' · 🛡 shielded':''));
   if(h.traits&&h.traits.length) lines.push('Traits: '+h.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name).join(', '));
   const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.chill>0?'❄️ chilled':'',
-    h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.corrupt>0?'☣ corrupt ×'+h.corrupt:'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
+    h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.reactCount>1?'⚛️ reaction ×'+h.reactCount:'',
+    h.corrupt>0?'☣ corrupt ×'+h.corrupt:'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
   if(fx) lines.push(fx);
   return lines.join('<br>');
 }
