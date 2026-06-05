@@ -332,7 +332,11 @@ function freshGame(mode){
     pendingRivals:[],     // {eta, spec} grudge-bearers returning to the queue
     townDue:false,        // a town interlude is queued after the next reward
     townEvent:null,       // the dilemma shown this town visit
-    hero:null,            // active hero during run
+    guildLvl:0,           // guild house level: party size = guildLvl + 1
+    heroes:[],            // active raiding party this wave
+    waveStartSlain:0,     // totalSlain at wave start (to detect 5-kill towns)
+    waveEnding:false,     // guard so afterWave runs once
+    hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
     msg:'',
@@ -431,7 +435,7 @@ function chooseBoss(key){
 
 /* ============================== PHASE: BUILD ============================= */
 function gotoBuild(first){
-  G.phase='build'; G.hero=null; selCard=-1; pickupIdx=-1; camX=0;
+  G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1; camX=0;
   if(first){
     showHint('Tap a card then a slot to build · tap a room to move it · drag to pan.');
     if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2800);
@@ -542,10 +546,10 @@ function stockShop(itemKey){
   render();
 }
 
-// Begin a wave: build cells geometry, spawn hero, switch to run.
+// Begin a wave: build cells geometry, spawn the raiding party, switch to run.
 function startWave(){
   buildCells();
-  spawnHero();
+  spawnGroup(G.guildLvl+1);
   G.phase='run'; speedMul=1; camX=0;
   // refill some mana each wave
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
@@ -650,11 +654,8 @@ function previewStats(spec){
   return {hp:Math.round(hp), atk:+atk.toFixed(1), gold:heroGold(n,d,spec.debuff.robbed)};
 }
 
-function spawnHero(){
-  ensureQueue(1);
-  const spec=G.queue.shift();
-  G.heroNum++;
-  // town-wide schemes affecting this arrival
+// Build a single hero unit from a spec (applies traits, sabotage, schemes).
+function buildHeroFromSpec(spec){
   let cls=spec.cls;
   if(G.fx.temple>0 && cls==='cleric') cls='warrior';   // temple burned: no clerics
   const d=difficulty(); const c=CLASSES[cls]; const n=spec.power;
@@ -684,7 +685,7 @@ function spawnHero(){
     vampiric: tr.includes('vampiric'),
     regen: tr.includes('zealot') || c.selfheal,
     reachedThrone:false,
-    x: 8, y: FLOOR-34,
+    x: 8, y: FLOOR-34, yOff:0,
     state:'walking',         // walking | fighting | shopping | boss | dead
     cellIndex:-1,
     atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
@@ -692,13 +693,40 @@ function spawnHero(){
   };
   let startBurn=spec.debuff.burn + (G.fx.well>0 ? 5+Math.floor(n*0.5) : 0);
   if(startBurn>0){ h.burn=startBurn; h.burnT=6; }
-  // each scheme lasts a number of waves; tick one off
-  if(G.fx.well>0) G.fx.well--; if(G.fx.smith>0) G.fx.smith--; if(G.fx.temple>0) G.fx.temple--;
-  G.hero=h;
+  return h;
 }
 
-function heroDmg(raw, pierce){
-  const h=G.hero;
+// Spawn a raiding party of n heroes (guild house size) that enter together.
+function spawnGroup(n){
+  ensureQueue(n);
+  G.heroes=[];
+  for(let k=0;k<n;k++){
+    const h=buildHeroFromSpec(G.queue.shift());
+    h.x = 8 - k*46;                       // stagger entry from the left
+    h.yOff = (k - (n-1)/2) * 8;           // slight vertical offset so they don't fully overlap
+    G.heroes.push(h); G.heroNum++;
+  }
+  // town-wide schemes last per WAVE, not per hero
+  if(G.fx.well>0) G.fx.well--; if(G.fx.smith>0) G.fx.smith--; if(G.fx.temple>0) G.fx.temple--;
+  G.waveStartSlain=G.totalSlain; G.waveEnding=false;
+  G.hero=leadHero();
+}
+function leadHero(){
+  let best=null;
+  for(const h of G.heroes){ if(h.state!=='dead' && (!best || h.x>best.x)) best=h; }
+  return best;
+}
+// Is h the frontmost (enemy-facing) hero in its current fight/boss group?
+function isFrontHero(h){
+  for(const o of G.heroes){
+    if(o===h || o.state==='dead') continue;
+    if(h.state==='boss'){ if(o.state==='boss' && o.x>h.x) return false; }
+    else if(o.cellIndex===h.cellIndex && (o.state==='fighting'||o.state==='walking') && o.x>h.x) return false;
+  }
+  return true;
+}
+
+function heroDmg(h, raw, pierce){
   let armor = pierce ? Math.max(0,h.armor-3) : h.armor;
   return Math.max(1, Math.round(raw - armor));
 }
@@ -706,11 +734,11 @@ function dealToHero(h, raw, label, pierce){
   if(!h||h.state==='dead') return;
   // rogue dodge
   if(h.dodge && Math.random()<h.dodge){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
-  const dmg=heroDmg(raw,pierce);
+  const dmg=heroDmg(h,raw,pierce);
   h.hp-=dmg;
   floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
   burst(h.x, h.y-20, '#ff4d6d', 6);
-  if(h.hp<=0){ h.hp=0; heroDies(); }
+  if(h.hp<=0){ h.hp=0; heroDies(h); }
 }
 function healBoss(amt){
   const b=G.boss; const before=b.hp;
@@ -721,18 +749,20 @@ function healBoss(amt){
 function bossX(){ return cellX(G.slots)+ROOM_W*0.6; }
 
 function castAbility(slot){
-  if(G.phase!=='run'||!G.hero||G.hero.state==='dead') return;
+  if(G.phase!=='run') return;
+  const target=leadHero();
+  if(!target){ return; }
   const a=G.boss.abil[slot]; const def=ABIL[a.id];
   if(a.cd>0){ showHint(def.name+' on cooldown.'); return; }
   if(G.boss.mana<def.cost){ showHint('Not enough mana.'); return; }
   G.boss.mana-=def.cost; a.cd=def.cd;
-  def.run(G.hero);
+  def.run(target);
   burst(bossX(), FLOOR-40, G.boss.col, 10);
   render();
 }
 
-function heroDies(){
-  const h=G.hero; if(h.state==='dead') return;
+function heroDies(h){
+  if(!h || h.state==='dead') return;
   h.state='dead';
   // loot: carried gold + bounty (scaled a little by your threat dial)
   const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12));
@@ -755,14 +785,14 @@ function heroDies(){
   floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
   const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
   showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
-  setTimeout(afterKill, 950);
 }
 
-function afterKill(){
-  // campaign chapter win takes priority
+// Called once after the whole raiding party is wiped out.
+function afterWave(){
+  G.waveEnding=false;
   if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
-  // queue a town interlude every 5 kills — it opens AFTER the card draft
-  G.townDue = (G.totalSlain>0 && G.totalSlain%5===0);
+  // a town is due if the party's kills crossed a 5-kill boundary
+  G.townDue = Math.floor(G.waveStartSlain/5) !== Math.floor(G.totalSlain/5);
   gotoReward();
 }
 
@@ -790,7 +820,7 @@ function retryWave(){
   overlay.classList.remove('show');
   G.boss.hp=Math.max(1,Math.round(G.boss.maxHp*0.5));
   G.boss.mana=G.boss.maxMana;
-  G.phase='build'; G.hero=null;
+  G.phase='build'; G.hero=null; G.heroes=[];
   showHint('You rally. Boss restored to half HP — fortify and try again.');
   render();
 }
@@ -934,6 +964,17 @@ function buyScheme(key){
 }
 function setThreat(d){ G.bounty=clamp(G.bounty+d,-2,3); renderTown(); renderTop(); }
 
+const GUILD_MAX=3;   // party of up to 4
+function guildCost(){ return 9 + G.guildLvl*7; }
+function buyGuild(){
+  if(G.guildLvl>=GUILD_MAX){ showHint('Guild house is at max level.'); return; }
+  const cost=guildCost();
+  if(G.dread<cost){ showHint('Not enough dread.'); return; }
+  G.dread-=cost; G.guildLvl++;
+  showHint('Guild House Lv '+G.guildLvl+' — heroes now raid in parties of '+(G.guildLvl+1)+'!');
+  renderTown(); renderTop();
+}
+
 function sabotageCost(spec,key){ return TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3); }
 function sabotage(idx,key){
   const spec=G.queue[idx]; if(!spec) return;
@@ -1029,6 +1070,14 @@ function renderTown(){
     <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span></p>
     ${evHtml}
     ${threat}
+    <div class="row" style="justify-content:center;margin:6px 0">
+      <button ${G.guildLvl>=GUILD_MAX||G.dread<guildCost()?'disabled':''} onclick="buyGuild()"
+        style="border-color:#ffd34d;display:flex;flex-direction:column;align-items:center;min-width:180px;height:auto;padding:8px;gap:1px">
+        <span style="font-size:18px">🏛️ Guild House${G.guildLvl>0?' · Lv '+G.guildLvl:''}</span>
+        <span class="small" style="opacity:.85;font-weight:normal">${G.guildLvl>=GUILD_MAX?'Max — heroes raid in parties of '+(G.guildLvl+1):'Heroes raid in parties of '+(G.guildLvl+1)+' → '+(G.guildLvl+2)}</span>
+        <span style="color:#b985ff">${G.guildLvl>=GUILD_MAX?'MAX':guildCost()+' ☠'}</span>
+      </button>
+    </div>
     <h2 style="margin:8px 0 4px">Empower the Boss <span class="small" style="opacity:.6">(dread)</span></h2>
     <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${ups}</div>
     <h2 style="margin:10px 0 4px">Town Schemes</h2>
@@ -1046,29 +1095,39 @@ function update(dt){
   particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt; });
   particles=particles.filter(p=>p.life>0);
 
-  if(G.phase!=='run'||!G.hero) return;
+  if(G.phase!=='run' || !G.heroes.length) return;
   const steps=speedMul; // scale sim by running update multiple conceptual times
-  for(let s=0;s<steps;s++) simStep(dt);
+  for(let s=0;s<steps && G.phase==='run';s++){
+    for(const h of G.heroes){ if(G.phase!=='run') break; if(h.state!=='dead') simStep(h,dt); }
+  }
+  if(G.phase!=='run') return;
+  G.hero=leadHero();
 
   // ability cooldowns + mana regen
   G.boss.abil.forEach(a=>{ if(a.cd>0)a.cd=Math.max(0,a.cd-dt*speedMul); });
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana + dt*speedMul*(G.boss.manaRegen||6));
 
-  // camera follows hero (unless the player is dragging to look around)
-  if(!panning){
-    const target=clamp(G.hero.x - VW*0.42, 0, Math.max(0,corridorWidth()-VW));
+  // wave ends when the whole party is wiped — survived the raid
+  if(G.phase==='run' && !G.waveEnding && G.heroes.every(h=>h.state==='dead')){
+    G.waveEnding=true; setTimeout(afterWave, 850);
+  }
+
+  // camera follows the lead hero (unless the player is dragging to look around)
+  const lead=G.hero;
+  if(!panning && lead){
+    const target=clamp(lead.x - VW*0.42, 0, Math.max(0,corridorWidth()-VW));
     camX += (target-camX)*Math.min(1,dt*6);
   }
 }
 
-function simStep(dt){
-  const h=G.hero; if(!h||h.state==='dead') return;
+function simStep(h,dt){
+  if(!h||h.state==='dead') return;
 
   // status: burn
   if(h.burn>0 && h.burnT>0){
     h._burnAcc=(h._burnAcc||0)+dt;
     if(h._burnAcc>=0.5){ h._burnAcc=0; h.hp-=h.burn; floater(h.x,h.y-50,'-'+h.burn,'#ff9a3a');
-      if(h.hp<=0){h.hp=0;heroDies();return;} }
+      if(h.hp<=0){h.hp=0;heroDies(h);return;} }
     h.burnT-=dt;
   }
   // regeneration trickle (clerics + zealot trait)
@@ -1097,14 +1156,14 @@ function simStep(dt){
     if(cellM && cellM.traps && cellM.traps.length) trapTick(h,cellM,dt);
     if(h.state==='dead') return;
     if(!cellM||!cellM.mon||!cellM.mon.alive){ h.state='walking'; return; }
-    fightTick(h, cellM.mon, dt, cellM);
+    fightTick(h, cellM.mon, dt, cellM, isFrontHero(h));
   }
   else if(h.state==='shopping'){
     h.shopT-=dt;
     if(h.shopT<=0){ doShopping(h, G.cells[h.cellIndex]); h.state='walking'; }
   }
   else if(h.state==='boss'){
-    bossFightTick(h,dt);
+    bossFightTick(h,dt,isFrontHero(h));
   }
 }
 
@@ -1138,8 +1197,8 @@ function trapTick(h,cell,dt){
   }
 }
 
-function fightTick(h, mon, dt, cell){
-  // hero attacks monster
+function fightTick(h, mon, dt, cell, isFront){
+  // hero attacks monster (all party members in the room gang up)
   h.atkT-=dt;
   if(h.atkT<=0){
     h.atkT=0.7*h.atkSpeed;
@@ -1149,15 +1208,16 @@ function fightTick(h, mon, dt, cell){
     floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
     if(mon.hp<=0){ mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
       floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
-      // potion heal trigger if hero hurt
       return; }
   }
-  // monster attacks hero
-  mon.atkT-=dt;
-  if(mon.atkT<=0){
-    mon.atkT=0.9;
-    dealToHero(h, mon.atk, 'HIT');
-    maybePotion(h);
+  // monster strikes only the front hero
+  if(isFront){
+    mon.atkT-=dt;
+    if(mon.atkT<=0){
+      mon.atkT=0.9;
+      dealToHero(h, mon.atk, 'HIT');
+      maybePotion(h);
+    }
   }
 }
 
@@ -1191,9 +1251,9 @@ function doShopping(h, cell){
   }
 }
 
-function bossFightTick(h,dt){
+function bossFightTick(h,dt,isFront){
   const b=G.boss;
-  // hero attacks boss
+  // every hero at the throne hammers the boss
   h.atkT-=dt;
   if(h.atkT<=0){
     h.atkT=0.8*h.atkSpeed;
@@ -1204,12 +1264,14 @@ function bossFightTick(h,dt){
     burst(bossX(), FLOOR-50, '#ff4d6d', 6);
     if(b.hp<=0){ b.hp=0; bossDies(); return; }
   }
-  // boss auto-attacks hero
-  h._batk=(h._batk||0)-dt;
-  if(h._batk<=0){
-    h._batk=1.0;
-    dealToHero(h, b.atk, 'SLAM');
-    maybePotion(h);
+  // boss only swings at the front hero
+  if(isFront){
+    h._batk=(h._batk||0)-dt;
+    if(h._batk<=0){
+      h._batk=1.0;
+      dealToHero(h, b.atk, 'SLAM');
+      maybePotion(h);
+    }
   }
 }
 
@@ -1282,8 +1344,10 @@ function drawDungeon(tx, scale, isBuild){
     }
   }
   // hero
-  if(G.hero && G.hero.state!=='dead') drawHero(tx(G.hero.x), G.hero);
-  else if(G.hero && G.hero.state==='dead') drawHeroDead(tx(G.hero.x), G.hero);
+  // draw the whole raiding party (dead first so living draw on top)
+  const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
+  party.filter(h=>h.state==='dead').forEach(h=>drawHeroDead(tx(h.x), h));
+  party.filter(h=>h.state!=='dead').forEach(h=>drawHero(tx(h.x), h));
 }
 
 function drawRoomBg(x0,w,isBoss,i){
@@ -1416,7 +1480,7 @@ function drawMonster(cx,type,col){
 }
 
 function drawHero(sx,h){
-  const y=FLOOR; const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
+  const y=FLOOR+(h.yOff||0); const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
   const yy=y+bob;
   // elite aura
   if(h.elite){
@@ -1452,7 +1516,7 @@ function drawHero(sx,h){
   X.textAlign='left';
 }
 function drawHeroDead(sx,h){
-  const y=FLOOR;
+  const y=FLOOR+(h.yOff||0);
   X.globalAlpha=0.8;
   px(sx-16,y-8,32,8,h.col); px(sx-20,y-12,12,8,h.tint); // fallen
   X.globalAlpha=1;
