@@ -1256,6 +1256,7 @@ function placeCard(ci, idx){
   } else if(canFuse(room,card)){
     // fuse a second trap/monster into this room
     room.part2=card.type;
+    if(card.type==='minion'){ room.minHp=card.minHp; room.minAtk=card.minAtk; if(!room.label) room.label=card.label; }  // carry the corrupted hero's stats
     G.hand.splice(ci,1);
     const info=synergyInfo(roomParts(room));
     burst(cellX(idx)+ROOM_W/2, FLOOR-40, '#9a5cff', 20);
@@ -1325,8 +1326,8 @@ function buildCells(){
           cell.traps.push({type:p, def, fireT:0});
         } else if(def.kind==='monster'){
           hasMon=true;
-          const bHp = p==='minion'? r.minHp : def.hp;
-          const bAtk= p==='minion'? r.minAtk : def.atk;
+          const bHp = p==='minion'? (r.minHp||def.hp) : def.hp;   // ||def guards a NaN/missing minion stat
+          const bAtk= p==='minion'? (r.minAtk||def.atk): def.atk;
           // "Fed" monsters (goblins) grow with every hero that died in this room — uncapped.
           const feed = def.feeds ? (1 + (r.kills||0)*0.10) : 1;
           // Monsters scale HARD: weak at Lv1, brutal at high level.
@@ -2831,7 +2832,7 @@ function describeRoom(room){
     lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){ let hp=0,atk=0, fed=false;
-    monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?room.minHp:def.hp, bAtk=p==='minion'?room.minAtk:def.atk;
+    monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
       const feed=def.feeds?(1+(room.kills||0)*0.10):1; if(def.feeds)fed=true;
       hp+=bHp*(0.9+(room.lvl-1)*0.85)*feed; atk+=bAtk*(1.0+(room.lvl-1)*0.9)*feed; });
     lines.push(`👹 Guard: <b>${Math.round(hp*syn*vm*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*vm*(1+(RB.monDmg||0)))}</b> atk /0.9s`);
@@ -2910,6 +2911,7 @@ function fuseRooms(from,to){
   const a=G.rooms[from], b=G.rooms[to];
   if(!canFuseRooms(b,a)) return;
   b.part2=a.type;
+  if(a.type==='minion'){ b.minHp=a.minHp; b.minAtk=a.minAtk; if(!b.label) b.label=a.label; }  // carry the corrupted hero's stats
   b.kills=(b.kills||0)+(a.kills||0);   // carry the absorbed room's veteran progress
   b.lvl=Math.min(maxLevel(), Math.max(b.lvl, a.lvl));
   G.rooms[from]=null;                  // the absorbed room's slot opens up
