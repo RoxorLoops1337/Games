@@ -127,8 +127,14 @@
   #inspect .small{opacity:.7;font-size:11px;}
   #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
+  #pausebtn{position:absolute;top:6px;right:46px;z-index:21;width:34px;height:34px;padding:0;
+    font-size:18px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
+  .pauserow{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .pauserow label{font-weight:bold;font-size:14px;}
+  .pauserow input[type=range]{flex:1;max-width:210px;accent-color:var(--accent);height:24px;}
+  .pauserow button{font-size:12px;padding:6px 10px;min-height:34px;}
   #relicbar{position:absolute;top:5px;left:5px;z-index:21;display:flex;gap:3px;flex-wrap:wrap;
-    max-width:calc(100% - 84px);}
+    max-width:calc(100% - 128px);}
   .relicchip{width:32px;height:32px;border-radius:7px;border:2px solid;
     background:radial-gradient(circle at 50% 38%, rgba(60,52,86,.95), rgba(20,15,34,.95));
     display:flex;align-items:center;justify-content:center;line-height:1;cursor:pointer;
@@ -210,6 +216,7 @@
     <div id="inspect"></div>
     <div id="tutbar"></div>
     <div id="relicbar"></div>
+    <button id="pausebtn" title="Menu &amp; settings" onclick="openPauseMenu()">☰</button>
     <button id="audiobtn" title="Sound on/off">🔊</button>
     <div id="zoomctl">
       <button onclick="zoomBy(1.2)" title="Zoom in">＋</button>
@@ -786,22 +793,32 @@ function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
 // Procedural WebAudio SFX + a soft ambient loop — no asset files. Plus screen
 // shake, hit-pause and crits to make every hit land.
 let AC=null, audioOn=true, _musicTimer=null, _sfxLast={};
+let sfxBus=null, musicBus=null, sfxVol=1, musVol=1;   // separate volume buses
 let shakeT=0, shakeMag=0, hitStop=0;
 function shake(mag){ shakeMag=Math.max(shakeMag,mag); shakeT=0.22; }
 function loadAudioPref(){ try{ audioOn = localStorage.getItem('bm_audio')!=='off'; }catch(_){ } }
 function saveAudioPref(){ try{ localStorage.setItem('bm_audio', audioOn?'on':'off'); }catch(_){ } }
+function loadVolPrefs(){ try{
+  const s=parseFloat(localStorage.getItem('bm_sfxvol')); if(!isNaN(s)) sfxVol=clamp(s,0,1);
+  const m=parseFloat(localStorage.getItem('bm_musvol')); if(!isNaN(m)) musVol=clamp(m,0,1);
+}catch(_){ } }
+function setSfxVol(v){ sfxVol=clamp(+v,0,1); if(sfxBus) sfxBus.gain.value=sfxVol; try{ localStorage.setItem('bm_sfxvol',sfxVol); }catch(_){ } }
+function setMusVol(v){ musVol=clamp(+v,0,1); if(musicBus) musicBus.gain.value=musVol; try{ localStorage.setItem('bm_musvol',musVol); }catch(_){ } }
 function initAudio(){
   if(AC){ if(AC.state==='suspended') AC.resume(); return; }
-  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); startMusic(); }catch(_){ AC=null; }
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)();
+    sfxBus=AC.createGain();   sfxBus.gain.value=sfxVol;   sfxBus.connect(AC.destination);
+    musicBus=AC.createGain(); musicBus.gain.value=musVol; musicBus.connect(AC.destination);
+    startMusic(); }catch(_){ AC=null; }
 }
-function tone(freq,dur,type,vol,slideTo){
+function tone(freq,dur,type,vol,slideTo,bus){
   if(!AC||!audioOn) return;
   const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
   o.type=type||'square'; o.frequency.setValueAtTime(freq,t);
   if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1,slideTo),t+dur);
   g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.18,t+0.008);
   g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+dur+0.02);
+  o.connect(g); g.connect(bus||sfxBus||AC.destination); o.start(t); o.stop(t+dur+0.02);
 }
 function noiseBurst(dur,vol,cut){
   if(!AC||!audioOn) return;
@@ -811,7 +828,7 @@ function noiseBurst(dur,vol,cut){
   const s=AC.createBufferSource(); s.buffer=buf;
   const g=AC.createGain(); g.gain.value=vol||0.18;
   const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=cut||2600;
-  s.connect(f); f.connect(g); g.connect(AC.destination); s.start();
+  s.connect(f); f.connect(g); g.connect(sfxBus||AC.destination); s.start();
 }
 const SFX={
   hit:()=>noiseBurst(0.05,0.10,3200),
@@ -866,18 +883,18 @@ function musicTick(){
     const bar=Math.floor(_mBeat/4)%4;
     const chord=progs[_mProg][bar];
     if(_mBeat%4===0){
-      chord.forEach(f=>tone(f,1.6,M.pad,M.padVol,f));
-      tone(chord[0]/2,1.9,'triangle',M.padVol*0.9);
+      chord.forEach(f=>tone(f,1.6,M.pad,M.padVol,f,musicBus));
+      tone(chord[0]/2,1.9,'triangle',M.padVol*0.9,null,musicBus);
       if(bar===0){ if(Math.random()<0.55) _mProg=(_mProg+1)%progs.length;
         _mMelOn=Math.random()<0.85; _mDensity=M.density*(0.7+Math.random()*0.5); }
     } else if(_mBeat % M.bassEvery===0){
-      tone(chord[0]/2,0.45,'triangle',M.padVol*0.8);
+      tone(chord[0]/2,0.45,'triangle',M.padVol*0.8,null,musicBus);
     }
     if(_mMelOn && Math.random()<_mDensity){
       const scale=M.penta||_BASE_PENTA; const n=scale[ri(0,scale.length-1)];
-      tone(n,0.32,M.mel,M.melVol,n);
+      tone(n,0.32,M.mel,M.melVol,n,musicBus);
       if(Math.random()<0.33){ const n2=scale[ri(0,scale.length-1)];
-        setTimeout(()=>{ if(audioOn&&AC) try{ tone(n2,0.24,M.mel,M.melVol*0.85,n2); }catch(_){ } }, Math.floor(_musicMs/2)); }
+        setTimeout(()=>{ if(audioOn&&AC) try{ tone(n2,0.24,M.mel,M.melVol*0.85,n2,musicBus); }catch(_){ } }, Math.floor(_musicMs/2)); }
     }
     _mBeat++;
   }catch(_){ }
@@ -908,6 +925,39 @@ function toggleAudio(){
   const b=document.getElementById('audiobtn'); if(b) b.textContent=audioOn?'🔊':'🔇';
   showHint(audioOn?'🔊 Sound on':'🔇 Muted');
 }
+
+/* ===================== PAUSE / SETTINGS MENU ===========================
+   A ☰ button over the board opens a modal that freezes the run, exposes
+   music/SFX volume, and offers an abandon-run "Quit to Title".            */
+let paused=false, pauseConfirm=false;
+function openPauseMenu(){
+  // only over the live board (build/run); on overlay screens the button is hidden behind the overlay
+  if(!G || G.phase==='menu' || overlay.classList.contains('show')) return;
+  paused=true; pauseConfirm=false;
+  overlay.classList.add('show'); renderPauseMenu();
+}
+function renderPauseMenu(){
+  overlay.innerHTML=`<h1>⏸ Paused</h1>
+    <div style="display:flex;flex-direction:column;gap:13px;width:min(360px,90%);margin:6px 0">
+      <div class="pauserow"><label>🎵 Music</label>
+        <input type="range" min="0" max="100" value="${Math.round(musVol*100)}" oninput="setMusVol(this.value/100)"></div>
+      <div class="pauserow"><label>🔊 Sound FX</label>
+        <input type="range" min="0" max="100" value="${Math.round(sfxVol*100)}" oninput="setSfxVol(this.value/100)"></div>
+      <div class="pauserow"><label>${audioOn?'🔊':'🔇'} Audio</label>
+        <button onclick="toggleAudioFromMenu()">${audioOn?'On — tap to mute':'Muted — tap to enable'}</button></div>
+    </div>
+    <div class="menu-btns"><button class="go" onclick="resumeGame()">▶ Resume</button></div>
+    <div class="menu-btns" style="margin-top:6px">${pauseConfirm
+      ? `<span style="color:#ff9aae;align-self:center">Abandon this run? Progress in it is lost.</span>
+         <button class="go" onclick="resumeGame()">No, keep playing</button>
+         <button style="background:#7a2030;border-color:#ff5470" onclick="quitToTitle()">Yes, quit</button>`
+      : `<button style="background:#5a2030;border-color:#ff7a8a" onclick="askQuit()">🏳️ Quit to Title (lose run)</button>`}
+    </div>`;
+}
+function askQuit(){ pauseConfirm=true; renderPauseMenu(); }
+function toggleAudioFromMenu(){ toggleAudio(); renderPauseMenu(); }
+function resumeGame(){ paused=false; pauseConfirm=false; overlay.classList.remove('show'); render(); }
+function quitToTitle(){ paused=false; pauseConfirm=false; gotoMenu(); }
 
 const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
 function difficulty(){
@@ -1115,10 +1165,12 @@ function gotoBossSelect(){
         <div class="desc">${b.blurb}</div>
         <div class="small" style="color:${b.col};margin:3px 0"><b>✦ ${PASSIVES[b.passive].name}</b><br>${PASSIVES[b.passive].desc}</div>
         <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
-      </div>`;}).join('')}</div>`;
+      </div>`;}).join('')}</div>
+    <div class="menu-btns"><button onclick="gotoMenu()">← Back to title</button></div>`;
 }
 function chooseBoss(key){
   applyRunes();                                  // lock in this run's rune bonuses
+  G.hand=[];                                     // reset (safe if you backed out & re-picked)
   const b=BOSSES[key];
   const mLvl=bossLevelOf(key);                    // boss mastery: permanent +HP/+ATK
   const maxHp=Math.round(b.maxHp*(1+RB.bossHp)*bossMasteryHp(mLvl)) + RB.bossHpFlat;
@@ -1167,7 +1219,7 @@ function renderLoadout(){
     <p>Passive: <b style="color:${b.col}">✦ ${PASSIVES[b.passive].name}</b> — ${PASSIVES[b.passive].desc}</p>
     <p>Equip <b>3 abilities</b> for this run — <b>${loadoutSel.length}/3</b> chosen.</p>
     <div class="choices" style="max-width:700px">${cards}</div>
-    <div class="menu-btns"><button class="go" ${loadoutSel.length!==3?'disabled':''} onclick="confirmLoadout()">⚔️ Enter the dungeon →</button></div>`;
+    <div class="menu-btns"><button onclick="gotoBossSelect()">← Back</button><button class="go" ${loadoutSel.length!==3?'disabled':''} onclick="confirmLoadout()">⚔️ Enter the dungeon →</button></div>`;
 }
 
 /* ============================== PHASE: BUILD ============================= */
@@ -1991,6 +2043,7 @@ function renderTown(){
 
 /* ============================ UPDATE / SIM ============================== */
 function update(dt){
+  if(paused) return;                 // pause menu freezes the whole simulation
   // animate floaters/particles always
   floats.forEach(f=>{ f.y+=f.vy*dt; f.life-=dt*0.9; });
   floats=floats.filter(f=>f.life>0);
@@ -3130,6 +3183,7 @@ if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 
 loadRunes();
 loadAudioPref();
+loadVolPrefs();
 // Audio can only start after a user gesture; wake it on the first interaction.
 window.addEventListener('pointerdown', ()=>{ if(audioOn) initAudio(); }, {once:false});
 window.addEventListener('keydown', ()=>{ if(audioOn) initAudio(); }, {once:false});
