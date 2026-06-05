@@ -566,9 +566,19 @@ function recomputeRB(){
 function addRelic(id){
   const r=RELICS[id]; if(!r) return;
   G.relics.push(id);
-  if(r.hp){ G.boss.maxHp+=r.hp; G.boss.hp+=r.hp; }
+  const b=G.boss, rb=r.rb||{};
+  if(r.hp){ b.maxHp+=r.hp; b.hp+=r.hp; }
   if(r.gold) G.gold+=r.gold;
   if(r.dread) G.dread+=r.dread;
+  // Stats that are normally locked in at run start must be applied on pickup
+  // too (mana cap, mana regen, boss attack) — otherwise a mid-run relic looks
+  // like it did nothing.
+  if(b){
+    if(rb.manaFlat){ b.maxMana+=rb.manaFlat; b.mana=Math.min(b.maxMana, b.mana+rb.manaFlat); }
+    if(rb.manaRegen){ b.manaRegen=(b.manaRegen||6)+rb.manaRegen; }
+    if(rb.bossAtk){ b.atk+=Math.round((BOSSES[b.key]?BOSSES[b.key].atk:b.atk)*rb.bossAtk); }
+    if(rb.bossAtkFlat){ b.atk+=rb.bossAtkFlat; }
+  }
   recomputeRB();
   if(typeof renderRelicBar==='function') renderRelicBar();
 }
