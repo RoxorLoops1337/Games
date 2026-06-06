@@ -275,6 +275,7 @@ const ROOMS = {
   maul:     {kind:'trap',   name:'Armor Crusher',ic:'🔨',col:'#9aa4b2', dmg:13, rate:0.7,  elem:'phys', pierceAll:true, desc:'Ignores ALL armor — crushes armored heroes.'},
   gallows:  {kind:'trap',   name:'Gallows',    ic:'⚰️', col:'#6a5a8a', dmg:8,  rate:0.6,  elem:'phys', vsLowHp:0.4, vsMult:3, desc:'Executes the wounded: 3× damage under 40% HP.'},
   hexward:  {kind:'trap',   name:'Hexward',    ic:'🧿', col:'#4dc3ff', dmg:6,  rate:0.45, elem:'phys', vsElite:true, vsMult:2.2, desc:'2.2× damage to elite (trait-bearing) heroes.'},
+  bombard:  {kind:'trap',   name:'Bombard',    ic:'💣', col:'#e0823a', dmg:15, rate:2.4,  elem:'phys', aoe:1, desc:'Lobs shells that hit EVERY hero within one room of the blast — punishes a strung-out corridor.'},
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Weak early — but grows +10% stronger for every hero that dies in this room.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
@@ -634,7 +635,7 @@ function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per leve
 function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
-const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100 };
+const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55 };
 function bossUnlocked(k){ return (UNLOCK_BOSS[k]||0) <= RUNES.kills; }
 function cardUnlocked(t){ return (UNLOCK_CARD[t]||0) <= RUNES.kills; }
 function unlockedRoomKeys(){ return ROOM_KEYS.filter(cardUnlocked); }
@@ -2269,6 +2270,7 @@ function update(dt){
   const steps=speedMul; // scale sim by running update multiple conceptual times
   for(let s=0;s<steps && G.phase==='run';s++){
     for(const h of G.heroes){ if(G.phase!=='run') break; if(h.state!=='dead') simStep(h,dt); }
+    if(G.phase==='run') aoeTrapTick(dt);
   }
   if(G.phase!=='run') return;
   G.hero=leadHero();
@@ -2423,6 +2425,7 @@ function thiefSteal(h){
 function trapTick(h,cell,dt){
   const r=cell.room; const syn=cell.syn||1; const doc=bossDoc();
   for(const tr of cell.traps){
+    if(tr.def.aoe) continue;        // area traps fire once per interval in aoeTrapTick, not per-hero
     tr.fireT-=dt;
     if(tr.fireT<=0){
       tr.fireT=tr.def.rate;
@@ -2443,6 +2446,43 @@ function trapTick(h,cell,dt){
       if(G.stats) G.stats.trapDmg+=Math.round(dmg);
       burst(h.x, h.y-20, d.col, 5);
       if(h.state==='dead') return;
+    }
+  }
+}
+
+// Area traps (Bombard) fire at the CELL level once per interval — independent of
+// which hero is standing on them — and strike EVERY live hero whose room is
+// within the blast radius. This rewards a long, strung-out corridor (the party
+// spread across rooms all eat the same shell) rather than one bunched kill-room.
+function heroCellIndex(o){ return (o.cellIndex>=0 && o.cellIndex<G.cells.length) ? o.cellIndex : cellAt(o.x).index; }
+function aoeTrapTick(dt){
+  if(G.phase!=='run' || !G.heroes.length) return;
+  const doc=bossDoc();
+  for(const cell of G.cells){
+    if(!cell.traps || !cell.traps.length) continue;
+    const r=cell.room; const syn=cell.syn||1; const vr=cell.vet||0;
+    for(const tr of cell.traps){
+      const d=tr.def; if(!d.aoe) continue;
+      tr.fireT-=dt;
+      if(tr.fireT>0) continue;                       // still charging
+      // find targets in range; if none, hold the charge until someone is
+      const lo=cell.index-d.aoe, hi=cell.index+d.aoe;
+      const targets=G.heroes.filter(o=>o && o.state!=='dead' && heroCellIndex(o)>=lo && heroCellIndex(o)<=hi);
+      if(!targets.length) continue;
+      tr.fireT=d.rate;
+      let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
+      if(vr) base*=(1+vr*VET_DMG);
+      if(doc==='inferno') base*=1.2;
+      const pierce=(doc==='bastion'||d.pierceAll)?'full':!!d.pierce;
+      for(const o of targets){
+        const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
+        dealToHero(o, dmg, 'BOOM', pierce, d.elem);
+        if(o.state!=='dead' && doc==='inferno'){ o.burn=Math.max(o.burn||0, 3+(r.lvl-1)); o.burnT=3; }
+        if(G.stats) G.stats.trapDmg+=dmg;
+      }
+      if(doc==='soulengine' && G.boss) G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+targets.length);
+      burst(cell.x0+ROOM_W*0.5, FLOOR-40, d.col, 18); shake(4); sfx('boss');
+      floater(cell.x0+ROOM_W*0.5, FLOOR-94, '💥 BOMBARD ×'+targets.length, d.col);
     }
   }
 }
@@ -3127,7 +3167,8 @@ function describeCard(card){
   const lines=[`<b>${def.ic} ${name}</b> · ${def.kind.toUpperCase()}${lvl>1?' · Lv '+lvl:''}`];
   if(def.kind==='trap'){
     const dmg=Math.round(def.dmg*(1+(lvl-1)*0.4)*(1+(RB.trapDmg||0)));
-    lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`);
+    lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.aoe?' · 💥 AoE':''}`);
+    if(def.aoe) lines.push(`<span class="small" style="color:#e0a060">💥 Blasts every hero within ${def.aoe} room${def.aoe>1?'s':''} of this one</span>`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
   } else if(def.kind==='monster'){
     const bHp=card.type==='minion'?card.minHp:def.hp, bAtk=card.type==='minion'?card.minAtk:def.atk;
@@ -3184,7 +3225,7 @@ function describeRoom(room){
   const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`];
   parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
     const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0)));
-    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`);
+    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){ let hp=0,atk=0, fed=false; const bas=bastionMul();
