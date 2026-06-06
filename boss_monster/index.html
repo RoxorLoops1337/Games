@@ -2571,6 +2571,23 @@ function drawShopProp(cx,room){
     X.fillText('(empty — stock it)', cx, FLOOR-92); X.textAlign='left';
   }
 }
+// When the shop ART is shown, the painted shelf is just decoration — draw the
+// actual stocked items on a small plaque so the player can see their stock.
+function drawShopStock(cx,room){
+  const unsold=(room.stock||[]).filter(s=>!s.sold);
+  if(unsold.length){
+    const n=Math.min(4,unsold.length); const wd=n*18+12;
+    X.fillStyle='rgba(10,7,18,.7)'; X.strokeStyle='rgba(255,211,77,.5)'; X.lineWidth=1;
+    X.fillRect(cx-wd/2, FLOOR-60, wd, 22); X.strokeRect(cx-wd/2+.5, FLOOR-59.5, wd-1, 21);
+    X.font='15px Trebuchet MS'; X.textAlign='center';
+    unsold.slice(0,4).forEach((s,k)=>{ X.fillText(ITEMS[s.key].ic, cx-wd/2+15+k*18, FLOOR-44); });
+    if(unsold.length>4){ X.fillStyle='#ffd34d'; X.font='9px Trebuchet MS'; X.fillText('+'+(unsold.length-4), cx+wd/2-6, FLOOR-44); }
+    X.textAlign='left';
+  } else {
+    X.fillStyle='#ffd36a'; X.font='bold 10px Trebuchet MS'; X.textAlign='center';
+    X.fillText('empty — stock it', cx, FLOOR-44); X.textAlign='left';
+  }
+}
 
 // Real room artwork (small quantized PNGs in rooms/). A single-trap room's art
 // replaces its procedural prop; a shop shows the shop art; any monster room gets
@@ -2624,7 +2641,10 @@ function drawRoomContents(x0,w,room,i){
       bar(cx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
   }
   // shop counter
-  if(parts.includes('shop') && art!=='shop') drawShopProp(cx,room);
+  if(parts.includes('shop')){
+    if(art!=='shop') drawShopProp(cx,room);
+    else drawShopStock(cx,room);          // art shows the shelf; overlay the live stock
+  }
 
   drawLvlBadge(cx,FLOOR-128,room.lvl,ROOMS[room.type].col);
   // veteran rank badge: a gold star with the rank, shown in build AND run
