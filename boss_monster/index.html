@@ -444,6 +444,20 @@ const DOCTRINES = {
   overgrowth:{ic:'🌿', name:'Overgrowth',      desc:'Choking vines slow every hero through the halls (−25% move speed).'},
   gluttony:  {ic:'😋', name:'Gluttony',        desc:'Every hero slain permanently grows the boss’s max HP and attack.'},
 };
+// EDICTS: optional run modifiers chosen before a run. Each makes the raid harder
+// in a distinct way and, in return, multiplies the rune reward you bank. Stackable.
+const EDICTS = {
+  ironHorde:    {ic:'🛡️', name:'Iron Horde',    desc:'Heroes have +35% HP.',            reward:0.30},
+  bloodPact:    {ic:'🩸', name:'Blood Pact',    desc:'Heroes deal +25% damage.',        reward:0.30},
+  swiftRaiders: {ic:'🏃', name:'Swift Raiders', desc:'Heroes move +30% faster.',        reward:0.25},
+  warband:      {ic:'👥', name:'Warband',       desc:'Raiding parties bring +1 hero.',   reward:0.30},
+  eliteVanguard:{ic:'⭐', name:'Elite Vanguard', desc:'Far more heroes roll elite traits.',reward:0.30},
+  leanCoffers:  {ic:'💰', name:'Lean Coffers',  desc:'You earn 40% less gold.',          reward:0.25},
+  glassThrone:  {ic:'💎', name:'Glass Throne',  desc:'Your boss has −30% max HP.',       reward:0.35},
+};
+const EDICT_KEYS = Object.keys(EDICTS);
+function hasEdict(id){ return !!(G && G.edicts && G.edicts.includes(id)); }
+function edictRewardMul(){ return 1 + (G&&G.edicts? G.edicts.reduce((s,id)=>s+(EDICTS[id]?EDICTS[id].reward:0),0) : 0); }
 // Bosses: differing stats, a passive, two SIGNATURE abilities (always equipped)
 // and a pool to pick a 3rd from — so each boss plays to its own identity.
 const BOSSES = {
@@ -809,6 +823,7 @@ function freshGame(mode){
     waveEnding:false,     // guard so afterWave runs once
     runesBanked:0,        // rune points already credited from this run
     relics:[],            // relic ids collected this run
+    edicts:[],            // optional run modifiers chosen at run start (harder run, bigger rune reward)
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
     combo:0,              // kill streak (resets when a hero strikes the boss)
     killsBanked:0, bossXpBanked:0, newUnlocks:[],   // lifetime-kill + boss-XP banking, unlock toasts
@@ -1055,8 +1070,8 @@ function showHelp(){
     </p>
     <div class="menu-btns"><button class="go" onclick="gotoMenu()">Back</button></div>`;
 }
-function startCampaign(){ G=freshGame('campaign'); gotoBossSelect(); }
-function startEndless(){ G=freshGame('endless'); gotoBossSelect(); }
+function startCampaign(){ G=freshGame('campaign'); gotoEdicts(); }
+function startEndless(){ G=freshGame('endless'); gotoEdicts(); }
 
 /* ============================== UNLOCKS ================================ */
 // Bosses & cards unlock as your LIFETIME kills climb. Shows progress.
@@ -1191,11 +1206,38 @@ function renderRunes(){
   </div>`;
 }
 
+/* ============================== PHASE: EDICTS ============================ */
+// Optional run modifiers. Toggle any combination, then continue to boss select.
+function gotoEdicts(){ G.phase='edicts'; renderEdicts(); }
+function toggleEdict(id){
+  if(!EDICTS[id]) return;
+  const i=G.edicts.indexOf(id);
+  if(i>=0) G.edicts.splice(i,1); else G.edicts.push(id);
+  sfx('buy'); renderEdicts();
+}
+function renderEdicts(){
+  G.phase='edicts'; overlay.classList.add('show');
+  const cards=EDICT_KEYS.map(id=>{ const e=EDICTS[id]; const on=G.edicts.includes(id);
+    return `<div class="choice" style="width:158px;cursor:pointer;${on?'border-color:#ffd34d;box-shadow:0 0 8px #ffd34d':''}" onclick="toggleEdict('${id}')">
+      <div class="big">${e.ic}</div><h3 style="font-size:13px;margin:2px 0">${e.name}</h3>
+      <div class="small" style="line-height:1.25;min-height:30px">${e.desc}</div>
+      <div class="small" style="color:#ffd34d;margin-top:3px">+${Math.round(e.reward*100)}% runes</div>
+      <div class="small">${on?'<span style="color:#ffd34d">✔ sworn</span>':'<span style="color:#6a5a9a">tap to swear</span>'}</div></div>`;
+  }).join('');
+  const mul=edictRewardMul();
+  overlay.innerHTML=`<h1>⚖️ Swear your Edicts</h1>
+    <p style="max-width:560px">Optional run modifiers — each makes the raid <b>harder</b> in its own way and, in return, boosts the <b style="color:#ffd34d">runes</b> you bank. Stack as many as you dare, or take none.</p>
+    <div class="choices" style="max-width:560px">${cards}</div>
+    <p style="margin-top:8px">Reward multiplier: <b style="color:#ffd34d">×${mul.toFixed(2)}</b>${G.edicts.length?` · ${G.edicts.length} edict${G.edicts.length>1?'s':''} sworn`:' · none sworn'}</p>
+    <div class="menu-btns"><button onclick="gotoMenu()">← Menu</button><button class="go" onclick="gotoBossSelect()">Choose your Boss →</button></div>`;
+}
+
 /* =========================== PHASE: BOSS SELECT ========================== */
 function gotoBossSelect(){
   G.phase='bossSelect'; overlay.classList.add('show');
+  const edTag = G.edicts.length ? ` · <span style="color:#ffd34d">⚖️ ${G.edicts.map(id=>EDICTS[id].ic).join('')} ×${edictRewardMul().toFixed(2)} runes</span>` : '';
   overlay.innerHTML = `<h1>Choose your Boss</h1>
-    <p>${G.mode==='campaign'?'Campaign — survive 5 escalating chapters.':'Endless — how long can you reign?'}</p>
+    <p>${G.mode==='campaign'?'Campaign — survive 5 escalating chapters.':'Endless — how long can you reign?'}${edTag}</p>
     <div class="choices">${BOSS_KEYS.map(k=>{
       const b=BOSSES[k]; const lk=!bossUnlocked(k);
       const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
@@ -1213,14 +1255,15 @@ function gotoBossSelect(){
         <div class="small" style="opacity:.85">★ ${ABIL[b.sig[0]].ic} ${ABIL[b.sig[0]].name} · ${ABIL[b.sig[1]].ic} ${ABIL[b.sig[1]].name}</div>
         <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
       </div>`;}).join('')}</div>
-    <div class="menu-btns"><button onclick="gotoMenu()">← Back to title</button></div>`;
+    <div class="menu-btns"><button onclick="gotoEdicts()">← Edicts</button></div>`;
 }
 function chooseBoss(key){
   applyRunes();                                  // lock in this run's rune bonuses
   G.hand=[];                                     // reset (safe if you backed out & re-picked)
   const b=BOSSES[key];
   const mLvl=bossLevelOf(key);                    // boss mastery: permanent +HP/+ATK
-  const maxHp=Math.round(b.maxHp*(1+RB.bossHp)*bossMasteryHp(mLvl)) + RB.bossHpFlat;
+  const glass=hasEdict('glassThrone')?0.70:1;     // Glass Throne edict: frail boss, bigger reward
+  const maxHp=Math.round(b.maxHp*(1+RB.bossHp)*bossMasteryHp(mLvl)*glass) + RB.bossHpFlat;
   const atk=Math.round(b.atk*(1+RB.bossAtk)*bossMasteryAtk(mLvl)) + RB.bossAtkFlat;
   G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1, masteryLvl:mLvl,
     mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
@@ -1483,12 +1526,14 @@ function genHeroSpec(){
   }
   const cls=pickHeroClass();
   // elite chance climbs with progress; later heroes can roll two traits.
-  const eliteChance=clamp(0.06 + power*0.02, 0, 0.7);
+  // Elite Vanguard edict pushes both far higher.
+  const vanguard=hasEdict('eliteVanguard');
+  const eliteChance=clamp((vanguard?0.45:0.06) + power*0.02, 0, vanguard?0.95:0.7);
   const traits=[];
   if(Math.random()<eliteChance){
     const pool=[...TRAIT_KEYS];
     traits.push(pool.splice(ri(0,pool.length-1),1)[0]);
-    if(power>=7 && Math.random()<0.35) traits.push(pool.splice(ri(0,pool.length-1),1)[0]);
+    if((power>=7||vanguard) && Math.random()<(vanguard?0.6:0.35)) traits.push(pool.splice(ri(0,pool.length-1),1)[0]);
   }
   return {cls, power, traits, name:rollName(), rivalGen:0,
           debuff:{atkMul:1, burn:0, robbed:false}};
@@ -1556,6 +1601,10 @@ function buildHeroFromSpec(spec){
   if(tr.includes('berserk')){ atk*=1.4; atkSpeed*=0.65; }
   if(tr.includes('armored')) armor+=6;
   if(tr.includes('swift')){ spd*=1.5; atkSpeed*=0.8; }
+  // ---- run edicts (chosen at run start) ----
+  if(hasEdict('ironHorde'))    hp*=1.35;
+  if(hasEdict('bloodPact'))    atk*=1.25;
+  if(hasEdict('swiftRaiders')) spd*=1.30;
   // ---- town sabotage ----
   atk*=spec.debuff.atkMul;
   // ---- champion mini-boss ----
@@ -1593,7 +1642,7 @@ function spawnGroup(n){
   for(const r of G.pendingRivals) r.eta--;   // one wave closer to each rival's return
   ensureQueue(1);
   const champ = !!(G.queue[0] && G.queue[0].champion);
-  const count = champ ? 1 : n;
+  const count = champ ? 1 : n + (hasEdict('warband')?1:0);   // Warband edict: +1 raider per party
   ensureQueue(count);
   G.heroes=[];
   for(let k=0;k<count;k++){
@@ -1738,7 +1787,7 @@ function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead';
   // loot: carried gold + bounty (threat dial + rune bonuses)
-  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0))) + (RB.goldKill||0);
+  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1)) + (RB.goldKill||0);
   G.gold+=loot;
   // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
@@ -1831,7 +1880,8 @@ function totalKills(){ return G.totalSlain; }
 // Bank this run's rune points (delta since last banking) into the pool.
 // Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
 function awardRunes(){
-  const total = Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0);
+  // Edicts multiply the runes you bank for the whole run.
+  const total = Math.floor((Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul());
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
@@ -2450,7 +2500,7 @@ function draw(){
   X.fillStyle=g; X.fillRect(0,0,CV.width,CV.height);
 
   if(!G) return;
-  if(G.phase==='menu'||G.phase==='bossSelect'){ X.setTransform(baseK,0,0,baseK,0,0); drawIdleScene(); return; }
+  if(G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ X.setTransform(baseK,0,0,baseK,0,0); drawIdleScene(); return; }
 
   // Zoom: scale the world about the floor line so it stays pinned to the bottom.
   const z = (G.phase==='build'||G.phase==='run') ? zoom : 1;
@@ -2915,7 +2965,7 @@ function render(){
   draw();
 }
 function renderTop(){
-  if(!G||G.phase==='menu'){ topbar.innerHTML=`<div class="stat">🐉 <b>BOSS MONSTER</b></div>`; return; }
+  if(!G||G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ topbar.innerHTML=`<div class="stat">🐉 <b>BOSS MONSTER</b></div>`; return; }
   if(!G.boss){ topbar.innerHTML=''; return; }
   const b=G.boss;
   const modeLbl = G.mode==='campaign'
@@ -2935,7 +2985,7 @@ function renderTop(){
 }
 
 function renderPanel(){
-  if(!G||G.phase==='menu'||G.phase==='bossSelect'){ panel.innerHTML=''; return; }
+  if(!G||G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ panel.innerHTML=''; return; }
 
   if(G.phase==='build'){
     const shopExists=G.rooms.some(r=>r&&r.type==='shop');
