@@ -345,6 +345,11 @@ function canFuseRooms(into, from){
     && into.def.kind!=='shop' && from.def.kind!=='shop' && from.type!==into.type);
 }
 
+// ---- Boss doctrine helpers (dungeon-wide rules for the active boss) ----
+function bossDoc(){ return (G && G.boss && G.boss.doc) || ''; }
+function monFeeds(def){ return !!(def.feeds || bossDoc()==='undeath'); }   // Undeath: every monster feeds
+function bastionMul(){ return bossDoc()==='bastion' ? 1.25 : 1; }          // Bastion: tougher guards
+
 // Shop stock items: arm the heroes (makes them stronger) for instant gold.
 const ITEMS = {
   sword:  {name:'Sword',  ic:'🗡️', price:14, atk:4,  desc:'+4 hero ATK'},
@@ -429,26 +434,36 @@ const PASSIVES = {
   thorns:  {name:'Spiked Throne',    desc:'Reflects 50% of melee back at attackers.'},
   titan:   {name:"Titan's Might",    desc:'+30% ability damage.'},
 };
+// Boss DOCTRINES: a dungeon-wide rule that changes HOW that boss kills heroes,
+// so each boss is a different way to play. Applied via combat/build hooks.
+const DOCTRINES = {
+  inferno:   {ic:'🔥', name:'Inferno Dungeon', desc:'Your traps deal +20% and every trap hit sets heroes ablaze.'},
+  undeath:   {ic:'💀', name:'Undeath',         desc:'EVERY monster room feeds — it grows +10% stronger per hero that dies in it.'},
+  soulengine:{ic:'🔮', name:'Soul Engine',     desc:'Your traps & monsters channel mana to the throne — fuel your spells.'},
+  bastion:   {ic:'🛡️', name:'Bastion',         desc:'Your traps ignore ALL armor and your monster guards are +25% mightier.'},
+  overgrowth:{ic:'🌿', name:'Overgrowth',      desc:'Choking vines slow every hero through the halls (−25% move speed).'},
+  gluttony:  {ic:'😋', name:'Gluttony',        desc:'Every hero slain permanently grows the boss’s max HP and attack.'},
+};
 // Bosses: differing stats, a passive, two SIGNATURE abilities (always equipped)
 // and a pool to pick a 3rd from — so each boss plays to its own identity.
 const BOSSES = {
   dragon: {name:'Ignar the Dragon', ic:'🐉', col:'#c43a3a', maxHp:175, atk:20,
-    blurb:'High HP bruiser. Breathe fire on the brave.', passive:'scaled',
+    blurb:'High HP bruiser. Breathe fire on the brave.', passive:'scaled', doc:'inferno',
     sig:['breath','slam'], pool:['drain','dread','freeze']},
   lich:   {name:'Mortis the Lich', ic:'☠️', col:'#7ad0c0', maxHp:135, atk:15,
-    blurb:'Frail but cruel — and hard to keep dead.', passive:'undying',
+    blurb:'Frail but cruel — and hard to keep dead.', passive:'undying', doc:'undeath',
     sig:['bolt','raise'], pool:['curse','freeze','drain']},
   demon:  {name:'Azzaroth the Demon', ic:'😈', col:'#a23bd0', maxHp:150, atk:22,
-    blurb:'Aggressive caster who drains the living.', passive:'arcane',
+    blurb:'Aggressive caster who drains the living.', passive:'arcane', doc:'soulengine',
     sig:['hellfire','siphon'], pool:['bolt','curse','dread']},
   ogre:   {name:'Gormauth the Devourer', ic:'👹', col:'#b0563a', maxHp:230, atk:25,
-    blurb:'Colossal glutton who feasts on the fallen.', passive:'feed',
+    blurb:'Colossal glutton who feasts on the fallen.', passive:'feed', doc:'gluttony',
     sig:['devour','slam'], pool:['breath','drain','dread']},
   ent:    {name:'Thornheart', ic:'🌳', col:'#5fae54', maxHp:165, atk:18,
-    blurb:'A bramble-throne that punishes melee.', passive:'thorns',
+    blurb:'A bramble-throne that punishes melee.', passive:'thorns', doc:'overgrowth',
     sig:['entangle','mend'], pool:['bolt','curse','freeze']},
   golem:  {name:'Karnak the Colossus', ic:'🗿', col:'#9aa4b2', maxHp:210, atk:19,
-    blurb:'Living siege engine — ability damage incarnate.', passive:'titan',
+    blurb:'Living siege engine — ability damage incarnate.', passive:'titan', doc:'bastion',
     sig:['quake','slam'], pool:['drain','dread','breath']},
 };
 const BOSS_KEYS = Object.keys(BOSSES);
@@ -1192,7 +1207,9 @@ function gotoBossSelect(){
           <i style="width:${xi.max?100:Math.max(4,Math.round(xi.into/xi.need*100))}%;background:linear-gradient(90deg,#caa15e,#ffd34d)"></i>
           <span style="line-height:16px">${xi.max?'★ MAX':xi.into+' / '+xi.need+' XP'}</span></div>
         <div class="desc">${b.blurb}</div>
-        <div class="small" style="color:${b.col};margin:3px 0"><b>✦ ${PASSIVES[b.passive].name}</b><br>${PASSIVES[b.passive].desc}</div>
+        <div class="small" style="color:${b.col};margin:3px 0 1px;font-weight:bold">${DOCTRINES[b.doc].ic} ${DOCTRINES[b.doc].name}</div>
+        <div class="small" style="opacity:.82;line-height:1.25">${DOCTRINES[b.doc].desc}</div>
+        <div class="small" style="color:${b.col};margin:2px 0"><b>✦ ${PASSIVES[b.passive].name}</b> · ${PASSIVES[b.passive].desc}</div>
         <div class="small" style="opacity:.85">★ ${ABIL[b.sig[0]].ic} ${ABIL[b.sig[0]].name} · ${ABIL[b.sig[1]].ic} ${ABIL[b.sig[1]].name}</div>
         <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
       </div>`;}).join('')}</div>
@@ -1250,7 +1267,8 @@ function renderLoadout(){
   const sigCards=b.sig.map(id=>abilCardHTML(id,'sig',b.col)).join('');
   const poolCards=b.pool.map(id=>abilCardHTML(id, loadoutSel.includes(id)?'on':'off', b.col)).join('');
   overlay.innerHTML=`<h1>${b.ic} ${b.name}</h1>
-    <p>Passive: <b style="color:${b.col}">✦ ${PASSIVES[b.passive].name}</b> — ${PASSIVES[b.passive].desc}</p>
+    <p><b style="color:${b.col}">${DOCTRINES[b.doc].ic} ${DOCTRINES[b.doc].name}</b> — ${DOCTRINES[b.doc].desc}</p>
+    <p style="opacity:.9">Passive: <b style="color:${b.col}">✦ ${PASSIVES[b.passive].name}</b> — ${PASSIVES[b.passive].desc}</p>
     <p><b style="color:${b.col}">★ Two signature abilities</b> are locked in — pick <b>one</b> more:</p>
     <div class="choices" style="max-width:520px;opacity:.92">${sigCards}</div>
     <div style="height:8px"></div>
@@ -1430,11 +1448,13 @@ function buildCells(){
           hasMon=true;
           const bHp = p==='minion'? (r.minHp||def.hp) : def.hp;   // ||def guards a NaN/missing minion stat
           const bAtk= p==='minion'? (r.minAtk||def.atk): def.atk;
-          // "Fed" monsters (goblins) grow with every hero that died in this room — uncapped.
-          const feed = def.feeds ? (1 + (r.kills||0)*0.10) : 1;
+          // "Fed" monsters grow with every hero that died in this room — uncapped.
+          // Under the Undeath doctrine, ALL monster rooms feed.
+          const feed = monFeeds(def) ? (1 + (r.kills||0)*0.10) : 1;
+          const bas = bastionMul();   // Bastion doctrine: tougher guards
           // Monsters scale HARD: weak at Lv1, brutal at high level.
-          monHp += bHp  * (0.9 + (r.lvl-1)*0.85) * feed;
-          monAtk+= bAtk * (1.0 + (r.lvl-1)*0.9)  * feed;
+          monHp += bHp  * (0.9 + (r.lvl-1)*0.85) * feed * bas;
+          monAtk+= bAtk * (1.0 + (r.lvl-1)*0.9)  * feed * bas;
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
@@ -1727,6 +1747,9 @@ function heroDies(h){
   G.survived++; G.totalSlain++;
   // Devour passive: the boss feasts on the fallen
   if(G.boss.feed) healBoss(Math.round(G.boss.maxHp*G.boss.feed));
+  // Gluttony doctrine: every kill permanently grows the boss
+  if(G.boss.doc==='gluttony'){ G.boss.maxHp+=5; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+5); G.boss.atk+=0.6;
+    floater(bossX(), FLOOR-110, '😋 GROW', '#b0563a'); }
   // kill streak: rewards an airtight dungeon (resets if a hero strikes the boss)
   G.combo=(G.combo||0)+1;
   let comboBonus=0;
@@ -2208,7 +2231,7 @@ function simStep(h,dt){
     // traps still fire on a frozen/standing hero
     if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     if(h.state==='dead' || frozen) return;
-    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1);   // oil & chill slow movement
+    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1);   // oil & chill slow movement; Overgrowth vines slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
     // a living monster blocks: walk up to it (through the trap), THEN fight
@@ -2299,7 +2322,7 @@ function thiefSteal(h){
 
 // Fire every trap in the cell (a combo room can hold two), scaled by synergy.
 function trapTick(h,cell,dt){
-  const r=cell.room; const syn=cell.syn||1;
+  const r=cell.room; const syn=cell.syn||1; const doc=bossDoc();
   for(const tr of cell.traps){
     tr.fireT-=dt;
     if(tr.fireT<=0){
@@ -2312,9 +2335,12 @@ function trapTick(h,cell,dt){
       if(d.vsLowHp && h.hp < h.maxHp*d.vsLowHp) dmg*=d.vsMult;
       // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
       const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
-      const pierce = d.pierceAll ? 'full' : !!d.pierce;
+      if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
+      const pierce = (doc==='bastion'||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion: traps ignore armor
       dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem);
       if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
+      else if(doc==='inferno' && h.state!=='dead'){ h.burn=Math.max(h.burn||0, 3+(r.lvl-1)); h.burnT=3; }  // Inferno: every trap sets ablaze
+      if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
       burst(h.x, h.y-20, d.col, 5);
       if(h.state==='dead') return;
     }
@@ -2343,6 +2369,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       mon.atkT=0.9;
       const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*h.maxHp):0;
       dealToHero(h, mon.atk+bite, 'HIT');
+      if(bossDoc()==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+2); }  // Soul Engine: guards fuel mana
       maybePotion(h);
     }
   }
@@ -3003,10 +3030,11 @@ function describeCard(card){
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
   } else if(def.kind==='monster'){
     const bHp=card.type==='minion'?card.minHp:def.hp, bAtk=card.type==='minion'?card.minAtk:def.atk;
-    const hp=Math.round(bHp*(0.9+(lvl-1)*0.85)*(1+(RB.monHp||0)));
-    const atk=Math.round(bAtk*(1.0+(lvl-1)*0.9)*(1+(RB.monDmg||0)));
+    const bas=bastionMul();
+    const hp=Math.round(bHp*(0.9+(lvl-1)*0.85)*bas*(1+(RB.monHp||0)));
+    const atk=Math.round(bAtk*(1.0+(lvl-1)*0.9)*bas*(1+(RB.monDmg||0)));
     lines.push(`👹 <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s — blocks the corridor`);
-    if(def.feeds) lines.push('🍖 Grows +10% per hero that dies in its room');
+    if(monFeeds(def)) lines.push('🍖 Grows +10% per hero that dies in its room'+(def.feeds?'':' (Undeath)'));
   } else if(def.kind==='shop'){
     lines.push(`Sells gear at ×${shopMarkup(lvl).toFixed(2)} markup — you keep the gold`);
   }
@@ -3058,10 +3086,10 @@ function describeRoom(room){
     lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  if(monParts.length){ let hp=0,atk=0, fed=false;
+  if(monParts.length){ let hp=0,atk=0, fed=false; const bas=bastionMul();
     monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
-      const feed=def.feeds?(1+(room.kills||0)*0.10):1; if(def.feeds)fed=true;
-      hp+=bHp*(0.9+(room.lvl-1)*0.85)*feed; atk+=bAtk*(1.0+(room.lvl-1)*0.9)*feed; });
+      const feed=monFeeds(def)?(1+(room.kills||0)*0.10):1; if(monFeeds(def))fed=true;
+      hp+=bHp*(0.9+(room.lvl-1)*0.85)*feed*bas; atk+=bAtk*(1.0+(room.lvl-1)*0.9)*feed*bas; });
     lines.push(`👹 Guard: <b>${Math.round(hp*syn*vm*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*vm*(1+(RB.monDmg||0)))}</b> atk /0.9s`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${(room.kills||0)*10}% (no cap)`); }
   if(parts.includes('shop')){
@@ -3107,6 +3135,7 @@ function describeBoss(){
   const lines=[`<b>${b.ic} ${b.name}</b> · Lv ${b.lvl}${b.masteryLvl>1?` · ★ Mastery ${b.masteryLvl}`:''}`,
     `❤️ <b>${Math.ceil(b.hp)}</b>/${b.maxHp} HP · 🗡️ ${b.atk} atk · 🔷 ${Math.floor(b.mana)}/${b.maxMana} mana`,
     'Abilities: '+b.abil.map(a=>ABIL[a.id].ic+' '+ABIL[a.id].name).join(', ')];
+  if(b.doc&&DOCTRINES[b.doc]) lines.push(`<span style="color:${b.col};font-weight:bold">${DOCTRINES[b.doc].ic} ${DOCTRINES[b.doc].name}</span> — ${DOCTRINES[b.doc].desc}`);
   if(b.passive&&PASSIVES[b.passive]) lines.push(`<span style="color:${b.col}">✦ ${PASSIVES[b.passive].name}</span> — ${PASSIVES[b.passive].desc}`);
   const totalDR=Math.min(0.85,(RB.bossDR||0)+(b.passiveDR||0));
   if(totalDR) lines.push(`Damage reduction: ${Math.round(totalDR*100)}%`);
