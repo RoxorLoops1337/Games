@@ -824,6 +824,8 @@ function freshGame(mode){
     runesBanked:0,        // rune points already credited from this run
     relics:[],            // relic ids collected this run
     edicts:[],            // optional run modifiers chosen at run start (harder run, bigger rune reward)
+    stats:{trapDmg:0, monDmg:0, abilDmg:0, reactions:0, breaches:0},  // run telemetry for the defeat post-mortem
+    killer:null,          // snapshot of the hero who felled the throne
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
     combo:0,              // kill streak (resets when a hero strikes the boss)
     killsBanked:0, bossXpBanked:0, newUnlocks:[],   // lifetime-kill + boss-XP banking, unlock toasts
@@ -1687,6 +1689,7 @@ function dealToHero(h, raw, label, pierce, elem){
   if(crit) dmg*=2;
   if(h.shieldT>0){ dmg=Math.max(1,Math.round(dmg*0.4)); }   // champion shield (−60%)
   h.hp-=dmg;
+  h.dmgTaken=(h.dmgTaken||0)+dmg;               // telemetry: how much your dungeon stripped from this hero
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
     shake(6); hitStop=0.05; sfx('crit'); }
   else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
@@ -1712,6 +1715,7 @@ const ELEM_COMBO={
 function reactMul(h){ return 1 + (h.reactCount||0)*0.25; }   // escalating chain
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
+  if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
   floater(h.x,h.y-66, label+(h.reactCount>1?' ×'+h.reactCount:'')+' -'+x, col);
   burst(h.x,h.y-24,col,16); shake(6); sfx('crit');
 }
@@ -1866,7 +1870,7 @@ function bossDies(){
     : `You reigned ${G.survived} heroes before the throne fell.`;
   overlay.innerHTML=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
     <div style="font-size:54px">${G.boss.ic}💔</div>
-    <p>${G.boss.name} was struck down by a hero who reached the throne.</p>
+    ${buildPostmortem()}
     <p>${score}</p>
     <p style="opacity:.7">Dead is dead — this run is over.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
@@ -1877,6 +1881,49 @@ function bossDies(){
     </div>`;
 }
 function totalKills(){ return G.totalSlain; }
+// Capture just enough of the hero who felled the throne for the post-mortem.
+function snapshotHero(h){
+  return { heroName:h.heroName, title:h.title, cls:h.cls, elite:!!h.elite, champion:h.champion||null,
+    traits:[...(h.specTraits||h.traits||[])], power:h.specPower||0, rivalGen:h.rivalGen||0,
+    maxHp:h.maxHp, dmgTaken:Math.round(h.dmgTaken||0), dodge:h.dodge||0, armor:h.armor||0 };
+}
+// Build the "why you lost" panel: who broke through + the single most useful lesson.
+function buildPostmortem(){
+  const k=G.killer, s=G.stats||{}; const cls=k&&CLASSES[k.cls]?CLASSES[k.cls]:null;
+  // scan the built dungeon for composition
+  let traps=0, mons=0; const elems=new Set();
+  for(const c of (G.cells||[])){ if(c.kind==='boss') continue;
+    if(c.traps){ traps+=c.traps.length; c.traps.forEach(t=>{ if(t.def&&t.def.elem) elems.add(t.def.elem); }); }
+    if(c.mon) mons++; }
+  const pct = (k&&k.maxHp) ? Math.min(100,Math.round(100*k.dmgTaken/k.maxHp)) : 0;
+  const name = k ? (k.heroName ? k.heroName+(k.title?' '+k.title:'') : (cls?cls.name:'A hero')) : 'A hero';
+  const icon = k&&k.champion ? '👑' : (cls?cls.ic:'⚔️');
+  const traitTxt = k&&k.traits&&k.traits.length ? ' · '+k.traits.join(', ') : '';
+  const who = k ? `${icon} <b>${name}</b> <span style="opacity:.8">(${cls?cls.name:'?'}${k.rivalGen?` · grudge ×${k.rivalGen}`:''}${k.elite?' · elite':''}${traitTxt})</span>` : 'A hero';
+  // collect tips by relevance, show the best few
+  const tips=[];
+  if(k){
+    if(k.traits.includes('swift')) tips.push('🏃 They were <b>Swift</b> — front-load your damage or slow them (oil/chill rooms, or the Overgrowth doctrine).');
+    if(k.cls==='rogue'||k.dodge>=0.3) tips.push('🗡️ Rogues <b>dodge ~35%</b> of direct hits — lean on burn DoT and crushers, which can’t be dodged.');
+    if(k.traits.includes('armored')||k.armor>=8) tips.push('🛡️ Heavy <b>armor</b> blunted your traps — add piercing rooms (🔱spikes pierce) or the Bastion doctrine.');
+    if(k.traits.includes('hardy')) tips.push('❤️ A <b>Hardy</b> raider has huge HP — you need sustained damage: a longer corridor or stacked DoT.');
+  }
+  if(elems.size>=2 && (s.reactions||0)===0) tips.push('⚛️ Your elemental rooms <b>never combo’d</b> — order matters: oil BEFORE flame/tesla/frost, frost before crushers.');
+  else if(elems.size===1 && (s.reactions||0)===0 && [...elems][0]!=='oil') tips.push('⚛️ Put an 🛢️<b>oil</b> room BEFORE your '+[...elems][0]+' room to unlock reactions.');
+  const tot=(s.trapDmg||0)+(s.monDmg||0);
+  if(tot>0 && s.trapDmg>s.monDmg*5) tips.push('Your guards barely fought — a blocker monster holds heroes in your traps longer.');
+  else if(tot>0 && s.monDmg>s.trapDmg*5) tips.push('Almost all damage came from guards — traps soften the <b>whole</b> party, not just the front hero.');
+  if((s.breaches||0)>=3) tips.push(`<b>${s.breaches}</b> heroes reached your throne this run — the corridor leaks; deepen it or add a chokepoint.`);
+  if(G.slots<=2) tips.push('A <b>longer dungeon</b> (more slots) means more trap ticks before the throne.');
+  if(pct>=85) tips.push('So close — they reached the throne nearly dead. A little more corridor damage or 🩹 Repair would’ve held.');
+  else if(pct<40) tips.push('They barely took a scratch — your corridor needs more raw damage or better element combos.');
+  const top = tips.slice(0,3);
+  return `<div style="text-align:left;max-width:440px;margin:6px auto;background:#1b1430;border:1px solid #3a2c5a;border-radius:10px;padding:10px 13px">
+    <div style="margin-bottom:5px">${who} reached the throne.</div>
+    <div class="small" style="opacity:.9;margin-bottom:6px">Your corridor stripped <b style="color:${pct>=70?'#7bdc6b':pct>=40?'#ffd34d':'#ff7a8a'}">${pct}%</b> of their HP before the throne · 🪤 ${s.trapDmg||0} trap · 👹 ${s.monDmg||0} guard · ⚛️ ${s.reactions||0} reactions</div>
+    ${top.length?'<div class="small" style="color:#caa15e;font-weight:bold;margin-bottom:2px">What would’ve held the throne:</div>'+top.map(t=>`<div class="small" style="line-height:1.3;margin:3px 0">• ${t}</div>`).join(''):''}
+  </div>`;
+}
 // Bank this run's rune points (delta since last banking) into the pool.
 // Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
 function awardRunes(){
@@ -2292,6 +2339,7 @@ function simStep(h,dt){
     // reached boss room? stand INSIDE it (in front of the boss), not at the door
     if(h.x >= cellX(G.slots)+ROOM_W*0.30){
       if(h.champion==='thief'){ thiefSteal(h); return; }   // robs you instead of fighting
+      if(!h.reachedThrone && G.stats) G.stats.breaches++;
       h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.44;
     }
   }
@@ -2337,6 +2385,7 @@ function onEnterCell(h,cell){
   } else if(cell.kind==='boss'){
     if(h.champion==='thief'){ thiefSteal(h); return; }
     // step inside the throne room rather than stopping at the door
+    if(!h.reachedThrone && G.stats) G.stats.breaches++;
     h.state='boss'; h.reachedThrone=true; h.x=cell.x0+ROOM_W*0.44;
   }
 }
@@ -2391,6 +2440,7 @@ function trapTick(h,cell,dt){
       if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
       else if(doc==='inferno' && h.state!=='dead'){ h.burn=Math.max(h.burn||0, 3+(r.lvl-1)); h.burnT=3; }  // Inferno: every trap sets ablaze
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
+      if(G.stats) G.stats.trapDmg+=Math.round(dmg);
       burst(h.x, h.y-20, d.col, 5);
       if(h.state==='dead') return;
     }
@@ -2419,6 +2469,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       mon.atkT=0.9;
       const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*h.maxHp):0;
       dealToHero(h, mon.atk+bite, 'HIT');
+      if(G.stats) G.stats.monDmg+=mon.atk+bite;
       if(bossDoc()==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+2); }  // Soul Engine: guards fuel mana
       maybePotion(h);
     }
@@ -2474,7 +2525,7 @@ function bossFightTick(h,dt,isFront,frozen){
       floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
       burst(bossX(), FLOOR-50, '#ff4d6d', 6);
       shake(3); sfx('boss');
-      if(b.hp<=0){ b.hp=0; bossDies(); return; }
+      if(b.hp<=0){ b.hp=0; G.killer=snapshotHero(h); bossDies(); return; }
     }
   }
   // boss only swings at the front hero
