@@ -2409,12 +2409,16 @@ function drawDungeon(tx, scale, isBuild){
     const room=G.rooms[i];
     const dropTarget = isBuild && pickupIdx>=0;   // we're holding a room to move
     if(!room){
-      // empty slot
-      X.strokeStyle=(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
-      X.setLineDash([6,5]); X.lineWidth=2;
-      X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
-      X.fillStyle='#6a5a9a'; X.font='12px Trebuchet MS'; X.textAlign='center';
-      X.fillText(dropTarget?'drop here':'empty', x0+w/2, FLOOR-58); X.textAlign='left';
+      // empty slot — show the stone room art; overlay the placeable hint in build
+      const ea = ROOM_IMG.empty && ROOM_IMG.empty._ok;
+      if(ea) drawRoomArt(x0,w,ROOM_IMG.empty);
+      if(isBuild || !ea){
+        X.strokeStyle=(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
+        X.setLineDash([6,5]); X.lineWidth=2;
+        X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
+        X.fillStyle=(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#8a7ab8'; X.font='12px Trebuchet MS'; X.textAlign='center';
+        X.fillText(dropTarget?'drop here':'empty', x0+w/2, FLOOR-58); X.textAlign='left';
+      }
       // tutorial: pulse the first empty slot during the "place" step
       if(isBuild && G && G.tutHi==='slot' && i===G.rooms.findIndex(r=>!r)){
         const pu=0.5+0.5*Math.sin(performance.now()/220);
@@ -2575,7 +2579,7 @@ function drawShopProp(cx,room){
 const ROOM_IMG={};
 const ROOM_ART_TRAPS={spike:1, flame:1, oil:1};
 if(typeof Image!=='undefined'){
-  ['spike','flame','oil','shop','lair'].forEach(k=>{
+  ['spike','flame','oil','shop','lair','empty'].forEach(k=>{
     const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='rooms/'+k+'.png'; ROOM_IMG[k]=im;
   });
 }
@@ -2595,7 +2599,9 @@ function drawRoomArt(x0,w,img){
   X.imageSmoothingEnabled=sm;
 }
 function drawRoomFull(x0,w,room,i){
-  const k=roomArtReady(room); if(k) drawRoomArt(x0,w,ROOM_IMG[k]);
+  const k=roomArtReady(room);
+  if(k) drawRoomArt(x0,w,ROOM_IMG[k]);                                   // dedicated full art
+  else if(ROOM_IMG.empty && ROOM_IMG.empty._ok) drawRoomArt(x0,w,ROOM_IMG.empty); // stone backdrop for art-less rooms
   drawRoomContents(x0,w,room,i);
 }
 function drawRoomContents(x0,w,room,i){
