@@ -453,7 +453,7 @@ const BOSSES = {
 };
 const BOSS_KEYS = Object.keys(BOSSES);
 function applyBossPassive(b){
-  b.passiveDR=0; b.reviveHp=0; b.feed=0; b.thorns=0; b.pAbilDmg=0; b.pAbilCost=0; b.revived=false;
+  b.passiveDR=0; b.reviveHp=0; b.feed=0; b.thorns=0; b.pAbilDmg=0; b.pAbilCost=0; b.revived=false; b.reviveT=0;
   switch(b.passive){
     case 'scaled':  b.passiveDR=0.12; break;
     case 'undying': b.reviveHp=0.35; break;
@@ -473,13 +473,13 @@ const ABIL = {
   bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged shock. Chains off oil.',
            run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT', false, 'shock')},
   curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
-           run:h=>{h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
+           run:h=>{ if(h.cursed) return; h.cursed=true; h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
   freeze: {name:'Freeze',  ic:'❄️', cost:20, cd:6,  desc:'Freezes in place — primes SHATTER.',
            run:h=>{h.freeze=2.2; h.chill=2.6; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
   drain:  {name:'Drain',   ic:'🩸', cost:28, cd:5,  desc:'Damage hero, heal boss.',
            run:h=>{dealToHero(h, abilDmg(22+G.boss.lvl*3),'DRAIN', false, 'phys'); healBoss(16+G.boss.lvl*3);}},
   dread:  {name:'Dread',   ic:'👁️', cost:30, cd:9,  desc:'Slows + weakens the hero.',
-           run:h=>{h.spd*=0.5; h.atk*=0.7; floater(h.x,h.y-60,'DREAD','#a23bd0');}},
+           run:h=>{ if(h.dreaded) return; h.dreaded=true; h.spd*=0.5; h.atk*=0.7; floater(h.x,h.y-60,'DREAD','#a23bd0');}},
   mend:   {name:'Mend',    ic:'💚', cost:46, cd:10, desc:'Heal the boss (costly).',
            run:()=>healBoss(30+G.boss.lvl*5)},
   // ---- boss-exclusive signature abilities (define each boss's playstyle) ----
@@ -993,7 +993,7 @@ function difficulty(){
   const cumulative = 1 + G.totalSlain*0.05;
   const threat = 1 + G.bounty*0.15;
   if(G.mode==='campaign') return cumulative * CAMPAIGN[G.levelIdx].diff * threat;
-  return (cumulative + G.survived*0.05) * threat;
+  return cumulative * threat;   // Endless already ramps via totalSlain (was double-counting survived)
 }
 
 /* ============================== PHASE: MENU =============================== */
@@ -1290,6 +1290,18 @@ function buySlot(){
   showHint('New slot added on the far left. Drag to pan the dungeon.');
   render();
 }
+// Gold sink: spend loot to patch the throne's HP between waves (the boss only
+// otherwise heals via abilities/runes), so surplus gold always has a use.
+function repairCost(){ const b=G.boss; const heal=Math.min(b.maxHp-b.hp, Math.ceil(b.maxHp*0.20)); return {heal, cost:Math.max(1,Math.ceil(heal*0.8))}; }
+function repairThrone(){
+  if(!G || G.phase!=='build' || !G.boss) return;
+  if(G.boss.hp>=G.boss.maxHp){ showHint('The throne is already at full HP.'); return; }
+  const {heal,cost}=repairCost();
+  if(G.gold<cost){ showHint('Not enough gold to repair ('+cost+'g).'); return; }
+  G.gold-=cost; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+heal);
+  floater(bossX(), FLOOR-96, '🩹 +'+heal+' HP', '#7bdc6b'); burst(bossX(),FLOOR-50,'#7bdc6b',10);
+  sfx('upgrade'); showHint('Throne repaired +'+heal+' HP for '+cost+'g.'); render();
+}
 
 function selectCard(i){
   selCard = (selCard===i?-1:i);
@@ -1462,8 +1474,9 @@ function genHeroSpec(){
           debuff:{atkMul:1, burn:0, robbed:false}};
 }
 // Pull the next spec, letting a due rival cut the line ahead of fresh heroes.
+// (ETA is counted down once per wave in spawnGroup — NOT here, or every queue
+//  refill/preview would burn the timer and rivals would return at random.)
 function nextSpec(){
-  for(const r of G.pendingRivals) r.eta--;
   const i=G.pendingRivals.findIndex(r=>r.eta<=0);
   if(i>=0) return G.pendingRivals.splice(i,1)[0].spec;
   return genHeroSpec();
@@ -1557,6 +1570,7 @@ function buildHeroFromSpec(spec){
 // Spawn a raiding party of n heroes (guild house size) that enter together.
 // A champion arrives ALONE — a dramatic mini-boss duel.
 function spawnGroup(n){
+  for(const r of G.pendingRivals) r.eta--;   // one wave closer to each rival's return
   ensureQueue(1);
   const champ = !!(G.queue[0] && G.queue[0].champion);
   const count = champ ? 1 : n;
@@ -1688,7 +1702,8 @@ function castAbility(slot){
   if(G.phase!=='run') return;
   const target=leadHero();
   if(!target){ return; }
-  const a=G.boss.abil[slot]; const def=ABIL[a.id];
+  const a=G.boss.abil[slot]; const def=a&&ABIL[a.id];
+  if(!def){ return; }
   const cost=abilCost(def.cost);
   if(a.cd>0){ showHint(def.name+' on cooldown.'); return; }
   if(G.boss.mana<cost){ showHint('Not enough mana.'); return; }
@@ -1717,8 +1732,10 @@ function heroDies(h){
   let comboBonus=0;
   if(G.combo>=3){ comboBonus=G.combo; G.gold+=comboBonus;
     floater(h.x, h.y-78, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
-  // room XP: credit the room the hero fell in (toward fusing a 2nd part)
-  const dcell=cellAt(h.x);
+  // room XP: credit the room the hero was IN when it fell (toward fusing a 2nd
+  // part / veteran ranks). Use the tracked cellIndex, not the raw x — a kill a
+  // pixel past a boundary used to lose its credit.
+  const dcell=(h.cellIndex>=0 && h.cellIndex<G.cells.length) ? G.cells[h.cellIndex] : cellAt(h.x);
   if(dcell && dcell.room && dcell.room.def.kind!=='shop'){
     dcell.room.kills=(dcell.room.kills||0)+1;
     if(dcell.room.kills===fuseKills() && !dcell.room.part2)
@@ -1763,6 +1780,8 @@ function bossDies(){
   // Phylactery: rise once instead of falling
   if(b.reviveHp && !b.revived){
     b.revived=true; b.hp=Math.round(b.maxHp*b.reviveHp); b.mana=b.maxMana;
+    b.reviveT=1.4;                                  // brief invulnerability so a 2nd throne hero can't re-kill instantly
+    for(const o of (G.heroes||[])){ if(o.state==='boss'){ o.state='walking'; o.x=cellX(G.slots)-12; o.atkT=0.6; } }  // blast them off the throne
     floater(bossX(), FLOOR-100, '☠️ THE LICH RISES!', '#7ad0c0'); burst(bossX(),FLOOR-50,'#7ad0c0',30);
     shake(10); sfx('relic'); showHint('Phylactery! '+b.name+' claws back from death.');
     return;
@@ -1940,7 +1959,7 @@ const EVENTS = [
       {l:'Dread → Gold (−4 ☠, +45g)', cond:()=>G.dread>=4, run:()=>{ G.dread-=4; G.gold+=45; return 'Fear sold for coin.'; }} ]},
   { t:'The Deserter 🚪', d:'A frightened recruit will betray his comrades for the right master.',
     opts:[
-      {l:'Corrupt him (free minion)', cond:()=>G.hand.length<5, run:()=>{ grantMinionCard(G.totalSlain+1); return 'A turncoat joins your halls.'; }},
+      {l:'Corrupt him (free minion)', cond:()=>G.hand.length<handCap(), run:()=>{ grantMinionCard(G.totalSlain+1); return 'A turncoat joins your halls.'; }},
       {l:'Make an example (+5 ☠)', run:()=>{ G.dread+=5; return 'His screams spread dread.'; }} ]},
   { t:"Champion's Vow ⚔️", d:'A famed champion swears to end you and rallies the town.',
     opts:[
@@ -2136,6 +2155,7 @@ function update(dt){
 
   // ability cooldowns + mana regen
   G.boss.abil.forEach(a=>{ if(a.cd>0)a.cd=Math.max(0,a.cd-dt*speedMul); });
+  if(G.boss.reviveT>0) G.boss.reviveT=Math.max(0, G.boss.reviveT-dt*speedMul);   // post-revive invuln
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana + dt*speedMul*(G.boss.manaRegen||6));
 
   // wave ends when the whole party is wiped — survived the raid
@@ -2362,8 +2382,9 @@ function doShopping(h, cell){
 
 function bossFightTick(h,dt,isFront,frozen){
   const b=G.boss;
-  // every hero at the throne hammers the boss — unless frozen in place
-  if(!frozen){
+  // every hero at the throne hammers the boss — unless frozen, or the boss is
+  // briefly invulnerable just after a Phylactery revive
+  if(!frozen && !(b.reviveT>0)){
     h.atkT-=dt;
     if(h.atkT<=0){
       h.atkT=0.8*h.atkSpeed;
@@ -2894,6 +2915,7 @@ function renderPanel(){
     panel.innerHTML=`
       <div class="row" style="margin-bottom:6px">
         <button class="buy" onclick="buySlot()" ${G.gold<slotCost()?'disabled':''}>➕ Slot (${slotCost()}g)</button>
+        ${G.boss && G.boss.hp<G.boss.maxHp ? `<button class="buy" onclick="repairThrone()" title="Spend gold to heal the throne" ${G.gold<repairCost().cost?'disabled':''}>🩹 Repair +${repairCost().heal} (${repairCost().cost}g)</button>` : ''}
         ${shopExists?`<span class="pill">🛒 Stock:</span>`+Object.keys(ITEMS).map(k=>{
           const it=ITEMS[k];
           return `<button onclick="stockShop('${k}')" title="${it.name} — ${it.desc}. You pay ${it.price}g to stock it; heroes buy it for more (your profit)." ${G.gold<it.price?'disabled':''}
