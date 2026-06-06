@@ -1288,7 +1288,7 @@ function chooseBoss(key){
   const glass=hasEdict('glassThrone')?0.70:1;     // Glass Throne edict: frail boss, bigger reward
   const maxHp=Math.round(b.maxHp*(1+RB.bossHp)*bossMasteryHp(mLvl)*glass) + RB.bossHpFlat;
   const atk=Math.round(b.atk*(1+RB.bossAtk)*bossMasteryAtk(mLvl)) + RB.bossAtkFlat;
-  G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1, masteryLvl:mLvl,
+  G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1, masteryLvl:mLvl, smiteCd:0,
     mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
     abil:[...b.sig, b.pool[0]].map(id=>({id,cd:0})) };
   applyBossPassive(G.boss);                       // signature passive effects
@@ -1701,10 +1701,10 @@ function heroDmg(h, raw, pierce){
   let armor = pierce==='full' ? 0 : pierce ? Math.max(0,h.armor-3) : h.armor;
   return Math.max(1, Math.round(raw - armor));
 }
-function dealToHero(h, raw, label, pierce, elem){
+function dealToHero(h, raw, label, pierce, elem, noDodge){
   if(!h||h.state==='dead') return;
-  // rogue dodge
-  if(h.dodge && Math.random()<h.dodge){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
+  // rogue dodge (an aimed Smite can't be dodged)
+  if(!noDodge && h.dodge && Math.random()<h.dodge){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
   let dmg=heroDmg(h,raw,pierce);
   const crit = Math.random()<0.12;              // your dungeon can land critical hits
   if(crit) dmg*=2;
@@ -1806,6 +1806,30 @@ function castAbility(slot){
   burst(bossX(), FLOOR-40, G.boss.col, 10);
   shake(5); sfx('cast');
   render();
+}
+
+// ---- Smite: an active, AIMED boss strike for the throne stand ----
+// Heroes who reach the throne used to be a near-automatic loss you only watched.
+// Smite is a free, no-mana burst on a SHORT cooldown that you fire by hand —
+// tap a hero on your throne to aim it (or the button / spacebar hits the
+// front-most). The skill is choosing the moment and the target: finish a
+// wounded raider, or focus the champion before it chunks your HP.
+const SMITE_MUL=2.4, SMITE_CD=1.6;
+function throneHeroes(){ return (G && G.heroes) ? G.heroes.filter(h=>h && h.state==='boss' && h.hp>0) : []; }
+function smite(target){
+  if(G.phase!=='run' || !G.boss) return;
+  const b=G.boss;
+  const at=throneHeroes();
+  if(!at.length){ showHint('No hero has reached the throne to smite.'); return; }
+  if((b.smiteCd||0)>0){ showHint('⚔️ Smite is recharging.'); return; }
+  // aim: the tapped hero if it's at the throne, else the front-most (closest to the boss)
+  const t=(target && target.state==='boss' && target.hp>0) ? target : at.reduce((a,c)=>c.x>a.x?c:a, at[0]);
+  const dmg=Math.max(1, Math.round(b.atk*SMITE_MUL*(1+(RB.abilDmg||0))));
+  b.smiteCd=SMITE_CD*(1-(RB.abilCd||0));
+  floater(t.x, t.y-72, '⚔️ SMITE', '#ffd34d'); burst(t.x, t.y-24, '#ffd34d', 22);
+  shake(8); hitStop=0.05; sfx('crit');
+  dealToHero(t, dmg, 'SMITE', false, 'phys', true);   // aimed → ignores dodge
+  renderPanel();
 }
 
 function heroDies(h){
@@ -2338,6 +2362,7 @@ function update(dt){
   // ability cooldowns + mana regen
   G.boss.abil.forEach(a=>{ if(a.cd>0)a.cd=Math.max(0,a.cd-dt*speedMul); });
   if(G.boss.reviveT>0) G.boss.reviveT=Math.max(0, G.boss.reviveT-dt*speedMul);   // post-revive invuln
+  if(G.boss.smiteCd>0) G.boss.smiteCd=Math.max(0, G.boss.smiteCd-dt*speedMul);   // active Smite cooldown
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana + dt*speedMul*(G.boss.manaRegen||6));
 
   // wave ends when the whole party is wiped — survived the raid
@@ -3188,6 +3213,13 @@ function renderPanel(){
           <span style="font-size:11px">${def.name}</span>
           <span class="c">${a.cd>0?'⏳'+a.cd.toFixed(1)+'s':'🔷'+cost}</span>
         </button>`;}).join('')}
+      ${(()=>{ const ready=(b.smiteCd||0)<=0; const has=G.heroes.some(h=>h&&h.state==='boss'&&h.hp>0);
+        return `<button class="abil${has&&ready?' tut-pulse':''}" onclick="smite()" ${(!ready||!has)?'disabled':''}
+          title="A heavy boss strike (no mana) on a hero at the throne. Tap a throne hero to aim, or press Space for the front-most.">
+          <span style="font-size:18px">⚔️</span>
+          <span style="font-size:11px">Smite</span>
+          <span class="c">${(b.smiteCd||0)>0?'⏳'+b.smiteCd.toFixed(1)+'s':(has?'aim!':'—')}</span>
+        </button>`; })()}
       <span style="flex:1"></span>
       <button onclick="toggleSpeed()">⏩ ${speedMul}×</button>
     </div>`;
@@ -3478,7 +3510,10 @@ function endDrag(e){
       tapSlot(idx);
       const r=G.rooms[idx]; showInspectEntity(r?{kind:'room',room:r}:{kind:'empty'});
     } else {
-      showInspectEntity(entityAt(wx));          // boss in build, or hero/room/boss in run
+      const ent=entityAt(wx);                    // boss in build, or hero/room/boss in run
+      // tapping a hero at your throne AIMS a Smite at it; otherwise inspect
+      if(G.phase==='run' && ent && ent.kind==='hero' && ent.h.state==='boss' && ent.h.hp>0) smite(ent.h);
+      else showInspectEntity(ent);
     }
   } else if(G.phase==='run'){
     panHoldUntil = performance.now()+3500;       // keep your panned view for a bit
@@ -3549,7 +3584,8 @@ window.addEventListener('keydown', e=>{
   if(!G) return;
   if(G.phase==='run'){
     if(e.key>='1'&&e.key<='3'){ const i=+e.key-1; if(i<G.boss.abil.length) castAbility(i); }
-    if(e.key===' '){ e.preventDefault(); toggleSpeed(); }
+    // Space smites when heroes are at the throne (the active moment), else toggles speed
+    if(e.key===' '){ e.preventDefault(); if(throneHeroes().length) smite(); else toggleSpeed(); }
   } else if(G.phase==='build' && e.key===' '){ e.preventDefault(); startWave(); }
 });
 
