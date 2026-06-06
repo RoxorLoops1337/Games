@@ -1158,7 +1158,7 @@ function gotoBossSelect(){
       const b=BOSSES[k]; const lk=!bossUnlocked(k);
       const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
       return `<div class="choice${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="width:200px">
-        <div class="big">${lk?'🔒':b.ic}</div><h3>${b.name}</h3>
+        ${lk?'<div class="big">🔒</div>':`<img src="bosses/${k}.png" alt="${b.name}" style="height:84px;image-rendering:pixelated;display:block;margin:2px auto -2px">`}<h3>${b.name}</h3>
         ${lk?`<div class="desc">🔒 Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills (you: ${RUNES.kills})</div>`
             :`<div class="small" style="color:var(--gold);font-weight:bold">★ Mastery Lv ${xi.lvl}${xi.max?' (MAX)':''}</div>
         <div class="bar" style="width:96%;height:16px;margin:4px auto;background:#2a2046">
@@ -2717,25 +2717,41 @@ function drawHeroDead(sx,h){
   X.font='16px Trebuchet MS'; X.textAlign='center'; X.fillText('💀',sx,y-14); X.textAlign='left';
 }
 
+// Real boss artwork (small quantized PNGs in bosses/). Preloaded; drawBoss
+// falls back to the procedural body until/unless the image is ready.
+const BOSS_IMG={};
+if(typeof Image!=='undefined'){
+  ['dragon','golem','lich','ent','demon','ogre'].forEach(k=>{
+    const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='bosses/'+k+'.png'; BOSS_IMG[k]=im;
+  });
+}
 function drawBoss(cx){
   const y=FLOOR; const b=G.boss; const c=b.col;
   // throne
   px(cx-30,y-70,60,70,'#3a2440'); px(cx-34,y-86,68,20,'#5a2a4a');
   px(cx-30,y-86,8,86,'#6a3a5a'); px(cx+22,y-86,8,86,'#6a3a5a');
-  // boss body big
+  const img=BOSS_IMG[b.key];
+  if(img && img._ok){
+    // real sprite: bottom-anchored on the throne, aspect preserved
+    const dh=116, dw=Math.round(dh*(img.width/img.height));
+    const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+    X.drawImage(img, Math.round(cx-dw/2), Math.round(y-dh+2), dw, dh);
+    X.imageSmoothingEnabled=sm;
+    bar(cx-40, y-dh-8, 80, 8, b.hp/b.maxHp, '#ff4d6d');
+    X.fillStyle='#fff'; X.font='10px Trebuchet MS'; X.textAlign='center';
+    X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-dh-10); X.textAlign='left';
+    return;
+  }
+  // ---- procedural fallback ----
   px(cx-22,y-58,44,50,c);
   px(cx-18,y-78,36,24,c);
-  // eyes
   px(cx-12,y-72,7,7,'#ffec3a'); px(cx+5,y-72,7,7,'#ffec3a');
   px(cx-10,y-70,3,3,'#000'); px(cx+7,y-70,3,3,'#000');
-  // type flair
-  if(b.key==='dragon'){ px(cx-26,y-86,8,10,c); px(cx+18,y-86,8,10,c);  // horns
-    px(cx-30,y-40,10,18,c); px(cx+20,y-40,10,18,c); }                  // wings
-  if(b.key==='lich'){ px(cx-20,y-90,40,6,'#cde'); px(cx-6,y-94,12,6,'#9adfff'); } // crown
-  if(b.key==='demon'){ px(cx-22,y-90,8,12,'#6a1a2a'); px(cx+14,y-90,8,12,'#6a1a2a'); } // horns
-  // big icon overlay for clarity
+  if(b.key==='dragon'){ px(cx-26,y-86,8,10,c); px(cx+18,y-86,8,10,c);
+    px(cx-30,y-40,10,18,c); px(cx+20,y-40,10,18,c); }
+  if(b.key==='lich'){ px(cx-20,y-90,40,6,'#cde'); px(cx-6,y-94,12,6,'#9adfff'); }
+  if(b.key==='demon'){ px(cx-22,y-90,8,12,'#6a1a2a'); px(cx+14,y-90,8,12,'#6a1a2a'); }
   X.font='26px Trebuchet MS'; X.textAlign='center'; X.fillText(b.ic, cx, y-30); X.textAlign='left';
-  // boss hp bar (always)
   bar(cx-40, y-104, 80, 8, b.hp/b.maxHp, '#ff4d6d');
   X.fillStyle='#fff'; X.font='10px Trebuchet MS'; X.textAlign='center';
   X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-106); X.textAlign='left';
