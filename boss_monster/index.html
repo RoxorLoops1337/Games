@@ -459,6 +459,24 @@ const EDICTS = {
 const EDICT_KEYS = Object.keys(EDICTS);
 function hasEdict(id){ return !!(G && G.edicts && G.edicts.includes(id)); }
 function edictRewardMul(){ return 1 + (G&&G.edicts? G.edicts.reduce((s,id)=>s+(EDICTS[id]?EDICTS[id].reward:0),0) : 0); }
+
+// MANDATES: dungeon-wide RULE changes drafted mid-run (1 of 3 at each chapter
+// break, and at endless milestones). Unlike relics (flat % stats) these rewrite
+// how the dungeon works, so a single run evolves a distinct identity.
+const MANDATES = {
+  pierceHalls:   {ic:'🗡️', name:'Piercing Halls',   desc:'All your traps ignore hero armor.'},
+  wildfire:      {ic:'🔥', name:'Wildfire',          desc:'Every trap also sets heroes ablaze (burn).'},
+  undyingLegion: {ic:'💀', name:'Undying Legion',    desc:'Each monster guard revives once per wave at 50% HP.'},
+  quicksand:     {ic:'🏖️', name:'Quicksand Floors',  desc:'All heroes move 20% slower through your halls.'},
+  bloodthrone:   {ic:'🩸', name:'Bloodthrone',       desc:'Your boss heals 5% of its max HP on every kill.'},
+  tollKeeper:    {ic:'☣️', name:'Toll Keeper',       desc:'The corruption toll each room takes is doubled.'},
+  goldVeins:     {ic:'💰', name:'Gold Veins',        desc:'+50% gold from slain heroes.'},
+  hairTrigger:   {ic:'⚙️', name:'Hair Trigger',      desc:'All traps fire 20% faster.'},
+  conductor:     {ic:'⚛️', name:'Conductor',         desc:'Elemental reactions deal +50% damage.'},
+  reinforced:    {ic:'🏰', name:'Reinforced Throne', desc:'+35% boss max HP, healed to full immediately.'},
+};
+const MANDATE_KEYS = Object.keys(MANDATES);
+function hasMandate(id){ return !!(G && G.mandates && G.mandates.includes(id)); }
 // Bosses: differing stats, a passive, two SIGNATURE abilities (always equipped)
 // and a pool to pick a 3rd from — so each boss plays to its own identity.
 const BOSSES = {
@@ -827,6 +845,8 @@ function freshGame(mode){
     edicts:[],            // optional run modifiers chosen at run start (harder run, bigger rune reward)
     stats:{trapDmg:0, monDmg:0, abilDmg:0, reactions:0, breaches:0},  // run telemetry for the defeat post-mortem
     killer:null,          // snapshot of the hero who felled the throne
+    mandates:[],          // rule-changing dungeon upgrades drafted mid-run
+    mandateDue:false,     // a mandate draft is queued (endless milestone)
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
     combo:0,              // kill streak (resets when a hero strikes the boss)
     killsBanked:0, bossXpBanked:0, newUnlocks:[],   // lifetime-kill + boss-XP banking, unlock toasts
@@ -1713,7 +1733,7 @@ const ELEM_COMBO={
   shock:'⚡ Conducts through <b>oiled</b> heroes to the whole party. Put it <b>after</b> an oil room.',
   phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
 };
-function reactMul(h){ return 1 + (h.reactCount||0)*0.25; }   // escalating chain
+function reactMul(h){ return (1 + (h.reactCount||0)*0.25) * (hasMandate('conductor')?1.5:1); }   // escalating chain; Conductor mandate +50%
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
@@ -1792,7 +1812,7 @@ function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead';
   // loot: carried gold + bounty (threat dial + rune bonuses)
-  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1)) + (RB.goldKill||0);
+  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.5:1)) + (RB.goldKill||0);
   G.gold+=loot;
   // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
@@ -1801,6 +1821,7 @@ function heroDies(h){
   G.survived++; G.totalSlain++;
   // Devour passive: the boss feasts on the fallen
   if(G.boss.feed) healBoss(Math.round(G.boss.maxHp*G.boss.feed));
+  if(hasMandate('bloodthrone')) healBoss(Math.round(G.boss.maxHp*0.05));   // Bloodthrone mandate: heal per kill
   // Gluttony doctrine: every kill permanently grows the boss
   if(G.boss.doc==='gluttony'){ G.boss.maxHp+=5; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+5); G.boss.atk+=0.6;
     floater(bossX(), FLOOR-110, '😋 GROW', '#b0563a'); }
@@ -1843,9 +1864,12 @@ function afterWave(){
   if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
   // a town is due if the party's kills crossed a 5-kill boundary
   G.townDue = Math.floor(G.waveStartSlain/5) !== Math.floor(G.totalSlain/5);
-  // Endless earns a relic draft every 10 kills (campaign gets one per chapter)
-  if(G.mode!=='campaign')
+  // Endless earns a relic draft every 10 kills, and a mandate every 25 kills
+  // (campaign gets both per chapter cleared instead).
+  if(G.mode!=='campaign'){
     G.relicDue = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
+    G.mandateDue = Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
+  }
   gotoReward();
 }
 
@@ -1991,7 +2015,11 @@ function skipDraft(){ overlay.classList.remove('show'); afterReward(); }
 // After the card draft, drop into the town if a 5-kill interlude is due.
 function afterReward(){
   if(G.relicDue){ G.relicDue=false;
-    gotoRelicChoice('Relic Unearthed', 'A power stirs in the deep — claim one.', townOrBuild); return; }
+    gotoRelicChoice('Relic Unearthed', 'A power stirs in the deep — claim one.', afterRelicMaybeMandate); return; }
+  afterRelicMaybeMandate();
+}
+function afterRelicMaybeMandate(){
+  if(G.mandateDue){ G.mandateDue=false; gotoMandateChoice(townOrBuild); return; }
   townOrBuild();
 }
 function townOrBuild(){ if(G.townDue){ G.townDue=false; gotoTown(); } else gotoBuild(false); }
@@ -2021,6 +2049,38 @@ function pickRelic(i){
   if(done) done(); else gotoBuild(false);
 }
 
+/* ============================== MANDATE DRAFT =========================== */
+function rollMandateChoices(n){
+  const pool=MANDATE_KEYS.filter(id=>!hasMandate(id));
+  const out=[]; const bag=[...pool];
+  while(out.length<n && bag.length) out.push(bag.splice(ri(0,bag.length-1),1)[0]);
+  return out;
+}
+function gotoMandateChoice(onDone){
+  const choices=rollMandateChoices(3);
+  if(!choices.length){ (onDone||townOrBuild)(); return; }   // all mandates owned — skip
+  G.phase='mandate'; G._mandatePick=onDone||null; G._mandateChoices=choices;
+  overlay.classList.add('show');
+  overlay.innerHTML=`<h1 style="color:#ff9a3a">⚖️ Decree a Mandate</h1>
+    <p>A standing rule for the rest of your reign — choose one to reshape your dungeon.</p>
+    <div class="choices">${choices.map((id,i)=>{ const m=MANDATES[id];
+      return `<div class="choice" style="width:208px;border-color:#ff9a3a" onclick="pickMandate(${i})">
+        <div class="big">${m.ic}</div>
+        <h3 style="margin:4px 0">${m.name}</h3>
+        <div class="desc">${m.desc}</div></div>`;}).join('')}</div>
+    ${G.mandates.length?`<p class="small" style="opacity:.75">In force: ${G.mandates.map(id=>MANDATES[id].ic+' '+MANDATES[id].name).join(' · ')}</p>`:''}`;
+}
+function pickMandate(i){
+  if(G.phase!=='mandate') return;
+  const id=G._mandateChoices && G._mandateChoices[i]; if(!id) return;
+  G.mandates.push(id);
+  if(id==='reinforced' && G.boss){ G.boss.maxHp=Math.round(G.boss.maxHp*1.35); G.boss.hp=G.boss.maxHp; }
+  sfx('relic'); showHint(MANDATES[id].ic+' Mandate decreed: '+MANDATES[id].name);
+  const done=G._mandatePick; G._mandateChoices=null; G._mandatePick=null;
+  overlay.classList.remove('show');
+  (done||townOrBuild)();
+}
+
 /* ============================== PHASE: WIN =============================== */
 function winLevel(){
   if(G.mode!=='campaign'){ return; }
@@ -2048,8 +2108,8 @@ function winLevel(){
   G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+heal);
   gotoRelicChoice('Chapter Survived!',
     `<b>${lvl.name}</b> cleared · <span class="gold">+${lvl.reward}g</span> · boss recovers +${heal} HP.<br>`+
-    `Fortify with a relic, then face <b>${CAMPAIGN[G.levelIdx+1].name}</b> (${CAMPAIGN[G.levelIdx+1].target} heroes).`,
-    nextLevel);
+    `Fortify with a relic + decree a mandate, then face <b>${CAMPAIGN[G.levelIdx+1].name}</b> (${CAMPAIGN[G.levelIdx+1].target} heroes).`,
+    ()=>gotoMandateChoice(nextLevel));   // chapter break: relic (stats) THEN mandate (rule)
 }
 function nextLevel(){
   G.levelIdx++; G.survived=0;
@@ -2330,7 +2390,7 @@ function simStep(h,dt){
     // traps still fire on a frozen/standing hero
     if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     if(h.state==='dead' || frozen) return;
-    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1);   // oil & chill slow movement; Overgrowth vines slow everyone
+    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.8:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
     // a living monster blocks: walk up to it (through the trap), THEN fight
@@ -2376,7 +2436,7 @@ function onEnterCell(h,cell){
   // which the boss cashes in (see bossFightTick).
   if(cell.room && cell.kind!=='boss'){
     h.corrupt=(h.corrupt||0)+1;
-    const toll=Math.round(CORRUPT_PCT*h.maxHp);
+    const toll=Math.round(CORRUPT_PCT*h.maxHp*(hasMandate('tollKeeper')?2:1));   // Toll Keeper mandate: double corruption toll
     if(toll>0){ h.hp-=toll; floater(h.x, h.y-58, '☣ -'+toll, '#b06bff'); burst(h.x,h.y-22,'#9a5cff',5);
       if(h.hp<=0){ h.hp=0; heroDies(h); return; } }
   }
@@ -2428,7 +2488,7 @@ function trapTick(h,cell,dt){
     if(tr.def.aoe) continue;        // area traps fire once per interval in aoeTrapTick, not per-hero
     tr.fireT-=dt;
     if(tr.fireT<=0){
-      tr.fireT=tr.def.rate;
+      tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.8:1);   // Hair Trigger mandate: traps fire faster
       const d=tr.def;
       let dmg=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
       // counter-card bonuses vs certain heroes
@@ -2438,10 +2498,10 @@ function trapTick(h,cell,dt){
       // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
       const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
       if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
-      const pierce = (doc==='bastion'||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion: traps ignore armor
+      const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion/Piercing Halls: ignore armor
       dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem);
       if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
-      else if(doc==='inferno' && h.state!=='dead'){ h.burn=Math.max(h.burn||0, 3+(r.lvl-1)); h.burnT=3; }  // Inferno: every trap sets ablaze
+      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.max(h.burn||0, 3+(r.lvl-1)); h.burnT=3; }  // Inferno/Wildfire: every trap sets ablaze
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
       if(G.stats) G.stats.trapDmg+=Math.round(dmg);
       burst(h.x, h.y-20, d.col, 5);
@@ -2469,15 +2529,15 @@ function aoeTrapTick(dt){
       const lo=cell.index-d.aoe, hi=cell.index+d.aoe;
       const targets=G.heroes.filter(o=>o && o.state!=='dead' && heroCellIndex(o)>=lo && heroCellIndex(o)<=hi);
       if(!targets.length) continue;
-      tr.fireT=d.rate;
+      tr.fireT=d.rate * (hasMandate('hairTrigger')?0.8:1);
       let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
       if(vr) base*=(1+vr*VET_DMG);
       if(doc==='inferno') base*=1.2;
-      const pierce=(doc==='bastion'||d.pierceAll)?'full':!!d.pierce;
+      const pierce=(doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll)?'full':!!d.pierce;
       for(const o of targets){
         const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
         dealToHero(o, dmg, 'BOOM', pierce, d.elem);
-        if(o.state!=='dead' && doc==='inferno'){ o.burn=Math.max(o.burn||0, 3+(r.lvl-1)); o.burnT=3; }
+        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.max(o.burn||0, 3+(r.lvl-1)); o.burnT=3; }
         if(G.stats) G.stats.trapDmg+=dmg;
       }
       if(doc==='soulengine' && G.boss) G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+targets.length);
@@ -2497,7 +2557,13 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       mon.hp-=dmg;
       if(h.vampiric) healHero(h, dmg*0.4);
       floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
-      if(mon.hp<=0){ mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
+      if(mon.hp<=0){
+        // Undying Legion mandate: each guard claws back once per wave
+        if(hasMandate('undyingLegion') && !mon.revivedOnce){
+          mon.revivedOnce=true; mon.hp=Math.round(mon.maxHp*0.5); mon.alive=true; mon.atkT=0.4;
+          burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#9a5cff',16); floater(cell.x0+ROOM_W*0.68,FLOOR-78,'💀 RISES','#b985ff');
+          return; }
+        mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
         floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
         return; }
     }
@@ -3283,6 +3349,8 @@ function describeBoss(){
   if(totalDR) lines.push(`Damage reduction: ${Math.round(totalDR*100)}%`);
   if(G.relics&&G.relics.length)
     lines.push('Relics: '+G.relics.map(id=>{const r=RELICS[id];return `<span style="color:${RELIC_TIERS[r.tier].col}">${r.ic}${r.name}</span>`;}).join(', '));
+  if(G.mandates&&G.mandates.length)
+    lines.push('Mandates: '+G.mandates.map(id=>`<span style="color:#ff9a3a">${MANDATES[id].ic}${MANDATES[id].name}</span>`).join(', '));
   return lines.join('<br>');
 }
 
