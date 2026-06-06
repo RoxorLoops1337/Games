@@ -2423,9 +2423,9 @@ function drawDungeon(tx, scale, isBuild){
       }
     } else if(roomDrag && roomDrag.dragging && i===roomDrag.from){
       // the room being dragged: lifted + faded
-      X.save(); X.globalAlpha=0.5; X.translate(0,-48); drawRoomContents(x0, w, room, i); X.restore();
+      X.save(); X.globalAlpha=0.5; X.translate(0,-48); drawRoomFull(x0, w, room, i); X.restore();
     } else {
-      drawRoomContents(x0, w, room, i);
+      drawRoomFull(x0, w, room, i);
     }
     // picked-up room highlight
     if(isBuild && i===pickupIdx){
@@ -2568,10 +2568,41 @@ function drawShopProp(cx,room){
   }
 }
 
+// Real room artwork (small quantized PNGs in rooms/). A single-trap room's art
+// replaces its procedural prop; a shop shows the shop art; any monster room gets
+// the "lair" backdrop with the live monster sprite drawn in front. Fused rooms
+// and art-less types fall back to the procedural look.
+const ROOM_IMG={};
+const ROOM_ART_TRAPS={spike:1, flame:1, oil:1};
+if(typeof Image!=='undefined'){
+  ['spike','flame','oil','shop','lair'].forEach(k=>{
+    const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='rooms/'+k+'.png'; ROOM_IMG[k]=im;
+  });
+}
+const ROOM_ART_DROP=12;   // px the art bottom sits below the floor line
+function roomArtKey(room){
+  const parts=roomParts(room);
+  if(parts.some(p=>ROOMS[p].kind==='monster')) return 'lair';      // backdrop
+  if(parts.includes('shop')) return 'shop';
+  if(parts.length===1 && ROOM_ART_TRAPS[parts[0]]) return parts[0]; // replaces the prop
+  return null;
+}
+function roomArtReady(room){ const k=roomArtKey(room); const im=k&&ROOM_IMG[k]; return (im&&im._ok)?k:null; }
+function drawRoomArt(x0,w,img){
+  const dh=Math.round(w*(img.height/img.width));
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+  X.drawImage(img, Math.round(x0), Math.round(FLOOR+ROOM_ART_DROP-dh), Math.round(w), dh);
+  X.imageSmoothingEnabled=sm;
+}
+function drawRoomFull(x0,w,room,i){
+  const k=roomArtReady(room); if(k) drawRoomArt(x0,w,ROOM_IMG[k]);
+  drawRoomContents(x0,w,room,i);
+}
 function drawRoomContents(x0,w,room,i){
   const cx=x0+w/2; const cell=G.cells[i]; const parts=roomParts(room);
-  // traps
-  for(const p of parts){ if(ROOMS[p].kind==='trap') drawTrapProp(x0,w,cx,p); }
+  const art=roomArtReady(room);                 // suppress props the art already shows
+  // traps (the single-trap art replaces its own prop; 'lair' backdrop keeps them)
+  for(const p of parts){ if(ROOMS[p].kind==='trap' && art!==p) drawTrapProp(x0,w,cx,p); }
   // monsters (a combo room can hold two) — draw each so both stay visible
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){
@@ -2587,7 +2618,7 @@ function drawRoomContents(x0,w,room,i){
       bar(cx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
   }
   // shop counter
-  if(parts.includes('shop')) drawShopProp(cx,room);
+  if(parts.includes('shop') && art!=='shop') drawShopProp(cx,room);
 
   drawLvlBadge(cx,FLOOR-128,room.lvl,ROOMS[room.type].col);
   // veteran rank badge: a gold star with the rank, shown in build AND run
