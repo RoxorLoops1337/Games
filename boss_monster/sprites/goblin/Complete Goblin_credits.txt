@@ -1,0 +1,146 @@
+* Shadow (shadow)
+
+  Textures
+
+  Author(s) : Dr. Jamgo
+  License(s): CC0
+  Url(s)    : https://opengameart.org/content/shadow-for-lpc-sprite
+
+  Fixed colors
+
+  Author(s) : Dr. Jamgo
+  License(s): CC0
+  Url(s)    : https://opengameart.org/content/shadow-for-lpc-sprite
+
+* Goblin (body)
+
+  Textures
+
+  Author(s) : Stephen Challener (Redshrike)
+              Johannes Sjölund (wulax)
+  License(s): CC-BY-SA 3.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+              https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+
+  Primary colors
+
+  Author(s) : Lanea Zimmerman (Sharm)
+              Stephen Challener (Redshrike)
+              Manuel Riecke (MrBeast)
+              Charles Sanchez (CharlesGabriel)
+              Zi Ye
+  License(s): CC-BY-SA 3.0
+  Url(s)    : https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+              https://opengameart.org/content/sinbad-the-ogre
+              https://opengameart.org/content/four-characters-my-lpc-entries
+              https://opengameart.org/content/lpc-male-sheets
+
+* Obi (belt)
+
+  Textures
+
+  Author(s) : David Conway Jr. (JaidynReiman)
+  License(s): OGA-BY 3.0
+              OGA-BY 4.0
+              CC-BY 3.0
+              CC-BY 4.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/lpc-relm-outfit-pieces-2-kimonos-2-sleeves-2-boots-tabi-socks-updated-4924
+
+  Primary colors
+
+  Author(s) : Eliza Wyatt (ElizaWy)
+              Joe White
+  License(s): CC-BY-SA 3.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/lpc-pregnancy-bases-maternity-wear
+
+* Goblin (head)
+
+  Textures
+
+  Author(s) : bluecarrot16
+              Stephen Challener (Redshrike)
+              William.Thompsonj
+  License(s): OGA-BY 3.0
+              CC-BY 4.0
+              GPL 2.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/lpc-goblin
+              https://opengameart.org/content/lpc-folk
+
+  Primary colors
+
+  Author(s) : Lanea Zimmerman (Sharm)
+              Stephen Challener (Redshrike)
+              Manuel Riecke (MrBeast)
+              Charles Sanchez (CharlesGabriel)
+              Zi Ye
+  License(s): CC-BY-SA 3.0
+  Url(s)    : https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+              https://opengameart.org/content/sinbad-the-ogre
+              https://opengameart.org/content/four-characters-my-lpc-entries
+              https://opengameart.org/content/lpc-male-sheets
+
+* Goblin (eyes)
+
+  Textures
+
+  Author(s) : bluecarrot16
+              Stephen Challener (Redshrike)
+              William.Thompsonj
+  License(s): OGA-BY 3.0
+              CC-BY 4.0
+              GPL 2.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/lpc-goblin
+              https://opengameart.org/content/lpc-folk
+
+  Primary colors
+
+  Author(s) : David Conway Jr. (JaidynReiman)
+              Stephen Challener (Redshrike)
+              Johannes Sjölund (wulax)
+              Matthew Krohn (makrohn)
+  License(s): CC-BY-SA 3.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+              https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+
+* Axe (mainhand)
+
+  Textures
+
+  Author(s) : DarkwallLKE
+              Tuomo Untinen (reemax)
+              pflat
+              bluecarrot16
+              Pierre Vigier (pvigier)
+              Johannes Sjölund (wulax)
+              Inboxninja
+  License(s): CC-BY-SA 3.0
+              GPL 2.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/lpc-items-and-game-effects
+              https://opengameart.org/content/lpc-axe
+              https://opengameart.org/content/lpc-hand-tools
+
+  Primary colors
+
+  Author(s) : Michael Whitlock (bigbeargames)
+              Matthew Krohn (makrohn)
+              Johannes Sjölund (wulax)
+  License(s): CC-BY-SA 3.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+              https://opengameart.org/content/lpc-combat-armor-for-women
+
+  Secondary colors
+
+  Author(s) : Eliza Wyatt (ElizaWy)
+              Joe White
+  License(s): CC-BY-SA 3.0
+              GPL 3.0
+  Url(s)    : https://opengameart.org/content/lpc-pregnancy-bases-maternity-wear
+
