@@ -710,17 +710,25 @@ function buildTown(id){
   showHint(`${b.ic} ${b.name} ${lvl>1?'upgraded to Lv '+lvl:'built'}!`);
   renderTownBuilder();
 }
-// Resources banked from a run — monotonic in run progress so re-banking can't double-pay.
-function awardTownResources(){
-  const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), gold=Math.max(0,G.gold||0);
-  const totW=Math.floor(slain*1.2)+Math.floor(gold/3);
-  const totS=Math.floor(slain*0.6)+Math.floor(gold/6);
-  const totSh=Math.floor(slain/6)+lvl;
-  const dw=Math.max(0,totW-(G.woodBanked||0)), ds=Math.max(0,totS-(G.stoneBanked||0)), dsh=Math.max(0,totSh-(G.shardBanked||0));
-  TOWN.res.wood+=dw; TOWN.res.stone+=ds; TOWN.res.shards+=dsh;
-  G.woodBanked=totW; G.stoneBanked=totS; G.shardBanked=totSh;
+// --- At-risk resources: you gather Wood/Stone/Shards as you slay heroes, but
+// they aren't yours until you extract. Close the dungeon to KEEP all of it; die
+// and the fallen throne swallows half. ---
+const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
+function pendingResources(){             // the haul you've gathered so far this run
+  const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0);
+  return { wood:Math.floor(slain*1.2), stone:Math.floor(slain*0.6), shards:Math.floor(slain/6)+lvl };
+}
+// Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
+// converts leftover treasury gold into a bonus (only on a clean extraction/win).
+function bankResources(frac, withGold){
+  const p=pendingResources();
+  let w=p.wood, s=p.stone, sh=p.shards;
+  if(withGold){ const g=Math.max(0,G.gold||0); w+=Math.floor(g/3); s+=Math.floor(g/6); }
+  w=Math.floor(w*frac); s=Math.floor(s*frac); sh=Math.floor(sh*frac);
+  TOWN.res.wood+=w; TOWN.res.stone+=s; TOWN.res.shards+=sh;
   saveTown();
-  return {wood:dw,stone:ds,shards:dsh};
+  G.townGain={wood:w,stone:s,shards:sh};
+  return G.townGain;
 }
 // ---- Boss mastery: each boss earns XP from kills made while playing it and
 // levels up, gaining a permanent +HP/+ATK bonus. ----
@@ -1135,16 +1143,35 @@ function renderPauseMenu(){
     </div>
     <div class="menu-btns"><button class="go" onclick="resumeGame()">▶ Resume</button></div>
     <div class="menu-btns" style="margin-top:6px">${pauseConfirm
-      ? `<span style="color:#ff9aae;align-self:center">Abandon this run? Progress in it is lost.</span>
-         <button class="go" onclick="resumeGame()">No, keep playing</button>
-         <button style="background:#7a2030;border-color:#ff5470" onclick="quitToTitle()">Yes, quit</button>`
-      : `<button style="background:#5a2030;border-color:#ff7a8a" onclick="askQuit()">🏳️ Quit to Title (lose run)</button>`}
+      ? `<span style="color:#9be86b;align-self:center;max-width:340px;text-align:center">End the run now and withdraw with your <b>full haul</b> of ${haulStr(pendingResources())}?</span>
+         <button class="go" onclick="resumeGame()">No, keep raiding</button>
+         <button style="background:#2e6a3c;border-color:#6ad97e" onclick="closeDungeon()">🏳️ Close &amp; keep all</button>`
+      : `<button style="background:#3a4a26;border-color:#9be86b" onclick="askQuit()">🏳️ Close the Dungeon — keep ${haulStr(pendingResources())}</button>`}
     </div>`;
 }
+function haulStr(p){ const a=[]; if(p.wood)a.push('🪵'+p.wood); if(p.stone)a.push('🪨'+p.stone); if(p.shards)a.push('🔮'+p.shards); return a.length?a.join(' '):'no resources yet'; }
 function askQuit(){ pauseConfirm=true; renderPauseMenu(); }
+function promptClose(){ paused=true; pauseConfirm=true; overlay.classList.add('show'); renderPauseMenu(); }
 function toggleAudioFromMenu(){ toggleAudio(); renderPauseMenu(); }
 function resumeGame(){ paused=false; pauseConfirm=false; overlay.classList.remove('show'); render(); }
-function quitToTitle(){ paused=false; pauseConfirm=false; gotoMenu(); }
+// Voluntary extraction: end the run, keep the FULL haul (+ a leftover-gold bonus).
+function closeDungeon(){
+  paused=false; pauseConfirm=false;
+  const earned=awardRunes();
+  bankResources(1, true);
+  G.phase='closed'; overlay.classList.add('show');
+  overlay.innerHTML=`<h1 style="color:#9be86b">🏳️ DUNGEON CLOSED</h1>
+    <div style="font-size:54px">${G.boss?G.boss.ic:'🐲'}🚪</div>
+    <p>You sealed the halls and withdrew in good order after slaying <b>${G.totalSlain}</b> heroes — keeping every scrap you gathered.</p>
+    <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
+    ${townGainLine('kept')}
+    ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
+    <div class="menu-btns">
+      <button class="go" onclick="openTownBuilder()">🏗️ Town Builder</button>
+      <button onclick="openRunes()">🔮 Rune Page</button>
+      <button onclick="gotoMenu()">Main menu</button>
+    </div>`;
+}
 
 const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
 function difficulty(){
@@ -2214,6 +2241,8 @@ function bossDies(){
   G.phase='lose'; overlay.classList.add('show');
   shake(12); sfx('lose');
   const earned=awardRunes();
+  const lost=pendingResources();                 // what the fallen throne swallowed (the half you didn't keep)
+  bankResources(DEATH_KEEP, false);              // keep only half; no gold bonus on a death
   const score = G.mode==='campaign'
     ? `You fell on Chapter ${G.levelIdx+1} after slaying ${totalKills()} heroes.`
     : `You reigned ${G.survived} heroes before the throne fell.`;
@@ -2221,9 +2250,9 @@ function bossDies(){
     <div style="font-size:54px">${G.boss.ic}💔</div>
     ${buildPostmortem()}
     <p>${score}</p>
-    <p style="opacity:.7">Dead is dead — this run is over.</p>
+    <p style="opacity:.7">Dead is dead — and the fallen throne swallowed <b>half</b> your haul. Next time, <b>close the dungeon</b> to keep it all.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
-    ${townGainLine()}
+    ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
     <div class="menu-btns">
       <button class="go" onclick="openRunes()">🔮 Rune Page</button>
@@ -2232,10 +2261,10 @@ function bossDies(){
     </div>`;
 }
 // One-line summary of the Wood/Stone/Shards a run banked for the Town Builder.
-function townGainLine(){
+function townGainLine(verb){
   const g=G.townGain; if(!g||(g.wood+g.stone+g.shards<=0)) return '';
   const p=[]; if(g.wood)p.push('🪵 '+g.wood); if(g.stone)p.push('🪨 '+g.stone); if(g.shards)p.push('🔮 '+g.shards);
-  return `<p style="color:#d6a86a">🏗️ Town resources: +${p.join(' · ')}</p>`;
+  return `<p style="color:#d6a86a">🏗️ Town resources ${verb||'banked'}: +${p.join(' · ')}</p>`;
 }
 function totalKills(){ return G.totalSlain; }
 // Capture just enough of the hero who felled the throne for the post-mortem.
@@ -2428,12 +2457,13 @@ function winLevel(){
     G.phase='win'; overlay.classList.add('show');
     sfx('win');
     const earned=awardRunes();
+    bankResources(1, true);                        // a full clean victory — keep everything + gold bonus
     overlay.innerHTML=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
       <div style="font-size:60px">${G.boss.ic}👑</div>
       <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
          having buried <b>${G.totalSlain}</b> heroes.</p>
       <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
-      ${townGainLine()}
+      ${townGainLine('kept')}
       ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
       <div class="menu-btns">
         <button class="go" onclick="gotoMenu()">★ Main menu</button>
@@ -2656,7 +2686,7 @@ function renderTown(){
   const locked = BUILDING_KEYS.filter(id=>!townHas(id));
   const lockHtml = locked.length ? `<p class="small" style="opacity:.65;margin:10px auto 0;max-width:580px">🔒 Grow your town in the <b>Town Builder</b> (main menu): ${locked.map(id=>BUILDINGS[id].ic+' '+BUILDINGS[id].name).join(' · ')}</p>` : '';
   overlay.innerHTML=`<h1 style="margin-bottom:2px">🏚️ Hero Town</h1>
-    <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span></p>
+    <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span> · <span title="Resources at risk — keep them by closing the dungeon" style="color:#9be86b">🏗️ ${haulStr(pendingResources())}</span></p>
     ${evHtml}
     ${townHas('watch')?threat:''}
     ${guildBlock}
@@ -3555,6 +3585,8 @@ function renderPanel(){
             style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join('')
           :`<span class="small">Build a 🛒 Shop to sell gear for gold.</span>`}
         <span style="flex:1"></span>
+        <span class="pill" title="Resources gathered this run. Close the dungeon to keep them all — if the throne falls you lose half.">🏗️ ${haulStr(pendingResources())}</span>
+        <button onclick="promptClose()" title="End the run now and keep your full haul" style="padding:6px 9px;border-color:#9be86b;color:#cdeeb0">🏳️ Close</button>
         <button class="go${G&&G.tutHi==='start'?' tut-pulse':''}" onclick="startWave()">⚔️ Start Wave</button>
       </div>
       <div class="row">
