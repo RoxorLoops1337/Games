@@ -680,6 +680,23 @@ const BUILDINGS={
     desc:'Control how loudly you provoke the realm — set the Threat level each visit.',
     lvlText:l=>'Unlocks Threat control (taunt / lie low).',
     cost:l=>[{wood:40,stone:30}][l-1]},
+  // ---- economy / passive buildings (no town section — permanent bonuses) ----
+  quarry: {name:'Quarry & Mill',     ic:'⛏️', sect:'eco', max:3,
+    desc:'Work-gangs that haul more from every raid. Boosts ALL resources you gather.',
+    lvlText:l=>`+${[0,15,35,60][l]}% Wood, Stone & Shards gathered per run.`,
+    cost:l=>[{wood:80,stone:40},{wood:140,stone:90},{wood:230,stone:160}][l-1]},
+  vault:  {name:'The Vault',         ic:'🏦', sect:'eco', max:3,
+    desc:'A warded strong-room. Even if the throne falls, more of your haul survives.',
+    lvlText:l=>`Keep ${[50,60,70,80][l]}% of your haul if you die (was 50%).`,
+    cost:l=>[{stone:60,shards:5},{stone:110,shards:12},{stone:190,shards:22}][l-1]},
+  treasury:{name:'Treasury',         ic:'💰', sect:'eco', max:3,
+    desc:'A war-chest that bankrolls each crusade. Start every run with extra gold.',
+    lvlText:l=>`Start each run with +${[0,25,55,90][l]} gold.`,
+    cost:l=>[{wood:70,stone:30},{wood:120,stone:70},{wood:200,stone:120}][l-1]},
+  obelisk:{name:'Dread Obelisk',     ic:'☠️', sect:'eco', max:3,
+    desc:'A monument of terror that wrings more fear from every kill — more to spend in town each run.',
+    lvlText:l=>`+${l} dread per kill in-run.`,
+    cost:l=>[{stone:50,shards:6},{stone:100,shards:14},{stone:180,shards:24}][l-1]},
 };
 const BUILDING_KEYS=Object.keys(BUILDINGS);
 // which town options a building level unlocks, and per-building discounts
@@ -687,6 +704,11 @@ const SANCTUM_UNLOCK={ reinforce:1, sharpen:1, attune:2, ascend:3 };
 const INN_UNLOCK={ intimidate:1, rob:1, poison:2, corrupt:2 };
 function innDisc(){ return townLvl('inn')>=3 ? 0.75 : 1; }   // Inn Lv3: meddling −25%
 function denDisc(){ return townLvl('den')>=2 ? 0.70 : 1; }   // Den Lv2: schemes −30%
+// economy-building effects
+function quarryMul(){ return 1 + [0,0.15,0.35,0.60][townLvl('quarry')]; }   // resource yield
+function deathKeep(){ return [0.5,0.6,0.7,0.8][townLvl('vault')]; }         // fraction kept on death
+function townGold0(){ return [0,25,55,90][townLvl('treasury')]; }           // bonus starting gold
+function townDreadKill(){ return townLvl('obelisk'); }                      // +dread per kill
 function loadTown(){
   try{ const s=JSON.parse(localStorage.getItem('bossmonster_town')||'null');
     if(s && s.res){ TOWN={ res:{wood:s.res.wood||0,stone:s.res.stone||0,shards:s.res.shards||0},
@@ -715,8 +737,8 @@ function buildTown(id){
 // and the fallen throne swallows half. ---
 const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
-  const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0);
-  return { wood:Math.floor(slain*1.2), stone:Math.floor(slain*0.6), shards:Math.floor(slain/6)+lvl };
+  const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), m=quarryMul();
+  return { wood:Math.floor(slain*1.2*m), stone:Math.floor(slain*0.6*m), shards:Math.floor((slain/6+lvl)*m) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -1324,27 +1346,33 @@ function resBar(){
     <span title="Shards">🔮 <span style="color:#c79bff">${TOWN.res.shards}</span></span></div>`;
 }
 function costStr(c){ if(!c) return ''; const p=[]; if(c.wood)p.push(`🪵${c.wood}`); if(c.stone)p.push(`🪨${c.stone}`); if(c.shards)p.push(`🔮${c.shards}`); return p.join(' '); }
+function buildingCardHTML(id){
+  const b=BUILDINGS[id]; const lvl=townLvl(id), maxed=lvl>=b.max;
+  const next=maxed?null:buildingCost(id,lvl+1); const afford=canAfford(next);
+  const lvlPips=`<span class="small" style="color:#ffd34d">${'◆'.repeat(lvl)}${'◇'.repeat(b.max-lvl)}</span>`;
+  const action = maxed
+    ? `<div class="small" style="color:#7bdc6b;font-weight:bold">✔ FULLY BUILT</div>`
+    : `<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:4px;padding:6px 10px;font-size:12px">
+         ${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`;
+  return `<div class="choice" style="width:210px;${lvl>0?'border-color:#7bdc6b':''}">
+    <div class="big">${lvl>0?b.ic:'🏗️'}</div>
+    <h3 style="font-size:14px;margin:1px 0">${b.name} ${lvlPips}</h3>
+    <div class="small" style="opacity:.85;min-height:46px;line-height:1.25">${b.desc}</div>
+    <div class="small" style="color:#9adfff;min-height:30px;line-height:1.2">${maxed?b.lvlText(b.max):(lvl>0?b.lvlText(lvl)+'<br>':'')}${maxed?'':`<span style="opacity:.7">Next: ${b.lvlText(lvl+1)}</span>`}</div>
+    ${action}</div>`;
+}
 function renderTownBuilder(){
   overlay.classList.add('show');
-  const cards=BUILDING_KEYS.map(id=>{
-    const b=BUILDINGS[id]; const lvl=townLvl(id), maxed=lvl>=b.max;
-    const next=maxed?null:buildingCost(id,lvl+1); const afford=canAfford(next);
-    const lvlPips=`<span class="small" style="color:#ffd34d">${'◆'.repeat(lvl)}${'◇'.repeat(b.max-lvl)}</span>`;
-    const action = maxed
-      ? `<div class="small" style="color:#7bdc6b;font-weight:bold">✔ FULLY BUILT</div>`
-      : `<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:4px;padding:6px 10px;font-size:12px">
-           ${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`;
-    return `<div class="choice" style="width:210px;${lvl>0?'border-color:#7bdc6b':''}">
-      <div class="big">${lvl>0?b.ic:'🏗️'}</div>
-      <h3 style="font-size:14px;margin:1px 0">${b.name} ${lvlPips}</h3>
-      <div class="small" style="opacity:.85;min-height:46px;line-height:1.25">${b.desc}</div>
-      <div class="small" style="color:#9adfff;min-height:30px;line-height:1.2">${maxed?b.lvlText(b.max):(lvl>0?b.lvlText(lvl)+'<br>':'')}${maxed?'':`<span style="opacity:.7">Next: ${b.lvlText(lvl+1)}</span>`}</div>
-      ${action}</div>`;}).join('');
+  const townCards=BUILDING_KEYS.filter(id=>BUILDINGS[id].sect!=='eco').map(buildingCardHTML).join('');
+  const ecoCards =BUILDING_KEYS.filter(id=>BUILDINGS[id].sect==='eco').map(buildingCardHTML).join('');
   overlay.innerHTML=`<h1 style="margin-bottom:2px">🏗️ Town Builder</h1>
-    <p style="margin:4px 0">Spend resources earned from your runs to grow the town. Each building unlocks part of the in-run <b>Hero Town</b> screen.</p>
+    <p style="margin:4px 0">Spend resources earned from your runs to grow the town.</p>
     ${resBar()}
-    <div class="choices" style="margin-top:10px">${cards}</div>
-    <p class="small" style="opacity:.6;max-width:560px;margin:8px auto 0">The Notice Board (events) is always open. Earn 🪵 / 🪨 from waves survived and leftover gold, and 🔮 from depth.</p>
+    <h2 style="margin:10px 0 4px">Town Halls <span class="small" style="opacity:.6">— unlock the in-run Hero Town</span></h2>
+    <div class="choices">${townCards}</div>
+    <h2 style="margin:12px 0 4px">Economy <span class="small" style="opacity:.6">— permanent bonuses</span></h2>
+    <div class="choices">${ecoCards}</div>
+    <p class="small" style="opacity:.6;max-width:560px;margin:8px auto 0">The Notice Board (events) is always open. Earn 🪵 / 🪨 from waves survived and 🔮 from depth — banked when you <b>close the dungeon</b> (or halved if the throne falls).</p>
     <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
 }
 
@@ -1601,7 +1629,7 @@ function chooseBoss(key){
   // starter dungeon + rune head-starts
   G.slots=1+RB.slot0;
   G.rooms=Array(G.slots).fill(null);
-  G.gold=30+RB.gold0;
+  G.gold=30+RB.gold0+townGold0();   // Treasury: bonus starting gold
   G.dread=RB.dread0;
   G.guildLvl=Math.min(townLvl('guild'), RB.guild0);   // can't out-start your built Guild ceiling
   zoom=1; camX=0;
@@ -2167,7 +2195,7 @@ function heroDies(h){
   G.gold+=loot;
   // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
-    + (RB.dreadKill||0) + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
+    + (RB.dreadKill||0) + townDreadKill() + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
   // Devour passive: the boss feasts on the fallen
@@ -2241,8 +2269,8 @@ function bossDies(){
   G.phase='lose'; overlay.classList.add('show');
   shake(12); sfx('lose');
   const earned=awardRunes();
-  const lost=pendingResources();                 // what the fallen throne swallowed (the half you didn't keep)
-  bankResources(DEATH_KEEP, false);              // keep only half; no gold bonus on a death
+  const keep=deathKeep(), lostPct=Math.round((1-keep)*100);
+  bankResources(keep, false);                    // keep your Vault fraction; no gold bonus on a death
   const score = G.mode==='campaign'
     ? `You fell on Chapter ${G.levelIdx+1} after slaying ${totalKills()} heroes.`
     : `You reigned ${G.survived} heroes before the throne fell.`;
@@ -2250,7 +2278,7 @@ function bossDies(){
     <div style="font-size:54px">${G.boss.ic}💔</div>
     ${buildPostmortem()}
     <p>${score}</p>
-    <p style="opacity:.7">Dead is dead — and the fallen throne swallowed <b>half</b> your haul. Next time, <b>close the dungeon</b> to keep it all.</p>
+    <p style="opacity:.7">Dead is dead — the fallen throne swallowed <b>${lostPct}%</b> of your haul. Next time, <b>close the dungeon</b> to keep it all.${townLvl('vault')<3?' (A bigger 🏦 Vault keeps more.)':''}</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
@@ -3585,7 +3613,7 @@ function renderPanel(){
             style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join('')
           :`<span class="small">Build a 🛒 Shop to sell gear for gold.</span>`}
         <span style="flex:1"></span>
-        <span class="pill" title="Resources gathered this run. Close the dungeon to keep them all — if the throne falls you lose half.">🏗️ ${haulStr(pendingResources())}</span>
+        <span class="pill" title="Resources gathered this run. Close the dungeon to keep them all — if the throne falls you lose ${Math.round((1-deathKeep())*100)}%.">🏗️ ${haulStr(pendingResources())}</span>
         <button onclick="promptClose()" title="End the run now and keep your full haul" style="padding:6px 9px;border-color:#9be86b;color:#cdeeb0">🏳️ Close</button>
         <button class="go${G&&G.tutHi==='start'?' tut-pulse':''}" onclick="startWave()">⚔️ Start Wave</button>
       </div>
