@@ -651,6 +651,77 @@ function loadRunes(){
 function saveRunes(){
   try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp})); }catch(_){ }
 }
+
+/* ======================= TOWN BUILDER (meta progression) ==================
+   A persistent little town you grow between runs with Wood/Stone/Shards earned
+   from each run. Each building UNLOCKS (and deepens) a section of the in-run
+   Hero Town screen. A brand-new town has only the Notice Board (events). */
+let TOWN={ res:{wood:0,stone:0,shards:0}, built:{} };
+const TOWN_START={ wood:120, stone:60, shards:8 };     // starter stockpile for a fresh town
+// id → {name, ic, sect (town section it unlocks), max, unlocks, cost(lvl)→{wood,stone,shards}}
+const BUILDINGS={
+  guild:  {name:'Guild House',       ic:'🏛️', sect:'guild',  max:3,
+    desc:'Lets heroes raise war-parties. Building level = the party-size ceiling you can buy each run.',
+    lvlText:l=>`In-run you can grow the Guild to Lv ${l} (parties of ${l+1}).`,
+    cost:l=>[{wood:60},{wood:90,stone:45},{wood:150,stone:90}][l-1]},
+  sanctum:{name:"Sorcerer's Sanctum", ic:'🔮', sect:'empower', max:3,
+    desc:'Arcane forge for empowering your boss. Higher levels unlock stronger empowerments.',
+    lvlText:l=>['Unlocks Reinforce Throne & Sharpen Claws.','+ Dark Attunement (mana).','+ Empower Boss (boss level).'][l-1],
+    cost:l=>[{shards:6,stone:25},{shards:13,stone:50},{shards:22,stone:85}][l-1]},
+  inn:    {name:'The Inn',           ic:'🍺', sect:'inn',    max:3,
+    desc:'Where heroes drink before the raid — and where you meddle with them.',
+    lvlText:l=>['Unlocks Intimidate & Rob the next arrivals.','+ Poison & Corrupt-to-minion.','Meddling costs 25% less.'][l-1],
+    cost:l=>[{wood:55,stone:25},{wood:85,stone:50},{wood:130,stone:80}][l-1]},
+  den:    {name:"Smugglers' Den",    ic:'💰', sect:'schemes', max:2,
+    desc:'A black-market cellar for town-wide schemes (poison the well, bribe the smith…).',
+    lvlText:l=>['Unlocks Town Schemes.','Schemes cost 30% less.'][l-1],
+    cost:l=>[{wood:45,stone:35},{wood:80,stone:65}][l-1]},
+  watch:  {name:'Watchtower',        ic:'🔥', sect:'threat', max:1,
+    desc:'Control how loudly you provoke the realm — set the Threat level each visit.',
+    lvlText:l=>'Unlocks Threat control (taunt / lie low).',
+    cost:l=>[{wood:40,stone:30}][l-1]},
+};
+const BUILDING_KEYS=Object.keys(BUILDINGS);
+// which town options a building level unlocks, and per-building discounts
+const SANCTUM_UNLOCK={ reinforce:1, sharpen:1, attune:2, ascend:3 };
+const INN_UNLOCK={ intimidate:1, rob:1, poison:2, corrupt:2 };
+function innDisc(){ return townLvl('inn')>=3 ? 0.75 : 1; }   // Inn Lv3: meddling −25%
+function denDisc(){ return townLvl('den')>=2 ? 0.70 : 1; }   // Den Lv2: schemes −30%
+function loadTown(){
+  try{ const s=JSON.parse(localStorage.getItem('bossmonster_town')||'null');
+    if(s && s.res){ TOWN={ res:{wood:s.res.wood||0,stone:s.res.stone||0,shards:s.res.shards||0},
+                           built:(s.built&&typeof s.built==='object')?s.built:{} }; }
+    else { TOWN={ res:{...TOWN_START}, built:{} }; saveTown(); }   // first ever launch → stockpile
+  }catch(_){ TOWN={ res:{...TOWN_START}, built:{} }; }
+}
+function saveTown(){
+  try{ localStorage.setItem('bossmonster_town', JSON.stringify(TOWN)); }catch(_){ }
+}
+function townLvl(id){ return TOWN.built[id]||0; }
+function townHas(id){ return townLvl(id)>0; }
+function buildingCost(id,lvl){ const b=BUILDINGS[id]; return (lvl<=b.max)? b.cost(lvl) : null; }
+function canAfford(c){ return c && (TOWN.res.wood>=(c.wood||0)) && (TOWN.res.stone>=(c.stone||0)) && (TOWN.res.shards>=(c.shards||0)); }
+function buildTown(id){
+  const b=BUILDINGS[id]; if(!b) return;
+  const lvl=townLvl(id)+1; if(lvl>b.max){ showHint(b.name+' is fully built.'); return; }
+  const c=buildingCost(id,lvl); if(!canAfford(c)){ showHint('Not enough resources.'); return; }
+  TOWN.res.wood-=(c.wood||0); TOWN.res.stone-=(c.stone||0); TOWN.res.shards-=(c.shards||0);
+  TOWN.built[id]=lvl; saveTown(); sfx('upgrade');
+  showHint(`${b.ic} ${b.name} ${lvl>1?'upgraded to Lv '+lvl:'built'}!`);
+  renderTownBuilder();
+}
+// Resources banked from a run — monotonic in run progress so re-banking can't double-pay.
+function awardTownResources(){
+  const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), gold=Math.max(0,G.gold||0);
+  const totW=Math.floor(slain*1.2)+Math.floor(gold/3);
+  const totS=Math.floor(slain*0.6)+Math.floor(gold/6);
+  const totSh=Math.floor(slain/6)+lvl;
+  const dw=Math.max(0,totW-(G.woodBanked||0)), ds=Math.max(0,totS-(G.stoneBanked||0)), dsh=Math.max(0,totSh-(G.shardBanked||0));
+  TOWN.res.wood+=dw; TOWN.res.stone+=ds; TOWN.res.shards+=dsh;
+  G.woodBanked=totW; G.stoneBanked=totS; G.shardBanked=totSh;
+  saveTown();
+  return {wood:dw,stone:ds,shards:dsh};
+}
 // ---- Boss mastery: each boss earns XP from kills made while playing it and
 // levels up, gaining a permanent +HP/+ATK bonus. ----
 const BOSS_XP_PER_LVL=12, BOSS_LVL_MAX=20;
@@ -1105,6 +1176,7 @@ function gotoMenu(){
       <button onclick="startEndless()">♾️ Endless</button>
       <button onclick="startTutorial()" class="${tutDoneGet()?'':'tut-pulse'}">📖 Tutorial</button>
       <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
+      <button onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="openCodex()">⚛️ Combo Codex</button>
       <button onclick="openUnlocks()">🔓 Unlocks</button>
       <button onclick="showHelp()">❓ How to play</button>
@@ -1213,6 +1285,39 @@ function openCodex(){
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
     <h2 style="margin:12px 0 4px">Keywords</h2>
     <div style="max-width:640px;text-align:left;margin:0 auto">${keys}</div>
+    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
+}
+
+/* ============================ TOWN BUILDER UI =========================== */
+function openTownBuilder(){ overlay.classList.add('show'); renderTownBuilder(); }
+function resBar(){
+  return `<div class="row" style="justify-content:center;gap:16px;font-size:17px;font-weight:bold">
+    <span title="Wood">🪵 <span style="color:#d6a86a">${TOWN.res.wood}</span></span>
+    <span title="Stone">🪨 <span style="color:#c8cdd6">${TOWN.res.stone}</span></span>
+    <span title="Shards">🔮 <span style="color:#c79bff">${TOWN.res.shards}</span></span></div>`;
+}
+function costStr(c){ if(!c) return ''; const p=[]; if(c.wood)p.push(`🪵${c.wood}`); if(c.stone)p.push(`🪨${c.stone}`); if(c.shards)p.push(`🔮${c.shards}`); return p.join(' '); }
+function renderTownBuilder(){
+  overlay.classList.add('show');
+  const cards=BUILDING_KEYS.map(id=>{
+    const b=BUILDINGS[id]; const lvl=townLvl(id), maxed=lvl>=b.max;
+    const next=maxed?null:buildingCost(id,lvl+1); const afford=canAfford(next);
+    const lvlPips=`<span class="small" style="color:#ffd34d">${'◆'.repeat(lvl)}${'◇'.repeat(b.max-lvl)}</span>`;
+    const action = maxed
+      ? `<div class="small" style="color:#7bdc6b;font-weight:bold">✔ FULLY BUILT</div>`
+      : `<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:4px;padding:6px 10px;font-size:12px">
+           ${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`;
+    return `<div class="choice" style="width:210px;${lvl>0?'border-color:#7bdc6b':''}">
+      <div class="big">${lvl>0?b.ic:'🏗️'}</div>
+      <h3 style="font-size:14px;margin:1px 0">${b.name} ${lvlPips}</h3>
+      <div class="small" style="opacity:.85;min-height:46px;line-height:1.25">${b.desc}</div>
+      <div class="small" style="color:#9adfff;min-height:30px;line-height:1.2">${maxed?b.lvlText(b.max):(lvl>0?b.lvlText(lvl)+'<br>':'')}${maxed?'':`<span style="opacity:.7">Next: ${b.lvlText(lvl+1)}</span>`}</div>
+      ${action}</div>`;}).join('');
+  overlay.innerHTML=`<h1 style="margin-bottom:2px">🏗️ Town Builder</h1>
+    <p style="margin:4px 0">Spend resources earned from your runs to grow the town. Each building unlocks part of the in-run <b>Hero Town</b> screen.</p>
+    ${resBar()}
+    <div class="choices" style="margin-top:10px">${cards}</div>
+    <p class="small" style="opacity:.6;max-width:560px;margin:8px auto 0">The Notice Board (events) is always open. Earn 🪵 / 🪨 from waves survived and leftover gold, and 🔮 from depth.</p>
     <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
 }
 
@@ -1471,7 +1576,7 @@ function chooseBoss(key){
   G.rooms=Array(G.slots).fill(null);
   G.gold=30+RB.gold0;
   G.dread=RB.dread0;
-  G.guildLvl=Math.min(GUILD_MAX, RB.guild0);
+  G.guildLvl=Math.min(townLvl('guild'), RB.guild0);   // can't out-start your built Guild ceiling
   zoom=1; camX=0;
   for(let i=0;i<RB.cards0;i++) G.hand.push({type:pickCardWeighted(unlockedRoomKeys(), runDepth()), lvl:1});
   gotoLoadout();                                  // pick your 3 abilities
@@ -2118,11 +2223,19 @@ function bossDies(){
     <p>${score}</p>
     <p style="opacity:.7">Dead is dead — this run is over.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
+    ${townGainLine()}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
     <div class="menu-btns">
       <button class="go" onclick="openRunes()">🔮 Rune Page</button>
+      <button onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
+}
+// One-line summary of the Wood/Stone/Shards a run banked for the Town Builder.
+function townGainLine(){
+  const g=G.townGain; if(!g||(g.wood+g.stone+g.shards<=0)) return '';
+  const p=[]; if(g.wood)p.push('🪵 '+g.wood); if(g.stone)p.push('🪨 '+g.stone); if(g.shards)p.push('🔮 '+g.shards);
+  return `<p style="color:#d6a86a">🏗️ Town resources: +${p.join(' · ')}</p>`;
 }
 function totalKills(){ return G.totalSlain; }
 // Capture just enough of the hero who felled the throne for the post-mortem.
@@ -2194,6 +2307,7 @@ function awardRunes(){
     if(lvlAfter>lvlBefore) G.newUnlocks.push(`${BOSSES[bk].ic} ${BOSSES[bk].name.split(' ')[0]} → Mastery Lv ${lvlAfter}`);
   }
   saveRunes();
+  G.townGain=awardTownResources();      // bank Wood/Stone/Shards for the Town Builder
   return delta;
 }
 
@@ -2319,6 +2433,7 @@ function winLevel(){
       <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
          having buried <b>${G.totalSlain}</b> heroes.</p>
       <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
+      ${townGainLine()}
       ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
       <div class="menu-btns">
         <button class="go" onclick="gotoMenu()">★ Main menu</button>
@@ -2387,6 +2502,7 @@ function chooseEvent(i){
 // Boss empowerments are repeatable — each level costs ~40% more than the last.
 function upgradeCost(key){ return townCost(Math.round(TOWN_UPGRADES[key].base * Math.pow(1.4, G.townBuys[key]||0))); }
 function buyUpgrade(key){
+  if(townLvl('sanctum')<(SANCTUM_UNLOCK[key]||1)){ showHint("Build the Sorcerer's Sanctum higher first."); return; }
   const cost=upgradeCost(key);
   if(G.dread<cost){ showHint('Not enough dread.'); return; }
   G.dread-=cost; G.townBuys[key]=(G.townBuys[key]||0)+1;
@@ -2398,20 +2514,23 @@ function buyUpgrade(key){
   showHint(TOWN_UPGRADES[key].name+'!'); renderTown(); renderTop();
 }
 
-function schemeCost(key){ return townCost(TOWN_SCHEMES[key].cost); }
+function schemeCost(key){ return Math.max(1, Math.round(townCost(TOWN_SCHEMES[key].cost)*denDisc())); }
 function buyScheme(key){
+  if(!townHas('den')){ showHint("Build the Smugglers' Den first."); return; }
   const s=TOWN_SCHEMES[key]; const c=schemeCost(key);
   if(G.fx[key]>0){ showHint('Already active.'); return; }
   if(G.dread<c){ showHint('Not enough dread.'); return; }
   G.dread-=c; G.fx[key]=s.waves;
   showHint(s.name+' — active '+s.waves+' waves.'); renderTown(); renderTop();
 }
-function setThreat(d){ G.bounty=clamp(G.bounty+d,-2,3); renderTown(); renderTop(); }
+function setThreat(d){ if(!townHas('watch')){ showHint('Build the Watchtower first.'); return; } G.bounty=clamp(G.bounty+d,-2,3); renderTown(); renderTop(); }
 
 const GUILD_MAX=3;   // party of up to 4
 function guildCost(){ return townCost(9 + G.guildLvl*7); }
 function buyGuild(){
-  if(G.guildLvl>=GUILD_MAX){ showHint('Guild house is at max level.'); return; }
+  const cap=townLvl('guild');
+  if(!cap){ showHint('Build the Guild House in the Town Builder first.'); return; }
+  if(G.guildLvl>=cap){ showHint('Guild is at its built ceiling (Lv '+cap+'). Upgrade the Guild House to raise it.'); return; }
   const cost=guildCost();
   if(G.dread<cost){ showHint('Not enough dread.'); return; }
   G.dread-=cost; G.guildLvl++;
@@ -2419,9 +2538,11 @@ function buyGuild(){
   renderTown(); renderTop();
 }
 
-function sabotageCost(spec,key){ return townCost(TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3)); }
+function sabotageCost(spec,key){ return Math.max(1, Math.round(townCost(TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3))*innDisc())); }
+function corruptCost(){ return Math.max(1, Math.round(townCost(CORRUPT_COST)*innDisc())); }
 function sabotage(idx,key){
   const spec=G.queue[idx]; if(!spec) return;
+  if(townLvl('inn')<(INN_UNLOCK[key]||1)){ showHint('Build the Inn higher to do that.'); return; }
   const cost=sabotageCost(spec,key);
   if(G.dread<cost){ showHint('Not enough dread.'); return; }
   if(key==='intimidate'){
@@ -2453,7 +2574,8 @@ function grantMinionCard(power){
 }
 function corruptHero(idx){
   const spec=G.queue[idx]; if(!spec) return;
-  const cc=townCost(CORRUPT_COST);
+  if(townLvl('inn')<INN_UNLOCK.corrupt){ showHint('Build the Inn (Lv 2) to corrupt heroes.'); return; }
+  const cc=corruptCost();
   if(G.dread<cc){ showHint('Not enough dread.'); return; }
   if(G.hand.length>=handCap()){ showHint('Hand full — play a card first.'); return; }
   G.dread-=cc; G.queue.splice(idx,1);
@@ -2480,7 +2602,7 @@ function renderTown(){
       <button onclick="setThreat(1)" ${G.bounty>=3?'disabled':''} style="padding:5px 9px;min-height:0">Taunt ▲</button>
       <button onclick="setThreat(-1)" ${G.bounty<=-2?'disabled':''} style="padding:5px 9px;min-height:0">Lie low ▼</button>
     </div>`;
-  const ups=Object.keys(TOWN_UPGRADES).map(k=>{
+  const ups=Object.keys(TOWN_UPGRADES).filter(k=>townLvl('sanctum')>=(SANCTUM_UNLOCK[k]||1)).map(k=>{
     const u=TOWN_UPGRADES[k]; const n=G.townBuys[k]||0; const cost=upgradeCost(k); const can=G.dread>=cost;
     return `<button ${can?'':'disabled'} onclick="buyUpgrade('${k}')"
       style="display:flex;flex-direction:column;align-items:center;min-width:112px;gap:1px;height:auto;padding:7px;border-color:var(--accent)">
@@ -2498,13 +2620,14 @@ function renderTown(){
     const c=CLASSES[spec.cls]; const ps=previewStats(spec);
     const nm = spec.name ? `${spec.name}${spec.title?' '+spec.title:''}` : c.name;
     const traits=spec.traits.map(t=>`<span class="tag" style="color:${TRAITS[t].col}">${TRAITS[t].ic}${TRAITS[t].name}</span>`).join('');
-    const sab=Object.keys(TOWN_SABOTAGE).map(k=>{
+    const sab=Object.keys(TOWN_SABOTAGE).filter(k=>townLvl('inn')>=(INN_UNLOCK[k]||1)).map(k=>{
       const s=TOWN_SABOTAGE[k]; const cost=sabotageCost(spec,k);
       const done=(k==='intimidate'&&spec.debuff.atkMul<1)||(k==='rob'&&spec.debuff.robbed);
       const dis=done||G.dread<cost;
       return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
         ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
-    const corruptDis = G.dread<townCost(CORRUPT_COST) || G.hand.length>=handCap();
+    const canCorrupt = townLvl('inn')>=INN_UNLOCK.corrupt;
+    const corruptDis = G.dread<corruptCost() || G.hand.length>=handCap();
     const ch = spec.champion ? CHAMPIONS[spec.champion] : null;
     return `<div class="choice" style="width:208px;${ch?'border-color:'+ch.col+';box-shadow:0 0 10px '+ch.col:spec.rival?'border-color:#ff6b8a':''}">
       <div class="big">${ch?ch.ic+'👑':c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
@@ -2513,27 +2636,35 @@ function renderTown(){
       <div class="small" style="opacity:.6">${ch?ch.desc:c.name+' · power '+(spec.power+1)}</div>
       <div style="min-height:20px;margin:3px 0">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
       <div class="stats">❤️ ${ps.hp} · 🗡️ ${ps.atk} · 💰 ${ps.gold}</div>
-      <div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
-      <button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">🧟 Corrupt ${townCost(CORRUPT_COST)}☠</button>
+      ${townHas('inn') ? `<div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
+      ${canCorrupt?`<button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">🧟 Corrupt ${corruptCost()}☠</button>`:''}`
+      : `<div class="small" style="opacity:.5;margin-top:6px">🔒 Build the Inn to meddle</div>`}
     </div>`;}).join('');
+  const cap=townLvl('guild');
+  const guildBlock = townHas('guild') ? `<div class="row" style="justify-content:center;margin:6px 0">
+      <button ${G.guildLvl>=cap||G.dread<guildCost()?'disabled':''} onclick="buyGuild()"
+        style="border-color:#ffd34d;display:flex;flex-direction:column;align-items:center;min-width:180px;height:auto;padding:8px;gap:1px">
+        <span style="font-size:18px">🏛️ Guild House${G.guildLvl>0?' · Lv '+G.guildLvl:''}</span>
+        <span class="small" style="opacity:.85;font-weight:normal">${G.guildLvl>=cap?'At built ceiling — parties of '+(G.guildLvl+1):'Heroes raid in parties of '+(G.guildLvl+1)+' → '+(G.guildLvl+2)}</span>
+        <span style="color:#b985ff">${G.guildLvl>=cap?'CEILING Lv '+cap:guildCost()+' ☠'}</span>
+      </button>
+    </div>` : '';
+  const empowerBlock = townHas('sanctum') ? `<h2 style="margin:8px 0 4px">Empower the Boss <span class="small" style="opacity:.6">(dread)</span></h2>
+    <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${ups}</div>` : '';
+  const schemeBlock = townHas('den') ? `<h2 style="margin:10px 0 4px">Town Schemes${denDisc()<1?' <span class="small" style="opacity:.6;color:#7bdc6b">−30%</span>':''}</h2>
+    <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${schemes}</div>` : '';
+  const locked = BUILDING_KEYS.filter(id=>!townHas(id));
+  const lockHtml = locked.length ? `<p class="small" style="opacity:.65;margin:10px auto 0;max-width:580px">🔒 Grow your town in the <b>Town Builder</b> (main menu): ${locked.map(id=>BUILDINGS[id].ic+' '+BUILDINGS[id].name).join(' · ')}</p>` : '';
   overlay.innerHTML=`<h1 style="margin-bottom:2px">🏚️ Hero Town</h1>
     <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span></p>
     ${evHtml}
-    ${threat}
-    <div class="row" style="justify-content:center;margin:6px 0">
-      <button ${G.guildLvl>=GUILD_MAX||G.dread<guildCost()?'disabled':''} onclick="buyGuild()"
-        style="border-color:#ffd34d;display:flex;flex-direction:column;align-items:center;min-width:180px;height:auto;padding:8px;gap:1px">
-        <span style="font-size:18px">🏛️ Guild House${G.guildLvl>0?' · Lv '+G.guildLvl:''}</span>
-        <span class="small" style="opacity:.85;font-weight:normal">${G.guildLvl>=GUILD_MAX?'Max — heroes raid in parties of '+(G.guildLvl+1):'Heroes raid in parties of '+(G.guildLvl+1)+' → '+(G.guildLvl+2)}</span>
-        <span style="color:#b985ff">${G.guildLvl>=GUILD_MAX?'MAX':guildCost()+' ☠'}</span>
-      </button>
-    </div>
-    <h2 style="margin:8px 0 4px">Empower the Boss <span class="small" style="opacity:.6">(dread)</span></h2>
-    <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${ups}</div>
-    <h2 style="margin:10px 0 4px">Town Schemes</h2>
-    <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${schemes}</div>
-    <h2 style="margin:10px 0 4px">Next Arrivals — meddle &amp; corrupt</h2>
+    ${townHas('watch')?threat:''}
+    ${guildBlock}
+    ${empowerBlock}
+    ${schemeBlock}
+    <h2 style="margin:10px 0 4px">Next Arrivals${townHas('inn')?' — meddle &amp; corrupt':''}</h2>
     <div class="choices">${roster}</div>
+    ${lockHtml}
     <div class="menu-btns"><button class="go" onclick="leaveTown()">⚔️ Back to the dungeon</button></div>`;
 }
 
@@ -3881,6 +4012,7 @@ window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
 if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 
 loadRunes();
+loadTown();
 loadAudioPref();
 loadVolPrefs();
 // Audio can only start after a user gesture; wake it on the first interaction.
