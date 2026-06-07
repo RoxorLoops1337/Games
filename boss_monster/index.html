@@ -82,6 +82,11 @@
   .abil{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:74px;padding:6px 8px;}
   .abil > span{pointer-events:none;}   /* taps always land on the button, never a child being re-rendered */
   .abil .c{font-size:10px;color:var(--mana);}
+  .abil.overdrive{border-color:#ff7a2e;}
+  .abil.overdrive.rdy{border-color:#ffd34d;color:#fff;
+    background:linear-gradient(#7a3a14,#3a1c08);box-shadow:0 0 14px #ff9a3a;animation:odpulse 1s ease-in-out infinite;}
+  .abil.overdrive.rdy .c{color:#ffe9a8;}
+  @keyframes odpulse{0%,100%{box-shadow:0 0 10px #ff9a3a;}50%{box-shadow:0 0 22px #ffd34d,0 0 8px #ff5470;}}
   .abil:disabled .c{color:#888;}
   .pill{font-size:11px;padding:2px 8px;border-radius:10px;background:#2a2046;border:1px solid #3a2c66;}
   /* Overlay screens */
@@ -1677,7 +1682,7 @@ function chooseBoss(key){
   const glass=hasEdict('glassThrone')?0.70:1;     // Glass Throne edict: frail boss, bigger reward
   const maxHp=Math.round(b.maxHp*(1+RB.bossHp)*bossMasteryHp(mLvl)*glass) + RB.bossHpFlat;
   const atk=Math.round(b.atk*(1+RB.bossAtk)*bossMasteryAtk(mLvl)) + RB.bossAtkFlat;
-  G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1, masteryLvl:mLvl, smiteCd:0,
+  G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1, masteryLvl:mLvl, smiteCd:0, rage:0,
     mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
     abil:[...b.sig, b.pool[0]].map(id=>({id,cd:0})) };
   applyBossPassive(G.boss);                       // signature passive effects
@@ -2148,6 +2153,7 @@ function popReact(h,label,col,x){
   burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); shake(6+Math.min(chain,6)); sfx('crit');
   if(chain>=3) flash(col, Math.min(0.3, 0.10+chain*0.03), 0.22);             // escalating reaction spectacle
   if(chain>=4) slowmo(0.25);
+  gainRage(2);                                                                // reactions feed Overdrive
 }
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
@@ -2237,6 +2243,8 @@ function castAbility(slot){
 // front-most). The skill is choosing the moment and the target: finish a
 // wounded raider, or focus the champion before it chunks your HP.
 const SMITE_MUL=2.4, SMITE_CD=1.6;
+const RAGE_MAX=100;                 // 💥 Overdrive meter — fills as you fight, unleashes a screen-clearing wrath
+function gainRage(n){ const b=G&&G.boss; if(b) b.rage=Math.min(RAGE_MAX,(b.rage||0)+n); }
 function throneHeroes(){ return (G && G.heroes) ? G.heroes.filter(h=>h && h.state==='boss' && h.hp>0) : []; }
 function smite(target){
   if(G.phase!=='run' || !G.boss) return;
@@ -2251,6 +2259,28 @@ function smite(target){
   floater(t.x, t.y-72, '⚔️ SMITE', '#ffd34d'); burst(t.x, t.y-24, '#ffd34d', 22);
   shake(8); hitStop=0.05; sfx('crit');
   dealToHero(t, dmg, 'SMITE', false, 'phys', true);   // aimed → ignores dodge
+  renderPanel();
+}
+// 💥 OVERDRIVE — when the Rage meter is full, unleash a screen-clearing wrath:
+// a heavy armor-piercing blast on EVERY living raider, leaving survivors burning
+// and chilled. The signature power-fantasy moment.
+let overdriveT=0;
+function castOverdrive(){
+  if(G.phase!=='run' || !G.boss) return;
+  const b=G.boss;
+  if((b.rage||0) < RAGE_MAX){ showHint('💥 Overdrive is still charging.'); return; }
+  b.rage=0;
+  // cinematic
+  flash(b.col||'#ff5470', 0.55, 0.55); slowmo(0.7); shake(16); sfx('relic'); hitStop=0.06;
+  floater(bossX(), FLOOR-150, '💥 OVERDRIVE!', b.col||'#ff5470', true);
+  overdriveT=0.6;                                   // drives the corridor shockwave in draw()
+  const living=(G.heroes||[]).filter(h=>h && h.state!=='dead');
+  for(const h of living){
+    const dmg=Math.round(h.maxHp*0.45 + 25 + (b.lvl||1)*6);
+    burst(h.x, h.y-24, b.col||'#ff5470', 18);
+    dealToHero(h, dmg, 'OVERDRIVE', 'full', null, true);   // pierces all armor, can't be dodged
+    if(h.state!=='dead'){ h.burn=(h.burn||0)+8; h.burnT=4; h.chill=Math.max(h.chill||0,3); }
+  }
   renderPanel();
 }
 
@@ -2277,6 +2307,7 @@ function heroDies(h){
   if(G.combo>=3){ comboBonus=G.combo; G.gold+=comboBonus;
     floater(h.x, h.y-78, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
   comboCallout(G.combo, h.x);
+  gainRage(8);                                  // 💥 every kill stokes the boss's wrath
   // room XP: credit the room the hero was IN when it fell (toward fusing a 2nd
   // part / veteran ranks). Use the tracked cellIndex, not the raw x — a kill a
   // pixel past a boundary used to lose its credit.
@@ -2808,6 +2839,7 @@ function update(dt){
   if(shakeT>0) shakeT=Math.max(0,shakeT-dt);   // screen-shake decay
   if(flashT>0) flashT=Math.max(0,flashT-dt);   // screen-flash decay
   if(slowT>0) slowT=Math.max(0,slowT-dt);      // slow-mo decay (real time)
+  if(overdriveT>0) overdriveT=Math.max(0,overdriveT-dt);   // Overdrive shockwave
 
   if(G.phase!=='run' || !G.heroes.length) return;
   // hit-pause: briefly freeze the sim on big hits for impact
@@ -3161,7 +3193,7 @@ function bossFightTick(h,dt,isFront,frozen){
       if(b.thorns){ dealToHero(h, Math.round(dmg*b.thorns), 'THORNS'); }  // Spiked Throne reflect
       floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
       burst(bossX(), FLOOR-50, '#ff4d6d', 6);
-      shake(3); sfx('boss');
+      shake(3); sfx('boss'); gainRage(3);        // being struck at the throne stokes wrath too
       if(b.hp<=0){ b.hp=0; G.killer=snapshotHero(h); bossDies(); return; }
     }
   }
@@ -3214,6 +3246,15 @@ function draw(){
       X.fillStyle=f.col; X.fillText(f.txt, tx(f.x), f.y);
     } else { X.fillStyle=f.col; X.font='bold 16px Trebuchet MS'; X.fillText(f.txt, tx(f.x), f.y); } });
   X.globalAlpha=1; X.textAlign='left';
+
+  // 💥 Overdrive shockwave — a bright ring sweeping out from the throne
+  if(overdriveT>0){
+    const p=1-(overdriveT/0.6);                 // 0→1 over the effect
+    const cx=tx(cellX(G.slots)+ROOM_W*0.6), cy=FLOOR-40;
+    const r=20+p*VW*1.1;
+    X.globalAlpha=clamp(1-p,0,1)*0.8; X.strokeStyle=(G.boss&&G.boss.col)||'#ff5470'; X.lineWidth=10+(1-p)*18;
+    X.beginPath(); X.arc(cx,cy,r,0,Math.PI*2); X.stroke(); X.globalAlpha=1;
+  }
 
   // full-screen colour flash (device space, above everything)
   if(flashT>0 && flashDur>0){
@@ -3721,6 +3762,7 @@ function renderPanel(){
         <div class="bmbars">
           <div class="bar bmhp"><i id="pbhp" style="background:linear-gradient(90deg,#ff4d6d,#ff8a8a);width:${b.hp/b.maxHp*100}%"></i><span id="pbhpT">${Math.ceil(b.hp)}/${b.maxHp}</span></div>
           <div class="bar bmmana"><i id="pbmana" style="background:linear-gradient(90deg,#2a7adf,#4dc3ff);width:${b.mana/b.maxMana*100}%"></i><span id="pbmanaT">${Math.floor(b.mana)}/${b.maxMana}</span></div>
+          <div class="bar bmrage" title="Overdrive meter"><i id="pbrage" style="background:linear-gradient(90deg,#ff7a2e,#ffd34d);width:${(b.rage||0)/RAGE_MAX*100}%"></i><span id="pbrageT">💥 ${Math.floor(b.rage||0)}%</span></div>
         </div>
       </div>
       ${G.boss.abil.map((a,i)=>{ const def=ABIL[a.id]; const cost=abilCost(def.cost);
@@ -3737,6 +3779,13 @@ function renderPanel(){
           <span style="font-size:18px">⚔️</span>
           <span style="font-size:11px">Smite</span>
           <span class="c">${(b.smiteCd||0)>0?'⏳'+b.smiteCd.toFixed(1)+'s':(has?'aim!':'—')}</span>
+        </button>`; })()}
+      ${(()=>{ const ready=(b.rage||0)>=RAGE_MAX;
+        return `<button class="abil overdrive${ready?' rdy':''}" onclick="castOverdrive()" ${ready?'':'disabled'}
+          title="OVERDRIVE — when Rage is full, blast EVERY raider for ~45% max HP (ignores armor), leaving survivors burning &amp; chilled. Hotkey: Q">
+          <span style="font-size:18px">💥</span>
+          <span style="font-size:11px">Overdrive</span>
+          <span class="c">${ready?'READY!':Math.floor(b.rage||0)+'%'}</span>
         </button>`; })()}
       <span style="flex:1"></span>
       <button onclick="toggleSpeed()">⏩ ${speedMul}×</button>
@@ -4111,6 +4160,7 @@ window.addEventListener('keydown', e=>{
   if(!G) return;
   if(G.phase==='run'){
     if(e.key>='1'&&e.key<='3'){ const i=+e.key-1; if(i<G.boss.abil.length) castAbility(i); }
+    if(e.key==='q'||e.key==='Q'){ castOverdrive(); }       // 💥 Overdrive ultimate
     // Space smites when heroes are at the throne (the active moment), else toggles speed
     if(e.key===' '){ e.preventDefault(); if(throneHeroes().length) smite(); else toggleSpeed(); }
   } else if(G.phase==='build' && e.key===' '){ e.preventDefault(); startWave(); }
@@ -4135,25 +4185,34 @@ function updateRunPanel(){
   if(!G||G.phase!=='run'||!G.boss) return;
   const btns=panel.querySelectorAll('.abil');
   const n=G.boss.abil.length;
-  if(btns.length!==n+1){ renderPanel(); return; }      // +1 = the Smite button
+  if(btns.length!==n+2){ renderPanel(); return; }      // +2 = Smite and Overdrive buttons
   const setDis=(el,v)=>{ if(el.disabled!==v) el.disabled=v; };
+  const setCls=(el,c,on)=>{ if(el.classList.contains(c)!==on) el.classList.toggle(c,on); };
   const setTxt=(el,v)=>{ if(el && el.textContent!==v) el.textContent=v; };  // only touch the DOM on a real change
   for(let i=0;i<n;i++){
     const a=G.boss.abil[i], def=ABIL[a.id], cost=abilCost(def.cost);
     setDis(btns[i], a.cd>0||G.boss.mana<cost);
     setTxt(btns[i].querySelector('.c'), a.cd>0 ? '⏳'+a.cd.toFixed(1)+'s' : '🔷'+cost);
   }
-  // Smite is the last .abil button — refresh its ready/aim state live too
-  const b=G.boss, sb=btns[n], ready=(b.smiteCd||0)<=0, has=G.heroes.some(h=>h&&h.state==='boss'&&h.hp>0);
-  setDis(sb, !ready||!has);
+  const b=G.boss;
+  // Smite (btns[n]) — refresh its ready/aim state live
+  const sb=btns[n], sready=(b.smiteCd||0)<=0, has=G.heroes.some(h=>h&&h.state==='boss'&&h.hp>0);
+  setDis(sb, !sready||!has);
   setTxt(sb.querySelector('.c'), (b.smiteCd||0)>0 ? '⏳'+b.smiteCd.toFixed(1)+'s' : (has?'aim!':'—'));
-  // live boss HP + mana readout next to the abilities
+  // Overdrive (btns[n+1]) — charges with Rage
+  const ob=btns[n+1], oready=(b.rage||0)>=RAGE_MAX;
+  setDis(ob, !oready); setCls(ob, 'rdy', oready);
+  setTxt(ob.querySelector('.c'), oready ? 'READY!' : Math.floor(b.rage||0)+'%');
+  // live boss HP + mana + rage readout
   const hp=document.getElementById('pbhp'), hpT=document.getElementById('pbhpT');
   const mn=document.getElementById('pbmana'), mnT=document.getElementById('pbmanaT');
+  const rg=document.getElementById('pbrage'), rgT=document.getElementById('pbrageT');
   if(hp) hp.style.width=(b.hp/b.maxHp*100)+'%';
   if(hpT) setTxt(hpT, Math.ceil(b.hp)+'/'+b.maxHp);
   if(mn) mn.style.width=(b.mana/b.maxMana*100)+'%';
   if(mnT) setTxt(mnT, Math.floor(b.mana)+'/'+b.maxMana);
+  if(rg) rg.style.width=((b.rage||0)/RAGE_MAX*100)+'%';
+  if(rgT) setTxt(rgT, '💥 '+Math.floor(b.rage||0)+'%');
 }
 
 /* keep the canvas matched to the stage (rotation, panel-height changes, etc.) */
