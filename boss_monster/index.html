@@ -95,6 +95,20 @@
     -webkit-overflow-scrolling:touch;
     padding:calc(18px + env(safe-area-inset-top,0px)) 18px calc(18px + env(safe-area-inset-bottom,0px));}
   #overlay.show{display:flex;}
+  /* aftermath reward reveal */
+  .amstage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:260px;}
+  .amtitle{font-size:15px;color:#cdbcff;letter-spacing:.5px;opacity:.9;}
+  .ambook,.amchest{font-size:74px;line-height:1;filter:drop-shadow(0 5px 12px rgba(0,0,0,.55));}
+  .amcount{font-size:30px;font-weight:bold;color:#ffd34d;text-shadow:0 2px 6px #000;min-height:34px;}
+  .flyicon{position:absolute;font-size:24px;z-index:62;pointer-events:none;text-shadow:0 1px 3px #000;
+    transition:transform .5s cubic-bezier(.5,-.3,.3,1.25),opacity .5s;}
+  @keyframes ampop{0%{transform:scale(1)}40%{transform:scale(1.3)}100%{transform:scale(1)}}
+  .ampop{animation:ampop .26s ease-out;}
+  .amunlabel{font-size:18px;font-weight:bold;color:#6ad97e;letter-spacing:3px;text-shadow:0 0 10px #6ad97e88;}
+  .amcard{font-size:28px;font-weight:bold;padding:18px 26px;border-radius:16px;border:2px solid var(--gold);
+    background:linear-gradient(160deg,#2a2046,#1a1330);box-shadow:0 0 28px #ffd34d88;cursor:pointer;
+    animation:amreveal .55s cubic-bezier(.2,.85,.3,1.3);}
+  @keyframes amreveal{0%{transform:scale(.1) rotate(-200deg);opacity:0}70%{transform:scale(1.12) rotate(7deg);opacity:1}100%{transform:scale(1) rotate(0)}}
   #overlay h1{font-size:34px;margin:0 0 4px;color:var(--gold);letter-spacing:1px;
     text-shadow:0 2px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);}
   #overlay h2{font-size:20px;margin:6px 0;color:var(--accent);}
@@ -1120,6 +1134,8 @@ const SFX={
   lose:()=>[392,330,262].forEach((f,i)=>setTimeout(()=>tone(f,0.3,'sawtooth',0.17),i*170)),
   win:()=>[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'square',0.15),i*120)),
   combo:()=>tone(880,0.08,'square',0.13,1320),
+  plop:()=>tone(440,0.09,'sine',0.15,150),                                   // rune drops into the book
+  ching:()=>{ tone(1568,0.06,'triangle',0.12); setTimeout(()=>tone(2349,0.09,'triangle',0.10),42); },  // coin into the chest
 };
 function sfx(name){
   const f=SFX[name]; if(!f) return;
@@ -1243,7 +1259,7 @@ function closeDungeon(){
   const earned=awardRunes();
   bankResources(1, true);
   G.phase='closed'; overlay.classList.add('show');
-  overlay.innerHTML=`<h1 style="color:#9be86b">🏳️ DUNGEON CLOSED</h1>
+  const summary=`<h1 style="color:#9be86b">🏳️ DUNGEON CLOSED</h1>
     <div style="font-size:54px">${G.boss?G.boss.ic:'🐲'}🚪</div>
     <p>You sealed the halls and withdrew in good order after slaying <b>${G.totalSlain}</b> heroes — keeping every scrap you gathered.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
@@ -1254,6 +1270,7 @@ function closeDungeon(){
       <button onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
+  aftermathSequence(earned, summary);
 }
 
 const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
@@ -2381,7 +2398,7 @@ function bossDies(){
   const score = G.mode==='campaign'
     ? `You fell on Chapter ${G.levelIdx+1} after slaying ${totalKills()} heroes.`
     : `You reigned ${G.survived} heroes before the throne fell.`;
-  overlay.innerHTML=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
+  const summary=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
     <div style="font-size:54px">${G.boss.ic}💔</div>
     ${buildPostmortem()}
     <p>${score}</p>
@@ -2394,6 +2411,7 @@ function bossDies(){
       <button onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
+  aftermathSequence(earned, summary);
 }
 // One-line summary of the Wood/Stone/Shards a run banked for the Town Builder.
 function townGainLine(verb){
@@ -2401,6 +2419,83 @@ function townGainLine(verb){
   const p=[]; if(g.wood)p.push('🪵 '+g.wood); if(g.stone)p.push('🪨 '+g.stone); if(g.shards)p.push('🔮 '+g.shards);
   return `<p style="color:#d6a86a">🏗️ Town resources ${verb||'banked'}: +${p.join(' · ')}</p>`;
 }
+/* ===================== AFTERMATH — animated reward reveal =================
+   Before the final summary, play a little sequence: rune points fly into a book
+   (plop), town resources fly into a chest (ching), then each unlock spin-zooms in
+   to be tapped through. Skip jumps straight to the summary. */
+let _amTimers=[], _amQueue=[], _amSummary=null;
+function amClearTimers(){ _amTimers.forEach(t=>clearTimeout(t)); _amTimers=[]; }
+function amSched(fn,ms){ const t=setTimeout(fn,ms); _amTimers.push(t); return t; }
+function amSetText(id,txt){ const e=document.getElementById(id); if(e) e.textContent=txt; }
+function amPop(id){ const e=document.getElementById(id); if(e){ e.classList.remove('ampop'); void e.offsetWidth; e.classList.add('ampop'); } }
+function amSpawnFly(icon,color,targetId){
+  const tgt=document.getElementById(targetId); if(!tgt||!overlay) return;
+  const o=overlay.getBoundingClientRect(), t=tgt.getBoundingClientRect();
+  const tx=t.left-o.left+t.width/2, ty=t.top-o.top+t.height/2;
+  const sx=o.width*0.5+(Math.random()*220-110), sy=o.height*0.80;
+  const el=document.createElement('div'); el.className='flyicon'; el.textContent=icon; if(color) el.style.color=color;
+  el.style.left=sx+'px'; el.style.top=sy+'px'; overlay.appendChild(el);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.style.transform='translate('+(tx-sx)+'px,'+(ty-sy)+'px) scale(.4)'; el.style.opacity='.15'; }));
+  amSched(()=>el.remove(),720);
+}
+function aftermathSequence(earned, summaryHtml){
+  _amSummary=summaryHtml; amClearTimers();
+  const g=G.townGain||{wood:0,stone:0,shards:0};
+  const unlocks=(G.newUnlocks||[]).slice();
+  _amQueue=[];
+  if(earned>0) _amQueue.push({t:'runes',n:earned});
+  if((g.wood||0)+(g.stone||0)+(g.shards||0)>0) _amQueue.push({t:'res',g});
+  unlocks.forEach(u=>_amQueue.push({t:'unlock',label:u}));
+  overlay.classList.add('show');
+  if(!_amQueue.length){ amShowSummary(); return; }   // nothing to celebrate → straight to summary
+  overlay.innerHTML='<div id="amstage" class="amstage"></div>'+
+    '<div class="menu-btns" style="margin-top:12px"><button onclick="amSkip()">Skip ⏭</button></div>';
+  amNext();
+}
+function amNext(){
+  amClearTimers();
+  const st=_amQueue.shift();
+  if(!st){ amShowSummary(); return; }
+  if(st.t==='runes') amStageRunes(st.n);
+  else if(st.t==='res') amStageRes(st.g);
+  else amStageUnlock(st.label);
+}
+function amStageRunes(n){
+  const s=document.getElementById('amstage'); if(!s){ amNext(); return; }
+  s.innerHTML='<div class="amtitle">🔮 Rune points earned</div><div class="ambook" id="amtgt">📖</div><div class="amcount" id="amcount">0 ◆</div>';
+  const N=Math.max(1,Math.min(n,25)), travel=520, stagger=Math.max(45,Math.min(150,1000/N));
+  for(let i=0;i<N;i++){
+    amSched(()=>amSpawnFly('◆','#ffd34d','amtgt'), i*stagger);
+    amSched(()=>{ sfx('plop'); amSetText('amcount', Math.min(n,Math.round((i+1)*(n/N)))+' ◆'); amPop('amtgt'); }, i*stagger+travel);
+  }
+  amSched(()=>{ amSetText('amcount', n+' ◆'); amNext(); }, N*stagger+travel+750);
+}
+function amStageRes(g){
+  const s=document.getElementById('amstage'); if(!s){ amNext(); return; }
+  s.innerHTML='<div class="amtitle">🏗️ Town resources gathered</div><div class="amchest" id="amtgt">🧰</div><div class="amcount" id="amcount"></div>';
+  const types=[['wood','🪵','#d6a86a'],['stone','🪨','#c8cdd6'],['shards','🔮','#c79bff']].filter(t=>g[t[0]]>0);
+  const got={wood:0,stone:0,shards:0};
+  const draw=()=>amSetText('amcount', types.map(t=>t[1]+' '+got[t[0]]).join('   '));
+  draw(); let delay=0;
+  types.forEach(([key,icon,col])=>{
+    const amt=g[key], N=Math.max(1,Math.min(amt,8)), stagger=85;
+    for(let i=0;i<N;i++){
+      amSched(()=>amSpawnFly(icon,col,'amtgt'), delay+i*stagger);
+      amSched(()=>{ sfx('ching'); got[key]=Math.min(amt,Math.round((i+1)*(amt/N))); draw(); amPop('amtgt'); }, delay+i*stagger+470);
+    }
+    delay+=N*stagger+280;
+  });
+  amSched(()=>{ types.forEach(t=>got[t[0]]=g[t[0]]); draw(); amNext(); }, delay+750);
+}
+function amStageUnlock(label){
+  const s=document.getElementById('amstage'); if(!s){ amNext(); return; }
+  s.innerHTML='<div class="amunlabel">✦ UNLOCKED ✦</div>'+
+    '<div class="amcard" onclick="amNext()">'+label+'</div>'+
+    '<div class="menu-btns"><button class="go" onclick="amNext()">Next ▶</button></div>';
+  sfx('relic');
+}
+function amSkip(){ amClearTimers(); if(overlay&&overlay.querySelectorAll) overlay.querySelectorAll('.flyicon').forEach(e=>e.remove()); _amQueue=[]; amShowSummary(); }
+function amShowSummary(){ amClearTimers(); if(_amSummary!=null && overlay) overlay.innerHTML=_amSummary; }
 function totalKills(){ return G.totalSlain; }
 // Capture just enough of the hero who felled the throne for the post-mortem.
 function snapshotHero(h){
@@ -2592,7 +2687,7 @@ function winLevel(){
     sfx('win');
     const earned=awardRunes();
     bankResources(1, true);                        // a full clean victory — keep everything + gold bonus
-    overlay.innerHTML=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
+    const summary=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
       <div style="font-size:60px">${G.boss.ic}👑</div>
       <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
          having buried <b>${G.totalSlain}</b> heroes.</p>
@@ -2603,6 +2698,7 @@ function winLevel(){
         <button class="go" onclick="gotoMenu()">★ Main menu</button>
         <button onclick="openRunes()">🔮 Rune Page</button>
         <button onclick="startEndless()">Try Endless</button></div>`;
+    aftermathSequence(earned, summary);
     return;
   }
   // heal boss 30% as a chapter reward, then draft a relic before continuing
