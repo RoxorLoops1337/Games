@@ -697,6 +697,18 @@ const BUILDINGS={
     desc:'A monument of terror that wrings more fear from every kill — more to spend in town each run.',
     lvlText:l=>`+${l} dread per kill in-run.`,
     cost:l=>[{stone:50,shards:6},{stone:100,shards:14},{stone:180,shards:24}][l-1]},
+  library:{name:'Dark Library',      ic:'📚', sect:'eco', max:3,
+    desc:'Forbidden lore that turns every slaughter into deeper understanding. More rune points per run.',
+    lvlText:l=>`+${[0,12,25,40][l]}% rune points earned per run.`,
+    cost:l=>[{shards:8,wood:30},{shards:16,stone:60},{shards:28,stone:110}][l-1]},
+  smithy: {name:'Dark Smithy',       ic:'🔨', sect:'eco', max:3,
+    desc:'Forges cursed gear and slips it into your shops for free — every sale is pure profit.',
+    lvlText:l=>`Each shop is pre-stocked with ${l} free item${l>1?'s':''} every wave.`,
+    cost:l=>[{wood:60,stone:30},{wood:110,stone:70},{wood:180,stone:120}][l-1]},
+  shrine: {name:'Relic Shrine',      ic:'🛐', sect:'eco', max:3,
+    desc:'An altar to dark powers — you begin each run already bearing a relic (two at max).',
+    lvlText:l=>l>=3?'Start every run with 2 random relics (better odds).':`Start every run with 1 random relic${l>1?' (better odds)':''}.`,
+    cost:l=>[{shards:10,stone:30},{shards:20,stone:70},{shards:34,stone:130}][l-1]},
 };
 const BUILDING_KEYS=Object.keys(BUILDINGS);
 // which town options a building level unlocks, and per-building discounts
@@ -709,6 +721,21 @@ function quarryMul(){ return 1 + [0,0.15,0.35,0.60][townLvl('quarry')]; }   // r
 function deathKeep(){ return [0.5,0.6,0.7,0.8][townLvl('vault')]; }         // fraction kept on death
 function townGold0(){ return [0,25,55,90][townLvl('treasury')]; }           // bonus starting gold
 function townDreadKill(){ return townLvl('obelisk'); }                      // +dread per kill
+function libraryMul(){ return 1 + [0,0.12,0.25,0.40][townLvl('library')]; } // rune-point income
+function shrineRelics(){ return [0,1,1,2][townLvl('shrine')]; }             // free relics at run start
+// Dark Smithy: keep N free items stocked in each shop (buildCells re-sells them each wave).
+function smithyRestock(){
+  const n=townLvl('smithy'); if(!n || !G.rooms) return; const keys=Object.keys(ITEMS);
+  for(const r of G.rooms){ if(r && r.type==='shop'){ if(!r.stock) r.stock=[];
+    let free=r.stock.filter(s=>s.free).length;
+    while(free<n){ r.stock.push({key:pick(keys), sold:false, free:true}); free++; } } }
+}
+// pick a random relic you don't own, tier-weighted (higher boost → better odds)
+function randomRelicId(boost){
+  const owned=new Set(G&&G.relics||[]); let guard=0;
+  while(guard++<60){ const t=rollTier(boost||1); const pool=RELIC_BY_TIER[t].filter(id=>!owned.has(id)); if(pool.length) return pick(pool); }
+  const all=Object.keys(RELICS).filter(id=>!owned.has(id)); return all.length?pick(all):null;
+}
 function loadTown(){
   try{ const s=JSON.parse(localStorage.getItem('bossmonster_town')||'null');
     if(s && s.res){ TOWN={ res:{wood:s.res.wood||0,stone:s.res.stone||0,shards:s.res.shards||0},
@@ -1626,6 +1653,9 @@ function chooseBoss(key){
     mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
     abil:[...b.sig, b.pool[0]].map(id=>({id,cd:0})) };
   applyBossPassive(G.boss);                       // signature passive effects
+  // Relic Shrine: begin the run already bearing relic(s)
+  G.shrineRelics=[];
+  for(let i=0;i<shrineRelics();i++){ const id=randomRelicId(townLvl('shrine')); if(id){ addRelic(id); G.shrineRelics.push(id); } }
   // starter dungeon + rune head-starts
   G.slots=1+RB.slot0;
   G.rooms=Array(G.slots).fill(null);
@@ -1683,9 +1713,12 @@ function minCam(){ return (G && G.phase==='build' && G.queue && G.queue.length) 
 function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
   ensureQueue(Math.max(3, G.guildLvl+1));        // pre-roll the next arrivals to preview
+  smithyRestock();                                // Dark Smithy: free shop stock
   camX=minCam();                                  // reveal the staging area
   if(first){
-    showHint('Tap a card then a slot to build · tap a room to move it · drag to pan.');
+    if(G.shrineRelics && G.shrineRelics.length)
+      showHint('🛐 The Shrine grants you '+G.shrineRelics.map(id=>RELICS[id].ic+' '+RELICS[id].name).join(' & ')+'!');
+    else showHint('Tap a card then a slot to build · tap a room to move it · drag to pan.');
     if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2800);
   }
   render();
@@ -1819,6 +1852,7 @@ function stockShop(itemKey){
 
 // Begin a wave: build cells geometry, spawn the raiding party, switch to run.
 function startWave(){
+  smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
   spawnGroup(G.guildLvl+1);
   G.phase='run'; speedMul=1; camX=0;
@@ -2342,7 +2376,7 @@ function buildPostmortem(){
 // Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
 function awardRunes(){
   // Edicts multiply the runes you bank for the whole run.
-  const total = Math.floor((Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul());
+  const total = Math.floor((Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul());
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
@@ -2364,7 +2398,6 @@ function awardRunes(){
     if(lvlAfter>lvlBefore) G.newUnlocks.push(`${BOSSES[bk].ic} ${BOSSES[bk].name.split(' ')[0]} → Mastery Lv ${lvlAfter}`);
   }
   saveRunes();
-  G.townGain=awardTownResources();      // bank Wood/Stone/Shards for the Town Builder
   return delta;
 }
 
