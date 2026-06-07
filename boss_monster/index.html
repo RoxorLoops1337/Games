@@ -562,9 +562,9 @@ const ABIL = {
 const CAMPAIGN = [
   {target:5,  diff:1.0,  reward:60, name:'The First Trespassers'},
   {target:7,  diff:1.35, reward:80, name:'Word Spreads'},
-  {target:9,  diff:1.8,  reward:110,name:'The Guild Responds'},
-  {target:11, diff:2.4,  reward:150,name:'Champions Arrive'},
-  {target:13, diff:3.2,  reward:0,  name:'The Final Crusade'},
+  {target:9,  diff:1.75, reward:110,name:'The Guild Responds'},
+  {target:11, diff:2.2,  reward:150,name:'Champions Arrive'},
+  {target:13, diff:2.7,  reward:0,  name:'The Final Crusade'},
 ];
 
 /* ========================= RUNE PAGE (meta progression) =================
@@ -1041,12 +1041,14 @@ function quitToTitle(){ paused=false; pauseConfirm=false; gotoMenu(); }
 
 const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
 function difficulty(){
-  // base ramp from cumulative kills (applies to both modes) ×
-  // campaign chapter multiplier × bounty/threat dial.
-  const cumulative = 1 + G.totalSlain*0.05;
+  // base ramp from cumulative kills × campaign chapter multiplier × bounty dial.
+  // Campaign uses a GENTLER cumulative ramp because the chapter multiplier is the
+  // intended primary scaler — otherwise the two compound into an unwinnable cliff
+  // by the final chapter (heroes hit ~8× base stats a level-capped dungeon can't match).
+  const cumulative = 1 + G.totalSlain*(G.mode==='campaign'?0.025:0.05);
   const threat = 1 + G.bounty*0.15;
   if(G.mode==='campaign') return cumulative * CAMPAIGN[G.levelIdx].diff * threat;
-  return cumulative * threat;   // Endless already ramps via totalSlain (was double-counting survived)
+  return cumulative * threat;   // Endless ramps via totalSlain only
 }
 
 /* ============================== PHASE: MENU =============================== */
