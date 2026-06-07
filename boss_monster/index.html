@@ -276,6 +276,9 @@ const ROOMS = {
   gallows:  {kind:'trap',   name:'Gallows',    ic:'⚰️', col:'#6a5a8a', dmg:8,  rate:0.6,  elem:'phys', vsLowHp:0.4, vsMult:3, desc:'Executes the wounded: 3× damage under 40% HP.'},
   hexward:  {kind:'trap',   name:'Hexward',    ic:'🧿', col:'#4dc3ff', dmg:6,  rate:0.45, elem:'phys', vsElite:true, vsMult:2.2, desc:'2.2× damage to elite (trait-bearing) heroes.'},
   bombard:  {kind:'trap',   name:'Bombard',    ic:'💣', col:'#e0823a', dmg:15, rate:2.4,  elem:'phys', aoe:1, desc:'Lobs shells that hit EVERY hero within one room of the blast — punishes a strung-out corridor.'},
+  venom:    {kind:'trap',   name:'Venom Vent', ic:'🐍', col:'#7bdc6b', dmg:3,  rate:0.7,  elem:'phys', poison:4, desc:'Weak hit, but injects STACKING poison. A 🔥flame room then COMBUSTS the stacks for a burst.'},
+  corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:5,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
+  hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:4,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Weak early — but grows +10% stronger for every hero that dies in this room.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
@@ -653,7 +656,7 @@ function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per leve
 function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
-const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55 };
+const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55, venom:30, corrode:60, hexbrand:80 };
 function bossUnlocked(k){ return (UNLOCK_BOSS[k]||0) <= RUNES.kills; }
 function cardUnlocked(t){ return (UNLOCK_CARD[t]||0) <= RUNES.kills; }
 function unlockedRoomKeys(){ return ROOM_KEYS.filter(cardUnlocked); }
@@ -1701,6 +1704,7 @@ function isFrontHero(h){
 
 function heroDmg(h, raw, pierce){
   let armor = pierce==='full' ? 0 : pierce ? Math.max(0,h.armor-3) : h.armor;
+  if(h.acid>0) armor=Math.max(0, armor - h.acid);     // Acid corrodes armor so later hits bite
   return Math.max(1, Math.round(raw - armor));
 }
 function dealToHero(h, raw, label, pierce, elem, noDodge){
@@ -1711,6 +1715,9 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
   const crit = Math.random()<0.12;              // your dungeon can land critical hits
   if(crit) dmg*=2;
   if(h.shieldT>0){ dmg=Math.max(1,Math.round(dmg*0.4)); }   // champion shield (−60%)
+  // 🎯 DETONATE — a Hex Brand makes the NEXT hit on a marked hero hit far harder
+  if(h.mark>0 && label!=='HEAL'){ dmg=Math.round(dmg*(1+MARK_AMP)); h.mark=0;
+    floater(h.x, h.y-66, '🎯 DETONATE', '#ff5470'); burst(h.x,h.y-24,'#ff5470',16); sfx('crit'); if(G.stats)G.stats.reactions++; }
   h.hp-=dmg;
   h.dmgTaken=(h.dmgTaken||0)+dmg;               // telemetry: how much your dungeon stripped from this hero
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
@@ -1727,12 +1734,13 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
 // then crush to SHATTER; oil then frost to ENCASE; etc. Each reaction a hero
 // suffers in quick succession escalates the next (reaction chain).
 const PRIME_OIL=12, PRIME_ICE=10, PRIME_SHOCK=9;   // long enough to cross rooms
+const MARK_AMP=1.2;                                // 🎯 Hex Brand: the next hit deals +120%
 // Teach the ordering combos in tooltips. Element → how to chain it across rooms.
 const ELEM_COMBO={
   oil:  'Coats heroes (slows them) and primes them. Put it <b>before</b> a 🔥flame (Ignite), ⚡tesla (Conduct) or ❄frost (Encase) room.',
-  fire: '🔥 Ignites <b>oiled</b> heroes and 💥 thermal-shocks <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
+  fire: '🔥 Ignites <b>oiled</b> heroes, ☠️ <b>Combusts</b> poisoned ones, and 💥 thermal-shocks <b>chilled</b> ones. Put it <b>after</b> an oil, venom or frost room.',
   ice:  '❄ Chills (slows); a later phys/shock hit then <b>Shatters</b>. Encases <b>oiled</b> heroes. Put before crushers, or after oil.',
-  shock:'⚡ Conducts through <b>oiled</b> heroes to the whole party. Put it <b>after</b> an oil room.',
+  shock:'⚡ Conducts through <b>oiled</b> heroes to the party, and ⚡ <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
   phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
 };
 function reactMul(h){ return (1 + (h.reactCount||0)*0.25) * (hasMandate('conductor')?1.5:1); }   // escalating chain; Conductor mandate +50%
@@ -1753,6 +1761,18 @@ function elementReact(h, elem, baseDmg){
   if(elem==='fire' && h.oil>0){
     h.oil=0; const x=Math.round((baseDmg*1.3+18)*reactMul(h)); h.hp-=x;
     h.burn=(h.burn||0)+10; h.burnT=5; popReact(h,'🔥 IGNITE','#ff7a2e',x);
+    if(h.hp<=0){h.hp=0;heroDies(h);return;}
+  }
+  // ☠️ COMBUST — fire on a POISONED hero detonates the venom for a stack-scaled burst
+  if(elem==='fire' && h.poison>0){
+    const x=Math.round((h.poison*3 + baseDmg*0.5 + 8)*reactMul(h)); h.hp-=x; h.poison=0; h.poisonT=0;
+    popReact(h,'☠️ COMBUST','#9be86b',x);
+    if(h.hp<=0){h.hp=0;heroDies(h);return;}
+  }
+  // ⚡ OVERLOAD — lightning on a CHILLED hero stuns them solid
+  if(elem==='shock' && h.chill>0 && !(h.freeze>0)){
+    const x=Math.round((baseDmg*0.6+8)*reactMul(h)); h.hp-=x; h.chill=0; h.freeze=1.2;
+    popReact(h,'⚡ OVERLOAD','#fff34d',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 🧊 ENCASE — ice on an OILED hero: wet + cold freezes them SOLID (a sitting duck)
@@ -2391,6 +2411,13 @@ function simStep(h,dt){
       if(h.hp<=0){h.hp=0;heroDies(h);return;} }
     h.burnT-=dt;
   }
+  // status: poison — stacking DoT (every poison source piles more stacks)
+  if(h.poison>0 && h.poisonT>0){
+    h._poisAcc=(h._poisAcc||0)+dt;
+    if(h._poisAcc>=0.5){ h._poisAcc=0; const pd=Math.ceil(h.poison); h.hp-=pd; floater(h.x,h.y-44,'☠'+pd,'#9be86b');
+      if(h.hp<=0){h.hp=0;heroDies(h);return;} }
+    h.poisonT-=dt;
+  }
   // regeneration trickle (clerics + zealot trait)
   if(h.regen && h.state!=='dead' && h.hp<h.maxHp){
     h.hp=Math.min(h.maxHp, h.hp + h.maxHp*0.025*dt);
@@ -2401,6 +2428,8 @@ function simStep(h,dt){
   if(h.oil>0) h.oil-=dt;
   if(h.chill>0) h.chill-=dt;
   if(h.shock>0) h.shock-=dt;
+  if(h.acid>0){ h.acidT-=dt; if(h.acidT<=0) h.acid=0; }   // corrosion wears off
+  if(h.mark>0){ h.markT-=dt; if(h.markT<=0) h.mark=0; }   // brand fades if no hit lands
   // reaction-chain window: combo decays if no new reaction lands in time
   if(h.reactT>0){ h.reactT-=dt; if(h.reactT<=0) h.reactCount=0; }
   // freeze: the HERO is immobilised (can't move or attack) — but the dungeon's
@@ -2509,6 +2538,13 @@ function thiefSteal(h){
 }
 
 // Fire every trap in the cell (a combo room can hold two), scaled by synergy.
+// Apply a trap's lingering statuses (poison / acid / mark) to a hero it just hit.
+function applyTrapStatus(h, d, r){
+  if(!h || h.state==='dead') return;
+  if(d.poison){ h.poison=(h.poison||0)+d.poison+((r&&r.lvl||1)-1); h.poisonT=4; }   // stacks, +1/level
+  if(d.acid){ h.acid=(h.acid||0)+d.acid; h.acidT=4; }
+  if(d.mark && !(h.mark>0)){ h.mark=1; h.markT=4; floater(h.x,h.y-58,'🎯 MARKED','#ff5470'); }
+}
 function trapTick(h,cell,dt){
   const r=cell.room; const syn=cell.syn||1; const doc=bossDoc();
   for(const tr of cell.traps){
@@ -2529,6 +2565,7 @@ function trapTick(h,cell,dt){
       dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem);
       if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
       else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.max(h.burn||0, 3+(r.lvl-1)); h.burnT=3; }  // Inferno/Wildfire: every trap sets ablaze
+      applyTrapStatus(h, d, r);                                  // poison / acid / mark
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
       if(G.stats) G.stats.trapDmg+=Math.round(dmg);
       burst(h.x, h.y-20, d.col, 5);
@@ -2565,6 +2602,7 @@ function aoeTrapTick(dt){
         const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
         dealToHero(o, dmg, 'BOOM', pierce, d.elem);
         if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.max(o.burn||0, 3+(r.lvl-1)); o.burnT=3; }
+        applyTrapStatus(o, d, r);
         if(G.stats) G.stats.trapDmg+=dmg;
       }
       if(doc==='soulengine' && G.boss) G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+targets.length);
@@ -3267,7 +3305,7 @@ function describeCard(card){
   const lines=[`<b>${def.ic} ${name}</b> · ${def.kind.toUpperCase()}${lvl>1?' · Lv '+lvl:''}`];
   if(def.kind==='trap'){
     const dmg=Math.round(def.dmg*(1+(lvl-1)*0.4)*(1+(RB.trapDmg||0)));
-    lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.aoe?' · 💥 AoE':''}`);
+    lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠poison':''}${def.acid?' +🧪acid':''}${def.mark?' +🎯mark':''}${def.aoe?' · 💥 AoE':''}`);
     if(def.aoe) lines.push(`<span class="small" style="color:#e0a060">💥 Blasts every hero within ${def.aoe} room${def.aoe>1?'s':''} of this one</span>`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
   } else if(def.kind==='monster'){
@@ -3325,7 +3363,7 @@ function describeRoom(room){
   const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`];
   parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
     const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0)));
-    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
+    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){ let hp=0,atk=0, fed=false; const bas=bastionMul();
