@@ -80,6 +80,7 @@
   .card .x{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;
     background:#a02040;border:1px solid #ff6b8a;font-size:11px;line-height:16px;text-align:center;color:#fff;}
   .abil{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:74px;padding:6px 8px;}
+  .abil > span{pointer-events:none;}   /* taps always land on the button, never a child being re-rendered */
   .abil .c{font-size:10px;color:var(--mana);}
   .abil:disabled .c{color:#888;}
   .pill{font-size:11px;padding:2px 8px;border-radius:10px;background:#2a2046;border:1px solid #3a2c66;}
@@ -4086,26 +4087,32 @@ function frame(ts){
   requestAnimationFrame(frame);
 }
 // Update ability buttons WITHOUT rebuilding the DOM — rebuilding mid-tap was
-// destroying the button between touchstart/touchend, eating the click.
+// destroying the button between touchstart/touchend, eating the click (notably
+// on iPad). The Smite button also carries class "abil", so the live count is
+// abil.length + 1; matching that is what stops the per-frame rebuild.
 function updateRunPanel(){
-  if(!G||G.phase!=='run') return;
+  if(!G||G.phase!=='run'||!G.boss) return;
   const btns=panel.querySelectorAll('.abil');
-  if(btns.length!==G.boss.abil.length){ renderPanel(); return; }
-  G.boss.abil.forEach((a,i)=>{
-    const def=ABIL[a.id];
-    const cost=abilCost(def.cost);
-    btns[i].disabled = (a.cd>0 || G.boss.mana<cost);
-    const c=btns[i].querySelector('.c');
-    if(c) c.textContent = a.cd>0 ? ('⏳'+a.cd.toFixed(1)+'s') : ('🔷'+cost);
-  });
+  const n=G.boss.abil.length;
+  if(btns.length!==n+1){ renderPanel(); return; }      // +1 = the Smite button
+  const setDis=(el,v)=>{ if(el.disabled!==v) el.disabled=v; };
+  const setTxt=(el,v)=>{ if(el && el.textContent!==v) el.textContent=v; };  // only touch the DOM on a real change
+  for(let i=0;i<n;i++){
+    const a=G.boss.abil[i], def=ABIL[a.id], cost=abilCost(def.cost);
+    setDis(btns[i], a.cd>0||G.boss.mana<cost);
+    setTxt(btns[i].querySelector('.c'), a.cd>0 ? '⏳'+a.cd.toFixed(1)+'s' : '🔷'+cost);
+  }
+  // Smite is the last .abil button — refresh its ready/aim state live too
+  const b=G.boss, sb=btns[n], ready=(b.smiteCd||0)<=0, has=G.heroes.some(h=>h&&h.state==='boss'&&h.hp>0);
+  setDis(sb, !ready||!has);
+  setTxt(sb.querySelector('.c'), (b.smiteCd||0)>0 ? '⏳'+b.smiteCd.toFixed(1)+'s' : (has?'aim!':'—'));
   // live boss HP + mana readout next to the abilities
-  const b=G.boss;
   const hp=document.getElementById('pbhp'), hpT=document.getElementById('pbhpT');
   const mn=document.getElementById('pbmana'), mnT=document.getElementById('pbmanaT');
   if(hp) hp.style.width=(b.hp/b.maxHp*100)+'%';
-  if(hpT) hpT.textContent=Math.ceil(b.hp)+'/'+b.maxHp;
+  if(hpT) setTxt(hpT, Math.ceil(b.hp)+'/'+b.maxHp);
   if(mn) mn.style.width=(b.mana/b.maxMana*100)+'%';
-  if(mnT) mnT.textContent=Math.floor(b.mana)+'/'+b.maxMana;
+  if(mnT) setTxt(mnT, Math.floor(b.mana)+'/'+b.maxMana);
 }
 
 /* keep the canvas matched to the stage (rotation, panel-height changes, etc.) */
