@@ -661,6 +661,32 @@ function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per le
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
 const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55, venom:30, corrode:60, hexbrand:80, warden:35, slime:50, totem:75, runestone:90 };
+// Card rarity — drives how often each room is OFFERED in the draft & opening hand
+// (same tier vocabulary as relics). Workhorses are common; build-definers are epic.
+const CARD_RARITY={
+  spike:'common', arrow:'common', oil:'common', goblin:'common', skeleton:'common',
+  flame:'special', frost:'special', tesla:'special', venom:'special', ogre:'special', shop:'special',
+  magebane:'rare', gallows:'rare', hexward:'rare', corrode:'rare', warden:'rare', slime:'rare',
+  maul:'epic', bombard:'epic', hexbrand:'epic', totem:'epic', runestone:'epic',
+};
+const CARD_TIER_W={ common:100, special:50, rare:24, epic:10 };   // base offer weights
+function cardRarity(t){ return CARD_RARITY[t]||'common'; }
+// Offer weight for a card — rarer tiers get a touch more likely as a run deepens.
+function cardWeight(t, L){
+  const r=cardRarity(t), base=CARD_TIER_W[r]||100;
+  const mult = r==='epic' ? 1+L*0.10 : r==='rare' ? 1+L*0.06 : 1;
+  return base*mult;
+}
+function runDepth(){ return G.mode==='campaign' ? G.levelIdx*1.3 : (G.totalSlain||0)/12; }
+// Weighted draw from a pool of card types, honoring rarity (optional exclude set).
+function pickCardWeighted(pool, L, exclude){
+  const cand = exclude ? pool.filter(t=>!exclude.has(t)) : pool;
+  const list = cand.length ? cand : pool;
+  let tot=0; for(const t of list) tot+=cardWeight(t, L||0);
+  let r=Math.random()*tot;
+  for(const t of list){ r-=cardWeight(t, L||0); if(r<=0) return t; }
+  return list[list.length-1];
+}
 function bossUnlocked(k){ return (UNLOCK_BOSS[k]||0) <= RUNES.kills; }
 function cardUnlocked(t){ return (UNLOCK_CARD[t]||0) <= RUNES.kills; }
 function unlockedRoomKeys(){ return ROOM_KEYS.filter(cardUnlocked); }
@@ -1374,7 +1400,7 @@ function chooseBoss(key){
   G.dread=RB.dread0;
   G.guildLvl=Math.min(GUILD_MAX, RB.guild0);
   zoom=1; camX=0;
-  for(let i=0;i<RB.cards0;i++) G.hand.push({type:pick(unlockedRoomKeys()), lvl:1});
+  for(let i=0;i<RB.cards0;i++) G.hand.push({type:pickCardWeighted(unlockedRoomKeys(), runDepth()), lvl:1});
   gotoLoadout();                                  // pick your 3 abilities
 }
 
@@ -2106,21 +2132,25 @@ function gotoReward(){
   G.drafts=[];
   const pool=unlockedRoomKeys();
   const choices=3+(RB.draft||0);
+  const L=runDepth(); const shown=new Set();
   for(let i=0;i<choices;i++){
     let t;
-    if(Math.random()<0.45 && owned.size){ t=pick([...owned]); }
-    else t=pick(pool);
+    if(Math.random()<0.45 && owned.size){
+      const ownPool=[...owned].filter(o=>!shown.has(o));     // favor what you own (enables upgrades)
+      t = ownPool.length ? pick(ownPool) : pickCardWeighted(pool, L, shown);
+    } else t=pickCardWeighted(pool, L, shown);               // else rarity-weighted; rarer shows up less
+    shown.add(t);
     G.drafts.push({type:t, lvl:1});
   }
   overlay.classList.add('show');
   overlay.innerHTML=`<h1>Spoils of War</h1>
     <p>Draft one room card. ${G.hand.length>=handCap()?`<b style="color:#ff8a8a">Hand full (${handCap()}) — picking will need a discard, or skip.</b>`:`Hold up to ${handCap()}.`}</p>
     <div class="choices">${G.drafts.map((c,i)=>{
-      const d=ROOMS[c.type];
-      return `<div class="choice" onclick="takeDraft(${i})">
+      const d=ROOMS[c.type]; const tr=cardRarity(c.type); const tc=(RELIC_TIERS[tr]||{}).col||'#888';
+      return `<div class="choice" onclick="takeDraft(${i})" style="border-color:${tc};box-shadow:0 0 10px ${tc}33">
         <div class="big">${d.ic}</div><h3>${d.name}</h3>
         <div class="desc">${d.desc}</div>
-        <div class="stats">${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>
+        <div class="stats" style="color:${tc};font-weight:bold;letter-spacing:.5px">${(RELIC_TIERS[tr]||{}).name||'Common'} · ${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>
     <div class="menu-btns"><button onclick="skipDraft()">Skip draft</button></div>`;
 }
 function takeDraft(i){
@@ -3402,7 +3432,8 @@ function describeQueueHero(spec){
 function describeCard(card){
   const def=ROOMS[card.type]; const lvl=card.lvl||1;
   const name = card.type==='minion' ? (card.label||'Corrupted') : def.name;
-  const lines=[`<b>${def.ic} ${name}</b> · ${def.kind.toUpperCase()}${lvl>1?' · Lv '+lvl:''}`];
+  const tr=cardRarity(card.type), tc=(RELIC_TIERS[tr]||{}).col||'#888';
+  const lines=[`<b>${def.ic} ${name}</b> · <span style="color:${tc};font-weight:bold">${(RELIC_TIERS[tr]||{}).name||'Common'}</span> ${def.kind.toUpperCase()}${lvl>1?' · Lv '+lvl:''}`];
   if(def.kind==='trap' && def.amp){
     lines.push(`🔯 <b style="color:#b985ff">Amplifier</b> — +${Math.round(def.amp*100)}% to traps & guards in this room and the two beside it`);
   } else if(def.kind==='trap'){
