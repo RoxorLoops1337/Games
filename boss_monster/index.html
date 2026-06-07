@@ -283,12 +283,12 @@ const ROOMS = {
   corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:5,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
   hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:4,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
   runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.20, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +20%.'},
-  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Weak early — but grows +10% stronger for every hero that dies in this room.'},
-  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Weak early — but grows +10% stronger for every hero that dies in this room.'},
+  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits — reforms once at 60% HP when slain. Soaks burst; weak to ☠poison & 💥AoE.'},
-  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
+  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
 };
@@ -667,7 +667,7 @@ const BUILDINGS={
   sanctum:{name:"Sorcerer's Sanctum", ic:'🔮', sect:'empower', max:3,
     desc:'Arcane forge for empowering your boss. Higher levels unlock stronger empowerments.',
     lvlText:l=>['Unlocks Reinforce Throne & Sharpen Claws.','+ Dark Attunement (mana).','+ Empower Boss (boss level).'][l-1],
-    cost:l=>[{shards:6,stone:25},{shards:13,stone:50},{shards:22,stone:85}][l-1]},
+    cost:l=>[{shards:5,stone:25},{shards:11,stone:50},{shards:18,stone:85}][l-1]},
   inn:    {name:'The Inn',           ic:'🍺', sect:'inn',    max:3,
     desc:'Where heroes drink before the raid — and where you meddle with them.',
     lvlText:l=>['Unlocks Intimidate & Rob the next arrivals.','+ Poison & Corrupt-to-minion.','Meddling costs 25% less.'][l-1],
@@ -688,7 +688,7 @@ const BUILDINGS={
   vault:  {name:'The Vault',         ic:'🏦', sect:'eco', max:3,
     desc:'A warded strong-room. Even if the throne falls, more of your haul survives.',
     lvlText:l=>`Keep ${[50,60,70,80][l]}% of your haul if you die (was 50%).`,
-    cost:l=>[{stone:60,shards:5},{stone:110,shards:12},{stone:190,shards:22}][l-1]},
+    cost:l=>[{stone:60,shards:4},{stone:110,shards:10},{stone:190,shards:18}][l-1]},
   treasury:{name:'Treasury',         ic:'💰', sect:'eco', max:3,
     desc:'A war-chest that bankrolls each crusade. Start every run with extra gold.',
     lvlText:l=>`Start each run with +${[0,25,55,90][l]} gold.`,
@@ -696,11 +696,11 @@ const BUILDINGS={
   obelisk:{name:'Dread Obelisk',     ic:'☠️', sect:'eco', max:3,
     desc:'A monument of terror that wrings more fear from every kill — more to spend in town each run.',
     lvlText:l=>`+${l} dread per kill in-run.`,
-    cost:l=>[{stone:50,shards:6},{stone:100,shards:14},{stone:180,shards:24}][l-1]},
+    cost:l=>[{stone:50,shards:5},{stone:100,shards:11},{stone:180,shards:19}][l-1]},
   library:{name:'Dark Library',      ic:'📚', sect:'eco', max:3,
     desc:'Forbidden lore that turns every slaughter into deeper understanding. More rune points per run.',
     lvlText:l=>`+${[0,12,25,40][l]}% rune points earned per run.`,
-    cost:l=>[{shards:8,wood:30},{shards:16,stone:60},{shards:28,stone:110}][l-1]},
+    cost:l=>[{shards:6,wood:30},{shards:13,stone:60},{shards:22,stone:110}][l-1]},
   smithy: {name:'Dark Smithy',       ic:'🔨', sect:'eco', max:3,
     desc:'Forges cursed gear and slips it into your shops for free — every sale is pure profit.',
     lvlText:l=>`Each shop is pre-stocked with ${l} free item${l>1?'s':''} every wave.`,
@@ -708,7 +708,7 @@ const BUILDINGS={
   shrine: {name:'Relic Shrine',      ic:'🛐', sect:'eco', max:3,
     desc:'An altar to dark powers — you begin each run already bearing a relic (two at max).',
     lvlText:l=>l>=3?'Start every run with 2 random relics (better odds).':`Start every run with 1 random relic${l>1?' (better odds)':''}.`,
-    cost:l=>[{shards:10,stone:30},{shards:20,stone:70},{shards:34,stone:130}][l-1]},
+    cost:l=>[{shards:8,stone:30},{shards:16,stone:70},{shards:27,stone:130}][l-1]},
 };
 const BUILDING_KEYS=Object.keys(BUILDINGS);
 // which town options a building level unlocks, and per-building discounts
@@ -770,7 +770,7 @@ function buildTown(id){
 const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
   const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), m=quarryMul();
-  return { wood:Math.floor(slain*1.2*m), stone:Math.floor(slain*0.6*m), shards:Math.floor((slain/6+lvl)*m) };
+  return { wood:Math.floor(slain*1.2*m), stone:Math.floor(slain*0.6*m), shards:Math.floor((slain/4+lvl)*m) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
