@@ -1036,7 +1036,7 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 function showHint(t){ hintEl.textContent=t; hintEl.classList.add('show');
   clearTimeout(showHint._t); showHint._t=setTimeout(()=>hintEl.classList.remove('show'),2200); }
-function floater(x,y,txt,col){ floats.push({x,y,txt,col,life:1,vy:-34}); }
+function floater(x,y,txt,col,big){ floats.push({x,y,txt,col,life:1,vy:big?-26:-34,big:!!big,fade:big?0.62:0.9}); }
 function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
   {x,y,vx:rnd(-90,90),vy:rnd(-150,-20),life:rnd(.4,.9),col,sz:rnd(2,5)}); }
 
@@ -1046,7 +1046,28 @@ function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
 let AC=null, audioOn=true, _musicTimer=null, _sfxLast={};
 let sfxBus=null, musicBus=null, sfxVol=1, musVol=1;   // separate volume buses
 let shakeT=0, shakeMag=0, hitStop=0;
+let slowT=0;                         // slow-motion timer (epic moments)
+let flashT=0, flashDur=0, flashCol='#fff', flashMax=0;   // full-screen colour flash
 function shake(mag){ shakeMag=Math.max(shakeMag,mag); shakeT=0.22; }
+function slowmo(t){ slowT=Math.max(slowT,t); }                 // brief bullet-time
+function flash(col,strength=0.3,dur=0.3){ flashCol=col; flashMax=Math.max(flashMax,strength); flashT=Math.max(flashT,dur); flashDur=Math.max(flashDur,dur); }
+// Escalating kill-streak announcer — banners get louder the longer your dungeon
+// holds an airtight line (the streak breaks if a hero ever reaches the throne).
+const COMBO_TIERS=[
+  {n:5,  t:'RAMPAGE!',     c:'#ff9a3a', f:0.20, slow:0},
+  {n:8,  t:'DOMINATING!',  c:'#ff7a2e', f:0.24, slow:0.30},
+  {n:12, t:'UNSTOPPABLE!', c:'#ff5470', f:0.28, slow:0.40},
+  {n:16, t:'GODLIKE!',     c:'#b985ff', f:0.32, slow:0.50},
+  {n:20, t:'LEGENDARY!',   c:'#4dc3ff', f:0.36, slow:0.50},
+];
+function comboCallout(combo, x){
+  let tier=COMBO_TIERS.find(ct=>ct.n===combo);
+  if(!tier && combo>20 && (combo-20)%5===0) tier={t:'LEGENDARY ×'+combo+'!', c:'#4dc3ff', f:0.38, slow:0.5};
+  if(!tier) return;
+  floater((x!=null?x:VW*0.5), FLOOR-150, tier.t, tier.c, true);
+  flash(tier.c, tier.f, 0.35); shake(8+Math.min(combo,12)); sfx('combo');
+  if(tier.slow) slowmo(tier.slow);
+}
 function loadAudioPref(){ try{ audioOn = localStorage.getItem('bm_audio')!=='off'; }catch(_){ } }
 function saveAudioPref(){ try{ localStorage.setItem('bm_audio', audioOn?'on':'off'); }catch(_){ } }
 function loadVolPrefs(){ try{
@@ -2122,8 +2143,11 @@ function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasManda
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
-  floater(h.x,h.y-66, label+(h.reactCount>1?' ×'+h.reactCount:'')+' -'+x, col);
-  burst(h.x,h.y-24,col,16); shake(6); sfx('crit');
+  const chain=h.reactCount;
+  floater(h.x,h.y-66, label+(chain>1?' ×'+chain:'')+' -'+x, col, chain>=3);   // chains pop big
+  burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); shake(6+Math.min(chain,6)); sfx('crit');
+  if(chain>=3) flash(col, Math.min(0.3, 0.10+chain*0.03), 0.22);             // escalating reaction spectacle
+  if(chain>=4) slowmo(0.25);
 }
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
@@ -2252,6 +2276,7 @@ function heroDies(h){
   let comboBonus=0;
   if(G.combo>=3){ comboBonus=G.combo; G.gold+=comboBonus;
     floater(h.x, h.y-78, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
+  comboCallout(G.combo, h.x);
   // room XP: credit the room the hero was IN when it fell (toward fusing a 2nd
   // part / veteran ranks). Use the tracked cellIndex, not the raw x — a kill a
   // pixel past a boundary used to lose its credit.
@@ -2267,12 +2292,15 @@ function heroDies(h){
   floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
   floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
   shake(4); sfx('kill');
+  // extra juice for the heroes that matter most
+  if(h.elite && !h.champion){ burst(h.x,h.y-24,'#ffd34d',16); flash('#ffd34d',0.18,0.22); shake(6); }
+  if(h.reachedThrone && !h.champion){ flash('#9be86b',0.16,0.2); }
   const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
   if(h.champion){
     // a felled champion is a big payday + a guaranteed relic
     G.dread+=6; G.relicDue=true;
-    floater(h.x, h.y-92, 'CHAMPION SLAIN! 🏺', '#ffd34d'); burst(h.x,h.y-30,h.champCol||'#ffd34d',30);
-    shake(10); sfx('relic');
+    floater(h.x, h.y-92, '👑 CHAMPION SLAIN! 🏺', h.champCol||'#ffd34d', true); burst(h.x,h.y-30,h.champCol||'#ffd34d',46);
+    flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('relic');
     showHint('🏆 '+nm+' is slain! Big loot + a relic awaits.');
   } else {
     showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
@@ -2778,14 +2806,17 @@ function update(dt){
   particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt; });
   particles=particles.filter(p=>p.life>0);
   if(shakeT>0) shakeT=Math.max(0,shakeT-dt);   // screen-shake decay
+  if(flashT>0) flashT=Math.max(0,flashT-dt);   // screen-flash decay
+  if(slowT>0) slowT=Math.max(0,slowT-dt);      // slow-mo decay (real time)
 
   if(G.phase!=='run' || !G.heroes.length) return;
   // hit-pause: briefly freeze the sim on big hits for impact
   if(hitStop>0){ hitStop=Math.max(0,hitStop-dt); return; }
+  const sdt = slowT>0 ? dt*0.35 : dt;          // bullet-time slows the SIM, not the FX
   const steps=speedMul; // scale sim by running update multiple conceptual times
   for(let s=0;s<steps && G.phase==='run';s++){
-    for(const h of G.heroes){ if(G.phase!=='run') break; if(h.state!=='dead') simStep(h,dt); }
-    if(G.phase==='run') aoeTrapTick(dt);
+    for(const h of G.heroes){ if(G.phase!=='run') break; if(h.state!=='dead') simStep(h,sdt); }
+    if(G.phase==='run') aoeTrapTick(sdt);
   }
   if(G.phase!=='run') return;
   G.hero=leadHero();
@@ -3176,10 +3207,20 @@ function draw(){
   particles.forEach(p=>{ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
     const sx=tx(p.x); X.fillRect(sx, p.y, p.sz, p.sz); });
   X.globalAlpha=1;
-  floats.forEach(f=>{ X.globalAlpha=clamp(f.life,0,1); X.fillStyle=f.col;
-    X.font='bold 16px Trebuchet MS'; X.textAlign='center';
-    X.fillText(f.txt, tx(f.x), f.y); });
+  floats.forEach(f=>{ X.globalAlpha=clamp(f.life,0,1); X.textAlign='center';
+    if(f.big){ const sz=Math.round(22+(1-f.life)*8);   // big callouts grow as they rise
+      X.font='bold '+sz+'px Trebuchet MS';
+      X.lineWidth=4; X.strokeStyle='rgba(0,0,0,.65)'; X.strokeText(f.txt, tx(f.x), f.y);
+      X.fillStyle=f.col; X.fillText(f.txt, tx(f.x), f.y);
+    } else { X.fillStyle=f.col; X.font='bold 16px Trebuchet MS'; X.fillText(f.txt, tx(f.x), f.y); } });
   X.globalAlpha=1; X.textAlign='left';
+
+  // full-screen colour flash (device space, above everything)
+  if(flashT>0 && flashDur>0){
+    X.setTransform(1,0,0,1,0,0);
+    X.globalAlpha=clamp(flashMax*(flashT/flashDur),0,1); X.fillStyle=flashCol;
+    X.fillRect(0,0,CV.width,CV.height); X.globalAlpha=1;
+  }
 }
 
 function drawDungeon(tx, scale, isBuild){
