@@ -3473,43 +3473,62 @@ if(typeof Image!=='undefined'){
 }
 const ROOM_ART_DROP=12;   // px the art bottom sits below the floor line
 
-// ---- animated knight sprite (warrior-class heroes) ----------------------
-// Sheets are 4 rows = facing up/left/down/right; heroes march rightward, so we
-// use row 3. ax/ay = the character's torso-centre / feet in source px (measured),
-// so walk and the bigger 192px attack frames line up without the figure jumping.
-const KNIGHT_IMG={};
-const KNIGHT_DIR_RIGHT=3, KNIGHT_DIR_LEFT=1, KNIGHT_SCALE=0.9;
-const KNIGHT_CLIPS={
-  idle:  {fw:64, fh:64,  frames:2, fps:4,  ax:38, ay:63},
-  walk:  {fw:64, fh:64,  frames:8, fps:11, ax:41, ay:63},
-  slash: {fw:192,fh:192, frames:5, fps:13, ax:98, ay:127},
-  islash:{fw:192,fh:192, frames:5, fps:13, ax:97, ay:127},
-  thrust:{fw:192,fh:192, frames:7, fps:14, ax:98, ay:127},
+// ---- animated character sprites (heroes by class) -----------------------
+// Sheets are 4 rows = facing up/left/down/right; heroes march rightward (row 3).
+// The cleric is one "LPC universal" sheet (its clips are row groups). ax/ay are
+// the measured torso-centre / feet in source px so every clip lines up — feet on
+// the floor, body the same size — regardless of 64px vs 192px frame canvases.
+const SPRITES={
+  warrior: { base:'sprites/knight/knight_', scale:0.92, atk:['slash','islash','thrust'], clips:{
+    idle:  {sheet:'idle',  fw:64, fh:64,  n:2, fps:4,  row:3, ax:41, ay:62},
+    walk:  {sheet:'walk',  fw:64, fh:64,  n:8, fps:11, row:3, ax:41, ay:62},
+    slash: {sheet:'slash', fw:192,fh:192, n:5, fps:13, row:3, ax:97, ay:126},
+    islash:{sheet:'islash',fw:192,fh:192, n:5, fps:13, row:3, ax:97, ay:126},
+    thrust:{sheet:'thrust',fw:192,fh:192, n:7, fps:14, row:3, ax:98, ay:126},
+  }},
+  mage: { base:'sprites/wizard/wizard_', scale:0.86, atk:['cast'], clips:{
+    idle: {sheet:'idle', fw:192,fh:192, n:2, fps:4,  row:3, ax:103, ay:126},
+    walk: {sheet:'walk', fw:192,fh:192, n:8, fps:11, row:3, ax:103, ay:126},
+    cast: {sheet:'cast', fw:64, fh:64,  n:6, fps:10, row:3, ax:31,  ay:62},
+  }},
+  cleric: { universal:'sprites/cleric/cleric_universal.png', uw:64, uh:64, scale:0.83, atk:['slash'], clips:{
+    idle: {row:11, n:1, fps:1,  ax:24, ay:62},   // walk-right, rest frame
+    walk: {row:11, n:9, fps:11, ax:24, ay:62},
+    slash:{row:15, n:6, fps:13, ax:24, ay:62},
+    cast: {row:3,  n:7, fps:11, ax:24, ay:62},
+  }},
 };
+const CLASS_SPRITE={ warrior:'warrior', mage:'mage', cleric:'cleric' };
+const SPR_IMG={};
 if(typeof Image!=='undefined'){
-  Object.keys(KNIGHT_CLIPS).forEach(k=>{
-    const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/knight/knight_'+k+'.png'; KNIGHT_IMG[k]=im;
-  });
+  for(const key in SPRITES){ const cfg=SPRITES[key]; SPR_IMG[key]={};
+    if(cfg.universal){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src=cfg.universal; SPR_IMG[key]._uni=im; }
+    else for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!SPR_IMG[key][sh]){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src=cfg.base+sh+'.png'; SPR_IMG[key][sh]=im; } }
+  }
 }
-function knightReady(){ return KNIGHT_IMG.walk && KNIGHT_IMG.walk._ok; }
-function knightClip(h){
-  if(h.freeze>0) return 'idle';
-  if(h.state==='fighting' || h.state==='boss'){ if(!h._atkClip) h._atkClip=pick(['slash','islash','thrust']); return h._atkClip; }
-  if(h.state==='walking'){ const moving = h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02; return moving?'walk':'idle'; }
-  return 'idle';
+function spriteReady(key){ const s=SPR_IMG[key]; if(!s) return false; return SPRITES[key].universal ? (s._uni&&s._uni._ok) : (s.walk&&s.walk._ok); }
+function spriteClip(h, cfg){
+  if(h.freeze>0 && cfg.clips.idle) return 'idle';
+  if(h.state==='fighting' || h.state==='boss'){ if(!h._atkClip || !cfg.clips[h._atkClip]) h._atkClip=pick(cfg.atk); return h._atkClip; }
+  if(h.state==='walking'){ const moving = h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02; return moving?'walk':(cfg.clips.idle?'idle':'walk'); }
+  return cfg.clips.idle?'idle':'walk';
 }
-function drawKnight(sx, footY, h){
-  const name=knightClip(h), clip=KNIGHT_CLIPS[name], img=KNIGHT_IMG[name];
+function drawSprite(sx, footY, h, key){
+  const cfg=SPRITES[key]; if(!cfg) return false;
+  const name=spriteClip(h, cfg), clip=cfg.clips[name]; if(!clip) return false;
+  let img, fw, fh;
+  if(cfg.universal){ img=SPR_IMG[key]._uni; fw=cfg.uw; fh=cfg.uh; }
+  else { img=SPR_IMG[key][clip.sheet]; fw=clip.fw; fh=clip.fh; }
   if(!img||!img._ok) return false;
   const now=performance.now();
   if(h._animClip!==name){ h._animClip=name; h._animT=0; }      // restart timing on clip change
   const dt=Math.min(0.1,(now-(h._animLast||now))/1000); h._animLast=now;
   h._animT=(h._animT||0)+dt; h._animPX=h.x;
-  const frame=Math.floor(h._animT*clip.fps)%clip.frames;
-  const S=KNIGHT_SCALE, srcX=frame*clip.fw, srcY=KNIGHT_DIR_RIGHT*clip.fh;
+  const frame=Math.floor(h._animT*clip.fps)%clip.n;
+  const S=cfg.scale, srcX=frame*fw, srcY=clip.row*fh;
   const dx=Math.round(sx-clip.ax*S), dy=Math.round(footY-clip.ay*S);
   X.imageSmoothingEnabled=false;
-  X.drawImage(img, srcX,srcY,clip.fw,clip.fh, dx,dy, Math.round(clip.fw*S), Math.round(clip.fh*S));
+  X.drawImage(img, srcX,srcY,fw,fh, dx,dy, Math.round(fw*S), Math.round(fh*S));
   return true;
 }
 function roomArtKey(room){
@@ -3642,8 +3661,9 @@ function drawHero(sx,h){
   }
   // shadow
   X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,champ?20:14,4,0,0,7); X.fill();
-  // warriors render as the animated knight sprite; everyone else keeps the pixel figure
-  const drewKnight = (h.cls==='warrior') && knightReady() && drawKnight(sx, y, h);
+  // classes with a sprite render as the animated character; others keep the pixel figure
+  const skey = CLASS_SPRITE[h.cls];
+  const drewKnight = skey && spriteReady(skey) && drawSprite(sx, y, h, skey);
   if(!drewKnight){
     // legs
     px(sx-7,yy-14,5,14,'#3a3050'); px(sx+2,yy-14,5,14,'#3a3050');
