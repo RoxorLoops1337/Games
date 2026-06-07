@@ -737,16 +737,21 @@ function randomRelicId(boost){
   const all=Object.keys(RELICS).filter(id=>!owned.has(id)); return all.length?pick(all):null;
 }
 function loadTown(){
+  const num=v=>Number.isFinite(+v)?Math.max(0,Math.floor(+v)):0;   // coerce; a corrupt save can't brick the town
   try{ const s=JSON.parse(localStorage.getItem('bossmonster_town')||'null');
-    if(s && s.res){ TOWN={ res:{wood:s.res.wood||0,stone:s.res.stone||0,shards:s.res.shards||0},
-                           built:(s.built&&typeof s.built==='object')?s.built:{} }; }
+    if(s && s.res){
+      const built={}; if(s.built && typeof s.built==='object'){
+        for(const id in BUILDINGS) if(s.built[id]) built[id]=Math.min(BUILDINGS[id].max, num(s.built[id]));  // clamp to [0,max]
+      }
+      TOWN={ res:{wood:num(s.res.wood), stone:num(s.res.stone), shards:num(s.res.shards)}, built };
+    }
     else { TOWN={ res:{...TOWN_START}, built:{} }; saveTown(); }   // first ever launch → stockpile
   }catch(_){ TOWN={ res:{...TOWN_START}, built:{} }; }
 }
 function saveTown(){
   try{ localStorage.setItem('bossmonster_town', JSON.stringify(TOWN)); }catch(_){ }
 }
-function townLvl(id){ return TOWN.built[id]||0; }
+function townLvl(id){ return Math.min((BUILDINGS[id]?BUILDINGS[id].max:9), TOWN.built[id]||0); }
 function townHas(id){ return townLvl(id)>0; }
 function buildingCost(id,lvl){ const b=BUILDINGS[id]; return (lvl<=b.max)? b.cost(lvl) : null; }
 function canAfford(c){ return c && (TOWN.res.wood>=(c.wood||0)) && (TOWN.res.stone>=(c.stone||0)) && (TOWN.res.shards>=(c.shards||0)); }
@@ -771,9 +776,10 @@ function pendingResources(){             // the haul you've gathered so far this
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
 function bankResources(frac, withGold){
   const p=pendingResources();
-  let w=p.wood, s=p.stone, sh=p.shards;
+  // the penalty applies only to the gathered haul; a gold-conversion bonus (clean
+  // extraction/win) is added in full afterwards so the two are never coupled.
+  let w=Math.floor(p.wood*frac), s=Math.floor(p.stone*frac), sh=Math.floor(p.shards*frac);
   if(withGold){ const g=Math.max(0,G.gold||0); w+=Math.floor(g/3); s+=Math.floor(g/6); }
-  w=Math.floor(w*frac); s=Math.floor(s*frac); sh=Math.floor(sh*frac);
   TOWN.res.wood+=w; TOWN.res.stone+=s; TOWN.res.shards+=sh;
   saveTown();
   G.townGain={wood:w,stone:s,shards:sh};
@@ -1663,7 +1669,7 @@ function chooseBoss(key){
   G.dread=RB.dread0;
   G.guildLvl=Math.min(townLvl('guild'), RB.guild0);   // can't out-start your built Guild ceiling
   zoom=1; camX=0;
-  for(let i=0;i<RB.cards0;i++) G.hand.push({type:pickCardWeighted(unlockedRoomKeys(), runDepth()), lvl:1});
+  { const seen=new Set(); for(let i=0;i<RB.cards0;i++){ const t=pickCardWeighted(unlockedRoomKeys(), runDepth(), seen); seen.add(t); G.hand.push({type:t, lvl:1}); } }
   gotoLoadout();                                  // pick your 3 abilities
 }
 
@@ -2102,6 +2108,7 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
 // suffers in quick succession escalates the next (reaction chain).
 const PRIME_OIL=12, PRIME_ICE=10, PRIME_SHOCK=9;   // long enough to cross rooms
 const MARK_AMP=1.2;                                // 🎯 Hex Brand: the next hit deals +120%
+const POISON_CAP=10;                               // ☠️ poison stacks cap (keeps Combust from snowballing)
 // Teach the ordering combos in tooltips. Element → how to chain it across rooms.
 const ELEM_COMBO={
   oil:  'Coats heroes (slows them) and primes them. Put it <b>before</b> a 🔥flame (Ignite), ⚡tesla (Conduct) or ❄frost (Encase) room.',
@@ -2110,7 +2117,7 @@ const ELEM_COMBO={
   shock:'⚡ Conducts through <b>oiled</b> heroes to the party, and ⚡ <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
   phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
 };
-function reactMul(h){ return (1 + (h.reactCount||0)*0.25) * (hasMandate('conductor')?1.5:1); }   // escalating chain; Conductor mandate +50%
+function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.5:1); }   // escalating chain (capped at +100%); Conductor mandate +50%
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
@@ -2119,6 +2126,7 @@ function popReact(h,label,col,x){
 }
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
+  const rm=reactMul(h);          // snapshot once — a single hit can't self-amplify across its own reactions
   // priming statuses — refreshed while in the room, then carried down the hall
   if(elem==='oil')  h.oil  =Math.max(h.oil||0,  PRIME_OIL);
   else if(elem==='ice')  h.chill=Math.max(h.chill||0,PRIME_ICE);
@@ -2126,38 +2134,38 @@ function elementReact(h, elem, baseDmg){
 
   // 🔥 IGNITE — fire on an OILED hero: the oil flashes off in a heavy burst + burn
   if(elem==='fire' && h.oil>0){
-    h.oil=0; const x=Math.round((baseDmg*1.3+18)*reactMul(h)); h.hp-=x;
+    h.oil=0; const x=Math.round((baseDmg*1.3+18)*rm); h.hp-=x;
     h.burn=(h.burn||0)+10; h.burnT=5; popReact(h,'🔥 IGNITE','#ff7a2e',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ☠️ COMBUST — fire on a POISONED hero detonates the venom for a stack-scaled burst
   if(elem==='fire' && h.poison>0){
-    const x=Math.round((h.poison*3 + baseDmg*0.5 + 8)*reactMul(h)); h.hp-=x; h.poison=0; h.poisonT=0;
+    const x=Math.round((Math.min(h.poison,POISON_CAP)*3 + baseDmg*0.5 + 8)*rm); h.hp-=x; h.poison=0; h.poisonT=0;
     popReact(h,'☠️ COMBUST','#9be86b',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ⚡ OVERLOAD — lightning on a CHILLED hero stuns them solid
   if(elem==='shock' && h.chill>0 && !(h.freeze>0)){
-    const x=Math.round((baseDmg*0.6+8)*reactMul(h)); h.hp-=x; h.chill=0; h.freeze=1.2;
+    const x=Math.round((baseDmg*0.6+8)*rm); h.hp-=x; h.chill=0; h.freeze=1.2;
     popReact(h,'⚡ OVERLOAD','#fff34d',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 🧊 ENCASE — ice on an OILED hero: wet + cold freezes them SOLID (a sitting duck)
   else if(elem==='ice' && h.oil>0 && !(h.freeze>0)){
-    const x=Math.round((baseDmg*0.7+8)*reactMul(h)); h.hp-=x;
+    const x=Math.round((baseDmg*0.7+8)*rm); h.hp-=x;
     h.freeze=2.0; h.chill=PRIME_ICE; popReact(h,'🧊 ENCASE','#bfefff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ❄ SHATTER — a phys/shock impact on a CHILLED/frozen hero cracks the ice
   if((elem==='phys'||elem==='shock') && (h.chill>0||h.freeze>0)){
-    h.chill=0; const x=Math.round((baseDmg*0.9+12)*reactMul(h)); h.hp-=x;
+    h.chill=0; const x=Math.round((baseDmg*0.9+12)*rm); h.hp-=x;
     popReact(h,'❄ SHATTER','#9adfff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 💥 THERMAL SHOCK — opposite temperatures: fire on a CHILLED hero, or ice on a
   // BURNING hero. The sudden swing cracks them for a burst.
   if((elem==='fire' && h.chill>0) || (elem==='ice' && h.burn>0)){
-    const x=Math.round((baseDmg*1.0+12)*reactMul(h)); h.hp-=x;
+    const x=Math.round((baseDmg*1.0+12)*rm); h.hp-=x;
     if(elem==='fire') h.chill=0; else { h.burn=0; h.burnT=0; }
     popReact(h,'💥 THERMAL SHOCK','#ff5470',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
@@ -2165,9 +2173,9 @@ function elementReact(h, elem, baseDmg){
   // ⚡ CONDUCT — lightning on an OILED (wet) hero arcs to the rest of the party.
   // Oil is NOT consumed, so a wet hero can still be ignited afterwards.
   if(elem==='shock' && h.oil>0){
-    const m=reactMul(h); let arced=0;
+    let arced=0;
     for(const o of G.heroes){ if(o===h||o.state==='dead') continue;
-      const cd=Math.round(baseDmg*0.6*m); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
+      const cd=Math.round(baseDmg*0.6*rm); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
     if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
       floater(h.x,h.y-66,'⚡ CONDUCT ×'+arced,'#fff34d'); shake(5); sfx('crit'); }
@@ -2273,6 +2281,7 @@ function heroDies(h){
 
 // Called once after the whole raiding party is wiped out.
 function afterWave(){
+  if(G.phase!=='run') return;          // run already ended (closed/lost/won) — don't resurrect it
   G.waveEnding=false;
   if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
   // a town is due if the party's kills crossed a 5-kill boundary
@@ -2950,7 +2959,7 @@ function ampAt(idx){
 // Apply a trap's lingering statuses (poison / acid / mark) to a hero it just hit.
 function applyTrapStatus(h, d, r){
   if(!h || h.state==='dead') return;
-  if(d.poison){ h.poison=(h.poison||0)+d.poison+((r&&r.lvl||1)-1); h.poisonT=4; }   // stacks, +1/level
+  if(d.poison){ h.poison=Math.min(POISON_CAP, (h.poison||0)+d.poison+((r&&r.lvl||1)-1)); h.poisonT=4; }   // stacks (capped), +1/level
   if(d.acid){ h.acid=(h.acid||0)+d.acid; h.acidT=4; }
   if(d.mark && !(h.mark>0)){ h.mark=1; h.markT=4; floater(h.x,h.y-58,'🎯 MARKED','#ff5470'); }
 }
