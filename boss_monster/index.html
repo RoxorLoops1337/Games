@@ -2336,6 +2336,7 @@ function awardRunes(){
     if(lvlAfter>lvlBefore) G.newUnlocks.push(`${BOSSES[bk].ic} ${BOSSES[bk].name.split(' ')[0]} → Mastery Lv ${lvlAfter}`);
   }
   saveRunes();
+  G.townGain=awardTownResources();      // bank Wood/Stone/Shards for the Town Builder
   return delta;
 }
 
