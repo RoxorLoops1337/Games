@@ -1076,6 +1076,7 @@ function gotoMenu(){
       <button onclick="startEndless()">♾️ Endless</button>
       <button onclick="startTutorial()" class="${tutDoneGet()?'':'tut-pulse'}">📖 Tutorial</button>
       <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
+      <button onclick="openCodex()">⚛️ Combo Codex</button>
       <button onclick="openUnlocks()">🔓 Unlocks</button>
       <button onclick="showHelp()">❓ How to play</button>
     </div>
@@ -1118,6 +1119,71 @@ function openUnlocks(){
     <p>Slay heroes to unlock new bosses & rooms. Lifetime kills: <b style="color:var(--gold)">${RUNES.kills}</b></p>
     <h2 style="margin:6px 0 4px">Bosses</h2><div class="unlockgrid">${bosses}</div>
     <h2 style="margin:12px 0 4px">Room Cards</h2><div class="unlockgrid">${cards}</div>
+    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
+}
+
+/* ============================== COMBO CODEX ============================= */
+// Discovery: a keyword glossary + every reaction, so combos are learnable.
+const KEYWORDS={
+  Primer:    {col:'#9adfff', txt:'Applies a lingering status (oil/chill) a Detonator consumes. Place it BEFORE detonators.'},
+  Detonator: {col:'#ff7a2e', txt:'Triggers a reaction on a primed hero. Place it AFTER the primer that sets it up.'},
+  Poison:    {col:'#7bdc6b', txt:'Stacking damage-over-time — pile several sources, then a 🔥 fire room Combusts the stacks.'},
+  Mark:      {col:'#ff5470', txt:'Brands a hero so the NEXT hit Detonates for +120%. Put it just before a heavy hitter.'},
+  'Armor-shred':{col:'#b6e84d', txt:'Corrodes armor so every later hit lands harder. Pairs with fast/weak traps.'},
+  Burn:      {col:'#ff9a3a', txt:'Damage-over-time. Ignite (oil→fire) stacks a big one.'},
+  AoE:       {col:'#e0823a', txt:'Hits multiple heroes at once. Loves a strung-out corridor or a Warden kill-box.'},
+  Amplifier: {col:'#b985ff', txt:'Boosts nearby rooms instead of dealing damage. Surround it with your best traps.'},
+  Pierce:    {col:'#caa15e', txt:'Ignores hero armor — the answer to armored raiders.'},
+  Taunt:     {col:'#c9a14d', txt:'Holds the whole party in one room and hits them all. Stack traps in that room.'},
+  Support:   {col:'#7a9e6a', txt:'Buffs the rooms on either side while alive. Protect it behind your line.'},
+  Split:     {col:'#6ad9b0', txt:'Reforms once when slain, so it holds the party twice as long.'},
+  Scaling:   {col:'#5fae54', txt:'Grows permanently with every hero that dies in its room.'},
+  Counter:   {col:'#b163ff', txt:'Bonus damage to a specific kind of hero (class / elite / wounded).'},
+};
+const REACTIONS=[
+  {ic:'🔥', name:'Ignite',        how:'🔥 fire on an 🛢️ oiled hero',          pay:'heavy burst + big burn'},
+  {ic:'☠️', name:'Combust',       how:'🔥 fire on a ☠️ poisoned hero',         pay:'burst scaling with poison stacks'},
+  {ic:'💥', name:'Thermal Shock', how:'fire on a chilled hero, or ice on a burning one', pay:'sudden-swing burst'},
+  {ic:'🧊', name:'Encase',        how:'❄ ice on an 🛢️ oiled hero',            pay:'freezes them solid (a sitting duck)'},
+  {ic:'❄', name:'Shatter',        how:'💥 phys or ⚡ shock on a chilled/frozen hero', pay:'burst, cracks the ice'},
+  {ic:'⚡', name:'Conduct',        how:'⚡ shock on an 🛢️ oiled hero',          pay:'arcs to the WHOLE party'},
+  {ic:'⚡', name:'Overload',       how:'⚡ shock on a ❄ chilled hero',          pay:'stuns them solid'},
+  {ic:'🎯', name:'Detonate',      how:'any hit on a 🎯 marked hero',           pay:'+120% damage (consumes the mark)'},
+];
+// Derive a card's keyword tags from its properties.
+function cardTags(def){
+  const t=[];
+  if(def.elem==='oil'||def.elem==='ice') t.push('Primer');
+  if(def.elem==='fire'||def.elem==='shock') t.push('Detonator');
+  if(def.elem==='phys' && def.dmg && !def.amp && !def.poison && !def.acid && !def.mark) t.push('Detonator'); // shatters chilled
+  if(def.poison) t.push('Poison');
+  if(def.mark) t.push('Mark');
+  if(def.acid) t.push('Armor-shred');
+  if(def.burn) t.push('Burn');
+  if(def.aoe) t.push('AoE');
+  if(def.amp) t.push('Amplifier');
+  if(def.pierce||def.pierceAll) t.push('Pierce');
+  if(def.taunt) t.push('Taunt');
+  if(def.totem) t.push('Support');
+  if(def.split) t.push('Split');
+  if(def.feeds) t.push('Scaling');
+  if(def.vsClass||def.vsElite||def.vsLowHp) t.push('Counter');
+  return [...new Set(t)];
+}
+function openCodex(){
+  overlay.classList.add('show');
+  const react=REACTIONS.map(r=>`<div class="ucard" style="width:auto;min-width:150px;text-align:left;padding:8px 10px">
+    <div style="font-weight:bold">${r.ic} ${r.name}</div>
+    <div class="small" style="opacity:.85">${r.how}</div>
+    <div class="small" style="color:#7bdc6b">→ ${r.pay}</div></div>`).join('');
+  const keys=Object.keys(KEYWORDS).map(k=>`<div class="small" style="margin:3px 0;line-height:1.3">
+    <b style="color:${KEYWORDS[k].col}">${k}</b> — ${KEYWORDS[k].txt}</div>`).join('');
+  overlay.innerHTML=`<h1>⚛️ Combo Codex</h1>
+    <p>Traps & monsters apply <b>statuses</b> that linger as heroes walk. The right <b>order</b> sets off a reaction — and each reaction <b>escalates</b> the next (a chain).</p>
+    <h2 style="margin:6px 0 4px">Reactions</h2>
+    <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
+    <h2 style="margin:12px 0 4px">Keywords</h2>
+    <div style="max-width:640px;text-align:left;margin:0 auto">${keys}</div>
     <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
 }
 
@@ -3357,6 +3423,8 @@ function describeCard(card){
   } else if(def.kind==='shop'){
     lines.push(`Sells gear at ×${shopMarkup(lvl).toFixed(2)} markup — you keep the gold`);
   }
+  const tags=cardTags(def);
+  if(tags.length) lines.push(tags.map(t=>`<span style="background:#2a2342;border:1px solid ${(KEYWORDS[t]||{}).col||'#888'};color:${(KEYWORDS[t]||{}).col||'#ccc'};border-radius:4px;padding:0 5px;font-size:10px;margin:1px 3px 0 0;white-space:nowrap">${t}</span>`).join(' '));
   lines.push(`<span style="opacity:.85">${def.desc}</span>`);
   return lines.join('<br>');
 }
