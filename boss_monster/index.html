@@ -279,8 +279,12 @@ const ROOMS = {
   venom:    {kind:'trap',   name:'Venom Vent', ic:'🐍', col:'#7bdc6b', dmg:3,  rate:0.7,  elem:'phys', poison:4, desc:'Weak hit, but injects STACKING poison. A 🔥flame room then COMBUSTS the stacks for a burst.'},
   corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:5,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
   hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:4,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
+  runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.20, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +20%.'},
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Weak early — but grows +10% stronger for every hero that dies in this room.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:26, atk:9,  desc:'Scales hard with levels.'},
+  warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
+  totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
+  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits — reforms once at 60% HP when slain. Soaks burst; weak to ☠poison & 💥AoE.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:48, atk:16, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
@@ -656,7 +660,7 @@ function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per leve
 function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
-const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55, venom:30, corrode:60, hexbrand:80 };
+const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55, venom:30, corrode:60, hexbrand:80, warden:35, slime:50, totem:75, runestone:90 };
 function bossUnlocked(k){ return (UNLOCK_BOSS[k]||0) <= RUNES.kills; }
 function cardUnlocked(t){ return (UNLOCK_CARD[t]||0) <= RUNES.kills; }
 function unlockedRoomKeys(){ return ROOM_KEYS.filter(cardUnlocked); }
@@ -1510,13 +1514,17 @@ function buildCells(){
       const syn=synergyInfo(parts).m + (parts.length>1?(RB.synergy||0):0);
       cell.syn=syn;
       const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank powers this cell
-      let monHp=0, monAtk=0, hasMon=false, hasShop=false;
+      let monHp=0, monAtk=0, hasMon=false, hasShop=false, hasSplit=false;
       for(const p of parts){
         const def=ROOMS[p];
         if(def.kind==='trap'){
           cell.traps.push({type:p, def, fireT:0});
+          if(def.amp) cell.ampSelf=(cell.ampSelf||0)+def.amp;     // Runestone amplifier (this + adjacent)
         } else if(def.kind==='monster'){
           hasMon=true;
+          if(def.taunt) cell.warden=true;                        // strikes the whole stalled party
+          if(def.totem) cell.totem=true;                         // buffs adjacent rooms while alive
+          if(def.split) hasSplit=true;                           // reforms once on death
           const bHp = p==='minion'? (r.minHp||def.hp) : def.hp;   // ||def guards a NaN/missing minion stat
           const bAtk= p==='minion'? (r.minAtk||def.atk): def.atk;
           // "Fed" monsters grow with every hero that died in this room — uncapped.
@@ -1531,7 +1539,7 @@ function buildCells(){
         }
       }
       if(hasMon){ const hp=Math.round(monHp*syn*vm*(1+(RB.monHp||0)));
-        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*vm*(1+(RB.monDmg||0))), atkT:0, alive:true}; }
+        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*vm*(1+(RB.monDmg||0))), atkT:0, alive:true, split:hasSplit}; }
       cell.shop=hasShop;
       cell.kind = hasMon ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
     }
@@ -2538,6 +2546,16 @@ function thiefSteal(h){
 }
 
 // Fire every trap in the cell (a combo room can hold two), scaled by synergy.
+// Positional amplification for a cell: Runestone traps (this + adjacent rooms)
+// and living War Totems (adjacent rooms) multiply trap & guard output.
+function ampAt(idx){
+  let m=1;
+  for(let j=idx-1;j<=idx+1;j++){ const c=G.cells&&G.cells[j]; if(!c) continue;
+    if(c.ampSelf) m+=c.ampSelf;                                       // Runestone reaches this + adjacent
+    if(j!==idx && c.totem && c.mon && c.mon.alive) m+=0.25;           // adjacent living War Totem
+  }
+  return m;
+}
 // Apply a trap's lingering statuses (poison / acid / mark) to a hero it just hit.
 function applyTrapStatus(h, d, r){
   if(!h || h.state==='dead') return;
@@ -2546,9 +2564,10 @@ function applyTrapStatus(h, d, r){
   if(d.mark && !(h.mark>0)){ h.mark=1; h.markT=4; floater(h.x,h.y-58,'🎯 MARKED','#ff5470'); }
 }
 function trapTick(h,cell,dt){
-  const r=cell.room; const syn=cell.syn||1; const doc=bossDoc();
+  const r=cell.room; const syn=cell.syn||1; const doc=bossDoc(); const amp=ampAt(cell.index);
   for(const tr of cell.traps){
     if(tr.def.aoe) continue;        // area traps fire once per interval in aoeTrapTick, not per-hero
+    if(tr.def.amp) continue;        // Runestone deals no damage — it only amplifies (ampAt)
     tr.fireT-=dt;
     if(tr.fireT<=0){
       tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.8:1);   // Hair Trigger mandate: traps fire faster
@@ -2561,6 +2580,7 @@ function trapTick(h,cell,dt){
       // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
       const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
       if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
+      dmg*=amp;                                                // Runestone / War Totem amplification
       const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion/Piercing Halls: ignore armor
       dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem);
       if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
@@ -2597,6 +2617,7 @@ function aoeTrapTick(dt){
       let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
       if(vr) base*=(1+vr*VET_DMG);
       if(doc==='inferno') base*=1.2;
+      base*=ampAt(cell.index);                                  // Runestone / War Totem amplification
       const pierce=(doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll)?'full':!!d.pierce;
       for(const o of targets){
         const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
@@ -2628,21 +2649,34 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
           mon.revivedOnce=true; mon.hp=Math.round(mon.maxHp*0.5); mon.alive=true; mon.atkT=0.4;
           burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#9a5cff',16); floater(cell.x0+ROOM_W*0.68,FLOOR-78,'💀 RISES','#b985ff');
           return; }
+        // Gel Cube: reforms once at 60% HP when slain
+        if(mon.split && !mon.didSplit){
+          mon.didSplit=true; mon.hp=Math.round(mon.maxHp*0.6); mon.alive=true; mon.atkT=0.3;
+          burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#6ad9b0',16); floater(cell.x0+ROOM_W*0.68,FLOOR-78,'🟩 SPLIT','#6ad9b0');
+          return; }
         mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
         floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
         return; }
     }
   }
-  // monster strikes only the front hero (a frozen hero still gets mauled)
+  // monster strikes the front hero — or, for a Warden, the WHOLE party in the room
   if(isFront){
     mon.atkT-=dt;
     if(mon.atkT<=0){
       mon.atkT=0.9;
-      const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*h.maxHp):0;
-      dealToHero(h, mon.atk+bite, 'HIT');
-      if(G.stats) G.stats.monDmg+=mon.atk+bite;
+      const amp=ampAt(cell.index);
+      const targets = cell.warden
+        ? G.heroes.filter(o=>o && o.state==='fighting' && o.cellIndex===cell.index)   // taunt: hit everyone stalled here
+        : [h];
+      for(const t of targets){
+        const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*t.maxHp):0;
+        const dmg=Math.round((mon.atk+bite)*amp);
+        dealToHero(t, dmg, 'HIT');
+        if(G.stats) G.stats.monDmg+=dmg;
+        maybePotion(t);
+      }
+      if(cell.warden && targets.length>1) floater(cell.x0+ROOM_W*0.5, FLOOR-86, '🛡️ ×'+targets.length, '#c9a14d');
       if(bossDoc()==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+2); }  // Soul Engine: guards fuel mana
-      maybePotion(h);
     }
   }
 }
@@ -3303,7 +3337,9 @@ function describeCard(card){
   const def=ROOMS[card.type]; const lvl=card.lvl||1;
   const name = card.type==='minion' ? (card.label||'Corrupted') : def.name;
   const lines=[`<b>${def.ic} ${name}</b> · ${def.kind.toUpperCase()}${lvl>1?' · Lv '+lvl:''}`];
-  if(def.kind==='trap'){
+  if(def.kind==='trap' && def.amp){
+    lines.push(`🔯 <b style="color:#b985ff">Amplifier</b> — +${Math.round(def.amp*100)}% to traps & guards in this room and the two beside it`);
+  } else if(def.kind==='trap'){
     const dmg=Math.round(def.dmg*(1+(lvl-1)*0.4)*(1+(RB.trapDmg||0)));
     lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠poison':''}${def.acid?' +🧪acid':''}${def.mark?' +🎯mark':''}${def.aoe?' · 💥 AoE':''}`);
     if(def.aoe) lines.push(`<span class="small" style="color:#e0a060">💥 Blasts every hero within ${def.aoe} room${def.aoe>1?'s':''} of this one</span>`);
@@ -3314,6 +3350,9 @@ function describeCard(card){
     const hp=Math.round(bHp*(0.9+(lvl-1)*0.85)*bas*(1+(RB.monHp||0)));
     const atk=Math.round(bAtk*(1.0+(lvl-1)*0.9)*bas*(1+(RB.monDmg||0)));
     lines.push(`👹 <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s — blocks the corridor`);
+    if(def.taunt) lines.push('🛡️ <b style="color:#c9a14d">Taunt</b> — strikes EVERY hero stalled in its room');
+    if(def.totem) lines.push('🗿 <b style="color:#7a9e6a">Support</b> — +25% to the rooms on either side while alive');
+    if(def.split) lines.push('🟩 <b style="color:#6ad9b0">Split</b> — reforms once at 60% HP when slain');
     if(monFeeds(def)) lines.push('🍖 Grows +10% per hero that dies in its room'+(def.feeds?'':' (Undeath)'));
   } else if(def.kind==='shop'){
     lines.push(`Sells gear at ×${shopMarkup(lvl).toFixed(2)} markup — you keep the gold`);
@@ -3362,6 +3401,7 @@ function describeRoom(room){
   const title = parts.length>1 ? comboName(room) : roomName(room);
   const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`];
   parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
+    if(def.amp){ lines.push(`${def.ic} ${def.name}: 🔯 +${Math.round(def.amp*100)}% to this & adjacent rooms`); return; }
     const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0)));
     lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
