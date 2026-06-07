@@ -153,9 +153,9 @@
   .rbpts{position:absolute;top:12px;right:16px;z-index:6;font-size:26px;font-weight:bold;
     color:#ffe9a8;text-shadow:0 2px 4px #000,0 0 10px #c9881f;display:flex;align-items:center;gap:4px;}
   .rbpts .rbscroll-ic{font-size:22px}
-  .rbview{max-width:100%;max-height:100%;overflow:auto;-webkit-overflow-scrolling:touch;
-    padding:54px 14px 16px;}
-  .rtree{position:relative;margin:0 auto;border-radius:16px;
+  .rbview{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab;}
+  .rbview:active{cursor:grabbing;}
+  .rtree{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;border-radius:16px;
     background:radial-gradient(ellipse at 50% 28%,#f0e3c2 0%,#e0c99e 62%,#cdb487 100%);
     border:7px solid #6a4a2a;
     box-shadow:inset 0 0 46px rgba(110,74,30,.45),inset 0 0 0 3px #b58a52,0 10px 34px rgba(0,0,0,.55);}
@@ -180,7 +180,10 @@
   .rbranchhdr{position:absolute;transform:translateX(-50%);white-space:nowrap;font-size:12px;
     font-weight:bold;letter-spacing:.3px;padding:2px 8px;border-radius:8px;border:1.5px solid;
     background:rgba(245,235,205,.92);box-shadow:0 1px 3px rgba(80,50,10,.35);}
-  .rbview{padding-bottom:74px;}
+  .rbzoom{position:absolute;right:10px;bottom:84px;z-index:7;display:flex;flex-direction:column;gap:6px;}
+  .rbzoom button{width:40px;height:40px;padding:0;font-size:22px;font-weight:bold;border-radius:10px;
+    background:linear-gradient(#3a2a16,#241808);border:2px solid #caa15e;color:#ffe9b8;box-shadow:0 3px 0 #1c130a;}
+  .rbzoom button:active{transform:translateY(2px);box-shadow:0 1px 0 #1c130a;}
   .rbdetail{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px));
     z-index:7;display:flex;align-items:center;gap:10px;width:min(560px,calc(100% - 20px));
     padding:8px 12px;border-radius:12px;background:rgba(16,11,30,.96);border:2px solid var(--accent);
@@ -1261,7 +1264,7 @@ function tutEnd(){
 
 /* ============================== RUNE PAGE UI ============================= */
 let runeSel=null;
-function openRunes(){ runeSel=null; overlay.classList.add('show'); renderRunes(); }
+function openRunes(){ runeSel=null; runeView=null; overlay.classList.add('show'); renderRunes(); }
 // First tap a node to inspect it (detail bar appears); tap it again — or the
 // Buy button — to spend a point on the next rank.
 function tapRune(id){
@@ -1321,13 +1324,83 @@ function renderRunes(){
   overlay.innerHTML=`<div class="runebook">
     <button class="rbback" onclick="gotoMenu()">‹ BACK</button>
     <div class="rbpts">${RUNES.points} <span class="rbscroll-ic">📜</span></div>
-    <div class="rbview"><div class="rtree" style="width:${W}px;height:${H}px">
+    <div class="rbview" id="rbview"><div class="rtree" id="rtree" style="width:${W}px;height:${H}px">
       <svg width="${W}" height="${H}" style="position:absolute;left:0;top:0;pointer-events:none">${paths}</svg>
       ${heads}
       ${nodes}
     </div></div>
+    <div class="rbzoom"><button onclick="runeZoomBtn(1)" aria-label="zoom in">＋</button><button onclick="runeZoomBtn(-1)" aria-label="zoom out">－</button></div>
     ${detail}
   </div>`;
+  setupRuneViewport(W, H);
+}
+// ---- rune page pan/zoom: a persistent transform so re-renders never jump ----
+let runeView=null;                 // {x,y,scale} kept across renders
+let runeVP=null;                   // viewport metrics {vw,vh,W,H,minS,maxS}
+let runeDragged=false;             // did this gesture move enough to count as a pan?
+function setupRuneViewport(W,H){
+  const vp=document.getElementById('rbview'), tree=document.getElementById('rtree');
+  if(!vp||!tree) return;
+  const vw=vp.clientWidth||window.innerWidth, vh=vp.clientHeight||window.innerHeight;
+  const usableH=Math.max(120, vh-96);                         // leave room for the detail bar
+  const fit=Math.min(vw/W, usableH/H, 1)*0.98;
+  runeVP={ vw, vh, W, H, minS:Math.max(0.3, fit*0.8), maxS:2.4 };
+  if(!runeView){                                              // first open → fit & centre
+    runeView={ scale:fit, x:(vw-W*fit)/2, y:Math.max(46,(usableH-H*fit)/2) };
+  }
+  applyRuneView();
+  attachRuneGestures(vp);
+}
+function clampRuneView(){
+  if(!runeView||!runeVP) return;
+  const {vw,vh,W,H}=runeVP, s=runeView.scale, tw=W*s, th=H*s, m=80;
+  runeView.x = tw<=vw ? clamp(runeView.x,0,vw-tw) : clamp(runeView.x, vw-tw-m, m);
+  runeView.y = th<=vh ? clamp(runeView.y,0,vh-th) : clamp(runeView.y, vh-th-m, m);
+}
+function applyRuneView(){
+  const tree=document.getElementById('rtree'); if(!tree||!runeView) return;
+  clampRuneView();
+  tree.style.transform=`translate(${runeView.x}px,${runeView.y}px) scale(${runeView.scale})`;
+}
+function runeZoomAround(mx,my,ns){
+  const s=runeView.scale; ns=clamp(ns, runeVP.minS, runeVP.maxS);
+  const tx=(mx-runeView.x)/s, ty=(my-runeView.y)/s;          // tree point under the cursor
+  runeView.scale=ns; runeView.x=mx-tx*ns; runeView.y=my-ty*ns;
+  applyRuneView();
+}
+function runeZoomBtn(dir){
+  const vp=document.getElementById('rbview'); if(!vp||!runeView) return;
+  runeZoomAround(vp.clientWidth/2, vp.clientHeight/2, runeView.scale*(dir>0?1.25:0.8));
+}
+function attachRuneGestures(vp){
+  const pts=new Map(); let panStart=null, pinch=null;
+  const rect=()=>vp.getBoundingClientRect();
+  vp.onpointerdown=e=>{
+    try{ vp.setPointerCapture(e.pointerId); }catch(_){}
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); runeDragged=false;
+    if(pts.size===1){ panStart={x:e.clientX,y:e.clientY,vx:runeView.x,vy:runeView.y}; }
+    else if(pts.size===2){ const[a,b]=[...pts.values()];
+      pinch={ d0:Math.hypot(a.x-b.x,a.y-b.y)||1, s0:runeView.scale }; panStart=null; }
+  };
+  vp.onpointermove=e=>{
+    if(!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size>=2 && pinch){ const[a,b]=[...pts.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y);
+      const r=rect(), mx=(a.x+b.x)/2-r.left, my=(a.y+b.y)/2-r.top;
+      runeZoomAround(mx,my, pinch.s0*(d/pinch.d0)); runeDragged=true; }
+    else if(panStart){ const dx=e.clientX-panStart.x, dy=e.clientY-panStart.y;
+      if(Math.abs(dx)+Math.abs(dy)>6) runeDragged=true;
+      runeView.x=panStart.vx+dx; runeView.y=panStart.vy+dy; applyRuneView(); }
+  };
+  const up=e=>{ pts.delete(e.pointerId);
+    if(pts.size<2) pinch=null;
+    if(pts.size===1){ const p=[...pts.values()][0]; panStart={x:p.x,y:p.y,vx:runeView.x,vy:runeView.y}; }
+    else if(pts.size===0) panStart=null; };
+  vp.onpointerup=up; vp.onpointercancel=up;
+  vp.onwheel=e=>{ e.preventDefault(); const r=rect();
+    runeZoomAround(e.clientX-r.left, e.clientY-r.top, runeView.scale*(e.deltaY<0?1.12:0.89)); };
+  // if the gesture was a pan/pinch, swallow the node click so it doesn't buy/select
+  vp.addEventListener('click', e=>{ if(runeDragged){ e.stopPropagation(); e.preventDefault(); } }, true);
 }
 
 /* ============================== PHASE: EDICTS ============================ */
