@@ -538,7 +538,7 @@ const ABIL = {
            run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT', false, 'shock')},
   curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
            run:h=>{ if(h.cursed) return; h.cursed=true; h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
-  freeze: {name:'Freeze',  ic:'❄️', cost:20, cd:6,  desc:'Freezes in place — primes SHATTER.',
+  freeze: {name:'Freeze',  ic:'❄️', cost:34, cd:6,  desc:'Freezes in place — primes SHATTER. A costly lock.',
            run:h=>{h.freeze=2.2; h.chill=2.6; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
   drain:  {name:'Drain',   ic:'🩸', cost:28, cd:5,  desc:'Damage hero, heal boss.',
            run:h=>{dealToHero(h, abilDmg(22+G.boss.lvl*3),'DRAIN', false, 'phys'); healBoss(16+G.boss.lvl*3);}},
@@ -1683,7 +1683,7 @@ function chooseBoss(key){
   const maxHp=Math.round(b.maxHp*(1+RB.bossHp)*bossMasteryHp(mLvl)*glass) + RB.bossHpFlat;
   const atk=Math.round(b.atk*(1+RB.bossAtk)*bossMasteryAtk(mLvl)) + RB.bossAtkFlat;
   G.boss={ key, ...b, atk, hp:maxHp, maxHp, lvl:1, masteryLvl:mLvl, smiteCd:0, rage:0,
-    mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:6+RB.manaRegen,
+    mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:5.5+RB.manaRegen,
     abil:[...b.sig, b.pool[0]].map(id=>({id,cd:0})) };
   applyBossPassive(G.boss);                       // signature passive effects
   // Relic Shrine: begin the run already bearing relic(s)
