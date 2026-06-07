@@ -311,6 +311,7 @@ function abilDmg(x){ const p=G.boss?G.boss.pAbilDmg||0:0; return Math.round(x*(1
 function townCost(c){ return Math.max(1, Math.round(c*(1-(RB.townDisc||0)))); }
 // Shop sale price scales with the shop room's level (+40% markup per level).
 function shopMarkup(lvl){ return 1.6 + ((lvl||1)-1)*0.4; }
+function shopCap(room){ return ((room&&room.lvl)||1)+1; }   // Lv1 holds 2 items, +1 slot per level
 function salePrice(room, key){ return Math.round(ITEMS[key].price * shopMarkup(room?room.lvl:1)); }
 
 // Fusing two components yields a synergy multiplier on the room's output.
@@ -732,9 +733,9 @@ function shrineRelics(){ return [0,1,1,2][townLvl('shrine')]; }             // f
 // Dark Smithy: keep N free items stocked in each shop (buildCells re-sells them each wave).
 function smithyRestock(){
   const n=townLvl('smithy'); if(!n || !G.rooms) return; const keys=Object.keys(ITEMS);
-  for(const r of G.rooms){ if(r && r.type==='shop'){ if(!r.stock) r.stock=[];
+  for(const r of G.rooms){ if(r && r.type==='shop'){ if(!r.stock) r.stock=[]; const cap=shopCap(r);
     let free=r.stock.filter(s=>s.free).length;
-    while(free<n){ r.stock.push({key:pick(keys), sold:false, free:true}); free++; } } }
+    while(free<n && r.stock.length<cap){ r.stock.push({key:pick(keys), sold:false, free:true}); free++; } } }
 }
 // pick a random relic you don't own, tier-weighted (higher boost → better odds)
 function randomRelicId(boost){
@@ -1876,8 +1877,10 @@ function makeRoom(type,lvl,card){
 function stockShop(itemKey){
   const it=ITEMS[itemKey];
   if(G.gold<it.price){ showHint('Not enough gold to stock that.'); return; }
-  const shop=G.rooms.find(r=>r&&r.type==='shop');
+  const shop=G.rooms.find(r=>r&&r.type==='shop' && (r.stock||[]).length<shopCap(r))
+          || G.rooms.find(r=>r&&r.type==='shop');
   if(!shop){ showHint('Build a Shop room first.'); return; }
+  if((shop.stock||[]).length>=shopCap(shop)){ showHint('Shop is full — Lv '+shop.lvl+' holds '+shopCap(shop)+' items. Level it up for more slots.'); return; }
   G.gold-=it.price; shop.stock.push({key:itemKey, sold:false});
   showHint(it.name+' stocked. Heroes pay '+salePrice(shop,itemKey)+'g (Lv '+shop.lvl+' shop).');
   render();
@@ -2288,7 +2291,8 @@ function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead';
   // loot: carried gold + bounty (threat dial + rune bonuses)
-  const loot=Math.round((h.gold + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.5:1)) + (RB.goldKill||0);
+  // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
+  const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.5:1)) + (RB.goldKill||0);
   G.gold+=loot;
   // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
@@ -3165,7 +3169,7 @@ function doShopping(h, cell){
     if(s.sold) continue;
     const price=salePrice(cell.room, s.key);
     if(h.gold>=price){
-      h.gold-=price; G.gold+=price; s.sold=true;
+      h.gold-=price; G.gold+=price; h.spent=(h.spent||0)+price; s.sold=true;   // sale is PROFIT — loot adds spent back
       const it=ITEMS[s.key];
       if(it.atk) h.atk+=it.atk;
       if(it.def) h.armor+=it.def;
@@ -3827,11 +3831,13 @@ function renderPanel(){
       <div class="row" style="margin-bottom:6px">
         <button class="buy" onclick="buySlot()" ${G.gold<slotCost()?'disabled':''}>➕ Slot (${slotCost()}g)</button>
         ${G.boss && G.boss.hp<G.boss.maxHp ? `<button class="buy" onclick="repairThrone()" title="Spend gold to heal the throne" ${G.gold<repairCost().cost?'disabled':''}>🩹 Repair +${repairCost().heal} (${repairCost().cost}g)</button>` : ''}
-        ${shopExists?`<span class="pill">🛒 Stock:</span>`+Object.keys(ITEMS).map(k=>{
+        ${shopExists?(()=>{ const shops=G.rooms.filter(r=>r&&r.type==='shop');
+          const used=shops.reduce((a,r)=>a+(r.stock||[]).length,0), cap=shops.reduce((a,r)=>a+shopCap(r),0); const full=used>=cap;
+          return `<span class="pill" title="Each shop holds (level + 1) items; sales are pure profit on top of loot.">🛒 Stock ${used}/${cap}</span>`+Object.keys(ITEMS).map(k=>{
           const it=ITEMS[k];
-          return `<button onclick="stockShop('${k}')" title="${it.name} — ${it.desc}. You pay ${it.price}g to stock it; heroes buy it for more (your profit)." ${G.gold<it.price?'disabled':''}
-            style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join('')
-          :`<span class="small">Build a 🛒 Shop to sell gear for gold.</span>`}
+          return `<button onclick="stockShop('${k}')" title="${it.name} — ${it.desc}. Stock for ${it.price}g; heroes pay the marked-up price (kept as profit)." ${(G.gold<it.price||full)?'disabled':''}
+            style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join(''); })()
+          :`<span class="small">Build a 🛒 Shop to sell gear for profit.</span>`}
         <span style="flex:1"></span>
         <span class="pill" title="Resources gathered this run. Close the dungeon to keep them all — if the throne falls you lose ${Math.round((1-deathKeep())*100)}%.">🏗️ ${haulStr(pendingResources())}</span>
         <button onclick="promptClose()" title="End the run now and keep your full haul" style="padding:6px 9px;border-color:#9be86b;color:#cdeeb0">🏳️ Close</button>
@@ -3944,7 +3950,7 @@ function describeCard(card){
     if(def.split) lines.push('🟩 <b style="color:#6ad9b0">Split</b> — reforms once at 60% HP when slain');
     if(monFeeds(def)) lines.push('🍖 Grows +10% per hero that dies in its room'+(def.feeds?'':' (Undeath)'));
   } else if(def.kind==='shop'){
-    lines.push(`Sells gear at ×${shopMarkup(lvl).toFixed(2)} markup — you keep the gold`);
+    lines.push(`Holds ${lvl+1} item${lvl+1>1?'s':''} (+1 slot/level). Heroes buy at ×${shopMarkup(lvl).toFixed(2)} — pure profit, and they still drop full loot.`);
   }
   const tags=cardTags(def);
   if(tags.length) lines.push(tags.map(t=>`<span style="background:#2a2342;border:1px solid ${(KEYWORDS[t]||{}).col||'#888'};color:${(KEYWORDS[t]||{}).col||'#ccc'};border-radius:4px;padding:0 5px;font-size:10px;margin:1px 3px 0 0;white-space:nowrap">${t}</span>`).join(' '));
@@ -4005,8 +4011,8 @@ function describeRoom(room){
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${(room.kills||0)*10}% (no cap)`); }
   if(parts.includes('shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
-    lines.push(`🛒 Shop Lv ${room.lvl}: ×${shopMarkup(room.lvl).toFixed(2)} markup`);
-    if(unsold.length) unsold.forEach(s=>lines.push(`${ITEMS[s.key].ic} ${ITEMS[s.key].name} (${ITEMS[s.key].desc}) — sells <b>${salePrice(room,s.key)}g</b>`));
+    lines.push(`🛒 Shop Lv ${room.lvl}: ×${shopMarkup(room.lvl).toFixed(2)} markup · ${(room.stock||[]).length}/${shopCap(room)} slots`);
+    if(unsold.length) unsold.forEach(s=>lines.push(`${ITEMS[s.key].ic} ${ITEMS[s.key].name} (${ITEMS[s.key].desc}) — sells <b>${salePrice(room,s.key)}g</b>${s.free?' <span style="color:#6ad97e">(free)</span>':''}`));
     else lines.push('<span style="opacity:.7">empty — stock it in build</span>');
   }
   if(parts.length>1) lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
