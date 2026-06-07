@@ -3531,6 +3531,36 @@ function drawSprite(sx, footY, h, key){
   X.drawImage(img, srcX,srcY,fw,fh, dx,dy, Math.round(fw*S), Math.round(fh*S));
   return true;
 }
+// ---- animated monster sprites (guard a room; face LEFT toward the raiders) ----
+const MON_SPRITES={
+  goblin:{ base:'sprites/goblin/goblin_', scale:0.8, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:23, ay:61},
+    slash:{sheet:'slash',fw:64,fh:64,n:5,fps:12, ax:23, ay:61},
+  }},
+};
+const MON_IMG={};
+if(typeof Image!=='undefined'){
+  for(const key in MON_SPRITES){ const cfg=MON_SPRITES[key]; MON_IMG[key]={};
+    for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!MON_IMG[key][sh]){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src=cfg.base+sh+'.png'; MON_IMG[key][sh]=im; } } }
+}
+function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
+function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
+function drawMonsterSprite(cx, footY, room, cell, key, alive){
+  const cfg=MON_SPRITES[key]; if(!cfg||!room) return false;
+  const name=(alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
+  const clip=cfg.clips[name], img=MON_IMG[key][clip.sheet];
+  if(!img||!img._ok) return false;
+  const now=performance.now();
+  if(room._mc!==name){ room._mc=name; room._mt=0; }
+  const dt=Math.min(0.1,(now-(room._ml||now))/1000); room._ml=now;
+  room._mt=(room._mt||0)+dt;
+  const frame=Math.floor(room._mt*clip.fps)%clip.n;
+  const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
+  const dx=Math.round(cx-clip.ax*S), dy=Math.round(footY-clip.ay*S);
+  X.imageSmoothingEnabled=false;
+  X.drawImage(img, srcX,srcY,clip.fw,clip.fh, dx,dy, Math.round(clip.fw*S), Math.round(clip.fh*S));
+  return true;
+}
 function roomArtKey(room){
   const parts=roomParts(room);
   if(parts.some(p=>ROOMS[p].kind==='monster')) return 'lair';      // backdrop
@@ -3563,9 +3593,10 @@ function drawRoomContents(x0,w,room,i){
     monParts.forEach((mp,mi)=>{
       const def=ROOMS[mp]; const sprite = mp==='minion'?'minion':mp;
       const ox = monParts.length>1 ? (mi===0? -22 : 22) : 0;   // stand them side by side
-      if(alive) drawMonster(cx+ox, sprite, def.col);
-      else { X.globalAlpha=0.35; drawMonster(cx+ox, sprite, def.col); X.globalAlpha=1;
-             px(cx+ox-12,FLOOR-10,24,6,'#3a3a3a'); }
+      if(!alive) X.globalAlpha=0.35;
+      const drew = (mp==='goblin') && monSpriteReady('goblin') && drawMonsterSprite(cx+ox, FLOOR, room, cell, 'goblin', alive);
+      if(!drew) drawMonster(cx+ox, sprite, def.col);
+      if(!alive){ X.globalAlpha=1; px(cx+ox-12,FLOOR-10,24,6,'#3a3a3a'); }
     });
     if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
       bar(cx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
