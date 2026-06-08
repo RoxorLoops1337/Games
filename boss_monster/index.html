@@ -3651,8 +3651,9 @@ function drawSprite(sx, footY, h, key){
 // ---- animated monster sprites (guard a room; face LEFT toward the raiders) ----
 const MON_SPRITES={
   goblin:{ base:'sprites/goblin/goblin_', scale:0.8, dirRow:1, idle:'idle', atk:'slash', clips:{
-    idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:23, ay:61},
-    slash:{sheet:'slash',fw:64,fh:64,n:5,fps:12, ax:23, ay:61},
+    idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:25, ay:61},
+    walk: {sheet:'walk', fw:64,fh:64,n:8,fps:10, ax:25, ay:61},
+    slash:{sheet:'slash',fw:64,fh:64,n:5,fps:12, ax:25, ay:61},
   }},
 };
 const MON_IMG={};
@@ -3662,9 +3663,10 @@ if(typeof Image!=='undefined'){
 }
 function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
-function drawMonsterSprite(cx, footY, room, cell, key, alive){
+function drawMonsterSprite(cx, footY, room, cell, key, alive, moving){
   const cfg=MON_SPRITES[key]; if(!cfg||!room) return false;
-  const name=(alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
+  const name = moving && cfg.clips.walk ? 'walk'
+             : (alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
   const clip=cfg.clips[name], img=MON_IMG[key][clip.sheet];
   if(!img||!img._ok) return false;
   const now=performance.now();
@@ -3707,16 +3709,26 @@ function drawRoomContents(x0,w,room,i){
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
+    // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
+    const engaged = alive && cell && G.phase==='run' && monsterAttacking(cell);
+    const targetF = engaged ? 0.58 : 0.74;
+    if(room._monF===undefined) room._monF=targetF;
+    const now=performance.now(); const mdt=Math.min(0.05,(now-(room._mpl||now))/1000); room._mpl=now;
+    const rate=0.42;                                   // fraction/sec (~84px/s)
+    if(room._monF<targetF) room._monF=Math.min(targetF, room._monF+rate*mdt);
+    else if(room._monF>targetF) room._monF=Math.max(targetF, room._monF-rate*mdt);
+    const moving = alive && Math.abs(room._monF-targetF)>0.004;
+    const mbx = x0 + w*room._monF;                     // animated monster base x
     monParts.forEach((mp,mi)=>{
       const def=ROOMS[mp]; const sprite = mp==='minion'?'minion':mp;
       const ox = monParts.length>1 ? (mi===0? -22 : 22) : 0;   // stand them side by side
       if(!alive) X.globalAlpha=0.35;
-      const drew = (mp==='goblin') && monSpriteReady('goblin') && drawMonsterSprite(cx+ox, FLOOR, room, cell, 'goblin', alive);
-      if(!drew) drawMonster(cx+ox, sprite, def.col);
-      if(!alive){ X.globalAlpha=1; px(cx+ox-12,FLOOR-10,24,6,'#3a3a3a'); }
+      const drew = (mp==='goblin') && monSpriteReady('goblin') && drawMonsterSprite(mbx+ox, FLOOR, room, cell, 'goblin', alive, moving);
+      if(!drew) drawMonster(mbx+ox, sprite, def.col);
+      if(!alive){ X.globalAlpha=1; px(mbx+ox-12,FLOOR-10,24,6,'#3a3a3a'); }
     });
     if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
-      bar(cx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
+      bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
   }
   // shop counter
   if(parts.includes('shop')){
