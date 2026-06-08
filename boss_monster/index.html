@@ -3892,6 +3892,34 @@ if(typeof Image!=='undefined'){
 }
 function demonIdleReady(){ return DEMON_IDLE.length===4 && DEMON_IDLE.every(im=>im&&im._ok); }
 function demonIdleFrame(){ return DEMON_IDLE[DEMON_PP[Math.floor(performance.now()/170)%DEMON_PP.length]]; }  // ~6fps ping-pong
+// Azzaroth's purple arcane glow. front=false → back-glow + ground pool (drawn
+// behind the sprite); front=true → rising magic motes (drawn in front).
+function drawDemonAura(cx, y, dw, dh, front){
+  const now=performance.now(); const pulse=0.5+0.5*Math.sin(now/640);
+  if(!front){
+    const gx=cx, gy=y-dh*0.55, gr=dw*0.72;
+    const g=X.createRadialGradient(gx,gy,3, gx,gy,gr);
+    g.addColorStop(0, 'rgba(190,90,240,'+(0.34+0.14*pulse).toFixed(3)+')');
+    g.addColorStop(0.45,'rgba(150,55,210,'+(0.16+0.08*pulse).toFixed(3)+')');
+    g.addColorStop(1, 'rgba(150,55,210,0)');
+    X.fillStyle=g; X.beginPath(); X.arc(gx,gy,gr,0,7); X.fill();
+    // ground light pool under the throne
+    X.globalAlpha=0.16+0.10*pulse; X.fillStyle='#b06bff';
+    X.beginPath(); X.ellipse(cx,y,dw*0.42,9,0,0,7); X.fill(); X.globalAlpha=1;
+  } else {
+    // rising arcane motes
+    for(let i=0;i<7;i++){
+      const seed=i*0.137, prog=((now/1000*0.4)+seed)%1;       // 0..1, loops ~2.5s
+      const my=y-3 - prog*(dh*0.95);
+      const mx=cx + Math.sin(now/780 + i*1.9)*(dw*0.34) + (i-3)*2;
+      const a=Math.sin(prog*Math.PI)*0.75; if(a<=0) continue;
+      const sz=2+(i%2);
+      X.globalAlpha=a*0.5; X.fillStyle='#d9a8ff'; X.fillRect(mx-1,my-1,sz+2,sz+2);  // soft halo
+      X.globalAlpha=a;     X.fillStyle='#f0d6ff'; X.fillRect(mx,my,sz,sz);          // bright core
+    }
+    X.globalAlpha=1;
+  }
+}
 function drawBoss(cx){
   const y=FLOOR; const b=G.boss; const c=b.col;
   // throne
@@ -3903,9 +3931,11 @@ function drawBoss(cx){
   if(img && img._ok){
     // real sprite: bottom-anchored on the throne, aspect preserved
     const dh=116, dw=Math.round(dh*(img.width/img.height));
+    if(b.key==='demon') drawDemonAura(cx, y, dw, dh, false);   // purple back-glow + ground pool (behind)
     const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=animated;   // smooth the big detailed demon frames, nearest for the small pixel bosses
     X.drawImage(img, Math.round(cx-dw/2), Math.round(y-dh+2), dw, dh);
     X.imageSmoothingEnabled=sm;
+    if(b.key==='demon') drawDemonAura(cx, y, dw, dh, true);    // rising magic motes (in front)
     bar(cx-40, y-dh-8, 80, 8, b.hp/b.maxHp, '#ff4d6d');
     X.fillStyle='#fff'; X.font='10px Trebuchet MS'; X.textAlign='center';
     X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-dh-10); X.textAlign='left';
