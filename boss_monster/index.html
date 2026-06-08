@@ -3092,6 +3092,10 @@ function onEnterCell(h,cell){
     if(toll>0){ h.hp-=toll; floater(h.x, h.y-58, '☣ -'+toll, '#b06bff'); burst(h.x,h.y-22,'#9a5cff',5);
       if(h.hp<=0){ h.hp=0; heroDies(h); return; } }
   }
+  // 🗡️ a rogue slips in and disarms the room's traps for a few seconds
+  if(h.cls==='rogue' && cell.kind!=='boss' && cell.traps && cell.traps.length){
+    cell._disarmT=DISARM_DUR; floater(h.x, h.y-72, '🗡️ DISARMED', '#5fd17a');
+  }
   // Monsters are handled by the walking branch: the hero walks up to the
   // blocker (passing through any trap in the room) before the fight starts.
   if(cell.shop && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
@@ -3151,7 +3155,10 @@ function applyTrapStatus(h, d, r){
   if(d.acid){ h.acid=(h.acid||0)+d.acid; h.acidT=4; }
   if(d.mark && !(h.mark>0)){ h.mark=1; h.markT=4; floater(h.x,h.y-58,'🎯 MARKED','#ff5470'); }
 }
+const DISARM_DUR=4;   // 🗡️ a rogue disarms a room's traps for this many seconds
 function trapTick(h,cell,dt){
+  if(h.cls==='rogue') cell._disarmT=DISARM_DUR;   // a rogue keeps the room's traps disabled (and a few s after)
+  if(cell._disarmT>0) return;                      // traps are disarmed — they don't fire
   const r=cell.room; const syn=cell.syn||1; const doc=bossDoc(); const amp=ampAt(cell.index);
   for(const tr of cell.traps){
     if(tr.def.aoe) continue;        // area traps fire once per interval in aoeTrapTick, not per-hero
@@ -3192,6 +3199,7 @@ function aoeTrapTick(dt){
   const doc=bossDoc();
   for(const cell of G.cells){
     if(!cell.traps || !cell.traps.length) continue;
+    if(cell._disarmT>0){ cell._disarmT=Math.max(0,cell._disarmT-dt); continue; }   // disarmed: decay + don't fire
     const r=cell.room; const syn=cell.syn||1; const vr=cell.vet||0;
     for(const tr of cell.traps){
       const d=tr.def; if(!d.aoe) continue;
@@ -3713,6 +3721,11 @@ function drawRoomContents(x0,w,room,i){
   const art=roomArtReady(room);                 // suppress props the art already shows
   // traps (the single-trap art replaces its own prop; 'lair' backdrop keeps them)
   for(const p of parts){ if(ROOMS[p].kind==='trap' && art!==p) drawTrapProp(x0,w,cx,p); }
+  if(cell && cell._disarmT>0){   // rogue disarmed this room's traps
+    X.globalAlpha=0.55+0.35*Math.sin(performance.now()/120); X.fillStyle='#5fd17a';
+    X.font='bold 11px Trebuchet MS'; X.textAlign='center';
+    X.fillText('🗡️ DISARMED', cx, FLOOR-110); X.textAlign='left'; X.globalAlpha=1;
+  }
   // monsters (a combo room can hold two) — draw each so both stay visible
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(monParts.length){
