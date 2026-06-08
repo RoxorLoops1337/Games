@@ -999,6 +999,30 @@ function rollRelicChoices(n){
   return picks;
 }
 
+/* ----------------------- traveling merchant -----------------------------
+   A wandering trader who turns up in the Hero Town between milestones and
+   sells relics for dread. Stock is rolled fresh each visit (weighted by the
+   same tier curve as drafts) and priced by rarity.                         */
+const MERCHANT_PRICE={ common:8, special:14, rare:22, epic:34, legendary:48, mythic:66 };
+function rollMerchant(){
+  // Visits most town stops, but not every one — keeps the encounter special.
+  if(Math.random()<0.25){ return {visiting:false, stock:[]}; }
+  const n = 2 + (Math.random()<0.5?1:0);              // 2–3 wares
+  const ids = rollRelicChoices(n);
+  const stock = ids.map(id=>({ id, tier:RELICS[id].tier,
+    price:Math.max(1, Math.round(MERCHANT_PRICE[RELICS[id].tier]*(1-(RB.townDisc||0)))), sold:false }));
+  return { visiting:true, stock };
+}
+function buyMerchantRelic(idx){
+  const m=G.merchant; if(!m||!m.visiting) return;
+  const w=m.stock[idx]; if(!w||w.sold) return;
+  if(G.relics.includes(w.id)){ w.sold=true; renderTown(); return; }   // already owned elsewhere
+  if(G.dread<w.price){ showHint('Not enough dread.'); return; }
+  G.dread-=w.price; w.sold=true; addRelic(w.id);
+  showHint('🛒 Acquired '+RELICS[w.id].ic+' '+RELICS[w.id].name+'!');
+  renderTown(); renderTop();
+}
+
 /* -------------------------------- state ---------------------------------- */
 let G = null;        // active game object
 let last = 0;        // rAF timestamp
@@ -1046,6 +1070,7 @@ function freshGame(mode){
     pendingRivals:[],     // {eta, spec} grudge-bearers returning to the queue
     townDue:false,        // a town interlude is queued after the next reward
     townEvent:null,       // the dilemma shown this town visit
+    merchant:null,        // traveling merchant's relic stock for this town visit
     guildLvl:0,           // guild house level: party size = guildLvl + 1
     heroes:[],            // active raiding party this wave
     waveStartSlain:0,     // totalSlain at wave start (to detect 5-kill towns)
@@ -2784,6 +2809,7 @@ const EVENTS = [
 function gotoTown(){
   G.phase='town'; ensureQueue(3);
   G.townEvent={ ...pick(EVENTS), done:false, outcome:'' };
+  G.merchant=rollMerchant();
   renderTown();
 }
 function chooseEvent(i){
@@ -2892,6 +2918,21 @@ function renderTown(){
             ${ev.opts.map((o,i)=>`<button ${o.cond&&!o.cond()?'disabled':''} onclick="chooseEvent(${i})" style="font-size:12px">${o.l}</button>`).join('')}
           </div>`}
     </div>` : '';
+  const m=G.merchant;
+  const merchHtml = (m&&m.visiting&&m.stock.length) ? `<div style="max-width:600px;margin:6px auto;padding:10px 14px;border:2px solid #ffd34d;border-radius:12px;background:#241a0e">
+      <h2 style="margin:0 0 2px;color:#ffd34d">🛒 Traveling Merchant</h2>
+      <div class="small" style="opacity:.8;margin-bottom:6px">"Rare wares for a dreadful price, my lord…" — pay in <span style="color:#b985ff">☠ dread</span>.</div>
+      <div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap">
+      ${m.stock.map((w,i)=>{ const r=RELICS[w.id]; const tc=RELIC_TIERS[w.tier].col; const owned=G.relics.includes(w.id);
+        const can=!w.sold&&!owned&&G.dread>=w.price;
+        return `<button ${can?'':'disabled'} onclick="buyMerchantRelic(${i})"
+          style="display:flex;flex-direction:column;align-items:center;min-width:130px;max-width:150px;gap:2px;height:auto;padding:9px 8px;border-color:${tc};${w.sold||owned?'opacity:.45':''}">
+          <span style="font-size:24px">${r.ic}</span>
+          <span style="color:${tc};font-weight:bold;font-size:13px">${r.name}</span>
+          <span class="small" style="color:${tc};opacity:.8">${RELIC_TIERS[w.tier].name}</span>
+          <span class="small" style="opacity:.85;font-weight:normal;line-height:1.2">${r.desc}</span>
+          <span style="color:#b985ff;margin-top:2px">${w.sold?'✔ Sold':owned?'Owned':w.price+' ☠'}</span></button>`;}).join('')}
+      </div></div>` : (m&&!m.visiting ? `<p class="small" style="opacity:.5;margin:6px auto;max-width:560px">🛒 No merchant in town this time — the trader's caravan has moved on.</p>` : '');
   const threat = `<div class="row" style="justify-content:center;gap:8px;align-items:center">
       <span class="small">Threat: <b>${G.bounty>0?'+':''}${G.bounty}</b> ${G.bounty>0?'🔥 tougher heroes, richer loot':G.bounty<0?'🌫 weaker heroes, leaner loot':'⚖ neutral'}</span>
       <button onclick="setThreat(1)" ${G.bounty>=3?'disabled':''} style="padding:5px 9px;min-height:0">Taunt ▲</button>
@@ -2953,6 +2994,7 @@ function renderTown(){
   overlay.innerHTML=`<h1 style="margin-bottom:2px">🏚️ Hero Town</h1>
     <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span> · <span title="Resources at risk — keep them by closing the dungeon" style="color:#9be86b">🏗️ ${haulStr(pendingResources())}</span></p>
     ${evHtml}
+    ${merchHtml}
     ${townHas('watch')?threat:''}
     ${guildBlock}
     ${empowerBlock}
