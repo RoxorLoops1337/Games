@@ -3380,15 +3380,16 @@ function drawDungeon(tx, scale, isBuild){
     const room=G.rooms[i];
     const dropTarget = isBuild && pickupIdx>=0;   // we're holding a room to move
     if(!room){
+      const beingDragged = roomDrag && roomDrag.dragging && i===roomDrag.from;   // empty slot picked up
       // empty slot — show the stone room art; overlay the placeable hint in build
       const ea = ROOM_IMG.empty && ROOM_IMG.empty._ok;
-      if(ea) drawRoomArt(x0,w,ROOM_IMG.empty);
+      if(ea){ if(beingDragged){ X.save(); X.globalAlpha=0.45; } drawRoomArt(x0,w,ROOM_IMG.empty); if(beingDragged) X.restore(); }
       if(isBuild || !ea){
-        X.strokeStyle=(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
-        X.setLineDash([6,5]); X.lineWidth=2;
+        X.strokeStyle=beingDragged?'#ffd34d':(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
+        X.setLineDash([6,5]); X.lineWidth=beingDragged?3:2;
         X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
-        X.fillStyle=(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#8a7ab8'; X.font='12px Trebuchet MS'; X.textAlign='center';
-        X.fillText(dropTarget?'drop here':'empty', x0+w/2, FLOOR-58); X.textAlign='left';
+        X.fillStyle=(isBuild&&(selCard>=0||dropTarget||beingDragged))?'#ffd34d':'#8a7ab8'; X.font='12px Trebuchet MS'; X.textAlign='center';
+        X.fillText(beingDragged?'↔ moving':(dropTarget?'drop here':'empty'), x0+w/2, FLOOR-58); X.textAlign='left';
       }
       // tutorial: pulse the first empty slot during the "place" step
       if(isBuild && G && G.tutHi==='slot' && i===G.rooms.findIndex(r=>!r)){
@@ -4221,10 +4222,11 @@ CV.addEventListener('pointerdown', e=>{
     drag=null; panning=false; cardDrag=null; endCardGhost(); return;
   }
   try{ CV.setPointerCapture(e.pointerId); }catch(_){}
-  // In build, pressing ON a placed room (no card selected) picks it up to drag.
+  // In build, pressing ON a slot (no card selected) picks it up to drag — works
+  // for EMPTY slots too, so the gap can be repositioned in the corridor.
   if(G.phase==='build' && selCard<0){
     const slot=Math.floor(clientToWorldX(e)/ROOM_W); const vy=clientToVY(e);
-    if(slot>=0 && slot<G.slots && G.rooms[slot] && vy>FLOOR-152 && vy<FLOOR+16){
+    if(slot>=0 && slot<G.slots && vy>FLOOR-152 && vy<FLOOR+16){
       roomDrag={ id:e.pointerId, from:slot, sx:e.clientX, sy:e.clientY, dragging:false };
       return;
     }
