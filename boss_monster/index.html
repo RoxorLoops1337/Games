@@ -3815,24 +3815,53 @@ function drawMonster(cx,type,col){
   }
 }
 
+// ---- the empowered hero (Champion): a big "Super Knight" walk sprite -------
+// 12 frames; frame 0 is the neutral stance, 1..11 are the walk cycle.
+const CHAMP_WALK=[]; const CHAMP_DH=88;
+if(typeof Image!=='undefined'){
+  for(let i=0;i<12;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/champion/champion_'+i+'.png'; CHAMP_WALK.push(im); }
+}
+function champReady(){ return CHAMP_WALK.length===12 && CHAMP_WALK.every(im=>im&&im._ok); }
+function drawChampion(sx, footY, h){
+  const moving = h.state==='walking' && !(h.freeze>0) && (h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02);
+  const now=performance.now();
+  let frame=0;
+  if(moving){
+    if(h._champClip!=='walk'){ h._champClip='walk'; h._champT=0; }
+    const dt=Math.min(0.1,(now-(h._champLast||now))/1000); h._champLast=now;
+    h._champT=(h._champT||0)+dt;
+    frame=1+Math.floor(h._champT*12)%11;          // walk cycle = frames 1..11 @12fps
+  } else { h._champClip='idle'; h._champLast=now; frame=0; }   // neutral stance
+  h._animPX=h.x;
+  const im=CHAMP_WALK[frame]; if(!im||!im._ok) return false;
+  const dh=CHAMP_DH, dw=Math.round(dh*(im.width/im.height));
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=true;
+  X.drawImage(im, Math.round(sx-dw/2), Math.round(footY-dh+2), dw, dh);
+  X.imageSmoothingEnabled=sm;
+  return true;
+}
 function drawHero(sx,h){
   const y=FLOOR+(h.yOff||0); const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
   const yy=y+bob;
   const champ=!!h.champion;
+  const champSprite = champ && champReady();
   // aura (champion = its colour, bigger/brighter; elite = trait colour)
   if(champ || h.elite){
     const t=performance.now()/200;
     const col=champ?(h.champCol||'#ffd34d'):(h.traits.length?TRAITS[h.traits[0]].col:'#ffd34d');
     X.globalAlpha=(champ?0.30:0.18)+0.08*Math.sin(t);
-    X.fillStyle=col; X.beginPath(); X.ellipse(sx,yy-26,champ?30:20,champ?42:30,0,0,7); X.fill();
-    X.globalAlpha=1;
+    X.fillStyle=col; X.beginPath();
+    if(champSprite) X.ellipse(sx,y-44,40,56,0,0,7); else X.ellipse(sx,yy-26,champ?30:20,champ?42:30,0,0,7);
+    X.fill(); X.globalAlpha=1;
   }
   // shadow
-  X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,champ?20:14,4,0,0,7); X.fill();
-  // classes with a sprite render as the animated character; others keep the pixel figure
-  const skey = CLASS_SPRITE[h.cls];
+  X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,champSprite?26:(champ?20:14),4,0,0,7); X.fill();
+  // the empowered hero renders as the big Super Knight; classes with a sprite use
+  // their character; everyone else keeps the pixel figure
+  const drewChamp = champSprite && drawChampion(sx, y, h);
+  const skey = !drewChamp && CLASS_SPRITE[h.cls];
   const drewKnight = skey && spriteReady(skey) && drawSprite(sx, y, h, skey);
-  if(!drewKnight){
+  if(!drewChamp && !drewKnight){
     // legs
     px(sx-7,yy-14,5,14,'#3a3050'); px(sx+2,yy-14,5,14,'#3a3050');
     // body
@@ -3846,6 +3875,8 @@ function drawHero(sx,h){
     if(h.cls==='rogue'){ px(sx+9,yy-30,5,16,'#cfd6e0'); } //dagger
     if(h.cls==='cleric'){ px(sx-2,yy-58,4,10,'#ffec99'); px(sx-5,yy-54,10,4,'#ffec99'); } //cross
   }
+  // visual top of the figure — overlays (HP, gold, crown, name) stack above it
+  const figTop = drewChamp ? (y - CHAMP_DH) : (yy - 46);
   // frozen / elemental status tints
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
@@ -3857,16 +3888,16 @@ function drawHero(sx,h){
     X.globalAlpha=1; }
   // hp bar (wider for champions)
   const bw=champ?52:36;
-  bar(sx-bw/2, yy-(champ?66:60), bw, champ?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d');
+  bar(sx-bw/2, figTop-(champ?20:14), bw, champ?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d');
   // gold + elite trait markers
   X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
-  X.fillText('💰'+h.gold, sx, yy-64);
+  X.fillText('💰'+h.gold, sx, figTop-18);
   if(champ){
-    X.font='18px Trebuchet MS'; X.fillText('👑', sx, yy-78);          // crown above head
+    X.font='18px Trebuchet MS'; X.fillText('👑', sx, figTop-32);          // crown above head
     X.font='bold 10px Trebuchet MS'; X.fillStyle=h.champCol||'#ffd34d';
-    X.fillText((h.champIc||'')+' '+h.heroName, sx, yy-90);            // name banner
+    X.fillText((h.champIc||'')+' '+h.heroName, sx, figTop-46);            // name banner
   } else if(h.elite){ X.font='11px Trebuchet MS';
-    X.fillText(h.traits.map(t=>TRAITS[t].ic).join(''), sx, yy-74); }
+    X.fillText(h.traits.map(t=>TRAITS[t].ic).join(''), sx, figTop-28); }
   X.textAlign='left';
 }
 function drawHeroDead(sx,h){
