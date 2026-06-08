@@ -105,9 +105,15 @@
   @keyframes ampop{0%{transform:scale(1)}40%{transform:scale(1.3)}100%{transform:scale(1)}}
   .ampop{animation:ampop .26s ease-out;}
   .amunlabel{font-size:18px;font-weight:bold;color:#6ad97e;letter-spacing:3px;text-shadow:0 0 10px #6ad97e88;}
-  .amcard{font-size:28px;font-weight:bold;padding:18px 26px;border-radius:16px;border:2px solid var(--gold);
+  .amcard{padding:16px 22px;border-radius:16px;border:2px solid var(--gold);max-width:300px;
     background:linear-gradient(160deg,#2a2046,#1a1330);box-shadow:0 0 28px #ffd34d88;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:5px;
     animation:amreveal .55s cubic-bezier(.2,.85,.3,1.3);}
+  .amcic{font-size:46px;line-height:1;}
+  .amcname{font-size:21px;font-weight:bold;color:#ffe9a8;}
+  .amkind{font-size:10px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#1a1330;
+    background:var(--gold);border-radius:8px;padding:2px 8px;}
+  .amdesc{font-size:13px;line-height:1.35;opacity:.92;margin-top:3px;}
   @keyframes amreveal{0%{transform:scale(.1) rotate(-200deg);opacity:0}70%{transform:scale(1.12) rotate(7deg);opacity:1}100%{transform:scale(1) rotate(0)}}
   #overlay h1{font-size:34px;margin:0 0 4px;color:var(--gold);letter-spacing:1px;
     text-shadow:0 2px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);}
@@ -1264,7 +1270,7 @@ function closeDungeon(){
     <p>You sealed the halls and withdrew in good order after slaying <b>${G.totalSlain}</b> heroes — keeping every scrap you gathered.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
-    ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
+    ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
     <div class="menu-btns">
       <button class="go" onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="openRunes()">🔮 Rune Page</button>
@@ -2405,7 +2411,7 @@ function bossDies(){
     <p style="opacity:.7">Dead is dead — the fallen throne swallowed <b>${lostPct}%</b> of your haul. Next time, <b>close the dungeon</b> to keep it all.${townLvl('vault')<3?' (A bigger 🏦 Vault keeps more.)':''}</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
-    ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
+    ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
     <div class="menu-btns">
       <button class="go" onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="openTownBuilder()">🏗️ Town Builder</button>
@@ -2445,7 +2451,7 @@ function aftermathSequence(earned, summaryHtml){
   _amQueue=[];
   if(earned>0) _amQueue.push({t:'runes',n:earned});
   if((g.wood||0)+(g.stone||0)+(g.shards||0)>0) _amQueue.push({t:'res',g});
-  unlocks.forEach(u=>_amQueue.push({t:'unlock',label:u}));
+  unlocks.forEach(u=>_amQueue.push({t:'unlock',u}));
   overlay.classList.add('show');
   if(!_amQueue.length){ amShowSummary(); return; }   // nothing to celebrate → straight to summary
   overlay.innerHTML='<div id="amstage" class="amstage"></div>'+
@@ -2458,7 +2464,7 @@ function amNext(){
   if(!st){ amShowSummary(); return; }
   if(st.t==='runes') amStageRunes(st.n);
   else if(st.t==='res') amStageRes(st.g);
-  else amStageUnlock(st.label);
+  else amStageUnlock(st.u);
 }
 function amStageRunes(n){
   const s=document.getElementById('amstage'); if(!s){ amNext(); return; }
@@ -2487,10 +2493,17 @@ function amStageRes(g){
   });
   amSched(()=>{ types.forEach(t=>got[t[0]]=g[t[0]]); draw(); amNext(); }, delay+750);
 }
-function amStageUnlock(label){
+function amStageUnlock(u){
   const s=document.getElementById('amstage'); if(!s){ amNext(); return; }
+  if(typeof u==='string') u={ic:'',name:u,kind:'',desc:''};   // legacy/back-compat
+  const ic=u.ic||'', name=u.name||'', kind=u.kind||'', desc=u.desc||'';
   s.innerHTML='<div class="amunlabel">✦ UNLOCKED ✦</div>'+
-    '<div class="amcard" onclick="amNext()">'+label+'</div>'+
+    '<div class="amcard" onclick="amNext()">'+
+      (ic?'<div class="amcic">'+ic+'</div>':'')+
+      '<div class="amcname">'+name+'</div>'+
+      (kind?'<div class="amkind">'+kind+'</div>':'')+
+      (desc?'<div class="amdesc">'+desc+'</div>':'')+
+    '</div>'+
     '<div class="menu-btns"><button class="go" onclick="amNext()">Next ▶</button></div>';
   sfx('relic');
 }
@@ -2554,8 +2567,10 @@ function awardRunes(){
   G.killsBanked=G.totalSlain; RUNES.kills+=kd;
   const after=RUNES.kills;
   G.newUnlocks=[];
-  for(const k in UNLOCK_BOSS){ if(UNLOCK_BOSS[k]>before && UNLOCK_BOSS[k]<=after) G.newUnlocks.push(BOSSES[k].ic+' '+BOSSES[k].name); }
-  for(const k in UNLOCK_CARD){ if(UNLOCK_CARD[k]>before && UNLOCK_CARD[k]<=after) G.newUnlocks.push(ROOMS[k].ic+' '+ROOMS[k].name); }
+  for(const k in UNLOCK_BOSS){ if(UNLOCK_BOSS[k]>before && UNLOCK_BOSS[k]<=after)
+    G.newUnlocks.push({ic:BOSSES[k].ic, name:BOSSES[k].name, kind:'New Boss', desc:BOSSES[k].blurb}); }
+  for(const k in UNLOCK_CARD){ if(UNLOCK_CARD[k]>before && UNLOCK_CARD[k]<=after)
+    G.newUnlocks.push({ic:ROOMS[k].ic, name:ROOMS[k].name, kind:ROOMS[k].kind==='trap'?'New Trap':ROOMS[k].kind==='monster'?'New Monster':'New Card', desc:ROOMS[k].desc}); }
   // bank boss mastery XP for the boss you played + detect a level-up
   if(G.boss && G.boss.key){
     if(!RUNES.bossXp) RUNES.bossXp={};
@@ -2563,7 +2578,8 @@ function awardRunes(){
     const bd=Math.max(0, G.totalSlain - (G.bossXpBanked||0)); G.bossXpBanked=G.totalSlain;
     RUNES.bossXp[bk]=(RUNES.bossXp[bk]||0)+bd;
     const lvlAfter=bossLevelOf(bk);
-    if(lvlAfter>lvlBefore) G.newUnlocks.push(`${BOSSES[bk].ic} ${BOSSES[bk].name.split(' ')[0]} → Mastery Lv ${lvlAfter}`);
+    if(lvlAfter>lvlBefore) G.newUnlocks.push({ic:BOSSES[bk].ic, name:BOSSES[bk].name.split(' ')[0]+' · Mastery Lv '+lvlAfter,
+      kind:'Boss Mastery', desc:'Permanently stronger '+BOSSES[bk].name.split(' ')[0]+' — more HP & attack every run you play it.'});
   }
   saveRunes();
   return delta;
@@ -2693,7 +2709,7 @@ function winLevel(){
          having buried <b>${G.totalSlain}</b> heroes.</p>
       <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
       ${townGainLine('kept')}
-      ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.join(', ')}!</p>`:''}
+      ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
       <div class="menu-btns">
         <button class="go" onclick="gotoMenu()">★ Main menu</button>
         <button onclick="openRunes()">🔮 Rune Page</button>
