@@ -603,13 +603,19 @@ const ABIL = {
 };
 
 // Campaign: keep your dungeon between levels; targets + difficulty ramp up.
-const CAMPAIGN = [
-  {target:5,  diff:1.0,  reward:60, name:'The First Trespassers'},
-  {target:7,  diff:1.35, reward:80, name:'Word Spreads'},
-  {target:9,  diff:1.75, reward:110,name:'The Guild Responds'},
-  {target:11, diff:2.2,  reward:150,name:'Champions Arrive'},
-  {target:13, diff:2.7,  reward:0,  name:'The Final Crusade'},
-];
+// Campaign is a 50-level siege. Each LEVEL is one wave; clearing it advances you.
+// Waves grow in size; every 5th level is a milestone with mini-boss(es) + a reward
+// (odd 5s = relic, even 5s = mandate + a Town visit). Level 50 → the King finale.
+const CAMP_LEVELS=50;
+function campLevel(){ return (G.levelIdx||0)+1; }
+function campPower(){ return Math.max(1, Math.ceil(campLevel()*0.7)); }   // hero stat-scaler (gentler than 1:1 with level)                  // 1..50 (levelIdx is 0-based)
+function levelComp(L){
+  const ms = (L%5===0);
+  const champs  = ms ? (1 + Math.floor((L-5)/15)) : 0;            // mini-bosses: 1 (5-15), 2 (20-30), 3 (35-45), 4 (50)
+  const normals = ms ? Math.floor(L/10)                          // milestone escort (small)
+                     : Math.min(5, 1 + Math.floor((L-1)/6));      // regular waves grow 1→5
+  return { champs, normals };
+}
 
 /* ========================= RUNE PAGE (meta progression) =================
    Persistent skill tree drawn as a branching spellbook. Each node has RANKS
@@ -1286,16 +1292,13 @@ function closeDungeon(){
   aftermathSequence(earned, summary);
 }
 
-const curLevel = ()=> G.mode==='campaign' ? CAMPAIGN[G.levelIdx] : null;
+const curLevel = ()=> null;   // (legacy chapter table removed — campaign is level-driven now)
 function difficulty(){
-  // base ramp from cumulative kills × campaign chapter multiplier × bounty dial.
-  // Campaign uses a GENTLER cumulative ramp because the chapter multiplier is the
-  // intended primary scaler — otherwise the two compound into an unwinnable cliff
-  // by the final chapter (heroes hit ~8× base stats a level-capped dungeon can't match).
-  const cumulative = 1 + G.totalSlain*(G.mode==='campaign'?0.025:0.05);
   const threat = 1 + G.bounty*0.15;
-  if(G.mode==='campaign') return cumulative * CAMPAIGN[G.levelIdx].diff * threat;
-  return cumulative * threat;   // Endless ramps via totalSlain only
+  // Campaign: a steady level ramp drives it (hero power also scales with level), so
+  // it does NOT compound on cumulative kills the way Endless does.
+  if(G.mode==='campaign') return (1 + (campLevel()-1)*0.02) * threat;   // L1=1.0 → L50≈2.0× (hero power carries the rest)
+  return (1 + G.totalSlain*0.05) * threat;   // Endless ramps via totalSlain only
 }
 
 /* ============================== PHASE: MENU =============================== */
@@ -1685,7 +1688,7 @@ function gotoBossSelect(){
   G.phase='bossSelect'; overlay.classList.add('show');
   const edTag = G.edicts.length ? ` · <span style="color:#ffd34d">⚖️ ${G.edicts.map(id=>EDICTS[id].ic).join('')} ×${edictRewardMul().toFixed(2)} runes</span>` : '';
   overlay.innerHTML = `<h1>Choose your Boss</h1>
-    <p>${G.mode==='campaign'?'Campaign — survive 5 escalating chapters.':'Endless — how long can you reign?'}${edTag}</p>
+    <p>${G.mode==='campaign'?'Campaign — break a 50-wave siege, milestone mini-bosses & rewards.':'Endless — how long can you reign?'}${edTag}</p>
     <div class="choices">${BOSS_KEYS.map(k=>{
       const b=BOSSES[k]; const lk=!bossUnlocked(k);
       const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
@@ -1978,9 +1981,12 @@ function buildCells(){
 // Heroes are pre-generated into a queue so the town can preview & sabotage the
 // next arrivals. A spec is a lightweight seed; buildHero turns it into a unit.
 function genHeroSpec(){
-  const power=G.heroSeq++;
-  // every CHAMP_EVERY-th arrival (after the early game) is a champion mini-boss
-  if(power>0 && power%CHAMP_EVERY===0){
+  // Campaign scales heroes by LEVEL (a 50-level run kills hundreds, so spawn-count
+  // would explode); Endless keeps the running spawn counter.
+  const power = (G.mode==='campaign') ? campPower() : G.heroSeq++;
+  // Endless: every CHAMP_EVERY-th arrival is a champion. Campaign champions come
+  // only from milestone levels (spawnGroup), never injected here.
+  if(G.mode!=='campaign' && power>0 && power%CHAMP_EVERY===0){
     const type=pick(CHAMP_KEYS);
     return {cls:CHAMPIONS[type].cls, power, traits:[], name:rollName(), champion:type, rivalGen:0,
             debuff:{atkMul:1, burn:0, robbed:false}};
@@ -2099,21 +2105,40 @@ function buildHeroFromSpec(spec){
 
 // Spawn a raiding party of n heroes (guild house size) that enter together.
 // A champion arrives ALONE — a dramatic mini-boss duel.
+// A fresh champion spec (used by campaign milestones — not pulled from the queue).
+function champSpec(){
+  const type=pick(CHAMP_KEYS);
+  return {cls:CHAMPIONS[type].cls, power:campPower(), traits:[], name:rollName(), champion:type, rivalGen:0,
+          debuff:{atkMul:1, burn:0, robbed:false}};
+}
 function spawnGroup(n){
   for(const r of G.pendingRivals) r.eta--;   // one wave closer to each rival's return
-  ensureQueue(1);
-  const champ = !!(G.queue[0] && G.queue[0].champion);
-  const count = champ ? 1 : n + (hasEdict('warband')?1:0);   // Warband edict: +1 raider per party
-  ensureQueue(count);
+  let specs=[];
+  if(G.mode==='campaign'){
+    // each level's wave is defined: a growing party, plus mini-boss(es) at milestones
+    const comp=levelComp(campLevel());
+    for(let i=0;i<comp.champs;i++)  specs.push(champSpec());
+    let normals=comp.normals + (hasEdict('warband')?1:0);
+    for(let i=0;i<normals;i++)      specs.push(nextSpec());
+    if(!specs.length) specs.push(nextSpec());   // safety: never an empty wave
+  } else {
+    ensureQueue(1);
+    const champ = !!(G.queue[0] && G.queue[0].champion);
+    const count = champ ? 1 : n + (hasEdict('warband')?1:0);   // Warband edict: +1 raider per party
+    ensureQueue(count);
+    for(let k=0;k<count;k++) specs.push(G.queue.shift());
+  }
   G.heroes=[];
+  const count=specs.length;
   for(let k=0;k<count;k++){
-    const h=buildHeroFromSpec(G.queue.shift());
+    const h=buildHeroFromSpec(specs[k]);
     h.x = 8 - k*46;                       // stagger entry from the left
     h.yOff = (k - (count-1)/2) * 8;       // slight vertical offset so they don't fully overlap
     G.heroes.push(h); G.heroNum++;
   }
-  if(champ){ const h=G.heroes[0];
-    showHint('⚔️ CHAMPION APPROACHES: '+h.heroName+' '+h.title+'!');
+  const anyChamp=G.heroes.find(h=>h.champion);
+  if(anyChamp){
+    showHint('⚔️ CHAMPION APPROACHES: '+anyChamp.heroName+(anyChamp.title?' '+anyChamp.title:'')+'!');
     shake(8); sfx('boss'); }
   // town-wide schemes last per WAVE, not per hero
   if(G.fx.well>0) G.fx.well--; if(G.fx.smith>0) G.fx.smith--; if(G.fx.temple>0) G.fx.temple--;
@@ -2377,16 +2402,42 @@ function heroDies(h){
 function afterWave(){
   if(G.phase!=='run') return;          // run already ended (closed/lost/won) — don't resurrect it
   G.waveEnding=false;
-  if(G.mode==='campaign' && G.survived>=curLevel().target){ winLevel(); return; }
-  // a town is due if the party's kills crossed a 5-kill boundary
+  if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
+  // Endless: town every 5 kills, relic every 10, mandate every 25
   G.townDue = Math.floor(G.waveStartSlain/5) !== Math.floor(G.totalSlain/5);
-  // Endless earns a relic draft every 10 kills, and a mandate every 25 kills
-  // (campaign gets both per chapter cleared instead).
-  if(G.mode!=='campaign'){
-    G.relicDue = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
-    G.mandateDue = Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
-  }
+  G.relicDue = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
+  G.mandateDue = Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
   gotoReward();
+}
+// Campaign: a wave was just cleared → bank gold, hand out milestone rewards, and
+// advance to the next level. (Level 50 cleared → the finale.)
+function campaignAdvance(){
+  const L=campLevel();                       // the level just beaten (1..50)
+  if(L>=CAMP_LEVELS){ campaignVictory(); return; }
+  G.gold += 25 + L*4;                          // per-level gold
+  if(L%5===0){
+    if((L/5)%2===0){ G.mandateDue=true; G.townDue=true; }   // 10,20,30,40 → 📜 mandate + 🏚 town
+    else { G.relicDue=true; }                               // 5,15,25,35,45 → 🏺 relic
+    showHint('★ Level '+L+' cleared — milestone reward!');
+  }
+  G.levelIdx++;                                // next level
+  gotoReward();                                // card draft → (relic/mandate/town flags) → build next level
+}
+function campaignVictory(){
+  G.phase='win'; overlay.classList.add('show'); sfx('win');
+  const earned=awardRunes(); bankResources(1,true);
+  const summary=`<h1 style="color:#ffd34d">THE SIEGE IS BROKEN</h1>
+    <div style="font-size:60px">${G.boss.ic}👑</div>
+    <p>All ${CAMP_LEVELS} waves shattered upon your halls. ${G.boss.name} reigns supreme,
+       having buried <b>${G.totalSlain}</b> heroes.</p>
+    <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
+    ${townGainLine('kept')}
+    ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
+    <div class="menu-btns">
+      <button class="go" onclick="gotoMenu()">★ Main menu</button>
+      <button onclick="openRunes()">🔮 Rune Page</button>
+      <button onclick="startEndless()">Try Endless</button></div>`;
+  aftermathSequence(earned, summary);
 }
 
 function heroReachesThrone(){
@@ -2409,7 +2460,7 @@ function bossDies(){
   const keep=deathKeep(), lostPct=Math.round((1-keep)*100);
   bankResources(keep, false);                    // keep your Vault fraction; no gold bonus on a death
   const score = G.mode==='campaign'
-    ? `You fell on Chapter ${G.levelIdx+1} after slaying ${totalKills()} heroes.`
+    ? `You fell on Level ${campLevel()}/${CAMP_LEVELS} after slaying ${totalKills()} heroes.`
     : `You reigned ${G.survived} heroes before the throne fell.`;
   const summary=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
     <div style="font-size:54px">${G.boss.ic}💔</div>
@@ -2698,46 +2749,6 @@ function pickMandate(i){
   const done=G._mandatePick; G._mandateChoices=null; G._mandatePick=null;
   overlay.classList.remove('show');
   (done||townOrBuild)();
-}
-
-/* ============================== PHASE: WIN =============================== */
-function winLevel(){
-  if(G.mode!=='campaign'){ return; }
-  const lvl=curLevel();
-  G.gold+=lvl.reward;
-  if(G.levelIdx>=CAMPAIGN.length-1){
-    // game complete
-    G.phase='win'; overlay.classList.add('show');
-    sfx('win');
-    const earned=awardRunes();
-    bankResources(1, true);                        // a full clean victory — keep everything + gold bonus
-    const summary=`<h1 style="color:#ffd34d">DUNGEON SUPREME</h1>
-      <div style="font-size:60px">${G.boss.ic}👑</div>
-      <p>Every crusade broke upon your halls. ${G.boss.name} reigns eternal,
-         having buried <b>${G.totalSlain}</b> heroes.</p>
-      <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
-      ${townGainLine('kept')}
-      ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
-      <div class="menu-btns">
-        <button class="go" onclick="gotoMenu()">★ Main menu</button>
-        <button onclick="openRunes()">🔮 Rune Page</button>
-        <button onclick="startEndless()">Try Endless</button></div>`;
-    aftermathSequence(earned, summary);
-    return;
-  }
-  // heal boss 30% as a chapter reward, then draft a relic before continuing
-  const heal=Math.round(G.boss.maxHp*0.3);
-  G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+heal);
-  gotoRelicChoice('Chapter Survived!',
-    `<b>${lvl.name}</b> cleared · <span class="gold">+${lvl.reward}g</span> · boss recovers +${heal} HP.<br>`+
-    `Fortify with a relic + decree a mandate, then face <b>${CAMPAIGN[G.levelIdx+1].name}</b> (${CAMPAIGN[G.levelIdx+1].target} heroes).`,
-    ()=>gotoMandateChoice(nextLevel));   // chapter break: relic (stats) THEN mandate (rule)
-}
-function nextLevel(){
-  G.levelIdx++; G.survived=0;
-  overlay.classList.remove('show');
-  gotoBuild(false);
-  render();
 }
 
 /* ============================== PHASE: TOWN ============================== */
@@ -4023,7 +4034,7 @@ function renderTop(){
   if(!G.boss){ topbar.innerHTML=''; return; }
   const b=G.boss;
   const modeLbl = G.mode==='campaign'
-    ? `Ch.${G.levelIdx+1}/5 · ${G.survived}/${curLevel().target} slain`
+    ? `⚔️ Level ${campLevel()}/${CAMP_LEVELS} · ${G.totalSlain} slain`
     : `Endless · ${G.survived} slain`;
   topbar.innerHTML=`
     <div class="stat">${b.ic}<span class="small">${b.name.split(' ')[0]}</span></div>
