@@ -3885,25 +3885,25 @@ if(typeof Image!=='undefined'){
     const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='bosses/'+k+'.png'; BOSS_IMG[k]=im;
   });
 }
-// Dragon idle: 4 frames played as a ping-pong loop (0→1→2→3→2→1→…)
-const DRAGON_IDLE=[]; const DRAGON_PP=[0,1,2,3,2,1];
+// Demon idle: 4 frames played as a ping-pong loop (0→1→2→3→2→1→…)
+const DEMON_IDLE=[]; const DEMON_PP=[0,1,2,3,2,1];
 if(typeof Image!=='undefined'){
-  for(let i=0;i<4;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/dragon/dragon_idle_'+i+'.png'; DRAGON_IDLE.push(im); }
+  for(let i=0;i<4;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/demon/demon_idle_'+i+'.png'; DEMON_IDLE.push(im); }
 }
-function dragonIdleReady(){ return DRAGON_IDLE.length===4 && DRAGON_IDLE.every(im=>im&&im._ok); }
-function dragonIdleFrame(){ return DRAGON_IDLE[DRAGON_PP[Math.floor(performance.now()/170)%DRAGON_PP.length]]; }  // ~6fps ping-pong
+function demonIdleReady(){ return DEMON_IDLE.length===4 && DEMON_IDLE.every(im=>im&&im._ok); }
+function demonIdleFrame(){ return DEMON_IDLE[DEMON_PP[Math.floor(performance.now()/170)%DEMON_PP.length]]; }  // ~6fps ping-pong
 function drawBoss(cx){
   const y=FLOOR; const b=G.boss; const c=b.col;
   // throne
   px(cx-30,y-70,60,70,'#3a2440'); px(cx-34,y-86,68,20,'#5a2a4a');
   px(cx-30,y-86,8,86,'#6a3a5a'); px(cx+22,y-86,8,86,'#6a3a5a');
   let img=BOSS_IMG[b.key];
-  const animated = (b.key==='dragon' && dragonIdleReady());
-  if(animated) img=dragonIdleFrame();
+  const animated = (b.key==='demon' && demonIdleReady());
+  if(animated) img=demonIdleFrame();
   if(img && img._ok){
     // real sprite: bottom-anchored on the throne, aspect preserved
     const dh=116, dw=Math.round(dh*(img.width/img.height));
-    const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=animated;   // smooth the big detailed dragon, nearest for the small pixel bosses
+    const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=animated;   // smooth the big detailed demon frames, nearest for the small pixel bosses
     X.drawImage(img, Math.round(cx-dw/2), Math.round(y-dh+2), dw, dh);
     X.imageSmoothingEnabled=sm;
     bar(cx-40, y-dh-8, 80, 8, b.hp/b.maxHp, '#ff4d6d');
