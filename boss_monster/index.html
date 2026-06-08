@@ -74,8 +74,7 @@
   .card.sel{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold);}
   .cardghost{position:fixed;left:0;top:0;transform:translate(-50%,-65%);z-index:60;pointer-events:none;
     opacity:.92;cursor:grabbing;box-shadow:0 8px 22px rgba(0,0,0,.6);border-color:var(--gold);}
-  .card .ic{font-size:24px;line-height:1;}
-  .card .nm{font-size:10px;margin-top:3px;font-weight:bold;}
+  .card .ic{font-size:24px;line-height:1;}  .card .nm{font-size:10px;margin-top:3px;font-weight:bold;}
   .card .lv{position:absolute;top:2px;right:4px;font-size:9px;color:var(--gold);}
   .card .x{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;
     background:#a02040;border:1px solid #ff6b8a;font-size:11px;line-height:16px;text-align:center;color:#fff;}
@@ -124,6 +123,11 @@
     border-radius:12px;padding:12px;cursor:pointer;transition:transform .1s,border-color .15s;}
   .choice:hover{transform:translateY(-4px);border-color:var(--gold);}
   .choice .big{font-size:40px;}
+  /* painted card-art icons (icons/<type>.png) replacing the emoji on card faces */
+  .card .ic .cardimg{width:50px;height:50px;object-fit:contain;display:block;margin:0 auto -2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
+  .choice .big .cardimg{width:78px;height:78px;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));}
+  .amcic .cardimg{width:62px;height:62px;object-fit:contain;display:block;margin:0 auto;}
+  .cardghost .ic .cardimg{width:54px;height:54px;object-fit:contain;display:block;margin:0 auto;}
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
@@ -320,6 +324,9 @@ const ROOMS = {
 };
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
+// Room types with a painted card-art icon (icons/<type>.png); else fall back to the emoji.
+const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','slime']);
+function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
 const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
 const FUSE_KILLS = 3;  // hero deaths in a room before it can fuse a 2nd part
 // Effective values after rune bonuses (RB):
@@ -2497,9 +2504,10 @@ function amStageUnlock(u){
   const s=document.getElementById('amstage'); if(!s){ amNext(); return; }
   if(typeof u==='string') u={ic:'',name:u,kind:'',desc:''};   // legacy/back-compat
   const ic=u.ic||'', name=u.name||'', kind=u.kind||'', desc=u.desc||'';
+  const face = (u.key && HAS_ICON.has(u.key)) ? cardFace(u.key) : ic;   // painted icon for card unlocks
   s.innerHTML='<div class="amunlabel">✦ UNLOCKED ✦</div>'+
     '<div class="amcard" onclick="amNext()">'+
-      (ic?'<div class="amcic">'+ic+'</div>':'')+
+      (face?'<div class="amcic">'+face+'</div>':'')+
       '<div class="amcname">'+name+'</div>'+
       (kind?'<div class="amkind">'+kind+'</div>':'')+
       (desc?'<div class="amdesc">'+desc+'</div>':'')+
@@ -2570,7 +2578,7 @@ function awardRunes(){
   for(const k in UNLOCK_BOSS){ if(UNLOCK_BOSS[k]>before && UNLOCK_BOSS[k]<=after)
     G.newUnlocks.push({ic:BOSSES[k].ic, name:BOSSES[k].name, kind:'New Boss', desc:BOSSES[k].blurb}); }
   for(const k in UNLOCK_CARD){ if(UNLOCK_CARD[k]>before && UNLOCK_CARD[k]<=after)
-    G.newUnlocks.push({ic:ROOMS[k].ic, name:ROOMS[k].name, kind:ROOMS[k].kind==='trap'?'New Trap':ROOMS[k].kind==='monster'?'New Monster':'New Card', desc:ROOMS[k].desc}); }
+    G.newUnlocks.push({ic:ROOMS[k].ic, name:ROOMS[k].name, kind:ROOMS[k].kind==='trap'?'New Trap':ROOMS[k].kind==='monster'?'New Monster':'New Card', desc:ROOMS[k].desc, key:k}); }
   // bank boss mastery XP for the boss you played + detect a level-up
   if(G.boss && G.boss.key){
     if(!RUNES.bossXp) RUNES.bossXp={};
@@ -2609,7 +2617,7 @@ function gotoReward(){
     <div class="choices">${G.drafts.map((c,i)=>{
       const d=ROOMS[c.type]; const tr=cardRarity(c.type); const tc=(RELIC_TIERS[tr]||{}).col||'#888';
       return `<div class="choice" onclick="takeDraft(${i})" style="border-color:${tc};box-shadow:0 0 10px ${tc}33">
-        <div class="big">${d.ic}</div><h3>${d.name}</h3>
+        <div class="big">${cardFace(c.type)||d.ic}</div><h3>${d.name}</h3>
         <div class="desc">${d.desc}</div>
         <div class="stats" style="color:${tc};font-weight:bold;letter-spacing:.5px">${(RELIC_TIERS[tr]||{}).name||'Common'} · ${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>
     <div class="menu-btns"><button onclick="skipDraft()">Skip draft</button></div>`;
@@ -3975,7 +3983,7 @@ function renderPanel(){
           return `<div class="card ${selCard===i?'sel':''}" data-ci="${i}"
             onmouseenter="cardHover(${i})" onmouseleave="cardHoverOut()"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
             <div class="x" onclick="event.stopPropagation();discardCard(${i})">✕</div>
-            <div class="ic">${d.ic}</div><div class="nm">${c.label||d.name}</div></div>`;}).join('')
+            <div class="ic">${cardFace(c.type)||d.ic}</div><div class="nm">${c.label||d.name}</div></div>`;}).join('')
           :`<span class="small" style="opacity:.6;align-self:center">No cards — survive a hero to draft one.</span>`}
         </div>
       </div>`;
@@ -4344,7 +4352,7 @@ function slotUnderPointer(e){
 function startCardGhost(ci){
   const c=G.hand[ci]; if(!c) return; const d=ROOMS[c.type];
   cardGhost=document.createElement('div'); cardGhost.className='card cardghost';
-  cardGhost.innerHTML=`<div class="ic">${d.ic}</div><div class="nm">${c.label||d.name}</div>`;
+  cardGhost.innerHTML=`<div class="ic">${cardFace(c.type)||d.ic}</div><div class="nm">${c.label||d.name}</div>`;
   document.body.appendChild(cardGhost);
 }
 function moveCardGhost(x,y){ if(cardGhost){ cardGhost.style.left=x+'px'; cardGhost.style.top=y+'px'; } }
