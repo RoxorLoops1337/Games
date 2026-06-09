@@ -317,6 +317,7 @@ const ROOMS = {
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
+  warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A drill-yard blocker. The monster rooms on EITHER side are pre-trained: +30% HP & ATK each wave.'},
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits — reforms once at 60% HP when slain. Soaks burst; weak to ☠poison & 💥AoE.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
@@ -394,6 +395,8 @@ function canFuseRooms(into, from){
 function bossDoc(){ return (G && G.boss && G.boss.doc) || ''; }
 function monFeeds(def){ return !!(def.feeds || bossDoc()==='undeath'); }   // Undeath: every monster feeds
 function bastionMul(){ return bossDoc()==='bastion' ? 1.25 : 1; }          // Bastion: tougher guards
+// Barracks (in-run, gold-funded): a global Monster Rank that buffs EVERY monster's HP & ATK.
+function barracksMul(){ const b=G&&G.barracks; return (b&&b.built)? 1 + 0.16*b.lvl : 1; }
 
 // Shop stock items: arm the heroes (makes them stronger) for instant gold.
 const ITEMS = {
@@ -649,7 +652,7 @@ const RUNE_LIST=[
   rn('room2','Feral','👹','+6% monster damage',3,2, 5,1,{monDmg:0.06},'room1'),
   rn('room3','Reinforced','🧱','+6% monster HP',3,3, 5,2,{monHp:0.06},'room2'),
   rn('room4','Master Builder','📐','+1 room level cap',3,4, 2,3,{upCap:1},'room3'),
-  rn('room5','Synergist','✨','+5% combo synergy',3,5, 3,3,{synergy:0.05},'room4'),
+  rn('room5','Excavator','⛏️','+1 room-slot cap & +5% synergy',3,5, 1,5,{slotMax:1,synergy:0.05},'room4'),
   // 🧛 Warden
   rn('town1','Negotiator','🤝','town costs 6% less',4,1, 5,1,{townDisc:0.06},'root'),
   rn('town2','Big Hands','🖐️','+1 hand size',4,2, 3,2,{hand:1},'town1'),
@@ -680,7 +683,7 @@ let RUNES={ points:0, ranks:{}, kills:0, bossXp:{} };   // kills=lifetime (unloc
 let RB={};   // aggregated bonuses for the active run
 function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
-  abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,upCap:0,fuseFast:0,
+  abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,slotMax:0,upCap:0,fuseFast:0,
   synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
 function loadRunes(){
   try{ const s=JSON.parse(localStorage.getItem('bossmonster_runes')||'{}');
@@ -749,6 +752,10 @@ const BUILDINGS={
     desc:'An altar to dark powers — you begin each run already bearing a relic (two at max).',
     lvlText:l=>l>=3?'Start every run with 2 random relics (better odds).':`Start every run with 1 random relic${l>1?' (better odds)':''}.`,
     cost:l=>[{shards:8,stone:30},{shards:16,stone:70},{shards:27,stone:130}][l-1]},
+  foundry:{name:'War Foundry',       ic:'🏗️', sect:'eco', max:2,
+    desc:'Excavates deeper halls — permanently raises how many corridor rooms you may build each run (base cap is 5).',
+    lvlText:l=>`+${l} to your room-slot cap (max ${5+l} rooms per run).`,
+    cost:l=>[{wood:120,stone:90,shards:6},{wood:220,stone:170,shards:14}][l-1]},
 };
 const BUILDING_KEYS=Object.keys(BUILDINGS);
 // which town options a building level unlocks, and per-building discounts
@@ -837,7 +844,7 @@ function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per leve
 function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
-const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55, venom:30, corrode:60, hexbrand:80, warden:35, slime:50, totem:75, runestone:90 };
+const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55, venom:30, corrode:60, hexbrand:80, warden:35, slime:50, totem:75, runestone:90, warcamp:0 };
 // Card rarity — drives how often each room is OFFERED in the draft & opening hand
 // (same tier vocabulary as relics). Workhorses are common; build-definers are epic.
 const CARD_RARITY={
@@ -845,6 +852,7 @@ const CARD_RARITY={
   flame:'special', frost:'special', tesla:'special', venom:'special', ogre:'special', shop:'special',
   magebane:'rare', gallows:'rare', hexward:'rare', corrode:'rare', warden:'rare', slime:'rare',
   maul:'epic', bombard:'epic', hexbrand:'epic', totem:'epic', runestone:'epic',
+  warcamp:'rare',
 };
 const CARD_TIER_W={ common:100, special:50, rare:24, epic:10 };   // base offer weights
 function cardRarity(t){ return CARD_RARITY[t]||'common'; }
@@ -953,6 +961,7 @@ const RELICS={
   rBanner:{tier:'rare',name:'War Banner',ic:'🚩',desc:'+18% boss attack',rb:{bossAtk:.18}},
   rEye:   {tier:'rare',name:"Hoarder's Eye",ic:'👁️',desc:'+4 gold/kill, +18% loot',rb:{goldKill:4,loot:.18}},
   rFrost: {tier:'rare',name:'Frost Heart',ic:'❄️',desc:'+25% ability damage',rb:{abilDmg:.25}},
+  rDeed:  {tier:'rare',name:'Deed to the Deep',ic:'📜',desc:'+1 room-slot cap (build one more room)',rb:{slotMax:1}},
   // ---- epic ----
   eForge: {tier:'epic',name:'Soulforge',ic:'🔨',desc:'+30% monster damage & HP',rb:{monDmg:.30,monHp:.30}},
   eCore:  {tier:'epic',name:'Infernal Core',ic:'🌋',desc:'+30% trap damage',rb:{trapDmg:.30}},
@@ -960,6 +969,7 @@ const RELICS={
   eStaff: {tier:'epic',name:'Archmage Staff',ic:'🪄',desc:'+30% ability dmg, +40 mana, 15% cheaper',rb:{abilDmg:.30,manaFlat:40,abilCost:.15}},
   eHorn:  {tier:'epic',name:"Warlord's Horn",ic:'📯',desc:'+25% boss atk, +15% monster dmg',rb:{bossAtk:.25,monDmg:.15}},
   eMidas: {tier:'epic',name:'Midas Relic',ic:'🤑',desc:'+6 gold/kill, +30% loot',rb:{goldKill:6,loot:.30}},
+  eVault: {tier:'epic',name:'Architect\'s Sigil',ic:'📐',desc:'+1 room-slot cap, +20% monster HP',rb:{slotMax:1,monHp:.20}},
   // ---- legendary ----
   lHeart: {tier:'legendary',name:'Heart of the Mountain',ic:'🏔️',desc:'+150 max HP, +15% DR',hp:150,rb:{bossDR:.15}},
   lBlade: {tier:'legendary',name:'Worldender Blade',ic:'⚔️',desc:'+40% ALL damage',rb:{trapDmg:.40,monDmg:.40,abilDmg:.40,bossAtk:.40}},
@@ -1064,6 +1074,7 @@ function freshGame(mode){
     heroSeq:0,            // power index assigned to each generated hero
     queue:[],             // upcoming hero specs (previewed in town)
     townBuys:{},          // {upgradeKey: timesBought} for rising costs
+    barracks:{built:false, lvl:0},   // in-run Barracks: gold-funded global Monster Rank
     dread:0,              // town currency (earned per kill)
     bounty:0,             // threat dial: higher = tougher heroes, more reward
     fx:{well:0, smith:0, temple:0},  // active town-wide schemes (waves left)
@@ -1324,7 +1335,11 @@ function difficulty(){
   const threat = 1 + G.bounty*0.15;
   // Campaign: a steady level ramp drives it (hero power also scales with level), so
   // it does NOT compound on cumulative kills the way Endless does.
-  if(G.mode==='campaign') return (1 + (campLevel()-1)*0.02) * threat;   // L1=1.0 → L50≈2.0× (hero power carries the rest)
+  // The realm escalates steeply: a fresh run (no runes/town/extra slots) is meant to
+  // be brutal — only the smartest 5-room dungeon squeaks past ~20% of the time, and
+  // meta-progression is what makes victory reliable. Two ramp terms make the back
+  // half + King the real filter while keeping the opening fair.
+  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.034) * threat; }   // L1=1.0 → L50≈5.4×
   return (1 + G.totalSlain*0.05) * threat;   // Endless ramps via totalSlain only
 }
 
@@ -1825,8 +1840,16 @@ function cellX(i){ return i*ROOM_W; }        // left edge of cell i (0..slots-1 
 // Slots get steeply more expensive the longer your dungeon already is, so
 // stretching the corridor is a real escalating investment (≈68,116,197,335,…).
 function slotCost(){ return Math.max(1, Math.round(40*Math.pow(1.7,G.slots)*(1-(RB.slotCost||0)))); }
+// First runs are capped at 5 corridor rooms. The ceiling is raised — slowly and
+// preciously — by meta-progression (a deep rune, the War Foundry building) and by
+// run-found relics, so a wider dungeon is an earned reward.
+const SLOT_CAP_BASE=5;
+function townSlotBonus(){ return [0,1,2][townLvl('foundry')]||0; }   // War Foundry: +1 cap per level (max 2)
+// The cap gates the campaign's power curve; Endless stays an uncapped sandbox.
+function slotCap(){ return (G&&G.mode==='endless') ? 99 : SLOT_CAP_BASE + (RB.slotMax||0) + townSlotBonus(); }
 
 function buySlot(){
+  if(G.slots>=slotCap()){ showHint('🧱 Slot cap reached ('+slotCap()+'). Raise it with runes, the War Foundry, or relics.'); return; }
   const c=slotCost();
   if(G.gold<c){ showHint('Not enough gold.'); return; }
   G.gold-=c; G.slots++; G.rooms.unshift(null);   // new slot extends to the LEFT
@@ -1993,12 +2016,21 @@ function buildCells(){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
       }
-      if(hasMon){ const hp=Math.round(monHp*syn*vm*(1+(RB.monHp||0)));
-        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*vm*(1+(RB.monDmg||0))), atkT:0, alive:true, split:hasSplit}; }
+      if(hasMon){ const bm=barracksMul(); const hp=Math.round(monHp*syn*vm*(1+(RB.monHp||0))*bm);
+        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*vm*(1+(RB.monDmg||0))*bm), atkT:0, alive:true, split:hasSplit}; }
       cell.shop=hasShop;
       cell.kind = hasMon ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
     }
     G.cells.push(cell);
+  }
+  // 🏕️ War Camp aura: monster rooms beside a War Camp are pre-drilled (+30% HP & ATK).
+  for(const c of G.cells){
+    if(!c.room) continue;
+    if(!roomParts(c.room).includes('warcamp')) continue;
+    for(const j of [c.index-1, c.index+1]){
+      const nb=G.cells[j];
+      if(nb && nb.mon){ nb.mon.hp=Math.round(nb.mon.hp*1.30); nb.mon.maxHp=nb.mon.hp; nb.mon.atk=Math.round(nb.mon.atk*1.30); }
+    }
   }
   // boss cell
   G.cells.push({index:G.slots, x0:cellX(G.slots), x1:cellX(G.slots)+ROOM_W, kind:'boss', traps:[]});
@@ -2933,6 +2965,28 @@ function buyGuild(){
   renderTown(); renderTop();
 }
 
+// ---- Barracks: a HoMM-style training camp, funded with GOLD in town ----
+const BARRACKS_BUILD=90;            // gold to raise the camp
+const BARRACKS_MAX=8;               // max Monster Rank
+function barracksDrillCost(){ return Math.round(110 * Math.pow(1.65, (G.barracks&&G.barracks.lvl)||0)); }  // big, escalating gold sink
+function buildBarracks(){
+  if(!G.barracks) G.barracks={built:false,lvl:0};
+  if(G.barracks.built) return;
+  if(G.gold<BARRACKS_BUILD){ showHint('Not enough gold to raise the Barracks.'); return; }
+  G.gold-=BARRACKS_BUILD; G.barracks.built=true;
+  sfx('upgrade'); showHint('🏋️ Barracks raised — now drill your monsters with gold!');
+  renderTown(); renderTop();
+}
+function drillBarracks(){
+  if(!G.barracks||!G.barracks.built){ showHint('Build the Barracks first.'); return; }
+  if(G.barracks.lvl>=BARRACKS_MAX){ showHint('Monster Rank is maxed.'); return; }
+  const c=barracksDrillCost();
+  if(G.gold<c){ showHint('Not enough gold to drill ('+c+'g).'); return; }
+  G.gold-=c; G.barracks.lvl++;
+  sfx('upgrade'); showHint('🏋️ Monster Rank '+G.barracks.lvl+' — every monster +'+Math.round(0.16*G.barracks.lvl*100)+'% HP & ATK!');
+  renderTown(); renderTop();
+}
+
 function sabotageCost(spec,key){ return Math.max(1, Math.round(townCost(TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3))*innDisc())); }
 function corruptCost(){ return Math.max(1, Math.round(townCost(CORRUPT_COST)*innDisc())); }
 function sabotage(idx,key){
@@ -3007,6 +3061,16 @@ function renderTown(){
           <span class="small" style="opacity:.85;font-weight:normal;line-height:1.2">${r.desc}</span>
           <span style="color:#b985ff;margin-top:2px">${w.sold?'✔ Sold':owned?'Owned':w.price+' ☠'}</span></button>`;}).join('')}
       </div></div>` : (m&&!m.visiting ? `<p class="small" style="opacity:.5;margin:6px auto;max-width:560px">🛒 No merchant in town this time — the trader's caravan has moved on.</p>` : '');
+  const bk=G.barracks||{built:false,lvl:0};
+  const barracksHtml=`<div style="max-width:560px;margin:6px auto;padding:9px 14px;border:2px solid #c98a3a;border-radius:12px;background:#241c10">
+      <h2 style="margin:0 0 2px;color:#e0a85a">🏋️ Barracks — Training Camp <span class="small" style="opacity:.7;font-weight:normal">(spend 💰 gold)</span></h2>
+      ${bk.built
+        ? `<div class="small" style="opacity:.85;margin-bottom:6px">Monster Rank <b style="color:#ffd34d">${bk.lvl}/${BARRACKS_MAX}</b> — every monster room hits <b>+${Math.round(0.16*bk.lvl*100)}%</b> HP &amp; ATK.</div>
+           <button ${bk.lvl>=BARRACKS_MAX||G.gold<barracksDrillCost()?'disabled':''} onclick="drillBarracks()" style="border-color:#c98a3a;padding:8px 12px">
+             ${bk.lvl>=BARRACKS_MAX?'⭐ Monster Rank MAXED':`⚔️ Drill monsters → Rank ${bk.lvl+1} (${barracksDrillCost()}g)`}</button>`
+        : `<div class="small" style="opacity:.85;margin-bottom:6px">Raise a war-camp, then pour gold into it to permanently rank up <b>every</b> monster you build this run.</div>
+           <button ${G.gold<BARRACKS_BUILD?'disabled':''} onclick="buildBarracks()" style="border-color:#c98a3a;padding:8px 12px">🏗️ Raise the Barracks (${BARRACKS_BUILD}g)</button>`}
+    </div>`;
   const threat = `<div class="row" style="justify-content:center;gap:8px;align-items:center">
       <span class="small">Threat: <b>${G.bounty>0?'+':''}${G.bounty}</b> ${G.bounty>0?'🔥 tougher heroes, richer loot':G.bounty<0?'🌫 weaker heroes, leaner loot':'⚖ neutral'}</span>
       <button onclick="setThreat(1)" ${G.bounty>=3?'disabled':''} style="padding:5px 9px;min-height:0">Taunt ▲</button>
@@ -3069,6 +3133,7 @@ function renderTown(){
     <p style="margin:4px 0"><b>${G.totalSlain}</b> slain · 💰 <span class="gold">${G.gold}</span> · <span style="color:#b985ff">☠ ${G.dread} dread</span> · <span title="Resources at risk — keep them by closing the dungeon" style="color:#9be86b">🏗️ ${haulStr(pendingResources())}</span></p>
     ${evHtml}
     ${merchHtml}
+    ${barracksHtml}
     ${townHas('watch')?threat:''}
     ${guildBlock}
     ${empowerBlock}
@@ -4185,7 +4250,7 @@ function renderPanel(){
     const shopExists=G.rooms.some(r=>r&&r.type==='shop');
     panel.innerHTML=`
       <div class="row" style="margin-bottom:6px">
-        <button class="buy" onclick="buySlot()" ${G.gold<slotCost()?'disabled':''}>➕ Slot (${slotCost()}g)</button>
+        <button class="buy" onclick="buySlot()" title="Corridor rooms: ${G.slots}/${slotCap()}. Raise the cap with runes, the War Foundry & relics." ${(G.slots>=slotCap()||G.gold<slotCost())?'disabled':''}>${G.slots>=slotCap()?`🧱 Slots ${G.slots}/${slotCap()} (max)`:`➕ Slot ${G.slots}/${slotCap()} (${slotCost()}g)`}</button>
         ${G.boss && G.boss.hp<G.boss.maxHp ? `<button class="buy" onclick="repairThrone()" title="Spend gold to heal the throne" ${G.gold<repairCost().cost?'disabled':''}>🩹 Repair +${repairCost().heal} (${repairCost().cost}g)</button>` : ''}
         ${shopExists?(()=>{ const shops=G.rooms.filter(r=>r&&r.type==='shop');
           const used=shops.reduce((a,r)=>a+(r.stock||[]).length,0), cap=shops.reduce((a,r)=>a+shopCap(r),0); const full=used>=cap;
