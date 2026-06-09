@@ -17,16 +17,18 @@ auto-resolve. Two modes: **Campaign** (a fixed 50-level siege) and **Endless**.
   `<script>`. There is no framework; it's vanilla canvas + DOM overlays.
 - Live URL: **https://games-71g.pages.dev/boss_monster/** (Cloudflare Pages,
   auto-deploys on merge to `main`).
-- Repo: `RoxorLoops1337/Games`. Feature branch: **`claude/boss-monster-game-huEQU`**.
+- Repo: `RoxorLoops1337/Games`. Feature branch: **whatever your session
+  designates** — it changes per session (e.g. `claude/boss-monster-handover-3ayjow`);
+  the workflow is the same regardless.
 
 ---
 
 ## 2. Workflow (from repo CLAUDE.md — follow exactly)
 
-1. Make changes on the feature branch `claude/boss-monster-game-huEQU`.
+1. Make changes on your session's designated feature branch.
 2. `node build.js` (esbuild; **recursively copies `boss_monster/` → `dist/`**, so
    any asset under it ships). Confirm 0 errors.
-3. Commit → push `-u origin claude/boss-monster-game-huEQU`.
+3. Commit → push `-u origin <your-branch>`.
 4. **Create a DRAFT PR → mark it ready → squash-merge to `main`. Do NOT ask
    "want me to merge?".**
 5. **Always paste the live URL at the bottom of every reply** while working on
@@ -121,8 +123,8 @@ effect (e.g. tier probabilities, monster atk at N kills).
   climb), normal escorts growing `min(5, 1+floor((L-1)/6))`.
 - `campPower()` = `ceil(level*0.7)` (hero stat index). 
 - **Difficulty**: `difficulty()` campaign branch = `(1+(L-1)*0.02)*(1+(L-1)*0.034)*threat`
-  (≈**5.3×** by L50; the inline comment saying 6.2× is stale from when it was
-  0.043). This is the main "how hard" dial — raise the `0.034` term to harden.
+  (≈**5.3×** by L50; the inline comment now matches). This is the main "how hard"
+  dial — raise the `0.034` term to harden.
 - Milestones: odd 5s (5/15/25/35/45) → **relic**; even 5s (10/20/30/40/50) →
   **mandate + Town visit**. `campaignAdvance()` drives it.
 - **The King finale** (`campaignVictory → kingApproaches → faceTheKing →` King
@@ -213,8 +215,11 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
 ## 6. Sprites
 `boss_monster/sprites/<actor>/` (knight, wizard, cleric, goblin, demon, champion).
 Champion = the **Super Knight** mini-boss: walk frames `champion_0..11.png`;
-**`sprites/champion/attack/` exists (README only) awaiting attack frames** — when
-they land, wire them into `drawChampion`. Boss art in `boss_monster/bosses/`.
+attack frames `attack/champion_attack_0..13.png` — **wired into `drawChampion`**:
+while `state` is `fighting`/`boss` the swing is synced to `h.atkT` (one full
+14-frame cycle per attack interval, blade lands as the damage does), drawn at
+`CHAMP_ATK_DH=99` vs walk's `CHAMP_DH=88` (attack art has less padding; content
+heights matched, same foot baseline). Boss art in `boss_monster/bosses/`.
 Card icons in `boss_monster/icons/`. Upload via GitHub (preserves transparency),
 no baked shadow, right-facing.
 
@@ -244,7 +249,7 @@ git add -A && git commit -m "..."
 git fetch origin main -q; git merge -X ours origin/main -m "merge main"
 grep -q awardTownResources boss_monster/index.html && echo "RUN THE GUARD"
 node build.js
-git push -u origin claude/boss-monster-game-huEQU
+git push -u origin <your-session-branch>
 # create DRAFT PR → mark ready → squash-merge (mcp__github__*)
 ```
 Then paste `https://games-71g.pages.dev/boss_monster/` at the end of your reply.
