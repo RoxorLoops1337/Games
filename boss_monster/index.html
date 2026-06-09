@@ -374,7 +374,7 @@ function synergyInfo(parts){
   const key=[...parts].sort().join('+');
   if(SYNERGY_PAIRS[key]) return {...SYNERGY_PAIRS[key], tone:'good'};
   const kinds=parts.map(t=>ROOMS[t].kind);
-  if(kinds[0]==='monster'&&kinds[1]==='monster') return {m:0.8, name:'Overcrowded', tone:'bad'};
+  if(kinds[0]==='monster'&&kinds[1]==='monster') return {m:1, name:'Pack', tone:'good'};   // two separate guards, one after the other
   if(kinds.includes('monster')&&kinds.includes('trap')) return {m:1.18, name:'Pinned Down', tone:'good'};
   if(kinds[0]==='trap'&&kinds[1]==='trap') return {m:1.08, name:'Hazard Field', tone:'good'};
   return {m:1, name:'Unstable', tone:'bad'};
@@ -2027,34 +2027,33 @@ function buildCells(){
       const syn=synergyInfo(parts).m + (parts.length>1?(RB.synergy||0):0);
       cell.syn=syn;
       const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank powers this cell
-      let monHp=0, monAtk=0, hasMon=false, hasShop=false, hasSplit=false;
+      let guards=[], hasShop=false; const bm=barracksMul();
       for(const p of parts){
         const def=ROOMS[p];
         if(def.kind==='trap'){
           cell.traps.push({type:p, def, fireT:0});
           if(def.amp) cell.ampSelf=(cell.ampSelf||0)+def.amp;     // Runestone amplifier (this + adjacent)
         } else if(def.kind==='monster'){
-          hasMon=true;
           if(def.taunt) cell.warden=true;                        // strikes the whole stalled party
           if(def.totem) cell.totem=true;                         // buffs adjacent rooms while alive
-          if(def.split) hasSplit=true;                           // reforms once on death
           const bHp = p==='minion'? (r.minHp||def.hp) : def.hp;   // ||def guards a NaN/missing minion stat
           const bAtk= p==='minion'? (r.minAtk||def.atk): def.atk;
           // "Fed" monsters grow with every hero that died in this room — uncapped.
           // Under the Undeath doctrine, ALL monster rooms feed.
           const feed = monFeeds(def) ? (1 + (r.kills||0)*0.10) : 1;
           const bas = bastionMul();   // Bastion doctrine: tougher guards
-          // Monsters scale HARD: weak at Lv1, brutal at high level.
-          monHp += bHp  * (0.9 + (r.lvl-1)*0.85) * feed * bas;
-          monAtk+= bAtk * (1.0 + (r.lvl-1)*0.9)  * feed * bas;
+          // Each monster is its OWN guard — separate HP & attack, with the combo
+          // multiplier applied individually (two fused monsters = two guards in a row).
+          const hp = Math.round(bHp  * (0.9 + (r.lvl-1)*0.85) * feed * bas * syn * vm * (1+(RB.monHp||0)) * bm);
+          const atk= Math.round(bAtk * (1.0 + (r.lvl-1)*0.9)  * feed * bas * syn * vm * (1+(RB.monDmg||0)) * bm);
+          guards.push({hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split});
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
       }
-      if(hasMon){ const bm=barracksMul(); const hp=Math.round(monHp*syn*vm*(1+(RB.monHp||0))*bm);
-        cell.mon={hp, maxHp:hp, atk:Math.round(monAtk*syn*vm*(1+(RB.monDmg||0))*bm), atkT:0, alive:true, split:hasSplit}; }
+      if(guards.length){ cell.mon=guards[0]; cell.mon2=guards[1]||null; }   // mon2 steps up when the first falls
       cell.shop=hasShop;
-      cell.kind = hasMon ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
+      cell.kind = guards.length ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
     }
     G.cells.push(cell);
   }
@@ -2063,8 +2062,8 @@ function buildCells(){
     if(!c.room) continue;
     if(!roomParts(c.room).includes('warcamp')) continue;
     for(const j of [c.index-1, c.index+1]){
-      const nb=G.cells[j];
-      if(nb && nb.mon){ nb.mon.hp=Math.round(nb.mon.hp*1.30); nb.mon.maxHp=nb.mon.hp; nb.mon.atk=Math.round(nb.mon.atk*1.30); }
+      const nb=G.cells[j]; if(!nb) continue;
+      for(const g of [nb.mon, nb.mon2]){ if(g){ g.hp=Math.round(g.hp*1.30); g.maxHp=g.hp; g.atk=Math.round(g.atk*1.30); } }
     }
   }
   // boss cell
@@ -2607,7 +2606,7 @@ function destroyRoom(cell){
   if(idx<0 || idx>=G.rooms.length || !G.rooms[idx]) return;
   const nm=roomName(G.rooms[idx]);
   G.rooms[idx]=null;
-  cell.room=null; cell.traps=[]; cell.mon=null; cell.shop=false; cell.syn=1; cell.ampSelf=0; cell.totem=false;
+  cell.room=null; cell.traps=[]; cell.mon=null; cell.mon2=null; cell.shop=false; cell.syn=1; cell.ampSelf=0; cell.totem=false;
   burst(cell.x0+ROOM_W/2, FLOOR-30, '#ff5470', 42); burst(cell.x0+ROOM_W/2, FLOOR-64,'#ffd34d',28);
   floater(cell.x0+ROOM_W/2, FLOOR-100, '💥 '+nm+' SMASHED!', '#ff5470', true);
   shake(12); flash('#ff5470',0.22,0.3); sfx('lose');
@@ -3580,6 +3579,9 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
           return; }
         mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
         floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
+        // a second fused guard steps up to take its place
+        if(cell.mon2 && cell.mon2.alive){ cell.mon=cell.mon2; cell.mon2=null; cell.mon.atkT=0.3;
+          floater(cell.x0+ROOM_W*0.55, FLOOR-88, '⚔️ NEXT GUARD', '#ffd34d'); }
         return; }
     }
   }
@@ -4582,11 +4584,14 @@ function describeRoom(room){
     lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  if(monParts.length){ let hp=0,atk=0, fed=false; const bas=bastionMul();
+  if(monParts.length){ let fed=false; const bas=bastionMul(), bm=barracksMul();
+    // each guard gets its OWN stat line (two fused monsters fight one after the other)
     monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
       const feed=monFeeds(def)?(1+(room.kills||0)*0.10):1; if(monFeeds(def))fed=true;
-      hp+=bHp*(0.9+(room.lvl-1)*0.85)*feed*bas; atk+=bAtk*(1.0+(room.lvl-1)*0.9)*feed*bas; });
-    lines.push(`👹 Guard: <b>${Math.round(hp*syn*vm*(1+(RB.monHp||0)))}</b> HP · <b>${Math.round(atk*syn*vm*(1+(RB.monDmg||0)))}</b> atk /0.9s`);
+      const hp=Math.round(bHp*(0.9+(room.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp||0))*bm);
+      const atk=Math.round(bAtk*(1.0+(room.lvl-1)*0.9)*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
+      lines.push(`${def.ic} ${(p==='minion'?(room.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s`); });
+    if(monParts.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ two guards — the 2nd steps up when the 1st falls</span>`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${(room.kills||0)*10}% (no cap)`); }
   if(parts.includes('shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
