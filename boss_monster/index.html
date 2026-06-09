@@ -214,11 +214,20 @@
   .rbzoom button{width:40px;height:40px;padding:0;font-size:22px;font-weight:bold;border-radius:10px;
     background:linear-gradient(#3a2a16,#241808);border:2px solid #caa15e;color:#ffe9b8;box-shadow:0 3px 0 #1c130a;}
   .rbzoom button:active{transform:translateY(2px);box-shadow:0 1px 0 #1c130a;}
-  .rbdetail{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px));
-    z-index:7;display:flex;align-items:center;gap:10px;width:min(560px,calc(100% - 20px));
-    padding:8px 12px;border-radius:12px;background:rgba(16,11,30,.96);border:2px solid var(--accent);
-    box-shadow:0 6px 24px rgba(0,0,0,.6);}
-  .rbdetail button.go{white-space:nowrap;}
+  /* buy popup anchored next to the selected rune (inside the transformed tree) */
+  .rbpop{position:absolute;transform:translateX(-50%);width:220px;z-index:6;
+    padding:8px 10px;border-radius:11px;background:rgba(16,11,30,.97);border:2px solid var(--accent);
+    box-shadow:0 6px 20px rgba(0,0,0,.7);color:#f0e6d0;}
+  .rbpop .rbpoprow{display:flex;gap:8px;align-items:flex-start;}
+  .rbpop .rbpopic{font-size:24px;line-height:1;}
+  .rbpop .rbpopact{margin-top:7px;display:flex;justify-content:center;}
+  .rbpop button.go{white-space:nowrap;padding:6px 16px;font-size:15px;}
+  .rbpop::after{content:"";position:absolute;left:50%;margin-left:-8px;border:8px solid transparent;}
+  .rbpop.below::after{top:-16px;border-bottom-color:var(--accent);}
+  .rbpop.above::after{bottom:-16px;border-top-color:var(--accent);}
+  .rbhint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px));
+    z-index:7;font-size:12px;opacity:.8;padding:6px 14px;border-radius:10px;background:rgba(16,11,30,.9);
+    border:1px solid var(--accent);}
   /* ---- Tutorial coach banner + highlights ---- */
   #tutbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:22;
     width:min(520px,calc(100% - 56px));display:none;align-items:center;gap:10px;
@@ -1603,21 +1612,24 @@ function renderRunes(){
     return `<div class="rnode ${cls}" style="left:${x}px;top:${y}px;width:${NODE}px;height:${NODE}px"
       onclick="tapRune('${n.id}')" title="${n.name}: ${n.desc} (${cost}◆/rank)">
       <span class="ric">${ic}</span><span class="rcnt">${r}/${n.maxRank}</span></div>`;}).join('');
-  // detail bar for the selected node
-  let detail='';
+  // buy popup — anchored NEXT TO the selected node (lives inside the tree so it
+  // pans & zooms glued to its rune). Falls below the node, or above for low rows.
+  let pop='', hint='';
   const s=runeSel?RUNE_NODES[runeSel]:null;
   if(s){ const r=ranksOf(s.id), maxed=r>=s.maxRank, unlocked=runeUnlocked(s), cost=runeCost(s), afford=RUNES.points>=cost;
     const action = maxed ? '<span style="color:#7bdc6b;font-weight:bold">✔ MAXED</span>'
-      : !unlocked ? `<span style="color:#ff9aae;font-size:12px">🔒 unlock ${RUNE_NODES[s.req].name} first</span>`
+      : !unlocked ? `<span style="color:#ff9aae">🔒 unlock ${RUNE_NODES[s.req].name} first</span>`
       : `<button class="go" ${afford?'':'disabled'} onclick="buyRune('${s.id}')">Buy · ${cost}◆</button>`;
-    detail=`<div class="rbdetail">
-      <span style="font-size:26px">${unlocked?s.ic:'🔒'}</span>
-      <div style="flex:1;text-align:left;min-width:0">
-        <b>${s.name}</b> <span class="small">· rank ${r}/${s.maxRank} · ${cost}◆/rank</span><br>
-        <span class="small" style="opacity:.9">${s.desc}</span>
-      </div>${action}</div>`;
+    const below = s.row < maxRow/2;
+    const vpos = below ? `top:${Math.round(cy(s)+NODE/2+12)}px` : `bottom:${Math.round(H-(cy(s)-NODE/2-12))}px`;
+    pop=`<div class="rbpop ${below?'below':'above'}" style="left:${Math.round(cx(s))}px;${vpos}">
+      <div class="rbpoprow"><span class="rbpopic">${unlocked?s.ic:'🔒'}</span>
+        <div style="text-align:left;min-width:0">
+          <b>${s.name}</b> <span class="small">· ${r}/${s.maxRank} · ${cost}◆</span><br>
+          <span class="small" style="opacity:.9">${s.desc}</span></div></div>
+      <div class="rbpopact">${action}</div></div>`;
   } else {
-    detail=`<div class="rbdetail" style="justify-content:center"><span class="small" style="opacity:.8">Tap a rune to inspect it · tap again (or Buy) to spend a point.</span></div>`;
+    hint=`<div class="rbhint">Tap a rune to inspect it · tap again (or Buy) to spend a point.</div>`;
   }
   overlay.innerHTML=`<div class="runebook">
     <button class="rbback" onclick="gotoMenu()">‹ BACK</button>
@@ -1626,9 +1638,10 @@ function renderRunes(){
       <svg width="${W}" height="${H}" style="position:absolute;left:0;top:0;pointer-events:none">${paths}</svg>
       ${heads}
       ${nodes}
+      ${pop}
     </div></div>
     <div class="rbzoom"><button onclick="runeZoomBtn(1)" aria-label="zoom in">＋</button><button onclick="runeZoomBtn(-1)" aria-label="zoom out">－</button></div>
-    ${detail}
+    ${hint}
   </div>`;
   setupRuneViewport(W, H);
 }
