@@ -396,7 +396,7 @@ function vetMul(room){ return 1 + vetRank(room)*VET_DMG; }
 function roomUpgradeCost(room){ return Math.max(1, Math.round((25 + 22*room.lvl) * (room.part2?1.4:1) * (1-(RB.townDisc||0)))); }
 // Can room `from` be merged INTO room `into` (turning `into` into a combo)?
 function canFuseRooms(into, from){
-  return !!(into && from && (into.kills||0)>=fuseKills() && !into.part2 && !from.part2
+  return !!(into && from && !into.part2 && !from.part2
     && into.def.kind!=='shop' && from.def.kind!=='shop' && from.type!==into.type);
 }
 
@@ -694,14 +694,47 @@ function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadK
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
   abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,slotMax:0,upCap:0,fuseFast:0,
   synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
+// ---- save slots: independent profiles (own runes + town). Slot 1 inherits any
+// pre-slot save so existing players keep their progress. ----
+const SAVE_SLOTS=3;
+let saveSlot=1;
+function runeKey(){ return 'bossmonster_runes_'+saveSlot; }
+function townKey(){ return 'bossmonster_town_'+saveSlot; }
+function loadSlot(){
+  try{ const n=parseInt(localStorage.getItem('bm_slot'),10); saveSlot=(n>=1&&n<=SAVE_SLOTS)?n:1; }catch(_){ saveSlot=1; }
+  // one-time migration of the legacy un-slotted save into slot 1
+  try{
+    const oldR=localStorage.getItem('bossmonster_runes'), oldT=localStorage.getItem('bossmonster_town');
+    if(oldR && localStorage.getItem('bossmonster_runes_1')==null) localStorage.setItem('bossmonster_runes_1', oldR);
+    if(oldT && localStorage.getItem('bossmonster_town_1')==null) localStorage.setItem('bossmonster_town_1', oldT);
+  }catch(_){ }
+}
+function switchSlot(n){
+  if(n<1||n>SAVE_SLOTS) return;
+  saveSlot=n; try{ localStorage.setItem('bm_slot', n); }catch(_){ }
+  loadRunes(); applyRunes(); loadTown();
+  gotoMenu();
+}
+function slotSummary(n){
+  try{ const r=JSON.parse(localStorage.getItem('bossmonster_runes_'+n)||'null');
+       const t=JSON.parse(localStorage.getItem('bossmonster_town_'+n)||'null');
+       if(!r && !t) return null;   // empty slot
+       const pts=(r&&r.points)||0, kills=(r&&r.kills)||0;
+       const builds=t&&t.built?Object.values(t.built).filter(v=>v>0).length:0;
+       return {pts, kills, builds}; }catch(_){ return null; }
+}
+function resetSlot(n){
+  try{ localStorage.removeItem('bossmonster_runes_'+n); localStorage.removeItem('bossmonster_town_'+n); }catch(_){ }
+  if(n===saveSlot){ loadRunes(); applyRunes(); loadTown(); }
+}
 function loadRunes(){
-  try{ const s=JSON.parse(localStorage.getItem('bossmonster_runes')||'{}');
+  try{ const s=JSON.parse(localStorage.getItem(runeKey())||'{}');
     RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{}, kills:s.kills||0,
             bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{} }; }
   catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{} }; }
 }
 function saveRunes(){
-  try{ localStorage.setItem('bossmonster_runes', JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp})); }catch(_){ }
+  try{ localStorage.setItem(runeKey(), JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp})); }catch(_){ }
 }
 
 /* ======================= TOWN BUILDER (meta progression) ==================
@@ -794,7 +827,7 @@ function randomRelicId(boost){
 }
 function loadTown(){
   const num=v=>Number.isFinite(+v)?Math.max(0,Math.floor(+v)):0;   // coerce; a corrupt save can't brick the town
-  try{ const s=JSON.parse(localStorage.getItem('bossmonster_town')||'null');
+  try{ const s=JSON.parse(localStorage.getItem(townKey())||'null');
     if(s && s.res){
       const built={}; if(s.built && typeof s.built==='object'){
         for(const id in BUILDINGS) if(s.built[id]) built[id]=Math.min(BUILDINGS[id].max, num(s.built[id]));  // clamp to [0,max]
@@ -805,7 +838,7 @@ function loadTown(){
   }catch(_){ TOWN={ res:{...TOWN_START}, built:{} }; }
 }
 function saveTown(){
-  try{ localStorage.setItem('bossmonster_town', JSON.stringify(TOWN)); }catch(_){ }
+  try{ localStorage.setItem(townKey(), JSON.stringify(TOWN)); }catch(_){ }
 }
 function townLvl(id){ return Math.min((BUILDINGS[id]?BUILDINGS[id].max:9), TOWN.built[id]||0); }
 function townHas(id){ return townLvl(id)>0; }
@@ -826,7 +859,8 @@ function buildTown(id){
 const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
   const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), m=quarryMul();
-  return { wood:Math.floor(slain*0.12*m), stone:Math.floor(slain*0.06*m), shards:Math.floor((slain/4+lvl)*m) };
+  // Trimmed so the town is a long grind: wood/stone ~÷3, shards (the meta currency) ~÷10.
+  return { wood:Math.floor(slain*0.04*m), stone:Math.floor(slain*0.02*m), shards:Math.floor((slain/4+lvl)*m/10) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -835,7 +869,7 @@ function bankResources(frac, withGold){
   // the penalty applies only to the gathered haul; a gold-conversion bonus (clean
   // extraction/win) is added in full afterwards so the two are never coupled.
   let w=Math.floor(p.wood*frac), s=Math.floor(p.stone*frac), sh=Math.floor(p.shards*frac);
-  if(withGold){ const g=Math.max(0,G.gold||0); w+=Math.floor(g/30); s+=Math.floor(g/60); }
+  if(withGold){ const g=Math.max(0,G.gold||0); w+=Math.floor(g/90); s+=Math.floor(g/180); }
   TOWN.res.wood+=w; TOWN.res.stone+=s; TOWN.res.shards+=sh;
   saveTown();
   G.townGain={wood:w,stone:s,shards:sh};
@@ -1375,6 +1409,7 @@ function gotoMenu(){
       <button onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="openCodex()">⚛️ Combo Codex</button>
       <button onclick="openUnlocks()">🔓 Unlocks</button>
+      <button onclick="openSlots()">💾 Save Slot ${saveSlot}</button>
       <button onclick="showHelp()">❓ How to play</button>
     </div>
     <div class="ko">
@@ -1404,6 +1439,39 @@ function startCampaign(){ G=freshGame('campaign'); gotoEdicts(); }
 function startEndless(){ G=freshGame('endless'); gotoEdicts(); }
 
 /* ============================== UNLOCKS ================================ */
+// Save slots: three independent profiles (own runes + town). Switch to start a
+// fresh game with no runes/town, or jump back to a built-up one.
+function openSlots(){
+  overlay.classList.add('show');
+  const cards=[];
+  for(let n=1;n<=SAVE_SLOTS;n++){
+    const s=slotSummary(n), active=(n===saveSlot);
+    const body = s
+      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> lifetime kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}</div>`
+      : `<div class="small" style="opacity:.7;margin:4px 0">Empty — a brand-new game (no runes, no town)</div>`;
+    cards.push(`<div class="choice" style="width:240px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
+      <div class="big">💾</div>
+      <h3 style="margin:2px 0">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● active</span>':''}</h3>
+      ${body}
+      <div class="row" style="justify-content:center;gap:6px;margin-top:6px">
+        <button class="go" onclick="switchSlot(${n})">${active?'Continue':(s?'Load':'New Game')}</button>
+        ${s?`<button onclick="confirmResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae;padding:6px 10px">🗑 Reset</button>`:''}
+      </div></div>`);
+  }
+  overlay.innerHTML=`<h1>💾 Save Slots</h1>
+    <p class="small" style="opacity:.85;max-width:560px">Each slot is its own profile — runes, town and unlocks are separate. Switch to an empty slot to start fresh.</p>
+    <div class="choices">${cards.join('')}</div>
+    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
+}
+function confirmResetSlot(n){
+  if(n===saveSlot){ /* show inline confirm */ }
+  overlay.innerHTML=`<h1 style="color:#ff6b8a">Reset Slot ${n}?</h1>
+    <p>This permanently erases that slot's runes, town and unlocks. This can't be undone.</p>
+    <div class="menu-btns">
+      <button onclick="doResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Erase Slot ${n}</button>
+      <button class="go" onclick="openSlots()">Cancel</button></div>`;
+}
+function doResetSlot(n){ resetSlot(n); openSlots(); }
 // Bosses & cards unlock as your LIFETIME kills climb. Shows progress.
 function openUnlocks(){
   overlay.classList.add('show');
@@ -1919,7 +1987,7 @@ function discardCard(i){
 }
 function roomName(r){ return r?(r.type==='minion'?(r.label||'Corrupted'):ROOMS[r.type].name):'empty'; }
 function canFuse(room,card){
-  return (room.kills||0)>=fuseKills() && !room.part2
+  return !room.part2
     && room.def.kind!=='shop' && ROOMS[card.type].kind!=='shop'
     && card.type!==room.type;
 }
@@ -1967,11 +2035,11 @@ function placeCard(ci, idx){
     burst(cellX(idx)+ROOM_W/2, FLOOR-40, '#9a5cff', 20);
     floater(cellX(idx)+ROOM_W/2, FLOOR-80, info.name||'COMBO', info.tone==='bad'?'#ff7a8a':'#7bdc6b');
     showHint('Fused → '+comboName(room)+(info.name?' ('+info.name+', ×'+info.m.toFixed(2)+')':'')+'!');
-  } else if(room.def.kind!=='shop' && ROOMS[card.type].kind!=='shop' && !room.part2){
-    showHint(ROOMS[room.type].name+' needs '+fuseKills()+' kills before it can fuse a 2nd part ('+(room.kills||0)+'/'+fuseKills()+').');
+  } else if(room.part2){
+    showHint(comboName(room)+' is already a full combo — no room for a 3rd part.');
     return false;
   } else {
-    showHint('Can\'t place that here.');
+    showHint('Can\'t place that here (shops can\'t fuse).');
     return false;
   }
   selCard=-1; sfx('upgrade');
@@ -2515,8 +2583,6 @@ function heroDies(h){
   const dcell=(h.cellIndex>=0 && h.cellIndex<G.cells.length) ? G.cells[h.cellIndex] : cellAt(h.x);
   if(dcell && dcell.room && dcell.room.def.kind!=='shop'){
     dcell.room.kills=(dcell.room.kills||0)+1;
-    if(dcell.room.kills===fuseKills() && !dcell.room.part2)
-      floater(dcell.x0+ROOM_W/2, FLOOR-96, 'FUSE READY!', '#ffd34d');
   }
   // a hero who touched the throne returns with a grudge
   if(h.reachedThrone) makeRival(h);
@@ -2809,7 +2875,8 @@ function buildPostmortem(){
 // Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
 function awardRunes(){
   // Edicts multiply the runes you bank for the whole run.
-  const total = Math.floor((Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul());
+  // Rune income cut ~10× so maxing the tree is a long grind (was ~100/win → all pages in 2 wins).
+  const total = Math.floor((G.totalSlain/4 + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul() / 10);
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
@@ -4118,18 +4185,16 @@ function drawRoomContents(x0,w,room,i){
     X.fillText('⭐'+vr, cx+26, FLOOR-124); X.textAlign='left';
   }
 
-  // build-time room info: XP pips, fuse-ready, combo synergy
+  // build-time room info: fuse hint, combo synergy
   if(G.phase!=='run' && ROOMS[room.type].kind!=='shop'){
-    const fk=fuseKills(); const k=Math.min(fk, room.kills||0);
-    for(let p=0;p<fk;p++) px(cx-16+p*11, FLOOR-118, 8,5, p<k?'#ffd34d':'#3a2c5a');
     if(room.part2){
       const info=synergyInfo(parts);
       X.fillStyle=info.tone==='good'?'#7bdc6b':info.tone==='bad'?'#ff7a8a':'#cdbaff';
       X.font='bold 9px Trebuchet MS'; X.textAlign='center';
       X.fillText((info.name||'Combo')+' ×'+info.m.toFixed(2), cx, FLOOR-104); X.textAlign='left';
-    } else if((room.kills||0)>=fuseKills()){
-      X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
-      X.fillText('⚡ FUSE READY', cx, FLOOR-104); X.textAlign='left';
+    } else {
+      X.fillStyle='#ffd34d'; X.globalAlpha=0.85; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
+      X.fillText('⚡ can fuse a 2nd card', cx, FLOOR-104); X.textAlign='left'; X.globalAlpha=1;
     }
   }
 }
@@ -4603,9 +4668,7 @@ function describeRoom(room){
   if(ROOMS[room.type].kind!=='shop'){
     const k=room.kills||0;
     if(vr) lines.push(`⭐ <b>Veteran ${vr}/${VET_MAX}</b>: +${Math.round(vr*VET_DMG*100)}% output · bites +${(vr*VET_BITE*100).toFixed(1)}% of hero HP/hit`);
-    if(!room.part2) lines.push(k>=fuseKills()
-      ? '⚡ <b>Ready to fuse</b> — drag another room onto it to merge'
-      : `Fuse XP: ${k}/${fuseKills()} kills`);
+    if(!room.part2) lines.push('⚡ <b>Can fuse</b> — drop another room card here (or drag a room onto it) to merge into a combo');
     if(vr<VET_MAX){ const next=(vr+1)*VET_KILLS; lines.push(`<span class="small">⭐ next veteran rank at ${next} kills (${k}/${next})</span>`); }
   }
   if(G && G.phase==='build'){
@@ -4906,6 +4969,7 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
 if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 
+loadSlot();
 loadRunes();
 loadTown();
 loadAudioPref();
