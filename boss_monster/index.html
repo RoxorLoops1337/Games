@@ -899,10 +899,13 @@ const CARD_RARITY={
 };
 const CARD_TIER_W={ common:100, special:50, rare:24, epic:10 };   // base offer weights
 function cardRarity(t){ return CARD_RARITY[t]||'common'; }
-// Offer weight for a card — rarer tiers get a touch more likely as a run deepens.
+// Offer weight for a card — rarer tiers stay genuinely rare early and only
+// become likely as a run deepens (no epic counter-cards in the opening rounds).
 function cardWeight(t, L){
   const r=cardRarity(t), base=CARD_TIER_W[r]||100;
-  const mult = r==='epic' ? 1+L*0.10 : r==='rare' ? 1+L*0.06 : 1;
+  const mult = r==='epic' ? Math.max(0.08, L*0.16 - 0.25)   // ~0 until a few levels in
+             : r==='rare' ? Math.max(0.3, 1 + (L-2)*0.06)   // slightly scarcer in the first rounds too
+             : 1;
   return base*mult;
 }
 function runDepth(){ return G.mode==='campaign' ? G.levelIdx*1.3 : (G.totalSlain||0)/12; }
@@ -1027,8 +1030,10 @@ const RELIC_BY_TIER={};
 TIER_ORDER.forEach(t=>RELIC_BY_TIER[t]=Object.keys(RELICS).filter(k=>RELICS[k].tier===t));
 
 function tierWeights(L){
-  return { common:Math.max(2,28-L*4), special:18, rare:6+L*1.6,
-    epic:2+L*1.3, legendary:.4+L*.7, mythic:.08+L*.3 };
+  // Early relics are mostly common/special/rare; epics+ ramp in from thresholds,
+  // so a fresh save won't roll two epics on its first relic screen.
+  return { common:Math.max(3,30-L*3), special:20, rare:4+L*1.2,
+    epic:Math.max(0,(L-4))*0.8, legendary:Math.max(0,(L-10))*0.5, mythic:Math.max(0,(L-18))*0.3 };
 }
 function rollTier(L){
   const w=tierWeights(L); let tot=0; for(const t in w) tot+=w[t];
