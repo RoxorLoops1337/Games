@@ -386,9 +386,9 @@ function comboName(r){ return roomParts(r).map(t=>ROOMS[t].name).join(' + '); }
 // AND bite a % of the hero's max HP every strike, so they never fall off vs
 // late-game tanks. The kill count that already drives fusing also drives this.
 const VET_KILLS = 6;     // hero deaths in a room per veteran rank
-const VET_MAX   = 8;     // rank cap
-const VET_DMG   = 0.12;  // +12% trap/monster output per rank
-const VET_BITE  = 0.012; // + this fraction of the hero's MAX HP per rank, every hit
+const VET_MAX   = 6;     // rank cap (was 8 — caps the snowball)
+const VET_DMG   = 0.09;  // +9% trap/monster output per rank (was 12%)
+const VET_BITE  = 0.006; // % of hero MAX HP per rank per hit (was 1.2% — halved to tame the snowball)
 const CORRUPT_PCT  = 0.015; // toll: drain this % of max HP each populated room a hero passes
 const CORRUPT_BOSS = 0.06;  // the boss strikes +6% harder per corruption stack a hero carries
 function vetRank(room){ return room ? Math.min(VET_MAX, Math.floor((room.kills||0)/VET_KILLS)) : 0; }
@@ -523,13 +523,13 @@ const MANDATES = {
   pierceHalls:   {ic:'🗡️', name:'Piercing Halls',   desc:'All your traps ignore hero armor.'},
   wildfire:      {ic:'🔥', name:'Wildfire',          desc:'Every trap also sets heroes ablaze (burn).'},
   undyingLegion: {ic:'💀', name:'Undying Legion',    desc:'Each monster guard revives once per wave at 50% HP.'},
-  quicksand:     {ic:'🏖️', name:'Quicksand Floors',  desc:'All heroes move 20% slower through your halls.'},
-  bloodthrone:   {ic:'🩸', name:'Bloodthrone',       desc:'Your boss heals 5% of its max HP on every kill.'},
+  quicksand:     {ic:'🏖️', name:'Quicksand Floors',  desc:'All heroes move 12% slower through your halls.'},
+  bloodthrone:   {ic:'🩸', name:'Bloodthrone',       desc:'Your boss heals 3% of its max HP on every kill.'},
   tollKeeper:    {ic:'☣️', name:'Toll Keeper',       desc:'The corruption toll each room takes is doubled.'},
-  goldVeins:     {ic:'💰', name:'Gold Veins',        desc:'+50% gold from slain heroes.'},
-  hairTrigger:   {ic:'⚙️', name:'Hair Trigger',      desc:'All traps fire 20% faster.'},
-  conductor:     {ic:'⚛️', name:'Conductor',         desc:'Elemental reactions deal +50% damage.'},
-  reinforced:    {ic:'🏰', name:'Reinforced Throne', desc:'+35% boss max HP, healed to full immediately.'},
+  goldVeins:     {ic:'💰', name:'Gold Veins',        desc:'+30% gold from slain heroes.'},
+  hairTrigger:   {ic:'⚙️', name:'Hair Trigger',      desc:'All traps fire 12% faster.'},
+  conductor:     {ic:'⚛️', name:'Conductor',         desc:'Elemental reactions deal +30% damage.'},
+  reinforced:    {ic:'🏰', name:'Reinforced Throne', desc:'+20% boss max HP, healed to full immediately.'},
 };
 const MANDATE_KEYS = Object.keys(MANDATES);
 function hasMandate(id){ return !!(G && G.mandates && G.mandates.includes(id)); }
@@ -950,44 +950,44 @@ const TIER_ORDER=['common','special','rare','epic','legendary','mythic'];
 // relic = {tier,name,ic,desc, rb:{passive %/flat bonuses}, hp/gold/dread:instant}
 const RELICS={
   // ---- common ----
-  cFang:  {tier:'common',name:'Cracked Fang',ic:'🦷',desc:'+10% trap damage',rb:{trapDmg:.10}},
-  cShackle:{tier:'common',name:'Rusty Shackle',ic:'⛓️',desc:'+10% monster damage',rb:{monDmg:.10}},
-  cCoin:  {tier:'common',name:'Worn Coin',ic:'🪙',desc:'+12% loot',rb:{loot:.12}},
+  cFang:  {tier:'common',name:'Cracked Fang',ic:'🦷',desc:'+7% trap damage',rb:{trapDmg:.07}},
+  cShackle:{tier:'common',name:'Rusty Shackle',ic:'⛓️',desc:'+7% monster damage',rb:{monDmg:.07}},
+  cCoin:  {tier:'common',name:'Worn Coin',ic:'🪙',desc:'+10% loot',rb:{loot:.10}},
   cIdol:  {tier:'common',name:'Dull Idol',ic:'🗿',desc:'+25 max HP (healed)',hp:25},
-  cEmber: {tier:'common',name:'Ember',ic:'🔥',desc:'+8% ability damage',rb:{abilDmg:.08}},
-  cScrap: {tier:'common',name:'Iron Scrap',ic:'⚙️',desc:'+6% boss damage reduction',rb:{bossDR:.06}},
+  cEmber: {tier:'common',name:'Ember',ic:'🔥',desc:'+5% ability damage',rb:{abilDmg:.05}},
+  cScrap: {tier:'common',name:'Iron Scrap',ic:'⚙️',desc:'+4% boss damage reduction',rb:{bossDR:.04}},
   // ---- special ----
-  sTooth: {tier:'special',name:'Serpent Tooth',ic:'🐍',desc:'+16% trap damage',rb:{trapDmg:.16}},
-  sCharm: {tier:'special',name:'Bone Charm',ic:'💀',desc:'+16% monster HP',rb:{monHp:.16}},
-  sPouch: {tier:'special',name:'Greedy Pouch',ic:'👛',desc:'+2 gold/kill, +10% loot',rb:{goldKill:2,loot:.10}},
-  sWard:  {tier:'special',name:'Warding Stone',ic:'🪨',desc:'+8% DR, +6 HP/wave',rb:{bossDR:.08,bossRegen:6}},
+  sTooth: {tier:'special',name:'Serpent Tooth',ic:'🐍',desc:'+11% trap damage',rb:{trapDmg:.11}},
+  sCharm: {tier:'special',name:'Bone Charm',ic:'💀',desc:'+11% monster HP',rb:{monHp:.11}},
+  sPouch: {tier:'special',name:'Greedy Pouch',ic:'👛',desc:'+2 gold/kill, +8% loot',rb:{goldKill:2,loot:.08}},
+  sWard:  {tier:'special',name:'Warding Stone',ic:'🪨',desc:'+5% DR, +5 HP/wave',rb:{bossDR:.05,bossRegen:5}},
   sMana:  {tier:'special',name:'Mana Crystal',ic:'🔷',desc:'+25 mana, +2 regen',rb:{manaFlat:25,manaRegen:2}},
-  sCollar:{tier:'special',name:'Spiked Collar',ic:'🦮',desc:'+16% monster damage',rb:{monDmg:.16}},
+  sCollar:{tier:'special',name:'Spiked Collar',ic:'🦮',desc:'+11% monster damage',rb:{monDmg:.11}},
   // ---- rare ----
-  rScale: {tier:'rare',name:'Dragonscale',ic:'🐲',desc:'+12% DR, +60 max HP',rb:{bossDR:.12},hp:60},
-  rBlood: {tier:'rare',name:'Bloodstone',ic:'🩸',desc:'+20% trap & monster damage',rb:{trapDmg:.20,monDmg:.20}},
-  rTome:  {tier:'rare',name:'Tome of Power',ic:'📖',desc:'+20% ability dmg, 12% cheaper',rb:{abilDmg:.20,abilCost:.12}},
-  rBanner:{tier:'rare',name:'War Banner',ic:'🚩',desc:'+18% boss attack',rb:{bossAtk:.18}},
-  rEye:   {tier:'rare',name:"Hoarder's Eye",ic:'👁️',desc:'+4 gold/kill, +18% loot',rb:{goldKill:4,loot:.18}},
-  rFrost: {tier:'rare',name:'Frost Heart',ic:'❄️',desc:'+25% ability damage',rb:{abilDmg:.25}},
+  rScale: {tier:'rare',name:'Dragonscale',ic:'🐲',desc:'+8% DR, +50 max HP',rb:{bossDR:.08},hp:50},
+  rBlood: {tier:'rare',name:'Bloodstone',ic:'🩸',desc:'+13% trap & monster damage',rb:{trapDmg:.13,monDmg:.13}},
+  rTome:  {tier:'rare',name:'Tome of Power',ic:'📖',desc:'+14% ability dmg, 12% cheaper',rb:{abilDmg:.14,abilCost:.12}},
+  rBanner:{tier:'rare',name:'War Banner',ic:'🚩',desc:'+12% boss attack',rb:{bossAtk:.12}},
+  rEye:   {tier:'rare',name:"Hoarder's Eye",ic:'👁️',desc:'+4 gold/kill, +14% loot',rb:{goldKill:4,loot:.14}},
+  rFrost: {tier:'rare',name:'Frost Heart',ic:'❄️',desc:'+16% ability damage',rb:{abilDmg:.16}},
   rDeed:  {tier:'rare',name:'Deed to the Deep',ic:'📜',desc:'+1 room-slot cap (build one more room)',rb:{slotMax:1}},
   // ---- epic ----
-  eForge: {tier:'epic',name:'Soulforge',ic:'🔨',desc:'+30% monster damage & HP',rb:{monDmg:.30,monHp:.30}},
-  eCore:  {tier:'epic',name:'Infernal Core',ic:'🌋',desc:'+30% trap damage',rb:{trapDmg:.30}},
-  eThrone:{tier:'epic',name:'Throne of Bone',ic:'🦴',desc:'+18% DR, +12 HP/wave',rb:{bossDR:.18,bossRegen:12}},
-  eStaff: {tier:'epic',name:'Archmage Staff',ic:'🪄',desc:'+30% ability dmg, +40 mana, 15% cheaper',rb:{abilDmg:.30,manaFlat:40,abilCost:.15}},
-  eHorn:  {tier:'epic',name:"Warlord's Horn",ic:'📯',desc:'+25% boss atk, +15% monster dmg',rb:{bossAtk:.25,monDmg:.15}},
-  eMidas: {tier:'epic',name:'Midas Relic',ic:'🤑',desc:'+6 gold/kill, +30% loot',rb:{goldKill:6,loot:.30}},
-  eVault: {tier:'epic',name:'Architect\'s Sigil',ic:'📐',desc:'+1 room-slot cap, +20% monster HP',rb:{slotMax:1,monHp:.20}},
+  eForge: {tier:'epic',name:'Soulforge',ic:'🔨',desc:'+20% monster damage & HP',rb:{monDmg:.20,monHp:.20}},
+  eCore:  {tier:'epic',name:'Infernal Core',ic:'🌋',desc:'+20% trap damage',rb:{trapDmg:.20}},
+  eThrone:{tier:'epic',name:'Throne of Bone',ic:'🦴',desc:'+11% DR, +9 HP/wave',rb:{bossDR:.11,bossRegen:9}},
+  eStaff: {tier:'epic',name:'Archmage Staff',ic:'🪄',desc:'+20% ability dmg, +40 mana, 15% cheaper',rb:{abilDmg:.20,manaFlat:40,abilCost:.15}},
+  eHorn:  {tier:'epic',name:"Warlord's Horn",ic:'📯',desc:'+16% boss atk, +10% monster dmg',rb:{bossAtk:.16,monDmg:.10}},
+  eMidas: {tier:'epic',name:'Midas Relic',ic:'🤑',desc:'+6 gold/kill, +28% loot',rb:{goldKill:6,loot:.28}},
+  eVault: {tier:'epic',name:'Architect\'s Sigil',ic:'📐',desc:'+1 room-slot cap, +14% monster HP',rb:{slotMax:1,monHp:.14}},
   // ---- legendary ----
-  lHeart: {tier:'legendary',name:'Heart of the Mountain',ic:'🏔️',desc:'+150 max HP, +15% DR',hp:150,rb:{bossDR:.15}},
-  lBlade: {tier:'legendary',name:'Worldender Blade',ic:'⚔️',desc:'+40% ALL damage',rb:{trapDmg:.40,monDmg:.40,abilDmg:.40,bossAtk:.40}},
-  lPhyl:  {tier:'legendary',name:'Phylactery',ic:'💜',desc:'+25 HP/wave, +12% DR, +20% ability dmg',rb:{bossRegen:25,bossDR:.12,abilDmg:.20}},
-  lCrown: {tier:'legendary',name:'Crown of Avarice',ic:'👑',desc:'+10 gold/kill, +50% loot, +3 dread/kill',rb:{goldKill:10,loot:.50,dreadKill:3}},
+  lHeart: {tier:'legendary',name:'Heart of the Mountain',ic:'🏔️',desc:'+120 max HP, +10% DR',hp:120,rb:{bossDR:.10}},
+  lBlade: {tier:'legendary',name:'Worldender Blade',ic:'⚔️',desc:'+26% ALL damage',rb:{trapDmg:.26,monDmg:.26,abilDmg:.26,bossAtk:.26}},
+  lPhyl:  {tier:'legendary',name:'Phylactery',ic:'💜',desc:'+18 HP/wave, +8% DR, +14% ability dmg',rb:{bossRegen:18,bossDR:.08,abilDmg:.14}},
+  lCrown: {tier:'legendary',name:'Crown of Avarice',ic:'👑',desc:'+8 gold/kill, +35% loot, +3 dread/kill',rb:{goldKill:8,loot:.35,dreadKill:3}},
   // ---- mythic ----
-  mRuin:  {tier:'mythic',name:'Avatar of Ruin',ic:'😈',desc:'+60% all damage, +100 max HP',hp:100,rb:{trapDmg:.60,monDmg:.60,abilDmg:.60,bossAtk:.60}},
-  mEtern: {tier:'mythic',name:'Eternity Stone',ic:'♾️',desc:'+20% DR, +30 HP/wave, +30% ability dmg, +80 HP',hp:80,rb:{bossDR:.20,bossRegen:30,abilDmg:.30}},
-  mGod:   {tier:'mythic',name:"God's Eye",ic:'🌟',desc:'+40% everything, +5 gold & +2 dread/kill',rb:{trapDmg:.40,monDmg:.40,monHp:.40,abilDmg:.40,bossAtk:.40,goldKill:5,dreadKill:2}},
+  mRuin:  {tier:'mythic',name:'Avatar of Ruin',ic:'😈',desc:'+40% all damage, +80 max HP',hp:80,rb:{trapDmg:.40,monDmg:.40,abilDmg:.40,bossAtk:.40}},
+  mEtern: {tier:'mythic',name:'Eternity Stone',ic:'♾️',desc:'+13% DR, +20 HP/wave, +20% ability dmg, +60 HP',hp:60,rb:{bossDR:.13,bossRegen:20,abilDmg:.20}},
+  mGod:   {tier:'mythic',name:"God's Eye",ic:'🌟',desc:'+27% everything, +5 gold & +2 dread/kill',rb:{trapDmg:.27,monDmg:.27,monHp:.27,abilDmg:.27,bossAtk:.27,goldKill:5,dreadKill:2}},
 };
 const RELIC_BY_TIER={};
 TIER_ORDER.forEach(t=>RELIC_BY_TIER[t]=Object.keys(RELICS).filter(k=>RELICS[k].tier===t));
@@ -1350,7 +1350,7 @@ function difficulty(){
   // be brutal — only the smartest 5-room dungeon squeaks past ~20% of the time, and
   // meta-progression is what makes victory reliable. Two ramp terms make the back
   // half + King the real filter while keeping the opening fair.
-  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.043) * threat; }   // L1=1.0 → L50≈6.2× (first runs are brutal — meta is the path to winning)
+  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.034) * threat; }   // L1=1.0 → L50≈6.2× (first runs are brutal — meta is the path to winning)
   return (1 + G.totalSlain*0.05) * threat;   // Endless ramps via totalSlain only
 }
 
@@ -2322,7 +2322,7 @@ const ELEM_COMBO={
   shock:'⚡ Conducts through <b>oiled</b> heroes to the party, and ⚡ <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
   phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
 };
-function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.5:1); }   // escalating chain (capped at +100%); Conductor mandate +50%
+function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +50%
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
@@ -2488,7 +2488,7 @@ function heroDies(h){
   }
   // loot: carried gold + bounty (threat dial + rune bonuses)
   // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
-  const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.5:1)) + (RB.goldKill||0);
+  const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.3:1)) + (RB.goldKill||0);
   G.gold+=loot;
   // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
@@ -2497,7 +2497,7 @@ function heroDies(h){
   G.survived++; G.totalSlain++;
   // Devour passive: the boss feasts on the fallen
   if(G.boss.feed) healBoss(Math.round(G.boss.maxHp*G.boss.feed));
-  if(hasMandate('bloodthrone')) healBoss(Math.round(G.boss.maxHp*0.05));   // Bloodthrone mandate: heal per kill
+  if(hasMandate('bloodthrone')) healBoss(Math.round(G.boss.maxHp*0.03));   // Bloodthrone mandate: heal per kill
   // Gluttony doctrine: every kill permanently grows the boss
   if(G.boss.doc==='gluttony'){ G.boss.maxHp+=5; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+5); G.boss.atk+=0.6;
     floater(bossX(), FLOOR-110, '😋 GROW', '#b0563a'); }
@@ -2936,7 +2936,7 @@ function pickMandate(i){
   if(G.phase!=='mandate') return;
   const id=G._mandateChoices && G._mandateChoices[i]; if(!id) return;
   G.mandates.push(id);
-  if(id==='reinforced' && G.boss){ G.boss.maxHp=Math.round(G.boss.maxHp*1.35); G.boss.hp=G.boss.maxHp; }
+  if(id==='reinforced' && G.boss){ G.boss.maxHp=Math.round(G.boss.maxHp*1.20); G.boss.hp=G.boss.maxHp; }
   sfx('relic'); showHint(MANDATES[id].ic+' Mandate decreed: '+MANDATES[id].name);
   const done=G._mandatePick; G._mandateChoices=null; G._mandatePick=null;
   overlay.classList.remove('show');
@@ -3330,7 +3330,7 @@ function simStep(h,dt){
     // traps still fire on a frozen/standing hero
     if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     if(h.state==='dead' || frozen) return;
-    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.8:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
+    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
     // a living monster blocks: walk up to it (through the trap), THEN fight
@@ -3458,7 +3458,7 @@ function trapTick(h,cell,dt){
     if(tr.def.amp) continue;        // Runestone deals no damage — it only amplifies (ampAt)
     tr.fireT-=dt;
     if(tr.fireT<=0){
-      tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.8:1);   // Hair Trigger mandate: traps fire faster
+      tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.88:1);   // Hair Trigger mandate: traps fire faster
       const d=tr.def;
       let dmg=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
       // counter-card bonuses vs certain heroes
@@ -3502,7 +3502,7 @@ function aoeTrapTick(dt){
       const lo=cell.index-d.aoe, hi=cell.index+d.aoe;
       const targets=G.heroes.filter(o=>o && o.state!=='dead' && heroCellIndex(o)>=lo && heroCellIndex(o)<=hi);
       if(!targets.length) continue;
-      tr.fireT=d.rate * (hasMandate('hairTrigger')?0.8:1);
+      tr.fireT=d.rate * (hasMandate('hairTrigger')?0.88:1);
       let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
       if(vr) base*=(1+vr*VET_DMG);
       if(doc==='inferno') base*=1.2;
