@@ -1083,6 +1083,8 @@ function freshGame(mode){
     mandates:[],          // rule-changing dungeon upgrades drafted mid-run
     mandateDue:false,     // a mandate draft is queued (endless milestone)
     relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
+    kingDue:false,        // the King's final raid is queued for the next wave
+    kingFight:false,      // the King is currently raiding the dungeon (finale)
     combo:0,              // kill streak (resets when a hero strikes the boss)
     killsBanked:0, bossXpBanked:0, newUnlocks:[],   // lifetime-kill + boss-XP banking, unlock toasts
     tutorial:false, tutStep:0, tutHi:null,   // guided tutorial state
@@ -1821,8 +1823,8 @@ function corridorWidth(){ return (G.slots+1)*ROOM_W; }
 function cellX(i){ return i*ROOM_W; }        // left edge of cell i (0..slots-1 rooms, slots=boss)
 
 // Slots get steeply more expensive the longer your dungeon already is, so
-// stretching the corridor is a real escalating investment (≈40,64,102,164,…).
-function slotCost(){ return Math.max(1, Math.round(25*Math.pow(1.6,G.slots)*(1-(RB.slotCost||0)))); }
+// stretching the corridor is a real escalating investment (≈68,116,197,335,…).
+function slotCost(){ return Math.max(1, Math.round(40*Math.pow(1.7,G.slots)*(1-(RB.slotCost||0)))); }
 
 function buySlot(){
   const c=slotCost();
@@ -2103,6 +2105,7 @@ function buildHeroFromSpec(spec){
   const champ = spec.champion ? CHAMPIONS[spec.champion] : null;
   let gold=heroGold(n,d,spec.debuff.robbed), bounty=heroBounty(n,d);
   if(champ){ hp*=champ.hpMul; atk*=champ.atkMul; armor+=2; gold=Math.round(gold*2.5); bounty=Math.round(bounty*3); }
+  if(spec.king){ hp*=8; atk*=1.3; armor+=10; spd*=0.92; gold=0; bounty=0; }   // 👑 the finale boss-raider (tuned via sim: a solid dungeon wins ~90%, but he can smash rooms, pressure the throne, and end a weak run)
   hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
     cls, ...c, name:cls, traits:tr,
@@ -2110,6 +2113,7 @@ function buildHeroFromSpec(spec){
     heroName: spec.name, title: spec.title || (champ?champ.title:null),
     champion: spec.champion||null, champIc: champ?champ.ic:null, champCol: champ?champ.col:null,
     rival: !!spec.rival, rivalGen: spec.rivalGen||0,
+    king: !!spec.king,
     specPower: n, specTraits: tr,
     maxHp:hp, hp:hp, atk, _atkBase:atk, armor, spd, atkSpeed,
     gold, bounty,
@@ -2138,6 +2142,17 @@ function champSpec(){
 }
 function spawnGroup(n){
   for(const r of G.pendingRivals) r.eta--;   // one wave closer to each rival's return
+  // 👑 THE KING — a lone finale raider, spawned in place of a normal party.
+  if(G.kingDue){
+    G.kingDue=false; G.kingFight=true;
+    const h=buildHeroFromSpec(kingSpec());
+    h.x=8; h.yOff=0;
+    G.heroes=[h]; G.heroNum++;
+    showHint('👑 THE HIGH KING storms your dungeon — fell him to win forever!');
+    shake(12); sfx('boss');
+    G.waveStartSlain=G.totalSlain; G.waveEnding=false; G.hero=leadHero();
+    return;
+  }
   let specs=[];
   if(G.mode==='campaign'){
     // each level's wave is defined: a growing party, plus mini-boss(es) at milestones
@@ -2370,6 +2385,14 @@ function castOverdrive(){
 function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead';
+  // 👑 The King falls — the realm is yours forever.
+  if(h.king){
+    G.totalSlain++;
+    burst(h.x, h.y-30, '#ffd34d', 64); burst(h.x,h.y-60,'#fff',40);
+    floater(h.x, h.y-96, '👑 THE KING IS SLAIN!', '#ffd34d', true);
+    flash('#ffd34d', 0.5, 0.6); slowmo(0.5); shake(16); sfx('relic');
+    trueVictory(); return;
+  }
   // loot: carried gold + bounty (threat dial + rune bonuses)
   // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
   const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.5:1)) + (RB.goldKill||0);
@@ -2448,13 +2471,62 @@ function campaignAdvance(){
   G.levelIdx++;                                // next level
   gotoReward();                                // card draft → (relic/mandate/town flags) → build next level
 }
+// ----------------------------- THE KING FINALE ---------------------------
+// Clearing wave 50 looks like victory… until the High King kicks the doors in.
+const KING_SMASH=0.10;            // chance the King smashes each room he marches through
 function campaignVictory(){
+  // A FALSE victory — savour it for a beat before the floor shakes.
+  G.phase='win'; overlay.classList.add('show'); sfx('win');
+  overlay.innerHTML=`<h1 style="color:#ffd34d">THE SIEGE IS BROKEN</h1>
+    <div style="font-size:60px">${G.boss.ic}🎉</div>
+    <p>All ${CAMP_LEVELS} waves shattered upon your halls. ${G.boss.name} reigns supreme,
+       having buried <b>${G.totalSlain}</b> heroes. The kingdom's armies lie spent…</p>
+    <p style="opacity:.55">The dungeon falls quiet.</p>`;
+  setTimeout(kingApproaches, 2800);
+}
+function kingApproaches(){
+  shake(16); sfx('boss'); flash('#ffd34d',0.35,0.5);
+  overlay.innerHTML=`<h1 style="color:#ff5470;letter-spacing:2px">👑 THE HIGH KING</h1>
+    <div style="font-size:70px">👑</div>
+    <p style="font-size:18px"><b>BOOM. BOOM. BOOM.</b></p>
+    <p>The throne-room doors buckle. The High King himself strides into your dungeon,
+       crown ablaze and blade drawn, swearing to <b>raze every room you built</b>.</p>
+    <p style="color:#ffd34d">He smashes rooms as he advances — but fell him, and the realm is yours <b>forever</b>.</p>
+    <div class="menu-btns"><button class="go" onclick="faceTheKing()">⚔️ Stand your ground</button></div>`;
+}
+function faceTheKing(){
+  // One last prep phase, then the King raids as the next (and final) wave.
+  overlay.classList.remove('show');
+  G.kingDue=true; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+Math.round(G.boss.maxHp*0.5));  // a defiant second wind
+  G.phase='build';
+  showHint('👑 Fortify! The King attacks when you start the wave.');
+  render();
+}
+// The King: a lone, colossal raider who shrugs off corruption and smashes rooms.
+function kingSpec(){
+  return {cls:'warrior', power:campPower(), traits:[], name:'The High King', title:'', king:true,
+          debuff:{atkMul:1, burn:0, robbed:false}};
+}
+function destroyRoom(cell){
+  const idx=cell.index;
+  if(idx<0 || idx>=G.rooms.length || !G.rooms[idx]) return;
+  const nm=roomName(G.rooms[idx]);
+  G.rooms[idx]=null;
+  cell.room=null; cell.traps=[]; cell.mon=null; cell.shop=false; cell.syn=1; cell.ampSelf=0; cell.totem=false;
+  burst(cell.x0+ROOM_W/2, FLOOR-30, '#ff5470', 42); burst(cell.x0+ROOM_W/2, FLOOR-64,'#ffd34d',28);
+  floater(cell.x0+ROOM_W/2, FLOOR-100, '💥 '+nm+' SMASHED!', '#ff5470', true);
+  shake(12); flash('#ff5470',0.22,0.3); sfx('lose');
+  showHint('👑 The King smashes your '+nm+'!');
+}
+function trueVictory(){
+  if(G.phase==='win') return;
   G.phase='win'; overlay.classList.add('show'); sfx('win');
   const earned=awardRunes(); bankResources(1,true);
-  const summary=`<h1 style="color:#ffd34d">THE SIEGE IS BROKEN</h1>
-    <div style="font-size:60px">${G.boss.ic}👑</div>
-    <p>All ${CAMP_LEVELS} waves shattered upon your halls. ${G.boss.name} reigns supreme,
-       having buried <b>${G.totalSlain}</b> heroes.</p>
+  const summary=`<h1 style="color:#ffd34d">THE CROWN HAS FALLEN</h1>
+    <div style="font-size:60px">${G.boss.ic}👑💔</div>
+    <p>The High King lies shattered upon your floor. No army, no champion, no crown remains to
+       challenge you — ${G.boss.name} rules the realm <b>eternal</b>, having buried
+       <b>${G.totalSlain}</b> heroes and a king.</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
@@ -2484,7 +2556,9 @@ function bossDies(){
   const earned=awardRunes();
   const keep=deathKeep(), lostPct=Math.round((1-keep)*100);
   bankResources(keep, false);                    // keep your Vault fraction; no gold bonus on a death
-  const score = G.mode==='campaign'
+  const score = G.kingFight
+    ? `So close — the High King breached the throne after you survived all ${CAMP_LEVELS} waves. The crown endures… this time.`
+    : G.mode==='campaign'
     ? `You fell on Level ${campLevel()}/${CAMP_LEVELS} after slaying ${totalKills()} heroes.`
     : `You reigned ${G.survived} heroes before the throne fell.`;
   const summary=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
@@ -3135,6 +3209,11 @@ function cellAt(x){
   return x<0 ? G.cells[0] : G.cells[G.cells.length-1];
 }
 function onEnterCell(h,cell){
+  // 👑 The King shrugs off corruption and SMASHES rooms as he marches through.
+  if(h.king){
+    if(cell.room && cell.kind!=='boss' && Math.random()<KING_SMASH) destroyRoom(cell);
+    // (no corruption toll, no shopping — fall through to the throne-room handling)
+  } else {
   // Corruption toll: every populated room a hero walks through drains a slice of
   // their MAX HP and leaves a corruption stack. Even a worthless early room still
   // softens the raider — and the deeper the dungeon, the more stacks pile up,
@@ -3149,9 +3228,10 @@ function onEnterCell(h,cell){
   if(h.cls==='rogue' && cell.kind!=='boss' && cell.traps && cell.traps.length){
     cell._disarmT=DISARM_DUR; floater(h.x, h.y-72, '🗡️ DISARMED', '#5fd17a');
   }
+  }
   // Monsters are handled by the walking branch: the hero walks up to the
   // blocker (passing through any trap in the room) before the fight starts.
-  if(cell.shop && G.fx.smith===0 && cell.room.stock.some(s=>!s.sold)){
+  if(!h.king && cell.shop && G.fx.smith===0 && cell.room && cell.room.stock.some(s=>!s.sold)){
     h.state='shopping'; h.x=cell.x0+ROOM_W*0.5; h.shopT=0.8;
   } else if(cell.kind==='boss'){
     if(h.champion==='thief'){ thiefSteal(h); return; }
@@ -3910,14 +3990,15 @@ function drawHero(sx,h){
   const y=FLOOR+(h.yOff||0); const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
   const yy=y+bob;
   const champ=!!h.champion;
+  const king=!!h.king;
   const champSprite = champ && champReady();
-  // aura (champion = its colour, bigger/brighter; elite = trait colour)
-  if(champ || h.elite){
+  // aura (champion = its colour, bigger/brighter; elite = trait colour; king = royal gold)
+  if(champ || h.elite || king){
     const t=performance.now()/200;
-    const col=champ?(h.champCol||'#ffd34d'):(h.traits.length?TRAITS[h.traits[0]].col:'#ffd34d');
-    X.globalAlpha=(champ?0.30:0.18)+0.08*Math.sin(t);
+    const col=king?'#ffd34d':champ?(h.champCol||'#ffd34d'):(h.traits.length?TRAITS[h.traits[0]].col:'#ffd34d');
+    X.globalAlpha=(king?0.34:champ?0.30:0.18)+0.10*Math.sin(t);
     X.fillStyle=col; X.beginPath();
-    if(champSprite) X.ellipse(sx,y-44,40,56,0,0,7); else X.ellipse(sx,yy-26,champ?30:20,champ?42:30,0,0,7);
+    if(champSprite) X.ellipse(sx,y-44,40,56,0,0,7); else X.ellipse(sx,yy-26,king?34:champ?30:20,king?46:champ?42:30,0,0,7);
     X.fill(); X.globalAlpha=1;
   }
   // shadow
@@ -3958,7 +4039,11 @@ function drawHero(sx,h){
   // gold + elite trait markers
   X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
   X.fillText('💰'+h.gold, sx, figTop-18);
-  if(champ){
+  if(king){
+    X.font='24px Trebuchet MS'; X.fillText('👑', sx, figTop-30);          // big crown above head
+    X.font='bold 11px Trebuchet MS'; X.fillStyle='#ffd34d';
+    X.fillText('THE HIGH KING', sx, figTop-46);                            // name banner
+  } else if(champ){
     X.font='18px Trebuchet MS'; X.fillText('👑', sx, figTop-32);          // crown above head
     X.font='bold 10px Trebuchet MS'; X.fillStyle=h.champCol||'#ffd34d';
     X.fillText((h.champIc||'')+' '+h.heroName, sx, figTop-46);            // name banner
@@ -4075,7 +4160,9 @@ function renderTop(){
   if(!G||G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ topbar.innerHTML=`<div class="stat">🐉 <b>BOSS MONSTER</b></div>`; return; }
   if(!G.boss){ topbar.innerHTML=''; return; }
   const b=G.boss;
-  const modeLbl = G.mode==='campaign'
+  const modeLbl = (G.kingFight||G.kingDue)
+    ? `👑 THE KING'S SIEGE · ${G.totalSlain} slain`
+    : G.mode==='campaign'
     ? `⚔️ Level ${campLevel()}/${CAMP_LEVELS} · ${G.totalSlain} slain`
     : `Endless · ${G.survived} slain`;
   topbar.innerHTML=`
