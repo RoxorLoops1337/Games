@@ -3289,8 +3289,8 @@ function onEnterCell(h,cell){
     if(toll>0){ h.hp-=toll; floater(h.x, h.y-58, '☣ -'+toll, '#b06bff'); burst(h.x,h.y-22,'#9a5cff',5);
       if(h.hp<=0){ h.hp=0; heroDies(h); return; } }
   }
-  // 🗡️ a rogue slips in and disarms the room's traps for a few seconds
-  if(h.cls==='rogue' && cell.kind!=='boss' && cell.traps && cell.traps.length){
+  // 🗡️ a rogue has a 1-in-3 chance to slip in and disarm the room's traps briefly
+  if(h.cls==='rogue' && cell.kind!=='boss' && cell.traps && cell.traps.length && Math.random()<1/3){
     cell._disarmT=DISARM_DUR; floater(h.x, h.y-72, '🗡️ DISARMED', '#5fd17a');
   }
   }
@@ -3353,9 +3353,8 @@ function applyTrapStatus(h, d, r){
   if(d.acid){ h.acid=(h.acid||0)+d.acid; h.acidT=4; }
   if(d.mark && !(h.mark>0)){ h.mark=1; h.markT=4; floater(h.x,h.y-58,'🎯 MARKED','#ff5470'); }
 }
-const DISARM_DUR=4;   // 🗡️ a rogue disarms a room's traps for this many seconds
+const DISARM_DUR=2;   // 🗡️ a rogue who disarms a room shuts its traps off for this many seconds
 function trapTick(h,cell,dt){
-  if(h.cls==='rogue') cell._disarmT=DISARM_DUR;   // a rogue keeps the room's traps disabled (and a few s after)
   if(cell._disarmT>0) return;                      // traps are disarmed — they don't fire
   const r=cell.room; const syn=cell.syn||1; const doc=bossDoc(); const amp=ampAt(cell.index);
   for(const tr of cell.traps){
