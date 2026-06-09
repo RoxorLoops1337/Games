@@ -826,7 +826,8 @@ function buildTown(id){
 const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
   const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), m=quarryMul();
-  return { wood:Math.floor(slain*0.12*m), stone:Math.floor(slain*0.06*m), shards:Math.floor((slain/4+lvl)*m) };
+  // Trimmed so the town is a long grind: wood/stone ~÷3, shards (the meta currency) ~÷10.
+  return { wood:Math.floor(slain*0.04*m), stone:Math.floor(slain*0.02*m), shards:Math.floor((slain/4+lvl)*m/10) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -835,7 +836,7 @@ function bankResources(frac, withGold){
   // the penalty applies only to the gathered haul; a gold-conversion bonus (clean
   // extraction/win) is added in full afterwards so the two are never coupled.
   let w=Math.floor(p.wood*frac), s=Math.floor(p.stone*frac), sh=Math.floor(p.shards*frac);
-  if(withGold){ const g=Math.max(0,G.gold||0); w+=Math.floor(g/30); s+=Math.floor(g/60); }
+  if(withGold){ const g=Math.max(0,G.gold||0); w+=Math.floor(g/90); s+=Math.floor(g/180); }
   TOWN.res.wood+=w; TOWN.res.stone+=s; TOWN.res.shards+=sh;
   saveTown();
   G.townGain={wood:w,stone:s,shards:sh};
@@ -2809,7 +2810,8 @@ function buildPostmortem(){
 // Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
 function awardRunes(){
   // Edicts multiply the runes you bank for the whole run.
-  const total = Math.floor((Math.floor(G.totalSlain/4) + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul());
+  // Rune income cut ~10× so maxing the tree is a long grind (was ~100/win → all pages in 2 wins).
+  const total = Math.floor((G.totalSlain/4 + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul() / 10);
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
