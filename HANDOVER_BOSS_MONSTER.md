@@ -50,6 +50,10 @@ fi
 After any `-X ours` merge, **re-grep for the feature you just added** to make sure
 it survived, and rebuild.
 
+Also: because we **squash-merge**, binary files added on a branch show up as
+**add/add conflicts (`AA`)** on the next merge of main — `-X ours` can't
+auto-resolve those. Fix with `git checkout --ours -- <paths>` then commit.
+
 ### GitHub specifics
 - Use the `mcp__github__*` tools (no `gh` CLI). Scope is `roxorloops1337/games`.
 - The token can expire mid-session ("requires re-authorization"). If so, commit +
@@ -147,7 +151,19 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
   check not-full/not-shop/different-type. A room holds 2 parts.
 - **Two fused monsters are TWO separate guards** (`cell.mon` + `cell.mon2`), each
   with its own HP/atk and the synergy multiplier applied individually; the 2nd
-  steps up when the 1st falls. Synergy for monster+monster is "Pack" ×1.0.
+  steps up when the 1st falls. Unnamed monster+monster is "Pack" ×1.0, but
+  **named monster pairs have identities** (`SYNERGY_PAIRS` entries with `fx` +
+  `desc`, hooks applied in `buildCells`): Grave Horde / Spawning Vats
+  (`feedBoth` — both guards feed +3%/kill), Gatehouse (`tauntBoth` — party-wide
+  strikes), Sludge Colossus (`splitBoth` — both reform at 60%), Bone Colossus
+  (plain ×1.25). Listed in the Codex's "Named Fusions" section (auto-generated
+  from `SYNERGY_PAIRS`). Tests: `tests/boss_monster_fusion.test.mjs`.
+- **Demolish**: the room inspect bubble offers 🗑 Demolish in build phase
+  (`askDeleteRoom` → in-bubble confirm → `doDeleteRoom`; no refund).
+- **Inspect bubble**: anchored near the click/hover x (`lastPtrCX`), clamped to
+  the stage. A tapped bubble is **pinned** (`inspectPinned`) — hover no longer
+  overwrites/hides it; hover-empty hides on a 280ms grace (`hideInspectSoon`)
+  so the mouse can reach the bubble's buttons.
 - **Veteran ranks** (kills make a room stronger): `VET_KILLS=6`/rank, `VET_MAX=6`,
   `VET_DMG=0.09`/rank, `VET_BITE=0.006` (% hero max-HP/hit — the snowball driver,
   kept low on purpose).
@@ -193,10 +209,15 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
   Pointer capture is deferred until a real drag so taps reach nodes (iOS fix).
   The runebook is `position:absolute;inset:0` (iOS flex %-height bug fix).
 
-### Save slots — `SAVE_SLOTS=3`
+### Save slots — `SAVE_SLOTS=3` — and the menu hierarchy
 - Independent profiles. Keys: `bossmonster_runes_<n>` / `bossmonster_town_<n>`,
   active slot in `bm_slot`. Legacy un-slotted saves migrate into slot 1.
-  `switchSlot/resetSlot/slotSummary`. Menu screen: `openSlots()`.
+  `switchSlot/resetSlot/slotSummary`.
+- **Menu is slot-first**: boot → `openTitle()` (branding + pitch + the three
+  slot cards; pick one via `pickSlot`) → `gotoMenu()` = the **profile home**
+  (Campaign/Endless/Tutorial row, Runes/Town row, small links for Codex /
+  Unlocks / Help / Switch slot). All Back buttons land on `gotoMenu()`;
+  `openSlots()` is now an alias for `openTitle()`.
 
 ### Meta-reward economy (recently cut hard — owner found it too fast)
 - Rune points & shards both scaled `slain/4+level`; **both ÷10** now
