@@ -577,11 +577,11 @@ const ABIL = {
   mend:   {name:'Mend',    ic:'💚', cost:46, cd:10, desc:'Heal the boss (costly).',
            run:()=>healBoss(30+G.boss.lvl*5)},
   // ---- boss-exclusive signature abilities (define each boss's playstyle) ----
-  quake:  {name:'Quake',   ic:'🌋', cost:34, cd:9,  desc:'Stuns & damages EVERY hero in the dungeon.', sig:true,
+  quake:  {name:'Quake',   ic:'🌋', cost:34, cd:9,  desc:'Stuns & damages EVERY hero in the dungeon.', sig:true, aoe:true,
            run:h=>{ for(const o of (G.heroes||[])){ if(o.state==='dead') continue; o.freeze=Math.max(o.freeze||0,1.2);
              dealToHero(o, abilDmg(15+G.boss.lvl*3), 'QUAKE', false, 'phys'); }
              floater(bossX(),FLOOR-92,'🌋 QUAKE','#caa15e'); shake(9); }},
-  hellfire:{name:'Hellfire',ic:'🔥', cost:38, cd:8,  desc:'Rains fire on ALL heroes — burns & ignites oil.', sig:true,
+  hellfire:{name:'Hellfire',ic:'🔥', cost:38, cd:8,  desc:'Rains fire on ALL heroes — burns & ignites oil.', sig:true, aoe:true,
            run:h=>{ for(const o of (G.heroes||[])){ if(o.state==='dead') continue;
              dealToHero(o, abilDmg(17+G.boss.lvl*3), 'BURN', false, 'fire'); if(o.state!=='dead'){ o.burn=(o.burn||0)+5; o.burnT=4; } }
              floater(bossX(),FLOOR-92,'🔥 HELLFIRE','#ff7a2e'); shake(8); }},
@@ -2374,6 +2374,14 @@ function healBoss(amt){
     burst(bossX(), FLOOR-50, '#7bdc6b', 8); }
 }
 function bossX(){ return cellX(G.slots)+ROOM_W*0.6; }
+// 🔮 Boss ability bolts — a glowing projectile that flies from the throne, ACROSS
+// the rooms, to the target, so every ability visibly originates from the boss.
+let bossBolts=[];
+function bossBolt(tx,ty,col,ic){
+  if(!G||!G.boss) return;
+  bossBolts.push({ x0:bossX(), y0:(typeof bossCastY==='function'?bossCastY():FLOOR-110),
+    x1:tx, y1:(ty!=null?ty-28:FLOOR-40), t:0, dur:0.30, col:col||G.boss.col||'#ff5470', ic:ic||'' });
+}
 
 function castAbility(slot){
   if(G.phase!=='run') return;
@@ -2386,7 +2394,11 @@ function castAbility(slot){
   if(G.boss.mana<cost){ showHint('Not enough mana.'); return; }
   G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
   def.run(target);
-  burst(bossX(), FLOOR-40, G.boss.col, 10);
+  // bolt(s) from the boss to the target(s) so you see where the power comes from
+  const living=(G.heroes||[]).filter(h=>h&&h.state!=='dead');
+  if(def.aoe && living.length) living.forEach(h=>bossBolt(h.x, h.y, G.boss.col, def.ic));
+  else bossBolt(target.x, target.y, G.boss.col, def.ic);
+  burst(bossX(), bossCastY(), G.boss.col, 12);
   shake(5); sfx('cast');
   render();
 }
@@ -2411,6 +2423,7 @@ function smite(target){
   const t=(target && target.state==='boss' && target.hp>0) ? target : at.reduce((a,c)=>c.x>a.x?c:a, at[0]);
   const dmg=Math.max(1, Math.round(b.atk*SMITE_MUL*(1+(RB.abilDmg||0))));
   b.smiteCd=SMITE_CD*(1-(RB.abilCd||0));
+  bossBolt(t.x, t.y, '#ffd34d', '⚔️');
   floater(t.x, t.y-72, '⚔️ SMITE', '#ffd34d'); burst(t.x, t.y-24, '#ffd34d', 22);
   shake(8); hitStop=0.05; sfx('crit');
   dealToHero(t, dmg, 'SMITE', false, 'phys', true);   // aimed → ignores dodge
@@ -3211,6 +3224,7 @@ function update(dt){
   floats=floats.filter(f=>f.life>0);
   particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt; });
   particles=particles.filter(p=>p.life>0);
+  if(bossBolts.length){ bossBolts.forEach(b=>{ b.t+=dt; }); bossBolts=bossBolts.filter(b=>b.t<b.dur); }
   if(shakeT>0) shakeT=Math.max(0,shakeT-dt);   // screen-shake decay
   if(flashT>0) flashT=Math.max(0,flashT-dt);   // screen-flash decay
   if(slowT>0) slowT=Math.max(0,slowT-dt);      // slow-mo decay (real time)
@@ -3627,6 +3641,24 @@ function draw(){
   particles.forEach(p=>{ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
     const sx=tx(p.x); X.fillRect(sx, p.y, p.sz, p.sz); });
   X.globalAlpha=1;
+
+  // 🔮 boss ability bolts — glowing projectiles streaking from the throne across
+  // the corridor to their targets, with a comet trail so the source reads clearly
+  if(bossBolts.length){
+    X.lineCap='round';
+    for(const b of bossBolts){
+      const p=clamp(b.t/b.dur,0,1), e=p*p*(3-2*p);          // smoothstep ease
+      const x=b.x0+(b.x1-b.x0)*e, y=b.y0+(b.y1-b.y0)*e, sx=tx(x);
+      const te=Math.max(0,e-0.22), txp=tx(b.x0+(b.x1-b.x0)*te), typ=b.y0+(b.y1-b.y0)*te;
+      X.strokeStyle=b.col; X.globalAlpha=0.55; X.lineWidth=6;
+      X.beginPath(); X.moveTo(txp,typ); X.lineTo(sx,y); X.stroke();
+      X.fillStyle=b.col; X.globalAlpha=0.9; X.beginPath(); X.arc(sx,y,7,0,Math.PI*2); X.fill();
+      X.globalAlpha=0.3; X.beginPath(); X.arc(sx,y,14,0,Math.PI*2); X.fill();
+      if(b.ic){ X.globalAlpha=clamp(1-p*0.3,0,1); X.font='18px Trebuchet MS'; X.textAlign='center';
+        X.fillText(b.ic, sx, y+6); X.textAlign='left'; }
+    }
+    X.globalAlpha=1;
+  }
   floats.forEach(f=>{ X.globalAlpha=clamp(f.life,0,1); X.textAlign='center';
     if(f.big){ const sz=Math.round(22+(1-f.life)*8);   // big callouts grow as they rise
       X.font='bold '+sz+'px Trebuchet MS';
@@ -4230,40 +4262,44 @@ function drawDemonAura(cx, y, dw, dh, front){
     X.globalAlpha=1;
   }
 }
+// The boss looms LARGER than the rooms (rooms are 150 tall; the boss tops ~185)
+// so it reads as the towering threat at the end of the hall.
+const BOSS_H=185;
+function bossCastY(){ return FLOOR-BOSS_H*0.6; }   // where its abilities launch from (chest height)
 function drawBoss(cx){
   const y=FLOOR; const b=G.boss; const c=b.col;
-  // throne
-  px(cx-30,y-70,60,70,'#3a2440'); px(cx-34,y-86,68,20,'#5a2a4a');
-  px(cx-30,y-86,8,86,'#6a3a5a'); px(cx+22,y-86,8,86,'#6a3a5a');
+  // throne (scaled up to match the bigger boss)
+  px(cx-42,y-98,84,98,'#3a2440'); px(cx-48,y-120,96,28,'#5a2a4a');
+  px(cx-42,y-120,11,120,'#6a3a5a'); px(cx+31,y-120,11,120,'#6a3a5a');
   let img=BOSS_IMG[b.key];
   const animated = (b.key==='demon' && demonIdleReady());
   if(animated) img=demonIdleFrame();
   if(img && img._ok){
-    // real sprite: bottom-anchored on the throne, aspect preserved
-    const dh=116, dw=Math.round(dh*(img.width/img.height));
+    // real sprite: bottom-anchored on the throne, aspect preserved, towering
+    const dh=BOSS_H, dw=Math.round(dh*(img.width/img.height));
     if(b.key==='demon') drawDemonAura(cx, y, dw, dh, false);   // purple back-glow + ground pool (behind)
     const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=animated;   // smooth the big detailed demon frames, nearest for the small pixel bosses
     X.drawImage(img, Math.round(cx-dw/2), Math.round(y-dh+2), dw, dh);
     X.imageSmoothingEnabled=sm;
     if(b.key==='demon') drawDemonAura(cx, y, dw, dh, true);    // rising magic motes (in front)
-    bar(cx-40, y-dh-8, 80, 8, b.hp/b.maxHp, '#ff4d6d');
-    X.fillStyle='#fff'; X.font='10px Trebuchet MS'; X.textAlign='center';
-    X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-dh-10); X.textAlign='left';
+    bar(cx-52, y-dh-10, 104, 9, b.hp/b.maxHp, '#ff4d6d');
+    X.fillStyle='#fff'; X.font='11px Trebuchet MS'; X.textAlign='center';
+    X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-dh-13); X.textAlign='left';
     return;
   }
-  // ---- procedural fallback ----
-  px(cx-22,y-58,44,50,c);
-  px(cx-18,y-78,36,24,c);
-  px(cx-12,y-72,7,7,'#ffec3a'); px(cx+5,y-72,7,7,'#ffec3a');
-  px(cx-10,y-70,3,3,'#000'); px(cx+7,y-70,3,3,'#000');
-  if(b.key==='dragon'){ px(cx-26,y-86,8,10,c); px(cx+18,y-86,8,10,c);
-    px(cx-30,y-40,10,18,c); px(cx+20,y-40,10,18,c); }
-  if(b.key==='lich'){ px(cx-20,y-90,40,6,'#cde'); px(cx-6,y-94,12,6,'#9adfff'); }
-  if(b.key==='demon'){ px(cx-22,y-90,8,12,'#6a1a2a'); px(cx+14,y-90,8,12,'#6a1a2a'); }
-  X.font='26px Trebuchet MS'; X.textAlign='center'; X.fillText(b.ic, cx, y-30); X.textAlign='left';
-  bar(cx-40, y-104, 80, 8, b.hp/b.maxHp, '#ff4d6d');
-  X.fillStyle='#fff'; X.font='10px Trebuchet MS'; X.textAlign='center';
-  X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-106); X.textAlign='left';
+  // ---- procedural fallback (scaled ~1.55× to tower over the rooms) ----
+  px(cx-34,y-90,68,78,c);
+  px(cx-28,y-120,56,38,c);
+  px(cx-19,y-111,11,11,'#ffec3a'); px(cx+8,y-111,11,11,'#ffec3a');
+  px(cx-16,y-108,5,5,'#000'); px(cx+11,y-108,5,5,'#000');
+  if(b.key==='dragon'){ px(cx-40,y-134,12,16,c); px(cx+28,y-134,12,16,c);
+    px(cx-47,y-62,16,28,c); px(cx+31,y-62,16,28,c); }
+  if(b.key==='lich'){ px(cx-31,y-139,62,9,'#cde'); px(cx-9,y-145,18,9,'#9adfff'); }
+  if(b.key==='demon'){ px(cx-34,y-139,12,18,'#6a1a2a'); px(cx+22,y-139,12,18,'#6a1a2a'); }
+  X.font='40px Trebuchet MS'; X.textAlign='center'; X.fillText(b.ic, cx, y-46); X.textAlign='left';
+  bar(cx-52, y-BOSS_H+10, 104, 9, b.hp/b.maxHp, '#ff4d6d');
+  X.fillStyle='#fff'; X.font='11px Trebuchet MS'; X.textAlign='center';
+  X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-BOSS_H+7); X.textAlign='left';
 }
 
 function drawIdleScene(){
