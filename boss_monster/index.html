@@ -3744,14 +3744,18 @@ function bossFightTick(h,dt,isFront,frozen){
 }
 
 /* ============================== RENDER =================================== */
+let _bgGrad=null,_bgGradH=0, _thrGrad=null,_thrKey='', _demGrad=null,_demKey='';
 function draw(){
   const sh = shakeT>0 ? shakeMag*(shakeT/0.22) : 0;
   const ox = sh? (Math.random()*2-1)*sh : 0, oy = sh? (Math.random()*2-1)*sh : 0;
   // background fills the WHOLE canvas at any zoom (device space)
   X.setTransform(1,0,0,1,0,0); X.imageSmoothingEnabled=false;
-  const g=X.createLinearGradient(0,0,0,CV.height);
-  g.addColorStop(0,'#1a1230'); g.addColorStop(1,'#0c0916');
-  X.fillStyle=g; X.fillRect(0,0,CV.width,CV.height);
+  if(!_bgGrad || _bgGradH!==CV.height){          // gradients are costly to build on Safari — cache until resize
+    _bgGrad=X.createLinearGradient(0,0,0,CV.height);
+    _bgGrad.addColorStop(0,'#1a1230'); _bgGrad.addColorStop(1,'#0c0916');
+    _bgGradH=CV.height;
+  }
+  X.fillStyle=_bgGrad; X.fillRect(0,0,CV.width,CV.height);
 
   if(!G) return;
   if(G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ X.setTransform(baseK,0,0,baseK,0,0); drawIdleScene(); return; }
@@ -3928,10 +3932,14 @@ function drawRoomBg(x0,w,isBoss,i){
   X.fillStyle=isBoss?'#5a2a4a':'#251b44';
   X.fillRect(x0, FLOOR-150, w, 5);
   if(isBoss){
-    // throne glow
-    const gg=X.createRadialGradient(x0+w*0.6,FLOOR-70,8,x0+w*0.6,FLOOR-70,90);
-    gg.addColorStop(0,'rgba(180,60,140,.35)'); gg.addColorStop(1,'rgba(0,0,0,0)');
-    X.fillStyle=gg; X.fillRect(x0,FLOOR-150,w,150);
+    // throne glow (cached — only moves when the corridor gains a slot)
+    const tk=x0+'_'+w;
+    if(!_thrGrad || _thrKey!==tk){
+      _thrGrad=X.createRadialGradient(x0+w*0.6,FLOOR-70,8,x0+w*0.6,FLOOR-70,90);
+      _thrGrad.addColorStop(0,'rgba(180,60,140,.35)'); _thrGrad.addColorStop(1,'rgba(0,0,0,0)');
+      _thrKey=tk;
+    }
+    X.fillStyle=_thrGrad; X.fillRect(x0,FLOOR-150,w,150);
   }
 }
 
@@ -4384,11 +4392,19 @@ function drawDemonAura(cx, y, dw, dh, front){
   const now=performance.now(); const pulse=0.5+0.5*Math.sin(now/640);
   if(!front){
     const gx=cx, gy=y-dh*0.55, gr=dw*0.72;
-    const g=X.createRadialGradient(gx,gy,3, gx,gy,gr);
-    g.addColorStop(0, 'rgba(190,90,240,'+(0.34+0.14*pulse).toFixed(3)+')');
-    g.addColorStop(0.45,'rgba(150,55,210,'+(0.16+0.08*pulse).toFixed(3)+')');
-    g.addColorStop(1, 'rgba(150,55,210,0)');
-    X.fillStyle=g; X.beginPath(); X.arc(gx,gy,gr,0,7); X.fill();
+    // cached gradient at peak alpha; the pulse modulates via globalAlpha instead
+    // of rebuilding the gradient (with its toFixed string churn) every frame
+    const dk=Math.round(gx)+'_'+Math.round(gy)+'_'+Math.round(gr);
+    if(!_demGrad || _demKey!==dk){
+      _demGrad=X.createRadialGradient(gx,gy,3, gx,gy,gr);
+      _demGrad.addColorStop(0,'rgba(190,90,240,0.48)');
+      _demGrad.addColorStop(0.45,'rgba(150,55,210,0.226)');
+      _demGrad.addColorStop(1,'rgba(150,55,210,0)');
+      _demKey=dk;
+    }
+    X.globalAlpha=0.708+0.292*pulse;
+    X.fillStyle=_demGrad; X.beginPath(); X.arc(gx,gy,gr,0,7); X.fill();
+    X.globalAlpha=1;
     // ground light pool under the throne
     X.globalAlpha=0.16+0.10*pulse; X.fillStyle='#b06bff';
     X.beginPath(); X.ellipse(cx,y,dw*0.42,9,0,0,7); X.fill(); X.globalAlpha=1;
@@ -4475,15 +4491,42 @@ function renderTop(){
     : `Endless · ${G.survived} slain`;
   topbar.innerHTML=`
     <div class="stat">${b.ic}<span class="small">${b.name.split(' ')[0]}</span></div>
-    <div class="stat">❤️<div class="bar"><i style="width:${b.hp/b.maxHp*100}%;background:linear-gradient(90deg,#ff4d6d,#ff8a8a)"></i>
-      <span>${Math.ceil(b.hp)}/${b.maxHp}</span></div></div>
-    <div class="stat">🔷<div class="bar"><i style="width:${b.mana/b.maxMana*100}%;background:linear-gradient(90deg,#2a7adf,#4dc3ff)"></i>
-      <span>${Math.floor(b.mana)}/${b.maxMana}</span></div></div>
-    <div class="stat gold">💰<b>${G.gold}</b></div>
-    <div class="stat" style="color:#b985ff">☠<b>${G.dread}</b></div>
-    ${G.bounty?`<div class="stat small" title="threat dial">${G.bounty>0?'🔥':'🌫'} ${G.bounty>0?'+':''}${G.bounty}</div>`:''}
-    ${G.combo>=3?`<div class="stat small" title="kill streak" style="color:#ff9a3a">🔥x${G.combo}</div>`:''}
-    <div class="stat small">${modeLbl}</div>`;
+    <div class="stat">❤️<div class="bar"><i id="tbhp" style="width:${b.hp/b.maxHp*100}%;background:linear-gradient(90deg,#ff4d6d,#ff8a8a)"></i>
+      <span id="tbhpT">${Math.ceil(b.hp)}/${b.maxHp}</span></div></div>
+    <div class="stat">🔷<div class="bar"><i id="tbmana" style="width:${b.mana/b.maxMana*100}%;background:linear-gradient(90deg,#2a7adf,#4dc3ff)"></i>
+      <span id="tbmanaT">${Math.floor(b.mana)}/${b.maxMana}</span></div></div>
+    <div class="stat gold">💰<b id="tbgold">${G.gold}</b></div>
+    <div class="stat" style="color:#b985ff">☠<b id="tbdread">${G.dread}</b></div>
+    <div class="stat small" id="tbbounty" title="threat dial" style="${G.bounty?'':'display:none'}">${G.bounty?(G.bounty>0?'🔥 +':'🌫 ')+G.bounty:''}</div>
+    <div class="stat small" id="tbcombo" title="kill streak" style="color:#ff9a3a;${G.combo>=3?'':'display:none'}">🔥x${G.combo}</div>
+    <div class="stat small" id="tbmode">${modeLbl}</div>`;
+}
+// Per-frame top-bar refresh WITHOUT rebuilding the DOM (same reasoning as
+// updateRunPanel: innerHTML every frame forces parse+layout and eats taps on
+// iPad). Patches values into the elements renderTop() built; falls back to a
+// full renderTop() if the structure isn't there yet.
+function updateTop(){
+  if(!G||G.phase!=='run'||!G.boss) return;
+  const hp=document.getElementById('tbhp');
+  if(!hp){ renderTop(); return; }
+  const b=G.boss, $=id=>document.getElementById(id);
+  const setTxt=(el,v)=>{ if(el&&el.textContent!==v) el.textContent=v; };
+  const setW=(el,v)=>{ if(el&&el.style.width!==v) el.style.width=v; };
+  setW(hp,(b.hp/b.maxHp*100)+'%');           setTxt($('tbhpT'), Math.ceil(b.hp)+'/'+b.maxHp);
+  setW($('tbmana'),(b.mana/b.maxMana*100)+'%'); setTxt($('tbmanaT'), Math.floor(b.mana)+'/'+b.maxMana);
+  setTxt($('tbgold'), ''+G.gold); setTxt($('tbdread'), ''+G.dread);
+  const bo=$('tbbounty'), boShow=!!G.bounty;
+  if(bo){ const d=boShow?'':'none'; if(bo.style.display!==d) bo.style.display=d;
+    if(boShow) setTxt(bo,(G.bounty>0?'🔥 +':'🌫 ')+G.bounty); }
+  const co=$('tbcombo'), coShow=G.combo>=3;
+  if(co){ const d=coShow?'':'none'; if(co.style.display!==d) co.style.display=d;
+    if(coShow) setTxt(co,'🔥x'+G.combo); }
+  const modeLbl=(G.kingFight||G.kingDue)
+    ? `👑 THE KING'S SIEGE · ${G.totalSlain} slain`
+    : G.mode==='campaign'
+    ? `⚔️ Level ${campLevel()}/${CAMP_LEVELS} · ${G.totalSlain} slain`
+    : `Endless · ${G.survived} slain`;
+  setTxt($('tbmode'), modeLbl);
 }
 
 function renderPanel(){
@@ -4937,7 +4980,7 @@ window.addEventListener('keydown', e=>{
 /* ================================ LOOP ================================== */
 function frame(ts){
   const dt=Math.min(0.05,(ts-last)/1000)||0; last=ts;
-  if(G && G.phase==='run'){ update(dt); renderTop(); }
+  if(G && G.phase==='run'){ update(dt); updateTop(); }
   else { update(dt); }
   draw();
   if(AC) updateMusicMood();   // music follows the game state

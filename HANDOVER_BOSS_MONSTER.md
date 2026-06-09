@@ -62,13 +62,15 @@ it survived, and rebuild.
 
 ## 3. Testing & balance harnesses (all in `/tmp`, not committed)
 
-**Headless unit tests** (`/tmp/h*.mjs`): read the `<script>` out of the HTML,
-stub `document`/canvas/`Image`/`AudioContext` via Proxies, do
-`code.replace(/\bconst\b/g,'var').replace(/\blet\b/g,'var')`, then
-`eval('(function(){'+code+'\nglobalThis.__api={...}})()')` to expose internals.
-The canvas ctx proxy **must** return `{addColorStop:noop}` for
-`createLinearGradient/Radial` and `{width:10}` for `measureText`, or `draw()`
-throws. Copy an existing `h*.mjs` header verbatim.
+**Headless unit tests now live in the repo** — `tests/boss_monster_lib.mjs`
+exports `loadGame(exposeStr)` (full stub set: document/canvas/Image/Audio
+Proxies, const/let→var rewrite, eval with an `__api` expose) and `harness()`
+(tiny pass/fail counter). Write new suites as `tests/boss_monster_<x>.test.mjs`
+importing the lib — **don't recreate `/tmp/h*.mjs` throwaways; commit suites so
+they survive container recycling.** Run: `npm run test:boss` (all),
+`test:relics`, `test:champion`. The canvas ctx stub **must** return
+`{addColorStop:noop}` for `createLinearGradient/Radial` and `{width:10}` for
+`measureText`, or `draw()` throws (the lib handles this).
 
 Current suites worth keeping green: `h91` rogue-disarm, `h92` campaign, `h93`
 merchant, `h95` King, `h96` slot-cap/Barracks/WarCamp, `h98` wave preview==spawn,
