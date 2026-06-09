@@ -1840,9 +1840,13 @@ function gotoBuild(first){
 function corridorWidth(){ return (G.slots+1)*ROOM_W; }
 function cellX(i){ return i*ROOM_W; }        // left edge of cell i (0..slots-1 rooms, slots=boss)
 
-// Slots get steeply more expensive the longer your dungeon already is, so
-// stretching the corridor is a real escalating investment (≈68,116,197,335,…).
-function slotCost(){ return Math.max(1, Math.round(40*Math.pow(1.7,G.slots)*(1-(RB.slotCost||0)))); }
+// The 2nd room stays affordable, but every slot AFTER #2 explodes exponentially
+// (~50, 120, 276, 635, 1461, …) — a 4th/5th room is a major commitment.
+function slotCost(){
+  const s=G.slots;                                   // current count: this buys the (s+1)th room
+  const base = s<=1 ? 50 : 120*Math.pow(2.3, s-2);
+  return Math.max(1, Math.round(base*(1-(RB.slotCost||0))));
+}
 // First runs are capped at 5 corridor rooms. The ceiling is raised — slowly and
 // preciously — by meta-progression (a deep rune, the War Foundry building) and by
 // run-found relics, so a wider dungeon is an earned reward.
