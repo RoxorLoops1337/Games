@@ -2193,6 +2193,7 @@ function buildHeroFromSpec(spec){
     atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
     freeze:0, shopT:0, walkAnim:0,
     shieldT:0, specialT:5,   // champion special timers
+    spellT:ri(2,6), rallyT:0, blessT:0, evadeT:0, surgeT:0,   // class-spell cooldown + active buff timers
   };
   let startBurn=spec.debuff.burn + (G.fx.well>0 ? 5+Math.floor(n*0.5) : 0);
   if(startBurn>0){ h.burn=startBurn; h.burnT=6; }
@@ -2288,7 +2289,8 @@ function heroDmg(h, raw, pierce){
 function dealToHero(h, raw, label, pierce, elem, noDodge){
   if(!h||h.state==='dead') return;
   // rogue dodge (an aimed Smite can't be dodged)
-  if(!noDodge && h.dodge && Math.random()<h.dodge){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
+  const dodgeCh=(h.dodge||0)+(h.evadeT>0?0.25:0);   // 🗡️ Evasion spell adds dodge
+  if(!noDodge && dodgeCh>0 && Math.random()<dodgeCh){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
   let dmg=heroDmg(h,raw,pierce);
   const crit = Math.random()<0.12;              // your dungeon can land critical hits
   if(crit) dmg*=2;
@@ -3306,8 +3308,9 @@ function simStep(h,dt){
   if(h.regen && h.state!=='dead' && h.hp<h.maxHp){
     h.hp=Math.min(h.maxHp, h.hp + h.maxHp*0.025*dt);
   }
-  // champion mini-boss specials
+  // champion mini-boss specials; regular heroes cast their class spell
   if(h.champion) championTick(h,dt);
+  else heroSpellTick(h,dt);
   // elemental status timers
   if(h.oil>0) h.oil-=dt;
   if(h.chill>0) h.chill-=dt;
@@ -3420,6 +3423,38 @@ function championTick(h,dt){
     floater(h.x, h.y-72, '💀 SIPHON +'+heal, '#b163ff'); healHero(h,0); sfx('cast');
   }
 }
+// ---- class spells: every regular hero auto-casts a signature ability on its
+// own cooldown (champions use championTick instead). Buffs fold into damage via
+// heroAtkMul / the dodge check. Clerics heal AND bless the whole party.
+function heroAtkMul(h){ return (h.rallyT>0?1.30:1) * (h.blessT>0?1.20:1) * (h.surgeT>0?1.60:1); }
+function heroSpellTick(h,dt){
+  if(h.rallyT>0) h.rallyT-=dt;
+  if(h.blessT>0) h.blessT-=dt;
+  if(h.evadeT>0) h.evadeT-=dt;
+  if(h.surgeT>0) h.surgeT-=dt;
+  // only cast once they're in the dungeon and in/near a fight (not still strolling in)
+  if(h.x<8 || h.freeze>0) return;
+  h.spellT-=dt;
+  if(h.spellT>0) return;
+  if(h.cls==='cleric'){
+    // heal the most-wounded living ally (incl. self) + bless the whole party's attacks
+    const allies=(G.heroes||[]).filter(o=>o&&o.state!=='dead');
+    let low=null; for(const o of allies){ if(o.hp<o.maxHp && (!low || o.hp/o.maxHp<low.hp/low.maxHp)) low=o; }
+    if(low){ healHero(low, Math.round(low.maxHp*0.12)); }
+    for(const o of allies) o.blessT=4;
+    floater(h.x, h.y-78, '🙏 BLESS', '#ffe9a8'); sfx('cast');
+    h.spellT=ri(5,7);
+  } else if(h.cls==='warrior'){
+    h.rallyT=4; floater(h.x, h.y-72, '⚔️ WAR CRY', '#ff9a3a'); sfx('cast');
+    h.spellT=ri(6,8);
+  } else if(h.cls==='mage'){
+    h.surgeT=2.6; floater(h.x, h.y-72, '✨ ARCANE SURGE', '#9ad'); sfx('cast');
+    h.spellT=ri(5,7);
+  } else if(h.cls==='rogue'){
+    h.evadeT=3; floater(h.x, h.y-72, '🗡️ EVASION', '#9adfff'); sfx('cast');
+    h.spellT=ri(6,9);
+  } else { h.spellT=6; }
+}
 // The gold thief reaches the throne and escapes with your gold (no loot, no kill).
 function thiefSteal(h){
   if(h.state==='dead') return;
@@ -3528,7 +3563,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
     h.atkT-=dt;
     if(h.atkT<=0){
       h.atkT=0.7*h.atkSpeed;
-      const dmg=Math.max(1,Math.round(h.atk));
+      const dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)));
       mon.hp-=dmg;
       if(h.vampiric) healHero(h, dmg*0.4);
       floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
@@ -3611,7 +3646,7 @@ function bossFightTick(h,dt,isFront,frozen){
     if(h.atkT<=0){
       h.atkT=0.8*h.atkSpeed;
       const dr=Math.min(0.85,(RB.bossDR||0)+(b.passiveDR||0));
-      const dmg=Math.max(1,Math.round(h.atk*(1-dr)));
+      const dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)*(1-dr)));
       b.hp-=dmg;
       if(G.combo>0) G.combo=0;                 // defense breached — streak broken
       if(h.vampiric) healHero(h, dmg*0.4);
