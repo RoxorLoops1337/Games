@@ -1,26 +1,18 @@
 # Champion knight — ATTACK animation
 
-The Super Knight's **attack** animation (he's the powered-up hero mini-boss).
-This is the swing he plays when he's hammering a monster guard or the boss's
-throne. The walk animation lives one folder up (`sprites/champion/`).
+The Super Knight's **attack** swing — **wired into the game** via `drawChampion`
+in `boss_monster/index.html`.
 
-Upload via GitHub's **Add file → Upload files** (not as a chat image) so
-transparency is preserved. Export **without** a baked shadow — the engine draws
-its own. Heroes face/march rightward, so the **right-facing** swing is what gets
-used.
+- Frames: `champion_attack_0.png … champion_attack_13.png` (14 frames, one PNG
+  per frame, right-facing, transparent background).
+- Cycle: guard stance → raise → strike → follow-through. The game maps the
+  hero's attack timer (`h.atkT`) onto the 14 frames so one full swing spans one
+  attack interval and the blade lands as the damage is dealt.
+- Scale: the attack art has less padding than the walk frames (content height
+  790/926 vs 1042/1082), so it draws at `CHAMP_ATK_DH=99` against the walk's
+  `CHAMP_DH=88` to keep the knight the same on-screen size. All frames share
+  the same foot baseline (content bottom y=917 of 926).
 
-Drop the frames in **this** folder. Any filenames are fine — I'll normalise them
-(e.g. to `champion_attack_0.png … champion_attack_N.png`). To save me guessing,
-note:
-- frame size (e.g. 64×64 or 192×192) and grid (cols × rows), or one PNG per frame
-- which rows are which facing (up / left / down / right) if it's a multi-row sheet
-- attack frame count + FPS
-- where in the cycle the "hit" lands (which frame is the contact/impact frame)
-
-Keep the **same footing** as the walk frames (feet at the same baseline across
-every frame) and the **same overall scale** so he doesn't jump in size or jitter
-when he switches from walking to swinging. He should read clearly BIGGER than a
-normal hero.
-
-Once these are in, I'll wire the attack animation into `drawChampion` so the
-Super Knight swings instead of sliding his walk pose while fighting.
+If you replace these frames, keep the same footing/scale conventions and update
+`CHAMP_ATK_DH` if the padding ratio changes. The walk animation lives one
+folder up (`sprites/champion/`).

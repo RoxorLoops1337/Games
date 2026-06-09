@@ -1389,7 +1389,7 @@ function difficulty(){
   // be brutal — only the smartest 5-room dungeon squeaks past ~20% of the time, and
   // meta-progression is what makes victory reliable. Two ramp terms make the back
   // half + King the real filter while keeping the opening fair.
-  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.034) * threat; }   // L1=1.0 → L50≈6.2× (first runs are brutal — meta is the path to winning)
+  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.034) * threat; }   // L1=1.0 → L50≈5.3× (first runs are brutal — meta is the path to winning)
   return (1 + G.totalSlain*0.05) * threat;   // Endless ramps via totalSlain only
 }
 
@@ -4254,23 +4254,37 @@ function drawMonster(cx,type,col){
 // ---- the empowered hero (Champion): a big "Super Knight" walk sprite -------
 // 12 frames; frame 0 is the neutral stance, 1..11 are the walk cycle.
 const CHAMP_WALK=[]; const CHAMP_DH=88;
+// 14-frame attack swing (guard → raise → strike → follow-through). The attack art
+// has less padding than the walk art, so it draws taller to keep the knight the
+// same on-screen size (content heights matched; feet share the same baseline).
+const CHAMP_ATK=[]; const CHAMP_ATK_DH=99;
 if(typeof Image!=='undefined'){
   for(let i=0;i<12;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/champion/champion_'+i+'.png'; CHAMP_WALK.push(im); }
+  for(let i=0;i<14;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/champion/attack/champion_attack_'+i+'.png'; CHAMP_ATK.push(im); }
 }
 function champReady(){ return CHAMP_WALK.length===12 && CHAMP_WALK.every(im=>im&&im._ok); }
+function champAtkReady(){ return CHAMP_ATK.length===14 && CHAMP_ATK.every(im=>im&&im._ok); }
 function drawChampion(sx, footY, h){
   const moving = h.state==='walking' && !(h.freeze>0) && (h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02);
+  const fighting = (h.state==='fighting'||h.state==='boss') && !(h.freeze>0);
   const now=performance.now();
-  let frame=0;
-  if(moving){
+  let im, dh=CHAMP_DH;
+  if(fighting && champAtkReady()){
+    // sync the swing to the attack timer so the blade lands when the damage does:
+    // h.atkT counts down from the attack interval to 0 (the hit) each swing
+    const iv=(h.state==='boss'?0.8:0.7)*(h.atkSpeed||1);
+    const prog=Math.max(0, Math.min(0.999, 1-(h.atkT||0)/iv));
+    im=CHAMP_ATK[Math.floor(prog*14)]; dh=CHAMP_ATK_DH;
+    h._champClip='attack'; h._champLast=now;
+  } else if(moving){
     if(h._champClip!=='walk'){ h._champClip='walk'; h._champT=0; }
     const dt=Math.min(0.1,(now-(h._champLast||now))/1000); h._champLast=now;
     h._champT=(h._champT||0)+dt;
-    frame=1+Math.floor(h._champT*12)%11;          // walk cycle = frames 1..11 @12fps
-  } else { h._champClip='idle'; h._champLast=now; frame=0; }   // neutral stance
+    im=CHAMP_WALK[1+Math.floor(h._champT*12)%11];          // walk cycle = frames 1..11 @12fps
+  } else { h._champClip='idle'; h._champLast=now; im=CHAMP_WALK[0]; }   // neutral stance
   h._animPX=h.x;
-  const im=CHAMP_WALK[frame]; if(!im||!im._ok) return false;
-  const dh=CHAMP_DH, dw=Math.round(dh*(im.width/im.height));
+  if(!im||!im._ok) return false;
+  const dw=Math.round(dh*(im.width/im.height));
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=true;
   X.drawImage(im, Math.round(sx-dw/2), Math.round(footY-dh+2), dw, dh);
   X.imageSmoothingEnabled=sm;
