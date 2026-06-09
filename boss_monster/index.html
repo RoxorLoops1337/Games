@@ -288,7 +288,10 @@ const hintEl = document.getElementById('hint');
 const inspectEl = document.getElementById('inspect');
 const tutBar = document.getElementById('tutbar');
 const relicBar = document.getElementById('relicbar');
-let inspectHover = false;
+let inspectHover = false;        // shown by hover (auto-hides) vs pinned by a tap
+let inspectPinned = false;       // a tapped bubble stays until ✕ / tap elsewhere
+let lastPtrCX = null;            // last pointer x in stage px — anchors the bubble
+let _inspHideT = 0, _overInspect = false;
 
 // Virtual render space. VH is fixed so sprites stay a constant size; VW is
 // derived from the live screen aspect each resize, so the canvas is crisp and
@@ -367,6 +370,13 @@ const SYNERGY_PAIRS = {
   'frost+tesla':   {m:1.30,name:'Superconductor'},
   'arrow+frost':   {m:1.30,name:'Brittle Bones'},
   'oil+spike':     {m:1.15,name:'Slippery'},
+  // monster + monster pair identities — a mechanical twist on top of the
+  // multiplier (fx hooks are applied to the guards in buildCells)
+  'goblin+skeleton':{m:1.10,name:'Grave Horde',    fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (+3%/kill each).'},
+  'ogre+warden':    {m:1.10,name:'Gatehouse',      fx:'tauntBoth', desc:'BOTH guards strike the whole party stalled in the room.'},
+  'ogre+slime':     {m:1.10,name:'Sludge Colossus',fx:'splitBoth', desc:'BOTH guards reform once at 60% HP when slain.'},
+  'ogre+skeleton':  {m:1.25,name:'Bone Colossus',  desc:'A late-game wall — both guards hit ×1.25 harder.'},
+  'goblin+slime':   {m:1.10,name:'Spawning Vats',  fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (+3%/kill each).'},
 };
 function roomParts(r){ return r.part2 ? [r.type, r.part2] : [r.type]; }
 function synergyInfo(parts){
@@ -1394,10 +1404,54 @@ function difficulty(){
 }
 
 /* ============================== PHASE: MENU =============================== */
+// The PROFILE HOME — reached after picking a save slot on the title screen.
+// Play actions up top, meta below, everything else demoted to small links.
 function gotoMenu(){
   G = freshGame('campaign'); G.phase='menu'; render();
   tutBar.classList.remove('show');
   overlay.classList.add('show');
+  const s=slotSummary(saveSlot);
+  overlay.innerHTML = `
+    <h1>BOSS&nbsp;MONSTER</h1>
+    <h2>Build the dungeon. Bury the heroes.</h2>
+    <p class="small" style="opacity:.85;margin:2px 0 8px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills`:' · fresh profile'}</p>
+    <div class="menu-btns">
+      <button class="go" onclick="startCampaign()">⚔️ Campaign</button>
+      <button onclick="startEndless()">♾️ Endless</button>
+      <button onclick="startTutorial()" class="${tutDoneGet()?'':'tut-pulse'}">📖 Tutorial</button>
+    </div>
+    <div class="menu-btns" style="margin-top:8px">
+      <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
+      <button onclick="openTownBuilder()">🏗️ Town Builder</button>
+    </div>
+    <p class="small" style="margin-top:12px;opacity:.9">
+      <a href="#" onclick="openCodex();return false" style="color:#9adfff">⚛️ Combo Codex</a> &nbsp;·&nbsp;
+      <a href="#" onclick="openUnlocks();return false" style="color:#9adfff">🔓 Unlocks</a> &nbsp;·&nbsp;
+      <a href="#" onclick="showHelp();return false" style="color:#9adfff">❓ How to play</a> &nbsp;·&nbsp;
+      <a href="#" onclick="openTitle();return false" style="color:#9adfff">💾 Switch slot</a>
+    </p>`;
+}
+// The TITLE screen — branding, the pitch, and the three save-slot profiles.
+// Picking a slot leads to the profile home; everything else lives there.
+function openTitle(){
+  G = freshGame('campaign'); G.phase='menu'; render();
+  tutBar.classList.remove('show');
+  overlay.classList.add('show');
+  const cards=[];
+  for(let n=1;n<=SAVE_SLOTS;n++){
+    const s=slotSummary(n), active=(n===saveSlot);
+    const body = s
+      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}</div>`
+      : `<div class="small" style="opacity:.7;margin:4px 0">Empty — a brand-new game</div>`;
+    cards.push(`<div class="choice" style="width:220px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
+      <div class="big">💾</div>
+      <h3 style="margin:2px 0">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● last played</span>':''}</h3>
+      ${body}
+      <div class="row" style="justify-content:center;gap:6px;margin-top:6px">
+        <button class="go" onclick="pickSlot(${n})">${active?'▶ Continue':(s?'▶ Load':'▶ New Game')}</button>
+        ${s?`<button onclick="confirmResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae;padding:6px 10px">🗑</button>`:''}
+      </div></div>`);
+  }
   overlay.innerHTML = `
     <h1>BOSS&nbsp;MONSTER</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
@@ -1406,23 +1460,11 @@ function gotoMenu(){
        <b>shop</b> that sells them gear you loot right back. Every kill earns a
        <b>room card</b>; matching cards <b>upgrade</b> a room. Fights auto-resolve,
        but your <b>boss abilities</b> are yours to fire.</p>
-    <div class="menu-btns">
-      <button class="go" onclick="startCampaign()">⚔️ Campaign</button>
-      <button onclick="startEndless()">♾️ Endless</button>
-      <button onclick="startTutorial()" class="${tutDoneGet()?'':'tut-pulse'}">📖 Tutorial</button>
-      <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
-      <button onclick="openTownBuilder()">🏗️ Town Builder</button>
-      <button onclick="openCodex()">⚛️ Combo Codex</button>
-      <button onclick="openUnlocks()">🔓 Unlocks</button>
-      <button onclick="openSlots()">💾 Save Slot ${saveSlot}</button>
-      <button onclick="showHelp()">❓ How to play</button>
-    </div>
-    <div class="ko">
-      <span class="tag">🦷 Traps</span><span class="tag">👹 Monsters</span>
-      <span class="tag">🛒 Shop economy</span><span class="tag">🃏 Card upgrades</span>
-      <span class="tag">🐉 3 bosses</span>
-    </div>`;
+    <div class="choices">${cards.join('')}</div>
+    <p class="small" style="margin-top:10px;opacity:.9">Each slot is its own profile — runes, town and unlocks are separate.
+      &nbsp;<a href="#" onclick="showHelp();return false" style="color:#9adfff">❓ How to play</a></p>`;
 }
+function pickSlot(n){ if(n===saveSlot) gotoMenu(); else switchSlot(n); }
 function showHelp(){
   overlay.innerHTML = `
     <h1>How to play</h1>
@@ -1446,35 +1488,15 @@ function startEndless(){ G=freshGame('endless'); gotoEdicts(); }
 /* ============================== UNLOCKS ================================ */
 // Save slots: three independent profiles (own runes + town). Switch to start a
 // fresh game with no runes/town, or jump back to a built-up one.
-function openSlots(){
-  overlay.classList.add('show');
-  const cards=[];
-  for(let n=1;n<=SAVE_SLOTS;n++){
-    const s=slotSummary(n), active=(n===saveSlot);
-    const body = s
-      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> lifetime kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}</div>`
-      : `<div class="small" style="opacity:.7;margin:4px 0">Empty — a brand-new game (no runes, no town)</div>`;
-    cards.push(`<div class="choice" style="width:240px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
-      <div class="big">💾</div>
-      <h3 style="margin:2px 0">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● active</span>':''}</h3>
-      ${body}
-      <div class="row" style="justify-content:center;gap:6px;margin-top:6px">
-        <button class="go" onclick="switchSlot(${n})">${active?'Continue':(s?'Load':'New Game')}</button>
-        ${s?`<button onclick="confirmResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae;padding:6px 10px">🗑 Reset</button>`:''}
-      </div></div>`);
-  }
-  overlay.innerHTML=`<h1>💾 Save Slots</h1>
-    <p class="small" style="opacity:.85;max-width:560px">Each slot is its own profile — runes, town and unlocks are separate. Switch to an empty slot to start fresh.</p>
-    <div class="choices">${cards.join('')}</div>
-    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
-}
+// Save-slot management now lives ON the title screen (slot-first hierarchy).
+function openSlots(){ openTitle(); }
 function confirmResetSlot(n){
   if(n===saveSlot){ /* show inline confirm */ }
   overlay.innerHTML=`<h1 style="color:#ff6b8a">Reset Slot ${n}?</h1>
     <p>This permanently erases that slot's runes, town and unlocks. This can't be undone.</p>
     <div class="menu-btns">
       <button onclick="doResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Erase Slot ${n}</button>
-      <button class="go" onclick="openSlots()">Cancel</button></div>`;
+      <button class="go" onclick="openTitle()">Cancel</button></div>`;
 }
 function doResetSlot(n){ resetSlot(n); openSlots(); }
 // Bosses & cards unlock as your LIFETIME kills climb. Shows progress.
@@ -1548,10 +1570,18 @@ function openCodex(){
     <div class="small" style="color:#7bdc6b">→ ${r.pay}</div></div>`).join('');
   const keys=Object.keys(KEYWORDS).map(k=>`<div class="small" style="margin:3px 0;line-height:1.3">
     <b style="color:${KEYWORDS[k].col}">${k}</b> — ${KEYWORDS[k].txt}</div>`).join('');
+  const fus=Object.keys(SYNERGY_PAIRS).map(k=>{ const v=SYNERGY_PAIRS[k]; const [a,b]=k.split('+');
+    return `<div class="ucard" style="width:auto;min-width:150px;text-align:left;padding:8px 10px">
+      <div style="font-weight:bold">${ROOMS[a].ic}${ROOMS[b].ic} ${v.name} <span style="color:#7bdc6b">×${v.m.toFixed(2)}</span></div>
+      <div class="small" style="opacity:.85">${ROOMS[a].name} + ${ROOMS[b].name}</div>
+      ${v.desc?`<div class="small" style="color:#b985ff">${v.desc}</div>`:''}</div>`;}).join('');
   overlay.innerHTML=`<h1>⚛️ Combo Codex</h1>
     <p>Traps & monsters apply <b>statuses</b> that linger as heroes walk. The right <b>order</b> sets off a reaction — and each reaction <b>escalates</b> the next (a chain).</p>
     <h2 style="margin:6px 0 4px">Reactions</h2>
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
+    <h2 style="margin:12px 0 4px">Named Fusions</h2>
+    <p class="small" style="opacity:.85;margin:0 0 4px">Fuse two rooms (drag one onto another) to combine them. These pairs have an identity — anything else is Pack (two guards), Pinned Down ×1.18 (monster+trap) or Hazard Field ×1.08 (trap+trap).</p>
+    <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">${fus}</div>
     <h2 style="margin:12px 0 4px">Keywords</h2>
     <div style="max-width:640px;text-align:left;margin:0 auto">${keys}</div>
     <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
@@ -2097,7 +2127,8 @@ function buildCells(){
     const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:'empty', traps:[], mon:null, shop:false};
     if(r){
       const parts=roomParts(r);
-      const syn=synergyInfo(parts).m + (parts.length>1?(RB.synergy||0):0);
+      const sI=synergyInfo(parts);
+      const syn=sI.m + (parts.length>1?(RB.synergy||0):0);
       cell.syn=syn;
       const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank powers this cell
       let guards=[], hasShop=false; const bm=barracksMul();
@@ -2113,7 +2144,7 @@ function buildCells(){
           const bAtk= p==='minion'? (r.minAtk||def.atk): def.atk;
           // "Fed" monsters grow with every hero that died in this room — uncapped.
           // Under the Undeath doctrine, ALL monster rooms feed.
-          const feed = monFeeds(def) ? (1 + (r.kills||0)*0.03) : 1;
+          const feed = (monFeeds(def) || sI.fx==='feedBoth') ? (1 + (r.kills||0)*0.03) : 1;   // Grave Horde/Spawning Vats: the pair shares the feast
           const bas = bastionMul();   // Bastion doctrine: tougher guards
           // Each monster is its OWN guard — separate HP & attack, with the combo
           // multiplier applied individually (two fused monsters = two guards in a row).
@@ -2124,6 +2155,9 @@ function buildCells(){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
       }
+      // monster-pair identities (Gatehouse / Sludge Colossus)
+      if(sI.fx==='tauntBoth' && guards.length>1) cell.warden=true;
+      if(sI.fx==='splitBoth') guards.forEach(g=>{ g.split=true; });
       if(guards.length){ cell.mon=guards[0]; cell.mon2=guards[1]||null; }   // mon2 steps up when the first falls
       cell.shop=hasShop;
       cell.kind = guards.length ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
@@ -4606,11 +4640,23 @@ function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel
 
 /* ============================== INSPECTION ============================== */
 // Hover (desktop) or tap (mobile/run) a room, hero or the boss to read its stats.
-function hideInspect(){ inspectEl.classList.remove('show'); }
+function hideInspect(){ inspectEl.classList.remove('show'); inspectPinned=false; cancelHideInspect(); }
+// Delayed hide so the mouse can travel from a room INTO the bubble (to reach
+// the Upgrade/Demolish buttons) without it vanishing en route.
+function hideInspectSoon(){ cancelHideInspect(); _inspHideT=setTimeout(()=>{ if(!_overInspect && inspectHover) hideInspect(); }, 280); }
+function cancelHideInspect(){ if(_inspHideT){ clearTimeout(_inspHideT); _inspHideT=0; } }
 function showInspect(html, hover){
+  cancelHideInspect();
   inspectEl.innerHTML=html+'<span class="ix" onclick="hideInspect()">✕</span>';
-  inspectEl.classList.add('show'); inspectHover=!!hover;
+  inspectEl.classList.add('show'); inspectHover=!!hover; inspectPinned=!hover;
+  // anchor the bubble near the click/hover instead of the far bottom-left corner
+  const stW=CV.getBoundingClientRect().width || 800;
+  const w=inspectEl.offsetWidth || 240;
+  let x=(lastPtrCX!=null ? lastPtrCX : stW/2) - w/2;
+  inspectEl.style.left=Math.round(Math.max(8, Math.min(stW-w-8, x)))+'px';
 }
+inspectEl.addEventListener('pointerenter', ()=>{ _overInspect=true; cancelHideInspect(); });
+inspectEl.addEventListener('pointerleave', ()=>{ _overInspect=false; if(inspectHover) hideInspectSoon(); });
 function showInspectEntity(ent, hover){
   if(!ent || ent.kind==='empty'){ hideInspect(); return; }
   let html='';
@@ -4665,14 +4711,14 @@ function describeCard(card){
   lines.push(`<span style="opacity:.85">${def.desc}</span>`);
   return lines.join('<br>');
 }
-function cardHover(i){ const c=G.hand[i]; if(c) showInspect(describeCard(c), true); }
-function cardHoverOut(){ if(inspectHover) hideInspect(); }
+function cardHover(i){ const c=G.hand[i]; if(c){ lastPtrCX=null; showInspect(describeCard(c), true); } }
+function cardHoverOut(){ if(inspectHover) hideInspectSoon(); }
 // Slay-the-Spire-style relic bar at the top; hover (desktop) / tap (mobile) for info.
 function describeRelic(id){ const r=RELICS[id]; if(!r) return '';
   const tc=RELIC_TIERS[r.tier];
   return `<b>${r.ic} ${r.name}</b> · <span style="color:${tc.col}">${tc.name.toUpperCase()}</span><br><span style="opacity:.9">${r.desc}</span>`; }
-function relicHover(id){ showInspect(describeRelic(id), true); }
-function relicTap(id){ showInspect(describeRelic(id), false); }
+function relicHover(id){ lastPtrCX=null; showInspect(describeRelic(id), true); }
+function relicTap(id){ lastPtrCX=null; showInspect(describeRelic(id), false); }
 function renderRelicBar(){
   if(!relicBar) return;
   if(!G || !G.relics || !G.relics.length || (G.phase!=='build' && G.phase!=='run')){ relicBar.innerHTML=''; return; }
@@ -4714,7 +4760,8 @@ function describeRoom(room){
   if(monParts.length){ let fed=false; const bas=bastionMul(), bm=barracksMul();
     // each guard gets its OWN stat line (two fused monsters fight one after the other)
     monParts.forEach(p=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
-      const feed=monFeeds(def)?(1+(room.kills||0)*0.03):1; if(monFeeds(def))fed=true;
+      const feeds=monFeeds(def)||synI.fx==='feedBoth';
+      const feed=feeds?(1+(room.kills||0)*0.03):1; if(feeds)fed=true;
       const hp=Math.round(bHp*(0.9+(room.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp||0))*bm);
       const atk=Math.round(bAtk*(1.0+(room.lvl-1)*0.9)*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
       lines.push(`${def.ic} ${(p==='minion'?(room.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s`); });
@@ -4726,7 +4773,10 @@ function describeRoom(room){
     if(unsold.length) unsold.forEach(s=>lines.push(`${ITEMS[s.key].ic} ${ITEMS[s.key].name} (${ITEMS[s.key].desc}) — sells <b>${salePrice(room,s.key)}g</b>${s.free?' <span style="color:#6ad97e">(free)</span>':''}`));
     else lines.push('<span style="opacity:.7">empty — stock it in build</span>');
   }
-  if(parts.length>1) lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
+  if(parts.length>1){
+    lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
+    if(synI.desc) lines.push(`<span class="small" style="color:#b985ff">${synI.desc}</span>`);
+  }
   if(ROOMS[room.type].kind!=='shop'){
     const k=room.kills||0;
     if(vr) lines.push(`⭐ <b>Veteran ${vr}/${VET_MAX}</b>: +${Math.round(vr*VET_DMG*100)}% output · bites +${(vr*VET_BITE*100).toFixed(1)}% of hero HP/hit`);
@@ -4735,11 +4785,32 @@ function describeRoom(room){
   }
   if(G && G.phase==='build'){
     const idx=G.rooms.indexOf(room);
-    if(idx>=0){ lines.push(room.lvl<maxLevel()
+    if(idx>=0){ lines.push((room.lvl<maxLevel()
       ? `<button onclick="upgradeRoomGold(${idx})">⬆ Upgrade → Lv ${room.lvl+1} · ${roomUpgradeCost(room)}g</button>`
-      : '<span class="small">Max level — train it with kills for veteran ranks</span>'); }
+      : '<span class="small">Max level — train it with kills for veteran ranks</span>')
+      + ` <button onclick="askDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Demolish</button>`); }
   }
   return lines.join('<br>');
+}
+// Demolish a built room (build phase only) — two-step confirm inside the bubble.
+function askDeleteRoom(idx){
+  const r=G&&G.rooms[idx]; if(!r||G.phase!=='build') return;
+  showInspect(`<b style="color:#ff8a9a">Demolish ${comboName(r)}?</b><br>
+    <span class="small">Lv ${r.lvl}${r.kills?` · ${r.kills} kills of veteran progress`:''} — gone for good, no refund.</span><br>
+    <button onclick="doDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Yes, demolish</button>
+    <button onclick="reinspectRoom(${idx})">Keep it</button>`, false);
+}
+function doDeleteRoom(idx){
+  const r=G&&G.rooms[idx]; if(!r||G.phase!=='build') return;
+  const nm=comboName(r);
+  G.rooms[idx]=null; if(selCard>=0) selCard=-1; pickupIdx=-1;
+  burst(cellX(idx)+ROOM_W/2, FLOOR-40, '#ff5470', 26); sfx('hit');
+  showHint('🗑 '+nm+' demolished.');
+  hideInspect(); render();
+}
+function reinspectRoom(idx){
+  const r=G&&G.rooms[idx];
+  if(r) showInspectEntity({kind:'room',room:r}); else hideInspect();
 }
 function describeHero(h){
   const C=CLASSES[h.cls];
@@ -4825,6 +4896,7 @@ function zoomBy(f){ setZoom(zoom*f); draw(); }
 function zoomFit(){ if(!G) return; zoom=clamp(VW/Math.max(1,corridorWidth()), ZMIN, 1.2); camX=0; draw(); }
 
 CV.addEventListener('pointerdown', e=>{
+  lastPtrCX=e.clientX-CV.getBoundingClientRect().left;   // anchor for the inspect bubble
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
   e.preventDefault();
   pointers[e.pointerId]={x:e.clientX,y:e.clientY};
@@ -4910,12 +4982,18 @@ function endDrag(e){
 CV.addEventListener('pointerup', endDrag);
 CV.addEventListener('pointercancel', endDrag);
 
-// Desktop hover inspection
+// Desktop hover inspection. A PINNED bubble (from a tap) is left alone so it
+// can't be wiped out while the mouse travels toward its buttons; hover-empty
+// hides on a short grace timer for the same reason.
 CV.addEventListener('mousemove', e=>{
+  lastPtrCX=e.clientX-CV.getBoundingClientRect().left;
   if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
-  showInspectEntity(entityAt(clientToWorldX(e)), true);
+  if(inspectPinned) return;
+  const ent=entityAt(clientToWorldX(e));
+  if(!ent || ent.kind==='empty'){ if(inspectHover) hideInspectSoon(); return; }
+  showInspectEntity(ent, true);
 });
-CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspect(); });
+CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
 
 /* ---- Drag a hand card onto a room slot to build/upgrade/fuse ---- */
 let cardDrag=null, cardDragSlot=-1, cardGhost=null;
@@ -5043,7 +5121,7 @@ window.addEventListener('keydown', ()=>{ if(audioOn) initAudio(); }, {once:false
   if(ab){ ab.textContent=audioOn?'🔊':'🔇';
     ab.addEventListener('click', e=>{ e.stopPropagation(); toggleAudio(); }); } }
 resize();
-gotoMenu();
+openTitle();
 requestAnimationFrame(frame);
 </script>
 </body>

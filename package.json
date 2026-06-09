@@ -8,7 +8,7 @@
     "watch": "node build.js --watch",
     "test:relics": "node tests/boss_monster_relics.test.mjs",
     "test:champion": "node tests/boss_monster_champion.test.mjs",
-    "test:boss": "node tests/boss_monster_relics.test.mjs && node tests/boss_monster_champion.test.mjs"
+    "test:boss": "node tests/boss_monster_relics.test.mjs && node tests/boss_monster_champion.test.mjs && node tests/boss_monster_fusion.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
