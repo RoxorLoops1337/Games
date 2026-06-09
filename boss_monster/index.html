@@ -1341,7 +1341,7 @@ function difficulty(){
   // be brutal — only the smartest 5-room dungeon squeaks past ~20% of the time, and
   // meta-progression is what makes victory reliable. Two ramp terms make the back
   // half + King the real filter while keeping the opening fair.
-  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.034) * threat; }   // L1=1.0 → L50≈5.4×
+  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.043) * threat; }   // L1=1.0 → L50≈6.2× (first runs are brutal — meta is the path to winning)
   return (1 + G.totalSlain*0.05) * threat;   // Endless ramps via totalSlain only
 }
 
@@ -1881,8 +1881,17 @@ function selectCard(i){
   else hideInspect();
   render();
 }
+// Extra cards aren't dead weight: scrap any hand card for gold (by rarity) to
+// keep funding room levels, the Barracks & the Black Market once your 5 rooms are set.
+const SCRAP_GOLD={ common:10, special:16, rare:26, epic:40 };
+function cardScrapGold(type){ return SCRAP_GOLD[cardRarity(type)] || 10; }
 function discardCard(i){
+  const card=G.hand[i]; if(!card) return;
+  const g=cardScrapGold(card.type);
+  G.gold+=g;
   G.hand.splice(i,1); if(selCard===i)selCard=-1; else if(selCard>i)selCard--;
+  sfx('buy'); showHint('🔧 Scrapped '+(card.label||ROOMS[card.type].name)+' for '+g+' gold.');
+  if(typeof renderTop==='function') renderTop();
   render();
 }
 function roomName(r){ return r?(r.type==='minion'?(r.label||'Corrupted'):ROOMS[r.type].name):'empty'; }
@@ -4322,8 +4331,9 @@ function renderPanel(){
           const d=ROOMS[c.type];
           return `<div class="card ${selCard===i?'sel':''}" data-ci="${i}"
             onmouseenter="cardHover(${i})" onmouseleave="cardHoverOut()"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
-            <div class="x" onclick="event.stopPropagation();discardCard(${i})">✕</div>
-            <div class="ic">${cardFace(c.type)||d.ic}</div><div class="nm">${c.label||d.name}</div></div>`;}).join('')
+            <div class="x" title="Scrap for ${cardScrapGold(c.type)} gold" onclick="event.stopPropagation();discardCard(${i})">✕</div>
+            <div class="ic">${cardFace(c.type)||d.ic}</div><div class="nm">${c.label||d.name}</div>
+            <div class="scrapg" style="font-size:9px;opacity:.6;color:#ffd34d">🔧 ${cardScrapGold(c.type)}g</div></div>`;}).join('')
           :`<span class="small" style="opacity:.6;align-self:center">No cards — survive a hero to draft one.</span>`}
         </div>
       </div>`;
