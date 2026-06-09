@@ -1072,7 +1072,8 @@ function freshGame(mode){
     heroNum:0,            // total heroes spawned (scaling)
     totalSlain:0,         // cumulative kills (drives scaling + town breaks)
     heroSeq:0,            // power index assigned to each generated hero
-    queue:[],             // upcoming hero specs (previewed in town)
+    queue:[],             // upcoming hero specs (previewed in town & staging) — in campaign this IS the next wave
+    waveLevel:null,       // campaign: which level G.queue was rolled for (keeps preview == actual spawn)
     townBuys:{},          // {upgradeKey: timesBought} for rising costs
     barracks:{built:false, lvl:0},   // in-run Barracks: gold-funded global Monster Rank
     dread:0,              // town currency (earned per kill)
@@ -1821,7 +1822,8 @@ function renderLoadout(){
 function minCam(){ return (G && G.phase==='build' && G.queue && G.queue.length) ? -STAGEW : 0; }
 function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
-  ensureQueue(Math.max(3, G.guildLvl+1));        // pre-roll the next arrivals to preview
+  if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
+  else ensureQueue(Math.max(3, G.guildLvl+1));   // endless: pre-roll the next arrivals to preview
   smithyRestock();                                // Dark Smithy: free shop stock
   camX=minCam();                                  // reveal the staging area
   if(first){
@@ -2172,8 +2174,23 @@ function champSpec(){
   return {cls:CHAMPIONS[type].cls, power:campPower(), traits:[], name:rollName(), champion:type, rivalGen:0,
           debuff:{atkMul:1, burn:0, robbed:false}};
 }
+// Roll the upcoming CAMPAIGN wave exactly once per level and cache it in G.queue,
+// so the staging preview, the town roster, and any town meddling all act on the
+// SAME specs that will actually raid. (Endless keeps its rolling queue.)
+function prepCampaignWave(){
+  if(G.mode!=='campaign') return;
+  if(G.waveLevel===campLevel() && G.queue.length) return;   // already rolled for this level
+  for(const r of G.pendingRivals) r.eta--;                  // rivals tick one wave closer (once per wave)
+  const comp=levelComp(campLevel());
+  const specs=[];
+  for(let i=0;i<comp.champs;i++)  specs.push(champSpec());
+  let normals=comp.normals + (hasEdict('warband')?1:0);
+  for(let i=0;i<normals;i++)      specs.push(nextSpec());
+  if(!specs.length) specs.push(nextSpec());                 // safety: never an empty wave
+  G.queue=specs;
+  G.waveLevel=campLevel();
+}
 function spawnGroup(n){
-  for(const r of G.pendingRivals) r.eta--;   // one wave closer to each rival's return
   // 👑 THE KING — a lone finale raider, spawned in place of a normal party.
   if(G.kingDue){
     G.kingDue=false; G.kingFight=true;
@@ -2187,13 +2204,11 @@ function spawnGroup(n){
   }
   let specs=[];
   if(G.mode==='campaign'){
-    // each level's wave is defined: a growing party, plus mini-boss(es) at milestones
-    const comp=levelComp(campLevel());
-    for(let i=0;i<comp.champs;i++)  specs.push(champSpec());
-    let normals=comp.normals + (hasEdict('warband')?1:0);
-    for(let i=0;i<normals;i++)      specs.push(nextSpec());
-    if(!specs.length) specs.push(nextSpec());   // safety: never an empty wave
+    prepCampaignWave();          // ensure the cached wave exists (rivals tick inside)
+    specs=G.queue.splice(0);     // consume the exact wave the player just previewed
+    G.waveLevel=null;            // force a fresh roll for the next level
   } else {
+    for(const r of G.pendingRivals) r.eta--;   // endless: rivals tick per wave here
     ensureQueue(1);
     const champ = !!(G.queue[0] && G.queue[0].champion);
     const count = champ ? 1 : n + (hasEdict('warband')?1:0);   // Warband edict: +1 raider per party
@@ -2913,7 +2928,8 @@ const EVENTS = [
 ];
 
 function gotoTown(){
-  G.phase='town'; ensureQueue(3);
+  G.phase='town';
+  if(G.mode==='campaign') prepCampaignWave(); else ensureQueue(3);   // show the real next wave in the roster
   G.townEvent={ ...pick(EVENTS), done:false, outcome:'' };
   G.merchant=rollMerchant();
   renderTown();
@@ -3028,7 +3044,8 @@ function corruptHero(idx){
   if(G.dread<cc){ showHint('Not enough dread.'); return; }
   if(G.hand.length>=handCap()){ showHint('Hand full — play a card first.'); return; }
   G.dread-=cc; G.queue.splice(idx,1);
-  G.hand.push(minionCardFromSpec(spec)); ensureQueue(3);
+  // Campaign: corrupting a hero simply shrinks THIS wave (don't refill with strangers).
+  G.hand.push(minionCardFromSpec(spec)); if(G.mode!=='campaign') ensureQueue(3);
   showHint((spec.name||'A hero')+' is corrupted into a minion!'); renderTown(); renderTop();
 }
 
@@ -3674,9 +3691,14 @@ function previewHeroObj(spec){
 }
 // Show the next wave standing ready in the staging zone left of the entrance.
 function drawWaitingHeroes(tx){
+  if(G.mode==='campaign') prepCampaignWave();    // make sure the cached wave is rolled
   if(!G.queue || !G.queue.length) return;
-  const champ=!!G.queue[0].champion;
-  const n=champ?1:Math.min(G.queue.length, G.guildLvl+1);
+  // Campaign: the whole wave is queued, so show it all. Endless: a champion raids
+  // alone, otherwise the guild-sized party.
+  let n;
+  if(G.mode==='campaign') n=Math.min(G.queue.length, 9);
+  else n=G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1);
+  const hasChamp = G.queue.slice(0,n).some(s=>s.champion);
   // gate line at the entrance
   X.strokeStyle='rgba(120,100,170,.5)'; X.setLineDash([4,5]); X.lineWidth=2;
   X.beginPath(); X.moveTo(tx(0), FLOOR-150); X.lineTo(tx(0), FLOOR); X.stroke(); X.setLineDash([]);
@@ -3686,8 +3708,8 @@ function drawWaitingHeroes(tx){
     h.yOff = (k-(n-1)/2)*13;
     X.globalAlpha=0.92; drawHero(tx(wx), h); X.globalAlpha=1;
   }
-  X.fillStyle=champ?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
-  X.fillText(champ?'⚔️ CHAMPION!':'⏳ Next wave →', tx(-STAGEW*0.5), FLOOR-128);
+  X.fillStyle=hasChamp?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
+  X.fillText(hasChamp?'⚔️ CHAMPION!':'⏳ Next wave →', tx(-STAGEW*0.5), FLOOR-128);
   X.textAlign='left';
 }
 
@@ -4400,8 +4422,8 @@ function entityAt(wx){
   }
   // upcoming heroes waiting in the staging zone (build) — match drawWaitingHeroes
   if(G.phase==='build' && G.queue && G.queue.length && wx<0){
-    const champ=!!G.queue[0].champion;
-    const n=champ?1:Math.min(G.queue.length, G.guildLvl+1);
+    const n = G.mode==='campaign' ? Math.min(G.queue.length, 9)
+            : (G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1));
     let best=-1,bd=24;
     for(let k=0;k<n;k++){ const hx=-STAGEW*0.62+k*14; const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
     if(best>=0) return {kind:'queuehero', spec:G.queue[best]};
