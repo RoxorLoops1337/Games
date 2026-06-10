@@ -1659,14 +1659,20 @@ function openCloud(msg){
     <div class="menu-btns" style="margin-top:12px"><button onclick="openTitle()">← Back</button></div>`;
 }
 async function cloudBackup(){
+  let r=null;
   try{
-    const r=await fetch('/api/save',{method:'POST',headers:{'content-type':'application/json'},
+    r=await fetch('/api/save',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({code:cloudCode(), data:{v:1, runes:RUNES, town:TOWN}})});
     if(!r.ok) throw 0;
     const j=await r.json();
     try{ localStorage.setItem('bm_cloud_'+saveSlot, j.code); }catch(_){ }
     openCloud('✔ Backed up just now — code below works on any device.');
-  }catch(_){ showHint('☁️ Backup failed — try again in a moment.'); }
+  }catch(_){
+    // say WHY, so a server-side problem is diagnosable from the hint
+    if(r && r.status===429) showHint('☁️ One backup per 10s — wait a moment and try again.');
+    else if(r && r.status===503) showHint('☁️ Cloud storage isn\'t configured on the server.');
+    else showHint('☁️ Backup failed ('+(r?'HTTP '+r.status:'network')+') — try again in a moment.');
+  }
 }
 let _restoreArm=null;
 async function cloudRestore(){
