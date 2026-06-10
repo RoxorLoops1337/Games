@@ -36,6 +36,17 @@ t.ok(c[1].warden === true, 'Gatehouse: cell strikes the whole stalled party');
 t.ok(c[2].mon.split === true && c[2].mon2.split === true, 'Sludge Colossus: both guards split');
 t.ok(!c[3].warden, 'Grave Horde does not taunt');
 
+// --- 3-part stacking: third guard at 85%, identity from best named pair ---
+A.G.rooms[4] = { type:'ogre', part2:'warden', part3:'skeleton', lvl:1, kills:0 };
+A.buildCells();
+const c4 = A.G.cells[4];
+t.ok(!!c4.mon3, 'third guard exists');
+t.ok(c4.warden === true, 'Gatehouse identity survives a 3rd part');
+// skeleton is 3rd: base 32 → with Gatehouse ×1.10 and 0.85 third-guard factor
+t.ok(c4.mon3.maxHp < Math.round(32*0.9*1.10) , 'third guard joins below full strength');
+t.ok(A.synergyInfo(['ogre','warden','skeleton']).name === 'Bone Colossus', 'BEST named pair wins in a trio (×1.25 beats ×1.10)');
+t.ok(A.synergyInfo(['warden','slime','spike']).name === 'Pinned Down', 'pairless trio falls back by kinds');
+
 // --- room inspect shows the pair identity + demolish button in build ---
 A.G.phase = 'build';
 const html = A.describeRoom(A.G.rooms[0]);

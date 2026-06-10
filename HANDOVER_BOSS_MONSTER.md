@@ -163,7 +163,11 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
 - `ROOMS` = traps + monsters + shop + `warcamp` (War Camp blocker, buffs adjacent
   monster rooms +30%) + `minion` (corrupted hero).
 - **Fusing is ungated** (no kill requirement) — `canFuse`/`canFuseRooms` only
-  check not-full/not-shop/different-type. A room holds 2 parts.
+  check not-full/not-shop/not-duplicate-type. **A room holds up to 3 parts**
+  (`type`+`part2`+`part3`): 2nd is free, **3rd costs `FUSE3_GOLD=250`** and a
+  3rd *guard* joins at `GUARD3_MUL=0.85`. Guards chain `mon→mon2→mon3` (step-up
+  in fightTick). `synergyInfo` picks the **best named pair** among all parts;
+  fallback by kinds (any monster+trap = Pinned Down etc.).
 - **Two fused monsters are TWO separate guards** (`cell.mon` + `cell.mon2`), each
   with its own HP/atk and the synergy multiplier applied individually; the 2nd
   steps up when the 1st falls. Unnamed monster+monster is "Pack" ×1.0, but
