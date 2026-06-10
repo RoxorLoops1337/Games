@@ -148,6 +148,16 @@ effect (e.g. tier probabilities, monster atk at N kills).
   `lbFetch/lbSubmit/lbName` (name cached in `bm_lbname`). Submits
   `RUNES.best` explicitly via a button — never auto-posts.
 - Tests: `tests/boss_monster_board.test.mjs` (mock KV).
+- **☁️ Cloud saves** share the same KV namespace: `functions/api/save.js`
+  (`save:<code>` keys, 1-year TTL refreshed on write, 10s/IP throttle,
+  20KB cap). Client: `openCloud()` on the title screen — backup uploads the
+  ACTIVE slot's RUNES+TOWN under a sync code (`bm_cloud_<slot>`), restore
+  pulls a code into the active slot with a tap-twice overwrite confirm.
+  Tests: `tests/boss_monster_cloud.test.mjs`. Leaderboard fetches retry
+  with backoff (transient failures showed as "offline").
+- **Town map backdrop**: `town/map_bg.png` (owner-generated 16:9) replaces the
+  procedural terrain when present; building art comes next via the same
+  graceful-fallback pattern.
 
 ### Battle report, Ascension & juice
 - **Battle report** (`battleReportHTML`, shown on win/lose/close screens): per-room
