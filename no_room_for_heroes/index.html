@@ -4356,18 +4356,8 @@ function draw(){
   if(!G) return;
   if(G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ X.setTransform(baseK,0,0,baseK,0,0); drawIdleScene(); return; }
 
-  // Painted arena backdrop (device space, behind the dungeon). Cover-fit to the
-  // canvas height and panned by camera progress so the green entrance shows at
-  // the start and the storm-lit castle/throne reveals as you near the boss.
-  if(ARENA_BG && ARENA_BG._ok){
-    const iw=ARENA_BG.naturalWidth||ARENA_BG.width||1, ih=ARENA_BG.naturalHeight||ARENA_BG.height||1;
-    const dh=CV.height, dw=iw*(dh/ih), slack=Math.max(0, dw-CV.width);
-    let prog=0;
-    if(G.phase==='build'||G.phase==='run'){ const span=Math.max(1,corridorWidth()-VW/zoom)-minCam(); if(span>0) prog=clamp((camX-minCam())/span,0,1); }
-    X.imageSmoothingEnabled=true;
-    X.drawImage(ARENA_BG, Math.round(ox-slack*prog), Math.round(oy), Math.round(dw), dh);
-    X.imageSmoothingEnabled=false;
-  }
+  // (the painted arena backdrop is drawn in WORLD space inside drawDungeon, so
+  //  it zooms & pans together with the rooms and the boss)
 
   // Zoom: scale the world about the floor line so it stays pinned to the bottom.
   const z = (G.phase==='build'||G.phase==='run') ? zoom : 1;
@@ -4430,6 +4420,17 @@ function draw(){
 }
 
 function drawDungeon(tx, scale, isBuild){
+  // Painted backdrop in WORLD space — zooms & pans with the dungeon. Stretched
+  // to frame the corridor (staging on the left → boss & throne on the right),
+  // with the carved wall landing on the floor line.
+  if(ARENA_BG && ARENA_BG._ok){
+    const bgLeft=-STAGEW, bgW=corridorWidth()-bgLeft;     // span staging → boss cell's right edge
+    const bgH=VH*1.16;                                    // sky + zoom-out headroom
+    const bgTop=FLOOR-0.76*bgH;                           // wall (~76% down the art) sits on the floor
+    X.imageSmoothingEnabled=true;
+    X.drawImage(ARENA_BG, tx(bgLeft), bgTop, bgW, bgH);
+    X.imageSmoothingEnabled=false;
+  }
   // floor (drawn wide/tall so it still covers the screen when zoomed out).
   // With a painted backdrop, let its carved wall show through — just lay a
   // translucent shade below the floor line so rooms/heroes still read.
