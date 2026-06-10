@@ -729,9 +729,9 @@ function slotSummary(n){
   try{ const r=JSON.parse(localStorage.getItem('bossmonster_runes_'+n)||'null');
        const t=JSON.parse(localStorage.getItem('bossmonster_town_'+n)||'null');
        if(!r && !t) return null;   // empty slot
-       const pts=(r&&r.points)||0, kills=(r&&r.kills)||0;
+       const pts=(r&&r.points)||0, kills=(r&&r.kills)||0, best=(r&&r.best)||0;
        const builds=t&&t.built?Object.values(t.built).filter(v=>v>0).length:0;
-       return {pts, kills, builds}; }catch(_){ return null; }
+       return {pts, kills, builds, best}; }catch(_){ return null; }
 }
 function resetSlot(n){
   try{ localStorage.removeItem('bossmonster_runes_'+n); localStorage.removeItem('bossmonster_town_'+n); }catch(_){ }
@@ -740,11 +740,11 @@ function resetSlot(n){
 function loadRunes(){
   try{ const s=JSON.parse(localStorage.getItem(runeKey())||'{}');
     RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{}, kills:s.kills||0,
-            bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{} }; }
-  catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{} }; }
+            bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{}, best:s.best||0 }; }
+  catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{}, best:0 }; }
 }
 function saveRunes(){
-  try{ localStorage.setItem(runeKey(), JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp})); }catch(_){ }
+  try{ localStorage.setItem(runeKey(), JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp, best:RUNES.best||0})); }catch(_){ }
 }
 
 /* ======================= TOWN BUILDER (meta progression) ==================
@@ -1469,7 +1469,7 @@ function openTitle(){
   for(let n=1;n<=SAVE_SLOTS;n++){
     const s=slotSummary(n), active=(n===saveSlot);
     const body = s
-      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}</div>`
+      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}${s.best?`<br>♾️ endless best: <b>${s.best}</b> slain`:''}</div>`
       : `<div class="small" style="opacity:.7;margin:4px 0">Empty — a brand-new game</div>`;
     cards.push(`<div class="choice" style="width:220px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
       <div class="big">💾</div>
@@ -1792,6 +1792,15 @@ function drawTownMap(cv){
     c.fillStyle='#2f5c38'; c.beginPath(); c.arc(x-3*s,y-7*s,4*s,0,7); c.arc(x+3*s,y-8*s,4*s,0,7); c.fill(); };
   [[60,140,1.2],[250,120,1],[340,140,0.8],[700,120,1.1],[600,485,1],[320,500,0.9],[745,470,1.2],[40,495,1]].forEach(t=>tree(t[0],t[1],t[2]));
   [[210,160],[770,140],[60,260],[915,360]].forEach(r=>{ P(r[0],r[1],16,9,'#5a6470'); P(r[0]+3,r[1]-4,9,5,'#6d7884'); });
+  // villagers: the town comes alive as it grows (2 souls per built building)
+  const pop=Math.min(26, Object.values(TOWN.built||{}).filter(v=>v>0).length*2);
+  const VCOLS=['#c45a4a','#4a8c5a','#5a6cc4','#c9c46a','#9a5cff','#b06a2e'];
+  for(let v=0;v<pop;v++){
+    const r1=((v*127)%83)/83, r2=((v*61)%71)/71;
+    const vx=90+r1*790, vy=403+r2*16;
+    P(vx-1.5,vy-9,3,6,VCOLS[v%VCOLS.length]);      // body on the main street
+    P(vx-1,vy-12,2.5,3,'#e8c07a');                 // head
+  }
   // plots
   for(const id in TOWN_PLOTS){ drawTownPlot(c,P,id); }
 }
@@ -2574,7 +2583,7 @@ function spawnGroup(n){
     const h=buildHeroFromSpec(kingSpec());
     h.x=8; h.yOff=0;
     G.heroes=[h]; G.heroNum++;
-    showHint('👑 THE HIGH KING storms your dungeon — fell him to win forever!');
+    banner('👑 THE HIGH KING', '#ffd34d', 'Fell him and rule forever');
     shake(12); sfx('boss');
     G.waveStartSlain=G.totalSlain; G.waveEnding=false; G.hero=leadHero();
     return;
@@ -2601,9 +2610,15 @@ function spawnGroup(n){
     G.heroes.push(h); G.heroNum++;
   }
   const anyChamp=G.heroes.find(h=>h.champion);
+  const anyRival=G.heroes.find(h=>h.rival && !h.champion);
   if(anyChamp){
-    showHint('⚔️ CHAMPION APPROACHES: '+anyChamp.heroName+(anyChamp.title?' '+anyChamp.title:'')+'!');
+    banner('⚔️ CHAMPION APPROACHES', anyChamp.champCol||'#ffd34d',
+      anyChamp.heroName+(anyChamp.title?' '+anyChamp.title:''));
     shake(8); sfx('boss'); }
+  else if(anyRival){
+    banner('😡 YOUR RIVAL RETURNS', '#ff5470',
+      (anyRival.heroName||'A grudge-bearer')+' remembers your throne');
+    shake(6); sfx('boss'); }
   // town-wide schemes last per WAVE, not per hero
   if(G.fx.well>0) G.fx.well--; if(G.fx.smith>0) G.fx.smith--; if(G.fx.temple>0) G.fx.temple--;
   G.waveStartSlain=G.totalSlain; G.waveEnding=false;
@@ -3176,6 +3191,7 @@ function awardRunes(){
     if(lvlAfter>lvlBefore) G.newUnlocks.push({ic:BOSSES[bk].ic, name:BOSSES[bk].name.split(' ')[0]+' · Mastery Lv '+lvlAfter,
       kind:'Boss Mastery', desc:'Permanently stronger '+BOSSES[bk].name.split(' ')[0]+' — more HP & attack every run you play it.'});
   }
+  if(G.mode==='endless') RUNES.best=Math.max(RUNES.best||0, G.totalSlain||0);   // personal endless record
   saveRunes();
   return delta;
 }
@@ -3617,7 +3633,8 @@ function update(dt){
 
   // wave ends when the whole party is wiped — survived the raid
   if(G.phase==='run' && !G.waveEnding && G.heroes.every(h=>h.state==='dead')){
-    G.waveEnding=true; setTimeout(afterWave, 850);
+    G.waveEnding=true; killCamT=0.6; flash('#ffd34d',0.10,0.25);   // savor the last kill in slow-mo
+    setTimeout(afterWave, 850);
   }
 
   // camera follows the lead hero — but pause the auto-follow for a moment after
@@ -4016,6 +4033,26 @@ function bossFightTick(h,dt,isFront,frozen){
 
 /* ============================== RENDER =================================== */
 let _bgGrad=null,_bgGradH=0, _thrGrad=null,_thrKey='', _demGrad=null,_demKey='';
+// nameplate banner (champion/King/rival arrivals) + wave-end slow-mo kill cam
+let bannerMsg=null, killCamT=0;
+function banner(text, col, sub){ bannerMsg={text, sub:sub||'', col:col||'#ffd34d', t:0, dur:2.4}; }
+function drawBanner(){
+  if(!bannerMsg) return;
+  const m=bannerMsg, p=m.t/m.dur;
+  const a=Math.min(1, p*6, (1-p)*4);                  // quick in, gentle out
+  const slide=(1-Math.min(1,p*5))*40;
+  X.setTransform(1,0,0,1,0,0);
+  const W=CV.width, bh=Math.round(CV.height*0.16), by=Math.round(CV.height*0.24);
+  X.globalAlpha=a*0.78; X.fillStyle='#0c0916'; X.fillRect(0,by,W,bh);
+  X.globalAlpha=a; X.fillStyle=m.col;
+  X.fillRect(0,by,W,3); X.fillRect(0,by+bh-3,W,3);
+  X.textAlign='center';
+  X.font='bold '+Math.round(bh*0.34)+'px Trebuchet MS';
+  X.fillText(m.text, W/2+slide, by+bh*0.46);
+  if(m.sub){ X.font=Math.round(bh*0.22)+'px Trebuchet MS'; X.fillStyle='#e9e0ff';
+    X.fillText(m.sub, W/2+slide*1.4, by+bh*0.80); }
+  X.textAlign='left'; X.globalAlpha=1;
+}
 function draw(){
   const sh = shakeT>0 ? shakeMag*(shakeT/0.22) : 0;
   const ox = sh? (Math.random()*2-1)*sh : 0, oy = sh? (Math.random()*2-1)*sh : 0;
@@ -4429,6 +4466,21 @@ function drawRoomContents(x0,w,room,i){
     X.globalAlpha=0.55+0.35*Math.sin(performance.now()/120); X.fillStyle='#5fd17a';
     X.font='bold 11px Trebuchet MS'; X.textAlign='center';
     X.fillText('🗡️ DISARMED', cx, FLOOR-110); X.textAlign='left'; X.globalAlpha=1;
+  }
+  // the room's body count made visible: old blood and bones pile up with kills
+  // (deterministic per slot+index so the carnage doesn't flicker frame to frame)
+  const kct=room.kills||0;
+  if(kct>0 && ROOMS[room.type].kind!=='shop'){
+    const n=Math.min(14, Math.ceil(kct/2));
+    for(let b=0;b<n;b++){
+      const r1=((i*73+b*149)%97)/97, r2=((i*37+b*211)%89)/89;
+      const bx=x0+16+r1*(w-32), by=FLOOR-2-r2*8;
+      if(b%3===0){ X.globalAlpha=0.30; X.fillStyle='#5a1020';
+        X.beginPath(); X.ellipse(bx,by+3,7+5*r2,2.4,0,0,7); X.fill(); X.globalAlpha=1; }
+      if((i*13+b*7)%3===0){ X.globalAlpha=0.9; X.font='9px Trebuchet MS'; X.textAlign='center';
+        X.fillText('💀',bx,by); X.textAlign='left'; X.globalAlpha=1; }
+      else { px(bx-3,by-1,6,2,'#cfc8b4'); px(bx-1,by-3,2,2,'#bdb7a7'); }   // scattered bones
+    }
   }
   // monsters (a combo room can hold two) — draw each so both stay visible
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
@@ -5300,10 +5352,14 @@ window.addEventListener('keydown', e=>{
 
 /* ================================ LOOP ================================== */
 function frame(ts){
-  const dt=Math.min(0.05,(ts-last)/1000)||0; last=ts;
+  const raw=Math.min(0.05,(ts-last)/1000)||0; last=ts;
+  let dt=raw;
+  if(killCamT>0){ killCamT-=raw; dt*=0.25; }          // wave-end kill cam: brief slow-mo
+  if(bannerMsg){ bannerMsg.t+=raw; if(bannerMsg.t>=bannerMsg.dur) bannerMsg=null; }
   if(G && G.phase==='run'){ update(dt); updateTop(); }
   else { update(dt); }
   draw();
+  drawBanner();
   if(AC) updateMusicMood();   // music follows the game state
   // keep run panel cooldowns fresh
   if(G&&G.phase==='run'){ updateRunPanel(); }
