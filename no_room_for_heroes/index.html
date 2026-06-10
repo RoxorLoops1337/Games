@@ -4335,6 +4335,12 @@ function drawBanner(){
     X.fillText(m.sub, W/2+slide*1.4, by+bh*0.80); }
   X.textAlign='left'; X.globalAlpha=1;
 }
+// Optional painted arena backdrop — drop art at arena/bg.png and it fills the
+// screen behind the dungeon (green entrance on the left → storm-lit throne on
+// the right), panning slightly toward the boss as the camera moves. Falls back
+// to the plain gradient sky when absent.
+let ARENA_BG=null;
+if(typeof Image!=='undefined'){ ARENA_BG=new Image(); ARENA_BG.onload=()=>{ARENA_BG._ok=true;}; ARENA_BG.onerror=()=>{}; ARENA_BG.src='arena/bg.png'; }
 function draw(){
   const sh = shakeT>0 ? shakeMag*(shakeT/0.22) : 0;
   const ox = sh? (Math.random()*2-1)*sh : 0, oy = sh? (Math.random()*2-1)*sh : 0;
@@ -4349,6 +4355,19 @@ function draw(){
 
   if(!G) return;
   if(G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ X.setTransform(baseK,0,0,baseK,0,0); drawIdleScene(); return; }
+
+  // Painted arena backdrop (device space, behind the dungeon). Cover-fit to the
+  // canvas height and panned by camera progress so the green entrance shows at
+  // the start and the storm-lit castle/throne reveals as you near the boss.
+  if(ARENA_BG && ARENA_BG._ok){
+    const iw=ARENA_BG.naturalWidth||ARENA_BG.width||1, ih=ARENA_BG.naturalHeight||ARENA_BG.height||1;
+    const dh=CV.height, dw=iw*(dh/ih), slack=Math.max(0, dw-CV.width);
+    let prog=0;
+    if(G.phase==='build'||G.phase==='run'){ const span=Math.max(1,corridorWidth()-VW/zoom)-minCam(); if(span>0) prog=clamp((camX-minCam())/span,0,1); }
+    X.imageSmoothingEnabled=true;
+    X.drawImage(ARENA_BG, Math.round(ox-slack*prog), Math.round(oy), Math.round(dw), dh);
+    X.imageSmoothingEnabled=false;
+  }
 
   // Zoom: scale the world about the floor line so it stays pinned to the bottom.
   const z = (G.phase==='build'||G.phase==='run') ? zoom : 1;
