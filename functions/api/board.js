@@ -14,23 +14,28 @@ const json = (o, s) => new Response(JSON.stringify(o), {
   headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
 });
 
+// binding variable names are case-sensitive in the dashboard — accept any casing
+const kv = env => env.BOARD || env.board || env.Board || null;
+
 export async function onRequestGet({ env }) {
-  if (!env.BOARD) return json({ error: 'not configured' }, 503);
-  const top = JSON.parse((await env.BOARD.get('top')) || '[]');
+  const KV = kv(env);
+  if (!KV) return json({ error: 'not configured' }, 503);
+  const top = JSON.parse((await KV.get('top')) || '[]');
   return json({ top });
 }
 
 export async function onRequestPost({ request, env }) {
-  if (!env.BOARD) return json({ error: 'not configured' }, 503);
+  const KV = kv(env);
+  if (!KV) return json({ error: 'not configured' }, 503);
   const ip = request.headers.get('cf-connecting-ip') || '?';
-  if (await env.BOARD.get('rl:' + ip)) return json({ error: 'slow down' }, 429);
+  if (await KV.get('rl:' + ip)) return json({ error: 'slow down' }, 429);
 
   let b; try { b = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
   const name = String(b.name || '').replace(/[^\w \-.']/g, '').trim().slice(0, 16) || 'Anonymous';
   const score = Math.floor(+b.score);
   if (!Number.isFinite(score) || score < 1 || score > 50000) return json({ error: 'bad score' }, 400);
 
-  const top = JSON.parse((await env.BOARD.get('top')) || '[]');
+  const top = JSON.parse((await KV.get('top')) || '[]');
   const i = top.findIndex(e => e.name === name);
   if (i >= 0) {
     if (top[i].score >= score) return json({ top, kept: true });   // not a new personal best
@@ -40,7 +45,7 @@ export async function onRequestPost({ request, env }) {
   top.sort((a, b2) => b2.score - a.score);
   if (top.length > 50) top.length = 50;
 
-  await env.BOARD.put('top', JSON.stringify(top));
-  await env.BOARD.put('rl:' + ip, '1', { expirationTtl: 30 });
+  await KV.put('top', JSON.stringify(top));
+  await KV.put('rl:' + ip, '1', { expirationTtl: 30 });
   return json({ top });
 }
