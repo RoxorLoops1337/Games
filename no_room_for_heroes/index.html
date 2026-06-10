@@ -4439,6 +4439,9 @@ function drawDungeon(tx, scale, isBuild){
   if(ARENA_BG && ARENA_BG._ok){
     const bgH=ARENA_H(), bgW=arenaW();                    // the scene, at native scale
     const bgTop=FLOOR-0.76*bgH;                           // wall (~76% down the art) sits on the floor
+    const nativeW=bgH*iw/ih;                              // the art's natural width — never squished
+    const bgW=Math.max(nativeW, VW/zoom + ROOM_W);        // always at least the full view width
+    const bgRight=corridorWidth();                        // throne stays pinned to the boss
     X.imageSmoothingEnabled=true;
     X.drawImage(ARENA_BG, tx(worldLeft()), bgTop, bgW, bgH);   // right edge = the boss's throne
     X.imageSmoothingEnabled=false;
