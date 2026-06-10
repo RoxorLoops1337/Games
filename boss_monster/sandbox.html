@@ -18,13 +18,14 @@
   canvas{display:block;width:100%;}
   #hud{position:absolute;top:6px;left:8px;font-size:12px;color:var(--gold);
     background:rgba(12,9,22,.7);border:1px solid var(--line);border-radius:8px;padding:4px 8px;line-height:1.5;}
-  #ctrl{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-  button{background:var(--panel);border:1.5px solid var(--line);color:var(--ink);
+  #ctrl{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}
+  button,select{background:var(--panel);border:1.5px solid var(--line);color:var(--ink);
     border-radius:9px;padding:8px 12px;font-family:inherit;font-size:13px;cursor:pointer;min-height:38px;}
   button:active{transform:translateY(1px);}
   button.go{border-color:#7bdc6b;color:#cdeeb0;}
   button.warn{border-color:#ff6b8a;color:#ff9aae;}
   button.tog.on{border-color:var(--gold);color:var(--gold);}
+  select{border-color:var(--accent);}
   .note{font-size:11px;opacity:.7;margin-top:6px;line-height:1.5;}
   a{color:#9adfff;}
 </style>
@@ -34,6 +35,10 @@
   <h1>👺 Mob Sandbox <span class="small">— how do N goblins look swarming one Super Knight? (<a href="index.html">back to the game</a>)</span></h1>
   <div id="stage"><canvas id="cv"></canvas><div id="hud"></div></div>
   <div id="ctrl">
+    <select id="modeSel" onchange="setMode(this.value)" title="Mob behaviour">
+      <option value="v1">V1 — ranks &amp; cleave</option>
+      <option value="v2">V2 — pile-on frenzy 🩸</option>
+    </select>
     <button class="go" onclick="addGoblins(1)">+1 goblin</button>
     <button class="go" onclick="addGoblins(5)">+5</button>
     <button class="go" onclick="addGoblins(15)">+15</button>
@@ -43,9 +48,10 @@
     <button class="tog" id="slowBtn" onclick="toggleSlow()">🐢 Slow-mo</button>
     <button class="tog" id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
   </div>
-  <p class="note">Uses the game's real sprites & sizes (goblins at game scale 0.8, knight at champion size,
-    room is one game cell — 200 world px). Front two ranks per side attack with lunges; the knight cleaves the
-    side with the bigger crowd. Watch the FPS counter — that's the “would it still run” answer.</p>
+  <p class="note">Uses the game's real sprites &amp; sizes (goblins at game scale 0.8, knight at champion size,
+    room is one game cell — 200 world px). <b>V1</b>: orderly ranks, front two attack, knight cleaves the bigger side.
+    <b>V2</b>: a tight pile — up to 10 swing at once, blood stains the floor, and the overflow climbs the mob's backs.
+    Watch the FPS counter — that's the “would it still run” answer.</p>
 </div>
 <script>
 /* ---------- world (matches the game's coordinates) ---------- */
@@ -76,84 +82,128 @@ const GOB={ idle:{img:load('sprites/goblin/goblin_idle.png'), n:2, fps:4},
             hurt:{img:load('sprites/goblin/goblin_hurt.png'), n:6, fps:10} };  // hurt row 0 only
 const GS=0.8, GAX=25, GAY=61;   // the game's goblin scale + anchor
 
+/* ---------- modes ---------- */
+const MODES={
+  v1:{ gap:40, rankDx:24, files:3, fileY:[-14,0,14], jx:4, atkRanks:2, maxSwings:4,
+       swingPeriod:0.8, cleave:2, blood:false, climbers:0 },
+  v2:{ gap:24, rankDx:13, files:4, fileY:[-16,-7,3,13], jx:7, atkRanks:3, maxSwings:10,
+       swingPeriod:0.65, cleave:3, blood:true, climbersPerSide:4 },
+};
+let mode='v1';
+function M(){ return MODES[mode]; }
+function setMode(v){ mode=v; retarget(); }
+
 /* ---------- state ---------- */
-const knight={ hp:4000, maxHp:4000, face:1, swingT:0, swingPeriod:0.8, clipT:0, idleT:0 };
-let goblins=[], parts=[], floats=[];
+const knight={ hp:4000, maxHp:4000, face:1, swingT:0, clipT:0, hurtFlash:0 };
+let goblins=[], parts=[], floats=[], stains=[];
 let regen=true, slow=false, paused=false;
 let fps=60, fpsAcc=0, fpsN=0, fpsShown=60;
 let spawnCount=0, slainCount=0;
 
-const FILES=3, FILE_Y=[-14,0,14], RANK_DX=24, FRONT_GAP=40;
 function sideGoblins(s){ return goblins.filter(g=>g.side===s && g.state!=='dead'); }
 function retarget(){            // pack each side into ranks; survivors shuffle forward
+  const m=M();
   for(const s of [-1,1]){
-    sideGoblins(s).forEach((g,i)=>{
-      const rank=Math.floor(i/FILES), file=i%FILES;
-      g.tx=KX + s*(FRONT_GAP + rank*RANK_DX + (file-1)*4);
-      g.ty=FLOOR + FILE_Y[file] + ((rank%2)? 6:0);
-      g.rank=rank;
+    const gs=sideGoblins(s);
+    const groundCap = mode==='v2' ? m.files*3 : 999;   // v2: overflow climbs the pile
+    gs.forEach((g,i)=>{
+      if(mode==='v2' && i>=groundCap && (i-groundCap)<m.climbersPerSide){
+        const ci=i-groundCap;                          // scramble up the mob's backs
+        g.climb=true; g.rank=0;
+        g.tx=KX + s*(14+ci*9) + g.j*3;
+        g.ty=FLOOR - 22 - (ci%2)*9 + g.j;
+      } else {
+        const ii = (mode==='v2' && i>=groundCap) ? i-m.climbersPerSide : i;
+        const rank=Math.floor(ii/m.files), file=ii%m.files;
+        g.climb=false; g.rank=rank;
+        g.tx=KX + s*(m.gap + rank*m.rankDx + (file-1)*m.jx) + g.j*2;
+        g.ty=FLOOR + m.fileY[file] + ((rank%2)? 5:0);
+      }
     });
   }
 }
 function addGoblins(n){
   for(let i=0;i<n;i++){
     const side=(sideGoblins(-1).length<=sideGoblins(1).length)?-1:1;
-    goblins.push({ side, x:KX+side*(VW/2+30+Math.random()*60), y:FLOOR+FILE_Y[(spawnCount++)%3],
-      tx:0, ty:0, rank:9, hp:60, state:'enter', clipT:Math.random(), atkT:0.4+Math.random()*0.8,
-      lunge:0, hurtT:0 });
+    goblins.push({ side, x:KX+side*(VW/2+30+Math.random()*60), y:FLOOR+((spawnCount%3)-1)*12,
+      tx:0, ty:0, rank:9, climb:false, j:(Math.random()*2-1), hp:60, state:'enter',
+      clipT:Math.random(), atkT:0.4+Math.random()*0.8, swing:0, lunge:0, hurtT:0 });
+    spawnCount++;
   }
   retarget();
 }
-function clearGoblins(){ goblins=[]; retarget(); }
+function clearGoblins(){ goblins=[]; stains=[]; retarget(); }
 function toggleRegen(){ regen=!regen; document.getElementById('regenBtn').classList.toggle('on',regen); }
 function toggleSlow(){ slow=!slow; document.getElementById('slowBtn').classList.toggle('on',slow); }
 function togglePause(){ paused=!paused; document.getElementById('pauseBtn').classList.toggle('on',paused); }
 
-function burst(x,y,col,n){ for(let i=0;i<n;i++) parts.push({x,y,vx:(Math.random()*2-1)*120,
-  vy:-Math.random()*150-30, life:0.5+Math.random()*0.3, col}); }
+function burst(x,y,col,n,spd){ for(let i=0;i<n;i++) parts.push({x,y,vx:(Math.random()*2-1)*(spd||120),
+  vy:-Math.random()*(spd||150)-30, life:0.5+Math.random()*0.3, col}); }
 function floater(x,y,txt,col){ floats.push({x,y,txt,col,life:1}); }
+function bloodStain(x,y,big){
+  if(!M().blood) return;
+  stains.push({x:x+(Math.random()*16-8), y:Math.max(FLOOR-18,y)+(Math.random()*10-2),
+    rx:(big?9:4)+Math.random()*(big?8:4), ry:(big?3.5:1.6)+Math.random()*2, a:0.5+Math.random()*0.25});
+  if(stains.length>140) stains.splice(0, stains.length-140);
+}
+function bloodSpray(x,y,n){ if(!M().blood) return;
+  for(let i=0;i<n;i++) parts.push({x,y,vx:(Math.random()*2-1)*170, vy:-Math.random()*190-40,
+    life:0.4+Math.random()*0.35, col:(Math.random()<0.6?'#a3122a':'#d92038'), blood:true}); }
 
 /* ---------- sim ---------- */
+function activeSwings(){ return goblins.reduce((a,g)=>a+(g.swing>0?1:0),0); }
 function update(dt){
+  const m=M();
   // goblins
   for(const g of goblins){
     if(g.state==='dead'){ g.hurtT+=dt; continue; }
     g.clipT+=dt;
     const dx=g.tx-g.x, dy=g.ty-g.y, d=Math.hypot(dx,dy);
-    if(d>3){ const sp=86; g.x+=dx/d*sp*dt; g.y+=dy/d*sp*dt; g.state='walk'; }
+    if(d>3){ const sp=g.climb?(d>50?92:50):86;   // climbers sprint in, then clamber up
+      g.x+=dx/d*sp*dt; g.y+=dy/d*sp*dt; g.state='walk'; }
     else {
       g.state='mob';
-      if(g.rank<2){                     // front two ranks fight
+      const canFight = g.climb || g.rank<m.atkRanks;
+      if(canFight){
         g.atkT-=dt;
-        if(g.atkT<=0){ g.atkT=0.9+Math.random()*0.25; g.swing=0.42; g.clipT=0; }
+        if(g.atkT<=0){
+          if(activeSwings()<m.maxSwings){ g.atkT=0.9+Math.random()*0.25; g.swing=0.42; g.clipT=0; }
+          else g.atkT=0.1+Math.random()*0.1;       // pile is busy — jostle and retry
+        }
       }
     }
-    if(g.swing>0){ g.swing-=dt; g.lunge=Math.sin((1-g.swing/0.42)*Math.PI)*10;
+    if(g.swing>0){ g.swing-=dt; g.lunge=Math.sin((1-g.swing/0.42)*Math.PI)*(g.climb?6:10);
       if(g.swing<=0.21 && !g.hitDone){ g.hitDone=true;
-        knight.hp=Math.max(0,knight.hp-3);
-        floater(KX+(Math.random()*30-15), FLOOR-CHAMP_DH-6-Math.random()*14, '-3', '#ff8a9a'); }
+        knight.hp=Math.max(0,knight.hp-3); knight.hurtFlash=0.12;
+        floater(KX+(Math.random()*30-15), FLOOR-CHAMP_DH-6-Math.random()*14, '-3', '#ff8a9a');
+        bloodSpray(KX+(Math.random()*18-9), FLOOR-CHAMP_DH*0.55, 3); bloodStain(KX, FLOOR-4, false); }
       if(g.swing<=0){ g.swing=0; g.lunge=0; g.hitDone=false; }
     }
   }
   // knight: face the bigger crowd, swing on a cycle, cleave the front
   const L=sideGoblins(-1).length, R=sideGoblins(1).length, total=L+R;
   if(total){ knight.face = (R>=L)?1:-1; }
-  if(total && goblins.some(g=>g.state==='mob'&&g.rank<2)){
+  if(total && goblins.some(g=>g.state==='mob'&&(g.climb||g.rank<m.atkRanks))){
     knight.swingT+=dt;
-    if(knight.swingT>=knight.swingPeriod){
+    if(knight.swingT>=m.swingPeriod){
       knight.swingT=0;
-      const targets=sideGoblins(knight.face).filter(g=>g.state==='mob').slice(0,2);
+      const pool=sideGoblins(knight.face).filter(g=>g.state==='mob');
+      const targets=pool.slice(0,m.cleave);
       targets.forEach((g,i)=>{ g.hp-=(i===0?65:35);
         if(g.hp<=0){ g.state='dead'; g.hurtT=0; slainCount++;
-          burst(g.x,g.y-20,'#7bdc6b',14); floater(g.x,g.y-44,'💀','#ffd34d'); }
-        else { burst(g.x,g.y-22,'#ff9a3a',5); } });
+          burst(g.x,g.y-20,'#7bdc6b',10); bloodSpray(g.x,g.y-18,12); bloodStain(g.x,g.y,true); bloodStain(g.x,g.y,true);
+          floater(g.x,g.y-44,'💀','#ffd34d'); }
+        else { burst(g.x,g.y-22,'#ff9a3a',4); bloodSpray(g.x,g.y-20,4); bloodStain(g.x,g.y,false); } });
       retarget();
     }
   } else knight.swingT=0;
   if(regen) knight.hp=Math.min(knight.maxHp, knight.hp+30*dt);
-  if(knight.hp<=0){ knight.hp=knight.maxHp; floater(KX,FLOOR-150,'⚰️ THE KNIGHT FALLS — respawned','#ff8a9a'); }
+  knight.hurtFlash=Math.max(0,knight.hurtFlash-dt);
+  if(knight.hp<=0){ knight.hp=knight.maxHp; bloodSpray(KX,FLOOR-50,30); bloodStain(KX,FLOOR-2,true);
+    floater(KX,FLOOR-150,'⚰️ THE KNIGHT FALLS — respawned','#ff8a9a'); }
   goblins=goblins.filter(g=>g.state!=='dead'||g.hurtT<0.9);
-  for(const p of parts){ p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=300*dt; }
+  for(const p of parts){ p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=300*dt;
+    if(p.blood && p.y>=FLOOR+6){ bloodStain(p.x,p.y,false); p.life=0; } }
   parts=parts.filter(p=>p.life>0);
   for(const f of floats) f.life-=dt*0.8, f.y-=22*dt;
   floats=floats.filter(f=>f.life>0);
@@ -169,32 +219,37 @@ function drawGoblin(g){
   if(!clip.img._ok) return;
   let frame=Math.floor(g.clipT*clip.fps)%clip.n;
   if(g.state==='dead'){ frame=Math.min(clip.n-1, Math.floor(g.hurtT*clip.fps)); X.globalAlpha=Math.max(0,1-(g.hurtT-0.5)/0.4); }
+  const bob=g.climb? Math.sin(g.clipT*7+g.j*9)*2.5 : 0;     // climbers scramble for footing
   const lx=g.x - g.side*g.lunge;
   X.drawImage(clip.img, frame*64, row*64, 64,64,
-    Math.round(lx-GAX*GS), Math.round(g.y-GAY*GS), Math.round(64*GS), Math.round(64*GS));
+    Math.round(lx-GAX*GS), Math.round(g.y+bob-GAY*GS), Math.round(64*GS), Math.round(64*GS));
   X.globalAlpha=1;
 }
 function drawKnight(){
-  const fighting=goblins.some(g=>g.state==='mob'&&g.rank<2);
+  const m=M();
+  const fighting=goblins.some(g=>g.state==='mob'&&(g.climb||g.rank<m.atkRanks));
   let im, dh;
   if(fighting && CHAMP_ATK.every(i=>i._ok)){
-    const prog=Math.min(0.999, knight.swingT/knight.swingPeriod);
+    const prog=Math.min(0.999, knight.swingT/m.swingPeriod);
     im=CHAMP_ATK[Math.floor(prog*14)]; dh=CHAMP_ATK_DH;
-  } else { knight.idleT+= (slow?0.4:1)/60; im=CHAMP_WALK[0]; dh=CHAMP_DH; }
+  } else { im=CHAMP_WALK[0]; dh=CHAMP_DH; }
   if(!im||!im._ok) return;
   const dw=Math.round(dh*(im.width/im.height));
   X.save();
   if(knight.face<0){ X.translate(KX,0); X.scale(-1,1); X.translate(-KX,0); }
   X.imageSmoothingEnabled=true;
   X.drawImage(im, Math.round(KX-dw/2), Math.round(FLOOR-dh+2), dw, dh);
+  if(knight.hurtFlash>0){ X.globalAlpha=knight.hurtFlash*3; X.globalCompositeOperation='source-atop';
+    X.fillStyle='#d92038'; X.fillRect(KX-dw/2,FLOOR-dh+2,dw,dh);
+    X.globalCompositeOperation='source-over'; X.globalAlpha=1; }
   X.imageSmoothingEnabled=false;
   X.restore();
   // hp bar
   const bw=64, p=knight.hp/knight.maxHp;
-  X.fillStyle='rgba(0,0,0,.55)'; X.fillRect(KX-bw/2-1, FLOOR-dh-18, bw+2, 9);
-  X.fillStyle=p>0.3?'#5ad97e':'#ff4d6d'; X.fillRect(KX-bw/2, FLOOR-dh-17, Math.round(bw*p), 7);
+  X.fillStyle='rgba(0,0,0,.55)'; X.fillRect(KX-bw/2-1, FLOOR-CHAMP_ATK_DH-18, bw+2, 9);
+  X.fillStyle=p>0.3?'#5ad97e':'#ff4d6d'; X.fillRect(KX-bw/2, FLOOR-CHAMP_ATK_DH-17, Math.round(bw*p), 7);
   X.fillStyle='#ffd34d'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
-  X.fillText('👑 SUPER KNIGHT', KX, FLOOR-dh-24); X.textAlign='left';
+  X.fillText('👑 SUPER KNIGHT', KX, FLOOR-CHAMP_ATK_DH-24); X.textAlign='left';
 }
 function draw(){
   X.setTransform(baseK,0,0,baseK,0,0); X.imageSmoothingEnabled=false;
@@ -207,16 +262,24 @@ function draw(){
   if(ROOM_LAIR._ok){ const dh=Math.round(ROOM_W*(ROOM_LAIR.height/ROOM_LAIR.width));
     X.drawImage(ROOM_LAIR, ROOM_X0, FLOOR+6-dh, ROOM_W, dh); }
   else { X.strokeStyle='#3a2d5c'; X.lineWidth=2; X.strokeRect(ROOM_X0, FLOOR-150, ROOM_W, 150); }
-  // actors, depth-sorted by foot y (crowd reads correctly)
-  const order=[...goblins].sort((a,b)=>a.y-b.y);
+  // blood pools under everything that bleeds
+  for(const s of stains){ X.globalAlpha=s.a; X.fillStyle='#6b0d1d';
+    X.beginPath(); X.ellipse(s.x,s.y,s.rx,s.ry,0,0,7); X.fill(); }
+  X.globalAlpha=1;
+  // actors, depth-sorted by foot y; climbers join the top layer only once
+  // they're actually up on the pile (while crossing the floor they're ground)
+  const up=g=>g.climb && g.y<FLOOR-8;
+  const ground=goblins.filter(g=>!up(g)).sort((a,b)=>a.y-b.y);
+  const climbers=goblins.filter(up);
   let knightDrawn=false;
-  for(const gob of order){
+  for(const gob of ground){
     if(!knightDrawn && gob.y>FLOOR+2){ drawKnight(); knightDrawn=true; }
     drawGoblin(gob);
   }
   if(!knightDrawn) drawKnight();
+  for(const gob of climbers) drawGoblin(gob);
   for(const p of parts){ X.globalAlpha=Math.min(1,p.life*2); X.fillStyle=p.col;
-    X.fillRect(p.x-2,p.y-2,4,4); } X.globalAlpha=1;
+    X.fillRect(p.x-2,p.y-2,p.blood?3:4,p.blood?3:4); } X.globalAlpha=1;
   X.font='bold 13px Trebuchet MS'; X.textAlign='center';
   for(const f of floats){ X.globalAlpha=Math.min(1,f.life*1.6); X.fillStyle=f.col; X.fillText(f.txt,f.x,f.y); }
   X.globalAlpha=1; X.textAlign='left';
@@ -230,7 +293,7 @@ function frame(ts){
   if(!paused) update(raw*(slow?0.35:1));
   draw();
   const alive=goblins.filter(g=>g.state!=='dead').length;
-  hud.innerHTML=`👺 <b>${alive}</b> goblins &nbsp;·&nbsp; 💀 ${slainCount} slain &nbsp;·&nbsp; ❤️ ${Math.ceil(knight.hp)}/${knight.maxHp} &nbsp;·&nbsp; <b>${fpsShown}</b> fps`;
+  hud.innerHTML=`👺 <b>${alive}</b> goblins &nbsp;·&nbsp; ⚔️ ${activeSwings()} swinging &nbsp;·&nbsp; 💀 ${slainCount} slain &nbsp;·&nbsp; ❤️ ${Math.ceil(knight.hp)}/${knight.maxHp} &nbsp;·&nbsp; <b>${fpsShown}</b> fps`;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

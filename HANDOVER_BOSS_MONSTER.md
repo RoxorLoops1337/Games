@@ -256,8 +256,11 @@ no baked shadow, right-facing.
 
 **Mob sandbox**: `boss_monster/sandbox.html` — a standalone toy (one room, a
 Super Knight, +N goblin buttons, FPS counter) the owner uses to eyeball how a
-goblin horde reads visually before deciding on monster stacking. It borrows
-the game's sprites/scales but shares no code with `index.html`.
+goblin horde reads visually before deciding on monster stacking. A dropdown
+picks the mob behaviour (`MODES`): **V1** ranks-and-cleave, **V2** pile-on
+frenzy (tighter packing, up to 10 concurrent attackers, blood spray + floor
+stains, overflow goblins climb onto the pile). It borrows the game's
+sprites/scales but shares no code with `index.html`.
 
 ---
 
