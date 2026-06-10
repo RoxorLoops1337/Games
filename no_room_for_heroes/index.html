@@ -355,10 +355,8 @@ const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','slime']);
 function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
 const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
-const FUSE_KILLS = 3;  // hero deaths in a room before it can fuse a 2nd part
 // Effective values after rune bonuses (RB):
 function maxLevel(){ return MAX_LEVEL + (RB.upCap||0); }
-function fuseKills(){ return Math.max(1, FUSE_KILLS - (RB.fuseFast||0)); }
 function handCap(){ return 5 + (RB.hand||0); }
 function abilCost(c){ const p=G.boss?G.boss.pAbilCost||0:0; return Math.max(1, Math.round(c*(1-Math.min(0.8,(RB.abilCost||0)+p)))); }
 function abilDmg(x){ const p=G.boss?G.boss.pAbilDmg||0:0; return Math.round(x*(1+(RB.abilDmg||0)+p)); }
@@ -1415,7 +1413,6 @@ function closeDungeon(){
   aftermathSequence(earned, summary);
 }
 
-const curLevel = ()=> null;   // (legacy chapter table removed — campaign is level-driven now)
 function difficulty(){
   const threat = 1 + G.bounty*0.15;
   // Campaign: a steady level ramp drives it (hero power also scales with level), so
@@ -2729,7 +2726,8 @@ function champSpec(){
 // SAME specs that will actually raid. (Endless keeps its rolling queue.)
 function prepCampaignWave(){
   if(G.mode!=='campaign') return;
-  if(G.waveLevel===campLevel() && G.queue.length) return;   // already rolled for this level
+  if(G.waveLevel===campLevel()) return;   // already rolled for this level (an emptied
+                                          // queue from corruption stays empty — don't re-roll)
   for(const r of G.pendingRivals) r.eta--;                  // rivals tick one wave closer (once per wave)
   const comp=levelComp(campLevel());
   const specs=[];
@@ -3163,9 +3161,6 @@ function trueVictory(){
   aftermathSequence(earned, summary);
 }
 
-function heroReachesThrone(){
-  // hero now fights the boss; handled in update. nothing here.
-}
 function bossDies(){
   const b=G.boss;
   // Phylactery: rise once instead of falling
