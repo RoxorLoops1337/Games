@@ -5393,6 +5393,10 @@ CV.addEventListener('pointercancel', endDrag);
 CV.addEventListener('mousemove', e=>{
   lastPtrCX=e.clientX-CV.getBoundingClientRect().left;
   if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
+  // only the band the rooms/actors actually occupy — hovering the empty floor
+  // below (or the sky above) shouldn't pop the bubble
+  const wy=clientToVY(e);
+  if(wy>FLOOR+14 || wy<FLOOR-214){ if(inspectHover) hideInspectSoon(); return; }
   const ent=entityAt(clientToWorldX(e));
   if(!ent || ent.kind==='empty'){ if(inspectHover) hideInspectSoon(); return; }
   if(inspectPinned && sameInspectEnt(ent)) return;   // keep the pinned bubble (with its buttons) intact
