@@ -729,9 +729,9 @@ function slotSummary(n){
   try{ const r=JSON.parse(localStorage.getItem('bossmonster_runes_'+n)||'null');
        const t=JSON.parse(localStorage.getItem('bossmonster_town_'+n)||'null');
        if(!r && !t) return null;   // empty slot
-       const pts=(r&&r.points)||0, kills=(r&&r.kills)||0, best=(r&&r.best)||0;
+       const pts=(r&&r.points)||0, kills=(r&&r.kills)||0, best=(r&&r.best)||0, asc=(r&&r.asc)||0;
        const builds=t&&t.built?Object.values(t.built).filter(v=>v>0).length:0;
-       return {pts, kills, builds, best}; }catch(_){ return null; }
+       return {pts, kills, builds, best, asc}; }catch(_){ return null; }
 }
 function resetSlot(n){
   try{ localStorage.removeItem('bossmonster_runes_'+n); localStorage.removeItem('bossmonster_town_'+n); }catch(_){ }
@@ -740,11 +740,11 @@ function resetSlot(n){
 function loadRunes(){
   try{ const s=JSON.parse(localStorage.getItem(runeKey())||'{}');
     RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{}, kills:s.kills||0,
-            bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{}, best:s.best||0 }; }
-  catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{}, best:0 }; }
+            bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{}, best:s.best||0, asc:s.asc||0 }; }
+  catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{}, best:0, asc:0 }; }
 }
 function saveRunes(){
-  try{ localStorage.setItem(runeKey(), JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp, best:RUNES.best||0})); }catch(_){ }
+  try{ localStorage.setItem(runeKey(), JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp, best:RUNES.best||0, asc:RUNES.asc||0})); }catch(_){ }
 }
 
 /* ======================= TOWN BUILDER (meta progression) ==================
@@ -1379,6 +1379,7 @@ function closeDungeon(){
   const summary=`<h1 style="color:#9be86b">🏳️ DUNGEON CLOSED</h1>
     <div style="font-size:54px">${G.boss?G.boss.ic:'🐲'}🚪</div>
     <p>You sealed the halls and withdrew in good order after slaying <b>${G.totalSlain}</b> heroes — keeping every scrap you gathered.</p>
+    ${battleReportHTML()}
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
@@ -1399,7 +1400,7 @@ function difficulty(){
   // be brutal — only the smartest 5-room dungeon squeaks past ~20% of the time, and
   // meta-progression is what makes victory reliable. Two ramp terms make the back
   // half + King the real filter while keeping the opening fair.
-  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.034) * threat; }   // L1=1.0 → L50≈5.3× (first runs are brutal — meta is the path to winning)
+  if(G.mode==='campaign'){ const L=campLevel(); return (1 + (L-1)*0.02) * (1 + (L-1)*0.034) * threat * (1+(RUNES.asc||0)*0.18); }   // L1=1.0 → L50≈5.3× (first runs are brutal — meta is the path to winning); 👑 Ascension +18%/crown
   return (1 + G.totalSlain*0.05) * threat;   // Endless ramps via totalSlain only
 }
 
@@ -1415,7 +1416,7 @@ function gotoMenu(){
   overlay.innerHTML = `
     <h1>BOSS&nbsp;MONSTER</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
-    <p class="small" style="opacity:.85;margin:2px 0 8px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills`:' · fresh profile'}</p>
+    <p class="small" style="opacity:.85;margin:2px 0 8px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills${s.asc?` · <span style="color:#c79bff">👑 A${s.asc}</span>`:''}`:' · fresh profile'}</p>
     <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
       <button class="go${tutDoneGet()?'':' tut-pulse'}" style="min-width:250px" onclick="openPlay()">⚔️ Start Game${sub('campaign · endless · tutorial')}</button>
       <button style="min-width:250px" onclick="openStronghold()">🏰 Stronghold${sub('runes · town · unlocks')}</button>
@@ -1429,7 +1430,7 @@ function openPlay(){
   const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
   overlay.innerHTML = `<h1>⚔️ Start Game</h1>
     <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
-      <button class="go" style="min-width:270px" onclick="startCampaign()">⚔️ Campaign${sub('the 50-level siege — relics, mandates, the King')}</button>
+      <button class="go" style="min-width:270px" onclick="startCampaign()">⚔️ Campaign${(RUNES.asc||0)?` <span style="color:#c79bff">👑A${RUNES.asc}</span>`:''}${sub((RUNES.asc||0)?`ascension ${RUNES.asc}: +${Math.round(RUNES.asc*18)}% harder — the crown remembers`:'the 50-level siege — relics, mandates, the King')}</button>
       <button style="min-width:270px" onclick="startEndless()">♾️ Endless${sub('no cap, no King — how long can you last?')}</button>
       <button style="min-width:270px" class="${tutDoneGet()?'':'tut-pulse'}" onclick="startTutorial()">📖 Tutorial${sub('learn the loop in one guided run')}</button>
     </div>
@@ -1469,7 +1470,7 @@ function openTitle(){
   for(let n=1;n<=SAVE_SLOTS;n++){
     const s=slotSummary(n), active=(n===saveSlot);
     const body = s
-      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}${s.best?`<br>♾️ endless best: <b>${s.best}</b> slain`:''}</div>`
+      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}${(s.best||s.asc)?`<br>${s.asc?`<span style="color:#c79bff">👑 Ascension ${s.asc}</span>`:''}${s.asc&&s.best?' · ':''}${s.best?`♾️ best: <b>${s.best}</b> slain`:''}`:''}</div>`
       : `<div class="small" style="opacity:.7;margin:4px 0">Empty — a brand-new game</div>`;
     cards.push(`<div class="choice" style="width:220px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
       <div class="big">💾</div>
@@ -2644,6 +2645,10 @@ function heroDmg(h, raw, pierce){
   if(h.acid>0) armor=Math.max(0, armor - h.acid);     // Acid corrodes armor so later hits bite
   return Math.max(1, Math.round(raw - armor));
 }
+// While a ROOM (trap or guard) is dealing damage this is set to it, so the
+// battle report can attribute every point — including nested reaction chains —
+// to the room that caused it. Anything outside a room context = boss/elements.
+let _roomDmgCtx=null;
 function dealToHero(h, raw, label, pierce, elem, noDodge){
   if(!h||h.state==='dead') return;
   // rogue dodge (an aimed Smite can't be dodged)
@@ -2658,6 +2663,8 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
     floater(h.x, h.y-66, '🎯 DETONATE', '#ff5470'); burst(h.x,h.y-24,'#ff5470',16); sfx('crit'); if(G.stats)G.stats.reactions++; }
   h.hp-=dmg;
   h.dmgTaken=(h.dmgTaken||0)+dmg;               // telemetry: how much your dungeon stripped from this hero
+  if(G.stats){ if(_roomDmgCtx) _roomDmgCtx.dmg=(_roomDmgCtx.dmg||0)+dmg;
+    else if(label!=='HEAL') G.stats.abilDmg=(G.stats.abilDmg||0)+dmg; }   // boss abilities / Smite / elements
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
     shake(6); hitStop=0.05; sfx('crit'); }
   else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
@@ -2972,12 +2979,17 @@ function destroyRoom(cell){
 function trueVictory(){
   if(G.phase==='win') return;
   G.phase='win'; overlay.classList.add('show'); sfx('win');
+  // 👑 ASCENSION: every crown taken raises the next campaign's difficulty —
+  // the long-term ladder for an account that out-grew the base siege
+  RUNES.asc=Math.min(9,(RUNES.asc||0)+1);
   const earned=awardRunes(); bankResources(1,true);
   const summary=`<h1 style="color:#ffd34d">THE CROWN HAS FALLEN</h1>
     <div style="font-size:60px">${G.boss.ic}👑💔</div>
     <p>The High King lies shattered upon your floor. No army, no champion, no crown remains to
        challenge you — ${G.boss.name} rules the realm <b>eternal</b>, having buried
        <b>${G.totalSlain}</b> heroes and a king.</p>
+    <p style="color:#c79bff">👑 <b>ASCENSION ${RUNES.asc}</b> — from now on the realm sends stronger heroes (+${Math.round(RUNES.asc*18)}% campaign difficulty). Prove it again.</p>
+    ${battleReportHTML()}
     <p style="color:#ffd34d">🔮 +${earned} rune points (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
@@ -3015,6 +3027,7 @@ function bossDies(){
   const summary=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
     <div style="font-size:54px">${G.boss.ic}💔</div>
     ${buildPostmortem()}
+    ${battleReportHTML()}
     <p>${score}</p>
     <p style="opacity:.7">Dead is dead — the fallen throne swallowed <b>${lostPct}%</b> of your haul. Next time, <b>close the dungeon</b> to keep it all.${townLvl('vault')<3?' (A bigger 🏦 Vault keeps more.)':''}</p>
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
@@ -3124,6 +3137,25 @@ function snapshotHero(h){
   return { heroName:h.heroName, title:h.title, cls:h.cls, elite:!!h.elite, champion:h.champion||null,
     traits:[...(h.specTraits||h.traits||[])], power:h.specPower||0, rivalGen:h.rivalGen||0,
     maxHp:h.maxHp, dmgTaken:Math.round(h.dmgTaken||0), dodge:h.dodge||0, armor:h.armor||0 };
+}
+// 📜 Battle report: which rooms actually carried the run (damage attributed in
+// dealToHero via _roomDmgCtx; kills tracked per room in heroDies).
+function battleReportHTML(){
+  const s=G.stats||{};
+  const rooms=(G.rooms||[]).filter(r=>r && ((r.dmg||0)>0 || (r.kills||0)>0))
+    .sort((a,b)=>(b.dmg||0)-(a.dmg||0)).slice(0,6);
+  const rows=rooms.map((r,i)=>{
+    const ic=roomParts(r).map(p=>ROOMS[p].ic).join('');
+    return `<div style="display:flex;gap:8px;justify-content:space-between">
+      <span>${i===0?'🏆 ':''}${ic} ${comboName(r)} <span class="small" style="opacity:.6">Lv${r.lvl}</span></span>
+      <span style="color:#ffd34d">${r.dmg||0} dmg · ${r.kills||0} kill${(r.kills||0)===1?'':'s'}</span></div>`;
+  }).join('');
+  const totals=`<div class="small" style="opacity:.8;margin-top:5px;border-top:1px solid #3a2c5a;padding-top:4px">
+    🦷 traps ${s.trapDmg||0} · 👹 guards ${s.monDmg||0} · 🐉 boss &amp; elements ${s.abilDmg||0}
+    · ⚛️ reactions ${s.reactions||0} · 🚪 breaches ${s.breaches||0}</div>`;
+  if(!rooms.length && !(s.trapDmg||s.monDmg||s.abilDmg)) return '';
+  return `<div style="text-align:left;max-width:440px;margin:6px auto;background:#1b1430;border:1px solid #3a2c5a;border-radius:10px;padding:9px 13px;font-size:12px;line-height:1.55">
+    <b style="color:#9adfff">📜 Battle report</b><br>${rows||'<span class="small" style="opacity:.6">no rooms dealt damage</span>'}${totals}</div>`;
 }
 // Build the "why you lost" panel: who broke through + the single most useful lesson.
 function buildPostmortem(){
@@ -3864,7 +3896,7 @@ function trapTick(h,cell,dt){
       if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
       dmg*=amp;                                                // Runestone / War Totem amplification
       const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion/Piercing Halls: ignore armor
-      dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem);
+      _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
       if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
       else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.max(h.burn||0, 3+(r.lvl-1)); h.burnT=3; }  // Inferno/Wildfire: every trap sets ablaze
       applyTrapStatus(h, d, r);                                  // poison / acid / mark
@@ -3904,7 +3936,7 @@ function aoeTrapTick(dt){
       const pierce=(doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll)?'full':!!d.pierce;
       for(const o of targets){
         const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
-        dealToHero(o, dmg, 'BOOM', pierce, d.elem);
+        _roomDmgCtx=r; dealToHero(o, dmg, 'BOOM', pierce, d.elem); _roomDmgCtx=null;
         if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.max(o.burn||0, 3+(r.lvl-1)); o.burnT=3; }
         applyTrapStatus(o, d, r);
         if(G.stats) G.stats.trapDmg+=dmg;
@@ -3957,7 +3989,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       for(const t of targets){
         const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*t.maxHp):0;
         const dmg=Math.round((mon.atk+bite)*amp);
-        dealToHero(t, dmg, 'HIT');
+        _roomDmgCtx=cell.room; dealToHero(t, dmg, 'HIT'); _roomDmgCtx=null;
         if(G.stats) G.stats.monDmg+=dmg;
         maybePotion(t);
       }
