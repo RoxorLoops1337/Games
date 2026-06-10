@@ -1683,6 +1683,11 @@ const TOWN_PLOTS={
   treasury:{x:395,y:470}, vault: {x:520,y:478},
   obelisk: {x:825,y:185}, library:{x:805,y:315}, shrine:{x:845,y:455},
 };
+// Optional painted backdrop (owner-generated art). Drop a 16:9 image at
+// town/map_bg.png (generated from the 16:9 cover plate of this 960×520 world)
+// and it replaces the procedural terrain; plots/buildings/villagers draw on top.
+let TOWN_BG=null;
+if(typeof Image!=='undefined'){ TOWN_BG=new Image(); TOWN_BG.onload=()=>{TOWN_BG._ok=true;}; TOWN_BG.onerror=()=>{}; TOWN_BG.src='town/map_bg.png'; }
 let townPopId=null;
 // pan/zoom state (persists while the screen is open so a rebuild keeps your view)
 let townZoom=1, townCamX=0, townCamY=0;
@@ -1832,6 +1837,11 @@ function drawTownMap(cv){
   c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cv.width,cv.height);
   c.setTransform(k,0,0,k,-townCamX*k,-townCamY*k); c.imageSmoothingEnabled=false;
   const P=(x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); };
+  if(TOWN_BG && TOWN_BG._ok){
+    // the painted 16:9 backdrop covers world x≈[17.75,942.25] (cover-plate crop);
+    // draw it uniformly scaled to span the full width (crops ~10 world px top/bottom)
+    c.drawImage(TOWN_BG, 0, -10, TOWN_W, 540);
+  } else {
   // night meadow
   const g=c.createLinearGradient(0,0,0,TOWN_H); g.addColorStop(0,'#16241a'); g.addColorStop(1,'#0e1812');
   c.fillStyle=g; c.fillRect(0,0,TOWN_W,TOWN_H);
@@ -1858,6 +1868,7 @@ function drawTownMap(cv){
     c.fillStyle='#2f5c38'; c.beginPath(); c.arc(x-3*s,y-7*s,4*s,0,7); c.arc(x+3*s,y-8*s,4*s,0,7); c.fill(); };
   [[60,140,1.2],[250,120,1],[340,140,0.8],[700,120,1.1],[600,485,1],[320,500,0.9],[745,470,1.2],[40,495,1]].forEach(t=>tree(t[0],t[1],t[2]));
   [[210,160],[770,140],[60,260],[915,360]].forEach(r=>{ P(r[0],r[1],16,9,'#5a6470'); P(r[0]+3,r[1]-4,9,5,'#6d7884'); });
+  }
   // villagers: the town comes alive as it grows (2 souls per built building)
   const pop=Math.min(26, Object.values(TOWN.built||{}).filter(v=>v>0).length*2);
   const VCOLS=['#c45a4a','#4a8c5a','#5a6cc4','#c9c46a','#9a5cff','#b06a2e'];
