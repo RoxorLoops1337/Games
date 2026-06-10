@@ -1449,9 +1449,9 @@ function openPlay(){
 }
 /* 🏆 Endless leaderboard — Cloudflare Pages Function (/api/board) + KV.
    Fails soft: if the function/KV binding isn't deployed, the screen says so. */
-async function lbFetch(){ try{ const r=await fetch('api/board'); if(!r.ok) throw 0; return (await r.json()).top||[]; }catch(_){ return null; } }
+async function lbFetch(){ try{ const r=await fetch('/api/board'); if(!r.ok) throw 0; return (await r.json()).top||[]; }catch(_){ return null; } }
 async function lbSubmit(score){ try{
-  const r=await fetch('api/board',{method:'POST',headers:{'content-type':'application/json'},
+  const r=await fetch('/api/board',{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({name:lbName(), score})});
   if(!r.ok) throw 0; return (await r.json()).top||[]; }catch(_){ return null; } }
 function lbName(){
