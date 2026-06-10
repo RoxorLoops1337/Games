@@ -38,6 +38,7 @@
     <select id="modeSel" onchange="setMode(this.value)" title="Mob behaviour">
       <option value="v1">V1 — ranks &amp; cleave</option>
       <option value="v2">V2 — pile-on frenzy 🩸</option>
+      <option value="v3">V3 — chaotic frenzy 🎲</option>
     </select>
     <button class="go" onclick="addGoblins(1)">+1 goblin</button>
     <button class="go" onclick="addGoblins(5)">+5</button>
@@ -88,6 +89,11 @@ const MODES={
        swingPeriod:0.8, cleave:2, blood:false, climbers:0 },
   v2:{ gap:24, rankDx:13, files:4, fileY:[-16,-7,3,13], jx:7, atkRanks:3, maxSwings:10,
        swingPeriod:0.65, cleave:3, blood:true, climbersPerSide:4 },
+  // v3 = v2 but every goblin has its own rhythm: personal attack cadence,
+  // staggered admission to the swing budget, slot fidgeting and random hops —
+  // kills the "everyone lunges on the same beat" sync of v2
+  v3:{ gap:24, rankDx:13, files:4, fileY:[-16,-7,3,13], jx:7, atkRanks:3, maxSwings:10,
+       swingPeriod:0.65, cleave:3, blood:true, climbersPerSide:4, chaos:true },
 };
 let mode='v1';
 function M(){ return MODES[mode]; }
@@ -107,18 +113,20 @@ function retarget(){            // pack each side into ranks; survivors shuffle 
     const gs=sideGoblins(s);
     const groundCap = mode==='v2' ? m.files*3 : 999;   // v2: overflow climbs the pile
     gs.forEach((g,i)=>{
-      if(mode==='v2' && i>=groundCap && (i-groundCap)<m.climbersPerSide){
+      const piling=(m.climbersPerSide||0)>0;
+      if(piling && i>=groundCap && (i-groundCap)<m.climbersPerSide){
         const ci=i-groundCap;                          // scramble up the mob's backs
         g.climb=true; g.rank=0;
-        g.tx=KX + s*(14+ci*9) + g.j*3;
-        g.ty=FLOOR - 22 - (ci%2)*9 + g.j;
+        g.bx=KX + s*(14+ci*9) + g.j*3;
+        g.by=FLOOR - 22 - (ci%2)*9 + g.j;
       } else {
-        const ii = (mode==='v2' && i>=groundCap) ? i-m.climbersPerSide : i;
+        const ii = (piling && i>=groundCap) ? i-m.climbersPerSide : i;
         const rank=Math.floor(ii/m.files), file=ii%m.files;
         g.climb=false; g.rank=rank;
-        g.tx=KX + s*(m.gap + rank*m.rankDx + (file-1)*m.jx) + g.j*2;
-        g.ty=FLOOR + m.fileY[file] + ((rank%2)? 5:0);
+        g.bx=KX + s*(m.gap + rank*m.rankDx + (file-1)*m.jx) + g.j*2;
+        g.by=FLOOR + m.fileY[file] + ((rank%2)? 5:0);
       }
+      g.tx=g.bx+(g.fx||0); g.ty=g.by+(g.fy||0);
     });
   }
 }
@@ -126,8 +134,11 @@ function addGoblins(n){
   for(let i=0;i<n;i++){
     const side=(sideGoblins(-1).length<=sideGoblins(1).length)?-1:1;
     goblins.push({ side, x:KX+side*(VW/2+30+Math.random()*60), y:FLOOR+((spawnCount%3)-1)*12,
-      tx:0, ty:0, rank:9, climb:false, j:(Math.random()*2-1), hp:60, state:'enter',
-      clipT:Math.random(), atkT:0.4+Math.random()*0.8, swing:0, lunge:0, hurtT:0 });
+      tx:0, ty:0, bx:0, by:0, fx:0, fy:0, rank:9, climb:false, j:(Math.random()*2-1),
+      hp:60, state:'enter', clipT:Math.random(), atkT:0.4+Math.random()*0.8,
+      period:0.55+Math.random()*0.5, spd:75+Math.random()*26,    // v3 personality
+      fidgetT:Math.random()*0.8, hop:0, hopV:0,
+      swing:0, swingDur:0.42, lunge:0, lungeAmp:10, hurtT:0 });
     spawnCount++;
   }
   retarget();
@@ -159,21 +170,38 @@ function update(dt){
     if(g.state==='dead'){ g.hurtT+=dt; continue; }
     g.clipT+=dt;
     const dx=g.tx-g.x, dy=g.ty-g.y, d=Math.hypot(dx,dy);
-    if(d>3){ const sp=g.climb?(d>50?92:50):86;   // climbers sprint in, then clamber up
+    if(d>3){ const base=m.chaos?g.spd:86; const sp=g.climb?(d>50?base+6:50):base;
       g.x+=dx/d*sp*dt; g.y+=dy/d*sp*dt; g.state='walk'; }
     else {
       g.state='mob';
+      if(m.chaos){                                  // v3: shift weight, drift around the slot, hop
+        g.fidgetT-=dt;
+        if(g.fidgetT<=0){
+          g.fidgetT=0.4+Math.random()*1.1;
+          g.fx=(Math.random()-0.5)*9; g.fy=(Math.random()-0.5)*5;
+          g.tx=g.bx+g.fx; g.ty=g.by+g.fy;
+          if(Math.random()<0.18 && g.hop===0) g.hopV=120+Math.random()*60;
+        }
+        if(g.hopV>0||g.hop>0){ g.hop+=g.hopV*dt; g.hopV-=520*dt;
+          if(g.hop<=0){ g.hop=0; g.hopV=0; } }
+      }
       const canFight = g.climb || g.rank<m.atkRanks;
       if(canFight){
         g.atkT-=dt;
         if(g.atkT<=0){
-          if(activeSwings()<m.maxSwings){ g.atkT=0.9+Math.random()*0.25; g.swing=0.42; g.clipT=0; }
-          else g.atkT=0.1+Math.random()*0.1;       // pile is busy — jostle and retry
+          // v3: even with budget free, only some join per beat — staggers the starts
+          if(activeSwings()<m.maxSwings && (!m.chaos || Math.random()<0.55)){
+            g.atkT=(m.chaos?g.period:0.9)+Math.random()*0.25;
+            g.swingDur=m.chaos?0.32+Math.random()*0.2:0.42;
+            g.lungeAmp=m.chaos?6+Math.random()*8:10;
+            g.swing=g.swingDur; g.clipT=0;
+          }
+          else g.atkT=m.chaos?0.05+Math.random()*0.4:0.1+Math.random()*0.1; // jostle and retry — staggered in v3
         }
       }
     }
-    if(g.swing>0){ g.swing-=dt; g.lunge=Math.sin((1-g.swing/0.42)*Math.PI)*(g.climb?6:10);
-      if(g.swing<=0.21 && !g.hitDone){ g.hitDone=true;
+    if(g.swing>0){ g.swing-=dt; g.lunge=Math.sin((1-g.swing/g.swingDur)*Math.PI)*(g.climb?6:g.lungeAmp);
+      if(g.swing<=g.swingDur*0.5 && !g.hitDone){ g.hitDone=true;
         knight.hp=Math.max(0,knight.hp-3); knight.hurtFlash=0.12;
         floater(KX+(Math.random()*30-15), FLOOR-CHAMP_DH-6-Math.random()*14, '-3', '#ff8a9a');
         bloodSpray(KX+(Math.random()*18-9), FLOOR-CHAMP_DH*0.55, 3); bloodStain(KX, FLOOR-4, false); }
@@ -219,7 +247,7 @@ function drawGoblin(g){
   if(!clip.img._ok) return;
   let frame=Math.floor(g.clipT*clip.fps)%clip.n;
   if(g.state==='dead'){ frame=Math.min(clip.n-1, Math.floor(g.hurtT*clip.fps)); X.globalAlpha=Math.max(0,1-(g.hurtT-0.5)/0.4); }
-  const bob=g.climb? Math.sin(g.clipT*7+g.j*9)*2.5 : 0;     // climbers scramble for footing
+  const bob=(g.climb? Math.sin(g.clipT*7+g.j*9)*2.5 : 0) - (g.hop||0)*0.6;  // scramble + v3 hops
   const lx=g.x - g.side*g.lunge;
   X.drawImage(clip.img, frame*64, row*64, 64,64,
     Math.round(lx-GAX*GS), Math.round(g.y+bob-GAY*GS), Math.round(64*GS), Math.round(64*GS));

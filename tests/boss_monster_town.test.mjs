@@ -4,7 +4,9 @@
 import { loadGame, harness } from './boss_monster_lib.mjs';
 
 const A = loadGame(`freshGame,openTownBuilder,renderTownBuilder,drawTownMap,townPlotAt,
-  showTownPop,hideTownPop,buildTown,townLvl,buildingCost,canAfford,
+  showTownPop,hideTownPop,buildTown,townLvl,buildingCost,canAfford,townClampCam,
+  get townZoom(){return townZoom;},set townZoom(v){townZoom=v;},
+  get townCamX(){return townCamX;},set townCamX(v){townCamX=v;},
   BUILDINGS,TOWN_PLOTS,get TOWN(){return TOWN;},get G(){return G;},set G(v){G=v;}`);
 const t = harness('town map');
 
@@ -31,6 +33,13 @@ A.G = A.freshGame('campaign');
 let threw = '';
 try { A.openTownBuilder(); A.showTownPop('guild'); A.hideTownPop(); } catch (e) { threw = e.message; }
 t.ok(threw === '', 'map + popup render clean' + (threw ? ' — ' + threw : ''));
+
+// pan/zoom clamps: zoom is capped at 3 and the camera can't leave the world
+A.townZoom = 99; A.townCamX = 1e5; A.townClampCam();
+t.ok(A.townZoom === 3, 'zoom clamps to 3x');
+t.ok(A.townCamX === 960 - 960 / 3, 'camera clamps to the world edge');
+A.townZoom = 0.2; A.townClampCam();
+t.ok(A.townZoom === 1 && A.townCamX === 0, 'zoom-out clamps to 1x and recenters');
 
 // build flow: rig the treasury, build the watchtower, verify level + deduction
 A.TOWN.res.wood = 500; A.TOWN.res.stone = 500; A.TOWN.res.shards = 100;

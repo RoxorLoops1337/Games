@@ -1615,7 +1615,7 @@ function openCodex(){
 }
 
 /* ============================ TOWN BUILDER UI =========================== */
-function openTownBuilder(){ overlay.classList.add('show'); townPopId=null; renderTownBuilder(); }
+function openTownBuilder(){ overlay.classList.add('show'); townPopId=null; townZoom=1; townCamX=0; townCamY=0; renderTownBuilder(); }
 function resBar(){
   return `<div class="row" style="justify-content:center;gap:16px;font-size:17px;font-weight:bold">
     <span title="Wood">🪵 <span style="color:#d6a86a">${TOWN.res.wood}</span></span>
@@ -1637,15 +1637,42 @@ const TOWN_PLOTS={
   obelisk: {x:825,y:185}, library:{x:805,y:315}, shrine:{x:845,y:455},
 };
 let townPopId=null;
+// pan/zoom state (persists while the screen is open so a rebuild keeps your view)
+let townZoom=1, townCamX=0, townCamY=0;
+const TOWN_ZMAX=3;
+function townClampCam(){
+  townZoom=Math.max(1, Math.min(TOWN_ZMAX, townZoom));
+  townCamX=Math.max(0, Math.min(TOWN_W - TOWN_W/townZoom, townCamX));
+  townCamY=Math.max(0, Math.min(TOWN_H - TOWN_H/townZoom, townCamY));
+}
+function townZoomAt(f, cssX, cssY, cv){   // zoom about a css-pixel anchor
+  const r=cv.getBoundingClientRect(); const kc=(r.width>0?r.width:920)/TOWN_W;
+  const wx=townCamX + cssX/(kc*townZoom), wy=townCamY + cssY/(kc*townZoom);
+  townZoom*=f; townClampCam();
+  townCamX=wx - cssX/(kc*townZoom); townCamY=wy - cssY/(kc*townZoom);
+  townClampCam();
+}
+function townZoomBtn(f){
+  const cv=document.getElementById('towncv'); if(!cv) return;
+  const r=cv.getBoundingClientRect();
+  if(f===0){ townZoom=1; townCamX=0; townCamY=0; }
+  else townZoomAt(f, (r.width||920)/2, (r.height||520)/2, cv);
+  drawTownMap(cv); if(townPopId) showTownPop(townPopId);
+}
 function renderTownBuilder(){
   overlay.classList.add('show');
   overlay.innerHTML=`<h1 style="margin-bottom:2px">🏗️ Town Builder</h1>
     ${resBar()}
-    <div id="townmap" style="position:relative;margin:8px auto 0;max-width:920px;border:2px solid var(--line);border-radius:12px;overflow:hidden;touch-action:manipulation">
+    <div id="townmap" style="position:relative;margin:8px auto 0;max-width:980px;border:2px solid var(--line);border-radius:12px;overflow:hidden;touch-action:none">
       <canvas id="towncv" style="display:block;width:100%;cursor:pointer"></canvas>
       <div id="townpop" style="position:absolute;display:none;z-index:5;max-width:230px;background:rgba(12,9,22,.96);border:1.5px solid var(--accent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.45;text-align:left"></div>
+      <div style="position:absolute;top:6px;right:6px;z-index:4;display:flex;gap:4px">
+        <button onclick="townZoomBtn(1.45)" style="width:36px;height:36px;padding:0;font-size:17px">＋</button>
+        <button onclick="townZoomBtn(1/1.45)" style="width:36px;height:36px;padding:0;font-size:17px">－</button>
+        <button onclick="townZoomBtn(0)" style="width:36px;height:36px;padding:0;font-size:14px">⤢</button>
+      </div>
     </div>
-    <p class="small" style="opacity:.6;max-width:560px;margin:6px auto 0">Tap a plot to build or upgrade. A green 🔨 means you can afford it. Earn 🪵 / 🪨 from waves survived and 🔮 from depth — banked when you <b>close the dungeon</b> (or halved if the throne falls).</p>
+    <p class="small" style="opacity:.6;max-width:560px;margin:6px auto 0">Tap a plot to build or upgrade — a green 🔨 means you can afford it. Pinch or use ＋/− to zoom, drag to pan. Earn 🪵 / 🪨 from waves survived and 🔮 from depth — banked when you <b>close the dungeon</b> (or halved if the throne falls).</p>
     <div class="menu-btns" style="margin-top:6px"><button class="go" onclick="openStronghold()">← Back</button></div>`;
   const cv=document.getElementById('towncv');
   const host=document.getElementById('townmap');
@@ -1653,13 +1680,52 @@ function renderTownBuilder(){
   const dpr=(typeof devicePixelRatio==='number'&&devicePixelRatio>0)?devicePixelRatio:1;
   cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssW*dpr*(TOWN_H/TOWN_W));
   cv.style.height=Math.round(cssW*(TOWN_H/TOWN_W))+'px';
+  townClampCam();
   drawTownMap(cv);
+  // one-finger: tap (inspect) or drag (pan). two fingers: pinch zoom. wheel: zoom.
+  const ptrs={}; let panned=false, pinch0=null;
   cv.addEventListener('pointerdown', e=>{
-    const r=cv.getBoundingClientRect();
-    const wx=(e.clientX-r.left)*(TOWN_W/r.width), wy=(e.clientY-r.top)*(TOWN_W/r.width);
+    ptrs[e.pointerId]={x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY};
+    panned=false;
+    const v=Object.values(ptrs);
+    if(v.length===2) pinch0={d:Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y)||1, z:townZoom};
+  });
+  cv.addEventListener('pointermove', e=>{
+    const p=ptrs[e.pointerId]; if(!p) return;
+    const v=Object.values(ptrs);
+    if(v.length===2 && pinch0){
+      const d=Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y)||1;
+      const r=cv.getBoundingClientRect();
+      const mx=(v[0].x+v[1].x)/2-r.left, my=(v[0].y+v[1].y)/2-r.top;
+      const f=(pinch0.z*(d/pinch0.d))/townZoom;
+      townZoomAt(f, mx, my, cv); panned=true;
+      p.x=e.clientX; p.y=e.clientY; drawTownMap(cv); hideTownPop(); return;
+    }
+    const dx=e.clientX-p.x, dy=e.clientY-p.y;
+    if(panned || Math.abs(e.clientX-p.sx)>8 || Math.abs(e.clientY-p.sy)>8){
+      panned=true;
+      const r=cv.getBoundingClientRect(); const kc=(r.width>0?r.width:920)/TOWN_W;
+      townCamX-=dx/(kc*townZoom); townCamY-=dy/(kc*townZoom); townClampCam();
+      drawTownMap(cv); hideTownPop();
+    }
+    p.x=e.clientX; p.y=e.clientY;
+  });
+  const ptrUp=e=>{
+    const p=ptrs[e.pointerId]; delete ptrs[e.pointerId];
+    if(Object.keys(ptrs).length<2) pinch0=null;
+    if(!p || panned) return;
+    const r=cv.getBoundingClientRect(); const kc=(r.width>0?r.width:920)/TOWN_W;
+    const wx=townCamX+(e.clientX-r.left)/(kc*townZoom), wy=townCamY+(e.clientY-r.top)/(kc*townZoom);
     const id=townPlotAt(wx,wy);
     if(id) showTownPop(id); else hideTownPop();
-  });
+  };
+  cv.addEventListener('pointerup', ptrUp);
+  cv.addEventListener('pointercancel', e=>{ delete ptrs[e.pointerId]; pinch0=null; });
+  cv.addEventListener('wheel', e=>{ e.preventDefault();
+    const r=cv.getBoundingClientRect();
+    townZoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-r.left, e.clientY-r.top, cv);
+    drawTownMap(cv); if(townPopId) showTownPop(townPopId);
+  }, {passive:false});
   if(townPopId) showTownPop(townPopId);   // re-open after a build re-render
 }
 function townPlotAt(wx,wy){
@@ -1683,21 +1749,22 @@ function showTownPop(id){
     <div class="small" style="color:#9adfff">${lvl>0?b.lvlText(lvl):''}${maxed?'':(lvl>0?'<br>':'')+(maxed?'':`<span style="opacity:.75">Next: ${b.lvlText(lvl+1)}</span>`)}</div>
     ${maxed?'<div class="small" style="color:#7bdc6b;font-weight:bold;margin-top:4px">✔ FULLY BUILT</div>'
       :`<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:6px;padding:6px 10px;font-size:12px;min-height:34px">${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`}`;
-  // anchor next to the plot, clamped inside the map
-  const r=cv.getBoundingClientRect(); const k=(r.width>0?r.width:920)/TOWN_W;
+  // anchor next to the plot (through the pan/zoom transform), clamped inside the map
+  const r=cv.getBoundingClientRect(); const k=((r.width>0?r.width:920)/TOWN_W)*townZoom;
   const p=TOWN_PLOTS[id];
   el.style.display='block';
   const ew=el.offsetWidth||220, eh=el.offsetHeight||120;
-  let x=p.x*k+18, y=(p.y-60)*k-eh/2;
-  if(x+ew > (r.width||920)-6) x=p.x*k-ew-18;
+  let x=(p.x-townCamX)*k+18, y=(p.y-60-townCamY)*k-eh/2;
+  if(x+ew > (r.width||920)-6) x=(p.x-townCamX)*k-ew-18;
   el.style.left=Math.round(Math.max(6,x))+'px';
   el.style.top =Math.round(Math.max(6,Math.min(((r.height||520))-eh-6, y)))+'px';
 }
 // ---- the painted map ----
 function drawTownMap(cv){
   const c=cv.getContext('2d'); if(!c) return;
-  const k=cv.width/TOWN_W;
-  c.setTransform(k,0,0,k,0,0); c.imageSmoothingEnabled=false;
+  const k=(cv.width/TOWN_W)*townZoom;
+  c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cv.width,cv.height);
+  c.setTransform(k,0,0,k,-townCamX*k,-townCamY*k); c.imageSmoothingEnabled=false;
   const P=(x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); };
   // night meadow
   const g=c.createLinearGradient(0,0,0,TOWN_H); g.addColorStop(0,'#16241a'); g.addColorStop(1,'#0e1812');
