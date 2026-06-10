@@ -31,6 +31,7 @@ export async function onRequestGet({ request, env }) {
   if (!CODE_RE.test(code)) return json({ error: 'bad code' }, 400);
   const raw = await KV.get('save:' + code);
   if (!raw) return json({ error: 'not found' }, 404);
+  await KV.put('save:' + code, raw, { expirationTtl: TTL });
   return json({ data: JSON.parse(raw) });
 }
 
@@ -48,7 +49,10 @@ export async function onRequestPost({ request, env }) {
 
   let code = String(b.code || '').toUpperCase();
   if (code && !CODE_RE.test(code)) return json({ error: 'bad code' }, 400);
-  if (!code) code = newCode();
+  if (!code) {
+    code = newCode();
+    for (let i = 0; i < 5 && await KV.get('save:' + code); i++) code = newCode();
+  }
 
   await KV.put('save:' + code, raw, { expirationTtl: TTL });
   await KV.put('srl:' + ip, '1', { expirationTtl: 10 });

@@ -5,7 +5,7 @@
 //   node tests/no_room_for_heroes_champion.test.mjs   (or: npm run test:champion)
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
-const A = loadGame('drawChampion,champAtkReady,champReady,CHAMP_ATK,CHAMP_WALK,CHAMP_ATK_DH,CHAMP_DH');
+const A = loadGame('drawChampion,champAtkReady,champReady,championTick,CHAMP_ATK,CHAMP_WALK,CHAMP_ATK_DH,CHAMP_DH');
 const t = harness('champion clips');
 
 t.ok(A.CHAMP_ATK.length === 14, '14 attack frames loaded');
@@ -34,5 +34,19 @@ for (const [atkT, iv, want] of [[0.7, 0.7, 0], [0, 0.7, 13], [0.35, 0.7, 7]]) {
   const f = Math.floor(prog * 14);
   t.ok(f === want, `frame at atkT=${atkT} → ${f}, want ${want}`);
 }
+
+// Berserker recomputes atk every frame from _atkBase — boss debuffs (Curse,
+// Dread) must survive that recompute instead of being silently wiped.
+const bz = () => ({ champion: 'berserker', hp: 100, maxHp: 100, _atkBase: 20, atk: 20, shieldT: 0 });
+let z = bz(); A.championTick(z, 0.1);
+t.ok(z.atk === 20, 'full-HP berserker sits at base atk');
+z.hp = 50; A.championTick(z, 0.1);
+t.ok(z.atk === 26, 'berserker enrages as HP drops (+60% at 0 HP → +30% at half)');
+z = bz(); z.cursed = true; A.championTick(z, 0.1);
+t.ok(z.atk === 11, 'Curse (×0.55) survives the berserker recompute');
+z = bz(); z.dreaded = true; A.championTick(z, 0.1);
+t.ok(z.atk === 14, 'Dread (×0.7) survives the berserker recompute');
+z = bz(); z.cursed = true; z.dreaded = true; A.championTick(z, 0.1);
+t.ok(Math.abs(z.atk - 7.7) < 0.01, 'Curse + Dread stack on a berserker');
 
 t.done();
