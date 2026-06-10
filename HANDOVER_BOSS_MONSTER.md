@@ -239,8 +239,7 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
 ---
 
 ## 6. Sprites
-`boss_monster/sprites/<actor>/` (knight, wizard, cleric, goblin, demon, champion).
-Champion = the **Super Knight** mini-boss: walk frames `champion_0..11.png`;
+`boss_monster/sprites/<actor>/` (knight, wizard, cleric, goblin, demon, champion).Champion = the **Super Knight** mini-boss: walk frames `champion_0..11.png`;
 attack frames `attack/champion_attack_0..13.png` — **wired into `drawChampion`**:
 while `state` is `fighting`/`boss` the swing is synced to `h.atkT` (one full
 14-frame cycle per attack interval, blade lands as the damage does), drawn at
@@ -248,6 +247,11 @@ while `state` is `fighting`/`boss` the swing is synced to `h.atkT` (one full
 heights matched, same foot baseline). Boss art in `boss_monster/bosses/`.
 Card icons in `boss_monster/icons/`. Upload via GitHub (preserves transparency),
 no baked shadow, right-facing.
+
+**Mob sandbox**: `boss_monster/sandbox.html` — a standalone toy (one room, a
+Super Knight, +N goblin buttons, FPS counter) the owner uses to eyeball how a
+goblin horde reads visually before deciding on monster stacking. It borrows
+the game's sprites/scales but shares no code with `index.html`.
 
 ---
 
