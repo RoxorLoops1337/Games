@@ -208,7 +208,10 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
   canvas): `TOWN_PLOTS` fixes each building's spot, unbuilt = dashed
   foundation, built = a procedural structure that grows with level (max =
   banner), green 🔨 = affordable. Tap → anchored popup (`showTownPop` /
-  `townPlotAt`, hit radius 58). Pure UI — `TOWN.built{}` data unchanged.
+  `townPlotAt`, hit radius 58). **Pannable/zoomable** (1–3×): drag pans,
+  pinch/wheel/＋− buttons zoom about the anchor (`townZoom/townCamX/Y`,
+  `townClampCam`); the popup tracks the transform; view resets on open.
+  Pure UI — `TOWN.built{}` data unchanged.
   Tests: `tests/boss_monster_town.test.mjs`.
 - **Rune page**: static-tree skill page; **pannable/zoomable** but the buy popup
   is **anchored next to the tapped node** (lives inside the transformed tree).
@@ -259,7 +262,9 @@ Super Knight, +N goblin buttons, FPS counter) the owner uses to eyeball how a
 goblin horde reads visually before deciding on monster stacking. A dropdown
 picks the mob behaviour (`MODES`): **V1** ranks-and-cleave, **V2** pile-on
 frenzy (tighter packing, up to 10 concurrent attackers, blood spray + floor
-stains, overflow goblins climb onto the pile). It borrows the game's
+stains, overflow goblins climb onto the pile), **V3** chaotic frenzy (V2 +
+per-goblin cadence/speed, staggered swing admission, slot fidgeting and
+random hops — kills the synchronized-lunge look). It borrows the game's
 sprites/scales but shares no code with `index.html`.
 
 ---
