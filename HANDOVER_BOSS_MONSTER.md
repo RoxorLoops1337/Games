@@ -138,6 +138,17 @@ effect (e.g. tier probabilities, monster atk at N kills).
   hero with `king:true`, **HP ×8 / ATK ×1.3**, ignores corruption, and **smashes
   a room he passes with `KING_SMASH=0.10`**. Kill him → `trueVictory()`.
 
+### 🏆 Endless leaderboard (Cloudflare Pages Function + KV)
+- Server: `functions/api/board.js` (repo root — Pages auto-deploys it at
+  `/api/board`). GET → top 50; POST {name,score} → sanitized name, score
+  clamped 1..50000, best-per-name, 30s per-IP throttle. **Requires a KV
+  namespace binding named `BOARD`** on the Pages project (dashboard →
+  Settings → Bindings); returns 503 until bound and the client fails soft.
+- Client: `openLeaderboard()` (Start Game menu + endless end screens),
+  `lbFetch/lbSubmit/lbName` (name cached in `bm_lbname`). Submits
+  `RUNES.best` explicitly via a button — never auto-posts.
+- Tests: `tests/boss_monster_board.test.mjs` (mock KV).
+
 ### Battle report, Ascension & juice
 - **Battle report** (`battleReportHTML`, shown on win/lose/close screens): per-room
   damage attributed in `dealToHero` via the `_roomDmgCtx` context var (set around

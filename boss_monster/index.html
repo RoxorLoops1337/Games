@@ -1395,6 +1395,7 @@ function closeDungeon(){
     <div class="menu-btns">
       <button class="go" onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="openRunes()">🔮 Rune Page</button>
+      ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
   aftermathSequence(earned, summary);
@@ -1442,8 +1443,44 @@ function openPlay(){
       <button class="go" style="min-width:270px" onclick="startCampaign()">⚔️ Campaign${(RUNES.asc||0)?` <span style="color:#c79bff">👑A${RUNES.asc}</span>`:''}${sub((RUNES.asc||0)?`ascension ${RUNES.asc}: +${Math.round(RUNES.asc*18)}% harder — the crown remembers`:'the 50-level siege — relics, mandates, the King')}</button>
       <button style="min-width:270px" onclick="startEndless()">♾️ Endless${sub('no cap, no King — how long can you last?')}</button>
       <button style="min-width:270px" class="${tutDoneGet()?'':'tut-pulse'}" onclick="startTutorial()">📖 Tutorial${sub('learn the loop in one guided run')}</button>
+      <button style="min-width:270px" onclick="openLeaderboard()">🏆 Leaderboard${sub('the realm\'s greatest endless reigns')}</button>
     </div>
     <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
+}
+/* 🏆 Endless leaderboard — Cloudflare Pages Function (/api/board) + KV.
+   Fails soft: if the function/KV binding isn't deployed, the screen says so. */
+async function lbFetch(){ try{ const r=await fetch('api/board'); if(!r.ok) throw 0; return (await r.json()).top||[]; }catch(_){ return null; } }
+async function lbSubmit(score){ try{
+  const r=await fetch('api/board',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({name:lbName(), score})});
+  if(!r.ok) throw 0; return (await r.json()).top||[]; }catch(_){ return null; } }
+function lbName(){
+  let n=null; try{ n=localStorage.getItem('bm_lbname'); }catch(_){ }
+  if(!n){ n=(typeof prompt==='function' ? (prompt('Name for the public leaderboard:','Boss')||'') : '').trim().slice(0,16);
+    if(n){ try{ localStorage.setItem('bm_lbname',n); }catch(_){ } } }
+  return n||'Anonymous';
+}
+function renderLB(top){
+  const el=document.getElementById('lbbody'); if(!el) return;
+  if(top===null){ el.innerHTML='Leaderboard offline — the server isn\'t set up yet (KV binding "BOARD" in the Cloudflare Pages project).'; return; }
+  if(!top.length){ el.innerHTML='No entries yet — be the first!'; return; }
+  el.innerHTML='<div style="max-width:320px;margin:0 auto;text-align:left;line-height:1.8">'
+    +top.slice(0,10).map((e,i)=>`<div style="display:flex;justify-content:space-between;gap:14px">
+      <span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${e.name}</span><b style="color:#ffd34d">${e.score}</b></div>`).join('')+'</div>';
+}
+function openLeaderboard(){
+  overlay.classList.add('show');
+  overlay.innerHTML=`<h1>🏆 Endless Leaderboard</h1>
+    <p class="small" id="lbbody" style="opacity:.9">Loading…</p>
+    <p class="small" style="opacity:.7">Your endless best: <b style="color:#ffd34d">${RUNES.best||0}</b> slain</p>
+    <div class="menu-btns">
+      ${(RUNES.best||0)>0?`<button class="go" onclick="lbSend()">📤 Submit my best (${RUNES.best})</button>`:''}
+      <button onclick="openPlay()">← Back</button></div>`;
+  lbFetch().then(renderLB);
+}
+async function lbSend(){
+  const el=document.getElementById('lbbody'); if(el) el.innerHTML='Submitting…';
+  renderLB(await lbSubmit(RUNES.best||0));
 }
 // Stronghold → everything that makes the NEXT run stronger.
 function openStronghold(){
@@ -3050,6 +3087,7 @@ function bossDies(){
     <div class="menu-btns">
       <button class="go" onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="openTownBuilder()">🏗️ Town Builder</button>
+      ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
   aftermathSequence(earned, summary);
