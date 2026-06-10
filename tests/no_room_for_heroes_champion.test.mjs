@@ -2,8 +2,8 @@
 // fighting, walk while moving, idle when frozen, and the swing-progress math
 // must map the attack timer onto the 14 frames.
 //
-//   node tests/boss_monster_champion.test.mjs   (or: npm run test:champion)
-import { loadGame, harness } from './boss_monster_lib.mjs';
+//   node tests/no_room_for_heroes_champion.test.mjs   (or: npm run test:champion)
+import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame('drawChampion,champAtkReady,champReady,CHAMP_ATK,CHAMP_WALK,CHAMP_ATK_DH,CHAMP_DH');
 const t = harness('champion clips');

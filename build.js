@@ -25,6 +25,7 @@ const DIST = path.join(REPO, 'dist');
 const STATIC_PATHS = [
   'index.html',
   'README.md',
+  '_redirects',
   'beatbox_story',
   'decktest',
   'pitchdeck',
@@ -40,7 +41,7 @@ const STATIC_PATHS = [
   'evolve_and_conquer',
   'tower-defense-sprites',
   'night_shift',
-  'boss_monster',
+  'no_room_for_heroes',
   'tools',
 ];
 

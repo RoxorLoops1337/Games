@@ -1,7 +1,7 @@
 # No Room For Heroes — Handover (for the next Claude)
 
-A living handover for the **No Room For Heroes** game (folder/URL still `boss_monster`). Read this first, then skim
-`boss_monster/index.html`. Keep this file updated as you change things.
+A living handover for the **No Room For Heroes** game (folder/URL `no_room_for_heroes`; was `boss_monster` before the rename). Read this first, then skim
+`no_room_for_heroes/index.html`. Keep this file updated as you change things.
 
 ---
 
@@ -13,9 +13,9 @@ line the corridor with **trap rooms**, **monster rooms** and a **shop**, draft
 **room cards** as rewards, and fire **boss abilities** by hand. Fights
 auto-resolve. Two modes: **Campaign** (a fixed 50-level siege) and **Endless**.
 
-- **The whole game is `boss_monster/index.html`** — markup + CSS + one big
+- **The whole game is `no_room_for_heroes/index.html`** — markup + CSS + one big
   `<script>`. There is no framework; it's vanilla canvas + DOM overlays.
-- Live URL: **https://games-71g.pages.dev/boss_monster/** (Cloudflare Pages,
+- Live URL: **https://games-71g.pages.dev/no_room_for_heroes/** (Cloudflare Pages,
   auto-deploys on merge to `main`).
 - Repo: `RoxorLoops1337/Games`. Feature branch: **whatever your session
   designates** — it changes per session (e.g. `claude/boss-monster-handover-3ayjow`);
@@ -26,13 +26,13 @@ auto-resolve. Two modes: **Campaign** (a fixed 50-level siege) and **Endless**.
 ## 2. Workflow (from repo CLAUDE.md — follow exactly)
 
 1. Make changes on your session's designated feature branch.
-2. `node build.js` (esbuild; **recursively copies `boss_monster/` → `dist/`**, so
+2. `node build.js` (esbuild; **recursively copies `no_room_for_heroes/` → `dist/`**, so
    any asset under it ships). Confirm 0 errors.
 3. Commit → push `-u origin <your-branch>`.
 4. **Create a DRAFT PR → mark it ready → squash-merge to `main`. Do NOT ask
    "want me to merge?".**
 5. **Always paste the live URL at the bottom of every reply** while working on
-   this game: `https://games-71g.pages.dev/boss_monster/`.
+   this game: `https://games-71g.pages.dev/no_room_for_heroes/`.
 6. Commit messages / PR bodies end with the session link (the harness adds it).
    Never put the model identifier anywhere in commits/PRs.
 
@@ -42,8 +42,8 @@ repeatedly **silently resurrected deleted code** (notably an `awardTownResources
 call that crashes run-end). **Every push sequence includes a guard:**
 ```bash
 git fetch origin main -q; git merge -X ours origin/main -m "merge main"
-if grep -q "awardTownResources" boss_monster/index.html; then
-  perl -0pi -e 's/^\s*awardTownResources\([^;]*\);\s*$//mg' boss_monster/index.html
+if grep -q "awardTownResources" no_room_for_heroes/index.html; then
+  perl -0pi -e 's/^\s*awardTownResources\([^;]*\);\s*$//mg' no_room_for_heroes/index.html
   git add -A && git commit -q -m guard
 fi
 ```
@@ -66,10 +66,10 @@ auto-resolve those. Fix with `git checkout --ours -- <paths>` then commit.
 
 ## 3. Testing & balance harnesses (all in `/tmp`, not committed)
 
-**Headless unit tests now live in the repo** — `tests/boss_monster_lib.mjs`
+**Headless unit tests now live in the repo** — `tests/no_room_for_heroes_lib.mjs`
 exports `loadGame(exposeStr)` (full stub set: document/canvas/Image/Audio
 Proxies, const/let→var rewrite, eval with an `__api` expose) and `harness()`
-(tiny pass/fail counter). Write new suites as `tests/boss_monster_<x>.test.mjs`
+(tiny pass/fail counter). Write new suites as `tests/no_room_for_heroes_<x>.test.mjs`
 importing the lib — **don't recreate `/tmp/h*.mjs` throwaways; commit suites so
 they survive container recycling.** Run: `npm run test:boss` (all),
 `test:relics`, `test:champion`. The canvas ctx stub **must** return
@@ -147,13 +147,13 @@ effect (e.g. tier probabilities, monster atk at N kills).
 - Client: `openLeaderboard()` (Start Game menu + endless end screens),
   `lbFetch/lbSubmit/lbName` (name cached in `bm_lbname`). Submits
   `RUNES.best` explicitly via a button — never auto-posts.
-- Tests: `tests/boss_monster_board.test.mjs` (mock KV).
+- Tests: `tests/no_room_for_heroes_board.test.mjs` (mock KV).
 - **☁️ Cloud saves** share the same KV namespace: `functions/api/save.js`
   (`save:<code>` keys, 1-year TTL refreshed on write, 10s/IP throttle,
   20KB cap). Client: `openCloud()` on the title screen — backup uploads the
   ACTIVE slot's RUNES+TOWN under a sync code (`bm_cloud_<slot>`), restore
   pulls a code into the active slot with a tap-twice overwrite confirm.
-  Tests: `tests/boss_monster_cloud.test.mjs`. Leaderboard fetches retry
+  Tests: `tests/no_room_for_heroes_cloud.test.mjs`. Leaderboard fetches retry
   with backoff (transient failures showed as "offline").
 - **Town map backdrop**: `town/map_bg.png` (owner-generated 16:9) replaces the
   procedural terrain when present; building art comes next via the same
@@ -164,7 +164,7 @@ effect (e.g. tier probabilities, monster atk at N kills).
   damage attributed in `dealToHero` via the `_roomDmgCtx` context var (set around
   the trap/guard tick calls — nested reaction chains inherit the room); anything
   context-free lands in `G.stats.abilDmg` ("boss & elements"). Kills were already
-  per-room (`room.kills`). Tests: `tests/boss_monster_meta.test.mjs`.
+  per-room (`room.kills`). Tests: `tests/no_room_for_heroes_meta.test.mjs`.
 - **👑 Ascension (NG+)**: `RUNES.asc` (persisted per slot) +1 on each
   `trueVictory` (cap 9). `difficulty()` campaign branch ×`(1+asc*0.18)`;
   **endless untouched** (leaderboard fairness). Shown on title cards, home slot
@@ -197,7 +197,7 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
   (`feedBoth` — both guards feed +3%/kill), Gatehouse (`tauntBoth` — party-wide
   strikes), Sludge Colossus (`splitBoth` — both reform at 60%), Bone Colossus
   (plain ×1.25). Listed in the Codex's "Named Fusions" section (auto-generated
-  from `SYNERGY_PAIRS`). Tests: `tests/boss_monster_fusion.test.mjs`.
+  from `SYNERGY_PAIRS`). Tests: `tests/no_room_for_heroes_fusion.test.mjs`.
 - **Demolish**: the room inspect bubble offers 🗑 Demolish in build phase
   (`askDeleteRoom` → in-bubble confirm → `doDeleteRoom`; no refund).
 - **Inspect bubble**: anchored near the click/hover x (`lastPtrCX`), clamped to
@@ -252,7 +252,7 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
   pinch/wheel/＋− buttons zoom about the anchor (`townZoom/townCamX/Y`,
   `townClampCam`); the popup tracks the transform; view resets on open.
   Pure UI — `TOWN.built{}` data unchanged.
-  Tests: `tests/boss_monster_town.test.mjs`.
+  Tests: `tests/no_room_for_heroes_town.test.mjs`.
 - **Rune page**: static-tree skill page; **pannable/zoomable** but the buy popup
   is **anchored next to the tapped node** (lives inside the transformed tree).
   Pointer capture is deferred until a real drag so taps reach nodes (iOS fix).
@@ -288,16 +288,16 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
 ---
 
 ## 6. Sprites
-`boss_monster/sprites/<actor>/` (knight, wizard, cleric, goblin, demon, champion).Champion = the **Super Knight** mini-boss: walk frames `champion_0..11.png`;
+`no_room_for_heroes/sprites/<actor>/` (knight, wizard, cleric, goblin, demon, champion).Champion = the **Super Knight** mini-boss: walk frames `champion_0..11.png`;
 attack frames `attack/champion_attack_0..13.png` — **wired into `drawChampion`**:
 while `state` is `fighting`/`boss` the swing is synced to `h.atkT` (one full
 14-frame cycle per attack interval, blade lands as the damage does), drawn at
 `CHAMP_ATK_DH=99` vs walk's `CHAMP_DH=88` (attack art has less padding; content
-heights matched, same foot baseline). Boss art in `boss_monster/bosses/`.
-Card icons in `boss_monster/icons/`. Upload via GitHub (preserves transparency),
+heights matched, same foot baseline). Boss art in `no_room_for_heroes/bosses/`.
+Card icons in `no_room_for_heroes/icons/`. Upload via GitHub (preserves transparency),
 no baked shadow, right-facing.
 
-**Mob sandbox**: `boss_monster/sandbox.html` — a standalone toy (one room, a
+**Mob sandbox**: `no_room_for_heroes/sandbox.html` — a standalone toy (one room, a
 Super Knight, +N goblin buttons, FPS counter) the owner uses to eyeball how a
 goblin horde reads visually before deciding on monster stacking. A dropdown
 picks the mob behaviour (`MODES`): **V1** ranks-and-cleave, **V2** pile-on
@@ -326,14 +326,14 @@ sprites/scales but shares no code with `index.html`.
 ```bash
 cd /home/user/Games
 node build.js                      # sanity: 0 errors
-# make change in boss_monster/index.html
+# make change in no_room_for_heroes/index.html
 node build.js
 # (recreate a /tmp/h*.mjs harness if you need a unit test)
 git add -A && git commit -m "..."
 git fetch origin main -q; git merge -X ours origin/main -m "merge main"
-grep -q awardTownResources boss_monster/index.html && echo "RUN THE GUARD"
+grep -q awardTownResources no_room_for_heroes/index.html && echo "RUN THE GUARD"
 node build.js
 git push -u origin <your-session-branch>
 # create DRAFT PR → mark ready → squash-merge (mcp__github__*)
 ```
-Then paste `https://games-71g.pages.dev/boss_monster/` at the end of your reply.
+Then paste `https://games-71g.pages.dev/no_room_for_heroes/` at the end of your reply.

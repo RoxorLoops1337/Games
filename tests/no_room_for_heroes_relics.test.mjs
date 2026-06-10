@@ -3,13 +3,13 @@
 // via addRelic(), and asserts that every rb key shows up in RB (live bonuses)
 // and every one-time boon (hp / manaFlat / manaRegen / bossAtk) hits the boss.
 //
-//   node tests/boss_monster_relics.test.mjs   (or: npm run test:relics)
+//   node tests/no_room_for_heroes_relics.test.mjs   (or: npm run test:relics)
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const html = readFileSync(join(here, '..', 'boss_monster', 'index.html'), 'utf8');
+const html = readFileSync(join(here, '..', 'no_room_for_heroes', 'index.html'), 'utf8');
 let code = html.match(/<script>([\s\S]*)<\/script>/)[1];
 
 // --- minimal DOM / browser stubs so the game script can evaluate headlessly ---

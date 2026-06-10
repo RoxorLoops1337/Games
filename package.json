@@ -6,9 +6,9 @@
   "scripts": {
     "build": "node build.js",
     "watch": "node build.js --watch",
-    "test:relics": "node tests/boss_monster_relics.test.mjs",
-    "test:champion": "node tests/boss_monster_champion.test.mjs",
-    "test:boss": "node tests/boss_monster_relics.test.mjs && node tests/boss_monster_champion.test.mjs && node tests/boss_monster_fusion.test.mjs && node tests/boss_monster_town.test.mjs && node tests/boss_monster_meta.test.mjs && node tests/boss_monster_board.test.mjs && node tests/boss_monster_cloud.test.mjs"
+    "test:relics": "node tests/no_room_for_heroes_relics.test.mjs",
+    "test:champion": "node tests/no_room_for_heroes_champion.test.mjs",
+    "test:boss": "node tests/no_room_for_heroes_relics.test.mjs && node tests/no_room_for_heroes_champion.test.mjs && node tests/no_room_for_heroes_fusion.test.mjs && node tests/no_room_for_heroes_town.test.mjs && node tests/no_room_for_heroes_meta.test.mjs && node tests/no_room_for_heroes_board.test.mjs && node tests/no_room_for_heroes_cloud.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",

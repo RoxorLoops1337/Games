@@ -1,7 +1,7 @@
 # Champion knight — ATTACK animation
 
 The Super Knight's **attack** swing — **wired into the game** via `drawChampion`
-in `boss_monster/index.html`.
+in `no_room_for_heroes/index.html`.
 
 - Frames: `champion_attack_0.png … champion_attack_13.png` (14 frames, one PNG
   per frame, right-facing, transparent background).
