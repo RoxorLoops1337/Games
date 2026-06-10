@@ -4430,11 +4430,18 @@ function draw(){
 }
 
 function drawDungeon(tx, scale, isBuild){
-  // floor (drawn wide/tall so it still covers the screen when zoomed out)
-  X.fillStyle='#241a3a';
-  X.fillRect(-VW, FLOOR, VW*4, VH);
-  X.fillStyle='#2e2350';
-  X.fillRect(-VW, FLOOR, VW*4, 6);
+  // floor (drawn wide/tall so it still covers the screen when zoomed out).
+  // With a painted backdrop, let its carved wall show through — just lay a
+  // translucent shade below the floor line so rooms/heroes still read.
+  if(ARENA_BG && ARENA_BG._ok){
+    X.fillStyle='rgba(18,12,30,.34)'; X.fillRect(-VW, FLOOR, VW*4, VH);
+    X.fillStyle='rgba(46,35,80,.65)'; X.fillRect(-VW, FLOOR, VW*4, 4);
+  } else {
+    X.fillStyle='#241a3a';
+    X.fillRect(-VW, FLOOR, VW*4, VH);
+    X.fillStyle='#2e2350';
+    X.fillRect(-VW, FLOOR, VW*4, 6);
+  }
 
   // each cell
   for(let i=0;i<G.slots+1;i++){
