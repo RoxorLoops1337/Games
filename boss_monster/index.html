@@ -4667,7 +4667,7 @@ function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel
 
 /* ============================== INSPECTION ============================== */
 // Hover (desktop) or tap (mobile/run) a room, hero or the boss to read its stats.
-function hideInspect(){ inspectEl.classList.remove('show'); inspectPinned=false; cancelHideInspect(); }
+function hideInspect(){ inspectEl.classList.remove('show'); inspectPinned=false; inspectEnt=null; cancelHideInspect(); }
 // Delayed hide so the mouse can travel from a room INTO the bubble (to reach
 // the Upgrade/Demolish buttons) without it vanishing en route.
 function hideInspectSoon(){ cancelHideInspect(); _inspHideT=setTimeout(()=>{ if(!_overInspect && inspectHover) hideInspect(); }, 280); }
@@ -4675,7 +4675,7 @@ function cancelHideInspect(){ if(_inspHideT){ clearTimeout(_inspHideT); _inspHid
 function showInspect(html, hover){
   cancelHideInspect();
   inspectEl.innerHTML=html+'<span class="ix" onclick="hideInspect()">✕</span>';
-  inspectEl.classList.add('show'); inspectHover=!!hover; inspectPinned=!hover;
+  inspectEl.classList.add('show'); inspectHover=!!hover; inspectPinned=!hover; inspectEnt=null;
   // anchor the bubble near the click/hover instead of the far bottom-left corner
   const stW=CV.getBoundingClientRect().width || 800;
   const w=inspectEl.offsetWidth || 240;
@@ -4684,6 +4684,7 @@ function showInspect(html, hover){
 }
 inspectEl.addEventListener('pointerenter', ()=>{ _overInspect=true; cancelHideInspect(); });
 inspectEl.addEventListener('pointerleave', ()=>{ _overInspect=false; if(inspectHover) hideInspectSoon(); });
+let inspectEnt=null;   // what the bubble currently describes (for hover-vs-pin logic)
 function showInspectEntity(ent, hover){
   if(!ent || ent.kind==='empty'){ hideInspect(); return; }
   let html='';
@@ -4692,7 +4693,11 @@ function showInspectEntity(ent, hover){
   else if(ent.kind==='boss') html=describeBoss();
   else if(ent.kind==='room') html=describeRoom(ent.room);
   else return;
-  showInspect(html, hover);
+  showInspect(html, hover); inspectEnt=ent;
+}
+function sameInspectEnt(ent){
+  return !!(inspectEnt && ent && inspectEnt.kind===ent.kind
+    && inspectEnt.h===ent.h && inspectEnt.room===ent.room && inspectEnt.spec===ent.spec);
 }
 // Tooltip for an upcoming hero waiting at the gate (build preview).
 function describeQueueHero(spec){
@@ -5009,15 +5014,16 @@ function endDrag(e){
 CV.addEventListener('pointerup', endDrag);
 CV.addEventListener('pointercancel', endDrag);
 
-// Desktop hover inspection. A PINNED bubble (from a tap) is left alone so it
-// can't be wiped out while the mouse travels toward its buttons; hover-empty
-// hides on a short grace timer for the same reason.
+// Desktop hover inspection. A PINNED bubble (from a tap) survives empty-space
+// hover so it can't be wiped out while the mouse travels toward its buttons —
+// but hovering a DIFFERENT entity replaces it, so room info (veteran XP etc.)
+// stays browsable. Hover-empty hides on a short grace timer.
 CV.addEventListener('mousemove', e=>{
   lastPtrCX=e.clientX-CV.getBoundingClientRect().left;
   if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
-  if(inspectPinned) return;
   const ent=entityAt(clientToWorldX(e));
   if(!ent || ent.kind==='empty'){ if(inspectHover) hideInspectSoon(); return; }
+  if(inspectPinned && sameInspectEnt(ent)) return;   // keep the pinned bubble (with its buttons) intact
   showInspectEntity(ent, true);
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
