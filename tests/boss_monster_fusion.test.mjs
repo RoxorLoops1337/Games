@@ -4,7 +4,8 @@
 import { loadGame, harness } from './boss_monster_lib.mjs';
 
 const A = loadGame(`freshGame,buildCells,synergyInfo,doDeleteRoom,askDeleteRoom,
-  openTitle,gotoMenu,openCodex,pickSlot,describeRoom,chooseBoss,ROOMS,SYNERGY_PAIRS,
+  openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,
+  pickSlot,describeRoom,chooseBoss,ROOMS,SYNERGY_PAIRS,
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('fusion/demolish/menu');
 
@@ -55,7 +56,11 @@ t.ok(A.G.rooms[1] != null, 'demolish refuses outside the build phase');
 
 // --- menu screens render without throwing ---
 let threw = '';
-try { A.openTitle(); A.gotoMenu(); A.pickSlot(1); A.openCodex(); } catch (e) { threw = e.message; }
-t.ok(threw === '', 'title/home/pickSlot/codex render clean' + (threw ? ' — ' + threw : ''));
+try {
+  A.openTitle(); A.gotoMenu(); A.pickSlot(1);
+  A.openPlay(); A.openStronghold(); A.openLibrary();
+  A.openCodex(); A.openUnlocks(); A.showHelp();
+} catch (e) { threw = e.message; }
+t.ok(threw === '', 'all menu screens render clean' + (threw ? ' — ' + threw : ''));
 
 t.done();

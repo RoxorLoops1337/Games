@@ -213,11 +213,14 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
 - Independent profiles. Keys: `bossmonster_runes_<n>` / `bossmonster_town_<n>`,
   active slot in `bm_slot`. Legacy un-slotted saves migrate into slot 1.
   `switchSlot/resetSlot/slotSummary`.
-- **Menu is slot-first**: boot → `openTitle()` (branding + pitch + the three
-  slot cards; pick one via `pickSlot`) → `gotoMenu()` = the **profile home**
-  (Campaign/Endless/Tutorial row, Runes/Town row, small links for Codex /
-  Unlocks / Help / Switch slot). All Back buttons land on `gotoMenu()`;
-  `openSlots()` is now an alias for `openTitle()`.
+- **Menu is slot-first with grouped submenus** (owner dislikes link rows —
+  buttons only): boot → `openTitle()` (branding + pitch + the three slot cards;
+  `pickSlot`) → `gotoMenu()` = the **profile home** with four buttons:
+  `openPlay()` (Campaign/Endless/Tutorial), `openStronghold()` (Rune Page /
+  Town Builder / Unlocks), `openLibrary()` (Codex / How to play), and Save
+  Slots (`openTitle`). Each leaf screen's Back returns to its parent submenu
+  (runebook & town builder & unlocks → Stronghold; codex & help → Library);
+  `openSlots()` is an alias for `openTitle()`.
 
 ### Meta-reward economy (recently cut hard — owner found it too fast)
 - Rune points & shards both scaled `slain/4+level`; **both ÷10** now

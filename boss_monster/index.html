@@ -1405,31 +1405,59 @@ function difficulty(){
 
 /* ============================== PHASE: MENU =============================== */
 // The PROFILE HOME — reached after picking a save slot on the title screen.
-// Play actions up top, meta below, everything else demoted to small links.
+// Four grouped buttons, each leading to a small submenu (no link clutter).
 function gotoMenu(){
   G = freshGame('campaign'); G.phase='menu'; render();
   tutBar.classList.remove('show');
   overlay.classList.add('show');
   const s=slotSummary(saveSlot);
+  const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
   overlay.innerHTML = `
     <h1>BOSS&nbsp;MONSTER</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
     <p class="small" style="opacity:.85;margin:2px 0 8px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills`:' · fresh profile'}</p>
-    <div class="menu-btns">
-      <button class="go" onclick="startCampaign()">⚔️ Campaign</button>
-      <button onclick="startEndless()">♾️ Endless</button>
-      <button onclick="startTutorial()" class="${tutDoneGet()?'':'tut-pulse'}">📖 Tutorial</button>
+    <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
+      <button class="go${tutDoneGet()?'':' tut-pulse'}" style="min-width:250px" onclick="openPlay()">⚔️ Start Game${sub('campaign · endless · tutorial')}</button>
+      <button style="min-width:250px" onclick="openStronghold()">🏰 Stronghold${sub('runes · town · unlocks')}</button>
+      <button style="min-width:250px" onclick="openLibrary()">📖 Library${sub('combo codex · how to play')}</button>
+      <button style="min-width:250px" onclick="openTitle()">💾 Save Slots${sub('switch profile')}</button>
+    </div>`;
+}
+// Start Game → pick a mode.
+function openPlay(){
+  overlay.classList.add('show');
+  const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
+  overlay.innerHTML = `<h1>⚔️ Start Game</h1>
+    <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
+      <button class="go" style="min-width:270px" onclick="startCampaign()">⚔️ Campaign${sub('the 50-level siege — relics, mandates, the King')}</button>
+      <button style="min-width:270px" onclick="startEndless()">♾️ Endless${sub('no cap, no King — how long can you last?')}</button>
+      <button style="min-width:270px" class="${tutDoneGet()?'':'tut-pulse'}" onclick="startTutorial()">📖 Tutorial${sub('learn the loop in one guided run')}</button>
     </div>
-    <div class="menu-btns" style="margin-top:8px">
-      <button onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}</button>
-      <button onclick="openTownBuilder()">🏗️ Town Builder</button>
+    <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
+}
+// Stronghold → everything that makes the NEXT run stronger.
+function openStronghold(){
+  overlay.classList.add('show');
+  const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
+  overlay.innerHTML = `<h1>🏰 Stronghold</h1>
+    <p class="small" style="opacity:.85;margin:0 0 6px">Permanent power between runs.</p>
+    <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
+      <button class="go" style="min-width:270px" onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}${sub('spend rune points on the boss skill tree')}</button>
+      <button style="min-width:270px" onclick="openTownBuilder()">🏗️ Town Builder${sub('spend wood, stone & shards on buildings')}</button>
+      <button style="min-width:270px" onclick="openUnlocks()">🔓 Unlocks${sub('bosses & cards earned by lifetime kills')}</button>
     </div>
-    <p class="small" style="margin-top:12px;opacity:.9">
-      <a href="#" onclick="openCodex();return false" style="color:#9adfff">⚛️ Combo Codex</a> &nbsp;·&nbsp;
-      <a href="#" onclick="openUnlocks();return false" style="color:#9adfff">🔓 Unlocks</a> &nbsp;·&nbsp;
-      <a href="#" onclick="showHelp();return false" style="color:#9adfff">❓ How to play</a> &nbsp;·&nbsp;
-      <a href="#" onclick="openTitle();return false" style="color:#9adfff">💾 Switch slot</a>
-    </p>`;
+    <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
+}
+// Library → reference material.
+function openLibrary(){
+  overlay.classList.add('show');
+  const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
+  overlay.innerHTML = `<h1>📖 Library</h1>
+    <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
+      <button class="go" style="min-width:270px" onclick="openCodex()">⚛️ Combo Codex${sub('reactions, named fusions & keywords')}</button>
+      <button style="min-width:270px" onclick="showHelp()">❓ How to play${sub('the loop in five lines')}</button>
+    </div>
+    <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
 }
 // The TITLE screen — branding, the pitch, and the three save-slot profiles.
 // Picking a slot leads to the profile home; everything else lives there.
@@ -1461,8 +1489,7 @@ function openTitle(){
        <b>room card</b>; matching cards <b>upgrade</b> a room. Fights auto-resolve,
        but your <b>boss abilities</b> are yours to fire.</p>
     <div class="choices">${cards.join('')}</div>
-    <p class="small" style="margin-top:10px;opacity:.9">Each slot is its own profile — runes, town and unlocks are separate.
-      &nbsp;<a href="#" onclick="showHelp();return false" style="color:#9adfff">❓ How to play</a></p>`;
+    <p class="small" style="margin-top:10px;opacity:.9">Each slot is its own profile — runes, town and unlocks are separate.</p>`;
 }
 function pickSlot(n){ if(n===saveSlot) gotoMenu(); else switchSlot(n); }
 function showHelp(){
@@ -1480,7 +1507,7 @@ function showHelp(){
         Boss HP barely heals — only <b>Mend/Drain</b> abilities restore it, so don't
         let anyone through.
     </p>
-    <div class="menu-btns"><button class="go" onclick="gotoMenu()">Back</button></div>`;
+    <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
 }
 function startCampaign(){ G=freshGame('campaign'); gotoEdicts(); }
 function startEndless(){ G=freshGame('endless'); gotoEdicts(); }
@@ -1511,7 +1538,7 @@ function openUnlocks(){
     <p>Slay heroes to unlock new bosses & rooms. Lifetime kills: <b style="color:var(--gold)">${RUNES.kills}</b></p>
     <h2 style="margin:6px 0 4px">Bosses</h2><div class="unlockgrid">${bosses}</div>
     <h2 style="margin:12px 0 4px">Room Cards</h2><div class="unlockgrid">${cards}</div>
-    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
+    <div class="menu-btns"><button class="go" onclick="openStronghold()">← Back</button></div>`;
 }
 
 /* ============================== COMBO CODEX ============================= */
@@ -1584,7 +1611,7 @@ function openCodex(){
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">${fus}</div>
     <h2 style="margin:12px 0 4px">Keywords</h2>
     <div style="max-width:640px;text-align:left;margin:0 auto">${keys}</div>
-    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
+    <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
 }
 
 /* ============================ TOWN BUILDER UI =========================== */
@@ -1623,7 +1650,7 @@ function renderTownBuilder(){
     <h2 style="margin:12px 0 4px">Economy <span class="small" style="opacity:.6">— permanent bonuses</span></h2>
     <div class="choices">${ecoCards}</div>
     <p class="small" style="opacity:.6;max-width:560px;margin:8px auto 0">The Notice Board (events) is always open. Earn 🪵 / 🪨 from waves survived and 🔮 from depth — banked when you <b>close the dungeon</b> (or halved if the throne falls).</p>
-    <div class="menu-btns"><button class="go" onclick="gotoMenu()">← Back</button></div>`;
+    <div class="menu-btns"><button class="go" onclick="openStronghold()">← Back</button></div>`;
 }
 
 /* ============================== TUTORIAL =============================== */
@@ -1735,7 +1762,7 @@ function renderRunes(){
     hint=`<div class="rbhint">Tap a rune to inspect it · tap again (or Buy) to spend a point.</div>`;
   }
   overlay.innerHTML=`<div class="runebook">
-    <button class="rbback" onclick="gotoMenu()">‹ BACK</button>
+    <button class="rbback" onclick="openStronghold()">‹ BACK</button>
     <div class="rbpts">${RUNES.points} <span class="rbscroll-ic">📜</span></div>
     <div class="rbview" id="rbview"><div class="rtree" id="rtree" style="width:${W}px;height:${H}px">
       <svg width="${W}" height="${H}" style="position:absolute;left:0;top:0;pointer-events:none">${paths}</svg>
