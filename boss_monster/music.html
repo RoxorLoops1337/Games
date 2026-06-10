@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Boss Monster — Music Player</title>
+<style>
+  :root{ --bg:#0c0916; --panel:#171029; --line:#3a2d5c; --accent:#9a5cff;
+    --ink:#e9e0ff; --gold:#ffd34d; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Trebuchet MS",Verdana,sans-serif;}
+  #wrap{max-width:760px;margin:0 auto;padding:14px;}
+  h1{font-size:20px;color:var(--gold);margin:6px 0 2px;}
+  h1 .small{font-size:11px;color:var(--ink);opacity:.7;font-weight:normal;}
+  .track{display:flex;gap:12px;align-items:center;background:var(--panel);
+    border:1.5px solid var(--line);border-radius:12px;padding:10px 14px;margin:10px 0;}
+  .track.playing{border-color:var(--gold);box-shadow:0 0 14px rgba(255,211,77,.25);}
+  .track button{width:54px;height:54px;border-radius:50%;font-size:22px;flex:none;
+    background:#241a3e;border:2px solid var(--accent);color:var(--ink);cursor:pointer;}
+  .track.playing button{border-color:var(--gold);color:var(--gold);}
+  .tn{font-weight:bold;font-size:15px;}
+  .td{font-size:12px;opacity:.75;line-height:1.45;}
+  .tt{font-size:11px;color:#9adfff;opacity:.9;}
+  #viz{width:100%;height:64px;background:#100b1e;border:1.5px solid var(--line);
+    border-radius:10px;margin-top:10px;}
+  #ctl{display:flex;gap:14px;align-items:center;margin-top:10px;font-size:13px;flex-wrap:wrap;}
+  input[type=range]{accent-color:var(--accent);width:150px;}
+  .note{font-size:11px;opacity:.7;margin-top:10px;line-height:1.5;}
+  a{color:#9adfff;}
+  label{display:flex;gap:6px;align-items:center;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>🎵 Boss Monster — Music Player <span class="small">(<a href="index.html">back to the game</a>)</span></h1>
+  <div class="td" style="margin-bottom:4px">Original 8-bit compositions on authentic NES channels:
+    two pulse waves (12.5% / 25% duty), a triangle bass and a noise kit. All loop forever — tap ▶ to audition.</div>
+  <div id="list"></div>
+  <canvas id="viz"></canvas>
+  <div id="ctl">
+    <label>🔊 <input type="range" id="vol" min="0" max="100" value="70"></label>
+    <label><input type="checkbox" id="echo" checked> cavern echo</label>
+    <span id="status" class="td">stopped</span>
+  </div>
+  <p class="note">Pick your favorites and I'll wire them into the game's mood system
+    (menu/town → wave → champion → danger). Everything is sequenced in code — tempo,
+    key and instrumentation are all one-line tweaks.</p>
+</div>
+<script>
+/* ================= note parsing ================= */
+const NOTE_OFF={c:0,d:2,e:4,f:5,g:7,a:9,b:11};
+function midi(tok){ const m=/^([a-g])(#?)(\d)$/.exec(tok); if(!m) return null;
+  return 12*(+m[3]+1)+NOTE_OFF[m[1]]+(m[2]?1:0); }
+const hz=n=>440*Math.pow(2,(n-69)/12);
+// "d4:2 -:4 f#3:2" → [{t,midi,d}] in 16th-note units; returns {ev,len}
+function parseSeq(s){
+  const ev=[]; let t=0;
+  for(const tok of s.trim().split(/\s+/)){
+    const [n,d]=tok.split(':'); const dur=+d;
+    if(n!=='-'){ const m=midi(n); if(m==null) throw new Error('bad note '+tok); ev.push({t,m,d:dur}); }
+    t+=dur;
+  }
+  return {ev,len:t};
+}
+// drums: one char per 16th — k kick, s snare, h hat, H open hat, . rest
+function parseDrums(s){
+  const ev=[]; const str=s.replace(/\s+/g,'');
+  for(let i=0;i<str.length;i++) if(str[i]!=='.') ev.push({t:i,k:str[i]});
+  return {ev,len:str.length};
+}
+
+/* ================= the compositions ================= */
+const TRACKS=[
+{ name:'Mist over the Meadow', tag:'menu / town', bpm:96,
+  desc:'Faxanadu-style melancholy — a modal wanderer\'s theme in D dorian.',
+  lead:{duty:.25,vol:.16,seq:
+   'd4:6 f4:2 g4:4 a4:4  c5:6 a4:2 g4:4 f4:4  g4:6 e4:2 f4:4 g4:4  e4:10 -:2 c4:2 d4:2 '+
+   'd4:6 f4:2 g4:4 a4:4  c5:6 d5:2 c5:4 a4:4  b4:4 a4:4 g4:4 e4:4  d4:12 -:4'},
+  arp:{duty:.125,vol:.07,seq:
+   'd3:2 a3:2 d4:2 a3:2 d3:2 a3:2 d4:2 a3:2  d3:2 f3:2 a3:2 f3:2 d3:2 f3:2 a3:2 f3:2 '+
+   'c3:2 g3:2 c4:2 g3:2 c3:2 g3:2 c4:2 g3:2  a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 a3:2 e3:2 '+
+   'd3:2 a3:2 d4:2 a3:2 d3:2 a3:2 d4:2 a3:2  f3:2 c4:2 f4:2 c4:2 f3:2 c4:2 f4:2 c4:2 '+
+   'g3:2 d4:2 g4:2 d4:2 b3:2 d4:2 g4:2 d4:2  d3:2 a3:2 d4:2 a3:2 d3:2 f3:2 a3:2 d4:2'},
+  bass:{vol:.22,seq:
+   'd2:8 d2:8  d2:8 d2:8  c2:8 c2:8  a1:8 a1:8  d2:8 d2:8  f2:8 f2:8  g2:8 g2:8  d2:12 a1:4'},
+  drums:{vol:.35,seq:'k...h...k...h... '.repeat(8)} },
+
+{ name:'The Buried Cathedral', tag:'mystery / dungeon', bpm:80,
+  desc:'Slow, eerie, cathedral-cold — long lead notes over a hypnotic arpeggio (E aeolian).',
+  lead:{duty:.25,vol:.15,seq:
+   '-:16  b4:12 g4:4  a4:8 g4:4 a4:4  e4:16  g4:6 f#4:2 g4:4 a4:4  b4:8 d5:8  c5:6 b4:2 a4:4 f#4:4  e4:16'},
+  arp:{duty:.125,vol:.08,seq:
+   'e3:2 g3:2 b3:2 g3:2 e3:2 g3:2 b3:2 g3:2  e3:2 g3:2 b3:2 g3:2 e3:2 g3:2 b3:2 g3:2 '+
+   'c3:2 g3:2 b3:2 g3:2 c3:2 g3:2 b3:2 g3:2  a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 a3:2 e3:2 '+
+   'e3:2 g3:2 b3:2 g3:2 e3:2 g3:2 b3:2 g3:2  g3:2 b3:2 d4:2 b3:2 g3:2 b3:2 d4:2 b3:2 '+
+   'd3:2 f#3:2 a3:2 f#3:2 d3:2 f#3:2 a3:2 f#3:2  e3:2 g3:2 b3:2 g3:2 e3:2 b3:2 g3:2 e3:2'},
+  bass:{vol:.22,seq:'e2:16  e2:16  c2:16  a1:16  e2:16  g2:16  d2:16  e2:16'},
+  drums:{vol:.25,seq:'............h... '.repeat(8)} },
+
+{ name:'Hammers of the Hall', tag:'build phase', bpm:120,
+  desc:'Bouncy work-song for laying traps — G mixolydian with a walking triangle bass.',
+  lead:{duty:.25,vol:.15,seq:
+   'g4:2 -:2 b4:2 -:2 d5:4 b4:2 g4:2  f4:2 -:2 a4:2 -:2 c5:4 a4:2 f4:2 '+
+   'g4:2 b4:2 d5:2 e5:2 d5:4 b4:4  a4:2 b4:2 c5:2 a4:2 b4:8 '+
+   'g4:2 -:2 b4:2 -:2 d5:4 e5:2 d5:2  c5:2 -:2 a4:2 -:2 f4:4 a4:2 c5:2 '+
+   'b4:2 d5:2 g5:4 f5:2 d5:2 b4:2 a4:2  g4:12 -:4'},
+  arp:{duty:.125,vol:.06,seq:
+   ('-:2 b3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2  -:2 a3:2 -:2 a3:2 -:2 a3:2 -:2 a3:2 ').repeat(2)+
+   '-:2 b3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2  -:2 c4:2 -:2 c4:2 -:2 c4:2 -:2 c4:2 '+
+   '-:2 b3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2  -:2 b3:2 -:2 b3:2 -:2 d4:2 -:2 d4:2'},
+  bass:{vol:.24,seq:
+   'g2:2 g3:2 d3:2 g2:2 g2:2 g3:2 d3:2 b2:2  f2:2 f3:2 c3:2 f2:2 f2:2 f3:2 c3:2 a2:2 '+
+   'g2:2 g3:2 d3:2 g2:2 g2:2 g3:2 d3:2 b2:2  c3:2 c3:2 g2:2 c3:2 d3:2 d3:2 a2:2 d3:2 '+
+   'g2:2 g3:2 d3:2 g2:2 g2:2 g3:2 d3:2 b2:2  f2:2 f3:2 c3:2 f2:2 f2:2 f3:2 c3:2 a2:2 '+
+   'g2:2 b2:2 d3:2 g3:2 f3:2 d3:2 b2:2 a2:2  g2:2 g3:2 d3:2 g2:2 g2:8'},
+  drums:{vol:.4,seq:'k.h.s.h.k.h.s.h. '.repeat(8)} },
+
+{ name:'Throneblood', tag:'boss fight', bpm:150,
+  desc:'Driving A-minor assault — relentless triangle ostinato, harmonic-minor stabs.',
+  lead:{duty:.25,vol:.16,seq:
+   'a4:2 a4:2 c5:2 a4:2 e5:4 d5:2 c5:2  b4:2 c5:2 b4:2 g4:2 a4:8 '+
+   'f5:4 e5:2 d5:2 c5:4 d5:2 e5:2  b4:4 e5:4 g#4:4 b4:4 '+
+   'a4:2 a4:2 c5:2 a4:2 e5:4 g5:4  f5:2 e5:2 d5:2 c5:2 b4:4 d5:4 '+
+   'c5:2 d5:2 e5:2 f5:2 g5:2 f5:2 e5:2 d5:2  e5:8 g#4:4 e4:4'},
+  arp:{duty:.125,vol:.07,seq:
+   'a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 a3:2 a4:2  a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 '+
+   'f3:2 f4:2 f3:2 f4:2 f3:2 f4:2 f3:2 f4:2  g3:2 g4:2 g3:2 g4:2 e3:2 e4:2 e3:2 e4:2 '+
+   'a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 a3:2 a4:2  f3:2 f4:2 f3:2 f4:2 d3:2 d4:2 d3:2 d4:2 '+
+   'f3:2 f4:2 f3:2 f4:2 g3:2 g4:2 g3:2 g4:2  e3:2 e4:2 e3:2 e4:2 e3:2 g#3:2 b3:2 e4:2'},
+  bass:{vol:.26,seq:
+   'a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 a3:2 e3:2  a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 g3:2 e3:2 '+
+   'f2:2 c3:2 f3:2 c3:2 f2:2 c3:2 f3:2 c3:2  g2:2 d3:2 g3:2 d3:2 e2:2 b2:2 e3:2 b2:2 '+
+   'a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 a3:2 e3:2  a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 g3:2 e3:2 '+
+   'f2:2 c3:2 f3:2 c3:2 g2:2 d3:2 g3:2 d3:2  a2:2 e3:2 a3:2 e3:2 a2:2 a2:2 a2:2 a2:2'},
+  drums:{vol:.45,seq:'k.h.s.h.k.h.s.hh '.repeat(7)+'k.h.s.h.s.s.s.s.'} },
+
+{ name:'The High King Falls', tag:'final boss', bpm:160,
+  desc:'The crown\'s last stand — D minor with chromatic menace and a screaming top line.',
+  lead:{duty:.25,vol:.16,seq:
+   'd5:4 -:2 d5:2 e5:2 f5:2 e5:2 d5:2  c#5:4 e5:4 a4:8 '+
+   'd5:2 f5:2 a5:4 g5:2 f5:2 e5:4  c#5:2 d5:2 e5:2 c#5:2 a4:8 '+
+   'd5:4 -:2 d5:2 e5:2 f5:2 g5:2 a5:2  a#5:4 a5:2 g5:2 f5:4 e5:4 '+
+   'f5:2 e5:2 d5:2 c#5:2 d5:2 e5:2 f5:2 g5:2  a5:8 c#5:4 d5:4'},
+  arp:{duty:.125,vol:.07,seq:
+   'd4:2 f4:2 a4:2 f4:2 d4:2 f4:2 a4:2 f4:2  d4:2 f4:2 a4:2 f4:2 c4:2 e4:2 g4:2 e4:2 '+
+   'a#3:2 d4:2 f4:2 d4:2 a#3:2 d4:2 f4:2 d4:2  a3:2 c#4:2 e4:2 c#4:2 a3:2 c#4:2 e4:2 c#4:2 '+
+   'd4:2 f4:2 a4:2 f4:2 d4:2 f4:2 a4:2 f4:2  c4:2 e4:2 g4:2 e4:2 c4:2 e4:2 g4:2 e4:2 '+
+   'a#3:2 d4:2 f4:2 d4:2 g3:2 a#3:2 d4:2 a#3:2  d4:2 f4:2 a4:2 f4:2 a3:2 c#4:2 e4:2 a4:2'},
+  bass:{vol:.26,seq:
+   'd2:2 a2:2 d3:2 a2:2 d2:2 a2:2 d3:2 a2:2  d2:2 a2:2 d3:2 a2:2 c2:2 g2:2 c3:2 g2:2 '+
+   'a#1:2 f2:2 a#2:2 f2:2 a#1:2 f2:2 a#2:2 f2:2  a1:2 e2:2 a2:2 e2:2 a1:2 a1:2 c#2:2 e2:2 '+
+   'd2:2 a2:2 d3:2 a2:2 d2:2 a2:2 d3:2 a2:2  c2:2 g2:2 c3:2 g2:2 c2:2 g2:2 c3:2 g2:2 '+
+   'a#1:2 f2:2 a#2:2 f2:2 g2:2 d3:2 g3:2 d3:2  d2:2 a2:2 d3:2 a2:2 a1:2 a1:2 a2:2 c#3:2'},
+  drums:{vol:.45,seq:'k.h.s.h.kkh.s.h. '.repeat(7)+'k.h.s.h.s.sks.ss'} },
+];
+
+// validate: all channels of a track must agree on loop length
+function validateTracks(){
+  return TRACKS.map(t=>{
+    const L=parseSeq(t.lead.seq).len, A=parseSeq(t.arp.seq).len,
+          B=parseSeq(t.bass.seq).len, D=parseDrums(t.drums.seq).len;
+    return {name:t.name, lead:L, arp:A, bass:B, drums:D, ok:(L===A&&A===B&&B===D)};
+  });
+}
+
+/* ================= the NES-ish synth ================= */
+let AC=null, master=null, analyser=null, delaySend=null;
+let playing=-1, schedTimer=0, loopStart=0, srcs=[];
+function ensureAC(){
+  if(AC) return;
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain(); master.gain.value=0.7;
+  analyser=AC.createAnalyser(); analyser.fftSize=256;
+  master.connect(analyser); analyser.connect(AC.destination);
+  // light feedback delay — the "cavern" toggle
+  delaySend=AC.createGain(); delaySend.gain.value=0.22;
+  const dl=AC.createDelay(1); dl.delayTime.value=0.28;
+  const fb=AC.createGain(); fb.gain.value=0.3;
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2400;
+  delaySend.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(master);
+}
+const duties={};
+function dutyWave(p){
+  if(duties[p]) return duties[p];
+  const N=32, re=new Float32Array(N), im=new Float32Array(N);
+  for(let n=1;n<N;n++) im[n]=(2/(n*Math.PI))*Math.sin(Math.PI*n*p);
+  return duties[p]=AC.createPeriodicWave(re,im);
+}
+let noiseBuf=null;
+function noise(){
+  if(noiseBuf) return noiseBuf;
+  noiseBuf=AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+  const d=noiseBuf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  return noiseBuf;
+}
+function tone(when,dur,freq,wave,duty,vol,echo){
+  const o=AC.createOscillator(), g=AC.createGain();
+  if(wave==='pulse'){ o.setPeriodicWave(dutyWave(duty)); } else o.type='triangle';
+  o.frequency.value=freq;
+  g.gain.setValueAtTime(0,when);
+  g.gain.linearRampToValueAtTime(vol,when+0.006);
+  g.gain.setValueAtTime(vol,when+Math.max(0.01,dur-0.035));
+  g.gain.linearRampToValueAtTime(0,when+dur);
+  o.connect(g); g.connect(master);
+  if(echo && document.getElementById('echo').checked) g.connect(delaySend);
+  o.start(when); o.stop(when+dur+0.02); srcs.push(o);
+}
+function drum(when,k,vol){
+  if(k==='k'){ const o=AC.createOscillator(), g=AC.createGain(); o.type='triangle';
+    o.frequency.setValueAtTime(130,when); o.frequency.exponentialRampToValueAtTime(38,when+0.1);
+    g.gain.setValueAtTime(vol,when); g.gain.exponentialRampToValueAtTime(0.001,when+0.13);
+    o.connect(g); g.connect(master); o.start(when); o.stop(when+0.15); srcs.push(o); return; }
+  const s=AC.createBufferSource(); s.buffer=noise();
+  const f=AC.createBiquadFilter(), g=AC.createGain();
+  if(k==='s'){ f.type='bandpass'; f.frequency.value=1800; f.Q.value=0.8;
+    g.gain.setValueAtTime(vol*0.9,when); g.gain.exponentialRampToValueAtTime(0.001,when+0.12); }
+  else { f.type='highpass'; f.frequency.value=6000;
+    const len=(k==='H')?0.14:0.045;
+    g.gain.setValueAtTime(vol*0.5,when); g.gain.exponentialRampToValueAtTime(0.001,when+len); }
+  s.connect(f); f.connect(g); g.connect(master);
+  s.start(when); s.stop(when+0.2); srcs.push(s);
+}
+/* lookahead scheduler: keep ~0.35s of the loop queued */
+let parsed=null, nextStep=0, stepDur=0, loopLen=0;
+function startTrack(i){
+  stopAll();
+  ensureAC(); if(AC.state==='suspended') AC.resume();
+  const t=TRACKS[i];
+  parsed={ lead:parseSeq(t.lead.seq), arp:parseSeq(t.arp.seq),
+           bass:parseSeq(t.bass.seq), drums:parseDrums(t.drums.seq), t };
+  loopLen=parsed.lead.len;
+  stepDur=60/t.bpm/4;                        // one 16th
+  nextStep=0; loopStart=AC.currentTime+0.08;
+  playing=i; renderList();
+  document.getElementById('status').textContent='♪ '+t.name+' — looping';
+  schedTimer=setInterval(schedule,40); schedule(); vizLoop();
+}
+function schedule(){
+  if(playing<0) return;
+  const horizon=AC.currentTime+0.4;
+  while(loopStart+nextStep*stepDur < horizon){
+    const step=nextStep%loopLen, base=loopStart+nextStep*stepDur;
+    const t=parsed.t;
+    for(const ch of ['lead','arp','bass']){
+      for(const e of parsed[ch].ev) if(e.t===step)
+        tone(base, e.d*stepDur*0.92, hz(e.m), ch==='bass'?'tri':'pulse',
+             t[ch].duty||0, t[ch].vol, ch!=='bass');
+    }
+    for(const e of parsed.drums.ev) if(e.t===step) drum(base, e.k, t.drums.vol);
+    nextStep++;
+  }
+}
+function stopAll(){
+  if(schedTimer){ clearInterval(schedTimer); schedTimer=0; }
+  for(const s of srcs){ try{ s.stop(); }catch(_){ } }
+  srcs=[]; playing=-1; renderList();
+  const st=document.getElementById('status'); if(st) st.textContent='stopped';
+}
+function toggle(i){ if(playing===i) stopAll(); else startTrack(i); }
+
+/* ================= UI ================= */
+function renderList(){
+  document.getElementById('list').innerHTML=TRACKS.map((t,i)=>
+    '<div class="track'+(playing===i?' playing':'')+'">'+
+    '<button onclick="toggle('+i+')">'+(playing===i?'⏹':'▶')+'</button>'+
+    '<div><div class="tn">'+t.name+' <span class="tt">· '+t.tag+' · '+t.bpm+' BPM</span></div>'+
+    '<div class="td">'+t.desc+'</div></div></div>').join('');
+}
+renderList();
+document.getElementById('vol').addEventListener('input',e=>{ if(master) master.gain.value=e.target.value/100; });
+function vizLoop(){
+  const cv=document.getElementById('viz'); const c=cv.getContext('2d');
+  cv.width=cv.clientWidth*(devicePixelRatio||1); cv.height=64*(devicePixelRatio||1);
+  const data=new Uint8Array(analyser.frequencyBinCount);
+  (function f(){
+    if(playing<0){ c.clearRect(0,0,cv.width,cv.height); return; }
+    analyser.getByteFrequencyData(data);
+    c.clearRect(0,0,cv.width,cv.height);
+    const n=48, w=cv.width/n;
+    for(let i=0;i<n;i++){ const v=data[Math.floor(i*data.length/n/1.5)]/255;
+      c.fillStyle=i%4===0?'#ffd34d':'#9a5cff';
+      c.fillRect(i*w+1, cv.height*(1-v), w-2, cv.height*v); }
+    requestAnimationFrame(f);
+  })();
+}
+window.validateTracks=validateTracks;   // headless test hook
+</script>
+</body>
+</html>
