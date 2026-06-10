@@ -203,7 +203,13 @@ and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
   boss empowerment (needs Sanctum), schemes (Den), sabotage/corrupt (Inn), guild,
   threat dial (Watchtower).
 - **Town Builder** (persistent, between runs): spend wood/stone/shards on
-  `BUILDINGS` that unlock the in-run town options + passive bonuses.
+  `BUILDINGS` that unlock the in-run town options + passive bonuses. **Rendered
+  as a painted village MAP** (`renderTownBuilder` → `drawTownMap` on its own
+  canvas): `TOWN_PLOTS` fixes each building's spot, unbuilt = dashed
+  foundation, built = a procedural structure that grows with level (max =
+  banner), green 🔨 = affordable. Tap → anchored popup (`showTownPop` /
+  `townPlotAt`, hit radius 58). Pure UI — `TOWN.built{}` data unchanged.
+  Tests: `tests/boss_monster_town.test.mjs`.
 - **Rune page**: static-tree skill page; **pannable/zoomable** but the buy popup
   is **anchored next to the tapped node** (lives inside the transformed tree).
   Pointer capture is deferred until a real drag so taps reach nodes (iOS fix).

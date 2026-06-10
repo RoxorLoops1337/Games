@@ -1615,7 +1615,7 @@ function openCodex(){
 }
 
 /* ============================ TOWN BUILDER UI =========================== */
-function openTownBuilder(){ overlay.classList.add('show'); renderTownBuilder(); }
+function openTownBuilder(){ overlay.classList.add('show'); townPopId=null; renderTownBuilder(); }
 function resBar(){
   return `<div class="row" style="justify-content:center;gap:16px;font-size:17px;font-weight:bold">
     <span title="Wood">🪵 <span style="color:#d6a86a">${TOWN.res.wood}</span></span>
@@ -1623,34 +1623,177 @@ function resBar(){
     <span title="Shards">🔮 <span style="color:#c79bff">${TOWN.res.shards}</span></span></div>`;
 }
 function costStr(c){ if(!c) return ''; const p=[]; if(c.wood)p.push(`🪵${c.wood}`); if(c.stone)p.push(`🪨${c.stone}`); if(c.shards)p.push(`🔮${c.shards}`); return p.join(' '); }
-function buildingCardHTML(id){
-  const b=BUILDINGS[id]; const lvl=townLvl(id), maxed=lvl>=b.max;
-  const next=maxed?null:buildingCost(id,lvl+1); const afford=canAfford(next);
-  const lvlPips=`<span class="small" style="color:#ffd34d">${'◆'.repeat(lvl)}${'◇'.repeat(b.max-lvl)}</span>`;
-  const action = maxed
-    ? `<div class="small" style="color:#7bdc6b;font-weight:bold">✔ FULLY BUILT</div>`
-    : `<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:4px;padding:6px 10px;font-size:12px">
-         ${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`;
-  return `<div class="choice" style="width:210px;${lvl>0?'border-color:#7bdc6b':''}">
-    <div class="big">${lvl>0?b.ic:'🏗️'}</div>
-    <h3 style="font-size:14px;margin:1px 0">${b.name} ${lvlPips}</h3>
-    <div class="small" style="opacity:.85;min-height:46px;line-height:1.25">${b.desc}</div>
-    <div class="small" style="color:#9adfff;min-height:30px;line-height:1.2">${maxed?b.lvlText(b.max):(lvl>0?b.lvlText(lvl)+'<br>':'')}${maxed?'':`<span style="opacity:.7">Next: ${b.lvlText(lvl+1)}</span>`}</div>
-    ${action}</div>`;
-}
+
+/* ---- Town Builder as a MAP: plots on a painted village, tap to build ---- */
+// World is 960×520. Each building has a fixed home on the map; unbuilt = a
+// staked-out foundation, built = a little painted structure that grows with
+// level. Tapping a plot opens an anchored popup (same pattern as the runebook).
+const TOWN_W=960, TOWN_H=520;
+const TOWN_PLOTS={
+  foundry: {x:150,y:205}, quarry:{x:115,y:340}, smithy:{x:165,y:465},
+  guild:   {x:370,y:235}, watch: {x:483,y:160}, inn:   {x:600,y:235},
+  sanctum: {x:300,y:345}, den:   {x:665,y:350},
+  treasury:{x:395,y:470}, vault: {x:520,y:478},
+  obelisk: {x:825,y:185}, library:{x:805,y:315}, shrine:{x:845,y:455},
+};
+let townPopId=null;
 function renderTownBuilder(){
   overlay.classList.add('show');
-  const townCards=BUILDING_KEYS.filter(id=>BUILDINGS[id].sect!=='eco').map(buildingCardHTML).join('');
-  const ecoCards =BUILDING_KEYS.filter(id=>BUILDINGS[id].sect==='eco').map(buildingCardHTML).join('');
   overlay.innerHTML=`<h1 style="margin-bottom:2px">🏗️ Town Builder</h1>
-    <p style="margin:4px 0">Spend resources earned from your runs to grow the town.</p>
     ${resBar()}
-    <h2 style="margin:10px 0 4px">Town Halls <span class="small" style="opacity:.6">— unlock the in-run Hero Town</span></h2>
-    <div class="choices">${townCards}</div>
-    <h2 style="margin:12px 0 4px">Economy <span class="small" style="opacity:.6">— permanent bonuses</span></h2>
-    <div class="choices">${ecoCards}</div>
-    <p class="small" style="opacity:.6;max-width:560px;margin:8px auto 0">The Notice Board (events) is always open. Earn 🪵 / 🪨 from waves survived and 🔮 from depth — banked when you <b>close the dungeon</b> (or halved if the throne falls).</p>
-    <div class="menu-btns"><button class="go" onclick="openStronghold()">← Back</button></div>`;
+    <div id="townmap" style="position:relative;margin:8px auto 0;max-width:920px;border:2px solid var(--line);border-radius:12px;overflow:hidden;touch-action:manipulation">
+      <canvas id="towncv" style="display:block;width:100%;cursor:pointer"></canvas>
+      <div id="townpop" style="position:absolute;display:none;z-index:5;max-width:230px;background:rgba(12,9,22,.96);border:1.5px solid var(--accent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.45;text-align:left"></div>
+    </div>
+    <p class="small" style="opacity:.6;max-width:560px;margin:6px auto 0">Tap a plot to build or upgrade. A green 🔨 means you can afford it. Earn 🪵 / 🪨 from waves survived and 🔮 from depth — banked when you <b>close the dungeon</b> (or halved if the throne falls).</p>
+    <div class="menu-btns" style="margin-top:6px"><button class="go" onclick="openStronghold()">← Back</button></div>`;
+  const cv=document.getElementById('towncv');
+  const host=document.getElementById('townmap');
+  const cssW=(+host.clientWidth>0)?+host.clientWidth:920;
+  const dpr=(typeof devicePixelRatio==='number'&&devicePixelRatio>0)?devicePixelRatio:1;
+  cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssW*dpr*(TOWN_H/TOWN_W));
+  cv.style.height=Math.round(cssW*(TOWN_H/TOWN_W))+'px';
+  drawTownMap(cv);
+  cv.addEventListener('pointerdown', e=>{
+    const r=cv.getBoundingClientRect();
+    const wx=(e.clientX-r.left)*(TOWN_W/r.width), wy=(e.clientY-r.top)*(TOWN_W/r.width);
+    const id=townPlotAt(wx,wy);
+    if(id) showTownPop(id); else hideTownPop();
+  });
+  if(townPopId) showTownPop(townPopId);   // re-open after a build re-render
+}
+function townPlotAt(wx,wy){
+  let best=null,bd=58;
+  for(const id in TOWN_PLOTS){ const p=TOWN_PLOTS[id];
+    const d=Math.hypot(wx-p.x, wy-(p.y-22));   // plots are anchored at the foot; aim mid-building
+    if(d<bd){ bd=d; best=id; } }
+  return best;
+}
+function hideTownPop(){ townPopId=null; const el=document.getElementById('townpop'); if(el) el.style.display='none'; }
+function showTownPop(id){
+  const el=document.getElementById('townpop'), cv=document.getElementById('towncv');
+  if(!el||!cv) return;
+  townPopId=id;
+  const b=BUILDINGS[id]; const lvl=townLvl(id), maxed=lvl>=b.max;
+  const next=maxed?null:buildingCost(id,lvl+1); const afford=canAfford(next);
+  const pips=`<span style="color:#ffd34d">${'◆'.repeat(lvl)}${'◇'.repeat(b.max-lvl)}</span>`;
+  el.innerHTML=`<b style="color:var(--gold)">${b.ic} ${b.name}</b> ${pips}
+    <span style="float:right;cursor:pointer;color:#ff8a9a" onclick="hideTownPop()">✕</span>
+    <div class="small" style="opacity:.85;margin:3px 0">${b.desc}</div>
+    <div class="small" style="color:#9adfff">${lvl>0?b.lvlText(lvl):''}${maxed?'':(lvl>0?'<br>':'')+(maxed?'':`<span style="opacity:.75">Next: ${b.lvlText(lvl+1)}</span>`)}</div>
+    ${maxed?'<div class="small" style="color:#7bdc6b;font-weight:bold;margin-top:4px">✔ FULLY BUILT</div>'
+      :`<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:6px;padding:6px 10px;font-size:12px;min-height:34px">${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`}`;
+  // anchor next to the plot, clamped inside the map
+  const r=cv.getBoundingClientRect(); const k=(r.width>0?r.width:920)/TOWN_W;
+  const p=TOWN_PLOTS[id];
+  el.style.display='block';
+  const ew=el.offsetWidth||220, eh=el.offsetHeight||120;
+  let x=p.x*k+18, y=(p.y-60)*k-eh/2;
+  if(x+ew > (r.width||920)-6) x=p.x*k-ew-18;
+  el.style.left=Math.round(Math.max(6,x))+'px';
+  el.style.top =Math.round(Math.max(6,Math.min(((r.height||520))-eh-6, y)))+'px';
+}
+// ---- the painted map ----
+function drawTownMap(cv){
+  const c=cv.getContext('2d'); if(!c) return;
+  const k=cv.width/TOWN_W;
+  c.setTransform(k,0,0,k,0,0); c.imageSmoothingEnabled=false;
+  const P=(x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); };
+  // night meadow
+  const g=c.createLinearGradient(0,0,0,TOWN_H); g.addColorStop(0,'#16241a'); g.addColorStop(1,'#0e1812');
+  c.fillStyle=g; c.fillRect(0,0,TOWN_W,TOWN_H);
+  // mottled grass + a pond
+  for(let i=0;i<70;i++){ const sx=(i*157)%TOWN_W, sy=40+((i*211)%(TOWN_H-60));
+    P(sx,sy,14+(i%3)*8,6,'rgba(60,110,70,.10)'); }
+  c.fillStyle='#1d3a52'; c.beginPath(); c.ellipse(905,80,70,34,0,0,7); c.fill();
+  c.fillStyle='#27506e'; c.beginPath(); c.ellipse(905,78,58,26,0,0,7); c.fill();
+  // roads: a main street with a plaza loop
+  const road=(x0,y0,x1,y1,w)=>{ c.strokeStyle='#4a3b2a'; c.lineWidth=w; c.lineCap='round';
+    c.beginPath(); c.moveTo(x0,y0); c.lineTo(x1,y1); c.stroke();
+    c.strokeStyle='#5d4a33'; c.lineWidth=w-8; c.beginPath(); c.moveTo(x0,y0); c.lineTo(x1,y1); c.stroke(); };
+  road(40,415,920,415,26);                       // main street
+  road(483,415,483,205,20);                      // up to the watchtower
+  road(200,415,160,250,16); road(660,395,815,250,16);
+  // plaza
+  c.fillStyle='#5d4a33'; c.beginPath(); c.ellipse(483,300,120,58,0,0,7); c.fill();
+  c.fillStyle='#4a3b2a'; c.beginPath(); c.ellipse(483,300,120,58,0,0,7); c.lineWidth=4; c.strokeStyle='#3a2e20'; c.stroke();
+  // fountain
+  P(467,288,32,10,'#7a8494'); P(471,280,24,8,'#9aa4b2'); P(477,270,12,10,'#4dc3ff');
+  // scattered trees & rocks (fixed, decorative)
+  const tree=(x,y,s)=>{ P(x-2*s,y-6*s,4*s,7*s,'#4a3320');
+    c.fillStyle='#274a2e'; c.beginPath(); c.arc(x,y-9*s,6*s,0,7); c.fill();
+    c.fillStyle='#2f5c38'; c.beginPath(); c.arc(x-3*s,y-7*s,4*s,0,7); c.arc(x+3*s,y-8*s,4*s,0,7); c.fill(); };
+  [[60,140,1.2],[250,120,1],[340,140,0.8],[700,120,1.1],[600,485,1],[320,500,0.9],[745,470,1.2],[40,495,1]].forEach(t=>tree(t[0],t[1],t[2]));
+  [[210,160],[770,140],[60,260],[915,360]].forEach(r=>{ P(r[0],r[1],16,9,'#5a6470'); P(r[0]+3,r[1]-4,9,5,'#6d7884'); });
+  // plots
+  for(const id in TOWN_PLOTS){ drawTownPlot(c,P,id); }
+}
+function drawTownPlot(c,P,id){
+  const p=TOWN_PLOTS[id], b=BUILDINGS[id], lvl=townLvl(id), maxed=lvl>=b.max;
+  const x=p.x, y=p.y;
+  if(lvl<1){
+    // staked-out foundation
+    c.strokeStyle='rgba(255,211,77,.45)'; c.lineWidth=2; c.setLineDash([5,4]);
+    c.strokeRect(x-26,y-40,52,40); c.setLineDash([]);
+    P(x-26,y-3,52,3,'rgba(255,211,77,.25)');
+    c.globalAlpha=0.5; c.font='20px Trebuchet MS'; c.textAlign='center';
+    c.fillText(b.ic, x, y-14); c.globalAlpha=1;
+  } else {
+    drawTownBuilding(c,P,id,x,y,lvl);
+  }
+  // name + level pips
+  c.font='bold 10px Trebuchet MS'; c.textAlign='center';
+  c.fillStyle=lvl>0?'#e9e0ff':'rgba(233,224,255,.55)';
+  c.fillText(b.name, x, y+13);
+  c.fillStyle='#ffd34d'; c.font='9px Trebuchet MS';
+  c.fillText('◆'.repeat(lvl)+'◇'.repeat(b.max-lvl), x, y+24);
+  // affordable hammer
+  if(!maxed && canAfford(buildingCost(id,lvl+1))){
+    c.font='13px Trebuchet MS'; c.fillText('🔨', x+32, y-34);
+  }
+  c.textAlign='left';
+}
+// Little painted structures. All share a foot anchor (x = center, y = ground);
+// they grow a bit with level and fly a banner when fully built.
+function drawTownBuilding(c,P,id,x,y,lvl){
+  const b=BUILDINGS[id], s=1+(lvl-1)*0.12, maxed=lvl>=b.max;
+  const W=Math.round(48*s), H=Math.round(34*s), x0=x-W/2, y0=y-H;
+  const wall={guild:'#8a7a5c',sanctum:'#5c4a8a',inn:'#7a5c40',den:'#4a4438',watch:'#6d6154',
+    quarry:'#6d655a',vault:'#5f6772',treasury:'#7a6a3a',obelisk:'#2c2733',library:'#4a3d5c',
+    smithy:'#5c4338',shrine:'#5c5066',foundry:'#54504a'}[id]||'#6a5a45';
+  const roof={guild:'#a8413a',sanctum:'#8a5cff',inn:'#b06a2e',den:'#3a342c',watch:'#7a4a3a',
+    quarry:'#4a443c',vault:'#3e4754',treasury:'#ffd34d',obelisk:'#16121e',library:'#7a5cb0',
+    smithy:'#3a302a',shrine:'#9a8ab0',foundry:'#807a70'}[id]||'#8a4a3a';
+  if(id==='obelisk'){             // a black spike, not a house
+    c.fillStyle=wall; c.beginPath(); c.moveTo(x-10*s,y); c.lineTo(x,y-58*s); c.lineTo(x+10*s,y); c.closePath(); c.fill();
+    P(x-3,y-46*s,6,8,'#b985ff');
+  } else if(id==='watch'){        // tall tower with a beacon
+    P(x0+W*0.28,y-58*s,W*0.44,58*s,wall); P(x0+W*0.22,y-62*s,W*0.56,8,roof);
+    P(x-4,y-70*s,8,10,'#ff9a3a'); P(x-2,y-74*s,4,5,'#ffd34d');
+  } else if(id==='sanctum'){      // wizard tower with a crystal
+    P(x0+W*0.2,y-52*s,W*0.6,52*s,wall);
+    c.fillStyle=roof; c.beginPath(); c.moveTo(x0+W*0.1,y-52*s); c.lineTo(x,y-72*s); c.lineTo(x0+W*0.9,y-52*s); c.closePath(); c.fill();
+    P(x-3,y-66*s,6,7,'#c79bff'); P(x-6,y-30*s,12,12,'#2a2342');
+  } else {                        // generic hall, flavoured by palette
+    P(x0,y0,W,H,wall);
+    c.fillStyle=roof; c.beginPath(); c.moveTo(x0-4,y0); c.lineTo(x,y0-16*s-(id==='guild'?4:0)); c.lineTo(x0+W+4,y0); c.closePath(); c.fill();
+    P(x-5,y-12*s,10,12*s,'#2a2030');                          // door
+    P(x0+6,y0+6,8,7,'#ffe9a0'); P(x0+W-14,y0+6,8,7,'#ffe9a0'); // lit windows
+    if(id==='smithy'||id==='foundry'){ P(x0+W-10,y0-14,7,14,'#3a3430'); P(x0+W-9,y0-20,5,5,'rgba(200,200,200,.5)'); } // chimney+smoke
+    if(id==='inn'){ P(x0-8,y0+4,4,16,'#4a3320'); P(x0-12,y0+2,12,9,'#b06a2e'); }   // hanging sign
+    if(id==='quarry'){ P(x0-14,y-8,12,8,'#5a6470'); P(x0-10,y-13,7,5,'#6d7884'); } // rock pile
+    if(id==='vault'){ P(x-7,y-16*s,14,4,'#9aa4b2'); }
+  }
+  c.font=Math.round(13+3*s)+'px Trebuchet MS'; c.textAlign='center';
+  c.fillText(b.ic, x, y-H*0.45);
+  if(maxed){ // banner flies from the actual rooftop (the tall builds aren't house-height)
+    let fx=x+W/2, fy=y0-22;
+    if(id==='obelisk'){ fx=x+2; fy=y-58*s; }
+    else if(id==='watch'){ fx=x+W*0.30; fy=y-70*s; }
+    else if(id==='sanctum'){ fx=x+4; fy=y-72*s; }
+    P(fx-1,fy,2,14,'#caa15e'); c.fillStyle='#ffd34d';
+    c.beginPath(); c.moveTo(fx+1,fy); c.lineTo(fx+12,fy+4); c.lineTo(fx+1,fy+8); c.closePath(); c.fill(); }
+  c.textAlign='left';
 }
 
 /* ============================== TUTORIAL =============================== */
