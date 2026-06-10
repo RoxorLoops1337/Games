@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Boss Monster — Build the Dungeon</title>
+<title>No Room For Heroes — Build the Dungeon</title>
 <style>
   :root{
     --ink:#e9e0ff; --gold:#ffd34d; --hp:#ff4d6d; --mana:#4dc3ff; --xp:#7bdc6b;
@@ -262,7 +262,7 @@
 </style>
 </head>
 <body>
-<div id="rotate"><div class="ph">📱</div><b>Rotate your device</b><span class="small" style="opacity:.75">Boss Monster plays in landscape (16:9)</span></div>
+<div id="rotate"><div class="ph">📱</div><b>Rotate your device</b><span class="small" style="opacity:.75">No Room For Heroes plays in landscape (16:9)</span></div>
 <div id="app">
   <div id="topbar"></div>
   <div id="stage">
@@ -285,7 +285,7 @@
 <script>
 "use strict";
 /* ============================================================================
-   BOSS MONSTER — build a reverse dungeon. Heroes walk in from the left toward
+   NO ROOM FOR HEROES — build a reverse dungeon. Heroes walk in from the left toward
    your boss on the right; kill them with trap rooms, monster rooms and a shop
    that arms them (so you can loot it all back). Auto-resolve combat + manual
    boss abilities. Campaign + Endless.
@@ -1437,7 +1437,7 @@ function gotoMenu(){
   const s=slotSummary(saveSlot);
   const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
   overlay.innerHTML = `
-    <h1>BOSS&nbsp;MONSTER</h1>
+    <h1>NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
     <p class="small" style="opacity:.85;margin:2px 0 8px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills${s.asc?` · <span style="color:#c79bff">👑 A${s.asc}</span>`:''}`:' · fresh profile'}</p>
     <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
@@ -1554,7 +1554,7 @@ function openTitle(){
       </div></div>`);
   }
   overlay.innerHTML = `
-    <h1>BOSS&nbsp;MONSTER</h1>
+    <h1>NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
     <p>You are the final boss. Heroes raid from the left toward your throne on the
        right — line the hall with <b>trap rooms</b>, <b>monster rooms</b> and a

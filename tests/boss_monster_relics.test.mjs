@@ -1,4 +1,4 @@
-// Regression guard: every Boss Monster relic bonus must actually land in the
+// Regression guard: every No Room For Heroes relic bonus must actually land in the
 // run. Loads the game's inline <script> in a stubbed DOM, applies each relic
 // via addRelic(), and asserts that every rb key shows up in RB (live bonuses)
 // and every one-time boon (hp / manaFlat / manaRegen / bossAtk) hits the boss.

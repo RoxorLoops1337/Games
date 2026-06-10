@@ -1,4 +1,4 @@
-// Shared headless loader for Boss Monster tests. Evaluates the game's inline
+// Shared headless loader for No Room For Heroes tests. Evaluates the game's inline
 // <script> in a stubbed DOM and returns the internals you ask for.
 //
 //   import { loadGame } from './boss_monster_lib.mjs';

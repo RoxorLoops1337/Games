@@ -1,4 +1,4 @@
-// Boss Monster — cloud saves (Cloudflare Pages Function).
+// No Room For Heroes — cloud saves (Cloudflare Pages Function).
 //
 // Shares the leaderboard's KV namespace (binding BOARD, any casing) with a
 // key prefix. A save is stored under a random sync code; the code is the

@@ -1,6 +1,6 @@
-# Boss Monster — Handover (for the next Claude)
+# No Room For Heroes — Handover (for the next Claude)
 
-A living handover for the **Boss Monster** game. Read this first, then skim
+A living handover for the **No Room For Heroes** game (folder/URL still `boss_monster`). Read this first, then skim
 `boss_monster/index.html`. Keep this file updated as you change things.
 
 ---
