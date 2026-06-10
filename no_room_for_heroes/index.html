@@ -4,11 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <title>No Room For Heroes — Build the Dungeon</title>
 <style>
   :root{
     --ink:#e9e0ff; --gold:#ffd34d; --hp:#ff4d6d; --mana:#4dc3ff; --xp:#7bdc6b;
     --panel:#1b1530; --panel2:#241a40; --line:#6b4fb0; --accent:#b985ff;
+    --pix:'Press Start 2P','Courier New',monospace;   /* 16-bit pixel button/title font */
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;background:#0c0916;color:var(--ink);
@@ -65,15 +69,22 @@
     padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px));
     min-height:74px;flex:0 0 auto;}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-  button{font-family:inherit;cursor:pointer;color:var(--ink);background:var(--panel2);
-    border:1px solid var(--line);border-radius:8px;padding:9px 13px;font-size:13px;font-weight:bold;
-    min-height:42px;touch-action:manipulation;transition:transform .05s,background .15s;}
+  /* 16-bit pixel buttons: blocky border, hard drop-shadow bevel, pixel font.
+     The hard 0-blur shadow reads as a raised pixel edge; :active presses it in. */
+  button{font-family:var(--pix);cursor:pointer;color:var(--ink);background:var(--panel2);
+    border:2px solid var(--line);border-radius:3px;padding:11px 14px;font-size:10px;font-weight:normal;
+    line-height:1.6;letter-spacing:.5px;text-transform:uppercase;
+    box-shadow:0 3px 0 #100b22, inset 0 0 0 1px rgba(255,255,255,.05);
+    min-height:42px;touch-action:manipulation;transition:transform .05s,background .15s,box-shadow .05s;}
   button:hover:not(:disabled){background:#34265e;}
-  button:active:not(:disabled){transform:translateY(1px);}
+  button:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #100b22, inset 0 0 0 1px rgba(255,255,255,.05);}
   button:disabled{opacity:.4;cursor:not-allowed;}
-  button.go{background:#2c8a4a;border-color:#52d97e;}
+  button.go{background:#2c8a4a;border-color:#52d97e;box-shadow:0 3px 0 #14401f, inset 0 0 0 1px rgba(255,255,255,.08);}
   button.go:hover:not(:disabled){background:#36a558;}
-  button.buy{background:#5a4a18;border-color:var(--gold);}
+  button.go:active:not(:disabled){box-shadow:0 1px 0 #14401f, inset 0 0 0 1px rgba(255,255,255,.08);}
+  button.buy{background:#5a4a18;border-color:var(--gold);box-shadow:0 3px 0 #2e2408, inset 0 0 0 1px rgba(255,255,255,.07);}
+  /* keep the descriptive sub-lines inside menu buttons in the readable font */
+  button .small{font-family:'Trebuchet MS',system-ui,sans-serif;text-transform:none;letter-spacing:0;}
   /* hand scrolls horizontally so it never shoves the action buttons away */
   .cards{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;padding-bottom:2px;
     -webkit-overflow-scrolling:touch;scrollbar-width:thin;}
@@ -144,7 +155,40 @@
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
   .menu-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:14px;}
-  .menu-btns button{font-size:16px;padding:12px 22px;}
+  .menu-btns button{font-size:11px;padding:13px 20px;}
+  /* ===== Cinematic title screen ===== */
+  #overlay.titlemode{padding:0;background:#0c0916;}        /* let the art go full-bleed */
+  .titlescreen{position:absolute;inset:0;overflow:hidden;}
+  .titlescreen .tbg{position:absolute;inset:0;background:#0c0916 center/cover no-repeat;
+    background-image:url('title/bg.png');}
+  .titlescreen .tbg.missing{background:
+    radial-gradient(120% 90% at 78% 22%,#3a2470 0%,#1a1030 55%,#0c0916 100%);}   /* fallback if art absent */
+  .titlelogo{position:absolute;left:50%;top:6%;width:min(660px,86%);height:auto;z-index:2;
+    image-rendering:pixelated;filter:drop-shadow(0 10px 20px rgba(0,0,0,.6));
+    transform-origin:50% 50%;animation:logoTwirl 1.15s cubic-bezier(.18,.7,.24,1) both;}
+  .titlelogo-fallback{position:absolute;left:50%;top:12%;z-index:2;width:90%;text-align:center;
+    font-family:var(--pix);font-size:30px;line-height:1.4;color:var(--gold);
+    text-shadow:0 3px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);
+    transform-origin:50% 50%;animation:logoTwirl 1.15s cubic-bezier(.18,.7,.24,1) both;}
+  .titlestart{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);z-index:3;
+    animation:titleStartIn .45s ease-out 1s both;}
+  .titlestart button{font-size:15px;padding:16px 34px;min-height:54px;letter-spacing:1px;
+    background:#b0202a;border-color:#ff6a72;color:#fff;
+    box-shadow:0 4px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);animation:titlePulse 1.6s ease-in-out infinite;}
+  .titlestart button:hover:not(:disabled){background:#c8262f;}
+  .titlestart button:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);}
+  /* SNES-style: drop in from above while spinning 3×, overshoot, settle */
+  @keyframes logoTwirl{
+    0%   {transform:translate(-50%,-180%) scale(.04) rotate(-1080deg);opacity:0;}
+    55%  {opacity:1;}
+    70%  {transform:translate(-50%,8%) scale(1.16) rotate(22deg);}
+    84%  {transform:translate(-50%,-2%) scale(.93) rotate(-7deg);}
+    93%  {transform:translate(-50%,1%) scale(1.03) rotate(2deg);}
+    100% {transform:translate(-50%,0) scale(1) rotate(0);}
+  }
+  @keyframes titleStartIn{0%{opacity:0;transform:translate(-50%,24px);}100%{opacity:1;transform:translate(-50%,0);}}
+  @keyframes titlePulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.22);}}
+  @media (max-width:560px){ .titlelogo{top:9%;width:90%;} .titlestart button{font-size:12px;padding:13px 24px;} }
   .ko{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:13px;opacity:.85;}
   .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#2a2046;margin:2px;}
   @media (max-width:560px){
@@ -165,7 +209,7 @@
   #inspect.show{opacity:1;transform:translateY(0);pointer-events:auto;}
   #inspect b{color:var(--gold);}
   #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
-  #inspect button{margin-top:6px;padding:6px 10px;min-height:34px;font-size:12px;}
+  #inspect button{margin-top:6px;padding:6px 10px;min-height:34px;font-size:9px;}
   #inspect .small{opacity:.7;font-size:11px;}
   #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
@@ -174,7 +218,7 @@
   .pauserow{display:flex;align-items:center;justify-content:space-between;gap:12px;}
   .pauserow label{font-weight:bold;font-size:14px;}
   .pauserow input[type=range]{flex:1;max-width:210px;accent-color:var(--accent);height:24px;}
-  .pauserow button{font-size:12px;padding:6px 10px;min-height:34px;}
+  .pauserow button{font-size:9px;padding:6px 10px;min-height:34px;}
   #relicbar{position:absolute;top:5px;left:5px;z-index:21;display:flex;gap:3px;flex-wrap:wrap;
     max-width:calc(100% - 128px);}
   .relicchip{width:32px;height:32px;border-radius:7px;border:2px solid;
@@ -233,7 +277,7 @@
   .rbpop .rbpoprow{display:flex;gap:8px;align-items:flex-start;}
   .rbpop .rbpopic{font-size:24px;line-height:1;}
   .rbpop .rbpopact{margin-top:7px;display:flex;justify-content:center;}
-  .rbpop button.go{white-space:nowrap;padding:6px 16px;font-size:15px;}
+  .rbpop button.go{white-space:nowrap;padding:6px 16px;font-size:10px;}
   .rbpop::after{content:"";position:absolute;left:50%;margin-left:-8px;border:8px solid transparent;}
   .rbpop.below::after{top:-16px;border-bottom-color:var(--accent);}
   .rbpop.above::after{bottom:-16px;border-top-color:var(--accent);}
@@ -723,7 +767,7 @@ let RUNES={ points:0, ranks:{}, kills:0, bossXp:{} };   // kills=lifetime (unloc
 let RB={};   // aggregated bonuses for the active run
 function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
-  abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,slotMax:0,upCap:0,fuseFast:0,
+  abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,slotMax:0,upCap:0,
   synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
 // ---- save slots: independent profiles (own runes + town). Slot 1 inherits any
 // pre-slot save so existing players keep their progress. ----
@@ -1427,6 +1471,29 @@ function difficulty(){
 
 /* ============================== PHASE: MENU =============================== */
 // The PROFILE HOME — reached after picking a save slot on the title screen.
+// Cinematic entry screen: full-bleed art (title/bg.png) with the logo
+// (title/logo.png) twirling in SNES-style, and a single Start Game button.
+// Both art files are optional — missing art falls back to a painted gradient
+// and a text title, so the screen always works.
+function titleScreen(){
+  G = freshGame('campaign'); G.phase='menu'; render();
+  tutBar.classList.remove('show');
+  overlay.classList.add('show'); overlay.classList.add('titlemode');
+  overlay.innerHTML = `
+    <div class="titlescreen">
+      <div class="tbg" id="titlebg"></div>
+      <img class="titlelogo" src="title/logo.png" alt="No Room For Heroes" onerror="titleLogoFail(this)">
+      <div class="titlestart"><button class="go" onclick="leaveTitle()">▶ Start Game</button></div>
+    </div>`;
+  const bg=document.getElementById('titlebg');                 // swap to the painted
+  if(bg && typeof Image!=='undefined'){ const probe=new Image(); probe.onerror=()=>bg.classList.add('missing'); probe.src='title/bg.png'; } // fallback if the art 404s
+}
+function titleLogoFail(img){
+  const h=document.createElement('h1'); h.className='titlelogo-fallback';
+  h.innerHTML='NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES'; img.replaceWith(h);
+}
+function leaveTitle(){ overlay.classList.remove('titlemode'); openTitle(); }
+
 // Four grouped buttons, each leading to a small submenu (no link clutter).
 function gotoMenu(){
   G = freshGame('campaign'); G.phase='menu'; render();
@@ -2288,14 +2355,18 @@ function chooseBoss(key){
     mana:60+RB.manaFlat, maxMana:100+RB.manaFlat, manaRegen:5.5+RB.manaRegen,
     abil:[...b.sig, b.pool[0]].map(id=>({id,cd:0})) };
   applyBossPassive(G.boss);                       // signature passive effects
+  // Seed the treasuries to 0 BEFORE granting shrine relics so a relic's instant
+  // gold/dread lands on them instead of being overwritten; the base starting
+  // amounts (and any relic rb bonuses, now folded into RB) are added afterwards.
+  G.gold=0; G.dread=0;
   // Relic Shrine: begin the run already bearing relic(s)
   G.shrineRelics=[];
   for(let i=0;i<shrineRelics();i++){ const id=randomRelicId(townLvl('shrine')); if(id){ addRelic(id); G.shrineRelics.push(id); } }
   // starter dungeon + rune head-starts
   G.slots=1+RB.slot0;
   G.rooms=Array(G.slots).fill(null);
-  G.gold=30+RB.gold0+townGold0();   // Treasury: bonus starting gold
-  G.dread=RB.dread0;
+  G.gold+=30+RB.gold0+townGold0();   // Treasury: bonus starting gold (on top of any relic gold)
+  G.dread+=RB.dread0;
   G.guildLvl=Math.min(townLvl('guild'), RB.guild0);   // can't out-start your built Guild ceiling
   zoom=1; camX=0;
   { const seen=new Set(); for(let i=0;i<RB.cards0;i++){ const t=pickCardWeighted(unlockedRoomKeys(), runDepth(), seen); seen.add(t); G.hand.push({type:t, lvl:1}); } }
@@ -3959,7 +4030,10 @@ function onEnterCell(h,cell){
 function championTick(h,dt){
   if(h.shieldT>0) h.shieldT-=dt;
   if(h.champion==='berserker'){
-    h.atk = +(h._atkBase*(1 + (1 - h.hp/h.maxHp)*0.6)).toFixed(1);   // enrage as HP drops (max +60%)
+    let m = 1 + (1 - h.hp/h.maxHp)*0.6;                    // enrage as HP drops (max +60%)
+    if(h.cursed)  m *= 0.55;                               // boss debuffs must survive the
+    if(h.dreaded) m *= 0.7;                                // per-frame recompute, not be wiped
+    h.atk = +(h._atkBase*m).toFixed(1);
     return;
   }
   h.specialT-=dt;
@@ -5647,7 +5721,7 @@ window.addEventListener('keydown', ()=>{ if(audioOn) initAudio(); }, {once:false
   if(ab){ ab.textContent=audioOn?'🔊':'🔇';
     ab.addEventListener('click', e=>{ e.stopPropagation(); toggleAudio(); }); } }
 resize();
-openTitle();
+titleScreen();
 requestAnimationFrame(frame);
 </script>
 </body>
