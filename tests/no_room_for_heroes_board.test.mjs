@@ -10,7 +10,13 @@ function mockKV() {
   const store = new Map();
   return {
     async get(k) { return store.has(k) ? store.get(k) : null; },
-    async put(k, v) { store.set(k, v); },
+    // real Cloudflare KV rejects expirationTtl < 60 (the whole request then
+    // 500s) — enforce it here so a regression can't pass the suite
+    async put(k, v, opt) {
+      if (opt && opt.expirationTtl != null && opt.expirationTtl < 60)
+        throw new Error('expirationTtl must be at least 60');
+      store.set(k, String(v));
+    },
     _store: store,
   };
 }

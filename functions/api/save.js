@@ -39,7 +39,11 @@ export async function onRequestPost({ request, env }) {
   const KV = kv(env);
   if (!KV) return json({ error: 'not configured' }, 503);
   const ip = request.headers.get('cf-connecting-ip') || '?';
-  if (await KV.get('srl:' + ip)) return json({ error: 'slow down' }, 429);
+  // 10s per-IP write throttle. KV's MINIMUM expirationTtl is 60s (a smaller
+  // value makes put() throw → the whole request 500s), so the key stores a
+  // timestamp and lives 60s while the comparison enforces the real 10s window.
+  const last = await KV.get('srl:' + ip);
+  if (last && Date.now() - +last < 10000) return json({ error: 'slow down' }, 429);
 
   let b; try { b = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
   const data = b && b.data;
@@ -55,6 +59,6 @@ export async function onRequestPost({ request, env }) {
   }
 
   await KV.put('save:' + code, raw, { expirationTtl: TTL });
-  await KV.put('srl:' + ip, '1', { expirationTtl: 10 });
+  await KV.put('srl:' + ip, String(Date.now()), { expirationTtl: 60 });
   return json({ code });
 }

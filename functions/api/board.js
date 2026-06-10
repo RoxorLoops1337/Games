@@ -28,7 +28,10 @@ export async function onRequestPost({ request, env }) {
   const KV = kv(env);
   if (!KV) return json({ error: 'not configured' }, 503);
   const ip = request.headers.get('cf-connecting-ip') || '?';
-  if (await KV.get('rl:' + ip)) return json({ error: 'slow down' }, 429);
+  // 30s per-IP throttle — KV's minimum expirationTtl is 60s (smaller throws →
+  // 500), so store a timestamp and compare for the real window.
+  const last = await KV.get('rl:' + ip);
+  if (last && Date.now() - +last < 30000) return json({ error: 'slow down' }, 429);
 
   let b; try { b = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
   const name = String(b.name || '').replace(/[^\w \-.']/g, '').trim().slice(0, 16) || 'Anonymous';
@@ -46,6 +49,6 @@ export async function onRequestPost({ request, env }) {
   if (top.length > 50) top.length = 50;
 
   await KV.put('top', JSON.stringify(top));
-  await KV.put('rl:' + ip, '1', { expirationTtl: 30 });
+  await KV.put('rl:' + ip, String(Date.now()), { expirationTtl: 60 });
   return json({ top });
 }
