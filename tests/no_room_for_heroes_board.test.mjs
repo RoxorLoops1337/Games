@@ -1,8 +1,8 @@
 // Leaderboard Pages Function: validation, best-per-name, throttle, 503 fallback.
 //
-//   node tests/boss_monster_board.test.mjs   (or: npm run test:boss)
+//   node tests/no_room_for_heroes_board.test.mjs   (or: npm run test:boss)
 import { onRequestGet, onRequestPost } from '../functions/api/board.js';
-import { harness } from './boss_monster_lib.mjs';
+import { harness } from './no_room_for_heroes_lib.mjs';
 
 const t = harness('leaderboard fn');
 

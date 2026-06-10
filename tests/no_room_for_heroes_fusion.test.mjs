@@ -1,7 +1,7 @@
 // Fusion pair identities + room demolish + menu screens.
 //
-//   node tests/boss_monster_fusion.test.mjs   (or: npm run test:boss)
-import { loadGame, harness } from './boss_monster_lib.mjs';
+//   node tests/no_room_for_heroes_fusion.test.mjs   (or: npm run test:boss)
+import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,buildCells,synergyInfo,doDeleteRoom,askDeleteRoom,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,

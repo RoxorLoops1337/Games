@@ -1,7 +1,7 @@
 // Town Builder map: plot coverage, hit-testing, popup content, build flow.
 //
-//   node tests/boss_monster_town.test.mjs   (or: npm run test:boss)
-import { loadGame, harness } from './boss_monster_lib.mjs';
+//   node tests/no_room_for_heroes_town.test.mjs   (or: npm run test:boss)
+import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,openTownBuilder,renderTownBuilder,drawTownMap,townPlotAt,
   showTownPop,hideTownPop,buildTown,townLvl,buildingCost,canAfford,townClampCam,

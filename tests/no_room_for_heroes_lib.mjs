@@ -1,11 +1,11 @@
 // Shared headless loader for No Room For Heroes tests. Evaluates the game's inline
 // <script> in a stubbed DOM and returns the internals you ask for.
 //
-//   import { loadGame } from './boss_monster_lib.mjs';
+//   import { loadGame } from './no_room_for_heroes_lib.mjs';
 //   const A = loadGame('freshGame,drawChampion,get G(){return G;},set G(v){G=v;}');
 //
 // The expose string is the body of an object literal, so plain names, getters
-// and setters all work. Stubs are the proven set from boss_monster_relics.test.mjs
+// and setters all work. Stubs are the proven set from no_room_for_heroes_relics.test.mjs
 // plus an Image stub (fires onload immediately so sprite arrays read as loaded).
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 
 export function loadGame(expose) {
   const here = dirname(fileURLToPath(import.meta.url));
-  const html = readFileSync(join(here, '..', 'boss_monster', 'index.html'), 'utf8');
+  const html = readFileSync(join(here, '..', 'no_room_for_heroes', 'index.html'), 'utf8');
   let code = html.match(/<script>([\s\S]*)<\/script>/)[1];
 
   const noop = () => {};

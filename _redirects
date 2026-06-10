@@ -1,0 +1,3 @@
+# Cloudflare Pages redirects.
+# No Room For Heroes was formerly served at /boss_monster/ — keep old links alive.
+/boss_monster/*  /no_room_for_heroes/:splat  301
