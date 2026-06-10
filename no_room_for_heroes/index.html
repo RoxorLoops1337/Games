@@ -2432,7 +2432,7 @@ function renderLoadout(){
 /* ============================== PHASE: BUILD ============================= */
 // In build, allow the camera a little past the entrance so the upcoming heroes
 // waiting at the gate are visible.
-function minCam(){ return (G && G.phase==='build' && G.queue && G.queue.length) ? -STAGEW : 0; }
+function minCam(){ return (G && (G.phase==='run' || (G.phase==='build' && G.queue && G.queue.length))) ? -STAGEW : 0; }
 function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
@@ -2605,7 +2605,7 @@ function startWave(){
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
   spawnGroup(G.guildLvl+1);
-  G.phase='run'; speedMul=1; camX=0;
+  G.phase='run'; speedMul=1; camX=-STAGEW;   // open on the gate so you see the heroes march in
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
   if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
@@ -2831,7 +2831,7 @@ function spawnGroup(n){
   if(G.kingDue){
     G.kingDue=false; G.kingFight=true;
     const h=buildHeroFromSpec(kingSpec());
-    h.x=8; h.yOff=0;
+    h.x=-60; h.yOff=0;                    // the King strides in from outside too
     G.heroes=[h]; G.heroNum++;
     banner('👑 THE HIGH KING', '#ffd34d', 'Fell him and rule forever');
     shake(12); sfx('boss');
@@ -2855,7 +2855,7 @@ function spawnGroup(n){
   const count=specs.length;
   for(let k=0;k<count;k++){
     const h=buildHeroFromSpec(specs[k]);
-    h.x = 8 - k*46;                       // stagger entry from the left
+    h.x = -56 - k*40;                     // start OUTSIDE the rooms (left of the gate) and march in
     h.yOff = (k - (count-1)/2) * 8;       // slight vertical offset so they don't fully overlap
     G.heroes.push(h); G.heroNum++;
   }
@@ -3920,7 +3920,7 @@ function update(dt){
   // you pan, so you can scroll over to inspect the boss on the right.
   const lead=G.hero;
   if(!panning && performance.now()>panHoldUntil && lead){
-    const target=clamp(lead.x - VW*0.42, 0, Math.max(0,corridorWidth()-VW));
+    const target=clamp(lead.x - VW*0.42, minCam(), Math.max(0,corridorWidth()-VW));
     camX += (target-camX)*Math.min(1,dt*6);
   }
 }
@@ -4424,11 +4424,14 @@ function drawDungeon(tx, scale, isBuild){
   // to frame the corridor (staging on the left → boss & throne on the right),
   // with the carved wall landing on the floor line.
   if(ARENA_BG && ARENA_BG._ok){
-    const bgLeft=-STAGEW, bgW=corridorWidth()-bgLeft;     // span staging → boss cell's right edge
+    const iw=ARENA_BG.naturalWidth||ARENA_BG.width||1, ih=ARENA_BG.naturalHeight||ARENA_BG.height||1;
     const bgH=VH*1.16;                                    // sky + zoom-out headroom
     const bgTop=FLOOR-0.76*bgH;                           // wall (~76% down the art) sits on the floor
+    const nativeW=bgH*iw/ih;                              // the art's natural width — never squished
+    const bgW=Math.max(nativeW, VW/zoom + ROOM_W);        // always at least the full view width
+    const bgRight=corridorWidth();                        // throne stays pinned to the boss
     X.imageSmoothingEnabled=true;
-    X.drawImage(ARENA_BG, tx(bgLeft), bgTop, bgW, bgH);
+    X.drawImage(ARENA_BG, tx(bgRight-bgW), bgTop, bgW, bgH);
     X.imageSmoothingEnabled=false;
   }
   // floor (drawn wide/tall so it still covers the screen when zoomed out).
