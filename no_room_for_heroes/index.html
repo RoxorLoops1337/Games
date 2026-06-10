@@ -2432,13 +2432,16 @@ function renderLoadout(){
 /* ============================== PHASE: BUILD ============================= */
 // In build, allow the camera a little past the entrance so the upcoming heroes
 // waiting at the gate are visible.
-function minCam(){ return (G && (G.phase==='run' || (G.phase==='build' && G.queue && G.queue.length))) ? -STAGEW : 0; }
+function minCam(){
+  if(!(G && (G.phase==='run' || G.phase==='build'))) return 0;
+  return worldLeft();   // pan across the whole painted landscape (gate-only when no art)
+}
 function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
   else ensureQueue(Math.max(3, G.guildLvl+1));   // endless: pre-roll the next arrivals to preview
   smithyRestock();                                // Dark Smithy: free shop stock
-  camX=minCam();                                  // reveal the staging area
+  zoomFit();                                      // open on the FULL scene (landscape → throne)
   if(first){
     if(G.shrineRelics && G.shrineRelics.length)
       showHint('🛐 The Shrine grants you '+G.shrineRelics.map(id=>RELICS[id].ic+' '+RELICS[id].name).join(' & ')+'!');
@@ -2605,7 +2608,7 @@ function startWave(){
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
   spawnGroup(G.guildLvl+1);
-  G.phase='run'; speedMul=1; camX=-STAGEW;   // open on the gate so you see the heroes march in
+  G.phase='run'; speedMul=1; camX=Math.max(minCam(), -STAGEW-ROOM_W);   // open near the gate to watch the march-in
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
   if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
@@ -4341,6 +4344,16 @@ function drawBanner(){
 // to the plain gradient sky when absent.
 let ARENA_BG=null;
 if(typeof Image!=='undefined'){ ARENA_BG=new Image(); ARENA_BG.onload=()=>{ARENA_BG._ok=true;}; ARENA_BG.onerror=()=>{}; ARENA_BG.src='arena/bg.png'; }
+// The backdrop IS the scene: a fixed landscape whose RIGHT edge is the boss's
+// throne room; rooms build leftward over it. These helpers define its extent.
+const ARENA_H=()=>VH*1.16;                       // sky + zoom-out headroom
+function arenaNativeW(){ if(!(ARENA_BG&&ARENA_BG._ok)) return 0;
+  const iw=ARENA_BG.naturalWidth||ARENA_BG.width||1, ih=ARENA_BG.naturalHeight||ARENA_BG.height||1;
+  return ARENA_H()*iw/ih; }
+// world width of the drawn scene: the art at native scale, stretched only if a
+// huge dungeon outgrows it (the art must always cover the rooms + staging)
+function arenaW(){ const aw=arenaNativeW(); return aw?Math.max(aw, corridorWidth()+STAGEW):0; }
+function worldLeft(){ const aw=arenaW(); return aw? corridorWidth()-aw : -STAGEW; }
 function draw(){
   const sh = shakeT>0 ? shakeMag*(shakeT/0.22) : 0;
   const ox = sh? (Math.random()*2-1)*sh : 0, oy = sh? (Math.random()*2-1)*sh : 0;
@@ -4424,14 +4437,10 @@ function drawDungeon(tx, scale, isBuild){
   // to frame the corridor (staging on the left → boss & throne on the right),
   // with the carved wall landing on the floor line.
   if(ARENA_BG && ARENA_BG._ok){
-    const iw=ARENA_BG.naturalWidth||ARENA_BG.width||1, ih=ARENA_BG.naturalHeight||ARENA_BG.height||1;
-    const bgH=VH*1.16;                                    // sky + zoom-out headroom
+    const bgH=ARENA_H(), bgW=arenaW();                    // the scene, at native scale
     const bgTop=FLOOR-0.76*bgH;                           // wall (~76% down the art) sits on the floor
-    const nativeW=bgH*iw/ih;                              // the art's natural width — never squished
-    const bgW=Math.max(nativeW, VW/zoom + ROOM_W);        // always at least the full view width
-    const bgRight=corridorWidth();                        // throne stays pinned to the boss
     X.imageSmoothingEnabled=true;
-    X.drawImage(ARENA_BG, tx(bgRight-bgW), bgTop, bgW, bgH);
+    X.drawImage(ARENA_BG, tx(worldLeft()), bgTop, bgW, bgH);   // right edge = the boss's throne
     X.imageSmoothingEnabled=false;
   }
   // floor (drawn wide/tall so it still covers the screen when zoomed out).
@@ -5520,9 +5529,12 @@ function upgradeRoomGold(idx){
   sfx('upgrade'); showHint(comboName(room)+' upgraded to Lv '+room.lvl+' for '+cost+'g.');
   render(); showInspectEntity({kind:'room',room});
 }
-function setZoom(z){ zoom=clamp(z, ZMIN, ZMAX); }
+// Zoom-out is allowed far enough to take in the WHOLE painted scene.
+function zMin(){ return Math.min(ZMIN, VW/Math.max(1, corridorWidth()-worldLeft())); }
+function setZoom(z){ zoom=clamp(z, zMin(), ZMAX); }
 function zoomBy(f){ setZoom(zoom*f); draw(); }
-function zoomFit(){ if(!G) return; zoom=clamp(VW/Math.max(1,corridorWidth()), ZMIN, 1.2); camX=0; draw(); }
+function zoomFit(){ if(!G) return;   // fit the WHOLE scene (landscape → throne)
+  zoom=clamp(VW/Math.max(1,corridorWidth()-worldLeft()), zMin(), 1.2); camX=worldLeft(); draw(); }
 
 CV.addEventListener('pointerdown', e=>{
   { const _r=CV.getBoundingClientRect(); lastPtrCX=e.clientX-_r.left; lastPtrCY=e.clientY-_r.top; }   // anchor for the inspect bubble
