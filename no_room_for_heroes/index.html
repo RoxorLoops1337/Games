@@ -939,8 +939,8 @@ function buildTown(id){
 const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
   const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), m=quarryMul();
-  // Trimmed so the town is a long grind: wood/stone ~÷3, shards (the meta currency) ~÷10.
-  return { wood:Math.floor(slain*0.04*m), stone:Math.floor(slain*0.02*m), shards:Math.floor((slain/4+lvl)*m/10) };
+  // Town grind eased ~25%: wood/stone and shards (the meta currency) earn a bit faster.
+  return { wood:Math.floor(slain*0.05*m), stone:Math.floor(slain*0.025*m), shards:Math.floor((slain/4+lvl)*m/8) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -3445,8 +3445,8 @@ function buildPostmortem(){
 // Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
 function awardRunes(){
   // Edicts multiply the runes you bank for the whole run.
-  // Rune income cut ~10× so maxing the tree is a long grind (was ~100/win → all pages in 2 wins).
-  const total = Math.floor((G.totalSlain/4 + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul() / 10);
+  // Rune income eased ~25% (÷8 instead of ÷10) so the tree fills a bit quicker.
+  const total = Math.floor((G.totalSlain/4 + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul() / 8);
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
