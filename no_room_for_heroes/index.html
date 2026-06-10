@@ -383,7 +383,7 @@ const ROOMS = {
   corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:5,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
   hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:4,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
   runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.20, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +20%.'},
-  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Weak early — but grows +3% stronger for every hero that dies in this room.'},
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Weak early — but grows stronger with every hero that dies in this room (fast at first, never caps).'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
@@ -428,11 +428,11 @@ const SYNERGY_PAIRS = {
   'oil+spike':     {m:1.15,name:'Slippery'},
   // monster + monster pair identities — a mechanical twist on top of the
   // multiplier (fx hooks are applied to the guards in buildCells)
-  'goblin+skeleton':{m:1.10,name:'Grave Horde',    fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (+3%/kill each).'},
+  'goblin+skeleton':{m:1.10,name:'Grave Horde',    fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (no cap).'},
   'ogre+warden':    {m:1.10,name:'Gatehouse',      fx:'tauntBoth', desc:'BOTH guards strike the whole party stalled in the room.'},
   'ogre+slime':     {m:1.10,name:'Sludge Colossus',fx:'splitBoth', desc:'BOTH guards reform once at 60% HP when slain.'},
   'ogre+skeleton':  {m:1.25,name:'Bone Colossus',  desc:'A late-game wall — both guards hit ×1.25 harder.'},
-  'goblin+slime':   {m:1.10,name:'Spawning Vats',  fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (+3%/kill each).'},
+  'goblin+slime':   {m:1.10,name:'Spawning Vats',  fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (no cap).'},
 };
 function roomParts(r){ const p=[r.type]; if(r.part2)p.push(r.part2); if(r.part3)p.push(r.part3); return p; }
 function synergyInfo(parts){
@@ -478,6 +478,12 @@ function canFuseRooms(into, from){
 // ---- Boss doctrine helpers (dungeon-wide rules for the active boss) ----
 function bossDoc(){ return (G && G.boss && G.boss.doc) || ''; }
 function monFeeds(def){ return !!(def.feeds || bossDoc()==='undeath'); }   // Undeath: every monster feeds
+// "Fed" growth per hero that died in the room. UNCAPPED but with diminishing
+// returns: ~+3%/kill for the first few corpses (same early feel), then the
+// curve bends so it keeps climbing forever without the old runaway.
+//   old linear: 10→1.30  50→2.50  100→4.00  200→7.00  (applied to BOTH hp & atk)
+//   now:        10→1.21  50→1.54  100→1.72  200→1.91
+function feedMul(kills){ return 1 + 0.30 * Math.log1p(0.10 * (kills||0)); }
 function bastionMul(){ return bossDoc()==='bastion' ? 1.25 : 1; }          // Bastion: tougher guards
 // Barracks (in-run, gold-funded): a global Monster Rank that buffs EVERY monster's HP & ATK.
 function barracksMul(){ const b=G&&G.barracks; return (b&&b.built)? 1 + 0.16*b.lvl : 1; }
@@ -570,7 +576,7 @@ const PASSIVES = {
 // so each boss is a different way to play. Applied via combat/build hooks.
 const DOCTRINES = {
   inferno:   {ic:'🔥', name:'Inferno Dungeon', desc:'Your traps deal +20% and every trap hit sets heroes ablaze.'},
-  undeath:   {ic:'💀', name:'Undeath',         desc:'EVERY monster room feeds — it grows +3% stronger per hero that dies in it.'},
+  undeath:   {ic:'💀', name:'Undeath',         desc:'EVERY monster room feeds — it grows stronger per hero that dies in it (diminishing, no cap).'},
   soulengine:{ic:'🔮', name:'Soul Engine',     desc:'Your traps & monsters channel mana to the throne — fuel your spells.'},
   bastion:   {ic:'🛡️', name:'Bastion',         desc:'Your traps ignore ALL armor and your monster guards are +25% mightier.'},
   overgrowth:{ic:'🌿', name:'Overgrowth',      desc:'Choking vines slow every hero through the halls (−25% move speed).'},
@@ -2632,7 +2638,7 @@ function buildCells(){
           const bAtk= p==='minion'? (r.minAtk||def.atk): def.atk;
           // "Fed" monsters grow with every hero that died in this room — uncapped.
           // Under the Undeath doctrine, ALL monster rooms feed.
-          const feed = (monFeeds(def) || sI.fx==='feedBoth') ? (1 + (r.kills||0)*0.03) : 1;   // Grave Horde/Spawning Vats: the pair shares the feast
+          const feed = (monFeeds(def) || sI.fx==='feedBoth') ? feedMul(r.kills) : 1;   // Grave Horde/Spawning Vats: the pair shares the feast
           const bas = bastionMul();   // Bastion doctrine: tougher guards
           // Each monster is its OWN guard — separate HP & attack, with the combo
           // multiplier applied individually (fused monsters = guards in a row;
@@ -5290,7 +5296,7 @@ function describeCard(card){
     if(def.taunt) lines.push('🛡️ <b style="color:#c9a14d">Taunt</b> — strikes EVERY hero stalled in its room');
     if(def.totem) lines.push('🗿 <b style="color:#7a9e6a">Support</b> — +25% to the rooms on either side while alive');
     if(def.split) lines.push('🟩 <b style="color:#6ad9b0">Split</b> — reforms once at 60% HP when slain');
-    if(monFeeds(def)) lines.push('🍖 Grows +3% per hero that dies in its room'+(def.feeds?'':' (Undeath)'));
+    if(monFeeds(def)) lines.push('🍖 Grows stronger per hero that dies in its room (no cap)'+(def.feeds?'':' (Undeath)'));
   } else if(def.kind==='shop'){
     lines.push(`Holds ${lvl+1} item${lvl+1>1?'s':''} (+1 slot/level). Heroes buy at ×${shopMarkup(lvl).toFixed(2)} — pure profit, and they still drop full loot.`);
   }
@@ -5349,13 +5355,13 @@ function describeRoom(room){
     // each guard gets its OWN stat line (two fused monsters fight one after the other)
     monParts.forEach((p,mi)=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
       const feeds=monFeeds(def)||synI.fx==='feedBoth';
-      const feed=feeds?(1+(room.kills||0)*0.03):1; if(feeds)fed=true;
+      const feed=feeds?feedMul(room.kills):1; if(feeds)fed=true;
       const g3=mi>=2?GUARD3_MUL:1;
       const hp=Math.round(bHp*(0.9+(room.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp||0))*bm*g3);
       const atk=Math.round(bAtk*(1.0+(room.lvl-1)*0.9)*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm*g3);
       lines.push(`${def.ic} ${(p==='minion'?(room.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${mi>=2?' <span class="small" style="opacity:.7">(3rd: ×'+GUARD3_MUL+')</span>':''}`); });
     if(monParts.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${monParts.length} guards — each steps up when the one before falls</span>`);
-    if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${(room.kills||0)*3}% (no cap)`); }
+    if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feedMul(room.kills)-1)*100)}% (no cap)`); }
   if(parts.includes('shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
     lines.push(`🛒 Shop Lv ${room.lvl}: ×${shopMarkup(room.lvl).toFixed(2)} markup · ${(room.stock||[]).length}/${shopCap(room)} slots`);

@@ -5,7 +5,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,buildCells,synergyInfo,doDeleteRoom,askDeleteRoom,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,
-  pickSlot,describeRoom,chooseBoss,ROOMS,SYNERGY_PAIRS,
+  pickSlot,describeRoom,chooseBoss,feedMul,ROOMS,SYNERGY_PAIRS,
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('fusion/demolish/menu');
 
@@ -73,5 +73,15 @@ try {
   A.openCodex(); A.openUnlocks(); A.showHelp();
 } catch (e) { threw = e.message; }
 t.ok(threw === '', 'all menu screens render clean' + (threw ? ' — ' + threw : ''));
+
+// --- "Fed" growth curve: uncapped, monotonic, with diminishing returns ---
+const fm = A.feedMul;
+t.ok(fm(0) === 1, 'no kills → no bonus (×1)');
+t.ok(Math.abs((fm(1) - 1) - 0.03) < 0.005, 'first corpse ≈ +3% (early feel preserved)');
+t.ok(fm(10) > fm(5) && fm(100) > fm(50) && fm(1000) > fm(500), 'monotonic increase — never caps');
+// diminishing: each successive block of kills adds less than the one before
+t.ok((fm(20) - fm(10)) < (fm(10) - fm(0)), 'diminishing returns (curve bends)');
+// and the late-game runaway is gone: old linear hit ×4.0 at 100 kills
+t.ok(fm(100) < 2.0 && fm(100) > 1.5, `tamed late game: 100 kills → ×${fm(100).toFixed(2)} (was ×4.0)`);
 
 t.done();
