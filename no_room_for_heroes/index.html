@@ -1834,6 +1834,10 @@ const TOWN_PLOTS={
 // and it replaces the procedural terrain; plots/buildings/villagers draw on top.
 let TOWN_BG=null;
 if(typeof Image!=='undefined'){ TOWN_BG=new Image(); TOWN_BG.onload=()=>{TOWN_BG._ok=true;}; TOWN_BG.onerror=()=>{}; TOWN_BG.src='town/map_bg.png'; }
+// Painted building art (town/<id>.png) — drawn over its plot when present;
+// otherwise the procedural building (drawTownBuilding) is used. Same _ok flag.
+const BUILD_IMG={};
+if(typeof Image!=='undefined'){ for(const _id in TOWN_PLOTS){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.onerror=()=>{}; im.src='town/'+_id+'.png'; BUILD_IMG[_id]=im; } }
 let townPopId=null;
 // pan/zoom state (persists while the screen is open so a rebuild keeps your view)
 let townZoom=1, townCamX=0, townCamY=0;
@@ -2056,6 +2060,14 @@ function drawTownPlot(c,P,id){
 // they grow a bit with level and fly a banner when fully built.
 function drawTownBuilding(c,P,id,x,y,lvl){
   const b=BUILDINGS[id], s=1+(lvl-1)*0.12, maxed=lvl>=b.max;
+  const art=BUILD_IMG[id];
+  if(art && art._ok){                               // painted art: bottom-centred on the plot
+    const DH=Math.round(72*s);
+    const iw=art.naturalWidth||art.width||1, ih=art.naturalHeight||art.height||1;
+    const DW=Math.round(DH*iw/ih);
+    c.drawImage(art, Math.round(x-DW/2), Math.round(y-DH+4), DW, DH);
+    return;
+  }
   const W=Math.round(48*s), H=Math.round(34*s), x0=x-W/2, y0=y-H;
   const wall={guild:'#8a7a5c',sanctum:'#5c4a8a',inn:'#7a5c40',den:'#4a4438',watch:'#6d6154',
     quarry:'#6d655a',vault:'#5f6772',treasury:'#7a6a3a',obelisk:'#2c2733',library:'#4a3d5c',
