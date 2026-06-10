@@ -304,6 +304,7 @@ const relicBar = document.getElementById('relicbar');
 let inspectHover = false;        // shown by hover (auto-hides) vs pinned by a tap
 let inspectPinned = false;       // a tapped bubble stays until ✕ / tap elsewhere
 let lastPtrCX = null;            // last pointer x in stage px — anchors the bubble
+let lastPtrCY = null;            // last pointer y in stage px — anchors the bubble vertically
 let _inspHideT = 0, _overInspect = false;
 
 // Virtual render space. VH is fixed so sprites stay a constant size; VW is
@@ -5135,10 +5136,26 @@ function showInspect(html, hover){
   inspectEl.innerHTML=html+'<span class="ix" onclick="hideInspect()">✕</span>';
   inspectEl.classList.add('show'); inspectHover=!!hover; inspectPinned=!hover; inspectEnt=null;
   // anchor the bubble near the click/hover instead of the far bottom-left corner
-  const stW=CV.getBoundingClientRect().width || 800;
-  const w=inspectEl.offsetWidth || 240;
-  let x=(lastPtrCX!=null ? lastPtrCX : stW/2) - w/2;
-  inspectEl.style.left=Math.round(Math.max(8, Math.min(stW-w-8, x)))+'px';
+  const r=CV.getBoundingClientRect();
+  const stW=r.width||800, stH=r.height||450;
+  const w=inspectEl.offsetWidth||240, h=inspectEl.offsetHeight||120;
+  if(lastPtrCX==null){          // hand-card / relic hover: keep the centred bottom anchor
+    inspectEl.style.left=Math.round(Math.max(8,(stW-w)/2))+'px';
+    inspectEl.style.top='auto'; inspectEl.style.bottom='8px';
+    return;
+  }
+  // Offset to the RIGHT of the cursor so the bubble never covers the room you're
+  // about to click/drag. Prefer top-right; drop to bottom-right if it'd clip the top.
+  const OFF=18;
+  let x=lastPtrCX+OFF;
+  if(x+w>stW-8) x=lastPtrCX-w-OFF;                 // no room on the right → flip left of cursor
+  x=Math.max(8, Math.min(stW-w-8, x));
+  const cy=(lastPtrCY!=null?lastPtrCY:stH);
+  let y=cy-h-OFF;                                   // top-right of the cursor
+  if(y<8) y=cy+OFF;                                 // not enough headroom → bottom-right
+  y=Math.max(8, Math.min(stH-h-8, y));
+  inspectEl.style.left=Math.round(x)+'px';
+  inspectEl.style.bottom='auto'; inspectEl.style.top=Math.round(y)+'px';
 }
 inspectEl.addEventListener('pointerenter', ()=>{ _overInspect=true; cancelHideInspect(); });
 inspectEl.addEventListener('pointerleave', ()=>{ _overInspect=false; if(inspectHover) hideInspectSoon(); });
@@ -5201,14 +5218,14 @@ function describeCard(card){
   lines.push(`<span style="opacity:.85">${def.desc}</span>`);
   return lines.join('<br>');
 }
-function cardHover(i){ const c=G.hand[i]; if(c){ lastPtrCX=null; showInspect(describeCard(c), true); } }
+function cardHover(i){ const c=G.hand[i]; if(c){ lastPtrCX=null; lastPtrCY=null; showInspect(describeCard(c), true); } }
 function cardHoverOut(){ if(inspectHover) hideInspectSoon(); }
 // Slay-the-Spire-style relic bar at the top; hover (desktop) / tap (mobile) for info.
 function describeRelic(id){ const r=RELICS[id]; if(!r) return '';
   const tc=RELIC_TIERS[r.tier];
   return `<b>${r.ic} ${r.name}</b> · <span style="color:${tc.col}">${tc.name.toUpperCase()}</span><br><span style="opacity:.9">${r.desc}</span>`; }
-function relicHover(id){ lastPtrCX=null; showInspect(describeRelic(id), true); }
-function relicTap(id){ lastPtrCX=null; showInspect(describeRelic(id), false); }
+function relicHover(id){ lastPtrCX=null; lastPtrCY=null; showInspect(describeRelic(id), true); }
+function relicTap(id){ lastPtrCX=null; lastPtrCY=null; showInspect(describeRelic(id), false); }
 function renderRelicBar(){
   if(!relicBar) return;
   if(!G || !G.relics || !G.relics.length || (G.phase!=='build' && G.phase!=='run')){ relicBar.innerHTML=''; return; }
@@ -5392,7 +5409,7 @@ function zoomBy(f){ setZoom(zoom*f); draw(); }
 function zoomFit(){ if(!G) return; zoom=clamp(VW/Math.max(1,corridorWidth()), ZMIN, 1.2); camX=0; draw(); }
 
 CV.addEventListener('pointerdown', e=>{
-  lastPtrCX=e.clientX-CV.getBoundingClientRect().left;   // anchor for the inspect bubble
+  { const _r=CV.getBoundingClientRect(); lastPtrCX=e.clientX-_r.left; lastPtrCY=e.clientY-_r.top; }   // anchor for the inspect bubble
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
   e.preventDefault();
   pointers[e.pointerId]={x:e.clientX,y:e.clientY};
@@ -5483,7 +5500,7 @@ CV.addEventListener('pointercancel', endDrag);
 // but hovering a DIFFERENT entity replaces it, so room info (veteran XP etc.)
 // stays browsable. Hover-empty hides on a short grace timer.
 CV.addEventListener('mousemove', e=>{
-  lastPtrCX=e.clientX-CV.getBoundingClientRect().left;
+  { const _r=CV.getBoundingClientRect(); lastPtrCX=e.clientX-_r.left; lastPtrCY=e.clientY-_r.top; }
   if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
   // only the band the rooms/actors actually occupy — hovering the empty floor
   // below (or the sky above) shouldn't pop the bubble
