@@ -163,32 +163,31 @@
     background-image:url('title/bg.png');}
   .titlescreen .tbg.missing{background:
     radial-gradient(120% 90% at 78% 22%,#3a2470 0%,#1a1030 55%,#0c0916 100%);}   /* fallback if art absent */
-  .titlelogo{position:absolute;left:50%;top:6%;width:min(660px,86%);height:auto;z-index:2;
-    image-rendering:pixelated;filter:drop-shadow(0 10px 20px rgba(0,0,0,.6));
-    transform-origin:50% 50%;animation:logoTwirl 1.15s cubic-bezier(.18,.7,.24,1) both;}
-  .titlelogo-fallback{position:absolute;left:50%;top:12%;z-index:2;width:90%;text-align:center;
-    font-family:var(--pix);font-size:30px;line-height:1.4;color:var(--gold);
+  .titlelogo{position:absolute;left:50%;top:3%;width:min(440px,58%);height:auto;z-index:2;
+    image-rendering:pixelated;filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));
+    transform-origin:50% 50%;animation:logoTwirl 2s cubic-bezier(.25,.46,.45,.94) both;}
+  .titlelogo-fallback{position:absolute;left:50%;top:5%;z-index:2;width:84%;text-align:center;
+    font-family:var(--pix);font-size:26px;line-height:1.4;color:var(--gold);
     text-shadow:0 3px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);
-    transform-origin:50% 50%;animation:logoTwirl 1.15s cubic-bezier(.18,.7,.24,1) both;}
+    transform-origin:50% 50%;animation:logoTwirl 2s cubic-bezier(.25,.46,.45,.94) both;}
   .titlestart{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);z-index:3;
-    animation:titleStartIn .45s ease-out 1s both;}
+    animation:titleStartIn .45s ease-out 1.9s both;}
   .titlestart button{font-size:15px;padding:16px 34px;min-height:54px;letter-spacing:1px;
     background:#b0202a;border-color:#ff6a72;color:#fff;
     box-shadow:0 4px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);animation:titlePulse 1.6s ease-in-out infinite;}
   .titlestart button:hover:not(:disabled){background:#c8262f;}
   .titlestart button:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);}
-  /* SNES-style: drop in from above while spinning 3×, overshoot, settle */
+  /* SNES-style: zoom in slowly from a tiny point while spinning 4½×, settle */
   @keyframes logoTwirl{
-    0%   {transform:translate(-50%,-180%) scale(.04) rotate(-1080deg);opacity:0;}
-    55%  {opacity:1;}
-    70%  {transform:translate(-50%,8%) scale(1.16) rotate(22deg);}
-    84%  {transform:translate(-50%,-2%) scale(.93) rotate(-7deg);}
-    93%  {transform:translate(-50%,1%) scale(1.03) rotate(2deg);}
+    0%   {transform:translate(-50%,0) scale(.02) rotate(-1620deg);opacity:0;}
+    10%  {opacity:1;}
+    82%  {transform:translate(-50%,0) scale(1.05) rotate(16deg);}   /* zoomed in, last of the spin, slight overshoot */
+    92%  {transform:translate(-50%,0) scale(.985) rotate(-4deg);}
     100% {transform:translate(-50%,0) scale(1) rotate(0);}
   }
   @keyframes titleStartIn{0%{opacity:0;transform:translate(-50%,24px);}100%{opacity:1;transform:translate(-50%,0);}}
   @keyframes titlePulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.22);}}
-  @media (max-width:560px){ .titlelogo{top:9%;width:90%;} .titlestart button{font-size:12px;padding:13px 24px;} }
+  @media (max-width:560px){ .titlelogo{top:5%;width:74%;} .titlestart button{font-size:12px;padding:13px 24px;} }
   .ko{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:13px;opacity:.85;}
   .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#2a2046;margin:2px;}
   @media (max-width:560px){
