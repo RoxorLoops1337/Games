@@ -1687,48 +1687,67 @@ let townPopId=null;
 // pan/zoom state (persists while the screen is open so a rebuild keeps your view)
 let townZoom=1, townCamX=0, townCamY=0;
 const TOWN_ZMAX=3;
+// world units visible at zoom 1 (the full-screen canvas COVERS the viewport, so
+// this is ≤ the world on the cramped axis; defaults = whole world for tests)
+let _tVisW=TOWN_W, _tVisH=TOWN_H, _tKCss=1;
+function townMeasure(cv){
+  const r=cv.getBoundingClientRect();
+  const cw=(r.width>0?r.width:920), ch=(r.height>0?r.height:520);
+  _tKCss=Math.max(cw/TOWN_W, ch/TOWN_H);            // css px per world unit at zoom 1 (cover)
+  _tVisW=cw/_tKCss; _tVisH=ch/_tKCss;
+}
 function townClampCam(){
   townZoom=Math.max(1, Math.min(TOWN_ZMAX, townZoom));
-  townCamX=Math.max(0, Math.min(TOWN_W - TOWN_W/townZoom, townCamX));
-  townCamY=Math.max(0, Math.min(TOWN_H - TOWN_H/townZoom, townCamY));
+  townCamX=Math.max(0, Math.min(TOWN_W - _tVisW/townZoom, townCamX));
+  townCamY=Math.max(0, Math.min(TOWN_H - _tVisH/townZoom, townCamY));
 }
 function townZoomAt(f, cssX, cssY, cv){   // zoom about a css-pixel anchor
-  const r=cv.getBoundingClientRect(); const kc=(r.width>0?r.width:920)/TOWN_W;
-  const wx=townCamX + cssX/(kc*townZoom), wy=townCamY + cssY/(kc*townZoom);
+  const kc=_tKCss*townZoom;
+  const wx=townCamX + cssX/kc, wy=townCamY + cssY/kc;
   townZoom*=f; townClampCam();
-  townCamX=wx - cssX/(kc*townZoom); townCamY=wy - cssY/(kc*townZoom);
+  const kc2=_tKCss*townZoom;
+  townCamX=wx - cssX/kc2; townCamY=wy - cssY/kc2;
   townClampCam();
 }
 function townZoomBtn(f){
   const cv=document.getElementById('towncv'); if(!cv) return;
   const r=cv.getBoundingClientRect();
-  if(f===0){ townZoom=1; townCamX=0; townCamY=0; }
+  if(f===0){ townZoom=1; townCamX=0; townCamY=0; townClampCam(); }
   else townZoomAt(f, (r.width||920)/2, (r.height||520)/2, cv);
   drawTownMap(cv); if(townPopId) showTownPop(townPopId);
 }
 function renderTownBuilder(){
   overlay.classList.add('show');
-  overlay.innerHTML=`<h1 style="margin-bottom:2px">🏗️ Town Builder</h1>
-    ${resBar()}
-    <div id="townmap" style="position:relative;margin:8px auto 0;max-width:980px;border:2px solid var(--line);border-radius:12px;overflow:hidden;touch-action:none">
-      <canvas id="towncv" style="display:block;width:100%;cursor:pointer"></canvas>
-      <div id="townpop" style="position:absolute;display:none;z-index:5;max-width:230px;background:rgba(12,9,22,.96);border:1.5px solid var(--accent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.45;text-align:left"></div>
-      <div style="position:absolute;top:6px;right:6px;z-index:4;display:flex;gap:4px">
-        <button onclick="townZoomBtn(1.45)" style="width:36px;height:36px;padding:0;font-size:17px">＋</button>
-        <button onclick="townZoomBtn(1/1.45)" style="width:36px;height:36px;padding:0;font-size:17px">－</button>
-        <button onclick="townZoomBtn(0)" style="width:36px;height:36px;padding:0;font-size:14px">⤢</button>
+  // full-screen takeover, same pattern as the runebook (absolute inset:0 —
+  // also the iOS flex-%-height fix)
+  overlay.innerHTML=`<div id="townmap" style="position:absolute;inset:0;overflow:hidden;touch-action:none">
+      <canvas id="towncv" style="position:absolute;inset:0;width:100%;height:100%;cursor:pointer"></canvas>
+      <button class="rbback" onclick="openStronghold()">‹ BACK</button>
+      <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:4;background:rgba(12,9,22,.78);border:1px solid var(--line);border-radius:10px;padding:5px 14px;display:flex;gap:14px;align-items:center;white-space:nowrap">
+        <b style="color:var(--gold)">🏗️ Town Builder</b>
+        <span title="Wood">🪵 <b style="color:#d6a86a">${TOWN.res.wood}</b></span>
+        <span title="Stone">🪨 <b style="color:#c8cdd6">${TOWN.res.stone}</b></span>
+        <span title="Shards">🔮 <b style="color:#c79bff">${TOWN.res.shards}</b></span>
       </div>
-    </div>
-    <p class="small" style="opacity:.6;max-width:560px;margin:6px auto 0">Tap a plot to build or upgrade — a green 🔨 means you can afford it. Pinch or use ＋/− to zoom, drag to pan. Earn 🪵 / 🪨 from waves survived and 🔮 from depth — banked when you <b>close the dungeon</b> (or halved if the throne falls).</p>
-    <div class="menu-btns" style="margin-top:6px"><button class="go" onclick="openStronghold()">← Back</button></div>`;
+      <div id="townpop" style="position:absolute;display:none;z-index:5;max-width:230px;background:rgba(12,9,22,.96);border:1.5px solid var(--accent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.45;text-align:left"></div>
+      <div style="position:absolute;bottom:12px;right:12px;z-index:4;display:flex;gap:5px">
+        <button onclick="townZoomBtn(1.45)" style="width:42px;height:42px;padding:0;font-size:18px">＋</button>
+        <button onclick="townZoomBtn(1/1.45)" style="width:42px;height:42px;padding:0;font-size:18px">－</button>
+        <button onclick="townZoomBtn(0)" style="width:42px;height:42px;padding:0;font-size:15px">⤢</button>
+      </div>
+      <div class="small" style="position:absolute;bottom:14px;left:12px;z-index:4;opacity:.65;max-width:46%;text-align:left">Tap a plot to build · green 🔨 = affordable · drag to pan, pinch/＋− to zoom</div>
+    </div>`;
   const cv=document.getElementById('towncv');
   const host=document.getElementById('townmap');
-  const cssW=(+host.clientWidth>0)?+host.clientWidth:920;
+  const cw=(+host.clientWidth>0)?+host.clientWidth:920;
+  const ch=(+host.clientHeight>0)?+host.clientHeight:520;
   const dpr=(typeof devicePixelRatio==='number'&&devicePixelRatio>0)?devicePixelRatio:1;
-  cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssW*dpr*(TOWN_H/TOWN_W));
-  cv.style.height=Math.round(cssW*(TOWN_H/TOWN_W))+'px';
-  townClampCam();
+  cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr);
+  townMeasure(cv); townClampCam();
   drawTownMap(cv);
+  // re-render on rotation / window resize while the map is open
+  if(!window._townRsHook){ window._townRsHook=true;
+    window.addEventListener('resize', ()=>{ if(document.getElementById('towncv')) setTimeout(renderTownBuilder,120); }); }
   // one-finger: tap (inspect) or drag (pan). two fingers: pinch zoom. wheel: zoom.
   const ptrs={}; let panned=false, pinch0=null;
   cv.addEventListener('pointerdown', e=>{
@@ -1751,8 +1770,8 @@ function renderTownBuilder(){
     const dx=e.clientX-p.x, dy=e.clientY-p.y;
     if(panned || Math.abs(e.clientX-p.sx)>8 || Math.abs(e.clientY-p.sy)>8){
       panned=true;
-      const r=cv.getBoundingClientRect(); const kc=(r.width>0?r.width:920)/TOWN_W;
-      townCamX-=dx/(kc*townZoom); townCamY-=dy/(kc*townZoom); townClampCam();
+      const kc=_tKCss*townZoom;
+      townCamX-=dx/kc; townCamY-=dy/kc; townClampCam();
       drawTownMap(cv); hideTownPop();
     }
     p.x=e.clientX; p.y=e.clientY;
@@ -1761,8 +1780,8 @@ function renderTownBuilder(){
     const p=ptrs[e.pointerId]; delete ptrs[e.pointerId];
     if(Object.keys(ptrs).length<2) pinch0=null;
     if(!p || panned) return;
-    const r=cv.getBoundingClientRect(); const kc=(r.width>0?r.width:920)/TOWN_W;
-    const wx=townCamX+(e.clientX-r.left)/(kc*townZoom), wy=townCamY+(e.clientY-r.top)/(kc*townZoom);
+    const r=cv.getBoundingClientRect(); const kc=_tKCss*townZoom;
+    const wx=townCamX+(e.clientX-r.left)/kc, wy=townCamY+(e.clientY-r.top)/kc;
     const id=townPlotAt(wx,wy);
     if(id) showTownPop(id); else hideTownPop();
   };
@@ -1797,7 +1816,7 @@ function showTownPop(id){
     ${maxed?'<div class="small" style="color:#7bdc6b;font-weight:bold;margin-top:4px">✔ FULLY BUILT</div>'
       :`<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:6px;padding:6px 10px;font-size:12px;min-height:34px">${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`}`;
   // anchor next to the plot (through the pan/zoom transform), clamped inside the map
-  const r=cv.getBoundingClientRect(); const k=((r.width>0?r.width:920)/TOWN_W)*townZoom;
+  const r=cv.getBoundingClientRect(); const k=_tKCss*townZoom;
   const p=TOWN_PLOTS[id];
   el.style.display='block';
   const ew=el.offsetWidth||220, eh=el.offsetHeight||120;
@@ -1809,7 +1828,7 @@ function showTownPop(id){
 // ---- the painted map ----
 function drawTownMap(cv){
   const c=cv.getContext('2d'); if(!c) return;
-  const k=(cv.width/TOWN_W)*townZoom;
+  const k=(cv.width/_tVisW)*townZoom;   // device px per world unit (cover-scaled)
   c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cv.width,cv.height);
   c.setTransform(k,0,0,k,-townCamX*k,-townCamY*k); c.imageSmoothingEnabled=false;
   const P=(x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); };

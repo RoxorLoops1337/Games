@@ -7,6 +7,7 @@ const A = loadGame(`freshGame,openTownBuilder,renderTownBuilder,drawTownMap,town
   showTownPop,hideTownPop,buildTown,townLvl,buildingCost,canAfford,townClampCam,
   get townZoom(){return townZoom;},set townZoom(v){townZoom=v;},
   get townCamX(){return townCamX;},set townCamX(v){townCamX=v;},
+  get _tVisW(){return _tVisW;},
   BUILDINGS,TOWN_PLOTS,get TOWN(){return TOWN;},get G(){return G;},set G(v){G=v;}`);
 const t = harness('town map');
 
@@ -35,11 +36,12 @@ try { A.openTownBuilder(); A.showTownPop('guild'); A.hideTownPop(); } catch (e) 
 t.ok(threw === '', 'map + popup render clean' + (threw ? ' — ' + threw : ''));
 
 // pan/zoom clamps: zoom is capped at 3 and the camera can't leave the world
+// (the visible width depends on the cover-scaled viewport, so read it back)
 A.townZoom = 99; A.townCamX = 1e5; A.townClampCam();
 t.ok(A.townZoom === 3, 'zoom clamps to 3x');
-t.ok(A.townCamX === 960 - 960 / 3, 'camera clamps to the world edge');
+t.ok(Math.abs(A.townCamX - (960 - A._tVisW / 3)) < 1e-6, 'camera clamps to the world edge');
 A.townZoom = 0.2; A.townClampCam();
-t.ok(A.townZoom === 1 && A.townCamX === 0, 'zoom-out clamps to 1x and recenters');
+t.ok(A.townZoom === 1 && Math.abs(A.townCamX - (960 - A._tVisW)) < 1e-6, 'zoom-out clamps to 1x at the edge');
 
 // build flow: rig the treasury, build the watchtower, verify level + deduction
 A.TOWN.res.wood = 500; A.TOWN.res.stone = 500; A.TOWN.res.shards = 100;
