@@ -1,4 +1,4 @@
-// Boss Monster — endless leaderboard (Cloudflare Pages Function).
+// No Room For Heroes — endless leaderboard (Cloudflare Pages Function).
 //
 // Deployed automatically by Cloudflare Pages from this repo's /functions dir
 // as https://<site>/api/board. Requires ONE dashboard step: in the Pages
