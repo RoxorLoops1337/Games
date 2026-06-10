@@ -138,6 +138,21 @@ effect (e.g. tier probabilities, monster atk at N kills).
   hero with `king:true`, **HP ×8 / ATK ×1.3**, ignores corruption, and **smashes
   a room he passes with `KING_SMASH=0.10`**. Kill him → `trueVictory()`.
 
+### Battle report, Ascension & juice
+- **Battle report** (`battleReportHTML`, shown on win/lose/close screens): per-room
+  damage attributed in `dealToHero` via the `_roomDmgCtx` context var (set around
+  the trap/guard tick calls — nested reaction chains inherit the room); anything
+  context-free lands in `G.stats.abilDmg` ("boss & elements"). Kills were already
+  per-room (`room.kills`). Tests: `tests/boss_monster_meta.test.mjs`.
+- **👑 Ascension (NG+)**: `RUNES.asc` (persisted per slot) +1 on each
+  `trueVictory` (cap 9). `difficulty()` campaign branch ×`(1+asc*0.18)`;
+  **endless untouched** (leaderboard fairness). Shown on title cards, home slot
+  line, Campaign button.
+- **Juice**: wave-end kill cam (`killCamT` slow-mo in `frame()`), arrival
+  `banner()` nameplates (champion/King/rival, drawn by `drawBanner` in device
+  space), per-room carnage (bones/blood scale with `room.kills` in
+  `drawRoomContents`), `RUNES.best` endless record, town-map villagers.
+
 ### Wave preview consistency
 Campaign rolls each wave **once** into `G.queue` via `prepCampaignWave()`
 (keyed by `G.waveLevel`), so the staging-zone preview, town roster, town meddling
