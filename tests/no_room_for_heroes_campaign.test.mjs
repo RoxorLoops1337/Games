@@ -32,4 +32,15 @@ A.G.levelIdx = (A.G.levelIdx || 0) + 1;
 A.prepCampaignWave();
 t.ok(A.G.queue.length >= 1 && A.G.waveLevel === A.campLevel(), 'next level rolls a fresh wave');
 
+// --- champion doorway smash: once per cell per wave, patched up in build ---
+const B = loadGame(`freshGame,smashDoorway,cellArt,get G(){return G;},set G(v){G=v;}`);
+B.G = B.freshGame('campaign');
+const cell = { index: 2, x0: 400, kind: 'room' };
+B.smashDoorway({ champion: 'paladin' }, cell);
+t.ok(B.G.brokenCells && B.G.brokenCells[2] === true, 'champion smash marks the cell broken');
+const before = Object.keys(B.G.brokenCells).length;
+B.smashDoorway({ champion: 'paladin' }, cell);
+t.ok(Object.keys(B.G.brokenCells).length === before, 'second pass through the same doorway is a no-op');
+t.ok(typeof B.cellArt === 'function', 'cellArt selector exists (falls back to normal art without _broken.png)');
+
 t.done();
