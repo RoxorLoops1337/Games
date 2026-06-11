@@ -122,11 +122,11 @@
     pointer-events: none;
     transition: opacity 0.25s;
   }
-  /* Cinematic vignette — subtle darkened corners like a real camera lens */
+  /* Horror vignette — heavy darkness pressing in from the edges */
   #vignette {
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at center, transparent 58%, rgba(10,5,5,0.42) 100%);
+    background: radial-gradient(ellipse at center, transparent 38%, rgba(0,0,0,0.85) 100%);
     pointer-events: none;
   }
   #overlay {
@@ -617,15 +617,19 @@
     <h1>DHAUWIE SURVIVAL</h1>
     <h2>~ The Last Human ~</h2>
     <div class="story" id="story-text">
-      The world has fallen. Every soul has turned into a flesh-hungry zombie.
-      Every soul... except one. <b style="color:#00ff88">Dhauwie</b>, the last human survivor,
-      crawls out from the wreckage of civilization with a single hope:
+      The grid is down. The world has fallen, the sun has set, and every
+      soul has turned into a flesh-hungry zombie. Every soul... except
+      one. <b style="color:#00ff88">Dhauwie</b>, the last human survivor,
+      stumbles out of the wreckage with a flickering torch and a single
+      hope:
       <br><br>
       Deep inside the abandoned <b>research lab</b> at the edge of town
-      lies the prototype <b style="color:#ffe066">Antidote Grenade</b> - a holy
-      invention rumored to turn any zombie it touches into <b>Jesus</b>.
+      lies the prototype <b style="color:#ffe066">Antidote Grenade</b> -
+      a holy invention rumored to turn any zombie it touches into <b>Jesus</b>.
       <br><br>
-      Find the lab. Survive the horde. Save the world.
+      <b style="color:#ff5555">It is the middle of the night.</b> The only
+      light comes from your torch and the few street lamps that still
+      work. Stay close to the light. Find the lab. Survive.
     </div>
     <div class="controls">
       <b style="color:#00ff88">DESKTOP</b><br>
@@ -729,9 +733,9 @@ renderer.toneMappingExposure = 1.15;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xc28b75);
-// Slightly cooler horizon fog so distant buildings melt into the dust haze
-scene.fog = new THREE.Fog(0xb87456, 50, 200);
+scene.background = new THREE.Color(0x000000);
+// Short, dark fog — the world drops off into black 60m out
+scene.fog = new THREE.Fog(0x03040a, 10, 60);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 500);
 camera.position.set(0, PLAYER_HEIGHT, 0);
@@ -763,8 +767,9 @@ let bloomPass = null;
     // (muzzle flash, lamps, beacon, zombie eyes), then tone-map at the end.
     const c = new EffectComposer(renderer);
     c.addPass(new RenderPass(scene, camera));
+    // Night bloom — lower threshold so lamps + emissives bleed properly
     bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.45, 0.55, 0.82
+      new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.85, 0.7, 0.55
     );
     c.addPass(bloomPass);
     c.addPass(new OutputPass());
@@ -796,9 +801,11 @@ addEventListener('resize', () => {
   if (composer) composer.setSize(innerWidth, innerHeight);
 });
 
-const hemi = new THREE.HemisphereLight(0xffd9b3, 0x55403a, 1.1);
+// Near-black ambient: just enough cold tint so geometry isn't pure black
+const hemi = new THREE.HemisphereLight(0x1a2230, 0x05060a, 0.10);
 scene.add(hemi);
-const moon = new THREE.DirectionalLight(0xfff0d6, 1.5);
+// Cold dim moonlight from above, still casts shadows
+const moon = new THREE.DirectionalLight(0x7990b8, 0.18);
 moon.position.set(40, 80, 30);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
@@ -812,10 +819,16 @@ moon.shadow.camera.near = 1;
 moon.shadow.camera.far = 200;
 scene.add(moon);
 
-const flashlight = new THREE.SpotLight(0xfff2cc, 1.6, 40, Math.PI / 5, 0.4, 1.0);
+// Player flashlight — your only personal light. Tight cone, decent throw,
+// warm bulb. Bloom makes it read as a real beam.
+const flashlight = new THREE.SpotLight(0xffe6bb, 4.0, 30, Math.PI / 6.5, 0.28, 1.0);
 flashlight.position.copy(camera.position);
 scene.add(flashlight);
 scene.add(flashlight.target);
+// Tiny warm point hanging right at the camera — sells "something in your
+// hand is glowing" and keeps your gun from going pitch black up close.
+const handLamp = new THREE.PointLight(0xffd9a8, 0.45, 2.2);
+camera.add(handLamp);
 
 function makeBuildingTexture(baseHex, windowLitHex, roofHex) {
   // 512px facade with brick courses, grime streaks, lit / dark / broken
@@ -1152,28 +1165,26 @@ const labPos = new THREE.Vector3(90, 0, 90);
   addBox(labPos.x, 10, labPos.z, 3, 0.6, 0.6, 0xffffff);
 }
 
-// === Atmosphere: sky dome, sun, ground decals, cars, lamps, trees ===
+// === Night atmosphere: starry sky, moon, scattered window lights ===
 
-// Sky gradient dome (replaces flat background)
+// Night sky dome — deep black at zenith fading to dim navy at horizon,
+// peppered with stars.
 {
   const skyCanvas = document.createElement('canvas');
   skyCanvas.width = 4; skyCanvas.height = 512;
   const skyG = skyCanvas.getContext('2d');
   const grad = skyG.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0,    '#2a1838');  // zenith deep violet
-  grad.addColorStop(0.22, '#523648');  // upper haze
-  grad.addColorStop(0.45, '#a05c5a');  // warm band
-  grad.addColorStop(0.62, '#d28058');  // sunset orange
-  grad.addColorStop(0.78, '#e8a878');  // horizon glow
-  grad.addColorStop(0.90, '#8e4a28');  // dust haze
-  grad.addColorStop(1,    '#3a2018');  // ground horizon
+  grad.addColorStop(0,    '#000003');  // zenith black
+  grad.addColorStop(0.35, '#020412');  // upper dark
+  grad.addColorStop(0.75, '#08101c');  // dim navy
+  grad.addColorStop(1,    '#040608');  // ground horizon
   skyG.fillStyle = grad;
   skyG.fillRect(0, 0, 4, 512);
-  // Faint stars near the top
-  for (let i = 0; i < 40; i++) {
-    skyG.globalAlpha = 0.25 + Math.random() * 0.55;
-    skyG.fillStyle = '#ffffff';
-    skyG.fillRect(Math.random() * 4, Math.random() * 130, 1, 1);
+  // Many faint stars across the entire upper hemisphere
+  for (let i = 0; i < 220; i++) {
+    skyG.globalAlpha = 0.3 + Math.random() * 0.7;
+    skyG.fillStyle = Math.random() < 0.15 ? '#aac8ff' : '#ffffff';
+    skyG.fillRect(Math.random() * 4, Math.random() * 340, 1, 1);
   }
   skyG.globalAlpha = 1;
   const skyTex = new THREE.CanvasTexture(skyCanvas);
@@ -1182,30 +1193,64 @@ const labPos = new THREE.Vector3(90, 0, 90);
   const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false });
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
-  scene.background = null; // sky dome is the backdrop now
+  scene.background = null;
 }
 
-// Sun + halo
+// Cold moon hanging in the sky — small glowing disc + soft halo
 {
-  const sunPos = new THREE.Vector3(80, 70, -200).normalize().multiplyScalar(320);
-  const sun = new THREE.Mesh(
+  const moonPos = new THREE.Vector3(60, 90, -180).normalize().multiplyScalar(320);
+  const moonMesh = new THREE.Mesh(
     new THREE.SphereGeometry(7, 20, 14),
-    new THREE.MeshBasicMaterial({ color: 0xfff0c8, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xeaf0ff, fog: false, depthWrite: false })
   );
-  sun.position.copy(sunPos);
-  scene.add(sun);
-  const halo = new THREE.Mesh(
-    new THREE.SphereGeometry(20, 20, 14),
-    new THREE.MeshBasicMaterial({ color: 0xffc880, fog: false, depthWrite: false, transparent: true, opacity: 0.32 })
+  moonMesh.position.copy(moonPos);
+  scene.add(moonMesh);
+  const moonHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(16, 20, 14),
+    new THREE.MeshBasicMaterial({ color: 0x9ab0d8, fog: false, depthWrite: false, transparent: true, opacity: 0.25 })
   );
-  halo.position.copy(sunPos);
-  scene.add(halo);
-  const halo2 = new THREE.Mesh(
-    new THREE.SphereGeometry(48, 16, 12),
-    new THREE.MeshBasicMaterial({ color: 0xff9050, fog: false, depthWrite: false, transparent: true, opacity: 0.12 })
-  );
-  halo2.position.copy(sunPos);
-  scene.add(halo2);
+  moonHalo.position.copy(moonPos);
+  scene.add(moonHalo);
+}
+
+// Apartment-window lights: scatter ~28 warm point lights at random spots
+// on the surfaces of existing buildings, so a few rooms look "occupied"
+// at night without lighting the whole world.
+{
+  const buildings = [];
+  for (const o of obstacles) {
+    const s = o.box.getSize(new THREE.Vector3());
+    // Buildings are tall axis-aligned boxes — distinguish from walls/crates/cars
+    if (s.y >= 5 && s.x >= 3 && s.z >= 3 && !o.isCar && !o.destructible) buildings.push(o);
+  }
+  let placed = 0;
+  while (placed < 28 && buildings.length) {
+    const b = buildings[(Math.random() * buildings.length) | 0];
+    const c = b.box.getCenter(new THREE.Vector3());
+    const s = b.box.getSize(new THREE.Vector3());
+    const face = (Math.random() * 4) | 0; // 0=+x 1=-x 2=+z 3=-z
+    let lx, ly, lz;
+    const y = c.y - s.y / 2 + 1.5 + Math.random() * (s.y - 2.5);
+    if (face === 0)      { lx = c.x + s.x / 2 + 0.08; ly = y; lz = c.z + (Math.random() - 0.5) * s.z * 0.7; }
+    else if (face === 1) { lx = c.x - s.x / 2 - 0.08; ly = y; lz = c.z + (Math.random() - 0.5) * s.z * 0.7; }
+    else if (face === 2) { lx = c.x + (Math.random() - 0.5) * s.x * 0.7; ly = y; lz = c.z + s.z / 2 + 0.08; }
+    else                 { lx = c.x + (Math.random() - 0.5) * s.x * 0.7; ly = y; lz = c.z - s.z / 2 - 0.08; }
+    const warm = Math.random() < 0.85 ? 0xffd089 : 0x9ec3ff; // mostly warm, occasional cold fluorescent
+    const wl = new THREE.PointLight(warm, 0.55, 10);
+    wl.position.set(lx, ly, lz);
+    scene.add(wl);
+    // Glowing window pane behind the light so you actually see the source
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.85, 1.0),
+      new THREE.MeshBasicMaterial({ color: warm, transparent: true, opacity: 0.85, fog: true, depthWrite: false })
+    );
+    if (face === 0)      { glow.rotation.y =  Math.PI / 2; glow.position.set(lx + 0.02, ly, lz); }
+    else if (face === 1) { glow.rotation.y = -Math.PI / 2; glow.position.set(lx - 0.02, ly, lz); }
+    else if (face === 2) { glow.position.set(lx, ly, lz + 0.02); }
+    else                 { glow.rotation.y = Math.PI; glow.position.set(lx, ly, lz - 0.02); }
+    scene.add(glow);
+    placed++;
+  }
 }
 
 // Helper: find a spot clear of all existing obstacles (and not on spawn/lab)
@@ -1329,9 +1374,17 @@ function makeLamp(x, z) {
   );
   bulb.position.set(1.28, 4.96, 0);
   g.add(bulb);
-  const light = new THREE.PointLight(0xffd49a, 1.6, 18);
+  const light = new THREE.PointLight(0xffd49a, 2.4, 22);
   light.position.set(1.28, 4.9, 0);
   g.add(light);
+  // Soft ground splash so each lamp casts a visible pool of light on the road
+  const splash = new THREE.Mesh(
+    new THREE.CircleGeometry(3.2, 18),
+    new THREE.MeshBasicMaterial({ color: 0xffd49a, transparent: true, opacity: 0.15, depthWrite: false, fog: false })
+  );
+  splash.rotation.x = -Math.PI / 2;
+  splash.position.set(1.28, 0.04, 0);
+  g.add(splash);
 
   const rotY = Math.random() * Math.PI * 2;
   g.position.set(x, 0, z);
@@ -1352,6 +1405,7 @@ function makeLamp(x, z) {
     destructible: 'lamp', dHp: 30,
     lampLight: light,
     lampBulbMat: bulb.material,
+    lampSplashMat: splash.material,
     bulbPos,
     lightOut: false
   };
@@ -1369,6 +1423,7 @@ function shootOutLamp(o) {
   o.lampLight.intensity = 0;
   o.lampBulbMat.emissiveIntensity = 0;
   o.lampBulbMat.color.setHex(0x222226);
+  if (o.lampSplashMat) o.lampSplashMat.opacity = 0;
   spawnGlassFX(o.bulbPos);
   spawnImpactFX(o.bulbPos);
   playTone(1400, 0.08, 'square', 0.12);
@@ -1381,12 +1436,14 @@ function updateLampFlickers(dt) {
     if (f.t > 0) continue;
     f.dim = !f.dim;
     if (f.dim) {
-      f.o.lampLight.intensity = 0.15;
+      f.o.lampLight.intensity = 0.2;
       f.o.lampBulbMat.emissiveIntensity = 0.3;
+      if (f.o.lampSplashMat) f.o.lampSplashMat.opacity = 0.02;
       f.t = 0.04 + Math.random() * 0.16;   // brief dropout
     } else {
-      f.o.lampLight.intensity = 1.6;
+      f.o.lampLight.intensity = 2.4;
       f.o.lampBulbMat.emissiveIntensity = 2.8;
+      if (f.o.lampSplashMat) f.o.lampSplashMat.opacity = 0.15;
       f.t = 0.6 + Math.random() * 3.0;     // steady stretch
     }
   }
@@ -1476,10 +1533,10 @@ for (let i = 0; i < dustCount; i++) {
 }
 dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
 const dustMat = new THREE.PointsMaterial({
-  color: 0xe2c8a4,
-  size: 0.08,
+  color: 0x687888,
+  size: 0.07,
   transparent: true,
-  opacity: 0.5,
+  opacity: 0.32,
   sizeAttenuation: true,
   depthWrite: false,
   fog: true
