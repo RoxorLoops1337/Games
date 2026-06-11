@@ -36,8 +36,9 @@
   <h1>🎵 No Room For Heroes — Music Player <span class="small">(<a href="index.html">back to the game</a>)</span></h1>
   <div class="td" style="margin-bottom:4px">An original chiptune library on authentic NES channels:
     two pulse waves (12.5% / 25% duty), a triangle bass and a noise kit. 15 hand-written pieces plus a
-    100-song generated songbook across genres — beat-em-up, drum &amp; bass, platformer, adventure,
-    hero rock, house, synthwave, metal, funk, techno, chip pop, mystic, waltz and jazz. Tap ▶ to audition.</div>
+    200-song generated songbook across 20 genres — beat-em-up, drum &amp; bass, platformer, adventure,
+    hero rock, house, synthwave, metal, funk, techno, chip pop, mystic, waltz, jazz, boom bap, ska,
+    trance, western, 6/8 tavern jig and music box. Tap ▶ to audition.</div>
   <input id="filt" placeholder="filter: name, genre or bpm…" oninput="renderList()"
     style="width:100%;margin:6px 0;padding:8px 10px;background:#171029;border:1.5px solid #6b4fb0;
     border-radius:8px;color:#e9e0ff;font-family:inherit;font-size:13px">
@@ -328,6 +329,8 @@ const BASSF={
     return [TK(m)+':2',TK(m)+':1',TK(m+7)+':1',TK(m)+':2','-:2',TK(m+10)+':2',TK(m)+':1',TK(m+12)+':1',TK(m+7)+':2',TK(m)+':2']; },
   walk:(r,sc,rb,cd,nd,st)=>[TK(degm(sc,rb,cd))+':4',TK(degm(sc,rb,cd+2))+':4',TK(degm(sc,rb,cd+4))+':4',TK(degm(sc,rb,nd)-1)+':4'],
   waltz:(r,sc,rb,cd,nd,st)=>{ const m=degm(sc,rb,cd); return [TK(m)+':4',TK(m+7)+':4',TK(m+7)+':4']; },
+  jig:(r,sc,rb,cd,nd,st)=>{ const m=degm(sc,rb,cd);
+    return [TK(m)+':2',TK(m+7)+':2',TK(m)+':2',TK(m+12)+':2',TK(m+7)+':2',TK(m)+':2']; },
 };
 // arp styles: (rng, scale, arpRoot, chordDeg, steps) → token array
 const ARPF={
@@ -495,6 +498,90 @@ const SONGS=[
  ['Last Call at the Gilded Goblin','jazz','a',16,110],
 ];
 for(const s of SONGS) TRACKS.push(compose({n:s[0],g:s[1],k:s[2],bars:s[3],s:s[4]}));
+
+/* ============ volume II: 100 more songs, six new genres ============ */
+Object.assign(GENRES,{
+  boombap:{tag:'boom bap',blurb:'Dusty-crate hip-hop nod — lazy swing, deep subs.',bpm:[86,96],scale:'dorian',
+    progs:[[0,0,3,4],[0,3,0,4]],bass:'sub',arp:'pad',rest:.3,
+    rh:[[3,1,2,2,4,4],[2,2,3,1,4,4],[3,1,4,3,1,4]],
+    dr:['k..h..s...k..s..','k.hh..s..k.h.s..'],fill:'k..h..s..k.s.ss.',vols:{dr:.38}},
+  ska:{tag:'ska',blurb:'Upstroke skank — walking bass, two-tone bounce.',bpm:[138,158],scale:'mixo',
+    progs:[[0,3,4,4],[0,5,3,4]],bass:'walk',arp:'offstab',rest:.15,
+    rh:[[2,2,2,2,4,4],[2,2,4,2,2,4],[4,2,2,2,2,4]],
+    dr:['k.h.s.h.k.h.s.h.','k.hHs.h.k.hHs.h.'],fill:'k.h.s.h.s.s.s.ss'},
+  trance:{tag:'trance',blurb:'Uplifting rave cathedral — rolling 16th arps.',bpm:[136,142],scale:'minor',
+    progs:[[0,5,3,6],[0,3,5,6]],bass:'pump',arp:'up16',rest:.15,
+    rh:[[8,8],[4,4,8],[4,12],[8,4,4]],
+    dr:['k.H.k.H.k.H.k.H.','k.H.k.H.k.H.kHHH'],fill:'k.H.k.H.ksksksks',vols:{arp:.09}},
+  western:{tag:'western',blurb:'Spaghetti-western standoff — whistled lines, clip-clop dust.',bpm:[96,116],scale:'hmin',
+    progs:[[0,5,3,4],[0,3,0,4]],bass:'gallop',arp:'pad',rest:.25,
+    rh:[[6,2,8],[8,8],[4,4,8],[12,4]],
+    dr:['k..k..s.k..k..s.','k.hk..s.k.hk..s.'],fill:'k..k..s.s.s.s.s.',vols:{dr:.32}},
+  jig:{tag:'tavern jig 6/8',blurb:'Hearthfire reel — tankards up, heels down.',bpm:[104,132],scale:'mixo',steps:12,
+    progs:[[0,3,4,0],[0,5,4,0]],bass:'jig',arp:'offstab',rest:.08,
+    rh:[[2,2,2,2,2,2],[4,2,4,2],[2,4,2,4],[2,2,4,4],[6,2,4]],
+    dr:['k.h.h.k.h.h.','k.h.h.k.h.s.'],fill:'k.h.h.s.s.s.',vols:{dr:.34}},
+  musicbox:{tag:'music box',blurb:'A porcelain lullaby — tiny, glassy, sleeping.',bpm:[60,80],scale:'major',
+    progs:[[0,3,4,0],[0,5,3,4]],bass:'sub',arp:'up16',rest:.15,
+    rh:[[4,4,4,4],[8,4,4],[4,8,4],[16]],
+    dr:['................','..............h.'],fill:'............h...',vols:{dr:.15,lead:.12,arp:.06,bass:.16}},
+});
+// [name, genre, key, bars, seed]
+const SONGS2=[
+ ['Concrete Cipher','boombap','a',8,201],['Dusty Crates of the Crypt','boombap','d',8,202],
+ ['Boom Bap Basilisk','boombap','e',8,203],['Subway Scrolls','boombap','g',16,204],
+ ['Golden Era Goblin','boombap','a',8,205],['Turntable Tombstone','boombap','c',8,206],
+ ['Five Borough Bones','boombap','d',8,207],['Lo-Fi Lich','boombap','e',16,208],
+ ['Skankin\' Skeleton','ska','c',8,209],['Two-Tone Tavern','ska','g',8,210],
+ ['Rude Boy Rampart','ska','d',8,211],['Checkerboard Charge','ska','f',8,212],
+ ['Brass Knuckle Bounce','ska','c',16,213],['Pork Pie Paladin','ska','g',8,214],
+ ['Offbeat Onslaught','ska','a',8,215],['Specials of the Keep','ska','d',8,216],
+ ['Gateway 138','trance','a',32,217],['Cathedral of Light','trance','d',8,218],
+ ['Hyperion Uplift','trance','e',8,219],['Astral Causeway','trance','f',16,220],
+ ['Neon Pilgrimage','trance','g',8,221],['Sunburst Horizon','trance','a',8,222],
+ ['Velvet Stratosphere','trance','d',8,223],['Ecliptic Anthem','trance','e',16,224],
+ ['A Fistful of Florins','western','a',8,225],['High Noon at the Gate','western','d',8,226],
+ ['The Gallows Gunslinger','western','e',16,227],['Tumbleweed Throne','western','g',8,228],
+ ['Six-String Showdown','western','a',8,229],['Dead Man\'s Dust','western','d',8,230],
+ ['Goblin\'s Jig','jig','c',8,231],['Tankard Toss','jig','g',8,232],
+ ['The Hearthfire Reel','jig','d',16,233],['Penny Whistle Plunder','jig','f',8,234],
+ ['Barrelhouse Jig','jig','c',8,235],
+ ['Music Box Memory','musicbox','c',8,236],['Starlight Mobile','musicbox','g',8,237],
+ ['The Porcelain Princess','musicbox','f',16,238],
+ ['Streets of Sorrow','beatemup','d',16,239],['Knuckleduster Nights','beatemup','a',8,240],
+ ['Vigilante Vendetta','beatemup','e',8,241],['Crowbar Carnival','beatemup','g',8,242],
+ ['Midnight Beatdown','beatemup','c',8,243],['Boss of the Bowery','beatemup','a',16,244],
+ ['Tarantula Steppa','dnb','e',8,245],['Venom Rollers','dnb','a',8,246],
+ ['Photon Jungle','dnb','d',8,247],['Bassbin Behemoth','dnb','f',16,248],
+ ['Render the Night','dnb','g',8,249],['Catacomb Junglism','dnb','e',8,250],
+ ['Steel Drum Stampede','dnb','a',8,251],['Subsonic Siege','dnb','d',32,252],
+ ['Springboard Skies','platformer','c',8,253],['Checkpoint Cheer','platformer','g',8,254],
+ ['Pixel Meadow Dash','platformer','d',8,255],['Secret Exit Shuffle','platformer','f',8,256],
+ ['Invincibility Strut','platformer','c',16,257],['World 9 Wonder','platformer','g',8,258],
+ ['The Ferryman\'s Lantern','adventure','d',8,259],['Banner of the Dawn','adventure','c',8,260],
+ ['Stormlight Crossing','adventure','g',8,261],['The Cartographer\'s Song','adventure','f',16,262],
+ ['Vale of Heroes','adventure','c',32,263],['Twilight Causeway','adventure','a',8,264],
+ ['Power Glove Punchout','heroRock','e',8,265],['Saturday Morning Shred','heroRock','a',8,266],
+ ['Arcade Avenger','heroRock','d',8,267],['Laser Katana','heroRock','g',16,268],
+ ['Chrome Dome Smackdown','heroRock','c',8,269],['Heroes in a Half Pipe','heroRock','e',8,270],
+ ['Block Party 92','house','a',8,271],['Sweatbox Serenade','house','d',8,272],
+ ['Piano in the Basement','house','f',16,273],['Groove Sanctum','house','g',8,274],
+ ['Digital Dreams of \'86','synthwave','a',8,275],['Replicant Rain','synthwave','d',16,276],
+ ['Starlight Coupe','synthwave','e',8,277],['Magnetic Memories','synthwave','f',8,278],
+ ['Arcade Afterdark','synthwave','g',8,279],['Ferrari to the Void','synthwave','a',16,280],
+ ['Forgemaster\'s Fury','metal','e',8,281],['Rifflord Rising','metal','a',32,282],
+ ['Pentagram Pit','metal','d',8,283],['Valkyrie Velocity','metal','e',8,284],
+ ['Mushroom Cloud Funk','funk','e',8,285],['Velvet Vault Strut','funk','a',8,286],
+ ['Dungeon Disco Inferno','funk','d',16,287],['Bass of Spades','funk','g',8,288],
+ ['Circuit Breaker','techno','a',8,289],['Mainframe March','techno','d',8,290],
+ ['Hydraulic Hymn','techno','e',16,291],['Megahertz Monastery','techno','f',8,292],
+ ['Glitter Cartridge','chippop','c',8,293],['Save Point Smile','chippop','g',8,294],
+ ['Two-Player Crush','chippop','d',8,295],['Confetti Combo','chippop','f',16,296],
+ ['The Bone Orchard','mystic','e',16,297],['Whisperwind Well','mystic','a',8,298],
+ ['Waltz for a Fallen King','waltz','d',16,299],
+ ['Blue Goblin Lounge','jazz','g',16,300],
+];
+for(const s of SONGS2) TRACKS.push(compose({n:s[0],g:s[1],k:s[2],bars:s[3],s:s[4]}));
 
 // validate: all channels of a track must agree on loop length
 function validateTracks(){
