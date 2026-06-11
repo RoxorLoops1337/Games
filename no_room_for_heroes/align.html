@@ -11,18 +11,20 @@
   h1{font-size:18px;margin:0 0 6px;color:var(--gold);}
   #stage{background:#15102a;border:2px solid var(--line);border-radius:10px;image-rendering:pixelated;
     touch-action:none;cursor:grab;}
-  #side{width:340px;max-width:96vw;display:flex;flex-direction:column;gap:8px;}
+  #side{width:360px;max-width:96vw;display:flex;flex-direction:column;gap:8px;}
   .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
   button,select{background:#241a40;color:var(--ink);border:2px solid var(--line);border-radius:6px;
     padding:7px 10px;font-family:inherit;font-size:13px;cursor:pointer;}
   button.sel{border-color:var(--gold);color:var(--gold);}
-  textarea{width:100%;height:190px;background:#120c22;color:#9fe;border:1.5px solid var(--line);
+  textarea{width:100%;height:170px;background:#120c22;color:#9fe;border:1.5px solid var(--line);
     border-radius:8px;font-family:monospace;font-size:11px;padding:8px;box-sizing:border-box;}
   .hint{font-size:12px;opacity:.8;line-height:1.5;}
-  .item{display:flex;gap:6px;align-items:center;font-size:13px;padding:4px 8px;border:1.5px solid #3a2c66;
+  .item{display:flex;gap:6px;align-items:center;font-size:12px;padding:4px 8px;border:1.5px solid #3a2c66;
     border-radius:7px;cursor:pointer;}
   .item.sel{border-color:var(--gold);}
   .item b{color:var(--gold);}
+  .item.light b{color:#9adfff;}
+  .grouplbl{width:100%;font-size:11px;opacity:.6;margin-top:2px;}
 </style>
 </head>
 <body>
@@ -30,9 +32,9 @@
   <h1>🔧 Room Alignment Tool</h1>
   <canvas id="stage" width="640" height="760"></canvas>
   <div class="hint" style="max-width:640px;margin-top:6px">
-    <b>Drag</b> a piece to move · <b>mouse wheel / ＋−</b> to scale · <b>F</b> flip ·
-    <b>arrow keys</b> nudge 1px (Shift = 5px) · positions are in room-fractions so they
-    survive any screen size. The dashed line is the FLOOR; heroes stand on it (gray silhouette = hero height).
+    <b>Drag</b> to move · <b>wheel / ＋−</b> size (lights: glow radius) · <b>F</b> flip ·
+    <b>arrows</b> nudge (Shift=5px) · <b>⬆⬇ layer</b> changes what draws on top (higher = in front).
+    Flame columns ignite left → right; poison + candles loop. Dashed line = floor; gray box ≈ hero.
   </div>
 </div>
 <div id="side">
@@ -40,8 +42,12 @@
   <div class="row">
     <button onclick="bump(1.06)">＋ bigger</button><button onclick="bump(0.94)">− smaller</button>
     <button onclick="flipSel()">⇋ flip</button>
+    <button onclick="layerSel(1)">⬆ layer</button><button onclick="layerSel(-1)">⬇ layer</button>
+  </div>
+  <div class="row">
     <button id="animbtn" onclick="anim=!anim;render()" class="sel">▶ anim</button>
     <button onclick="fireNow()">💥 fire</button>
+    <button id="lightbtn" onclick="showLights=!showLights;render()" class="sel">💡 lights</button>
   </div>
   <div class="row">
     <button class="sel" onclick="exportJson()">📋 Generate layout.json</button>
@@ -49,15 +55,16 @@
   </div>
   <textarea id="out" placeholder="layout.json appears here — upload it to no_room_for_heroes/rooms/ on GitHub"></textarea>
   <div class="hint">When it looks right: <b>Generate</b> → <b>download</b> →
-    upload <code>layout.json</code> to <code>no_room_for_heroes/rooms/</code> on GitHub
-    (Add file → Upload files). The game picks it up on the next deploy.</div>
+    upload <code>layout.json</code> to <code>no_room_for_heroes/rooms/</code> on GitHub.
+    The game reads pieces, layers AND lights from it on the next deploy.</div>
 </div>
 <script>
 const CV=document.getElementById('stage'), X=CV.getContext('2d');
-const CELLW=200, S=2.9;                       // world cell px → screen scale
-const W=CELLW*S, OX=(CV.width-W)/2, FLOORY=620;   // floor line on screen
+const CELLW=200, S=2.9;
+const W=CELLW*S, OX=(CV.width-W)/2, FLOORY=620;
+const RISE=110, FALL=480, CASCADE=70;
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a'};
 const ART={};
-function load(src){ const im=new Image(); im.src=src; return im; }
 function probeSeq(id,dir,cb){
   const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
   const rec={frames:[],static:null}; ART[id]=rec;
@@ -72,103 +79,162 @@ function probeSeq(id,dir,cb){
   };
   tryN(0);
 }
-const room=load('rooms/empty.png'); room.onload=()=>render();
-const ARTIDS=[['spike','rooms/traps/'],['flame','rooms/traps/'],['poison1','rooms/traps/'],['poison2','rooms/traps/'],['candle','rooms/fx/']];
-ARTIDS.forEach(([id,dir])=>probeSeq(id,dir,()=>{ render(); refreshItems(); }));
+const room=new Image(); room.onload=()=>render(); room.src='rooms/empty.png';
+[['spike','rooms/traps/'],['flame','rooms/traps/'],['poison1','rooms/traps/'],['poison2','rooms/traps/'],['candle','rooms/fx/']]
+  .forEach(([id,dir])=>probeSeq(id,dir,()=>{ render(); refreshItems(); }));
 
-// ---- the editable pieces (defaults mirror the game's LAYOUT) ----
+// ---- editable pieces: sprites + lights (defaults mirror the game) ----
 let pieces=[
-  {role:'trap spike',   trap:'spike',  art:'spike',   fx:.50, fy:0,   h:74},
-  {role:'trap flame \u00d74', trap:'flame', art:'flame', fx:.50, fy:0, h:130, n:4, gap:.21},
-  {role:'venom LEFT',   trap:'venom',  art:'poison1', fx:.13, fy:30,  h:80, mode:'loop'},
-  {role:'venom RIGHT',  trap:'venom',  art:'poison2', fx:.87, fy:26,  h:92, mode:'loop'},
-  {role:'candle LEFT',  candle:true,   art:'candle',  fx:.18, fy:118, h:26},
-  {role:'candle RIGHT', candle:true,   art:'candle',  fx:.89, fy:118, h:26},
+  {role:'spike',        trap:'spike',  art:'spike',   fx:.50, fy:0,   h:74,  layer:9},
+  {role:'flame ×4',     trap:'flame',  art:'flame',   fx:.50, fy:0,   h:130, layer:1, n:4, gap:.21},
+  {role:'venom L',      trap:'venom',  art:'poison1', fx:.13, fy:30,  h:80,  layer:0, mode:'loop'},
+  {role:'venom R',      trap:'venom',  art:'poison2', fx:.87, fy:26,  h:92,  layer:0, mode:'loop'},
+  {role:'candle L',     candle:0,      art:'candle',  fx:.18, fy:118, h:26},
+  {role:'candle R',     candle:1,      art:'candle',  fx:.89, fy:118, h:26},
+  {role:'light candle L', light:'candle0', kind:'candle', fx:.18, fy:134, h:34},
+  {role:'light candle R', light:'candle1', kind:'candle', fx:.89, fy:134, h:34},
+  {role:'light flame',    light:'flame',   kind:'heat',   fx:.50, fy:70,  h:56, lockX:true},
+  {role:'light venom L',  light:'venom0',  kind:'vapor',  fx:.13, fy:64,  h:44},
+  {role:'light venom R',  light:'venom1',  kind:'vapor',  fx:.87, fy:60,  h:44},
 ];
 fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   if(!j) return;
   const np=[];
+  const defLayer={venom:0, flame:1, spike:9};
   for(const t in (j.traps||{})) j.traps[t].forEach((p,k)=>{
-    const e={role:'trap '+t+(j.traps[t].length>1?(k?' RIGHT':' LEFT'):''),trap:t,...p};
-    if(t==='flame'&&!e.n){ e.n=4; e.gap=.21; e.role='trap flame \u00d74'; }
+    const e={role:t+(j.traps[t].length>1?(k?' R':' L'):''),trap:t,layer:(p.layer!=null?p.layer:(defLayer[t]!=null?defLayer[t]:1)),...p};
+    if(t==='flame'&&!e.n){ e.n=4; e.gap=.21; }
+    if(t==='flame') e.role='flame ×4';
     if(t==='venom'&&!e.mode) e.mode='loop';
     np.push(e);
   });
-  (j.candles||[]).forEach((c,k)=>np.push({role:'candle '+(k?'RIGHT':'LEFT'),candle:true,art:c.art||'candle',...c}));
+  (j.candles||[]).forEach((c,k)=>np.push({role:'candle '+(k?'R':'L'),candle:k,art:c.art||'candle',...c}));
+  const kindOf=a=>a==='flame'?'heat':(a.startsWith('venom')?'vapor':'candle');
+  const lights=j.lights||[];
+  if(lights.length){
+    lights.forEach(l=>np.push({role:'light '+l.attach, light:l.attach, kind:kindOf(l.attach),
+      fx:(l.fx!=null?l.fx:.5), fy:l.fy||60, h:l.r||40, lockX:l.attach==='flame'}));
+  } else {
+    // derive defaults from the loaded pieces (same as the game)
+    np.filter(p=>p.candle!=null).forEach(p=>np.push({role:'light candle '+(p.candle?'R':'L'), light:'candle'+p.candle, kind:'candle', fx:p.fx, fy:(p.fy||118)+16, h:34}));
+    np.filter(p=>p.trap==='venom').forEach((p,i)=>np.push({role:'light venom '+(i?'R':'L'), light:'venom'+i, kind:'vapor', fx:p.fx, fy:(p.fy||0)+34, h:44}));
+    if(np.some(p=>p.trap==='flame')) np.push({role:'light flame', light:'flame', kind:'heat', fx:.5, fy:70, h:56, lockX:true});
+  }
   if(np.length) pieces=np;
   refreshItems(); render();
 }).catch(()=>{});
 
-let sel=0, anim=true, firedAt=performance.now();
-function artFrame(id,mode){
-  const r=ART[id]; if(!r) return null;
-  const N=r.frames.length;
-  if(!N) return r.static;
-  if(!anim) return r.frames[0];
-  if(id==='candle'||mode==='loop') return r.frames[Math.floor(performance.now()/110)%N];
-  const e=(performance.now()-firedAt)%2400, RISE=110,FALL=480;
-  let f=0;
-  if(e<RISE) f=Math.min(N-1,Math.floor(e/RISE*N));
-  else if(e<RISE+FALL) f=Math.max(0,N-1-Math.floor((e-RISE)/FALL*N));
-  return r.frames[f];
+let sel=0, anim=true, showLights=true, firedAt=performance.now();
+function frameIdx(rec,mode,c){
+  const N=rec.frames.length; if(N<2) return 0;
+  if(!anim) return 0;
+  if(mode==='loop') return Math.floor(performance.now()/110+c*3)%N;
+  const e=(performance.now()-firedAt-c*CASCADE+24e5)%2400;
+  if(e<RISE) return Math.max(0,Math.min(N-1,Math.floor(e/RISE*N)));
+  if(e<RISE+FALL) return Math.max(0,N-1-Math.floor((e-RISE)/FALL*N));
+  return 0;
+}
+function pieceImg(p,c){
+  const rec=ART[p.art]; if(!rec) return null;
+  if(!rec.frames.length) return rec.static;
+  const mode=(p.candle!=null)?'loop':p.mode;
+  return rec.frames[frameIdx(rec,mode,c||0)]||rec.frames[0];
 }
 function pieceRect(p){
-  const im=artFrame(p.art,p.mode)||{width:16,height:24};
+  if(p.light){ const r=p.h*S; const cx=OX+W*p.fx, cy=FLOORY-p.fy*S;
+    return {x:cx-r, y:cy-r, w:r*2, h:r*2}; }
+  const im=pieceImg(p)||{width:16,height:24};
   const dh=p.h*S, dw=dh*(im.width/im.height||1);
   const n=p.n||1, span=dw+(n-1)*(p.gap||.2)*W;
   const cx=OX+W*p.fx, by=FLOORY-p.fy*S;
   return {x:cx-span/2, y:by-dh, w:span, h:dh, dw, n};
 }
+const _gl={};
+function glow(cx,cy,r,col,a){
+  if(!(a>0.01)) return;
+  const key=col+'_'+Math.round(r/4);
+  let g=_gl[key];
+  if(!g){ g=X.createRadialGradient(0,0,1,0,0,r); g.addColorStop(0,col); g.addColorStop(1,'rgba(0,0,0,0)'); _gl[key]=g; }
+  X.save(); X.globalCompositeOperation='lighter'; X.globalAlpha=Math.min(1,a);
+  X.translate(cx,cy); X.fillStyle=g; X.fillRect(-r,-r,r*2,r*2); X.restore();
+}
+function lightAlpha(p){
+  const t=performance.now();
+  if(!anim) return 0.3;
+  if(p.kind==='candle'){ const sd=(p.light==='candle1')?4.1:1.3;
+    return 0.18+0.16*((Math.sin(t/91+sd)+Math.sin(t/37+sd*1.7))*0.25+0.5); }
+  if(p.kind==='vapor') return 0.20+0.10*Math.sin(t/600+(p.light==='venom1'?2:0));
+  // heat: follow the brightest flame column
+  const rec=ART.flame; if(!rec||rec.frames.length<2) return 0.3;
+  let m=0; for(let c=0;c<4;c++) m=Math.max(m, frameIdx(rec,null,c)/(rec.frames.length-1));
+  return 0.55*Math.pow(m,1.3);
+}
 function render(){
   X.imageSmoothingEnabled=false;
   X.fillStyle='#15102a'; X.fillRect(0,0,CV.width,CV.height);
-  // room art (bottom 12 world px below floor, like the game)
   if(room.complete&&room.width){
     const dh=W*(room.height/room.width);
     X.drawImage(room, OX, FLOORY+12*S-dh, W, dh);
   }
-  // floor line + hero silhouette for scale
   X.strokeStyle='rgba(255,255,255,.45)'; X.setLineDash([8,6]);
   X.beginPath(); X.moveTo(0,FLOORY); X.lineTo(CV.width,FLOORY); X.stroke(); X.setLineDash([]);
   X.fillStyle='rgba(160,160,190,.25)';
-  X.fillRect(OX+W*0.30-14*S/2, FLOORY-52*S, 14*S, 52*S);  // ~hero size
-  // pieces
-  pieces.forEach((p,i)=>{
+  X.fillRect(OX+W*0.30-14*S/2, FLOORY-52*S, 14*S, 52*S);
+  // sprites: candles first (wall decor), then traps in LAYER order (low first)
+  const sprites=pieces.filter(p=>!p.light)
+    .sort((a,b)=>((a.candle!=null?-99:(a.layer||0))-(b.candle!=null?-99:(b.layer||0))));
+  for(const p of sprites){
     const r=pieceRect(p), n=p.n||1;
     let any=false;
     for(let c=0;c<n;c++){
-      const im=(n>1)
-        ? (()=>{ const rr=ART[p.art]; if(!rr||!rr.frames.length) return artFrame(p.art,p.mode);
-            if(!anim) return rr.frames[0];
-            const N=rr.frames.length, e=(performance.now()-firedAt-c*50+24e5)%2400, RISE=110,FALL=480;
-            let f=0; if(e<RISE) f=Math.max(0,Math.min(N-1,Math.floor(e/RISE*N)));
-            else if(e<RISE+FALL) f=Math.max(0,N-1-Math.floor((e-RISE)/FALL*N));
-            return rr.frames[f]; })()
-        : artFrame(p.art,p.mode);
+      const im=pieceImg(p,c);
       if(!(im&&im.width)) continue;
       any=true;
-      const dw=r.dw||r.w, cx0=r.x+ c*((p.gap||.2)*W);
+      const dw=r.dw||r.w, cx0=r.x+c*((p.gap||.2)*W);
       if(p.flip){ X.save(); X.translate(cx0+dw/2,0); X.scale(-1,1);
         X.drawImage(im,-dw/2,r.y,dw,r.h); X.restore(); }
       else X.drawImage(im,cx0,r.y,dw,r.h);
+      // per-column heat light, drawn with the column (game does the same)
+      if(showLights && p.trap==='flame'){
+        const lp=pieces.find(q=>q.light==='flame');
+        if(lp){ const rec=ART.flame, N=rec?rec.frames.length:0;
+          const inten=N>1?frameIdx(rec,null,c)/(N-1):0.5;
+          glow(cx0+dw/2, FLOORY-lp.fy*S, lp.h*S, LIGHT_COL.heat, 0.55*Math.pow(inten,1.3)); } }
     }
     if(!any){
       X.strokeStyle='#666'; X.strokeRect(r.x,r.y,r.w,r.h);
       X.fillStyle='#888'; X.font='11px monospace'; X.fillText('no art: '+p.art, r.x+3, r.y+14);
     }
-    if(i===sel){ X.strokeStyle='#ffd34d'; X.lineWidth=2; X.strokeRect(r.x-2,r.y-2,r.w+4,r.h+4); X.lineWidth=1; }
+  }
+  // non-flame lights (flame columns handled above)
+  if(showLights) for(const p of pieces){
+    if(!p.light||p.light==='flame') continue;
+    glow(OX+W*p.fx, FLOORY-p.fy*S, p.h*S, LIGHT_COL[p.kind], lightAlpha(p));
+  }
+  // selection box + light markers
+  pieces.forEach((p,i)=>{
+    const r=pieceRect(p);
+    if(p.light){ X.strokeStyle=i===sel?'#ffd34d':'rgba(154,223,255,.35)'; X.setLineDash([4,4]);
+      X.strokeRect(r.x,r.y,r.w,r.h); X.setLineDash([]);
+      X.fillStyle=i===sel?'#ffd34d':'rgba(154,223,255,.6)'; X.font='10px monospace';
+      X.fillText('💡', r.x+r.w/2-5, r.y+r.h/2+3); }
+    else if(i===sel){ X.strokeStyle='#ffd34d'; X.lineWidth=2; X.strokeRect(r.x-2,r.y-2,r.w+4,r.h+4); X.lineWidth=1; }
   });
   X.fillStyle='#9fe'; X.font='12px monospace';
   const p=pieces[sel];
-  X.fillText(`${p.role}: fx=${p.fx.toFixed(3)}  fy=${Math.round(p.fy)}px  h=${Math.round(p.h)}px${p.flip?'  flipped':''}`, 10, 20);
+  X.fillText(`${p.role}: fx=${p.fx.toFixed(3)} fy=${Math.round(p.fy)}px ${p.light?'r':'h'}=${Math.round(p.h)}px`
+    +(p.trap?` layer=${p.layer||0}`:'')+(p.flip?' flipped':''), 10, 20);
 }
 setInterval(()=>{ if(anim) render(); }, 80);
 function refreshItems(){
-  document.getElementById('items').innerHTML=pieces.map((p,i)=>
-    `<span class="item${i===sel?' sel':''}" onclick="sel=${i};refreshItems();render()"><b>${p.role}</b></span>`).join('');
+  const traps=pieces.map((p,i)=>({p,i})).filter(x=>!x.p.light);
+  const lights=pieces.map((p,i)=>({p,i})).filter(x=>x.p.light);
+  document.getElementById('items').innerHTML=
+    traps.map(({p,i})=>`<span class="item${i===sel?' sel':''}" onclick="sel=${i};refreshItems();render()"><b>${p.role}</b>${p.trap?' <span style="opacity:.6">L'+(p.layer||0)+'</span>':''}</span>`).join('')
+    +'<span class="grouplbl">lights</span>'
+    +lights.map(({p,i})=>`<span class="item light${i===sel?' sel':''}" onclick="sel=${i};refreshItems();render()"><b>${p.role}</b></span>`).join('');
 }
 refreshItems();
-// drag / wheel / keys
 let drag=null;
 CV.addEventListener('pointerdown',e=>{
   const r=CV.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
@@ -181,7 +247,7 @@ CV.addEventListener('pointermove',e=>{
   if(!drag) return;
   const r=CV.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
   const p=pieces[sel];
-  p.fx=Math.min(1.1,Math.max(-0.1, drag.fx+(mx-drag.mx)/W));
+  if(!p.lockX) p.fx=Math.min(1.1,Math.max(-0.1, drag.fx+(mx-drag.mx)/W));
   p.fy=Math.max(-20, drag.fy-(my-drag.my)/S);
   render();
 });
@@ -189,26 +255,29 @@ CV.addEventListener('pointerup',()=>drag=null);
 CV.addEventListener('wheel',e=>{ e.preventDefault(); bump(e.deltaY<0?1.05:0.95); },{passive:false});
 window.addEventListener('keydown',e=>{
   const p=pieces[sel], st=e.shiftKey?5:1;
-  if(e.key==='ArrowLeft'){p.fx-=st/CELLW;} else if(e.key==='ArrowRight'){p.fx+=st/CELLW;}
+  if(e.key==='ArrowLeft'&&!p.lockX){p.fx-=st/CELLW;} else if(e.key==='ArrowRight'&&!p.lockX){p.fx+=st/CELLW;}
   else if(e.key==='ArrowUp'){p.fy+=st;} else if(e.key==='ArrowDown'){p.fy-=st;}
   else if(e.key==='f'||e.key==='F'){flipSel();return;} else return;
   e.preventDefault(); render();
 });
-function bump(f){ const p=pieces[sel]; p.h=Math.min(220,Math.max(8,p.h*f)); render(); }
-function flipSel(){ const p=pieces[sel]; p.flip=!p.flip; render(); }
+function bump(f){ const p=pieces[sel]; p.h=Math.min(260,Math.max(8,p.h*f)); render(); }
+function flipSel(){ const p=pieces[sel]; if(!p.light){ p.flip=!p.flip; render(); } }
+function layerSel(d){ const p=pieces[sel]; if(p.trap){ p.layer=(p.layer||0)+d; refreshItems(); render(); } }
 function fireNow(){ firedAt=performance.now(); }
 function buildJson(){
-  const traps={}, candles=[];
+  const traps={}, candles=[], lights=[];
   for(const p of pieces){
+    if(p.light){ const e={attach:p.light, fy:Math.round(p.fy), r:Math.round(p.h)};
+      if(!p.lockX) e.fx=+p.fx.toFixed(3); lights.push(e); continue; }
     const e={art:p.art, fx:+p.fx.toFixed(3), fy:Math.round(p.fy), h:Math.round(p.h)};
     if(p.flip) e.flip=true;
     if(p.n) e.n=p.n;
     if(p.gap) e.gap=+p.gap.toFixed(3);
     if(p.mode) e.mode=p.mode;
-    if(p.candle) candles.push(e);
-    else (traps[p.trap]=traps[p.trap]||[]).push(e);
+    if(p.candle!=null) candles.push(e);
+    else { if(p.layer!=null) e.layer=p.layer; (traps[p.trap]=traps[p.trap]||[]).push(e); }
   }
-  return {traps, candles};
+  return {traps, candles, lights};
 }
 function exportJson(){ document.getElementById('out').value=JSON.stringify(buildJson(),null,1); }
 function downloadJson(){
