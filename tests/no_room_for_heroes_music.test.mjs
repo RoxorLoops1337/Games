@@ -20,14 +20,15 @@ global.devicePixelRatio = 1;
 eval(code);   // compose() self-checks every generated track at load (throws on drift)
 
 const v = global.window.validateTracks();
-t.ok(v.length === 115, `library complete: ${v.length} tracks (15 hand-written + 100 generated)`);
+t.ok(v.length === 215, `library complete: ${v.length} tracks (15 hand-written + 200 generated)`);
 const bad = v.filter(x => !x.ok);
 t.ok(bad.length === 0, 'all channels agree on loop length' + (bad.length ? ' — BAD: ' + bad.map(b => b.name).join(', ') : ''));
 
 // the genre spread the songbook promises actually exists
 const tags = new Set(v.map(x => x.name));
-t.ok(tags.has('Junglist Throne') && tags.has('Crown of the Wild') && tags.has('Clockwork Waltz'),
-  'spot-check: dnb, long adventure and 3/4 waltz tracks present');
+t.ok(tags.has('Junglist Throne') && tags.has('Crown of the Wild') && tags.has('Clockwork Waltz')
+  && tags.has('Gateway 138') && tags.has('Goblin\'s Jig') && tags.has('Lo-Fi Lich'),
+  'spot-check: dnb, long adventure, 3/4 waltz, 32-bar trance, 6/8 jig and boom bap present');
 
 // long-form pieces really are longer (16/32 bars vs the 8-bar default)
 const lens = v.map(x => x.lead);
