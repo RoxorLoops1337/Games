@@ -122,6 +122,13 @@
     pointer-events: none;
     transition: opacity 0.25s;
   }
+  /* Horror vignette — heavy darkness pressing in from the edges */
+  #vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 38%, rgba(0,0,0,0.85) 100%);
+    pointer-events: none;
+  }
   #overlay {
     position: fixed;
     inset: 0;
@@ -548,6 +555,7 @@
 <canvas id="game"></canvas>
 
 <div id="hud" class="hidden">
+  <div id="vignette"></div>
   <div id="crosshair"></div>
   <div id="damage-flash"></div>
   <div id="stats">
@@ -609,15 +617,19 @@
     <h1>DHAUWIE SURVIVAL</h1>
     <h2>~ The Last Human ~</h2>
     <div class="story" id="story-text">
-      The world has fallen. Every soul has turned into a flesh-hungry zombie.
-      Every soul... except one. <b style="color:#00ff88">Dhauwie</b>, the last human survivor,
-      crawls out from the wreckage of civilization with a single hope:
+      The grid is down. The world has fallen, the sun has set, and every
+      soul has turned into a flesh-hungry zombie. Every soul... except
+      one. <b style="color:#00ff88">Dhauwie</b>, the last human survivor,
+      stumbles out of the wreckage with a flickering torch and a single
+      hope:
       <br><br>
       Deep inside the abandoned <b>research lab</b> at the edge of town
-      lies the prototype <b style="color:#ffe066">Antidote Grenade</b> - a holy
-      invention rumored to turn any zombie it touches into <b>Jesus</b>.
+      lies the prototype <b style="color:#ffe066">Antidote Grenade</b> -
+      a holy invention rumored to turn any zombie it touches into <b>Jesus</b>.
       <br><br>
-      Find the lab. Survive the horde. Save the world.
+      <b style="color:#ff5555">It is the middle of the night.</b> The only
+      light comes from your torch and the few street lamps that still
+      work. Stay close to the light. Find the lab. Survive.
     </div>
     <div class="controls">
       <b style="color:#00ff88">DESKTOP</b><br>
@@ -634,7 +646,8 @@
       <br>
       Pick up weapon crates by walking over them.<br>
       Look for <b style="color:#00ff88">green-trimmed safehouses</b> — supply crates inside heal, refill ammo, and rescue a survivor.<br>
-      Every cleared wave lets you pick one of three <b style="color:#ffe066">perks</b>.
+      Every cleared wave lets you pick one of three <b style="color:#ffe066">perks</b>.<br>
+      <b style="color:#ff8866">The world is destructible</b> — shoot or ram crates, lamps and trees to smash them apart. Cars explode!
     </div>
   </div>
   <div id="overlay-foot">
@@ -689,7 +702,8 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://esm.sh/three@0.160.0"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
   }
 }
 </script>
@@ -719,25 +733,84 @@ renderer.toneMappingExposure = 1.15;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xc28b75);
-// Slightly cooler horizon fog so distant buildings melt into the dust haze
-scene.fog = new THREE.Fog(0xb87456, 50, 200);
+scene.background = new THREE.Color(0x000000);
+// Short, dark fog — the world drops off into black 60m out
+scene.fog = new THREE.Fog(0x03040a, 10, 60);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 500);
 camera.position.set(0, PLAYER_HEIGHT, 0);
+
+// === Next-gen rendering extras: HDR post pipeline + image-based lighting ===
+// Loaded async so the game still boots even if the addons CDN is slow/down.
+let composer = null;
+let bloomPass = null;
+(async () => {
+  try {
+    const [
+      { EffectComposer },
+      { RenderPass },
+      { UnrealBloomPass },
+      { OutputPass },
+      { RoomEnvironment },
+    ] = await Promise.all([
+      import('three/addons/postprocessing/EffectComposer.js'),
+      import('three/addons/postprocessing/RenderPass.js'),
+      import('three/addons/postprocessing/UnrealBloomPass.js'),
+      import('three/addons/postprocessing/OutputPass.js'),
+      import('three/addons/environments/RoomEnvironment.js'),
+    ]);
+    // Image-based lighting: every PBR material picks up soft studio
+    // reflections — car paint, gun metal, glass all read as real surfaces.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    // HDR composer: render in half-float, bloom the bright emissives
+    // (muzzle flash, lamps, beacon, zombie eyes), then tone-map at the end.
+    const c = new EffectComposer(renderer);
+    c.addPass(new RenderPass(scene, camera));
+    // Night bloom — lower threshold so lamps + emissives bleed properly
+    bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.85, 0.7, 0.55
+    );
+    c.addPass(bloomPass);
+    c.addPass(new OutputPass());
+    c.setSize(innerWidth, innerHeight);
+    composer = c;
+  } catch (_) {
+    // Addons unreachable — base renderer keeps working without post FX.
+    composer = null;
+  }
+})();
+// Auto-degrade: if the frame rate tanks (low-end phones), drop the post
+// pipeline so gameplay stays smooth.
+let slowFrames = 0;
+function checkPerf(dt) {
+  if (!composer) return;
+  // dt is clamped to 0.05 by the loop, so >= catches every slow frame
+  if (dt >= 0.05) {
+    slowFrames++;
+    if (slowFrames > 120) composer = null;
+  } else if (slowFrames > 0) {
+    slowFrames--;
+  }
+}
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  if (composer) composer.setSize(innerWidth, innerHeight);
 });
 
-const hemi = new THREE.HemisphereLight(0xffd9b3, 0x55403a, 1.1);
+// Near-black ambient: just enough cold tint so geometry isn't pure black
+const hemi = new THREE.HemisphereLight(0x1a2230, 0x05060a, 0.10);
 scene.add(hemi);
-const moon = new THREE.DirectionalLight(0xfff0d6, 1.5);
+// Cold dim moonlight from above, still casts shadows
+const moon = new THREE.DirectionalLight(0x7990b8, 0.18);
 moon.position.set(40, 80, 30);
 moon.castShadow = true;
-moon.shadow.mapSize.set(1024, 1024);
+moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.bias = -0.0004;
+moon.shadow.normalBias = 0.02;
 moon.shadow.camera.left = -120;
 moon.shadow.camera.right = 120;
 moon.shadow.camera.top = 120;
@@ -746,46 +819,115 @@ moon.shadow.camera.near = 1;
 moon.shadow.camera.far = 200;
 scene.add(moon);
 
-const flashlight = new THREE.SpotLight(0xfff2cc, 1.6, 40, Math.PI / 5, 0.4, 1.0);
+// Player flashlight — your only personal light. Tight cone, decent throw,
+// warm bulb. Bloom makes it read as a real beam.
+const flashlight = new THREE.SpotLight(0xffe6bb, 4.0, 30, Math.PI / 6.5, 0.28, 1.0);
 flashlight.position.copy(camera.position);
 scene.add(flashlight);
 scene.add(flashlight.target);
+// Tiny warm point hanging right at the camera — sells "something in your
+// hand is glowing" and keeps your gun from going pitch black up close.
+const handLamp = new THREE.PointLight(0xffd9a8, 0.45, 2.2);
+camera.add(handLamp);
 
 function makeBuildingTexture(baseHex, windowLitHex, roofHex) {
+  // 512px facade with brick courses, grime streaks, lit / dark / broken
+  // windows, sills and AC units — reads as a real weathered building.
+  const S = 512;
   const c = document.createElement('canvas');
-  c.width = 256; c.height = 256;
+  c.width = S; c.height = S;
   const g = c.getContext('2d');
   g.fillStyle = baseHex;
-  g.fillRect(0, 0, 256, 256);
+  g.fillRect(0, 0, S, S);
+  // Brick courses
   g.fillStyle = 'rgba(0,0,0,0.18)';
-  for (let y = 0; y < 256; y += 16) {
-    g.fillRect(0, y, 256, 1);
-    const off = (y / 16) % 2 === 0 ? 0 : 32;
-    for (let x = off; x < 256; x += 64) g.fillRect(x, y, 1, 16);
+  for (let y = 0; y < S; y += 32) {
+    g.fillRect(0, y, S, 2);
+    const off = (y / 32) % 2 === 0 ? 0 : 64;
+    for (let x = off; x < S; x += 128) g.fillRect(x, y, 2, 32);
   }
-  for (let i = 0; i < 800; i++) {
-    g.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.07).toFixed(3) + ')';
-    g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  // Surface noise / weathering speckle
+  for (let i = 0; i < 2600; i++) {
+    g.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.08).toFixed(3) + ')';
+    g.fillRect(Math.random() * S, Math.random() * S, 3, 3);
   }
-  for (let wy = 28; wy < 224; wy += 64) {
-    for (let wx = 28; wx < 224; wx += 64) {
-      g.fillStyle = Math.random() < 0.65 ? windowLitHex : '#1a1c22';
-      g.fillRect(wx, wy, 28, 36);
+  for (let i = 0; i < 600; i++) {
+    g.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.05).toFixed(3) + ')';
+    g.fillRect(Math.random() * S, Math.random() * S, 2, 2);
+  }
+  // Windows
+  for (let wy = 56; wy < 448; wy += 128) {
+    for (let wx = 56; wx < 448; wx += 128) {
+      const r = Math.random();
+      if (r < 0.55) {
+        // Lit window with a warm vertical falloff
+        const grad = g.createLinearGradient(wx, wy, wx, wy + 72);
+        grad.addColorStop(0, windowLitHex);
+        grad.addColorStop(1, '#7a5520');
+        g.fillStyle = grad;
+      } else if (r < 0.85) {
+        // Dark window with a faint sky reflection on the upper half
+        g.fillStyle = '#10141c';
+        g.fillRect(wx, wy, 56, 72);
+        const refl = g.createLinearGradient(wx, wy, wx + 56, wy + 36);
+        refl.addColorStop(0, 'rgba(150,140,170,0.32)');
+        refl.addColorStop(1, 'rgba(150,140,170,0)');
+        g.fillStyle = refl;
+      } else {
+        // Broken window — dark with cracks
+        g.fillStyle = '#06080c';
+      }
+      g.fillRect(wx, wy, 56, 72);
+      if (r >= 0.85) {
+        g.strokeStyle = 'rgba(200,200,210,0.5)';
+        g.lineWidth = 1;
+        for (let k = 0; k < 4; k++) {
+          g.beginPath();
+          g.moveTo(wx + 28, wy + 36);
+          g.lineTo(wx + Math.random() * 56, wy + Math.random() * 72);
+          g.stroke();
+        }
+      }
+      // Frame + mullions
       g.strokeStyle = '#222';
-      g.lineWidth = 2;
-      g.strokeRect(wx, wy, 28, 36);
+      g.lineWidth = 3;
+      g.strokeRect(wx, wy, 56, 72);
       g.beginPath();
-      g.moveTo(wx + 14, wy);    g.lineTo(wx + 14, wy + 36);
-      g.moveTo(wx, wy + 18);    g.lineTo(wx + 28, wy + 18);
+      g.moveTo(wx + 28, wy); g.lineTo(wx + 28, wy + 72);
+      g.moveTo(wx, wy + 36); g.lineTo(wx + 56, wy + 36);
       g.strokeStyle = '#111';
+      g.lineWidth = 2;
       g.stroke();
+      // Concrete sill
+      g.fillStyle = 'rgba(255,255,255,0.12)';
+      g.fillRect(wx - 4, wy + 72, 64, 5);
+      // Grime streak running down from the sill
+      const streak = g.createLinearGradient(0, wy + 77, 0, wy + 117);
+      streak.addColorStop(0, 'rgba(20,16,12,0.35)');
+      streak.addColorStop(1, 'rgba(20,16,12,0)');
+      g.fillStyle = streak;
+      g.fillRect(wx + 4 + Math.random() * 30, wy + 77, 8 + Math.random() * 10, 40);
+      // Occasional AC unit under a window
+      if (Math.random() < 0.22) {
+        g.fillStyle = '#5a5a5e';
+        g.fillRect(wx + 8, wy + 78, 30, 16);
+        g.fillStyle = '#3a3a3e';
+        g.fillRect(wx + 11, wy + 81, 24, 10);
+      }
     }
   }
+  // Roof cap + drip-edge stain
   g.fillStyle = roofHex;
-  g.fillRect(0, 0, 256, 10);
+  g.fillRect(0, 0, S, 18);
+  const drip = g.createLinearGradient(0, 18, 0, 50);
+  drip.addColorStop(0, 'rgba(0,0,0,0.30)');
+  drip.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = drip;
+  g.fillRect(0, 18, S, 32);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
   return tex;
 }
 
@@ -958,7 +1100,7 @@ function addCrate(x, y, z, s) {
   m.castShadow = true;
   m.receiveShadow = true;
   scene.add(m);
-  obstacles.push({ mesh: m, box: new THREE.Box3().setFromObject(m) });
+  obstacles.push({ mesh: m, box: new THREE.Box3().setFromObject(m), destructible: 'crate', dHp: 25 });
   return m;
 }
 
@@ -1023,28 +1165,26 @@ const labPos = new THREE.Vector3(90, 0, 90);
   addBox(labPos.x, 10, labPos.z, 3, 0.6, 0.6, 0xffffff);
 }
 
-// === Atmosphere: sky dome, sun, ground decals, cars, lamps, trees ===
+// === Night atmosphere: starry sky, moon, scattered window lights ===
 
-// Sky gradient dome (replaces flat background)
+// Night sky dome — deep black at zenith fading to dim navy at horizon,
+// peppered with stars.
 {
   const skyCanvas = document.createElement('canvas');
   skyCanvas.width = 4; skyCanvas.height = 512;
   const skyG = skyCanvas.getContext('2d');
   const grad = skyG.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0,    '#2a1838');  // zenith deep violet
-  grad.addColorStop(0.22, '#523648');  // upper haze
-  grad.addColorStop(0.45, '#a05c5a');  // warm band
-  grad.addColorStop(0.62, '#d28058');  // sunset orange
-  grad.addColorStop(0.78, '#e8a878');  // horizon glow
-  grad.addColorStop(0.90, '#8e4a28');  // dust haze
-  grad.addColorStop(1,    '#3a2018');  // ground horizon
+  grad.addColorStop(0,    '#000003');  // zenith black
+  grad.addColorStop(0.35, '#020412');  // upper dark
+  grad.addColorStop(0.75, '#08101c');  // dim navy
+  grad.addColorStop(1,    '#040608');  // ground horizon
   skyG.fillStyle = grad;
   skyG.fillRect(0, 0, 4, 512);
-  // Faint stars near the top
-  for (let i = 0; i < 40; i++) {
-    skyG.globalAlpha = 0.25 + Math.random() * 0.55;
-    skyG.fillStyle = '#ffffff';
-    skyG.fillRect(Math.random() * 4, Math.random() * 130, 1, 1);
+  // Many faint stars across the entire upper hemisphere
+  for (let i = 0; i < 220; i++) {
+    skyG.globalAlpha = 0.3 + Math.random() * 0.7;
+    skyG.fillStyle = Math.random() < 0.15 ? '#aac8ff' : '#ffffff';
+    skyG.fillRect(Math.random() * 4, Math.random() * 340, 1, 1);
   }
   skyG.globalAlpha = 1;
   const skyTex = new THREE.CanvasTexture(skyCanvas);
@@ -1053,30 +1193,64 @@ const labPos = new THREE.Vector3(90, 0, 90);
   const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false });
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
-  scene.background = null; // sky dome is the backdrop now
+  scene.background = null;
 }
 
-// Sun + halo
+// Cold moon hanging in the sky — small glowing disc + soft halo
 {
-  const sunPos = new THREE.Vector3(80, 70, -200).normalize().multiplyScalar(320);
-  const sun = new THREE.Mesh(
+  const moonPos = new THREE.Vector3(60, 90, -180).normalize().multiplyScalar(320);
+  const moonMesh = new THREE.Mesh(
     new THREE.SphereGeometry(7, 20, 14),
-    new THREE.MeshBasicMaterial({ color: 0xfff0c8, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xeaf0ff, fog: false, depthWrite: false })
   );
-  sun.position.copy(sunPos);
-  scene.add(sun);
-  const halo = new THREE.Mesh(
-    new THREE.SphereGeometry(20, 20, 14),
-    new THREE.MeshBasicMaterial({ color: 0xffc880, fog: false, depthWrite: false, transparent: true, opacity: 0.32 })
+  moonMesh.position.copy(moonPos);
+  scene.add(moonMesh);
+  const moonHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(16, 20, 14),
+    new THREE.MeshBasicMaterial({ color: 0x9ab0d8, fog: false, depthWrite: false, transparent: true, opacity: 0.25 })
   );
-  halo.position.copy(sunPos);
-  scene.add(halo);
-  const halo2 = new THREE.Mesh(
-    new THREE.SphereGeometry(48, 16, 12),
-    new THREE.MeshBasicMaterial({ color: 0xff9050, fog: false, depthWrite: false, transparent: true, opacity: 0.12 })
-  );
-  halo2.position.copy(sunPos);
-  scene.add(halo2);
+  moonHalo.position.copy(moonPos);
+  scene.add(moonHalo);
+}
+
+// Apartment-window lights: scatter ~28 warm point lights at random spots
+// on the surfaces of existing buildings, so a few rooms look "occupied"
+// at night without lighting the whole world.
+{
+  const buildings = [];
+  for (const o of obstacles) {
+    const s = o.box.getSize(new THREE.Vector3());
+    // Buildings are tall axis-aligned boxes — distinguish from walls/crates/cars
+    if (s.y >= 5 && s.x >= 3 && s.z >= 3 && !o.isCar && !o.destructible) buildings.push(o);
+  }
+  let placed = 0;
+  while (placed < 28 && buildings.length) {
+    const b = buildings[(Math.random() * buildings.length) | 0];
+    const c = b.box.getCenter(new THREE.Vector3());
+    const s = b.box.getSize(new THREE.Vector3());
+    const face = (Math.random() * 4) | 0; // 0=+x 1=-x 2=+z 3=-z
+    let lx, ly, lz;
+    const y = c.y - s.y / 2 + 1.5 + Math.random() * (s.y - 2.5);
+    if (face === 0)      { lx = c.x + s.x / 2 + 0.08; ly = y; lz = c.z + (Math.random() - 0.5) * s.z * 0.7; }
+    else if (face === 1) { lx = c.x - s.x / 2 - 0.08; ly = y; lz = c.z + (Math.random() - 0.5) * s.z * 0.7; }
+    else if (face === 2) { lx = c.x + (Math.random() - 0.5) * s.x * 0.7; ly = y; lz = c.z + s.z / 2 + 0.08; }
+    else                 { lx = c.x + (Math.random() - 0.5) * s.x * 0.7; ly = y; lz = c.z - s.z / 2 - 0.08; }
+    const warm = Math.random() < 0.85 ? 0xffd089 : 0x9ec3ff; // mostly warm, occasional cold fluorescent
+    const wl = new THREE.PointLight(warm, 0.55, 10);
+    wl.position.set(lx, ly, lz);
+    scene.add(wl);
+    // Glowing window pane behind the light so you actually see the source
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.85, 1.0),
+      new THREE.MeshBasicMaterial({ color: warm, transparent: true, opacity: 0.85, fog: true, depthWrite: false })
+    );
+    if (face === 0)      { glow.rotation.y =  Math.PI / 2; glow.position.set(lx + 0.02, ly, lz); }
+    else if (face === 1) { glow.rotation.y = -Math.PI / 2; glow.position.set(lx - 0.02, ly, lz); }
+    else if (face === 2) { glow.position.set(lx, ly, lz + 0.02); }
+    else                 { glow.rotation.y = Math.PI; glow.position.set(lx, ly, lz - 0.02); }
+    scene.add(glow);
+    placed++;
+  }
 }
 
 // Helper: find a spot clear of all existing obstacles (and not on spawn/lab)
@@ -1101,9 +1275,9 @@ function findClearSpot(minClear) {
 function makeCar(x, z, rot) {
   const carColors = [0x6a1818, 0x1a2a4a, 0x3a3a3a, 0x5a4828, 0x2a3a2a, 0x4a4a4a, 0x7a3a1a];
   const carColor = carColors[(Math.random() * carColors.length) | 0];
-  const body = new THREE.MeshStandardMaterial({ color: carColor, metalness: 0.55, roughness: 0.5 });
+  const body = new THREE.MeshStandardMaterial({ color: carColor, metalness: 0.85, roughness: 0.32 });
   const dirty = new THREE.MeshStandardMaterial({ color: 0x222226, metalness: 0.7, roughness: 0.4 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x0a0c14, metalness: 0.3, roughness: 0.15 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x0a0c14, metalness: 0.6, roughness: 0.08 });
   const tire  = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.95 });
   const rim   = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, metalness: 0.6, roughness: 0.45 });
   const head  = new THREE.MeshStandardMaterial({ color: 0xeeeebb, emissive: 0x202010, roughness: 0.2 });
@@ -1172,6 +1346,8 @@ function makeCar(x, z, rot) {
 }
 
 // --- Streetlamp with point light ---
+// (declared before the makeLamp() calls below run at init time)
+const lampFlickers = [];
 function makeLamp(x, z) {
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.7, roughness: 0.5 });
   const g = new THREE.Group();
@@ -1198,20 +1374,79 @@ function makeLamp(x, z) {
   );
   bulb.position.set(1.28, 4.96, 0);
   g.add(bulb);
-  const light = new THREE.PointLight(0xffd49a, 1.6, 18);
+  const light = new THREE.PointLight(0xffd49a, 2.4, 22);
   light.position.set(1.28, 4.9, 0);
   g.add(light);
+  // Soft ground splash so each lamp casts a visible pool of light on the road
+  const splash = new THREE.Mesh(
+    new THREE.CircleGeometry(3.2, 18),
+    new THREE.MeshBasicMaterial({ color: 0xffd49a, transparent: true, opacity: 0.15, depthWrite: false, fog: false })
+  );
+  splash.rotation.x = -Math.PI / 2;
+  splash.position.set(1.28, 0.04, 0);
+  g.add(splash);
 
+  const rotY = Math.random() * Math.PI * 2;
   g.position.set(x, 0, z);
-  g.rotation.y = Math.random() * Math.PI * 2;
+  g.rotation.y = rotY;
   scene.add(g);
-  obstacles.push({
+  // World-space position of the bulb head — the shootable target
+  const bulbPos = new THREE.Vector3(
+    x + Math.cos(rotY) * 1.28,
+    4.96,
+    z - Math.sin(rotY) * 1.28
+  );
+  const entry = {
     mesh: g,
     box: new THREE.Box3(
       new THREE.Vector3(x - 0.25, 0, z - 0.25),
       new THREE.Vector3(x + 0.25, 5.5, z + 0.25)
-    )
-  });
+    ),
+    destructible: 'lamp', dHp: 30,
+    lampLight: light,
+    lampBulbMat: bulb.material,
+    lampSplashMat: splash.material,
+    bulbPos,
+    lightOut: false
+  };
+  obstacles.push(entry);
+  // ~1 in 3 lamps has a dying ballast and flickers
+  if (Math.random() < 0.35) {
+    lampFlickers.push({ o: entry, t: Math.random() * 3, dim: false });
+  }
+}
+
+// Shooting the lamp head: glass shatters, sparks pop, the light dies —
+// but the pole stays standing.
+function shootOutLamp(o) {
+  o.lightOut = true;
+  o.lampLight.intensity = 0;
+  o.lampBulbMat.emissiveIntensity = 0;
+  o.lampBulbMat.color.setHex(0x222226);
+  if (o.lampSplashMat) o.lampSplashMat.opacity = 0;
+  spawnGlassFX(o.bulbPos);
+  spawnImpactFX(o.bulbPos);
+  playTone(1400, 0.08, 'square', 0.12);
+  playNoise(0.12, 0.15);
+}
+function updateLampFlickers(dt) {
+  for (const f of lampFlickers) {
+    if (f.o.lightOut) continue;
+    f.t -= dt;
+    if (f.t > 0) continue;
+    f.dim = !f.dim;
+    if (f.dim) {
+      f.o.lampLight.intensity = 0.2;
+      f.o.lampBulbMat.emissiveIntensity = 0.3;
+      if (f.o.lampSplashMat) f.o.lampSplashMat.opacity = 0.02;
+      f.t = 0.04 + Math.random() * 0.16;   // brief dropout
+    } else {
+      f.o.lampLight.intensity = 2.4;
+      f.o.lampBulbMat.emissiveIntensity = 2.8;
+      if (f.o.lampSplashMat) f.o.lampSplashMat.opacity = 0.15;
+      f.t = 0.6 + Math.random() * 3.0;     // steady stretch
+    }
+  }
 }
 
 // --- Dead tree ---
@@ -1249,7 +1484,8 @@ function makeTree(x, z) {
     box: new THREE.Box3(
       new THREE.Vector3(x - 0.3, 0, z - 0.3),
       new THREE.Vector3(x + 0.3, trunkH, z + 0.3)
-    )
+    ),
+    destructible: 'tree', dHp: 30
   });
 }
 
@@ -1297,10 +1533,10 @@ for (let i = 0; i < dustCount; i++) {
 }
 dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
 const dustMat = new THREE.PointsMaterial({
-  color: 0xe2c8a4,
-  size: 0.08,
+  color: 0x687888,
+  size: 0.07,
   transparent: true,
-  opacity: 0.5,
+  opacity: 0.32,
   sizeAttenuation: true,
   depthWrite: false,
   fog: true
@@ -1571,11 +1807,26 @@ const driveHpFillEl = document.getElementById('drive-hpfill');
 function enterVehicle(car) {
   inVehicle = true;
   currentVehicle = car;
-  vehicleHeading = car.mesh.rotation.y;
+  // The model's nose is +z local but driving moves along local -z, so we
+  // offset the physics heading by PI and add it back for display. This way
+  // the car drives nose-first.
+  vehicleHeading = car.mesh.rotation.y - Math.PI;
   vehicleSpeed = 0;
   weaponGroup.visible = false;
   driveHudEl.classList.remove('hidden');
   interactPromptEl.classList.add('hidden');
+  // Headlights: one warm spotlight at the nose pointing down the road
+  if (!car.headlight) {
+    const hl = new THREE.SpotLight(0xfff2cc, 3.2, 50, Math.PI / 5.5, 0.35, 1.0);
+    hl.position.set(0, 0.85, 2.0);
+    const tgt = new THREE.Object3D();
+    tgt.position.set(0, 0.3, 16);
+    car.mesh.add(tgt);
+    car.mesh.add(hl);
+    hl.target = tgt;
+    car.headlight = hl;
+  }
+  car.headlight.visible = true;
   addKillFeed('Hopped in a car!', 'holy');
   playTone(440, 0.10, 'square', 0.12);
   playTone(660, 0.10, 'square', 0.10);
@@ -1589,43 +1840,60 @@ function exitVehicle() {
   const fwdX  = -Math.sin(h), fwdZ  = -Math.cos(h);
   const carX = currentVehicle.mesh.position.x;
   const carZ = currentVehicle.mesh.position.z;
-  // Candidate exit positions ordered by preference. Distances are larger
-  // than half the car's diagonal so the player never spawns inside the
-  // car's axis-aligned bounding box.
+  // A rotated car's axis-aligned bounding box can reach ~3.05m from its
+  // center (half-diagonal of 4.2 x 1.9 at 45 degrees), so candidates must
+  // sit beyond that — and the car's own box must be part of the clearance
+  // check, otherwise a "clear" candidate can still be inside the car AABB
+  // and the player spawns permanently stuck in its collision box.
+  const spotClear = (tx, tz) => {
+    if (Math.abs(tx) > HW - 1 || Math.abs(tz) > HW - 1) return false;
+    const sample = new THREE.Vector3(tx, 1, tz);
+    for (const o of obstacles) {
+      if (o.box.distanceToPoint(sample) < 0.55) return false;
+    }
+    return true;
+  };
   const tries = [
-    { dx:  rightX * 2.8, dz:  rightZ * 2.8 },  // right (driver) side
-    { dx: -rightX * 2.8, dz: -rightZ * 2.8 },  // left side
-    { dx:  rightX * 4.2, dz:  rightZ * 4.2 },  // further right
-    { dx: -rightX * 4.2, dz: -rightZ * 4.2 },  // further left
-    { dx: -fwdX   * 3.5, dz: -fwdZ   * 3.5 },  // behind the car
-    { dx:  fwdX   * 3.5, dz:  fwdZ   * 3.5 },  // in front of the car
+    { dx:  rightX * 3.7, dz:  rightZ * 3.7 },  // right (driver) side
+    { dx: -rightX * 3.7, dz: -rightZ * 3.7 },  // left side
+    { dx: -fwdX   * 4.3, dz: -fwdZ   * 4.3 },  // behind the car
+    { dx:  fwdX   * 4.3, dz:  fwdZ   * 4.3 },  // in front of the car
+    { dx:  rightX * 5.0, dz:  rightZ * 5.0 },  // further right
+    { dx: -rightX * 5.0, dz: -rightZ * 5.0 },  // further left
   ];
-  const sample = new THREE.Vector3();
   let placed = false;
   for (const t of tries) {
-    const tx = carX + t.dx;
-    const tz = carZ + t.dz;
-    if (Math.abs(tx) > HW - 1 || Math.abs(tz) > HW - 1) continue;
-    sample.set(tx, 1, tz);
-    let blocked = false;
-    for (const o of obstacles) {
-      if (o === currentVehicle) continue;
-      if (o.box.distanceToPoint(sample) < 0.55) { blocked = true; break; }
-    }
-    if (!blocked) {
-      player.pos.set(tx, PLAYER_HEIGHT, tz);
+    if (spotClear(carX + t.dx, carZ + t.dz)) {
+      player.pos.set(carX + t.dx, PLAYER_HEIGHT, carZ + t.dz);
       placed = true;
       break;
     }
   }
   if (!placed) {
-    // Last-resort: shove the player well to the right and clamp later
-    player.pos.set(carX + rightX * 3.0, PLAYER_HEIGHT, carZ + rightZ * 3.0);
+    // Radial sweep: try 12 directions at increasing radii until clear
+    outer:
+    for (const r of [3.7, 4.6, 5.6, 6.8]) {
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        const tx = carX + Math.cos(a) * r;
+        const tz = carZ + Math.sin(a) * r;
+        if (spotClear(tx, tz)) {
+          player.pos.set(tx, PLAYER_HEIGHT, tz);
+          placed = true;
+          break outer;
+        }
+      }
+    }
+  }
+  if (!placed) {
+    // Truly boxed in — place far right of the car, outside any possible AABB
+    player.pos.set(carX + rightX * 5.0, PLAYER_HEIGHT, carZ + rightZ * 5.0);
   }
   if (Math.abs(player.pos.x) > HW - 1) player.pos.x = Math.sign(player.pos.x) * (HW - 1);
   if (Math.abs(player.pos.z) > HW - 1) player.pos.z = Math.sign(player.pos.z) * (HW - 1);
   player.vel.y = 0;
   player.onGround = true;
+  if (currentVehicle.headlight) currentVehicle.headlight.visible = false;
   inVehicle = false;
   currentVehicle = null;
   vehicleSpeed = 0;
@@ -1637,30 +1905,443 @@ function damageVehicle(dmg) {
   if (!currentVehicle) return;
   currentVehicle.hp = Math.max(0, currentVehicle.hp - dmg);
   if (currentVehicle.hp <= 0) {
-    // Explode
-    const pos = currentVehicle.mesh.position.clone();
-    pos.y = 0.8;
-    for (let i = 0; i < 5; i++) spawnBloodBurst(pos, 0xff7733);
-    for (let i = 0; i < 3; i++) spawnBloodBurst(pos, 0xffcc44);
-    playTone(60, 0.5, 'sawtooth', 0.25);
-    playTone(120, 0.4, 'sawtooth', 0.20);
-    addShake(0.32);
-    damagePlayer(40);
-    // Kill nearby zombies (boom radius)
-    for (const z of zombies) {
-      if (z.dead || z.transformed) continue;
-      if (z.mesh.position.distanceTo(pos) < 6) {
-        spawnBloodBurst(z.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)));
-        z.die();
-      }
-    }
+    const car = currentVehicle;
     exitVehicle();
+    explodeCar(car);
   }
 }
 
 // Cars are tagged as drivable directly in makeCar() — no AABB heuristic
 // is reliable here because cars spawn at random rotations and the axis-
 // aligned bounding box of a rotated car is much larger than its real size.
+
+// === Destruction physics: debris fragments + breakable obstacles ===
+const debris = [];
+const DEBRIS_CAP = 90;
+function spawnFragment(geo, color, pos, vel, opts = {}) {
+  if (debris.length >= DEBRIS_CAP) {
+    const old = debris.shift();
+    scene.remove(old.mesh);
+    old.mesh.geometry.dispose();
+    old.mesh.material.dispose();
+  }
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: opts.roughness !== undefined ? opts.roughness : 0.85,
+    metalness: opts.metalness || 0,
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.copy(pos);
+  m.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+  m.castShadow = true;
+  scene.add(m);
+  debris.push({
+    mesh: m,
+    vel: vel.clone(),
+    angVel: new THREE.Vector3(
+      (Math.random() - 0.5) * 12,
+      (Math.random() - 0.5) * 12,
+      (Math.random() - 0.5) * 12
+    ),
+    life: 3.2 + Math.random() * 1.2,
+    maxLife: 4.4,
+    halfH: opts.halfH || 0.05,
+  });
+}
+function updateDebris(dt) {
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i];
+    d.life -= dt;
+    if (d.life <= 0) {
+      scene.remove(d.mesh);
+      d.mesh.geometry.dispose();
+      d.mesh.material.dispose();
+      debris.splice(i, 1);
+      continue;
+    }
+    d.vel.y -= GRAVITY * dt;
+    d.mesh.position.add(d.vel.clone().multiplyScalar(dt));
+    if (d.mesh.position.y < d.halfH) {
+      d.mesh.position.y = d.halfH;
+      d.vel.y *= -0.35;
+      d.vel.x *= 0.6;
+      d.vel.z *= 0.6;
+      d.angVel.multiplyScalar(0.5);
+      if (Math.abs(d.vel.y) < 0.5) d.vel.y = 0;
+    }
+    d.mesh.rotation.x += d.angVel.x * dt;
+    d.mesh.rotation.y += d.angVel.y * dt;
+    d.mesh.rotation.z += d.angVel.z * dt;
+    // Fade out in the last 0.8s
+    if (d.life < 0.8) {
+      d.mesh.material.transparent = true;
+      d.mesh.material.opacity = d.life / 0.8;
+    }
+  }
+}
+
+// Bullet hit on hard surface: sparks + dust puff
+function spawnImpactFX(pos) {
+  for (let i = 0; i < 5; i++) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.035, 0.035, 0.035),
+      new THREE.MeshBasicMaterial({ color: 0xffd988, transparent: true, opacity: 1 })
+    );
+    m.position.copy(pos);
+    const v = new THREE.Vector3(
+      (Math.random() - 0.5) * 6,
+      Math.random() * 3 + 1,
+      (Math.random() - 0.5) * 6
+    );
+    scene.add(m);
+    particles.push({ mesh: m, vel: v, life: 0.28, maxLife: 0.28 });
+  }
+  for (let i = 0; i < 3; i++) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.09, 0.09, 0.09),
+      new THREE.MeshBasicMaterial({ color: 0x8a7a66, transparent: true, opacity: 0.6 })
+    );
+    m.position.copy(pos);
+    const v = new THREE.Vector3(
+      (Math.random() - 0.5) * 1.5,
+      Math.random() * 1.2 + 0.4,
+      (Math.random() - 0.5) * 1.5
+    );
+    scene.add(m);
+    particles.push({ mesh: m, vel: v, life: 0.55, maxLife: 0.55, grow: 2.5 });
+  }
+}
+
+let gridDirty = false;
+function removeObstacle(o) {
+  const i = obstacles.indexOf(o);
+  if (i >= 0) obstacles.splice(i, 1);
+  scene.remove(o.mesh);
+  gridDirty = true;
+}
+
+function destroyObstacle(o, impactDir) {
+  const center = o.box.getCenter(new THREE.Vector3());
+  const dir = impactDir
+    ? new THREE.Vector3(impactDir.x, 0, impactDir.z).normalize()
+    : new THREE.Vector3(0, 0, 1);
+  const baseVel = () => new THREE.Vector3(
+    dir.x * (1.5 + Math.random() * 2.5) + (Math.random() - 0.5) * 3,
+    2 + Math.random() * 3.5,
+    dir.z * (1.5 + Math.random() * 2.5) + (Math.random() - 0.5) * 3
+  );
+  if (o.destructible === 'crate') {
+    for (let i = 0; i < 10; i++) {
+      spawnFragment(
+        new THREE.BoxGeometry(0.10 + Math.random() * 0.12, 0.035, 0.25 + Math.random() * 0.35),
+        0x7a4a24,
+        center.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6, (Math.random()-0.5)*0.6, (Math.random()-0.5)*0.6)),
+        baseVel()
+      );
+    }
+    playNoise(0.22, 0.20);
+    playTone(140, 0.18, 'sawtooth', 0.10);
+  } else if (o.destructible === 'lamp') {
+    for (let i = 0; i < 5; i++) {
+      spawnFragment(
+        new THREE.CylinderGeometry(0.06, 0.08, 0.7 + Math.random() * 0.5, 6),
+        0x1a1a1a,
+        center.clone().add(new THREE.Vector3((Math.random()-0.5)*0.4, (Math.random()-0.5)*2.0, (Math.random()-0.5)*0.4)),
+        baseVel(),
+        { metalness: 0.6, roughness: 0.45, halfH: 0.08 }
+      );
+    }
+    // Glass + spark pop from the bulb housing
+    const bulbPos = center.clone(); bulbPos.y = 4.9;
+    spawnImpactFX(bulbPos);
+    playNoise(0.18, 0.18);
+    playTone(900, 0.10, 'square', 0.10);
+  } else if (o.destructible === 'tree') {
+    for (let i = 0; i < 7; i++) {
+      spawnFragment(
+        new THREE.CylinderGeometry(0.05 + Math.random() * 0.06, 0.08 + Math.random() * 0.08, 0.5 + Math.random() * 0.7, 6),
+        0x2c1a10,
+        center.clone().add(new THREE.Vector3((Math.random()-0.5)*0.5, (Math.random()-0.5)*1.6, (Math.random()-0.5)*0.5)),
+        baseVel(),
+        { halfH: 0.07 }
+      );
+    }
+    playNoise(0.25, 0.22);
+    playTone(90, 0.30, 'sawtooth', 0.12);
+  }
+  removeObstacle(o);
+}
+
+function damageDestructible(o, dmg, dir) {
+  o.dHp -= dmg;
+  if (o.dHp <= 0) destroyObstacle(o, dir);
+}
+
+// Generalized car explosion — works on parked cars and the one being driven
+function explodeCar(o) {
+  const pos = o.mesh.position.clone();
+  pos.y = 0.8;
+  for (let i = 0; i < 5; i++) spawnBloodBurst(pos, 0xff7733);
+  for (let i = 0; i < 3; i++) spawnBloodBurst(pos, 0xffcc44);
+  playTone(60, 0.5, 'sawtooth', 0.25);
+  playTone(120, 0.4, 'sawtooth', 0.20);
+  playNoise(0.4, 0.25);
+  addShake(0.32);
+  // Metal panels + tires fly off
+  const panelColors = [0x6a1818, 0x1a2a4a, 0x3a3a3a, 0x2a2a2e, 0x111114];
+  for (let i = 0; i < 11; i++) {
+    spawnFragment(
+      new THREE.BoxGeometry(0.25 + Math.random() * 0.4, 0.03, 0.2 + Math.random() * 0.35),
+      panelColors[(Math.random() * panelColors.length) | 0],
+      pos.clone().add(new THREE.Vector3((Math.random()-0.5)*1.6, Math.random()*0.8, (Math.random()-0.5)*3.0)),
+      new THREE.Vector3((Math.random()-0.5)*9, 4 + Math.random()*6, (Math.random()-0.5)*9),
+      { metalness: 0.6, roughness: 0.4 }
+    );
+  }
+  for (let i = 0; i < 2; i++) {
+    spawnFragment(
+      new THREE.CylinderGeometry(0.34, 0.34, 0.28, 10),
+      0x0a0a0a,
+      pos.clone().add(new THREE.Vector3((Math.random()-0.5)*1.2, 0.4, (Math.random()-0.5)*2.0)),
+      new THREE.Vector3((Math.random()-0.5)*7, 5 + Math.random()*4, (Math.random()-0.5)*7),
+      { halfH: 0.18 }
+    );
+  }
+  // Blast: kill zombies in 6m, splash the player up to 40 within 5m
+  for (const z of zombies) {
+    if (z.dead || z.transformed) continue;
+    if (z.mesh.position.distanceTo(pos) < 6) {
+      spawnBloodBurst(z.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)));
+      z.die();
+    }
+  }
+  const pd = Math.hypot(player.pos.x - pos.x, player.pos.z - pos.z);
+  if (pd < 5) damagePlayer(Math.round(40 * (1 - pd / 5)));
+  const wreckRot = o.mesh.rotation.y;
+  removeObstacle(o);
+  // Leave a charred wreck that burns and smokes instead of vanishing
+  const wreck = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, 0.55, 4.0),
+    new THREE.MeshStandardMaterial({ color: 0x17120e, roughness: 1.0 })
+  );
+  wreck.position.set(pos.x, 0.3, pos.z);
+  wreck.rotation.y = wreckRot;
+  wreck.castShadow = true;
+  scene.add(wreck);
+  obstacles.push({ mesh: wreck, box: new THREE.Box3().setFromObject(wreck), burnTtl: 22 });
+  const fireLight = new THREE.PointLight(0xff6622, 2.2, 10);
+  fireLight.position.set(pos.x, 1.1, pos.z);
+  scene.add(fireLight);
+  fires.push({ light: fireLight, ttl: 9, max: 9 });
+  gridDirty = true;
+}
+
+// === Realism layer: bullet holes, blood pools, smoke, fire, crows, skids ===
+
+// Persistent bullet-hole decals on static surfaces (shared geo + material)
+const bulletHoles = [];
+const bulletHoleGeo = new THREE.CircleGeometry(0.05, 8);
+const bulletHoleMat = new THREE.MeshBasicMaterial({
+  color: 0x0c0c0c, transparent: true, opacity: 0.85,
+  depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2
+});
+function boxFaceNormal(box, p) {
+  const d = [
+    { v: Math.abs(p.x - box.min.x), n: [-1, 0, 0] },
+    { v: Math.abs(p.x - box.max.x), n: [ 1, 0, 0] },
+    { v: Math.abs(p.y - box.min.y), n: [ 0,-1, 0] },
+    { v: Math.abs(p.y - box.max.y), n: [ 0, 1, 0] },
+    { v: Math.abs(p.z - box.min.z), n: [ 0, 0,-1] },
+    { v: Math.abs(p.z - box.max.z), n: [ 0, 0, 1] },
+  ];
+  d.sort((a, b) => a.v - b.v);
+  return new THREE.Vector3(...d[0].n);
+}
+function addBulletHole(pos, box) {
+  const n = boxFaceNormal(box, pos);
+  const m = new THREE.Mesh(bulletHoleGeo, bulletHoleMat);
+  m.position.copy(pos).add(n.clone().multiplyScalar(0.012));
+  m.lookAt(pos.clone().add(n));
+  m.scale.setScalar(0.8 + Math.random() * 0.7);
+  scene.add(m);
+  bulletHoles.push(m);
+  if (bulletHoles.length > 80) scene.remove(bulletHoles.shift());
+}
+
+// Glass spray (car windows, lamp bulbs)
+function spawnGlassFX(pos) {
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.012, 0.05),
+      new THREE.MeshBasicMaterial({ color: 0xbfdde8, transparent: true, opacity: 0.9 })
+    );
+    m.position.copy(pos);
+    const v = new THREE.Vector3(
+      (Math.random() - 0.5) * 5,
+      Math.random() * 2 + 0.5,
+      (Math.random() - 0.5) * 5
+    );
+    scene.add(m);
+    particles.push({ mesh: m, vel: v, life: 0.5, maxLife: 0.5 });
+  }
+}
+
+// Blood pools that spread under corpses where they land
+const bloodPools = [];
+const bloodPoolGeo = new THREE.CircleGeometry(1, 12);
+const bloodPoolMat = new THREE.MeshBasicMaterial({
+  color: 0x3a0505, transparent: true, opacity: 0.72,
+  depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1
+});
+function spawnBloodPool(x, z) {
+  const m = new THREE.Mesh(bloodPoolGeo, bloodPoolMat);
+  m.rotation.x = -Math.PI / 2;
+  m.rotation.z = Math.random() * Math.PI * 2;
+  m.position.set(x, 0.018 + Math.random() * 0.004, z);
+  m.scale.setScalar(0.05);
+  scene.add(m);
+  bloodPools.push({ mesh: m, target: 0.55 + Math.random() * 0.45, t: 0 });
+  if (bloodPools.length > 40) scene.remove(bloodPools.shift().mesh);
+}
+function updateBloodPools(dt) {
+  for (const p of bloodPools) {
+    if (p.t >= 1) continue;
+    p.t = Math.min(1, p.t + dt / 2.5);
+    // Ease-out spread, like blood soaking into dirt
+    const s = p.target * (1 - Math.pow(1 - p.t, 3));
+    p.mesh.scale.setScalar(Math.max(0.05, s));
+  }
+}
+
+// Damaged cars trail smoke from the hood; wrecks burn with embers
+const fires = [];
+let smokeTimer = 0;
+function spawnSmokePuff(x, y, z, dark) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.12, 0.12),
+    new THREE.MeshBasicMaterial({ color: dark ? 0x1c1c1c : 0x55534e, transparent: true, opacity: 0.5 })
+  );
+  m.position.set(x + (Math.random() - 0.5) * 0.4, y, z + (Math.random() - 0.5) * 0.4);
+  const v = new THREE.Vector3((Math.random() - 0.5) * 0.4, 1.0 + Math.random() * 0.8, (Math.random() - 0.5) * 0.4);
+  scene.add(m);
+  particles.push({ mesh: m, vel: v, life: 1.4, maxLife: 1.4, grow: 2.0 });
+}
+function updateVehicleSmoke(dt) {
+  smokeTimer -= dt;
+  const doSpawn = smokeTimer <= 0;
+  if (doSpawn) smokeTimer = 0.14;
+  for (const o of obstacles) {
+    // Wounded drivable cars smoke; below 30 HP the smoke turns black
+    if (o.isCar && o.hp < 60) {
+      if (!doSpawn) continue;
+      if (o.mesh.position.distanceToSquared(player.pos) > 3600) continue;
+      const rot = o.mesh.rotation.y;
+      spawnSmokePuff(
+        o.mesh.position.x + Math.sin(rot) * 1.3,
+        1.0,
+        o.mesh.position.z + Math.cos(rot) * 1.3,
+        o.hp < 30
+      );
+    } else if (o.burnTtl > 0) {
+      // Burning wreck: thick black smoke column + drifting embers
+      if (!doSpawn) continue;
+      o.burnTtl -= 0.14;
+      spawnSmokePuff(o.mesh.position.x, 0.9, o.mesh.position.z, true);
+      if (Math.random() < 0.5) {
+        const ember = new THREE.Mesh(
+          new THREE.BoxGeometry(0.04, 0.04, 0.04),
+          new THREE.MeshBasicMaterial({ color: 0xff8830, transparent: true, opacity: 1 })
+        );
+        ember.position.set(o.mesh.position.x, 0.7, o.mesh.position.z);
+        scene.add(ember);
+        particles.push({
+          mesh: ember,
+          vel: new THREE.Vector3((Math.random() - 0.5) * 1.2, 2 + Math.random() * 1.5, (Math.random() - 0.5) * 1.2),
+          life: 0.8, maxLife: 0.8, grow: 0.3
+        });
+      }
+    }
+  }
+  for (let i = fires.length - 1; i >= 0; i--) {
+    const f = fires[i];
+    f.ttl -= dt;
+    if (f.ttl <= 0) {
+      scene.remove(f.light);
+      fires.splice(i, 1);
+      continue;
+    }
+    // Fire flicker: noisy intensity that dies down as the fuel burns out
+    f.light.intensity = (f.ttl / f.max) * (1.6 + Math.random() * 1.4);
+  }
+}
+
+// Crows circling the skyline
+const crows = [];
+for (let i = 0; i < 5; i++) {
+  const cg = new THREE.Group();
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0x0a0a0c });
+  const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.28), wingMat);
+  wingL.position.x = -0.45;
+  cg.add(wingL);
+  const wingR = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.28), wingMat);
+  wingR.position.x = 0.45;
+  cg.add(wingR);
+  scene.add(cg);
+  crows.push({
+    g: cg, wingL, wingR,
+    r: 28 + Math.random() * 50,
+    h: 26 + Math.random() * 14,
+    a: Math.random() * Math.PI * 2,
+    speed: (0.05 + Math.random() * 0.08) * (Math.random() < 0.5 ? 1 : -1),
+    flap: Math.random() * 10,
+    cx: (Math.random() - 0.5) * 80,
+    cz: (Math.random() - 0.5) * 80
+  });
+}
+function updateCrows(dt) {
+  for (const c of crows) {
+    c.a += c.speed * dt * 2;
+    c.flap += dt * 9;
+    c.g.position.set(
+      c.cx + Math.cos(c.a) * c.r,
+      c.h + Math.sin(c.a * 3) * 1.5,
+      c.cz + Math.sin(c.a) * c.r
+    );
+    c.g.rotation.y = -c.a - (c.speed > 0 ? Math.PI / 2 : -Math.PI / 2);
+    const w = Math.sin(c.flap) * 0.55;
+    c.wingL.rotation.z =  w;
+    c.wingR.rotation.z = -w;
+  }
+}
+
+// Tire skid marks when drifting hard
+const skids = [];
+const skidGeo = new THREE.PlaneGeometry(0.22, 0.7);
+const skidMat = new THREE.MeshBasicMaterial({
+  color: 0x0a0a0a, transparent: true, opacity: 0.4,
+  depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1
+});
+let skidTimer = 0;
+function dropSkidMarks(carX, carZ, heading, dt) {
+  skidTimer -= dt;
+  if (skidTimer > 0) return;
+  skidTimer = 0.07;
+  const fwdX = -Math.sin(heading), fwdZ = -Math.cos(heading);
+  const rgtX =  Math.cos(heading), rgtZ = -Math.sin(heading);
+  for (const s of [-0.8, 0.8]) {
+    const m = new THREE.Mesh(skidGeo, skidMat);
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.z = -heading;
+    m.position.set(
+      carX - fwdX * 1.4 + rgtX * s,
+      0.014,
+      carZ - fwdZ * 1.4 + rgtZ * s
+    );
+    scene.add(m);
+    skids.push(m);
+    if (skids.length > 120) scene.remove(skids.shift());
+  }
+}
 
 // --- Flow-field pathfinding (BFS from player on a coarse grid) ---
 const CELL_SIZE = 4;
@@ -2589,10 +3270,12 @@ class Zombie {
       this.ragVel.x *= 0.45;
       this.ragVel.z *= 0.45;
       if (Math.abs(this.ragVel.y) < 0.6) this.ragVel.y = 0;
-      // Spit a bit of dust/blood on the first ground impact
+      // Spit a bit of dust/blood on the first ground impact, and start a
+      // blood pool spreading under wherever the body actually landed
       if (!this._impacted) {
         this._impacted = true;
         spawnBloodBurst(this.mesh.position.clone().add(new THREE.Vector3(0, 0.2, 0)), 0x6a3018);
+        spawnBloodPool(this.mesh.position.x, this.mesh.position.z);
         if (this.deathStyle === 'headshot') addShake(0.08);
       }
       this.spinVel *= 0.7;
@@ -3012,6 +3695,26 @@ function shoot() {
 
   const origin = camera.getWorldPosition(new THREE.Vector3());
   const baseDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  // Muzzle smoke: two growing gray puffs drifting up from the barrel
+  {
+    const sRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const smokePos = origin.clone()
+      .add(baseDir.clone().multiplyScalar(0.55))
+      .add(sRight.multiplyScalar(0.13))
+      .add(new THREE.Vector3(0, -0.08, 0));
+    for (let i = 0; i < 2; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.05, 0.05, 0.05),
+        new THREE.MeshBasicMaterial({ color: 0x9a9a96, transparent: true, opacity: 0.4 })
+      );
+      m.position.copy(smokePos);
+      const v = baseDir.clone().multiplyScalar(0.6 + Math.random() * 0.6);
+      v.y += 0.5 + Math.random() * 0.4;
+      v.x += (Math.random() - 0.5) * 0.3;
+      scene.add(m);
+      particles.push({ mesh: m, vel: v, life: 0.5, maxLife: 0.5, grow: 4 });
+    }
+  }
   const dmgMul = powerups.dmg.active > 0 ? powerups.dmg.mul : 1;
   const maxHits = 1 + playerStats.pierceBonus;
   for (let p = 0; p < w.pellets; p++) {
@@ -3063,6 +3766,7 @@ function shoot() {
           hitIsHead = false;
         }
       }
+      let hitObstacle = null;
       for (const o of obstacles) {
         // Don't block ray with the car you're driving
         if (inVehicle && o === currentVehicle) continue;
@@ -3070,10 +3774,39 @@ function shoot() {
         if (t !== null && t < hitDist) {
           hitDist = t;
           hitZombie = null;
+          hitObstacle = o;
         }
       }
       if (!hitZombie) {
         endPoint = curOrigin.clone().add(dir.clone().multiplyScalar(Math.min(hitDist, remainingRange)));
+        // Street light bulbs are small spheres outside the pole's collision
+        // box — check the bullet path against them separately. The glass
+        // breaks but doesn't stop the bullet.
+        const segMax = Math.min(hitDist, remainingRange);
+        for (const lo of obstacles) {
+          if (lo.destructible !== 'lamp' || lo.lightOut || !lo.bulbPos) continue;
+          const v = lo.bulbPos.clone().sub(curOrigin);
+          const tB = v.dot(dir);
+          if (tB < 0 || tB > segMax) continue;
+          if (v.lengthSq() - tB * tB < 0.45 * 0.45) shootOutLamp(lo);
+        }
+        // Surface hit: sparks/dust always; destructibles take damage,
+        // parked cars take hull damage and eventually explode; solid
+        // walls keep a permanent bullet hole.
+        if (hitObstacle && hitDist < remainingRange - 0.01) {
+          const impactPos = curOrigin.clone().add(dir.clone().multiplyScalar(hitDist));
+          spawnImpactFX(impactPos);
+          const obstDmg = Math.round(weaponDamage(currentWeaponKey) * dmgMul);
+          if (hitObstacle.destructible) {
+            damageDestructible(hitObstacle, obstDmg, dir);
+          } else if (hitObstacle.isCar) {
+            hitObstacle.hp -= obstDmg * 0.5;
+            spawnGlassFX(impactPos);
+            if (hitObstacle.hp <= 0) explodeCar(hitObstacle);
+          } else {
+            addBulletHole(impactPos, hitObstacle.box);
+          }
+        }
         break;
       }
       hitSet.add(hitZombie);
@@ -3513,6 +4246,25 @@ function collidesWithBox(box) {
     maxZ > box.min.z && minZ < box.max.z &&
     maxY > box.min.y && minY < box.max.y
   );
+}
+
+// Safety net: if the player somehow ends up overlapping an obstacle box
+// (bad exit placement, a box that grew, etc.), tryMove would revert every
+// step and lock them in place forever. Push them out along the smallest
+// horizontal penetration axis instead.
+function unstickPlayer() {
+  for (const o of obstacles) {
+    if (!collidesWithBox(o.box)) continue;
+    const ox = Math.min(player.pos.x + PLAYER_RADIUS, o.box.max.x)
+             - Math.max(player.pos.x - PLAYER_RADIUS, o.box.min.x);
+    const oz = Math.min(player.pos.z + PLAYER_RADIUS, o.box.max.z)
+             - Math.max(player.pos.z - PLAYER_RADIUS, o.box.min.z);
+    if (ox <= 0 || oz <= 0) continue;
+    const cx = (o.box.min.x + o.box.max.x) / 2;
+    const cz = (o.box.min.z + o.box.max.z) / 2;
+    if (ox <= oz) player.pos.x += (player.pos.x >= cx ? 1 : -1) * (ox + 0.02);
+    else          player.pos.z += (player.pos.z >= cz ? 1 : -1) * (oz + 0.02);
+  }
 }
 
 // ===== Polish layer: juice, audio, minimap, powerups, boss waves =====
@@ -3963,7 +4715,13 @@ function updateParticles(dt) {
       particles.splice(i, 1);
       continue;
     }
-    p.vel.y -= 14 * dt;
+    // Smoke-style particles grow and float instead of dropping like debris
+    if (p.grow) {
+      p.mesh.scale.multiplyScalar(1 + p.grow * dt);
+      p.vel.y -= 2 * dt;
+    } else {
+      p.vel.y -= 14 * dt;
+    }
     p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
     if (p.mesh.position.y < 0.05) {
       p.mesh.position.y = 0.05;
@@ -4129,11 +4887,19 @@ function update(dt) {
     let crashed = false;
     for (const o of obstacles) {
       if (o === currentVehicle) continue;
-      // Skip other cars too (push them later) — actually treat them as walls for now
       if (o.box.distanceToPoint(desired) < 1.7) {
+        // Destructibles get smashed through instead of stopping the car
+        if (o.destructible && Math.abs(vehicleSpeed) > 3) {
+          destroyObstacle(o, dir);
+          damageVehicle(3);
+          addShake(0.12);
+          if (!currentVehicle) return; // car exploded during the smash
+          break;
+        }
         if (Math.abs(vehicleSpeed) > 6) {
           damageVehicle(Math.abs(vehicleSpeed) * 0.6);
           addShake(0.18);
+          if (!currentVehicle) return; // crash killed the car
         }
         vehicleSpeed *= -0.3;
         crashed = true;
@@ -4141,8 +4907,14 @@ function update(dt) {
       }
     }
     if (!crashed) currentVehicle.mesh.position.copy(desired);
-    currentVehicle.mesh.rotation.y = vehicleHeading;
+    // Display rotation is heading + PI so the model drives nose-first
+    currentVehicle.mesh.rotation.y = vehicleHeading + Math.PI;
     currentVehicle.box.setFromObject(currentVehicle.mesh);
+
+    // Drifting hard at speed lays down rubber
+    if (Math.abs(steer) > 0.45 && Math.abs(vehicleSpeed) > 8) {
+      dropSkidMarks(currentVehicle.mesh.position.x, currentVehicle.mesh.position.z, vehicleHeading, dt);
+    }
 
     // Ram zombies
     if (Math.abs(vehicleSpeed) > 5) {
@@ -4156,6 +4928,7 @@ function update(dt) {
           z.die();
           damageVehicle(2);
           addShake(0.06);
+          if (!currentVehicle) return; // car exploded mid-ram
         }
       }
     }
@@ -4180,6 +4953,7 @@ function update(dt) {
     // Look stays free (mouse), but yaw is biased toward vehicle direction
     camera.rotation.y = vehicleHeading + (player.yaw - (player._lastVehicleYaw || vehicleHeading)) * 0; // lock yaw to vehicle
     camera.rotation.x = player.pitch;
+    camera.rotation.z = 0;
     player.yaw = vehicleHeading; // keep player.yaw synced so mouse delta works on exit
 
     // Flashlight forward
@@ -4218,9 +4992,20 @@ function update(dt) {
     player.vel.y -= GRAVITY * dt;
     delta.y = player.vel.y * dt;
 
+    const preVelY = player.vel.y;
     tryMove(delta);
+    unstickPlayer();
+    // Landing thud: camera dips proportionally to fall speed
+    if (!player._wasOnGround && player.onGround) {
+      player._landDip = Math.min(0.18, Math.abs(preVelY) * 0.014);
+      if (Math.abs(preVelY) > 6) playNoise(0.06, 0.10);
+    }
+    player._wasOnGround = player.onGround;
+    player._landDip = (player._landDip || 0) * Math.pow(0.002, dt);
 
     const moving = moveDir.lengthSq() > 0 && player.onGround;
+    // Head bob blends in/out smoothly so stopping doesn't snap the camera
+    player._bobAmt = (player._bobAmt || 0) + ((moving ? 1 : 0) - (player._bobAmt || 0)) * Math.min(1, dt * 8);
     if (moving) player.weaponBob += dt * (keys['ShiftLeft'] ? 12 : 8);
     if (weaponMesh) {
       // Reload animation: weapon tilts down + sideways during reload, returns
@@ -4264,6 +5049,9 @@ function update(dt) {
     }
 
     camera.position.copy(player.pos);
+    // Head bob (synced to weapon bob) + landing dip
+    camera.position.y += Math.abs(Math.sin(player.weaponBob)) * 0.045 * (player._bobAmt || 0)
+                       - (player._landDip || 0);
     if (shakeAmt > 0.001) {
       camera.position.x += (Math.random() - 0.5) * shakeAmt;
       camera.position.y += (Math.random() - 0.5) * shakeAmt;
@@ -4273,6 +5061,8 @@ function update(dt) {
     camera.rotation.order = 'YXZ';
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
+    // Subtle camera roll while strafing-walking — sells the body movement
+    camera.rotation.z = Math.sin(player.weaponBob) * 0.006 * (player._bobAmt || 0);
 
     flashlight.position.copy(camera.position);
     const fdir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -4342,6 +5132,11 @@ function update(dt) {
 
   flowFieldTimer -= dt;
   if (flowFieldTimer <= 0) {
+    if (gridDirty) {
+      // An obstacle was destroyed — zombies can now path through the gap
+      buildGridBlocked();
+      gridDirty = false;
+    }
     recomputeFlowField();
     flowFieldTimer = 0.25;
   }
@@ -4388,6 +5183,11 @@ function update(dt) {
   }
 
   updateParticles(dt);
+  updateDebris(dt);
+  updateLampFlickers(dt);
+  updateBloodPools(dt);
+  updateVehicleSmoke(dt);
+  updateCrows(dt);
   updateDmgNumbers(dt);
   updateKillFeed(dt);
   updateStreakTimer(dt);
@@ -4406,9 +5206,15 @@ function loop(now) {
   lastTime = now;
   try {
     update(dt);
-    renderer.render(scene, camera);
+    checkPerf(dt);
+    if (composer) composer.render();
+    else renderer.render(scene, camera);
   } catch (err) {
-    if (!_loopErrShown) {
+    // If the post pipeline ever throws, fall back to the base renderer
+    // instead of freezing the game.
+    if (composer) {
+      composer = null;
+    } else if (!_loopErrShown) {
       _loopErrShown = true;
       showFatal('loop error: ' + (err && err.message ? err.message : err) + '\n' + (err && err.stack ? err.stack.split('\n').slice(0,5).join('\n') : ''));
     }
