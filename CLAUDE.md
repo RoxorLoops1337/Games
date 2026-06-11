@@ -1,5 +1,74 @@
 Workflow:
 - After committing + pushing to the feature branch, always create the PR (draft), then mark it ready and squash-merge to main without asking. Skip the "want me to merge?" question.
+- Before EVERY push: run `npm run check` (build + all test suites). If it fails, fix it before pushing — never push red.
+- Commit messages end with the session link the harness provides. Never put a model identifier in commits/PRs.
 
 Reply formatting:
-- When working on a game in this repo, paste its live Cloudflare Pages URL at the bottom of every reply (e.g. `https://games-71g.pages.dev/verb_collector/` while working on Verb Collector). Cloudflare Pages host: `games-71g.pages.dev`; each game lives at `/<folder>/`.
+- When working on No Room For Heroes, paste these links at the bottom of every reply:
+  Play: https://games-71g.pages.dev/no_room_for_heroes/
+  Align tool: https://games-71g.pages.dev/no_room_for_heroes/align.html
+  Music player: https://games-71g.pages.dev/no_room_for_heroes/music.html
+  Goblin sandbox: https://games-71g.pages.dev/no_room_for_heroes/sandbox.html
+- For other games: `https://games-71g.pages.dev/<folder>/`.
+
+# Repo map (read this before touching anything)
+
+- **The main game is `no_room_for_heroes/index.html`** — ONE file: markup + CSS + a single big `<script>`. No framework, vanilla canvas + DOM overlays. ~6k lines.
+- `no_room_for_heroes/align.html` — standalone art-alignment tool (exports `rooms/layout.json`).
+- `no_room_for_heroes/music.html` — standalone chiptune player (215 tracks; a deterministic composer generates 200 of them).
+- `functions/api/board.js` + `functions/api/save.js` — Cloudflare Pages Functions (leaderboard + cloud saves, KV binding `BOARD`).
+- `build.js` — copies static folders into `dist/` (Pages deploys `dist/`). New top-level folders must be added to `STATIC_PATHS`.
+- `tests/no_room_for_heroes_*.test.mjs` — 9 headless suites; `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM. Write new tests with it; never create throwaway harnesses outside `tests/`.
+- `HANDOVER_NO_ROOM_FOR_HEROES.md` — deeper architecture notes (G state object, phases, combat flow, balance history).
+
+# Verify with ONE command
+
+    npm run check        # build + all 9 suites — must be green before every push
+
+# SMALL-CHANGE PROTOCOL (for budget-model sessions)
+
+You may be a lower-cost model session doing small tasks. Follow these rules strictly:
+
+**You may freely change:** text/copy, CSS, button labels, colors, emoji, layout.json values,
+README files, single-constant balance tweaks (see the dials table below), adding a music
+track to a mood slot, asset filenames/paths, small additions to align.html.
+
+**ESCALATE instead of changing (tell the user "this needs the main session") if the task touches:**
+- camera/zoom math (`frameWave`, `frameWaveRun`, `minCam`, `zMin`, the follow block in `update`) — it has subtle zoom-aware clamps that broke three times
+- the save system (`localStorage` keys `bm_*`/`bossmonster_*`, `loadRunes/loadTown/saveTown`) or the cloud functions — data loss risk
+- `simStep` / combat resolution / `heroDies` / wave spawning
+- the music sequencer (`mtTone/musicTick`) or the composer in music.html
+- anything requiring >~60 changed lines in index.html
+
+**Hard rules for every session, every size:**
+1. `npm run check` green before push. If you can't make it green, STOP and report.
+2. After any merge of origin/main into the branch, RE-GREP for the feature you just added
+   (squash-merges resurrect old code; resolve conflicts by keeping HEAD, then verify).
+   Known zombie to grep for and kill: `awardTownResources` must have 0 hits in index.html.
+3. Never rename `localStorage` keys, KV keys, or the `no_room_for_heroes/` folder.
+4. Cloudflare KV: `expirationTtl` must be ≥ 60 — smaller values throw and 500 the request.
+5. The art system is graceful-fallback everywhere: missing art must never break the game.
+
+# Art pipeline (owner uploads, code auto-detects)
+
+- Frame sequences accept BOTH namings: `<id>_0.png,_1…` and `<id>_01.png,_02…` (and static `<id>.png`).
+- Standard room: `rooms/empty.png` (+ `rooms/empty_broken.png` after champion smash).
+- Trap overlays: `rooms/traps/<id>*.png` — strike animation synced to firing (up ~0.11s, down ~0.48s); `TRAP_ANIM` marks loopers (venom). Flame = 1 column duplicated ×4, ignites left→right (70ms cascade).
+- Candle flames: `rooms/fx/candle_*.png`, loop ~9fps.
+- Positions/sizes/layers/lights ALL come from `rooms/layout.json` (made with align.html). Don't hand-tune draw positions in code — fix the layout or the align tool.
+- Lights: `LAYOUT.lights` {attach, fx, fy, r, a} — candle flicker / flame heat / venom vapor, additive glows.
+- Champion death anim: `sprites/champion/death/champion_death_*.png`, plays once, holds last frame.
+
+# Balance dials (single-constant tweaks, safe for small sessions)
+
+- Fed monster growth: `feedMul(k)=1+0.30*ln(1+0.10k)` (uncapped, diminishing)
+- Rune income: `/8` in `awardRunes`; resources: wood `*0.05`, stone `*0.025`, shards `/8` in `pendingResources`
+- Campaign difficulty: the `0.034` term in `difficulty()`
+- Trap strike timing: `TRAP_RISE=110`, `TRAP_FALL=480`; flame cascade `70`ms; candle loop `110`ms
+- Music volume under SFX: `MUSIC_SCALE=0.55`
+
+# Deploy & infra
+
+- Merge to main → Cloudflare Pages auto-builds `dist/` (~1 min). `_redirects` handles the old `/boss_monster/*` path.
+- GitHub via `mcp__github__*` tools only (no gh CLI), scope `roxorloops1337/games`. Token can expire mid-session: commit+push anyway, PR when it recovers.
+- Merge conflicts with origin/main after squash-merges are NORMAL. Resolve keeping HEAD (your branch), re-run `npm run check`, re-grep your feature.
