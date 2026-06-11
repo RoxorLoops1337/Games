@@ -825,11 +825,20 @@ scene.add(hemi);
 // throw, casts real-time shadows.
 const flashlight = new THREE.SpotLight(0xffe6bb, 6.5, 34, Math.PI / 5.5, 0.22, 1.0);
 flashlight.position.copy(camera.position);
-flashlight.castShadow = true;
-flashlight.shadow.mapSize.set(1024, 1024);
-flashlight.shadow.bias = -0.0008;
-flashlight.shadow.camera.near = 0.2;
-flashlight.shadow.camera.far = 34;
+// Flashlight shadows: skip on touch / high-DPI screens where the cost
+// of re-rendering the scene from the spotlight's POV every frame causes
+// the view-jump-feeling stutter. Desktop with a normal display still
+// gets the spooky cast-shadow effect, at half resolution to keep the
+// per-frame cost reasonable.
+const wantsShadows = !(('ontouchstart' in window) || (navigator.maxTouchPoints > 0))
+                   && devicePixelRatio < 1.6;
+flashlight.castShadow = wantsShadows;
+if (wantsShadows) {
+  flashlight.shadow.mapSize.set(512, 512);
+  flashlight.shadow.bias = -0.0008;
+  flashlight.shadow.camera.near = 0.4;
+  flashlight.shadow.camera.far = 30;
+}
 scene.add(flashlight);
 scene.add(flashlight.target);
 // Tiny warm point hanging right at the camera — sells "something in your
@@ -2032,6 +2041,14 @@ let gridDirty = false;
 function removeObstacle(o) {
   const i = obstacles.indexOf(o);
   if (i >= 0) obstacles.splice(i, 1);
+  // Keep cached car/wreck lists in sync so updateVehicleSmoke doesn't
+  // touch a freed obstacle. (Defined later in script — guard for init.)
+  if (typeof _carList !== 'undefined') {
+    const ci = _carList.indexOf(o);
+    if (ci >= 0) _carList.splice(ci, 1);
+    const wi = _wreckList.indexOf(o);
+    if (wi >= 0) _wreckList.splice(wi, 1);
+  }
   scene.remove(o.mesh);
   gridDirty = true;
 }
@@ -2144,7 +2161,9 @@ function explodeCar(o) {
   wreck.rotation.y = wreckRot;
   wreck.castShadow = true;
   scene.add(wreck);
-  obstacles.push({ mesh: wreck, box: new THREE.Box3().setFromObject(wreck), burnTtl: 22 });
+  const wreckEntry = { mesh: wreck, box: new THREE.Box3().setFromObject(wreck), burnTtl: 22 };
+  obstacles.push(wreckEntry);
+  if (typeof _wreckList !== 'undefined') _wreckList.push(wreckEntry);
   const fireLight = new THREE.PointLight(0xff6622, 2.2, 10);
   fireLight.position.set(pos.x, 1.1, pos.z);
   scene.add(fireLight);
@@ -2242,40 +2261,54 @@ function spawnSmokePuff(x, y, z, dark) {
   scene.add(m);
   particles.push({ mesh: m, vel: v, life: 1.4, maxLife: 1.4, grow: 2.0 });
 }
+// Cached lists rebuilt only when the obstacle topology changes — saves
+// iterating the full ~150-element obstacle array every frame.
+const _carList = [];
+const _wreckList = [];
+function rebuildCarLists() {
+  _carList.length = 0; _wreckList.length = 0;
+  for (const o of obstacles) {
+    if (o.isCar) _carList.push(o);
+    else if (o.burnTtl > 0) _wreckList.push(o);
+  }
+}
+rebuildCarLists();
+
 function updateVehicleSmoke(dt) {
   smokeTimer -= dt;
   const doSpawn = smokeTimer <= 0;
-  if (doSpawn) smokeTimer = 0.14;
-  for (const o of obstacles) {
-    // Wounded drivable cars smoke; below 30 HP the smoke turns black
-    if (o.isCar && o.hp < 60) {
-      if (!doSpawn) continue;
-      if (o.mesh.position.distanceToSquared(player.pos) > 3600) continue;
-      const rot = o.mesh.rotation.y;
-      spawnSmokePuff(
-        o.mesh.position.x + Math.sin(rot) * 1.3,
-        1.0,
-        o.mesh.position.z + Math.cos(rot) * 1.3,
-        o.hp < 30
+  if (!doSpawn) return; // only iterate when we'd actually spawn anything
+  smokeTimer = 0.14;
+  // Wounded drivable cars smoke; below 30 HP the smoke turns black
+  for (const o of _carList) {
+    if (o.hp >= 60) continue;
+    if (o.mesh.position.distanceToSquared(player.pos) > 3600) continue;
+    const rot = o.mesh.rotation.y;
+    spawnSmokePuff(
+      o.mesh.position.x + Math.sin(rot) * 1.3,
+      1.0,
+      o.mesh.position.z + Math.cos(rot) * 1.3,
+      o.hp < 30
+    );
+  }
+  // Burning wreck: thick black smoke column + drifting embers
+  for (let i = _wreckList.length - 1; i >= 0; i--) {
+    const o = _wreckList[i];
+    if (o.burnTtl <= 0) { _wreckList.splice(i, 1); continue; }
+    o.burnTtl -= 0.14;
+    spawnSmokePuff(o.mesh.position.x, 0.9, o.mesh.position.z, true);
+    if (Math.random() < 0.5) {
+      const ember = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.04, 0.04),
+        new THREE.MeshBasicMaterial({ color: 0xff8830, transparent: true, opacity: 1 })
       );
-    } else if (o.burnTtl > 0) {
-      // Burning wreck: thick black smoke column + drifting embers
-      if (!doSpawn) continue;
-      o.burnTtl -= 0.14;
-      spawnSmokePuff(o.mesh.position.x, 0.9, o.mesh.position.z, true);
-      if (Math.random() < 0.5) {
-        const ember = new THREE.Mesh(
-          new THREE.BoxGeometry(0.04, 0.04, 0.04),
-          new THREE.MeshBasicMaterial({ color: 0xff8830, transparent: true, opacity: 1 })
-        );
-        ember.position.set(o.mesh.position.x, 0.7, o.mesh.position.z);
-        scene.add(ember);
-        particles.push({
-          mesh: ember,
-          vel: new THREE.Vector3((Math.random() - 0.5) * 1.2, 2 + Math.random() * 1.5, (Math.random() - 0.5) * 1.2),
-          life: 0.8, maxLife: 0.8, grow: 0.3
-        });
-      }
+      ember.position.set(o.mesh.position.x, 0.7, o.mesh.position.z);
+      scene.add(ember);
+      particles.push({
+        mesh: ember,
+        vel: new THREE.Vector3((Math.random() - 0.5) * 1.2, 2 + Math.random() * 1.5, (Math.random() - 0.5) * 1.2),
+        life: 0.8, maxLife: 0.8, grow: 0.3
+      });
     }
   }
   for (let i = fires.length - 1; i >= 0; i--) {
@@ -2801,11 +2834,24 @@ canvas.addEventListener('click', () => {
   }
 });
 
+// Skip the first mousemove after pointer lock re-acquires. Some browsers
+// deliver an inflated initial movementX/Y representing the cursor's
+// off-canvas position before lock, which would snap the view.
+let _skipNextMouseDelta = false;
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === canvas) _skipNextMouseDelta = true;
+});
+
 addEventListener('mousemove', e => {
   if (document.pointerLockElement !== canvas) return;
+  if (_skipNextMouseDelta) { _skipNextMouseDelta = false; return; }
   const sens = 0.0024;
-  player.yaw   -= e.movementX * sens;
-  player.pitch -= e.movementY * sens;
+  // Cap any single event's contribution so a driver hiccup or focus
+  // restore can't snap the view halfway across the world.
+  const dx = Math.max(-160, Math.min(160, e.movementX));
+  const dy = Math.max(-160, Math.min(160, e.movementY));
+  player.yaw   -= dx * sens;
+  player.pitch -= dy * sens;
   player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
 });
 
