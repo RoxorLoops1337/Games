@@ -3958,7 +3958,7 @@ function update(dt){
   // you pan, so you can scroll over to inspect the boss on the right.
   const lead=G.hero;
   if(!panning && performance.now()>panHoldUntil && lead){
-    const target=clamp(lead.x - VW*0.42, minCam(), Math.max(0,corridorWidth()-VW));
+    const target=clamp(lead.x - VW*0.42, minCam(), Math.max(minCam(),corridorWidth()-VW));
     camX += (target-camX)*Math.min(1,dt*6);
   }
 }
@@ -4378,7 +4378,13 @@ function drawBanner(){
 // the right), panning slightly toward the boss as the camera moves. Falls back
 // to the plain gradient sky when absent.
 let ARENA_BG=null;
-if(typeof Image!=='undefined'){ ARENA_BG=new Image(); ARENA_BG.onload=()=>{ARENA_BG._ok=true;}; ARENA_BG.onerror=()=>{}; ARENA_BG.src='arena/bg.png'; }
+if(typeof Image!=='undefined'){ ARENA_BG=new Image();
+  ARENA_BG.onload=()=>{ ARENA_BG._ok=true;
+    // the build camera may have been fitted before the art arrived (tiny no-art
+    // world) — re-frame the full scene now that its true extent is known
+    if(typeof G!=='undefined' && G && G.phase==='build' && typeof zoomFit==='function') zoomFit();
+  };
+  ARENA_BG.onerror=()=>{}; ARENA_BG.src='arena/bg.png'; }
 // The backdrop IS the scene: a fixed landscape whose RIGHT edge is the boss's
 // throne room; rooms build leftward over it. These helpers define its extent.
 const ARENA_H=()=>VH*1.16;                       // sky + zoom-out headroom
@@ -4414,7 +4420,10 @@ function draw(){
 
   // Camera: follows the hero in run; drag to pan in build. Visible world width
   // grows when zoomed out (VW/z), so the whole dungeon can fit on screen.
-  const maxCam=Math.max(0, corridorWidth()-VW/z);
+  // Right limit anchors the BOSS to the screen's right edge: when the view is
+  // wider than the corridor (wide phones / zoomed out), the dungeon hugs the
+  // right and the painted landscape fills leftward — never dead space right.
+  const maxCam=Math.max(minCam(), corridorWidth()-VW/z);
   camX=clamp(camX,minCam(),maxCam);
   const tx = (wx)=>wx-camX;
   const isBuild = (G.phase==='build');
@@ -5617,7 +5626,7 @@ CV.addEventListener('pointermove', e=>{
   const rect=CV.getBoundingClientRect();
   const dxV=(e.clientX-drag.startCX)*(VW/rect.width);
   if(Math.abs(e.clientX-drag.startCX)>6) drag.moved=true;
-  const maxCam=Math.max(0, corridorWidth()-VW/zoom);
+  const maxCam=Math.max(minCam(), corridorWidth()-VW/zoom);
   camX=clamp(drag.cam0 - dxV/zoom, minCam(), maxCam);
 });
 CV.addEventListener('wheel', e=>{
