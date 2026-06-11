@@ -4197,6 +4197,7 @@ function trapTick(h,cell,dt){
     tr.fireT-=dt;
     if(tr.fireT<=0){
       tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.88:1);   // Hair Trigger mandate: traps fire faster
+      tr.firedAt=performance.now();                                // drives the painted strike animation
       const d=tr.def;
       let dmg=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
       // counter-card bonuses vs certain heroes
@@ -4241,6 +4242,7 @@ function aoeTrapTick(dt){
       const targets=G.heroes.filter(o=>o && o.state!=='dead' && heroCellIndex(o)>=lo && heroCellIndex(o)<=hi);
       if(!targets.length) continue;
       tr.fireT=d.rate * (hasMandate('hairTrigger')?0.88:1);
+      tr.firedAt=performance.now();                             // drives the painted strike animation
       let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
       if(vr) base*=(1+vr*VET_DMG);
       if(doc==='inferno') base*=1.2;
@@ -4643,9 +4645,17 @@ function drawRoomBg(x0,w,isBoss,i){
 // chunky pixel rect helper
 function px(x,y,w,h,c){ X.fillStyle=c; X.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
 
-function drawTrapProp(x0,w,cx,type){
-  // painted overlay (static or animated) replaces the procedural prop
-  const art=trapArtImg(type);
+function drawTrapProp(x0,w,cx,type,cell){
+  // painted overlay (static or animated) replaces the procedural prop.
+  // Run: the strike animation is synced to the trap's real fire moment.
+  // Build: a gentle preview strike every 2.4s so the anim shows when placing.
+  let firedAt=null;
+  if(G && G.phase==='run' && cell && cell.traps){
+    const tr=cell.traps.find(t=>t.type===type); if(tr && tr.firedAt) firedAt=tr.firedAt;
+  } else if(G && G.phase==='build'){
+    firedAt=performance.now() - (performance.now()%2400);
+  }
+  const art=trapArtImg(type, firedAt);
   if(art && (art._ok || art.complete)){
     const dh=Math.min(110, w*0.7*(art.height/art.width));
     const dw=dh*(art.width/art.height);
@@ -4760,10 +4770,23 @@ if(typeof Image!=='undefined'){
     probe(0);
   }
 }
-function trapArtImg(type){
+// Animated traps play a STRIKE profile synced to the actual firing:
+// frames race UP fast (~0.11s), then run back DOWN slow (~0.48s), then rest
+// on frame 0 (armed) until the next fire. Works with any frame count — 4-5
+// frames is plenty; more only adds smoothness. Static art shows as-is.
+const TRAP_RISE=110, TRAP_FALL=480;
+function trapArtImg(type, firedAt){
   const r=TRAP_IMG[type]; if(!r) return null;
-  if(r.frames.length) return r.frames[Math.floor(performance.now()/140)%r.frames.length]||r.frames[0];
-  return r.static;
+  const N=r.frames.length;
+  if(!N) return r.static;
+  if(N===1) return r.frames[0];
+  let f=0;
+  if(firedAt!=null){
+    const e=performance.now()-firedAt;
+    if(e<TRAP_RISE) f=Math.min(N-1, Math.floor(e/TRAP_RISE*N));                  // snap up
+    else if(e<TRAP_RISE+TRAP_FALL) f=Math.max(0, N-1-Math.floor((e-TRAP_RISE)/TRAP_FALL*N)); // ease down
+  }
+  return r.frames[f]||r.frames[0];
 }
 // Pick the (possibly smashed) art for cell i. Falls back to the normal art
 // while a broken variant isn't uploaded, so the effect degrades gracefully.
@@ -4884,7 +4907,7 @@ function drawRoomContents(x0,w,room,i){
   const cx=x0+w/2; const cell=G.cells[i]; const parts=roomParts(room);
   const art=roomArtReady(room);                 // suppress props the art already shows
   // traps (the single-trap art replaces its own prop; 'lair' backdrop keeps them)
-  for(const p of parts){ if(ROOMS[p].kind==='trap' && art!==p) drawTrapProp(x0,w,cx,p); }
+  for(const p of parts){ if(ROOMS[p].kind==='trap' && art!==p) drawTrapProp(x0,w,cx,p,cell); }
   if(cell && cell._disarmT>0){   // rogue disarmed this room's traps
     X.globalAlpha=0.55+0.35*Math.sin(performance.now()/120); X.fillStyle='#5fd17a';
     X.font='bold 11px Trebuchet MS'; X.textAlign='center';

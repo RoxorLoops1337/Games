@@ -21,8 +21,16 @@ transparent). Two options per trap:
 
 - **Static:** upload `rooms/traps/<id>.png`
 - **Animated:** upload numbered frames `rooms/traps/<id>_0.png`,
-  `<id>_1.png`, … (any count up to 12 — they're probed in order and loop at
-  ~7 fps). If frames exist they win over the static file.
+  `<id>_1.png`, … (any count up to 12, probed in order). If frames exist they
+  win over the static file.
+
+**How animations play — the strike profile.** Order frames from RESTING
+(`_0`, e.g. spikes retracted) to FULLY EXTENDED (last frame, spikes up). The
+engine plays them **synced to the trap actually firing**: up FAST (~0.11 s),
+back down SLOW (~0.48 s), then resting on frame 0 until the next hit. 4–5
+frames is plenty — the engine owns the timing, so no extra frames are needed
+for fast-up/slow-down. In the build phase each trap previews its strike every
+2.4 s so you see the animation while placing.
 
 Trap ids: `spike flame arrow oil frost tesla magebane maul gallows hexward
 bombard venom corrode hexbrand runestone`
