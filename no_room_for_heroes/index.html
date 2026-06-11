@@ -3958,7 +3958,8 @@ function update(dt){
   // you pan, so you can scroll over to inspect the boss on the right.
   const lead=G.hero;
   if(!panning && performance.now()>panHoldUntil && lead){
-    const target=clamp(lead.x - VW*0.42, minCam(), Math.max(minCam(),corridorWidth()-VW));
+    const mxT=corridorWidth()-VW;
+    const target=clamp(lead.x - VW*0.42, Math.min(minCam(),mxT), mxT);
     camX += (target-camX)*Math.min(1,dt*6);
   }
 }
@@ -4420,11 +4421,11 @@ function draw(){
 
   // Camera: follows the hero in run; drag to pan in build. Visible world width
   // grows when zoomed out (VW/z), so the whole dungeon can fit on screen.
-  // Right limit anchors the BOSS to the screen's right edge: when the view is
-  // wider than the corridor (wide phones / zoomed out), the dungeon hugs the
-  // right and the painted landscape fills leftward — never dead space right.
-  const maxCam=Math.max(minCam(), corridorWidth()-VW/z);
-  camX=clamp(camX,minCam(),maxCam);
+  // The BOSS anchors to the screen's right edge: the rightmost visible world
+  // is always the boss cell's right edge, so any spare width fills with the
+  // painted landscape to the LEFT — never dead space right of the throne.
+  const maxCam=corridorWidth()-VW/z;
+  camX=clamp(camX, Math.min(minCam(),maxCam), maxCam);
   const tx = (wx)=>wx-camX;
   const isBuild = (G.phase==='build');
   drawDungeon(tx, 1, isBuild);
@@ -5626,8 +5627,8 @@ CV.addEventListener('pointermove', e=>{
   const rect=CV.getBoundingClientRect();
   const dxV=(e.clientX-drag.startCX)*(VW/rect.width);
   if(Math.abs(e.clientX-drag.startCX)>6) drag.moved=true;
-  const maxCam=Math.max(minCam(), corridorWidth()-VW/zoom);
-  camX=clamp(drag.cam0 - dxV/zoom, minCam(), maxCam);
+  const maxCam=corridorWidth()-VW/zoom;
+  camX=clamp(drag.cam0 - dxV/zoom, Math.min(minCam(),maxCam), maxCam);
 });
 CV.addEventListener('wheel', e=>{
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
