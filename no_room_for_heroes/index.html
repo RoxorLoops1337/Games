@@ -4644,6 +4644,16 @@ function drawRoomBg(x0,w,isBoss,i){
 function px(x,y,w,h,c){ X.fillStyle=c; X.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
 
 function drawTrapProp(x0,w,cx,type){
+  // painted overlay (static or animated) replaces the procedural prop
+  const art=trapArtImg(type);
+  if(art && (art._ok || art.complete)){
+    const dh=Math.min(110, w*0.7*(art.height/art.width));
+    const dw=dh*(art.width/art.height);
+    const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+    X.drawImage(art, Math.round(cx-dw/2), Math.round(FLOOR-dh), Math.round(dw), Math.round(dh));
+    X.imageSmoothingEnabled=sm;
+    return;
+  }
   if(type==='spike'){
     for(let s=0;s<5;s++){ const sx=x0+18+s*((w-36)/4);
       px(sx,FLOOR-14,10,14,'#cfd6e0'); px(sx+2,FLOOR-14,6,8,'#9aa4b2'); }
@@ -4729,12 +4739,31 @@ function drawShopStock(cx,room){
 // and art-less types fall back to the procedural look.
 const ROOM_IMG={};
 const ROOM_IMG_BROKEN={};   // rooms/<k>_broken.png — shown after a champion smashes the doorway
-const ROOM_ART_TRAPS={spike:1, flame:1, oil:1};
 if(typeof Image!=='undefined'){
-  ['spike','flame','oil','shop','lair','empty'].forEach(k=>{
+  ['empty'].forEach(k=>{    // the standard room (all cells use it; contents overlay)
     const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='rooms/'+k+'.png'; ROOM_IMG[k]=im;
     const ib=new Image(); ib.onload=()=>{ ib._ok=true; }; ib.onerror=()=>{}; ib.src='rooms/'+k+'_broken.png'; ROOM_IMG_BROKEN[k]=ib;
   });
+}
+// ---- painted trap overlays (rooms/traps/<id>.png) ------------------------
+// Each trap can have a static sprite (<id>.png) or an animation (<id>_0.png,
+// <id>_1.png, … — frames probed in order, any count). While neither exists
+// the procedural prop keeps drawing, so traps upgrade one art file at a time.
+const TRAP_IMG={};
+if(typeof Image!=='undefined'){
+  for(const id in ROOMS){ if(ROOMS[id].kind!=='trap') continue;
+    const rec={frames:[], static:null}; TRAP_IMG[id]=rec;
+    const st=new Image(); st.onload=()=>{ st._ok=true; rec.static=st; }; st.onerror=()=>{}; st.src='rooms/traps/'+id+'.png';
+    const probe=n=>{ const im=new Image();
+      im.onload=()=>{ rec.frames[n]=im; if(n<11) probe(n+1); };
+      im.onerror=()=>{}; im.src='rooms/traps/'+id+'_'+n+'.png'; };
+    probe(0);
+  }
+}
+function trapArtImg(type){
+  const r=TRAP_IMG[type]; if(!r) return null;
+  if(r.frames.length) return r.frames[Math.floor(performance.now()/140)%r.frames.length]||r.frames[0];
+  return r.static;
 }
 // Pick the (possibly smashed) art for cell i. Falls back to the normal art
 // while a broken variant isn't uploaded, so the effect degrades gracefully.
@@ -4834,13 +4863,10 @@ function drawMonsterSprite(cx, footY, room, cell, key, alive, moving){
   X.drawImage(img, srcX,srcY,clip.fw,clip.fh, dx,dy, Math.round(clip.fw*S), Math.round(clip.fh*S));
   return true;
 }
-function roomArtKey(room){
-  const parts=roomParts(room);
-  if(parts.some(p=>ROOMS[p].kind==='monster')) return 'lair';      // backdrop
-  if(parts.includes('shop')) return 'shop';
-  if(parts.length===1 && ROOM_ART_TRAPS[parts[0]]) return parts[0]; // replaces the prop
-  return null;
-}
+// Owner's art model: every cell is the STANDARD room (rooms/empty.png, broken
+// variant after a champion smash) and the contents — traps, monsters, shop —
+// draw as separate overlays inside it. Dedicated full-room art is retired.
+function roomArtKey(room){ return null; }
 function roomArtReady(room){ const k=roomArtKey(room); const im=k&&ROOM_IMG[k]; return (im&&im._ok)?k:null; }
 function drawRoomArt(x0,w,img){
   const dh=Math.round(w*(img.height/img.width));
