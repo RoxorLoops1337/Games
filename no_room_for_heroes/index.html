@@ -3196,7 +3196,7 @@ function castOverdrive(){
 
 function heroDies(h){
   if(!h || h.state==='dead') return;
-  h.state='dead';
+  h.state='dead'; h.diedAt=performance.now();   // drives the death animation
   // 👑 The King falls — the realm is yours forever.
   if(h.king){
     G.totalSlain++;
@@ -4882,7 +4882,7 @@ const TRAP_ANIM={venom:'loop'};
 // fire cascade. (More efficient than baking 4 flames into the frames.)
 function normalizeLayout(){
   const f=LAYOUT.traps&&LAYOUT.traps.flame;
-  if(f && f.length===1 && !f[0].n){ f[0]=Object.assign({},f[0],{fx:.5,n:4,gap:.21}); }
+  if(f && f.length===1 && !f[0].n){ f[0]=Object.assign({},f[0],{n:4,gap:.21}); }   // 4 columns around the owner's fx
 }
 normalizeLayout();
 if(typeof fetch!=='undefined'){
@@ -5183,6 +5183,21 @@ if(typeof Image!=='undefined'){
   for(let i=0;i<12;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/champion/champion_'+i+'.png'; CHAMP_WALK.push(im); }
   for(let i=0;i<14;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/champion/attack/champion_attack_'+i+'.png'; CHAMP_ATK.push(im); }
 }
+// Champion DEATH animation (sprites/champion/death/champion_death_<n>.png,
+// 0-based or _01-style 1-based). Plays once on death, holds the last frame.
+const CHAMP_DEATH=[]; const CHAMP_DEATH_DH=92; const CHAMP_DEATH_MS=140;
+if(typeof Image!=='undefined'){
+  const namers=[k=>'champion_death_'+k+'.png', k=>'champion_death_'+String(k+1).padStart(2,'0')+'.png'];
+  const tryN=ni=>{ if(ni>=namers.length) return;
+    const im=new Image();
+    im.onload=()=>{ im._ok=true; CHAMP_DEATH[0]=im; const next=k=>{ const f=new Image();
+        f.onload=()=>{ f._ok=true; CHAMP_DEATH[k]=f; if(k<15) next(k+1); }; f.onerror=()=>{}; f.src='sprites/champion/death/'+namers[ni](k); };
+      next(1); };
+    im.onerror=()=>tryN(ni+1);
+    im.src='sprites/champion/death/'+namers[ni](0);
+  };
+  tryN(0);
+}
 function champReady(){ return CHAMP_WALK.length===12 && CHAMP_WALK.every(im=>im&&im._ok); }
 function champAtkReady(){ return CHAMP_ATK.length===14 && CHAMP_ATK.every(im=>im&&im._ok); }
 function drawChampion(sx, footY, h){
@@ -5278,6 +5293,19 @@ function drawHero(sx,h){
 }
 function drawHeroDead(sx,h){
   const y=FLOOR+(h.yOff||0);
+  // champions get their painted death animation (play once, hold last frame)
+  if(h.champion && CHAMP_DEATH.length){
+    const N=CHAMP_DEATH.length;
+    const f=Math.min(N-1, h.diedAt!=null ? Math.floor((performance.now()-h.diedAt)/CHAMP_DEATH_MS) : N-1);
+    const im=CHAMP_DEATH[f];
+    if(im && im._ok){
+      const dh=CHAMP_DEATH_DH, dw=dh*(im.width/im.height);
+      const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+      X.drawImage(im, Math.round(sx-dw/2), Math.round(y-dh), Math.round(dw), Math.round(dh));
+      X.imageSmoothingEnabled=sm;
+      return;
+    }
+  }
   X.globalAlpha=0.8;
   px(sx-16,y-8,32,8,h.col); px(sx-20,y-12,12,8,h.tint); // fallen
   X.globalAlpha=1;

@@ -79,28 +79,33 @@ ARTIDS.forEach(([id,dir])=>probeSeq(id,dir,()=>{ render(); refreshItems(); }));
 // ---- the editable pieces (defaults mirror the game's LAYOUT) ----
 let pieces=[
   {role:'trap spike',   trap:'spike',  art:'spike',   fx:.50, fy:0,   h:74},
-  {role:'trap flame',   trap:'flame',  art:'flame',   fx:.50, fy:0,   h:130},
-  {role:'venom LEFT',   trap:'venom',  art:'poison1', fx:.13, fy:30,  h:80},
-  {role:'venom RIGHT',  trap:'venom',  art:'poison2', fx:.87, fy:26,  h:92},
+  {role:'trap flame \u00d74', trap:'flame', art:'flame', fx:.50, fy:0, h:130, n:4, gap:.21},
+  {role:'venom LEFT',   trap:'venom',  art:'poison1', fx:.13, fy:30,  h:80, mode:'loop'},
+  {role:'venom RIGHT',  trap:'venom',  art:'poison2', fx:.87, fy:26,  h:92, mode:'loop'},
   {role:'candle LEFT',  candle:true,   art:'candle',  fx:.18, fy:118, h:26},
   {role:'candle RIGHT', candle:true,   art:'candle',  fx:.89, fy:118, h:26},
 ];
 fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   if(!j) return;
   const np=[];
-  for(const t in (j.traps||{})) j.traps[t].forEach((p,k)=>np.push({role:'trap '+t+(j.traps[t].length>1?(k?' RIGHT':' LEFT'):''),trap:t,...p}));
+  for(const t in (j.traps||{})) j.traps[t].forEach((p,k)=>{
+    const e={role:'trap '+t+(j.traps[t].length>1?(k?' RIGHT':' LEFT'):''),trap:t,...p};
+    if(t==='flame'&&!e.n){ e.n=4; e.gap=.21; e.role='trap flame \u00d74'; }
+    if(t==='venom'&&!e.mode) e.mode='loop';
+    np.push(e);
+  });
   (j.candles||[]).forEach((c,k)=>np.push({role:'candle '+(k?'RIGHT':'LEFT'),candle:true,art:c.art||'candle',...c}));
   if(np.length) pieces=np;
   refreshItems(); render();
 }).catch(()=>{});
 
 let sel=0, anim=true, firedAt=performance.now();
-function artFrame(id){
+function artFrame(id,mode){
   const r=ART[id]; if(!r) return null;
   const N=r.frames.length;
   if(!N) return r.static;
   if(!anim) return r.frames[0];
-  if(id==='candle') return r.frames[Math.floor(performance.now()/110)%N];
+  if(id==='candle'||mode==='loop') return r.frames[Math.floor(performance.now()/110)%N];
   const e=(performance.now()-firedAt)%2400, RISE=110,FALL=480;
   let f=0;
   if(e<RISE) f=Math.min(N-1,Math.floor(e/RISE*N));
@@ -108,10 +113,11 @@ function artFrame(id){
   return r.frames[f];
 }
 function pieceRect(p){
-  const im=artFrame(p.art)||{width:16,height:24};
+  const im=artFrame(p.art,p.mode)||{width:16,height:24};
   const dh=p.h*S, dw=dh*(im.width/im.height||1);
+  const n=p.n||1, span=dw+(n-1)*(p.gap||.2)*W;
   const cx=OX+W*p.fx, by=FLOORY-p.fy*S;
-  return {x:cx-dw/2, y:by-dh, w:dw, h:dh};
+  return {x:cx-span/2, y:by-dh, w:span, h:dh, dw, n};
 }
 function render(){
   X.imageSmoothingEnabled=false;
@@ -128,12 +134,25 @@ function render(){
   X.fillRect(OX+W*0.30-14*S/2, FLOORY-52*S, 14*S, 52*S);  // ~hero size
   // pieces
   pieces.forEach((p,i)=>{
-    const im=artFrame(p.art), r=pieceRect(p);
-    if(im&&im.width){
-      if(p.flip){ X.save(); X.translate(r.x+r.w/2,0); X.scale(-1,1);
-        X.drawImage(im,-r.w/2,r.y,r.w,r.h); X.restore(); }
-      else X.drawImage(im,r.x,r.y,r.w,r.h);
-    } else {
+    const r=pieceRect(p), n=p.n||1;
+    let any=false;
+    for(let c=0;c<n;c++){
+      const im=(n>1)
+        ? (()=>{ const rr=ART[p.art]; if(!rr||!rr.frames.length) return artFrame(p.art,p.mode);
+            if(!anim) return rr.frames[0];
+            const N=rr.frames.length, e=(performance.now()-firedAt-c*50+24e5)%2400, RISE=110,FALL=480;
+            let f=0; if(e<RISE) f=Math.max(0,Math.min(N-1,Math.floor(e/RISE*N)));
+            else if(e<RISE+FALL) f=Math.max(0,N-1-Math.floor((e-RISE)/FALL*N));
+            return rr.frames[f]; })()
+        : artFrame(p.art,p.mode);
+      if(!(im&&im.width)) continue;
+      any=true;
+      const dw=r.dw||r.w, cx0=r.x+ c*((p.gap||.2)*W);
+      if(p.flip){ X.save(); X.translate(cx0+dw/2,0); X.scale(-1,1);
+        X.drawImage(im,-dw/2,r.y,dw,r.h); X.restore(); }
+      else X.drawImage(im,cx0,r.y,dw,r.h);
+    }
+    if(!any){
       X.strokeStyle='#666'; X.strokeRect(r.x,r.y,r.w,r.h);
       X.fillStyle='#888'; X.font='11px monospace'; X.fillText('no art: '+p.art, r.x+3, r.y+14);
     }
@@ -183,6 +202,9 @@ function buildJson(){
   for(const p of pieces){
     const e={art:p.art, fx:+p.fx.toFixed(3), fy:Math.round(p.fy), h:Math.round(p.h)};
     if(p.flip) e.flip=true;
+    if(p.n) e.n=p.n;
+    if(p.gap) e.gap=+p.gap.toFixed(3);
+    if(p.mode) e.mode=p.mode;
     if(p.candle) candles.push(e);
     else (traps[p.trap]=traps[p.trap]||[]).push(e);
   }
