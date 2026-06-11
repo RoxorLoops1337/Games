@@ -4697,19 +4697,25 @@ function drawTrapProp(x0,w,cx,type,cell){
   } else if(G && G.phase==='build'){
     firedAt=performance.now() - (performance.now()%2400);
   }
-  // layout-driven parts (venom has a left + right wall piece)
+  // layout-driven parts (venom has a left + right wall piece). A part with
+  // n>1 is duplicated n copies across the room (the flame jet: one column of
+  // art, four columns drawn, each firing ~50ms after the last → a sweep).
   const parts=(LAYOUT.traps&&LAYOUT.traps[type])||[{art:type,fx:.5,fy:0,h:100}];
   let drew=false;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
   for(const p of parts){
-    const art=artFrame(p.art||type, firedAt);
-    if(!(art&&(art._ok||art.complete)&&art.width)) continue;
-    drew=true;
-    const dh=p.h||100, dw=dh*(art.width/art.height);
-    const px0=x0+w*(p.fx!=null?p.fx:.5)-dw/2, py=FLOOR-(p.fy||0)-dh;
-    if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
-      X.drawImage(art, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
-    else X.drawImage(art, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh));
+    const n=p.n||1, gap=p.gap||0.2;
+    for(let c=0;c<n;c++){
+      const art=artFrame(p.art||type, firedAt!=null?firedAt+c*50:null);
+      if(!(art&&(art._ok||art.complete)&&art.width)) continue;
+      drew=true;
+      const dh=p.h||100, dw=dh*(art.width/art.height);
+      const fx=(p.fx!=null?p.fx:.5)+(c-(n-1)/2)*gap;
+      const px0=x0+w*fx-dw/2, py=FLOOR-(p.fy||0)-dh;
+      if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
+        X.drawImage(art, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
+      else X.drawImage(art, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh));
+    }
   }
   X.imageSmoothingEnabled=sm;
   if(drew) return;
@@ -4844,10 +4850,22 @@ let LAYOUT={
   },
   candles:[{art:'candle', fx:.18, fy:118, h:26},{art:'candle', fx:.89, fy:118, h:26}],
 };
+// In-room layering when a fused room has several traps: low draws first.
+// Poison behind everything, flames over it, spikes ALWAYS on top.
+const TRAP_LAYER={venom:0, flame:1, spike:9};
+// The flame jet shows FOUR columns from the one uploaded animation: the single
+// part from the layout is duplicated (n) across the room with a per-column
+// fire cascade. (More efficient than baking 4 flames into the frames.)
+function normalizeLayout(){
+  const f=LAYOUT.traps&&LAYOUT.traps.flame;
+  if(f && f.length===1 && !f[0].n){ f[0]=Object.assign({},f[0],{fx:.5,n:4,gap:.21}); }
+}
+normalizeLayout();
 if(typeof fetch!=='undefined'){
   try{ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
     if(j&&j.traps){ LAYOUT.traps=Object.assign(LAYOUT.traps, j.traps); }
     if(j&&j.candles) LAYOUT.candles=j.candles;
+    normalizeLayout();
     // probe any art ids the layout references that we haven't loaded
     for(const t in LAYOUT.traps) for(const p of LAYOUT.traps[t]) if(p.art) artProbe(p.art);
     (LAYOUT.candles||[]).forEach(c=>{ if(c.art) artProbe(c.art); });
@@ -4867,7 +4885,7 @@ function artFrame(id, firedAt, loop){
   let f=0;
   if(firedAt!=null){
     const e=performance.now()-firedAt;
-    if(e<TRAP_RISE) f=Math.min(N-1, Math.floor(e/TRAP_RISE*N));                  // snap up
+    if(e<TRAP_RISE) f=Math.max(0, Math.min(N-1, Math.floor(e/TRAP_RISE*N)));   // max(0): cascaded copies fire slightly later                  // snap up
     else if(e<TRAP_RISE+TRAP_FALL) f=Math.max(0, N-1-Math.floor((e-TRAP_RISE)/TRAP_FALL*N)); // ease down
   }
   return r.frames[f]||r.frames[0];
@@ -5004,8 +5022,11 @@ function drawRoomContents(x0,w,room,i){
   drawCandles(x0,w,i);                          // wall-torch flames over the room art
   const cx=x0+w/2; const cell=G.cells[i]; const parts=roomParts(room);
   const art=roomArtReady(room);                 // suppress props the art already shows
-  // traps (the single-trap art replaces its own prop; 'lair' backdrop keeps them)
-  for(const p of parts){ if(ROOMS[p].kind==='trap' && art!==p) drawTrapProp(x0,w,cx,p,cell); }
+  // traps, drawn bottom layer first: poison sits behind, flames over it,
+  // spikes ALWAYS on top (owner's layering), other traps in between.
+  const trapParts=parts.filter(p=>ROOMS[p].kind==='trap' && art!==p)
+    .sort((a,b)=>(TRAP_LAYER[a]??1)-(TRAP_LAYER[b]??1));
+  for(const p of trapParts) drawTrapProp(x0,w,cx,p,cell);
   if(cell && cell._disarmT>0){   // rogue disarmed this room's traps
     X.globalAlpha=0.55+0.35*Math.sin(performance.now()/120); X.fillStyle='#5fd17a';
     X.font='bold 11px Trebuchet MS'; X.textAlign='center';
