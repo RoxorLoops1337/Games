@@ -2478,6 +2478,7 @@ function minCam(){
 }
 function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
+  G.brokenCells={};                              // doorways get patched up between waves
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
   else ensureQueue(Math.max(3, G.guildLvl+1));   // endless: pre-roll the next arrivals to preview
   smithyRestock();                                // Dark Smithy: free shop stock
@@ -4054,7 +4055,24 @@ function cellAt(x){
   // boss. Only x past the far end falls through to the boss cell.
   return x<0 ? G.cells[0] : G.cells[G.cells.length-1];
 }
+// 💥 A champion (or the King) doesn't use the door — it goes THROUGH the
+// doorway: screen shake, a stone-debris burst, billowing dust, and the cell's
+// art flips to its rooms/<k>_broken.png variant (once per cell per wave).
+function smashDoorway(h,cell){
+  if(!G.brokenCells) G.brokenCells={};
+  if(G.brokenCells[cell.index]) return;
+  G.brokenCells[cell.index]=true;
+  const x=cell.x0+6;
+  shake(9); sfx('hit'); sfx('boss');
+  burst(x, FLOOR-40, '#9aa4b2', 16);                       // flying stone
+  burst(x, FLOOR-90, '#6d6154', 12);
+  burst(x, FLOOR-20, '#3a3430', 8);
+  for(let i=0;i<14;i++)                                     // slow dust cloud
+    particles.push({x:x+rnd(-12,26), y:FLOOR-rnd(10,120), vx:rnd(-18,30), vy:rnd(-26,-6), life:rnd(.8,1.5), col:i%2?'#8a8398':'#5d5668', sz:rnd(4,8)});
+  floater(x+10, FLOOR-120, '💥', '#caa15e', true);
+}
 function onEnterCell(h,cell){
+  if((h.champion||h.king) && cell.kind!=='boss') smashDoorway(h,cell);
   // 👑 The King shrugs off corruption and SMASHES rooms as he marches through.
   if(h.king){
     if(cell.room && cell.kind!=='boss' && Math.random()<KING_SMASH) destroyRoom(cell);
@@ -4518,7 +4536,7 @@ function drawDungeon(tx, scale, isBuild){
       const beingDragged = roomDrag && roomDrag.dragging && i===roomDrag.from;   // empty slot picked up
       // empty slot — show the stone room art; overlay the placeable hint in build
       const ea = ROOM_IMG.empty && ROOM_IMG.empty._ok;
-      if(ea){ if(beingDragged){ X.save(); X.globalAlpha=0.45; } drawRoomArt(x0,w,ROOM_IMG.empty); if(beingDragged) X.restore(); }
+      if(ea){ if(beingDragged){ X.save(); X.globalAlpha=0.45; } drawRoomArt(x0,w,cellArt('empty',i)); if(beingDragged) X.restore(); }
       if(isBuild || !ea){
         X.strokeStyle=beingDragged?'#ffd34d':(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
         X.setLineDash([6,5]); X.lineWidth=beingDragged?3:2;
@@ -4710,11 +4728,19 @@ function drawShopStock(cx,room){
 // the "lair" backdrop with the live monster sprite drawn in front. Fused rooms
 // and art-less types fall back to the procedural look.
 const ROOM_IMG={};
+const ROOM_IMG_BROKEN={};   // rooms/<k>_broken.png — shown after a champion smashes the doorway
 const ROOM_ART_TRAPS={spike:1, flame:1, oil:1};
 if(typeof Image!=='undefined'){
   ['spike','flame','oil','shop','lair','empty'].forEach(k=>{
     const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='rooms/'+k+'.png'; ROOM_IMG[k]=im;
+    const ib=new Image(); ib.onload=()=>{ ib._ok=true; }; ib.onerror=()=>{}; ib.src='rooms/'+k+'_broken.png'; ROOM_IMG_BROKEN[k]=ib;
   });
+}
+// Pick the (possibly smashed) art for cell i. Falls back to the normal art
+// while a broken variant isn't uploaded, so the effect degrades gracefully.
+function cellArt(k,i){
+  const b=ROOM_IMG_BROKEN[k];
+  return (G && G.brokenCells && G.brokenCells[i] && b && b._ok) ? b : ROOM_IMG[k];
 }
 const ROOM_ART_DROP=12;   // px the art bottom sits below the floor line
 
@@ -4824,8 +4850,8 @@ function drawRoomArt(x0,w,img){
 }
 function drawRoomFull(x0,w,room,i){
   const k=roomArtReady(room);
-  if(k) drawRoomArt(x0,w,ROOM_IMG[k]);                                   // dedicated full art
-  else if(ROOM_IMG.empty && ROOM_IMG.empty._ok) drawRoomArt(x0,w,ROOM_IMG.empty); // stone backdrop for art-less rooms
+  if(k) drawRoomArt(x0,w,cellArt(k,i));                                  // dedicated full art (broken variant after a champion smash)
+  else if(ROOM_IMG.empty && ROOM_IMG.empty._ok) drawRoomArt(x0,w,cellArt('empty',i)); // stone backdrop for art-less rooms
   drawRoomContents(x0,w,room,i);
 }
 function drawRoomContents(x0,w,room,i){
