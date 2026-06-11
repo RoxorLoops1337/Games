@@ -224,7 +224,7 @@
     #inspect{font-size:11px;line-height:1.4;padding:6px 22px 6px 8px;}
     #inspect button{min-height:26px;padding:4px 8px;font-size:8px;}
     .pauserow button{font-size:8px;min-height:26px;}
-    #zoomctl button,.rbzoom button{width:28px;height:28px;font-size:15px;}
+    .rbzoom button{width:28px;height:28px;font-size:15px;}
     #pausebtn,#audiobtn{width:28px;height:28px;font-size:13px;}
     .titlestart button{font-size:11px;padding:10px 20px;min-height:40px;}
     .titlelogo{width:min(300px,46%);}
@@ -256,9 +256,6 @@
     font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla","EmojiOne Color","Android Emoji",sans-serif;
     text-shadow:0 1px 2px rgba(0,0,0,.6);overflow:hidden;}
   .relicchip .ric{display:block;transform:translateY(.5px);}
-  #zoomctl{position:absolute;right:6px;bottom:6px;z-index:21;display:flex;flex-direction:column;gap:4px;}
-  #zoomctl button{width:34px;height:34px;padding:0;font-size:18px;font-weight:bold;border-radius:8px;
-    background:rgba(20,15,36,.8);border:1px solid var(--line);color:var(--ink);}
   /* ---- Rune Page: spellbook skill tree ---- */
   .runebook{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
   .rbback{position:absolute;top:10px;left:10px;z-index:6;font-weight:bold;letter-spacing:1px;
@@ -345,11 +342,7 @@
     <div id="relicbar"></div>
     <button id="pausebtn" title="Menu &amp; settings" onclick="openPauseMenu()">☰</button>
     <button id="audiobtn" title="Sound on/off">🔊</button>
-    <div id="zoomctl">
-      <button onclick="zoomBy(1.2)" title="Zoom in">＋</button>
-      <button onclick="zoomFit()" title="Fit dungeon">⤢</button>
-      <button onclick="zoomBy(0.83)" title="Zoom out">－</button>
-    </div>
+    <!-- zoom buttons removed — pinch / wheel zoom only (they sat over the boss) -->
   </div>
   <div id="panel"></div>
   <div id="overlay"></div>
@@ -2488,7 +2481,7 @@ function gotoBuild(first){
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
   else ensureQueue(Math.max(3, G.guildLvl+1));   // endless: pre-roll the next arrivals to preview
   smithyRestock();                                // Dark Smithy: free shop stock
-  zoomFit();                                      // open on the FULL scene (landscape → throne)
+  frameWave();                                    // the gameplay framing (boss right, gate + a slice of landscape)
   if(first){
     if(G.shrineRelics && G.shrineRelics.length)
       showHint('🛐 The Shrine grants you '+G.shrineRelics.map(id=>RELICS[id].ic+' '+RELICS[id].name).join(' & ')+'!');
@@ -2655,7 +2648,7 @@ function startWave(){
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
   spawnGroup(G.guildLvl+1);
-  G.phase='run'; speedMul=1; camX=Math.max(minCam(), -STAGEW-ROOM_W);   // open near the gate to watch the march-in
+  G.phase='run'; speedMul=1; frameWave();         // same framing for the wave — heroes march in from the left edge
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
   if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
@@ -4395,7 +4388,7 @@ if(typeof Image!=='undefined'){ ARENA_BG=new Image();
   ARENA_BG.onload=()=>{ ARENA_BG._ok=true;
     // the build camera may have been fitted before the art arrived (tiny no-art
     // world) — re-frame the full scene now that its true extent is known
-    if(typeof G!=='undefined' && G && G.phase==='build' && typeof zoomFit==='function') zoomFit();
+    if(typeof G!=='undefined' && G && (G.phase==='build'||G.phase==='run') && typeof frameWave==='function') frameWave();
   };
   ARENA_BG.onerror=()=>{}; ARENA_BG.src='arena/bg.png'; }
 // The backdrop IS the scene: a fixed landscape whose RIGHT edge is the boss's
@@ -5586,10 +5579,17 @@ function upgradeRoomGold(idx){
   sfx('upgrade'); showHint(comboName(room)+' upgraded to Lv '+room.lvl+' for '+cost+'g.');
   render(); showInspectEntity({kind:'room',room});
 }
-// Zoom-out is allowed far enough to take in the WHOLE painted scene.
-function zMin(){ return Math.min(ZMIN, VW/Math.max(1, corridorWidth()-worldLeft())); }
+// Max zoom-out is EXACTLY the full painted scene — never further (no void).
+function zMin(){ return Math.min(ZMAX, VW/Math.max(1, corridorWidth()-worldLeft())); }
 function setZoom(z){ zoom=clamp(z, zMin(), ZMAX); }
 function zoomBy(f){ setZoom(zoom*f); draw(); }
+// The gameplay framing: boss flush right, the rooms, the gate, and about one
+// room's worth of landscape beyond it — used at wave start and back in build.
+function frameWave(){ if(!G) return;
+  const vis=Math.min(corridorWidth()-worldLeft(), corridorWidth()+STAGEW+ROOM_W);
+  zoom=clamp(VW/Math.max(1,vis), zMin(), ZMAX);
+  camX=corridorWidth()-VW/zoom; draw();
+}
 function zoomFit(){ if(!G) return;   // fit the WHOLE scene (landscape → throne)
   zoom=clamp(VW/Math.max(1,corridorWidth()-worldLeft()), zMin(), 1.2); camX=worldLeft(); draw(); }
 
