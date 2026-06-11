@@ -4655,15 +4655,22 @@ function drawTrapProp(x0,w,cx,type,cell){
   } else if(G && G.phase==='build'){
     firedAt=performance.now() - (performance.now()%2400);
   }
-  const art=trapArtImg(type, firedAt);
-  if(art && (art._ok || art.complete)){
-    const dh=Math.min(110, w*0.7*(art.height/art.width));
-    const dw=dh*(art.width/art.height);
-    const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
-    X.drawImage(art, Math.round(cx-dw/2), Math.round(FLOOR-dh), Math.round(dw), Math.round(dh));
-    X.imageSmoothingEnabled=sm;
-    return;
+  // layout-driven parts (venom has a left + right wall piece)
+  const parts=(LAYOUT.traps&&LAYOUT.traps[type])||[{art:type,fx:.5,fy:0,h:100}];
+  let drew=false;
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+  for(const p of parts){
+    const art=artFrame(p.art||type, firedAt);
+    if(!(art&&(art._ok||art.complete)&&art.width)) continue;
+    drew=true;
+    const dh=p.h||100, dw=dh*(art.width/art.height);
+    const px0=x0+w*(p.fx!=null?p.fx:.5)-dw/2, py=FLOOR-(p.fy||0)-dh;
+    if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
+      X.drawImage(art, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
+    else X.drawImage(art, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh));
   }
+  X.imageSmoothingEnabled=sm;
+  if(drew) return;
   if(type==='spike'){
     for(let s=0;s<5;s++){ const sx=x0+18+s*((w-36)/4);
       px(sx,FLOOR-14,10,14,'#cfd6e0'); px(sx+2,FLOOR-14,6,8,'#9aa4b2'); }
@@ -4755,31 +4762,66 @@ if(typeof Image!=='undefined'){
     const ib=new Image(); ib.onload=()=>{ ib._ok=true; }; ib.onerror=()=>{}; ib.src='rooms/'+k+'_broken.png'; ROOM_IMG_BROKEN[k]=ib;
   });
 }
-// ---- painted trap overlays (rooms/traps/<id>.png) ------------------------
-// Each trap can have a static sprite (<id>.png) or an animation (<id>_0.png,
-// <id>_1.png, … — frames probed in order, any count). While neither exists
-// the procedural prop keeps drawing, so traps upgrade one art file at a time.
-const TRAP_IMG={};
+// ---- painted overlay art registry (rooms/traps/*, rooms/fx/*) ------------
+// Frame sequences accept BOTH naming styles: zero-based (<id>_0.png, _1 …)
+// and one-based zero-padded (<id>_01.png, _02 …). A static <id>.png also
+// works. While an id has no art the procedural prop keeps drawing.
+const ART={};                       // id → {frames:[], static:null}
+const ART_DIR={poison1:'rooms/traps/',poison2:'rooms/traps/',candle:'rooms/fx/'};
+function artProbe(id){
+  if(ART[id] || typeof Image==='undefined') return;
+  const rec={frames:[],static:null}; ART[id]=rec;
+  const dir=ART_DIR[id]||'rooms/traps/';
+  const st=new Image(); st.onload=()=>{ st._ok=true; rec.static=st; }; st.onerror=()=>{}; st.src=dir+id+'.png';
+  const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
+  const tryNamer=ni=>{
+    if(ni>=namers.length) return;
+    const im=new Image();
+    im.onload=()=>{ rec.frames[0]=im; const next=k=>{ const f=new Image();
+        f.onload=()=>{ rec.frames[k]=f; if(k<11) next(k+1); }; f.onerror=()=>{}; f.src=dir+namers[ni](k); };
+      next(1); };
+    im.onerror=()=>tryNamer(ni+1);
+    im.src=dir+namers[ni](0);
+  };
+  tryNamer(0);
+}
 if(typeof Image!=='undefined'){
-  for(const id in ROOMS){ if(ROOMS[id].kind!=='trap') continue;
-    const rec={frames:[], static:null}; TRAP_IMG[id]=rec;
-    const st=new Image(); st.onload=()=>{ st._ok=true; rec.static=st; }; st.onerror=()=>{}; st.src='rooms/traps/'+id+'.png';
-    const probe=n=>{ const im=new Image();
-      im.onload=()=>{ rec.frames[n]=im; if(n<11) probe(n+1); };
-      im.onerror=()=>{}; im.src='rooms/traps/'+id+'_'+n+'.png'; };
-    probe(0);
-  }
+  for(const id in ROOMS){ if(ROOMS[id].kind==='trap') artProbe(id); }
+  ['poison1','poison2','candle'].forEach(artProbe);
+}
+// Layout: where each overlay sits in the room. fx = sprite-centre as a
+// fraction of the cell width; fy = px the sprite BOTTOM sits above the floor;
+// h = display height in world px; flip = mirror horizontally. A trap can have
+// several parts (venom: a left and a right wall piece). rooms/layout.json
+// (exported from align.html) overrides these defaults.
+let LAYOUT={
+  traps:{
+    spike:[{art:'spike', fx:.50, fy:0,  h:74}],
+    flame:[{art:'flame', fx:.50, fy:0,  h:130}],
+    venom:[{art:'poison1', fx:.13, fy:30, h:80},{art:'poison2', fx:.87, fy:26, h:92}],
+  },
+  candles:[{art:'candle', fx:.18, fy:118, h:26},{art:'candle', fx:.89, fy:118, h:26}],
+};
+if(typeof fetch!=='undefined'){
+  try{ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
+    if(j&&j.traps){ LAYOUT.traps=Object.assign(LAYOUT.traps, j.traps); }
+    if(j&&j.candles) LAYOUT.candles=j.candles;
+    // probe any art ids the layout references that we haven't loaded
+    for(const t in LAYOUT.traps) for(const p of LAYOUT.traps[t]) if(p.art) artProbe(p.art);
+    (LAYOUT.candles||[]).forEach(c=>{ if(c.art) artProbe(c.art); });
+  }).catch(()=>{}); }catch(_){ }
 }
 // Animated traps play a STRIKE profile synced to the actual firing:
 // frames race UP fast (~0.11s), then run back DOWN slow (~0.48s), then rest
 // on frame 0 (armed) until the next fire. Works with any frame count — 4-5
 // frames is plenty; more only adds smoothness. Static art shows as-is.
 const TRAP_RISE=110, TRAP_FALL=480;
-function trapArtImg(type, firedAt){
-  const r=TRAP_IMG[type]; if(!r) return null;
+function artFrame(id, firedAt, loop){
+  const r=ART[id]; if(!r) return null;
   const N=r.frames.length;
   if(!N) return r.static;
   if(N===1) return r.frames[0];
+  if(loop) return r.frames[Math.floor(performance.now()/110+(loop===true?0:loop))%N]||r.frames[0];
   let f=0;
   if(firedAt!=null){
     const e=performance.now()-firedAt;
@@ -4788,24 +4830,16 @@ function trapArtImg(type, firedAt){
   }
   return r.frames[f]||r.frames[0];
 }
-// ---- ambient candle/torch flames (rooms/fx/candle_0.png, _1, …) ----------
-// Looping flame frames drawn on the standard room's two wall torches. Each
-// torch is staggered so the dungeon doesn't flicker in lock-step.
-const CANDLE_FRAMES=[];
-if(typeof Image!=='undefined'){
-  const probe=n=>{ const im=new Image();
-    im.onload=()=>{ CANDLE_FRAMES[n]=im; if(n<11) probe(n+1); };
-    im.onerror=()=>{}; im.src='rooms/fx/candle_'+n+'.png'; };
-  probe(0);
-}
-const CANDLE_POS=[{fx:0.11},{fx:0.89}];   // torch spots on the standard room art
+// ---- ambient candle flames on the room's holders (layout-positioned) -----
 function drawCandles(x0,w,i){
-  const N=CANDLE_FRAMES.length; if(!N) return;
+  const list=LAYOUT.candles||[]; if(!list.length) return;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
-  for(let c=0;c<CANDLE_POS.length;c++){
-    const im=CANDLE_FRAMES[(Math.floor(performance.now()/110)+i*3+c*5)%N]; if(!im) continue;
-    const dh=24, dw=Math.max(8, dh*((im.width||16)/(im.height||24)));
-    X.drawImage(im, Math.round(x0+w*CANDLE_POS[c].fx-dw/2), Math.round(FLOOR-132-dh), Math.round(dw), dh);
+  for(let c=0;c<list.length;c++){
+    const e=list[c];
+    const im=artFrame(e.art||'candle', null, i*3+c*5+1);   // staggered loop
+    if(!(im&&(im._ok||im.complete)&&im.width)) continue;
+    const dh=e.h||26, dw=Math.max(6, dh*(im.width/im.height));
+    X.drawImage(im, Math.round(x0+w*e.fx-dw/2), Math.round(FLOOR-(e.fy||118)-dh), Math.round(dw), Math.round(dh));
   }
   X.imageSmoothingEnabled=sm;
 }
