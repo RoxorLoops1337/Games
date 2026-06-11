@@ -33,19 +33,28 @@ t.ok(r.status === 503, 'GET without KV binding → 503');
 
 const env = { BOARD: mockKV() };
 r = await onRequestGet({ env });
-t.ok(r.status === 200 && (await r.json()).top.length === 0, 'empty board');
+let j = await r.json();
+t.ok(r.status === 200 && j.top.length === 0 && j.day.length === 0 && j.week.length === 0 && j.month.length === 0,
+  'empty boards (day/week/month/all)');
 
 r = await post(env, { name: 'Danhieux', score: 420 });
-let top = (await r.json()).top;
-t.ok(r.status === 200 && top.length === 1 && top[0].score === 420, 'first score lands');
+j = await r.json();
+t.ok(r.status === 200 && ['day','week','month','all'].every(p => j[p].length === 1 && j[p][0].score === 420),
+  'first score lands on ALL four boards');
+t.ok([...env.BOARD._store.keys()].some(k => k.startsWith('top:d:'))
+  && [...env.BOARD._store.keys()].some(k => k.startsWith('top:w:'))
+  && [...env.BOARD._store.keys()].some(k => k.startsWith('top:m:'))
+  && env.BOARD._store.has('top'),
+  'period boards stored under dated keys; all-time keeps the legacy top key');
 
 // same name, lower score → kept best; throttle blocks rapid second write from same IP
 r = await post(env, { name: 'Danhieux', score: 100 });
 t.ok(r.status === 429, 'same IP throttled for 30s');
 r = await post(env, { name: 'Danhieux', score: 100 }, '2.2.2.2');
-t.ok((await r.json()).kept === true, 'lower score keeps the old best');
+j = await r.json();
+t.ok(j.all.length === 1 && j.all[0].score === 420 && j.day[0].score === 420, 'lower score keeps the old best (every board)');
 r = await post(env, { name: 'Danhieux', score: 999 }, '3.3.3.3');
-top = (await r.json()).top;
+let top = (await r.json()).top;
 t.ok(top.length === 1 && top[0].score === 999, 'higher score replaces, no duplicate names');
 
 // validation: garbage scores and names
