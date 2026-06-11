@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No Room For Heroes — Room Alignment Tool</title>
+<style>
+  :root{ --ink:#e9e0ff; --gold:#ffd34d; --line:#6b4fb0; --accent:#b985ff; --panel:#1b1530; }
+  body{margin:0;background:#0c0916;color:var(--ink);font-family:'Trebuchet MS',system-ui,sans-serif;
+    display:flex;flex-wrap:wrap;gap:14px;padding:14px;}
+  h1{font-size:18px;margin:0 0 6px;color:var(--gold);}
+  #stage{background:#15102a;border:2px solid var(--line);border-radius:10px;image-rendering:pixelated;
+    touch-action:none;cursor:grab;}
+  #side{width:340px;max-width:96vw;display:flex;flex-direction:column;gap:8px;}
+  .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  button,select{background:#241a40;color:var(--ink);border:2px solid var(--line);border-radius:6px;
+    padding:7px 10px;font-family:inherit;font-size:13px;cursor:pointer;}
+  button.sel{border-color:var(--gold);color:var(--gold);}
+  textarea{width:100%;height:190px;background:#120c22;color:#9fe;border:1.5px solid var(--line);
+    border-radius:8px;font-family:monospace;font-size:11px;padding:8px;box-sizing:border-box;}
+  .hint{font-size:12px;opacity:.8;line-height:1.5;}
+  .item{display:flex;gap:6px;align-items:center;font-size:13px;padding:4px 8px;border:1.5px solid #3a2c66;
+    border-radius:7px;cursor:pointer;}
+  .item.sel{border-color:var(--gold);}
+  .item b{color:var(--gold);}
+</style>
+</head>
+<body>
+<div>
+  <h1>🔧 Room Alignment Tool</h1>
+  <canvas id="stage" width="640" height="760"></canvas>
+  <div class="hint" style="max-width:640px;margin-top:6px">
+    <b>Drag</b> a piece to move · <b>mouse wheel / ＋−</b> to scale · <b>F</b> flip ·
+    <b>arrow keys</b> nudge 1px (Shift = 5px) · positions are in room-fractions so they
+    survive any screen size. The dashed line is the FLOOR; heroes stand on it (gray silhouette = hero height).
+  </div>
+</div>
+<div id="side">
+  <div class="row" id="items"></div>
+  <div class="row">
+    <button onclick="bump(1.06)">＋ bigger</button><button onclick="bump(0.94)">− smaller</button>
+    <button onclick="flipSel()">⇋ flip</button>
+    <button id="animbtn" onclick="anim=!anim;render()" class="sel">▶ anim</button>
+    <button onclick="fireNow()">💥 fire</button>
+  </div>
+  <div class="row">
+    <button class="sel" onclick="exportJson()">📋 Generate layout.json</button>
+    <button onclick="downloadJson()">⬇ download</button>
+  </div>
+  <textarea id="out" placeholder="layout.json appears here — upload it to no_room_for_heroes/rooms/ on GitHub"></textarea>
+  <div class="hint">When it looks right: <b>Generate</b> → <b>download</b> →
+    upload <code>layout.json</code> to <code>no_room_for_heroes/rooms/</code> on GitHub
+    (Add file → Upload files). The game picks it up on the next deploy.</div>
+</div>
+<script>
+const CV=document.getElementById('stage'), X=CV.getContext('2d');
+const CELLW=200, S=2.9;                       // world cell px → screen scale
+const W=CELLW*S, OX=(CV.width-W)/2, FLOORY=620;   // floor line on screen
+const ART={};
+function load(src){ const im=new Image(); im.src=src; return im; }
+function probeSeq(id,dir,cb){
+  const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
+  const rec={frames:[],static:null}; ART[id]=rec;
+  const st=new Image(); st.onload=()=>{rec.static=st;cb();}; st.onerror=()=>{}; st.src=dir+id+'.png';
+  const tryN=ni=>{ if(ni>=namers.length) return;
+    const im=new Image();
+    im.onload=()=>{ rec.frames[0]=im; cb(); const next=k=>{ const f=new Image();
+        f.onload=()=>{ rec.frames[k]=f; cb(); if(k<11) next(k+1); }; f.onerror=()=>{}; f.src=dir+namers[ni](k); };
+      next(1); };
+    im.onerror=()=>tryN(ni+1);
+    im.src=dir+namers[ni](0);
+  };
+  tryN(0);
+}
+const room=load('rooms/empty.png'); room.onload=()=>render();
+const ARTIDS=[['spike','rooms/traps/'],['flame','rooms/traps/'],['poison1','rooms/traps/'],['poison2','rooms/traps/'],['candle','rooms/fx/']];
+ARTIDS.forEach(([id,dir])=>probeSeq(id,dir,()=>{ render(); refreshItems(); }));
+
+// ---- the editable pieces (defaults mirror the game's LAYOUT) ----
+let pieces=[
+  {role:'trap spike',   trap:'spike',  art:'spike',   fx:.50, fy:0,   h:74},
+  {role:'trap flame',   trap:'flame',  art:'flame',   fx:.50, fy:0,   h:130},
+  {role:'venom LEFT',   trap:'venom',  art:'poison1', fx:.13, fy:30,  h:80},
+  {role:'venom RIGHT',  trap:'venom',  art:'poison2', fx:.87, fy:26,  h:92},
+  {role:'candle LEFT',  candle:true,   art:'candle',  fx:.18, fy:118, h:26},
+  {role:'candle RIGHT', candle:true,   art:'candle',  fx:.89, fy:118, h:26},
+];
+fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
+  if(!j) return;
+  const np=[];
+  for(const t in (j.traps||{})) j.traps[t].forEach((p,k)=>np.push({role:'trap '+t+(j.traps[t].length>1?(k?' RIGHT':' LEFT'):''),trap:t,...p}));
+  (j.candles||[]).forEach((c,k)=>np.push({role:'candle '+(k?'RIGHT':'LEFT'),candle:true,art:c.art||'candle',...c}));
+  if(np.length) pieces=np;
+  refreshItems(); render();
+}).catch(()=>{});
+
+let sel=0, anim=true, firedAt=performance.now();
+function artFrame(id){
+  const r=ART[id]; if(!r) return null;
+  const N=r.frames.length;
+  if(!N) return r.static;
+  if(!anim) return r.frames[0];
+  if(id==='candle') return r.frames[Math.floor(performance.now()/110)%N];
+  const e=(performance.now()-firedAt)%2400, RISE=110,FALL=480;
+  let f=0;
+  if(e<RISE) f=Math.min(N-1,Math.floor(e/RISE*N));
+  else if(e<RISE+FALL) f=Math.max(0,N-1-Math.floor((e-RISE)/FALL*N));
+  return r.frames[f];
+}
+function pieceRect(p){
+  const im=artFrame(p.art)||{width:16,height:24};
+  const dh=p.h*S, dw=dh*(im.width/im.height||1);
+  const cx=OX+W*p.fx, by=FLOORY-p.fy*S;
+  return {x:cx-dw/2, y:by-dh, w:dw, h:dh};
+}
+function render(){
+  X.imageSmoothingEnabled=false;
+  X.fillStyle='#15102a'; X.fillRect(0,0,CV.width,CV.height);
+  // room art (bottom 12 world px below floor, like the game)
+  if(room.complete&&room.width){
+    const dh=W*(room.height/room.width);
+    X.drawImage(room, OX, FLOORY+12*S-dh, W, dh);
+  }
+  // floor line + hero silhouette for scale
+  X.strokeStyle='rgba(255,255,255,.45)'; X.setLineDash([8,6]);
+  X.beginPath(); X.moveTo(0,FLOORY); X.lineTo(CV.width,FLOORY); X.stroke(); X.setLineDash([]);
+  X.fillStyle='rgba(160,160,190,.25)';
+  X.fillRect(OX+W*0.30-14*S/2, FLOORY-52*S, 14*S, 52*S);  // ~hero size
+  // pieces
+  pieces.forEach((p,i)=>{
+    const im=artFrame(p.art), r=pieceRect(p);
+    if(im&&im.width){
+      if(p.flip){ X.save(); X.translate(r.x+r.w/2,0); X.scale(-1,1);
+        X.drawImage(im,-r.w/2,r.y,r.w,r.h); X.restore(); }
+      else X.drawImage(im,r.x,r.y,r.w,r.h);
+    } else {
+      X.strokeStyle='#666'; X.strokeRect(r.x,r.y,r.w,r.h);
+      X.fillStyle='#888'; X.font='11px monospace'; X.fillText('no art: '+p.art, r.x+3, r.y+14);
+    }
+    if(i===sel){ X.strokeStyle='#ffd34d'; X.lineWidth=2; X.strokeRect(r.x-2,r.y-2,r.w+4,r.h+4); X.lineWidth=1; }
+  });
+  X.fillStyle='#9fe'; X.font='12px monospace';
+  const p=pieces[sel];
+  X.fillText(`${p.role}: fx=${p.fx.toFixed(3)}  fy=${Math.round(p.fy)}px  h=${Math.round(p.h)}px${p.flip?'  flipped':''}`, 10, 20);
+}
+setInterval(()=>{ if(anim) render(); }, 80);
+function refreshItems(){
+  document.getElementById('items').innerHTML=pieces.map((p,i)=>
+    `<span class="item${i===sel?' sel':''}" onclick="sel=${i};refreshItems();render()"><b>${p.role}</b></span>`).join('');
+}
+refreshItems();
+// drag / wheel / keys
+let drag=null;
+CV.addEventListener('pointerdown',e=>{
+  const r=CV.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  for(let i=pieces.length-1;i>=0;i--){ const b=pieceRect(pieces[i]);
+    if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h){ sel=i; refreshItems(); break; } }
+  const p=pieces[sel];
+  drag={mx,my,fx:p.fx,fy:p.fy}; CV.setPointerCapture(e.pointerId); render();
+});
+CV.addEventListener('pointermove',e=>{
+  if(!drag) return;
+  const r=CV.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  const p=pieces[sel];
+  p.fx=Math.min(1.1,Math.max(-0.1, drag.fx+(mx-drag.mx)/W));
+  p.fy=Math.max(-20, drag.fy-(my-drag.my)/S);
+  render();
+});
+CV.addEventListener('pointerup',()=>drag=null);
+CV.addEventListener('wheel',e=>{ e.preventDefault(); bump(e.deltaY<0?1.05:0.95); },{passive:false});
+window.addEventListener('keydown',e=>{
+  const p=pieces[sel], st=e.shiftKey?5:1;
+  if(e.key==='ArrowLeft'){p.fx-=st/CELLW;} else if(e.key==='ArrowRight'){p.fx+=st/CELLW;}
+  else if(e.key==='ArrowUp'){p.fy+=st;} else if(e.key==='ArrowDown'){p.fy-=st;}
+  else if(e.key==='f'||e.key==='F'){flipSel();return;} else return;
+  e.preventDefault(); render();
+});
+function bump(f){ const p=pieces[sel]; p.h=Math.min(220,Math.max(8,p.h*f)); render(); }
+function flipSel(){ const p=pieces[sel]; p.flip=!p.flip; render(); }
+function fireNow(){ firedAt=performance.now(); }
+function buildJson(){
+  const traps={}, candles=[];
+  for(const p of pieces){
+    const e={art:p.art, fx:+p.fx.toFixed(3), fy:Math.round(p.fy), h:Math.round(p.h)};
+    if(p.flip) e.flip=true;
+    if(p.candle) candles.push(e);
+    else (traps[p.trap]=traps[p.trap]||[]).push(e);
+  }
+  return {traps, candles};
+}
+function exportJson(){ document.getElementById('out').value=JSON.stringify(buildJson(),null,1); }
+function downloadJson(){
+  exportJson();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([document.getElementById('out').value],{type:'application/json'}));
+  a.download='layout.json'; a.click();
+}
+render();
+</script>
+</body>
+</html>
