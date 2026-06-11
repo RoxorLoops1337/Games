@@ -1352,74 +1352,112 @@ function sfx(name){
   if(now-(_sfxLast[name]||0)<55) return;        // throttle so rapid hits don't buzz
   _sfxLast[name]=now; try{ f(); }catch(_){ }
 }
-// Dynamic ambient music: each MOOD has its own tempo, chord progressions,
-// melody scale, timbre and intensity. The active mood follows the game state
-// (calm menu/build, brighter town, driving wave, tense champion, urgent danger).
-const _BASE_PENTA=[220,262,294,330,392,440,523,587];   // A-minor pentatonic
-const MOODS={
-  calm:    {ms:440, density:0.40, pad:'sine',     mel:'triangle', padVol:0.028, melVol:0.028, bassEvery:2,
-    progs:[ [[220,262,330],[196,247,294],[174,220,262],[165,208,247]],
-            [[220,262,330],[174,220,262],[196,247,294],[247,294,349]] ]},
-  town:    {ms:400, density:0.58, pad:'triangle', mel:'square',   padVol:0.024, melVol:0.030, bassEvery:2,
-    // brighter, market-ish — C major flavour
-    progs:[ [[262,330,392],[349,440,523],[392,494,587],[440,523,659]],
-            [[262,330,392],[294,370,440],[349,440,523],[392,494,587]] ],
-    penta:[294,330,392,440,494,587,659,784]},
-  fight:   {ms:360, density:0.62, pad:'sine',     mel:'triangle', padVol:0.028, melVol:0.030, bassEvery:1,
-    progs:[ [[220,262,330],[196,247,294],[233,277,349],[220,262,330]],
-            [[220,262,330],[174,220,262],[233,277,349],[247,294,370]] ]},
-  champion:{ms:300, density:0.82, pad:'sawtooth', mel:'square',   padVol:0.020, melVol:0.034, bassEvery:1,
-    // tense, low, tritone-tinged
-    progs:[ [[147,175,220],[156,196,233],[147,175,220],[165,196,247]],
-            [[147,185,220],[138,175,220],[147,175,233],[156,196,247]] ],
-    penta:[220,262,311,349,415,466,523,622]},
-  danger:  {ms:330, density:0.72, pad:'sawtooth', mel:'triangle', padVol:0.022, melVol:0.032, bassEvery:1,
-    progs:[ [[165,196,247],[156,196,233],[147,175,220],[138,165,208]] ],
-    penta:[165,196,233,247,294,330,392,440]},
+// ---- The soundtrack: real chiptune tracks (picked by the owner) ----------
+//   title → The Buried Cathedral · menu → Hammers of the Hall ·
+//   wave → Throneblood · boss/champion → Thrash the Throne ·
+//   town → Goomba Stomp Groove.  Same NES synth as music.html (two pulse
+//   waves, triangle bass, noise kit), scheduled with a 0.4s lookahead into
+//   the game's musicBus so the volume slider & mute keep working.
+const MUSIC_TRACKS={
+  // The Buried Cathedral
+  title:{"bpm":80,"lead":{"duty":0.25,"vol":0.15,"seq":"-:16  b4:12 g4:4  a4:8 g4:4 a4:4  e4:16  g4:6 f#4:2 g4:4 a4:4  b4:8 d5:8  c5:6 b4:2 a4:4 f#4:4  e4:16"},"arp":{"duty":0.125,"vol":0.08,"seq":"e3:2 g3:2 b3:2 g3:2 e3:2 g3:2 b3:2 g3:2  e3:2 g3:2 b3:2 g3:2 e3:2 g3:2 b3:2 g3:2 c3:2 g3:2 b3:2 g3:2 c3:2 g3:2 b3:2 g3:2  a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 a3:2 e3:2 e3:2 g3:2 b3:2 g3:2 e3:2 g3:2 b3:2 g3:2  g3:2 b3:2 d4:2 b3:2 g3:2 b3:2 d4:2 b3:2 d3:2 f#3:2 a3:2 f#3:2 d3:2 f#3:2 a3:2 f#3:2  e3:2 g3:2 b3:2 g3:2 e3:2 b3:2 g3:2 e3:2"},"bass":{"vol":0.22,"seq":"e2:16  e2:16  c2:16  a1:16  e2:16  g2:16  d2:16  e2:16"},"drums":{"vol":0.25,"seq":"............h... ............h... ............h... ............h... ............h... ............h... ............h... ............h... "}},
+  // Hammers of the Hall
+  menu:{"bpm":120,"lead":{"duty":0.25,"vol":0.15,"seq":"g4:2 -:2 b4:2 -:2 d5:4 b4:2 g4:2  f4:2 -:2 a4:2 -:2 c5:4 a4:2 f4:2 g4:2 b4:2 d5:2 e5:2 d5:4 b4:4  a4:2 b4:2 c5:2 a4:2 b4:8 g4:2 -:2 b4:2 -:2 d5:4 e5:2 d5:2  c5:2 -:2 a4:2 -:2 f4:4 a4:2 c5:2 b4:2 d5:2 g5:4 f5:2 d5:2 b4:2 a4:2  g4:12 -:4"},"arp":{"duty":0.125,"vol":0.06,"seq":"-:2 b3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2  -:2 a3:2 -:2 a3:2 -:2 a3:2 -:2 a3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2  -:2 a3:2 -:2 a3:2 -:2 a3:2 -:2 a3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2  -:2 c4:2 -:2 c4:2 -:2 c4:2 -:2 c4:2 -:2 b3:2 -:2 b3:2 -:2 b3:2 -:2 b3:2  -:2 b3:2 -:2 b3:2 -:2 d4:2 -:2 d4:2"},"bass":{"vol":0.24,"seq":"g2:2 g3:2 d3:2 g2:2 g2:2 g3:2 d3:2 b2:2  f2:2 f3:2 c3:2 f2:2 f2:2 f3:2 c3:2 a2:2 g2:2 g3:2 d3:2 g2:2 g2:2 g3:2 d3:2 b2:2  c3:2 c3:2 g2:2 c3:2 d3:2 d3:2 a2:2 d3:2 g2:2 g3:2 d3:2 g2:2 g2:2 g3:2 d3:2 b2:2  f2:2 f3:2 c3:2 f2:2 f2:2 f3:2 c3:2 a2:2 g2:2 b2:2 d3:2 g3:2 f3:2 d3:2 b2:2 a2:2  g2:2 g3:2 d3:2 g2:2 g2:8"},"drums":{"vol":0.4,"seq":"k.h.s.h.k.h.s.h. k.h.s.h.k.h.s.h. k.h.s.h.k.h.s.h. k.h.s.h.k.h.s.h. k.h.s.h.k.h.s.h. k.h.s.h.k.h.s.h. k.h.s.h.k.h.s.h. k.h.s.h.k.h.s.h. "}},
+  // Throneblood
+  wave:{"bpm":150,"lead":{"duty":0.25,"vol":0.16,"seq":"a4:2 a4:2 c5:2 a4:2 e5:4 d5:2 c5:2  b4:2 c5:2 b4:2 g4:2 a4:8 f5:4 e5:2 d5:2 c5:4 d5:2 e5:2  b4:4 e5:4 g#4:4 b4:4 a4:2 a4:2 c5:2 a4:2 e5:4 g5:4  f5:2 e5:2 d5:2 c5:2 b4:4 d5:4 c5:2 d5:2 e5:2 f5:2 g5:2 f5:2 e5:2 d5:2  e5:8 g#4:4 e4:4"},"arp":{"duty":0.125,"vol":0.07,"seq":"a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 a3:2 a4:2  a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 f3:2 f4:2 f3:2 f4:2 f3:2 f4:2 f3:2 f4:2  g3:2 g4:2 g3:2 g4:2 e3:2 e4:2 e3:2 e4:2 a3:2 a4:2 a3:2 a4:2 a3:2 a4:2 a3:2 a4:2  f3:2 f4:2 f3:2 f4:2 d3:2 d4:2 d3:2 d4:2 f3:2 f4:2 f3:2 f4:2 g3:2 g4:2 g3:2 g4:2  e3:2 e4:2 e3:2 e4:2 e3:2 g#3:2 b3:2 e4:2"},"bass":{"vol":0.26,"seq":"a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 a3:2 e3:2  a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 g3:2 e3:2 f2:2 c3:2 f3:2 c3:2 f2:2 c3:2 f3:2 c3:2  g2:2 d3:2 g3:2 d3:2 e2:2 b2:2 e3:2 b2:2 a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 a3:2 e3:2  a2:2 e3:2 a3:2 e3:2 a2:2 e3:2 g3:2 e3:2 f2:2 c3:2 f3:2 c3:2 g2:2 d3:2 g3:2 d3:2  a2:2 e3:2 a3:2 e3:2 a2:2 a2:2 a2:2 a2:2"},"drums":{"vol":0.45,"seq":"k.h.s.h.k.h.s.hh k.h.s.h.k.h.s.hh k.h.s.h.k.h.s.hh k.h.s.h.k.h.s.hh k.h.s.h.k.h.s.hh k.h.s.h.k.h.s.hh k.h.s.h.k.h.s.hh k.h.s.h.s.s.s.s."}},
+  // Thrash the Throne
+  boss:{"bpm":180,"lead":{"duty":0.25,"vol":0.15,"seq":"d5:2 a4:2 d#4:2 d4:2 d4:4 -:4 c4:2 d4:2 a#3:2 -:2 c4:4 d#4:4 d#4:2 c4:2 -:2 a#3:2 a#3:4 -:4 a#3:2 a#3:2 -:2 a#3:2 a#3:4 a#3:4 a#3:2 c4:2 a#3:2 c4:2 d4:4 f4:4 d#4:2 f4:2 d4:2 f4:2 d#4:4 f4:4 d#4:2 a#3:2 a#3:2 a#3:2 a#3:4 c4:4 a4:4 d5:12"},"arp":{"duty":0.125,"vol":0.07,"seq":"d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 c5:2 g4:2 c5:2 g4:2 c5:2 g4:2 c5:2 g4:2 d#4:2 a#3:2 d#4:2 a#3:2 d#4:2 a#3:2 d#4:2 a#3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 c5:2 g4:2 c5:2 g4:2 c5:2 g4:2 c5:2 g4:2 d#4:2 a#3:2 d#4:2 a#3:2 d#4:2 a#3:2 d#4:2 a#3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2 d4:2 a3:2"},"bass":{"vol":0.25,"seq":"d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 c2:1 c2:1 c2:2 c2:1 c2:1 c2:2 c2:1 c2:1 c2:2 c2:1 c2:1 c2:2 d#1:1 d#1:1 d#1:2 d#1:1 d#1:1 d#1:2 d#1:1 d#1:1 d#1:2 d#1:1 d#1:1 d#1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 c2:1 c2:1 c2:2 c2:1 c2:1 c2:2 c2:1 c2:1 c2:2 c2:1 c2:1 c2:2 d#1:1 d#1:1 d#1:2 d#1:1 d#1:1 d#1:2 d#1:1 d#1:1 d#1:2 d#1:1 d#1:1 d#1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2 d1:1 d1:1 d1:2"},"drums":{"vol":0.45,"seq":"k.k.s.k.k.k.s.k.kkk.s.k.kkk.s.kkk.k.s.k.k.k.s.k.kkk.s.k.kkk.s.kkk.k.s.k.k.k.s.k.kkk.s.k.kkk.s.kkk.k.s.k.k.k.s.k.k.k.s.k.s.s.s.ss"}},
+  // Goomba Stomp Groove
+  town:{"bpm":146,"lead":{"duty":0.25,"vol":0.15,"seq":"c5:2 d5:2 f5:2 g5:2 g5:4 d5:2 e5:2 e5:2 -:2 c5:2 a#4:2 a4:4 c5:2 f5:2 f5:1 c5:1 d5:2 c5:2 a#4:2 a4:4 a#4:2 g4:2 g4:2 -:2 a4:2 a#4:2 a#4:4 a4:2 c5:2 c5:2 -:2 a4:2 a#4:2 c5:4 d5:2 -:2 c5:2 f5:2 g5:2 a5:2 a5:4 a#5:2 a5:2 a5:1 a#5:1 d6:2 a#5:2 g5:2 f5:4 g5:2 f5:2 d5:4 c5:12"},"arp":{"duty":0.125,"vol":0.07,"seq":"-:2 e4:2 -:2 g4:2 -:2 e4:2 -:2 g4:2 -:2 c5:2 -:2 e5:2 -:2 c5:2 -:2 e5:2 -:2 a4:2 -:2 c5:2 -:2 a4:2 -:2 c5:2 -:2 a#4:2 -:2 d5:2 -:2 a#4:2 -:2 d5:2 -:2 e4:2 -:2 g4:2 -:2 e4:2 -:2 g4:2 -:2 c5:2 -:2 e5:2 -:2 c5:2 -:2 e5:2 -:2 a4:2 -:2 c5:2 -:2 a4:2 -:2 c5:2 -:2 a#4:2 -:2 d5:2 -:2 a#4:2 -:2 d5:2"},"bass":{"vol":0.25,"seq":"c1:2 c2:2 c1:2 c2:2 c1:2 c2:2 c1:2 c2:2 a1:2 a2:2 a1:2 a2:2 a1:2 a2:2 a1:2 a2:2 f1:2 f2:2 f1:2 f2:2 f1:2 f2:2 f1:2 f2:2 g1:2 g2:2 g1:2 g2:2 g1:2 g2:2 g1:2 g2:2 c1:2 c2:2 c1:2 c2:2 c1:2 c2:2 c1:2 c2:2 a1:2 a2:2 a1:2 a2:2 a1:2 a2:2 a1:2 a2:2 f1:2 f2:2 f1:2 f2:2 f1:2 f2:2 f1:2 f2:2 g1:2 g2:2 g1:2 g2:2 g1:2 g2:2 g1:2 g2:2"},"drums":{"vol":0.42,"seq":"k.h.s.h.k.h.s.hhk.hhs.h.k.h.s.h.k.h.s.h.k.h.s.hhk.hhs.h.k.h.s.h.k.h.s.h.k.h.s.hhk.hhs.h.k.h.s.h.k.h.s.h.k.h.s.hhk.h.s.h.k.s.s.ss"}},
 };
-let musicMood='calm', _musicMs=440, _mBeat=0, _mProg=0, _mMelOn=true, _mDensity=0.5;
+const MT_NOTE={c:0,d:2,e:4,f:5,g:7,a:9,b:11};
+function mtMidi(t){ const m=/^([a-g])(#?)(\d)$/.exec(t); if(!m) return null;
+  return 12*(+m[3]+1)+MT_NOTE[m[1]]+(m[2]?1:0); }
+const mtHz=n=>440*Math.pow(2,(n-69)/12);
+function mtParseSeq(s){ const ev=[]; let t=0;
+  for(const tok of s.trim().split(/\s+/)){ const i=tok.lastIndexOf(':');
+    const n=tok.slice(0,i), d=+tok.slice(i+1);
+    if(n!=='-'){ const m=mtMidi(n); if(m!=null) ev.push({t,m,d}); } t+=d; }
+  return {ev,len:t}; }
+function mtParseDrums(s){ const ev=[]; const str=s.replace(/\s+/g,'');
+  for(let i=0;i<str.length;i++) if(str[i]!=='.') ev.push({t:i,k:str[i]});
+  return {ev,len:str.length}; }
+const _mtDuty={};
+function mtDutyWave(p){ if(_mtDuty[p]) return _mtDuty[p];
+  const N=32, re=new Float32Array(N), im=new Float32Array(N);
+  for(let n=1;n<N;n++) im[n]=(2/(n*Math.PI))*Math.sin(Math.PI*n*p);
+  return _mtDuty[p]=AC.createPeriodicWave(re,im); }
+let _mtNoiseBuf=null;
+function mtNoise(){ if(_mtNoiseBuf) return _mtNoiseBuf;
+  _mtNoiseBuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);
+  const d=_mtNoiseBuf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; return _mtNoiseBuf; }
+const MUSIC_SCALE=0.55;            // chip tracks under the SFX
+let _mtSrcs=[];
+function mtTone(when,dur,freq,wave,duty,vol){
+  const o=AC.createOscillator(), g=AC.createGain();
+  if(wave==='pulse') o.setPeriodicWave(mtDutyWave(duty)); else o.type='triangle';
+  o.frequency.value=freq;
+  g.gain.setValueAtTime(0,when);
+  g.gain.linearRampToValueAtTime(vol*MUSIC_SCALE,when+0.006);
+  g.gain.setValueAtTime(vol*MUSIC_SCALE,when+Math.max(0.01,dur-0.035));
+  g.gain.linearRampToValueAtTime(0,when+dur);
+  o.connect(g); g.connect(musicBus); o.start(when); o.stop(when+dur+0.02); _mtSrcs.push(o); }
+function mtDrum(when,k,vol){
+  vol*=MUSIC_SCALE;
+  if(k==='k'){ const o=AC.createOscillator(), g=AC.createGain(); o.type='triangle';
+    o.frequency.setValueAtTime(130,when); o.frequency.exponentialRampToValueAtTime(38,when+0.1);
+    g.gain.setValueAtTime(vol,when); g.gain.exponentialRampToValueAtTime(0.001,when+0.13);
+    o.connect(g); g.connect(musicBus); o.start(when); o.stop(when+0.15); _mtSrcs.push(o); return; }
+  const s=AC.createBufferSource(); s.buffer=mtNoise();
+  const f=AC.createBiquadFilter(), g=AC.createGain();
+  if(k==='s'){ f.type='bandpass'; f.frequency.value=1800; f.Q.value=0.8;
+    g.gain.setValueAtTime(vol*0.9,when); g.gain.exponentialRampToValueAtTime(0.001,when+0.12); }
+  else { f.type='highpass'; f.frequency.value=6000;
+    const len=(k==='H')?0.14:0.045;
+    g.gain.setValueAtTime(vol*0.5,when); g.gain.exponentialRampToValueAtTime(0.001,when+len); }
+  s.connect(f); f.connect(g); g.connect(musicBus); s.start(when); s.stop(when+0.2); _mtSrcs.push(s); }
+let musicMood=null, _mtParsed=null, _mtStep=0, _mtLoopStart=0, _mtStepDur=0;
+function mtStart(mood){
+  const t=MUSIC_TRACKS[mood]; if(!t||!AC) return;
+  for(const s of _mtSrcs){ try{ s.stop(); }catch(_){ } } _mtSrcs=[];
+  _mtParsed={ lead:mtParseSeq(t.lead.seq), arp:mtParseSeq(t.arp.seq),
+              bass:mtParseSeq(t.bass.seq), drums:mtParseDrums(t.drums.seq), t };
+  _mtStepDur=60/t.bpm/4; _mtStep=0; _mtLoopStart=AC.currentTime+0.06;
+}
 function musicTick(){
-  if(!audioOn||!AC) return;
+  if(!audioOn||!AC||!_mtParsed) return;
   try{
-    const M=MOODS[musicMood]||MOODS.calm; const progs=M.progs;
-    if(_mProg>=progs.length) _mProg=0;
-    const bar=Math.floor(_mBeat/4)%4;
-    const chord=progs[_mProg][bar];
-    if(_mBeat%4===0){
-      chord.forEach(f=>tone(f,1.6,M.pad,M.padVol,f,musicBus));
-      tone(chord[0]/2,1.9,'triangle',M.padVol*0.9,null,musicBus);
-      if(bar===0){ if(Math.random()<0.55) _mProg=(_mProg+1)%progs.length;
-        _mMelOn=Math.random()<0.85; _mDensity=M.density*(0.7+Math.random()*0.5); }
-    } else if(_mBeat % M.bassEvery===0){
-      tone(chord[0]/2,0.45,'triangle',M.padVol*0.8,null,musicBus);
+    if(_mtSrcs.length>360) _mtSrcs=_mtSrcs.slice(-120);   // keep the stop-list bounded
+    const horizon=AC.currentTime+0.4, loopLen=_mtParsed.lead.len, t=_mtParsed.t;
+    while(_mtLoopStart+_mtStep*_mtStepDur < horizon){
+      const step=_mtStep%loopLen, base=_mtLoopStart+_mtStep*_mtStepDur;
+      for(const ch of ['lead','arp','bass'])
+        for(const e of _mtParsed[ch].ev) if(e.t===step)
+          mtTone(base, e.d*_mtStepDur*0.92, mtHz(e.m), ch==='bass'?'tri':'pulse', t[ch].duty||0, t[ch].vol);
+      for(const e of _mtParsed.drums.ev) if(e.t===step) mtDrum(base, e.k, t.drums.vol);
+      _mtStep++;
     }
-    if(_mMelOn && Math.random()<_mDensity){
-      const scale=M.penta||_BASE_PENTA; const n=scale[ri(0,scale.length-1)];
-      tone(n,0.32,M.mel,M.melVol,n,musicBus);
-      if(Math.random()<0.33){ const n2=scale[ri(0,scale.length-1)];
-        setTimeout(()=>{ if(audioOn&&AC) try{ tone(n2,0.24,M.mel,M.melVol*0.85,n2,musicBus); }catch(_){ } }, Math.floor(_musicMs/2)); }
-    }
-    _mBeat++;
   }catch(_){ }
 }
-function scheduleMusic(ms){ if(_musicTimer) clearInterval(_musicTimer); _musicMs=ms; _musicTimer=setInterval(musicTick, ms); }
-function startMusic(){ if(!AC||_musicTimer) return; _mBeat=0; _mProg=0; scheduleMusic(MOODS[musicMood].ms); }
+function scheduleMusic(){ if(_musicTimer) clearInterval(_musicTimer); _musicTimer=setInterval(musicTick,40); }
+function startMusic(){ if(!AC||_musicTimer) return; mtStart(musicMood||'title'); scheduleMusic(); }
 function setMusicMood(mood){
-  if(!MOODS[mood] || mood===musicMood) return;
+  if(!MUSIC_TRACKS[mood] || mood===musicMood) return;
   musicMood=mood;
-  if(AC && MOODS[mood].ms!==_musicMs) scheduleMusic(MOODS[mood].ms);
+  if(AC) mtStart(mood);
 }
 // Pick the mood from the current game state (called each frame; no-ops if same).
+let uiScreen='title';   // which overlay screen is up when no run is active
 function updateMusicMood(){
-  let mood='calm';
-  if(G){
-    if(G.phase==='town') mood='town';
-    else if(G.phase==='run'){
-      if(G.heroes && G.heroes.some(h=>h.champion && h.state!=='dead')) mood='champion';
-      else if(G.boss && G.boss.hp/G.boss.maxHp < 0.30) mood='danger';
-      else mood='fight';
-    }
+  let mood;
+  if(G && G.phase==='town') mood='town';
+  else if(G && (G.phase==='build'||G.phase==='run')){
+    mood='wave';
+    if(G.phase==='run' && G.heroes && G.heroes.some(h=>(h.champion||h.king) && h.state!=='dead')) mood='boss';
+    else if(G.phase==='run' && G.boss && G.boss.hp/G.boss.maxHp < 0.30) mood='boss';
   }
+  else mood=(uiScreen==='town')?'town':(uiScreen==='title'?'title':'menu');
   setMusicMood(mood);
 }
 function toggleAudio(){
@@ -1503,6 +1541,7 @@ function difficulty(){
 // Both art files are optional — missing art falls back to a painted gradient
 // and a text title, so the screen always works.
 function titleScreen(){
+  uiScreen='title';
   G = freshGame('campaign'); G.phase='menu'; render();
   tutBar.classList.remove('show');
   overlay.classList.add('show'); overlay.classList.add('titlemode');
@@ -1523,6 +1562,7 @@ function leaveTitle(){ overlay.classList.remove('titlemode'); openTitle(); }
 
 // Four grouped buttons, each leading to a small submenu (no link clutter).
 function gotoMenu(){
+  uiScreen='menu';
   G = freshGame('campaign'); G.phase='menu'; render();
   tutBar.classList.remove('show');
   overlay.classList.add('show');
@@ -1614,6 +1654,7 @@ async function lbSend(){
 }
 // Stronghold → everything that makes the NEXT run stronger.
 function openStronghold(){
+  uiScreen='menu';
   overlay.classList.add('show');
   const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
   overlay.innerHTML = `<h1>🏰 Stronghold</h1>
@@ -1639,6 +1680,7 @@ function openLibrary(){
 // The TITLE screen — branding, the pitch, and the three save-slot profiles.
 // Picking a slot leads to the profile home; everything else lives there.
 function openTitle(){
+  uiScreen='menu';
   G = freshGame('campaign'); G.phase='menu'; render();
   tutBar.classList.remove('show');
   overlay.classList.add('show');
@@ -1853,7 +1895,7 @@ function openCodex(){
 }
 
 /* ============================ TOWN BUILDER UI =========================== */
-function openTownBuilder(){ overlay.classList.add('show'); townPopId=null; townZoom=1; townCamX=0; townCamY=0; renderTownBuilder(); }
+function openTownBuilder(){ uiScreen='town'; overlay.classList.add('show'); townPopId=null; townZoom=1; townCamX=0; townCamY=0; renderTownBuilder(); }
 function resBar(){
   return `<div class="row" style="justify-content:center;gap:16px;font-size:17px;font-weight:bold">
     <span title="Wood">🪵 <span style="color:#d6a86a">${TOWN.res.wood}</span></span>
