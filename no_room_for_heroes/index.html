@@ -960,9 +960,10 @@ function buildTown(id){
 // and the fallen throne swallows half. ---
 const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
-  const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), m=quarryMul();
-  // Town grind eased ~25%: wood/stone and shards (the meta currency) earn a bit faster.
-  return { wood:Math.floor(slain*0.05*m), stone:Math.floor(slain*0.025*m), shards:Math.floor((slain/4+lvl)*m/8) };
+  // Per-kill loot rolls (see heroDies): 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing.
+  // Champions roll twice. Quarry still scales the wood/stone/shards haul.
+  const d=G.drops||{}, m=quarryMul();
+  return { wood:Math.floor((d.wood||0)*m), stone:Math.floor((d.stone||0)*m), shards:Math.floor((d.shards||0)*m) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -1221,6 +1222,7 @@ function freshGame(mode){
     survived:0,           // heroes killed this level / run
     heroNum:0,            // total heroes spawned (scaling)
     totalSlain:0,         // cumulative kills (drives scaling + town breaks)
+    drops:{wood:0, stone:0, shards:0, runes:0},  // per-kill loot rolls — 20/20/20/10/30, champions roll twice
     heroSeq:0,            // power index assigned to each generated hero
     queue:[],             // upcoming hero specs (previewed in town & staging) — in campaign this IS the next wave
     waveLevel:null,       // campaign: which level G.queue was rolled for (keeps preview == actual spawn)
@@ -3214,6 +3216,16 @@ function heroDies(h){
     + (RB.dreadKill||0) + townDreadKill() + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
+  // Loot drop: 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing. Champions roll twice.
+  if(!G.drops) G.drops={wood:0,stone:0,shards:0,runes:0};
+  const lootRolls = h.champion ? 2 : 1;
+  for(let i=0;i<lootRolls;i++){
+    const r=Math.random();
+    if(r<0.20){      G.drops.wood++;   floater(h.x, h.y-66-i*16, '+1 🪵', '#b58a4e'); }
+    else if(r<0.40){ G.drops.stone++;  floater(h.x, h.y-66-i*16, '+1 🪨', '#a8a8b4'); }
+    else if(r<0.60){ G.drops.runes++;  floater(h.x, h.y-66-i*16, '+1 ᚱ',  '#b985ff'); }
+    else if(r<0.70){ G.drops.shards++; floater(h.x, h.y-66-i*16, '+1 💠', '#9adfff'); }
+  }
   // Devour passive: the boss feasts on the fallen
   if(G.boss.feed) healBoss(Math.round(G.boss.maxHp*G.boss.feed));
   if(hasMandate('bloodthrone')) healBoss(Math.round(G.boss.maxHp*0.03));   // Bloodthrone mandate: heal per kill
@@ -3545,11 +3557,11 @@ function buildPostmortem(){
   </div>`;
 }
 // Bank this run's rune points (delta since last banking) into the pool.
-// Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
+// Income now flows from per-kill loot rolls (20% rune per slain hero, champions roll twice)
+// + 1 per campaign chapter cleared, then edict/library multipliers.
 function awardRunes(){
-  // Edicts multiply the runes you bank for the whole run.
-  // Rune income eased ~25% (÷8 instead of ÷10) so the tree fills a bit quicker.
-  const total = Math.floor((G.totalSlain/4 + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul() / 8);
+  const drops = (G.drops && G.drops.runes) || 0;
+  const total = Math.floor((drops + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul());
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
