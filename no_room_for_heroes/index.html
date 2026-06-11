@@ -4538,7 +4538,7 @@ function drawDungeon(tx, scale, isBuild){
       const beingDragged = roomDrag && roomDrag.dragging && i===roomDrag.from;   // empty slot picked up
       // empty slot — show the stone room art; overlay the placeable hint in build
       const ea = ROOM_IMG.empty && ROOM_IMG.empty._ok;
-      if(ea){ if(beingDragged){ X.save(); X.globalAlpha=0.45; } drawRoomArt(x0,w,cellArt('empty',i)); if(beingDragged) X.restore(); }
+      if(ea){ if(beingDragged){ X.save(); X.globalAlpha=0.45; } drawRoomArt(x0,w,cellArt('empty',i)); drawCandles(x0,w,i); if(beingDragged) X.restore(); }
       if(isBuild || !ea){
         X.strokeStyle=beingDragged?'#ffd34d':(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
         X.setLineDash([6,5]); X.lineWidth=beingDragged?3:2;
@@ -4788,6 +4788,27 @@ function trapArtImg(type, firedAt){
   }
   return r.frames[f]||r.frames[0];
 }
+// ---- ambient candle/torch flames (rooms/fx/candle_0.png, _1, …) ----------
+// Looping flame frames drawn on the standard room's two wall torches. Each
+// torch is staggered so the dungeon doesn't flicker in lock-step.
+const CANDLE_FRAMES=[];
+if(typeof Image!=='undefined'){
+  const probe=n=>{ const im=new Image();
+    im.onload=()=>{ CANDLE_FRAMES[n]=im; if(n<11) probe(n+1); };
+    im.onerror=()=>{}; im.src='rooms/fx/candle_'+n+'.png'; };
+  probe(0);
+}
+const CANDLE_POS=[{fx:0.11},{fx:0.89}];   // torch spots on the standard room art
+function drawCandles(x0,w,i){
+  const N=CANDLE_FRAMES.length; if(!N) return;
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+  for(let c=0;c<CANDLE_POS.length;c++){
+    const im=CANDLE_FRAMES[(Math.floor(performance.now()/110)+i*3+c*5)%N]; if(!im) continue;
+    const dh=24, dw=Math.max(8, dh*((im.width||16)/(im.height||24)));
+    X.drawImage(im, Math.round(x0+w*CANDLE_POS[c].fx-dw/2), Math.round(FLOOR-132-dh), Math.round(dw), dh);
+  }
+  X.imageSmoothingEnabled=sm;
+}
 // Pick the (possibly smashed) art for cell i. Falls back to the normal art
 // while a broken variant isn't uploaded, so the effect degrades gracefully.
 function cellArt(k,i){
@@ -4904,6 +4925,7 @@ function drawRoomFull(x0,w,room,i){
   drawRoomContents(x0,w,room,i);
 }
 function drawRoomContents(x0,w,room,i){
+  drawCandles(x0,w,i);                          // wall-torch flames over the room art
   const cx=x0+w/2; const cell=G.cells[i]; const parts=roomParts(room);
   const art=roomArtReady(room);                 // suppress props the art already shows
   // traps (the single-trap art replaces its own prop; 'lair' backdrop keeps them)

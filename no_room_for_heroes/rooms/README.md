@@ -38,3 +38,12 @@ bombard venom corrode hexbrand runestone`
 **Graceful:** while a trap has no art, its procedural prop keeps drawing — so
 you can upgrade traps one file at a time. Upload via GitHub → Add file →
 Upload files.
+
+## Candle / torch flames (`rooms/fx/candle_<n>.png`)
+
+Looping flame frames for the standard room's two wall torches. Upload
+`rooms/fx/candle_0.png`, `candle_1.png`, … (any count up to 12) — small
+transparent frames (~16×24 px, flame only). They loop at ~9 fps, drawn on
+both torch sconces of every room, staggered per cell so the dungeon
+flickers naturally. While missing, nothing extra draws (the painted flame
+on the room art stays). Torch positions are tunable in `CANDLE_POS`.
