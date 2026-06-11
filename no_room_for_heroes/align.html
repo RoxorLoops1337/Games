@@ -43,6 +43,7 @@
     <button onclick="bump(1.06)">＋ bigger</button><button onclick="bump(0.94)">− smaller</button>
     <button onclick="flipSel()">⇋ flip</button>
     <button onclick="layerSel(1)">⬆ layer</button><button onclick="layerSel(-1)">⬇ layer</button>
+    <button onclick="brightSel(1.15)">☀ brighter</button><button onclick="brightSel(0.87)">🌙 dimmer</button>
   </div>
   <div class="row">
     <button id="animbtn" onclick="anim=!anim;render()" class="sel">▶ anim</button>
@@ -113,7 +114,7 @@ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   const lights=j.lights||[];
   if(lights.length){
     lights.forEach(l=>np.push({role:'light '+l.attach, light:l.attach, kind:kindOf(l.attach),
-      fx:(l.fx!=null?l.fx:.5), fy:l.fy||60, h:l.r||40, lockX:l.attach==='flame'}));
+      fx:(l.fx!=null?l.fx:.5), fy:l.fy||60, h:l.r||40, a:l.a||1, lockX:l.attach==='flame'}));
   } else {
     // derive defaults from the loaded pieces (same as the game)
     np.filter(p=>p.candle!=null).forEach(p=>np.push({role:'light candle '+(p.candle?'R':'L'), light:'candle'+p.candle, kind:'candle', fx:p.fx, fy:(p.fy||118)+16, h:34}));
@@ -159,15 +160,15 @@ function glow(cx,cy,r,col,a){
   X.translate(cx,cy); X.fillStyle=g; X.fillRect(-r,-r,r*2,r*2); X.restore();
 }
 function lightAlpha(p){
-  const t=performance.now();
-  if(!anim) return 0.3;
+  const t=performance.now(), A=p.a||1;
+  if(!anim) return 0.3*A;
   if(p.kind==='candle'){ const sd=(p.light==='candle1')?4.1:1.3;
-    return 0.18+0.16*((Math.sin(t/91+sd)+Math.sin(t/37+sd*1.7))*0.25+0.5); }
-  if(p.kind==='vapor') return 0.20+0.10*Math.sin(t/600+(p.light==='venom1'?2:0));
+    return (0.18+0.16*((Math.sin(t/91+sd)+Math.sin(t/37+sd*1.7))*0.25+0.5))*A; }
+  if(p.kind==='vapor') return (0.20+0.10*Math.sin(t/600+(p.light==='venom1'?2:0)))*A;
   // heat: follow the brightest flame column
-  const rec=ART.flame; if(!rec||rec.frames.length<2) return 0.3;
+  const rec=ART.flame; if(!rec||rec.frames.length<2) return 0.3*A;
   let m=0; for(let c=0;c<4;c++) m=Math.max(m, frameIdx(rec,null,c)/(rec.frames.length-1));
-  return 0.55*Math.pow(m,1.3);
+  return 0.55*Math.pow(m,1.3)*A;
 }
 function render(){
   X.imageSmoothingEnabled=false;
@@ -199,7 +200,7 @@ function render(){
         const lp=pieces.find(q=>q.light==='flame');
         if(lp){ const rec=ART.flame, N=rec?rec.frames.length:0;
           const inten=N>1?frameIdx(rec,null,c)/(N-1):0.5;
-          glow(cx0+dw/2, FLOORY-lp.fy*S, lp.h*S, LIGHT_COL.heat, 0.55*Math.pow(inten,1.3)); } }
+          glow(cx0+dw/2, FLOORY-lp.fy*S, lp.h*S, LIGHT_COL.heat, 0.55*Math.pow(inten,1.3)*(lp.a||1)); } }
     }
     if(!any){
       X.strokeStyle='#666'; X.strokeRect(r.x,r.y,r.w,r.h);
@@ -223,7 +224,7 @@ function render(){
   X.fillStyle='#9fe'; X.font='12px monospace';
   const p=pieces[sel];
   X.fillText(`${p.role}: fx=${p.fx.toFixed(3)} fy=${Math.round(p.fy)}px ${p.light?'r':'h'}=${Math.round(p.h)}px`
-    +(p.trap?` layer=${p.layer||0}`:'')+(p.flip?' flipped':''), 10, 20);
+    +(p.trap?` layer=${p.layer||0}`:'')+(p.light?` intensity=${(p.a||1).toFixed(2)}×`:'')+(p.flip?' flipped':''), 10, 20);
 }
 setInterval(()=>{ if(anim) render(); }, 80);
 function refreshItems(){
@@ -263,12 +264,15 @@ window.addEventListener('keydown',e=>{
 function bump(f){ const p=pieces[sel]; p.h=Math.min(260,Math.max(8,p.h*f)); render(); }
 function flipSel(){ const p=pieces[sel]; if(!p.light){ p.flip=!p.flip; render(); } }
 function layerSel(d){ const p=pieces[sel]; if(p.trap){ p.layer=(p.layer||0)+d; refreshItems(); render(); } }
+function brightSel(f){ const p=pieces[sel]; if(p.light){ p.a=Math.min(3,Math.max(0.2,(p.a||1)*f)); render(); } }
 function fireNow(){ firedAt=performance.now(); }
 function buildJson(){
   const traps={}, candles=[], lights=[];
   for(const p of pieces){
     if(p.light){ const e={attach:p.light, fy:Math.round(p.fy), r:Math.round(p.h)};
-      if(!p.lockX) e.fx=+p.fx.toFixed(3); lights.push(e); continue; }
+      if(!p.lockX) e.fx=+p.fx.toFixed(3);
+      if(p.a && Math.abs(p.a-1)>0.01) e.a=+p.a.toFixed(2);
+      lights.push(e); continue; }
     const e={art:p.art, fx:+p.fx.toFixed(3), fy:Math.round(p.fy), h:Math.round(p.h)};
     if(p.flip) e.flip=true;
     if(p.n) e.n=p.n;
