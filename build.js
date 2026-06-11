@@ -42,6 +42,7 @@ const STATIC_PATHS = [
   'tower-defense-sprites',
   'night_shift',
   'no_room_for_heroes',
+  'chase_hq',
   'tools',
 ];
 
