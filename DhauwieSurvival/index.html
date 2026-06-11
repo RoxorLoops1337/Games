@@ -1301,6 +1301,8 @@ function makeCar(x, z, rot) {
 }
 
 // --- Streetlamp with point light ---
+// (declared before the makeLamp() calls below run at init time)
+const lampFlickers = [];
 function makeLamp(x, z) {
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.7, roughness: 0.5 });
   const g = new THREE.Group();
@@ -1331,17 +1333,63 @@ function makeLamp(x, z) {
   light.position.set(1.28, 4.9, 0);
   g.add(light);
 
+  const rotY = Math.random() * Math.PI * 2;
   g.position.set(x, 0, z);
-  g.rotation.y = Math.random() * Math.PI * 2;
+  g.rotation.y = rotY;
   scene.add(g);
-  obstacles.push({
+  // World-space position of the bulb head — the shootable target
+  const bulbPos = new THREE.Vector3(
+    x + Math.cos(rotY) * 1.28,
+    4.96,
+    z - Math.sin(rotY) * 1.28
+  );
+  const entry = {
     mesh: g,
     box: new THREE.Box3(
       new THREE.Vector3(x - 0.25, 0, z - 0.25),
       new THREE.Vector3(x + 0.25, 5.5, z + 0.25)
     ),
-    destructible: 'lamp', dHp: 30
-  });
+    destructible: 'lamp', dHp: 30,
+    lampLight: light,
+    lampBulbMat: bulb.material,
+    bulbPos,
+    lightOut: false
+  };
+  obstacles.push(entry);
+  // ~1 in 3 lamps has a dying ballast and flickers
+  if (Math.random() < 0.35) {
+    lampFlickers.push({ o: entry, t: Math.random() * 3, dim: false });
+  }
+}
+
+// Shooting the lamp head: glass shatters, sparks pop, the light dies —
+// but the pole stays standing.
+function shootOutLamp(o) {
+  o.lightOut = true;
+  o.lampLight.intensity = 0;
+  o.lampBulbMat.emissiveIntensity = 0;
+  o.lampBulbMat.color.setHex(0x222226);
+  spawnGlassFX(o.bulbPos);
+  spawnImpactFX(o.bulbPos);
+  playTone(1400, 0.08, 'square', 0.12);
+  playNoise(0.12, 0.15);
+}
+function updateLampFlickers(dt) {
+  for (const f of lampFlickers) {
+    if (f.o.lightOut) continue;
+    f.t -= dt;
+    if (f.t > 0) continue;
+    f.dim = !f.dim;
+    if (f.dim) {
+      f.o.lampLight.intensity = 0.15;
+      f.o.lampBulbMat.emissiveIntensity = 0.3;
+      f.t = 0.04 + Math.random() * 0.16;   // brief dropout
+    } else {
+      f.o.lampLight.intensity = 1.6;
+      f.o.lampBulbMat.emissiveIntensity = 2.8;
+      f.t = 0.6 + Math.random() * 3.0;     // steady stretch
+    }
+  }
 }
 
 // --- Dead tree ---
@@ -2012,7 +2060,230 @@ function explodeCar(o) {
   }
   const pd = Math.hypot(player.pos.x - pos.x, player.pos.z - pos.z);
   if (pd < 5) damagePlayer(Math.round(40 * (1 - pd / 5)));
+  const wreckRot = o.mesh.rotation.y;
   removeObstacle(o);
+  // Leave a charred wreck that burns and smokes instead of vanishing
+  const wreck = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, 0.55, 4.0),
+    new THREE.MeshStandardMaterial({ color: 0x17120e, roughness: 1.0 })
+  );
+  wreck.position.set(pos.x, 0.3, pos.z);
+  wreck.rotation.y = wreckRot;
+  wreck.castShadow = true;
+  scene.add(wreck);
+  obstacles.push({ mesh: wreck, box: new THREE.Box3().setFromObject(wreck), burnTtl: 22 });
+  const fireLight = new THREE.PointLight(0xff6622, 2.2, 10);
+  fireLight.position.set(pos.x, 1.1, pos.z);
+  scene.add(fireLight);
+  fires.push({ light: fireLight, ttl: 9, max: 9 });
+  gridDirty = true;
+}
+
+// === Realism layer: bullet holes, blood pools, smoke, fire, crows, skids ===
+
+// Persistent bullet-hole decals on static surfaces (shared geo + material)
+const bulletHoles = [];
+const bulletHoleGeo = new THREE.CircleGeometry(0.05, 8);
+const bulletHoleMat = new THREE.MeshBasicMaterial({
+  color: 0x0c0c0c, transparent: true, opacity: 0.85,
+  depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2
+});
+function boxFaceNormal(box, p) {
+  const d = [
+    { v: Math.abs(p.x - box.min.x), n: [-1, 0, 0] },
+    { v: Math.abs(p.x - box.max.x), n: [ 1, 0, 0] },
+    { v: Math.abs(p.y - box.min.y), n: [ 0,-1, 0] },
+    { v: Math.abs(p.y - box.max.y), n: [ 0, 1, 0] },
+    { v: Math.abs(p.z - box.min.z), n: [ 0, 0,-1] },
+    { v: Math.abs(p.z - box.max.z), n: [ 0, 0, 1] },
+  ];
+  d.sort((a, b) => a.v - b.v);
+  return new THREE.Vector3(...d[0].n);
+}
+function addBulletHole(pos, box) {
+  const n = boxFaceNormal(box, pos);
+  const m = new THREE.Mesh(bulletHoleGeo, bulletHoleMat);
+  m.position.copy(pos).add(n.clone().multiplyScalar(0.012));
+  m.lookAt(pos.clone().add(n));
+  m.scale.setScalar(0.8 + Math.random() * 0.7);
+  scene.add(m);
+  bulletHoles.push(m);
+  if (bulletHoles.length > 80) scene.remove(bulletHoles.shift());
+}
+
+// Glass spray (car windows, lamp bulbs)
+function spawnGlassFX(pos) {
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.012, 0.05),
+      new THREE.MeshBasicMaterial({ color: 0xbfdde8, transparent: true, opacity: 0.9 })
+    );
+    m.position.copy(pos);
+    const v = new THREE.Vector3(
+      (Math.random() - 0.5) * 5,
+      Math.random() * 2 + 0.5,
+      (Math.random() - 0.5) * 5
+    );
+    scene.add(m);
+    particles.push({ mesh: m, vel: v, life: 0.5, maxLife: 0.5 });
+  }
+}
+
+// Blood pools that spread under corpses where they land
+const bloodPools = [];
+const bloodPoolGeo = new THREE.CircleGeometry(1, 12);
+const bloodPoolMat = new THREE.MeshBasicMaterial({
+  color: 0x3a0505, transparent: true, opacity: 0.72,
+  depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1
+});
+function spawnBloodPool(x, z) {
+  const m = new THREE.Mesh(bloodPoolGeo, bloodPoolMat);
+  m.rotation.x = -Math.PI / 2;
+  m.rotation.z = Math.random() * Math.PI * 2;
+  m.position.set(x, 0.018 + Math.random() * 0.004, z);
+  m.scale.setScalar(0.05);
+  scene.add(m);
+  bloodPools.push({ mesh: m, target: 0.55 + Math.random() * 0.45, t: 0 });
+  if (bloodPools.length > 40) scene.remove(bloodPools.shift().mesh);
+}
+function updateBloodPools(dt) {
+  for (const p of bloodPools) {
+    if (p.t >= 1) continue;
+    p.t = Math.min(1, p.t + dt / 2.5);
+    // Ease-out spread, like blood soaking into dirt
+    const s = p.target * (1 - Math.pow(1 - p.t, 3));
+    p.mesh.scale.setScalar(Math.max(0.05, s));
+  }
+}
+
+// Damaged cars trail smoke from the hood; wrecks burn with embers
+const fires = [];
+let smokeTimer = 0;
+function spawnSmokePuff(x, y, z, dark) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.12, 0.12),
+    new THREE.MeshBasicMaterial({ color: dark ? 0x1c1c1c : 0x55534e, transparent: true, opacity: 0.5 })
+  );
+  m.position.set(x + (Math.random() - 0.5) * 0.4, y, z + (Math.random() - 0.5) * 0.4);
+  const v = new THREE.Vector3((Math.random() - 0.5) * 0.4, 1.0 + Math.random() * 0.8, (Math.random() - 0.5) * 0.4);
+  scene.add(m);
+  particles.push({ mesh: m, vel: v, life: 1.4, maxLife: 1.4, grow: 2.0 });
+}
+function updateVehicleSmoke(dt) {
+  smokeTimer -= dt;
+  const doSpawn = smokeTimer <= 0;
+  if (doSpawn) smokeTimer = 0.14;
+  for (const o of obstacles) {
+    // Wounded drivable cars smoke; below 30 HP the smoke turns black
+    if (o.isCar && o.hp < 60) {
+      if (!doSpawn) continue;
+      if (o.mesh.position.distanceToSquared(player.pos) > 3600) continue;
+      const rot = o.mesh.rotation.y;
+      spawnSmokePuff(
+        o.mesh.position.x + Math.sin(rot) * 1.3,
+        1.0,
+        o.mesh.position.z + Math.cos(rot) * 1.3,
+        o.hp < 30
+      );
+    } else if (o.burnTtl > 0) {
+      // Burning wreck: thick black smoke column + drifting embers
+      if (!doSpawn) continue;
+      o.burnTtl -= 0.14;
+      spawnSmokePuff(o.mesh.position.x, 0.9, o.mesh.position.z, true);
+      if (Math.random() < 0.5) {
+        const ember = new THREE.Mesh(
+          new THREE.BoxGeometry(0.04, 0.04, 0.04),
+          new THREE.MeshBasicMaterial({ color: 0xff8830, transparent: true, opacity: 1 })
+        );
+        ember.position.set(o.mesh.position.x, 0.7, o.mesh.position.z);
+        scene.add(ember);
+        particles.push({
+          mesh: ember,
+          vel: new THREE.Vector3((Math.random() - 0.5) * 1.2, 2 + Math.random() * 1.5, (Math.random() - 0.5) * 1.2),
+          life: 0.8, maxLife: 0.8, grow: 0.3
+        });
+      }
+    }
+  }
+  for (let i = fires.length - 1; i >= 0; i--) {
+    const f = fires[i];
+    f.ttl -= dt;
+    if (f.ttl <= 0) {
+      scene.remove(f.light);
+      fires.splice(i, 1);
+      continue;
+    }
+    // Fire flicker: noisy intensity that dies down as the fuel burns out
+    f.light.intensity = (f.ttl / f.max) * (1.6 + Math.random() * 1.4);
+  }
+}
+
+// Crows circling the skyline
+const crows = [];
+for (let i = 0; i < 5; i++) {
+  const cg = new THREE.Group();
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0x0a0a0c });
+  const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.28), wingMat);
+  wingL.position.x = -0.45;
+  cg.add(wingL);
+  const wingR = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.28), wingMat);
+  wingR.position.x = 0.45;
+  cg.add(wingR);
+  scene.add(cg);
+  crows.push({
+    g: cg, wingL, wingR,
+    r: 28 + Math.random() * 50,
+    h: 26 + Math.random() * 14,
+    a: Math.random() * Math.PI * 2,
+    speed: (0.05 + Math.random() * 0.08) * (Math.random() < 0.5 ? 1 : -1),
+    flap: Math.random() * 10,
+    cx: (Math.random() - 0.5) * 80,
+    cz: (Math.random() - 0.5) * 80
+  });
+}
+function updateCrows(dt) {
+  for (const c of crows) {
+    c.a += c.speed * dt * 2;
+    c.flap += dt * 9;
+    c.g.position.set(
+      c.cx + Math.cos(c.a) * c.r,
+      c.h + Math.sin(c.a * 3) * 1.5,
+      c.cz + Math.sin(c.a) * c.r
+    );
+    c.g.rotation.y = -c.a - (c.speed > 0 ? Math.PI / 2 : -Math.PI / 2);
+    const w = Math.sin(c.flap) * 0.55;
+    c.wingL.rotation.z =  w;
+    c.wingR.rotation.z = -w;
+  }
+}
+
+// Tire skid marks when drifting hard
+const skids = [];
+const skidGeo = new THREE.PlaneGeometry(0.22, 0.7);
+const skidMat = new THREE.MeshBasicMaterial({
+  color: 0x0a0a0a, transparent: true, opacity: 0.4,
+  depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1
+});
+let skidTimer = 0;
+function dropSkidMarks(carX, carZ, heading, dt) {
+  skidTimer -= dt;
+  if (skidTimer > 0) return;
+  skidTimer = 0.07;
+  const fwdX = -Math.sin(heading), fwdZ = -Math.cos(heading);
+  const rgtX =  Math.cos(heading), rgtZ = -Math.sin(heading);
+  for (const s of [-0.8, 0.8]) {
+    const m = new THREE.Mesh(skidGeo, skidMat);
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.z = -heading;
+    m.position.set(
+      carX - fwdX * 1.4 + rgtX * s,
+      0.014,
+      carZ - fwdZ * 1.4 + rgtZ * s
+    );
+    scene.add(m);
+    skids.push(m);
+    if (skids.length > 120) scene.remove(skids.shift());
+  }
 }
 
 // --- Flow-field pathfinding (BFS from player on a coarse grid) ---
@@ -2942,10 +3213,12 @@ class Zombie {
       this.ragVel.x *= 0.45;
       this.ragVel.z *= 0.45;
       if (Math.abs(this.ragVel.y) < 0.6) this.ragVel.y = 0;
-      // Spit a bit of dust/blood on the first ground impact
+      // Spit a bit of dust/blood on the first ground impact, and start a
+      // blood pool spreading under wherever the body actually landed
       if (!this._impacted) {
         this._impacted = true;
         spawnBloodBurst(this.mesh.position.clone().add(new THREE.Vector3(0, 0.2, 0)), 0x6a3018);
+        spawnBloodPool(this.mesh.position.x, this.mesh.position.z);
         if (this.deathStyle === 'headshot') addShake(0.08);
       }
       this.spinVel *= 0.7;
@@ -3449,8 +3722,20 @@ function shoot() {
       }
       if (!hitZombie) {
         endPoint = curOrigin.clone().add(dir.clone().multiplyScalar(Math.min(hitDist, remainingRange)));
+        // Street light bulbs are small spheres outside the pole's collision
+        // box — check the bullet path against them separately. The glass
+        // breaks but doesn't stop the bullet.
+        const segMax = Math.min(hitDist, remainingRange);
+        for (const lo of obstacles) {
+          if (lo.destructible !== 'lamp' || lo.lightOut || !lo.bulbPos) continue;
+          const v = lo.bulbPos.clone().sub(curOrigin);
+          const tB = v.dot(dir);
+          if (tB < 0 || tB > segMax) continue;
+          if (v.lengthSq() - tB * tB < 0.45 * 0.45) shootOutLamp(lo);
+        }
         // Surface hit: sparks/dust always; destructibles take damage,
-        // parked cars take hull damage and eventually explode.
+        // parked cars take hull damage and eventually explode; solid
+        // walls keep a permanent bullet hole.
         if (hitObstacle && hitDist < remainingRange - 0.01) {
           const impactPos = curOrigin.clone().add(dir.clone().multiplyScalar(hitDist));
           spawnImpactFX(impactPos);
@@ -3459,7 +3744,10 @@ function shoot() {
             damageDestructible(hitObstacle, obstDmg, dir);
           } else if (hitObstacle.isCar) {
             hitObstacle.hp -= obstDmg * 0.5;
+            spawnGlassFX(impactPos);
             if (hitObstacle.hp <= 0) explodeCar(hitObstacle);
+          } else {
+            addBulletHole(impactPos, hitObstacle.box);
           }
         }
         break;
@@ -4566,6 +4854,11 @@ function update(dt) {
     currentVehicle.mesh.rotation.y = vehicleHeading + Math.PI;
     currentVehicle.box.setFromObject(currentVehicle.mesh);
 
+    // Drifting hard at speed lays down rubber
+    if (Math.abs(steer) > 0.45 && Math.abs(vehicleSpeed) > 8) {
+      dropSkidMarks(currentVehicle.mesh.position.x, currentVehicle.mesh.position.z, vehicleHeading, dt);
+    }
+
     // Ram zombies
     if (Math.abs(vehicleSpeed) > 5) {
       for (const z of zombies) {
@@ -4603,6 +4896,7 @@ function update(dt) {
     // Look stays free (mouse), but yaw is biased toward vehicle direction
     camera.rotation.y = vehicleHeading + (player.yaw - (player._lastVehicleYaw || vehicleHeading)) * 0; // lock yaw to vehicle
     camera.rotation.x = player.pitch;
+    camera.rotation.z = 0;
     player.yaw = vehicleHeading; // keep player.yaw synced so mouse delta works on exit
 
     // Flashlight forward
@@ -4641,10 +4935,20 @@ function update(dt) {
     player.vel.y -= GRAVITY * dt;
     delta.y = player.vel.y * dt;
 
+    const preVelY = player.vel.y;
     tryMove(delta);
     unstickPlayer();
+    // Landing thud: camera dips proportionally to fall speed
+    if (!player._wasOnGround && player.onGround) {
+      player._landDip = Math.min(0.18, Math.abs(preVelY) * 0.014);
+      if (Math.abs(preVelY) > 6) playNoise(0.06, 0.10);
+    }
+    player._wasOnGround = player.onGround;
+    player._landDip = (player._landDip || 0) * Math.pow(0.002, dt);
 
     const moving = moveDir.lengthSq() > 0 && player.onGround;
+    // Head bob blends in/out smoothly so stopping doesn't snap the camera
+    player._bobAmt = (player._bobAmt || 0) + ((moving ? 1 : 0) - (player._bobAmt || 0)) * Math.min(1, dt * 8);
     if (moving) player.weaponBob += dt * (keys['ShiftLeft'] ? 12 : 8);
     if (weaponMesh) {
       // Reload animation: weapon tilts down + sideways during reload, returns
@@ -4688,6 +4992,9 @@ function update(dt) {
     }
 
     camera.position.copy(player.pos);
+    // Head bob (synced to weapon bob) + landing dip
+    camera.position.y += Math.abs(Math.sin(player.weaponBob)) * 0.045 * (player._bobAmt || 0)
+                       - (player._landDip || 0);
     if (shakeAmt > 0.001) {
       camera.position.x += (Math.random() - 0.5) * shakeAmt;
       camera.position.y += (Math.random() - 0.5) * shakeAmt;
@@ -4697,6 +5004,8 @@ function update(dt) {
     camera.rotation.order = 'YXZ';
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
+    // Subtle camera roll while strafing-walking — sells the body movement
+    camera.rotation.z = Math.sin(player.weaponBob) * 0.006 * (player._bobAmt || 0);
 
     flashlight.position.copy(camera.position);
     const fdir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -4818,6 +5127,10 @@ function update(dt) {
 
   updateParticles(dt);
   updateDebris(dt);
+  updateLampFlickers(dt);
+  updateBloodPools(dt);
+  updateVehicleSmoke(dt);
+  updateCrows(dt);
   updateDmgNumbers(dt);
   updateKillFeed(dt);
   updateStreakTimer(dt);
