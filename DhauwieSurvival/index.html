@@ -762,7 +762,19 @@ let bloomPass = null;
     // Image-based lighting: every PBR material picks up soft studio
     // reflections — car paint, gun metal, glass all read as real surfaces.
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    // Horror mode: no image-based lighting. We want surfaces dead-black
+    // unless directly lit by the flashlight or a street lamp. We still
+    // need PBR-style reflections to look "metallic" up close, so feed a
+    // tiny pre-baked black env map so metals stay metal-shaped instead of
+    // glowing pure white from a missing reflection.
+    const darkEnvCanvas = document.createElement('canvas');
+    darkEnvCanvas.width = darkEnvCanvas.height = 16;
+    const dc = darkEnvCanvas.getContext('2d');
+    dc.fillStyle = '#0a0c12';
+    dc.fillRect(0, 0, 16, 16);
+    const darkEnvScene = new THREE.Scene();
+    darkEnvScene.background = new THREE.CanvasTexture(darkEnvCanvas);
+    scene.environment = pmrem.fromScene(darkEnvScene, 0.5).texture;
     // HDR composer: render in half-float, bloom the bright emissives
     // (muzzle flash, lamps, beacon, zombie eyes), then tone-map at the end.
     const c = new EffectComposer(renderer);
@@ -801,28 +813,23 @@ addEventListener('resize', () => {
   if (composer) composer.setSize(innerWidth, innerHeight);
 });
 
-// Near-black ambient: just enough cold tint so geometry isn't pure black
-const hemi = new THREE.HemisphereLight(0x1a2230, 0x05060a, 0.10);
+// True horror dark — NO ambient, NO directional moonlight. Geometry is
+// dead-black unless directly hit by the flashlight or a street lamp.
+// A near-zero hemisphere just gives a hint of cool tint to silhouettes
+// near light sources so they don't look completely solid.
+const hemi = new THREE.HemisphereLight(0x0a1018, 0x000000, 0.015);
 scene.add(hemi);
-// Cold dim moonlight from above, still casts shadows
-const moon = new THREE.DirectionalLight(0x7990b8, 0.18);
-moon.position.set(40, 80, 30);
-moon.castShadow = true;
-moon.shadow.mapSize.set(2048, 2048);
-moon.shadow.bias = -0.0004;
-moon.shadow.normalBias = 0.02;
-moon.shadow.camera.left = -120;
-moon.shadow.camera.right = 120;
-moon.shadow.camera.top = 120;
-moon.shadow.camera.bottom = -120;
-moon.shadow.camera.near = 1;
-moon.shadow.camera.far = 200;
-scene.add(moon);
 
-// Player flashlight — your only personal light. Tight cone, decent throw,
-// warm bulb. Bloom makes it read as a real beam.
-const flashlight = new THREE.SpotLight(0xffe6bb, 4.0, 30, Math.PI / 6.5, 0.28, 1.0);
+// Player flashlight — your only personal light, and it now does heavy
+// lifting since nothing else illuminates the world. Tight cone, long
+// throw, casts real-time shadows.
+const flashlight = new THREE.SpotLight(0xffe6bb, 6.5, 34, Math.PI / 5.5, 0.22, 1.0);
 flashlight.position.copy(camera.position);
+flashlight.castShadow = true;
+flashlight.shadow.mapSize.set(1024, 1024);
+flashlight.shadow.bias = -0.0008;
+flashlight.shadow.camera.near = 0.2;
+flashlight.shadow.camera.far = 34;
 scene.add(flashlight);
 scene.add(flashlight.target);
 // Tiny warm point hanging right at the camera — sells "something in your
@@ -1165,35 +1172,44 @@ const labPos = new THREE.Vector3(90, 0, 90);
   addBox(labPos.x, 10, labPos.z, 3, 0.6, 0.6, 0xffffff);
 }
 
-// === Night atmosphere: starry sky, moon, scattered window lights ===
+// === Night atmosphere: black void sky, real stars, moon, window lights ===
 
-// Night sky dome — deep black at zenith fading to dim navy at horizon,
-// peppered with stars.
+// Pure black void background — no gradient bands, no painted-on stars.
+// Just the absence of light, the way real night feels when the grid is down.
+scene.background = new THREE.Color(0x000000);
+
+// Real Points-based stars: 2000 sharp pixels scattered on a giant sphere,
+// upper hemisphere only so they don't show through the ground. Looks
+// crisp at any FOV, bloom adds the halo for free.
 {
-  const skyCanvas = document.createElement('canvas');
-  skyCanvas.width = 4; skyCanvas.height = 512;
-  const skyG = skyCanvas.getContext('2d');
-  const grad = skyG.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0,    '#000003');  // zenith black
-  grad.addColorStop(0.35, '#020412');  // upper dark
-  grad.addColorStop(0.75, '#08101c');  // dim navy
-  grad.addColorStop(1,    '#040608');  // ground horizon
-  skyG.fillStyle = grad;
-  skyG.fillRect(0, 0, 4, 512);
-  // Many faint stars across the entire upper hemisphere
-  for (let i = 0; i < 220; i++) {
-    skyG.globalAlpha = 0.3 + Math.random() * 0.7;
-    skyG.fillStyle = Math.random() < 0.15 ? '#aac8ff' : '#ffffff';
-    skyG.fillRect(Math.random() * 4, Math.random() * 340, 1, 1);
+  const STAR_COUNT = 2000;
+  const positions = new Float32Array(STAR_COUNT * 3);
+  const colors = new Float32Array(STAR_COUNT * 3);
+  const R = 400;
+  for (let i = 0; i < STAR_COUNT; i++) {
+    // Uniform distribution on upper-hemisphere cap (cosine-weighted to
+    // avoid a dense ring at the equator)
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(0.05 + Math.random() * 0.95); // 0..~1.5 rad from zenith
+    positions[i * 3]     = R * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = R * Math.cos(phi);
+    positions[i * 3 + 2] = R * Math.sin(phi) * Math.sin(theta);
+    // Most stars white, a few cold-blue or warm-amber
+    const r = Math.random();
+    if (r < 0.85)      { colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0; }
+    else if (r < 0.95) { colors[i * 3] = 0.7; colors[i * 3 + 1] = 0.8; colors[i * 3 + 2] = 1.0; }
+    else               { colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.85;colors[i * 3 + 2] = 0.6; }
+    // Varied brightness using point size attenuation done via scale below
   }
-  skyG.globalAlpha = 1;
-  const skyTex = new THREE.CanvasTexture(skyCanvas);
-  skyTex.colorSpace = THREE.SRGBColorSpace;
-  const skyGeo = new THREE.SphereGeometry(420, 32, 18);
-  const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false });
-  const sky = new THREE.Mesh(skyGeo, skyMat);
-  scene.add(sky);
-  scene.background = null;
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const starMat = new THREE.PointsMaterial({
+    size: 1.8, sizeAttenuation: false, vertexColors: true,
+    transparent: true, opacity: 0.95, depthWrite: false, fog: false
+  });
+  const stars = new THREE.Points(starGeo, starMat);
+  scene.add(stars);
 }
 
 // Cold moon hanging in the sky — small glowing disc + soft halo
