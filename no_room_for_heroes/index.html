@@ -2539,7 +2539,7 @@ function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
   G.brokenCells={};                              // doorways get patched up between waves
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
-  else ensureQueue(Math.max(3, G.guildLvl+1));   // endless: pre-roll the next arrivals to preview
+  else ensureQueue(Math.max(3, G.guildLvl+1+(hasEdict('warband')?1:0)));   // endless: pre-roll the next arrivals to preview (Warband +1)
   smithyRestock();                                // Dark Smithy: free shop stock
   frameWave();                                    // the gameplay framing (boss right, gate + a slice of landscape)
   if(first){
@@ -4672,7 +4672,7 @@ function drawWaitingHeroes(tx){
   // alone, otherwise the guild-sized party.
   let n;
   if(G.mode==='campaign') n=Math.min(G.queue.length, 9);
-  else n=G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1);
+  else n=G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0));
   const hasChamp = G.queue.slice(0,n).some(s=>s.champion);
   // gate line at the entrance
   X.strokeStyle='rgba(120,100,170,.5)'; X.setLineDash([4,5]); X.lineWidth=2;
@@ -5722,7 +5722,7 @@ function entityAt(wx){
   // upcoming heroes waiting in the staging zone (build) — match drawWaitingHeroes
   if(G.phase==='build' && G.queue && G.queue.length && wx<0){
     const n = G.mode==='campaign' ? Math.min(G.queue.length, 9)
-            : (G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1));
+            : (G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0)));
     let best=-1,bd=24;
     for(let k=0;k<n;k++){ const hx=-STAGEW*0.62+k*14; const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
     if(best>=0) return {kind:'queuehero', spec:G.queue[best]};
