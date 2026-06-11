@@ -4019,12 +4019,17 @@ function update(dt){
     setTimeout(afterWave, 850);
   }
 
-  // camera follows the lead hero — but pause the auto-follow for a moment after
-  // you pan, so you can scroll over to inspect the boss on the right.
-  const lead=G.hero;
-  if(!panning && performance.now()>panHoldUntil && lead){
+  // Camera anchors as far RIGHT as it can while every living hero stays in
+  // frame: leftmost hero - margin is the left edge; the right limit pins the
+  // boss to the screen edge. (Old behaviour tracked the lead → centred the
+  // view as heroes advanced, dragging it left even though the throne was the
+  // important thing.)
+  if(!panning && performance.now()>panHoldUntil && G.heroes && G.heroes.length){
     const mxT=corridorWidth()-VW;
-    const target=clamp(lead.x - VW*0.42, Math.min(minCam(),mxT), mxT);
+    let leftmost=Infinity;
+    for(const h of G.heroes) if(h && h.state!=='dead' && h.x<leftmost) leftmost=h.x;
+    if(!isFinite(leftmost)) leftmost=corridorWidth();
+    const target=clamp(leftmost-24, Math.min(minCam(),mxT), mxT);
     camX += (target-camX)*Math.min(1,dt*6);
   }
 }
