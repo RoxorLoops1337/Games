@@ -2708,7 +2708,7 @@ function startWave(){
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
   spawnGroup(G.guildLvl+1);
-  G.phase='run'; speedMul=1; frameWave();         // same framing for the wave — heroes march in from the left edge
+  G.phase='run'; speedMul=1; frameWaveRun();      // hug the right edge, heroes just in frame
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
   if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
@@ -4066,7 +4066,7 @@ function simStep(h,dt){
   const frozen = h.freeze>0;
   if(frozen) h.freeze-=dt;
 
-  const cell=cellAt(h.x);
+  const cell=(h.x>=0)?cellAt(h.x):null;   // still marching in → no cell, no traps
   if(cell && cell.index!==h.cellIndex && h.state==='walking' && !frozen){
     h.cellIndex=cell.index; onEnterCell(h,cell);
   }
@@ -4284,7 +4284,8 @@ function trapTick(h,cell,dt){
 // which hero is standing on them — and strike EVERY live hero whose room is
 // within the blast radius. This rewards a long, strung-out corridor (the party
 // spread across rooms all eat the same shell) rather than one bunched kill-room.
-function heroCellIndex(o){ return (o.cellIndex>=0 && o.cellIndex<G.cells.length) ? o.cellIndex : cellAt(o.x).index; }
+function heroCellIndex(o){ if(o.x<0) return -1;   // outside the gate — untargetable
+  return (o.cellIndex>=0 && o.cellIndex<G.cells.length) ? o.cellIndex : cellAt(o.x).index; }
 function aoeTrapTick(dt){
   if(G.phase!=='run' || !G.heroes.length) return;
   const doc=bossDoc();
@@ -4297,7 +4298,7 @@ function aoeTrapTick(dt){
       tr.fireT-=dt;
       if(tr.fireT>0) continue;                       // still charging
       // find targets in range; if none, hold the charge until someone is
-      const lo=cell.index-d.aoe, hi=cell.index+d.aoe;
+      const lo=Math.max(0, cell.index-d.aoe), hi=cell.index+d.aoe;   // never reach outside the gate
       const targets=G.heroes.filter(o=>o && o.state!=='dead' && heroCellIndex(o)>=lo && heroCellIndex(o)<=hi);
       if(!targets.length) continue;
       tr.fireT=d.rate * (hasMandate('hairTrigger')?0.88:1);
@@ -4740,7 +4741,7 @@ function drawTrapPart(x0,w,type,p,pi,cell){
       if(l) drawGlow(x0+w*fx, FLOOR-(l.fy||70), l.r||56, LIGHT_COL.heat, 0.55*Math.pow(inten,1.3)*(l.a||1)); }
     else if(type==='venom'){ const l=lightCfg('venom'+pi);
       if(l) drawGlow(x0+w*(l.fx!=null?l.fx:fx), FLOOR-(l.fy||34), l.r||44, LIGHT_COL.vapor,
-        (0.20+0.10*Math.sin(performance.now()/600+seed*2.1))*(l.a||1)); }
+        0.32*(l.a||1)*(0.825+0.175*Math.sin(performance.now()/260+seed*2.1))); }   // 65–100% of peak, quick simmer
   }
   X.imageSmoothingEnabled=sm;
   return drew;
@@ -5885,6 +5886,15 @@ function zoomBy(f){ setZoom(zoom*f); draw(); }
 // room's worth of landscape beyond it — used at wave start and back in build.
 function frameWave(){ if(!G) return;
   const vis=Math.min(corridorWidth()-worldLeft(), corridorWidth()+STAGEW+ROOM_W);
+  zoom=clamp(VW/Math.max(1,vis), zMin(), ZMAX);
+  camX=corridorWidth()-VW/zoom; draw();
+}
+// Wave-start framing: camera as far RIGHT as possible while the marching
+// party is still in frame (leftmost hero + a small margin → right edge = boss).
+function frameWaveRun(){ if(!G) return;
+  let heroLeft=-STAGEW;
+  if(G.heroes&&G.heroes.length) heroLeft=Math.min.apply(null,G.heroes.map(h=>h.x));
+  const vis=corridorWidth()-(heroLeft-24);
   zoom=clamp(VW/Math.max(1,vis), zMin(), ZMAX);
   camX=corridorWidth()-VW/zoom; draw();
 }
