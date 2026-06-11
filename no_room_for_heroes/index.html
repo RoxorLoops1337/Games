@@ -1560,6 +1560,22 @@ function titleLogoFail(img){
 }
 function leaveTitle(){ overlay.classList.remove('titlemode'); openTitle(); }
 
+// Options — music & SFX mixer, reachable from the main menu (the same
+// sliders also live in the in-run pause menu).
+function openOptions(){
+  uiScreen='menu';
+  overlay.classList.add('show');
+  overlay.innerHTML=`<h1>\u2699\uFE0F Options</h1>
+    <div style="display:flex;flex-direction:column;gap:13px;width:min(360px,90%);margin:10px 0">
+      <div class="pauserow"><label>\uD83C\uDFB5 Music</label>
+        <input type="range" min="0" max="100" value="${Math.round(musVol*100)}" oninput="setMusVol(this.value/100)"></div>
+      <div class="pauserow"><label>\uD83D\uDD0A Sound FX</label>
+        <input type="range" min="0" max="100" value="${Math.round(sfxVol*100)}" oninput="setSfxVol(this.value/100)"></div>
+      <div class="pauserow"><label>${audioOn?'\uD83D\uDD0A':'\uD83D\uDD07'} Audio</label>
+        <button onclick="toggleAudio();openOptions()">${audioOn?'On \u2014 tap to mute':'Muted \u2014 tap to enable'}</button></div>
+    </div>
+    <div class="menu-btns"><button onclick="gotoMenu()">\u2190 Back</button></div>`;
+}
 // Four grouped buttons, each leading to a small submenu (no link clutter).
 function gotoMenu(){
   uiScreen='menu';
@@ -1577,6 +1593,7 @@ function gotoMenu(){
       <button style="min-width:250px" onclick="openStronghold()">🏰 Stronghold${sub('runes · town · unlocks')}</button>
       <button style="min-width:250px" onclick="openLibrary()">📖 Library${sub('combo codex · how to play')}</button>
       <button style="min-width:250px" onclick="openTitle()">💾 Save Slots${sub('switch profile')}</button>
+      <button style="min-width:250px" onclick="openOptions()">\u2699\uFE0F Options${sub('music & sfx mixer')}</button>
     </div>`;
 }
 // Start Game → pick a mode.
@@ -4701,12 +4718,16 @@ function drawTrapProp(x0,w,cx,type,cell){
   // n>1 is duplicated n copies across the room (the flame jet: one column of
   // art, four columns drawn, each firing ~50ms after the last → a sweep).
   const parts=(LAYOUT.traps&&LAYOUT.traps[type])||[{art:type,fx:.5,fy:0,h:100}];
+  const i_loopSeed=cell?cell.index*3+1:1;   // stagger loops per room
   let drew=false;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
   for(const p of parts){
     const n=p.n||1, gap=p.gap||0.2;
     for(let c=0;c<n;c++){
-      const art=artFrame(p.art||type, firedAt!=null?firedAt+c*50:null);
+      const mode=p.mode||TRAP_ANIM[type];
+      const art=(mode==='loop')
+        ? artFrame(p.art||type, null, c*4+i_loopSeed)
+        : artFrame(p.art||type, firedAt!=null?firedAt+c*50:null);
       if(!(art&&(art._ok||art.complete)&&art.width)) continue;
       drew=true;
       const dh=p.h||100, dw=dh*(art.width/art.height);
@@ -4853,6 +4874,9 @@ let LAYOUT={
 // In-room layering when a fused room has several traps: low draws first.
 // Poison behind everything, flames over it, spikes ALWAYS on top.
 const TRAP_LAYER={venom:0, flame:1, spike:9};
+// Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
+// (continuous). The poison vents pour non-stop.
+const TRAP_ANIM={venom:'loop'};
 // The flame jet shows FOUR columns from the one uploaded animation: the single
 // part from the layout is duplicated (n) across the room with a per-column
 // fire cascade. (More efficient than baking 4 flames into the frames.)
