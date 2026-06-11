@@ -1561,9 +1561,11 @@ function openPlay(){
 }
 /* 🏆 Endless leaderboard — Cloudflare Pages Function (/api/board) + KV.
    Fails soft: if the function/KV binding isn't deployed, the screen says so. */
+// Boards come as {day,week,month,all} (older server: just {top} → map to all).
+function lbShape(j){ return { day:j.day||[], week:j.week||[], month:j.month||[], all:j.all||j.top||[] }; }
 async function lbFetch(){
   for(let a=0;a<3;a++){                                  // transient fetch hiccups: retry with backoff
-    try{ const r=await fetch('/api/board'); if(r.ok) return (await r.json()).top||[]; }catch(_){ }
+    try{ const r=await fetch('/api/board'); if(r.ok) return lbShape(await r.json()); }catch(_){ }
     await new Promise(res=>setTimeout(res, 350*(a+1)));
   }
   return null;
@@ -1572,7 +1574,7 @@ async function lbSubmit(score){
   for(let a=0;a<2;a++){
     try{ const r=await fetch('/api/board',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({name:lbName(), score})});
-      if(r.ok) return (await r.json()).top||[];
+      if(r.ok) return lbShape(await r.json());
       if(r.status===429) return lbFetch();               // throttled — the score is likely already up there
     }catch(_){ }
     await new Promise(res=>setTimeout(res, 500));
@@ -1585,10 +1587,18 @@ function lbName(){
     if(n){ try{ localStorage.setItem('bm_lbname',n); }catch(_){ } } }
   return n||'Anonymous';
 }
-function renderLB(top){
+let LB_DATA=null, LB_TAB='day';
+const LB_TABS=[['day','📅 Daily'],['week','🗓️ Weekly'],['month','📆 Monthly'],['all','👑 All-time']];
+function lbPickTab(t){ LB_TAB=t; renderLB(LB_DATA); }
+function renderLB(boards){
+  LB_DATA=boards;
+  const tabs=document.getElementById('lbtabs');
+  if(tabs) tabs.innerHTML=LB_TABS.map(([k,lbl])=>
+    `<button onclick="lbPickTab('${k}')" style="padding:6px 10px;min-height:30px;font-size:9px;${k===LB_TAB?'border-color:var(--gold);color:var(--gold);':''}">${lbl}</button>`).join('');
   const el=document.getElementById('lbbody'); if(!el) return;
-  if(top===null){ el.innerHTML='Leaderboard offline — the server isn\'t set up yet (KV binding "BOARD" in the Cloudflare Pages project).'; return; }
-  if(!top.length){ el.innerHTML='No entries yet — be the first!'; return; }
+  if(boards===null){ el.innerHTML='Leaderboard offline — the server isn\'t set up yet (KV binding "BOARD" in the Cloudflare Pages project).'; return; }
+  const top=boards[LB_TAB]||[];
+  if(!top.length){ el.innerHTML='No entries '+(LB_TAB==='all'?'yet':'this '+(LB_TAB==='day'?'day':LB_TAB))+' — be the first!'; return; }
   el.innerHTML='<div style="max-width:320px;margin:0 auto;text-align:left;line-height:1.8">'
     +top.slice(0,10).map((e,i)=>`<div style="display:flex;justify-content:space-between;gap:14px">
       <span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${e.name}</span><b style="color:#ffd34d">${e.score}</b></div>`).join('')+'</div>';
@@ -1596,11 +1606,13 @@ function renderLB(top){
 function openLeaderboard(){
   overlay.classList.add('show');
   overlay.innerHTML=`<h1>🏆 Endless Leaderboard</h1>
+    <div id="lbtabs" class="menu-btns" style="gap:6px;margin-top:4px"></div>
     <p class="small" id="lbbody" style="opacity:.9">Loading…</p>
     <p class="small" style="opacity:.7">Your endless best: <b style="color:#ffd34d">${RUNES.best||0}</b> slain</p>
     <div class="menu-btns">
       ${(RUNES.best||0)>0?`<button class="go" onclick="lbSend()">📤 Submit my best (${RUNES.best})</button>`:''}
       <button onclick="openPlay()">← Back</button></div>`;
+  renderLB(LB_DATA);                       // show cached boards instantly, then refresh
   lbFetch().then(renderLB);
 }
 async function lbSend(){
