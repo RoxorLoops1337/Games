@@ -4025,7 +4025,8 @@ function update(dt){
   // view as heroes advanced, dragging it left even though the throne was the
   // important thing.)
   if(!panning && performance.now()>panHoldUntil && G.heroes && G.heroes.length){
-    const mxT=corridorWidth()-VW;
+    const visW=VW/zoom;                            // ACTUAL visible width at the current zoom
+    const mxT=corridorWidth()-visW;                // boss flush right
     let leftmost=Infinity;
     for(const h of G.heroes) if(h && h.state!=='dead' && h.x<leftmost) leftmost=h.x;
     if(!isFinite(leftmost)) leftmost=corridorWidth();
