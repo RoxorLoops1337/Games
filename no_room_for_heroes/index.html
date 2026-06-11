@@ -200,6 +200,35 @@
     button{padding:8px 10px;}
   }
   @media (max-width:380px){ .bar{width:64px;} #topbar{font-size:10px;} }
+  /* SHORT screens (landscape phones ~360-480px tall): compact everything so
+     the dungeon gets the height, not the chrome. Buttons especially — the
+     desktop pixel buttons read comically big at this size. */
+  @media (max-height:540px){
+    button{padding:6px 10px;font-size:9px;min-height:30px;box-shadow:0 2px 0 #100b22, inset 0 0 0 1px rgba(255,255,255,.05);}
+    button.go{box-shadow:0 2px 0 #14401f, inset 0 0 0 1px rgba(255,255,255,.08);}
+    button.buy{box-shadow:0 2px 0 #2e2408, inset 0 0 0 1px rgba(255,255,255,.07);}
+    .menu-btns{gap:8px;margin-top:8px;}
+    .menu-btns button{font-size:9px;padding:9px 14px;}
+    #topbar{font-size:11px;gap:4px;padding:3px 7px 3px;}
+    .stat{padding:1px 6px;gap:3px;} .stat b{font-size:12px;}
+    .bar{width:90px;height:12px;}
+    #panel{min-height:52px;padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px));}
+    .row{gap:5px;}
+    .card{width:58px;min-height:48px;} .card .ic .cardimg{width:36px;height:36px;}
+    .abil{min-width:54px;padding:3px 5px;}
+    #overlay h1{font-size:20px;} #overlay h2{font-size:13px;margin:3px 0;}
+    #overlay p{font-size:12px;margin:4px 0;}
+    .choices{gap:8px;margin-top:6px;}
+    .choice{width:124px;padding:8px;} .choice .big{font-size:26px;} .choice h3{font-size:13px;}
+    .choice .big .cardimg{width:52px;height:52px;}
+    #inspect{font-size:11px;line-height:1.4;padding:6px 22px 6px 8px;}
+    #inspect button{min-height:26px;padding:4px 8px;font-size:8px;}
+    .pauserow button{font-size:8px;min-height:26px;}
+    #zoomctl button,.rbzoom button{width:28px;height:28px;font-size:15px;}
+    #pausebtn,#audiobtn{width:28px;height:28px;font-size:13px;}
+    .titlestart button{font-size:11px;padding:10px 20px;min-height:40px;}
+    .titlelogo{width:min(300px,46%);}
+  }
   /* inspection tooltip */
   #inspect{position:absolute;left:8px;bottom:8px;max-width:min(340px,calc(100% - 16px));
     background:rgba(12,9,22,.94);border:1.5px solid var(--accent);border-radius:10px;
@@ -5770,15 +5799,21 @@ loadRunes();
 loadTown();
 loadAudioPref();
 loadVolPrefs();
-// Phones: try to lock landscape on the first tap (needs fullscreen on
-// Android Chrome; iOS doesn't support locking — the #rotate gate covers it).
+// Phones: keep the game fullscreen (hides the browser's address bar). Not
+// once-only — if the first attempt fails or the user drops out of fullscreen,
+// the next tap re-engages it. Throttled so an intentional exit isn't fought
+// more than once per few seconds.
+let _fsLast=0;
 window.addEventListener('pointerdown', async ()=>{
   try{
     if(Math.min(screen.width||9999, screen.height||9999) > 560) return;   // phones only
-    if(document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+    if(document.fullscreenElement) return;                                // already fullscreen
+    const now=Date.now(); if(now-_fsLast<3000) return; _fsLast=now;
+    if(document.documentElement.requestFullscreen)
+      await document.documentElement.requestFullscreen({navigationUI:'hide'});
     if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
   }catch(_){ }
-}, {once:true});
+});
 // Audio can only start after a user gesture; wake it on the first interaction.
 window.addEventListener('pointerdown', ()=>{ if(audioOn) initAudio(); }, {once:false});
 window.addEventListener('keydown', ()=>{ if(audioOn) initAudio(); }, {once:false});
