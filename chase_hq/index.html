@@ -168,28 +168,43 @@
     text-shadow:0 2px 6px #000; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
     transition:transform .08s, background .08s; }
   .tBtn:active, .tBtn.pressed{ transform:scale(0.92); background:radial-gradient(circle at 30% 30%, rgba(255,210,61,.45), rgba(120,60,0,.55)); }
-  /* gas + brake styled like vertical foot pedals (rounded slab, tilted/raised look) */
-  .tBtn.pedal{ border-radius:18px 18px 28px 28px;
-    flex-direction:column; gap:6px; font-size:16px; letter-spacing:3px;
-    border-width:2px; border-style:solid; padding:8px 0;
-    box-shadow:inset 0 8px 18px rgba(255,255,255,.08), 0 6px 0 rgba(0,0,0,.45), 0 12px 22px rgba(0,0,0,.55); }
-  .tBtn.pedal .ic{ font-size:30px; line-height:1; }
-  .tBtn.pedal:active, .tBtn.pedal.pressed{ transform:translateY(4px) scale(0.98);
-    box-shadow:inset 0 8px 18px rgba(255,255,255,.16), 0 2px 0 rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.55); }
+  /* compact vertical foot pedals */
+  .tBtn.pedal{ border-radius:14px 14px 22px 22px;
+    flex-direction:column; gap:3px; font-size:11px; letter-spacing:2px;
+    border-width:2px; border-style:solid; padding:6px 0;
+    box-shadow:inset 0 6px 14px rgba(255,255,255,.08), 0 5px 0 rgba(0,0,0,.45), 0 10px 18px rgba(0,0,0,.55); }
+  .tBtn.pedal .ic{ font-size:22px; line-height:1; }
+  .tBtn.pedal:active, .tBtn.pedal.pressed{ transform:translateY(3px) scale(0.98);
+    box-shadow:inset 0 6px 14px rgba(255,255,255,.16), 0 2px 0 rgba(0,0,0,.5), 0 4px 10px rgba(0,0,0,.55); }
   .tBtn.gas{ background:linear-gradient(180deg,#1e6a32 0%,#0e3a1a 100%); border-color:#5fff9a; color:#dfffe8; }
   .tBtn.gas.pressed{ background:linear-gradient(180deg,#5fffa0 0%,#1d6a3a 100%); color:#fff;
-    box-shadow:inset 0 8px 18px rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.5), 0 0 24px rgba(70,255,130,.6); }
+    box-shadow:inset 0 6px 14px rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.5), 0 0 22px rgba(70,255,130,.6); }
   .tBtn.brake{ background:linear-gradient(180deg,#7a1818 0%,#3a0a0a 100%); border-color:#ff7070; color:#ffe0e0; }
   .tBtn.brake.pressed{ background:linear-gradient(180deg,#ff5050 0%,#8a1a1a 100%); color:#fff;
-    box-shadow:inset 0 8px 18px rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.5), 0 0 24px rgba(255,80,80,.6); }
-  .tBtn.turbo{ background:radial-gradient(circle at 30% 30%, rgba(255,180,40,.35), rgba(80,30,0,.6));
-    border-color:#ffb040; box-shadow:0 0 14px rgba(255,150,40,.5); font-size:18px; letter-spacing:2px; }
-  #tLeft  { left:18px;  bottom:18px;  width:78px; height:78px; }
-  #tRight { left:108px; bottom:18px;  width:78px; height:78px; }
-  #tGas   { right:18px; bottom:18px;  width:78px; height:150px; }
-  #tBrake { right:104px; bottom:18px; width:70px; height:120px; }
-  #tTurbo { right:184px; bottom:18px; width:70px; height:70px; }
-  #tPause { left:18px;  top:18px;     width:42px; height:42px; font-size:18px; }
+    box-shadow:inset 0 6px 14px rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.5), 0 0 22px rgba(255,80,80,.6); }
+  /* NITRO horizontal pill sits above the two pedals */
+  .tBtn.turbo{ border-radius:22px;
+    background:linear-gradient(180deg, rgba(255,200,80,.55), rgba(120,50,0,.75));
+    border-color:#ffb040; color:#fff2c0;
+    box-shadow:0 0 16px rgba(255,150,40,.55), inset 0 4px 10px rgba(255,255,255,.18);
+    font-size:14px; letter-spacing:3px; }
+  .tBtn.turbo.pressed{ background:linear-gradient(180deg,#fff2a0,#ff7a18); color:#3a1500; }
+  #tGas   { right:18px;  bottom:18px;  width:64px;  height:96px; }
+  #tBrake { right:90px;  bottom:18px;  width:64px;  height:96px; }
+  #tTurbo { right:18px;  bottom:124px; width:136px; height:36px; }
+  #tPause { left:18px;   top:18px;     width:38px;  height:38px; font-size:16px; }
+  /* analog joystick — replaces the ◀ / ▶ buttons */
+  #tJoy{ position:absolute; pointer-events:auto;
+    left:18px; bottom:18px; width:140px; height:140px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,.06), rgba(0,0,0,.55));
+    border:2px solid rgba(255,255,255,.4); box-shadow:0 0 18px rgba(0,0,0,.45);
+    touch-action:none; }
+  #tJoyKnob{ position:absolute; left:50%; top:50%; width:62px; height:62px; border-radius:50%;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle at 30% 30%, #ffd23d 0%, #c08000 70%, #6a3f00 100%);
+    border:2px solid #fff; box-shadow:0 4px 10px rgba(0,0,0,.55), inset 0 4px 10px rgba(255,255,255,.25);
+    pointer-events:none; }
+  #tJoy .ring{ position:absolute; inset:30%; border-radius:50%; border:1px dashed rgba(255,255,255,.18); pointer-events:none; }
 
   /* portrait warning — must rotate */
   #rotate{ display:none; position:fixed; inset:0; z-index:50; background:#000;
@@ -205,15 +220,17 @@
     #hudTimeLabel{ font-size:9px; letter-spacing:3px; }
     #hudScoreBox, #hudStageBox{ font-size:13px; top:8px; }
     #hudScoreBox small, #hudStageBox small{ font-size:9px; letter-spacing:2px; }
-    /* speedometer slides up to the top-center under the timer so the touch
-       pedals own the bottom corners — much smaller, still readable */
-    #cluster{ right:auto; left:50%; top:80px; bottom:auto; transform:translateX(-50%); }
+    /* speedometer in the top-right corner — out of the way of touch controls */
+    #cluster{ right:8px; left:auto; top:8px; bottom:auto; transform:none; }
     #gauge{ width:96px; height:96px; }
-    #speedDigits{ font-size:18px; margin-top:-32px; }
-    #speedDigits small{ font-size:10px; }
-    #turboRow{ margin-top:4px; gap:4px; }
-    .turboCell{ width:20px; height:8px; }
+    #speedDigits{ font-size:16px; margin-top:-30px; }
+    #speedDigits small{ font-size:9px; }
+    #turboRow{ margin-top:2px; gap:3px; }
+    .turboCell{ width:18px; height:7px; }
     #turboLabel{ display:none; }
+    /* stage label moves under the timer because top-right is now the gauge */
+    #hudStageBox{ right:auto; left:50%; top:60px; transform:translateX(-50%); text-align:center; font-size:11px; }
+    #hudStageBox small{ display:inline; margin-right:4px; }
     #radio{ display:none !important; }
     #dmgWrap{ width:200px; top:54px; }
     #distVal{ font-size:18px; }
@@ -316,8 +333,7 @@
 <div id="errBox"></div>
 
 <div id="touchCtrls">
-  <div id="tLeft"  class="tBtn" data-key="ArrowLeft">◀</div>
-  <div id="tRight" class="tBtn" data-key="ArrowRight">▶</div>
+  <div id="tJoy"><div class="ring"></div><div id="tJoyKnob"></div></div>
   <div id="tGas"   class="tBtn pedal gas"   data-key="ArrowUp"><span class="ic">▲</span><span>GAS</span></div>
   <div id="tBrake" class="tBtn pedal brake" data-key="ArrowDown"><span class="ic">■</span><span>BRAKE</span></div>
   <div id="tTurbo" class="tBtn turbo" data-key="Space">NITRO</div>
@@ -359,7 +375,9 @@ window.addEventListener('keydown', e => {
   keys[e.code] = true;
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
-const kSteer = () => (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+let touchSteer = 0;          // -1..1 analog from joystick (overrides keys when nonzero)
+const kSteer = () => touchSteer !== 0 ? touchSteer
+  : (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
 const kGas   = () => (keys.ArrowUp || keys.KeyW) ? 1 : 0;
 const kBrake = () => (keys.ArrowDown || keys.KeyS) ? 1 : 0;
 
@@ -381,6 +399,48 @@ document.querySelectorAll('#touchCtrls .tBtn').forEach(btn => {
   btn.addEventListener('mouseup',    release);
   btn.addEventListener('mouseleave', release);
 });
+// analog joystick: drag the knob horizontally inside the base, snap back on release
+(() => {
+  const joy = document.getElementById('tJoy');
+  const knob = document.getElementById('tJoyKnob');
+  if (!joy || !knob) return;
+  let activeId = null, cx = 0, cy = 0, R = 50; // R = drag radius
+  const reset = () => { knob.style.transform = 'translate(-50%,-50%)'; touchSteer = 0; activeId = null; };
+  const apply = (clientX, clientY) => {
+    const dx = clamp(clientX - cx, -R, R);
+    const dy = clamp(clientY - cy, -R, R);
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    // small deadzone so a finger that barely moves doesn't twitch the wheel
+    const t = Math.abs(dx) < 6 ? 0 : (dx - 6 * Math.sign(dx)) / (R - 6);
+    touchSteer = clamp(t, -1, 1);
+  };
+  joy.addEventListener('touchstart', e => {
+    e.preventDefault(); ensureFullscreen();
+    const r = joy.getBoundingClientRect();
+    cx = r.left + r.width / 2; cy = r.top + r.height / 2; R = r.width * 0.42;
+    const t = e.changedTouches[0]; activeId = t.identifier;
+    apply(t.clientX, t.clientY);
+  }, { passive: false });
+  joy.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === activeId) { apply(t.clientX, t.clientY); break; }
+  }, { passive: false });
+  const end = e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === activeId) { reset(); break; }
+  };
+  joy.addEventListener('touchend', end, { passive: false });
+  joy.addEventListener('touchcancel', end, { passive: false });
+  // mouse fallback for desktop testing
+  let mouseDown = false;
+  joy.addEventListener('mousedown', e => {
+    e.preventDefault(); const r = joy.getBoundingClientRect();
+    cx = r.left + r.width / 2; cy = r.top + r.height / 2; R = r.width * 0.42;
+    mouseDown = true; apply(e.clientX, e.clientY);
+  });
+  window.addEventListener('mousemove', e => { if (mouseDown) apply(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', () => { if (mouseDown) { mouseDown = false; reset(); } });
+})();
 // tap-to-start handler for the title (since keyboard isn't reachable on phone)
 document.addEventListener('touchstart', e => {
   ensureFullscreen();
@@ -391,17 +451,32 @@ document.addEventListener('touchstart', e => {
   }
 }, { passive: true });
 
-let _fsTried = false;
+// nudge fullscreen + orientation on every interaction (cheap if already in)
 function ensureFullscreen(){
-  if (_fsTried) return;
-  _fsTried = true;
   const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
-  if (req) req.call(el).catch(() => {});
-  if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
-  // address-bar nudge for browsers that ignore fullscreen
-  setTimeout(() => window.scrollTo(0, 1), 100);
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+    if (req) try { req.call(el).catch(() => {}); } catch (e) {}
+  }
+  if (screen.orientation && screen.orientation.lock) {
+    try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
+  }
+  hideAddressBar();
 }
+// aggressive address-bar collapse: set html/body to the live innerHeight, scroll
+// just enough to push the URL bar off, and re-run on every orientation/resize
+function hideAddressBar(){
+  const h = window.innerHeight;
+  document.documentElement.style.height = h + 'px';
+  document.body.style.height = h + 'px';
+  // tiny scroll y triggers Safari's auto-hide on first interaction
+  window.scrollTo(0, 1);
+  setTimeout(() => window.scrollTo(0, 1), 50);
+  setTimeout(() => window.scrollTo(0, 1), 200);
+}
+window.addEventListener('orientationchange', () => setTimeout(hideAddressBar, 200));
+window.addEventListener('resize', () => requestAnimationFrame(hideAddressBar));
+if (IS_TOUCH) setTimeout(hideAddressBar, 50);
 
 const rotateEl = document.getElementById('rotate');
 function checkOrientation(){
