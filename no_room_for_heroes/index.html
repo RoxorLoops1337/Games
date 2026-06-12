@@ -1507,6 +1507,7 @@ function closeDungeon(){
   paused=false; pauseConfirm=false;
   const earned=awardRunes();
   bankResources(1, true);
+  lbAutoSubmit();                                          // endless: auto-push the run to the public board
   G.phase='closed'; overlay.classList.add('show');
   const summary=`<h1 style="color:#9be86b">🏳️ DUNGEON CLOSED</h1>
     <div style="font-size:54px">${G.boss?G.boss.ic:'🐲'}🚪</div>
@@ -1632,6 +1633,18 @@ async function lbSubmit(score){
     await new Promise(res=>setTimeout(res, 500));
   }
   return null;
+}
+// Endless auto-upload: fire on every run end (close OR death) so the board
+// reflects the run without the player tapping "Submit my best". No prompt —
+// falls back to "Anonymous" if no name is stored yet. Fully silent failure.
+function lbAutoSubmit(){
+  if(!G || G.mode!=='endless') return;
+  const score = Math.max(G.totalSlain||0, RUNES.best||0);
+  if(score<=0) return;
+  let name='Anonymous';
+  try{ name = (localStorage.getItem('bm_lbname')||'').trim() || 'Anonymous'; }catch(_){ }
+  try{ fetch('/api/board',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({name, score})}).catch(()=>{}); }catch(_){ }
 }
 function lbName(){
   let n=null; try{ n=localStorage.getItem('bm_lbname'); }catch(_){ }
@@ -3511,6 +3524,7 @@ function bossDies(){
   G.phase='lose'; overlay.classList.add('show');
   shake(12); sfx('lose');
   const earned=awardRunes();
+  lbAutoSubmit();                                // endless: auto-push the run to the public board
   const keep=deathKeep(), lostPct=Math.round((1-keep)*100);
   bankResources(keep, false);                    // keep your Vault fraction; no gold bonus on a death
   const score = G.kingFight
