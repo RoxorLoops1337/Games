@@ -559,7 +559,7 @@ const TOWN_SCHEMES = {
   temple: {name:'Burn the Temple',  ic:'🔥', cost:5, waves:5, desc:'No clerics arrive for 5 waves.'},
 };
 // Corrupt a previewed hero into a minion you can place to defend a room.
-const CORRUPT_COST = 6;
+const CORRUPT_COST = 12;        // doubled — and capped at 1 corruption per town visit (see G.corruptedThisTown)
 
 // Named adventurers + grudge titles for recurring rivals.
 const HERO_NAMES = ['Aldric','Bryn','Cael','Dara','Edrik','Fenn','Gwen','Hale',
@@ -2956,6 +2956,7 @@ function spawnGroup(n){
     ensureQueue(count);
     for(let k=0;k<count;k++) specs.push(G.queue.shift());
   }
+  if(!specs.length) specs.push(nextSpec());    // never start with no heroes (e.g. corrupted the whole wave)
   G.heroes=[];
   const count=specs.length;
   for(let k=0;k<count;k++){
@@ -3726,6 +3727,7 @@ const EVENTS = [
 function gotoTown(){
   G.phase='town';
   if(G.mode==='campaign') prepCampaignWave(); else ensureQueue(3);   // show the real next wave in the roster
+  G.corruptedThisTown=0;                                              // 1 corruption per town visit
   G.townEvent={ ...pick(EVENTS), done:false, outcome:'' };
   G.merchant=rollMerchant();
   renderTown();
@@ -3855,10 +3857,11 @@ function grantMinionCard(power){
 function corruptHero(idx){
   const spec=G.queue[idx]; if(!spec) return;
   if(townLvl('inn')<INN_UNLOCK.corrupt){ showHint('Build the Inn (Lv 2) to corrupt heroes.'); return; }
+  if((G.corruptedThisTown||0)>=1){ showHint('Only one corruption per town visit.'); return; }
   const cc=corruptCost();
   if(G.dread<cc){ showHint('Not enough dread.'); return; }
   if(G.hand.length>=handCap()){ showHint('Hand full — play a card first.'); return; }
-  G.dread-=cc; G.queue.splice(idx,1);
+  G.dread-=cc; G.queue.splice(idx,1); G.corruptedThisTown=(G.corruptedThisTown||0)+1;
   // Campaign: corrupting a hero simply shrinks THIS wave (don't refill with strangers).
   G.hand.push(minionCardFromSpec(spec)); if(G.mode!=='campaign') ensureQueue(3);
   showHint((spec.name||'A hero')+' is corrupted into a minion!'); renderTown(); renderTop();
@@ -3949,7 +3952,7 @@ function renderTown(){
       return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
         ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
     const canCorrupt = townLvl('inn')>=INN_UNLOCK.corrupt;
-    const corruptDis = G.dread<corruptCost() || G.hand.length>=handCap();
+    const corruptDis = G.dread<corruptCost() || G.hand.length>=handCap() || (G.corruptedThisTown||0)>=1;
     const ch = spec.champion ? CHAMPIONS[spec.champion] : null;
     return `<div class="choice" style="width:208px;${ch?'border-color:'+ch.col+';box-shadow:0 0 10px '+ch.col:spec.rival?'border-color:#ff6b8a':''}">
       <div class="big">${ch?ch.ic+'👑':c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
@@ -4096,15 +4099,12 @@ function simStep(h,dt){
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
-    // a living monster blocks: stop just inside the room and let the monster march
-    // over to you (its sprite slides left in the draw step). Engage on contact.
+    // a living monster blocks: keep walking until the monster's advancing sprite
+    // reaches you, then engage. (The monster slides left in the draw step.)
     if(cell && cell.mon && cell.mon.alive){
-      const stopX = cell.x0+ROOM_W*0.08;
-      if(h.x>stopX) h.x=stopX;
       const monF = (cell.room && cell.room._monF!==undefined) ? cell.room._monF : 0.74;
       const monX = cell.x0 + ROOM_W*monF;
-      if(monX <= h.x + 24){ h.state='fighting'; h.atkT=0; cell.mon.atkT=0; }
-      return;
+      if(monX <= h.x + 24){ h.state='fighting'; h.atkT=0; cell.mon.atkT=0; return; }
     }
     // reached boss room? stand INSIDE it (in front of the boss), not at the door
     if(h.x >= cellX(G.slots)+ROOM_W*0.30){
@@ -5104,6 +5104,40 @@ function drawRoomArt(x0,w,img){
   X.drawImage(img, Math.round(x0), Math.round(FLOOR+ROOM_ART_DROP-dh), Math.round(w), dh);
   X.imageSmoothingEnabled=sm;
 }
+// ⚡ Lightning arcs from a Tesla coil to every hero in the room (and chaining
+// across them) for ~180ms after the coil fires. Pure visual — damage is dealt
+// in trapTick. Jagged segments re-randomise per frame so the bolt feels alive.
+function drawTeslaArcs(x0, w, cell){
+  if(!cell || G.phase!=='run' || !cell.traps || !cell.traps.length) return;
+  const tr=cell.traps.find(t=>t.type==='tesla' && t.firedAt); if(!tr) return;
+  const since = performance.now() - tr.firedAt; const FLASH=180;
+  if(since<0 || since>FLASH) return;
+  const fade = 1 - since/FLASH;
+  const targets = (G.heroes||[]).filter(h=>h && h.state!=='dead' && h.cellIndex===cell.index);
+  if(!targets.length) return;
+  const cx = x0 + w*0.5, cy = FLOOR-50;     // coil tip
+  X.save();
+  X.shadowColor='#fff34d'; X.shadowBlur=8;
+  X.strokeStyle='#fff34d'; X.lineWidth=2.2; X.globalAlpha=0.55+0.45*fade;
+  for(const h of targets) drawJaggedBolt(cx, cy, h.x, h.y-30);
+  // chain across heroes (visual mirror of the CONDUCT mechanic)
+  if(targets.length>1){
+    X.strokeStyle='#9adfff'; X.lineWidth=1.4; X.globalAlpha=0.4+0.4*fade;
+    for(let i=1;i<targets.length;i++) drawJaggedBolt(targets[i-1].x, targets[i-1].y-30, targets[i].x, targets[i].y-30);
+  }
+  X.restore();
+}
+function drawJaggedBolt(x1,y1,x2,y2){
+  X.beginPath(); X.moveTo(x1,y1);
+  const segs=6;
+  for(let i=1;i<segs;i++){
+    const t=i/segs;
+    const x = x1 + (x2-x1)*t + (Math.random()-0.5)*18;
+    const y = y1 + (y2-y1)*t + (Math.random()-0.5)*14;
+    X.lineTo(x,y);
+  }
+  X.lineTo(x2,y2); X.stroke();
+}
 function drawRoomFull(x0,w,room,i){
   const k=roomArtReady(room);
   if(k) drawRoomArt(x0,w,cellArt(k,i));                                  // dedicated full art (broken variant after a champion smash)
@@ -5127,6 +5161,7 @@ function drawRoomContents(x0,w,room,i){
   const drewType={};
   for(const it of items) if(drawTrapPart(x0,w,it.type,it.p,it.pi,cell)) drewType[it.type]=1;
   for(const tp of trapTypes) if(!drewType[tp]) drawTrapProp(x0,w,cx,tp,cell);   // procedural fallback
+  if(trapTypes.includes('tesla')) drawTeslaArcs(x0,w,cell);   // ⚡ arcs from coil through heroes when it fires
   if(cell && cell._disarmT>0){   // rogue disarmed this room's traps
     X.globalAlpha=0.55+0.35*Math.sin(performance.now()/120); X.fillStyle='#5fd17a';
     X.font='bold 11px Trebuchet MS'; X.textAlign='center';
