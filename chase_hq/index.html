@@ -72,9 +72,32 @@
   #banner.stamp{ animation:stamp .35s ease-out; }
   #subBanner{ position:fixed; top:46%; left:0; right:0; text-align:center; z-index:12; pointer-events:none;
     font-size:20px; color:#ffd23d; display:none; text-shadow:0 2px 8px #000; }
-  .popup{ position:fixed; z-index:13; pointer-events:none; font-size:22px; color:var(--yellow);
-    text-shadow:0 0 10px rgba(255,200,60,.8),0 2px 4px #000; animation:popfly 1s ease-out forwards; }
+  .popup{ position:fixed; z-index:13; pointer-events:none; font-size:30px; color:var(--yellow);
+    text-shadow:0 0 14px rgba(255,200,60,.9),0 3px 6px #000; animation:popfly 1.1s cubic-bezier(.2,.7,.3,1) forwards;
+    font-style:italic; letter-spacing:1px; }
   .popup.crash{ color:var(--red); }
+  .popup.nice{ color:#5fffb0; text-shadow:0 0 16px rgba(60,255,180,.9),0 3px 6px #000; font-size:36px; }
+  .popup.perfect{ color:#ff6ed6; text-shadow:0 0 22px rgba(255,110,214,.95),0 3px 6px #000; font-size:46px; transform:rotate(-4deg); }
+  .popup.combo{ color:#ffd23d; font-size:24px; }
+  /* combo HUD */
+  #comboBox{ position:fixed; top:170px; left:50%; transform:translateX(-50%); z-index:11;
+    text-align:center; color:#fff; pointer-events:none; opacity:0; transition:opacity .25s; }
+  #comboBox.on{ opacity:1; }
+  #comboMul{ font-size:50px; line-height:1; color:#ffd23d; text-shadow:0 0 18px rgba(255,210,61,.9),0 3px 8px #000; font-style:italic; }
+  #comboLbl{ font-size:11px; letter-spacing:5px; color:#ffd23d99; margin-top:2px; }
+  /* damage red flash */
+  #flash{ position:fixed; inset:0; pointer-events:none; z-index:7; background:rgba(255,30,30,0); transition:background .15s; }
+  /* news-stand confetti container */
+  #confettiBox{ position:fixed; inset:0; pointer-events:none; z-index:14; overflow:hidden; }
+  .confetti{ position:absolute; width:9px; height:14px; will-change:transform; }
+  /* run-stats overlay during BUSTED */
+  #runStats{ position:fixed; top:32%; left:50%; transform:translateX(-50%); z-index:13;
+    background:rgba(6,10,20,.85); border:1px solid #ffd23d66; border-radius:10px;
+    padding:18px 28px; color:#fff; font-size:18px; line-height:1.7; display:none;
+    box-shadow:0 0 32px rgba(255,210,61,.25); text-align:left; min-width:340px; }
+  #runStats h3{ margin:0 0 10px; color:#ffd23d; font-size:22px; letter-spacing:4px; text-align:center; }
+  #runStats .row{ display:flex; justify-content:space-between; gap:24px; }
+  #runStats .row.total{ border-top:1px dashed #ffd23d55; margin-top:8px; padding-top:8px; color:#5fffb0; font-size:22px; }
 
   /* full screens */
   .screen{ position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center;
@@ -86,6 +109,28 @@
     text-shadow:0 0 16px rgba(255,210,61,.6); }
   #pressStart{ margin-top:46px; font-size:22px; letter-spacing:4px; animation:blink 1.1s steps(2) infinite; }
   #titleHi{ margin-top:14px; font-size:14px; color:#9fd1ff; letter-spacing:2px; }
+  /* menu */
+  #menu{ margin-top:38px; display:flex; flex-direction:column; gap:8px; }
+  .menuItem{ font-size:24px; letter-spacing:5px; color:#9fd1ff; padding:6px 18px;
+    border:1px solid transparent; border-radius:6px; transition:all .15s; }
+  .menuItem .desc{ display:block; font-size:11px; letter-spacing:3px; color:#9fd1ff66; margin-top:3px; }
+  .menuItem.sel{ color:#ffd23d; border-color:#ffd23d; background:rgba(255,210,61,.08);
+    box-shadow:0 0 16px rgba(255,210,61,.25); transform:scale(1.04); }
+  .menuItem.sel .desc{ color:#ffd23daa; }
+  #menuHint{ margin-top:24px; font-size:12px; color:#ffffff66; letter-spacing:3px; }
+  /* stage select grid */
+  #stageGrid{ display:none; margin-top:22px; grid-template-columns:repeat(3,1fr); gap:10px; max-width:560px; }
+  .stageCard{ background:rgba(8,12,22,.7); border:1px solid #ffffff22; border-radius:8px; padding:10px 12px;
+    color:#cfe0ff; text-align:center; transition:all .15s; }
+  .stageCard .num{ font-size:32px; color:#ffd23d; font-style:italic; }
+  .stageCard .nm{ font-size:11px; letter-spacing:3px; color:#9fd1ff; margin-top:2px; }
+  .stageCard.sel{ border-color:#ffd23d; background:rgba(255,210,61,.12); transform:scale(1.06); box-shadow:0 0 16px rgba(255,210,61,.3); }
+  .stageCard.locked{ opacity:.4; }
+  .stageCard.locked .num{ color:#888; }
+  /* mode badge in HUD */
+  #modeBadge{ position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:10;
+    color:#ffd23d; font-size:11px; letter-spacing:5px; pointer-events:none; opacity:.7;
+    text-shadow:0 2px 6px #000; }
   #controls{ margin-top:34px; display:grid; grid-template-columns:auto auto; gap:6px 22px; font-size:13px;
     color:#cfe0ff; background:rgba(0,0,20,.5); border:1px solid #ffffff22; border-radius:10px; padding:16px 26px; }
   #controls b{ color:var(--yellow); font-weight:normal; }
@@ -141,12 +186,22 @@
 
 <div id="banner"></div>
 <div id="subBanner"></div>
+<div id="comboBox"><div id="comboMul">×2</div><div id="comboLbl">COMBO</div></div>
+<div id="flash"></div>
+<div id="confettiBox"></div>
+<div id="runStats"></div>
 
 <div class="screen" id="titleScreen">
   <div id="logo">CHASE H.Q.</div>
   <div id="logoSub">SIREN CITY PURSUIT</div>
-  <div id="pressStart">— PRESS ENTER —</div>
   <div id="titleHi">HI-SCORE 0</div>
+  <div id="menu">
+    <div class="menuItem sel" data-mode="PURSUIT">PURSUIT MODE<span class="desc">chase the campaign — 3 suspects</span></div>
+    <div class="menuItem" data-mode="ENDLESS">ENDLESS HEAT<span class="desc">never-ending chain · escalating perps</span></div>
+    <div class="menuItem" data-mode="STAGE">STAGE SELECT<span class="desc">pick any unlocked stage</span></div>
+  </div>
+  <div id="stageGrid"></div>
+  <div id="menuHint">↑ ↓ to choose &nbsp;·&nbsp; ENTER to start &nbsp;·&nbsp; ESC to go back</div>
   <div id="controls">
     <span><b>↑ / W</b> accelerate</span><span><b>↓ / S</b> brake</span>
     <span><b>← → / A D</b> steer</span><span><b>SPACE</b> turbo (×3)</span>
@@ -154,6 +209,7 @@
   </div>
   <div id="credit">built with three.js &amp; WebAudio — every car, road and sound is procedural · no assets were harmed</div>
 </div>
+<div id="modeBadge" style="display:none"></div>
 
 <div class="screen hidden" id="resultScreen">
   <div id="bigResult">TIME UP</div>
@@ -1363,14 +1419,60 @@ function subBanner(text, hold = 2){
   subBannerEl.style.display = 'block';
   setTimeout(() => { subBannerEl.style.display = 'none'; }, hold * 1000);
 }
-function popup(text, cls = ''){
+function popup(text, cls = '', x, y){
   const d = document.createElement('div');
   d.className = 'popup ' + cls;
   d.textContent = text;
-  d.style.left = (innerWidth * 0.5 + rand(-120, 120)) + 'px';
-  d.style.top = (innerHeight * 0.45 + rand(-40, 40)) + 'px';
+  d.style.left = ((x ?? innerWidth * 0.5) + rand(-90, 90)) + 'px';
+  d.style.top = ((y ?? innerHeight * 0.42) + rand(-30, 30)) + 'px';
   document.body.appendChild(d);
-  setTimeout(() => d.remove(), 1050);
+  setTimeout(() => d.remove(), 1150);
+}
+
+const comboBox = $('comboBox'), comboMul = $('comboMul');
+function bumpCombo(){
+  G.combo++; G.comboT = 2.4;
+  if (G.combo >= 2) {
+    comboMul.textContent = '×' + G.combo;
+    comboBox.classList.add('on');
+    comboMul.style.transform = 'scale(1.5)';
+    setTimeout(() => { comboMul.style.transform = 'scale(1)'; }, 90);
+  }
+}
+function resetCombo(){ G.combo = 0; G.comboT = 0; comboBox.classList.remove('on'); }
+
+const flashEl = $('flash');
+function damageFlash(intensity = 0.45){
+  flashEl.style.background = `rgba(255,30,30,${intensity})`;
+  G.damageFlashT = 0.18;
+}
+
+const confettiBox = $('confettiBox');
+const CONFETTI_COLORS = ['#ff3b30', '#ffd23d', '#3da9ff', '#42e36b', '#ff6ed6', '#ffffff'];
+function spawnConfetti(burst = 80){
+  for (let i = 0; i < burst; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    c.style.left = (innerWidth * (0.3 + Math.random() * 0.4)) + 'px';
+    c.style.top = (innerHeight * 0.3) + 'px';
+    c.style.transform = `rotate(${Math.random() * 360}deg)`;
+    const dx = rand(-260, 260), dy = rand(-180, 60), rot = rand(-720, 720);
+    confettiBox.appendChild(c);
+    const dur = 1800 + Math.random() * 1400;
+    c.animate([
+      { transform: c.style.transform, opacity: 1 },
+      { transform: `translate(${dx}px, ${dy + 80}px) rotate(${rot * 0.4}deg)`, opacity: 1, offset: 0.4 },
+      { transform: `translate(${dx * 1.2}px, ${innerHeight}px) rotate(${rot}deg)`, opacity: 0 },
+    ], { duration: dur, easing: 'cubic-bezier(.25,.7,.4,1)' });
+    setTimeout(() => c.remove(), dur + 50);
+  }
+}
+
+function judgmentFor(closing){
+  if (closing > 28) return { cls: 'perfect', label: 'PERFECT RAM!', mult: 3 };
+  if (closing > 16) return { cls: 'nice',    label: 'NICE HIT!',    mult: 2 };
+  return                  { cls: '',        label: 'HIT!',         mult: 1 };
 }
 let radioTimer = null, radioHide = null;
 function radio(text, speak = true){
@@ -1449,6 +1551,16 @@ const G = {
   phase: 'CHASE', time: 60, turbos: 3, turboT: 0,
   shake: 0, musicOn: true, hitCool: 0, lastSecond: -1,
   sirenBurstT: 0, sirenNear: false,
+  hitStopT: 0,             // freeze gameplay (not rendering) for cinematic punctuation
+  slowmoT: 0,              // gameplay time multiplier — final hit dramatic slow-mo
+  combo: 0, comboT: 0,     // hit chain
+  hits: 0, drifts: 0, nearMisses: 0, dmgDealt: 0, // run stats
+  cameraKick: 0,           // FOV punch on turbo
+  damageFlashT: 0,
+  fovPunchT: 0,
+  mode: 'PURSUIT',         // PURSUIT | ENDLESS | STAGE
+  endlessRun: 0,           // suspect # in endless chain
+  unlocked: +(localStorage.getItem('chasehq_unlocked') || 1),
 };
 hudHi.textContent = G.hi;
 $('titleHi').textContent = 'HI-SCORE ' + G.hi;
@@ -1466,6 +1578,9 @@ function startStage(idx){
   sus.s = stage.gap; sus.lat = 0; sus.v = 0; sus.dmg = 0; sus.busted = 0;
   G.phase = 'CHASE'; G.time = stage.time; G.turbos = 3; G.turboT = 0; G.shake = 0;
   G.sirenBurstT = 0; G.sirenNear = false;
+  G.hitStopT = 0; G.slowmoT = 0; G.combo = 0; G.comboT = 0;
+  G.hits = 0; G.drifts = 0; G.nearMisses = 0; G.dmgDealt = 0;
+  $('comboBox').classList.remove('on'); $('runStats').style.display = 'none';
   sfx.setSiren(false, false);
   hudStage.textContent = idx + 1;
   hudStageName.textContent = stage.name;
@@ -1476,6 +1591,68 @@ function startStage(idx){
   subBanner('STAGE ' + (idx + 1) + ' — ' + stage.name, 4);
 }
 function setState(s){ G.state = s; G.stateT = 0; }
+
+/* ============================================================ menu */
+const menuItems = [...document.querySelectorAll('#menu .menuItem')];
+const stageGrid = $('stageGrid'), menuEl = $('menu');
+let menuIdx = 0, menuMode = 'main', stageIdx = 0;
+function renderMenu(){
+  menuItems.forEach((m, i) => m.classList.toggle('sel', i === menuIdx));
+}
+function buildStageGrid(){
+  stageGrid.innerHTML = '';
+  STAGES.forEach((st, i) => {
+    const c = document.createElement('div');
+    c.className = 'stageCard' + (i > G.unlocked - 1 ? ' locked' : '') + (i === stageIdx ? ' sel' : '');
+    c.innerHTML = `<div class="num">${i + 1}</div><div class="nm">${st.name}</div>`;
+    stageGrid.appendChild(c);
+  });
+}
+function setMenuMode(mode){
+  menuMode = mode;
+  if (mode === 'main') { menuEl.style.display = 'flex'; stageGrid.style.display = 'none'; }
+  else if (mode === 'stage') { menuEl.style.display = 'none'; stageGrid.style.display = 'grid'; stageIdx = 0; buildStageGrid(); }
+}
+function menuNav(dx, dy){
+  if (menuMode === 'main') {
+    menuIdx = (menuIdx + (dy > 0 ? 1 : -1) + menuItems.length) % menuItems.length;
+    renderMenu();
+    sfx.blip(620, 0.04, 0.08);
+  } else if (menuMode === 'stage') {
+    const cols = 3;
+    if (dx) stageIdx = clamp(stageIdx + dx, 0, STAGES.length - 1);
+    if (dy) stageIdx = clamp(stageIdx + dy * cols, 0, STAGES.length - 1);
+    buildStageGrid();
+    sfx.blip(620, 0.04, 0.08);
+  }
+}
+function menuConfirm(){
+  sfx.blip(880, 0.08, 0.12);
+  if (menuMode === 'main') {
+    const mode = menuItems[menuIdx].dataset.mode;
+    if (mode === 'STAGE') { setMenuMode('stage'); return; }
+    G.mode = mode;
+    titleScreen.classList.add('hidden');
+    G.score = 0; hudScore.textContent = 0; G.endlessRun = 0;
+    showModeBadge();
+    startStage(0);
+  } else if (menuMode === 'stage') {
+    if (stageIdx > G.unlocked - 1) { sfx.blip(180, 0.1, 0.1); return; }
+    G.mode = 'STAGE';
+    titleScreen.classList.add('hidden');
+    G.score = 0; hudScore.textContent = 0;
+    showModeBadge();
+    startStage(stageIdx);
+  }
+}
+function showModeBadge(){
+  const b = $('modeBadge');
+  const labels = { PURSUIT: '★ PURSUIT MODE ★', ENDLESS: '◉ ENDLESS HEAT ◉', STAGE: '▶ STAGE SELECT ◀' };
+  b.textContent = labels[G.mode] || '';
+  b.style.display = 'block';
+  setTimeout(() => b.style.opacity = '0.25', 3000);
+  b.style.opacity = '0.7';
+}
 
 function addScore(n){
   G.score += n;
@@ -1516,7 +1693,8 @@ function updatePlayer(dt){
   // turbo
   if (pressed.Space && G.turbos > 0 && G.turboT <= 0 && G.state === 'RUN') {
     G.turbos--; G.turboT = 5;
-    sfx.turbo(); popup('TURBO!');
+    G.fovPunchT = 0.5;            // FOV punch sells the kick
+    sfx.turbo(); popup('TURBO!', 'nice');
     [...turboRow.children].forEach((c, i) => c.className = 'turboCell' + (i < G.turbos ? ' full' : ''));
   }
   if (G.turboT > 0) G.turboT -= dt;
@@ -1666,12 +1844,24 @@ function collisions(dt, stage){
       sus.v += 2.5;
       posAt((pl.s + sus.s) / 2 + 2, (pl.lat + sus.lat) / 2, tmpV);
       tmpV.y += 0.7;
-      sparks.spawn(tmpV, 26, 11);
-      G.shake = Math.max(G.shake, 0.5);
+      sparks.spawn(tmpV, 26 + Math.floor(closing), 11);
+      G.shake = Math.max(G.shake, 0.5 + closing * 0.04);
       sfx.hit();
-      addScore(200);
-      popup('HIT! +200');
-      if (sus.dmg >= 100 && G.state === 'RUN') beginBust(stage);
+      // juice: judgment + combo + hit-stop
+      const j = judgmentFor(closing);
+      bumpCombo();
+      G.hits++; G.dmgDealt += dmg;
+      const base = 200 + Math.floor(closing * 8);
+      const score = Math.floor(base * j.mult * Math.max(1, G.combo * 0.6 + 0.4));
+      addScore(score);
+      popup(`${j.label} +${score}`, j.cls);
+      if (G.combo >= 2) popup(`×${G.combo} COMBO`, 'combo', innerWidth * 0.5, innerHeight * 0.36);
+      G.hitStopT = Math.max(G.hitStopT, 0.05 + closing * 0.004);
+      if (sus.dmg >= 100 && G.state === 'RUN') {
+        G.slowmoT = 1.2;       // dramatic finale slow-mo
+        G.hitStopT = 0.12;
+        beginBust(stage);
+      }
     } else if (pl.s >= sus.s || Math.abs(pl.lat - sus.lat) > 1.2) {
       // side rub
       const push = pl.lat > sus.lat ? 1 : -1;
@@ -1693,6 +1883,9 @@ function collisions(dt, stage){
         G.shake = Math.max(G.shake, 1);
         sfx.crash(closing / 40);
         popup('CRASH!', 'crash');
+        damageFlash(0.5);
+        G.hitStopT = Math.max(G.hitStopT, 0.09);
+        resetCombo();
         t.v = Math.min(t.v + 6, 30);
       } else {
         // shove through: keep most momentum, knock the slowpoke forward and aside
@@ -1711,6 +1904,23 @@ function collisions(dt, stage){
       }
     }
   }
+  // near-miss bonus — traffic flying past your bumper while you're fast
+  if (pl.v > 35 && G.hitCool <= 0) {
+    for (const t of traffic) {
+      const ds = t.s - pl.s;
+      if (ds > 1.6 && ds < 5.5 && Math.abs(t.lat - pl.lat) < 2.4 && Math.abs(t.lat - pl.lat) > 1.05) {
+        if (t._missed) continue;
+        t._missed = 0.6;
+        G.nearMisses++;
+        const bonus = 150 + Math.floor(pl.v * 2);
+        addScore(bonus);
+        popup(`NEAR MISS +${bonus}`, 'nice', innerWidth * 0.5, innerHeight * 0.55);
+        sfx.blip(1600, 0.06, 0.08);
+        break;
+      }
+    }
+  }
+  for (const t of traffic) if (t._missed) { t._missed -= dt; if (t._missed <= 0) t._missed = 0; }
 }
 
 function beginBust(stage){
@@ -1720,12 +1930,26 @@ function beginBust(stage){
   sfx.extend();
   spotMarker.visible = false;
   dmgWrap.style.display = 'none';
-  const bonus = 10000 + Math.ceil(G.time) * 150;
-  setTimeout(() => {
-    popup('+' + bonus);
-    addScore(bonus);
-    radio(`Suspect apprehended! The ${stage.susName} is in custody. Outstanding work, officer!`);
-  }, 1600);
+  resetCombo();
+  spawnConfetti(120);
+  setTimeout(() => spawnConfetti(60), 700);
+  const timeBonus = Math.ceil(G.time) * 150;
+  const arrest = 10000;
+  const hitBonus = G.hits * 100;
+  const driftBonus = Math.floor(G.drifts * 50);
+  const nearBonus = G.nearMisses * 200;
+  const total = arrest + timeBonus + hitBonus + driftBonus + nearBonus;
+  // run-stats panel
+  const s = $('runStats');
+  s.innerHTML = `<h3>SUSPECT IN CUSTODY</h3>
+    <div class="row"><span>Arrest bonus</span><b>+${arrest}</b></div>
+    <div class="row"><span>Time bonus</span><b>+${timeBonus}</b></div>
+    <div class="row"><span>Rams (${G.hits})</span><b>+${hitBonus}</b></div>
+    <div class="row"><span>Drift seconds</span><b>+${driftBonus}</b></div>
+    <div class="row"><span>Near misses (${G.nearMisses})</span><b>+${nearBonus}</b></div>
+    <div class="row total"><span>STAGE BONUS</span><b>+${total}</b></div>`;
+  setTimeout(() => { s.style.display = 'block'; addScore(total); radio(`Suspect apprehended! The ${stage.susName} is in custody. Outstanding work, officer!`); }, 1500);
+  setTimeout(() => { s.style.display = 'none'; }, 6300);
 }
 
 /* ============================================================ camera */
@@ -1760,7 +1984,11 @@ function updateCamera(dt){
       G.shake = Math.max(0, G.shake - dt * 2.2);
     }
     camera.lookAt(camLook);
-    const targetFov = 60 + (pl.v / MAXV) * 18 + (G.turboT > 0 ? 8 : 0);
+    // camera roll: lean into the turn so the world tilts when you swerve hard
+    const rollTarget = -pl.steerVis * 0.06 + pl.drift * Math.sign(-pl.steerVis) * 0.08;
+    camera.rotation.z = lerp(camera.rotation.z, rollTarget, clamp(dt * 5, 0, 1));
+    const punch = G.fovPunchT > 0 ? G.fovPunchT * 9 : 0;
+    const targetFov = 60 + (pl.v / MAXV) * 18 + (G.turboT > 0 ? 8 : 0) + punch;
     camera.fov = lerp(camera.fov, targetFov, clamp(dt * 3, 0, 1));
   }
   camera.updateProjectionMatrix();
@@ -1782,19 +2010,36 @@ let lastT = performance.now();
 let lightbarT = 0;
 
 function frame(now){
-  const dt = clamp((now - lastT) / 1000, 0.001, 0.05);
+  const realDt = clamp((now - lastT) / 1000, 0.001, 0.05);
   lastT = now;
   if (G.state === 'PAUSE') { renderer.render(scene, camera); flushPressed(); return; }
+  // hit-stop: freeze gameplay for a few ms, but keep rendering + UI ticking
+  let dt = realDt;
+  if (G.hitStopT > 0) { G.hitStopT -= realDt; dt = 0.0001; }
+  else if (G.slowmoT > 0) { G.slowmoT -= realDt; dt = realDt * 0.35; }
   G.stateT += dt;
   const stage = STAGES[G.stageIdx];
 
   // banners
-  if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) bannerEl.style.display = 'none'; }
+  if (bannerTimer > 0) { bannerTimer -= realDt; if (bannerTimer <= 0) bannerEl.style.display = 'none'; }
+  // combo decay
+  if (G.comboT > 0) { G.comboT -= realDt; if (G.comboT <= 0) resetCombo(); }
+  // damage flash decay
+  if (G.damageFlashT > 0) { G.damageFlashT -= realDt; if (G.damageFlashT <= 0) flashEl.style.background = 'rgba(255,30,30,0)'; }
+  // FOV punch decay
+  if (G.fovPunchT > 0) G.fovPunchT -= realDt;
+  // drift seconds counter
+  if (G.state === 'RUN' && pl.drift > 0.5 && pl.v > 32) G.drifts += realDt;
 
   switch (G.state) {
     case 'TITLE':
       idleScene(dt);
-      if (pressed.Enter) { sfx.init(); sfx.ctx && sfx.ctx.resume(); titleScreen.classList.add('hidden'); startStage(0); G.score = 0; hudScore.textContent = 0; }
+      if (pressed.ArrowUp || pressed.KeyW) menuNav(0, -1);
+      if (pressed.ArrowDown || pressed.KeyS) menuNav(0, 1);
+      if (pressed.ArrowLeft || pressed.KeyA) menuNav(-1, 0);
+      if (pressed.ArrowRight || pressed.KeyD) menuNav(1, 0);
+      if (pressed.Escape && menuMode !== 'main') setMenuMode('main');
+      if (pressed.Enter) { sfx.init(); sfx.ctx && sfx.ctx.resume(); menuConfirm(); }
       break;
     case 'INTRO':
       idleScene(dt);
@@ -1861,16 +2106,15 @@ function frame(now){
       updateSuspect(dt, stage);
       updateTraffic(dt);
       if (G.stateT > 6.5) {
-        if (G.stageIdx + 1 < STAGES.length) startStage(G.stageIdx + 1);
-        else {
-          setState('WIN');
-          sfx.setSiren(false, false);
-          sfx.setEngine(0, 0, false);
-          bigResult.textContent = 'CITY SECURED';
-          resultDetail.innerHTML = `All suspects in custody.<br>FINAL SCORE ${G.score}` + (G.score >= G.hi ? '<br><span style="color:#42e36b">NEW HI-SCORE!</span>' : '');
-          resultScreen.classList.remove('hidden');
-          say('All units, stand down. Siren City sleeps safe tonight. You are the finest, officer.');
+        // unlock the next campaign stage after busting one
+        if (G.mode !== 'ENDLESS' && G.stageIdx + 1 > G.unlocked - 1) {
+          G.unlocked = Math.min(STAGES.length, G.stageIdx + 2);
+          localStorage.setItem('chasehq_unlocked', G.unlocked);
         }
+        if (G.mode === 'ENDLESS') { G.endlessRun++; startStage(G.endlessRun % STAGES.length); }
+        else if (G.mode === 'STAGE') { showWin('STAGE CLEAR', `${stage.name}<br>SCORE ${G.score}`); }
+        else if (G.stageIdx + 1 < STAGES.length) startStage(G.stageIdx + 1);
+        else showWin('CITY SECURED', `All suspects in custody.<br>FINAL SCORE ${G.score}` + (G.score >= G.hi ? '<br><span style="color:#42e36b">NEW HI-SCORE!</span>' : ''));
       }
       break;
     }
@@ -1937,6 +2181,21 @@ function idleScene(dt){
 }
 
 let pauseDim = null;
+function showWin(title, detail){
+  setState('WIN');
+  sfx.setSiren(false, false);
+  sfx.setEngine(0, 0, false);
+  bigResult.textContent = title;
+  resultDetail.innerHTML = detail;
+  resultScreen.classList.remove('hidden');
+  spawnConfetti(150);
+  setTimeout(() => spawnConfetti(80), 900);
+  setTimeout(() => spawnConfetti(80), 1800);
+  say(title === 'CITY SECURED'
+    ? 'All units, stand down. Siren City sleeps safe tonight. You are the finest, officer.'
+    : 'Nice work officer. Take a break.');
+}
+
 function setStatePaused(){
   setState('PAUSE');
   sfx.setEngine(0, 0, false); sfx.setSiren(false, false); sfx.setSkid(0); sfx.setWind(0);
