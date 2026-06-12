@@ -5147,7 +5147,9 @@ function drawRoomContents(x0,w,room,i){
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
     // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
-    const engaged = alive && cell && G.phase==='run' && monsterAttacking(cell);
+    // (advance the moment a hero is in the cell — don't wait for fighting state)
+    const engaged = alive && cell && G.phase==='run'
+      && (G.heroes||[]).some(h=>h && h.cellIndex===cell.index && (h.state==='walking'||h.state==='fighting'));
     const targetF = engaged ? 0.58 : 0.74;
     if(room._monF===undefined) room._monF=targetF;
     const now=performance.now(); const mdt=Math.min(0.05,(now-(room._mpl||now))/1000); room._mpl=now;
