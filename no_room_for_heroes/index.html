@@ -404,7 +404,7 @@ const ROOMS = {
   corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:5,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
   hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:4,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
   runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.20, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +20%.'},
-  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Spawns +1 goblin per wave (cap 20). They march out to ambush heroes; survivors return to the den. Feeds: kills in this room grow each goblin.'},
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Spawns goblins every wave (Lv 1-2: 1, Lv 3-4: 2, Lv 5: 3 · cap 20). Each goblin levels from its own kills — +30% HP & +20% ATK per level. Immune to your own traps. Survivors return and heal between waves.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
@@ -2993,48 +2993,68 @@ function leadHero(){
 }
 
 /* ============================ GOBLIN DEN SPAWNERS ========================
-   A pure Goblin Den is a spawner, not a stationary guard. Every wave it
-   spawns +1 goblin (cap 20). Goblins march LEFT through the dungeon (your
-   own traps don't hurt them), attack any hero they meet, and survivors are
-   banked back into the den when the wave ends.
+   A pure Goblin Den is a spawner, not a stationary guard. room.goblins is
+   an ARRAY of persistent units (each {kills}). Every wave the den adds
+   `goblinSpawnRate(lvl)` new units (cap 20). Goblins march LEFT through the
+   dungeon (your own traps don't hurt them), attack any hero they meet,
+   level up from kills (HP/ATK scale with level), and survivors are banked
+   back into the den when the wave ends. Survivors heal to full between
+   waves; the slain are gone.
 */
 const GOBLIN_DEN_CAP = 20;
 const GOBLIN_HP_FRAC = 0.34, GOBLIN_ATK_FRAC = 0.34;
-const GOBLIN_SPD = 50;       // px/sec
+const GOBLIN_SPD = 50;                       // px/sec
+const GOBLIN_LVL_MAX = 10;
+const GOBLIN_XP_PER_LVL = 3;                 // kills needed for each level up
+const GOBLIN_HP_PER_LVL = 0.30;              // +30% maxHp per level
+const GOBLIN_ATK_PER_LVL = 0.20;             // +20% atk per level
+function goblinSpawnRate(lvl){ return Math.floor(((lvl||1)-1)/2)+1; }   // Lv1-2 → 1, Lv3-4 → 2, Lv5 → 3
+function goblinLevel(kills){ return Math.min(GOBLIN_LVL_MAX, 1+Math.floor((kills||0)/GOBLIN_XP_PER_LVL)); }
+// Migrate older saves: room.goblins used to be a number (= survivor count).
+function ensureGoblinArray(r){
+  if(typeof r.goblins==='number'){ const n=r.goblins; r.goblins=[]; for(let i=0;i<n;i++) r.goblins.push({kills:0}); }
+  if(!Array.isArray(r.goblins)) r.goblins=[];
+  return r.goblins;
+}
 function spawnDenGoblinsForWave(){
   G.minions = [];
   if(!G.cells) return;
   for(const cell of G.cells){
     if(cell.spawner!=='goblin' || !cell.room) continue;
     const r=cell.room;
-    if(typeof r.goblins!=='number') r.goblins=0;
-    r.goblins = Math.min(GOBLIN_DEN_CAP, (r.goblins||0)+1);   // +1 per wave, capped at 20
+    const arr=ensureGoblinArray(r);
+    // add this wave's new recruits, respecting the cap
+    const add=Math.min(goblinSpawnRate(r.lvl), GOBLIN_DEN_CAP - arr.length);
+    for(let i=0;i<add;i++) arr.push({kills:0});
+    // derive per-goblin base stats from room state, then scale per individual level
     const parts=roomParts(r); const sI=synergyInfo(parts); const syn=sI.m + (parts.length>1?(RB.synergy||0):0);
     const def=ROOMS.goblin; const bas=bastionMul(), bm=barracksMul(), vm=vetMul(r);
-    const feed=feedMul(r.kills||0);                              // dens grow with their kill-count
+    const feed=feedMul(r.kills||0);
     const baseHp =Math.round(def.hp *(0.9+(r.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp ||0))*bm);
     const baseAtk=Math.round(def.atk*(1.0+(r.lvl-1)*0.9 )*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
-    const hp =Math.max(2, Math.round(baseHp *GOBLIN_HP_FRAC));
-    const atk=Math.max(1, Math.round(baseAtk*GOBLIN_ATK_FRAC));
-    for(let i=0;i<r.goblins;i++){
+    arr.forEach((unit,i)=>{
+      const lvl=goblinLevel(unit.kills);
+      const hp =Math.max(2, Math.round(baseHp *GOBLIN_HP_FRAC *(1+(lvl-1)*GOBLIN_HP_PER_LVL )));
+      const atk=Math.max(1, Math.round(baseAtk*GOBLIN_ATK_FRAC*(1+(lvl-1)*GOBLIN_ATK_PER_LVL)));
       G.minions.push({
-        type:'goblin', home:cell.index,
+        type:'goblin', home:cell.index, _src:unit,
         x: cell.x0 + ROOM_W*(0.55 + (i%6)*0.04),
         y: FLOOR,
         hp, maxHp:hp, atk,
         atkT: 0.4 + Math.random()*0.6,
-        state:'walking', cellIndex:cell.index, walkAnim:Math.random()*6
+        state:'walking', cellIndex:cell.index, walkAnim:Math.random()*6,
+        kills: unit.kills||0, lvl
       });
-    }
+    });
   }
 }
 function endWaveGoblins(){
   if(!G.minions) return;
-  const counts={};
-  for(const g of G.minions) if(g.hp>0) counts[g.home]=(counts[g.home]||0)+1;
+  const byHome={};
+  for(const g of G.minions){ if(g.hp>0) (byHome[g.home]=byHome[g.home]||[]).push({kills:g.kills||0}); }
   if(G.cells) for(const cell of G.cells){
     if(cell.spawner!=='goblin' || !cell.room) continue;
-    cell.room.goblins = counts[cell.index]||0;
+    cell.room.goblins = byHome[cell.index] || [];
   }
   G.minions = [];
 }
@@ -3054,13 +3074,17 @@ function goblinStep(g, dt){
     g.atkT -= dt;
     if(g.atkT<=0){
       g.atkT = 0.9;
-      // goblin strikes the hero
       target.hp -= g.atk;
       floater(target.x, target.y-40, '-'+g.atk, '#5fae54');
       burst(target.x, target.y-22, '#5fae54', 4);
-      if(target.hp<=0){ target.hp=0; heroDies(target); }
-      // hero retaliates
-      else {
+      if(target.hp<=0){
+        target.hp=0;
+        // 👺 the killing blow earns the goblin XP — level shown next wave
+        g.kills=(g.kills||0)+1;
+        const newLvl=goblinLevel(g.kills);
+        if(newLvl>g.lvl){ g.lvl=newLvl; floater(g.x, g.y-58, 'LVL '+newLvl+' ⭐', '#ffd34d', true); sfx('combo'); }
+        heroDies(target);
+      } else {
         const back=Math.max(1, Math.round(target.atk||1));
         g.hp -= back;
         floater(g.x, g.y-40, '-'+back, '#ff7a8a');
@@ -3069,7 +3093,6 @@ function goblinStep(g, dt){
     }
     return;
   }
-  // no target: march LEFT (right-to-left) looking for trouble
   g.state='walking';
   g.x -= GOBLIN_SPD*dt;
   g.walkAnim += dt*8;
@@ -3084,9 +3107,13 @@ function drawDenGoblins(tx){
   if(!G.minions || !G.minions.length) return;
   for(const g of G.minions){
     if(g.hp<=0) continue;
-    const bob = Math.sin(g.walkAnim*1.6)*1.6;
-    drawMonster(tx(g.x), 'goblin', '#5fae54');
-    bar(tx(g.x)-14, g.y-46+bob, 28, 3, g.hp/g.maxHp, '#ff4d6d');
+    const sx=tx(g.x);
+    drawMonster(sx, 'goblin', '#5fae54');
+    bar(sx-14, g.y-46, 28, 3, g.hp/g.maxHp, '#ff4d6d');
+    if(g.lvl>1){                                  // ⭐ veteran star above the head
+      X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
+      X.fillText('⭐'+g.lvl, sx, g.y-52); X.textAlign='left';
+    }
   }
 }
 // Is h the frontmost (enemy-facing) hero in its current fight/boss group?
@@ -5293,7 +5320,7 @@ function drawRoomContents(x0,w,room,i){
   if(cell && cell.spawner==='goblin'){
     const n = G.phase==='run'
       ? (G.minions||[]).filter(m=>m.home===cell.index && m.hp>0).length
-      : (room.goblins||0);
+      : (Array.isArray(room.goblins) ? room.goblins.length : (room.goblins||0));
     X.fillStyle='#5fae54'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
     X.fillText('👺 '+n+'/'+GOBLIN_DEN_CAP, cx, FLOOR-118); X.textAlign='left';
   }
@@ -5923,8 +5950,12 @@ function describeRoom(room){
     const bAtk=Math.round(def.atk*(1.0+(room.lvl-1)*0.9 )*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
     const ghp =Math.max(2, Math.round(bHp *GOBLIN_HP_FRAC));
     const gatk=Math.max(1, Math.round(bAtk*GOBLIN_ATK_FRAC));
-    lines.push(`${def.ic} Goblins (spawner): <b>${ghp}</b> HP · <b>${gatk}</b> atk each · ${room.goblins||0}/${GOBLIN_DEN_CAP} · +1/wave`);
+    const units=Array.isArray(room.goblins)?room.goblins:[];
+    const totalKills=units.reduce((s,u)=>s+(u.kills||0),0);
+    const maxLvl=units.reduce((m,u)=>Math.max(m,goblinLevel(u.kills)),1);
+    lines.push(`${def.ic} Goblins (spawner): <b>${ghp}</b> HP · <b>${gatk}</b> atk each (Lv 1) · ${units.length}/${GOBLIN_DEN_CAP} · +${goblinSpawnRate(room.lvl)}/wave`);
     lines.push(`<span class="small" style="opacity:.85">March left to ambush heroes — survivors return. Immune to your own traps.</span>`);
+    lines.push(`<span class="small" style="opacity:.85">Each goblin levels from its own kills (+${Math.round(GOBLIN_HP_PER_LVL*100)}% HP, +${Math.round(GOBLIN_ATK_PER_LVL*100)}% ATK per level, every ${GOBLIN_XP_PER_LVL} kills, cap Lv ${GOBLIN_LVL_MAX}). Top vet: <b>Lv ${maxLvl}</b> · pack kills: <b>${totalKills}</b>.</span>`);
     if(feed>1) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feed-1)*100)}% per goblin (no cap)`);
   } else if(monParts.length){ let fed=false; const bas=bastionMul(), bm=barracksMul();
     // each guard gets its OWN stat line (two fused monsters fight one after the other)
