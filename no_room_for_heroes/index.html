@@ -4096,9 +4096,14 @@ function simStep(h,dt){
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
-    // a living monster blocks: walk up to it (through the trap), THEN fight
-    if(cell && cell.mon && cell.mon.alive && h.x >= cell.x0+ROOM_W*0.5){
-      h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
+    // a living monster blocks: stop just inside the room and let the monster march
+    // over to you (its sprite slides left in the draw step). Engage on contact.
+    if(cell && cell.mon && cell.mon.alive){
+      const stopX = cell.x0+ROOM_W*0.08;
+      if(h.x>stopX) h.x=stopX;
+      const monF = (cell.room && cell.room._monF!==undefined) ? cell.room._monF : 0.74;
+      const monX = cell.x0 + ROOM_W*monF;
+      if(monX <= h.x + 24){ h.state='fighting'; h.atkT=0; cell.mon.atkT=0; }
       return;
     }
     // reached boss room? stand INSIDE it (in front of the boss), not at the door
@@ -5150,7 +5155,8 @@ function drawRoomContents(x0,w,room,i){
     // (advance the moment a hero is in the cell — don't wait for fighting state)
     const engaged = alive && cell && G.phase==='run'
       && (G.heroes||[]).some(h=>h && h.cellIndex===cell.index && (h.state==='walking'||h.state==='fighting'));
-    const targetF = engaged ? 0.58 : 0.74;
+    // engaged: march all the way across to meet the hero waiting just inside the door
+    const targetF = engaged ? 0.20 : 0.74;
     if(room._monF===undefined) room._monF=targetF;
     const now=performance.now(); const mdt=Math.min(0.05,(now-(room._mpl||now))/1000); room._mpl=now;
     const rate=0.42;                                   // fraction/sec (~84px/s)
