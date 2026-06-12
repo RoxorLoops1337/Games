@@ -2238,11 +2238,12 @@ function updateCamera(dt){
     camera.lookAt(tmpV.x, tmpV.y + 0.8, tmpV.z);
     camera.fov = lerp(camera.fov, 50, dt * 2);
   } else {
-    // hug-the-bumper chase camera: cockpit-low, the road sweeps fast underneath
-    posAt(pl.s - 3.2, pl.lat * 0.7, tmpV);
-    camPos.set(tmpV.x, tmpV.y + 1.85, tmpV.z);
-    posAt(pl.s + 6 + pl.v * 0.06, pl.lat * 0.9, tmpV2);
-    camLook.set(tmpV2.x, tmpV2.y + 0.55, tmpV2.z);
+    // close eagle-view chase cam: behind the bumper but lifted, angled down
+    // so the car sits in the bottom-center of the frame and the road sweeps up
+    posAt(pl.s - 2.6, pl.lat * 0.7, tmpV);
+    camPos.set(tmpV.x, tmpV.y + 4.2, tmpV.z);
+    posAt(pl.s + 3.5 + pl.v * 0.04, pl.lat * 0.9, tmpV2);
+    camLook.set(tmpV2.x, tmpV2.y + 0.25, tmpV2.z);
     camera.position.lerp(camPos, clamp(dt * 6, 0, 1));
     if (G.shake > 0.01) {
       camShakeT += dt * 40;
