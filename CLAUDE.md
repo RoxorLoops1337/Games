@@ -66,6 +66,7 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - Campaign difficulty: the `0.034` term in `difficulty()`
 - Trap strike timing: `TRAP_RISE=110`, `TRAP_FALL=480`; flame cascade `70`ms; candle loop `110`ms
 - Music volume under SFX: `MUSIC_SCALE=0.55`
+- Den goblins: `GOBLIN_HP_FRAC=0.55`, hero retaliation `*0.4` in `goblinStep`, `GOBLIN_SPD=50`, cap `GOBLIN_DEN_CAP=20`
 
 # Deploy & infra
 
