@@ -404,7 +404,7 @@ const ROOMS = {
   corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:5,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
   hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:4,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
   runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.20, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +20%.'},
-  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Weak early — but grows stronger with every hero that dies in this room (fast at first, never caps).'},
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Spawns goblins every wave (Lv 1-2: 1, Lv 3-4: 2, Lv 5: 3 · cap 20). Each goblin levels from its own kills — +30% HP & +20% ATK per level. Immune to your own traps. Survivors return and heal between waves.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
@@ -559,7 +559,7 @@ const TOWN_SCHEMES = {
   temple: {name:'Burn the Temple',  ic:'🔥', cost:5, waves:5, desc:'No clerics arrive for 5 waves.'},
 };
 // Corrupt a previewed hero into a minion you can place to defend a room.
-const CORRUPT_COST = 6;
+const CORRUPT_COST = 12;        // doubled — and capped at 1 corruption per town visit (see G.corruptedThisTown)
 
 // Named adventurers + grudge titles for recurring rivals.
 const HERO_NAMES = ['Aldric','Bryn','Cael','Dara','Edrik','Fenn','Gwen','Hale',
@@ -960,9 +960,10 @@ function buildTown(id){
 // and the fallen throne swallows half. ---
 const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
-  const slain=G.totalSlain||0, lvl=(G.mode==='campaign'?(G.levelIdx||0):0), m=quarryMul();
-  // Town grind eased ~25%: wood/stone and shards (the meta currency) earn a bit faster.
-  return { wood:Math.floor(slain*0.05*m), stone:Math.floor(slain*0.025*m), shards:Math.floor((slain/4+lvl)*m/8) };
+  // Per-kill loot rolls (see heroDies): 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing.
+  // Champions roll twice. Quarry still scales the wood/stone/shards haul.
+  const d=G.drops||{}, m=quarryMul();
+  return { wood:Math.floor((d.wood||0)*m), stone:Math.floor((d.stone||0)*m), shards:Math.floor((d.shards||0)*m) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -1221,6 +1222,7 @@ function freshGame(mode){
     survived:0,           // heroes killed this level / run
     heroNum:0,            // total heroes spawned (scaling)
     totalSlain:0,         // cumulative kills (drives scaling + town breaks)
+    drops:{wood:0, stone:0, shards:0, runes:0},  // per-kill loot rolls — 20/20/20/10/30, champions roll twice
     heroSeq:0,            // power index assigned to each generated hero
     queue:[],             // upcoming hero specs (previewed in town & staging) — in campaign this IS the next wave
     waveLevel:null,       // campaign: which level G.queue was rolled for (keeps preview == actual spawn)
@@ -2539,7 +2541,7 @@ function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
   G.brokenCells={};                              // doorways get patched up between waves
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
-  else ensureQueue(Math.max(3, G.guildLvl+1));   // endless: pre-roll the next arrivals to preview
+  else ensureQueue(Math.max(3, G.guildLvl+1+(hasEdict('warband')?1:0)));   // endless: pre-roll the next arrivals to preview (Warband +1)
   smithyRestock();                                // Dark Smithy: free shop stock
   frameWave();                                    // the gameplay framing (boss right, gate + a slice of landscape)
   if(first){
@@ -2708,6 +2710,7 @@ function startWave(){
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
   spawnGroup(G.guildLvl+1);
+  spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 20) marches out this wave
   G.phase='run'; speedMul=1; frameWaveRun();      // hug the right edge, heroes just in frame
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
@@ -2727,6 +2730,10 @@ function buildCells(){
       const syn=sI.m + (parts.length>1?(RB.synergy||0):0);
       cell.syn=syn;
       const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank powers this cell
+      // 👺 Pure Goblin Den = a SPAWNER — no stationary guard; goblins march out per wave
+      const monParts=parts.filter(p=>ROOMS[p] && ROOMS[p].kind==='monster');
+      const pureGoblin=monParts.length>0 && monParts.every(p=>p==='goblin');
+      if(pureGoblin) cell.spawner='goblin';
       let guards=[], hasShop=false; const bm=barracksMul();
       for(const p of parts){
         const def=ROOMS[p];
@@ -2734,6 +2741,7 @@ function buildCells(){
           cell.traps.push({type:p, def, fireT:0});
           if(def.amp) cell.ampSelf=(cell.ampSelf||0)+def.amp;     // Runestone amplifier (this + adjacent)
         } else if(def.kind==='monster'){
+          if(pureGoblin) continue;                                 // spawner: handled by spawnDenGoblinsForWave
           if(def.taunt) cell.warden=true;                        // strikes the whole stalled party
           if(def.totem) cell.totem=true;                         // buffs adjacent rooms while alive
           const bHp = p==='minion'? (r.minHp||def.hp) : def.hp;   // ||def guards a NaN/missing minion stat
@@ -2954,6 +2962,7 @@ function spawnGroup(n){
     ensureQueue(count);
     for(let k=0;k<count;k++) specs.push(G.queue.shift());
   }
+  if(!specs.length) specs.push(nextSpec());    // never start with no heroes (e.g. corrupted the whole wave)
   G.heroes=[];
   const count=specs.length;
   for(let k=0;k<count;k++){
@@ -2981,6 +2990,131 @@ function leadHero(){
   let best=null;
   for(const h of G.heroes){ if(h.state!=='dead' && (!best || h.x>best.x)) best=h; }
   return best;
+}
+
+/* ============================ GOBLIN DEN SPAWNERS ========================
+   A pure Goblin Den is a spawner, not a stationary guard. room.goblins is
+   an ARRAY of persistent units (each {kills}). Every wave the den adds
+   `goblinSpawnRate(lvl)` new units (cap 20). Goblins march LEFT through the
+   dungeon (your own traps don't hurt them), attack any hero they meet,
+   level up from kills (HP/ATK scale with level), and survivors are banked
+   back into the den when the wave ends. Survivors heal to full between
+   waves; the slain are gone.
+*/
+const GOBLIN_DEN_CAP = 20;
+const GOBLIN_HP_FRAC = 0.34, GOBLIN_ATK_FRAC = 0.34;
+const GOBLIN_SPD = 50;                       // px/sec
+const GOBLIN_LVL_MAX = 10;
+const GOBLIN_XP_PER_LVL = 3;                 // kills needed for each level up
+const GOBLIN_HP_PER_LVL = 0.30;              // +30% maxHp per level
+const GOBLIN_ATK_PER_LVL = 0.20;             // +20% atk per level
+function goblinSpawnRate(lvl){ return Math.floor(((lvl||1)-1)/2)+1; }   // Lv1-2 → 1, Lv3-4 → 2, Lv5 → 3
+function goblinLevel(kills){ return Math.min(GOBLIN_LVL_MAX, 1+Math.floor((kills||0)/GOBLIN_XP_PER_LVL)); }
+// Migrate older saves: room.goblins used to be a number (= survivor count).
+function ensureGoblinArray(r){
+  if(typeof r.goblins==='number'){ const n=r.goblins; r.goblins=[]; for(let i=0;i<n;i++) r.goblins.push({kills:0}); }
+  if(!Array.isArray(r.goblins)) r.goblins=[];
+  return r.goblins;
+}
+function spawnDenGoblinsForWave(){
+  G.minions = [];
+  if(!G.cells) return;
+  for(const cell of G.cells){
+    if(cell.spawner!=='goblin' || !cell.room) continue;
+    const r=cell.room;
+    const arr=ensureGoblinArray(r);
+    // add this wave's new recruits, respecting the cap
+    const add=Math.min(goblinSpawnRate(r.lvl), GOBLIN_DEN_CAP - arr.length);
+    for(let i=0;i<add;i++) arr.push({kills:0});
+    // derive per-goblin base stats from room state, then scale per individual level
+    const parts=roomParts(r); const sI=synergyInfo(parts); const syn=sI.m + (parts.length>1?(RB.synergy||0):0);
+    const def=ROOMS.goblin; const bas=bastionMul(), bm=barracksMul(), vm=vetMul(r);
+    const feed=feedMul(r.kills||0);
+    const baseHp =Math.round(def.hp *(0.9+(r.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp ||0))*bm);
+    const baseAtk=Math.round(def.atk*(1.0+(r.lvl-1)*0.9 )*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
+    arr.forEach((unit,i)=>{
+      const lvl=goblinLevel(unit.kills);
+      const hp =Math.max(2, Math.round(baseHp *GOBLIN_HP_FRAC *(1+(lvl-1)*GOBLIN_HP_PER_LVL )));
+      const atk=Math.max(1, Math.round(baseAtk*GOBLIN_ATK_FRAC*(1+(lvl-1)*GOBLIN_ATK_PER_LVL)));
+      G.minions.push({
+        type:'goblin', home:cell.index, _src:unit,
+        x: cell.x0 + ROOM_W*(0.55 + (i%6)*0.04),
+        y: FLOOR,
+        hp, maxHp:hp, atk,
+        atkT: 0.4 + Math.random()*0.6,
+        state:'walking', cellIndex:cell.index, walkAnim:Math.random()*6,
+        kills: unit.kills||0, lvl
+      });
+    });
+  }
+}
+function endWaveGoblins(){
+  if(!G.minions) return;
+  const byHome={};
+  for(const g of G.minions){ if(g.hp>0) (byHome[g.home]=byHome[g.home]||[]).push({kills:g.kills||0}); }
+  if(G.cells) for(const cell of G.cells){
+    if(cell.spawner!=='goblin' || !cell.room) continue;
+    cell.room.goblins = byHome[cell.index] || [];
+  }
+  G.minions = [];
+}
+function goblinStep(g, dt){
+  if(g.hp<=0) return;
+  const c = cellAt(g.x); if(c) g.cellIndex=c.index;
+  // pick a living hero in this cell, if any
+  let target=null, bestDx=Infinity;
+  for(const h of (G.heroes||[])){
+    if(!h || h.state==='dead' || h.x<0 || h.cellIndex!==g.cellIndex) continue;
+    const dx=Math.abs(h.x-g.x); if(dx<bestDx){ bestDx=dx; target=h; }
+  }
+  if(target){
+    g.state='fighting';
+    if(bestDx>16) g.x += Math.sign(target.x-g.x)*GOBLIN_SPD*dt;
+    g.walkAnim += dt*8;
+    g.atkT -= dt;
+    if(g.atkT<=0){
+      g.atkT = 0.9;
+      target.hp -= g.atk;
+      floater(target.x, target.y-40, '-'+g.atk, '#5fae54');
+      burst(target.x, target.y-22, '#5fae54', 4);
+      if(target.hp<=0){
+        target.hp=0;
+        // 👺 the killing blow earns the goblin XP — level shown next wave
+        g.kills=(g.kills||0)+1;
+        const newLvl=goblinLevel(g.kills);
+        if(newLvl>g.lvl){ g.lvl=newLvl; floater(g.x, g.y-58, 'LVL '+newLvl+' ⭐', '#ffd34d', true); sfx('combo'); }
+        heroDies(target);
+      } else {
+        const back=Math.max(1, Math.round(target.atk||1));
+        g.hp -= back;
+        floater(g.x, g.y-40, '-'+back, '#ff7a8a');
+        if(g.hp<=0){ g.hp=0; burst(g.x, g.y-18, '#5fae54', 14); sfx('hit'); }
+      }
+    }
+    return;
+  }
+  g.state='walking';
+  g.x -= GOBLIN_SPD*dt;
+  g.walkAnim += dt*8;
+  if(g.x < 6) g.x = 6;
+}
+function goblinTick(dt){
+  if(!G.minions || !G.minions.length) return;
+  for(const g of G.minions) goblinStep(g, dt);
+  G.minions = G.minions.filter(g=>g.hp>0);
+}
+function drawDenGoblins(tx){
+  if(!G.minions || !G.minions.length) return;
+  for(const g of G.minions){
+    if(g.hp<=0) continue;
+    const sx=tx(g.x);
+    drawMonster(sx, 'goblin', '#5fae54');
+    bar(sx-14, g.y-46, 28, 3, g.hp/g.maxHp, '#ff4d6d');
+    if(g.lvl>1){                                  // ⭐ veteran star above the head
+      X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
+      X.fillText('⭐'+g.lvl, sx, g.y-52); X.textAlign='left';
+    }
+  }
 }
 // Is h the frontmost (enemy-facing) hero in its current fight/boss group?
 function isFrontHero(h){
@@ -3214,6 +3348,16 @@ function heroDies(h){
     + (RB.dreadKill||0) + townDreadKill() + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
+  // Loot drop: 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing. Champions roll twice.
+  if(!G.drops) G.drops={wood:0,stone:0,shards:0,runes:0};
+  const lootRolls = h.champion ? 2 : 1;
+  for(let i=0;i<lootRolls;i++){
+    const r=Math.random();
+    if(r<0.20){      G.drops.wood++;   floater(h.x, h.y-66-i*16, '+1 🪵', '#b58a4e'); }
+    else if(r<0.40){ G.drops.stone++;  floater(h.x, h.y-66-i*16, '+1 🪨', '#a8a8b4'); }
+    else if(r<0.60){ G.drops.runes++;  floater(h.x, h.y-66-i*16, '+1 ᚱ',  '#b985ff'); }
+    else if(r<0.70){ G.drops.shards++; floater(h.x, h.y-66-i*16, '+1 💠', '#9adfff'); }
+  }
   // Devour passive: the boss feasts on the fallen
   if(G.boss.feed) healBoss(Math.round(G.boss.maxHp*G.boss.feed));
   if(hasMandate('bloodthrone')) healBoss(Math.round(G.boss.maxHp*0.03));   // Bloodthrone mandate: heal per kill
@@ -3260,6 +3404,7 @@ function heroDies(h){
 function afterWave(){
   if(G.phase!=='run') return;          // run already ended (closed/lost/won) — don't resurrect it
   G.waveEnding=false;
+  endWaveGoblins();                    // bank surviving goblins back into their dens
   if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
   // Endless: town every 5 kills, relic every 10, mandate every 25
   G.townDue = Math.floor(G.waveStartSlain/5) !== Math.floor(G.totalSlain/5);
@@ -3545,11 +3690,11 @@ function buildPostmortem(){
   </div>`;
 }
 // Bank this run's rune points (delta since last banking) into the pool.
-// Income is deliberately stingy: ~1 point per 4 kills + 1 per chapter cleared.
+// Income now flows from per-kill loot rolls (20% rune per slain hero, champions roll twice)
+// + 1 per campaign chapter cleared, then edict/library multipliers.
 function awardRunes(){
-  // Edicts multiply the runes you bank for the whole run.
-  // Rune income eased ~25% (÷8 instead of ÷10) so the tree fills a bit quicker.
-  const total = Math.floor((G.totalSlain/4 + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul() / 8);
+  const drops = (G.drops && G.drops.runes) || 0;
+  const total = Math.floor((drops + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul());
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
@@ -3714,6 +3859,7 @@ const EVENTS = [
 function gotoTown(){
   G.phase='town';
   if(G.mode==='campaign') prepCampaignWave(); else ensureQueue(3);   // show the real next wave in the roster
+  G.corruptedThisTown=0;                                              // 1 corruption per town visit
   G.townEvent={ ...pick(EVENTS), done:false, outcome:'' };
   G.merchant=rollMerchant();
   renderTown();
@@ -3843,10 +3989,11 @@ function grantMinionCard(power){
 function corruptHero(idx){
   const spec=G.queue[idx]; if(!spec) return;
   if(townLvl('inn')<INN_UNLOCK.corrupt){ showHint('Build the Inn (Lv 2) to corrupt heroes.'); return; }
+  if((G.corruptedThisTown||0)>=1){ showHint('Only one corruption per town visit.'); return; }
   const cc=corruptCost();
   if(G.dread<cc){ showHint('Not enough dread.'); return; }
   if(G.hand.length>=handCap()){ showHint('Hand full — play a card first.'); return; }
-  G.dread-=cc; G.queue.splice(idx,1);
+  G.dread-=cc; G.queue.splice(idx,1); G.corruptedThisTown=(G.corruptedThisTown||0)+1;
   // Campaign: corrupting a hero simply shrinks THIS wave (don't refill with strangers).
   G.hand.push(minionCardFromSpec(spec)); if(G.mode!=='campaign') ensureQueue(3);
   showHint((spec.name||'A hero')+' is corrupted into a minion!'); renderTown(); renderTop();
@@ -3937,7 +4084,7 @@ function renderTown(){
       return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
         ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
     const canCorrupt = townLvl('inn')>=INN_UNLOCK.corrupt;
-    const corruptDis = G.dread<corruptCost() || G.hand.length>=handCap();
+    const corruptDis = G.dread<corruptCost() || G.hand.length>=handCap() || (G.corruptedThisTown||0)>=1;
     const ch = spec.champion ? CHAMPIONS[spec.champion] : null;
     return `<div class="choice" style="width:208px;${ch?'border-color:'+ch.col+';box-shadow:0 0 10px '+ch.col:spec.rival?'border-color:#ff6b8a':''}">
       <div class="big">${ch?ch.ic+'👑':c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
@@ -4003,6 +4150,7 @@ function update(dt){
   for(let s=0;s<steps && G.phase==='run';s++){
     for(const h of G.heroes){ if(G.phase!=='run') break; if(h.state!=='dead') simStep(h,sdt); }
     if(G.phase==='run') aoeTrapTick(sdt);
+    if(G.phase==='run') goblinTick(sdt);
   }
   if(G.phase!=='run') return;
   G.hero=leadHero();
@@ -4084,10 +4232,12 @@ function simStep(h,dt){
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
-    // a living monster blocks: walk up to it (through the trap), THEN fight
-    if(cell && cell.mon && cell.mon.alive && h.x >= cell.x0+ROOM_W*0.5){
-      h.state='fighting'; h.x=cell.x0+ROOM_W*0.55; h.atkT=0; cell.mon.atkT=0;
-      return;
+    // a living monster blocks: keep walking until the monster's advancing sprite
+    // reaches you, then engage. (The monster slides left in the draw step.)
+    if(cell && cell.mon && cell.mon.alive){
+      const monF = (cell.room && cell.room._monF!==undefined) ? cell.room._monF : 0.74;
+      const monX = cell.x0 + ROOM_W*monF;
+      if(monX <= h.x + 24){ h.state='fighting'; h.atkT=0; cell.mon.atkT=0; return; }
     }
     // reached boss room? stand INSIDE it (in front of the boss), not at the door
     if(h.x >= cellX(G.slots)+ROOM_W*0.30){
@@ -4652,6 +4802,7 @@ function drawDungeon(tx, scale, isBuild){
   const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
   party.filter(h=>h.state==='dead').forEach(h=>drawHeroDead(tx(h.x), h));
   party.filter(h=>h.state!=='dead').forEach(h=>drawHero(tx(h.x), h));
+  if(G.phase==='run') drawDenGoblins(tx);    // 👺 marching goblins from Den spawners
 }
 // Build a lightweight hero object from a queued spec for drawing/preview.
 function previewHeroObj(spec){
@@ -4672,7 +4823,7 @@ function drawWaitingHeroes(tx){
   // alone, otherwise the guild-sized party.
   let n;
   if(G.mode==='campaign') n=Math.min(G.queue.length, 9);
-  else n=G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1);
+  else n=G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0));
   const hasChamp = G.queue.slice(0,n).some(s=>s.champion);
   // gate line at the entrance
   X.strokeStyle='rgba(120,100,170,.5)'; X.setLineDash([4,5]); X.lineWidth=2;
@@ -5087,6 +5238,40 @@ function drawRoomArt(x0,w,img){
   X.drawImage(img, Math.round(x0), Math.round(FLOOR+ROOM_ART_DROP-dh), Math.round(w), dh);
   X.imageSmoothingEnabled=sm;
 }
+// ⚡ Lightning arcs from a Tesla coil to every hero in the room (and chaining
+// across them) for ~180ms after the coil fires. Pure visual — damage is dealt
+// in trapTick. Jagged segments re-randomise per frame so the bolt feels alive.
+function drawTeslaArcs(x0, w, cell){
+  if(!cell || G.phase!=='run' || !cell.traps || !cell.traps.length) return;
+  const tr=cell.traps.find(t=>t.type==='tesla' && t.firedAt); if(!tr) return;
+  const since = performance.now() - tr.firedAt; const FLASH=180;
+  if(since<0 || since>FLASH) return;
+  const fade = 1 - since/FLASH;
+  const targets = (G.heroes||[]).filter(h=>h && h.state!=='dead' && h.cellIndex===cell.index);
+  if(!targets.length) return;
+  const cx = x0 + w*0.5, cy = FLOOR-50;     // coil tip
+  X.save();
+  X.shadowColor='#fff34d'; X.shadowBlur=8;
+  X.strokeStyle='#fff34d'; X.lineWidth=2.2; X.globalAlpha=0.55+0.45*fade;
+  for(const h of targets) drawJaggedBolt(cx, cy, h.x, h.y-30);
+  // chain across heroes (visual mirror of the CONDUCT mechanic)
+  if(targets.length>1){
+    X.strokeStyle='#9adfff'; X.lineWidth=1.4; X.globalAlpha=0.4+0.4*fade;
+    for(let i=1;i<targets.length;i++) drawJaggedBolt(targets[i-1].x, targets[i-1].y-30, targets[i].x, targets[i].y-30);
+  }
+  X.restore();
+}
+function drawJaggedBolt(x1,y1,x2,y2){
+  X.beginPath(); X.moveTo(x1,y1);
+  const segs=6;
+  for(let i=1;i<segs;i++){
+    const t=i/segs;
+    const x = x1 + (x2-x1)*t + (Math.random()-0.5)*18;
+    const y = y1 + (y2-y1)*t + (Math.random()-0.5)*14;
+    X.lineTo(x,y);
+  }
+  X.lineTo(x2,y2); X.stroke();
+}
 function drawRoomFull(x0,w,room,i){
   const k=roomArtReady(room);
   if(k) drawRoomArt(x0,w,cellArt(k,i));                                  // dedicated full art (broken variant after a champion smash)
@@ -5110,6 +5295,7 @@ function drawRoomContents(x0,w,room,i){
   const drewType={};
   for(const it of items) if(drawTrapPart(x0,w,it.type,it.p,it.pi,cell)) drewType[it.type]=1;
   for(const tp of trapTypes) if(!drewType[tp]) drawTrapProp(x0,w,cx,tp,cell);   // procedural fallback
+  if(trapTypes.includes('tesla')) drawTeslaArcs(x0,w,cell);   // ⚡ arcs from coil through heroes when it fires
   if(cell && cell._disarmT>0){   // rogue disarmed this room's traps
     X.globalAlpha=0.55+0.35*Math.sin(performance.now()/120); X.fillStyle='#5fd17a';
     X.font='bold 11px Trebuchet MS'; X.textAlign='center';
@@ -5130,13 +5316,26 @@ function drawRoomContents(x0,w,room,i){
       else { px(bx-3,by-1,6,2,'#cfc8b4'); px(bx-1,by-3,2,2,'#bdb7a7'); }   // scattered bones
     }
   }
+  // 👺 Goblin Den spawner badge: show the current goblin count above the room
+  if(cell && cell.spawner==='goblin'){
+    const n = G.phase==='run'
+      ? (G.minions||[]).filter(m=>m.home===cell.index && m.hp>0).length
+      : (Array.isArray(room.goblins) ? room.goblins.length : (room.goblins||0));
+    X.fillStyle='#5fae54'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
+    X.fillText('👺 '+n+'/'+GOBLIN_DEN_CAP, cx, FLOOR-118); X.textAlign='left';
+  }
   // monsters (a combo room can hold two) — draw each so both stay visible
+  // (a spawner Den has no stationary guard in run phase — the goblins are out marching)
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
+  if(cell && cell.spawner==='goblin' && G.phase==='run'){ /* skip — goblins drawn by drawDenGoblins */ } else
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
     // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
-    const engaged = alive && cell && G.phase==='run' && monsterAttacking(cell);
-    const targetF = engaged ? 0.58 : 0.74;
+    // (advance the moment a hero is in the cell — don't wait for fighting state)
+    const engaged = alive && cell && G.phase==='run'
+      && (G.heroes||[]).some(h=>h && h.cellIndex===cell.index && (h.state==='walking'||h.state==='fighting'));
+    // engaged: march all the way across to meet the hero waiting just inside the door
+    const targetF = engaged ? 0.20 : 0.74;
     if(room._monF===undefined) room._monF=targetF;
     const now=performance.now(); const mdt=Math.min(0.05,(now-(room._mpl||now))/1000); room._mpl=now;
     const rate=0.42;                                   // fraction/sec (~84px/s)
@@ -5259,6 +5458,64 @@ if(typeof Image!=='undefined'){
 }
 function champReady(){ return CHAMP_WALK.length===12 && CHAMP_WALK.every(im=>im&&im._ok); }
 function champAtkReady(){ return CHAMP_ATK.length===14 && CHAMP_ATK.every(im=>im&&im._ok); }
+
+// ---- Super Rogue (rogue-class champion: 'thief') ----
+// Same big-mini-boss role as the Super Knight, but for the rogue class. Five
+// clips: walk(15), idle(5), attack1(6), attack2(7) alternating per swing, and
+// death(7). All filenames are 1-based 2-digit (s_rogue_<clip>_<NN>.png).
+const ROGUE_WALK=[], ROGUE_IDLE=[], ROGUE_ATK1=[], ROGUE_ATK2=[], ROGUE_DEATH=[];
+const ROGUE_WALK_DH=96, ROGUE_IDLE_DH=110, ROGUE_ATK_DH=100, ROGUE_DEATH_DH=98;
+const ROGUE_WALK_FPS=14, ROGUE_IDLE_FPS=6, ROGUE_DEATH_MS=140;
+if(typeof Image!=='undefined'){
+  const load=(arr,clip,n)=>{ for(let i=1;i<=n;i++){ const im=new Image(); im.onload=()=>{im._ok=true;};
+    im.src='sprites/super_rogue/s_rogue_'+clip+'_'+String(i).padStart(2,'0')+'.png'; arr.push(im); } };
+  load(ROGUE_WALK,'walk',15); load(ROGUE_IDLE,'idle',5);
+  load(ROGUE_ATK1,'attack1',6); load(ROGUE_ATK2,'attack2',7);
+  load(ROGUE_DEATH,'death',7);
+}
+function rogueWalkReady(){ return ROGUE_WALK.length===15 && ROGUE_WALK.every(im=>im&&im._ok); }
+function rogueIdleReady(){ return ROGUE_IDLE.length===5  && ROGUE_IDLE.every(im=>im&&im._ok); }
+function rogueAtkReady() { return ROGUE_ATK1.length===6 && ROGUE_ATK2.length===7
+                                && ROGUE_ATK1.every(im=>im&&im._ok) && ROGUE_ATK2.every(im=>im&&im._ok); }
+function isRogueChamp(h){ return h && h.champion && CHAMPIONS[h.champion] && CHAMPIONS[h.champion].cls==='rogue'; }
+
+function drawSuperRogue(sx, footY, h){
+  const moving = h.state==='walking' && !(h.freeze>0) && (h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02);
+  const fighting = (h.state==='fighting'||h.state==='boss') && !(h.freeze>0);
+  const now=performance.now();
+  let im, dh=ROGUE_WALK_DH;
+  if(fighting && rogueAtkReady()){
+    if(h._champClip!=='attack'){
+      h._champClip='attack';
+      h._rogueSwingIx = ((h._rogueSwingIx||0)+1) % 2;   // alternate atk1 ↔ atk2 per swing
+    }
+    const iv=(h.state==='boss'?0.8:0.7)*(h.atkSpeed||1);
+    const prog=Math.max(0, Math.min(0.999, 1-(h.atkT||0)/iv));
+    const clip = h._rogueSwingIx ? ROGUE_ATK2 : ROGUE_ATK1;
+    im = clip[Math.floor(prog*clip.length)]; dh = ROGUE_ATK_DH;
+    h._champLast=now;
+  } else if(moving && rogueWalkReady()){
+    if(h._champClip!=='walk'){ h._champClip='walk'; h._champT=0; }
+    const dt=Math.min(0.1,(now-(h._champLast||now))/1000); h._champLast=now;
+    h._champT=(h._champT||0)+dt;
+    im = ROGUE_WALK[Math.floor(h._champT*ROGUE_WALK_FPS)%15]; dh=ROGUE_WALK_DH;
+  } else if(rogueIdleReady()){
+    if(h._champClip!=='idle'){ h._champClip='idle'; h._champT=0; }
+    const dt=Math.min(0.1,(now-(h._champLast||now))/1000); h._champLast=now;
+    h._champT=(h._champT||0)+dt;
+    im = ROGUE_IDLE[Math.floor(h._champT*ROGUE_IDLE_FPS)%5]; dh=ROGUE_IDLE_DH;
+  } else {
+    h._champClip='idle'; h._champLast=now; im=ROGUE_WALK[0] || ROGUE_IDLE[0]; dh=ROGUE_IDLE_DH;
+  }
+  h._animPX=h.x;
+  if(!im||!im._ok) return false;
+  const dw=Math.round(dh*(im.width/im.height));
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=true;
+  X.drawImage(im, Math.round(sx-dw/2), Math.round(footY-dh+2), dw, dh);
+  X.imageSmoothingEnabled=sm;
+  return true;
+}
+
 function drawChampion(sx, footY, h){
   const moving = h.state==='walking' && !(h.freeze>0) && (h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02);
   const fighting = (h.state==='fighting'||h.state==='boss') && !(h.freeze>0);
@@ -5290,7 +5547,8 @@ function drawHero(sx,h){
   const yy=y+bob;
   const champ=!!h.champion;
   const king=!!h.king;
-  const champSprite = champ && champReady();
+  const rogueChamp = champ && isRogueChamp(h);
+  const champSprite = champ && (rogueChamp ? (rogueWalkReady()||rogueIdleReady()||rogueAtkReady()) : champReady());
   // aura (champion = its colour, bigger/brighter; elite = trait colour; king = royal gold)
   if(champ || h.elite || king){
     const t=performance.now()/200;
@@ -5302,9 +5560,10 @@ function drawHero(sx,h){
   }
   // shadow
   X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,champSprite?26:(champ?20:14),4,0,0,7); X.fill();
-  // the empowered hero renders as the big Super Knight; classes with a sprite use
-  // their character; everyone else keeps the pixel figure
-  const drewChamp = champSprite && drawChampion(sx, y, h);
+  // the empowered hero renders as the big Super Knight (or Super Rogue for
+  // rogue-class champions); other classes use their hero sprite; the rest get
+  // the pixel figure
+  const drewChamp = champSprite && (rogueChamp ? drawSuperRogue(sx, y, h) : drawChampion(sx, y, h));
   const skey = !drewChamp && CLASS_SPRITE[h.cls];
   const drewKnight = skey && spriteReady(skey) && drawSprite(sx, y, h, skey);
   if(!drewChamp && !drewKnight){
@@ -5322,7 +5581,7 @@ function drawHero(sx,h){
     if(h.cls==='cleric'){ px(sx-2,yy-58,4,10,'#ffec99'); px(sx-5,yy-54,10,4,'#ffec99'); } //cross
   }
   // visual top of the figure — overlays (HP, gold, crown, name) stack above it
-  const figTop = drewChamp ? (y - CHAMP_DH) : (yy - 46);
+  const figTop = drewChamp ? (y - (rogueChamp?ROGUE_IDLE_DH:CHAMP_DH)) : (yy - 46);
   // frozen / elemental status tints
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
@@ -5352,13 +5611,18 @@ function drawHero(sx,h){
 }
 function drawHeroDead(sx,h){
   const y=FLOOR+(h.yOff||0);
-  // champions get their painted death animation (play once, hold last frame)
-  if(h.champion && CHAMP_DEATH.length){
-    const N=CHAMP_DEATH.length;
+  // champions get their painted death animation (play once, hold last frame).
+  // Rogue-class champions use the Super Rogue death frames; everyone else uses
+  // the Super Knight set.
+  const useRogue = isRogueChamp(h) && ROGUE_DEATH.length && ROGUE_DEATH.every(im=>im&&im._ok);
+  const arr = useRogue ? ROGUE_DEATH : (h.champion ? CHAMP_DEATH : null);
+  if(arr && arr.length){
+    const dhBase = useRogue ? ROGUE_DEATH_DH : CHAMP_DEATH_DH;
+    const N=arr.length;
     const f=Math.min(N-1, h.diedAt!=null ? Math.floor((performance.now()-h.diedAt)/CHAMP_DEATH_MS) : N-1);
-    const im=CHAMP_DEATH[f];
+    const im=arr[f];
     if(im && im._ok){
-      const dh=CHAMP_DEATH_DH, dw=dh*(im.width/im.height);
+      const dh=dhBase, dw=dh*(im.width/im.height);
       const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
       X.drawImage(im, Math.round(sx-dw/2), Math.round(y-dh), Math.round(dw), Math.round(dh));
       X.imageSmoothingEnabled=sm;
@@ -5722,7 +5986,7 @@ function entityAt(wx){
   // upcoming heroes waiting in the staging zone (build) — match drawWaitingHeroes
   if(G.phase==='build' && G.queue && G.queue.length && wx<0){
     const n = G.mode==='campaign' ? Math.min(G.queue.length, 9)
-            : (G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1));
+            : (G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0)));
     let best=-1,bd=24;
     for(let k=0;k<n;k++){ const hx=-STAGEW*0.62+k*14; const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
     if(best>=0) return {kind:'queuehero', spec:G.queue[best]};
@@ -5744,7 +6008,21 @@ function describeRoom(room){
     lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  if(monParts.length){ let fed=false; const bas=bastionMul(), bm=barracksMul();
+  const pureGoblin = monParts.length>0 && monParts.every(p=>p==='goblin');
+  if(pureGoblin){ const def=ROOMS.goblin; const bas=bastionMul(), bm=barracksMul();
+    const feed=feedMul(room.kills||0);
+    const bHp =Math.round(def.hp *(0.9+(room.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp ||0))*bm);
+    const bAtk=Math.round(def.atk*(1.0+(room.lvl-1)*0.9 )*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
+    const ghp =Math.max(2, Math.round(bHp *GOBLIN_HP_FRAC));
+    const gatk=Math.max(1, Math.round(bAtk*GOBLIN_ATK_FRAC));
+    const units=Array.isArray(room.goblins)?room.goblins:[];
+    const totalKills=units.reduce((s,u)=>s+(u.kills||0),0);
+    const maxLvl=units.reduce((m,u)=>Math.max(m,goblinLevel(u.kills)),1);
+    lines.push(`${def.ic} Goblins (spawner): <b>${ghp}</b> HP · <b>${gatk}</b> atk each (Lv 1) · ${units.length}/${GOBLIN_DEN_CAP} · +${goblinSpawnRate(room.lvl)}/wave`);
+    lines.push(`<span class="small" style="opacity:.85">March left to ambush heroes — survivors return. Immune to your own traps.</span>`);
+    lines.push(`<span class="small" style="opacity:.85">Each goblin levels from its own kills (+${Math.round(GOBLIN_HP_PER_LVL*100)}% HP, +${Math.round(GOBLIN_ATK_PER_LVL*100)}% ATK per level, every ${GOBLIN_XP_PER_LVL} kills, cap Lv ${GOBLIN_LVL_MAX}). Top vet: <b>Lv ${maxLvl}</b> · pack kills: <b>${totalKills}</b>.</span>`);
+    if(feed>1) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feed-1)*100)}% per goblin (no cap)`);
+  } else if(monParts.length){ let fed=false; const bas=bastionMul(), bm=barracksMul();
     // each guard gets its OWN stat line (two fused monsters fight one after the other)
     monParts.forEach((p,mi)=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
       const feeds=monFeeds(def)||synI.fx==='feedBoth';
