@@ -3002,7 +3002,7 @@ function leadHero(){
    waves; the slain are gone.
 */
 const GOBLIN_DEN_CAP = 20;
-const GOBLIN_HP_FRAC = 0.34, GOBLIN_ATK_FRAC = 0.34;
+const GOBLIN_HP_FRAC = 0.55, GOBLIN_ATK_FRAC = 0.34;   // hp raised: full-atk retaliation 1-shot them
 const GOBLIN_SPD = 50;                       // px/sec
 const GOBLIN_LVL_MAX = 10;
 const GOBLIN_XP_PER_LVL = 3;                 // kills needed for each level up
@@ -3085,7 +3085,9 @@ function goblinStep(g, dt){
         if(newLvl>g.lvl){ g.lvl=newLvl; floater(g.x, g.y-58, 'LVL '+newLvl+' ⭐', '#ffd34d', true); sfx('combo'); }
         heroDies(target);
       } else {
-        const back=Math.max(1, Math.round(target.atk||1));
+        // glancing retaliation (40% of hero atk) — a full swing per goblin
+        // attack one-shot every fresh goblin the moment it met a hero
+        const back=Math.max(1, Math.round((target.atk||1)*0.4));
         g.hp -= back;
         floater(g.x, g.y-40, '-'+back, '#ff7a8a');
         if(g.hp<=0){ g.hp=0; burst(g.x, g.y-18, '#5fae54', 14); sfx('hit'); }
@@ -3103,12 +3105,32 @@ function goblinTick(dt){
   for(const g of G.minions) goblinStep(g, dt);
   G.minions = G.minions.filter(g=>g.hp>0);
 }
+// One marching den goblin with its own animation state (walk / slash clips
+// from the LPC sheet, facing LEFT like stationed guards). Falls back to the
+// procedural drawMonster while the sheet isn't loaded.
+function drawDenGoblinSprite(g, sx, clipName){
+  const cfg=MON_SPRITES.goblin; if(!cfg) return false;
+  const name = clipName || (g.state==='fighting' ? cfg.atk : 'walk');
+  const clip=cfg.clips[name]||cfg.clips.idle, img=MON_IMG.goblin && MON_IMG.goblin[clip.sheet];
+  if(!img||!img._ok) return false;
+  const now=performance.now();
+  if(g._mc!==name){ g._mc=name; g._mt=0; }
+  const dtm=Math.min(0.1,(now-(g._ml||now))/1000); g._ml=now;
+  g._mt=(g._mt||0)+dtm;
+  const frame=Math.floor(g._mt*clip.fps)%clip.n;
+  const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+  X.drawImage(img, srcX,srcY,clip.fw,clip.fh,
+    Math.round(sx-clip.ax*S), Math.round(FLOOR-clip.ay*S), Math.round(clip.fw*S), Math.round(clip.fh*S));
+  X.imageSmoothingEnabled=sm;
+  return true;
+}
 function drawDenGoblins(tx){
   if(!G.minions || !G.minions.length) return;
   for(const g of G.minions){
     if(g.hp<=0) continue;
     const sx=tx(g.x);
-    drawMonster(sx, 'goblin', '#5fae54');
+    if(!drawDenGoblinSprite(g, sx)) drawMonster(sx, 'goblin', '#5fae54');
     bar(sx-14, g.y-46, 28, 3, g.hp/g.maxHp, '#ff4d6d');
     if(g.lvl>1){                                  // ⭐ veteran star above the head
       X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
@@ -5328,6 +5350,24 @@ function drawRoomContents(x0,w,room,i){
   // (a spawner Den has no stationary guard in run phase — the goblins are out marching)
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(cell && cell.spawner==='goblin' && G.phase==='run'){ /* skip — goblins drawn by drawDenGoblins */ } else
+  if(cell && cell.spawner==='goblin'){
+    // BUILD phase: every banked goblin idles in the den (next wave's recruits
+    // included), staggered in two loose ranks so the crowd reads at a glance
+    const arr=ensureGoblinArray(room);
+    const preview=Math.min(GOBLIN_DEN_CAP, arr.length+goblinSpawnRate(room.lvl));
+    room._previewUnits=room._previewUnits||{};
+    for(let i=0;i<preview;i++){
+      const u=arr[i] || (room._previewUnits[i]=room._previewUnits[i]||{kills:0});
+      if(u._mt===undefined) u._mt=i*0.37;             // de-sync the idle bob
+      const gx=x0+w*(0.20+(i%6)*0.115), recruit=i>=arr.length;
+      if(recruit) X.globalAlpha=0.55;                  // incoming recruits shown ghosted
+      if(!drawDenGoblinSprite(u, gx+( (i/6|0)%2 ?5:0), 'idle')) drawMonster(gx, 'goblin', '#5fae54');
+      if(recruit) X.globalAlpha=1;
+      const lv=goblinLevel(u.kills||0);
+      if(lv>1){ X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
+        X.fillText('⭐'+lv, gx, FLOOR-52); X.textAlign='left'; }
+    }
+  } else
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
     // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
