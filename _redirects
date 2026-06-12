@@ -1,3 +1,7 @@
 # Cloudflare Pages redirects.
 # No Room For Heroes was formerly served at /boss_monster/ — keep old links alive.
 /boss_monster/*  /no_room_for_heroes/:splat  301
+# Jellei HQ. (Happy Birthday Edition) — game folder stays /chase_hq/, but the
+# rebranded name should also resolve.
+/jellei_hq/*     /chase_hq/:splat            200
+/jellei_hq       /chase_hq/                  200
