@@ -5913,7 +5913,7 @@ function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel
 function hideInspect(){ inspectEl.classList.remove('show'); inspectPinned=false; inspectEnt=null; cancelHideInspect(); }
 // Delayed hide so the mouse can travel from a room INTO the bubble (to reach
 // the Upgrade/Demolish buttons) without it vanishing en route.
-function hideInspectSoon(){ cancelHideInspect(); _inspHideT=setTimeout(()=>{ if(!_overInspect && inspectHover) hideInspect(); }, 280); }
+function hideInspectSoon(){ cancelHideInspect(); _inspHideT=setTimeout(()=>{ if(!_overInspect && inspectHover) hideInspect(); }, 450); }   // grace: mouse travel room → bubble buttons
 function cancelHideInspect(){ if(_inspHideT){ clearTimeout(_inspHideT); _inspHideT=0; } }
 function showInspect(html, hover){
   cancelHideInspect();
@@ -6325,7 +6325,10 @@ CV.addEventListener('mousemove', e=>{
   if(wy>FLOOR+14 || wy<FLOOR-214){ if(inspectHover) hideInspectSoon(); return; }
   const ent=entityAt(clientToWorldX(e));
   if(!ent || ent.kind==='empty'){ if(inspectHover) hideInspectSoon(); return; }
-  if(inspectPinned && sameInspectEnt(ent)) return;   // keep the pinned bubble (with its buttons) intact
+  // keep the pinned bubble intact: same entity, OR a custom pinned dialog
+  // (inspectEnt===null, e.g. the demolish confirm) which hover must NEVER
+  // replace — that was wiping the "Yes, demolish" box mid-mouse-travel
+  if(inspectPinned && (inspectEnt===null || sameInspectEnt(ent))) return;
   showInspectEntity(ent, true);
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
