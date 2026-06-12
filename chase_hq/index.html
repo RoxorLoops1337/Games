@@ -1669,7 +1669,7 @@ function updatePlayer(dt){
   const vMax = MAXV + (turbo ? 14 : 0);
   const pt = posAt(pl.s, pl.lat, tmpV);
   // longitudinal
-  let a = gas * 21 * (1 - Math.pow(pl.v / vMax, 1.7)) * (pl.spin > 0 ? 0.45 : 1);
+  let a = gas * 21 * (1 - Math.pow(pl.v / vMax, 1.7)) * (pl.spin > 0 ? 0.7 : 1);
   if (turbo) a += 17;
   a -= brake * 26;
   a -= 0.0022 * pl.v * pl.v;
@@ -1689,7 +1689,7 @@ function updatePlayer(dt){
   const driftTarget = pl.v > 32 ? clamp((demand - 8.5) / 6, 0, 1) : 0;
   pl.drift = lerp(pl.drift, driftTarget, clamp(dt * 5, 0, 1));
   if (pl.drift > 0.25) pl.v = Math.max(0, pl.v - pl.drift * 5.5 * dt);
-  if (pl.spin > 0) { pl.spin -= dt; pl.v = Math.max(0, pl.v - 8 * dt); }
+  if (pl.spin > 0) { pl.spin -= dt; pl.v = Math.max(0, pl.v - 3 * dt); }
   // turbo
   if (pressed.Space && G.turbos > 0 && G.turboT <= 0 && G.state === 'RUN') {
     G.turbos--; G.turboT = 5;
@@ -1759,9 +1759,11 @@ function updateSuspect(dt, stage){
       else if (gap > 300) target *= 0.85;
       else if (gap > 150) target *= 0.95;
     } else {
+      // pursuit phase: aggressive rubber-band so a single crash never strands you
       target = stage.susSpeedHot * (1 - sus.dmg * 0.0028);
-      if (gap > 220) target *= 0.88;
-      else if (gap > 120) target *= 0.93;
+      if (gap > 200) target *= 0.55;       // big drop-back — you can always re-close
+      else if (gap > 100) target *= 0.72;
+      else if (gap > 40)  target *= 0.86;
     }
     if (gap < 14) target = Math.max(target, pl.v + 3); // he floors it — you never get in front
     sus.v = lerp(sus.v, target, clamp(dt * 0.5, 0, 1));
@@ -1876,8 +1878,9 @@ function collisions(dt, stage){
     const closing = pl.v - t.v;
     if (pl.s < t.s && closing > 0) {
       if (closing > 16) {
-        pl.v = Math.max(t.v * 0.9, pl.v * 0.45);
-        pl.spin = 0.5;
+        // keep significant momentum — a single bump shouldn't end the chase
+        pl.v = Math.max(t.v * 0.95, pl.v * 0.65);
+        pl.spin = 0.3;
         posAt(t.s - 2, (pl.lat + t.lat) / 2, tmpV); tmpV.y += 0.6;
         sparks.spawn(tmpV, 30, 12);
         G.shake = Math.max(G.shake, 1);
