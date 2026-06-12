@@ -3108,9 +3108,9 @@ function goblinTick(dt){
 // One marching den goblin with its own animation state (walk / slash clips
 // from the LPC sheet, facing LEFT like stationed guards). Falls back to the
 // procedural drawMonster while the sheet isn't loaded.
-function drawDenGoblinSprite(g, sx){
+function drawDenGoblinSprite(g, sx, clipName){
   const cfg=MON_SPRITES.goblin; if(!cfg) return false;
-  const name = g.state==='fighting' ? cfg.atk : 'walk';
+  const name = clipName || (g.state==='fighting' ? cfg.atk : 'walk');
   const clip=cfg.clips[name]||cfg.clips.idle, img=MON_IMG.goblin && MON_IMG.goblin[clip.sheet];
   if(!img||!img._ok) return false;
   const now=performance.now();
@@ -5350,6 +5350,24 @@ function drawRoomContents(x0,w,room,i){
   // (a spawner Den has no stationary guard in run phase — the goblins are out marching)
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   if(cell && cell.spawner==='goblin' && G.phase==='run'){ /* skip — goblins drawn by drawDenGoblins */ } else
+  if(cell && cell.spawner==='goblin'){
+    // BUILD phase: every banked goblin idles in the den (next wave's recruits
+    // included), staggered in two loose ranks so the crowd reads at a glance
+    const arr=ensureGoblinArray(room);
+    const preview=Math.min(GOBLIN_DEN_CAP, arr.length+goblinSpawnRate(room.lvl));
+    room._previewUnits=room._previewUnits||{};
+    for(let i=0;i<preview;i++){
+      const u=arr[i] || (room._previewUnits[i]=room._previewUnits[i]||{kills:0});
+      if(u._mt===undefined) u._mt=i*0.37;             // de-sync the idle bob
+      const gx=x0+w*(0.20+(i%6)*0.115), recruit=i>=arr.length;
+      if(recruit) X.globalAlpha=0.55;                  // incoming recruits shown ghosted
+      if(!drawDenGoblinSprite(u, gx+( (i/6|0)%2 ?5:0), 'idle')) drawMonster(gx, 'goblin', '#5fae54');
+      if(recruit) X.globalAlpha=1;
+      const lv=goblinLevel(u.kills||0);
+      if(lv>1){ X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
+        X.fillText('⭐'+lv, gx, FLOOR-52); X.textAlign='left'; }
+    }
+  } else
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
     // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
