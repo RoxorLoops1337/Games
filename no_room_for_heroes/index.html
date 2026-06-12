@@ -490,6 +490,11 @@ function roomUpgradeCost(room){ return Math.max(1, Math.round((25 + 22*room.lvl)
 // A room holds up to 3 parts. The 3rd costs gold (tall builds compete with wide
 // ones instead of strictly beating them) and its guard joins at 85% strength.
 const FUSE3_GOLD=250, GUARD3_MUL=0.85;
+// Stacked TRAPS discount (mirrors the 3rd-guard rule): in a multi-trap room
+// the 1st damage-trap hits full, the 2nd at 80%, the 3rd at 60%. Without it,
+// full-trap stacking strictly dominated every other build (owner's A2 run:
+// 248k trap dmg vs 0 guard dmg).
+const TRAP_STACK_MUL=[1, 0.8, 0.6];
 // Can room `from` be merged INTO room `into` (turning `into` into a combo)?
 function canFuseRooms(into, from){
   return !!(into && from && roomParts(into).length<3 && !from.part2 && !from.part3
@@ -680,7 +685,7 @@ const ABIL = {
            run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT', false, 'shock')},
   curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
            run:h=>{ if(h.cursed) return; h.cursed=true; h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
-  freeze: {name:'Freeze',  ic:'❄️', cost:34, cd:6,  desc:'Freezes in place — primes SHATTER. A costly lock.',
+  freeze: {name:'Freeze',  ic:'❄️', cost:34, cd:7,  desc:'Freezes in place — primes SHATTER. A costly lock.',
            run:h=>{h.freeze=2.2; h.chill=2.6; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
   drain:  {name:'Drain',   ic:'🩸', cost:28, cd:5,  desc:'Damage hero, heal boss.',
            run:h=>{dealToHero(h, abilDmg(22+G.boss.lvl*3),'DRAIN', false, 'phys'); healBoss(16+G.boss.lvl*3);}},
@@ -710,9 +715,9 @@ const ABIL = {
              if(before!=='dead' && h.state==='dead'){ healBoss(Math.round(G.boss.maxHp*0.07));
                for(const o of (G.heroes||[])){ if(o.state==='dead'||o===h) continue; o.chill=Math.max(o.chill||0,3); }
                floater(bossX(),FLOOR-92,'💀 RAISED','#b163ff'); } }},
-  entangle:{name:'Entangle',ic:'🌿', cost:24, cd:7,  desc:'Roots the front-line heroes in thorns.', sig:true,
-           run:h=>{ const ci=h.cellIndex; let n=0;
-             for(const o of (G.heroes||[])){ if(o.state==='dead') continue; if(o===h || o.cellIndex===ci){ o.freeze=Math.max(o.freeze||0,2.6); n++; dealToHero(o, abilDmg(10+G.boss.lvl*2),'THORNS',false,'phys'); } }
+  entangle:{name:'Entangle',ic:'🌿', cost:30, cd:10, desc:'Roots the front-line heroes in thorns.', sig:true,
+           run:h=>{ const ci=h.cellIndex; let n=0;   // 2.6s root @ cd7 was a near-permanent lockdown with Freeze
+             for(const o of (G.heroes||[])){ if(o.state==='dead') continue; if(o===h || o.cellIndex===ci){ o.freeze=Math.max(o.freeze||0,1.8); n++; dealToHero(o, abilDmg(10+G.boss.lvl*2),'THORNS',false,'phys'); } }
              floater(bossX(),FLOOR-92,'🌿 ENTANGLE ×'+n,'#5fae54'); }},
 };
 
@@ -2751,7 +2756,8 @@ function buildCells(){
       for(const p of parts){
         const def=ROOMS[p];
         if(def.kind==='trap'){
-          cell.traps.push({type:p, def, fireT:0});
+          const di=cell.traps.filter(t=>!t.def.amp).length;     // damage-trap index in this room
+          cell.traps.push({type:p, def, fireT:0, stackMul: def.amp?1:TRAP_STACK_MUL[Math.min(di,2)]});
           if(def.amp) cell.ampSelf=(cell.ampSelf||0)+def.amp;     // Runestone amplifier (this + adjacent)
         } else if(def.kind==='monster'){
           if(pureGoblin) continue;                                 // spawner: handled by spawnDenGoblinsForWave
@@ -4450,7 +4456,7 @@ function trapTick(h,cell,dt){
       tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.88:1);   // Hair Trigger mandate: traps fire faster
       tr.firedAt=performance.now();                                // drives the painted strike animation
       const d=tr.def;
-      let dmg=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
+      let dmg=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0)) * (tr.stackMul||1);
       // counter-card bonuses vs certain heroes
       if(d.vsClass && d.vsClass.includes(h.cls)) dmg*=d.vsMult;
       if(d.vsElite && h.elite) dmg*=d.vsMult;
@@ -4495,7 +4501,7 @@ function aoeTrapTick(dt){
       if(!targets.length) continue;
       tr.fireT=d.rate * (hasMandate('hairTrigger')?0.88:1);
       tr.firedAt=performance.now();                             // drives the painted strike animation
-      let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0));
+      let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0)) * (tr.stackMul||1);
       if(vr) base*=(1+vr*VET_DMG);
       if(doc==='inferno') base*=1.2;
       base*=ampAt(cell.index);                                  // Runestone / War Totem amplification
@@ -5927,7 +5933,7 @@ function toggleSpeed(){ speedMul = speedMul===1?2: speedMul===2?3:1; renderPanel
 function hideInspect(){ inspectEl.classList.remove('show'); inspectPinned=false; inspectEnt=null; cancelHideInspect(); }
 // Delayed hide so the mouse can travel from a room INTO the bubble (to reach
 // the Upgrade/Demolish buttons) without it vanishing en route.
-function hideInspectSoon(){ cancelHideInspect(); _inspHideT=setTimeout(()=>{ if(!_overInspect && inspectHover) hideInspect(); }, 280); }
+function hideInspectSoon(){ cancelHideInspect(); _inspHideT=setTimeout(()=>{ if(!_overInspect && inspectHover) hideInspect(); }, 450); }   // grace: mouse travel room → bubble buttons
 function cancelHideInspect(){ if(_inspHideT){ clearTimeout(_inspHideT); _inspHideT=0; } }
 function showInspect(html, hover){
   cancelHideInspect();
@@ -6056,10 +6062,12 @@ function describeRoom(room){
   const vr=vetRank(room); const vm=vetMul(room);
   const title = parts.length>1 ? comboName(room) : roomName(room);
   const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`];
+  let _trapDi=0;
   parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
     if(def.amp){ lines.push(`${def.ic} ${def.name}: 🔯 +${Math.round(def.amp*100)}% to this & adjacent rooms`); return; }
-    const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0)));
-    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
+    const _sm=TRAP_STACK_MUL[Math.min(_trapDi++,2)];
+    const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0))*_sm);
+    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${_sm<1?` <span class="small" style="opacity:.7">(stacked ×${_sm})</span>`:''}${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   const pureGoblin = monParts.length>0 && monParts.every(p=>p==='goblin');
@@ -6339,7 +6347,10 @@ CV.addEventListener('mousemove', e=>{
   if(wy>FLOOR+14 || wy<FLOOR-214){ if(inspectHover) hideInspectSoon(); return; }
   const ent=entityAt(clientToWorldX(e));
   if(!ent || ent.kind==='empty'){ if(inspectHover) hideInspectSoon(); return; }
-  if(inspectPinned && sameInspectEnt(ent)) return;   // keep the pinned bubble (with its buttons) intact
+  // keep the pinned bubble intact: same entity, OR a custom pinned dialog
+  // (inspectEnt===null, e.g. the demolish confirm) which hover must NEVER
+  // replace — that was wiping the "Yes, demolish" box mid-mouse-travel
+  if(inspectPinned && (inspectEnt===null || sameInspectEnt(ent))) return;
   showInspectEntity(ent, true);
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
