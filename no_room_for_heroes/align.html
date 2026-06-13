@@ -50,6 +50,14 @@
     <button onclick="fireNow()">💥 fire</button>
     <button id="lightbtn" onclick="showLights=!showLights;render()" class="sel">💡 lights</button>
   </div>
+  <div class="grouplbl">test traffic — watch them run through to align everything</div>
+  <div class="row">
+    <button id="heroStreamBtn" onclick="toggleStream('hero')">🛡️ heroes →</button>
+    <button id="monStreamBtn" onclick="toggleStream('mon')">👺 ← monsters</button>
+    <button onclick="addChampion()">⚔️ super hero</button>
+    <button onclick="burstBoth()">💥 swarm both</button>
+    <button onclick="clearActors()">🧹 clear</button>
+  </div>
   <div class="row">
     <button class="sel" onclick="exportJson()">📋 Generate layout.json</button>
     <button onclick="downloadJson()">⬇ download</button>
@@ -233,12 +241,68 @@ function render(){
       X.fillText('💡', r.x+r.w/2-5, r.y+r.h/2+3); }
     else if(i===sel){ X.strokeStyle='#ffd34d'; X.lineWidth=2; X.strokeRect(r.x-2,r.y-2,r.w+4,r.h+4); X.lineWidth=1; }
   });
+  drawActors();
   X.fillStyle='#9fe'; X.font='12px monospace';
   const p=pieces[sel];
   X.fillText(`${p.role}: fx=${p.fx.toFixed(3)} fy=${Math.round(p.fy)}px ${p.light?'r':'h'}=${Math.round(p.h)}px`
     +(p.trap?` layer=${p.layer||0}`:'')+(p.light?` intensity=${(p.a||1).toFixed(2)}×`:'')+(p.flip?' flipped':''), 10, 20);
 }
-setInterval(()=>{ if(anim) render(); }, 80);
+
+// ---- test traffic: real game sprites running through the room ----
+const CH_DH=88;   // champion draw height (world px), matches the game
+const HSHEET={
+  warrior:{src:'sprites/knight/knight_walk.png', fw:64, fh:64, n:8, row:3, scale:.92, ax:41, ay:62},
+  mage:   {src:'sprites/wizard/wizard_walk.png', fw:192,fh:192,n:8, row:3, scale:.86, ax:103,ay:126},
+  cleric: {src:'sprites/cleric/cleric_universal.png', fw:64, fh:64, n:9, row:11, scale:.83, ax:24, ay:62},
+  goblin: {src:'sprites/goblin/goblin_walk.png', fw:64, fh:64, n:8, row:1, scale:.8, ax:25, ay:61},
+};
+const HIMG={}; for(const k in HSHEET){ const im=new Image(); im.src=HSHEET[k].src; HIMG[k]=im; }
+const CHAMP=[]; for(let i=0;i<12;i++){ const im=new Image(); im.src='sprites/champion/champion_'+i+'.png'; CHAMP.push(im); }
+let actors=[], streamHero=false, streamMon=false, _spawnH=0, _spawnM=0, _lastT=performance.now();
+const HERO_KINDS=['warrior','mage','cleric'];
+function addChampion(){ actors.push({kind:'champion', x:-32, dir:1, t:Math.random()*2, spd:46}); }
+function spawnHero(){ actors.push({kind:HERO_KINDS[Math.floor(Math.random()*HERO_KINDS.length)], x:-32, dir:1, t:Math.random()*2, spd:52+Math.random()*10}); }
+function spawnMon(){ actors.push({kind:'goblin', x:CELLW+32, dir:-1, t:Math.random()*2, spd:50}); }
+function toggleStream(which){
+  if(which==='hero'){ streamHero=!streamHero; document.getElementById('heroStreamBtn').classList.toggle('sel',streamHero); if(streamHero) spawnHero(); }
+  else { streamMon=!streamMon; document.getElementById('monStreamBtn').classList.toggle('sel',streamMon); if(streamMon) spawnMon(); }
+}
+function burstBoth(){ for(let i=0;i<6;i++){ actors.push({kind:HERO_KINDS[i%3], x:-32-i*34, dir:1, t:Math.random()*2, spd:54});
+  actors.push({kind:'goblin', x:CELLW+32+i*30, dir:-1, t:Math.random()*2, spd:50}); } }
+function clearActors(){ actors=[]; streamHero=streamMon=false;
+  document.getElementById('heroStreamBtn').classList.remove('sel'); document.getElementById('monStreamBtn').classList.remove('sel'); }
+function stepActors(dt){
+  if(streamHero && (_spawnH-=dt)<=0){ _spawnH=0.7; spawnHero(); }
+  if(streamMon  && (_spawnM-=dt)<=0){ _spawnM=0.65; spawnMon(); }
+  for(const a of actors){ a.x += a.dir*a.spd*dt; a.t += dt; }
+  actors = actors.filter(a=> a.x>-60 && a.x<CELLW+60);
+}
+function drawActors(){
+  for(const a of actors){
+    const sx=OX+a.x*S;
+    if(a.kind==='champion'){
+      const im=CHAMP[1+Math.floor(a.t*12)%11]||CHAMP[0];
+      if(!(im&&im.complete&&im.width)) continue;
+      const dh=CH_DH*S, dw=dh*(im.width/im.height);
+      X.imageSmoothingEnabled=false;
+      X.drawImage(im, Math.round(sx-dw/2), Math.round(FLOORY-dh), Math.round(dw), Math.round(dh));
+      continue;
+    }
+    const c=HSHEET[a.kind], im=HIMG[a.kind];
+    if(!(im&&im.complete&&im.width)) continue;
+    const frame=Math.floor(a.t*11)%c.n, S2=c.scale*S;
+    X.imageSmoothingEnabled=false;
+    X.drawImage(im, frame*c.fw, c.row*c.fh, c.fw, c.fh,
+      Math.round(sx-c.ax*S2), Math.round(FLOORY-c.ay*S2), Math.round(c.fw*S2), Math.round(c.fh*S2));
+  }
+}
+function loop(){
+  const now=performance.now(), dt=Math.min(0.05,(now-_lastT)/1000); _lastT=now;
+  if(actors.length||streamHero||streamMon){ stepActors(dt); render(); }
+  else if(anim) render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
 function refreshItems(){
   const traps=pieces.map((p,i)=>({p,i})).filter(x=>!x.p.light);
   const lights=pieces.map((p,i)=>({p,i})).filter(x=>x.p.light);
