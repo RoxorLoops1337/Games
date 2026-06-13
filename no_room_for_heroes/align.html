@@ -44,6 +44,7 @@
     <button onclick="flipSel()">⇋ flip</button>
     <button onclick="layerSel(1)">⬆ layer</button><button onclick="layerSel(-1)">⬇ layer</button>
     <button onclick="brightSel(1.15)">☀ brighter</button><button onclick="brightSel(0.87)">🌙 dimmer</button>
+    <button onclick="hideSel()">👁 hide/show</button><button onclick="hideAllTraps()">🙈 all traps</button>
   </div>
   <div class="row">
     <button id="animbtn" onclick="anim=!anim;render()" class="sel">▶ anim</button>
@@ -202,7 +203,7 @@ function render(){
   X.fillStyle='rgba(160,160,190,.25)';
   X.fillRect(OX+W*0.30-14*S/2, FLOORY-52*S, 14*S, 52*S);
   // sprites: candles first (wall decor), then traps in LAYER order (low first)
-  const sprites=pieces.filter(p=>!p.light)
+  const sprites=pieces.filter(p=>!p.light && !p.hidden)
     .sort((a,b)=>((a.candle!=null?-99:(a.layer||0))-(b.candle!=null?-99:(b.layer||0))));
   for(const p of sprites){
     const r=pieceRect(p), n=p.n||1;
@@ -229,17 +230,19 @@ function render(){
   }
   // non-flame lights (flame columns handled above)
   if(showLights) for(const p of pieces){
-    if(!p.light||p.light==='flame') continue;
+    if(!p.light||p.light==='flame'||p.hidden) continue;
     glow(OX+W*p.fx, FLOORY-p.fy*S, p.h*S, LIGHT_COL[p.kind], lightAlpha(p));
   }
-  // selection box + light markers
+  // selection box + light markers (a hidden piece shows only when it's selected)
   pieces.forEach((p,i)=>{
+    if(p.hidden && i!==sel) return;
     const r=pieceRect(p);
     if(p.light){ X.strokeStyle=i===sel?'#ffd34d':'rgba(154,223,255,.35)'; X.setLineDash([4,4]);
       X.strokeRect(r.x,r.y,r.w,r.h); X.setLineDash([]);
       X.fillStyle=i===sel?'#ffd34d':'rgba(154,223,255,.6)'; X.font='10px monospace';
       X.fillText('💡', r.x+r.w/2-5, r.y+r.h/2+3); }
-    else if(i===sel){ X.strokeStyle='#ffd34d'; X.lineWidth=2; X.strokeRect(r.x-2,r.y-2,r.w+4,r.h+4); X.lineWidth=1; }
+    else if(i===sel){ X.strokeStyle=p.hidden?'rgba(255,211,77,.5)':'#ffd34d'; X.setLineDash(p.hidden?[5,4]:[]);
+      X.lineWidth=2; X.strokeRect(r.x-2,r.y-2,r.w+4,r.h+4); X.lineWidth=1; X.setLineDash([]); }
   });
   drawActors();
   X.fillStyle='#9fe'; X.font='12px monospace';
@@ -307,16 +310,23 @@ function refreshItems(){
   const traps=pieces.map((p,i)=>({p,i})).filter(x=>!x.p.light);
   const lights=pieces.map((p,i)=>({p,i})).filter(x=>x.p.light);
   document.getElementById('items').innerHTML=
-    traps.map(({p,i})=>`<span class="item${i===sel?' sel':''}" onclick="sel=${i};refreshItems();render()"><b>${p.role}</b>${p.trap?' <span style="opacity:.6">L'+(p.layer||0)+'</span>':''}</span>`).join('')
+    traps.map(({p,i})=>`<span class="item${i===sel?' sel':''}" style="${p.hidden?'opacity:.45':''}" onclick="sel=${i};refreshItems();render()">${p.hidden?'🙈 ':''}<b>${p.role}</b>${p.trap?' <span style="opacity:.6">L'+(p.layer||0)+'</span>':''}</span>`).join('')
     +'<span class="grouplbl">lights</span>'
-    +lights.map(({p,i})=>`<span class="item light${i===sel?' sel':''}" onclick="sel=${i};refreshItems();render()"><b>${p.role}</b></span>`).join('');
+    +lights.map(({p,i})=>`<span class="item light${i===sel?' sel':''}" style="${p.hidden?'opacity:.45':''}" onclick="sel=${i};refreshItems();render()">${p.hidden?'🙈 ':''}<b>${p.role}</b></span>`).join('');
 }
 refreshItems();
 let drag=null;
 CV.addEventListener('pointerdown',e=>{
   const r=CV.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
-  for(let i=pieces.length-1;i>=0;i--){ const b=pieceRect(pieces[i]);
-    if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h){ sel=i; refreshItems(); break; } }
+  const inRect=b=> mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h;
+  // KEEP the current selection if the click lands on it — so once a piece is
+  // chosen (here or via the list) you drag THAT one, even where traps overlap.
+  // Only re-pick (topmost, non-hidden) when the click is off the selected one.
+  const cur=pieces[sel];
+  if(!(cur && !cur.hidden && inRect(pieceRect(cur)))){
+    for(let i=pieces.length-1;i>=0;i--){ if(pieces[i].hidden) continue;
+      if(inRect(pieceRect(pieces[i]))){ sel=i; refreshItems(); break; } }
+  }
   const p=pieces[sel];
   drag={mx,my,fx:p.fx,fy:p.fy}; CV.setPointerCapture(e.pointerId); render();
 });
@@ -340,6 +350,9 @@ window.addEventListener('keydown',e=>{
 function bump(f){ const p=pieces[sel]; p.h=Math.min(260,Math.max(8,p.h*f)); render(); }
 function flipSel(){ const p=pieces[sel]; if(!p.light){ p.flip=!p.flip; render(); } }
 function layerSel(d){ const p=pieces[sel]; if(p.trap){ p.layer=(p.layer||0)+d; refreshItems(); render(); } }
+function hideSel(){ pieces[sel].hidden=!pieces[sel].hidden; refreshItems(); render(); }
+function hideAllTraps(){ const anyShown=pieces.some(p=>p.trap&&!p.hidden);
+  for(const p of pieces) if(p.trap) p.hidden=anyShown; refreshItems(); render(); }   // hide all if any shown, else reveal
 function brightSel(f){ const p=pieces[sel]; if(p.light){ p.a=Math.min(3,Math.max(0.2,(p.a||1)*f)); render(); } }
 function fireNow(){ firedAt=performance.now(); }
 function buildJson(){
