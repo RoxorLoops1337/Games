@@ -254,24 +254,29 @@ function render(){
 // ---- test traffic: real game sprites running through the room ----
 const CH_DH=88;   // champion draw height (world px), matches the game
 const HSHEET={
-  warrior:{src:'sprites/knight/knight_walk.png', fw:64, fh:64, n:8, row:3, scale:.92, ax:41, ay:62},
-  mage:   {src:'sprites/wizard/wizard_walk.png', fw:192,fh:192,n:8, row:3, scale:.86, ax:103,ay:126},
-  cleric: {src:'sprites/cleric/cleric_universal.png', fw:64, fh:64, n:9, row:11, scale:.83, ax:24, ay:62},
-  goblin: {src:'sprites/goblin/goblin_walk.png', fw:64, fh:64, n:8, row:1, scale:.8, ax:25, ay:61},
+  warrior: {src:'sprites/knight/knight_walk.png', fw:64, fh:64, n:8, row:3, scale:.92, ax:41, ay:62},
+  mage:    {src:'sprites/wizard/wizard_walk.png', fw:192,fh:192,n:8, row:3, scale:.86, ax:103,ay:126},
+  cleric:  {src:'sprites/cleric/cleric_universal.png', fw:64, fh:64, n:9, row:11, scale:.83, ax:24, ay:62},
+  rogue:   {src:'sprites/rogue/rogue_walk.png', fw:64, fh:64, n:8, row:3, scale:.92, ax:32, ay:62},
+  goblin:  {src:'sprites/goblin/goblin_walk.png', fw:64, fh:64, n:8, row:1, scale:.8,  ax:25, ay:61},
+  skeleton:{src:'sprites/skeleton/skeleton_walk.png', fw:64, fh:64, n:8, row:1, scale:.82, ax:32, ay:61},
+  warden:  {src:'sprites/warden/warden_walk.png', fw:192,fh:192,n:8, row:1, scale:.95, ax:96, ay:126},
+  ogre:    {src:'sprites/ogre/ogre_walk.png', fw:192,fh:192,n:8, row:1, scale:1.15,ax:96, ay:126},
 };
 const HIMG={}; for(const k in HSHEET){ const im=new Image(); im.src=HSHEET[k].src; HIMG[k]=im; }
 const CHAMP=[]; for(let i=0;i<12;i++){ const im=new Image(); im.src='sprites/champion/champion_'+i+'.png'; CHAMP.push(im); }
 let actors=[], streamHero=false, streamMon=false, _spawnH=0, _spawnM=0, _lastT=performance.now();
-const HERO_KINDS=['warrior','mage','cleric'];
+const HERO_KINDS=['warrior','mage','cleric','rogue'];
+const MON_KINDS=['goblin','skeleton','warden','ogre'];
 function addChampion(){ actors.push({kind:'champion', x:-32, dir:1, t:Math.random()*2, spd:46}); }
 function spawnHero(){ actors.push({kind:HERO_KINDS[Math.floor(Math.random()*HERO_KINDS.length)], x:-32, dir:1, t:Math.random()*2, spd:52+Math.random()*10}); }
-function spawnMon(){ actors.push({kind:'goblin', x:CELLW+32, dir:-1, t:Math.random()*2, spd:50}); }
+function spawnMon(){ actors.push({kind:MON_KINDS[Math.floor(Math.random()*MON_KINDS.length)], x:CELLW+32, dir:-1, t:Math.random()*2, spd:50}); }
 function toggleStream(which){
   if(which==='hero'){ streamHero=!streamHero; document.getElementById('heroStreamBtn').classList.toggle('sel',streamHero); if(streamHero) spawnHero(); }
   else { streamMon=!streamMon; document.getElementById('monStreamBtn').classList.toggle('sel',streamMon); if(streamMon) spawnMon(); }
 }
-function burstBoth(){ for(let i=0;i<6;i++){ actors.push({kind:HERO_KINDS[i%3], x:-32-i*34, dir:1, t:Math.random()*2, spd:54});
-  actors.push({kind:'goblin', x:CELLW+32+i*30, dir:-1, t:Math.random()*2, spd:50}); } }
+function burstBoth(){ for(let i=0;i<8;i++){ actors.push({kind:HERO_KINDS[i%HERO_KINDS.length], x:-32-i*34, dir:1, t:Math.random()*2, spd:54});
+  actors.push({kind:MON_KINDS[i%MON_KINDS.length], x:CELLW+32+i*30, dir:-1, t:Math.random()*2, spd:50}); } }
 function clearActors(){ actors=[]; streamHero=streamMon=false;
   document.getElementById('heroStreamBtn').classList.remove('sel'); document.getElementById('monStreamBtn').classList.remove('sel'); }
 function stepActors(dt){
