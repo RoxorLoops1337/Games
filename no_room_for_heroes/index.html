@@ -5075,12 +5075,19 @@ let LAYOUT={
     spike:[{art:'spike', fx:.50, fy:0,  h:74}],
     flame:[{art:'flame', fx:.50, fy:0,  h:130}],
     venom:[{art:'poison1', fx:.13, fy:30, h:80},{art:'poison2', fx:.87, fy:26, h:92}],
+    // new animated traps (owner aligns the exact positions in align.html)
+    maul:[{art:'maul', fx:.50, fy:0, h:118, layer:8}],
+    arrow:[{art:'arrow', fx:.50, fy:6, h:150, layer:7}],
+    frost:[{art:'frost', fx:.50, fy:0, h:90, layer:2}],
+    gallows:[{art:'gallows', fx:.50, fy:0, h:124, layer:6}],
+    hexward:[{art:'hexward', fx:.50, fy:30, h:96, layer:5}],
+    tesla:[{art:'tesla', fx:.50, fy:0, h:100, layer:4}],
   },
   candles:[{art:'candle', fx:.18, fy:118, h:26},{art:'candle', fx:.89, fy:118, h:26}],
 };
 // In-room layering when a fused room has several traps: low draws first.
 // Poison behind everything, flames over it, spikes ALWAYS on top.
-const TRAP_LAYER={venom:0, flame:1, spike:9};
+const TRAP_LAYER={venom:0, frost:2, tesla:4, hexward:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
 // Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
 // (continuous). The poison vents pour non-stop.
 const TRAP_ANIM={venom:'loop'};
