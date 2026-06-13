@@ -53,7 +53,7 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 
 - Frame sequences accept BOTH namings: `<id>_0.png,_1…` and `<id>_01.png,_02…` (and static `<id>.png`).
 - Standard room: `rooms/empty.png` (+ `rooms/empty_broken.png` after champion smash).
-- Trap overlays: `rooms/traps/<id>*.png` — strike animation synced to firing (up ~0.11s, down ~0.48s); `TRAP_ANIM` marks loopers (venom). Flame = 1 column duplicated ×4, ignites left→right (70ms cascade).
+- Trap overlays: `rooms/traps/<id>*.png` — strike animation synced to firing (up ~0.11s, down ~0.48s); `TRAP_ANIM` marks loopers (venom). Flame = 1 column duplicated ×4, ignites left→right (70ms cascade). Animated art exists for: spike, flame, venom(poison1/2), maul, arrow, frost, gallows, hexward, tesla. Per-trap z-order + positions in `LAYOUT.traps` / `rooms/layout.json`.
 - Candle flames: `rooms/fx/candle_*.png`, loop ~9fps.
 - Positions/sizes/layers/lights ALL come from `rooms/layout.json` (made with align.html). Don't hand-tune draw positions in code — fix the layout or the align tool.
 - Lights: `LAYOUT.lights` {attach, fx, fy, r, a} — candle flicker / flame heat / venom vapor, additive glows.
