@@ -1,13 +1,13 @@
 {
- "heroLayer": 0.5,
+ "heroLayer": 5,
  "traps": {
   "spike": [
    {
     "art": "spike",
-    "fx": 0.507,
-    "fy": 13,
-    "h": 61,
-    "layer": 9
+    "fx": 0.516,
+    "fy": -11,
+    "h": 69,
+    "layer": 6
    }
   ],
   "flame": [
@@ -18,7 +18,7 @@
     "h": 130,
     "n": 4,
     "gap": 0.21,
-    "layer": 1
+    "layer": 6
    }
   ],
   "venom": [
@@ -42,10 +42,10 @@
   "maul": [
    {
     "art": "maul",
-    "fx": 0.519,
-    "fy": 60,
-    "h": 118,
-    "layer": -8
+    "fx": 0.509,
+    "fy": 42,
+    "h": 133,
+    "layer": 6
    }
   ],
   "arrow": [
@@ -60,27 +60,26 @@
   "frost": [
    {
     "art": "frost",
-    "fx": 0.509,
-    "fy": 3,
+    "fx": 0.501,
+    "fy": 7,
     "h": 66,
-    "layer": 9
+    "layer": 4
    }
   ],
   "gallows": [
    {
     "art": "gallows",
-    "fx": 0.336,
-    "fy": 39,
+    "fx": 0.717,
+    "fy": 19,
     "h": 69,
-    "flip": true,
-    "layer": 7
+    "layer": 5
    }
   ],
   "hexward": [
    {
     "art": "hexward",
-    "fx": 0.5,
-    "fy": 30,
+    "fx": 0.489,
+    "fy": 19,
     "h": 96,
     "layer": 5
    }
@@ -88,8 +87,8 @@
   "tesla": [
    {
     "art": "tesla",
-    "fx": 0.505,
-    "fy": 8,
+    "fx": 0.493,
+    "fy": 22,
     "h": 73,
     "layer": 4
    }
