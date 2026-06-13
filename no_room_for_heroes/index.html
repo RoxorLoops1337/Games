@@ -5120,7 +5120,7 @@ const TRAP_ANIM={venom:'loop'};
 // e.g. the maul SLAMS down fast then grinds back up slow.
 const TRAP_TIMING={
   maul:    {rise:55,  fall:560},
-  arrow:   {rise:70,  fall:300},
+  arrow:   {rise:300, fwd:true},   // dart volley: plays forward once, no reverse retract
   frost:   {rise:200, fall:680},
   gallows: {rise:90,  fall:600},
   hexward: {rise:240, fall:520},
@@ -5158,6 +5158,7 @@ function strikeIdx(N,firedAt,type){
   if(e<0) return 0;
   const t=TRAP_TIMING[type], rise=t?t.rise:TRAP_RISE, fall=t?t.fall:TRAP_FALL;
   if(e<rise) return Math.max(0,Math.min(N-1,Math.floor(e/rise*N)));
+  if(t&&t.fwd) return 0;   // forward-only: snap back to rest instead of reverse-playing
   if(e<rise+fall) return Math.max(0,N-1-Math.floor((e-rise)/fall*N));
   return 0;
 }
