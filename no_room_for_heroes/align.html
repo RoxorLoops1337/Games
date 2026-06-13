@@ -227,7 +227,7 @@ function render(){
       if(!(im&&im.width)) continue;
       any=true;
       const dw=r.dw||r.w, cx0=r.x+c*((p.gap||.2)*W);
-      const a=(p.trap==='flame')?0.8:1;   // flame is 20% see-through, matching the game
+      const a=(p.trap==='flame')?0.5:1;   // flame is 50% see-through, matching the game
       if(a<1){ X.save(); X.globalAlpha*=a; }
       if(p.flip){ X.save(); X.translate(cx0+dw/2,0); X.scale(-1,1);
         X.drawImage(im,-dw/2,r.y,dw,r.h); X.restore(); }

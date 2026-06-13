@@ -4925,8 +4925,8 @@ function drawTrapPart(x0,w,type,p,pi,cell){
   const n=p.n||1, gap=p.gap||0.2, seed=(cell?cell.index*3:0)+pi*4+1;
   const N=rec.frames.length;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
-  // flame reads as 20% see-through so heroes appear to walk through the fire
-  const partAlpha=(p.alpha!=null?p.alpha:(type==='flame'?0.8:1));
+  // flame reads as 50% see-through so heroes appear to walk through the fire
+  const partAlpha=(p.alpha!=null?p.alpha:(type==='flame'?0.5:1));
   let drew=false;
   for(let c=0;c<n;c++){
     let img, inten=1;
