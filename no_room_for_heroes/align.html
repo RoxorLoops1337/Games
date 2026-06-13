@@ -86,7 +86,7 @@ const CELLW=200, S=2.9;
 const W=CELLW*S, OX=(CV.width-W)/2, FLOORY=620;
 const RISE=110, FALL=480, CASCADE=70;
 // per-trap strike profile + idle phase offset (mirror the game)
-const TIMING={maul:{rise:55,fall:560}, arrow:{rise:70,fall:300}, frost:{rise:200,fall:680},
+const TIMING={maul:{rise:55,fall:560}, arrow:{rise:300,fwd:true}, frost:{rise:200,fall:680},
   gallows:{rise:90,fall:600}, hexward:{rise:240,fall:520}, tesla:{rise:45,fall:240}, spike:{rise:70,fall:430}};
 const PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
 const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff'};
@@ -177,6 +177,7 @@ function frameIdx(rec,mode,c,type){
   const t=TIMING[type], rise=t?t.rise:RISE, fall=t?t.fall:FALL, ph=PHASE[type]||0;
   const e=(performance.now()-firedAt-c*CASCADE-ph+24e5)%2400;
   if(e<rise) return Math.max(0,Math.min(N-1,Math.floor(e/rise*N)));
+  if(t&&t.fwd) return 0;   // forward-only: snap back to rest instead of reverse-playing
   if(e<rise+fall) return Math.max(0,N-1-Math.floor((e-rise)/fall*N));
   return 0;
 }
