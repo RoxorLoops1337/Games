@@ -85,7 +85,11 @@ const CV=document.getElementById('stage'), X=CV.getContext('2d');
 const CELLW=200, S=2.9;
 const W=CELLW*S, OX=(CV.width-W)/2, FLOORY=620;
 const RISE=110, FALL=480, CASCADE=70;
-const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a'};
+// per-trap strike profile + idle phase offset (mirror the game)
+const TIMING={maul:{rise:55,fall:560}, arrow:{rise:70,fall:300}, frost:{rise:200,fall:680},
+  gallows:{rise:90,fall:600}, hexward:{rise:240,fall:520}, tesla:{rise:45,fall:240}, spike:{rise:70,fall:430}};
+const PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff'};
 const ART={};
 function probeSeq(id,dir,cb){
   const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
@@ -126,6 +130,9 @@ let pieces=[
   {role:'light flame',    light:'flame',   kind:'heat',   fx:.50, fy:70,  h:56, lockX:true},
   {role:'light venom L',  light:'venom0',  kind:'vapor',  fx:.13, fy:64,  h:44},
   {role:'light venom R',  light:'venom1',  kind:'vapor',  fx:.87, fy:60,  h:44},
+  {role:'light frost',    light:'frost',   kind:'frost',  fx:.50, fy:40,  h:46},
+  {role:'light tesla',    light:'tesla',   kind:'tesla',  fx:.50, fy:55,  h:44},
+  {role:'light hexward',  light:'hexward', kind:'hexward',fx:.50, fy:60,  h:54},
 ];
 const DEFAULT_PIECES=pieces;   // keep the built-in defaults to merge any trap the saved layout doesn't have yet
 fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
@@ -143,7 +150,7 @@ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   // any trap with art but missing from the saved layout → seed from the defaults
   for(const d of DEFAULT_PIECES) if(d.trap && !seen.has(d.trap)) np.push({...d});
   (j.candles||[]).forEach((c,k)=>np.push({role:'candle '+(k?'R':'L'),candle:k,art:c.art||'candle',...c}));
-  const kindOf=a=>a==='flame'?'heat':(a.startsWith('venom')?'vapor':'candle');
+  const kindOf=a=>a==='flame'?'heat':(a.startsWith('venom')?'vapor':(a==='frost'||a==='tesla'||a==='hexward')?a:'candle');
   const lights=j.lights||[];
   if(lights.length){
     lights.forEach(l=>np.push({role:'light '+l.attach, light:l.attach, kind:kindOf(l.attach),
@@ -154,26 +161,30 @@ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
     np.filter(p=>p.trap==='venom').forEach((p,i)=>np.push({role:'light venom '+(i?'R':'L'), light:'venom'+i, kind:'vapor', fx:p.fx, fy:(p.fy||0)+34, h:44}));
     if(np.some(p=>p.trap==='flame')) np.push({role:'light flame', light:'flame', kind:'heat', fx:.5, fy:70, h:56, lockX:true});
   }
+  // seed the per-trap accent lights (frost/tesla/hexward) if the layout lacks them yet
+  const haveLight=new Set(np.filter(p=>p.light).map(p=>p.light));
+  for(const d of DEFAULT_PIECES) if(d.light && /^(frost|tesla|hexward)$/.test(d.light) && !haveLight.has(d.light)) np.push({...d});
   if(np.length) pieces=np;
   if(typeof j.heroLayer==='number'){ heroLayer=j.heroLayer; const el=document.getElementById('heroLayer'); if(el) el.value=heroLayer; }
   refreshItems(); render();
 }).catch(()=>{});
 
 let sel=0, anim=true, showLights=true, firedAt=performance.now();
-function frameIdx(rec,mode,c){
+function frameIdx(rec,mode,c,type){
   const N=rec.frames.length; if(N<2) return 0;
   if(!anim) return 0;
   if(mode==='loop') return Math.floor(performance.now()/110+c*3)%N;
-  const e=(performance.now()-firedAt-c*CASCADE+24e5)%2400;
-  if(e<RISE) return Math.max(0,Math.min(N-1,Math.floor(e/RISE*N)));
-  if(e<RISE+FALL) return Math.max(0,N-1-Math.floor((e-RISE)/FALL*N));
+  const t=TIMING[type], rise=t?t.rise:RISE, fall=t?t.fall:FALL, ph=PHASE[type]||0;
+  const e=(performance.now()-firedAt-c*CASCADE-ph+24e5)%2400;
+  if(e<rise) return Math.max(0,Math.min(N-1,Math.floor(e/rise*N)));
+  if(e<rise+fall) return Math.max(0,N-1-Math.floor((e-rise)/fall*N));
   return 0;
 }
 function pieceImg(p,c){
   const rec=ART[p.art]; if(!rec) return null;
   if(!rec.frames.length) return rec.static;
   const mode=(p.candle!=null)?'loop':p.mode;
-  return rec.frames[frameIdx(rec,mode,c||0)]||rec.frames[0];
+  return rec.frames[frameIdx(rec,mode,c||0,p.trap)]||rec.frames[0];
 }
 function pieceRect(p){
   if(p.light){ const r=p.h*S; const cx=OX+W*p.fx, cy=FLOORY-p.fy*S;
@@ -199,9 +210,16 @@ function lightAlpha(p){
   if(p.kind==='candle'){ const sd=(p.light==='candle1')?4.1:1.3;
     return (0.18+0.16*((Math.sin(t/91+sd)+Math.sin(t/37+sd*1.7))*0.25+0.5))*A; }
   if(p.kind==='vapor') return 0.32*A*(0.825+0.175*Math.sin(t/260+(p.light==='venom1'?2:0)));
+  if(p.kind==='frost'||p.kind==='tesla'||p.kind==='hexward'){
+    const rec=ART[p.kind], N=rec?rec.frames.length:0;
+    const i=N>1?frameIdx(rec,null,0,p.kind)/(N-1):0;
+    if(p.kind==='tesla') return (0.14+0.40*i)*(0.62+0.38*Math.abs(Math.sin(t/55)))*A;
+    if(p.kind==='hexward') return (0.16+0.30*i)*(0.78+0.22*Math.sin(t/430))*A;
+    return (0.16+0.34*i)*A;   // frost
+  }
   // heat: follow the brightest flame column
   const rec=ART.flame; if(!rec||rec.frames.length<2) return 0.3*A;
-  let m=0; for(let c=0;c<4;c++) m=Math.max(m, frameIdx(rec,null,c)/(rec.frames.length-1));
+  let m=0; for(let c=0;c<4;c++) m=Math.max(m, frameIdx(rec,null,c,'flame')/(rec.frames.length-1));
   return 0.55*Math.pow(m,1.3)*A;
 }
 function render(){
@@ -237,7 +255,7 @@ function render(){
       if(showLights && p.trap==='flame'){
         const lp=pieces.find(q=>q.light==='flame');
         if(lp){ const rec=ART.flame, N=rec?rec.frames.length:0;
-          const inten=N>1?frameIdx(rec,null,c)/(N-1):0.5;
+          const inten=N>1?frameIdx(rec,null,c,'flame')/(N-1):0.5;
           glow(cx0+dw/2, FLOORY-lp.fy*S, lp.h*S, LIGHT_COL.heat, 0.55*Math.pow(inten,1.3)*(lp.a||1)); } }
     }
     if(!any){
