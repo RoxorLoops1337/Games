@@ -60,6 +60,12 @@
     <button onclick="clearActors()">🧹 clear</button>
   </div>
   <div class="row">
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;opacity:.85;">🛡️ hero lift
+      <input id="heroLift" type="range" min="0" max="48" step="1" value="0"
+        oninput="heroLift=+this.value;document.getElementById('heroLiftVal').textContent=heroLift+'px';if(actors.length)render();">
+      <span id="heroLiftVal" style="min-width:34px">0px</span></label>
+  </div>
+  <div class="row">
     <button class="sel" onclick="exportJson()">📋 Generate layout.json</button>
     <button onclick="downloadJson()">⬇ download</button>
   </div>
@@ -266,6 +272,7 @@ const HSHEET={
 const HIMG={}; for(const k in HSHEET){ const im=new Image(); im.src=HSHEET[k].src; HIMG[k]=im; }
 const CHAMP=[]; for(let i=0;i<12;i++){ const im=new Image(); im.src='sprites/champion/champion_'+i+'.png'; CHAMP.push(im); }
 let actors=[], streamHero=false, streamMon=false, _spawnH=0, _spawnM=0, _lastT=performance.now();
+let heroLift=0;   // align tool only: raise heroes/super-heroes this many world-px off the floor
 const HERO_KINDS=['warrior','mage','cleric','rogue'];
 const MON_KINDS=['goblin','skeleton','warden','ogre'];
 function addChampion(){ actors.push({kind:'champion', x:-32, dir:1, t:Math.random()*2, spd:46}); }
@@ -288,12 +295,15 @@ function stepActors(dt){
 function drawActors(){
   for(const a of actors){
     const sx=OX+a.x*S;
+    // heroes & super-heroes (everything that isn't a monster) ride the hero-lift slider
+    const isHero = a.kind==='champion' || HERO_KINDS.includes(a.kind);
+    const fy = FLOORY - (isHero ? heroLift*S : 0);
     if(a.kind==='champion'){
       const im=CHAMP[1+Math.floor(a.t*12)%11]||CHAMP[0];
       if(!(im&&im.complete&&im.width)) continue;
       const dh=CH_DH*S, dw=dh*(im.width/im.height);
       X.imageSmoothingEnabled=false;
-      X.drawImage(im, Math.round(sx-dw/2), Math.round(FLOORY-dh), Math.round(dw), Math.round(dh));
+      X.drawImage(im, Math.round(sx-dw/2), Math.round(fy-dh), Math.round(dw), Math.round(dh));
       continue;
     }
     const c=HSHEET[a.kind], im=HIMG[a.kind];
@@ -301,7 +311,7 @@ function drawActors(){
     const frame=Math.floor(a.t*11)%c.n, S2=c.scale*S;
     X.imageSmoothingEnabled=false;
     X.drawImage(im, frame*c.fw, c.row*c.fh, c.fw, c.fh,
-      Math.round(sx-c.ax*S2), Math.round(FLOORY-c.ay*S2), Math.round(c.fw*S2), Math.round(c.fh*S2));
+      Math.round(sx-c.ax*S2), Math.round(fy-c.ay*S2), Math.round(c.fw*S2), Math.round(c.fh*S2));
   }
 }
 function loop(){
