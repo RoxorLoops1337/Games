@@ -5210,8 +5210,15 @@ const SPRITES={
     slash:{row:15, n:6, fps:13, ax:24, ay:62},
     cast: {row:3,  n:7, fps:11, ax:24, ay:62},
   }},
+  rogue: { base:'sprites/rogue/rogue_', scale:0.92, atk:['slash','islash'], clips:{
+    idle:  {sheet:'idle',  fw:64, fh:64,  n:2, fps:4,  row:3, ax:32, ay:62},
+    walk:  {sheet:'walk',  fw:64, fh:64,  n:8, fps:11, row:3, ax:32, ay:62},
+    slash: {sheet:'slash', fw:192,fh:192, n:5, fps:13, row:3, ax:96, ay:126},
+    islash:{sheet:'islash',fw:64, fh:64,  n:5, fps:13, row:3, ax:32, ay:62},
+    thrust:{sheet:'thrust',fw:64, fh:64,  n:7, fps:14, row:3, ax:32, ay:62},
+  }},
 };
-const CLASS_SPRITE={ warrior:'warrior', mage:'mage', cleric:'cleric' };
+const CLASS_SPRITE={ warrior:'warrior', mage:'mage', cleric:'cleric', rogue:'rogue' };
 const SPR_IMG={};
 if(typeof Image!=='undefined'){
   for(const key in SPRITES){ const cfg=SPRITES[key]; SPR_IMG[key]={};
@@ -5250,6 +5257,21 @@ const MON_SPRITES={
     idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:25, ay:61},
     walk: {sheet:'walk', fw:64,fh:64,n:8,fps:10, ax:25, ay:61},
     slash:{sheet:'slash',fw:64,fh:64,n:5,fps:12, ax:25, ay:61},
+  }},
+  skeleton:{ base:'sprites/skeleton/skeleton_', scale:0.82, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:64, fh:64, n:2,fps:4,  ax:32, ay:61},
+    walk: {sheet:'walk', fw:64, fh:64, n:8,fps:10, ax:32, ay:61},
+    slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},
+  }},
+  warden:{ base:'sprites/warden/warden_', scale:0.95, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:192,fh:192,n:2,fps:4,  ax:96, ay:126},
+    walk: {sheet:'walk', fw:192,fh:192,n:8,fps:10, ax:96, ay:126},
+    slash:{sheet:'slash',fw:64, fh:64, n:5,fps:12, ax:32, ay:61},
+  }},
+  ogre:{ base:'sprites/ogre/ogre_', scale:1.15, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:192,fh:192,n:2,fps:4,  ax:96, ay:126},
+    walk: {sheet:'walk', fw:192,fh:192,n:8,fps:10, ax:96, ay:126},
+    slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},
   }},
 };
 const MON_IMG={};
@@ -5415,7 +5437,7 @@ function drawRoomContents(x0,w,room,i){
       const sp=monParts.length>2?28:44;
       const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 3)
       if(!alive) X.globalAlpha=0.35;
-      const drew = (mp==='goblin') && monSpriteReady('goblin') && drawMonsterSprite(mbx+ox, FLOOR, room, cell, 'goblin', alive, moving);
+      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR, room, cell, mp, alive, moving);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
       if(!alive){ X.globalAlpha=1; px(mbx+ox-12,FLOOR-10,24,6,'#3a3a3a'); }
     });
