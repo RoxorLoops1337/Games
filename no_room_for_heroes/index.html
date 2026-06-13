@@ -4784,7 +4784,9 @@ function drawDungeon(tx, scale, isBuild){
     X.fillRect(-VW, FLOOR, VW*4, 6);
   }
 
-  // each cell
+  // each cell. Front-of-hero trap parts are collected here and replayed after
+  // the party draws, so e.g. a translucent flame can lick over the heroes.
+  _frontTraps=[];
   for(let i=0;i<G.slots+1;i++){
     const isBoss=(i===G.slots);
     const x0=tx(cellX(i)); const w=ROOM_W*scale;
@@ -4812,7 +4814,9 @@ function drawDungeon(tx, scale, isBuild){
       }
     } else if(roomDrag && roomDrag.dragging && i===roomDrag.from){
       // the room being dragged: lifted + faded
+      const _ft=_frontTraps; _frontTraps=null;   // lifted room: draw its traps inline so they rise with it
       X.save(); X.globalAlpha=0.5; X.translate(0,-48); drawRoomFull(x0, w, room, i); X.restore();
+      _frontTraps=_ft;
     } else {
       drawRoomFull(x0, w, room, i);
     }
@@ -4845,6 +4849,8 @@ function drawDungeon(tx, scale, isBuild){
   party.filter(h=>h.state==='dead').forEach(h=>drawHeroDead(tx(h.x), h));
   party.filter(h=>h.state!=='dead').forEach(h=>drawHero(tx(h.x), h));
   if(G.phase==='run') drawDenGoblins(tx);    // 👺 marching goblins from Den spawners
+  // front-of-hero trap layers, replayed over the party (see HERO_LAYER)
+  if(_frontTraps){ for(const f of _frontTraps) f(); _frontTraps=null; }
 }
 // Build a lightweight hero object from a queued spec for drawing/preview.
 function previewHeroObj(spec){
@@ -4919,6 +4925,8 @@ function drawTrapPart(x0,w,type,p,pi,cell){
   const n=p.n||1, gap=p.gap||0.2, seed=(cell?cell.index*3:0)+pi*4+1;
   const N=rec.frames.length;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+  // flame reads as 20% see-through so heroes appear to walk through the fire
+  const partAlpha=(p.alpha!=null?p.alpha:(type==='flame'?0.8:1));
   let drew=false;
   for(let c=0;c<n;c++){
     let img, inten=1;
@@ -4932,9 +4940,11 @@ function drawTrapPart(x0,w,type,p,pi,cell){
     const dh=p.h||100, dw=dh*(img.width/img.height);
     const fx=(p.fx!=null?p.fx:.5)+(c-(n-1)/2)*gap;
     const px0=x0+w*fx-dw/2, py=FLOOR-(p.fy||0)-dh;
+    if(partAlpha<1){ X.save(); X.globalAlpha*=partAlpha; }
     if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
       X.drawImage(img, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
     else X.drawImage(img, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh));
+    if(partAlpha<1) X.restore();
     // light: heat per flame column (follows the strike), vapor per poison part
     if(type==='flame'){ const l=lightCfg('flame');
       if(l) drawGlow(x0+w*fx, FLOOR-(l.fy||70), l.r||56, LIGHT_COL.heat, 0.55*Math.pow(inten,1.3)*(l.a||1)); }
@@ -5088,6 +5098,12 @@ let LAYOUT={
 // In-room layering when a fused room has several traps: low draws first.
 // Poison behind everything, flames over it, spikes ALWAYS on top.
 const TRAP_LAYER={venom:0, frost:2, tesla:4, hexward:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
+// Heroes draw at this z within the trap stack: any trap PART whose layer is
+// ABOVE it renders in FRONT of the party (e.g. translucent flames licking over
+// a hero). Overridable via LAYOUT.heroLayer (tuned in align.html). The high
+// default keeps the whole party on top — old behaviour — until a layout sets it.
+let HERO_LAYER=999;
+let _frontTraps=null;   // deferred front-of-hero trap draws, flushed after the party renders
 // Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
 // (continuous). The poison vents pour non-stop.
 const TRAP_ANIM={venom:'loop'};
@@ -5128,6 +5144,7 @@ function normalizeLayout(){
     LAYOUT.lights=L;
   }
   LAYOUT._lights={}; for(const l of LAYOUT.lights) LAYOUT._lights[l.attach]=l;
+  if(typeof LAYOUT.heroLayer==='number') HERO_LAYER=LAYOUT.heroLayer;
 }
 normalizeLayout();
 if(typeof fetch!=='undefined'){
@@ -5135,6 +5152,7 @@ if(typeof fetch!=='undefined'){
     if(j&&j.traps){ LAYOUT.traps=Object.assign(LAYOUT.traps, j.traps); }
     if(j&&j.candles) LAYOUT.candles=j.candles;
     if(j&&j.lights) LAYOUT.lights=j.lights;
+    if(j&&typeof j.heroLayer==='number') LAYOUT.heroLayer=j.heroLayer;
     normalizeLayout();
     // probe any art ids the layout references that we haven't loaded
     for(const t in LAYOUT.traps) for(const p of LAYOUT.traps[t]) if(p.art) artProbe(p.art);
@@ -5364,7 +5382,16 @@ function drawRoomContents(x0,w,room,i){
   }
   items.sort((a,b)=>a.layer-b.layer);
   const drewType={};
-  for(const it of items) if(drawTrapPart(x0,w,it.type,it.p,it.pi,cell)) drewType[it.type]=1;
+  for(const it of items){
+    // a part above the hero's layer is deferred so the party draws between the
+    // back and front trap layers (only when its art is loaded — otherwise draw
+    // inline so the procedural fallback can still kick in).
+    const rec=ART[it.p.art||it.type];
+    if(_frontTraps && it.layer>HERO_LAYER && rec && (rec.frames.length||rec.static)){
+      drewType[it.type]=1;
+      _frontTraps.push(()=>drawTrapPart(x0,w,it.type,it.p,it.pi,cell));
+    } else if(drawTrapPart(x0,w,it.type,it.p,it.pi,cell)) drewType[it.type]=1;
+  }
   for(const tp of trapTypes) if(!drewType[tp]) drawTrapProp(x0,w,cx,tp,cell);   // procedural fallback
   if(trapTypes.includes('tesla')) drawTeslaArcs(x0,w,cell);   // ⚡ arcs from coil through heroes when it fires
   if(cell && cell._disarmT>0){   // rogue disarmed this room's traps
