@@ -4918,7 +4918,7 @@ function drawTrapPart(x0,w,type,p,pi,cell){
   if(G && G.phase==='run' && cell && cell.traps){
     const tr=cell.traps.find(t=>t.type===type); if(tr && tr.firedAt) firedAt=tr.firedAt;
   } else if(G && G.phase==='build'){
-    firedAt=performance.now() - (performance.now()%2400);
+    firedAt=(performance.now() - (performance.now()%2400)) + (TRAP_PHASE[type]||0);
   }
   const id=p.art||type, rec=ART[id]; if(!rec) return false;
   const mode=p.mode||TRAP_ANIM[type];
@@ -4932,7 +4932,7 @@ function drawTrapPart(x0,w,type,p,pi,cell){
     let img, inten=1;
     if(N>1){
       const idx=(mode==='loop') ? Math.floor(performance.now()/110+seed+c*3)%N
-                                : strikeIdx(N, firedAt!=null?firedAt+c*70:null);
+                                : strikeIdx(N, firedAt!=null?firedAt+c*70:null, type);
       img=rec.frames[idx]||rec.frames[0]; inten=idx/(N-1);
     } else img=rec.frames[0]||rec.static;
     if(!(img&&(img._ok||img.complete)&&img.width)) continue;
@@ -4951,6 +4951,14 @@ function drawTrapPart(x0,w,type,p,pi,cell){
     else if(type==='venom'){ const l=lightCfg('venom'+pi);
       if(l) drawGlow(x0+w*(l.fx!=null?l.fx:fx), FLOOR-(l.fy||34), l.r||44, LIGHT_COL.vapor,
         0.32*(l.a||1)*(0.825+0.175*Math.sin(performance.now()/260+seed*2.1))); }   // 65–100% of peak, quick simmer
+    // accent glows: a base ambient that flares with the strike (inten). Position
+    // falls back to the trap's own centre when the layout has no light entry yet.
+    else if(type==='frost')
+      trapAccentGlow('frost',x0,w,fx,p,LIGHT_COL.frost, 0.16+0.34*inten);
+    else if(type==='tesla'){ const fl=0.62+0.38*Math.abs(Math.sin(performance.now()/55+seed)); // electric flicker
+      trapAccentGlow('tesla',x0,w,fx,p,LIGHT_COL.tesla, (0.14+0.40*inten)*fl); }
+    else if(type==='hexward'){ const pu=0.78+0.22*Math.sin(performance.now()/430+seed); // slow arcane pulse
+      trapAccentGlow('hexward',x0,w,fx,p,LIGHT_COL.hexward, (0.16+0.30*inten)*pu); }
   }
   X.imageSmoothingEnabled=sm;
   return drew;
@@ -5107,9 +5115,24 @@ let _frontTraps=null;   // deferred front-of-hero trap draws, flushed after the 
 // Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
 // (continuous). The poison vents pour non-stop.
 const TRAP_ANIM={venom:'loop'};
+// Per-trap strike profile {rise,fall} in ms so they don't all move identically.
+// rise = time to slam to the last frame, fall = time to ease back to rest.
+// e.g. the maul SLAMS down fast then grinds back up slow.
+const TRAP_TIMING={
+  maul:    {rise:55,  fall:560},
+  arrow:   {rise:70,  fall:300},
+  frost:   {rise:200, fall:680},
+  gallows: {rise:90,  fall:600},
+  hexward: {rise:240, fall:520},
+  tesla:   {rise:45,  fall:240},
+  spike:   {rise:70,  fall:430},
+};
+// Build-phase idle preview fires each trap on its own offset within the 2.4s
+// loop so a multi-trap room doesn't pulse all at once.
+const TRAP_PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
 // Additive light glows (cached radial gradients): candle flicker, flame heat,
-// poison vapor. Positions/radii come from LAYOUT.lights (align.html).
-const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a'};
+// poison vapor, plus per-trap accents (frost chill, tesla spark, hex sigil).
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff'};
 let _glowG={};
 function drawGlow(cx,cy,r,col,a){
   if(!(a>0.01)||!(r>2)) return;
@@ -5120,12 +5143,22 @@ function drawGlow(cx,cy,r,col,a){
   X.translate(cx,cy); X.fillStyle=g; X.fillRect(-r,-r,r*2,r*2); X.restore();
 }
 function lightCfg(attach){ return (LAYOUT._lights||{})[attach]; }
-function strikeIdx(N,firedAt){
+// Draw a single-trap accent glow. Uses the aligned light entry if one exists,
+// otherwise centres on the trap art so the effect shows before it's tuned.
+function trapAccentGlow(attach,x0,w,fx,p,col,a){
+  const l=lightCfg(attach);
+  const cx=x0+w*((l&&l.fx!=null)?l.fx:fx);
+  const cy=FLOOR-((l&&l.fy!=null)?l.fy:((p.fy||0)+(p.h||100)*0.5));
+  const r=(l&&l.r)?l.r:(p.h||100)*0.55;
+  drawGlow(cx,cy,r,col,a*((l&&l.a)||1));
+}
+function strikeIdx(N,firedAt,type){
   if(firedAt==null) return 0;
   const e=performance.now()-firedAt;
   if(e<0) return 0;
-  if(e<TRAP_RISE) return Math.max(0,Math.min(N-1,Math.floor(e/TRAP_RISE*N)));
-  if(e<TRAP_RISE+TRAP_FALL) return Math.max(0,N-1-Math.floor((e-TRAP_RISE)/TRAP_FALL*N));
+  const t=TRAP_TIMING[type], rise=t?t.rise:TRAP_RISE, fall=t?t.fall:TRAP_FALL;
+  if(e<rise) return Math.max(0,Math.min(N-1,Math.floor(e/rise*N)));
+  if(e<rise+fall) return Math.max(0,N-1-Math.floor((e-rise)/fall*N));
   return 0;
 }
 // The flame jet shows FOUR columns from the one uploaded animation: the single
