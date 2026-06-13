@@ -66,6 +66,12 @@
       <span id="heroLiftVal" style="min-width:34px">0px</span></label>
   </div>
   <div class="row">
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;opacity:.85;">🎚️ hero layer
+      <input id="heroLayer" type="number" step="0.5" value="999" style="width:70px"
+        oninput="heroLayer=+this.value;if(actors.length)render();">
+      <span style="opacity:.6">traps above this draw in front</span></label>
+  </div>
+  <div class="row">
     <button class="sel" onclick="exportJson()">📋 Generate layout.json</button>
     <button onclick="downloadJson()">⬇ download</button>
   </div>
@@ -149,6 +155,7 @@ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
     if(np.some(p=>p.trap==='flame')) np.push({role:'light flame', light:'flame', kind:'heat', fx:.5, fy:70, h:56, lockX:true});
   }
   if(np.length) pieces=np;
+  if(typeof j.heroLayer==='number'){ heroLayer=j.heroLayer; const el=document.getElementById('heroLayer'); if(el) el.value=heroLayer; }
   refreshItems(); render();
 }).catch(()=>{});
 
@@ -211,7 +218,8 @@ function render(){
   // sprites: candles first (wall decor), then traps in LAYER order (low first)
   const sprites=pieces.filter(p=>!p.light && !p.hidden)
     .sort((a,b)=>((a.candle!=null?-99:(a.layer||0))-(b.candle!=null?-99:(b.layer||0))));
-  for(const p of sprites){
+  const spriteLayer=p=>(p.candle!=null?-99:(p.layer||0));
+  const drawSprite=(p)=>{
     const r=pieceRect(p), n=p.n||1;
     let any=false;
     for(let c=0;c<n;c++){
@@ -219,9 +227,12 @@ function render(){
       if(!(im&&im.width)) continue;
       any=true;
       const dw=r.dw||r.w, cx0=r.x+c*((p.gap||.2)*W);
+      const a=(p.trap==='flame')?0.8:1;   // flame is 20% see-through, matching the game
+      if(a<1){ X.save(); X.globalAlpha*=a; }
       if(p.flip){ X.save(); X.translate(cx0+dw/2,0); X.scale(-1,1);
         X.drawImage(im,-dw/2,r.y,dw,r.h); X.restore(); }
       else X.drawImage(im,cx0,r.y,dw,r.h);
+      if(a<1) X.restore();
       // per-column heat light, drawn with the column (game does the same)
       if(showLights && p.trap==='flame'){
         const lp=pieces.find(q=>q.light==='flame');
@@ -233,7 +244,9 @@ function render(){
       X.strokeStyle='#666'; X.strokeRect(r.x,r.y,r.w,r.h);
       X.fillStyle='#888'; X.font='11px monospace'; X.fillText('no art: '+p.art, r.x+3, r.y+14);
     }
-  }
+  };
+  // back layer: traps at/below the hero layer draw before the test-traffic heroes
+  for(const p of sprites) if(spriteLayer(p)<=heroLayer) drawSprite(p);
   // non-flame lights (flame columns handled above)
   if(showLights) for(const p of pieces){
     if(!p.light||p.light==='flame'||p.hidden) continue;
@@ -251,6 +264,8 @@ function render(){
       X.lineWidth=2; X.strokeRect(r.x-2,r.y-2,r.w+4,r.h+4); X.lineWidth=1; X.setLineDash([]); }
   });
   drawActors();
+  // front layer: traps above the hero layer draw OVER the heroes
+  for(const p of sprites) if(spriteLayer(p)>heroLayer) drawSprite(p);
   X.fillStyle='#9fe'; X.font='12px monospace';
   const p=pieces[sel];
   X.fillText(`${p.role}: fx=${p.fx.toFixed(3)} fy=${Math.round(p.fy)}px ${p.light?'r':'h'}=${Math.round(p.h)}px`
@@ -273,6 +288,7 @@ const HIMG={}; for(const k in HSHEET){ const im=new Image(); im.src=HSHEET[k].sr
 const CHAMP=[]; for(let i=0;i<12;i++){ const im=new Image(); im.src='sprites/champion/champion_'+i+'.png'; CHAMP.push(im); }
 let actors=[], streamHero=false, streamMon=false, _spawnH=0, _spawnM=0, _lastT=performance.now();
 let heroLift=0;   // align tool only: raise heroes/super-heroes this many world-px off the floor
+let heroLayer=999; // z within the trap stack: traps with a higher layer render IN FRONT of heroes
 const HERO_KINDS=['warrior','mage','cleric','rogue'];
 const MON_KINDS=['goblin','skeleton','warden','ogre'];
 function addChampion(){ actors.push({kind:'champion', x:-32, dir:1, t:Math.random()*2, spd:46}); }
@@ -385,7 +401,10 @@ function buildJson(){
     if(p.candle!=null) candles.push(e);
     else { if(p.layer!=null) e.layer=p.layer; (traps[p.trap]=traps[p.trap]||[]).push(e); }
   }
-  return {traps, candles, lights};
+  const out={};
+  if(isFinite(heroLayer) && heroLayer!==999) out.heroLayer=heroLayer;
+  out.traps=traps; out.candles=candles; out.lights=lights;
+  return out;
 }
 function exportJson(){ document.getElementById('out').value=JSON.stringify(buildJson(),null,1); }
 function downloadJson(){
