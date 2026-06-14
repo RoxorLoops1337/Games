@@ -2,5 +2,7 @@ node_modules/
 dist/
 beatbox_story/beatbox-story.bundle.js.map
 .DS_Store
-.claude/
+# Keep Claude config out of git, but DO track shared slash commands (e.g. /sprite)
+.claude/*
+!.claude/commands/
 
