@@ -1,0 +1,70 @@
+{
+  "_comment": "SDXL + Pixel Art XL LoRA sprite workflow (ComfyUI API format). The positive prompt text is the literal token PARAM_PROMPT so that (a) artokun/comfyui-mcp auto-exposes this as its own typed MCP tool when dropped in the workflows dir, and (b) generate_sprite.py substitutes the real prompt at runtime. Set ckpt_name and lora_name to match your installed files (see SETUP.md).",
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "PARAM_CHECKPOINT"
+    }
+  },
+  "10": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "lora_name": "PARAM_LORA",
+      "strength_model": 1.0,
+      "strength_clip": 1.0,
+      "model": ["4", 0],
+      "clip": ["4", 1]
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "PARAM_PROMPT",
+      "clip": ["10", 1]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, soft, anti-aliased, gradient, photorealistic, 3d render, jpeg artifacts, watermark, text",
+      "clip": ["10", 1]
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 30,
+      "cfg": 7.5,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0,
+      "model": ["10", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["4", 2]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "sprite_raw",
+      "images": ["8", 0]
+    }
+  }
+}

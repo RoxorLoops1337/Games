@@ -74,3 +74,25 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - Merge to main → Cloudflare Pages auto-builds `dist/` (~1 min). `_redirects` handles the old `/boss_monster/*` path.
 - GitHub via `mcp__github__*` tools only (no gh CLI), scope `roxorloops1337/games`. Token can expire mid-session: commit+push anyway, PR when it recovers.
 - Merge conflicts with origin/main after squash-merges are NORMAL. Resolve keeping HEAD (your branch), re-run `npm run check`, re-grep your feature.
+
+# Generating pixel-art assets (local ComfyUI)
+
+This repo has a local sprite generator under `tools/comfyui/`. When the user asks to
+create, generate, or make a sprite / icon / item / tile / portrait, use it instead of
+drawing by hand or reaching for a cloud service. Run from the repo root:
+
+    python tools/comfyui/make_sprite.py "<subject prompt>" --name <short-name> --size <px>
+
+- Auto-appends pixel-art style cues, renders on the local ComfyUI (SDXL + Pixel Art XL),
+  pixelates (downscale + palette + transparent bg), and writes `assets/<name>.png`.
+  Move the finished sprite into the game's art folders (`no_room_for_heroes/sprites/…`,
+  `rooms/…`) and wire it like the other art.
+- Default size 64; `--size 96` for more detail. Default palette is true color; pass
+  `--palette tools/comfyui/palettes/pico-8.gpl` for a stylized 16-color look.
+- `/sprite <subject>` is the slash-command shortcut (`.claude/commands/sprite.md`).
+- One-time: `pip install pillow numpy`; verify with `python tools/comfyui/make_sprite.py --check`.
+- Better models / quality knobs: see `tools/comfyui/README.md`.
+- **REQUIRES a reachable local ComfyUI** (default `127.0.0.1:8000`). This works from
+  Claude Code running on the owner's machine — NOT from cloud/web sessions, whose
+  container can't reach the local ComfyUI. The pixelate half (`pixelate.py`) runs
+  anywhere `pillow`+`numpy` are installed.
