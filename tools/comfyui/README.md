@@ -51,6 +51,20 @@ and to animate one, replace the static PNG with a frame sequence (`<id>_0.png, _
 Monsters without art (totem, warcamp, slime) need directional LPC sheets, not single
 sprites — that's outside this generator.
 
+## Animate a static sprite (no GPU)
+
+`animate.py` turns ONE static sprite into an animated frame sequence + sprite sheet,
+procedurally (motion + light) — no ComfyUI/GPU, just Pillow. Frames are named to match
+the game's loader (`<name>_0.png, _1 …`), so they drop straight into `rooms/traps/` etc.
+```
+python tools/comfyui/animate.py assets/runestone.png --mode pulse  --frames 6 --out-dir no_room_for_heroes/rooms/traps --name runestone
+python tools/comfyui/animate.py assets/spike.png     --mode strike --frames 5 --sheet
+python tools/comfyui/animate.py in.png --mode flicker --frames 6 --gif preview.gif
+```
+Modes: `strike` (trap lunge — the engine plays it rise-fast/fall-slow), `pulse` (glow
+throb), `flicker` (spark), `bob` (idle hover). This is procedural motion on existing art —
+for hand-drawn frame-by-frame animation you still need to draw/generate each frame.
+
 ## Options
 
 `--size 96` (more detail) · `--palette palettes/pico-8.gpl` (stylized 16 colors) ·
