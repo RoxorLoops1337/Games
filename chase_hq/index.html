@@ -884,6 +884,26 @@ const sunSpriteMat = new THREE.SpriteMaterial({ map: glowTex('rgba(255,220,150,0
 const sunSprite = new THREE.Sprite(sunSpriteMat);
 scene.add(sunSprite);
 
+// lens-flare ring: bigger soft halo behind the sun + small chromatic bubbles
+// positioned along the camera-to-sun line, so the flare reads as real glass-glow
+const sunHaloMat = new THREE.SpriteMaterial({
+  map: glowTex('rgba(255,210,150,0.45)'), transparent: true, depthWrite: false, fog: false,
+  blending: THREE.AdditiveBlending,
+});
+const sunHalo = new THREE.Sprite(sunHaloMat);
+scene.add(sunHalo);
+const FLARE_COLORS = ['rgba(255,180,140,0.45)', 'rgba(170,230,255,0.35)', 'rgba(255,240,180,0.55)', 'rgba(200,180,255,0.35)'];
+const FLARE_DISTS = [55, 90, 130, 175];  // world units in front of the camera
+const FLARE_SIZES = [16, 11, 26, 8];
+const flares = [];
+for (let i = 0; i < FLARE_COLORS.length; i++) {
+  const m = new THREE.SpriteMaterial({ map: glowTex(FLARE_COLORS[i]), transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending });
+  const s = new THREE.Sprite(m);
+  s.scale.set(FLARE_SIZES[i], FLARE_SIZES[i], 1);
+  scene.add(s);
+  flares.push(s);
+}
+
 let stars = null;
 
 const sunLight = new THREE.DirectionalLight(0xffffff, 3);
@@ -1069,9 +1089,65 @@ function buildWorld(stage){
     world.add(water);
   }
 
+  buildGuardrails(theme);
   scatterScenery(theme, stage, rng);
   buildGantries(theme, rng);
   spotMarker.visible = false;
+}
+
+function guardrailTex(theme){
+  return makeCanvas(256, 64, (g, w, h) => {
+    g.fillStyle = theme.night ? '#b6b8be' : '#cdd0d6'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#e8ebf0'; g.fillRect(0, 12, w, 8);   // top highlight
+    g.fillStyle = '#7a7e88'; g.fillRect(0, h - 14, w, 6); // bottom shadow
+    g.fillStyle = '#3f424a';                              // post shadow stripes
+    for (let x = 0; x < w; x += 32) g.fillRect(x, 0, 4, h);
+    g.fillStyle = 'rgba(50,55,65,0.4)';                   // grime line
+    g.fillRect(0, h * 0.5 - 1, w, 2);
+  });
+}
+function buildGuardrails(theme){
+  const tex = guardrailTex(theme);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  const mat = new THREE.MeshStandardMaterial({
+    map: tex, color: 0xffffff, metalness: 0.55, roughness: 0.4, envMapIntensity: 1.1,
+    side: THREE.DoubleSide,
+  });
+  const pts = track.pts;
+  for (const side of [-1, 1]) {
+    const lat = side * 7.0;
+    const cols = 2;            // bottom and top of the rail (y = 0.05 and 0.75)
+    const yT = [0.05, 0.85];
+    const rows = pts.length;
+    const pos = new Float32Array(rows * cols * 3);
+    const uv  = new Float32Array(rows * cols * 2);
+    let p = 0, q = 0;
+    for (let r = 0; r < rows; r++) {
+      const pt = pts[r];
+      const lx = -Math.cos(pt.h), lz = -Math.sin(pt.h);
+      const px = pt.x + lx * lat;
+      const pz = pt.z + lz * lat;
+      for (let c = 0; c < cols; c++) {
+        pos[p++] = px; pos[p++] = pt.y + yT[c]; pos[p++] = pz;
+        uv[q++] = c;   uv[q++] = (r * STEP) / 3;
+      }
+    }
+    const idx = [];
+    for (let r = 0; r < rows - 1; r++) {
+      const a = r * cols, b = a + cols;
+      // wind so the visible face is the one toward the road (sign depends on side)
+      if (side > 0) idx.push(a, a+1, b,  a+1, b+1, b);
+      else          idx.push(a, b, a+1,  a+1, b, b+1);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat);
+    m.receiveShadow = true; m.castShadow = false;
+    world.add(m);
+  }
 }
 
 function instancedScatter(geo, mat, count, place){
@@ -1460,6 +1536,51 @@ function makeCar(type, opts = {}){
     ts.position.set(0, 1.42, 0);
     grp.add(ts);
   }
+  // damage rig for the suspect: hood flame, broken-tail-light tint baseline,
+  // and a hidden warning light. Drives off sus.dmg in updateSuspect.
+  if (opts.suspect) {
+    car.basePaintColor = new THREE.Color(opts.color ?? 0xcccccc);
+    const flameTex = makeCanvas(64, 96, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      const grad = g.createRadialGradient(w/2, h*0.82, 4, w/2, h*0.4, w*0.6);
+      grad.addColorStop(0, 'rgba(255,255,210,1)');
+      grad.addColorStop(0.35, 'rgba(255,190,60,0.85)');
+      grad.addColorStop(0.7, 'rgba(255,90,30,0.45)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    });
+    const flameMat = new THREE.SpriteMaterial({
+      map: flameTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const flame = new THREE.Sprite(flameMat);
+    flame.scale.set(1.4, 1.9, 1);
+    flame.position.set(0, 1.1, -P.len / 2 + 0.6);
+    flame.visible = false;
+    grp.add(flame);
+    car.flame = flame;
+    // engine-bay point light (warm) — flickers only when on fire
+    const fireLight = new THREE.PointLight(0xff7a30, 0, 14, 1.7);
+    fireLight.position.set(0, 0.9, -P.len / 2 + 0.4);
+    grp.add(fireLight);
+    car.fireLight = fireLight;
+    // a couple of dark scorch decals on the hood — opacity grows with damage
+    const scorchTex = makeCanvas(128, 128, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = 'rgba(8,8,8,0.85)';
+      for (let i = 0; i < 18; i++) {
+        const x = rand(20, w - 20), y = rand(20, h - 20), r = rand(8, 24);
+        g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+      }
+    });
+    const scorch = new THREE.Mesh(
+      new THREE.PlaneGeometry(P.width * 0.7, 1.0),
+      new THREE.MeshBasicMaterial({ map: scorchTex, transparent: true, opacity: 0, depthWrite: false })
+    );
+    scorch.rotation.x = -Math.PI / 2;
+    scorch.position.set(0, 0.82, -P.len / 2 + 0.7);
+    grp.add(scorch);
+    car.scorch = scorch;
+  }
   return car;
 }
 
@@ -1617,10 +1738,11 @@ function buildCars(stage){
   // suspect
   const susType = stage.suspect === 'ghost' ? 'sports' : stage.suspect;
   susCar = makeCar(susType, {
-    color: stage.susColor, night: theme.night,
+    color: stage.susColor, night: theme.night, suspect: true,
     bigSpoiler: stage.suspect !== 'muscle', underglow: stage.suspect === 'ghost',
   });
   susCar.paint.metalness = 0.88; susCar.paint.roughness = 0.24;
+  if (susCar.basePaintColor) susCar.basePaintColor.copy(susCar.paint.color);
   world.add(susCar.grp);
 
   // traffic
@@ -1827,6 +1949,7 @@ $('titleHi').textContent = 'HI-SCORE ' + G.hi;
 const pl = { s: 0, lat: 0, v: 0, steerVis: 0, drift: 0, spin: 0, offroad: 0 };
 const sus = { s: 800, lat: 0, v: 0, dmg: 0, weaveT: 0, busted: 0 };
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const _susBlack = new THREE.Color(0x080808), _susEmber = new THREE.Color(0xff5418);
 
 function startStage(idx){
   G.stageIdx = idx;
@@ -2050,7 +2173,32 @@ function updateSuspect(dt, stage){
   // mesh
   posAt(sus.s, sus.lat, tmpV);
   susCar.grp.position.set(tmpV.x, tmpV.y, tmpV.z);
-  susCar.grp.rotation.set(Math.atan(tmpV.sl) * 0.7, -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06, 0, 'YXZ');
+  // damage-driven body lean wobble — gets dragged at high damage like a busted suspension
+  const d = sus.dmg / 100;
+  const tiltZ = d > 0.4 ? Math.sin(G.stateT * 1.7) * (d - 0.4) * 0.18 : 0;
+  susCar.grp.rotation.set(Math.atan(tmpV.sl) * 0.7, -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06, tiltZ, 'YXZ');
+  // paint scorching: as damage climbs, paint goes dirty + matte + emissive embers
+  if (susCar.basePaintColor) {
+    susCar.paint.color.copy(susCar.basePaintColor).lerp(_susBlack, d * 0.75);
+    susCar.paint.roughness = lerp(0.24, 0.88, d);
+    susCar.paint.emissive.copy(_susEmber).multiplyScalar(d > 0.65 ? (d - 0.65) * 2.6 : 0);
+    susCar.paint.emissiveIntensity = d > 0.65 ? 1 : 0;
+    susCar.paint.needsUpdate = true;
+  }
+  if (susCar.scorch) susCar.scorch.material.opacity = clamp((d - 0.25) * 1.4, 0, 0.85);
+  // hood fire and engine-bay light kick in around 70% damage
+  if (susCar.flame) {
+    const on = d > 0.7 && G.state !== 'BUSTED';
+    susCar.flame.visible = on;
+    if (on) {
+      const fw = 1.4 + Math.sin(G.stateT * 26) * 0.18 + Math.random() * 0.15;
+      const fh = 1.9 + Math.sin(G.stateT * 22 + 1) * 0.22 + Math.random() * 0.2;
+      susCar.flame.scale.set(fw, fh, 1);
+      susCar.fireLight.intensity = 4 + Math.sin(G.stateT * 38) * 1.6;
+    } else {
+      susCar.fireLight.intensity = 0;
+    }
+  }
   const wr = sus.v * dt / susCar.wheelR;
   for (const w of susCar.wheels) w.rotation.x -= wr;
   // damage smoke
@@ -2238,12 +2386,12 @@ function updateCamera(dt){
     camera.lookAt(tmpV.x, tmpV.y + 0.8, tmpV.z);
     camera.fov = lerp(camera.fov, 50, dt * 2);
   } else {
-    // close eagle-view chase cam: behind the bumper but lifted, angled down
-    // so the car sits in the bottom-center of the frame and the road sweeps up
-    posAt(pl.s - 2.6, pl.lat * 0.7, tmpV);
-    camPos.set(tmpV.x, tmpV.y + 4.2, tmpV.z);
-    posAt(pl.s + 3.5 + pl.v * 0.04, pl.lat * 0.9, tmpV2);
-    camLook.set(tmpV2.x, tmpV2.y + 0.25, tmpV2.z);
+    // close eagle-view chase cam: even tighter trail, angled down so the car
+    // sits in the bottom-center of the frame and the road sweeps up at you
+    posAt(pl.s - 1.9, pl.lat * 0.7, tmpV);
+    camPos.set(tmpV.x, tmpV.y + 3.4, tmpV.z);
+    posAt(pl.s + 2.6 + pl.v * 0.035, pl.lat * 0.92, tmpV2);
+    camLook.set(tmpV2.x, tmpV2.y + 0.15, tmpV2.z);
     camera.position.lerp(camPos, clamp(dt * 6, 0, 1));
     if (G.shake > 0.01) {
       camShakeT += dt * 40;
@@ -2264,6 +2412,15 @@ function updateCamera(dt){
   sky.position.copy(camera.position);
   tmpV2.copy(theme.sunDir).multiplyScalar(1750).add(camera.position);
   sunSprite.position.copy(tmpV2);
+  sunHalo.position.copy(tmpV2);
+  sunHalo.scale.set(theme.sunSize * 1.9, theme.sunSize * 1.9, 1);
+  // lens flares ride the line from sun toward the camera; they sit at fixed
+  // distances in front of the camera (in the sun's direction) so they always
+  // stay framed when the sun is on-screen
+  const sunFwd = tmpV.copy(theme.sunDir).normalize();
+  for (let i = 0; i < flares.length; i++) {
+    flares[i].position.copy(camera.position).addScaledVector(sunFwd, FLARE_DISTS[i]);
+  }
   if (stars) stars.position.copy(camera.position);
   // shadow light follows player
   if (playerCar) {
