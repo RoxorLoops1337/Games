@@ -36,6 +36,21 @@ python tools/comfyui/make_sprite.py "a health potion, red liquid" --name potion 
 Output lands in `assets/`. Raw 1024px renders are cached in `tools/comfyui/raw/`
 (gitignored).
 
+## Batch: fill in the game's missing trap art
+
+`make_missing.py` renders all of No Room For Heroes' trap art that's still procedural
+(oil, magebane, bombard, corrode, hexbrand, runestone) in one go, straight into
+`no_room_for_heroes/rooms/traps/<id>.png`:
+```
+python tools/comfyui/make_missing.py            # all 6
+python tools/comfyui/make_missing.py --only bombard corrode
+python tools/comfyui/make_missing.py --dry-run  # show the commands, render nothing
+```
+These are single static sprites (the loader shows them as-is); align them in `align.html`,
+and to animate one, replace the static PNG with a frame sequence (`<id>_0.png, _1 …`).
+Monsters without art (totem, warcamp, slime) need directional LPC sheets, not single
+sprites — that's outside this generator.
+
 ## Options
 
 `--size 96` (more detail) · `--palette palettes/pico-8.gpl` (stylized 16 colors) ·
