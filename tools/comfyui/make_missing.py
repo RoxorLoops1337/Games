@@ -32,15 +32,29 @@ REPO = HERE.parent.parent
 MAKE = HERE / "make_sprite.py"
 TRAPS_DIR = REPO / "no_room_for_heroes" / "rooms" / "traps"
 
-# id -> subject prompt (make_sprite appends the pixel-art/sprite style cues).
-# Prompts mirror each trap's in-game name, role and colour.
+# Shared style cues so new traps match the existing rooms/traps art: full-colour
+# (NOT 16-colour) chunky pixel art, weathered dungeon materials, dramatic rim
+# light, single apparatus on a transparent (white) background. Passed verbatim
+# via --raw-prompt, so each value below must be a full VISUAL description — the
+# trap ids (oil, magebane, ...) are invented game terms SDXL doesn't know.
+STYLE = ("detailed chunky pixel art, dark medieval dungeon trap prop, weathered "
+         "iron wood and stone, dramatic rim lighting, single object centered, "
+         "front three-quarter view, plain solid white background")
+
+# id -> VISUAL description (colour-matched to each trap's in-game tint).
 MISSING_TRAPS = {
-    "oil":       "a black oil slick puddle with a tipped iron barrel, dripping crude oil, side view dungeon floor trap",
-    "magebane":  "a floating anti-magic crystal ward glowing with purple arcane runes, dungeon trap",
-    "bombard":   "an iron mortar cannon lobbing a burning explosive shell, dungeon siege trap, orange flames",
-    "corrode":   "a brass acid sprayer nozzle spraying green corrosive acid, rusted dripping pipes, dungeon trap",
-    "hexbrand":  "a glowing red-hot cursed branding iron with a burning hex sigil, dungeon trap",
-    "runestone": "a tall arcane runestone monolith carved with glowing purple runes, dungeon trap",
+    "oil":       "a spilled black crude-oil slick spreading across cracked dungeon "
+                 "stone, a tipped rusted iron barrel leaking glossy black tar, dark greasy puddle",
+    "magebane":  "a tall violet anti-magic crystal obelisk on a dark iron stand, "
+                 "glowing purple amethyst shards crackling with arcane sparks",
+    "bombard":   "a squat black iron mortar cannon on a reinforced wooden carriage, "
+                 "wide upward-angled barrel, a glowing fused iron bombshell, wisps of smoke",
+    "corrode":   "a brass and copper acid-sprayer nozzle on rusted corroded pipework, "
+                 "dripping glowing toxic-green acid, pitted bubbling metal",
+    "hexbrand":  "a glowing red-hot iron branding rod resting in a small iron brazier "
+                 "of embers, the brand tip a burning crimson hex sigil",
+    "runestone": "a tall ancient grey standing-stone monolith carved with glowing "
+                 "purple arcane runes, weathered cracked rock, faint violet aura",
 }
 
 
@@ -49,7 +63,8 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", nargs="+", metavar="ID",
                     help="render only these trap ids (default: all missing)")
-    ap.add_argument("--size", type=int, default=96, help="sprite size px (default 96)")
+    ap.add_argument("--size", type=int, default=256,
+                    help="sprite size px (default 256 — existing trap art is high-res, not tiny)")
     ap.add_argument("--host", default="127.0.0.1:8000", help="ComfyUI address")
     ap.add_argument("--palette", default="none", help="passed through to make_sprite")
     ap.add_argument("--dry-run", action="store_true",
@@ -65,7 +80,8 @@ def main():
     jobs = []
     for tid in ids:
         out_path = TRAPS_DIR / f"{tid}.png"
-        cmd = [sys.executable, str(MAKE), MISSING_TRAPS[tid],
+        prompt = f"{MISSING_TRAPS[tid]}, {STYLE}"
+        cmd = [sys.executable, str(MAKE), prompt, "--raw-prompt",
                "--name", tid, "--size", str(args.size),
                "--palette", args.palette, "--host", args.host,
                "--out", str(TRAPS_DIR)]
