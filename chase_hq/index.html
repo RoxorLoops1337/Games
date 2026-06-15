@@ -803,7 +803,7 @@ const THEMES = {
     hemiSky: 0xbcd8ff, hemiGnd: 0x8a7c5e, hemiInt: 1.0,
     ground: 0x8aa45e, shoulder: 0x9a9382, mtn: 0x7e96ad,
     water: true, palms: true, bushes: true, cacti: false, rocks: false, buildings: false, lamps: false,
-    env: 1.1,
+    env: 1.1, birds: 'gull', clouds: true, gasStations: true, overpasses: true,
   },
 };
 // desert & city defined separately to keep the big literal readable
@@ -816,7 +816,7 @@ THEMES.desert = {
   hemiSky: 0xcf9a78, hemiGnd: 0x70451f, hemiInt: 0.85,
   ground: 0xb98e54, shoulder: 0xa98a5c, mtn: 0x7c4f63,
   water: false, palms: false, bushes: false, cacti: true, rocks: true, buildings: false, lamps: false,
-  env: 1.0,
+  env: 1.0, birds: 'vulture', clouds: true, gasStations: true, overpasses: true,
 };
 THEMES.city = {
   night: true, hillAmp: 2, terr: 0.4,
@@ -827,7 +827,7 @@ THEMES.city = {
   hemiSky: 0x32406e, hemiGnd: 0x10131c, hemiInt: 0.55,
   ground: 0x23262d, shoulder: 0x33363d, mtn: 0x0e1322,
   water: false, palms: false, bushes: false, cacti: false, rocks: false, buildings: true, lamps: true,
-  env: 0.55, stars: true,
+  env: 0.55, stars: true, birds: null, clouds: false, gasStations: false, overpasses: true,
 };
 
 const STAGES = [
@@ -883,6 +883,26 @@ scene.add(sky);
 const sunSpriteMat = new THREE.SpriteMaterial({ map: glowTex('rgba(255,220,150,0.6)'), transparent: true, depthWrite: false, fog: false });
 const sunSprite = new THREE.Sprite(sunSpriteMat);
 scene.add(sunSprite);
+
+// lens-flare ring: bigger soft halo behind the sun + small chromatic bubbles
+// positioned along the camera-to-sun line, so the flare reads as real glass-glow
+const sunHaloMat = new THREE.SpriteMaterial({
+  map: glowTex('rgba(255,210,150,0.45)'), transparent: true, depthWrite: false, fog: false,
+  blending: THREE.AdditiveBlending,
+});
+const sunHalo = new THREE.Sprite(sunHaloMat);
+scene.add(sunHalo);
+const FLARE_COLORS = ['rgba(255,180,140,0.45)', 'rgba(170,230,255,0.35)', 'rgba(255,240,180,0.55)', 'rgba(200,180,255,0.35)'];
+const FLARE_DISTS = [55, 90, 130, 175];  // world units in front of the camera
+const FLARE_SIZES = [16, 11, 26, 8];
+const flares = [];
+for (let i = 0; i < FLARE_COLORS.length; i++) {
+  const m = new THREE.SpriteMaterial({ map: glowTex(FLARE_COLORS[i]), transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending });
+  const s = new THREE.Sprite(m);
+  s.scale.set(FLARE_SIZES[i], FLARE_SIZES[i], 1);
+  scene.add(s);
+  flares.push(s);
+}
 
 let stars = null;
 
@@ -1069,9 +1089,68 @@ function buildWorld(stage){
     world.add(water);
   }
 
+  buildGuardrails(theme);
   scatterScenery(theme, stage, rng);
   buildGantries(theme, rng);
+  if (theme.overpasses) buildOverpasses(theme, rng);
+  buildRoadsideStructures(theme, rng);
+  configureAmbient(theme, rng);
   spotMarker.visible = false;
+}
+
+function guardrailTex(theme){
+  return makeCanvas(256, 64, (g, w, h) => {
+    g.fillStyle = theme.night ? '#b6b8be' : '#cdd0d6'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#e8ebf0'; g.fillRect(0, 12, w, 8);   // top highlight
+    g.fillStyle = '#7a7e88'; g.fillRect(0, h - 14, w, 6); // bottom shadow
+    g.fillStyle = '#3f424a';                              // post shadow stripes
+    for (let x = 0; x < w; x += 32) g.fillRect(x, 0, 4, h);
+    g.fillStyle = 'rgba(50,55,65,0.4)';                   // grime line
+    g.fillRect(0, h * 0.5 - 1, w, 2);
+  });
+}
+function buildGuardrails(theme){
+  const tex = guardrailTex(theme);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  const mat = new THREE.MeshStandardMaterial({
+    map: tex, color: 0xffffff, metalness: 0.55, roughness: 0.4, envMapIntensity: 1.1,
+    side: THREE.DoubleSide,
+  });
+  const pts = track.pts;
+  for (const side of [-1, 1]) {
+    const lat = side * 7.0;
+    const cols = 2;            // bottom and top of the rail (y = 0.05 and 0.75)
+    const yT = [0.05, 0.85];
+    const rows = pts.length;
+    const pos = new Float32Array(rows * cols * 3);
+    const uv  = new Float32Array(rows * cols * 2);
+    let p = 0, q = 0;
+    for (let r = 0; r < rows; r++) {
+      const pt = pts[r];
+      const lx = -Math.cos(pt.h), lz = -Math.sin(pt.h);
+      const px = pt.x + lx * lat;
+      const pz = pt.z + lz * lat;
+      for (let c = 0; c < cols; c++) {
+        pos[p++] = px; pos[p++] = pt.y + yT[c]; pos[p++] = pz;
+        uv[q++] = c;   uv[q++] = (r * STEP) / 3;
+      }
+    }
+    const idx = [];
+    for (let r = 0; r < rows - 1; r++) {
+      const a = r * cols, b = a + cols;
+      // wind so the visible face is the one toward the road (sign depends on side)
+      if (side > 0) idx.push(a, a+1, b,  a+1, b+1, b);
+      else          idx.push(a, b, a+1,  a+1, b, b+1);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat);
+    m.receiveShadow = true; m.castShadow = false;
+    world.add(m);
+  }
 }
 
 function instancedScatter(geo, mat, count, place){
@@ -1249,6 +1328,124 @@ function buildGantries(theme, rng){
   }
 }
 
+// concrete overpass bridges the road dives under — big landmark moments.
+// built in the car's local frame (grp.rotation.y = -heading): local +X = across
+// the road, local Z = along it, so the deck spans X and piers sit at ±X.
+function buildOverpasses(theme, rng){
+  const concrete = new THREE.MeshStandardMaterial({ color: theme.night ? 0x4a4e57 : 0x9a9690, roughness: 0.95 });
+  const deckGeo = new THREE.BoxGeometry(40, 1.4, 9);
+  const railGeo = new THREE.BoxGeometry(40, 1.0, 0.5);
+  const pierGeo = new THREE.BoxGeometry(2.4, 8, 3);
+  for (let s = 1500 + rng() * 600; s < TRACK_LEN - 700; s += 2600 + rng() * 1400) {
+    const i = Math.floor(s / STEP), pt = track.pts[i];
+    const grp = new THREE.Group();
+    const deck = new THREE.Mesh(deckGeo, concrete);
+    deck.position.set(0, 8.0, 0); deck.castShadow = true; deck.receiveShadow = true;
+    grp.add(deck);
+    for (const dz of [-4, 4]) {
+      const rail = new THREE.Mesh(railGeo, concrete);
+      rail.position.set(0, 9.0, dz);
+      grp.add(rail);
+    }
+    for (const side of [-13, 13]) {
+      const pier = new THREE.Mesh(pierGeo, concrete);
+      pier.position.set(side, 4.0, 0);
+      pier.castShadow = true;
+      grp.add(pier);
+    }
+    grp.position.set(pt.x, pt.y, pt.z);
+    grp.rotation.y = -pt.h;
+    world.add(grp);
+  }
+}
+
+function gasSignTex(name){
+  return makeCanvas(128, 128, (g, w, h) => {
+    g.fillStyle = '#ff3b30'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(w/2, h*0.38, w*0.28, 0, 7); g.fill();
+    g.fillStyle = '#ff3b30'; g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('⛽', w/2, h*0.38);
+    g.fillStyle = '#fff'; g.font = 'bold 22px Arial';
+    g.fillText(name, w/2, h*0.82);
+  });
+}
+const BILLBOARD_TEXTS = [
+  ['JELLEI', 'COLA', '#e8141e'], ['DRIVE', 'FAST', '#1565ff'],
+  ['BUST', 'EM!', '#ff8c00'], ['HAPPY', 'B-DAY', '#d619a8'],
+  ['ROXOR', 'TUNES', '#12a150'], ['NITRO', 'JUICE', '#00b8d4'],
+];
+function billboardTex(a, b, col){
+  return makeCanvas(256, 160, (g, w, h) => {
+    g.fillStyle = '#101216'; g.fillRect(0, 0, w, h);
+    g.fillStyle = col; g.fillRect(8, 8, w - 16, h - 16);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 56px Arial Black, Arial';
+    g.fillText(a, w/2, h*0.36); g.fillText(b, w/2, h*0.7);
+  });
+}
+function buildRoadsideStructures(theme, rng){
+  // gas stations: a lit canopy on four poles + a little shop box + pumps
+  if (theme.gasStations) {
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0xf0f2f5, roughness: 0.6,
+      emissive: 0xfff4d8, emissiveIntensity: theme.night ? 1.2 : 0.05 });
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0xcfd2d8, metalness: 0.4, roughness: 0.5 });
+    const shopMat = new THREE.MeshStandardMaterial({ color: 0xd9dde4, roughness: 0.85 });
+    const pumpMat = new THREE.MeshStandardMaterial({ color: 0xe23b30, roughness: 0.6 });
+    for (let n = 0; n < 5; n++) {
+      const s = 700 + rng() * (TRACK_LEN - 1400);
+      const side = rng() < 0.5 ? -1 : 1;
+      const g0 = groundAt(s, side * 22, theme);
+      const pt = track.pts[clamp(Math.floor(s / STEP), 0, track.pts.length - 1)];
+      const grp = new THREE.Group();
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(11, 0.5, 8), canopyMat);
+      canopy.position.y = 5; grp.add(canopy);
+      for (const [px, pz] of [[-4.5, -3], [4.5, -3], [-4.5, 3], [4.5, 3]]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 5, 6), poleMat);
+        pole.position.set(px, 2.5, pz); grp.add(pole);
+      }
+      for (const px of [-2, 2]) {
+        const pump = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.6, 1.1), pumpMat);
+        pump.position.set(px, 0.8, 0); grp.add(pump);
+      }
+      const shop = new THREE.Mesh(new THREE.BoxGeometry(7, 3.4, 5), shopMat);
+      shop.position.set(0, 1.7, 9); grp.add(shop);
+      const signTexM = new THREE.MeshStandardMaterial({ map: gasSignTex('JELLEI'), emissive: 0xffffff,
+        emissiveMap: gasSignTex('JELLEI'), emissiveIntensity: theme.night ? 0.8 : 0.1, side: THREE.DoubleSide });
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), signTexM);
+      // child of a group already rotated to road heading; face the sign toward
+      // road center (local -X for the +side station, +X for the -side one)
+      sign.position.set(0, 7, 0); sign.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+      grp.add(sign);
+      grp.position.set(g0.x, g0.y, g0.z);
+      grp.rotation.y = -pt.h;
+      world.add(grp);
+    }
+  }
+  // billboards everywhere (all themes) — a panel on two legs facing the road
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x55585f, metalness: 0.3, roughness: 0.7 });
+  for (let n = 0; n < 8; n++) {
+    const s = 500 + rng() * (TRACK_LEN - 1000);
+    const side = rng() < 0.5 ? -1 : 1;
+    const lat = side * (18 + rng() * 14);
+    const g0 = groundAt(s, lat, theme);
+    const pt = track.pts[clamp(Math.floor(s / STEP), 0, track.pts.length - 1)];
+    const [a, b, col] = BILLBOARD_TEXTS[Math.floor(rng() * BILLBOARD_TEXTS.length)];
+    const tex = billboardTex(a, b, col);
+    const grp = new THREE.Group();
+    for (const lx2 of [-2.6, 2.6]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), legMat);
+      leg.position.set(lx2, 3.5, 0); grp.add(leg);
+    }
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(8, 5),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7, side: THREE.DoubleSide,
+        emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: theme.night ? 0.5 : 0.06 }));
+    panel.position.set(0, 8, 0); grp.add(panel);
+    grp.position.set(g0.x, g0.y, g0.z);
+    grp.rotation.y = -pt.h;   // face back along the road, toward the oncoming player
+    world.add(grp);
+  }
+}
+
 function disposeWorld(){
   if (!world) return;
   world.traverse(o => {
@@ -1312,6 +1509,12 @@ const PROFILES = {
     body: [[-2.45, 0.25], [-2.5, 1.0], [-0.35, 1.0], [-0.3, 1.52], [0.85, 1.52], [1.25, 0.92], [2.4, 0.85], [2.49, 0.42], [2.4, 0.25]],
     glass: [[-0.25, 1.5], [0.75, 1.5], [1.1, 0.95], [-0.25, 0.95]],
     headY: 0.58, tailY: 0.62,
+  },
+  bus: {
+    len: 8.4, width: 2.3, wheelR: 0.46, axles: [-3.0, 2.8],
+    body: [[-4.1, 0.28], [-4.18, 2.55], [4.0, 2.55], [4.18, 2.2], [4.2, 0.5], [4.1, 0.28]],
+    glass: null, windshield: { y0: 1.3, y1: 2.35, z0: -4.16, z1: -3.4 },
+    headY: 0.7, tailY: 0.9,
   },
 };
 
@@ -1460,6 +1663,51 @@ function makeCar(type, opts = {}){
     ts.position.set(0, 1.42, 0);
     grp.add(ts);
   }
+  // damage rig for the suspect: hood flame, broken-tail-light tint baseline,
+  // and a hidden warning light. Drives off sus.dmg in updateSuspect.
+  if (opts.suspect) {
+    car.basePaintColor = new THREE.Color(opts.color ?? 0xcccccc);
+    const flameTex = makeCanvas(64, 96, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      const grad = g.createRadialGradient(w/2, h*0.82, 4, w/2, h*0.4, w*0.6);
+      grad.addColorStop(0, 'rgba(255,255,210,1)');
+      grad.addColorStop(0.35, 'rgba(255,190,60,0.85)');
+      grad.addColorStop(0.7, 'rgba(255,90,30,0.45)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    });
+    const flameMat = new THREE.SpriteMaterial({
+      map: flameTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const flame = new THREE.Sprite(flameMat);
+    flame.scale.set(1.4, 1.9, 1);
+    flame.position.set(0, 1.1, -P.len / 2 + 0.6);
+    flame.visible = false;
+    grp.add(flame);
+    car.flame = flame;
+    // engine-bay point light (warm) — flickers only when on fire
+    const fireLight = new THREE.PointLight(0xff7a30, 0, 14, 1.7);
+    fireLight.position.set(0, 0.9, -P.len / 2 + 0.4);
+    grp.add(fireLight);
+    car.fireLight = fireLight;
+    // a couple of dark scorch decals on the hood — opacity grows with damage
+    const scorchTex = makeCanvas(128, 128, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = 'rgba(8,8,8,0.85)';
+      for (let i = 0; i < 18; i++) {
+        const x = rand(20, w - 20), y = rand(20, h - 20), r = rand(8, 24);
+        g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+      }
+    });
+    const scorch = new THREE.Mesh(
+      new THREE.PlaneGeometry(P.width * 0.7, 1.0),
+      new THREE.MeshBasicMaterial({ map: scorchTex, transparent: true, opacity: 0, depthWrite: false })
+    );
+    scorch.rotation.x = -Math.PI / 2;
+    scorch.position.set(0, 0.82, -P.len / 2 + 0.7);
+    grp.add(scorch);
+    car.scorch = scorch;
+  }
   return car;
 }
 
@@ -1588,6 +1836,179 @@ spotMarker.rotation.x = Math.PI;
 spotMarker.visible = false;
 scene.add(spotMarker);
 
+/* ============================================================ ambient life (persistent — survives stage swaps) */
+function makeHelicopter(){
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a2336, metalness: 0.5, roughness: 0.4 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x101216, roughness: 0.6, metalness: 0.3 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x0c1622, metalness: 1, roughness: 0.1 });
+  // front = local -z (matches the car convention so rotation.y = -heading works)
+  const fus = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), bodyMat);
+  fus.scale.set(1.3, 1.3, 2.5); fus.castShadow = true; group.add(fus);
+  const glass = new THREE.Mesh(new THREE.SphereGeometry(0.95, 14, 10), glassMat);
+  glass.scale.set(1.05, 0.95, 1.15); glass.position.set(0, 0.12, -1.6); group.add(glass);
+  const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 3.2, 8), bodyMat);
+  boom.rotation.x = Math.PI / 2; boom.position.set(0, 0.2, 2.5); group.add(boom);
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.95, 0.65), bodyMat);
+  fin.position.set(0, 0.65, 3.9); group.add(fin);
+  const tailRotor = new THREE.Group();
+  tailRotor.add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.3, 0.1), darkMat));
+  tailRotor.position.set(0.32, 0.55, 4.0); group.add(tailRotor);
+  for (const sx of [-0.8, 0.8]) {
+    const skid = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3, 6), darkMat);
+    skid.rotation.x = Math.PI / 2; skid.position.set(sx, -1.15, 0); group.add(skid);
+    for (const sz of [-0.7, 0.7]) {
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.6, 0.07), darkMat);
+      strut.position.set(sx, -0.75, sz); group.add(strut);
+    }
+  }
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.0, 6), darkMat);
+  mast.position.set(0, 0.7, 0); group.add(mast);
+  const rotor = new THREE.Group();
+  rotor.add(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.25, 8), darkMat));
+  for (let k = 0; k < 2; k++) {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.04, 0.38), darkMat);
+    blade.rotation.y = k * Math.PI / 2; rotor.add(blade);
+  }
+  rotor.position.set(0, 1.2, 0); group.add(rotor);
+  // belly beacon + the iconic underbody flashers
+  const beaconMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xff2020, emissiveIntensity: 2.4 });
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), beaconMat);
+  beacon.position.set(0, -1.4, -0.2); group.add(beacon);
+  // downward searchlight (night)
+  const spot = new THREE.SpotLight(0xffffff, 0, 160, 0.3, 0.55, 1.3);
+  spot.position.set(0, -1, -0.4);
+  group.add(spot);
+  const spotTarget = new THREE.Object3D();
+  scene.add(spotTarget); spot.target = spotTarget;
+  // a faint volumetric cone so the searchlight beam is visible at night
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0xfff4d0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  const beam = new THREE.Mesh(new THREE.ConeGeometry(7, 24, 16, 1, true), beamMat);
+  beam.position.set(0, -13, -0.4); // cone points down (apex up)
+  group.add(beam);
+  group.scale.setScalar(1.25);
+  group.visible = false;
+  scene.add(group);
+  return { group, rotor, tailRotor, spot, spotTarget, beaconMat, beam, beamMat };
+}
+const heli = makeHelicopter();
+
+function cloudTex(){
+  return makeCanvas(256, 128, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    for (let i = 0; i < 9; i++) {
+      const x = rand(40, w - 40), y = rand(50, h - 20), r = rand(24, 52);
+      const rad = g.createRadialGradient(x, y, 2, x, y, r);
+      rad.addColorStop(0, 'rgba(255,255,255,0.95)');
+      rad.addColorStop(0.6, 'rgba(255,255,255,0.5)');
+      rad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = rad; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+  });
+}
+function makeClouds(n){
+  const group = new THREE.Group();
+  const tex = cloudTex();
+  const items = [];
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    const s = new THREE.Sprite(m);
+    s.userData = { ox: rand(-450, 450), oy: rand(130, 300), oz: rand(-700, 200), sc: rand(90, 220), drift: rand(1.5, 5) };
+    group.add(s); items.push(s);
+  }
+  group.visible = false; scene.add(group);
+  return { group, items, mat: null };
+}
+const clouds = makeClouds(14);
+
+function makeBirdFlock(n){
+  const group = new THREE.Group();
+  const wingGeo = new THREE.BufferGeometry();
+  wingGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0,0,0, 1.2,0,-0.45, 1.2,0,0.45]), 3));
+  wingGeo.computeVertexNormals();
+  const mat = new THREE.MeshBasicMaterial({ color: 0x2a2a2a, side: THREE.DoubleSide });
+  const birds = [];
+  for (let i = 0; i < n; i++) {
+    const b = new THREE.Group();
+    const lw = new THREE.Mesh(wingGeo, mat); lw.scale.x = -1;
+    const rw = new THREE.Mesh(wingGeo, mat);
+    b.add(lw); b.add(rw);
+    b.userData = { lw, rw, phase: rand(0, 6.3),
+      ox: rand(-55, 55), oy: rand(16, 40), oz: rand(-90, 50), flap: rand(7, 11), amp: 0.55 };
+    group.add(b); birds.push(b);
+  }
+  group.visible = false; scene.add(group);
+  return { group, birds, mat };
+}
+const birdFlock = makeBirdFlock(18);
+
+let ambient = { birds: null, clouds: false, night: false };
+function configureAmbient(theme, rng){
+  ambient.birds = theme.birds || null;
+  ambient.clouds = !!theme.clouds;
+  ambient.night = !!theme.night;
+  clouds.group.visible = ambient.clouds;
+  for (const s of clouds.items) s.material.opacity = ambient.clouds ? (theme.night ? 0 : 0.75) : 0;
+  birdFlock.group.visible = !!ambient.birds;
+  if (ambient.birds) {
+    const gull = ambient.birds === 'gull';
+    birdFlock.mat.color.set(gull ? 0xf4f4f4 : 0x2b2018);
+    for (const b of birdFlock.birds) b.userData.amp = gull ? 0.6 : 0.18; // gulls flap, vultures soar
+  }
+  // searchlight beam only at night
+  heli.beamMat.opacity = 0;
+}
+
+function updateAmbient(dt){
+  const gameplay = G.state === 'INTRO' || G.state === 'COUNT' || G.state === 'RUN' || G.state === 'BUSTED';
+  // ---- helicopter ----
+  heli.group.visible = gameplay;
+  if (gameplay) {
+    posAt(pl.s + 17, Math.sin(G.stateT * 0.4) * 3.5, tmpV);
+    const bob = Math.sin(G.stateT * 0.9) * 0.7;
+    heli.group.position.set(tmpV.x, tmpV.y + 15 + bob, tmpV.z);
+    heli.group.rotation.set(0, -tmpV.h, Math.sin(G.stateT * 0.5) * 0.12, 'YXZ');
+    heli.rotor.rotation.y += dt * 34;
+    heli.tailRotor.rotation.x += dt * 46;
+    const beaconOn = (Math.sin(G.stateT * 7) > 0);
+    heli.beaconMat.emissiveIntensity = beaconOn ? 3.2 : 0.3;
+    if (ambient.night) {
+      // searchlight tracks the suspect in pursuit, else sweeps near the player
+      const tgt = (G.phase === 'PURSUIT') ? sus : pl;
+      posAt(tgt.s, tgt.lat, tmpV2);
+      heli.spotTarget.position.set(tmpV2.x, tmpV2.y, tmpV2.z);
+      heli.spot.intensity = 260;
+      heli.beamMat.opacity = 0.12;
+    } else {
+      heli.spot.intensity = 0; heli.beamMat.opacity = 0;
+    }
+  }
+  // ---- birds ---- (drift back past the player, recycle ahead)
+  if (birdFlock.group.visible) {
+    posAt(pl.s + 45, 0, tmpV);
+    for (const b of birdFlock.birds) {
+      const u = b.userData;
+      u.oz -= dt * 7;
+      if (u.oz < -130) { u.oz = rand(40, 90); u.ox = rand(-60, 60); u.oy = rand(16, 40); }
+      b.position.set(tmpV.x + u.ox, tmpV.y + u.oy, tmpV.z + u.oz);
+      b.rotation.y = -tmpV.h;
+      const f = Math.sin(G.stateT * u.flap + u.phase) * u.amp;
+      u.lw.rotation.x = f; u.rw.rotation.x = -f;
+    }
+  }
+  // ---- clouds ---- (drift sideways high up, recycle around the player)
+  if (clouds.group.visible) {
+    posAt(pl.s + 200, 0, tmpV);
+    for (const s of clouds.items) {
+      const u = s.userData;
+      u.ox += dt * u.drift;
+      if (u.ox > 600) u.ox = -600;
+      s.position.set(tmpV.x + u.ox, tmpV.y + u.oy, tmpV.z + u.oz);
+      s.scale.set(u.sc, u.sc * 0.55, 1);
+    }
+  }
+}
+
 /* ============================================================ entities */
 let playerCar = null, susCar = null;
 let headLights = null;
@@ -1617,26 +2038,28 @@ function buildCars(stage){
   // suspect
   const susType = stage.suspect === 'ghost' ? 'sports' : stage.suspect;
   susCar = makeCar(susType, {
-    color: stage.susColor, night: theme.night,
+    color: stage.susColor, night: theme.night, suspect: true,
     bigSpoiler: stage.suspect !== 'muscle', underglow: stage.suspect === 'ghost',
   });
   susCar.paint.metalness = 0.88; susCar.paint.roughness = 0.24;
+  if (susCar.basePaintColor) susCar.basePaintColor.copy(susCar.paint.color);
   world.add(susCar.grp);
 
   // traffic
   traffic.length = 0;
-  const types = ['sedan', 'sedan', 'van', 'pickup', 'sedan', 'van'];
+  const types = ['sedan', 'sedan', 'van', 'pickup', 'sedan', 'bus', 'sedan', 'van'];
   for (let i = 0; i < TRAFFIC_N; i++) {
     const tType = types[i % types.length];
     const taxi = tType === 'sedan' && i % 5 === 0;
+    const bus = tType === 'bus';
     const c = makeCar(tType, {
-      color: taxi ? 0xe8b820 : trafficPalette[i % trafficPalette.length],
+      color: taxi ? 0xe8b820 : bus ? 0xe0a020 : trafficPalette[i % trafficPalette.length],
       night: theme.night, taxiSign: taxi,
     });
     world.add(c.grp);
     traffic.push({
-      car: c, s: 0, lat: LANES[i % 3], v: rand(17, 26),
-      latTarget: LANES[i % 3], laneTimer: rand(4, 14), dodge: 0,
+      car: c, s: 0, lat: LANES[i % 3], v: bus ? rand(14, 18) : rand(17, 26),
+      latTarget: LANES[i % 3], laneTimer: rand(4, 14), dodge: 0, big: bus,
     });
     respawnTraffic(traffic[i], 120 + i * 38, true);
   }
@@ -1827,6 +2250,7 @@ $('titleHi').textContent = 'HI-SCORE ' + G.hi;
 const pl = { s: 0, lat: 0, v: 0, steerVis: 0, drift: 0, spin: 0, offroad: 0 };
 const sus = { s: 800, lat: 0, v: 0, dmg: 0, weaveT: 0, busted: 0 };
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const _susBlack = new THREE.Color(0x080808), _susEmber = new THREE.Color(0xff5418);
 
 function startStage(idx){
   G.stageIdx = idx;
@@ -2014,9 +2438,11 @@ function updateSuspect(dt, stage){
       // gap-coupled rubber-band: the further behind you fall, the more he dawdles,
       // so the target is always catchable even after a couple of crashes
       target = stage.susSpeed;
-      if (gap > 450) target *= 0.72;
-      else if (gap > 300) target *= 0.85;
-      else if (gap > 150) target *= 0.95;
+      if (gap > 450) target *= 0.6;
+      else if (gap > 300) target *= 0.72;
+      else if (gap > 150) target *= 0.82;
+      else target *= 0.9;          // close range: he keeps dawdling so the final
+                                   // approach is always doable on engine alone (no turbo)
     } else {
       // pursuit phase: aggressive rubber-band so a single crash never strands you
       target = stage.susSpeedHot * (1 - sus.dmg * 0.0028);
@@ -2050,7 +2476,32 @@ function updateSuspect(dt, stage){
   // mesh
   posAt(sus.s, sus.lat, tmpV);
   susCar.grp.position.set(tmpV.x, tmpV.y, tmpV.z);
-  susCar.grp.rotation.set(Math.atan(tmpV.sl) * 0.7, -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06, 0, 'YXZ');
+  // damage-driven body lean wobble — gets dragged at high damage like a busted suspension
+  const d = sus.dmg / 100;
+  const tiltZ = d > 0.4 ? Math.sin(G.stateT * 1.7) * (d - 0.4) * 0.18 : 0;
+  susCar.grp.rotation.set(Math.atan(tmpV.sl) * 0.7, -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06, tiltZ, 'YXZ');
+  // paint scorching: as damage climbs, paint goes dirty + matte + emissive embers
+  if (susCar.basePaintColor) {
+    susCar.paint.color.copy(susCar.basePaintColor).lerp(_susBlack, d * 0.75);
+    susCar.paint.roughness = lerp(0.24, 0.88, d);
+    susCar.paint.emissive.copy(_susEmber).multiplyScalar(d > 0.65 ? (d - 0.65) * 2.6 : 0);
+    susCar.paint.emissiveIntensity = d > 0.65 ? 1 : 0;
+    susCar.paint.needsUpdate = true;
+  }
+  if (susCar.scorch) susCar.scorch.material.opacity = clamp((d - 0.25) * 1.4, 0, 0.85);
+  // hood fire and engine-bay light kick in around 70% damage
+  if (susCar.flame) {
+    const on = d > 0.7 && G.state !== 'BUSTED';
+    susCar.flame.visible = on;
+    if (on) {
+      const fw = 1.4 + Math.sin(G.stateT * 26) * 0.18 + Math.random() * 0.15;
+      const fh = 1.9 + Math.sin(G.stateT * 22 + 1) * 0.22 + Math.random() * 0.2;
+      susCar.flame.scale.set(fw, fh, 1);
+      susCar.fireLight.intensity = 4 + Math.sin(G.stateT * 38) * 1.6;
+    } else {
+      susCar.fireLight.intensity = 0;
+    }
+  }
   const wr = sus.v * dt / susCar.wheelR;
   for (const w of susCar.wheels) w.rotation.x -= wr;
   // damage smoke
@@ -2238,12 +2689,12 @@ function updateCamera(dt){
     camera.lookAt(tmpV.x, tmpV.y + 0.8, tmpV.z);
     camera.fov = lerp(camera.fov, 50, dt * 2);
   } else {
-    // close eagle-view chase cam: behind the bumper but lifted, angled down
-    // so the car sits in the bottom-center of the frame and the road sweeps up
-    posAt(pl.s - 2.6, pl.lat * 0.7, tmpV);
-    camPos.set(tmpV.x, tmpV.y + 4.2, tmpV.z);
-    posAt(pl.s + 3.5 + pl.v * 0.04, pl.lat * 0.9, tmpV2);
-    camLook.set(tmpV2.x, tmpV2.y + 0.25, tmpV2.z);
+    // close chase cam that hugs the car: short trail, modest height, and a
+    // TIGHT fov (the real "closeness" lever — a wide fov zooms the car back out)
+    posAt(pl.s - 1.35, pl.lat * 0.72, tmpV);
+    camPos.set(tmpV.x, tmpV.y + 2.5, tmpV.z);
+    posAt(pl.s + 1.8 + pl.v * 0.03, pl.lat * 0.95, tmpV2);
+    camLook.set(tmpV2.x, tmpV2.y + 0.45, tmpV2.z);
     camera.position.lerp(camPos, clamp(dt * 6, 0, 1));
     if (G.shake > 0.01) {
       camShakeT += dt * 40;
@@ -2256,7 +2707,9 @@ function updateCamera(dt){
     const rollTarget = -pl.steerVis * 0.06 + pl.drift * Math.sign(-pl.steerVis) * 0.08;
     camera.rotation.z = lerp(camera.rotation.z, rollTarget, clamp(dt * 5, 0, 1));
     const punch = G.fovPunchT > 0 ? G.fovPunchT * 9 : 0;
-    const targetFov = 60 + (pl.v / MAXV) * 18 + (G.turboT > 0 ? 8 : 0) + punch;
+    // base fov kept low so the car stays large in frame; only a gentle widen
+    // with speed for a sense of rush (was 60 + v*18 which zoomed everything out)
+    const targetFov = 50 + (pl.v / MAXV) * 9 + (G.turboT > 0 ? 7 : 0) + punch;
     camera.fov = lerp(camera.fov, targetFov, clamp(dt * 3, 0, 1));
   }
   camera.updateProjectionMatrix();
@@ -2264,6 +2717,15 @@ function updateCamera(dt){
   sky.position.copy(camera.position);
   tmpV2.copy(theme.sunDir).multiplyScalar(1750).add(camera.position);
   sunSprite.position.copy(tmpV2);
+  sunHalo.position.copy(tmpV2);
+  sunHalo.scale.set(theme.sunSize * 1.9, theme.sunSize * 1.9, 1);
+  // lens flares ride the line from sun toward the camera; they sit at fixed
+  // distances in front of the camera (in the sun's direction) so they always
+  // stay framed when the sun is on-screen
+  const sunFwd = tmpV.copy(theme.sunDir).normalize();
+  for (let i = 0; i < flares.length; i++) {
+    flares[i].position.copy(camera.position).addScaledVector(sunFwd, FLARE_DISTS[i]);
+  }
   if (stars) stars.position.copy(camera.position);
   // shadow light follows player
   if (playerCar) {
@@ -2422,6 +2884,7 @@ function frame(now){
   smoke.update(dt);
   dust.update(dt);
   skids.update(dt);
+  updateAmbient(dt);
   updateCamera(dt);
 
   // HUD
@@ -2493,7 +2956,8 @@ function startWorldForTitle(){
 
 /* boot */
 startWorldForTitle();
-window.__CHQ = { G, pl, sus, keys, traffic, renderer, step: t => frame(t) }; // debug/testing handle
+window.__CHQ = { G, pl, sus, keys, traffic, renderer, scene, heli, clouds, birdFlock,
+  STAGES, startStage, step: t => frame(t) }; // debug/testing handle
 renderer.setAnimationLoop(frame);
 </script>
 </body>
