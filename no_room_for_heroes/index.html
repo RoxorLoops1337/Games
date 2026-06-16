@@ -388,6 +388,7 @@ let zoom = 1;                    // dungeon zoom (pinch / buttons / wheel)
 const ZMIN = 0.45, ZMAX = 1.7;
 const STAGEW = 132;              // staging area (left of the entrance) for waiting heroes
 const FLOOR = 330;          // y of the floor line
+const LIFT = 14;            // px heroes & monsters are raised off the floor line (they walk a touch higher)
 const ROOM_W = 200;         // pixel width of one room/cell
 
 /* ----------------------------- content tables ---------------------------- */
@@ -2967,7 +2968,7 @@ function spawnGroup(n){
   if(G.kingDue){
     G.kingDue=false; G.kingFight=true;
     const h=buildHeroFromSpec(kingSpec());
-    h.x=-60; h.yOff=0;                    // the King strides in from outside too
+    h.x=-60; h.yOff=-LIFT;                // the King strides in from outside too (same lifted line)
     G.heroes=[h]; G.heroNum++;
     banner('👑 THE HIGH KING', '#ffd34d', 'Fell him and rule forever');
     shake(12); sfx('boss');
@@ -2993,7 +2994,7 @@ function spawnGroup(n){
   for(let k=0;k<count;k++){
     const h=buildHeroFromSpec(specs[k]);
     h.x = -56 - k*40;                     // start OUTSIDE the rooms (left of the gate) and march in
-    h.yOff = (k - (count-1)/2) * 2;       // near-flat: overlapping heroes sit at most ~2px apart
+    h.yOff = -LIFT;                       // all on the same line, lifted off the floor (matches align tool)
     G.heroes.push(h); G.heroNum++;
   }
   const anyChamp=G.heroes.find(h=>h.champion);
@@ -3083,18 +3084,27 @@ function endWaveGoblins(){
   }
   G.minions = [];
 }
+function goblinValidTarget(g, h){
+  return !!(h && (G.heroes||[]).includes(h) && h.hp>0 && h.state!=='dead' && h.x>=0 && h.cellIndex===g.cellIndex);
+}
 function goblinStep(g, dt){
-  if(g.hp<=0) return;
+  if(g.hp<=0){ g.engaged=null; return; }
   const c = cellAt(g.x); if(c) g.cellIndex=c.index;
-  // pick a living hero in this cell, if any
-  let target=null, bestDx=Infinity;
-  for(const h of (G.heroes||[])){
-    if(!h || h.state==='dead' || h.x<0 || h.cellIndex!==g.cellIndex) continue;
-    const dx=Math.abs(h.x-g.x); if(dx<bestDx){ bestDx=dx; target=h; }
+  // LOCK onto a hero and hold until one of us dies — so we fight to the finish
+  // instead of landing one hit and clipping straight through.
+  let target = goblinValidTarget(g, g.engaged) ? g.engaged : null;
+  if(!target){
+    let bestDx=Infinity;
+    for(const h of (G.heroes||[])){
+      if(!goblinValidTarget(g,h)) continue;
+      const dx=Math.abs(h.x-g.x); if(dx<bestDx){ bestDx=dx; target=h; }
+    }
+    g.engaged=target;
   }
   if(target){
     g.state='fighting';
-    if(bestDx>16) g.x += Math.sign(target.x-g.x)*GOBLIN_SPD*dt;
+    const dx=target.x-g.x;
+    if(Math.abs(dx)>16) g.x += Math.sign(dx)*GOBLIN_SPD*dt;   // close in, then hold the line
     g.walkAnim += dt*8;
     g.atkT -= dt;
     if(g.atkT<=0){
@@ -3103,24 +3113,24 @@ function goblinStep(g, dt){
       floater(target.x, target.y-40, '-'+g.atk, '#5fae54');
       burst(target.x, target.y-22, '#5fae54', 4);
       if(target.hp<=0){
-        target.hp=0;
+        target.hp=0; g.engaged=null;
         // 👺 the killing blow earns the goblin XP — level shown next wave
         g.kills=(g.kills||0)+1;
         const newLvl=goblinLevel(g.kills);
         if(newLvl>g.lvl){ g.lvl=newLvl; floater(g.x, g.y-58, 'LVL '+newLvl+' ⭐', '#ffd34d', true); sfx('combo'); }
         heroDies(target);
       } else {
-        // glancing retaliation (40% of hero atk) — a full swing per goblin
-        // attack one-shot every fresh goblin the moment it met a hero
+        // the hero swings back each exchange (40% of its atk) — the trade
+        // continues until the goblin or the hero falls
         const back=Math.max(1, Math.round((target.atk||1)*0.4));
         g.hp -= back;
         floater(g.x, g.y-40, '-'+back, '#ff7a8a');
-        if(g.hp<=0){ g.hp=0; burst(g.x, g.y-18, '#5fae54', 14); sfx('hit'); }
+        if(g.hp<=0){ g.hp=0; g.engaged=null; burst(g.x, g.y-18, '#5fae54', 14); sfx('hit'); }
       }
     }
     return;
   }
-  g.state='walking';
+  g.state='walking'; g.engaged=null;
   g.x -= GOBLIN_SPD*dt;
   g.walkAnim += dt*8;
   if(g.x < 6) g.x = 6;
@@ -3146,7 +3156,7 @@ function drawDenGoblinSprite(g, sx, clipName){
   const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
   X.drawImage(img, srcX,srcY,clip.fw,clip.fh,
-    Math.round(sx-clip.ax*S), Math.round(FLOOR-clip.ay*S), Math.round(clip.fw*S), Math.round(clip.fh*S));
+    Math.round(sx-clip.ax*S), Math.round(FLOOR-LIFT-clip.ay*S), Math.round(clip.fw*S), Math.round(clip.fh*S));
   X.imageSmoothingEnabled=sm;
   return true;
 }
@@ -4277,6 +4287,9 @@ function simStep(h,dt){
     // traps still fire on a frozen/standing hero
     if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     if(h.state==='dead' || frozen) return;
+    // a den goblin locked onto this hero holds it in place — stand and trade
+    // blows (goblinStep resolves the fight) until the goblin (or hero) dies
+    if((G.minions||[]).some(g=>g.hp>0 && g.engaged===h)){ h.walkAnim+=dt*10; return; }
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
@@ -4965,6 +4978,10 @@ function drawTrapPart(x0,w,type,p,pi,cell){
       trapAccentGlow('tesla',x0,w,fx,p,LIGHT_COL.tesla, (0.14+0.40*inten)*fl); }
     else if(type==='hexward'){ const pu=0.78+0.22*Math.sin(performance.now()/430+seed); // slow arcane pulse
       trapAccentGlow('hexward',x0,w,fx,p,LIGHT_COL.hexward, (0.16+0.30*inten)*pu); }
+    else if(type==='corrode'){ const bub=0.85+0.15*Math.sin(performance.now()/180+seed); // toxic simmer
+      trapAccentGlow('corrode',x0,w,fx,p,LIGHT_COL.corrode, (0.18+0.30*inten)*bub); }
+    else if(type==='magebane'){ const pu=0.74+0.26*Math.sin(performance.now()/380+seed); // arcane pulse
+      trapAccentGlow('magebane',x0,w,fx,p,LIGHT_COL.magebane, (0.16+0.30*inten)*pu); }
   }
   X.imageSmoothingEnabled=sm;
   return drew;
@@ -5146,13 +5163,13 @@ let HERO_LAYER=999;
 let _frontTraps=null;   // deferred front-of-hero trap draws, flushed after the party renders
 // Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
 // (continuous). The poison vents pour non-stop.
-const TRAP_ANIM={venom:'loop'};
+const TRAP_ANIM={venom:'loop', oil:'loop'};   // oil keeps flowing instead of a one-shot burst
 // Per-trap strike profile {rise,fall} in ms so they don't all move identically.
 // rise = time to slam to the last frame, fall = time to ease back to rest.
 // e.g. the maul SLAMS down fast then grinds back up slow.
 const TRAP_TIMING={
   maul:    {rise:55,  fall:560},
-  arrow:   {rise:300, fwd:true},   // dart volley: plays forward once, no reverse retract
+  arrow:   {rise:420, fwd:true},   // dart volley: plays forward once (slower), no reverse retract
   frost:   {rise:200, fall:680},
   gallows: {rise:90,  fall:600},
   hexward: {rise:240, fall:520},
@@ -5164,7 +5181,7 @@ const TRAP_TIMING={
 const TRAP_PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
 // Additive light glows (cached radial gradients): candle flicker, flame heat,
 // poison vapor, plus per-trap accents (frost chill, tesla spark, hex sigil).
-const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff'};
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff'};
 let _glowG={};
 function drawGlow(cx,cy,r,col,a){
   if(!(a>0.01)||!(r>2)) return;
@@ -5537,7 +5554,7 @@ function drawRoomContents(x0,w,room,i){
       const sp=monParts.length>2?28:44;
       const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 3)
       if(!alive) X.globalAlpha=0.35;
-      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR, room, cell, mp, alive, moving);
+      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT, room, cell, mp, alive, moving);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
       if(!alive){ X.globalAlpha=1; px(mbx+ox-12,FLOOR-10,24,6,'#3a3a3a'); }
     });
@@ -5588,7 +5605,7 @@ function bar(x,y,w,h,frac,col){
 
 // ---- pixel creatures (procedural) ----
 function drawMonster(cx,type,col){
-  const y=FLOOR;
+  const y=FLOOR-LIFT;
   if(type==='minion'){           // corrupted hero: purple wraith with glowing eyes
     px(cx-9,y-14,5,14,'#2a1a40'); px(cx+4,y-14,5,14,'#2a1a40');
     px(cx-9,y-34,18,22,'#6a3aa0');
