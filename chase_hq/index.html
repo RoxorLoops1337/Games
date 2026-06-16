@@ -2359,6 +2359,17 @@ function updatePlayer(dt){
   a -= 9.81 * pt.sl * 0.55;
   pl.offroad = Math.abs(pl.lat) > 7.7 ? 1 : 0;
   if (pl.offroad && pl.v > 24) a -= (pl.v - 24) * 1.3;
+  // SLIPSTREAM: drafting close behind the suspect cuts your drag and tows you in.
+  // Real racing physics, and it's the key fix for "I get ~10m back but can never
+  // close" — tracking a weaving target by hand bled the speed you needed to ram.
+  pl.draft = 0;
+  if (G.phase === 'PURSUIT') {
+    const dg = sus.s - pl.s;
+    if (dg > 2.4 && dg < 28 && Math.abs(pl.lat - sus.lat) < 4) {
+      pl.draft = lerp(6.5, 1, clamp((dg - 2.4) / 26, 0, 1));
+      a += pl.draft;
+    }
+  }
   pl.v = Math.max(0, pl.v + a * dt);
   // lateral
   const steerPow = 5.5 + pl.v * 0.135;
@@ -2449,6 +2460,14 @@ function updateSuspect(dt, stage){
       if (gap > 200) target *= 0.55;       // big drop-back — you can always re-close
       else if (gap > 100) target *= 0.72;
       else if (gap > 40)  target *= 0.86;
+      else {
+        // CLOSE ZONE (<40m): the critical fix. Previously he ran full speed here,
+        // so closing from ~10m to a ram was impossible — he'd just match you and
+        // sit out of reach. Now cap him to just under the player's own speed so
+        // leaning on the throttle always reels in the last few metres for a hit.
+        const catchCap = Math.max(pl.v * 0.9, stage.susSpeedHot * 0.55);
+        target = Math.min(target * 0.88, catchCap);
+      }
     }
     // overtaking is already prevented by the hard position clamp below — DON'T speed-match
     // here, or the player can never feel the impact of closing in at speed
@@ -2456,13 +2475,12 @@ function updateSuspect(dt, stage){
     sus.s += sus.v * dt;
     // weaving + evasion
     sus.weaveT += dt;
-    // gentler weave in pursuit so you can actually line up a ram
-    let latT = Math.sin(sus.weaveT * (G.phase === 'PURSUIT' ? 0.7 : 0.4)) * (G.phase === 'PURSUIT' ? 2.0 : 2.2);
-    // only dodge when you're nearly touching him, and dodge less so a slight
-    // overlap still triggers the collision
-    if (G.phase === 'PURSUIT' && gap < 7 && Math.abs(pl.lat - sus.lat) < 1.6) {
-      latT = pl.lat > sus.lat ? sus.lat - 1.2 : sus.lat + 1.2;
-    }
+    // weave amplitude FADES TO ZERO as you close, so the suspect settles into a
+    // steady line for the kill instead of juking out of every ram attempt — this
+    // is what lets you actually connect once you're on his bumper
+    let weaveAmp = G.phase === 'PURSUIT' ? 1.4 : 2.2;
+    if (G.phase === 'PURSUIT') weaveAmp *= clamp((gap - 7) / 22, 0, 1);
+    let latT = Math.sin(sus.weaveT * (G.phase === 'PURSUIT' ? 0.7 : 0.4)) * weaveAmp;
     // avoid traffic ahead
     for (const t of traffic) {
       const ds = t.s - sus.s;
@@ -2549,15 +2567,17 @@ function overlap(aS, aLat, bS, bLat, len = 4.7, wid = 2.05){
 }
 function collisions(dt, stage){
   G.hitCool -= dt;
-  // player vs suspect
-  if (G.phase === 'PURSUIT' && overlap(pl.s, pl.lat, sus.s, sus.lat, 4.8, 2.1)) {
+  // player vs suspect — generous lateral window so being roughly behind him is
+  // enough to land the ram (he weaves; you shouldn't need pixel-perfect lane match)
+  if (G.phase === 'PURSUIT' && overlap(pl.s, pl.lat, sus.s, sus.lat, 4.8, 2.9)) {
     const closing = pl.v - sus.v;
-    if (pl.s < sus.s && closing > 1 && G.hitCool <= 0) {
-      G.hitCool = 0.35;
-      const dmg = clamp(closing * 1.15, 5, 20);
+    if (pl.s < sus.s && closing > 0.4 && G.hitCool <= 0) {
+      G.hitCool = 0.25;
+      const dmg = clamp(closing * 1.4, 7, 24);
       sus.dmg = clamp(sus.dmg + dmg, 0, 100);
-      pl.v = sus.v + closing * 0.45;
-      sus.v += 2.5;
+      pl.v = sus.v + closing * 0.5;
+      sus.v += 1.4;   // gentle lurch so he separates a touch — was 2.5, which
+                      // (with the old close-zone) let him crawl out of reach after a tap
       posAt((pl.s + sus.s) / 2 + 2, (pl.lat + sus.lat) / 2, tmpV);
       tmpV.y += 0.7;
       sparks.spawn(tmpV, 26 + Math.floor(closing), 11);
@@ -2807,6 +2827,13 @@ function frame(now){
       // backstop: the suspect can never be overtaken, even via another lane
       if (pl.s > sus.s - 2.5) { pl.s = sus.s - 2.5; pl.v = Math.min(pl.v, sus.v + 1); }
       const gap = sus.s - pl.s;
+      // ram assist: once you're close behind in pursuit, gently magnetise into the
+      // suspect's lane so a committed approach connects without frame-perfect steering
+      // (tracking his lane by hand bled too much speed to ever close the last few m)
+      if (G.phase === 'PURSUIT' && gap > 0 && gap < 16) {
+        const dl = sus.lat - pl.lat;
+        if (Math.abs(dl) < 3.4) pl.lat += dl * clamp(dt * 1.8, 0, 0.4);
+      }
       // siren: short burst at GO, then again only once the target is close
       if (G.sirenBurstT > 0) G.sirenBurstT -= dt;
       if (G.phase === 'PURSUIT' || gap < 200) G.sirenNear = true;
