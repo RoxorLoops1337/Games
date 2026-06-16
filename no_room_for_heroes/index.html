@@ -5020,6 +5020,29 @@ function drawTrapProp(x0,w,cx,type,cell){
     X.fillStyle='#fff'; X.beginPath(); X.arc(cx-1.5,FLOOR-49,1.5,0,7); X.fill();         // glint
   }
 }
+// Shop interior art: a wall shelf, the keeper behind a counter. Sizes/positions
+// are fractions of the room width w so the whole scene scales with zoom; bottoms
+// are anchored to the floor. {fx:centre, wf:width frac, bf:bottom-above-floor frac}.
+const SHOP_IMG={};
+if(typeof Image!=='undefined'){
+  ['shelf','keeper','table'].forEach(k=>{ const im=new Image(); im.onload=()=>{im._ok=true;}; im.onerror=()=>{}; im.src='sprites/shop/shop_'+k+'.png'; SHOP_IMG[k]=im; });
+}
+const SHOP_LAYOUT={
+  shelf: {fx:.50, wf:.38, bf:.35},   // on the back wall, up high
+  keeper:{fx:.50, wf:.19, bf:.03},   // standing behind the counter
+  table: {fx:.50, wf:.78, bf:-.04},  // the counter at the front, on the floor
+};
+function shopArtReady(){ return ['shelf','keeper','table'].every(k=>SHOP_IMG[k]&&SHOP_IMG[k]._ok); }
+function drawShopArt(x0,w){
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+  for(const k of ['shelf','keeper','table']){            // back → front
+    const im=SHOP_IMG[k], L=SHOP_LAYOUT[k];
+    const dw=L.wf*w, dh=dw*im.height/im.width;
+    const bx=x0+w*L.fx, by=FLOOR-L.bf*w;
+    X.drawImage(im, Math.round(bx-dw/2), Math.round(by-dh), Math.round(dw), Math.round(dh));
+  }
+  X.imageSmoothingEnabled=sm;
+}
 function drawShopProp(cx,room){
   px(cx-34,FLOOR-40,68,40,'#5a4326'); px(cx-34,FLOOR-44,68,6,'#caa15e');
   px(cx-6,FLOOR-70,12,16,'#3a6a8a'); px(cx-5,FLOOR-82,10,12,'#e8c07a');
@@ -5521,10 +5544,11 @@ function drawRoomContents(x0,w,room,i){
     if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
       bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
   }
-  // shop counter
+  // shop counter — painted interior (shelf + keeper + counter) with the live
+  // stock plaque overlaid; falls back to the procedural prop until art loads
   if(parts.includes('shop')){
-    if(art!=='shop') drawShopProp(cx,room);
-    else drawShopStock(cx,room);          // art shows the shelf; overlay the live stock
+    if(shopArtReady()){ drawShopArt(x0,w); drawShopStock(cx,room); }
+    else drawShopProp(cx,room);
   }
 
   drawLvlBadge(cx,FLOOR-128,room.lvl,ROOMS[room.type].col);
