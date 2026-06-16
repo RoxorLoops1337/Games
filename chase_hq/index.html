@@ -52,6 +52,15 @@
   /* gauge cluster */
   #cluster{ position:fixed; right:16px; bottom:14px; text-align:center; z-index:10; pointer-events:none; }
   #gauge{ width:170px; height:170px; filter:drop-shadow(0 4px 10px rgba(0,0,0,.7)); }
+  /* on touch devices the speedometer sits just ABOVE the gas/brake/nitro pedal
+     stack (at any width — the desktop bottom-right spot lands right on the pedals) */
+  body.touch #cluster{ right:14px; left:auto; top:auto; bottom:176px; transform:none; }
+  body.touch #gauge{ width:104px; height:104px; }
+  body.touch #speedDigits{ font-size:17px; margin-top:-34px; }
+  body.touch #speedDigits small{ font-size:9px; }
+  body.touch #turboRow{ margin-top:2px; gap:3px; }
+  body.touch .turboCell{ width:18px; height:7px; }
+  body.touch #turboLabel{ display:none; }
   #speedDigits{ font-size:30px; color:#fff; margin-top:-52px; text-shadow:0 0 10px rgba(120,200,255,.6); }
   #speedDigits small{ font-size:12px; color:#ffffff99; }
   #turboRow{ margin-top:8px; display:flex; gap:6px; justify-content:center; }
@@ -386,7 +395,7 @@ const kBrake = () => (keys.ArrowDown || keys.KeyS) ? 1 : 0;
 // over the noisier `ontouchstart` / `maxTouchPoints` checks: a Surface in laptop
 // mode reports touch but is coarse=false, so it correctly keeps the keyboard layout
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
-if (IS_TOUCH) document.getElementById('touchCtrls').classList.add('on');
+if (IS_TOUCH) { document.getElementById('touchCtrls').classList.add('on'); document.body.classList.add('touch'); }
 // each touch button drives the same `keys` / `pressed` maps the keyboard uses
 document.querySelectorAll('#touchCtrls .tBtn').forEach(btn => {
   const code = btn.dataset.key;
