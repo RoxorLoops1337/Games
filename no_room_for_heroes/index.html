@@ -231,14 +231,20 @@
   }
   /* inspection tooltip */
   #inspect{position:absolute;left:8px;bottom:8px;max-width:min(340px,calc(100% - 16px));
+    max-height:calc(100% - 16px);overflow-y:auto;overscroll-behavior:contain;
     background:rgba(12,9,22,.94);border:1.5px solid var(--accent);border-radius:10px;
     padding:8px 26px 8px 10px;font-size:12px;line-height:1.5;z-index:20;
     opacity:0;transform:translateY(6px);transition:opacity .12s,transform .12s;pointer-events:none;}
   #inspect.show{opacity:1;transform:translateY(0);pointer-events:auto;}
   #inspect b{color:var(--gold);}
-  #inspect .ix{position:absolute;top:3px;right:6px;cursor:pointer;color:#ff8a9a;font-size:13px;}
+  #inspect .ix{position:sticky;float:right;top:-2px;margin-left:6px;cursor:pointer;color:#ff8a9a;font-size:13px;z-index:1;}
   #inspect button{margin-top:6px;padding:6px 10px;min-height:34px;font-size:9px;}
   #inspect .small{opacity:.7;font-size:11px;}
+  /* keep the action buttons (Upgrade/Demolish) pinned & reachable even when the
+     bubble's text is long enough to scroll */
+  #inspect .ibtns{position:sticky;bottom:0;display:flex;gap:6px;flex-wrap:wrap;
+    background:rgba(12,9,22,.97);padding:6px 0 2px;margin-top:6px;}
+  #inspect .ibtns button{margin-top:0;}
   #audiobtn{position:absolute;top:6px;right:6px;z-index:21;width:34px;height:34px;padding:0;
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
   #pausebtn{position:absolute;top:6px;right:46px;z-index:21;width:34px;height:34px;padding:0;
@@ -6037,7 +6043,8 @@ function hideInspectSoon(){ cancelHideInspect(); _inspHideT=setTimeout(()=>{ if(
 function cancelHideInspect(){ if(_inspHideT){ clearTimeout(_inspHideT); _inspHideT=0; } }
 function showInspect(html, hover){
   cancelHideInspect();
-  inspectEl.innerHTML=html+'<span class="ix" onclick="hideInspect()">✕</span>';
+  inspectEl.innerHTML='<span class="ix" onclick="hideInspect()">✕</span>'+html;
+  inspectEl.scrollTop=0;
   inspectEl.classList.add('show'); inspectHover=!!hover; inspectPinned=!hover; inspectEnt=null;
   // anchor the bubble near the click/hover instead of the far bottom-left corner
   const r=CV.getBoundingClientRect();
@@ -6216,10 +6223,10 @@ function describeRoom(room){
   }
   if(G && G.phase==='build'){
     const idx=G.rooms.indexOf(room);
-    if(idx>=0){ lines.push((room.lvl<maxLevel()
+    if(idx>=0){ lines.push(`<div class="ibtns">`+(room.lvl<maxLevel()
       ? `<button onclick="upgradeRoomGold(${idx})">⬆ Upgrade → Lv ${room.lvl+1} · ${roomUpgradeCost(room)}g</button>`
       : '<span class="small">Max level — train it with kills for veteran ranks</span>')
-      + ` <button onclick="askDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Demolish</button>`); }
+      + `<button onclick="askDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Demolish</button></div>`); }
   }
   return lines.join('<br>');
 }
