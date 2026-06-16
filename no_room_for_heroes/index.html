@@ -5904,7 +5904,7 @@ function drawDemonAura(cx, y, dw, dh, front){
 }
 // The boss looms LARGER than the rooms (rooms are 150 tall; the boss tops ~185)
 // so it reads as the towering threat at the end of the hall.
-const BOSS_H=185;
+const BOSS_H=167;   // boss draw height (10% smaller than the old 185)
 function bossCastY(){ return FLOOR-BOSS_H*0.6; }   // where its abilities launch from (chest height)
 function drawBoss(cx){
   const y=FLOOR; const b=G.boss; const c=b.col;
