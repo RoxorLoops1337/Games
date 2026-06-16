@@ -6216,12 +6216,17 @@ function entityAt(wx){
   if(idx>=0 && idx<G.slots){ const r=G.rooms[idx]; return r?{kind:'room',room:r}:{kind:'empty'}; }
   return null;
 }
-function describeRoom(room){
+function describeRoom(room, detail){
   const parts=roomParts(room);
   const synI=synergyInfo(parts); const syn=synI.m + (parts.length>1?(RB.synergy||0):0);
   const vr=vetRank(room); const vm=vetMul(room);
   const title = parts.length>1 ? comboName(room) : roomName(room);
-  const lines=[`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`];
+  const titleLine=`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`;
+  const buildIdx = (G && G.phase==='build') ? G.rooms.indexOf(room) : -1;
+  // Build phase: the bubble opens as a compact action menu (Upgrade · Demolish ·
+  // Info); the full stat readout is gated behind ℹ️ Info so a tap isn't a wall of text.
+  if(buildIdx>=0 && !detail) return titleLine + roomActionBtns(room, buildIdx, true);
+  const lines=[titleLine];
   let _trapDi=0;
   parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
     if(def.amp){ lines.push(`${def.ic} ${def.name}: 🔯 +${Math.round(def.amp*100)}% to this & adjacent rooms`); return; }
@@ -6274,14 +6279,24 @@ function describeRoom(room){
       : `⚡ <b>Can fuse a 3rd part</b> — costs ${FUSE3_GOLD}g; a 3rd guard joins at ×${GUARD3_MUL}`);
     if(vr<VET_MAX){ const next=(vr+1)*VET_KILLS; lines.push(`<span class="small">⭐ next veteran rank at ${next} kills (${k}/${next})</span>`); }
   }
-  if(G && G.phase==='build'){
-    const idx=G.rooms.indexOf(room);
-    if(idx>=0){ lines.push(`<div class="ibtns">`+(room.lvl<maxLevel()
-      ? `<button onclick="upgradeRoomGold(${idx})">⬆ Upgrade → Lv ${room.lvl+1} · ${roomUpgradeCost(room)}g</button>`
-      : '<span class="small">Max level — train it with kills for veteran ranks</span>')
-      + `<button onclick="askDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Demolish</button></div>`); }
-  }
+  if(buildIdx>=0) lines.push(roomActionBtns(room, buildIdx, false));
   return lines.join('<br>');
+}
+// Action buttons for the room bubble (build phase). `withInfo` appends the ℹ️ Info
+// button that expands the compact menu into the full stat readout.
+function roomActionBtns(room, idx, withInfo){
+  const up = room.lvl<maxLevel()
+    ? `<button onclick="upgradeRoomGold(${idx})">⬆ Upgrade → Lv ${room.lvl+1} · ${roomUpgradeCost(room)}g</button>`
+    : '<span class="small">Max level — train it with kills for veteran ranks</span>';
+  const del = `<button onclick="askDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Demolish</button>`;
+  const info = withInfo ? `<button onclick="showRoomDetail(${idx})">ℹ️ Info</button>` : '';
+  return `<div class="ibtns">${up}${del}${info}</div>`;
+}
+// Expand the compact room menu into the full stat readout (stays pinned).
+function showRoomDetail(idx){
+  const r=G&&G.rooms[idx]; if(!r) return;
+  showInspect(describeRoom(r, true), false);
+  inspectEnt={kind:'room',room:r};
 }
 // Demolish a built room (build phase only) — two-step confirm inside the bubble.
 function askDeleteRoom(idx){
