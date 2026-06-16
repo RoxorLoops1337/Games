@@ -4915,6 +4915,8 @@ function drawRoomBg(x0,w,isBoss,i){
   X.fillStyle=isBoss?'#5a2a4a':'#251b44';
   X.fillRect(x0, FLOOR-150, w, 5);
   if(isBoss){
+    const ta=bossThroneArt();
+    if(ta){ drawRoomArt(x0,w,ta); return; }   // painted throne room replaces the procedural backdrop
     // throne glow (cached — only moves when the corridor gains a slot)
     const tk=x0+'_'+w;
     if(!_thrGrad || _thrKey!==tk){
@@ -5850,6 +5852,13 @@ if(typeof Image!=='undefined'){
     const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='bosses/'+k+'.png'; BOSS_IMG[k]=im;
   });
 }
+// Throne-room backdrops (rooms/throne_<colour>.png) keyed to each boss by hue.
+const BOSS_THRONE={dragon:'red', ogre:'red', demon:'purple', golem:'purple', ent:'green', lich:'green'};
+const THRONE_IMG={};
+if(typeof Image!=='undefined'){
+  ['green','purple','red'].forEach(c=>{ const im=new Image(); im.onload=()=>{im._ok=true;}; im.onerror=()=>{}; im.src='rooms/throne_'+c+'.png'; THRONE_IMG[c]=im; });
+}
+function bossThroneArt(){ const k=G&&G.boss&&G.boss.key; const im=k&&THRONE_IMG[BOSS_THRONE[k]]; return (im&&im._ok)?im:null; }
 // Demon idle: 4 frames played as a ping-pong loop (0→1→2→3→2→1→…)
 const DEMON_IDLE=[]; const DEMON_PP=[0,1,2,3,2,1];
 if(typeof Image!=='undefined'){
@@ -5899,9 +5908,12 @@ const BOSS_H=185;
 function bossCastY(){ return FLOOR-BOSS_H*0.6; }   // where its abilities launch from (chest height)
 function drawBoss(cx){
   const y=FLOOR; const b=G.boss; const c=b.col;
-  // throne (scaled up to match the bigger boss)
-  px(cx-42,y-98,84,98,'#3a2440'); px(cx-48,y-120,96,28,'#5a2a4a');
-  px(cx-42,y-120,11,120,'#6a3a5a'); px(cx+31,y-120,11,120,'#6a3a5a');
+  if(!bossThroneArt()){
+    // procedural throne (scaled up to match the bigger boss) — only when there's
+    // no painted throne room behind the boss
+    px(cx-42,y-98,84,98,'#3a2440'); px(cx-48,y-120,96,28,'#5a2a4a');
+    px(cx-42,y-120,11,120,'#6a3a5a'); px(cx+31,y-120,11,120,'#6a3a5a');
+  }
   let img=BOSS_IMG[b.key];
   const animated = (b.key==='demon' && demonIdleReady());
   if(animated) img=demonIdleFrame();
