@@ -60,10 +60,10 @@
     <button onclick="clearActors()">🧹 clear</button>
   </div>
   <div class="row">
-    <label style="display:flex;gap:8px;align-items:center;font-size:12px;opacity:.85;">🛡️ hero lift
-      <input id="heroLift" type="range" min="0" max="48" step="1" value="0"
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;opacity:.85;">🛡️ mob lift
+      <input id="heroLift" type="range" min="0" max="48" step="1" value="14"
         oninput="heroLift=+this.value;document.getElementById('heroLiftVal').textContent=heroLift+'px';if(actors.length)render();">
-      <span id="heroLiftVal" style="min-width:34px">0px</span></label>
+      <span id="heroLiftVal" style="min-width:34px">14px</span></label>
   </div>
   <div class="row">
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;opacity:.85;">🎚️ hero layer
@@ -89,7 +89,7 @@ const RISE=110, FALL=480, CASCADE=70;
 const TIMING={maul:{rise:55,fall:560}, arrow:{rise:300,fwd:true}, frost:{rise:200,fall:680},
   gallows:{rise:90,fall:600}, hexward:{rise:240,fall:520}, tesla:{rise:45,fall:240}, spike:{rise:70,fall:430}};
 const PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
-const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff'};
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff'};
 const ART={};
 function probeSeq(id,dir,cb){
   const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
@@ -124,7 +124,7 @@ let pieces=[
   {role:'gallows',      trap:'gallows',art:'gallows', fx:.50, fy:0,   h:124, layer:6},
   {role:'hexward',      trap:'hexward',art:'hexward', fx:.50, fy:30,  h:96,  layer:5},
   {role:'tesla',        trap:'tesla',  art:'tesla',   fx:.50, fy:0,   h:100, layer:4},
-  {role:'oil',          trap:'oil',    art:'oil',     fx:.50, fy:0,   h:120, layer:1},
+  {role:'oil',          trap:'oil',    art:'oil',     fx:.50, fy:0,   h:120, layer:1, mode:'loop'},
   {role:'corrode',      trap:'corrode',art:'corrode', fx:.50, fy:8,   h:78,  layer:3},
   {role:'magebane',     trap:'magebane',art:'magebane',fx:.50, fy:52, h:108, layer:5},
   {role:'candle L',     candle:0,      art:'candle',  fx:.18, fy:118, h:26},
@@ -137,6 +137,8 @@ let pieces=[
   {role:'light frost',    light:'frost',   kind:'frost',  fx:.50, fy:40,  h:46},
   {role:'light tesla',    light:'tesla',   kind:'tesla',  fx:.50, fy:55,  h:44},
   {role:'light hexward',  light:'hexward', kind:'hexward',fx:.50, fy:60,  h:54},
+  {role:'light corrode',  light:'corrode', kind:'corrode',fx:.50, fy:40,  h:46},
+  {role:'light magebane', light:'magebane',kind:'magebane',fx:.50,fy:60,  h:54},
 ];
 const DEFAULT_PIECES=pieces;   // keep the built-in defaults to merge any trap the saved layout doesn't have yet
 fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
@@ -154,7 +156,7 @@ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   // any trap with art but missing from the saved layout → seed from the defaults
   for(const d of DEFAULT_PIECES) if(d.trap && !seen.has(d.trap)) np.push({...d});
   (j.candles||[]).forEach((c,k)=>np.push({role:'candle '+(k?'R':'L'),candle:k,art:c.art||'candle',...c}));
-  const kindOf=a=>a==='flame'?'heat':(a.startsWith('venom')?'vapor':(a==='frost'||a==='tesla'||a==='hexward')?a:'candle');
+  const kindOf=a=>a==='flame'?'heat':(a.startsWith('venom')?'vapor':(a==='frost'||a==='tesla'||a==='hexward'||a==='corrode'||a==='magebane')?a:'candle');
   const lights=j.lights||[];
   if(lights.length){
     lights.forEach(l=>np.push({role:'light '+l.attach, light:l.attach, kind:kindOf(l.attach),
@@ -167,7 +169,7 @@ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   }
   // seed the per-trap accent lights (frost/tesla/hexward) if the layout lacks them yet
   const haveLight=new Set(np.filter(p=>p.light).map(p=>p.light));
-  for(const d of DEFAULT_PIECES) if(d.light && /^(frost|tesla|hexward)$/.test(d.light) && !haveLight.has(d.light)) np.push({...d});
+  for(const d of DEFAULT_PIECES) if(d.light && /^(frost|tesla|hexward|corrode|magebane)$/.test(d.light) && !haveLight.has(d.light)) np.push({...d});
   if(np.length) pieces=np;
   if(typeof j.heroLayer==='number'){ heroLayer=j.heroLayer; const el=document.getElementById('heroLayer'); if(el) el.value=heroLayer; }
   refreshItems(); render();
@@ -215,11 +217,12 @@ function lightAlpha(p){
   if(p.kind==='candle'){ const sd=(p.light==='candle1')?4.1:1.3;
     return (0.18+0.16*((Math.sin(t/91+sd)+Math.sin(t/37+sd*1.7))*0.25+0.5))*A; }
   if(p.kind==='vapor') return 0.32*A*(0.825+0.175*Math.sin(t/260+(p.light==='venom1'?2:0)));
-  if(p.kind==='frost'||p.kind==='tesla'||p.kind==='hexward'){
+  if(p.kind==='frost'||p.kind==='tesla'||p.kind==='hexward'||p.kind==='corrode'||p.kind==='magebane'){
     const rec=ART[p.kind], N=rec?rec.frames.length:0;
     const i=N>1?frameIdx(rec,null,0,p.kind)/(N-1):0;
     if(p.kind==='tesla') return (0.14+0.40*i)*(0.62+0.38*Math.abs(Math.sin(t/55)))*A;
-    if(p.kind==='hexward') return (0.16+0.30*i)*(0.78+0.22*Math.sin(t/430))*A;
+    if(p.kind==='hexward'||p.kind==='magebane') return (0.16+0.30*i)*(0.78+0.22*Math.sin(t/400))*A;
+    if(p.kind==='corrode') return (0.18+0.30*i)*(0.85+0.15*Math.sin(t/180))*A;
     return (0.16+0.34*i)*A;   // frost
   }
   // heat: follow the brightest flame column
@@ -310,7 +313,7 @@ const HSHEET={
 const HIMG={}; for(const k in HSHEET){ const im=new Image(); im.src=HSHEET[k].src; HIMG[k]=im; }
 const CHAMP=[]; for(let i=0;i<12;i++){ const im=new Image(); im.src='sprites/champion/champion_'+i+'.png'; CHAMP.push(im); }
 let actors=[], streamHero=false, streamMon=false, _spawnH=0, _spawnM=0, _lastT=performance.now();
-let heroLift=0;   // align tool only: raise heroes/super-heroes this many world-px off the floor
+let heroLift=14;   // align tool: raise heroes/super-heroes/monsters this many world-px off the floor (matches the game's LIFT)
 let heroLayer=999; // z within the trap stack: traps with a higher layer render IN FRONT of heroes
 const HERO_KINDS=['warrior','mage','cleric','rogue'];
 const MON_KINDS=['goblin','skeleton','warden','ogre'];
@@ -334,9 +337,8 @@ function stepActors(dt){
 function drawActors(){
   for(const a of actors){
     const sx=OX+a.x*S;
-    // heroes & super-heroes (everything that isn't a monster) ride the hero-lift slider
-    const isHero = a.kind==='champion' || HERO_KINDS.includes(a.kind);
-    const fy = FLOORY - (isHero ? heroLift*S : 0);
+    // heroes AND monsters all ride the lift slider so they share one walking line
+    const fy = FLOORY - heroLift*S;
     if(a.kind==='champion'){
       const im=CHAMP[1+Math.floor(a.t*12)%11]||CHAMP[0];
       if(!(im&&im.complete&&im.width)) continue;

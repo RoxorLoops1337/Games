@@ -1,11 +1,11 @@
 {
- "heroLayer": 5,
+ "heroLayer": 6,
  "traps": {
   "spike": [
    {
     "art": "spike",
-    "fx": 0.516,
-    "fy": -11,
+    "fx": 0.515,
+    "fy": -13,
     "h": 69,
     "layer": 6
    }
@@ -24,16 +24,16 @@
   "venom": [
    {
     "art": "poison1",
-    "fx": 0.315,
-    "fy": 26,
+    "fx": 0.278,
+    "fy": 16,
     "h": 75,
     "mode": "loop",
     "layer": 0
    },
    {
     "art": "poison2",
-    "fx": 0.682,
-    "fy": 19,
+    "fx": 0.761,
+    "fy": 12,
     "h": 68,
     "mode": "loop",
     "layer": 0
@@ -45,23 +45,23 @@
     "fx": 0.509,
     "fy": 42,
     "h": 133,
-    "layer": 6
+    "layer": 11
    }
   ],
   "arrow": [
    {
     "art": "arrow",
     "fx": 0.493,
-    "fy": -14,
+    "fy": -15,
     "h": 213,
-    "layer": 8
+    "layer": 11
    }
   ],
   "frost": [
    {
     "art": "frost",
-    "fx": 0.501,
-    "fy": 7,
+    "fx": 0.326,
+    "fy": 11,
     "h": 66,
     "layer": 4
    }
@@ -69,17 +69,18 @@
   "gallows": [
    {
     "art": "gallows",
-    "fx": 0.717,
-    "fy": 19,
-    "h": 69,
-    "layer": 5
+    "fx": 0.379,
+    "fy": 32,
+    "h": 87,
+    "flip": true,
+    "layer": 4
    }
   ],
   "hexward": [
    {
     "art": "hexward",
-    "fx": 0.489,
-    "fy": 19,
+    "fx": 0.38,
+    "fy": 18,
     "h": 96,
     "layer": 5
    }
@@ -90,7 +91,34 @@
     "fx": 0.493,
     "fy": 22,
     "h": 73,
-    "layer": 4
+    "layer": 3
+   }
+  ],
+  "oil": [
+   {
+    "art": "oil",
+    "fx": 0.636,
+    "fy": 10,
+    "h": 94,
+    "layer": 0
+   }
+  ],
+  "corrode": [
+   {
+    "art": "corrode",
+    "fx": 0.684,
+    "fy": -5,
+    "h": 78,
+    "layer": 3
+   }
+  ],
+  "magebane": [
+   {
+    "art": "magebane",
+    "fx": 0.5,
+    "fy": 52,
+    "h": 108,
+    "layer": 0
    }
   ]
  },
@@ -111,37 +139,58 @@
  "lights": [
   {
    "attach": "candle0",
-   "fy": 138,
+   "fy": 140,
    "r": 34,
-   "fx": 0.174,
+   "fx": 0.196,
    "a": 3
   },
   {
    "attach": "candle1",
-   "fy": 137,
+   "fy": 136,
    "r": 34,
-   "fx": 0.845,
+   "fx": 0.813,
    "a": 3
   },
   {
    "attach": "venom0",
-   "fy": 61,
-   "r": 44,
-   "fx": 0.332,
-   "a": 2.31
+   "fy": 52,
+   "r": 48,
+   "fx": 0.283,
+   "a": 3
   },
   {
    "attach": "venom1",
    "fy": 47,
-   "r": 44,
-   "fx": 0.683,
+   "r": 52,
+   "fx": 0.762,
    "a": 2.27
   },
   {
    "attach": "flame",
    "fy": 55,
-   "r": 56,
-   "a": 1.98
+   "r": 63,
+   "a": 3
+  },
+  {
+   "attach": "frost",
+   "fy": 31,
+   "r": 62,
+   "fx": 0.335,
+   "a": 3
+  },
+  {
+   "attach": "tesla",
+   "fy": 55,
+   "r": 44,
+   "fx": 0.5,
+   "a": 3
+  },
+  {
+   "attach": "hexward",
+   "fy": 68,
+   "r": 54,
+   "fx": 0.384,
+   "a": 3
   }
  ]
 }
