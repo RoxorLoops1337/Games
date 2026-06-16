@@ -4883,6 +4883,9 @@ function previewHeroObj(spec){
     shieldT:0, freeze:0, chill:0, oil:0, shock:0 };
 }
 // Show the next wave standing ready in the staging zone left of the entrance.
+// Preview hero objects are CACHED per queue slot so their idle animation keeps
+// advancing (rebuilding them every frame would freeze the sprite on frame 0).
+let _waitAnim=[];
 function drawWaitingHeroes(tx){
   if(G.mode==='campaign') prepCampaignWave();    // make sure the cached wave is rolled
   if(!G.queue || !G.queue.length) return;
@@ -4895,10 +4898,15 @@ function drawWaitingHeroes(tx){
   // gate line at the entrance
   X.strokeStyle='rgba(120,100,170,.5)'; X.setLineDash([4,5]); X.lineWidth=2;
   X.beginPath(); X.moveTo(tx(0), FLOOR-150); X.lineTo(tx(0), FLOOR); X.stroke(); X.setLineDash([]);
+  const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
   for(let k=0;k<n;k++){
-    const h=previewHeroObj(G.queue[k]);
-    const wx = -STAGEW*0.62 + k*14;
-    h.yOff = (k-(n-1)/2)*13;
+    const spec=G.queue[k];
+    // reuse the cached object so _animT accumulates across frames (idle plays);
+    // rebuild it only when the spec at this slot changes (new wave rolled)
+    let e=_waitAnim[k]; if(!e || e.spec!==spec){ e=_waitAnim[k]={spec, h:previewHeroObj(spec)}; }
+    const h=e.h;
+    const wx = -STAGEW*0.5 - (n-1)*sp/2 + k*sp;            // centred in the staging zone
+    h.yOff = -LIFT;                                        // stand on the walking line (right height)
     X.globalAlpha=0.92; drawHero(tx(wx), h); X.globalAlpha=1;
   }
   X.fillStyle=hasChamp?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
@@ -5398,10 +5406,13 @@ function drawMonsterSprite(cx, footY, room, cell, key, alive, moving){
   const clip=cfg.clips[name], img=MON_IMG[key][clip.sheet];
   if(!img||!img._ok) return false;
   const now=performance.now();
-  if(room._mc!==name){ room._mc=name; room._mt=0; }
-  const dt=Math.min(0.1,(now-(room._ml||now))/1000); room._ml=now;
-  room._mt=(room._mt||0)+dt;
-  const frame=Math.floor(room._mt*clip.fps)%clip.n;
+  // animation timing is per-monster: a fused room draws 2–3 different sprites, and
+  // sharing one timer made them run fast and freeze on each other's wrong frame.
+  const KC='_mc_'+key, KT='_mt_'+key, KL='_ml_'+key;
+  if(room[KC]!==name){ room[KC]=name; room[KT]=0; }
+  const dt=Math.min(0.1,(now-(room[KL]||now))/1000); room[KL]=now;
+  room[KT]=(room[KT]||0)+dt;
+  const frame=Math.floor(room[KT]*clip.fps)%clip.n;
   const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
   const dx=Math.round(cx-clip.ax*S), dy=Math.round(footY-clip.ay*S);
   X.imageSmoothingEnabled=false;
@@ -5538,6 +5549,12 @@ function drawRoomContents(x0,w,room,i){
   } else
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
+    // slain guards just vanish (no ghost, no corpse). In a fused room the FRONT
+    // guard dies first and the next steps up, so skip the leading parts whose
+    // guards are gone; when the last falls, deadCount covers them all → nothing draws.
+    const deadCount = (G.phase==='run' && cell)
+      ? Math.max(0, monParts.length - [cell.mon,cell.mon2,cell.mon3].filter(g=>g&&g.alive).length)
+      : 0;
     // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
     // (advance the moment a hero is in the cell — don't wait for fighting state)
     const engaged = alive && cell && G.phase==='run'
@@ -5552,13 +5569,12 @@ function drawRoomContents(x0,w,room,i){
     const moving = alive && Math.abs(room._monF-targetF)>0.004;
     const mbx = x0 + w*room._monF;                     // animated monster base x
     monParts.forEach((mp,mi)=>{
+      if(mi<deadCount) return;                                 // this guard was slain — just gone
       const def=ROOMS[mp]; const sprite = mp==='minion'?'minion':mp;
       const sp=monParts.length>2?28:44;
       const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 3)
-      if(!alive) X.globalAlpha=0.35;
       const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT, room, cell, mp, alive, moving);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
-      if(!alive){ X.globalAlpha=1; px(mbx+ox-12,FLOOR-10,24,6,'#3a3a3a'); }
     });
     if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
       bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
@@ -6526,6 +6542,9 @@ CV.addEventListener('mousemove', e=>{
   // (inspectEnt===null, e.g. the demolish confirm) which hover must NEVER
   // replace — that was wiping the "Yes, demolish" box mid-mouse-travel
   if(inspectPinned && (inspectEnt===null || sameInspectEnt(ent))) return;
+  // Build-phase room bubbles are CLICK-ONLY — the Upgrade/Demolish menu must not
+  // pop on hover. (Run-phase room stats + heroes/boss still preview on hover.)
+  if(ent.kind==='room' && G.phase==='build'){ if(inspectHover) hideInspectSoon(); return; }
   showInspectEntity(ent, true);
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
