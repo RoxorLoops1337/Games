@@ -2449,10 +2449,10 @@ function updateSuspect(dt, stage){
       // gap-coupled rubber-band: the further behind you fall, the more he dawdles,
       // so the target is always catchable even after a couple of crashes
       target = stage.susSpeed;
-      if (gap > 450) target *= 0.6;
-      else if (gap > 300) target *= 0.72;
-      else if (gap > 150) target *= 0.82;
-      else target *= 0.9;          // close range: he keeps dawdling so the final
+      if (gap > 450) target *= 0.66;
+      else if (gap > 300) target *= 0.78;
+      else if (gap > 150) target *= 0.88;
+      else target *= 0.93;         // close range: still dawdles so the final
                                    // approach is always doable on engine alone (no turbo)
     } else {
       // pursuit phase: aggressive rubber-band so a single crash never strands you
@@ -2572,12 +2572,14 @@ function collisions(dt, stage){
   if (G.phase === 'PURSUIT' && overlap(pl.s, pl.lat, sus.s, sus.lat, 4.8, 2.9)) {
     const closing = pl.v - sus.v;
     if (pl.s < sus.s && closing > 0.4 && G.hitCool <= 0) {
-      G.hitCool = 0.25;
-      const dmg = clamp(closing * 1.4, 7, 24);
+      G.hitCool = 0.4;
+      const dmg = clamp(closing * 1.4, 7, 22);
       sus.dmg = clamp(sus.dmg + dmg, 0, 100);
-      pl.v = sus.v + closing * 0.5;
-      sus.v += 1.4;   // gentle lurch so he separates a touch — was 2.5, which
-                      // (with the old close-zone) let him crawl out of reach after a tap
+      // RAM RECOIL: the impact knocks you back BELOW his speed (harder hits bounce
+      // you off harder) and shoves him forward, so you must re-close via the draft
+      // before the next ram — no more machine-gunning him to a bust in one go
+      pl.v = sus.v - clamp(closing * 0.45, 2.5, 8);
+      sus.v += 2.2;
       posAt((pl.s + sus.s) / 2 + 2, (pl.lat + sus.lat) / 2, tmpV);
       tmpV.y += 0.7;
       sparks.spawn(tmpV, 26 + Math.floor(closing), 11);
