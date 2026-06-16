@@ -4287,9 +4287,10 @@ function simStep(h,dt){
     // traps still fire on a frozen/standing hero
     if(cell && cell.traps && cell.traps.length) trapTick(h,cell,dt);
     if(h.state==='dead' || frozen) return;
-    // a den goblin locked onto this hero holds it in place — stand and trade
-    // blows (goblinStep resolves the fight) until the goblin (or hero) dies
-    if((G.minions||[]).some(g=>g.hp>0 && g.engaged===h)){ h.walkAnim+=dt*10; return; }
+    // a den goblin locked onto this hero holds it in place — but only ONCE THE
+    // GOBLIN IS CLOSE. Until then keep marching toward it (the goblin closes from
+    // its side too), so heroes don't freeze while a goblin ambles across the room.
+    if((G.minions||[]).some(g=>g.hp>0 && g.engaged===h && Math.abs(g.x-h.x)<=24)){ h.walkAnim+=dt*10; return; }
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
