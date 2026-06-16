@@ -1,339 +1,276 @@
 # No Room For Heroes — Handover (for the next Claude)
 
-A living handover for the **No Room For Heroes** game (folder/URL `no_room_for_heroes`; was `boss_monster` before the rename). Read this first, then skim
-`no_room_for_heroes/index.html`. Keep this file updated as you change things.
+A living handover for the **No Room For Heroes** game (folder/URL `no_room_for_heroes`;
+it was called *Boss Monster* before the rename — you'll still see `bm_*` /
+`bossmonster_*` storage keys and the `/boss_monster/*` redirect). Read this, then
+skim `no_room_for_heroes/index.html`. **Keep this file updated as you change things.**
 
 ---
 
 ## 1. What the game is
 
-A single-file HTML/JS **reverse-tower-defense roguelike deckbuilder**. *You are
-the final boss.* Heroes raid from the left toward your throne on the right; you
-line the corridor with **trap rooms**, **monster rooms** and a **shop**, draft
-**room cards** as rewards, and fire **boss abilities** by hand. Fights
-auto-resolve. Two modes: **Campaign** (a fixed 50-level siege) and **Endless**.
+A single-file HTML/JS **reverse-tower-defense roguelike deckbuilder**. *You are the
+final boss.* Heroes raid from the left toward your throne on the right; you line the
+corridor with **trap rooms**, **monster rooms** and a **shop**, draft **room cards**
+as rewards, and fire **boss abilities** by hand. Fights auto-resolve. Two modes:
+**Campaign** (a fixed 50-level siege) and **Endless**.
 
-- **The whole game is `no_room_for_heroes/index.html`** — markup + CSS + one big
-  `<script>`. There is no framework; it's vanilla canvas + DOM overlays.
-- Live URL: **https://games-71g.pages.dev/no_room_for_heroes/** (Cloudflare Pages,
-  auto-deploys on merge to `main`).
-- Repo: `RoxorLoops1337/Games`. Feature branch: **whatever your session
-  designates** — it changes per session (e.g. `claude/boss-monster-handover-3ayjow`);
-  the workflow is the same regardless.
+- Live: **https://games-71g.pages.dev/no_room_for_heroes/** (Cloudflare Pages,
+  auto-deploys ~1 min after merge to `main`).
+- Repo: `RoxorLoops1337/Games`. Your feature branch is named per-session.
+- Plays mostly on **iPad Safari** — watch for touch/pointer + flexbox-%-height bugs.
 
 ---
 
-## 2. Workflow (from repo CLAUDE.md — follow exactly)
+## 2. Repo map (read before touching anything)
 
-1. Make changes on your session's designated feature branch.
-2. `node build.js` (esbuild; **recursively copies `no_room_for_heroes/` → `dist/`**, so
-   any asset under it ships). Confirm 0 errors.
-3. Commit → push `-u origin <your-branch>`.
-4. **Create a DRAFT PR → mark it ready → squash-merge to `main`. Do NOT ask
-   "want me to merge?".**
-5. **Always paste the live URL at the bottom of every reply** while working on
-   this game: `https://games-71g.pages.dev/no_room_for_heroes/`.
-6. Commit messages / PR bodies end with the session link (the harness adds it).
-   Never put the model identifier anywhere in commits/PRs.
+- **`no_room_for_heroes/index.html`** — THE game. Markup + CSS + one ~6k-line
+  `<script>`. No framework, vanilla canvas + DOM overlays.
+- `no_room_for_heroes/align.html` — standalone **art-alignment tool**. Positions /
+  sizes / layers / lights of every trap + the test-traffic heroes/monsters; exports
+  `rooms/layout.json`. **This is where trap/light positions are tuned — never
+  hand-tune draw positions in code.**
+- `no_room_for_heroes/music.html` — standalone chiptune player (deterministic composer).
+- `no_room_for_heroes/sandbox.html` — goblin-horde visual sandbox (shares sprites,
+  not code).
+- `functions/api/board.js` + `functions/api/save.js` — Cloudflare Pages Functions
+  (leaderboard + cloud saves, KV binding `BOARD`).
+- `build.js` — copies `STATIC_PATHS` folders into `dist/` (Pages deploys `dist/`).
+  `no_room_for_heroes` and `tools` are already in the list; new TOP-LEVEL folders
+  must be added.
+- `tests/no_room_for_heroes_*.test.mjs` — 9 headless suites; `tests/no_room_for_heroes_lib.mjs`
+  exports `loadGame(exposeStr)` (evals the inline script with a stubbed DOM). **Write
+  new tests with the lib; never make throwaway harnesses outside `tests/`.**
+- `tools/comfyui/` — local pixel-art sprite generator (see §6).
 
-### ⚠️ Recurring merge-guard bug
-Reconciling with `git fetch origin main && git merge -X ours origin/main` has
-repeatedly **silently resurrected deleted code** (notably an `awardTownResources`
-call that crashes run-end). **Every push sequence includes a guard:**
-```bash
-git fetch origin main -q; git merge -X ours origin/main -m "merge main"
-if grep -q "awardTownResources" no_room_for_heroes/index.html; then
-  perl -0pi -e 's/^\s*awardTownResources\([^;]*\);\s*$//mg' no_room_for_heroes/index.html
-  git add -A && git commit -q -m guard
-fi
+---
+
+## 3. Workflow — verify with ONE command, then ship
+
 ```
-After any `-X ours` merge, **re-grep for the feature you just added** to make sure
-it survived, and rebuild.
+npm run check        # = node build.js && all 9 test suites — must be GREEN before every push
+```
 
-Also: because we **squash-merge**, binary files added on a branch show up as
-**add/add conflicts (`AA`)** on the next merge of main — `-X ours` can't
-auto-resolve those. Fix with `git checkout --ours -- <paths>` then commit.
+1. Work on your session's feature branch.
+2. `npm run check` green. If you can't make it green, STOP and report — never push red.
+3. Commit → `git push -u origin <branch>`.
+4. **Create a DRAFT PR → mark it ready → squash-merge to `main`. Don't ask "want me
+   to merge?".** (`mcp__github__*` tools only; scope `roxorloops1337/games`. No `gh` CLI.)
+5. End every reply (while on this game) with the four links:
+   ```
+   Play: https://games-71g.pages.dev/no_room_for_heroes/
+   Align tool: https://games-71g.pages.dev/no_room_for_heroes/align.html
+   Music player: https://games-71g.pages.dev/no_room_for_heroes/music.html
+   Goblin sandbox: https://games-71g.pages.dev/no_room_for_heroes/sandbox.html
+   ```
+6. Commit/PR end with the session link the harness provides. **Never put a model
+   identifier in commits/PRs/code.**
 
-### GitHub specifics
-- Use the `mcp__github__*` tools (no `gh` CLI). Scope is `roxorloops1337/games`.
-- The token can expire mid-session ("requires re-authorization"). If so, commit +
-  push anyway; the draft PR accumulates commits on the branch and you can
-  mark-ready/merge once it recovers.
-- After each merge you get a `<github-webhook-activity>` "merged → unsubscribed"
-  message and Cloudflare deploy-bot comments — **these need no action.**
+### Merge conflicts are NORMAL (we squash-merge)
+After each PR squash-merges, the next PR conflicts with `origin/main`. Resolve by
+**keeping HEAD (your branch)**: `git fetch origin main && git merge origin/main`,
+fix conflicts keeping your side, then **re-run `npm run check`** and **re-grep the
+feature you just added** (squash-merges can resurrect old code). Binary add/add
+conflicts: `git checkout --ours -- <path>`. Known zombie to keep at 0 hits:
+`awardTownResources`.
 
----
-
-## 3. Testing & balance harnesses (all in `/tmp`, not committed)
-
-**Headless unit tests now live in the repo** — `tests/no_room_for_heroes_lib.mjs`
-exports `loadGame(exposeStr)` (full stub set: document/canvas/Image/Audio
-Proxies, const/let→var rewrite, eval with an `__api` expose) and `harness()`
-(tiny pass/fail counter). Write new suites as `tests/no_room_for_heroes_<x>.test.mjs`
-importing the lib — **don't recreate `/tmp/h*.mjs` throwaways; commit suites so
-they survive container recycling.** Run: `npm run test:boss` (all),
-`test:relics`, `test:champion`. The canvas ctx stub **must** return
-`{addColorStop:noop}` for `createLinearGradient/Radial` and `{width:10}` for
-`measureText`, or `draw()` throws (the lib handles this).
-
-Current suites worth keeping green: `h91` rogue-disarm, `h92` campaign, `h93`
-merchant, `h95` King, `h96` slot-cap/Barracks/WarCamp, `h98` wave preview==spawn,
-`h99` Black Market, `h100` scrap/difficulty, `h101` hero spells, `h103`
-slots+fusing. (They live in `/tmp`, so they vanish when the container is
-recycled — recreate from the HTML if needed.)
-
-**Balance sims**: `/tmp/ptlib.mjs` exports `loadGame()` (full game eval with a
-big exposed API). Built on it:
-- `/tmp/firstrun.mjs` — a smart **first run** (5-slot cap, no runes/town, natural
-  gold economy, blocker+trap layouts, heavy boss-ability casting). Target: best
-  layout wins ~10-20%.
-- `/tmp/maxedsim.mjs` — a **fully-meta'd** account (all runes + all town buildings
-  + per-level boss empowerment). Should win ~90-100%.
-- `/tmp/campsim3.mjs` — a **mid** account (8 rooms, light empowerment, no runes).
-
-> Sims are **pessimistic** (they don't model human skill); the owner outplays
-> them, so treat sim win-rates as a floor.
-
-`node -e` one-liners against `ptlib.mjs` are the fastest way to print a constant's
-effect (e.g. tier probabilities, monster atk at N kills).
+### Webhooks need no action
+After a merge you get "merged → unsubscribed" + a Cloudflare deploy-bot comment —
+both routine. The PR-activity subscription is for CI/review events; on this repo
+there are no GitHub Actions, and the "unstable" mergeable state is just the
+non-required Cloudflare preview check (merge on the green local `npm run check`).
 
 ---
 
 ## 4. Core architecture (where things live in index.html)
 
-- **`G`** = the active run state object, built by `freshGame(mode)`; assigned via
-  `G = freshGame(...)` (callers, not freshGame, set the global). Key fields:
-  `mode`, `levelIdx` (0-based), `phase` (`menu|bossSelect|edicts|loadout|build|run|town|reward|mandate|win|lose`),
-  `boss`, `heroes`, `queue` (the upcoming wave), `rooms[]`, `cells[]`, `slots`,
-  `gold`, `dread`, `hand[]`, `relics[]`, `mandates[]`, `totalSlain`.
-- **`RUNES`** (persistent meta: `points`, `ranks{}`, `kills` lifetime, `bossXp`)
-  and **`TOWN`** (`res{wood,stone,shards}`, `built{}`) — saved to localStorage.
-- **`RB`** = aggregated run bonuses (rune + relic), rebuilt by `recomputeRB()`;
-  `blankRB()` is the zeroed template (**keep this function — I once deleted it by
-  accident and crashed load**). `applyRunes()` locks rune bonuses at run start.
-- **Phases / screens** are rendered into `#overlay` (DOM) and the canvas (`draw()`
-  via `requestAnimationFrame(frame)`). `render()` = top bar + relic bar + panel +
-  draw. Town/menu/rune/etc. screens set `overlay.innerHTML`.
-- **Cells**: `buildCells()` turns `G.rooms` into `G.cells` (geometry + live trap
-  list + monster guards). `ROOM_W=200`, `FLOOR=330`, world units `VW≈960,VH≈420`.
-- **Combat**: `simStep(h,dt)` per hero; `fightTick` (vs monster), `bossFightTick`
-  (vs throne), `trapTick`/`aoeTrapTick` (traps). Heroes walk → fight monsters →
-  reach throne. `heroDies` handles loot/dread/combo/rivals.
+- **`G`** = active run state (`freshGame(mode)`; the global is set by callers).
+  Key fields: `mode`, `levelIdx`, `phase`
+  (`menu|bossSelect|edicts|loadout|build|run|town|reward|mandate|win|lose`), `boss`,
+  `heroes`, `queue`, `rooms[]`, `cells[]`, `slots`, `gold`, `dread`, `hand[]`,
+  `relics[]`, `mandates[]`, `minions[]` (marching den goblins), `totalSlain`.
+- **`RUNES`** (persistent meta: `points`, `ranks{}`, lifetime `kills`, `bossXp`,
+  `asc`) and **`TOWN`** (`res{wood,stone,shards}`, `built{}`) — localStorage, per
+  save slot (`SAVE_SLOTS=3`, keys `bossmonster_runes_<n>` / `bossmonster_town_<n>`,
+  active slot in `bm_slot`). **Never rename these keys.**
+- **`RB`** = aggregated run bonuses; `recomputeRB()`, `blankRB()` (keep it),
+  `applyRunes()` at run start.
+- **Geometry**: `ROOM_W=200`, `FLOOR=330` (the floor line), `LIFT=14` (heroes &
+  monsters draw this many px above the floor — see §5). `buildCells()` turns
+  `G.rooms` → `G.cells` (geometry + live traps + monster guards).
+- **Combat**: `simStep(h,dt)` per hero → `fightTick` (vs monster), `bossFightTick`
+  (vs throne), `trapTick`/`aoeTrapTick`. `heroDies` handles loot/dread/combo/rivals.
+  Den goblins: `goblinStep`/`goblinTick` (see §5 "Den goblins").
+- **Render**: `requestAnimationFrame(frame)` → `draw()` (canvas) + DOM overlays
+  (`#overlay`, `#panel`, `#inspect` bubble). `drawDungeon(tx,scale,isBuild)` draws
+  the corridor: room backgrounds → per-cell contents (`drawRoomContents`) → the
+  party → deferred front-of-hero trap layers.
 
 ---
 
-## 5. Major systems & current tuning (all values current as of this handover)
+## 5. The art system (most recent work lives here)
 
-### Campaign (50-level siege) — `CAMP_LEVELS=50`
-- `levelComp(L)` defines each wave: champions at every 5th level (1→4 as you
-  climb), normal escorts growing `min(5, 1+floor((L-1)/6))`.
-- `campPower()` = `ceil(level*0.7)` (hero stat index). 
-- **Difficulty**: `difficulty()` campaign branch = `(1+(L-1)*0.02)*(1+(L-1)*0.034)*threat`
-  (≈**5.3×** by L50; the inline comment now matches). This is the main "how hard"
-  dial — raise the `0.034` term to harden.
-- Milestones: odd 5s (5/15/25/35/45) → **relic**; even 5s (10/20/30/40/50) →
-  **mandate + Town visit**. `campaignAdvance()` drives it.
-- **The King finale** (`campaignVictory → kingApproaches → faceTheKing →` King
-  wave): clearing wave 50 shows a FAKE victory, then the King raids. He's a lone
-  hero with `king:true`, **HP ×8 / ATK ×1.3**, ignores corruption, and **smashes
-  a room he passes with `KING_SMASH=0.10`**. Kill him → `trueVictory()`.
-
-### 🏆 Endless leaderboard (Cloudflare Pages Function + KV)
-- Server: `functions/api/board.js` (repo root — Pages auto-deploys it at
-  `/api/board`). GET → top 50; POST {name,score} → sanitized name, score
-  clamped 1..50000, best-per-name, 30s per-IP throttle. **Requires a KV
-  namespace binding named `BOARD`** on the Pages project (dashboard →
-  Settings → Bindings); returns 503 until bound and the client fails soft.
-- Client: `openLeaderboard()` (Start Game menu + endless end screens),
-  `lbFetch/lbSubmit/lbName` (name cached in `bm_lbname`). Submits
-  `RUNES.best` explicitly via a button — never auto-posts.
-- Tests: `tests/no_room_for_heroes_board.test.mjs` (mock KV).
-- **☁️ Cloud saves** share the same KV namespace: `functions/api/save.js`
-  (`save:<code>` keys, 1-year TTL refreshed on write, 10s/IP throttle,
-  20KB cap). Client: `openCloud()` on the title screen — backup uploads the
-  ACTIVE slot's RUNES+TOWN under a sync code (`bm_cloud_<slot>`), restore
-  pulls a code into the active slot with a tap-twice overwrite confirm.
-  Tests: `tests/no_room_for_heroes_cloud.test.mjs`. Leaderboard fetches retry
-  with backoff (transient failures showed as "offline").
-- **Town map backdrop**: `town/map_bg.png` (owner-generated 16:9) replaces the
-  procedural terrain when present; building art comes next via the same
-  graceful-fallback pattern.
-
-### Battle report, Ascension & juice
-- **Battle report** (`battleReportHTML`, shown on win/lose/close screens): per-room
-  damage attributed in `dealToHero` via the `_roomDmgCtx` context var (set around
-  the trap/guard tick calls — nested reaction chains inherit the room); anything
-  context-free lands in `G.stats.abilDmg` ("boss & elements"). Kills were already
-  per-room (`room.kills`). Tests: `tests/no_room_for_heroes_meta.test.mjs`.
-- **👑 Ascension (NG+)**: `RUNES.asc` (persisted per slot) +1 on each
-  `trueVictory` (cap 9). `difficulty()` campaign branch ×`(1+asc*0.18)`;
-  **endless untouched** (leaderboard fairness). Shown on title cards, home slot
-  line, Campaign button.
-- **Juice**: wave-end kill cam (`killCamT` slow-mo in `frame()`), arrival
-  `banner()` nameplates (champion/King/rival, drawn by `drawBanner` in device
-  space), per-room carnage (bones/blood scale with `room.kills` in
-  `drawRoomContents`), `RUNES.best` endless record, town-map villagers.
-
-### Wave preview consistency
-Campaign rolls each wave **once** into `G.queue` via `prepCampaignWave()`
-(keyed by `G.waveLevel`), so the staging-zone preview, town roster, town meddling
-and `spawnGroup` all use the *same* specs. Don't reintroduce fresh-rolling in
-`spawnGroup` for campaign.
-
-### Rooms, fusing, monsters
-- `ROOMS` = traps + monsters + shop + `warcamp` (War Camp blocker, buffs adjacent
-  monster rooms +30%) + `minion` (corrupted hero).
-- **Fusing is ungated** (no kill requirement) — `canFuse`/`canFuseRooms` only
-  check not-full/not-shop/not-duplicate-type. **A room holds up to 3 parts**
-  (`type`+`part2`+`part3`): 2nd is free, **3rd costs `FUSE3_GOLD=250`** and a
-  3rd *guard* joins at `GUARD3_MUL=0.85`. Guards chain `mon→mon2→mon3` (step-up
-  in fightTick). `synergyInfo` picks the **best named pair** among all parts;
-  fallback by kinds (any monster+trap = Pinned Down etc.).
-- **Two fused monsters are TWO separate guards** (`cell.mon` + `cell.mon2`), each
-  with its own HP/atk and the synergy multiplier applied individually; the 2nd
-  steps up when the 1st falls. Unnamed monster+monster is "Pack" ×1.0, but
-  **named monster pairs have identities** (`SYNERGY_PAIRS` entries with `fx` +
-  `desc`, hooks applied in `buildCells`): Grave Horde / Spawning Vats
-  (`feedBoth` — both guards feed +3%/kill), Gatehouse (`tauntBoth` — party-wide
-  strikes), Sludge Colossus (`splitBoth` — both reform at 60%), Bone Colossus
-  (plain ×1.25). Listed in the Codex's "Named Fusions" section (auto-generated
-  from `SYNERGY_PAIRS`). Tests: `tests/no_room_for_heroes_fusion.test.mjs`.
-- **Demolish**: the room inspect bubble offers 🗑 Demolish in build phase
-  (`askDeleteRoom` → in-bubble confirm → `doDeleteRoom`; no refund).
-- **Inspect bubble**: anchored near the click/hover x (`lastPtrCX`), clamped to
-  the stage. A tapped bubble is **pinned** (`inspectPinned`) — hover no longer
-  overwrites/hides it; hover-empty hides on a 280ms grace (`hideInspectSoon`)
-  so the mouse can reach the bubble's buttons.
-- **Veteran ranks** (kills make a room stronger): `VET_KILLS=6`/rank, `VET_MAX=6`,
-  `VET_DMG=0.09`/rank, `VET_BITE=0.006` (% hero max-HP/hit — the snowball driver,
-  kept low on purpose).
-- **Feed** (Goblin Den / Undeath doctrine grow per kill): **+3%/kill** (`*0.03`).
-- **Barracks** (in-run, town screen, gold): build `BARRACKS_BUILD=160`, then
-  `barracksDrillCost()=240·1.9^lvl` for a global Monster Rank (+16% HP&ATK/rank,
-  `BARRACKS_MAX=8`).
-
-### Slots
-- `slotCap()` = **5 (campaign)** + rune Excavator (+1) + War Foundry building
-  (+1-2) + relics (Deed/Architect's Sigil, +1 each). Endless = 99 (uncapped).
-- `slotCost()` = **2nd room cheap (~50g), then `120·2.3^(slots-2)`** (exponential
-  past slot 2).
+All art is **graceful-fallback**: missing art must never break the game (procedural
+shapes draw until a PNG loads). Positions/sizes/layers/lights come from
+`rooms/layout.json` (made in `align.html`) — **fix the layout/align tool, not draw
+positions in code.**
 
 ### Heroes
-- Classes: warrior/rogue/mage/cleric (`CLASSES`), plus champion mini-bosses
-  (`CHAMPIONS`, e.g. paladin/berserker/necromancer/thief).
-- **Class spells** (auto-cast on cooldown, `heroSpellTick`): Warrior War Cry
-  (+30% atk 4s), Mage Arcane Surge (+60% atk ~2.6s), Rogue Evasion (+25% dodge
-  3s), **Cleric Heal & Bless** (heals most-wounded ally 12% + party +20% atk 4s).
-  Buffs fold in via `heroAtkMul(h)` and the dodge roll.
-- **Rogue trap-disarm**: on entering a trap room, **always** disarms its traps for
-  `DISARM_DUR=3`s (one timed window per entry, not re-armed).
+- `SPRITES` (keyed by sprite id) + `CLASS_SPRITE` (class→sprite): warrior→knight,
+  mage→wizard, cleric, rogue. LPC sheets, right-facing (`row:3`); per-clip `ax`/`ay`
+  anchors keep body size consistent across 64px/192px frames. `drawSprite`/`spriteClip`
+  pick idle/walk/attack by hero state. Champion mini-boss art in `sprites/champion/`
+  (`drawChampion`, swing synced to `h.atkT`).
 
-### Boss & abilities
-- `BOSSES` (dragon/lich/demon/ogre/ent/golem), each with a passive + 2 signature
-  abilities + a pool 3rd. Real sprites for dragon/lich/demon; procedural fallback.
-- Boss drawn at `BOSS_H=185` (towers over the 150px rooms). Abilities fire a
-  **bolt from the throne across the rooms** to the target (`bossBolt` / `bossBolts`
-  drawn in `draw()`); AoE abilities (quake/hellfire, tagged `aoe:true`) spray one
-  per hero. `Smite` and `Overdrive` (rage meter) are the active player tools.
+### Monsters
+- `MON_SPRITES` (goblin, skeleton, warden, ogre, **slime**) + `drawMonsterSprite`
+  (`dirRow:1` = left-facing toward incoming heroes; single-row sheets use `dirRow:0`).
+  `MON_IMG` loader, `monSpriteReady`. Monster room draw is generalized: any
+  `MON_SPRITES[mp]` entry uses sprites, else procedural `drawMonster`.
+- **Slime** was assembled from loose `gel_idle/walk/attack` frames into 1-row sheets
+  (`sprites/slime/slime_*.png`); walk frames were scaled up ~1.4× so the cube stays
+  the same size across clips. Monsters still WITHOUT sprites (procedural): `totem`,
+  `warcamp`, `minion` — they'd need directional LPC sheets.
 
-### Town economy / meta
-- In-run **Town screen** (even-5 milestones): the **Traveling Merchant** (buy
-  relics with dread, `MERCHANT_PRICE` by tier), the **Barracks**, the **Black
-  Market** (adjustable exchange: sell 1 dread→`BM_SELL=100`g, buy 1 dread←`BM_BUY=200`g),
-  boss empowerment (needs Sanctum), schemes (Den), sabotage/corrupt (Inn), guild,
-  threat dial (Watchtower).
-- **Town Builder** (persistent, between runs): spend wood/stone/shards on
-  `BUILDINGS` that unlock the in-run town options + passive bonuses. **Rendered
-  as a painted village MAP** (`renderTownBuilder` → `drawTownMap` on its own
-  canvas): `TOWN_PLOTS` fixes each building's spot, unbuilt = dashed
-  foundation, built = a procedural structure that grows with level (max =
-  banner), green 🔨 = affordable. Tap → anchored popup (`showTownPop` /
-  `townPlotAt`, hit radius 58). **Pannable/zoomable** (1–3×): drag pans,
-  pinch/wheel/＋− buttons zoom about the anchor (`townZoom/townCamX/Y`,
-  `townClampCam`); the popup tracks the transform; view resets on open.
-  Pure UI — `TOWN.built{}` data unchanged.
-  Tests: `tests/no_room_for_heroes_town.test.mjs`.
-- **Rune page**: static-tree skill page; **pannable/zoomable** but the buy popup
-  is **anchored next to the tapped node** (lives inside the transformed tree).
-  Pointer capture is deferred until a real drag so taps reach nodes (iOS fix).
-  The runebook is `position:absolute;inset:0` (iOS flex %-height bug fix).
+### The LIFT (heroes + monsters share one walking line)
+- `const LIFT=14`. Heroes get `h.yOff=-LIFT` (flat — no per-hero spread; they walk
+  on one line). Every monster draw is raised by `LIFT` (`drawMonster` uses
+  `FLOOR-LIFT`; `drawMonsterSprite` is called with `FLOOR-LIFT`; den-goblin sprite
+  raised inline). The align tool's "mob lift" slider defaults to 14 and lifts both
+  heroes AND monsters so its preview matches the game.
 
-### Save slots — `SAVE_SLOTS=3` — and the menu hierarchy
-- Independent profiles. Keys: `bossmonster_runes_<n>` / `bossmonster_town_<n>`,
-  active slot in `bm_slot`. Legacy un-slotted saves migrate into slot 1.
-  `switchSlot/resetSlot/slotSummary`.
-- **Menu is slot-first with grouped submenus** (owner dislikes link rows —
-  buttons only): boot → `openTitle()` (branding + pitch + the three slot cards;
-  `pickSlot`) → `gotoMenu()` = the **profile home** with four buttons:
-  `openPlay()` (Campaign/Endless/Tutorial), `openStronghold()` (Rune Page /
-  Town Builder / Unlocks), `openLibrary()` (Codex / How to play), and Save
-  Slots (`openTitle`). Each leaf screen's Back returns to its parent submenu
-  (runebook & town builder & unlocks → Stronghold; codex & help → Library);
-  `openSlots()` is an alias for `openTitle()`.
+### Traps
+- Art in `rooms/traps/<id>*.png`. Naming accepts `<id>_0.png` / `<id>_01.png` /
+  static `<id>.png`. Animated art exists for: **spike, flame, venom (poison1/2),
+  maul, arrow, frost, gallows, hexward, tesla, oil, corrode, magebane**. Still
+  procedural (no art yet): **bombard, hexbrand, runestone**.
+- `LAYOUT` (defaults in code) is overridden by `rooms/layout.json`. Each trap PART
+  carries `fx, fy, h, layer` (+ `n`/`gap` for the flame's 4 columns, `flip`, `mode`).
+- **Per-trap timing** `TRAP_TIMING{rise,fall}` (ms): traps move differently (maul
+  slams down fast/grinds up slow; arrow `{rise:420,fwd:true}` = forward-only volley,
+  slower). **`TRAP_ANIM`** = `{venom:'loop', oil:'loop'}` (continuous flow instead of
+  a strike). **`TRAP_PHASE`** staggers the build-phase idle preview so a multi-trap
+  room doesn't pulse in unison. `strikeIdx(N,firedAt,type)` reads the profile;
+  `fwd:true` snaps back to rest instead of reverse-playing.
+- **Hero z-layer**: `HERO_LAYER` (from `LAYOUT.heroLayer`) — trap parts with `layer
+  > HERO_LAYER` render IN FRONT of the party (deferred draw flushed after heroes).
+  The **flame** is `p.alpha 0.5` (50% see-through) so heroes read as walking through it.
+- **Lights** (`LIGHT_COL` + `trapAccentGlow`, additive radial glows): candle / flame
+  heat / venom vapor, plus per-trap accents **frost (blue), tesla (yellow flicker),
+  hexward + magebane (purple pulse), corrode (acid-green simmer)**. Positions fall
+  back to the trap centre until aligned in `align.html`.
 
-### Meta-reward economy (recently cut hard — owner found it too fast)
-- Rune points & shards both scaled `slain/4+level`; **both ÷10** now
-  (`awardRunes` `/10`; `pendingResources` shards `*m/10`).
-- Wood/stone ~÷3 (`slain*0.04` / `slain*0.02`); win gold→resource conversion
-  `g/90` & `g/180`.
-- **Card scrap**: a hand card's ✕ scraps it for gold (`SCRAP_GOLD` common 10 →
-  epic 40) — the sink for extra cards once 5 rooms are built.
+### Shop & boss room
+- **Shop interior** (`drawShopArt` + `SHOP_LAYOUT`, fractions of room width so it
+  scales with zoom): `sprites/shop/shop_{shelf,keeper,table}.png` drawn back→front,
+  with the live stock plaque (`drawShopStock`) overlaid. Falls back to the
+  procedural counter until art loads.
+- **Throne rooms** (boss cell): `rooms/throne_{green,purple,red}.png`, mapped per
+  boss by hue via `BOSS_THRONE` (red: dragon/ogre · purple: demon/golem · green:
+  ent/lich). `drawRoomBg` paints it behind the boss; `drawBoss` skips its procedural
+  throne when the art shows. Boss draws floor-anchored at `BOSS_H=167` (10% smaller
+  than the old 185); only the **demon** has a real sprite (+ idle animation + aura),
+  others procedural.
 
-### Rarity curves (recently made rarer early)
-- **Cards** `cardWeight(t,L)`: epic `max(0.08, L*0.16-0.25)` (≈0 in opening
-  rounds → ramps), rare slightly scarcer early. `L=runDepth()=levelIdx*1.3`.
-- **Relics** `tierWeights(L)`: epic ramps after L>4, legendary after L>10, mythic
-  after L>18. First relic (~L6) ≈ 4.5% epic / 0% legendary+mythic.
+### Den goblins (combat)
+- Goblin Den spawns marching `G.minions`. **They lock onto a hero (`g.engaged`) and
+  the hero HALTS to trade blows until one dies** (`goblinStep` keeps the lock,
+  `goblinValidTarget` guards against stale cross-wave refs; the hero-walk update
+  halts while any living goblin has `g.engaged===h`). Dials: `GOBLIN_HP_FRAC=0.55`,
+  hero retaliation `*0.4`, `GOBLIN_SPD=50`, `GOBLIN_DEN_CAP=20`.
 
----
-
-## 6. Sprites
-`no_room_for_heroes/sprites/<actor>/` (knight, wizard, cleric, goblin, demon, champion).Champion = the **Super Knight** mini-boss: walk frames `champion_0..11.png`;
-attack frames `attack/champion_attack_0..13.png` — **wired into `drawChampion`**:
-while `state` is `fighting`/`boss` the swing is synced to `h.atkT` (one full
-14-frame cycle per attack interval, blade lands as the damage does), drawn at
-`CHAMP_ATK_DH=99` vs walk's `CHAMP_DH=88` (attack art has less padding; content
-heights matched, same foot baseline). Boss art in `no_room_for_heroes/bosses/`.
-Card icons in `no_room_for_heroes/icons/`. Upload via GitHub (preserves transparency),
-no baked shadow, right-facing.
-
-**Mob sandbox**: `no_room_for_heroes/sandbox.html` — a standalone toy (one room, a
-Super Knight, +N goblin buttons, FPS counter) the owner uses to eyeball how a
-goblin horde reads visually before deciding on monster stacking. A dropdown
-picks the mob behaviour (`MODES`): **V1** ranks-and-cleave, **V2** pile-on
-frenzy (tighter packing, up to 10 concurrent attackers, blood spray + floor
-stains, overflow goblins climb onto the pile), **V3** chaotic frenzy (V2 +
-per-goblin cadence/speed, staggered swing admission, slot fidgeting and
-random hops — kills the synchronized-lunge look). It borrows the game's
-sprites/scales but shares no code with `index.html`.
+### The align-tool loop
+`align.html` shows every trap + test-traffic heroes/monsters running through a room.
+Tune positions/sizes/layers/lights/lift there → **Generate → download** → upload
+`rooms/layout.json` to `no_room_for_heroes/rooms/` on GitHub. The game reads it on
+the next deploy. When you add a new trap/light, register it in align.html's probe
+list, default pieces, `defLayer`, and (for lights) `LIGHT_COL`/`kindOf`/`lightAlpha`.
 
 ---
 
-## 7. The owner's balance philosophy (important context)
-- **First runs should be brutal (~20% win with *very* smart play, lower now);
-  meta-progression — runes + town + more slots — is the path to reliable wins.**
-- The owner iterates fast on feel: they'll say "too easy / too strong / too much"
-  and want a specific dial moved. Make the change, sim both ends (first-run +
-  maxed), keep the spread (hard floor, reliable ceiling), and ship.
-- Recurring asks have been **nerfs** (relics, decrees, veteran snowball, feed,
-  meta rewards, early epics) and **depth** (hero spells, two-guard fusion, the
-  King, merchant, Black Market, Barracks).
-- Plays on **iPad Safari** — watch for touch/pointer and flexbox-%-height issues.
+## 6. ComfyUI pixel-art sprite tooling (`tools/comfyui/`)
+
+When the owner asks to **create/generate a sprite/icon/tile**, use this — not
+hand-drawing or a cloud service.
+
+- `make_sprite.py "<subject>" --name <n> --size <px>` → ComfyUI (SDXL + Pixel Art XL
+  LoRA) → `pixelate.py` (downscale + palette + transparent bg) → `assets/<n>.png`.
+  Ranked model auto-detect (drop a better SDXL checkpoint in and it's preferred).
+  `/sprite <subject>` is the slash-command shortcut.
+- `make_missing.py` — batch-renders the still-procedural traps (bombard/hexbrand/
+  runestone left) into `rooms/traps/` with style-matched prompts.
+- `animate.py` — **CPU only** (Pillow): turns one static sprite into a frame
+  sequence + sheet (strike/pulse/flicker/bob). No GPU/ComfyUI needed.
+
+### ⚠️ The cloud-vs-local constraint (read this)
+The generation step needs a **reachable local ComfyUI** (`127.0.0.1:8000`). A Claude
+Code session **started from the phone/web runs in an isolated cloud sandbox** that
+CANNOT reach the owner's machine (localhost is the sandbox; outbound is proxy-blocked)
+— so `make_sprite.py`/`make_missing.py` will NOT run there. Only a session running
+**on the owner's machine** (desktop Claude Code, or the script directly) can generate.
+The **CPU halves run anywhere** (`pixelate.py`, `animate.py`) — so the split is:
+owner's machine generates → pushes art → a cloud session does pixelate/animate/align/
+wire. Don't promise to generate from a cloud session; verify with
+`python tools/comfyui/make_sprite.py --check` first.
 
 ---
 
-## 8. Quick start for your first task
+## 7. Major gameplay systems & tuning
+
+- **Campaign** (`CAMP_LEVELS=50`): `levelComp(L)` waves, `campPower()=ceil(L*0.7)`,
+  difficulty `(1+(L-1)*0.02)*(1+(L-1)*0.034)*threat` (raise the `0.034` to harden) ×
+  `(1+asc*0.18)` for Ascension. Odd-5 → relic, even-5 → mandate + Town. **The King
+  finale** after wave 50 (HP×8, ATK×1.3, smashes a room with `KING_SMASH=0.10`).
+- **Rooms/fusing**: a room holds up to 3 parts (2nd free, 3rd `FUSE3_GOLD=250`, 3rd
+  guard `GUARD3_MUL=0.85`). Two fused monsters = two guards (`cell.mon`+`cell.mon2`),
+  named pairs in `SYNERGY_PAIRS`. **Demolish** + **Upgrade** live in the room inspect
+  bubble (build phase). The bubble caps at stage height with scroll, and the
+  Upgrade/Demolish buttons sit in a **sticky `.ibtns` footer** so a long bubble
+  (e.g. Goblin Den) can't hide them.
+- **Heroes**: warrior/rogue/mage/cleric + champion mini-bosses. Auto-cast class
+  spells (`heroSpellTick`); rogue disarms a trap room on entry (`DISARM_DUR=3`s).
+- **Boss**: `BOSSES` (dragon/lich/demon/ogre/ent/golem), passive + 2 signature + pool
+  ability; bolts fly from the throne (`bossBolt`); `Smite` + `Overdrive` (rage) are
+  the player's active tools.
+- **Town/meta**: in-run Town (Merchant, Barracks, Black Market `BM_SELL=100`/`BM_BUY=200`,
+  boss empowerment, schemes); persistent **Town Builder** (painted map, pan/zoom).
+  Slots: `slotCap()`=5 campaign (+rune/building/relic), 99 endless; `slotCost()`
+  exponential past slot 2.
+- **Leaderboard + cloud saves**: `functions/api/{board,save}.js`, KV binding `BOARD`
+  (TTL must be ≥60). Endless-only leaderboard; cloud save backs up RUNES+TOWN under a
+  sync code.
+
+### Single-constant dials (safe tweaks)
+- Fed monster growth `feedMul(k)=1+0.30*ln(1+0.10k)`; rune income `/8` in
+  `awardRunes`; resources wood `*0.05`, stone `*0.025`, shards `/8`.
+- Veteran snowball `VET_DMG=0.09`/rank, `VET_BITE=0.006`; stacked traps
+  `TRAP_STACK_MUL=[1,0.8,0.6]`; music under SFX `MUSIC_SCALE=0.55`.
+- Trap strike `TRAP_RISE=110`/`TRAP_FALL=480` (defaults; per-trap overrides in
+  `TRAP_TIMING`); flame cascade `70`ms; candle loop `110`ms.
+
+---
+
+## 8. The owner's balance philosophy
+
+- **First runs should be brutal (~20% win with smart play); meta-progression (runes
+  + town + slots) is the path to reliable wins.** Sims in `/tmp` (not committed) are
+  pessimistic — treat their win-rates as a floor; the owner outplays them.
+- The owner iterates fast on *feel*: "too easy/strong/big" → move a specific dial.
+  Recent asks: nerfs (snowball, feed, meta rewards, early epics) and depth (hero
+  spells, two-guard fusion, the King, merchant, the whole art pass).
+- Art comes in waves of uploaded PNGs/zips → you place + wire + align them. The owner
+  generates new art on their machine (ComfyUI) and aligns positions in `align.html`.
+
+---
+
+## 9. Quick start for your first task
 ```bash
 cd /home/user/Games
-node build.js                      # sanity: 0 errors
-# make change in no_room_for_heroes/index.html
-node build.js
-# (recreate a /tmp/h*.mjs harness if you need a unit test)
+npm run check                      # build + 9 suites, must be green
+# edit no_room_for_heroes/index.html (and/or align.html, rooms/layout.json)
+npm run check
 git add -A && git commit -m "..."
-git fetch origin main -q; git merge -X ours origin/main -m "merge main"
-grep -q awardTownResources no_room_for_heroes/index.html && echo "RUN THE GUARD"
-node build.js
 git push -u origin <your-session-branch>
-# create DRAFT PR → mark ready → squash-merge (mcp__github__*)
+# DRAFT PR → mark ready → squash-merge (mcp__github__*). Conflicts: keep HEAD, re-check, re-grep.
 ```
-Then paste `https://games-71g.pages.dev/no_room_for_heroes/` at the end of your reply.
+End the reply with the four links (Play / Align tool / Music player / Goblin sandbox).
