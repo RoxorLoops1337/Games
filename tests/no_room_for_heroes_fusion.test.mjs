@@ -47,12 +47,19 @@ t.ok(c4.mon3.maxHp < Math.round(32*0.9*1.10) , 'third guard joins below full str
 t.ok(A.synergyInfo(['ogre','warden','skeleton']).name === 'Bone Colossus', 'BEST named pair wins in a trio (×1.25 beats ×1.10)');
 t.ok(A.synergyInfo(['warden','slime','spike']).name === 'Pinned Down', 'pairless trio falls back by kinds');
 
-// --- room inspect shows the pair identity + demolish button in build ---
+// --- room inspect: build phase opens as a compact menu (Upgrade/Demolish/Info);
+//     the full stat readout is gated behind the Info button ---
 A.G.phase = 'build';
-const html = A.describeRoom(A.G.rooms[0]);
-t.ok(html.includes('Grave Horde'), 'inspect shows the pair name');
-t.ok(html.includes('feeds BOTH guards'), 'inspect shows the pair twist');
-t.ok(html.includes('askDeleteRoom(0)'), 'inspect offers Demolish in build phase');
+const menu = A.describeRoom(A.G.rooms[0]);
+t.ok(menu.includes('upgradeRoomGold(0)'), 'menu offers Upgrade in build phase');
+t.ok(menu.includes('askDeleteRoom(0)'), 'menu offers Demolish in build phase');
+t.ok(menu.includes('showRoomDetail(0)'), 'menu offers an Info button');
+t.ok(!menu.includes('feeds BOTH guards'), 'menu hides the detailed stats until Info');
+const html = A.describeRoom(A.G.rooms[0], true);
+t.ok(html.includes('Grave Horde'), 'Info detail shows the pair name');
+t.ok(html.includes('feeds BOTH guards'), 'Info detail shows the pair twist');
+t.ok(html.includes('askDeleteRoom(0)'), 'Info detail still offers Demolish');
+t.ok(!html.includes('showRoomDetail(0)'), 'Info detail drops the now-redundant Info button');
 
 // --- demolish flow: ask is non-destructive, do clears the slot ---
 A.askDeleteRoom(0);
