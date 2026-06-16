@@ -5100,12 +5100,15 @@ let LAYOUT={
     gallows:[{art:'gallows', fx:.50, fy:0, h:124, layer:6}],
     hexward:[{art:'hexward', fx:.50, fy:30, h:96, layer:5}],
     tesla:[{art:'tesla', fx:.50, fy:0, h:100, layer:4}],
+    oil:[{art:'oil', fx:.50, fy:0, h:120, layer:1}],          // barrel pouring a floor slick
+    corrode:[{art:'corrode', fx:.50, fy:8, h:78, layer:3}],   // acid sprayer device
+    magebane:[{art:'magebane', fx:.50, fy:52, h:108, layer:5}],// chain + anti-magic amulet across the room
   },
   candles:[{art:'candle', fx:.18, fy:118, h:26},{art:'candle', fx:.89, fy:118, h:26}],
 };
 // In-room layering when a fused room has several traps: low draws first.
 // Poison behind everything, flames over it, spikes ALWAYS on top.
-const TRAP_LAYER={venom:0, frost:2, tesla:4, hexward:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
+const TRAP_LAYER={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
 // Heroes draw at this z within the trap stack: any trap PART whose layer is
 // ABOVE it renders in FRONT of the party (e.g. translucent flames licking over
 // a hero). Overridable via LAYOUT.heroLayer (tuned in align.html). The high
@@ -5324,6 +5327,13 @@ const MON_SPRITES={
     idle: {sheet:'idle', fw:192,fh:192,n:2,fps:4,  ax:96, ay:126},
     walk: {sheet:'walk', fw:192,fh:192,n:8,fps:10, ax:96, ay:126},
     slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},
+  }},
+  // Gel Cube: art is single-direction frame stacks (assembled into 1-row sheets),
+  // walk frames were drawn smaller so they're normalized up — hence per-clip anchors.
+  slime:{ base:'sprites/slime/slime_', scale:0.16, dirRow:0, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:890,fh:957,n:4,fps:5,  ax:444, ay:943},
+    walk: {sheet:'walk', fw:950,fh:887,n:4,fps:9,  ax:483, ay:868},
+    slash:{sheet:'slash',fw:986,fh:871,n:7,fps:13, ax:463, ay:858},
   }},
 };
 const MON_IMG={};
