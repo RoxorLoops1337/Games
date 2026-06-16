@@ -108,7 +108,8 @@ function probeSeq(id,dir,cb){
 const room=new Image(); room.onload=()=>render(); room.src='rooms/empty.png';
 [['spike','rooms/traps/'],['flame','rooms/traps/'],['poison1','rooms/traps/'],['poison2','rooms/traps/'],
  ['maul','rooms/traps/'],['arrow','rooms/traps/'],['frost','rooms/traps/'],['gallows','rooms/traps/'],
- ['hexward','rooms/traps/'],['tesla','rooms/traps/'],['candle','rooms/fx/']]
+ ['hexward','rooms/traps/'],['tesla','rooms/traps/'],
+ ['oil','rooms/traps/'],['corrode','rooms/traps/'],['magebane','rooms/traps/'],['candle','rooms/fx/']]
   .forEach(([id,dir])=>probeSeq(id,dir,()=>{ render(); refreshItems(); }));
 
 // ---- editable pieces: sprites + lights (defaults mirror the game) ----
@@ -123,6 +124,9 @@ let pieces=[
   {role:'gallows',      trap:'gallows',art:'gallows', fx:.50, fy:0,   h:124, layer:6},
   {role:'hexward',      trap:'hexward',art:'hexward', fx:.50, fy:30,  h:96,  layer:5},
   {role:'tesla',        trap:'tesla',  art:'tesla',   fx:.50, fy:0,   h:100, layer:4},
+  {role:'oil',          trap:'oil',    art:'oil',     fx:.50, fy:0,   h:120, layer:1},
+  {role:'corrode',      trap:'corrode',art:'corrode', fx:.50, fy:8,   h:78,  layer:3},
+  {role:'magebane',     trap:'magebane',art:'magebane',fx:.50, fy:52, h:108, layer:5},
   {role:'candle L',     candle:0,      art:'candle',  fx:.18, fy:118, h:26},
   {role:'candle R',     candle:1,      art:'candle',  fx:.89, fy:118, h:26},
   {role:'light candle L', light:'candle0', kind:'candle', fx:.18, fy:134, h:34},
@@ -138,7 +142,7 @@ const DEFAULT_PIECES=pieces;   // keep the built-in defaults to merge any trap t
 fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   if(!j) return;
   const np=[];
-  const defLayer={venom:0, frost:2, tesla:4, hexward:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
+  const defLayer={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
   const seen=new Set();
   for(const t in (j.traps||{})){ seen.add(t); j.traps[t].forEach((p,k)=>{
     const e={role:t+(j.traps[t].length>1?(k?' R':' L'):''),trap:t,layer:(p.layer!=null?p.layer:(defLayer[t]!=null?defLayer[t]:1)),...p};
