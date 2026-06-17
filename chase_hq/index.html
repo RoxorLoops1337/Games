@@ -2314,7 +2314,7 @@ function startStage(idx){
   buildCars(stage);
   pl.s = 0; pl.lat = 0; pl.v = 0; pl.drift = 0; pl.spin = 0; pl.steerVis = 0;
   sus.s = stage.gap; sus.lat = 0; sus.v = 0; sus.dmg = 0; sus.busted = 0;
-  sus.hitKick = 0; sus.dodgeActive = 0; sus.dodgeT = rand(3.5, 6);
+  sus.hitKick = 0; sus.dodgeActive = 0; sus.dodgeT = rand(0.5, 4);
   G.phase = 'CHASE'; G.time = stage.time; G.turbos = 3; G.turboT = 0; G.shake = 0;
   G.sirenBurstT = 0; G.sirenNear = false;
   G.hitStopT = 0; G.slowmoT = 0; G.combo = 0; G.comboT = 0;
@@ -2544,7 +2544,7 @@ function updateSuspect(dt, stage){
       if (sus.dodgeT <= 0 && sus.dodgeActive <= 0 && gap < 70) {
         sus.dodgeActive = 0.7;
         sus.dodgeDir = (pl.lat >= sus.lat) ? -1 : 1;   // cut away from the cop
-        sus.dodgeT = rand(3.5, 7);
+        sus.dodgeT = rand(0.5, 4);
       }
       if (sus.dodgeActive > 0) { sus.dodgeActive -= dt; latT += sus.dodgeDir * 4.6; }
     }
