@@ -34,6 +34,37 @@
   #rotate .ph{font-size:56px;animation:rotph 1.8s ease-in-out infinite;}
   @keyframes rotph{0%,18%{transform:rotate(0)}55%,100%{transform:rotate(90deg)}}
   @media (orientation:portrait) and (max-width:560px){ #rotate{display:flex;} }
+  /* ---- Boot splash: pure-CSS / image-free, so it paints the instant the page
+     starts streaming (no blank wait on slow links). Faded out by JS once the
+     menu is up. A throne-room glow, a bobbing crown, a torch-flicker title and
+     an indeterminate "forging" bar — on-theme for "you are the final boss". ---- */
+  #boot{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 34%, #2a1640 0%, #160e28 48%, #0a0714 100%);
+    opacity:1;transition:opacity .55s ease;}
+  #boot.hide{opacity:0;pointer-events:none;}
+  #boot .boot-inner{display:flex;flex-direction:column;align-items:center;gap:20px;
+    text-align:center;padding:0 16px;transform:translateY(-3%);}
+  #boot .boot-crown{font-size:clamp(40px,9vw,60px);line-height:1;
+    filter:drop-shadow(0 0 16px #ffd34d99);animation:bootbob 2.4s ease-in-out infinite;}
+  @keyframes bootbob{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-12px) rotate(5deg)}}
+  #boot .boot-title{font-family:var(--pix);font-size:clamp(17px,4.6vw,33px);line-height:1.55;
+    color:var(--gold);letter-spacing:1px;
+    text-shadow:0 2px 0 #7a4a14, 0 0 8px #ffd34d77, 0 0 24px #b985ff66;
+    animation:bootflick 4.2s ease-in-out infinite;}
+  @keyframes bootflick{0%,100%{opacity:1}47%{opacity:.82}49%{opacity:.99}51%{opacity:.8}53%{opacity:.96}}
+  #boot .boot-sub{font-family:var(--pix);font-size:clamp(8px,1.7vw,11px);color:var(--accent);
+    letter-spacing:.5px;animation:bootpulse 1.6s ease-in-out infinite;}
+  @keyframes bootpulse{0%,100%{opacity:.45}50%{opacity:.95}}
+  #boot .boot-bar{width:min(64vw,300px);height:11px;border:2px solid var(--line);border-radius:7px;
+    background:#0a0716;overflow:hidden;box-shadow:0 0 16px #b985ff55, inset 0 0 7px #0009;}
+  #boot .boot-bar i{display:block;height:100%;width:38%;border-radius:5px;
+    background:linear-gradient(90deg,#7a4a14,#ffd34d,#b985ff);box-shadow:0 0 10px #ffd34daa;
+    animation:bootsweep 1.2s ease-in-out infinite;}
+  @keyframes bootsweep{0%{transform:translateX(-130%)}100%{transform:translateX(330%)}}
+  @media (prefers-reduced-motion:reduce){
+    #boot .boot-crown,#boot .boot-title,#boot .boot-sub,#boot .boot-bar i{animation:none;}
+    #boot .boot-bar i{width:100%;}
+  }
   /* Top status bar */
   #topbar{display:flex;align-items:center;gap:8px;background:#140f24;
     padding:calc(6px + env(safe-area-inset-top,0px)) 10px 6px;
@@ -337,6 +368,14 @@
 </style>
 </head>
 <body>
+<div id="boot" aria-hidden="true">
+  <div class="boot-inner">
+    <div class="boot-crown">👑</div>
+    <div class="boot-title">NO ROOM<br>FOR HEROES</div>
+    <div class="boot-sub">forging the dungeon…</div>
+    <div class="boot-bar"><i></i></div>
+  </div>
+</div>
 <div id="rotate"><div class="ph">📱</div><b>Rotate your device</b><span class="small" style="opacity:.75">No Room For Heroes plays in landscape (16:9)</span></div>
 <div id="app">
   <div id="topbar"></div>
@@ -355,6 +394,14 @@
 </div>
 <script>
 "use strict";
+const _BOOT_T0 = (typeof performance!=='undefined' ? performance.now() : 0);   // when the boot splash went up
+// Fade out the boot splash once the menu is ready — but hold it on screen a
+// short minimum so it reads as intentional rather than a flash on fast links.
+function hideBoot(){
+  const el=document.getElementById('boot'); if(!el || el._gone) return; el._gone=true;
+  const wait=Math.max(0, 500-((typeof performance!=='undefined'?performance.now():0)-_BOOT_T0));
+  setTimeout(()=>{ el.classList.add('hide'); setTimeout(()=>{ if(el.parentNode) el.remove(); }, 650); }, wait);
+}
 /* ============================================================================
    NO ROOM FOR HEROES — build a reverse dungeon. Heroes walk in from the left toward
    your boss on the right; kill them with trap rooms, monster rooms and a shop
@@ -6688,6 +6735,7 @@ window.addEventListener('keydown', ()=>{ if(audioOn) initAudio(); }, {once:false
 resize();
 titleScreen();
 requestAnimationFrame(frame);
+hideBoot();
 </script>
 </body>
 </html>
