@@ -385,7 +385,7 @@ let VW = 960, VH = 420;          // virtual units (recomputed in resize())
 let baseK = 1;                   // virtual→device-pixel scale
 let cssW = 960, cssH = 420;      // canvas CSS size in px
 let zoom = 1;                    // dungeon zoom (pinch / buttons / wheel)
-const ZMIN = 0.45, ZMAX = 1.7;
+const ZMAX = 1.7;
 const STAGEW = 132;              // staging area (left of the entrance) for waiting heroes
 const FLOOR = 330;          // y of the floor line
 const LIFT = 14;            // px heroes & monsters are raised off the floor line (they walk a touch higher)
@@ -790,7 +790,6 @@ const RUNE_LIST=[
   rn('asc5','GODKING','🌟','+12% all dmg, +50 HP, 5% DR',5,5, 1,8,{trapDmg:0.12,monDmg:0.12,abilDmg:0.12,bossAtk:0.12,bossHpFlat:50,bossDR:0.05},'asc4'),
 ];
 const RUNE_NODES={}; RUNE_LIST.forEach(n=>RUNE_NODES[n.id]=n);
-const RUNE_COUNT=RUNE_LIST.length;
 // Branch headers shown above each column of the tree.
 const RUNE_BRANCHES=[
   {col:0, ic:'💰', name:'Treasury',   c:'#b8860b'},
@@ -970,7 +969,6 @@ function buildTown(id){
 // --- At-risk resources: you gather Wood/Stone/Shards as you slay heroes, but
 // they aren't yours until you extract. Close the dungeon to KEEP all of it; die
 // and the fallen throne swallows half. ---
-const DEATH_KEEP=0.5;                    // fraction kept if the throne falls
 function pendingResources(){             // the haul you've gathered so far this run
   // Per-kill loot rolls (see heroDies): 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing.
   // Champions roll twice. Quarry still scales the wood/stone/shards haul.
@@ -1039,7 +1037,6 @@ function unlockedRoomKeys(){ return ROOM_KEYS.filter(cardUnlocked); }
 function ranksOf(id){ return RUNES.ranks[id]||0; }
 function runeCost(n){ return n.cost; }                       // flat per rank
 function runeUnlocked(n){ return !n.req || ranksOf(n.req)>0; }
-function runeAvailable(n){ return runeUnlocked(n) && ranksOf(n.id) < n.maxRank; }
 function runeBonuses(){
   const b=blankRB();
   for(const id in RUNES.ranks){ const n=RUNE_NODES[id]; if(!n) continue; const r=RUNES.ranks[id]||0;
@@ -1277,6 +1274,10 @@ const rnd=(a,b)=>a+Math.random()*(b-a);
 const ri=(a,b)=>Math.floor(rnd(a,b+1));
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+// Load an art image with the standard graceful-fallback flag: `_ok` flips true
+// once it decodes, and a missing file is swallowed (the game draws procedurally
+// until/unless the PNG arrives). Returns the Image so callers can store it.
+function loadImg(src){ const im=new Image(); im.onload=()=>{ im._ok=true; }; im.onerror=()=>{}; im.src=src; return im; }
 function showHint(t){ hintEl.textContent=t; hintEl.classList.add('show');
   clearTimeout(showHint._t); showHint._t=setTimeout(()=>hintEl.classList.remove('show'),2200); }
 function floater(x,y,txt,col,big){ floats.push({x,y,txt,col,life:1,vy:big?-26:-34,big:!!big,fade:big?0.62:0.9}); }
@@ -1940,12 +1941,6 @@ function openCodex(){
 
 /* ============================ TOWN BUILDER UI =========================== */
 function openTownBuilder(){ uiScreen='town'; overlay.classList.add('show'); townPopId=null; townZoom=1; townCamX=0; townCamY=0; renderTownBuilder(); }
-function resBar(){
-  return `<div class="row" style="justify-content:center;gap:16px;font-size:17px;font-weight:bold">
-    <span title="Wood">🪵 <span style="color:#d6a86a">${TOWN.res.wood}</span></span>
-    <span title="Stone">🪨 <span style="color:#c8cdd6">${TOWN.res.stone}</span></span>
-    <span title="Shards">🔮 <span style="color:#c79bff">${TOWN.res.shards}</span></span></div>`;
-}
 function costStr(c){ if(!c) return ''; const p=[]; if(c.wood)p.push(`🪵${c.wood}`); if(c.stone)p.push(`🪨${c.stone}`); if(c.shards)p.push(`🔮${c.shards}`); return p.join(' '); }
 
 /* ---- Town Builder as a MAP: plots on a painted village, tap to build ---- */
@@ -1964,11 +1959,11 @@ const TOWN_PLOTS={
 // town/map_bg.png (generated from the 16:9 cover plate of this 960×520 world)
 // and it replaces the procedural terrain; plots/buildings/villagers draw on top.
 let TOWN_BG=null;
-if(typeof Image!=='undefined'){ TOWN_BG=new Image(); TOWN_BG.onload=()=>{TOWN_BG._ok=true;}; TOWN_BG.onerror=()=>{}; TOWN_BG.src='town/map_bg.png'; }
+if(typeof Image!=='undefined'){ TOWN_BG=loadImg('town/map_bg.png'); }
 // Painted building art (town/<id>.png) — drawn over its plot when present;
 // otherwise the procedural building (drawTownBuilding) is used. Same _ok flag.
 const BUILD_IMG={};
-if(typeof Image!=='undefined'){ for(const _id in TOWN_PLOTS){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.onerror=()=>{}; im.src='town/'+_id+'.png'; BUILD_IMG[_id]=im; } }
+if(typeof Image!=='undefined'){ for(const _id in TOWN_PLOTS){ BUILD_IMG[_id]=loadImg('town/'+_id+'.png'); } }
 let townPopId=null;
 // pan/zoom state (persists while the screen is open so a rebuild keeps your view)
 let townZoom=1, townCamX=0, townCamY=0;
@@ -3956,7 +3951,6 @@ function buyScheme(key){
 }
 function setThreat(d){ if(!townHas('watch')){ showHint('Build the Watchtower first.'); return; } G.bounty=clamp(G.bounty+d,-2,3); renderTown(); renderTop(); }
 
-const GUILD_MAX=3;   // party of up to 4
 function guildCost(){ return townCost(9 + G.guildLvl*7); }
 function buyGuild(){
   const cap=townLvl('guild');
@@ -5053,7 +5047,7 @@ function drawTrapProp(x0,w,cx,type,cell){
 // are anchored to the floor. {fx:centre, wf:width frac, bf:bottom-above-floor frac}.
 const SHOP_IMG={};
 if(typeof Image!=='undefined'){
-  ['shelf','keeper','table'].forEach(k=>{ const im=new Image(); im.onload=()=>{im._ok=true;}; im.onerror=()=>{}; im.src='sprites/shop/shop_'+k+'.png'; SHOP_IMG[k]=im; });
+  ['shelf','keeper','table'].forEach(k=>{ SHOP_IMG[k]=loadImg('sprites/shop/shop_'+k+'.png'); });
 }
 const SHOP_LAYOUT={
   shelf: {fx:.50, wf:.38, bf:.35},   // on the back wall, up high
@@ -5109,8 +5103,8 @@ const ROOM_IMG={};
 const ROOM_IMG_BROKEN={};   // rooms/<k>_broken.png — shown after a champion smashes the doorway
 if(typeof Image!=='undefined'){
   ['empty'].forEach(k=>{    // the standard room (all cells use it; contents overlay)
-    const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='rooms/'+k+'.png'; ROOM_IMG[k]=im;
-    const ib=new Image(); ib.onload=()=>{ ib._ok=true; }; ib.onerror=()=>{}; ib.src='rooms/'+k+'_broken.png'; ROOM_IMG_BROKEN[k]=ib;
+    ROOM_IMG[k]=loadImg('rooms/'+k+'.png');
+    ROOM_IMG_BROKEN[k]=loadImg('rooms/'+k+'_broken.png');
   });
 }
 // ---- painted overlay art registry (rooms/traps/*, rooms/fx/*) ------------
@@ -5334,8 +5328,8 @@ const CLASS_SPRITE={ warrior:'warrior', mage:'mage', cleric:'cleric', rogue:'rog
 const SPR_IMG={};
 if(typeof Image!=='undefined'){
   for(const key in SPRITES){ const cfg=SPRITES[key]; SPR_IMG[key]={};
-    if(cfg.universal){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src=cfg.universal; SPR_IMG[key]._uni=im; }
-    else for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!SPR_IMG[key][sh]){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src=cfg.base+sh+'.png'; SPR_IMG[key][sh]=im; } }
+    if(cfg.universal){ SPR_IMG[key]._uni=loadImg(cfg.universal); }
+    else for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!SPR_IMG[key][sh]){ SPR_IMG[key][sh]=loadImg(cfg.base+sh+'.png'); } }
   }
 }
 function spriteReady(key){ const s=SPR_IMG[key]; if(!s) return false; return SPRITES[key].universal ? (s._uni&&s._uni._ok) : (s.walk&&s.walk._ok); }
@@ -5396,7 +5390,7 @@ const MON_SPRITES={
 const MON_IMG={};
 if(typeof Image!=='undefined'){
   for(const key in MON_SPRITES){ const cfg=MON_SPRITES[key]; MON_IMG[key]={};
-    for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!MON_IMG[key][sh]){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src=cfg.base+sh+'.png'; MON_IMG[key][sh]=im; } } }
+    for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!MON_IMG[key][sh]){ MON_IMG[key][sh]=loadImg(cfg.base+sh+'.png'); } } }
 }
 function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
@@ -5664,8 +5658,8 @@ const CHAMP_WALK=[]; const CHAMP_DH=88;
 // same on-screen size (content heights matched; feet share the same baseline).
 const CHAMP_ATK=[]; const CHAMP_ATK_DH=99;
 if(typeof Image!=='undefined'){
-  for(let i=0;i<12;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/champion/champion_'+i+'.png'; CHAMP_WALK.push(im); }
-  for(let i=0;i<14;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/champion/attack/champion_attack_'+i+'.png'; CHAMP_ATK.push(im); }
+  for(let i=0;i<12;i++){ CHAMP_WALK.push(loadImg('sprites/champion/champion_'+i+'.png')); }
+  for(let i=0;i<14;i++){ CHAMP_ATK.push(loadImg('sprites/champion/attack/champion_attack_'+i+'.png')); }
 }
 // Champion DEATH animation (sprites/champion/death/champion_death_<n>.png,
 // 0-based or _01-style 1-based). Plays once on death, holds the last frame.
@@ -5866,20 +5860,20 @@ function drawHeroDead(sx,h){
 const BOSS_IMG={};
 if(typeof Image!=='undefined'){
   ['dragon','golem','lich','ent','demon','ogre'].forEach(k=>{
-    const im=new Image(); im.onload=()=>{ im._ok=true; }; im.src='bosses/'+k+'.png'; BOSS_IMG[k]=im;
+    BOSS_IMG[k]=loadImg('bosses/'+k+'.png');
   });
 }
 // Throne-room backdrops (rooms/throne_<colour>.png) keyed to each boss by hue.
 const BOSS_THRONE={dragon:'red', ogre:'red', demon:'purple', golem:'purple', ent:'green', lich:'green'};
 const THRONE_IMG={};
 if(typeof Image!=='undefined'){
-  ['green','purple','red'].forEach(c=>{ const im=new Image(); im.onload=()=>{im._ok=true;}; im.onerror=()=>{}; im.src='rooms/throne_'+c+'.png'; THRONE_IMG[c]=im; });
+  ['green','purple','red'].forEach(c=>{ THRONE_IMG[c]=loadImg('rooms/throne_'+c+'.png'); });
 }
 function bossThroneArt(){ const k=G&&G.boss&&G.boss.key; const im=k&&THRONE_IMG[BOSS_THRONE[k]]; return (im&&im._ok)?im:null; }
 // Demon idle: 4 frames played as a ping-pong loop (0→1→2→3→2→1→…)
 const DEMON_IDLE=[]; const DEMON_PP=[0,1,2,3,2,1];
 if(typeof Image!=='undefined'){
-  for(let i=0;i<4;i++){ const im=new Image(); im.onload=()=>{im._ok=true;}; im.src='sprites/demon/demon_idle_'+i+'.png'; DEMON_IDLE.push(im); }
+  for(let i=0;i<4;i++){ DEMON_IDLE.push(loadImg('sprites/demon/demon_idle_'+i+'.png')); }
 }
 function demonIdleReady(){ return DEMON_IDLE.length===4 && DEMON_IDLE.every(im=>im&&im._ok); }
 function demonIdleFrame(){ return DEMON_IDLE[DEMON_PP[Math.floor(performance.now()/170)%DEMON_PP.length]]; }  // ~6fps ping-pong
@@ -6436,9 +6430,6 @@ function frameWaveRun(){ if(!G) return;
   zoom=clamp(VW/Math.max(1,vis), zMin(), ZMAX);
   camX=corridorWidth()-VW/zoom; draw();
 }
-function zoomFit(){ if(!G) return;   // fit the WHOLE scene (landscape → throne)
-  zoom=clamp(VW/Math.max(1,corridorWidth()-worldLeft()), zMin(), 1.2); camX=worldLeft(); draw(); }
-
 CV.addEventListener('pointerdown', e=>{
   { const _r=CV.getBoundingClientRect(); lastPtrCX=e.clientX-_r.left; lastPtrCY=e.clientY-_r.top; }   // anchor for the inspect bubble
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
