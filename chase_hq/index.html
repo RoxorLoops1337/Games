@@ -1833,6 +1833,48 @@ class Skids {
   }
 }
 
+// chunky body panels / bumper bits that fly off the suspect when you ram him
+class Debris {
+  constructor(parent, count = 48){
+    this.items = [];
+    const geo = new THREE.BoxGeometry(0.22, 0.09, 0.34);
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.55, metalness: 0.55 });
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.castShadow = true; mesh.visible = false;
+      parent.add(mesh);
+      this.items.push({ mesh, m, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0 });
+    }
+    this.cursor = 0;
+  }
+  spawn(p, n, color, speed){
+    for (let k = 0; k < n; k++) {
+      const it = this.items[this.cursor = (this.cursor + 1) % this.items.length];
+      it.mesh.visible = true;
+      it.mesh.position.set(p.x + rand(-0.5, 0.5), p.y + rand(-0.2, 0.4), p.z + rand(-0.5, 0.5));
+      it.mesh.scale.setScalar(rand(0.5, 1.5));
+      // mostly the suspect's paint colour, a few dark/metal bits
+      it.m.color.set(Math.random() < 0.7 ? color : (Math.random() < 0.5 ? 0x16181c : 0xb8bcc4));
+      // burst up and outward; the camera leaves them behind so they trail nicely
+      it.vel.set(rand(-1, 1) * speed, rand(0.7, 1.7) * speed * 0.6, rand(0.2, 1) * speed * 0.7);
+      it.spin.set(rand(-9, 9), rand(-9, 9), rand(-9, 9));
+      it.life = rand(0.7, 1.4);
+    }
+  }
+  update(dt){
+    for (const it of this.items) {
+      if (!it.mesh.visible) continue;
+      it.life -= dt;
+      if (it.life <= 0) { it.mesh.visible = false; continue; }
+      it.vel.y -= 24 * dt;
+      it.mesh.position.addScaledVector(it.vel, dt);
+      it.mesh.rotation.x += it.spin.x * dt;
+      it.mesh.rotation.y += it.spin.y * dt;
+      it.mesh.rotation.z += it.spin.z * dt;
+    }
+  }
+}
+
 /* persistent FX containers (rebuilt content survives stage swaps) */
 const fxGroup = new THREE.Group();
 scene.add(fxGroup);
@@ -1840,6 +1882,7 @@ const sparks = new Sparks(fxGroup);
 const smoke = new Puffs(fxGroup, 70, 0x999999);
 const dust = new Puffs(fxGroup, 50, 0xc9b089);
 const skids = new Skids(fxGroup);
+const debris = new Debris(fxGroup);
 
 /* suspect overhead marker (lives in scene so stage disposal never touches it) */
 const spotMarker = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.9, 4),
@@ -2260,7 +2303,7 @@ hudHi.textContent = G.hi;
 $('titleHi').textContent = 'HI-SCORE ' + G.hi;
 
 const pl = { s: 0, lat: 0, v: 0, steerVis: 0, drift: 0, spin: 0, offroad: 0 };
-const sus = { s: 800, lat: 0, v: 0, dmg: 0, weaveT: 0, busted: 0, hitKick: 0 };
+const sus = { s: 800, lat: 0, v: 0, dmg: 0, weaveT: 0, busted: 0, hitKick: 0, dodgeT: 4, dodgeActive: 0, dodgeDir: 1, prevLat: 0 };
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 const _susBlack = new THREE.Color(0x080808), _susEmber = new THREE.Color(0xff5418);
 
@@ -2271,6 +2314,7 @@ function startStage(idx){
   buildCars(stage);
   pl.s = 0; pl.lat = 0; pl.v = 0; pl.drift = 0; pl.spin = 0; pl.steerVis = 0;
   sus.s = stage.gap; sus.lat = 0; sus.v = 0; sus.dmg = 0; sus.busted = 0;
+  sus.hitKick = 0; sus.dodgeActive = 0; sus.dodgeT = rand(0.5, 4); sus.prevLat = 0;
   G.phase = 'CHASE'; G.time = stage.time; G.turbos = 3; G.turboT = 0; G.shake = 0;
   G.sirenBurstT = 0; G.sirenNear = false;
   G.hitStopT = 0; G.slowmoT = 0; G.combo = 0; G.comboT = 0;
@@ -2493,6 +2537,17 @@ function updateSuspect(dt, stage){
     let weaveAmp = G.phase === 'PURSUIT' ? 1.4 : 2.2;
     if (G.phase === 'PURSUIT') weaveAmp *= clamp((gap - 7) / 22, 0, 1);
     let latT = Math.sin(sus.weaveT * (G.phase === 'PURSUIT' ? 0.7 : 0.4)) * weaveAmp;
+    // occasional evasive juke (pursuit only): every few seconds he cuts sharply to
+    // one side to shake you, then settles — brief, so you can re-line-up and ram
+    if (G.phase === 'PURSUIT') {
+      sus.dodgeT -= dt;
+      if (sus.dodgeT <= 0 && sus.dodgeActive <= 0 && gap < 70) {
+        sus.dodgeActive = 0.7;
+        sus.dodgeDir = (pl.lat >= sus.lat) ? -1 : 1;   // cut away from the cop
+        sus.dodgeT = rand(0.5, 4);
+      }
+      if (sus.dodgeActive > 0) { sus.dodgeActive -= dt; latT += sus.dodgeDir * 4.6; }
+    }
     // avoid traffic ahead
     for (const t of traffic) {
       const ds = t.s - sus.s;
@@ -2511,9 +2566,14 @@ function updateSuspect(dt, stage){
   const tiltZ = d > 0.4 ? Math.sin(G.stateT * 1.7) * (d - 0.4) * 0.18 : 0;
   // impact swivel: a ram kicks his rear out (yaw) and rolls the body; decays fast
   if (sus.hitKick) { sus.hitKick *= Math.max(0, 1 - dt * 7); if (Math.abs(sus.hitKick) < 0.004) sus.hitKick = 0; }
+  // steer swivel: angle the nose into the lateral slide so dodges read as real
+  // swerves (a hard juke throws the whole body sideways), not a flat slide
+  const latVel = (sus.lat - sus.prevLat) / Math.max(dt, 0.001);
+  sus.prevLat = sus.lat;
+  const swivel = clamp(latVel * 0.07, -0.6, 0.6);
   susCar.grp.rotation.set(Math.atan(tmpV.sl) * 0.7,
-    -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06 + sus.hitKick,
-    tiltZ - sus.hitKick * 0.6, 'YXZ');
+    -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06 + sus.hitKick + swivel,
+    tiltZ - sus.hitKick * 0.6 - swivel * 0.35, 'YXZ');
   // paint scorching: as damage climbs, paint goes dirty + matte + emissive embers
   if (susCar.basePaintColor) {
     susCar.paint.color.copy(susCar.basePaintColor).lerp(_susBlack, d * 0.75);
@@ -2602,6 +2662,8 @@ function collisions(dt, stage){
       posAt((pl.s + sus.s) / 2 + 2, (pl.lat + sus.lat) / 2, tmpV);
       tmpV.y += 0.7;
       sparks.spawn(tmpV, 26 + Math.floor(closing), 11);
+      // body panels fly off — more (and faster) the harder you hit
+      debris.spawn(tmpV, 3 + Math.floor(closing * 0.5), susCar.basePaintColor || susCar.paint.color, 4 + closing * 0.5);
       G.shake = Math.max(G.shake, 0.5 + closing * 0.04);
       sfx.hit();
       // juice: judgment + combo + hit-stop
@@ -2932,6 +2994,7 @@ function frame(now){
   smoke.update(dt);
   dust.update(dt);
   skids.update(dt);
+  debris.update(dt);
   updateAmbient(dt);
   updateCamera(dt);
 
