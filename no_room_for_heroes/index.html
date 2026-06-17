@@ -1342,6 +1342,27 @@ let flashT=0, flashDur=0, flashCol='#fff', flashMax=0;   // full-screen colour f
 function shake(mag){ shakeMag=Math.max(shakeMag,mag); shakeT=0.22; }
 function slowmo(t){ slowT=Math.max(slowT,t); }                 // brief bullet-time
 function flash(col,strength=0.3,dur=0.3){ flashCol=col; flashMax=Math.max(flashMax,strength); flashT=Math.max(flashT,dur); flashDur=Math.max(flashDur,dur); }
+// ---- Gore & ambient FX — purely cosmetic, layered on the existing
+// shake/flash/hit-stop. Never touches combat math or save state. ----
+const BLOOD_COLS=['#9e1226','#c01933','#7a0e1d','#e23b50','#5a0a16'];
+let decals=[];       // floor blood pools / splatter {x,y,r,col,life,seed}
+let embers=[];       // drifting ambient motes + rising soul wisps {x,y,vx,vy,life,max,col,sz}
+let throneHitT=0;    // red screen-edge pulse while a hero hammers the throne
+let _emberAcc=0;     // ambient-spawn accumulator
+const DECAL_CAP=90;
+// A spray of chunky blood that arcs out (dirx biases it sideways) and falls under
+// gravity; particles flagged blood:true splatter the floor where they land.
+function blood(x,y,n,dirx){ const dx=dirx||0;
+  for(let i=0;i<n;i++) particles.push({ x, y,
+    vx: dx*rnd(30,130)+rnd(-70,70), vy:-rnd(30,160),
+    life:rnd(.45,1.0), col:pick(BLOOD_COLS), sz:rnd(2,5), blood:true }); }
+// A pool soaking into the floor at a kill/impact spot (persists, then fades).
+function bloodPool(x,r){ decals.push({ x, y:FLOOR-1, r:r||rnd(11,18),
+    col:pick(['#6e0c1a','#85101f','#5a0a16']), life:1, seed:rnd(0,6.28) });
+  if(decals.length>DECAL_CAP) decals.splice(0, decals.length-DECAL_CAP); }
+// A short burst of bright sparks (weapon contact, ability cast).
+function sparks(x,y,col,n){ for(let i=0;i<(n||6);i++) particles.push({ x, y,
+    vx:rnd(-130,130), vy:-rnd(40,180), life:rnd(.2,.5), col:col||'#ffe39a', sz:rnd(1,2.5) }); }
 // Escalating kill-streak announcer — banners get louder the longer your dungeon
 // holds an airtight line (the streak breaks if a hero ever reaches the throne).
 const COMBO_TIERS=[
@@ -1358,6 +1379,10 @@ function comboCallout(combo, x){
   floater((x!=null?x:VW*0.5), FLOOR-150, tier.t, tier.c, true);
   flash(tier.c, tier.f, 0.35); shake(8+Math.min(combo,12)); sfx('combo');
   if(tier.slow) slowmo(tier.slow);
+  // a flurry of embers in the streak's colour — bigger streak, bigger flourish
+  const ex=(x!=null?x:VW*0.5);
+  for(let i=0;i<Math.min(22,6+combo);i++) embers.push({x:ex+rnd(-66,66), y:FLOOR-rnd(20,160),
+    vx:rnd(-22,22), vy:-rnd(20,64), life:rnd(1,2), max:2, col:tier.c, sz:rnd(2,3.6)});
 }
 function loadAudioPref(){ try{ audioOn = localStorage.getItem('bm_audio')!=='off'; }catch(_){ } }
 function saveAudioPref(){ try{ localStorage.setItem('bm_audio', audioOn?'on':'off'); }catch(_){ } }
@@ -3250,10 +3275,14 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
   h.dmgTaken=(h.dmgTaken||0)+dmg;               // telemetry: how much your dungeon stripped from this hero
   if(G.stats){ if(_roomDmgCtx) _roomDmgCtx.dmg=(_roomDmgCtx.dmg||0)+dmg;
     else if(label!=='HEAL') G.stats.abilDmg=(G.stats.abilDmg||0)+dmg; }   // boss abilities / Smite / elements
+  h.flashAt=performance.now();                               // sprite hit-flash
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
-    shake(6); hitStop=0.05; sfx('crit'); }
+    blood(h.x, h.y-22, 14, -1); bloodPool(h.x, rnd(8,13)); flash('#ff2d4d',0.12,0.16);
+    shake(7); hitStop=0.06; sfx('crit'); }
   else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
-    burst(h.x, h.y-20, '#ff4d6d', 6); sfx('hit'); }
+    if(label==='HEAL') burst(h.x, h.y-20, '#ff4d6d', 6);
+    else blood(h.x, h.y-22, Math.min(9,3+Math.ceil(dmg/14)), -1);   // bigger hits bleed more
+    sfx('hit'); }
   if(h.hp<=0){ h.hp=0; heroDies(h); return; }
   elementReact(h, elem||'phys', dmg);           // elemental status + reactions
 }
@@ -3354,8 +3383,10 @@ function bossX(){ return cellX(G.slots)+ROOM_W*0.6; }
 let bossBolts=[];
 function bossBolt(tx,ty,col,ic){
   if(!G||!G.boss) return;
+  const c=col||G.boss.col||'#ff5470';
   bossBolts.push({ x0:bossX(), y0:(typeof bossCastY==='function'?bossCastY():FLOOR-110),
-    x1:tx, y1:(ty!=null?ty-28:FLOOR-40), t:0, dur:0.30, col:col||G.boss.col||'#ff5470', ic:ic||'' });
+    x1:tx, y1:(ty!=null?ty-28:FLOOR-40), t:0, dur:0.30, col:c, ic:ic||'' });
+  burst(bossX(), FLOOR-90, c, 9); sparks(bossX(), FLOOR-92, c, 6); flash(c, 0.09, 0.15);   // cast pop at the throne
 }
 
 function castAbility(slot){
@@ -3483,6 +3514,12 @@ function heroDies(h){
   floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
   floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
   shake(4); sfx('kill');
+  // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising
+  blood(h.x, h.y-24, 20, 0); bloodPool(h.x, rnd(13,19)); hitStop=Math.max(hitStop,0.05);
+  for(let i=0;i<7;i++) particles.push({x:h.x, y:h.y-24, vx:rnd(-150,150), vy:-rnd(80,230),
+    life:rnd(.6,1.1), col:pick(['#7a0e1d','#4a2a18','#d8cfc0']), sz:rnd(2,4), blood:true});
+  for(let i=0;i<3;i++) embers.push({x:h.x+rnd(-6,6), y:h.y-30, vx:rnd(-8,8), vy:-rnd(26,48),
+    life:rnd(1.1,1.9), max:1.9, col:'#bfe6ff', sz:rnd(2,3.4)});
   // extra juice for the heroes that matter most
   if(h.elite && !h.champion){ burst(h.x,h.y-24,'#ffd34d',16); flash('#ffd34d',0.18,0.22); shake(6); }
   if(h.reachedThrone && !h.champion){ flash('#9be86b',0.16,0.2); }
@@ -4233,8 +4270,20 @@ function update(dt){
   // animate floaters/particles always
   floats.forEach(f=>{ f.y+=f.vy*dt; f.life-=dt*0.9; });
   floats=floats.filter(f=>f.life>0);
-  particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt; });
+  particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt;
+    if(p.blood && p.vy>0 && p.y>=FLOOR){ p.life=0;             // spray that lands soaks into the floor
+      if(decals.length<DECAL_CAP && Math.random()<0.5)
+        decals.push({x:p.x, y:FLOOR-1, r:rnd(3,7), col:p.col, life:rnd(.6,1), seed:rnd(0,6.28)}); } });
   particles=particles.filter(p=>p.life>0);
+  if(decals.length){ for(const d of decals) d.life-=dt*0.05; decals=decals.filter(d=>d.life>0); }   // blood dries slowly
+  if(embers.length){ embers.forEach(e=>{ e.x+=e.vx*dt; e.y+=e.vy*dt; e.life-=dt; }); embers=embers.filter(e=>e.life>0); }
+  if(throneHitT>0) throneHitT=Math.max(0,throneHitT-dt);
+  // ambient embers drifting through the lit corridor (atmosphere)
+  if(G && (G.phase==='build'||G.phase==='run')){ _emberAcc+=dt;
+    while(_emberAcc>0.07 && embers.length<64){ _emberAcc-=0.07;
+      embers.push({ x:camX+rnd(-30, VW/Math.max(.2,zoom)+30), y:FLOOR-rnd(8,200),
+        vx:rnd(-5,9), vy:-rnd(5,16), life:rnd(2.4,4.6), max:4.6,
+        col:Math.random()<0.5?'#b985ff':'#ffb066', sz:rnd(1,2.3) }); } }
   if(bossBolts.length){ bossBolts.forEach(b=>{ b.t+=dt; }); bossBolts=bossBolts.filter(b=>b.t<b.dur); }
   if(shakeT>0) shakeT=Math.max(0,shakeT-dt);   // screen-shake decay
   if(flashT>0) flashT=Math.max(0,flashT-dt);   // screen-flash decay
@@ -4588,7 +4637,8 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
     if(h.atkT<=0){
       h.atkT=0.7*h.atkSpeed;
       const dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)));
-      mon.hp-=dmg;
+      mon.hp-=dmg; mon.flashAt=performance.now();
+      sparks(cell.x0+ROOM_W*0.58, FLOOR-54, '#ffe39a', 5);     // weapon-contact sparks
       if(h.vampiric) healHero(h, dmg*0.4);
       floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
       if(mon.hp<=0){
@@ -4603,6 +4653,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
           burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#6ad9b0',16); floater(cell.x0+ROOM_W*0.68,FLOOR-78,'🟩 SPLIT','#6ad9b0');
           return; }
         mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
+        blood(cell.x0+ROOM_W*0.66, FLOOR-30, 13, 1); bloodPool(cell.x0+ROOM_W*0.66, rnd(10,15)); shake(4);
         floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
         // the next fused guard steps up to take its place (up to 3 in a row)
         if(cell.mon2 && cell.mon2.alive){ cell.mon=cell.mon2; cell.mon2=cell.mon3||null; cell.mon3=null; cell.mon.atkT=0.3;
@@ -4674,7 +4725,7 @@ function bossFightTick(h,dt,isFront,frozen){
       h.atkT=0.8*h.atkSpeed;
       const dr=Math.min(0.85,(RB.bossDR||0)+(b.passiveDR||0));
       const dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)*(1-dr)));
-      b.hp-=dmg;
+      b.hp-=dmg; throneHitT=Math.max(throneHitT,0.22);   // red screen-edge pulse: your throne is hit
       if(G.combo>0) G.combo=0;                 // defense breached — streak broken
       if(h.vampiric) healHero(h, dmg*0.4);
       if(b.thorns){ dealToHero(h, Math.round(dmg*b.thorns), 'THORNS'); }  // Spiked Throne reflect
@@ -4698,6 +4749,7 @@ function bossFightTick(h,dt,isFront,frozen){
 
 /* ============================== RENDER =================================== */
 let _bgGrad=null,_bgGradH=0, _thrGrad=null,_thrKey='', _demGrad=null,_demKey='';
+let _vig=null,_vigH=0, _redVig=null,_redVigH=0;   // cached vignette gradients (rebuilt on resize)
 // nameplate banner (champion/King/rival arrivals) + wave-end slow-mo kill cam
 let bannerMsg=null, killCamT=0;
 function banner(text, col, sub){ bannerMsg={text, sub:sub||'', col:col||'#ffd34d', t:0, dur:2.4}; }
@@ -4778,6 +4830,11 @@ function draw(){
   particles.forEach(p=>{ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
     const sx=tx(p.x); X.fillRect(sx, p.y, p.sz, p.sz); });
   X.globalAlpha=1;
+  // ambient embers + rising soul wisps (additive glow, world space)
+  if(embers.length){ X.save(); X.globalCompositeOperation='lighter';
+    for(const e of embers){ X.globalAlpha=clamp(e.life/(e.max||3),0,1)*0.5; X.fillStyle=e.col;
+      X.beginPath(); X.arc(tx(e.x), e.y, e.sz, 0, 6.2832); X.fill(); }
+    X.restore(); X.globalAlpha=1; }
 
   // 🔮 boss ability bolts — glowing projectiles streaking from the throne across
   // the corridor to their targets, with a comet trail so the source reads clearly
@@ -4801,7 +4858,10 @@ function draw(){
       X.font='bold '+sz+'px Trebuchet MS';
       X.lineWidth=4; X.strokeStyle='rgba(0,0,0,.65)'; X.strokeText(f.txt, tx(f.x), f.y);
       X.fillStyle=f.col; X.fillText(f.txt, tx(f.x), f.y);
-    } else { X.fillStyle=f.col; X.font='bold 16px Trebuchet MS'; X.fillText(f.txt, tx(f.x), f.y); } });
+    } else { const pop=f.life>0.86 ? 1+(f.life-0.86)/0.14*0.7 : 1;   // quick scale-in punch
+      X.font='bold '+Math.round(16*pop)+'px Trebuchet MS';
+      X.lineWidth=3; X.strokeStyle='rgba(0,0,0,.55)'; X.strokeText(f.txt, tx(f.x), f.y);
+      X.fillStyle=f.col; X.fillText(f.txt, tx(f.x), f.y); } });
   X.globalAlpha=1; X.textAlign='left';
 
   // 💥 Overdrive shockwave — a bright ring sweeping out from the throne
@@ -4813,6 +4873,26 @@ function draw(){
     X.beginPath(); X.arc(cx,cy,r,0,Math.PI*2); X.stroke(); X.globalAlpha=1;
   }
 
+  // ---- screen-space atmosphere (device space, above the world) ----
+  X.setTransform(1,0,0,1,0,0);
+  // cinematic vignette — darkened corners for depth & focus
+  if(!_vig || _vigH!==CV.height){
+    _vig=X.createRadialGradient(CV.width/2,CV.height*0.46,CV.height*0.30, CV.width/2,CV.height*0.5,CV.height*0.96);
+    _vig.addColorStop(0,'rgba(0,0,0,0)'); _vig.addColorStop(1,'rgba(0,0,0,0.42)'); _vigH=CV.height;
+  }
+  X.fillStyle=_vig; X.fillRect(0,0,CV.width,CV.height);
+  // your throne under attack — red edges pulse when a hero strikes the boss, and a
+  // steady danger pulse when the throne's HP runs low
+  let danger = throneHitT>0 ? clamp(throneHitT/0.22,0,1)*0.5 : 0;
+  if(G && G.boss && G.phase==='run'){ const hpf=G.boss.hp/G.boss.maxHp;
+    if(hpf<0.34) danger=Math.max(danger, (0.34-hpf)/0.34*(0.26+0.12*Math.sin(performance.now()/180))); }
+  if(danger>0){
+    if(!_redVig || _redVigH!==CV.height){
+      _redVig=X.createRadialGradient(CV.width/2,CV.height/2,CV.height*0.34, CV.width/2,CV.height/2,CV.height*0.82);
+      _redVig.addColorStop(0,'rgba(0,0,0,0)'); _redVig.addColorStop(1,'rgba(190,20,40,1)'); _redVigH=CV.height;
+    }
+    X.globalAlpha=clamp(danger,0,0.6); X.fillStyle=_redVig; X.fillRect(0,0,CV.width,CV.height); X.globalAlpha=1;
+  }
   // full-screen colour flash (device space, above everything)
   if(flashT>0 && flashDur>0){
     X.setTransform(1,0,0,1,0,0);
@@ -4844,6 +4924,11 @@ function drawDungeon(tx, scale, isBuild){
     X.fillStyle='#2e2350';
     X.fillRect(-VW, FLOOR, VW*4, 6);
   }
+
+  // 🩸 floor blood — pools & splatter soaking in, drawn under the rooms & actors
+  if(decals.length){ for(const d of decals){ X.globalAlpha=clamp(d.life,0,1)*0.5; X.fillStyle=d.col;
+      X.beginPath(); X.ellipse(tx(d.x), d.y, d.r, d.r*0.4, 0, 0, 6.2832); X.fill(); }
+    X.globalAlpha=1; }
 
   // each cell. Front-of-hero trap parts are collected here and replayed after
   // the party draws, so e.g. a translucent flame can lick over the heroes.
@@ -5617,9 +5702,12 @@ function drawRoomContents(x0,w,room,i){
       const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 3)
       const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT, room, cell, mp, alive, moving);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
+      if(cell && cell.mon && cell.mon.flashAt){ const mf=performance.now()-cell.mon.flashAt;   // struck-just-now flash
+        if(mf<120){ X.save(); X.globalAlpha=(1-mf/120)*0.45; X.globalCompositeOperation='lighter';
+          X.fillStyle='#ffffff'; X.beginPath(); X.ellipse(mbx+ox, FLOOR-LIFT-26, 20, 30, 0,0,6.2832); X.fill(); X.restore(); } }
     });
     if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
-      bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d');
+      bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
   }
   // shop counter — painted interior (shelf + keeper + counter) with the live
   // stock plaque overlaid; falls back to the procedural prop until art loads
@@ -5658,8 +5746,16 @@ function drawLvlBadge(cx,y,lvl,col){
   X.fillText(lvl, cx, y+4); X.textAlign='left';
 }
 
-function bar(x,y,w,h,frac,col){
-  px(x,y,w,h,'#000'); px(x,y,Math.max(0,w*clamp(frac,0,1)),h,col);
+function bar(x,y,w,h,frac,col,ent){
+  frac=clamp(frac,0,1);
+  px(x,y,w,h,'#000');
+  // optional delayed-damage "ghost": a pale sliver that drains after a hit lands,
+  // so you can read how much was just stripped off (stored on the entity)
+  if(ent){ const g=ent._bg;
+    if(g===undefined || g<=frac) ent._bg=frac;
+    else { ent._bg=Math.max(frac, g-0.012);
+      if(ent._bg>frac) px(x+w*frac, y, Math.max(0,w*(ent._bg-frac)), h, '#ffe1a8'); } }
+  px(x,y,Math.max(0,w*frac),h,col);
   X.strokeStyle='rgba(255,255,255,.25)'; X.lineWidth=1; X.strokeRect(x+.5,y+.5,w-1,h-1);
 }
 
@@ -5854,13 +5950,15 @@ function drawHero(sx,h){
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   if(h.oil>0){ X.globalAlpha=.3; px(sx-10,yy-46,20,46,'#0a0a06'); X.globalAlpha=1; }
   if(h.shock>0){ X.globalAlpha=.3+0.2*Math.sin(performance.now()/70); px(sx-10,yy-48,20,48,'#fff34d'); X.globalAlpha=1; }
+  // 🩸 damage hit-flash — a quick red pop the instant this hero is struck
+  { const fa=performance.now()-(h.flashAt||0); if(fa<120){ X.globalAlpha=(1-fa/120)*0.55; px(sx-11,yy-50,22,50,'#ff5a72'); X.globalAlpha=1; } }
   // champion shield bubble
   if(h.shieldT>0){ X.globalAlpha=0.35+0.1*Math.sin(performance.now()/90);
     X.strokeStyle='#ffd34d'; X.lineWidth=2; X.beginPath(); X.ellipse(sx,yy-26,18,28,0,0,7); X.stroke();
     X.globalAlpha=1; }
   // hp bar (wider for champions)
   const bw=champ?52:36;
-  bar(sx-bw/2, figTop-(champ?20:14), bw, champ?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d');
+  bar(sx-bw/2, figTop-(champ?20:14), bw, champ?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d', h);
   // gold + elite trait markers
   X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
   X.fillText('💰'+h.gold, sx, figTop-18);
@@ -5983,7 +6081,7 @@ function drawBoss(cx){
     X.drawImage(img, Math.round(cx-dw/2), Math.round(y-dh+2), dw, dh);
     X.imageSmoothingEnabled=sm;
     if(b.key==='demon') drawDemonAura(cx, y, dw, dh, true);    // rising magic motes (in front)
-    bar(cx-52, y-dh-10, 104, 9, b.hp/b.maxHp, '#ff4d6d');
+    bar(cx-52, y-dh-10, 104, 9, b.hp/b.maxHp, '#ff4d6d', b);
     X.fillStyle='#fff'; X.font='11px Trebuchet MS'; X.textAlign='center';
     X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-dh-13); X.textAlign='left';
     return;
@@ -5998,7 +6096,7 @@ function drawBoss(cx){
   if(b.key==='lich'){ px(cx-31,y-139,62,9,'#cde'); px(cx-9,y-145,18,9,'#9adfff'); }
   if(b.key==='demon'){ px(cx-34,y-139,12,18,'#6a1a2a'); px(cx+22,y-139,12,18,'#6a1a2a'); }
   X.font='40px Trebuchet MS'; X.textAlign='center'; X.fillText(b.ic, cx, y-46); X.textAlign='left';
-  bar(cx-52, y-BOSS_H+10, 104, 9, b.hp/b.maxHp, '#ff4d6d');
+  bar(cx-52, y-BOSS_H+10, 104, 9, b.hp/b.maxHp, '#ff4d6d', b);
   X.fillStyle='#fff'; X.font='11px Trebuchet MS'; X.textAlign='center';
   X.fillText(Math.ceil(b.hp)+'/'+b.maxHp, cx, y-BOSS_H+7); X.textAlign='left';
 }
