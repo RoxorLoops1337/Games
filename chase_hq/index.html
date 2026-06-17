@@ -2260,7 +2260,7 @@ hudHi.textContent = G.hi;
 $('titleHi').textContent = 'HI-SCORE ' + G.hi;
 
 const pl = { s: 0, lat: 0, v: 0, steerVis: 0, drift: 0, spin: 0, offroad: 0 };
-const sus = { s: 800, lat: 0, v: 0, dmg: 0, weaveT: 0, busted: 0 };
+const sus = { s: 800, lat: 0, v: 0, dmg: 0, weaveT: 0, busted: 0, hitKick: 0 };
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 const _susBlack = new THREE.Color(0x080808), _susEmber = new THREE.Color(0xff5418);
 
@@ -2509,7 +2509,11 @@ function updateSuspect(dt, stage){
   // damage-driven body lean wobble — gets dragged at high damage like a busted suspension
   const d = sus.dmg / 100;
   const tiltZ = d > 0.4 ? Math.sin(G.stateT * 1.7) * (d - 0.4) * 0.18 : 0;
-  susCar.grp.rotation.set(Math.atan(tmpV.sl) * 0.7, -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06, tiltZ, 'YXZ');
+  // impact swivel: a ram kicks his rear out (yaw) and rolls the body; decays fast
+  if (sus.hitKick) { sus.hitKick *= Math.max(0, 1 - dt * 7); if (Math.abs(sus.hitKick) < 0.004) sus.hitKick = 0; }
+  susCar.grp.rotation.set(Math.atan(tmpV.sl) * 0.7,
+    -tmpV.h + Math.sin(sus.weaveT * 0.9) * 0.06 + sus.hitKick,
+    tiltZ - sus.hitKick * 0.6, 'YXZ');
   // paint scorching: as damage climbs, paint goes dirty + matte + emissive embers
   if (susCar.basePaintColor) {
     susCar.paint.color.copy(susCar.basePaintColor).lerp(_susBlack, d * 0.75);
@@ -2587,6 +2591,9 @@ function collisions(dt, stage){
       G.hitCool = 0.4;
       const dmg = clamp(closing * 1.4, 7, 22);
       sus.dmg = clamp(sus.dmg + dmg, 0, 100);
+      // swivel his rear out on impact — kick away from the side you clipped him on,
+      // scaled by how hard you hit (decays in updateSuspect)
+      sus.hitKick = (pl.lat < sus.lat ? 1 : -1) * clamp(closing * 0.028, 0.12, 0.45);
       // RAM RECOIL: the impact knocks you back BELOW his speed (harder hits bounce
       // you off harder) and shoves him forward, so you must re-close via the draft
       // before the next ram — no more machine-gunning him to a bust in one go
