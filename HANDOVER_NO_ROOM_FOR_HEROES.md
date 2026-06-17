@@ -38,9 +38,11 @@ as rewards, and fire **boss abilities** by hand. Fights auto-resolve. Two modes:
 - `build.js` — copies `STATIC_PATHS` folders into `dist/` (Pages deploys `dist/`).
   `no_room_for_heroes` and `tools` are already in the list; new TOP-LEVEL folders
   must be added.
-- `tests/no_room_for_heroes_*.test.mjs` — 9 headless suites; `tests/no_room_for_heroes_lib.mjs`
-  exports `loadGame(exposeStr)` (evals the inline script with a stubbed DOM). **Write
-  new tests with the lib; never make throwaway harnesses outside `tests/`.**
+- `tests/no_room_for_heroes_*.test.mjs` — 10 headless suites; `tests/no_room_for_heroes_lib.mjs`
+  exports `loadGame(exposeStr)` (evals the inline script with a stubbed DOM — including a
+  full no-op canvas context, so the `juice` suite drives `draw()`/`update()` through a real
+  wave to catch render-time errors the logic suites can't see). **Write new tests with the
+  lib; never make throwaway harnesses outside `tests/`.**
 - `tools/comfyui/` — local pixel-art sprite generator (see §6).
 
 ---
@@ -48,7 +50,7 @@ as rewards, and fire **boss abilities** by hand. Fights auto-resolve. Two modes:
 ## 3. Workflow — verify with ONE command, then ship
 
 ```
-npm run check        # = node build.js && all 9 test suites — must be GREEN before every push
+npm run check        # = node build.js && all 10 test suites — must be GREEN before every push
 ```
 
 1. Work on your session's feature branch.
@@ -186,6 +188,27 @@ Tune positions/sizes/layers/lights/lift there → **Generate → download** → 
 the next deploy. When you add a new trap/light, register it in align.html's probe
 list, default pieces, `defLayer`, and (for lights) `LIGHT_COL`/`kindOf`/`lightAlpha`.
 
+### Game feel / FX layer (the "juice")
+Cosmetic-only, layered on the existing `shake/flash/hitStop/slowmo/comboCallout`.
+**Never touches combat math or save state** — it reads game state and pushes to FX
+arrays. Lives near the `AUDIO + GAME FEEL` block.
+- **Blood** (`blood(x,y,n,dirx)`) pushes gore particles to `particles` flagged
+  `blood:true`; when one lands (`p.y>=FLOOR`) the particle update splatters a floor
+  `decals[]` entry. `bloodPool(x,r)` drops a pool directly. `sparks(...)` = bright
+  weapon/cast specks. Hooks: `dealToHero` (hit + crit), `heroDies` (gibs + pool +
+  soul wisp), `fightTick` (monster hit/death), `bossBolt` (cast pop).
+- **`decals[]`** = floor blood (cap `DECAL_CAP`=90), drawn in `drawDungeon` under the
+  actors. **`embers[]`** = ambient motes + rising soul wisps (additive, drawn in
+  `draw()`); spawned each frame in build/run and by `comboCallout`.
+- **Sprite hit-flash**: `h.flashAt` / `cell.mon.flashAt` timestamps → a 120ms pop in
+  `drawHero` / the monster draw. **Ghost HP bars**: `bar(...,ent)` stores `ent._bg`
+  and drains a pale sliver after a hit (heroes, monsters, boss).
+- **Screen-space** (device transform, end of `draw()`): cached **vignette** (`_vig`)
+  always; **red danger vignette** (`_redVig`) when `throneHitT>0` (throne struck) or
+  the boss HP is low. Rebuild on resize (keyed on `CV.height`).
+- Covered by `tests/no_room_for_heroes_juice.test.mjs` — it runs a real wave through
+  `draw()`, so a render-time error there fails `npm run check`.
+
 ---
 
 ## 6. ComfyUI pixel-art sprite tooling (`tools/comfyui/`)
@@ -266,7 +289,7 @@ wire. Don't promise to generate from a cloud session; verify with
 ## 9. Quick start for your first task
 ```bash
 cd /home/user/Games
-npm run check                      # build + 9 suites, must be green
+npm run check                      # build + 10 suites, must be green
 # edit no_room_for_heroes/index.html (and/or align.html, rooms/layout.json)
 npm run check
 git add -A && git commit -m "..."
