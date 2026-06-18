@@ -348,6 +348,8 @@
     transition:transform .08s;}
   .rnode:active{transform:scale(.92);}
   .rnode .ric{font-size:27px;line-height:1;}
+  .rnode .ric .runeimg{width:40px;height:40px;object-fit:contain;display:block;}
+  .rbpop .rbpopic .runeimg{width:26px;height:26px;object-fit:contain;display:inline-block;vertical-align:middle;}
   .rnode .rcnt{position:absolute;bottom:-10px;font-size:11px;font-weight:bold;line-height:1;
     background:#171024;border:1.5px solid;border-radius:7px;padding:1px 5px;white-space:nowrap;}
   .rn-max{background:linear-gradient(#2e6a3c,#1c3f25);border-color:#6ad97e;box-shadow:0 0 12px #6ad97e88,inset 0 0 8px #0006;}
@@ -512,6 +514,16 @@ function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="
 // Painted boss-ability icons (abilities/<id>.png); graceful fallback to the emoji.
 const ABIL_ICONS=new Set(['slam','breath','bolt','curse','freeze','drain','dread','mend','quake','hellfire','siphon','devour','raise','entangle']);
 function abilFace(id, cls){ return ABIL_ICONS.has(id) ? '<img class="'+(cls||'abilimg')+'" src="abilities/'+id+'.png" alt="" draggable="false">' : null; }
+// Painted rune-tree icons (runes/<branch>_<name>.png) per node id; emoji fallback.
+const RUNE_ICON={
+  eco1:'treasury_seed', eco2:'treasury_pickpocket', eco3:'treasury_looter', eco4:'treasury_cheap', eco5:'treasury_avarice',
+  def1:'bulwark_thick', def2:'bulwark_stoneskin', def3:'bulwark_iron', def4:'bulwark_mending', def5:'bulwark_bastion',
+  off1:'wrath_claws', off2:'wrath_cruelty', off3:'wrath_focus', off4:'wrath_efficient', off5:'wrath_tyrant',
+  room1:'dungeoneer_spikes', room2:'dungeoneer_feral', room3:'dungeoneer_reinforced', room4:'dungeoneer_builder', room5:'dungeoneer_excavator',
+  town1:'warden_negotiator', town2:'warden_big', town3:'warden_foresight', town4:'warden_opening', town5:'warden_conscription',
+  asc1:'ascendant_bloodlust', asc2:'ascendant_fortune', asc3:'ascendant_warmind', asc4:'ascendant_juggernaut', asc5:'ascendant_godking',
+};
+function runeFace(id){ return RUNE_ICON[id] ? '<img class="runeimg" src="runes/'+RUNE_ICON[id]+'.png" alt="" draggable="false">' : null; }
 const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
 // Effective values after rune bonuses (RB):
 function maxLevel(){ return MAX_LEVEL + (RB.upCap||0); }
@@ -2443,7 +2455,7 @@ function renderRunes(){
     const r=ranksOf(n.id), maxed=r>=n.maxRank, unlocked=runeUnlocked(n), cost=runeCost(n), afford=RUNES.points>=cost;
     const cls = (maxed?'rn-max':(unlocked?(afford?'rn-buy':'rn-cost'):'rn-lock')) + (n.id===runeSel?' rn-sel':'');
     const x=Math.round(PAD+n.col*COLW), y=Math.round(topPad+n.row*ROWH);
-    const ic = unlocked? n.ic : '🔒';
+    const ic = unlocked? (runeFace(n.id)||n.ic) : '🔒';
     return `<div class="rnode ${cls}" style="left:${x}px;top:${y}px;width:${NODE}px;height:${NODE}px"
       onclick="tapRune('${n.id}')" title="${n.name}: ${n.desc} (${cost}◆/rank)">
       <span class="ric">${ic}</span><span class="rcnt">${r}/${n.maxRank}</span></div>`;}).join('');
@@ -2458,7 +2470,7 @@ function renderRunes(){
     const below = s.row < maxRow/2;
     const vpos = below ? `top:${Math.round(cy(s)+NODE/2+12)}px` : `bottom:${Math.round(H-(cy(s)-NODE/2-12))}px`;
     pop=`<div class="rbpop ${below?'below':'above'}" style="left:${Math.round(cx(s))}px;${vpos}">
-      <div class="rbpoprow"><span class="rbpopic">${unlocked?s.ic:'🔒'}</span>
+      <div class="rbpoprow"><span class="rbpopic">${unlocked?(runeFace(s.id)||s.ic):'🔒'}</span>
         <div style="text-align:left;min-width:0">
           <b>${s.name}</b> <span class="small">· ${r}/${s.maxRank} · ${cost}◆</span><br>
           <span class="small" style="opacity:.9">${s.desc}</span></div></div>
