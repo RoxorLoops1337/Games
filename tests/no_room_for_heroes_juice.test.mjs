@@ -75,7 +75,9 @@ try{
   for(let i=0;i<6;i++){ A.render(); A.update(0.05); A.draw(); }   // hand-card deal-in + panel render
   A.G.hand.push({type:'flame',lvl:1});                            // a fresh draft → new card deals in
   A.render(); A.draw();
-  t.ok(true, 'build-phase render + draw loop clean (cards, HUD, motion)');
+  A.G.brokenCells={0:true,1:true};                                // champion-smashed rooms → broken art + gap walls
+  A.draw();
+  t.ok(true, 'build-phase render + draw loop clean (cards, HUD, motion, broken rooms, gaps)');
 }catch(e){ t.ok(false, 'build-phase draw threw: '+e.message); }
 
 t.done();
