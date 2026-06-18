@@ -42,6 +42,8 @@ try{
     room('goblin', 2),
     room('ogre', 2, 'warden'),
     room('flame', 2, 'venom'),
+    room('bombard', 2, 'hexbrand'),   // newly-arted traps (AoE + brand)
+    room('runestone', 2),             // amplifier (passive looping art)
   ]);
   t.ok(A.G.phase==='run', 'wave started → run phase');
   t.ok(Array.isArray(A.G.heroes) && A.G.heroes.length>0, 'heroes spawned');

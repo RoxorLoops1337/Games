@@ -5424,6 +5424,10 @@ let LAYOUT={
     oil:[{art:'oil', fx:.50, fy:0, h:120, layer:1}],          // barrel pouring a floor slick
     corrode:[{art:'corrode', fx:.50, fy:8, h:78, layer:3}],   // acid sprayer device
     magebane:[{art:'magebane', fx:.50, fy:52, h:108, layer:5}],// chain + anti-magic amulet across the room
+    // newly-painted (owner fine-tunes positions in align.html)
+    bombard:[{art:'bombard', fx:.50, fy:0, h:122, layer:7}],   // mortar lobbing shells
+    hexbrand:[{art:'hexbrand', fx:.50, fy:30, h:104, layer:5}],// branding sigil
+    runestone:[{art:'runestone', fx:.50, fy:0, h:126, layer:5}],// standing rune (passive glow)
   },
   candles:[{art:'candle', fx:.18, fy:118, h:26},{art:'candle', fx:.89, fy:118, h:26}],
 };
@@ -5438,7 +5442,7 @@ let HERO_LAYER=999;
 let _frontTraps=null;   // deferred front-of-hero trap draws, flushed after the party renders
 // Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
 // (continuous). The poison vents pour non-stop.
-const TRAP_ANIM={venom:'loop', oil:'loop'};   // oil keeps flowing instead of a one-shot burst
+const TRAP_ANIM={venom:'loop', oil:'loop', runestone:'loop'};   // oil keeps flowing; the Runestone is a passive always-glowing rune (no strike)
 // Per-trap strike profile {rise,fall} in ms so they don't all move identically.
 // rise = time to slam to the last frame, fall = time to ease back to rest.
 // e.g. the maul SLAMS down fast then grinds back up slow.

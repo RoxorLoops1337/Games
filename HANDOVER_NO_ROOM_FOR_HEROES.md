@@ -143,9 +143,12 @@ positions in code.**
 
 ### Traps
 - Art in `rooms/traps/<id>*.png`. Naming accepts `<id>_0.png` / `<id>_01.png` /
-  static `<id>.png`. Animated art exists for: **spike, flame, venom (poison1/2),
-  maul, arrow, frost, gallows, hexward, tesla, oil, corrode, magebane**. Still
-  procedural (no art yet): **bombard, hexbrand, runestone**.
+  `<id>_1.png` / static `<id>.png` (auto-probed by `artProbe` for every trap).
+  Animated art now exists for **every** trap: spike, flame, venom (poison1/2),
+  maul, arrow, frost, gallows, hexward, tesla, oil, corrode, magebane, **bombard,
+  hexbrand, runestone** (runestone is `TRAP_ANIM:'loop'` — a passive glow, no
+  strike). New traps need a `LAYOUT.traps` entry (game) + a `pieces`/probe/`defLayer`
+  entry (align.html) — owner fine-tunes positions there.
 - `LAYOUT` (defaults in code) is overridden by `rooms/layout.json`. Each trap PART
   carries `fx, fy, h, layer` (+ `n`/`gap` for the flame's 4 columns, `flip`, `mode`).
 - **Per-trap timing** `TRAP_TIMING{rise,fall}` (ms): traps move differently (maul
