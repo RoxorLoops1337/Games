@@ -4975,6 +4975,7 @@ function drawDungeon(tx, scale, isBuild){
       X.beginPath(); X.ellipse(tx(d.x), d.y, d.r, d.r*0.4, 0, 0, 6.2832); X.fill(); }
     X.globalAlpha=1; }
 
+  drawGaps(tx, scale);                        // stone wall between rooms (+ before the throne) — BEHIND the room walls
   // each cell. Front-of-hero trap parts are collected here and replayed after
   // the party draws, so e.g. a translucent flame can lick over the heroes.
   _frontTraps=[];
@@ -5032,7 +5033,6 @@ function drawDungeon(tx, scale, isBuild){
       X.fillText(i+1, x0+10, FLOOR-126);
     }
   }
-  drawGaps(tx, scale);                        // stone wall between rooms (+ before the throne)
   // upcoming heroes waiting at the gate (build only)
   if(isBuild) drawWaitingHeroes(tx);
   // hero
@@ -5677,6 +5677,12 @@ function drawRoomFull(x0,w,room,i){
 function drawRoomContents(x0,w,room,i){
   drawCandles(x0,w,i);                          // wall-torch flames over the room art
   const cx=x0+w/2; const cell=G.cells[i]; const parts=roomParts(room);
+  // Is THIS room (its CURRENT build state) a pure Goblin Den? Decide from the
+  // room itself, not the cell — G.cells is only rebuilt at startWave, so a stale
+  // cell.spawner would draw ghost goblins for, say, a Bone Pit built where a Den
+  // used to stand. Used to gate the den crowd-preview & badge below.
+  const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
+  const isDen = monParts.length>0 && monParts.every(p=>p==='goblin');
   const art=roomArtReady(room);                 // suppress props the art already shows
   // traps: every layout PART carries a layer (override in align.html);
   // defaults keep poison behind, flames over it, spikes ALWAYS on top.
@@ -5722,8 +5728,8 @@ function drawRoomContents(x0,w,room,i){
     }
   }
   // 👺 Goblin Den spawner badge: show the current goblin count above the room
-  if(cell && cell.spawner==='goblin'){
-    const n = G.phase==='run'
+  if(isDen){
+    const n = (G.phase==='run' && cell)
       ? (G.minions||[]).filter(m=>m.home===cell.index && m.hp>0).length
       : (Array.isArray(room.goblins) ? room.goblins.length : (room.goblins||0));
     X.fillStyle='#5fae54'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
@@ -5731,9 +5737,8 @@ function drawRoomContents(x0,w,room,i){
   }
   // monsters (a combo room can hold two) — draw each so both stay visible
   // (a spawner Den has no stationary guard in run phase — the goblins are out marching)
-  const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  if(cell && cell.spawner==='goblin' && G.phase==='run'){ /* skip — goblins drawn by drawDenGoblins */ } else
-  if(cell && cell.spawner==='goblin'){
+  if(isDen && G.phase==='run'){ /* skip — goblins drawn by drawDenGoblins */ } else
+  if(isDen){
     // BUILD phase: every banked goblin idles in the den (next wave's recruits
     // included), staggered in two loose ranks so the crowd reads at a glance
     const arr=ensureGoblinArray(room);
@@ -5765,7 +5770,9 @@ function drawRoomContents(x0,w,room,i){
       && (G.heroes||[]).some(h=>h && h.cellIndex===cell.index && (h.state==='walking'||h.state==='fighting'));
     // engaged: march all the way across to meet the hero waiting just inside the door
     const targetF = engaged ? 0.20 : 0.74;
-    if(room._monF===undefined) room._monF=targetF;
+    // build phase: stand at rest (right side) — don't inherit a stale run position
+    // that left the monster sliding in from the left after a wave
+    if(room._monF===undefined || G.phase!=='run') room._monF=targetF;
     const now=performance.now(); const mdt=Math.min(0.05,(now-(room._mpl||now))/1000); room._mpl=now;
     const rate=0.42;                                   // fraction/sec (~84px/s)
     if(room._monF<targetF) room._monF=Math.min(targetF, room._monF+rate*mdt);

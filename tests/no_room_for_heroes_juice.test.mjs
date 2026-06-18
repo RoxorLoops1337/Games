@@ -80,4 +80,18 @@ try{
   t.ok(true, 'build-phase render + draw loop clean (cards, HUD, motion, broken rooms, gaps)');
 }catch(e){ t.ok(false, 'build-phase draw threw: '+e.message); }
 
+// 4) stale-cell guard: G.cells is only rebuilt at startWave, so a Bone Pit built
+//    in a slot a Goblin Den used to occupy must NOT inherit the den's preview.
+//    The den render gates on the CURRENT room (isDen), not the stale cell.spawner.
+try{
+  A.G = A.freshGame('campaign'); A.chooseBoss(BOSS);
+  A.G.slots=2; A.G.rooms=[room('goblin',1), room('skeleton',1)];
+  A.G.phase='build'; A.buildCells();                              // cells built — slot 0 gets spawner:'goblin'
+  t.ok(A.G.cells[0] && A.G.cells[0].spawner==='goblin', 'den cell carries spawner:goblin');
+  A.G.rooms[0]=room('skeleton',1);                               // swap slot 0 to a Bone Pit, cells NOT rebuilt
+  t.ok(A.G.cells[0].spawner==='goblin', 'cell.spawner is now STALE (the bug condition)');
+  A.draw();                                                      // must read isDen from the room, draw a skeleton, not ghost goblins
+  t.ok(true, 'stale-cell den preview no longer fires for a non-goblin room');
+}catch(e){ t.ok(false, 'stale-cell draw threw: '+e.message); }
+
 t.done();
