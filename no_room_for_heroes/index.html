@@ -187,6 +187,24 @@
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
   .menu-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:14px;}
   .menu-btns button{font-size:11px;padding:13px 20px;}
+  /* ===== anime.js-inspired motion (vanilla, no dependency) — overshoot/spring
+     entrances, staggered card reveals, and a soft overlay drift-in. ===== */
+  @keyframes jzReveal{ 0%{opacity:0;transform:translateY(16px) scale(.94);} 100%{opacity:1;transform:translateY(0) scale(1);} }
+  @keyframes jzDeal{ 0%{opacity:0;transform:translateY(22px) scale(.7) rotate(-6deg);}
+    65%{opacity:1;transform:translateY(-3px) scale(1.06) rotate(1.5deg);} 100%{transform:translateY(0) scale(1) rotate(0);} }
+  /* reward / boss-select cards spring in (stagger via inline animation-delay) */
+  .choice.jz{ animation:jzReveal .42s cubic-bezier(.34,1.56,.64,1) backwards; }
+  /* hand cards: smooth select-pop (drag uses a separate ghost, so transforms are safe) + deal-in */
+  .card{ transition:transform .13s cubic-bezier(.34,1.56,.64,1), box-shadow .13s ease; }
+  .card.sel{ transform:translateY(-3px) scale(1.06); }
+  .card.jzdeal{ animation:jzDeal .42s cubic-bezier(.34,1.56,.64,1) backwards; }
+  /* every overlay screen: title + button row drift up softly when opened */
+  #overlay.show > h1{ animation:jzReveal .36s cubic-bezier(.34,1.56,.64,1) backwards; }
+  #overlay.show > .menu-btns{ animation:jzReveal .36s ease-out .08s backwards; }
+  @media (prefers-reduced-motion:reduce){
+    .choice.jz, .card.jzdeal, #overlay.show > h1, #overlay.show > .menu-btns{ animation:none; }
+    .card{ transition:none; }
+  }
   /* ===== Cinematic title screen ===== */
   #overlay.titlemode{padding:0;background:#0c0916;}        /* let the art go full-bleed */
   .titlescreen{position:absolute;inset:0;overflow:hidden;}
@@ -1247,6 +1265,7 @@ let floats = [];     // floating combat texts
 let particles = [];
 let camX = 0;        // camera offset (world px)
 let selCard = -1;    // selected hand card index in build
+let _lastHandLen = 0; // hand size at the previous render — newly-drawn cards deal in
 let pickupIdx = -1;  // slot picked up for rearranging (no card selected)
 let speedMul = 1;    // run speed multiplier
 
@@ -1325,6 +1344,15 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 // once it decodes, and a missing file is swallowed (the game draws procedurally
 // until/unless the PNG arrives). Returns the Image so callers can store it.
 function loadImg(src){ const im=new Image(); im.onload=()=>{ im._ok=true; }; im.onerror=()=>{}; im.src=src; return im; }
+// Eased HUD count-up — rolls a number toward its target a little each frame (an
+// ease-out approach, the heart of anime.js's number tweens) instead of snapping.
+// Stores the live float on the node so repeated per-frame calls stay smooth.
+function countTo(el, target){
+  if(!el) return;
+  let cur=el._dv; if(cur===undefined){ cur=parseFloat(el.textContent); if(isNaN(cur)) cur=target; }
+  let next=cur+(target-cur)*0.2; if(Math.abs(target-next)<0.5) next=target;
+  el._dv=next; const s=''+Math.round(next); if(el.textContent!==s) el.textContent=s;
+}
 function showHint(t){ hintEl.textContent=t; hintEl.classList.add('show');
   clearTimeout(showHint._t); showHint._t=setTimeout(()=>hintEl.classList.remove('show'),2200); }
 function floater(x,y,txt,col,big){ floats.push({x,y,txt,col,life:1,vy:big?-26:-34,big:!!big,fade:big?0.62:0.9}); }
@@ -2534,10 +2562,10 @@ function gotoBossSelect(){
   const edTag = G.edicts.length ? ` · <span style="color:#ffd34d">⚖️ ${G.edicts.map(id=>EDICTS[id].ic).join('')} ×${edictRewardMul().toFixed(2)} runes</span>` : '';
   overlay.innerHTML = `<h1>Choose your Boss</h1>
     <p>${G.mode==='campaign'?'Campaign — break a 50-wave siege, milestone mini-bosses & rewards.':'Endless — how long can you reign?'}${edTag}</p>
-    <div class="choices">${BOSS_KEYS.map(k=>{
+    <div class="choices">${BOSS_KEYS.map((k,i)=>{
       const b=BOSSES[k]; const lk=!bossUnlocked(k);
       const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
-      return `<div class="choice${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="width:200px">
+      return `<div class="choice jz${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="width:200px;animation-delay:${i*60}ms">
         ${lk?'<div class="big">🔒</div>':`<img src="bosses/${k}.png" alt="${b.name}" style="height:84px;image-rendering:pixelated;display:block;margin:2px auto -2px">`}<h3>${b.name}</h3>
         ${lk?`<div class="desc">🔒 Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills (you: ${RUNES.kills})</div>`
             :`<div class="small" style="color:var(--gold);font-weight:bold">★ Mastery Lv ${xi.lvl}${xi.max?' (MAX)':''}</div>
@@ -3883,7 +3911,7 @@ function gotoReward(){
     <p>Draft one room card. ${G.hand.length>=handCap()?`<b style="color:#ff8a8a">Hand full (${handCap()}) — picking will need a discard, or skip.</b>`:`Hold up to ${handCap()}.`}</p>
     <div class="choices">${G.drafts.map((c,i)=>{
       const d=ROOMS[c.type]; const tr=cardRarity(c.type); const tc=(RELIC_TIERS[tr]||{}).col||'#888';
-      return `<div class="choice" onclick="takeDraft(${i})" style="border-color:${tc};box-shadow:0 0 10px ${tc}33">
+      return `<div class="choice jz" onclick="takeDraft(${i})" style="border-color:${tc};box-shadow:0 0 10px ${tc}33;animation-delay:${i*70}ms">
         <div class="big">${cardFace(c.type)||d.ic}</div><h3>${d.name}</h3>
         <div class="desc">${d.desc}</div>
         <div class="stats" style="color:${tc};font-weight:bold;letter-spacing:.5px">${(RELIC_TIERS[tr]||{}).name||'Common'} · ${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>
@@ -6153,7 +6181,7 @@ function updateTop(){
   const setW=(el,v)=>{ if(el&&el.style.width!==v) el.style.width=v; };
   setW(hp,(b.hp/b.maxHp*100)+'%');           setTxt($('tbhpT'), Math.ceil(b.hp)+'/'+b.maxHp);
   setW($('tbmana'),(b.mana/b.maxMana*100)+'%'); setTxt($('tbmanaT'), Math.floor(b.mana)+'/'+b.maxMana);
-  setTxt($('tbgold'), ''+G.gold); setTxt($('tbdread'), ''+G.dread);
+  countTo($('tbgold'), G.gold); countTo($('tbdread'), G.dread);   // roll up, don't snap
   const bo=$('tbbounty'), boShow=!!G.bounty;
   if(bo){ const d=boShow?'':'none'; if(bo.style.display!==d) bo.style.display=d;
     if(boShow) setTxt(bo,(G.bounty>0?'🔥 +':'🌫 ')+G.bounty); }
@@ -6173,6 +6201,9 @@ function renderPanel(){
 
   if(G.phase==='build'){
     const shopExists=G.rooms.some(r=>r&&r.type==='shop');
+    // deal-in only the cards that are NEW since the last render (a fresh draft),
+    // so selecting/scrapping a card doesn't re-pop the whole hand
+    const _newFrom=(G.hand.length>_lastHandLen)?_lastHandLen:G.hand.length; _lastHandLen=G.hand.length;
     panel.innerHTML=`
       <div class="row" style="margin-bottom:6px">
         <button class="buy" onclick="buySlot()" title="Corridor rooms: ${G.slots}/${slotCap()}. Raise the cap with runes, the War Foundry & relics." ${(G.slots>=slotCap()||G.gold<slotCost())?'disabled':''}>${G.slots>=slotCap()?`🧱 Slots ${G.slots}/${slotCap()} (max)`:`➕ Slot ${G.slots}/${slotCap()} (${slotCost()}g)`}</button>
@@ -6192,9 +6223,10 @@ function renderPanel(){
       <div class="row">
         <span class="small" style="min-width:46px">Hand:</span>
         <div class="cards${G&&G.tutHi==='hand'?' tut-pulse':''}">${G.hand.length? G.hand.map((c,i)=>{
-          const d=ROOMS[c.type];
-          return `<div class="card ${selCard===i?'sel':''}" data-ci="${i}"
-            onmouseenter="cardHover(${i})" onmouseleave="cardHoverOut()"${c.type==='minion'?' style="border-color:#9a5cff"':''}>
+          const d=ROOMS[c.type]; const isNew=i>=_newFrom;
+          const _sty=(c.type==='minion'?'border-color:#9a5cff;':'')+(isNew?`animation-delay:${(i-_newFrom)*60}ms;`:'');
+          return `<div class="card ${selCard===i?'sel':''}${isNew?' jzdeal':''}" data-ci="${i}"
+            onmouseenter="cardHover(${i})" onmouseleave="cardHoverOut()"${_sty?` style="${_sty}"`:''}>
             <div class="x" title="Scrap for ${cardScrapGold(c.type)} gold" onclick="event.stopPropagation();discardCard(${i})">✕</div>
             <div class="ic">${cardFace(c.type)||d.ic}</div><div class="nm">${c.label||d.name}</div>
             <div class="scrapg" style="font-size:9px;opacity:.6;color:#ffd34d">🔧 ${cardScrapGold(c.type)}g</div></div>`;}).join('')

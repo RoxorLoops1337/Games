@@ -10,7 +10,7 @@
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
-  update,draw,render,dealToHero,heroDies,applyRunes,makeRoom,BOSSES,particles,floats,
+  update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,BOSSES,particles,floats,
   get G(){return G;},set G(v){G=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
 const t = harness('render/juice smoke');
@@ -49,6 +49,7 @@ try{
   let frames=0;
   for(; frames<1500; frames++){
     A.update(0.05);
+    A.updateTop();                      // exercises the HUD count-up (countTo) path
     A.draw();
     if(A.G.phase!=='run') break;        // wave resolved (heroes dead or throne fell)
   }
@@ -69,9 +70,12 @@ t.ok(!threw, 'run-phase draw/update/juice loop never threw'
 try{
   A.G = A.freshGame('campaign'); A.chooseBoss(BOSS);
   A.G.slots=3; A.G.rooms=[room('spike',1), null, room('shop',1)];
+  A.G.hand=[{type:'spike',lvl:1},{type:'goblin',lvl:1},{type:'ogre',lvl:1}];
   A.G.phase='build'; A.buildCells(); A.prepCampaignWave();
-  for(let i=0;i<12;i++){ A.update(0.05); A.draw(); }
-  t.ok(true, 'build-phase draw loop clean');
+  for(let i=0;i<6;i++){ A.render(); A.update(0.05); A.draw(); }   // hand-card deal-in + panel render
+  A.G.hand.push({type:'flame',lvl:1});                            // a fresh draft → new card deals in
+  A.render(); A.draw();
+  t.ok(true, 'build-phase render + draw loop clean (cards, HUD, motion)');
 }catch(e){ t.ok(false, 'build-phase draw threw: '+e.message); }
 
 t.done();
