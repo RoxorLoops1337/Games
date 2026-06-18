@@ -480,7 +480,7 @@ const ROOMS = {
   tesla:    {kind:'trap',   name:'Tesla Coil', ic:'⚡', col:'#fff34d', dmg:9,  rate:0.7,  elem:'shock',desc:'Lightning. Chains across the party if they are oiled.'},
   // ---- counter cards (unlockable) ----
   magebane: {kind:'trap',   name:'Mage-Bane',  ic:'🔮', col:'#b163ff', dmg:7,  rate:0.5,  elem:'phys', vsClass:['mage','cleric'], vsMult:2.6, desc:'2.6× damage to mages & clerics.'},
-  maul:     {kind:'trap',   name:'Armor Crusher',ic:'🔨',col:'#9aa4b2', dmg:13, rate:0.7,  elem:'phys', pierceAll:true, desc:'Ignores ALL armor — crushes armored heroes.'},
+  maul:     {kind:'trap',   name:'Armor Crusher',ic:'🔨',col:'#9aa4b2', dmg:16, rate:1.0,  elem:'phys', pierceAll:true, desc:'Ignores ALL armor — crushes armored heroes.'},
   gallows:  {kind:'trap',   name:'Gallows',    ic:'⚰️', col:'#6a5a8a', dmg:8,  rate:0.6,  elem:'phys', vsLowHp:0.4, vsMult:3, desc:'Executes the wounded: 3× damage under 40% HP.'},
   hexward:  {kind:'trap',   name:'Hexward',    ic:'🧿', col:'#4dc3ff', dmg:6,  rate:0.45, elem:'phys', vsElite:true, vsMult:2.2, desc:'2.2× damage to elite (trait-bearing) heroes.'},
   bombard:  {kind:'trap',   name:'Bombard',    ic:'💣', col:'#e0823a', dmg:15, rate:2.4,  elem:'phys', aoe:1, desc:'Lobs shells that hit EVERY hero within one room of the blast — punishes a strung-out corridor.'},
@@ -1077,7 +1077,7 @@ function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per leve
 function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
-const UNLOCK_CARD={ oil:10, frost:25, tesla:45, magebane:20, maul:40, gallows:70, hexward:100, bombard:55, venom:30, corrode:60, hexbrand:80, warden:35, slime:50, totem:75, runestone:90, warcamp:0 };
+const UNLOCK_CARD={ oil:25, frost:65, tesla:120, magebane:50, maul:105, gallows:180, hexward:260, bombard:145, venom:80, corrode:160, hexbrand:210, warden:90, slime:130, totem:195, runestone:235, warcamp:0 };
 // Card rarity — drives how often each room is OFFERED in the draft & opening hand
 // (same tier vocabulary as relics). Workhorses are common; build-definers are epic.
 const CARD_RARITY={
@@ -1377,6 +1377,7 @@ function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
 let AC=null, audioOn=true, _musicTimer=null, _sfxLast={};
 let sfxBus=null, musicBus=null, sfxVol=1, musVol=1;   // separate volume buses
 let shakeT=0, shakeMag=0, hitStop=0;
+let _simTick=0;     // increments once per sim step; traps use it so their cooldown ticks once, not per-hero
 let slowT=0;                         // slow-motion timer (epic moments)
 let flashT=0, flashDur=0, flashCol='#fff', flashMax=0;   // full-screen colour flash
 function shake(mag){ shakeMag=Math.max(shakeMag,mag); shakeT=0.22; }
@@ -3447,7 +3448,7 @@ function bossBolt(tx,ty,col,ic){
   if(!G||!G.boss) return;
   const c=col||G.boss.col||'#ff5470';
   bossBolts.push({ x0:bossX(), y0:(typeof bossCastY==='function'?bossCastY():FLOOR-110),
-    x1:tx, y1:(ty!=null?ty-28:FLOOR-40), t:0, dur:0.30, col:c, ic:ic||'' });
+    x1:tx, y1:(ty!=null?ty-28:FLOOR-40), t:0, dur:0.12, col:c, ic:ic||'' });   // fast streak — lands ~with the hit, not after it
   burst(bossX(), FLOOR-90, c, 9); sparks(bossX(), FLOOR-92, c, 6); flash(c, 0.09, 0.15);   // cast pop at the throne
 }
 
@@ -4358,6 +4359,7 @@ function update(dt){
   const sdt = slowT>0 ? dt*0.35 : dt;          // bullet-time slows the SIM, not the FX
   const steps=speedMul; // scale sim by running update multiple conceptual times
   for(let s=0;s<steps && G.phase==='run';s++){
+    _simTick++;          // one tick id per sim step → traps cool down once, not once-per-hero
     for(const h of G.heroes){ if(G.phase!=='run') break; if(h.state!=='dead') simStep(h,sdt); }
     if(G.phase==='run') aoeTrapTick(sdt);
     if(G.phase==='run') goblinTick(sdt);
@@ -4637,6 +4639,8 @@ function trapTick(h,cell,dt){
   for(const tr of cell.traps){
     if(tr.def.aoe) continue;        // area traps fire once per interval in aoeTrapTick, not per-hero
     if(tr.def.amp) continue;        // Runestone deals no damage — it only amplifies (ampAt)
+    if(tr._st===_simTick) continue; // cool down ONCE per sim tick — extra heroes in the room must not
+    tr._st=_simTick;                // speed the strike up (the bug that made the Armor Crusher slam frantically)
     tr.fireT-=dt;
     if(tr.fireT<=0){
       tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.88:1);   // Hair Trigger mandate: traps fire faster
@@ -5603,7 +5607,7 @@ const MON_SPRITES={
   }},
   // Gel Cube: art is single-direction frame stacks (assembled into 1-row sheets),
   // walk frames were drawn smaller so they're normalized up — hence per-clip anchors.
-  slime:{ base:'sprites/slime/slime_', scale:0.16, dirRow:0, idle:'idle', atk:'slash', clips:{
+  slime:{ base:'sprites/slime/slime_', scale:0.096, dirRow:0, idle:'idle', atk:'slash', clips:{
     idle: {sheet:'idle', fw:890,fh:957,n:4,fps:5,  ax:444, ay:943},
     walk: {sheet:'walk', fw:950,fh:887,n:4,fps:9,  ax:483, ay:868},
     slash:{sheet:'slash',fw:986,fh:871,n:7,fps:13, ax:463, ay:858},
