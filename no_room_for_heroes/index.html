@@ -4349,6 +4349,16 @@ function update(dt){
   if(decals.length){ for(const d of decals) d.life-=dt*0.05; decals=decals.filter(d=>d.life>0); }   // blood dries slowly
   if(embers.length){ embers.forEach(e=>{ e.x+=e.vx*dt; e.y+=e.vy*dt; e.life-=dt; }); embers=embers.filter(e=>e.life>0); }
   if(throneHitT>0) throneHitT=Math.max(0,throneHitT-dt);
+  // background storm: a lightning bolt cracks over the castle/moon every few seconds
+  if(G && (G.phase==='build'||G.phase==='run')){
+    if(_lxT>0) _lxT-=dt;
+    _lxNext-=dt;
+    if(_lxNext<=0){
+      _lxNext=rnd(3.5,9); _lxT=rnd(0.30,0.5);
+      _lxBolt=[]; let bx=0.885+rnd(-0.03,0.03), by=0.02;
+      while(by<0.42){ _lxBolt.push([bx,by]); by+=rnd(0.05,0.11); bx+=rnd(-0.05,0.05); }
+    }
+  }
   // ambient embers drifting through the lit corridor (atmosphere)
   if(G && (G.phase==='build'||G.phase==='run')){ _emberAcc+=dt;
     while(_emberAcc>0.07 && embers.length<64){ _emberAcc-=0.07;
@@ -4837,6 +4847,7 @@ function bossFightTick(h,dt,isFront,frozen){
 
 /* ============================== RENDER =================================== */
 let _bgGrad=null,_bgGradH=0, _thrGrad=null,_thrKey='', _demGrad=null,_demKey='';
+let _lxT=0, _lxNext=3, _lxBolt=null;   // storm lightning over the castle: flash timer / next-strike countdown / bolt path (backdrop fractions)
 let _vig=null,_vigH=0, _redVig=null,_redVigH=0;   // cached vignette gradients (rebuilt on resize)
 // nameplate banner (champion/King/rival arrivals) + wave-end slow-mo kill cam
 let bannerMsg=null, killCamT=0;
@@ -4880,6 +4891,36 @@ function arenaNativeW(){ if(!(ARENA_BG&&ARENA_BG._ok)) return 0;
 // huge dungeon outgrows it (the art must always cover the rooms + staging)
 function arenaW(){ const aw=arenaNativeW(); return aw?Math.max(aw, corridorWidth()+STAGEW):0; }
 function worldLeft(){ const aw=arenaW(); return aw? corridorWidth()-aw : -STAGEW; }
+// Procedural storm FX painted over the arena backdrop (x0/top = its top-left on
+// screen, w/h = its drawn size): faint skyline mist drifting over the mountains,
+// and periodic lightning at the castle/moon (top-right). Cosmetic; cheap (no
+// per-frame gradients — layered arcs for the glow only while a bolt is live).
+function drawArenaFX(x0, top, w, h){
+  const now=performance.now();
+  // skyline atmosphere — faint mist banks drifting across the mountains
+  X.save(); X.globalCompositeOperation='lighter';
+  for(let i=0;i<3;i++){
+    const span=w*1.3, dx=(now*(0.006+i*0.003))%span;
+    const mx=x0 - w*0.15 + ((i*w*0.46 + dx)%span);
+    const my=top + h*(0.47+i*0.05) + Math.sin(now*0.0004+i*2)*5;
+    X.globalAlpha=0.05; X.fillStyle=(i%2)?'#6a5aa0':'#8a6a86';
+    X.beginPath(); X.ellipse(mx, my, w*0.22, h*0.05, 0, 0, 6.2832); X.fill();
+  }
+  X.restore();
+  // lightning at the castle / moon (top-right)
+  if(_lxT>0 && _lxBolt && _lxBolt.length){
+    const flick=0.5+0.5*Math.abs(Math.sin(now/18));
+    const a=clamp(_lxT/0.12,0,1)*flick;
+    const mx=x0 + w*0.90, my=top + h*0.13;
+    X.save(); X.globalCompositeOperation='lighter';
+    for(let r=w*0.17, al=0.05; r>5; r*=0.66, al+=0.05){ X.globalAlpha=a*al; X.fillStyle='#c2a0ff'; X.beginPath(); X.arc(mx,my,r,0,6.2832); X.fill(); }
+    X.lineJoin='round'; X.lineCap='round';
+    const trace=()=>{ X.beginPath(); for(let i=0;i<_lxBolt.length;i++){ const p=_lxBolt[i], sx=x0+p[0]*w, sy=top+p[1]*h; i?X.lineTo(sx,sy):X.moveTo(sx,sy); } X.stroke(); };
+    X.globalAlpha=a*0.4; X.strokeStyle='#b163ff'; X.lineWidth=6; trace();   // soft purple underglow
+    X.globalAlpha=Math.min(1,a*1.2); X.strokeStyle='#efe6ff'; X.lineWidth=2.4; trace();  // bright core
+    X.restore();
+  }
+}
 function draw(){
   const sh = shakeT>0 ? shakeMag*(shakeT/0.22) : 0;
   const ox = sh? (Math.random()*2-1)*sh : 0, oy = sh? (Math.random()*2-1)*sh : 0;
@@ -4999,6 +5040,7 @@ function drawDungeon(tx, scale, isBuild){
     X.imageSmoothingEnabled=true;
     X.drawImage(ARENA_BG, tx(worldLeft()), bgTop, bgW, bgH);   // right edge = the boss's throne
     X.imageSmoothingEnabled=false;
+    drawArenaFX(tx(worldLeft()), bgTop, bgW, bgH);             // drifting mist + storm lightning
   }
   // floor (drawn wide/tall so it still covers the screen when zoomed out).
   // With a painted backdrop, let its carved wall show through — just lay a
