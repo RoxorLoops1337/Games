@@ -4458,12 +4458,17 @@ function smashDoorway(h,cell){
   if(G.brokenCells[cell.index]) return;
   G.brokenCells[cell.index]=true;
   const x=cell.x0+6;
-  shake(9); sfx('hit'); sfx('boss');
-  burst(x, FLOOR-40, '#9aa4b2', 16);                       // flying stone
-  burst(x, FLOOR-90, '#6d6154', 12);
-  burst(x, FLOOR-20, '#3a3430', 8);
-  for(let i=0;i<14;i++)                                     // slow dust cloud
-    particles.push({x:x+rnd(-12,26), y:FLOOR-rnd(10,120), vx:rnd(-18,30), vy:rnd(-26,-6), life:rnd(.8,1.5), col:i%2?'#8a8398':'#5d5668', sz:rnd(4,8)});
+  shake(10); hitStop=Math.max(hitStop,0.05); sfx('hit'); sfx('boss');
+  burst(x, FLOOR-40, '#9aa4b2', 18);                       // flying stone
+  burst(x, FLOOR-90, '#6d6154', 14);
+  burst(x, FLOOR-20, '#3a3430', 10);
+  // chunky shattering stone — heavy shards that arc out across the room and fall
+  for(let i=0;i<16;i++)
+    particles.push({x:x+rnd(0,ROOM_W*0.6), y:FLOOR-rnd(20,150), vx:rnd(-150,180), vy:-rnd(60,240),
+      life:rnd(.6,1.2), col:pick(['#9aa4b2','#6d6154','#8a8398','#5d5668','#3a3430']), sz:rnd(3,7)});
+  for(let i=0;i<16;i++)                                     // slow dust cloud billowing up
+    particles.push({x:x+rnd(-12,ROOM_W*0.5), y:FLOOR-rnd(10,120), vx:rnd(-18,30), vy:rnd(-26,-6), life:rnd(.8,1.6), col:i%2?'#8a8398':'#5d5668', sz:rnd(4,9)});
+  sparks(x+ROOM_W*0.25, FLOOR-70, '#cdbaff', 8);
   floater(x+10, FLOOR-120, '💥', '#caa15e', true);
 }
 function onEnterCell(h,cell){
@@ -5015,6 +5020,7 @@ function drawDungeon(tx, scale, isBuild){
       X.fillText(i+1, x0+10, FLOOR-126);
     }
   }
+  drawGaps(tx, scale);                        // stone wall between rooms (+ before the throne)
   // upcoming heroes waiting at the gate (build only)
   if(isBuild) drawWaitingHeroes(tx);
   // hero
@@ -5070,12 +5076,15 @@ function drawWaitingHeroes(tx){
 }
 
 function drawRoomBg(x0,w,isBoss,i){
-  X.fillStyle=isBoss?'#2a1530':'#191230';
+  // Normal rooms are SEE-THROUGH now — the painted arena backdrop shows through the
+  // room art's archway; the stone wall between rooms is drawn by drawGaps().
+  if(!isBoss) return;
+  X.fillStyle='#2a1530';
   X.fillRect(x0, FLOOR-150, w, 150);
   // wall pillars
   X.fillStyle='#120c24';
   X.fillRect(x0, FLOOR-150, 4, 150);
-  X.fillStyle=isBoss?'#5a2a4a':'#251b44';
+  X.fillStyle='#5a2a4a';
   X.fillRect(x0, FLOOR-150, w, 5);
   if(isBoss){
     const ta=bossThroneArt();
@@ -5260,12 +5269,16 @@ function drawShopStock(cx,room){
 // the "lair" backdrop with the live monster sprite drawn in front. Fused rooms
 // and art-less types fall back to the procedural look.
 const ROOM_IMG={};
-const ROOM_IMG_BROKEN={};   // rooms/<k>_broken.png — shown after a champion smashes the doorway
+const ROOM_IMG_BROKEN={};    // rooms/<k>_broken.png — shown after a champion smashes the doorway
+const ROOM_IMG_BROKEN2={};   // a 2nd broken variant (rooms/<k>_broken2.png) for visual variety
+let GAP_IMG=null;            // rooms/gap.png — the stone wall drawn between rooms (and before the throne)
 if(typeof Image!=='undefined'){
   ['empty'].forEach(k=>{    // the standard room (all cells use it; contents overlay)
     ROOM_IMG[k]=loadImg('rooms/'+k+'.png');
     ROOM_IMG_BROKEN[k]=loadImg('rooms/'+k+'_broken.png');
+    ROOM_IMG_BROKEN2[k]=loadImg('rooms/'+k+'_broken2.png');
   });
+  GAP_IMG=loadImg('rooms/gap.png');
 }
 // ---- painted overlay art registry (rooms/traps/*, rooms/fx/*) ------------
 // Frame sequences accept BOTH naming styles: zero-based (<id>_0.png, _1 …)
@@ -5428,6 +5441,7 @@ function artFrame(id, firedAt, loop){
 }
 // ---- ambient candle flames on the room's holders (layout-positioned) -----
 function drawCandles(x0,w,i){
+  if(G && G.brokenCells && G.brokenCells[i]) return;   // a smashed room's torches are gone
   const list=LAYOUT.candles||[]; if(!list.length) return;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
   for(let c=0;c<list.length;c++){
@@ -5447,8 +5461,13 @@ function drawCandles(x0,w,i){
 // Pick the (possibly smashed) art for cell i. Falls back to the normal art
 // while a broken variant isn't uploaded, so the effect degrades gracefully.
 function cellArt(k,i){
-  const b=ROOM_IMG_BROKEN[k];
-  return (G && G.brokenCells && G.brokenCells[i] && b && b._ok) ? b : ROOM_IMG[k];
+  if(G && G.brokenCells && G.brokenCells[i]){
+    // alternate the two broken variants by cell so the carnage isn't uniform
+    const v = (i%2===0) ? ROOM_IMG_BROKEN[k] : (ROOM_IMG_BROKEN2[k]||ROOM_IMG_BROKEN[k]);
+    if(v && v._ok) return v;
+    if(ROOM_IMG_BROKEN[k] && ROOM_IMG_BROKEN[k]._ok) return ROOM_IMG_BROKEN[k];
+  }
+  return ROOM_IMG[k];
 }
 const ROOM_ART_DROP=12;   // px the art bottom sits below the floor line
 
@@ -5583,6 +5602,24 @@ function drawRoomArt(x0,w,img){
   const dh=Math.round(w*(img.height/img.width));
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
   X.drawImage(img, Math.round(x0), Math.round(FLOOR+ROOM_ART_DROP-dh), Math.round(w), dh);
+  X.imageSmoothingEnabled=sm;
+}
+// The stone wall between rooms (rooms/gap.png), drawn at every cell boundary —
+// between each pair of rooms AND just before the throne — height-matched to the
+// room art and centred on the boundary, so the corridor reads as one continuous
+// wall with the room alcoves cut into it. Drawn over the (now see-through) rooms.
+const GAP_W_FRAC=null;   // override the gap width as a fraction of ROOM_W (else native aspect)
+function drawGaps(tx, scale){
+  if(!(GAP_IMG && GAP_IMG._ok) || !G) return;
+  const w=ROOM_W*scale;
+  const roomAR = (ROOM_IMG.empty && ROOM_IMG.empty._ok) ? (ROOM_IMG.empty.height/ROOM_IMG.empty.width) : (545/523);
+  const gh=w*roomAR;                                       // same height as the room art
+  const gw=GAP_W_FRAC!=null ? w*GAP_W_FRAC : gh*(GAP_IMG.width/GAP_IMG.height);
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+  for(let i=1;i<=G.slots;i++){                             // boundary i = between cell i-1 and cell i (i=slots → before the throne)
+    const cx=tx(cellX(i));
+    X.drawImage(GAP_IMG, Math.round(cx-gw/2), Math.round(FLOOR+ROOM_ART_DROP-gh), Math.round(gw), Math.round(gh));
+  }
   X.imageSmoothingEnabled=sm;
 }
 // ⚡ Lightning arcs from a Tesla coil to every hero in the room (and chaining
