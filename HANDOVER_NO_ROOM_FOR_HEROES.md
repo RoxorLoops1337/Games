@@ -206,8 +206,16 @@ arrays. Lives near the `AUDIO + GAME FEEL` block.
 - **Screen-space** (device transform, end of `draw()`): cached **vignette** (`_vig`)
   always; **red danger vignette** (`_redVig`) when `throneHitT>0` (throne struck) or
   the boss HP is low. Rebuild on resize (keyed on `CV.height`).
+- **UI motion** (anime.js-inspired, vanilla — no dependency): `jz*` CSS keyframes
+  (`jzReveal`/`jzDeal`, easeOutBack `cubic-bezier(.34,1.56,.64,1)`) spring reward &
+  boss-select cards in (`.choice.jz` + inline `animation-delay` stagger), deal new
+  hand cards in (`.card.jzdeal`, gated to cards added since the last render) and pop
+  the selected card (`.card.sel`); every overlay's `<h1>`/`.menu-btns` drift in. The
+  HUD rolls gold/dread with `countTo()` (eased per-frame lerp in `updateTop`) instead
+  of snapping. All honour `prefers-reduced-motion`.
 - Covered by `tests/no_room_for_heroes_juice.test.mjs` — it runs a real wave through
-  `draw()`, so a render-time error there fails `npm run check`.
+  `draw()`/`updateTop()` and a build-phase `render()`, so a render-time error there
+  fails `npm run check`.
 
 ---
 
