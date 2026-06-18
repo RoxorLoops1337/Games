@@ -236,6 +236,11 @@
     box-shadow:0 4px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);animation:titlePulse 1.6s ease-in-out infinite;}
   .titlestart button:hover:not(:disabled){background:#c8262f;}
   .titlestart button:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);}
+  /* "tap for sound" prompt: browsers block audio until a gesture, so the title
+     theme can't autoplay — nudge the player to tap, then it starts. */
+  .titlehint{position:absolute;left:50%;bottom:3.5%;transform:translateX(-50%);z-index:3;
+    font-size:12px;color:#cdbaff;opacity:.82;letter-spacing:.5px;pointer-events:none;
+    text-shadow:0 1px 3px #000;animation:titleStartIn .45s ease-out 2.2s both;}
   /* SNES-style: zoom in slowly from a tiny point while spinning 4½×, settle */
   @keyframes logoTwirl{
     0%   {transform:translate(-50%,0) scale(.02) rotate(-1620deg);opacity:0;}
@@ -1438,7 +1443,9 @@ function initAudio(){
   try{ AC=new (window.AudioContext||window.webkitAudioContext)();
     sfxBus=AC.createGain();   sfxBus.gain.value=sfxVol;   sfxBus.connect(AC.destination);
     musicBus=AC.createGain(); musicBus.gain.value=musVol; musicBus.connect(AC.destination);
-    startMusic(); }catch(_){ AC=null; }
+    startMusic();
+    const _th=document.getElementById('titlehint'); if(_th) _th.style.display='none';   // sound's on — drop the prompt
+  }catch(_){ AC=null; }
 }
 function tone(freq,dur,type,vol,slideTo,bus){
   if(!AC||!audioOn) return;
@@ -1679,6 +1686,7 @@ function titleScreen(){
       <div class="tbg" id="titlebg"></div>
       <img class="titlelogo" src="title/logo.png" alt="No Room For Heroes" onerror="titleLogoFail(this)">
       <div class="titlestart"><button class="go" onclick="leaveTitle()">▶ Start Game</button></div>
+      ${(typeof AC!=='undefined' && AC)?'':'<div class="titlehint" id="titlehint">🔊 tap for sound</div>'}
     </div>`;
   const bg=document.getElementById('titlebg');                 // swap to the painted
   if(bg && typeof Image!=='undefined'){ const probe=new Image(); probe.onerror=()=>bg.classList.add('missing'); probe.src='title/bg.png'; } // fallback if the art 404s
