@@ -764,13 +764,13 @@ const ABIL = {
   slam:   {name:'Slam',    ic:'💥', cost:22, cd:3,  desc:'Heavy blow to the hero.',
            run:h=>dealToHero(h, abilDmg(26+G.boss.lvl*4), 'SLAM', false, 'phys')},
   breath: {name:'Fire Breath',ic:'🔥',cost:36, cd:6, desc:'Big fire damage + burn. Ignites oil.',
-           run:h=>{dealToHero(h, abilDmg(34+G.boss.lvl*5),'BURN', false, 'fire'); h.burn=(h.burn||0)+6; h.burnT=4;}},
+           run:h=>{dealToHero(h, abilDmg(34+G.boss.lvl*5),'BURN', false, 'fire'); addBurn(h,6,4);}},
   bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged shock. Chains off oil.',
            run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT', false, 'shock')},
   curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
            run:h=>{ if(h.cursed) return; h.cursed=true; h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
   freeze: {name:'Freeze',  ic:'❄️', cost:34, cd:7,  desc:'Freezes in place — primes SHATTER. A costly lock.',
-           run:h=>{h.freeze=2.2; h.chill=2.6; floater(h.x,h.y-60,'FROZEN','#9adfff');}},
+           run:h=>{h.freeze=Math.max(h.freeze||0,ccDur(h,2.2)); h.chill=Math.max(h.chill||0,ccDur(h,2.6)); floater(h.x,h.y-60,'FROZEN','#9adfff');}},
   drain:  {name:'Drain',   ic:'🩸', cost:28, cd:5,  desc:'Damage hero, heal boss.',
            run:h=>{dealToHero(h, abilDmg(22+G.boss.lvl*3),'DRAIN', false, 'phys'); healBoss(16+G.boss.lvl*3);}},
   dread:  {name:'Dread',   ic:'👁️', cost:30, cd:9,  desc:'Slows + weakens the hero.',
@@ -779,12 +779,12 @@ const ABIL = {
            run:()=>healBoss(30+G.boss.lvl*5)},
   // ---- boss-exclusive signature abilities (define each boss's playstyle) ----
   quake:  {name:'Quake',   ic:'🌋', cost:34, cd:9,  desc:'Stuns & damages EVERY hero in the dungeon.', sig:true, aoe:true,
-           run:h=>{ for(const o of (G.heroes||[])){ if(o.state==='dead') continue; o.freeze=Math.max(o.freeze||0,1.2);
+           run:h=>{ for(const o of (G.heroes||[])){ if(o.state==='dead') continue; o.freeze=Math.max(o.freeze||0,ccDur(o,1.2));
              dealToHero(o, abilDmg(15+G.boss.lvl*3), 'QUAKE', false, 'phys'); }
              floater(bossX(),FLOOR-92,'🌋 QUAKE','#caa15e'); shake(9); }},
   hellfire:{name:'Hellfire',ic:'🔥', cost:38, cd:8,  desc:'Rains fire on ALL heroes — burns & ignites oil.', sig:true, aoe:true,
            run:h=>{ for(const o of (G.heroes||[])){ if(o.state==='dead') continue;
-             dealToHero(o, abilDmg(17+G.boss.lvl*3), 'BURN', false, 'fire'); if(o.state!=='dead'){ o.burn=(o.burn||0)+5; o.burnT=4; } }
+             dealToHero(o, abilDmg(17+G.boss.lvl*3), 'BURN', false, 'fire'); if(o.state!=='dead'){ addBurn(o,5,4); } }
              floater(bossX(),FLOOR-92,'🔥 HELLFIRE','#ff7a2e'); shake(8); }},
   siphon: {name:'Mana Siphon',ic:'🔮',cost:14, cd:4, desc:'Bleeds the hero and converts the hit into boss mana.', sig:true,
            run:h=>{ const dmg=abilDmg(14+G.boss.lvl*2); dealToHero(h, dmg, 'SIPHON', false, 'shock');
@@ -801,7 +801,7 @@ const ABIL = {
                floater(bossX(),FLOOR-92,'💀 RAISED','#b163ff'); } }},
   entangle:{name:'Entangle',ic:'🌿', cost:30, cd:10, desc:'Roots the front-line heroes in thorns.', sig:true,
            run:h=>{ const ci=h.cellIndex; let n=0;   // 2.6s root @ cd7 was a near-permanent lockdown with Freeze
-             for(const o of (G.heroes||[])){ if(o.state==='dead') continue; if(o===h || o.cellIndex===ci){ o.freeze=Math.max(o.freeze||0,1.8); n++; dealToHero(o, abilDmg(10+G.boss.lvl*2),'THORNS',false,'phys'); } }
+             for(const o of (G.heroes||[])){ if(o.state==='dead') continue; if(o===h || o.cellIndex===ci){ o.freeze=Math.max(o.freeze||0,ccDur(o,1.8)); n++; dealToHero(o, abilDmg(10+G.boss.lvl*2),'THORNS',false,'phys'); } }
              floater(bossX(),FLOOR-92,'🌿 ENTANGLE ×'+n,'#5fae54'); }},
 };
 
@@ -3354,18 +3354,40 @@ function popReact(h,label,col,x){
   if(chain>=4) slowmo(0.25);
   gainRage(2);                                                                // reactions feed Overdrive
 }
+// ---- Hero status resistance (tames the freeze+oil / Inferno-burn lock) ----
+// Heroes shrug off control faster deep into the siege; champions/elites resist
+// hardest, and a Wizard's ward (wardT) adds protection. Scales the DURATION of
+// freeze / oil / chill / shock. Plus a no-refreeze window after thawing and a
+// burn cap so re-Ignite can't snowball.
+const FREEZE_IMMUNE=3;     // s a hero can't be RE-frozen right after thawing
+const BURN_CAP=22;         // ceiling on stacked burn-per-tick
+function statusResist(h){
+  if(!h) return 0;
+  const lvl=(G && G.mode==='campaign') ? campLevel() : Math.min(50, 1+(G?G.survived:0)/3);
+  let r=Math.min(0.45, Math.max(0,lvl-1)*0.010);
+  if(h.champion||h.king) r+=0.25; else if(h.elite) r+=0.10;
+  if(h.wardT>0) r+=0.28;                                       // 🧙 Wizard ward
+  return Math.min(0.78, r);
+}
+function ccDur(h,dur){ return dur*(1-statusResist(h)); }       // resisted control duration
+function applyFreeze(h,dur){                                   // freeze: respects resist + the no-refreeze window
+  if(!h || (h.refreezeT||0)>0) return false;
+  const d=ccDur(h,dur); if(d<=0.05) return false;
+  h.freeze=Math.max(h.freeze||0, d); return true;
+}
+function addBurn(h,amt,dur){ h.burn=Math.min(BURN_CAP,(h.burn||0)+amt); if(dur) h.burnT=Math.max(h.burnT||0,dur); }
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
   const rm=reactMul(h);          // snapshot once — a single hit can't self-amplify across its own reactions
   // priming statuses — refreshed while in the room, then carried down the hall
-  if(elem==='oil')  h.oil  =Math.max(h.oil||0,  PRIME_OIL);
-  else if(elem==='ice')  h.chill=Math.max(h.chill||0,PRIME_ICE);
-  else if(elem==='shock') h.shock=Math.max(h.shock||0,PRIME_SHOCK);
+  if(elem==='oil')  h.oil  =Math.max(h.oil||0,  ccDur(h,PRIME_OIL));
+  else if(elem==='ice')  h.chill=Math.max(h.chill||0,ccDur(h,PRIME_ICE));
+  else if(elem==='shock') h.shock=Math.max(h.shock||0,ccDur(h,PRIME_SHOCK));
 
   // 🔥 IGNITE — fire on an OILED hero: the oil flashes off in a heavy burst + burn
   if(elem==='fire' && h.oil>0){
     h.oil=0; const x=Math.round((baseDmg*1.3+18)*rm); h.hp-=x;
-    h.burn=(h.burn||0)+10; h.burnT=5; popReact(h,'🔥 IGNITE','#ff7a2e',x);
+    addBurn(h, 7, 5); popReact(h,'🔥 IGNITE','#ff7a2e',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ☠️ COMBUST — fire on a POISONED hero detonates the venom for a stack-scaled burst
@@ -3376,14 +3398,14 @@ function elementReact(h, elem, baseDmg){
   }
   // ⚡ OVERLOAD — lightning on a CHILLED hero stuns them solid
   if(elem==='shock' && h.chill>0 && !(h.freeze>0)){
-    const x=Math.round((baseDmg*0.6+8)*rm); h.hp-=x; h.chill=0; h.freeze=1.2;
+    const x=Math.round((baseDmg*0.6+8)*rm); h.hp-=x; h.chill=0; applyFreeze(h, 1.1);
     popReact(h,'⚡ OVERLOAD','#fff34d',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 🧊 ENCASE — ice on an OILED hero: wet + cold freezes them SOLID (a sitting duck)
   else if(elem==='ice' && h.oil>0 && !(h.freeze>0)){
     const x=Math.round((baseDmg*0.7+8)*rm); h.hp-=x;
-    h.freeze=2.0; h.chill=PRIME_ICE; popReact(h,'🧊 ENCASE','#bfefff',x);
+    applyFreeze(h, 1.4); h.chill=Math.max(h.chill||0, ccDur(h,PRIME_ICE)); popReact(h,'🧊 ENCASE','#bfefff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ❄ SHATTER — a phys/shock impact on a CHILLED/frozen hero cracks the ice
@@ -4399,6 +4421,8 @@ function simStep(h,dt){
   if(h.oil>0) h.oil-=dt;
   if(h.chill>0) h.chill-=dt;
   if(h.shock>0) h.shock-=dt;
+  if(h.refreezeT>0) h.refreezeT-=dt;     // no-refreeze window after thawing
+  if(h.wardT>0) h.wardT-=dt;             // 🧙 Wizard ward
   if(h.acid>0){ h.acidT-=dt; if(h.acidT<=0) h.acid=0; }   // corrosion wears off
   if(h.mark>0){ h.markT-=dt; if(h.markT<=0) h.mark=0; }   // brand fades if no hit lands
   // reaction-chain window: combo decays if no new reaction lands in time
@@ -4406,7 +4430,7 @@ function simStep(h,dt){
   // freeze: the HERO is immobilised (can't move or attack) — but the dungeon's
   // traps and monsters keep punishing the sitting duck.
   const frozen = h.freeze>0;
-  if(frozen) h.freeze-=dt;
+  if(frozen){ h.freeze-=dt; if(h.freeze<=0){ h.freeze=0; h.refreezeT=FREEZE_IMMUNE; } }   // just thawed → brief refreeze immunity
 
   const cell=(h.x>=0)?cellAt(h.x):null;   // still marching in → no cell, no traps
   if(cell && cell.index!==h.cellIndex && h.state==='walking' && !frozen){
@@ -4552,18 +4576,25 @@ function heroSpellTick(h,dt){
   h.spellT-=dt;
   if(h.spellT>0) return;
   if(h.cls==='cleric'){
-    // heal the most-wounded living ally (incl. self) + bless the whole party's attacks
+    // heal the most-wounded living ally (incl. self), DISPEL the dungeon's control
+    // off the party (freeze/oil/chill/shock), + bless the whole party's attacks
     const allies=(G.heroes||[]).filter(o=>o&&o.state!=='dead');
     let low=null; for(const o of allies){ if(o.hp<o.maxHp && (!low || o.hp/o.maxHp<low.hp/low.maxHp)) low=o; }
     if(low){ healHero(low, Math.round(low.maxHp*0.12)); }
-    for(const o of allies) o.blessT=4;
-    floater(h.x, h.y-78, '🙏 BLESS', '#ffe9a8'); sfx('cast');
+    let cleansed=false;
+    for(const o of allies){
+      if(o.freeze>0||o.oil>0||o.chill>0||o.shock>0){ o.freeze=0; o.oil=0; o.chill=0; o.shock=0; o.refreezeT=Math.max(o.refreezeT||0,1.5); cleansed=true; }
+      o.blessT=4;
+    }
+    floater(h.x, h.y-78, cleansed?'🙏 CLEANSE':'🙏 BLESS', '#ffe9a8'); sfx('cast');
     h.spellT=ri(5,7);
   } else if(h.cls==='warrior'){
     h.rallyT=4; floater(h.x, h.y-72, '⚔️ WAR CRY', '#ff9a3a'); sfx('cast');
     h.spellT=ri(6,8);
   } else if(h.cls==='mage'){
-    h.surgeT=2.6; floater(h.x, h.y-72, '✨ ARCANE SURGE', '#9ad'); sfx('cast');
+    h.surgeT=2.6;
+    for(const o of (G.heroes||[])){ if(o&&o.state!=='dead') o.wardT=Math.max(o.wardT||0, 6); }   // 🧙 ward the party vs the elements
+    floater(h.x, h.y-72, '✨ ARCANE WARD', '#9ad'); sfx('cast');
     h.spellT=ri(5,7);
   } else if(h.cls==='rogue'){
     h.evadeT=3; floater(h.x, h.y-72, '🗡️ EVASION', '#9adfff'); sfx('cast');
@@ -4622,8 +4653,8 @@ function trapTick(h,cell,dt){
       dmg*=amp;                                                // Runestone / War Totem amplification
       const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion/Piercing Halls: ignore armor
       _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
-      if(d.burn){ h.burn=d.burn+(r.lvl-1)*2; h.burnT=3; }
-      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.max(h.burn||0, 3+(r.lvl-1)); h.burnT=3; }  // Inferno/Wildfire: every trap sets ablaze
+      if(d.burn){ addBurn(h, d.burn+(r.lvl-1)*2, 3); }
+      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(BURN_CAP, Math.max(h.burn||0, 2+(r.lvl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
       applyTrapStatus(h, d, r);                                  // poison / acid / mark
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
       if(G.stats) G.stats.trapDmg+=Math.round(dmg);
@@ -4664,7 +4695,7 @@ function aoeTrapTick(dt){
       for(const o of targets){
         const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
         _roomDmgCtx=r; dealToHero(o, dmg, 'BOOM', pierce, d.elem); _roomDmgCtx=null;
-        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.max(o.burn||0, 3+(r.lvl-1)); o.burnT=3; }
+        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(BURN_CAP, Math.max(o.burn||0, 2+(r.lvl-1))); o.burnT=Math.max(o.burnT||0,3); }
         applyTrapStatus(o, d, r);
         if(G.stats) G.stats.trapDmg+=dmg;
       }

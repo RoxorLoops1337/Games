@@ -38,7 +38,7 @@ as rewards, and fire **boss abilities** by hand. Fights auto-resolve. Two modes:
 - `build.js` — copies `STATIC_PATHS` folders into `dist/` (Pages deploys `dist/`).
   `no_room_for_heroes` and `tools` are already in the list; new TOP-LEVEL folders
   must be added.
-- `tests/no_room_for_heroes_*.test.mjs` — 10 headless suites; `tests/no_room_for_heroes_lib.mjs`
+- `tests/no_room_for_heroes_*.test.mjs` — 11 headless suites; `tests/no_room_for_heroes_lib.mjs`
   exports `loadGame(exposeStr)` (evals the inline script with a stubbed DOM — including a
   full no-op canvas context, so the `juice` suite drives `draw()`/`update()` through a real
   wave to catch render-time errors the logic suites can't see). **Write new tests with the
@@ -50,7 +50,7 @@ as rewards, and fire **boss abilities** by hand. Fights auto-resolve. Two modes:
 ## 3. Workflow — verify with ONE command, then ship
 
 ```
-npm run check        # = node build.js && all 10 test suites — must be GREEN before every push
+npm run check        # = node build.js && all 11 test suites — must be GREEN before every push
 ```
 
 1. Work on your session's feature branch.
@@ -297,7 +297,7 @@ wire. Don't promise to generate from a cloud session; verify with
 ## 9. Quick start for your first task
 ```bash
 cd /home/user/Games
-npm run check                      # build + 10 suites, must be green
+npm run check                      # build + 11 suites, must be green
 # edit no_room_for_heroes/index.html (and/or align.html, rooms/layout.json)
 npm run check
 git add -A && git commit -m "..."

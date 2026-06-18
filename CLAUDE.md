@@ -18,12 +18,12 @@ Reply formatting:
 - `no_room_for_heroes/music.html` — standalone chiptune player (215 tracks; a deterministic composer generates 200 of them).
 - `functions/api/board.js` + `functions/api/save.js` — Cloudflare Pages Functions (leaderboard + cloud saves, KV binding `BOARD`).
 - `build.js` — copies static folders into `dist/` (Pages deploys `dist/`). New top-level folders must be added to `STATIC_PATHS`.
-- `tests/no_room_for_heroes_*.test.mjs` — 10 headless suites; `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM (incl. a full no-op canvas ctx, so the `juice` suite drives `draw()`/`update()` to catch render-time errors the logic suites miss). Write new tests with it; never create throwaway harnesses outside `tests/`.
+- `tests/no_room_for_heroes_*.test.mjs` — 11 headless suites; `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM (incl. a full no-op canvas ctx, so the `juice` suite drives `draw()`/`update()` to catch render-time errors the logic suites miss). Write new tests with it; never create throwaway harnesses outside `tests/`.
 - `HANDOVER_NO_ROOM_FOR_HEROES.md` — deeper architecture notes (G state object, phases, combat flow, balance history).
 
 # Verify with ONE command
 
-    npm run check        # build + all 10 suites — must be green before every push
+    npm run check        # build + all 11 suites — must be green before every push
 
 # SMALL-CHANGE PROTOCOL (for budget-model sessions)
 
@@ -68,6 +68,7 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - Music volume under SFX: `MUSIC_SCALE=0.55`
 - Stacked traps: `TRAP_STACK_MUL=[1,0.8,0.6]` (2nd/3rd trap in a room hit softer — full-trap stacking was unbeatable)
 - Den goblins: `GOBLIN_HP_FRAC=0.55`, hero retaliation `*0.4` in `goblinStep`, `GOBLIN_SPD=50`, cap `GOBLIN_DEN_CAP=20`
+- Hero CC resistance (tames the freeze+oil/Inferno lock): `statusResist(h)` = level ramp `(lvl-1)*0.010` cap `0.45`, +`0.25` champion/+`0.10` elite, +`0.28` Wizard ward (`wardT`); scales freeze/oil/chill/shock duration via `ccDur`. `FREEZE_IMMUNE=3`s post-thaw no-refreeze window; `BURN_CAP=22` caps stacked burn (`addBurn`). Cleric cleanse + Mage `wardT` in `heroSpellTick`. Covered by `tests/no_room_for_heroes_balance.test.mjs`.
 
 # Deploy & infra
 
