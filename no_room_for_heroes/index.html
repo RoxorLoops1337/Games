@@ -5118,29 +5118,29 @@ function drawWaitingHeroes(tx){
   X.textAlign='left';
 }
 
+const BOSS_ROOM_SCALE=1.2;   // throne room drawn this much bigger than a normal room
 function drawRoomBg(x0,w,isBoss,i){
   // Normal rooms are SEE-THROUGH now — the painted arena backdrop shows through the
   // room art's archway; the stone wall between rooms is drawn by drawGaps().
   if(!isBoss) return;
-  X.fillStyle='#2a1530';
-  X.fillRect(x0, FLOOR-150, w, 150);
-  // wall pillars
-  X.fillStyle='#120c24';
-  X.fillRect(x0, FLOOR-150, 4, 150);
-  X.fillStyle='#5a2a4a';
-  X.fillRect(x0, FLOOR-150, w, 5);
-  if(isBoss){
-    const ta=bossThroneArt();
-    if(ta){ drawRoomArt(x0,w,ta); return; }   // painted throne room replaces the procedural backdrop
-    // throne glow (cached — only moves when the corridor gains a slot)
-    const tk=x0+'_'+w;
-    if(!_thrGrad || _thrKey!==tk){
-      _thrGrad=X.createRadialGradient(x0+w*0.6,FLOOR-70,8,x0+w*0.6,FLOOR-70,90);
-      _thrGrad.addColorStop(0,'rgba(180,60,140,.35)'); _thrGrad.addColorStop(1,'rgba(0,0,0,0)');
-      _thrKey=tk;
-    }
-    X.fillStyle=_thrGrad; X.fillRect(x0,FLOOR-150,w,150);
+  // Boss throne room: ALSO see-through (no flat purple backdrop) and drawn ~20%
+  // bigger so the lair towers over the corridor — centred on the cell, floor-anchored.
+  const ta=bossThroneArt();
+  if(ta){
+    const tw=w*BOSS_ROOM_SCALE, th=tw*(ta.height/ta.width);
+    const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+    X.drawImage(ta, Math.round(x0+w*0.5-tw*0.5), Math.round(FLOOR+ROOM_ART_DROP-th), Math.round(tw), Math.round(th));
+    X.imageSmoothingEnabled=sm;
+    return;
   }
+  // no painted throne art yet — a soft glow (not a flat purple block) as a graceful fallback
+  const tk=x0+'_'+w;
+  if(!_thrGrad || _thrKey!==tk){
+    _thrGrad=X.createRadialGradient(x0+w*0.6,FLOOR-84,8,x0+w*0.6,FLOOR-84,120);
+    _thrGrad.addColorStop(0,'rgba(150,70,120,.26)'); _thrGrad.addColorStop(1,'rgba(0,0,0,0)');
+    _thrKey=tk;
+  }
+  X.fillStyle=_thrGrad; X.fillRect(x0-w*0.12,FLOOR-184,w*1.24,184);
 }
 
 // chunky pixel rect helper
@@ -5599,7 +5599,7 @@ const MON_SPRITES={
   ogre:{ base:'sprites/ogre/ogre_', scale:1.15, dirRow:1, idle:'idle', atk:'slash', clips:{
     idle: {sheet:'idle', fw:192,fh:192,n:2,fps:4,  ax:96, ay:126},
     walk: {sheet:'walk', fw:192,fh:192,n:8,fps:10, ax:96, ay:126},
-    slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},
+    slash:{sheet:'islash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},   // 192px attack sheet (ogre_slash.png is a mismatched 64px export → drew garbled "ghost ogres")
   }},
   // Gel Cube: art is single-direction frame stacks (assembled into 1-row sheets),
   // walk frames were drawn smaller so they're normalized up — hence per-clip anchors.
@@ -5778,10 +5778,8 @@ function drawRoomContents(x0,w,room,i){
     for(let i=0;i<preview;i++){
       const u=arr[i] || (room._previewUnits[i]=room._previewUnits[i]||{kills:0});
       if(u._mt===undefined) u._mt=i*0.37;             // de-sync the idle bob
-      const gx=x0+w*(0.20+(i%6)*0.115), recruit=i>=arr.length;
-      if(recruit) X.globalAlpha=0.55;                  // incoming recruits shown ghosted
+      const gx=x0+w*(0.72-(i%6)*0.105);                // fill from the RIGHT (like a stationed guard), drawn SOLID — no ghosting
       if(!drawDenGoblinSprite(u, gx+( (i/6|0)%2 ?5:0), 'idle')) drawMonster(gx, 'goblin', '#5fae54');
-      if(recruit) X.globalAlpha=1;
       const lv=goblinLevel(u.kills||0);
       if(lv>1){ X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
         X.fillText('⭐'+lv, gx, FLOOR-52); X.textAlign='left'; }
