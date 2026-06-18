@@ -190,6 +190,7 @@
   /* painted card-art icons (icons/<type>.png) replacing the emoji on card faces */
   .card .ic .cardimg{width:50px;height:50px;object-fit:contain;display:block;margin:0 auto -2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
   .choice .big .cardimg{width:78px;height:78px;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));}
+  .abilimg{width:26px;height:26px;object-fit:contain;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));}
   .amcic .cardimg{width:62px;height:62px;object-fit:contain;display:block;margin:0 auto;}
   .cardghost .ic .cardimg{width:54px;height:54px;object-fit:contain;display:block;margin:0 auto;}
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
@@ -508,6 +509,9 @@ const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 // Room types with a painted card-art icon (icons/<type>.png); else fall back to the emoji.
 const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','slime']);
 function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
+// Painted boss-ability icons (abilities/<id>.png); graceful fallback to the emoji.
+const ABIL_ICONS=new Set(['slam','breath','bolt','curse','freeze','drain','dread','mend','quake','hellfire','siphon','devour','raise','entangle']);
+function abilFace(id, cls){ return ABIL_ICONS.has(id) ? '<img class="'+(cls||'abilimg')+'" src="abilities/'+id+'.png" alt="" draggable="false">' : null; }
 const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
 // Effective values after rune bonuses (RB):
 function maxLevel(){ return MAX_LEVEL + (RB.upCap||0); }
@@ -2651,7 +2655,7 @@ function abilCardHTML(id, state, col){   // state: 'sig' | 'on' | 'off'
             : '<span style="color:#6a5a9a">tap to choose</span>';
   const click = state==='sig' ? '' : ` onclick="toggleLoadout('${id}')"`;
   return `<div class="choice" style="width:150px;${state==='sig'?'':'cursor:pointer;'}${hi}"${click}>
-    <div class="big">${d.ic}</div><h3 style="font-size:13px;margin:2px 0">${d.name}</h3>
+    <div class="big">${abilFace(id,'cardimg')||d.ic}</div><h3 style="font-size:13px;margin:2px 0">${d.name}</h3>
     <div class="small" style="opacity:.85">${d.desc}</div>
     <div class="small" style="color:#4dc3ff">🔷${d.cost} · ${d.cd}s</div>
     <div class="small">${tag}</div></div>`;
@@ -6392,7 +6396,7 @@ function renderPanel(){
         const dis=(a.cd>0||G.boss.mana<cost);
         return `<button class="abil${i===0&&G.tutHi==='abil'?' tut-pulse':''}" onclick="castAbility(${i})" ${dis?'disabled':''}
           title="${def.desc}">
-          <span style="font-size:18px">${def.ic}</span>
+          <span style="font-size:18px">${abilFace(a.id)||def.ic}</span>
           <span style="font-size:11px">${def.name}</span>
           <span class="c">${a.cd>0?'⏳'+a.cd.toFixed(1)+'s':'🔷'+cost}</span>
         </button>`;}).join('')}
