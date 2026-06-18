@@ -509,7 +509,7 @@ const ROOMS = {
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 // Room types with a painted card-art icon (icons/<type>.png); else fall back to the emoji.
-const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','slime']);
+const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','slime','runestone','shop']);
 function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
 // Painted boss-ability icons (abilities/<id>.png); graceful fallback to the emoji.
 const ABIL_ICONS=new Set(['slam','breath','bolt','curse','freeze','drain','dread','mend','quake','hellfire','siphon','devour','raise','entangle']);
@@ -524,6 +524,9 @@ const RUNE_ICON={
   asc1:'ascendant_bloodlust', asc2:'ascendant_fortune', asc3:'ascendant_warmind', asc4:'ascendant_juggernaut', asc5:'ascendant_godking',
 };
 function runeFace(id){ return RUNE_ICON[id] ? '<img class="runeimg" src="runes/'+RUNE_ICON[id]+'.png" alt="" draggable="false">' : null; }
+// Painted edict (run-modifier) icons (modifiers/<name>.png) per edict key; emoji fallback.
+const EDICT_ICON={ ironHorde:'iron', bloodPact:'blood', swiftRaiders:'swift', warband:'warband', eliteVanguard:'elite', leanCoffers:'lean', glassThrone:'glass' };
+function edictFace(id){ return EDICT_ICON[id] ? '<img class="cardimg" src="modifiers/'+EDICT_ICON[id]+'.png" alt="" draggable="false">' : null; }
 const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
 // Effective values after rune bonuses (RB):
 function maxLevel(){ return MAX_LEVEL + (RB.upCap||0); }
@@ -1873,7 +1876,7 @@ function openTitle(){
       ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}${(s.best||s.asc)?`<br>${s.asc?`<span style="color:#c79bff">👑 Ascension ${s.asc}</span>`:''}${s.asc&&s.best?' · ':''}${s.best?`♾️ best: <b>${s.best}</b> slain`:''}`:''}</div>`
       : `<div class="small" style="opacity:.7;margin:4px 0">Empty — a brand-new game</div>`;
     cards.push(`<div class="choice" style="width:220px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
-      <div class="big">💾</div>
+      <div class="big"><img class="cardimg" src="icons/ui_save.png" alt="" draggable="false"></div>
       <h3 style="margin:2px 0">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● last played</span>':''}</h3>
       ${body}
       <div class="row" style="justify-content:center;gap:6px;margin-top:6px">
@@ -2580,7 +2583,7 @@ function renderEdicts(){
   G.phase='edicts'; overlay.classList.add('show');
   const cards=EDICT_KEYS.map(id=>{ const e=EDICTS[id]; const on=G.edicts.includes(id);
     return `<div class="choice" style="width:158px;cursor:pointer;${on?'border-color:#ffd34d;box-shadow:0 0 8px #ffd34d':''}" onclick="toggleEdict('${id}')">
-      <div class="big">${e.ic}</div><h3 style="font-size:13px;margin:2px 0">${e.name}</h3>
+      <div class="big">${edictFace(id)||e.ic}</div><h3 style="font-size:13px;margin:2px 0">${e.name}</h3>
       <div class="small" style="line-height:1.25;min-height:30px">${e.desc}</div>
       <div class="small" style="color:#ffd34d;margin-top:3px">+${Math.round(e.reward*100)}% runes</div>
       <div class="small">${on?'<span style="color:#ffd34d">✔ sworn</span>':'<span style="color:#6a5a9a">tap to swear</span>'}</div></div>`;
