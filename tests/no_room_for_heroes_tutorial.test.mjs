@@ -14,7 +14,7 @@ const t = harness('tutorial (guided run)');
 
 A.startTutorial();
 t.ok(A.G.tutorial===true && A.G.tutStep===0, 'tutorial starts at beat 0');
-t.ok(A.G.slots===3 && A.G.rooms.every(r=>r===null) && A.G.hand.length===0, 'fresh dungeon: 3 empty slots, no cards');
+t.ok(A.G.slots===1 && A.G.rooms.every(r=>r===null) && A.G.hand.length===0, 'fresh dungeon: 1 empty room, no cards');
 
 // --- input is hard-gated to the current beat ---
 t.ok(A.tutAllow('start')===false && A.tutAllow('ability')===false, 'intro (cont) blocks wave + abilities');
