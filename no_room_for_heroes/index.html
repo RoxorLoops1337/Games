@@ -2509,7 +2509,7 @@ const TUT=[
 /*22*/{ title:"The horde", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"Now the <b>real</b> raid — a whole army at once. Hold the throne as long as you can… 😈",
         enter:()=>{ G._tutWave=TUT_HORDE(); G.boss.hp=Math.min(G.boss.hp, Math.max(1,Math.round(G.boss.maxHp*0.08))); } },
-/*23*/{ overlay:true, gate:'none', adv:'never' },   // silent watch — bossDies() runs the finale
+/*23*/{ overlay:true, gate:'free', adv:'never' },   // watch the horde — abilities/smite stay usable; bossDies() runs the finale
 ];
 function tutDoneGet(){ try{ return localStorage.getItem('bm_tut_done')==='1'; }catch(_){ return false; } }
 function tutDoneSet(){ try{ localStorage.setItem('bm_tut_done','1'); }catch(_){ } }
