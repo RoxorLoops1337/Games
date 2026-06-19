@@ -3373,7 +3373,7 @@ function buildHeroFromSpec(spec){
     state:'walking',         // walking | fighting | shopping | boss | dead
     cellIndex:-1,
     atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
-    freeze:0, shopT:0, walkAnim:0,
+    freeze:0, shopT:0, walkAnim:Math.random()*6, _yj:(Math.random()<0.5?0:1),   // de-sync gait + a touch of height variance
     shieldT:0, specialT:5,   // champion special timers
     spellT:ri(2,6), rallyT:0, blessT:0, evadeT:0, surgeT:0,   // class-spell cooldown + active buff timers
   };
@@ -3541,6 +3541,10 @@ function goblinValidTarget(g, h){
 }
 function goblinStep(g, dt){
   if(g.hp<=0){ g.engaged=null; return; }
+  // 🐇 sandbox-style marching hops: integrate the current little jump, and now and
+  // then kick off a new one while the goblin is walking (state from last frame).
+  if(g.hopV>0 || g.hop>0){ g.hop=(g.hop||0)+g.hopV*dt; g.hopV-=300*dt; if(g.hop<=0){ g.hop=0; g.hopV=0; } }
+  else if(g.state==='walking' && Math.random()<dt*0.8){ g.hopV=70+Math.random()*45; }
   const c = cellAt(g.x); if(c) g.cellIndex=c.index;
   // LOCK onto a hero and hold until one of us dies — fight that one to the finish,
   // then turn to the NEXT nearest. Land a kill → pick a new target next frame.
@@ -3617,7 +3621,7 @@ function drawDenGoblinSprite(g, sx, clipName){
   const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
   X.drawImage(img, srcX,srcY,clip.fw,clip.fh,
-    Math.round(sx-clip.ax*S), Math.round(FLOOR-LIFT-clip.ay*S), Math.round(clip.fw*S), Math.round(clip.fh*S));
+    Math.round(sx-clip.ax*S), Math.round(FLOOR-LIFT-clip.ay*S-(g.hop||0)), Math.round(clip.fw*S), Math.round(clip.fh*S));
   X.imageSmoothingEnabled=sm;
   return true;
 }
@@ -6057,7 +6061,7 @@ if(typeof Image!=='undefined'){
 }
 function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
-function drawMonsterSprite(cx, footY, room, cell, key, alive, moving){
+function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase){
   const cfg=MON_SPRITES[key]; if(!cfg||!room) return false;
   const name = moving && cfg.clips.walk ? 'walk'
              : (alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
@@ -6070,7 +6074,9 @@ function drawMonsterSprite(cx, footY, room, cell, key, alive, moving){
   if(room[KC]!==name){ room[KC]=name; room[KT]=0; }
   const dt=Math.min(0.1,(now-(room[KL]||now))/1000); room[KL]=now;
   room[KT]=(room[KT]||0)+dt;
-  const frame=Math.floor(room[KT]*clip.fps)%clip.n;
+  // `phase` de-syncs identical stacked guards so a room of five Bone Pits doesn't
+  // animate as one clone.
+  const frame=Math.floor((room[KT]+(phase||0))*clip.fps)%clip.n;
   const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
   const dx=Math.round(cx-clip.ax*S), dy=Math.round(footY-clip.ay*S);
   X.imageSmoothingEnabled=false;
@@ -6234,12 +6240,22 @@ function drawRoomContents(x0,w,room,i){
     const deadCount = (G.phase==='run' && cell)
       ? Math.max(0, (cell.guards||[]).filter(g=>g && !g.alive).length)
       : 0;
-    // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
-    // (advance the moment a hero is in the cell — don't wait for fighting state)
-    const engaged = alive && cell && G.phase==='run'
-      && (G.heroes||[]).some(h=>h && h.cellIndex===cell.index && (h.state==='walking'||h.state==='fighting'));
-    // engaged: march all the way across to meet the hero waiting just inside the door
-    const targetF = engaged ? 0.20 : 0.74;
+    // monsters wait on the RIGHT and walk LEFT to MEET a hero who enters their
+    // room — then STOP right next to him (don't slide past). Find the front-most
+    // (right-most) raider stalled in this cell and stand just to his right.
+    let frontHx=null;
+    if(alive && cell && G.phase==='run') for(const h of (G.heroes||[])){
+      if(h && h.x>=0 && h.cellIndex===cell.index && (h.state==='walking'||h.state==='fighting')){
+        if(frontHx===null || h.x>frontHx) frontHx=h.x;
+      }
+    }
+    const engaged = frontHx!==null;
+    // stand a touch to the hero's right (facing him); clamp inside the room so a
+    // hero who slips deep in doesn't drag the guard out the far wall. (frontHx is a
+    // WORLD x — convert to a cell fraction with the cell's world bounds, not x0/w.)
+    const targetF = engaged
+      ? Math.max(0.20, Math.min(0.74, (frontHx - cellX(cell.index))/ROOM_W + 0.10))
+      : 0.74;
     // build phase: stand at rest (right side) — don't inherit a stale run position
     // that left the monster sliding in from the left after a wave
     if(room._monF===undefined || G.phase!=='run') room._monF=targetF;
@@ -6254,7 +6270,9 @@ function drawRoomContents(x0,w,room,i){
       const def=ROOMS[mp]; const sprite = mp==='minion'?'minion':mp;
       const sp=monParts.length>3?20:(monParts.length>2?28:44);
       const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 5)
-      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT, room, cell, mp, alive, moving);
+      const oy=(monParts.length>1)?(mi%2)*2:0;                 // stagger heights so a stack reads as a crowd
+      const ph=mi*0.31;                                        // …and de-sync their animation cycles
+      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT-oy, room, cell, mp, alive, moving, ph);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
       if(cell && cell.mon && cell.mon.flashAt){ const mf=performance.now()-cell.mon.flashAt;   // struck-just-now flash
         if(mf<120){ X.save(); X.globalAlpha=(1-mf/120)*0.45; X.globalCompositeOperation='lighter';
@@ -6465,7 +6483,7 @@ function drawChampion(sx, footY, h){
   return true;
 }
 function drawHero(sx,h){
-  const y=FLOOR+(h.yOff||0); const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
+  const y=FLOOR+(h.yOff||0)-(h._yj||0); const c=h; const bob=h.state==='walking'?Math.sin(h.walkAnim)*2:0;
   const yy=y+bob;
   const champ=!!h.champion;
   const king=!!h.king;
