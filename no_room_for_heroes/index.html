@@ -1909,7 +1909,7 @@ function openTitle(){
        <b>shop</b> that sells them gear you loot right back. Every kill earns a
        <b>room card</b>; matching cards <b>upgrade</b> a room. Fights auto-resolve,
        but your <b>boss abilities</b> are yours to fire.</p>
-    <div class="choices">${cards.join('')}</div>
+    <div class="choices" style="flex-wrap:nowrap;width:min(708px,100%)">${cards.join('')}</div>
     <div class="menu-btns" style="margin-top:8px"><button onclick="openCloud()" style="padding:7px 14px;font-size:13px">☁️ Cloud Save</button></div>
     <p class="small" style="margin-top:8px;opacity:.9">Each slot is its own profile — runes, town and unlocks are separate.</p>`;
 }
