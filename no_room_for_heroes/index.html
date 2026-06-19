@@ -535,7 +535,9 @@ function runeFace(id){ return RUNE_ICON[id] ? '<img class="runeimg" src="runes/'
 // Painted edict (run-modifier) icons (modifiers/<name>.png) per edict key; emoji fallback.
 const EDICT_ICON={ ironHorde:'iron', bloodPact:'blood', swiftRaiders:'swift', warband:'warband', eliteVanguard:'elite', leanCoffers:'lean', glassThrone:'glass' };
 function edictFace(id){ return EDICT_ICON[id] ? '<img class="cardimg" src="modifiers/'+EDICT_ICON[id]+'.png" alt="" draggable="false">' : null; }
-const MAX_LEVEL = 5;   // a trap/monster can be upgraded this many times
+const MAX_LEVEL = 5;   // a TRAP can be stacked-upgraded this many levels
+const MAX_SLOTS = 5;   // a room can hold this many units (grown +1 per gold upgrade)
+const MAX_TRAPS = 2;   // …of which at most this many may be traps
 // Effective values after rune bonuses (RB):
 function maxLevel(){ return MAX_LEVEL + (RB.upCap||0); }
 function handCap(){ return 5 + (RB.hand||0); }
@@ -544,8 +546,9 @@ function abilDmg(x){ const p=G.boss?G.boss.pAbilDmg||0:0; return Math.round(x*(1
 function townCost(c){ return Math.max(1, Math.round(c*(1-(RB.townDisc||0)))); }
 // Shop sale price scales with the shop room's level (+40% markup per level).
 function shopMarkup(lvl){ return 1.6 + ((lvl||1)-1)*0.4; }
-function shopCap(room){ return ((room&&room.lvl)||1)+1; }   // Lv1 holds 2 items, +1 slot per level
-function salePrice(room, key){ return Math.round(ITEMS[key].price * shopMarkup(room?room.lvl:1)); }
+function shopTier(room){ return (room&&room.cap)||1; }       // shops scale with the room's slot count
+function shopCap(room){ return shopTier(room)+1; }           // tier 1 holds 2 items, +1 slot per upgrade
+function salePrice(room, key){ return Math.round(ITEMS[key].price * shopMarkup(shopTier(room))); }
 
 // Fusing two components yields a synergy multiplier on the room's output.
 // Some pairs are great, some are duds (diminishing returns).
@@ -571,24 +574,24 @@ const SYNERGY_PAIRS = {
   'ogre+skeleton':  {m:1.25,name:'Bone Colossus',  desc:'A late-game wall — both guards hit ×1.25 harder.'},
   'goblin+slime':   {m:1.10,name:'Spawning Vats',  fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (no cap).'},
 };
-function roomParts(r){ const p=[r.type]; if(r.part2)p.push(r.part2); if(r.part3)p.push(r.part3); return p; }
-function synergyInfo(parts){
-  if(parts.length<2) return {m:1, name:'', tone:'neutral'};
-  // the best NAMED pair anywhere in the room wins — a 3-part room keeps its identity
-  let best=null;
-  for(let a=0;a<parts.length;a++) for(let b=a+1;b<parts.length;b++){
-    const hit=SYNERGY_PAIRS[[parts[a],parts[b]].sort().join('+')];
-    if(hit && (!best || hit.m>best.m)) best=hit;
-  }
-  if(best) return {...best, tone:'good'};
-  const kinds=parts.map(t=>ROOMS[t].kind);
-  const nm=kinds.filter(k=>k==='monster').length, nt=kinds.filter(k=>k==='trap').length;
-  if(nm&&nt) return {m:1.18, name:'Pinned Down', tone:'good'};
-  if(nm>=2) return {m:1, name:'Pack', tone:'good'};   // separate guards, one after the other
-  if(nt>=2) return {m:1.08, name:'Hazard Field', tone:'good'};
-  return {m:1, name:'Unstable', tone:'bad'};
+// A room holds an array of UNITS ({kind,type,lvl}); roomParts lists their types
+// (with duplicates — five Bone Pits = five 'skeleton' entries). Falls back to a
+// bare {type} object for any pre-unit data path.
+function roomParts(r){ return (r&&r.units)? r.units.map(u=>u.type) : (r&&r.type? [r.type] : []); }
+function roomTrapUnits(r){ return (r&&r.units||[]).filter(u=>u.kind==='trap'); }
+function roomMonUnits(r){ return (r&&r.units||[]).filter(u=>u.kind==='monster'); }
+function roomFreeSlots(r){ return Math.max(0,(r.cap||1)-(r.units||[]).length); }
+// Synergies/named fusions were removed — units act independently now (an oil
+// trap priming a flame trap is emergent, not a multiplier). Kept as a neutral
+// stub so any lingering caller still resolves.
+function synergyInfo(parts){ return {m:1, name:'', tone:'neutral'}; }
+function comboName(r){
+  if(!r) return 'empty';
+  if(r.type==='minion') return r.label||'Corrupted';
+  const counts={}; for(const t of roomParts(r)) counts[t]=(counts[t]||0)+1;
+  const s=Object.keys(counts).map(t=>ROOMS[t].name+(counts[t]>1?' ×'+counts[t]:'')).join(' + ');
+  return s || roomName(r);
 }
-function comboName(r){ return roomParts(r).map(t=>ROOMS[t].name).join(' + '); }
 
 // ---- Aging dungeon: veteran rooms, merging & corruption ----------------
 // Rooms that have killed a lot of heroes become "veterans": they hit harder
@@ -602,20 +605,14 @@ const CORRUPT_PCT  = 0.015; // toll: drain this % of max HP each populated room 
 const CORRUPT_BOSS = 0.06;  // the boss strikes +6% harder per corruption stack a hero carries
 function vetRank(room){ return room ? Math.min(VET_MAX, Math.floor((room.kills||0)/VET_KILLS)) : 0; }
 function vetMul(room){ return 1 + vetRank(room)*VET_DMG; }
-function roomUpgradeCost(room){ return Math.max(1, Math.round((25 + 22*room.lvl) * (room.part3?1.8:room.part2?1.4:1) * (1-(RB.townDisc||0)))); }
-// A room holds up to 3 parts. The 3rd costs gold (tall builds compete with wide
-// ones instead of strictly beating them) and its guard joins at 85% strength.
-const FUSE3_GOLD=250, GUARD3_MUL=0.85;
-// Stacked TRAPS discount (mirrors the 3rd-guard rule): in a multi-trap room
-// the 1st damage-trap hits full, the 2nd at 80%, the 3rd at 60%. Without it,
-// full-trap stacking strictly dominated every other build (owner's A2 run:
-// 248k trap dmg vs 0 guard dmg).
+// Each gold upgrade buys one more slot (capacity), not more power.
+function roomUpgradeCost(room){ return Math.max(1, Math.round((25 + 30*(room.cap||1)) * (1-(RB.townDisc||0)))); }
+// Stacked TRAPS discount: a room may hold at most 2 traps; the 1st damage-trap
+// hits full, the 2nd at 80%. Without it, full-trap stacking strictly dominated.
 const TRAP_STACK_MUL=[1, 0.8, 0.6];
-// Can room `from` be merged INTO room `into` (turning `into` into a combo)?
-function canFuseRooms(into, from){
-  return !!(into && from && roomParts(into).length<3 && !from.part2 && !from.part3
-    && into.def.kind!=='shop' && from.def.kind!=='shop' && !roomParts(into).includes(from.type));
-}
+// Room-merge-on-drag was removed with synergies — you now build a room by
+// dropping cards into its slots, so dragging one room onto another only reorders.
+function canFuseRooms(into, from){ return false; }
 
 // ---- Boss doctrine helpers (dungeon-wide rules for the active boss) ----
 function bossDoc(){ return (G && G.boss && G.boss.doc) || ''; }
@@ -1865,7 +1862,7 @@ function openLibrary(){
   const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
   overlay.innerHTML = `<h1>📖 Library</h1>
     <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
-      <button class="go" style="min-width:270px" onclick="openCodex()">⚛️ Combo Codex${sub('reactions, named fusions & keywords')}</button>
+      <button class="go" style="min-width:270px" onclick="openCodex()">⚛️ Combo Codex${sub('reactions, rooms & keywords')}</button>
       <button style="min-width:270px" onclick="showHelp()">❓ How to play${sub('the loop in five lines')}</button>
     </div>
     <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
@@ -2079,18 +2076,12 @@ function openCodex(){
     <div class="small" style="color:#7bdc6b">→ ${r.pay}</div></div>`).join('');
   const keys=Object.keys(KEYWORDS).map(k=>`<div class="small" style="margin:3px 0;line-height:1.3">
     <b style="color:${KEYWORDS[k].col}">${k}</b> — ${KEYWORDS[k].txt}</div>`).join('');
-  const fus=Object.keys(SYNERGY_PAIRS).map(k=>{ const v=SYNERGY_PAIRS[k]; const [a,b]=k.split('+');
-    return `<div class="ucard" style="width:auto;min-width:150px;text-align:left;padding:8px 10px">
-      <div style="font-weight:bold">${ROOMS[a].ic}${ROOMS[b].ic} ${v.name} <span style="color:#7bdc6b">×${v.m.toFixed(2)}</span></div>
-      <div class="small" style="opacity:.85">${ROOMS[a].name} + ${ROOMS[b].name}</div>
-      ${v.desc?`<div class="small" style="color:#b985ff">${v.desc}</div>`:''}</div>`;}).join('');
   overlay.innerHTML=`<h1>⚛️ Combo Codex</h1>
     <p>Traps & monsters apply <b>statuses</b> that linger as heroes walk. The right <b>order</b> sets off a reaction — and each reaction <b>escalates</b> the next (a chain).</p>
     <h2 style="margin:6px 0 4px">Reactions</h2>
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
-    <h2 style="margin:12px 0 4px">Named Fusions</h2>
-    <p class="small" style="opacity:.85;margin:0 0 4px">Fuse rooms (drag one onto another, or drop a card on a room) — up to <b>3 parts</b>; the 3rd costs ${FUSE3_GOLD}g and a 3rd guard joins at ×${GUARD3_MUL}. The best named pair in the room sets its identity — anything else is Pack (guards in a row), Pinned Down ×1.18 (monster+trap) or Hazard Field ×1.08 (trap+trap).</p>
-    <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">${fus}</div>
+    <h2 style="margin:12px 0 4px">Rooms</h2>
+    <p class="small" style="opacity:.85;margin:0 0 4px">Each room holds up to <b>${MAX_SLOTS} slots</b> — ⬆ spend gold to add one (every room starts with 1). At most <b>${MAX_TRAPS} traps</b>; fill the rest with monsters, mix &amp; match. Drop the <b>same trap</b> on itself to level it up (max ${MAX_LEVEL}); monsters <b>stack as independent copies</b> and toughen from the room's <b>veteran</b> kills. Synergy is emergent — line up statuses (oil → flame, frost → shatter) using the reactions above.</p>
     <h2 style="margin:12px 0 4px">Keywords</h2>
     <div style="max-width:640px;text-align:left;margin:0 auto">${keys}</div>
     <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
@@ -2399,7 +2390,7 @@ const TUT_STEPS=[
   {adv:'wave',   hi:'start', text:"Your dungeon is armed! Tap <b>⚔️ Start Wave</b> — a hero marches in and your rooms fight automatically."},
   {adv:'kill',   hi:'abil',  text:"Blast the intruder with a <b>boss ability</b> (bottom-left) — they cost 🔷 mana. Slay them before they reach the throne!"},
   {adv:'upgrade',hi:'hand',  text:"Every kill earns a card. Got two of the <b>same</b> room? Select that card, then tap the matching room to <b>level it up</b> — it gets stronger."},
-  {adv:null,     hi:null, final:true, text:"You're ready! 👑 Tip: tap any room, card, hero or your boss to inspect it. Build, upgrade and fuse rooms — and don't let anyone through. Good luck!"},
+  {adv:null,     hi:null, final:true, text:"You're ready! 👑 Tip: tap any room, card, hero or your boss to inspect it. Build rooms, upgrade them for more slots, and stack traps & monsters — don't let anyone through. Good luck!"},
 ];
 function tutDoneGet(){ try{ return localStorage.getItem('bm_tut_done')==='1'; }catch(_){ return false; } }
 function tutDoneSet(){ try{ localStorage.setItem('bm_tut_done','1'); }catch(_){ } }
@@ -2815,57 +2806,74 @@ function tapSlot(idx){
   }
   placeCard(selCard, idx);
 }
-// Apply hand card `ci` to slot `idx` (build / upgrade / fuse). Returns true on success.
+// Apply hand card `ci` to slot `idx`. Returns true on success.
+//  • empty slot → new room (1 slot)
+//  • same trap → stack-upgrade that trap's level (cap 5)
+//  • new trap → fills a slot, max 2 traps per room
+//  • monster → always a NEW independent copy (no merge); veterans from kills
 function placeCard(ci, idx){
   const card=G.hand[ci]; if(!card) return false;
+  const T=card.type, cdef=ROOMS[T];
   const room=G.rooms[idx];
   if(!room){
-    // build new room here
-    G.rooms[idx]=makeRoom(card.type, card.lvl, card);
+    G.rooms[idx]=makeRoom(T, card.lvl, card);
     G.hand.splice(ci,1);
-    burst(cellX(idx)+ROOM_W/2, FLOOR-30, ROOMS[card.type].col, 14);
-    showHint(ROOMS[card.type].name+' built!'); tutEvent('place');
-  } else if(roomParts(room).includes(card.type)){
-    // upgrade matching room/part (capped)
-    if(room.lvl>=maxLevel()){ showHint(comboName(room)+' is already max level ('+maxLevel()+').'); return false; }
-    room.lvl++;
-    G.hand.splice(ci,1);
-    burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
-    floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
-    showHint(comboName(room)+' upgraded to Lv '+room.lvl+(room.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('upgrade');
-  } else if(canFuse(room,card)){
-    // fuse a 2nd (free) or 3rd (gold) trap/monster into this room
-    const third=!!room.part2;
-    if(third && G.gold<FUSE3_GOLD){ showHint('A 3rd part costs '+FUSE3_GOLD+'g — not enough gold.'); return false; }
-    if(third){ G.gold-=FUSE3_GOLD; room.part3=card.type; }
-    else room.part2=card.type;
-    if(card.type==='minion'){ room.minHp=card.minHp; room.minAtk=card.minAtk; if(!room.label) room.label=card.label; }  // carry the corrupted hero's stats
-    G.hand.splice(ci,1);
-    const info=synergyInfo(roomParts(room));
-    burst(cellX(idx)+ROOM_W/2, FLOOR-40, '#9a5cff', 20);
-    floater(cellX(idx)+ROOM_W/2, FLOOR-80, info.name||'COMBO', info.tone==='bad'?'#ff7a8a':'#7bdc6b');
-    showHint('Fused → '+comboName(room)+(info.name?' ('+info.name+', ×'+info.m.toFixed(2)+')':'')+(third?' (−'+FUSE3_GOLD+'g)':'')+'!');
-  } else if(roomParts(room).length>=3){
-    showHint(comboName(room)+' is already a full combo — 3 parts max.');
-    return false;
-  } else {
-    showHint('Can\'t place that here (shops can\'t fuse).');
-    return false;
+    burst(cellX(idx)+ROOM_W/2, FLOOR-30, cdef.col, 14);
+    showHint(ROOMS[T].name+' built!'); tutEvent('place');
+    selCard=-1; sfx('upgrade'); render(); return true;
   }
-  selCard=-1; sfx('upgrade');
-  render();
-  return true;
+  // shops never share a room
+  if(cdef.kind==='shop' || room.units.some(u=>u.kind==='shop')){
+    showHint('A Shop takes the whole room — it can\'t share slots.'); return false;
+  }
+  if(cdef.kind==='trap'){
+    const existing=room.units.find(u=>u.kind==='trap' && u.type===T);
+    if(existing){
+      if(existing.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
+      existing.lvl++;
+      G.hand.splice(ci,1);
+      burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
+      floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+existing.lvl, '#ffd34d');
+      showHint(ROOMS[T].name+' upgraded to Lv '+existing.lvl+(existing.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('upgrade');
+      selCard=-1; sfx('upgrade'); render(); return true;
+    }
+    if(roomTrapUnits(room).length>=MAX_TRAPS){ showHint('A room holds at most '+MAX_TRAPS+' traps.'); return false; }
+    if(roomFreeSlots(room)<=0){ showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false; }
+    room.units.push(makeUnit(T, card.lvl, card));
+  } else {
+    // monster: always a fresh independent copy — five Bone Pits = five guards
+    if(roomFreeSlots(room)<=0){ showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false; }
+    const u=makeUnit(T, card.lvl, card);
+    room.units.push(u);
+    if(T==='minion'){ room.minHp=u.minHp; room.minAtk=u.minAtk; if(!room.label) room.label=u.label; }
+  }
+  room.type=room.units[0].type;                       // keep primary type in sync
+  G.hand.splice(ci,1);
+  burst(cellX(idx)+ROOM_W/2, FLOOR-40, cdef.col, 18);
+  floater(cellX(idx)+ROOM_W/2, FLOOR-80, '+ '+ROOMS[T].name, '#7bdc6b');
+  showHint('Added '+ROOMS[T].name+' → '+room.units.length+'/'+(room.cap||1)+' slots.'); tutEvent('place');
+  selCard=-1; sfx('upgrade'); render(); return true;
 }
 
+function makeUnit(type, lvl, card){
+  const def=ROOMS[type];
+  const u={kind:def.kind, type, lvl:Math.max(1, lvl||1)};
+  if(type==='minion'){            // carry the corrupted hero's stats + name
+    u.minHp = card?.minHp || def.hp;
+    u.minAtk= card?.minAtk || def.atk;
+    u.label = card?.label || 'Corrupted';
+  }
+  return u;
+}
+// A room is a container of up to `cap` slots (starts at 1, grown by gold). `units`
+// holds the placed trap/monster/shop units. `lvl` is kept = 1 as an inert guard
+// for any old code path; real power comes from per-trap level + veteran kills.
 function makeRoom(type,lvl,card){
   const def=ROOMS[type];
-  const r={type,lvl,def,kills:0,part2:null,part3:null};
+  const u=makeUnit(type, lvl, card);
+  const r={type, lvl:1, def, kills:0, cap:1, units:[u]};
   if(def.kind==='shop') r.stock=[];
-  if(type==='minion'){            // carry the corrupted hero's stats + name
-    r.minHp = card?.minHp || def.hp;
-    r.minAtk = card?.minAtk || def.atk;
-    r.label = card?.label || 'Corrupted';
-  }
+  if(type==='minion'){ r.minHp=u.minHp; r.minAtk=u.minAtk; r.label=u.label; }
   return r;
 }
 
@@ -2902,47 +2910,40 @@ function buildCells(){
     const r=G.rooms[i];
     const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:'empty', traps:[], mon:null, shop:false};
     if(r){
-      const parts=roomParts(r);
-      const sI=synergyInfo(parts);
-      const syn=sI.m + (parts.length>1?(RB.synergy||0):0);
-      cell.syn=syn;
-      const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank powers this cell
+      cell.syn=1;                                // synergies removed — units act independently
+      const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank (room kills) powers this cell
       // 👺 Pure Goblin Den = a SPAWNER — no stationary guard; goblins march out per wave
-      const monParts=parts.filter(p=>ROOMS[p] && ROOMS[p].kind==='monster');
-      const pureGoblin=monParts.length>0 && monParts.every(p=>p==='goblin');
+      const monUnits=roomMonUnits(r);
+      const pureGoblin=monUnits.length>0 && monUnits.every(u=>u.type==='goblin');
       if(pureGoblin) cell.spawner='goblin';
       let guards=[], hasShop=false; const bm=barracksMul();
-      for(const p of parts){
-        const def=ROOMS[p];
+      for(const u of r.units){
+        const def=ROOMS[u.type]; const lvl=u.lvl||1;
         if(def.kind==='trap'){
           const di=cell.traps.filter(t=>!t.def.amp).length;     // damage-trap index in this room
-          cell.traps.push({type:p, def, fireT:0, stackMul: def.amp?1:TRAP_STACK_MUL[Math.min(di,2)]});
+          cell.traps.push({type:u.type, def, lvl, fireT:0, stackMul: def.amp?1:TRAP_STACK_MUL[Math.min(di,2)]});
           if(def.amp) cell.ampSelf=(cell.ampSelf||0)+def.amp;     // Runestone amplifier (this + adjacent)
         } else if(def.kind==='monster'){
           if(pureGoblin) continue;                                 // spawner: handled by spawnDenGoblinsForWave
           if(def.taunt) cell.warden=true;                        // strikes the whole stalled party
           if(def.totem) cell.totem=true;                         // buffs adjacent rooms while alive
-          const bHp = p==='minion'? (r.minHp||def.hp) : def.hp;   // ||def guards a NaN/missing minion stat
-          const bAtk= p==='minion'? (r.minAtk||def.atk): def.atk;
+          const bHp = u.type==='minion'? (u.minHp||def.hp) : def.hp;
+          const bAtk= u.type==='minion'? (u.minAtk||def.atk): def.atk;
           // "Fed" monsters grow with every hero that died in this room — uncapped.
-          // Under the Undeath doctrine, ALL monster rooms feed.
-          const feed = (monFeeds(def) || sI.fx==='feedBoth') ? feedMul(r.kills) : 1;   // Grave Horde/Spawning Vats: the pair shares the feast
+          const feed = monFeeds(def) ? feedMul(r.kills) : 1;
           const bas = bastionMul();   // Bastion doctrine: tougher guards
-          // Each monster is its OWN guard — separate HP & attack, with the combo
-          // multiplier applied individually (fused monsters = guards in a row;
-          // the 3rd joins at 85% so tall rooms don't strictly beat wide dungeons).
-          const g3 = guards.length>=2 ? GUARD3_MUL : 1;
-          const hp = Math.round(bHp  * (0.9 + (r.lvl-1)*0.85) * feed * bas * syn * vm * (1+(RB.monHp||0)) * bm * g3);
-          const atk= Math.round(bAtk * (1.0 + (r.lvl-1)*0.9)  * feed * bas * syn * vm * (1+(RB.monDmg||0)) * bm * g3);
-          guards.push({hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split});
+          // Each monster is its OWN guard (separate HP & ATK). Power comes from
+          // the unit's own level + veteran kills; a room gets strong by holding
+          // MORE guards, not stronger ones — only the front guard attacks.
+          const hp = Math.round(bHp  * (0.9 + (lvl-1)*0.85) * feed * bas * vm * (1+(RB.monHp||0)) * bm);
+          const atk= Math.round(bAtk * (1.0 + (lvl-1)*0.9)  * feed * bas * vm * (1+(RB.monDmg||0)) * bm);
+          guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split});
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
       }
-      // monster-pair identities (Gatehouse / Sludge Colossus)
-      if(sI.fx==='tauntBoth' && guards.length>1) cell.warden=true;
-      if(sI.fx==='splitBoth') guards.forEach(g=>{ g.split=true; });
-      if(guards.length){ cell.mon=guards[0]; cell.mon2=guards[1]||null; cell.mon3=guards[2]||null; }   // each steps up when the one before falls
+      cell.guards=guards;                        // every guard, front-to-back
+      if(guards.length) cell.mon=guards[0];      // active guard; the next alive steps up when it falls
       cell.shop=hasShop;
       cell.kind = guards.length ? 'monster' : (cell.traps.length ? 'trap' : (hasShop ? 'shop' : 'empty'));
     }
@@ -2954,7 +2955,7 @@ function buildCells(){
     if(!roomParts(c.room).includes('warcamp')) continue;
     for(const j of [c.index-1, c.index+1]){
       const nb=G.cells[j]; if(!nb) continue;
-      for(const g of [nb.mon, nb.mon2, nb.mon3]){ if(g){ g.hp=Math.round(g.hp*1.30); g.maxHp=g.hp; g.atk=Math.round(g.atk*1.30); } }
+      for(const g of (nb.guards||[])){ if(g){ g.hp=Math.round(g.hp*1.30); g.maxHp=g.hp; g.atk=Math.round(g.atk*1.30); } }
     }
   }
   // boss cell
@@ -3202,15 +3203,18 @@ function spawnDenGoblinsForWave(){
     if(cell.spawner!=='goblin' || !cell.room) continue;
     const r=cell.room;
     const arr=ensureGoblinArray(r);
-    // add this wave's new recruits, respecting the cap
-    const add=Math.min(goblinSpawnRate(r.lvl), GOBLIN_DEN_CAP - arr.length);
+    // the den's strength comes from the goblin UNITS placed: one recruit per unit
+    // each wave, base stats scaled by the units' (card) level.
+    const gUnits=roomMonUnits(r).filter(u=>u.type==='goblin');
+    const gcount=Math.max(1, gUnits.length);
+    const glvl=gUnits.reduce((m,u)=>Math.max(m,u.lvl||1), 1);
+    const add=Math.min(gcount, GOBLIN_DEN_CAP - arr.length);
     for(let i=0;i<add;i++) arr.push({kills:0});
     // derive per-goblin base stats from room state, then scale per individual level
-    const parts=roomParts(r); const sI=synergyInfo(parts); const syn=sI.m + (parts.length>1?(RB.synergy||0):0);
     const def=ROOMS.goblin; const bas=bastionMul(), bm=barracksMul(), vm=vetMul(r);
     const feed=feedMul(r.kills||0);
-    const baseHp =Math.round(def.hp *(0.9+(r.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp ||0))*bm);
-    const baseAtk=Math.round(def.atk*(1.0+(r.lvl-1)*0.9 )*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
+    const baseHp =Math.round(def.hp *(0.9+(glvl-1)*0.85)*feed*bas*vm*(1+(RB.monHp ||0))*bm);
+    const baseAtk=Math.round(def.atk*(1.0+(glvl-1)*0.9 )*feed*bas*vm*(1+(RB.monDmg||0))*bm);
     arr.forEach((unit,i)=>{
       const lvl=goblinLevel(unit.kills);
       const hp =Math.max(2, Math.round(baseHp *GOBLIN_HP_FRAC *(1+(lvl-1)*GOBLIN_HP_PER_LVL )));
@@ -3723,7 +3727,7 @@ function destroyRoom(cell){
   if(idx<0 || idx>=G.rooms.length || !G.rooms[idx]) return;
   const nm=roomName(G.rooms[idx]);
   G.rooms[idx]=null;
-  cell.room=null; cell.traps=[]; cell.mon=null; cell.mon2=null; cell.mon3=null; cell.shop=false; cell.syn=1; cell.ampSelf=0; cell.totem=false;
+  cell.room=null; cell.traps=[]; cell.mon=null; cell.guards=[]; cell.shop=false; cell.syn=1; cell.ampSelf=0; cell.totem=false;
   burst(cell.x0+ROOM_W/2, FLOOR-30, '#ff5470', 42); burst(cell.x0+ROOM_W/2, FLOOR-64,'#ffd34d',28);
   floater(cell.x0+ROOM_W/2, FLOOR-100, '💥 '+nm+' SMASHED!', '#ff5470', true);
   shake(12); flash('#ff5470',0.22,0.3); sfx('lose');
@@ -3899,7 +3903,7 @@ function battleReportHTML(){
   const rows=rooms.map((r,i)=>{
     const ic=roomParts(r).map(p=>ROOMS[p].ic).join('');
     return `<div style="display:flex;gap:8px;justify-content:space-between">
-      <span>${i===0?'🏆 ':''}${ic} ${comboName(r)} <span class="small" style="opacity:.6">Lv${r.lvl}</span></span>
+      <span>${i===0?'🏆 ':''}${ic} ${comboName(r)} <span class="small" style="opacity:.6">${(r.units||[]).length}/${r.cap||1}</span></span>
       <span style="color:#ffd34d">${r.dmg||0} dmg · ${r.kills||0} kill${(r.kills||0)===1?'':'s'}</span></div>`;
   }).join('');
   const totals=`<div class="small" style="opacity:.8;margin-top:5px;border-top:1px solid #3a2c5a;padding-top:4px">
@@ -4713,7 +4717,8 @@ function trapTick(h,cell,dt){
       tr.fireT=tr.def.rate * (hasMandate('hairTrigger')?0.88:1);   // Hair Trigger mandate: traps fire faster
       tr.firedAt=performance.now();                                // drives the painted strike animation
       const d=tr.def;
-      let dmg=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0)) * (tr.stackMul||1);
+      const tl=tr.lvl||1;
+      let dmg=d.dmg * (1 + (tl-1)*0.4) * syn * (1+(RB.trapDmg||0)) * (tr.stackMul||1);
       // counter-card bonuses vs certain heroes
       if(d.vsClass && d.vsClass.includes(h.cls)) dmg*=d.vsMult;
       if(d.vsElite && h.elite) dmg*=d.vsMult;
@@ -4724,8 +4729,8 @@ function trapTick(h,cell,dt){
       dmg*=amp;                                                // Runestone / War Totem amplification
       const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion/Piercing Halls: ignore armor
       _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
-      if(d.burn){ addBurn(h, d.burn+(r.lvl-1)*2, 3); }
-      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(BURN_CAP, Math.max(h.burn||0, 2+(r.lvl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
+      if(d.burn){ addBurn(h, d.burn+(tl-1)*2, 3); }
+      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(BURN_CAP, Math.max(h.burn||0, 2+(tl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
       applyTrapStatus(h, d, r);                                  // poison / acid / mark
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
       if(G.stats) G.stats.trapDmg+=Math.round(dmg);
@@ -4758,7 +4763,8 @@ function aoeTrapTick(dt){
       if(!targets.length) continue;
       tr.fireT=d.rate * (hasMandate('hairTrigger')?0.88:1);
       tr.firedAt=performance.now();                             // drives the painted strike animation
-      let base=d.dmg * (1 + (r.lvl-1)*0.4) * syn * (1+(RB.trapDmg||0)) * (tr.stackMul||1);
+      const tl=tr.lvl||1;
+      let base=d.dmg * (1 + (tl-1)*0.4) * syn * (1+(RB.trapDmg||0)) * (tr.stackMul||1);
       if(vr) base*=(1+vr*VET_DMG);
       if(doc==='inferno') base*=1.2;
       base*=ampAt(cell.index);                                  // Runestone / War Totem amplification
@@ -4766,7 +4772,7 @@ function aoeTrapTick(dt){
       for(const o of targets){
         const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
         _roomDmgCtx=r; dealToHero(o, dmg, 'BOOM', pierce, d.elem); _roomDmgCtx=null;
-        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(BURN_CAP, Math.max(o.burn||0, 2+(r.lvl-1))); o.burnT=Math.max(o.burnT||0,3); }
+        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(BURN_CAP, Math.max(o.burn||0, 2+(tl-1))); o.burnT=Math.max(o.burnT||0,3); }
         applyTrapStatus(o, d, r);
         if(G.stats) G.stats.trapDmg+=dmg;
       }
@@ -4802,8 +4808,9 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
         blood(cell.x0+ROOM_W*0.66, FLOOR-30, 13, 1); bloodPool(cell.x0+ROOM_W*0.66, rnd(10,15)); shake(4);
         floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
-        // the next fused guard steps up to take its place (up to 3 in a row)
-        if(cell.mon2 && cell.mon2.alive){ cell.mon=cell.mon2; cell.mon2=cell.mon3||null; cell.mon3=null; cell.mon.atkT=0.3;
+        // the next guard in the room steps up to take its place (up to 5 in a row)
+        const next=(cell.guards||[]).find(g=>g&&g.alive);
+        if(next){ cell.mon=next; cell.mon.atkT=0.3;
           floater(cell.x0+ROOM_W*0.55, FLOOR-88, '⚔️ NEXT GUARD', '#ffd34d'); }
         return; }
     }
@@ -5883,7 +5890,8 @@ function drawRoomContents(x0,w,room,i){
     // BUILD phase: every banked goblin idles in the den (next wave's recruits
     // included), staggered in two loose ranks so the crowd reads at a glance
     const arr=ensureGoblinArray(room);
-    const preview=Math.min(GOBLIN_DEN_CAP, arr.length+goblinSpawnRate(room.lvl));
+    const gUnits=roomMonUnits(room).filter(u=>u.type==='goblin').length||1;
+    const preview=Math.min(GOBLIN_DEN_CAP, arr.length+gUnits);
     room._previewUnits=room._previewUnits||{};
     for(let i=0;i<preview;i++){
       const u=arr[i] || (room._previewUnits[i]=room._previewUnits[i]||{kills:0});
@@ -5897,11 +5905,10 @@ function drawRoomContents(x0,w,room,i){
   } else
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
-    // slain guards just vanish (no ghost, no corpse). In a fused room the FRONT
-    // guard dies first and the next steps up, so skip the leading parts whose
-    // guards are gone; when the last falls, deadCount covers them all → nothing draws.
+    // slain guards just vanish (no ghost, no corpse). Guards die FRONT-first and
+    // the next steps up, so the dead ones are always the leading slots — skip them.
     const deadCount = (G.phase==='run' && cell)
-      ? Math.max(0, monParts.length - [cell.mon,cell.mon2,cell.mon3].filter(g=>g&&g.alive).length)
+      ? Math.max(0, (cell.guards||[]).filter(g=>g && !g.alive).length)
       : 0;
     // monsters wait on the RIGHT and walk LEFT to meet a hero who enters their room
     // (advance the moment a hero is in the cell — don't wait for fighting state)
@@ -5921,8 +5928,8 @@ function drawRoomContents(x0,w,room,i){
     monParts.forEach((mp,mi)=>{
       if(mi<deadCount) return;                                 // this guard was slain — just gone
       const def=ROOMS[mp]; const sprite = mp==='minion'?'minion':mp;
-      const sp=monParts.length>2?28:44;
-      const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 3)
+      const sp=monParts.length>3?20:(monParts.length>2?28:44);
+      const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 5)
       const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT, room, cell, mp, alive, moving);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
       if(cell && cell.mon && cell.mon.flashAt){ const mf=performance.now()-cell.mon.flashAt;   // struck-just-now flash
@@ -5939,7 +5946,15 @@ function drawRoomContents(x0,w,room,i){
     else drawShopProp(cx,room);
   }
 
-  drawLvlBadge(cx,FLOOR-128,room.lvl,ROOMS[room.type].col);
+  // slot-usage badge (units / capacity) — replaces the old single room level
+  if(ROOMS[room.type].kind==='shop'){
+    drawLvlBadge(cx,FLOOR-128,room.cap||1,ROOMS[room.type].col);   // shop tier
+  } else {
+    const used=(room.units||[]).length, capN=room.cap||1;
+    X.fillStyle='rgba(0,0,0,.45)'; X.fillRect(cx-22, FLOOR-138, 44, 16);
+    X.fillStyle='#cdbaff'; X.font='bold 10px Trebuchet MS'; X.textAlign='center';
+    X.fillText('▦ '+used+'/'+capN, cx, FLOOR-126); X.textAlign='left';
+  }
   // veteran rank badge: a gold star with the rank, shown in build AND run
   const vr=vetRank(room);
   if(vr>0){
@@ -5947,17 +5962,14 @@ function drawRoomContents(x0,w,room,i){
     X.fillText('⭐'+vr, cx+26, FLOOR-124); X.textAlign='left';
   }
 
-  // build-time room info: fuse hint, combo synergy
+  // build-time room info: free-slot / upgrade prompt
   if(G.phase!=='run' && ROOMS[room.type].kind!=='shop'){
-    if(room.part2){
-      const info=synergyInfo(parts);
-      X.fillStyle=info.tone==='good'?'#7bdc6b':info.tone==='bad'?'#ff7a8a':'#cdbaff';
-      X.font='bold 9px Trebuchet MS'; X.textAlign='center';
-      X.fillText((info.name||'Combo')+' ×'+info.m.toFixed(2), cx, FLOOR-104); X.textAlign='left';
-    } else {
-      X.fillStyle='#ffd34d'; X.globalAlpha=0.85; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
-      X.fillText('⚡ can fuse a 2nd card', cx, FLOOR-104); X.textAlign='left'; X.globalAlpha=1;
-    }
+    const used=(room.units||[]).length, capN=room.cap||1;
+    X.font='bold 9px Trebuchet MS'; X.textAlign='center'; X.globalAlpha=0.9;
+    if(used<capN){ X.fillStyle='#7bdc6b'; X.fillText('＋ '+(capN-used)+' free slot'+(capN-used>1?'s':''), cx, FLOOR-104); }
+    else if(capN<MAX_SLOTS){ X.fillStyle='#ffd34d'; X.fillText('⬆ upgrade: +1 slot', cx, FLOOR-104); }
+    else { X.fillStyle='#cdbaff'; X.fillText('full · '+MAX_SLOTS+' slots', cx, FLOOR-104); }
+    X.globalAlpha=1; X.textAlign='left';
   }
 }
 
@@ -6600,66 +6612,59 @@ function entityAt(wx){
   return null;
 }
 function describeRoom(room, detail){
-  const parts=roomParts(room);
-  const synI=synergyInfo(parts); const syn=synI.m + (parts.length>1?(RB.synergy||0):0);
   const vr=vetRank(room); const vm=vetMul(room);
-  const title = parts.length>1 ? comboName(room) : roomName(room);
-  const titleLine=`<b>${title}</b> · Lv ${room.lvl}/${maxLevel()}${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`;
+  const bas=bastionMul(), bm=barracksMul();
+  const trapUnits=roomTrapUnits(room), monUnits=roomMonUnits(room);
+  const titleLine=`<b>${comboName(room)}</b> · ${(room.units||[]).length}/${room.cap||1} slots${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`;
   const buildIdx = (G && G.phase==='build') ? G.rooms.indexOf(room) : -1;
   // Build phase: the bubble opens as a compact action menu (Upgrade · Demolish ·
   // Info); the full stat readout is gated behind ℹ️ Info so a tap isn't a wall of text.
   if(buildIdx>=0 && !detail) return titleLine + roomActionBtns(room, buildIdx, true);
   const lines=[titleLine];
+  // traps — each carries its OWN level (stack the same trap to raise it)
   let _trapDi=0;
-  parts.filter(p=>ROOMS[p].kind==='trap').forEach(p=>{ const def=ROOMS[p];
+  trapUnits.forEach(u=>{ const def=ROOMS[u.type]; const lv=u.lvl||1;
     if(def.amp){ lines.push(`${def.ic} ${def.name}: 🔯 +${Math.round(def.amp*100)}% to this & adjacent rooms`); return; }
     const _sm=TRAP_STACK_MUL[Math.min(_trapDi++,2)];
-    const dmg=Math.round(def.dmg*(1+(room.lvl-1)*0.4)*syn*vm*(1+(RB.trapDmg||0))*_sm);
-    lines.push(`${def.ic} ${def.name}: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${_sm<1?` <span class="small" style="opacity:.7">(stacked ×${_sm})</span>`:''}${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
+    const dmg=Math.round(def.dmg*(1+(lv-1)*0.4)*vm*(1+(RB.trapDmg||0))*_sm);
+    lines.push(`${def.ic} ${def.name} <span style="color:#ffd34d">Lv ${lv}/${maxLevel()}</span>: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${_sm<1?` <span class="small" style="opacity:.7">(stacked ×${_sm})</span>`:''}${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
-  const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  const pureGoblin = monParts.length>0 && monParts.every(p=>p==='goblin');
-  if(pureGoblin){ const def=ROOMS.goblin; const bas=bastionMul(), bm=barracksMul();
+  // monsters
+  const pureGoblin = monUnits.length>0 && monUnits.every(u=>u.type==='goblin');
+  if(pureGoblin){ const def=ROOMS.goblin;
+    const glvl=monUnits.reduce((m,u)=>Math.max(m,u.lvl||1),1);
     const feed=feedMul(room.kills||0);
-    const bHp =Math.round(def.hp *(0.9+(room.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp ||0))*bm);
-    const bAtk=Math.round(def.atk*(1.0+(room.lvl-1)*0.9 )*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm);
+    const bHp =Math.round(def.hp *(0.9+(glvl-1)*0.85)*feed*bas*vm*(1+(RB.monHp ||0))*bm);
+    const bAtk=Math.round(def.atk*(1.0+(glvl-1)*0.9 )*feed*bas*vm*(1+(RB.monDmg||0))*bm);
     const ghp =Math.max(2, Math.round(bHp *GOBLIN_HP_FRAC));
     const gatk=Math.max(1, Math.round(bAtk*GOBLIN_ATK_FRAC));
-    const units=Array.isArray(room.goblins)?room.goblins:[];
-    const totalKills=units.reduce((s,u)=>s+(u.kills||0),0);
-    const maxLvl=units.reduce((m,u)=>Math.max(m,goblinLevel(u.kills)),1);
-    lines.push(`${def.ic} Goblins (spawner): <b>${ghp}</b> HP · <b>${gatk}</b> atk each (Lv 1) · ${units.length}/${GOBLIN_DEN_CAP} · +${goblinSpawnRate(room.lvl)}/wave`);
+    const gob=Array.isArray(room.goblins)?room.goblins:[];
+    const totalKills=gob.reduce((s,u)=>s+(u.kills||0),0);
+    const maxLvl=gob.reduce((m,u)=>Math.max(m,goblinLevel(u.kills)),1);
+    lines.push(`${def.ic} Goblins (spawner): <b>${ghp}</b> HP · <b>${gatk}</b> atk each (Lv 1) · ${gob.length}/${GOBLIN_DEN_CAP} · +${monUnits.length}/wave`);
     lines.push(`<span class="small" style="opacity:.85">March left to ambush heroes — survivors return. Immune to your own traps.</span>`);
     lines.push(`<span class="small" style="opacity:.85">Each goblin levels from its own kills (+${Math.round(GOBLIN_HP_PER_LVL*100)}% HP, +${Math.round(GOBLIN_ATK_PER_LVL*100)}% ATK per level, every ${GOBLIN_XP_PER_LVL} kills, cap Lv ${GOBLIN_LVL_MAX}). Top vet: <b>Lv ${maxLvl}</b> · pack kills: <b>${totalKills}</b>.</span>`);
     if(feed>1) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feed-1)*100)}% per goblin (no cap)`);
-  } else if(monParts.length){ let fed=false; const bas=bastionMul(), bm=barracksMul();
-    // each guard gets its OWN stat line (two fused monsters fight one after the other)
-    monParts.forEach((p,mi)=>{ const def=ROOMS[p]; const bHp=p==='minion'?(room.minHp||def.hp):def.hp, bAtk=p==='minion'?(room.minAtk||def.atk):def.atk;
-      const feeds=monFeeds(def)||synI.fx==='feedBoth';
-      const feed=feeds?feedMul(room.kills):1; if(feeds)fed=true;
-      const g3=mi>=2?GUARD3_MUL:1;
-      const hp=Math.round(bHp*(0.9+(room.lvl-1)*0.85)*feed*bas*syn*vm*(1+(RB.monHp||0))*bm*g3);
-      const atk=Math.round(bAtk*(1.0+(room.lvl-1)*0.9)*feed*bas*syn*vm*(1+(RB.monDmg||0))*bm*g3);
-      lines.push(`${def.ic} ${(p==='minion'?(room.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${mi>=2?' <span class="small" style="opacity:.7">(3rd: ×'+GUARD3_MUL+')</span>':''}`); });
-    if(monParts.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${monParts.length} guards — each steps up when the one before falls</span>`);
+  } else if(monUnits.length){ let fed=false;
+    // each guard gets its OWN stat line (they fight one after the other)
+    monUnits.forEach(u=>{ const def=ROOMS[u.type]; const lv=u.lvl||1;
+      const bHp=u.type==='minion'?(u.minHp||def.hp):def.hp, bAtk=u.type==='minion'?(u.minAtk||def.atk):def.atk;
+      const feeds=monFeeds(def); const feed=feeds?feedMul(room.kills):1; if(feeds)fed=true;
+      const hp=Math.round(bHp*(0.9+(lv-1)*0.85)*feed*bas*vm*(1+(RB.monHp||0))*bm);
+      const atk=Math.round(bAtk*(1.0+(lv-1)*0.9)*feed*bas*vm*(1+(RB.monDmg||0))*bm);
+      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}`); });
+    if(monUnits.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${monUnits.length} guards — each steps up when the one before falls</span>`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feedMul(room.kills)-1)*100)}% (no cap)`); }
-  if(parts.includes('shop')){
+  if(room.units.some(u=>u.kind==='shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
-    lines.push(`🛒 Shop Lv ${room.lvl}: ×${shopMarkup(room.lvl).toFixed(2)} markup · ${(room.stock||[]).length}/${shopCap(room)} slots`);
+    lines.push(`🛒 Shop tier ${shopTier(room)}: ×${shopMarkup(shopTier(room)).toFixed(2)} markup · ${(room.stock||[]).length}/${shopCap(room)} slots`);
     if(unsold.length) unsold.forEach(s=>lines.push(`${ITEMS[s.key].ic} ${ITEMS[s.key].name} (${ITEMS[s.key].desc}) — sells <b>${salePrice(room,s.key)}g</b>${s.free?' <span style="color:#6ad97e">(free)</span>':''}`));
     else lines.push('<span style="opacity:.7">empty — stock it in build</span>');
   }
-  if(parts.length>1){
-    lines.push(`Synergy: <span style="color:${synI.tone==='bad'?'#ff7a8a':'#7bdc6b'}">${synI.name||'—'} ×${syn.toFixed(2)}</span>`);
-    if(synI.desc) lines.push(`<span class="small" style="color:#b985ff">${synI.desc}</span>`);
-  }
   if(ROOMS[room.type].kind!=='shop'){
-    const k=room.kills||0;
+    const used=(room.units||[]).length, capN=room.cap||1, k=room.kills||0, tn=trapUnits.length;
     if(vr) lines.push(`⭐ <b>Veteran ${vr}/${VET_MAX}</b>: +${Math.round(vr*VET_DMG*100)}% output · bites +${(vr*VET_BITE*100).toFixed(1)}% of hero HP/hit`);
-    const np=roomParts(room).length;
-    if(np<3) lines.push(np<2
-      ? '⚡ <b>Can fuse</b> — drop another room card here (or drag a room onto it) to merge into a combo'
-      : `⚡ <b>Can fuse a 3rd part</b> — costs ${FUSE3_GOLD}g; a 3rd guard joins at ×${GUARD3_MUL}`);
+    lines.push(`<span class="small">▦ ${used}/${capN} slots${used<capN?' — drop a card to fill one':(capN<MAX_SLOTS?' — ⬆ upgrade for +1':' — full')} · traps ${tn}/${MAX_TRAPS}</span>`);
     if(vr<VET_MAX){ const next=(vr+1)*VET_KILLS; lines.push(`<span class="small">⭐ next veteran rank at ${next} kills (${k}/${next})</span>`); }
   }
   if(buildIdx>=0) lines.push(roomActionBtns(room, buildIdx, false));
@@ -6668,9 +6673,9 @@ function describeRoom(room, detail){
 // Action buttons for the room bubble (build phase). `withInfo` appends the ℹ️ Info
 // button that expands the compact menu into the full stat readout.
 function roomActionBtns(room, idx, withInfo){
-  const up = room.lvl<maxLevel()
-    ? `<button onclick="upgradeRoomGold(${idx})">⬆ Upgrade → Lv ${room.lvl+1} · ${roomUpgradeCost(room)}g</button>`
-    : '<span class="small">Max level — train it with kills for veteran ranks</span>';
+  const up = (room.cap||1)<MAX_SLOTS
+    ? `<button onclick="upgradeRoomGold(${idx})">⬆ Add slot → ${(room.cap||1)+1}/${MAX_SLOTS} · ${roomUpgradeCost(room)}g</button>`
+    : `<span class="small">Max ${MAX_SLOTS} slots — train guards with kills for veteran ranks</span>`;
   const del = `<button onclick="askDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Demolish</button>`;
   const info = withInfo ? `<button onclick="showRoomDetail(${idx})">ℹ️ Info</button>` : '';
   return `<div class="ibtns">${up}${del}${info}</div>`;
@@ -6751,35 +6756,19 @@ function moveRoom(from,to){
   const [r]=G.rooms.splice(from,1); G.rooms.splice(to,0,r);
   sfx('upgrade'); showHint('Rooms rearranged.'); render();
 }
-// Merge built room `from` INTO `to`, recycling an old room into a combo.
-function fuseRooms(from,to){
-  const a=G.rooms[from], b=G.rooms[to];
-  if(!canFuseRooms(b,a)) return;
-  const third=!!b.part2;
-  if(third){ if(G.gold<FUSE3_GOLD){ showHint('A 3rd part costs '+FUSE3_GOLD+'g — not enough gold.'); return; } G.gold-=FUSE3_GOLD; }
-  if(third) b.part3=a.type; else b.part2=a.type;
-  if(a.type==='minion'){ b.minHp=a.minHp; b.minAtk=a.minAtk; if(!b.label) b.label=a.label; }  // carry the corrupted hero's stats
-  b.kills=(b.kills||0)+(a.kills||0);   // carry the absorbed room's veteran progress
-  b.lvl=Math.min(maxLevel(), Math.max(b.lvl, a.lvl));
-  G.rooms[from]=null;                  // the absorbed room's slot opens up
-  if(selCard>=0) selCard=-1; pickupIdx=-1;
-  const info=synergyInfo(roomParts(b));
-  burst(cellX(to)+ROOM_W/2, FLOOR-40, '#9a5cff', 24);
-  floater(cellX(to)+ROOM_W/2, FLOOR-86, info.name||'MERGED', info.tone==='bad'?'#ff7a8a':'#7bdc6b');
-  sfx('upgrade'); showHint('Merged → '+comboName(b)+(info.name?' ('+info.name+' ×'+info.m.toFixed(2)+')':'')+'!');
-  render(); showInspectEntity({kind:'room',room:b});
-}
-// Spend gold to level a room up (alternative to drawing a matching card).
+// Room-merge-on-drag was removed with synergies — dragging a room only reorders.
+function fuseRooms(from,to){ moveRoom(from,to); }
+// Spend gold to add one SLOT to a room (up to MAX_SLOTS) so it can hold more units.
 function upgradeRoomGold(idx){
   if(!G || G.phase!=='build') return;
   const room=G.rooms[idx]; if(!room) return;
-  if(room.lvl>=maxLevel()){ showHint(comboName(room)+' is already max level.'); return; }
+  if((room.cap||1)>=MAX_SLOTS){ showHint(comboName(room)+' already has the max '+MAX_SLOTS+' slots.'); return; }
   const cost=roomUpgradeCost(room);
   if(G.gold<cost){ showHint('Not enough gold — need '+cost+'g.'); return; }
-  G.gold-=cost; room.lvl++;
+  G.gold-=cost; room.cap=(room.cap||1)+1;
   burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
-  floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+room.lvl, '#ffd34d');
-  sfx('upgrade'); showHint(comboName(room)+' upgraded to Lv '+room.lvl+' for '+cost+'g.');
+  floater(cellX(idx)+ROOM_W/2, FLOOR-70, '▦ '+room.cap+'/'+MAX_SLOTS, '#ffd34d');
+  sfx('upgrade'); showHint(comboName(room)+' → '+room.cap+'/'+MAX_SLOTS+' slots for '+cost+'g. Drop a card to fill it.');
   render(); showInspectEntity({kind:'room',room});
 }
 // Max zoom-out is EXACTLY the full painted scene — never further (no void).

@@ -66,7 +66,8 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - Campaign difficulty: the `0.034` term in `difficulty()`
 - Trap strike timing: `TRAP_RISE=110`, `TRAP_FALL=480`; flame cascade `70`ms; candle loop `110`ms
 - Music volume under SFX: `MUSIC_SCALE=0.55`
-- Stacked traps: `TRAP_STACK_MUL=[1,0.8,0.6]` (2nd/3rd trap in a room hit softer — full-trap stacking was unbeatable)
+- Rooms (slot model): `cap` slots (1→`MAX_SLOTS=5`, +1 per gold `upgradeRoomGold`), `room.units[]` = mix of traps (≤`MAX_TRAPS=2`; stack the same trap to raise its `lvl`≤`MAX_LEVEL=5`) + monsters (stack as independent guards in `cell.guards[]`; veteran from `room.kills`). Synergies/named fusions and room-merge-on-drag are REMOVED.
+- Stacked traps: `TRAP_STACK_MUL=[1,0.8,0.6]` (2nd trap hits ×0.8 — only ≤2 traps per room now, so the ×0.6 slot is unused)
 - Den goblins: `GOBLIN_HP_FRAC=0.55`, hero retaliation `*0.4` in `goblinStep`, `GOBLIN_SPD=50`, cap `GOBLIN_DEN_CAP=20`
 - Hero CC resistance (tames the freeze+oil/Inferno lock): `statusResist(h)` = level ramp `(lvl-1)*0.010` cap `0.45`, +`0.25` champion/+`0.10` elite, +`0.28` Wizard ward (`wardT`); scales freeze/oil/chill/shock duration via `ccDur`. `FREEZE_IMMUNE=3`s post-thaw no-refreeze window; `BURN_CAP=22` caps stacked burn (`addBurn`). Cleric cleanse + Mage `wardT` in `heroSpellTick`. Covered by `tests/no_room_for_heroes_balance.test.mjs`.
 

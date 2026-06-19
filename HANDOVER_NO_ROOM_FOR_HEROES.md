@@ -255,12 +255,21 @@ wire. Don't promise to generate from a cloud session; verify with
   difficulty `(1+(L-1)*0.02)*(1+(L-1)*0.034)*threat` (raise the `0.034` to harden) ×
   `(1+asc*0.18)` for Ascension. Odd-5 → relic, even-5 → mandate + Town. **The King
   finale** after wave 50 (HP×8, ATK×1.3, smashes a room with `KING_SMASH=0.10`).
-- **Rooms/fusing**: a room holds up to 3 parts (2nd free, 3rd `FUSE3_GOLD=250`, 3rd
-  guard `GUARD3_MUL=0.85`). Two fused monsters = two guards (`cell.mon`+`cell.mon2`),
-  named pairs in `SYNERGY_PAIRS`. **Demolish** + **Upgrade** live in the room inspect
-  bubble (build phase). The bubble caps at stage height with scroll, and the
-  Upgrade/Demolish buttons sit in a **sticky `.ibtns` footer** so a long bubble
-  (e.g. Goblin Den) can't hide them.
+- **Rooms (slot model)**: a room is `{type, def, cap, units[], kills}`. `cap` = slot
+  count, starts at **1**, grown +1 per gold **Upgrade** (`upgradeRoomGold`, cost
+  `roomUpgradeCost`) up to `MAX_SLOTS=5`. `units[]` holds `{kind,type,lvl}` — at most
+  `MAX_TRAPS=2` traps, the rest monsters, mix & match. `placeCard`: empty→new room;
+  **same trap → that trap's `lvl++`** (cap `MAX_LEVEL=5`, then refused); **new trap →
+  fills a slot** (≤2); **monster → always a fresh independent copy** (five Bone Pits =
+  five guards), never merges. `buildCells` makes one `cell.traps[]` entry per trap
+  unit (per-trap `lvl`) and one guard per monster unit in `cell.guards[]`; `cell.mon`
+  is the active (front) guard, the next alive steps up when it falls. Monsters scale
+  by their unit `lvl` + room **veteran** kills (`vetRank`/`vetMul`) + feed (`feedMul`)
+  — power comes from QUANTITY, only the front guard attacks. **Synergies/named fusions
+  and room-merge-on-drag were REMOVED** (`synergyInfo` is a neutral stub, `canFuseRooms`
+  →false, `SYNERGY_PAIRS` is dead data) — synergy is now emergent (oil→flame via status
+  reactions). **Demolish** + **Upgrade** live in the room inspect bubble (build phase),
+  in a sticky `.ibtns` footer.
 - **Heroes**: warrior/rogue/mage/cleric + champion mini-bosses. Auto-cast class
   spells (`heroSpellTick`); rogue disarms a trap room on entry (`DISARM_DUR=3`s).
 - **Boss**: `BOSSES` (dragon/lich/demon/ogre/ent/golem), passive + 2 signature + pool

@@ -1,63 +1,85 @@
-// Fusion pair identities + room demolish + menu screens.
+// Room model: 5-slot mix-and-match rooms (≤2 traps), trap stacking, monster
+// copies, gold slot-upgrades, the build menu + demolish flow.
 //
 //   node tests/no_room_for_heroes_fusion.test.mjs   (or: npm run test:boss)
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
-const A = loadGame(`freshGame,buildCells,synergyInfo,doDeleteRoom,askDeleteRoom,
-  openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,
-  pickSlot,describeRoom,chooseBoss,feedMul,ROOMS,SYNERGY_PAIRS,
+const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
+  upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
+  MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
+  openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
   get G(){return G;},set G(v){G=v;}`);
-const t = harness('fusion/demolish/menu');
+const t = harness('rooms (slots/stacking/menu)');
 
-// --- synergyInfo returns the named monster pairs (keys are sorted parts) ---
-const gi = p => A.synergyInfo(p);
-t.ok(gi(['goblin','skeleton']).name === 'Grave Horde' && gi(['goblin','skeleton']).fx === 'feedBoth', 'goblin+skeleton → Grave Horde feedBoth');
-t.ok(gi(['skeleton','goblin']).name === 'Grave Horde', 'order-independent lookup');
-t.ok(gi(['warden','ogre']).fx === 'tauntBoth', 'ogre+warden → Gatehouse tauntBoth');
-t.ok(gi(['slime','ogre']).fx === 'splitBoth', 'ogre+slime → Sludge Colossus splitBoth');
-t.ok(gi(['ogre','skeleton']).m === 1.25, 'ogre+skeleton → Bone Colossus ×1.25');
-t.ok(gi(['goblin','ogre']).name === 'Pack' && gi(['goblin','ogre']).m === 1, 'unnamed monster pair stays Pack ×1.0');
+function freshBuild(){ A.G=A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots=5; A.G.phase='build'; A.G.gold=999999; }
+function place(type,lvl,idx){ A.G.hand=[{type,lvl:lvl||1}]; return A.placeCard(0, idx); }
 
-// --- buildCells applies the fx hooks to the guards ---
-A.G = A.freshGame('campaign');
-A.chooseBoss('dragon');                                              // build phase always has a boss
-A.G.slots = 5;                                                       // room for all four test cells
-A.G.rooms[0] = { type:'goblin', part2:'skeleton', lvl:1, kills:10 };  // Grave Horde, well fed
-A.G.rooms[1] = { type:'ogre', part2:'warden', lvl:1, kills:0 };      // Gatehouse
-A.G.rooms[2] = { type:'ogre', part2:'slime', lvl:1, kills:0 };       // Sludge Colossus
-A.G.rooms[3] = { type:'goblin', part2:'skeleton', lvl:1, kills:0 };  // Grave Horde, unfed
+// --- a fresh room starts with ONE slot ---
+freshBuild();
+place('skeleton',1,0);
+let r=A.G.rooms[0];
+t.ok(r && r.units.length===1 && r.cap===1, 'placing a card builds a 1-unit room (cap 1)');
+t.ok(place('skeleton',1,0)===false, 'a 2nd unit is refused — the room is full at cap 1');
+t.ok(r.units.length===1, 'the refused placement added nothing');
+
+// --- gold upgrade adds a slot; monsters STACK as independent copies ---
+A.G.gold=A.roomUpgradeCost(r); A.upgradeRoomGold(0);
+t.ok(r.cap===2, 'gold upgrade adds one slot');
+place('skeleton',1,0);
+t.ok(r.units.length===2 && A.roomMonUnits(r).length===2, 'a 2nd Bone Pit stacks as a SEPARATE guard (no merge)');
+A.G.gold=999999; while(r.cap<A.MAX_SLOTS) A.upgradeRoomGold(0);
+while(r.units.length<A.MAX_SLOTS) place('skeleton',1,0);
+t.ok(r.units.length===5 && A.roomMonUnits(r).length===5, 'five Bone Pits live in one room');
+t.ok(place('skeleton',1,0)===false, 'a 6th unit is refused at the 5-slot cap');
+
+// --- buildCells turns the stack into 5 separate guards ---
 A.buildCells();
-const c = A.G.cells;
-// feedBoth: the SECOND guard (skeleton, which doesn't feed on its own) must
-// also grow with kills — compare fed vs unfed rooms
-t.ok(c[0].mon2 && c[3].mon2 && c[0].mon2.maxHp > c[3].mon2.maxHp, 'Grave Horde feeds the non-feeding guard too');
-t.ok(c[0].mon.maxHp > c[3].mon.maxHp, 'Grave Horde feeds the first guard');
-t.ok(c[1].warden === true, 'Gatehouse: cell strikes the whole stalled party');
-t.ok(c[2].mon.split === true && c[2].mon2.split === true, 'Sludge Colossus: both guards split');
-t.ok(!c[3].warden, 'Grave Horde does not taunt');
+let cell=A.G.cells[0];
+t.ok(cell.guards && cell.guards.length===5, 'buildCells makes one guard per monster unit');
+t.ok(cell.mon===cell.guards[0] && cell.guards.every(g=>g.alive), 'front guard is active; every guard alive');
+t.ok(cell.guards.every(g=>g.type==='skeleton'), 'each guard remembers its type');
 
-// --- 3-part stacking: third guard at 85%, identity from best named pair ---
-A.G.rooms[4] = { type:'ogre', part2:'warden', part3:'skeleton', lvl:1, kills:0 };
+// --- TRAPS: same trap stacks into a LEVEL (one unit); max level then refuses ---
+freshBuild();
+place('spike',1,0); const tr=A.G.rooms[0];
+t.ok(A.roomTrapUnits(tr).length===1 && tr.units[0].lvl===1, 'first trap is level 1');
+place('spike',1,0);
+t.ok(tr.units.length===1 && A.roomTrapUnits(tr)[0].lvl===2, 'same trap → level 2, still one unit (no new slot used)');
+while(A.roomTrapUnits(tr)[0].lvl<A.maxLevel()) place('spike',1,0);
+t.ok(A.roomTrapUnits(tr)[0].lvl===A.maxLevel(), 'trap reaches max level ('+A.maxLevel()+')');
+t.ok(place('spike',1,0)===false, 'a maxed trap refuses further stacking');
+
+// --- at most TWO traps per room ---
+A.G.gold=999999; A.upgradeRoomGold(0);                 // cap 2
+t.ok(place('flame',1,0)!==false && A.roomTrapUnits(tr).length===2, 'a 2nd trap TYPE fills the new slot');
+A.upgradeRoomGold(0);                                  // cap 3
+t.ok(place('venom',1,0)===false, 'a 3rd trap is refused — max '+A.MAX_TRAPS+' traps per room');
+
+// --- mix and match: 2 traps + 3 monsters in one 5-slot room ---
+freshBuild();
+place('spike',1,2); A.G.gold=999999;
+while(A.G.rooms[2].cap<5) A.upgradeRoomGold(2);
+place('flame',1,2); place('skeleton',1,2); place('ogre',1,2); place('warden',1,2);
+const rm=A.G.rooms[2];
+t.ok(rm.units.length===5 && A.roomTrapUnits(rm).length===2 && A.roomMonUnits(rm).length===3, '2 traps + 3 monsters share one room');
 A.buildCells();
-const c4 = A.G.cells[4];
-t.ok(!!c4.mon3, 'third guard exists');
-t.ok(c4.warden === true, 'Gatehouse identity survives a 3rd part');
-// skeleton is 3rd: base 32 → with Gatehouse ×1.10 and 0.85 third-guard factor
-t.ok(c4.mon3.maxHp < Math.round(32*0.9*1.10) , 'third guard joins below full strength');
-t.ok(A.synergyInfo(['ogre','warden','skeleton']).name === 'Bone Colossus', 'BEST named pair wins in a trio (×1.25 beats ×1.10)');
-t.ok(A.synergyInfo(['warden','slime','spike']).name === 'Pinned Down', 'pairless trio falls back by kinds');
+const cm=A.G.cells[2];
+t.ok(cm.traps.length===2 && cm.guards.length===3, 'buildCells splits the mixed room into 2 traps + 3 guards');
+t.ok(cm.traps.find(x=>x.type==='spike').lvl===1, 'a trap carries its own level into the cell');
+t.ok(cm.warden===true, 'a Warden unit still taunts the whole party');
 
-// --- room inspect: build phase opens as a compact menu (Upgrade/Demolish/Info);
-//     the full stat readout is gated behind the Info button ---
-A.G.phase = 'build';
+// --- veteran rank still rides on room kills ---
+freshBuild(); place('skeleton',1,0); A.G.rooms[0].kills=12;
+t.ok(A.vetRank(A.G.rooms[0])>=2, 'room veteran rank still derives from kills');
+
+// --- build menu: Upgrade(+slot) / Demolish / Info, full readout behind Info ---
+A.G.phase='build';
 const menu = A.describeRoom(A.G.rooms[0]);
-t.ok(menu.includes('upgradeRoomGold(0)'), 'menu offers Upgrade in build phase');
-t.ok(menu.includes('askDeleteRoom(0)'), 'menu offers Demolish in build phase');
+t.ok(menu.includes('upgradeRoomGold(0)'), 'menu offers the slot upgrade');
+t.ok(menu.includes('askDeleteRoom(0)'), 'menu offers Demolish');
 t.ok(menu.includes('showRoomDetail(0)'), 'menu offers an Info button');
-t.ok(!menu.includes('feeds BOTH guards'), 'menu hides the detailed stats until Info');
 const html = A.describeRoom(A.G.rooms[0], true);
-t.ok(html.includes('Grave Horde'), 'Info detail shows the pair name');
-t.ok(html.includes('feeds BOTH guards'), 'Info detail shows the pair twist');
+t.ok(html.includes('slots'), 'Info detail shows slot usage');
 t.ok(html.includes('askDeleteRoom(0)'), 'Info detail still offers Demolish');
 t.ok(!html.includes('showRoomDetail(0)'), 'Info detail drops the now-redundant Info button');
 
@@ -68,7 +90,7 @@ A.doDeleteRoom(0);
 t.ok(A.G.rooms[0] == null, 'confirming deletes the room');
 A.doDeleteRoom(0);                                  // idempotent on empty slot
 t.ok(A.G.rooms[0] == null, 'double-confirm is harmless');
-A.G.phase = 'run'; A.G.rooms[1] = { type:'ogre', part2:'warden', lvl:1, kills:0 };
+A.G.phase = 'run'; A.G.rooms[1] = A.makeRoom('ogre', 1);
 A.doDeleteRoom(1);
 t.ok(A.G.rooms[1] != null, 'demolish refuses outside the build phase');
 
@@ -86,9 +108,7 @@ const fm = A.feedMul;
 t.ok(fm(0) === 1, 'no kills → no bonus (×1)');
 t.ok(Math.abs((fm(1) - 1) - 0.03) < 0.005, 'first corpse ≈ +3% (early feel preserved)');
 t.ok(fm(10) > fm(5) && fm(100) > fm(50) && fm(1000) > fm(500), 'monotonic increase — never caps');
-// diminishing: each successive block of kills adds less than the one before
 t.ok((fm(20) - fm(10)) < (fm(10) - fm(0)), 'diminishing returns (curve bends)');
-// and the late-game runaway is gone: old linear hit ×4.0 at 100 kills
 t.ok(fm(100) < 2.0 && fm(100) > 1.5, `tamed late game: 100 kills → ×${fm(100).toFixed(2)} (was ×4.0)`);
 
 t.done();
