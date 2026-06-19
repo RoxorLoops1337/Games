@@ -3093,8 +3093,21 @@ function placeCard(ci, idx){
     showHint(ROOMS[T].name+' built!'); tutEvent('placed', idx);
     selCard=-1; sfx('upgrade'); render(); return true;
   }
-  // shops never share a room
-  if(cdef.kind==='shop' || room.units.some(u=>u.kind==='shop')){
+  // shops never share a room — but a shop card dropped on a shop UPGRADES its tier
+  const roomIsShop = room.units.some(u=>u.kind==='shop');
+  if(cdef.kind==='shop'){
+    if(roomIsShop){
+      if((room.cap||1)>=MAX_SLOTS){ showHint('Shop is already max tier ('+MAX_SLOTS+').'); return false; }
+      room.cap=(room.cap||1)+1;
+      G.hand.splice(ci,1);
+      burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
+      floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'Shop Lv '+room.cap, '#ffd34d');
+      showHint('Shop upgraded to tier '+room.cap+'/'+MAX_SLOTS+' — steeper markup (×'+shopMarkup(room.cap).toFixed(2)+') & '+shopCap(room)+' stock slots.');
+      selCard=-1; sfx('upgrade'); render(); return true;
+    }
+    showHint('A Shop takes the whole room — drop it on an empty room.'); return false;
+  }
+  if(roomIsShop){
     showHint('A Shop takes the whole room — it can\'t share slots.'); return false;
   }
   if(cdef.kind==='trap'){
