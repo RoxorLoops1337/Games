@@ -197,9 +197,13 @@
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
-  /* save-slot stats: fixed height + centred so every slot card is the SAME size
-     whether or not it has the optional "best slain" / Ascension line */
-  .slotbody{min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.4;margin:4px 0;}
+  /* save-slot stats: a 3-column grid (icon · value · label) so every row lines
+     up and never wraps; fixed floor height keeps every slot card the SAME size */
+  .slotbody{min-height:78px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.4;margin:4px 0;}
+  .slotstats{display:inline-grid;grid-template-columns:auto auto auto;gap:3px 7px;align-items:baseline;text-align:left;white-space:nowrap;}
+  .slotstats b{justify-self:end;color:#fff;}
+  .slotstats .lbl{opacity:.78;}
+  .slotstats .full{grid-column:1/-1;justify-self:center;}
   .menu-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:14px;}
   .menu-btns button{font-size:11px;padding:13px 20px;}
   /* ===== anime.js-inspired motion (vanilla, no dependency) — overshoot/spring
@@ -1876,9 +1880,17 @@ function openTitle(){
   const cards=[];
   for(let n=1;n<=SAVE_SLOTS;n++){
     const s=slotSummary(n), active=(n===saveSlot);
+    // one stat = three aligned grid cells: icon · right-aligned value · label
+    const row = (ic,val,lbl)=>`<span>${ic}</span><b>${val}</b><span class="lbl">${lbl}</span>`;
     const stats = s
-      ? `🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}${(s.best||s.asc)?`<br>${s.asc?`<span style="color:#c79bff">👑 Ascension ${s.asc}</span>`:''}${s.asc&&s.best?' · ':''}${s.best?`♾️ best: <b>${s.best}</b> slain`:''}`:''}`
-      : 'Empty — a brand-new game';
+      ? `<div class="slotstats">`
+        + row('🔮', s.pts,    'rune pts')
+        + row('☠',  s.kills,  'kills')
+        + row('🏗️', s.builds, 'building'+(s.builds!==1?'s':''))
+        + row('♾️', s.best,   'best slain')
+        + (s.asc ? `<span class="full" style="color:#c79bff">👑 Ascension ${s.asc}</span>` : '')
+        + `</div>`
+      : `<span style="opacity:.75">Empty — a brand-new game</span>`;
     const body = `<div class="slotbody small" style="opacity:${s?'.9':'.7'}">${stats}</div>`;
     cards.push(`<div class="choice" style="width:220px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
       <div class="big"><img class="cardimg" src="icons/ui_save.png" alt="" draggable="false"></div>
