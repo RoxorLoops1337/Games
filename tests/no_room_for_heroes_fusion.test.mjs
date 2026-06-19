@@ -68,6 +68,15 @@ t.ok(cm.traps.length===2 && cm.guards.length===3, 'buildCells splits the mixed r
 t.ok(cm.traps.find(x=>x.type==='spike').lvl===1, 'a trap carries its own level into the cell');
 t.ok(cm.warden===true, 'a Warden unit still taunts the whole party');
 
+// --- shop upgrades by stacking shop cards (and never shares a room) ---
+freshBuild();
+place('shop',1,0); const sh=A.G.rooms[0];
+t.ok(sh && sh.units.length===1 && sh.units[0].kind==='shop' && sh.cap===1, 'a Shop builds as its own 1-slot room');
+t.ok(place('spike',1,0)===false, 'a trap can\'t share a Shop room');
+t.ok(place('shop',1,0)!==false && A.G.rooms[0].cap===2, 'dropping a Shop card on a Shop upgrades its tier');
+A.G.gold=999999; place('shop',1,0); place('shop',1,0);
+t.ok(A.G.rooms[0].cap===4, 'stacking more Shop cards keeps raising the tier');
+
 // --- veteran rank still rides on room kills ---
 freshBuild(); place('skeleton',1,0); A.G.rooms[0].kills=12;
 t.ok(A.vetRank(A.G.rooms[0])>=2, 'room veteran rank still derives from kills');
