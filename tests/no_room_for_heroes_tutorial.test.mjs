@@ -45,7 +45,7 @@ try{
     else if(g==='slotbuy'){ A.upgradeRoomGold(st.cell); }
     else if(g==='buyroom'){ A.buySlot(); }
     else if(g==='relic'){ A.pickRelic(0); }
-    else if(g==='none'){ reachedHorde=true; A.bossDies(); A.tutBtn(); A.tutBtn(); }
+    else if(st.adv==='never'){ reachedHorde=true; A.bossDies(); A.tutBtn(); A.tutBtn(); }   // finale watch beat
     else { A.tutAdvance(); }
     // probe a few invariants as the dungeon takes shape
     if(A.G.slots>=2) secondRoom=true;
@@ -54,7 +54,7 @@ try{
             if(A.roomTrapUnits(r0).some(u=>u.lvl>=2)) stackedTrap=true;
             if(A.roomTrapUnits(r0).length>=2) twoTraps=true;
             if(A.roomTrapUnits(r0).length>=1 && A.roomMonUnits(r0).length>=1) mixed=true; }
-    if(g!=='none' && A.G.tutStep===before){ err='stuck at beat '+before+' (gate '+g+')'; break; }
+    if(st.adv!=='never' && A.G.tutStep===before){ err='stuck at beat '+before+' (gate '+g+')'; break; }
   }
 }catch(e){ err=(e&&e.message||String(e))+' @beat '+A.G.tutStep; }
 

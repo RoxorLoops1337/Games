@@ -411,6 +411,7 @@
     border:2px solid var(--gold);box-shadow:0 14px 48px rgba(0,0,0,.7),0 0 22px #ffd34d44;
     opacity:0;transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1);}
   #tutmodal.show{display:block;opacity:1;transform:translate(-50%,-50%) scale(1);}
+  #tutmodal.low{top:70%;}   /* drop near the bottom pointer so the board stays visible */
   #tutmodal .go,#tutmodal .tm-skip{pointer-events:auto;}
   #tutmodal .tm-body{font-size:14.5px;line-height:1.5;color:var(--ink);}
   #tutmodal .tm-body b{color:#ffe7a3;}
@@ -2437,7 +2438,7 @@ const TUT=[
 /*1*/ { title:"Here he comes", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"A lone knight is marching for your throne. Tap <b>⚔️ Start Wave</b> to send him in.",
         enter:()=>{ G._tutWave=[{cls:'warrior',hp:74,atk:4,spd:34}]; G.boss.mana=G.boss.maxMana; } },
-/*2*/ { title:"Blast him!", pos:'top', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.32,
+/*2*/ { title:"Blast him!", pos:'bottom', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.32,
         body:"You have <b>boss abilities</b> (bottom-left) that cost 🔷 mana. Strike the knight down before he reaches the throne!",
         pauseBody:"He's closing in! <b>Tap a boss ability</b> (bottom-left) to blast him. 🔷",
         enter:()=>{ G.boss.mana=G.boss.maxMana; } },
@@ -2468,7 +2469,7 @@ const TUT=[
 /*12*/{ title:"Next raider", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b>. This one moves… differently.",
         enter:()=>{ G._tutWave=[{cls:'rogue',hp:64,atk:5,spd:62}]; G.boss.mana=G.boss.maxMana; } },
-/*13*/{ title:"A rogue!", pos:'top', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.6,
+/*13*/{ title:"A rogue!", pos:'bottom', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.6,
         body:"Watch — a <b>rogue DISARMS your traps</b> as he passes them! Don't panic…",
         pauseBody:"He slipped your traps! <b>Tap an ability</b> to cut him down before the throne! 🔷",
         enter:()=>{ G.boss.mana=G.boss.maxMana; } },
@@ -2497,7 +2498,7 @@ const TUT=[
 /*22*/{ title:"⚠️ A CHAMPION", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"A <b>champion</b> approaches — tough, and he <b>smashes through rooms</b>. Throw EVERYTHING at him.",
         enter:()=>{ G._tutWave=[{cls:'warrior',power:2,champion:TUT_CHAMP(),hp:230,atk:8,spd:32}]; G.boss.mana=G.boss.maxMana; } },
-/*19*/{ title:"Finish him!", pos:'top', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.5,
+/*19*/{ title:"Finish him!", pos:'bottom', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.5,
         body:"Your dungeon grinds him down — <b>hammer him with abilities</b> to finish the job! 🔷",
         pauseBody:"Now! <b>Abilities!</b> Drop the champion! 🔷",
         enter:()=>{ G.boss.mana=G.boss.maxMana; } },
@@ -2508,7 +2509,7 @@ const TUT=[
 /*22*/{ title:"The horde", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"Now the <b>real</b> raid — a whole army at once. Hold the throne as long as you can… 😈",
         enter:()=>{ G._tutWave=TUT_HORDE(); G.boss.hp=Math.min(G.boss.hp, Math.max(1,Math.round(G.boss.maxHp*0.08))); } },
-/*23*/{ overlay:true, gate:'none', adv:'never' },   // silent watch — bossDies() runs the finale
+/*23*/{ overlay:true, gate:'free', adv:'never' },   // watch the horde — abilities/smite stay usable; bossDies() runs the finale
 ];
 function tutDoneGet(){ try{ return localStorage.getItem('bm_tut_done')==='1'; }catch(_){ return false; } }
 function tutDoneSet(){ try{ localStorage.setItem('bm_tut_done','1'); }catch(_){ } }
@@ -2530,7 +2531,7 @@ function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
   tutBtnFn=o.onNext||null;
-  m.className='show';   // always centred — consistent across every tip
+  m.className='show'+(o.pos==='bottom'?' low':'');   // centred, or low (near the bottom pointer)
   m.innerHTML=(o.skip?`<button class="tm-skip" onclick="tutSkip()">skip ✕</button>`:'')
     +(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
