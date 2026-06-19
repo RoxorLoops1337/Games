@@ -403,14 +403,15 @@
   @keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 #ffd34d00;}50%{box-shadow:0 0 0 4px #ffd34d99;}}
   .tut-pulse{animation:tutpulse 1s ease-in-out infinite;border-color:var(--gold)!important;}
   /* ---- Scripted tutorial: centered modal + blinking arrow (fixed, above all) ---- */
+  /* centred modal; pointer-events:none so a tip floating over the board never
+     blocks the tap beneath it — only its own buttons capture clicks */
   #tutmodal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.96);
-    z-index:60;display:none;width:min(440px,calc(100% - 48px));text-align:center;
+    z-index:60;display:none;width:min(440px,calc(100% - 48px));text-align:center;pointer-events:none;
     padding:18px 20px 16px;border-radius:16px;background:linear-gradient(165deg,#241a44,#140e2a);
     border:2px solid var(--gold);box-shadow:0 14px 48px rgba(0,0,0,.7),0 0 22px #ffd34d44;
     opacity:0;transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1);}
   #tutmodal.show{display:block;opacity:1;transform:translate(-50%,-50%) scale(1);}
-  #tutmodal.top{top:64px;transform:translate(-50%,0) scale(.96);}
-  #tutmodal.top.show{transform:translate(-50%,0) scale(1);}
+  #tutmodal .go,#tutmodal .tm-skip{pointer-events:auto;}
   #tutmodal .tm-body{font-size:14.5px;line-height:1.5;color:var(--ink);}
   #tutmodal .tm-body b{color:#ffe7a3;}
   #tutmodal h3{margin:0 0 6px;color:var(--gold);font-size:17px;letter-spacing:.5px;}
@@ -2518,7 +2519,7 @@ function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
   tutBtnFn=o.onNext||null;
-  m.className='show'+(o.pos==='top'?' top':'');
+  m.className='show';   // always centred — consistent across every tip
   m.innerHTML=(o.skip?`<button class="tm-skip" onclick="tutSkip()">skip ✕</button>`:'')
     +(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
