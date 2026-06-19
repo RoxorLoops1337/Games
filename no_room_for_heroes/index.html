@@ -5126,9 +5126,15 @@ function drawDungeon(tx, scale, isBuild){
       const ea = ROOM_IMG.empty && ROOM_IMG.empty._ok;
       if(ea){ if(beingDragged){ X.save(); X.globalAlpha=0.45; } drawRoomArt(x0,w,cellArt('empty',i)); drawCandles(x0,w,i); if(beingDragged) X.restore(); }
       if(isBuild || !ea){
-        X.strokeStyle=beingDragged?'#ffd34d':(isBuild&&(selCard>=0||dropTarget))?'#ffd34d':'#4a3a72';
-        X.setLineDash([6,5]); X.lineWidth=beingDragged?3:2;
-        X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
+        // Outline a slot ONLY while you're actively placing/moving a room (gold),
+        // or as a fallback when the stone art hasn't loaded — no idle dashed guide
+        // lines cluttering the hall otherwise.
+        const placing = beingDragged || (isBuild && (selCard>=0 || dropTarget));
+        if(placing || !ea){
+          X.strokeStyle = placing ? '#ffd34d' : '#4a3a72';
+          X.setLineDash([6,5]); X.lineWidth=beingDragged?3:2;
+          X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
+        }
         X.fillStyle=(isBuild&&(selCard>=0||dropTarget||beingDragged))?'#ffd34d':'#8a7ab8'; X.font='12px Trebuchet MS'; X.textAlign='center';
         X.fillText(beingDragged?'↔ moving':(dropTarget?'drop here':'empty'), x0+w/2, FLOOR-58); X.textAlign='left';
       }
@@ -5202,9 +5208,6 @@ function drawWaitingHeroes(tx){
   if(G.mode==='campaign') n=Math.min(G.queue.length, 9);
   else n=G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0));
   const hasChamp = G.queue.slice(0,n).some(s=>s.champion);
-  // gate line at the entrance
-  X.strokeStyle='rgba(120,100,170,.5)'; X.setLineDash([4,5]); X.lineWidth=2;
-  X.beginPath(); X.moveTo(tx(0), FLOOR-150); X.lineTo(tx(0), FLOOR); X.stroke(); X.setLineDash([]);
   const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
   for(let k=0;k<n;k++){
     const spec=G.queue[k];
