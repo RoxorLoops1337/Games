@@ -10,7 +10,7 @@
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
-  update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,BOSSES,particles,floats,
+  update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
   goblinStep,
   get G(){return G;},set G(v){G=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
@@ -18,10 +18,16 @@ const t = harness('render/juice smoke');
 const BOSS = Object.keys(A.BOSSES)[0];
 
 // mint rooms through the real factory so they carry .def / stock / etc.
+// mint a room and, for the optional extra parts, push them as real units into
+// grown slots (mixed rooms now hold up to 5 trap/monster units).
 function room(type, lvl, part2, part3){
   const r = A.makeRoom(type, lvl||1);
-  if(part2) r.part2 = part2;
-  if(part3) r.part3 = part3;
+  for(const p of [part2, part3]){
+    if(!p) continue;
+    r.cap = (r.cap||1) + 1;
+    r.units.push(A.makeUnit(p, lvl||1));
+  }
+  if(r.units[0]) r.type = r.units[0].type;
   return r;
 }
 
