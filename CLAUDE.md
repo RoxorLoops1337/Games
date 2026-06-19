@@ -18,12 +18,12 @@ Reply formatting:
 - `no_room_for_heroes/music.html` — standalone chiptune player (215 tracks; a deterministic composer generates 200 of them).
 - `functions/api/board.js` + `functions/api/save.js` — Cloudflare Pages Functions (leaderboard + cloud saves, KV binding `BOARD`).
 - `build.js` — copies static folders into `dist/` (Pages deploys `dist/`). New top-level folders must be added to `STATIC_PATHS`.
-- `tests/no_room_for_heroes_*.test.mjs` — 11 headless suites; `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM (incl. a full no-op canvas ctx, so the `juice` suite drives `draw()`/`update()` to catch render-time errors the logic suites miss). Write new tests with it; never create throwaway harnesses outside `tests/`.
+- `tests/no_room_for_heroes_*.test.mjs` — 12 headless suites; `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM (incl. a full no-op canvas ctx, so the `juice` suite drives `draw()`/`update()` to catch render-time errors the logic suites miss). The `tutorial` suite drives the whole guided run beat-by-beat. Write new tests with it; never create throwaway harnesses outside `tests/`.
 - `HANDOVER_NO_ROOM_FOR_HEROES.md` — deeper architecture notes (G state object, phases, combat flow, balance history).
 
 # Verify with ONE command
 
-    npm run check        # build + all 11 suites — must be green before every push
+    npm run check        # build + all 12 suites — must be green before every push
 
 # SMALL-CHANGE PROTOCOL (for budget-model sessions)
 

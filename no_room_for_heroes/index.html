@@ -402,6 +402,27 @@
   #tutbar .tutskip{font-size:11px;padding:5px 8px;min-height:0;background:#2a2040;border-color:#4a3a72;}
   @keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 #ffd34d00;}50%{box-shadow:0 0 0 4px #ffd34d99;}}
   .tut-pulse{animation:tutpulse 1s ease-in-out infinite;border-color:var(--gold)!important;}
+  /* ---- Scripted tutorial: centered modal + blinking arrow (fixed, above all) ---- */
+  #tutmodal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.96);
+    z-index:60;display:none;width:min(440px,calc(100% - 48px));text-align:center;
+    padding:18px 20px 16px;border-radius:16px;background:linear-gradient(165deg,#241a44,#140e2a);
+    border:2px solid var(--gold);box-shadow:0 14px 48px rgba(0,0,0,.7),0 0 22px #ffd34d44;
+    opacity:0;transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1);}
+  #tutmodal.show{display:block;opacity:1;transform:translate(-50%,-50%) scale(1);}
+  #tutmodal.top{top:64px;transform:translate(-50%,0) scale(.96);}
+  #tutmodal.top.show{transform:translate(-50%,0) scale(1);}
+  #tutmodal .tm-body{font-size:14.5px;line-height:1.5;color:var(--ink);}
+  #tutmodal .tm-body b{color:#ffe7a3;}
+  #tutmodal h3{margin:0 0 6px;color:var(--gold);font-size:17px;letter-spacing:.5px;}
+  #tutmodal .tm-btns{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  #tutmodal .tm-skip{position:absolute;top:6px;right:10px;font-size:11px;opacity:.5;cursor:pointer;
+    background:none;border:none;color:var(--ink);}
+  #tutmodal .tm-skip:hover{opacity:.9;}
+  @keyframes tutbob{0%,100%{transform:translate(-50%,-50%) translateY(0);}50%{transform:translate(-50%,-50%) translateY(-9px);}}
+  @keyframes tutarrowblink{0%,100%{opacity:1;filter:drop-shadow(0 0 6px #ffd34d);}50%{opacity:.4;filter:drop-shadow(0 0 14px #ffd34d);}}
+  #tutarrow{position:fixed;z-index:61;display:none;font-size:36px;pointer-events:none;
+    animation:tutbob .7s ease-in-out infinite, tutarrowblink .7s ease-in-out infinite;}
+  #tutarrow.on{display:block;}
   /* locked content (boss select / unlocks screen) */
   .choice.rlocked{opacity:.55;cursor:default;border-color:#3a3450;}
   .unlockgrid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:680px;margin:0 auto;}
@@ -437,6 +458,8 @@
   </div>
   <div id="panel"></div>
   <div id="overlay"></div>
+  <div id="tutarrow">👆</div>
+  <div id="tutmodal"></div>
 </div>
 <script>
 "use strict";
@@ -1633,6 +1656,7 @@ let paused=false, pauseConfirm=false;
 function openPauseMenu(){
   // only over the live board (build/run); on overlay screens the button is hidden behind the overlay
   if(!G || G.phase==='menu' || overlay.classList.contains('show')) return;
+  if(G.tutorial) return;             // tutorial runs a forced flow — escape via the modal's skip ✕
   paused=true; pauseConfirm=false;
   overlay.classList.add('show'); renderPauseMenu();
 }
@@ -1740,6 +1764,8 @@ function openOptions(){
 // Four grouped buttons, each leading to a small submenu (no link clutter).
 function gotoMenu(){
   uiScreen='menu';
+  if(typeof tutModalHide==='function') tutModalHide();   // clear any orphaned tutorial modal
+  { const _a=document.getElementById('tutarrow'); if(_a) _a.classList.remove('on'); }
   G = freshGame('campaign'); G.phase='menu'; render();
   tutBar.classList.remove('show');
   overlay.classList.add('show');
@@ -2382,49 +2408,255 @@ function drawTownBuilding(c,P,id,x,y,lvl){
 }
 
 /* ============================== TUTORIAL =============================== */
-// A guided first run: contextual coach steps that advance as you actually
-// select a card, place it, start a wave, slay a hero, and level a room.
-const TUT_STEPS=[
-  {adv:'select', hi:'hand',  text:"👋 Welcome, Boss! You build a dungeon to stop heroes reaching your throne (far right). Tap a <b>room card</b> below to pick it."},
-  {adv:'place',  hi:'slot',  text:"Now tap a glowing <b>empty slot</b> to build your room there."},
-  {adv:'wave',   hi:'start', text:"Your dungeon is armed! Tap <b>⚔️ Start Wave</b> — a hero marches in and your rooms fight automatically."},
-  {adv:'kill',   hi:'abil',  text:"Blast the intruder with a <b>boss ability</b> (bottom-left) — they cost 🔷 mana. Slay them before they reach the throne!"},
-  {adv:'upgrade',hi:'hand',  text:"Every kill earns a card. Got two of the <b>same</b> room? Select that card, then tap the matching room to <b>level it up</b> — it gets stronger."},
-  {adv:null,     hi:null, final:true, text:"You're ready! 👑 Tip: tap any room, card, hero or your boss to inspect it. Build rooms, upgrade them for more slots, and stack traps & monsters — don't let anyone through. Good luck!"},
+/* ============================ GUIDED TUTORIAL ===========================
+   A scripted, mobile-style first run: a CENTRED modal explains each beat, the
+   game PAUSES at key moments, input is hard-locked to the one thing you need to
+   tap (a blinking arrow points at it), and every wave / card draft / relic is
+   scripted. All of it is gated behind G.tutorial so the real game is untouched.
+
+   Step fields:
+     title,body  modal text       gate   what input is allowed this step
+     pos         'center'|'top'    adv    event token that advances the step
+     arrow       'start'|'abil'|'hand'   cell  dungeon slot to ring-pulse + gate placement to
+     enter()     setup (scripts the wave/draft)   runBody  swap modal text once the wave starts
+     runPause    pause + swap to pauseBody once the lead hero crosses this corridor fraction
+     overlay     true = no modal (a draft/relic screen carries the instruction)
+*/
+function TUT_CHAMP(){ return (typeof CHAMP_KEYS!=='undefined' && CHAMP_KEYS.length)?CHAMP_KEYS[0]:null; }
+function TUT_HORDE(){
+  const a=[]; const mix=['warrior','rogue','mage','warrior','cleric'];
+  for(let i=0;i<10;i++) a.push({cls:mix[i%5], power:3, hp:240+i*18, atk:10, spd:42});
+  a.push({cls:'warrior', power:4, champion:TUT_CHAMP(), hp:560, atk:14, spd:36});
+  return a;
+}
+const TUT=[
+/*0*/ { title:"👑 You are the Boss", pos:'center', gate:'cont', adv:'cont', btn:"Show me →",
+        body:"Welcome! That throne on the right is <b>yours</b> — your <b>health bar is up top</b>. Heroes raid in from the LEFT to smash it. Your job: stop every last one." },
+/*1*/ { title:"Here he comes", pos:'top', gate:'start', adv:'started', arrow:'start',
+        body:"A lone knight is marching for your throne. Tap <b>⚔️ Start Wave</b> to send him in.",
+        enter:()=>{ G._tutWave=[{cls:'warrior',hp:74,atk:4,spd:34}]; G.boss.mana=G.boss.maxMana; } },
+/*2*/ { title:"Blast him!", pos:'top', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.32,
+        body:"You have <b>boss abilities</b> (bottom-left) that cost 🔷 mana. Strike the knight down before he reaches the throne!",
+        pauseBody:"He's closing in! <b>Tap a boss ability</b> (bottom-left) to blast him. 🔷",
+        enter:()=>{ G.boss.mana=G.boss.maxMana; } },
+/*3*/ { overlay:true, gate:'pick', adv:'picked', title:"Spoils of War",
+        body:"Every kill earns a <b>room card</b>. <b>Pick a trap</b> to start arming your dungeon.",
+        enter:()=>{ G._tutDraft=[{type:'spike'},{type:'flame'},{type:'arrow'}]; } },
+/*4*/ { title:"Build your trap", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
+        body:"<b>Drag your trap card</b> into the glowing room (or tap the card, then the room). Let's see what a hero does when he walks into it." },
+/*5*/ { title:"Spring it", pos:'top', gate:'start', adv:'cleared', arrow:'start',
+        body:"Tap <b>⚔️ Start Wave</b> and watch the next knight stroll right into your trap.",
+        runBody:"Watch him walk into your trap… 💥", enter:()=>{ G._tutWave=[{cls:'warrior',hp:48,atk:4,spd:30}]; } },
+/*6*/ { overlay:true, gate:'pick', adv:'picked', title:"Three of a kind",
+        body:"The same trap, three times! <b>Pick it</b> — duplicates of a trap make it stronger.",
+        enter:()=>{ const t=G._tutTrap||'spike'; G._tutDraft=[{type:t},{type:t},{type:t}]; } },
+/*7*/ { title:"Stack to upgrade", pos:'top', gate:'trapup', adv:'trapped', cell:0, hi:'slot',
+        body:"Drop the <b>same trap onto your trap</b> to <b>level it up</b> — deadlier, and it still takes just one slot." },
+/*8*/ { title:"Test it", pos:'top', gate:'start', adv:'cleared', arrow:'start',
+        body:"Tap <b>⚔️ Start Wave</b> — your upgraded trap hits much harder now.",
+        runBody:"💥 Boom — feel the upgrade!", enter:()=>{ G._tutWave=[{cls:'warrior',hp:78,atk:4,spd:30}]; } },
+/*9*/ { overlay:true, gate:'pick', adv:'picked', title:"A different trap",
+        body:"Now a <b>different</b> trap. Pick one — two trap types layer their damage.",
+        enter:()=>{ const t=G._tutTrap||'spike'; const o=['spike','flame','arrow'].filter(x=>x!==t); G._tutDraft=[{type:o[0]},{type:o[1]}]; } },
+/*10*/{ title:"Make some room", pos:'top', gate:'slotbuy', adv:'slotbought', cell:0,
+        body:"A room starts with <b>ONE slot</b>. <b>Tap your room</b>, then tap <b>⬆ Add slot</b> to fit a second trap. (Same trap stacks; a <i>different</i> one needs its own slot.)",
+        enter:()=>{ G.gold=Math.max(G.gold||0, 999); } },
+/*11*/{ title:"Two traps", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
+        body:"Drop the new trap into the free slot. <b>Max 2 traps per room</b> — fill the rest with monsters." },
+/*12*/{ title:"Next raider", pos:'top', gate:'start', adv:'started', arrow:'start',
+        body:"Tap <b>⚔️ Start Wave</b>. This one moves… differently.",
+        enter:()=>{ G._tutWave=[{cls:'rogue',hp:64,atk:5,spd:62}]; G.boss.mana=G.boss.maxMana; } },
+/*13*/{ title:"A rogue!", pos:'top', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.6,
+        body:"Watch — a <b>rogue DISARMS your traps</b> as he passes them! Don't panic…",
+        pauseBody:"He slipped your traps! <b>Tap an ability</b> to cut him down before the throne! 🔷",
+        enter:()=>{ G.boss.mana=G.boss.maxMana; } },
+/*14*/{ overlay:true, gate:'pick', adv:'picked', title:"Bring out the monsters",
+        body:"That's why you also need <b>monsters</b> — a rogue can't disarm a guard. <b>Pick a monster.</b>",
+        enter:()=>{ G._tutDraft=[{type:'skeleton'},{type:'goblin'},{type:'slime'}]; } },
+/*15*/{ title:"Room for a guard", pos:'top', gate:'slotbuy', adv:'slotbought', cell:0,
+        body:"<b>Tap your room</b> and <b>⬆ Add slot</b> again — make space for your monster beside the traps.",
+        enter:()=>{ G.gold=Math.max(G.gold||0, 999); } },
+/*16*/{ title:"Mix & match", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
+        body:"Drop the monster in. Now heroes get <b>stuck on your guard</b> while your traps chip them down. 🔥" },
+/*17*/{ title:"See it work", pos:'top', gate:'start', adv:'cleared', arrow:'start',
+        body:"Tap <b>⚔️ Start Wave</b> — guard + traps, together.",
+        runBody:"Guard blocks, traps bite… 💀", enter:()=>{ G._tutWave=[{cls:'rogue',hp:74,atk:5,spd:58}]; } },
+/*18*/{ title:"⚠️ A CHAMPION", pos:'top', gate:'start', adv:'started', arrow:'start',
+        body:"A <b>champion</b> approaches — tough, and he <b>smashes through rooms</b>. Throw EVERYTHING at him.",
+        enter:()=>{ G._tutWave=[{cls:'warrior',power:2,champion:TUT_CHAMP(),hp:230,atk:8,spd:32}]; G.boss.mana=G.boss.maxMana; } },
+/*19*/{ title:"Finish him!", pos:'top', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.5,
+        body:"Your dungeon grinds him down — <b>hammer him with abilities</b> to finish the job! 🔷",
+        pauseBody:"Now! <b>Abilities!</b> Drop the champion! 🔷",
+        enter:()=>{ G.boss.mana=G.boss.maxMana; } },
+/*20*/{ overlay:true, gate:'relic', adv:'relic', title:"🏺 An artifact!",
+        body:"Champions drop <b>relics</b> — permanent powers for your boss. Claim one!" },
+/*21*/{ title:"Grow your dungeon", pos:'center', gate:'cont', adv:'cont', btn:"I'm ready →",
+        body:"You've got it! Every room can grow to <b>5 slots</b> — <b>up to 2 traps</b>, the rest <b>monsters</b>. Buy slots with gold, open <b>new rooms</b> for a longer gauntlet, and let your guards rack up kills to become veterans." },
+/*22*/{ title:"The horde", pos:'top', gate:'start', adv:'started', arrow:'start',
+        body:"Now the <b>real</b> raid — a whole army at once. Hold the throne as long as you can… 😈",
+        enter:()=>{ G._tutWave=TUT_HORDE(); G.boss.hp=Math.min(G.boss.hp, Math.max(1,Math.round(G.boss.maxHp*0.08))); } },
+/*23*/{ overlay:true, gate:'none', adv:'never' },   // silent watch — bossDies() runs the finale
 ];
 function tutDoneGet(){ try{ return localStorage.getItem('bm_tut_done')==='1'; }catch(_){ return false; } }
 function tutDoneSet(){ try{ localStorage.setItem('bm_tut_done','1'); }catch(_){ } }
+function tutStepObj(){ return (G&&G.tutorial)?TUT[G.tutStep]:null; }
 function startTutorial(){
   G=freshGame('campaign');
   chooseBoss('dragon');          // pick a starter boss + default kit (skip the menus)
   confirmLoadout();              // -> build phase
-  G.tutorial=true; G.tutStep=0;
-  G.slots=2; G.rooms=[null,null];
-  G.hand=[{type:'spike',lvl:1},{type:'spike',lvl:1},{type:'goblin',lvl:1}];
-  selCard=-1; pickupIdx=-1;
+  G.tutorial=true; G.tutStep=0; G._tutEntered=-1;
+  G._tutWave=null; G._tutDraft=null; G._tutTrap=null; G._tutEarned=0;
+  G.slots=3; G.rooms=[null,null,null];
+  G.hand=[]; G.boss.mana=G.boss.maxMana;
+  selCard=-1; pickupIdx=-1; paused=false;
   tutShow(); render();
 }
+// Generic modal painter (used by the scripted steps AND the finale).
+let tutBtnFn=null;
+function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
+function tutModalPaint(o){
+  const m=document.getElementById('tutmodal'); if(!m) return;
+  tutBtnFn=o.onNext||null;
+  m.className='show'+(o.pos==='top'?' top':'');
+  m.innerHTML=(o.skip?`<button class="tm-skip" onclick="tutSkip()">skip ✕</button>`:'')
+    +(o.title?`<h3>${o.title}</h3>`:'')
+    +`<div class="tm-body">${o.body||''}</div>`
+    +(o.onNext?`<div class="tm-btns"><button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
+}
+function tutModalHide(){ const m=document.getElementById('tutmodal'); if(m){ m.className=''; m.innerHTML=''; } }
 function tutShow(){
-  if(!G||!G.tutorial){ tutBar.classList.remove('show'); return; }
-  const st=TUT_STEPS[G.tutStep];
-  G.tutHi = st?st.hi:null;
-  if(!st){ tutBar.classList.remove('show'); return; }
-  tutBar.innerHTML=`<div class="tuttext">${st.text}</div>`+
-    (st.final ? `<button class="go" onclick="tutFinish()">Got it ✓</button>`
-              : `<button class="tutskip" onclick="tutSkip()">Skip ✕</button>`);
-  tutBar.classList.add('show');
+  const st=tutStepObj();
+  if(!st){ tutModalHide(); G&&(G.tutHi=null,G.tutCell=null); return; }
+  if(G._tutEntered!==G.tutStep){ G._tutEntered=G.tutStep; st._armed=false; if(st.enter) st.enter(); }
+  G.tutHi = st.hi||null;
+  G.tutCell = (st.cell!=null)?st.cell:null;
+  paused = !!st.pause;
+  if(st.overlay) tutModalHide();
+  else tutModalPaint({ title:st.title, body:st.body, pos:st.pos, skip:!st.noskip,
+                       onNext:(st.gate==='cont'||st.gate==='menu')?tutAdvance:null, btn:st.btn });
+  if(typeof renderPanel==='function' && G && (G.phase==='build'||G.phase==='run')) renderPanel();
 }
-function tutEvent(ev){
+function tutAdvance(){
   if(!G||!G.tutorial) return;
-  const st=TUT_STEPS[G.tutStep];
-  if(st && st.adv===ev){ G.tutStep++; tutShow(); renderPanel(); }
+  G.tutStep++; paused=false;
+  if(G.tutStep>=TUT.length){ tutEnd(); return; }
+  tutShow();
 }
-function tutSkip(){ tutEnd(); }
+function tutEvent(ev, idx){
+  if(!G||!G.tutorial) return;
+  const st=tutStepObj(); if(!st) return;
+  if(st.adv===ev && (st.cell==null || idx==null || idx===st.cell)) tutAdvance();
+}
+// Is `action` permitted by the current step? (everything else is swallowed)
+function tutAllow(action, idx){
+  if(!G||!G.tutorial) return true;
+  const st=tutStepObj(); if(!st) return true;
+  const g=st.gate;
+  if(g==='free') return true;
+  if(action==='start')   return g==='start';
+  if(action==='ability') return g==='abil';
+  if(action==='draft')   return g==='pick';
+  if(action==='relic')   return g==='relic';
+  if(action==='slotbuy') return g==='slotbuy' && (st.cell==null||idx===st.cell);
+  if(action==='place')   return (g==='place'||g==='trapup'||g==='newroom') && (st.cell==null||idx===st.cell);
+  return false;
+}
+function tutNudge(){ try{ sfx('hit'); }catch(_){ } }
+// Called from update() each run frame (before the pause short-circuit): once the
+// lead hero crosses runPause, freeze and swap the modal to its action prompt.
+function tutRunTick(){
+  const st=tutStepObj(); if(!st||!st.runPause||st._armed) return false;
+  const h=(typeof leadHero==='function')?leadHero():null;
+  if(h && h.x>=0 && h.x >= corridorWidth()*st.runPause){
+    st._armed=true; paused=true;
+    if(st.pauseBody){ const b=document.querySelector('#tutmodal .tm-body'); if(b) b.innerHTML=st.pauseBody; }
+    return true;
+  }
+  return false;
+}
+// Position the blinking arrow over the current step's DOM target.
+function tutArrowTick(){
+  const arrow=document.getElementById('tutarrow'); if(!arrow) return;
+  const st=tutStepObj();
+  let el=null;
+  if(st && st.arrow==='start') el=document.getElementById('btnStartWave')||document.querySelector('#panel .go');
+  else if(st && st.arrow==='abil') el=document.querySelector('#panel .abil');
+  else if(st && st.arrow==='hand') el=document.querySelector('#panel .cards');
+  if(!el){ arrow.classList.remove('on'); return; }
+  const r=el.getBoundingClientRect();
+  arrow.style.left=(r.left+r.width/2)+'px';
+  arrow.style.top =(r.top-4)+'px';
+  arrow.classList.add('on');
+}
+// Forced card draft (renders in the normal reward overlay, but with set choices).
+function tutGotoReward(){
+  G.phase='reward';
+  G.drafts=(G._tutDraft||[]).map(c=>({type:c.type,lvl:1}));
+  const st=tutStepObj()||{};
+  overlay.classList.add('show');
+  overlay.innerHTML=`<h1>${st.title||'Spoils of War'}</h1>
+    <p>${st.body||'Draft a card.'}</p>
+    <div class="choices">${G.drafts.map((c,i)=>{ const d=ROOMS[c.type];
+      return `<div class="choice jz tut-pulse" onclick="takeDraft(${i})" style="animation-delay:${i*70}ms">
+        <div class="big">${cardFace(c.type)||d.ic}</div><h3>${d.name}</h3>
+        <div class="desc">${d.desc}</div>
+        <div class="stats" style="font-weight:bold">${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>`;
+}
+// Build + spawn the scripted tutorial wave (overrides normal spawnGroup).
+function tutSpawnWave(){
+  G.heroes=[];
+  (G._tutWave||[]).forEach((sp,k)=>{
+    const spec={cls:sp.cls||'warrior', power:sp.power||1, traits:sp.traits||[],
+      name:sp.name||((sp.cls||'hero').charAt(0).toUpperCase()+(sp.cls||'hero').slice(1)),
+      champion:sp.champion||null, debuff:{atkMul:1,burn:0,robbed:false}};
+    const h=buildHeroFromSpec(spec);
+    h.x=-56-k*40; h.yOff=-LIFT;
+    if(sp.hp!=null){ h.hp=h.maxHp=sp.hp; }
+    if(sp.atk!=null){ h.atk=sp.atk; h._atkBase=sp.atk; }
+    if(sp.spd!=null){ h.spd=sp.spd; }
+    G.heroes.push(h); G.heroNum++;
+  });
+  if(!G.heroes.length){ const h=buildHeroFromSpec({cls:'warrior',power:1,traits:[],name:'Knight',debuff:{atkMul:1,burn:0,robbed:false}}); h.x=-56; h.yOff=-LIFT; G.heroes.push(h); }
+  G._tutWave=null;
+  G.waveStartSlain=G.totalSlain; G.waveEnding=false; G.hero=leadHero();
+}
+// After a scripted wave clears (all heroes dead): route to the next screen.
+function tutAfterWave(){
+  if(typeof endWaveGoblins==='function') endWaveGoblins();
+  tutEvent('cleared');                 // advance start-then-watch beats
+  const cur=tutStepObj();
+  if(!cur){ tutEnd(); return; }
+  if(G._tutDraft){ tutGotoReward(); return; }
+  if(cur.gate==='relic'){
+    gotoRelicChoice("Champion's Spoils","Champions drop <b>relics</b> — permanent powers. Claim one!",
+      ()=>{ gotoBuild(false); tutEvent('relic'); });
+    return;
+  }
+  gotoBuild(false);
+}
+// The finale: the horde breaches the throne → a defiant send-off + the payout.
+function tutFinale(){
+  paused=true; G.phase='tutend';
+  let earned=0; try{ earned=awardRunes(); }catch(_){ }
+  G._tutEarned=earned||0;
+  try{ shake(12); sfx('lose'); }catch(_){ }
+  overlay.classList.remove('show');
+  tutModalPaint({ title:"💀 Your throne has fallen", btn:"And then?", onNext:tutFinale2,
+    body:"The horde was too many… <i>this time</i>. But a boss <b>never truly dies</b> — he sinks into the dark, remembers every wound, and rises again with a <b>VENGEANCE</b>. 🔥" });
+}
+function tutFinale2(){
+  tutModalPaint({ title:"🔮 Stronger every return", btn:"To the Stronghold →", onNext:()=>{ tutEnd(); try{ openStronghold(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
+    body:`You banked <b>${G._tutEarned||0} 🔮 rune points</b> and 🏗️ mastery this run. Spend them in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you.` });
+}
+function tutSkip(){ tutEnd(); try{ gotoMenu(); }catch(_){ } }
 function tutFinish(){ tutEnd(); }
 function tutEnd(){
-  if(G) { G.tutorial=false; G.tutHi=null; }
-  tutBar.classList.remove('show'); tutDoneSet();
-  if(G && (G.phase==='build'||G.phase==='run')) renderPanel();
+  if(G){ G.tutorial=false; G.tutHi=null; G.tutCell=null; G._tutWave=null; G._tutDraft=null; }
+  paused=false;
+  tutModalHide();
+  const a=document.getElementById('tutarrow'); if(a) a.classList.remove('on');
+  tutDoneSet();
+  if(G && (G.phase==='build'||G.phase==='run') && typeof renderPanel==='function') renderPanel();
 }
 
 /* ============================== RUNE PAGE UI ============================= */
@@ -2813,13 +3045,14 @@ function tapSlot(idx){
 //  • monster → always a NEW independent copy (no merge); veterans from kills
 function placeCard(ci, idx){
   const card=G.hand[ci]; if(!card) return false;
+  if(!tutAllow('place', idx)){ tutNudge(); return false; }   // tutorial: only the scripted slot
   const T=card.type, cdef=ROOMS[T];
   const room=G.rooms[idx];
   if(!room){
     G.rooms[idx]=makeRoom(T, card.lvl, card);
     G.hand.splice(ci,1);
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, cdef.col, 14);
-    showHint(ROOMS[T].name+' built!'); tutEvent('place');
+    showHint(ROOMS[T].name+' built!'); tutEvent('placed', idx);
     selCard=-1; sfx('upgrade'); render(); return true;
   }
   // shops never share a room
@@ -2834,7 +3067,7 @@ function placeCard(ci, idx){
       G.hand.splice(ci,1);
       burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
       floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+existing.lvl, '#ffd34d');
-      showHint(ROOMS[T].name+' upgraded to Lv '+existing.lvl+(existing.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('upgrade');
+      showHint(ROOMS[T].name+' upgraded to Lv '+existing.lvl+(existing.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('trapped', idx);
       selCard=-1; sfx('upgrade'); render(); return true;
     }
     if(roomTrapUnits(room).length>=MAX_TRAPS){ showHint('A room holds at most '+MAX_TRAPS+' traps.'); return false; }
@@ -2851,7 +3084,7 @@ function placeCard(ci, idx){
   G.hand.splice(ci,1);
   burst(cellX(idx)+ROOM_W/2, FLOOR-40, cdef.col, 18);
   floater(cellX(idx)+ROOM_W/2, FLOOR-80, '+ '+ROOMS[T].name, '#7bdc6b');
-  showHint('Added '+ROOMS[T].name+' → '+room.units.length+'/'+(room.cap||1)+' slots.'); tutEvent('place');
+  showHint('Added '+ROOMS[T].name+' → '+room.units.length+'/'+(room.cap||1)+' slots.'); tutEvent('placed', idx);
   selCard=-1; sfx('upgrade'); render(); return true;
 }
 
@@ -2892,6 +3125,7 @@ function stockShop(itemKey){
 
 // Begin a wave: build cells geometry, spawn the raiding party, switch to run.
 function startWave(){
+  if(!tutAllow('start')){ tutNudge(); return; }   // tutorial: only when prompted
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
   spawnGroup(G.guildLvl+1);
@@ -2900,7 +3134,13 @@ function startWave(){
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
   if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
-  tutEvent('wave');
+  // tutorial: 'start-then-watch' beats swap their modal to a running caption;
+  // pure 'start' beats advance immediately.
+  if(G.tutorial){ const st=tutStepObj();
+    if(st && st.runBody){ const b=document.querySelector('#tutmodal .tm-body'); if(b) b.innerHTML=st.runBody;
+      const a=document.getElementById('tutarrow'); if(a) a.classList.remove('on'); }
+    tutEvent('started');
+  }
   render();
 }
 
@@ -3117,6 +3357,7 @@ function prepCampaignWave(){
   G.waveLevel=campLevel();
 }
 function spawnGroup(n){
+  if(G.tutorial && G._tutWave){ tutSpawnWave(); return; }   // scripted tutorial wave
   // 👑 THE KING — a lone finale raider, spawned in place of a normal party.
   if(G.kingDue){
     G.kingDue=false; G.kingFight=true;
@@ -3515,15 +3756,20 @@ function bossBolt(tx,ty,col,ic){
 
 function castAbility(slot){
   if(G.phase!=='run') return;
+  if(!tutAllow('ability')){ tutNudge(); return; }   // tutorial: only when prompted
   const target=leadHero();
   if(!target){ return; }
   const a=G.boss.abil[slot]; const def=a&&ABIL[a.id];
   if(!def){ return; }
+  // tutorial: the sim is frozen on an ability beat, so refresh mana/cooldown each
+  // press — the player can never soft-lock on cooldowns while paused.
+  if(G.tutorial && paused){ G.boss.mana=G.boss.maxMana; a.cd=0; }
   const cost=abilCost(def.cost);
   if(a.cd>0){ showHint(def.name+' on cooldown.'); return; }
   if(G.boss.mana<cost){ showHint('Not enough mana.'); return; }
   G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
   def.run(target);
+  tutEvent('ability');
   // bolt(s) from the boss to the target(s) so you see where the power comes from
   const living=(G.heroes||[]).filter(h=>h&&h.state!=='dead');
   if(def.aoe && living.length) living.forEach(h=>bossBolt(h.x, h.y, G.boss.col, def.ic));
@@ -3664,6 +3910,7 @@ function heroDies(h){
 function afterWave(){
   if(G.phase!=='run') return;          // run already ended (closed/lost/won) — don't resurrect it
   G.waveEnding=false;
+  if(G.tutorial){ tutAfterWave(); return; }   // scripted tutorial flow
   endWaveGoblins();                    // bank surviving goblins back into their dens
   if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
   // Endless: town every 5 kills, relic every 10, mandate every 25
@@ -3759,6 +4006,7 @@ function trueVictory(){
 
 function bossDies(){
   const b=G.boss;
+  if(G.tutorial){ tutFinale(); return; }   // scripted finale send-off
   // Phylactery: rise once instead of falling
   if(b.reviveHp && !b.revived){
     b.revived=true; b.hp=Math.round(b.maxHp*b.reviveHp); b.mana=b.maxMana;
@@ -3986,6 +4234,7 @@ function awardRunes(){
 
 /* ============================= PHASE: REWARD ============================= */
 function gotoReward(){
+  if(G.tutorial && G._tutDraft){ tutGotoReward(); return; }   // scripted tutorial draft
   G.phase='reward';
   // draft 3 room cards, weighted by what helps (slightly favor what you own to enable upgrades)
   const owned = new Set(G.rooms.filter(Boolean).map(r=>r.type).filter(t=>t!=='minion'));
@@ -4014,10 +4263,18 @@ function gotoReward(){
     <div class="menu-btns"><button onclick="skipDraft()">Skip draft</button></div>`;
 }
 function takeDraft(i){
+  const card=G.drafts[i]; if(!card) return;
+  if(G.tutorial){
+    if(ROOMS[card.type] && ROOMS[card.type].kind==='trap' && !G._tutTrap) G._tutTrap=card.type;
+    G.hand.push({type:card.type, lvl:1}); G._tutDraft=null;
+    overlay.classList.remove('show');
+    gotoBuild(false); tutEvent('picked');
+    return;
+  }
   if(G.hand.length>=handCap()){
     showHint('Hand full — discard a card in build, or skip.'); return;
   }
-  G.hand.push(G.drafts[i]);
+  G.hand.push(card);
   overlay.classList.remove('show');
   afterReward();
 }
@@ -4390,6 +4647,7 @@ function renderTown(){
 
 /* ============================ UPDATE / SIM ============================== */
 function update(dt){
+  if(G && G.tutorial && G.phase==='run' && tutRunTick()) return;   // auto-pause beat just triggered
   if(paused) return;                 // pause menu freezes the whole simulation
   // animate floaters/particles always
   floats.forEach(f=>{ f.y+=f.vy*dt; f.life-=dt*0.9; });
@@ -5145,12 +5403,6 @@ function drawDungeon(tx, scale, isBuild){
         X.fillStyle=(isBuild&&(selCard>=0||dropTarget||beingDragged))?'#ffd34d':'#8a7ab8'; X.font='12px Trebuchet MS'; X.textAlign='center';
         X.fillText(beingDragged?'↔ moving':(dropTarget?'drop here':'empty'), x0+w/2, FLOOR-58); X.textAlign='left';
       }
-      // tutorial: pulse the first empty slot during the "place" step
-      if(isBuild && G && G.tutHi==='slot' && i===G.rooms.findIndex(r=>!r)){
-        const pu=0.5+0.5*Math.sin(performance.now()/220);
-        X.strokeStyle='#ffd34d'; X.globalAlpha=0.5+0.5*pu; X.lineWidth=3; X.setLineDash([]);
-        X.strokeRect(x0+3, FLOOR-126, w-6, 122); X.globalAlpha=1;
-      }
     } else if(roomDrag && roomDrag.dragging && i===roomDrag.from){
       // the room being dragged: lifted + faded
       const _ft=_frontTraps; _frontTraps=null;   // lifted room: draw its traps inline so they rise with it
@@ -5158,6 +5410,12 @@ function drawDungeon(tx, scale, isBuild){
       _frontTraps=_ft;
     } else {
       drawRoomFull(x0, w, room, i);
+    }
+    // tutorial: a bright blinking ring around the slot you should act on
+    if(G && G.tutorial && G.tutCell===i){
+      const pu=0.5+0.5*Math.sin(performance.now()/200);
+      X.strokeStyle='#ffd34d'; X.globalAlpha=0.45+0.55*pu; X.lineWidth=3.5; X.setLineDash([8,5]);
+      X.strokeRect(x0+3, FLOOR-128, w-6, 126); X.setLineDash([]); X.globalAlpha=1;
     }
     // picked-up room highlight
     if(isBuild && i===pickupIdx){
@@ -6425,7 +6683,7 @@ function renderPanel(){
         <span style="flex:1"></span>
         <span class="pill" title="Resources gathered this run. Close the dungeon to keep them all — if the throne falls you lose ${Math.round((1-deathKeep())*100)}%.">🏗️ ${haulStr(pendingResources())}</span>
         <button onclick="promptClose()" title="End the run now and keep your full haul" style="padding:6px 9px;border-color:#9be86b;color:#cdeeb0">🏳️ Close</button>
-        <button class="go${G&&G.tutHi==='start'?' tut-pulse':''}" onclick="startWave()"><img class="btnico" src="icons/ui_war.png" alt="" draggable="false">Start Wave</button>
+        <button id="btnStartWave" class="go${G&&G.tutHi==='start'?' tut-pulse':''}" onclick="startWave()"><img class="btnico" src="icons/ui_war.png" alt="" draggable="false">Start Wave</button>
       </div>
       <div class="row">
         <span class="small" style="min-width:46px">Hand:</span>
@@ -6761,6 +7019,7 @@ function fuseRooms(from,to){ moveRoom(from,to); }
 // Spend gold to add one SLOT to a room (up to MAX_SLOTS) so it can hold more units.
 function upgradeRoomGold(idx){
   if(!G || G.phase!=='build') return;
+  if(!tutAllow('slotbuy', idx)){ tutNudge(); return; }   // tutorial: only the scripted room
   const room=G.rooms[idx]; if(!room) return;
   if((room.cap||1)>=MAX_SLOTS){ showHint(comboName(room)+' already has the max '+MAX_SLOTS+' slots.'); return; }
   const cost=roomUpgradeCost(room);
@@ -6769,7 +7028,7 @@ function upgradeRoomGold(idx){
   burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
   floater(cellX(idx)+ROOM_W/2, FLOOR-70, '▦ '+room.cap+'/'+MAX_SLOTS, '#ffd34d');
   sfx('upgrade'); showHint(comboName(room)+' → '+room.cap+'/'+MAX_SLOTS+' slots for '+cost+'g. Drop a card to fill it.');
-  render(); showInspectEntity({kind:'room',room});
+  render(); showInspectEntity({kind:'room',room}); tutEvent('slotbought', idx);
 }
 // Max zoom-out is EXACTLY the full painted scene — never further (no void).
 function zMin(){ return Math.min(ZMAX, VW/Math.max(1, corridorWidth()-worldLeft())); }
@@ -6975,6 +7234,7 @@ function frame(ts){
   if(AC) updateMusicMood();   // music follows the game state
   // keep run panel cooldowns fresh
   if(G&&G.phase==='run'){ updateRunPanel(); }
+  if(G&&G.tutorial) tutArrowTick();   // keep the blinking arrow on its target
   requestAnimationFrame(frame);
 }
 // Update ability buttons WITHOUT rebuilding the DOM — rebuilding mid-tap was
