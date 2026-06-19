@@ -11,6 +11,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,BOSSES,particles,floats,
+  goblinStep,
   get G(){return G;},set G(v){G=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
 const t = harness('render/juice smoke');
@@ -95,5 +96,37 @@ try{
   A.draw();                                                      // must read isDen from the room, draw a skeleton, not ghost goblins
   t.ok(true, 'stale-cell den preview no longer fires for a non-goblin room');
 }catch(e){ t.ok(false, 'stale-cell draw threw: '+e.message); }
+
+// 5) den goblins now HUNT: a goblin chases the nearest living hero across the
+//    whole dungeon (no same-cell requirement), fights it to the finish, and when
+//    every hero is down it marches back to its den rest spot on the right.
+try{
+  freshRun([room('goblin', 3), room('spike', 1), room('ogre', 1)]);
+  const g = (A.G.minions||[])[0];
+  t.ok(!!g, 'a den goblin marched out for the wave');
+  if(g){
+    // isolate one hero, drop it far to the LEFT in a different cell, goblin to the right
+    const h = A.G.heroes[0];
+    A.G.heroes = [h];
+    h.state='walking'; h.hp = h.maxHp = 99999; h.atk = 0;   // unkillable, harmless dummy
+    h.x = A.G.cells[0].x0 + 4;                               // far-left cell
+    g.x = A.G.cells[Math.min(2, A.G.cells.length-1)].x0 + 20; // a few cells to the right
+    g.engaged = null;
+    const gap0 = Math.abs(g.x - h.x);
+    t.ok(Array.isArray(A.G.cells) && A.G.cells.length>0, 'dungeon cells exist');
+    for(let i=0;i<60;i++) A.goblinStep(g, 0.05);
+    t.ok(Math.abs(g.x - h.x) < gap0 - 1, 'goblin closed the gap to a hero in another room ('+gap0.toFixed(0)+'→'+Math.abs(g.x-h.x).toFixed(0)+')');
+    t.ok(g.engaged === h, 'goblin locked onto the far hero (cross-cell hunt)');
+
+    // now wipe the party → the goblin should retreat toward its den (homeX, right)
+    h.hp = 0; h.state = 'dead';
+    g.engaged = null;
+    const homeX = g.homeX;
+    g.x = homeX - 200;                                       // stranded far to the left
+    const back0 = homeX - g.x;
+    for(let i=0;i<80;i++) A.goblinStep(g, 0.05);
+    t.ok((homeX - g.x) < back0 - 1, 'with no heroes left, goblin walks back toward the den ('+back0.toFixed(0)+'→'+(homeX-g.x).toFixed(0)+')');
+  }
+}catch(e){ t.ok(false, 'goblin hunt/retreat behavior threw: '+e.message); }
 
 t.done();
