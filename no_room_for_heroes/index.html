@@ -1705,7 +1705,7 @@ function closeDungeon(){
       ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
-  aftermathSequence(earned, summary);
+  aftermathSequence(earned, summary, G.mode==='endless');   // endless → auto-open the leaderboard after the payout
 }
 
 function difficulty(){
@@ -1850,9 +1850,20 @@ function renderLB(boards){
   if(boards===null){ el.innerHTML='Leaderboard offline — the server isn\'t set up yet (KV binding "BOARD" in the Cloudflare Pages project).'; return; }
   const top=boards[LB_TAB]||[];
   if(!top.length){ el.innerHTML='No entries '+(LB_TAB==='all'?'yet':'this '+(LB_TAB==='day'?'day':LB_TAB))+' — be the first!'; return; }
-  el.innerHTML='<div style="max-width:320px;margin:0 auto;text-align:left;line-height:1.8">'
-    +top.slice(0,10).map((e,i)=>`<div style="display:flex;justify-content:space-between;gap:14px">
-      <span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${e.name}</span><b style="color:#ffd34d">${e.score}</b></div>`).join('')+'</div>';
+  el.innerHTML='<div style="max-width:340px;margin:0 auto;text-align:left;line-height:1.8">'
+    +top.slice(0,10).map((e,i)=>`<div style="display:flex;justify-content:space-between;gap:14px;align-items:baseline">
+      <span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${e.name}</span>
+      <span style="white-space:nowrap"><b style="color:#ffd34d">${e.score}</b>${e.t?` <span class="small" style="opacity:.5">· ${lbAgo(e.t)}</span>`:''}</span></div>`).join('')
+    +'</div><p class="small" style="opacity:.5;margin-top:6px">'+(LB_TAB==='all'?'all-time':'resets each '+(LB_TAB==='day'?'day':LB_TAB)+' (UTC)')+'</p>';
+}
+// Relative timestamp for a board entry (server stamps each score with t=Date.now()).
+function lbAgo(t){
+  if(!t) return '';
+  const s=Math.max(0,(Date.now()-t)/1000);
+  if(s<90) return 'just now';
+  if(s<3600) return Math.round(s/60)+'m ago';
+  if(s<86400) return Math.round(s/3600)+'h ago';
+  return Math.round(s/86400)+'d ago';
 }
 function openLeaderboard(){
   overlay.classList.add('show');
@@ -3373,7 +3384,7 @@ function buildHeroFromSpec(spec){
     state:'walking',         // walking | fighting | shopping | boss | dead
     cellIndex:-1,
     atkT:0, hasPotion:false, items:[], burn:0, burnT:0,
-    freeze:0, shopT:0, walkAnim:Math.random()*6, _yj:(Math.random()<0.5?0:1),   // de-sync gait + a touch of height variance
+    freeze:0, shopT:0, walkAnim:Math.random()*6, _yj:Math.floor(Math.random()*4),   // de-sync gait + stagger height (0–3px)
     shieldT:0, specialT:5,   // champion special timers
     spellT:ri(2,6), rallyT:0, blessT:0, evadeT:0, surgeT:0,   // class-spell cooldown + active buff timers
   };
@@ -3519,6 +3530,7 @@ function spawnDenGoblinsForWave(){
         hp, maxHp:hp, atk,
         atkT: 0.4 + Math.random()*0.6,
         state:'walking', cellIndex:cell.index, walkAnim:Math.random()*6,
+        _yj: Math.floor(Math.random()*4),                  // stagger marching heights
         kills: unit.kills||0, lvl
       });
     });
@@ -3621,7 +3633,7 @@ function drawDenGoblinSprite(g, sx, clipName){
   const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
   X.drawImage(img, srcX,srcY,clip.fw,clip.fh,
-    Math.round(sx-clip.ax*S), Math.round(FLOOR-LIFT-clip.ay*S-(g.hop||0)), Math.round(clip.fw*S), Math.round(clip.fh*S));
+    Math.round(sx-clip.ax*S), Math.round(FLOOR-LIFT-clip.ay*S-(g.hop||0)-(g._yj||0)), Math.round(clip.fw*S), Math.round(clip.fh*S));
   X.imageSmoothingEnabled=sm;
   return true;
 }
@@ -4097,7 +4109,7 @@ function bossDies(){
       ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
-  aftermathSequence(earned, summary);
+  aftermathSequence(earned, summary, G.mode==='endless');   // endless → auto-open the leaderboard after the payout
 }
 // One-line summary of the Wood/Stone/Shards a run banked for the Town Builder.
 function townGainLine(verb){
@@ -4109,7 +4121,7 @@ function townGainLine(verb){
    Before the final summary, play a little sequence: rune points fly into a book
    (plop), town resources fly into a chest (ching), then each unlock spin-zooms in
    to be tapped through. Skip jumps straight to the summary. */
-let _amTimers=[], _amQueue=[], _amSummary=null;
+let _amTimers=[], _amQueue=[], _amSummary=null, _amToLB=false;
 function amClearTimers(){ _amTimers.forEach(t=>clearTimeout(t)); _amTimers=[]; }
 function amSched(fn,ms){ const t=setTimeout(fn,ms); _amTimers.push(t); return t; }
 function amSetText(id,txt){ const e=document.getElementById(id); if(e) e.textContent=txt; }
@@ -4124,8 +4136,8 @@ function amSpawnFly(icon,color,targetId){
   requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.style.transform='translate('+(tx-sx)+'px,'+(ty-sy)+'px) scale(.4)'; el.style.opacity='.15'; }));
   amSched(()=>el.remove(),720);
 }
-function aftermathSequence(earned, summaryHtml){
-  _amSummary=summaryHtml; amClearTimers();
+function aftermathSequence(earned, summaryHtml, toLB){
+  _amSummary=summaryHtml; _amToLB=!!toLB; amClearTimers();
   const g=G.townGain||{wood:0,stone:0,shards:0};
   const unlocks=(G.newUnlocks||[]).slice();
   _amQueue=[];
@@ -4189,7 +4201,13 @@ function amStageUnlock(u){
   sfx('relic');
 }
 function amSkip(){ amClearTimers(); if(overlay&&overlay.querySelectorAll) overlay.querySelectorAll('.flyicon').forEach(e=>e.remove()); _amQueue=[]; amShowSummary(); }
-function amShowSummary(){ amClearTimers(); if(_amSummary!=null && overlay) overlay.innerHTML=_amSummary; }
+function amShowSummary(){
+  amClearTimers();
+  // Endless: after the payout animation, drop the player straight onto the
+  // leaderboard (the run report's Leaderboard button, but automatic).
+  if(_amToLB){ _amToLB=false; openLeaderboard(); return; }
+  if(_amSummary!=null && overlay) overlay.innerHTML=_amSummary;
+}
 function totalKills(){ return G.totalSlain; }
 // Capture just enough of the hero who felled the throne for the post-mortem.
 function snapshotHero(h){
@@ -6226,6 +6244,7 @@ function drawRoomContents(x0,w,room,i){
     for(let i=0;i<preview;i++){
       const u=arr[i] || (room._previewUnits[i]=room._previewUnits[i]||{kills:0});
       if(u._mt===undefined) u._mt=i*0.37;             // de-sync the idle bob
+      if(u._yj===undefined) u._yj=(i*7)%4;            // stagger heights in the den crowd
       const gx=x0+w*(0.72-(i%6)*0.105);                // fill from the RIGHT (like a stationed guard), drawn SOLID — no ghosting
       if(!drawDenGoblinSprite(u, gx+( (i/6|0)%2 ?5:0), 'idle')) drawMonster(gx, 'goblin', '#5fae54');
       const lv=goblinLevel(u.kills||0);
@@ -6270,7 +6289,7 @@ function drawRoomContents(x0,w,room,i){
       const def=ROOMS[mp]; const sprite = mp==='minion'?'minion':mp;
       const sp=monParts.length>3?20:(monParts.length>2?28:44);
       const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 5)
-      const oy=(monParts.length>1)?(mi%2)*2:0;                 // stagger heights so a stack reads as a crowd
+      const oy=(monParts.length>1)?[0,3,1,4,2][mi%5]:0;        // each guard a distinct height so a stack reads as a crowd
       const ph=mi*0.31;                                        // …and de-sync their animation cycles
       const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT-oy, room, cell, mp, alive, moving, ph);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
