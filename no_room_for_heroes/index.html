@@ -2483,7 +2483,18 @@ const TUT=[
 /*17*/{ title:"See it work", pos:'top', gate:'start', adv:'cleared', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b> — guard + traps, together.",
         runBody:"Guard blocks, traps bite… 💀", enter:()=>{ G._tutWave=[{cls:'rogue',hp:74,atk:5,spd:58}]; } },
-/*18*/{ title:"⚠️ A CHAMPION", pos:'top', gate:'start', adv:'started', arrow:'start',
+/*18*/{ overlay:true, gate:'pick', adv:'picked', title:"Spoils of War",
+        body:"One room is a fine start — but a longer corridor grinds heroes down harder. <b>Pick another monster</b> for a brand-new room.",
+        enter:()=>{ G._tutDraft=[{type:'skeleton'},{type:'goblin'},{type:'ogre'}]; } },
+/*19*/{ title:"Open a 2nd room", gate:'buyroom', adv:'boughtroom', arrow:'buyroom',
+        body:"You can add more rooms to your corridor. Tap <b>➕ Room</b> (bottom bar) to open a brand-new one.",
+        enter:()=>{ G.gold=Math.max(G.gold||0, 999); } },
+/*20*/{ title:"Fill the new room", gate:'place', adv:'placed', cell:0,
+        body:"Drop your monster into the <b>new empty room</b> on the left." },
+/*21*/{ title:"A longer gauntlet", gate:'start', adv:'cleared', arrow:'start',
+        body:"Tap <b>⚔️ Start Wave</b> — now heroes must fight through <b>two</b> rooms to reach you.",
+        runBody:"Two rooms, double the grind… 💀", enter:()=>{ G._tutWave=[{cls:'warrior',hp:90,atk:5,spd:34}]; } },
+/*22*/{ title:"⚠️ A CHAMPION", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"A <b>champion</b> approaches — tough, and he <b>smashes through rooms</b>. Throw EVERYTHING at him.",
         enter:()=>{ G._tutWave=[{cls:'warrior',power:2,champion:TUT_CHAMP(),hp:230,atk:8,spd:32}]; G.boss.mana=G.boss.maxMana; } },
 /*19*/{ title:"Finish him!", pos:'top', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.5,
@@ -2559,6 +2570,7 @@ function tutAllow(action, idx){
   if(action==='ability') return g==='abil';
   if(action==='draft')   return g==='pick';
   if(action==='relic')   return g==='relic';
+  if(action==='buyroom') return g==='buyroom';
   if(action==='slotbuy') return g==='slotbuy' && (st.cell==null||idx===st.cell);
   if(action==='place')   return (g==='place'||g==='trapup'||g==='newroom') && (st.cell==null||idx===st.cell);
   return false;
@@ -2582,6 +2594,7 @@ function tutArrowTick(){
   const st=tutStepObj();
   let el=null;
   if(st && st.arrow==='start') el=document.getElementById('btnStartWave')||document.querySelector('#panel .go');
+  else if(st && st.arrow==='buyroom') el=document.getElementById('btnBuyRoom');
   else if(st && st.arrow==='abil') el=document.querySelector('#panel .abil');
   else if(st && st.arrow==='hand') el=document.querySelector('#panel .cards');
   if(!el){ arrow.classList.remove('on'); return; }
@@ -2636,19 +2649,27 @@ function tutAfterWave(){
   }
   gotoBuild(false);
 }
-// The finale: the horde breaches the throne → a defiant send-off + the payout.
+// The finale: the horde breaches the throne → a defiant send-off + a real payout
+// (a starter stash of runes + building resources, banked to the active slot).
+const TUT_RUNE_GIFT=8, TUT_RES_GIFT={wood:60, stone:30, shards:5};
 function tutFinale(){
   paused=true; G.phase='tutend';
-  let earned=0; try{ earned=awardRunes(); }catch(_){ }
-  G._tutEarned=earned||0;
+  try{
+    RUNES.points=(RUNES.points||0)+TUT_RUNE_GIFT; saveRunes();
+    if(TOWN && TOWN.res){ TOWN.res.wood=(TOWN.res.wood||0)+TUT_RES_GIFT.wood;
+      TOWN.res.stone=(TOWN.res.stone||0)+TUT_RES_GIFT.stone;
+      TOWN.res.shards=(TOWN.res.shards||0)+TUT_RES_GIFT.shards; saveTown(); }
+  }catch(_){ }
+  G._tutEarned=TUT_RUNE_GIFT;
   try{ shake(12); sfx('lose'); }catch(_){ }
   overlay.classList.remove('show');
   tutModalPaint({ title:"💀 Your throne has fallen", btn:"And then?", onNext:tutFinale2,
     body:"The horde was too many… <i>this time</i>. But a boss <b>never truly dies</b> — he sinks into the dark, remembers every wound, and rises again with a <b>VENGEANCE</b>. 🔥" });
 }
 function tutFinale2(){
+  const g=TUT_RES_GIFT;
   tutModalPaint({ title:"🔮 Stronger every return", btn:"To the Stronghold →", onNext:()=>{ tutEnd(); try{ openStronghold(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
-    body:`You banked <b>${G._tutEarned||0} 🔮 rune points</b> and 🏗️ mastery this run. Spend them in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you.` });
+    body:`A parting gift for surviving your first siege: <b>${G._tutEarned} 🔮 rune points</b> and <b>🪵 ${g.wood} · 🪨 ${g.stone} · 💎 ${g.shards}</b> building resources. Spend them in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you.` });
 }
 function tutSkip(){ tutEnd(); try{ gotoMenu(); }catch(_){ } }
 function tutFinish(){ tutEnd(); }
@@ -2949,7 +2970,7 @@ function gotoBuild(first){
   if(first){
     if(G.shrineRelics && G.shrineRelics.length)
       showHint('🛐 The Shrine grants you '+G.shrineRelics.map(id=>RELICS[id].ic+' '+RELICS[id].name).join(' & ')+'!');
-    else showHint('Tap a card then a slot to build · tap a room to move it · drag to pan.');
+    else showHint('Tap a card then a room to build · tap a room to move it · drag to pan.');
     if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2800);
   }
   render();
@@ -2975,14 +2996,15 @@ function townSlotBonus(){ return [0,1,2][townLvl('foundry')]||0; }   // War Foun
 function slotCap(){ return (G&&G.mode==='endless') ? 99 : SLOT_CAP_BASE + (RB.slotMax||0) + townSlotBonus(); }
 
 function buySlot(){
-  if(G.slots>=slotCap()){ showHint('🧱 Slot cap reached ('+slotCap()+'). Raise it with runes, the War Foundry, or relics.'); return; }
+  if(!tutAllow('buyroom')){ tutNudge(); return; }   // tutorial: only when prompted
+  if(G.slots>=slotCap()){ showHint('🧱 Room cap reached ('+slotCap()+'). Raise it with runes, the War Foundry, or relics.'); return; }
   const c=slotCost();
   if(G.gold<c){ showHint('Not enough gold.'); return; }
-  G.gold-=c; G.slots++; G.rooms.unshift(null);   // new slot extends to the LEFT
-  // existing rooms keep their objects; unshift(null) puts new empty slot far left
-  pickupIdx=-1; camX=0;                           // pan to reveal the new slot
-  showHint('New slot added on the far left. Drag to pan the dungeon.');
-  render();
+  G.gold-=c; G.slots++; G.rooms.unshift(null);   // new room position extends to the LEFT
+  // existing rooms keep their objects; unshift(null) puts the new empty room far left
+  pickupIdx=-1; camX=0;                           // pan to reveal the new room
+  showHint('New room added on the far left. Drag to pan the dungeon.');
+  render(); tutEvent('boughtroom');
 }
 // Gold sink: spend loot to patch the throne's HP between waves (the boss only
 // otherwise heals via abilities/runes), so surplus gold always has a use.
@@ -3031,7 +3053,7 @@ function tapSlot(idx){
     const here=G.rooms[idx];
     if(pickupIdx<0){
       if(!here){ showHint('Pick a card to build, or tap a room to move it.'); return; }
-      pickupIdx=idx; showHint('Moving '+roomName(here)+' — tap any slot to drop (swaps if full).');
+      pickupIdx=idx; showHint('Moving '+roomName(here)+' — tap where to drop it (swaps if full).');
       render(); return;
     }
     if(pickupIdx===idx){ pickupIdx=-1; showHint('Move cancelled.'); render(); return; }
@@ -5403,7 +5425,7 @@ function drawDungeon(tx, scale, isBuild){
           X.strokeRect(x0+6, FLOOR-120, w-12, 110); X.setLineDash([]);
         }
         X.fillStyle=(isBuild&&(selCard>=0||dropTarget||beingDragged))?'#ffd34d':'#8a7ab8'; X.font='12px Trebuchet MS'; X.textAlign='center';
-        X.fillText(beingDragged?'↔ moving':(dropTarget?'drop here':'empty'), x0+w/2, FLOOR-58); X.textAlign='left';
+        X.fillText(beingDragged?'↔ moving':(dropTarget?'drop here':'＋ room'), x0+w/2, FLOOR-58); X.textAlign='left';
       }
     } else if(roomDrag && roomDrag.dragging && i===roomDrag.from){
       // the room being dragged: lifted + faded
@@ -6688,7 +6710,7 @@ function renderPanel(){
     const _newFrom=(G.hand.length>_lastHandLen)?_lastHandLen:G.hand.length; _lastHandLen=G.hand.length;
     panel.innerHTML=`
       <div class="row" style="margin-bottom:6px">
-        <button class="buy" onclick="buySlot()" title="Corridor rooms: ${G.slots}/${slotCap()}. Raise the cap with runes, the War Foundry & relics." ${(G.slots>=slotCap()||G.gold<slotCost())?'disabled':''}>${G.slots>=slotCap()?`🧱 Slots ${G.slots}/${slotCap()} (max)`:`➕ Slot ${G.slots}/${slotCap()} (${slotCost()}g)`}</button>
+        <button id="btnBuyRoom" class="buy" onclick="buySlot()" title="Corridor rooms: ${G.slots}/${slotCap()}. Raise the cap with runes, the War Foundry & relics." ${(G.slots>=slotCap()||G.gold<slotCost())?'disabled':''}>${G.slots>=slotCap()?`🧱 Rooms ${G.slots}/${slotCap()} (max)`:`➕ Room ${G.slots}/${slotCap()} (${slotCost()}g)`}</button>
         ${G.boss && G.boss.hp<G.boss.maxHp ? `<button class="buy" onclick="repairThrone()" title="Spend gold to heal the throne" ${G.gold<repairCost().cost?'disabled':''}>🩹 Repair +${repairCost().heal} (${repairCost().cost}g)</button>` : ''}
         ${shopExists?(()=>{ const shops=G.rooms.filter(r=>r&&r.type==='shop');
           const used=shops.reduce((a,r)=>a+(r.stock||[]).length,0), cap=shops.reduce((a,r)=>a+shopCap(r),0); const full=used>=cap;
@@ -7217,7 +7239,7 @@ function endCardDrag(e){
     const slot=slotUnderPointer(e);
     endCardGhost();
     if(slot>=0) placeCard(cardDrag.ci, slot);
-    else showHint('Drop a card onto a room slot to build there.');
+    else showHint('Drop a card onto a room to build there.');
   } else {
     selectCard(cardDrag.ci);                          // it was a tap, not a drag
   }

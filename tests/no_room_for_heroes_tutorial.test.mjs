@@ -7,7 +7,7 @@
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,startTutorial,tutAdvance,tutBtn,tutAllow,tutStepObj,
-  startWave,placeCard,upgradeRoomGold,takeDraft,pickRelic,heroDies,afterWave,bossDies,
+  startWave,placeCard,upgradeRoomGold,buySlot,takeDraft,pickRelic,heroDies,afterWave,bossDies,
   TUT,roomTrapUnits,roomMonUnits,draw,update,
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('tutorial (guided run)');
@@ -22,7 +22,7 @@ A.tutAdvance();                                  // → beat 1 (start wave)
 t.ok(A.tutAllow('start')===true && A.tutAllow('ability')===false, 'beat 1 allows Start Wave only');
 
 // --- drive the entire script generically by each beat's gate ---
-let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false;
+let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false, secondRoom=false;
 try{
   while(A.G.tutorial && guard++ < 120){
     const before=A.G.tutStep;
@@ -43,10 +43,12 @@ try{
     else if(g==='pick'){ A.takeDraft(0); }
     else if(g==='place' || g==='trapup'){ A.placeCard(0, st.cell); }
     else if(g==='slotbuy'){ A.upgradeRoomGold(st.cell); }
+    else if(g==='buyroom'){ A.buySlot(); }
     else if(g==='relic'){ A.pickRelic(0); }
     else if(g==='none'){ reachedHorde=true; A.bossDies(); A.tutBtn(); A.tutBtn(); }
     else { A.tutAdvance(); }
     // probe a few invariants as the dungeon takes shape
+    if(A.G.slots>=2) secondRoom=true;
     const r0=A.G.rooms[0];
     if(r0){ if(A.roomTrapUnits(r0).length>=1) builtTrap=true;
             if(A.roomTrapUnits(r0).some(u=>u.lvl>=2)) stackedTrap=true;
@@ -61,6 +63,7 @@ t.ok(builtTrap, 'beat 4: a trap was built into the room');
 t.ok(stackedTrap, 'beat 7: stacking the same trap raised its level');
 t.ok(twoTraps, 'beat 11: a 2nd trap type went in after buying a slot');
 t.ok(mixed, 'beat 16: a monster joined the traps in one room');
+t.ok(secondRoom, 'a second corridor room was opened (buy + fill)');
 t.ok(reachedHorde, 'reached the unbeatable-horde finale');
 t.ok(A.G.tutorial===false, 'finale ends the tutorial');
 t.ok(guard<120, 'finished in a bounded number of steps ('+guard+')');
