@@ -403,14 +403,15 @@
   @keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 #ffd34d00;}50%{box-shadow:0 0 0 4px #ffd34d99;}}
   .tut-pulse{animation:tutpulse 1s ease-in-out infinite;border-color:var(--gold)!important;}
   /* ---- Scripted tutorial: centered modal + blinking arrow (fixed, above all) ---- */
+  /* centred modal; pointer-events:none so a tip floating over the board never
+     blocks the tap beneath it — only its own buttons capture clicks */
   #tutmodal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.96);
-    z-index:60;display:none;width:min(440px,calc(100% - 48px));text-align:center;
+    z-index:60;display:none;width:min(440px,calc(100% - 48px));text-align:center;pointer-events:none;
     padding:18px 20px 16px;border-radius:16px;background:linear-gradient(165deg,#241a44,#140e2a);
     border:2px solid var(--gold);box-shadow:0 14px 48px rgba(0,0,0,.7),0 0 22px #ffd34d44;
     opacity:0;transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1);}
   #tutmodal.show{display:block;opacity:1;transform:translate(-50%,-50%) scale(1);}
-  #tutmodal.top{top:64px;transform:translate(-50%,0) scale(.96);}
-  #tutmodal.top.show{transform:translate(-50%,0) scale(1);}
+  #tutmodal .go,#tutmodal .tm-skip{pointer-events:auto;}
   #tutmodal .tm-body{font-size:14.5px;line-height:1.5;color:var(--ink);}
   #tutmodal .tm-body b{color:#ffe7a3;}
   #tutmodal h3{margin:0 0 6px;color:var(--gold);font-size:17px;letter-spacing:.5px;}
@@ -2431,7 +2432,8 @@ function TUT_HORDE(){
 }
 const TUT=[
 /*0*/ { title:"👑 You are the Boss", pos:'center', gate:'cont', adv:'cont', btn:"Show me →",
-        body:"Welcome! That throne on the right is <b>yours</b> — your <b>health bar is up top</b>. Heroes raid in from the LEFT to smash it. Your job: stop every last one." },
+        body:"Welcome! That throne on the right is <b>yours</b> — your <b>health bar is up top</b>. Heroes raid in from the LEFT to smash it. Your job: stop every last one.",
+        enter:()=>{ G._tutWave=[{cls:'warrior',hp:74,atk:4,spd:34}]; } },   // stage the knight from the very start
 /*1*/ { title:"Here he comes", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"A lone knight is marching for your throne. Tap <b>⚔️ Start Wave</b> to send him in.",
         enter:()=>{ G._tutWave=[{cls:'warrior',hp:74,atk:4,spd:34}]; G.boss.mana=G.boss.maxMana; } },
@@ -2517,7 +2519,7 @@ function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
   tutBtnFn=o.onNext||null;
-  m.className='show'+(o.pos==='top'?' top':'');
+  m.className='show';   // always centred — consistent across every tip
   m.innerHTML=(o.skip?`<button class="tm-skip" onclick="tutSkip()">skip ✕</button>`:'')
     +(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
@@ -5465,17 +5467,32 @@ function previewHeroObj(spec){
 // advancing (rebuilding them every frame would freeze the sprite on frame 0).
 let _waitAnim=[];
 function drawWaitingHeroes(tx){
-  if(G.mode==='campaign') prepCampaignWave();    // make sure the cached wave is rolled
-  if(!G.queue || !G.queue.length) return;
+  let specs;
+  if(G.tutorial){
+    // preview the SCRIPTED wave (G._tutWave), not a random campaign roll. Cache the
+    // derived specs (stable object identity) so the idle animation keeps advancing.
+    if(!G._tutWave || !G._tutWave.length) return;
+    if(G._tutPreviewFor!==G._tutWave){
+      G._tutPreviewFor=G._tutWave;
+      G._tutPreviewSpecs=G._tutWave.map(sp=>({cls:sp.cls||'warrior', power:sp.power||1, traits:sp.traits||[],
+        name:sp.name||((sp.cls||'hero').charAt(0).toUpperCase()+(sp.cls||'hero').slice(1)),
+        champion:sp.champion||null, debuff:{atkMul:1,burn:0,robbed:false}}));
+    }
+    specs=G._tutPreviewSpecs;
+  } else {
+    if(G.mode==='campaign') prepCampaignWave();    // make sure the cached wave is rolled
+    if(!G.queue || !G.queue.length) return;
+    specs=G.queue;
+  }
   // Campaign: the whole wave is queued, so show it all. Endless: a champion raids
   // alone, otherwise the guild-sized party.
   let n;
-  if(G.mode==='campaign') n=Math.min(G.queue.length, 9);
-  else n=G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0));
-  const hasChamp = G.queue.slice(0,n).some(s=>s.champion);
+  if(G.tutorial || G.mode==='campaign') n=Math.min(specs.length, 9);
+  else n=specs[0].champion ? 1 : Math.min(specs.length, G.guildLvl+1+(hasEdict('warband')?1:0));
+  const hasChamp = specs.slice(0,n).some(s=>s.champion);
   const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
   for(let k=0;k<n;k++){
-    const spec=G.queue[k];
+    const spec=specs[k];
     // reuse the cached object so _animT accumulates across frames (idle plays);
     // rebuild it only when the spec at this slot changes (new wave rolled)
     let e=_waitAnim[k]; if(!e || e.spec!==spec){ e=_waitAnim[k]={spec, h:previewHeroObj(spec)}; }
