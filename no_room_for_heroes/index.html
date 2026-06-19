@@ -3170,6 +3170,7 @@ function leadHero(){
 const GOBLIN_DEN_CAP = 20;
 const GOBLIN_HP_FRAC = 0.55, GOBLIN_ATK_FRAC = 0.34;   // hp raised: full-atk retaliation 1-shot them
 const GOBLIN_SPD = 50;                       // px/sec
+const GOBLIN_REACH = 16;                     // close to this then trade blows
 const GOBLIN_LVL_MAX = 10;
 const GOBLIN_XP_PER_LVL = 3;                 // kills needed for each level up
 const GOBLIN_HP_PER_LVL = 0.30;              // +30% maxHp per level
@@ -3202,9 +3203,10 @@ function spawnDenGoblinsForWave(){
       const lvl=goblinLevel(unit.kills);
       const hp =Math.max(2, Math.round(baseHp *GOBLIN_HP_FRAC *(1+(lvl-1)*GOBLIN_HP_PER_LVL )));
       const atk=Math.max(1, Math.round(baseAtk*GOBLIN_ATK_FRAC*(1+(lvl-1)*GOBLIN_ATK_PER_LVL)));
+      const gx = cell.x0 + ROOM_W*(0.55 + (i%6)*0.04);     // den rest spot (right side)
       G.minions.push({
-        type:'goblin', home:cell.index, _src:unit,
-        x: cell.x0 + ROOM_W*(0.55 + (i%6)*0.04),
+        type:'goblin', home:cell.index, homeX:gx, _src:unit,
+        x: gx,
         y: FLOOR,
         hp, maxHp:hp, atk,
         atkT: 0.4 + Math.random()*0.6,
@@ -3225,13 +3227,15 @@ function endWaveGoblins(){
   G.minions = [];
 }
 function goblinValidTarget(g, h){
-  return !!(h && (G.heroes||[]).includes(h) && h.hp>0 && h.state!=='dead' && h.x>=0 && h.cellIndex===g.cellIndex);
+  // Goblins hunt ANY living hero anywhere in the dungeon — not just their own
+  // room — so they keep fighting every hero they cross until the party is wiped.
+  return !!(h && (G.heroes||[]).includes(h) && h.hp>0 && h.state!=='dead' && h.x>=0);
 }
 function goblinStep(g, dt){
   if(g.hp<=0){ g.engaged=null; return; }
   const c = cellAt(g.x); if(c) g.cellIndex=c.index;
-  // LOCK onto a hero and hold until one of us dies — so we fight to the finish
-  // instead of landing one hit and clipping straight through.
+  // LOCK onto a hero and hold until one of us dies — fight that one to the finish,
+  // then turn to the NEXT nearest. Land a kill → pick a new target next frame.
   let target = goblinValidTarget(g, g.engaged) ? g.engaged : null;
   if(!target){
     let bestDx=Infinity;
@@ -3242,9 +3246,16 @@ function goblinStep(g, dt){
     g.engaged=target;
   }
   if(target){
-    g.state='fighting';
     const dx=target.x-g.x;
-    if(Math.abs(dx)>16) g.x += Math.sign(dx)*GOBLIN_SPD*dt;   // close in, then hold the line
+    if(Math.abs(dx)>GOBLIN_REACH){
+      // not in melee yet → march toward the hero (left OR right) and hold the lock
+      g.state='walking';
+      g.x += Math.sign(dx)*GOBLIN_SPD*dt;
+      g.walkAnim += dt*8;
+      if(g.x < 6) g.x = 6;
+      return;
+    }
+    g.state='fighting';
     g.walkAnim += dt*8;
     g.atkT -= dt;
     if(g.atkT<=0){
@@ -3270,9 +3281,11 @@ function goblinStep(g, dt){
     }
     return;
   }
+  // No living heroes left → march back to the den rest spot on the right.
   g.state='walking'; g.engaged=null;
-  g.x -= GOBLIN_SPD*dt;
-  g.walkAnim += dt*8;
+  const homeX = (g.homeX!==undefined) ? g.homeX : g.x;
+  if(g.x < homeX-6){ g.x += GOBLIN_SPD*dt; g.walkAnim += dt*8; }
+  else if(g.x > homeX+6){ g.x -= GOBLIN_SPD*dt; g.walkAnim += dt*8; }
   if(g.x < 6) g.x = 6;
 }
 function goblinTick(dt){
