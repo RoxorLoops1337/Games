@@ -197,6 +197,9 @@
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
+  /* save-slot stats: fixed height + centred so every slot card is the SAME size
+     whether or not it has the optional "best slain" / Ascension line */
+  .slotbody{min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.4;margin:4px 0;}
   .menu-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:14px;}
   .menu-btns button{font-size:11px;padding:13px 20px;}
   /* ===== anime.js-inspired motion (vanilla, no dependency) — overshoot/spring
@@ -1400,7 +1403,7 @@ function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
 // Procedural WebAudio SFX + a soft ambient loop — no asset files. Plus screen
 // shake, hit-pause and crits to make every hit land.
 let AC=null, audioOn=true, _musicTimer=null, _sfxLast={};
-let sfxBus=null, musicBus=null, sfxVol=1, musVol=1;   // separate volume buses
+let sfxBus=null, musicBus=null, sfxVol=1, musVol=0.4;   // separate volume buses (music defaults to 40%)
 let shakeT=0, shakeMag=0, hitStop=0;
 let _simTick=0;     // increments once per sim step; traps use it so their cooldown ticks once, not per-hero
 let slowT=0;                         // slow-motion timer (epic moments)
@@ -1873,9 +1876,10 @@ function openTitle(){
   const cards=[];
   for(let n=1;n<=SAVE_SLOTS;n++){
     const s=slotSummary(n), active=(n===saveSlot);
-    const body = s
-      ? `<div class="small" style="opacity:.9;margin:4px 0">🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}${(s.best||s.asc)?`<br>${s.asc?`<span style="color:#c79bff">👑 Ascension ${s.asc}</span>`:''}${s.asc&&s.best?' · ':''}${s.best?`♾️ best: <b>${s.best}</b> slain`:''}`:''}</div>`
-      : `<div class="small" style="opacity:.7;margin:4px 0">Empty — a brand-new game</div>`;
+    const stats = s
+      ? `🔮 <b>${s.pts}</b> rune pts · ☠ <b>${s.kills}</b> kills · 🏗️ <b>${s.builds}</b> building${s.builds!==1?'s':''}${(s.best||s.asc)?`<br>${s.asc?`<span style="color:#c79bff">👑 Ascension ${s.asc}</span>`:''}${s.asc&&s.best?' · ':''}${s.best?`♾️ best: <b>${s.best}</b> slain`:''}`:''}`
+      : 'Empty — a brand-new game';
+    const body = `<div class="slotbody small" style="opacity:${s?'.9':'.7'}">${stats}</div>`;
     cards.push(`<div class="choice" style="width:220px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
       <div class="big"><img class="cardimg" src="icons/ui_save.png" alt="" draggable="false"></div>
       <h3 style="margin:2px 0">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● last played</span>':''}</h3>
@@ -7029,6 +7033,11 @@ resize();
 titleScreen();
 requestAnimationFrame(frame);
 hideBoot();
+// Try to start the title music immediately. Browsers usually keep the
+// AudioContext suspended until a gesture (the first tap resumes it via the
+// pointerdown listener + drops the "tap for sound" prompt), but where autoplay
+// is permitted this kicks the theme off on load at the default 40% volume.
+if(audioOn) try{ initAudio(); }catch(_){ }
 </script>
 </body>
 </html>
