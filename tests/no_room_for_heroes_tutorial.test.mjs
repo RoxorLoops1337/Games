@@ -7,7 +7,7 @@
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,startTutorial,tutAdvance,tutBtn,tutAllow,tutStepObj,
-  startWave,placeCard,upgradeRoomGold,buySlot,takeDraft,pickRelic,heroDies,afterWave,bossDies,
+  startWave,placeCard,upgradeRoomGold,buySlot,moveRoom,takeDraft,pickRelic,heroDies,afterWave,bossDies,
   TUT,roomTrapUnits,roomMonUnits,draw,update,
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('tutorial (guided run)');
@@ -22,7 +22,7 @@ A.tutAdvance();                                  // → beat 1 (start wave)
 t.ok(A.tutAllow('start')===true && A.tutAllow('ability')===false, 'beat 1 allows Start Wave only');
 
 // --- drive the entire script generically by each beat's gate ---
-let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false, secondRoom=false;
+let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false, secondRoom=false, sawSwap=false;
 try{
   while(A.G.tutorial && guard++ < 120){
     const before=A.G.tutStep;
@@ -44,6 +44,7 @@ try{
     else if(g==='place' || g==='trapup'){ A.placeCard(0, st.cell); }
     else if(g==='slotbuy'){ A.upgradeRoomGold(st.cell); }
     else if(g==='buyroom'){ A.buySlot(); }
+    else if(g==='swap'){ sawSwap=true; A.moveRoom(0, 1); }
     else if(g==='relic'){ A.pickRelic(0); }
     else if(st.adv==='never'){ reachedHorde=true; A.bossDies(); A.tutBtn(); A.tutBtn(); }   // finale watch beat
     else { A.tutAdvance(); }
@@ -64,6 +65,7 @@ t.ok(stackedTrap, 'beat 7: stacking the same trap raised its level');
 t.ok(twoTraps, 'beat 11: a 2nd trap type went in after buying a slot');
 t.ok(mixed, 'beat 16: a monster joined the traps in one room');
 t.ok(secondRoom, 'a second corridor room was opened (buy + fill)');
+t.ok(sawSwap, 'the rearrange-rooms beat was taught');
 t.ok(reachedHorde, 'reached the unbeatable-horde finale');
 t.ok(A.G.tutorial===false, 'finale ends the tutorial');
 t.ok(guard<120, 'finished in a bounded number of steps ('+guard+')');

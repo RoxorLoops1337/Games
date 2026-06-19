@@ -2447,7 +2447,7 @@ const TUT=[
         enter:()=>{ G._tutDraft=[{type:'spike'},{type:'flame'},{type:'arrow'}]; } },
 /*4*/ { title:"Build your trap", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
         body:"<b>Drag your trap card</b> into the glowing room (or tap the card, then the room). Let's see what a hero does when he walks into it." },
-/*5*/ { title:"Spring it", pos:'top', gate:'start', adv:'cleared', arrow:'start',
+/*5*/ { title:"Spring it", pos:'bottom', gate:'start', adv:'cleared', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b> and watch the next knight stroll right into your trap.",
         runBody:"Watch him walk into your trap… 💥", enter:()=>{ G._tutWave=[{cls:'warrior',hp:48,atk:4,spd:30}]; } },
 /*6*/ { overlay:true, gate:'pick', adv:'picked', title:"Spoils of War",
@@ -2455,7 +2455,7 @@ const TUT=[
         enter:()=>{ const t=G._tutTrap||'spike'; G._tutDraft=[{type:t},{type:t},{type:t}]; } },
 /*7*/ { title:"Stack to upgrade", pos:'top', gate:'trapup', adv:'trapped', cell:0, hi:'slot',
         body:"Drop the <b>same trap onto your trap</b> to <b>level it up</b> — deadlier, and it still takes just one slot." },
-/*8*/ { title:"Test it", pos:'top', gate:'start', adv:'cleared', arrow:'start',
+/*8*/ { title:"Test it", pos:'bottom', gate:'start', adv:'cleared', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b> — your upgraded trap hits much harder now.",
         runBody:"💥 Boom — feel the upgrade!", enter:()=>{ G._tutWave=[{cls:'warrior',hp:78,atk:4,spd:30}]; } },
 /*9*/ { overlay:true, gate:'pick', adv:'picked', title:"A different trap",
@@ -2495,6 +2495,8 @@ const TUT=[
 /*21*/{ title:"A longer gauntlet", gate:'start', adv:'cleared', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b> — now heroes must fight through <b>two</b> rooms to reach you.",
         runBody:"Two rooms, double the grind… 💀", enter:()=>{ G._tutWave=[{cls:'warrior',hp:90,atk:5,spd:34}]; } },
+/*+*/ { title:"Rearrange your rooms", gate:'swap', adv:'swapped',
+        body:"Order matters — heroes hit your rooms left-to-right. <b>Drag a room</b> to a new spot (or tap it, then tap where to move it) to <b>swap</b> their order." },
 /*22*/{ title:"⚠️ A CHAMPION", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"A <b>champion</b> approaches — tough, and he <b>smashes through rooms</b>. Throw EVERYTHING at him.",
         enter:()=>{ G._tutWave=[{cls:'warrior',power:2,champion:TUT_CHAMP(),hp:230,atk:8,spd:32}]; G.boss.mana=G.boss.maxMana; } },
@@ -2531,7 +2533,7 @@ function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
   tutBtnFn=o.onNext||null;
-  m.className='show'+(o.pos==='bottom'?' low':'');   // centred, or low (near the bottom pointer)
+  m.className='show low';   // every tip sits low (just under the floor) so the board stays visible
   m.innerHTML=(o.skip?`<button class="tm-skip" onclick="tutSkip()">skip ✕</button>`:'')
     +(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
@@ -2572,6 +2574,7 @@ function tutAllow(action, idx){
   if(action==='draft')   return g==='pick';
   if(action==='relic')   return g==='relic';
   if(action==='buyroom') return g==='buyroom';
+  if(action==='swap')    return g==='swap';
   if(action==='slotbuy') return g==='slotbuy' && (st.cell==null||idx===st.cell);
   if(action==='place')   return (g==='place'||g==='trapup'||g==='newroom') && (st.cell==null||idx===st.cell);
   return false;
@@ -2652,16 +2655,22 @@ function tutAfterWave(){
 }
 // The finale: the horde breaches the throne → a defiant send-off + a real payout
 // (a starter stash of runes + building resources, banked to the active slot).
-const TUT_RUNE_GIFT=8, TUT_RES_GIFT={wood:60, stone:30, shards:5};
+const TUT_RUNE_GIFT=4, TUT_RES_GIFT={wood:15, stone:5};
+function tutRewardClaimed(){ try{ return localStorage.getItem('bm_tut_reward')==='1'; }catch(_){ return false; } }
+function tutClaimReward(){ try{ localStorage.setItem('bm_tut_reward','1'); }catch(_){ } }
 function tutFinale(){
   paused=true; G.phase='tutend';
-  try{
-    RUNES.points=(RUNES.points||0)+TUT_RUNE_GIFT; saveRunes();
-    if(TOWN && TOWN.res){ TOWN.res.wood=(TOWN.res.wood||0)+TUT_RES_GIFT.wood;
-      TOWN.res.stone=(TOWN.res.stone||0)+TUT_RES_GIFT.stone;
-      TOWN.res.shards=(TOWN.res.shards||0)+TUT_RES_GIFT.shards; saveTown(); }
-  }catch(_){ }
-  G._tutEarned=TUT_RUNE_GIFT;
+  // First completion only: a small starter stash, banked to the active slot.
+  // Replays grant nothing.
+  G._tutGifted = !tutRewardClaimed();
+  if(G._tutGifted){
+    try{
+      RUNES.points=(RUNES.points||0)+TUT_RUNE_GIFT; saveRunes();
+      if(TOWN && TOWN.res){ TOWN.res.wood=(TOWN.res.wood||0)+TUT_RES_GIFT.wood;
+        TOWN.res.stone=(TOWN.res.stone||0)+TUT_RES_GIFT.stone; saveTown(); }
+    }catch(_){ }
+    tutClaimReward();
+  }
   try{ shake(12); sfx('lose'); }catch(_){ }
   overlay.classList.remove('show');
   tutModalPaint({ title:"💀 Your throne has fallen", btn:"And then?", onNext:tutFinale2,
@@ -2669,8 +2678,11 @@ function tutFinale(){
 }
 function tutFinale2(){
   const g=TUT_RES_GIFT;
+  const gift = G._tutGifted
+    ? `A parting gift for surviving your first siege: <b>${TUT_RUNE_GIFT} 🔮 rune points</b> and <b>🪵 ${g.wood} · 🪨 ${g.stone}</b>. `
+    : ``;
   tutModalPaint({ title:"🔮 Stronger every return", btn:"To the Stronghold →", onNext:()=>{ tutEnd(); try{ openStronghold(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
-    body:`A parting gift for surviving your first siege: <b>${G._tutEarned} 🔮 rune points</b> and <b>🪵 ${g.wood} · 🪨 ${g.stone} · 💎 ${g.shards}</b> building resources. Spend them in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you.` });
+    body:`${gift}Spend rune points &amp; resources in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you.` });
 }
 function tutSkip(){ tutEnd(); try{ gotoMenu(); }catch(_){ } }
 function tutFinish(){ tutEnd(); }
@@ -3054,12 +3066,13 @@ function tapSlot(idx){
     const here=G.rooms[idx];
     if(pickupIdx<0){
       if(!here){ showHint('Pick a card to build, or tap a room to move it.'); return; }
+      if(!tutAllow('swap')){ tutNudge(); return; }   // tutorial: only when prompted
       pickupIdx=idx; showHint('Moving '+roomName(here)+' — tap where to drop it (swaps if full).');
       render(); return;
     }
     if(pickupIdx===idx){ pickupIdx=-1; showHint('Move cancelled.'); render(); return; }
     const tmp=G.rooms[pickupIdx]; G.rooms[pickupIdx]=G.rooms[idx]; G.rooms[idx]=tmp;
-    pickupIdx=-1; showHint('Rooms rearranged.'); render(); return;
+    pickupIdx=-1; showHint('Rooms rearranged.'); render(); tutEvent('swapped'); return;
   }
   placeCard(selCard, idx);
 }
@@ -7051,8 +7064,9 @@ function clientToVY(e){ const rect=CV.getBoundingClientRect();
 // Move a room from one slot to another, pushing the rooms in between over.
 function moveRoom(from,to){
   if(from===to || from<0 || to<0 || from>=G.slots || to>=G.slots) return;
+  if(!tutAllow('swap')){ tutNudge(); return; }   // tutorial: only when prompted
   const [r]=G.rooms.splice(from,1); G.rooms.splice(to,0,r);
-  sfx('upgrade'); showHint('Rooms rearranged.'); render();
+  sfx('upgrade'); showHint('Rooms rearranged.'); render(); tutEvent('swapped');
 }
 // Room-merge-on-drag was removed with synergies — dragging a room only reorders.
 function fuseRooms(from,to){ moveRoom(from,to); }
