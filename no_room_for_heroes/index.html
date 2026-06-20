@@ -3438,6 +3438,7 @@ function buildHeroFromSpec(spec){
   let gold=heroGold(n,d,spec.debuff.robbed), bounty=heroBounty(n,d);
   if(champ){ hp*=champ.hpMul; atk*=champ.atkMul; armor+=2; gold=Math.round(gold*2.5); bounty=Math.round(bounty*3); }
   if(spec.king){ hp*=10; atk*=1.65; armor+=13; spd*=0.97; gold=0; bounty=0; }   // 👑 the finale boss-raider — deliberately punishing: far tankier, hits much harder at the throne, near-impervious armor and shrugs off CC (see statusResist). A solid dungeon still wins, but the margin is thin.
+  if(spec.kingGuard){ hp*=0.5; atk*=0.55; armor=Math.max(0,armor-3); gold=Math.round(gold*0.2); bounty=Math.round(bounty*0.4); }   // 👑 little knights of the King's host: weak & expendable
   hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
     cls, ...c, name:cls, traits:tr,
@@ -3445,7 +3446,7 @@ function buildHeroFromSpec(spec){
     heroName: spec.name, title: spec.title || (champ?champ.title:null),
     champion: spec.champion||null, champIc: champ?champ.ic:null, champCol: champ?champ.col:null,
     rival: !!spec.rival, rivalGen: spec.rivalGen||0,
-    king: !!spec.king,
+    king: !!spec.king, kingGuard: !!spec.kingGuard,
     specPower: n, specTraits: tr,
     maxHp:hp, hp:hp, atk, _atkBase:atk, armor, spd, atkSpeed,
     gold, bounty,
@@ -3492,14 +3493,24 @@ function prepCampaignWave(){
 }
 function spawnGroup(n){
   if(G.tutorial && G._tutWave){ tutSpawnWave(); return; }   // scripted tutorial wave
-  // 👑 THE KING — a lone finale raider, spawned in place of a normal party.
+  // 👑 THE KING — the finale raider no longer marches alone: an honor guard of
+  // KING_GUARD little knights storms the dungeon with him. They're weak (your
+  // halls mow most down) but the swarm makes the last stand feel like a siege.
   if(G.kingDue){
     G.kingDue=false; G.kingFight=true;
-    const h=buildHeroFromSpec(kingSpec());
-    h.x=-60; h.yOff=-LIFT;                // the King strides in from outside too (same lifted line)
-    G.heroes=[h]; G.heroNum++;
-    banner('👑 THE HIGH KING', '#ffd34d', 'Fell him and rule forever');
-    shake(12); sfx('boss');
+    G.heroes=[];
+    const vanguard=12;                                  // knights marching ahead of the crown
+    for(let i=0;i<KING_GUARD;i++){
+      const g=buildHeroFromSpec(kingGuardSpec());
+      g.x=-40 - i*16 + ri(-4,4);                        // a long marching column streaming in from the left
+      g.yOff=-LIFT;
+      G.heroes.push(g); G.heroNum++;
+    }
+    const king=buildHeroFromSpec(kingSpec());
+    king.x=-40 - vanguard*16; king.yOff=-LIFT;          // the crown rides near the front of its host
+    G.heroes.push(king); G.heroNum++;                   // pushed last → drawn on top of the swarm
+    banner('👑 THE HIGH KING & HIS HOST', '#ffd34d', KING_GUARD+' knights and a crown — hold the line');
+    shake(14); sfx('boss');
     G.waveStartSlain=G.totalSlain; G.waveEnding=false; G.hero=leadHero();
     return;
   }
@@ -4075,6 +4086,8 @@ function campaignAdvance(){
 // ----------------------------- THE KING FINALE ---------------------------
 // Clearing wave 50 looks like victory… until the High King kicks the doors in.
 const KING_SMASH=0.16;            // chance the King smashes each room he marches through
+const KING_GUARD=50;             // 👑 the King's honor guard — little knights that storm in with him (spectacle)
+const KING_GUARD_POWER=0.40;     // their stat-power vs the campaign — weak on purpose, so your halls can mow them
 function campaignVictory(){
   // A FALSE victory — savour it for a beat before the floor shakes.
   G.phase='win'; overlay.classList.add('show'); sfx('win');
@@ -4107,6 +4120,12 @@ function faceTheKing(){
 function kingSpec(){
   return {cls:'warrior', power:campPower(), traits:[], name:'The High King', title:'', king:true,
           debuff:{atkMul:1, burn:0, robbed:false}};
+}
+// 👑 A little knight of the King's host — many, weak, expendable. Pure spectacle:
+// the dungeon should mow most of them down before they reach the throne.
+function kingGuardSpec(){
+  return {cls:'warrior', power:Math.max(1,Math.round(campPower()*KING_GUARD_POWER)), traits:[],
+          name:'Knight', title:'', kingGuard:true, debuff:{atkMul:1, burn:0, robbed:false}};
 }
 function destroyRoom(cell){
   const idx=cell.index;
@@ -6650,7 +6669,7 @@ function drawHero(sx,h){
   const drewChamp = champSprite && (rogueChamp ? drawSuperRogue(sx, y, h) : drawChampion(sx, y, h));
   const drewKing  = !drewChamp && kingSprite && drawChampion(sx, y, h, KING_SCALE);   // 👑 Super Knight ×1.4
   const skey = !drewChamp && !drewKing && CLASS_SPRITE[h.cls];
-  const drewKnight = skey && spriteReady(skey) && drawSprite(sx, y, h, skey, king?KING_SCALE:1);
+  const drewKnight = skey && spriteReady(skey) && drawSprite(sx, y, h, skey, king?KING_SCALE:(h.kingGuard?0.7:1));
   if(!drewChamp && !drewKing && !drewKnight){
     // legs
     px(sx-7,yy-14,5,14,'#3a3050'); px(sx+2,yy-14,5,14,'#3a3050');
@@ -6669,6 +6688,7 @@ function drawHero(sx,h){
   const figTop = drewChamp ? (y - (rogueChamp?ROGUE_IDLE_DH:CHAMP_DH))
                : drewKing  ? (y - Math.round(CHAMP_DH*KING_SCALE))
                : king      ? (yy - 64)                 // King fallback (sprite/figure) stands taller
+               : h.kingGuard ? (yy - 34)               // a little knight sits lower
                : (yy - 46);
   // frozen / elemental status tints
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
@@ -6685,9 +6705,9 @@ function drawHero(sx,h){
   const big = champ || king;
   const bw = drewKing ? Math.round(52*KING_SCALE) : (big?52:36);
   bar(sx-bw/2, figTop-(big?20:14), bw, big?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d', h);
-  // gold + elite trait markers
+  // gold + elite trait markers (the King's little knights skip the gold tag — 50 of them would be noise)
   X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
-  X.fillText('💰'+h.gold, sx, figTop-18);
+  if(!h.kingGuard) X.fillText('💰'+h.gold, sx, figTop-18);
   if(king){
     X.font='24px Trebuchet MS'; X.fillText('👑', sx, figTop-30);          // big crown above head
     X.font='bold 11px Trebuchet MS'; X.fillStyle='#ffd34d';
