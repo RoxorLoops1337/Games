@@ -13,7 +13,7 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
   goblinStep,fightTick,shake,
   collectLoot,collectAllLoot,mergeGear,autoMergeGear,assignLoot,GEAR,CHEST_MAX,TIER_ORDER,
-  equipGear,roomMonUnits,renderPanel,
+  equipGear,roomMonUnits,renderPanel,describeHero,describeRoom,describeLoot,entityAt,gearEffectText,
   get panelHTML(){ return panel.innerHTML; },
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
@@ -273,5 +273,33 @@ try{
   const n=A.G.boss.abil.length;
   t.ok(abilCount===n+3, 'run panel renders n+3 .abil buttons (got '+abilCount+', abilities='+n+') so updateRunPanel patches in place instead of rebuilding every frame');
 }catch(e){ t.ok(false, 'ability-button count check threw: '+e.message); }
+
+// 13) Loot readouts: carried gear reads on heroes, equipped gear on monsters,
+//     and a floor pickup is inspectable (entityAt resolves it) for mid-wave collect.
+try{
+  // per-tier effect text
+  t.ok(A.gearEffectText({k:'blade',t:'common'})==='+25% ATK', 'gearEffectText reports the per-tier effect');
+
+  // a carrier advertises its gear in the hero inspect bubble
+  const hh={cls:'warrior', heroName:'Sir Test', traits:[], hp:10, maxHp:10, atk:3, armor:2, spd:46, gold:5, loot:{k:'blade',t:'epic'}};
+  const hd=A.describeHero(hh);
+  t.ok(/Carrying/.test(hd) && /Blade/.test(hd), 'a carrier shows its gear in the hero inspect bubble');
+
+  // a floor pickup describes its equipped effect
+  t.ok(/damage taken/.test(A.describeLoot({k:'aegis',t:'rare',x:200})), 'a floor pickup describes its equipped effect');
+
+  // equipped gear is listed on the monster room readout
+  A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='build';
+  A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)];
+  const bare=A.describeRoom(A.G.rooms[0], true);
+  A.G.rooms[0].units[0].gear=[{k:'blade',t:'mythic'}];
+  const armed=A.describeRoom(A.G.rooms[0], true);
+  t.ok(/Blade/.test(armed) && armed!==bare, 'equipped gear is listed on the monster room readout');
+
+  // entityAt resolves a floor pickup so it can be inspected & collected mid-wave
+  A.G.floorLoot=[{k:'charm',t:'common',x:300}];
+  const ent=A.entityAt(300);
+  t.ok(ent && ent.kind==='loot' && ent.loot.k==='charm', 'entityAt resolves a floor pickup for inspect/collect');
+}catch(e){ t.ok(false, 'loot readout threw: '+e.message); }
 
 t.done();

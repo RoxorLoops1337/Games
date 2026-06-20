@@ -1388,6 +1388,20 @@ function equipGear(gi, slot){
   showHint('🛡️ Equipped '+RELIC_TIERS[g.t].name+' '+GEAR[g.k].name+' on a '+ROOMS[target.type].name+'.');
   renderPanel(); render();
 }
+// ---- gear info readouts (used by the inspect bubbles + the chest tooltips) ----
+function gearTag(g){ const col=RELIC_TIERS[g.t].col;
+  return `<span style="color:${col}">${GEAR[g.k].ic} ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name}</span>`; }
+function gearEffectText(g){ const ti=Math.max(0,TIER_ORDER.indexOf(g.t));
+  if(g.k==='blade') return `+${Math.round(BLADE_ATK[ti]*100)}% ATK`;
+  if(g.k==='aegis') return `+${Math.round(AEGIS_HP[ti]*100)}% HP · −${Math.round(AEGIS_DR[ti]*100)}% damage taken`;
+  if(g.k==='charm') return `${Math.round(CHARM_LEECH[ti]*100)}% lifesteal on hit`;
+  if(g.k==='tome')  return `hits chill & burn (${TOME_BURN[ti]} burn)`;
+  return ''; }
+function describeLoot(L){
+  return `${gearTag(L)} <span class="small" style="opacity:.8">· tier ${TIER_ORDER.indexOf(L.t)+1}/6</span>`
+    + `<br><span class="small">Equipped on a monster: <b>${gearEffectText(L)}</b></span>`
+    + `<br><span class="small" style="color:#9adfff">💎 Tap to collect · merge two alike to upgrade a tier</span>`;
+}
 
 // 💎 draw the gear lying on the dungeon floor (world space; tx maps world→camera x)
 function drawFloorLoot(tx){
@@ -6899,6 +6913,14 @@ function drawHero(sx,h){
     X.fillText((h.champIc||'')+' '+h.heroName, sx, figTop-46);            // name banner
   } else if(h.elite){ X.font='11px Trebuchet MS';
     X.fillText(h.traits.map(t=>TRAITS[t].ic).join(''), sx, figTop-28); }
+  // 💎 carrier marker — a glinting gem at the shoulder so loot-bearers read at a glance
+  if(h.loot){
+    const col=RELIC_TIERS[h.loot.t].col, gx=sx+13, gy=yy-30+Math.sin(performance.now()/300+sx)*1.5;
+    X.save(); X.globalCompositeOperation='lighter'; X.globalAlpha=0.5+0.22*Math.sin(performance.now()/200+sx);
+    X.fillStyle=col; X.beginPath(); X.arc(gx,gy,6,0,6.2832); X.fill(); X.restore();
+    X.font='11px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
+    X.fillText(GEAR[h.loot.k].ic, gx, gy); X.textBaseline='alphabetic';
+  }
   X.textAlign='left';
 }
 function drawHeroDead(sx,h){
@@ -7135,7 +7157,7 @@ function renderPanel(){
       ${ (G.chest.length || (G.floorLoot&&G.floorLoot.length)) ? `<div class="row">
         <span class="small" style="min-width:46px" title="Gear looted from slain heroes. Tap two of the same kind to merge them up a tier.">🧰 Chest ${G.chest.length}/${CHEST_MAX}:</span>
         <div class="chest">${ G.chest.length ? G.chest.map((g,i)=>{ const col=RELIC_TIERS[g.t].col;
-            return `<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${GEAR[g.k].desc}. Drag onto a monster to equip, or tap a matching piece to merge." style="border-color:${col}">
+            return `<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap a matching piece to merge." style="border-color:${col}">
               <span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;}).join('')
           : `<span class="small" style="opacity:.6;align-self:center">Empty — slay carriers to loot their gear.</span>` }</div>
         ${ (G.floorLoot&&G.floorLoot.length) ? `<button class="buy" onclick="collectAllLoot()" title="Sweep up every piece lying on the floor">💎 Collect ${G.floorLoot.length}</button>` : '' }
@@ -7234,12 +7256,13 @@ function showInspectEntity(ent, hover){
   else if(ent.kind==='queuehero') html=describeQueueHero(ent.spec);
   else if(ent.kind==='boss') html=describeBoss();
   else if(ent.kind==='room') html=describeRoom(ent.room);
+  else if(ent.kind==='loot') html=describeLoot(ent.loot);
   else return;
   showInspect(html, hover); inspectEnt=ent;
 }
 function sameInspectEnt(ent){
   return !!(inspectEnt && ent && inspectEnt.kind===ent.kind
-    && inspectEnt.h===ent.h && inspectEnt.room===ent.room && inspectEnt.spec===ent.spec);
+    && inspectEnt.h===ent.h && inspectEnt.room===ent.room && inspectEnt.spec===ent.spec && inspectEnt.loot===ent.loot);
 }
 // Tooltip for an upcoming hero waiting at the gate (build preview).
 function describeQueueHero(spec){
@@ -7314,6 +7337,8 @@ function entityAt(wx){
     for(let k=0;k<n;k++){ const hx=-STAGEW*0.62+k*14; const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
     if(best>=0) return {kind:'queuehero', spec:G.queue[best]};
   }
+  // 💎 dropped gear on the floor — foreground over the room behind it (but heroes win)
+  if(G.floorLoot && G.floorLoot.length){ const li=floorLootAt(wx); if(li>=0) return {kind:'loot', loot:G.floorLoot[li]}; }
   const idx=Math.floor(wx/ROOM_W);
   if(idx===G.slots) return {kind:'boss'};
   if(idx>=0 && idx<G.slots){ const r=G.rooms[idx]; return r?{kind:'room',room:r}:{kind:'empty'}; }
@@ -7358,9 +7383,12 @@ function describeRoom(room, detail){
     monUnits.forEach(u=>{ const def=ROOMS[u.type]; const lv=u.lvl||1;
       const bHp=u.type==='minion'?(u.minHp||def.hp):def.hp, bAtk=u.type==='minion'?(u.minAtk||def.atk):def.atk;
       const feeds=monFeeds(def); const feed=feeds?feedMul(room.kills):1; if(feeds)fed=true;
-      const hp=Math.round(bHp*(0.9+(lv-1)*0.85)*feed*bas*vm*(1+(RB.monHp||0))*bm);
-      const atk=Math.round(bAtk*(1.0+(lv-1)*0.9)*feed*bas*vm*(1+(RB.monDmg||0))*bm);
-      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}`); });
+      const ge=gearEffects(u.gear);                       // 💎 fold equipped gear into the shown stats
+      const hp=Math.round(bHp*(0.9+(lv-1)*0.85)*feed*bas*vm*(1+(RB.monHp||0))*bm*ge.hpMul);
+      const atk=Math.round(bAtk*(1.0+(lv-1)*0.9)*feed*bas*vm*(1+(RB.monDmg||0))*bm*ge.atkMul);
+      const carries=(u.gear&&u.gear.length)?' · '+u.gear.map(g=>GEAR[g.k].ic).join(''):'';
+      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${carries}`);
+      if(u.gear&&u.gear.length) u.gear.forEach(g=>lines.push(`<span class="small" style="opacity:.9">&nbsp;&nbsp;🎒 ${gearTag(g)} — ${gearEffectText(g)}</span>`)); });
     if(monUnits.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${monUnits.length} guards — each steps up when the one before falls</span>`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feedMul(room.kills)-1)*100)}% (no cap)`); }
   if(room.units.some(u=>u.kind==='shop')){
@@ -7432,6 +7460,7 @@ function describeHero(h){
     h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.reactCount>1?'⚛️ reaction ×'+h.reactCount:'',
     h.corrupt>0?'☣ corrupt ×'+h.corrupt:'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
   if(fx) lines.push(fx);
+  if(h.loot) lines.push(`💎 Carrying ${gearTag(h.loot)} <span class="small" style="opacity:.85">— drops on the floor when slain</span>`);
   return lines.join('<br>');
 }
 function describeBoss(){
@@ -7522,10 +7551,14 @@ CV.addEventListener('pointerdown', e=>{
   try{ CV.setPointerCapture(e.pointerId); }catch(_){}
   // In build, pressing ON a slot (no card selected) picks it up to drag — works
   // for EMPTY slots too, so the gap can be repositioned in the corridor.
+  // 💎 tap a dropped gear lying on the floor to collect it — works in BUILD and mid-WAVE
+  if((G.phase==='build'||G.phase==='run') && selCard<0){
+    const vy=clientToVY(e), wx=clientToWorldX(e);
+    if(vy>FLOOR-46 && vy<FLOOR+20){ const li=floorLootAt(wx);
+      if(li>=0){ collectLoot(li); if(G.phase==='build') renderPanel(); render(); return; } }
+  }
   if(G.phase==='build' && selCard<0){
     const vy=clientToVY(e), wx=clientToWorldX(e);
-    // 💎 tap a dropped gear lying on the floor to collect it into the chest
-    if(vy>FLOOR-46 && vy<FLOOR+20){ const li=floorLootAt(wx); if(li>=0){ collectLoot(li); renderPanel(); render(); return; } }
     const slot=Math.floor(wx/ROOM_W);
     if(slot>=0 && slot<G.slots && vy>FLOOR-152 && vy<FLOOR+16){
       roomDrag={ id:e.pointerId, from:slot, sx:e.clientX, sy:e.clientY, dragging:false };
@@ -7616,9 +7649,10 @@ CV.addEventListener('mousemove', e=>{
   // (inspectEnt===null, e.g. the demolish confirm) which hover must NEVER
   // replace — that was wiping the "Yes, demolish" box mid-mouse-travel
   if(inspectPinned && (inspectEnt===null || sameInspectEnt(ent))) return;
-  // Build-phase room bubbles are CLICK-ONLY — the Upgrade/Demolish menu must not
-  // pop on hover. (Run-phase room stats + heroes/boss still preview on hover.)
-  if(ent.kind==='room' && G.phase==='build'){ if(inspectHover) hideInspectSoon(); return; }
+  // Room bubbles are CLICK-ONLY in BOTH phases — build's Upgrade/Demolish menu must
+  // not pop on hover, and mid-wave room stats should only appear when you tap a room.
+  // (Heroes, the boss, and 💎 floor loot still preview on hover.)
+  if(ent.kind==='room'){ if(inspectHover) hideInspectSoon(); return; }
   showInspectEntity(ent, true);
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
