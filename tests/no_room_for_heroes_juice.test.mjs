@@ -182,4 +182,21 @@ try{
   t.ok(true, 'the King draws as a scaled Super Knight (walk / fight / throne) without throwing');
 }catch(e){ t.ok(false, 'King render threw: '+e.message); }
 
+// 9) the King storms in with a 50-knight host (spectacle) — one King leads a
+//    swarm of weak little knights; the whole host renders cleanly.
+try{
+  A.G = A.freshGame('campaign'); A.chooseBoss(BOSS);
+  A.G.slots=2; A.G.rooms=[room('spike',1), room('goblin',1)];
+  if(typeof A.applyRunes==='function') A.applyRunes();
+  A.prepCampaignWave();
+  A.G.kingDue=true; A.startWave();
+  const kings  = A.G.heroes.filter(h=>h && h.king);
+  const guards = A.G.heroes.filter(h=>h && h.kingGuard);
+  t.ok(kings.length===1, 'exactly one High King leads the wave');
+  t.ok(guards.length===50, 'the King brings a 50-knight honor guard (got '+guards.length+')');
+  t.ok(guards.every(g=>g.maxHp < kings[0].maxHp && !g.king), 'the little knights are far weaker than the King');
+  let kf=0; for(; kf<300; kf++){ A.update(0.05); A.draw(); if(A.G.phase!=='run') break; }
+  t.ok(kf>0, 'the King + 50-knight host runs '+kf+' frames without throwing');
+}catch(e){ t.ok(false, 'king host spawn/render threw: '+e.message); }
+
 t.done();
