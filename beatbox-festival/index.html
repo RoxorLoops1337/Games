@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>World Beatbox Festival 2026 — Where the Mouth Becomes the Orchestra</title>
+<meta name="description" content="The World Beatbox Festival 2026. Three days. Eighty artists. One global heartbeat. Berlin · 12–14 June 2026." />
+<style>
+  :root {
+    --bg-0: #05030a;
+    --bg-1: #0a0418;
+    --ink: #f6f3ff;
+    --muted: #9089b3;
+    --neon-pink: #ff2bd6;
+    --neon-violet: #7a2bff;
+    --neon-cyan: #2bf0ff;
+    --neon-lime: #c8ff2b;
+    --grad-hero: radial-gradient(ellipse at 20% 10%, rgba(255,43,214,0.35), transparent 55%),
+                 radial-gradient(ellipse at 80% 30%, rgba(43,240,255,0.28), transparent 55%),
+                 radial-gradient(ellipse at 50% 90%, rgba(122,43,255,0.45), transparent 60%),
+                 linear-gradient(180deg, #05030a 0%, #0a0418 100%);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg-0);
+    color: var(--ink);
+    overflow-x: hidden;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: var(--neon-pink); color: #000; }
+
+  /* ====== NAV ====== */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 48px;
+    backdrop-filter: blur(14px);
+    background: rgba(5, 3, 10, 0.55);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .logo {
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot {
+    width: 10px; height: 10px;
+    background: var(--neon-pink);
+    border-radius: 50%;
+    box-shadow: 0 0 16px var(--neon-pink);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+  }
+  nav ul {
+    display: flex; gap: 36px;
+    list-style: none;
+    font-size: 13px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  nav ul a {
+    color: var(--muted);
+    transition: color 0.2s;
+    position: relative;
+  }
+  nav ul a:hover { color: var(--ink); }
+  nav ul a::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: -6px;
+    width: 0; height: 1px;
+    background: var(--neon-pink);
+    transition: width 0.3s;
+  }
+  nav ul a:hover::after { width: 100%; }
+  .nav-cta {
+    padding: 10px 22px;
+    background: var(--ink);
+    color: #000;
+    border-radius: 100px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .nav-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(255, 43, 214, 0.4);
+    background: var(--neon-pink);
+  }
+
+  /* ====== HERO ====== */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    background: var(--grad-hero);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 48px;
+    overflow: hidden;
+  }
+  .hero canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    opacity: 0.5;
+  }
+  .grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.5'/></svg>");
+    opacity: 0.6;
+    mix-blend-mode: overlay;
+    z-index: 2;
+  }
+  .hero-inner {
+    position: relative;
+    z-index: 3;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    padding-top: 60px;
+  }
+  .hero-meta {
+    display: flex;
+    gap: 32px;
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 36px;
+    font-weight: 500;
+  }
+  .hero-meta span { display: flex; align-items: center; gap: 8px; }
+  .hero-meta span::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--neon-cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--neon-cyan);
+  }
+  h1.hero-title {
+    font-size: clamp(60px, 11vw, 180px);
+    font-weight: 900;
+    line-height: 0.88;
+    letter-spacing: -0.04em;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, #fff 0%, #fff 40%, #b29cff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 24px;
+  }
+  h1.hero-title .accent {
+    background: linear-gradient(90deg, var(--neon-pink), var(--neon-violet), var(--neon-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-style: italic;
+    font-weight: 900;
+  }
+  .hero-tag {
+    font-size: clamp(16px, 1.6vw, 22px);
+    color: var(--muted);
+    max-width: 580px;
+    margin-bottom: 48px;
+    font-weight: 400;
+  }
+  .hero-tag strong { color: var(--ink); font-weight: 600; }
+
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    padding: 18px 36px;
+    background: var(--ink);
+    color: #000;
+    border-radius: 100px;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    transition: transform 0.25s, box-shadow 0.25s;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 50px rgba(255, 43, 214, 0.45);
+    background: linear-gradient(90deg, var(--neon-pink), var(--neon-violet));
+    color: #fff;
+  }
+  .btn-secondary {
+    padding: 18px 36px;
+    color: var(--ink);
+    border-radius: 100px;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border: 1px solid rgba(255,255,255,0.18);
+    cursor: pointer;
+    background: transparent;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .btn-secondary:hover {
+    border-color: var(--neon-cyan);
+    background: rgba(43, 240, 255, 0.06);
+  }
+
+  .hero-bottom {
+    position: absolute;
+    bottom: 32px;
+    left: 48px;
+    right: 48px;
+    z-index: 3;
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .countdown {
+    display: flex;
+    gap: 24px;
+  }
+  .countdown-unit {
+    text-align: center;
+  }
+  .countdown-num {
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    line-height: 1;
+  }
+  .countdown-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    margin-top: 6px;
+    display: block;
+  }
+  .scroll-hint {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .scroll-hint::after {
+    content: '';
+    width: 1px; height: 60px;
+    background: linear-gradient(to bottom, var(--neon-cyan), transparent);
+  }
+
+  /* ====== MARQUEE ====== */
+  .marquee {
+    overflow: hidden;
+    border-block: 1px solid rgba(255,255,255,0.08);
+    background: #05030a;
+    padding: 22px 0;
+    position: relative;
+    z-index: 4;
+  }
+  .marquee-track {
+    display: flex;
+    gap: 64px;
+    white-space: nowrap;
+    animation: scroll 28s linear infinite;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    width: max-content;
+  }
+  .marquee-track span { color: var(--ink); }
+  .marquee-track span.alt {
+    color: transparent;
+    -webkit-text-stroke: 1px var(--neon-pink);
+    font-style: italic;
+  }
+  @keyframes scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* ====== SECTIONS ====== */
+  section.padded {
+    padding: 140px 48px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--neon-pink);
+    margin-bottom: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .eyebrow::before {
+    content: '';
+    width: 32px; height: 1px;
+    background: var(--neon-pink);
+  }
+  h2.section-title {
+    font-size: clamp(40px, 6vw, 88px);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+    margin-bottom: 24px;
+    text-transform: uppercase;
+  }
+  h2.section-title em {
+    background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-style: italic;
+  }
+  .section-intro {
+    font-size: 18px;
+    color: var(--muted);
+    max-width: 640px;
+    margin-bottom: 80px;
+  }
+
+  /* ====== LINEUP ====== */
+  .lineup-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .artist {
+    background: var(--bg-0);
+    padding: 36px 28px;
+    position: relative;
+    transition: background 0.4s;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .artist::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--neon-pink), var(--neon-violet));
+    opacity: 0;
+    transition: opacity 0.4s;
+    z-index: 0;
+  }
+  .artist:hover::before { opacity: 1; }
+  .artist > * { position: relative; z-index: 1; }
+  .artist:nth-child(3n)::before {
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-violet));
+  }
+  .artist:nth-child(5n)::before {
+    background: linear-gradient(135deg, var(--neon-lime), var(--neon-pink));
+  }
+  .artist-num {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 80px;
+    transition: color 0.4s;
+  }
+  .artist:hover .artist-num { color: rgba(255,255,255,0.7); }
+  .artist-name {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 8px;
+    transition: transform 0.4s;
+  }
+  .artist:hover .artist-name { transform: translateY(-2px); }
+  .artist-origin {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    transition: color 0.4s;
+  }
+  .artist:hover .artist-origin { color: rgba(255,255,255,0.85); }
+
+  .artist.span-3 { grid-column: span 3; }
+  .artist.span-4 { grid-column: span 4; }
+  .artist.span-6 { grid-column: span 6; }
+  .artist.headliner {
+    background: linear-gradient(135deg, #1a0830, #050208);
+  }
+  .artist.headliner .artist-name { font-size: 44px; }
+  .artist.headliner .artist-num { color: var(--neon-pink); }
+
+  /* ====== SCHEDULE ====== */
+  .schedule {
+    background: linear-gradient(180deg, #05030a 0%, #100628 100%);
+    padding: 140px 48px;
+    border-block: 1px solid rgba(255,255,255,0.06);
+  }
+  .schedule-inner { max-width: 1400px; margin: 0 auto; }
+  .day-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 60px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .day-tab {
+    padding: 24px 36px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.3s;
+    position: relative;
+  }
+  .day-tab.active { color: var(--ink); }
+  .day-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan));
+  }
+  .day-tab .day-num { font-size: 32px; font-weight: 900; display: block; color: var(--ink); margin-bottom: 4px; letter-spacing: -0.02em; }
+  .schedule-list { display: none; }
+  .schedule-list.active { display: block; animation: fadein 0.4s ease; }
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .slot {
+    display: grid;
+    grid-template-columns: 120px 1fr 200px 1fr;
+    gap: 32px;
+    padding: 28px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    align-items: center;
+    transition: padding 0.3s;
+  }
+  .slot:hover { padding-left: 16px; }
+  .slot-time {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .slot-act {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .slot-stage {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    font-weight: 600;
+    border: 1px solid rgba(43,240,255,0.4);
+    padding: 6px 14px;
+    border-radius: 100px;
+    width: fit-content;
+  }
+  .slot-desc {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  /* ====== STATS ====== */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-block: 1px solid rgba(255,255,255,0.08);
+  }
+  .stat {
+    padding: 64px 32px;
+    text-align: center;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+    overflow: hidden;
+  }
+  .stat:last-child { border-right: none; }
+  .stat-num {
+    font-size: clamp(56px, 7vw, 96px);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    background: linear-gradient(180deg, #fff, #b29cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-label {
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  /* ====== TICKETS ====== */
+  .tickets-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-top: 60px;
+  }
+  .ticket-card {
+    padding: 48px 36px;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s, border-color 0.3s;
+  }
+  .ticket-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(255,255,255,0.2);
+  }
+  .ticket-card.featured {
+    background: linear-gradient(180deg, rgba(255,43,214,0.18), rgba(122,43,255,0.08));
+    border-color: rgba(255,43,214,0.4);
+  }
+  .ticket-tag {
+    display: inline-block;
+    padding: 6px 14px;
+    background: var(--neon-pink);
+    color: #000;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 700;
+    border-radius: 100px;
+    margin-bottom: 28px;
+  }
+  .ticket-name {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .ticket-price {
+    font-size: 64px;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .ticket-price .currency {
+    font-size: 28px;
+    vertical-align: top;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .ticket-period {
+    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+  .ticket-features {
+    list-style: none;
+    margin-bottom: 36px;
+  }
+  .ticket-features li {
+    padding: 12px 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .ticket-features li::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--neon-cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--neon-cyan);
+  }
+  .ticket-card.featured .ticket-features li::before {
+    background: var(--neon-pink);
+    box-shadow: 0 0 8px var(--neon-pink);
+  }
+  .ticket-btn {
+    width: 100%;
+    padding: 18px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--ink);
+    border-radius: 100px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .ticket-btn:hover { background: rgba(255,255,255,0.12); }
+  .ticket-card.featured .ticket-btn {
+    background: var(--ink);
+    color: #000;
+    border-color: var(--ink);
+  }
+  .ticket-card.featured .ticket-btn:hover {
+    background: var(--neon-pink);
+    color: #fff;
+  }
+
+  /* ====== VENUE ====== */
+  .venue {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+  }
+  .venue-visual {
+    aspect-ratio: 4/5;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #1a0830 0%, #2b0a4e 60%, #4d1a8a 100%);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .venue-visual::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 30% 30%, rgba(255,43,214,0.4), transparent 50%),
+                radial-gradient(circle at 70% 70%, rgba(43,240,255,0.4), transparent 50%);
+    mix-blend-mode: screen;
+  }
+  .venue-visual svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .venue-info ul {
+    list-style: none;
+    margin-top: 40px;
+  }
+  .venue-info li {
+    padding: 20px 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    justify-content: space-between;
+    font-size: 15px;
+  }
+  .venue-info li span:first-child {
+    color: var(--muted);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* ====== FOOTER ====== */
+  footer {
+    background: #05030a;
+    padding: 120px 48px 60px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .footer-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .footer-cta {
+    font-size: clamp(50px, 8vw, 130px);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    text-transform: uppercase;
+    margin-bottom: 80px;
+    background: linear-gradient(90deg, #fff, var(--neon-pink), var(--neon-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 60px;
+    margin-bottom: 80px;
+    padding-bottom: 60px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .footer-col h4 {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+    font-weight: 600;
+  }
+  .footer-col ul { list-style: none; }
+  .footer-col li { padding: 6px 0; }
+  .footer-col a {
+    color: var(--ink);
+    transition: color 0.2s;
+  }
+  .footer-col a:hover { color: var(--neon-pink); }
+  .newsletter {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .newsletter input {
+    flex: 1;
+    padding: 14px 18px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 100px;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .newsletter input:focus { border-color: var(--neon-pink); }
+  .newsletter button {
+    padding: 14px 24px;
+    background: var(--ink);
+    color: #000;
+    border: none;
+    border-radius: 100px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .newsletter button:hover { background: var(--neon-pink); color: #fff; }
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* ====== RESPONSIVE ====== */
+  @media (max-width: 960px) {
+    nav { padding: 16px 24px; }
+    nav ul { display: none; }
+    .hero, section.padded, .schedule, footer { padding-left: 24px; padding-right: 24px; }
+    section.padded { padding-block: 80px; }
+    .hero-bottom { left: 24px; right: 24px; }
+    .scroll-hint { display: none; }
+    .lineup-grid { grid-template-columns: repeat(2, 1fr); }
+    .artist.span-3, .artist.span-4, .artist.span-6 { grid-column: span 2; }
+    .artist.headliner .artist-name { font-size: 32px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .stat:nth-child(2) { border-right: none; }
+    .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .tickets-grid, .venue, .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+    .slot { grid-template-columns: 1fr; gap: 8px; padding: 20px 0; }
+    .slot-time { font-size: 16px; color: var(--neon-cyan); }
+    .slot-act { font-size: 20px; }
+    .day-tab { padding: 16px 18px; font-size: 11px; }
+    .day-tab .day-num { font-size: 22px; }
+    .marquee-track { font-size: 20px; gap: 36px; }
+    .countdown { gap: 12px; }
+    .countdown-num { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo"><span class="logo-dot"></span> WBF · 2026</div>
+  <ul>
+    <li><a href="#lineup">Lineup</a></li>
+    <li><a href="#schedule">Schedule</a></li>
+    <li><a href="#tickets">Tickets</a></li>
+    <li><a href="#venue">Venue</a></li>
+  </ul>
+  <a href="#tickets" class="nav-cta">Get Tickets</a>
+</nav>
+
+<!-- ====== HERO ====== -->
+<header class="hero">
+  <canvas id="wave"></canvas>
+  <div class="grain"></div>
+  <div class="hero-inner">
+    <div class="hero-meta">
+      <span>Berlin · Tempelhof</span>
+      <span>12 — 14 June 2026</span>
+      <span>3 Stages · 80 Artists</span>
+    </div>
+    <h1 class="hero-title">World<br>Beatbox<br><span class="accent">Festival</span></h1>
+    <p class="hero-tag">Three days. Eighty mouths. One global heartbeat. The planet's loudest gathering of vocal percussion, looped sound art, and live improv — <strong>where the human voice becomes the orchestra.</strong></p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="document.getElementById('tickets').scrollIntoView({behavior:'smooth'})">
+        Reserve Your Pass →
+      </button>
+      <button class="btn-secondary" onclick="document.getElementById('lineup').scrollIntoView({behavior:'smooth'})">
+        Watch the Trailer
+      </button>
+    </div>
+  </div>
+  <div class="hero-bottom">
+    <div class="countdown" id="countdown">
+      <div class="countdown-unit"><span class="countdown-num" id="cd-d">--</span><span class="countdown-label">Days</span></div>
+      <div class="countdown-unit"><span class="countdown-num" id="cd-h">--</span><span class="countdown-label">Hours</span></div>
+      <div class="countdown-unit"><span class="countdown-num" id="cd-m">--</span><span class="countdown-label">Min</span></div>
+      <div class="countdown-unit"><span class="countdown-num" id="cd-s">--</span><span class="countdown-label">Sec</span></div>
+    </div>
+    <div class="scroll-hint">Scroll · Listen</div>
+  </div>
+</header>
+
+<!-- ====== MARQUEE ====== -->
+<div class="marquee">
+  <div class="marquee-track">
+    <span>Boom</span><span class="alt">·</span>
+    <span class="alt">Tikka</span><span>·</span>
+    <span>Pscht</span><span class="alt">·</span>
+    <span class="alt">Krrrr</span><span>·</span>
+    <span>Wub Wub</span><span class="alt">·</span>
+    <span class="alt">Dum Dum</span><span>·</span>
+    <span>Click Click</span><span class="alt">·</span>
+    <span class="alt">Inhale Snare</span><span>·</span>
+    <span>Boom</span><span class="alt">·</span>
+    <span class="alt">Tikka</span><span>·</span>
+    <span>Pscht</span><span class="alt">·</span>
+    <span class="alt">Krrrr</span><span>·</span>
+    <span>Wub Wub</span><span class="alt">·</span>
+    <span class="alt">Dum Dum</span><span>·</span>
+    <span>Click Click</span><span class="alt">·</span>
+    <span class="alt">Inhale Snare</span><span>·</span>
+  </div>
+</div>
+
+<!-- ====== LINEUP ====== -->
+<section class="padded" id="lineup">
+  <div class="eyebrow">The Lineup</div>
+  <h2 class="section-title">80 voices,<br>one <em>impossible</em> sound.</h2>
+  <p class="section-intro">From world-champion loopers to underground noise sculptors. Every continent. Every register. Every breath.</p>
+
+  <div class="lineup-grid">
+    <div class="artist headliner span-6">
+      <div class="artist-num">01 · Headliner — Friday</div>
+      <div class="artist-name">CODFISH</div>
+      <div class="artist-origin">Australia</div>
+    </div>
+    <div class="artist headliner span-6">
+      <div class="artist-num">02 · Headliner — Saturday</div>
+      <div class="artist-name">RIVER'</div>
+      <div class="artist-origin">South Korea</div>
+    </div>
+
+    <div class="artist span-4"><div class="artist-num">03</div><div class="artist-name">D-Low</div><div class="artist-origin">United Kingdom</div></div>
+    <div class="artist span-4"><div class="artist-num">04</div><div class="artist-name">NaPoM</div><div class="artist-origin">United States</div></div>
+    <div class="artist span-4"><div class="artist-num">05</div><div class="artist-name">Pe4enka</div><div class="artist-origin">Russia</div></div>
+
+    <div class="artist span-3"><div class="artist-num">06</div><div class="artist-name">Helium</div><div class="artist-origin">Germany</div></div>
+    <div class="artist span-3"><div class="artist-num">07</div><div class="artist-name">Saro</div><div class="artist-origin">Ukraine</div></div>
+    <div class="artist span-3"><div class="artist-num">08</div><div class="artist-name">King Inertia</div><div class="artist-origin">USA</div></div>
+    <div class="artist span-3"><div class="artist-num">09</div><div class="artist-name">Show-Go</div><div class="artist-origin">Japan</div></div>
+
+    <div class="artist span-4"><div class="artist-num">10</div><div class="artist-name">Inkie</div><div class="artist-origin">Belgium</div></div>
+    <div class="artist span-4"><div class="artist-num">11</div><div class="artist-name">Tomazacre</div><div class="artist-origin">France</div></div>
+    <div class="artist span-4"><div class="artist-num">12</div><div class="artist-name">Trung Bao</div><div class="artist-origin">Vietnam</div></div>
+
+    <div class="artist span-3"><div class="artist-num">13</div><div class="artist-name">Penguin</div><div class="artist-origin">Switzerland</div></div>
+    <div class="artist span-3"><div class="artist-num">14</div><div class="artist-name">MB14</div><div class="artist-origin">France</div></div>
+    <div class="artist span-3"><div class="artist-num">15</div><div class="artist-name">SO-SO</div><div class="artist-origin">Japan</div></div>
+    <div class="artist span-3"><div class="artist-num">16</div><div class="artist-name">+ 64 More</div><div class="artist-origin">Worldwide</div></div>
+  </div>
+</section>
+
+<!-- ====== STATS ====== -->
+<section class="stats">
+  <div class="stat"><div class="stat-num">3</div><div class="stat-label">Days · Nights</div></div>
+  <div class="stat"><div class="stat-num">80</div><div class="stat-label">Artists</div></div>
+  <div class="stat"><div class="stat-num">42</div><div class="stat-label">Countries</div></div>
+  <div class="stat"><div class="stat-num">25k</div><div class="stat-label">Heartbeats</div></div>
+</section>
+
+<!-- ====== SCHEDULE ====== -->
+<section class="schedule" id="schedule">
+  <div class="schedule-inner">
+    <div class="eyebrow">The Schedule</div>
+    <h2 class="section-title">Three days,<br>nonstop <em>noise</em>.</h2>
+
+    <div class="day-tabs">
+      <button class="day-tab active" data-day="1"><span class="day-num">12</span>Friday · Opening</button>
+      <button class="day-tab" data-day="2"><span class="day-num">13</span>Saturday · Showdown</button>
+      <button class="day-tab" data-day="3"><span class="day-num">14</span>Sunday · Cypher</button>
+    </div>
+
+    <div class="schedule-list active" data-day="1">
+      <div class="slot"><div class="slot-time">17:00</div><div class="slot-act">Gates Open · Sound Healing</div><div class="slot-stage">Main Stage</div><div class="slot-desc">Welcome ceremony with opening loopers and breath rituals.</div></div>
+      <div class="slot"><div class="slot-time">19:30</div><div class="slot-act">Helium ✕ Saro</div><div class="slot-stage">Sub Stage</div><div class="slot-desc">Surprise duet between the European loop kings.</div></div>
+      <div class="slot"><div class="slot-time">21:00</div><div class="slot-act">Pe4enka — Solo Set</div><div class="slot-stage">Main Stage</div><div class="slot-desc">A 45-minute journey through 808s, drill, and ambient breath.</div></div>
+      <div class="slot"><div class="slot-time">22:30</div><div class="slot-act">CODFISH — Headline</div><div class="slot-stage">Main Stage</div><div class="slot-desc">Full live rig. Confirmed world premiere of "Mouthwork II".</div></div>
+      <div class="slot"><div class="slot-time">00:00</div><div class="slot-act">Open Cypher</div><div class="slot-stage">Cypher Tent</div><div class="slot-desc">Bring your mic. The cypher runs until dawn.</div></div>
+    </div>
+
+    <div class="schedule-list" data-day="2">
+      <div class="slot"><div class="slot-time">14:00</div><div class="slot-act">Workshops · 12 sessions</div><div class="slot-stage">Workshop Hall</div><div class="slot-desc">Lip rolls, throat bass, looping fundamentals, vocal scratching.</div></div>
+      <div class="slot"><div class="slot-time">17:00</div><div class="slot-act">Solo Battle · Quarterfinals</div><div class="slot-stage">Battle Arena</div><div class="slot-desc">16 → 8. The bracket nobody predicted.</div></div>
+      <div class="slot"><div class="slot-time">20:00</div><div class="slot-act">D-Low ✕ NaPoM</div><div class="slot-stage">Main Stage</div><div class="slot-desc">First time on the same stage in five years.</div></div>
+      <div class="slot"><div class="slot-time">21:30</div><div class="slot-act">RIVER' — Headline</div><div class="slot-stage">Main Stage</div><div class="slot-desc">A.V. show. Lasers. Pure technique.</div></div>
+      <div class="slot"><div class="slot-time">23:30</div><div class="slot-act">Late Night Loop Lab</div><div class="slot-stage">Sub Stage</div><div class="slot-desc">Curated by the festival's resident producers.</div></div>
+    </div>
+
+    <div class="schedule-list" data-day="3">
+      <div class="slot"><div class="slot-time">12:00</div><div class="slot-act">Family Brunch Cypher</div><div class="slot-stage">Cypher Tent</div><div class="slot-desc">All-ages. Coffee, croissants, kick drums.</div></div>
+      <div class="slot"><div class="slot-time">15:00</div><div class="slot-act">Solo Battle · Final</div><div class="slot-stage">Battle Arena</div><div class="slot-desc">The crown is up for grabs. €25,000 prize.</div></div>
+      <div class="slot"><div class="slot-time">18:00</div><div class="slot-act">Tag Team Final</div><div class="slot-stage">Battle Arena</div><div class="slot-desc">The two-person format that broke the internet.</div></div>
+      <div class="slot"><div class="slot-time">20:30</div><div class="slot-act">Closing Ceremony · All Artists</div><div class="slot-stage">Main Stage</div><div class="slot-desc">Eighty mouths. One song. We've never tried this before.</div></div>
+      <div class="slot"><div class="slot-time">23:00</div><div class="slot-act">Goodbye Cypher</div><div class="slot-stage">Cypher Tent</div><div class="slot-desc">No headliners. No rules. Just breath.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== TICKETS ====== -->
+<section class="padded" id="tickets">
+  <div class="eyebrow">Tickets</div>
+  <h2 class="section-title">Pick your <em>frequency</em>.</h2>
+  <p class="section-intro">Day passes, full weekenders, and the legendary Frontline pass — limited to 200 holders worldwide.</p>
+
+  <div class="tickets-grid">
+    <div class="ticket-card">
+      <div class="ticket-name">Day Pass</div>
+      <div class="ticket-price"><span class="currency">€</span>69</div>
+      <div class="ticket-period">Single day · Friday</div>
+      <ul class="ticket-features">
+        <li>Access to Main + Sub Stage</li>
+        <li>Open Cypher entry</li>
+        <li>Festival app access</li>
+      </ul>
+      <button class="ticket-btn">Buy Day Pass</button>
+    </div>
+
+    <div class="ticket-card featured">
+      <div class="ticket-tag">Most Popular</div>
+      <div class="ticket-name">Weekender</div>
+      <div class="ticket-price"><span class="currency">€</span>179</div>
+      <div class="ticket-period">All 3 days · Fri – Sun</div>
+      <ul class="ticket-features">
+        <li>All stages, all days</li>
+        <li>Workshop access · 12 sessions</li>
+        <li>Battle arena entry</li>
+        <li>Festival merch drop</li>
+      </ul>
+      <button class="ticket-btn">Buy Weekender</button>
+    </div>
+
+    <div class="ticket-card">
+      <div class="ticket-name">Frontline</div>
+      <div class="ticket-price"><span class="currency">€</span>449</div>
+      <div class="ticket-period">3 days · 200 holders</div>
+      <ul class="ticket-features">
+        <li>Front pit access · all sets</li>
+        <li>Artist lounge entry</li>
+        <li>Soundcheck attendance</li>
+        <li>Limited vinyl + signed poster</li>
+      </ul>
+      <button class="ticket-btn">Apply for Frontline</button>
+    </div>
+  </div>
+</section>
+
+<!-- ====== VENUE ====== -->
+<section class="padded" id="venue">
+  <div class="venue">
+    <div class="venue-info">
+      <div class="eyebrow">The Venue</div>
+      <h2 class="section-title">Tempelhof.<br>An <em>airfield</em> for sound.</h2>
+      <p class="section-intro">Berlin's iconic former airport — 300 hectares of open sky, a hangar with 22-metre ceilings, and acoustics that turn breath into thunder.</p>
+      <ul>
+        <li><span>Address</span><span>Tempelhofer Damm, 12101 Berlin</span></li>
+        <li><span>Capacity</span><span>25,000</span></li>
+        <li><span>Stages</span><span>Main · Sub · Battle Arena · Cypher Tent</span></li>
+        <li><span>Transit</span><span>U6 Platz der Luftbrücke · 4 min</span></li>
+        <li><span>Camping</span><span>On-site, included with Weekender</span></li>
+      </ul>
+    </div>
+    <div class="venue-visual">
+      <svg viewBox="0 0 400 500" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="line-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ff2bd6"/>
+            <stop offset="100%" stop-color="#2bf0ff"/>
+          </linearGradient>
+        </defs>
+        <g stroke="url(#line-grad)" stroke-width="1" fill="none" opacity="0.6">
+          <path d="M 50 250 Q 150 100, 250 250 T 450 250" />
+          <path d="M 50 270 Q 150 130, 250 270 T 450 270" />
+          <path d="M 50 230 Q 150 80, 250 230 T 450 230" />
+          <path d="M 50 290 Q 150 160, 250 290 T 450 290" />
+          <path d="M 50 210 Q 150 60, 250 210 T 450 210" />
+        </g>
+        <g fill="#fff">
+          <circle cx="80" cy="380" r="3"><animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="200" cy="420" r="2"><animate attributeName="opacity" values="0.3;1;0.3" dur="2.4s" repeatCount="indefinite"/></circle>
+          <circle cx="320" cy="380" r="3"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.8s" repeatCount="indefinite"/></circle>
+          <circle cx="160" cy="450" r="2"><animate attributeName="opacity" values="0.3;1;0.3" dur="2.6s" repeatCount="indefinite"/></circle>
+          <circle cx="280" cy="440" r="2"><animate attributeName="opacity" values="0.3;1;0.3" dur="2.2s" repeatCount="indefinite"/></circle>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ====== FOOTER ====== -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-cta">Be there.<br>Be loud.</div>
+
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4>Get The Drop</h4>
+        <p style="color: var(--muted); font-size: 14px;">Lineup updates, ticket waves, and surprise releases. No spam.</p>
+        <form class="newsletter" onsubmit="event.preventDefault(); this.querySelector('button').textContent = 'Subscribed';">
+          <input type="email" placeholder="your@email" required />
+          <button type="submit">Join</button>
+        </form>
+      </div>
+      <div class="footer-col">
+        <h4>Festival</h4>
+        <ul>
+          <li><a href="#lineup">Lineup</a></li>
+          <li><a href="#schedule">Schedule</a></li>
+          <li><a href="#tickets">Tickets</a></li>
+          <li><a href="#venue">Venue</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Compete</h4>
+        <ul>
+          <li><a href="#">Solo Battle</a></li>
+          <li><a href="#">Tag Team</a></li>
+          <li><a href="#">Loop Station</a></li>
+          <li><a href="#">Showcase Submissions</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="#">Instagram</a></li>
+          <li><a href="#">YouTube</a></li>
+          <li><a href="#">TikTok</a></li>
+          <li><a href="#">Press Kit</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 World Beatbox Federation</span>
+      <span>Made with breath in Berlin</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ====== Animated waveform background ======
+  const canvas = document.getElementById('wave');
+  const ctx = canvas.getContext('2d');
+  let w, h;
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    w = canvas.width = canvas.clientWidth * dpr;
+    h = canvas.height = canvas.clientHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let t = 0;
+  function drawWave() {
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    ctx.clearRect(0, 0, cw, ch);
+
+    const layers = [
+      { color: 'rgba(255, 43, 214, 0.55)', amp: 60, freq: 0.012, speed: 0.6, y: ch * 0.55 },
+      { color: 'rgba(43, 240, 255, 0.45)', amp: 80, freq: 0.008, speed: 0.4, y: ch * 0.65 },
+      { color: 'rgba(122, 43, 255, 0.5)',  amp: 50, freq: 0.018, speed: 0.8, y: ch * 0.5  }
+    ];
+
+    layers.forEach(layer => {
+      ctx.beginPath();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = layer.color;
+      ctx.shadowColor = layer.color;
+      ctx.shadowBlur = 14;
+      for (let x = 0; x <= cw; x += 4) {
+        const y = layer.y +
+          Math.sin(x * layer.freq + t * layer.speed) * layer.amp +
+          Math.sin(x * layer.freq * 2.3 + t * layer.speed * 1.7) * (layer.amp * 0.4);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+
+    ctx.shadowBlur = 0;
+    t += 0.025;
+    requestAnimationFrame(drawWave);
+  }
+  drawWave();
+
+  // ====== Countdown to 12 June 2026, 17:00 CEST ======
+  const target = new Date('2026-06-12T17:00:00+02:00').getTime();
+  function updateCountdown() {
+    const diff = target - Date.now();
+    if (diff <= 0) {
+      ['cd-d','cd-h','cd-m','cd-s'].forEach(id => document.getElementById(id).textContent = '00');
+      return;
+    }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    document.getElementById('cd-d').textContent = String(d).padStart(2, '0');
+    document.getElementById('cd-h').textContent = String(h).padStart(2, '0');
+    document.getElementById('cd-m').textContent = String(m).padStart(2, '0');
+    document.getElementById('cd-s').textContent = String(s).padStart(2, '0');
+  }
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+
+  // ====== Schedule day tabs ======
+  document.querySelectorAll('.day-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const day = btn.dataset.day;
+      document.querySelectorAll('.day-tab').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.schedule-list').forEach(list => {
+        list.classList.toggle('active', list.dataset.day === day);
+      });
+    });
+  });
+</script>
+
+</body>
+</html>
