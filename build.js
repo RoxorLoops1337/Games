@@ -43,6 +43,7 @@ const STATIC_PATHS = [
   'night_shift',
   'no_room_for_heroes',
   'chase_hq',
+  'messenger',
   'tools',
 ];
 
