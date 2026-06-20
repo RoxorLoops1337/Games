@@ -12,6 +12,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
   goblinStep,fightTick,shake,
+  collectLoot,collectAllLoot,mergeGear,autoMergeGear,assignLoot,GEAR,CHEST_MAX,TIER_ORDER,
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
@@ -198,5 +199,35 @@ try{
   let kf=0; for(; kf<300; kf++){ A.update(0.05); A.draw(); if(A.G.phase!=='run') break; }
   t.ok(kf>0, 'the King + 50-knight host runs '+kf+' frames without throwing');
 }catch(e){ t.ok(false, 'king host spawn/render threw: '+e.message); }
+
+// 10) 💎 Loot loop: a slain carrier drops gear → collect into the 16-slot chest
+//     → tap two of a kind to merge up the rarity ladder.
+try{
+  // a champion always carries class-themed gear (mage → tome)
+  const champHero={cls:'mage', champion:'x'}; A.assignLoot(champHero);
+  t.ok(champHero.loot && champHero.loot.k==='tome', 'a champion always carries class-themed gear (mage→tome)');
+
+  freshRun([room('spike',1), room('goblin',1)]);
+  const h=A.G.heroes[0]; h.loot={k:'blade', t:'common'}; h.x=120;
+  A.heroDies(h);
+  t.ok((A.G.floorLoot||[]).length===1, 'a slain carrier drops one piece on the floor');
+  for(let i=0;i<10;i++) A.draw();                         // render the glinting floor loot (no throw)
+  t.ok(A.collectLoot(0)===true && A.G.chest.length===1 && A.G.floorLoot.length===0, 'clicking collects it into the chest');
+
+  // two of the same kind+tier merge into the next rarity up
+  A.G.chest=[{k:'tome',t:'common'},{k:'tome',t:'common'}];
+  A.mergeGear(0,1);
+  t.ok(A.G.chest.length===1 && A.G.chest[0].t===A.TIER_ORDER[1], 'two commons merge into the next tier (special)');
+
+  // the chest is hard-capped at CHEST_MAX
+  A.G.chest=[]; for(let i=0;i<A.CHEST_MAX;i++) A.G.chest.push({k:'blade',t:'rare'});
+  A.G.floorLoot=[{k:'blade',t:'rare',x:100}];
+  t.ok(A.collectLoot(0)===false && A.G.chest.length===A.CHEST_MAX, 'the chest is capped at CHEST_MAX ('+A.CHEST_MAX+')');
+
+  // auto-merge fuses every matching pair: 4 commons → 1 rare
+  A.G.chest=[{k:'charm',t:'common'},{k:'charm',t:'common'},{k:'charm',t:'common'},{k:'charm',t:'common'}];
+  A.autoMergeGear();
+  t.ok(A.G.chest.length===1 && A.G.chest[0].t===A.TIER_ORDER[2], 'auto-merge fuses 4 commons → 1 rare');
+}catch(e){ t.ok(false, 'loot loop threw: '+e.message); }
 
 t.done();
