@@ -196,6 +196,7 @@
   .choice .big .relicimg{width:62px;height:62px;display:block;margin:0 auto;vertical-align:0;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));}
   .relicchip .ric .relicimg{width:22px;height:22px;display:block;vertical-align:0;}
   .tact .relicimg{width:30px;height:30px;display:block;vertical-align:0;}
+  .itemimg{width:1.5em;height:1.5em;object-fit:contain;display:inline-block;vertical-align:-.42em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
   .btnico{height:18px;width:auto;vertical-align:-4px;margin-right:2px;}
   .amcic .cardimg{width:62px;height:62px;object-fit:contain;display:block;margin:0 auto;}
   .cardghost .ic .cardimg{width:54px;height:54px;object-fit:contain;display:block;margin:0 auto;}
@@ -579,6 +580,9 @@ const TOWNACT_ICON={ well:'townscheme_well', smith:'townscheme_bribe', temple:'t
   intimidate:'meddle_intimidate', poison:'meddle_poison', rob:'meddle_rob', corrupt:'meddle_corrupt',
   reinforce:'empower_reinforce', attune:'empower_attunement', ascend:'empower_boss', sharpen:'empower_claws' };
 function townActFace(id,cls){ return TOWNACT_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/'+TOWNACT_ICON[id]+'.png" alt="" draggable="false">' : null; }
+// Painted shop-item icons (items/<key>.png); emoji fallback.
+const ITEM_ICON=new Set(['sword','armor','potion','great']);
+function itemFace(key,cls){ return ITEM_ICON.has(key) ? '<img class="'+(cls||'itemimg')+'" src="items/'+key+'.png" alt="" draggable="false">' : null; }
 const MAX_LEVEL = 5;   // a TRAP can be stacked-upgraded this many levels
 const MAX_SLOTS = 5;   // a room can hold this many units (grown +1 per gold upgrade)
 const MAX_TRAPS = 2;   // …of which at most this many may be traps
@@ -5761,6 +5765,19 @@ const SHOP_IMG={};
 if(typeof Image!=='undefined'){
   ['shelf','keeper','table'].forEach(k=>{ SHOP_IMG[k]=loadImg('sprites/shop/shop_'+k+'.png'); });
 }
+// Painted shop-item art (items/<key>.png) drawn on the stock plaque; emoji fallback.
+const ITEM_IMG={};
+if(typeof Image!=='undefined'){
+  ['sword','armor','potion','great'].forEach(k=>{ ITEM_IMG[k]=loadImg('items/'+k+'.png'); });
+}
+function drawItemIcon(key, cx, footY, h){
+  const im=ITEM_IMG[key];
+  if(im && im._ok){ const w=h*(im.width/im.height);
+    const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
+    X.drawImage(im, Math.round(cx-w/2), Math.round(footY-h), Math.round(w), Math.round(h));
+    X.imageSmoothingEnabled=sm; return true; }
+  return false;
+}
 const SHOP_LAYOUT={
   shelf: {fx:.50, wf:.38, bf:.35},   // on the back wall, up high
   keeper:{fx:.50, wf:.19, bf:.03},   // standing behind the counter
@@ -5788,7 +5805,7 @@ function drawShopProp(cx,room){
   px(cx-6,FLOOR-70,12,16,'#3a6a8a'); px(cx-5,FLOOR-82,10,12,'#e8c07a');
   const unsold=(room.stock||[]).filter(s=>!s.sold);
   X.font='14px Trebuchet MS'; X.textAlign='center';
-  unsold.slice(0,4).forEach((s,k)=>{ X.fillText(ITEMS[s.key].ic, cx-24+k*16, FLOOR-46); });
+  unsold.slice(0,4).forEach((s,k)=>{ if(!drawItemIcon(s.key, cx-24+k*16, FLOOR-42, 16)){ X.fillText(ITEMS[s.key].ic, cx-24+k*16, FLOOR-46); } });
   X.textAlign='left';
   if((room.stock||[]).length===0){
     X.fillStyle='#8a7aa8'; X.font='10px Trebuchet MS'; X.textAlign='center';
@@ -5804,7 +5821,7 @@ function drawShopStock(cx,room){
     X.fillStyle='rgba(10,7,18,.7)'; X.strokeStyle='rgba(255,211,77,.5)'; X.lineWidth=1;
     X.fillRect(cx-wd/2, FLOOR-60, wd, 22); X.strokeRect(cx-wd/2+.5, FLOOR-59.5, wd-1, 21);
     X.font='15px Trebuchet MS'; X.textAlign='center';
-    unsold.slice(0,4).forEach((s,k)=>{ X.fillText(ITEMS[s.key].ic, cx-wd/2+15+k*18, FLOOR-44); });
+    unsold.slice(0,4).forEach((s,k)=>{ const ix=cx-wd/2+15+k*18; if(!drawItemIcon(s.key, ix, FLOOR-41, 17)){ X.fillText(ITEMS[s.key].ic, ix, FLOOR-44); } });
     if(unsold.length>4){ X.fillStyle='#ffd34d'; X.font='9px Trebuchet MS'; X.fillText('+'+(unsold.length-4), cx+wd/2-6, FLOOR-44); }
     X.textAlign='left';
   } else {
@@ -6840,7 +6857,7 @@ function renderPanel(){
           return `<span class="pill" title="Each shop holds (level + 1) items; sales are pure profit on top of loot.">🛒 Stock ${used}/${cap}</span>`+Object.keys(ITEMS).map(k=>{
           const it=ITEMS[k];
           return `<button onclick="stockShop('${k}')" title="${it.name} — ${it.desc}. Stock for ${it.price}g; heroes pay the marked-up price (kept as profit)." ${(G.gold<it.price||full)?'disabled':''}
-            style="padding:6px 9px">${it.ic} ${it.price}g</button>`;}).join(''); })()
+            style="padding:6px 9px">${itemFace(k)||it.ic} ${it.price}g</button>`;}).join(''); })()
           :`<span class="small">Build a 🛒 Shop to sell gear for profit.</span>`}
         <span style="flex:1"></span>
         <span class="pill" title="Resources gathered this run. Close the dungeon to keep them all — if the throne falls you lose ${Math.round((1-deathKeep())*100)}%.">🏗️ ${haulStr(pendingResources())}</span>
@@ -7078,7 +7095,7 @@ function describeRoom(room, detail){
   if(room.units.some(u=>u.kind==='shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
     lines.push(`🛒 Shop tier ${shopTier(room)}: ×${shopMarkup(shopTier(room)).toFixed(2)} markup · ${(room.stock||[]).length}/${shopCap(room)} slots`);
-    if(unsold.length) unsold.forEach(s=>lines.push(`${ITEMS[s.key].ic} ${ITEMS[s.key].name} (${ITEMS[s.key].desc}) — sells <b>${salePrice(room,s.key)}g</b>${s.free?' <span style="color:#6ad97e">(free)</span>':''}`));
+    if(unsold.length) unsold.forEach(s=>lines.push(`${itemFace(s.key)||ITEMS[s.key].ic} ${ITEMS[s.key].name} (${ITEMS[s.key].desc}) — sells <b>${salePrice(room,s.key)}g</b>${s.free?' <span style="color:#6ad97e">(free)</span>':''}`));
     else lines.push('<span style="opacity:.7">empty — stock it in build</span>');
   }
   if(ROOMS[room.type].kind!=='shop'){
