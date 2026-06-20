@@ -7733,7 +7733,7 @@ function updateRunPanel(){
   if(!G||G.phase!=='run'||!G.boss) return;
   const btns=panel.querySelectorAll('.abil');
   const n=G.boss.abil.length;
-  if(btns.length!==n+2){ renderPanel(); return; }      // +2 = Smite and Overdrive buttons
+  if(btns.length!==n+3){ renderPanel(); return; }      // +3 = Smite, Overdrive and Potion buttons
   const setDis=(el,v)=>{ if(el.disabled!==v) el.disabled=v; };
   const setCls=(el,c,on)=>{ if(el.classList.contains(c)!==on) el.classList.toggle(c,on); };
   const setTxt=(el,v)=>{ if(el && el.textContent!==v) el.textContent=v; };  // only touch the DOM on a real change
