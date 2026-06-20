@@ -540,7 +540,7 @@ const ROOMS = {
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
   warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A drill-yard blocker. The monster rooms on EITHER side are pre-trained: +30% HP & ATK each wave.'},
-  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits — reforms once at 60% HP when slain. Soaks burst; weak to ☠poison & 💥AoE.'},
+  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
@@ -2096,7 +2096,7 @@ const KEYWORDS={
   Pierce:    {col:'#caa15e', txt:'Ignores hero armor — the answer to armored raiders.'},
   Taunt:     {col:'#c9a14d', txt:'Holds the whole party in one room and hits them all. Stack traps in that room.'},
   Support:   {col:'#7a9e6a', txt:'Buffs the rooms on either side while alive. Protect it behind your line.'},
-  Split:     {col:'#6ad9b0', txt:'Reforms once when slain, so it holds the party twice as long.'},
+  Split:     {col:'#6ad9b0', txt:'At 60% HP it splits into two smaller cubes that keep its stats — twice the wall.'},
   Scaling:   {col:'#5fae54', txt:'Grows permanently with every hero that dies in its room.'},
   Counter:   {col:'#b163ff', txt:'Bonus damage to a specific kind of hero (class / elite / wounded).'},
 };
@@ -5170,16 +5170,23 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       sparks(cell.x0+ROOM_W*0.58, FLOOR-54, '#ffe39a', 5);     // weapon-contact sparks
       if(h.vampiric) healHero(h, dmg*0.4);
       floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
+      // 🟩 Gel Cube: the instant it drops under 60% HP it splits ONCE into TWO
+      // smaller cubes that keep the big one's stats (maxHp + atk). The twin joins
+      // the guard line right behind it; total HP to chew through ≈ unchanged.
+      if(mon.split && !mon.didSplit && mon.hp>0 && mon.hp < mon.maxHp*0.6){
+        mon.didSplit=true; mon.small=true;
+        const twin={type:mon.type, hp:mon.maxHp, maxHp:mon.maxHp, atk:mon.atk, atkT:0.3,
+                    alive:true, split:true, didSplit:true, small:true};
+        cell.guards=cell.guards||[]; const gi=cell.guards.indexOf(mon);
+        cell.guards.splice(gi>=0?gi+1:cell.guards.length, 0, twin);
+        burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#6ad9b0',18);
+        floater(cell.x0+ROOM_W*0.6,FLOOR-78,'🟩 SPLIT!','#6ad9b0'); sfx('hit'); shake(3);
+      }
       if(mon.hp<=0){
         // Undying Legion mandate: each guard claws back once per wave
         if(hasMandate('undyingLegion') && !mon.revivedOnce){
           mon.revivedOnce=true; mon.hp=Math.round(mon.maxHp*0.5); mon.alive=true; mon.atkT=0.4;
           burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#9a5cff',16); floater(cell.x0+ROOM_W*0.68,FLOOR-78,'💀 RISES','#b985ff');
-          return; }
-        // Gel Cube: reforms once at 60% HP when slain
-        if(mon.split && !mon.didSplit){
-          mon.didSplit=true; mon.hp=Math.round(mon.maxHp*0.6); mon.alive=true; mon.atkT=0.3;
-          burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#6ad9b0',16); floater(cell.x0+ROOM_W*0.68,FLOOR-78,'🟩 SPLIT','#6ad9b0');
           return; }
         mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
         blood(cell.x0+ROOM_W*0.66, FLOOR-30, 13, 1); bloodPool(cell.x0+ROOM_W*0.66, rnd(10,15)); shake(4);
@@ -6155,7 +6162,7 @@ if(typeof Image!=='undefined'){
 }
 function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
-function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase){
+function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase, scaleMul){
   const cfg=MON_SPRITES[key]; if(!cfg||!room) return false;
   const name = moving && cfg.clips.walk ? 'walk'
              : (alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
@@ -6171,7 +6178,7 @@ function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase){
   // `phase` de-syncs identical stacked guards so a room of five Bone Pits doesn't
   // animate as one clone.
   const frame=Math.floor((room[KT]+(phase||0))*clip.fps)%clip.n;
-  const S=cfg.scale, srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
+  const S=cfg.scale*(scaleMul||1), srcX=frame*clip.fw, srcY=cfg.dirRow*clip.fh;
   const dx=Math.round(cx-clip.ax*S), dy=Math.round(footY-clip.ay*S);
   X.imageSmoothingEnabled=false;
   X.drawImage(img, srcX,srcY,clip.fw,clip.fh, dx,dy, Math.round(clip.fw*S), Math.round(clip.fh*S));
@@ -6330,11 +6337,6 @@ function drawRoomContents(x0,w,room,i){
   } else
   if(monParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
-    // slain guards just vanish (no ghost, no corpse). Guards die FRONT-first and
-    // the next steps up, so the dead ones are always the leading slots — skip them.
-    const deadCount = (G.phase==='run' && cell)
-      ? Math.max(0, (cell.guards||[]).filter(g=>g && !g.alive).length)
-      : 0;
     // monsters wait on the RIGHT and walk LEFT to MEET a hero who enters their
     // room — then STOP right next to him (don't slide past). Find the front-most
     // (right-most) raider stalled in this cell and stand just to his right.
@@ -6360,19 +6362,25 @@ function drawRoomContents(x0,w,room,i){
     else if(room._monF>targetF) room._monF=Math.max(targetF, room._monF-rate*mdt);
     const moving = alive && Math.abs(room._monF-targetF)>0.004;
     const mbx = x0 + w*room._monF;                     // animated monster base x
-    monParts.forEach((mp,mi)=>{
-      if(mi<deadCount) return;                                 // this guard was slain — just gone
-      const def=ROOMS[mp]; const sprite = mp==='minion'?'minion':mp;
-      const sp=monParts.length>3?20:(monParts.length>2?28:44);
-      const ox=(mi-(monParts.length-1)/2)*sp;                  // stand them side by side (up to 5)
-      const oy=(monParts.length>1)?[0,3,1,4,2][mi%5]:0;        // each guard a distinct height so a stack reads as a crowd
-      const ph=mi*0.31;                                        // …and de-sync their animation cycles
-      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT-oy, room, cell, mp, alive, moving, ph);
+    // Run phase draws the LIVE guards (a Gel Cube SPLIT can grow this beyond the
+    // placed-unit count); build phase previews the placed units. Each entry is
+    // {type, small}. Gel Cubes (split) PAINT FIRST so they sit behind the rest.
+    const drawList = (G.phase==='run' && cell && cell.guards)
+      ? cell.guards.filter(g=>g && g.alive).map(g=>({type:g.type, small:!!g.small}))
+      : monParts.map(mp=>({type:mp, small:false}));
+    const n=drawList.length, sp=n>3?20:(n>2?28:44);
+    const order=[...drawList.keys()].sort((a,b)=>((ROOMS[drawList[a].type]||{}).split?0:1)-((ROOMS[drawList[b].type]||{}).split?0:1));
+    for(const li of order){
+      const g=drawList[li], mp=g.type, def=ROOMS[mp], sprite=mp==='minion'?'minion':mp;
+      const ox=(li-(n-1)/2)*sp;                                // stand them side by side
+      const oy=(n>1)?[0,3,1,4,2][li%5]:0;                      // distinct heights so a stack reads as a crowd
+      const ph=li*0.31, sc=g.small?0.7:1;                      // de-sync cycles; split cubes draw smaller
+      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT-oy, room, cell, mp, alive, moving, ph, sc);
       if(!drew) drawMonster(mbx+ox, sprite, def.col);
       if(cell && cell.mon && cell.mon.flashAt){ const mf=performance.now()-cell.mon.flashAt;   // struck-just-now flash
         if(mf<120){ X.save(); X.globalAlpha=(1-mf/120)*0.45; X.globalCompositeOperation='lighter';
           X.fillStyle='#ffffff'; X.beginPath(); X.ellipse(mbx+ox, FLOOR-LIFT-26, 20, 30, 0,0,6.2832); X.fill(); X.restore(); } }
-    });
+    }
     if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
       bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
   }
@@ -7004,7 +7012,7 @@ function describeCard(card){
     lines.push(`👹 <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s — blocks the corridor`);
     if(def.taunt) lines.push('🛡️ <b style="color:#c9a14d">Taunt</b> — strikes EVERY hero stalled in its room');
     if(def.totem) lines.push('🗿 <b style="color:#7a9e6a">Support</b> — +25% to the rooms on either side while alive');
-    if(def.split) lines.push('🟩 <b style="color:#6ad9b0">Split</b> — reforms once at 60% HP when slain');
+    if(def.split) lines.push('🟩 <b style="color:#6ad9b0">Split</b> — at 60% HP it splits into two smaller cubes (same stats)');
     if(monFeeds(def)) lines.push('🍖 Grows stronger per hero that dies in its room (no cap)'+(def.feeds?'':' (Undeath)'));
   } else if(def.kind==='shop'){
     lines.push(`Holds ${lvl+1} item${lvl+1>1?'s':''} (+1 slot/level). Heroes buy at ×${shopMarkup(lvl).toFixed(2)} — pure profit, and they still drop full loot.`);

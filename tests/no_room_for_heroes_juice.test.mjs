@@ -11,7 +11,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
-  goblinStep,
+  goblinStep,fightTick,
   get G(){return G;},set G(v){G=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
 const t = harness('render/juice smoke');
@@ -48,6 +48,7 @@ try{
     room('spike', 2),
     room('goblin', 2),
     room('ogre', 2, 'warden'),
+    room('slime', 2),                 // Gel Cube — splits under 60% HP (extra guard + smaller draw)
     room('warcamp', 2),               // newly-arted monster sprite (War Camp, 192px sheets)
     room('totem', 2),                 // newly-arted monster sprite (War Totem, 64px + 192px slash)
     room('flame', 2, 'venom'),
@@ -137,5 +138,22 @@ try{
     t.ok((homeX - g.x) < back0 - 1, 'with no heroes left, goblin walks back toward the den ('+back0.toFixed(0)+'→'+(homeX-g.x).toFixed(0)+')');
   }
 }catch(e){ t.ok(false, 'goblin hunt/retreat behavior threw: '+e.message); }
+
+// 6) Gel Cube: drops under 60% HP → splits ONCE into two cubes keeping the big
+//    one's stats (maxHp + atk); the twin joins the room's guard line.
+try{
+  freshRun([room('slime', 2)]);
+  const sc=A.G.cells[0], slime=sc.mon;
+  t.ok(slime && slime.split, 'slime room builds a splitting guard');
+  slime.hp=Math.round(slime.maxHp*0.62);                         // just above the 60% line
+  const hero=A.G.heroes[0]; hero.state='fighting'; hero.cellIndex=0; hero.x=sc.x0+40; hero.atkT=0;
+  hero.atk=Math.max(hero.atk, slime.maxHp*0.12);                 // a hit that pushes it under 60%
+  A.fightTick(hero, slime, 0.12, sc, true, false);
+  const live=(sc.guards||[]).filter(g=>g && g.alive);
+  t.ok(live.length===2, 'Gel Cube split into TWO under 60% (was '+live.length+')');
+  t.ok(live.every(g=>g.atk===slime.atk && g.maxHp===slime.maxHp), 'both cubes keep the big one’s stats');
+  t.ok(slime.didSplit && live.every(g=>g.small), 'it only splits once; the cubes are flagged smaller');
+  for(let i=0;i<30;i++) A.draw();                                // draw the two cubes (smaller, behind) without throwing
+}catch(e){ t.ok(false, 'gel cube split threw: '+e.message); }
 
 t.done();
