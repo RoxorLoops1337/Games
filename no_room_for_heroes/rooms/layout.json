@@ -106,9 +106,9 @@
   "corrode": [
    {
     "art": "corrode",
-    "fx": 0.684,
-    "fy": -5,
-    "h": 78,
+    "fx": 0.711,
+    "fy": 6,
+    "h": 57,
     "layer": 3
    }
   ],
@@ -119,6 +119,35 @@
     "fy": 52,
     "h": 108,
     "layer": 0
+   }
+  ],
+  "bombard": [
+   {
+    "art": "bombard",
+    "fx": 0.603,
+    "fy": 12,
+    "h": 84,
+    "flip": true,
+    "layer": 7
+   }
+  ],
+  "hexbrand": [
+   {
+    "art": "hexbrand",
+    "fx": 0.497,
+    "fy": 70,
+    "h": 104,
+    "layer": 5
+   }
+  ],
+  "runestone": [
+   {
+    "art": "runestone",
+    "fx": 0.362,
+    "fy": 23,
+    "h": 68,
+    "mode": "loop",
+    "layer": 5
    }
   ]
  },
@@ -191,6 +220,18 @@
    "r": 54,
    "fx": 0.384,
    "a": 3
+  },
+  {
+   "attach": "corrode",
+   "fy": 40,
+   "r": 46,
+   "fx": 0.5
+  },
+  {
+   "attach": "magebane",
+   "fy": 60,
+   "r": 54,
+   "fx": 0.5
   }
  ]
 }
