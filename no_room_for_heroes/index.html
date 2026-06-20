@@ -547,7 +547,7 @@ const ROOMS = {
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 // Room types with a painted card-art icon (icons/<type>.png); else fall back to the emoji.
-const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','slime','runestone','shop']);
+const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','warcamp','slime','runestone','shop']);
 function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
 // Painted boss-ability icons (abilities/<id>.png); graceful fallback to the emoji.
 const ABIL_ICONS=new Set(['slam','breath','bolt','curse','freeze','drain','dread','mend','quake','hellfire','siphon','devour','raise','entangle']);
@@ -6839,7 +6839,7 @@ function renderPanel(){
         <span style="flex:1"></span>
         <span class="pill" title="Resources gathered this run. Close the dungeon to keep them all — if the throne falls you lose ${Math.round((1-deathKeep())*100)}%.">🏗️ ${haulStr(pendingResources())}</span>
         <button onclick="promptClose()" title="End the run now and keep your full haul" style="padding:6px 9px;border-color:#9be86b;color:#cdeeb0">🏳️ Close</button>
-        <button id="btnStartWave" class="go${G&&G.tutHi==='start'?' tut-pulse':''}" onclick="startWave()"><img class="btnico" src="icons/ui_war.png" alt="" draggable="false">Start Wave</button>
+        <button id="btnStartWave" class="go${G&&G.tutHi==='start'?' tut-pulse':''}" onclick="startWave()">⚔️ Start Wave</button>
       </div>
       <div class="row">
         <span class="small" style="min-width:46px">Hand:</span>
