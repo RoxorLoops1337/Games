@@ -164,11 +164,22 @@ try{
   freshRun([room('spike',1), room('goblin',1)]);
   A.shakeMag=0;
   const h=A.G.heroes.find(x=>x && !x.champion && !x.elite && x.state!=='dead') || A.G.heroes[0];
-  A.dealToHero(h, 999999, 'TEST', false, 'phys');               // a lethal routine hit → heroDies
+  A.dealToHero(h, 999999, 'TEST', 'full', 'phys', true);        // a lethal routine hit (aimed → no dodge) → heroDies
   t.ok(h.state==='dead', 'routine hero died from the hit (control)');
   t.ok(A.shakeMag===0, 'a routine hero kill no longer shakes the screen');
   A.shakeMag=0; A.shake(10);
   t.ok(Math.abs(A.shakeMag-8)<1e-9, 'SHAKE_SCALE softens set-piece shakes (10→8)');
 }catch(e){ t.ok(false, 'shake-restraint check threw: '+e.message); }
+
+// 8) the King (👑) renders as a 40%-bigger Super Knight — drive walk/fight/throne
+//    stances through the scaled drawChampion path without throwing.
+try{
+  freshRun([room('spike',1), room('goblin',1)]);
+  const h=A.G.heroes[0]; h.king=true; h.heroName='The High King'; h.champion=null;
+  h.state='walking'; for(let i=0;i<20;i++){ h.x+=3; A.draw(); }
+  h.state='fighting'; h.atkT=0.3; for(let i=0;i<10;i++) A.draw();
+  h.state='boss';     h.atkT=0.5; for(let i=0;i<10;i++) A.draw();
+  t.ok(true, 'the King draws as a scaled Super Knight (walk / fight / throne) without throwing');
+}catch(e){ t.ok(false, 'King render threw: '+e.message); }
 
 t.done();
