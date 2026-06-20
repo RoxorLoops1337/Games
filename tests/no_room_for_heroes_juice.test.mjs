@@ -13,6 +13,7 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
   goblinStep,fightTick,shake,
   collectLoot,collectAllLoot,mergeGear,autoMergeGear,assignLoot,GEAR,CHEST_MAX,TIER_ORDER,
+  equipGear,roomMonUnits,
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
@@ -229,5 +230,35 @@ try{
   A.autoMergeGear();
   t.ok(A.G.chest.length===1 && A.G.chest[0].t===A.TIER_ORDER[2], 'auto-merge fuses 4 commons → 1 rare');
 }catch(e){ t.ok(false, 'loot loop threw: '+e.message); }
+
+// 11) 🛡️ Equip gear onto a monster → it folds into the guard's stats & specials
+try{
+  A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='build';
+  A.G.slots=2; A.G.rooms=[A.makeRoom('skeleton',1), A.makeRoom('skeleton',1)];
+  A.G.chest=[{k:'blade',t:'epic'},{k:'aegis',t:'rare'}];
+
+  // gear is refused on a room with no monster (temporarily a trap room)
+  const keep=A.G.rooms[1]; A.G.rooms[1]=A.makeRoom('spike',1);
+  A.equipGear(0,1);
+  t.ok(A.G.chest.length===2, 'gear is refused on a room with no monster');
+  A.G.rooms[1]=keep;
+
+  // equip both onto room 0's skeleton; they leave the chest
+  A.equipGear(0,0); A.equipGear(0,0);
+  t.ok(A.G.rooms[0].units[0].gear.length===2 && A.G.chest.length===0, 'both pieces equip and leave the chest');
+
+  A.buildCells();
+  const geared=A.G.cells[0].guards[0], bare=A.G.cells[1].guards[0];
+  t.ok(geared.atk>bare.atk && geared.maxHp>bare.maxHp, 'Blade & Aegis raise the monster ATK & HP');
+  t.ok(geared.dr>0, 'Aegis grants the guard damage reduction');
+  t.ok(Array.isArray(geared.gear) && geared.gear.length===2, 'the guard remembers its equipped gear');
+
+  // Charm → lifesteal; Tome → an elemental proc
+  A.G.rooms[0].units[0].gear=[{k:'charm',t:'mythic'}]; A.buildCells();
+  t.ok(A.G.cells[0].guards[0].leech>0, 'Charm grants the guard lifesteal');
+  A.G.rooms[0].units[0].gear=[{k:'tome',t:'common'}]; A.buildCells();
+  const pr=A.G.cells[0].guards[0].proc;
+  t.ok(pr && pr.burn>0, 'Tome grants the guard an elemental (burn/chill) proc');
+}catch(e){ t.ok(false, 'gear equip/effects threw: '+e.message); }
 
 t.done();

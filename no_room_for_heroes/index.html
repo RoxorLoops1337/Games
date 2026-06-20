@@ -1354,6 +1354,41 @@ function autoMergeGear(){
   showHint(merged?('⬆ Auto-merged '+merged+' pair'+(merged>1?'s':'')+'.'):'No matching pairs to merge.');
   renderPanel(); render();
 }
+// ---- equipping gear onto monsters (the payoff) ----
+// Each monster guard holds up to GEAR_SLOTS pieces. Effects scale by tier index
+// (0 common … 5 mythic) and fold into the guard's stats / combat in buildCells +
+// fightTick: Blade → +ATK, Aegis → +HP & damage-reduction, Charm → lifesteal,
+// Tome → the monster's hits chill & burn.
+const GEAR_SLOTS=2;
+const BLADE_ATK  =[0.25,0.45,0.70,1.00,1.40,1.90];   // +ATK fraction per Blade
+const AEGIS_HP   =[0.30,0.50,0.75,1.05,1.45,1.95];   // +HP fraction per Aegis
+const AEGIS_DR   =[0.08,0.13,0.18,0.24,0.31,0.40];   // damage reduction per Aegis
+const CHARM_LEECH=[0.20,0.30,0.42,0.55,0.70,0.90];   // lifesteal fraction per Charm
+const TOME_BURN  =[2,3,4,6,8,11];                    // burn stack a Tome proc applies
+function gearEffects(gearArr){
+  let atkMul=1, hpMul=1, drKeep=1, leech=0, procTier=-1;
+  for(const g of (gearArr||[])){ const ti=TIER_ORDER.indexOf(g.t); if(ti<0) continue;
+    if(g.k==='blade')      atkMul*=(1+BLADE_ATK[ti]);
+    else if(g.k==='aegis'){ hpMul*=(1+AEGIS_HP[ti]); drKeep*=(1-AEGIS_DR[ti]); }
+    else if(g.k==='charm')  leech+=CHARM_LEECH[ti];
+    else if(g.k==='tome')   procTier=Math.max(procTier, ti);
+  }
+  return { atkMul, hpMul, dr:Math.min(0.6, 1-drKeep), leech:Math.min(0.9, leech),
+           proc: procTier>=0 ? {burn:TOME_BURN[procTier], chill:1.4+procTier*0.45} : null };
+}
+function equipGear(gi, slot){
+  const g=G.chest[gi]; if(!g) return;
+  const r=G.rooms[slot];
+  const mons=r ? roomMonUnits(r).filter(u=>u.type!=='goblin') : [];   // goblin dens spawn — they can't wear gear
+  if(!mons.length){ showHint('🛡️ '+GEAR[g.k].name+' arms a MONSTER — drop it on a room that has one.'); return; }
+  const target=mons.find(u=>(u.gear||[]).length<GEAR_SLOTS);
+  if(!target){ showHint('Every monster here already carries '+GEAR_SLOTS+' pieces.'); return; }
+  target.gear=target.gear||[]; target.gear.push({k:g.k, t:g.t});
+  G.chest.splice(gi,1); selGear=-1; sfx('relic');
+  showHint('🛡️ Equipped '+RELIC_TIERS[g.t].name+' '+GEAR[g.k].name+' on a '+ROOMS[target.type].name+'.');
+  renderPanel(); render();
+}
+
 // 💎 draw the gear lying on the dungeon floor (world space; tx maps world→camera x)
 function drawFloorLoot(tx){
   const arr=G.floorLoot; if(!arr||!arr.length) return;
@@ -3431,9 +3466,11 @@ function buildCells(){
           // Each monster is its OWN guard (separate HP & ATK). Power comes from
           // the unit's own level + veteran kills; a room gets strong by holding
           // MORE guards, not stronger ones — only the front guard attacks.
-          const hp = Math.round(bHp  * (0.9 + (lvl-1)*0.85) * feed * bas * vm * (1+(RB.monHp||0)) * bm);
-          const atk= Math.round(bAtk * (1.0 + (lvl-1)*0.9)  * feed * bas * vm * (1+(RB.monDmg||0)) * bm);
-          guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split});
+          const ge = gearEffects(u.gear);             // 💎 looted gear bolted onto this monster
+          const hp = Math.round(bHp  * (0.9 + (lvl-1)*0.85) * feed * bas * vm * (1+(RB.monHp||0)) * bm * ge.hpMul);
+          const atk= Math.round(bAtk * (1.0 + (lvl-1)*0.9)  * feed * bas * vm * (1+(RB.monDmg||0)) * bm * ge.atkMul);
+          guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split,
+                       dr:ge.dr, leech:ge.leech, proc:ge.proc, gear:(u.gear||[]).slice()});
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
@@ -5344,7 +5381,8 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
     h.atkT-=dt;
     if(h.atkT<=0){
       h.atkT=0.7*h.atkSpeed;
-      const dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)));
+      let dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)));
+      if(mon.dr) dmg=Math.max(1,Math.round(dmg*(1-mon.dr)));   // 🛡️ Aegis: looted damage reduction
       mon.hp-=dmg; mon.flashAt=performance.now();
       sparks(cell.x0+ROOM_W*0.58, FLOOR-54, '#ffe39a', 5);     // weapon-contact sparks
       if(h.vampiric) healHero(h, dmg*0.4);
@@ -5391,6 +5429,11 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         const dmg=Math.round((mon.atk+bite)*amp);
         _roomDmgCtx=cell.room; dealToHero(t, dmg, 'HIT'); _roomDmgCtx=null;
         if(G.stats) G.stats.monDmg+=dmg;
+        if(mon.leech){ const heal=Math.round(dmg*mon.leech);   // 💍 Charm: the monster drinks the wound
+          if(heal>0 && mon.hp<mon.maxHp){ mon.hp=Math.min(mon.maxHp, mon.hp+heal);
+            floater(cell.x0+ROOM_W*0.66, FLOOR-66, '+'+heal, '#7bdc6b'); } }
+        if(mon.proc && t.state!=='dead'){                      // 📘 Tome: hits chill & burn
+          addBurn(t, mon.proc.burn, 3); t.chill=Math.max(t.chill||0, ccDur(t, mon.proc.chill)); }
         maybePotion(t);
       }
       if(cell.warden && targets.length>1) floater(cell.x0+ROOM_W*0.5, FLOOR-86, '🛡️ ×'+targets.length, '#c9a14d');
@@ -6563,6 +6606,19 @@ function drawRoomContents(x0,w,room,i){
     }
     if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
       bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
+    // 💎 equipped-gear badge (build phase) — show what this room's monsters loot-out with
+    if(G.phase==='build'){
+      const gear=[].concat(...roomMonUnits(room).map(u=>u.gear||[]));
+      if(gear.length){
+        let gx=mbx-(gear.length-1)*8; const gy=FLOOR-94;
+        X.font='13px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
+        for(const g of gear){ const col=RELIC_TIERS[g.t].col;
+          X.save(); X.globalAlpha=0.9; X.fillStyle=col; X.beginPath(); X.arc(gx,gy,8,0,6.2832); X.fill();
+          X.globalAlpha=0.55; X.lineWidth=1; X.strokeStyle='#000'; X.stroke(); X.restore();
+          X.fillText(GEAR[g.k].ic, gx, gy); gx+=16; }
+        X.textAlign='left'; X.textBaseline='alphabetic';
+      }
+    }
   }
   // shop counter — painted interior (shelf + keeper + counter) with the live
   // stock plaque overlaid; falls back to the procedural prop until art loads
@@ -7079,7 +7135,7 @@ function renderPanel(){
       ${ (G.chest.length || (G.floorLoot&&G.floorLoot.length)) ? `<div class="row">
         <span class="small" style="min-width:46px" title="Gear looted from slain heroes. Tap two of the same kind to merge them up a tier.">🧰 Chest ${G.chest.length}/${CHEST_MAX}:</span>
         <div class="chest">${ G.chest.length ? G.chest.map((g,i)=>{ const col=RELIC_TIERS[g.t].col;
-            return `<div class="gcell${selGear===i?' sel':''}" onclick="tapGear(${i})" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${GEAR[g.k].desc}. Tap a matching piece to merge." style="border-color:${col}">
+            return `<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${GEAR[g.k].desc}. Drag onto a monster to equip, or tap a matching piece to merge." style="border-color:${col}">
               <span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;}).join('')
           : `<span class="small" style="opacity:.6;align-self:center">Empty — slay carriers to loot their gear.</span>` }</div>
         ${ (G.floorLoot&&G.floorLoot.length) ? `<button class="buy" onclick="collectAllLoot()" title="Sweep up every piece lying on the floor">💎 Collect ${G.floorLoot.length}</button>` : '' }
@@ -7569,6 +7625,7 @@ CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
 
 /* ---- Drag a hand card onto a room slot to build/upgrade/fuse ---- */
 let cardDrag=null, cardDragSlot=-1, cardGhost=null;
+let gearDrag=null;   // 💎 dragging a chest piece onto a monster to equip it
 function slotUnderPointer(e){
   const rect=CV.getBoundingClientRect();
   if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom) return -1;
@@ -7586,9 +7643,34 @@ function endCardGhost(){ if(cardGhost){ cardGhost.remove(); cardGhost=null; } }
 panel.addEventListener('pointerdown', e=>{
   if(!G || G.phase!=='build') return;
   if(e.target.closest('.x')) return;                 // discard button
+  const gEl=e.target.closest('.gcell');              // 💎 chest gear: drag to equip / tap to select+merge
+  if(gEl){ gearDrag={ id:e.pointerId, gi:+gEl.dataset.gi, sx:e.clientX, sy:e.clientY, dragging:false }; return; }
   const cardEl=e.target.closest('.card'); if(!cardEl) return;
   cardDrag={ id:e.pointerId, ci:+cardEl.dataset.ci, sx:e.clientX, sy:e.clientY, dragging:false };
 });
+function startGearGhost(gi){
+  const g=G.chest[gi]; if(!g) return; const col=RELIC_TIERS[g.t].col;
+  cardGhost=document.createElement('div'); cardGhost.className='gcell cardghost'; cardGhost.style.borderColor=col;
+  cardGhost.innerHTML=`<span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span>`;
+  document.body.appendChild(cardGhost);
+}
+window.addEventListener('pointermove', e=>{
+  if(!gearDrag || e.pointerId!==gearDrag.id) return;
+  const dx=e.clientX-gearDrag.sx, dy=e.clientY-gearDrag.sy;
+  if(!gearDrag.dragging && Math.hypot(dx,dy)>8){ gearDrag.dragging=true; startGearGhost(gearDrag.gi); hideInspect(); }
+  if(gearDrag.dragging){ e.preventDefault(); moveCardGhost(e.clientX,e.clientY); }
+}, {passive:false});
+function endGearDrag(e){
+  if(!gearDrag || (e && e.pointerId!==gearDrag.id)) return;
+  if(gearDrag.dragging){ const slot=slotUnderPointer(e); endCardGhost();
+    if(slot>=0) equipGear(gearDrag.gi, slot);
+    else showHint('Drag gear onto a room with a monster to equip it.');
+  } else { tapGear(gearDrag.gi); }                    // a tap → select / merge
+  gearDrag=null;
+  if(G && G.phase==='build') draw();
+}
+window.addEventListener('pointerup', endGearDrag);
+window.addEventListener('pointercancel', e=>{ if(gearDrag){ endCardGhost(); gearDrag=null; } });
 window.addEventListener('pointermove', e=>{
   if(!cardDrag || e.pointerId!==cardDrag.id) return;
   const dx=e.clientX-cardDrag.sx, dy=e.clientY-cardDrag.sy;
