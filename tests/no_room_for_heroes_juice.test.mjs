@@ -13,7 +13,8 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
   goblinStep,fightTick,shake,
   collectLoot,collectAllLoot,mergeGear,autoMergeGear,assignLoot,GEAR,CHEST_MAX,TIER_ORDER,
-  equipGear,roomMonUnits,
+  equipGear,roomMonUnits,renderPanel,
+  get panelHTML(){ return panel.innerHTML; },
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
@@ -260,5 +261,17 @@ try{
   const pr=A.G.cells[0].guards[0].proc;
   t.ok(pr && pr.burn>0, 'Tome grants the guard an elemental (burn/chill) proc');
 }catch(e){ t.ok(false, 'gear equip/effects threw: '+e.message); }
+
+// 12) Run panel must render exactly n+3 .abil buttons (abilities + Smite + Overdrive
+//     + Potion), matching updateRunPanel's rebuild guard. If they diverge, the guard
+//     rebuilds the whole panel EVERY frame and ability clicks get eaten mid-press.
+try{
+  freshRun([room('spike',2)]);
+  A.G.phase='run'; A.renderPanel();
+  const html=A.panelHTML||'';
+  const abilCount=(html.match(/<button class="abil/g)||[]).length;
+  const n=A.G.boss.abil.length;
+  t.ok(abilCount===n+3, 'run panel renders n+3 .abil buttons (got '+abilCount+', abilities='+n+') so updateRunPanel patches in place instead of rebuilding every frame');
+}catch(e){ t.ok(false, 'ability-button count check threw: '+e.message); }
 
 t.done();
