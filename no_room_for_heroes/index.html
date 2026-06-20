@@ -5766,6 +5766,12 @@ const SHOP_LAYOUT={
   keeper:{fx:.50, wf:.19, bf:.03},   // standing behind the counter
   table: {fx:.50, wf:.78, bf:-.04},  // the counter at the front, on the floor
 };
+// owner-tunable shop layout (made with shop_align.html → rooms/shop.json); merged over the defaults.
+if(typeof fetch!=='undefined'){
+  try{ fetch('rooms/shop.json').then(r=>r.ok?r.json():null).then(j=>{
+    if(j) for(const k in SHOP_LAYOUT){ if(j[k]) Object.assign(SHOP_LAYOUT[k], j[k]); }
+  }).catch(()=>{}); }catch(_){ }
+}
 function shopArtReady(){ return ['shelf','keeper','table'].every(k=>SHOP_IMG[k]&&SHOP_IMG[k]._ok); }
 function drawShopArt(x0,w){
   const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;
