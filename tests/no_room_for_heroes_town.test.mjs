@@ -5,6 +5,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,openTownBuilder,renderTownBuilder,drawTownMap,townPlotAt,
   showTownPop,hideTownPop,buildTown,townLvl,buildingCost,canAfford,townClampCam,
+  corruptHero,corruptCost,minionCardFromSpec,CHAMPIONS,
   get townZoom(){return townZoom;},set townZoom(v){townZoom=v;},
   get townCamX(){return townCamX;},set townCamX(v){townCamX=v;},
   get _tVisW(){return _tVisW;},
@@ -53,5 +54,32 @@ t.ok(A.townLvl('watch') === 1, 'watchtower built to Lv 1');
 t.ok(A.TOWN.res.wood === w0 - (cost.wood || 0) && A.TOWN.res.stone === s0 - (cost.stone || 0), 'resources deducted');
 A.buildTown('watch');   // max:1 — must refuse
 t.ok(A.townLvl('watch') === 1, 'fully-built building refuses another level');
+
+// ---- corruption rework: cost scales with power, champions are a premium,
+//      a corrupted champion is nerfed, and the ATTEMPT is a 60% gamble ----
+A.G = A.freshGame('campaign');
+const CK = Object.keys(A.CHAMPIONS)[0];
+const mk = over => ({cls:'warrior', power:40, traits:[], rival:false, name:'X', debuff:{atkMul:1,burn:0,robbed:false}, ...over});
+const mook = mk({power:4}), bruiser = mk({}), champ = mk({champion:CK});
+t.ok(A.corruptCost(bruiser) > A.corruptCost(mook), 'corruption cost scales with hero power');
+t.ok(A.corruptCost(champ) > A.corruptCost(bruiser) * 2, 'a champion (super-hero) costs a hefty premium');
+
+const cm = A.minionCardFromSpec(champ), nm = A.minionCardFromSpec(bruiser);
+t.ok(cm.minHp < nm.minHp && cm.minAtk < nm.minAtk, 'a corrupted champion comes back weaker than a corrupted normal hero');
+
+// the 60% gamble — deterministic via a stubbed RNG
+A.TOWN.built.inn = 2;                                    // unlock corruption
+const _rand = Math.random;
+const setup = () => { A.G.queue = [mk({champion:CK})]; A.G.hand = []; A.G.dread = 1e6; A.G.corruptedThisTown = 0; };
+let cThrew = '';
+try {
+  setup(); Math.random = () => 0.1;  A.corruptHero(0);   // < 0.6 → success
+  t.ok(A.G.queue.length === 0 && A.G.hand.length === 1, 'a successful corruption turns the hero into a minion card');
+  setup(); Math.random = () => 0.9;  A.corruptHero(0);   // ≥ 0.6 → failure
+  t.ok(A.G.queue.length === 1 && A.G.hand.length === 0 && A.G.corruptedThisTown === 1,
+    'a failed corruption spends the attempt but leaves the hero to march on');
+} catch (e) { cThrew = e.message; }
+finally { Math.random = _rand; }
+t.ok(cThrew === '', 'corruptHero runs clean' + (cThrew ? ' — ' + cThrew : ''));
 
 t.done();

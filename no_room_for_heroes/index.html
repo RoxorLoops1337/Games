@@ -733,7 +733,8 @@ const TOWN_SCHEMES = {
   temple: {name:'Burn the Temple',  ic:'🔥', cost:5, waves:5, desc:'No clerics arrive for 5 waves.'},
 };
 // Corrupt a previewed hero into a minion you can place to defend a room.
-const CORRUPT_COST = 12;        // doubled — and capped at 1 corruption per town visit (see G.corruptedThisTown)
+const CORRUPT_COST = 12;        // base dread; the real price scales hard with the hero's power (see corruptCost)
+const CORRUPT_CHANCE = 0.6;     // a corruption ATTEMPT only succeeds 60% of the time — a real gamble
 
 // Named adventurers + grudge titles for recurring rivals.
 const HERO_NAMES = ['Aldric','Bryn','Cael','Dara','Edrik','Fenn','Gwen','Hale',
@@ -4809,7 +4810,18 @@ function bmBuy(){     // gold → dread
 }
 
 function sabotageCost(spec,key){ return Math.max(1, Math.round(townCost(TOWN_SABOTAGE[key].cost + Math.floor(spec.power*0.3))*innDisc())); }
-function corruptCost(){ return Math.max(1, Math.round(townCost(CORRUPT_COST)*innDisc())); }
+// Price scales HARD with the raider's might (a super-hero is a premium target),
+// so corrupting a powerful champion costs far more than turning an early mook.
+function corruptCost(spec){
+  let extra=0, mult=1;
+  if(spec){
+    extra = Math.floor((spec.power||0)*0.9);                  // power tax — 3× steeper than sabotage's 0.3
+    if(spec.champion) mult=3;                                 // 👑 champions/super-heroes are a premium
+    else if(spec.traits&&spec.traits.length) mult=1.6;        // elites cost more
+    if(spec.rival) mult*=1.25;
+  }
+  return Math.max(1, Math.round(townCost((CORRUPT_COST+extra)*mult)*innDisc()));
+}
 function sabotage(idx,key){
   const spec=G.queue[idx]; if(!spec) return;
   if(townLvl('inn')<(INN_UNLOCK[key]||1)){ showHint('Build the Inn higher to do that.'); return; }
@@ -4830,12 +4842,14 @@ function sabotage(idx,key){
 
 // ---- corruption: turn a previewed hero into a placeable minion card ----
 function minionCardFromSpec(spec){
-  // A corrupted hero defends with a solid chunk of their former might — but a
-  // champion is turned into a normal-scale minion (no boss-tier HP multiplier).
+  // A corrupted hero defends with a chunk of their former might — but a champion is
+  // turned into a normal-scale minion (no boss-tier HP multiplier) AND comes back
+  // weaker still (0.8×): a super-hero makes a strong thrall, not a copy of itself.
   const base = spec.champion ? {...spec, champion:null} : spec;
   const ps=previewStats(base);
-  return { type:'minion', lvl:1, minHp:Math.round(ps.hp*0.6),
-           minAtk:Math.max(3,Math.round(ps.atk*0.65)), label:(spec.name||'Thrall') };
+  const nerf = spec.champion ? 0.8 : 1;
+  return { type:'minion', lvl:1, minHp:Math.round(ps.hp*0.6*nerf),
+           minAtk:Math.max(3,Math.round(ps.atk*0.65*nerf)), label:(spec.name||'Thrall') };
 }
 function grantMinionCard(power){
   if(G.hand.length>=handCap()){ showHint('Hand full — make room first.'); return false; }
@@ -4845,14 +4859,21 @@ function grantMinionCard(power){
 function corruptHero(idx){
   const spec=G.queue[idx]; if(!spec) return;
   if(townLvl('inn')<INN_UNLOCK.corrupt){ showHint('Build the Inn (Lv 2) to corrupt heroes.'); return; }
-  if((G.corruptedThisTown||0)>=1){ showHint('Only one corruption per town visit.'); return; }
-  const cc=corruptCost();
+  if((G.corruptedThisTown||0)>=1){ showHint('Only one corruption attempt per town visit.'); return; }
+  const cc=corruptCost(spec);
   if(G.dread<cc){ showHint('Not enough dread.'); return; }
   if(G.hand.length>=handCap()){ showHint('Hand full — play a card first.'); return; }
-  G.dread-=cc; G.queue.splice(idx,1); G.corruptedThisTown=(G.corruptedThisTown||0)+1;
-  // Campaign: corrupting a hero simply shrinks THIS wave (don't refill with strangers).
-  G.hand.push(minionCardFromSpec(spec)); if(G.mode!=='campaign') ensureQueue(3);
-  showHint((spec.name||'A hero')+' is corrupted into a minion!'); renderTown(); renderTop();
+  // The ATTEMPT is spent whether it takes or not — corruption is a gamble (CORRUPT_CHANCE).
+  G.dread-=cc; G.corruptedThisTown=(G.corruptedThisTown||0)+1;
+  if(Math.random()<CORRUPT_CHANCE){
+    G.queue.splice(idx,1);
+    // Campaign: corrupting a hero simply shrinks THIS wave (don't refill with strangers).
+    G.hand.push(minionCardFromSpec(spec)); if(G.mode!=='campaign') ensureQueue(3);
+    showHint((spec.name||'A hero')+' is corrupted into a minion!');
+  } else {
+    showHint('☠ '+(spec.name||'The hero')+' RESISTED the corruption — the dread is spent and they march on.');
+  }
+  renderTown(); renderTop();
 }
 
 function leaveTown(){ overlay.classList.remove('show'); gotoBuild(false); }
@@ -4949,7 +4970,8 @@ function renderTown(){
       return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
         ${townActFace(k)||s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
     const canCorrupt = townLvl('inn')>=INN_UNLOCK.corrupt;
-    const corruptDis = G.dread<corruptCost() || G.hand.length>=handCap() || (G.corruptedThisTown||0)>=1;
+    const cCost = corruptCost(spec);
+    const corruptDis = G.dread<cCost || G.hand.length>=handCap() || (G.corruptedThisTown||0)>=1;
     const ch = spec.champion ? CHAMPIONS[spec.champion] : null;
     return `<div class="choice" style="width:208px;${ch?'border-color:'+ch.col+';box-shadow:0 0 10px '+ch.col:spec.rival?'border-color:#ff6b8a':''}">
       <div class="big">${ch?ch.ic+'👑':c.ic}${spec.rival?'⚔️':''}${spec.traits.length?'⭐':''}${spec.debuff.burn>0?'☠️':''}</div>
@@ -4959,7 +4981,7 @@ function renderTown(){
       <div style="min-height:20px;margin:3px 0">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
       <div class="stats">❤️ ${ps.hp} · 🗡️ ${ps.atk} · 💰 ${ps.gold}</div>
       ${townHas('inn') ? `<div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
-      ${canCorrupt?`<button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">${townActFace('corrupt')||'🧟'} Corrupt ${corruptCost()}☠</button>`:''}`
+      ${canCorrupt?`<button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" title="${Math.round(CORRUPT_CHANCE*100)}% chance to succeed — the dread is spent either way${spec.champion?'. Champions are a premium target.':''}" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">${townActFace('corrupt')||'🧟'} Corrupt <span class="small">${Math.round(CORRUPT_CHANCE*100)}%</span> ${cCost}☠</button>`:''}`
       : `<div class="small" style="opacity:.5;margin-top:6px">🔒 Build the Inn to meddle</div>`}
     </div>`;}).join('');
   const cap=townLvl('guild');
