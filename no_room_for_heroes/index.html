@@ -6913,10 +6913,12 @@ function drawHero(sx,h){
     X.fillText((h.champIc||'')+' '+h.heroName, sx, figTop-46);            // name banner
   } else if(h.elite){ X.font='11px Trebuchet MS';
     X.fillText(h.traits.map(t=>TRAITS[t].ic).join(''), sx, figTop-28); }
-  // 💎 carrier marker — a glinting gem at the shoulder so loot-bearers read at a glance
+  // 💎 carrier marker — a glinting gem at the shoulder so loot-bearers read at a glance.
+  // Phase is a STABLE per-hero offset (NOT screen-x, which jitters as the hero walks).
   if(h.loot){
-    const col=RELIC_TIERS[h.loot.t].col, gx=sx+13, gy=yy-30+Math.sin(performance.now()/300+sx)*1.5;
-    X.save(); X.globalCompositeOperation='lighter'; X.globalAlpha=0.5+0.22*Math.sin(performance.now()/200+sx);
+    const ph=(h._yj||0)*1.7 + h.cls.length;          // constant per hero → a calm, de-synced bob
+    const col=RELIC_TIERS[h.loot.t].col, gx=sx+13, gy=yy-36+Math.sin(performance.now()/360+ph)*1.2;
+    X.save(); X.globalCompositeOperation='lighter'; X.globalAlpha=0.5+0.18*Math.sin(performance.now()/280+ph);
     X.fillStyle=col; X.beginPath(); X.arc(gx,gy,6,0,6.2832); X.fill(); X.restore();
     X.font='11px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
     X.fillText(GEAR[h.loot.k].ic, gx, gy); X.textBaseline='alphabetic';
