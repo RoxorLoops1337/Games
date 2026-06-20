@@ -81,6 +81,7 @@ t.ok(!threw, 'run-phase draw/update/juice loop never threw'
 try{
   A.G = A.freshGame('campaign'); A.chooseBoss(BOSS);
   A.G.slots=3; A.G.rooms=[room('spike',1), null, room('shop',1)];
+  A.G.rooms[2].stock=[{key:'sword'},{key:'armor'},{key:'potion'},{key:'great'}];  // exercises the painted item-icon draw
   A.G.hand=[{type:'spike',lvl:1},{type:'goblin',lvl:1},{type:'ogre',lvl:1}];
   A.G.phase='build'; A.buildCells(); A.prepCampaignWave();
   for(let i=0;i<6;i++){ A.render(); A.update(0.05); A.draw(); }   // hand-card deal-in + panel render
