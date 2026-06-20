@@ -7118,9 +7118,14 @@ function describeRoom(room, detail){
 // Action buttons for the room bubble (build phase). `withInfo` appends the ℹ️ Info
 // button that expands the compact menu into the full stat readout.
 function roomActionBtns(room, idx, withInfo){
-  const up = (room.cap||1)<MAX_SLOTS
-    ? `<button onclick="upgradeRoomGold(${idx})">⬆ Add slot → ${(room.cap||1)+1}/${MAX_SLOTS} · ${roomUpgradeCost(room)}g</button>`
-    : `<span class="small">Max ${MAX_SLOTS} slots — train guards with kills for veteran ranks</span>`;
+  // A shop has no unit slots — its `cap` is its tier (markup + stock capacity),
+  // so its gold upgrade reads as "Upgrade Shop" rather than "Add slot".
+  const isShop = (room.units||[]).some(u=>u.kind==='shop');
+  const up = (room.cap||1)>=MAX_SLOTS
+    ? `<span class="small">${isShop?'Max shop tier':('Max '+MAX_SLOTS+' slots — train guards with kills for veteran ranks')}</span>`
+    : isShop
+      ? `<button onclick="upgradeRoomGold(${idx})" title="Steeper markup + an extra stock slot">⬆ Upgrade Shop → tier ${(room.cap||1)+1} · ${roomUpgradeCost(room)}g</button>`
+      : `<button onclick="upgradeRoomGold(${idx})">⬆ Add slot → ${(room.cap||1)+1}/${MAX_SLOTS} · ${roomUpgradeCost(room)}g</button>`;
   const del = `<button onclick="askDeleteRoom(${idx})" style="border-color:#ff6b8a;color:#ff9aae">🗑 Demolish</button>`;
   const info = withInfo ? `<button onclick="showRoomDetail(${idx})">ℹ️ Info</button>` : '';
   return `<div class="ibtns">${up}${del}${info}</div>`;
@@ -7213,9 +7218,12 @@ function upgradeRoomGold(idx){
   const cost=roomUpgradeCost(room);
   if(G.gold<cost){ showHint('Not enough gold — need '+cost+'g.'); return; }
   G.gold-=cost; room.cap=(room.cap||1)+1;
+  const isShop=(room.units||[]).some(u=>u.kind==='shop');
   burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
-  floater(cellX(idx)+ROOM_W/2, FLOOR-70, '▦ '+room.cap+'/'+MAX_SLOTS, '#ffd34d');
-  sfx('upgrade'); showHint(comboName(room)+' → '+room.cap+'/'+MAX_SLOTS+' slots for '+cost+'g. Drop a card to fill it.');
+  floater(cellX(idx)+ROOM_W/2, FLOOR-70, isShop?('🛒 tier '+room.cap):('▦ '+room.cap+'/'+MAX_SLOTS), '#ffd34d');
+  sfx('upgrade'); showHint(isShop
+    ? comboName(room)+' upgraded to tier '+room.cap+' — ×'+shopMarkup(room.cap).toFixed(2)+' markup · '+shopCap(room)+' stock slots ('+cost+'g).'
+    : comboName(room)+' → '+room.cap+'/'+MAX_SLOTS+' slots for '+cost+'g. Drop a card to fill it.');
   render(); showInspectEntity({kind:'room',room}); tutEvent('slotbought', idx);
 }
 // Max zoom-out is EXACTLY the full painted scene — never further (no void).
