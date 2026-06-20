@@ -126,6 +126,14 @@
   .cards{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;padding-bottom:2px;
     -webkit-overflow-scrolling:touch;scrollbar-width:thin;}
   .cards .card{flex:0 0 auto;}
+  /* 🧰 War Chest: looted gear cells */
+  .chest{display:flex;gap:5px;flex-wrap:wrap;flex:1;min-width:0;}
+  .gcell{position:relative;width:38px;height:42px;border:2px solid var(--line);border-radius:7px;
+    background:#1a1330;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    cursor:pointer;user-select:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+  .gcell.sel{box-shadow:0 0 0 2px var(--gold) inset;}
+  .gcell .gic{font-size:18px;line-height:1;}
+  .gcell .gt{font-size:9px;font-weight:bold;line-height:1.1;}
   .card{position:relative;width:78px;min-height:62px;border-radius:8px;border:2px solid var(--line);
     background:linear-gradient(160deg,#322652,#181029);padding:5px 4px;display:flex;flex-direction:column;
     align-items:center;justify-content:center;text-align:center;cursor:grab;touch-action:none;
@@ -1250,6 +1258,118 @@ const RELIC_TIERS={
   mythic:   {name:'Mythic',    col:'#ff5470'},
 };
 const TIER_ORDER=['common','special','rare','epic','legendary','mythic'];
+
+/* ============================ LOOT / SPOILS OF WAR ============================
+   ~1 in 4 raiders carry a piece of gear, themed to their class. When they fall
+   it drops on the floor where they died; click it (in the build phase) to bank
+   it in your War Chest (CHEST_MAX slots). Two of the SAME kind+tier MERGE into
+   the next rarity up (common→…→mythic). Equipping gear onto monsters (Phase 2)
+   makes them stronger. Per-run only — no save-schema change. */
+const GEAR={
+  blade:{name:'Blade', ic:'🗡️', cls:'warrior', desc:'+ATK for the monster it arms'},
+  tome: {name:'Tome',  ic:'📘', cls:'mage',    desc:"the monster's hits chill & burn"},
+  charm:{name:'Charm', ic:'💍', cls:'rogue',   desc:'the monster lifesteals on hit'},
+  aegis:{name:'Aegis', ic:'🛡️', cls:'cleric',  desc:'+HP & damage reduction'},
+};
+const GEAR_BY_CLASS={warrior:'blade', mage:'tome', rogue:'charm', cleric:'aegis'};
+const CHEST_MAX=16;            // 🧰 War Chest capacity
+const LOOT_CHANCE=0.25;        // ~1 in 4 ordinary raiders carry gear
+const TIER_ABBR={common:'C', special:'S', rare:'R', epic:'E', legendary:'L', mythic:'M'};
+// roll a rarity: heavily weighted to common; elites/champions/the King skew up.
+function rollLootTier(h){
+  const r=Math.random();
+  let idx = r<0.60?0 : r<0.83?1 : r<0.94?2 : r<0.985?3 : r<0.998?4 : 5;
+  const bonus = (h.king)?3 : (h.champion)?2 : (h.elite)?1 : 0;
+  return TIER_ORDER[Math.min(TIER_ORDER.length-1, idx+bonus)];
+}
+// decide (at spawn) whether a hero carries gear, and which piece
+function assignLoot(h){
+  if(!h) return; const k=GEAR_BY_CLASS[h.cls]; if(!k) return;
+  let carry;
+  if(h.king||h.champion) carry=true;                 // bosses always drop a trophy
+  else if(h.kingGuard)   carry=Math.random()<0.08;   // 50-strong host: only a few drop
+  else if(h.elite)       carry=Math.random()<0.5;
+  else                   carry=Math.random()<LOOT_CHANCE;
+  if(carry) h.loot={k, t:rollLootTier(h)};
+}
+// a slain carrier drops its gear on the floor where it fell
+function dropLoot(h){
+  if(!h||!h.loot) return; const L=h.loot; h.loot=null;
+  G.floorLoot=G.floorLoot||[];
+  G.floorLoot.push({k:L.k, t:L.t, x:h.x, born:performance.now()});
+  const col=RELIC_TIERS[L.t].col;
+  floater(h.x, h.y-82, '💎 '+RELIC_TIERS[L.t].name+' '+GEAR[L.k].name+'!', col, true);
+  burst(h.x, h.y-22, col, 14);
+}
+function floorLootAt(wx){
+  const arr=G.floorLoot||[];
+  for(let i=arr.length-1;i>=0;i--){ if(Math.abs(wx-arr[i].x)<22) return i; }
+  return -1;
+}
+function collectLoot(i){
+  const arr=G.floorLoot||[]; const L=arr[i]; if(!L) return false;
+  if((G.chest||[]).length>=CHEST_MAX){ showHint('🧰 Chest full ('+CHEST_MAX+') — merge or scrap gear to make room.'); return false; }
+  G.chest=G.chest||[]; G.chest.push({k:L.k, t:L.t}); arr.splice(i,1);
+  burst(L.x, FLOOR-16, RELIC_TIERS[L.t].col, 10); sfx('relic');
+  showHint('🧰 Collected '+RELIC_TIERS[L.t].name+' '+GEAR[L.k].name+' ('+G.chest.length+'/'+CHEST_MAX+').');
+  return true;
+}
+function collectAllLoot(){
+  let n=0; while((G.floorLoot||[]).length && (G.chest||[]).length<CHEST_MAX){ if(collectLoot(0)) n++; else break; }
+  if(!n && (G.floorLoot||[]).length) showHint('🧰 Chest is full — merge gear to make room.');
+  renderPanel(); render();
+}
+// gear selection + merge (two of the same kind & tier → one of the next tier)
+let selGear=-1;
+function tapGear(i){
+  const a=G.chest[selGear], b=G.chest[i];
+  if(selGear>=0 && selGear!==i && a && b && a.k===b.k && a.t===b.t){ mergeGear(selGear, i); return; }
+  selGear = (selGear===i ? -1 : i); renderPanel();
+}
+function mergeGear(i,j){
+  const a=G.chest[i]; if(!a) return;
+  const ni=TIER_ORDER.indexOf(a.t);
+  if(ni>=TIER_ORDER.length-1){ showHint(GEAR[a.k].name+' is already Mythic — it can\'t be merged higher.'); return; }
+  const nt=TIER_ORDER[ni+1];
+  const hi=Math.max(i,j), lo=Math.min(i,j);
+  G.chest.splice(hi,1); G.chest.splice(lo,1);          // remove both
+  G.chest.push({k:a.k, t:nt});                          // forge the upgrade
+  selGear=-1; sfx('relic');
+  showHint('⬆ Merged into a '+RELIC_TIERS[nt].name+' '+GEAR[a.k].name+'!');
+  renderPanel();
+}
+function autoMergeGear(){
+  let merged=0, guard=0;
+  for(;;){
+    if(guard++>200) break;
+    let done=true;
+    outer: for(let i=0;i<G.chest.length;i++) for(let j=i+1;j<G.chest.length;j++){
+      const a=G.chest[i], b=G.chest[j];
+      if(a.k===b.k && a.t===b.t && TIER_ORDER.indexOf(a.t)<TIER_ORDER.length-1){
+        mergeGear(i,j); merged++; done=false; break outer;
+      }
+    }
+    if(done) break;
+  }
+  showHint(merged?('⬆ Auto-merged '+merged+' pair'+(merged>1?'s':'')+'.'):'No matching pairs to merge.');
+  renderPanel(); render();
+}
+// 💎 draw the gear lying on the dungeon floor (world space; tx maps world→camera x)
+function drawFloorLoot(tx){
+  const arr=G.floorLoot; if(!arr||!arr.length) return;
+  const now=performance.now();
+  for(const L of arr){
+    const sx=tx(L.x), bob=Math.sin(now/320 + L.x)*3, gy=FLOOR-18-bob, col=RELIC_TIERS[L.t].col;
+    X.save(); X.globalCompositeOperation='lighter'; X.globalAlpha=0.45+0.22*Math.sin(now/200+L.x);
+    X.fillStyle=col; X.beginPath(); X.arc(sx, gy, 13, 0, 6.2832); X.fill(); X.restore();
+    X.globalAlpha=0.55; X.strokeStyle=col; X.lineWidth=1.5;
+    X.beginPath(); X.ellipse(sx, FLOOR-3, 11, 4, 0, 0, 6.2832); X.stroke(); X.globalAlpha=1;
+    X.font='19px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
+    X.fillText(GEAR[L.k].ic, sx, gy);
+    X.textBaseline='alphabetic'; X.textAlign='left';
+  }
+}
+
 // relic = {tier,name,ic,desc, rb:{passive %/flat bonuses}, hp/gold/dread:instant}
 const RELICS={
   // ---- common ----
@@ -1433,6 +1553,8 @@ function freshGame(mode){
     hero:null,            // lead hero (frontmost) — camera/ability target
     drafts:[],            // current reward choices
     cells:[],             // built each run: rooms + boss room with geometry
+    floorLoot:[],         // 💎 gear dropped by slain heroes, lying on the floor to collect
+    chest:[],             // 🧰 collected gear (≤ CHEST_MAX) — merge & equip in the build phase
     msg:'',
   };
 }
@@ -3051,7 +3173,7 @@ function minCam(){
   return worldLeft();   // pan across the whole painted landscape (gate-only when no art)
 }
 function gotoBuild(first){
-  G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1;
+  G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1; selGear=-1;
   G.brokenCells={};                              // doorways get patched up between waves
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
   else ensureQueue(Math.max(3, G.guildLvl+1+(hasEdict('warband')?1:0)));   // endless: pre-roll the next arrivals to preview (Warband +1)
@@ -3463,6 +3585,7 @@ function buildHeroFromSpec(spec){
   };
   let startBurn=spec.debuff.burn + (G.fx.well>0 ? 5+Math.floor(n*0.5) : 0);
   if(startBurn>0){ h.burn=startBurn; h.burnT=6; }
+  if(!G.tutorial) assignLoot(h);          // 💎 ~1 in 4 carry a class-themed trophy to drop on death
   return h;
 }
 
@@ -4034,6 +4157,7 @@ function heroDies(h){
   floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
   floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
   sfx('kill');
+  if(h.loot) dropLoot(h);                 // 💎 carriers drop their gear on the floor to collect
   // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising
   blood(h.x, h.y-24, 20, 0); bloodPool(h.x, rnd(13,19)); hitStop=Math.max(hitStop,0.05);
   for(let i=0;i<7;i++) particles.push({x:h.x, y:h.y-24, vx:rnd(-150,150), vy:-rnd(80,230),
@@ -5458,6 +5582,7 @@ function draw(){
     for(const e of embers){ X.globalAlpha=clamp(e.life/(e.max||3),0,1)*0.5; X.fillStyle=e.col;
       X.beginPath(); X.arc(tx(e.x), e.y, e.sz, 0, 6.2832); X.fill(); }
     X.restore(); X.globalAlpha=1; }
+  drawFloorLoot(tx);                     // 💎 dropped gear glinting on the dungeon floor
 
   // 🔮 boss ability bolts — glowing projectiles streaking from the throne across
   // the corridor to their targets, with a comet trail so the source reads clearly
@@ -6950,7 +7075,16 @@ function renderPanel(){
             <div class="scrapg" style="font-size:9px;opacity:.6;color:#ffd34d">🔧 ${cardScrapGold(c.type)}g</div></div>`;}).join('')
           :`<span class="small" style="opacity:.6;align-self:center">No cards — survive a hero to draft one.</span>`}
         </div>
-      </div>`;
+      </div>
+      ${ (G.chest.length || (G.floorLoot&&G.floorLoot.length)) ? `<div class="row">
+        <span class="small" style="min-width:46px" title="Gear looted from slain heroes. Tap two of the same kind to merge them up a tier.">🧰 Chest ${G.chest.length}/${CHEST_MAX}:</span>
+        <div class="chest">${ G.chest.length ? G.chest.map((g,i)=>{ const col=RELIC_TIERS[g.t].col;
+            return `<div class="gcell${selGear===i?' sel':''}" onclick="tapGear(${i})" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${GEAR[g.k].desc}. Tap a matching piece to merge." style="border-color:${col}">
+              <span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;}).join('')
+          : `<span class="small" style="opacity:.6;align-self:center">Empty — slay carriers to loot their gear.</span>` }</div>
+        ${ (G.floorLoot&&G.floorLoot.length) ? `<button class="buy" onclick="collectAllLoot()" title="Sweep up every piece lying on the floor">💎 Collect ${G.floorLoot.length}</button>` : '' }
+        ${ G.chest.length>=2 ? `<button onclick="autoMergeGear()" title="Fuse every matching pair up a tier">⬆ Merge</button>` : '' }
+      </div>` : '' }`;
   }
   else if(G.phase==='run'){
     const b=G.boss;
@@ -7333,7 +7467,10 @@ CV.addEventListener('pointerdown', e=>{
   // In build, pressing ON a slot (no card selected) picks it up to drag — works
   // for EMPTY slots too, so the gap can be repositioned in the corridor.
   if(G.phase==='build' && selCard<0){
-    const slot=Math.floor(clientToWorldX(e)/ROOM_W); const vy=clientToVY(e);
+    const vy=clientToVY(e), wx=clientToWorldX(e);
+    // 💎 tap a dropped gear lying on the floor to collect it into the chest
+    if(vy>FLOOR-46 && vy<FLOOR+20){ const li=floorLootAt(wx); if(li>=0){ collectLoot(li); renderPanel(); render(); return; } }
+    const slot=Math.floor(wx/ROOM_W);
     if(slot>=0 && slot<G.slots && vy>FLOOR-152 && vy<FLOOR+16){
       roomDrag={ id:e.pointerId, from:slot, sx:e.clientX, sy:e.clientY, dragging:false };
       return;
