@@ -1470,7 +1470,12 @@ let shakeT=0, shakeMag=0, hitStop=0;
 let _simTick=0;     // increments once per sim step; traps use it so their cooldown ticks once, not per-hero
 let slowT=0;                         // slow-motion timer (epic moments)
 let flashT=0, flashDur=0, flashCol='#fff', flashMax=0;   // full-screen colour flash
-function shake(mag){ shakeMag=Math.max(shakeMag,mag); shakeT=0.22; }
+// Screen shake is reserved for set-piece moments (boss/champion/king arrivals &
+// deaths, the throne falling, room smashes, Overdrive, phylactery) — the constant
+// per-hit/kill/cast/reaction rumble was toned out. SHAKE_SCALE softens whatever's
+// left a touch more, and is the one dial to retune the feel.
+const SHAKE_SCALE=0.8;
+function shake(mag){ shakeMag=Math.max(shakeMag,mag*SHAKE_SCALE); shakeT=0.22; }
 function slowmo(t){ slowT=Math.max(slowT,t); }                 // brief bullet-time
 function flash(col,strength=0.3,dur=0.3){ flashCol=col; flashMax=Math.max(flashMax,strength); flashT=Math.max(flashT,dur); flashDur=Math.max(flashDur,dur); }
 // ---- Gore & ambient FX — purely cosmetic, layered on the existing
@@ -1508,7 +1513,7 @@ function comboCallout(combo, x){
   if(!tier && combo>20 && (combo-20)%5===0) tier={t:'LEGENDARY ×'+combo+'!', c:'#4dc3ff', f:0.38, slow:0.5};
   if(!tier) return;
   floater((x!=null?x:VW*0.5), FLOOR-150, tier.t, tier.c, true);
-  flash(tier.c, tier.f, 0.35); shake(8+Math.min(combo,12)); sfx('combo');
+  flash(tier.c, tier.f, 0.35); shake(6+Math.min(combo,8)); sfx('combo');
   if(tier.slow) slowmo(tier.slow);
   // a flurry of embers in the streak's colour — bigger streak, bigger flourish
   const ex=(x!=null?x:VW*0.5);
@@ -3755,7 +3760,7 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
   h.flashAt=performance.now();                               // sprite hit-flash
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
     blood(h.x, h.y-22, 14, -1); bloodPool(h.x, rnd(8,13)); flash('#ff2d4d',0.12,0.16);
-    shake(7); hitStop=0.06; sfx('crit'); }
+    hitStop=0.06; sfx('crit'); }
   else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
     if(label==='HEAL') burst(h.x, h.y-20, '#ff4d6d', 6);
     else blood(h.x, h.y-22, Math.min(9,3+Math.ceil(dmg/14)), -1);   // bigger hits bleed more
@@ -3786,7 +3791,7 @@ function popReact(h,label,col,x){
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
   const chain=h.reactCount;
   floater(h.x,h.y-66, label+(chain>1?' ×'+chain:'')+' -'+x, col, chain>=3);   // chains pop big
-  burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); shake(6+Math.min(chain,6)); sfx('crit');
+  burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); sfx('crit');
   if(chain>=3) flash(col, Math.min(0.3, 0.10+chain*0.03), 0.22);             // escalating reaction spectacle
   if(chain>=4) slowmo(0.25);
   gainRage(2);                                                                // reactions feed Overdrive
@@ -3867,7 +3872,7 @@ function elementReact(h, elem, baseDmg){
       const cd=Math.round(baseDmg*0.6*rm); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
     if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
-      floater(h.x,h.y-66,'⚡ CONDUCT ×'+arced,'#fff34d'); shake(5); sfx('crit'); }
+      floater(h.x,h.y-66,'⚡ CONDUCT ×'+arced,'#fff34d'); sfx('crit'); }
   }
 }
 function healBoss(amt){
@@ -3909,7 +3914,7 @@ function castAbility(slot){
   if(def.aoe && living.length) living.forEach(h=>bossBolt(h.x, h.y, G.boss.col, def.ic));
   else bossBolt(target.x, target.y, G.boss.col, def.ic);
   burst(bossX(), bossCastY(), G.boss.col, 12);
-  shake(5); sfx('cast');
+  sfx('cast');
   render();
 }
 
@@ -3935,7 +3940,7 @@ function smite(target){
   b.smiteCd=SMITE_CD*(1-(RB.abilCd||0));
   bossBolt(t.x, t.y, '#ffd34d', '⚔️');
   floater(t.x, t.y-72, '⚔️ SMITE', '#ffd34d'); burst(t.x, t.y-24, '#ffd34d', 22);
-  shake(8); hitStop=0.05; sfx('crit');
+  shake(6); hitStop=0.05; sfx('crit');
   dealToHero(t, dmg, 'SMITE', false, 'phys', true);   // aimed → ignores dodge
   renderPanel();
 }
@@ -4017,7 +4022,7 @@ function heroDies(h){
   burst(h.x, h.y-20, '#ffd34d', 22);
   floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
   floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
-  shake(4); sfx('kill');
+  sfx('kill');
   // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising
   blood(h.x, h.y-24, 20, 0); bloodPool(h.x, rnd(13,19)); hitStop=Math.max(hitStop,0.05);
   for(let i=0;i<7;i++) particles.push({x:h.x, y:h.y-24, vx:rnd(-150,150), vy:-rnd(80,230),
@@ -4025,7 +4030,7 @@ function heroDies(h){
   for(let i=0;i<3;i++) embers.push({x:h.x+rnd(-6,6), y:h.y-30, vx:rnd(-8,8), vy:-rnd(26,48),
     life:rnd(1.1,1.9), max:1.9, col:'#bfe6ff', sz:rnd(2,3.4)});
   // extra juice for the heroes that matter most
-  if(h.elite && !h.champion){ burst(h.x,h.y-24,'#ffd34d',16); flash('#ffd34d',0.18,0.22); shake(6); }
+  if(h.elite && !h.champion){ burst(h.x,h.y-24,'#ffd34d',16); flash('#ffd34d',0.18,0.22); shake(4); }
   if(h.reachedThrone && !h.champion){ flash('#9be86b',0.16,0.2); }
   const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
   if(h.champion){
@@ -5184,7 +5189,7 @@ function aoeTrapTick(dt){
         if(G.stats) G.stats.trapDmg+=dmg;
       }
       if(doc==='soulengine' && G.boss) G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+targets.length);
-      burst(cell.x0+ROOM_W*0.5, FLOOR-40, d.col, 18); shake(4); sfx('boss');
+      burst(cell.x0+ROOM_W*0.5, FLOOR-40, d.col, 18); sfx('boss');
       floater(cell.x0+ROOM_W*0.5, FLOOR-94, '💥 BOMBARD ×'+targets.length, d.col);
     }
   }
@@ -5211,7 +5216,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         cell.guards=cell.guards||[]; const gi=cell.guards.indexOf(mon);
         cell.guards.splice(gi>=0?gi+1:cell.guards.length, 0, twin);
         burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#6ad9b0',18);
-        floater(cell.x0+ROOM_W*0.6,FLOOR-78,'🟩 SPLIT!','#6ad9b0'); sfx('hit'); shake(3);
+        floater(cell.x0+ROOM_W*0.6,FLOOR-78,'🟩 SPLIT!','#6ad9b0'); sfx('hit');
       }
       if(mon.hp<=0){
         // Undying Legion mandate: each guard claws back once per wave
@@ -5220,7 +5225,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
           burst(cell.x0+ROOM_W*0.68,FLOOR-30,'#9a5cff',16); floater(cell.x0+ROOM_W*0.68,FLOOR-78,'💀 RISES','#b985ff');
           return; }
         mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
-        blood(cell.x0+ROOM_W*0.66, FLOOR-30, 13, 1); bloodPool(cell.x0+ROOM_W*0.66, rnd(10,15)); shake(4);
+        blood(cell.x0+ROOM_W*0.66, FLOOR-30, 13, 1); bloodPool(cell.x0+ROOM_W*0.66, rnd(10,15));
         floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
         // the next guard in the room steps up to take its place (up to 5 in a row)
         const next=(cell.guards||[]).find(g=>g&&g.alive);
@@ -5299,7 +5304,7 @@ function bossFightTick(h,dt,isFront,frozen){
       if(b.thorns){ dealToHero(h, Math.round(dmg*b.thorns), 'THORNS'); }  // Spiked Throne reflect
       floater(bossX(), FLOOR-90, '-'+dmg, '#ff7a8a');
       burst(bossX(), FLOOR-50, '#ff4d6d', 6);
-      shake(3); sfx('boss'); gainRage(3);        // being struck at the throne stokes wrath too
+      sfx('boss'); gainRage(3);                  // being struck at the throne stokes wrath too (red edge pulse already signals it)
       if(b.hp<=0){ b.hp=0; G.killer=snapshotHero(h); bossDies(); return; }
     }
   }

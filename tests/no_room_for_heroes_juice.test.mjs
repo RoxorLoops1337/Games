@@ -11,8 +11,9 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
-  goblinStep,fightTick,
+  goblinStep,fightTick,shake,
   get G(){return G;},set G(v){G=v;},
+  get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
 const t = harness('render/juice smoke');
 const BOSS = Object.keys(A.BOSSES)[0];
@@ -155,5 +156,19 @@ try{
   t.ok(slime.didSplit && live.every(g=>g.small), 'it only splits once; the cubes are flagged smaller');
   for(let i=0;i<30;i++) A.draw();                                // draw the two cubes (smaller, behind) without throwing
 }catch(e){ t.ok(false, 'gel cube split threw: '+e.message); }
+
+// 7) screen shake is reserved for set-pieces now — the constant per-hit/kill
+//    rumble was toned out. A routine hero kill must NOT shake; the SHAKE_SCALE
+//    dial softens whatever set-piece shakes remain.
+try{
+  freshRun([room('spike',1), room('goblin',1)]);
+  A.shakeMag=0;
+  const h=A.G.heroes.find(x=>x && !x.champion && !x.elite && x.state!=='dead') || A.G.heroes[0];
+  A.dealToHero(h, 999999, 'TEST', false, 'phys');               // a lethal routine hit → heroDies
+  t.ok(h.state==='dead', 'routine hero died from the hit (control)');
+  t.ok(A.shakeMag===0, 'a routine hero kill no longer shakes the screen');
+  A.shakeMag=0; A.shake(10);
+  t.ok(Math.abs(A.shakeMag-8)<1e-9, 'SHAKE_SCALE softens set-piece shakes (10→8)');
+}catch(e){ t.ok(false, 'shake-restraint check threw: '+e.message); }
 
 t.done();
