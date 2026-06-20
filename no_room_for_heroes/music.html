@@ -38,7 +38,8 @@
     two pulse waves (12.5% / 25% duty), a triangle bass and a noise kit. 15 hand-written pieces plus a
     200-song generated songbook across 20 genres — beat-em-up, drum &amp; bass, platformer, adventure,
     hero rock, house, synthwave, metal, funk, techno, chip pop, mystic, waltz, jazz, boom bap, ska,
-    trance, western, 6/8 tavern jig and music box. Tap ▶ to audition.</div>
+    trance, western, 6/8 tavern jig and music box — plus, at the very bottom, five fresh
+    <b>C-part bridges</b> for each of the game's five looping themes. Tap ▶ to audition.</div>
   <input id="filt" placeholder="filter: name, genre or bpm…" oninput="renderList()"
     style="width:100%;margin:6px 0;padding:8px 10px;background:#171029;border:1.5px solid #6b4fb0;
     border-radius:8px;color:#e9e0ff;font-family:inherit;font-size:13px">
@@ -582,6 +583,114 @@ const SONGS2=[
  ['Blue Goblin Lounge','jazz','g',16,300],
 ];
 for(const s of SONGS2) TRACKS.push(compose({n:s[0],g:s[1],k:s[2],bars:s[3],s:s[4]}));
+
+/* ============ C-part bridges for the five in-game themes ============
+   The game only loops five tracks (title→Buried Cathedral, menu→Hammers of the
+   Hall, wave→Throneblood, boss→Thrash the Throne, town→Goomba Stomp Groove), so
+   on a long session they wear thin. Each one gets FIVE optional "C parts" — a
+   fresh 4-bar bridge spliced onto the original A+B so the loop breathes. Audition
+   them at the bottom of the list; tell me the keepers and I'll wire them into the
+   mood system. Every bridge is built to exactly 4 bars (64 sixteenths) on all four
+   channels, so the splice can never drift the loop. */
+const BASSC={
+  pump:(rb,sc,cd)=>{ const m=degm(sc,rb,cd),o=[]; for(let i=0;i<4;i++) o.push(TK(m)+':2',TK(m+12)+':2'); return o.join(' '); },
+  hold:(rb,sc,cd)=>{ const m=degm(sc,rb,cd); return TK(m)+':8 '+TK(m+7)+':4 '+TK(m)+':4'; },
+  drive:(rb,sc,cd)=>{ const m=degm(sc,rb,cd),o=[]; for(let i=0;i<4;i++) o.push(TK(m)+':1',TK(m)+':1',TK(m)+':2'); return o.join(' '); },
+};
+const ARPC={
+  off:(ra,sc,cd)=>{ const x=TK(degm(sc,ra,cd+2)),o=[]; for(let i=0;i<4;i++) o.push('-:2',x+':2'); return o.join(' '); },
+  up:(ra,sc,cd)=>{ const c=[cd,cd+2,cd+4,cd+7],o=[]; for(let i=0;i<16;i++) o.push(TK(degm(sc,ra,c[i%4]))+':1'); return o.join(' '); },
+  pad:(ra,sc,cd)=>TK(degm(sc,ra,cd+2))+':16',
+};
+const CFEEL={
+  lift:{bass:'pump',arp:'off',rest:.12,dr:'k.h.s.h.k.h.s.h.',fill:'k.h.s.h.k.s.s.ss',rh:[[4,4,4,4],[4,2,2,4,4],[2,2,4,4,4]]},
+  breakdown:{bass:'hold',arp:'pad',rest:.35,dr:'k.......s.......',fill:'k...h...s...h.hh',rh:[[8,8],[8,4,4],[6,2,8]]},
+  drive:{bass:'drive',arp:'up',rest:.08,dr:'k.k.s.k.k.k.s.k.',fill:'k.k.s.k.s.s.s.ss',rh:[[2,2,2,2,2,2,2,2],[2,1,1,2,2,2,2,2,2],[4,2,2,2,2,4]]},
+  stabs:{bass:'pump',arp:'off',rest:.26,dr:'k..h..s.k..h..s.',fill:'k..h..s.s.s.s.ss',rh:[[2,2,4,2,2,4],[4,2,2,4,4],[2,2,2,2,4,4]]},
+  climb:{bass:'pump',arp:'up',rest:.05,dr:'k.h.k.h.s.h.s.h.',fill:'k.h.s.h.k.s.k.ss',rh:[[2,2,2,2,2,2,2,2],[1,1,2,2,2,2,2,2,2],[4,4,4,4]]},
+};
+// generate a 4-bar C section: chord-tone leads on the strong beats, scale-step
+// motion between, with per-"feel" bass / arp / drum styles.
+function cGen(o){
+  const sc=SCL[o.scale], r=RNG(o.seed||1), F=CFEEL[o.feel];
+  const rb=KEYROOT[o.key]-24, ra=KEYROOT[o.key], rl=KEYROOT[o.key]+12;
+  const lead=[],arp=[],bass=[],dr=[]; let cur=7;
+  for(let b=0;b<4;b++){
+    const cd=o.prog[b%4], rh=pickr(r,F.rh); let pos=0;
+    for(const d of rh){
+      const strong=(pos===0||pos===8);
+      if(!strong && r()<F.rest){ lead.push('-:'+d); }
+      else{
+        if(strong){ const chord=[cd,cd+2,cd+4]; let best=chord[0],bd=99;
+          for(const ct of chord) for(const oc of [0,7,-7]){ const c2=ct+oc, dd=Math.abs(c2-cur); if(dd<bd){bd=dd;best=c2;} }
+          cur=best;
+        } else cur+=pickr(r,[-2,-1,1,2,r()<.3?3:-1]);
+        cur=Math.max(-1,Math.min(14,cur));
+        lead.push(TK(degm(sc,rl,cur))+':'+d);
+      }
+      pos+=d;
+    }
+    bass.push(BASSC[F.bass](rb,sc,cd));
+    arp.push(ARPC[F.arp](ra,sc,cd));
+    dr.push(b===3?F.fill:F.dr);
+  }
+  return {lead:lead.join(' '), arp:arp.join(' '), bass:bass.join(' '), drums:dr.join('')};
+}
+function cTrack(baseName,label,blurb,o){
+  const b=TRACKS.find(t=>t.name===baseName); if(!b) throw new Error('no C-part base '+baseName);
+  const c=cGen(o);
+  const t={ name:b.name+' — '+label, tag:b.tag+' · +C bridge', bpm:b.bpm,
+    desc:'“'+b.name+'” with a new C-part bridge — '+blurb+'.',
+    lead:{duty:b.lead.duty, vol:b.lead.vol, seq:b.lead.seq+'  '+c.lead},
+    arp:{duty:b.arp.duty, vol:b.arp.vol, seq:b.arp.seq+'  '+c.arp},
+    bass:{vol:b.bass.vol, seq:b.bass.seq+'  '+c.bass},
+    drums:{vol:b.drums.vol, seq:b.drums.seq+c.drums} };
+  const L=parseSeq(t.lead.seq).len;                 // a splice must never drift the loop
+  if(parseSeq(t.arp.seq).len!==L||parseSeq(t.bass.seq).len!==L||parseDrums(t.drums.seq).len!==L)
+    throw new Error('C-part length drift in '+t.name);
+  return t;
+}
+// [label, feel, 4-chord progression (scale degrees), blurb, scaleOverride?]
+const CSONGS=[
+ { base:'The Buried Cathedral', key:'e', scale:'minor', seed:7710, items:[
+   ['Antiphon Lift','lift',[2,5,3,0],'a brighter III–VII answer rises over the cold arpeggio'],
+   ['Hollow Breakdown','breakdown',[0,5,0,3],'the kit drops to a single heartbeat under long, held calls'],
+   ['Toll & Echo','stabs',[0,3,5,4],'call-and-response bell hits trade across the bar'],
+   ['Spiral Ascent','climb',[3,4,5,6],'a stepwise run climbs the aeolian scale back to the top'],
+   ['Crypt Gallop','drive',[0,6,5,0],'a sudden driving gallop before the loop resets'],
+ ]},
+ { base:'Hammers of the Hall', key:'g', scale:'mixo', seed:7810, items:[
+   ['Anvil Lift','lift',[3,4,0,0],'a IV–V worksong lift'],
+   ['Bellows Breakdown','breakdown',[0,5,3,0],'tools down for a half-time breather'],
+   ['Hammer Stabs','stabs',[0,0,3,4],'syncopated off-beat strikes'],
+   ['Forge Climb','climb',[0,3,4,5],'sparks climb the mixolydian scale'],
+   ["Smith's Gallop",'drive',[0,4,3,4],'a quick double-time run'],
+ ]},
+ { base:'Throneblood', key:'a', scale:'minor', seed:7910, items:[
+   ['War Lift','lift',[5,3,4,0],'a VI–iv–v charge'],
+   ['Siege Breakdown','breakdown',[0,5,0,4],'the hush before the next rush'],
+   ['Blade Stabs','stabs',[0,3,4,3],'parry-and-riposte hits'],
+   ['Harmonic Ascent','climb',[0,3,4,4],'the raised-7th leading-tone climb','hmin'],
+   ['Onslaught','drive',[0,4,5,4],'a relentless harmonic-minor gallop','hmin'],
+ ]},
+ { base:'Thrash the Throne', key:'d', scale:'phryg', seed:8010, items:[
+   ['Riff Lift','lift',[0,1,0,6],'leans on the b2 phrygian snarl'],
+   ['Mosh Breakdown','breakdown',[0,0,1,0],'a half-time chug'],
+   ['Tremolo Stabs','stabs',[0,1,6,1],'palm-muted stabs'],
+   ['Blastbeat Climb','climb',[0,3,5,6],'a screaming ascent'],
+   ['Double-Kick Gallop','drive',[0,1,0,5],'a full-sprint double-kick gallop'],
+ ]},
+ { base:'Goomba Stomp Groove', key:'c', scale:'mixo', seed:8110, items:[
+   ['Power-Up Lift','lift',[3,4,0,0],'a bright coin-run lift'],
+   ['Pipe Breakdown','breakdown',[0,5,3,0],'a slow underwater half-time'],
+   ['Coin Stabs','stabs',[0,3,4,3],'bouncy off-beat hits'],
+   ['Flagpole Climb','climb',[0,3,4,5],'a victory run up the scale'],
+   ['Warp Gallop','drive',[0,4,5,4],'a fast warp-zone dash'],
+ ]},
+];
+let _cseed=0;
+for(const s of CSONGS) for(const it of s.items)
+  TRACKS.push(cTrack(s.base, it[0], it[3], {key:s.key, scale:it[4]||s.scale, prog:it[2], feel:it[1], seed:s.seed+(++_cseed)}));
 
 // validate: all channels of a track must agree on loop length
 function validateTracks(){
