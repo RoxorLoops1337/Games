@@ -3945,7 +3945,7 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
 // decides the combo. Oil them first, then a later flame room IGNITES; chill
 // then crush to SHATTER; oil then frost to ENCASE; etc. Each reaction a hero
 // suffers in quick succession escalates the next (reaction chain).
-const PRIME_OIL=12, PRIME_ICE=10, PRIME_SHOCK=9;   // long enough to cross rooms
+const PRIME_OIL=12, PRIME_ICE=7, PRIME_SHOCK=9;    // long enough to cross a room (frost was oppressive at 10)
 const MARK_AMP=1.2;                                // 🎯 Hex Brand: the next hit deals +120%
 const POISON_CAP=10;                               // ☠️ poison stacks cap (keeps Combust from snowballing)
 // Teach the ordering combos in tooltips. Element → how to chain it across rooms.
@@ -5110,7 +5110,7 @@ function simStep(h,dt){
     // GOBLIN IS CLOSE. Until then keep marching toward it (the goblin closes from
     // its side too), so heroes don't freeze while a goblin ambles across the room.
     if((G.minions||[]).some(g=>g.hp>0 && g.engaged===h && Math.abs(g.x-h.x)<=24)){ h.walkAnim+=dt*10; return; }
-    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.7:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone
+    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.78:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone (chill eased from 0.7 — frost was too oppressive)
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
     // a living monster blocks: keep walking until the monster's advancing sprite
