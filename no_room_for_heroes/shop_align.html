@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No Room For Heroes — Shop Alignment Tool</title>
+<style>
+  :root{ --ink:#e9e0ff; --gold:#ffd34d; --line:#6b4fb0; --accent:#b985ff; }
+  body{margin:0;background:#0c0916;color:var(--ink);font-family:'Trebuchet MS',system-ui,sans-serif;
+    display:flex;flex-wrap:wrap;gap:14px;padding:14px;}
+  h1{font-size:18px;margin:0 0 6px;color:var(--gold);}
+  #stage{background:#15102a;border:2px solid var(--line);border-radius:10px;image-rendering:pixelated;
+    touch-action:none;cursor:grab;}
+  #side{width:360px;max-width:96vw;display:flex;flex-direction:column;gap:8px;}
+  .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  button{background:#241a40;color:var(--ink);border:2px solid var(--line);border-radius:6px;
+    padding:7px 10px;font-family:inherit;font-size:13px;cursor:pointer;}
+  button.sel{border-color:var(--gold);color:var(--gold);}
+  textarea{width:100%;height:150px;background:#120c22;color:#9fe;border:1.5px solid var(--line);
+    border-radius:8px;font-family:monospace;font-size:12px;padding:8px;box-sizing:border-box;}
+  .hint{font-size:12px;opacity:.8;line-height:1.5;}
+  .item{display:flex;gap:6px;align-items:center;font-size:13px;padding:5px 10px;border:1.5px solid #3a2c66;
+    border-radius:7px;cursor:pointer;}
+  .item.sel{border-color:var(--gold);color:var(--gold);}
+  label.sl{display:flex;gap:8px;align-items:center;font-size:12px;opacity:.9;width:100%;}
+  label.sl input[type=range]{flex:1;accent-color:var(--accent);}
+  label.sl span{min-width:54px;text-align:right;font-family:monospace;}
+</style>
+</head>
+<body>
+<div>
+  <h1>🛒 Shop Alignment Tool</h1>
+  <canvas id="stage" width="640" height="760"></canvas>
+  <div class="hint" style="max-width:640px;margin-top:6px">
+    Pick a piece, then <b>drag</b> it on the canvas to move · <b>wheel / ＋−</b> to resize ·
+    <b>arrows</b> nudge (Shift = bigger). Dashed line = floor; the faint gold box ≈ where the stock
+    plaque shows the items. The three pieces draw back→front: <b>shelf → keeper → counter</b>.
+  </div>
+</div>
+<div id="side">
+  <div class="row" id="items"></div>
+  <div class="row">
+    <button onclick="bump(1.05)">＋ bigger</button><button onclick="bump(0.95)">− smaller</button>
+    <button onclick="reset()">↺ reset piece</button>
+  </div>
+  <div class="row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:2px">
+    <label class="sl">↔ x <input id="slfx" type="range" min="0" max="1" step="0.005" oninput="setF('fx',+this.value)"><span id="vfx"></span></label>
+    <label class="sl">⤢ size <input id="slwf" type="range" min="0.03" max="1.1" step="0.005" oninput="setF('wf',+this.value)"><span id="vwf"></span></label>
+    <label class="sl">↕ floor <input id="slbf" type="range" min="-0.2" max="0.6" step="0.005" oninput="setF('bf',+this.value)"><span id="vbf"></span></label>
+  </div>
+  <div class="row" style="margin-top:4px">
+    <button onclick="togglePlaque()" id="plqbtn" class="sel">🏷️ stock preview</button>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button class="sel" onclick="exportJson()">📋 Generate shop.json</button>
+    <button onclick="downloadJson()">⬇ download</button>
+  </div>
+  <textarea id="out" placeholder="shop.json appears here"></textarea>
+  <div class="hint">When it looks right: <b>Generate</b> → <b>download</b> →
+    upload <code>shop.json</code> to <code>no_room_for_heroes/rooms/</code> on GitHub.
+    The game reads the shop layout from it on the next deploy.</div>
+</div>
+<script>
+const CV=document.getElementById('stage'), X=CV.getContext('2d');
+const CELLW=200, S=2.9, W=CELLW*S, OX=(CV.width-W)/2, FLOORY=620;
+const KEYS=['shelf','keeper','table'];
+const LABELS={shelf:'🗄️ shelf', keeper:'🧙 keeper', table:'🪵 counter'};
+// defaults must mirror SHOP_LAYOUT in index.html
+const DEFAULT={ shelf:{fx:.50,wf:.38,bf:.35}, keeper:{fx:.50,wf:.19,bf:.03}, table:{fx:.50,wf:.78,bf:-.04} };
+const SHOP=JSON.parse(JSON.stringify(DEFAULT));
+let sel='table', showPlaque=true;
+
+const IMG={}, ROOM=new Image();
+ROOM.onload=render; ROOM.src='rooms/empty.png';
+KEYS.forEach(k=>{ const im=new Image(); im.onload=render; im.src='sprites/shop/shop_'+k+'.png'; IMG[k]=im; });
+// seed from the live shop.json if it exists
+fetch('rooms/shop.json').then(r=>r.ok?r.json():null).then(j=>{ if(j){ for(const k of KEYS) if(j[k]) Object.assign(SHOP[k], j[k]); } syncSliders(); render(); }).catch(()=>{});
+
+function pieceRect(k){
+  const im=IMG[k], L=SHOP[k];
+  const aspect=(im&&im.naturalWidth)? im.naturalHeight/im.naturalWidth : 1;
+  const dw=L.wf*W, dh=dw*aspect;
+  const bx=OX+W*L.fx, by=FLOORY-L.bf*W;
+  return {x:Math.round(bx-dw/2), y:Math.round(by-dh), w:Math.round(dw), h:Math.round(dh)};
+}
+function render(){
+  X.clearRect(0,0,CV.width,CV.height);
+  // room backdrop (mirror drawRoomArt: bottom ~12u below the floor)
+  if(ROOM.naturalWidth){ const dh=W*(ROOM.naturalHeight/ROOM.naturalWidth);
+    X.imageSmoothingEnabled=false; X.drawImage(ROOM, OX, Math.round(FLOORY+12*S-dh), W, Math.round(dh)); }
+  // shop pieces back → front
+  X.imageSmoothingEnabled=false;
+  for(const k of KEYS){ const im=IMG[k]; if(!im||!im.naturalWidth) continue; const r=pieceRect(k);
+    X.globalAlpha=(k===sel)?1:0.96; X.drawImage(im, r.x, r.y, r.w, r.h); X.globalAlpha=1; }
+  // stock plaque reference (mirror drawShopStock: centred, ~22u tall just above the floor)
+  if(showPlaque){ const cx=OX+W*0.5, u=S, pw=(4*18+12)*u;
+    X.strokeStyle='rgba(255,211,77,.55)'; X.setLineDash([4,3]); X.lineWidth=1.5;
+    X.strokeRect(cx-pw/2, FLOORY-60*u, pw, 22*u); X.setLineDash([]);
+    X.fillStyle='rgba(255,211,77,.85)'; X.font=Math.round(13*u)+'px Trebuchet MS'; X.textAlign='center';
+    X.fillText('🗡️ 🛡️ 🧪 💍', cx, FLOORY-44*u); X.textAlign='left'; }
+  // floor line
+  X.strokeStyle='rgba(255,211,77,.4)'; X.setLineDash([6,5]); X.lineWidth=1;
+  X.beginPath(); X.moveTo(0,FLOORY); X.lineTo(CV.width,FLOORY); X.stroke(); X.setLineDash([]);
+  // selected-piece outline
+  const r=pieceRect(sel);
+  X.strokeStyle='#ffd34d'; X.lineWidth=2; X.strokeRect(r.x-1.5,r.y-1.5,r.w+3,r.h+3);
+}
+
+// ---- selection + drag ----
+function refreshItems(){ document.getElementById('items').innerHTML=KEYS.map(k=>
+  `<div class="item ${k===sel?'sel':''}" onclick="pick('${k}')">${LABELS[k]}</div>`).join(''); }
+function pick(k){ sel=k; refreshItems(); syncSliders(); render(); }
+function syncSliders(){ const L=SHOP[sel];
+  for(const f of ['fx','wf','bf']){ const s=document.getElementById('sl'+f); if(s) s.value=L[f];
+    const v=document.getElementById('v'+f); if(v) v.textContent=L[f].toFixed(3); } }
+function setF(f,val){ SHOP[sel][f]=val; document.getElementById('v'+f).textContent=val.toFixed(3); render(); }
+function bump(f){ SHOP[sel].wf=Math.min(1.2,Math.max(0.03, SHOP[sel].wf*f)); syncSliders(); render(); }
+function reset(){ Object.assign(SHOP[sel], DEFAULT[sel]); syncSliders(); render(); }
+function togglePlaque(){ showPlaque=!showPlaque; document.getElementById('plqbtn').classList.toggle('sel',showPlaque); render(); }
+
+let drag=null;
+function cpt(e){ const b=CV.getBoundingClientRect(); return {x:(e.clientX-b.left)*(CV.width/b.width), y:(e.clientY-b.top)*(CV.height/b.height)}; }
+function hit(p){ for(let i=KEYS.length-1;i>=0;i--){ const k=KEYS[i], r=pieceRect(k);
+  if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h) return k; } return null; }
+CV.addEventListener('pointerdown', e=>{ e.preventDefault(); const p=cpt(e); const k=hit(p)||sel; pick(k);
+  const L=SHOP[k]; const bx=OX+W*L.fx, by=FLOORY-L.bf*W; drag={dx:bx-p.x, dy:by-p.y}; CV.setPointerCapture(e.pointerId); CV.style.cursor='grabbing'; });
+CV.addEventListener('pointermove', e=>{ if(!drag) return; const p=cpt(e);
+  const bx=p.x+drag.dx, by=p.y+drag.dy; const L=SHOP[sel];
+  L.fx=Math.max(0,Math.min(1,(bx-OX)/W)); L.bf=(FLOORY-by)/W; syncSliders(); render(); });
+CV.addEventListener('pointerup', ()=>{ drag=null; CV.style.cursor='grab'; });
+CV.addEventListener('wheel', e=>{ e.preventDefault(); bump(e.deltaY<0?1.05:0.952); }, {passive:false});
+addEventListener('keydown', e=>{ const step=(e.shiftKey?0.02:0.004); const L=SHOP[sel];
+  if(e.key==='ArrowLeft'){ L.fx=Math.max(0,L.fx-step); } else if(e.key==='ArrowRight'){ L.fx=Math.min(1,L.fx+step); }
+  else if(e.key==='ArrowUp'){ L.bf+=step; } else if(e.key==='ArrowDown'){ L.bf-=step; }
+  else if(e.key==='+'||e.key==='='){ bump(1.05); return; } else if(e.key==='-'){ bump(0.95); return; }
+  else return; e.preventDefault(); syncSliders(); render(); });
+
+// ---- export ----
+function buildJson(){ const o={}; for(const k of KEYS) o[k]={fx:+SHOP[k].fx.toFixed(3), wf:+SHOP[k].wf.toFixed(3), bf:+SHOP[k].bf.toFixed(3)}; return o; }
+function exportJson(){ document.getElementById('out').value=JSON.stringify(buildJson(),null,1); }
+function downloadJson(){ exportJson(); const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([document.getElementById('out').value],{type:'application/json'}));
+  a.download='shop.json'; a.click(); }
+
+refreshItems(); syncSliders(); render();
+</script>
+</body>
+</html>
