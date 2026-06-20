@@ -18,8 +18,8 @@ t.ok(A.G.slots===1 && A.G.rooms.every(r=>r===null) && A.G.hand.length===0, 'fres
 
 // --- input is hard-gated to the current beat ---
 t.ok(A.tutAllow('start')===false && A.tutAllow('ability')===false, 'intro (cont) blocks wave + abilities');
-A.tutAdvance();                                  // → beat 1 (start wave)
-t.ok(A.tutAllow('start')===true && A.tutAllow('ability')===false, 'beat 1 allows Start Wave only');
+let gg=0; while(A.TUT[A.G.tutStep] && A.TUT[A.G.tutStep].gate==='cont' && gg++<10) A.tutAdvance();  // skip the intro bubbles
+t.ok(A.TUT[A.G.tutStep].gate==='start' && A.tutAllow('start')===true && A.tutAllow('ability')===false, 'first start beat allows Start Wave only');
 
 // --- drive the entire script generically by each beat's gate ---
 let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false, secondRoom=false, sawSwap=false;

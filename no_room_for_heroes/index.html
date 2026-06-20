@@ -2462,11 +2462,15 @@ function TUT_HORDE(){
   return a;
 }
 const TUT=[
-/*0*/ { title:"👑 You are the Boss", pos:'center', gate:'cont', adv:'cont', btn:"Show me →",
-        body:"Welcome! That throne on the right is <b>yours</b> — your <b>health bar is up top</b>. Heroes raid in from the LEFT to smash it. Your job: stop every last one.",
+/*0*/ { title:"👑 That's you", gate:'cont', adv:'cont', arrow:'boss', btn:"Next →",
+        body:"See that monster on the right? <b>That's you</b> — the dungeon's final boss. 👑",
         enter:()=>{ G._tutWave=[{cls:'warrior',hp:74,atk:4,spd:34}]; } },   // stage the knight from the very start
-/*1*/ { title:"Here he comes", pos:'top', gate:'start', adv:'started', arrow:'start',
-        body:"A lone knight is marching for your throne. Tap <b>⚔️ Start Wave</b> to send him in.",
+/*0b*/{ title:"Your health", gate:'cont', adv:'cont', arrow:'health', btn:"Next →",
+        body:"Your <b>health bar</b> sits up at the top. Heroes win by reaching your throne and draining it — don't let them." },
+/*0c*/{ title:"Smash him!", gate:'cont', adv:'cont', arrow:'hero', btn:"Let's go →",
+        body:"This hero is marching in to kill you for <b>honor and glory</b>… 😤 <b>Smash him</b> before he reaches the throne." },
+/*1*/ { title:"Send him in", gate:'start', adv:'started', arrow:'start',
+        body:"Tap <b>⚔️ Start Wave</b> to begin.",
         enter:()=>{ G._tutWave=[{cls:'warrior',hp:74,atk:4,spd:34}]; G.boss.mana=G.boss.maxMana; } },
 /*2*/ { title:"Blast him!", pos:'bottom', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.32,
         body:"You have <b>boss abilities</b> (bottom-left) that cost 🔷 mana. Strike the knight down before he reaches the throne!",
@@ -2564,8 +2568,8 @@ function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
   tutBtnFn=o.onNext||null;
   m.className='show low';   // every tip sits low (just under the floor) so the board stays visible
-  m.innerHTML=(o.skip?`<button class="tm-skip" onclick="tutSkip()">skip ✕</button>`:'')
-    +(o.title?`<h3>${o.title}</h3>`:'')
+  // No skip/✕ — the tutorial is a forced flow; you can't accidentally close out of it.
+  m.innerHTML=(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
     +(o.onNext?`<div class="tm-btns"><button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
 }
@@ -2623,18 +2627,36 @@ function tutRunTick(){
   return false;
 }
 // Position the blinking arrow over the current step's DOM target.
+// World (canvas) point → viewport coords, so the arrow can point at the boss/hero.
+function tutWorldToScreen(worldX, vy){
+  const cv=document.getElementById('cv'); const rect=cv.getBoundingClientRect();
+  const x = rect.left + (worldX - camX)*zoom*(rect.width/VW);
+  const z=(G&&(G.phase==='build'||G.phase==='run'))?zoom:1;
+  const deviceY = vy*baseK*z + FLOOR*baseK*(1-z);
+  const y = rect.top + deviceY*(rect.height/cv.height);
+  return {x,y};
+}
 function tutArrowTick(){
   const arrow=document.getElementById('tutarrow'); if(!arrow) return;
-  const st=tutStepObj();
-  let el=null;
-  if(st && st.arrow==='start') el=document.getElementById('btnStartWave')||document.querySelector('#panel .go');
-  else if(st && st.arrow==='buyroom') el=document.getElementById('btnBuyRoom');
-  else if(st && st.arrow==='abil') el=document.querySelector('#panel .abil');
-  else if(st && st.arrow==='hand') el=document.querySelector('#panel .cards');
-  if(!el){ arrow.classList.remove('on'); return; }
-  const r=el.getBoundingClientRect();
-  arrow.style.left=(r.left+r.width/2)+'px';
-  arrow.style.top =(r.top-4)+'px';
+  const st=tutStepObj(); const a=st&&st.arrow;
+  let px=null, py=null, glyph='👇';
+  if(a==='health'){                                   // boss HP is top-left of the topbar → point UP at it
+    const el=document.getElementById('topbar');
+    if(el){ const r=el.getBoundingClientRect(); px=r.left+Math.min(r.width*0.22,90); py=r.bottom+8; glyph='☝️'; }
+  }
+  else if(a==='boss'){ try{ const p=tutWorldToScreen(bossX(), FLOOR-70); px=p.x; py=p.y-22; }catch(_){ } }
+  else if(a==='hero'){ try{ const p=tutWorldToScreen(-STAGEW*0.5, FLOOR-54); px=p.x; py=p.y-22; }catch(_){ } }
+  else {                                              // bottom-panel button targets
+    let el=null;
+    if(a==='start') el=document.getElementById('btnStartWave')||document.querySelector('#panel .go');
+    else if(a==='buyroom') el=document.getElementById('btnBuyRoom');
+    else if(a==='abil') el=document.querySelector('#panel .abil');
+    else if(a==='hand') el=document.querySelector('#panel .cards');
+    if(el){ const r=el.getBoundingClientRect(); px=r.left+r.width/2; py=r.top-4; }
+  }
+  if(px==null){ arrow.classList.remove('on'); return; }
+  if(arrow.textContent!==glyph) arrow.textContent=glyph;
+  arrow.style.left=px+'px'; arrow.style.top=py+'px';
   arrow.classList.add('on');
 }
 // Forced card draft (renders in the normal reward overlay, but with set choices).
