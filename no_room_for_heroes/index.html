@@ -814,7 +814,7 @@ const BOSSES = {
     blurb:'Aggressive caster who drains the living.', passive:'arcane', doc:'soulengine',
     sig:['hellfire','siphon'], pool:['bolt','curse','dread']},
   ogre:   {name:'Gormauth the Devourer', ic:'👹', col:'#b0563a', maxHp:230, atk:25,
-    blurb:'Colossal glutton who feasts on the fallen.', passive:'feed', doc:'gluttony',
+    blurb:'Colossal glutton who feasts on the fallen — carries +2 potion slots.', passive:'feed', doc:'gluttony',
     sig:['devour','slam'], pool:['breath','drain','dread']},
   ent:    {name:'Thornheart', ic:'🌳', col:'#5fae54', maxHp:165, atk:18,
     blurb:'A bramble-throne that punishes melee.', passive:'thorns', doc:'overgrowth',
@@ -825,12 +825,12 @@ const BOSSES = {
 };
 const BOSS_KEYS = Object.keys(BOSSES);
 function applyBossPassive(b){
-  b.passiveDR=0; b.reviveHp=0; b.feed=0; b.thorns=0; b.pAbilDmg=0; b.pAbilCost=0; b.revived=false; b.reviveT=0;
+  b.passiveDR=0; b.reviveHp=0; b.feed=0; b.thorns=0; b.pAbilDmg=0; b.pAbilCost=0; b.revived=false; b.reviveT=0; b.pPotionCap=0;
   switch(b.passive){
     case 'scaled':  b.passiveDR=0.12; break;
     case 'undying': b.reviveHp=0.35; break;
     case 'arcane':  b.pAbilCost=0.20; b.manaRegen=(b.manaRegen||6)+3; break;
-    case 'feed':    b.feed=0.04; break;
+    case 'feed':    b.feed=0.04; b.pPotionCap=2; break;   // the Devourer's gullet holds +2 throne potions
     case 'thorns':  b.thorns=0.5; break;
     case 'titan':   b.pAbilDmg=0.30; break;
   }
@@ -960,7 +960,7 @@ let RB={};   // aggregated bonuses for the active run
 function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
   abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,slotMax:0,upCap:0,
-  synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0}; }
+  synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0,potionSlots:0}; }
 // ---- save slots: independent profiles (own runes + town). Slot 1 inherits any
 // pre-slot save so existing players keep their progress. ----
 const SAVE_SLOTS=3;
@@ -1274,6 +1274,7 @@ const RELICS={
   rEye:   {tier:'rare',name:"Hoarder's Eye",ic:'👁️',desc:'+4 gold/kill, +14% loot',rb:{goldKill:4,loot:.14}},
   rFrost: {tier:'rare',name:'Frost Heart',ic:'❄️',desc:'+16% ability damage',rb:{abilDmg:.16}},
   rDeed:  {tier:'rare',name:'Deed to the Deep',ic:'📜',desc:'+1 room-slot cap (build one more room)',rb:{slotMax:1}},
+  rFlask: {tier:'rare',name:"Alchemist's Belt",ic:'🧪',desc:'+2 throne potion slots (carry up to 5)',rb:{potionSlots:2}},
   // ---- epic ----
   eForge: {tier:'epic',name:'Soulforge',ic:'🔨',desc:'+20% monster damage & HP',rb:{monDmg:.20,monHp:.20}},
   eCore:  {tier:'epic',name:'Infernal Core',ic:'🌋',desc:'+20% trap damage',rb:{trapDmg:.20}},
@@ -1328,6 +1329,7 @@ function rollRelicChoices(n){
    sells relics for dread. Stock is rolled fresh each visit (weighted by the
    same tier curve as drafts) and priced by rarity.                         */
 const MERCHANT_PRICE={ common:8, special:14, rare:22, epic:34, legendary:48, mythic:66 };
+const POTION_GOLD=24;   // gold price of one throne potion at the traveling merchant
 function rollMerchant(){
   // Visits most town stops, but not every one — keeps the encounter special.
   if(Math.random()<0.25){ return {visiting:false, stock:[]}; }
@@ -1335,7 +1337,9 @@ function rollMerchant(){
   const ids = rollRelicChoices(n);
   const stock = ids.map(id=>({ id, tier:RELICS[id].tier,
     price:Math.max(1, Math.round(MERCHANT_PRICE[RELICS[id].tier]*(1-(RB.townDisc||0)))), sold:false }));
-  return { visiting:true, stock };
+  // He also restocks throne potions (paid in plain gold) — always on offer.
+  const potion = { price: Math.max(1, Math.round(POTION_GOLD*(1-(RB.townDisc||0)))) };
+  return { visiting:true, stock, potion };
 }
 function buyMerchantRelic(idx){
   const m=G.merchant; if(!m||!m.visiting) return;
@@ -1344,6 +1348,15 @@ function buyMerchantRelic(idx){
   if(G.dread<w.price){ showHint('Not enough dread.'); return; }
   G.dread-=w.price; w.sold=true; addRelic(w.id);
   showHint('🛒 Acquired '+RELICS[w.id].ic+' '+RELICS[w.id].name+'!');
+  renderTown(); renderTop();
+}
+function buyMerchantPotion(){
+  const m=G.merchant; if(!m||!m.visiting||!m.potion) return;
+  if(!G.boss) return;
+  if((G.boss.potions||0)>=potionCap()){ showHint('Your potion belt is already full ('+potionCap()+').'); return; }
+  if(G.gold<m.potion.price){ showHint('Not enough gold.'); return; }
+  G.gold-=m.potion.price; G.boss.potions=(G.boss.potions||0)+1;
+  showHint('🧪 Bought a throne potion ('+G.boss.potions+'/'+potionCap()+').');
   renderTown(); renderTop();
 }
 
@@ -2972,6 +2985,9 @@ function chooseBoss(key){
   // Relic Shrine: begin the run already bearing relic(s)
   G.shrineRelics=[];
   for(let i=0;i<shrineRelics();i++){ const id=randomRelicId(townLvl('shrine')); if(id){ addRelic(id); G.shrineRelics.push(id); } }
+  // 🧪 Throne potions: start each run with a full belt (cap reflects relics +
+  // this boss's pPotionCap, both known by now). Bought back at the merchant.
+  G.boss.potions=potionCap();
   // starter dungeon + rune head-starts
   G.slots=1+RB.slot0;
   G.rooms=Array(G.slots).fill(null);
@@ -3077,15 +3093,21 @@ function buySlot(){
 }
 // Gold sink: spend loot to patch the throne's HP between waves (the boss only
 // otherwise heals via abilities/runes), so surplus gold always has a use.
-function repairCost(){ const b=G.boss; const heal=Math.min(b.maxHp-b.hp, Math.ceil(b.maxHp*0.20)); return {heal, cost:Math.max(1,Math.ceil(heal*0.8))}; }
-function repairThrone(){
-  if(!G || G.phase!=='build' || !G.boss) return;
+// 🧪 Throne potions — a held consumable that heals the boss (replaces the old
+// gold "repair" button). You carry up to potionCap() (3, raised to 5 by an
+// artifact or a specific boss) and refill them from the traveling merchant.
+const POTION_HEAL=0.35;        // each potion heals this fraction of max HP
+function potionCap(){ return Math.min(5, 3 + (RB.potionSlots||0) + ((G.boss&&G.boss.pPotionCap)||0)); }
+function useBossPotion(){
+  if(!G || !G.boss) return;
+  if((G.boss.potions||0)<=0){ showHint('No potions left — buy more from the traveling merchant in town.'); return; }
   if(G.boss.hp>=G.boss.maxHp){ showHint('The throne is already at full HP.'); return; }
-  const {heal,cost}=repairCost();
-  if(G.gold<cost){ showHint('Not enough gold to repair ('+cost+'g).'); return; }
-  G.gold-=cost; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+heal);
-  floater(bossX(), FLOOR-96, '🩹 +'+heal+' HP', '#7bdc6b'); burst(bossX(),FLOOR-50,'#7bdc6b',10);
-  sfx('upgrade'); showHint('Throne repaired +'+heal+' HP for '+cost+'g.'); render();
+  G.boss.potions--;
+  const heal=Math.min(G.boss.maxHp-G.boss.hp, Math.ceil(G.boss.maxHp*POTION_HEAL));
+  G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+heal);
+  floater(bossX(), FLOOR-96, '🧪 +'+heal+' HP', '#7bdc6b'); burst(bossX(),FLOOR-50,'#7bdc6b',14);
+  sfx('relic'); showHint('🧪 Potion quaffed — throne +'+heal+' HP ('+G.boss.potions+'/'+potionCap()+' left).');
+  render(); if(typeof renderPanel==='function') renderPanel();
 }
 
 function selectCard(i){
@@ -4649,9 +4671,9 @@ function renderTown(){
           </div>`}
     </div>` : '';
   const m=G.merchant;
-  const merchHtml = (m&&m.visiting&&m.stock.length) ? `<div style="max-width:600px;margin:6px auto;padding:10px 14px;border:2px solid #ffd34d;border-radius:12px;background:#241a0e">
+  const merchHtml = (m&&m.visiting&&(m.stock.length||m.potion)) ? `<div style="max-width:600px;margin:6px auto;padding:10px 14px;border:2px solid #ffd34d;border-radius:12px;background:#241a0e">
       <h2 style="margin:0 0 2px;color:#ffd34d">🛒 Traveling Merchant</h2>
-      <div class="small" style="opacity:.8;margin-bottom:6px">"Rare wares for a dreadful price, my lord…" — pay in <span style="color:#b985ff">☠ dread</span>.</div>
+      <div class="small" style="opacity:.8;margin-bottom:6px">Artifacts for a dreadful price (<span style="color:#b985ff">☠ dread</span>) — and throne potions for plain <span style="color:#ffd34d">💰 gold</span>.</div>
       <div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap">
       ${m.stock.map((w,i)=>{ const r=RELICS[w.id]; const tc=RELIC_TIERS[w.tier].col; const owned=G.relics.includes(w.id);
         const can=!w.sold&&!owned&&G.dread>=w.price;
@@ -4662,6 +4684,15 @@ function renderTown(){
           <span class="small" style="color:${tc};opacity:.8">${RELIC_TIERS[w.tier].name}</span>
           <span class="small" style="opacity:.85;font-weight:normal;line-height:1.2">${r.desc}</span>
           <span style="color:#b985ff;margin-top:2px">${w.sold?'✔ Sold':owned?'Owned':w.price+' ☠'}</span></button>`;}).join('')}
+      ${m.potion?(()=>{ const have=(G.boss&&G.boss.potions)||0, cap=potionCap(); const full=have>=cap;
+        const can=!!G.boss&&!full&&G.gold>=m.potion.price;
+        return `<button ${can?'':'disabled'} onclick="buyMerchantPotion()" title="Refill the boss's potion belt. Each potion heals the throne ${Math.round(POTION_HEAL*100)}% of max HP mid-run."
+          style="display:flex;flex-direction:column;align-items:center;min-width:130px;max-width:150px;gap:2px;height:auto;padding:9px 8px;border-color:#7bdc6b">
+          <span style="font-size:24px">🧪</span>
+          <span style="color:#7bdc6b;font-weight:bold;font-size:13px">Throne Potion</span>
+          <span class="small" style="opacity:.8">Belt ${have}/${cap}</span>
+          <span class="small" style="opacity:.85;font-weight:normal;line-height:1.2">Heals the throne ${Math.round(POTION_HEAL*100)}% HP.</span>
+          <span style="color:#ffd34d;margin-top:2px">${full?'✔ Belt full':m.potion.price+' 💰'}</span></button>`;})():''}
       </div></div>` : (m&&!m.visiting ? `<p class="small" style="opacity:.5;margin:6px auto;max-width:560px">🛒 No merchant in town this time — the trader's caravan has moved on.</p>` : '');
   const bk=G.barracks||{built:false,lvl:0};
   const barracksHtml=`<div style="max-width:560px;margin:6px auto;padding:9px 14px;border:2px solid #c98a3a;border-radius:12px;background:#241c10">
@@ -6859,7 +6890,7 @@ function renderPanel(){
     panel.innerHTML=`
       <div class="row" style="margin-bottom:6px">
         <button id="btnBuyRoom" class="buy" onclick="buySlot()" title="Corridor rooms: ${G.slots}/${slotCap()}. Raise the cap with runes, the War Foundry & relics." ${(G.slots>=slotCap()||G.gold<slotCost())?'disabled':''}>${G.slots>=slotCap()?`🧱 Rooms ${G.slots}/${slotCap()} (max)`:`➕ Room ${G.slots}/${slotCap()} (${slotCost()}g)`}</button>
-        ${G.boss && G.boss.hp<G.boss.maxHp ? `<button class="buy" onclick="repairThrone()" title="Spend gold to heal the throne" ${G.gold<repairCost().cost?'disabled':''}>🩹 Repair +${repairCost().heal} (${repairCost().cost}g)</button>` : ''}
+        ${G.boss ? `<button class="buy" onclick="useBossPotion()" title="Quaff a potion to heal the throne ${Math.round(POTION_HEAL*100)}% — restock from the traveling merchant in town." ${((G.boss.potions||0)<=0||G.boss.hp>=G.boss.maxHp)?'disabled':''}>🧪 Potion ${G.boss.potions||0}/${potionCap()}</button>` : ''}
         ${shopExists?(()=>{ const shops=G.rooms.filter(r=>r&&r.type==='shop');
           const used=shops.reduce((a,r)=>a+(r.stock||[]).length,0), cap=shops.reduce((a,r)=>a+shopCap(r),0); const full=used>=cap;
           return `<span class="pill" title="Each shop holds (level + 1) items; sales are pure profit on top of loot.">🛒 Stock ${used}/${cap}</span>`+Object.keys(ITEMS).map(k=>{
@@ -6918,6 +6949,13 @@ function renderPanel(){
           <span style="font-size:18px">💥</span>
           <span style="font-size:11px">Overdrive</span>
           <span class="c">${ready?'READY!':Math.floor(b.rage||0)+'%'}</span>
+        </button>`; })()}
+      ${(()=>{ const dis=((b.potions||0)<=0||b.hp>=b.maxHp);
+        return `<button class="abil" onclick="useBossPotion()" ${dis?'disabled':''}
+          title="Quaff a potion to heal the throne ${Math.round(POTION_HEAL*100)}% of max HP. Restock from the traveling merchant in town.">
+          <span style="font-size:18px">🧪</span>
+          <span style="font-size:11px">Potion</span>
+          <span class="c">${b.potions||0}/${potionCap()}</span>
         </button>`; })()}
       <span style="flex:1"></span>
       <button onclick="toggleSpeed()">⏩ ${speedMul}×</button>

@@ -7,6 +7,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
+  useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('rooms (slots/stacking/menu)');
@@ -111,6 +112,33 @@ try {
   A.openCodex(); A.openUnlocks(); A.showHelp();
 } catch (e) { threw = e.message; }
 t.ok(threw === '', 'all menu screens render clean' + (threw ? ' — ' + threw : ''));
+
+// --- 🧪 throne potions: held heals that replaced the gold "Repair" button ---
+A.G=A.freshGame('campaign'); A.chooseBoss('dragon');
+t.ok(A.potionCap()===3 && A.G.boss.potions===3, 'a fresh boss starts with a full 3-potion belt');
+A.G.boss.hp=Math.round(A.G.boss.maxHp*0.4);
+const lowHp=A.G.boss.hp, expHeal=Math.ceil(A.G.boss.maxHp*A.POTION_HEAL);
+A.useBossPotion();
+t.ok(A.G.boss.potions===2, 'quaffing a potion spends one slot');
+t.ok(A.G.boss.hp===lowHp+expHeal, 'the potion healed '+Math.round(A.POTION_HEAL*100)+'% of max HP');
+A.G.boss.hp=A.G.boss.maxHp; A.useBossPotion();
+t.ok(A.G.boss.potions===2, 'a full-HP throne refuses to waste a potion');
+A.G.boss.potions=0; A.G.boss.hp=10; A.useBossPotion();
+t.ok(A.G.boss.hp===10, 'an empty belt cannot heal');
+
+// the Devourer's gullet (+2) and the Alchemist's Belt relic (+2) raise the cap to 5
+A.G=A.freshGame('campaign'); A.chooseBoss('ogre');
+t.ok(A.potionCap()===5 && A.G.boss.potions===5, 'the Devourer carries a 5-potion belt');
+A.G=A.freshGame('campaign'); A.chooseBoss('dragon'); A.addRelic('rFlask');
+t.ok(A.potionCap()===5, "the Alchemist's Belt relic raises the cap to 5");
+
+// the traveling merchant restocks potions for plain GOLD (not dread)
+A.G=A.freshGame('campaign'); A.chooseBoss('dragon');
+let mp=null; for(let i=0;i<50 && !mp;i++){ const m=A.rollMerchant(); if(m.visiting) mp=m.potion; }
+t.ok(mp && mp.price>0, 'a visiting merchant always offers a gold-priced potion');
+A.G.boss.potions=1; A.G.gold=A.POTION_GOLD*5; A.G.merchant={visiting:true,stock:[],potion:{price:A.POTION_GOLD}};
+const gold0=A.G.gold; A.buyMerchantPotion();
+t.ok(A.G.boss.potions===2 && A.G.gold===gold0-A.POTION_GOLD, 'buying a potion costs gold and fills a belt slot');
 
 // --- "Fed" growth curve: uncapped, monotonic, with diminishing returns ---
 const fm = A.feedMul;
