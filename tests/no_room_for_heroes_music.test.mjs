@@ -20,9 +20,16 @@ global.devicePixelRatio = 1;
 eval(code);   // compose() self-checks every generated track at load (throws on drift)
 
 const v = global.window.validateTracks();
-t.ok(v.length === 215, `library complete: ${v.length} tracks (15 hand-written + 200 generated)`);
+t.ok(v.length === 240, `library complete: ${v.length} tracks (15 hand-written + 200 generated + 25 C-part bridges)`);
 const bad = v.filter(x => !x.ok);
 t.ok(bad.length === 0, 'all channels agree on loop length' + (bad.length ? ' — BAD: ' + bad.map(b => b.name).join(', ') : ''));
+
+// the 5-per-theme C-part bridges all spliced on cleanly (5 in-game themes × 5)
+const names = new Set(v.map(x => x.name));
+const cParts = v.filter(x => / — .+/.test(x.name) && x.name.match(/Buried Cathedral|Hammers of the Hall|Throneblood|Thrash the Throne|Goomba Stomp Groove/));
+t.ok(cParts.length === 25, `25 C-part variants present (got ${cParts.length})`);
+t.ok(names.has('Throneblood — Blade Stabs') && names.has('The Buried Cathedral — Hollow Breakdown')
+  && names.has('Goomba Stomp Groove — Warp Gallop'), 'spot-check: themed C-part bridges are in the list');
 
 // the genre spread the songbook promises actually exists
 const tags = new Set(v.map(x => x.name));
