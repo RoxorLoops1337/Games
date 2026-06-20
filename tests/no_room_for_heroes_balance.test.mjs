@@ -21,6 +21,7 @@ const r1 = A.statusResist(grunt);
 t.ok(r1 < 0.05, `level 1 grunt barely resists (${r1.toFixed(2)})`);
 t.ok(A.statusResist(champ) > A.statusResist(grunt), 'champions resist more than grunts');
 t.ok(A.statusResist(elite) > A.statusResist(grunt), 'elites resist more than grunts');
+t.ok(A.statusResist({king:true}) > A.statusResist(champ), 'the King shrugs off CC harder than a champion');
 
 // deep into the siege: heroes toughen up
 A.G.levelIdx = 40;

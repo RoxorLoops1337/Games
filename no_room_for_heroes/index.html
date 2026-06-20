@@ -3437,7 +3437,7 @@ function buildHeroFromSpec(spec){
   const champ = spec.champion ? CHAMPIONS[spec.champion] : null;
   let gold=heroGold(n,d,spec.debuff.robbed), bounty=heroBounty(n,d);
   if(champ){ hp*=champ.hpMul; atk*=champ.atkMul; armor+=2; gold=Math.round(gold*2.5); bounty=Math.round(bounty*3); }
-  if(spec.king){ hp*=8; atk*=1.3; armor+=10; spd*=0.92; gold=0; bounty=0; }   // 👑 the finale boss-raider (tuned via sim: a solid dungeon wins ~90%, but he can smash rooms, pressure the throne, and end a weak run)
+  if(spec.king){ hp*=10; atk*=1.65; armor+=13; spd*=0.97; gold=0; bounty=0; }   // 👑 the finale boss-raider — deliberately punishing: far tankier, hits much harder at the throne, near-impervious armor and shrugs off CC (see statusResist). A solid dungeon still wins, but the margin is thin.
   hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
     cls, ...c, name:cls, traits:tr,
@@ -3807,7 +3807,7 @@ function statusResist(h){
   if(!h) return 0;
   const lvl=(G && G.mode==='campaign') ? campLevel() : Math.min(50, 1+(G?G.survived:0)/3);
   let r=Math.min(0.45, Math.max(0,lvl-1)*0.010);
-  if(h.champion||h.king) r+=0.25; else if(h.elite) r+=0.10;
+  if(h.king) r+=0.42; else if(h.champion) r+=0.25; else if(h.elite) r+=0.10;   // 👑 the King shrugs off corruption & CC the hardest
   if(h.wardT>0) r+=0.28;                                       // 🧙 Wizard ward
   return Math.min(0.78, r);
 }
@@ -4074,7 +4074,7 @@ function campaignAdvance(){
 }
 // ----------------------------- THE KING FINALE ---------------------------
 // Clearing wave 50 looks like victory… until the High King kicks the doors in.
-const KING_SMASH=0.10;            // chance the King smashes each room he marches through
+const KING_SMASH=0.16;            // chance the King smashes each room he marches through
 function campaignVictory(){
   // A FALSE victory — savour it for a beat before the floor shakes.
   G.phase='win'; overlay.classList.add('show'); sfx('win');
@@ -6131,7 +6131,7 @@ function spriteClip(h, cfg){
   if(h.state==='walking'){ const moving = h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02; return moving?'walk':(cfg.clips.idle?'idle':'walk'); }
   return cfg.clips.idle?'idle':'walk';
 }
-function drawSprite(sx, footY, h, key){
+function drawSprite(sx, footY, h, key, scaleMul=1){
   const cfg=SPRITES[key]; if(!cfg) return false;
   const name=spriteClip(h, cfg), clip=cfg.clips[name]; if(!clip) return false;
   let img, fw, fh;
@@ -6143,7 +6143,7 @@ function drawSprite(sx, footY, h, key){
   const dt=Math.min(0.1,(now-(h._animLast||now))/1000); h._animLast=now;
   h._animT=(h._animT||0)+dt; h._animPX=h.x;
   const frame=Math.floor(h._animT*clip.fps)%clip.n;
-  const S=cfg.scale, srcX=frame*fw, srcY=clip.row*fh;
+  const S=cfg.scale*scaleMul, srcX=frame*fw, srcY=clip.row*fh;
   const dx=Math.round(sx-clip.ax*S), dy=Math.round(footY-clip.ay*S);
   X.imageSmoothingEnabled=false;
   X.drawImage(img, srcX,srcY,fw,fh, dx,dy, Math.round(fw*S), Math.round(fh*S));
@@ -6512,6 +6512,7 @@ function drawMonster(cx,type,col){
 // ---- the empowered hero (Champion): a big "Super Knight" walk sprite -------
 // 12 frames; frame 0 is the neutral stance, 1..11 are the walk cycle.
 const CHAMP_WALK=[]; const CHAMP_DH=88;
+const KING_SCALE=1.40;   // 👑 the High King renders as a Super Knight, 40% bigger than a champion
 // 14-frame attack swing (guard → raise → strike → follow-through). The attack art
 // has less padding than the walk art, so it draws taller to keep the knight the
 // same on-screen size (content heights matched; feet share the same baseline).
@@ -6595,17 +6596,17 @@ function drawSuperRogue(sx, footY, h){
   return true;
 }
 
-function drawChampion(sx, footY, h){
+function drawChampion(sx, footY, h, scale=1){
   const moving = h.state==='walking' && !(h.freeze>0) && (h._animPX===undefined || Math.abs(h.x-h._animPX)>0.02);
   const fighting = (h.state==='fighting'||h.state==='boss') && !(h.freeze>0);
   const now=performance.now();
-  let im, dh=CHAMP_DH;
+  let im, dh=CHAMP_DH*scale;
   if(fighting && champAtkReady()){
     // sync the swing to the attack timer so the blade lands when the damage does:
     // h.atkT counts down from the attack interval to 0 (the hit) each swing
     const iv=(h.state==='boss'?0.8:0.7)*(h.atkSpeed||1);
     const prog=Math.max(0, Math.min(0.999, 1-(h.atkT||0)/iv));
-    im=CHAMP_ATK[Math.floor(prog*14)]; dh=CHAMP_ATK_DH;
+    im=CHAMP_ATK[Math.floor(prog*14)]; dh=CHAMP_ATK_DH*scale;
     h._champClip='attack'; h._champLast=now;
   } else if(moving){
     if(h._champClip!=='walk'){ h._champClip='walk'; h._champT=0; }
@@ -6628,24 +6629,29 @@ function drawHero(sx,h){
   const king=!!h.king;
   const rogueChamp = champ && isRogueChamp(h);
   const champSprite = champ && (rogueChamp ? (rogueWalkReady()||rogueIdleReady()||rogueAtkReady()) : champReady());
-  // aura (champion = its colour, bigger/brighter; elite = trait colour; king = royal gold)
+  const kingSprite = king && !champ && champReady();      // 👑 the King is a 40%-bigger Super Knight
+  // aura (champion = its colour, bigger/brighter; elite = trait colour; king = royal gold, the largest)
   if(champ || h.elite || king){
     const t=performance.now()/200;
     const col=king?'#ffd34d':champ?(h.champCol||'#ffd34d'):(h.traits.length?TRAITS[h.traits[0]].col:'#ffd34d');
     X.globalAlpha=(king?0.34:champ?0.30:0.18)+0.10*Math.sin(t);
     X.fillStyle=col; X.beginPath();
-    if(champSprite) X.ellipse(sx,y-44,40,56,0,0,7); else X.ellipse(sx,yy-26,king?34:champ?30:20,king?46:champ?42:30,0,0,7);
+    if(kingSprite) X.ellipse(sx,y-44*KING_SCALE,40*KING_SCALE,56*KING_SCALE,0,0,7);
+    else if(champSprite) X.ellipse(sx,y-44,40,56,0,0,7);
+    else X.ellipse(sx,yy-26,king?34:champ?30:20,king?46:champ?42:30,0,0,7);
     X.fill(); X.globalAlpha=1;
   }
-  // shadow
-  X.fillStyle='rgba(0,0,0,.3)'; X.beginPath(); X.ellipse(sx,y,champSprite?26:(champ?20:14),4,0,0,7); X.fill();
+  // shadow (the King casts the widest)
+  X.fillStyle='rgba(0,0,0,.3)'; X.beginPath();
+  X.ellipse(sx,y, kingSprite?Math.round(26*KING_SCALE):(champSprite?26:(king?22:(champ?20:14))),4,0,0,7); X.fill();
   // the empowered hero renders as the big Super Knight (or Super Rogue for
   // rogue-class champions); other classes use their hero sprite; the rest get
   // the pixel figure
   const drewChamp = champSprite && (rogueChamp ? drawSuperRogue(sx, y, h) : drawChampion(sx, y, h));
-  const skey = !drewChamp && CLASS_SPRITE[h.cls];
-  const drewKnight = skey && spriteReady(skey) && drawSprite(sx, y, h, skey);
-  if(!drewChamp && !drewKnight){
+  const drewKing  = !drewChamp && kingSprite && drawChampion(sx, y, h, KING_SCALE);   // 👑 Super Knight ×1.4
+  const skey = !drewChamp && !drewKing && CLASS_SPRITE[h.cls];
+  const drewKnight = skey && spriteReady(skey) && drawSprite(sx, y, h, skey, king?KING_SCALE:1);
+  if(!drewChamp && !drewKing && !drewKnight){
     // legs
     px(sx-7,yy-14,5,14,'#3a3050'); px(sx+2,yy-14,5,14,'#3a3050');
     // body
@@ -6660,7 +6666,10 @@ function drawHero(sx,h){
     if(h.cls==='cleric'){ px(sx-2,yy-58,4,10,'#ffec99'); px(sx-5,yy-54,10,4,'#ffec99'); } //cross
   }
   // visual top of the figure — overlays (HP, gold, crown, name) stack above it
-  const figTop = drewChamp ? (y - (rogueChamp?ROGUE_IDLE_DH:CHAMP_DH)) : (yy - 46);
+  const figTop = drewChamp ? (y - (rogueChamp?ROGUE_IDLE_DH:CHAMP_DH))
+               : drewKing  ? (y - Math.round(CHAMP_DH*KING_SCALE))
+               : king      ? (yy - 64)                 // King fallback (sprite/figure) stands taller
+               : (yy - 46);
   // frozen / elemental status tints
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
@@ -6672,9 +6681,10 @@ function drawHero(sx,h){
   if(h.shieldT>0){ X.globalAlpha=0.35+0.1*Math.sin(performance.now()/90);
     X.strokeStyle='#ffd34d'; X.lineWidth=2; X.beginPath(); X.ellipse(sx,yy-26,18,28,0,0,7); X.stroke();
     X.globalAlpha=1; }
-  // hp bar (wider for champions)
-  const bw=champ?52:36;
-  bar(sx-bw/2, figTop-(champ?20:14), bw, champ?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d', h);
+  // hp bar (wider for champions; widest for the King)
+  const big = champ || king;
+  const bw = drewKing ? Math.round(52*KING_SCALE) : (big?52:36);
+  bar(sx-bw/2, figTop-(big?20:14), bw, big?8:6, h.hp/h.maxHp, h.hp/h.maxHp>0.3?'#5ad97e':'#ff4d6d', h);
   // gold + elite trait markers
   X.font='10px Trebuchet MS'; X.textAlign='center'; X.fillStyle='#ffd34d';
   X.fillText('💰'+h.gold, sx, figTop-18);

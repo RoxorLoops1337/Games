@@ -46,4 +46,14 @@ A.trueVictory();
 t.ok(A.RUNES.asc === 4, 'trueVictory raises ascension');
 t.ok(A.G.phase === 'win', 'victory phase reached');
 
+// 👑 the King finale-raider is built far stronger than a same-power warrior
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
+const baseSpec = { cls:'warrior', power:50, traits:[], debuff:{atkMul:1, burn:0, robbed:false} };
+const plain = A.buildHeroFromSpec(baseSpec);
+const king  = A.buildHeroFromSpec({ ...baseSpec, king:true, name:'The High King' });
+t.ok(king.king, 'the King is flagged');
+t.ok(king.maxHp > plain.maxHp * 9, `the King is far tankier (${king.maxHp} vs ${plain.maxHp})`);
+t.ok(king.atk > plain.atk * 1.5, `the King hits much harder (${king.atk} vs ${plain.atk})`);
+t.ok(king.armor >= plain.armor + 13, 'the King wears heavy armor (+13)');
+
 t.done();
