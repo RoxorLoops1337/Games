@@ -191,6 +191,11 @@
   .card .ic .cardimg{width:50px;height:50px;object-fit:contain;display:block;margin:0 auto -2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
   .choice .big .cardimg{width:78px;height:78px;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));}
   .abilimg{width:26px;height:26px;object-fit:contain;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));}
+  /* painted relic / mandate / town-action icons — sized by context (default inline ~1.3em) */
+  .relicimg{width:1.35em;height:1.35em;object-fit:contain;display:inline-block;vertical-align:-.35em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
+  .choice .big .relicimg{width:62px;height:62px;display:block;margin:0 auto;vertical-align:0;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));}
+  .relicchip .ric .relicimg{width:22px;height:22px;display:block;vertical-align:0;}
+  .tact .relicimg{width:30px;height:30px;display:block;vertical-align:0;}
   .btnico{height:18px;width:auto;vertical-align:-4px;margin-right:2px;}
   .amcic .cardimg{width:62px;height:62px;object-fit:contain;display:block;margin:0 auto;}
   .cardghost .ic .cardimg{width:54px;height:54px;object-fit:contain;display:block;margin:0 auto;}
@@ -560,6 +565,20 @@ function runeFace(id){ return RUNE_ICON[id] ? '<img class="runeimg" src="runes/'
 // Painted edict (run-modifier) icons (modifiers/<name>.png) per edict key; emoji fallback.
 const EDICT_ICON={ ironHorde:'iron', bloodPact:'blood', swiftRaiders:'swift', warband:'warband', eliteVanguard:'elite', leanCoffers:'lean', glassThrone:'glass' };
 function edictFace(id){ return EDICT_ICON[id] ? '<img class="cardimg" src="modifiers/'+EDICT_ICON[id]+'.png" alt="" draggable="false">' : null; }
+// Painted relic icons (icons/relic_<word>.png) per relic key; emoji fallback.
+const RELIC_ICON={ cFang:'cracked', cEmber:'ember', sTooth:'serpent', sCharm:'charm', sPouch:'greedy', sMana:'mana', sCollar:'collar',
+  rScale:'dragonscale', rBlood:'bloodstone', rTome:'tome', rBanner:'banner', rEye:'hoarder', rFrost:'frost', rDeed:'deed',
+  eCore:'infernal', eStaff:'archmage', lPhyl:'phylactery', mRuin:'avatar', mEtern:'eternity' };
+function relicFace(id,cls){ return RELIC_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/relic_'+RELIC_ICON[id]+'.png" alt="" draggable="false">' : null; }
+// Painted mandate ("decree") icons (icons/decree_<word>.png) per mandate key; emoji fallback.
+const MANDATE_ICON={ pierceHalls:'piercing', undyingLegion:'legion', quicksand:'quicksand', bloodthrone:'bloodthrone',
+  tollKeeper:'toll', goldVeins:'veins', hairTrigger:'hair', conductor:'conductor' };
+function mandateFace(id,cls){ return MANDATE_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/decree_'+MANDATE_ICON[id]+'.png" alt="" draggable="false">' : null; }
+// Painted town-action icons (schemes / sabotage / empower / corrupt) per action key; emoji fallback.
+const TOWNACT_ICON={ well:'townscheme_well', smith:'townscheme_bribe', temple:'townscheme_temple',
+  intimidate:'meddle_intimidate', poison:'meddle_poison', rob:'meddle_rob', corrupt:'meddle_corrupt',
+  reinforce:'empower_reinforce', attune:'empower_attunement', ascend:'empower_boss', sharpen:'empower_claws' };
+function townActFace(id,cls){ return TOWNACT_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/'+TOWNACT_ICON[id]+'.png" alt="" draggable="false">' : null; }
 const MAX_LEVEL = 5;   // a TRAP can be stacked-upgraded this many levels
 const MAX_SLOTS = 5;   // a room can hold this many units (grown +1 per gold upgrade)
 const MAX_TRAPS = 2;   // …of which at most this many may be traps
@@ -4373,11 +4392,11 @@ function gotoRelicChoice(title, subHtml, onPick){
     <p>${subHtml||'Choose a relic to empower your dungeon.'}</p>
     <div class="choices">${choices.map((id,i)=>{ const r=RELICS[id]; const tc=RELIC_TIERS[r.tier];
       return `<div class="choice" style="width:208px;border-color:${tc.col}" onclick="pickRelic(${i})">
-        <div class="big">${r.ic}</div>
+        <div class="big">${relicFace(id)||r.ic}</div>
         <div class="small" style="color:${tc.col};font-weight:bold;letter-spacing:1px">${tc.name.toUpperCase()}</div>
         <h3 style="margin:4px 0">${r.name}</h3>
         <div class="desc">${r.desc}</div></div>`;}).join('')}</div>
-    ${G.relics.length?`<p class="small" style="opacity:.75">Held: ${G.relics.map(id=>RELICS[id].ic).join(' ')}</p>`:''}`;
+    ${G.relics.length?`<p class="small" style="opacity:.75">Held: ${G.relics.map(id=>relicFace(id)||RELICS[id].ic).join(' ')}</p>`:''}`;
 }
 function pickRelic(i){
   if(G.phase!=='relic') return;
@@ -4405,10 +4424,10 @@ function gotoMandateChoice(onDone){
     <p>A standing rule for the rest of your reign — choose one to reshape your dungeon.</p>
     <div class="choices">${choices.map((id,i)=>{ const m=MANDATES[id];
       return `<div class="choice" style="width:208px;border-color:#ff9a3a" onclick="pickMandate(${i})">
-        <div class="big">${m.ic}</div>
+        <div class="big">${mandateFace(id)||m.ic}</div>
         <h3 style="margin:4px 0">${m.name}</h3>
         <div class="desc">${m.desc}</div></div>`;}).join('')}</div>
-    ${G.mandates.length?`<p class="small" style="opacity:.75">In force: ${G.mandates.map(id=>MANDATES[id].ic+' '+MANDATES[id].name).join(' · ')}</p>`:''}`;
+    ${G.mandates.length?`<p class="small" style="opacity:.75">In force: ${G.mandates.map(id=>(mandateFace(id)||MANDATES[id].ic)+' '+MANDATES[id].name).join(' · ')}</p>`:''}`;
 }
 function pickMandate(i){
   if(G.phase!=='mandate') return;
@@ -4653,14 +4672,14 @@ function renderTown(){
     const u=TOWN_UPGRADES[k]; const n=G.townBuys[k]||0; const cost=upgradeCost(k); const can=G.dread>=cost;
     return `<button ${can?'':'disabled'} onclick="buyUpgrade('${k}')"
       style="display:flex;flex-direction:column;align-items:center;min-width:112px;gap:1px;height:auto;padding:7px;border-color:var(--accent)">
-      <span style="font-size:20px">${u.ic}</span><span>${u.name}${n>0?` <span style="color:#ffd34d">Lv ${n}</span>`:''}</span>
+      <span class="tact" style="font-size:20px">${townActFace(k)||u.ic}</span><span>${u.name}${n>0?` <span style="color:#ffd34d">Lv ${n}</span>`:''}</span>
       <span class="small" style="opacity:.8;font-weight:normal">${u.desc}</span>
       <span style="color:#b985ff">→ Lv ${n+1} · ${cost} ☠</span></button>`;}).join('');
   const schemes=Object.keys(TOWN_SCHEMES).map(k=>{
     const s=TOWN_SCHEMES[k]; const sc=schemeCost(k); const active=G.fx[k]>0; const can=!active&&G.dread>=sc;
     return `<button ${can?'':'disabled'} onclick="buyScheme('${k}')"
       style="display:flex;flex-direction:column;align-items:center;min-width:112px;gap:1px;height:auto;padding:7px">
-      <span style="font-size:20px">${s.ic}</span><span>${s.name}</span>
+      <span class="tact" style="font-size:20px">${townActFace(k)||s.ic}</span><span>${s.name}</span>
       <span class="small" style="opacity:.8;font-weight:normal">${s.desc}</span>
       <span style="color:#b985ff">${active?('active '+G.fx[k]+'w'):sc+' ☠'}</span></button>`;}).join('');
   const roster=G.queue.slice(0,3).map((spec,i)=>{
@@ -4672,7 +4691,7 @@ function renderTown(){
       const done=(k==='intimidate'&&spec.debuff.atkMul<1)||(k==='rob'&&spec.debuff.robbed);
       const dis=done||G.dread<cost;
       return `<button ${dis?'disabled':''} onclick="sabotage(${i},'${k}')" style="padding:5px 6px;font-size:11px;min-height:0">
-        ${s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
+        ${townActFace(k)||s.ic} ${s.name} <span class="small">${done?'✓':cost+'☠'}</span></button>`;}).join('');
     const canCorrupt = townLvl('inn')>=INN_UNLOCK.corrupt;
     const corruptDis = G.dread<corruptCost() || G.hand.length>=handCap() || (G.corruptedThisTown||0)>=1;
     const ch = spec.champion ? CHAMPIONS[spec.champion] : null;
@@ -4684,7 +4703,7 @@ function renderTown(){
       <div style="min-height:20px;margin:3px 0">${traits||'<span class="small" style="opacity:.5">no traits</span>'}</div>
       <div class="stats">❤️ ${ps.hp} · 🗡️ ${ps.atk} · 💰 ${ps.gold}</div>
       ${townHas('inn') ? `<div class="row" style="justify-content:center;gap:4px;margin-top:6px">${sab}</div>
-      ${canCorrupt?`<button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">🧟 Corrupt ${corruptCost()}☠</button>`:''}`
+      ${canCorrupt?`<button ${corruptDis?'disabled':''} onclick="corruptHero(${i})" style="margin-top:5px;padding:5px 8px;font-size:11px;min-height:0;border-color:#9a5cff">${townActFace('corrupt')||'🧟'} Corrupt ${corruptCost()}☠</button>`:''}`
       : `<div class="small" style="opacity:.5;margin-top:6px">🔒 Build the Inn to meddle</div>`}
     </div>`;}).join('');
   const cap=townLvl('guild');
@@ -6064,6 +6083,18 @@ const MON_SPRITES={
     walk: {sheet:'walk', fw:192,fh:192,n:8,fps:10, ax:96, ay:126},
     slash:{sheet:'islash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},   // 192px attack sheet (ogre_slash.png is a mismatched 64px export → drew garbled "ghost ogres")
   }},
+  // War Camp: 192px sheets throughout (idle 2 / walk 8 / slash 5) — like the Warden.
+  warcamp:{ base:'sprites/warcamp/warcamp_', scale:0.95, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:192,fh:192,n:2,fps:4,  ax:96, ay:126},
+    walk: {sheet:'walk', fw:192,fh:192,n:8,fps:10, ax:96, ay:126},
+    slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},
+  }},
+  // War Totem (ROOMS key 'totem'): 64px idle/walk + a 192px attack sheet — like the Skeleton.
+  totem:{ base:'sprites/wartotem/wartotem_', scale:0.82, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:64, fh:64, n:2,fps:4,  ax:32, ay:61},
+    walk: {sheet:'walk', fw:64, fh:64, n:8,fps:10, ax:32, ay:61},
+    slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12, ax:96, ay:126},
+  }},
   // Gel Cube: art is single-direction frame stacks (assembled into 1-row sheets),
   // walk frames were drawn smaller so they're normalized up — hence per-clip anchors.
   slime:{ base:'sprites/slime/slime_', scale:0.096, dirRow:0, idle:'idle', atk:'slash', clips:{
@@ -6951,7 +6982,7 @@ function renderRelicBar(){
   if(!G || !G.relics || !G.relics.length || (G.phase!=='build' && G.phase!=='run')){ relicBar.innerHTML=''; return; }
   relicBar.innerHTML=G.relics.map(id=>{ const r=RELICS[id]; const tc=RELIC_TIERS[r.tier];
     return `<div class="relicchip" style="border-color:${tc.col};box-shadow:0 0 6px ${tc.col}66"
-      title="${r.name}: ${r.desc}" onmouseenter="relicHover('${id}')" onmouseleave="cardHoverOut()" onclick="relicTap('${id}')"><span class="ric">${r.ic}</span></div>`;}).join('');
+      title="${r.name}: ${r.desc}" onmouseenter="relicHover('${id}')" onmouseleave="cardHoverOut()" onclick="relicTap('${id}')"><span class="ric">${relicFace(id)||r.ic}</span></div>`;}).join('');
 }
 function entityAt(wx){
   if(G.phase==='run' && G.heroes){

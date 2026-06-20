@@ -48,6 +48,8 @@ try{
     room('spike', 2),
     room('goblin', 2),
     room('ogre', 2, 'warden'),
+    room('warcamp', 2),               // newly-arted monster sprite (War Camp, 192px sheets)
+    room('totem', 2),                 // newly-arted monster sprite (War Totem, 64px + 192px slash)
     room('flame', 2, 'venom'),
     room('bombard', 2, 'hexbrand'),   // newly-arted traps (AoE + brand)
     room('runestone', 2),             // amplifier (passive looping art)
