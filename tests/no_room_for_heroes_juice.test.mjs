@@ -13,7 +13,7 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
   goblinStep,fightTick,shake,
   collectLoot,collectAllLoot,mergeGear,autoMergeGear,assignLoot,GEAR,CHEST_MAX,TIER_ORDER,
-  equipGear,roomMonUnits,renderPanel,describeHero,describeRoom,describeLoot,entityAt,gearEffectText,
+  equipGear,roomMonUnits,renderPanel,describeHero,describeRoom,describeLoot,entityAt,gearEffectText,ampAt,
   get panelHTML(){ return panel.innerHTML; },
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
@@ -301,5 +301,28 @@ try{
   const ent=A.entityAt(300);
   t.ok(ent && ent.kind==='loot' && ent.loot.k==='charm', 'entityAt resolves a floor pickup for inspect/collect');
 }catch(e){ t.ok(false, 'loot readout threw: '+e.message); }
+
+// 14) Support monsters buff where heroes actually are:
+//     War Camp trains its OWN room + the room AHEAD (not behind); War Totem
+//     amplifies its OWN room while its totem-guard still stands.
+try{
+  A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='build';
+  A.G.slots=3; A.G.rooms=[A.makeRoom('skeleton',1), A.makeRoom('warcamp',1), A.makeRoom('skeleton',1)];
+  A.buildCells();
+  const behind=A.G.cells[0].guards[0], ahead=A.G.cells[2].guards[0];
+  // a lone skeleton baseline (no War Camp nearby)
+  A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)]; A.buildCells();
+  const base=A.G.cells[0].guards[0];
+  t.ok(ahead.maxHp>base.maxHp, 'War Camp trains the room AHEAD (toward the throne)');
+  t.ok(behind.maxHp===base.maxHp, 'War Camp does NOT train the already-cleared room behind it');
+
+  // War Totem: skeleton + totem stacked in one room — amp applies to that room
+  A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)];
+  A.G.rooms[0].cap=2; A.G.rooms[0].units.push(A.makeUnit('totem',1));
+  A.buildCells();
+  t.ok(A.ampAt(0)>1, 'a living War Totem amplifies its OWN room');
+  A.G.cells[0].guards.forEach(g=>{ if(g.type==='totem') g.alive=false; });
+  t.ok(A.ampAt(0)===1, 'once the totem falls, the amp is gone');
+}catch(e){ t.ok(false, 'support-buff rework threw: '+e.message); }
 
 t.done();

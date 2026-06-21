@@ -546,8 +546,8 @@ const ROOMS = {
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Marching goblins that level up from their own kills.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
-  totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while alive, +25% trap & guard output to the rooms on EITHER side. Protect it.'},
-  warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A drill-yard blocker. The monster rooms on EITHER side are pre-trained: +30% HP & ATK each wave.'},
+  totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while it stands, +30% trap & guard output to its OWN room. Hide it behind a tank.'},
+  warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A forward drill-yard: pre-trains THIS room and the one ahead (toward the throne) — +30% HP & ATK each wave.'},
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
@@ -2285,7 +2285,7 @@ const KEYWORDS={
   Amplifier: {col:'#b985ff', txt:'Boosts nearby rooms instead of dealing damage. Surround it with your best traps.'},
   Pierce:    {col:'#caa15e', txt:'Ignores hero armor — the answer to armored raiders.'},
   Taunt:     {col:'#c9a14d', txt:'Holds the whole party in one room and hits them all. Stack traps in that room.'},
-  Support:   {col:'#7a9e6a', txt:'Buffs the rooms on either side while alive. Protect it behind your line.'},
+  Support:   {col:'#7a9e6a', txt:'Buffs its own room while it stands. Hide it in the back row behind a tank.'},
   Split:     {col:'#6ad9b0', txt:'At 60% HP it splits into two smaller cubes that keep its stats — twice the wall.'},
   Scaling:   {col:'#5fae54', txt:'Grows permanently with every hero that dies in its room.'},
   Counter:   {col:'#b163ff', txt:'Bonus damage to a specific kind of hero (class / elite / wounded).'},
@@ -3497,11 +3497,14 @@ function buildCells(){
     }
     G.cells.push(cell);
   }
-  // 🏕️ War Camp aura: monster rooms beside a War Camp are pre-drilled (+30% HP & ATK).
+  // 🏕️ War Camp: a forward drill-yard. It pre-trains the guards in its OWN room and
+  // the room AHEAD (toward the throne, where the heroes are headed) — +30% HP & ATK,
+  // build-time so it lands whether or not the camp itself survives. (The room behind
+  // is already cleared by the time heroes pass, so buffing it was wasted.)
   for(const c of G.cells){
     if(!c.room) continue;
     if(!roomParts(c.room).includes('warcamp')) continue;
-    for(const j of [c.index-1, c.index+1]){
+    for(const j of [c.index, c.index+1]){
       const nb=G.cells[j]; if(!nb) continue;
       for(const g of (nb.guards||[])){ if(g){ g.hp=Math.round(g.hp*1.30); g.maxHp=g.hp; g.atk=Math.round(g.atk*1.30); } }
     }
@@ -5320,8 +5323,11 @@ function ampAt(idx){
   let m=1;
   for(let j=idx-1;j<=idx+1;j++){ const c=G.cells&&G.cells[j]; if(!c) continue;
     if(c.ampSelf) m+=c.ampSelf;                                       // Runestone reaches this + adjacent
-    if(j!==idx && c.totem && c.mon && c.mon.alive) m+=0.25;           // adjacent living War Totem
   }
+  // 🗿 War Totem: amplifies its OWN room (traps + co-guards) while its totem still
+  // stands — a back-row support that makes the room heroes are fighting in deadlier.
+  const self=G.cells&&G.cells[idx];
+  if(self && self.guards && self.guards.some(g=>g&&g.alive&&g.type==='totem')) m+=0.30;
   return m;
 }
 // Apply a trap's lingering statuses (poison / acid / mark) to a hero it just hit.
@@ -7181,7 +7187,7 @@ function renderPanel(){
       ${ (G.chest.length || (G.floorLoot&&G.floorLoot.length)) ? `<div class="row">
         <span class="small" style="min-width:46px" title="Gear looted from slain heroes. Tap two of the same kind to merge them up a tier.">🧰 Chest ${G.chest.length}/${CHEST_MAX}:</span>
         <div class="chest">${ G.chest.length ? G.chest.map((g,i)=>{ const col=RELIC_TIERS[g.t].col;
-            return `<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap a matching piece to merge." style="border-color:${col}">
+            return `<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or onto a matching piece (or tap two) to merge." style="border-color:${col}">
               <span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;}).join('')
           : `<span class="small" style="opacity:.6;align-self:center">Empty — slay carriers to loot their gear.</span>` }</div>
         ${ (G.floorLoot&&G.floorLoot.length) ? `<button class="buy" onclick="collectAllLoot()" title="Sweep up every piece lying on the floor">💎 Collect ${G.floorLoot.length}</button>` : '' }
@@ -7321,7 +7327,7 @@ function describeCard(card){
     const atk=Math.round(bAtk*(1.0+(lvl-1)*0.9)*bas*(1+(RB.monDmg||0)));
     lines.push(`👹 <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s — blocks the corridor`);
     if(def.taunt) lines.push('🛡️ <b style="color:#c9a14d">Taunt</b> — strikes EVERY hero stalled in its room');
-    if(def.totem) lines.push('🗿 <b style="color:#7a9e6a">Support</b> — +25% to the rooms on either side while alive');
+    if(def.totem) lines.push('🗿 <b style="color:#7a9e6a">Support</b> — +30% to THIS room\'s traps & guards while it stands');
     if(def.split) lines.push('🟩 <b style="color:#6ad9b0">Split</b> — at 60% HP it splits into two smaller cubes (same stats)');
     if(monFeeds(def)) lines.push('🍖 Grows stronger per hero that dies in its room (no cap)'+(def.feeds?'':' (Undeath)'));
   } else if(def.kind==='shop'){
@@ -7720,9 +7726,22 @@ window.addEventListener('pointermove', e=>{
 }, {passive:false});
 function endGearDrag(e){
   if(!gearDrag || (e && e.pointerId!==gearDrag.id)) return;
-  if(gearDrag.dragging){ const slot=slotUnderPointer(e); endCardGhost();
-    if(slot>=0) equipGear(gearDrag.gi, slot);
-    else showHint('Drag gear onto a room with a monster to equip it.');
+  if(gearDrag.dragging){
+    endCardGhost();
+    // dropped ON another chest cell? → merge two of the same kind & tier
+    const tEl = e && document.elementFromPoint(e.clientX, e.clientY);
+    const gCell = tEl && tEl.closest && tEl.closest('.gcell');
+    if(gCell){
+      const tj=+gCell.dataset.gi;
+      if(tj===gearDrag.gi){ selGear=-1; renderPanel(); }               // dropped on itself
+      else { const a=G.chest[gearDrag.gi], b=G.chest[tj];
+        if(a&&b&&a.k===b.k&&a.t===b.t) mergeGear(gearDrag.gi, tj);
+        else showHint('Only two of the SAME gear at the SAME tier merge.'); }
+    } else {
+      const slot=slotUnderPointer(e);                                  // onto the board → equip a monster
+      if(slot>=0) equipGear(gearDrag.gi, slot);
+      else showHint('Drag gear onto a monster to equip, or onto a matching piece to merge.');
+    }
   } else { tapGear(gearDrag.gi); }                    // a tap → select / merge
   gearDrag=null;
   if(G && G.phase==='build') draw();
