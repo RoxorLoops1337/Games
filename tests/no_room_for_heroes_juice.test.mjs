@@ -323,24 +323,48 @@ try{
   t.ok(A.ampAt(0)===1, 'once the totem falls, the amp is gone');
 }catch(e){ t.ok(false, 'support-buff rework threw: '+e.message); }
 
-// 15) Every living guard in a room focus-fires the front hero — three guards hit
-//     ~3× a lone guard in the same tick (not just the front guard attacking).
+// 15) Every living guard in a room focus-fires the front hero — three guards deal
+//     ~3× a lone guard's damage. Summed over many ticks so the 12% crit roll
+//     (dealToHero) averages out instead of making the ratio flaky.
 try{
-  function tickDmg(nGuards){
+  function totalDmg(nGuards){
     A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='run';
     A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)]; A.G.rooms[0].cap=nGuards;
     for(let i=1;i<nGuards;i++) A.G.rooms[0].units.push(A.makeUnit('skeleton',1));
     A.buildCells();
     const cell=A.G.cells[0];
-    const hero={cls:'warrior', state:'fighting', cellIndex:0, x:cell.x0+200, y:0, hp:1e6, maxHp:1e6,
-      atk:0, atkSpeed:1, armor:0, acid:0, mark:0, burn:0, freeze:0, chill:0, oil:0, shock:0, reactCount:0, atkT:999};
+    const hero={cls:'warrior', state:'fighting', cellIndex:0, x:cell.x0+220, y:0, hp:1e9, maxHp:1e9,
+      atk:0, atkSpeed:1, armor:0, acid:0, mark:0, burn:0, freeze:0, chill:0, oil:0, shock:0, reactCount:0, atkT:1e9};
     A.G.heroes=[hero];
-    A.fightTick(hero, cell.mon, 0.05, cell, true, false);
-    return 1e6 - hero.hp;
+    let total=0;
+    for(let k=0;k<80;k++){
+      cell.guards.forEach(g=>{ if(g) g.atkT=0; });    // ready every guard each tick
+      const before=hero.hp;
+      A.fightTick(hero, cell.mon, 0.05, cell, true, false);
+      total += before-hero.hp;
+    }
+    return total;
   }
-  const d1=tickDmg(1), d3=tickDmg(3);
-  t.ok(d1>0, 'a single guard strikes the front hero ('+d1+')');
+  const d1=totalDmg(1), d3=totalDmg(3);
+  t.ok(d1>0, 'a single guard strikes the front hero ('+d1+' over 80 ticks)');
   t.ok(d3 > d1*2.5, 'three guards focus-fire ~3× a lone guard ('+d1+' → '+d3+')');
 }catch(e){ t.ok(false, 'simultaneous-attack threw: '+e.message); }
+
+// 16) 🐲 Drakeling fire breath: a ranged cone that stacks burn on EVERY hero in the room
+try{
+  A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='run';
+  A.G.slots=1; A.G.rooms=[A.makeRoom('dragon',1)]; A.buildCells();
+  const cell=A.G.cells[0];
+  const mk=x=>({cls:'warrior', state:'fighting', cellIndex:0, x, y:0, hp:1e6, maxHp:1e6, atk:0, atkSpeed:1,
+    armor:0, acid:0, mark:0, burn:0, burnT:0, freeze:0, chill:0, oil:0, shock:0, reactCount:0, atkT:999});
+  const front=mk(cell.x0+220), back=mk(cell.x0+160);
+  A.G.heroes=[front, back];
+  A.fightTick(front, cell.mon, 0.05, cell, true, false);
+  t.ok(front.burn>0 && back.burn>0, 'fire breath ignites EVERY hero in the room (ranged cone)');
+  const b1=front.burn;
+  cell.guards[0].atkT=0;                                   // ready the next breath
+  A.fightTick(front, cell.mon, 0.05, cell, true, false);
+  t.ok(front.burn>b1, 'burn STACKS with each breath');
+}catch(e){ t.ok(false, 'dragon breath threw: '+e.message); }
 
 t.done();

@@ -550,6 +550,7 @@ const ROOMS = {
   warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
+  dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:38, atk:6, breath:{burn:3, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
 };
@@ -1165,7 +1166,7 @@ function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per leve
 function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
 // ---- Unlocks: content gated behind lifetime kills ----
 const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
-const UNLOCK_CARD={ oil:25, frost:65, tesla:120, magebane:50, maul:105, gallows:180, hexward:260, bombard:145, venom:80, corrode:160, hexbrand:210, warden:90, slime:130, totem:195, runestone:235, warcamp:0 };
+const UNLOCK_CARD={ oil:25, frost:65, tesla:120, magebane:50, maul:105, gallows:180, hexward:260, bombard:145, venom:80, corrode:160, hexbrand:210, warden:90, slime:130, totem:195, runestone:235, warcamp:0, dragon:150 };
 // Card rarity — drives how often each room is OFFERED in the draft & opening hand
 // (same tier vocabulary as relics). Workhorses are common; build-definers are epic.
 const CARD_RARITY={
@@ -1173,7 +1174,7 @@ const CARD_RARITY={
   flame:'special', frost:'special', tesla:'special', venom:'special', ogre:'special', shop:'special',
   magebane:'rare', gallows:'rare', hexward:'rare', corrode:'rare', warden:'rare', slime:'rare',
   maul:'epic', bombard:'epic', hexbrand:'epic', totem:'epic', runestone:'epic',
-  warcamp:'rare',
+  warcamp:'rare', dragon:'rare',
 };
 const CARD_TIER_W={ common:100, special:50, rare:24, epic:10 };   // base offer weights
 function cardRarity(t){ return CARD_RARITY[t]||'common'; }
@@ -3487,6 +3488,7 @@ function buildCells(){
           const hp = Math.round(bHp  * (0.9 + (lvl-1)*0.85) * feed * bas * vm * (1+(RB.monHp||0)) * bm * ge.hpMul);
           const atk= Math.round(bAtk * (1.0 + (lvl-1)*0.9)  * feed * bas * vm * (1+(RB.monDmg||0)) * bm * ge.atkMul);
           guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split,
+                       breath:def.breath||null,
                        dr:ge.dr, leech:ge.leech, proc:ge.proc, gear:(u.gear||[]).slice()});
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
@@ -5491,6 +5493,21 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
           addBurn(t, g.proc.burn, 3); t.chill=Math.max(t.chill||0, ccDur(t, g.proc.chill)); }
         maybePotion(t);
       }
+      // 🐲 Drakeling fire breath: a ranged cone that ignites EVERY hero in the room,
+      // stacking burn (up to BURN_CAP) for breath.dur seconds — on top of the claw above.
+      if(g.breath){
+        let lit=0;
+        for(const o of G.heroes){
+          if(!o || o.state==='dead' || o.cellIndex!==cell.index) continue;
+          if(o.state!=='fighting' && o.state!=='walking') continue;
+          addBurn(o, g.breath.burn, g.breath.dur); lit++;
+          floater(o.x, o.y-62, '🔥+'+g.breath.burn, '#ff7a2e');
+        }
+        if(lit){ const bx=cell.x0+ROOM_W*0.6;
+          for(let i=0;i<7;i++) embers.push({x:bx-rnd(0,90), y:FLOOR-rnd(20,46), vx:-rnd(40,120), vy:-rnd(6,30),
+            life:rnd(.4,.8), max:.8, col:pick(['#ff7a2e','#ffd34d','#ff5a2e']), sz:rnd(2,3.6)});
+          sfx('hit'); }
+      }
       if(taunt && targets.length>1) floater(cell.x0+ROOM_W*0.5, FLOOR-86, '🛡️ ×'+targets.length, '#c9a14d');
       if(bossDoc()==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+2); }  // Soul Engine: guards fuel mana
     }
@@ -7430,7 +7447,7 @@ function describeRoom(room, detail){
       const hp=Math.round(bHp*(0.9+(lv-1)*0.85)*feed*bas*vm*(1+(RB.monHp||0))*bm*ge.hpMul);
       const atk=Math.round(bAtk*(1.0+(lv-1)*0.9)*feed*bas*vm*(1+(RB.monDmg||0))*bm*ge.atkMul);
       const carries=(u.gear&&u.gear.length)?' · '+u.gear.map(g=>GEAR[g.k].ic).join(''):'';
-      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${carries}`);
+      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${def.breath?` · 🔥 burns the whole room (+${def.breath.burn}/hit, ${def.breath.dur}s)`:''}${carries}`);
       if(u.gear&&u.gear.length) u.gear.forEach(g=>lines.push(`<span class="small" style="opacity:.9">&nbsp;&nbsp;🎒 ${gearTag(g)} — ${gearEffectText(g)}</span>`)); });
     if(monUnits.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${monUnits.length} guards — each steps up when the one before falls</span>`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feedMul(room.kills)-1)*100)}% (no cap)`); }
