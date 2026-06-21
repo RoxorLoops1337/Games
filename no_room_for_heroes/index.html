@@ -547,7 +547,7 @@ const ROOMS = {
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while it stands, +30% trap & guard output to its OWN room. Hide it behind a tank.'},
-  warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A forward drill-yard: pre-trains THIS room and the one ahead (toward the throne) — +30% HP & ATK each wave.'},
+  warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
@@ -659,6 +659,8 @@ const VET_DMG   = 0.09;  // +9% trap/monster output per rank (was 12%)
 const VET_BITE  = 0.006; // % of hero MAX HP per rank per hit (was 1.2% — halved to tame the snowball)
 const CORRUPT_PCT  = 0.015; // toll: drain this % of max HP each populated room a hero passes
 const CORRUPT_BOSS = 0.06;  // the boss strikes +6% harder per corruption stack a hero carries
+const WARCAMP_REGEN = 0.035; // 🏕️ War Camp conditioning: guards regen this frac of max HP per second
+const WARCAMP_HASTE = 0.72;  // …and swing this much faster (attack-interval multiplier, <1 = faster)
 function vetRank(room){ return room ? Math.min(VET_MAX, Math.floor((room.kills||0)/VET_KILLS)) : 0; }
 function vetMul(room){ return 1 + vetRank(room)*VET_DMG; }
 // Each gold upgrade buys one more slot (capacity), not more power.
@@ -3497,16 +3499,19 @@ function buildCells(){
     }
     G.cells.push(cell);
   }
-  // 🏕️ War Camp: a forward drill-yard. It pre-trains the guards in its OWN room and
-  // the room AHEAD (toward the throne, where the heroes are headed) — +30% HP & ATK,
-  // build-time so it lands whether or not the camp itself survives. (The room behind
-  // is already cleared by the time heroes pass, so buffing it was wasted.)
+  // 🏕️ War Camp: a drill-yard that CONDITIONS the guards in its own room and BOTH
+  // neighbours — health regen + faster swings (not a flat stat buff). Build-time and
+  // life-independent: the conditioning sticks whether or not the camp (or anyone in
+  // those rooms) is still standing.
   for(const c of G.cells){
     if(!c.room) continue;
     if(!roomParts(c.room).includes('warcamp')) continue;
-    for(const j of [c.index, c.index+1]){
+    for(const j of [c.index-1, c.index, c.index+1]){
       const nb=G.cells[j]; if(!nb) continue;
-      for(const g of (nb.guards||[])){ if(g){ g.hp=Math.round(g.hp*1.30); g.maxHp=g.hp; g.atk=Math.round(g.atk*1.30); } }
+      for(const g of (nb.guards||[])){ if(g){
+        g.regen=Math.max(g.regen||0, WARCAMP_REGEN);
+        g.haste=Math.min(g.haste||1, WARCAMP_HASTE);
+      } }
     }
   }
   // boss cell
@@ -5457,28 +5462,36 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         return; }
     }
   }
-  // monster strikes the front hero — or, for a Warden, the WHOLE party in the room
+  // monster strikes — EVERY living guard in the room gangs up on the FRONT hero,
+  // each on its OWN cadence (when it falls they all roll onto the next in line). A
+  // Warden taunts the WHOLE stalled party. War Camp conditioning gives buffed guards
+  // health regen + faster swings. Resolved once per room-tick (on the front hero).
   if(isFront){
-    mon.atkT-=dt;
-    if(mon.atkT<=0){
-      mon.atkT=0.9;
-      const amp=ampAt(cell.index);
-      const targets = cell.warden
+    const amp=ampAt(cell.index);
+    for(const g of (cell.guards||[])){
+      if(!g || !g.alive) continue;
+      if(g.regen && g.hp<g.maxHp) g.hp=Math.min(g.maxHp, g.hp + g.maxHp*g.regen*dt);   // 🏕️ drill-yard regen
+      g.atkT=(g.atkT||0)-dt;
+      if(g.atkT>0) continue;
+      g.atkT=0.9*(g.haste||1);
+      const taunt = ROOMS[g.type] && ROOMS[g.type].taunt;
+      const targets = taunt
         ? G.heroes.filter(o=>o && o.state==='fighting' && o.cellIndex===cell.index)   // taunt: hit everyone stalled here
         : [h];
       for(const t of targets){
+        if(!t || t.state==='dead') continue;
         const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*t.maxHp):0;
-        const dmg=Math.round((mon.atk+bite)*amp);
+        const dmg=Math.round((g.atk+bite)*amp);
         _roomDmgCtx=cell.room; dealToHero(t, dmg, 'HIT'); _roomDmgCtx=null;
         if(G.stats) G.stats.monDmg+=dmg;
-        if(mon.leech){ const heal=Math.round(dmg*mon.leech);   // 💍 Charm: the monster drinks the wound
-          if(heal>0 && mon.hp<mon.maxHp){ mon.hp=Math.min(mon.maxHp, mon.hp+heal);
+        if(g.leech){ const heal=Math.round(dmg*g.leech);   // 💍 Charm: the monster drinks the wound
+          if(heal>0 && g.hp<g.maxHp){ g.hp=Math.min(g.maxHp, g.hp+heal);
             floater(cell.x0+ROOM_W*0.66, FLOOR-66, '+'+heal, '#7bdc6b'); } }
-        if(mon.proc && t.state!=='dead'){                      // 📘 Tome: hits chill & burn
-          addBurn(t, mon.proc.burn, 3); t.chill=Math.max(t.chill||0, ccDur(t, mon.proc.chill)); }
+        if(g.proc && t.state!=='dead'){                      // 📘 Tome: hits chill & burn
+          addBurn(t, g.proc.burn, 3); t.chill=Math.max(t.chill||0, ccDur(t, g.proc.chill)); }
         maybePotion(t);
       }
-      if(cell.warden && targets.length>1) floater(cell.x0+ROOM_W*0.5, FLOOR-86, '🛡️ ×'+targets.length, '#c9a14d');
+      if(taunt && targets.length>1) floater(cell.x0+ROOM_W*0.5, FLOOR-86, '🛡️ ×'+targets.length, '#c9a14d');
       if(bossDoc()==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+2); }  // Soul Engine: guards fuel mana
     }
   }

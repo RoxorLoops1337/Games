@@ -302,21 +302,19 @@ try{
   t.ok(ent && ent.kind==='loot' && ent.loot.k==='charm', 'entityAt resolves a floor pickup for inspect/collect');
 }catch(e){ t.ok(false, 'loot readout threw: '+e.message); }
 
-// 14) Support monsters buff where heroes actually are:
-//     War Camp trains its OWN room + the room AHEAD (not behind); War Totem
-//     amplifies its OWN room while its totem-guard still stands.
+// 14) Support monsters: War Camp CONDITIONS its own room + BOTH neighbours (regen +
+//     faster swings, build-time); War Totem amplifies its OWN room while its totem lives.
 try{
   A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='build';
-  A.G.slots=3; A.G.rooms=[A.makeRoom('skeleton',1), A.makeRoom('warcamp',1), A.makeRoom('skeleton',1)];
+  A.G.slots=4; A.G.rooms=[A.makeRoom('skeleton',1), A.makeRoom('warcamp',1), A.makeRoom('skeleton',1), A.makeRoom('skeleton',1)];
   A.buildCells();
-  const behind=A.G.cells[0].guards[0], ahead=A.G.cells[2].guards[0];
-  // a lone skeleton baseline (no War Camp nearby)
-  A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)]; A.buildCells();
-  const base=A.G.cells[0].guards[0];
-  t.ok(ahead.maxHp>base.maxHp, 'War Camp trains the room AHEAD (toward the throne)');
-  t.ok(behind.maxHp===base.maxHp, 'War Camp does NOT train the already-cleared room behind it');
+  const left=A.G.cells[0].guards[0], camp=A.G.cells[1].guards[0], right=A.G.cells[2].guards[0], far=A.G.cells[3].guards[0];
+  t.ok(left.regen>0 && left.haste<1, 'War Camp conditions the room behind it');
+  t.ok(camp.regen>0 && camp.haste<1, 'War Camp conditions its own room');
+  t.ok(right.regen>0 && right.haste<1, 'War Camp conditions the room ahead');
+  t.ok(!(far.regen>0), 'a room two away is left untouched');
 
-  // War Totem: skeleton + totem stacked in one room — amp applies to that room
+  // War Totem: skeleton + totem stacked in one room — amp applies to that room while alive
   A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)];
   A.G.rooms[0].cap=2; A.G.rooms[0].units.push(A.makeUnit('totem',1));
   A.buildCells();
@@ -324,5 +322,25 @@ try{
   A.G.cells[0].guards.forEach(g=>{ if(g.type==='totem') g.alive=false; });
   t.ok(A.ampAt(0)===1, 'once the totem falls, the amp is gone');
 }catch(e){ t.ok(false, 'support-buff rework threw: '+e.message); }
+
+// 15) Every living guard in a room focus-fires the front hero — three guards hit
+//     ~3× a lone guard in the same tick (not just the front guard attacking).
+try{
+  function tickDmg(nGuards){
+    A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='run';
+    A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)]; A.G.rooms[0].cap=nGuards;
+    for(let i=1;i<nGuards;i++) A.G.rooms[0].units.push(A.makeUnit('skeleton',1));
+    A.buildCells();
+    const cell=A.G.cells[0];
+    const hero={cls:'warrior', state:'fighting', cellIndex:0, x:cell.x0+200, y:0, hp:1e6, maxHp:1e6,
+      atk:0, atkSpeed:1, armor:0, acid:0, mark:0, burn:0, freeze:0, chill:0, oil:0, shock:0, reactCount:0, atkT:999};
+    A.G.heroes=[hero];
+    A.fightTick(hero, cell.mon, 0.05, cell, true, false);
+    return 1e6 - hero.hp;
+  }
+  const d1=tickDmg(1), d3=tickDmg(3);
+  t.ok(d1>0, 'a single guard strikes the front hero ('+d1+')');
+  t.ok(d3 > d1*2.5, 'three guards focus-fire ~3× a lone guard ('+d1+' → '+d3+')');
+}catch(e){ t.ok(false, 'simultaneous-attack threw: '+e.message); }
 
 t.done();
