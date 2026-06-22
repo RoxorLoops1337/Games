@@ -73,4 +73,16 @@ t.ok(guard<120, 'finished in a bounded number of steps ('+guard+')');
 // --- replaying after it's done: gating is inert when not in the tutorial ---
 t.ok(A.tutAllow('start')===true && A.tutAllow('ability')===true, 'outside the tutorial nothing is gated');
 
+// --- the "Pick a Trap" Spoils beat is trap-only (spike/flame + a Bone Pit) ---
+A.startTutorial();
+const ti = A.TUT.findIndex(s => s.pickKind === 'trap');
+t.ok(ti >= 0, 'a Spoils of War beat is flagged trap-only (pickKind)');
+A.G.tutStep = ti; A.G.phase = 'reward';
+A.G.drafts = [{type:'spike',lvl:1},{type:'flame',lvl:1},{type:'skeleton',lvl:1}];
+A.G._tutDraft = A.G.drafts.slice();
+A.takeDraft(2);   // the Bone Pit (monster) — locked, must be ignored
+t.ok(A.G.tutStep === ti && A.G.hand.length === 0, 'picking the monster card does nothing (locked)');
+A.takeDraft(0);   // a trap — allowed, advances the beat
+t.ok(A.G.hand.length === 1 && A.G._tutTrap === 'spike' && A.G.tutStep === ti + 1, 'picking a trap is allowed and advances');
+
 t.done();
