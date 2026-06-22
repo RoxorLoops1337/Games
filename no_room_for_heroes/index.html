@@ -4109,6 +4109,7 @@ function castAbility(slot){
   if(a.cd>0){ showHint(def.name+' on cooldown.'); return; }
   if(G.boss.mana<cost){ showHint('Not enough mana.'); return; }
   G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
+  G.boss.castAt=performance.now();             // play the boss's attack animation
   def.run(target);
   tutEvent('ability');
   // bolt(s) from the boss to the target(s) so you see where the power comes from
@@ -4140,6 +4141,7 @@ function smite(target){
   const t=(target && target.state==='boss' && target.hp>0) ? target : at.reduce((a,c)=>c.x>a.x?c:a, at[0]);
   const dmg=Math.max(1, Math.round(b.atk*SMITE_MUL*(1+(RB.abilDmg||0))));
   b.smiteCd=SMITE_CD*(1-(RB.abilCd||0));
+  b.castAt=performance.now();                  // play the boss's attack animation
   bossBolt(t.x, t.y, '#ffd34d', '⚔️');
   floater(t.x, t.y-72, '⚔️ SMITE', '#ffd34d'); burst(t.x, t.y-24, '#ffd34d', 22);
   shake(6); hitStop=0.05; sfx('crit');
@@ -4154,7 +4156,7 @@ function castOverdrive(){
   if(G.phase!=='run' || !G.boss) return;
   const b=G.boss;
   if((b.rage||0) < RAGE_MAX){ showHint('💥 Overdrive is still charging.'); return; }
-  b.rage=0;
+  b.rage=0; b.castAt=performance.now();              // play the boss's attack animation
   // cinematic
   flash(b.col||'#ff5470', 0.55, 0.55); slowmo(0.7); shake(16); sfx('relic'); hitStop=0.06;
   floater(bossX(), FLOOR-150, '💥 OVERDRIVE!', b.col||'#ff5470', true);
@@ -7046,13 +7048,36 @@ if(typeof Image!=='undefined'){
   ['green','purple','red'].forEach(c=>{ THRONE_IMG[c]=loadImg('rooms/throne_'+c+'.png'); });
 }
 function bossThroneArt(){ const k=G&&G.boss&&G.boss.key; const im=k&&THRONE_IMG[BOSS_THRONE[k]]; return (im&&im._ok)?im:null; }
-// Demon idle: 4 frames played as a ping-pong loop (0→1→2→3→2→1→…)
-const DEMON_IDLE=[]; const DEMON_PP=[0,1,2,3,2,1];
+// Animated throne bosses: idle (ping-pong loop) + an attack clip that plays once
+// when the boss casts. Keyed by boss id → its character-art folder. Bosses without
+// an entry (lich, ent) fall back to the static bosses/<key>.png.
+const BOSS_ANIM_SRC={
+  demon: {dir:'azzaroth', idle:4, attack:6},   // Azzaroth
+  dragon:{dir:'ignar',    idle:4, attack:7},   // Ignar
+  ogre:  {dir:'gormauth', idle:5, attack:5},   // Gormauth
+  golem: {dir:'karnak',   idle:4, attack:5},   // Karnak
+};
+const BOSS_ANIM={};
 if(typeof Image!=='undefined'){
-  for(let i=0;i<4;i++){ DEMON_IDLE.push(loadImg('sprites/demon/demon_idle_'+i+'.png')); }
+  for(const key in BOSS_ANIM_SRC){ const s=BOSS_ANIM_SRC[key]; BOSS_ANIM[key]={idle:[],attack:[]};
+    for(let i=0;i<s.idle;i++)   BOSS_ANIM[key].idle.push(  loadImg('sprites/'+s.dir+'/'+s.dir+'_idle_'+i+'.png'));
+    for(let i=0;i<s.attack;i++) BOSS_ANIM[key].attack.push(loadImg('sprites/'+s.dir+'/'+s.dir+'_attack_'+i+'.png'));
+  }
 }
-function demonIdleReady(){ return DEMON_IDLE.length===4 && DEMON_IDLE.every(im=>im&&im._ok); }
-function demonIdleFrame(){ return DEMON_IDLE[DEMON_PP[Math.floor(performance.now()/170)%DEMON_PP.length]]; }  // ~6fps ping-pong
+const BOSS_CAST_MS=640;   // how long the attack clip plays after a cast/smite
+function pingpong(n){ const a=[]; for(let i=0;i<n;i++)a.push(i); for(let i=n-2;i>=1;i--)a.push(i); return a; }
+function bossClipReady(arr){ return arr.length>0 && arr.every(im=>im&&im._ok); }
+function bossFrame(b){
+  const A=b&&BOSS_ANIM[b.key]; if(!A) return null;
+  const now=performance.now();
+  if(b.castAt && now-b.castAt<BOSS_CAST_MS && bossClipReady(A.attack)){      // mid-cast → play the attack clip
+    const prog=(now-b.castAt)/BOSS_CAST_MS;
+    return A.attack[Math.min(A.attack.length-1, Math.floor(prog*A.attack.length))];
+  }
+  if(bossClipReady(A.idle)){ const pp=A._pp||(A._pp=pingpong(A.idle.length));
+    return A.idle[pp[Math.floor(now/170)%pp.length]]; }
+  return null;
+}
 // Azzaroth's purple arcane glow. front=false → back-glow + ground pool (drawn
 // behind the sprite); front=true → rising magic motes (drawn in front).
 function drawDemonAura(cx, y, dw, dh, front){
@@ -7102,8 +7127,8 @@ function drawBoss(cx){
     px(cx-42,y-120,11,120,'#6a3a5a'); px(cx+31,y-120,11,120,'#6a3a5a');
   }
   let img=BOSS_IMG[b.key];
-  const animated = (b.key==='demon' && demonIdleReady());
-  if(animated) img=demonIdleFrame();
+  const fr=bossFrame(b); const animated=!!fr;     // animated idle/attack frames if this boss has art
+  if(fr) img=fr;
   if(img && img._ok){
     // real sprite: bottom-anchored on the throne, aspect preserved, towering
     const dh=BOSS_H, dw=Math.round(dh*(img.width/img.height));
