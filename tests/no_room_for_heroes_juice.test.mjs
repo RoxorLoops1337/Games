@@ -13,7 +13,7 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   update,draw,render,updateTop,dealToHero,heroDies,applyRunes,makeRoom,makeUnit,BOSSES,particles,floats,
   goblinStep,fightTick,shake,
   collectLoot,collectAllLoot,mergeGear,autoMergeGear,assignLoot,GEAR,CHEST_MAX,TIER_ORDER,
-  equipGear,roomMonUnits,renderPanel,describeHero,describeRoom,describeLoot,entityAt,gearEffectText,ampAt,
+  equipGear,roomMonUnits,renderPanel,describeHero,describeRoom,describeLoot,entityAt,gearEffectText,gearEffects,ampAt,
   get panelHTML(){ return panel.innerHTML; },
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
@@ -366,5 +366,30 @@ try{
   A.fightTick(front, cell.mon, 0.05, cell, true, false);
   t.ok(front.burn>b1, 'burn STACKS with each breath');
 }catch(e){ t.ok(false, 'dragon breath threw: '+e.message); }
+
+// 17) Legendary+ gear gains a SIGNATURE on-hit special (lower tiers have none).
+try{
+  const legBlade=A.gearEffects([{k:'blade',t:'legendary'}]);
+  t.ok(A.gearEffects([{k:'blade',t:'epic'}]).crush===0 && legBlade.crush>0, 'a Blade gains armor crush at legendary');
+  t.ok(A.gearEffects([{k:'blade',t:'mythic'}]).crush>legBlade.crush, 'mythic crush is stronger than legendary');
+  t.ok(A.gearEffects([{k:'aegis',t:'legendary'}]).thorns>0 && A.gearEffects([{k:'aegis',t:'rare'}]).thorns===0, 'a legendary Aegis adds thorns (rare has none)');
+  t.ok(A.gearEffects([{k:'charm',t:'mythic'}]).poison>0 && A.gearEffects([{k:'charm',t:'epic'}]).poison===0, 'a mythic Charm adds poison (epic has none)');
+  t.ok(A.gearEffects([{k:'tome',t:'legendary'}]).proc.freeze && A.gearEffects([{k:'tome',t:'rare'}]).proc.freeze==null, 'a Tome gains a freeze chance at legendary+ only');
+  t.ok(/armor crush/.test(A.gearEffectText({k:'blade',t:'mythic'})), 'the gear readout names the legendary special');
+
+  // integration: a legendary-Aegis guard reflects thorns when a hero strikes it
+  A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='run';
+  A.G.slots=1; A.G.rooms=[A.makeRoom('skeleton',1)];
+  A.G.rooms[0].units[0].gear=[{k:'aegis',t:'mythic'}];
+  A.buildCells();
+  const cell=A.G.cells[0];
+  cell.guards.forEach(g=>{ g.atkT=999; });                  // suppress the guard's own swing — isolate thorns
+  const hero={cls:'warrior', state:'fighting', cellIndex:0, x:cell.x0+220, y:0, hp:1000, maxHp:1000,
+    atk:40, atkSpeed:1, armor:0, acid:0, mark:0, burn:0, freeze:0, chill:0, oil:0, shock:0, reactCount:0, atkT:0};
+  A.G.heroes=[hero];
+  const before=hero.hp;
+  A.fightTick(hero, cell.mon, 0.05, cell, true, false);
+  t.ok(hero.hp<before, 'thorns reflects damage back at a hero who strikes a legendary-Aegis guard');
+}catch(e){ t.ok(false, 'legendary-gear specials threw: '+e.message); }
 
 t.done();
