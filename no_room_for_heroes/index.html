@@ -147,7 +147,14 @@
   .card .lv{position:absolute;top:2px;right:4px;font-size:9px;color:var(--gold);}
   .card .x{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;
     background:#a02040;border:1px solid #ff6b8a;font-size:11px;line-height:16px;text-align:center;color:#fff;}
-  .abil{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:74px;padding:6px 8px;}
+  .abil{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:74px;padding:6px 8px;}
+  /* tutorial: a bobbing 👇 hand pinned above each highlighted ability / card */
+  @keyframes tuthandbob{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(-7px);}}
+  .tuthand{position:absolute;left:50%;top:-28px;transform:translateX(-50%);font-size:22px;pointer-events:none;z-index:6;
+    filter:drop-shadow(0 0 6px #ffd34d);animation:tuthandbob .7s ease-in-out infinite;}
+  .choice .tuthand{top:-30px;font-size:26px;}
+  .choice.tut-locked{opacity:.42;filter:grayscale(.6);cursor:default;}
+  .choice.tut-locked:hover{transform:none;border-color:var(--line);box-shadow:0 6px 18px #0008;}
   .abil > span{pointer-events:none;}   /* taps always land on the button, never a child being re-rendered */
   .abil .c{font-size:10px;color:var(--mana);}
   .abil.overdrive{border-color:#ff7a2e;}
@@ -189,7 +196,7 @@
   #overlay h2{font-size:20px;margin:6px 0;color:var(--accent);}
   #overlay p{max-width:620px;line-height:1.5;font-size:14px;opacity:.92;margin:6px 0;}
   .choices{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
-  .choice{width:160px;background:linear-gradient(160deg,#2a2050,#14102a);border:2px solid var(--line);
+  .choice{position:relative;width:160px;background:linear-gradient(160deg,#2a2050,#14102a);border:2px solid var(--line);
     border-radius:14px;padding:12px;cursor:pointer;transition:transform .1s,border-color .15s,box-shadow .15s;
     box-shadow:0 6px 18px #0008,inset 0 1px 0 rgba(255,255,255,.05);}
   .choice:hover{transform:translateY(-4px);border-color:var(--gold);
@@ -2674,13 +2681,13 @@ const TUT=[
 /*1*/ { title:"Send him in", gate:'start', adv:'started', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b> to begin.",
         enter:()=>{ G._tutWave=[{cls:'warrior',hp:74,atk:4,spd:34}]; G.boss.mana=G.boss.maxMana; } },
-/*2*/ { title:"Blast him!", pos:'bottom', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.32,
+/*2*/ { title:"Blast him!", pos:'bottom', gate:'abil', adv:'kill', hi:'abil', runPause:0.32,
         body:"You have <b>boss abilities</b> (bottom-left) that cost 🔷 mana. Strike the knight down before he reaches the throne!",
         pauseBody:"He's closing in! <b>Tap a boss ability</b> (bottom-left) to blast him. 🔷",
         enter:()=>{ G.boss.mana=G.boss.maxMana; } },
-/*3*/ { overlay:true, gate:'pick', adv:'picked', title:"Spoils of War",
-        body:"Every kill earns a <b>room card</b>. <b>Pick a trap</b> to start arming your dungeon.",
-        enter:()=>{ G._tutDraft=[{type:'spike'},{type:'flame'},{type:'arrow'}]; } },
+/*3*/ { overlay:true, gate:'pick', adv:'picked', title:"Spoils of War", pickKind:'trap',
+        body:"After every wave you get to pick a <b>room card</b> as a reward. Room cards can be <b>Traps</b> or <b>Monsters</b>. <b>Pick a Trap.</b>",
+        enter:()=>{ G._tutDraft=[{type:'spike'},{type:'flame'},{type:'skeleton'}]; } },
 /*4*/ { title:"Build your trap", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
         body:"<b>Drag your trap card</b> into the glowing room (or tap the card, then the room). Let's see what a hero does when he walks into it." },
 /*5*/ { title:"Spring it", pos:'bottom', gate:'start', adv:'cleared', arrow:'start',
@@ -2705,7 +2712,7 @@ const TUT=[
 /*12*/{ title:"Next raider", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b>. This one moves… differently.",
         enter:()=>{ G._tutWave=[{cls:'rogue',hp:64,atk:5,spd:62}]; G.boss.mana=G.boss.maxMana; } },
-/*13*/{ title:"A rogue!", pos:'bottom', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.6,
+/*13*/{ title:"A rogue!", pos:'bottom', gate:'abil', adv:'kill', hi:'abil', runPause:0.6,
         body:"Watch — a <b>rogue DISARMS your traps</b> as he passes them! Don't panic…",
         pauseBody:"He slipped your traps! <b>Tap an ability</b> to cut him down before the throne! 🔷",
         enter:()=>{ G.boss.mana=G.boss.maxMana; } },
@@ -2736,7 +2743,7 @@ const TUT=[
 /*22*/{ title:"⚠️ A CHAMPION", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"A <b>champion</b> approaches — tough, and he <b>smashes through rooms</b>. Throw EVERYTHING at him.",
         enter:()=>{ G._tutWave=[{cls:'warrior',power:2,champion:TUT_CHAMP(),hp:230,atk:8,spd:32}]; G.boss.mana=G.boss.maxMana; } },
-/*19*/{ title:"Finish him!", pos:'bottom', gate:'abil', adv:'kill', arrow:'abil', hi:'abil', runPause:0.5,
+/*19*/{ title:"Finish him!", pos:'bottom', gate:'abil', adv:'kill', hi:'abil', runPause:0.5,
         body:"Your dungeon grinds him down — <b>hammer him with abilities</b> to finish the job! 🔷",
         pauseBody:"Now! <b>Abilities!</b> Drop the champion! 🔷",
         enter:()=>{ G.boss.mana=G.boss.maxMana; } },
@@ -2861,18 +2868,36 @@ function tutArrowTick(){
   arrow.style.left=px+'px'; arrow.style.top=py+'px';
   arrow.classList.add('on');
 }
+// Early-tutorial cards explain themselves in plain language — the elemental-combo
+// extras ("shatters frozen heroes", "ignites oiled heroes", …) are saved for later,
+// once the player has met those mechanics.
+const TUT_CARD_DESC={
+  spike:'Fast, cheap spikes — chip every hero that walks past.',
+  flame:'Hits hard and sets heroes on fire.',
+  arrow:'Very rapid darts that punch through armor.',
+  skeleton:'A tough guard — heroes must kill it to get past.',
+  goblin:'Goblins swarm out of the den to ambush heroes.',
+  slime:'A gel cube that soaks up a ton of damage.',
+  ogre:'A brutal heavy-hitter that blocks the hall.',
+};
+function tutCardDesc(type){ return TUT_CARD_DESC[type] || (ROOMS[type] && ROOMS[type].desc) || ''; }
 // Forced card draft (renders in the normal reward overlay, but with set choices).
+// A step's `pickKind` (e.g. 'trap') locks the other kinds: only the matching cards
+// get the pulse + 👇 hand and can be selected.
 function tutGotoReward(){
   G.phase='reward';
   G.drafts=(G._tutDraft||[]).map(c=>({type:c.type,lvl:1}));
   const st=tutStepObj()||{};
+  const lock=st.pickKind||null;
   overlay.classList.add('show');
   overlay.innerHTML=`<h1>${st.title||'Spoils of War'}</h1>
     <p>${st.body||'Draft a card.'}</p>
     <div class="choices">${G.drafts.map((c,i)=>{ const d=ROOMS[c.type];
-      return `<div class="choice jz tut-pulse" onclick="takeDraft(${i})" style="animation-delay:${i*70}ms">
+      const ok = !lock || d.kind===lock;
+      return `<div class="choice jz ${ok?'tut-pulse':'tut-locked'}" ${ok?`onclick="takeDraft(${i})"`:''} style="animation-delay:${i*70}ms">
+        ${ok&&lock?'<div class="tuthand">👇</div>':''}
         <div class="big">${cardFace(c.type)||d.ic}</div><h3>${d.name}</h3>
-        <div class="desc">${d.desc}</div>
+        <div class="desc">${tutCardDesc(c.type)}</div>
         <div class="stats" style="font-weight:bold">${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>`;
 }
 // Build + spawn the scripted tutorial wave (overrides normal spawnGroup).
@@ -4623,6 +4648,8 @@ function gotoReward(){
 function takeDraft(i){
   const card=G.drafts[i]; if(!card) return;
   if(G.tutorial){
+    const st=tutStepObj();
+    if(st && st.pickKind && ROOMS[card.type] && ROOMS[card.type].kind!==st.pickKind) return;  // locked: only the prompted kind
     if(ROOMS[card.type] && ROOMS[card.type].kind==='trap' && !G._tutTrap) G._tutTrap=card.type;
     G.hand.push({type:card.type, lvl:1}); G._tutDraft=null;
     overlay.classList.remove('show');
@@ -7284,8 +7311,9 @@ function renderPanel(){
       </div>
       ${G.boss.abil.map((a,i)=>{ const def=ABIL[a.id]; const cost=abilCost(def.cost);
         const dis=(a.cd>0||G.boss.mana<cost);
-        return `<button class="abil${i===0&&G.tutHi==='abil'?' tut-pulse':''}" onclick="castAbility(${i})" ${dis?'disabled':''}
+        return `<button class="abil${G.tutHi==='abil'?' tut-pulse':''}" onclick="castAbility(${i})" ${dis?'disabled':''}
           title="${def.desc}">
+          ${G.tutHi==='abil'?'<span class="tuthand">👇</span>':''}
           <span style="font-size:18px">${abilFace(a.id)||def.ic}</span>
           <span style="font-size:11px">${def.name}</span>
           <span class="c">${a.cd>0?'⏳'+a.cd.toFixed(1)+'s':'🔷'+cost}</span>
