@@ -1369,16 +1369,21 @@ const AEGIS_HP   =[0.30,0.50,0.75,1.05,1.45,1.95];   // +HP fraction per Aegis
 const AEGIS_DR   =[0.08,0.13,0.18,0.24,0.31,0.40];   // damage reduction per Aegis
 const CHARM_LEECH=[0.20,0.30,0.42,0.55,0.70,0.90];   // lifesteal fraction per Charm
 const TOME_BURN  =[2,3,4,6,8,11];                    // burn stack a Tome proc applies
+const GEAR_LEG=4;   // legendary tier index — gear at this tier or above gains a SIGNATURE on-hit special
 function gearEffects(gearArr){
   let atkMul=1, hpMul=1, drKeep=1, leech=0, procTier=-1;
+  let crush=0, poison=0, thorns=0, freeze=null;
   for(const g of (gearArr||[])){ const ti=TIER_ORDER.indexOf(g.t); if(ti<0) continue;
-    if(g.k==='blade')      atkMul*=(1+BLADE_ATK[ti]);
-    else if(g.k==='aegis'){ hpMul*=(1+AEGIS_HP[ti]); drKeep*=(1-AEGIS_DR[ti]); }
-    else if(g.k==='charm')  leech+=CHARM_LEECH[ti];
-    else if(g.k==='tome')   procTier=Math.max(procTier, ti);
+    const leg=ti>=GEAR_LEG, myth=ti>=5;
+    if(g.k==='blade'){      atkMul*=(1+BLADE_ATK[ti]); if(leg) crush+=(myth?7:4); }            // 🪓 armor crush
+    else if(g.k==='aegis'){ hpMul*=(1+AEGIS_HP[ti]); drKeep*=(1-AEGIS_DR[ti]); if(leg) thorns+=(myth?0.9:0.5); }  // ✦ thorns
+    else if(g.k==='charm'){ leech+=CHARM_LEECH[ti]; if(leg) poison+=(myth?5:3); }              // ☠ poison
+    else if(g.k==='tome'){  procTier=Math.max(procTier, ti);                                    // ❄️ freeze
+      if(leg){ const f={chance:myth?0.30:0.18, dur:myth?1.2:0.8}; if(!freeze||f.chance>freeze.chance) freeze=f; } }
   }
   return { atkMul, hpMul, dr:Math.min(0.6, 1-drKeep), leech:Math.min(0.9, leech),
-           proc: procTier>=0 ? {burn:TOME_BURN[procTier], chill:1.4+procTier*0.45} : null };
+           proc: procTier>=0 ? {burn:TOME_BURN[procTier], chill:1.4+procTier*0.45, freeze} : null,
+           crush, poison:Math.min(8,poison), thorns:Math.min(1.2,thorns) };
 }
 function equipGear(gi, slot){
   const g=G.chest[gi]; if(!g) return;
@@ -1395,11 +1400,11 @@ function equipGear(gi, slot){
 // ---- gear info readouts (used by the inspect bubbles + the chest tooltips) ----
 function gearTag(g){ const col=RELIC_TIERS[g.t].col;
   return `<span style="color:${col}">${GEAR[g.k].ic} ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name}</span>`; }
-function gearEffectText(g){ const ti=Math.max(0,TIER_ORDER.indexOf(g.t));
-  if(g.k==='blade') return `+${Math.round(BLADE_ATK[ti]*100)}% ATK`;
-  if(g.k==='aegis') return `+${Math.round(AEGIS_HP[ti]*100)}% HP · −${Math.round(AEGIS_DR[ti]*100)}% damage taken`;
-  if(g.k==='charm') return `${Math.round(CHARM_LEECH[ti]*100)}% lifesteal on hit`;
-  if(g.k==='tome')  return `hits chill & burn (${TOME_BURN[ti]} burn)`;
+function gearEffectText(g){ const ti=Math.max(0,TIER_ORDER.indexOf(g.t)); const leg=ti>=GEAR_LEG, myth=ti>=5;
+  if(g.k==='blade') return `+${Math.round(BLADE_ATK[ti]*100)}% ATK`+(leg?` · 🪓 armor crush ${myth?7:4}`:'');
+  if(g.k==='aegis') return `+${Math.round(AEGIS_HP[ti]*100)}% HP · −${Math.round(AEGIS_DR[ti]*100)}% damage taken`+(leg?` · ✦ thorns ${Math.round((myth?0.9:0.5)*100)}%`:'');
+  if(g.k==='charm') return `${Math.round(CHARM_LEECH[ti]*100)}% lifesteal on hit`+(leg?` · ☠ poison ${myth?5:3}/hit`:'');
+  if(g.k==='tome')  return `hits chill & burn (${TOME_BURN[ti]} burn)`+(leg?` · ❄️ ${Math.round((myth?0.30:0.18)*100)}% freeze`:'');
   return ''; }
 function describeLoot(L){
   return `${gearTag(L)} <span class="small" style="opacity:.8">· tier ${TIER_ORDER.indexOf(L.t)+1}/6</span>`
@@ -3489,7 +3494,8 @@ function buildCells(){
           const atk= Math.round(bAtk * (1.0 + (lvl-1)*0.9)  * feed * bas * vm * (1+(RB.monDmg||0)) * bm * ge.atkMul);
           guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split,
                        breath:def.breath||null,
-                       dr:ge.dr, leech:ge.leech, proc:ge.proc, gear:(u.gear||[]).slice()});
+                       dr:ge.dr, leech:ge.leech, proc:ge.proc, crush:ge.crush, poison:ge.poison, thorns:ge.thorns,
+                       gear:(u.gear||[]).slice()});
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
@@ -5433,6 +5439,10 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       let dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)));
       if(mon.dr) dmg=Math.max(1,Math.round(dmg*(1-mon.dr)));   // 🛡️ Aegis: looted damage reduction
       mon.hp-=dmg; mon.flashAt=performance.now();
+      if(mon.thorns){                                          // ✦ legendary Aegis: reflect a slice back at the attacker
+        const refl=Math.max(1,Math.round(dmg*mon.thorns));
+        _roomDmgCtx=cell.room; dealToHero(h, refl, 'THORNS', false, 'phys'); _roomDmgCtx=null;
+        floater(h.x, h.y-58, '✦-'+refl, '#c9a14d'); }
       sparks(cell.x0+ROOM_W*0.58, FLOOR-54, '#ffe39a', 5);     // weapon-contact sparks
       if(h.vampiric) healHero(h, dmg*0.4);
       floater(cell.x0+ROOM_W*0.7, FLOOR-60,'-'+dmg,'#fff');
@@ -5489,8 +5499,13 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         if(g.leech){ const heal=Math.round(dmg*g.leech);   // 💍 Charm: the monster drinks the wound
           if(heal>0 && g.hp<g.maxHp){ g.hp=Math.min(g.maxHp, g.hp+heal);
             floater(cell.x0+ROOM_W*0.66, FLOOR-66, '+'+heal, '#7bdc6b'); } }
-        if(g.proc && t.state!=='dead'){                      // 📘 Tome: hits chill & burn
-          addBurn(t, g.proc.burn, 3); t.chill=Math.max(t.chill||0, ccDur(t, g.proc.chill)); }
+        if(g.proc && t.state!=='dead'){                      // 📘 Tome: hits chill & burn (legendary+ may FREEZE)
+          addBurn(t, g.proc.burn, 3); t.chill=Math.max(t.chill||0, ccDur(t, g.proc.chill));
+          if(g.proc.freeze && Math.random()<g.proc.freeze.chance) applyFreeze(t, g.proc.freeze.dur); }
+        if(g.crush && t.state!=='dead'){                     // 🪓 legendary Blade: armor crush (corrodes armor)
+          t.acid=(t.acid||0)+g.crush; t.acidT=Math.max(t.acidT||0,4); floater(t.x, t.y-70, '🪓 CRUSH', '#c98a3a'); }
+        if(g.poison && t.state!=='dead'){                    // ☠ legendary Charm: venomous strike
+          t.poison=Math.min(POISON_CAP,(t.poison||0)+g.poison); t.poisonT=Math.max(t.poisonT||0,4); }
         maybePotion(t);
       }
       // 🐲 Drakeling fire breath: a ranged cone that ignites EVERY hero in the room,
