@@ -6500,7 +6500,31 @@ const MON_SPRITES={
     idle: {sheet:'idle', fw:298,fh:210,n:6,fps:7,  ax:174, ay:210},
     slash:{sheet:'slash',fw:346,fh:210,n:7,fps:13, ax:172, ay:210},
   }},
+  // Veteran-tier appearances: a guard's room upgrades its look as it racks up
+  // kills (see monVariantKey). Same LPC pipeline as the base sprites; the 192px
+  // attack sheets carry their swing arc, the 64px idle/walk are the body.
+  skeleton2:{ base:'sprites/skeleton2/skeleton2_', scale:0.82, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:32,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:32,ay:61}, slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12,ax:96,ay:126} }},
+  skeleton3:{ base:'sprites/skeleton3/skeleton3_', scale:0.82, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:32,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:32,ay:61}, slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12,ax:96,ay:126} }},
+  ogre2:{ base:'sprites/ogre2/ogre2_', scale:1.15, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle:{sheet:'idle',fw:192,fh:192,n:2,fps:4,ax:96,ay:126}, walk:{sheet:'walk',fw:192,fh:192,n:8,fps:10,ax:96,ay:126}, slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12,ax:96,ay:126} }},
+  ogre3:{ base:'sprites/ogre3/ogre3_', scale:1.15, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:32,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:32,ay:61}, slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12,ax:96,ay:126} }},
+  goblin2:{ base:'sprites/goblin2/goblin2_', scale:0.8, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:25,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:25,ay:61}, slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12,ax:96,ay:126} }},
+  goblin3:{ base:'sprites/goblin3/goblin3_', scale:0.8, dirRow:1, idle:'idle', atk:'smash', clips:{
+    idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:25,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:25,ay:61}, smash:{sheet:'smash',fw:192,fh:192,n:4,fps:11,ax:96,ay:126} }},
 };
+// A guard's room shows a fancier sprite as it becomes a veteran (kills → vetRank):
+// base → tier-2 (rank ≥1) → tier-3 (rank ≥3). Only skeleton/ogre/goblin have variants.
+const MON_VARIANT={skeleton:1, ogre:1, goblin:1};
+function monVariantKey(key, room){
+  if(!MON_VARIANT[key] || !room) return key;
+  const vr=vetRank(room)||0; const t = vr>=3 ? '3' : vr>=1 ? '2' : '';
+  if(t){ const vk=key+t; if(MON_SPRITES[vk] && monSpriteReady(vk)) return vk; }
+  return key;
+}
 const MON_IMG={};
 if(typeof Image!=='undefined'){
   for(const key in MON_SPRITES){ const cfg=MON_SPRITES[key]; MON_IMG[key]={};
@@ -6509,6 +6533,7 @@ if(typeof Image!=='undefined'){
 function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
 function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase, scaleMul){
+  key=monVariantKey(key, room);                  // 💀 veteran rooms wear a fancier sprite
   const cfg=MON_SPRITES[key]; if(!cfg||!room) return false;
   const name = moving && cfg.clips.walk ? 'walk'
              : (alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
