@@ -557,7 +557,7 @@ const ROOMS = {
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 // Room types with a painted card-art icon (icons/<type>.png); else fall back to the emoji.
-const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','warcamp','slime','runestone','shop']);
+const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','warcamp','slime','runestone','shop','dragon']);
 function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
 // Painted boss-ability icons (abilities/<id>.png); graceful fallback to the emoji.
 const ABIL_ICONS=new Set(['slam','breath','bolt','curse','freeze','drain','dread','mend','quake','hellfire','siphon','devour','raise','entangle']);
@@ -6463,6 +6463,13 @@ const MON_SPRITES={
     idle: {sheet:'idle', fw:890,fh:957,n:4,fps:5,  ax:444, ay:943},
     walk: {sheet:'walk', fw:950,fh:887,n:4,fps:9,  ax:483, ay:868},
     slash:{sheet:'slash',fw:986,fh:871,n:7,fps:13, ax:463, ay:858},
+  }},
+  // 🐲 Drakeling: idle + fire-breath (attack) frame sequences assembled into 1-row
+  // sheets (assemble_sheet.py), flipped to face LEFT, tight-cropped so the body
+  // fills the frame (no walk clip — the dragon holds its ground from the back row).
+  dragon:{ base:'sprites/dragon/dragon_', scale:0.6, dirRow:0, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:298,fh:210,n:6,fps:7,  ax:174, ay:210},
+    slash:{sheet:'slash',fw:346,fh:210,n:7,fps:13, ax:172, ay:210},
   }},
 };
 const MON_IMG={};
