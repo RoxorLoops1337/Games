@@ -2177,11 +2177,11 @@ function openTitle(){
   overlay.innerHTML = `
     <h1>NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
-    <p>You are the final boss. Heroes raid from the left toward your throne on the
-       right — line the hall with <b>trap rooms</b>, <b>monster rooms</b> and a
-       <b>shop</b> that sells them gear you loot right back. Every kill earns a
-       <b>room card</b>; matching cards <b>upgrade</b> a room. Fights auto-resolve,
-       but your <b>boss abilities</b> are yours to fire.</p>
+    <p style="max-width:760px">You are the <b>Final Boss</b>.<br><br>
+       Heroes seeking glory are coming for your head. Build a deadly dungeon filled with
+       traps, monsters, and twisted corridors to stop them before they reach your throne.<br><br>
+       Defeat waves of heroes to unlock new rooms, traps, and monsters. Expand your lair,
+       create brutal kill zones, and prove that there is <b>No Room For Heroes</b>.</p>
     <div class="choices" style="flex-wrap:nowrap;width:min(708px,100%)">${cards.join('')}</div>
     <div class="menu-btns" style="margin-top:8px"><button onclick="openCloud()" style="padding:7px 14px;font-size:13px">☁️ Cloud Save</button></div>
     <p class="small" style="margin-top:8px;opacity:.9">Each slot is its own profile — runes, town and unlocks are separate.</p>`;
