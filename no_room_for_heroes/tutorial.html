@@ -21,49 +21,17 @@
   .btn.gold{ background:var(--gold); color:#1a1230; font-weight:bold; border-color:var(--gold); }
   .note{ font-size:11px; opacity:.6; }
   main{ flex:1; display:flex; min-height:0; }
-  /* ---- live preview stage (represents the game window) ---- */
+  /* ---- live preview stage: the REAL game, frozen at the selected step ---- */
   #stagewrap{ flex:1; display:flex; align-items:center; justify-content:center; padding:16px; min-width:0; }
-  #stage{ position:relative; width:100%; max-width:1000px; aspect-ratio:16/10; border-radius:10px; overflow:hidden;
-    background:linear-gradient(#241a3a 0%,#1a1330 62%,#0e0a1c 100%);
-    box-shadow:0 10px 40px #000a, inset 0 0 60px #0008; user-select:none; }
-  #world{ position:absolute; inset:0; transform-origin:60% bottom; transition:transform .12s ease; }
-  .floor{ position:absolute; left:0; right:0; bottom:13%; height:2px; background:#3a2c52; box-shadow:0 0 16px #0007; }
-  /* real dungeon art (the actual room / throne / boss sprites from the game) sitting on the floor,
-     so designed camera/arrow/box positions line up with what the player really sees */
-  .rm,.bosscell{ position:absolute; bottom:13%; width:25%; height:64%;
-    display:flex; align-items:flex-end; justify-content:center; }
-  .rm img.art,.bosscell img.art{ width:100%; height:auto; max-height:100%; object-fit:contain; object-position:bottom;
-    image-rendering:pixelated; filter:drop-shadow(0 5px 9px #0008); }
-  .rm .trap{ position:absolute; bottom:3%; left:50%; transform:translateX(-50%);
-    height:40%; width:auto; image-rendering:pixelated; pointer-events:none; filter:drop-shadow(0 2px 4px #000a); }
-  .bosscell .boss{ position:absolute; bottom:5%; left:50%; transform:translateX(-50%);
-    height:50%; width:auto; image-rendering:pixelated; filter:drop-shadow(0 0 18px #ff6a3a66); }
-  #hpbar{ position:absolute; left:2%; top:3%; width:34%; height:14px; background:#2a1a2a; border:1px solid #6a3a5a;
-    border-radius:7px; overflow:hidden; }
-  #hpbar i{ display:block; height:100%; width:72%; background:linear-gradient(90deg,#ff4d6d,#ff8a8a); }
-  /* mock bottom panel + buttons (arrow targets) */
-  #panelbar{ position:absolute; left:0; right:0; bottom:0; height:14%; background:#140e26;
-    border-top:1px solid var(--line); display:flex; align-items:center; gap:6px; padding:0 10px; }
-  #panelbar .pb{ background:#2a2244; border:2px solid var(--line); border-radius:8px; min-width:48px; height:62%;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; color:#cdbaff; padding:2px 6px; }
-  #panelbar .abil{ min-width:46px; }
-  #panelbar .grow{ flex:1; }
-  #panelbar .go{ background:linear-gradient(#3fae5f,#2a8c4a); color:#fff; font-weight:bold; border-color:#2a8c4a; }
-  /* the tutorial tip box — mirrors #tutmodal in index.html */
-  #tut{ position:absolute; z-index:20; width:min(440px,calc(100% - 24px)); text-align:center; cursor:move;
-    padding:18px 20px 16px; border-radius:16px; background:linear-gradient(165deg,#241a44,#140e2a);
-    border:2px solid var(--gold); box-shadow:0 14px 48px rgba(0,0,0,.7),0 0 22px #ffd34d44;
-    transform:translate(-50%,-50%); }
-  #tut h3{ margin:0 0 6px; color:var(--gold); font-size:17px; letter-spacing:.5px; }
-  #tut .tm-body{ font-size:14.5px; line-height:1.5; color:var(--ink); }
-  #tut .tm-body b{ color:#ffe7a3; }
-  #tut .tm-btns{ margin-top:14px; }
-  #tut .go2{ background:var(--gold); color:#1a1230; font-weight:bold; border:none; border-radius:8px; padding:7px 16px; cursor:pointer; }
-  #tut .grip{ position:absolute; right:-5px; top:50%; transform:translateY(-50%); width:12px; height:34px;
-    background:var(--gold); border-radius:4px; cursor:ew-resize; opacity:.85; }
-  #arrow{ position:absolute; z-index:21; font-size:34px; cursor:move; filter:drop-shadow(0 0 6px #ffd34d);
-    transform:translate(-50%,-50%); animation:bob 1s ease-in-out infinite; }
-  @keyframes bob{ 0%,100%{ margin-top:0 } 50%{ margin-top:-7px } }
+  #stage{ position:relative; width:100%; max-width:1040px; aspect-ratio:16/9; border-radius:10px; overflow:hidden;
+    background:#0c0916; box-shadow:0 10px 40px #000a, inset 0 0 60px #0008; user-select:none; }
+  #game{ position:absolute; inset:0; width:100%; height:100%; border:0; background:#0c0916; }
+  /* transparent layer over the iframe: drag to move the tip box, and swallow stray
+     clicks so the preview can't be advanced out from under the designer */
+  #draglayer{ position:absolute; inset:0; cursor:move; touch-action:none; z-index:5; }
+  #pvstate{ position:absolute; left:9px; bottom:7px; z-index:6; pointer-events:none;
+    background:rgba(10,7,22,.7); padding:2px 8px; border-radius:7px; }
+  #pvstate.err{ color:#ff9a9a; }
   /* ---- right control panel ---- */
   #side{ width:344px; flex:0 0 344px; background:#120d24; border-left:1px solid var(--line);
     overflow-y:auto; padding:12px; }
@@ -98,37 +66,9 @@
 <main>
   <div id="stagewrap">
     <div id="stage">
-      <div id="hpbar"><i></i></div>
-      <div id="world">
-        <div class="floor"></div>
-        <div class="rm" style="left:0">
-          <img class="art" src="rooms/empty.png" alt="" onerror="this.style.display='none'">
-          <img class="trap" src="rooms/spike.png" alt="" onerror="this.style.display='none'"></div>
-        <div class="rm" style="left:25%">
-          <img class="art" src="rooms/empty.png" alt="" onerror="this.style.display='none'">
-          <img class="trap" src="rooms/flame.png" alt="" onerror="this.style.display='none'"></div>
-        <div class="rm" style="left:50%">
-          <img class="art" src="rooms/empty.png" alt="" onerror="this.style.display='none'"></div>
-        <div class="bosscell" style="left:75%">
-          <img class="art" src="rooms/throne_purple.png" alt="" onerror="this.style.display='none'">
-          <img class="boss" src="sprites/ignar/ignar_idle_0.png" alt="" onerror="this.style.display='none'"></div>
-      </div>
-      <div id="panelbar">
-        <div class="pb" data-t="buyroom">➕<span>Room</span></div>
-        <div class="pb" data-t="hand" style="min-width:74px">🃏<span>Hand</span></div>
-        <div class="grow"></div>
-        <div class="pb abil" data-t="abil">🔥<span>Slam</span></div>
-        <div class="pb abil">❄️<span>Freeze</span></div>
-        <div class="pb abil">☠️<span>Drain</span></div>
-        <div class="pb go" data-t="start">⚔️<span>Start</span></div>
-      </div>
-      <div id="arrow">👇</div>
-      <div id="tut">
-        <h3 id="tutTitle">Title</h3>
-        <div class="tm-body" id="tutBody">Body text…</div>
-        <div class="tm-btns"><button class="go2">Next →</button></div>
-        <div class="grip" id="grip"></div>
-      </div>
+      <iframe id="game" src="index.html?tutpreview=1" title="live tutorial preview" scrolling="no"></iframe>
+      <div id="draglayer" title="Drag to move the tip box"></div>
+      <div id="pvstate" class="note">loading live preview…</div>
     </div>
   </div>
 
@@ -160,7 +100,7 @@
       <input type="number" id="fX" min="0" max="100" step="0.5">
       <input type="number" id="fY" min="0" max="100" step="0.5"></div>
     <div class="row"><label>Width</label><input type="range" id="fW" min="200" max="760" step="2"><span class="val" id="fWv"></span></div>
-    <div class="hint">Drag the box to move it (switches Anchor to Free); drag the gold grip to resize width.</div>
+    <div class="hint">Drag anywhere on the preview to move the box (switches Anchor to Free). Width is the slider above.</div>
 
     <h2>Camera &amp; zoom</h2>
     <div class="row"><label>Zoom</label><input type="range" id="fZoom" min="0.5" max="2.6" step="0.05"><span class="val" id="fZoomv"></span></div>
@@ -181,7 +121,7 @@
       <div class="row"><label>Glyph</label><input type="text" id="fAg" maxlength="4" style="flex:0 0 64px"><span class="note" id="arrowTgt"></span></div>
       <div class="row"><label>Nudge X / Y</label><input type="number" id="fAdx" step="2"><input type="number" id="fAdy" step="2"></div>
       <div class="row"><label>Hide arrow</label><input type="checkbox" id="fAhide"></div>
-      <div class="hint">Drag the 👇 on the stage to nudge it. (3 ability beats show a hand on each ability — those follow the glyph + nudge.)</div>
+      <div class="hint">Nudge the arrow with X / Y above. (3 ability beats show a hand on each ability — those follow the glyph + nudge.)</div>
     </div>
     <div id="noArrow" class="hint dim">This step has no pointing arrow.</div>
 
@@ -204,11 +144,6 @@
 // ---- built-in defaults (match #tutmodal in index.html) ----
 const DEF = { w:440, fs:14.5, ts:17, pad:18, lh:1.5, align:'center', anchor:'low' };
 const LS_KEY = 'nrfh_tut_design_v1';
-// arrow target → an approximate spot on the mock stage (% of stage)
-const ARROW_POS = {
-  boss:{x:90,y:38}, hero:{x:6,y:54}, health:{x:18,y:14},
-  start:{x:92,y:90}, buyroom:{x:6,y:90}, abil:{x:64,y:90}, hand:{x:16,y:90}
-};
 
 let STEPS = [];                       // [{title,body,pauseBody,runBody,overlay,gate,arrow}]
 let data = { global:{}, steps:{} };   // sparse overrides being designed
@@ -264,50 +199,27 @@ function clearStep(field){ if(data.steps[cur]){ delete data.steps[cur][field]; i
 function setGlobal(field, v){ data.global[field] = v; save(); render(); }
 
 // ---------- the live preview ----------
-function render(){
-  const st = STEPS[cur] || {};
-  const tut = document.getElementById('tut');
-  const body = document.getElementById('tutBody');
-  const title = document.getElementById('tutTitle');
-  // text (override or original)
-  const s = data.steps[cur] || {};
-  title.innerHTML = (s.title != null ? s.title : st.title) || '';
-  title.style.display = title.innerHTML ? '' : 'none';
-  body.innerHTML = (s.body != null ? s.body : st.body) || '<i>(no body)</i>';
-  // box style
-  tut.style.width = 'min(' + eff('w') + 'px, calc(100% - 24px))';
-  tut.style.padding = eff('pad') + 'px';
-  tut.style.textAlign = eff('align');
-  title.style.fontSize = eff('ts') + 'px';
-  body.style.fontSize = eff('fs') + 'px';
-  body.style.lineHeight = eff('lh');
-  body.style.textAlign = eff('align');
-  // position
-  const anchor = eff('anchor');
-  let x, y;
-  if(anchor === 'free'){ x = eff('x'); y = eff('y'); }
-  else { x = 50; y = ({low:70, center:50, top:20, bottom:80})[anchor] || 70; }
-  tut.style.left = x + '%'; tut.style.top = y + '%';
-  // arrow (floating arrow for st.arrow steps; the 'abil' beats show 3 ability hands)
-  const arrow = document.getElementById('arrow');
-  const tgt = st.arrow || (st.hi==='abil' ? 'abil' : '');
-  if(tgt && !eff('ahide')){
-    arrow.style.display = '';
-    arrow.textContent = eff('ag') || '👇';
-    const base = ARROW_POS[tgt] || {x:50,y:50};
-    // nudge is in px relative to the stage size → convert to %
-    const stage = document.getElementById('stage').getBoundingClientRect();
-    const ax = base.x + (eff('adx')||0)/stage.width*100;
-    const ay = base.y + (eff('ady')||0)/stage.height*100;
-    arrow.style.left = ax + '%'; arrow.style.top = ay + '%';
-  } else { arrow.style.display = 'none'; }
-  // camera / zoom preview — scales the dungeon layer only (UI overlays stay put)
-  const ov = data.steps[cur] || {};
-  const world = document.getElementById('world');
-  world.style.transformOrigin = ((ov.cam != null ? ov.cam : 0.6) * 100) + '% bottom';
-  world.style.transform = 'scale(' + (ov.zoom || 1) + ')';
-  syncControls();
+// The preview is the REAL game running in an iframe (index.html?tutpreview=1). On every
+// change we push the current step + the full design overrides; the game fast-forwards its
+// guided run to that step and re-applies the overrides, so what you see IS what the player
+// sees. No drawing happens here anymore — we just keep the side panel in sync and post.
+let pvReady = false, _postRAF = 0;
+function gameWin(){ const f = document.getElementById('game'); return f && f.contentWindow; }
+function postPreview(){
+  if(_postRAF) return;
+  _postRAF = requestAnimationFrame(()=>{ _postRAF = 0; if(!pvReady) return;
+    const w = gameWin(); if(w) w.postMessage({ type:'tutpreview', step:cur, cfg:prune() }, '*'); });
 }
+function render(){ syncControls(); postPreview(); }
+// the iframe reports readiness / which step it settled on / any error
+window.addEventListener('message', e=>{
+  const d = e && e.data; if(!d || typeof d!=='object') return;
+  const pv = document.getElementById('pvstate');
+  if(d.type==='tutpreview-ready'){ pvReady = true; if(pv){ pv.textContent=''; pv.className='note'; }
+    const w = gameWin(); if(w) w.postMessage({ type:'tutpreview', step:cur, cfg:prune() }, '*'); }
+  else if(d.type==='tutpreview-at'){ if(pv){ pv.textContent='beat '+d.step+' · live'; pv.className='note'; } }
+  else if(d.type==='tutpreview-error'){ if(pv){ pv.textContent='preview error: '+d.msg; pv.className='note err'; } }
+});
 
 // ---------- controls reflect the current step ----------
 function syncControls(){
@@ -417,20 +329,20 @@ function wire(){
   document.getElementById('btnImport').onclick = ()=>document.getElementById('file').click();
   document.getElementById('file').onchange = importJson;
 
-  dragBox(); dragArrow(); resizeBox();
+  dragBox();
 }
 
-// ---------- drag the box (→ Free anchor) ----------
+// ---------- drag anywhere on the preview to place the tip box (→ Free anchor) ----------
+// A transparent layer sits over the iframe (we can't reach into the cross-document game),
+// so a press-and-drag maps the pointer to a stage % and moves the box there live.
 function dragBox(){
-  const tut = document.getElementById('tut'), stage = document.getElementById('stage');
+  const layer = document.getElementById('draglayer'), stage = document.getElementById('stage');
   let drag = null;
-  tut.addEventListener('pointerdown', e=>{
-    if(e.target.id === 'grip' || e.target.classList.contains('go2')) return;
-    const r = stage.getBoundingClientRect();
-    drag = {}; tut.setPointerCapture(e.pointerId); e.preventDefault();
-  });
-  tut.addEventListener('pointermove', e=>{
+  layer.addEventListener('pointerdown', e=>{ drag={}; layer.setPointerCapture(e.pointerId); e.preventDefault(); });
+  layer.addEventListener('pointermove', e=>{
     if(!drag) return;
+    const st = STEPS[cur] || {};
+    if(st.overlay) return;                       // reward/overlay beats have no positionable box
     const r = stage.getBoundingClientRect();
     const x = clamp((e.clientX - r.left)/r.width*100, 2, 98);
     const y = clamp((e.clientY - r.top)/r.height*100, 4, 96);
@@ -439,37 +351,7 @@ function dragBox(){
     (data.steps[cur]).y = round(y);
     save(); render();
   });
-  tut.addEventListener('pointerup', ()=>{ drag=null; });
-}
-function resizeBox(){
-  const grip = document.getElementById('grip'), stage=document.getElementById('stage');
-  let on=false;
-  grip.addEventListener('pointerdown', e=>{ on=true; grip.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation(); });
-  grip.addEventListener('pointermove', e=>{
-    if(!on) return;
-    const tutR = document.getElementById('tut').getBoundingClientRect();
-    const w = clamp(Math.round((e.clientX - tutR.left)*2/1)/1*1, 200, 760); // width ≈ 2×(pointer-from-centre)
-    const cx = tutR.left + tutR.width/2;
-    setStep('w', clamp(Math.round((e.clientX - cx)*2), 200, 760));
-  });
-  grip.addEventListener('pointerup', ()=>{ on=false; });
-}
-function dragArrow(){
-  const arrow = document.getElementById('arrow'), stage=document.getElementById('stage');
-  let on=false;
-  arrow.addEventListener('pointerdown', e=>{ on=true; arrow.setPointerCapture(e.pointerId); e.preventDefault(); });
-  arrow.addEventListener('pointermove', e=>{
-    if(!on) return;
-    const st = STEPS[cur]; const tgt = st.arrow || (st.hi==='abil'?'abil':''); if(!tgt) return;
-    const r = stage.getBoundingClientRect();
-    const base = ARROW_POS[tgt] || {x:50,y:50};
-    const px = (e.clientX - r.left) - base.x/100*r.width;
-    const py = (e.clientY - r.top) - base.y/100*r.height;
-    (data.steps[cur]=data.steps[cur]||{}).adx = Math.round(px);
-    (data.steps[cur]).ady = Math.round(py);
-    save(); render();
-  });
-  arrow.addEventListener('pointerup', ()=>{ on=false; });
+  layer.addEventListener('pointerup', ()=>{ drag=null; });
 }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 

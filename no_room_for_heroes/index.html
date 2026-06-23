@@ -362,6 +362,8 @@
     font-size:16px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
   #pausebtn{position:absolute;top:6px;right:46px;z-index:21;width:34px;height:34px;padding:0;
     font-size:18px;border-radius:8px;background:rgba(20,15,36,.8);border:1px solid var(--line);}
+  /* in the Tutorial Designer preview iframe, hide the live menu/audio chrome */
+  html.tutpreview #pausebtn, html.tutpreview #audiobtn{ display:none; }
   .pauserow{display:flex;align-items:center;justify-content:space-between;gap:12px;}
   .pauserow label{font-weight:bold;font-size:14px;}
   .pauserow input[type=range]{flex:1;max-width:210px;accent-color:var(--accent);height:24px;}
@@ -8044,6 +8046,81 @@ function updateRunPanel(){
   if(rgT) setTxt(rgT, '💥 '+Math.floor(b.rage||0)+'%');
 }
 
+/* ===================== TUTORIAL PREVIEW MODE (tutorial.html designer) =====================
+   Opened in an <iframe src="index.html?tutpreview=1"> by the Tutorial Designer. Instead of
+   normal play, it FAST-FORWARDS the real guided run to a requested step (driving each beat
+   through the very same hooks the headless tutorial test uses), then freezes and renders that
+   exact scene — so the designer always shows what the player really sees, step by step.
+   It also accepts the designer's live tutorial.json overrides via postMessage and re-applies
+   them, so wording / box / arrow / camera edits update in place. All of this is gated behind
+   the query flag, so normal play and the test suites are untouched. */
+const TUTPREVIEW = (()=>{ try{ return /[?&]tutpreview=1/.test(location.search); }catch(_){ return false; } })();
+// Replay one beat the way the test driver does, so the dungeon builds up for real.
+function tutPvDrive(st){
+  const g=st.gate;
+  if(g==='cont'||g==='menu'){ tutAdvance(); }
+  else if(g==='start'){
+    const before=G.tutStep; startWave();
+    if(G.tutStep===before){                 // a "watch" beat (adv:'cleared') → resolve the wave
+      (G.heroes||[]).forEach(h=>{ if(h.state!=='dead') heroDies(h); }); afterWave(); }
+  }
+  else if(g==='abil'){ (G.heroes||[]).forEach(h=>{ if(h.state!=='dead') heroDies(h); }); afterWave(); }
+  else if(g==='pick'){ takeDraft(0); }
+  else if(g==='place'||g==='trapup'){ placeCard(0, st.cell); }
+  else if(g==='slotbuy'){ upgradeRoomGold(st.cell); }
+  else if(g==='buyroom'){ buySlot(); }
+  else if(g==='swap'){ moveRoom(0,1); }
+  else if(g==='relic'){ pickRelic(0); }
+  else if(st.adv==='never'){ /* finale watch — nothing to drive */ }
+  else { tutAdvance(); }
+}
+let _tutPvBusy=false;
+// Build the exact scene for `target` and present it frozen.
+function tutPreviewGoto(target){
+  if(_tutPvBusy) return; _tutPvBusy=true;
+  try{
+    target = Math.max(0, Math.min(TUT.length-1, target|0));
+    startTutorial();
+    let guard=0;
+    while(G.tutorial && G.tutStep<target && guard++<200){
+      const before=G.tutStep; tutPvDrive(TUT[before]);
+      if(G.tutStep===before) break;                 // safety — never spin
+    }
+    const st=TUT[G.tutStep]||{};
+    if(st.overlay){
+      if(G._tutDraft && G.phase==='reward') tutGotoReward();  // repaint reward wording with current cfg
+    } else {
+      tutShow(); applyTutCam(G.tutStep);
+      if(st.runPause && G.phase==='run'){            // march the lead hero to the prompt moment, then freeze
+        let gg=0; while(gg++<400 && !paused && G.heroes && G.heroes.length) update(0.03);
+        paused=true;
+      }
+    }
+    if(typeof draw==='function') draw();
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'tutpreview-at', step:G.tutStep}, '*'); }catch(_){ }
+  }catch(err){
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'tutpreview-error', step:target, msg:String(err&&err.message||err)}, '*'); }catch(_){ }
+  }
+  _tutPvBusy=false;
+}
+function tutPreviewMsg(e){
+  const d=e&&e.data; if(!d||d.type!=='tutpreview') return;
+  if(d.cfg!==undefined) TUT_CFG = d.cfg || null;   // full {global,steps} from the designer
+  tutPreviewGoto(d.step|0);
+}
+function tutPreviewInit(){
+  audioOn=false;                                   // never make noise inside the designer
+  document.documentElement.classList.add('tutpreview');
+  window.addEventListener('message', tutPreviewMsg);
+  // render-only loop: keep idle art (candles / boss idle) + the arrow alive WITHOUT advancing
+  // combat, so the frozen scene stays put.
+  (function pv(){ try{ if(typeof draw==='function') draw(); if(typeof drawBanner==='function') drawBanner();
+    if(G&&G.tutorial&&typeof tutArrowTick==='function') tutArrowTick(); }catch(_){ }
+    requestAnimationFrame(pv); })();
+  tutPreviewGoto(0);
+  try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'tutpreview-ready', steps:TUT.length}, '*'); }catch(_){ }
+}
+
 /* keep the canvas matched to the stage (rotation, panel-height changes, etc.) */
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
@@ -8052,7 +8129,7 @@ if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 loadSlot();
 loadRunes();
 loadTown();
-loadTutCfg();
+if(!TUTPREVIEW) loadTutCfg();   // in the designer, overrides come live from the parent (don't fetch the deployed json)
 loadAspect();
 loadAudioPref();
 loadVolPrefs();
@@ -8063,6 +8140,7 @@ loadVolPrefs();
 let _fsLast=0;
 window.addEventListener('pointerdown', async ()=>{
   try{
+    if(TUTPREVIEW) return;                                                 // never grab fullscreen inside the designer
     if(Math.min(screen.width||9999, screen.height||9999) > 560) return;   // phones only
     if(document.fullscreenElement) return;                                // already fullscreen
     const now=Date.now(); if(now-_fsLast<3000) return; _fsLast=now;
@@ -8072,14 +8150,14 @@ window.addEventListener('pointerdown', async ()=>{
   }catch(_){ }
 });
 // Audio can only start after a user gesture; wake it on the first interaction.
-window.addEventListener('pointerdown', ()=>{ if(audioOn) initAudio(); }, {once:false});
-window.addEventListener('keydown', ()=>{ if(audioOn) initAudio(); }, {once:false});
+window.addEventListener('pointerdown', ()=>{ if(audioOn && !TUTPREVIEW) initAudio(); }, {once:false});
+window.addEventListener('keydown', ()=>{ if(audioOn && !TUTPREVIEW) initAudio(); }, {once:false});
 { const ab=document.getElementById('audiobtn');
   if(ab){ ab.textContent=audioOn?'🔊':'🔇';
     ab.addEventListener('click', e=>{ e.stopPropagation(); toggleAudio(); }); } }
 resize();
-titleScreen();
-requestAnimationFrame(frame);
+if(TUTPREVIEW){ tutPreviewInit(); }     // Tutorial Designer iframe → step-by-step preview, not normal play
+else { titleScreen(); requestAnimationFrame(frame); }
 hideBoot();
 // Try to start the title music immediately. Browsers usually keep the
 // AudioContext suspended until a gesture (the first tap resumes it via the
