@@ -151,6 +151,10 @@
   .gcell.sel{box-shadow:0 0 0 2px var(--gold) inset;}
   .gcell .gic{font-size:18px;line-height:1;}
   .gcell .gt{font-size:9px;font-weight:bold;line-height:1.1;}
+  /* painted sword art for gear (gear/<kind>_<tier>.png) */
+  .gcell .gearimg, .cardghost .gearimg{height:66%;width:auto;max-width:92%;object-fit:contain;display:block;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));}
+  .chestgrid .gcell .gearimg{height:72%;}
   .card{position:relative;width:140px;min-height:112px;border-radius:10px;border:2px solid var(--line);
     background:linear-gradient(160deg,#322652,#181029);padding:8px 7px;display:flex;flex-direction:column;
     align-items:center;justify-content:center;text-align:center;cursor:grab;touch-action:none;
@@ -1299,6 +1303,18 @@ const GEAR={
   aegis:{name:'Aegis', ic:'🛡️', cls:'cleric',  desc:'+HP & damage reduction'},
 };
 const GEAR_BY_CLASS={warrior:'blade', mage:'tome', rogue:'charm', cleric:'aegis'};
+// 💎 Every (kind × tier) is its own named sword, art in gear/<kind>_<tier>.png. The EFFECT is
+// the kind's (blade = armor crush, charm = lifesteal/poison, tome = burn/chill/freeze,
+// aegis = +HP/thorns) scaled by tier — the name + art just give each drop its own identity.
+const SWORD_NAMES={
+  blade:{common:"Footman's Edge", special:'Verdant Knight-Blade', rare:'Tidesteel Broadsword', epic:'Filigree Saber', legendary:'Wyrmtongue Flammard', mythic:'Worldcleaver'},
+  charm:{common:'Nightfang Tantō', special:'Gloomshard Edge', rare:'Ruby Reaver', epic:'Onyx Vesper', legendary:'Bloodthorn Saw', mythic:'Heartdrinker'},
+  tome: {common:'Frostbite Shard', special:'Glacier Sliver', rare:'Tidecaller Crystal', epic:'Amethyst Spellblade', legendary:'Stormglass Fang', mythic:'Cinderwake'},
+  aegis:{common:'Gilded Khopesh', special:'Sunwarden Saber', rare:'Goldleaf Crescent', epic:'Reliquary Key', legendary:'Crown Regent', mythic:"Seraph's Wing"},
+};
+function swordName(g){ return (SWORD_NAMES[g.k] && SWORD_NAMES[g.k][g.t]) || (RELIC_TIERS[g.t].name+' '+GEAR[g.k].name); }
+function gearIcon(g){ return `<img class="gearimg" src="gear/${g.k}_${g.t}.png" alt="" draggable="false" onerror="gearIconFail(this,'${GEAR[g.k].ic}')">`; }
+function gearIconFail(img,ic){ const s=document.createElement('span'); s.className='gic'; s.textContent=ic; img.replaceWith(s); }
 const CHEST_MAX=16;            // 🧰 War Chest capacity
 const LOOT_CHANCE=0.25;        // ~1 in 4 ordinary raiders carry gear
 const TIER_ABBR={common:'C', special:'S', rare:'R', epic:'E', legendary:'L', mythic:'M'};
@@ -1325,7 +1341,7 @@ function dropLoot(h){
   G.floorLoot=G.floorLoot||[];
   G.floorLoot.push({k:L.k, t:L.t, x:h.x, born:performance.now()});
   const col=RELIC_TIERS[L.t].col;
-  floater(h.x, h.y-82, '💎 '+RELIC_TIERS[L.t].name+' '+GEAR[L.k].name+'!', col, true);
+  floater(h.x, h.y-82, '💎 '+swordName(L)+'!', col, true);
   burst(h.x, h.y-22, col, 14);
 }
 function floorLootAt(wx){
@@ -1338,7 +1354,7 @@ function collectLoot(i){
   if((G.chest||[]).length>=CHEST_MAX){ showHint('🧰 Chest full ('+CHEST_MAX+') — merge or scrap gear to make room.'); return false; }
   G.chest=G.chest||[]; G.chest.push({k:L.k, t:L.t}); arr.splice(i,1);
   burst(L.x, FLOOR-16, RELIC_TIERS[L.t].col, 10); sfx('relic');
-  showHint('🧰 Collected '+RELIC_TIERS[L.t].name+' '+GEAR[L.k].name+' ('+G.chest.length+'/'+CHEST_MAX+').');
+  showHint('🧰 Collected '+swordName(L)+' ('+RELIC_TIERS[L.t].name+', '+G.chest.length+'/'+CHEST_MAX+').');
   return true;
 }
 function collectAllLoot(){
@@ -1362,7 +1378,7 @@ function mergeGear(i,j){
   G.chest.splice(hi,1); G.chest.splice(lo,1);          // remove both
   G.chest.push({k:a.k, t:nt});                          // forge the upgrade
   selGear=-1; sfx('relic');
-  showHint('⬆ Merged into a '+RELIC_TIERS[nt].name+' '+GEAR[a.k].name+'!');
+  showHint('⬆ Merged into '+swordName({k:a.k,t:nt})+' ('+RELIC_TIERS[nt].name+')!');
   renderPanel();
 }
 function autoMergeGear(){
@@ -1417,12 +1433,12 @@ function equipGear(gi, slot){
   if(!target){ showHint('Every monster here already carries '+GEAR_SLOTS+' pieces.'); return; }
   target.gear=target.gear||[]; target.gear.push({k:g.k, t:g.t});
   G.chest.splice(gi,1); selGear=-1; sfx('relic');
-  showHint('🛡️ Equipped '+RELIC_TIERS[g.t].name+' '+GEAR[g.k].name+' on a '+ROOMS[target.type].name+'.');
+  showHint('🛡️ Equipped '+swordName(g)+' on a '+ROOMS[target.type].name+'.');
   renderPanel(); render();
 }
 // ---- gear info readouts (used by the inspect bubbles + the chest tooltips) ----
 function gearTag(g){ const col=RELIC_TIERS[g.t].col;
-  return `<span style="color:${col}">${GEAR[g.k].ic} ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name}</span>`; }
+  return `<span style="color:${col}">${GEAR[g.k].ic} <b>${swordName(g)}</b> <span class="small" style="opacity:.7">(${RELIC_TIERS[g.t].name} ${GEAR[g.k].name})</span></span>`; }
 function gearEffectText(g){ const ti=Math.max(0,TIER_ORDER.indexOf(g.t)); const leg=ti>=GEAR_LEG, myth=ti>=5;
   if(g.k==='blade') return `+${Math.round(BLADE_ATK[ti]*100)}% ATK`+(leg?` · 🪓 armor crush ${myth?7:4}`:'');
   if(g.k==='aegis') return `+${Math.round(AEGIS_HP[ti]*100)}% HP · −${Math.round(AEGIS_DR[ti]*100)}% damage taken`+(leg?` · ✦ thorns ${Math.round((myth?0.9:0.5)*100)}%`:'');
@@ -7636,7 +7652,7 @@ function renderChestPop(){
   let cells='';
   for(let i=0;i<CHEST_MAX;i++){ const g=chest[i];
     if(g){ const col=RELIC_TIERS[g.t].col;
-      cells+=`<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col}"><span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
+      cells+=`<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${swordName(g)} · ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col}">${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
     } else cells+='<div class="gcell empty"></div>';
   }
   const loot=(G&&G.floorLoot&&G.floorLoot.length)||0;
@@ -8016,7 +8032,7 @@ panel.addEventListener('pointerdown', e=>{
 function startGearGhost(gi){
   const g=G.chest[gi]; if(!g) return; const col=RELIC_TIERS[g.t].col;
   cardGhost=document.createElement('div'); cardGhost.className='gcell cardghost'; cardGhost.style.borderColor=col;
-  cardGhost.innerHTML=`<span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span>`;
+  cardGhost.innerHTML=`${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span>`;
   document.body.appendChild(cardGhost);
 }
 window.addEventListener('pointermove', e=>{
