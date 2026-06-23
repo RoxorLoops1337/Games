@@ -1310,7 +1310,7 @@ const SWORD_NAMES={
   blade:{common:"Footman's Edge", special:'Verdant Knight-Blade', rare:'Tidesteel Broadsword', epic:'Filigree Saber', legendary:'Wyrmtongue Flammard', mythic:'Worldcleaver'},
   charm:{common:'Nightfang Tantō', special:'Gloomshard Edge', rare:'Ruby Reaver', epic:'Onyx Vesper', legendary:'Bloodthorn Saw', mythic:'Heartdrinker'},
   tome: {common:'Frostbite Shard', special:'Glacier Sliver', rare:'Tidecaller Crystal', epic:'Amethyst Spellblade', legendary:'Stormglass Fang', mythic:'Cinderwake'},
-  aegis:{common:'Gilded Khopesh', special:'Sunwarden Saber', rare:'Goldleaf Crescent', epic:'Reliquary Key', legendary:'Crown Regent', mythic:"Seraph's Wing"},
+  aegis:{common:'Cracked Roundshield', special:'Bronzeward Buckler', rare:'Ironwall Heater', epic:'Drakescale Bulwark', legendary:'Lightbearer Aegis', mythic:'Phoenix Bulwark'},   // shields (cleric defense)
 };
 function swordName(g){ return (SWORD_NAMES[g.k] && SWORD_NAMES[g.k][g.t]) || (RELIC_TIERS[g.t].name+' '+GEAR[g.k].name); }
 function gearIcon(g){ return `<img class="gearimg" src="gear/${g.k}_${g.t}.png" alt="" draggable="false" onerror="gearIconFail(this,'${GEAR[g.k].ic}')">`; }
