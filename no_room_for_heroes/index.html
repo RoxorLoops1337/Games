@@ -1315,6 +1315,9 @@ const SWORD_NAMES={
 function swordName(g){ return (SWORD_NAMES[g.k] && SWORD_NAMES[g.k][g.t]) || (RELIC_TIERS[g.t].name+' '+GEAR[g.k].name); }
 function gearIcon(g){ return `<img class="gearimg" src="gear/${g.k}_${g.t}.png" alt="" draggable="false" onerror="gearIconFail(this,'${GEAR[g.k].ic}')">`; }
 function gearIconFail(img,ic){ const s=document.createElement('span'); s.className='gic'; s.textContent=ic; img.replaceWith(s); }
+// canvas gear art (floor loot, carried by heroes, equipped on monsters) — lazy Image cache
+const GEAR_IMG={};
+function gearArt(k,t){ if(typeof Image==='undefined') return null; const key=k+'_'+t; let im=GEAR_IMG[key]; if(!im) im=GEAR_IMG[key]=loadImg('gear/'+key+'.png'); return (im&&im._ok)?im:null; }
 const CHEST_MAX=16;            // 🧰 War Chest capacity
 const LOOT_CHANCE=0.25;        // ~1 in 4 ordinary raiders carry gear
 const TIER_ABBR={common:'C', special:'S', rare:'R', epic:'E', legendary:'L', mythic:'M'};
@@ -1461,9 +1464,10 @@ function drawFloorLoot(tx){
     X.fillStyle=col; X.beginPath(); X.arc(sx, gy, 13, 0, 6.2832); X.fill(); X.restore();
     X.globalAlpha=0.55; X.strokeStyle=col; X.lineWidth=1.5;
     X.beginPath(); X.ellipse(sx, FLOOR-3, 11, 4, 0, 0, 6.2832); X.stroke(); X.globalAlpha=1;
-    X.font='19px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
-    X.fillText(GEAR[L.k].ic, sx, gy);
-    X.textBaseline='alphabetic'; X.textAlign='left';
+    const im=gearArt(L.k,L.t);
+    if(im){ const s=30; X.drawImage(im, sx-s/2, gy-s/2, s, s); }
+    else { X.font='19px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
+      X.fillText(GEAR[L.k].ic, sx, gy); X.textBaseline='alphabetic'; X.textAlign='left'; }
   }
 }
 
@@ -6904,9 +6908,12 @@ function drawRoomContents(x0,w,room,i){
         let gx=mbx-(gear.length-1)*8; const gy=FLOOR-94;
         X.font='13px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
         for(const g of gear){ const col=RELIC_TIERS[g.t].col;
-          X.save(); X.globalAlpha=0.9; X.fillStyle=col; X.beginPath(); X.arc(gx,gy,8,0,6.2832); X.fill();
+          X.save(); X.globalAlpha=0.9; X.fillStyle=col; X.beginPath(); X.arc(gx,gy,9,0,6.2832); X.fill();
           X.globalAlpha=0.55; X.lineWidth=1; X.strokeStyle='#000'; X.stroke(); X.restore();
-          X.fillText(GEAR[g.k].ic, gx, gy); gx+=16; }
+          const im=gearArt(g.k,g.t);
+          if(im){ const s=18; X.drawImage(im, gx-s/2, gy-s/2, s, s); }
+          else X.fillText(GEAR[g.k].ic, gx, gy);
+          gx+=18; }
         X.textAlign='left'; X.textBaseline='alphabetic';
       }
     }
@@ -7196,9 +7203,11 @@ function drawHero(sx,h){
     const ph=(h._yj||0)*1.7 + h.cls.length;          // constant per hero → a calm, de-synced bob
     const col=RELIC_TIERS[h.loot.t].col, gx=sx+13, gy=yy-36+Math.sin(performance.now()/360+ph)*1.2;
     X.save(); X.globalCompositeOperation='lighter'; X.globalAlpha=0.5+0.18*Math.sin(performance.now()/280+ph);
-    X.fillStyle=col; X.beginPath(); X.arc(gx,gy,6,0,6.2832); X.fill(); X.restore();
-    X.font='11px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
-    X.fillText(GEAR[h.loot.k].ic, gx, gy); X.textBaseline='alphabetic';
+    X.fillStyle=col; X.beginPath(); X.arc(gx,gy,7,0,6.2832); X.fill(); X.restore();
+    const im=gearArt(h.loot.k,h.loot.t);
+    if(im){ const s=18; X.drawImage(im, gx-s/2, gy-s/2, s, s); }
+    else { X.font='11px Trebuchet MS'; X.textAlign='center'; X.textBaseline='middle';
+      X.fillText(GEAR[h.loot.k].ic, gx, gy); X.textBaseline='alphabetic'; }
   }
   X.textAlign='left';
 }
