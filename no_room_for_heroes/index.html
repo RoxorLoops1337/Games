@@ -2772,15 +2772,45 @@ function startTutorial(){
 }
 // Generic modal painter (used by the scripted steps AND the finale).
 let tutBtnFn=null;
+/* ---- Tutorial layout overrides (designed in tutorial.html → tutorial.json) ----
+   A downloaded tutorial.json may set, globally and per step (keyed by step index),
+   the tip box's width/padding/font/alignment/position, the wording, and the arrow
+   glyph/offset. Everything is optional and falls back to the built-in defaults, so
+   the game runs identically when the file is absent. */
+let TUT_CFG=null;
+function loadTutCfg(){ try{ fetch('tutorial.json',{cache:'no-store'})
+  .then(r=>r.ok?r.json():null).then(j=>{ if(j&&typeof j==='object') TUT_CFG=j; }).catch(()=>{}); }catch(_){ } }
+function tutCfg(i){ if(!TUT_CFG) return null; const g=TUT_CFG.global||{}, s=(TUT_CFG.steps||{})[i]||{}; return Object.assign({}, g, s); }
+function tutText(field){ const st=tutStepObj(); if(!st) return ''; const c=tutCfg(G.tutStep);
+  return (c && c[field]!=null && c[field]!=='') ? c[field] : (st[field]||''); }
+function tutHand(){   // the 👇 over each highlighted ability — designable glyph / nudge / hide
+  const c = (G&&G.tutorial) ? tutCfg(G.tutStep) : null;
+  if(c && c.ahide) return '';
+  const g=(c&&c.ag)||'👇'; let s='';
+  if(c){ const dx=+c.adx||0, dy=+c.ady||0; if(dx||dy) s=` style="margin-left:${dx}px;top:${-28+dy}px"`; }
+  return `<span class="tuthand"${s}>${g}</span>`;
+}
+function applyTutModalStyle(m, i){
+  const c=tutCfg(i); if(!c) return;
+  if(c.w) m.style.width='min('+c.w+'px, calc(100% - 24px))';
+  if(c.pad!=null) m.style.padding=c.pad+'px';
+  if(c.align) m.style.textAlign=c.align;
+  const body=m.querySelector('.tm-body'); if(body){ if(c.fs) body.style.fontSize=c.fs+'px'; if(c.lh) body.style.lineHeight=c.lh; if(c.align) body.style.textAlign=c.align; }
+  const h=m.querySelector('h3'); if(h&&c.ts) h.style.fontSize=c.ts+'px';
+  if(c.anchor==='free' && c.x!=null && c.y!=null){ m.classList.remove('low'); m.style.left=c.x+'%'; m.style.top=c.y+'%'; }
+  else if(c.anchor && c.anchor!=='low'){ m.classList.remove('low'); const yt={top:20,center:50,bottom:80}[c.anchor]; if(yt) m.style.top=yt+'%'; }
+}
 function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
   tutBtnFn=o.onNext||null;
+  m.removeAttribute('style');               // clear the previous step's inline overrides
   m.className='show low';   // every tip sits low (just under the floor) so the board stays visible
   // No skip/✕ — the tutorial is a forced flow; you can't accidentally close out of it.
   m.innerHTML=(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
     +(o.onNext?`<div class="tm-btns"><button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
+  applyTutModalStyle(m, o.idx);             // apply any designed overrides
 }
 function tutModalHide(){ const m=document.getElementById('tutmodal'); if(m){ m.className=''; m.innerHTML=''; } }
 function tutShow(){
@@ -2791,7 +2821,7 @@ function tutShow(){
   G.tutCell = (st.cell!=null)?st.cell:null;
   paused = !!st.pause;
   if(st.overlay) tutModalHide();
-  else tutModalPaint({ title:st.title, body:st.body, pos:st.pos, skip:!st.noskip,
+  else tutModalPaint({ idx:G.tutStep, title:tutText('title'), body:tutText('body'), pos:st.pos, skip:!st.noskip,
                        onNext:(st.gate==='cont'||st.gate==='menu')?tutAdvance:null, btn:st.btn });
   if(typeof renderPanel==='function' && G && (G.phase==='build'||G.phase==='run')) renderPanel();
 }
@@ -2830,7 +2860,7 @@ function tutRunTick(){
   const h=(typeof leadHero==='function')?leadHero():null;
   if(h && h.x>=0 && h.x >= corridorWidth()*st.runPause){
     st._armed=true; paused=true;
-    if(st.pauseBody){ const b=document.querySelector('#tutmodal .tm-body'); if(b) b.innerHTML=st.pauseBody; }
+    const pb=tutText('pauseBody'); if(pb){ const b=document.querySelector('#tutmodal .tm-body'); if(b) b.innerHTML=pb; }
     return true;
   }
   return false;
@@ -2863,6 +2893,9 @@ function tutArrowTick(){
     else if(a==='hand') el=document.querySelector('#panel .cards');
     if(el){ const r=el.getBoundingClientRect(); px=r.left+r.width/2; py=r.top-4; }
   }
+  const c=tutCfg(G.tutStep);                          // designed arrow overrides (glyph / nudge / hide)
+  if(c){ if(c.ahide){ arrow.classList.remove('on'); return; }
+    if(c.ag) glyph=c.ag; if(c.adx) px=(px||0)+(+c.adx); if(c.ady) py=(py||0)+(+c.ady); }
   if(px==null){ arrow.classList.remove('on'); return; }
   if(arrow.textContent!==glyph) arrow.textContent=glyph;
   arrow.style.left=px+'px'; arrow.style.top=py+'px';
@@ -2890,8 +2923,8 @@ function tutGotoReward(){
   const st=tutStepObj()||{};
   const lock=st.pickKind||null;
   overlay.classList.add('show');
-  overlay.innerHTML=`<h1>${st.title||'Spoils of War'}</h1>
-    <p>${st.body||'Draft a card.'}</p>
+  overlay.innerHTML=`<h1>${tutText('title')||'Spoils of War'}</h1>
+    <p>${tutText('body')||'Draft a card.'}</p>
     <div class="choices">${G.drafts.map((c,i)=>{ const d=ROOMS[c.type];
       const ok = !lock || d.kind===lock;
       return `<div class="choice jz ${ok?'tut-pulse':'tut-locked'}" ${ok?`onclick="takeDraft(${i})"`:''} style="animation-delay:${i*70}ms">
@@ -3475,8 +3508,8 @@ function startWave(){
   if(RB.bossRegen) G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+RB.bossRegen);
   // tutorial: 'start-then-watch' beats swap their modal to a running caption;
   // pure 'start' beats advance immediately.
-  if(G.tutorial){ const st=tutStepObj();
-    if(st && st.runBody){ const b=document.querySelector('#tutmodal .tm-body'); if(b) b.innerHTML=st.runBody;
+  if(G.tutorial){ const st=tutStepObj(); const rb=tutText('runBody');
+    if(st && rb){ const b=document.querySelector('#tutmodal .tm-body'); if(b) b.innerHTML=rb;
       const a=document.getElementById('tutarrow'); if(a) a.classList.remove('on'); }
     tutEvent('started');
   }
@@ -7338,7 +7371,7 @@ function renderPanel(){
         const dis=(a.cd>0||G.boss.mana<cost);
         return `<button class="abil${G.tutHi==='abil'?' tut-pulse':''}" onclick="castAbility(${i})" ${dis?'disabled':''}
           title="${def.desc}">
-          ${G.tutHi==='abil'?'<span class="tuthand">👇</span>':''}
+          ${G.tutHi==='abil'?tutHand():''}
           <span style="font-size:18px">${abilFace(a.id)||def.ic}</span>
           <span style="font-size:11px">${def.name}</span>
           <span class="c">${a.cd>0?'⏳'+a.cd.toFixed(1)+'s':'🔷'+cost}</span>
@@ -7978,6 +8011,7 @@ if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 loadSlot();
 loadRunes();
 loadTown();
+loadTutCfg();
 loadAudioPref();
 loadVolPrefs();
 // Phones: keep the game fullscreen (hides the browser's address bar). Not

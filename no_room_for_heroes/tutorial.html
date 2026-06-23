@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>No Room For Heroes — Tutorial Designer</title>
+<style>
+  :root{ --gold:#ffd34d; --ink:#e9e2ff; --line:#4a3a72; --panel:#1a1330; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:#0c0a16; color:var(--ink);
+    font-family:'Trebuchet MS',system-ui,sans-serif; }
+  body{ display:flex; flex-direction:column; }
+  header{ display:flex; align-items:center; gap:10px; padding:8px 14px; background:#140e2a;
+    border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1{ font-size:16px; margin:0; color:var(--gold); letter-spacing:.5px; }
+  header .sp{ flex:1; }
+  button,select,input,textarea{ font-family:inherit; color:var(--ink); }
+  .btn{ background:#2a2040; border:1px solid var(--line); color:var(--ink); border-radius:8px;
+    padding:6px 12px; cursor:pointer; font-size:13px; }
+  .btn:hover{ border-color:var(--gold); }
+  .btn.gold{ background:var(--gold); color:#1a1230; font-weight:bold; border-color:var(--gold); }
+  .note{ font-size:11px; opacity:.6; }
+  main{ flex:1; display:flex; min-height:0; }
+  /* ---- live preview stage (represents the game window) ---- */
+  #stagewrap{ flex:1; display:flex; align-items:center; justify-content:center; padding:16px; min-width:0; }
+  #stage{ position:relative; width:100%; max-width:1000px; aspect-ratio:16/10; border-radius:10px; overflow:hidden;
+    background:linear-gradient(#241a3a 0%,#1a1330 62%,#0e0a1c 100%);
+    box-shadow:0 10px 40px #000a, inset 0 0 60px #0008; user-select:none; }
+  .floor{ position:absolute; left:0; right:0; bottom:14%; height:3px; background:#3a2c52; box-shadow:0 0 14px #0006; }
+  .room{ position:absolute; bottom:14%; width:13%; height:30%; background:linear-gradient(#2a2348,#1c1733);
+    border:2px solid #3a2c5a; border-radius:6px 6px 0 0; display:flex; align-items:flex-end; justify-content:center;
+    font-size:26px; padding-bottom:4px; }
+  .bossblob{ position:absolute; right:3%; bottom:14%; width:14%; height:46%;
+    background:radial-gradient(circle at 50% 40%, #c43a3a, #6a1a2a); border-radius:40% 40% 30% 30%;
+    display:flex; align-items:center; justify-content:center; font-size:40px; box-shadow:0 0 30px #c43a3a66; }
+  #hpbar{ position:absolute; left:2%; top:3%; width:34%; height:14px; background:#2a1a2a; border:1px solid #6a3a5a;
+    border-radius:7px; overflow:hidden; }
+  #hpbar i{ display:block; height:100%; width:72%; background:linear-gradient(90deg,#ff4d6d,#ff8a8a); }
+  /* mock bottom panel + buttons (arrow targets) */
+  #panelbar{ position:absolute; left:0; right:0; bottom:0; height:14%; background:#140e26;
+    border-top:1px solid var(--line); display:flex; align-items:center; gap:6px; padding:0 10px; }
+  #panelbar .pb{ background:#2a2244; border:2px solid var(--line); border-radius:8px; min-width:48px; height:62%;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; color:#cdbaff; padding:2px 6px; }
+  #panelbar .abil{ min-width:46px; }
+  #panelbar .grow{ flex:1; }
+  #panelbar .go{ background:linear-gradient(#3fae5f,#2a8c4a); color:#fff; font-weight:bold; border-color:#2a8c4a; }
+  /* the tutorial tip box — mirrors #tutmodal in index.html */
+  #tut{ position:absolute; z-index:20; width:min(440px,calc(100% - 24px)); text-align:center; cursor:move;
+    padding:18px 20px 16px; border-radius:16px; background:linear-gradient(165deg,#241a44,#140e2a);
+    border:2px solid var(--gold); box-shadow:0 14px 48px rgba(0,0,0,.7),0 0 22px #ffd34d44;
+    transform:translate(-50%,-50%); }
+  #tut h3{ margin:0 0 6px; color:var(--gold); font-size:17px; letter-spacing:.5px; }
+  #tut .tm-body{ font-size:14.5px; line-height:1.5; color:var(--ink); }
+  #tut .tm-body b{ color:#ffe7a3; }
+  #tut .tm-btns{ margin-top:14px; }
+  #tut .go2{ background:var(--gold); color:#1a1230; font-weight:bold; border:none; border-radius:8px; padding:7px 16px; cursor:pointer; }
+  #tut .grip{ position:absolute; right:-5px; top:50%; transform:translateY(-50%); width:12px; height:34px;
+    background:var(--gold); border-radius:4px; cursor:ew-resize; opacity:.85; }
+  #arrow{ position:absolute; z-index:21; font-size:34px; cursor:move; filter:drop-shadow(0 0 6px #ffd34d);
+    transform:translate(-50%,-50%); animation:bob 1s ease-in-out infinite; }
+  @keyframes bob{ 0%,100%{ margin-top:0 } 50%{ margin-top:-7px } }
+  /* ---- right control panel ---- */
+  #side{ width:344px; flex:0 0 344px; background:#120d24; border-left:1px solid var(--line);
+    overflow-y:auto; padding:12px; }
+  #side h2{ font-size:13px; margin:14px 0 6px; color:var(--gold); text-transform:uppercase; letter-spacing:1px; }
+  #side h2:first-child{ margin-top:0; }
+  .row{ display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .row label{ font-size:12px; min-width:78px; opacity:.85; }
+  .row input[type=number]{ width:62px; }
+  .row input[type=text],.row select{ flex:1; min-width:0; }
+  input,select,textarea{ background:#0f0b1e; border:1px solid var(--line); border-radius:6px; padding:5px 7px; font-size:12px; }
+  textarea{ width:100%; resize:vertical; line-height:1.4; }
+  input[type=range]{ flex:1; padding:0; }
+  .val{ font-size:11px; opacity:.7; min-width:34px; text-align:right; }
+  .stepnav{ display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+  .stepnav select{ flex:1; }
+  .pill{ display:inline-block; font-size:10px; padding:1px 6px; border-radius:8px; background:#2a2244; margin-left:6px; }
+  .dim{ opacity:.45; }
+  hr{ border:none; border-top:1px solid var(--line); margin:12px 0; }
+  .hint{ font-size:11px; opacity:.6; margin:4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎓 Tutorial Designer</h1>
+  <span class="note" id="loaded">loading steps…</span>
+  <span class="sp"></span>
+  <button class="btn" id="btnImport">⬆ Import</button>
+  <input type="file" id="file" accept=".json,application/json" style="display:none">
+  <button class="btn" id="btnReset">↺ Reset all</button>
+  <button class="btn gold" id="btnExport">⬇ Download tutorial.json</button>
+</header>
+<main>
+  <div id="stagewrap">
+    <div id="stage">
+      <div id="hpbar"><i></i></div>
+      <div class="floor"></div>
+      <div class="room" style="left:30%">🦷</div>
+      <div class="room" style="left:46%">🔥</div>
+      <div class="room" style="left:62%">💀</div>
+      <div class="bossblob">🐲</div>
+      <div id="panelbar">
+        <div class="pb" data-t="buyroom">➕<span>Room</span></div>
+        <div class="pb" data-t="hand" style="min-width:74px">🃏<span>Hand</span></div>
+        <div class="grow"></div>
+        <div class="pb abil" data-t="abil">🔥<span>Slam</span></div>
+        <div class="pb abil">❄️<span>Freeze</span></div>
+        <div class="pb abil">☠️<span>Drain</span></div>
+        <div class="pb go" data-t="start">⚔️<span>Start</span></div>
+      </div>
+      <div id="arrow">👇</div>
+      <div id="tut">
+        <h3 id="tutTitle">Title</h3>
+        <div class="tm-body" id="tutBody">Body text…</div>
+        <div class="tm-btns"><button class="go2">Next →</button></div>
+        <div class="grip" id="grip"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="side">
+    <div class="stepnav">
+      <button class="btn" id="prev">◀</button>
+      <select id="stepSel"></select>
+      <button class="btn" id="next">▶</button>
+    </div>
+    <div class="hint" id="stepkind"></div>
+
+    <h2>Wording</h2>
+    <div class="row"><label>Title</label><input type="text" id="fTitle"></div>
+    <div class="row" style="align-items:flex-start"><label>Body</label><textarea id="fBody" rows="4"></textarea></div>
+    <div id="pauseRow" class="row" style="align-items:flex-start"><label>Mid-wave</label><textarea id="fPause" rows="2"></textarea></div>
+    <div id="runRow" class="row" style="align-items:flex-start"><label>Run caption</label><textarea id="fRun" rows="2"></textarea></div>
+    <div class="hint">HTML allowed (e.g. &lt;b&gt;bold&lt;/b&gt;). Leave matching the original to keep the game's own text.</div>
+
+    <h2>Box position &amp; size</h2>
+    <div class="row"><label>Anchor</label>
+      <select id="fAnchor">
+        <option value="low">Low (default)</option>
+        <option value="center">Center</option>
+        <option value="top">Top</option>
+        <option value="bottom">Bottom</option>
+        <option value="free">Free (drag)</option>
+      </select></div>
+    <div class="row" id="xyRow"><label>X / Y %</label>
+      <input type="number" id="fX" min="0" max="100" step="0.5">
+      <input type="number" id="fY" min="0" max="100" step="0.5"></div>
+    <div class="row"><label>Width</label><input type="range" id="fW" min="200" max="760" step="2"><span class="val" id="fWv"></span></div>
+    <div class="hint">Drag the box to move it (switches Anchor to Free); drag the gold grip to resize width.</div>
+
+    <h2>Font &amp; spacing</h2>
+    <div class="row"><label>Body size</label><input type="range" id="fFs" min="9" max="30" step="0.5"><span class="val" id="fFsv"></span></div>
+    <div class="row"><label>Title size</label><input type="range" id="fTs" min="11" max="34" step="0.5"><span class="val" id="fTsv"></span></div>
+    <div class="row"><label>Padding</label><input type="range" id="fPad" min="6" max="40" step="1"><span class="val" id="fPadv"></span></div>
+    <div class="row"><label>Line height</label><input type="range" id="fLh" min="1" max="2.2" step="0.05"><span class="val" id="fLhv"></span></div>
+    <div class="row"><label>Align</label>
+      <select id="fAlign"><option value="center">center</option><option value="left">left</option><option value="right">right</option></select></div>
+
+    <h2>Pointing hand / arrow</h2>
+    <div id="arrowCtl">
+      <div class="row"><label>Glyph</label><input type="text" id="fAg" maxlength="4" style="flex:0 0 64px"><span class="note" id="arrowTgt"></span></div>
+      <div class="row"><label>Nudge X / Y</label><input type="number" id="fAdx" step="2"><input type="number" id="fAdy" step="2"></div>
+      <div class="row"><label>Hide arrow</label><input type="checkbox" id="fAhide"></div>
+      <div class="hint">Drag the 👇 on the stage to nudge it. (3 ability beats show a hand on each ability — those follow the glyph + nudge.)</div>
+    </div>
+    <div id="noArrow" class="hint dim">This step has no pointing arrow.</div>
+
+    <hr>
+    <button class="btn" id="resetStep" style="width:100%">↺ Reset this step to defaults</button>
+
+    <h2>Global defaults</h2>
+    <div class="hint">Apply to every step unless that step overrides them.</div>
+    <div class="row"><label>Width</label><input type="range" id="gW" min="200" max="760" step="2"><span class="val" id="gWv"></span></div>
+    <div class="row"><label>Body size</label><input type="range" id="gFs" min="9" max="30" step="0.5"><span class="val" id="gFsv"></span></div>
+    <div class="row"><label>Title size</label><input type="range" id="gTs" min="11" max="34" step="0.5"><span class="val" id="gTsv"></span></div>
+    <div class="row"><label>Padding</label><input type="range" id="gPad" min="6" max="40" step="1"><span class="val" id="gPadv"></span></div>
+    <div class="row"><label>Line height</label><input type="range" id="gLh" min="1" max="2.2" step="0.05"><span class="val" id="gLhv"></span></div>
+    <div class="row"><label>Align</label>
+      <select id="gAlign"><option value="center">center</option><option value="left">left</option><option value="right">right</option></select></div>
+  </div>
+</main>
+
+<script>
+// ---- built-in defaults (match #tutmodal in index.html) ----
+const DEF = { w:440, fs:14.5, ts:17, pad:18, lh:1.5, align:'center', anchor:'low' };
+const LS_KEY = 'nrfh_tut_design_v1';
+// arrow target → an approximate spot on the mock stage (% of stage)
+const ARROW_POS = {
+  boss:{x:90,y:38}, hero:{x:6,y:54}, health:{x:18,y:14},
+  start:{x:92,y:90}, buyroom:{x:6,y:90}, abil:{x:64,y:90}, hand:{x:16,y:90}
+};
+
+let STEPS = [];                       // [{title,body,pauseBody,runBody,overlay,gate,arrow}]
+let data = { global:{}, steps:{} };   // sparse overrides being designed
+let cur = 0;
+
+// ---------- load the real step list from index.html (stays in sync) ----------
+function parseTUT(src){
+  const a = src.indexOf('const TUT=[');
+  if(a < 0) return [];
+  // find the end of the array: first "];" after a "/*23*/"-style last entry
+  const end = src.indexOf('\n];', a);
+  const block = src.slice(a, end < 0 ? a+40000 : end);
+  // each step begins with a /*marker*/ comment — split on those
+  const chunks = block.split(/\/\*[^*]*\*\//).slice(1);
+  const grab = (s, key, q) => { const m = s.match(new RegExp(key + ':' + q + '((?:[^' + q + '\\\\]|\\\\.)*)' + q)); return m ? m[1].replace(/\\"/g,'"').replace(/\\'/g,"'") : ''; };
+  return chunks.map(c => ({
+    title: grab(c,'title','"'),
+    body: grab(c,'body','"'),
+    pauseBody: grab(c,'pauseBody','"'),
+    runBody: grab(c,'runBody','"'),
+    overlay: /overlay\s*:\s*true/.test(c),
+    gate: grab(c,'gate',"'"),
+    arrow: grab(c,'arrow',"'"),
+    hi: grab(c,'hi',"'")
+  }));
+}
+async function loadSteps(){
+  try{
+    const r = await fetch('index.html', {cache:'no-store'});
+    const t = await r.text();
+    STEPS = parseTUT(t);
+  }catch(e){ STEPS = []; }
+  if(!STEPS.length){
+    document.getElementById('loaded').textContent = 'could not read index.html — open this page from the game folder';
+    STEPS = [{title:'(no steps found)', body:'', overlay:false, gate:'', arrow:''}];
+  } else {
+    document.getElementById('loaded').textContent = STEPS.length + ' steps loaded';
+  }
+  buildStepList();
+  load();
+  select(0);
+}
+
+// ---------- effective value = step override ?? global ?? built-in ----------
+function eff(field){
+  const s = data.steps[cur] || {};
+  if(s[field] != null) return s[field];
+  if(data.global[field] != null) return data.global[field];
+  return DEF[field];
+}
+function setStep(field, v){ (data.steps[cur] = data.steps[cur] || {})[field] = v; save(); render(); }
+function clearStep(field){ if(data.steps[cur]){ delete data.steps[cur][field]; if(!Object.keys(data.steps[cur]).length) delete data.steps[cur]; } save(); render(); }
+function setGlobal(field, v){ data.global[field] = v; save(); render(); }
+
+// ---------- the live preview ----------
+function render(){
+  const st = STEPS[cur] || {};
+  const tut = document.getElementById('tut');
+  const body = document.getElementById('tutBody');
+  const title = document.getElementById('tutTitle');
+  // text (override or original)
+  const s = data.steps[cur] || {};
+  title.innerHTML = (s.title != null ? s.title : st.title) || '';
+  title.style.display = title.innerHTML ? '' : 'none';
+  body.innerHTML = (s.body != null ? s.body : st.body) || '<i>(no body)</i>';
+  // box style
+  tut.style.width = 'min(' + eff('w') + 'px, calc(100% - 24px))';
+  tut.style.padding = eff('pad') + 'px';
+  tut.style.textAlign = eff('align');
+  title.style.fontSize = eff('ts') + 'px';
+  body.style.fontSize = eff('fs') + 'px';
+  body.style.lineHeight = eff('lh');
+  body.style.textAlign = eff('align');
+  // position
+  const anchor = eff('anchor');
+  let x, y;
+  if(anchor === 'free'){ x = eff('x'); y = eff('y'); }
+  else { x = 50; y = ({low:70, center:50, top:20, bottom:80})[anchor] || 70; }
+  tut.style.left = x + '%'; tut.style.top = y + '%';
+  // arrow (floating arrow for st.arrow steps; the 'abil' beats show 3 ability hands)
+  const arrow = document.getElementById('arrow');
+  const tgt = st.arrow || (st.hi==='abil' ? 'abil' : '');
+  if(tgt && !eff('ahide')){
+    arrow.style.display = '';
+    arrow.textContent = eff('ag') || '👇';
+    const base = ARROW_POS[tgt] || {x:50,y:50};
+    // nudge is in px relative to the stage size → convert to %
+    const stage = document.getElementById('stage').getBoundingClientRect();
+    const ax = base.x + (eff('adx')||0)/stage.width*100;
+    const ay = base.y + (eff('ady')||0)/stage.height*100;
+    arrow.style.left = ax + '%'; arrow.style.top = ay + '%';
+  } else { arrow.style.display = 'none'; }
+  syncControls();
+}
+
+// ---------- controls reflect the current step ----------
+function syncControls(){
+  const st = STEPS[cur] || {}, s = data.steps[cur] || {};
+  const V = (id,v)=>{ const el=document.getElementById(id); if(el && el.value!=v) el.value=v; };
+  const T = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  V('fTitle', s.title != null ? s.title : st.title || '');
+  V('fBody', s.body != null ? s.body : st.body || '');
+  V('fPause', s.pauseBody != null ? s.pauseBody : st.pauseBody || '');
+  V('fRun', s.runBody != null ? s.runBody : st.runBody || '');
+  document.getElementById('pauseRow').style.display = st.pauseBody ? '' : 'none';
+  document.getElementById('runRow').style.display = st.runBody ? '' : 'none';
+  V('fAnchor', eff('anchor'));
+  document.getElementById('xyRow').style.display = eff('anchor')==='free' ? '' : 'none';
+  V('fX', round(eff('x') ?? 50)); V('fY', round(eff('y') ?? 70));
+  V('fW', eff('w')); T('fWv', eff('w')+'px');
+  V('fFs', eff('fs')); T('fFsv', eff('fs')+'px');
+  V('fTs', eff('ts')); T('fTsv', eff('ts')+'px');
+  V('fPad', eff('pad')); T('fPadv', eff('pad')+'px');
+  V('fLh', eff('lh')); T('fLhv', eff('lh'));
+  V('fAlign', eff('align'));
+  // arrow controls
+  const tgt = st.arrow || (st.hi==='abil' ? 'abil' : '');
+  document.getElementById('arrowCtl').style.display = tgt ? '' : 'none';
+  document.getElementById('noArrow').style.display = tgt ? 'none' : '';
+  if(tgt){
+    V('fAg', eff('ag') || '👇'); V('fAdx', eff('adx')||0); V('fAdy', eff('ady')||0);
+    document.getElementById('fAhide').checked = !!eff('ahide');
+    T('arrowTgt', st.arrow ? ('→ points at: ' + st.arrow) : '→ the 3 ability hands');
+  }
+  // global
+  V('gW', data.global.w ?? DEF.w); T('gWv', (data.global.w ?? DEF.w)+'px');
+  V('gFs', data.global.fs ?? DEF.fs); T('gFsv', (data.global.fs ?? DEF.fs)+'px');
+  V('gTs', data.global.ts ?? DEF.ts); T('gTsv', (data.global.ts ?? DEF.ts)+'px');
+  V('gPad', data.global.pad ?? DEF.pad); T('gPadv', (data.global.pad ?? DEF.pad)+'px');
+  V('gLh', data.global.lh ?? DEF.lh); T('gLhv', data.global.lh ?? DEF.lh);
+  V('gAlign', data.global.align ?? DEF.align);
+}
+function round(n){ return Math.round(n*10)/10; }
+
+function buildStepList(){
+  const sel = document.getElementById('stepSel');
+  sel.innerHTML = STEPS.map((s,i)=>{
+    const t = (s.title || (s.overlay?'(overlay)':'(step)')).replace(/<[^>]+>/g,'');
+    return `<option value="${i}">${i}. ${t}</option>`;
+  }).join('');
+}
+function select(i){
+  cur = Math.max(0, Math.min(STEPS.length-1, i));
+  document.getElementById('stepSel').value = cur;
+  const st = STEPS[cur];
+  document.getElementById('stepkind').textContent =
+    (st.overlay ? 'Reward / overlay step — box position is not used (full-screen). Text still applies.' :
+     'Tip box step' + (st.gate ? ' · gate: '+st.gate : ''));
+  render();
+}
+
+// ---------- text override: only store if changed from the original ----------
+function textOverride(field, srcField){
+  const val = document.getElementById(field).value;
+  const orig = (STEPS[cur][srcField] || '');
+  if(val === orig) clearStep(srcField); else setStep(srcField, val);
+}
+
+// ---------- wire controls ----------
+function wire(){
+  document.getElementById('prev').onclick = ()=>select(cur-1);
+  document.getElementById('next').onclick = ()=>select(cur+1);
+  document.getElementById('stepSel').onchange = e=>select(+e.target.value);
+
+  document.getElementById('fTitle').oninput = ()=>textOverride('fTitle','title');
+  document.getElementById('fBody').oninput = ()=>textOverride('fBody','body');
+  document.getElementById('fPause').oninput = ()=>textOverride('fPause','pauseBody');
+  document.getElementById('fRun').oninput = ()=>textOverride('fRun','runBody');
+
+  document.getElementById('fAnchor').onchange = e=>{
+    if(e.target.value === 'free'){ if(eff('x')==null) setStep('x',50); if(eff('y')==null) setStep('y',70); }
+    setStep('anchor', e.target.value);
+  };
+  document.getElementById('fX').oninput = e=>setStep('x', +e.target.value);
+  document.getElementById('fY').oninput = e=>setStep('y', +e.target.value);
+  const sr = (id,field)=>document.getElementById(id).oninput = e=>setStep(field, +e.target.value);
+  sr('fW','w'); sr('fFs','fs'); sr('fTs','ts'); sr('fPad','pad'); sr('fLh','lh');
+  document.getElementById('fAlign').onchange = e=>setStep('align', e.target.value);
+
+  document.getElementById('fAg').oninput = e=>setStep('ag', e.target.value || '👇');
+  document.getElementById('fAdx').oninput = e=>setStep('adx', +e.target.value);
+  document.getElementById('fAdy').oninput = e=>setStep('ady', +e.target.value);
+  document.getElementById('fAhide').onchange = e=> e.target.checked ? setStep('ahide', true) : clearStep('ahide');
+
+  document.getElementById('resetStep').onclick = ()=>{ delete data.steps[cur]; save(); render(); };
+
+  const gr = (id,field)=>document.getElementById(id).oninput = e=>setGlobal(field, +e.target.value);
+  gr('gW','w'); gr('gFs','fs'); gr('gTs','ts'); gr('gPad','pad'); gr('gLh','lh');
+  document.getElementById('gAlign').onchange = e=>setGlobal('align', e.target.value);
+
+  document.getElementById('btnExport').onclick = exportJson;
+  document.getElementById('btnReset').onclick = ()=>{ if(confirm('Clear ALL tutorial design overrides?')){ data={global:{},steps:{}}; save(); render(); } };
+  document.getElementById('btnImport').onclick = ()=>document.getElementById('file').click();
+  document.getElementById('file').onchange = importJson;
+
+  dragBox(); dragArrow(); resizeBox();
+}
+
+// ---------- drag the box (→ Free anchor) ----------
+function dragBox(){
+  const tut = document.getElementById('tut'), stage = document.getElementById('stage');
+  let drag = null;
+  tut.addEventListener('pointerdown', e=>{
+    if(e.target.id === 'grip' || e.target.classList.contains('go2')) return;
+    const r = stage.getBoundingClientRect();
+    drag = {}; tut.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  tut.addEventListener('pointermove', e=>{
+    if(!drag) return;
+    const r = stage.getBoundingClientRect();
+    const x = clamp((e.clientX - r.left)/r.width*100, 2, 98);
+    const y = clamp((e.clientY - r.top)/r.height*100, 4, 96);
+    if(eff('anchor') !== 'free') (data.steps[cur]=data.steps[cur]||{}).anchor='free';
+    (data.steps[cur]=data.steps[cur]||{}).x = round(x);
+    (data.steps[cur]).y = round(y);
+    save(); render();
+  });
+  tut.addEventListener('pointerup', ()=>{ drag=null; });
+}
+function resizeBox(){
+  const grip = document.getElementById('grip'), stage=document.getElementById('stage');
+  let on=false;
+  grip.addEventListener('pointerdown', e=>{ on=true; grip.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation(); });
+  grip.addEventListener('pointermove', e=>{
+    if(!on) return;
+    const tutR = document.getElementById('tut').getBoundingClientRect();
+    const w = clamp(Math.round((e.clientX - tutR.left)*2/1)/1*1, 200, 760); // width ≈ 2×(pointer-from-centre)
+    const cx = tutR.left + tutR.width/2;
+    setStep('w', clamp(Math.round((e.clientX - cx)*2), 200, 760));
+  });
+  grip.addEventListener('pointerup', ()=>{ on=false; });
+}
+function dragArrow(){
+  const arrow = document.getElementById('arrow'), stage=document.getElementById('stage');
+  let on=false;
+  arrow.addEventListener('pointerdown', e=>{ on=true; arrow.setPointerCapture(e.pointerId); e.preventDefault(); });
+  arrow.addEventListener('pointermove', e=>{
+    if(!on) return;
+    const st = STEPS[cur]; const tgt = st.arrow || (st.hi==='abil'?'abil':''); if(!tgt) return;
+    const r = stage.getBoundingClientRect();
+    const base = ARROW_POS[tgt] || {x:50,y:50};
+    const px = (e.clientX - r.left) - base.x/100*r.width;
+    const py = (e.clientY - r.top) - base.y/100*r.height;
+    (data.steps[cur]=data.steps[cur]||{}).adx = Math.round(px);
+    (data.steps[cur]).ady = Math.round(py);
+    save(); render();
+  });
+  arrow.addEventListener('pointerup', ()=>{ on=false; });
+}
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+// ---------- persistence + export ----------
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(_){ } }
+function load(){ try{ const j = JSON.parse(localStorage.getItem(LS_KEY)); if(j && j.steps) data=j; }catch(_){ } }
+function prune(){
+  // drop empty step objects so the json stays tidy
+  const out = { global: {...data.global}, steps: {} };
+  for(const k in data.steps){ const s=data.steps[k]; if(s && Object.keys(s).length) out.steps[k]=s; }
+  return out;
+}
+function exportJson(){
+  const blob = new Blob([JSON.stringify(prune(), null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'tutorial.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+function importJson(e){
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{ try{ const j=JSON.parse(rd.result); if(j&&typeof j==='object'){ data={global:j.global||{}, steps:j.steps||{}}; save(); render(); } }catch(err){ alert('Bad JSON: '+err.message); } };
+  rd.readAsText(f);
+  e.target.value='';
+}
+
+wire();
+loadSteps();
+</script>
+</body>
+</html>
