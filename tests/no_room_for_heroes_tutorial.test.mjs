@@ -6,10 +6,10 @@
 //   node tests/no_room_for_heroes_tutorial.test.mjs
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
-const A = loadGame(`freshGame,startTutorial,tutAdvance,tutBtn,tutAllow,tutStepObj,
+const A = loadGame(`freshGame,startTutorial,tutAdvance,tutBtn,tutAllow,tutStepObj,tutText,
   startWave,placeCard,upgradeRoomGold,buySlot,moveRoom,takeDraft,pickRelic,heroDies,afterWave,bossDies,
   TUT,roomTrapUnits,roomMonUnits,draw,update,
-  get G(){return G;},set G(v){G=v;}`);
+  get G(){return G;},set G(v){G=v;},set TUT_CFG(v){TUT_CFG=v;}`);
 const t = harness('tutorial (guided run)');
 
 A.startTutorial();
@@ -84,5 +84,15 @@ A.takeDraft(2);   // the Bone Pit (monster) — locked, must be ignored
 t.ok(A.G.tutStep === ti && A.G.hand.length === 0, 'picking the monster card does nothing (locked)');
 A.takeDraft(0);   // a trap — allowed, advances the beat
 t.ok(A.G.hand.length === 1 && A.G._tutTrap === 'spike' && A.G.tutStep === ti + 1, 'picking a trap is allowed and advances');
+
+// --- a downloaded tutorial.json (designed in tutorial.html) overrides the wording ---
+A.startTutorial();
+A.TUT_CFG = { global:{}, steps:{ '0':{ title:'CUSTOM', body:'CUSTOM BODY' } } };
+A.G.tutStep = 0;
+t.ok(A.tutText('body') === 'CUSTOM BODY' && A.tutText('title') === 'CUSTOM', 'a tutorial.json step override replaces the wording');
+A.G.tutStep = 1;
+t.ok(A.tutText('body') === (A.TUT[1].body || ''), 'an un-overridden step keeps its built-in wording');
+A.TUT_CFG = null;
+t.ok(A.tutText('title') === (A.TUT[A.G.tutStep].title || ''), 'with no config, wording is the built-in default');
 
 t.done();
