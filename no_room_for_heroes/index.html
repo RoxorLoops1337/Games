@@ -7990,7 +7990,6 @@ panel.addEventListener('pointerdown', e=>{
 });
 function startGearGhost(gi){
   const g=G.chest[gi]; if(!g) return; const col=RELIC_TIERS[g.t].col;
-  closeChest();   // a drag begins → close the popup so the board is visible to drop on a monster
   cardGhost=document.createElement('div'); cardGhost.className='gcell cardghost'; cardGhost.style.borderColor=col;
   cardGhost.innerHTML=`<span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span>`;
   document.body.appendChild(cardGhost);
@@ -7999,7 +7998,13 @@ window.addEventListener('pointermove', e=>{
   if(!gearDrag || e.pointerId!==gearDrag.id) return;
   const dx=e.clientX-gearDrag.sx, dy=e.clientY-gearDrag.sy;
   if(!gearDrag.dragging && Math.hypot(dx,dy)>8){ gearDrag.dragging=true; startGearGhost(gearDrag.gi); hideInspect(); }
-  if(gearDrag.dragging){ e.preventDefault(); moveCardGhost(e.clientX,e.clientY); }
+  if(gearDrag.dragging){ e.preventDefault(); moveCardGhost(e.clientX,e.clientY);
+    // stay open while dragging inside the popup (drop on another piece to merge);
+    // close it the moment the drag leaves the popup so you can drop on a monster
+    if(chestOpen){ const p=document.getElementById('chestpop');
+      if(p){ const r=p.getBoundingClientRect();
+        if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom) closeChest(); } }
+  }
 }, {passive:false});
 function endGearDrag(e){
   if(!gearDrag || (e && e.pointerId!==gearDrag.id)) return;
