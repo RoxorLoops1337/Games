@@ -2029,9 +2029,9 @@ function gotoMenu(){
 // Start Game → pick a mode.
 function openPlay(){
   overlay.classList.add('show');
-  const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
+  const sub=t=>`<br><span style="font-weight:normal;opacity:.78;font-size:15px">${t}</span>`;
   overlay.innerHTML = `<h1>⚔️ Start Game</h1>
-    <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
+    <div class="menu-btns" style="flex-direction:column;align-items:stretch;gap:14px;width:480px;max-width:94%">
       <button class="go" style="min-width:270px" onclick="startCampaign()">⚔️ Campaign${(RUNES.asc||0)?` <span style="color:#c79bff">👑A${RUNES.asc}</span>`:''}${sub((RUNES.asc||0)?`ascension ${RUNES.asc}: +${Math.round(RUNES.asc*18)}% harder — the crown remembers`:'the 50-level siege — relics, mandates, the King')}</button>
       <button style="min-width:270px" onclick="startEndless()">♾️ Endless${sub('no cap, no King — how long can you last?')}</button>
       <button style="min-width:270px" class="${tutDoneGet()?'':'tut-pulse'}" onclick="startTutorial()">📖 Tutorial${sub('learn the loop in one guided run')}</button>
