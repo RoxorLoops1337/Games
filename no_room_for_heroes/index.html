@@ -36,15 +36,14 @@
                radial-gradient(90px 160px at 96.5% 50%, rgba(255,150,60,.11), transparent 70%);
     animation:barglow 3.4s ease-in-out infinite alternate; }
   @keyframes barglow{ from{opacity:.5} to{opacity:1} }
-  #app{position:relative;z-index:1;display:flex;flex-direction:column;margin:auto;overflow:hidden;border-radius:11px;
-    --ui:1;   /* whole-game UI scale (= frameH/720); top bar + bottom panel zoom by this so the game scales as one unit. Set in resize() */
-    box-shadow:0 0 0 1px #6a5838, 0 0 0 5px #14102a, 0 0 0 7px #3a2c5a, 0 18px 52px #000c, 0 0 90px -14px #b98a3a40;
-    width:min(100vw, 177.78vh);  height:min(100vh, 56.25vw);
-    width:min(100vw, 177.78dvh); height:min(100dvh, 56.25vw);}
+  #app{position:fixed; left:50%; top:50%; z-index:1;display:flex;flex-direction:column;overflow:hidden;border-radius:11px;
+    /* the WHOLE game is one fixed 1280×720 design, scaled as a single unit to fit any screen
+       (like scaling a JPEG) — identical layout everywhere, just bigger/smaller. resize() sets --gs. */
+    width:1280px; height:720px;
+    transform:translate(-50%,-50%) scale(var(--gs,1)); transform-origin:center center;
+    box-shadow:0 0 0 1px #6a5838, 0 0 0 5px #14102a, 0 0 0 7px #3a2c5a, 0 18px 52px #000c, 0 0 90px -14px #b98a3a40;}
   /* optional 16:10 frame (a touch taller) — toggled in the pause menu */
-  html.ar-1610 #app{
-    width:min(100vw, 160vh);  height:min(100vh, 62.5vw);
-    width:min(100vw, 160dvh); height:min(100dvh, 62.5vw);}
+  html.ar-1610 #app{ height:800px; }
   /* portrait PHONES get a rotate gate (iPad portrait stays allowed) */
   #rotate{display:none;position:fixed;inset:0;z-index:999;background:#0c0916;
     flex-direction:column;align-items:center;justify-content:center;gap:12px;
@@ -87,7 +86,7 @@
   #topbar{display:flex;align-items:center;gap:8px;background:linear-gradient(#1c1534,#120c22);
     padding:calc(6px + env(safe-area-inset-top,0px)) 10px 6px;
     border-bottom:2px solid var(--line);box-shadow:0 2px 0 #0a0716,0 4px 12px #00000055;
-    font-size:13px;flex-wrap:wrap;zoom:var(--ui,1);}
+    font-size:13px;flex-wrap:wrap;}
   .stat{display:flex;align-items:center;gap:5px;background:linear-gradient(#2b2148,#1c1536);
     border:1px solid #483872;padding:3px 8px;border-radius:7px;white-space:nowrap;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px #0006;}
@@ -120,7 +119,7 @@
   #panel{background:linear-gradient(#181128,#100b1e);border-top:2px solid var(--line);
     box-shadow:0 -2px 0 #0a0716,0 -4px 14px #00000055;
     padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px));
-    min-height:74px;flex:0 0 auto;zoom:var(--ui,1);}
+    min-height:74px;flex:0 0 auto;}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   /* 16-bit pixel buttons: blocky border, hard drop-shadow bevel, pixel font.
      The hard 0-blur shadow reads as a raised pixel edge; :active presses it in. */
@@ -543,6 +542,7 @@ let _inspHideT = 0, _overInspect = false;
 let VW = 960, VH = 420;          // virtual units (recomputed in resize())
 let baseK = 1;                   // virtual→device-pixel scale
 let cssW = 960, cssH = 420;      // canvas CSS size in px
+let GSCALE = 1;                  // whole-game scale: the fixed design is drawn at 1280×(720|800) and #app is transform-scaled by this to fit the screen (like scaling a JPEG). Overlays positioned from on-screen rects divide by it.
 let zoom = 1;                    // dungeon zoom (pinch / buttons / wheel)
 const ZMAX = 1.7;
 const STAGEW = 132;              // staging area (left of the entrance) for waiting heroes
@@ -1578,17 +1578,24 @@ let speedMul = 1;    // run speed multiplier
 
 // Size the canvas backing store to the stage, derive VW from the real aspect.
 function resize(){
-  // Scale the top bar + bottom panel with the frame height so the WHOLE game scales as one
-  // unit (the arena already keeps constant framing at any size) — same look on every screen,
-  // just bigger/smaller. REF 720 = the design height, where the UI is at 1× full size.
+  // The whole game is one fixed 1280×(720|800) design that scales as a single unit to fit the
+  // screen, like scaling a JPEG. Compute that scale and apply it as the #app transform.
+  const designW = 1280, designH = (document.documentElement.classList && document.documentElement.classList.contains('ar-1610')) ? 800 : 720;
+  const vw = window.innerWidth || designW, vh = window.innerHeight || designH;
+  GSCALE = Math.min(vw/designW, vh/designH) || 1;
   const _app = document.getElementById('app');
-  if(_app && _app.style && _app.style.setProperty){ const fh = _app.getBoundingClientRect().height;
-    if(fh > 2){ const ui = Math.max(0.5, Math.min(3.5, fh/720)).toFixed(3);
-      if(_app.style.getPropertyValue('--ui') !== ui) _app.style.setProperty('--ui', ui); } }
+  if(_app && _app.style && _app.style.setProperty){
+    const gs = GSCALE.toFixed(4);
+    if(_app.style.getPropertyValue('--gs') !== gs) _app.style.setProperty('--gs', gs);
+  }
+  // Size the canvas from the UNSCALED design layout (offsetWidth/Height ignore the transform);
+  // the #app transform then scales the rendered pixels along with everything else. The virtual
+  // width VW is therefore constant → the arena is framed identically at every screen size.
   const r = stage.getBoundingClientRect();
-  if(r.width<2 || r.height<2) return;
+  const w = stage.offsetWidth || r.width, h = stage.offsetHeight || r.height;
+  if(w<2 || h<2) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  cssW = r.width; cssH = r.height;
+  cssW = w; cssH = h;
   VH = 420;                                   // fixed virtual height
   VW = Math.max(360, Math.round(VH * cssW / cssH));
   CV.width  = Math.round(cssW * dpr);
@@ -2551,14 +2558,17 @@ function showTownPop(id){
     ${maxed?'<div class="small" style="color:#7bdc6b;font-weight:bold;margin-top:4px">✔ FULLY BUILT</div>'
       :`<button class="go" ${afford?'':'disabled'} onclick="buildTown('${id}')" style="margin-top:6px;padding:6px 10px;font-size:12px;min-height:34px">${lvl>0?`Upgrade → Lv ${lvl+1}`:'Build'} · ${costStr(next)}</button>`}`;
   // anchor next to the plot (through the pan/zoom transform), clamped inside the map
-  const r=cv.getBoundingClientRect(); const k=_tKCss*townZoom;
+  // _tKCss is measured from the on-screen rect, so /GSCALE brings k into the #townpop's own
+  // (transform-scaled) design px space.
+  const r=cv.getBoundingClientRect(); const k=(_tKCss*townZoom)/GSCALE;
   const p=TOWN_PLOTS[id];
   el.style.display='block';
   const ew=el.offsetWidth||220, eh=el.offsetHeight||120;
+  const rw=(r.width||920)/GSCALE, rh=(r.height||520)/GSCALE;
   let x=(p.x-townCamX)*k+18, y=(p.y-60-townCamY)*k-eh/2;
-  if(x+ew > (r.width||920)-6) x=(p.x-townCamX)*k-ew-18;
+  if(x+ew > rw-6) x=(p.x-townCamX)*k-ew-18;
   el.style.left=Math.round(Math.max(6,x))+'px';
-  el.style.top =Math.round(Math.max(6,Math.min(((r.height||520))-eh-6, y)))+'px';
+  el.style.top =Math.round(Math.max(6,Math.min(rh-eh-6, y)))+'px';
 }
 // ---- the painted map ----
 function drawTownMap(cv){
@@ -2945,11 +2955,15 @@ function tutArrowTick(){
     if(el){ const r=el.getBoundingClientRect(); px=r.left+r.width/2; py=r.top-4; }
   }
   const c=tutCfg(G.tutStep);                          // designed arrow overrides (glyph / nudge / hide)
-  if(c){ if(c.ahide){ arrow.classList.remove('on'); return; }
-    if(c.ag) glyph=c.ag; if(c.adx) px=(px||0)+(+c.adx); if(c.ady) py=(py||0)+(+c.ady); }
+  if(c){ if(c.ahide){ arrow.classList.remove('on'); return; } if(c.ag) glyph=c.ag; }
   if(px==null){ arrow.classList.remove('on'); return; }
+  // #tutarrow lives inside the transform-scaled #app → map the viewport target into #app-local
+  // design px, then apply the designer's nudge (which is authored in design px).
+  const _ar=document.getElementById('app').getBoundingClientRect();
+  let lx=(px-_ar.left)/GSCALE, ly=(py-_ar.top)/GSCALE;
+  if(c){ if(c.adx) lx+=(+c.adx); if(c.ady) ly+=(+c.ady); }
   if(arrow.textContent!==glyph) arrow.textContent=glyph;
-  arrow.style.left=px+'px'; arrow.style.top=py+'px';
+  arrow.style.left=lx+'px'; arrow.style.top=ly+'px';
   arrow.classList.add('on');
 }
 // Early-tutorial cards explain themselves in plain language — the elemental-combo
@@ -3192,9 +3206,9 @@ function attachRuneGestures(vp){
     if(!pts.has(e.pointerId)) return;
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(pts.size>=2 && pinch){ const[a,b]=[...pts.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y);
-      const r=rect(), mx=(a.x+b.x)/2-r.left, my=(a.y+b.y)/2-r.top;
+      const r=rect(), mx=((a.x+b.x)/2-r.left)/GSCALE, my=((a.y+b.y)/2-r.top)/GSCALE;   // on-screen → design px (#rtree lives in the scaled #app)
       runeZoomAround(mx,my, pinch.s0*(d/pinch.d0)); runeDragged=true; grab(e.pointerId); }
-    else if(panStart){ const dx=e.clientX-panStart.x, dy=e.clientY-panStart.y;
+    else if(panStart){ const dx=(e.clientX-panStart.x)/GSCALE, dy=(e.clientY-panStart.y)/GSCALE;
       if(Math.abs(dx)+Math.abs(dy)>8){ runeDragged=true; grab(e.pointerId); }
       if(runeDragged){ runeView.x=panStart.vx+dx; runeView.y=panStart.vy+dy; applyRuneView(); } }
   };
@@ -3204,7 +3218,7 @@ function attachRuneGestures(vp){
     else if(pts.size===1){ const p=[...pts.values()][0]; panStart={x:p.x,y:p.y,vx:runeView.x,vy:runeView.y}; } };
   vp.onpointerup=up; vp.onpointercancel=up;
   vp.onwheel=e=>{ e.preventDefault(); const r=rect();
-    runeZoomAround(e.clientX-r.left, e.clientY-r.top, runeView.scale*(e.deltaY<0?1.12:0.89)); };
+    runeZoomAround((e.clientX-r.left)/GSCALE, (e.clientY-r.top)/GSCALE, runeView.scale*(e.deltaY<0?1.12:0.89)); };
   // if the gesture was a pan/pinch, swallow the node click so it doesn't buy/select
   vp.addEventListener('click', e=>{ if(runeDragged){ e.stopPropagation(); e.preventDefault(); } }, true);
 }
@@ -4523,8 +4537,9 @@ function amPop(id){ const e=document.getElementById(id); if(e){ e.classList.remo
 function amSpawnFly(icon,color,targetId){
   const tgt=document.getElementById(targetId); if(!tgt||!overlay) return;
   const o=overlay.getBoundingClientRect(), t=tgt.getBoundingClientRect();
-  const tx=t.left-o.left+t.width/2, ty=t.top-o.top+t.height/2;
-  const sx=o.width*0.5+(Math.random()*220-110), sy=o.height*0.80;
+  // overlay is inside the transform-scaled #app → convert on-screen rect deltas to design px
+  const tx=(t.left-o.left+t.width/2)/GSCALE, ty=(t.top-o.top+t.height/2)/GSCALE;
+  const sx=(o.width/GSCALE)*0.5+(Math.random()*220-110), sy=(o.height/GSCALE)*0.80;
   const el=document.createElement('div'); el.className='flyicon'; el.textContent=icon; if(color) el.style.color=color;
   el.style.left=sx+'px'; el.style.top=sy+'px'; overlay.appendChild(el);
   requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.style.transform='translate('+(tx-sx)+'px,'+(ty-sy)+'px) scale(.4)'; el.style.opacity='.15'; }));
@@ -7468,9 +7483,10 @@ function showInspect(html, hover){
   inspectEl.innerHTML='<span class="ix" onclick="hideInspect()">✕</span>'+html;
   inspectEl.scrollTop=0;
   inspectEl.classList.add('show'); inspectHover=!!hover; inspectPinned=!hover; inspectEnt=null;
-  // anchor the bubble near the click/hover instead of the far bottom-left corner
+  // anchor the bubble near the click/hover instead of the far bottom-left corner.
+  // Work in UNSCALED design px (offset*), since #inspect lives inside the transform-scaled #app.
   const r=CV.getBoundingClientRect();
-  const stW=r.width||800, stH=r.height||450;
+  const stW=CV.offsetWidth||r.width||800, stH=CV.offsetHeight||r.height||450;
   const w=inspectEl.offsetWidth||240, h=inspectEl.offsetHeight||120;
   if(lastPtrCX==null){          // hand-card / relic hover: keep the centred bottom anchor
     inspectEl.style.left=Math.round(Math.max(8,(stW-w)/2))+'px';
@@ -7783,7 +7799,7 @@ function frameWaveRun(){ if(!G) return;
   camX=corridorWidth()-VW/zoom; draw();
 }
 CV.addEventListener('pointerdown', e=>{
-  { const _r=CV.getBoundingClientRect(); lastPtrCX=e.clientX-_r.left; lastPtrCY=e.clientY-_r.top; }   // anchor for the inspect bubble
+  { const _r=CV.getBoundingClientRect(); lastPtrCX=(e.clientX-_r.left)/GSCALE; lastPtrCY=(e.clientY-_r.top)/GSCALE; }   // anchor for the inspect bubble
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
   e.preventDefault();
   pointers[e.pointerId]={x:e.clientX,y:e.clientY};
@@ -7881,7 +7897,7 @@ CV.addEventListener('pointercancel', endDrag);
 // but hovering a DIFFERENT entity replaces it, so room info (veteran XP etc.)
 // stays browsable. Hover-empty hides on a short grace timer.
 CV.addEventListener('mousemove', e=>{
-  { const _r=CV.getBoundingClientRect(); lastPtrCX=e.clientX-_r.left; lastPtrCY=e.clientY-_r.top; }
+  { const _r=CV.getBoundingClientRect(); lastPtrCX=(e.clientX-_r.left)/GSCALE; lastPtrCY=(e.clientY-_r.top)/GSCALE; }
   if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
   // only the band the rooms/actors actually occupy — hovering the empty floor
   // below (or the sky above) shouldn't pop the bubble
