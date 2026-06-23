@@ -208,20 +208,20 @@
     background:var(--gold);border-radius:8px;padding:2px 8px;}
   .amdesc{font-size:13px;line-height:1.35;opacity:.92;margin-top:3px;}
   @keyframes amreveal{0%{transform:scale(.1) rotate(-200deg);opacity:0}70%{transform:scale(1.12) rotate(7deg);opacity:1}100%{transform:scale(1) rotate(0)}}
-  #overlay h1{font-size:34px;margin:0 0 4px;color:var(--gold);letter-spacing:1px;
+  #overlay h1{font-size:54px;margin:0 0 6px;color:var(--gold);letter-spacing:1px;
     text-shadow:0 2px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);}
-  #overlay h2{font-size:20px;margin:6px 0;color:var(--accent);}
-  #overlay p{max-width:620px;line-height:1.5;font-size:14px;opacity:.92;margin:6px 0;}
+  #overlay h2{font-size:30px;margin:8px 0;color:var(--accent);}
+  #overlay p{max-width:880px;line-height:1.5;font-size:19px;opacity:.92;margin:8px 0;}
   .choices{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
-  .choice{position:relative;width:160px;background:linear-gradient(160deg,#2a2050,#14102a);border:2px solid var(--line);
-    border-radius:14px;padding:12px;cursor:pointer;transition:transform .1s,border-color .15s,box-shadow .15s;
+  .choice{position:relative;width:212px;background:linear-gradient(160deg,#2a2050,#14102a);border:2px solid var(--line);
+    border-radius:14px;padding:16px;cursor:pointer;transition:transform .1s,border-color .15s,box-shadow .15s;
     box-shadow:0 6px 18px #0008,inset 0 1px 0 rgba(255,255,255,.05);}
   .choice:hover{transform:translateY(-4px);border-color:var(--gold);
     box-shadow:0 12px 26px #0009,0 0 18px #ffd34d55,inset 0 1px 0 rgba(255,255,255,.08);}
-  .choice .big{font-size:40px;}
+  .choice .big{font-size:54px;}
   /* painted card-art icons (icons/<type>.png) replacing the emoji on card faces */
   .card .ic .cardimg{width:90px;height:90px;object-fit:contain;display:block;margin:0 auto -3px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
-  .choice .big .cardimg{width:78px;height:78px;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));}
+  .choice .big .cardimg{width:104px;height:104px;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));}
   .abilimg{width:26px;height:26px;object-fit:contain;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));}
   /* painted relic / mandate / town-action icons — sized by context (default inline ~1.3em) */
   .relicimg{width:1.35em;height:1.35em;object-fit:contain;display:inline-block;vertical-align:-.35em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
@@ -242,8 +242,8 @@
   .slotstats b{justify-self:end;color:#fff;}
   .slotstats .lbl{opacity:.78;}
   .slotstats .full{grid-column:1/-1;justify-self:center;}
-  .menu-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:14px;}
-  .menu-btns button{font-size:11px;padding:13px 20px;}
+  .menu-btns{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:22px;}
+  .menu-btns button{font-size:20px;padding:20px 34px;}
   /* ===== anime.js-inspired motion (vanilla, no dependency) — overshoot/spring
      entrances, staggered card reveals, and a soft overlay drift-in. ===== */
   @keyframes jzReveal{ 0%{opacity:0;transform:translateY(16px) scale(.94);} 100%{opacity:1;transform:translateY(0) scale(1);} }
@@ -269,7 +269,7 @@
     background-image:url('title/bg.png');}
   .titlescreen .tbg.missing{background:
     radial-gradient(120% 90% at 78% 22%,#3a2470 0%,#1a1030 55%,#0c0916 100%);}   /* fallback if art absent */
-  .titlelogo{position:absolute;left:50%;top:3%;width:min(440px,58%);height:auto;z-index:2;
+  .titlelogo{position:absolute;left:50%;top:4%;width:min(720px,74%);height:auto;z-index:2;
     image-rendering:pixelated;filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));
     transform-origin:50% 50%;animation:logoTwirl 2s cubic-bezier(.25,.46,.45,.94) both;}
   .titlelogo-fallback{position:absolute;left:50%;top:5%;z-index:2;width:84%;text-align:center;
@@ -278,7 +278,7 @@
     transform-origin:50% 50%;animation:logoTwirl 2s cubic-bezier(.25,.46,.45,.94) both;}
   .titlestart{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);z-index:3;
     animation:titleStartIn .45s ease-out 1.9s both;}
-  .titlestart button{font-size:15px;padding:16px 34px;min-height:54px;letter-spacing:1px;
+  .titlestart button{font-size:25px;padding:24px 54px;min-height:78px;letter-spacing:1px;
     background:#b0202a;border-color:#ff6a72;color:#fff;
     box-shadow:0 4px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);animation:titlePulse 1.6s ease-in-out infinite;}
   .titlestart button:hover:not(:disabled){background:#c8262f;}
