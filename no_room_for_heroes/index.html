@@ -235,6 +235,17 @@
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
+  /* Boss select: a horizontal carousel of big boss cards you scroll/swipe through */
+  .bosscarousel{display:flex;align-items:stretch;gap:18px;overflow-x:auto;overflow-y:hidden;
+    width:min(1180px,96%);margin:10px auto 0;padding:8px 16px 18px;
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+  .bosscarousel .choice{flex:0 0 286px;width:286px;margin-top:0;scroll-snap-align:center;
+    display:flex;flex-direction:column;}
+  .bosscarousel .choice h3{font-size:20px;}
+  .bosscarousel .choice .desc{font-size:13px;}
+  .bosscarousel .choice .small{font-size:12.5px;}
+  .bosscarousel .choice .stats{font-size:13px;}
+  .bosscarousel .choice.rlocked{justify-content:center;text-align:center;opacity:.96;}
   /* save-slot stats: a 3-column grid (icon · value · label) so every row lines
      up and never wraps; fixed floor height keeps every slot card the SAME size */
   .slotbody{min-height:86px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.45;margin:4px 0;font-size:15px;}
@@ -3218,26 +3229,32 @@ function renderEdicts(){
 function gotoBossSelect(){
   G.phase='bossSelect'; overlay.classList.add('show');
   const edTag = G.edicts.length ? ` · <span style="color:#ffd34d">⚖️ ${G.edicts.map(id=>EDICTS[id].ic).join('')} ×${edictRewardMul().toFixed(2)} runes</span>` : '';
-  overlay.innerHTML = `<h1>Choose your Boss</h1>
+  overlay.innerHTML = `
+    <button onclick="gotoEdicts()" style="position:absolute;left:22px;top:22px;z-index:3;font-size:15px;padding:12px 22px">← Back</button>
+    <h1>Choose your Boss</h1>
     <p>${G.mode==='campaign'?'Campaign — break a 50-wave siege, milestone mini-bosses & rewards.':'Endless — how long can you reign?'}${edTag}</p>
-    <div class="choices">${BOSS_KEYS.map((k,i)=>{
+    <div class="bosscarousel">${BOSS_KEYS.map((k,i)=>{
       const b=BOSSES[k]; const lk=!bossUnlocked(k);
       const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
-      return `<div class="choice jz${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="width:200px;animation-delay:${i*60}ms">
-        ${lk?'<div class="big">🔒</div>':`<img src="bosses/${k}.png" alt="${b.name}" style="height:84px;image-rendering:pixelated;display:block;margin:2px auto -2px">`}<h3>${b.name}</h3>
-        ${lk?`<div class="desc">🔒 Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills (you: ${RUNES.kills})</div>`
-            :`<div class="small" style="color:var(--gold);font-weight:bold">★ Mastery Lv ${xi.lvl}${xi.max?' (MAX)':''}</div>
-        <div class="bar" style="width:96%;height:16px;margin:4px auto;background:#2a2046">
-          <i style="width:${xi.max?100:Math.max(4,Math.round(xi.into/xi.need*100))}%;background:linear-gradient(90deg,#caa15e,#ffd34d)"></i>
-          <span style="line-height:16px">${xi.max?'★ MAX':xi.into+' / '+xi.need+' XP'}</span></div>
-        <div class="desc">${b.blurb}</div>
-        <div class="small" style="color:${b.col};margin:3px 0 1px;font-weight:bold">${DOCTRINES[b.doc].ic} ${DOCTRINES[b.doc].name}</div>
-        <div class="small" style="opacity:.82;line-height:1.25">${DOCTRINES[b.doc].desc}</div>
-        <div class="small" style="color:${b.col};margin:2px 0"><b>✦ ${PASSIVES[b.passive].name}</b> · ${PASSIVES[b.passive].desc}</div>
-        <div class="small" style="opacity:.85">★ ${ABIL[b.sig[0]].ic} ${ABIL[b.sig[0]].name} · ${ABIL[b.sig[1]].ic} ${ABIL[b.sig[1]].name}</div>
-        <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
-      </div>`;}).join('')}</div>
-    <div class="menu-btns"><button onclick="gotoEdicts()">← Edicts</button></div>`;
+      return `<div class="choice jz${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="animation-delay:${i*60}ms">
+        ${lk
+          ? `<img src="bosses/${k}.png" alt="${b.name}" style="height:130px;image-rendering:pixelated;display:block;margin:2px auto -2px;filter:grayscale(1) brightness(.45)">
+             <h3>${b.name}</h3>
+             <div class="small" style="color:#ff9aae;font-weight:bold;margin-top:4px">🔒 Locked</div>
+             <div class="desc" style="margin-top:6px">Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills<br><span style="opacity:.7">(you: ${RUNES.kills})</span></div>`
+          : `<img src="bosses/${k}.png" alt="${b.name}" style="height:130px;image-rendering:pixelated;display:block;margin:2px auto -2px">
+             <h3>${b.name}</h3>
+             <div class="small" style="color:var(--gold);font-weight:bold">★ Mastery Lv ${xi.lvl}${xi.max?' (MAX)':''}</div>
+             <div class="bar" style="width:96%;height:16px;margin:4px auto;background:#2a2046">
+               <i style="width:${xi.max?100:Math.max(4,Math.round(xi.into/xi.need*100))}%;background:linear-gradient(90deg,#caa15e,#ffd34d)"></i>
+               <span style="line-height:16px">${xi.max?'★ MAX':xi.into+' / '+xi.need+' XP'}</span></div>
+             <div class="desc">${b.blurb}</div>
+             <div class="small" style="color:${b.col};margin:3px 0 1px;font-weight:bold">${DOCTRINES[b.doc].ic} ${DOCTRINES[b.doc].name}</div>
+             <div class="small" style="opacity:.82;line-height:1.25">${DOCTRINES[b.doc].desc}</div>
+             <div class="small" style="color:${b.col};margin:2px 0"><b>✦ ${PASSIVES[b.passive].name}</b> · ${PASSIVES[b.passive].desc}</div>
+             <div class="small" style="opacity:.85">★ ${ABIL[b.sig[0]].ic} ${ABIL[b.sig[0]].name} · ${ABIL[b.sig[1]].ic} ${ABIL[b.sig[1]].name}</div>
+             <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
+      </div>`;}).join('')}</div>`;
 }
 function chooseBoss(key){
   applyRunes();                                  // lock in this run's rune bonuses
