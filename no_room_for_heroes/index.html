@@ -298,48 +298,11 @@
   }
   @keyframes titleStartIn{0%{opacity:0;transform:translate(-50%,24px);}100%{opacity:1;transform:translate(-50%,0);}}
   @keyframes titlePulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.22);}}
-  @media (max-width:560px){ .titlelogo{top:5%;width:74%;} .titlestart button{font-size:12px;padding:13px 24px;} }
   .ko{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:13px;opacity:.85;}
   .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#2a2046;margin:2px;}
-  @media (max-width:560px){
-    #topbar{font-size:11px;gap:5px;padding:5px 7px;}
-    .stat{padding:2px 6px;gap:3px;}
-    .bar{width:80px;height:13px;}
-    #overlay h1{font-size:26px;} .choice{width:140px;}
-    .card{width:120px;min-height:98px;} .card .ic .cardimg{width:76px;height:76px;}
-    .abil{min-width:62px;padding:5px 6px;}
-    button{padding:8px 10px;}
-  }
-  @media (max-width:380px){ .bar{width:64px;} #topbar{font-size:10px;} }
-  /* SHORT screens (landscape phones ~360-480px tall): compact everything so
-     the dungeon gets the height, not the chrome. Buttons especially — the
-     desktop pixel buttons read comically big at this size. */
-  @media (max-height:540px){
-    button{padding:6px 10px;font-size:9px;min-height:30px;box-shadow:0 2px 0 #100b22, inset 0 0 0 1px rgba(255,255,255,.05);}
-    button.go{box-shadow:0 2px 0 #14401f, inset 0 0 0 1px rgba(255,255,255,.08);}
-    button.buy{box-shadow:0 2px 0 #2e2408, inset 0 0 0 1px rgba(255,255,255,.07);}
-    .menu-btns{gap:8px;margin-top:8px;}
-    .menu-btns button{font-size:9px;padding:9px 14px;}
-    #topbar{font-size:11px;gap:4px;padding:3px 7px 3px;}
-    .stat{padding:1px 6px;gap:3px;} .stat b{font-size:12px;}
-    .bar{width:90px;height:12px;}
-    #panel{min-height:52px;padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px));}
-    .row{gap:5px;}
-    .card{width:108px;min-height:88px;} .card .ic .cardimg{width:66px;height:66px;}
-    .abil{min-width:54px;padding:3px 5px;}
-    #overlay h1{font-size:20px;} #overlay h2{font-size:13px;margin:3px 0;}
-    #overlay p{font-size:12px;margin:4px 0;}
-    .choices{gap:8px;margin-top:6px;}
-    .choice{width:124px;padding:8px;} .choice .big{font-size:26px;} .choice h3{font-size:13px;}
-    .choice .big .cardimg{width:52px;height:52px;}
-    #inspect{font-size:11px;line-height:1.4;padding:6px 22px 6px 8px;}
-    #inspect button{min-height:26px;padding:4px 8px;font-size:8px;}
-    .pauserow button{font-size:8px;min-height:26px;}
-    .rbzoom button{width:28px;height:28px;font-size:15px;}
-    #pausebtn,#audiobtn{width:28px;height:28px;font-size:13px;}
-    .titlestart button{font-size:11px;padding:10px 20px;min-height:40px;}
-    .titlelogo{width:min(300px,46%);}
-  }
+  /* No viewport-size overrides: the whole game is ONE fixed 1280×720 design scaled
+     uniformly to fit any screen (see #app's transform), so it looks identical at every
+     size — just larger or smaller. Portrait phones still get the rotate gate above. */
   /* inspection tooltip */
   #inspect{position:absolute;left:8px;bottom:8px;max-width:min(340px,calc(100% - 16px));
     max-height:calc(100% - 16px);overflow-y:auto;overscroll-behavior:contain;
