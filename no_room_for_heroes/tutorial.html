@@ -26,6 +26,7 @@
   #stage{ position:relative; width:100%; max-width:1000px; aspect-ratio:16/10; border-radius:10px; overflow:hidden;
     background:linear-gradient(#241a3a 0%,#1a1330 62%,#0e0a1c 100%);
     box-shadow:0 10px 40px #000a, inset 0 0 60px #0008; user-select:none; }
+  #world{ position:absolute; inset:0; transform-origin:60% bottom; transition:transform .12s ease; }
   .floor{ position:absolute; left:0; right:0; bottom:14%; height:3px; background:#3a2c52; box-shadow:0 0 14px #0006; }
   .room{ position:absolute; bottom:14%; width:13%; height:30%; background:linear-gradient(#2a2348,#1c1733);
     border:2px solid #3a2c5a; border-radius:6px 6px 0 0; display:flex; align-items:flex-end; justify-content:center;
@@ -94,11 +95,13 @@
   <div id="stagewrap">
     <div id="stage">
       <div id="hpbar"><i></i></div>
-      <div class="floor"></div>
-      <div class="room" style="left:30%">🦷</div>
-      <div class="room" style="left:46%">🔥</div>
-      <div class="room" style="left:62%">💀</div>
-      <div class="bossblob">🐲</div>
+      <div id="world">
+        <div class="floor"></div>
+        <div class="room" style="left:30%">🦷</div>
+        <div class="room" style="left:46%">🔥</div>
+        <div class="room" style="left:62%">💀</div>
+        <div class="bossblob">🐲</div>
+      </div>
       <div id="panelbar">
         <div class="pb" data-t="buyroom">➕<span>Room</span></div>
         <div class="pb" data-t="hand" style="min-width:74px">🃏<span>Hand</span></div>
@@ -147,6 +150,12 @@
       <input type="number" id="fY" min="0" max="100" step="0.5"></div>
     <div class="row"><label>Width</label><input type="range" id="fW" min="200" max="760" step="2"><span class="val" id="fWv"></span></div>
     <div class="hint">Drag the box to move it (switches Anchor to Free); drag the gold grip to resize width.</div>
+
+    <h2>Camera &amp; zoom</h2>
+    <div class="row"><label>Zoom</label><input type="range" id="fZoom" min="0.5" max="2.6" step="0.05"><span class="val" id="fZoomv"></span></div>
+    <div class="row"><label>Focus</label><input type="range" id="fCam" min="0" max="100" step="1"><span class="val" id="fCamv"></span></div>
+    <button class="btn" id="camClear" style="width:100%; margin-top:2px">Use the game's default framing</button>
+    <div class="hint">Zoom in and pick what's centred — 0 = the gate, 100 = your throne. Applied when the step appears.</div>
 
     <h2>Font &amp; spacing</h2>
     <div class="row"><label>Body size</label><input type="range" id="fFs" min="9" max="30" step="0.5"><span class="val" id="fFsv"></span></div>
@@ -281,6 +290,11 @@ function render(){
     const ay = base.y + (eff('ady')||0)/stage.height*100;
     arrow.style.left = ax + '%'; arrow.style.top = ay + '%';
   } else { arrow.style.display = 'none'; }
+  // camera / zoom preview — scales the dungeon layer only (UI overlays stay put)
+  const ov = data.steps[cur] || {};
+  const world = document.getElementById('world');
+  world.style.transformOrigin = ((ov.cam != null ? ov.cam : 0.6) * 100) + '% bottom';
+  world.style.transform = 'scale(' + (ov.zoom || 1) + ')';
   syncControls();
 }
 
@@ -304,6 +318,10 @@ function syncControls(){
   V('fPad', eff('pad')); T('fPadv', eff('pad')+'px');
   V('fLh', eff('lh')); T('fLhv', eff('lh'));
   V('fAlign', eff('align'));
+  // camera
+  const oz=(data.steps[cur]||{}).zoom, ocam=(data.steps[cur]||{}).cam;
+  V('fZoom', oz||1); T('fZoomv', (oz||1).toFixed(2)+'×');
+  V('fCam', ocam!=null?Math.round(ocam*100):60); T('fCamv', (ocam!=null?Math.round(ocam*100):60)+'%');
   // arrow controls
   const tgt = st.arrow || (st.hi==='abil' ? 'abil' : '');
   document.getElementById('arrowCtl').style.display = tgt ? '' : 'none';
@@ -367,6 +385,10 @@ function wire(){
   const sr = (id,field)=>document.getElementById(id).oninput = e=>setStep(field, +e.target.value);
   sr('fW','w'); sr('fFs','fs'); sr('fTs','ts'); sr('fPad','pad'); sr('fLh','lh');
   document.getElementById('fAlign').onchange = e=>setStep('align', e.target.value);
+
+  document.getElementById('fZoom').oninput = e=>setStep('zoom', +e.target.value);
+  document.getElementById('fCam').oninput = e=>setStep('cam', +e.target.value/100);
+  document.getElementById('camClear').onclick = ()=>{ clearStep('zoom'); clearStep('cam'); };
 
   document.getElementById('fAg').oninput = e=>setStep('ag', e.target.value || '👇');
   document.getElementById('fAdx').oninput = e=>setStep('adx', +e.target.value);
