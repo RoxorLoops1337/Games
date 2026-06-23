@@ -237,7 +237,7 @@
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
   /* save-slot stats: a 3-column grid (icon · value · label) so every row lines
      up and never wraps; fixed floor height keeps every slot card the SAME size */
-  .slotbody{min-height:78px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.4;margin:4px 0;}
+  .slotbody{min-height:86px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.45;margin:4px 0;font-size:15px;}
   .slotstats{display:inline-grid;grid-template-columns:auto auto auto;gap:3px 7px;align-items:baseline;text-align:left;white-space:nowrap;}
   .slotstats b{justify-self:end;color:#fff;}
   .slotstats .lbl{opacity:.78;}
@@ -2164,14 +2164,14 @@ function openTitle(){
         + (s.asc ? `<span class="full" style="color:#c79bff">👑 Ascension ${s.asc}</span>` : '')
         + `</div>`
       : `<span style="opacity:.75">Empty — a brand-new game</span>`;
-    const body = `<div class="slotbody small" style="opacity:${s?'.9':'.7'}">${stats}</div>`;
-    cards.push(`<div class="choice" style="width:220px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
+    const body = `<div class="slotbody" style="opacity:${s?'.9':'.7'}">${stats}</div>`;
+    cards.push(`<div class="choice" style="width:300px;${active?'border-color:var(--gold);box-shadow:0 0 12px var(--gold)':''}">
       <div class="big"><img class="cardimg" src="icons/ui_save.png" alt="" draggable="false"></div>
-      <h3 style="margin:2px 0">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● last played</span>':''}</h3>
+      <h3 style="margin:2px 0;font-size:23px">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● last played</span>':''}</h3>
       ${body}
-      <div class="row" style="justify-content:center;gap:6px;margin-top:6px">
-        <button class="go" onclick="pickSlot(${n})">${active?'▶ Continue':(s?'▶ Load':'▶ New Game')}</button>
-        ${s?`<button onclick="confirmResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae;padding:6px 10px">🗑</button>`:''}
+      <div class="row" style="justify-content:center;gap:8px;margin-top:8px">
+        <button class="go" style="font-size:17px;padding:15px 24px" onclick="pickSlot(${n})">${active?'▶ Continue':(s?'▶ Load':'▶ New Game')}</button>
+        ${s?`<button onclick="confirmResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae;padding:11px 15px;font-size:17px">🗑</button>`:''}
       </div></div>`);
   }
   overlay.innerHTML = `
@@ -2182,9 +2182,8 @@ function openTitle(){
        traps, monsters, and twisted corridors to stop them before they reach your throne.<br><br>
        Defeat waves of heroes to unlock new rooms, traps, and monsters. Expand your lair,
        create brutal kill zones, and prove that there is <b>No Room For Heroes</b>.</p>
-    <div class="choices" style="flex-wrap:nowrap;width:min(708px,100%)">${cards.join('')}</div>
-    <div class="menu-btns" style="margin-top:8px"><button onclick="openCloud()" style="padding:7px 14px;font-size:13px">☁️ Cloud Save</button></div>
-    <p class="small" style="margin-top:8px;opacity:.9">Each slot is its own profile — runes, town and unlocks are separate.</p>`;
+    <div class="choices" style="flex-wrap:nowrap;width:min(980px,100%)">${cards.join('')}</div>
+    <div class="menu-btns" style="margin-top:8px"><button onclick="openCloud()" style="padding:7px 14px;font-size:13px">☁️ Cloud Save</button></div>`;
 }
 function pickSlot(n){ if(n===saveSlot) gotoMenu(); else switchSlot(n); }
 /* ☁️ Cloud saves — same KV namespace as the leaderboard (key-prefixed). A
