@@ -544,6 +544,7 @@ const STAGEW = 132;              // staging area (left of the entrance) for wait
 const FLOOR = 330;          // y of the floor line
 const LIFT = 14;            // px heroes & monsters are raised off the floor line (they walk a touch higher)
 const ROOM_W = 200;         // pixel width of one room/cell
+const DRAKE_HOVER = 128;    // 🐲 the Drakeling is a flyer — hovers this many px above the floor, on the room's right
 
 /* ----------------------------- content tables ---------------------------- */
 // Room cards. type = id. "trap" rooms hit passing heroes; "monster" rooms
@@ -4213,6 +4214,7 @@ function bossX(){ return cellX(G.slots)+ROOM_W*0.6; }
 // 🔮 Boss ability bolts — a glowing projectile that flies from the throne, ACROSS
 // the rooms, to the target, so every ability visibly originates from the boss.
 let bossBolts=[];
+let monBolts=[];   // 🐲 Drakeling fireballs (and any future ranged guard) — streak from the monster to a hero
 function bossBolt(tx,ty,col,ic){
   if(!G||!G.boss) return;
   const c=col||G.boss.col||'#ff5470';
@@ -5194,6 +5196,7 @@ function update(dt){
         vx:rnd(-5,9), vy:-rnd(5,16), life:rnd(2.4,4.6), max:4.6,
         col:Math.random()<0.5?'#b985ff':'#ffb066', sz:rnd(1,2.3) }); } }
   if(bossBolts.length){ bossBolts.forEach(b=>{ b.t+=dt; }); bossBolts=bossBolts.filter(b=>b.t<b.dur); }
+  if(monBolts.length){ monBolts.forEach(b=>{ b.t+=dt; }); monBolts=monBolts.filter(b=>b.t<b.dur); }
   if(shakeT>0) shakeT=Math.max(0,shakeT-dt);   // screen-shake decay
   if(flashT>0) flashT=Math.max(0,flashT-dt);   // screen-flash decay
   if(slowT>0) slowT=Math.max(0,slowT-dt);      // slow-mo decay (real time)
@@ -5642,15 +5645,17 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       // 🐲 Drakeling fire breath: a ranged cone that ignites EVERY hero in the room,
       // stacking burn (up to BURN_CAP) for breath.dur seconds — on top of the claw above.
       if(g.breath){
+        const dx0=cell.x0+ROOM_W*0.82, dy0=FLOOR-DRAKE_HOVER;   // 🐲 hover spot — must match the draw
         let lit=0;
         for(const o of G.heroes){
           if(!o || o.state==='dead' || o.cellIndex!==cell.index) continue;
           if(o.state!=='fighting' && o.state!=='walking') continue;
           addBurn(o, g.breath.burn, g.breath.dur); lit++;
           floater(o.x, o.y-62, '🔥+'+g.breath.burn, '#ff7a2e');
+          monBolts.push({ x0:dx0, y0:dy0, x1:o.x, y1:(o.y!=null?o.y-30:FLOOR-40), t:0, dur:0.22, col:'#ff7a2e', ic:'🔥' });   // spit a fireball at each
         }
-        if(lit){ const bx=cell.x0+ROOM_W*0.6;
-          for(let i=0;i<7;i++) embers.push({x:bx-rnd(0,90), y:FLOOR-rnd(20,46), vx:-rnd(40,120), vy:-rnd(6,30),
+        if(lit){ // ember puff at the drakeling's mouth, streaming left toward the heroes
+          for(let i=0;i<7;i++) embers.push({x:dx0-rnd(0,40), y:dy0+rnd(-8,14), vx:-rnd(60,150), vy:rnd(-6,24),
             life:rnd(.4,.8), max:.8, col:pick(['#ff7a2e','#ffd34d','#ff5a2e']), sz:rnd(2,3.6)});
           sfx('hit'); }
       }
@@ -5859,6 +5864,20 @@ function draw(){
       X.globalAlpha=0.3; X.beginPath(); X.arc(sx,y,14,0,Math.PI*2); X.fill();
       if(b.ic){ X.globalAlpha=clamp(1-p*0.3,0,1); X.font='18px Trebuchet MS'; X.textAlign='center';
         X.fillText(b.ic, sx, y+6); X.textAlign='left'; }
+    }
+    X.globalAlpha=1;
+  }
+  // 🐲 Drakeling fireballs — a small flaming streak from its hover spot to the hero
+  if(monBolts.length){
+    X.lineCap='round';
+    for(const b of monBolts){
+      const p=clamp(b.t/b.dur,0,1), e=p*p*(3-2*p);
+      const x=b.x0+(b.x1-b.x0)*e, y=b.y0+(b.y1-b.y0)*e, sx=tx(x);
+      const te=Math.max(0,e-0.28), txp=tx(b.x0+(b.x1-b.x0)*te), typ=b.y0+(b.y1-b.y0)*te;
+      X.strokeStyle=b.col; X.globalAlpha=0.5; X.lineWidth=5;
+      X.beginPath(); X.moveTo(txp,typ); X.lineTo(sx,y); X.stroke();
+      X.fillStyle='#ffd34d'; X.globalAlpha=0.95; X.beginPath(); X.arc(sx,y,5,0,Math.PI*2); X.fill();
+      X.fillStyle=b.col; X.globalAlpha=0.32; X.beginPath(); X.arc(sx,y,11,0,Math.PI*2); X.fill();
     }
     X.globalAlpha=1;
   }
@@ -6848,14 +6867,20 @@ function drawRoomContents(x0,w,room,i){
       const ox=(li-(n-1)/2)*sp;                                // stand them side by side
       const oy=(n>1)?[0,3,1,4,2][li%5]:0;                      // distinct heights so a stack reads as a crowd
       const ph=li*0.31, sc=g.small?0.7:1;                      // de-sync cycles; split cubes draw smaller
-      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(mbx+ox, FLOOR-LIFT-oy, room, cell, mp, alive, moving, ph, sc);
-      if(!drew) drawMonster(mbx+ox, sprite, def.col);
+      // 🐲 Drakeling is a flyer: hover high on the room's RIGHT and don't wade in (no walk)
+      const fly=mp==='dragon';
+      const dgx=fly ? x0+w*0.82 : mbx+ox;
+      const dgy=fly ? FLOOR-DRAKE_HOVER+Math.sin(performance.now()/450+li)*7 : FLOOR-LIFT-oy;
+      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(dgx, dgy, room, cell, mp, alive, fly?false:moving, ph, sc);
+      if(!drew) drawMonster(dgx, sprite, def.col);
       if(cell && cell.mon && cell.mon.flashAt){ const mf=performance.now()-cell.mon.flashAt;   // struck-just-now flash
         if(mf<120){ X.save(); X.globalAlpha=(1-mf/120)*0.45; X.globalCompositeOperation='lighter';
-          X.fillStyle='#ffffff'; X.beginPath(); X.ellipse(mbx+ox, FLOOR-LIFT-26, 20, 30, 0,0,6.2832); X.fill(); X.restore(); } }
+          X.fillStyle='#ffffff'; X.beginPath(); X.ellipse(dgx, dgy-26, 20, 30, 0,0,6.2832); X.fill(); X.restore(); } }
     }
-    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run')
-      bar(mbx-26,FLOOR-78,52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
+    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run'){
+      const mb=cell.mon.type==='dragon';                       // put the bar by the hovering drakeling
+      bar((mb?x0+w*0.82:mbx)-26, (mb?FLOOR-DRAKE_HOVER-26:FLOOR-78), 52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
+    }
     // 💎 equipped-gear badge (build phase) — show what this room's monsters loot-out with
     if(G.phase==='build'){
       const gear=[].concat(...roomMonUnits(room).map(u=>u.gear||[]));
