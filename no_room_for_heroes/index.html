@@ -2170,13 +2170,12 @@ function openTitle(){
       <h3 style="margin:2px 0;font-size:23px">Slot ${n}${active?' <span class="small" style="color:var(--gold)">● last played</span>':''}</h3>
       ${body}
       <div class="row" style="justify-content:center;gap:8px;margin-top:8px">
-        <button class="go" style="font-size:17px;padding:15px 24px" onclick="pickSlot(${n})">${active?'▶ Continue':(s?'▶ Load':'▶ New Game')}</button>
+        <button class="go" style="font-size:17px;padding:15px 24px" onclick="pickSlot(${n})">▶ Load</button>
         ${s?`<button onclick="confirmResetSlot(${n})" style="border-color:#ff6b8a;color:#ff9aae;padding:11px 15px;font-size:17px">🗑</button>`:''}
       </div></div>`);
   }
   overlay.innerHTML = `
     <h1>NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES</h1>
-    <h2>Build the dungeon. Bury the heroes.</h2>
     <p style="max-width:760px">You are the <b>Final Boss</b>.<br><br>
        Heroes seeking glory are coming for your head. Build a deadly dungeon filled with
        traps, monsters, and twisted corridors to stop them before they reach your throne.<br><br>
