@@ -2800,6 +2800,18 @@ function applyTutModalStyle(m, i){
   if(c.anchor==='free' && c.x!=null && c.y!=null){ m.classList.remove('low'); m.style.left=c.x+'%'; m.style.top=c.y+'%'; }
   else if(c.anchor && c.anchor!=='low'){ m.classList.remove('low'); const yt={top:20,center:50,bottom:80}[c.anchor]; if(yt) m.style.top=yt+'%'; }
 }
+// Per-step camera: a designed zoom level + focus (fraction of the corridor, 0=gate
+// … 1=throne) applied when the step is first shown. Only when set; else the game's
+// own framing stands.
+function applyTutCam(i){
+  try{
+    const c=tutCfg(i); if(!c || (!c.zoom && c.cam==null)) return;
+    if(c.zoom){ if(typeof setZoom==='function') setZoom(+c.zoom); else zoom=+c.zoom; }
+    if(c.cam!=null){ const cw=corridorWidth(), z=zoom||1, maxCam=cw-VW/z;
+      camX=clamp((+c.cam)*cw - (VW/z)/2, Math.min(minCam(),maxCam), maxCam); }
+    if(typeof draw==='function') draw();
+  }catch(_){}
+}
 function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
@@ -2816,7 +2828,7 @@ function tutModalHide(){ const m=document.getElementById('tutmodal'); if(m){ m.c
 function tutShow(){
   const st=tutStepObj();
   if(!st){ tutModalHide(); G&&(G.tutHi=null,G.tutCell=null); return; }
-  if(G._tutEntered!==G.tutStep){ G._tutEntered=G.tutStep; st._armed=false; if(st.enter) st.enter(); }
+  if(G._tutEntered!==G.tutStep){ G._tutEntered=G.tutStep; st._armed=false; if(st.enter) st.enter(); applyTutCam(G.tutStep); }
   G.tutHi = st.hi||null;
   G.tutCell = (st.cell!=null)?st.cell:null;
   paused = !!st.pause;
