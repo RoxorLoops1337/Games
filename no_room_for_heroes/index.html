@@ -37,6 +37,7 @@
     animation:barglow 3.4s ease-in-out infinite alternate; }
   @keyframes barglow{ from{opacity:.5} to{opacity:1} }
   #app{position:relative;z-index:1;display:flex;flex-direction:column;margin:auto;overflow:hidden;border-radius:11px;
+    --ui:1;   /* UI scale: top bar + bottom panel shrink with the frame height so the bar:arena:bar ratio stays constant (set in resize()) */
     box-shadow:0 0 0 1px #6a5838, 0 0 0 5px #14102a, 0 0 0 7px #3a2c5a, 0 18px 52px #000c, 0 0 90px -14px #b98a3a40;
     width:min(100vw, 177.78vh, 1280px);  height:min(100vh, 56.25vw, 720px);
     width:min(100vw, 177.78dvh, 1280px); height:min(100dvh, 56.25vw, 720px);}
@@ -86,7 +87,7 @@
   #topbar{display:flex;align-items:center;gap:8px;background:linear-gradient(#1c1534,#120c22);
     padding:calc(6px + env(safe-area-inset-top,0px)) 10px 6px;
     border-bottom:2px solid var(--line);box-shadow:0 2px 0 #0a0716,0 4px 12px #00000055;
-    font-size:13px;flex-wrap:wrap;}
+    font-size:13px;flex-wrap:wrap;zoom:var(--ui,1);}
   .stat{display:flex;align-items:center;gap:5px;background:linear-gradient(#2b2148,#1c1536);
     border:1px solid #483872;padding:3px 8px;border-radius:7px;white-space:nowrap;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px #0006;}
@@ -119,7 +120,7 @@
   #panel{background:linear-gradient(#181128,#100b1e);border-top:2px solid var(--line);
     box-shadow:0 -2px 0 #0a0716,0 -4px 14px #00000055;
     padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px));
-    min-height:74px;flex:0 0 auto;}
+    min-height:74px;flex:0 0 auto;zoom:var(--ui,1);}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   /* 16-bit pixel buttons: blocky border, hard drop-shadow bevel, pixel font.
      The hard 0-blur shadow reads as a raised pixel edge; :active presses it in. */
@@ -1577,6 +1578,14 @@ let speedMul = 1;    // run speed multiplier
 
 // Size the canvas backing store to the stage, derive VW from the real aspect.
 function resize(){
+  // Scale the top bar + bottom panel with the frame height so they shrink on short
+  // screens instead of crowding out the arena — keeps the bar:arena:bar ratio constant.
+  // (Set first so the stage measurement below reflects the rescaled bars.) REF 720 = the
+  // frame's max height, where the UI is at its designed full size.
+  const _app = document.getElementById('app');
+  if(_app && _app.style && _app.style.setProperty){ const fh = _app.getBoundingClientRect().height;
+    if(fh > 2){ const ui = Math.max(0.6, Math.min(1, fh/720)).toFixed(3);
+      if(_app.style.getPropertyValue('--ui') !== ui) _app.style.setProperty('--ui', ui); } }
   const r = stage.getBoundingClientRect();
   if(r.width<2 || r.height<2) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
