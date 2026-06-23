@@ -344,6 +344,25 @@
   .pauserow button{font-size:9px;padding:6px 10px;min-height:34px;}
   #relicbar{position:absolute;top:5px;left:5px;z-index:21;display:flex;gap:3px;flex-wrap:wrap;
     max-width:calc(100% - 128px);}
+  /* 🧰 War Chest: a small icon under the relic bar; click opens a 4×4 gear popup */
+  #chestbtn{position:absolute;left:5px;top:42px;z-index:22;display:none;align-items:center;gap:7px;
+    background:rgba(20,15,36,.86);border:2px solid var(--line);border-radius:11px;padding:7px 13px;
+    font-size:20px;line-height:1;cursor:pointer;color:var(--ink);box-shadow:0 2px 7px #0008;}
+  #chestbtn:hover{border-color:var(--gold);}
+  #chestbtn .cb-n{font-size:14px;font-weight:bold;color:var(--gold);}
+  #chestbtn .cb-loot{font-size:13px;font-weight:bold;color:#9adf6b;}
+  #chestpop{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:45;
+    display:none;flex-direction:column;align-items:center;gap:12px;
+    background:linear-gradient(#1c1536,#120c22);border:2px solid var(--gold);border-radius:16px;
+    padding:18px;box-shadow:0 18px 50px #000d,0 0 26px #ffd34d33;}
+  #chestpop.show{display:flex;}
+  #chestpop .cp-head{display:flex;align-items:center;gap:10px;width:100%;font-size:19px;font-weight:bold;color:var(--gold);}
+  #chestpop .cp-x{margin-left:auto;cursor:pointer;color:#ff9aae;font-size:24px;line-height:1;}
+  .chestgrid{display:grid;grid-template-columns:repeat(4,66px);grid-auto-rows:66px;gap:9px;}
+  .chestgrid .gcell{width:66px;height:66px;}
+  .chestgrid .gcell .gic{font-size:30px;}
+  .chestgrid .gcell .gt{font-size:12px;}
+  .chestgrid .gcell.empty{opacity:.3;border-style:dashed;cursor:default;background:#140f24;}
   .relicchip{width:32px;height:32px;border-radius:7px;border:2px solid;
     background:radial-gradient(circle at 50% 38%, rgba(60,52,86,.95), rgba(20,15,34,.95));
     display:flex;align-items:center;justify-content:center;line-height:1;cursor:pointer;
@@ -468,6 +487,8 @@
     <div id="inspect"></div>
     <div id="tutbar"></div>
     <div id="relicbar"></div>
+    <button id="chestbtn" title="War Chest — looted gear" onclick="toggleChest()"></button>
+    <div id="chestpop"></div>
     <button id="pausebtn" title="Menu &amp; settings" onclick="openPauseMenu()">☰</button>
     <button id="audiobtn" title="Sound on/off">🔊</button>
     <!-- zoom buttons removed — pinch / wheel zoom only (they sat over the boss) -->
@@ -7358,6 +7379,7 @@ function updateTop(){
 }
 
 function renderPanel(){
+  if(typeof placeChestBtn==='function') placeChestBtn();   // keep the 🧰 chest icon + popup in sync after gear ops
   if(!G||G.phase==='menu'||G.phase==='bossSelect'||G.phase==='edicts'){ panel.innerHTML=''; return; }
 
   if(G.phase==='build'){
@@ -7394,7 +7416,7 @@ function renderPanel(){
           :`<span class="small" style="opacity:.6;align-self:center">No cards — survive a hero to draft one.</span>`}
         </div>
       </div>
-      ${ (G.chest.length || (G.floorLoot&&G.floorLoot.length)) ? `<div class="row">
+      ${ false ? `<div class="row">
         <span class="small" style="min-width:46px" title="Gear looted from slain heroes. Tap two of the same kind to merge them up a tier.">🧰 Chest ${G.chest.length}/${CHEST_MAX}:</span>
         <div class="chest">${ G.chest.length ? G.chest.map((g,i)=>{ const col=RELIC_TIERS[g.t].col;
             return `<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or onto a matching piece (or tap two) to merge." style="border-color:${col}">
@@ -7559,11 +7581,53 @@ function describeRelic(id){ const r=RELICS[id]; if(!r) return '';
 function relicHover(id){ lastPtrCX=null; lastPtrCY=null; showInspect(describeRelic(id), true); }
 function relicTap(id){ lastPtrCX=null; lastPtrCY=null; showInspect(describeRelic(id), false); }
 function renderRelicBar(){
-  if(!relicBar) return;
-  if(!G || !G.relics || !G.relics.length || (G.phase!=='build' && G.phase!=='run')){ relicBar.innerHTML=''; return; }
-  relicBar.innerHTML=G.relics.map(id=>{ const r=RELICS[id]; const tc=RELIC_TIERS[r.tier];
-    return `<div class="relicchip" style="border-color:${tc.col};box-shadow:0 0 6px ${tc.col}66"
-      title="${r.name}: ${r.desc}" onmouseenter="relicHover('${id}')" onmouseleave="cardHoverOut()" onclick="relicTap('${id}')"><span class="ric">${relicFace(id)||r.ic}</span></div>`;}).join('');
+  if(relicBar){
+    if(!G || !G.relics || !G.relics.length || (G.phase!=='build' && G.phase!=='run')) relicBar.innerHTML='';
+    else relicBar.innerHTML=G.relics.map(id=>{ const r=RELICS[id]; const tc=RELIC_TIERS[r.tier];
+      return `<div class="relicchip" style="border-color:${tc.col};box-shadow:0 0 6px ${tc.col}66"
+        title="${r.name}: ${r.desc}" onmouseenter="relicHover('${id}')" onmouseleave="cardHoverOut()" onclick="relicTap('${id}')"><span class="ric">${relicFace(id)||r.ic}</span></div>`;}).join('');
+  }
+  placeChestBtn();
+}
+// 🧰 War Chest: a small icon under the relic bar; clicking opens a 4×4 popup of
+// looted gear (tap two of a kind to merge, drag a piece onto a monster to equip).
+let chestOpen=false;
+function placeChestBtn(){
+  const btn=document.getElementById('chestbtn'); if(!btn) return;
+  const has = G && G.phase==='build' && (((G.chest&&G.chest.length)>0) || ((G.floorLoot&&G.floorLoot.length)>0));
+  if(!has){ btn.style.display='none'; if(chestOpen) closeChest(); return; }
+  const loot=(G.floorLoot&&G.floorLoot.length)||0;
+  btn.innerHTML='🧰 <span class="cb-n">'+((G.chest&&G.chest.length)||0)+'/'+CHEST_MAX+'</span>'+(loot?' <span class="cb-loot">💎'+loot+'</span>':'');
+  if(relicBar) btn.style.top=(relicBar.offsetTop+relicBar.offsetHeight+6)+'px';
+  btn.style.display='inline-flex';
+  if(chestOpen) renderChestPop();
+}
+function toggleChest(){ chestOpen ? closeChest() : openChest(); }
+function openChest(){ chestOpen=true; renderChestPop(); const p=document.getElementById('chestpop'); if(p) p.classList.add('show'); }
+function closeChest(){ chestOpen=false; const p=document.getElementById('chestpop'); if(p) p.classList.remove('show'); }
+function renderChestPop(){
+  const p=document.getElementById('chestpop'); if(!p) return;
+  const chest=(G&&G.chest)||[];
+  let cells='';
+  for(let i=0;i<CHEST_MAX;i++){ const g=chest[i];
+    if(g){ const col=RELIC_TIERS[g.t].col;
+      cells+=`<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col}"><span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
+    } else cells+='<div class="gcell empty"></div>';
+  }
+  const loot=(G&&G.floorLoot&&G.floorLoot.length)||0;
+  p.innerHTML=`<div class="cp-head">🧰 War Chest <span style="font-size:14px;color:var(--ink);opacity:.7;font-weight:normal">${chest.length}/${CHEST_MAX}</span><span class="cp-x" onclick="closeChest()" title="Close">✕</span></div>
+    <div class="chestgrid">${cells}</div>
+    ${(loot||chest.length>=2)?`<div class="menu-btns" style="margin-top:0;gap:10px">
+      ${loot?`<button class="buy" onclick="collectAllLoot()" title="Sweep up every piece on the floor">💎 Collect ${loot}</button>`:''}
+      ${chest.length>=2?`<button onclick="autoMergeGear()" title="Fuse every matching pair up a tier">⬆ Merge all</button>`:''}</div>`:''}
+    <div class="small" style="opacity:.7;max-width:308px">Tap two of the same gear to merge · drag a piece onto a monster to equip.</div>`;
+}
+{ const _cp=document.getElementById('chestpop');
+  if(_cp) _cp.addEventListener('pointerdown', e=>{
+    if(!G || G.phase!=='build') return;
+    const gEl=e.target.closest('.gcell'); if(!gEl || gEl.classList.contains('empty')) return;
+    gearDrag={ id:e.pointerId, gi:+gEl.dataset.gi, sx:e.clientX, sy:e.clientY, dragging:false };
+  });
 }
 function entityAt(wx){
   if(G.phase==='run' && G.heroes){
@@ -7926,6 +7990,7 @@ panel.addEventListener('pointerdown', e=>{
 });
 function startGearGhost(gi){
   const g=G.chest[gi]; if(!g) return; const col=RELIC_TIERS[g.t].col;
+  closeChest();   // a drag begins → close the popup so the board is visible to drop on a monster
   cardGhost=document.createElement('div'); cardGhost.className='gcell cardghost'; cardGhost.style.borderColor=col;
   cardGhost.innerHTML=`<span class="gic">${GEAR[g.k].ic}</span><span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span>`;
   document.body.appendChild(cardGhost);
