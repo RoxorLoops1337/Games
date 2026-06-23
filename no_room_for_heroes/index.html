@@ -15,7 +15,7 @@
     --pix:'Press Start 2P','Courier New',monospace;   /* 16-bit pixel button/title font */
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;background:#0c0916;color:var(--ink);
+  html,body{margin:0;padding:0;height:100%;background:#070510;color:var(--ink);
     font-family:'Trebuchet MS',system-ui,sans-serif;overflow:hidden;
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
   /* The game lives in a 16:9 letterboxed frame, centered — like a console
@@ -23,10 +23,27 @@
      behind the mobile browser toolbar; vh fallback for older browsers.
      Capped at 1280×720 so the DOM UI doesn't get comically small on
      huge monitors (the canvas itself scales crisply at any size). */
-  body{display:flex;align-items:center;justify-content:center;}
-  #app{position:relative;display:flex;flex-direction:column;margin:auto;
+  body{display:flex;align-items:center;justify-content:center;
+    /* the letterbox "bars" around the 16:9 frame: a dungeon-stone vignette with
+       faint horizontal courses, rather than flat black */
+    background:
+      radial-gradient(135% 100% at 50% 40%, #1c1538 0%, #110b26 44%, #070510 80%),
+      repeating-linear-gradient(0deg, transparent 0 40px, rgba(255,255,255,.018) 40px 41px);}
+  body::after{ content:''; position:fixed; inset:0; z-index:0; pointer-events:none;   /* edge vignette */
+    background:radial-gradient(125% 95% at 50% 44%, transparent 50%, rgba(0,0,0,.6) 100%); }
+  body::before{ content:''; position:fixed; inset:0; z-index:0; pointer-events:none;  /* faint torch glow on the side bars */
+    background:radial-gradient(90px 160px at 3.5% 50%, rgba(255,150,60,.11), transparent 70%),
+               radial-gradient(90px 160px at 96.5% 50%, rgba(255,150,60,.11), transparent 70%);
+    animation:barglow 3.4s ease-in-out infinite alternate; }
+  @keyframes barglow{ from{opacity:.5} to{opacity:1} }
+  #app{position:relative;z-index:1;display:flex;flex-direction:column;margin:auto;overflow:hidden;border-radius:11px;
+    box-shadow:0 0 0 1px #6a5838, 0 0 0 5px #14102a, 0 0 0 7px #3a2c5a, 0 18px 52px #000c, 0 0 90px -14px #b98a3a40;
     width:min(100vw, 177.78vh, 1280px);  height:min(100vh, 56.25vw, 720px);
     width:min(100vw, 177.78dvh, 1280px); height:min(100dvh, 56.25vw, 720px);}
+  /* optional 16:10 frame (a touch taller) — toggled in the pause menu */
+  html.ar-1610 #app{
+    width:min(100vw, 160vh, 1280px);  height:min(100vh, 62.5vw, 800px);
+    width:min(100vw, 160dvh, 1280px); height:min(100dvh, 62.5vw, 800px);}
   /* portrait PHONES get a rotate gate (iPad portrait stays allowed) */
   #rotate{display:none;position:fixed;inset:0;z-index:999;background:#0c0916;
     flex-direction:column;align-items:center;justify-content:center;gap:12px;
@@ -1708,6 +1725,16 @@ function comboCallout(combo, x){
     vx:rnd(-22,22), vy:-rnd(20,64), life:rnd(1,2), max:2, col:tier.c, sz:rnd(2,3.6)});
 }
 function loadAudioPref(){ try{ audioOn = localStorage.getItem('bm_audio')!=='off'; }catch(_){ } }
+// ---- frame aspect ratio (16:9 default, optional 16:10) — toggled in the pause menu ----
+function aspectPref(){ try{ return localStorage.getItem('bm_aspect')==='1610' ? '1610' : '169'; }catch(_){ return '169'; } }
+function loadAspect(){ document.documentElement.classList.toggle('ar-1610', aspectPref()==='1610'); }
+function setAspect(a){
+  try{ localStorage.setItem('bm_aspect', a); }catch(_){ }
+  document.documentElement.classList.toggle('ar-1610', a==='1610');
+  requestAnimationFrame(()=>{ if(typeof resize==='function') resize(); if(typeof draw==='function') draw(); });
+  if(overlay && overlay.classList.contains('show') && typeof renderPauseMenu==='function') renderPauseMenu();
+}
+function cycleAspect(){ setAspect(aspectPref()==='169' ? '1610' : '169'); }
 function saveAudioPref(){ try{ localStorage.setItem('bm_audio', audioOn?'on':'off'); }catch(_){ } }
 function loadVolPrefs(){ try{
   const s=parseFloat(localStorage.getItem('bm_sfxvol')); if(!isNaN(s)) sfxVol=clamp(s,0,1);
@@ -1899,6 +1926,8 @@ function renderPauseMenu(){
         <input type="range" min="0" max="100" value="${Math.round(sfxVol*100)}" oninput="setSfxVol(this.value/100)"></div>
       <div class="pauserow"><label>${audioOn?'🔊':'🔇'} Audio</label>
         <button onclick="toggleAudioFromMenu()">${audioOn?'On — tap to mute':'Muted — tap to enable'}</button></div>
+      <div class="pauserow"><label>🖼 Frame</label>
+        <button onclick="cycleAspect()">${aspectPref()==='169'?'16:9 wide — tap for 16:10':'16:10 taller — tap for 16:9'}</button></div>
     </div>
     <div class="menu-btns"><button class="go" onclick="resumeGame()">▶ Resume</button></div>
     <div class="menu-btns" style="margin-top:6px">${pauseConfirm
@@ -8024,6 +8053,7 @@ loadSlot();
 loadRunes();
 loadTown();
 loadTutCfg();
+loadAspect();
 loadAudioPref();
 loadVolPrefs();
 // Phones: keep the game fullscreen (hides the browser's address bar). Not
