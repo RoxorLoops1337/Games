@@ -37,14 +37,14 @@
     animation:barglow 3.4s ease-in-out infinite alternate; }
   @keyframes barglow{ from{opacity:.5} to{opacity:1} }
   #app{position:relative;z-index:1;display:flex;flex-direction:column;margin:auto;overflow:hidden;border-radius:11px;
-    --ui:1;   /* UI scale: top bar + bottom panel shrink with the frame height so the bar:arena:bar ratio stays constant (set in resize()) */
+    --ui:1;   /* whole-game UI scale (= frameH/720); top bar + bottom panel zoom by this so the game scales as one unit. Set in resize() */
     box-shadow:0 0 0 1px #6a5838, 0 0 0 5px #14102a, 0 0 0 7px #3a2c5a, 0 18px 52px #000c, 0 0 90px -14px #b98a3a40;
-    width:min(100vw, 177.78vh, 1280px);  height:min(100vh, 56.25vw, 720px);
-    width:min(100vw, 177.78dvh, 1280px); height:min(100dvh, 56.25vw, 720px);}
+    width:min(100vw, 177.78vh);  height:min(100vh, 56.25vw);
+    width:min(100vw, 177.78dvh); height:min(100dvh, 56.25vw);}
   /* optional 16:10 frame (a touch taller) — toggled in the pause menu */
   html.ar-1610 #app{
-    width:min(100vw, 160vh, 1280px);  height:min(100vh, 62.5vw, 800px);
-    width:min(100vw, 160dvh, 1280px); height:min(100dvh, 62.5vw, 800px);}
+    width:min(100vw, 160vh);  height:min(100vh, 62.5vw);
+    width:min(100vw, 160dvh); height:min(100dvh, 62.5vw);}
   /* portrait PHONES get a rotate gate (iPad portrait stays allowed) */
   #rotate{display:none;position:fixed;inset:0;z-index:999;background:#0c0916;
     flex-direction:column;align-items:center;justify-content:center;gap:12px;
@@ -1578,13 +1578,12 @@ let speedMul = 1;    // run speed multiplier
 
 // Size the canvas backing store to the stage, derive VW from the real aspect.
 function resize(){
-  // Scale the top bar + bottom panel with the frame height so they shrink on short
-  // screens instead of crowding out the arena — keeps the bar:arena:bar ratio constant.
-  // (Set first so the stage measurement below reflects the rescaled bars.) REF 720 = the
-  // frame's max height, where the UI is at its designed full size.
+  // Scale the top bar + bottom panel with the frame height so the WHOLE game scales as one
+  // unit (the arena already keeps constant framing at any size) — same look on every screen,
+  // just bigger/smaller. REF 720 = the design height, where the UI is at 1× full size.
   const _app = document.getElementById('app');
   if(_app && _app.style && _app.style.setProperty){ const fh = _app.getBoundingClientRect().height;
-    if(fh > 2){ const ui = Math.max(0.6, Math.min(1, fh/720)).toFixed(3);
+    if(fh > 2){ const ui = Math.max(0.5, Math.min(3.5, fh/720)).toFixed(3);
       if(_app.style.getPropertyValue('--ui') !== ui) _app.style.setProperty('--ui', ui); } }
   const r = stage.getBoundingClientRect();
   if(r.width<2 || r.height<2) return;
