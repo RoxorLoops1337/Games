@@ -8039,21 +8039,9 @@ CV.addEventListener('pointercancel', endDrag);
 CV.addEventListener('mousemove', e=>{
   { const _r=CV.getBoundingClientRect(); lastPtrCX=(e.clientX-_r.left)/GSCALE; lastPtrCY=(e.clientY-_r.top)/GSCALE; }
   if(drag || !G || (G.phase!=='build' && G.phase!=='run')) return;
-  // only the band the rooms/actors actually occupy — hovering the empty floor
-  // below (or the sky above) shouldn't pop the bubble
-  const wy=clientToVY(e);
-  if(wy>FLOOR+14 || wy<FLOOR-214){ if(inspectHover) hideInspectSoon(); return; }
-  const ent=entityAt(clientToWorldX(e));
-  if(!ent || ent.kind==='empty'){ if(inspectHover) hideInspectSoon(); return; }
-  // keep the pinned bubble intact: same entity, OR a custom pinned dialog
-  // (inspectEnt===null, e.g. the demolish confirm) which hover must NEVER
-  // replace — that was wiping the "Yes, demolish" box mid-mouse-travel
-  if(inspectPinned && (inspectEnt===null || sameInspectEnt(ent))) return;
-  // Room bubbles are CLICK-ONLY in BOTH phases — build's Upgrade/Demolish menu must
-  // not pop on hover, and mid-wave room stats should only appear when you tap a room.
-  // (Heroes, the boss, and 💎 floor loot still preview on hover.)
-  if(ent.kind==='room'){ if(inspectHover) hideInspectSoon(); return; }
-  showInspectEntity(ent, true);
+  // All arena info bubbles are TAP-ONLY now (the hover preview was distracting) — moving
+  // the mouse just dismisses a lingering hover bubble; TAP an entity/room to inspect it.
+  if(inspectHover) hideInspectSoon();
 });
 CV.addEventListener('mouseleave', ()=>{ if(inspectHover) hideInspectSoon(); });
 
