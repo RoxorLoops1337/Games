@@ -920,6 +920,13 @@ const ABIL = {
              for(const o of (G.heroes||[])){ if(o.state==='dead') continue; if(o===h || o.cellIndex===ci){ o.freeze=Math.max(o.freeze||0,ccDur(o,1.8)); n++; dealToHero(o, abilDmg(10+G.boss.lvl*2),'THORNS',false,'phys'); } }
              floater(bossX(),FLOOR-92,'🌿 ENTANGLE ×'+n,'#5fae54'); }},
 };
+// ⚡ Mana economy: every ability costs MORE but recharges FASTER, so the throttle is your
+// mana pool (and mana-regen gear/relics — which were near-useless against the snappy default
+// regen) instead of cooldowns sitting idle. Applied uniformly to the table above.
+for(const _id in ABIL){ const _a=ABIL[_id];
+  if(_a.cost) _a.cost=Math.round(_a.cost*1.4);
+  if(_a.cd)   _a.cd=Math.max(0.8, Math.round(_a.cd*0.6*10)/10);
+}
 
 // Campaign: keep your dungeon between levels; targets + difficulty ramp up.
 // Campaign is a 50-level siege. Each LEVEL is one wave; clearing it advances you.
