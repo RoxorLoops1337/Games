@@ -75,4 +75,11 @@ A.RUNES = { points:0, ranks:{}, kills:0, bossXp:{}, best:0, asc:0, stats:{}, unl
 A.grandfatherUnlocks();
 t.ok(A.bossUnlocked('ogre')===false && Object.keys(A.RUNES.unlocked).length===0, 'a fresh profile earns everything via feats');
 
+// --- the NEW Orc Marauder monster earns its way in via the "station guards" feat ---
+fresh();
+t.ok(!!A.UNLOCK_CARD_COND.orc && A.UNLOCK_CARD_COND.orc.stat==='guards', 'Orc Marauder is gated by the station-guards feat');
+t.ok(A.cardUnlocked('orc')===false, 'Orc Marauder starts locked for a fresh profile');
+A.bumpStat('guards', A.UNLOCK_CARD_COND.orc.n);
+t.ok(A.cardUnlocked('orc')===true, 'stationing enough guards unlocks the Orc Marauder');
+
 t.done();
