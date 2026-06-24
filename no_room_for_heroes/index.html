@@ -44,6 +44,10 @@
     box-shadow:0 0 0 1px #6a5838, 0 0 0 5px #14102a, 0 0 0 7px #3a2c5a, 0 18px 52px #000c, 0 0 90px -14px #b98a3a40;}
   /* optional 16:10 frame (a touch taller) — toggled in the pause menu */
   html.ar-1610 #app{ height:800px; }
+  /* boss-themed cursors (set on #app once a boss is chosen; graceful fallback to auto/pointer) */
+  #app{ cursor: var(--curA, auto); }
+  #app button, #app .choice, #app .gcell, #app .card, #app #pausebtn, #app #audiobtn,
+  #app .relicchip, #app #chestbtn, #app [onclick]{ cursor: var(--curB, pointer); }
   /* portrait PHONES get a rotate gate (iPad portrait stays allowed) */
   #rotate{display:none;position:fixed;inset:0;z-index:999;background:#0c0916;
     flex-direction:column;align-items:center;justify-content:center;gap:12px;
@@ -2070,6 +2074,7 @@ function difficulty(){
 // and a text title, so the screen always works.
 function titleScreen(){
   uiScreen='title';
+  if(typeof setBossCursor==='function') setBossCursor(null);   // plain pointer in the menus
   G = freshGame('campaign'); G.phase='menu'; render();
   tutBar.classList.remove('show');
   overlay.classList.add('show'); overlay.classList.add('titlemode');
@@ -2108,6 +2113,7 @@ function openOptions(){
 // Four grouped buttons, each leading to a small submenu (no link clutter).
 function gotoMenu(){
   uiScreen='menu';
+  if(typeof setBossCursor==='function') setBossCursor(null);   // plain pointer in the menus
   if(typeof tutModalHide==='function') tutModalHide();   // clear any orphaned tutorial modal
   { const _a=document.getElementById('tutarrow'); if(_a) _a.classList.remove('on'); }
   G = freshGame('campaign'); G.phase='menu'; render();
@@ -3375,8 +3381,17 @@ function makeHScrollDraggable(el){
   el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   el.addEventListener('click', e=>{ if(el._noClick){ e.stopPropagation(); e.preventDefault(); el._noClick=false; } }, true);
 }
+// boss-themed mouse cursors: once you ARE a boss, the pointer takes on its look
+function setBossCursor(key){
+  const el=document.getElementById('app'); if(!el) return;
+  const dir=key && BOSS_ANIM_SRC[key] && BOSS_ANIM_SRC[key].dir;
+  if(!dir){ el.style.removeProperty('--curA'); el.style.removeProperty('--curB'); return; }
+  el.style.setProperty('--curA', `url(cursors/cursor_${dir}_select.png) 4 3, auto`);
+  el.style.setProperty('--curB', `url(cursors/cursor_${dir}_selectlink.png) 8 3, pointer`);
+}
 function chooseBoss(key){
   applyRunes();                                  // lock in this run's rune bonuses
+  setBossCursor(key);                            // pointer takes on the boss's theme for the run
   G.hand=[];                                     // reset (safe if you backed out & re-picked)
   const b=BOSSES[key];
   const mLvl=bossLevelOf(key);                    // boss mastery: permanent +HP/+ATK
