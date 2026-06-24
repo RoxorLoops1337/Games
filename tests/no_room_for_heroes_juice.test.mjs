@@ -52,6 +52,7 @@ try{
     room('spike', 2),
     room('goblin', 2),
     room('ogre', 2, 'warden'),
+    room('orc', 2),                   // Orc Marauder — new monster, static 2-frame idle sprite
     room('slime', 2),                 // Gel Cube — splits under 60% HP (extra guard + smaller draw)
     room('warcamp', 2),               // newly-arted monster sprite (War Camp, 192px sheets)
     room('totem', 2),                 // newly-arted monster sprite (War Totem, 64px + 192px slash)

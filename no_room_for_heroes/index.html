@@ -583,6 +583,7 @@ const ROOMS = {
   warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
+  orc:      {kind:'monster',name:'Orc Marauder',ic:'🪓', col:'#5a8f3a', hp:42, atk:15, desc:'A tusked green warrior — hits hard from the front line. No gimmicks, just a wall of muscle to anchor a room of traps.'},
   dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:38, atk:6, breath:{burn:3, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
@@ -1238,6 +1239,7 @@ const UNLOCK_CARD_COND={
   totem:    {stat:'drops',       n:100,   label:'Gather 100 loot drops'},
   runestone:{stat:'traps',       n:150,   label:'Build 150 traps'},
   dragon:   {stat:'elites',      n:30,    label:'Slay 30 elite heroes'},
+  orc:      {stat:'guards',      n:50,    label:'Station 50 monster guards'},
 };
 // lifetime feat counters (persisted in RUNES.stats). bumpStat adds; setStatMax keeps a best.
 function statVal(k){ return (RUNES.stats&&RUNES.stats[k])||0; }
@@ -1249,8 +1251,10 @@ function grandfatherUnlocks(){
   if(!RUNES.unlocked) RUNES.unlocked={};
   if(RUNES.gf) return;
   const k=RUNES.kills||0;
-  for(const id in UNLOCK_BOSS_COND){ if((UNLOCK_BOSS[id]||0)<=k) RUNES.unlocked[id]=true; }
-  for(const id in UNLOCK_CARD_COND){ if((UNLOCK_CARD[id]||0)<=k) RUNES.unlocked[id]=true; }
+  // only grandfather content that HAD a legacy kill threshold — brand-new content
+  // (no entry in UNLOCK_BOSS/UNLOCK_CARD) is always earned via its feat by everyone.
+  for(const id in UNLOCK_BOSS_COND){ if(id in UNLOCK_BOSS && UNLOCK_BOSS[id]<=k) RUNES.unlocked[id]=true; }
+  for(const id in UNLOCK_CARD_COND){ if(id in UNLOCK_CARD && UNLOCK_CARD[id]<=k) RUNES.unlocked[id]=true; }
   RUNES.gf=1; saveRunes();
 }
 // Card rarity — drives how often each room is OFFERED in the draft & opening hand
@@ -1260,7 +1264,7 @@ const CARD_RARITY={
   flame:'special', frost:'special', tesla:'special', venom:'special', ogre:'special', shop:'special',
   magebane:'rare', gallows:'rare', hexward:'rare', corrode:'rare', warden:'rare', slime:'rare',
   maul:'epic', bombard:'epic', hexbrand:'epic', totem:'epic', runestone:'epic',
-  warcamp:'rare', dragon:'rare',
+  warcamp:'rare', dragon:'rare', orc:'rare',
 };
 const CARD_TIER_W={ common:100, special:50, rare:24, epic:10 };   // base offer weights
 function cardRarity(t){ return CARD_RARITY[t]||'common'; }
@@ -3653,6 +3657,7 @@ function placeCard(ci, idx){
   if(!room){
     G.rooms[idx]=makeRoom(T, card.lvl, card);
     if(cdef.kind==='trap') bumpStat('traps');          // feat: traps built
+    else if(cdef.kind==='monster') bumpStat('guards'); // feat: monster guards stationed
     G.hand.splice(ci,1);
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, cdef.col, 14);
     showHint(ROOMS[T].name+' built!'); tutEvent('placed', idx);
@@ -3696,6 +3701,7 @@ function placeCard(ci, idx){
     if(roomFreeSlots(room)<=0){ showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false; }
     const u=makeUnit(T, card.lvl, card);
     room.units.push(u);
+    if(cdef.kind==='monster') bumpStat('guards');      // feat: monster guards stationed
     if(T==='minion'){ room.minHp=u.minHp; room.minAtk=u.minAtk; if(!room.label) room.label=u.label; }
   }
   room.type=room.units[0].type;                       // keep primary type in sync
@@ -6831,6 +6837,11 @@ const MON_SPRITES={
     idle: {sheet:'idle', fw:298,fh:210,n:6,fps:7,  ax:174, ay:210},
     slash:{sheet:'slash',fw:346,fh:210,n:7,fps:13, ax:172, ay:210},
   }},
+  // 🪓 Orc Marauder: a static 2-frame idle bob (cropped from the orc-warrior art),
+  // mirrored to face LEFT toward incoming heroes. Anchor = frame centre / feet in
+  // source px; no walk/attack clips → always draws idle. Graceful emoji fallback.
+  orc:{ base:'sprites/orc/orc_', scale:1.7, dirRow:0, idle:'idle', atk:'idle', clips:{
+    idle:{sheet:'idle', fw:192,fh:192,n:2,fps:3, ax:96, ay:125} }},
   // Veteran-tier appearances: a guard's room upgrades its look as it racks up
   // kills (see monVariantKey). Same LPC pipeline as the base sprites; the 192px
   // attack sheets carry their swing arc, the 64px idle/walk are the body.
