@@ -7349,10 +7349,12 @@ function bossThroneArt(){ const k=G&&G.boss&&G.boss.key; const im=k&&THRONE_IMG[
 // when the boss casts. Keyed by boss id → its character-art folder. Bosses without
 // an entry (lich, ent) fall back to the static bosses/<key>.png.
 const BOSS_ANIM_SRC={
-  demon: {dir:'azzaroth', idle:4, attack:6},   // Azzaroth
-  dragon:{dir:'ignar',    idle:4, attack:7},   // Ignar
-  ogre:  {dir:'gormauth', idle:5, attack:5},   // Gormauth
-  golem: {dir:'karnak',   idle:4, attack:5},   // Karnak
+  demon: {dir:'azzaroth',  idle:4, attack:6},   // Azzaroth
+  dragon:{dir:'ignar',     idle:4, attack:6},   // Ignar (refreshed art)
+  ogre:  {dir:'gormauth',  idle:5, attack:5},   // Gormauth
+  golem: {dir:'karnak',    idle:4, attack:5},   // Karnak
+  lich:  {dir:'mortis',    idle:5, attack:6},   // Mortis the Lich (new)
+  ent:   {dir:'thornheart',idle:5, attack:6},   // Thornheart (new)
 };
 const BOSS_ANIM={};
 if(typeof Image!=='undefined'){
