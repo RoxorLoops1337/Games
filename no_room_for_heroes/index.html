@@ -603,8 +603,9 @@ function runeFace(id){ return RUNE_ICON[id] ? '<img class="runeimg" src="runes/'
 const EDICT_ICON={ ironHorde:'iron', bloodPact:'blood', swiftRaiders:'swift', warband:'warband', eliteVanguard:'elite', leanCoffers:'lean', glassThrone:'glass' };
 function edictFace(id){ return EDICT_ICON[id] ? '<img class="cardimg" src="modifiers/'+EDICT_ICON[id]+'.png" alt="" draggable="false">' : null; }
 // Painted relic icons (icons/relic_<word>.png) per relic key; emoji fallback.
-const RELIC_ICON={ cFang:'cracked', cEmber:'ember', sTooth:'serpent', sCharm:'charm', sPouch:'greedy', sMana:'mana', sCollar:'collar',
-  rScale:'dragonscale', rBlood:'bloodstone', rTome:'tome', rBanner:'banner', rEye:'hoarder', rFrost:'frost', rDeed:'deed',
+const RELIC_ICON={ cFang:'cracked', cEmber:'wildfire', sTooth:'serpent', sCharm:'charm', sPouch:'greedy', sMana:'mana', sCollar:'collar',
+  cShackle:'shackle', cCoin:'worncoin', cIdol:'idol', sWard:'wardingstone', eMidas:'alchemist', rBanner:'horn',
+  rScale:'dragonscale', rBlood:'bloodstone', rTome:'tome', rEye:'hoarder', rFrost:'frost', rDeed:'deed',
   eCore:'infernal', eStaff:'archmage', lPhyl:'phylactery', mRuin:'avatar', mEtern:'eternity' };
 function relicFace(id,cls){ return RELIC_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/relic_'+RELIC_ICON[id]+'.png" alt="" draggable="false">' : null; }
 // Painted mandate ("decree") icons (icons/decree_<word>.png) per mandate key; emoji fallback.
