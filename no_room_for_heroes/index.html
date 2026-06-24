@@ -469,12 +469,14 @@
   /* locked content (boss select / unlocks screen) */
   .choice.rlocked{opacity:.55;cursor:default;border-color:#3a3450;}
   .unlockgrid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:680px;margin:0 auto;}
-  .ucard{width:96px;padding:8px 4px;border-radius:10px;border:2px solid #3a3450;background:#1a1430;
-    display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .ucard{width:116px;padding:8px 6px;border-radius:10px;border:2px solid #3a3450;background:#1a1430;
+    display:flex;flex-direction:column;align-items:center;gap:3px;}
   .ucard.uok{border-color:#52d97e;background:#1f3a26;}
   .ucard .uic{font-size:24px;}
   .ucard .un{font-size:11px;font-weight:bold;}
-  .ucard .ureq{font-size:10px;opacity:.8;}
+  .ucard .ureq{font-size:10px;opacity:.85;line-height:1.25;width:100%;}
+  .ucard .ubar{height:8px;width:100%;margin:3px 0 1px;background:#241a3e;border-radius:5px;overflow:hidden;}
+  .ucard .ubar i{display:block;height:100%;background:linear-gradient(90deg,#7a3abf,#b985ff);}
 </style>
 </head>
 <body>
@@ -1048,11 +1050,14 @@ function resetSlot(n){
 function loadRunes(){
   try{ const s=JSON.parse(localStorage.getItem(runeKey())||'{}');
     RUNES={ points:s.points||0, ranks:(s.ranks&&typeof s.ranks==='object')?s.ranks:{}, kills:s.kills||0,
-            bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{}, best:s.best||0, asc:s.asc||0 }; }
-  catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{}, best:0, asc:0 }; }
+            bossXp:(s.bossXp&&typeof s.bossXp==='object')?s.bossXp:{}, best:s.best||0, asc:s.asc||0,
+            stats:(s.stats&&typeof s.stats==='object')?s.stats:{},
+            unlocked:(s.unlocked&&typeof s.unlocked==='object')?s.unlocked:{}, gf:s.gf||0 }; }
+  catch(_){ RUNES={ points:0, ranks:{}, kills:0, bossXp:{}, best:0, asc:0, stats:{}, unlocked:{}, gf:0 }; }
+  if(typeof grandfatherUnlocks==='function') grandfatherUnlocks();
 }
 function saveRunes(){
-  try{ localStorage.setItem(runeKey(), JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp, best:RUNES.best||0, asc:RUNES.asc||0})); }catch(_){ }
+  try{ localStorage.setItem(runeKey(), JSON.stringify({points:RUNES.points, ranks:RUNES.ranks, kills:RUNES.kills, bossXp:RUNES.bossXp, best:RUNES.best||0, asc:RUNES.asc||0, stats:RUNES.stats||{}, unlocked:RUNES.unlocked||{}, gf:RUNES.gf||0})); }catch(_){ }
 }
 
 /* ======================= TOWN BUILDER (meta progression) ==================
@@ -1203,9 +1208,51 @@ function bossXpInfo(key){ const lvl=bossLevelOf(key);
   return { lvl, into, need:BOSS_XP_PER_LVL, max:lvl>=BOSS_LVL_MAX }; }
 function bossMasteryHp(lvl){ return 1 + (lvl-1)*0.04; }   // +4% max HP per level
 function bossMasteryAtk(lvl){ return 1 + (lvl-1)*0.025; } // +2.5% attack per level
-// ---- Unlocks: content gated behind lifetime kills ----
-const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // others unlocked from the start
+// ---- Unlocks: every gated boss & room earns its way in via a distinct FEAT.
+// The lifetime-kill thresholds below live on ONLY as a one-time grandfather so
+// existing saves keep everything they had already unlocked (see grandfatherUnlocks).
+// New progress is earned through ~15 different clever conditions instead. ----
+const UNLOCK_BOSS={ ogre:50, ent:110, golem:180 };           // legacy kill thresholds (grandfather only)
 const UNLOCK_CARD={ oil:25, frost:65, tesla:120, magebane:50, maul:105, gallows:180, hexward:260, bombard:145, venom:80, corrode:160, hexbrand:210, warden:90, slime:130, totem:195, runestone:235, warcamp:0, dragon:150 };
+// id → {stat, n, label}: the feat that earns each locked boss/card. Boss & card
+// maps are kept separate because 'ogre' & 'dragon' are keys in BOTH BOSSES and ROOMS.
+const UNLOCK_BOSS_COND={
+  ogre:  {stat:'throne',     n:30, label:'Slay 30 heroes that breach your throne'},
+  ent:   {stat:'poisoned',   n:40, label:'Poison 40 heroes to death'},
+  golem: {stat:'waves',      n:60, label:'Clear 60 waves'},
+};
+const UNLOCK_CARD_COND={
+  oil:      {stat:'reactions',   n:15,    label:'Trigger 15 elemental reactions'},
+  frost:    {stat:'frozen',      n:25,    label:'Freeze 25 heroes to death'},
+  tesla:    {stat:'abil',        n:60,    label:'Cast 60 boss abilities'},
+  magebane: {stat:'casterKills', n:20,    label:'Slay 20 Mage & Cleric heroes'},
+  maul:     {stat:'maxCombo',    n:8,     label:'Land an 8-kill combo streak'},
+  gallows:  {stat:'champions',   n:12,    label:'Execute 12 champions'},
+  hexward:  {stat:'relics',      n:25,    label:'Collect 25 relics'},
+  bombard:  {stat:'burned',      n:50,    label:'Burn 50 heroes to death'},
+  venom:    {stat:'poisoned',    n:20,    label:'Poison 20 heroes to death'},
+  corrode:  {stat:'merges',      n:25,    label:'Forge 25 gear merges'},
+  hexbrand: {stat:'gold',        n:40000, label:'Loot 40,000 gold in total'},
+  warden:   {stat:'tankKills',   n:25,    label:'Slay 25 Warrior heroes'},
+  slime:    {stat:'flawless',    n:10,    label:'Clear 10 waves with zero breaches'},
+  totem:    {stat:'drops',       n:100,   label:'Gather 100 loot drops'},
+  runestone:{stat:'traps',       n:150,   label:'Build 150 traps'},
+  dragon:   {stat:'elites',      n:30,    label:'Slay 30 elite heroes'},
+};
+// lifetime feat counters (persisted in RUNES.stats). bumpStat adds; setStatMax keeps a best.
+function statVal(k){ return (RUNES.stats&&RUNES.stats[k])||0; }
+function bumpStat(k,n){ if(!RUNES.stats) RUNES.stats={}; RUNES.stats[k]=(RUNES.stats[k]||0)+(n==null?1:n); }
+function setStatMax(k,v){ if(!RUNES.stats) RUNES.stats={}; if(v>(RUNES.stats[k]||0)) RUNES.stats[k]=v; }
+function condMet(c){ return !c || statVal(c.stat)>=c.n; }
+// one-time grandfather: snapshot existing kills→unlocks once, then everyone earns the feats.
+function grandfatherUnlocks(){
+  if(!RUNES.unlocked) RUNES.unlocked={};
+  if(RUNES.gf) return;
+  const k=RUNES.kills||0;
+  for(const id in UNLOCK_BOSS_COND){ if((UNLOCK_BOSS[id]||0)<=k) RUNES.unlocked[id]=true; }
+  for(const id in UNLOCK_CARD_COND){ if((UNLOCK_CARD[id]||0)<=k) RUNES.unlocked[id]=true; }
+  RUNES.gf=1; saveRunes();
+}
 // Card rarity — drives how often each room is OFFERED in the draft & opening hand
 // (same tier vocabulary as relics). Workhorses are common; build-definers are epic.
 const CARD_RARITY={
@@ -1236,8 +1283,8 @@ function pickCardWeighted(pool, L, exclude){
   for(const t of list){ r-=cardWeight(t, L||0); if(r<=0) return t; }
   return list[list.length-1];
 }
-function bossUnlocked(k){ return (UNLOCK_BOSS[k]||0) <= RUNES.kills; }
-function cardUnlocked(t){ return (UNLOCK_CARD[t]||0) <= RUNES.kills; }
+function bossUnlocked(k){ const c=UNLOCK_BOSS_COND[k]; if(!c) return true; return (RUNES.unlocked&&RUNES.unlocked[k]===true)||condMet(c); }
+function cardUnlocked(t){ const c=UNLOCK_CARD_COND[t]; if(!c) return true; return (RUNES.unlocked&&RUNES.unlocked[t]===true)||condMet(c); }
 function unlockedRoomKeys(){ return ROOM_KEYS.filter(cardUnlocked); }
 function ranksOf(id){ return RUNES.ranks[id]||0; }
 function runeCost(n){ return n.cost; }                       // flat per rank
@@ -1275,6 +1322,7 @@ function recomputeRB(){
 function addRelic(id){
   const r=RELICS[id]; if(!r) return;
   G.relics.push(id);
+  bumpStat('relics');                          // feat: relics collected
   const b=G.boss, rb=r.rb||{};
   if(r.hp){ b.maxHp+=r.hp; b.hp+=r.hp; }
   if(r.gold) G.gold+=r.gold;
@@ -1410,6 +1458,7 @@ function mergeGear(i,j){
   const hi=Math.max(i,j), lo=Math.min(i,j);
   G.chest.splice(hi,1); G.chest.splice(lo,1);          // remove both
   G.chest.push({k:a.k, t:nt, v:gearRollV(a.k)});        // forge the upgrade (a fresh variant roll)
+  bumpStat('merges');                                   // feat: gear merges forged
   selGear=-1; sfx('relic');
   showHint('⬆ Merged into '+swordName({k:a.k,t:nt})+' ('+RELIC_TIERS[nt].name+')!');
   renderPanel();
@@ -2242,7 +2291,7 @@ function openStronghold(){
     <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
       <button class="go" style="min-width:270px" onclick="openRunes()">🔮 Rune Page${RUNES.points?` (${RUNES.points}◆)`:''}${sub('spend rune points on the boss skill tree')}</button>
       <button style="min-width:270px" onclick="openTownBuilder()">🏗️ Town Builder${sub('spend wood, stone & shards on buildings')}</button>
-      <button style="min-width:270px" onclick="openUnlocks()">🔓 Unlocks${sub('bosses & cards earned by lifetime kills')}</button>
+      <button style="min-width:270px" onclick="openUnlocks()">🔓 Unlocks${sub('bosses & cards earned by clever feats')}</button>
     </div>
     <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
 }
@@ -2403,13 +2452,22 @@ function doResetSlot(n){ resetSlot(n); openSlots(); }
 // Bosses & cards unlock as your LIFETIME kills climb. Shows progress.
 function openUnlocks(){
   overlay.classList.add('show');
-  const ucard=(unlocked,ic,name,req)=>`<div class="ucard ${unlocked?'uok':''}">
-    <div class="uic">${unlocked?ic:'🔒'}</div><div class="un">${name}</div>
-    <div class="ureq">${unlocked?'<span style="color:#7bdc6b">unlocked</span>':req+' kills'}</div></div>`;
-  const bosses=BOSS_KEYS.map(k=>ucard(bossUnlocked(k),BOSSES[k].ic,BOSSES[k].name.split(' ')[0],UNLOCK_BOSS[k]||0)).join('');
-  const cards=ROOM_KEYS.map(k=>ucard(cardUnlocked(k),ROOMS[k].ic,ROOMS[k].name,UNLOCK_CARD[k]||0)).join('');
+  const ucard=(unlocked,ic,name,cond)=>{
+    let req;
+    if(unlocked) req='<span style="color:#7bdc6b">unlocked</span>';
+    else if(cond){ const v=Math.min(statVal(cond.stat),cond.n), pct=Math.max(4,Math.round(v/cond.n*100));
+      req=`<div>${cond.label}</div>
+        <div class="ubar"><i style="width:${pct}%"></i></div>
+        <div style="opacity:.7">${v.toLocaleString()} / ${cond.n.toLocaleString()}</div>`; }
+    else req='';
+    return `<div class="ucard ${unlocked?'uok':''}">
+      <div class="uic">${unlocked?ic:'🔒'}</div><div class="un">${name}</div>
+      <div class="ureq">${req}</div></div>`;
+  };
+  const bosses=BOSS_KEYS.map(k=>ucard(bossUnlocked(k),BOSSES[k].ic,BOSSES[k].name.split(' ')[0],UNLOCK_BOSS_COND[k])).join('');
+  const cards=ROOM_KEYS.map(k=>ucard(cardUnlocked(k),ROOMS[k].ic,ROOMS[k].name,UNLOCK_CARD_COND[k])).join('');
   overlay.innerHTML=`<h1>🔓 Unlocks</h1>
-    <p>Slay heroes to unlock new bosses & rooms. Lifetime kills: <b style="color:var(--gold)">${RUNES.kills}</b></p>
+    <p>Every locked boss &amp; room earns its way in through a different <b>feat</b> — burn, freeze, poison, combo, hoard… Lifetime kills: <b style="color:var(--gold)">${RUNES.kills}</b></p>
     <h2 style="margin:6px 0 4px">Bosses</h2><div class="unlockgrid">${bosses}</div>
     <h2 style="margin:12px 0 4px">Room Cards</h2><div class="unlockgrid">${cards}</div>
     <div class="menu-btns"><button class="go" onclick="openStronghold()">← Back</button></div>`;
@@ -3344,10 +3402,14 @@ function gotoBossSelect(){
       const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
       return `<div class="choice jz${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="animation-delay:${i*60}ms">
         ${lk
-          ? `<img src="bosses/${k}.png" alt="${b.name}" style="height:130px;image-rendering:pixelated;display:block;margin:2px auto -2px;filter:grayscale(1) brightness(.45)">
+          ? (()=>{ const c=UNLOCK_BOSS_COND[k]; const v=c?Math.min(statVal(c.stat),c.n):0, pct=c?Math.max(4,Math.round(v/c.n*100)):0;
+             return `<img src="bosses/${k}.png" alt="${b.name}" style="height:130px;image-rendering:pixelated;display:block;margin:2px auto -2px;filter:grayscale(1) brightness(.45)">
              <h3>${b.name}</h3>
              <div class="small" style="color:#ff9aae;font-weight:bold;margin-top:4px">🔒 Locked</div>
-             <div class="desc" style="margin-top:6px">Unlock at <b>${UNLOCK_BOSS[k]}</b> lifetime kills<br><span style="opacity:.7">(you: ${RUNES.kills})</span></div>`
+             <div class="desc" style="margin-top:6px">${c?c.label:'Locked'}</div>
+             <div class="bar" style="width:88%;height:14px;margin:5px auto 2px;background:#2a2046">
+               <i style="width:${pct}%;background:linear-gradient(90deg,#7a3abf,#b985ff)"></i>
+               <span style="line-height:14px">${v.toLocaleString()} / ${c?c.n.toLocaleString():0}</span></div>`; })()
           : `<img src="bosses/${k}.png" alt="${b.name}" style="height:130px;image-rendering:pixelated;display:block;margin:2px auto -2px">
              <h3>${b.name}</h3>
              <div class="small" style="color:var(--gold);font-weight:bold">★ Mastery Lv ${xi.lvl}${xi.max?' (MAX)':''}</div>
@@ -3383,7 +3445,7 @@ function makeHScrollDraggable(el){
 }
 // boss-themed mouse cursors: once you ARE a boss, the pointer takes on its look
 function setBossCursor(key){
-  const el=document.getElementById('app'); if(!el) return;
+  const el=document.getElementById('app'); if(!el||!el.style||!el.style.setProperty) return;   // headless harness has no CSSOM
   const dir=key && BOSS_ANIM_SRC[key] && BOSS_ANIM_SRC[key].dir;
   if(!dir){ el.style.removeProperty('--curA'); el.style.removeProperty('--curB'); return; }
   el.style.setProperty('--curA', `url(cursors/cursor_${dir}_select.png) 4 3, auto`);
@@ -3590,6 +3652,7 @@ function placeCard(ci, idx){
   const room=G.rooms[idx];
   if(!room){
     G.rooms[idx]=makeRoom(T, card.lvl, card);
+    if(cdef.kind==='trap') bumpStat('traps');          // feat: traps built
     G.hand.splice(ci,1);
     burst(cellX(idx)+ROOM_W/2, FLOOR-30, cdef.col, 14);
     showHint(ROOMS[T].name+' built!'); tutEvent('placed', idx);
@@ -3617,6 +3680,7 @@ function placeCard(ci, idx){
     if(existing){
       if(existing.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
       existing.lvl++;
+      bumpStat('traps');                                 // feat: traps built (a level-up counts)
       G.hand.splice(ci,1);
       burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
       floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+existing.lvl, '#ffd34d');
@@ -3626,6 +3690,7 @@ function placeCard(ci, idx){
     if(roomTrapUnits(room).length>=MAX_TRAPS){ showHint('A room holds at most '+MAX_TRAPS+' traps.'); return false; }
     if(roomFreeSlots(room)<=0){ showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false; }
     room.units.push(makeUnit(T, card.lvl, card));
+    bumpStat('traps');                                 // feat: traps built
   } else {
     // monster: always a fresh independent copy — five Bone Pits = five guards
     if(roomFreeSlots(room)<=0){ showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false; }
@@ -3681,6 +3746,7 @@ function startWave(){
   if(!tutAllow('start')){ tutNudge(); return; }   // tutorial: only when prompted
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
+  G._waveStartBreaches=(G.stats&&G.stats.breaches)||0;   // baseline for the "flawless wave" feat
   spawnGroup(G.guildLvl+1);
   spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 20) marches out this wave
   G.phase='run'; speedMul=1; frameWaveRun();      // hug the right edge, heroes just in frame
@@ -4193,7 +4259,7 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
   if(h.shieldT>0){ dmg=Math.max(1,Math.round(dmg*0.4)); }   // champion shield (−60%)
   // 🎯 DETONATE — a Hex Brand makes the NEXT hit on a marked hero hit far harder
   if(h.mark>0 && label!=='HEAL'){ dmg=Math.round(dmg*(1+MARK_AMP)); h.mark=0;
-    floater(h.x, h.y-66, '🎯 DETONATE', '#ff5470'); burst(h.x,h.y-24,'#ff5470',16); sfx('crit'); if(G.stats)G.stats.reactions++; }
+    floater(h.x, h.y-66, '🎯 DETONATE', '#ff5470'); burst(h.x,h.y-24,'#ff5470',16); sfx('crit'); if(G.stats)G.stats.reactions++; bumpStat('reactions'); }
   h.hp-=dmg;
   h.dmgTaken=(h.dmgTaken||0)+dmg;               // telemetry: how much your dungeon stripped from this hero
   if(G.stats){ if(_roomDmgCtx) _roomDmgCtx.dmg=(_roomDmgCtx.dmg||0)+dmg;
@@ -4230,6 +4296,7 @@ function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasManda
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
+  bumpStat('reactions');                                     // feat: lifetime elemental reactions
   const chain=h.reactCount;
   floater(h.x,h.y-66, label+(chain>1?' ×'+chain:'')+' -'+x, col, chain>=3);   // chains pop big
   burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); sfx('crit');
@@ -4351,6 +4418,7 @@ function castAbility(slot){
   G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
   G.boss.castAt=performance.now();             // play the boss's attack animation
   def.run(target);
+  bumpStat('abil');                            // feat: abilities cast
   tutEvent('ability');
   // bolt(s) from the boss to the target(s) so you see where the power comes from
   const living=(G.heroes||[]).filter(h=>h&&h.state!=='dead');
@@ -4431,15 +4499,25 @@ function heroDies(h){
     + (RB.dreadKill||0) + townDreadKill() + (h.elite?(RB.eliteDread||0):0) + (h.reachedThrone?(RB.throneDread||0):0);
   G.dread+=dread;
   G.survived++; G.totalSlain++;
+  // ── lifetime feat counters: drive the varied unlock conditions ──
+  bumpStat('gold', loot);
+  if(h.reachedThrone) bumpStat('throne');
+  if(h.poison>0)  bumpStat('poisoned');
+  if(h.freeze>0)  bumpStat('frozen');
+  if(h.burn>0)    bumpStat('burned');
+  if(h.champion)  bumpStat('champions');
+  if(h.elite)     bumpStat('elites');
+  if(h.cls==='mage'||h.cls==='cleric') bumpStat('casterKills');
+  if(h.cls==='warrior') bumpStat('tankKills');
   // Loot drop: 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing. Champions roll twice.
   if(!G.drops) G.drops={wood:0,stone:0,shards:0,runes:0};
   const lootRolls = h.champion ? 2 : 1;
   for(let i=0;i<lootRolls;i++){
     const r=Math.random();
-    if(r<0.20){      G.drops.wood++;   floater(h.x, h.y-66-i*16, '+1 🪵', '#b58a4e'); }
-    else if(r<0.40){ G.drops.stone++;  floater(h.x, h.y-66-i*16, '+1 🪨', '#a8a8b4'); }
-    else if(r<0.60){ G.drops.runes++;  floater(h.x, h.y-66-i*16, '+1 ᚱ',  '#b985ff'); }
-    else if(r<0.70){ G.drops.shards++; floater(h.x, h.y-66-i*16, '+1 💠', '#9adfff'); }
+    if(r<0.20){      G.drops.wood++;   bumpStat('drops'); floater(h.x, h.y-66-i*16, '+1 🪵', '#b58a4e'); }
+    else if(r<0.40){ G.drops.stone++;  bumpStat('drops'); floater(h.x, h.y-66-i*16, '+1 🪨', '#a8a8b4'); }
+    else if(r<0.60){ G.drops.runes++;  bumpStat('drops'); floater(h.x, h.y-66-i*16, '+1 ᚱ',  '#b985ff'); }
+    else if(r<0.70){ G.drops.shards++; bumpStat('drops'); floater(h.x, h.y-66-i*16, '+1 💠', '#9adfff'); }
   }
   // Devour passive: the boss feasts on the fallen
   if(G.boss.feed) healBoss(Math.round(G.boss.maxHp*G.boss.feed));
@@ -4449,6 +4527,7 @@ function heroDies(h){
     floater(bossX(), FLOOR-110, '😋 GROW', '#b0563a'); }
   // kill streak: rewards an airtight dungeon (resets if a hero strikes the boss)
   G.combo=(G.combo||0)+1;
+  setStatMax('maxCombo', G.combo);              // feat: best kill streak
   let comboBonus=0;
   if(G.combo>=3){ comboBonus=G.combo; G.gold+=comboBonus;
     floater(h.x, h.y-78, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
@@ -4495,6 +4574,9 @@ const WAVE_WIN_PHRASES=['WAVE CLEARED','HEROES REPELLED','THE HORDE BREAKS','ASS
   'THEY FALL BEFORE YOU','THE THRONE HOLDS','ANOTHER RAID SHATTERED','NO ROOM FOR HEROES'];
 function waveWinBanner(){
   G._waveWins=(G._waveWins||0)+1;
+  bumpStat('waves');                                     // feat: waves cleared
+  if(((G.stats&&G.stats.breaches)||0)===(G._waveStartBreaches||0)) bumpStat('flawless');   // feat: no hero breached the throne
+
   const phrase=WAVE_WIN_PHRASES[(G._waveWins-1)%WAVE_WIN_PHRASES.length];
   const sub=(G.mode==='campaign')
     ? `Level ${campLevel()} of ${CAMP_LEVELS} cleared · ${G.totalSlain} heroes slain`
@@ -4822,16 +4904,16 @@ function awardRunes(){
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
-  // bank lifetime kills + detect newly-unlocked content
-  const before=RUNES.kills;
+  // bank lifetime kills (still tracked for mastery, the title screen & grandfather)
   const kd=Math.max(0, G.totalSlain - (G.killsBanked||0));
   G.killsBanked=G.totalSlain; RUNES.kills+=kd;
-  const after=RUNES.kills;
+  // detect newly-EARNED unlocks (a feat condition just crossed) and make them sticky
   G.newUnlocks=[];
-  for(const k in UNLOCK_BOSS){ if(UNLOCK_BOSS[k]>before && UNLOCK_BOSS[k]<=after)
-    G.newUnlocks.push({ic:BOSSES[k].ic, name:BOSSES[k].name, kind:'New Boss', desc:BOSSES[k].blurb}); }
-  for(const k in UNLOCK_CARD){ if(UNLOCK_CARD[k]>before && UNLOCK_CARD[k]<=after)
-    G.newUnlocks.push({ic:ROOMS[k].ic, name:ROOMS[k].name, kind:ROOMS[k].kind==='trap'?'New Trap':ROOMS[k].kind==='monster'?'New Monster':'New Card', desc:ROOMS[k].desc, key:k}); }
+  if(!RUNES.unlocked) RUNES.unlocked={};
+  for(const k in UNLOCK_BOSS_COND){ if(!RUNES.unlocked[k] && condMet(UNLOCK_BOSS_COND[k])){ RUNES.unlocked[k]=true;
+    G.newUnlocks.push({ic:BOSSES[k].ic, name:BOSSES[k].name, kind:'New Boss', desc:BOSSES[k].blurb}); } }
+  for(const k in UNLOCK_CARD_COND){ if(!RUNES.unlocked[k] && condMet(UNLOCK_CARD_COND[k])){ RUNES.unlocked[k]=true;
+    G.newUnlocks.push({ic:ROOMS[k].ic, name:ROOMS[k].name, kind:ROOMS[k].kind==='trap'?'New Trap':ROOMS[k].kind==='monster'?'New Monster':'New Card', desc:ROOMS[k].desc, key:k}); } }
   // bank boss mastery XP for the boss you played + detect a level-up
   if(G.boss && G.boss.key){
     if(!RUNES.bossXp) RUNES.bossXp={};
