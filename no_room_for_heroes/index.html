@@ -2362,8 +2362,15 @@ function showHelp(){
     </p>
     <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
 }
-function startCampaign(){ G=freshGame('campaign'); gotoEdicts(); }
-function startEndless(){ G=freshGame('endless'); gotoEdicts(); }
+function startCampaign(){ if(forceFirstTutorial()) return; G=freshGame('campaign'); gotoEdicts(); }
+function startEndless(){ if(forceFirstTutorial()) return; G=freshGame('endless'); gotoEdicts(); }
+// A brand-new player (tutorial never opened AND zero lifetime kills) is routed through the
+// guided tutorial before their first real run. Finishing OR skipping it sets bm_tut_done,
+// so it only happens once.
+function forceFirstTutorial(){
+  if(tutDoneGet() || (RUNES.kills||0)>0) return false;
+  startTutorial(); return true;
+}
 
 /* ============================== UNLOCKS ================================ */
 // Save slots: three independent profiles (own runes + town). Switch to start a
