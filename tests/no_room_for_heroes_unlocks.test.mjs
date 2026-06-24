@@ -6,9 +6,10 @@
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,bossUnlocked,cardUnlocked,bumpStat,statVal,
-  saveRunes,loadRunes,awardRunes,grandfatherUnlocks,
+  saveRunes,loadRunes,awardRunes,grandfatherUnlocks,gotoBossSelect,scrollBosses,updateBossArrows,BOSS_KEYS,
   get RUNES(){return RUNES;},set RUNES(v){RUNES=v;},
   get UNLOCK_BOSS_COND(){return UNLOCK_BOSS_COND;},get UNLOCK_CARD_COND(){return UNLOCK_CARD_COND;},
+  get overlay(){return overlay;},
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('unlocks (feats)');
 
@@ -81,5 +82,21 @@ t.ok(!!A.UNLOCK_CARD_COND.orc && A.UNLOCK_CARD_COND.orc.stat==='guards', 'Orc Ma
 t.ok(A.cardUnlocked('orc')===false, 'Orc Marauder starts locked for a fresh profile');
 A.bumpStat('guards', A.UNLOCK_CARD_COND.orc.n);
 t.ok(A.cardUnlocked('orc')===true, 'stationing enough guards unlocks the Orc Marauder');
+
+// --- boss-select screen: paged ‹ › arrows, and unlocked bosses stay CLICKABLE ---
+// (regression for the drag-carousel that swallowed clicks so no boss could be picked)
+fresh();
+A.G = A.freshGame('campaign');
+A.gotoBossSelect();
+const bs = A.overlay.innerHTML || '';
+t.ok(bs.includes('id="bosscar"') && bs.includes('scrollBosses(-1)') && bs.includes('scrollBosses(1)'),
+  'boss select renders a scroll strip with ‹ › paging arrows');
+const unlockedBosses = A.BOSS_KEYS.filter(k => A.bossUnlocked(k));
+t.ok(unlockedBosses.length > 0 && unlockedBosses.every(k => bs.includes(`chooseBoss('${k}')`)),
+  'every unlocked boss card carries a chooseBoss() click handler (selectable)');
+t.ok(!bs.includes('makeHScrollDraggable'), 'the click-swallowing drag handler is gone');
+let arrowsThrew = false;
+try { A.scrollBosses(1); A.scrollBosses(-1); A.updateBossArrows(); } catch(e){ arrowsThrew = true; }
+t.ok(!arrowsThrew, 'arrow paging + grey-out handlers run without throwing');
 
 t.done();
