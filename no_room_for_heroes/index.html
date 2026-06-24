@@ -4449,17 +4449,33 @@ function heroDies(h){
 }
 
 // Called once after the whole raiding party is wiped out.
+const WAVE_WIN_PHRASES=['WAVE CLEARED','HEROES REPELLED','THE HORDE BREAKS','ASSAULT CRUSHED',
+  'THEY FALL BEFORE YOU','THE THRONE HOLDS','ANOTHER RAID SHATTERED','NO ROOM FOR HEROES'];
+function waveWinBanner(){
+  G._waveWins=(G._waveWins||0)+1;
+  const phrase=WAVE_WIN_PHRASES[(G._waveWins-1)%WAVE_WIN_PHRASES.length];
+  const sub=(G.mode==='campaign')
+    ? `Level ${campLevel()} of ${CAMP_LEVELS} cleared · ${G.totalSlain} heroes slain`
+    : `Wave ${G._waveWins} survived · ${G.totalSlain} heroes slain`;
+  banner('⚔️ '+phrase+'!', '#ffd34d', sub);
+}
 function afterWave(){
-  if(G.phase!=='run') return;          // run already ended (closed/lost/won) — don't resurrect it
-  G.waveEnding=false;
-  if(G.tutorial){ tutAfterWave(); return; }   // scripted tutorial flow
+  if(G.phase!=='run' || G._waveBeat) return;   // run already ended, or a victory beat is mid-flight
+  if(G.tutorial){ G.waveEnding=false; tutAfterWave(); return; }   // scripted tutorial flow
   endWaveGoblins();                    // bank surviving goblins back into their dens
-  if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
-  // Endless: town every 5 kills, relic every 10, mandate every 25
-  G.townDue = Math.floor(G.waveStartSlain/5) !== Math.floor(G.totalSlain/5);
-  G.relicDue = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
-  G.mandateDue = Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
-  gotoReward();
+  waveWinBanner();                     // 🎉 celebrate the cleared wave…
+  G._waveBeat=true;                    // …hold a beat before the reward (keep waveEnding so the wipe-check won't re-fire)
+  setTimeout(()=>{
+    if(!G) return;
+    G._waveBeat=false; G.waveEnding=false;
+    if(G.phase!=='run') return;        // closed/lost during the beat
+    if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
+    // Endless: town every 5 kills, relic every 10, mandate every 25
+    G.townDue   = Math.floor(G.waveStartSlain/5)  !== Math.floor(G.totalSlain/5);
+    G.relicDue  = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
+    G.mandateDue= Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
+    gotoReward();
+  }, 1300);
 }
 // Campaign: a wave was just cleared → bank gold, hand out milestone rewards, and
 // advance to the next level. (Level 50 cleared → the finale.)
