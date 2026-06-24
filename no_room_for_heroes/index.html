@@ -243,10 +243,14 @@
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
-  /* Boss select: a horizontal carousel of big boss cards you scroll/swipe through */
+  /* Boss select: 3 big boss cards in view; ‹ › arrows page left/right (smooth) */
+  .bossnav{position:relative;width:min(1040px,98%);margin:10px auto 0;
+    display:flex;align-items:center;justify-content:center;gap:8px;}
   .bosscarousel{display:flex;align-items:stretch;gap:18px;overflow-x:auto;overflow-y:hidden;
-    width:min(1180px,96%);margin:10px auto 0;padding:8px 16px 18px;
-    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+    width:894px;max-width:100%;padding:8px 6px 18px;
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;
+    scrollbar-width:none;}
+  .bosscarousel::-webkit-scrollbar{display:none;}
   .bosscarousel .choice{flex:0 0 286px;width:286px;margin-top:0;scroll-snap-align:center;
     display:flex;flex-direction:column;}
   .bosscarousel .choice h3{font-size:20px;}
@@ -254,6 +258,12 @@
   .bosscarousel .choice .small{font-size:12.5px;}
   .bosscarousel .choice .stats{font-size:13px;}
   .bosscarousel .choice.rlocked{justify-content:center;text-align:center;opacity:.96;}
+  .bossarrow{flex:0 0 auto;width:54px;height:54px;border-radius:50%;border:2px solid #4a3a6e;
+    background:#241a3e;color:#e8def7;font-size:30px;line-height:1;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px #0007;z-index:4;
+    transition:opacity .15s,background .15s,transform .1s;}
+  .bossarrow:hover:not(:disabled){background:#3a2c5a;transform:scale(1.08);}
+  .bossarrow:disabled{opacity:.26;cursor:default;}
   /* save-slot stats: a 3-column grid (icon · value · label) so every row lines
      up and never wraps; fixed floor height keeps every slot card the SAME size */
   .slotbody{min-height:86px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.45;margin:4px 0;font-size:15px;}
@@ -3401,7 +3411,9 @@ function gotoBossSelect(){
     <button onclick="gotoEdicts()" style="position:absolute;left:22px;top:22px;z-index:3;font-size:15px;padding:12px 22px">← Back</button>
     <h1>Choose your Boss</h1>
     <p>${G.mode==='campaign'?'Campaign — break a 50-wave siege, milestone mini-bosses & rewards.':'Endless — how long can you reign?'}${edTag}</p>
-    <div class="bosscarousel">${BOSS_KEYS.map((k,i)=>{
+    <div class="bossnav">
+    <button class="bossarrow" id="bossPrev" onclick="scrollBosses(-1)" aria-label="Previous bosses">‹</button>
+    <div class="bosscarousel" id="bosscar">${BOSS_KEYS.map((k,i)=>{
       const b=BOSSES[k]; const lk=!bossUnlocked(k);
       const xi=bossXpInfo(k); const mHp=Math.round(b.maxHp*bossMasteryHp(xi.lvl)), mAtk=Math.round(b.atk*bossMasteryAtk(xi.lvl));
       return `<div class="choice jz${lk?' rlocked':''}" ${lk?'':`onclick="chooseBoss('${k}')"`} style="animation-delay:${i*60}ms">
@@ -3426,26 +3438,27 @@ function gotoBossSelect(){
              <div class="small" style="color:${b.col};margin:2px 0"><b>✦ ${PASSIVES[b.passive].name}</b> · ${PASSIVES[b.passive].desc}</div>
              <div class="small" style="opacity:.85">★ ${ABIL[b.sig[0]].ic} ${ABIL[b.sig[0]].name} · ${ABIL[b.sig[1]].ic} ${ABIL[b.sig[1]].name}</div>
              <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
-      </div>`;}).join('')}</div>`;
-  makeHScrollDraggable(overlay.querySelector('.bosscarousel'));
+      </div>`;}).join('')}</div>
+    <button class="bossarrow" id="bossNext" onclick="scrollBosses(1)" aria-label="More bosses">›</button>
+    </div>`;
+  const car=overlay.querySelector('#bosscar');
+  if(car && car.addEventListener){ car.addEventListener('scroll', updateBossArrows, {passive:true}); }
+  updateBossArrows();
 }
-// hold-and-drag to scroll a horizontal strip with the mouse (touch already swipes
-// natively). A real drag swallows the click so it can't accidentally pick a boss.
-function makeHScrollDraggable(el){
-  if(!el) return;
-  let down=false, sx=0, sl=0;
-  el.style.cursor='grab';
-  el.addEventListener('pointerdown', e=>{
-    if(e.pointerType!=='mouse') return;
-    down=true; el._noClick=false; sx=e.clientX; sl=el.scrollLeft;
-    el.style.cursor='grabbing'; try{ el.setPointerCapture(e.pointerId); }catch(_){ }
-  });
-  el.addEventListener('pointermove', e=>{
-    if(!down) return; const dx=e.clientX-sx; if(Math.abs(dx)>4) el._noClick=true; el.scrollLeft=sl-dx;
-  });
-  const up=e=>{ if(!down) return; down=false; el.style.cursor='grab'; try{ el.releasePointerCapture(e.pointerId); }catch(_){ } };
-  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
-  el.addEventListener('click', e=>{ if(el._noClick){ e.stopPropagation(); e.preventDefault(); el._noClick=false; } }, true);
+// Boss carousel paging: ‹ › step one "page" (the 3 visible cards) at a time, smooth.
+// Clicks select normally — no drag handler to swallow them.
+function scrollBosses(dir){
+  const el=document.getElementById('bosscar'); if(!el || !el.scrollBy) return;
+  const page=Math.max(304, (el.clientWidth||894)-18);       // ≈ the visible width (3 cards)
+  el.scrollBy({ left: dir*page, behavior:'smooth' });
+}
+// grey out an arrow once the strip can't scroll further that way
+function updateBossArrows(){
+  const el=document.getElementById('bosscar'); if(!el) return;
+  const prev=document.getElementById('bossPrev'), next=document.getElementById('bossNext');
+  const sl=el.scrollLeft||0, max=(el.scrollWidth||0)-(el.clientWidth||0);
+  if(prev) prev.disabled = sl<=2;
+  if(next) next.disabled = sl>=max-2;
 }
 // boss-themed mouse cursors: once you ARE a boss, the pointer takes on its look
 function setBossCursor(key){
