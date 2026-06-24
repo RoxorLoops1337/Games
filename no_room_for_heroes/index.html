@@ -3354,6 +3354,25 @@ function gotoBossSelect(){
              <div class="small" style="opacity:.85">★ ${ABIL[b.sig[0]].ic} ${ABIL[b.sig[0]].name} · ${ABIL[b.sig[1]].ic} ${ABIL[b.sig[1]].name}</div>
              <div class="stats">❤️ ${mHp} HP · 🗡️ ${mAtk} ATK${xi.lvl>1?` <span style="color:#7bdc6b">(mastery)</span>`:''}</div>`}
       </div>`;}).join('')}</div>`;
+  makeHScrollDraggable(overlay.querySelector('.bosscarousel'));
+}
+// hold-and-drag to scroll a horizontal strip with the mouse (touch already swipes
+// natively). A real drag swallows the click so it can't accidentally pick a boss.
+function makeHScrollDraggable(el){
+  if(!el) return;
+  let down=false, sx=0, sl=0;
+  el.style.cursor='grab';
+  el.addEventListener('pointerdown', e=>{
+    if(e.pointerType!=='mouse') return;
+    down=true; el._noClick=false; sx=e.clientX; sl=el.scrollLeft;
+    el.style.cursor='grabbing'; try{ el.setPointerCapture(e.pointerId); }catch(_){ }
+  });
+  el.addEventListener('pointermove', e=>{
+    if(!down) return; const dx=e.clientX-sx; if(Math.abs(dx)>4) el._noClick=true; el.scrollLeft=sl-dx;
+  });
+  const up=e=>{ if(!down) return; down=false; el.style.cursor='grab'; try{ el.releasePointerCapture(e.pointerId); }catch(_){ } };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  el.addEventListener('click', e=>{ if(el._noClick){ e.stopPropagation(); e.preventDefault(); el._noClick=false; } }, true);
 }
 function chooseBoss(key){
   applyRunes();                                  // lock in this run's rune bonuses
