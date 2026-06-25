@@ -55,6 +55,23 @@
   #rotate .ph{font-size:56px;animation:rotph 1.8s ease-in-out infinite;}
   @keyframes rotph{0%,18%{transform:rotate(0)}55%,100%{transform:rotate(90deg)}}
   @media (orientation:portrait) and (max-width:560px){ #rotate{display:flex;} }
+  /* ---- "Tap to Start" gate: the first gesture unlocks audio (mobile blocks it
+     until a tap) AND goes fullscreen. Sits below #rotate so portrait still nags. */
+  #startgate{display:none;position:fixed;inset:0;z-index:500;cursor:pointer;
+    background:radial-gradient(120% 90% at 50% 38%,#241247 0%,#0c0916 60%,#05040a 100%);
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+  #startgate.show{display:flex;}
+  #startgate .sg-logo{width:min(620px,72vw);height:auto;image-rendering:pixelated;
+    filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));margin:0 0 6vh;animation:sgIn .8s ease-out both;}
+  h1.sg-logo{font-family:var(--pix);font-size:min(40px,7vw);line-height:1.3;color:var(--gold);
+    text-shadow:0 3px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);}
+  #startgate .sg-btn{font-size:26px;padding:24px 60px;min-height:78px;letter-spacing:1px;border-radius:14px;
+    background:#b0202a;border:1px solid #ff6a72;color:#fff;cursor:pointer;font-weight:700;
+    box-shadow:0 5px 0 #5a0d12;animation:titlePulse 1.6s ease-in-out infinite;}
+  #startgate .sg-btn:hover{background:#c8262f;}
+  #startgate .sg-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #5a0d12;}
+  #startgate .sg-hint{margin-top:22px;font-size:14px;color:#cdbaff;opacity:.8;letter-spacing:.5px;}
+  @keyframes sgIn{0%{opacity:0;transform:translateY(18px) scale(.96);}100%{opacity:1;transform:translateY(0) scale(1);}}
   /* ---- Boot splash: pure-CSS / image-free, so it paints the instant the page
      starts streaming (no blank wait on slow links). Faded out by JS once the
      menu is up. A throne-room glow, a bobbing crown, a torch-flicker title and
@@ -547,6 +564,7 @@
   </div>
 </div>
 <div id="rotate"><div class="ph">📱</div><b>Rotate your device</b><span class="small" style="opacity:.75">No Room For Heroes plays in landscape (16:9)</span></div>
+<div id="startgate"></div>
 <div id="app">
   <div id="topbar"></div>
   <div id="stage">
@@ -2289,6 +2307,28 @@ function endIntro(){
   titleScreen();                                  // beat 8: the title flies in
 }
 function replayIntro(){ overlay.classList.remove('show','titlemode'); playIntro(); }
+
+/* ===== "Tap to Start" gate ===================================================
+   Shown once on load over the title/intro. The tap is the user gesture mobile
+   browsers require to start audio — so it ALSO kicks off the music — and it
+   requests fullscreen (+ landscape lock on phones). Dismissing it reveals the
+   intro/title already waiting underneath. */
+function sgLogoFail(img){ const h=document.createElement('h1'); h.className='sg-logo';
+  h.innerHTML='NO&nbsp;ROOM<br>FOR&nbsp;HEROES'; img.replaceWith(h); }
+function showStartGate(){
+  const g=document.getElementById('startgate'); if(!g) return;
+  g.innerHTML=`<img class="sg-logo" src="title/logo.png" alt="No Room For Heroes" onerror="sgLogoFail(this)">
+    <button class="sg-btn" onclick="startGo()">▶ Start</button>
+    <div class="sg-hint">🔊 enables sound · ⛶ goes fullscreen</div>`;
+  g.classList.add('show');
+}
+function startGo(){
+  const g=document.getElementById('startgate'); if(g) g.classList.remove('show');
+  try{ if(audioOn) initAudio(); }catch(_){ }                       // unlock the audio context → title music starts
+  try{ const el=document.documentElement;                          // the explicit tap lets us go fullscreen
+    if(el && el.requestFullscreen){ const p=el.requestFullscreen({navigationUI:'hide'}); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
+  try{ if(typeof screen!=='undefined' && screen.orientation && screen.orientation.lock){ const p=screen.orientation.lock('landscape'); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
+}
 
 // Options — music & SFX mixer, reachable from the main menu (the same
 // sliders also live in the in-run pause menu).
@@ -8641,7 +8681,7 @@ window.addEventListener('keydown', ()=>{ if(audioOn && !TUTPREVIEW) initAudio();
     ab.addEventListener('click', e=>{ e.stopPropagation(); toggleAudio(); }); } }
 resize();
 if(TUTPREVIEW){ tutPreviewInit(); }     // Tutorial Designer iframe → step-by-step preview, not normal play
-else { titleScreen(); if(!introSeen()) playIntro(); requestAnimationFrame(frame); }
+else { titleScreen(); if(!introSeen()) playIntro(); showStartGate(); requestAnimationFrame(frame); }
 hideBoot();
 // Try to start the title music immediately. Browsers usually keep the
 // AudioContext suspended until a gesture (the first tap resumes it via the
