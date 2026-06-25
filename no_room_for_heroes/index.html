@@ -327,6 +327,44 @@
   }
   @keyframes titleStartIn{0%{opacity:0;transform:translate(-50%,24px);}100%{opacity:1;transform:translate(-50%,0);}}
   @keyframes titlePulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.22);}}
+  /* ===== Cinematic story intro (skippable, plays once on first load) ===== */
+  #introlayer{position:absolute;inset:0;z-index:80;background:#05040a;overflow:hidden;display:none;}
+  #introlayer.show{display:block;}
+  .introscene,.introfinal{position:absolute;inset:0;cursor:pointer;}
+  .introscene .iimg{position:absolute;inset:0;background:#05040a center/cover no-repeat;
+    transform-origin:50% 45%;animation:introImg 7.2s ease-out both;}
+  .introscene .iveil{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to bottom,rgba(5,4,10,.35) 0%,rgba(5,4,10,0) 26%,rgba(5,4,10,0) 50%,rgba(5,4,10,.88) 100%);}
+  .introtext{position:absolute;left:50%;bottom:11.5%;transform:translateX(-50%);width:min(900px,86%);
+    text-align:center;color:#f4ecff;font-size:25px;line-height:1.5;font-weight:600;letter-spacing:.3px;
+    text-shadow:0 2px 10px #000,0 0 26px rgba(0,0,0,.85);animation:introTextIn .9s ease-out .35s both;}
+  .introtext b{color:#ffd34d;font-weight:700;}
+  .introfinal{display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(120% 90% at 50% 42%,#271452 0%,#0c0916 58%,#05040a 100%);}
+  .introfinal .fl{width:min(860px,88%);text-align:center;color:#f4ecff;font-size:27px;line-height:1.65;
+    font-weight:600;text-shadow:0 2px 12px #000;animation:introFinalIn 1.1s ease-out both;}
+  .introskip{position:absolute;right:20px;top:18px;z-index:6;font-size:14px;padding:10px 18px;min-height:0;
+    background:rgba(20,14,34,.72);border:1px solid #4a3a6e;color:#cdbaff;border-radius:10px;cursor:pointer;
+    letter-spacing:.5px;}
+  .introskip:hover{background:rgba(44,30,70,.92);color:#fff;}
+  .intronext{position:absolute;right:24px;bottom:5.5%;z-index:5;color:#e6d8ff;font-size:14px;
+    text-shadow:0 1px 4px #000;pointer-events:none;animation:introBlink 1.5s ease-in-out infinite;}
+  .introdots{position:absolute;left:50%;bottom:4.6%;transform:translateX(-50%);z-index:5;display:flex;gap:7px;}
+  .introdots i{width:8px;height:8px;border-radius:50%;background:#4a3a6e;transition:background .3s;}
+  .introdots i.on{background:#ffd34d;}
+  /* small "replay the intro" button tucked in the corner of the title screen */
+  .titlereplay{position:absolute;left:16px;bottom:3.5%;z-index:3;font-size:12.5px;padding:8px 14px;min-height:0;
+    background:rgba(20,14,34,.6);border:1px solid #3a2c5a;color:#cdbaff;border-radius:9px;cursor:pointer;
+    animation:titleStartIn .45s ease-out 2.4s both;}
+  .titlereplay:hover{background:rgba(44,30,70,.85);color:#fff;}
+  @keyframes introImg{0%{opacity:0;transform:scale(1.085);}15%{opacity:1;}100%{opacity:1;transform:scale(1);}}
+  @keyframes introTextIn{0%{opacity:0;transform:translate(-50%,22px);}100%{opacity:1;transform:translate(-50%,0);}}
+  @keyframes introFinalIn{0%{opacity:0;transform:translateY(22px);}100%{opacity:1;transform:translateY(0);}}
+  @keyframes introBlink{0%,100%{opacity:.32;}50%{opacity:.9;}}
+  @media (prefers-reduced-motion:reduce){
+    .introscene .iimg{animation:introImgFade 1s ease-out both;}
+    @keyframes introImgFade{0%{opacity:0;}100%{opacity:1;}}
+  }
   .ko{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:13px;opacity:.85;}
   .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#2a2046;margin:2px;}
   /* No viewport-size overrides: the whole game is ONE fixed 1280×720 design scaled
@@ -515,6 +553,7 @@
   </div>
   <div id="panel"></div>
   <div id="overlay"></div>
+  <div id="introlayer"></div>
   <div id="tutarrow">👇</div>
   <div id="tutmodal"></div>
 </div>
@@ -2146,6 +2185,7 @@ function titleScreen(){
       <div class="tbg" id="titlebg"></div>
       <img class="titlelogo" src="title/logo.png" alt="No Room For Heroes" onerror="titleLogoFail(this)">
       <div class="titlestart"><button class="go" onclick="leaveTitle()">▶ Start Game</button></div>
+      <button class="titlereplay" onclick="replayIntro()">↻ Story</button>
       ${(typeof AC!=='undefined' && AC)?'':'<div class="titlehint" id="titlehint">🔊 tap for sound</div>'}
     </div>`;
   const bg=document.getElementById('titlebg');                 // swap to the painted
@@ -2156,6 +2196,74 @@ function titleLogoFail(img){
   h.innerHTML='NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES'; img.replaceWith(h);
 }
 function leaveTitle(){ overlay.classList.remove('titlemode'); openTitle(); }
+
+/* ===== Cinematic story intro =================================================
+   Eight beats: seven painted scenes (intro/intro_scene01–07.jpg) with narration,
+   then beat 8 — a short lead-in over black that hands off to the title screen so
+   the logo "flies in" as the climax. Skippable at any point; plays once on first
+   load (localStorage bm_intro_seen) and is re-watchable from the title screen.
+   Advance by tap/click or a per-beat auto-timer; CSS handles the smooth fades. */
+const INTRO_SCENES=[
+  {img:'intro/intro_scene01.jpg', text:'For centuries, monsters lived beneath the mountains in peace.'},
+  {img:'intro/intro_scene02.jpg', text:'Then the <b>Heroes</b> arrived.<br>At first, they came for treasure.'},
+  {img:'intro/intro_scene03.jpg', text:"But treasure wasn't enough.<br>Soon they hunted monsters for fame, glory, and power."},
+  {img:'intro/intro_scene04.jpg', text:'The heroes called it adventure.<br>The monsters called it <b>survival</b>.'},
+  {img:'intro/intro_scene05.jpg', text:'One by one, the great dungeons fell.<br>Now only one remains.'},
+  {img:'intro/intro_scene06.jpg', text:'The survivors have gathered in the last dungeon.<br>They have chosen <b>you</b> as their leader.'},
+  {img:'intro/intro_scene07.jpg', text:'You are the <b>Final Boss</b>.<br>The heroes are already on their way.'},
+];
+const INTRO_FINAL='Build rooms. Set traps. Raise monsters.<br>Protect your people — and show the world that there is…';
+const INTRO_DUR=6500, INTRO_FINAL_DUR=3600;
+let introIdx=-1, introTimer=0;
+function introSeen(){ try{ return localStorage.getItem('bm_intro_seen')==='1'; }catch(_){ return false; } }
+function introMarkSeen(){ try{ localStorage.setItem('bm_intro_seen','1'); }catch(_){ } }
+function introClearTimer(){ if(introTimer){ try{ clearTimeout(introTimer); }catch(_){ } introTimer=0; } }
+function introDots(active){
+  let h=''; for(let k=0;k<=INTRO_SCENES.length;k++) h+=`<i class="${k===active?'on':''}"></i>`; return h;
+}
+function playIntro(){
+  const L=document.getElementById('introlayer'); if(!L){ titleScreen(); return; }
+  uiScreen='intro';
+  overlay.classList.remove('show','titlemode');
+  L.classList.add('show');
+  introIdx=-1; introNext();
+}
+function introRenderScene(i){
+  const L=document.getElementById('introlayer'); if(!L) return; const s=INTRO_SCENES[i];
+  L.innerHTML=`
+    <div class="introscene" onclick="introNext()">
+      <div class="iimg" style="background-image:url('${s.img}')"></div>
+      <div class="iveil"></div>
+      <div class="introtext">${s.text}</div>
+      <div class="intronext">tap to continue ▸</div>
+      <div class="introdots">${introDots(i)}</div>
+    </div>
+    <button class="introskip" onclick="event.stopPropagation();skipIntro()">Skip ▸</button>`;
+  introClearTimer(); introTimer=setTimeout(introNext, INTRO_DUR);
+}
+function introRenderFinal(){
+  const L=document.getElementById('introlayer'); if(!L) return;
+  L.innerHTML=`
+    <div class="introfinal" onclick="endIntro()">
+      <div class="fl">${INTRO_FINAL}</div>
+      <div class="introdots" style="bottom:6%">${introDots(INTRO_SCENES.length)}</div>
+    </div>
+    <button class="introskip" onclick="event.stopPropagation();skipIntro()">Skip ▸</button>`;
+  introClearTimer(); introTimer=setTimeout(endIntro, INTRO_FINAL_DUR);
+}
+function introNext(){
+  introClearTimer(); introIdx++;
+  if(introIdx>=INTRO_SCENES.length){ introRenderFinal(); return; }
+  introRenderScene(introIdx);
+}
+function skipIntro(){ endIntro(); }
+function endIntro(){
+  introClearTimer(); introMarkSeen();
+  const L=document.getElementById('introlayer');
+  if(L){ L.classList.remove('show'); L.innerHTML=''; }
+  titleScreen();                                  // beat 8: the title flies in
+}
+function replayIntro(){ overlay.classList.remove('show','titlemode'); playIntro(); }
 
 // Options — music & SFX mixer, reachable from the main menu (the same
 // sliders also live in the in-run pause menu).
@@ -8487,7 +8595,7 @@ window.addEventListener('keydown', ()=>{ if(audioOn && !TUTPREVIEW) initAudio();
     ab.addEventListener('click', e=>{ e.stopPropagation(); toggleAudio(); }); } }
 resize();
 if(TUTPREVIEW){ tutPreviewInit(); }     // Tutorial Designer iframe → step-by-step preview, not normal play
-else { titleScreen(); requestAnimationFrame(frame); }
+else { titleScreen(); if(!introSeen()) playIntro(); requestAnimationFrame(frame); }
 hideBoot();
 // Try to start the title music immediately. Browsers usually keep the
 // AudioContext suspended until a gesture (the first tap resumes it via the
