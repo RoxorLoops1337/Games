@@ -11,9 +11,12 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const A = loadGame(`playIntro,introNext,skipIntro,endIntro,replayIntro,introSeen,titleScreen,
-  INTRO_SCENES,INTRO_FINAL,
+  loadAudioPref,leaveTitle,INTRO_SCENES,INTRO_FINAL,
   get introIdx(){return introIdx;},
   get uiScreen(){return uiScreen;},
+  get audioOn(){return audioOn;},
+  get audioMutedPref(){return audioMutedPref;},
+  setAudioPref(v){ try{ localStorage.setItem('bm_audio', v); }catch(_){ } },
   resetIntroSeen(){ try{ localStorage.removeItem('bm_intro_seen'); }catch(_){ } }`);
 const t = harness('intro (story)');
 
@@ -49,5 +52,13 @@ A.replayIntro();
 t.ok(A.introSeen() === false && A.uiScreen === 'intro' && A.introIdx === 0, 'the ↻ Story button replays from scene 1');
 A.skipIntro();
 t.ok(A.introSeen() === true && A.uiScreen === 'title', 'Skip ends the intro and lands on the title screen');
+
+// --- music is forced ON for the intro + title even if the player muted before ---
+A.setAudioPref('off');           // a previously-saved mute
+A.loadAudioPref();
+t.ok(A.audioOn === true, 'a saved mute does NOT silence the intro/title — music is forced on');
+t.ok(A.audioMutedPref === true, 'the saved mute is remembered as the standing preference');
+A.leaveTitle();
+t.ok(A.audioOn === false, 'entering the game restores the saved mute');
 
 t.done();
