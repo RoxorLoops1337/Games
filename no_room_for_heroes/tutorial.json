@@ -1,0 +1,35 @@
+{
+  "global": {
+    "w": 566,
+    "fs": 24,
+    "ts": 15
+  },
+  "steps": {
+    "0": { "anchor": "free", "x": 56, "y": 36.6, "fs": 20, "adx": -98, "ady": -146, "ts": 19, "w": 454 },
+    "1": { "anchor": "free", "x": 23.5, "y": 25.8, "fs": 19.5, "ts": 19, "body": "Your <b>health bar</b> sits up at the top. Heroes win when your health reaches 0.", "adx": 58, "ady": 16 },
+    "2": { "anchor": "free", "x": 37.6, "y": 35.2, "body": "This hero is ready to march in and kill you for <b>honor and glory</b>… 😤 <b>Smash him</b> before he reaches the throne.", "fs": 15.5, "ts": 20.5, "w": 502, "zoom": 1.2, "cam": 0.6 },
+    "3": { "anchor": "free", "x": 81.5, "y": 77.5, "fs": 18, "ts": 25.5 },
+    "4": { "anchor": "free", "x": 26, "y": 71.9, "fs": 21.5, "ts": 29 },
+    "6": { "anchor": "free", "x": 26.6, "y": 54.3, "fs": 17.5, "ts": 24, "w": 560 },
+    "7": { "anchor": "free", "x": 80.6, "y": 74.5, "fs": 20, "ts": 24, "title": "Bring the Pain", "w": 458 },
+    "9": { "anchor": "free", "x": 25.4, "y": 58.1, "fs": 18, "ts": 28.5 },
+    "10": { "anchor": "free", "x": 82, "y": 75.9, "fs": 21, "ts": 28 },
+    "12": { "anchor": "free", "x": 52.6, "y": 60.8, "fs": 17, "ts": 26, "w": 590 },
+    "13": { "anchor": "free", "x": 24, "y": 57.7, "fs": 22.5, "ts": 22.5, "w": 556 },
+    "14": { "title": "The Rogue", "anchor": "free", "x": 75.5, "y": 76.4, "fs": 18, "ts": 20.5, "w": 560, "body": "The Rogue has special abilities. Tap <b>⚔️ Start Wave</b> to find out. " },
+    "15": { "title": "Watch out!", "anchor": "free", "x": 31.2, "y": 73.5, "fs": 22, "ts": 26, "w": 606 },
+    "17": { "anchor": "free", "x": 57.4, "y": 64.8, "fs": 19.5, "ts": 21.5, "w": 590 },
+    "18": { "anchor": "free", "x": 23.7, "y": 60.1, "fs": 21.5, "ts": 28, "zoom": 1.4, "w": 596, "body": "Drag the monster into the room. Now heroes get <b>stuck on your guard</b> while your traps chip them down. 🔥" },
+    "19": { "anchor": "free", "x": 78.2, "y": 80.2, "fs": 21.5, "ts": 26.5, "w": 550 },
+    "21": { "anchor": "free", "x": 23.5, "y": 60, "fs": 19.5, "ts": 27.5, "w": 590 },
+    "22": { "w": 626, "ts": 27, "fs": 20.5, "anchor": "free", "x": 28.5, "y": 60.7, "body": "Drag your monster into the <b>new empty room</b> on the left." },
+    "23": { "title": "Nice setup!", "ts": 27.5, "w": 618, "anchor": "free", "x": 75, "y": 77.6 },
+    "24": { "anchor": "free", "x": 53, "y": 21.4, "ts": 27, "body": "Order matters — heroes hit your rooms left-to-right. <b>Drag a room</b> to a new spot to <b>swap</b> their order.", "w": 608 },
+    "25": { "anchor": "free", "x": 76.5, "y": 77.6 },
+    "28": { "anchor": "free", "x": 78, "y": 78, "ts": 24, "fs": 20, "w": 566 },
+    "29": { "anchor": "free", "x": 50, "y": 22.5, "ts": 24, "fs": 19, "w": 604 },
+    "30": { "anchor": "free", "x": 28, "y": 64, "ts": 24, "fs": 18, "w": 600 },
+    "31": { "w": 760, "anchor": "free", "x": 54.8, "y": 24.9, "ts": 28, "fs": 21.5 },
+    "32": { "anchor": "free", "x": 77.2, "y": 79.3 }
+  }
+}

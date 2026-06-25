@@ -8,6 +8,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,startTutorial,tutAdvance,tutBtn,tutAllow,tutStepObj,tutText,
   startWave,placeCard,upgradeRoomGold,buySlot,moveRoom,takeDraft,pickRelic,heroDies,afterWave,bossDies,
+  collectAllLoot,autoMergeGear,
   TUT,roomTrapUnits,roomMonUnits,draw,update,
   get G(){return G;},set G(v){G=v;},set TUT_CFG(v){TUT_CFG=v;}`);
 const t = harness('tutorial (guided run)');
@@ -22,7 +23,7 @@ let gg=0; while(A.TUT[A.G.tutStep] && A.TUT[A.G.tutStep].gate==='cont' && gg++<1
 t.ok(A.TUT[A.G.tutStep].gate==='start' && A.tutAllow('start')===true && A.tutAllow('ability')===false, 'first start beat allows Start Wave only');
 
 // --- drive the entire script generically by each beat's gate ---
-let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false, secondRoom=false, sawSwap=false;
+let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false, secondRoom=false, sawSwap=false, lootCollected=false, gearMerged=false;
 try{
   while(A.G.tutorial && guard++ < 120){
     const before=A.G.tutStep;
@@ -46,6 +47,8 @@ try{
     else if(g==='buyroom'){ A.buySlot(); }
     else if(g==='swap'){ sawSwap=true; A.moveRoom(0, 1); }
     else if(g==='relic'){ A.pickRelic(0); }
+    else if(g==='collect'){ A.collectAllLoot(); if(A.G.tutStep===before) A.tutAdvance(); }   // loot section: sweep the floor
+    else if(g==='merge'){ A.autoMergeGear(); if(A.G.tutStep===before) A.tutAdvance(); }       // loot section: fuse the pair
     else if(st.adv==='never'){ reachedHorde=true; A.bossDies(); A.tutBtn(); A.tutBtn(); }   // finale watch beat
     else { A.tutAdvance(); }
     // probe a few invariants as the dungeon takes shape
@@ -55,6 +58,8 @@ try{
             if(A.roomTrapUnits(r0).some(u=>u.lvl>=2)) stackedTrap=true;
             if(A.roomTrapUnits(r0).length>=2) twoTraps=true;
             if(A.roomTrapUnits(r0).length>=1 && A.roomMonUnits(r0).length>=1) mixed=true; }
+    if((A.G.chest||[]).length>=2) lootCollected=true;                       // gear swept into the War Chest
+    if((A.G.chest||[]).some(x=>x.t!=='common')) gearMerged=true;            // two commons fused into a higher tier
     if(st.adv!=='never' && A.G.tutStep===before){ err='stuck at beat '+before+' (gate '+g+')'; break; }
   }
 }catch(e){ err=(e&&e.message||String(e))+' @beat '+A.G.tutStep; }
@@ -64,6 +69,8 @@ t.ok(builtTrap, 'beat 4: a trap was built into the room');
 t.ok(stackedTrap, 'beat 7: stacking the same trap raised its level');
 t.ok(twoTraps, 'beat 11: a 2nd trap type went in after buying a slot');
 t.ok(mixed, 'beat 16: a monster joined the traps in one room');
+t.ok(lootCollected, 'loot section: slain heroes dropped gear that was collected into the War Chest');
+t.ok(gearMerged, 'loot section: two common swords merged into a higher tier');
 t.ok(secondRoom, 'a second corridor room was opened (buy + fill)');
 t.ok(sawSwap, 'the rearrange-rooms beat was taught');
 t.ok(reachedHorde, 'reached the unbeatable-horde finale');
