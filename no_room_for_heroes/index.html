@@ -1499,6 +1499,7 @@ function collectLoot(i){
   G.chest=G.chest||[]; G.chest.push({k:L.k, t:L.t, v:L.v}); arr.splice(i,1);
   burst(L.x, FLOOR-16, RELIC_TIERS[L.t].col, 10); sfx('relic');
   showHint('🧰 Collected '+swordName(L)+' ('+RELIC_TIERS[L.t].name+', '+G.chest.length+'/'+CHEST_MAX+').');
+  if(typeof tutEvent==='function') tutEvent('collect');   // tutorial: advances the "grab the spoils" beat
   return true;
 }
 function collectAllLoot(){
@@ -1525,6 +1526,7 @@ function mergeGear(i,j){
   selGear=-1; sfx('relic');
   showHint('⬆ Merged into '+swordName({k:a.k,t:nt})+' ('+RELIC_TIERS[nt].name+')!');
   renderPanel();
+  if(typeof tutEvent==='function') tutEvent('merge');     // tutorial: advances the "forge an upgrade" beat
 }
 function autoMergeGear(){
   let merged=0, guard=0;
@@ -3022,7 +3024,7 @@ const TUT=[
 /*3*/ { overlay:true, gate:'pick', adv:'picked', title:"Spoils of War", pickKind:'trap',
         body:"After every wave you get to pick a <b>room card</b> as a reward. Room cards can be <b>Traps</b> or <b>Monsters</b>. <b>Pick a Trap.</b>",
         enter:()=>{ G._tutDraft=[{type:'spike'},{type:'flame'},{type:'skeleton'}]; } },
-/*4*/ { title:"Build your trap", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
+/*4*/ { title:"Build your trap", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot', arrow:'cell',
         body:"<b>Drag your trap card</b> into the glowing room (or tap the card, then the room). Let's see what a hero does when he walks into it." },
 /*5*/ { title:"Spring it", pos:'bottom', gate:'start', adv:'cleared', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b> and watch the next knight stroll right into your trap.",
@@ -3038,10 +3040,10 @@ const TUT=[
 /*9*/ { overlay:true, gate:'pick', adv:'picked', title:"A different trap",
         body:"Now a <b>different</b> trap. Pick one — two trap types layer their damage.",
         enter:()=>{ const t=G._tutTrap||'spike'; const o=['spike','flame','arrow'].filter(x=>x!==t); G._tutDraft=[{type:o[0]},{type:o[1]}]; } },
-/*10*/{ title:"Make some room", pos:'top', gate:'slotbuy', adv:'slotbought', cell:0,
+/*10*/{ title:"Make some room", pos:'top', gate:'slotbuy', adv:'slotbought', cell:0, arrow:'cell',
         body:"A room starts with <b>ONE slot</b>. <b>Tap your room</b>, then tap <b>⬆ Add slot</b> to fit a second trap. (Same trap stacks; a <i>different</i> one needs its own slot.)",
         enter:()=>{ G.gold=Math.max(G.gold||0, 999); } },
-/*11*/{ title:"Two traps", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
+/*11*/{ title:"Two traps", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot', arrow:'cell',
         body:"Drop the new trap into the free slot. <b>Max 2 traps per room</b> — fill the rest with monsters." },
 /*12*/{ title:"Next raider", pos:'top', gate:'start', adv:'started', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b>. This one moves… differently.",
@@ -3053,10 +3055,10 @@ const TUT=[
 /*14*/{ overlay:true, gate:'pick', adv:'picked', title:"Bring out the monsters",
         body:"That's why you also need <b>monsters</b> — a rogue can't disarm a guard. <b>Pick a monster.</b>",
         enter:()=>{ G._tutDraft=[{type:'skeleton'},{type:'goblin'},{type:'slime'}]; } },
-/*15*/{ title:"Room for a guard", pos:'top', gate:'slotbuy', adv:'slotbought', cell:0,
+/*15*/{ title:"Room for a guard", pos:'top', gate:'slotbuy', adv:'slotbought', cell:0, arrow:'cell',
         body:"<b>Tap your room</b> and <b>⬆ Add slot</b> again — make space for your monster beside the traps.",
         enter:()=>{ G.gold=Math.max(G.gold||0, 999); } },
-/*16*/{ title:"Mix & match", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot',
+/*16*/{ title:"Mix & match", pos:'top', gate:'place', adv:'placed', cell:0, hi:'slot', arrow:'cell',
         body:"Drop the monster in. Now heroes get <b>stuck on your guard</b> while your traps chip them down. 🔥" },
 /*17*/{ title:"See it work", pos:'top', gate:'start', adv:'cleared', arrow:'start',
         body:"Tap <b>⚔️ Start Wave</b> — guard + traps, together.",
@@ -3083,6 +3085,18 @@ const TUT=[
         enter:()=>{ G.boss.mana=G.boss.maxMana; } },
 /*20*/{ overlay:true, gate:'relic', adv:'relic', title:"🏺 An artifact!",
         body:"Champions drop <b>relics</b> — permanent powers for your boss. Claim one!" },
+/*loot1*/{ title:"They came armed", pos:'top', gate:'start', adv:'cleared', arrow:'start',
+        body:"Champions drop relics — but <b>ordinary heroes</b> carry <b>gear</b>. This band has <b>two 🗡️ swords</b> and a <b>💍 ring</b>. Beat them and they'll <b>drop their loot</b>.",
+        runBody:"Cut them down — and watch what they leave behind… 💎",
+        enter:()=>{ G.boss.hp=G.boss.maxHp; G.boss.mana=G.boss.maxMana;   // weak band — the dungeon drops them so their gear hits the floor
+          G._tutWave=[{cls:'warrior',hp:24,atk:4,spd:30,loot:{k:'blade',t:'common'}},
+                      {cls:'warrior',hp:24,atk:4,spd:30,loot:{k:'blade',t:'common'}},
+                      {cls:'rogue',  hp:22,atk:4,spd:32,loot:{k:'charm',t:'common'}}]; } },
+/*loot2*/{ title:"Grab the spoils", pos:'top', gate:'collect', adv:'collect', arrow:'loot',
+        body:"They dropped their gear! 💎 <b>Tap each piece</b> on the floor to pick it up — or hit the <b>💎 Collect</b> button to sweep it all into your <b>War Chest</b>." },
+/*loot3*/{ title:"Forge an upgrade", pos:'top', gate:'merge', adv:'merge', arrow:'chest',
+        body:"Your loot lands in the 🧰 <b>War Chest</b> (top-left) — it's open now. Two of the <b>same</b> gear <b>merge into a stronger one</b>: tap the <b>two 🗡️ swords</b> to fuse them. (The lone 💍 ring needs a twin of its own.)",
+        enter:()=>{ try{ if(typeof openChest==='function') openChest(); }catch(_){ } } },
 /*21*/{ title:"Grow your dungeon", pos:'center', gate:'cont', adv:'cont', btn:"I'm ready →",
         body:"You've got it! Every room can grow to <b>5 slots</b> — <b>up to 2 traps</b>, the rest <b>monsters</b>. Buy slots with gold, open <b>new rooms</b> for a longer gauntlet, and let your guards rack up kills to become veterans." },
 /*22*/{ title:"The horde", pos:'top', gate:'start', adv:'started', arrow:'start',
@@ -3231,6 +3245,12 @@ function tutArrowTick(){
   }
   else if(a==='boss'){ try{ const p=tutWorldToScreen(bossX(), FLOOR-70); px=p.x; py=p.y-22; }catch(_){ } }
   else if(a==='hero'){ try{ const p=tutWorldToScreen(-STAGEW*0.5, FLOOR-54); px=p.x; py=p.y-22; }catch(_){ } }
+  else if(a==='cell'){ try{ const ci=(G&&G.tutCell!=null)?G.tutCell:0;   // point down at the highlighted room
+    const p=tutWorldToScreen(cellX(ci)+ROOM_W/2, FLOOR-130); px=p.x; py=p.y; }catch(_){ } }
+  else if(a==='loot'){ try{ const fl=(G&&G.floorLoot)||[];               // point at the first piece on the floor
+    if(fl.length){ const p=tutWorldToScreen(fl[0].x, FLOOR-30); px=p.x; py=p.y-8; } }catch(_){ } }
+  else if(a==='chest'){ const el=document.getElementById('chestbtn');    // point UP at the War Chest button
+    if(el){ const r=el.getBoundingClientRect(); px=r.left+r.width/2; py=r.bottom+8; glyph='☝️'; } }
   else {                                              // bottom-panel button targets
     let el=null;
     if(a==='start') el=document.getElementById('btnStartWave')||document.querySelector('#panel .go');
@@ -3295,6 +3315,7 @@ function tutSpawnWave(){
     if(sp.hp!=null){ h.hp=h.maxHp=sp.hp; }
     if(sp.atk!=null){ h.atk=sp.atk; h._atkBase=sp.atk; }
     if(sp.spd!=null){ h.spd=sp.spd; }
+    if(sp.loot){ h.loot={k:sp.loot.k, t:sp.loot.t||'common', v:sp.loot.v||0}; }   // scripted gear drop (loot tutorial)
     G.heroes.push(h); G.heroNum++;
   });
   if(!G.heroes.length){ const h=buildHeroFromSpec({cls:'warrior',power:1,traits:[],name:'Knight',debuff:{atkMul:1,burn:0,robbed:false}}); h.x=-56; h.yOff=-LIFT; G.heroes.push(h); }
@@ -8532,6 +8553,8 @@ function tutPvDrive(st){
   else if(g==='buyroom'){ buySlot(); }
   else if(g==='swap'){ moveRoom(0,1); }
   else if(g==='relic'){ pickRelic(0); }
+  else if(g==='collect'){ const b=G.tutStep; collectAllLoot(); if(G.tutStep===b) tutAdvance(); }
+  else if(g==='merge'){ const b=G.tutStep; autoMergeGear(); if(G.tutStep===b) tutAdvance(); }
   else if(st.adv==='never'){ /* finale watch — nothing to drive */ }
   else { tutAdvance(); }
 }

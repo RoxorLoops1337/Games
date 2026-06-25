@@ -183,7 +183,7 @@ async function loadSteps(){
     document.getElementById('loaded').textContent = STEPS.length + ' steps loaded';
   }
   buildStepList();
-  load();
+  await load();
   select(0);
 }
 
@@ -357,7 +357,12 @@ function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
 // ---------- persistence + export ----------
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(_){ } }
-function load(){ try{ const j = JSON.parse(localStorage.getItem(LS_KEY)); if(j && j.steps) data=j; }catch(_){ } }
+async function load(){
+  try{ const j = JSON.parse(localStorage.getItem(LS_KEY)); if(j && j.steps){ data=j; return; } }catch(_){ }
+  // no local design yet → seed from the deployed tutorial.json so the builder mirrors the live config
+  try{ const r = await fetch('tutorial.json',{cache:'no-store'}); if(r && r.ok){ const j = await r.json();
+    if(j && typeof j==='object'){ data = { global:j.global||{}, steps:j.steps||{} }; } } }catch(_){ }
+}
 function prune(){
   // drop empty step objects so the json stays tidy
   const out = { global: {...data.global}, steps: {} };
