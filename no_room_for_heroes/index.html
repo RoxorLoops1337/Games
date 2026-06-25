@@ -330,7 +330,7 @@
   /* ===== Cinematic story intro (skippable, plays once on first load) ===== */
   #introlayer{position:absolute;inset:0;z-index:80;background:#05040a;overflow:hidden;display:none;}
   #introlayer.show{display:block;}
-  .introscene,.introfinal{position:absolute;inset:0;cursor:pointer;}
+  .introscene,.introfinal{position:absolute;inset:0;}
   .introscene .iimg{position:absolute;inset:0;background:#05040a center/cover no-repeat;
     transform-origin:50% 45%;animation:introImg 7.2s ease-out both;}
   .introscene .iveil{position:absolute;inset:0;pointer-events:none;
@@ -339,10 +339,17 @@
     text-align:center;color:#f4ecff;font-size:25px;line-height:1.5;font-weight:600;letter-spacing:.3px;
     text-shadow:0 2px 10px #000,0 0 26px rgba(0,0,0,.85);animation:introTextIn .9s ease-out .35s both;}
   .introtext b{color:#ffd34d;font-weight:700;}
-  .introfinal{display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(120% 90% at 50% 42%,#271452 0%,#0c0916 58%,#05040a 100%);}
-  .introfinal .fl{width:min(860px,88%);text-align:center;color:#f4ecff;font-size:27px;line-height:1.65;
-    font-weight:600;text-shadow:0 2px 12px #000;animation:introFinalIn 1.1s ease-out both;}
+  /* Beat 8 wears the TITLE backdrop so the hand-off to titleScreen() is seamless
+     (same bg, only the logo flies in). bg.png falls back to a gradient if absent. */
+  .introfinal{display:flex;align-items:center;justify-content:center;background:#05040a;}
+  .introfinal .tbg{position:absolute;inset:0;background:#0c0916 center/cover no-repeat;
+    background-image:url('title/bg.png');}
+  .introfinal .tbg.missing{background:radial-gradient(120% 90% at 50% 42%,#271452 0%,#0c0916 58%,#05040a 100%);}
+  .introfinal .iveil{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(72% 64% at 50% 50%,rgba(5,4,10,.66) 0%,rgba(5,4,10,.32) 58%,rgba(5,4,10,.6) 100%);}
+  .introfinal .fl{position:relative;z-index:2;width:min(860px,88%);text-align:center;color:#f4ecff;
+    font-size:27px;line-height:1.65;font-weight:600;text-shadow:0 2px 12px #000;
+    animation:introFinalIn 1.1s ease-out both;}
   .introskip{position:absolute;right:20px;top:18px;z-index:6;font-size:14px;padding:10px 18px;min-height:0;
     background:rgba(20,14,34,.72);border:1px solid #4a3a6e;color:#cdbaff;border-radius:10px;cursor:pointer;
     letter-spacing:.5px;}
@@ -1862,7 +1869,7 @@ function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
 /* ====================== AUDIO + GAME FEEL (juice) ====================== */
 // Procedural WebAudio SFX + a soft ambient loop — no asset files. Plus screen
 // shake, hit-pause and crits to make every hit land.
-let AC=null, audioOn=true, _musicTimer=null, _sfxLast={};
+let AC=null, audioOn=true, audioMutedPref=false, _musicTimer=null, _sfxLast={};
 let sfxBus=null, musicBus=null, sfxVol=1, musVol=0.4;   // separate volume buses (music defaults to 40%)
 let shakeT=0, shakeMag=0, hitStop=0;
 let _simTick=0;     // increments once per sim step; traps use it so their cooldown ticks once, not per-hero
@@ -1918,7 +1925,10 @@ function comboCallout(combo, x){
   for(let i=0;i<Math.min(22,6+combo);i++) embers.push({x:ex+rnd(-66,66), y:FLOOR-rnd(20,160),
     vx:rnd(-22,22), vy:-rnd(20,64), life:rnd(1,2), max:2, col:tier.c, sz:rnd(2,3.6)});
 }
-function loadAudioPref(){ try{ audioOn = localStorage.getItem('bm_audio')!=='off'; }catch(_){ } }
+// The intro + title ALWAYS play music — a saved mute shouldn't kill the opening
+// showcase. We remember the player's mute as audioMutedPref and restore it the
+// moment they leave the title into the game (see leaveTitle).
+function loadAudioPref(){ try{ audioMutedPref = localStorage.getItem('bm_audio')==='off'; }catch(_){ audioMutedPref=false; } audioOn=true; }
 // ---- frame aspect ratio (16:9 default, optional 16:10) — toggled in the pause menu ----
 function aspectPref(){ try{ return localStorage.getItem('bm_aspect')==='1610' ? '1610' : '169'; }catch(_){ return '169'; } }
 function loadAspect(){ document.documentElement.classList.toggle('ar-1610', aspectPref()==='1610'); }
@@ -2094,7 +2104,7 @@ function updateMusicMood(){
   setMusicMood(mood);
 }
 function toggleAudio(){
-  audioOn=!audioOn; saveAudioPref();
+  audioOn=!audioOn; saveAudioPref(); audioMutedPref=!audioOn;   // an explicit toggle is the player's standing choice
   if(audioOn) initAudio();
   const b=document.getElementById('audiobtn'); if(b) b.textContent=audioOn?'🔊':'🔇';
   showHint(audioOn?'🔊 Sound on':'🔇 Muted');
@@ -2198,7 +2208,12 @@ function titleLogoFail(img){
   const h=document.createElement('h1'); h.className='titlelogo-fallback';
   h.innerHTML='NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES'; img.replaceWith(h);
 }
-function leaveTitle(){ overlay.classList.remove('titlemode'); openTitle(); }
+function leaveTitle(){
+  overlay.classList.remove('titlemode');
+  // entering the game: honour the player's saved mute again (intro+title forced it on)
+  if(audioMutedPref && audioOn){ audioOn=false; const b=document.getElementById('audiobtn'); if(b) b.textContent='🔇'; }
+  openTitle();
+}
 
 /* ===== Cinematic story intro =================================================
    Eight beats: seven painted scenes (intro/intro_scene01–07.jpg) with narration,
@@ -2245,13 +2260,19 @@ function introRenderScene(i){
 }
 function introRenderFinal(){
   const L=document.getElementById('introlayer'); if(!L) return;
+  // Beat 8 IS the title screen: the title backdrop + the lead-in text. Next hands
+  // off to titleScreen() over the SAME bg, so only the logo comes flying in.
   L.innerHTML=`
     <div class="introfinal">
+      <div class="tbg" id="introfbg"></div>
+      <div class="iveil"></div>
       <div class="fl">${INTRO_FINAL}</div>
       <div class="introdots" style="bottom:7%">${introDots(INTRO_SCENES.length)}</div>
-      <button class="intronextbtn" style="bottom:12%" onclick="endIntro()">Begin ▸</button>
+      <button class="intronextbtn" style="bottom:12%" onclick="endIntro()">Next ▸</button>
     </div>
     <button class="introskip" onclick="skipIntro()">Skip ▸</button>`;
+  const bg=document.getElementById('introfbg');                          // gradient fallback if title/bg.png 404s
+  if(bg && typeof Image!=='undefined'){ const probe=new Image(); probe.onerror=()=>bg.classList.add('missing'); probe.src='title/bg.png'; }
 }
 function introNext(){
   introIdx++;
