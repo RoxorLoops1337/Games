@@ -335,7 +335,7 @@
     transform-origin:50% 45%;animation:introImg 7.2s ease-out both;}
   .introscene .iveil{position:absolute;inset:0;pointer-events:none;
     background:linear-gradient(to bottom,rgba(5,4,10,.35) 0%,rgba(5,4,10,0) 26%,rgba(5,4,10,0) 50%,rgba(5,4,10,.88) 100%);}
-  .introtext{position:absolute;left:50%;bottom:11.5%;transform:translateX(-50%);width:min(900px,86%);
+  .introtext{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);width:min(900px,86%);
     text-align:center;color:#f4ecff;font-size:25px;line-height:1.5;font-weight:600;letter-spacing:.3px;
     text-shadow:0 2px 10px #000,0 0 26px rgba(0,0,0,.85);animation:introTextIn .9s ease-out .35s both;}
   .introtext b{color:#ffd34d;font-weight:700;}
@@ -347,9 +347,12 @@
     background:rgba(20,14,34,.72);border:1px solid #4a3a6e;color:#cdbaff;border-radius:10px;cursor:pointer;
     letter-spacing:.5px;}
   .introskip:hover{background:rgba(44,30,70,.92);color:#fff;}
-  .intronext{position:absolute;right:24px;bottom:5.5%;z-index:5;color:#e6d8ff;font-size:14px;
-    text-shadow:0 1px 4px #000;pointer-events:none;animation:introBlink 1.5s ease-in-out infinite;}
-  .introdots{position:absolute;left:50%;bottom:4.6%;transform:translateX(-50%);z-index:5;display:flex;gap:7px;}
+  .intronextbtn{position:absolute;right:26px;bottom:7%;z-index:6;font-size:17px;padding:13px 30px;min-height:0;
+    background:#b0202a;border:1px solid #ff6a72;color:#fff;border-radius:11px;cursor:pointer;font-weight:700;
+    letter-spacing:.6px;box-shadow:0 4px 0 #5a0d12;animation:introBtnIn .5s ease-out .3s both;}
+  .intronextbtn:hover{background:#c8262f;}
+  .intronextbtn:active{transform:translateY(3px);box-shadow:0 1px 0 #5a0d12;}
+  .introdots{position:absolute;left:50%;bottom:3.4%;transform:translateX(-50%);z-index:5;display:flex;gap:7px;}
   .introdots i{width:8px;height:8px;border-radius:50%;background:#4a3a6e;transition:background .3s;}
   .introdots i.on{background:#ffd34d;}
   /* small "replay the intro" button tucked in the corner of the title screen */
@@ -360,7 +363,7 @@
   @keyframes introImg{0%{opacity:0;transform:scale(1.085);}15%{opacity:1;}100%{opacity:1;transform:scale(1);}}
   @keyframes introTextIn{0%{opacity:0;transform:translate(-50%,22px);}100%{opacity:1;transform:translate(-50%,0);}}
   @keyframes introFinalIn{0%{opacity:0;transform:translateY(22px);}100%{opacity:1;transform:translateY(0);}}
-  @keyframes introBlink{0%,100%{opacity:.32;}50%{opacity:.9;}}
+  @keyframes introBtnIn{0%{opacity:0;}100%{opacity:1;}}
   @media (prefers-reduced-motion:reduce){
     .introscene .iimg{animation:introImgFade 1s ease-out both;}
     @keyframes introImgFade{0%{opacity:0;}100%{opacity:1;}}
@@ -2087,7 +2090,7 @@ function updateMusicMood(){
     if(G.phase==='run' && G.heroes && G.heroes.some(h=>(h.champion||h.king) && h.state!=='dead')) mood='boss';
     else if(G.phase==='run' && G.boss && G.boss.hp/G.boss.maxHp < 0.30) mood='boss';
   }
-  else mood=(uiScreen==='town')?'town':(uiScreen==='title'?'title':'menu');
+  else mood=(uiScreen==='town')?'town':((uiScreen==='title'||uiScreen==='intro')?'title':'menu');   // the story intro plays the title theme
   setMusicMood(mood);
 }
 function toggleAudio(){
@@ -2202,7 +2205,8 @@ function leaveTitle(){ overlay.classList.remove('titlemode'); openTitle(); }
    then beat 8 — a short lead-in over black that hands off to the title screen so
    the logo "flies in" as the climax. Skippable at any point; plays once on first
    load (localStorage bm_intro_seen) and is re-watchable from the title screen.
-   Advance by tap/click or a per-beat auto-timer; CSS handles the smooth fades. */
+   Advance ONLY with the Next button (no auto-timer) so a scene never slips by
+   while the player is still turning their phone to landscape; CSS does the fades. */
 const INTRO_SCENES=[
   {img:'intro/intro_scene01.jpg', text:'For centuries, monsters lived beneath the mountains in peace.'},
   {img:'intro/intro_scene02.jpg', text:'Then the <b>Heroes</b> arrived.<br>At first, they came for treasure.'},
@@ -2213,11 +2217,9 @@ const INTRO_SCENES=[
   {img:'intro/intro_scene07.jpg', text:'You are the <b>Final Boss</b>.<br>The heroes are already on their way.'},
 ];
 const INTRO_FINAL='Build rooms. Set traps. Raise monsters.<br>Protect your people — and show the world that there is…';
-const INTRO_DUR=6500, INTRO_FINAL_DUR=3600;
-let introIdx=-1, introTimer=0;
+let introIdx=-1;
 function introSeen(){ try{ return localStorage.getItem('bm_intro_seen')==='1'; }catch(_){ return false; } }
 function introMarkSeen(){ try{ localStorage.setItem('bm_intro_seen','1'); }catch(_){ } }
-function introClearTimer(){ if(introTimer){ try{ clearTimeout(introTimer); }catch(_){ } introTimer=0; } }
 function introDots(active){
   let h=''; for(let k=0;k<=INTRO_SCENES.length;k++) h+=`<i class="${k===active?'on':''}"></i>`; return h;
 }
@@ -2230,35 +2232,35 @@ function playIntro(){
 }
 function introRenderScene(i){
   const L=document.getElementById('introlayer'); if(!L) return; const s=INTRO_SCENES[i];
+  const last=(i===INTRO_SCENES.length-1);
   L.innerHTML=`
-    <div class="introscene" onclick="introNext()">
+    <div class="introscene">
       <div class="iimg" style="background-image:url('${s.img}')"></div>
       <div class="iveil"></div>
       <div class="introtext">${s.text}</div>
-      <div class="intronext">tap to continue ▸</div>
       <div class="introdots">${introDots(i)}</div>
+      <button class="intronextbtn" onclick="introNext()">${last?'Continue ▸':'Next ▸'}</button>
     </div>
-    <button class="introskip" onclick="event.stopPropagation();skipIntro()">Skip ▸</button>`;
-  introClearTimer(); introTimer=setTimeout(introNext, INTRO_DUR);
+    <button class="introskip" onclick="skipIntro()">Skip ▸</button>`;
 }
 function introRenderFinal(){
   const L=document.getElementById('introlayer'); if(!L) return;
   L.innerHTML=`
-    <div class="introfinal" onclick="endIntro()">
+    <div class="introfinal">
       <div class="fl">${INTRO_FINAL}</div>
-      <div class="introdots" style="bottom:6%">${introDots(INTRO_SCENES.length)}</div>
+      <div class="introdots" style="bottom:7%">${introDots(INTRO_SCENES.length)}</div>
+      <button class="intronextbtn" style="bottom:12%" onclick="endIntro()">Begin ▸</button>
     </div>
-    <button class="introskip" onclick="event.stopPropagation();skipIntro()">Skip ▸</button>`;
-  introClearTimer(); introTimer=setTimeout(endIntro, INTRO_FINAL_DUR);
+    <button class="introskip" onclick="skipIntro()">Skip ▸</button>`;
 }
 function introNext(){
-  introClearTimer(); introIdx++;
+  introIdx++;
   if(introIdx>=INTRO_SCENES.length){ introRenderFinal(); return; }
   introRenderScene(introIdx);
 }
 function skipIntro(){ endIntro(); }
 function endIntro(){
-  introClearTimer(); introMarkSeen();
+  introMarkSeen();
   const L=document.getElementById('introlayer');
   if(L){ L.classList.remove('show'); L.innerHTML=''; }
   titleScreen();                                  // beat 8: the title flies in
