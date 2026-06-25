@@ -79,6 +79,19 @@ try{
   t.ok(h && h.state==='dead', 'a hero can be damaged to death through dealToHero');
   t.ok(A.decals && A.decals.length>0, 'blood pooled on the floor after a kill (gore fired)');
   for(let i=0;i<20;i++) A.draw();        // draw the aftermath (corpse / blood decals / fading particles)
+
+  // 🐲 Drakeling holds the back-right (0.82) and never slides forward — a hero can
+  // only swing at it once it has crossed the room, giving the flyer its range edge.
+  freshRun([room('dragon', 3)]);
+  let drakeF=null;
+  for(let i=0;i<600 && drakeF===null; i++){
+    A.update(0.05);
+    const fh=(A.G.heroes||[]).find(h=>h && h.state==='fighting'
+      && A.G.cells[h.cellIndex] && A.G.cells[h.cellIndex].mon
+      && A.G.cells[h.cellIndex].mon.type==='dragon' && A.G.cells[h.cellIndex].mon.alive);
+    if(fh){ const c=A.G.cells[fh.cellIndex]; drakeF=(fh.x-c.x0)/(c.x1-c.x0); }
+  }
+  t.ok(drakeF!==null && drakeF>=0.7, 'a hero only reaches the Drakeling on the room’s right side (engaged at '+(drakeF!==null?drakeF.toFixed(2):'never')+')');
 }catch(e){ threw=e; }
 t.ok(!threw, 'run-phase draw/update/juice loop never threw'
   + (threw ? (' — '+threw.message+'\n'+String(threw.stack||'').split('\n').slice(0,4).join('\n')) : ''));

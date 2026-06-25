@@ -631,7 +631,7 @@ const STAGEW = 132;              // staging area (left of the entrance) for wait
 const FLOOR = 330;          // y of the floor line
 const LIFT = 14;            // px heroes & monsters are raised off the floor line (they walk a touch higher)
 const ROOM_W = 200;         // pixel width of one room/cell
-const DRAKE_HOVER = 128;    // 🐲 the Drakeling is a flyer — hovers this many px above the floor, on the room's right
+const DRAKE_HOVER = 64;     // 🐲 the Drakeling is a flyer — hovers this many px above the floor, on the room's right (low enough to read as a back-row threat)
 
 /* ----------------------------- content tables ---------------------------- */
 // Room cards. type = id. "trap" rooms hit passing heroes; "monster" rooms
@@ -5723,9 +5723,13 @@ function simStep(h,dt){
     // a living monster blocks: keep walking until the monster's advancing sprite
     // reaches you, then engage. (The monster slides left in the draw step.)
     if(cell && cell.mon && cell.mon.alive){
-      const monF = (cell.room && cell.room._monF!==undefined) ? cell.room._monF : 0.74;
+      // 🐲 a Drakeling is a flyer: it HOLDS the back-right (0.82, where it's drawn)
+      // and never slides forward, so heroes can only swing at it once they've crossed
+      // the whole room to reach it — its breath chips them the whole way in.
+      const drake = cell.mon.type==='dragon';
+      const monF = drake ? 0.82 : ((cell.room && cell.room._monF!==undefined) ? cell.room._monF : 0.74);
       const monX = cell.x0 + ROOM_W*monF;
-      if(monX <= h.x + 24){ h.state='fighting'; h.atkT=0; cell.mon.atkT=0; return; }
+      if(monX <= h.x + (drake?8:24)){ h.state='fighting'; h.atkT=0; cell.mon.atkT=0; return; }
     }
     // reached boss room? stand INSIDE it (in front of the boss), not at the door
     if(h.x >= cellX(G.slots)+ROOM_W*0.30){
@@ -6025,7 +6029,10 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         // the next guard in the room steps up to take its place (up to 5 in a row)
         const next=(cell.guards||[]).find(g=>g&&g.alive);
         if(next){ cell.mon=next; cell.mon.atkT=0.3;
-          floater(cell.x0+ROOM_W*0.55, FLOOR-88, '⚔️ NEXT GUARD', '#ffd34d'); }
+          floater(cell.x0+ROOM_W*0.55, FLOOR-88, '⚔️ NEXT GUARD', '#ffd34d');
+          if(next.type==='dragon'){   // 🐲 a flyer steps up — heroes must cross to the back-right to reach it
+            for(const o of (G.heroes||[])) if(o && o.cellIndex===cell.index && o.state==='fighting') o.state='walking';
+          } }
         return; }
     }
   }
