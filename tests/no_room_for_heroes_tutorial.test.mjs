@@ -80,6 +80,14 @@ t.ok(guard<120, 'finished in a bounded number of steps ('+guard+')');
 // --- replaying after it's done: gating is inert when not in the tutorial ---
 t.ok(A.tutAllow('start')===true && A.tutAllow('ability')===true, 'outside the tutorial nothing is gated');
 
+// --- the tutorial rogue can't dodge: abilities always land, so the guided kill can't stall ---
+A.startTutorial();
+const rwave = A.TUT.findIndex(s => s.enter && /cls:'rogue'/.test(String(s.enter)));
+t.ok(rwave >= 0, 'the tutorial stages a rogue wave');
+A.G.tutStep = rwave; A.TUT[rwave].enter(); A.startWave();
+const rogue = (A.G.heroes||[]).find(h => h.cls==='rogue');
+t.ok(rogue && rogue.dodge === 0, 'tutorial heroes have 0 dodge — abilities land every time (rogue soft-lock fix)');
+
 // --- the "Pick a Trap" Spoils beat is trap-only (spike/flame + a Bone Pit) ---
 A.startTutorial();
 const ti = A.TUT.findIndex(s => s.pickKind === 'trap');

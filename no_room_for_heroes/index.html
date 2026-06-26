@@ -3358,6 +3358,7 @@ function tutSpawnWave(){
     if(sp.atk!=null){ h.atk=sp.atk; h._atkBase=sp.atk; }
     if(sp.spd!=null){ h.spd=sp.spd; }
     if(sp.loot){ h.loot={k:sp.loot.k, t:sp.loot.t||'common', v:sp.loot.v||0}; }   // scripted gear drop (loot tutorial)
+    h.dodge=0;   // 🗡️ tutorial heroes never dodge — abilities land every time, so the guided "kill it" beats can't stall
     G.heroes.push(h); G.heroNum++;
   });
   if(!G.heroes.length){ const h=buildHeroFromSpec({cls:'warrior',power:1,traits:[],name:'Knight',debuff:{atkMul:1,burn:0,robbed:false}}); h.x=-56; h.yOff=-LIFT; G.heroes.push(h); }
@@ -5741,6 +5742,10 @@ function simStep(h,dt){
     // reached boss room? stand INSIDE it (in front of the boss), not at the door
     if(h.x >= cellX(G.slots)+ROOM_W*0.30){
       if(h.champion==='thief'){ thiefSteal(h); return; }   // robs you instead of fighting
+      // tutorial failsafe: a scripted raider must NEVER slip past on a "kill it" beat and
+      // strand the player — drop it at the door so the beat advances. (Not the finale, which
+      // is gate:'free' / adv:'never' and is MEANT to breach the throne.)
+      if(G.tutorial){ const ts=tutStepObj(); if(ts && (ts.gate==='abil'||ts.adv==='kill')){ heroDies(h); return; } }
       if(!h.reachedThrone && G.stats) G.stats.breaches++;
       h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.44;
     }
