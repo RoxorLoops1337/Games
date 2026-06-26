@@ -1737,7 +1737,9 @@ function rollRelicChoices(n){
    A wandering trader who turns up in the Hero Town between milestones and
    sells relics for dread. Stock is rolled fresh each visit (weighted by the
    same tier curve as drafts) and priced by rarity.                         */
-const MERCHANT_PRICE={ common:8, special:14, rare:22, epic:34, legendary:48, mythic:66 };
+// Dread price by rarity — steep, and scaling HARD for the top tiers so a full
+// relic set is a real long-haul investment (not something one good run buys out).
+const MERCHANT_PRICE={ common:12, special:24, rare:45, epic:85, legendary:150, mythic:260 };
 const POTION_GOLD=24;   // gold price of one throne potion at the traveling merchant
 function rollMerchant(){
   // Visits most town stops, but not every one — keeps the encounter special.
@@ -5203,8 +5205,13 @@ function townOrBuild(){ if(G.townDue){ G.townDue=false; gotoTown(); } else gotoB
 
 /* ============================== RELIC DRAFT ============================= */
 function gotoRelicChoice(title, subHtml, onPick){
-  G.phase='relic'; G._relicPick=onPick||null;
-  const choices=rollRelicChoices(3); G._relicChoices=choices;
+  const choices=rollRelicChoices(3);
+  if(!choices.length){                               // every relic already owned → don't show an unpickable screen
+    showHint('🏺 Every relic already claimed — nothing left to unearth.');
+    if(onPick) onPick(); else gotoBuild(false);
+    return;
+  }
+  G.phase='relic'; G._relicPick=onPick||null; G._relicChoices=choices;
   overlay.classList.add('show');
   overlay.innerHTML=`<h1 style="color:#b163ff">🏺 ${title}</h1>
     <p>${subHtml||'Choose a relic to empower your dungeon.'}</p>

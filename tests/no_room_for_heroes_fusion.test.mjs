@@ -8,6 +8,7 @@ const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,ma
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
+  gotoRelicChoice,rollRelicChoices,RELICS,MERCHANT_PRICE,TIER_ORDER,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('rooms (slots/stacking/menu)');
@@ -139,6 +140,20 @@ t.ok(mp && mp.price>0, 'a visiting merchant always offers a gold-priced potion')
 A.G.boss.potions=1; A.G.gold=A.POTION_GOLD*5; A.G.merchant={visiting:true,stock:[],potion:{price:A.POTION_GOLD}};
 const gold0=A.G.gold; A.buyMerchantPotion();
 t.ok(A.G.boss.potions===2 && A.G.gold===gold0-A.POTION_GOLD, 'buying a potion costs gold and fills a belt slot');
+
+// --- "Relic Unearthed" must NOT show an unpickable screen once every relic is owned ---
+A.G=A.freshGame('campaign'); A.chooseBoss('dragon');
+A.G.relics=Object.keys(A.RELICS);                 // own them all
+let relicSkipped=false; A.gotoRelicChoice('Relic Unearthed','test',()=>{ relicSkipped=true; });
+t.ok(relicSkipped && A.G.phase!=='relic', 'every relic owned → the relic draft is skipped (no soft-lock)');
+A.G.relics=[]; A.gotoRelicChoice('Relic Unearthed','test',()=>{});
+t.ok(A.G.phase==='relic' && (A.G._relicChoices||[]).length>0, 'with relics left, the draft still offers choices');
+
+// --- dread-shop relic prices are steep and scale up by tier ---
+const mpz=A.TIER_ORDER.map(tt=>A.MERCHANT_PRICE[tt]);
+t.ok(mpz.every((v,i)=>i===0||v>mpz[i-1]), 'merchant relic price rises with every tier');
+t.ok(A.MERCHANT_PRICE.mythic>=200 && A.MERCHANT_PRICE.mythic/A.MERCHANT_PRICE.common>=12,
+  'top-tier relics are a major dread sink (steep high-tier scaling)');
 
 // --- "Fed" growth curve: uncapped, monotonic, with diminishing returns ---
 const fm = A.feedMul;
