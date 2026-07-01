@@ -7272,10 +7272,11 @@ function drawRoomContents(x0,w,room,i){
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   const isDen = monParts.length>0 && monParts.every(p=>p==='goblin');
   const art=roomArtReady(room);                 // suppress props the art already shows
-  const synArt = !!roomSynArt(room);            // 🔗 a synergy backdrop already depicts both traps → hide the loose overlays
   // traps: every layout PART carries a layer (override in align.html);
   // defaults keep poison behind, flames over it, spikes ALWAYS on top.
-  const trapTypes=parts.filter(p=>ROOMS[p].kind==='trap' && art!==p && !synArt);
+  // (Synergy rooms KEEP their trap overlays — the backdrop is ambient theme; the
+  // actual traps still sit in the room and fire.)
+  const trapTypes=parts.filter(p=>ROOMS[p].kind==='trap' && art!==p);
   const items=[];
   for(const tp of trapTypes){
     const pl=(LAYOUT.traps&&LAYOUT.traps[tp])||[{art:tp,fx:.5,fy:0,h:100}];
