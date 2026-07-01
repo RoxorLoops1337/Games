@@ -3,8 +3,13 @@
 //
 //   node tests/no_room_for_heroes_fusion.test.mjs   (or: npm run test:boss)
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+const here = dirname(fileURLToPath(import.meta.url));
 
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
+  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
@@ -162,5 +167,37 @@ t.ok(Math.abs((fm(1) - 1) - 0.03) < 0.005, 'first corpse ≈ +3% (early feel pre
 t.ok(fm(10) > fm(5) && fm(100) > fm(50) && fm(1000) > fm(500), 'monotonic increase — never caps');
 t.ok((fm(20) - fm(10)) < (fm(10) - fm(0)), 'diminishing returns (curve bends)');
 t.ok(fm(100) < 2.0 && fm(100) > 1.5, `tamed late game: 100 kills → ×${fm(100).toFixed(2)} (was ×4.0)`);
+
+// --- 🔗 TRAP SYNERGIES: a curated trap pair → a themed room + damage amp + rider ---
+const synKeys = Object.keys(A.SYNERGIES);
+t.ok(synKeys.length === 35, `all 35 curated synergy pairs are defined (${synKeys.length})`);
+let badSyn = '';
+for(const k of synKeys){
+  const s = A.SYNERGIES[k], ids = k.split('+');
+  if(ids.slice().sort().join('+') !== k) badSyn = k+' key not canonical';
+  else if(!A.SYNERGY_TYPES[s.type]) badSyn = k+' unknown type';
+  else if(ids.some(id => !A.ROOMS[id] || A.ROOMS[id].kind !== 'trap')) badSyn = k+' non-trap id';
+  else if(!existsSync(join(here, '..', 'no_room_for_heroes', 'rooms', 'synergies', s.img + '.png'))) badSyn = k+' art missing';
+  if(badSyn) break;
+}
+t.ok(!badSyn, 'every synergy: canonical key, known type, real trap ids, shipped art' + (badSyn ? ' — '+badSyn : ''));
+t.ok(Object.values(A.SYNERGY_TYPES).every(v => v.amp > 0 && v.name && v.col && v.desc), 'every synergy type has an amp + name + colour + blurb');
+
+// detection: a real pair synergizes; dupes / undefined pairs / lone traps do not
+t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'oil',kind:'trap'}]})?.type === 'fire', 'Flame Jet + Oil Slick → fire synergy');
+t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'flame',kind:'trap'}]}) === null, 'the same trap twice is not a synergy');
+t.ok(A.roomSynergy({units:[{type:'spike',kind:'trap'},{type:'flame',kind:'trap'}]}) === null, 'an undefined pair is not a synergy');
+t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'oil',kind:'trap'},{type:'runestone',kind:'trap'}]})?.type === 'fire', 'a Runestone (amp-only) does not break the pair');
+
+// buildCells caches the type + a >1 damage amp on the cell
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;
+A.G.rooms = [{ type:'flame', cap:2, kills:0, units:[{type:'flame',kind:'trap',lvl:1},{type:'oil',kind:'trap',lvl:1}] }];
+A.buildCells();
+const c0 = A.G.cells[0];
+t.ok(c0.synType === 'fire' && c0.syn === 1 + A.SYNERGY_TYPES.fire.amp, `a synergy room caches synType + the damage amp (syn=${c0.syn})`);
+// a non-synergy 2-trap room stays neutral
+A.G.rooms = [{ type:'spike', cap:2, kills:0, units:[{type:'spike',kind:'trap',lvl:1},{type:'skeleton',kind:'monster',lvl:1}] }];
+A.buildCells();
+t.ok(!A.G.cells[0].synType && (A.G.cells[0].syn||1) === 1, 'a non-pair room has no synergy amp');
 
 t.done();

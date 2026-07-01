@@ -719,30 +719,83 @@ function shopTier(room){ return (room&&room.cap)||1; }       // shops scale with
 function shopCap(room){ return shopTier(room)+1; }           // tier 1 holds 2 items, +1 slot per upgrade
 function salePrice(room, key){ return Math.round(ITEMS[key].price * shopMarkup(shopTier(room))); }
 
-// Fusing two components yields a synergy multiplier on the room's output.
-// Some pairs are great, some are duds (diminishing returns).
-const SYNERGY_PAIRS = {
-  'flame+skeleton':{m:1.35,name:'Funeral Pyre'},
-  'flame+goblin':  {m:1.25,name:'Roasting Pit'},
-  'ogre+spike':    {m:1.30,name:'Impaler'},
-  'arrow+goblin':  {m:1.25,name:'Ambush'},
-  'arrow+skeleton':{m:1.20,name:'Bone Volley'},
-  'flame+spike':   {m:1.20,name:'Searing Pit'},
-  // elemental reaction combos
-  'flame+oil':     {m:1.45,name:'Inferno'},      // oil then ignite
-  'oil+tesla':     {m:1.40,name:'Conduction'},   // wet then chain lightning
-  'frost+spike':   {m:1.35,name:'Flash Freeze'}, // chill then shatter
-  'frost+tesla':   {m:1.30,name:'Superconductor'},
-  'arrow+frost':   {m:1.30,name:'Brittle Bones'},
-  'oil+spike':     {m:1.15,name:'Slippery'},
-  // monster + monster pair identities — a mechanical twist on top of the
-  // multiplier (fx hooks are applied to the guards in buildCells)
-  'goblin+skeleton':{m:1.10,name:'Grave Horde',    fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (no cap).'},
-  'ogre+warden':    {m:1.10,name:'Gatehouse',      fx:'tauntBoth', desc:'BOTH guards strike the whole party stalled in the room.'},
-  'ogre+slime':     {m:1.10,name:'Sludge Colossus',fx:'splitBoth', desc:'BOTH guards reform once at 60% HP when slain.'},
-  'ogre+skeleton':  {m:1.25,name:'Bone Colossus',  desc:'A late-game wall — both guards hit ×1.25 harder.'},
-  'goblin+slime':   {m:1.10,name:'Spawning Vats',  fx:'feedBoth',  desc:'Every hero slain here feeds BOTH guards (no cap).'},
+/* ===================== TRAP SYNERGIES =================================
+   A room holding a specific PAIR of damage traps becomes a themed "synergy"
+   room: a full-room backdrop (rooms/synergies/*) PLUS a type advantage — a
+   room-wide trap-damage amp and a signature on-hit rider. 35 curated pairs
+   across 7 types. Runestones (amp-only) don't count toward the pair. */
+const SYNERGIES={
+  'arrow+flame':{type:'fire',img:'synergy_fire_flamejet_dartwall'},
+  'arrow+frost':{type:'frost',img:'synergy_frost_frosttrap_dartwall'},
+  'arrow+maul':{type:'physical',img:'synergy_physical_armorcrusher_dartwall'},
+  'arrow+spike':{type:'physical',img:'synergy_physical_spikepit_dartwall'},
+  'arrow+venom':{type:'poison',img:'synergy_poison_venomvent_dartwall'},
+  'bombard+flame':{type:'fire',img:'synergy_fire_flamejet_bombard'},
+  'bombard+frost':{type:'frost',img:'synergy_frost_frosttrap_bombard'},
+  'bombard+maul':{type:'physical',img:'synergy_physical_bombard_armorcrusher'},
+  'bombard+oil':{type:'physical',img:'synergy_physical_bombard_oilslick'},
+  'bombard+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_bombard'},
+  'corrode+frost':{type:'frost',img:'synergy_frost_frosttrap_acidsprayer'},
+  'corrode+hexbrand':{type:'poison',img:'synergy_poison_acidsprayer_hexbrand'},
+  'corrode+maul':{type:'poison',img:'synergy_poison_acidsprayer_armorcrusher'},
+  'corrode+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_acidsprayer'},
+  'corrode+venom':{type:'poison',img:'synergy_poison_acidsprayer_venomvent'},
+  'flame+hexward':{type:'fire',img:'synergy_fire_flamejet_hexward'},
+  'flame+magebane':{type:'fire',img:'synergy_fire_flamejet_magebane'},
+  'flame+oil':{type:'fire',img:'synergy_fire_flamejet_oilslick'},
+  'frost+hexward':{type:'frost',img:'synergy_frost_frosttrap_hexward'},
+  'frost+venom':{type:'frost',img:'synergy_frost_frosttrap_venomvent'},
+  'gallows+hexbrand':{type:'execution',img:'synergy_execution_gallows_hexbrand'},
+  'gallows+hexward':{type:'arcane',img:'synergy_arcane_hexward_gallows'},
+  'gallows+magebane':{type:'execution',img:'synergy_execution_gallows_magebane'},
+  'gallows+spike':{type:'execution',img:'synergy_execution_gallows_spikepit'},
+  'gallows+venom':{type:'execution',img:'synergy_execution_gallows_venomvent'},
+  'hexbrand+magebane':{type:'arcane',img:'synergy_arcane_magebane_hexbrand'},
+  'hexbrand+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_hexbrand'},
+  'hexbrand+venom':{type:'poison',img:'synergy_poison_venomvent_hexbrand'},
+  'hexward+magebane':{type:'arcane',img:'synergy_arcane_magebane_hexward'},
+  'hexward+spike':{type:'arcane',img:'synergy_arcane_hexward_spikepit'},
+  'magebane+spike':{type:'arcane',img:'synergy_arcane_magebane_spikepit'},
+  'maul+oil':{type:'physical',img:'synergy_physical_armorcrusher_oilslick'},
+  'maul+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_armorcrusher'},
+  'oil+spike':{type:'physical',img:'synergy_physical_spikepit_oilslick'},
+  'oil+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_oilslick'},
 };
+// Per-type advantage: a room-wide trap-damage amp (folds into cell.syn) + a
+// signature rider (see synergyOnHit / the physical-pierce & execution branches).
+const SYNERGY_TYPES={
+  fire:      {name:'Inferno',     amp:0.25, col:'#ff7a2e', desc:'+25% trap damage — and every strike ADDS burn (the room stays ablaze).'},
+  frost:     {name:'Deep Freeze', amp:0.20, col:'#9adfff', desc:'+20% trap damage — every strike CHILLS, so heroes crawl through and shatter.'},
+  lightning: {name:'Overcharge',  amp:0.25, col:'#fff34d', desc:'+25% trap damage — every strike shocks and ARCS to every hero in the room.'},
+  poison:    {name:'Toxic',       amp:0.15, col:'#7bdc6b', desc:'+15% trap damage — every strike STACKS poison; the DoT builds fast.'},
+  physical:  {name:'Brutal',      amp:0.35, col:'#c9a14d', desc:'+35% trap damage — and every trap PIERCES armor.'},
+  arcane:    {name:'Hexed',       amp:0.20, col:'#b163ff', desc:'+20% trap damage — every strike BRANDS the target so the next hit detonates.'},
+  execution: {name:'Gallows',     amp:0.25, col:'#ff5470', desc:'+25% trap damage — and +60% MORE to any hero under 40% HP (a finisher room).'},
+};
+// A room's synergy = exactly two DISTINCT damage traps that form a curated pair
+// (Runestone amp-traps are ignored). Works from live cell.traps OR a room's units.
+function synergyFromTypes(types){
+  const t=[...new Set(types)].filter(x=>ROOMS[x]&&ROOMS[x].kind==='trap'&&!ROOMS[x].amp);
+  if(t.length!==2) return null;
+  return SYNERGIES[t.slice().sort().join('+')]||null;
+}
+function roomSynergy(room){ return (room&&room.units) ? synergyFromTypes(room.units.map(u=>u.type)) : null; }
+// The signature rider, run after a synergy room's trap lands a hit. (physical &
+// execution shape the DAMAGE instead — handled inline in trapTick.)
+function synergyOnHit(h, cell, tl, dmg){
+  if(!cell || !cell.synType || !h || h.state==='dead') return;
+  switch(cell.synType){
+    case 'fire':  addBurn(h, 2+(tl-1), 3); break;
+    case 'frost': h.chill=Math.max(h.chill||0, ccDur(h, 2.5)); break;
+    case 'lightning': {
+      h.shock=Math.max(h.shock||0, ccDur(h, PRIME_SHOCK));
+      const arc=Math.max(1, Math.round((dmg||0)*0.35));                 // chain a fraction to the rest of the room
+      for(const o of (G.heroes||[])) if(o&&o!==h&&o.state!=='dead'&&o.cellIndex===cell.index) dealToHero(o, arc, 'ARC', false, 'shock');
+      break; }
+    case 'poison': h.poison=Math.min(POISON_CAP,(h.poison||0)+2); h.poisonT=Math.max(h.poisonT||0,4); break;
+    case 'arcane': h.mark=1; h.markT=Math.max(h.markT||0,3); break;
+  }
+}
 // A room holds an array of UNITS ({kind,type,lvl}); roomParts lists their types
 // (with duplicates — five Bone Pits = five 'skeleton' entries). Falls back to a
 // bare {type} object for any pre-unit data path.
@@ -4019,6 +4072,9 @@ function buildCells(){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
       }
+      // 🔗 trap synergy: a curated pair → a room-wide damage amp + a type rider (see trapTick)
+      const synD=synergyFromTypes(cell.traps.map(t=>t.type));
+      if(synD){ cell.synType=synD.type; cell.syn=1+(SYNERGY_TYPES[synD.type].amp||0); }
       cell.guards=guards;                        // every guard, front-to-back
       if(guards.length) cell.mon=guards[0];      // active guard; the next alive steps up when it falls
       cell.shop=hasShop;
@@ -5941,18 +5997,20 @@ function trapTick(h,cell,dt){
       if(d.vsClass && d.vsClass.includes(h.cls)) dmg*=d.vsMult;
       if(d.vsElite && h.elite) dmg*=d.vsMult;
       if(d.vsLowHp && h.hp < h.maxHp*d.vsLowHp) dmg*=d.vsMult;
+      if(cell.synType==='execution' && h.hp < h.maxHp*0.4) dmg*=1.6;   // 🔗 Gallows synergy: finish the wounded
       // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
       const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
       if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
       dmg*=amp;                                                // Runestone / War Totem amplification
-      const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : !!d.pierce;  // Bastion/Piercing Halls: ignore armor
+      const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : (!!d.pierce || cell.synType==='physical');  // Bastion/Piercing Halls & 🔗 Brutal synergy: ignore armor
       _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
       if(d.burn){ addBurn(h, d.burn+(tl-1)*2, 3); }
       else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(BURN_CAP, Math.max(h.burn||0, 2+(tl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
       applyTrapStatus(h, d, r);                                  // poison / acid / mark
+      if(cell.synType) synergyOnHit(h, cell, tl, dmg);           // 🔗 synergy rider
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
       if(G.stats) G.stats.trapDmg+=Math.round(dmg);
-      burst(h.x, h.y-20, d.col, 5);
+      burst(h.x, h.y-20, cell.synType?SYNERGY_TYPES[cell.synType].col:d.col, cell.synType?8:5);
       if(h.state==='dead') return;
     }
   }
@@ -5986,12 +6044,14 @@ function aoeTrapTick(dt){
       if(vr) base*=(1+vr*VET_DMG);
       if(doc==='inferno') base*=1.2;
       base*=ampAt(cell.index);                                  // Runestone / War Totem amplification
-      const pierce=(doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll)?'full':!!d.pierce;
+      const pierce=(doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll)?'full':(!!d.pierce||cell.synType==='physical');
       for(const o of targets){
-        const dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
+        let dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
+        if(cell.synType==='execution' && o.hp < o.maxHp*0.4) dmg=Math.round(dmg*1.6);   // 🔗 Gallows finisher
         _roomDmgCtx=r; dealToHero(o, dmg, 'BOOM', pierce, d.elem); _roomDmgCtx=null;
         if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(BURN_CAP, Math.max(o.burn||0, 2+(tl-1))); o.burnT=Math.max(o.burnT||0,3); }
         applyTrapStatus(o, d, r);
+        if(cell.synType) synergyOnHit(o, cell, tl, dmg);          // 🔗 synergy rider
         if(G.stats) G.stats.trapDmg+=dmg;
       }
       if(doc==='soulengine' && G.boss) G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+targets.length);
@@ -6745,6 +6805,13 @@ const ROOM_IMG={};
 const ROOM_IMG_BROKEN={};    // rooms/<k>_broken.png — shown after a champion smashes the doorway
 const ROOM_IMG_BROKEN2={};   // a 2nd broken variant (rooms/<k>_broken2.png) for visual variety
 let GAP_IMG=null;            // rooms/gap.png — the stone wall drawn between rooms (and before the throne)
+// 🔗 Synergy room backdrops load LAZILY — only when a room actually forms that
+// pair — so the ~6MB set never touches boot. Graceful: missing art → standard room.
+const SYN_IMG={};
+function synImg(name){ if(!name) return null;
+  if(!SYN_IMG[name] && typeof Image!=='undefined') SYN_IMG[name]=loadImg('rooms/synergies/'+name+'.png');
+  return SYN_IMG[name]||null; }
+function roomSynArt(room){ const s=roomSynergy(room); if(!s) return null; const im=synImg(s.img); return (im&&im._ok)?im:null; }
 if(typeof Image!=='undefined'){
   ['empty'].forEach(k=>{    // the standard room (all cells use it; contents overlay)
     ROOM_IMG[k]=loadImg('rooms/'+k+'.png');
@@ -7188,6 +7255,11 @@ function drawRoomFull(x0,w,room,i){
   const k=roomArtReady(room);
   if(k) drawRoomArt(x0,w,cellArt(k,i));                                  // dedicated full art (broken variant after a champion smash)
   else if(ROOM_IMG.empty && ROOM_IMG.empty._ok) drawRoomArt(x0,w,cellArt('empty',i)); // stone backdrop for art-less rooms
+  // 🔗 synergy: the themed art (banners on the wall, effects on the floor) LAYERS
+  // over the stone room. Not while the doorway's smashed (no broken variant).
+  const smashed = G && G.brokenCells && G.brokenCells[i];
+  const sa = smashed ? null : roomSynArt(room);
+  if(sa) drawRoomArt(x0,w,sa);
   drawRoomContents(x0,w,room,i);
 }
 function drawRoomContents(x0,w,room,i){
@@ -7200,9 +7272,10 @@ function drawRoomContents(x0,w,room,i){
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
   const isDen = monParts.length>0 && monParts.every(p=>p==='goblin');
   const art=roomArtReady(room);                 // suppress props the art already shows
+  const synArt = !!roomSynArt(room);            // 🔗 a synergy backdrop already depicts both traps → hide the loose overlays
   // traps: every layout PART carries a layer (override in align.html);
   // defaults keep poison behind, flames over it, spikes ALWAYS on top.
-  const trapTypes=parts.filter(p=>ROOMS[p].kind==='trap' && art!==p);
+  const trapTypes=parts.filter(p=>ROOMS[p].kind==='trap' && art!==p && !synArt);
   const items=[];
   for(const tp of trapTypes){
     const pl=(LAYOUT.traps&&LAYOUT.traps[tp])||[{art:tp,fx:.5,fy:0,h:100}];
@@ -8131,12 +8204,14 @@ function describeRoom(room, detail){
   const vr=vetRank(room); const vm=vetMul(room);
   const bas=bastionMul(), bm=barracksMul();
   const trapUnits=roomTrapUnits(room), monUnits=roomMonUnits(room);
-  const titleLine=`<b>${comboName(room)}</b> · ${(room.units||[]).length}/${room.cap||1} slots${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`;
+  const _syn=roomSynergy(room), _st=_syn&&SYNERGY_TYPES[_syn.type];   // 🔗 trap-pair synergy
+  const titleLine=`<b>${comboName(room)}</b>${_st?` <span style="color:${_st.col};font-weight:bold">🔗 ${_st.name}</span>`:''} · ${(room.units||[]).length}/${room.cap||1} slots${vr?` · <span style="color:#ffd34d">⭐${vr}</span>`:''}`;
   const buildIdx = (G && G.phase==='build') ? G.rooms.indexOf(room) : -1;
   // Build phase: the bubble opens as a compact action menu (Upgrade · Demolish ·
   // Info); the full stat readout is gated behind ℹ️ Info so a tap isn't a wall of text.
   if(buildIdx>=0 && !detail) return titleLine + roomActionBtns(room, buildIdx, true);
   const lines=[titleLine];
+  if(_st) lines.push(`<span style="color:${_st.col};font-weight:bold">🔗 ${_st.name} synergy</span> <span class="small" style="opacity:.9">— ${_st.desc}</span>`);
   // traps — each carries its OWN level (stack the same trap to raise it)
   let _trapDi=0;
   trapUnits.forEach(u=>{ const def=ROOMS[u.type]; const lv=u.lvl||1;
