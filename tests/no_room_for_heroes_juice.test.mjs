@@ -58,6 +58,8 @@ try{
     room('totem', 2),                 // newly-arted monster sprite (War Totem, 64px + 192px slash)
     room('flame', 2, 'venom'),
     room('bombard', 2, 'hexbrand'),   // newly-arted traps (AoE + brand)
+    room('tesla', 2, 'oil'),          // 🔗 lightning synergy — the arc rider hits every hero in the room
+    room('gallows', 2, 'spike'),      // 🔗 execution synergy — finisher bonus vs low-HP heroes
     room('runestone', 2),             // amplifier (passive looping art)
   ]);
   t.ok(A.G.phase==='run', 'wave started → run phase');
