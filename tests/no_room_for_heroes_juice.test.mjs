@@ -94,6 +94,15 @@ try{
     if(fh){ const c=A.G.cells[fh.cellIndex]; drakeF=(fh.x-c.x0)/(c.x1-c.x0); }
   }
   t.ok(drakeF!==null && drakeF>=0.7, 'a hero only reaches the Drakeling on the room’s right side (engaged at '+(drakeF!==null?drakeF.toFixed(2):'never')+')');
+
+  // 👺 den goblins surge LEFT to ambush the party the moment a wave enters — even
+  // while heroes are still marching in from the gate (x<0), not only once inside.
+  freshRun([room('goblin', 2)]);
+  A.G.minions = [{hp:20,maxHp:20,atk:5,x:400,homeX:400,home:0,lvl:1,atkT:0,state:'walking',kills:0}];
+  A.G.heroes  = [{hp:100,maxHp:100,atk:8,x:-40,state:'walking',cls:'warrior',cellIndex:-1}];
+  const gobX0 = A.G.minions[0].x;
+  for(let i=0;i<20;i++) A.goblinStep(A.G.minions[0], 0.05);
+  t.ok(A.G.minions[0].x < gobX0 - 5, 'a den goblin marches LEFT toward an entering hero at the gate ('+Math.round(A.G.minions[0].x)+' < '+gobX0+')');
 }catch(e){ threw=e; }
 t.ok(!threw, 'run-phase draw/update/juice loop never threw'
   + (threw ? (' — '+threw.message+'\n'+String(threw.stack||'').split('\n').slice(0,4).join('\n')) : ''));

@@ -4396,9 +4396,10 @@ function endWaveGoblins(){
   G.minions = [];
 }
 function goblinValidTarget(g, h){
-  // Goblins hunt ANY living hero anywhere in the dungeon — not just their own
-  // room — so they keep fighting every hero they cross until the party is wiped.
-  return !!(h && (G.heroes||[]).includes(h) && h.hp>0 && h.state!=='dead' && h.x>=0);
+  // Goblins hunt ANY living hero — including ones still marching in from the gate
+  // (x<0) — so they surge LEFT to ambush the party the MOMENT a wave enters, not
+  // only once a hero has crossed the threshold. (They're clamped on-screen at x≥6.)
+  return !!(h && (G.heroes||[]).includes(h) && h.hp>0 && h.state!=='dead');
 }
 function goblinStep(g, dt){
   if(g.hp<=0){ g.engaged=null; return; }
