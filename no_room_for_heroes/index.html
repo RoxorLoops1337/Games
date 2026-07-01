@@ -7257,9 +7257,9 @@ function drawRoomFull(x0,w,room,i){
   if(k) drawRoomArt(x0,w,cellArt(k,i));                                  // dedicated full art (broken variant after a champion smash)
   else if(ROOM_IMG.empty && ROOM_IMG.empty._ok) drawRoomArt(x0,w,cellArt('empty',i)); // stone backdrop for art-less rooms
   // 🔗 synergy: the themed art (banners on the wall, effects on the floor) LAYERS
-  // over the stone room. Not while the doorway's smashed (no broken variant).
-  const smashed = G && G.brokenCells && G.brokenCells[i];
-  const sa = smashed ? null : roomSynArt(room);
+  // over the stone room — and stays even on a SMASHED room, since the champion only
+  // wrecks the doorway (cosmetic, patched next wave); the traps & theme are intact.
+  const sa = roomSynArt(room);
   if(sa) drawRoomArt(x0,w,sa);
   drawRoomContents(x0,w,room,i);
 }
