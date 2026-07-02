@@ -1692,11 +1692,17 @@ function equipGear(gi, slot){
 function gearTag(g){ const col=RELIC_TIERS[g.t].col;
   return `<span style="color:${col}">${GEAR[g.k].ic} <b>${swordName(g)}</b> <span class="small" style="opacity:.7">(${RELIC_TIERS[g.t].name} ${GEAR[g.k].name})</span></span>`; }
 function gearEffectText(g){ return effText(pieceEff(g)); }
-function describeLoot(L){
-  return `${gearTag(L)} <span class="small" style="opacity:.8">· tier ${TIER_ORDER.indexOf(L.t)+1}/6</span>`
-    + `<br><span class="small">Equipped on a monster: <b>${gearEffectText(L)}</b></span>`
-    + `<br><span class="small" style="color:#9adfff">💎 Tap to collect · merge two alike to upgrade a tier</span>`;
+// Info card for a gear piece — shared by floor loot (arena) and War Chest hover.
+function describeGear(g, onFloor){
+  return `${gearTag(g)} <span class="small" style="opacity:.8">· tier ${TIER_ORDER.indexOf(g.t)+1}/6</span>`
+    + `<br><span class="small">${GEAR[g.k].desc}</span>`
+    + `<br><span class="small">Equipped on a monster: <b>${gearEffectText(g)}</b></span>`
+    + `<br><span class="small" style="color:#9adfff">${onFloor
+        ? '💎 Tap to collect · merge two alike to upgrade a tier'
+        : '🧰 Drag onto a monster to equip · tap two alike to merge up a tier'}</span>`;
 }
+function describeLoot(L){ return describeGear(L, true); }
+function chestGearHover(i){ const it=((G&&G.chest)||[])[i]; if(it){ lastPtrCX=null; lastPtrCY=null; showInspect(describeGear(it,false), true); } }
 
 // 💎 draw the gear lying on the dungeon floor (world space; tx maps world→camera x)
 function drawFloorLoot(tx){
@@ -8172,7 +8178,7 @@ function renderChestPop(){
   let cells='';
   for(let i=0;i<CHEST_MAX;i++){ const g=chest[i];
     if(g){ const col=RELIC_TIERS[g.t].col;
-      cells+=`<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" title="${swordName(g)} · ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col}">${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
+      cells+=`<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" onmouseenter="chestGearHover(${i})" onmouseleave="cardHoverOut()" title="${swordName(g)} · ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col}">${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
     } else cells+='<div class="gcell empty"></div>';
   }
   const loot=(G&&G.floorLoot&&G.floorLoot.length)||0;
@@ -8469,6 +8475,19 @@ CV.addEventListener('wheel', e=>{
   if(!G || (G.phase!=='build' && G.phase!=='run')) return;
   e.preventDefault(); zoomBy(e.deltaY<0 ? 1.12 : 0.9);
 }, {passive:false});
+// 💎 Desktop hover: show a gear info card when the mouse is over a piece lying on
+// the dungeon floor (mobile keeps tap-to-collect). Touch never fires mousemove.
+CV.addEventListener('mousemove', e=>{
+  if(drag||roomDrag||pinch||gearDrag||cardDrag) return;                 // not mid-drag/pan
+  const overLoot = G && (G.phase==='build'||G.phase==='run') && G.floorLoot && G.floorLoot.length
+    && clientToVY(e)>FLOOR-46 && clientToVY(e)<FLOOR+20 ? floorLootAt(clientToWorldX(e)) : -1;
+  if(overLoot>=0){ const L=G.floorLoot[overLoot];
+    if(!(inspectEnt && inspectEnt.loot===L)){                          // only rebuild when the hovered piece changes
+      const _r=CV.getBoundingClientRect(); lastPtrCX=(e.clientX-_r.left)/GSCALE; lastPtrCY=(e.clientY-_r.top)/GSCALE;
+      showInspectEntity({kind:'loot', loot:L}, true);
+    }
+  } else if(inspectHover && inspectEnt && inspectEnt.kind==='loot') hideInspect();   // moved off → drop the loot card (leave pinned inspects alone)
+});
 
 function endDrag(e){
   if(e){ delete pointers[e.pointerId]; if(Object.keys(pointers).length<2) pinch=null; }

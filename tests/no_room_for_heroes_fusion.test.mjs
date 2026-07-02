@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
-  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,
+  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,describeGear,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
@@ -225,5 +225,12 @@ A.G._recentOffers = ['spike'];
 let spikes = 0, arrows = 0;
 for(let i=0;i<3000;i++){ const t2 = A.pickCardWeighted(['spike','arrow'], 5); if(t2==='spike') spikes++; else arrows++; }
 t.ok(arrows > spikes*1.8, `the recently-shown common is picked much less (spike ${spikes} vs arrow ${arrows})`);
+
+// --- 💎 gear info card (hover on the arena + in the chest) ---
+const sword = { k:'blade', t:'rare', v:0 };
+const floorTxt = A.describeGear(sword, true), chestTxt = A.describeGear(sword, false);
+t.ok(/Blade/.test(floorTxt) && /Tap to collect/.test(floorTxt), 'floor-loot gear card names the piece + collect hint');
+t.ok(/Drag onto a monster/.test(chestTxt) && !/Tap to collect/.test(chestTxt), 'chest gear card shows the equip/merge hint instead');
+t.ok(/Blade/.test(chestTxt) && /Rare/.test(chestTxt), 'both cards show the piece name and tier');
 
 t.done();
