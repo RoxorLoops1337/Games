@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
-  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,
+  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
@@ -212,5 +212,18 @@ t.ok((A.G.minions||[]).some(m => m.type==='goblin' && m.home===0), 'the mixed de
 // the inspector shows BOTH the den and the guard
 const desc = A.describeRoom(A.G.rooms[0], true);
 t.ok(/Goblins \(spawner\)/.test(desc) && /Ogre Lair/.test(desc), 'the room inspector lists both the goblin den and the ogre guard');
+
+// --- 🎲 draft variety: recently-offered cards are down-weighted so the same few don't recur ---
+A.G = A.freshGame('campaign');
+const w0 = A.cardWeight('spike', 5);
+A.G._recentOffers = ['spike'];
+t.ok(Math.abs(A.cardWeight('spike', 5) - w0*0.3) < 0.001, 'a recently-offered card is down-weighted ×0.3 (fresher next draft)');
+A.G._recentOffers = ['flame','frost'];
+t.ok(A.cardWeight('spike', 5) === w0, 'a card NOT recently offered keeps full weight');
+// over many rolls, a fresh card is offered far more than a recently-shown one of the same tier
+A.G._recentOffers = ['spike'];
+let spikes = 0, arrows = 0;
+for(let i=0;i<3000;i++){ const t2 = A.pickCardWeighted(['spike','arrow'], 5); if(t2==='spike') spikes++; else arrows++; }
+t.ok(arrows > spikes*1.8, `the recently-shown common is picked much less (spike ${spikes} vs arrow ${arrows})`);
 
 t.done();

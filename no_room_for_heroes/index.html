@@ -1405,7 +1405,10 @@ function cardWeight(t, L){
   const mult = r==='epic' ? Math.max(0.08, L*0.16 - 0.25)   // ~0 until a few levels in
              : r==='rare' ? Math.max(0.3, 1 + (L-2)*0.06)   // slightly scarcer in the first rounds too
              : 1;
-  return base*mult;
+  // 🎲 down-weight cards offered in the last couple of drafts so the SAME handful
+  // doesn't keep coming up — keeps each Spoils screen feeling fresh.
+  const fresh = (G && G._recentOffers && G._recentOffers.includes(t)) ? 0.3 : 1;
+  return base*mult*fresh;
 }
 function runDepth(){ return G.mode==='campaign' ? G.levelIdx*1.3 : (G.totalSlain||0)/12; }
 // Weighted draw from a pool of card types, honoring rarity (optional exclude set).
@@ -5214,13 +5217,15 @@ function gotoReward(){
   const L=runDepth(); const shown=new Set();
   for(let i=0;i<choices;i++){
     let t;
-    if(Math.random()<0.45 && owned.size){
-      const ownPool=[...owned].filter(o=>!shown.has(o));     // favor what you own (enables upgrades)
+    if(Math.random()<0.25 && owned.size){                    // occasionally favor what you own (enables upgrades) — was 0.45, too repetitive
+      const ownPool=[...owned].filter(o=>!shown.has(o));
       t = ownPool.length ? pick(ownPool) : pickCardWeighted(pool, L, shown);
-    } else t=pickCardWeighted(pool, L, shown);               // else rarity-weighted; rarer shows up less
+    } else t=pickCardWeighted(pool, L, shown);               // else rarity-weighted (with a recency penalty for variety)
     shown.add(t);
     G.drafts.push({type:t, lvl:1});
   }
+  // remember the last couple of drafts so cardWeight() can freshen the next roll
+  G._recentOffers = [...shown, ...(G._recentOffers||[])].filter((x,i,a)=>a.indexOf(x)===i).slice(0, 6);
   overlay.classList.add('show');
   overlay.innerHTML=`<h1>Spoils of War</h1>
     <p>Draft one room card. ${G.hand.length>=handCap()?`<b style="color:#ff8a8a">Hand full (${handCap()}) — picking will need a discard, or skip.</b>`:`Hold up to ${handCap()}.`}</p>
