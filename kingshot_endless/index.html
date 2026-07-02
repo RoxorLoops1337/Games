@@ -2,17 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Kingshot Endless</title>
 <style>
   html, body {
     margin: 0; padding: 0; height: 100%;
-    background: #0b0e14; overflow: hidden;
+    background: #1b2b1e; overflow: hidden;
     font-family: 'Segoe UI', system-ui, sans-serif;
     -webkit-user-select: none; user-select: none;
-    touch-action: none;
+    touch-action: none; overscroll-behavior: none;
   }
-  #game { display: block; margin: 0 auto; touch-action: none; }
+  #game { display: block; touch-action: none; }
 </style>
 </head>
 <body>
@@ -20,105 +21,187 @@
 <script>
 'use strict';
 // ============================================================
-// KINGSHOT ENDLESS — hold-the-line wave defense
-// One file, vanilla canvas. Virtual resolution 480x840, letter-
-// boxed to the window. All state lives in S; window.KS exposes
-// hooks for the headless test suite.
+// KINGSHOT ENDLESS — arcade-idle collector
+// Auto-firing knight ⇒ enemies drop helmets ⇒ stack them on
+// your back ⇒ sell at the shop ⇒ coins pile on the pallet ⇒
+// vacuum coins ⇒ pour them into build plates: archer towers,
+// porters, spawner gates, upgrades, and endless new zones.
+// One file, vanilla canvas, mobile-first. window.KS = test hooks.
 // ============================================================
 
-const W = 480, H = 840;
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 
-// ---- layout bands (virtual px) ------------------------------
-const HUD_H     = 64;          // top bar
-const WALL_Y    = 560;         // enemies stop & attack here
-const WALL_H    = 52;          // wall band height
-const SHOP_Y    = 726;         // bottom shop bar top
-const SLOT_XS   = [65, 135, 205, 275, 345, 415];
-const SLOT_Y    = WALL_Y + 24; // defenders stand on the wall
-const KING_X    = W / 2, KING_Y = 672;
+// ---- world geometry -----------------------------------------
+const WORLD_H = 1000;
+const HUB_W   = 820;          // hub strip at the left
+const ZONE_W  = 1050;         // each combat zone appended to the right
+const PEN_PAD = 90;           // fence inset inside a zone
+const SELL    = { x: 320, y: 430, r: 60 };
+const PALLET  = { x: 320, y: 640, r: 62 };
+const SPAWN_P = { x: 620, y: 540 };
 
 // ---- balance dials ------------------------------------------
-const START_COINS   = 45;
-const WALL_HP0      = 200;
-const BUILD_TIME    = 12;      // s between waves
-const VOLLEY_CD     = 3.2;     // s, king's tap volley
-const VOLLEY_ARROWS = 6;
-const VOLLEY_RADIUS = 58;
-const KING_RATE     = 1.1;     // s per auto shot
-const KING_DMG      = 5;
-const UPG_MUL       = 1.6;     // upgrade cost growth per level
-const DMG_UP        = 1.35;    // unit damage growth per level
-const COST_RAMP     = 0.45;    // placement cost +45% per owned unit of a type
+const PICK_R      = 78;    // helmet magnet radius
+const CAP0        = 8,  CAP_UP = 4;
+const SPEED0      = 185,   SPEED_UP = 0.12;   // +12%/lvl
+const DMG0        = 6,     DMG_UP = 1.45;     // x1.45/lvl
+const RATE0       = 0.55,  RATE_UP = 0.90;    // s per shot, x0.9/lvl
+const FIRE_RANGE  = 270;
+const SELL_RATE   = 7;     // helmets per second offloaded
+const VAC_RATE    = 55;    // pallet coins per second vacuumed
+const BUILD_RATE  = 60;    // wallet coins per second poured into plates
+const ECO         = 2.35;  // per-zone economy multiplier
+const HP_T        = 2.15;  // per-zone enemy hp multiplier
+const UNLOCK0     = 220, UNLOCK_MUL = 2.65;
+const OFFLINE_CAP = 4 * 3600;   // s of offline earnings
+const TOWER_RANGE = 340, TOWER_RATE = 1.05;
+const PORTER_CAP  = 10, PORTER_SPD = 135;
 
-function hpMul(n)   { return 1 + 0.30 * (n - 1) + 0.040 * Math.pow(n - 1, 1.6); }
-function dmgMulW(n) { return 1 + 0.09 * (n - 1); }
-function waveCount(n) { return Math.min(42, 5 + Math.round(2.2 * (n - 1))); }
-function rewardMul(n) { return 1 + 0.30 * (n - 1); }
-function waveBonus(n) { return 6 + 2 * n; }   // for tapping FIGHT early
+function eco(k)      { return Math.pow(ECO, k - 1); }
+function helmVal(k)  { return Math.ceil(4 * eco(k)); }
+function foeHp(k)    { return Math.ceil(13 * Math.pow(HP_T, k - 1)); }
+function foeDmg(k)   { return Math.ceil(4 * Math.pow(1.55, k - 1)); }
+function towerDmg(k) { return Math.ceil(9 * Math.pow(HP_T, k - 1)); }
+function unlockCost(k) { return Math.ceil(UNLOCK0 * Math.pow(UNLOCK_MUL, k - 1)); }
+const UPG = {
+  speed: { icon: '👟', name: 'SPEED',    base: 35 },
+  cap:   { icon: '🎒', name: 'CAPACITY', base: 30 },
+  dmg:   { icon: '⚔️', name: 'DAMAGE',   base: 45 },
+  rate:  { icon: '🏹', name: 'FIRE RATE', base: 55 },
+};
+function upgCost(key, lvl) { return Math.ceil(UPG[key].base * Math.pow(1.65, lvl)); }
+const FOE_NAMES = ['Grunt', 'Raider', 'Ogre', 'Wraith', 'Golem', 'Demon', 'Titan', 'Dread'];
+const FOE_COLS  = ['#c15840', '#c99a3a', '#7c52c9', '#4ba8b5', '#8a9a4a', '#c94a8a', '#5a6dcf', '#3f3f4f'];
+function foeName(k) { const i = (k - 1) % FOE_NAMES.length; const cyc = Math.floor((k - 1) / FOE_NAMES.length); return FOE_NAMES[i] + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''); }
+function foeCol(k)  { return FOE_COLS[(k - 1) % FOE_COLS.length]; }
 
-// ---- unit + enemy defs --------------------------------------
-const UNITS = {
-  archer: { name: 'Archer', cost: 30, dmg: 6,  rate: 0.90, range: 900, kind: 'arrow',  color: '#6ecb5a', unlock: 1 },
-  spear:  { name: 'Spear',  cost: 25, dmg: 16, rate: 0.75, range: 95,  kind: 'melee',  color: '#c9d4e0', unlock: 2 },
-  mage:   { name: 'Mage',   cost: 60, dmg: 12, rate: 2.10, range: 900, kind: 'fire',   color: '#b06ae0', unlock: 4, splash: 55 },
-};
-const FOES = {
-  grunt:  { hp: 20, spd: 52, dmg: 5,  worth: 6,  r: 12, color: '#d1553f' },
-  runner: { hp: 11, spd: 96, dmg: 3,  worth: 5,  r: 10, color: '#e0a13c' },
-  brute:  { hp: 85, spd: 30, dmg: 13, worth: 16, r: 17, color: '#8a4fc0' },
-  shield: { hp: 42, spd: 44, dmg: 6,  worth: 11, r: 13, color: '#4f7fc0', resist: 0.5 },
-  boss:   { hp: 360, spd: 22, dmg: 24, worth: 120, r: 26, color: '#c03a6b', boss: true },
-};
+// ---- deterministic rng --------------------------------------
+let seed = 987654321;
+function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
 
 // ---- state --------------------------------------------------
 let S;
-function reset() {
-  S = {
-    phase: 'menu',            // menu | build | wave | over
-    wave: 0, coins: START_COINS, kills: 0,
-    wallHp: WALL_HP0, wallMax: WALL_HP0,
-    slots: SLOT_XS.map(x => ({ x, y: SLOT_Y, unit: null })),
-    enemies: [], shots: [], parts: [], floats: [],
-    sel: null,                // selected shop card
-    buildT: 0, waveT: 0, spawnQ: [],
-    volleyCd: 0, kingCd: 0,
-    speed: 1, shake: 0,
-    best: loadBest(),
-    over: false, flash: 0, t: 0,
+function mkZone(k) {
+  const x0 = HUB_W + (k - 1) * ZONE_W;
+  return {
+    k, x0, x1: x0 + ZONE_W,
+    pen: { x0: x0 + PEN_PAD, x1: x0 + ZONE_W - PEN_PAD, y0: 160, y1: WORLD_H - 160 },
+    spawnCd: 1.2,
+    plates: [
+      { id: 'tower1', icon: '🏹', name: 'ARCHER TOWER', x: x0 + 260, y: 265, cost: Math.ceil(95 * eco(k)),  paid: 0, built: false },
+      { id: 'tower2', icon: '🏹', name: 'ARCHER TOWER', x: x0 + 260, y: WORLD_H - 265, cost: Math.ceil(150 * eco(k)), paid: 0, built: false },
+      { id: 'porter', icon: '🧺', name: 'PORTER',       x: x0 + 130, y: 500, cost: Math.ceil(120 * eco(k)), paid: 0, built: false },
+      { id: 'gate2',  icon: '🚪', name: 'MORE MONSTERS', x: x0 + 640, y: 230, cost: Math.ceil(110 * eco(k)), paid: 0, built: false },
+      { id: 'unlock', icon: '🔓', name: 'NEW LANDS',    x: x0 + ZONE_W - 60, y: 500, cost: unlockCost(k), paid: 0, built: false },
+    ],
+    towers: [], porters: [],
   };
 }
-function loadBest() {
-  try { return parseInt(localStorage.getItem('ks_endless_best') || '0', 10) || 0; }
-  catch (e) { return 0; }
+function reset() {
+  S = {
+    started: false, t: 0,
+    player: {
+      x: 620, y: 700, hp: 60, maxHp: 60, fireCd: 0, hurtT: 0, invuln: 0,
+      helmets: [],           // array of zone-tiers, index 0 = bottom of the stack
+      face: 1, moving: 0, deaths: 0,
+    },
+    wallet: 0,
+    pallet: 0,               // coin value piled at the pallet
+    up: { speed: 0, cap: 0, dmg: 0, rate: 0 },
+    upPaid: { speed: 0, cap: 0, dmg: 0, rate: 0 },
+    zones: [mkZone(1)],
+    enemies: [], items: [], shots: [], parts: [], floats: [],
+    stick: null,             // virtual joystick {ax,ay,dx,dy}
+    keys: {},
+    cam: { x: 620, y: 640 },
+    stats: { kills: 0, earned: 0, sold: 0 },
+    offlineMsg: 0, offlineAmt: 0,
+    shake: 0, saveCd: 5,
+  };
 }
-function saveBest() {
-  try { if (S.wave > S.best) { S.best = S.wave; localStorage.setItem('ks_endless_best', String(S.best)); } }
-  catch (e) {}
+function cap()    { return CAP0 + CAP_UP * S.up.cap; }
+function speed()  { return SPEED0 * (1 + SPEED_UP * S.up.speed); }
+function pDmg()   { return DMG0 * Math.pow(DMG_UP, S.up.dmg); }
+function pRate()  { return RATE0 * Math.pow(RATE_UP, S.up.rate); }
+function boundX() { return S.zones[S.zones.length - 1].x1 - 30; }
+
+// ---- save / load --------------------------------------------
+const SAVE_KEY = 'ks_idle_save';
+function save() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 1, wallet: S.wallet, pallet: S.pallet, up: S.up,
+      zoneCount: S.zones.length,
+      built: S.zones.map(z => z.plates.filter(p => p.built).map(p => p.id)),
+      paid: S.zones.map(z => { const o = {}; z.plates.forEach(p => { if (p.paid > 0 && !p.built) o[p.id] = p.paid; }); return o; }),
+      stats: S.stats, deaths: S.player.deaths, last: Date.now(),
+    }));
+  } catch (e) {}
+}
+function idleRate() {
+  // coins/s generated hands-free: zones with at least one tower AND a porter
+  let r = 0;
+  for (const z of S.zones) {
+    if (!z.porters.length || !z.towers.length) continue;
+    const killsPerSec = Math.min(z.towers.length / TOWER_RATE * 0.5, 1 / 2.2); // spawn-limited
+    r += killsPerSec * helmVal(z.k) * 1.4;
+  }
+  return r;
+}
+function load() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) {}
+  if (!d || d.v !== 1) return false;
+  S.wallet = d.wallet || 0; S.pallet = d.pallet || 0;
+  Object.assign(S.up, d.up || {});
+  Object.assign(S.stats, d.stats || {});
+  S.player.deaths = d.deaths || 0;
+  const n = Math.max(1, d.zoneCount || 1);
+  S.zones = []; for (let k = 1; k <= n; k++) S.zones.push(mkZone(k));
+  (d.built || []).forEach((ids, i) => {
+    const z = S.zones[i]; if (!z) return;
+    for (const id of ids) { const p = z.plates.find(q => q.id === id); if (p && id !== 'unlock') buildPlate(z, p, true); if (p && id === 'unlock') p.built = true; }
+  });
+  (d.paid || []).forEach((o, i) => {
+    const z = S.zones[i]; if (!z) return;
+    for (const id in o) { const p = z.plates.find(q => q.id === id); if (p && !p.built) p.paid = o[id]; }
+  });
+  // offline earnings
+  const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
+  const amt = Math.floor(idleRate() * away);
+  if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; S.offlineMsg = 6; }
+  return true;
 }
 
 // ---- tiny synth sfx -----------------------------------------
 let AC = null, muted = false;
-try { muted = localStorage.getItem('ks_endless_muted') === '1'; } catch (e) {}
+try { muted = localStorage.getItem('ks_idle_muted') === '1'; } catch (e) {}
 function audio() {
   if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
   return AC;
 }
-function sfx(kind) {
-  const ac = !muted && audio(); if (!ac) return;
+let sfxGate = 0;
+function sfx(kind, importance) {
+  if (muted) return;
+  if (!importance && S && S.t < sfxGate) return; // throttle chatter
+  const ac = audio(); if (!ac) return;
+  if (!importance && S) sfxGate = S.t + 0.03;
   const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
   o.connect(g); g.connect(ac.destination);
   const P = {
-    shoot: [880, 220, 0.05, 0.06, 'square'],
-    hit:   [180, 70,  0.08, 0.09, 'sawtooth'],
-    coin:  [1320, 1760, 0.05, 0.08, 'square'],
-    place: [440, 660, 0.06, 0.10, 'triangle'],
-    upg:   [520, 1040, 0.09, 0.12, 'triangle'],
-    crack: [110, 40, 0.06, 0.22, 'sawtooth'],
-    boom:  [70, 30, 0.20, 0.35, 'sawtooth'],
-    boss:  [90, 60, 0.25, 0.5, 'square'],
-  }[kind] || [440, 440, 0.05, 0.05, 'square'];
+    shoot: [700, 300, 0.03, 0.05, 'square'],
+    hit:   [200, 90, 0.05, 0.07, 'sawtooth'],
+    kill:  [300, 90, 0.07, 0.14, 'sawtooth'],
+    pick:  [880, 1320, 0.05, 0.07, 'square'],
+    sell:  [1100, 1650, 0.05, 0.08, 'square'],
+    coin:  [1400, 1870, 0.045, 0.07, 'triangle'],
+    pour:  [500, 720, 0.04, 0.05, 'triangle'],
+    built: [330, 990, 0.14, 0.4, 'triangle'],
+    unlock:[220, 880, 0.16, 0.7, 'triangle'],
+    hurt:  [140, 60, 0.10, 0.15, 'sawtooth'],
+    die:   [200, 40, 0.18, 0.5, 'sawtooth'],
+  }[kind] || [440, 440, 0.04, 0.05, 'square'];
   o.type = P[4];
   o.frequency.setValueAtTime(P[0], t);
   o.frequency.exponentialRampToValueAtTime(Math.max(20, P[1]), t + P[3]);
@@ -126,273 +209,330 @@ function sfx(kind) {
   g.gain.exponentialRampToValueAtTime(0.001, t + P[3]);
   o.start(t); o.stop(t + P[3] + 0.02);
 }
+function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
 
-// ---- waves --------------------------------------------------
-function startBuild() {
-  S.phase = 'build';
-  S.buildT = BUILD_TIME;
+// ---- helpers ------------------------------------------------
+function fmt(n) {
+  n = Math.floor(n);
+  if (n < 1000) return '' + n;
+  if (n < 1e6) return (n / 1000).toFixed(n < 1e4 ? 1 : 0) + 'k';
+  if (n < 1e9) return (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + 'M';
+  return (n / 1e9).toFixed(1) + 'B';
 }
-function startWave(skipBonus) {
-  S.wave++;
-  if (skipBonus) { S.coins += waveBonus(S.wave); float(W / 2, WALL_Y - 60, '+' + waveBonus(S.wave) + '¢', '#ffd94a'); }
-  S.phase = 'wave'; S.waveT = 0; S.spawnQ = [];
-  const n = S.wave, count = waveCount(n), boss = n % 10 === 0;
-  for (let i = 0; i < count; i++) {
-    let type = 'grunt';
-    const r = rnd();
-    if (n >= 3 && r < 0.22) type = 'runner';
-    if (n >= 5 && r >= 0.22 && r < 0.38) type = 'shield';
-    if (n >= 7 && r >= 0.38 && r < 0.52) type = 'brute';
-    S.spawnQ.push({ t: 0.5 + i * (7 / count) + rnd() * 0.3, type });
-  }
-  if (boss) S.spawnQ.push({ t: 8.5, type: 'boss' });
-  S.spawnQ.sort((a, b) => a.t - b.t);
-  if (boss) sfx('boss');
+function dist2(ax, ay, bx, by) { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; }
+function float(x, y, txt, color, big) {
+  S.floats.push({ x, y, txt: String(txt), color, t: 0, big });
+  if (S.floats.length > 50) S.floats.shift();
 }
-function spawnEnemy(type) {
-  const d = FOES[type], n = Math.max(1, S.wave);
+function puff(x, y, color, n, up) {
+  for (let i = 0; i < n; i++)
+    S.parts.push({ x, y, vx: (rnd() - 0.5) * 200, vy: (rnd() - (up ? 0.85 : 0.5)) * 220, t: 0, dur: 0.45 + rnd() * 0.2, r: 2 + rnd() * 3, color, g: up ? 1 : 0 });
+}
+function zoneAt(x) { for (const z of S.zones) if (x >= z.x0 && x < z.x1) return z; return null; }
+
+// ---- spawning / combat --------------------------------------
+function spawnEnemy(z) {
+  const gx = z.pen.x1 - 60, gy = 500;
   S.enemies.push({
-    type, x: 40 + rnd() * (W - 80), y: -20 - rnd() * 30,
-    hp: d.hp * hpMul(n), max: d.hp * hpMul(n),
-    spd: d.spd * (0.92 + rnd() * 0.16), dmg: d.dmg * dmgMulW(n),
-    worth: Math.ceil(d.worth * rewardMul(n)),
-    r: d.r, atkCd: 0, sway: rnd() * 6.28, hurt: 0,
-    resist: d.resist || 0, boss: !!d.boss,
+    k: z.k, x: gx, y: gy + (rnd() - 0.5) * 200,
+    hp: foeHp(z.k), max: foeHp(z.k),
+    tx: z.pen.x0 + rnd() * (z.pen.x1 - z.pen.x0), ty: z.pen.y0 + rnd() * (z.pen.y1 - z.pen.y0),
+    wanderT: 1 + rnd() * 2, atkCd: 0, hurt: 0, sway: rnd() * 6.28,
+    r: 15 + Math.min(9, z.k),
   });
 }
-
-// ---- shop / placement ---------------------------------------
-function ownedCount(type) { return S.slots.filter(s => s.unit && s.unit.type === type).length; }
-function placeCost(type)  { return Math.ceil(UNITS[type].cost * (1 + COST_RAMP * ownedCount(type))); }
-function upgCost(u)       { return Math.ceil(UNITS[u.type].cost * 0.8 * Math.pow(UPG_MUL, u.lvl - 1)); }
-function unitDmg(u)       { return UNITS[u.type].dmg * Math.pow(DMG_UP, u.lvl - 1); }
-
-function placeUnit(slot, type) {
-  const cost = placeCost(type);
-  if (slot.unit || S.coins < cost || S.wave + 1 < UNITS[type].unlock) return false;
-  S.coins -= cost;
-  slot.unit = { type, lvl: 1, cd: rnd() * 0.4 };
-  sfx('place'); puff(slot.x, slot.y, UNITS[type].color);
-  return true;
+function maxAlive(z) { return (z.plates.find(p => p.id === 'gate2').built ? 15 : 9); }
+function spawnInt(z) { return z.plates.find(p => p.id === 'gate2').built ? 1.4 : 2.4; }
+function dropHelmet(x, y, k) {
+  S.items.push({ x: x + (rnd() - 0.5) * 46, y: y + (rnd() - 0.5) * 36, k, t: 0, vy: -60 - rnd() * 60, vx: (rnd() - 0.5) * 80 });
 }
-function upgradeUnit(slot) {
-  const u = slot.unit; if (!u) return false;
-  const cost = upgCost(u);
-  if (S.coins < cost) return false;
-  S.coins -= cost; u.lvl++;
-  sfx('upg'); puff(slot.x, slot.y, '#ffd94a');
-  float(slot.x, slot.y - 30, 'LV ' + u.lvl, '#ffd94a');
-  return true;
-}
-function repairCost() { return Math.ceil(20 + (S.wallMax - S.wallHp) * 0.35); }
-function repairWall() {
-  if (S.wallHp >= S.wallMax) return false;
-  const c = repairCost(); if (S.coins < c) return false;
-  S.coins -= c; S.wallHp = S.wallMax; sfx('upg');
-  float(W / 2, WALL_Y, 'REPAIRED', '#6ecb5a');
-  return true;
-}
-function fortifyCost() { return Math.ceil(40 * Math.pow(1.5, Math.round(Math.log((S.wallMax / WALL_HP0)) / Math.log(1.25)))); }
-function fortifyWall() {
-  const c = fortifyCost(); if (S.coins < c) return false;
-  S.coins -= c;
-  S.wallMax = Math.round(S.wallMax * 1.25);
-  S.wallHp += Math.round(S.wallMax * 0.2);
-  if (S.wallHp > S.wallMax) S.wallHp = S.wallMax;
-  sfx('upg'); float(W / 2, WALL_Y, 'WALL +', '#6ec9e0');
-  return true;
-}
-
-// ---- combat -------------------------------------------------
-function nearestEnemy(x, y, maxR) {
-  let best = null, bd = maxR * maxR;
-  for (const e of S.enemies) {
-    if (e.hp <= 0) continue;
-    const dx = e.x - x, dy = e.y - y, d = dx * dx + dy * dy;
-    if (d < bd) { bd = d; best = e; }
-  }
-  return best;
-}
-function hurtEnemy(e, dmg, ranged) {
+function hurtEnemy(e, dmg) {
   if (e.hp <= 0) return;
-  if (ranged && e.resist) dmg *= (1 - e.resist);
-  e.hp -= dmg; e.hurt = 0.12;
-  float(e.x, e.y - e.r - 6, Math.ceil(dmg), '#fff');
-  if (e.hp <= 0) killEnemy(e);
-  else sfx('hit');
+  e.hp -= dmg; e.hurt = 0.1;
+  float(e.x, e.y - e.r - 12, Math.ceil(dmg), '#fff');
+  if (e.hp <= 0) {
+    S.stats.kills++;
+    const drops = 1 + (rnd() < 0.35 ? 1 : 0);
+    for (let i = 0; i < drops; i++) dropHelmet(e.x, e.y, e.k);
+    puff(e.x, e.y, foeCol(e.k), 10, true);
+    sfx('kill');
+  } else sfx('hit');
 }
-function killEnemy(e) {
-  S.kills++;
-  S.coins += e.worth;
-  float(e.x, e.y, '+' + e.worth + '¢', '#ffd94a');
-  for (let i = 0; i < (e.boss ? 26 : 8); i++) coinPart(e.x, e.y);
-  gib(e.x, e.y, FOES[e.type].color, e.boss ? 22 : 9);
-  if (e.boss) { S.shake = 14; sfx('boom'); } else sfx('coin');
+function hurtPlayer(d) {
+  const p = S.player;
+  if (p.invuln > 0) return;
+  p.hp -= d; p.hurtT = 0.15; p.invuln = 0.5; S.shake = Math.max(S.shake, 5);
+  sfx('hurt', true); buzz(30);
+  if (p.hp <= 0) playerDie();
 }
-function damageWall(d) {
-  S.wallHp -= d; S.shake = Math.max(S.shake, 5); S.flash = 0.1; sfx('crack');
-  if (S.wallHp <= 0) { S.wallHp = 0; gameOver(); }
-}
-function gameOver() {
-  if (S.phase === 'over') return;
-  S.phase = 'over'; S.over = true; S.shake = 20; sfx('boom');
-  saveBest();
-}
-function fireVolley(x, y) {
-  if (S.volleyCd > 0 || S.phase !== 'wave') return false;
-  S.volleyCd = VOLLEY_CD;
-  for (let i = 0; i < VOLLEY_ARROWS; i++) {
-    const a = rnd() * 6.28, r = rnd() * VOLLEY_RADIUS;
-    S.shots.push({
-      kind: 'volley', x: KING_X, y: KING_Y - 40,
-      tx: x + Math.cos(a) * r, ty: y + Math.sin(a) * r,
-      t: 0, dur: 0.45 + i * 0.05, dmg: KING_DMG * 2.2,
-    });
-  }
-  sfx('shoot');
-  return true;
+function playerDie() {
+  const p = S.player;
+  p.deaths++;
+  // scatter everything you carried
+  for (const k of p.helmets) dropHelmet(p.x, p.y, k);
+  p.helmets = [];
+  p.hp = p.maxHp; p.invuln = 2.5;
+  p.x = 620; p.y = 700;
+  float(620, 640, 'YOU DROPPED EVERYTHING!', '#ff6a5a', true);
+  S.shake = 14; sfx('die', true); buzz([60, 40, 60]);
 }
 
-// ---- particles / floats -------------------------------------
-function float(x, y, txt, color) {
-  S.floats.push({ x, y, txt: String(txt), color, t: 0 });
-  if (S.floats.length > 60) S.floats.shift();
-}
-function puff(x, y, color) {
-  for (let i = 0; i < 10; i++)
-    S.parts.push({ x, y, vx: (rnd() - 0.5) * 120, vy: (rnd() - 0.7) * 120, t: 0, dur: 0.5, r: 3, color });
-}
-function gib(x, y, color, n) {
-  for (let i = 0; i < n; i++)
-    S.parts.push({ x, y, vx: (rnd() - 0.5) * 220, vy: (rnd() - 0.8) * 200, t: 0, dur: 0.6, r: 2 + rnd() * 3, color, g: 1 });
-}
-function coinPart(x, y) {
-  S.parts.push({ x, y, vx: (rnd() - 0.5) * 260, vy: -80 - rnd() * 160, t: 0, dur: 0.55, r: 3, color: '#ffd94a', g: 1 });
-}
-let seed = 1234567;
-function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
-
-// ---- update -------------------------------------------------
-function tick(dt) {
-  dt *= S.speed;
-  S.t += dt;
-  if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
-  if (S.flash > 0) S.flash -= dt;
-  if (S.volleyCd > 0) S.volleyCd -= dt;
-
-  // particles & floats always run
-  for (const p of S.parts) {
-    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt;
-    if (p.g) p.vy += 420 * dt;
-  }
-  S.parts = S.parts.filter(p => p.t < p.dur);
-  for (const f of S.floats) { f.t += dt; f.y -= 34 * dt; }
-  S.floats = S.floats.filter(f => f.t < 0.9);
-
-  if (S.phase === 'menu' || S.phase === 'over') return;
-
-  if (S.phase === 'build') {
-    S.buildT -= dt;
-    if (S.buildT <= 0) startWave(false);
+// ---- building -----------------------------------------------
+function buildPlate(z, p, silent) {
+  p.built = true;
+  if (p.id === 'tower1' || p.id === 'tower2') z.towers.push({ x: p.x, y: p.y, k: z.k, cd: rnd() * 0.5 });
+  else if (p.id === 'porter') z.porters.push({ x: p.x, y: p.y, k: z.k, state: 'seek', carry: [], cd: 0 });
+  else if (p.id === 'unlock') {
+    S.zones.push(mkZone(z.k + 1));
+    if (!silent) { float(p.x, p.y - 60, '🌍 ZONE ' + (z.k + 1) + ' UNLOCKED!', '#ffd94a', true); sfx('unlock', true); buzz([40, 30, 80]); }
     return;
   }
+  if (!silent) { float(p.x, p.y - 50, p.name + ' BUILT!', '#6ecb5a', true); sfx('built', true); buzz(50); puff(p.x, p.y, '#ffd94a', 16, true); }
+}
+function pourInto(p, z, dt) {
+  if (p.built || S.wallet <= 0) return;
+  const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), p.cost - p.paid);
+  if (chunk <= 0) return;
+  S.wallet -= chunk; p.paid += chunk;
+  sfx('pour');
+  if (p.paid >= p.cost) buildPlate(z, p, false);
+}
 
-  // ---- wave phase ----
-  S.waveT += dt;
-  while (S.spawnQ.length && S.spawnQ[0].t <= S.waveT) spawnEnemy(S.spawnQ.shift().type);
+// ---- main update --------------------------------------------
+function tick(dt) {
+  if (!S.started) return;
+  S.t += dt;
+  if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
+  if (S.offlineMsg > 0) S.offlineMsg -= dt;
+  const p = S.player;
+  p.invuln = Math.max(0, p.invuln - dt);
+  p.hurtT = Math.max(0, p.hurtT - dt);
+  if (p.hp < p.maxHp && p.invuln <= 0) p.hp = Math.min(p.maxHp, p.hp + 5 * dt);
 
-  // enemies
-  for (const e of S.enemies) {
-    if (e.hp <= 0) continue;
-    e.hurt = Math.max(0, e.hurt - dt);
-    if (e.y < WALL_Y - e.r) {
-      e.y += e.spd * dt;
-      e.x += Math.sin(S.t * 2 + e.sway) * 8 * dt;
-      if (e.x < 24) e.x = 24; if (e.x > W - 24) e.x = W - 24;
-    } else {
-      e.y = WALL_Y - e.r;
-      e.atkCd -= dt;
-      if (e.atkCd <= 0) { e.atkCd = 0.9; damageWall(e.dmg); gib(e.x, WALL_Y + 6, '#9aa7b5', 4); }
-    }
-  }
-  S.enemies = S.enemies.filter(e => e.hp > 0);
+  // -- movement (joystick + keys)
+  let mx = 0, my = 0;
+  if (S.stick) { mx = S.stick.dx; my = S.stick.dy; }
+  if (S.keys.a || S.keys.ArrowLeft) mx -= 1;
+  if (S.keys.d || S.keys.ArrowRight) mx += 1;
+  if (S.keys.w || S.keys.ArrowUp) my -= 1;
+  if (S.keys.s || S.keys.ArrowDown) my += 1;
+  const ml = Math.hypot(mx, my);
+  if (ml > 0.1) {
+    mx /= Math.max(1, ml); my /= Math.max(1, ml);
+    const slow = 1 - Math.min(0.35, p.helmets.length / cap() * 0.35); // heavy stack = slower
+    p.x += mx * speed() * slow * dt;
+    p.y += my * speed() * slow * dt;
+    p.moving = 1; if (Math.abs(mx) > 0.15) p.face = mx > 0 ? 1 : -1;
+  } else p.moving = 0;
+  p.x = Math.max(40, Math.min(boundX(), p.x));
+  p.y = Math.max(50, Math.min(WORLD_H - 50, p.y));
 
-  // king auto-shot
-  S.kingCd -= dt;
-  if (S.kingCd <= 0) {
-    const tgt = nearestEnemy(KING_X, KING_Y, 2000);
+  // -- auto-fire
+  p.fireCd -= dt;
+  if (p.fireCd <= 0) {
+    let tgt = null, bd = FIRE_RANGE * FIRE_RANGE;
+    for (const e of S.enemies) { const d = dist2(e.x, e.y, p.x, p.y); if (e.hp > 0 && d < bd) { bd = d; tgt = e; } }
     if (tgt) {
-      S.kingCd = KING_RATE;
-      S.shots.push({ kind: 'arrow', x: KING_X, y: KING_Y - 42, tgt, t: 0, dur: 0.35, dmg: KING_DMG });
+      p.fireCd = pRate();
+      S.shots.push({ x: p.x, y: p.y - 26, tgt, dmg: pDmg(), spd: 460 });
+      p.face = tgt.x > p.x ? 1 : -1;
       sfx('shoot');
     }
   }
 
-  // defenders
-  for (const s of S.slots) {
-    const u = s.unit; if (!u) continue;
-    u.cd -= dt;
-    if (u.cd > 0) continue;
-    const def = UNITS[u.type];
-    if (def.kind === 'melee') {
-      const tgt = nearestEnemy(s.x, WALL_Y, def.range);
-      if (tgt) { u.cd = def.rate; hurtEnemy(tgt, unitDmg(u), false); u.jab = 0.15; }
-    } else {
-      const tgt = nearestEnemy(s.x, s.y, def.range);
-      if (tgt) {
-        u.cd = def.rate;
-        S.shots.push({
-          kind: def.kind === 'fire' ? 'fire' : 'arrow',
-          x: s.x, y: s.y - 16, tgt, t: 0,
-          dur: def.kind === 'fire' ? 0.6 : 0.32,
-          dmg: unitDmg(u), splash: def.splash || 0,
-        });
-        sfx('shoot');
+  // -- helmet pickup
+  if (p.helmets.length < cap()) {
+    for (const it of S.items) {
+      if (it.dead || it.t < 0.25) continue;
+      if (dist2(it.x, it.y, p.x, p.y) < PICK_R * PICK_R) {
+        it.dead = true;
+        p.helmets.push(it.k);
+        sfx('pick'); float(p.x, p.y - 40 - p.helmets.length * 7, '⛑', '#e8e0c8');
+        if (p.helmets.length >= cap()) float(p.x, p.y - 60, 'FULL! Go sell →', '#ffd94a', true);
+        if (p.helmets.length >= cap()) break;
       }
     }
   }
 
-  // projectiles
-  for (const sh of S.shots) {
-    sh.t += dt;
-    if (sh.t < sh.dur) continue;
-    sh.done = true;
-    if (sh.kind === 'volley') {
-      let hit = false;
-      for (const e of S.enemies) {
-        const dx = e.x - sh.tx, dy = e.y - sh.ty;
-        if (dx * dx + dy * dy < 30 * 30) { hurtEnemy(e, sh.dmg, true); hit = true; }
+  // -- sell stand
+  if (p.helmets.length && dist2(p.x, p.y, SELL.x, SELL.y) < SELL.r * SELL.r) {
+    p.sellAcc = (p.sellAcc || 0) + dt * SELL_RATE;
+    while (p.sellAcc >= 1 && p.helmets.length) {
+      p.sellAcc -= 1;
+      const k = p.helmets.pop();
+      const v = helmVal(k);
+      S.pallet += v; S.stats.sold++; S.stats.earned += v;
+      float(SELL.x + 30, SELL.y - 46, '+' + fmt(v), '#ffd94a');
+      puff(PALLET.x, PALLET.y - 20, '#ffd94a', 2, true);
+      sfx('sell');
+    }
+  } else p.sellAcc = 0;
+
+  // -- vacuum coins from pallet
+  if (S.pallet > 0 && dist2(p.x, p.y, PALLET.x, PALLET.y) < PALLET.r * PALLET.r) {
+    const take = Math.min(S.pallet, Math.max(1, Math.ceil(VAC_RATE * dt)));
+    S.pallet -= take; S.wallet += take;
+    if ((S.coinFxT = (S.coinFxT || 0) + dt) > 0.09) { S.coinFxT = 0; float(p.x, p.y - 46, '+' + fmt(take), '#ffd94a'); sfx('coin'); }
+  }
+
+  // -- upgrade plates (hub)
+  let ux = 130;
+  for (const key in UPG) {
+    const cost = upgCost(key, S.up[key]);
+    if (dist2(p.x, p.y, ux, 190) < 52 * 52 && S.wallet > 0 && S.upPaid[key] < cost) {
+      const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), cost - S.upPaid[key]);
+      S.wallet -= chunk; S.upPaid[key] += chunk; sfx('pour');
+      if (S.upPaid[key] >= cost) {
+        S.up[key]++; S.upPaid[key] = 0;
+        float(ux, 140, UPG[key].name + ' LV' + (S.up[key] + 1) + '!', '#6ecb5a', true);
+        sfx('built', true); buzz(40);
+        if (key === 'cap') float(p.x, p.y - 60, 'Backpack +' + CAP_UP, '#6ecb5a');
       }
-      if (!hit) gib(sh.tx, sh.ty, '#c9d4e0', 2);
-    } else if (sh.kind === 'fire') {
-      const cx = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.x : (sh.lx || 0), cy = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.y : (sh.ly || 0);
-      for (const e of S.enemies) {
-        const dx = e.x - cx, dy = e.y - cy;
-        if (dx * dx + dy * dy < sh.splash * sh.splash) hurtEnemy(e, sh.dmg, true);
-      }
-      gib(cx, cy, '#e08a3c', 10); S.shake = Math.max(S.shake, 3);
-    } else {
-      if (sh.tgt && sh.tgt.hp > 0) hurtEnemy(sh.tgt, sh.dmg, true);
-      else { const near = nearestEnemy(sh.lx || 0, sh.ly || 0, 30); if (near) hurtEnemy(near, sh.dmg, true); }
+    }
+    ux += 165;
+  }
+
+  // -- build plates (zones)
+  for (const z of S.zones) {
+    for (const pl of z.plates) {
+      if (pl.built) continue;
+      if (pl.id === 'unlock' && z.k < S.zones.length) continue; // already advanced past
+      if (dist2(p.x, p.y, pl.x, pl.y) < 56 * 56) pourInto(pl, z, dt);
     }
   }
-  // remember last-known target pos for shots whose target dies mid-flight
-  for (const sh of S.shots) if (sh.tgt && sh.tgt.hp > 0) { sh.lx = sh.tgt.x; sh.ly = sh.tgt.y; }
+
+  // -- zone spawners
+  for (const z of S.zones) {
+    const alive = S.enemies.reduce((n, e) => n + (e.k === z.k ? 1 : 0), 0);
+    z.spawnCd -= dt;
+    if (z.spawnCd <= 0 && alive < maxAlive(z)) { z.spawnCd = spawnInt(z); spawnEnemy(z); }
+  }
+
+  // -- enemies
+  for (const e of S.enemies) {
+    if (e.hp <= 0) continue;
+    e.hurt = Math.max(0, e.hurt - dt);
+    const z = S.zones[e.k - 1];
+    const nearPlayer = dist2(e.x, e.y, p.x, p.y) < 200 * 200 && p.x > z.pen.x0 - 60;
+    let tx = e.tx, ty = e.ty, spd = 42;
+    if (nearPlayer) { tx = p.x; ty = p.y; spd = 62 + e.k * 2; }
+    else { e.wanderT -= dt; if (e.wanderT <= 0) { e.wanderT = 1.5 + rnd() * 2.5; e.tx = z.pen.x0 + rnd() * (z.pen.x1 - z.pen.x0); e.ty = z.pen.y0 + rnd() * (z.pen.y1 - z.pen.y0); } }
+    const dx = tx - e.x, dy = ty - e.y, dl = Math.hypot(dx, dy) || 1;
+    if (dl > 30) { e.x += dx / dl * spd * dt; e.y += dy / dl * spd * dt; }
+    e.x = Math.max(z.pen.x0, Math.min(z.pen.x1, e.x));
+    e.y = Math.max(z.pen.y0, Math.min(z.pen.y1, e.y));
+    e.atkCd -= dt;
+    if (e.atkCd <= 0 && dist2(e.x, e.y, p.x, p.y) < (e.r + 22) * (e.r + 22)) {
+      e.atkCd = 0.85; hurtPlayer(foeDmg(e.k));
+    }
+  }
+  S.enemies = S.enemies.filter(e => e.hp > 0);
+
+  // -- towers
+  for (const z of S.zones) {
+    for (const tw of z.towers) {
+      tw.cd -= dt;
+      if (tw.cd > 0) continue;
+      let tgt = null, bd = TOWER_RANGE * TOWER_RANGE;
+      for (const e of S.enemies) { if (e.k !== z.k || e.hp <= 0) continue; const d = dist2(e.x, e.y, tw.x, tw.y); if (d < bd) { bd = d; tgt = e; } }
+      if (tgt) { tw.cd = TOWER_RATE; S.shots.push({ x: tw.x, y: tw.y - 52, tgt, dmg: towerDmg(z.k), spd: 430 }); }
+    }
+  }
+
+  // -- porters: seek helmets in their zone → carry to sell stand → deposit into pallet
+  for (const z of S.zones) {
+    for (const po of z.porters) {
+      if (po.state === 'seek') {
+        let it = null, bd = 1e12;
+        for (const i2 of S.items) { if (i2.dead || i2.x < z.x0 || i2.x >= z.x1) continue; const d = dist2(i2.x, i2.y, po.x, po.y); if (d < bd) { bd = d; it = i2; } }
+        if (!it) { if (po.carry.length) po.state = 'sell'; else { // idle drift home
+            const hx = z.x0 + 130, hy = 500, dl = Math.hypot(hx - po.x, hy - po.y);
+            if (dl > 12) { po.x += (hx - po.x) / dl * PORTER_SPD * 0.6 * dt; po.y += (hy - po.y) / dl * PORTER_SPD * 0.6 * dt; } }
+        } else {
+          const dl = Math.hypot(it.x - po.x, it.y - po.y) || 1;
+          po.x += (it.x - po.x) / dl * PORTER_SPD * dt; po.y += (it.y - po.y) / dl * PORTER_SPD * dt;
+          if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; po.carry.push(it.k); if (po.carry.length >= PORTER_CAP) po.state = 'sell'; }
+        }
+      } else { // sell
+        const dl = Math.hypot(SELL.x - po.x, SELL.y - po.y) || 1;
+        po.x += (SELL.x - po.x) / dl * PORTER_SPD * dt; po.y += (SELL.y - po.y) / dl * PORTER_SPD * dt;
+        if (dl < 46) {
+          po.cd -= dt;
+          if (po.cd <= 0 && po.carry.length) {
+            po.cd = 0.12;
+            const v = helmVal(po.carry.pop());
+            S.pallet += v; S.stats.earned += v; S.stats.sold++;
+            puff(PALLET.x, PALLET.y - 20, '#ffd94a', 1, true);
+          }
+          if (!po.carry.length) po.state = 'seek';
+        }
+      }
+    }
+  }
+
+  // -- items physics (pop out of enemies then rest)
+  for (const it of S.items) {
+    it.t += dt;
+    if (it.t < 0.4) { it.x += it.vx * dt; it.y += it.vy * dt; it.vy += 380 * dt; }
+  }
+  S.items = S.items.filter(i => !i.dead);
+  if (S.items.length > 320) S.items.splice(0, S.items.length - 320); // perf guard
+
+  // -- shots (homing arrows)
+  for (const sh of S.shots) {
+    const tx = sh.tgt.hp > 0 ? sh.tgt.x : sh.lx || sh.x, ty = sh.tgt.hp > 0 ? sh.tgt.y : sh.ly || sh.y;
+    if (sh.tgt.hp > 0) { sh.lx = tx; sh.ly = ty; }
+    const dx = tx - sh.x, dy = ty - sh.y, dl = Math.hypot(dx, dy) || 1;
+    sh.x += dx / dl * sh.spd * dt; sh.y += dy / dl * sh.spd * dt;
+    sh.a = Math.atan2(dy, dx);
+    if (dl < 18) { sh.done = true; if (sh.tgt.hp > 0) hurtEnemy(sh.tgt, sh.dmg); }
+    sh.life = (sh.life || 0) + dt; if (sh.life > 3) sh.done = true;
+  }
   S.shots = S.shots.filter(sh => !sh.done);
 
-  // wave clear?
-  if (S.phase === 'wave' && !S.spawnQ.length && !S.enemies.length) {
-    const bonus = Math.ceil(4 + S.wave * 1.5);
-    S.coins += bonus;
-    S.shots.length = 0;
-    float(W / 2, 300, 'WAVE ' + S.wave + ' CLEAR  +' + bonus + '¢', '#6ecb5a');
-    saveBest();
-    startBuild();
+  // -- particles / floats
+  for (const q of S.parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; if (q.g) q.vy += 420 * dt; }
+  S.parts = S.parts.filter(q => q.t < q.dur);
+  for (const f of S.floats) { f.t += dt; f.y -= 30 * dt; }
+  S.floats = S.floats.filter(f => f.t < (f.big ? 1.6 : 0.8));
+
+  // -- camera follows player
+  S.cam.x += (p.x - S.cam.x) * Math.min(1, 5 * dt);
+  S.cam.y += (p.y - S.cam.y) * Math.min(1, 5 * dt);
+
+  // -- autosave
+  S.saveCd -= dt;
+  if (S.saveCd <= 0) { S.saveCd = 5; save(); }
+}
+
+// ---- guidance arrow -----------------------------------------
+function guideTarget() {
+  const p = S.player;
+  if (p.helmets.length >= cap()) return { x: SELL.x, y: SELL.y, label: 'SELL' };
+  if (S.pallet >= 25) return { x: PALLET.x, y: PALLET.y, label: 'COINS' };
+  // cheapest affordable-ish plate
+  let best = null, bc = 1e18;
+  let ux = 130;
+  for (const key in UPG) {
+    const c = upgCost(key, S.up[key]) - S.upPaid[key];
+    if (S.wallet >= c * 0.6 && c < bc) { bc = c; best = { x: ux, y: 190, label: UPG[key].name }; }
+    ux += 165;
   }
+  for (const z of S.zones) for (const pl of z.plates) {
+    if (pl.built) continue;
+    if (pl.id === 'unlock' && z.k < S.zones.length) continue;
+    const c = pl.cost - pl.paid;
+    if (S.wallet >= c * 0.6 && c < bc) { bc = c; best = { x: pl.x, y: pl.y, label: pl.name }; }
+  }
+  if (best) return best;
+  // otherwise: go fight in the newest zone
+  const z = S.zones[S.zones.length - 1];
+  return { x: (z.pen.x0 + z.pen.x1) / 2, y: 500, label: 'FIGHT' };
 }
 
 // ---- drawing ------------------------------------------------
-function rrect(x, y, w, h, r) {
+let vw = 480, vh = 840, scl = 1, dpr = 1;
+function rr(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -401,300 +541,399 @@ function rrect(x, y, w, h, r) {
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
-function drawField() {
-  // grass
-  const g = ctx.createLinearGradient(0, HUD_H, 0, WALL_Y);
-  g.addColorStop(0, '#2a4a2e'); g.addColorStop(1, '#3a5c38');
-  ctx.fillStyle = g; ctx.fillRect(0, HUD_H, W, WALL_Y - HUD_H);
-  // dirt patches
-  ctx.fillStyle = 'rgba(90,70,40,0.25)';
-  for (let i = 0; i < 12; i++) {
-    const x = ((i * 137) % W), y = HUD_H + ((i * 211) % (WALL_Y - HUD_H - 40)) + 20;
-    ctx.beginPath(); ctx.ellipse(x, y, 26, 10, 0, 0, 6.29); ctx.fill();
+function shadow(x, y, w) {
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.4, 0, 0, 6.29); ctx.fill();
+}
+function drawHelmet(x, y, k, s) {
+  s = s || 1;
+  ctx.fillStyle = k === 1 ? '#b9c2cc' : foeCol(k);
+  ctx.beginPath(); ctx.arc(x, y, 9 * s, 3.14159, 0); ctx.fill();
+  ctx.fillRect(x - 9 * s, y - 1, 18 * s, 3 * s);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath(); ctx.arc(x - 3 * s, y - 4 * s, 2.5 * s, 0, 6.29); ctx.fill();
+}
+function drawGround() {
+  // base grass
+  ctx.fillStyle = '#3d5a3a'; ctx.fillRect(-2000, -2000, boundX() + 4000, WORLD_H + 4000);
+  // checkered mow-lines
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  for (let gx = -400; gx < boundX() + 400; gx += 160) ctx.fillRect(gx, -2000, 80, WORLD_H + 4000);
+  // hub plaza
+  ctx.fillStyle = '#8a7a5c'; rr(60, 90, HUB_W - 120, WORLD_H - 180, 26); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  for (let i = 0; i < 8; i++) ctx.fillRect(60, 90 + i * 110, HUB_W - 120, 3);
+  // zone pens
+  for (const z of S.zones) {
+    ctx.fillStyle = z.k % 2 ? '#57503c' : '#5c483c';
+    rr(z.pen.x0 - 20, z.pen.y0 - 20, z.pen.x1 - z.pen.x0 + 40, z.pen.y1 - z.pen.y0 + 40, 22); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    for (let i = 0; i < 10; i++) {
+      const bx = z.pen.x0 + ((i * 173) % (z.pen.x1 - z.pen.x0 - 40));
+      const by = z.pen.y0 + ((i * 311) % (z.pen.y1 - z.pen.y0 - 40));
+      ctx.beginPath(); ctx.ellipse(bx, by, 26, 11, 0, 0, 6.29); ctx.fill();
+    }
+    // fence posts
+    ctx.fillStyle = '#3a2e22';
+    const step = 56;
+    for (let fx = z.pen.x0 - 20; fx <= z.pen.x1 + 20; fx += step) {
+      ctx.fillRect(fx - 4, z.pen.y0 - 30, 8, 18);
+      ctx.fillRect(fx - 4, z.pen.y1 + 12, 8, 18);
+    }
+    for (let fy = z.pen.y0 - 20; fy <= z.pen.y1 + 20; fy += step) {
+      ctx.fillRect(z.pen.x1 + 12, fy - 4, 18, 8);
+      if (fy < 430 || fy > 570) ctx.fillRect(z.pen.x0 - 30, fy - 4, 18, 8); // entrance gap on the left
+    }
+    // zone banner
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('ZONE ' + z.k + ' — ' + foeName(z.k).toUpperCase() + 'S', (z.x0 + z.x1) / 2, z.pen.y0 - 40);
+    // spawner gate
+    const gx = z.pen.x1 - 40;
+    ctx.fillStyle = '#241c30'; rr(gx - 26, 430, 52, 140, 10); ctx.fill();
+    ctx.fillStyle = foeCol(z.k);
+    ctx.beginPath(); ctx.ellipse(gx, 500, 16, 44 + Math.sin(S.t * 3) * 5, 0, 0, 6.29); ctx.fill();
   }
-  // wall
-  ctx.fillStyle = '#5b6570'; ctx.fillRect(0, WALL_Y, W, WALL_H);
-  ctx.fillStyle = '#6d7885';
-  for (let x = 0; x < W; x += 40) ctx.fillRect(x + 4, WALL_Y - 10, 24, 12); // crenellations
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  for (let x = 0; x < W; x += 48) ctx.fillRect(x, WALL_Y + 18, 40, 3);      // brick lines
-  // cracks when hurt
-  const dmgFrac = 1 - S.wallHp / S.wallMax;
-  if (dmgFrac > 0.15) {
-    ctx.strokeStyle = 'rgba(20,22,26,' + Math.min(0.8, dmgFrac) + ')'; ctx.lineWidth = 2;
-    for (let i = 0; i < Math.floor(dmgFrac * 8); i++) {
-      const x = (i * 173 + 60) % W;
-      ctx.beginPath(); ctx.moveTo(x, WALL_Y + 4);
-      ctx.lineTo(x - 8, WALL_Y + 20); ctx.lineTo(x + 6, WALL_Y + 38); ctx.stroke();
+  // locked lands teaser to the right
+  const bx = boundX() + 30;
+  ctx.fillStyle = 'rgba(10,12,18,0.55)'; ctx.fillRect(bx, -2000, 3000, WORLD_H + 4000);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = 'bold 60px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🔒', bx + 160, 480);
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('NEW LANDS', bx + 160, 540);
+}
+function drawStands() {
+  // sell stand
+  shadow(SELL.x, SELL.y + 34, 52);
+  ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 7]);
+  ctx.beginPath(); ctx.arc(SELL.x, SELL.y, SELL.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#6a4a2e'; rr(SELL.x - 46, SELL.y - 40, 92, 56, 8); ctx.fill();
+  ctx.fillStyle = '#c0392b'; rr(SELL.x - 54, SELL.y - 58, 108, 22, 8); ctx.fill();
+  ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('⚖ SELL HELMETS', SELL.x, SELL.y - 42);
+  // shopkeeper
+  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(SELL.x, SELL.y - 6 + Math.sin(S.t * 4) * 1.5, 9, 0, 6.29); ctx.fill();
+  // coin pallet
+  shadow(PALLET.x, PALLET.y + 26, 56);
+  ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.setLineDash([8, 7]);
+  ctx.beginPath(); ctx.arc(PALLET.x, PALLET.y, PALLET.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#7a5c38'; rr(PALLET.x - 52, PALLET.y - 8, 104, 34, 6); ctx.fill();
+  // coin stacks proportional to pile value
+  const stacks = Math.min(24, Math.ceil(Math.log2(1 + S.pallet)));
+  for (let i = 0; i < stacks; i++) {
+    const cx = PALLET.x - 40 + (i % 6) * 16, cy = PALLET.y + 2 - Math.floor(i / 6) * 12;
+    const hgt = 2 + (i * 7 + 3) % 4;
+    for (let j = 0; j < hgt; j++) {
+      ctx.fillStyle = j % 2 ? '#ffd94a' : '#e8b93a';
+      ctx.beginPath(); ctx.ellipse(cx, cy - j * 4, 7, 3.4, 0, 0, 6.29); ctx.fill();
     }
   }
-  // courtyard
-  ctx.fillStyle = '#31394a'; ctx.fillRect(0, WALL_Y + WALL_H, W, SHOP_Y - WALL_Y - WALL_H);
-  // keep + king
-  ctx.fillStyle = '#454f63'; rrect(KING_X - 55, KING_Y - 34, 110, 62, 8); ctx.fill();
-  ctx.fillStyle = '#525d73';
-  ctx.fillRect(KING_X - 55, KING_Y - 44, 18, 12); ctx.fillRect(KING_X - 9, KING_Y - 44, 18, 12); ctx.fillRect(KING_X + 37, KING_Y - 44, 18, 12);
-  // king figure
-  ctx.fillStyle = '#e8c46a'; ctx.beginPath(); ctx.arc(KING_X, KING_Y - 52, 8, 0, 6.29); ctx.fill();
-  ctx.fillStyle = '#ffd94a';
-  ctx.beginPath(); ctx.moveTo(KING_X - 8, KING_Y - 58); ctx.lineTo(KING_X - 4, KING_Y - 66); ctx.lineTo(KING_X, KING_Y - 58);
-  ctx.lineTo(KING_X + 4, KING_Y - 66); ctx.lineTo(KING_X + 8, KING_Y - 58); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#a33'; ctx.fillRect(KING_X - 6, KING_Y - 50, 12, 16);
-  // volley cooldown ring
-  if (S.phase === 'wave') {
-    const f = 1 - Math.max(0, S.volleyCd) / VOLLEY_CD;
-    ctx.strokeStyle = f >= 1 ? '#ffd94a' : 'rgba(255,217,74,0.35)'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(KING_X, KING_Y - 50, 15, -1.57, -1.57 + f * 6.283); ctx.stroke();
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(S.pallet > 0 ? fmt(S.pallet) + ' ¢' : 'coin pallet', PALLET.x, PALLET.y + 52);
+  // upgrade plates
+  let ux = 130;
+  for (const key in UPG) {
+    const lvl = S.up[key], cost = upgCost(key, lvl), paid = S.upPaid[key];
+    ctx.fillStyle = 'rgba(38,46,66,0.85)'; ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ux, 190, 48, 0, 6.29); ctx.fill();
+    if (paid > 0) {
+      ctx.beginPath(); ctx.moveTo(ux, 190);
+      ctx.arc(ux, 190, 48, -1.5708, -1.5708 + paid / cost * 6.283); ctx.closePath();
+      ctx.fillStyle = 'rgba(255,217,74,0.35)'; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(ux, 190, 48, 0, 6.29); ctx.stroke();
+    ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.fillText(UPG[key].icon, ux, 188);
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText(UPG[key].name + ' LV' + (lvl + 1), ux, 210);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(fmt(cost - paid) + ' ¢', ux, 252);
+    ux += 165;
   }
-}
-function drawSlots() {
-  for (const s of S.slots) {
-    const u = s.unit;
-    ctx.strokeStyle = u ? 'rgba(255,255,255,0.12)' : (S.sel ? '#ffd94a' : 'rgba(255,255,255,0.3)');
-    ctx.lineWidth = 2; ctx.setLineDash(u ? [] : [5, 4]);
-    rrect(s.x - 26, s.y - 24, 52, 44, 8); ctx.stroke(); ctx.setLineDash([]);
-    if (!u) {
-      if (S.sel) {
-        const c = placeCost(S.sel);
-        ctx.fillStyle = S.coins >= c ? '#ffd94a' : '#888';
-        ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(c + '¢', s.x, s.y + 4);
+  // zone plates + towers
+  for (const z of S.zones) {
+    for (const pl of z.plates) {
+      if (pl.built) continue;
+      if (pl.id === 'unlock' && z.k < S.zones.length) continue;
+      ctx.fillStyle = 'rgba(38,46,66,0.85)'; ctx.strokeStyle = pl.id === 'unlock' ? '#6ec9e0' : '#6ecb5a'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(pl.x, pl.y, 52, 0, 6.29); ctx.fill();
+      if (pl.paid > 0) {
+        ctx.beginPath(); ctx.moveTo(pl.x, pl.y);
+        ctx.arc(pl.x, pl.y, 52, -1.5708, -1.5708 + pl.paid / pl.cost * 6.283); ctx.closePath();
+        ctx.fillStyle = 'rgba(110,203,90,0.35)'; ctx.fill();
       }
-      continue;
+      ctx.beginPath(); ctx.arc(pl.x, pl.y, 52, 0, 6.29); ctx.stroke();
+      ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+      ctx.fillText(pl.icon, pl.x, pl.y - 2);
+      ctx.font = 'bold 11px sans-serif'; ctx.fillText(pl.name, pl.x, pl.y + 20);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(fmt(pl.cost - pl.paid) + ' ¢', pl.x, pl.y + 74);
     }
-    const def = UNITS[u.type];
-    const bob = Math.sin(S.t * 5 + s.x) * 1.5;
-    // body
-    ctx.fillStyle = def.color;
-    rrect(s.x - 9, s.y - 8 + bob, 18, 20, 4); ctx.fill();
-    // head
-    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(s.x, s.y - 14 + bob, 7, 0, 6.29); ctx.fill();
-    // weapon
-    ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
-    if (u.type === 'archer') { ctx.beginPath(); ctx.arc(s.x + 11, s.y - 4 + bob, 8, -1.1, 1.1); ctx.stroke(); }
-    else if (u.type === 'spear') {
-      const jab = (u.jab && (u.jab -= 0.016) > 0) ? 6 : 0;
-      ctx.beginPath(); ctx.moveTo(s.x + 8, s.y + 6 + bob); ctx.lineTo(s.x + 14, s.y - 18 - jab + bob); ctx.stroke();
-    } else { ctx.strokeStyle = '#e08ae0'; ctx.beginPath(); ctx.moveTo(s.x + 10, s.y + 8 + bob); ctx.lineTo(s.x + 10, s.y - 16 + bob); ctx.stroke(); }
-    // level pips
-    ctx.fillStyle = '#ffd94a';
-    for (let i = 0; i < Math.min(u.lvl, 8); i++) ctx.fillRect(s.x - 24 + i * 6, s.y + 24, 4, 4);
-    // upgrade price tag
-    const c = upgCost(u);
-    ctx.fillStyle = S.coins >= c ? '#ffd94a' : 'rgba(255,255,255,0.35)';
-    ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('▲' + c, s.x, s.y + 40);
   }
 }
-function drawEnemies() {
-  for (const e of S.enemies) {
-    const bob = Math.abs(Math.sin(S.t * 8 + e.sway)) * 2;
-    ctx.fillStyle = e.hurt > 0 ? '#fff' : FOES[e.type].color;
-    // body
-    rrect(e.x - e.r * 0.7, e.y - e.r * 0.6 - bob, e.r * 1.4, e.r * 1.3, 4); ctx.fill();
-    // head
-    ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 0.9 - bob, e.r * 0.45, 0, 6.29); ctx.fill();
-    // shieldbearer front plate
-    if (e.type === 'shield') { ctx.fillStyle = '#dfe8f2'; ctx.fillRect(e.x - e.r * 0.8, e.y - e.r * 0.7 - bob, 5, e.r * 1.5); }
-    if (e.boss) {
-      ctx.fillStyle = '#ffd94a';
-      ctx.beginPath(); ctx.moveTo(e.x - 10, e.y - e.r * 1.35 - bob); ctx.lineTo(e.x, e.y - e.r * 1.75 - bob); ctx.lineTo(e.x + 10, e.y - e.r * 1.35 - bob); ctx.closePath(); ctx.fill();
-    }
-    // hp bar
+function drawTower(tw) {
+  shadow(tw.x, tw.y + 30, 34);
+  ctx.fillStyle = '#6a5138'; rr(tw.x - 22, tw.y - 30, 44, 60, 6); ctx.fill();
+  ctx.fillStyle = '#584330'; rr(tw.x - 28, tw.y - 44, 56, 18, 5); ctx.fill();
+  ctx.fillStyle = '#3a2e22';
+  for (let i = -2; i <= 2; i++) ctx.fillRect(tw.x + i * 12 - 3, tw.y - 52, 6, 8);
+  // archer on top
+  ctx.fillStyle = '#6ecb5a'; rr(tw.x - 6, tw.y - 66, 12, 16, 3); ctx.fill();
+  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(tw.x, tw.y - 70, 5.5, 0, 6.29); ctx.fill();
+  ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(tw.x + 8, tw.y - 60, 6, -1.1, 1.1); ctx.stroke();
+}
+function drawPorter(po) {
+  shadow(po.x, po.y + 14, 14);
+  ctx.fillStyle = '#c98a3c'; rr(po.x - 8, po.y - 10, 16, 18, 4); ctx.fill();
+  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(po.x, po.y - 16, 6.5, 0, 6.29); ctx.fill();
+  for (let i = 0; i < po.carry.length; i++)
+    drawHelmet(po.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), po.y - 26 - i * 6, po.carry[i], 0.7);
+}
+function drawEnemy(e) {
+  const bob = Math.abs(Math.sin(S.t * 7 + e.sway)) * 2.5;
+  shadow(e.x, e.y + e.r * 0.75, e.r);
+  ctx.fillStyle = e.hurt > 0 ? '#fff' : foeCol(e.k);
+  rr(e.x - e.r * 0.75, e.y - e.r * 0.8 - bob, e.r * 1.5, e.r * 1.4, 5); ctx.fill();
+  ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 1.05 - bob, e.r * 0.5, 0, 6.29); ctx.fill();
+  // helmet the enemy will drop
+  drawHelmet(e.x, e.y - e.r * 1.35 - bob, e.k, e.r / 18);
+  // eyes
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(e.x - e.r * 0.28 - 2, e.y - e.r * 1.08 - bob, 4, 4);
+  ctx.fillRect(e.x + e.r * 0.28 - 2, e.y - e.r * 1.08 - bob, 4, 4);
+  if (e.hp < e.max) {
     const f = e.hp / e.max;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(e.x - 16, e.y - e.r - 12 - bob, 32, 4);
-    ctx.fillStyle = f > 0.4 ? '#6ecb5a' : '#d1553f'; ctx.fillRect(e.x - 16, e.y - e.r - 12 - bob, 32 * f, 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(e.x - 17, e.y - e.r * 1.7 - bob, 34, 5);
+    ctx.fillStyle = f > 0.4 ? '#6ecb5a' : '#d1553f'; ctx.fillRect(e.x - 17, e.y - e.r * 1.7 - bob, 34 * f, 5);
   }
 }
-function drawShots() {
+function drawPlayer() {
+  const p = S.player;
+  const bob = p.moving ? Math.abs(Math.sin(S.t * 10)) * 3 : Math.sin(S.t * 3) * 1;
+  shadow(p.x, p.y + 16, 18);
+  if (p.invuln > 0 && Math.floor(S.t * 12) % 2) ctx.globalAlpha = 0.45;
+  // body
+  ctx.fillStyle = p.hurtT > 0 ? '#fff' : '#3f6fb5';
+  rr(p.x - 11, p.y - 14 - bob, 22, 26, 6); ctx.fill();
+  // head
+  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(p.x, p.y - 22 - bob, 9, 0, 6.29); ctx.fill();
+  // crown-helm
+  ctx.fillStyle = '#ffd94a';
+  ctx.beginPath(); ctx.moveTo(p.x - 9, p.y - 27 - bob); ctx.lineTo(p.x - 5, p.y - 36 - bob); ctx.lineTo(p.x, p.y - 28 - bob);
+  ctx.lineTo(p.x + 5, p.y - 36 - bob); ctx.lineTo(p.x + 9, p.y - 27 - bob); ctx.closePath(); ctx.fill();
+  // bow
+  ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(p.x + p.face * 13, p.y - 6 - bob, 9, p.face > 0 ? -1.2 : 1.94, p.face > 0 ? 1.2 : 4.34); ctx.stroke();
+  ctx.globalAlpha = 1;
+  // helmet stack on the back — the star of the show
+  const lean = -p.face * Math.min(10, p.helmets.length);
+  for (let i = 0; i < p.helmets.length; i++) {
+    const sway = Math.sin(S.t * 5 + i * 0.8) * (0.5 + i * 0.5) * (p.moving ? 1.6 : 0.6);
+    drawHelmet(p.x + lean * (i / Math.max(1, p.helmets.length)) * 0.4 + sway, p.y - 34 - bob - i * 7.5, p.helmets[i], 0.95);
+  }
+  if (p.helmets.length) {
+    ctx.fillStyle = p.helmets.length >= cap() ? '#ffd94a' : 'rgba(255,255,255,0.8)';
+    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(p.helmets.length + '/' + cap(), p.x, p.y - 40 - bob - p.helmets.length * 7.5);
+  }
+}
+function drawWorld() {
+  drawGround();
+  drawStands();
+  // ground items
+  for (const it of S.items) {
+    shadow(it.x, it.y + 6, 8);
+    drawHelmet(it.x, it.y + Math.sin(S.t * 3 + it.x) * 1.5, it.k, 0.9);
+  }
+  // depth-sorted actors
+  const actors = [];
+  for (const z of S.zones) {
+    for (const tw of z.towers) actors.push({ y: tw.y, f: () => drawTower(tw) });
+    for (const po of z.porters) actors.push({ y: po.y, f: () => drawPorter(po) });
+  }
+  for (const e of S.enemies) actors.push({ y: e.y, f: () => drawEnemy(e) });
+  actors.push({ y: S.player.y, f: drawPlayer });
+  actors.sort((a, b) => a.y - b.y);
+  for (const a of actors) a.f();
+  // arrows
   for (const sh of S.shots) {
-    const f = Math.min(1, sh.t / sh.dur);
-    let tx, ty;
-    if (sh.kind === 'volley') { tx = sh.tx; ty = sh.ty; }
-    else { tx = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.x : (sh.lx || sh.x); ty = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.y : (sh.ly || sh.y); }
-    const x = sh.x + (tx - sh.x) * f;
-    const y = sh.y + (ty - sh.y) * f - Math.sin(f * 3.14159) * (sh.kind === 'volley' ? 130 : 60);
-    if (sh.kind === 'fire') {
-      ctx.fillStyle = '#e08a3c'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.29); ctx.fill();
-      ctx.fillStyle = 'rgba(224,138,60,0.4)'; ctx.beginPath(); ctx.arc(x, y, 10, 0, 6.29); ctx.fill();
-    } else {
-      ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - (tx - sh.x) * 0.03, y + 6); ctx.stroke();
-    }
+    ctx.save(); ctx.translate(sh.x, sh.y); ctx.rotate(sh.a || 0);
+    ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.stroke();
+    ctx.fillStyle = '#e8dcc0';
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(3, -3); ctx.lineTo(3, 3); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
-}
-function drawParts() {
-  for (const p of S.parts) {
-    ctx.globalAlpha = 1 - p.t / p.dur;
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - p.r / 2, p.y - p.r / 2, p.r, p.r);
+  // particles
+  for (const q of S.parts) {
+    ctx.globalAlpha = 1 - q.t / q.dur;
+    ctx.fillStyle = q.color;
+    ctx.fillRect(q.x - q.r / 2, q.y - q.r / 2, q.r, q.r);
   }
   ctx.globalAlpha = 1;
-  ctx.textAlign = 'center';
+  // floats
   for (const f of S.floats) {
-    ctx.globalAlpha = 1 - f.t / 0.9;
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillStyle = '#000'; ctx.fillText(f.txt, f.x + 1, f.y + 1);
+    const life = f.big ? 1.6 : 0.8;
+    ctx.globalAlpha = Math.min(1, 3 * (1 - f.t / life));
+    ctx.font = 'bold ' + (f.big ? 20 : 14) + 'px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#000'; ctx.fillText(f.txt, f.x + 1.5, f.y + 1.5);
     ctx.fillStyle = f.color; ctx.fillText(f.txt, f.x, f.y);
   }
   ctx.globalAlpha = 1;
 }
-// clickable regions rebuilt each draw
 let hits = [];
-function btn(x, y, w, h, label, sub, act, opts) {
-  opts = opts || {};
-  ctx.fillStyle = opts.off ? '#39404d' : (opts.gold ? '#7a5f18' : '#3d4a63');
-  rrect(x, y, w, h, 8); ctx.fill();
-  if (opts.selq) { ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 3; rrect(x, y, w, h, 8); ctx.stroke(); }
-  ctx.fillStyle = opts.off ? '#78808c' : '#fff';
-  ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(label, x + w / 2, y + (sub ? h / 2 - 3 : h / 2 + 5));
-  if (sub) {
-    ctx.font = '11px sans-serif';
-    ctx.fillStyle = opts.off ? '#78808c' : '#ffd94a';
-    ctx.fillText(sub, x + w / 2, y + h / 2 + 13);
-  }
+function hudBtn(x, y, w, h, label, act) {
+  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(x, y, w, h, 8); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(label, x + w / 2, y + h / 2 + 5);
   hits.push({ x, y, w, h, act });
 }
 function drawHud() {
-  ctx.fillStyle = '#141924'; ctx.fillRect(0, 0, W, HUD_H);
-  ctx.textAlign = 'left'; ctx.font = 'bold 15px sans-serif';
-  ctx.fillStyle = '#fff'; ctx.fillText('WAVE ' + Math.max(1, S.wave + (S.phase === 'build' || S.phase === 'menu' ? 1 : 0)), 12, 24);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '11px sans-serif';
-  ctx.fillText('BEST ' + S.best + '   KILLS ' + S.kills, 12, 42);
-  // coins
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 17px sans-serif'; ctx.textAlign = 'right';
-  ctx.fillText(S.coins + ' ¢', W - 90, 28);
-  // wall hp bar
-  ctx.fillStyle = 'rgba(255,255,255,0.15)'; rrect(120, 48, 240, 10, 5); ctx.fill();
-  const f = S.wallHp / S.wallMax;
-  ctx.fillStyle = f > 0.5 ? '#6ecb5a' : f > 0.25 ? '#e0a13c' : '#d1553f';
-  if (f > 0) { rrect(120, 48, 240 * f, 10, 5); ctx.fill(); }
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('WALL ' + Math.ceil(S.wallHp) + '/' + S.wallMax, 240, 44);
-  // speed + mute
-  btn(W - 78, 8, 32, 26, 'x' + S.speed, null, () => { S.speed = S.speed === 1 ? 2 : 1; });
-  btn(W - 40, 8, 32, 26, muted ? '🔇' : '🔊', null, () => {
+  const p = S.player;
+  // wallet
+  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 10, 128, 36, 10); ctx.fill();
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('¢ ' + fmt(S.wallet), 22, 35);
+  // hp
+  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 52, 128, 16, 8); ctx.fill();
+  ctx.fillStyle = '#d1553f'; rr(12, 54, 124 * Math.max(0, p.hp / p.maxHp), 12, 6); ctx.fill();
+  // zone + kills
+  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 74, 128, 24, 8); ctx.fill();
+  ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 11px sans-serif';
+  ctx.fillText('ZONES ' + S.zones.length + '  ⚔ ' + fmt(S.stats.kills), 20, 90);
+  hudBtn(vw - 46, 10, 36, 30, muted ? '🔇' : '🔊', () => {
     muted = !muted;
-    try { localStorage.setItem('ks_endless_muted', muted ? '1' : '0'); } catch (e) {}
+    try { localStorage.setItem('ks_idle_muted', muted ? '1' : '0'); } catch (e) {}
   });
-}
-function drawShop() {
-  ctx.fillStyle = '#141924'; ctx.fillRect(0, SHOP_Y, W, H - SHOP_Y);
-  let x = 10;
-  for (const type of Object.keys(UNITS)) {
-    const def = UNITS[type], locked = S.wave + 1 < def.unlock;
-    const cost = placeCost(type);
-    btn(x, SHOP_Y + 10, 88, 52,
-      locked ? '🔒 ' + def.name : def.name,
-      locked ? 'wave ' + def.unlock : cost + '¢',
-      () => { if (!locked) S.sel = S.sel === type ? null : type; },
-      { off: locked || S.coins < cost, selq: S.sel === type });
-    x += 96;
+  // offline earnings toast
+  if (S.offlineMsg > 0 && S.offlineAmt > 0) {
+    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(vw / 2 - 150, 14, 300, 44, 10); ctx.fill();
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('While you were away…', vw / 2, 32);
+    ctx.fillText('+' + fmt(S.offlineAmt) + ' ¢ piled up at the pallet!', vw / 2, 50);
   }
-  btn(x, SHOP_Y + 10, 88, 52, '🔨 Repair', repairCost() + '¢', repairWall,
-    { off: S.wallHp >= S.wallMax || S.coins < repairCost() });
-  x += 96;
-  btn(x, SHOP_Y + 10, 82, 52, '🧱 Wall+', fortifyCost() + '¢', fortifyWall,
-    { off: S.coins < fortifyCost() });
-  // second row: fight / status
-  if (S.phase === 'build') {
-    btn(W / 2 - 110, SHOP_Y + 68, 220, 34, '⚔ FIGHT  (+' + waveBonus(S.wave + 1) + '¢)', null, () => startWave(true), { gold: true });
-    ctx.fillStyle = '#9aa7b5'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('next wave in ' + Math.ceil(S.buildT) + 's', W / 2, SHOP_Y + 66);
-  } else if (S.phase === 'wave') {
-    ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-    const left = S.spawnQ.length + S.enemies.length;
-    ctx.fillText(left + ' enemies left — tap the field to fire the King\'s volley', W / 2, SHOP_Y + 88);
+  // guidance arrow to next objective
+  const g = guideTarget();
+  const dx = g.x - S.cam.x, dy = g.y - S.cam.y;
+  if (dx * dx + dy * dy > 190 * 190) {
+    const a = Math.atan2(dy, dx);
+    const ax = vw / 2 + Math.cos(a) * Math.min(vw, vh) * 0.32;
+    const ay = vh / 2 + Math.sin(a) * Math.min(vw, vh) * 0.32;
+    const pulse = 1 + Math.sin(S.t * 6) * 0.12;
+    ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#ffd94a';
+    ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-8, -11); ctx.lineTo(-3, 0); ctx.lineTo(-8, 11); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(g.label, ax, ay + 26);
   }
-}
-function drawOverlay() {
-  if (S.phase === 'menu') {
-    ctx.fillStyle = 'rgba(8,10,16,0.78)'; ctx.fillRect(0, 0, W, H);
+  // joystick
+  if (S.stick) {
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(S.stick.ax, S.stick.ay, 44, 0, 6.29); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(S.stick.ax + S.stick.dx * 40, S.stick.ay + S.stick.dy * 40, 20, 0, 6.29); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // start overlay
+  if (!S.started) {
+    ctx.fillStyle = 'rgba(8,10,16,0.8)'; ctx.fillRect(0, 0, vw, vh);
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 42px sans-serif';
-    ctx.fillText('KINGSHOT', W / 2, 300);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 44px sans-serif';
+    ctx.fillText('KINGSHOT', vw / 2, vh * 0.34);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('E N D L E S S', W / 2, 334);
-    ctx.fillStyle = '#9aa7b5'; ctx.font = '13px sans-serif';
-    ctx.fillText('Hold the wall. Place defenders, upgrade them,', W / 2, 396);
-    ctx.fillText('tap the battlefield to rain royal arrows.', W / 2, 416);
-    ctx.fillText('The horde never stops. How far can you go?', W / 2, 436);
-    btn(W / 2 - 90, 480, 180, 48, '▶ DEFEND', null, () => { startBuild(); }, { gold: true });
-    if (S.best > 0) {
-      ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 13px sans-serif';
-      ctx.fillText('BEST: WAVE ' + S.best, W / 2, 560);
-    }
-  } else if (S.phase === 'over') {
-    ctx.fillStyle = 'rgba(8,10,16,0.82)'; ctx.fillRect(0, 0, W, H);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#d1553f'; ctx.font = 'bold 34px sans-serif';
-    ctx.fillText('THE WALL HAS FALLEN', W / 2, 320);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif';
-    ctx.fillText('You held for ' + S.wave + ' wave' + (S.wave === 1 ? '' : 's'), W / 2, 370);
+    ctx.fillText('E N D L E S S', vw / 2, vh * 0.34 + 34);
     ctx.fillStyle = '#9aa7b5'; ctx.font = '14px sans-serif';
-    ctx.fillText(S.kills + ' enemies slain', W / 2, 396);
-    if (S.wave >= S.best) { ctx.fillStyle = '#ffd94a'; ctx.fillText('★ NEW BEST ★', W / 2, 424); }
-    else ctx.fillText('best: wave ' + S.best, W / 2, 424);
-    btn(W / 2 - 90, 470, 180, 48, '↻ AGAIN', null, () => { reset(); startBuild(); }, { gold: true });
+    ctx.fillText('You fire automatically. Enemies drop helmets —', vw / 2, vh * 0.47);
+    ctx.fillText('stack them, sell them, and spend the coins on', vw / 2, vh * 0.47 + 22);
+    ctx.fillText('archer towers, porters, and endless new lands.', vw / 2, vh * 0.47 + 44);
+    ctx.fillText('Drag anywhere to walk.', vw / 2, vh * 0.47 + 76);
+    const pulse = 1 + Math.sin(S.t * 4) * 0.05;
+    ctx.save(); ctx.translate(vw / 2, vh * 0.68); ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#7a5f18'; rr(-110, -26, 220, 52, 12); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('▶ TAP TO PLAY', 0, 7);
+    ctx.restore();
   }
-  if (S.flash > 0) { ctx.fillStyle = 'rgba(209,85,63,' + (S.flash * 2.5) + ')'; ctx.fillRect(0, 0, W, H); }
 }
 function draw() {
   hits = [];
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#1b2b1e'; ctx.fillRect(0, 0, vw, vh);
   ctx.save();
-  ctx.setTransform(scaleF * dpr, 0, 0, scaleF * dpr, offX * dpr, offY * dpr);
-  if (S.shake > 0) ctx.translate((rnd() - 0.5) * S.shake, (rnd() - 0.5) * S.shake);
-  ctx.fillStyle = '#0b0e14'; ctx.fillRect(-offX / scaleF, -offY / scaleF, W + 2 * offX / scaleF, H + 2 * offY / scaleF);
-  drawField();
-  drawSlots();
-  drawEnemies();
-  drawShots();
-  drawParts();
-  drawHud();
-  drawShop();
-  drawOverlay();
+  const shx = S.shake > 0 ? (rnd() - 0.5) * S.shake : 0;
+  const shy = S.shake > 0 ? (rnd() - 0.5) * S.shake : 0;
+  // camera transform
+  const cx = Math.max(vw / scl / 2 - 200, Math.min(boundX() + 200 - vw / scl / 2, S.cam.x));
+  const cy = Math.max(Math.min(vh / scl / 2, WORLD_H / 2), Math.min(WORLD_H - vh / scl / 2, S.cam.y));
+  ctx.translate(vw / 2 + shx, vh / 2 + shy);
+  ctx.scale(scl, scl);
+  ctx.translate(-cx, -(vh / scl >= WORLD_H ? WORLD_H / 2 : cy));
+  drawWorld();
   ctx.restore();
+  drawHud();
 }
 
 // ---- input --------------------------------------------------
-let scaleF = 1, offX = 0, offY = 0, dpr = 1;
 function resize() {
-  dpr = window.devicePixelRatio || 1;
-  const vw = window.innerWidth, vh = window.innerHeight;
-  scaleF = Math.min(vw / W, vh / H);
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  vw = window.innerWidth; vh = window.innerHeight;
   cvs.width = Math.round(vw * dpr); cvs.height = Math.round(vh * dpr);
   cvs.style.width = vw + 'px'; cvs.style.height = vh + 'px';
-  offX = (vw - W * scaleF) / 2; offY = (vh - H * scaleF) / 2;
+  scl = Math.max(0.55, Math.min(1.35, Math.min(vw, vh) / 700));
 }
-function toVirtual(ev) {
+function pointerXY(ev) {
   const r = cvs.getBoundingClientRect();
-  const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
-  const cy = (ev.touches ? ev.touches[0].clientY : ev.clientY) - r.top;
-  return { x: (cx - offX) / scaleF, y: (cy - offY) / scaleF };
+  return { x: (ev.clientX !== undefined ? ev.clientX : ev.touches[0].clientX) - r.left,
+           y: (ev.clientY !== undefined ? ev.clientY : ev.touches[0].clientY) - r.top };
 }
-function tap(x, y) {
-  audio(); // unlock on first gesture
-  // buttons first (includes menu/over overlays)
+let activePointer = null;
+function onDown(ev) {
+  ev.preventDefault();
+  audio();
+  const p = pointerXY(ev);
+  if (!S.started) { S.started = true; sfx('built', true); return; }
   for (const h of hits) {
-    if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(); return; }
+    if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) { h.act(); return; }
   }
-  if (S.phase === 'menu' || S.phase === 'over') return;
-  // slots
-  for (const s of S.slots) {
-    if (Math.abs(x - s.x) <= 30 && y >= s.y - 28 && y <= s.y + 46) {
-      if (s.unit) upgradeUnit(s);
-      else if (S.sel) placeUnit(s, S.sel);
-      return;
-    }
-  }
-  // battlefield tap = king volley
-  if (y > HUD_H && y < WALL_Y) { fireVolley(x, y); return; }
+  activePointer = ev.pointerId !== undefined ? ev.pointerId : 'touch';
+  S.stick = { ax: p.x, ay: p.y, dx: 0, dy: 0 };
 }
-cvs.addEventListener('pointerdown', (ev) => { ev.preventDefault(); const p = toVirtual(ev); tap(p.x, p.y); });
+function onMove(ev) {
+  if (!S.stick) return;
+  if (ev.pointerId !== undefined && activePointer !== null && ev.pointerId !== activePointer) return;
+  const p = pointerXY(ev);
+  let dx = (p.x - S.stick.ax) / 44, dy = (p.y - S.stick.ay) / 44;
+  const l = Math.hypot(dx, dy);
+  if (l > 1) { dx /= l; dy /= l; }
+  S.stick.dx = dx; S.stick.dy = dy;
+}
+function onUp(ev) {
+  if (ev.pointerId !== undefined && activePointer !== null && ev.pointerId !== activePointer) return;
+  S.stick = null; activePointer = null;
+}
+cvs.addEventListener('pointerdown', onDown);
+cvs.addEventListener('pointermove', onMove);
+window.addEventListener('pointerup', onUp);
+window.addEventListener('pointercancel', onUp);
+window.addEventListener('keydown', (ev) => {
+  const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+  S.keys[k] = true;
+  if (!S.started) { S.started = true; }
+});
+window.addEventListener('keyup', (ev) => {
+  const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+  S.keys[k] = false;
+});
 window.addEventListener('resize', resize);
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 
-// ---- main loop ----------------------------------------------
+// ---- boot ---------------------------------------------------
+reset();
+load();
+resize();
 let lastT = 0;
 function frame(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
@@ -703,17 +942,16 @@ function frame(t) {
   draw();
   requestAnimationFrame(frame);
 }
-
-reset();
-resize();
 if (typeof window.__KS_HEADLESS__ === 'undefined') requestAnimationFrame(frame);
 
-// test hooks
+// ---- test hooks ---------------------------------------------
 window.KS = {
-  get S() { return S; }, reset, tick, draw, startBuild, startWave, spawnEnemy,
-  placeUnit, upgradeUnit, repairWall, fortifyWall, fireVolley, damageWall,
-  placeCost, upgCost, unitDmg, hpMul, waveCount, tap, UNITS, FOES,
-  constants: { W, H, WALL_Y, HUD_H, WALL_HP0, START_COINS, VOLLEY_CD },
+  get S() { return S; }, reset, tick, draw, save, load, idleRate,
+  spawnEnemy, hurtEnemy, hurtPlayer, playerDie, buildPlate, mkZone, dropHelmet,
+  cap, speed, pDmg, pRate, boundX, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, fmt,
+  guideTarget, zoneAt, foeName,
+  constants: { WORLD_H, HUB_W, ZONE_W, SELL, PALLET, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP },
+  start() { S.started = true; },
 };
 </script>
 </body>

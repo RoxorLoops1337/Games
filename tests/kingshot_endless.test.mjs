@@ -1,12 +1,13 @@
-// Headless smoke + logic suite for Kingshot Endless (kingshot_endless/index.html).
+// Headless suite for Kingshot Endless (arcade-idle collector rebuild).
 // Evaluates the game's inline <script> with a stubbed DOM/canvas and drives
-// tick()/draw() directly through the window.KS test hooks.
+// the full loop through window.KS: kill → helmet drop → pickup → sell →
+// coin vacuum → build plates → towers/porters → zone unlock → save/load.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { harness } from './no_room_for_heroes_lib.mjs';
 
-function loadKingshot() {
+function loadKingshot(store) {
   const here = dirname(fileURLToPath(import.meta.url));
   const html = readFileSync(join(here, '..', 'kingshot_endless', 'index.html'), 'utf8');
   const code = html.match(/<script>([\s\S]*)<\/script>/)[1];
@@ -23,13 +24,11 @@ function loadKingshot() {
     width: 480, height: 840,
   }, { get(t, k) { return (k in t) ? t[k] : noop; }, set(t, k, v) { t[k] = v; return true; } });
 
-  const store = { ks_endless_muted: '1' }; // keep sfx() on its early-out path
   global.localStorage = {
     getItem: k => (k in store ? store[k] : null),
     setItem: (k, v) => { store[k] = '' + v; },
     removeItem: k => { delete store[k]; },
   };
-  // recursive stub: any chain of prop-gets/calls keeps working, currentTime is numeric
   const audioNode = () => new Proxy(function () {}, {
     get: (_t, k) => (k === 'currentTime' ? 0 : audioNode()),
     apply: () => audioNode(),
@@ -40,121 +39,174 @@ function loadKingshot() {
   global.addEventListener = noop;
   global.devicePixelRatio = 1;
   global.innerWidth = 480; global.innerHeight = 840;
-  global.document = { getElementById: () => mkEl(), addEventListener: noop };
+  Object.defineProperty(globalThis, 'navigator', { value: { vibrate: noop, userAgent: 'node' }, configurable: true, writable: true });
+  global.document = { getElementById: () => mkEl(), addEventListener: noop, hidden: false };
   global.window = new Proxy(global, {
     get(t, k) { return (k in t) ? t[k] : undefined; },
     set(t, k, v) { t[k] = v; return true; },
   });
-  global.__KS_HEADLESS__ = true; // stops the game from starting its own rAF loop
+  global.__KS_HEADLESS__ = true;
 
   eval('(function(){' + code + '\n})()');
-  return { KS: globalThis.KS, store };
+  return globalThis.KS;
 }
 
 const t = harness('kingshot_endless');
-const { KS, store } = loadKingshot();
-
-// ---- boot state ----
-t.ok(KS && typeof KS.tick === 'function', 'KS test hooks exposed');
-t.ok(KS.S.phase === 'menu', 'boots to menu');
-t.ok(KS.S.coins === KS.constants.START_COINS, 'starting coins');
-t.ok(KS.S.slots.length === 6, 'six wall slots');
-t.ok(KS.S.wallHp === KS.constants.WALL_HP0, 'wall at full hp');
-
-// ---- draw never throws, in every phase ----
+const store = { ks_idle_muted: '1' };
+const KS = loadKingshot(store);
+const C = KS.constants;
+const step = (secs) => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) KS.tick(1 / 60); };
 const drawSafe = (label) => {
-  try { KS.draw(); t.ok(true, label); } catch (e) { t.ok(false, label + ' threw: ' + e.message); }
+  try { KS.draw(); t.ok(true, label); } catch (e) { t.ok(false, label + ' threw: ' + e.stack); }
 };
-drawSafe('draw() in menu');
 
-// ---- placement & economy ----
-KS.startBuild();
-t.ok(KS.S.phase === 'build', 'build phase after startBuild');
-const c0 = KS.S.coins;
-const archerCost = KS.placeCost('archer');
-t.ok(KS.placeUnit(KS.S.slots[0], 'archer') === true, 'place archer in empty slot');
-t.ok(KS.S.coins === c0 - archerCost, 'archer cost deducted');
-t.ok(KS.placeUnit(KS.S.slots[0], 'archer') === false, 'cannot place on occupied slot');
-t.ok(KS.placeCost('archer') > archerCost, 'placement cost ramps with owned count');
-t.ok(KS.placeUnit(KS.S.slots[1], 'spear') === false, 'spear locked before wave 2');
-t.ok(KS.placeUnit(KS.S.slots[1], 'mage') === false, 'mage locked before wave 4');
-KS.S.coins = 0;
-t.ok(KS.placeUnit(KS.S.slots[1], 'archer') === false, 'cannot place without coins');
-KS.S.coins = 500;
+// ---- boot ----
+t.ok(KS && typeof KS.tick === 'function', 'KS hooks exposed');
+t.ok(KS.S.started === false, 'boots to start overlay');
+t.ok(KS.S.zones.length === 1, 'one zone at boot');
+t.ok(KS.S.wallet === 0 && KS.S.pallet === 0, 'starts broke');
+drawSafe('draw() on start overlay');
+KS.start();
+t.ok(KS.S.started === true, 'start() begins the game');
 
-// ---- upgrade ----
-const u = KS.S.slots[0].unit;
-const dmg1 = KS.unitDmg(u), upc = KS.upgCost(u);
-t.ok(KS.upgradeUnit(KS.S.slots[0]) === true, 'upgrade works with coins');
-t.ok(u.lvl === 2, 'level went up');
-t.ok(Math.abs(KS.unitDmg(u) - dmg1 * 1.35) < 1e-9, 'damage scales x1.35 per level');
-t.ok(KS.upgCost(u) > upc, 'upgrade cost grows');
-drawSafe('draw() in build with units');
+// ---- movement ----
+const p = KS.S.player;
+const x0 = p.x;
+KS.S.keys.d = true; step(0.5); KS.S.keys.d = false;
+t.ok(p.x > x0 + 50, 'keyboard movement moves the player');
+KS.S.stick = { ax: 0, ay: 0, dx: 0, dy: -1 };
+const y0 = p.y; step(0.3); KS.S.stick = null;
+t.ok(p.y < y0 - 20, 'joystick movement moves the player');
 
-// ---- wall economy ----
-KS.S.wallHp = 100;
-t.ok(KS.repairWall() === true, 'repair works');
-t.ok(KS.S.wallHp === KS.S.wallMax, 'repair restores to max');
-t.ok(KS.repairWall() === false, 'repair refused at full hp');
-const max0 = KS.S.wallMax;
-t.ok(KS.fortifyWall() === true, 'fortify works');
-t.ok(KS.S.wallMax === Math.round(max0 * 1.25), 'fortify raises max hp x1.25');
+// ---- auto-fire kills, helmets drop ----
+KS.S.enemies.length = 0; KS.S.items.length = 0;
+const z1 = KS.S.zones[0];
+p.x = z1.pen.x0 + 120; p.y = 500;
+KS.spawnEnemy(z1);
+const foe = KS.S.enemies[0];
+foe.x = p.x + 100; foe.y = p.y; foe.tx = foe.x; foe.ty = foe.y;
+let guard = 0;
+while (KS.S.enemies.includes(foe) && guard++ < 60 * 20) KS.tick(1 / 60);
+t.ok(!KS.S.enemies.includes(foe), 'auto-fire kills a nearby enemy');
+t.ok(KS.S.stats.kills >= 1, 'kill counted');
+t.ok(KS.S.items.length >= 1, 'dead enemy dropped helmet(s)');
 
-// ---- wave 1 plays out and clears ----
-KS.S.coins = 200;
-KS.startWave(false);
-t.ok(KS.S.phase === 'wave' && KS.S.wave === 1, 'wave 1 started');
-t.ok(KS.S.spawnQ.length === KS.waveCount(1), 'spawn queue matches waveCount');
-let steps = 0;
-while (KS.S.phase === 'wave' && steps < 60 * 180) { KS.tick(1 / 60); if (steps % 30 === 0) KS.draw(); steps++; }
-t.ok(KS.S.phase === 'build', 'wave 1 cleared back to build phase');
-t.ok(KS.S.kills >= KS.waveCount(1), 'all wave-1 enemies killed');
-t.ok(KS.S.wallHp > 0, 'wall survived wave 1');
-t.ok(KS.S.coins > 200, 'kills + clear bonus paid out');
-t.ok(store.ks_endless_best === '1', 'best wave persisted to localStorage');
+// ---- pickup + capacity ----
+step(1.5); // items settle, magnet radius picks them up (player is right there)
+t.ok(p.helmets.length >= 1, 'helmets magnet onto the back stack');
+KS.S.items.length = 0;
+p.helmets = []; for (let i = 0; i < KS.cap(); i++) p.helmets.push(1);
+KS.dropHelmet(p.x, p.y, 1);
+step(1);
+t.ok(p.helmets.length === KS.cap(), 'stack respects capacity');
+t.ok(KS.S.items.length === 1, 'overflow helmet stays on the ground');
+KS.S.items.length = 0;
 
-// ---- volley ----
-KS.startWave(true); // wave 2, with skip bonus
-t.ok(KS.S.wave === 2, 'wave 2 started');
-KS.tick(1.2); // let a couple of enemies spawn
-t.ok(KS.fireVolley(240, 300) === true, 'volley fires on battlefield tap');
-t.ok(KS.S.volleyCd > 0, 'volley goes on cooldown');
-t.ok(KS.fireVolley(240, 300) === false, 'volley refused while on cooldown');
-t.ok(KS.S.shots.some(s => s.kind === 'volley'), 'volley arrows in flight');
+// ---- sell: helmets → pallet coins ----
+p.x = C.SELL.x; p.y = C.SELL.y;
+const helmets = p.helmets.length;
+step(helmets / C.SELL_RATE + 1);
+t.ok(p.helmets.length === 0, 'sell stand drains the whole stack');
+t.ok(KS.S.pallet === helmets * KS.helmVal(1), 'pallet piles the exact coin value');
 
-// ---- shield resist ----
-KS.spawnEnemy('shield');
-const sh = KS.S.enemies[KS.S.enemies.length - 1];
-const hp0 = sh.hp;
-KS.S.floats.length = 0;
-// hurtEnemy is internal; emulate a ranged hit through a resolved arrow instead:
-KS.S.shots.push({ kind: 'arrow', x: 0, y: 0, tgt: sh, t: 99, dur: 0.01, dmg: 10 });
-KS.tick(1 / 60);
-t.ok(Math.abs((hp0 - sh.hp) - 10 * (1 - KS.FOES.shield.resist)) < 0.5, 'shieldbearer halves ranged damage');
+// ---- vacuum: pallet → wallet ----
+p.x = C.PALLET.x; p.y = C.PALLET.y;
+const pal = KS.S.pallet;
+step(pal / C.VAC_RATE + 1);
+t.ok(KS.S.pallet === 0 && KS.S.wallet === pal, 'vacuum moves every coin to the wallet');
 
-// ---- scaling sanity ----
-t.ok(KS.hpMul(10) > KS.hpMul(5) && KS.hpMul(5) > KS.hpMul(1), 'hp scaling monotonic');
-t.ok(KS.waveCount(100) === 42, 'wave size capped');
+// ---- upgrade plate: pour coins, level up ----
+KS.S.wallet = 10000;
+const capBefore = KS.cap();
+p.x = 130 + 165; p.y = 190; // CAPACITY plate (2nd)
+const capCost = KS.upgCost('cap', 0);
+step(capCost / C.BUILD_RATE + 1);
+t.ok(KS.S.up.cap >= 1, 'capacity upgrade purchased by standing on plate');
+t.ok(KS.cap() === capBefore + 4 * KS.S.up.cap, 'capacity actually grew');
+const capLvl = KS.S.up.cap;
 
-// ---- boss wave ----
-KS.S.wave = 9; KS.S.spawnQ = []; KS.S.enemies.length = 0; KS.S.phase = 'build';
-KS.startWave(false);
-t.ok(KS.S.spawnQ.some(q => q.type === 'boss'), 'wave 10 spawns a boss');
-drawSafe('draw() mid-wave with boss queued');
+// ---- build a tower, it kills on its own ----
+const towerPlate = z1.plates.find(q => q.id === 'tower1');
+KS.S.wallet = towerPlate.cost + 500;
+p.x = towerPlate.x; p.y = towerPlate.y;
+step(towerPlate.cost / C.BUILD_RATE + 1.5);
+t.ok(towerPlate.built === true, 'tower plate fills and builds');
+t.ok(z1.towers.length === 1, 'tower exists');
+p.x = 620; p.y = 700; // walk player away so only the tower can do the killing
+KS.S.enemies.length = 0; KS.S.items.length = 0;
+KS.spawnEnemy(z1);
+const foe2 = KS.S.enemies[0];
+foe2.x = z1.towers[0].x + 150; foe2.y = z1.towers[0].y; foe2.tx = foe2.x; foe2.ty = foe2.y;
+guard = 0;
+while (KS.S.enemies.includes(foe2) && guard++ < 60 * 30) KS.tick(1 / 60);
+t.ok(!KS.S.enemies.includes(foe2), 'archer tower auto-kills without the player');
+drawSafe('draw() with tower + enemies');
 
-// ---- game over + restart ----
-KS.S.wave = 12; // pretend we got far
-KS.damageWall(1e9);
-t.ok(KS.S.phase === 'over', 'wall breaking ends the game');
-t.ok(store.ks_endless_best === '12', 'new best saved on game over');
-drawSafe('draw() on game-over screen');
+// ---- porter: collects drops and deposits at the pallet ----
+const porterPlate = z1.plates.find(q => q.id === 'porter');
+KS.S.wallet = porterPlate.cost + 500;
+p.x = porterPlate.x; p.y = porterPlate.y;
+step(porterPlate.cost / C.BUILD_RATE + 1.5);
+t.ok(porterPlate.built && z1.porters.length === 1, 'porter hired');
+KS.S.items.length = 0; KS.S.enemies.length = 0;
+const palBefore = KS.S.pallet;
+KS.dropHelmet(z1.x0 + 400, 500, 1); KS.dropHelmet(z1.x0 + 420, 520, 1);
+p.x = 620; p.y = 700;
+step(30);
+t.ok(KS.S.pallet > palBefore, 'porter hauled helmets to the shop → pallet grew');
+
+// ---- zone unlock extends the world ----
+const unlockPlate = z1.plates.find(q => q.id === 'unlock');
+KS.S.wallet = unlockPlate.cost + 10;
+const bx0 = KS.boundX();
+p.x = unlockPlate.x; p.y = unlockPlate.y;
+step(unlockPlate.cost / C.BUILD_RATE + 2);
+t.ok(KS.S.zones.length === 2, 'zone 2 unlocked');
+t.ok(KS.boundX() > bx0 + 900, 'world boundary extended');
+t.ok(KS.foeHp(2) > KS.foeHp(1) && KS.helmVal(2) > KS.helmVal(1), 'zone 2 foes tougher and worth more');
+drawSafe('draw() with two zones');
+
+// ---- player death scatters the stack ----
+p.helmets = [1, 1, 1];
+KS.S.items.length = 0;
+p.invuln = 0;
+KS.hurtPlayer(1e9);
+t.ok(p.hp === p.maxHp && p.helmets.length === 0, 'death resets hp and drops the stack');
+t.ok(KS.S.items.length === 3, 'dropped helmets land on the ground');
+t.ok(p.deaths === 1, 'death counted');
+
+// ---- guidance arrow always has a target ----
+const g = KS.guideTarget();
+t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
+
+// ---- save / load roundtrip ----
+KS.S.wallet = 777; KS.S.pallet = 55;
+KS.save();
+t.ok(!!store[C.SAVE_KEY], 'save written');
 KS.reset();
-t.ok(KS.S.phase === 'menu' && KS.S.coins === KS.constants.START_COINS, 'reset returns to fresh menu');
-t.ok(KS.S.best === 12, 'best survives reset');
+t.ok(KS.S.wallet === 0 && KS.S.zones.length === 1, 'reset wipes live state');
+t.ok(KS.load() === true, 'load succeeds');
+t.ok(KS.S.wallet === 777 && KS.S.pallet >= 55, 'wallet + pallet restored');
+t.ok(KS.S.zones.length === 2, 'zone count restored');
+t.ok(KS.S.zones[0].towers.length === 1 && KS.S.zones[0].porters.length === 1, 'structures rebuilt from save');
+t.ok(KS.S.up.cap === capLvl, 'upgrades restored');
 
-// ---- tap routing (uses hit regions built by draw) ----
-KS.draw();
-KS.tap(240, 500); // menu DEFEND button sits at ~(240, 504)
-t.ok(KS.S.phase === 'build', 'tapping DEFEND starts the game');
+// ---- offline earnings ----
+const d = JSON.parse(store[C.SAVE_KEY]);
+d.last = Date.now() - 3600 * 1000; // away 1h
+store[C.SAVE_KEY] = JSON.stringify(d);
+KS.reset(); KS.load();
+t.ok(KS.idleRate() > 0, 'tower+porter zone generates idle income');
+t.ok(KS.S.offlineAmt > 0 && KS.S.pallet >= 55 + KS.S.offlineAmt, 'offline earnings piled onto the pallet');
+
+// ---- misc helpers ----
+t.ok(KS.fmt(1234) === '1.2k' && KS.fmt(999) === '999', 'number formatting');
+t.ok(KS.unlockCost(3) > KS.unlockCost(2), 'unlock costs grow');
+t.ok(KS.foeName(9) !== KS.foeName(1), 'foe names cycle with suffixes');
+
+// long smoke: run 30s of chaos with everything alive, draw every few frames
+KS.start();
+for (let i = 0; i < 60 * 30; i++) { KS.tick(1 / 60); if (i % 20 === 0) KS.draw(); }
+t.ok(true, '30s mixed simulation with draws did not throw');
 
 t.done();
