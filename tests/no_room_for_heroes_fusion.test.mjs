@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
-  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,
+  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
@@ -199,5 +199,18 @@ t.ok(c0.synType === 'fire' && c0.syn === 1 + A.SYNERGY_TYPES.fire.amp, `a synerg
 A.G.rooms = [{ type:'spike', cap:2, kills:0, units:[{type:'spike',kind:'trap',lvl:1},{type:'skeleton',kind:'monster',lvl:1}] }];
 A.buildCells();
 t.ok(!A.G.cells[0].synType && (A.G.cells[0].syn||1) === 1, 'a non-pair room has no synergy amp');
+
+// --- 👺 a Goblin Den works even MIXED with a guard: goblins still march, the guard stays ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;
+A.G.rooms = [{ type:'goblin', cap:2, kills:0, units:[{type:'goblin',kind:'monster',lvl:1},{type:'ogre',kind:'monster',lvl:1}] }];
+A.buildCells();
+const den = A.G.cells[0];
+t.ok(den.spawner === 'goblin', 'a den mixed with an ogre still spawns goblins');
+t.ok(den.guards.length === 1 && den.guards[0].type === 'ogre', 'the ogre stays a stationary guard; the goblin is NOT a guard');
+A.spawnDenGoblinsForWave();
+t.ok((A.G.minions||[]).some(m => m.type==='goblin' && m.home===0), 'the mixed den marches goblins out for the wave');
+// the inspector shows BOTH the den and the guard
+const desc = A.describeRoom(A.G.rooms[0], true);
+t.ok(/Goblins \(spawner\)/.test(desc) && /Ogre Lair/.test(desc), 'the room inspector lists both the goblin den and the ogre guard');
 
 t.done();
