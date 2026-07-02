@@ -190,8 +190,9 @@ try{
 //    dial softens whatever set-piece shakes remain.
 try{
   freshRun([room('spike',1), room('goblin',1)]);
-  A.shakeMag=0;
+  A.shakeMag=0; A.G.combo=0;                                     // no combo-tier callout to muddy the check
   const h=A.G.heroes.find(x=>x && !x.champion && !x.elite && x.state!=='dead') || A.G.heroes[0];
+  h.champion=null; h.elite=false; h.reachedThrone=false;         // guarantee a ROUTINE kill (elite/champion/throne kills DO shake)
   A.dealToHero(h, 999999, 'TEST', 'full', 'phys', true);        // a lethal routine hit (aimed → no dodge) → heroDies
   t.ok(h.state==='dead', 'routine hero died from the hit (control)');
   t.ok(A.shakeMag===0, 'a routine hero kill no longer shakes the screen');

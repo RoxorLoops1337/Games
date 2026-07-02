@@ -233,4 +233,12 @@ t.ok(/Blade/.test(floorTxt) && /Tap to collect/.test(floorTxt), 'floor-loot gear
 t.ok(/Drag onto a monster/.test(chestTxt) && !/Tap to collect/.test(chestTxt), 'chest gear card shows the equip/merge hint instead');
 t.ok(/Blade/.test(chestTxt) && /Rare/.test(chestTxt), 'both cards show the piece name and tier');
 
+// --- ⚖️ rarity → power ladder: commons are the weak baseline; rares/epics hit harder ---
+const dps = k => A.ROOMS[k].dmg / A.ROOMS[k].rate;
+t.ok(dps('spike') < dps('gallows') && dps('gallows') < dps('maul'), `trap dps climbs common→rare→epic (spike ${dps('spike').toFixed(1)} < gallows ${dps('gallows').toFixed(1)} < maul ${dps('maul').toFixed(1)})`);
+t.ok(A.ROOMS.spike.dmg <= 5 && A.ROOMS.arrow.dmg <= 4, 'common traps are the weak baseline');
+t.ok(A.ROOMS.maul.dmg >= 18 && A.ROOMS.bombard.dmg >= 18, 'epic traps hit hard (a rare/epic feels good to get)');
+t.ok(A.ROOMS.goblin.hp < A.ROOMS.ogre.hp && A.ROOMS.skeleton.hp < A.ROOMS.ogre.hp, 'common monsters are frailer than the tougher tiers');
+t.ok(A.ROOMS.orc.atk > A.ROOMS.skeleton.atk && A.ROOMS.warden.hp > A.ROOMS.skeleton.hp, 'rare monsters out-stat the commons');
+
 t.done();

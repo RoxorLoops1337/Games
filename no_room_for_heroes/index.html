@@ -637,31 +637,38 @@ const DRAKE_HOVER = 64;     // 🐲 the Drakeling is a flyer — hovers this man
 // Room cards. type = id. "trap" rooms hit passing heroes; "monster" rooms
 // spawn a blocker that must be killed; "shop" arms heroes (you profit).
 const ROOMS = {
-  spike:    {kind:'trap',   name:'Spike Pit',  ic:'🦷', col:'#9aa4b2', dmg:6,  rate:0.45, elem:'phys', desc:'Fast cheap spikes. Shatters frozen heroes.'},
-  flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, elem:'fire', desc:'Hits hard + burns. Ignites oiled heroes.'},
-  arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:5,  rate:0.3,  elem:'phys', pierce:true, desc:'Very rapid, pierces armor.'},
+  // ---- COMMON traps: cheap baseline (weakest — the starters you upgrade away from) ----
+  spike:    {kind:'trap',   name:'Spike Pit',  ic:'🦷', col:'#9aa4b2', dmg:5,  rate:0.45, elem:'phys', desc:'Fast cheap spikes. Shatters frozen heroes.'},
+  arrow:    {kind:'trap',   name:'Dart Wall',  ic:'🎯', col:'#caa15e', dmg:4,  rate:0.34, elem:'phys', pierce:true, desc:'Rapid darts that pierce armor.'},
   oil:      {kind:'trap',   name:'Oil Slick',  ic:'🛢️', col:'#3a3a2a', dmg:3,  rate:0.7,  elem:'oil',  desc:'Coats heroes in oil — slows them, primes fire & lightning.'},
+  // ---- SPECIAL traps: an element + a reaction ----
+  flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, elem:'fire', desc:'Hits hard + burns. Ignites oiled heroes.'},
   frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). Then any hit SHATTERS for a burst.'},
   tesla:    {kind:'trap',   name:'Tesla Coil', ic:'⚡', col:'#fff34d', dmg:9,  rate:0.7,  elem:'shock',desc:'Lightning. Chains across the party if they are oiled.'},
-  // ---- counter cards (unlockable) ----
-  magebane: {kind:'trap',   name:'Mage-Bane',  ic:'🔮', col:'#b163ff', dmg:7,  rate:0.5,  elem:'phys', vsClass:['mage','cleric'], vsMult:2.6, desc:'2.6× damage to mages & clerics.'},
-  maul:     {kind:'trap',   name:'Armor Crusher',ic:'🔨',col:'#9aa4b2', dmg:16, rate:1.0,  elem:'phys', pierceAll:true, desc:'Ignores ALL armor — crushes armored heroes.'},
-  gallows:  {kind:'trap',   name:'Gallows',    ic:'⚰️', col:'#6a5a8a', dmg:8,  rate:0.6,  elem:'phys', vsLowHp:0.4, vsMult:3, desc:'Executes the wounded: 3× damage under 40% HP.'},
-  hexward:  {kind:'trap',   name:'Hexward',    ic:'🧿', col:'#4dc3ff', dmg:6,  rate:0.45, elem:'phys', vsElite:true, vsMult:2.2, desc:'2.2× damage to elite (trait-bearing) heroes.'},
-  bombard:  {kind:'trap',   name:'Bombard',    ic:'💣', col:'#e0823a', dmg:15, rate:2.4,  elem:'phys', aoe:1, desc:'Lobs shells that hit EVERY hero within one room of the blast — punishes a strung-out corridor.'},
   venom:    {kind:'trap',   name:'Venom Vent', ic:'🐍', col:'#7bdc6b', dmg:3,  rate:0.7,  elem:'phys', poison:4, desc:'Weak hit, but injects STACKING poison. A 🔥flame room then COMBUSTS the stacks for a burst.'},
-  corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:5,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
-  hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:4,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
-  runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.20, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +20%.'},
-  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:18, atk:7, feeds:true, desc:'Marching goblins that level up from their own kills.'},
-  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:32, atk:11,  desc:'Scales hard with levels.'},
-  warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:58, atk:8, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
-  totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:30, atk:2, totem:true, desc:'Support: while it stands, +30% trap & guard output to its OWN room. Hide it behind a tank.'},
-  warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:50, atk:8, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
-  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:34, atk:7, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
+  // ---- RARE traps: specialists that hit noticeably harder than commons ----
+  magebane: {kind:'trap',   name:'Mage-Bane',  ic:'🔮', col:'#b163ff', dmg:8,  rate:0.5,  elem:'phys', vsClass:['mage','cleric'], vsMult:2.6, desc:'2.6× damage to mages & clerics.'},
+  gallows:  {kind:'trap',   name:'Gallows',    ic:'⚰️', col:'#6a5a8a', dmg:9,  rate:0.6,  elem:'phys', vsLowHp:0.4, vsMult:3, desc:'Executes the wounded: 3× damage under 40% HP.'},
+  hexward:  {kind:'trap',   name:'Hexward',    ic:'🧿', col:'#4dc3ff', dmg:7,  rate:0.45, elem:'phys', vsElite:true, vsMult:2.2, desc:'2.2× damage to elite (trait-bearing) heroes.'},
+  corrode:  {kind:'trap',   name:'Acid Sprayer',ic:'🧪',col:'#b6e84d', dmg:6,  rate:0.6,  elem:'phys', acid:3, desc:'Corrodes ARMOR each spray, so every later hit bites deeper. Melts armored heroes.'},
+  // ---- EPIC traps: room-changers — grab one and feel it ----
+  maul:     {kind:'trap',   name:'Armor Crusher',ic:'🔨',col:'#9aa4b2', dmg:19, rate:1.0,  elem:'phys', pierceAll:true, desc:'Ignores ALL armor — crushes armored heroes.'},
+  bombard:  {kind:'trap',   name:'Bombard',    ic:'💣', col:'#e0823a', dmg:18, rate:2.4,  elem:'phys', aoe:1, desc:'Lobs shells that hit EVERY hero within one room of the blast — punishes a strung-out corridor.'},
+  hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:5,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
+  runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.25, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +25%.'},
+  // COMMON monsters: the cheap bodies (weakest — swarm/filler)
+  goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Marching goblins that level up from their own kills.'},
+  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:28, atk:10,  desc:'Scales hard with levels.'},
+  // SPECIAL: a proper wall
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
-  orc:      {kind:'monster',name:'Orc Marauder',ic:'🪓', col:'#5a8f3a', hp:42, atk:15, desc:'A tusked green warrior — hits hard from the front line. No gimmicks, just a wall of muscle to anchor a room of traps.'},
-  dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:38, atk:6, breath:{burn:3, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
+  // RARE monsters: stronger bodies + a real trick
+  warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:66, atk:9, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
+  warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:58, atk:9, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
+  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:38, atk:8, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
+  orc:      {kind:'monster',name:'Orc Marauder',ic:'🪓', col:'#5a8f3a', hp:48, atk:16, desc:'A tusked green warrior — hits hard from the front line. No gimmicks, just a wall of muscle to anchor a room of traps.'},
+  dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:44, atk:7, breath:{burn:3, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
+  // EPIC support
+  totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:36, atk:2, totem:true, desc:'Support: while it stands, +35% trap & guard output to its OWN room. Hide it behind a tank.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
   minion:   {kind:'monster',name:'Corrupted',  ic:'🧟', col:'#9a5cff', hp:30, atk:7, minion:true, desc:'A turned hero that guards a room.'},
 };
@@ -5981,7 +5988,7 @@ function ampAt(idx){
   // 🗿 War Totem: amplifies its OWN room (traps + co-guards) while its totem still
   // stands — a back-row support that makes the room heroes are fighting in deadlier.
   const self=G.cells&&G.cells[idx];
-  if(self && self.guards && self.guards.some(g=>g&&g.alive&&g.type==='totem')) m+=0.30;
+  if(self && self.guards && self.guards.some(g=>g&&g.alive&&g.type==='totem')) m+=0.35;   // 🗿 War Totem (epic): +35% to its own room
   return m;
 }
 // Apply a trap's lingering statuses (poison / acid / mark) to a hero it just hit.
