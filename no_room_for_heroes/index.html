@@ -4038,10 +4038,12 @@ function buildCells(){
     if(r){
       cell.syn=1;                                // synergies removed — units act independently
       const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank (room kills) powers this cell
-      // 👺 Pure Goblin Den = a SPAWNER — no stationary guard; goblins march out per wave
+      // 👺 Goblin Den = a SPAWNER — its goblins march out each wave instead of
+      // standing guard. This works even when the den is MIXED with other monsters:
+      // ANY goblin makes the room spawn a den; the non-goblin monsters stay guards.
       const monUnits=roomMonUnits(r);
-      const pureGoblin=monUnits.length>0 && monUnits.every(u=>u.type==='goblin');
-      if(pureGoblin) cell.spawner='goblin';
+      const hasGoblin=monUnits.some(u=>u.type==='goblin');
+      if(hasGoblin) cell.spawner='goblin';
       let guards=[], hasShop=false; const bm=barracksMul();
       for(const u of r.units){
         const def=ROOMS[u.type]; const lvl=u.lvl||1;
@@ -4050,7 +4052,7 @@ function buildCells(){
           cell.traps.push({type:u.type, def, lvl, fireT:0, stackMul: def.amp?1:TRAP_STACK_MUL[Math.min(di,2)]});
           if(def.amp) cell.ampSelf=(cell.ampSelf||0)+def.amp;     // Runestone amplifier (this + adjacent)
         } else if(def.kind==='monster'){
-          if(pureGoblin) continue;                                 // spawner: handled by spawnDenGoblinsForWave
+          if(u.type==='goblin') continue;                          // den goblins spawn & march — never a stationary guard
           if(def.taunt) cell.warden=true;                        // strikes the whole stalled party
           if(def.totem) cell.totem=true;                         // buffs adjacent rooms while alive
           const bHp = u.type==='minion'? (u.minHp||def.hp) : def.hp;
@@ -7271,7 +7273,8 @@ function drawRoomContents(x0,w,room,i){
   // cell.spawner would draw ghost goblins for, say, a Bone Pit built where a Den
   // used to stand. Used to gate the den crowd-preview & badge below.
   const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  const isDen = monParts.length>0 && monParts.every(p=>p==='goblin');
+  const hasGob = monParts.includes('goblin');                  // room spawns a goblin den (possibly ALONGSIDE guards)
+  const guardParts = monParts.filter(p=>p!=='goblin');         // non-goblin monsters draw as stationary guards
   const art=roomArtReady(room);                 // suppress props the art already shows
   // traps: every layout PART carries a layer (override in align.html);
   // defaults keep poison behind, flames over it, spikes ALWAYS on top.
@@ -7319,17 +7322,16 @@ function drawRoomContents(x0,w,room,i){
     }
   }
   // 👺 Goblin Den spawner badge: show the current goblin count above the room
-  if(isDen){
+  if(hasGob){
     const n = (G.phase==='run' && cell)
       ? (G.minions||[]).filter(m=>m.home===cell.index && m.hp>0).length
       : (Array.isArray(room.goblins) ? room.goblins.length : (room.goblins||0));
     X.fillStyle='#5fae54'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
     X.fillText('👺 '+n+'/'+GOBLIN_DEN_CAP, cx, FLOOR-118); X.textAlign='left';
   }
-  // monsters (a combo room can hold two) — draw each so both stay visible
-  // (a spawner Den has no stationary guard in run phase — the goblins are out marching)
-  if(isDen && G.phase==='run'){ /* skip — goblins drawn by drawDenGoblins */ } else
-  if(isDen){
+  // 👺 Den crowd — BUILD preview only (run-phase goblins march out, drawn by drawDenGoblins).
+  // Draws alongside any stationary guards below when the den is mixed with other monsters.
+  if(hasGob && G.phase!=='run'){
     // BUILD phase: every banked goblin idles in the den (next wave's recruits
     // included), staggered in two loose ranks so the crowd reads at a glance
     const arr=ensureGoblinArray(room);
@@ -7346,8 +7348,10 @@ function drawRoomContents(x0,w,room,i){
       if(lv>1){ X.fillStyle='#ffd34d'; X.font='bold 9px Trebuchet MS'; X.textAlign='center';
         X.fillText('⭐'+lv, gx, FLOOR-52); X.textAlign='left'; }
     }
-  } else
-  if(monParts.length){
+  }
+  // stationary guards (the non-goblin monsters) — draw in pure-guard rooms AND
+  // alongside a den when it's a mixed room.
+  if(guardParts.length){
     const alive = G.phase!=='run' ? true : (!cell || !cell.mon || cell.mon.alive);
     // monsters wait on the RIGHT and walk LEFT to MEET a hero who enters their
     // room — then STOP right next to him (don't slide past). Find the front-most
@@ -7379,7 +7383,7 @@ function drawRoomContents(x0,w,room,i){
     // {type, small}. Gel Cubes (split) PAINT FIRST so they sit behind the rest.
     const drawList = (G.phase==='run' && cell && cell.guards)
       ? cell.guards.filter(g=>g && g.alive).map(g=>({type:g.type, small:!!g.small}))
-      : monParts.map(mp=>({type:mp, small:false}));
+      : guardParts.map(mp=>({type:mp, small:false}));
     const n=drawList.length, sp=n>3?20:(n>2?28:44);
     const order=[...drawList.keys()].sort((a,b)=>((ROOMS[drawList[a].type]||{}).split?0:1)-((ROOMS[drawList[b].type]||{}).split?0:1));
     for(const li of order){
@@ -8223,9 +8227,10 @@ function describeRoom(room, detail){
     lines.push(`${def.ic} ${def.name} <span style="color:#ffd34d">Lv ${lv}/${maxLevel()}</span>: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${_sm<1?` <span class="small" style="opacity:.7">(stacked ×${_sm})</span>`:''}${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
     if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   // monsters
-  const pureGoblin = monUnits.length>0 && monUnits.every(u=>u.type==='goblin');
-  if(pureGoblin){ const def=ROOMS.goblin;
-    const glvl=monUnits.reduce((m,u)=>Math.max(m,u.lvl||1),1);
+  const gobUnits = monUnits.filter(u=>u.type==='goblin');       // 👺 the den (spawns & marches out)
+  const guardUnits = monUnits.filter(u=>u.type!=='goblin');     // stationary guards (shown beside a mixed den)
+  if(gobUnits.length){ const def=ROOMS.goblin;
+    const glvl=gobUnits.reduce((m,u)=>Math.max(m,u.lvl||1),1);
     const feed=feedMul(room.kills||0);
     const bHp =Math.round(def.hp *(0.9+(glvl-1)*0.85)*feed*bas*vm*(1+(RB.monHp ||0))*bm);
     const bAtk=Math.round(def.atk*(1.0+(glvl-1)*0.9 )*feed*bas*vm*(1+(RB.monDmg||0))*bm);
@@ -8234,13 +8239,14 @@ function describeRoom(room, detail){
     const gob=Array.isArray(room.goblins)?room.goblins:[];
     const totalKills=gob.reduce((s,u)=>s+(u.kills||0),0);
     const maxLvl=gob.reduce((m,u)=>Math.max(m,goblinLevel(u.kills)),1);
-    lines.push(`${def.ic} Goblins (spawner): <b>${ghp}</b> HP · <b>${gatk}</b> atk each (Lv 1) · ${gob.length}/${GOBLIN_DEN_CAP} · +${monUnits.length}/wave`);
+    lines.push(`${def.ic} Goblins (spawner): <b>${ghp}</b> HP · <b>${gatk}</b> atk each (Lv 1) · ${gob.length}/${GOBLIN_DEN_CAP} · +${gobUnits.length}/wave`);
     lines.push(`<span class="small" style="opacity:.85">March left to ambush heroes — survivors return. Immune to your own traps.</span>`);
     lines.push(`<span class="small" style="opacity:.85">Each goblin levels from its own kills (+${Math.round(GOBLIN_HP_PER_LVL*100)}% HP, +${Math.round(GOBLIN_ATK_PER_LVL*100)}% ATK per level, every ${GOBLIN_XP_PER_LVL} kills, cap Lv ${GOBLIN_LVL_MAX}). Top vet: <b>Lv ${maxLvl}</b> · pack kills: <b>${totalKills}</b>.</span>`);
     if(feed>1) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feed-1)*100)}% per goblin (no cap)`);
-  } else if(monUnits.length){ let fed=false;
+  }
+  if(guardUnits.length){ let fed=false;
     // each guard gets its OWN stat line (they fight one after the other)
-    monUnits.forEach(u=>{ const def=ROOMS[u.type]; const lv=u.lvl||1;
+    guardUnits.forEach(u=>{ const def=ROOMS[u.type]; const lv=u.lvl||1;
       const bHp=u.type==='minion'?(u.minHp||def.hp):def.hp, bAtk=u.type==='minion'?(u.minAtk||def.atk):def.atk;
       const feeds=monFeeds(def); const feed=feeds?feedMul(room.kills):1; if(feeds)fed=true;
       const ge=gearEffects(u.gear);                       // 💎 fold equipped gear into the shown stats
@@ -8249,7 +8255,7 @@ function describeRoom(room, detail){
       const carries=(u.gear&&u.gear.length)?' · '+u.gear.map(g=>GEAR[g.k].ic).join(''):'';
       lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${def.breath?` · 🔥 burns the whole room (+${def.breath.burn}/hit, ${def.breath.dur}s)`:''}${carries}`);
       if(u.gear&&u.gear.length) u.gear.forEach(g=>lines.push(`<span class="small" style="opacity:.9">&nbsp;&nbsp;🎒 ${gearTag(g)} — ${gearEffectText(g)}</span>`)); });
-    if(monUnits.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${monUnits.length} guards — each steps up when the one before falls</span>`);
+    if(guardUnits.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${guardUnits.length} guards — each steps up when the one before falls</span>`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feedMul(room.kills)-1)*100)}% (no cap)`); }
   if(room.units.some(u=>u.kind==='shop')){
     const unsold=(room.stock||[]).filter(s=>!s.sold);
