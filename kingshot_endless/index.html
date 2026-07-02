@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kingshot Endless</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #0b0e14; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  #game { display: block; margin: 0 auto; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+'use strict';
+// ============================================================
+// KINGSHOT ENDLESS — hold-the-line wave defense
+// One file, vanilla canvas. Virtual resolution 480x840, letter-
+// boxed to the window. All state lives in S; window.KS exposes
+// hooks for the headless test suite.
+// ============================================================
+
+const W = 480, H = 840;
+const cvs = document.getElementById('game');
+const ctx = cvs.getContext('2d');
+
+// ---- layout bands (virtual px) ------------------------------
+const HUD_H     = 64;          // top bar
+const WALL_Y    = 560;         // enemies stop & attack here
+const WALL_H    = 52;          // wall band height
+const SHOP_Y    = 726;         // bottom shop bar top
+const SLOT_XS   = [65, 135, 205, 275, 345, 415];
+const SLOT_Y    = WALL_Y + 24; // defenders stand on the wall
+const KING_X    = W / 2, KING_Y = 672;
+
+// ---- balance dials ------------------------------------------
+const START_COINS   = 45;
+const WALL_HP0      = 200;
+const BUILD_TIME    = 12;      // s between waves
+const VOLLEY_CD     = 3.2;     // s, king's tap volley
+const VOLLEY_ARROWS = 6;
+const VOLLEY_RADIUS = 58;
+const KING_RATE     = 1.1;     // s per auto shot
+const KING_DMG      = 5;
+const UPG_MUL       = 1.6;     // upgrade cost growth per level
+const DMG_UP        = 1.35;    // unit damage growth per level
+const COST_RAMP     = 0.45;    // placement cost +45% per owned unit of a type
+
+function hpMul(n)   { return 1 + 0.30 * (n - 1) + 0.040 * Math.pow(n - 1, 1.6); }
+function dmgMulW(n) { return 1 + 0.09 * (n - 1); }
+function waveCount(n) { return Math.min(42, 5 + Math.round(2.2 * (n - 1))); }
+function rewardMul(n) { return 1 + 0.30 * (n - 1); }
+function waveBonus(n) { return 6 + 2 * n; }   // for tapping FIGHT early
+
+// ---- unit + enemy defs --------------------------------------
+const UNITS = {
+  archer: { name: 'Archer', cost: 30, dmg: 6,  rate: 0.90, range: 900, kind: 'arrow',  color: '#6ecb5a', unlock: 1 },
+  spear:  { name: 'Spear',  cost: 25, dmg: 16, rate: 0.75, range: 95,  kind: 'melee',  color: '#c9d4e0', unlock: 2 },
+  mage:   { name: 'Mage',   cost: 60, dmg: 12, rate: 2.10, range: 900, kind: 'fire',   color: '#b06ae0', unlock: 4, splash: 55 },
+};
+const FOES = {
+  grunt:  { hp: 20, spd: 52, dmg: 5,  worth: 6,  r: 12, color: '#d1553f' },
+  runner: { hp: 11, spd: 96, dmg: 3,  worth: 5,  r: 10, color: '#e0a13c' },
+  brute:  { hp: 85, spd: 30, dmg: 13, worth: 16, r: 17, color: '#8a4fc0' },
+  shield: { hp: 42, spd: 44, dmg: 6,  worth: 11, r: 13, color: '#4f7fc0', resist: 0.5 },
+  boss:   { hp: 360, spd: 22, dmg: 24, worth: 120, r: 26, color: '#c03a6b', boss: true },
+};
+
+// ---- state --------------------------------------------------
+let S;
+function reset() {
+  S = {
+    phase: 'menu',            // menu | build | wave | over
+    wave: 0, coins: START_COINS, kills: 0,
+    wallHp: WALL_HP0, wallMax: WALL_HP0,
+    slots: SLOT_XS.map(x => ({ x, y: SLOT_Y, unit: null })),
+    enemies: [], shots: [], parts: [], floats: [],
+    sel: null,                // selected shop card
+    buildT: 0, waveT: 0, spawnQ: [],
+    volleyCd: 0, kingCd: 0,
+    speed: 1, shake: 0,
+    best: loadBest(),
+    over: false, flash: 0, t: 0,
+  };
+}
+function loadBest() {
+  try { return parseInt(localStorage.getItem('ks_endless_best') || '0', 10) || 0; }
+  catch (e) { return 0; }
+}
+function saveBest() {
+  try { if (S.wave > S.best) { S.best = S.wave; localStorage.setItem('ks_endless_best', String(S.best)); } }
+  catch (e) {}
+}
+
+// ---- tiny synth sfx -----------------------------------------
+let AC = null, muted = false;
+try { muted = localStorage.getItem('ks_endless_muted') === '1'; } catch (e) {}
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+  return AC;
+}
+function sfx(kind) {
+  const ac = !muted && audio(); if (!ac) return;
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  const P = {
+    shoot: [880, 220, 0.05, 0.06, 'square'],
+    hit:   [180, 70,  0.08, 0.09, 'sawtooth'],
+    coin:  [1320, 1760, 0.05, 0.08, 'square'],
+    place: [440, 660, 0.06, 0.10, 'triangle'],
+    upg:   [520, 1040, 0.09, 0.12, 'triangle'],
+    crack: [110, 40, 0.06, 0.22, 'sawtooth'],
+    boom:  [70, 30, 0.20, 0.35, 'sawtooth'],
+    boss:  [90, 60, 0.25, 0.5, 'square'],
+  }[kind] || [440, 440, 0.05, 0.05, 'square'];
+  o.type = P[4];
+  o.frequency.setValueAtTime(P[0], t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, P[1]), t + P[3]);
+  g.gain.setValueAtTime(P[2], t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + P[3]);
+  o.start(t); o.stop(t + P[3] + 0.02);
+}
+
+// ---- waves --------------------------------------------------
+function startBuild() {
+  S.phase = 'build';
+  S.buildT = BUILD_TIME;
+}
+function startWave(skipBonus) {
+  S.wave++;
+  if (skipBonus) { S.coins += waveBonus(S.wave); float(W / 2, WALL_Y - 60, '+' + waveBonus(S.wave) + '¢', '#ffd94a'); }
+  S.phase = 'wave'; S.waveT = 0; S.spawnQ = [];
+  const n = S.wave, count = waveCount(n), boss = n % 10 === 0;
+  for (let i = 0; i < count; i++) {
+    let type = 'grunt';
+    const r = rnd();
+    if (n >= 3 && r < 0.22) type = 'runner';
+    if (n >= 5 && r >= 0.22 && r < 0.38) type = 'shield';
+    if (n >= 7 && r >= 0.38 && r < 0.52) type = 'brute';
+    S.spawnQ.push({ t: 0.5 + i * (7 / count) + rnd() * 0.3, type });
+  }
+  if (boss) S.spawnQ.push({ t: 8.5, type: 'boss' });
+  S.spawnQ.sort((a, b) => a.t - b.t);
+  if (boss) sfx('boss');
+}
+function spawnEnemy(type) {
+  const d = FOES[type], n = Math.max(1, S.wave);
+  S.enemies.push({
+    type, x: 40 + rnd() * (W - 80), y: -20 - rnd() * 30,
+    hp: d.hp * hpMul(n), max: d.hp * hpMul(n),
+    spd: d.spd * (0.92 + rnd() * 0.16), dmg: d.dmg * dmgMulW(n),
+    worth: Math.ceil(d.worth * rewardMul(n)),
+    r: d.r, atkCd: 0, sway: rnd() * 6.28, hurt: 0,
+    resist: d.resist || 0, boss: !!d.boss,
+  });
+}
+
+// ---- shop / placement ---------------------------------------
+function ownedCount(type) { return S.slots.filter(s => s.unit && s.unit.type === type).length; }
+function placeCost(type)  { return Math.ceil(UNITS[type].cost * (1 + COST_RAMP * ownedCount(type))); }
+function upgCost(u)       { return Math.ceil(UNITS[u.type].cost * 0.8 * Math.pow(UPG_MUL, u.lvl - 1)); }
+function unitDmg(u)       { return UNITS[u.type].dmg * Math.pow(DMG_UP, u.lvl - 1); }
+
+function placeUnit(slot, type) {
+  const cost = placeCost(type);
+  if (slot.unit || S.coins < cost || S.wave + 1 < UNITS[type].unlock) return false;
+  S.coins -= cost;
+  slot.unit = { type, lvl: 1, cd: rnd() * 0.4 };
+  sfx('place'); puff(slot.x, slot.y, UNITS[type].color);
+  return true;
+}
+function upgradeUnit(slot) {
+  const u = slot.unit; if (!u) return false;
+  const cost = upgCost(u);
+  if (S.coins < cost) return false;
+  S.coins -= cost; u.lvl++;
+  sfx('upg'); puff(slot.x, slot.y, '#ffd94a');
+  float(slot.x, slot.y - 30, 'LV ' + u.lvl, '#ffd94a');
+  return true;
+}
+function repairCost() { return Math.ceil(20 + (S.wallMax - S.wallHp) * 0.35); }
+function repairWall() {
+  if (S.wallHp >= S.wallMax) return false;
+  const c = repairCost(); if (S.coins < c) return false;
+  S.coins -= c; S.wallHp = S.wallMax; sfx('upg');
+  float(W / 2, WALL_Y, 'REPAIRED', '#6ecb5a');
+  return true;
+}
+function fortifyCost() { return Math.ceil(40 * Math.pow(1.5, Math.round(Math.log((S.wallMax / WALL_HP0)) / Math.log(1.25)))); }
+function fortifyWall() {
+  const c = fortifyCost(); if (S.coins < c) return false;
+  S.coins -= c;
+  S.wallMax = Math.round(S.wallMax * 1.25);
+  S.wallHp += Math.round(S.wallMax * 0.2);
+  if (S.wallHp > S.wallMax) S.wallHp = S.wallMax;
+  sfx('upg'); float(W / 2, WALL_Y, 'WALL +', '#6ec9e0');
+  return true;
+}
+
+// ---- combat -------------------------------------------------
+function nearestEnemy(x, y, maxR) {
+  let best = null, bd = maxR * maxR;
+  for (const e of S.enemies) {
+    if (e.hp <= 0) continue;
+    const dx = e.x - x, dy = e.y - y, d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+function hurtEnemy(e, dmg, ranged) {
+  if (e.hp <= 0) return;
+  if (ranged && e.resist) dmg *= (1 - e.resist);
+  e.hp -= dmg; e.hurt = 0.12;
+  float(e.x, e.y - e.r - 6, Math.ceil(dmg), '#fff');
+  if (e.hp <= 0) killEnemy(e);
+  else sfx('hit');
+}
+function killEnemy(e) {
+  S.kills++;
+  S.coins += e.worth;
+  float(e.x, e.y, '+' + e.worth + '¢', '#ffd94a');
+  for (let i = 0; i < (e.boss ? 26 : 8); i++) coinPart(e.x, e.y);
+  gib(e.x, e.y, FOES[e.type].color, e.boss ? 22 : 9);
+  if (e.boss) { S.shake = 14; sfx('boom'); } else sfx('coin');
+}
+function damageWall(d) {
+  S.wallHp -= d; S.shake = Math.max(S.shake, 5); S.flash = 0.1; sfx('crack');
+  if (S.wallHp <= 0) { S.wallHp = 0; gameOver(); }
+}
+function gameOver() {
+  if (S.phase === 'over') return;
+  S.phase = 'over'; S.over = true; S.shake = 20; sfx('boom');
+  saveBest();
+}
+function fireVolley(x, y) {
+  if (S.volleyCd > 0 || S.phase !== 'wave') return false;
+  S.volleyCd = VOLLEY_CD;
+  for (let i = 0; i < VOLLEY_ARROWS; i++) {
+    const a = rnd() * 6.28, r = rnd() * VOLLEY_RADIUS;
+    S.shots.push({
+      kind: 'volley', x: KING_X, y: KING_Y - 40,
+      tx: x + Math.cos(a) * r, ty: y + Math.sin(a) * r,
+      t: 0, dur: 0.45 + i * 0.05, dmg: KING_DMG * 2.2,
+    });
+  }
+  sfx('shoot');
+  return true;
+}
+
+// ---- particles / floats -------------------------------------
+function float(x, y, txt, color) {
+  S.floats.push({ x, y, txt: String(txt), color, t: 0 });
+  if (S.floats.length > 60) S.floats.shift();
+}
+function puff(x, y, color) {
+  for (let i = 0; i < 10; i++)
+    S.parts.push({ x, y, vx: (rnd() - 0.5) * 120, vy: (rnd() - 0.7) * 120, t: 0, dur: 0.5, r: 3, color });
+}
+function gib(x, y, color, n) {
+  for (let i = 0; i < n; i++)
+    S.parts.push({ x, y, vx: (rnd() - 0.5) * 220, vy: (rnd() - 0.8) * 200, t: 0, dur: 0.6, r: 2 + rnd() * 3, color, g: 1 });
+}
+function coinPart(x, y) {
+  S.parts.push({ x, y, vx: (rnd() - 0.5) * 260, vy: -80 - rnd() * 160, t: 0, dur: 0.55, r: 3, color: '#ffd94a', g: 1 });
+}
+let seed = 1234567;
+function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+
+// ---- update -------------------------------------------------
+function tick(dt) {
+  dt *= S.speed;
+  S.t += dt;
+  if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
+  if (S.flash > 0) S.flash -= dt;
+  if (S.volleyCd > 0) S.volleyCd -= dt;
+
+  // particles & floats always run
+  for (const p of S.parts) {
+    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.g) p.vy += 420 * dt;
+  }
+  S.parts = S.parts.filter(p => p.t < p.dur);
+  for (const f of S.floats) { f.t += dt; f.y -= 34 * dt; }
+  S.floats = S.floats.filter(f => f.t < 0.9);
+
+  if (S.phase === 'menu' || S.phase === 'over') return;
+
+  if (S.phase === 'build') {
+    S.buildT -= dt;
+    if (S.buildT <= 0) startWave(false);
+    return;
+  }
+
+  // ---- wave phase ----
+  S.waveT += dt;
+  while (S.spawnQ.length && S.spawnQ[0].t <= S.waveT) spawnEnemy(S.spawnQ.shift().type);
+
+  // enemies
+  for (const e of S.enemies) {
+    if (e.hp <= 0) continue;
+    e.hurt = Math.max(0, e.hurt - dt);
+    if (e.y < WALL_Y - e.r) {
+      e.y += e.spd * dt;
+      e.x += Math.sin(S.t * 2 + e.sway) * 8 * dt;
+      if (e.x < 24) e.x = 24; if (e.x > W - 24) e.x = W - 24;
+    } else {
+      e.y = WALL_Y - e.r;
+      e.atkCd -= dt;
+      if (e.atkCd <= 0) { e.atkCd = 0.9; damageWall(e.dmg); gib(e.x, WALL_Y + 6, '#9aa7b5', 4); }
+    }
+  }
+  S.enemies = S.enemies.filter(e => e.hp > 0);
+
+  // king auto-shot
+  S.kingCd -= dt;
+  if (S.kingCd <= 0) {
+    const tgt = nearestEnemy(KING_X, KING_Y, 2000);
+    if (tgt) {
+      S.kingCd = KING_RATE;
+      S.shots.push({ kind: 'arrow', x: KING_X, y: KING_Y - 42, tgt, t: 0, dur: 0.35, dmg: KING_DMG });
+      sfx('shoot');
+    }
+  }
+
+  // defenders
+  for (const s of S.slots) {
+    const u = s.unit; if (!u) continue;
+    u.cd -= dt;
+    if (u.cd > 0) continue;
+    const def = UNITS[u.type];
+    if (def.kind === 'melee') {
+      const tgt = nearestEnemy(s.x, WALL_Y, def.range);
+      if (tgt) { u.cd = def.rate; hurtEnemy(tgt, unitDmg(u), false); u.jab = 0.15; }
+    } else {
+      const tgt = nearestEnemy(s.x, s.y, def.range);
+      if (tgt) {
+        u.cd = def.rate;
+        S.shots.push({
+          kind: def.kind === 'fire' ? 'fire' : 'arrow',
+          x: s.x, y: s.y - 16, tgt, t: 0,
+          dur: def.kind === 'fire' ? 0.6 : 0.32,
+          dmg: unitDmg(u), splash: def.splash || 0,
+        });
+        sfx('shoot');
+      }
+    }
+  }
+
+  // projectiles
+  for (const sh of S.shots) {
+    sh.t += dt;
+    if (sh.t < sh.dur) continue;
+    sh.done = true;
+    if (sh.kind === 'volley') {
+      let hit = false;
+      for (const e of S.enemies) {
+        const dx = e.x - sh.tx, dy = e.y - sh.ty;
+        if (dx * dx + dy * dy < 30 * 30) { hurtEnemy(e, sh.dmg, true); hit = true; }
+      }
+      if (!hit) gib(sh.tx, sh.ty, '#c9d4e0', 2);
+    } else if (sh.kind === 'fire') {
+      const cx = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.x : (sh.lx || 0), cy = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.y : (sh.ly || 0);
+      for (const e of S.enemies) {
+        const dx = e.x - cx, dy = e.y - cy;
+        if (dx * dx + dy * dy < sh.splash * sh.splash) hurtEnemy(e, sh.dmg, true);
+      }
+      gib(cx, cy, '#e08a3c', 10); S.shake = Math.max(S.shake, 3);
+    } else {
+      if (sh.tgt && sh.tgt.hp > 0) hurtEnemy(sh.tgt, sh.dmg, true);
+      else { const near = nearestEnemy(sh.lx || 0, sh.ly || 0, 30); if (near) hurtEnemy(near, sh.dmg, true); }
+    }
+  }
+  // remember last-known target pos for shots whose target dies mid-flight
+  for (const sh of S.shots) if (sh.tgt && sh.tgt.hp > 0) { sh.lx = sh.tgt.x; sh.ly = sh.tgt.y; }
+  S.shots = S.shots.filter(sh => !sh.done);
+
+  // wave clear?
+  if (S.phase === 'wave' && !S.spawnQ.length && !S.enemies.length) {
+    const bonus = Math.ceil(4 + S.wave * 1.5);
+    S.coins += bonus;
+    S.shots.length = 0;
+    float(W / 2, 300, 'WAVE ' + S.wave + ' CLEAR  +' + bonus + '¢', '#6ecb5a');
+    saveBest();
+    startBuild();
+  }
+}
+
+// ---- drawing ------------------------------------------------
+function rrect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawField() {
+  // grass
+  const g = ctx.createLinearGradient(0, HUD_H, 0, WALL_Y);
+  g.addColorStop(0, '#2a4a2e'); g.addColorStop(1, '#3a5c38');
+  ctx.fillStyle = g; ctx.fillRect(0, HUD_H, W, WALL_Y - HUD_H);
+  // dirt patches
+  ctx.fillStyle = 'rgba(90,70,40,0.25)';
+  for (let i = 0; i < 12; i++) {
+    const x = ((i * 137) % W), y = HUD_H + ((i * 211) % (WALL_Y - HUD_H - 40)) + 20;
+    ctx.beginPath(); ctx.ellipse(x, y, 26, 10, 0, 0, 6.29); ctx.fill();
+  }
+  // wall
+  ctx.fillStyle = '#5b6570'; ctx.fillRect(0, WALL_Y, W, WALL_H);
+  ctx.fillStyle = '#6d7885';
+  for (let x = 0; x < W; x += 40) ctx.fillRect(x + 4, WALL_Y - 10, 24, 12); // crenellations
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  for (let x = 0; x < W; x += 48) ctx.fillRect(x, WALL_Y + 18, 40, 3);      // brick lines
+  // cracks when hurt
+  const dmgFrac = 1 - S.wallHp / S.wallMax;
+  if (dmgFrac > 0.15) {
+    ctx.strokeStyle = 'rgba(20,22,26,' + Math.min(0.8, dmgFrac) + ')'; ctx.lineWidth = 2;
+    for (let i = 0; i < Math.floor(dmgFrac * 8); i++) {
+      const x = (i * 173 + 60) % W;
+      ctx.beginPath(); ctx.moveTo(x, WALL_Y + 4);
+      ctx.lineTo(x - 8, WALL_Y + 20); ctx.lineTo(x + 6, WALL_Y + 38); ctx.stroke();
+    }
+  }
+  // courtyard
+  ctx.fillStyle = '#31394a'; ctx.fillRect(0, WALL_Y + WALL_H, W, SHOP_Y - WALL_Y - WALL_H);
+  // keep + king
+  ctx.fillStyle = '#454f63'; rrect(KING_X - 55, KING_Y - 34, 110, 62, 8); ctx.fill();
+  ctx.fillStyle = '#525d73';
+  ctx.fillRect(KING_X - 55, KING_Y - 44, 18, 12); ctx.fillRect(KING_X - 9, KING_Y - 44, 18, 12); ctx.fillRect(KING_X + 37, KING_Y - 44, 18, 12);
+  // king figure
+  ctx.fillStyle = '#e8c46a'; ctx.beginPath(); ctx.arc(KING_X, KING_Y - 52, 8, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#ffd94a';
+  ctx.beginPath(); ctx.moveTo(KING_X - 8, KING_Y - 58); ctx.lineTo(KING_X - 4, KING_Y - 66); ctx.lineTo(KING_X, KING_Y - 58);
+  ctx.lineTo(KING_X + 4, KING_Y - 66); ctx.lineTo(KING_X + 8, KING_Y - 58); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#a33'; ctx.fillRect(KING_X - 6, KING_Y - 50, 12, 16);
+  // volley cooldown ring
+  if (S.phase === 'wave') {
+    const f = 1 - Math.max(0, S.volleyCd) / VOLLEY_CD;
+    ctx.strokeStyle = f >= 1 ? '#ffd94a' : 'rgba(255,217,74,0.35)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(KING_X, KING_Y - 50, 15, -1.57, -1.57 + f * 6.283); ctx.stroke();
+  }
+}
+function drawSlots() {
+  for (const s of S.slots) {
+    const u = s.unit;
+    ctx.strokeStyle = u ? 'rgba(255,255,255,0.12)' : (S.sel ? '#ffd94a' : 'rgba(255,255,255,0.3)');
+    ctx.lineWidth = 2; ctx.setLineDash(u ? [] : [5, 4]);
+    rrect(s.x - 26, s.y - 24, 52, 44, 8); ctx.stroke(); ctx.setLineDash([]);
+    if (!u) {
+      if (S.sel) {
+        const c = placeCost(S.sel);
+        ctx.fillStyle = S.coins >= c ? '#ffd94a' : '#888';
+        ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(c + '¢', s.x, s.y + 4);
+      }
+      continue;
+    }
+    const def = UNITS[u.type];
+    const bob = Math.sin(S.t * 5 + s.x) * 1.5;
+    // body
+    ctx.fillStyle = def.color;
+    rrect(s.x - 9, s.y - 8 + bob, 18, 20, 4); ctx.fill();
+    // head
+    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(s.x, s.y - 14 + bob, 7, 0, 6.29); ctx.fill();
+    // weapon
+    ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
+    if (u.type === 'archer') { ctx.beginPath(); ctx.arc(s.x + 11, s.y - 4 + bob, 8, -1.1, 1.1); ctx.stroke(); }
+    else if (u.type === 'spear') {
+      const jab = (u.jab && (u.jab -= 0.016) > 0) ? 6 : 0;
+      ctx.beginPath(); ctx.moveTo(s.x + 8, s.y + 6 + bob); ctx.lineTo(s.x + 14, s.y - 18 - jab + bob); ctx.stroke();
+    } else { ctx.strokeStyle = '#e08ae0'; ctx.beginPath(); ctx.moveTo(s.x + 10, s.y + 8 + bob); ctx.lineTo(s.x + 10, s.y - 16 + bob); ctx.stroke(); }
+    // level pips
+    ctx.fillStyle = '#ffd94a';
+    for (let i = 0; i < Math.min(u.lvl, 8); i++) ctx.fillRect(s.x - 24 + i * 6, s.y + 24, 4, 4);
+    // upgrade price tag
+    const c = upgCost(u);
+    ctx.fillStyle = S.coins >= c ? '#ffd94a' : 'rgba(255,255,255,0.35)';
+    ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('▲' + c, s.x, s.y + 40);
+  }
+}
+function drawEnemies() {
+  for (const e of S.enemies) {
+    const bob = Math.abs(Math.sin(S.t * 8 + e.sway)) * 2;
+    ctx.fillStyle = e.hurt > 0 ? '#fff' : FOES[e.type].color;
+    // body
+    rrect(e.x - e.r * 0.7, e.y - e.r * 0.6 - bob, e.r * 1.4, e.r * 1.3, 4); ctx.fill();
+    // head
+    ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 0.9 - bob, e.r * 0.45, 0, 6.29); ctx.fill();
+    // shieldbearer front plate
+    if (e.type === 'shield') { ctx.fillStyle = '#dfe8f2'; ctx.fillRect(e.x - e.r * 0.8, e.y - e.r * 0.7 - bob, 5, e.r * 1.5); }
+    if (e.boss) {
+      ctx.fillStyle = '#ffd94a';
+      ctx.beginPath(); ctx.moveTo(e.x - 10, e.y - e.r * 1.35 - bob); ctx.lineTo(e.x, e.y - e.r * 1.75 - bob); ctx.lineTo(e.x + 10, e.y - e.r * 1.35 - bob); ctx.closePath(); ctx.fill();
+    }
+    // hp bar
+    const f = e.hp / e.max;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(e.x - 16, e.y - e.r - 12 - bob, 32, 4);
+    ctx.fillStyle = f > 0.4 ? '#6ecb5a' : '#d1553f'; ctx.fillRect(e.x - 16, e.y - e.r - 12 - bob, 32 * f, 4);
+  }
+}
+function drawShots() {
+  for (const sh of S.shots) {
+    const f = Math.min(1, sh.t / sh.dur);
+    let tx, ty;
+    if (sh.kind === 'volley') { tx = sh.tx; ty = sh.ty; }
+    else { tx = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.x : (sh.lx || sh.x); ty = sh.tgt && sh.tgt.hp > 0 ? sh.tgt.y : (sh.ly || sh.y); }
+    const x = sh.x + (tx - sh.x) * f;
+    const y = sh.y + (ty - sh.y) * f - Math.sin(f * 3.14159) * (sh.kind === 'volley' ? 130 : 60);
+    if (sh.kind === 'fire') {
+      ctx.fillStyle = '#e08a3c'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.29); ctx.fill();
+      ctx.fillStyle = 'rgba(224,138,60,0.4)'; ctx.beginPath(); ctx.arc(x, y, 10, 0, 6.29); ctx.fill();
+    } else {
+      ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - (tx - sh.x) * 0.03, y + 6); ctx.stroke();
+    }
+  }
+}
+function drawParts() {
+  for (const p of S.parts) {
+    ctx.globalAlpha = 1 - p.t / p.dur;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.r / 2, p.y - p.r / 2, p.r, p.r);
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center';
+  for (const f of S.floats) {
+    ctx.globalAlpha = 1 - f.t / 0.9;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#000'; ctx.fillText(f.txt, f.x + 1, f.y + 1);
+    ctx.fillStyle = f.color; ctx.fillText(f.txt, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+}
+// clickable regions rebuilt each draw
+let hits = [];
+function btn(x, y, w, h, label, sub, act, opts) {
+  opts = opts || {};
+  ctx.fillStyle = opts.off ? '#39404d' : (opts.gold ? '#7a5f18' : '#3d4a63');
+  rrect(x, y, w, h, 8); ctx.fill();
+  if (opts.selq) { ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 3; rrect(x, y, w, h, 8); ctx.stroke(); }
+  ctx.fillStyle = opts.off ? '#78808c' : '#fff';
+  ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(label, x + w / 2, y + (sub ? h / 2 - 3 : h / 2 + 5));
+  if (sub) {
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = opts.off ? '#78808c' : '#ffd94a';
+    ctx.fillText(sub, x + w / 2, y + h / 2 + 13);
+  }
+  hits.push({ x, y, w, h, act });
+}
+function drawHud() {
+  ctx.fillStyle = '#141924'; ctx.fillRect(0, 0, W, HUD_H);
+  ctx.textAlign = 'left'; ctx.font = 'bold 15px sans-serif';
+  ctx.fillStyle = '#fff'; ctx.fillText('WAVE ' + Math.max(1, S.wave + (S.phase === 'build' || S.phase === 'menu' ? 1 : 0)), 12, 24);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '11px sans-serif';
+  ctx.fillText('BEST ' + S.best + '   KILLS ' + S.kills, 12, 42);
+  // coins
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 17px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText(S.coins + ' ¢', W - 90, 28);
+  // wall hp bar
+  ctx.fillStyle = 'rgba(255,255,255,0.15)'; rrect(120, 48, 240, 10, 5); ctx.fill();
+  const f = S.wallHp / S.wallMax;
+  ctx.fillStyle = f > 0.5 ? '#6ecb5a' : f > 0.25 ? '#e0a13c' : '#d1553f';
+  if (f > 0) { rrect(120, 48, 240 * f, 10, 5); ctx.fill(); }
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('WALL ' + Math.ceil(S.wallHp) + '/' + S.wallMax, 240, 44);
+  // speed + mute
+  btn(W - 78, 8, 32, 26, 'x' + S.speed, null, () => { S.speed = S.speed === 1 ? 2 : 1; });
+  btn(W - 40, 8, 32, 26, muted ? '🔇' : '🔊', null, () => {
+    muted = !muted;
+    try { localStorage.setItem('ks_endless_muted', muted ? '1' : '0'); } catch (e) {}
+  });
+}
+function drawShop() {
+  ctx.fillStyle = '#141924'; ctx.fillRect(0, SHOP_Y, W, H - SHOP_Y);
+  let x = 10;
+  for (const type of Object.keys(UNITS)) {
+    const def = UNITS[type], locked = S.wave + 1 < def.unlock;
+    const cost = placeCost(type);
+    btn(x, SHOP_Y + 10, 88, 52,
+      locked ? '🔒 ' + def.name : def.name,
+      locked ? 'wave ' + def.unlock : cost + '¢',
+      () => { if (!locked) S.sel = S.sel === type ? null : type; },
+      { off: locked || S.coins < cost, selq: S.sel === type });
+    x += 96;
+  }
+  btn(x, SHOP_Y + 10, 88, 52, '🔨 Repair', repairCost() + '¢', repairWall,
+    { off: S.wallHp >= S.wallMax || S.coins < repairCost() });
+  x += 96;
+  btn(x, SHOP_Y + 10, 82, 52, '🧱 Wall+', fortifyCost() + '¢', fortifyWall,
+    { off: S.coins < fortifyCost() });
+  // second row: fight / status
+  if (S.phase === 'build') {
+    btn(W / 2 - 110, SHOP_Y + 68, 220, 34, '⚔ FIGHT  (+' + waveBonus(S.wave + 1) + '¢)', null, () => startWave(true), { gold: true });
+    ctx.fillStyle = '#9aa7b5'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('next wave in ' + Math.ceil(S.buildT) + 's', W / 2, SHOP_Y + 66);
+  } else if (S.phase === 'wave') {
+    ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    const left = S.spawnQ.length + S.enemies.length;
+    ctx.fillText(left + ' enemies left — tap the field to fire the King\'s volley', W / 2, SHOP_Y + 88);
+  }
+}
+function drawOverlay() {
+  if (S.phase === 'menu') {
+    ctx.fillStyle = 'rgba(8,10,16,0.78)'; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 42px sans-serif';
+    ctx.fillText('KINGSHOT', W / 2, 300);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('E N D L E S S', W / 2, 334);
+    ctx.fillStyle = '#9aa7b5'; ctx.font = '13px sans-serif';
+    ctx.fillText('Hold the wall. Place defenders, upgrade them,', W / 2, 396);
+    ctx.fillText('tap the battlefield to rain royal arrows.', W / 2, 416);
+    ctx.fillText('The horde never stops. How far can you go?', W / 2, 436);
+    btn(W / 2 - 90, 480, 180, 48, '▶ DEFEND', null, () => { startBuild(); }, { gold: true });
+    if (S.best > 0) {
+      ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText('BEST: WAVE ' + S.best, W / 2, 560);
+    }
+  } else if (S.phase === 'over') {
+    ctx.fillStyle = 'rgba(8,10,16,0.82)'; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#d1553f'; ctx.font = 'bold 34px sans-serif';
+    ctx.fillText('THE WALL HAS FALLEN', W / 2, 320);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif';
+    ctx.fillText('You held for ' + S.wave + ' wave' + (S.wave === 1 ? '' : 's'), W / 2, 370);
+    ctx.fillStyle = '#9aa7b5'; ctx.font = '14px sans-serif';
+    ctx.fillText(S.kills + ' enemies slain', W / 2, 396);
+    if (S.wave >= S.best) { ctx.fillStyle = '#ffd94a'; ctx.fillText('★ NEW BEST ★', W / 2, 424); }
+    else ctx.fillText('best: wave ' + S.best, W / 2, 424);
+    btn(W / 2 - 90, 470, 180, 48, '↻ AGAIN', null, () => { reset(); startBuild(); }, { gold: true });
+  }
+  if (S.flash > 0) { ctx.fillStyle = 'rgba(209,85,63,' + (S.flash * 2.5) + ')'; ctx.fillRect(0, 0, W, H); }
+}
+function draw() {
+  hits = [];
+  ctx.save();
+  ctx.setTransform(scaleF * dpr, 0, 0, scaleF * dpr, offX * dpr, offY * dpr);
+  if (S.shake > 0) ctx.translate((rnd() - 0.5) * S.shake, (rnd() - 0.5) * S.shake);
+  ctx.fillStyle = '#0b0e14'; ctx.fillRect(-offX / scaleF, -offY / scaleF, W + 2 * offX / scaleF, H + 2 * offY / scaleF);
+  drawField();
+  drawSlots();
+  drawEnemies();
+  drawShots();
+  drawParts();
+  drawHud();
+  drawShop();
+  drawOverlay();
+  ctx.restore();
+}
+
+// ---- input --------------------------------------------------
+let scaleF = 1, offX = 0, offY = 0, dpr = 1;
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  scaleF = Math.min(vw / W, vh / H);
+  cvs.width = Math.round(vw * dpr); cvs.height = Math.round(vh * dpr);
+  cvs.style.width = vw + 'px'; cvs.style.height = vh + 'px';
+  offX = (vw - W * scaleF) / 2; offY = (vh - H * scaleF) / 2;
+}
+function toVirtual(ev) {
+  const r = cvs.getBoundingClientRect();
+  const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+  const cy = (ev.touches ? ev.touches[0].clientY : ev.clientY) - r.top;
+  return { x: (cx - offX) / scaleF, y: (cy - offY) / scaleF };
+}
+function tap(x, y) {
+  audio(); // unlock on first gesture
+  // buttons first (includes menu/over overlays)
+  for (const h of hits) {
+    if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(); return; }
+  }
+  if (S.phase === 'menu' || S.phase === 'over') return;
+  // slots
+  for (const s of S.slots) {
+    if (Math.abs(x - s.x) <= 30 && y >= s.y - 28 && y <= s.y + 46) {
+      if (s.unit) upgradeUnit(s);
+      else if (S.sel) placeUnit(s, S.sel);
+      return;
+    }
+  }
+  // battlefield tap = king volley
+  if (y > HUD_H && y < WALL_Y) { fireVolley(x, y); return; }
+}
+cvs.addEventListener('pointerdown', (ev) => { ev.preventDefault(); const p = toVirtual(ev); tap(p.x, p.y); });
+window.addEventListener('resize', resize);
+
+// ---- main loop ----------------------------------------------
+let lastT = 0;
+function frame(t) {
+  const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
+  lastT = t;
+  tick(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+reset();
+resize();
+if (typeof window.__KS_HEADLESS__ === 'undefined') requestAnimationFrame(frame);
+
+// test hooks
+window.KS = {
+  get S() { return S; }, reset, tick, draw, startBuild, startWave, spawnEnemy,
+  placeUnit, upgradeUnit, repairWall, fortifyWall, fireVolley, damageWall,
+  placeCost, upgCost, unitDmg, hpMul, waveCount, tap, UNITS, FOES,
+  constants: { W, H, WALL_Y, HUD_H, WALL_HP0, START_COINS, VOLLEY_CD },
+};
+</script>
+</body>
+</html>
