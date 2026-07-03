@@ -478,11 +478,108 @@ const p3 = KS.S.player; // reset() above replaced the player object
 try { KS.drawMinimap(); t.ok(true, 'minimap draws'); } catch (e) { t.ok(false, 'minimap threw: ' + e.message); }
 try { KS.musicTick(); KS.musicTick(); t.ok(true, 'music scheduler runs'); } catch (e) { t.ok(false, 'musicTick threw: ' + e.message); }
 
+// ---- quest tracker is opt-in ----
+t.ok(KS.S.showQuests === false, 'quest panel hidden by default (📜 button toggles it)');
+
+// ---- industry district: factorio-lite production chain ----
+KS.S.wallet = KS.S.distPlate.cost + 100;
+p3.x = C.DIST.plate.x; p3.y = C.DIST.plate.y;
+step(KS.S.distPlate.cost / C.BUILD_RATE + 1);
+t.ok(KS.S.distPlate.built && !!KS.S.district, 'industry district purchased');
+t.ok(KS.inWalkable(C.DIST.grove.x, C.DIST.grove.y) === true, 'district cell is walkable');
+freezeSpawns(); KS.S.enemies.length = 0; KS.S.items.length = 0;
+p3.helmets = [];
+// forest grove: real trees, real woodcutter, real pile
+const gp = KS.S.district.plates.grove;
+KS.S.wallet = gp.cost + 200;
+p3.x = C.DIST.grove.x; p3.y = C.DIST.grove.y;
+step(gp.cost / C.BUILD_RATE + 1);
+t.ok(gp.built, 'forest grove built');
+p3.helmets = []; // drop anything hoovered while standing on the pile
+p3.x = C.SPAWN.x; p3.y = C.SPAWN.y;
+KS.S.district.grove.logs.length = 0; KS.S.district.grove.t = 0;
+step(C.GROVE_T * 3 + 0.5);
+t.ok(KS.S.district.grove.logs.length === 3, 'woodcutter fills the grove log pile');
+// sawmill: 2 logs → 1 plank
+const sp = KS.S.district.plates.saw;
+KS.S.wallet = sp.cost + 100;
+p3.x = C.DIST.saw.x; p3.y = C.DIST.saw.y;
+step(sp.cost / C.BUILD_RATE + 1);
+t.ok(sp.built, 'sawmill built');
+p3.helmets = [{ k: 2, log: true }, { k: 2, log: true }];
+step(1);
+t.ok(KS.S.district.saw.ks.length >= 2 && p3.helmets.length === 0, 'sawmill intake eats logs from the stack');
+p3.x = C.SPAWN.x; p3.y = C.SPAWN.y;
+step(C.SAW_T + 1);
+t.ok(KS.S.district.saw.tray.length >= 1, 'two logs became a plank');
+p3.x = C.DIST.sawTray.x; p3.y = C.DIST.sawTray.y;
+step(1);
+t.ok(p3.helmets.some(e => e.plank), 'plank picked up from the tray');
+t.ok(KS.entryVal({ k: 2, plank: true }) === Math.ceil(KS.helmVal(2) * C.PLANK_MUL * KS.coinMul()), 'planks are worth x' + C.PLANK_MUL);
+// quarry
+const qp = KS.S.district.plates.quarry;
+KS.S.wallet = qp.cost + 100;
+p3.x = C.DIST.quarry.x; p3.y = C.DIST.quarry.y;
+step(qp.cost / C.BUILD_RATE + 1);
+t.ok(qp.built, 'stone quarry built');
+p3.helmets = [];
+p3.x = C.SPAWN.x; p3.y = C.SPAWN.y;
+KS.S.district.quarry.stones.length = 0; KS.S.district.quarry.t = 0;
+step(C.QUARRY_T * 3 + 0.5);
+t.ok(KS.S.district.quarry.stones.length === 3, 'miner fills the stone pile');
+// toolmaker: 1 plank + 2 stones → 1 tool
+const tp2 = KS.S.district.plates.tool;
+KS.S.wallet = tp2.cost + 100;
+p3.x = C.DIST.tool.x; p3.y = C.DIST.tool.y;
+step(tp2.cost / C.BUILD_RATE + 1);
+t.ok(tp2.built, 'toolmaker built');
+p3.helmets = [{ k: 2, plank: true }, { k: 2, stone: true }, { k: 2, stone: true }];
+step(1);
+t.ok(KS.S.district.tool.wood.length === 1 && KS.S.district.tool.stone.length === 2 && p3.helmets.length === 0, 'toolmaker intake sorts planks and stones');
+p3.x = C.SPAWN.x; p3.y = C.SPAWN.y;
+step(C.TOOL_T + 1);
+t.ok(KS.S.district.tool.tray.length === 1, 'crafted a tool from plank + stones');
+p3.x = C.DIST.toolTray.x; p3.y = C.DIST.toolTray.y;
+step(1);
+t.ok(p3.helmets.some(e => e.tool), 'tool picked up');
+t.ok(KS.entryVal({ k: 2, tool: true }) === Math.ceil(KS.helmVal(2) * C.TOOL_MUL * KS.coinMul()), 'tools are worth x' + C.TOOL_MUL);
+p3.helmets = [];
+// hauler automates grove → sawmill
+const hp2 = KS.S.district.plates.hauler;
+KS.S.wallet = hp2.cost + 100;
+p3.x = C.DIST.hauler.x; p3.y = C.DIST.hauler.y;
+step(hp2.cost / C.BUILD_RATE + 1);
+t.ok(hp2.built && !!KS.S.district.haulerNpc, 'hauler hired');
+KS.S.district.saw.ks.length = 0; KS.S.district.saw.tray.length = 0;
+KS.S.district.grove.logs = [2, 2, 2, 2];
+p3.x = C.SPAWN.x; p3.y = C.SPAWN.y;
+step(15);
+t.ok(KS.S.district.saw.ks.length + KS.S.district.saw.tray.length * 2 > 0, 'hauler feeds the sawmill hands-free');
+// trader sells finished goods
+const tr2 = KS.S.district.plates.trader;
+KS.S.wallet = tr2.cost + 100;
+p3.x = C.DIST.trader.x; p3.y = C.DIST.trader.y;
+step(tr2.cost / C.BUILD_RATE + 1);
+t.ok(tr2.built && !!KS.S.district.traderNpc, 'trader hired');
+KS.S.district.tool.tray = [2, 2];
+const palT = KS.S.pallet;
+p3.x = C.SPAWN.x; p3.y = C.SPAWN.y;
+step(35);
+t.ok(KS.S.pallet > palT, 'trader hauled tools to the sell stand → pallet grew');
+// persistence
+KS.S.district.grove.logs = [1, 1, 1];
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.distPlate.built && KS.S.district.plates.saw.built && KS.S.district.grove.logs.length === 3, 'district survives save/load');
+t.ok(!!KS.S.district.haulerNpc && !!KS.S.district.traderNpc, 'district NPCs respawn on load');
+KS.start();
+const p4 = KS.S.player;
+drawSafe('draw() with industry district');
+
 // ---- prestige: New Kingdom ----
 while (KS.S.zones.length < C.PRESTIGE_MIN) KS.S.zones.push(KS.mkZone(KS.S.zones.length + 1));
 KS.S.gems = 7; KS.S.wallet = 999;
 const gain = KS.crownsToGain();
-p3.x = C.MONU.x; p3.y = C.MONU.y; // stand still on the monument
+p4.x = C.MONU.x; p4.y = C.MONU.y; // stand still on the monument
 step(C.PREST_T + 1);
 t.ok(KS.S.crowns === gain && KS.S.prestiges === 1, 'holding the monument founds a New Kingdom');
 t.ok(KS.S.zones.length === 1 && KS.S.wallet === 0, 'prestige resets lands and coins');

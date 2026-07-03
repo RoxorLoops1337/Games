@@ -54,6 +54,21 @@ const GEM_X   = 225, GEM_Y0 = 480, GEM_STEP = 140;
 const MONU    = { x: 525, y: 315, r: 46 };     // New Kingdom monument (prestige)
 const KENNEL  = { x: 300, y: 872, r: 44 };     // war dog kennel
 const CAMP    = { x: 160, y: 330, r: 55 };     // lumber camp (logs pile up here)
+// industry district — a peaceful production cell at the SE diagonal (1,1)
+const DX = CELL_W, DY = CELL_H;                // district cell origin
+const DIST = {
+  plate:  { x: DX + 525, y: 940 },             // purchase plate at zone 1's south edge
+  grove:  { x: DX + 250, y: DY + 270, r: 60 },
+  quarry: { x: DX + 800, y: DY + 270, r: 60 },
+  saw:    { x: DX + 250, y: DY + 660, r: 55 },
+  sawTray:{ x: DX + 250, y: DY + 820, r: 55 },
+  tool:   { x: DX + 800, y: DY + 660, r: 55 },
+  toolTray:{ x: DX + 800, y: DY + 820, r: 55 },
+  hauler: { x: DX + 525, y: DY + 400, r: 46 },
+  trader: { x: DX + 525, y: DY + 620, r: 46 },
+  pad:    { x: DX + 80, y: DY + 80, r: 44 },
+};
+const DIST_COSTS = { grove: 220, quarry: 260, saw: 320, tool: 420, hauler: 520, trader: 520 };
 
 // ---- balance dials ------------------------------------------
 const PICK_R      = 78;
@@ -81,6 +96,11 @@ const FORGE_T     = 1.8;
 const FORGE_Q     = 12, TRAY_MAX = 10;
 const BAR_MUL     = 3;
 const CROWN_MUL   = 22;
+const STONE_MUL   = 1.2;   // raw stone sells slightly above a helmet
+const PLANK_MUL   = 3.5;   // sawmill: 2 logs → 1 plank
+const TOOL_MUL    = 12;    // toolmaker: 1 plank + 2 stones → 1 tool
+const GROVE_T     = 1.9, QUARRY_T = 2.4, SAW_T = 2.5, TOOL_T = 3.0;
+const PILE_MAX    = 30, SAW_IN_MAX = 12, TRAY12 = 12, TOOL_IN = 8, TOOLTRAY_MAX = 8;
 const GOLD_CHANCE = 0.045;
 const BOSS_CD     = 45;
 const WARP_T      = 0.55;
@@ -209,7 +229,9 @@ function reset() {
     crowns: 0, prestiges: 0, prestT: 0,
     ach: {}, toasts: [], achCd: 0,
     quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
-    showQuests: true, goldPulse: 0, hitStop: 0, amb: [],
+    showQuests: false, goldPulse: 0, hitStop: 0, amb: [],
+    district: null,
+    distPlate: { cost: 400, paid: 0, built: false },
     zones: [mkZone(1)],
     enemies: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [],
     chest: null, chestCd: 100,
@@ -226,7 +248,11 @@ function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG *
 function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1); }
 function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet); }
 function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns); }
-function entryVal(e) { return Math.ceil(helmVal(e.k) * (e.crown ? CROWN_MUL : e.bar ? BAR_MUL : 1) * coinMul()); }
+function entryVal(e) {
+  const mul = e.crown ? CROWN_MUL : e.tool ? TOOL_MUL : e.plank ? PLANK_MUL : e.bar ? BAR_MUL : e.stone ? STONE_MUL : 1;
+  return Math.ceil(helmVal(e.k) * mul * coinMul());
+}
+function cloneEntry(e) { return { k: e.k, bar: !!e.bar, crown: !!e.crown, log: !!e.log, plank: !!e.plank, stone: !!e.stone, tool: !!e.tool }; }
 // coin flow ramps up exponentially the longer you keep transacting at
 // the same spot (vacuuming the pallet / pouring into a plate)
 function touchFlow(key, dt) {
@@ -239,6 +265,7 @@ function zoneAt(x, y) { for (const z of S.zones) if (x >= z.x0 && x < z.x1 && y 
 function inCell(z, x, y, m) { m = m || 0; return x >= z.x0 - m && x < z.x1 + m && y >= z.y0 - m && y < z.y1 + m; }
 function inWalkable(x, y) {
   if (x >= 0 && x < CELL_W && y >= 0 && y < CELL_H) return true; // hub
+  if (S.distPlate.built && x >= DX && x < DX + CELL_W && y >= DY && y < DY + CELL_H) return true; // industry district
   return !!zoneAt(x, y);
 }
 function worldBounds() {
@@ -247,7 +274,18 @@ function worldBounds() {
     if (z.x0 < minX) minX = z.x0; if (z.x1 > maxX) maxX = z.x1;
     if (z.y0 < minY) minY = z.y0; if (z.y1 > maxY) maxY = z.y1;
   }
+  if (S.distPlate.built) { if (DX + CELL_W > maxX) maxX = DX + CELL_W; if (DY + CELL_H > maxY) maxY = DY + CELL_H; }
   return { minX, minY, maxX, maxY };
+}
+function initDistrict() {
+  S.district = {
+    plates: Object.fromEntries(Object.keys(DIST_COSTS).map(id => [id, { cost: DIST_COSTS[id], paid: 0, built: false }])),
+    grove: { logs: [], t: 0 },
+    quarry: { stones: [], t: 0 },
+    saw: { ks: [], t: 0, tray: [] },
+    tool: { wood: [], stone: [], t: 0, tray: [] },
+    haulerNpc: null, traderNpc: null,
+  };
 }
 
 // ---- save / load --------------------------------------------
@@ -271,6 +309,13 @@ function save() {
       camp: S.camp ? { logs: S.camp.logs } : null,
       quests: S.quests, dailies: S.dailies, dailyDay: S.dailyDay,
       streak: S.streak, lastStreakDay: S.lastStreakDay,
+      showQuests: S.showQuests ? 1 : 0,
+      district: S.district ? {
+        plates: Object.fromEntries(Object.entries(S.district.plates).map(([id, pl]) => [id, { b: pl.built ? 1 : 0, p: pl.paid }])),
+        grove: S.district.grove.logs, quarry: S.district.quarry.stones,
+        saw: { ks: S.district.saw.ks, tray: S.district.saw.tray },
+        tool: { wood: S.district.tool.wood, stone: S.district.tool.stone, tray: S.district.tool.tray },
+      } : null,
       crowns: S.crowns, prestiges: S.prestiges,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
@@ -326,6 +371,21 @@ function load() {
   if (d.camp) { S.campPlate.built = true; S.camp = { logs: d.camp.logs || [], chopT: 0 }; }
   S.quests = d.quests || []; S.dailies = d.dailies || [];
   S.dailyDay = d.dailyDay || ''; S.streak = d.streak || 0; S.lastStreakDay = d.lastStreakDay || '';
+  S.showQuests = !!d.showQuests;
+  if (d.district) {
+    S.distPlate.built = true;
+    initDistrict();
+    for (const id in d.district.plates || {}) {
+      const pl = S.district.plates[id]; if (!pl) continue;
+      pl.paid = d.district.plates[id].p || 0;
+      if (d.district.plates[id].b) { pl.built = true; if (id === 'hauler') spawnHauler(); if (id === 'trader') spawnTrader(); }
+    }
+    S.district.grove.logs = d.district.grove || [];
+    S.district.quarry.stones = d.district.quarry || [];
+    S.district.saw.ks = (d.district.saw || {}).ks || []; S.district.saw.tray = (d.district.saw || {}).tray || [];
+    S.district.tool.wood = (d.district.tool || {}).wood || []; S.district.tool.stone = (d.district.tool || {}).stone || [];
+    S.district.tool.tray = (d.district.tool || {}).tray || [];
+  }
   S.crowns = d.crowns || 0; S.prestiges = d.prestiges || 0;
   (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
@@ -492,7 +552,7 @@ function hurtPlayer(d) {
 function playerDie() {
   const p = S.player;
   p.deaths++;
-  for (const e of p.helmets) dropItem(p.x, p.y, { k: e.k, crown: !!e.crown, bar: !!e.bar, log: !!e.log });
+  for (const e of p.helmets) dropItem(p.x, p.y, cloneEntry(e));
   p.helmets = [];
   p.hp = p.maxHp; p.invuln = 2.5;
   p.x = SPAWN.x; p.y = SPAWN.y;
@@ -551,6 +611,10 @@ function pourHub(plate, dt, done) {
   if (plate.paid >= plate.cost) { plate.built = true; done(); sfx('built', true); buzz(50); }
 }
 
+// ---- district NPCs ------------------------------------------
+function spawnHauler() { S.district.haulerNpc = { x: DIST.hauler.x, y: DIST.hauler.y, state: 'idle', carry: [], job: null }; }
+function spawnTrader() { S.district.traderNpc = { x: DIST.trader.x, y: DIST.trader.y, state: 'idle', carry: [] }; }
+
 // ---- war dog ------------------------------------------------
 function spawnDog() {
   S.dog = { x: KENNEL.x, y: KENNEL.y - 30, state: 'follow', carry: null, tail: 0 };
@@ -578,14 +642,14 @@ function dogTick(dt) {
     else {
       const dl = Math.hypot(it.x - d.x, it.y - d.y) || 1;
       d.x += (it.x - d.x) / dl * DOG_SPD * dt; d.y += (it.y - d.y) / dl * DOG_SPD * dt;
-      if (dl < 20) { it.dead = true; d.carry = { k: it.k, bar: !!it.bar, crown: !!it.crown }; d.item = null; d.state = 'return'; }
+      if (dl < 20) { it.dead = true; d.carry = cloneEntry(it); d.item = null; d.state = 'return'; }
     }
   } else { // return to the player
     const dl = Math.hypot(p.x - d.x, p.y - d.y) || 1;
     d.x += (p.x - d.x) / dl * DOG_SPD * dt; d.y += (p.y - d.y) / dl * DOG_SPD * dt;
     if (dl < 30) {
       if (p.helmets.length < cap()) { p.helmets.push(d.carry); sfx('pick'); }
-      else dropItem(p.x, p.y, d.carry.crown ? { k: d.carry.k, crown: true } : d.carry.bar ? { k: d.carry.k, bar: true } : { k: d.carry.k });
+      else dropItem(p.x, p.y, cloneEntry(d.carry));
       d.carry = null; d.state = 'follow';
     }
   }
@@ -625,6 +689,7 @@ const QTPL = [
   { id: 'log',   icon: '🪵', txt: 'Haul # logs',       n: t => 5 + t * 2, ev: 'log' },
   { id: 'gem',   icon: '💎', txt: 'Collect # gems',    n: t => 2 + Math.ceil(t / 2), ev: 'gem' },
   { id: 'land',  icon: '🌍', txt: 'Unlock # new land', n: () => 1, ev: 'land' },
+  { id: 'tool',  icon: '🔨', txt: 'Craft # tools',     n: t => 2 + Math.ceil(t / 2), ev: 'tool' },
 ];
 function qTier() { return S.zones.length - 1; }
 function streakMul() { return 1 + Math.min(1, 0.1 * Math.max(0, S.streak - 1)); }
@@ -801,7 +866,7 @@ function tick(dt) {
       float(p.x, p.y - 50, '💎 +1', '#6ee0d8', true); sfx('gem', true);
     } else if (p.helmets.length < cap()) {
       it.dead = true;
-      p.helmets.push({ k: it.k, bar: !!it.bar, crown: !!it.crown, log: !!it.log });
+      p.helmets.push(cloneEntry(it));
       sfx('pick');
       if (p.helmets.length >= cap()) float(p.x, p.y - 60, 'FULL! Go sell →', '#ffd94a', true);
     }
@@ -855,6 +920,144 @@ function tick(dt) {
       }
     } else p.trayAcc = 0;
   }
+
+  // -- industry district: production chains + hand-feeding
+  if (S.district) {
+    const D = S.district, fk = S.zones.length;
+    // grove: two woodcutters chop logs
+    if (D.plates.grove.built && D.grove.logs.length < PILE_MAX) {
+      D.grove.t += dt;
+      if (D.grove.t >= GROVE_T) { D.grove.t = 0; D.grove.logs.push(fk); puff(DIST.grove.x - 40, DIST.grove.y - 20, '#8a5c30', 3, true); }
+    }
+    // quarry: miner chips stones
+    if (D.plates.quarry.built && D.quarry.stones.length < PILE_MAX) {
+      D.quarry.t += dt;
+      if (D.quarry.t >= QUARRY_T) { D.quarry.t = 0; D.quarry.stones.push(fk); puff(DIST.quarry.x + 30, DIST.quarry.y - 20, '#9aa0a8', 3, true); }
+    }
+    // sawmill: 2 logs → 1 plank
+    if (D.plates.saw.built && D.saw.ks.length >= 2 && D.saw.tray.length < TRAY12) {
+      D.saw.t += dt;
+      if (D.saw.t >= SAW_T) { D.saw.t = 0; const a = D.saw.ks.shift(), b = D.saw.ks.shift(); D.saw.tray.push(Math.max(a, b)); puff(DIST.sawTray.x, DIST.sawTray.y - 10, '#d9b98a', 4, true); sfx('smelt'); }
+    } else if (!(D.saw.ks.length >= 2)) D.saw.t = 0;
+    // toolmaker: 1 plank + 2 stones → 1 tool
+    if (D.plates.tool.built && D.tool.wood.length >= 1 && D.tool.stone.length >= 2 && D.tool.tray.length < TOOLTRAY_MAX) {
+      D.tool.t += dt;
+      if (D.tool.t >= TOOL_T) {
+        D.tool.t = 0;
+        D.tool.wood.shift(); D.tool.stone.shift(); D.tool.stone.shift();
+        D.tool.tray.push(fk);
+        questEvent('tool', 1);
+        puff(DIST.toolTray.x, DIST.toolTray.y - 10, '#ffd94a', 5, true); sfx('built');
+      }
+    } else if (!(D.tool.wood.length >= 1 && D.tool.stone.length >= 2)) D.tool.t = 0;
+    // station purchase plates
+    for (const id in D.plates) {
+      const pl = D.plates[id];
+      if (pl.built) continue;
+      const pos = DIST[id === 'grove' ? 'grove' : id === 'quarry' ? 'quarry' : id === 'saw' ? 'saw' : id === 'tool' ? 'tool' : id];
+      if (dist2(p.x, p.y, pos.x, pos.y) < 60 * 60) {
+        pourHub(pl, dt, () => {
+          float(pos.x, pos.y - 50, id.toUpperCase() + ' BUILT!', '#6ecb5a', true);
+          if (id === 'hauler') spawnHauler();
+          if (id === 'trader') spawnTrader();
+        });
+      }
+    }
+    // hand interactions
+    const take = (arr, mk) => { // pile → back stack
+      if (arr.length && p.helmets.length < cap()) {
+        p.hAcc = (p.hAcc || 0) + dt * SELL_RATE;
+        while (p.hAcc >= 1 && arr.length && p.helmets.length < cap()) { p.hAcc -= 1; p.helmets.push(mk(arr.pop())); sfx('pick'); }
+      }
+    };
+    if (D.plates.grove.built && dist2(p.x, p.y, DIST.grove.x, DIST.grove.y) < DIST.grove.r * DIST.grove.r)
+      take(D.grove.logs, k => { questEvent('log', 1); return { k, log: true }; });
+    if (D.plates.quarry.built && dist2(p.x, p.y, DIST.quarry.x, DIST.quarry.y) < DIST.quarry.r * DIST.quarry.r)
+      take(D.quarry.stones, k => ({ k, stone: true }));
+    if (D.plates.saw.built && dist2(p.x, p.y, DIST.saw.x, DIST.saw.y) < DIST.saw.r * DIST.saw.r && D.saw.ks.length < SAW_IN_MAX) {
+      p.sawAcc = (p.sawAcc || 0) + dt * SELL_RATE;
+      while (p.sawAcc >= 1 && D.saw.ks.length < SAW_IN_MAX) {
+        p.sawAcc -= 1;
+        const i = p.helmets.map(e => !!e.log).lastIndexOf(true);
+        if (i < 0) break;
+        D.saw.ks.push(p.helmets.splice(i, 1)[0].k); sfx('smelt');
+      }
+    } else p.sawAcc = 0;
+    if (D.plates.saw.built && dist2(p.x, p.y, DIST.sawTray.x, DIST.sawTray.y) < DIST.sawTray.r * DIST.sawTray.r)
+      take(D.saw.tray, k => ({ k, plank: true }));
+    if (D.plates.tool.built && dist2(p.x, p.y, DIST.tool.x, DIST.tool.y) < DIST.tool.r * DIST.tool.r) {
+      p.toolAcc = (p.toolAcc || 0) + dt * SELL_RATE;
+      while (p.toolAcc >= 1) {
+        p.toolAcc -= 1;
+        let i = D.tool.wood.length < TOOL_IN ? p.helmets.map(e => !!e.plank).lastIndexOf(true) : -1;
+        if (i >= 0) { D.tool.wood.push(p.helmets.splice(i, 1)[0].k); sfx('smelt'); continue; }
+        i = D.tool.stone.length < TOOL_IN ? p.helmets.map(e => !!e.stone).lastIndexOf(true) : -1;
+        if (i >= 0) { D.tool.stone.push(p.helmets.splice(i, 1)[0].k); sfx('smelt'); continue; }
+        break;
+      }
+    } else p.toolAcc = 0;
+    if (D.plates.tool.built && dist2(p.x, p.y, DIST.toolTray.x, DIST.toolTray.y) < DIST.toolTray.r * DIST.toolTray.r)
+      take(D.tool.tray, k => ({ k, tool: true }));
+    // hauler NPC: keeps the chain fed (grove→saw, quarry→tool, sawTray→tool)
+    const H = D.haulerNpc;
+    if (H) {
+      const jobs = [];
+      if (D.plates.saw.built && D.saw.ks.length < SAW_IN_MAX - 3 && D.grove.logs.length) jobs.push({ from: DIST.grove, to: DIST.saw, src: D.grove.logs, put: k => D.saw.ks.push(k), kind: 'log' });
+      if (D.plates.tool.built && D.tool.stone.length < TOOL_IN - 3 && D.quarry.stones.length) jobs.push({ from: DIST.quarry, to: DIST.tool, src: D.quarry.stones, put: k => D.tool.stone.push(k), kind: 'stone' });
+      if (D.plates.tool.built && D.tool.wood.length < TOOL_IN - 3 && D.saw.tray.length) jobs.push({ from: DIST.sawTray, to: DIST.tool, src: D.saw.tray, put: k => D.tool.wood.push(k), kind: 'plank' });
+      if (H.state === 'idle') {
+        if (jobs.length) { H.job = jobs[0]; H.state = 'pick'; }
+        else { const dl = Math.hypot(DIST.hauler.x - H.x, DIST.hauler.y - H.y); if (dl > 12) { H.x += (DIST.hauler.x - H.x) / dl * PORTER_SPD * 0.6 * dt; H.y += (DIST.hauler.y - H.y) / dl * PORTER_SPD * 0.6 * dt; } }
+      } else if (H.state === 'pick') {
+        const dl = Math.hypot(H.job.from.x - H.x, H.job.from.y - H.y) || 1;
+        H.x += (H.job.from.x - H.x) / dl * PORTER_SPD * dt; H.y += (H.job.from.y - H.y) / dl * PORTER_SPD * dt;
+        if (dl < 30) {
+          H.carry = [];
+          while (H.carry.length < 4 && H.job.src.length) H.carry.push(H.job.src.pop());
+          H.state = H.carry.length ? 'drop' : 'idle';
+        }
+      } else { // drop
+        const dl = Math.hypot(H.job.to.x - H.x, H.job.to.y - H.y) || 1;
+        H.x += (H.job.to.x - H.x) / dl * PORTER_SPD * dt; H.y += (H.job.to.y - H.y) / dl * PORTER_SPD * dt;
+        if (dl < 30) { for (const k of H.carry) H.job.put(k); H.carry = []; H.state = 'idle'; }
+      }
+    }
+    // trader NPC: sells finished goods at the hub sell stand
+    const T = D.traderNpc;
+    if (T) {
+      if (T.state === 'idle') {
+        const src = D.tool.tray.length ? { arr: D.tool.tray, mk: k => ({ k, tool: true }), at: DIST.toolTray }
+          : (!D.plates.tool.built && D.saw.tray.length >= 4 ? { arr: D.saw.tray, mk: k => ({ k, plank: true }), at: DIST.sawTray } : null);
+        if (src) { T.src = src; T.state = 'pick'; }
+        else { const dl = Math.hypot(DIST.trader.x - T.x, DIST.trader.y - T.y); if (dl > 12) { T.x += (DIST.trader.x - T.x) / dl * PORTER_SPD * 0.6 * dt; T.y += (DIST.trader.y - T.y) / dl * PORTER_SPD * 0.6 * dt; } }
+      } else if (T.state === 'pick') {
+        const dl = Math.hypot(T.src.at.x - T.x, T.src.at.y - T.y) || 1;
+        T.x += (T.src.at.x - T.x) / dl * PORTER_SPD * dt; T.y += (T.src.at.y - T.y) / dl * PORTER_SPD * dt;
+        if (dl < 30) {
+          T.carry = [];
+          while (T.carry.length < 6 && T.src.arr.length) T.carry.push(T.src.mk(T.src.arr.pop()));
+          T.state = T.carry.length ? 'sell' : 'idle';
+        }
+      } else {
+        const dl = Math.hypot(SELL.x - T.x, SELL.y - T.y) || 1;
+        T.x += (SELL.x - T.x) / dl * PORTER_SPD * dt; T.y += (SELL.y - T.y) / dl * PORTER_SPD * dt;
+        if (dl < 46) {
+          T.cd = (T.cd || 0) - dt;
+          if (T.cd <= 0 && T.carry.length) {
+            T.cd = 0.15;
+            const v = entryVal(T.carry.pop());
+            S.pallet += v; S.stats.earned += v; S.stats.sold++;
+            questEvent('sell', 1); questEvent('earn', v);
+            puff(PALLET.x, PALLET.y - 30, '#ffd94a', 1, true);
+          }
+          if (!T.carry.length) T.state = 'idle';
+        }
+      }
+    }
+  }
+  // district purchase plate (at zone 1's south edge)
+  if (!S.distPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, DIST.plate.x, DIST.plate.y) < 56 * 56)
+    pourHub(S.distPlate, dt, () => { initDistrict(); float(DIST.plate.x, DIST.plate.y - 50, '🏭 INDUSTRY DISTRICT OPEN — head southeast!', '#ffd94a', true); });
 
   // -- vacuum coins from pallet (flow ramps up the longer you stand)
   if (S.pallet > 0 && dist2(p.x, p.y, PALLET.x, PALLET.y) < PALLET.r * PALLET.r) {
@@ -1117,7 +1320,7 @@ function tick(dt) {
         } else {
           const dl = Math.hypot(it.x - po.x, it.y - po.y) || 1;
           po.x += (it.x - po.x) / dl * PORTER_SPD * dt; po.y += (it.y - po.y) / dl * PORTER_SPD * dt;
-          if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; po.carry.push({ k: it.k, bar: !!it.bar, crown: !!it.crown }); if (po.carry.length >= PORTER_CAP) po.state = 'sell'; }
+          if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; po.carry.push(cloneEntry(it)); if (po.carry.length >= PORTER_CAP) po.state = 'sell'; }
         }
       } else {
         const dl = Math.hypot(SELL.x - po.x, SELL.y - po.y) || 1;
@@ -1203,6 +1406,7 @@ function warpPads() {
   const nd = DIRS[newest.dir];
   pads.push({ x: HUBPAD.x, y: HUBPAD.y, r: HUBPAD.r, to: { x: newest.pad.x + nd[0] * 110, y: newest.pad.y + nd[1] * 110 } });
   for (const z of S.zones) pads.push({ x: z.pad.x, y: z.pad.y, r: z.pad.r, to: { x: HUBPAD.x, y: HUBPAD.y - 80 } });
+  if (S.distPlate.built) pads.push({ x: DIST.pad.x, y: DIST.pad.y, r: DIST.pad.r, to: { x: HUBPAD.x, y: HUBPAD.y - 80 } });
   return pads;
 }
 
@@ -1290,8 +1494,35 @@ function drawLogIcon(x, y, s) {
   ctx.fillStyle = '#8a5c30';
   ctx.beginPath(); ctx.arc(x + 10 * s, y, 1.5 * s, 0, 6.29); ctx.fill();
 }
+function drawStoneIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#8e969e';
+  ctx.beginPath();
+  ctx.moveTo(x - 8 * s, y + 4 * s); ctx.lineTo(x - 6 * s, y - 4 * s); ctx.lineTo(x + 1 * s, y - 6 * s);
+  ctx.lineTo(x + 8 * s, y - 2 * s); ctx.lineTo(x + 7 * s, y + 4 * s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath(); ctx.arc(x - 2 * s, y - 2 * s, 2 * s, 0, 6.29); ctx.fill();
+}
+function drawPlankIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#d9b98a'; rr(x - 11 * s, y - 3 * s, 22 * s, 6 * s, 2 * s); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,90,50,0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x - 8 * s, y); ctx.lineTo(x + 8 * s, y); ctx.stroke();
+}
+function drawToolIcon(x, y, s) {
+  s = s || 1;
+  ctx.strokeStyle = '#8a5c30'; ctx.lineWidth = 2.5 * s;
+  ctx.beginPath(); ctx.moveTo(x - 4 * s, y + 7 * s); ctx.lineTo(x + 4 * s, y - 4 * s); ctx.stroke();
+  ctx.fillStyle = '#9aa0a8'; rr(x - 1 * s, y - 9 * s, 10 * s, 6 * s, 2 * s); ctx.fill();
+}
 function drawStackEntry(e, x, y, s) {
-  if (e.crown) drawCrownIcon(x, y, s); else if (e.bar) drawBarIcon(x, y, s); else if (e.log) drawLogIcon(x, y, s); else drawHelmetIcon(x, y, e.k, s);
+  if (e.crown) drawCrownIcon(x, y, s);
+  else if (e.tool) drawToolIcon(x, y, s);
+  else if (e.plank) drawPlankIcon(x, y, s);
+  else if (e.bar) drawBarIcon(x, y, s);
+  else if (e.log) drawLogIcon(x, y, s);
+  else if (e.stone) drawStoneIcon(x, y, s);
+  else drawHelmetIcon(x, y, e.k, s);
 }
 function drawTree(x, y, s, c1, c2) {
   s = s || 1;
@@ -1315,6 +1546,7 @@ function plateCircle(x, y, r, stroke, paid, costV, fillCol) {
 }
 function cellWalkable(cx, cy) {
   if (cx === 0 && cy === 0) return true;
+  if (S.distPlate.built && cx === 1 && cy === 1) return true;
   return S.zones.some(z => z.cx === cx && z.cy === cy);
 }
 function drawGround() {
@@ -1328,11 +1560,12 @@ function drawGround() {
   const GRASS = [['#405c38', '#3a563c'], ['#3b5748', '#365243'], ['#565a33', '#50542f'], ['#49584f', '#43524a']];
   const CANOPY = [['#24421f', '#2e5226'], ['#1f3d33', '#28493d'], ['#4a4d1e', '#575a28'], ['#2c443e', '#37524a']];
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
+  if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1 });
   for (const c of cells) {
     const x0 = c.cx * CELL_W, y0 = c.cy * CELL_H;
     if (!rectVis(x0, y0, x0 + CELL_W, y0 + CELL_H)) continue;
-    const dir = c.k === 0 ? 0 : (c.k - 1) % 4;
-    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : GRASS[dir][c.k % 2];
+    const dir = c.k <= 0 ? 0 : (c.k - 1) % 4;
+    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : c.k === -1 ? '#57543e' : GRASS[dir][c.k % 2];
     ctx.fillRect(x0, y0, CELL_W, CELL_H);
     ctx.fillStyle = 'rgba(255,255,255,0.03)';
     for (let gx = x0; gx < x0 + CELL_W; gx += 160) ctx.fillRect(gx, y0, 80, CELL_H);
@@ -1492,6 +1725,10 @@ function drawStands() {
       const on2 = dist2(S.player.x, S.player.y, z.pad.x, z.pad.y) < z.pad.r * z.pad.r;
       drawPad(z.pad.x, z.pad.y, z.pad.r, '🌀 HOME', on2 ? S.player.warpT / WARP_T : 0);
     }
+    if (S.distPlate.built) {
+      const on3 = dist2(S.player.x, S.player.y, DIST.pad.x, DIST.pad.y) < DIST.pad.r * DIST.pad.r;
+      drawPad(DIST.pad.x, DIST.pad.y, DIST.pad.r, '🌀 HOME', on3 ? S.player.warpT / WARP_T : 0);
+    }
   } else if (S.zones.length >= 2) {
     plateCircle(HUBPAD.x, HUBPAD.y, 52, '#6ec9e0', S.wayPlate.paid, S.wayPlate.cost, 'rgba(110,201,224,0.35)');
     ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
@@ -1644,6 +1881,114 @@ function drawZoneStands() {
     }
   }
 }
+function drawDistrict() {
+  // purchase plate lives at zone 1's south edge
+  if (!S.distPlate.built) {
+    if (S.zones.length >= 2 && vis(DIST.plate.x, DIST.plate.y, 100)) {
+      plateCircle(DIST.plate.x, DIST.plate.y, 52, '#e0a13c', S.distPlate.paid, S.distPlate.cost, 'rgba(224,161,60,0.35)');
+      ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+      ctx.fillText('🏭', DIST.plate.x, DIST.plate.y - 2);
+      ctx.font = 'bold 11px sans-serif'; ctx.fillText('INDUSTRY DISTRICT', DIST.plate.x, DIST.plate.y + 20);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(fmt(S.distPlate.cost - S.distPlate.paid) + ' ¢', DIST.plate.x, DIST.plate.y + 74);
+    }
+    return;
+  }
+  const D = S.district;
+  if (!rectVis(DX, DY, DX + CELL_W, DY + CELL_H)) return;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 26px sans-serif';
+  ctx.fillText('🏭 INDUSTRY DISTRICT', DX + 525, DY + 130);
+  const stationPlate = (id, pos, icon, name) => {
+    const pl = D.plates[id];
+    if (pl.built) return true;
+    plateCircle(pos.x, pos.y, 50, '#e0a13c', pl.paid, pl.cost, 'rgba(224,161,60,0.35)');
+    ctx.font = '26px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.fillText(icon, pos.x, pos.y - 2);
+    ctx.font = 'bold 10px sans-serif'; ctx.fillText(name, pos.x, pos.y + 18);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(fmt(pl.cost - pl.paid) + ' ¢', pos.x, pos.y + 70);
+    return false;
+  };
+  // grove
+  if (stationPlate('grove', DIST.grove, '🌲', 'FOREST GROVE')) {
+    for (let i = 0; i < 5; i++) drawTree(DIST.grove.x - 70 + (i * 47) % 140, DIST.grove.y - 84 + (i * 29) % 40, 1.15);
+    const chop = Math.abs(Math.sin(S.t * 2.4));
+    ctx.fillStyle = '#8a9a4a'; rr(DIST.grove.x - 66, DIST.grove.y - 26, 14, 18, 4); ctx.fill();
+    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(DIST.grove.x - 59, DIST.grove.y - 32, 6, 0, 6.29); ctx.fill();
+    ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(DIST.grove.x - 56, DIST.grove.y - 24);
+    ctx.lineTo(DIST.grove.x - 44 + chop * 6, DIST.grove.y - 36 + chop * 20); ctx.stroke();
+    for (let i = 0; i < D.grove.logs.length; i++)
+      drawLogIcon(DIST.grove.x - 18 + (i % 6) * 13 - Math.floor(i / 6) * 6, DIST.grove.y + 14 - Math.floor(i / 6) * 9, 0.9);
+    ctx.strokeStyle = 'rgba(201,160,106,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(DIST.grove.x, DIST.grove.y, DIST.grove.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#c9a06a'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('🪵 ' + D.grove.logs.length + '/' + PILE_MAX, DIST.grove.x, DIST.grove.y + 44);
+  }
+  // quarry
+  if (stationPlate('quarry', DIST.quarry, '⛏️', 'STONE QUARRY')) {
+    ctx.fillStyle = '#6e747c';
+    ctx.beginPath();
+    ctx.moveTo(DIST.quarry.x - 60, DIST.quarry.y - 20); ctx.lineTo(DIST.quarry.x - 30, DIST.quarry.y - 70);
+    ctx.lineTo(DIST.quarry.x + 20, DIST.quarry.y - 55); ctx.lineTo(DIST.quarry.x + 60, DIST.quarry.y - 20);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#8e969e';
+    ctx.beginPath(); ctx.moveTo(DIST.quarry.x - 30, DIST.quarry.y - 70); ctx.lineTo(DIST.quarry.x - 5, DIST.quarry.y - 62); ctx.lineTo(DIST.quarry.x - 18, DIST.quarry.y - 30); ctx.closePath(); ctx.fill();
+    const swing = Math.abs(Math.sin(S.t * 2.1));
+    ctx.fillStyle = '#4ba8b5'; rr(DIST.quarry.x + 34, DIST.quarry.y - 34, 14, 18, 4); ctx.fill();
+    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(DIST.quarry.x + 41, DIST.quarry.y - 40, 6, 0, 6.29); ctx.fill();
+    ctx.strokeStyle = '#9aa0a8'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(DIST.quarry.x + 38, DIST.quarry.y - 32);
+    ctx.lineTo(DIST.quarry.x + 22 - swing * 6, DIST.quarry.y - 44 + swing * 18); ctx.stroke();
+    for (let i = 0; i < D.quarry.stones.length; i++)
+      drawStoneIcon(DIST.quarry.x - 18 + (i % 6) * 12 - Math.floor(i / 6) * 6, DIST.quarry.y + 14 - Math.floor(i / 6) * 8, 0.9);
+    ctx.strokeStyle = 'rgba(158,166,174,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(DIST.quarry.x, DIST.quarry.y, DIST.quarry.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#aeb6be'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('🪨 ' + D.quarry.stones.length + '/' + PILE_MAX, DIST.quarry.x, DIST.quarry.y + 44);
+  }
+  // sawmill
+  if (stationPlate('saw', DIST.saw, '🪚', 'SAWMILL')) {
+    shadow(DIST.saw.x, DIST.saw.y + 30, 46);
+    ctx.fillStyle = '#6a5138'; rr(DIST.saw.x - 44, DIST.saw.y - 40, 88, 64, 8); ctx.fill();
+    ctx.fillStyle = '#584330'; rr(DIST.saw.x - 50, DIST.saw.y - 52, 100, 16, 6); ctx.fill();
+    const spin = D.saw.ks.length >= 2 ? S.t * 9 : 0;
+    ctx.save(); ctx.translate(DIST.saw.x, DIST.saw.y - 8); ctx.rotate(spin);
+    ctx.fillStyle = '#c9ccd2';
+    for (let i = 0; i < 8; i++) { ctx.rotate(0.785); ctx.fillRect(-2, -16, 4, 8); }
+    ctx.beginPath(); ctx.arc(0, 0, 11, 0, 6.29); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('🪚 2 logs → 1 plank  (' + D.saw.ks.length + ' in)', DIST.saw.x, DIST.saw.y + 42);
+    ctx.strokeStyle = 'rgba(217,185,138,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(DIST.sawTray.x, DIST.sawTray.y, DIST.sawTray.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+    for (let i = 0; i < D.saw.tray.length; i++)
+      drawPlankIcon(DIST.sawTray.x - 20 + (i % 4) * 14, DIST.sawTray.y - Math.floor(i / 4) * 8, 0.85);
+    ctx.fillStyle = '#d9b98a'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('planks', DIST.sawTray.x, DIST.sawTray.y + 34);
+  }
+  // toolmaker
+  if (stationPlate('tool', DIST.tool, '🔨', 'TOOLMAKER')) {
+    shadow(DIST.tool.x, DIST.tool.y + 30, 46);
+    ctx.fillStyle = '#5c4a3a'; rr(DIST.tool.x - 44, DIST.tool.y - 34, 88, 56, 8); ctx.fill();
+    ctx.fillStyle = '#7a6a52'; rr(DIST.tool.x - 36, DIST.tool.y - 44, 72, 14, 5); ctx.fill();
+    const bang = Math.abs(Math.sin(S.t * 5));
+    drawToolIcon(DIST.tool.x, DIST.tool.y - 50 - bang * 8, 1.4);
+    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('🔨 1 plank + 2 stones → 1 tool', DIST.tool.x, DIST.tool.y + 40);
+    ctx.fillText('wood ' + D.tool.wood.length + '  stone ' + D.tool.stone.length, DIST.tool.x, DIST.tool.y + 54);
+    ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(DIST.toolTray.x, DIST.toolTray.y, DIST.toolTray.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+    for (let i = 0; i < D.tool.tray.length; i++)
+      drawToolIcon(DIST.toolTray.x - 21 + (i % 4) * 14, DIST.toolTray.y - Math.floor(i / 4) * 12, 0.9);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('tools (x' + TOOL_MUL + ')', DIST.toolTray.x, DIST.toolTray.y + 34);
+  }
+  stationPlate('hauler', DIST.hauler, '🧑‍🌾', 'HAULER (auto-feed)');
+  stationPlate('trader', DIST.trader, '🛒', 'TRADER (auto-sell)');
+  // waygate pad handled by warpPads/drawPad in drawStands when waygate built
+}
 function drawTower(tw) {
   shadow(tw.x, tw.y + 30, 34);
   if (tw.type === 'catapult') {
@@ -1702,6 +2047,20 @@ function drawPorter(po) {
   ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(po.x, po.y - 16, 6.5, 0, 6.29); ctx.fill();
   for (let i = 0; i < po.carry.length; i++)
     drawStackEntry(po.carry[i], po.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), po.y - 26 - i * 6, 0.7);
+}
+function drawWorker(w, col, carry, kind) {
+  shadow(w.x, w.y + 14, 14);
+  ctx.fillStyle = col; rr(w.x - 8, w.y - 10, 16, 18, 4); ctx.fill();
+  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(w.x, w.y - 16, 6.5, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#6a4520'; rr(w.x - 7, w.y - 24, 14, 4, 2); ctx.fill(); // hat brim
+  for (let i = 0; i < (carry || []).length; i++) {
+    const y = w.y - 26 - i * 6, x = w.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3);
+    const c = carry[i];
+    if (kind === 'entries') drawStackEntry(c, x, y, 0.7);
+    else if (kind === 'stone') drawStoneIcon(x, y, 0.7);
+    else if (kind === 'plank') drawPlankIcon(x, y, 0.7);
+    else drawLogIcon(x, y, 0.7);
+  }
 }
 function drawDog(d) {
   shadow(d.x, d.y + 8, 12);
@@ -1795,6 +2154,7 @@ function drawPlayer() {
 function drawWorld() {
   drawGround();
   drawStands();
+  drawDistrict();
   for (const z of S.zones) if (z.drums && rectVis(z.x0, z.y0, z.x1, z.y1)) drawDrums(z);
   // treasure chest
   if (S.chest && vis(S.chest.x, S.chest.y, 60)) {
@@ -1815,10 +2175,7 @@ function drawWorld() {
     shadow(it.x, it.y + 6, 8);
     const wob = Math.sin(S.t * 3 + it.x) * 1.5;
     if (it.gem) drawGemIcon(it.x, it.y + wob, 1.1);
-    else if (it.crown) drawCrownIcon(it.x, it.y + wob, 1);
-    else if (it.bar) drawBarIcon(it.x, it.y + wob, 0.9);
-    else if (it.log) drawLogIcon(it.x, it.y + wob, 0.9);
-    else drawHelmetIcon(it.x, it.y + wob, it.k, 0.9);
+    else drawStackEntry(it, it.x, it.y + wob, 0.9);
   }
   // ambient butterflies
   for (const b of S.amb) {
@@ -1834,6 +2191,11 @@ function drawWorld() {
     for (const po of z.porters) if (vis(po.x, po.y, 80)) actors.push({ y: po.y, f: () => drawPorter(po) });
   }
   for (const e of S.enemies) if (vis(e.x, e.y, 100)) actors.push({ y: e.y, f: () => drawEnemy(e) });
+  if (S.district) {
+    const H = S.district.haulerNpc, T = S.district.traderNpc;
+    if (H && vis(H.x, H.y, 60)) actors.push({ y: H.y, f: () => drawWorker(H, '#8a9a4a', H.carry, H.job ? H.job.kind : null) });
+    if (T && vis(T.x, T.y, 60)) actors.push({ y: T.y, f: () => drawWorker(T, '#c0605a', T.carry, 'entries') });
+  }
   if (S.dog) actors.push({ y: S.dog.y, f: () => drawDog(S.dog) });
   actors.push({ y: S.player.y, f: drawPlayer });
   actors.sort((a, b) => a.y - b.y);
@@ -1995,7 +2357,11 @@ function drawHud() {
   }
 }
 function drawQuests() {
-  hudBtn(vw - 46, 44, 36, 30, '📜', () => { S.showQuests = !S.showQuests; });
+  hudBtn(vw - 46, 44, 36, 30, '📜', () => { S.showQuests = !S.showQuests; save(); });
+  if (S.goldPulse > 0) { // fresh completion ping on the button
+    ctx.fillStyle = '#ffd94a';
+    ctx.beginPath(); ctx.arc(vw - 14, 48, 4 + Math.sin(S.t * 8), 0, 6.29); ctx.fill();
+  }
   if (!S.showQuests) return;
   const rows = S.dailies.concat(S.quests);
   if (!rows.length) return;
@@ -2028,6 +2394,7 @@ function drawQuests() {
 function drawMinimap() {
   // tiny map of the land grid in the top-right corner
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
+  if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1 });
   const nxt = cellFor(S.zones.length + 1);
   let minC = 0, maxC = 0, minR = 0, maxR = 0;
   for (const c of cells.concat([nxt])) {
@@ -2043,7 +2410,7 @@ function drawMinimap() {
   const cellXY = (cx2, cy2) => ({ x: ox + pad + (cx2 - minC) * cs, y: oy + pad + (cy2 - minR) * cs });
   for (const c of cells) {
     const q = cellXY(c.cx, c.cy);
-    ctx.fillStyle = c.k === 0 ? '#d9c9a0' : foeCol(c.k);
+    ctx.fillStyle = c.k === 0 ? '#d9c9a0' : c.k === -1 ? '#e0a13c' : foeCol(c.k);
     ctx.globalAlpha = c.k === 0 ? 0.95 : 0.8;
     rr(q.x + 1, q.y + 1, cs - 2, cs - 2, 3); ctx.fill();
     ctx.globalAlpha = 1;
@@ -2168,8 +2535,8 @@ window.KS = {
   cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
-  questEvent, rollDailies, streakMul, completeQuest,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD },
+  questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry,
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T },
   start() { S.started = true; },
 };
 </script>
