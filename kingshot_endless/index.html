@@ -165,7 +165,7 @@ function drawCards() {
 }
 function grantXp(n) {
   if (!S.started) return;
-  S.xp += n * (1 + 0.15 * pk('scholar'));
+  S.xp += n * (1 + 0.15 * pk('scholar')) * (1 + petBonus('xp'));
   while (S.xp >= xpNeed(S.level)) {
     S.xp -= xpNeed(S.level); S.level++;
     S.stats.level = S.level;
@@ -210,6 +210,73 @@ function triggerBoon() {
   S.boon = null;
   return true;
 }
+
+// ---- pet companions (collect / hatch / level) ----------------
+// Hatch eggs with gems. Duplicates level a pet up (bonus scales with
+// level). One ACTIVE pet trails the hero and grants its themed buff;
+// every UNIQUE species owned also adds a small permanent coin bonus,
+// so completing the collection matters.
+const RARITY = [
+  { name: 'Common',    col: '#c8d0da', w: 60 },
+  { name: 'Rare',      col: '#5aa9e0', w: 27 },
+  { name: 'Epic',      col: '#b06ee0', w: 10 },
+  { name: 'Legendary', col: '#ffb347', w: 3 },
+];
+const PETS = [
+  { id: 'pup',    ic: '🐶', name: 'Loyal Pup',    rar: 0, kind: 'coin',   amt: 0.06, desc: '+6% coin value / lvl' },
+  { id: 'cat',    ic: '🐱', name: 'Alley Cat',    rar: 0, kind: 'magnet', amt: 0.10, desc: '+10% pickup range / lvl' },
+  { id: 'chick',  ic: '🐤', name: 'Brave Chick',  rar: 0, kind: 'rate',   amt: 0.05, desc: '+5% fire rate / lvl' },
+  { id: 'bunny',  ic: '🐰', name: 'Lucky Bunny',  rar: 0, kind: 'speed',  amt: 0.06, desc: '+6% move speed / lvl' },
+  { id: 'piggy',  ic: '🐷', name: 'Coin Piggy',   rar: 0, kind: 'coin',   amt: 0.08, desc: '+8% coin value / lvl' },
+  { id: 'fox',    ic: '🦊', name: 'Sly Fox',      rar: 1, kind: 'dmg',    amt: 0.10, desc: '+10% damage / lvl' },
+  { id: 'owl',    ic: '🦉', name: 'Wise Owl',     rar: 1, kind: 'xp',     amt: 0.15, desc: '+15% XP gain / lvl' },
+  { id: 'boar',   ic: '🐗', name: 'War Boar',     rar: 1, kind: 'hp',     amt: 0.08, desc: '+8% max HP / lvl' },
+  { id: 'wolf',   ic: '🐺', name: 'Dire Wolf',    rar: 2, kind: 'dmg',    amt: 0.18, desc: '+18% damage / lvl' },
+  { id: 'tiger',  ic: '🐯', name: 'Tiger',        rar: 2, kind: 'coin',   amt: 0.16, desc: '+16% coin value / lvl' },
+  { id: 'dragon', ic: '🐲', name: 'Baby Dragon',  rar: 3, kind: 'dmg',    amt: 0.30, desc: '+30% damage / lvl' },
+  { id: 'unicorn',ic: '🦄', name: 'Unicorn',      rar: 3, kind: 'all',    amt: 0.10, desc: '+10% to everything / lvl' },
+];
+function petDef(id) { return PETS.find(p => p.id === id) || null; }
+function petLvl(id) { return (S.pets && S.pets[id]) || 0; }
+function petsOwned() { let n = 0; for (const id in (S.pets || {})) if (S.pets[id] > 0) n++; return n; }
+function activePet() { return S.activePet ? petDef(S.activePet) : null; }
+// additive fraction contributed by the active pet for a given stat kind
+function petBonus(kind) {
+  const a = activePet(); if (!a) return 0;
+  const lvl = petLvl(a.id);
+  if (a.kind === kind) return a.amt * lvl;
+  if (a.kind === 'all') return a.amt * lvl; // unicorn buffs every kind
+  return 0;
+}
+// permanent collection bonus: +2% coin value per unique species owned
+function petCollectionMul() { return 1 + 0.02 * petsOwned(); }
+function eggCost() { return 6 + (S.stats.hatches || 0) * 3; }
+function rollRarity() {
+  const tot = RARITY.reduce((s, r) => s + r.w, 0);
+  let x = rnd() * tot;
+  for (let i = 0; i < RARITY.length; i++) { x -= RARITY[i].w; if (x < 0) return i; }
+  return 0;
+}
+function hatchEgg() {
+  const c = eggCost();
+  if (S.gems < c) { float(S.player.x, S.player.y - 40, 'Need ' + c + '💎', '#6ee0d8'); return false; }
+  S.gems -= c;
+  S.stats.hatches = (S.stats.hatches || 0) + 1;
+  const r = rollRarity();
+  let pool = PETS.filter(p => p.rar === r);
+  if (!pool.length) pool = PETS;
+  const def = pool[Math.floor(rnd() * pool.length)];
+  const wasNew = petLvl(def.id) === 0;
+  S.pets[def.id] = petLvl(def.id) + 1;
+  if (!S.activePet) S.activePet = def.id;
+  const rc = RARITY[def.rar].col;
+  S.toasts.push({ txt: def.ic + ' ' + (wasNew ? 'NEW! ' : 'Lv' + S.pets[def.id] + ' ') + def.name, t: 0 });
+  S.shake = Math.max(S.shake, wasNew ? 8 : 4); S.goldPulse = Math.max(S.goldPulse, 0.5);
+  for (let i = 0; i < (wasNew ? 26 : 12); i++) S.parts.push({ x: S.player.x, y: S.player.y - 20, vx: (rnd() - 0.5) * 300, vy: -100 - rnd() * 200, t: 0, dur: 0.8, r: 3, color: rc, g: 1 });
+  sfx('unlock', true); buzz(wasNew ? [30, 20, 60] : 30);
+  return true;
+}
+function setActivePet(id) { if (petLvl(id) > 0) { S.activePet = id; sfx('built', true); } }
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
 function helmVal(k)  { return Math.ceil(5 * eco(k)); }
@@ -332,6 +399,7 @@ function reset() {
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
     combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
     xp: 0, level: 1, cards: null, pendingLevels: 0, perks: {},
+    pets: {}, activePet: null, showPets: false, petPos: { x: SPAWN.x - 30, y: SPAWN.y + 10 },
     boon: null, boonT: 30, frenzyT: 0, goldRushT: 0,
     district: null,
     distPlate: { cost: 400, paid: 0, built: false },
@@ -348,12 +416,12 @@ function reset() {
   };
 }
 function cap()     { return CAP0 + CAP_UP * S.up.cap + 2 * pk('cap'); }
-function pMaxHp()  { return Math.round((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns)); }
-function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')); }
-function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (S.frenzyT > 0 ? 1.5 : 1); }
-function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (S.frenzyT > 0 ? 2 : 1); }
-function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet')); }
-function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (S.goldRushT > 0 ? 3 : 1); }
+function pMaxHp()  { return Math.round((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns) * (1 + petBonus('hp'))); }
+function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')) * (1 + petBonus('speed')); }
+function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (S.frenzyT > 0 ? 1.5 : 1); }
+function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (1 + petBonus('rate')) / (S.frenzyT > 0 ? 2 : 1); }
+function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet') + petBonus('magnet')); }
+function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (S.goldRushT > 0 ? 3 : 1); }
 function comboWindow() { return COMBO_WINDOW + 0.4 * pk('combow'); }
 function critChance() { return 0.10 * S.gemUp.crit + 0.06 * pk('crit'); }
 function critMult()   { return 3 + 0.6 * pk('critdmg'); }
@@ -544,6 +612,7 @@ function save() {
       streak: S.streak, lastStreakDay: S.lastStreakDay,
       showQuests: S.showQuests ? 1 : 0,
       xp: S.xp, level: S.level, perks: S.perks,
+      pets: S.pets, activePet: S.activePet,
       district: S.district ? {
         plates: Object.fromEntries(Object.entries(S.district.plates).map(([id, pl]) => [id, { b: pl.built ? 1 : 0, p: pl.paid }])),
         grove: S.district.grove.logs, quarry: S.district.quarry.stones,
@@ -615,6 +684,8 @@ function load() {
   S.dailyDay = d.dailyDay || ''; S.streak = d.streak || 0; S.lastStreakDay = d.lastStreakDay || '';
   S.showQuests = !!d.showQuests;
   S.xp = d.xp || 0; S.level = d.level || 1; S.perks = d.perks || {};
+  S.pets = d.pets || {}; S.activePet = d.activePet || null;
+  if (S.activePet && petLvl(S.activePet) <= 0) S.activePet = null;
   if (d.district) {
     S.distPlate.built = true;
     initDistrict();
@@ -1118,6 +1189,10 @@ const ACH = [
   { id: 'dash50',  ic: '💨', name: 'Blink',             d: 'Dash 50 times',                  c: () => (S.stats.dashes || 0) >= 50 },
   { id: 'tycoon2', ic: '⚙️', name: 'Industrialist',    d: 'Own industry, farm & mine',      c: () => S.distPlate.built && S.d2Plate.farm.built && S.d2Plate.mine.built },
   { id: 'guild',   ic: '🎨', name: 'Guildmaster',      d: 'Own the Artisan Quarter',        c: () => S.d2Plate.artisan && S.d2Plate.artisan.built },
+  { id: 'pet1',    ic: '🥚', name: 'First Friend',     d: 'Hatch your first pet',           c: () => petsOwned() >= 1 },
+  { id: 'pet6',    ic: '🐾', name: 'Pack Leader',      d: 'Collect 6 different pets',       c: () => petsOwned() >= 6 },
+  { id: 'petAll',  ic: '🦄', name: 'Beastmaster',      d: 'Collect every pet species',      c: () => petsOwned() >= PETS.length },
+  { id: 'petLeg',  ic: '🐲', name: 'Mythic Bond',      d: 'Own a Legendary pet',            c: () => PETS.some(p => p.rar === 3 && petLvl(p.id) > 0) },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -1189,6 +1264,14 @@ function tick(dt) {
       S.parts.push({ x: p.x - mx * 10, y: p.y + 14, vx: -mx * 30, vy: -10, t: 0, dur: 0.4, r: 3, color: 'rgba(180,170,150,0.5)' });
     }
   } else p.moving = 0;
+
+  // -- pet companion follows a trailing point behind the hero
+  if (S.activePet) {
+    if (!S.petPos) S.petPos = { x: p.x - 26, y: p.y + 10 };
+    const tx = p.x - p.face * 22, ty = p.y + 12;
+    S.petPos.x += (tx - S.petPos.x) * Math.min(1, dt * 6);
+    S.petPos.y += (ty - S.petPos.y) * Math.min(1, dt * 6);
+  }
 
   // -- waygate pads
   if (S.waygate) {
@@ -2763,6 +2846,15 @@ function drawEnemy(e) {
 function drawPlayer() {
   const p = S.player;
   const bob = p.moving ? Math.abs(Math.sin(S.t * 10)) * 3 : Math.sin(S.t * 3) * 1;
+  // pet companion trails just behind/below the hero
+  const ap = activePet();
+  if (ap && S.petPos) {
+    const pb = Math.sin(S.t * 6) * 2;
+    shadow(S.petPos.x, S.petPos.y + 8, 9);
+    ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ap.ic, S.petPos.x, S.petPos.y - pb);
+    ctx.textBaseline = 'alphabetic';
+  }
   shadow(p.x, p.y + 16, 18);
   if (p.invuln > 0 && Math.floor(S.t * 12) % 2) ctx.globalAlpha = 0.45;
   // cape
@@ -3088,6 +3180,7 @@ function drawHud() {
   drawCombo();
   drawProgression();
   drawQuests();
+  drawPets();
   drawStatsPanel();
   // quest-complete golden pulse
   if (S.goldPulse > 0) {
@@ -3272,6 +3365,7 @@ function drawStatsPanel() {
     ['☠️ Deaths', fmt(S.player.deaths)], ['🔥 Streak', S.streak + 'd'],
     ['🔥 Best combo', fmt(S.stats.comboBest || 0)], ['⭐ Hero level', fmt(S.level)],
     ['🃏 Perks picked', fmt(perkCount())], ['★ Boons caught', fmt(S.stats.boons || 0)],
+    ['🐾 Pets owned', petsOwned() + '/' + PETS.length], ['🥚 Eggs hatched', fmt(S.stats.hatches || 0)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3345,6 +3439,60 @@ function drawQuests() {
     ctx.fillStyle = '#ff9a4a'; ctx.font = 'bold 10px sans-serif';
     ctx.fillText('🔥 ' + S.streak + '-day streak  (+' + Math.round((streakMul() - 1) * 100) + '% daily pay)', 16, y + 10);
   }
+}
+function drawPets() {
+  // 🐾 button under the quest button; badge glows when an egg is affordable
+  const bx = vw - 46, by = 78;
+  hudBtn(bx, by, 36, 30, '🐾', () => { S.showPets = !S.showPets; save(); });
+  if (S.gems >= eggCost()) {
+    ctx.fillStyle = '#6ee0d8';
+    ctx.beginPath(); ctx.arc(bx + 32, by + 4, 4 + Math.sin(S.t * 6) * 0.8, 0, 6.29); ctx.fill();
+  }
+  if (!S.showPets) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.92)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showPets = false; } });
+  const cx = vw / 2, top = Math.max(40, vh * 0.05);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('🐾 PET MENAGERIE', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText(petsOwned() + ' / ' + PETS.length + ' species · +' + Math.round((petCollectionMul() - 1) * 100) + '% coins from collection', cx, top + 20);
+  // hatch button
+  const hw = 240, hx = cx - hw / 2, hy = top + 34;
+  const canHatch = S.gems >= eggCost();
+  ctx.fillStyle = canHatch ? '#2f7d6e' : 'rgba(40,48,60,0.9)'; rr(hx, hy, hw, 42, 10); ctx.fill();
+  ctx.fillStyle = canHatch ? '#eafff9' : '#7a8792'; ctx.font = 'bold 16px sans-serif';
+  ctx.fillText('🥚 HATCH EGG   ' + eggCost() + '💎', cx, hy + 26);
+  hits.push({ x: hx, y: hy, w: hw, h: 42, act: () => { hatchEgg(); } });
+  // grid of species
+  const cols = 3, cellW = Math.min(150, (vw - 40) / cols), cellH = 76, gx0 = cx - (cols * cellW) / 2;
+  let gy = hy + 54;
+  ctx.textAlign = 'center';
+  for (let i = 0; i < PETS.length; i++) {
+    const def = PETS[i], lvl = petLvl(def.id), owned = lvl > 0;
+    const col = i % cols, row = Math.floor(i / cols);
+    const x = gx0 + col * cellW, y = gy + row * cellH;
+    const active = S.activePet === def.id;
+    ctx.globalAlpha = owned ? 1 : 0.4;
+    ctx.fillStyle = active ? 'rgba(255,217,74,0.18)' : 'rgba(20,25,36,0.85)';
+    rr(x + 3, y + 3, cellW - 6, cellH - 6, 8); ctx.fill();
+    ctx.strokeStyle = active ? '#ffd94a' : RARITY[def.rar].col; ctx.lineWidth = active ? 2.5 : 1.2;
+    rr(x + 3, y + 3, cellW - 6, cellH - 6, 8); ctx.stroke();
+    ctx.font = '26px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText(owned ? def.ic : '❔', x + cellW / 2, y + 30);
+    ctx.font = 'bold 10px sans-serif'; ctx.fillStyle = owned ? '#fff' : '#7a8792';
+    ctx.fillText(owned ? def.name : '???', x + cellW / 2, y + 44);
+    ctx.font = '8px sans-serif'; ctx.fillStyle = RARITY[def.rar].col;
+    ctx.fillText(RARITY[def.rar].name + (owned ? '  ·  Lv' + lvl : ''), x + cellW / 2, y + 55);
+    if (owned) {
+      ctx.font = '8px sans-serif'; ctx.fillStyle = '#9aa7b5';
+      ctx.fillText(def.desc, x + cellW / 2, y + 66);
+      hits.push({ x: x + 3, y: y + 3, w: cellW - 6, h: cellH - 6, act: () => { setActivePet(def.id); } });
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap an owned pet to make it your active companion · tap empty space to close', cx, vh - 16);
 }
 function drawMinimap() {
   // tiny map of the land grid in the top-right corner
@@ -3434,7 +3582,9 @@ function onDown(ev) {
   const p = pointerXY(ev);
   if (!S.started) { S.started = true; sfx('built', true); return; }
   if (S.showStats) { S.showStats = false; return; } // records overlay: any tap closes
-  for (const h of hits) {
+  // topmost-first: later-drawn elements (modals, panel buttons) win over HUD beneath
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const h = hits[i];
     if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) { h.act(); return; }
   }
   activePointer = ev.pointerId !== undefined ? ev.pointerId : 'touch';
@@ -3496,6 +3646,7 @@ window.KS = {
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry, drawStatsPanel,
   dashAbility, dashCdMax, registerCombo, comboMul, comboTier, drawCombo, comboWindow,
   grantXp, xpNeed, drawCards, pickCard, pk, perkCount, triggerBoon, CARDS, BOONS, critChance, critMult,
+  PETS, RARITY, hatchEgg, eggCost, petLvl, petsOwned, activePet, petBonus, petCollectionMul, setActivePet, drawPets,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },

@@ -558,6 +558,48 @@ KS.save(); KS.reset(); KS.load();
 t.ok(KS.pk('dmg') === 3 && KS.S.level === 7, 'perks + hero level persist through save/load');
 KS.S.perks = {}; KS.S.level = 1; KS.S.xp = 0; KS.S.cards = null; KS.S.boon = null; KS.S.frenzyT = 0; KS.S.goldRushT = 0;
 
+// ---- pet companions: hatch / collect / bonuses / persist ----
+KS.S.pets = {}; KS.S.activePet = null; KS.S.stats.hatches = 0;
+KS.S.gems = 5000;
+const ec0 = KS.eggCost(), gemsA = KS.S.gems;
+t.ok(KS.hatchEgg() === true, 'hatching an egg grants a pet');
+t.ok(KS.S.gems === gemsA - ec0, 'egg cost deducted from gems');
+t.ok(KS.petsOwned() >= 1 && KS.S.activePet !== null, 'first hatch auto-equips the pet');
+t.ok(KS.eggCost() > ec0, 'egg cost escalates with each hatch');
+KS.S.gems = 0;
+t.ok(KS.hatchEgg() === false, 'cannot hatch without enough gems');
+// many hatches collect distinct species and stack dupes as levels
+for (let i = 0; i < 260; i++) { KS.S.gems = 1e9; KS.hatchEgg(); }
+t.ok(KS.petsOwned() >= 6, 'repeated hatches collect several distinct species');
+t.ok(KS.S.stats.hatches > KS.petsOwned(), 'duplicate hatches level pets up (more hatches than species)');
+// active pet contributes its themed bonus, scaled by level
+KS.S.pets = { fox: 2 }; KS.S.activePet = 'fox'; // fox = +10% dmg / lvl
+t.ok(Math.abs(KS.petBonus('dmg') - 0.20) < 1e-9, 'active pet bonus scales with its level');
+KS.S.perks = {}; KS.S.frenzyT = 0;
+const dmgPet = KS.pDmg(); KS.S.activePet = null; const dmgNoPet = KS.pDmg();
+t.ok(dmgPet > dmgNoPet, 'equipping a damage pet raises damage');
+// a unicorn (all) buffs every stat kind at once
+KS.S.pets = { unicorn: 1 }; KS.S.activePet = 'unicorn';
+t.ok(KS.petBonus('dmg') > 0 && KS.petBonus('coin') > 0 && KS.petBonus('rate') > 0, 'a unicorn buffs every stat kind');
+// unique-species collection bonus raises coin value
+KS.S.pets = {}; KS.S.activePet = null;
+const coinNoPets = KS.coinMul();
+KS.S.pets = { pup: 1, cat: 1, fox: 1 };
+t.ok(Math.abs(KS.petCollectionMul() - 1.06) < 1e-9, 'collection grants +2% coins per unique species');
+t.ok(KS.coinMul() > coinNoPets, 'owning pets raises coin income via the collection bonus');
+// milestones
+KS.checkAch();
+t.ok(KS.S.ach.pet1 === true, 'hatching a pet unlocks First Friend');
+for (const pd of KS.PETS) KS.S.pets[pd.id] = 1;
+KS.checkAch();
+t.ok(KS.S.ach.petAll === true && KS.S.ach.petLeg === true, 'full collection + legendary milestones unlock');
+// pets persist through save/load; survive prestige (permanent collection)
+KS.S.pets = { wolf: 3, owl: 1 }; KS.S.activePet = 'wolf';
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.petLvl('wolf') === 3 && KS.S.activePet === 'wolf', 'pets + active choice persist through save/load');
+KS.S.pets = {}; KS.S.activePet = null; KS.S.stats.hatches = 0; KS.S.gems = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
