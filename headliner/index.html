@@ -86,9 +86,44 @@
     animation:pulse .5s ease-in-out infinite alternate;
   }
   @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.03)}}
+  #encoreBtn{
+    display:none;width:100%;margin-top:8px;border:0;border-radius:10px;padding:15px;
+    font-size:16px;font-weight:900;letter-spacing:.08em;
+    background:linear-gradient(90deg,var(--amber),var(--green));color:#0A1608;
+    animation:pulse .45s ease-in-out infinite alternate;
+  }
 
-  /* setlist builder */
-  #setlist{display:none;margin-top:10px}
+  /* setlist builder — pop-up modal */
+  #setlistModal{
+    display:none;position:fixed;inset:0;z-index:80;
+    background:rgba(8,6,13,.72);backdrop-filter:blur(3px);
+    align-items:flex-end;justify-content:center;padding:0;
+  }
+  #setlistModal.on{display:flex}
+  .slPanel{
+    width:100%;max-width:520px;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:var(--panel);border:1px solid var(--line);border-bottom:0;
+    border-radius:16px 16px 0 0;padding:16px 16px 22px;
+    box-shadow:0 -20px 60px -10px rgba(0,0,0,.7);
+    animation:slideUp .22s ease-out;
+  }
+  @keyframes slideUp{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+  .slTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .slTitle{font-size:17px;font-weight:800;letter-spacing:-.01em}
+  #slClose{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;font-size:15px;padding:5px 11px}
+  #slVibe{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-bottom:12px;line-height:1.5}
+  #slVibe b{color:var(--ac)}
+  #planBtn{display:none;width:100%;margin-top:8px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--dim);border-radius:10px;padding:9px;font-size:12px;font-weight:700;letter-spacing:.04em}
+  #slDig{width:100%;margin-bottom:12px;border:1px dashed var(--amber);background:transparent;
+    color:var(--amber);border-radius:10px;padding:11px;font-size:13px;font-weight:700}
+  #slDig:disabled{opacity:.4}
+  .genre{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;
+    padding:1px 5px;border-radius:4px;background:color-mix(in srgb,var(--ac) 22%,transparent);color:var(--ac);margin-left:4px}
+  .crChip.fav{box-shadow:inset 0 0 0 1px var(--green)}
+  .crChip.rare{border-color:var(--amber)}
+  .crChip .star{color:var(--amber);font-size:10px}
+
   .slHead{display:flex;justify-content:space-between;align-items:baseline;
     font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ac);margin-bottom:8px}
   .slHead #slCount{color:var(--dim)}
@@ -269,6 +304,8 @@
   @media (prefers-reduced-motion:reduce){
     #pad.spin{animation:none}
     #dropBtn{animation:none}
+    #encoreBtn{animation:none}
+    .slPanel{animation:none}
   }
 </style>
 </head>
@@ -303,22 +340,7 @@
     <div id="nextLbl"></div>
     <div id="gigZone">
       <button class="big" id="gigBtn">▶ GO LIVE</button>
-
-      <!-- setlist builder -->
-      <div id="setlist">
-        <div class="slHead">
-          <span>BUILD YOUR SET</span>
-          <span id="slCount">0 / 3</span>
-        </div>
-        <div id="slCurveWrap"><div id="slCurve"></div><span class="slCurveLbl" id="slEnergy"></span></div>
-        <div id="slChosen"></div>
-        <div class="slSub">Your crate — tap to add, in the order you'll play them:</div>
-        <div id="slCrate"></div>
-        <div id="slBtns">
-          <button id="slAuto">🎲 Auto</button>
-          <button id="slPlay">▶ PLAY SET</button>
-        </div>
-      </div>
+      <button id="planBtn">🎵 Edit your setlist</button>
 
       <div id="gigRun">
         <div id="trackLbl"></div>
@@ -326,11 +348,12 @@
         <div class="bar"><i id="gigBar"></i></div>
         <div id="gigPayLbl"></div>
         <div id="hypeWrap">
-          <div id="hypeLbl"><span>CROWD HYPE — tap the decks!</span><b id="hypeV">×1.00</b></div>
+          <div id="hypeLbl"><span id="moodLbl">CROWD MOOD — tap the decks!</span><b id="hypeV">×1.00</b></div>
           <div class="bar" id="hypeBar"><i id="hypeFill"></i></div>
         </div>
         <div id="streakLbl"></div>
       </div>
+      <button id="encoreBtn">🎉 ENCORE — ONE MORE! 🎉</button>
 
       <!-- the transition: crossfader blend -->
       <div id="transWrap">
@@ -383,6 +406,27 @@
 <button id="gold" aria-label="Viral moment">💿</button>
 <div id="flash"></div>
 
+<!-- setlist builder modal -->
+<div id="setlistModal">
+  <div class="slPanel">
+    <div class="slTop">
+      <span class="slTitle">🎵 Build your set</span>
+      <button id="slClose" aria-label="Close">✕</button>
+    </div>
+    <div id="slVibe"></div>
+    <div class="slHead"><span>YOUR SETLIST</span><span id="slCount">0 / 3</span></div>
+    <div id="slCurveWrap"><div id="slCurve"></div><span class="slCurveLbl" id="slEnergy"></span></div>
+    <div id="slChosen"></div>
+    <div class="slSub">Your crate — tap to add, in the order you'll play them:</div>
+    <div id="slCrate"></div>
+    <button id="slDig"></button>
+    <div id="slBtns">
+      <button id="slAuto">🎲 Auto</button>
+      <button id="slPlay">▶ PLAY SET</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 // HEADLINER — idle/tycoon DJ career game. One file, DOM UI, mobile-first.
@@ -422,28 +466,54 @@ const RISER_CHANCE = 0.7;                     // odds of a riser per set (dive b
 const RISER_LIFE = 6, RISER_FILL = 1.5;       // window to act; seconds of holding to reach full charge
 const RISER_MAX = 1.15, RISER_PEAK_LO = 0.82, RISER_PEAK_HI = 1.05; // overhold past MAX pops; release in [LO,HI] = perfect
 
-// The crate — each track has an energy (1–10); higher-energy bangers unlock as your career climbs.
+// Wave 2: genres, the vibe, crate-digging, crowd archetypes, the encore
+const GENRES = { house: '🏠 House', techno: '⚙️ Techno', disco: '🕺 Disco', dnb: '🥁 D&B', trance: '🌌 Trance', pop: '📻 Pop' };
+const VIBE_MAX = 0.35;                        // playing to the room's taste = up to +35%
+const DIG_BASE = 500, DIG_MUL = 1.8;          // crate-digging cost curve
+const ENCORE_THRESH = 0.8;                    // finish a set this hyped and the crowd demands one more
+const ENCORE_WIN = 3.2, ENCORE_JACKPOT = 0.6, ENCORE_BASE = 0.2; // encore timing window + payouts
+
+// The crate — each track has an energy (1–10) and a genre; bangers unlock as your career climbs.
 const TRACKS = [
-  { name: 'Bedroom Demo',      energy: 2, era: 0 },
-  { name: 'First Loop',        energy: 3, era: 0 },
-  { name: 'Lo-Fi Sketch',      energy: 2, era: 0 },
-  { name: 'Midnight Practice', energy: 4, era: 0 },
-  { name: 'Basement Bounce',   energy: 5, era: 1 },
-  { name: 'Red Cup Anthem',    energy: 6, era: 1 },
-  { name: "Neighbour's Woe",   energy: 5, era: 1 },
-  { name: 'Last Call',         energy: 4, era: 2 },
-  { name: 'Whiskey Groove',    energy: 6, era: 2 },
-  { name: 'Tuesday Heater',    energy: 7, era: 2 },
-  { name: 'Peak Time',         energy: 8, era: 3 },
-  { name: 'Laser Room',        energy: 7, era: 3 },
-  { name: 'Strobe Logic',      energy: 8, era: 3 },
-  { name: 'Voltage',           energy: 9, era: 3 },
-  { name: 'Concrete Bass',     energy: 9, era: 4 },
-  { name: '4AM Cathedral',     energy: 8, era: 4 },
-  { name: 'Industrial Ritual', energy: 10, era: 4 },
-  { name: 'Mainstage Messiah', energy: 10, era: 5 },
-  { name: 'Sunrise Set',       energy: 7, era: 5 },
-  { name: 'Pyro',              energy: 10, era: 5 },
+  { name: 'Bedroom Demo',      energy: 2, era: 0, genre: 'house' },
+  { name: 'First Loop',        energy: 3, era: 0, genre: 'house' },
+  { name: 'Lo-Fi Sketch',      energy: 2, era: 0, genre: 'disco' },
+  { name: 'Midnight Practice', energy: 4, era: 0, genre: 'house' },
+  { name: 'Basement Bounce',   energy: 5, era: 1, genre: 'disco' },
+  { name: 'Red Cup Anthem',    energy: 6, era: 1, genre: 'pop' },
+  { name: "Neighbour's Woe",   energy: 5, era: 1, genre: 'house' },
+  { name: 'Last Call',         energy: 4, era: 2, genre: 'disco' },
+  { name: 'Whiskey Groove',    energy: 6, era: 2, genre: 'house' },
+  { name: 'Tuesday Heater',    energy: 7, era: 2, genre: 'techno' },
+  { name: 'Peak Time',         energy: 8, era: 3, genre: 'techno' },
+  { name: 'Laser Room',        energy: 7, era: 3, genre: 'trance' },
+  { name: 'Strobe Logic',      energy: 8, era: 3, genre: 'techno' },
+  { name: 'Voltage',           energy: 9, era: 3, genre: 'dnb' },
+  { name: 'Concrete Bass',     energy: 9, era: 4, genre: 'techno' },
+  { name: '4AM Cathedral',     energy: 8, era: 4, genre: 'trance' },
+  { name: 'Industrial Ritual', energy: 10, era: 4, genre: 'techno' },
+  { name: 'Mainstage Messiah', energy: 10, era: 5, genre: 'trance' },
+  { name: 'Sunrise Set',       energy: 7, era: 5, genre: 'house' },
+  { name: 'Pyro',              energy: 10, era: 5, genre: 'dnb' },
+  // rare crate finds — never unlock by era; you dig for them (era: 99)
+  { name: 'Bootleg Edit',      energy: 7, era: 99, genre: 'disco',  rare: true },
+  { name: 'White Label',       energy: 8, era: 99, genre: 'techno', rare: true },
+  { name: 'Dusty 45',          energy: 5, era: 99, genre: 'disco',  rare: true },
+  { name: 'Unreleased ID',     energy: 9, era: 99, genre: 'dnb',    rare: true },
+  { name: 'Acid Relic',        energy: 8, era: 99, genre: 'techno', rare: true },
+  { name: 'Rare Groove',       energy: 6, era: 99, genre: 'house',  rare: true },
+  { name: 'Vinyl-Only Dub',    energy: 7, era: 99, genre: 'house',  rare: true },
+  { name: 'The Holy Grail',    energy: 10, era: 99, genre: 'trance', rare: true },
+];
+
+// Each venue's crowd is a different animal: what genre they crave, and how they feel about "the hit".
+const ARCHETYPES = [
+  { who: 'Your Cat',          fav: 'house',  commercial: 0 },
+  { who: 'Sloshed Mates',     fav: 'pop',    commercial: 1 },   // will chant for the wedding classic
+  { who: 'Grizzled Regulars', fav: 'disco',  commercial: 0 },
+  { who: 'Peak-Time Crowd',   fav: 'techno', commercial: 1 },
+  { who: 'Techno Purists',    fav: 'techno', commercial: -1 },  // play the hit and they fold their arms
+  { who: 'Festival Masses',   fav: 'trance', commercial: 1 },
 ];
 
 const VENUES = [
@@ -506,8 +576,9 @@ function freshState() {
     golden: null, goldT: 45, frenzyT: 0,
     lastSet: null,             // remembered setlist for one-tap re-booking
     setlistOpen: false, pendingSet: [], slNonce: 0,
+    dug: [],                   // rare tracks unlocked by crate-digging
     stats: { taps: 0, gigs: 0, festGigs: 0, drops: 0, dropsHit: 0, requests: 0, goldens: 0,
-             transitions: 0, perfectMixes: 0, risers: 0, risersHit: 0, playT: 0 },
+             transitions: 0, perfectMixes: 0, risers: 0, risersHit: 0, digs: 0, encores: 0, playT: 0 },
     feed: [], feedDirty: true,
     flavorT: 20,
     offline: null,
@@ -565,10 +636,43 @@ function fmtRate(n) { return n > 0 && n < 10 ? +n.toFixed(1) + '' : fmt(n); }
 
 /* ---------------- the crate / setlist / energy ---------------- */
 function topEra() { return Math.max(S.bestVenue, venueIdx()); }
+function owned(id) { return id >= 0 && id < TRACKS.length && (TRACKS[id].era <= topEra() || S.dug.indexOf(id) >= 0); }
 function unlockedTracks() {
-  const top = topEra(), out = [];
-  for (let i = 0; i < TRACKS.length; i++) if (TRACKS[i].era <= top) out.push(i);
+  const out = [];
+  for (let i = 0; i < TRACKS.length; i++) if (owned(i)) out.push(i);
   return out;
+}
+// crowd archetype + the vibe they crave
+function archetype(v) { return ARCHETYPES[v] || ARCHETYPES[0]; }
+function vibeScore(set, v) {
+  if (!set || !set.length) return 0;
+  const fav = archetype(v).fav;
+  let hit = 0;
+  for (const id of set) if (TRACKS[id].genre === fav) hit++;
+  return clamp(hit / set.length, 0, 1);
+}
+function vibeMul(set, v) { return 1 + vibeScore(set, v) * VIBE_MAX; }
+// crate-digging: cost grows with how many rares you've found
+function digCost() { return Math.ceil(DIG_BASE * Math.pow(DIG_MUL, S.dug.length)); }
+function digPool() {  // rare tracks not yet found
+  const out = [];
+  for (let i = 0; i < TRACKS.length; i++) if (TRACKS[i].rare && S.dug.indexOf(i) < 0) out.push(i);
+  return out;
+}
+function dig() {
+  const pool = digPool();
+  if (!pool.length) return -1;
+  const c = digCost();
+  if (S.cash < c) return -1;
+  S.cash -= c;
+  const id = pool[Math.floor(Math.random() * pool.length)];
+  S.dug.push(id);
+  S.stats.digs++;
+  S.slNonce++;
+  toast('CRATE FIND: ' + TRACKS[id].name.toUpperCase());
+  pushFeed('💎 You dug up a rare record: "' + TRACKS[id].name + '" (' + GENRES[TRACKS[id].genre].replace(/^\S+\s/, '') + ', energy ' + TRACKS[id].energy + ').');
+  confetti(14); sfx('unlock');
+  return id;
 }
 function setlistLen(v) { return SETLIST_LEN[v] || 3; }
 // how many tracks a set needs at venue v (never more than you've unlocked)
@@ -590,24 +694,26 @@ function energyScore(set) {
   return clamp(ramp * 0.75 + peakLate * 0.25, 0, 1);
 }
 function energyMul(set) { return 1 + energyScore(set) * ENERGY_MAX; }
-// the agent (and quick-play default) fields a well-paced set: a varied spread, sorted to build.
+// the agent (and quick-play default) fields a well-paced set that leans into the room's taste,
+// then sorts it to build energy toward a late peak.
 function autoSetlist(v) {
-  const pool = unlockedTracks();
-  const len = needLen(v);
-  const picked = shuffled(pool).slice(0, len);
+  const pool = unlockedTracks(), fav = archetype(v).fav, len = needLen(v);
+  // prefer on-genre tracks for the vibe bonus, but fall back to fill the slots
+  const onGenre = shuffled(pool.filter(id => TRACKS[id].genre === fav));
+  const rest = shuffled(pool.filter(id => TRACKS[id].genre !== fav));
+  const picked = onGenre.concat(rest).slice(0, len);
   picked.sort((a, b) => TRACKS[a].energy - TRACKS[b].energy);
   return picked;
 }
 function validSet(set, v) {
   if (!Array.isArray(set)) return null;
   const seen = {}, out = [];
-  for (const id of set) if (id >= 0 && id < TRACKS.length && TRACKS[id].era <= topEra() && !seen[id]) { seen[id] = 1; out.push(id); }
+  for (const id of set) if (owned(id) && !seen[id]) { seen[id] = 1; out.push(id); }
   return out.length === needLen(v) ? out : null;
 }
 
 /* ---------------- setlist builder (UI-driven) ---------------- */
 function openSetlist() {
-  if (S.gig) return false;
   const v = venueIdx();
   S.pendingSet = (validSet(S.lastSet, v) || autoSetlist(v)).slice();
   S.setlistOpen = true; S.slNonce++;
@@ -629,6 +735,7 @@ function playSet() {
   if (!setReady()) return false;
   const set = S.pendingSet.slice();
   S.setlistOpen = false;
+  if (S.gig) { S.lastSet = set; return true; } // mid-gig: just save it as the next set
   return bookGig(set);
 }
 
@@ -688,9 +795,10 @@ function bookGig(set) {
     riser: null, riserDone: false,
     pay: gigPay(v), fans: gigFans(v),
     dropAts, dropIdx: 0, drop: null,
-    hype: 0, energy: energyScore(list),
+    hype: 0, energy: energyScore(list), vibe: vibeScore(list, v),
     reqAt: (v >= 1 && Math.random() < REQ_CHANCE) ? dur * (0.15 + Math.random() * 0.5) : -1,
     req: null, reqDone: false,
+    encoreTried: false, encore: null,
   };
   sfx('book');
   return true;
@@ -774,14 +882,15 @@ function resolveRiser(popped) {
   return true;
 }
 
-// the live combined payout multiplier: crowd hype × energy pacing × mixing quality
+// the live combined payout multiplier: crowd hype × energy pacing × mixing quality × reading the room
 function gigMul(g) {
   const hypeMul = 1 + (g.hype || 0);
   const eMul = 1 + (g.energy != null ? g.energy : energyScore(g.set)) * ENERGY_MAX;
   const ts = g.transScores;
   const tAvg = ts.length ? ts.reduce((a, b) => a + b, 0) / ts.length : 0;
   const tMul = 1 + tAvg * TRANS_MAX;
-  return hypeMul * eMul * tMul;
+  const vMul = 1 + (g.vibe != null ? g.vibe : vibeScore(g.set, g.v)) * VIBE_MAX;
+  return hypeMul * eMul * tMul * vMul;
 }
 function dropHit() {
   const g = S.gig;
@@ -805,18 +914,36 @@ function chooseReq(giveHit) {
   const g = S.gig;
   if (!g || !g.req) return false;
   S.stats.requests++;
+  const arc = archetype(g.v);
   if (giveHit) {
-    const cash = g.pay * REQ_CASH;
+    const cash = g.pay * REQ_CASH * Math.max(0.2, 1 + 0.5 * arc.commercial); // hit-lovers pay more, purists pay less
     S.cash += cash; S.lifeCash += cash;
-    pushFeed('💰 You played the hit. The room erupts. +$' + fmt(cash) + '.');
+    if (arc.commercial < 0) {
+      g.hype = clamp(g.hype - 0.1, 0, 1);
+      pushFeed('💰 You caved and played the hit. The ' + arc.who + ' groan — +$' + fmt(cash) + ', but the room cools.');
+    } else {
+      g.hype = clamp(g.hype + 0.15, 0, 1);
+      pushFeed('💰 You played the hit. The ' + arc.who + ' lose it. +$' + fmt(cash) + '.');
+    }
   } else {
-    const fans = g.fans * REQ_FANS;
+    const fans = g.fans * REQ_FANS * Math.max(0.3, 1 - 0.3 * arc.commercial); // purists reward staying underground
     S.fans += fans; S.lifeFans += fans;
-    pushFeed('🎧 You played your own track anyway. Respect. +' + fmt(fans) + ' fans.');
+    g.hype = clamp(g.hype + (arc.commercial < 0 ? 0.2 : 0.1), 0, 1);
+    pushFeed('🎧 You stuck to your sound. ' + (arc.commercial < 0 ? 'The ' + arc.who + ' respect it. ' : '') + '+' + fmt(fans) + ' fans.');
   }
-  g.hype = Math.min(1, g.hype + 0.15);
   g.req = null; g.reqDone = true;
   sfx('cash');
+  return true;
+}
+function hitEncore() {
+  const g = S.gig;
+  if (!g || !g.encore) return false;
+  S.stats.encores++;
+  g.encore = null;
+  toast('ENCORE SMASHED! 🎆');
+  pushFeed('🎆 You dropped one more and tore the roof off. What a way to close.');
+  confetti(28); flash(); buzz([20, 40, 20, 40]); sfx('drop');
+  finishGig(1 + ENCORE_JACKPOT);
   return true;
 }
 function tapGold() {
@@ -846,17 +973,17 @@ function tapGold() {
   sfx('unlock');
   return true;
 }
-function finishGig() {
+function finishGig(bonusMul) {
   const g = S.gig;
   const V = VENUES[g.v];
-  const m = gigMul(g);
+  const m = gigMul(g) * (bonusMul || 1);
   const pay = g.pay * m, fans = g.fans * m;
   S.cash += pay; S.lifeCash += pay;
   S.fans += fans; S.lifeFans += fans;
   S.stats.gigs++;
   if (g.v === VENUES.length - 1) S.stats.festGigs++;
   pushFeed(V.icon + ' ' + V.gig + ' done — $' + fmt(pay) + ', +' + fmt(fans) + ' fans' +
-    (m > 1.05 ? ' (×' + m.toFixed(2) + ' — hype, pacing & mixing)' : '') + '.');
+    (m > 1.05 ? ' (×' + m.toFixed(2) + ((bonusMul || 1) > 1 ? ' with the encore!' : ' — hype, pacing, mixing & vibe') + ')' : '') + '.');
   sfx('cash');
   S.gig = null;
   S.rebookT = REBOOK_T;
@@ -1013,8 +1140,19 @@ function tick(dt) {
       g.req.t -= dt;
       if (g.req.t <= 0) { g.req = null; g.reqDone = true; }
     }
-    if (g.t >= g.dur) finishGig();
-  } else if (S.agent) {
+    // end of set → an encore if you left the crowd hot, otherwise finish
+    if (g.encore) {
+      g.encore.t -= dt;
+      if (g.encore.t <= 0) finishGig(1 + ENCORE_BASE); // the crowd cools — still a bonus for the hot set
+    } else if (g.t >= g.dur) {
+      if (!g.encoreTried && g.v >= 1 && g.hype >= ENCORE_THRESH) {
+        g.encoreTried = true; g.encore = { t: ENCORE_WIN };
+        toast('ENCORE! 🎉 ONE MORE?');
+        pushFeed('🎉 The crowd will not let you leave — ENCORE!');
+        sfx('dropcue');
+      } else finishGig(1);
+    }
+  } else if (S.agent && !S.setlistOpen) {   // don't yank the setlist away while the player is building it
     S.rebookT -= dt;
     if (S.rebookT <= 0) bookGig();
   }
@@ -1051,7 +1189,7 @@ function save() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       v: 1, fans: S.fans, cash: S.cash, lifeFans: S.lifeFans, lifeCash: S.lifeCash,
       items: S.items, agent: S.agent, influence: S.influence, prestiges: S.prestiges,
-      bestVenue: S.bestVenue, dropStreak: S.dropStreak, lastSet: S.lastSet, stats: S.stats, last: S.last, started: S.started,
+      bestVenue: S.bestVenue, dropStreak: S.dropStreak, lastSet: S.lastSet, dug: S.dug, stats: S.stats, last: S.last, started: S.started,
     }));
   } catch (e) { /* storage full/blocked — keep playing */ }
 }
@@ -1068,6 +1206,7 @@ function load() {
   S.bestVenue = d.bestVenue || 0;
   S.dropStreak = d.dropStreak || 0;
   S.lastSet = Array.isArray(d.lastSet) ? d.lastSet.filter(id => id >= 0 && id < TRACKS.length) : null;
+  S.dug = Array.isArray(d.dug) ? d.dug.filter(id => id >= 0 && id < TRACKS.length && TRACKS[id].rare) : [];
   if (d.stats) S.stats = Object.assign(S.stats, d.stats);
   S.started = !!d.started;
 
@@ -1181,7 +1320,12 @@ function miniBars(energy) { // tiny energy sparkline for a crate chip
   return h + '</span>';
 }
 function renderSetlist(v) {
-  const need = needLen(v);
+  const need = needLen(v), arc = archetype(v), fav = arc.fav;
+  // the room's taste
+  const vs = Math.round(vibeScore(S.pendingSet, v) * 100);
+  byId('slVibe').innerHTML = '🎧 Tonight: <b>' + VENUES[v].name + '</b> — the <b>' + arc.who + '</b>. They crave <b>' +
+    GENRES[fav] + '</b>' + (arc.commercial < 0 ? ' and <b>loathe</b> the cheesy hits.' : arc.commercial > 0 ? ' and love a crowd-pleaser.' : '.') +
+    (S.pendingSet.length ? '<br>Your set reads the room <b>' + vs + '%</b>.' : '');
   byId('slCount').textContent = S.pendingSet.length + ' / ' + need;
   // energy curve
   const curve = byId('slCurve'); curve.innerHTML = '';
@@ -1191,22 +1335,36 @@ function renderSetlist(v) {
   const chosen = byId('slChosen'); chosen.innerHTML = '';
   S.pendingSet.forEach((id, idx) => {
     const b = document.createElement('button'); b.className = 'slChip';
-    b.innerHTML = '<span class="ord">' + (idx + 1) + '</span>' + TRACKS[id].name + '<span class="en">e' + TRACKS[id].energy + '</span> ✕';
+    b.innerHTML = '<span class="ord">' + (idx + 1) + '</span>' + TRACKS[id].name +
+      '<span class="genre">' + GENRES[TRACKS[id].genre].replace(/^\S+\s/, '') + '</span><span class="en">e' + TRACKS[id].energy + '</span> ✕';
     b.onclick = () => { toggleTrack(id); render(); };
     chosen.appendChild(b);
   });
-  // the crate (tap to add)
+  // the crate (tap to add) — favoured genre glows, rares get a star
   const crate = byId('slCrate'); crate.innerHTML = '';
   unlockedTracks().forEach(id => {
-    const on = S.pendingSet.indexOf(id) >= 0;
-    const b = document.createElement('button'); b.className = 'crChip' + (on ? ' on' : '');
-    b.innerHTML = TRACKS[id].name + ' ' + miniBars(TRACKS[id].energy);
+    const on = S.pendingSet.indexOf(id) >= 0, T = TRACKS[id];
+    const b = document.createElement('button');
+    b.className = 'crChip' + (on ? ' on' : '') + (T.genre === fav ? ' fav' : '') + (T.rare ? ' rare' : '');
+    b.innerHTML = (T.rare ? '<span class="star">★</span> ' : '') + T.name +
+      '<span class="genre">' + GENRES[T.genre].replace(/^\S+\s/, '') + '</span> ' + miniBars(T.energy);
     b.onclick = () => { toggleTrack(id); render(); };
     crate.appendChild(b);
   });
-  const ready = setReady();
+  // crate-digging
+  const dg = byId('slDig'), pool = digPool();
+  if (pool.length) {
+    dg.style.display = '';
+    const c = digCost();
+    dg.disabled = S.cash < c;
+    dg.textContent = '💎 Dig the crates for a rare record  ($' + fmt(c) + ')';
+  } else { dg.style.display = 'none'; }
+  // play / save
+  const ready = setReady(), inGig = !!S.gig;
   byId('slPlay').disabled = !ready;
-  byId('slPlay').textContent = ready ? '▶ PLAY SET  ($' + fmt(gigPay(v) * energyMul(S.pendingSet)) + '+)' : 'PICK ' + (need - S.pendingSet.length) + ' MORE';
+  byId('slPlay').textContent = !ready ? 'PICK ' + (need - S.pendingSet.length) + ' MORE'
+    : inGig ? '✓ SAVE FOR NEXT SET'
+    : '▶ PLAY SET  ($' + fmt(gigPay(v) * energyMul(S.pendingSet) * vibeMul(S.pendingSet, v)) + '+)';
 }
 function render() {
   const v = venueIdx(), V = VENUES[v];
@@ -1236,14 +1394,15 @@ function render() {
   }
 
   // gig zone
-  const g = S.gig, open = S.setlistOpen && !g;
-  byId('gigBtn').style.display = (!g && !open) ? '' : 'none';
-  byId('setlist').style.display = open ? 'block' : 'none';
+  const g = S.gig, open = S.setlistOpen;
+  byId('gigBtn').style.display = g ? 'none' : '';
+  byId('planBtn').style.display = g ? 'block' : 'none';
+  byId('setlistModal').className = open ? 'on' : '';
   byId('gigRun').style.display = g ? 'block' : 'none';
   byId('gigBtn').textContent = '▶ GO LIVE · ' + V.name.toUpperCase() + '  ($' + fmt(gigPay(v)) + ')';
 
   if (open) {
-    const sig = S.slNonce + '|' + topEra();
+    const sig = S.slNonce + '|' + topEra() + '|' + (g ? 1 : 0) + '|' + (S.cash >= digCost() ? 1 : 0);
     if (sig !== lastSlSig) { lastSlSig = sig; renderSetlist(v); }
   } else lastSlSig = '';
 
@@ -1257,6 +1416,8 @@ function render() {
     byId('gigTrack').innerHTML = '<b>' + VENUES[g.v].gig + '</b> — live';
     byId('gigBar').style.width = clamp(g.t / g.dur * 100, 0, 100) + '%';
     byId('gigPayLbl').textContent = '→ $' + fmt(g.pay * m) + ' + ' + fmt(g.fans * m) + ' fans  (×' + m.toFixed(2) + ')';
+    const mood = g.hype < 0.15 ? 'DEAD ROOM' : g.hype < 0.4 ? 'WARMING UP' : g.hype < 0.75 ? 'LOCKED IN' : 'GOING OFF 🔥';
+    byId('moodLbl').textContent = archetype(g.v).who.toUpperCase() + ' — ' + mood;
     byId('hypeV').textContent = '×' + hypeMul.toFixed(2);
     byId('hypeFill').style.width = (g.hype || 0) * 100 + '%';
     byId('streakLbl').style.display = S.dropStreak > 1 ? 'block' : 'none';
@@ -1293,6 +1454,7 @@ function render() {
   }
 
   byId('dropBtn').style.display = (g && g.drop && !trans) ? 'block' : 'none';
+  byId('encoreBtn').style.display = (g && g.encore) ? 'block' : 'none';
   byId('pad').className = g ? 'spin' : '';
   byId('gold').style.display = S.golden ? 'block' : 'none';
 
@@ -1378,9 +1540,14 @@ function wire() {
     } catch (err) {}
   };
   byId('gigBtn').onclick = () => { openSetlist(); render(); };
+  byId('planBtn').onclick = () => { openSetlist(); render(); };
+  byId('slClose').onclick = () => { closeSetlist(); render(); };
+  byId('setlistModal').onclick = (e) => { if (e.target === byId('setlistModal')) { closeSetlist(); render(); } };
   byId('slAuto').onclick = () => { autoFillSet(); render(); };
+  byId('slDig').onclick = () => { dig(); render(); };
   byId('slPlay').onclick = () => { playSet(); render(); };
   byId('dropBtn').onpointerdown = (e) => { if (e && e.preventDefault) e.preventDefault(); dropHit(); render(); };
+  byId('encoreBtn').onpointerdown = (e) => { if (e && e.preventDefault) e.preventDefault(); hitEncore(); render(); };
   byId('reqA').onclick = () => { chooseReq(true); render(); };
   byId('reqB').onclick = () => { chooseReq(false); render(); };
   byId('gold').onpointerdown = (e) => { if (e && e.preventDefault) e.preventDefault(); tapGold(); render(); };
@@ -1453,13 +1620,15 @@ window.HL = {
     FRENZY_MUL, FRENZY_T, MILESTONES,
     TRACKS, SETLIST_LEN, ENERGY_MAX, TRANS_MAX, TRANS_LIFE, TRANS_PERFECT, TRANS_CLEAN, TRANS_OK,
     AUTO_TRANS_Q, RISER_CHANCE, RISER_LIFE, RISER_FILL, RISER_MAX, RISER_PEAK_LO, RISER_PEAK_HI,
+    GENRES, ARCHETYPES, VIBE_MAX, DIG_BASE, DIG_MUL, ENCORE_THRESH, ENCORE_WIN, ENCORE_JACKPOT, ENCORE_BASE,
   },
   tick, tap, buyItem, buyAgent, bookGig, dropHit, chooseReq, tapGold, prestige,
   fansPerSec, tapPow, itemCost, venueIdx, fill, gigPay, gigFans, milestoneMul,
   influenceGain, canPrestige, aliasName, fmt, mult,
-  unlockedTracks, setlistLen, needLen, energyScore, energyMul, autoSetlist, validSet,
-  openSetlist, toggleTrack, autoFillSet, setReady, playSet,
-  sweetCenter, setTransFader, resolveTransition, holdRiser, resolveRiser, gigMul,
+  unlockedTracks, owned, setlistLen, needLen, energyScore, energyMul, autoSetlist, validSet,
+  archetype, vibeScore, vibeMul, digCost, digPool, dig,
+  openSetlist, closeSetlist, toggleTrack, autoFillSet, setReady, playSet,
+  sweetCenter, setTransFader, resolveTransition, holdRiser, resolveRiser, hitEncore, gigMul,
   save, load, reset, render, musicTick, pushFeed,
 };
 </script>
