@@ -396,6 +396,7 @@ function reset() {
     crowns: 0, prestiges: 0, prestT: 0, cperks: {}, showCrownHall: false,
     ach: {}, toasts: [], achCd: 0,
     quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
+    loginDay: 0, lastLoginDay: '', loginAvail: false, showLogin: false,
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
     combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
     xp: 0, level: 1, cards: null, pendingLevels: 0, perks: {},
@@ -610,6 +611,7 @@ function save() {
       camp: S.camp ? { logs: S.camp.logs } : null,
       quests: S.quests, dailies: S.dailies, dailyDay: S.dailyDay,
       streak: S.streak, lastStreakDay: S.lastStreakDay,
+      loginDay: S.loginDay, lastLoginDay: S.lastLoginDay,
       showQuests: S.showQuests ? 1 : 0,
       xp: S.xp, level: S.level, perks: S.perks,
       pets: S.pets, activePet: S.activePet,
@@ -682,6 +684,7 @@ function load() {
   if (d.camp) { S.campPlate.built = true; S.camp = { logs: d.camp.logs || [], chopT: 0 }; }
   S.quests = d.quests || []; S.dailies = d.dailies || [];
   S.dailyDay = d.dailyDay || ''; S.streak = d.streak || 0; S.lastStreakDay = d.lastStreakDay || '';
+  S.loginDay = d.loginDay || 0; S.lastLoginDay = d.lastLoginDay || ''; checkLogin();
   S.showQuests = !!d.showQuests;
   S.xp = d.xp || 0; S.level = d.level || 1; S.perks = d.perks || {};
   S.pets = d.pets || {}; S.activePet = d.activePet || null;
@@ -1148,6 +1151,40 @@ function rollDailies() {
   }
   S.dailies = list; S.dailyDay = s;
 }
+
+// ---- daily login reward calendar -----------------------------
+// A 7-day escalating reward chain. One claim per real day; the day
+// index cycles 0→6→0 so the jackpot keeps coming back. Classic
+// "come back tomorrow" retention hook.
+const CALENDAR = [
+  { ic: '🪙', name: 'Coin Purse',  fx: () => { const g = Math.ceil(40 * helmVal(S.zones.length) * coinMul()); S.pallet += g; S.stats.earned += g; float(S.player.x, S.player.y - 40, '+' + fmt(g) + '¢', '#ffd94a', true); } },
+  { ic: '💎', name: 'Gem Pouch',   fx: () => { S.gems += 3; S.stats.gemsFound += 3; float(S.player.x, S.player.y - 40, '💎 +3', '#6ee0d8', true); } },
+  { ic: '🪙', name: 'Coin Chest',  fx: () => { const g = Math.ceil(90 * helmVal(S.zones.length) * coinMul()); S.pallet += g; S.stats.earned += g; float(S.player.x, S.player.y - 40, '+' + fmt(g) + '¢', '#ffd94a', true); } },
+  { ic: '⚡', name: 'Frenzy Token', fx: () => { S.frenzyT = Math.max(S.frenzyT, 15); float(S.player.x, S.player.y - 40, '⚡ Frenzy 15s', '#ffd94a', true); } },
+  { ic: '💎', name: 'Gem Sack',    fx: () => { S.gems += 6; S.stats.gemsFound += 6; float(S.player.x, S.player.y - 40, '💎 +6', '#6ee0d8', true); } },
+  { ic: '💰', name: 'Gold Rush',   fx: () => { S.goldRushT = Math.max(S.goldRushT, 20); float(S.player.x, S.player.y - 40, '💰 Gold Rush 20s', '#ffd94a', true); } },
+  { ic: '🎁', name: 'JACKPOT',     fx: () => { S.gems += 12; S.stats.gemsFound += 12; const g = Math.ceil(220 * helmVal(S.zones.length) * coinMul()); S.pallet += g; S.stats.earned += g; S.frenzyT = Math.max(S.frenzyT, 12); float(S.player.x, S.player.y - 40, '🎁 +' + fmt(g) + '¢ +12💎', '#ffd94a', true); } },
+];
+function checkLogin() {
+  if (S.lastLoginDay !== dayStr(0)) S.loginAvail = true;
+}
+function claimLogin() {
+  if (!S.loginAvail) return false;
+  const r = CALENDAR[S.loginDay % CALENDAR.length];
+  r.fx();
+  S.stats.logins = (S.stats.logins || 0) + 1;
+  if (S.loginDay === CALENDAR.length - 1) S.stats.jackpots = (S.stats.jackpots || 0) + 1;
+  S.loginDay = (S.loginDay + 1) % CALENDAR.length;
+  S.lastLoginDay = dayStr(0);
+  S.loginAvail = false;
+  S.toasts.push({ txt: '🎁 Daily Reward: ' + r.name, t: 0 });
+  S.goldPulse = Math.max(S.goldPulse, 0.6); S.shake = Math.max(S.shake, 7);
+  for (let i = 0; i < 24; i++) S.parts.push({ x: S.player.x, y: S.player.y - 20, vx: (rnd() - 0.5) * 320, vy: -120 - rnd() * 220, t: 0, dur: 0.8, r: 3, color: i % 2 ? '#ffd94a' : '#6ee0d8', g: 1 });
+  sfx('unlock', true); buzz([30, 20, 60]);
+  save();
+  return true;
+}
+
 function questEvent(ev, n) {
   for (const q of S.quests.concat(S.dailies)) {
     if (q.done || q.ev !== ev) continue;
@@ -1228,6 +1265,8 @@ const ACH = [
   { id: 'pet6',    ic: '🐾', name: 'Pack Leader',      d: 'Collect 6 different pets',       c: () => petsOwned() >= 6 },
   { id: 'petAll',  ic: '🦄', name: 'Beastmaster',      d: 'Collect every pet species',      c: () => petsOwned() >= PETS.length },
   { id: 'petLeg',  ic: '🐲', name: 'Mythic Bond',      d: 'Own a Legendary pet',            c: () => PETS.some(p => p.rar === 3 && petLvl(p.id) > 0) },
+  { id: 'login7',  ic: '🎁', name: 'Regular',          d: 'Claim 7 daily rewards',          c: () => (S.stats.logins || 0) >= 7 },
+  { id: 'jackpot', ic: '🎉', name: 'Jackpot!',         d: 'Claim the day-7 daily jackpot',   c: () => (S.stats.jackpots || 0) >= 1 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -1803,7 +1842,7 @@ function tick(dt) {
     if (q.done) { q.doneT += dt; if (q.doneT > 2.5) S.quests[i] = rollQuest(); }
   }
   S.dayCd = (S.dayCd || 0) - dt;
-  if (S.dayCd <= 0) { S.dayCd = 30; if (S.dailyDay !== dayStr(0)) rollDailies(); }
+  if (S.dayCd <= 0) { S.dayCd = 30; if (S.dailyDay !== dayStr(0)) rollDailies(); checkLogin(); }
   if (S.goldPulse > 0) S.goldPulse -= dt;
 
   // -- ambient butterflies
@@ -3221,6 +3260,7 @@ function drawHud() {
   drawProgression();
   drawQuests();
   drawPets();
+  drawLogin();
   drawCrownHall();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -3407,6 +3447,7 @@ function drawStatsPanel() {
     ['🔥 Best combo', fmt(S.stats.comboBest || 0)], ['⭐ Hero level', fmt(S.level)],
     ['🃏 Perks picked', fmt(perkCount())], ['★ Boons caught', fmt(S.stats.boons || 0)],
     ['🐾 Pets owned', petsOwned() + '/' + PETS.length], ['🥚 Eggs hatched', fmt(S.stats.hatches || 0)],
+    ['🎁 Daily claims', fmt(S.stats.logins || 0)], ['🏛 Crown perks', fmt(CPERKS.reduce((s, p) => s + cpk(p.id), 0))],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3534,6 +3575,55 @@ function drawPets() {
   }
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap an owned pet to make it your active companion · tap empty space to close', cx, vh - 16);
+}
+function drawLogin() {
+  // 🎁 button below the pets button; glows + bounces when a reward is ready
+  const bx = vw - 46, by = 112;
+  const ready = S.loginAvail;
+  const bob = ready ? Math.abs(Math.sin(S.t * 4)) * 3 : 0;
+  hudBtn(bx, by - bob, 36, 30, '🎁', () => { S.showLogin = !S.showLogin; save(); });
+  if (ready) {
+    ctx.strokeStyle = 'rgba(255,217,74,' + (0.5 + Math.sin(S.t * 5) * 0.3) + ')'; ctx.lineWidth = 2;
+    rr(bx - 1, by - bob - 1, 38, 32, 8); ctx.stroke();
+    ctx.fillStyle = '#ff5a5a';
+    ctx.beginPath(); ctx.arc(bx + 32, by - bob + 2, 4, 0, 6.29); ctx.fill();
+  }
+  if (!S.showLogin) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.93)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showLogin = false; } });
+  const cx = vw / 2, top = Math.max(46, vh * 0.1);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('🎁 DAILY REWARDS', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText(ready ? 'Your reward is ready — come back every day!' : 'Come back tomorrow for the next reward', cx, top + 22);
+  // 7 day tiles (4 + 3), current day highlighted
+  const cols = 4, tw = Math.min(96, (vw - 40) / cols), th = 78, gx0 = cx - (cols * tw) / 2;
+  let gy = top + 40;
+  for (let i = 0; i < CALENDAR.length; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const x = gx0 + col * tw + (row === 1 ? tw / 2 : 0), y = gy + row * (th + 8);
+    const isToday = i === S.loginDay, claimedPast = i < S.loginDay;
+    ctx.fillStyle = isToday ? 'rgba(255,217,74,0.2)' : claimedPast ? 'rgba(30,40,32,0.85)' : 'rgba(20,25,36,0.85)';
+    rr(x + 3, y + 3, tw - 6, th - 6, 8); ctx.fill();
+    ctx.strokeStyle = isToday ? '#ffd94a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = isToday ? 2.5 : 1;
+    rr(x + 3, y + 3, tw - 6, th - 6, 8); ctx.stroke();
+    ctx.fillStyle = '#8792a0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('DAY ' + (i + 1), x + tw / 2, y + 18);
+    ctx.font = (i === 6 ? 30 : 26) + 'px sans-serif'; ctx.fillStyle = claimedPast ? 'rgba(255,255,255,0.4)' : '#fff';
+    ctx.fillText(CALENDAR[i].ic, x + tw / 2, y + 46);
+    ctx.font = 'bold 9px sans-serif'; ctx.fillStyle = isToday ? '#ffd94a' : '#9aa7b5';
+    ctx.fillText(CALENDAR[i].name, x + tw / 2, y + th - 12);
+    if (claimedPast) { ctx.fillStyle = '#6ecb5a'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('✓', x + tw - 14, y + 18); }
+  }
+  // claim button
+  const clw = 220, clx = cx - clw / 2, cly = gy + 2 * (th + 8) + 12;
+  ctx.fillStyle = ready ? '#2f7d4a' : 'rgba(40,48,60,0.9)'; rr(clx, cly, clw, 44, 10); ctx.fill();
+  ctx.fillStyle = ready ? '#eafff0' : '#7a8792'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(ready ? '🎁 CLAIM DAY ' + (S.loginDay + 1) : '✓ CLAIMED TODAY', cx, cly + 28);
+  if (ready) hits.push({ x: clx, y: cly, w: clw, h: 44, act: () => { claimLogin(); } });
+  ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap empty space to close', cx, cly + 66);
 }
 function drawCrownHall() {
   if (!S.showCrownHall) return;
@@ -3727,6 +3817,7 @@ window.KS = {
   grantXp, xpNeed, drawCards, pickCard, pk, perkCount, triggerBoon, CARDS, BOONS, critChance, critMult,
   PETS, RARITY, hatchEgg, eggCost, petLvl, petsOwned, activePet, petBonus, petCollectionMul, setActivePet, drawPets,
   CPERKS, cpk, cperkCost, cperkBonus, buyCperk, drawCrownHall,
+  CALENDAR, checkLogin, claimLogin, drawLogin, dayStr,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },

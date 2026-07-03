@@ -631,6 +631,34 @@ store[C.SAVE_KEY] = worldSnap; KS.reset(); KS.load();
 KS.S.cperks = {}; KS.S.crowns = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- daily login reward calendar ----
+KS.S.loginDay = 0; KS.S.lastLoginDay = ''; KS.S.loginAvail = false;
+KS.S.stats.logins = 0; KS.S.stats.jackpots = 0;
+KS.checkLogin();
+t.ok(KS.S.loginAvail === true, 'a reward becomes available on a new day');
+t.ok(KS.claimLogin() === true, 'claiming the daily reward succeeds');
+t.ok(KS.S.loginDay === 1 && KS.S.stats.logins === 1, 'calendar advances to the next day after a claim');
+t.ok(KS.S.lastLoginDay === KS.dayStr(0), 'claim stamps today so it locks for the day');
+t.ok(KS.S.loginAvail === false && KS.claimLogin() === false, 'cannot claim twice in one day');
+KS.checkLogin();
+t.ok(KS.S.loginAvail === false, 'same-day re-check keeps the reward locked');
+KS.S.lastLoginDay = KS.dayStr(-1); KS.checkLogin();
+t.ok(KS.S.loginAvail === true, 'a new day re-opens the calendar');
+// day-7 jackpot pays gems + a big coin chest and wraps the calendar
+KS.S.loginDay = 6; KS.S.gems = 0; KS.S.pallet = 0; KS.S.frenzyT = 0;
+KS.S.lastLoginDay = KS.dayStr(-1); KS.checkLogin();
+KS.claimLogin();
+t.ok(KS.S.gems >= 12 && KS.S.pallet > 0, 'day-7 jackpot pays gems + a big coin chest');
+t.ok(KS.S.loginDay === 0 && KS.S.stats.jackpots === 1, 'calendar wraps to day 1 after the jackpot and counts it');
+KS.checkAch();
+t.ok(KS.S.ach.jackpot === true, 'jackpot milestone unlocks');
+// progress persists through save/load
+KS.S.loginDay = 3; KS.S.lastLoginDay = KS.dayStr(0);
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.loginDay === 3 && KS.S.lastLoginDay === KS.dayStr(0), 'calendar progress persists through save/load');
+KS.S.stats.logins = 0; KS.S.stats.jackpots = 0; KS.S.gems = 0; KS.S.pallet = 0; KS.S.frenzyT = 0; KS.S.goldRushT = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
