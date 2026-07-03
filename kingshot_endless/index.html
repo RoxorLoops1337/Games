@@ -295,9 +295,29 @@ const GEAR_SLOTS = [
   { id: 'trinket', ic: '💍', name: 'Trinket', fixed: null,  base: 0.10 },
 ];
 function gearDef(id) { return GEAR_SLOTS.find(s => s.id === id) || null; }
+// blacksmith: each enhance level adds a flat bump on top of the rolled stat
+const ENH_STEP = 0.02, ENH_MAX = 10;
+function gearAmt(g) { return g ? g.amt + ENH_STEP * (g.enh || 0) : 0; }
+function enhCost(g) { return 2 + (g.enh || 0) * 2 + g.rar; } // gems, escalating with level + rarity
+function enhanceGear(id) {
+  const g = S.gear[id]; if (!g) return false;
+  if ((g.enh || 0) >= ENH_MAX) return false;
+  const c = enhCost(g);
+  if (S.gems < c) { float(S.player.x, S.player.y - 40, 'Need ' + c + '💎', '#6ee0d8'); return false; }
+  S.gems -= c;
+  g.enh = (g.enh || 0) + 1;
+  S.stats.enhanced = (S.stats.enhanced || 0) + 1;
+  S.player.maxHp = pMaxHp(); if (S.player.hp > S.player.maxHp) S.player.hp = S.player.maxHp;
+  S.toasts.push({ txt: '⚒️ ' + gearDef(id).name + ' +' + g.enh, t: 0 });
+  S.goldPulse = Math.max(S.goldPulse, 0.4); S.shake = Math.max(S.shake, 5);
+  for (let i = 0; i < 14; i++) S.parts.push({ x: S.player.x, y: S.player.y - 20, vx: (rnd() - 0.5) * 240, vy: -80 - rnd() * 160, t: 0, dur: 0.6, r: 2.5, color: '#ffce4a', g: 1 });
+  sfx('built', true); buzz([20, 15, 30]);
+  save();
+  return true;
+}
 function gearBonus(kind) {
   let b = 0;
-  for (const s of GEAR_SLOTS) { const g = S.gear && S.gear[s.id]; if (g && g.kind === kind) b += g.amt; }
+  for (const s of GEAR_SLOTS) { const g = S.gear && S.gear[s.id]; if (g && g.kind === kind) b += gearAmt(g); }
   return b;
 }
 function gearCount() { let n = 0; for (const s of GEAR_SLOTS) if (S.gear && S.gear[s.id]) n++; return n; }
@@ -333,7 +353,7 @@ function gearLabel(g) {
   return RARITY[g.rar].name + ' ' + def.name + (g.kname ? ' ' + g.kname : '');
 }
 function gearStatText(g) {
-  return '+' + Math.round(g.amt * 100) + '% ' + (g.kind === 'dmg' ? 'damage' : g.kind === 'hp' ? 'max HP' : g.kind === 'coin' ? 'coin value' : g.kind === 'rate' ? 'fire rate' : g.kind === 'speed' ? 'move speed' : 'pickup range');
+  return '+' + Math.round(gearAmt(g) * 100) + '% ' + (g.kind === 'dmg' ? 'damage' : g.kind === 'hp' ? 'max HP' : g.kind === 'coin' ? 'coin value' : g.kind === 'rate' ? 'fire rate' : g.kind === 'speed' ? 'move speed' : 'pickup range');
 }
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
@@ -1331,6 +1351,8 @@ const ACH = [
   { id: 'gear1',   ic: '🗡', name: 'Armed',            d: 'Equip your first piece of gear',  c: () => gearCount() >= 1 },
   { id: 'gearSet', ic: '🛡', name: 'Fully Kitted',     d: 'Fill all three gear slots',       c: () => gearCount() >= 3 },
   { id: 'gearLeg', ic: '⚜️', name: 'Artifact Bearer',  d: 'Equip a Legendary piece',         c: () => GEAR_SLOTS.some(s => S.gear[s.id] && S.gear[s.id].rar === 3) },
+  { id: 'smith',   ic: '⚒️', name: 'Blacksmith',       d: 'Enhance a piece of gear',         c: () => (S.stats.enhanced || 0) >= 1 },
+  { id: 'smithX',  ic: '🔨', name: 'Master Smith',      d: 'Enhance gear 25 times',           c: () => (S.stats.enhanced || 0) >= 25 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -3514,6 +3536,7 @@ function drawStatsPanel() {
     ['🐾 Pets owned', petsOwned() + '/' + PETS.length], ['🥚 Eggs hatched', fmt(S.stats.hatches || 0)],
     ['🎁 Daily claims', fmt(S.stats.logins || 0)], ['🏛 Crown perks', fmt(CPERKS.reduce((s, p) => s + cpk(p.id), 0))],
     ['🗡 Gear found', fmt(S.stats.gearFound || 0)], ['🛡 Slots filled', gearCount() + '/3'],
+    ['⚒️ Enhances', fmt(S.stats.enhanced || 0)], ['💎 Gems held', fmt(S.gems)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3654,7 +3677,7 @@ function drawGear() {
   ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
   ctx.fillText('🗡 EQUIPMENT', cx, top);
   ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
-  ctx.fillText('Boss kings drop gear — stronger pieces auto-equip', cx, top + 22);
+  ctx.fillText('Boss kings drop gear · ⚒️ enhance at the forge with 💎  (' + S.gems + ' 💎)', cx, top + 22);
   let y = top + 44;
   const rowH = 84, w = Math.min(360, vw - 32);
   for (const s of GEAR_SLOTS) {
@@ -3667,9 +3690,18 @@ function drawGear() {
     ctx.textAlign = 'left';
     if (g) {
       ctx.fillStyle = rc; ctx.font = 'bold 15px sans-serif';
-      ctx.fillText(gearLabel(g), cx - w / 2 + 74, y + 30);
+      ctx.fillText(gearLabel(g) + (g.enh ? '  ⚒️+' + g.enh : ''), cx - w / 2 + 74, y + 26);
       ctx.fillStyle = '#c8d0da'; ctx.font = '13px sans-serif';
-      ctx.fillText(gearStatText(g), cx - w / 2 + 74, y + 52);
+      ctx.fillText(gearStatText(g), cx - w / 2 + 74, y + 48);
+      // enhance button
+      const maxed = (g.enh || 0) >= ENH_MAX, cost = enhCost(g), can = !maxed && S.gems >= cost;
+      const ebw = 96, ebx = cx + w / 2 - ebw - 10, eby = y + rowH / 2 - 22;
+      ctx.fillStyle = maxed ? 'rgba(60,60,50,0.9)' : can ? '#7a5a1e' : 'rgba(50,44,30,0.9)';
+      rr(ebx, eby, ebw, 30, 7); ctx.fill();
+      ctx.fillStyle = maxed ? '#9a9a80' : can ? '#ffe8a8' : '#8a7f5a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(maxed ? 'MAXED' : '⚒️ ' + cost + '💎', ebx + ebw / 2, eby + 19);
+      ctx.textAlign = 'left';
+      if (!maxed) hits.push({ x: ebx, y: eby, w: ebw, h: 30, act: () => { enhanceGear(s.id); } });
     } else {
       ctx.fillStyle = '#6a7684'; ctx.font = 'bold 14px sans-serif';
       ctx.fillText(s.name + ' — empty', cx - w / 2 + 74, y + 34);
@@ -3924,6 +3956,7 @@ window.KS = {
   CPERKS, cpk, cperkCost, cperkBonus, buyCperk, drawCrownHall,
   CALENDAR, checkLogin, claimLogin, drawLogin, dayStr,
   GEAR_SLOTS, RAR_MUL, rollGear, grantGear, gearBonus, gearCount, gearLabel, drawGear,
+  gearAmt, enhCost, enhanceGear, ENH_STEP, ENH_MAX,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
