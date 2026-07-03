@@ -5995,7 +5995,8 @@ function ampAt(idx){
   // 🗿 War Totem: amplifies its OWN room (traps + co-guards) while its totem still
   // stands — a back-row support that makes the room heroes are fighting in deadlier.
   const self=G.cells&&G.cells[idx];
-  if(self && self.guards && self.guards.some(g=>g&&g.alive&&g.type==='totem')) m+=0.35;   // 🗿 War Totem (epic): +35% to its own room
+  if(self && self.guards) for(const g of self.guards){
+    if(g&&g.alive&&g.type==='totem'){ m+=0.35; break; } }   // 🗿 War Totem (epic): +35% to its own room
   return m;
 }
 // Apply a trap's lingering statuses (poison / acid / mark) to a hero it just hit.
@@ -6008,7 +6009,8 @@ function applyTrapStatus(h, d, r){
 const DISARM_DUR=3;   // 🗡️ a rogue who enters a trap room shuts its traps off for this many seconds
 function trapTick(h,cell,dt){
   if(cell._disarmT>0) return;                      // traps are disarmed — they don't fire
-  const r=cell.room; const syn=cell.syn||1; const doc=bossDoc(); const amp=ampAt(cell.index);
+  const r=cell.room; const syn=cell.syn||1; const doc=bossDoc();
+  let amp=-1;   // ampAt is a neighbour scan — resolve it only when a trap actually fires
   for(const tr of cell.traps){
     if(tr.def.aoe) continue;        // area traps fire once per interval in aoeTrapTick, not per-hero
     if(tr.def.amp) continue;        // Runestone deals no damage — it only amplifies (ampAt)
@@ -6029,6 +6031,7 @@ function trapTick(h,cell,dt){
       // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
       const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
       if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
+      if(amp<0) amp=ampAt(cell.index);
       dmg*=amp;                                                // Runestone / War Totem amplification
       const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : (!!d.pierce || cell.synType==='physical');  // Bastion/Piercing Halls & 🔗 Brutal synergy: ignore armor
       _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
@@ -6050,6 +6053,7 @@ function trapTick(h,cell,dt){
 // spread across rooms all eat the same shell) rather than one bunched kill-room.
 function heroCellIndex(o){ if(o.x<0) return -1;   // outside the gate — untargetable
   return (o.cellIndex>=0 && o.cellIndex<G.cells.length) ? o.cellIndex : cellAt(o.x).index; }
+const _aoeTargets=[];   // scratch target list for aoeTrapTick (reused, never retained)
 function aoeTrapTick(dt){
   if(G.phase!=='run' || !G.heroes.length) return;
   const doc=bossDoc();
@@ -6062,8 +6066,10 @@ function aoeTrapTick(dt){
       tr.fireT-=dt;
       if(tr.fireT>0) continue;                       // still charging
       // find targets in range; if none, hold the charge until someone is
+      // (scratch array reused across ticks — a charged shell scans every tick)
       const lo=Math.max(0, cell.index-d.aoe), hi=cell.index+d.aoe;   // never reach outside the gate
-      const targets=G.heroes.filter(o=>o && o.state!=='dead' && heroCellIndex(o)>=lo && heroCellIndex(o)<=hi);
+      const targets=_aoeTargets; targets.length=0;
+      for(const o of G.heroes){ if(o && o.state!=='dead'){ const ci=heroCellIndex(o); if(ci>=lo&&ci<=hi) targets.push(o); } }
       if(!targets.length) continue;
       tr.fireT=d.rate * (hasMandate('hairTrigger')?0.88:1);
       tr.firedAt=performance.now();                             // drives the painted strike animation
@@ -6140,14 +6146,15 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
   // each on its OWN cadence (when it falls they all roll onto the next in line). A
   // Warden taunts the WHOLE stalled party. War Camp conditioning gives buffed guards
   // health regen + faster swings. Resolved once per room-tick (on the front hero).
-  if(isFront){
-    const amp=ampAt(cell.index);
-    for(const g of (cell.guards||[])){
+  if(isFront && cell.guards){
+    let amp=-1;   // ampAt is a neighbour scan — resolve it only when a guard actually swings
+    for(const g of cell.guards){
       if(!g || !g.alive) continue;
       if(g.regen && g.hp<g.maxHp) g.hp=Math.min(g.maxHp, g.hp + g.maxHp*g.regen*dt);   // 🏕️ drill-yard regen
       g.atkT=(g.atkT||0)-dt;
       if(g.atkT>0) continue;
       g.atkT=0.9*(g.haste||1);
+      if(amp<0) amp=ampAt(cell.index);
       const taunt = ROOMS[g.type] && ROOMS[g.type].taunt;
       const targets = taunt
         ? G.heroes.filter(o=>o && o.state==='fighting' && o.cellIndex===cell.index)   // taunt: hit everyone stalled here
@@ -6933,13 +6940,36 @@ const TRAP_PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexwa
 // poison vapor, plus per-trap accents (frost chill, tesla spark, hex sigil).
 const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff'};
 let _glowG={};
+// Each (colour, radius-bucket) glow is rendered ONCE into a small offscreen
+// canvas and blitted with drawImage. Filling with a live radial gradient every
+// frame re-rasterises the gradient each time — with a couple dozen candle/trap
+// lights on screen that's a real per-frame cost on Safari/mobile. Blitting a
+// cached sprite is a plain (GPU-friendly) image draw. Falls back to the old
+// gradient fill if the sprite can't be built.
 function drawGlow(cx,cy,r,col,a){
   if(!(a>0.01)||!(r>2)) return;
   const key=col+'_'+Math.round(r/4);
-  let g=_glowG[key];
-  if(!g){ g=X.createRadialGradient(0,0,1,0,0,r); g.addColorStop(0,col); g.addColorStop(1,'rgba(0,0,0,0)'); _glowG[key]=g; }
+  let s=_glowG[key];
+  if(s===undefined){
+    s=false;
+    try{
+      const R=Math.max(8,Math.round(r)), cv=document.createElement('canvas');
+      cv.width=cv.height=R*2;
+      const c2=cv.getContext && cv.getContext('2d');
+      if(c2 && c2.createRadialGradient && c2.fillRect){
+        const g=c2.createRadialGradient(R,R,1,R,R,R);
+        g.addColorStop(0,col); g.addColorStop(1,'rgba(0,0,0,0)');
+        c2.fillStyle=g; c2.fillRect(0,0,R*2,R*2);
+        s=cv;
+      }
+    }catch(_){ }
+    _glowG[key]=s;
+  }
   X.save(); X.globalCompositeOperation='lighter'; X.globalAlpha=Math.min(1,a);
-  X.translate(cx,cy); X.fillStyle=g; X.fillRect(-r,-r,r*2,r*2); X.restore();
+  if(s) X.drawImage(s, cx-r, cy-r, r*2, r*2);
+  else { const g=X.createRadialGradient(cx,cy,1,cx,cy,r); g.addColorStop(0,col); g.addColorStop(1,'rgba(0,0,0,0)');
+    X.fillStyle=g; X.fillRect(cx-r,cy-r,r*2,r*2); }
+  X.restore();
 }
 function lightCfg(attach){ return (LAYOUT._lights||{})[attach]; }
 // Draw a single-trap accent glow. Uses the aligned light entry if one exists,
@@ -7260,7 +7290,6 @@ function drawTeslaArcs(x0, w, cell){
   if(!targets.length) return;
   const cx = x0 + w*0.5, cy = FLOOR-50;     // coil tip
   X.save();
-  X.shadowColor='#fff34d'; X.shadowBlur=8;
   X.strokeStyle='#fff34d'; X.lineWidth=2.2; X.globalAlpha=0.55+0.45*fade;
   for(const h of targets) drawJaggedBolt(cx, cy, h.x, h.y-30);
   // chain across heroes (visual mirror of the CONDUCT mechanic)
@@ -7279,7 +7308,12 @@ function drawJaggedBolt(x1,y1,x2,y2){
     const y = y1 + (y2-y1)*t + (Math.random()-0.5)*14;
     X.lineTo(x,y);
   }
-  X.lineTo(x2,y2); X.stroke();
+  X.lineTo(x2,y2);
+  // glow = the SAME path stroked twice: a wide translucent underglow then the
+  // bright core. Replaces shadowBlur, which forces a slow blur pass per stroke.
+  const lw=X.lineWidth, ga=X.globalAlpha;
+  X.lineWidth=lw*3.4; X.globalAlpha=ga*0.32; X.stroke();
+  X.lineWidth=lw; X.globalAlpha=ga; X.stroke();
 }
 function drawRoomFull(x0,w,room,i){
   const k=roomArtReady(room);
