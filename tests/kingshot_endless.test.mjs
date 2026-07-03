@@ -728,6 +728,40 @@ t.ok((KS.S.gear.weapon.enh || 0) === 0, 'equipping a new piece starts fresh at +
 KS.S.gear = { weapon: null, armor: null, trinket: null }; KS.S.stats.enhanced = 0; KS.S.gems = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- wandering merchant ----
+KS.S.merchant = null; KS.S.stats.trades = 0;
+KS.spawnMerchant();
+t.ok(KS.S.merchant && KS.S.merchant.deals.length === 3, 'a merchant arrives with three deals');
+t.ok(KS.S.merchant.deals.every(d => d.cost > 0 && (d.cur === 'gem' || d.cur === 'coin')), 'each deal has a positive cost in coins or gems');
+// buy a known gem-cache deal for coins
+KS.S.merchant.deals = [{ id: 'gems', ic: '💎', name: 'Gem Cache', cur: 'coin', cost: 100, desc: '', sold: false }];
+KS.S.wallet = 250; KS.S.gems = 0;
+t.ok(KS.buyDeal(0) === true, 'a deal can be bought when you can afford it');
+t.ok(KS.S.wallet === 150 && KS.S.gems === 8, 'coins spent and the gem-cache reward applied');
+t.ok(KS.S.merchant === null, 'clearing the last deal sends the merchant on his way');
+t.ok(KS.S.stats.trades === 1, 'a merchant purchase is counted');
+KS.checkAch();
+t.ok(KS.S.ach.trade1 === true, 'first purchase unlocks the Customer milestone');
+// cannot buy a sold deal or without funds
+KS.spawnMerchant();
+KS.S.merchant.deals = [{ id: 'coins', ic: '🪙', name: 'Coin Sack', cur: 'gem', cost: 5, desc: '', sold: false }];
+KS.S.gems = 2;
+t.ok(KS.buyDeal(0) === false, 'cannot buy a deal you cannot afford');
+KS.S.gems = 20;
+t.ok(KS.buyDeal(0) === true && KS.buyDeal(0) === false, 'a deal cannot be bought twice');
+// the merchant leaves after his welcome wears out
+KS.start(); freezeSpawns();
+KS.spawnMerchant();
+KS.S.merchant.stay = 0.5;
+KS.tick(1); // stay ticks below zero → he moves on
+t.ok(KS.S.merchant === null, 'the merchant leaves after his stay expires');
+// merchant reappears on the cooldown
+KS.S.merchant = null; KS.S.merchantCd = 0.2;
+KS.tick(0.5);
+t.ok(KS.S.merchant !== null, 'a new merchant appears when the cooldown elapses');
+KS.S.merchant = null; KS.S.merchantCd = 999; KS.S.stats.trades = 0; KS.S.wallet = 0; KS.S.gems = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');

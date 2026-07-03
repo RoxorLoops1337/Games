@@ -388,6 +388,10 @@ function hexRgb(h)  { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5
 // ---- deterministic rng --------------------------------------
 let seed = 987654321;
 function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+// dedicated stream for the wandering merchant so its rolls never perturb the
+// deterministic enemy-spawn sequence the tests calibrate against.
+let mseed = 424242;
+function mrnd() { mseed = (mseed * 1103515245 + 12345) & 0x7fffffff; return mseed / 0x7fffffff; }
 
 // ---- zone factory -------------------------------------------
 // Every zone: archer tower, porter, horde gate (repeatable),
@@ -488,6 +492,7 @@ function reset() {
     zones: [mkZone(1)],
     enemies: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [],
     chest: null, chestCd: 100,
+    merchant: null, merchantCd: 70, showShop: false,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -1309,6 +1314,51 @@ function spawnChest() {
   sfx('gem', true);
 }
 
+// ---- wandering merchant (timed event + resource sink) --------
+// A travelling trader shows up every so often near the hub with three
+// randomized deals. Pay coins or gems for eggs, gear, boons, coins or
+// heals. He leaves after a while or once you clear his stock.
+const MERCH_CD = 140, MERCH_STAY = 78;
+const DEALS = [
+  { id: 'egg',   ic: '🥚', name: 'Mystery Egg', cur: 'coin', cost: () => Math.ceil(260 * helmVal(S.zones.length)), desc: 'Hatch a random pet', apply: () => { S.gems += eggCost(); hatchEgg(); } },
+  { id: 'gear',  ic: '🎁', name: 'Gear Crate',  cur: 'gem',  cost: () => 7, desc: 'A random gear piece',   apply: () => { grantGear(rollGear()); } },
+  { id: 'gems',  ic: '💎', name: 'Gem Cache',   cur: 'coin', cost: () => Math.ceil(340 * helmVal(S.zones.length)), desc: '+8 gems', apply: () => { S.gems += 8; S.stats.gemsFound = (S.stats.gemsFound || 0) + 8; } },
+  { id: 'coins', ic: '🪙', name: 'Coin Sack',   cur: 'gem',  cost: () => 5, desc: 'A big pile of coins',   apply: () => { const g = Math.ceil(500 * helmVal(S.zones.length) * coinMul()); S.wallet += g; S.stats.earned += g; } },
+  { id: 'boon',  ic: '⚡', name: 'Blessing',    cur: 'gem',  cost: () => 4, desc: 'Frenzy + Gold Rush 15s', apply: () => { S.frenzyT = Math.max(S.frenzyT, 15); S.goldRushT = Math.max(S.goldRushT, 15); } },
+  { id: 'heal',  ic: '❤️', name: 'Elixir',      cur: 'coin', cost: () => Math.ceil(200 * helmVal(S.zones.length)), desc: 'Full heal', apply: () => { S.player.hp = S.player.maxHp; } },
+];
+function dealDef(id) { return DEALS.find(d => d.id === id) || null; }
+function spawnMerchant() {
+  const pool = DEALS.slice(), deals = [];
+  for (let i = 0; i < 3 && pool.length; i++) {
+    const d = pool.splice(Math.floor(mrnd() * pool.length), 1)[0];
+    deals.push({ id: d.id, ic: d.ic, name: d.name, cur: d.cur, cost: d.cost(), desc: d.desc, sold: false });
+  }
+  S.merchant = { x: SPAWN.x + 96, y: SPAWN.y - 30, t: 0, stay: MERCH_STAY, deals };
+  S.toasts.push({ txt: '🛒 A merchant has arrived!', t: 0 });
+  sfx('gem', true); buzz(30);
+}
+function merchantLeaves(msg) {
+  if (msg) S.toasts.push({ txt: msg, t: 0 });
+  S.merchant = null; S.showShop = false;
+  S.merchantCd = MERCH_CD * (0.8 + mrnd() * 0.5);
+}
+function buyDeal(i) {
+  if (!S.merchant) return false;
+  const d = S.merchant.deals[i]; if (!d || d.sold) return false;
+  const have = d.cur === 'gem' ? S.gems : S.wallet;
+  if (have < d.cost) { float(S.player.x, S.player.y - 40, 'Need ' + d.cost + (d.cur === 'gem' ? '💎' : '¢'), '#ffd94a'); return false; }
+  if (d.cur === 'gem') S.gems -= d.cost; else S.wallet -= d.cost;
+  const def = dealDef(d.id); if (def) def.apply();
+  d.sold = true;
+  S.stats.trades = (S.stats.trades || 0) + 1;
+  S.goldPulse = Math.max(S.goldPulse, 0.4); S.shake = Math.max(S.shake, 5);
+  sfx('unlock', true); buzz(30);
+  if (S.merchant.deals.every(x => x.sold)) merchantLeaves('🛒 The merchant packs up, satisfied.');
+  else save();
+  return true;
+}
+
 // ---- milestones ---------------------------------------------
 const ACH = [
   { id: 'blood',   ic: '🩸', name: 'First Blood',     d: 'Slay your first foe',            c: () => S.stats.kills >= 1 },
@@ -1353,6 +1403,8 @@ const ACH = [
   { id: 'gearLeg', ic: '⚜️', name: 'Artifact Bearer',  d: 'Equip a Legendary piece',         c: () => GEAR_SLOTS.some(s => S.gear[s.id] && S.gear[s.id].rar === 3) },
   { id: 'smith',   ic: '⚒️', name: 'Blacksmith',       d: 'Enhance a piece of gear',         c: () => (S.stats.enhanced || 0) >= 1 },
   { id: 'smithX',  ic: '🔨', name: 'Master Smith',      d: 'Enhance gear 25 times',           c: () => (S.stats.enhanced || 0) >= 25 },
+  { id: 'trade1',  ic: '🛒', name: 'Customer',          d: 'Buy from the wandering merchant', c: () => (S.stats.trades || 0) >= 1 },
+  { id: 'trade15', ic: '💼', name: 'Regular Patron',    d: 'Make 15 merchant purchases',      c: () => (S.stats.trades || 0) >= 15 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -1919,6 +1971,15 @@ function tick(dt) {
     questEvent('chest', 1);
     sfx('unlock', true); buzz([30, 20, 50]);
     S.chest = null; S.chestCd = CHEST_CD * (0.8 + rnd() * 0.5);
+  }
+
+  // -- wandering merchant
+  if (!S.merchant) {
+    S.merchantCd -= dt;
+    if (S.merchantCd <= 0) spawnMerchant();
+  } else {
+    S.merchant.t += dt; S.merchant.stay -= dt;
+    if (S.merchant.stay <= 0) merchantLeaves('🛒 The merchant moves on…');
   }
 
   // -- quests housekeeping: keep 3 side quests rolling, roll dailies at midnight
@@ -3192,6 +3253,25 @@ function drawWorld() {
       ctx.fillRect(c.x + 10, c.y - 24, 2, 8); ctx.fillRect(c.x + 7, c.y - 21, 8, 2);
     }
   }
+  if (S.merchant && vis(S.merchant.x, S.merchant.y, 60)) {
+    const m = S.merchant, bob = Math.sin(S.t * 3) * 2;
+    shadow(m.x, m.y + 16, 20);
+    // stall canopy
+    ctx.fillStyle = 'rgba(255,217,74,' + (0.25 + Math.sin(S.t * 4) * 0.12) + ')';
+    ctx.beginPath(); ctx.arc(m.x, m.y - 4, 40 + Math.sin(S.t * 4) * 5, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#8a4a30'; rr(m.x - 26, m.y - 40 - bob, 52, 10, 3); ctx.fill();
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#d9584a' : '#f0f0e0'; rr(m.x - 26 + i * 13, m.y - 40 - bob, 13, 10, 2); ctx.fill(); }
+    // merchant emoji
+    ctx.font = '30px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🧙', m.x, m.y - 12 - bob);
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '18px sans-serif'; ctx.fillText('🛒', m.x + 22, m.y + 6);
+    // "!" bubble while he has unsold stock
+    if (m.deals.some(d => !d.sold) && Math.floor(S.t * 2) % 2) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('!', m.x - 24, m.y - 30 - bob);
+    }
+  }
   for (const it of S.items) {
     if (!vis(it.x, it.y, 40)) continue;
     shadow(it.x, it.y + 6, 8);
@@ -3348,6 +3428,7 @@ function drawHud() {
   drawPets();
   drawLogin();
   drawGear();
+  drawShop();
   drawCrownHall();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -3537,6 +3618,7 @@ function drawStatsPanel() {
     ['🎁 Daily claims', fmt(S.stats.logins || 0)], ['🏛 Crown perks', fmt(CPERKS.reduce((s, p) => s + cpk(p.id), 0))],
     ['🗡 Gear found', fmt(S.stats.gearFound || 0)], ['🛡 Slots filled', gearCount() + '/3'],
     ['⚒️ Enhances', fmt(S.stats.enhanced || 0)], ['💎 Gems held', fmt(S.gems)],
+    ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['🪙 Wallet', fmt(S.wallet)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3664,6 +3746,52 @@ function drawPets() {
   }
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap an owned pet to make it your active companion · tap empty space to close', cx, vh - 16);
+}
+function drawShop() {
+  if (!S.merchant) { S.showShop = false; return; }
+  // 🛒 button (only while a merchant is around), pulsing to draw the eye
+  const bx = vw - 46, by = 180;
+  const pulse = 0.5 + Math.sin(S.t * 5) * 0.4;
+  ctx.fillStyle = 'rgba(122,90,30,' + (0.6 + pulse * 0.35) + ')'; rr(bx, by, 36, 30, 8); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🛒', bx + 18, by + 20);
+  hits.push({ x: bx, y: by, w: 36, h: 30, act: () => { S.showShop = !S.showShop; } });
+  if (!S.showShop) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.93)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showShop = false; } });
+  const cx = vw / 2, top = Math.max(50, vh * 0.14);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('🛒 WANDERING MERCHANT', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText('"Rare wares, friend — but I ride on soon!"  ·  ' + Math.ceil(Math.max(0, S.merchant.stay)) + 's left', cx, top + 22);
+  ctx.fillText('🪙 ' + fmt(S.wallet) + '     💎 ' + S.gems, cx, top + 40);
+  let y = top + 56;
+  const rowH = 74, w = Math.min(360, vw - 32);
+  for (let i = 0; i < S.merchant.deals.length; i++) {
+    const d = S.merchant.deals[i];
+    const have = d.cur === 'gem' ? S.gems : S.wallet, can = !d.sold && have >= d.cost;
+    ctx.fillStyle = d.sold ? 'rgba(30,40,32,0.7)' : 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.fill();
+    ctx.strokeStyle = d.sold ? 'rgba(110,203,90,0.4)' : 'rgba(255,217,74,0.4)'; ctx.lineWidth = 1.2; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.stroke();
+    ctx.globalAlpha = d.sold ? 0.5 : 1;
+    ctx.font = '30px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.fillText(d.ic, cx - w / 2 + 36, y + rowH / 2 - 2);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(d.name, cx - w / 2 + 66, y + 26);
+    ctx.fillStyle = '#9aa7b5'; ctx.font = '11px sans-serif';
+    ctx.fillText(d.desc, cx - w / 2 + 66, y + 45);
+    // buy button
+    const cbw = 96, cbx = cx + w / 2 - cbw - 10, cby = y + rowH / 2 - 21;
+    ctx.fillStyle = d.sold ? 'rgba(60,70,50,0.8)' : can ? '#2f7d4a' : 'rgba(50,44,30,0.9)';
+    rr(cbx, cby, cbw, 30, 7); ctx.fill();
+    ctx.fillStyle = d.sold ? '#8fa07a' : can ? '#eafff0' : '#8a7f5a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(d.sold ? 'SOLD' : d.cost + (d.cur === 'gem' ? '💎' : '¢'), cbx + cbw / 2, cby + 19);
+    ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+    if (!d.sold) hits.push({ x: cbx, y: cby, w: cbw, h: 30, act: () => { buyDeal(i); } });
+    y += rowH;
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap empty space to close', cx, y + 14);
 }
 function drawGear() {
   // ⚔️ equipment button below the gift button
@@ -3957,6 +4085,7 @@ window.KS = {
   CALENDAR, checkLogin, claimLogin, drawLogin, dayStr,
   GEAR_SLOTS, RAR_MUL, rollGear, grantGear, gearBonus, gearCount, gearLabel, drawGear,
   gearAmt, enhCost, enhanceGear, ENH_STEP, ENH_MAX,
+  DEALS, spawnMerchant, buyDeal, merchantLeaves, drawShop,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
