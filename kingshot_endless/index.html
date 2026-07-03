@@ -64,6 +64,8 @@ const FIRE_RANGE  = 270;
 const SELL_RATE   = 7;
 const VAC_RATE    = 55;
 const BUILD_RATE  = 60;
+const FLOW_ACCEL  = 2.6;   // coin flow multiplies by this per second standing still
+const FLOW_CAP    = 600;   // max flow multiplier (~33k coins/s)
 const ECO         = 2.35;
 const HP_T        = 2.15;
 const UNLOCK0     = 220, UNLOCK_MUL = 2.65;
@@ -212,6 +214,14 @@ function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Ma
 function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet); }
 function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns); }
 function entryVal(e) { return Math.ceil(helmVal(e.k) * (e.crown ? CROWN_MUL : e.bar ? BAR_MUL : 1) * coinMul()); }
+// coin flow ramps up exponentially the longer you keep transacting at
+// the same spot (vacuuming the pallet / pouring into a plate)
+function touchFlow(key, dt) {
+  if (S.flowKey === key) S.flowT += dt;
+  else { S.flowKey = key; S.flowT = 0; }
+  S.flowTouched = true;
+}
+function flowMul() { return Math.min(FLOW_CAP, Math.pow(FLOW_ACCEL, S.flowT || 0)); }
 function zoneAt(x, y) { for (const z of S.zones) if (x >= z.x0 && x < z.x1 && y >= z.y0 && y < z.y1) return z; return null; }
 function inCell(z, x, y, m) { m = m || 0; return x >= z.x0 - m && x < z.x1 + m && y >= z.y0 - m && y < z.y1 + m; }
 function inWalkable(x, y) {
@@ -473,7 +483,8 @@ function buildPlate(z, pl, silent) {
 }
 function pourInto(pl, z, dt) {
   if (pl.built || S.wallet <= 0) return;
-  const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), pl.cost - pl.paid);
+  touchFlow(pl, dt);
+  const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * flowMul() * dt), pl.cost - pl.paid);
   if (chunk <= 0) return;
   S.wallet -= chunk; pl.paid += chunk;
   sfx('pour');
@@ -481,7 +492,8 @@ function pourInto(pl, z, dt) {
 }
 function pourHub(plate, dt, done) {
   if (plate.built || S.wallet <= 0) return;
-  const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), plate.cost - plate.paid);
+  touchFlow(plate, dt);
+  const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * flowMul() * dt), plate.cost - plate.paid);
   if (chunk <= 0) return;
   S.wallet -= chunk; plate.paid += chunk; sfx('pour');
   if (plate.paid >= plate.cost) { plate.built = true; done(); sfx('built', true); buzz(50); }
@@ -578,6 +590,7 @@ function checkAch() {
 function tick(dt) {
   if (!S.started) return;
   S.t += dt;
+  S.flowTouched = false;
   if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
   if (S.offlineMsg > 0) S.offlineMsg -= dt;
   const p = S.player;
@@ -704,9 +717,10 @@ function tick(dt) {
     } else p.trayAcc = 0;
   }
 
-  // -- vacuum coins from pallet
+  // -- vacuum coins from pallet (flow ramps up the longer you stand)
   if (S.pallet > 0 && dist2(p.x, p.y, PALLET.x, PALLET.y) < PALLET.r * PALLET.r) {
-    const take = Math.min(S.pallet, Math.max(1, Math.ceil(VAC_RATE * dt)));
+    touchFlow('pallet', dt);
+    const take = Math.min(S.pallet, Math.max(1, Math.ceil(VAC_RATE * flowMul() * dt)));
     S.pallet -= take; S.wallet += take;
     if ((S.coinFxT = (S.coinFxT || 0) + dt) > 0.09) {
       S.coinFxT = 0; float(p.x, p.y - 46, '+' + fmt(take), '#ffd94a'); sfx('coin');
@@ -719,7 +733,8 @@ function tick(dt) {
   for (const key in UPG) {
     const cost = upgCost(key, S.up[key]);
     if (dist2(p.x, p.y, ux, UPG_Y) < 52 * 52 && S.wallet > 0 && S.upPaid[key] < cost) {
-      const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), cost - S.upPaid[key]);
+      touchFlow('upg:' + key, dt);
+      const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * flowMul() * dt), cost - S.upPaid[key]);
       S.wallet -= chunk; S.upPaid[key] += chunk; sfx('pour');
       if (S.upPaid[key] >= cost) {
         S.up[key]++; S.upPaid[key] = 0;
@@ -942,6 +957,9 @@ function tick(dt) {
   S.parts = S.parts.filter(q => q.t < q.dur);
   for (const f of S.floats) { f.t += dt; f.y -= 30 * dt; }
   S.floats = S.floats.filter(f => f.t < (f.big ? 1.6 : 0.8));
+
+  // -- flow decay: leaving the spot resets the speed ramp
+  if (!S.flowTouched) { S.flowKey = null; S.flowT = 0; }
 
   // -- camera
   S.cam.x += (p.x - S.cam.x) * Math.min(1, 5 * dt);
@@ -1476,6 +1494,15 @@ function drawPlayer() {
     ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(p.helmets.length + '/' + cap(), p.x, p.y - 40 - bob - p.helmets.length * 7.5);
   }
+  // coin-flow speed indicator
+  const fm = flowMul();
+  if (S.flowKey !== null && fm >= 2) {
+    const pulse = 1 + Math.sin(S.t * 10) * 0.1;
+    ctx.save(); ctx.translate(p.x + 30, p.y - 30 - bob); ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('⏩x' + (fm >= 100 ? Math.round(fm) : fm.toFixed(0)), 0, 0);
+    ctx.restore();
+  }
 }
 function drawWorld() {
   drawGround();
@@ -1733,8 +1760,8 @@ window.KS = {
   spawnEnemy, summonBoss, hurtEnemy, hurtPlayer, playerDie, buildPlate, applyPlate, mkZone, dropHelmet, dropItem,
   cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
-  prestige, crownsToGain, spawnDog, checkAch, ACH,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS },
+  prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul,
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP },
   start() { S.started = true; },
 };
 </script>
