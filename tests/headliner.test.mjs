@@ -126,15 +126,19 @@ t.ok(HL.bookGig() === true, 'books a bedroom livestream');
 t.ok(HL.bookGig() === false, 'cannot double-book');
 const g = HL.S.gig;
 t.ok(g.v === 0 && g.dur === C.VENUES[0].dur, 'gig runs at the current venue');
-t.ok(g.dropAt >= g.dur * 0.35 && g.dropAt <= g.dur * 0.70, 'drop is scheduled mid-set');
+t.ok(g.dropAts.length === C.DROPS_BY_ERA[0], 'bedroom sets get one drop window');
+t.ok(g.dropAts[0] >= g.dur * 0.2 && g.dropAts[0] <= g.dur * 0.8, 'drop is scheduled mid-set');
+t.ok(g.reqAt === -1, 'the cat does not make requests (no requests in the bedroom)');
 t.ok(HL.dropHit() === false, 'cannot hit a drop that has not opened');
-g.dropAt = 0.5; // make the window deterministic
+g.dropAts = [0.5]; g.dropIdx = 0; // make the window deterministic
 step(0.7);
 t.ok(!!HL.S.gig.drop && HL.S.stats.drops === 1, 'the DROP window opened');
 const cashPre = HL.S.cash;
 t.ok(HL.dropHit() === true, 'hit the drop');
 t.ok(HL.S.cash - cashPre >= g.pay * C.DROP_BONUS - 1e-9, 'drop pays an instant bonus');
-t.ok(HL.S.stats.dropsHit === 1 && HL.S.gig.dropDone, 'drop consumed');
+t.ok(HL.S.stats.dropsHit === 1 && HL.S.gig.drop === null, 'drop consumed');
+t.ok(HL.S.dropStreak === 1, 'drop streak started');
+t.ok(g.hype >= C.HYPE_DROP - 0.05, 'hitting the drop hypes the crowd');
 const fansPre = HL.S.fans, cashMid = HL.S.cash;
 step(C.VENUES[0].dur);
 t.ok(HL.S.gig === null, 'gig finished');
@@ -142,23 +146,119 @@ t.ok(HL.S.cash >= cashMid + g.pay - 1e-9, 'gig paid out cash');
 t.ok(HL.S.fans >= fansPre + g.fans - 1e-9, 'gig earned fans');
 t.ok(HL.S.stats.gigs === 1, 'gig counted');
 
-// ---- missed drop just expires ----
+// ---- missed drop expires AND kills the streak ----
 HL.bookGig();
 const g2 = HL.S.gig;
-g2.dropAt = 0.2;
+g2.dropAts = [0.2]; g2.dropIdx = 0;
 step(0.4 + C.DROP_WIN);
-t.ok(HL.S.gig && !HL.S.gig.drop && HL.S.gig.dropDone, 'unhit drop window expires harmlessly');
+t.ok(HL.S.gig && !HL.S.gig.drop && HL.S.gig.dropIdx === 1, 'unhit drop window expires harmlessly');
+t.ok(HL.S.dropStreak === 0, 'missing a drop resets the streak');
 step(C.VENUES[0].dur);
 t.ok(HL.S.gig === null, 'that gig still completes');
 
+// ---- crowd hype: taps during a live set multiply the payout ----
+HL.bookGig();
+const gH = HL.S.gig;
+gH.dropAts = []; // no interruptions
+t.ok(gH.hype === 0, 'sets start with a cold crowd');
+for (let i = 0; i < 10; i++) HL.tap();
+t.ok(gH.hype >= 10 * C.HYPE_TAP - 1e-9, 'working the decks builds hype');
+const h0 = gH.hype;
+step(2);
+t.ok(gH.hype < h0, 'hype cools off if you stop');
+gH.hype = 1; gH.t = gH.dur - 0.01;
+const cashB = HL.S.cash;
+step(0.1);
+t.ok(HL.S.gig === null, 'hyped gig finished');
+t.ok(HL.S.cash - cashB >= gH.pay * 1.9, 'a fully hyped crowd ~doubles the payout');
+
+// ---- bigger venues: more drop windows, streaks chain across them ----
+HL.S.fans = 1.6e6; HL.tick(1 / 60); // warehouse era
+HL.bookGig();
+const g3 = HL.S.gig;
+t.ok(g3.dropAts.length === C.DROPS_BY_ERA[4] && C.DROPS_BY_ERA[4] === 3, 'warehouse sets schedule three drops');
+g3.dropAts = [0.1, 0.5, 0.9]; g3.dropIdx = 0; g3.reqAt = -1;
+step(0.2); HL.dropHit();
+step(0.4); HL.dropHit();
+step(0.4);
+const streakPay = HL.S.cash;
+HL.dropHit();
+t.ok(HL.S.dropStreak === 3, 'streak counts consecutive hits across windows');
+t.ok(HL.S.cash - streakPay >= g3.pay * C.DROP_BONUS * (1 + 3 * C.STREAK_BONUS) - 1, 'streak fattens each drop bonus');
+HL.S.gig = null;
+
+// ---- crowd requests: cash-or-cred decisions ----
+HL.bookGig();
+const gr = HL.S.gig;
+gr.dropAts = []; gr.reqAt = 0.1; gr.req = null; gr.reqDone = false;
+t.ok(HL.chooseReq(true) === false, 'no request yet, nothing to answer');
+step(0.3);
+t.ok(!!gr.req && gr.req.txt.length > 0, 'a crowd request appears mid-set');
+const cashR = HL.S.cash;
+t.ok(HL.chooseReq(true) === true, 'played the hit');
+t.ok(HL.S.cash - cashR >= gr.pay * C.REQ_CASH - 1e-9, 'crowd-pleasing pays cash');
+t.ok(!gr.req && gr.reqDone, 'request resolved');
+HL.S.gig = null;
+HL.bookGig();
+const gr2 = HL.S.gig;
+gr2.dropAts = []; gr2.reqAt = 0.1; gr2.req = null; gr2.reqDone = false;
+step(0.3);
+const fansR = HL.S.fans;
+t.ok(HL.chooseReq(false) === true, 'stayed true to the sound');
+t.ok(HL.S.fans - fansR >= gr2.fans * C.REQ_FANS - 1e-6, 'credibility pays fans');
+HL.S.gig = null;
+HL.bookGig();
+const gr3 = HL.S.gig;
+gr3.dropAts = []; gr3.reqAt = 0.1; gr3.req = null; gr3.reqDone = false;
+step(0.3 + C.REQ_WIN);
+t.ok(!gr3.req && gr3.reqDone, 'ignored requests just expire');
+t.ok(HL.S.stats.requests === 2, 'answered requests counted');
+HL.S.gig = null;
+
+// ---- golden vinyl: the viral moment ----
+HL.S.golden = null; HL.S.goldT = 0.05;
+step(0.2);
+t.ok(!!HL.S.golden, 'golden vinyl spawns when the timer fires');
+const fG = HL.S.fans, cG = HL.S.cash, frG = HL.S.frenzyT;
+t.ok(HL.tapGold() === true, 'grabbed the golden vinyl');
+t.ok(HL.S.fans > fG || HL.S.cash > cG || HL.S.frenzyT > frG, 'viral moment pays out (fans, cash, or frenzy)');
+t.ok(HL.S.golden === null && HL.S.goldT >= C.GOLD_MIN - 0.01, 'vinyl consumed, timer re-arms');
+t.ok(HL.tapGold() === false, 'no vinyl, no reward');
+t.ok(HL.S.stats.goldens === 1, 'viral moments counted');
+HL.S.goldT = 0.05;
+step(0.2);
+HL.S.golden.t = 0.01;
+step(0.1);
+t.ok(HL.S.golden === null, 'an ignored vinyl fades away');
+
+// ---- frenzy + item milestones multiply fans/sec ----
+HL.S.frenzyT = 0;
+const fpsCalm = HL.fansPerSec();
+HL.S.frenzyT = 5;
+t.ok(Math.abs(HL.fansPerSec() - fpsCalm * C.FRENZY_MUL) < 1e-6, 'frenzy multiplies fans/sec ×' + C.FRENZY_MUL);
+step(6);
+t.ok(HL.S.frenzyT <= 0, 'frenzy runs out');
+const own0 = HL.S.items[0];
+HL.S.items[0] = 9;
+t.ok(HL.milestoneMul(0) === 1, 'no milestone below 10 owned');
+HL.S.items[0] = 10;
+t.ok(HL.milestoneMul(0) === 2, 'owning 10 doubles that item');
+HL.S.items[0] = 100;
+t.ok(HL.milestoneMul(0) === 16, 'all four milestones stack to ×16');
+HL.S.items[0] = own0;
+
+// ---- back to the bedroom for automation ----
+HL.S.fans = 0; HL.S.bestVenue = 0;
+
 // ---- booking agent automation ----
+HL.S.cash = 0;
 t.ok(HL.buyAgent() === false, 'cannot hire the agent while broke');
 HL.S.cash = C.AGENT_COST + 100; HL.S.lifeCash += C.AGENT_COST + 100;
 t.ok(HL.buyAgent() === true && HL.S.agent, 'agent hired');
 t.ok(HL.buyAgent() === false, 'cannot hire twice');
 step(C.REBOOK_T + 0.2);
 t.ok(!!HL.S.gig, 'agent auto-books the next gig');
-HL.S.gig.dropAt = 1e9; // never opens; let it run out
+HL.S.gig.dropAts = []; HL.S.gig.reqAt = -1; // let it run out clean
 step(C.VENUES[0].dur + 1);
 step(C.REBOOK_T + 0.2);
 t.ok(!!HL.S.gig, 'agent keeps rebooking after each gig');
@@ -190,7 +290,7 @@ rSafe('render() after prestige');
 
 // ---- save / load roundtrip ----
 HL.S.fans = 777; HL.S.cash = 555; HL.S.lifeFans = 8888;
-HL.S.items[1] = 3; HL.S.agent = true; HL.S.bestVenue = 2;
+HL.S.items[1] = 3; HL.S.agent = true; HL.S.bestVenue = 2; HL.S.dropStreak = 4;
 HL.save();
 t.ok(!!store[C.SAVE_KEY], 'save written');
 HL.reset();
@@ -200,6 +300,7 @@ t.ok(HL.S.fans === 777 && HL.S.cash === 555, 'fans + cash restored');
 t.ok(HL.S.items[1] === 3 && HL.S.agent === true, 'gear + agent restored');
 t.ok(HL.S.influence === 10 && HL.S.prestiges === 1, 'influence + prestige count restored');
 t.ok(HL.S.bestVenue === 2, 'venue progress restored');
+t.ok(HL.S.dropStreak === 4, 'drop streak survives save/load');
 
 // ---- offline earnings ----
 let d = JSON.parse(store[C.SAVE_KEY]);
