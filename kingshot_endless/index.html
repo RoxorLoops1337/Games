@@ -112,7 +112,6 @@ const CROWN_BONUS  = 0.20; // +20% coin value per crown, forever
 const CROWN_DMG    = 0.30; // royal armory: +30% hero damage per crown
 const CROWN_HP     = 0.25; // royal vigor: +25% max HP per crown
 const HP0          = 60, HP_UP = 45;  // max HP: base + per VITALITY level
-const HIT_CAP      = 0.45; // a single hit can never take more than 45% of max HP
 const CHEST_CD     = 160;  // s between wandering treasure chests
 const DOG_SPD      = 250, DOG_FETCH_R = 320;
 
@@ -236,8 +235,8 @@ function reset() {
     showQuests: false, goldPulse: 0, hitStop: 0, amb: [],
     district: null,
     distPlate: { cost: 400, paid: 0, built: false },
-    d2: { farm: null, mine: null },
-    d2Plate: { farm: { cost: 700, paid: 0, built: false }, mine: { cost: 1200, paid: 0, built: false } },
+    d2: Object.fromEntries(Object.keys(D2CFG).map(dk => [dk, null])),
+    d2Plate: Object.fromEntries(Object.keys(D2CFG).map(dk => [dk, { cost: D2CFG[dk].cost, paid: 0, built: false }])),
     zones: [mkZone(1)],
     enemies: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [],
     chest: null, chestCd: 100,
@@ -260,6 +259,7 @@ const RES_MUL = {
   helm: 1, log: 1, stone: STONE_MUL, bar: BAR_MUL, plank: PLANK_MUL, tool: TOOL_MUL, crown: CROWN_MUL,
   wheat: 1, apple: 1.3, flour: 3, pie: 11,
   ore: 1.4, coal: 1.1, ingot: 6, sword: 20,
+  wool: 1.2, dye: 1.5, cloth: 5, regalia: 34,
 };
 function entryRes(e) { return e.res || (e.crown ? 'crown' : e.tool ? 'tool' : e.plank ? 'plank' : e.bar ? 'bar' : e.log ? 'log' : e.stone ? 'stone' : 'helm'); }
 function entryVal(e) { return Math.ceil(helmVal(e.k) * (RES_MUL[entryRes(e)] || 1) * coinMul()); }
@@ -329,6 +329,19 @@ const D2CFG = (() => {
         { id: 'smith', icon: '⚔️', name: 'WEAPONSMITH', cost: 900, recipe: { ingot: 1, plank: 1 }, out: 'sword', t: 3.4 },
       ],
     },
+    artisan: {
+      key: 'artisan', name: 'ARTISAN QUARTER', icon: '🎨', cell: [1, -1], need: 6, cost: 2600, ground: '#4a4054',
+      plate: { x: CELL_W + 525, y: 60 },              // land 1's north edge
+      producers: [
+        { id: 'sheep', icon: '🐑', name: 'SHEEP PEN', cost: 900, out: 'wool', t: 2.1 },
+        { id: 'dye', icon: '🏵️', name: 'DYE GARDEN', cost: 950, out: 'dye', t: 2.5 },
+      ],
+      crafters: [
+        { id: 'weaver', icon: '🧵', name: 'WEAVER', cost: 1300, recipe: { wool: 2 }, out: 'cloth', t: 2.9 },
+        // masterwork: combines woven cloth + dye + an INGOT hauled from the Deep Mines
+        { id: 'atelier', icon: '🎭', name: 'GRAND ATELIER', cost: 1800, recipe: { cloth: 1, dye: 1, ingot: 1 }, out: 'regalia', t: 3.6 },
+      ],
+    },
   };
   for (const k in cfg) {
     const d = cfg[k];
@@ -356,13 +369,30 @@ function initD2(dk) {
 }
 function spawnD2Hauler(dk) { S.d2[dk].haulerNpc = { x: D2CFG[dk].hauler.x, y: D2CFG[dk].hauler.y, state: 'idle', carry: [], job: null }; }
 function spawnD2Trader(dk) { S.d2[dk].traderNpc = { x: D2CFG[dk].trader.x, y: D2CFG[dk].trader.y, state: 'idle', carry: [] }; }
-// sources a hauler can pull a resource from (piles, trays, cross-district planks)
+// every place a hauler could pull a resource from, across ALL districts
+function anyResSources(res) {
+  const out = [];
+  if (S.district) {
+    if (res === 'log' && S.district.grove.logs.length) out.push({ at: DIST.grove, arr: S.district.grove.logs });
+    if (res === 'stone' && S.district.quarry.stones.length) out.push({ at: DIST.quarry, arr: S.district.quarry.stones });
+    if (res === 'plank' && S.district.plates.saw.built && S.district.saw.tray.length) out.push({ at: DIST.sawTray, arr: S.district.saw.tray });
+    if (res === 'tool' && S.district.plates.tool.built && S.district.tool.tray.length) out.push({ at: DIST.toolTray, arr: S.district.tool.tray });
+  }
+  for (const dk2 in D2CFG) {
+    const d2 = S.d2[dk2]; if (!d2) continue;
+    const cfg2 = D2CFG[dk2];
+    for (const pr of cfg2.producers) if (pr.out === res && d2.piles[pr.id].arr.length) out.push({ at: pr.pos, arr: d2.piles[pr.id].arr });
+    for (const cr of cfg2.crafters) if (cr.out === res && d2.crafts[cr.id].tray.length) out.push({ at: cr.trayPos, arr: d2.crafts[cr.id].tray });
+  }
+  return out;
+}
+// a hauler prefers local piles/trays, else fetches from any other district
 function d2Sources(dk, res) {
   const d = S.d2[dk], cfg = D2CFG[dk], out = [];
   for (const pr of cfg.producers) if (pr.out === res && d.piles[pr.id].arr.length) out.push({ at: pr.pos, arr: d.piles[pr.id].arr });
   for (const cr of cfg.crafters) if (cr.out === res && d.crafts[cr.id].tray.length) out.push({ at: cr.trayPos, arr: d.crafts[cr.id].tray });
-  if (res === 'plank' && S.district && S.district.plates.saw.built && S.district.saw.tray.length) out.push({ at: DIST.sawTray, arr: S.district.saw.tray });
-  return out;
+  if (out.length) return out;
+  return anyResSources(res);
 }
 
 function initDistrict() {
@@ -658,7 +688,7 @@ function hurtEnemy(e, dmg) {
 function hurtPlayer(d) {
   const p = S.player;
   if (p.invuln > 0) return;
-  d = Math.min(d, p.maxHp * HIT_CAP); // no single hit can one-shot you from full HP
+  // raw damage applies — neglect VITALITY and a high-land monster CAN one-shot you (that's the incentive to upgrade)
   p.hp -= d; p.hurtT = 0.15; p.invuln = 0.5; S.shake = Math.max(S.shake, 5);
   sfx('hurt', true); buzz(30);
   if (p.hp <= 0) playerDie();
@@ -894,6 +924,7 @@ const ACH = [
   { id: 'crown1',  name: 'New Kingdom',      c: () => S.crowns >= 1 },
   { id: 'chest1',  name: 'Treasure Hunter',  c: () => (S.stats.chests || 0) >= 1 },
   { id: 'tycoon2', name: 'Industrialist',    c: () => S.distPlate.built && S.d2Plate.farm.built && S.d2Plate.mine.built },
+  { id: 'guild',   name: 'Guildmaster',      c: () => S.d2Plate.artisan && S.d2Plate.artisan.built },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -1837,10 +1868,43 @@ function drawSwordIcon(x, y, s) {
   ctx.beginPath(); ctx.moveTo(x - 7 * s, y + 3 * s); ctx.lineTo(x - 3 * s, y + 7 * s); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x - 6.5 * s, y + 6.5 * s); ctx.lineTo(x - 8.5 * s, y + 8.5 * s); ctx.stroke();
 }
+function drawWoolIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#eef0f2';
+  ctx.beginPath(); ctx.arc(x - 3 * s, y, 4.5 * s, 0, 6.29); ctx.arc(x + 3 * s, y, 4.5 * s, 0, 6.29);
+  ctx.arc(x, y - 3 * s, 4.5 * s, 0, 6.29); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.beginPath(); ctx.arc(x + 1 * s, y + 1 * s, 2 * s, 0, 6.29); ctx.fill();
+}
+function drawDyeIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#8a3fb0'; rr(x - 6 * s, y - 5 * s, 12 * s, 12 * s, 3 * s); ctx.fill();
+  ctx.fillStyle = '#b46ad8';
+  ctx.beginPath(); ctx.ellipse(x, y - 4 * s, 5 * s, 2 * s, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(x - 3 * s, y - 5 * s, 2 * s, 2 * s);
+}
+function drawClothIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#c56ad0'; rr(x - 9 * s, y - 6 * s, 18 * s, 13 * s, 2 * s); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
+  for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * 5 * s, y - 5 * s); ctx.lineTo(x + i * 5 * s, y + 6 * s); ctx.stroke(); }
+}
+function drawRegaliaIcon(x, y, s) {
+  s = s || 1;
+  // a draped royal robe with a gold trim
+  ctx.fillStyle = '#7a2fb0';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 8 * s); ctx.lineTo(x + 8 * s, y - 2 * s); ctx.lineTo(x + 5 * s, y + 8 * s);
+  ctx.lineTo(x - 5 * s, y + 8 * s); ctx.lineTo(x - 8 * s, y - 2 * s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffd94a';
+  ctx.beginPath(); ctx.moveTo(x, y - 8 * s); ctx.lineTo(x - 3 * s, y + 8 * s); ctx.lineTo(x + 3 * s, y + 8 * s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y - 8 * s, 2 * s, 0, 6.29); ctx.fill();
+}
 const RES_ICON = {
   log: drawLogIcon, stone: drawStoneIcon, bar: drawBarIcon, plank: drawPlankIcon, tool: drawToolIcon, crown: drawCrownIcon,
   wheat: drawWheatIcon, apple: drawAppleIcon, flour: drawFlourIcon, pie: drawPieIcon,
   ore: drawOreIcon, coal: drawCoalIcon, ingot: drawIngotIcon, sword: drawSwordIcon,
+  wool: drawWoolIcon, dye: drawDyeIcon, cloth: drawClothIcon, regalia: drawRegaliaIcon,
 };
 function drawStackEntry(e, x, y, s) {
   const r = entryRes(e);
@@ -2529,9 +2593,23 @@ function drawD2() {
         ctx.beginPath(); ctx.moveTo(pr.pos.x - 60, pr.pos.y - 16); ctx.lineTo(pr.pos.x - 20, pr.pos.y - 66); ctx.lineTo(pr.pos.x + 40, pr.pos.y - 52); ctx.lineTo(pr.pos.x + 60, pr.pos.y - 16); ctx.closePath(); ctx.fill();
         ctx.fillStyle = '#6ec9e0';
         ctx.fillRect(pr.pos.x - 22, pr.pos.y - 44, 5, 5); ctx.fillRect(pr.pos.x + 8, pr.pos.y - 36, 5, 5); ctx.fillRect(pr.pos.x - 4, pr.pos.y - 28, 4, 4);
-      } else { // coal
+      } else if (pr.out === 'coal') {
         ctx.fillStyle = '#33333b';
         ctx.beginPath(); ctx.moveTo(pr.pos.x - 56, pr.pos.y - 14); ctx.lineTo(pr.pos.x - 12, pr.pos.y - 58); ctx.lineTo(pr.pos.x + 44, pr.pos.y - 44); ctx.lineTo(pr.pos.x + 56, pr.pos.y - 14); ctx.closePath(); ctx.fill();
+      } else if (pr.out === 'wool') { // grazing sheep
+        ctx.fillStyle = '#5c6a3a'; rr(pr.pos.x - 70, pr.pos.y - 30, 140, 24, 8); ctx.fill();
+        for (let i = 0; i < 3; i++) {
+          const sx = pr.pos.x - 46 + i * 46 + Math.sin(S.t * 0.7 + i) * 6, sy = pr.pos.y - 40 - (i % 2) * 10;
+          ctx.fillStyle = '#eef0f2'; ctx.beginPath(); ctx.ellipse(sx, sy, 10, 7, 0, 0, 6.29); ctx.fill();
+          ctx.fillStyle = '#3a3038'; ctx.beginPath(); ctx.arc(sx + 8, sy - 2, 3.5, 0, 6.29); ctx.fill();
+        }
+      } else { // dye garden — rows of colorful blooms
+        ctx.fillStyle = '#5a4a3a'; rr(pr.pos.x - 70, pr.pos.y - 60, 140, 46, 8); ctx.fill();
+        const cols = ['#c53f8a', '#8a3fb0', '#3f6ac5', '#d0a83f'];
+        for (let i = 0; i < 12; i++) {
+          ctx.fillStyle = cols[i % cols.length];
+          ctx.beginPath(); ctx.arc(pr.pos.x - 58 + (i % 6) * 20, pr.pos.y - 48 + Math.floor(i / 6) * 22 + Math.sin(S.t * 2 + i) * 2, 4, 0, 6.29); ctx.fill();
+        }
       }
       // worker + pile + ring
       const sw = Math.abs(Math.sin(S.t * 2.2 + pr.pos.x));
@@ -2978,7 +3056,7 @@ window.KS = {
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, HIT_CAP, CROWN_HP },
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP },
   start() { S.started = true; },
 };
 </script>
