@@ -116,13 +116,100 @@ const CHEST_CD     = 160;  // s between wandering treasure chests
 const DOG_SPD      = 250, DOG_FETCH_R = 320;
 // hero dash: a short burst with i-frames, on a cooldown crowns shorten
 const DASH_SPD = 780, DASH_TIME = 0.16, DASH_CD = 3.6, DASH_CD_CROWN = 0.35, DASH_CD_MIN = 1.2;
-function dashCdMax() { return Math.max(DASH_CD_MIN, DASH_CD - DASH_CD_CROWN * S.crowns); }
+function dashCdMax() { return Math.max(DASH_CD_MIN, DASH_CD - DASH_CD_CROWN * S.crowns - 0.3 * pk('nimble')); }
 // kill combo: chain kills fast to build a streak that pays escalating bonus coins
 const COMBO_WINDOW = 2.6;
 const COMBO_TIERS = [[80, 4, '#ff3a6b'], [40, 3, '#ff6a3a'], [20, 2, '#ff9a3a'], [10, 1.5, '#ffd94a'], [5, 1.25, '#e8e08a']];
 function comboMul() { for (const t of COMBO_TIERS) if (S.combo >= t[0]) return t[1]; return 1; }
 function comboTier() { for (let i = 0; i < COMBO_TIERS.length; i++) if (S.combo >= COMBO_TIERS[i][0]) return COMBO_TIERS.length - i; return 0; }
 function comboColor() { for (const t of COMBO_TIERS) if (S.combo >= t[0]) return t[2]; return '#c8d0da'; }
+
+// ---- hero XP + roguelite level-up upgrade draft --------------
+function pk(id) { return (S.perks && S.perks[id]) || 0; }
+function perkCount() { let n = 0; for (const k in (S.perks || {})) n += S.perks[k]; return n; }
+function xpNeed(lvl) { return Math.ceil(18 * Math.pow(1.28, lvl - 1)); }
+// upgrade cards — mostly stackable perks; each pick is a permanent run buff (reset on prestige)
+const CARDS = [
+  { id: 'dmg',     ic: '⚔️', name: 'Sharper Arrows', d: '+18% damage', max: 99 },
+  { id: 'rate',    ic: '🏹', name: 'Quickdraw',      d: '+10% fire rate', max: 99 },
+  { id: 'multi',   ic: '🎯', name: 'Multishot',      d: '+1 arrow per volley', max: 8 },
+  { id: 'crit',    ic: '💥', name: 'Deadeye',        d: '+6% crit chance', max: 12 },
+  { id: 'critdmg', ic: '🩸', name: 'Brutality',      d: '+60% crit damage', max: 12 },
+  { id: 'range',   ic: '📡', name: 'Eagle Eye',      d: '+12% range', max: 10 },
+  { id: 'velocity',ic: '💨', name: 'Swift Shafts',   d: '+18% arrow speed', max: 10 },
+  { id: 'speed',   ic: '👟', name: 'Fleet Foot',     d: '+9% move speed', max: 12 },
+  { id: 'hp',      ic: '❤️', name: 'Toughness',      d: '+30 max HP', max: 99 },
+  { id: 'regen',   ic: '➕', name: 'Regeneration',   d: '+3 HP/s regen', max: 20 },
+  { id: 'vamp',    ic: '🧛', name: 'Lifesteal',      d: 'Heal 2% max HP per kill', max: 10 },
+  { id: 'nimble',  ic: '🌀', name: 'Nimble',         d: '−0.3s dash cooldown', max: 8 },
+  { id: 'magnet',  ic: '🧲', name: 'Magnetism',      d: '+20% pickup range', max: 10 },
+  { id: 'coin',    ic: '🪙', name: 'Greed',          d: '+12% coin value', max: 20 },
+  { id: 'combow',  ic: '🔥', name: 'Momentum',       d: '+0.4s combo window', max: 8 },
+  { id: 'scholar', ic: '📖', name: 'Fast Learner',   d: '+15% XP gained', max: 12 },
+  { id: 'thorns',  ic: '🛡️', name: 'Thornmail',      d: 'Reflect damage when hit', max: 8 },
+  { id: 'luck',    ic: '🍀', name: 'Fortune',        d: '+1.5% golden-foe chance', max: 6 },
+  { id: 'cap',     ic: '🎒', name: 'Deep Pockets',   d: '+2 backpack slots', max: 20 },
+];
+function cardById(id) { return CARDS.find(c => c.id === id); }
+function drawCards() {
+  const avail = CARDS.filter(c => pk(c.id) < c.max);
+  const pool = avail.length ? avail : CARDS;
+  const pick = [];
+  let g2 = 0;
+  while (pick.length < 3 && g2++ < 80) {
+    const c = pool[Math.floor(rnd() * pool.length)];
+    if (!pick.includes(c)) pick.push(c);
+    if (pick.length >= pool.length) break;
+  }
+  S.cards = pick;
+}
+function grantXp(n) {
+  if (!S.started) return;
+  S.xp += n * (1 + 0.15 * pk('scholar'));
+  while (S.xp >= xpNeed(S.level)) {
+    S.xp -= xpNeed(S.level); S.level++;
+    S.stats.level = S.level;
+    if (S.cards) S.pendingLevels = (S.pendingLevels || 0) + 1; else drawCards();
+    S.goldPulse = Math.max(S.goldPulse, 0.5); sfx('unlock', true); buzz([20, 20, 40]);
+    S.toasts.push({ txt: '⭐ LEVEL ' + S.level + ' — choose an upgrade!', t: 0 });
+    for (let i = 0; i < 16; i++) S.parts.push({ x: S.player.x, y: S.player.y, vx: (rnd() - 0.5) * 240, vy: -100 - rnd() * 180, t: 0, dur: 0.7, r: 3, color: '#ffd94a', g: 1 });
+  }
+}
+function pickCard(i) {
+  if (!S.cards || !S.cards[i]) return false;
+  const c = S.cards[i];
+  S.perks[c.id] = pk(c.id) + 1;
+  if (c.id === 'hp') { const mh = pMaxHp(); S.player.hp += 30; if (S.player.hp > mh) S.player.hp = mh; }
+  S.cards = null;
+  S.toasts.push({ txt: c.ic + ' ' + c.name + (pk(c.id) > 1 ? ' x' + pk(c.id) : ''), t: 0 });
+  S.goldPulse = Math.max(S.goldPulse, 0.4); sfx('built', true); buzz(30);
+  if (S.pendingLevels > 0) { S.pendingLevels--; drawCards(); }
+  return true;
+}
+
+// ---- golden boons (Cookie-Clicker shiny) ---------------------
+const BOON_MIN = 42, BOON_MAX = 78;
+const BOONS = [
+  { id: 'coins',  ic: '🪙', name: 'Coin Rain!',  fx: () => { const g2 = Math.ceil(30 * helmVal(S.zones.length) * coinMul()); S.pallet += g2; S.stats.earned += g2; float(S.player.x, S.player.y - 40, '+' + fmt(g2) + '¢', '#ffd94a', true); } },
+  { id: 'frenzy', ic: '⚡', name: 'Frenzy!',     fx: () => { S.frenzyT = 12; } },
+  { id: 'gold',   ic: '💰', name: 'Gold Rush!',  fx: () => { S.goldRushT = 16; } },
+  { id: 'gems',   ic: '💎', name: 'Gem Cache!',  fx: () => { const n = 2 + Math.floor(rnd() * 4); S.gems += n; S.stats.gemsFound += n; float(S.player.x, S.player.y - 40, '💎 +' + n, '#6ee0d8', true); } },
+  { id: 'combo',  ic: '🔥', name: 'Killing Spree!', fx: () => { S.combo = Math.max(S.combo, 25); S.comboT = comboWindow(); S.comboTierShown = comboTier(); } },
+  { id: 'heal',   ic: '❤️', name: 'Second Wind!', fx: () => { S.player.hp = S.player.maxHp; } },
+  { id: 'xp',     ic: '⭐', name: 'Insight!',    fx: () => { grantXp(xpNeed(S.level) * 0.8); } },
+];
+function triggerBoon() {
+  if (!S.boon) return false;
+  const b = BOONS[Math.floor(rnd() * BOONS.length)];
+  b.fx();
+  S.stats.boons = (S.stats.boons || 0) + 1;
+  S.toasts.push({ txt: b.ic + ' ' + b.name, t: 0 });
+  S.goldPulse = Math.max(S.goldPulse, 0.6); S.shake = Math.max(S.shake, 6);
+  for (let i = 0; i < 22; i++) S.parts.push({ x: S.player.x, y: S.player.y - 20, vx: (rnd() - 0.5) * 320, vy: -120 - rnd() * 220, t: 0, dur: 0.8, r: 3, color: '#ffd94a', g: 1 });
+  sfx('unlock', true); buzz([30, 20, 60]);
+  S.boon = null;
+  return true;
+}
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
 function helmVal(k)  { return Math.ceil(5 * eco(k)); }
@@ -244,6 +331,8 @@ function reset() {
     quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
     combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
+    xp: 0, level: 1, cards: null, pendingLevels: 0, perks: {},
+    boon: null, boonT: 30, frenzyT: 0, goldRushT: 0,
     district: null,
     distPlate: { cost: 400, paid: 0, built: false },
     d2: Object.fromEntries(Object.keys(D2CFG).map(dk => [dk, null])),
@@ -258,13 +347,16 @@ function reset() {
     shake: 0, saveCd: 5,
   };
 }
-function cap()     { return CAP0 + CAP_UP * S.up.cap; }
-function pMaxHp()  { return Math.round((HP0 + HP_UP * S.up.hp) * (1 + CROWN_HP * S.crowns)); }
-function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed); }
-function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns); }
-function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1); }
-function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet); }
-function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns); }
+function cap()     { return CAP0 + CAP_UP * S.up.cap + 2 * pk('cap'); }
+function pMaxHp()  { return Math.round((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns)); }
+function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')); }
+function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (S.frenzyT > 0 ? 1.5 : 1); }
+function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (S.frenzyT > 0 ? 2 : 1); }
+function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet')); }
+function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (S.goldRushT > 0 ? 3 : 1); }
+function comboWindow() { return COMBO_WINDOW + 0.4 * pk('combow'); }
+function critChance() { return 0.10 * S.gemUp.crit + 0.06 * pk('crit'); }
+function critMult()   { return 3 + 0.6 * pk('critdmg'); }
 // value multipliers per carried resource kind (vs a frontier helmet)
 const RES_MUL = {
   helm: 1, log: 1, stone: STONE_MUL, bar: BAR_MUL, plank: PLANK_MUL, tool: TOOL_MUL, crown: CROWN_MUL,
@@ -451,6 +543,7 @@ function save() {
       quests: S.quests, dailies: S.dailies, dailyDay: S.dailyDay,
       streak: S.streak, lastStreakDay: S.lastStreakDay,
       showQuests: S.showQuests ? 1 : 0,
+      xp: S.xp, level: S.level, perks: S.perks,
       district: S.district ? {
         plates: Object.fromEntries(Object.entries(S.district.plates).map(([id, pl]) => [id, { b: pl.built ? 1 : 0, p: pl.paid }])),
         grove: S.district.grove.logs, quarry: S.district.quarry.stones,
@@ -521,6 +614,7 @@ function load() {
   S.quests = d.quests || []; S.dailies = d.dailies || [];
   S.dailyDay = d.dailyDay || ''; S.streak = d.streak || 0; S.lastStreakDay = d.lastStreakDay || '';
   S.showQuests = !!d.showQuests;
+  S.xp = d.xp || 0; S.level = d.level || 1; S.perks = d.perks || {};
   if (d.district) {
     S.distPlate.built = true;
     initDistrict();
@@ -654,7 +748,7 @@ function puff(x, y, color, n, up) {
 function spawnEnemy(z, opts) {
   opts = opts || {};
   const boss = !!opts.boss;
-  const gold = !boss && rnd() < GOLD_CHANCE;
+  const gold = !boss && rnd() < GOLD_CHANCE + 0.015 * pk('luck');
   // bosses inherit the land's archetype — spitter king bombards, fast king charges, tank king soaks
   const arch = foeArch(z.k);
   const archHp = arch === 'tank' ? 1.8 : arch === 'fast' ? 0.7 : arch === 'spitter' ? 0.85 : 1;
@@ -695,6 +789,8 @@ function hurtEnemy(e, dmg) {
     S.stats.kills++;
     questEvent('kill', 1);
     registerCombo(e);
+    grantXp(e.boss ? 50 : e.gold ? 6 : 3 + Math.floor(e.k / 2));
+    if (pk('vamp') > 0) { const p = S.player; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02 * pk('vamp')); }
     if (e.boss) {
       S.stats.bosses++;
       questEvent('boss', 1);
@@ -718,7 +814,7 @@ function hurtEnemy(e, dmg) {
 }
 function registerCombo(e) {
   S.combo++;
-  S.comboT = COMBO_WINDOW;
+  S.comboT = comboWindow();
   if (S.combo > (S.stats.comboBest || 0)) S.stats.comboBest = S.combo;
   const mul = comboMul();
   // combo pays a bonus on top of the dropped helmet, scaled by the current multiplier
@@ -755,15 +851,18 @@ function dashAbility() {
   if (l > 0.1) { dx /= l; dy /= l; } else { dx = p.mvx || p.face || 1; dy = p.mvy || 0; }
   p.dvx = dx; p.dvy = dy;
   p.dashT = DASH_TIME; p.dashCd = dashCdMax();
+  S.stats.dashes = (S.stats.dashes || 0) + 1;
   p.invuln = Math.max(p.invuln, DASH_TIME + 0.12); // i-frames through the dash + a hair after
   if (Math.abs(dx) > 0.15) p.face = dx > 0 ? 1 : -1;
   puff(p.x, p.y, '#6ec9e0', 12, false);
   sfx('warp'); buzz(15);
   return true;
 }
-function hurtPlayer(d) {
+function hurtPlayer(d, src) {
   const p = S.player;
   if (p.invuln > 0) return;
+  // thornmail: reflect a chunk of the hit back onto the attacker
+  if (src && pk('thorns') > 0 && src.hp > 0) hurtEnemy(src, pMaxHp() * 0.06 * pk('thorns'));
   // raw damage applies — neglect VITALITY and a high-land monster CAN one-shot you (that's the incentive to upgrade)
   p.hp -= d; p.hurtT = 0.15; p.invuln = 0.5; S.shake = Math.max(S.shake, 5);
   sfx('hurt', true); buzz(30);
@@ -882,6 +981,8 @@ function prestige() {
   S.crowns += gain; S.prestiges++;
   // burn the old kingdom; keep gems, shrines, crowns, achievements, stats
   S.wallet = 0; S.pallet = 0;
+  S.xp = 0; S.level = 1; S.perks = {}; S.cards = null; S.pendingLevels = 0;
+  S.combo = 0; S.comboTierShown = 0; S.frenzyT = 0; S.goldRushT = 0;
   S.up = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
   S.upPaid = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
   S.forge = null; S.forgePlate = { cost: 260, paid: 0, built: false };
@@ -1001,6 +1102,20 @@ const ACH = [
   { id: 'chest1',  ic: '💰', name: 'Treasure Hunter',  d: 'Open a wandering chest',         c: () => (S.stats.chests || 0) >= 1 },
   { id: 'craft50', ic: '🏭', name: 'Master Crafter',   d: 'Craft 50 industry goods',        c: () => (S.stats.crafted || 0) >= 50 },
   { id: 'combo40', ic: '🔥', name: 'Combo Master',      d: 'Reach a 40 kill combo',          c: () => (S.stats.comboBest || 0) >= 40 },
+  { id: 'combo80', ic: '🌋', name: 'Unstoppable',       d: 'Reach an 80 kill combo',         c: () => (S.stats.comboBest || 0) >= 80 },
+  { id: 'lv10',    ic: '⭐', name: 'Seasoned',          d: 'Reach hero level 10',            c: () => S.level >= 10 },
+  { id: 'lv25',    ic: '🌟', name: 'Veteran',           d: 'Reach hero level 25',            c: () => S.level >= 25 },
+  { id: 'lv50',    ic: '✨', name: 'Legend',            d: 'Reach hero level 50',            c: () => S.level >= 50 },
+  { id: 'perk5',   ic: '🃏', name: 'Dabbler',           d: 'Pick 5 upgrade cards',           c: () => perkCount() >= 5 },
+  { id: 'perk20',  ic: '🎴', name: 'Build Crafter',     d: 'Pick 20 upgrade cards',          c: () => perkCount() >= 20 },
+  { id: 'boon5',   ic: '★',  name: 'Lucky Star',        d: 'Catch 5 golden boons',           c: () => (S.stats.boons || 0) >= 5 },
+  { id: 'k5000',   ic: '💀', name: 'Warlord',           d: 'Slay 5,000 foes',                c: () => S.stats.kills >= 5000 },
+  { id: 'boss20',  ic: '👑', name: 'Dynasty Ender',     d: 'Defeat 20 boss kings',           c: () => S.stats.bosses >= 20 },
+  { id: 'rich1m',  ic: '💵', name: 'Millionaire',       d: 'Earn 1,000,000 coins total',     c: () => S.stats.earned >= 1e6 },
+  { id: 'crown5',  ic: '👑', name: 'Serial Monarch',    d: 'Found 5 New Kingdoms',           c: () => S.crowns >= 5 },
+  { id: 'land12',  ic: '🌎', name: 'Continent',         d: 'Own 12 lands',                   c: () => S.zones.length >= 12 },
+  { id: 'craft250',ic: '🏭', name: 'Factory Baron',     d: 'Craft 250 industry goods',       c: () => (S.stats.crafted || 0) >= 250 },
+  { id: 'dash50',  ic: '💨', name: 'Blink',             d: 'Dash 50 times',                  c: () => (S.stats.dashes || 0) >= 50 },
   { id: 'tycoon2', ic: '⚙️', name: 'Industrialist',    d: 'Own industry, farm & mine',      c: () => S.distPlate.built && S.d2Plate.farm.built && S.d2Plate.mine.built },
   { id: 'guild',   ic: '🎨', name: 'Guildmaster',      d: 'Own the Artisan Quarter',        c: () => S.d2Plate.artisan && S.d2Plate.artisan.built },
 ];
@@ -1036,7 +1151,9 @@ function tick(dt) {
   p.maxHp = mh;
   if (p.hp > p.maxHp) p.hp = p.maxHp;
   // regen scales with the pool so it stays meaningful on a big HP bar
-  if (p.hp < p.maxHp && p.invuln <= 0) p.hp = Math.min(p.maxHp, p.hp + Math.max(5, p.maxHp * 0.04) * dt);
+  if (p.hp < p.maxHp && p.invuln <= 0) p.hp = Math.min(p.maxHp, p.hp + (Math.max(5, p.maxHp * 0.04) + 3 * pk('regen')) * dt);
+  if (S.frenzyT > 0) S.frenzyT -= dt;
+  if (S.goldRushT > 0) S.goldRushT -= dt;
 
   // -- movement (joystick + keys), constrained to unlocked lands
   let mx = 0, my = 0;
@@ -1091,16 +1208,22 @@ function tick(dt) {
     } else p.warpT = 0;
   }
 
-  // -- auto-fire (with crits)
+  // -- auto-fire (crits + multishot: one arrow at each of the nearest N foes)
   p.fireCd -= dt;
   if (p.fireCd <= 0) {
-    let tgt = null, bd = FIRE_RANGE * FIRE_RANGE;
-    for (const e of S.enemies) { const d = dist2(e.x, e.y, p.x, p.y); if (e.hp > 0 && d < bd) { bd = d; tgt = e; } }
-    if (tgt) {
+    const range = FIRE_RANGE * (1 + 0.12 * pk('range'));
+    const inRange = [];
+    for (const e of S.enemies) { if (e.hp > 0) { const d = dist2(e.x, e.y, p.x, p.y); if (d < range * range) inRange.push([d, e]); } }
+    if (inRange.length) {
+      inRange.sort((a, b) => a[0] - b[0]);
+      const shots = 1 + pk('multi'), spd = 460 * (1 + 0.18 * pk('velocity'));
       p.fireCd = pRate();
-      const crit = rnd() < 0.10 * S.gemUp.crit;
-      S.shots.push({ x: p.x, y: p.y - 26, tgt, dmg: pDmg() * (crit ? 3 : 1), spd: 460, crit });
-      p.face = tgt.x > p.x ? 1 : -1;
+      for (let i = 0; i < shots; i++) {
+        const tgt = inRange[i % inRange.length][1];
+        const crit = rnd() < critChance();
+        S.shots.push({ x: p.x, y: p.y - 26, tgt, dmg: pDmg() * (crit ? critMult() : 1), spd, crit });
+      }
+      p.face = inRange[0][1].x > p.x ? 1 : -1;
       sfx('shoot');
     }
   }
@@ -1573,6 +1696,19 @@ function tick(dt) {
     if (dist2(b.x, b.y, p.x, p.y) > 1100 * 1100) { b.x = p.x + (rnd() - 0.5) * 800; b.y = p.y + (rnd() - 0.5) * 800; }
   }
 
+  // -- golden boon: a shiny drifts across the screen; tap it for a random buff
+  if (S.boon) {
+    S.boon.x += S.boon.vx * dt; S.boon.t += dt;
+    if (S.boon.x < -60 || S.boon.x > vw + 60 || S.boon.t > 14) S.boon = null;
+  } else {
+    S.boonT -= dt;
+    if (S.boonT <= 0) {
+      S.boonT = BOON_MIN + rnd() * (BOON_MAX - BOON_MIN);
+      const fromLeft = rnd() < 0.5;
+      S.boon = { x: fromLeft ? -40 : vw + 40, y: 120 + rnd() * (vh - 300), vx: (fromLeft ? 1 : -1) * (90 + rnd() * 60), t: 0, bob: rnd() * 6.28 };
+    }
+  }
+
   // -- milestones + toasts
   S.achCd -= dt;
   if (S.achCd <= 0) { S.achCd = 0.5; checkAch(); }
@@ -1641,7 +1777,7 @@ function tick(dt) {
     if (e.arch !== 'spitter') { // spitters (incl. bosses) attack only at range
       e.atkCd -= dt;
       if (e.atkCd <= 0 && dist2(e.x, e.y, p.x, p.y) < (e.r + 22) * (e.r + 22)) {
-        e.atkCd = 0.85; hurtPlayer(e.dmg);
+        e.atkCd = 0.85; hurtPlayer(e.dmg, e);
       }
     }
   }
@@ -2950,6 +3086,7 @@ function drawHud() {
   });
   drawMinimap();
   drawCombo();
+  drawProgression();
   drawQuests();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -3028,6 +3165,66 @@ function drawHud() {
     ctx.restore();
   }
 }
+function drawProgression() {
+  // XP / level bar under the wallet
+  const bx = 10, by = 100, bw = 128;
+  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(bx, by, bw, 14, 7); ctx.fill();
+  const f = Math.min(1, S.xp / xpNeed(S.level));
+  ctx.fillStyle = '#8a6ad8'; rr(bx + 2, by + 2, (bw - 4) * f, 10, 5); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('LV ' + S.level, bx + 6, by + 11);
+  // active boon timers
+  let tbx = bx; const tby = by + 18;
+  if (S.frenzyT > 0) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('⚡' + Math.ceil(S.frenzyT) + 's', tbx, tby + 8); tbx += 44; }
+  if (S.goldRushT > 0) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('💰' + Math.ceil(S.goldRushT) + 's', tbx, tby + 8); }
+  // golden boon shiny
+  if (S.boon) {
+    const bob = Math.sin(S.t * 5 + S.boon.bob) * 6;
+    const gx = S.boon.x, gy = S.boon.y + bob;
+    ctx.save();
+    const gl = 0.4 + Math.sin(S.t * 8) * 0.25;
+    ctx.fillStyle = 'rgba(255,217,74,' + gl + ')';
+    ctx.beginPath(); ctx.arc(gx, gy, 26 + Math.sin(S.t * 6) * 3, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#ffd94a'; ctx.beginPath(); ctx.arc(gx, gy, 15, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#fff8c0'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('★', gx, gy + 6);
+    ctx.restore();
+    hits.push({ x: gx - 30, y: gy - 30, w: 60, h: 60, act: triggerBoon });
+    // sparkle trail
+    if (Math.floor(S.t * 12) % 2) S.parts.push({ x: gx - Math.sign(S.boon.vx) * 12, y: gy, vx: 0, vy: 0, t: 0, dur: 0.4, r: 2, color: '#fff8c0' });
+  }
+  // level-up card draft (bottom of screen, non-blocking)
+  if (S.cards) {
+    ctx.fillStyle = 'rgba(8,10,16,0.55)'; ctx.fillRect(0, vh - 170, vw, 170);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('⭐ LEVEL UP — pick an upgrade', vw / 2, vh - 150);
+    const n = S.cards.length, cw = Math.min(120, (vw - 40) / n - 8), gap = 8;
+    const total = n * cw + (n - 1) * gap, x0 = (vw - total) / 2;
+    for (let i = 0; i < n; i++) {
+      const c = S.cards[i], cx = x0 + i * (cw + gap), cy = vh - 132, ch = 116;
+      ctx.fillStyle = 'rgba(38,46,66,0.96)'; rr(cx, cy, cw, ch, 10); ctx.fill();
+      ctx.strokeStyle = '#8a6ad8'; ctx.lineWidth = 2.5; rr(cx, cy, cw, ch, 10); ctx.stroke();
+      ctx.font = '30px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.fillText(c.ic, cx + cw / 2, cy + 38);
+      ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#ffd94a';
+      ctx.fillText(c.name, cx + cw / 2, cy + 62);
+      ctx.font = '10px sans-serif'; ctx.fillStyle = '#c8d0da';
+      wrapText(c.d, cx + cw / 2, cy + 80, cw - 12, 12);
+      const owned = pk(c.id);
+      if (owned > 0) { ctx.fillStyle = '#8a6ad8'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('owned x' + owned, cx + cw / 2, cy + ch - 8); }
+      hits.push({ x: cx, y: cy, w: cw, h: ch, act: () => pickCard(i) });
+    }
+  }
+}
+function wrapText(txt, cx, y, maxW, lh) {
+  const words = txt.split(' '); let line = '', yy = y;
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { ctx.fillText(line, cx, yy); line = w; yy += lh; }
+    else line = test;
+  }
+  if (line) ctx.fillText(line, cx, yy);
+}
 function drawCombo() {
   if (S.combo < 3) return;
   const mul = comboMul(), col = comboColor();
@@ -3041,7 +3238,7 @@ function drawCombo() {
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(S.combo + ' COMBO', 1, 17);
   ctx.fillStyle = '#fff'; ctx.fillText(S.combo + ' COMBO', 0, 16);
   ctx.restore();
-  const w = 96, f = Math.max(0, S.comboT / COMBO_WINDOW);
+  const w = 96, f = Math.max(0, S.comboT / comboWindow());
   ctx.fillStyle = 'rgba(0,0,0,0.45)'; rr(cx - w / 2, cy + 24, w, 5, 2); ctx.fill();
   ctx.fillStyle = col; rr(cx - w / 2, cy + 24, w * f, 5, 2); ctx.fill();
 }
@@ -3073,7 +3270,8 @@ function drawStatsPanel() {
     ['🗺️ Lands', fmt(S.zones.length)], ['👑 Crowns', fmt(S.crowns)],
     ['🔁 Prestiges', fmt(S.prestiges)], ['⏱️ Played', fmtTime(st.playT)],
     ['☠️ Deaths', fmt(S.player.deaths)], ['🔥 Streak', S.streak + 'd'],
-    ['🔥 Best combo', fmt(S.stats.comboBest || 0)],
+    ['🔥 Best combo', fmt(S.stats.comboBest || 0)], ['⭐ Hero level', fmt(S.level)],
+    ['🃏 Perks picked', fmt(perkCount())], ['★ Boons caught', fmt(S.stats.boons || 0)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3296,7 +3494,8 @@ window.KS = {
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry, drawStatsPanel,
-  dashAbility, dashCdMax, registerCombo, comboMul, comboTier, drawCombo,
+  dashAbility, dashCdMax, registerCombo, comboMul, comboTier, drawCombo, comboWindow,
+  grantXp, xpNeed, drawCards, pickCard, pk, perkCount, triggerBoon, CARDS, BOONS, critChance, critMult,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },

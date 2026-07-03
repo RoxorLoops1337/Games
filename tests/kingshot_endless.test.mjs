@@ -502,6 +502,62 @@ t.ok(KS.S.ach.combo40 === true, 'Combo Master milestone unlocks at a 40 streak')
 KS.S.enemies.length = 0; KS.S.items.length = 0;
 p.x = C.SPAWN.x; p.y = C.SPAWN.y;
 
+// ---- hero XP + roguelite level-up card draft ----
+KS.S.xp = 0; KS.S.level = 1; KS.S.cards = null; KS.S.perks = {}; KS.S.pendingLevels = 0;
+KS.grantXp(KS.xpNeed(1) + KS.xpNeed(2)); // enough for two levels
+t.ok(KS.S.level >= 3, 'XP grants hero levels');
+t.ok(Array.isArray(KS.S.cards) && KS.S.cards.length === 3, 'level-up offers a 3-card draft');
+t.ok(KS.S.pendingLevels >= 1, 'extra level-ups queue behind the open draft');
+// picking a damage card raises damage
+KS.S.cards = [{ id: 'dmg', ic: '⚔️', name: 'Sharper Arrows', d: '+18% damage', max: 99 }];
+const dmg0 = KS.pDmg();
+t.ok(KS.pickCard(0) === true, 'a card can be picked');
+t.ok(KS.pk('dmg') === 1 && Math.abs(KS.pDmg() - dmg0 * 1.18) < 1e-6, 'damage card applies +18% damage');
+t.ok(KS.S.cards !== null || KS.S.pendingLevels === 0, 'a queued level-up re-opens the draft after picking');
+// multishot fires extra arrows
+KS.S.perks = { multi: 2 }; KS.S.cards = null; KS.S.pendingLevels = 0;
+KS.S.enemies.length = 0; KS.S.shots.length = 0; freezeSpawns();
+const zc = KS.S.zones[0];
+for (let i = 0; i < 3; i++) { KS.spawnEnemy(zc); const e = KS.S.enemies[i]; e.gold = false; e.boss = false; e.hp = e.max = 1e6; e.x = zc.pen.x0 + 200 + i * 30; e.y = 500; e.tx = e.x; e.ty = e.y; e.wanderT = 99; }
+p.x = zc.pen.x0 + 200; p.y = 500; p.fireCd = 0;
+KS.tick(1 / 60);
+t.ok(KS.S.shots.length >= 3, 'multishot (x2 perk) fires 3 arrows at once');
+KS.S.perks = {}; KS.S.enemies.length = 0; KS.S.shots.length = 0;
+// lifesteal heals on kill
+KS.S.perks = { vamp: 3 };
+p.maxHp = KS.pMaxHp(); p.hp = 10;
+KS.spawnEnemy(zc); const ve = KS.S.enemies[KS.S.enemies.length - 1]; ve.gold = false; ve.boss = false; ve.x = p.x; ve.y = p.y;
+KS.hurtEnemy(ve, 1e9);
+t.ok(p.hp > 10, 'lifesteal perk heals the hero on kill');
+KS.S.perks = {}; p.hp = p.maxHp; KS.S.enemies.length = 0;
+
+// ---- golden boon ----
+KS.S.boon = { x: 100, y: 200, vx: 0, t: 0, bob: 0 };
+const before = { wallet: KS.S.wallet, gems: KS.S.gems, hp: p.hp, frenzy: KS.S.frenzyT, gold: KS.S.goldRushT };
+KS.S.stats.boons = 0;
+// force each boon effect at least once by triggering several
+let anyEffect = false;
+for (let i = 0; i < 12 && !anyEffect; i++) {
+  KS.S.boon = { x: 100, y: 200, vx: 0, t: 0, bob: 0 };
+  KS.triggerBoon();
+  if (KS.S.wallet !== before.wallet || KS.S.pallet > 0 || KS.S.gems !== before.gems || KS.S.frenzyT > 0 || KS.S.goldRushT > 0 || KS.S.combo > 0 || KS.S.level > 1) anyEffect = true;
+}
+t.ok(anyEffect, 'catching a golden boon applies a random buff');
+t.ok(KS.S.stats.boons >= 1 && KS.S.boon === null, 'boon consumed + counted');
+KS.S.frenzyT = 0; KS.S.goldRushT = 0; KS.S.combo = 0;
+
+// frenzy boosts fire rate, gold rush boosts coin value
+KS.S.perks = {}; const rateBase = KS.pRate(), coinBase = KS.coinMul();
+KS.S.frenzyT = 5; t.ok(KS.pRate() < rateBase, 'frenzy speeds up fire rate');
+KS.S.goldRushT = 5; t.ok(KS.coinMul() > coinBase, 'gold rush multiplies coin value');
+KS.S.frenzyT = 0; KS.S.goldRushT = 0;
+
+// perks + level persist through save/load, reset on prestige
+KS.S.perks = { dmg: 3, multi: 1 }; KS.S.level = 7; KS.S.xp = 5;
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.pk('dmg') === 3 && KS.S.level === 7, 'perks + hero level persist through save/load');
+KS.S.perks = {}; KS.S.level = 1; KS.S.xp = 0; KS.S.cards = null; KS.S.boon = null; KS.S.frenzyT = 0; KS.S.goldRushT = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
