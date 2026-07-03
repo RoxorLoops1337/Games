@@ -53,6 +53,7 @@ const UPG_X0  = 245, UPG_STEP = 165, UPG_Y = 190;
 const GEM_X   = 225, GEM_Y0 = 480, GEM_STEP = 140;
 const MONU    = { x: 525, y: 315, r: 46 };     // New Kingdom monument (prestige)
 const KENNEL  = { x: 300, y: 872, r: 44 };     // war dog kennel
+const CAMP    = { x: 160, y: 330, r: 55 };     // lumber camp (logs pile up here)
 
 // ---- balance dials ------------------------------------------
 const PICK_R      = 78;
@@ -68,7 +69,7 @@ const FLOW_ACCEL  = 2.6;   // coin flow multiplies by this per second standing s
 const FLOW_CAP    = 600;   // max flow multiplier (~33k coins/s)
 const ECO         = 2.35;
 const HP_T        = 2.15;
-const UNLOCK0     = 220, UNLOCK_MUL = 2.65;
+const UNLOCK0     = 180, UNLOCK_MUL = 2.35; // tracks the economy so each land costs similar effort
 const OFFLINE_CAP = 4 * 3600;
 const TOWER_RANGE = 340, TOWER_RATE = 1.05;
 const TOWER_TRAIN = 0.35;  // +35% tower dmg per training level
@@ -83,13 +84,15 @@ const CROWN_MUL   = 22;
 const GOLD_CHANCE = 0.045;
 const BOSS_CD     = 45;
 const WARP_T      = 0.55;
+const CHOP_T       = 3.2;  // s per log chopped at the lumber camp
+const CAMP_MAX     = 24;   // logs the pile can hold
 const PRESTIGE_MIN = 5;    // lands required to found a New Kingdom
 const PREST_T      = 3;    // s holding still on the monument
 const CROWN_BONUS  = 0.20; // +20% coin value per crown, forever
 const DOG_SPD      = 250, DOG_FETCH_R = 320;
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
-function helmVal(k)  { return Math.ceil(4 * eco(k)); }
+function helmVal(k)  { return Math.ceil(5 * eco(k)); }
 function foeHp(k)    { return Math.ceil(13 * Math.pow(HP_T, k - 1)); }
 function foeDmg(k)   { return Math.ceil(4 * Math.pow(1.55, k - 1)); }
 function towerDmg(k) { return Math.ceil(9 * Math.pow(HP_T, k - 1)); }
@@ -137,14 +140,14 @@ function mkZone(k) {
     cost: Math.ceil(cost), paid: 0, lvl: 0, built: false, repeat: !!rep,
   });
   const plates = [
-    P('tower1', '🏹', 'ARCHER TOWER', 260, 265, 95 * eco(k)),
+    P('tower1', '🏹', 'ARCHER TOWER', 260, 265, 70 * eco(k)),
     P('gate2', '🚪', 'HORDE GATE', 640, 230, 110 * eco(k), { mul: 1.6, max: 4 }),
     P('towersUp', '🎯', 'TRAIN TOWERS', 525, 500, 130 * eco(k), { mul: 1.7, max: 6 }),
-    P('porter', '🧺', 'PORTER', 150, 380, 120 * eco(k)),
+    P('porter', '🧺', 'PORTER', 150, 380, 90 * eco(k)),
     P('porterPlus', '🧺', '+PORTER', 150, 620, 150 * eco(k), { mul: 1.9, max: 2 }),
   ];
   if (k === 1) {
-    plates.push(P('tower2', '🏹', 'ARCHER TOWER', 260, 735, 150 * eco(k)));
+    plates.push(P('tower2', '🏹', 'ARCHER TOWER', 260, 735, 120 * eco(k)));
   } else {
     const a = POOL[k % POOL.length], b = POOL[(k + 2) % POOL.length];
     plates.push(P(a.id, a.icon, a.name, 260, 735, 95 * eco(k) * a.mul));
@@ -196,6 +199,8 @@ function reset() {
     wayPlate: { cost: 400, paid: 0, built: false },
     dog: null,
     dogPlate: { cost: 500, paid: 0, built: false },
+    camp: null,              // {logs:[tier..], chopT}
+    campPlate: { cost: 350, paid: 0, built: false },
     crowns: 0, prestiges: 0, prestT: 0,
     ach: {}, toasts: [], achCd: 0,
     zones: [mkZone(1)],
@@ -255,6 +260,7 @@ function save() {
       forge: S.forge ? { queue: S.forge.queue, tray: S.forge.tray } : null,
       waygate: S.waygate,
       dog: S.dogPlate.built,
+      camp: S.camp ? { logs: S.camp.logs } : null,
       crowns: S.crowns, prestiges: S.prestiges,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
@@ -307,6 +313,7 @@ function load() {
   if (d.forge) { S.forgePlate.built = true; S.forge = { queue: d.forge.queue || [], tray: d.forge.tray || [], smeltT: 0 }; }
   if (d.waygate) { S.wayPlate.built = true; S.waygate = true; }
   if (d.dog) { S.dogPlate.built = true; spawnDog(); }
+  if (d.camp) { S.campPlate.built = true; S.camp = { logs: d.camp.logs || [], chopT: 0 }; }
   S.crowns = d.crowns || 0; S.prestiges = d.prestiges || 0;
   (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
@@ -357,6 +364,34 @@ function sfx(kind, importance) {
   o.start(t); o.stop(t + P[3] + 0.02);
 }
 function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+// ---- chiptune loop (scheduled a beat ahead of the clock) -----
+const MELODY = [0, 3, 5, 7, 10, 7, 5, 3, 0, 3, 7, 12, 10, 7, 5, 3]; // A-minor pentatonic
+const BASSLN = [-12, -12, -5, -7];
+const M_STEP = 0.21;
+let mNext = 0, mStep = 0;
+function mNote(freq, at, dur, type, vol) {
+  const ac = AC; if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.type = type;
+  o.frequency.setValueAtTime(freq, at);
+  g.gain.setValueAtTime(vol, at);
+  g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.start(at); o.stop(at + dur + 0.02);
+}
+function musicTick() {
+  if (muted || !AC || !S.started) return;
+  const now = AC.currentTime;
+  if (mNext < now - 1) mNext = now;   // resync after tab sleep / mute
+  while (mNext < now + 0.55) {
+    const i = mStep % 16, bar = Math.floor(mStep / 4) % 4;
+    mNote(220 * Math.pow(2, MELODY[i] / 12), mNext, M_STEP * 0.95, 'square', 0.026);
+    if (i % 4 === 0) mNote(110 * Math.pow(2, BASSLN[bar] / 12), mNext, M_STEP * 3.8, 'triangle', 0.05);
+    if (i % 2 === 1) mNote(2200 + (i * 37) % 500, mNext, 0.03, 'square', 0.007);
+    mNext += M_STEP; mStep++;
+  }
+}
 
 // ---- helpers ------------------------------------------------
 function fmt(n) {
@@ -423,7 +458,7 @@ function hurtEnemy(e, dmg) {
       float(e.x, e.y - 30, '💎', '#6ee0d8', true);
       sfx('gem', true);
     } else {
-      const drops = 1 + (rnd() < 0.35 ? 1 : 0);
+      const drops = 1 + (rnd() < 0.55 ? 1 : 0);
       for (let i = 0; i < drops; i++) dropHelmet(e.x, e.y, e.k);
       sfx('kill');
     }
@@ -440,7 +475,7 @@ function hurtPlayer(d) {
 function playerDie() {
   const p = S.player;
   p.deaths++;
-  for (const e of p.helmets) dropItem(p.x, p.y, e.crown ? { k: e.k, crown: true } : e.bar ? { k: e.k, bar: true } : { k: e.k });
+  for (const e of p.helmets) dropItem(p.x, p.y, { k: e.k, crown: !!e.crown, bar: !!e.bar, log: !!e.log });
   p.helmets = [];
   p.hp = p.maxHp; p.invuln = 2.5;
   p.x = SPAWN.x; p.y = SPAWN.y;
@@ -664,7 +699,7 @@ function tick(dt) {
       float(p.x, p.y - 50, '💎 +1', '#6ee0d8', true); sfx('gem', true);
     } else if (p.helmets.length < cap()) {
       it.dead = true;
-      p.helmets.push({ k: it.k, bar: !!it.bar, crown: !!it.crown });
+      p.helmets.push({ k: it.k, bar: !!it.bar, crown: !!it.crown, log: !!it.log });
       sfx('pick');
       if (p.helmets.length >= cap()) float(p.x, p.y - 60, 'FULL! Go sell →', '#ffd94a', true);
     }
@@ -771,6 +806,29 @@ function tick(dt) {
     pourHub(S.wayPlate, dt, () => { S.waygate = true; float(HUBPAD.x, HUBPAD.y - 50, 'WAYGATE OPEN! Stand still on it to warp', '#6ec9e0', true); });
   if (!S.dogPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, KENNEL.x, KENNEL.y) < 56 * 56)
     pourHub(S.dogPlate, dt, () => { spawnDog(); float(KENNEL.x, KENNEL.y - 50, '🐕 WAR DOG! He fetches drops for you', '#6ecb5a', true); });
+  if (!S.campPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, CAMP.x, CAMP.y) < 56 * 56)
+    pourHub(S.campPlate, dt, () => { S.camp = { logs: [], chopT: 0 }; float(CAMP.x, CAMP.y - 50, '🪵 LUMBER CAMP! Logs pile up on their own', '#6ecb5a', true); });
+
+  // -- lumber camp: woodcutter chops, logs pile, player hauls them
+  if (S.camp) {
+    if (S.camp.logs.length < CAMP_MAX) {
+      S.camp.chopT += dt;
+      if (S.camp.chopT >= CHOP_T) {
+        S.camp.chopT = 0;
+        S.camp.logs.push(S.zones.length); // log value tracks your frontier
+        puff(CAMP.x - 30, CAMP.y - 20, '#8a5c30', 4, true);
+        sfx('smelt');
+      }
+    }
+    if (S.camp.logs.length && p.helmets.length < cap() && dist2(p.x, p.y, CAMP.x, CAMP.y) < CAMP.r * CAMP.r) {
+      p.campAcc = (p.campAcc || 0) + dt * SELL_RATE;
+      while (p.campAcc >= 1 && S.camp.logs.length && p.helmets.length < cap()) {
+        p.campAcc -= 1;
+        p.helmets.push({ k: S.camp.logs.pop(), log: true });
+        sfx('pick');
+      }
+    } else p.campAcc = 0;
+  }
 
   // -- war dog
   dogTick(dt);
@@ -983,30 +1041,22 @@ function warpPads() {
 function guideTarget() {
   const p = S.player;
   if (p.helmets.length >= cap()) return { x: SELL.x, y: SELL.y, label: 'SELL' };
-  if (S.pallet >= 25) return { x: PALLET.x, y: PALLET.y, label: 'COINS' };
+  // only interrupt for the pallet when it holds real money relative to the wallet
+  if (S.pallet >= Math.max(60, S.wallet * 0.5)) return { x: PALLET.x, y: PALLET.y, label: 'COINS' };
   let gy = GEM_Y0;
   for (const key in GEMU) {
     if (S.gems >= gemUpCost(key, S.gemUp[key]) - S.gemPaid[key]) return { x: GEM_X, y: gy, label: '💎 ' + GEMU[key].name };
     gy += GEM_STEP;
   }
-  let best = null, bc = 1e18;
-  let ux = UPG_X0;
-  for (const key in UPG) {
-    const c = upgCost(key, S.up[key]) - S.upPaid[key];
-    if (S.wallet >= c * 0.6 && c < bc) { bc = c; best = { x: ux, y: UPG_Y, label: UPG[key].name }; }
-    ux += UPG_STEP;
+  // progression ladder on the frontier land: get the tower up, hire the
+  // porter, then push to NEW LANDS. Everything else is discretionary —
+  // the arrow always shows the road forward, even while you save up.
+  const fz = S.zones[S.zones.length - 1];
+  for (const id of ['tower1', 'porter', 'unlock']) {
+    const pl = fz.plates.find(q => q.id === id);
+    if (pl && !pl.built) return { x: pl.x, y: pl.y, label: pl.name };
   }
-  if (!S.forgePlate.built && S.wallet >= (S.forgePlate.cost - S.forgePlate.paid) * 0.6 && S.forgePlate.cost - S.forgePlate.paid < bc) { bc = S.forgePlate.cost - S.forgePlate.paid; best = { x: FORGE.x, y: FORGE.y, label: 'FORGE' }; }
-  if (!S.wayPlate.built && S.zones.length >= 2 && S.wallet >= (S.wayPlate.cost - S.wayPlate.paid) * 0.6 && S.wayPlate.cost - S.wayPlate.paid < bc) { bc = S.wayPlate.cost - S.wayPlate.paid; best = { x: HUBPAD.x, y: HUBPAD.y, label: 'WAYGATE' }; }
-  for (const z of S.zones) for (const pl of z.plates) {
-    if (pl.built) continue;
-    if (pl.id === 'unlock' && z.k < S.zones.length) continue;
-    const c = pl.cost - pl.paid;
-    if (S.wallet >= c * 0.6 && c < bc) { bc = c; best = { x: pl.x, y: pl.y, label: pl.name }; }
-  }
-  if (best) return best;
-  const z = S.zones[S.zones.length - 1];
-  return { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2, label: 'FIGHT' };
+  return { x: (fz.x0 + fz.x1) / 2, y: (fz.y0 + fz.y1) / 2, label: 'FIGHT' };
 }
 
 // ---- drawing ------------------------------------------------
@@ -1059,8 +1109,16 @@ function drawGemIcon(x, y, s) {
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.beginPath(); ctx.moveTo(x, y - 7 * s); ctx.lineTo(x + 3 * s, y - 2.5 * s); ctx.lineTo(x - 3 * s, y - 2.5 * s); ctx.closePath(); ctx.fill();
 }
+function drawLogIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#8a5c30'; rr(x - 10 * s, y - 4 * s, 20 * s, 8 * s, 3 * s); ctx.fill();
+  ctx.fillStyle = '#c9a06a';
+  ctx.beginPath(); ctx.ellipse(x + 10 * s, y, 3 * s, 4 * s, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#8a5c30';
+  ctx.beginPath(); ctx.arc(x + 10 * s, y, 1.5 * s, 0, 6.29); ctx.fill();
+}
 function drawStackEntry(e, x, y, s) {
-  if (e.crown) drawCrownIcon(x, y, s); else if (e.bar) drawBarIcon(x, y, s); else drawHelmetIcon(x, y, e.k, s);
+  if (e.crown) drawCrownIcon(x, y, s); else if (e.bar) drawBarIcon(x, y, s); else if (e.log) drawLogIcon(x, y, s); else drawHelmetIcon(x, y, e.k, s);
 }
 function drawTree(x, y, s) {
   s = s || 1;
@@ -1313,6 +1371,36 @@ function drawStands() {
       ctx.fillText('👑 unlocks at ' + PRESTIGE_MIN + ' lands', MONU.x, MONU.y + 48);
     }
   }
+  // lumber camp
+  if (S.campPlate.built) {
+    shadow(CAMP.x, CAMP.y + 28, 44);
+    // stump + chopping woodcutter
+    ctx.fillStyle = '#6a4520'; ctx.beginPath(); ctx.ellipse(CAMP.x - 30, CAMP.y - 14, 12, 8, 0, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#c9a06a'; ctx.beginPath(); ctx.ellipse(CAMP.x - 30, CAMP.y - 18, 10, 6, 0, 0, 6.29); ctx.fill();
+    const chop = Math.abs(Math.sin(S.t * 2.2));
+    ctx.fillStyle = '#8a9a4a'; rr(CAMP.x - 52, CAMP.y - 34, 14, 18, 4); ctx.fill();
+    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(CAMP.x - 45, CAMP.y - 40, 6, 0, 6.29); ctx.fill();
+    ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(CAMP.x - 42, CAMP.y - 32);
+    ctx.lineTo(CAMP.x - 30 + chop * 6, CAMP.y - 44 + chop * 22); ctx.stroke();
+    // the log pile — stacked rows like the coin mountain
+    const n = S.camp.logs.length;
+    for (let i = 0; i < n; i++) {
+      const row = Math.floor(i / 6), col = i % 6;
+      drawLogIcon(CAMP.x + 2 + col * 13 - row * 6, CAMP.y + 6 - row * 9, 0.95);
+    }
+    ctx.strokeStyle = 'rgba(201,160,106,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(CAMP.x, CAMP.y, CAMP.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#c9a06a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('🪵 ' + n + '/' + CAMP_MAX + '  (worth ' + fmt(Math.ceil(helmVal(S.zones.length) * coinMul())) + '¢ each)', CAMP.x, CAMP.y + 42);
+  } else if (S.zones.length >= 2) {
+    plateCircle(CAMP.x, CAMP.y, 48, '#c9a06a', S.campPlate.paid, S.campPlate.cost, 'rgba(201,160,106,0.35)');
+    ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.fillText('🪵', CAMP.x, CAMP.y - 2);
+    ctx.font = 'bold 11px sans-serif'; ctx.fillText('LUMBER CAMP', CAMP.x, CAMP.y + 18);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(fmt(S.campPlate.cost - S.campPlate.paid) + ' ¢', CAMP.x, CAMP.y + 70);
+  }
   // war dog kennel
   if (S.dogPlate.built) {
     shadow(KENNEL.x, KENNEL.y + 20, 34);
@@ -1514,6 +1602,7 @@ function drawWorld() {
     if (it.gem) drawGemIcon(it.x, it.y + wob, 1.1);
     else if (it.crown) drawCrownIcon(it.x, it.y + wob, 1);
     else if (it.bar) drawBarIcon(it.x, it.y + wob, 0.9);
+    else if (it.log) drawLogIcon(it.x, it.y + wob, 0.9);
     else drawHelmetIcon(it.x, it.y + wob, it.k, 0.9);
   }
   const actors = [];
@@ -1615,6 +1704,7 @@ function drawHud() {
     muted = !muted;
     try { localStorage.setItem('ks_idle_muted', muted ? '1' : '0'); } catch (e) {}
   });
+  drawMinimap();
   if (S.offlineMsg > 0 && S.offlineAmt > 0) {
     ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(vw / 2 - 150, 14, 300, 44, 10); ctx.fill();
     ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
@@ -1663,6 +1753,41 @@ function drawHud() {
     ctx.fillText('▶ TAP TO PLAY', 0, 7);
     ctx.restore();
   }
+}
+function drawMinimap() {
+  // tiny map of the land grid in the top-right corner
+  const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
+  const nxt = cellFor(S.zones.length + 1);
+  let minC = 0, maxC = 0, minR = 0, maxR = 0;
+  for (const c of cells.concat([nxt])) {
+    if (c.cx < minC) minC = c.cx; if (c.cx > maxC) maxC = c.cx;
+    if (c.cy < minR) minR = c.cy; if (c.cy > maxR) maxR = c.cy;
+  }
+  const cols = maxC - minC + 1, rows = maxR - minR + 1;
+  const size = 108, pad = 3;
+  const cs = Math.min(22, Math.floor((size - pad * 2) / Math.max(cols, rows)));
+  const w = cols * cs + pad * 2, h = rows * cs + pad * 2;
+  const ox = vw - 10 - w, oy = 48;
+  ctx.fillStyle = 'rgba(20,25,36,0.75)'; rr(ox, oy, w, h, 8); ctx.fill();
+  const cellXY = (cx2, cy2) => ({ x: ox + pad + (cx2 - minC) * cs, y: oy + pad + (cy2 - minR) * cs });
+  for (const c of cells) {
+    const q = cellXY(c.cx, c.cy);
+    ctx.fillStyle = c.k === 0 ? '#d9c9a0' : foeCol(c.k);
+    ctx.globalAlpha = c.k === 0 ? 0.95 : 0.8;
+    rr(q.x + 1, q.y + 1, cs - 2, cs - 2, 3); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  const nq = cellXY(nxt.cx, nxt.cy);
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+  rr(nq.x + 1, nq.y + 1, cs - 2, cs - 2, 3); ctx.stroke(); ctx.setLineDash([]);
+  // player dot
+  const pcx = Math.floor(S.player.x / CELL_W + (S.player.x < 0 ? -1e-9 : 0));
+  const pcy = Math.floor(S.player.y / CELL_H + (S.player.y < 0 ? -1e-9 : 0));
+  const pq = cellXY(pcx, pcy);
+  const fx = (S.player.x - pcx * CELL_W) / CELL_W, fy = (S.player.y - pcy * CELL_H) / CELL_H;
+  const pulse = 2.4 + Math.sin(S.t * 6) * 0.7;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(pq.x + 1 + fx * (cs - 2), pq.y + 1 + fy * (cs - 2), pulse, 0, 6.29); ctx.fill();
 }
 function draw() {
   hits = [];
@@ -1749,6 +1874,7 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
   lastT = t;
   tick(dt);
+  musicTick();
   draw();
   requestAnimationFrame(frame);
 }
@@ -1760,8 +1886,8 @@ window.KS = {
   spawnEnemy, summonBoss, hurtEnemy, hurtPlayer, playerDie, buildPlate, applyPlate, mkZone, dropHelmet, dropItem,
   cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
-  prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP },
+  prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap,
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX },
   start() { S.started = true; },
 };
 </script>
