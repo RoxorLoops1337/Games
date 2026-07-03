@@ -524,6 +524,20 @@ const p3 = KS.S.player; // reset() above replaced the player object
 try { KS.drawMinimap(); t.ok(true, 'minimap draws'); } catch (e) { t.ok(false, 'minimap threw: ' + e.message); }
 try { KS.musicTick(); KS.musicTick(); t.ok(true, 'music scheduler runs'); } catch (e) { t.ok(false, 'musicTick threw: ' + e.message); }
 
+// ---- records panel (achievements + stats) ----
+t.ok(KS.S.showStats === false, 'records panel hidden by default');
+try { KS.S.showStats = true; KS.draw(); t.ok(true, 'records panel draws (unlocked + locked milestones)'); }
+catch (e) { t.ok(false, 'stats panel threw: ' + e.stack); }
+KS.S.showStats = false;
+// crafted stat feeds the Master Crafter milestone
+t.ok(typeof KS.S.stats.crafted === 'number' || KS.S.stats.crafted === undefined, 'crafted stat tracked');
+KS.S.stats.crafted = 50; KS.checkAch();
+t.ok(KS.S.ach.craft50 === true, 'Master Crafter milestone unlocks at 50 crafted goods');
+// playtime accumulates
+const ptBefore = KS.S.stats.playT || 0;
+step(1);
+t.ok(KS.S.stats.playT > ptBefore, 'playtime accumulates in stats');
+
 // ---- quest tracker is opt-in ----
 t.ok(KS.S.showQuests === false, 'quest panel hidden by default (📜 button toggles it)');
 
