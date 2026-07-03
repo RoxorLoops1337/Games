@@ -130,7 +130,7 @@ t.ok(HL.unlockedTracks().length >= C.SETLIST_LEN[0], 'the bedroom starts with en
 const bedTracks = HL.unlockedTracks().length;
 HL.S.bestVenue = 5;
 t.ok(HL.unlockedTracks().length > bedTracks, 'higher-energy tracks unlock at bigger venues');
-t.ok(HL.unlockedTracks().length === C.TRACKS.length, 'the festival unlocks the whole crate');
+t.ok(HL.unlockedTracks().length === C.TRACKS.filter(tk => !tk.rare).length, 'the festival unlocks every era-gated track (rares still need digging)');
 HL.S.bestVenue = 0;
 
 // ---- energy curve: the crowd wants a build with a late peak ----
@@ -262,9 +262,9 @@ t.ok(hotPay >= coldPay * 1.9, 'a fully hyped crowd ~doubles the payout vs a dead
 
 // ---- combined multiplier: hype × pacing × mixing all stack ----
 HL.bookGig([3, 1]); const gM = HL.S.gig; quiet(gM);
-gM.hype = 1; gM.energy = 1; gM.transScores = [1, 1];
+gM.hype = 1; gM.energy = 1; gM.transScores = [1, 1]; gM.vibe = 1;
 const mm = HL.gigMul(gM);
-t.ok(Math.abs(mm - (1 + 1) * (1 + C.ENERGY_MAX) * (1 + C.TRANS_MAX)) < 1e-9, 'a flawless set stacks hype, pacing and mixing into one big multiplier');
+t.ok(Math.abs(mm - (1 + 1) * (1 + C.ENERGY_MAX) * (1 + C.TRANS_MAX) * (1 + C.VIBE_MAX)) < 1e-9, 'a flawless set stacks hype, pacing, mixing and vibe into one big multiplier');
 HL.S.gig = null;
 
 // ---- missed drop expires AND kills the streak ----
@@ -320,6 +320,104 @@ step(0.3 + C.REQ_WIN);
 t.ok(!gr3.req && gr3.reqDone, 'ignored requests just expire');
 t.ok(HL.S.stats.requests === 2, 'answered requests counted');
 HL.S.gig = null;
+
+// ---- genres & the vibe: read the room ----
+t.ok(C.TRACKS.every(tk => C.GENRES[tk.genre]), 'every track is tagged with a genre');
+t.ok(C.ARCHETYPES.length === C.VENUES.length, 'every venue has a crowd archetype');
+t.ok(HL.archetype(4).fav === 'techno' && HL.archetype(4).commercial < 0, 'the warehouse is techno purists who hate commercial');
+t.ok(HL.vibeScore([10, 12, 14, 16], 4) === 1, 'an all-techno set reads the warehouse perfectly');
+t.ok(Math.abs(HL.vibeMul([10, 12, 14, 16], 4) - (1 + C.VIBE_MAX)) < 1e-9, 'a perfect vibe caps at +' + Math.round(C.VIBE_MAX * 100) + '%');
+t.ok(HL.vibeScore([5], 4) === 0, 'an off-genre set reads the room at 0%');
+HL.S.bestVenue = 5;
+t.ok(HL.vibeScore(HL.autoSetlist(4), 4) > 0.3, 'the auto-setlist leans into what the room wants');
+HL.S.bestVenue = 0;
+
+// ---- vibe stacks into the gig multiplier ----
+HL.S.fans = 1.6e6; HL.tick(1 / 60);           // warehouse
+HL.bookGig([14, 16, 10, 12]);                  // all techno
+const gV = HL.S.gig; quiet(gV);
+t.ok(gV.vibe === 1, 'the gig records a perfect vibe');
+gV.hype = 0; gV.energy = 0; gV.transScores = [];
+t.ok(Math.abs(HL.gigMul(gV) - (1 + C.VIBE_MAX)) < 1e-9, 'reading the room multiplies the payout on its own');
+HL.S.gig = null; HL.S.fans = 0; HL.S.bestVenue = 0;
+
+// ---- crowd archetypes reshape the requests ----
+HL.S.fans = 1.6e6; HL.tick(1 / 60);           // warehouse purists
+HL.bookGig(HL.autoSetlist(4));
+const gP = HL.S.gig; quiet(gP);
+gP.req = { txt: 'x', t: C.REQ_WIN }; gP.reqDone = false; gP.hype = 0.5;
+const cashP = HL.S.cash;
+HL.chooseReq(true);                            // cave to the hit in front of purists
+t.ok(HL.S.cash > cashP && gP.hype < 0.5, 'purists pay for the hit but the room cools');
+HL.S.gig = null;
+HL.bookGig(HL.autoSetlist(4));
+const gP2 = HL.S.gig; quiet(gP2);
+gP2.req = { txt: 'x', t: C.REQ_WIN }; gP2.reqDone = false; gP2.hype = 0.5;
+HL.chooseReq(false);                           // stay underground
+t.ok(gP2.hype > 0.5, 'staying true to the sound heats the purists up');
+HL.S.gig = null; HL.S.fans = 0; HL.S.bestVenue = 0;
+
+// ---- crate digging: spend cash to unlock rare records ----
+const rares = C.TRACKS.filter(tk => tk.rare).length;
+t.ok(rares >= 6, 'there is a stash of rare records to dig for');
+t.ok(HL.digPool().length === rares && HL.S.dug.length === 0, 'you start with none of them');
+HL.S.cash = 0;
+t.ok(HL.dig() === -1, 'cannot dig while broke');
+const digCost0 = HL.digCost();
+HL.S.cash = digCost0 + 5;
+const unlockedBefore = HL.unlockedTracks().length;
+const dugId = HL.dig();
+t.ok(dugId >= 0 && C.TRACKS[dugId].rare, 'digging turns up a rare record');
+t.ok(HL.S.cash === 5 && HL.S.stats.digs === 1, 'digging costs cash and is counted');
+t.ok(HL.unlockedTracks().length === unlockedBefore + 1 && HL.owned(dugId), 'the rare joins your crate');
+t.ok(HL.digCost() > digCost0, 'each dig costs more than the last');
+t.ok(HL.digPool().length === rares - 1, 'the dig pool shrinks');
+
+// ---- the encore: leave the crowd hot and they demand one more ----
+HL.S.fans = 61e3; HL.tick(1 / 60);            // club
+HL.bookGig([10, 11, 12, 13]);
+const gE = HL.S.gig; quiet(gE);
+gE.hype = 0.9; gE.t = gE.dur - 0.01;
+step(0.1);
+t.ok(HL.S.gig && HL.S.gig.encore, 'a red-hot set triggers an encore instead of ending');
+const cashE = HL.S.cash;
+t.ok(HL.hitEncore() === true, 'smashing the encore closes the gig');
+t.ok(HL.S.gig === null && HL.S.stats.encores === 1 && HL.S.cash > cashE, 'the encore pays a jackpot on top');
+// a cold set just ends — no encore
+HL.bookGig([10, 11, 12, 13]);
+const gE2 = HL.S.gig; quiet(gE2);
+gE2.hype = 0.1; gE2.t = gE2.dur - 0.01;
+step(0.1);
+t.ok(HL.S.gig === null, 'a lukewarm set ends with no encore');
+// an ignored encore still pays a bonus and finishes
+HL.bookGig([10, 11, 12, 13]);
+const gE3 = HL.S.gig; quiet(gE3);
+gE3.hype = 0.95; gE3.t = gE3.dur - 0.01;
+step(0.1);
+t.ok(!!HL.S.gig.encore, 'the encore opens');
+step(C.ENCORE_WIN + 0.2);
+t.ok(HL.S.gig === null, 'an unclaimed encore times out and the gig finishes');
+HL.S.gig = null; HL.S.fans = 0; HL.S.bestVenue = 0;
+
+// ---- setlist modal: opens, closes, and can be edited mid-gig without booking ----
+t.ok(HL.openSetlist() === true && HL.S.setlistOpen, 'the setlist modal opens');
+HL.closeSetlist();
+t.ok(HL.S.setlistOpen === false, 'and closes on demand');
+HL.bookGig([3, 1]); // now in a gig
+HL.openSetlist();
+HL.S.pendingSet = [1, 3];
+t.ok(HL.playSet() === true && HL.S.setlistOpen === false, 'editing mid-gig saves without a crash');
+t.ok(HL.S.lastSet.join(',') === '1,3' && HL.S.gig, 'mid-gig edits just update the next set, the current gig plays on');
+HL.S.gig = null;
+
+// ---- the agent will not yank the setlist away while you are building it ----
+HL.S.agent = true; HL.S.rebookT = 0; HL.S.setlistOpen = true;
+step(C.REBOOK_T + 1);
+t.ok(HL.S.gig === null, 'no auto-booking while the setlist modal is open');
+HL.closeSetlist();
+step(C.REBOOK_T + 0.2);
+t.ok(!!HL.S.gig, 'the agent resumes booking once the modal is closed');
+HL.S.gig = null; HL.S.agent = false;
 HL.S.fans = 0; HL.S.bestVenue = 0;
 
 // ---- golden vinyl: the viral moment ----
@@ -401,6 +499,8 @@ rSafe('render() after prestige');
 HL.S.fans = 777; HL.S.cash = 555; HL.S.lifeFans = 8888;
 HL.S.items[1] = 3; HL.S.agent = true; HL.S.bestVenue = 2; HL.S.dropStreak = 4;
 HL.S.lastSet = [7, 8, 9];
+HL.S.dug = [20, 22]; // a couple of rare crate finds (prestige earlier wiped the live dig)
+const dugSnapshot = HL.S.dug.slice();
 HL.save();
 t.ok(!!store[C.SAVE_KEY], 'save written');
 HL.reset();
@@ -412,6 +512,7 @@ t.ok(HL.S.influence === 10 && HL.S.prestiges === 1, 'influence + prestige count 
 t.ok(HL.S.bestVenue === 2, 'venue progress restored');
 t.ok(HL.S.dropStreak === 4, 'drop streak survives save/load');
 t.ok(Array.isArray(HL.S.lastSet) && HL.S.lastSet.join(',') === '7,8,9', 'remembered setlist survives save/load');
+t.ok(HL.S.dug.join(',') === dugSnapshot.join(',') && HL.S.dug.length > 0, 'the dug-up rare crate survives save/load');
 
 // ---- offline earnings ----
 let d = JSON.parse(store[C.SAVE_KEY]);
@@ -452,7 +553,9 @@ for (let i = 0; i < 90 * 60; i++) {
     if (gg.riser && !gg.riser.done) { if (gg.riser.charge < 0.9) HL.holdRiser(true); else HL.holdRiser(false); }
     if (gg.drop) HL.dropHit();
     if (gg.req) HL.chooseReq(i % 2 === 0);
+    if (gg.encore) HL.hitEncore();
   } else if (!HL.S.agent && i % 120 === 0) { HL.openSetlist(); HL.playSet(); }
+  if (i === 30) { HL.S.cash += 1e5; HL.dig(); } // a crate dig mid-marathon
   if (i % 30 === 0) HL.render();
   if (i % 40 === 0) HL.tap();
 }
