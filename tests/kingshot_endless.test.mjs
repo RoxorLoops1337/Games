@@ -414,11 +414,41 @@ KS.dropHelmet(p2.x + 200, p2.y, 1); // outside the pickup magnet
 step(4);
 t.ok(p2.helmets.length === 1, 'dog fetched the far helmet into the stack');
 
+// ---- lumber camp: passive second resource with a visible pile ----
+KS.S.wallet = KS.S.campPlate.cost + 100;
+p2.x = C.CAMP.x; p2.y = C.CAMP.y;
+step(KS.S.campPlate.cost / C.BUILD_RATE + 1);
+t.ok(KS.S.campPlate.built && !!KS.S.camp, 'lumber camp built');
+KS.S.enemies.length = 0; KS.S.items.length = 0; freezeSpawns();
+p2.helmets = [];
+p2.x = C.SPAWN.x; p2.y = C.SPAWN.y;
+KS.S.camp.logs.length = 0; KS.S.camp.chopT = 0;
+step(C.CHOP_T * 3 + 0.5);
+t.ok(KS.S.camp.logs.length === 3, 'woodcutter chopped logs onto the pile');
+t.ok(KS.S.camp.logs[0] === KS.S.zones.length, 'log tier tracks unlocked lands');
+p2.x = C.CAMP.x; p2.y = C.CAMP.y;
+step(1.5);
+t.ok(p2.helmets.length === 3 && p2.helmets.every(e => e.log), 'logs hauled onto the back stack');
+const palL = KS.S.pallet;
+p2.x = C.SELL.x; p2.y = C.SELL.y;
+step(1.5);
+t.ok(KS.S.pallet > palL, 'logs sell for coins');
+// camp state persists
+KS.S.camp.logs = [1, 1];
+KS.save(); KS.reset(); KS.load();
+t.ok(!!KS.S.camp && KS.S.camp.logs.length === 2, 'camp + log pile survive save/load');
+KS.start();
+const p3 = KS.S.player; // reset() above replaced the player object
+
+// ---- minimap + music are draw/schedule-safe headless ----
+try { KS.drawMinimap(); t.ok(true, 'minimap draws'); } catch (e) { t.ok(false, 'minimap threw: ' + e.message); }
+try { KS.musicTick(); KS.musicTick(); t.ok(true, 'music scheduler runs'); } catch (e) { t.ok(false, 'musicTick threw: ' + e.message); }
+
 // ---- prestige: New Kingdom ----
 while (KS.S.zones.length < C.PRESTIGE_MIN) KS.S.zones.push(KS.mkZone(KS.S.zones.length + 1));
 KS.S.gems = 7; KS.S.wallet = 999;
 const gain = KS.crownsToGain();
-p2.x = C.MONU.x; p2.y = C.MONU.y; // stand still on the monument
+p3.x = C.MONU.x; p3.y = C.MONU.y; // stand still on the monument
 step(C.PREST_T + 1);
 t.ok(KS.S.crowns === gain && KS.S.prestiges === 1, 'holding the monument founds a New Kingdom');
 t.ok(KS.S.zones.length === 1 && KS.S.wallet === 0, 'prestige resets lands and coins');
