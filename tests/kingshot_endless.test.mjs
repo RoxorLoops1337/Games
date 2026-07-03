@@ -254,6 +254,34 @@ p.x = C.SELL.x; p.y = C.SELL.y;
 step(1.5);
 t.ok(KS.S.pallet === palB + 3 * KS.helmVal(1) * C.BAR_MUL, 'selling bars pays triple');
 
+// ---- smelter ONLY accepts shields (helmets), not other resources ----
+p.helmets = []; KS.S.forge.queue.length = 0; KS.S.forge.tray.length = 0; KS.S.forge.smeltT = 0;
+p.helmets = [{ k: 2, log: true }, { k: 2, stone: true }, { k: 2, res: 'wheat' }, { k: 2, plank: true }, { k: 2, bar: true }];
+p.x = C.FORGE.x; p.y = C.FORGE.y;
+step(2);
+t.ok(KS.S.forge.queue.length === 0, 'smelter refuses logs/stones/produce/planks/bars — no free gold bars');
+t.ok(p.helmets.length === 5, 'those materials stay on your back');
+p.helmets = [];
+
+// ---- metal tiers: which shield you smelt decides the metal ----
+t.ok(KS.metal(1).name === 'copper' && KS.metal(4).name === 'gold' && KS.metal(8).name === 'uranium', 'tiers map to named metals (copper→…→uranium)');
+t.ok(KS.metal(3).col !== KS.metal(4).col, 'different tiers smelt to different-colored bars (purple shields → their own bar)');
+t.ok(KS.metal(9).name.startsWith('copper'), 'metals cycle with a tier suffix past uranium');
+t.ok(KS.entryVal({ k: 6, bar: true }) > KS.entryVal({ k: 2, bar: true }), 'a higher-tier metal bar is worth more');
+p.x = C.SPAWN.x; p.y = C.SPAWN.y;
+
+// ---- porters route shields into the smelter (x3) instead of selling raw ----
+KS.S.forge.queue.length = 0; KS.S.forge.tray.length = 0;
+const pz = KS.S.zones[0];
+if (!pz.porters.length) KS.applyPlate(pz, pz.plates.find(q => q.id === 'porter'));
+const po = pz.porters[0];
+po.state = 'sell'; po.carry = [{ k: 1 }, { k: 1 }, { k: 2, crown: true }]; // 2 shields + 1 crown
+const palPo = KS.S.pallet;
+step(20);
+t.ok(KS.S.forge.queue.length + KS.S.forge.tray.length >= 2, 'porter fed its shields into the smelter');
+t.ok(KS.S.pallet > palPo, 'porter still sold the non-shield loot (the crown) at the stand');
+KS.S.forge.queue.length = 0; KS.S.forge.tray.length = 0;
+
 // ---- wizard tower: chain lightning ----
 KS.S.enemies.length = 0; KS.S.shots.length = 0; freezeSpawns();
 p.x = C.SPAWN.x; p.y = C.SPAWN.y;
