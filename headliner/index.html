@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#131019">
+<title>Headliner — DJ Idle Tycoon</title>
+<style>
+  :root{
+    --bg:#131019; --panel:#1C1826; --panel2:#242031; --line:#332D45;
+    --ink:#F2EEE6; --dim:#A79FB8; --faint:#6E667F;
+    --ac:#9A93AC; --ac-ink:#0E0C14;
+    --green:#5ED98A; --amber:#FFB454; --magenta:#FF4D8F; --violet:#A78BFF;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  body[data-era="0"]{--ac:#9A93AC}
+  body[data-era="1"]{--ac:#E8C36B}
+  body[data-era="2"]{--ac:#FFB454}
+  body[data-era="3"]{--ac:#FF4D8F}
+  body[data-era="4"]{--ac:#A78BFF}
+  body[data-era="5"]{--ac:#5ED98A}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    touch-action:manipulation; user-select:none;-webkit-user-select:none;
+    min-height:100vh;
+    transition:--ac .4s;
+  }
+  #app{max-width:520px;margin:0 auto;padding:10px 12px 90px}
+
+  /* top bar */
+  #top{display:flex;align-items:center;gap:8px;padding:6px 2px 10px}
+  #alias{font-weight:800;font-size:18px;letter-spacing:-.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{
+    font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:99px;
+    background:var(--panel);border:1px solid var(--line);color:var(--dim);white-space:nowrap;
+  }
+  .chip b{color:var(--violet)}
+  #mute{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;font-size:15px;padding:4px 9px}
+
+  /* counters */
+  #counters{display:grid;grid-template-columns:1.3fr 1fr;gap:8px;margin-bottom:8px}
+  .counter{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  .counter .k{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--faint);text-transform:uppercase}
+  .counter .v{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2}
+  .counter .r{font-family:var(--mono);font-size:11px;color:var(--ac)}
+  #cashV{color:var(--green)}
+
+  /* offline banner */
+  #offline{
+    display:none;background:linear-gradient(100deg,#241E36,var(--panel));border:1px solid var(--violet);
+    border-radius:12px;padding:10px 14px;margin-bottom:8px;font-size:13px;color:var(--dim);
+  }
+  #offline b{color:var(--ink)}
+  #offline .x{float:right;color:var(--violet);font-weight:700;padding:0 4px}
+
+  /* venue / gig card */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+  .card h2{
+    margin:0 0 8px;font-family:var(--mono);font-size:10px;font-weight:600;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--faint);
+  }
+  #venueName{font-size:20px;font-weight:800;margin:0 0 2px;color:var(--ac)}
+  #venueCap{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:10px}
+  .bar{height:10px;border-radius:99px;background:var(--panel2);overflow:hidden;position:relative}
+  .bar i{display:block;height:100%;width:0%;background:var(--ac);border-radius:99px;transition:width .2s linear}
+  #nextLbl{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:6px;font-variant-numeric:tabular-nums}
+
+  #gigZone{margin-top:12px}
+  button{font-family:inherit;cursor:pointer}
+  .big{
+    width:100%;border:0;border-radius:10px;padding:13px;font-size:15px;font-weight:800;
+    letter-spacing:.04em;background:var(--ac);color:var(--ac-ink);
+  }
+  .big:disabled{opacity:.45}
+  #gigRun{display:none}
+  #gigTrack{font-size:13px;color:var(--dim);margin-bottom:6px}
+  #gigTrack b{color:var(--ink)}
+  #gigPayLbl{font-family:var(--mono);font-size:11px;color:var(--green);margin-top:6px;font-variant-numeric:tabular-nums}
+  #dropBtn{
+    display:none;width:100%;margin-top:8px;border:0;border-radius:10px;padding:14px;
+    font-size:16px;font-weight:900;letter-spacing:.1em;
+    background:var(--magenta);color:#16000A;
+    animation:pulse .5s ease-in-out infinite alternate;
+  }
+  @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.03)}}
+
+  /* tap pad */
+  #padWrap{display:flex;flex-direction:column;align-items:center;padding:16px 14px}
+  #pad{
+    width:150px;height:150px;border-radius:50%;border:0;position:relative;
+    background:
+      radial-gradient(circle at 50% 50%, var(--ac) 0 14%, #0C0A12 15% 17%,
+        #211D2C 18% 44%, #1A1622 45% 47%, #211D2C 48% 74%, #14111C 75% 100%);
+    box-shadow:0 0 0 4px var(--panel2), 0 8px 30px -8px color-mix(in srgb,var(--ac) 45%,transparent);
+  }
+  #pad:active{transform:scale(.97)}
+  #pad.spin{animation:spin 1.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #tapLbl{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--dim);margin-top:10px;text-transform:uppercase}
+  #tapLbl b{color:var(--ac)}
+  .float{
+    position:fixed;font-family:var(--mono);font-weight:700;font-size:14px;color:var(--ac);
+    pointer-events:none;animation:rise .8s ease-out forwards;z-index:50;
+  }
+  @keyframes rise{to{transform:translateY(-46px);opacity:0}}
+
+  /* shop rows */
+  .row{
+    display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);
+  }
+  .row:last-child{border-bottom:none}
+  .row .ic{font-size:22px;width:30px;text-align:center}
+  .row .mid{flex:1;min-width:0}
+  .row .nm{font-size:14px;font-weight:700}
+  .row .nm small{font-family:var(--mono);font-weight:400;color:var(--faint);font-size:11px;margin-left:6px}
+  .row .sub{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .buy{
+    border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    border-radius:8px;padding:7px 10px;font-family:var(--mono);font-size:12px;min-width:78px;
+    font-variant-numeric:tabular-nums;
+  }
+  .buy.can{background:var(--green);color:#08130B;border-color:var(--green);font-weight:700}
+  .row.hide{display:none}
+
+  /* prestige */
+  #prCard{display:none;border-color:var(--violet)}
+  #prCard p{font-size:13px;color:var(--dim);margin:0 0 10px}
+  #prCard p b{color:var(--violet)}
+  #prBtn{background:var(--violet);color:#120B22}
+
+  /* feed */
+  #feed{list-style:none;margin:0;padding:0}
+  #feed li{
+    font-size:12.5px;color:var(--dim);padding:6px 0;border-bottom:1px dashed var(--line);line-height:1.45;
+  }
+  #feed li:first-child{color:var(--ink)}
+  #feed li:last-child{border-bottom:none}
+  #feed li .t{font-family:var(--mono);color:var(--faint);font-size:10px;margin-right:6px}
+
+  /* toast */
+  #toast{
+    position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99;
+    background:var(--ac);color:var(--ac-ink);font-weight:800;font-size:14px;
+    padding:10px 18px;border-radius:99px;display:none;white-space:nowrap;
+    box-shadow:0 10px 30px -8px rgba(0,0,0,.6);
+  }
+  @media (prefers-reduced-motion:reduce){
+    #pad.spin{animation:none}
+    #dropBtn{animation:none}
+  }
+</style>
+</head>
+<body data-era="0">
+<div id="app">
+  <div id="top">
+    <div id="alias">DJ Nova</div>
+    <span class="chip" id="infChip">⭐ <b id="infV">0</b> influence</span>
+    <button id="mute">🔊</button>
+  </div>
+
+  <div id="counters">
+    <div class="counter">
+      <span class="k">Fans</span>
+      <div class="v" id="fansV">0</div>
+      <span class="r" id="fpsV">+0/s</span>
+    </div>
+    <div class="counter">
+      <span class="k">Cash</span>
+      <div class="v" id="cashV">$0</div>
+      <span class="r" id="eraV">Bedroom era</span>
+    </div>
+  </div>
+
+  <div id="offline"><span class="x" id="offX">✕</span><span id="offTxt"></span></div>
+
+  <div class="card">
+    <h2>Current venue</h2>
+    <div id="venueName">Your Bedroom</div>
+    <div id="venueCap">CAP 1 · AUDIENCE: YOUR CAT</div>
+    <div class="bar"><i id="nextBar"></i></div>
+    <div id="nextLbl"></div>
+    <div id="gigZone">
+      <button class="big" id="gigBtn">▶ GO LIVE</button>
+      <div id="gigRun">
+        <div id="gigTrack"></div>
+        <div class="bar"><i id="gigBar"></i></div>
+        <div id="gigPayLbl"></div>
+      </div>
+      <button id="dropBtn">🔥 HIT THE DROP 🔥</button>
+    </div>
+  </div>
+
+  <div class="card" id="padWrap">
+    <button id="pad" aria-label="Practice"></button>
+    <div id="tapLbl">PRACTICE · <b id="tapV">+1</b> FANS / TAP</div>
+  </div>
+
+  <div class="card">
+    <h2>Build the buzz</h2>
+    <div id="shop"></div>
+  </div>
+
+  <div class="card" id="prCard">
+    <h2>Reinvent yourself</h2>
+    <p id="prTxt"></p>
+    <button class="big" id="prBtn">RETIRE THE ALIAS</button>
+  </div>
+
+  <div class="card">
+    <h2>The feed</h2>
+    <ul id="feed"></ul>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+// HEADLINER — idle/tycoon DJ career game. One file, DOM UI, mobile-first.
+// window.HL = test hooks (state, tick, actions) for the headless suite.
+
+/* ---------------- constants ---------------- */
+const SAVE_KEY = 'hl_save';
+const MUTE_KEY = 'hl_muted';
+const OFF_CAP = 10 * 3600;      // offline earnings cap (s)
+const OFF_EFF = 0.6;            // offline gig efficiency w/ booking agent
+const INF_MUL = 0.20;           // +20% fans & cash per influence
+const DROP_WIN = 2.8;           // seconds the DROP button stays hittable
+const DROP_BONUS = 0.35;        // instant bonus = 35% of gig pay
+const AGENT_COST = 4000;
+const REBOOK_T = 1.5;
+const COMBO_MAX = 3, COMBO_STEP = 0.08, COMBO_HOLD = 1.0;
+
+const VENUES = [
+  { name: 'Your Bedroom',        icon: '🛏️', cap: 1,     req: 0,      dur: 10, pay: 14,     fanGain: 6,    gig: 'Living-room livestream', sub: 'AUDIENCE: YOUR CAT',        era: 'Bedroom era' },
+  { name: 'House Party',         icon: '🏠', cap: 30,    req: 100,    dur: 14, pay: 70,     fanGain: 45,   gig: 'Basement house party',   sub: 'SOMEONE SPILLED A DRINK',   era: 'House-party era' },
+  { name: 'Dive Bar',            icon: '🍺', cap: 80,    req: 2500,   dur: 18, pay: 420,    fanGain: 520,  gig: 'Tuesday residency',      sub: 'PAID PARTLY IN BEER',       era: 'Dive-bar era' },
+  { name: 'The Club',            icon: '🪩', cap: 400,   req: 60e3,   dur: 24, pay: 5200,   fanGain: 11e3, gig: 'Peak-hour club set',     sub: 'YOUR NAME ON THE FLYER',    era: 'Club era' },
+  { name: 'Warehouse Rave',      icon: '🏭', cap: 1500,  req: 1.5e6,  dur: 30, pay: 48e3,   fanGain: 26e4, gig: 'Warehouse all-nighter',  sub: 'THE FLOOR IS BOUNCING',     era: 'Warehouse era' },
+  { name: 'Festival Main Stage', icon: '🎪', cap: 60000, req: 5e7,    dur: 40, pay: 1.6e6,  fanGain: 9e6,  gig: 'Festival headline set',  sub: 'YOUR NAME, TWENTY FEET TALL', era: 'Headliner era' },
+];
+
+const ITEMS = [
+  { id: 'phones',  name: 'Better Headphones',    icon: '🎧', cost: 15,    fps: 0.4,   blurb: 'Hear the mix. Finally.' },
+  { id: 'mixtape', name: 'Mixtape Drops',        icon: '💿', cost: 120,   fps: 2.5,   blurb: 'USBs in jacket pockets.' },
+  { id: 'social',  name: 'Social Media Intern',  icon: '📱', cost: 900,   fps: 11,    blurb: 'Posts clips at 3AM.' },
+  { id: 'ghost',   name: 'Ghost Producer',       icon: '👻', cost: 6000,  fps: 52,    blurb: 'We do not talk about Kevin.' },
+  { id: 'radio',   name: 'Late-Night Radio Play',icon: '📻', cost: 42e3,  fps: 250,   blurb: '2AM slot. Truckers love you.' },
+  { id: 'pr',      name: 'PR Agency',            icon: '🗞️', cost: 3e5,   fps: 1300,  blurb: '"One to watch" — some blog.' },
+  { id: 'label',   name: 'Label Deal',           icon: '💼', cost: 2.2e6, fps: 7000,  blurb: 'Only slightly predatory.' },
+  { id: 'anthem',  name: 'Viral Anthem',         icon: '🚀', cost: 1.6e7, fps: 40000, blurb: 'That one song. You know the one.' },
+];
+const COST_MUL = 1.15;
+
+const ALIAS_A = ['Nova', 'Neon', 'Static', 'Echo', 'Bass', 'Midnight', 'Crystal', 'Phantom', 'Retro', 'Solar'];
+const ALIAS_B = ['', ' Pulse', ' Drift', ' Haze', ' Riot', ' Bloom', ' Circuit', ' Mirage', ' Vandal', ' Halo'];
+
+const FLAVOR = [
+  ['Your cat left during the second track.', 'Mom says turn it down. Fans gained: 0.', 'You practiced the same transition 47 times.', 'Your desk fan counts as a smoke machine, right?'],
+  ['Someone spilled beer on your controller.', 'A stranger asked for your SoundCloud. A STRANGER.', 'The neighbors called. Twice.', 'You cleared the kitchen with a 10-minute ambient intro.'],
+  ['The bar owner wants "nothing weird". You played something weird.', 'A regular requested Wonderwall. You survived.', 'The rent is not payable in beer. You checked.', 'Tuesday crowd: 11 people, 9 of them nodding.'],
+  ['A rival DJ watched your whole set with arms crossed.', 'Someone recorded your drop — 12k views overnight.', 'The lighting guy finally learned your name.', 'A local blog calls you "one to watch".'],
+  ['The warehouse floor is literally bouncing.', 'Track ID? TRACK ID?? — everyone, all night.', '3AM and nobody wants it to end.', 'Your unreleased edit just became a myth.'],
+  ['60,000 people singing your melody back at you.', 'Your rider now includes a very specific brand of water.', 'A documentary crew is following you around.', 'Your mom finally tells people what you do.'],
+];
+
+/* ---------------- state ---------------- */
+let S;
+function freshState() {
+  return {
+    started: false,
+    fans: 0, cash: 0, lifeFans: 0, lifeCash: 0,
+    items: ITEMS.map(() => 0),
+    agent: false,
+    influence: 0, prestiges: 0,
+    gig: null, rebookT: 0,
+    combo: 1, comboT: 0,
+    bestVenue: 0,
+    stats: { taps: 0, gigs: 0, festGigs: 0, drops: 0, dropsHit: 0, playT: 0 },
+    feed: [], feedDirty: true,
+    flavorT: 20,
+    offline: null,
+    last: Date.now(),
+  };
+}
+S = freshState();
+
+/* ---------------- core math ---------------- */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function mult() { return 1 + INF_MUL * S.influence; }
+function fansPerSec() {
+  let f = 0;
+  for (let i = 0; i < ITEMS.length; i++) f += ITEMS[i].fps * S.items[i];
+  return f * mult();
+}
+function tapPow() { return (1 + fansPerSec() * 0.06) * mult() * S.combo; }
+function itemCost(i) { return Math.ceil(ITEMS[i].cost * Math.pow(COST_MUL, S.items[i])); }
+function venueIdx() {
+  let v = 0;
+  for (let i = 0; i < VENUES.length; i++) if (S.fans >= VENUES[i].req) v = i;
+  return v;
+}
+function fill(v) {
+  const req = VENUES[v].req;
+  if (!req) return 1;
+  return clamp(0.25 + 0.75 * S.fans / (req * 4), 0.25, 1);
+}
+function gigPay(v) { return VENUES[v].pay * fill(v) * mult(); }
+function gigFans(v) { return VENUES[v].fanGain * fill(v) * mult(); }
+function influenceGain() { return Math.floor(Math.cbrt(S.lifeFans / 4e6)); }
+function canPrestige() { return S.stats.festGigs >= 1 && influenceGain() >= 1; }
+function aliasName() {
+  const p = S.prestiges;
+  return 'DJ ' + ALIAS_A[p % ALIAS_A.length] + ALIAS_B[Math.floor(p / ALIAS_A.length + p * 3) % ALIAS_B.length];
+}
+function fmt(n) {
+  if (n < 1000) return '' + Math.floor(n);
+  const u = ['k', 'M', 'B', 'T', 'q'];
+  let i = -1;
+  while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+  return (n >= 100 ? Math.floor(n) : n.toFixed(1).replace(/\.0$/, '')) + u[i];
+}
+// for per-second / per-tap rates: keep a decimal on small values so "+0.4/s" doesn't read as "+0/s"
+function fmtRate(n) { return n > 0 && n < 10 ? +n.toFixed(1) + '' : fmt(n); }
+
+/* ---------------- actions ---------------- */
+function tap() {
+  const gain = tapPow();
+  S.fans += gain; S.lifeFans += gain;
+  S.stats.taps++;
+  S.combo = Math.min(COMBO_MAX, S.combo + COMBO_STEP);
+  S.comboT = COMBO_HOLD;
+  return gain;
+}
+function buyItem(i) {
+  const c = itemCost(i);
+  if (S.cash < c) return false;
+  S.cash -= c;
+  S.items[i]++;
+  sfx('buy');
+  return true;
+}
+function buyAgent() {
+  if (S.agent || S.cash < AGENT_COST) return false;
+  S.cash -= AGENT_COST;
+  S.agent = true;
+  pushFeed('🤝 Booking agent hired. Gigs now book themselves.');
+  sfx('buy');
+  return true;
+}
+function bookGig() {
+  if (S.gig) return false;
+  const v = venueIdx();
+  S.gig = {
+    v, t: 0, dur: VENUES[v].dur,
+    pay: gigPay(v), fans: gigFans(v),
+    dropAt: VENUES[v].dur * (0.35 + Math.random() * 0.35),
+    drop: null, dropDone: false,
+  };
+  sfx('book');
+  return true;
+}
+function dropHit() {
+  const g = S.gig;
+  if (!g || !g.drop) return false;
+  const bonus = g.pay * DROP_BONUS;
+  S.cash += bonus; S.lifeCash += bonus;
+  S.stats.dropsHit++;
+  g.drop = null; g.dropDone = true;
+  pushFeed('🔥 You hit the drop. +$' + fmt(bonus) + ' in instant hype.');
+  toast('PERFECT DROP  +$' + fmt(bonus));
+  sfx('drop');
+  return true;
+}
+function finishGig() {
+  const g = S.gig;
+  const V = VENUES[g.v];
+  S.cash += g.pay; S.lifeCash += g.pay;
+  S.fans += g.fans; S.lifeFans += g.fans;
+  S.stats.gigs++;
+  if (g.v === VENUES.length - 1) S.stats.festGigs++;
+  pushFeed(V.icon + ' ' + V.gig + ' done — $' + fmt(g.pay) + ', +' + fmt(g.fans) + ' fans.');
+  sfx('cash');
+  S.gig = null;
+  S.rebookT = REBOOK_T;
+}
+function prestige() {
+  if (!canPrestige()) return false;
+  const gain = influenceGain();
+  const keepInf = S.influence + gain;
+  const keepP = S.prestiges + 1;
+  const muted = musicMuted;
+  S = freshState();
+  S.started = true;
+  S.influence = keepInf;
+  S.prestiges = keepP;
+  musicMuted = muted;
+  pushFeed('⭐ You retired the old alias at the top. ' + aliasName() + ' steps up with ' + keepInf + ' influence (+' + Math.round(keepInf * INF_MUL * 100) + '% everything).');
+  toast('REBORN AS ' + aliasName().toUpperCase());
+  save();
+  return gain;
+}
+
+/* ---------------- feed / toast ---------------- */
+function pushFeed(msg) {
+  S.feed.unshift({ t: Date.now(), msg });
+  if (S.feed.length > 6) S.feed.length = 6;
+  S.feedDirty = true;
+}
+let toastT = 0;
+function toast(msg) {
+  const el = byId('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  toastT = 2.2;
+}
+
+/* ---------------- tick ---------------- */
+function tick(dt) {
+  if (!S.started) return;
+  S.stats.playT += dt;
+
+  // passive fans
+  const f = fansPerSec() * dt;
+  S.fans += f; S.lifeFans += f;
+
+  // combo decay
+  if (S.comboT > 0) S.comboT -= dt;
+  else S.combo = Math.max(1, S.combo - 2 * dt);
+
+  // venue unlock check
+  const v = venueIdx();
+  if (v > S.bestVenue) {
+    S.bestVenue = v;
+    pushFeed('🎉 UNLOCKED: ' + VENUES[v].name + ' (cap ' + fmt(VENUES[v].cap) + '). The come-up is real.');
+    toast('NEW VENUE: ' + VENUES[v].name.toUpperCase());
+    sfx('unlock');
+  }
+
+  // gig progress
+  const g = S.gig;
+  if (g) {
+    g.t += dt;
+    if (!g.dropDone && !g.drop && g.t >= g.dropAt) {
+      g.drop = { t: DROP_WIN };
+      S.stats.drops++;
+      sfx('dropcue');
+    }
+    if (g.drop) {
+      g.drop.t -= dt;
+      if (g.drop.t <= 0) { g.drop = null; g.dropDone = true; }
+    }
+    if (g.t >= g.dur) finishGig();
+  } else if (S.agent) {
+    S.rebookT -= dt;
+    if (S.rebookT <= 0) bookGig();
+  }
+
+  // ambient flavor
+  S.flavorT -= dt;
+  if (S.flavorT <= 0) {
+    S.flavorT = 22 + Math.random() * 14;
+    const pool = FLAVOR[venueIdx()];
+    pushFeed('💬 ' + pool[Math.floor(Math.random() * pool.length)]);
+  }
+
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) byId('toast').style.display = 'none'; }
+
+  saveT -= dt;
+  if (saveT <= 0) { saveT = 5; save(); }
+}
+
+/* ---------------- save / load ---------------- */
+let saveT = 5;
+function save() {
+  S.last = Date.now();
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 1, fans: S.fans, cash: S.cash, lifeFans: S.lifeFans, lifeCash: S.lifeCash,
+      items: S.items, agent: S.agent, influence: S.influence, prestiges: S.prestiges,
+      bestVenue: S.bestVenue, stats: S.stats, last: S.last, started: S.started,
+    }));
+  } catch (e) { /* storage full/blocked — keep playing */ }
+}
+function load() {
+  let d;
+  try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { d = null; }
+  if (!d || d.v !== 1) return false;
+  S = freshState();
+  S.fans = d.fans || 0; S.cash = d.cash || 0;
+  S.lifeFans = d.lifeFans || 0; S.lifeCash = d.lifeCash || 0;
+  S.items = ITEMS.map((_, i) => (d.items && d.items[i]) || 0);
+  S.agent = !!d.agent;
+  S.influence = d.influence || 0; S.prestiges = d.prestiges || 0;
+  S.bestVenue = d.bestVenue || 0;
+  if (d.stats) S.stats = Object.assign(S.stats, d.stats);
+  S.started = !!d.started;
+
+  // offline earnings
+  const dt = clamp((Date.now() - (d.last || Date.now())) / 1000, 0, OFF_CAP);
+  if (S.started && dt > 30) {
+    const offFans = fansPerSec() * dt;
+    let offCash = 0;
+    if (S.agent) {
+      const v = venueIdx();
+      offCash = gigPay(v) / VENUES[v].dur * dt * OFF_EFF;
+    }
+    S.fans += offFans; S.lifeFans += offFans;
+    S.cash += offCash; S.lifeCash += offCash;
+    S.bestVenue = Math.max(S.bestVenue, venueIdx());
+    S.offline = { t: dt, fans: offFans, cash: offCash };
+    pushFeed('😴 While you slept: +' + fmt(offFans) + ' fans' + (offCash ? ', +$' + fmt(offCash) + ' from agent-booked gigs' : '') + '.');
+  }
+  return true;
+}
+function reset() { S = freshState(); }
+
+/* ---------------- audio (lazy, gesture-gated) ---------------- */
+let actx = null, musicMuted = false, mNext = 0, mStep = 0;
+try { musicMuted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) {}
+function audioInit() {
+  if (actx) return;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+}
+function tone(freq, t0, dur, type, vol, slide) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if (slide) o.frequency.exponentialRampToValueAtTime(slide, t0 + dur);
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  o.connect(g); g.connect(actx.destination);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function sfx(kind) {
+  if (!actx || musicMuted) return;
+  const t = actx.currentTime;
+  if (kind === 'tap') tone(660 + Math.random() * 120, t, 0.05, 'square', 0.03);
+  else if (kind === 'buy') { tone(520, t, 0.08, 'square', 0.05); tone(780, t + 0.07, 0.1, 'square', 0.05); }
+  else if (kind === 'cash') { tone(880, t, 0.07, 'triangle', 0.07); tone(1320, t + 0.06, 0.12, 'triangle', 0.07); }
+  else if (kind === 'book') tone(330, t, 0.12, 'sawtooth', 0.04, 440);
+  else if (kind === 'dropcue') { tone(200, t, 0.3, 'sawtooth', 0.06, 800); }
+  else if (kind === 'drop') { tone(80, t, 0.35, 'sine', 0.22, 40); tone(1200, t, 0.2, 'sawtooth', 0.05, 200); }
+  else if (kind === 'unlock') { [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.09, 0.14, 'triangle', 0.07)); }
+}
+// minimal club beat: layers thicken with each era
+const BASSLINE = [55, 55, 65.4, 55, 55, 49, 55, 73.4];
+function musicTick() {
+  if (!actx || musicMuted) return;
+  const era = venueIdx();
+  const bpm = 100 + era * 8, spb = 60 / bpm / 4; // 16th notes
+  if (mNext < actx.currentTime - 0.5) mNext = actx.currentTime;
+  while (mNext < actx.currentTime + 0.15) {
+    const s = mStep % 16, t = mNext;
+    if (s % 4 === 0) tone(140, t, 0.12, 'sine', 0.16, 42);                      // kick
+    if (era >= 1 && s % 4 === 2) tone(7000, t, 0.03, 'square', 0.015);          // hat
+    if (era >= 2 && s % 2 === 0) tone(BASSLINE[(s / 2) | 0], t, spb * 1.8, 'sawtooth', 0.04); // bass
+    if (era >= 3 && (s === 4 || s === 12)) tone(1800, t, 0.05, 'square', 0.03); // clap-ish
+    if (era >= 4 && s % 2 === 1) tone(440 * Math.pow(2, [0, 3, 7, 10][(s >> 2) % 4] / 12), t, 0.08, 'triangle', 0.025); // arp
+    if (era >= 5 && s === 15) tone(400, t, spb * 4, 'sawtooth', 0.03, 3200);    // riser
+    mNext += spb; mStep++;
+  }
+}
+
+/* ---------------- DOM ---------------- */
+const elCache = {};
+function byId(id) { return elCache[id] || (elCache[id] = document.getElementById(id)); }
+
+const shopRefs = [];
+function buildShop() {
+  const shop = byId('shop');
+  ITEMS.forEach((it, i) => {
+    const row = document.createElement('div'); row.className = 'row hide';
+    const ic = document.createElement('div'); ic.className = 'ic'; ic.textContent = it.icon;
+    const mid = document.createElement('div'); mid.className = 'mid';
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name;
+    const cnt = document.createElement('small'); nm.appendChild(cnt);
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = '+' + it.fps + ' fans/s · ' + it.blurb;
+    const btn = document.createElement('button'); btn.className = 'buy';
+    btn.onclick = () => { if (buyItem(i)) render(); };
+    mid.appendChild(nm); mid.appendChild(sub);
+    row.appendChild(ic); row.appendChild(mid); row.appendChild(btn);
+    shop.appendChild(row);
+    shopRefs.push({ row, cnt, btn });
+  });
+  // booking agent row
+  const row = document.createElement('div'); row.className = 'row hide';
+  const ic = document.createElement('div'); ic.className = 'ic'; ic.textContent = '🤝';
+  const mid = document.createElement('div'); mid.className = 'mid';
+  const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = 'Booking Agent';
+  const sub = document.createElement('div'); sub.className = 'sub';
+  sub.textContent = 'Auto-books your next gig. Forever.';
+  const btn = document.createElement('button'); btn.className = 'buy';
+  btn.onclick = () => { if (buyAgent()) render(); };
+  mid.appendChild(nm); mid.appendChild(sub);
+  row.appendChild(ic); row.appendChild(mid); row.appendChild(btn);
+  byId('shop').appendChild(row);
+  shopRefs.agent = { row, btn };
+}
+
+let prArmed = 0;
+function render() {
+  const v = venueIdx(), V = VENUES[v];
+  document.body.dataset.era = v;
+
+  byId('alias').textContent = aliasName();
+  byId('infV').textContent = S.influence;
+  byId('infChip').style.display = (S.influence || S.prestiges || canPrestige()) ? '' : 'none';
+  byId('fansV').textContent = fmt(S.fans);
+  byId('fpsV').textContent = '+' + fmtRate(fansPerSec()) + '/s' + (S.combo > 1.05 ? ' · combo ×' + S.combo.toFixed(1) : '');
+  byId('cashV').textContent = '$' + fmt(S.cash);
+  byId('eraV').textContent = V.era;
+  byId('tapV').textContent = '+' + fmtRate(tapPow());
+
+  // venue + next unlock
+  byId('venueName').textContent = V.icon + ' ' + V.name;
+  byId('venueCap').textContent = 'CAP ' + fmt(V.cap) + ' · ' + V.sub;
+  const nx = VENUES[v + 1];
+  if (nx) {
+    byId('nextBar').style.width = clamp(S.fans / nx.req * 100, 0, 100) + '%';
+    byId('nextLbl').textContent = 'Next: ' + nx.name + ' at ' + fmt(nx.req) + ' fans (' + fmt(S.fans) + ')';
+  } else {
+    byId('nextBar').style.width = '100%';
+    byId('nextLbl').textContent = 'You made it. This is the top.';
+  }
+
+  // gig zone
+  const g = S.gig;
+  byId('gigBtn').style.display = g ? 'none' : '';
+  byId('gigRun').style.display = g ? 'block' : 'none';
+  byId('gigBtn').textContent = '▶ PLAY: ' + V.gig.toUpperCase() + '  ($' + fmt(gigPay(v)) + ')';
+  if (g) {
+    byId('gigTrack').innerHTML = '<b>' + VENUES[g.v].gig + '</b> — live';
+    byId('gigBar').style.width = clamp(g.t / g.dur * 100, 0, 100) + '%';
+    byId('gigPayLbl').textContent = '→ $' + fmt(g.pay) + ' + ' + fmt(g.fans) + ' fans at the end';
+  }
+  byId('dropBtn').style.display = (g && g.drop) ? 'block' : 'none';
+  byId('pad').className = g ? 'spin' : '';
+
+  // shop
+  ITEMS.forEach((it, i) => {
+    const r = shopRefs[i];
+    if (!r) return;
+    const show = S.items[i] > 0 || S.lifeCash >= it.cost * 0.4;
+    r.row.className = 'row' + (show ? '' : ' hide');
+    r.cnt.textContent = S.items[i] ? ' ×' + S.items[i] : '';
+    const c = itemCost(i);
+    r.btn.textContent = '$' + fmt(c);
+    r.btn.className = 'buy' + (S.cash >= c ? ' can' : '');
+  });
+  if (shopRefs.agent) {
+    const a = shopRefs.agent;
+    a.row.className = 'row' + (S.agent || S.lifeCash >= AGENT_COST * 0.4 ? '' : ' hide');
+    a.btn.textContent = S.agent ? 'HIRED ✓' : '$' + fmt(AGENT_COST);
+    a.btn.className = 'buy' + (!S.agent && S.cash >= AGENT_COST ? ' can' : '');
+  }
+
+  // prestige
+  const prVis = S.bestVenue >= 3 || S.stats.festGigs > 0 || S.prestiges > 0;
+  byId('prCard').style.display = prVis ? 'block' : 'none';
+  if (prVis) {
+    const gain = influenceGain();
+    if (S.stats.festGigs < 1) {
+      byId('prTxt').innerHTML = 'Headline the <b>Festival Main Stage</b> once, and you can retire this alias to be reborn with permanent <b>influence</b>.';
+      byId('prBtn').disabled = true;
+      byId('prBtn').textContent = 'RETIRE THE ALIAS (LOCKED)';
+    } else {
+      byId('prTxt').innerHTML = 'Retire <b>' + aliasName() + '</b> and start over as a new alias with <b>+' + gain + ' influence</b> (each = +' + (INF_MUL * 100) + '% fans & cash, forever).';
+      byId('prBtn').disabled = !canPrestige();
+      byId('prBtn').textContent = prArmed > 0 ? '⚠ TAP AGAIN TO RETIRE ⚠' : 'RETIRE THE ALIAS  (+' + gain + ' ⭐)';
+    }
+  }
+
+  // feed
+  if (S.feedDirty) {
+    S.feedDirty = false;
+    const ul = byId('feed');
+    ul.innerHTML = '';
+    S.feed.forEach(f => {
+      const li = document.createElement('li');
+      const t = document.createElement('span'); t.className = 't';
+      const ago = Math.max(0, (Date.now() - f.t) / 1000);
+      t.textContent = ago < 60 ? 'now' : Math.floor(ago / 60) + 'm';
+      li.appendChild(t);
+      li.appendChild(document.createTextNode(f.msg));
+      ul.appendChild(li);
+    });
+  }
+
+  // offline banner
+  const off = byId('offline');
+  if (S.offline) {
+    off.style.display = 'block';
+    byId('offTxt').innerHTML = '😴 <b>Welcome back.</b> While you were gone (' + Math.floor(S.offline.t / 60) + 'm): <b>+' + fmt(S.offline.fans) + ' fans</b>' + (S.offline.cash ? ', <b>+$' + fmt(S.offline.cash) + '</b>' : '') + '.';
+  } else off.style.display = 'none';
+
+  byId('mute').textContent = musicMuted ? '🔇' : '🔊';
+}
+
+/* ---------------- input wiring ---------------- */
+function wire() {
+  byId('pad').onpointerdown = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const gain = tap();
+    sfx('tap');
+    // floating +N
+    try {
+      const f = document.createElement('div');
+      f.className = 'float';
+      f.textContent = '+' + fmt(gain);
+      f.style.left = (e.clientX + (Math.random() * 30 - 15)) + 'px';
+      f.style.top = (e.clientY - 20) + 'px';
+      document.body.appendChild(f);
+      setTimeout(() => f.remove(), 850);
+    } catch (err) {}
+  };
+  byId('gigBtn').onclick = () => { bookGig(); render(); };
+  byId('dropBtn').onpointerdown = (e) => { if (e && e.preventDefault) e.preventDefault(); dropHit(); render(); };
+  byId('offX').onclick = () => { S.offline = null; render(); };
+  byId('mute').onclick = () => {
+    musicMuted = !musicMuted;
+    try { localStorage.setItem(MUTE_KEY, musicMuted ? '1' : '0'); } catch (e) {}
+    render();
+  };
+  byId('prBtn').onclick = () => {
+    if (!canPrestige()) return;
+    if (prArmed > 0) { prArmed = 0; prestige(); }
+    else prArmed = 3;
+    render();
+  };
+  document.addEventListener('pointerdown', () => {
+    audioInit();
+    if (actx && actx.resume) actx.resume();
+  }, { once: false });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+  window.addEventListener('pagehide', save);
+}
+
+/* ---------------- main loop ---------------- */
+let lastT = 0;
+function frame(now) {
+  const dt = Math.min(0.25, (now - lastT) / 1000 || 0.016);
+  lastT = now;
+  tick(dt);
+  if (prArmed > 0) { prArmed -= dt; if (prArmed <= 0) { prArmed = 0; S.feedDirty = true; } }
+  musicTick();
+  render();
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- boot ---------------- */
+buildShop();
+wire();
+if (!load()) {
+  S.started = true;
+  pushFeed('🛏️ Two decks, a desk lamp, and a dream. Welcome to the come-up.');
+}
+S.started = true;
+render();
+if (typeof window.__HL_HEADLESS__ === 'undefined') requestAnimationFrame(frame);
+
+window.HL = {
+  get S() { return S; },
+  constants: { SAVE_KEY, MUTE_KEY, VENUES, ITEMS, COST_MUL, AGENT_COST, INF_MUL, DROP_WIN, DROP_BONUS, OFF_CAP, OFF_EFF, COMBO_MAX, REBOOK_T },
+  tick, tap, buyItem, buyAgent, bookGig, dropHit, prestige,
+  fansPerSec, tapPow, itemCost, venueIdx, fill, gigPay, gigFans,
+  influenceGain, canPrestige, aliasName, fmt, mult,
+  save, load, reset, render, musicTick, pushFeed,
+};
+</script>
+</body>
+</html>
