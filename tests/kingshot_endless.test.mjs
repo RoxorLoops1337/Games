@@ -478,6 +478,30 @@ t.ok(KS.dashCdMax() < cd0 && KS.dashCdMax() >= C.DASH_CD_MIN, 'crowns shorten th
 KS.S.crowns = 0;
 p.dashCd = 0; p.dashT = 0; p.invuln = 0; p.hp = p.maxHp;
 
+// ---- kill combo multiplier ----
+KS.S.combo = 0; KS.S.comboT = 0; KS.S.comboTierShown = 0; KS.S.stats.comboBest = 0;
+KS.S.enemies.length = 0; KS.S.items.length = 0; freezeSpawns();
+p.x = z1.pen.x0 + 200; p.y = 500;
+// rack up kills fast by summoning + instakilling
+for (let i = 0; i < 12; i++) { KS.spawnEnemy(z1); const e = KS.S.enemies[KS.S.enemies.length - 1]; e.gold = false; e.boss = false; e.x = p.x; e.y = p.y; KS.hurtEnemy(e, 1e9); }
+t.ok(KS.S.combo === 12, 'chained kills build the combo counter');
+t.ok(KS.comboMul() >= 1.5, 'a 12-combo reaches at least x1.5');
+t.ok(KS.S.stats.comboBest >= 12, 'best combo recorded in stats');
+// combo pays bonus coins beyond the raw helmet value
+const palC = KS.S.pallet;
+KS.spawnEnemy(z1); const ce = KS.S.enemies[KS.S.enemies.length - 1]; ce.gold = false; ce.boss = false; ce.x = p.x; ce.y = p.y;
+KS.hurtEnemy(ce, 1e9);
+t.ok(KS.S.pallet > palC, 'combo awards bonus coins on kill');
+// combo decays when you stop killing
+step(C.COMBO_WINDOW + 0.2);
+t.ok(KS.S.combo === 0, 'combo resets after the window lapses');
+t.ok(KS.comboMul() === 1, 'multiplier back to x1 once the combo drops');
+// milestone
+KS.S.stats.comboBest = 40; KS.checkAch();
+t.ok(KS.S.ach.combo40 === true, 'Combo Master milestone unlocks at a 40 streak');
+KS.S.enemies.length = 0; KS.S.items.length = 0;
+p.x = C.SPAWN.x; p.y = C.SPAWN.y;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');

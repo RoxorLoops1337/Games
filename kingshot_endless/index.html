@@ -117,6 +117,12 @@ const DOG_SPD      = 250, DOG_FETCH_R = 320;
 // hero dash: a short burst with i-frames, on a cooldown crowns shorten
 const DASH_SPD = 780, DASH_TIME = 0.16, DASH_CD = 3.6, DASH_CD_CROWN = 0.35, DASH_CD_MIN = 1.2;
 function dashCdMax() { return Math.max(DASH_CD_MIN, DASH_CD - DASH_CD_CROWN * S.crowns); }
+// kill combo: chain kills fast to build a streak that pays escalating bonus coins
+const COMBO_WINDOW = 2.6;
+const COMBO_TIERS = [[80, 4, '#ff3a6b'], [40, 3, '#ff6a3a'], [20, 2, '#ff9a3a'], [10, 1.5, '#ffd94a'], [5, 1.25, '#e8e08a']];
+function comboMul() { for (const t of COMBO_TIERS) if (S.combo >= t[0]) return t[1]; return 1; }
+function comboTier() { for (let i = 0; i < COMBO_TIERS.length; i++) if (S.combo >= COMBO_TIERS[i][0]) return COMBO_TIERS.length - i; return 0; }
+function comboColor() { for (const t of COMBO_TIERS) if (S.combo >= t[0]) return t[2]; return '#c8d0da'; }
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
 function helmVal(k)  { return Math.ceil(5 * eco(k)); }
@@ -237,6 +243,7 @@ function reset() {
     ach: {}, toasts: [], achCd: 0,
     quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
+    combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
     district: null,
     distPlate: { cost: 400, paid: 0, built: false },
     d2: Object.fromEntries(Object.keys(D2CFG).map(dk => [dk, null])),
@@ -561,7 +568,7 @@ function audio() {
   return AC;
 }
 let sfxGate = 0;
-function sfx(kind, importance) {
+function sfx(kind, importance, pitch) {
   if (muted) return;
   if (!importance && S && S.t < sfxGate) return;
   const ac = audio(); if (!ac) return;
@@ -587,9 +594,10 @@ function sfx(kind, importance) {
     warp:  [300, 1200, 0.12, 0.3, 'sine'],
     boss:  [80, 55, 0.25, 0.8, 'square'],
   }[kind] || [440, 440, 0.04, 0.05, 'square'];
+  const pm = pitch || 1;
   o.type = P[4];
-  o.frequency.setValueAtTime(P[0], t);
-  o.frequency.exponentialRampToValueAtTime(Math.max(20, P[1]), t + P[3]);
+  o.frequency.setValueAtTime(P[0] * pm, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, P[1] * pm), t + P[3]);
   g.gain.setValueAtTime(P[2], t);
   g.gain.exponentialRampToValueAtTime(0.001, t + P[3]);
   o.start(t); o.stop(t + P[3] + 0.02);
@@ -686,6 +694,7 @@ function hurtEnemy(e, dmg) {
   if (e.hp <= 0) {
     S.stats.kills++;
     questEvent('kill', 1);
+    registerCombo(e);
     if (e.boss) {
       S.stats.bosses++;
       questEvent('boss', 1);
@@ -703,10 +712,35 @@ function hurtEnemy(e, dmg) {
     } else {
       const drops = 1 + (rnd() < 0.55 ? 1 : 0);
       for (let i = 0; i < drops; i++) dropHelmet(e.x, e.y, e.k);
-      sfx('kill');
     }
     puff(e.x, e.y, e.gold ? '#ffd94a' : foeCol(e.k), e.boss ? 26 : 10, true);
   } else sfx('hit');
+}
+function registerCombo(e) {
+  S.combo++;
+  S.comboT = COMBO_WINDOW;
+  if (S.combo > (S.stats.comboBest || 0)) S.stats.comboBest = S.combo;
+  const mul = comboMul();
+  // combo pays a bonus on top of the dropped helmet, scaled by the current multiplier
+  if (mul > 1) {
+    const bonus = Math.ceil(helmVal(e.k) * (mul - 1) * coinMul());
+    if (bonus > 0) {
+      S.pallet += bonus; S.stats.earned += bonus;
+      float(e.x, e.y - 26, '+' + fmt(bonus) + '¢', comboColor());
+      questEvent('earn', bonus);
+    }
+  }
+  // milestone flourish when you cross into a new tier
+  const tier = comboTier();
+  if (tier > S.comboTierShown) {
+    S.comboTierShown = tier;
+    S.comboFlash = 0.6; S.goldPulse = Math.max(S.goldPulse, 0.4);
+    S.toasts.push({ txt: '🔥 COMBO x' + mul + '  (' + S.combo + ' streak!)', t: 0 });
+    for (let i = 0; i < 14; i++) S.parts.push({ x: e.x, y: e.y, vx: (rnd() - 0.5) * 260, vy: -80 - rnd() * 180, t: 0, dur: 0.6, r: 3, color: comboColor(), g: 1 });
+    sfx('gem', true); buzz(20);
+  }
+  // kill pitch rises with the streak (regular kills; boss/gold have their own sounds)
+  if (!e.boss && !e.gold) sfx('kill', false, 1 + Math.min(1.4, S.combo * 0.02));
 }
 function dashAbility() {
   const p = S.player;
@@ -966,6 +1000,7 @@ const ACH = [
   { id: 'crown1',  ic: '👑', name: 'New Kingdom',      d: 'Found a New Kingdom (prestige)', c: () => S.crowns >= 1 },
   { id: 'chest1',  ic: '💰', name: 'Treasure Hunter',  d: 'Open a wandering chest',         c: () => (S.stats.chests || 0) >= 1 },
   { id: 'craft50', ic: '🏭', name: 'Master Crafter',   d: 'Craft 50 industry goods',        c: () => (S.stats.crafted || 0) >= 50 },
+  { id: 'combo40', ic: '🔥', name: 'Combo Master',      d: 'Reach a 40 kill combo',          c: () => (S.stats.comboBest || 0) >= 40 },
   { id: 'tycoon2', ic: '⚙️', name: 'Industrialist',    d: 'Own industry, farm & mine',      c: () => S.distPlate.built && S.d2Plate.farm.built && S.d2Plate.mine.built },
   { id: 'guild',   ic: '🎨', name: 'Guildmaster',      d: 'Own the Artisan Quarter',        c: () => S.d2Plate.artisan && S.d2Plate.artisan.built },
 ];
@@ -984,6 +1019,12 @@ function tick(dt) {
   S.t += dt;
   S.stats.playT = (S.stats.playT || 0) + dt;
   S.flowTouched = false;
+  // combo decays if you stop killing
+  if (S.combo > 0) {
+    S.comboT -= dt;
+    if (S.comboT <= 0) { S.combo = 0; S.comboTierShown = 0; }
+  }
+  if (S.comboFlash > 0) S.comboFlash -= dt;
   if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
   if (S.offlineMsg > 0) S.offlineMsg -= dt;
   const p = S.player;
@@ -2908,6 +2949,7 @@ function drawHud() {
     try { localStorage.setItem('ks_idle_muted', muted ? '1' : '0'); } catch (e) {}
   });
   drawMinimap();
+  drawCombo();
   drawQuests();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -2986,6 +3028,23 @@ function drawHud() {
     ctx.restore();
   }
 }
+function drawCombo() {
+  if (S.combo < 3) return;
+  const mul = comboMul(), col = comboColor();
+  const cx = vw / 2, cy = 116;
+  const sc = 1 + (S.comboFlash > 0 ? S.comboFlash * 0.6 : 0) + Math.sin(S.t * 12) * 0.02 * comboTier();
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
+  ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText('x' + mul, 2, 2);
+  ctx.fillStyle = col; ctx.fillText('x' + mul, 0, 0);
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(S.combo + ' COMBO', 1, 17);
+  ctx.fillStyle = '#fff'; ctx.fillText(S.combo + ' COMBO', 0, 16);
+  ctx.restore();
+  const w = 96, f = Math.max(0, S.comboT / COMBO_WINDOW);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; rr(cx - w / 2, cy + 24, w, 5, 2); ctx.fill();
+  ctx.fillStyle = col; rr(cx - w / 2, cy + 24, w * f, 5, 2); ctx.fill();
+}
 function fmtTime(s) {
   s = Math.floor(s || 0);
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -3014,6 +3073,7 @@ function drawStatsPanel() {
     ['🗺️ Lands', fmt(S.zones.length)], ['👑 Crowns', fmt(S.crowns)],
     ['🔁 Prestiges', fmt(S.prestiges)], ['⏱️ Played', fmtTime(st.playT)],
     ['☠️ Deaths', fmt(S.player.deaths)], ['🔥 Streak', S.streak + 'd'],
+    ['🔥 Best combo', fmt(S.stats.comboBest || 0)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3236,9 +3296,9 @@ window.KS = {
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry, drawStatsPanel,
-  dashAbility, dashCdMax,
+  dashAbility, dashCdMax, registerCombo, comboMul, comboTier, drawCombo,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN },
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
 };
 </script>
