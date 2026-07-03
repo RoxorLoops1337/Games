@@ -262,6 +262,18 @@ const RES_MUL = {
   wool: 1.2, dye: 1.5, cloth: 5, regalia: 34,
 };
 function entryRes(e) { return e.res || (e.crown ? 'crown' : e.tool ? 'tool' : e.plank ? 'plank' : e.bar ? 'bar' : e.log ? 'log' : e.stone ? 'stone' : 'helm'); }
+// smelting a tier-k helmet yields that tier's metal — feed purple shields, get purple bars
+const METALS = [
+  { name: 'copper',   col: '#c87838' },
+  { name: 'bronze',   col: '#b5804a' },
+  { name: 'silver',   col: '#c8ccd4' },
+  { name: 'gold',     col: '#e8b93a' },
+  { name: 'platinum', col: '#d6e2ea' },
+  { name: 'mythril',  col: '#6ee0d8' },
+  { name: 'cobalt',   col: '#5a7fe0' },
+  { name: 'uranium',  col: '#a6e04a' },
+];
+function metal(k) { const cyc = Math.floor((k - 1) / METALS.length); const m = METALS[(k - 1) % METALS.length]; return { name: m.name + (cyc ? ' +' + cyc : ''), col: m.col, glow: (k % METALS.length) === 0 }; }
 function entryVal(e) { return Math.ceil(helmVal(e.k) * (RES_MUL[entryRes(e)] || 1) * coinMul()); }
 function cloneEntry(e) { return { k: e.k, bar: !!e.bar, crown: !!e.crown, log: !!e.log, plank: !!e.plank, stone: !!e.stone, tool: !!e.tool, res: e.res }; }
 // coin flow ramps up exponentially the longer you keep transacting at
@@ -1047,8 +1059,9 @@ function tick(dt) {
       p.forgeAcc = (p.forgeAcc || 0) + dt * SELL_RATE;
       while (p.forgeAcc >= 1 && f.queue.length < FORGE_Q) {
         p.forgeAcc -= 1;
+        // the forge ONLY smelts raw helmets (shields) — not bars, crowns, logs, ore, produce…
         let idx = -1;
-        for (let i = p.helmets.length - 1; i >= 0; i--) if (!p.helmets[i].bar && !p.helmets[i].crown) { idx = i; break; }
+        for (let i = p.helmets.length - 1; i >= 0; i--) if (entryRes(p.helmets[i]) === 'helm') { idx = i; break; }
         if (idx < 0) break;
         f.queue.push(p.helmets.splice(idx, 1)[0].k);
         sfx('smelt');
@@ -1058,9 +1071,12 @@ function tick(dt) {
       f.smeltT += dt;
       if (f.smeltT >= FORGE_T) {
         f.smeltT = 0;
-        f.tray.push(f.queue.shift());
+        const bk = f.queue.shift();
+        f.tray.push(bk);
         questEvent('bar', 1);
-        puff(TRAY.x, TRAY.y - 10, '#e8b93a', 5, true);
+        const m = metal(bk);
+        float(TRAY.x, TRAY.y - 30, m.name + ' bar', m.col);
+        puff(TRAY.x, TRAY.y - 10, m.col, 5, true);
         sfx('smelt');
       }
     } else f.smeltT = 0;
@@ -1401,7 +1417,7 @@ function tick(dt) {
 
   // -- hub build plates: forge + waygate + kennel
   if (!S.forgePlate.built && dist2(p.x, p.y, FORGE.x, FORGE.y) < 56 * 56)
-    pourHub(S.forgePlate, dt, () => { S.forge = { queue: [], tray: [], smeltT: 0 }; float(FORGE.x, FORGE.y - 50, 'FORGE BUILT! Helmets → gold bars (x' + BAR_MUL + ')', '#6ecb5a', true); });
+    pourHub(S.forgePlate, dt, () => { S.forge = { queue: [], tray: [], smeltT: 0 }; float(FORGE.x, FORGE.y - 50, 'SMELTER BUILT! Shields → metal bars (x' + BAR_MUL + ') — porters feed it', '#6ecb5a', true); });
   if (!S.wayPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, HUBPAD.x, HUBPAD.y) < 56 * 56)
     pourHub(S.wayPlate, dt, () => { S.waygate = true; float(HUBPAD.x, HUBPAD.y - 50, 'WAYGATE OPEN! Stand still on it to warp', '#6ec9e0', true); });
   if (!S.dogPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, KENNEL.x, KENNEL.y) < 56 * 56)
@@ -1616,18 +1632,33 @@ function tick(dt) {
           if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; po.carry.push(cloneEntry(it)); if (po.carry.length >= PORTER_CAP) po.state = 'sell'; }
         }
       } else {
-        const dl = Math.hypot(SELL.x - po.x, SELL.y - po.y) || 1;
-        po.x += (SELL.x - po.x) / dl * PORTER_SPD * dt; po.y += (SELL.y - po.y) / dl * PORTER_SPD * dt;
+        // offload at the hub: route raw shields into the smelter (x3), sell everything else.
+        // when empty-handed, sweep finished bars off the smelter tray so they get sold too.
+        const hasHelm = po.carry.some(e => entryRes(e) === 'helm');
+        const feedSmelter = S.forge && hasHelm && S.forge.queue.length < FORGE_Q;
+        const tgt = feedSmelter ? FORGE : SELL;
+        const dl = Math.hypot(tgt.x - po.x, tgt.y - po.y) || 1;
+        po.x += (tgt.x - po.x) / dl * PORTER_SPD * dt; po.y += (tgt.y - po.y) / dl * PORTER_SPD * dt;
         if (dl < 46) {
           po.cd -= dt;
           if (po.cd <= 0 && po.carry.length) {
             po.cd = 0.12;
-            const v = entryVal(po.carry.pop());
-            S.pallet += v; S.stats.earned += v; S.stats.sold++;
-            questEvent('sell', 1); questEvent('earn', v);
-            puff(PALLET.x, PALLET.y - 30, '#ffd94a', 1, true);
+            if (feedSmelter && S.forge.queue.length < FORGE_Q) {
+              const i = po.carry.map(e => entryRes(e) === 'helm').lastIndexOf(true);
+              if (i >= 0) { S.forge.queue.push(po.carry.splice(i, 1)[0].k); sfx('smelt'); }
+            } else {
+              const v = entryVal(po.carry.pop());
+              S.pallet += v; S.stats.earned += v; S.stats.sold++;
+              questEvent('sell', 1); questEvent('earn', v);
+              puff(PALLET.x, PALLET.y - 30, '#ffd94a', 1, true);
+            }
           }
-          if (!po.carry.length) po.state = 'seek';
+          if (!po.carry.length) {
+            // relieve a nearly-full tray so the smelter never hard-stalls; otherwise leave the bars for you
+            if (S.forge && S.forge.tray.length >= TRAY_MAX - 2) {
+              while (po.carry.length < PORTER_CAP && S.forge.tray.length) po.carry.push({ k: S.forge.tray.pop(), bar: true });
+            } else po.state = 'seek';
+          }
         }
       }
     }
@@ -1753,9 +1784,10 @@ function drawHelmetIcon(x, y, k, s) {
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.beginPath(); ctx.arc(x - 3 * s, y - 4 * s, 2.5 * s, 0, 6.29); ctx.fill();
 }
-function drawBarIcon(x, y, s) {
+function drawBarIcon(x, y, s, col, glow) {
   s = s || 1;
-  ctx.fillStyle = '#e8b93a';
+  if (glow) { ctx.fillStyle = 'rgba(166,224,74,0.35)'; ctx.beginPath(); ctx.arc(x, y, 11 * s, 0, 6.29); ctx.fill(); }
+  ctx.fillStyle = col || '#e8b93a';
   ctx.beginPath();
   ctx.moveTo(x - 10 * s, y + 4 * s); ctx.lineTo(x - 7 * s, y - 4 * s);
   ctx.lineTo(x + 7 * s, y - 4 * s); ctx.lineTo(x + 10 * s, y + 4 * s);
@@ -1909,6 +1941,7 @@ const RES_ICON = {
 function drawStackEntry(e, x, y, s) {
   const r = entryRes(e);
   if (r === 'helm') drawHelmetIcon(x, y, e.k, s);
+  else if (r === 'bar') { const m = metal(e.k || 1); drawBarIcon(x, y, s, m.col, m.glow); }
   else (RES_ICON[r] || drawHelmetIcon)(x, y, s);
 }
 function drawTree(x, y, s, c1, c2) {
@@ -2088,21 +2121,24 @@ function drawStands() {
     ctx.fillStyle = 'rgba(255,120,40,' + glow + ')';
     rr(FORGE.x - 22, FORGE.y - 12, 44, 28, 8); ctx.fill();
     ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('⚒ FORGE  x' + BAR_MUL, FORGE.x, FORGE.y - 52);
-    ctx.fillStyle = '#ffb060'; ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(S.forge.queue.length + '/' + FORGE_Q + ' smelting', FORGE.x, FORGE.y + 44);
+    ctx.fillText('⚒ SMELTER  x' + BAR_MUL, FORGE.x, FORGE.y - 52);
+    ctx.fillStyle = '#ffb060'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('shields only · ' + S.forge.queue.length + '/' + FORGE_Q, FORGE.x, FORGE.y + 44);
     ctx.strokeStyle = 'rgba(232,185,58,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(TRAY.x, TRAY.y, TRAY.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = '#5c4a30'; rr(TRAY.x - 40, TRAY.y - 6, 80, 22, 5); ctx.fill();
-    for (let i = 0; i < S.forge.tray.length; i++)
-      drawBarIcon(TRAY.x - 30 + (i % 5) * 15, TRAY.y - Math.floor(i / 5) * 9, 0.8);
-    ctx.fillStyle = '#e8b93a'; ctx.font = 'bold 12px sans-serif';
-    ctx.fillText('gold bars', TRAY.x, TRAY.y + 34);
+    for (let i = 0; i < S.forge.tray.length; i++) {
+      const m = metal(S.forge.tray[i] || 1);
+      drawBarIcon(TRAY.x - 30 + (i % 5) * 15, TRAY.y - Math.floor(i / 5) * 9, 0.8, m.col, m.glow);
+    }
+    const topM = S.forge.tray.length ? metal(S.forge.tray[S.forge.tray.length - 1]) : null;
+    ctx.fillStyle = topM ? topM.col : '#e8b93a'; ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(topM ? topM.name + ' bars' : 'metal bars', TRAY.x, TRAY.y + 34);
   } else {
     plateCircle(FORGE.x, FORGE.y, 52, '#ff8a3c', S.forgePlate.paid, S.forgePlate.cost, 'rgba(255,138,60,0.35)');
     ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText('⚒', FORGE.x, FORGE.y - 2);
-    ctx.font = 'bold 11px sans-serif'; ctx.fillText('FORGE (x' + BAR_MUL + ' gold)', FORGE.x, FORGE.y + 20);
+    ctx.font = 'bold 11px sans-serif'; ctx.fillText('SMELTER (shields→bars)', FORGE.x, FORGE.y + 20);
     ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
     ctx.fillText(fmt(S.forgePlate.cost - S.forgePlate.paid) + ' ¢', FORGE.x, FORGE.y + 74);
   }
@@ -3055,7 +3091,7 @@ window.KS = {
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry,
-  initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL,
+  initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP },
   start() { S.started = true; },
 };
