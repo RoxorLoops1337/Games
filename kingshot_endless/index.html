@@ -278,6 +278,64 @@ function hatchEgg() {
 }
 function setActivePet(id) { if (petLvl(id) > 0) { S.activePet = id; sfx('built', true); } }
 
+// ---- gear / equipment (boss loot) ----------------------------
+// Boss kings drop gear. Three slots (weapon/armor/trinket); each piece
+// rolls a rarity (reusing the pet tiers) and a stat. Better pieces
+// auto-equip, weaker ones salvage into a gem — no fiddly inventory.
+const RAR_MUL = [1, 1.8, 3, 5]; // power multiplier per rarity tier
+const TRINKET_KINDS = [
+  { kind: 'coin',   label: 'of Greed' },
+  { kind: 'rate',   label: 'of Haste' },
+  { kind: 'speed',  label: 'of Swiftness' },
+  { kind: 'magnet', label: 'of Draw' },
+];
+const GEAR_SLOTS = [
+  { id: 'weapon',  ic: '🗡', name: 'Weapon',  fixed: 'dmg', base: 0.12 },
+  { id: 'armor',   ic: '🛡', name: 'Armor',   fixed: 'hp',  base: 0.10 },
+  { id: 'trinket', ic: '💍', name: 'Trinket', fixed: null,  base: 0.10 },
+];
+function gearDef(id) { return GEAR_SLOTS.find(s => s.id === id) || null; }
+function gearBonus(kind) {
+  let b = 0;
+  for (const s of GEAR_SLOTS) { const g = S.gear && S.gear[s.id]; if (g && g.kind === kind) b += g.amt; }
+  return b;
+}
+function gearCount() { let n = 0; for (const s of GEAR_SLOTS) if (S.gear && S.gear[s.id]) n++; return n; }
+function rollGear() {
+  const slot = GEAR_SLOTS[Math.floor(rnd() * GEAR_SLOTS.length)];
+  const rar = rollRarity(); // reuse the pet rarity roller
+  let kind = slot.fixed, kname = '';
+  if (!kind) { const tk = TRINKET_KINDS[Math.floor(rnd() * TRINKET_KINDS.length)]; kind = tk.kind; kname = tk.label; }
+  const amt = Math.round(slot.base * RAR_MUL[rar] * 1000) / 1000;
+  return { slot: slot.id, kind, rar, amt, kname };
+}
+function grantGear(g) {
+  S.stats.gearFound = (S.stats.gearFound || 0) + 1;
+  const cur = S.gear[g.slot];
+  if (!cur || g.amt > cur.amt) {
+    S.gear[g.slot] = g;
+    S.player.maxHp = pMaxHp(); if (S.player.hp > S.player.maxHp) S.player.hp = S.player.maxHp;
+    const rc = RARITY[g.rar].col, def = gearDef(g.slot);
+    S.toasts.push({ txt: def.ic + ' ' + RARITY[g.rar].name + ' ' + def.name + '!', t: 0 });
+    S.goldPulse = Math.max(S.goldPulse, 0.5); S.shake = Math.max(S.shake, 6);
+    for (let i = 0; i < 18; i++) S.parts.push({ x: S.player.x, y: S.player.y - 20, vx: (rnd() - 0.5) * 300, vy: -100 - rnd() * 200, t: 0, dur: 0.8, r: 3, color: rc, g: 1 });
+    sfx('unlock', true); buzz(30);
+    return true;
+  }
+  // weaker than what's equipped → salvage into a gem
+  S.gems += 1; S.stats.gemsFound = (S.stats.gemsFound || 0) + 1;
+  float(S.player.x, S.player.y - 40, 'Salvaged +1💎', '#6ee0d8');
+  return false;
+}
+function gearLabel(g) {
+  const def = gearDef(g.slot);
+  const kd = TRINKET_KINDS.find(t => t.kind === g.kind);
+  return RARITY[g.rar].name + ' ' + def.name + (g.kname ? ' ' + g.kname : '');
+}
+function gearStatText(g) {
+  return '+' + Math.round(g.amt * 100) + '% ' + (g.kind === 'dmg' ? 'damage' : g.kind === 'hp' ? 'max HP' : g.kind === 'coin' ? 'coin value' : g.kind === 'rate' ? 'fire rate' : g.kind === 'speed' ? 'move speed' : 'pickup range');
+}
+
 function eco(k)      { return Math.pow(ECO, k - 1); }
 function helmVal(k)  { return Math.ceil(5 * eco(k)); }
 function foeHp(k)    { return Math.ceil(13 * Math.pow(HP_T, k - 1)); }
@@ -401,6 +459,7 @@ function reset() {
     combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
     xp: 0, level: 1, cards: null, pendingLevels: 0, perks: {},
     pets: {}, activePet: null, showPets: false, petPos: { x: SPAWN.x - 30, y: SPAWN.y + 10 },
+    gear: { weapon: null, armor: null, trinket: null }, showGear: false,
     boon: null, boonT: 30, frenzyT: 0, goldRushT: 0,
     district: null,
     distPlate: { cost: 400, paid: 0, built: false },
@@ -417,12 +476,12 @@ function reset() {
   };
 }
 function cap()     { return CAP0 + CAP_UP * S.up.cap + 2 * pk('cap'); }
-function pMaxHp()  { return Math.round((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns) * (1 + petBonus('hp')) * (1 + cperkBonus('hp'))); }
-function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')) * (1 + petBonus('speed')) * (1 + cperkBonus('speed')); }
-function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (S.frenzyT > 0 ? 1.5 : 1); }
-function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (1 + petBonus('rate')) / (1 + cperkBonus('rate')) / (S.frenzyT > 0 ? 2 : 1); }
-function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet') + petBonus('magnet')); }
-function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (1 + cperkBonus('coin')) * (S.goldRushT > 0 ? 3 : 1); }
+function pMaxHp()  { return Math.round((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns) * (1 + petBonus('hp')) * (1 + cperkBonus('hp')) * (1 + gearBonus('hp'))); }
+function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')) * (1 + petBonus('speed')) * (1 + cperkBonus('speed')) * (1 + gearBonus('speed')); }
+function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (1 + gearBonus('dmg')) * (S.frenzyT > 0 ? 1.5 : 1); }
+function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (1 + petBonus('rate')) / (1 + cperkBonus('rate')) / (1 + gearBonus('rate')) / (S.frenzyT > 0 ? 2 : 1); }
+function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet') + petBonus('magnet') + gearBonus('magnet')); }
+function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (1 + cperkBonus('coin')) * (1 + gearBonus('coin')) * (S.goldRushT > 0 ? 3 : 1); }
 function comboWindow() { return COMBO_WINDOW + 0.4 * pk('combow'); }
 function critChance() { return 0.10 * S.gemUp.crit + 0.06 * pk('crit'); }
 function critMult()   { return 3 + 0.6 * pk('critdmg'); }
@@ -614,7 +673,7 @@ function save() {
       loginDay: S.loginDay, lastLoginDay: S.lastLoginDay,
       showQuests: S.showQuests ? 1 : 0,
       xp: S.xp, level: S.level, perks: S.perks,
-      pets: S.pets, activePet: S.activePet,
+      pets: S.pets, activePet: S.activePet, gear: S.gear,
       district: S.district ? {
         plates: Object.fromEntries(Object.entries(S.district.plates).map(([id, pl]) => [id, { b: pl.built ? 1 : 0, p: pl.paid }])),
         grove: S.district.grove.logs, quarry: S.district.quarry.stones,
@@ -689,6 +748,7 @@ function load() {
   S.xp = d.xp || 0; S.level = d.level || 1; S.perks = d.perks || {};
   S.pets = d.pets || {}; S.activePet = d.activePet || null;
   if (S.activePet && petLvl(S.activePet) <= 0) S.activePet = null;
+  S.gear = Object.assign({ weapon: null, armor: null, trinket: null }, d.gear || {});
   if (d.district) {
     S.distPlate.built = true;
     initDistrict();
@@ -872,6 +932,7 @@ function hurtEnemy(e, dmg) {
       dropItem(e.x, e.y, { k: e.k, crown: true });
       dropItem(e.x, e.y, { gem: true }); dropItem(e.x, e.y, { gem: true });
       for (let i = 0; i < 6; i++) dropHelmet(e.x, e.y, e.k);
+      grantGear(rollGear()); // every boss drops a piece of gear
       float(e.x, e.y - 40, '👑 CROWN!', '#ffd94a', true);
       S.shake = 14; sfx('boom', true); buzz([50, 30, 80]);
     } else if (e.gold) {
@@ -1267,6 +1328,9 @@ const ACH = [
   { id: 'petLeg',  ic: '🐲', name: 'Mythic Bond',      d: 'Own a Legendary pet',            c: () => PETS.some(p => p.rar === 3 && petLvl(p.id) > 0) },
   { id: 'login7',  ic: '🎁', name: 'Regular',          d: 'Claim 7 daily rewards',          c: () => (S.stats.logins || 0) >= 7 },
   { id: 'jackpot', ic: '🎉', name: 'Jackpot!',         d: 'Claim the day-7 daily jackpot',   c: () => (S.stats.jackpots || 0) >= 1 },
+  { id: 'gear1',   ic: '🗡', name: 'Armed',            d: 'Equip your first piece of gear',  c: () => gearCount() >= 1 },
+  { id: 'gearSet', ic: '🛡', name: 'Fully Kitted',     d: 'Fill all three gear slots',       c: () => gearCount() >= 3 },
+  { id: 'gearLeg', ic: '⚜️', name: 'Artifact Bearer',  d: 'Equip a Legendary piece',         c: () => GEAR_SLOTS.some(s => S.gear[s.id] && S.gear[s.id].rar === 3) },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -3261,6 +3325,7 @@ function drawHud() {
   drawQuests();
   drawPets();
   drawLogin();
+  drawGear();
   drawCrownHall();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -3448,6 +3513,7 @@ function drawStatsPanel() {
     ['🃏 Perks picked', fmt(perkCount())], ['★ Boons caught', fmt(S.stats.boons || 0)],
     ['🐾 Pets owned', petsOwned() + '/' + PETS.length], ['🥚 Eggs hatched', fmt(S.stats.hatches || 0)],
     ['🎁 Daily claims', fmt(S.stats.logins || 0)], ['🏛 Crown perks', fmt(CPERKS.reduce((s, p) => s + cpk(p.id), 0))],
+    ['🗡 Gear found', fmt(S.stats.gearFound || 0)], ['🛡 Slots filled', gearCount() + '/3'],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3575,6 +3641,45 @@ function drawPets() {
   }
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap an owned pet to make it your active companion · tap empty space to close', cx, vh - 16);
+}
+function drawGear() {
+  // ⚔️ equipment button below the gift button
+  const bx = vw - 46, by = 146;
+  hudBtn(bx, by, 36, 30, '🗡', () => { S.showGear = !S.showGear; save(); });
+  if (!S.showGear) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.93)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showGear = false; } });
+  const cx = vw / 2, top = Math.max(46, vh * 0.12);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('🗡 EQUIPMENT', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText('Boss kings drop gear — stronger pieces auto-equip', cx, top + 22);
+  let y = top + 44;
+  const rowH = 84, w = Math.min(360, vw - 32);
+  for (const s of GEAR_SLOTS) {
+    const g = S.gear[s.id];
+    const rc = g ? RARITY[g.rar].col : 'rgba(255,255,255,0.12)';
+    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.fill();
+    ctx.strokeStyle = rc; ctx.lineWidth = g ? 2 : 1; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.stroke();
+    ctx.font = '34px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = g ? '#fff' : 'rgba(255,255,255,0.3)';
+    ctx.fillText(s.ic, cx - w / 2 + 40, y + rowH / 2 - 2);
+    ctx.textAlign = 'left';
+    if (g) {
+      ctx.fillStyle = rc; ctx.font = 'bold 15px sans-serif';
+      ctx.fillText(gearLabel(g), cx - w / 2 + 74, y + 30);
+      ctx.fillStyle = '#c8d0da'; ctx.font = '13px sans-serif';
+      ctx.fillText(gearStatText(g), cx - w / 2 + 74, y + 52);
+    } else {
+      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(s.name + ' — empty', cx - w / 2 + 74, y + 34);
+      ctx.fillStyle = '#55606c'; ctx.font = '11px sans-serif';
+      ctx.fillText('Slay a boss king to find one', cx - w / 2 + 74, y + 52);
+    }
+    y += rowH;
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap empty space to close', cx, y + 14);
 }
 function drawLogin() {
   // 🎁 button below the pets button; glows + bounces when a reward is ready
@@ -3818,6 +3923,7 @@ window.KS = {
   PETS, RARITY, hatchEgg, eggCost, petLvl, petsOwned, activePet, petBonus, petCollectionMul, setActivePet, drawPets,
   CPERKS, cpk, cperkCost, cperkBonus, buyCperk, drawCrownHall,
   CALENDAR, checkLogin, claimLogin, drawLogin, dayStr,
+  GEAR_SLOTS, RAR_MUL, rollGear, grantGear, gearBonus, gearCount, gearLabel, drawGear,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },

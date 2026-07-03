@@ -659,6 +659,48 @@ t.ok(KS.S.loginDay === 3 && KS.S.lastLoginDay === KS.dayStr(0), 'calendar progre
 KS.S.stats.logins = 0; KS.S.stats.jackpots = 0; KS.S.gems = 0; KS.S.pallet = 0; KS.S.frenzyT = 0; KS.S.goldRushT = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- gear / equipment (boss loot) ----
+KS.S.gear = { weapon: null, armor: null, trinket: null }; KS.S.stats.gearFound = 0; KS.S.gems = 0;
+// a rolled piece has a valid slot, rarity, kind and positive stat
+const rg = KS.rollGear();
+t.ok(['weapon', 'armor', 'trinket'].includes(rg.slot) && rg.rar >= 0 && rg.rar <= 3 && rg.amt > 0, 'rollGear produces a valid piece');
+// equipping the first piece in a slot always takes
+const wpn = { slot: 'weapon', kind: 'dmg', rar: 1, amt: 0.216, kname: '' };
+KS.S.perks = {}; KS.S.crowns = 0; KS.S.cperks = {}; KS.S.pets = {}; KS.S.activePet = null;
+const dmgBare = KS.pDmg();
+t.ok(KS.grantGear(wpn) === true, 'first gear in a slot auto-equips');
+t.ok(KS.gearBonus('dmg') === 0.216 && KS.pDmg() > dmgBare, 'weapon gear raises damage');
+t.ok(KS.gearCount() === 1 && KS.S.stats.gearFound === 1, 'slot filled + drop counted');
+// a stronger piece replaces it; a weaker one salvages into a gem
+const gemsPre = KS.S.gems;
+t.ok(KS.grantGear({ slot: 'weapon', kind: 'dmg', rar: 3, amt: 0.60, kname: '' }) === true, 'a stronger weapon replaces the old one');
+t.ok(KS.gearBonus('dmg') === 0.60, 'the better weapon is now equipped');
+t.ok(KS.grantGear({ slot: 'weapon', kind: 'dmg', rar: 0, amt: 0.12, kname: '' }) === false, 'a weaker weapon does not equip');
+t.ok(KS.S.gems === gemsPre + 1, 'the weaker piece is salvaged into a gem');
+// armor raises max HP; trinket kinds feed their own stats
+KS.grantGear({ slot: 'armor', kind: 'hp', rar: 2, amt: 0.30, kname: '' });
+KS.grantGear({ slot: 'trinket', kind: 'coin', rar: 1, amt: 0.18, kname: 'of Greed' });
+t.ok(KS.gearBonus('hp') === 0.30 && KS.gearBonus('coin') === 0.18, 'armor + trinket bonuses register');
+t.ok(KS.gearCount() === 3, 'all three slots can be filled');
+// milestones
+KS.checkAch();
+t.ok(KS.S.ach.gear1 === true && KS.S.ach.gearSet === true && KS.S.ach.gearLeg === true, 'gear milestones unlock (armed, full set, legendary)');
+// a boss kill drops gear
+KS.start(); freezeSpawns();
+const zg = KS.S.zones[0]; KS.S.enemies.length = 0;
+KS.spawnEnemy(zg, { boss: true });
+const gboss = KS.S.enemies.find(e => e.boss);
+const foundBefore = KS.S.stats.gearFound;
+KS.hurtEnemy(gboss, 1e12);
+t.ok(KS.S.stats.gearFound === foundBefore + 1, 'defeating a boss drops a piece of gear');
+// gear persists through save/load
+KS.S.gear = { weapon: { slot: 'weapon', kind: 'dmg', rar: 2, amt: 0.36, kname: '' }, armor: null, trinket: null };
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.gear.weapon && KS.S.gear.weapon.amt === 0.36 && KS.gearBonus('dmg') === 0.36, 'equipped gear persists through save/load');
+KS.S.gear = { weapon: null, armor: null, trinket: null }; KS.S.stats.gearFound = 0; KS.S.gems = 0;
+KS.S.enemies.length = 0; KS.S.items.length = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
