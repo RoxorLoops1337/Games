@@ -86,6 +86,160 @@
     animation:pulse .5s ease-in-out infinite alternate;
   }
   @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.03)}}
+  #encoreBtn{
+    display:none;width:100%;margin-top:8px;border:0;border-radius:10px;padding:15px;
+    font-size:16px;font-weight:900;letter-spacing:.08em;
+    background:linear-gradient(90deg,var(--amber),var(--green));color:#0A1608;
+    animation:pulse .45s ease-in-out infinite alternate;
+  }
+
+  /* setlist builder — pop-up modal */
+  #setlistModal{
+    display:none;position:fixed;inset:0;z-index:80;
+    background:rgba(8,6,13,.72);backdrop-filter:blur(3px);
+    align-items:flex-end;justify-content:center;padding:0;
+  }
+  #setlistModal.on{display:flex}
+  .slPanel{
+    width:100%;max-width:520px;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:var(--panel);border:1px solid var(--line);border-bottom:0;
+    border-radius:16px 16px 0 0;padding:16px 16px 22px;
+    box-shadow:0 -20px 60px -10px rgba(0,0,0,.7);
+    animation:slideUp .22s ease-out;
+  }
+  @keyframes slideUp{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+  .slTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .slTitle{font-size:17px;font-weight:800;letter-spacing:-.01em}
+  #slClose{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;font-size:15px;padding:5px 11px}
+  #slVibe{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-bottom:12px;line-height:1.5}
+  #slVibe b{color:var(--ac)}
+  #planBtn{display:none;width:100%;margin-top:8px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--dim);border-radius:10px;padding:9px;font-size:12px;font-weight:700;letter-spacing:.04em}
+  #slDig{width:100%;margin-bottom:12px;border:1px dashed var(--amber);background:transparent;
+    color:var(--amber);border-radius:10px;padding:11px;font-size:13px;font-weight:700}
+  #slDig:disabled{opacity:.4}
+  .genre{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;
+    padding:1px 5px;border-radius:4px;background:color-mix(in srgb,var(--ac) 22%,transparent);color:var(--ac);margin-left:4px}
+  .crChip.fav{box-shadow:inset 0 0 0 1px var(--green)}
+  .crChip.rare{border-color:var(--amber)}
+  .crChip .star{color:var(--amber);font-size:10px}
+
+  .slHead{display:flex;justify-content:space-between;align-items:baseline;
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ac);margin-bottom:8px}
+  .slHead #slCount{color:var(--dim)}
+  #slCurveWrap{position:relative;background:var(--panel2);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+  #slCurve{display:flex;align-items:flex-end;gap:3px;height:38px}
+  #slCurve i{flex:1;min-width:4px;border-radius:2px 2px 0 0;background:linear-gradient(var(--ac),color-mix(in srgb,var(--ac) 30%,transparent));transition:height .15s}
+  .slCurveLbl{position:absolute;top:6px;right:10px;font-family:var(--mono);font-size:10px;color:var(--faint)}
+  #slChosen{display:flex;flex-wrap:wrap;gap:6px;min-height:34px;margin-bottom:8px}
+  #slChosen:empty::before{content:'Tap tracks below to build your set…';color:var(--faint);font-size:12px;font-style:italic}
+  .slChip{display:flex;align-items:center;gap:6px;background:var(--ac);color:var(--ac-ink);
+    border:0;border-radius:8px;padding:7px 10px;font-size:12.5px;font-weight:700}
+  .slChip .ord{font-family:var(--mono);opacity:.7;font-size:11px}
+  .slChip .en{font-family:var(--mono);font-size:10px;opacity:.8}
+  .slSub{font-size:11px;color:var(--faint);margin-bottom:6px}
+  #slCrate{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .crChip{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:7px 10px;font-size:12.5px;display:flex;align-items:center;gap:6px}
+  .crChip.on{border-color:var(--ac);color:var(--ac)}
+  .crChip .en{font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .crChip .bars{display:inline-flex;align-items:flex-end;gap:1px;height:11px}
+  .crChip .bars i{width:2px;background:var(--ac);border-radius:1px}
+  #slBtns{display:flex;gap:8px}
+  #slAuto{flex:none;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:12px 14px;font-size:13px;font-weight:700}
+  #slPlay{flex:1;border:0;border-radius:10px;padding:12px;font-size:15px;font-weight:800;letter-spacing:.04em;background:var(--ac);color:var(--ac-ink)}
+  #slPlay:disabled{opacity:.4}
+
+  #trackLbl{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ac);margin-bottom:6px}
+  #trackLbl .en{color:var(--faint)}
+
+  /* the transition — crossfader */
+  #transWrap{display:none;margin-top:8px;border:1px solid var(--magenta);border-radius:10px;
+    background:linear-gradient(100deg,#2A1424,var(--panel2));padding:10px 12px}
+  .transHead{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:8px}
+  .transHead b{color:var(--ink)}
+  #transV{font-weight:700;color:var(--magenta)}
+  #transV.good{color:var(--green)} #transV.bad{color:var(--magenta)}
+  #transFader{position:relative;height:52px;border-radius:10px;background:#0B0910;border:1px solid var(--line);
+    touch-action:none;overflow:hidden}
+  #transSweet{position:absolute;top:0;bottom:0;width:13%;left:40%;
+    background:linear-gradient(var(--green),transparent);opacity:.22;border-left:1px dashed var(--green);border-right:1px dashed var(--green)}
+  .transRail{position:absolute;top:50%;left:12px;right:12px;height:4px;transform:translateY(-50%);border-radius:4px;
+    background:linear-gradient(90deg,var(--magenta),#241a2e 45% 55%,#4DD8E8)}
+  #transKnob{position:absolute;top:6px;bottom:6px;width:38px;border-radius:8px;left:0;
+    background:linear-gradient(180deg,#F4F1F7,#B9B2C9);box-shadow:0 4px 12px rgba(0,0,0,.5)}
+  .transHint{font-family:var(--mono);font-size:10px;color:var(--faint);text-align:center;margin-top:8px}
+
+  /* the filter riser */
+  #riserWrap{display:none;margin-top:8px;border:1px solid var(--violet);border-radius:10px;
+    background:linear-gradient(100deg,#1E1634,var(--panel2));padding:10px 12px}
+  .riserHead{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:8px}
+  #riserV{color:var(--violet);font-weight:700}
+  #riserBar{position:relative;height:16px;border-radius:8px;background:#0B0910;border:1px solid var(--line);overflow:hidden;margin-bottom:8px}
+  #riserPeak{position:absolute;top:0;bottom:0;left:71%;width:20%;background:var(--green);opacity:.2;border-left:1px dashed var(--green)}
+  #riserFill{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--violet),var(--magenta))}
+  #riserBtn{width:100%;border:0;border-radius:8px;padding:13px;font-size:14px;font-weight:800;letter-spacing:.04em;
+    background:var(--violet);color:#120B22;touch-action:none}
+  #riserBtn.holding{background:var(--magenta);color:#16000A}
+
+  /* crowd hype (build it by tapping the decks during a live set) */
+  #hypeWrap{margin-top:8px}
+  #hypeLbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:4px}
+  #hypeLbl b{color:var(--magenta)}
+  #hypeBar i{background:linear-gradient(90deg,var(--ac),var(--magenta))}
+  #streakLbl{font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:6px;display:none}
+
+  /* crowd request card */
+  #reqCard{
+    display:none;margin-top:10px;border:1px solid var(--amber);border-radius:10px;
+    background:linear-gradient(100deg,#2A2130,var(--panel2));padding:10px 12px;
+  }
+  #reqQ{font-size:13px;color:var(--ink);margin-bottom:8px;line-height:1.4}
+  #reqT{font-family:var(--mono);font-size:10px;color:var(--amber)}
+  .reqBtns{display:flex;gap:8px;margin-top:8px}
+  .reqBtns button{
+    flex:1;border:0;border-radius:8px;padding:10px 6px;font-size:12px;font-weight:700;
+  }
+  #reqA{background:var(--green);color:#08130B}
+  #reqB{background:var(--violet);color:#120B22}
+
+  /* golden vinyl — viral moment */
+  #gold{
+    display:none;position:fixed;right:14px;top:110px;z-index:60;
+    width:64px;height:64px;border-radius:50%;border:0;font-size:30px;
+    background:radial-gradient(circle at 35% 30%, #FFE9A8, #F5C542 45%, #B8860B 80%);
+    box-shadow:0 0 24px 6px rgba(245,197,66,.45);
+    animation:goldspin 2.2s linear infinite;
+  }
+  @keyframes goldspin{50%{transform:rotate(180deg) scale(1.12)}to{transform:rotate(360deg)}}
+
+  /* juice: confetti + screen flash + crowd emoji */
+  .conf{
+    position:fixed;width:8px;height:12px;z-index:98;pointer-events:none;
+    animation:confall 1.1s ease-in forwards;
+  }
+  @keyframes confall{
+    from{transform:translateY(0) rotate(0)}
+    to{transform:translateY(64vh) rotate(540deg);opacity:0}
+  }
+  #flash{
+    position:fixed;inset:0;background:var(--magenta);opacity:0;pointer-events:none;z-index:97;
+  }
+  #flash.on{animation:flashy .35s ease-out}
+  @keyframes flashy{from{opacity:.35}to{opacity:0}}
+  .crowd{
+    position:fixed;font-size:20px;pointer-events:none;z-index:49;
+    animation:crowdrise 1.6s ease-out forwards;
+  }
+  @keyframes crowdrise{
+    from{transform:translateY(0) scale(.8);opacity:1}
+    to{transform:translateY(-90px) scale(1.3);opacity:0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .conf,.crowd{display:none}
+    #gold{animation:none}
+    #flash.on{animation:none}
+  }
 
   /* tap pad */
   #padWrap{display:flex;flex-direction:column;align-items:center;padding:16px 14px}
@@ -150,6 +304,8 @@
   @media (prefers-reduced-motion:reduce){
     #pad.spin{animation:none}
     #dropBtn{animation:none}
+    #encoreBtn{animation:none}
+    .slPanel{animation:none}
   }
 </style>
 </head>
@@ -184,12 +340,44 @@
     <div id="nextLbl"></div>
     <div id="gigZone">
       <button class="big" id="gigBtn">▶ GO LIVE</button>
+      <button id="planBtn">🎵 Edit your setlist</button>
+
       <div id="gigRun">
+        <div id="trackLbl"></div>
         <div id="gigTrack"></div>
         <div class="bar"><i id="gigBar"></i></div>
         <div id="gigPayLbl"></div>
+        <div id="hypeWrap">
+          <div id="hypeLbl"><span id="moodLbl">CROWD MOOD — tap the decks!</span><b id="hypeV">×1.00</b></div>
+          <div class="bar" id="hypeBar"><i id="hypeFill"></i></div>
+        </div>
+        <div id="streakLbl"></div>
       </div>
+      <button id="encoreBtn">🎉 ENCORE — ONE MORE! 🎉</button>
+
+      <!-- the transition: crossfader blend -->
+      <div id="transWrap">
+        <div class="transHead"><span>🎚️ BLEND INTO <b id="transNext">the next track</b></span><span id="transV">DRAG A → B</span></div>
+        <div id="transFader"><div id="transSweet"></div><div class="transRail"></div><div id="transKnob"></div></div>
+        <div class="transHint">slide across and release in the green — it drifts with the beat</div>
+      </div>
+
+      <!-- the filter riser: hold to build, release at the peak -->
+      <div id="riserWrap">
+        <div class="riserHead"><span>🎛️ FILTER — HOLD TO BUILD</span><span id="riserV"></span></div>
+        <div id="riserBar"><div id="riserPeak"></div><i id="riserFill"></i></div>
+        <button id="riserBtn">HOLD ▲ &nbsp; release at the peak</button>
+      </div>
+
       <button id="dropBtn">🔥 HIT THE DROP 🔥</button>
+      <div id="reqCard">
+        <div id="reqQ"></div>
+        <span id="reqT"></span>
+        <div class="reqBtns">
+          <button id="reqA">💰 Give them the hit</button>
+          <button id="reqB">🎧 Play your own track</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -215,6 +403,29 @@
   </div>
 </div>
 <div id="toast"></div>
+<button id="gold" aria-label="Viral moment">💿</button>
+<div id="flash"></div>
+
+<!-- setlist builder modal -->
+<div id="setlistModal">
+  <div class="slPanel">
+    <div class="slTop">
+      <span class="slTitle">🎵 Build your set</span>
+      <button id="slClose" aria-label="Close">✕</button>
+    </div>
+    <div id="slVibe"></div>
+    <div class="slHead"><span>YOUR SETLIST</span><span id="slCount">0 / 3</span></div>
+    <div id="slCurveWrap"><div id="slCurve"></div><span class="slCurveLbl" id="slEnergy"></span></div>
+    <div id="slChosen"></div>
+    <div class="slSub">Your crate — tap to add, in the order you'll play them:</div>
+    <div id="slCrate"></div>
+    <button id="slDig"></button>
+    <div id="slBtns">
+      <button id="slAuto">🎲 Auto</button>
+      <button id="slPlay">▶ PLAY SET</button>
+    </div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -232,6 +443,78 @@ const DROP_BONUS = 0.35;        // instant bonus = 35% of gig pay
 const AGENT_COST = 4000;
 const REBOOK_T = 1.5;
 const COMBO_MAX = 3, COMBO_STEP = 0.08, COMBO_HOLD = 1.0;
+const DROPS_BY_ERA = [1, 1, 2, 2, 3, 3];   // drop windows per gig, by venue
+const STREAK_BONUS = 0.10, STREAK_CAP = 10; // each consecutive drop hit: +10% drop pay, up to +100%
+const HYPE_TAP = 0.035, HYPE_DROP = 0.30, HYPE_DECAY = 0.012; // hype: 0..1, doubles gig pay at full
+const REQ_CHANCE = 0.6, REQ_WIN = 6;        // crowd request odds per gig + decision window (s)
+const REQ_CASH = 0.5, REQ_FANS = 0.5;       // request rewards, as a fraction of the gig's payout
+const GOLD_MIN = 55, GOLD_MAX = 115, GOLD_LIFE = 6; // golden vinyl spawn timing + lifetime (s)
+const FRENZY_MUL = 7, FRENZY_T = 30;        // viral frenzy: ×7 fans/sec for 30s
+const MILESTONES = [10, 25, 50, 100];       // owning this many of an item doubles its output
+
+// --- Wave 1: the performance ---
+const SETLIST_LEN = [2, 3, 3, 4, 4, 5];     // tracks per set, by venue
+const ENERGY_MAX = 0.4;                      // a perfectly-paced energy curve = +40% payout
+// The Transition (crossfader blend) — drag the fader into the moving sweet spot on each track change
+const TRANS_MAX = 0.5;                        // flawless mixing across the set = +50% payout
+const TRANS_LIFE = 3.4;                       // seconds to land a blend before it drifts
+const TRANS_SWAY = 0.14, TRANS_SPEED = 2.3;   // the sweet spot drifts with the phrase
+const TRANS_PERFECT = 0.065, TRANS_CLEAN = 0.14, TRANS_OK = 0.26; // fader distance → grade
+const AUTO_TRANS_Q = 0.5;                     // agent / ignored transitions resolve to a competent-but-not-perfect blend
+// Filter Riser — hold to sweep the mix up, release at the peak
+const RISER_CHANCE = 0.7;                     // odds of a riser per set (dive bar and up)
+const RISER_LIFE = 6, RISER_FILL = 1.5;       // window to act; seconds of holding to reach full charge
+const RISER_MAX = 1.15, RISER_PEAK_LO = 0.82, RISER_PEAK_HI = 1.05; // overhold past MAX pops; release in [LO,HI] = perfect
+
+// Wave 2: genres, the vibe, crate-digging, crowd archetypes, the encore
+const GENRES = { house: '🏠 House', techno: '⚙️ Techno', disco: '🕺 Disco', dnb: '🥁 D&B', trance: '🌌 Trance', pop: '📻 Pop' };
+const VIBE_MAX = 0.35;                        // playing to the room's taste = up to +35%
+const DIG_BASE = 500, DIG_MUL = 1.8;          // crate-digging cost curve
+const ENCORE_THRESH = 0.8;                    // finish a set this hyped and the crowd demands one more
+const ENCORE_WIN = 3.2, ENCORE_JACKPOT = 0.6, ENCORE_BASE = 0.2; // encore timing window + payouts
+
+// The crate — each track has an energy (1–10) and a genre; bangers unlock as your career climbs.
+const TRACKS = [
+  { name: 'Bedroom Demo',      energy: 2, era: 0, genre: 'house' },
+  { name: 'First Loop',        energy: 3, era: 0, genre: 'house' },
+  { name: 'Lo-Fi Sketch',      energy: 2, era: 0, genre: 'disco' },
+  { name: 'Midnight Practice', energy: 4, era: 0, genre: 'house' },
+  { name: 'Basement Bounce',   energy: 5, era: 1, genre: 'disco' },
+  { name: 'Red Cup Anthem',    energy: 6, era: 1, genre: 'pop' },
+  { name: "Neighbour's Woe",   energy: 5, era: 1, genre: 'house' },
+  { name: 'Last Call',         energy: 4, era: 2, genre: 'disco' },
+  { name: 'Whiskey Groove',    energy: 6, era: 2, genre: 'house' },
+  { name: 'Tuesday Heater',    energy: 7, era: 2, genre: 'techno' },
+  { name: 'Peak Time',         energy: 8, era: 3, genre: 'techno' },
+  { name: 'Laser Room',        energy: 7, era: 3, genre: 'trance' },
+  { name: 'Strobe Logic',      energy: 8, era: 3, genre: 'techno' },
+  { name: 'Voltage',           energy: 9, era: 3, genre: 'dnb' },
+  { name: 'Concrete Bass',     energy: 9, era: 4, genre: 'techno' },
+  { name: '4AM Cathedral',     energy: 8, era: 4, genre: 'trance' },
+  { name: 'Industrial Ritual', energy: 10, era: 4, genre: 'techno' },
+  { name: 'Mainstage Messiah', energy: 10, era: 5, genre: 'trance' },
+  { name: 'Sunrise Set',       energy: 7, era: 5, genre: 'house' },
+  { name: 'Pyro',              energy: 10, era: 5, genre: 'dnb' },
+  // rare crate finds — never unlock by era; you dig for them (era: 99)
+  { name: 'Bootleg Edit',      energy: 7, era: 99, genre: 'disco',  rare: true },
+  { name: 'White Label',       energy: 8, era: 99, genre: 'techno', rare: true },
+  { name: 'Dusty 45',          energy: 5, era: 99, genre: 'disco',  rare: true },
+  { name: 'Unreleased ID',     energy: 9, era: 99, genre: 'dnb',    rare: true },
+  { name: 'Acid Relic',        energy: 8, era: 99, genre: 'techno', rare: true },
+  { name: 'Rare Groove',       energy: 6, era: 99, genre: 'house',  rare: true },
+  { name: 'Vinyl-Only Dub',    energy: 7, era: 99, genre: 'house',  rare: true },
+  { name: 'The Holy Grail',    energy: 10, era: 99, genre: 'trance', rare: true },
+];
+
+// Each venue's crowd is a different animal: what genre they crave, and how they feel about "the hit".
+const ARCHETYPES = [
+  { who: 'Your Cat',          fav: 'house',  commercial: 0 },
+  { who: 'Sloshed Mates',     fav: 'pop',    commercial: 1 },   // will chant for the wedding classic
+  { who: 'Grizzled Regulars', fav: 'disco',  commercial: 0 },
+  { who: 'Peak-Time Crowd',   fav: 'techno', commercial: 1 },
+  { who: 'Techno Purists',    fav: 'techno', commercial: -1 },  // play the hit and they fold their arms
+  { who: 'Festival Masses',   fav: 'trance', commercial: 1 },
+];
 
 const VENUES = [
   { name: 'Your Bedroom',        icon: '🛏️', cap: 1,     req: 0,      dur: 10, pay: 14,     fanGain: 6,    gig: 'Living-room livestream', sub: 'AUDIENCE: YOUR CAT',        era: 'Bedroom era' },
@@ -257,6 +540,17 @@ const COST_MUL = 1.15;
 const ALIAS_A = ['Nova', 'Neon', 'Static', 'Echo', 'Bass', 'Midnight', 'Crystal', 'Phantom', 'Retro', 'Solar'];
 const ALIAS_B = ['', ' Pulse', ' Drift', ' Haze', ' Riot', ' Bloom', ' Circuit', ' Mirage', ' Vandal', ' Halo'];
 
+const REQUESTS = [
+  'Someone waves a $20 and requests the wedding classic.',
+  '"PLAY THE REMIX!" — the entire room, in unison.',
+  'A promoter sidles up: "got anything more… commercial?"',
+  'The bride-to-be requests THAT song. You know the one.',
+  'Chat is spamming for the TikTok edit.',
+  'A label scout asks if you have "anything radio-friendly".',
+  'A guy in a fedora requests "real music". He means his demo.',
+  'The bar owner taps his watch and mouths "HITS. NOW."',
+];
+
 const FLAVOR = [
   ['Your cat left during the second track.', 'Mom says turn it down. Fans gained: 0.', 'You practiced the same transition 47 times.', 'Your desk fan counts as a smoke machine, right?'],
   ['Someone spilled beer on your controller.', 'A stranger asked for your SoundCloud. A STRANGER.', 'The neighbors called. Twice.', 'You cleared the kitchen with a 10-minute ambient intro.'],
@@ -278,7 +572,13 @@ function freshState() {
     gig: null, rebookT: 0,
     combo: 1, comboT: 0,
     bestVenue: 0,
-    stats: { taps: 0, gigs: 0, festGigs: 0, drops: 0, dropsHit: 0, playT: 0 },
+    dropStreak: 0,
+    golden: null, goldT: 45, frenzyT: 0,
+    lastSet: null,             // remembered setlist for one-tap re-booking
+    setlistOpen: false, pendingSet: [], slNonce: 0,
+    dug: [],                   // rare tracks unlocked by crate-digging
+    stats: { taps: 0, gigs: 0, festGigs: 0, drops: 0, dropsHit: 0, requests: 0, goldens: 0,
+             transitions: 0, perfectMixes: 0, risers: 0, risersHit: 0, digs: 0, encores: 0, playT: 0 },
     feed: [], feedDirty: true,
     flavorT: 20,
     offline: null,
@@ -290,10 +590,19 @@ S = freshState();
 /* ---------------- core math ---------------- */
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 function mult() { return 1 + INF_MUL * S.influence; }
+function milestoneMul(i) {
+  let m = 1;
+  for (const th of MILESTONES) if (S.items[i] >= th) m *= 2;
+  return m;
+}
+function nextMilestone(i) {
+  for (const th of MILESTONES) if (S.items[i] < th) return th;
+  return 0;
+}
 function fansPerSec() {
   let f = 0;
-  for (let i = 0; i < ITEMS.length; i++) f += ITEMS[i].fps * S.items[i];
-  return f * mult();
+  for (let i = 0; i < ITEMS.length; i++) f += ITEMS[i].fps * S.items[i] * milestoneMul(i);
+  return f * mult() * (S.frenzyT > 0 ? FRENZY_MUL : 1);
 }
 function tapPow() { return (1 + fansPerSec() * 0.06) * mult() * S.combo; }
 function itemCost(i) { return Math.ceil(ITEMS[i].cost * Math.pow(COST_MUL, S.items[i])); }
@@ -325,6 +634,111 @@ function fmt(n) {
 // for per-second / per-tap rates: keep a decimal on small values so "+0.4/s" doesn't read as "+0/s"
 function fmtRate(n) { return n > 0 && n < 10 ? +n.toFixed(1) + '' : fmt(n); }
 
+/* ---------------- the crate / setlist / energy ---------------- */
+function topEra() { return Math.max(S.bestVenue, venueIdx()); }
+function owned(id) { return id >= 0 && id < TRACKS.length && (TRACKS[id].era <= topEra() || S.dug.indexOf(id) >= 0); }
+function unlockedTracks() {
+  const out = [];
+  for (let i = 0; i < TRACKS.length; i++) if (owned(i)) out.push(i);
+  return out;
+}
+// crowd archetype + the vibe they crave
+function archetype(v) { return ARCHETYPES[v] || ARCHETYPES[0]; }
+function vibeScore(set, v) {
+  if (!set || !set.length) return 0;
+  const fav = archetype(v).fav;
+  let hit = 0;
+  for (const id of set) if (TRACKS[id].genre === fav) hit++;
+  return clamp(hit / set.length, 0, 1);
+}
+function vibeMul(set, v) { return 1 + vibeScore(set, v) * VIBE_MAX; }
+// crate-digging: cost grows with how many rares you've found
+function digCost() { return Math.ceil(DIG_BASE * Math.pow(DIG_MUL, S.dug.length)); }
+function digPool() {  // rare tracks not yet found
+  const out = [];
+  for (let i = 0; i < TRACKS.length; i++) if (TRACKS[i].rare && S.dug.indexOf(i) < 0) out.push(i);
+  return out;
+}
+function dig() {
+  const pool = digPool();
+  if (!pool.length) return -1;
+  const c = digCost();
+  if (S.cash < c) return -1;
+  S.cash -= c;
+  const id = pool[Math.floor(Math.random() * pool.length)];
+  S.dug.push(id);
+  S.stats.digs++;
+  S.slNonce++;
+  toast('CRATE FIND: ' + TRACKS[id].name.toUpperCase());
+  pushFeed('💎 You dug up a rare record: "' + TRACKS[id].name + '" (' + GENRES[TRACKS[id].genre].replace(/^\S+\s/, '') + ', energy ' + TRACKS[id].energy + ').');
+  confetti(14); sfx('unlock');
+  return id;
+}
+function setlistLen(v) { return SETLIST_LEN[v] || 3; }
+// how many tracks a set needs at venue v (never more than you've unlocked)
+function needLen(v) { return Math.min(setlistLen(v), unlockedTracks().length); }
+function shuffled(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+// The crowd wants a journey: energy that builds, with the biggest track saved for peak time.
+function energyScore(set) {
+  if (!set || set.length < 2) return 0.5;
+  const es = set.map(id => TRACKS[id].energy);
+  let rising = 0; const pairs = es.length - 1;
+  for (let i = 0; i < pairs; i++) if (es[i + 1] >= es[i]) rising++;
+  const ramp = rising / pairs;                        // 0..1: how well it builds
+  const maxIdx = es.indexOf(Math.max.apply(null, es));
+  const peakLate = maxIdx >= Math.ceil(es.length / 2) ? 1 : 0; // banger in the back half?
+  return clamp(ramp * 0.75 + peakLate * 0.25, 0, 1);
+}
+function energyMul(set) { return 1 + energyScore(set) * ENERGY_MAX; }
+// the agent (and quick-play default) fields a well-paced set that leans into the room's taste,
+// then sorts it to build energy toward a late peak.
+function autoSetlist(v) {
+  const pool = unlockedTracks(), fav = archetype(v).fav, len = needLen(v);
+  // prefer on-genre tracks for the vibe bonus, but fall back to fill the slots
+  const onGenre = shuffled(pool.filter(id => TRACKS[id].genre === fav));
+  const rest = shuffled(pool.filter(id => TRACKS[id].genre !== fav));
+  const picked = onGenre.concat(rest).slice(0, len);
+  picked.sort((a, b) => TRACKS[a].energy - TRACKS[b].energy);
+  return picked;
+}
+function validSet(set, v) {
+  if (!Array.isArray(set)) return null;
+  const seen = {}, out = [];
+  for (const id of set) if (owned(id) && !seen[id]) { seen[id] = 1; out.push(id); }
+  return out.length === needLen(v) ? out : null;
+}
+
+/* ---------------- setlist builder (UI-driven) ---------------- */
+function openSetlist() {
+  const v = venueIdx();
+  S.pendingSet = (validSet(S.lastSet, v) || autoSetlist(v)).slice();
+  S.setlistOpen = true; S.slNonce++;
+  return true;
+}
+function closeSetlist() { S.setlistOpen = false; }
+function toggleTrack(id) {
+  const v = venueIdx(), need = needLen(v);
+  const i = S.pendingSet.indexOf(id);
+  if (i >= 0) { S.pendingSet.splice(i, 1); S.slNonce++; return true; }
+  if (TRACKS[id].era > topEra()) return false;
+  if (S.pendingSet.length >= need) return false;  // set is full
+  S.pendingSet.push(id); S.slNonce++;
+  return true;
+}
+function autoFillSet() { S.pendingSet = autoSetlist(venueIdx()); S.slNonce++; }
+function setReady() { return S.pendingSet.length === needLen(venueIdx()); }
+function playSet() {
+  if (!setReady()) return false;
+  const set = S.pendingSet.slice();
+  S.setlistOpen = false;
+  if (S.gig) { S.lastSet = set; return true; } // mid-gig: just save it as the next set
+  return bookGig(set);
+}
+
 /* ---------------- actions ---------------- */
 function tap() {
   const gain = tapPow();
@@ -332,6 +746,8 @@ function tap() {
   S.stats.taps++;
   S.combo = Math.min(COMBO_MAX, S.combo + COMBO_STEP);
   S.comboT = COMBO_HOLD;
+  if (S.gig) S.gig.hype = Math.min(1, (S.gig.hype || 0) + HYPE_TAP); // work the decks: live taps hype the crowd
+  buzz(8);
   return gain;
 }
 function buyItem(i) {
@@ -339,7 +755,12 @@ function buyItem(i) {
   if (S.cash < c) return false;
   S.cash -= c;
   S.items[i]++;
-  sfx('buy');
+  if (MILESTONES.includes(S.items[i])) {
+    toast(ITEMS[i].icon + ' ' + ITEMS[i].name.toUpperCase() + ' ×2 OUTPUT!');
+    pushFeed('📈 Milestone: ' + S.items[i] + '× ' + ITEMS[i].name + ' — output doubled.');
+    confetti(14);
+    sfx('unlock');
+  } else sfx('buy');
   return true;
 }
 function buyAgent() {
@@ -350,38 +771,219 @@ function buyAgent() {
   sfx('buy');
   return true;
 }
-function bookGig() {
+function bookGig(set) {
   if (S.gig) return false;
   const v = venueIdx();
+  const dur = VENUES[v].dur;
+  // resolve the setlist: use what was passed (validated) else auto-build a paced one
+  let list = validSet(set, v) || (Array.isArray(set) ? null : null);
+  if (!list) list = (set && set.length ? set.filter(id => id >= 0 && id < TRACKS.length) : null) || autoSetlist(v);
+  if (!list.length) list = autoSetlist(v);
+  S.lastSet = list.slice();
+  const trackDur = dur / list.length;
+  // schedule N drop windows spread across the middle of the set
+  const n = DROPS_BY_ERA[v];
+  const dropAts = [];
+  for (let i = 0; i < n; i++) {
+    const lo = 0.2 + 0.6 * i / n, hi = 0.2 + 0.6 * (i + 1) / n;
+    dropAts.push(dur * (lo + Math.random() * (hi - lo) * 0.8));
+  }
   S.gig = {
-    v, t: 0, dur: VENUES[v].dur,
+    v, t: 0, dur,
+    set: list, trackDur, trackIdx: 0, transIdx: 0, trans: null, transScores: [],
+    riserAt: (v >= 2 && Math.random() < RISER_CHANCE) ? dur * (0.25 + Math.random() * 0.35) : -1,
+    riser: null, riserDone: false,
     pay: gigPay(v), fans: gigFans(v),
-    dropAt: VENUES[v].dur * (0.35 + Math.random() * 0.35),
-    drop: null, dropDone: false,
+    dropAts, dropIdx: 0, drop: null,
+    hype: 0, energy: energyScore(list), vibe: vibeScore(list, v),
+    reqAt: (v >= 1 && Math.random() < REQ_CHANCE) ? dur * (0.15 + Math.random() * 0.5) : -1,
+    req: null, reqDone: false,
+    encoreTried: false, encore: null,
   };
   sfx('book');
   return true;
 }
+
+/* --- The Transition: crossfader blend on each track change --- */
+function sweetCenter(tr) { return clamp(tr.base + TRANS_SWAY * Math.sin(tr.t * TRANS_SPEED), 0.14, 0.9); }
+function openTransition(g) {
+  S.stats.transitions++;
+  // if the screen is already busy with another moment, auto-blend competently instead of stacking controls
+  if (g.drop || g.req || (g.riser && !g.riser.done)) { g.transScores.push(AUTO_TRANS_Q); return; }
+  g.trans = { t: 0, base: 0.42 + Math.random() * 0.3, fader: 0, done: false };
+  sfx('dropcue');
+}
+function setTransFader(val) { if (S.gig && S.gig.trans) S.gig.trans.fader = clamp(val, 0, 1); }
+function resolveTransition(fader) {
+  const g = S.gig; if (!g || !g.trans || g.trans.done) return false;
+  const tr = g.trans; tr.done = true;
+  let q, verdict;
+  if (fader == null) {                       // window drifted shut
+    q = 0.3; verdict = 'drift';
+    pushFeed('🎚️ The blend drifted — a bit sloppy, but you rode it out.');
+  } else {
+    const d = Math.abs(fader - sweetCenter(tr));
+    if (d <= TRANS_PERFECT) { q = 1; verdict = 'perfect'; }
+    else if (d <= TRANS_CLEAN) { q = 0.6; verdict = 'clean'; }
+    else if (d <= TRANS_OK) { q = 0.3; verdict = 'rough'; }
+    else { q = 0; verdict = 'wreck'; }
+  }
+  if (verdict === 'perfect') {
+    S.stats.perfectMixes++;
+    g.hype = clamp(g.hype + 0.22, 0, 1);
+    const bonus = g.pay * 0.08;
+    S.cash += bonus; S.lifeCash += bonus;
+    toast('SEAMLESS BLEND  +$' + fmt(bonus));
+    pushFeed('🎚️ Seamless blend — nobody heard the join. +$' + fmt(bonus) + '.');
+    confetti(14); flash(); buzz([15, 25]); sfx('drop');
+  } else if (verdict === 'clean') {
+    g.hype = clamp(g.hype + 0.1, 0, 1); sfx('cash');
+  } else if (verdict === 'wreck') {
+    g.hype = clamp(g.hype - 0.18, 0, 1);
+    toast('TRAINWRECK 🚂');
+    pushFeed('🚂 Trainwreck. Two beats fighting. The floor winces.');
+    buzz([40, 20, 40]); sfx('book');
+  }
+  g.transScores.push(q); g.trans = null;
+  return true;
+}
+
+/* --- The Filter Riser: hold to build tension, release at the peak --- */
+function startRiser(g) {
+  g.riser = { charge: 0, holding: false, life: RISER_LIFE, touched: false, done: false };
+  g.riserDone = true; S.stats.risers++;
+  sfx('dropcue');
+}
+function holdRiser(down) {
+  const g = S.gig; if (!g || !g.riser || g.riser.done) return false;
+  g.riser.holding = down;
+  if (down) g.riser.touched = true;
+  else resolveRiser(false);
+  return true;
+}
+function resolveRiser(popped) {
+  const g = S.gig; if (!g || !g.riser || g.riser.done) return false;
+  const r = g.riser; r.done = true;
+  if (!popped && r.charge >= RISER_PEAK_LO && r.charge <= RISER_PEAK_HI) {
+    S.stats.risersHit++;
+    g.hype = clamp(g.hype + 0.25, 0, 1);
+    const bonus = g.pay * 0.12;
+    S.cash += bonus; S.lifeCash += bonus;
+    toast('FILTER PEAK  +$' + fmt(bonus));
+    pushFeed('🎛️ You held the filter to the ceiling and dropped it clean. +$' + fmt(bonus) + '.');
+    confetti(16); flash(); buzz([10, 20, 40]); sfx('drop');
+  } else if (!popped && r.charge > 0.15) {
+    g.hype = clamp(g.hype + r.charge * 0.08, 0, 1); sfx('cash');
+  } else {
+    pushFeed('🎛️ The filter popped flat — released too ' + (popped ? 'late' : 'early') + '.');
+    buzz(30);
+  }
+  g.riser = null;
+  return true;
+}
+
+// the live combined payout multiplier: crowd hype × energy pacing × mixing quality × reading the room
+function gigMul(g) {
+  const hypeMul = 1 + (g.hype || 0);
+  const eMul = 1 + (g.energy != null ? g.energy : energyScore(g.set)) * ENERGY_MAX;
+  const ts = g.transScores;
+  const tAvg = ts.length ? ts.reduce((a, b) => a + b, 0) / ts.length : 0;
+  const tMul = 1 + tAvg * TRANS_MAX;
+  const vMul = 1 + (g.vibe != null ? g.vibe : vibeScore(g.set, g.v)) * VIBE_MAX;
+  return hypeMul * eMul * tMul * vMul;
+}
 function dropHit() {
   const g = S.gig;
   if (!g || !g.drop) return false;
-  const bonus = g.pay * DROP_BONUS;
+  S.dropStreak++;
+  const streakMul = 1 + STREAK_BONUS * Math.min(S.dropStreak, STREAK_CAP);
+  const bonus = g.pay * DROP_BONUS * streakMul;
   S.cash += bonus; S.lifeCash += bonus;
   S.stats.dropsHit++;
-  g.drop = null; g.dropDone = true;
-  pushFeed('🔥 You hit the drop. +$' + fmt(bonus) + ' in instant hype.');
-  toast('PERFECT DROP  +$' + fmt(bonus));
+  g.hype = Math.min(1, g.hype + HYPE_DROP);
+  g.drop = null;
+  pushFeed('🔥 Drop #' + S.dropStreak + ' in a row. +$' + fmt(bonus) + ' in instant hype.');
+  toast(S.dropStreak > 1 ? 'DROP STREAK ×' + S.dropStreak + '  +$' + fmt(bonus) : 'PERFECT DROP  +$' + fmt(bonus));
+  confetti(18);
+  flash();
+  buzz([20, 30, 40]);
   sfx('drop');
   return true;
 }
-function finishGig() {
+function chooseReq(giveHit) {
+  const g = S.gig;
+  if (!g || !g.req) return false;
+  S.stats.requests++;
+  const arc = archetype(g.v);
+  if (giveHit) {
+    const cash = g.pay * REQ_CASH * Math.max(0.2, 1 + 0.5 * arc.commercial); // hit-lovers pay more, purists pay less
+    S.cash += cash; S.lifeCash += cash;
+    if (arc.commercial < 0) {
+      g.hype = clamp(g.hype - 0.1, 0, 1);
+      pushFeed('💰 You caved and played the hit. The ' + arc.who + ' groan — +$' + fmt(cash) + ', but the room cools.');
+    } else {
+      g.hype = clamp(g.hype + 0.15, 0, 1);
+      pushFeed('💰 You played the hit. The ' + arc.who + ' lose it. +$' + fmt(cash) + '.');
+    }
+  } else {
+    const fans = g.fans * REQ_FANS * Math.max(0.3, 1 - 0.3 * arc.commercial); // purists reward staying underground
+    S.fans += fans; S.lifeFans += fans;
+    g.hype = clamp(g.hype + (arc.commercial < 0 ? 0.2 : 0.1), 0, 1);
+    pushFeed('🎧 You stuck to your sound. ' + (arc.commercial < 0 ? 'The ' + arc.who + ' respect it. ' : '') + '+' + fmt(fans) + ' fans.');
+  }
+  g.req = null; g.reqDone = true;
+  sfx('cash');
+  return true;
+}
+function hitEncore() {
+  const g = S.gig;
+  if (!g || !g.encore) return false;
+  S.stats.encores++;
+  g.encore = null;
+  toast('ENCORE SMASHED! 🎆');
+  pushFeed('🎆 You dropped one more and tore the roof off. What a way to close.');
+  confetti(28); flash(); buzz([20, 40, 20, 40]); sfx('drop');
+  finishGig(1 + ENCORE_JACKPOT);
+  return true;
+}
+function tapGold() {
+  if (!S.golden) return false;
+  S.stats.goldens++;
+  const roll = Math.random();
+  if (roll < 0.4) {
+    const fans = Math.max(50, fansPerSec() * 300) * mult();
+    S.fans += fans; S.lifeFans += fans;
+    toast('CLIP WENT VIRAL  +' + fmt(fans) + ' FANS');
+    pushFeed('💿 A clip of your set went viral overnight: +' + fmt(fans) + ' fans.');
+  } else if (roll < 0.7) {
+    const cash = Math.max(25, gigPay(venueIdx()) * 2);
+    S.cash += cash; S.lifeCash += cash;
+    toast('MERCH SPIKE  +$' + fmt(cash));
+    pushFeed('💿 Bootleg tees of your logo are everywhere: +$' + fmt(cash) + '.');
+  } else {
+    S.frenzyT = FRENZY_T;
+    toast('FAN FRENZY  ×' + FRENZY_MUL + ' FANS FOR ' + FRENZY_T + 's');
+    pushFeed('💿 You are trending. Fans are FLOODING in (×' + FRENZY_MUL + ' for ' + FRENZY_T + 's).');
+  }
+  S.golden = null;
+  S.goldT = GOLD_MIN + Math.random() * (GOLD_MAX - GOLD_MIN);
+  confetti(24);
+  flash();
+  buzz([15, 25, 15, 25, 40]);
+  sfx('unlock');
+  return true;
+}
+function finishGig(bonusMul) {
   const g = S.gig;
   const V = VENUES[g.v];
-  S.cash += g.pay; S.lifeCash += g.pay;
-  S.fans += g.fans; S.lifeFans += g.fans;
+  const m = gigMul(g) * (bonusMul || 1);
+  const pay = g.pay * m, fans = g.fans * m;
+  S.cash += pay; S.lifeCash += pay;
+  S.fans += fans; S.lifeFans += fans;
   S.stats.gigs++;
   if (g.v === VENUES.length - 1) S.stats.festGigs++;
-  pushFeed(V.icon + ' ' + V.gig + ' done — $' + fmt(g.pay) + ', +' + fmt(g.fans) + ' fans.');
+  pushFeed(V.icon + ' ' + V.gig + ' done — $' + fmt(pay) + ', +' + fmt(fans) + ' fans' +
+    (m > 1.05 ? ' (×' + m.toFixed(2) + ((bonusMul || 1) > 1 ? ' with the encore!' : ' — hype, pacing, mixing & vibe') + ')' : '') + '.');
   sfx('cash');
   S.gig = null;
   S.rebookT = REBOOK_T;
@@ -417,6 +1019,51 @@ function toast(msg) {
   toastT = 2.2;
 }
 
+/* ---------------- juice ---------------- */
+const CONF_COLS = ['#FF4D8F', '#5ED98A', '#FFB454', '#A78BFF', '#4DD8E8'];
+function confetti(n) {
+  try {
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('div');
+      c.className = 'conf';
+      c.style.background = CONF_COLS[i % CONF_COLS.length];
+      c.style.left = (10 + Math.random() * 80) + 'vw';
+      c.style.top = (5 + Math.random() * 20) + 'vh';
+      c.style.animationDelay = (Math.random() * 0.25) + 's';
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 1500);
+    }
+  } catch (e) {}
+}
+function flash() {
+  try {
+    const f = byId('flash');
+    f.className = '';
+    void f.offsetWidth; // restart the animation
+    f.className = 'on';
+  } catch (e) {}
+}
+function buzz(pattern) {
+  try { if (navigator && navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+}
+let crowdT = 0;
+function crowdJoy(dt) { // emoji rising off the venue card while the set is hot
+  if (!S.gig) return;
+  crowdT -= dt;
+  const rate = 0.4 + (S.gig.hype || 0) * 2.5; // hotter crowd, more hands in the air
+  if (crowdT > 0) return;
+  crowdT = 1 / rate;
+  try {
+    const e = document.createElement('div');
+    e.className = 'crowd';
+    e.textContent = ['🙌', '🔥', '💃', '🕺', '❤️', '🎉'][Math.floor(Math.random() * 6)];
+    e.style.left = (15 + Math.random() * 70) + 'vw';
+    e.style.top = (28 + Math.random() * 10) + 'vh';
+    document.body.appendChild(e);
+    setTimeout(() => e.remove(), 1700);
+  } catch (err) {}
+}
+
 /* ---------------- tick ---------------- */
 function tick(dt) {
   if (!S.started) return;
@@ -443,20 +1090,82 @@ function tick(dt) {
   const g = S.gig;
   if (g) {
     g.t += dt;
-    if (!g.dropDone && !g.drop && g.t >= g.dropAt) {
+    // hype cools off unless you keep working the decks
+    g.hype = Math.max(0, (g.hype || 0) - HYPE_DECAY * dt);
+
+    // track changes → a crossfader transition to mix into the next tune
+    if (g.transIdx < g.set.length - 1 && g.t >= (g.transIdx + 1) * g.trackDur) {
+      g.transIdx++; g.trackIdx = g.transIdx;
+      openTransition(g);
+    }
+    if (g.trans && !g.trans.done) {
+      g.trans.t += dt;
+      if (g.trans.t >= TRANS_LIFE) resolveTransition(null); // drifted shut
+    }
+
+    // filter riser — hold to build, release at the peak
+    if (g.riserAt >= 0 && !g.riserDone && g.t >= g.riserAt && !g.trans && !g.drop && !g.req) startRiser(g);
+    if (g.riserAt >= 0 && !g.riserDone && g.t >= g.riserAt + 3) g.riserDone = true; // never got a clear moment
+    if (g.riser && !g.riser.done) {
+      const r = g.riser; r.life -= dt;
+      if (r.holding) {
+        r.touched = true; r.charge += dt / RISER_FILL;
+        if (r.charge >= RISER_MAX) resolveRiser(true);   // over-held → pops
+      } else if (r.life <= 0) {
+        if (r.touched) resolveRiser(false); else g.riser = null;
+      }
+    }
+
+    // drop windows (several per set at bigger venues) — never on top of a transition
+    if (!g.drop && !g.trans && g.dropIdx < g.dropAts.length && g.t >= g.dropAts[g.dropIdx]) {
       g.drop = { t: DROP_WIN };
+      g.dropIdx++;
       S.stats.drops++;
       sfx('dropcue');
     }
     if (g.drop) {
       g.drop.t -= dt;
-      if (g.drop.t <= 0) { g.drop = null; g.dropDone = true; }
+      if (g.drop.t <= 0) { // whiffed it — the streak dies
+        g.drop = null;
+        if (S.dropStreak > 1) pushFeed('💀 Missed the drop. Streak of ' + S.dropStreak + ' gone.');
+        S.dropStreak = 0;
+      }
     }
-    if (g.t >= g.dur) finishGig();
-  } else if (S.agent) {
+    // crowd request
+    if (!g.req && !g.reqDone && g.reqAt >= 0 && g.t >= g.reqAt && !g.trans) {
+      g.req = { txt: REQUESTS[Math.floor(Math.random() * REQUESTS.length)], t: REQ_WIN };
+      sfx('book');
+    }
+    if (g.req) {
+      g.req.t -= dt;
+      if (g.req.t <= 0) { g.req = null; g.reqDone = true; }
+    }
+    // end of set → an encore if you left the crowd hot, otherwise finish
+    if (g.encore) {
+      g.encore.t -= dt;
+      if (g.encore.t <= 0) finishGig(1 + ENCORE_BASE); // the crowd cools — still a bonus for the hot set
+    } else if (g.t >= g.dur) {
+      if (!g.encoreTried && g.v >= 1 && g.hype >= ENCORE_THRESH) {
+        g.encoreTried = true; g.encore = { t: ENCORE_WIN };
+        toast('ENCORE! 🎉 ONE MORE?');
+        pushFeed('🎉 The crowd will not let you leave — ENCORE!');
+        sfx('dropcue');
+      } else finishGig(1);
+    }
+  } else if (S.agent && !S.setlistOpen) {   // don't yank the setlist away while the player is building it
     S.rebookT -= dt;
     if (S.rebookT <= 0) bookGig();
   }
+
+  // golden vinyl — the viral moment
+  if (S.golden) {
+    S.golden.t -= dt;
+    if (S.golden.t <= 0) { S.golden = null; S.goldT = GOLD_MIN + Math.random() * (GOLD_MAX - GOLD_MIN); }
+  } else {
+    S.goldT -= dt;
+    if (S.goldT <= 0) { S.golden = { t: GOLD_LIFE }; sfx('dropcue'); }
+  }
+  if (S.frenzyT > 0) S.frenzyT -= dt;
 
   // ambient flavor
   S.flavorT -= dt;
@@ -480,7 +1189,7 @@ function save() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       v: 1, fans: S.fans, cash: S.cash, lifeFans: S.lifeFans, lifeCash: S.lifeCash,
       items: S.items, agent: S.agent, influence: S.influence, prestiges: S.prestiges,
-      bestVenue: S.bestVenue, stats: S.stats, last: S.last, started: S.started,
+      bestVenue: S.bestVenue, dropStreak: S.dropStreak, lastSet: S.lastSet, dug: S.dug, stats: S.stats, last: S.last, started: S.started,
     }));
   } catch (e) { /* storage full/blocked — keep playing */ }
 }
@@ -495,6 +1204,9 @@ function load() {
   S.agent = !!d.agent;
   S.influence = d.influence || 0; S.prestiges = d.prestiges || 0;
   S.bestVenue = d.bestVenue || 0;
+  S.dropStreak = d.dropStreak || 0;
+  S.lastSet = Array.isArray(d.lastSet) ? d.lastSet.filter(id => id >= 0 && id < TRACKS.length) : null;
+  S.dug = Array.isArray(d.dug) ? d.dug.filter(id => id >= 0 && id < TRACKS.length && TRACKS[id].rare) : [];
   if (d.stats) S.stats = Object.assign(S.stats, d.stats);
   S.started = !!d.started;
 
@@ -583,7 +1295,7 @@ function buildShop() {
     mid.appendChild(nm); mid.appendChild(sub);
     row.appendChild(ic); row.appendChild(mid); row.appendChild(btn);
     shop.appendChild(row);
-    shopRefs.push({ row, cnt, btn });
+    shopRefs.push({ row, cnt, btn, sub });
   });
   // booking agent row
   const row = document.createElement('div'); row.className = 'row hide';
@@ -601,6 +1313,59 @@ function buildShop() {
 }
 
 let prArmed = 0;
+let lastSlSig = '';
+function miniBars(energy) { // tiny energy sparkline for a crate chip
+  let h = '<span class="bars">';
+  for (let i = 0; i < 5; i++) h += '<i style="height:' + (i < Math.round(energy / 2) ? 3 + i * 2 : 2) + 'px"></i>';
+  return h + '</span>';
+}
+function renderSetlist(v) {
+  const need = needLen(v), arc = archetype(v), fav = arc.fav;
+  // the room's taste
+  const vs = Math.round(vibeScore(S.pendingSet, v) * 100);
+  byId('slVibe').innerHTML = '🎧 Tonight: <b>' + VENUES[v].name + '</b> — the <b>' + arc.who + '</b>. They crave <b>' +
+    GENRES[fav] + '</b>' + (arc.commercial < 0 ? ' and <b>loathe</b> the cheesy hits.' : arc.commercial > 0 ? ' and love a crowd-pleaser.' : '.') +
+    (S.pendingSet.length ? '<br>Your set reads the room <b>' + vs + '%</b>.' : '');
+  byId('slCount').textContent = S.pendingSet.length + ' / ' + need;
+  // energy curve
+  const curve = byId('slCurve'); curve.innerHTML = '';
+  S.pendingSet.forEach(id => { const i = document.createElement('i'); i.style.height = (TRACKS[id].energy * 10) + '%'; curve.appendChild(i); });
+  byId('slEnergy').textContent = S.pendingSet.length >= 2 ? 'PACING ' + Math.round(energyScore(S.pendingSet) * 100) + '%' : 'add tracks →';
+  // chosen (ordered, tap to remove)
+  const chosen = byId('slChosen'); chosen.innerHTML = '';
+  S.pendingSet.forEach((id, idx) => {
+    const b = document.createElement('button'); b.className = 'slChip';
+    b.innerHTML = '<span class="ord">' + (idx + 1) + '</span>' + TRACKS[id].name +
+      '<span class="genre">' + GENRES[TRACKS[id].genre].replace(/^\S+\s/, '') + '</span><span class="en">e' + TRACKS[id].energy + '</span> ✕';
+    b.onclick = () => { toggleTrack(id); render(); };
+    chosen.appendChild(b);
+  });
+  // the crate (tap to add) — favoured genre glows, rares get a star
+  const crate = byId('slCrate'); crate.innerHTML = '';
+  unlockedTracks().forEach(id => {
+    const on = S.pendingSet.indexOf(id) >= 0, T = TRACKS[id];
+    const b = document.createElement('button');
+    b.className = 'crChip' + (on ? ' on' : '') + (T.genre === fav ? ' fav' : '') + (T.rare ? ' rare' : '');
+    b.innerHTML = (T.rare ? '<span class="star">★</span> ' : '') + T.name +
+      '<span class="genre">' + GENRES[T.genre].replace(/^\S+\s/, '') + '</span> ' + miniBars(T.energy);
+    b.onclick = () => { toggleTrack(id); render(); };
+    crate.appendChild(b);
+  });
+  // crate-digging
+  const dg = byId('slDig'), pool = digPool();
+  if (pool.length) {
+    dg.style.display = '';
+    const c = digCost();
+    dg.disabled = S.cash < c;
+    dg.textContent = '💎 Dig the crates for a rare record  ($' + fmt(c) + ')';
+  } else { dg.style.display = 'none'; }
+  // play / save
+  const ready = setReady(), inGig = !!S.gig;
+  byId('slPlay').disabled = !ready;
+  byId('slPlay').textContent = !ready ? 'PICK ' + (need - S.pendingSet.length) + ' MORE'
+    : inGig ? '✓ SAVE FOR NEXT SET'
+    : '▶ PLAY SET  ($' + fmt(gigPay(v) * energyMul(S.pendingSet) * vibeMul(S.pendingSet, v)) + '+)';
+}
 function render() {
   const v = venueIdx(), V = VENUES[v];
   document.body.dataset.era = v;
@@ -609,7 +1374,9 @@ function render() {
   byId('infV').textContent = S.influence;
   byId('infChip').style.display = (S.influence || S.prestiges || canPrestige()) ? '' : 'none';
   byId('fansV').textContent = fmt(S.fans);
-  byId('fpsV').textContent = '+' + fmtRate(fansPerSec()) + '/s' + (S.combo > 1.05 ? ' · combo ×' + S.combo.toFixed(1) : '');
+  byId('fpsV').textContent = '+' + fmtRate(fansPerSec()) + '/s'
+    + (S.frenzyT > 0 ? ' · 🔥VIRAL ' + Math.ceil(S.frenzyT) + 's' : '')
+    + (S.combo > 1.05 ? ' · combo ×' + S.combo.toFixed(1) : '');
   byId('cashV').textContent = '$' + fmt(S.cash);
   byId('eraV').textContent = V.era;
   byId('tapV').textContent = '+' + fmtRate(tapPow());
@@ -627,17 +1394,69 @@ function render() {
   }
 
   // gig zone
-  const g = S.gig;
+  const g = S.gig, open = S.setlistOpen;
   byId('gigBtn').style.display = g ? 'none' : '';
+  byId('planBtn').style.display = g ? 'block' : 'none';
+  byId('setlistModal').className = open ? 'on' : '';
   byId('gigRun').style.display = g ? 'block' : 'none';
-  byId('gigBtn').textContent = '▶ PLAY: ' + V.gig.toUpperCase() + '  ($' + fmt(gigPay(v)) + ')';
+  byId('gigBtn').textContent = '▶ GO LIVE · ' + V.name.toUpperCase() + '  ($' + fmt(gigPay(v)) + ')';
+
+  if (open) {
+    const sig = S.slNonce + '|' + topEra() + '|' + (g ? 1 : 0) + '|' + (S.cash >= digCost() ? 1 : 0);
+    if (sig !== lastSlSig) { lastSlSig = sig; renderSetlist(v); }
+  } else lastSlSig = '';
+
+  const trans = g && g.trans && !g.trans.done;
+  const riser = g && g.riser && !g.riser.done;
   if (g) {
+    const m = gigMul(g), hypeMul = 1 + (g.hype || 0);
+    const cur = TRACKS[g.set[g.trackIdx]];
+    byId('trackLbl').innerHTML = 'TRACK ' + (g.trackIdx + 1) + '/' + g.set.length + ' · ' + cur.name +
+      ' <span class="en">· energy ' + cur.energy + '</span>';
     byId('gigTrack').innerHTML = '<b>' + VENUES[g.v].gig + '</b> — live';
     byId('gigBar').style.width = clamp(g.t / g.dur * 100, 0, 100) + '%';
-    byId('gigPayLbl').textContent = '→ $' + fmt(g.pay) + ' + ' + fmt(g.fans) + ' fans at the end';
+    byId('gigPayLbl').textContent = '→ $' + fmt(g.pay * m) + ' + ' + fmt(g.fans * m) + ' fans  (×' + m.toFixed(2) + ')';
+    const mood = g.hype < 0.15 ? 'DEAD ROOM' : g.hype < 0.4 ? 'WARMING UP' : g.hype < 0.75 ? 'LOCKED IN' : 'GOING OFF 🔥';
+    byId('moodLbl').textContent = archetype(g.v).who.toUpperCase() + ' — ' + mood;
+    byId('hypeV').textContent = '×' + hypeMul.toFixed(2);
+    byId('hypeFill').style.width = (g.hype || 0) * 100 + '%';
+    byId('streakLbl').style.display = S.dropStreak > 1 ? 'block' : 'none';
+    byId('streakLbl').textContent = '🔥 DROP STREAK ×' + S.dropStreak + ' — next drop pays +' + Math.round(STREAK_BONUS * Math.min(S.dropStreak + 1, STREAK_CAP) * 100) + '%';
+    byId('reqCard').style.display = g.req ? 'block' : 'none';
+    if (g.req) {
+      byId('reqQ').textContent = '🗣️ ' + g.req.txt;
+      byId('reqT').textContent = 'DECIDE IN ' + Math.ceil(g.req.t) + 's';
+      byId('reqA').textContent = '💰 Give them the hit (+$' + fmt(g.pay * REQ_CASH) + ')';
+      byId('reqB').textContent = '🎧 Your own track (+' + fmt(g.fans * REQ_FANS) + ' fans)';
+    }
+  } else byId('reqCard').style.display = 'none';
+
+  // the transition (crossfader)
+  byId('transWrap').style.display = trans ? 'block' : 'none';
+  if (trans) {
+    const tr = g.trans, fw = byId('transFader').clientWidth || 300, c = sweetCenter(tr);
+    byId('transNext').textContent = TRACKS[g.set[g.trackIdx]].name;
+    byId('transSweet').style.left = (c * fw - 0.065 * fw) + 'px';
+    byId('transKnob').style.left = clamp(tr.fader * (fw - 38), 0, fw - 38) + 'px';
+    const d = Math.abs(tr.fader - c), tv = byId('transV');
+    if (d <= TRANS_PERFECT) { tv.textContent = '◆ PERFECT — release!'; tv.className = 'good'; }
+    else if (d <= TRANS_CLEAN) { tv.textContent = '~ close'; tv.className = ''; }
+    else { tv.textContent = tr.fader < 0.2 ? 'DRAG A → B' : '✕ off the beat'; tv.className = 'bad'; }
   }
-  byId('dropBtn').style.display = (g && g.drop) ? 'block' : 'none';
+
+  // the filter riser
+  byId('riserWrap').style.display = riser ? 'block' : 'none';
+  if (riser) {
+    const r = g.riser;
+    byId('riserFill').style.width = clamp(r.charge / RISER_MAX * 100, 0, 100) + '%';
+    byId('riserV').textContent = r.holding ? 'BUILDING…' : 'HOLD ▲';
+    byId('riserBtn').className = r.holding ? 'holding' : '';
+  }
+
+  byId('dropBtn').style.display = (g && g.drop && !trans) ? 'block' : 'none';
+  byId('encoreBtn').style.display = (g && g.encore) ? 'block' : 'none';
   byId('pad').className = g ? 'spin' : '';
+  byId('gold').style.display = S.golden ? 'block' : 'none';
 
   // shop
   ITEMS.forEach((it, i) => {
@@ -646,6 +1465,10 @@ function render() {
     const show = S.items[i] > 0 || S.lifeCash >= it.cost * 0.4;
     r.row.className = 'row' + (show ? '' : ' hide');
     r.cnt.textContent = S.items[i] ? ' ×' + S.items[i] : '';
+    const mm = milestoneMul(i), nx = nextMilestone(i);
+    r.sub.textContent = S.items[i] === 0
+      ? '+' + it.fps + ' fans/s · ' + it.blurb
+      : '+' + fmtRate(it.fps * mm) + ' fans/s each' + (mm > 1 ? ' (×' + mm + ')' : '') + (nx ? ' · ×2 output at ' + nx : ' · maxed out');
     const c = itemCost(i);
     r.btn.textContent = '$' + fmt(c);
     r.btn.className = 'buy' + (S.cash >= c ? ' can' : '');
@@ -716,8 +1539,33 @@ function wire() {
       setTimeout(() => f.remove(), 850);
     } catch (err) {}
   };
-  byId('gigBtn').onclick = () => { bookGig(); render(); };
+  byId('gigBtn').onclick = () => { openSetlist(); render(); };
+  byId('planBtn').onclick = () => { openSetlist(); render(); };
+  byId('slClose').onclick = () => { closeSetlist(); render(); };
+  byId('setlistModal').onclick = (e) => { if (e.target === byId('setlistModal')) { closeSetlist(); render(); } };
+  byId('slAuto').onclick = () => { autoFillSet(); render(); };
+  byId('slDig').onclick = () => { dig(); render(); };
+  byId('slPlay').onclick = () => { playSet(); render(); };
   byId('dropBtn').onpointerdown = (e) => { if (e && e.preventDefault) e.preventDefault(); dropHit(); render(); };
+  byId('encoreBtn').onpointerdown = (e) => { if (e && e.preventDefault) e.preventDefault(); hitEncore(); render(); };
+  byId('reqA').onclick = () => { chooseReq(true); render(); };
+  byId('reqB').onclick = () => { chooseReq(false); render(); };
+  byId('gold').onpointerdown = (e) => { if (e && e.preventDefault) e.preventDefault(); tapGold(); render(); };
+
+  // the transition — drag the crossfader, release to blend
+  const tf = byId('transFader');
+  let tfDrag = false;
+  const tfSet = (clientX) => { const r = tf.getBoundingClientRect(); setTransFader((clientX - r.left) / r.width); render(); };
+  tf.onpointerdown = (e) => { if (e.preventDefault) e.preventDefault(); tfDrag = true; if (tf.setPointerCapture) try { tf.setPointerCapture(e.pointerId); } catch (x) {} tfSet(e.clientX); };
+  tf.onpointermove = (e) => { if (tfDrag) tfSet(e.clientX); };
+  tf.onpointerup = (e) => { if (!tfDrag) return; tfDrag = false; resolveTransition(S.gig && S.gig.trans ? S.gig.trans.fader : null); render(); };
+  tf.onpointercancel = () => { tfDrag = false; };
+
+  // the filter riser — hold to build, release at the peak
+  const rb = byId('riserBtn');
+  rb.onpointerdown = (e) => { if (e.preventDefault) e.preventDefault(); holdRiser(true); render(); };
+  const rbUp = (e) => { if (e && e.preventDefault) e.preventDefault(); if (S.gig && S.gig.riser && S.gig.riser.holding) { holdRiser(false); render(); } };
+  rb.onpointerup = rbUp; rb.onpointerleave = rbUp; rb.onpointercancel = rbUp;
   byId('offX').onclick = () => { S.offline = null; render(); };
   byId('mute').onclick = () => {
     musicMuted = !musicMuted;
@@ -745,6 +1593,7 @@ function frame(now) {
   lastT = now;
   tick(dt);
   if (prArmed > 0) { prArmed -= dt; if (prArmed <= 0) { prArmed = 0; S.feedDirty = true; } }
+  crowdJoy(dt);
   musicTick();
   render();
   requestAnimationFrame(frame);
@@ -763,10 +1612,23 @@ if (typeof window.__HL_HEADLESS__ === 'undefined') requestAnimationFrame(frame);
 
 window.HL = {
   get S() { return S; },
-  constants: { SAVE_KEY, MUTE_KEY, VENUES, ITEMS, COST_MUL, AGENT_COST, INF_MUL, DROP_WIN, DROP_BONUS, OFF_CAP, OFF_EFF, COMBO_MAX, REBOOK_T },
-  tick, tap, buyItem, buyAgent, bookGig, dropHit, prestige,
-  fansPerSec, tapPow, itemCost, venueIdx, fill, gigPay, gigFans,
+  constants: {
+    SAVE_KEY, MUTE_KEY, VENUES, ITEMS, COST_MUL, AGENT_COST, INF_MUL, DROP_WIN, DROP_BONUS,
+    OFF_CAP, OFF_EFF, COMBO_MAX, REBOOK_T,
+    DROPS_BY_ERA, STREAK_BONUS, STREAK_CAP, HYPE_TAP, HYPE_DROP, HYPE_DECAY,
+    REQ_CHANCE, REQ_WIN, REQ_CASH, REQ_FANS, GOLD_MIN, GOLD_MAX, GOLD_LIFE,
+    FRENZY_MUL, FRENZY_T, MILESTONES,
+    TRACKS, SETLIST_LEN, ENERGY_MAX, TRANS_MAX, TRANS_LIFE, TRANS_PERFECT, TRANS_CLEAN, TRANS_OK,
+    AUTO_TRANS_Q, RISER_CHANCE, RISER_LIFE, RISER_FILL, RISER_MAX, RISER_PEAK_LO, RISER_PEAK_HI,
+    GENRES, ARCHETYPES, VIBE_MAX, DIG_BASE, DIG_MUL, ENCORE_THRESH, ENCORE_WIN, ENCORE_JACKPOT, ENCORE_BASE,
+  },
+  tick, tap, buyItem, buyAgent, bookGig, dropHit, chooseReq, tapGold, prestige,
+  fansPerSec, tapPow, itemCost, venueIdx, fill, gigPay, gigFans, milestoneMul,
   influenceGain, canPrestige, aliasName, fmt, mult,
+  unlockedTracks, owned, setlistLen, needLen, energyScore, energyMul, autoSetlist, validSet,
+  archetype, vibeScore, vibeMul, digCost, digPool, dig,
+  openSetlist, closeSetlist, toggleTrack, autoFillSet, setReady, playSet,
+  sweetCenter, setTransFader, resolveTransition, holdRiser, resolveRiser, hitEncore, gigMul,
   save, load, reset, render, musicTick, pushFeed,
 };
 </script>
