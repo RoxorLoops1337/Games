@@ -701,6 +701,33 @@ KS.S.gear = { weapon: null, armor: null, trinket: null }; KS.S.stats.gearFound =
 KS.S.enemies.length = 0; KS.S.items.length = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- blacksmith: gear enhancement (gem sink) ----
+KS.S.gear = { weapon: { slot: 'weapon', kind: 'dmg', rar: 1, amt: 0.216, kname: '' }, armor: null, trinket: null };
+KS.S.stats.enhanced = 0; KS.S.gems = 100;
+t.ok(Math.abs(KS.gearBonus('dmg') - 0.216) < 1e-9, 'un-enhanced gear uses its rolled stat');
+const enhCost0 = KS.enhCost(KS.S.gear.weapon), gemsPre2 = KS.S.gems;
+t.ok(KS.enhanceGear('weapon') === true, 'a piece of gear can be enhanced with gems');
+t.ok(KS.S.gear.weapon.enh === 1 && KS.S.gems === gemsPre2 - enhCost0, 'enhance level up + gems spent');
+t.ok(Math.abs(KS.gearBonus('dmg') - (0.216 + KS.ENH_STEP)) < 1e-9, 'enhancement adds a flat stat bump');
+t.ok(KS.enhCost(KS.S.gear.weapon) > enhCost0, 'each enhance costs more than the last');
+KS.checkAch();
+t.ok(KS.S.ach.smith === true, 'first enhance unlocks the Blacksmith milestone');
+// cannot enhance without gems, and cannot exceed the cap
+KS.S.gems = 0;
+t.ok(KS.enhanceGear('weapon') === false, 'cannot enhance without enough gems');
+KS.S.gems = 1e6; KS.S.gear.weapon.enh = KS.ENH_MAX;
+t.ok(KS.enhanceGear('weapon') === false, 'cannot enhance past the max level');
+// enhancing an empty slot is a no-op
+t.ok(KS.enhanceGear('armor') === false, 'cannot enhance an empty slot');
+// enhance level persists through save/load; replacing the piece resets it
+KS.S.gear.weapon.enh = 4;
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.gear.weapon.enh === 4 && Math.abs(KS.gearBonus('dmg') - (0.216 + 4 * KS.ENH_STEP)) < 1e-9, 'enhance level persists through save/load');
+KS.grantGear({ slot: 'weapon', kind: 'dmg', rar: 3, amt: 0.60, kname: '' });
+t.ok((KS.S.gear.weapon.enh || 0) === 0, 'equipping a new piece starts fresh at +0 enhance');
+KS.S.gear = { weapon: null, armor: null, trinket: null }; KS.S.stats.enhanced = 0; KS.S.gems = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
