@@ -71,6 +71,10 @@ t.ok(KS.S.wallet === 0 && KS.S.pallet === 0 && KS.S.gems === 0, 'starts broke');
 drawSafe('draw() on start overlay');
 KS.start();
 t.ok(KS.S.started === true, 'start() begins the game');
+KS.tick(1 / 60); // housekeeping rolls quests + dailies
+t.ok(KS.S.quests.length === 3 && KS.S.dailies.length === 3, 'three side quests + three dailies active');
+// neuter targets so ambient kills/sells during the suite never complete them
+for (const q of KS.S.quests.concat(KS.S.dailies)) q.target = 9e9;
 
 // ---- world grid geometry ----
 t.ok(KS.cellFor(1).cx === 1 && KS.cellFor(1).cy === 0, 'zone 1 grows EAST');
@@ -488,6 +492,43 @@ t.ok(Math.abs(KS.pDmg() - 6 * (1 + C.CROWN_DMG * gain)) < 1e-9, 'crowns sharpen 
 t.ok(KS.S.ach.crown1 === true, 'prestige milestone unlocked');
 KS.save(); KS.reset(); KS.load();
 t.ok(KS.S.crowns === gain && KS.S.prestiges === 1, 'crowns persist through save/load');
+
+// ---- quests: progress, payout, replacement ----
+KS.start();
+const wQ = KS.S.wallet;
+KS.S.quests[0] = { tpl: 'kill', icon: '⚔️', ev: 'kill', txt: 'Slay 3 foes', target: 3, prog: 0, reward: 111, gem: false, daily: false, done: false, doneT: 0 };
+KS.questEvent('kill', 2);
+t.ok(KS.S.quests[0].prog === 2 && !KS.S.quests[0].done, 'quest progress tracks events');
+KS.questEvent('kill', 1);
+t.ok(KS.S.quests[0].done === true, 'quest completes at target');
+t.ok(KS.S.wallet === wQ + 111, 'quest pays out instantly');
+step(3);
+t.ok(!KS.S.quests[0].done, 'completed side quest is replaced by a fresh one');
+KS.S.quests[0].target = 9e9;
+
+// ---- dailies + streak ----
+const todayStr = new Date().toISOString().slice(0, 10);
+const yestStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+KS.S.streak = 0; KS.S.lastStreakDay = '';
+KS.S.dailies[0] = { tpl: 'log', icon: '🪵', ev: 'log', txt: 'Haul 2 logs', target: 2, prog: 0, reward: 50, gem: false, daily: true, done: false, doneT: 0 };
+KS.questEvent('log', 2);
+t.ok(KS.S.dailies[0].done && KS.S.streak === 1 && KS.S.lastStreakDay === todayStr, 'first daily completion starts the streak');
+KS.S.streak = 3; KS.S.lastStreakDay = yestStr;
+KS.S.dailies[1] = { tpl: 'bar', icon: '🥇', ev: 'bar', txt: 'Smelt 1 bar', target: 1, prog: 0, reward: 50, gem: false, daily: true, done: false, doneT: 0 };
+KS.questEvent('bar', 1);
+t.ok(KS.S.streak === 4, 'consecutive-day completion extends the streak');
+t.ok(Math.abs(KS.streakMul() - 1.3) < 1e-9, 'streak multiplies daily rewards (+10%/day)');
+// midnight rollover
+KS.S.dailyDay = '2000-01-01'; KS.S.dayCd = 0;
+KS.tick(1 / 60);
+t.ok(KS.S.dailyDay === todayStr && KS.S.dailies.every(q => q.prog === 0 && !q.done), 'dailies re-roll on a new day');
+for (const q of KS.S.dailies) q.target = 9e9;
+// persistence
+KS.S.streak = 5;
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.streak === 5 && KS.S.dailies.length === 3 && KS.S.quests.length === 3, 'streak + quests + dailies persist');
+KS.start();
+drawSafe('draw() with quest tracker + biomes');
 
 // ---- misc helpers ----
 t.ok(KS.fmt(1234) === '1.2k' && KS.fmt(999) === '999', 'number formatting');

@@ -208,6 +208,8 @@ function reset() {
     campPlate: { cost: 350, paid: 0, built: false },
     crowns: 0, prestiges: 0, prestT: 0,
     ach: {}, toasts: [], achCd: 0,
+    quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
+    showQuests: true, goldPulse: 0, hitStop: 0, amb: [],
     zones: [mkZone(1)],
     enemies: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [],
     chest: null, chestCd: 100,
@@ -267,6 +269,8 @@ function save() {
       waygate: S.waygate,
       dog: S.dogPlate.built,
       camp: S.camp ? { logs: S.camp.logs } : null,
+      quests: S.quests, dailies: S.dailies, dailyDay: S.dailyDay,
+      streak: S.streak, lastStreakDay: S.lastStreakDay,
       crowns: S.crowns, prestiges: S.prestiges,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
@@ -320,6 +324,8 @@ function load() {
   if (d.waygate) { S.wayPlate.built = true; S.waygate = true; }
   if (d.dog) { S.dogPlate.built = true; spawnDog(); }
   if (d.camp) { S.campPlate.built = true; S.camp = { logs: d.camp.logs || [], chopT: 0 }; }
+  S.quests = d.quests || []; S.dailies = d.dailies || [];
+  S.dailyDay = d.dailyDay || ''; S.streak = d.streak || 0; S.lastStreakDay = d.lastStreakDay || '';
   S.crowns = d.crowns || 0; S.prestiges = d.prestiges || 0;
   (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
@@ -453,8 +459,11 @@ function hurtEnemy(e, dmg) {
   float(e.x, e.y - e.r - 12, Math.ceil(dmg), '#fff');
   if (e.hp <= 0) {
     S.stats.kills++;
+    questEvent('kill', 1);
     if (e.boss) {
       S.stats.bosses++;
+      questEvent('boss', 1);
+      S.hitStop = 0.14;
       dropItem(e.x, e.y, { k: e.k, crown: true });
       dropItem(e.x, e.y, { gem: true }); dropItem(e.x, e.y, { gem: true });
       for (let i = 0; i < 6; i++) dropHelmet(e.x, e.y, e.k);
@@ -502,7 +511,7 @@ function applyPlate(z, pl) {
     z.porters.push({ x: pl.x, y: pl.y, hx: pl.x, hy: pl.y, k: z.k, state: 'seek', carry: [], cd: 0 });
   else if (pl.id === 'gate2')      z.hordeLvl++;
   else if (pl.id === 'towersUp')   z.towerLvl++;
-  else if (pl.id === 'unlock')     S.zones.push(mkZone(z.k + 1));
+  else if (pl.id === 'unlock')   { S.zones.push(mkZone(z.k + 1)); questEvent('land', 1); }
 }
 function buildPlate(z, pl, silent) {
   applyPlate(z, pl);
@@ -603,6 +612,77 @@ function prestige() {
   float(SPAWN.x, SPAWN.y - 50, 'All coins now worth +' + Math.round(CROWN_BONUS * 100 * S.crowns) + '%', '#ffd94a', true);
   S.shake = 16; sfx('unlock', true); buzz([80, 40, 120]);
   save();
+}
+
+// ---- quests & daily tasks -----------------------------------
+const QTPL = [
+  { id: 'kill',  icon: '⚔️', txt: 'Slay # foes',       n: t => 20 + t * 12, ev: 'kill' },
+  { id: 'sell',  icon: '⚖️', txt: 'Sell # items',      n: t => 15 + t * 8,  ev: 'sell' },
+  { id: 'earn',  icon: '🪙', txt: 'Earn #¢',           n: t => Math.ceil(150 * Math.pow(1.9, t)), ev: 'earn' },
+  { id: 'boss',  icon: '💀', txt: 'Defeat # boss',     n: () => 1, ev: 'boss' },
+  { id: 'chest', icon: '💰', txt: 'Open # chest',      n: () => 1, ev: 'chest' },
+  { id: 'bar',   icon: '🥇', txt: 'Smelt # gold bars', n: t => 5 + t * 2, ev: 'bar' },
+  { id: 'log',   icon: '🪵', txt: 'Haul # logs',       n: t => 5 + t * 2, ev: 'log' },
+  { id: 'gem',   icon: '💎', txt: 'Collect # gems',    n: t => 2 + Math.ceil(t / 2), ev: 'gem' },
+  { id: 'land',  icon: '🌍', txt: 'Unlock # new land', n: () => 1, ev: 'land' },
+];
+function qTier() { return S.zones.length - 1; }
+function streakMul() { return 1 + Math.min(1, 0.1 * Math.max(0, S.streak - 1)); }
+function qReward(t, daily) { return Math.ceil(80 * Math.pow(1.75, t) * (daily ? 2 * streakMul() : 1)); }
+function mkQuest(tpl, daily) {
+  const t = qTier();
+  const target = tpl.n(t);
+  return { tpl: tpl.id, icon: tpl.icon, ev: tpl.ev, txt: tpl.txt.replace('#', fmt(target)), target, prog: 0, reward: qReward(t, daily), gem: rnd() < 0.3, daily: !!daily, done: false, doneT: 0 };
+}
+function rollQuest() {
+  const avoid = new Set(S.quests.map(q => q.tpl));
+  let pick = null, g2 = 0;
+  while (g2++ < 40) { const tpl = QTPL[Math.floor(rnd() * QTPL.length)]; if (!avoid.has(tpl.id)) { pick = tpl; break; } }
+  return mkQuest(pick || QTPL[0], false);
+}
+function dayStr(off) { return new Date(Date.now() + (off || 0) * 86400000).toISOString().slice(0, 10); }
+function rollDailies() {
+  // deterministic template picks from the calendar day
+  const s = dayStr(0);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
+  const list = [];
+  for (let i = 0; i < 3; i++) {
+    h = (h * 1103515245 + 12345) & 0x7fffffff;
+    let idx = h % QTPL.length, g2 = 0;
+    while (list.some(q => q.tpl === QTPL[idx].id) && g2++ < 10) idx = (idx + 1) % QTPL.length;
+    list.push(mkQuest(QTPL[idx], true));
+  }
+  S.dailies = list; S.dailyDay = s;
+}
+function questEvent(ev, n) {
+  for (const q of S.quests.concat(S.dailies)) {
+    if (q.done || q.ev !== ev) continue;
+    q.prog += n;
+    if (q.prog >= q.target) completeQuest(q);
+  }
+}
+function completeQuest(q) {
+  q.done = true; q.doneT = 0;
+  S.wallet += q.reward;
+  if (q.gem) { S.gems++; S.stats.gemsFound++; }
+  if (q.daily) {
+    const today = dayStr(0);
+    if (S.lastStreakDay !== today) {
+      S.streak = (S.lastStreakDay === dayStr(-1)) ? S.streak + 1 : 1;
+      S.lastStreakDay = today;
+    }
+  }
+  S.stats.quests = (S.stats.quests || 0) + 1;
+  S.toasts.push({ txt: '📜 ' + q.txt + '  +' + fmt(q.reward) + '¢' + (q.gem ? ' +💎' : ''), t: 0 });
+  confetti(S.player.x, S.player.y - 30);
+  S.goldPulse = 0.6;
+  sfx('unlock', true); buzz([40, 30, 60]);
+}
+function confetti(x, y) {
+  const cols = ['#ffd94a', '#ff6a5a', '#6ee0d8', '#6ecb5a', '#c98aff'];
+  for (let i = 0; i < 24; i++)
+    S.parts.push({ x, y, vx: (rnd() - 0.5) * 320, vy: -120 - rnd() * 220, t: 0, dur: 0.8 + rnd() * 0.4, r: 3 + rnd() * 2, color: cols[i % cols.length], g: 1 });
 }
 
 // ---- treasure chest -----------------------------------------
@@ -717,7 +797,7 @@ function tick(dt) {
     if (it.dead || it.t < 0.25) continue;
     if (dist2(it.x, it.y, p.x, p.y) >= pr * pr) continue;
     if (it.gem) {
-      it.dead = true; S.gems++; S.stats.gemsFound++;
+      it.dead = true; S.gems++; S.stats.gemsFound++; questEvent('gem', 1);
       float(p.x, p.y - 50, '💎 +1', '#6ee0d8', true); sfx('gem', true);
     } else if (p.helmets.length < cap()) {
       it.dead = true;
@@ -735,6 +815,7 @@ function tick(dt) {
       const e = p.helmets.pop();
       const v = entryVal(e);
       S.pallet += v; S.stats.sold++; S.stats.earned += v;
+      questEvent('sell', 1); questEvent('earn', v);
       float(SELL.x + 30, SELL.y - 46, '+' + fmt(v), e.crown ? '#ffd94a' : e.bar ? '#e8b93a' : '#ffd94a', e.crown);
       puff(PALLET.x, PALLET.y - 30, '#ffd94a', 3, true);
       sfx('sell');
@@ -760,6 +841,7 @@ function tick(dt) {
       if (f.smeltT >= FORGE_T) {
         f.smeltT = 0;
         f.tray.push(f.queue.shift());
+        questEvent('bar', 1);
         puff(TRAY.x, TRAY.y - 10, '#e8b93a', 5, true);
         sfx('smelt');
       }
@@ -847,6 +929,7 @@ function tick(dt) {
       while (p.campAcc >= 1 && S.camp.logs.length && p.helmets.length < cap()) {
         p.campAcc -= 1;
         p.helmets.push({ k: S.camp.logs.pop(), log: true });
+        questEvent('log', 1);
         sfx('pick');
       }
     } else p.campAcc = 0;
@@ -868,11 +951,30 @@ function tick(dt) {
   } else if (dist2(p.x, p.y, S.chest.x, S.chest.y) < 60 * 60) {
     S.wallet += S.chest.val;
     float(S.chest.x, S.chest.y - 40, '💰 +' + fmt(S.chest.val) + '¢', '#ffd94a', true);
-    if (S.chest.gem) { S.gems++; S.stats.gemsFound++; float(S.chest.x, S.chest.y - 66, '💎 +1', '#6ee0d8', true); }
+    if (S.chest.gem) { S.gems++; S.stats.gemsFound++; questEvent('gem', 1); float(S.chest.x, S.chest.y - 66, '💎 +1', '#6ee0d8', true); }
     for (let i = 0; i < 16; i++) puff(S.chest.x, S.chest.y, '#ffd94a', 1, true);
     S.stats.chests = (S.stats.chests || 0) + 1;
+    questEvent('chest', 1);
     sfx('unlock', true); buzz([30, 20, 50]);
     S.chest = null; S.chestCd = CHEST_CD * (0.8 + rnd() * 0.5);
+  }
+
+  // -- quests housekeeping: keep 3 side quests rolling, roll dailies at midnight
+  while (S.quests.length < 3) S.quests.push(rollQuest());
+  for (let i = 0; i < S.quests.length; i++) {
+    const q = S.quests[i];
+    if (q.done) { q.doneT += dt; if (q.doneT > 2.5) S.quests[i] = rollQuest(); }
+  }
+  S.dayCd = (S.dayCd || 0) - dt;
+  if (S.dayCd <= 0) { S.dayCd = 30; if (S.dailyDay !== dayStr(0)) rollDailies(); }
+  if (S.goldPulse > 0) S.goldPulse -= dt;
+
+  // -- ambient butterflies
+  while (S.amb.length < 10) S.amb.push({ x: p.x + (rnd() - 0.5) * 800, y: p.y + (rnd() - 0.5) * 800, a: rnd() * 6.28, ph: rnd() * 6.28, col: rnd() < 0.5 ? '#fff8c0' : '#ffd94a' });
+  for (const b of S.amb) {
+    b.a += (rnd() - 0.5) * 3 * dt; b.ph += dt * 14;
+    b.x += Math.cos(b.a) * 30 * dt; b.y += Math.sin(b.a) * 22 * dt + Math.sin(b.ph) * 8 * dt;
+    if (dist2(b.x, b.y, p.x, p.y) > 1100 * 1100) { b.x = p.x + (rnd() - 0.5) * 800; b.y = p.y + (rnd() - 0.5) * 800; }
   }
 
   // -- milestones + toasts
@@ -1026,6 +1128,7 @@ function tick(dt) {
             po.cd = 0.12;
             const v = entryVal(po.carry.pop());
             S.pallet += v; S.stats.earned += v; S.stats.sold++;
+            questEvent('sell', 1); questEvent('earn', v);
             puff(PALLET.x, PALLET.y - 30, '#ffd94a', 1, true);
           }
           if (!po.carry.length) po.state = 'seek';
@@ -1190,12 +1293,12 @@ function drawLogIcon(x, y, s) {
 function drawStackEntry(e, x, y, s) {
   if (e.crown) drawCrownIcon(x, y, s); else if (e.bar) drawBarIcon(x, y, s); else if (e.log) drawLogIcon(x, y, s); else drawHelmetIcon(x, y, e.k, s);
 }
-function drawTree(x, y, s) {
+function drawTree(x, y, s, c1, c2) {
   s = s || 1;
   ctx.fillStyle = '#3a2e22'; ctx.fillRect(x - 3 * s, y - 6 * s, 6 * s, 14 * s);
-  ctx.fillStyle = '#24421f';
+  ctx.fillStyle = c1 || '#24421f';
   ctx.beginPath(); ctx.arc(x, y - 20 * s, 16 * s, 0, 6.29); ctx.fill();
-  ctx.fillStyle = '#2e5226';
+  ctx.fillStyle = c2 || '#2e5226';
   ctx.beginPath(); ctx.arc(x - 6 * s, y - 14 * s, 11 * s, 0, 6.29); ctx.fill();
   ctx.beginPath(); ctx.arc(x + 7 * s, y - 13 * s, 10 * s, 0, 6.29); ctx.fill();
 }
@@ -1220,17 +1323,23 @@ function drawGround() {
   ctx.fillStyle = '#16241a';
   ctx.fillRect(b.minX - 2500, b.minY - 2500, (b.maxX - b.minX) + 5000, (b.maxY - b.minY) + 5000);
   // grass for hub + each unlocked cell
+  // biomes: each arm of the kingdom has its own palette
+  // E: plains, S: swamp, W: autumn, N: tundra
+  const GRASS = [['#405c38', '#3a563c'], ['#3b5748', '#365243'], ['#565a33', '#50542f'], ['#49584f', '#43524a']];
+  const CANOPY = [['#24421f', '#2e5226'], ['#1f3d33', '#28493d'], ['#4a4d1e', '#575a28'], ['#2c443e', '#37524a']];
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
   for (const c of cells) {
     const x0 = c.cx * CELL_W, y0 = c.cy * CELL_H;
     if (!rectVis(x0, y0, x0 + CELL_W, y0 + CELL_H)) continue;
-    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : (c.k % 2 ? '#3a563c' : '#405c38');
+    const dir = c.k === 0 ? 0 : (c.k - 1) % 4;
+    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : GRASS[dir][c.k % 2];
     ctx.fillRect(x0, y0, CELL_W, CELL_H);
     ctx.fillStyle = 'rgba(255,255,255,0.03)';
     for (let gx = x0; gx < x0 + CELL_W; gx += 160) ctx.fillRect(gx, y0, 80, CELL_H);
     // treeline on edges facing the dark forest
     const rowStep = 88;
-    const treeAt = (tx, ty) => drawTree(tx + ((tx * 7 + ty * 13) % 17) - 8, ty + ((tx * 11 + ty * 3) % 13) - 6, 0.9 + ((tx + ty) % 5) * 0.08);
+    const tc = c.k === 0 ? CANOPY[0] : CANOPY[dir];
+    const treeAt = (tx, ty) => drawTree(tx + ((tx * 7 + ty * 13) % 17) - 8, ty + ((tx * 11 + ty * 3) % 13) - 6, 0.9 + ((tx + ty) % 5) * 0.08, tc[0], tc[1]);
     if (!cellWalkable(c.cx, c.cy - 1)) for (let tx = x0 + 40; tx < x0 + CELL_W - 20; tx += rowStep) treeAt(tx, y0 + 26);
     if (!cellWalkable(c.cx, c.cy + 1)) for (let tx = x0 + 40; tx < x0 + CELL_W - 20; tx += rowStep) treeAt(tx, y0 + CELL_H - 14);
     if (!cellWalkable(c.cx - 1, c.cy)) for (let ty = y0 + 60; ty < y0 + CELL_H - 20; ty += rowStep) treeAt(x0 + 22, ty);
@@ -1711,6 +1820,14 @@ function drawWorld() {
     else if (it.log) drawLogIcon(it.x, it.y + wob, 0.9);
     else drawHelmetIcon(it.x, it.y + wob, it.k, 0.9);
   }
+  // ambient butterflies
+  for (const b of S.amb) {
+    if (!vis(b.x, b.y, 20)) continue;
+    const flap = Math.sin(b.ph) * 3;
+    ctx.fillStyle = b.col;
+    ctx.fillRect(b.x - 2 - Math.abs(flap) * 0.3, b.y - flap * 0.4, 2, 2);
+    ctx.fillRect(b.x + 1 + Math.abs(flap) * 0.3, b.y + flap * 0.4, 2, 2);
+  }
   const actors = [];
   for (const z of S.zones) {
     for (const tw of z.towers) if (vis(tw.x, tw.y, 120)) actors.push({ y: tw.y, f: () => drawTower(tw) });
@@ -1821,6 +1938,13 @@ function drawHud() {
     try { localStorage.setItem('ks_idle_muted', muted ? '1' : '0'); } catch (e) {}
   });
   drawMinimap();
+  drawQuests();
+  // quest-complete golden pulse
+  if (S.goldPulse > 0) {
+    ctx.strokeStyle = 'rgba(255,217,74,' + (S.goldPulse * 0.9) + ')';
+    ctx.lineWidth = 10;
+    rr(5, 5, vw - 10, vh - 10, 18); ctx.stroke();
+  }
   if (S.offlineMsg > 0 && S.offlineAmt > 0) {
     ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(vw / 2 - 150, 14, 300, 44, 10); ctx.fill();
     ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
@@ -1868,6 +1992,37 @@ function drawHud() {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
     ctx.fillText('▶ TAP TO PLAY', 0, 7);
     ctx.restore();
+  }
+}
+function drawQuests() {
+  hudBtn(vw - 46, 44, 36, 30, '📜', () => { S.showQuests = !S.showQuests; });
+  if (!S.showQuests) return;
+  const rows = S.dailies.concat(S.quests);
+  if (!rows.length) return;
+  const w = 208, rh = 27, oy = 170;
+  const h = rows.length * rh + (S.streak > 0 ? 18 : 6) + 6;
+  ctx.fillStyle = 'rgba(20,25,36,0.72)'; rr(10, oy, w, h, 10); ctx.fill();
+  let y = oy + 6;
+  ctx.textAlign = 'left';
+  for (const q of rows) {
+    ctx.globalAlpha = q.done ? 0.45 : 1;
+    ctx.font = '12px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText((q.daily ? '☀️' : '') + q.icon, 16, y + 13);
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillStyle = q.done ? '#6ecb5a' : '#e8e8e8';
+    ctx.fillText(q.done ? '✓ ' + q.txt : q.txt, 44, y + 9);
+    // progress bar
+    ctx.fillStyle = 'rgba(255,255,255,0.15)'; rr(44, y + 13, 100, 6, 3); ctx.fill();
+    const f = Math.min(1, q.prog / q.target);
+    if (f > 0) { ctx.fillStyle = q.done ? '#6ecb5a' : '#ffd94a'; rr(44, y + 13, 100 * f, 6, 3); ctx.fill(); }
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('+' + fmt(q.reward) + '¢' + (q.gem ? '💎' : ''), 150, y + 19);
+    ctx.globalAlpha = 1;
+    y += rh;
+  }
+  if (S.streak > 0) {
+    ctx.fillStyle = '#ff9a4a'; ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('🔥 ' + S.streak + '-day streak  (+' + Math.round((streakMul() - 1) * 100) + '% daily pay)', 16, y + 10);
   }
 }
 function drawMinimap() {
@@ -1998,7 +2153,8 @@ let lastT = 0;
 function frame(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
   lastT = t;
-  tick(dt);
+  if (S.hitStop > 0) { S.hitStop -= dt; tick(dt * 0.15); } // brief slow-mo on big kills
+  else tick(dt);
   musicTick();
   draw();
   requestAnimationFrame(frame);
@@ -2012,6 +2168,7 @@ window.KS = {
   cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
+  questEvent, rollDailies, streakMul, completeQuest,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD },
   start() { S.started = true; },
 };
