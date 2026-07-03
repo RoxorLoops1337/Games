@@ -36,7 +36,7 @@
                radial-gradient(90px 160px at 96.5% 50%, rgba(255,150,60,.11), transparent 70%);
     animation:barglow 3.4s ease-in-out infinite alternate; }
   @keyframes barglow{ from{opacity:.5} to{opacity:1} }
-  #app{position:fixed; left:50%; top:50%; z-index:1;display:flex;flex-direction:column;overflow:hidden;border-radius:11px;
+  #app{position:fixed; left:50%; top:calc(50% - var(--adh,0px)/2); z-index:1;display:flex;flex-direction:column;overflow:hidden;border-radius:11px;
     /* the WHOLE game is one fixed 1280×720 design, scaled as a single unit to fit any screen
        (like scaling a JPEG) — identical layout everywhere, just bigger/smaller. resize() sets --gs. */
     width:1280px; height:720px;
@@ -72,6 +72,14 @@
   #startgate .sg-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #5a0d12;}
   #startgate .sg-hint{margin-top:22px;font-size:14px;color:#cdbaff;opacity:.8;letter-spacing:.5px;}
   @keyframes sgIn{0%{opacity:0;transform:translateY(18px) scale(.96);}100%{opacity:1;transform:translateY(0) scale(1);}}
+  /* ---- Support banner: a slim, non-intrusive ad strip pinned to the bottom. It
+     reserves its own space (the game scales into the area ABOVE it via --adh), so
+     it never covers gameplay and never gates anything. Off unless configured. ---- */
+  :root{ --adh:0px; }
+  #adbar{display:none;position:fixed;left:0;right:0;bottom:0;height:var(--adh);z-index:40;overflow:hidden;
+    background:#07060d;border-top:1px solid #241a3e;align-items:center;justify-content:center;}
+  #adbar .adsbygoogle{display:block;width:100%;height:100%;}
+  html.ads-on #adbar{display:flex;}
   /* ---- Boot splash: pure-CSS / image-free, so it paints the instant the page
      starts streaming (no blank wait on slow links). Faded out by JS once the
      menu is up. A throne-room glow, a bobbing crown, a torch-flicker title and
@@ -585,6 +593,7 @@
   <div id="tutarrow">👇</div>
   <div id="tutmodal"></div>
 </div>
+<div id="adbar"></div>
 <script>
 "use strict";
 const _BOOT_T0 = (typeof performance!=='undefined' ? performance.now() : 0);   // when the boot splash went up
@@ -1857,7 +1866,8 @@ function resize(){
   // screen, like scaling a JPEG. Compute that scale and apply it as the #app transform.
   const designW = 1280, designH = (document.documentElement.classList && document.documentElement.classList.contains('ar-1610')) ? 800 : 720;
   const vw = window.innerWidth || designW, vh = window.innerHeight || designH;
-  GSCALE = Math.min(vw/designW, vh/designH) || 1;
+  const adh = (typeof ADS!=='undefined' && ADS && ADS._on) ? ADS.height : 0;   // reserve the support-banner strip
+  GSCALE = Math.min(vw/designW, (vh - adh)/designH) || 1;
   const _app = document.getElementById('app');
   if(_app && _app.style && _app.style.setProperty){
     const gs = GSCALE.toFixed(4);
@@ -8812,7 +8822,48 @@ window.addEventListener('keydown', ()=>{ if(audioOn && !TUTPREVIEW) initAudio();
 { const ab=document.getElementById('audiobtn');
   if(ab){ ab.textContent=audioOn?'🔊':'🔇';
     ab.addEventListener('click', e=>{ e.stopPropagation(); toggleAudio(); }); } }
+/* ========================= SUPPORT BANNER (opt-in ads) =======================
+   A slim display-ad strip pinned to the very bottom. It RESERVES its own space
+   (the game scales into the area above it via --adh), so it never covers the
+   game, never interrupts play, never gates anything, and grants no rewards —
+   it's just there to chip in a little support.
+
+   To switch it on with Google AdSense:
+     1. Get an AdSense account approved for your site (adsense.google.com).
+     2. Make a Display ad unit and copy its slot id.
+     3. Put your publisher id in `client`, the slot id in `slot`, set
+        `enabled:true`, and redeploy. Done — no other change needed.
+   Left OFF here, so the game is byte-for-byte the same until you configure it. */
+const ADS = {
+  enabled: false,                       // ← flip to true once the two ids below are filled in
+  client:  'ca-pub-0000000000000000',   // ← your AdSense publisher id (ca-pub-…)
+  slot:    '0000000000',                // ← a Display ad-unit slot id
+  height:  60,                          // reserved bottom strip height (px) — tune to your ad size
+  _on:     false,
+};
+function initAds(){
+  try{
+    // only run when actually configured — an unfilled placeholder leaves the game untouched
+    if(!ADS.enabled || !/^ca-pub-[1-9]\d{5,}$/.test(ADS.client) || !/^[1-9]\d{5,}$/.test(ADS.slot)) return;
+    ADS._on = true;
+    document.documentElement.classList.add('ads-on');
+    document.documentElement.style.setProperty('--adh', ADS.height+'px');
+    if(!document.getElementById('_adsense')){            // load the AdSense library once
+      const s=document.createElement('script'); s.id='_adsense'; s.async=true; s.crossOrigin='anonymous';
+      s.src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client='+ADS.client;
+      document.head.appendChild(s);
+    }
+    const bar=document.getElementById('adbar');
+    if(bar){
+      bar.innerHTML='<ins class="adsbygoogle" style="display:block;width:100%;height:100%" data-ad-client="'+ADS.client+'" data-ad-slot="'+ADS.slot+'" data-ad-format="horizontal" data-full-width-responsive="true"></ins>';
+      try{ (window.adsbygoogle=window.adsbygoogle||[]).push({}); }catch(_){ }
+    }
+    resize();                                            // re-fit the game above the strip
+  }catch(_){ }
+}
+
 resize();
+if(!TUTPREVIEW) initAds();                // opt-in support banner (see ADS config above)
 if(TUTPREVIEW){ tutPreviewInit(); }     // Tutorial Designer iframe → step-by-step preview, not normal play
 else { titleScreen(); if(!introSeen()) playIntro(); showStartGate(); requestAnimationFrame(frame); }
 hideBoot();
