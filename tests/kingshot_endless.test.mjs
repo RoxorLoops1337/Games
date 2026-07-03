@@ -429,6 +429,31 @@ t.ok(KS.S.items.length === 3 && KS.S.items.some(i => i.crown) && KS.S.items.some
 t.ok(p.deaths === deathsBefore + 1, 'death counted');
 KS.S.items.length = 0;
 
+// ---- hero dash ability ----
+KS.S.enemies.length = 0; KS.S.eshots.length = 0;
+p.x = C.SPAWN.x; p.y = C.SPAWN.y; p.invuln = 0; p.dashCd = 0; p.dashT = 0;
+KS.S.keys = { d: true }; // dash right
+const dx0 = p.x;
+t.ok(KS.dashAbility() === true, 'dash fires when off cooldown');
+t.ok(p.dashT > 0 && p.invuln > 0, 'dash grants i-frames while active');
+t.ok(Math.abs(p.dashCd - KS.dashCdMax()) < 1e-9, 'dash goes on cooldown');
+step(0.25); // let the dash resolve
+KS.S.keys = {};
+t.ok(p.x > dx0 + 60, 'dash bursts the hero in the input direction');
+t.ok(KS.dashAbility() === false, 'dash refuses while on cooldown');
+// i-frames actually dodge a hit
+p.dashCd = 0; p.invuln = 0; p.hp = p.maxHp;
+KS.dashAbility();
+const hpDash = p.hp;
+KS.hurtPlayer(9999); // would kill, but we're mid-dash
+t.ok(p.hp === hpDash && p.deaths !== undefined, 'a dash dodges an incoming hit (i-frames)');
+// crowns shorten the dash cooldown
+KS.S.crowns = 0; const cd0 = KS.dashCdMax();
+KS.S.crowns = 5;
+t.ok(KS.dashCdMax() < cd0 && KS.dashCdMax() >= C.DASH_CD_MIN, 'crowns shorten the dash cooldown (min floor honored)');
+KS.S.crowns = 0;
+p.dashCd = 0; p.dashT = 0; p.invuln = 0; p.hp = p.maxHp;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
