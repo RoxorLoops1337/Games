@@ -308,6 +308,24 @@ step(1);
 t.ok(KS.S.gems === gems0 + 1, 'gem auto-collected into the gem counter');
 KS.S.items.length = 0; KS.S.enemies.length = 0;
 
+// ---- enemy archetypes: every foe family behaves differently ----
+t.ok(KS.foeArch(1) === 'melee' && KS.foeArch(2) === 'fast' && KS.foeArch(3) === 'tank' && KS.foeArch(4) === 'spitter', 'foe families map to distinct archetypes');
+KS.S.enemies.length = 0; freezeSpawns();
+KS.spawnEnemy(z2); // Raider land → fast
+const fastFoe = KS.S.enemies[0];
+t.ok(fastFoe.arch === 'fast' && fastFoe.max < KS.foeHp(2), 'fast foes trade hp for speed');
+KS.S.enemies.length = 0; KS.S.eshots.length = 0;
+KS.spawnEnemy(z1);
+const spit = KS.S.enemies[0];
+spit.arch = 'spitter'; spit.gold = false; spit.hp = spit.max = 1e6; spit.atkCd = 0;
+spit.x = z1.pen.x0 + 300; spit.y = 500; spit.tx = spit.x; spit.ty = spit.y; spit.wanderT = 99;
+p.x = spit.x + 250; p.y = 500;
+step(2);
+t.ok(KS.S.eshots.length >= 1, 'spitter lobs hostile projectiles');
+t.ok(Math.hypot(spit.x - p.x, spit.y - p.y) > 150, 'spitter keeps its distance');
+KS.S.enemies.length = 0; KS.S.eshots.length = 0; KS.S.shots.length = 0;
+p.x = C.SPAWN.x; p.y = C.SPAWN.y; p.hp = p.maxHp;
+
 // ---- gem shrine upgrade ----
 KS.S.gems = 20;
 const pickBefore = KS.pickR();
@@ -414,6 +432,18 @@ KS.dropHelmet(p2.x + 200, p2.y, 1); // outside the pickup magnet
 step(4);
 t.ok(p2.helmets.length === 1, 'dog fetched the far helmet into the stack');
 
+// ---- wandering treasure chest ----
+KS.S.chest = null; KS.S.chestCd = 0.01;
+step(0.2);
+t.ok(!!KS.S.chest && KS.S.chest.val > 0, 'treasure chest spawns when the timer fires');
+const wChest = KS.S.wallet;
+KS.S.chest.x = p2.x; KS.S.chest.y = p2.y; // drag it under the player
+step(0.6);
+t.ok(KS.S.wallet > wChest, 'walking over the chest pays out');
+t.ok(!KS.S.chest, 'chest is consumed and the timer re-arms');
+KS.checkAch();
+t.ok(KS.S.ach.chest1 === true, 'Treasure Hunter milestone unlocked');
+
 // ---- lumber camp: passive second resource with a visible pile ----
 KS.S.wallet = KS.S.campPlate.cost + 100;
 p2.x = C.CAMP.x; p2.y = C.CAMP.y;
@@ -454,6 +484,7 @@ t.ok(KS.S.crowns === gain && KS.S.prestiges === 1, 'holding the monument founds 
 t.ok(KS.S.zones.length === 1 && KS.S.wallet === 0, 'prestige resets lands and coins');
 t.ok(KS.S.gems === 7, 'gems survive prestige');
 t.ok(Math.abs(KS.coinMul() - (1 + 0.25 * KS.S.gemUp.coin) * (1 + C.CROWN_BONUS * gain)) < 1e-9, 'crowns boost all coin income forever');
+t.ok(Math.abs(KS.pDmg() - 6 * (1 + C.CROWN_DMG * gain)) < 1e-9, 'crowns sharpen the royal weapon (+30% dmg each)');
 t.ok(KS.S.ach.crown1 === true, 'prestige milestone unlocked');
 KS.save(); KS.reset(); KS.load();
 t.ok(KS.S.crowns === gain && KS.S.prestiges === 1, 'crowns persist through save/load');
