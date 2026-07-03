@@ -114,6 +114,9 @@ const CROWN_HP     = 0.25; // royal vigor: +25% max HP per crown
 const HP0          = 60, HP_UP = 45;  // max HP: base + per VITALITY level
 const CHEST_CD     = 160;  // s between wandering treasure chests
 const DOG_SPD      = 250, DOG_FETCH_R = 320;
+// hero dash: a short burst with i-frames, on a cooldown crowns shorten
+const DASH_SPD = 780, DASH_TIME = 0.16, DASH_CD = 3.6, DASH_CD_CROWN = 0.35, DASH_CD_MIN = 1.2;
+function dashCdMax() { return Math.max(DASH_CD_MIN, DASH_CD - DASH_CD_CROWN * S.crowns); }
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
 function helmVal(k)  { return Math.ceil(5 * eco(k)); }
@@ -214,6 +217,7 @@ function reset() {
       x: SPAWN.x, y: SPAWN.y, hp: HP0, maxHp: HP0, fireCd: 0, hurtT: 0, invuln: 0,
       helmets: [],           // stack entries: {k, bar?, crown?}
       face: 1, moving: 0, deaths: 0, warpT: 0, dustT: 0,
+      dashCd: 0, dashT: 0, dvx: 0, dvy: 0, mvx: 1, mvy: 0,
     },
     wallet: 0, gems: 0,
     pallet: 0,
@@ -697,6 +701,25 @@ function hurtEnemy(e, dmg) {
     puff(e.x, e.y, e.gold ? '#ffd94a' : foeCol(e.k), e.boss ? 26 : 10, true);
   } else sfx('hit');
 }
+function dashAbility() {
+  const p = S.player;
+  if (!S.started || p.dashT > 0 || p.dashCd > 0) return false;
+  let dx = 0, dy = 0;
+  if (S.stick) { dx = S.stick.dx; dy = S.stick.dy; }
+  if (S.keys.a || S.keys.ArrowLeft) dx -= 1;
+  if (S.keys.d || S.keys.ArrowRight) dx += 1;
+  if (S.keys.w || S.keys.ArrowUp) dy -= 1;
+  if (S.keys.s || S.keys.ArrowDown) dy += 1;
+  const l = Math.hypot(dx, dy);
+  if (l > 0.1) { dx /= l; dy /= l; } else { dx = p.mvx || p.face || 1; dy = p.mvy || 0; }
+  p.dvx = dx; p.dvy = dy;
+  p.dashT = DASH_TIME; p.dashCd = dashCdMax();
+  p.invuln = Math.max(p.invuln, DASH_TIME + 0.12); // i-frames through the dash + a hair after
+  if (Math.abs(dx) > 0.15) p.face = dx > 0 ? 1 : -1;
+  puff(p.x, p.y, '#6ec9e0', 12, false);
+  sfx('warp'); buzz(15);
+  return true;
+}
 function hurtPlayer(d) {
   const p = S.player;
   if (p.invuln > 0) return;
@@ -975,7 +998,18 @@ function tick(dt) {
   if (S.keys.w || S.keys.ArrowUp) my -= 1;
   if (S.keys.s || S.keys.ArrowDown) my += 1;
   const ml = Math.hypot(mx, my);
-  if (ml > 0.1) {
+  if (ml > 0.1) { p.mvx = mx / ml; p.mvy = my / ml; } // remember heading for dash direction
+  p.dashCd = Math.max(0, p.dashCd - dt);
+  if (p.dashT > 0) {
+    // dashing: fast burst, invulnerable, cyan afterimage trail
+    p.dashT -= dt;
+    const nx = p.x + p.dvx * DASH_SPD * dt, ny = p.y + p.dvy * DASH_SPD * dt;
+    if (inWalkable(nx, ny)) { p.x = nx; p.y = ny; }
+    else if (inWalkable(nx, p.y)) p.x = nx;
+    else if (inWalkable(p.x, ny)) p.y = ny;
+    p.moving = 1;
+    S.parts.push({ x: p.x, y: p.y, vx: 0, vy: 0, t: 0, dur: 0.22, r: 9, color: 'rgba(110,201,224,0.45)' });
+  } else if (ml > 0.1) {
     mx /= Math.max(1, ml); my /= Math.max(1, ml);
     const slow = 1 - Math.min(0.35, p.helmets.length / cap() * 0.35);
     const nx = p.x + mx * speed() * slow * dt;
@@ -2223,7 +2257,7 @@ function drawStands() {
       ctx.fillText('👑 NEW KINGDOM  +' + crownsToGain(), MONU.x, MONU.y + 48);
       ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '10px sans-serif';
       ctx.fillText('hold still ' + PREST_T + 's: reset lands & coins, earn crowns', MONU.x, MONU.y + 64);
-      ctx.fillText('(+' + Math.round(CROWN_BONUS * 100) + '% coins & +' + Math.round(CROWN_DMG * 100) + '% damage each, forever)', MONU.x, MONU.y + 77);
+      ctx.fillText('(+' + Math.round(CROWN_BONUS * 100) + '% coins, +' + Math.round(CROWN_DMG * 100) + '% dmg, +' + Math.round(CROWN_HP * 100) + '% HP & faster dash — forever)', MONU.x, MONU.y + 77);
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 12px sans-serif';
       ctx.fillText('👑 unlocks at ' + PRESTIGE_MIN + ' lands', MONU.x, MONU.y + 48);
@@ -2895,6 +2929,27 @@ function drawHud() {
     ctx.beginPath(); ctx.arc(S.stick.ax + S.stick.dx * 40, S.stick.ay + S.stick.dy * 40, 20, 0, 6.29); ctx.fill();
     ctx.globalAlpha = 1;
   }
+  // dash button (bottom-right, thumb-reachable) with cooldown ring
+  if (S.started) {
+    const bx = vw - 58, by = vh - 84, r = 36;
+    const ready = p.dashCd <= 0;
+    ctx.fillStyle = ready ? 'rgba(56,120,150,0.85)' : 'rgba(30,38,52,0.8)';
+    ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.29); ctx.fill();
+    if (!ready) {
+      ctx.strokeStyle = '#6ec9e0'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(bx, by, r - 3, -1.5708, -1.5708 + (1 - p.dashCd / dashCdMax()) * 6.283); ctx.stroke();
+    } else {
+      const pulse = 0.5 + Math.sin(S.t * 6) * 0.3;
+      ctx.strokeStyle = 'rgba(110,201,224,' + pulse + ')'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(bx, by, r - 3, 0, 6.29); ctx.stroke();
+    }
+    ctx.fillStyle = ready ? '#fff' : '#6a7684';
+    ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('💨', bx, by + 8);
+    ctx.font = 'bold 9px sans-serif'; ctx.fillStyle = ready ? '#cfeaf2' : '#6a7684';
+    ctx.fillText('DASH', bx, by + 24);
+    hits.push({ x: bx - r, y: by - r, w: r * 2, h: r * 2, act: dashAbility });
+  }
   if (!S.started) {
     ctx.fillStyle = 'rgba(8,10,16,0.8)'; ctx.fillRect(0, 0, vw, vh);
     ctx.textAlign = 'center';
@@ -3132,7 +3187,8 @@ window.addEventListener('pointercancel', onUp);
 window.addEventListener('keydown', (ev) => {
   const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
   S.keys[k] = true;
-  if (!S.started) { S.started = true; }
+  if (!S.started) { S.started = true; return; }
+  if (k === ' ' || k === 'Shift') { ev.preventDefault(); dashAbility(); }
 });
 window.addEventListener('keyup', (ev) => {
   const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
@@ -3165,8 +3221,9 @@ window.KS = {
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry, drawStatsPanel,
+  dashAbility, dashCdMax,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP },
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN },
   start() { S.started = true; },
 };
 </script>
