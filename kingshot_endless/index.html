@@ -8,7 +8,7 @@
 <style>
   html, body {
     margin: 0; padding: 0; height: 100%;
-    background: #1b2b1e; overflow: hidden;
+    background: #16241a; overflow: hidden;
     font-family: 'Segoe UI', system-ui, sans-serif;
     -webkit-user-select: none; user-select: none;
     touch-action: none; overscroll-behavior: none;
@@ -23,11 +23,12 @@
 // ============================================================
 // KINGSHOT ENDLESS — arcade-idle collector
 // Auto-firing knight ⇒ enemies drop helmets ⇒ stack them on
-// your back ⇒ sell or SMELT them ⇒ coins pile on the pallet ⇒
-// pour them into stations: archer towers, wizard towers,
-// catapults, war drums, porters, boss altars, waygates — and
-// endless procedurally-scaled new lands. Golden foes drop gems
-// for permanent shrine upgrades.
+// your back ⇒ sell or SMELT them ⇒ coins pile into a mountain ⇒
+// pour them into stations: archer/wizard/catapult towers, war
+// drums, porters, horde gates, boss altars, waygates — and the
+// kingdom expands in ALL FOUR DIRECTIONS, land by land, carved
+// out of the dark forest. Golden foes drop gems for permanent
+// shrine upgrades.
 // One file, vanilla canvas, mobile-first. window.KS = test hooks.
 // ============================================================
 
@@ -35,42 +36,55 @@ const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 
 // ---- world geometry -----------------------------------------
-const WORLD_H = 1000;
-const HUB_W   = 820;          // hub strip at the left
-const ZONE_W  = 1050;         // each combat zone appended to the right
-const PEN_PAD = 90;           // fence inset inside a zone
-const SELL    = { x: 320, y: 430, r: 60 };
-const PALLET  = { x: 320, y: 640, r: 62 };
-const FORGE   = { x: 615, y: 430, r: 55 };     // helmet intake
-const TRAY    = { x: 615, y: 575, r: 55 };     // smelted bars pickup
-const HUBPAD  = { x: 680, y: 872, r: 44 };     // waygate pad (hub side)
+// The world is a grid of cells. The hub sits at cell (0,0);
+// zone k grows outward along four arms: E, S, W, N, E+2, S+2, …
+const CELL_W = 1050, CELL_H = 1000;
+const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+const DIR_NAME = ['EAST', 'SOUTH', 'WEST', 'NORTH'];
+function cellFor(k) { const d = DIRS[(k - 1) % 4], dist = Math.floor((k - 1) / 4) + 1; return { cx: d[0] * dist, cy: d[1] * dist, dir: (k - 1) % 4 }; }
+// hub furniture (all inside cell (0,0))
+const SELL    = { x: 435, y: 430, r: 60 };
+const PALLET  = { x: 435, y: 640, r: 66 };
+const FORGE   = { x: 730, y: 430, r: 55 };
+const TRAY    = { x: 730, y: 575, r: 55 };
+const HUBPAD  = { x: 790, y: 872, r: 44 };
+const SPAWN   = { x: 525, y: 720 };
+const UPG_X0  = 245, UPG_STEP = 165, UPG_Y = 190;
+const GEM_X   = 225, GEM_Y0 = 480, GEM_STEP = 140;
+const MONU    = { x: 525, y: 315, r: 46 };     // New Kingdom monument (prestige)
+const KENNEL  = { x: 300, y: 872, r: 44 };     // war dog kennel
 
 // ---- balance dials ------------------------------------------
-const PICK_R      = 78;    // helmet magnet radius (gem upgrade scales it)
+const PICK_R      = 78;
 const CAP0        = 8,  CAP_UP = 4;
-const SPEED0      = 185,   SPEED_UP = 0.12;
+const SPEED0      = 195,   SPEED_UP = 0.12;
 const DMG0        = 6,     DMG_UP = 1.45;
 const RATE0       = 0.55,  RATE_UP = 0.90;
 const FIRE_RANGE  = 270;
-const SELL_RATE   = 7;     // stack items per second offloaded
-const VAC_RATE    = 55;    // pallet coins per second vacuumed
-const BUILD_RATE  = 60;    // wallet coins per second poured into plates
-const ECO         = 2.35;  // per-zone economy multiplier
-const HP_T        = 2.15;  // per-zone enemy hp multiplier
+const SELL_RATE   = 7;
+const VAC_RATE    = 55;
+const BUILD_RATE  = 60;
+const ECO         = 2.35;
+const HP_T        = 2.15;
 const UNLOCK0     = 220, UNLOCK_MUL = 2.65;
 const OFFLINE_CAP = 4 * 3600;
 const TOWER_RANGE = 340, TOWER_RATE = 1.05;
+const TOWER_TRAIN = 0.35;  // +35% tower dmg per training level
 const WIZ_RATE    = 2.0, WIZ_CHAIN = 3, WIZ_JUMP = 160;
 const CAT_RATE    = 4.2, CAT_AOE = 115;
-const DRUM_MUL    = 0.75;  // fire-interval multiplier inside a drummed zone
+const DRUM_MUL    = 0.75;
 const PORTER_CAP  = 10, PORTER_SPD = 135;
-const FORGE_T     = 1.8;   // s per smelt
+const FORGE_T     = 1.8;
 const FORGE_Q     = 12, TRAY_MAX = 10;
-const BAR_MUL     = 3;     // bars sell for 3x the helmet
-const CROWN_MUL   = 22;    // boss crowns sell for 22x
-const GOLD_CHANCE = 0.045; // golden enemy spawn chance
-const BOSS_CD     = 45;    // altar cooldown
-const WARP_T      = 0.55;  // s standing on a pad to warp
+const BAR_MUL     = 3;
+const CROWN_MUL   = 22;
+const GOLD_CHANCE = 0.045;
+const BOSS_CD     = 45;
+const WARP_T      = 0.55;
+const PRESTIGE_MIN = 5;    // lands required to found a New Kingdom
+const PREST_T      = 3;    // s holding still on the monument
+const CROWN_BONUS  = 0.20; // +20% coin value per crown, forever
+const DOG_SPD      = 250, DOG_FETCH_R = 320;
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
 function helmVal(k)  { return Math.ceil(4 * eco(k)); }
@@ -95,43 +109,68 @@ const FOE_NAMES = ['Grunt', 'Raider', 'Ogre', 'Wraith', 'Golem', 'Demon', 'Titan
 const FOE_COLS  = ['#c15840', '#c99a3a', '#7c52c9', '#4ba8b5', '#8a9a4a', '#c94a8a', '#5a6dcf', '#3f3f4f'];
 function foeName(k) { const i = (k - 1) % FOE_NAMES.length; const cyc = Math.floor((k - 1) / FOE_NAMES.length); return FOE_NAMES[i] + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''); }
 function foeCol(k)  { return FOE_COLS[(k - 1) % FOE_COLS.length]; }
+function hexRgb(h)  { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
 
 // ---- deterministic rng --------------------------------------
 let seed = 987654321;
 function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
 
 // ---- zone factory -------------------------------------------
-// zone 1 is the tutorial layout; zones 2+ rotate two bonus
-// stations from a pool so every new land plays differently.
+// Every zone: archer tower, porter, horde gate (repeatable),
+// tower training (repeatable), +porter (repeatable), unlock.
+// Zones 2+ also rotate two bonus stations + a boss altar.
 const POOL = [
   { id: 'tower2',   icon: '🏹', name: 'ARCHER TOWER', mul: 1.5 },
   { id: 'wizard',   icon: '⚡', name: 'WIZARD TOWER', mul: 1.8 },
   { id: 'catapult', icon: '💣', name: 'CATAPULT',     mul: 1.7 },
   { id: 'drums',    icon: '🥁', name: 'WAR DRUMS',    mul: 1.4 },
-  { id: 'gate2',    icon: '🚪', name: 'MORE MONSTERS', mul: 1.15 },
 ];
 function mkZone(k) {
-  const x0 = HUB_W + (k - 1) * ZONE_W;
-  const P = (id, icon, name, x, y, cost) => ({ id, icon, name, x, y, cost: Math.ceil(cost), paid: 0, built: false });
-  const plates = [P('tower1', '🏹', 'ARCHER TOWER', x0 + 260, 265, 95 * eco(k))];
+  const cell = cellFor(k);
+  const x0 = cell.cx * CELL_W, y0 = cell.cy * CELL_H;
+  const x1 = x0 + CELL_W, y1 = y0 + CELL_H;
+  const P = (id, icon, name, px, py, cost, rep) => ({
+    id, icon, name, x: x0 + px, y: y0 + py,
+    base: Math.ceil(cost), mul: rep ? rep.mul : 0, maxLvl: rep ? rep.max : 0,
+    cost: Math.ceil(cost), paid: 0, lvl: 0, built: false, repeat: !!rep,
+  });
+  const plates = [
+    P('tower1', '🏹', 'ARCHER TOWER', 260, 265, 95 * eco(k)),
+    P('gate2', '🚪', 'HORDE GATE', 640, 230, 110 * eco(k), { mul: 1.6, max: 4 }),
+    P('towersUp', '🎯', 'TRAIN TOWERS', 525, 500, 130 * eco(k), { mul: 1.7, max: 6 }),
+    P('porter', '🧺', 'PORTER', 150, 380, 120 * eco(k)),
+    P('porterPlus', '🧺', '+PORTER', 150, 620, 150 * eco(k), { mul: 1.9, max: 2 }),
+  ];
   if (k === 1) {
-    plates.push(P('tower2', '🏹', 'ARCHER TOWER', x0 + 260, 735, 150 * eco(k)));
-    plates.push(P('gate2', '🚪', 'MORE MONSTERS', x0 + 640, 230, 110 * eco(k)));
+    plates.push(P('tower2', '🏹', 'ARCHER TOWER', 260, 735, 150 * eco(k)));
   } else {
     const a = POOL[k % POOL.length], b = POOL[(k + 2) % POOL.length];
-    plates.push(P(a.id, a.icon, a.name, x0 + 260, 735, 95 * eco(k) * a.mul));
-    plates.push(P(b.id, b.icon, b.name, x0 + 640, 230, 95 * eco(k) * b.mul));
-    plates.push(P('altar', '💀', 'BOSS ALTAR', x0 + 640, 770, 200 * eco(k)));
+    plates.push(P(a.id, a.icon, a.name, 260, 735, 95 * eco(k) * a.mul));
+    plates.push(P(b.id, b.icon, b.name, 790, 265, 95 * eco(k) * b.mul));
+    plates.push(P('altar', '💀', 'BOSS ALTAR', 640, 770, 200 * eco(k)));
   }
-  plates.push(P('porter', '🧺', 'PORTER', x0 + 130, 500, 120 * eco(k)));
-  plates.push(P('unlock', '🔓', 'NEW LANDS', x0 + ZONE_W - 60, 500, unlockCost(k)));
+  // unlock plate sits on the outward edge; entrance pad faces the hub
+  const d = DIRS[cell.dir];
+  const ux = d[0] ? (d[0] > 0 ? x1 - 60 : x0 + 60) : x0 + 525;
+  const uy = d[1] ? (d[1] > 0 ? y1 - 60 : y0 + 60) : y0 + 500;
+  plates.push({ id: 'unlock', icon: '🔓', name: 'NEW LANDS', x: ux, y: uy, base: unlockCost(k), mul: 0, maxLvl: 0, cost: unlockCost(k), paid: 0, lvl: 0, built: false, repeat: false });
+  const padx = d[0] ? (d[0] > 0 ? x0 + 60 : x1 - 60) : x0 + 525;
+  const pady = d[1] ? (d[1] > 0 ? y0 + 60 : y1 - 60) : y0 + 500;
+  const gatex = d[0] ? (d[0] > 0 ? x1 - 130 : x0 + 130) : x0 + 525;
+  const gatey = d[1] ? (d[1] > 0 ? y1 - 200 : y0 + 200) : y0 + 500;
   return {
-    k, x0, x1: x0 + ZONE_W,
-    pen: { x0: x0 + PEN_PAD, x1: x0 + ZONE_W - PEN_PAD, y0: 160, y1: WORLD_H - 160 },
+    k, x0, y0, x1, y1, cx: cell.cx, cy: cell.cy, dir: cell.dir,
+    pen: { x0: x0 + 90, x1: x1 - 90, y0: y0 + 160, y1: y1 - 160 },
+    gate: { x: gatex, y: gatey },
+    pad: { x: padx, y: pady, r: 44 },
     spawnCd: 1.2, plates,
     towers: [], porters: [], drums: false, altar: null,
+    towerLvl: 0, hordeLvl: 0,
   };
 }
+function towerMul(z) { return 1 + TOWER_TRAIN * z.towerLvl; }
+function maxAlive(z) { return 9 + 3 * z.hordeLvl; }
+function spawnInt(z) { return 2.4 * Math.pow(0.82, z.hordeLvl); }
 
 // ---- state --------------------------------------------------
 let S;
@@ -139,9 +178,9 @@ function reset() {
   S = {
     started: false, t: 0,
     player: {
-      x: 620, y: 700, hp: 60, maxHp: 60, fireCd: 0, hurtT: 0, invuln: 0,
+      x: SPAWN.x, y: SPAWN.y, hp: 60, maxHp: 60, fireCd: 0, hurtT: 0, invuln: 0,
       helmets: [],           // stack entries: {k, bar?, crown?}
-      face: 1, moving: 0, deaths: 0, warpT: 0,
+      face: 1, moving: 0, deaths: 0, warpT: 0, dustT: 0,
     },
     wallet: 0, gems: 0,
     pallet: 0,
@@ -149,15 +188,19 @@ function reset() {
     upPaid: { speed: 0, cap: 0, dmg: 0, rate: 0 },
     gemUp: { magnet: 0, crit: 0, coin: 0 },
     gemPaid: { magnet: 0, crit: 0, coin: 0 },
-    forge: null,             // {queue:[k..], tray:[k..], smeltT}
+    forge: null,
     forgePlate: { cost: 260, paid: 0, built: false },
     waygate: false,
     wayPlate: { cost: 400, paid: 0, built: false },
+    dog: null,
+    dogPlate: { cost: 500, paid: 0, built: false },
+    crowns: 0, prestiges: 0, prestT: 0,
+    ach: {}, toasts: [], achCd: 0,
     zones: [mkZone(1)],
     enemies: [], items: [], shots: [], parts: [], floats: [], fx: [],
     stick: null, keys: {},
-    cam: { x: 620, y: 640 },
-    stats: { kills: 0, earned: 0, sold: 0, bosses: 0 },
+    cam: { x: SPAWN.x, y: SPAWN.y },
+    stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
     offlineMsg: 0, offlineAmt: 0,
     shake: 0, saveCd: 5,
   };
@@ -165,24 +208,45 @@ function reset() {
 function cap()     { return CAP0 + CAP_UP * S.up.cap; }
 function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed); }
 function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg); }
-function pRate()   { const z = zoneAt(S.player.x); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1); }
+function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1); }
 function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet); }
-function coinMul() { return 1 + 0.25 * S.gemUp.coin; }
-function boundX()  { return S.zones[S.zones.length - 1].x1 - 30; }
+function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns); }
 function entryVal(e) { return Math.ceil(helmVal(e.k) * (e.crown ? CROWN_MUL : e.bar ? BAR_MUL : 1) * coinMul()); }
+function zoneAt(x, y) { for (const z of S.zones) if (x >= z.x0 && x < z.x1 && y >= z.y0 && y < z.y1) return z; return null; }
+function inCell(z, x, y, m) { m = m || 0; return x >= z.x0 - m && x < z.x1 + m && y >= z.y0 - m && y < z.y1 + m; }
+function inWalkable(x, y) {
+  if (x >= 0 && x < CELL_W && y >= 0 && y < CELL_H) return true; // hub
+  return !!zoneAt(x, y);
+}
+function worldBounds() {
+  let minX = 0, minY = 0, maxX = CELL_W, maxY = CELL_H;
+  for (const z of S.zones) {
+    if (z.x0 < minX) minX = z.x0; if (z.x1 > maxX) maxX = z.x1;
+    if (z.y0 < minY) minY = z.y0; if (z.y1 > maxY) maxY = z.y1;
+  }
+  return { minX, minY, maxX, maxY };
+}
 
 // ---- save / load --------------------------------------------
 const SAVE_KEY = 'ks_idle_save';
 function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 2, wallet: S.wallet, pallet: S.pallet, gems: S.gems,
+      v: 3, wallet: S.wallet, pallet: S.pallet, gems: S.gems,
       up: S.up, gemUp: S.gemUp,
       zoneCount: S.zones.length,
-      built: S.zones.map(z => z.plates.filter(p => p.built).map(p => p.id)),
-      paid: S.zones.map(z => { const o = {}; z.plates.forEach(p => { if (p.paid > 0 && !p.built) o[p.id] = p.paid; }); return o; }),
+      zs: S.zones.map(z => {
+        const o = {};
+        z.plates.forEach(pl => {
+          if (pl.built || pl.lvl > 0 || pl.paid > 0) o[pl.id] = { l: pl.lvl, b: pl.built ? 1 : 0, p: pl.built ? 0 : pl.paid };
+        });
+        return o;
+      }),
       forge: S.forge ? { queue: S.forge.queue, tray: S.forge.tray } : null,
       waygate: S.waygate,
+      dog: S.dogPlate.built,
+      crowns: S.crowns, prestiges: S.prestiges,
+      ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
     }));
   } catch (e) {}
@@ -192,7 +256,7 @@ function idleRate() {
   for (const z of S.zones) {
     if (!z.porters.length || !z.towers.length) continue;
     const killsPerSec = Math.min(z.towers.length / TOWER_RATE * 0.5, 1 / 2.2);
-    r += killsPerSec * helmVal(z.k) * 1.4 * coinMul();
+    r += killsPerSec * helmVal(z.k) * 1.4 * coinMul() * Math.min(2, 1 + 0.3 * (z.porters.length - 1));
   }
   return r;
 }
@@ -207,16 +271,34 @@ function load() {
   S.player.deaths = d.deaths || 0;
   const n = Math.max(1, d.zoneCount || 1);
   S.zones = []; for (let k = 1; k <= n; k++) S.zones.push(mkZone(k));
-  (d.built || []).forEach((ids, i) => {
-    const z = S.zones[i]; if (!z) return;
-    for (const id of ids) { const p = z.plates.find(q => q.id === id); if (p && id !== 'unlock') buildPlate(z, p, true); if (p && id === 'unlock') p.built = true; }
-  });
-  (d.paid || []).forEach((o, i) => {
-    const z = S.zones[i]; if (!z) return;
-    for (const id in o) { const p = z.plates.find(q => q.id === id); if (p && !p.built) p.paid = o[id]; }
-  });
+  if (d.zs) { // v3
+    d.zs.forEach((o, i) => {
+      const z = S.zones[i]; if (!z) return;
+      for (const id in o) {
+        const pl = z.plates.find(q => q.id === id); if (!pl) continue;
+        const st = o[id];
+        if (pl.repeat) { for (let j = 0; j < (st.l || 0); j++) applyPlate(z, pl); pl.lvl = st.l || 0; pl.cost = Math.ceil(pl.base * Math.pow(pl.mul, pl.lvl)); }
+        else if (st.b && id !== 'unlock') applyPlate(z, pl);
+        if (st.b) pl.built = true;
+        if (!pl.built) pl.paid = st.p || 0;
+      }
+    });
+  } else { // v1/v2 migration: arrays of built plate ids
+    (d.built || []).forEach((ids, i) => {
+      const z = S.zones[i]; if (!z) return;
+      for (const id of ids) {
+        const pl = z.plates.find(q => q.id === id); if (!pl) continue;
+        if (pl.repeat) { applyPlate(z, pl); pl.lvl = 1; pl.cost = Math.ceil(pl.base * pl.mul); }
+        else if (id !== 'unlock') { applyPlate(z, pl); pl.built = true; }
+        else pl.built = true;
+      }
+    });
+  }
   if (d.forge) { S.forgePlate.built = true; S.forge = { queue: d.forge.queue || [], tray: d.forge.tray || [], smeltT: 0 }; }
   if (d.waygate) { S.wayPlate.built = true; S.waygate = true; }
+  if (d.dog) { S.dogPlate.built = true; spawnDog(); }
+  S.crowns = d.crowns || 0; S.prestiges = d.prestiges || 0;
+  (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
   const amt = Math.floor(idleRate() * away);
   if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; S.offlineMsg = 6; }
@@ -283,17 +365,16 @@ function puff(x, y, color, n, up) {
   for (let i = 0; i < n; i++)
     S.parts.push({ x, y, vx: (rnd() - 0.5) * 200, vy: (rnd() - (up ? 0.85 : 0.5)) * 220, t: 0, dur: 0.45 + rnd() * 0.2, r: 2 + rnd() * 3, color, g: up ? 1 : 0 });
 }
-function zoneAt(x) { for (const z of S.zones) if (x >= z.x0 && x < z.x1) return z; return null; }
 
 // ---- spawning / combat --------------------------------------
 function spawnEnemy(z, opts) {
   opts = opts || {};
-  const gx = z.pen.x1 - 60, gy = 500;
   const boss = !!opts.boss;
   const gold = !boss && rnd() < GOLD_CHANCE;
   const hp = Math.ceil(foeHp(z.k) * (boss ? 22 : gold ? 2 : 1));
   S.enemies.push({
-    k: z.k, x: gx, y: gy + (rnd() - 0.5) * 200,
+    k: z.k,
+    x: z.gate.x + (rnd() - 0.5) * 80, y: z.gate.y + (rnd() - 0.5) * 80,
     hp, max: hp,
     spd: (boss ? 26 : 42) * (0.92 + rnd() * 0.16),
     dmg: foeDmg(z.k) * (boss ? 3.5 : 1),
@@ -301,7 +382,7 @@ function spawnEnemy(z, opts) {
     wanderT: 1 + rnd() * 2, atkCd: 0, hurt: 0, sway: rnd() * 6.28,
     r: boss ? 34 : (15 + Math.min(9, z.k)), boss, gold,
   });
-  if (boss) { float(gx - 60, gy, '💀 ' + foeName(z.k).toUpperCase() + ' KING!', '#ff6a5a', true); sfx('boss', true); S.shake = 12; }
+  if (boss) { float(z.gate.x, z.gate.y - 60, '💀 ' + foeName(z.k).toUpperCase() + ' KING!', '#ff6a5a', true); sfx('boss', true); S.shake = 12; }
 }
 function summonBoss(z) {
   if (!z.altar || z.altar.cd > 0) return false;
@@ -309,8 +390,6 @@ function summonBoss(z) {
   spawnEnemy(z, { boss: true });
   return true;
 }
-function maxAlive(z) { return (z.plates.some(p => p.id === 'gate2' && p.built) ? 15 : 9); }
-function spawnInt(z) { return z.plates.some(p => p.id === 'gate2' && p.built) ? 1.4 : 2.4; }
 function dropItem(x, y, spec) {
   S.items.push(Object.assign({ x: x + (rnd() - 0.5) * 46, y: y + (rnd() - 0.5) * 36, t: 0, vy: -60 - rnd() * 60, vx: (rnd() - 0.5) * 80 }, spec));
 }
@@ -354,34 +433,51 @@ function playerDie() {
   for (const e of p.helmets) dropItem(p.x, p.y, e.crown ? { k: e.k, crown: true } : e.bar ? { k: e.k, bar: true } : { k: e.k });
   p.helmets = [];
   p.hp = p.maxHp; p.invuln = 2.5;
-  p.x = 620; p.y = 700;
-  float(620, 640, 'YOU DROPPED EVERYTHING!', '#ff6a5a', true);
+  p.x = SPAWN.x; p.y = SPAWN.y;
+  float(SPAWN.x, SPAWN.y - 60, 'YOU DROPPED EVERYTHING!', '#ff6a5a', true);
   S.shake = 14; sfx('die', true); buzz([60, 40, 60]);
 }
 
 // ---- building -----------------------------------------------
-function buildPlate(z, p, silent) {
-  p.built = true;
-  if (p.id === 'tower1' || p.id === 'tower2') z.towers.push({ type: 'archer', x: p.x, y: p.y, k: z.k, cd: rnd() * 0.5 });
-  else if (p.id === 'wizard')   z.towers.push({ type: 'wizard', x: p.x, y: p.y, k: z.k, cd: rnd() * 0.5 });
-  else if (p.id === 'catapult') z.towers.push({ type: 'catapult', x: p.x, y: p.y, k: z.k, cd: 1 + rnd() });
-  else if (p.id === 'drums')    z.drums = true;
-  else if (p.id === 'altar')    z.altar = { x: p.x, y: p.y, cd: 0 };
-  else if (p.id === 'porter')   z.porters.push({ x: p.x, y: p.y, k: z.k, state: 'seek', carry: [], cd: 0 });
-  else if (p.id === 'unlock') {
-    S.zones.push(mkZone(z.k + 1));
-    if (!silent) { float(p.x, p.y - 60, '🌍 ZONE ' + (z.k + 1) + ' UNLOCKED!', '#ffd94a', true); sfx('unlock', true); buzz([40, 30, 80]); }
+function applyPlate(z, pl) {
+  if (pl.id === 'tower1' || pl.id === 'tower2') z.towers.push({ type: 'archer', x: pl.x, y: pl.y, k: z.k, cd: rnd() * 0.5 });
+  else if (pl.id === 'wizard')     z.towers.push({ type: 'wizard', x: pl.x, y: pl.y, k: z.k, cd: rnd() * 0.5 });
+  else if (pl.id === 'catapult')   z.towers.push({ type: 'catapult', x: pl.x, y: pl.y, k: z.k, cd: 1 + rnd() });
+  else if (pl.id === 'drums')      z.drums = true;
+  else if (pl.id === 'altar')      z.altar = { x: pl.x, y: pl.y, cd: 0 };
+  else if (pl.id === 'porter' || pl.id === 'porterPlus')
+    z.porters.push({ x: pl.x, y: pl.y, hx: pl.x, hy: pl.y, k: z.k, state: 'seek', carry: [], cd: 0 });
+  else if (pl.id === 'gate2')      z.hordeLvl++;
+  else if (pl.id === 'towersUp')   z.towerLvl++;
+  else if (pl.id === 'unlock')     S.zones.push(mkZone(z.k + 1));
+}
+function buildPlate(z, pl, silent) {
+  applyPlate(z, pl);
+  if (pl.repeat) {
+    pl.lvl++; pl.paid = 0;
+    pl.cost = Math.ceil(pl.base * Math.pow(pl.mul, pl.lvl));
+    if (pl.lvl >= pl.maxLvl) pl.built = true;
+    if (!silent) { float(pl.x, pl.y - 50, pl.name + ' LV' + pl.lvl + '!', '#6ecb5a', true); sfx('built', true); buzz(40); puff(pl.x, pl.y, '#ffd94a', 12, true); }
     return;
   }
-  if (!silent) { float(p.x, p.y - 50, p.name + ' BUILT!', '#6ecb5a', true); sfx('built', true); buzz(50); puff(p.x, p.y, '#ffd94a', 16, true); }
+  pl.built = true;
+  if (pl.id === 'unlock') {
+    if (!silent) {
+      const nz = S.zones[S.zones.length - 1];
+      float(pl.x, pl.y - 60, '🌍 NEW LAND ' + DIR_NAME[nz.dir] + '!', '#ffd94a', true);
+      sfx('unlock', true); buzz([40, 30, 80]);
+    }
+    return;
+  }
+  if (!silent) { float(pl.x, pl.y - 50, pl.name + ' BUILT!', '#6ecb5a', true); sfx('built', true); buzz(50); puff(pl.x, pl.y, '#ffd94a', 16, true); }
 }
-function pourInto(p, z, dt) {
-  if (p.built || S.wallet <= 0) return;
-  const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), p.cost - p.paid);
+function pourInto(pl, z, dt) {
+  if (pl.built || S.wallet <= 0) return;
+  const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), pl.cost - pl.paid);
   if (chunk <= 0) return;
-  S.wallet -= chunk; p.paid += chunk;
+  S.wallet -= chunk; pl.paid += chunk;
   sfx('pour');
-  if (p.paid >= p.cost) buildPlate(z, p, false);
+  if (pl.paid >= pl.cost) buildPlate(z, pl, false);
 }
 function pourHub(plate, dt, done) {
   if (plate.built || S.wallet <= 0) return;
@@ -389,6 +485,93 @@ function pourHub(plate, dt, done) {
   if (chunk <= 0) return;
   S.wallet -= chunk; plate.paid += chunk; sfx('pour');
   if (plate.paid >= plate.cost) { plate.built = true; done(); sfx('built', true); buzz(50); }
+}
+
+// ---- war dog ------------------------------------------------
+function spawnDog() {
+  S.dog = { x: KENNEL.x, y: KENNEL.y - 30, state: 'follow', carry: null, tail: 0 };
+}
+function dogTick(dt) {
+  const d = S.dog, p = S.player;
+  if (!d) return;
+  d.tail += dt;
+  if (d.state === 'follow') {
+    // trot behind the player, sniff out nearby drops if there's room on the stack
+    if (p.helmets.length < cap()) {
+      let it = null, bd = DOG_FETCH_R * DOG_FETCH_R;
+      for (const i2 of S.items) {
+        if (i2.dead || i2.gem || i2.t < 0.25) continue;
+        const q = dist2(i2.x, i2.y, p.x, p.y); if (q < bd) { bd = q; it = i2; }
+      }
+      if (it) { d.state = 'fetch'; d.item = it; }
+    }
+    const hx = p.x - p.face * 30, hy = p.y + 12;
+    const dl = Math.hypot(hx - d.x, hy - d.y);
+    if (dl > 16) { d.x += (hx - d.x) / dl * Math.min(DOG_SPD, dl * 6) * dt; d.y += (hy - d.y) / dl * Math.min(DOG_SPD, dl * 6) * dt; }
+  } else if (d.state === 'fetch') {
+    const it = d.item;
+    if (!it || it.dead) { d.state = 'follow'; d.item = null; }
+    else {
+      const dl = Math.hypot(it.x - d.x, it.y - d.y) || 1;
+      d.x += (it.x - d.x) / dl * DOG_SPD * dt; d.y += (it.y - d.y) / dl * DOG_SPD * dt;
+      if (dl < 20) { it.dead = true; d.carry = { k: it.k, bar: !!it.bar, crown: !!it.crown }; d.item = null; d.state = 'return'; }
+    }
+  } else { // return to the player
+    const dl = Math.hypot(p.x - d.x, p.y - d.y) || 1;
+    d.x += (p.x - d.x) / dl * DOG_SPD * dt; d.y += (p.y - d.y) / dl * DOG_SPD * dt;
+    if (dl < 30) {
+      if (p.helmets.length < cap()) { p.helmets.push(d.carry); sfx('pick'); }
+      else dropItem(p.x, p.y, d.carry.crown ? { k: d.carry.k, crown: true } : d.carry.bar ? { k: d.carry.k, bar: true } : { k: d.carry.k });
+      d.carry = null; d.state = 'follow';
+    }
+  }
+}
+
+// ---- prestige: found a New Kingdom --------------------------
+function crownsToGain() { return Math.max(1, S.zones.length - (PRESTIGE_MIN - 1)); }
+function prestige() {
+  const gain = crownsToGain();
+  S.crowns += gain; S.prestiges++;
+  // burn the old kingdom; keep gems, shrines, crowns, achievements, stats
+  S.wallet = 0; S.pallet = 0;
+  S.up = { speed: 0, cap: 0, dmg: 0, rate: 0 };
+  S.upPaid = { speed: 0, cap: 0, dmg: 0, rate: 0 };
+  S.forge = null; S.forgePlate = { cost: 260, paid: 0, built: false };
+  S.waygate = false; S.wayPlate = { cost: 400, paid: 0, built: false };
+  S.dog = null; S.dogPlate = { cost: 500, paid: 0, built: false };
+  S.zones = [mkZone(1)];
+  S.enemies = []; S.items = []; S.shots = [];
+  const p = S.player;
+  p.helmets = []; p.hp = p.maxHp; p.x = SPAWN.x; p.y = SPAWN.y; p.invuln = 2;
+  S.cam.x = p.x; S.cam.y = p.y;
+  float(SPAWN.x, SPAWN.y - 80, '👑 NEW KINGDOM!  +' + gain + ' crown' + (gain > 1 ? 's' : ''), '#ffd94a', true);
+  float(SPAWN.x, SPAWN.y - 50, 'All coins now worth +' + Math.round(CROWN_BONUS * 100 * S.crowns) + '%', '#ffd94a', true);
+  S.shake = 16; sfx('unlock', true); buzz([80, 40, 120]);
+  save();
+}
+
+// ---- milestones ---------------------------------------------
+const ACH = [
+  { id: 'blood',   name: 'First Blood',      c: () => S.stats.kills >= 1 },
+  { id: 'k100',    name: 'Century Slayer',   c: () => S.stats.kills >= 100 },
+  { id: 'k1000',   name: 'Thousand Cuts',    c: () => S.stats.kills >= 1000 },
+  { id: 'boss1',   name: 'Kingslayer',       c: () => S.stats.bosses >= 1 },
+  { id: 'boss5',   name: 'Regicide Habit',   c: () => S.stats.bosses >= 5 },
+  { id: 'land3',   name: 'Explorer',         c: () => S.zones.length >= 3 },
+  { id: 'land5',   name: 'Cartographer',     c: () => S.zones.length >= 5 },
+  { id: 'land8',   name: 'Empire',           c: () => S.zones.length >= 8 },
+  { id: 'rich10k', name: 'Tycoon',           c: () => S.stats.earned >= 10000 },
+  { id: 'gem1',    name: 'Shiny!',           c: () => S.stats.gemsFound >= 1 },
+  { id: 'mule',    name: 'Pack Mule',        c: () => S.player.helmets.length >= cap() },
+  { id: 'crown1',  name: 'New Kingdom',      c: () => S.crowns >= 1 },
+];
+function checkAch() {
+  for (const a of ACH) {
+    if (S.ach[a.id] || !a.c()) continue;
+    S.ach[a.id] = true;
+    S.toasts.push({ txt: '🏆 ' + a.name, t: 0 });
+    sfx('unlock', true); buzz(30);
+  }
 }
 
 // ---- main update --------------------------------------------
@@ -402,7 +585,7 @@ function tick(dt) {
   p.hurtT = Math.max(0, p.hurtT - dt);
   if (p.hp < p.maxHp && p.invuln <= 0) p.hp = Math.min(p.maxHp, p.hp + 5 * dt);
 
-  // -- movement (joystick + keys)
+  // -- movement (joystick + keys), constrained to unlocked lands
   let mx = 0, my = 0;
   if (S.stick) { mx = S.stick.dx; my = S.stick.dy; }
   if (S.keys.a || S.keys.ArrowLeft) mx -= 1;
@@ -413,15 +596,21 @@ function tick(dt) {
   if (ml > 0.1) {
     mx /= Math.max(1, ml); my /= Math.max(1, ml);
     const slow = 1 - Math.min(0.35, p.helmets.length / cap() * 0.35);
-    p.x += mx * speed() * slow * dt;
-    p.y += my * speed() * slow * dt;
+    const nx = p.x + mx * speed() * slow * dt;
+    const ny = p.y + my * speed() * slow * dt;
+    if (inWalkable(nx, ny)) { p.x = nx; p.y = ny; }
+    else if (inWalkable(nx, p.y)) p.x = nx;
+    else if (inWalkable(p.x, ny)) p.y = ny;
     p.moving = 1; if (Math.abs(mx) > 0.15) p.face = mx > 0 ? 1 : -1;
+    p.dustT += dt;
+    if (p.dustT > 0.18) {
+      p.dustT = 0;
+      S.parts.push({ x: p.x - mx * 10, y: p.y + 14, vx: -mx * 30, vy: -10, t: 0, dur: 0.4, r: 3, color: 'rgba(180,170,150,0.5)' });
+    }
   } else p.moving = 0;
-  p.x = Math.max(40, Math.min(boundX(), p.x));
-  p.y = Math.max(50, Math.min(WORLD_H - 50, p.y));
 
   // -- waygate pads
-  if (S.waygate && S.zones.length >= 2) {
+  if (S.waygate) {
     const pads = warpPads();
     let onPad = null;
     for (const pad of pads) if (dist2(p.x, p.y, pad.x, pad.y) < pad.r * pad.r) onPad = pad;
@@ -430,7 +619,7 @@ function tick(dt) {
       if (p.warpT >= WARP_T) {
         p.warpT = 0;
         puff(p.x, p.y, '#6ec9e0', 14, true);
-        p.x = onPad.to.x; p.y = onPad.to.y - 70;
+        p.x = onPad.to.x; p.y = onPad.to.y;
         S.cam.x = p.x; S.cam.y = p.y;
         puff(p.x, p.y, '#6ec9e0', 14, true);
         sfx('warp', true); buzz(20);
@@ -452,13 +641,13 @@ function tick(dt) {
     }
   }
 
-  // -- item pickup (helmets/bars/crowns to stack, gems to counter)
+  // -- item pickup
   const pr = pickR();
   for (const it of S.items) {
     if (it.dead || it.t < 0.25) continue;
     if (dist2(it.x, it.y, p.x, p.y) >= pr * pr) continue;
     if (it.gem) {
-      it.dead = true; S.gems++;
+      it.dead = true; S.gems++; S.stats.gemsFound++;
       float(p.x, p.y - 50, '💎 +1', '#6ee0d8', true); sfx('gem', true);
     } else if (p.helmets.length < cap()) {
       it.dead = true;
@@ -468,7 +657,7 @@ function tick(dt) {
     }
   }
 
-  // -- sell stand (sells helmets, bars, crowns at their value)
+  // -- sell stand
   if (p.helmets.length && dist2(p.x, p.y, SELL.x, SELL.y) < SELL.r * SELL.r) {
     p.sellAcc = (p.sellAcc || 0) + dt * SELL_RATE;
     while (p.sellAcc >= 1 && p.helmets.length) {
@@ -477,12 +666,12 @@ function tick(dt) {
       const v = entryVal(e);
       S.pallet += v; S.stats.sold++; S.stats.earned += v;
       float(SELL.x + 30, SELL.y - 46, '+' + fmt(v), e.crown ? '#ffd94a' : e.bar ? '#e8b93a' : '#ffd94a', e.crown);
-      puff(PALLET.x, PALLET.y - 20, '#ffd94a', 2, true);
+      puff(PALLET.x, PALLET.y - 30, '#ffd94a', 3, true);
       sfx('sell');
     }
   } else p.sellAcc = 0;
 
-  // -- forge: intake helmets, smelt into bars, tray pickup
+  // -- forge chain
   if (S.forge) {
     const f = S.forge;
     if (dist2(p.x, p.y, FORGE.x, FORGE.y) < FORGE.r * FORGE.r && f.queue.length < FORGE_Q) {
@@ -519,49 +708,69 @@ function tick(dt) {
   if (S.pallet > 0 && dist2(p.x, p.y, PALLET.x, PALLET.y) < PALLET.r * PALLET.r) {
     const take = Math.min(S.pallet, Math.max(1, Math.ceil(VAC_RATE * dt)));
     S.pallet -= take; S.wallet += take;
-    if ((S.coinFxT = (S.coinFxT || 0) + dt) > 0.09) { S.coinFxT = 0; float(p.x, p.y - 46, '+' + fmt(take), '#ffd94a'); sfx('coin'); }
+    if ((S.coinFxT = (S.coinFxT || 0) + dt) > 0.09) {
+      S.coinFxT = 0; float(p.x, p.y - 46, '+' + fmt(take), '#ffd94a'); sfx('coin');
+      S.parts.push({ x: PALLET.x + (rnd() - 0.5) * 60, y: PALLET.y - 10, vx: (p.x - PALLET.x) * 2, vy: (p.y - 40 - PALLET.y) * 2, t: 0, dur: 0.5, r: 4, color: '#ffd94a' });
+    }
   }
 
   // -- coin upgrade plates (hub)
-  let ux = 130;
+  let ux = UPG_X0;
   for (const key in UPG) {
     const cost = upgCost(key, S.up[key]);
-    if (dist2(p.x, p.y, ux, 190) < 52 * 52 && S.wallet > 0 && S.upPaid[key] < cost) {
+    if (dist2(p.x, p.y, ux, UPG_Y) < 52 * 52 && S.wallet > 0 && S.upPaid[key] < cost) {
       const chunk = Math.min(S.wallet, Math.ceil(BUILD_RATE * dt), cost - S.upPaid[key]);
       S.wallet -= chunk; S.upPaid[key] += chunk; sfx('pour');
       if (S.upPaid[key] >= cost) {
         S.up[key]++; S.upPaid[key] = 0;
-        float(ux, 140, UPG[key].name + ' LV' + (S.up[key] + 1) + '!', '#6ecb5a', true);
+        float(ux, UPG_Y - 50, UPG[key].name + ' LV' + (S.up[key] + 1) + '!', '#6ecb5a', true);
         sfx('built', true); buzz(40);
       }
     }
-    ux += 165;
+    ux += UPG_STEP;
   }
 
   // -- gem shrine plates (hub, paid in gems)
-  let gy = 480;
+  let gy = GEM_Y0;
   for (const key in GEMU) {
     const cost = gemUpCost(key, S.gemUp[key]);
-    if (dist2(p.x, p.y, 110, gy) < 46 * 46 && S.gems > 0 && S.gemPaid[key] < cost) {
+    if (dist2(p.x, p.y, GEM_X, gy) < 46 * 46 && S.gems > 0 && S.gemPaid[key] < cost) {
       S.gemAcc = (S.gemAcc || 0) + dt * 3;
       while (S.gemAcc >= 1 && S.gems > 0 && S.gemPaid[key] < cost) {
         S.gemAcc -= 1; S.gems--; S.gemPaid[key]++;
         sfx('gem');
         if (S.gemPaid[key] >= cost) {
           S.gemUp[key]++; S.gemPaid[key] = 0;
-          float(110, gy - 60, GEMU[key].name + ' LV' + S.gemUp[key] + '!', '#6ee0d8', true);
+          float(GEM_X, gy - 60, GEMU[key].name + ' LV' + S.gemUp[key] + '!', '#6ee0d8', true);
           sfx('built', true); buzz(40);
         }
       }
     }
-    gy += 140;
+    gy += GEM_STEP;
   }
 
-  // -- hub build plates: forge + waygate
+  // -- hub build plates: forge + waygate + kennel
   if (!S.forgePlate.built && dist2(p.x, p.y, FORGE.x, FORGE.y) < 56 * 56)
     pourHub(S.forgePlate, dt, () => { S.forge = { queue: [], tray: [], smeltT: 0 }; float(FORGE.x, FORGE.y - 50, 'FORGE BUILT! Helmets → gold bars (x' + BAR_MUL + ')', '#6ecb5a', true); });
   if (!S.wayPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, HUBPAD.x, HUBPAD.y) < 56 * 56)
     pourHub(S.wayPlate, dt, () => { S.waygate = true; float(HUBPAD.x, HUBPAD.y - 50, 'WAYGATE OPEN! Stand still on it to warp', '#6ec9e0', true); });
+  if (!S.dogPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, KENNEL.x, KENNEL.y) < 56 * 56)
+    pourHub(S.dogPlate, dt, () => { spawnDog(); float(KENNEL.x, KENNEL.y - 50, '🐕 WAR DOG! He fetches drops for you', '#6ecb5a', true); });
+
+  // -- war dog
+  dogTick(dt);
+
+  // -- New Kingdom monument (prestige)
+  if (S.zones.length >= PRESTIGE_MIN && dist2(p.x, p.y, MONU.x, MONU.y) < MONU.r * MONU.r && !p.moving) {
+    S.prestT += dt;
+    if (S.prestT >= PREST_T) { S.prestT = 0; prestige(); }
+  } else S.prestT = 0;
+
+  // -- milestones + toasts
+  S.achCd -= dt;
+  if (S.achCd <= 0) { S.achCd = 0.5; checkAch(); }
+  for (const to of S.toasts) to.t += dt;
+  S.toasts = S.toasts.filter(to => to.t < 3);
 
   // -- zone build plates + boss altars
   for (const z of S.zones) {
@@ -588,8 +797,8 @@ function tick(dt) {
     if (e.hp <= 0) continue;
     e.hurt = Math.max(0, e.hurt - dt);
     const z = S.zones[e.k - 1];
-    const aggroR = e.boss ? 900 : 200;
-    const nearPlayer = dist2(e.x, e.y, p.x, p.y) < aggroR * aggroR && p.x > z.pen.x0 - 60;
+    const aggroR = e.boss ? 1200 : 200;
+    const nearPlayer = dist2(e.x, e.y, p.x, p.y) < aggroR * aggroR && inCell(z, p.x, p.y, 60);
     let tx = e.tx, ty = e.ty, spd = e.boss ? e.spd : 42;
     if (nearPlayer) { tx = p.x; ty = p.y; spd = e.boss ? e.spd : 62 + e.k * 2; }
     else { e.wanderT -= dt; if (e.wanderT <= 0) { e.wanderT = 1.5 + rnd() * 2.5; e.tx = z.pen.x0 + rnd() * (z.pen.x1 - z.pen.x0); e.ty = z.pen.y0 + rnd() * (z.pen.y1 - z.pen.y0); } }
@@ -604,16 +813,17 @@ function tick(dt) {
   }
   S.enemies = S.enemies.filter(e => e.hp > 0);
 
-  // -- towers (archer / wizard / catapult)
+  // -- towers
   for (const z of S.zones) {
     const rateMul = z.drums ? DRUM_MUL : 1;
+    const dmgBase = towerDmg(z.k) * towerMul(z);
     for (const tw of z.towers) {
       tw.cd -= dt;
       if (tw.cd > 0) continue;
       if (tw.type === 'archer') {
         let tgt = null, bd = TOWER_RANGE * TOWER_RANGE;
         for (const e of S.enemies) { if (e.k !== z.k || e.hp <= 0) continue; const d = dist2(e.x, e.y, tw.x, tw.y); if (d < bd) { bd = d; tgt = e; } }
-        if (tgt) { tw.cd = TOWER_RATE * rateMul; S.shots.push({ x: tw.x, y: tw.y - 52, tgt, dmg: towerDmg(z.k), spd: 430 }); }
+        if (tgt) { tw.cd = TOWER_RATE * rateMul; S.shots.push({ x: tw.x, y: tw.y - 52, tgt, dmg: dmgBase, spd: 430 }); }
       } else if (tw.type === 'wizard') {
         let tgt = null, bd = TOWER_RANGE * TOWER_RANGE;
         for (const e of S.enemies) { if (e.k !== z.k || e.hp <= 0) continue; const d = dist2(e.x, e.y, tw.x, tw.y); if (d < bd) { bd = d; tgt = e; } }
@@ -632,10 +842,10 @@ function tick(dt) {
           }
           const pts = [{ x: tw.x, y: tw.y - 60 }].concat(hitOrder.map(e => ({ x: e.x, y: e.y - 10 })));
           S.fx.push({ kind: 'zap', pts, t: 0, dur: 0.2 });
-          for (const e of hitOrder) hurtEnemy(e, towerDmg(z.k) * 1.2);
+          for (const e of hitOrder) hurtEnemy(e, dmgBase * 1.2);
           sfx('zap', true);
         }
-      } else { // catapult: aim at the densest cluster
+      } else { // catapult: densest cluster
         let tgt = null, best = -1;
         for (const e of S.enemies) {
           if (e.k !== z.k || e.hp <= 0) continue;
@@ -645,7 +855,7 @@ function tick(dt) {
         }
         if (tgt) {
           tw.cd = CAT_RATE * rateMul;
-          S.shots.push({ boulder: true, sx: tw.x, sy: tw.y - 40, tx: tgt.x, ty: tgt.y, x: tw.x, y: tw.y - 40, t: 0, dur: 0.9, dmg: towerDmg(z.k) * 2.6, k: z.k });
+          S.shots.push({ boulder: true, sx: tw.x, sy: tw.y - 40, tx: tgt.x, ty: tgt.y, x: tw.x, y: tw.y - 40, t: 0, dur: 0.9, dmg: dmgBase * 2.6, k: z.k });
         }
       }
     }
@@ -656,10 +866,13 @@ function tick(dt) {
     for (const po of z.porters) {
       if (po.state === 'seek') {
         let it = null, bd = 1e12;
-        for (const i2 of S.items) { if (i2.dead || i2.gem || i2.x < z.x0 || i2.x >= z.x1) continue; const d = dist2(i2.x, i2.y, po.x, po.y); if (d < bd) { bd = d; it = i2; } }
+        for (const i2 of S.items) {
+          if (i2.dead || i2.gem || i2.x < z.x0 || i2.x >= z.x1 || i2.y < z.y0 || i2.y >= z.y1) continue;
+          const d = dist2(i2.x, i2.y, po.x, po.y); if (d < bd) { bd = d; it = i2; }
+        }
         if (!it) { if (po.carry.length) po.state = 'sell'; else {
-            const hx = z.x0 + 130, hy = 500, dl = Math.hypot(hx - po.x, hy - po.y);
-            if (dl > 12) { po.x += (hx - po.x) / dl * PORTER_SPD * 0.6 * dt; po.y += (hy - po.y) / dl * PORTER_SPD * 0.6 * dt; } }
+            const dl = Math.hypot(po.hx - po.x, po.hy - po.y);
+            if (dl > 12) { po.x += (po.hx - po.x) / dl * PORTER_SPD * 0.6 * dt; po.y += (po.hy - po.y) / dl * PORTER_SPD * 0.6 * dt; } }
         } else {
           const dl = Math.hypot(it.x - po.x, it.y - po.y) || 1;
           po.x += (it.x - po.x) / dl * PORTER_SPD * dt; po.y += (it.y - po.y) / dl * PORTER_SPD * dt;
@@ -674,7 +887,7 @@ function tick(dt) {
             po.cd = 0.12;
             const v = entryVal(po.carry.pop());
             S.pallet += v; S.stats.earned += v; S.stats.sold++;
-            puff(PALLET.x, PALLET.y - 20, '#ffd94a', 1, true);
+            puff(PALLET.x, PALLET.y - 30, '#ffd94a', 1, true);
           }
           if (!po.carry.length) po.state = 'seek';
         }
@@ -688,7 +901,7 @@ function tick(dt) {
     if (it.t < 0.4) { it.x += it.vx * dt; it.y += it.vy * dt; it.vy += 380 * dt; }
   }
   S.items = S.items.filter(i => !i.dead);
-  if (S.items.length > 320) S.items.splice(0, S.items.length - 320);
+  if (S.items.length > 400) S.items.splice(0, S.items.length - 400);
 
   // -- shots
   for (const sh of S.shots) {
@@ -739,11 +952,12 @@ function tick(dt) {
   if (S.saveCd <= 0) { S.saveCd = 5; save(); }
 }
 function warpPads() {
-  // hub pad warps to the newest zone; every zone entrance pad warps home
+  // hub pad warps to the newest zone's entrance; every zone pad warps home
   const pads = [];
   const newest = S.zones[S.zones.length - 1];
-  pads.push({ x: HUBPAD.x, y: HUBPAD.y, r: HUBPAD.r, to: { x: newest.x0 + 70, y: 872 } });
-  for (const z of S.zones) pads.push({ x: z.x0 + 70, y: 872, r: 44, to: { x: HUBPAD.x, y: HUBPAD.y } });
+  const nd = DIRS[newest.dir];
+  pads.push({ x: HUBPAD.x, y: HUBPAD.y, r: HUBPAD.r, to: { x: newest.pad.x + nd[0] * 110, y: newest.pad.y + nd[1] * 110 } });
+  for (const z of S.zones) pads.push({ x: z.pad.x, y: z.pad.y, r: z.pad.r, to: { x: HUBPAD.x, y: HUBPAD.y - 80 } });
   return pads;
 }
 
@@ -752,17 +966,17 @@ function guideTarget() {
   const p = S.player;
   if (p.helmets.length >= cap()) return { x: SELL.x, y: SELL.y, label: 'SELL' };
   if (S.pallet >= 25) return { x: PALLET.x, y: PALLET.y, label: 'COINS' };
-  let gy = 480;
+  let gy = GEM_Y0;
   for (const key in GEMU) {
-    if (S.gems >= gemUpCost(key, S.gemUp[key]) - S.gemPaid[key]) return { x: 110, y: gy, label: '💎 ' + GEMU[key].name };
-    gy += 140;
+    if (S.gems >= gemUpCost(key, S.gemUp[key]) - S.gemPaid[key]) return { x: GEM_X, y: gy, label: '💎 ' + GEMU[key].name };
+    gy += GEM_STEP;
   }
   let best = null, bc = 1e18;
-  let ux = 130;
+  let ux = UPG_X0;
   for (const key in UPG) {
     const c = upgCost(key, S.up[key]) - S.upPaid[key];
-    if (S.wallet >= c * 0.6 && c < bc) { bc = c; best = { x: ux, y: 190, label: UPG[key].name }; }
-    ux += 165;
+    if (S.wallet >= c * 0.6 && c < bc) { bc = c; best = { x: ux, y: UPG_Y, label: UPG[key].name }; }
+    ux += UPG_STEP;
   }
   if (!S.forgePlate.built && S.wallet >= (S.forgePlate.cost - S.forgePlate.paid) * 0.6 && S.forgePlate.cost - S.forgePlate.paid < bc) { bc = S.forgePlate.cost - S.forgePlate.paid; best = { x: FORGE.x, y: FORGE.y, label: 'FORGE' }; }
   if (!S.wayPlate.built && S.zones.length >= 2 && S.wallet >= (S.wayPlate.cost - S.wayPlate.paid) * 0.6 && S.wayPlate.cost - S.wayPlate.paid < bc) { bc = S.wayPlate.cost - S.wayPlate.paid; best = { x: HUBPAD.x, y: HUBPAD.y, label: 'WAYGATE' }; }
@@ -774,7 +988,7 @@ function guideTarget() {
   }
   if (best) return best;
   const z = S.zones[S.zones.length - 1];
-  return { x: (z.pen.x0 + z.pen.x1) / 2, y: 500, label: 'FIGHT' };
+  return { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2, label: 'FIGHT' };
 }
 
 // ---- drawing ------------------------------------------------
@@ -830,6 +1044,15 @@ function drawGemIcon(x, y, s) {
 function drawStackEntry(e, x, y, s) {
   if (e.crown) drawCrownIcon(x, y, s); else if (e.bar) drawBarIcon(x, y, s); else drawHelmetIcon(x, y, e.k, s);
 }
+function drawTree(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#3a2e22'; ctx.fillRect(x - 3 * s, y - 6 * s, 6 * s, 14 * s);
+  ctx.fillStyle = '#24421f';
+  ctx.beginPath(); ctx.arc(x, y - 20 * s, 16 * s, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#2e5226';
+  ctx.beginPath(); ctx.arc(x - 6 * s, y - 14 * s, 11 * s, 0, 6.29); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 7 * s, y - 13 * s, 10 * s, 0, 6.29); ctx.fill();
+}
 function plateCircle(x, y, r, stroke, paid, costV, fillCol) {
   ctx.fillStyle = 'rgba(38,46,66,0.85)';
   ctx.beginPath(); ctx.arc(x, y, r, 0, 6.29); ctx.fill();
@@ -841,15 +1064,51 @@ function plateCircle(x, y, r, stroke, paid, costV, fillCol) {
   ctx.strokeStyle = stroke; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.arc(x, y, r, 0, 6.29); ctx.stroke();
 }
+function cellWalkable(cx, cy) {
+  if (cx === 0 && cy === 0) return true;
+  return S.zones.some(z => z.cx === cx && z.cy === cy);
+}
 function drawGround() {
-  ctx.fillStyle = '#3d5a3a'; ctx.fillRect(-2000, -2000, boundX() + 4000, WORLD_H + 4000);
-  ctx.fillStyle = 'rgba(255,255,255,0.03)';
-  for (let gx = -400; gx < boundX() + 400; gx += 160) ctx.fillRect(gx, -2000, 80, WORLD_H + 4000);
-  ctx.fillStyle = '#8a7a5c'; rr(60, 90, HUB_W - 120, WORLD_H - 180, 26); ctx.fill();
+  // dark forest everywhere
+  const b = worldBounds();
+  ctx.fillStyle = '#16241a';
+  ctx.fillRect(b.minX - 2500, b.minY - 2500, (b.maxX - b.minX) + 5000, (b.maxY - b.minY) + 5000);
+  // grass for hub + each unlocked cell
+  const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
+  for (const c of cells) {
+    const x0 = c.cx * CELL_W, y0 = c.cy * CELL_H;
+    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : (c.k % 2 ? '#3a563c' : '#405c38');
+    ctx.fillRect(x0, y0, CELL_W, CELL_H);
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    for (let gx = x0; gx < x0 + CELL_W; gx += 160) ctx.fillRect(gx, y0, 80, CELL_H);
+    // treeline on edges facing the dark forest
+    const rowStep = 88;
+    const treeAt = (tx, ty) => drawTree(tx + ((tx * 7 + ty * 13) % 17) - 8, ty + ((tx * 11 + ty * 3) % 13) - 6, 0.9 + ((tx + ty) % 5) * 0.08);
+    if (!cellWalkable(c.cx, c.cy - 1)) for (let tx = x0 + 40; tx < x0 + CELL_W - 20; tx += rowStep) treeAt(tx, y0 + 26);
+    if (!cellWalkable(c.cx, c.cy + 1)) for (let tx = x0 + 40; tx < x0 + CELL_W - 20; tx += rowStep) treeAt(tx, y0 + CELL_H - 14);
+    if (!cellWalkable(c.cx - 1, c.cy)) for (let ty = y0 + 60; ty < y0 + CELL_H - 20; ty += rowStep) treeAt(x0 + 22, ty);
+    if (!cellWalkable(c.cx + 1, c.cy)) for (let ty = y0 + 60; ty < y0 + CELL_H - 20; ty += rowStep) treeAt(x0 + CELL_W - 22, ty);
+  }
+  // next-land preview
+  const nxt = cellFor(S.zones.length + 1);
+  const px0 = nxt.cx * CELL_W, py0 = nxt.cy * CELL_H;
+  ctx.fillStyle = 'rgba(30,40,34,0.9)'; ctx.fillRect(px0, py0, CELL_W, CELL_H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 4; ctx.setLineDash([18, 14]);
+  ctx.strokeRect(px0 + 30, py0 + 30, CELL_W - 60, CELL_H - 60); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = 'bold 60px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🔒', px0 + CELL_W / 2, py0 + CELL_H / 2 - 10);
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText('NEW LANDS — ' + DIR_NAME[nxt.dir], px0 + CELL_W / 2, py0 + CELL_H / 2 + 44);
+  // hub plaza
+  ctx.fillStyle = '#8a7a5c'; rr(115, 90, 820, 820, 26); ctx.fill();
   ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  for (let i = 0; i < 8; i++) ctx.fillRect(60, 90 + i * 110, HUB_W - 120, 3);
+  for (let i = 0; i < 8; i++) ctx.fillRect(115, 90 + i * 110, 820, 3);
+  // zone pens
   for (const z of S.zones) {
     ctx.fillStyle = z.k % 2 ? '#57503c' : '#5c483c';
+    rr(z.pen.x0 - 20, z.pen.y0 - 20, z.pen.x1 - z.pen.x0 + 40, z.pen.y1 - z.pen.y0 + 40, 22); ctx.fill();
+    const trgb = hexRgb(foeCol(z.k));
+    ctx.fillStyle = 'rgba(' + trgb[0] + ',' + trgb[1] + ',' + trgb[2] + ',0.07)';
     rr(z.pen.x0 - 20, z.pen.y0 - 20, z.pen.x1 - z.pen.x0 + 40, z.pen.y1 - z.pen.y0 + 40, 22); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.08)';
     for (let i = 0; i < 10; i++) {
@@ -857,30 +1116,36 @@ function drawGround() {
       const by = z.pen.y0 + ((i * 311) % (z.pen.y1 - z.pen.y0 - 40));
       ctx.beginPath(); ctx.ellipse(bx, by, 26, 11, 0, 0, 6.29); ctx.fill();
     }
+    // fence with a gap on the hub-facing side
     ctx.fillStyle = '#3a2e22';
     const step = 56;
+    const gapC = DIRS[z.dir][0] ? z.y0 + 500 : z.x0 + 525;
     for (let fx = z.pen.x0 - 20; fx <= z.pen.x1 + 20; fx += step) {
-      ctx.fillRect(fx - 4, z.pen.y0 - 30, 8, 18);
-      ctx.fillRect(fx - 4, z.pen.y1 + 12, 8, 18);
+      const gapTop = z.dir === 1 && Math.abs(fx - gapC) < 90; // south zone: gap on north fence
+      const gapBot = z.dir === 3 && Math.abs(fx - gapC) < 90; // north zone: gap on south fence
+      if (!gapTop) ctx.fillRect(fx - 4, z.pen.y0 - 30, 8, 18);
+      if (!gapBot) ctx.fillRect(fx - 4, z.pen.y1 + 12, 8, 18);
     }
     for (let fy = z.pen.y0 - 20; fy <= z.pen.y1 + 20; fy += step) {
-      ctx.fillRect(z.pen.x1 + 12, fy - 4, 18, 8);
-      if (fy < 430 || fy > 570) ctx.fillRect(z.pen.x0 - 30, fy - 4, 18, 8);
+      const gapL = z.dir === 0 && Math.abs(fy - gapC) < 90;  // east zone: gap on west fence
+      const gapR = z.dir === 2 && Math.abs(fy - gapC) < 90;  // west zone: gap on east fence
+      if (!gapR) ctx.fillRect(z.pen.x1 + 12, fy - 4, 18, 8);
+      if (!gapL) ctx.fillRect(z.pen.x0 - 30, fy - 4, 18, 8);
     }
+    // banner
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('ZONE ' + z.k + ' — ' + foeName(z.k).toUpperCase() + 'S', (z.x0 + z.x1) / 2, z.pen.y0 - 40);
-    const gx = z.pen.x1 - 40;
-    ctx.fillStyle = '#241c30'; rr(gx - 26, 430, 52, 140, 10); ctx.fill();
+    // spawner gate
+    ctx.fillStyle = '#241c30';
+    rr(z.gate.x - 26, z.gate.y - 70, 52, 140, 10); ctx.fill();
     ctx.fillStyle = foeCol(z.k);
-    ctx.beginPath(); ctx.ellipse(gx, 500, 16, 44 + Math.sin(S.t * 3) * 5, 0, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(z.gate.x, z.gate.y, 16, 44 + Math.sin(S.t * 3) * 5, 0, 0, 6.29); ctx.fill();
+    if (z.hordeLvl > 0) {
+      ctx.fillStyle = '#ff8a7a'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText('HORDE LV' + z.hordeLvl, z.gate.x, z.gate.y - 80);
+    }
   }
-  const bx = boundX() + 30;
-  ctx.fillStyle = 'rgba(10,12,18,0.55)'; ctx.fillRect(bx, -2000, 3000, WORLD_H + 4000);
-  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = 'bold 60px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('🔒', bx + 160, 480);
-  ctx.font = 'bold 20px sans-serif';
-  ctx.fillText('NEW LANDS', bx + 160, 540);
 }
 function drawPad(x, y, r, label, charge) {
   ctx.strokeStyle = '#6ec9e0'; ctx.lineWidth = 3;
@@ -894,6 +1159,29 @@ function drawPad(x, y, r, label, charge) {
   ctx.fillStyle = '#6ec9e0'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(label, x, y + r + 16);
 }
+function drawCoinMountain() {
+  shadow(PALLET.x, PALLET.y + 30, 62);
+  ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 7]);
+  ctx.beginPath(); ctx.arc(PALLET.x, PALLET.y, PALLET.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#7a5c38'; rr(PALLET.x - 62, PALLET.y - 4, 124, 36, 6); ctx.fill();
+  const stacks = Math.min(56, Math.ceil(3 * Math.sqrt(S.pallet / 12)));
+  for (let i = 0; i < stacks; i++) {
+    const col = i % 8, row = Math.floor(i / 8);
+    const cx2 = PALLET.x - 52 + col * 15 + (row % 2) * 7, cy2 = PALLET.y + 6 - row * 11;
+    const hgt = 2 + (i * 7 + 3) % 5;
+    for (let j = 0; j < hgt; j++) {
+      ctx.fillStyle = j % 2 ? '#ffd94a' : '#e8b93a';
+      ctx.beginPath(); ctx.ellipse(cx2, cy2 - j * 4, 7, 3.4, 0, 0, 6.29); ctx.fill();
+    }
+  }
+  if (S.pallet > 0 && Math.floor(S.t * 4) % 3 === 0) {
+    const sx = PALLET.x + (rnd() - 0.5) * 90, sy = PALLET.y - rnd() * 40;
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillRect(sx - 1, sy - 4, 2, 8); ctx.fillRect(sx - 4, sy - 1, 8, 2);
+  }
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(S.pallet > 0 ? fmt(S.pallet) + ' ¢' : 'coin pallet', PALLET.x, PALLET.y + 56);
+}
 function drawStands() {
   // sell stand
   shadow(SELL.x, SELL.y + 34, 52);
@@ -904,22 +1192,7 @@ function drawStands() {
   ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('⚖ SELL', SELL.x, SELL.y - 42);
   ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(SELL.x, SELL.y - 6 + Math.sin(S.t * 4) * 1.5, 9, 0, 6.29); ctx.fill();
-  // pallet
-  shadow(PALLET.x, PALLET.y + 26, 56);
-  ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.setLineDash([8, 7]);
-  ctx.beginPath(); ctx.arc(PALLET.x, PALLET.y, PALLET.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#7a5c38'; rr(PALLET.x - 52, PALLET.y - 8, 104, 34, 6); ctx.fill();
-  const stacks = Math.min(24, Math.ceil(Math.log2(1 + S.pallet)));
-  for (let i = 0; i < stacks; i++) {
-    const cx = PALLET.x - 40 + (i % 6) * 16, cy = PALLET.y + 2 - Math.floor(i / 6) * 12;
-    const hgt = 2 + (i * 7 + 3) % 4;
-    for (let j = 0; j < hgt; j++) {
-      ctx.fillStyle = j % 2 ? '#ffd94a' : '#e8b93a';
-      ctx.beginPath(); ctx.ellipse(cx, cy - j * 4, 7, 3.4, 0, 0, 6.29); ctx.fill();
-    }
-  }
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(S.pallet > 0 ? fmt(S.pallet) + ' ¢' : 'coin pallet', PALLET.x, PALLET.y + 52);
+  drawCoinMountain();
   // forge
   if (S.forgePlate.built) {
     shadow(FORGE.x, FORGE.y + 36, 50);
@@ -947,13 +1220,13 @@ function drawStands() {
     ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
     ctx.fillText(fmt(S.forgePlate.cost - S.forgePlate.paid) + ' ¢', FORGE.x, FORGE.y + 74);
   }
-  // waygate (hub side)
-  if (S.waygate && S.zones.length >= 2) {
+  // waygate
+  if (S.waygate) {
     const onIt = dist2(S.player.x, S.player.y, HUBPAD.x, HUBPAD.y) < HUBPAD.r * HUBPAD.r;
     drawPad(HUBPAD.x, HUBPAD.y, HUBPAD.r, '🌀 TO ZONE ' + S.zones.length, onIt ? S.player.warpT / WARP_T : 0);
     for (const z of S.zones) {
-      const px = z.x0 + 70, on2 = dist2(S.player.x, S.player.y, px, 872) < 44 * 44;
-      drawPad(px, 872, 44, '🌀 HOME', on2 ? S.player.warpT / WARP_T : 0);
+      const on2 = dist2(S.player.x, S.player.y, z.pad.x, z.pad.y) < z.pad.r * z.pad.r;
+      drawPad(z.pad.x, z.pad.y, z.pad.r, '🌀 HOME', on2 ? S.player.warpT / WARP_T : 0);
     }
   } else if (S.zones.length >= 2) {
     plateCircle(HUBPAD.x, HUBPAD.y, 52, '#6ec9e0', S.wayPlate.paid, S.wayPlate.cost, 'rgba(110,201,224,0.35)');
@@ -964,44 +1237,91 @@ function drawStands() {
     ctx.fillText(fmt(S.wayPlate.cost - S.wayPlate.paid) + ' ¢', HUBPAD.x, HUBPAD.y + 74);
   }
   // coin upgrade plates
-  let ux = 130;
+  let ux = UPG_X0;
   for (const key in UPG) {
     const lvl = S.up[key], cost = upgCost(key, lvl), paid = S.upPaid[key];
-    plateCircle(ux, 190, 48, '#ffd94a', paid, cost, 'rgba(255,217,74,0.35)');
+    plateCircle(ux, UPG_Y, 48, '#ffd94a', paid, cost, 'rgba(255,217,74,0.35)');
     ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
-    ctx.fillText(UPG[key].icon, ux, 188);
+    ctx.fillText(UPG[key].icon, ux, UPG_Y - 2);
     ctx.font = 'bold 11px sans-serif';
-    ctx.fillText(UPG[key].name + ' LV' + (lvl + 1), ux, 210);
+    ctx.fillText(UPG[key].name + ' LV' + (lvl + 1), ux, UPG_Y + 20);
     ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
-    ctx.fillText(fmt(cost - paid) + ' ¢', ux, 252);
-    ux += 165;
+    ctx.fillText(fmt(cost - paid) + ' ¢', ux, UPG_Y + 62);
+    ux += UPG_STEP;
   }
-  // gem shrine plates
-  let gy = 480;
+  // gem shrine plates + gem pile
+  let gy = GEM_Y0;
   for (const key in GEMU) {
     const lvl = S.gemUp[key], cost = gemUpCost(key, lvl), paid = S.gemPaid[key];
-    plateCircle(110, gy, 44, '#6ee0d8', paid, cost, 'rgba(110,224,216,0.35)');
+    plateCircle(GEM_X, gy, 44, '#6ee0d8', paid, cost, 'rgba(110,224,216,0.35)');
     ctx.font = '24px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
-    ctx.fillText(GEMU[key].icon, 110, gy - 4);
+    ctx.fillText(GEMU[key].icon, GEM_X, gy - 4);
     ctx.font = 'bold 10px sans-serif';
-    ctx.fillText(GEMU[key].name + (lvl ? ' LV' + lvl : ''), 110, gy + 16);
+    ctx.fillText(GEMU[key].name + (lvl ? ' LV' + lvl : ''), GEM_X, gy + 16);
     ctx.fillStyle = '#6ee0d8'; ctx.font = 'bold 13px sans-serif';
-    ctx.fillText((cost - paid) + ' 💎', 110, gy + 66);
-    if (dist2(S.player.x, S.player.y, 110, gy) < 100 * 100) {
+    ctx.fillText((cost - paid) + ' 💎', GEM_X, gy + 66);
+    if (dist2(S.player.x, S.player.y, GEM_X, gy) < 100 * 100) {
       ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '10px sans-serif';
-      ctx.fillText(GEMU[key].what, 110, gy + 82);
+      ctx.fillText(GEMU[key].what, GEM_X, gy + 82);
     }
-    gy += 140;
+    gy += GEM_STEP;
+  }
+  if (S.gems > 0) { // visible gem pile beside the shrines
+    const n = Math.min(24, S.gems);
+    for (let i = 0; i < n; i++)
+      drawGemIcon(GEM_X + 70 + (i % 4) * 13, GEM_Y0 - 60 + Math.floor(i / 4) * 11 - (i % 4) * 3, 0.85);
+  }
+  // New Kingdom monument
+  {
+    const ready = S.zones.length >= PRESTIGE_MIN;
+    shadow(MONU.x, MONU.y + 30, 44);
+    ctx.fillStyle = '#6d6455'; rr(MONU.x - 36, MONU.y - 4, 72, 34, 6); ctx.fill();
+    ctx.fillStyle = ready ? '#8a7930' : '#5c5c5c'; rr(MONU.x - 24, MONU.y - 36, 48, 38, 6); ctx.fill();
+    drawCrownIcon(MONU.x, MONU.y - 46 + Math.sin(S.t * 2) * 2, ready ? 1.6 : 1.2);
+    ctx.textAlign = 'center';
+    if (ready) {
+      const chg = S.prestT / PREST_T;
+      if (chg > 0) {
+        ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(MONU.x, MONU.y - 10, 52, -1.5708, -1.5708 + chg * 6.283); ctx.stroke();
+      }
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText('👑 NEW KINGDOM  +' + crownsToGain(), MONU.x, MONU.y + 48);
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '10px sans-serif';
+      ctx.fillText('hold still ' + PREST_T + 's: reset lands & coins,', MONU.x, MONU.y + 64);
+      ctx.fillText('earn crowns (+' + Math.round(CROWN_BONUS * 100) + '% coins each, forever)', MONU.x, MONU.y + 77);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('👑 unlocks at ' + PRESTIGE_MIN + ' lands', MONU.x, MONU.y + 48);
+    }
+  }
+  // war dog kennel
+  if (S.dogPlate.built) {
+    shadow(KENNEL.x, KENNEL.y + 20, 34);
+    ctx.fillStyle = '#7a5c38'; rr(KENNEL.x - 30, KENNEL.y - 24, 60, 44, 8); ctx.fill();
+    ctx.fillStyle = '#4a3826';
+    ctx.beginPath(); ctx.arc(KENNEL.x, KENNEL.y + 4, 14, 3.14159, 0); ctx.fill();
+    ctx.fillRect(KENNEL.x - 14, KENNEL.y + 4, 28, 14);
+    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('🐕 kennel', KENNEL.x, KENNEL.y + 38);
+  } else if (S.zones.length >= 2) {
+    plateCircle(KENNEL.x, KENNEL.y, 44, '#c98a3c', S.dogPlate.paid, S.dogPlate.cost, 'rgba(201,138,60,0.35)');
+    ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.fillText('🐕', KENNEL.x, KENNEL.y - 2);
+    ctx.font = 'bold 11px sans-serif'; ctx.fillText('WAR DOG', KENNEL.x, KENNEL.y + 18);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(fmt(S.dogPlate.cost - S.dogPlate.paid) + ' ¢', KENNEL.x, KENNEL.y + 66);
   }
   // zone plates + altars
   for (const z of S.zones) {
     for (const pl of z.plates) {
       if (pl.built) continue;
       if (pl.id === 'unlock' && z.k < S.zones.length) continue;
-      plateCircle(pl.x, pl.y, 52, pl.id === 'unlock' ? '#6ec9e0' : '#6ecb5a', pl.paid, pl.cost);
+      plateCircle(pl.x, pl.y, 52, pl.id === 'unlock' ? '#6ec9e0' : pl.repeat ? '#e0a13c' : '#6ecb5a', pl.paid, pl.cost);
       ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
       ctx.fillText(pl.icon, pl.x, pl.y - 2);
-      ctx.font = 'bold 11px sans-serif'; ctx.fillText(pl.name, pl.x, pl.y + 20);
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(pl.name + (pl.repeat && pl.lvl ? ' LV' + (pl.lvl + 1) : ''), pl.x, pl.y + 20);
       ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
       ctx.fillText(fmt(pl.cost - pl.paid) + ' ¢', pl.x, pl.y + 74);
     }
@@ -1018,6 +1338,11 @@ function drawStands() {
         ctx.strokeStyle = '#8a7a8a'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(a.x, a.y - 34, 10, -1.5708, -1.5708 + (1 - a.cd / BOSS_CD) * 6.283); ctx.stroke();
       }
+    }
+    if (z.towerLvl > 0) {
+      const pl = z.plates.find(q => q.id === 'towersUp');
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('🎯 TOWERS +' + Math.round(z.towerLvl * TOWER_TRAIN * 100) + '%', pl.x, pl.y - 60);
     }
   }
 }
@@ -1049,6 +1374,12 @@ function drawTower(tw) {
   ctx.fillStyle = '#584330'; rr(tw.x - 28, tw.y - 44, 56, 18, 5); ctx.fill();
   ctx.fillStyle = '#3a2e22';
   for (let i = -2; i <= 2; i++) ctx.fillRect(tw.x + i * 12 - 3, tw.y - 52, 6, 8);
+  // pennant
+  ctx.strokeStyle = '#3a2e22'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(tw.x - 24, tw.y - 44); ctx.lineTo(tw.x - 24, tw.y - 74); ctx.stroke();
+  const wave = Math.sin(S.t * 5 + tw.x) * 3;
+  ctx.fillStyle = '#c0392b';
+  ctx.beginPath(); ctx.moveTo(tw.x - 24, tw.y - 74); ctx.lineTo(tw.x - 4 + wave, tw.y - 69); ctx.lineTo(tw.x - 24, tw.y - 64); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#6ecb5a'; rr(tw.x - 6, tw.y - 66, 12, 16, 3); ctx.fill();
   ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(tw.x, tw.y - 70, 5.5, 0, 6.29); ctx.fill();
   ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
@@ -1074,6 +1405,21 @@ function drawPorter(po) {
   for (let i = 0; i < po.carry.length; i++)
     drawStackEntry(po.carry[i], po.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), po.y - 26 - i * 6, 0.7);
 }
+function drawDog(d) {
+  shadow(d.x, d.y + 8, 12);
+  const face = S.player.x > d.x ? 1 : -1;
+  ctx.fillStyle = '#8a5c30';
+  rr(d.x - 11, d.y - 8, 22, 12, 5); ctx.fill();                       // body
+  ctx.beginPath(); ctx.arc(d.x + face * 12, d.y - 8, 6.5, 0, 6.29); ctx.fill(); // head
+  ctx.fillStyle = '#6a4520';
+  ctx.beginPath(); ctx.moveTo(d.x + face * 9, d.y - 13); ctx.lineTo(d.x + face * 7, d.y - 20); ctx.lineTo(d.x + face * 13, d.y - 15); ctx.closePath(); ctx.fill(); // ear
+  const wag = Math.sin(d.tail * 14) * 5;
+  ctx.strokeStyle = '#8a5c30'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(d.x - face * 11, d.y - 5); ctx.lineTo(d.x - face * 18, d.y - 12 + wag); ctx.stroke(); // tail
+  ctx.fillStyle = '#000';
+  ctx.fillRect(d.x + face * 13 - 1, d.y - 10, 2, 2);                  // eye
+  if (d.carry) drawStackEntry(d.carry, d.x + face * 14, d.y - 20, 0.75);
+}
 function drawEnemy(e) {
   const bob = Math.abs(Math.sin(S.t * 7 + e.sway)) * 2.5;
   shadow(e.x, e.y + e.r * 0.75, e.r);
@@ -1097,15 +1443,29 @@ function drawPlayer() {
   const bob = p.moving ? Math.abs(Math.sin(S.t * 10)) * 3 : Math.sin(S.t * 3) * 1;
   shadow(p.x, p.y + 16, 18);
   if (p.invuln > 0 && Math.floor(S.t * 12) % 2) ctx.globalAlpha = 0.45;
+  // cape
+  const flap = (p.moving ? Math.sin(S.t * 10) * 5 : Math.sin(S.t * 2) * 2);
+  ctx.fillStyle = '#a03030';
+  ctx.beginPath();
+  ctx.moveTo(p.x - p.face * 4, p.y - 20 - bob);
+  ctx.lineTo(p.x - p.face * (16 + Math.abs(flap)), p.y - 2 - bob + flap);
+  ctx.lineTo(p.x - p.face * 8, p.y + 8 - bob);
+  ctx.closePath(); ctx.fill();
+  // body
   ctx.fillStyle = p.hurtT > 0 ? '#fff' : '#3f6fb5';
   rr(p.x - 11, p.y - 14 - bob, 22, 26, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.18)'; rr(p.x - 11, p.y - 14 - bob, 22, 8, 6); ctx.fill();
+  // head + crown
   ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(p.x, p.y - 22 - bob, 9, 0, 6.29); ctx.fill();
   ctx.fillStyle = '#ffd94a';
   ctx.beginPath(); ctx.moveTo(p.x - 9, p.y - 27 - bob); ctx.lineTo(p.x - 5, p.y - 36 - bob); ctx.lineTo(p.x, p.y - 28 - bob);
   ctx.lineTo(p.x + 5, p.y - 36 - bob); ctx.lineTo(p.x + 9, p.y - 27 - bob); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ff5a8a'; ctx.beginPath(); ctx.arc(p.x, p.y - 31 - bob, 1.8, 0, 6.29); ctx.fill();
+  // bow
   ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.arc(p.x + p.face * 13, p.y - 6 - bob, 9, p.face > 0 ? -1.2 : 1.94, p.face > 0 ? 1.2 : 4.34); ctx.stroke();
   ctx.globalAlpha = 1;
+  // stack on the back
   const lean = -p.face * Math.min(10, p.helmets.length);
   for (let i = 0; i < p.helmets.length; i++) {
     const sway = Math.sin(S.t * 5 + i * 0.8) * (0.5 + i * 0.5) * (p.moving ? 1.6 : 0.6);
@@ -1135,6 +1495,7 @@ function drawWorld() {
     for (const po of z.porters) actors.push({ y: po.y, f: () => drawPorter(po) });
   }
   for (const e of S.enemies) actors.push({ y: e.y, f: () => drawEnemy(e) });
+  if (S.dog) actors.push({ y: S.dog.y, f: () => drawDog(S.dog) });
   actors.push({ y: S.player.y, f: drawPlayer });
   actors.sort((a, b) => a.y - b.y);
   for (const a of actors) a.f();
@@ -1198,12 +1559,30 @@ function drawHud() {
   ctx.fillStyle = '#d1553f'; rr(12, 54, 124 * Math.max(0, p.hp / p.maxHp), 12, 6); ctx.fill();
   ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 74, 128, 24, 8); ctx.fill();
   ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 11px sans-serif';
-  ctx.fillText('ZONES ' + S.zones.length + '  ⚔ ' + fmt(S.stats.kills), 20, 90);
+  ctx.fillText('LANDS ' + S.zones.length + '  ⚔ ' + fmt(S.stats.kills), 20, 90);
   if (S.gems > 0 || S.gemUp.magnet + S.gemUp.crit + S.gemUp.coin > 0) {
     ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 104, 128, 26, 8); ctx.fill();
     drawGemIcon(26, 117, 1);
     ctx.fillStyle = '#6ee0d8'; ctx.font = 'bold 14px sans-serif';
     ctx.fillText(' ' + S.gems, 38, 122);
+  }
+  if (S.crowns > 0) {
+    ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 134, 128, 26, 8); ctx.fill();
+    drawCrownIcon(26, 147, 0.9);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(S.crowns + '  (+' + Math.round(S.crowns * CROWN_BONUS * 100) + '%¢)', 40, 152);
+  }
+  // milestone toasts
+  let ty = 70;
+  for (const to of S.toasts) {
+    const a = Math.min(1, 4 * Math.min(to.t, 3 - to.t));
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.fillStyle = 'rgba(20,25,36,0.92)'; rr(vw / 2 - 120, ty, 240, 34, 10); ctx.fill();
+    ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 1.5; rr(vw / 2 - 120, ty, 240, 34, 10); ctx.stroke();
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(to.txt, vw / 2, ty + 22);
+    ctx.globalAlpha = 1;
+    ty += 40;
   }
   hudBtn(vw - 46, 10, 36, 30, muted ? '🔇' : '🔊', () => {
     muted = !muted;
@@ -1247,8 +1626,8 @@ function drawHud() {
     ctx.fillStyle = '#9aa7b5'; ctx.font = '14px sans-serif';
     ctx.fillText('You fire automatically. Enemies drop helmets —', vw / 2, vh * 0.45);
     ctx.fillText('stack them, sell them (or smelt them into gold),', vw / 2, vh * 0.45 + 22);
-    ctx.fillText('and build towers, wizards, catapults, war drums,', vw / 2, vh * 0.45 + 44);
-    ctx.fillText('boss altars and endless new lands.', vw / 2, vh * 0.45 + 66);
+    ctx.fillText('build towers, drums, altars and waygates, and', vw / 2, vh * 0.45 + 44);
+    ctx.fillText('carve new lands out of the forest — in all directions.', vw / 2, vh * 0.45 + 66);
     ctx.fillText('Drag anywhere to walk.', vw / 2, vh * 0.45 + 98);
     const pulse = 1 + Math.sin(S.t * 4) * 0.05;
     ctx.save(); ctx.translate(vw / 2, vh * 0.68); ctx.scale(pulse, pulse);
@@ -1261,15 +1640,20 @@ function drawHud() {
 function draw() {
   hits = [];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#1b2b1e'; ctx.fillRect(0, 0, vw, vh);
+  ctx.fillStyle = '#16241a'; ctx.fillRect(0, 0, vw, vh);
   ctx.save();
   const shx = S.shake > 0 ? (rnd() - 0.5) * S.shake : 0;
   const shy = S.shake > 0 ? (rnd() - 0.5) * S.shake : 0;
-  const cx = Math.max(vw / scl / 2 - 200, Math.min(boundX() + 200 - vw / scl / 2, S.cam.x));
-  const cy = Math.max(Math.min(vh / scl / 2, WORLD_H / 2), Math.min(WORLD_H - vh / scl / 2, S.cam.y));
+  const b = worldBounds();
+  const vwW = vw / scl, vhW = vh / scl, M = 240;
+  let cx, cy;
+  if (b.maxX - b.minX + 2 * M <= vwW) cx = (b.minX + b.maxX) / 2;
+  else cx = Math.max(b.minX + vwW / 2 - M, Math.min(b.maxX - vwW / 2 + M, S.cam.x));
+  if (b.maxY - b.minY + 2 * M <= vhW) cy = (b.minY + b.maxY) / 2;
+  else cy = Math.max(b.minY + vhW / 2 - M, Math.min(b.maxY - vhW / 2 + M, S.cam.y));
   ctx.translate(vw / 2 + shx, vh / 2 + shy);
   ctx.scale(scl, scl);
-  ctx.translate(-cx, -(vh / scl >= WORLD_H ? WORLD_H / 2 : cy));
+  ctx.translate(-cx, -cy);
   drawWorld();
   ctx.restore();
   drawHud();
@@ -1346,10 +1730,11 @@ if (typeof window.__KS_HEADLESS__ === 'undefined') requestAnimationFrame(frame);
 // ---- test hooks ---------------------------------------------
 window.KS = {
   get S() { return S; }, reset, tick, draw, save, load, idleRate,
-  spawnEnemy, summonBoss, hurtEnemy, hurtPlayer, playerDie, buildPlate, mkZone, dropHelmet, dropItem,
-  cap, speed, pDmg, pRate, pickR, coinMul, entryVal, boundX, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
-  guideTarget, zoneAt, foeName, warpPads,
-  constants: { WORLD_H, HUB_W, ZONE_W, SELL, PALLET, FORGE, TRAY, HUBPAD, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE },
+  spawnEnemy, summonBoss, hurtEnemy, hurtPlayer, playerDie, buildPlate, applyPlate, mkZone, dropHelmet, dropItem,
+  cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
+  guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
+  prestige, crownsToGain, spawnDog, checkAch, ACH,
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS },
   start() { S.started = true; },
 };
 </script>
