@@ -232,7 +232,7 @@ function reset() {
     crowns: 0, prestiges: 0, prestT: 0,
     ach: {}, toasts: [], achCd: 0,
     quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
-    showQuests: false, goldPulse: 0, hitStop: 0, amb: [],
+    showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
     district: null,
     distPlate: { cost: 400, paid: 0, built: false },
     d2: Object.fromEntries(Object.keys(D2CFG).map(dk => [dk, null])),
@@ -922,21 +922,22 @@ function spawnChest() {
 
 // ---- milestones ---------------------------------------------
 const ACH = [
-  { id: 'blood',   name: 'First Blood',      c: () => S.stats.kills >= 1 },
-  { id: 'k100',    name: 'Century Slayer',   c: () => S.stats.kills >= 100 },
-  { id: 'k1000',   name: 'Thousand Cuts',    c: () => S.stats.kills >= 1000 },
-  { id: 'boss1',   name: 'Kingslayer',       c: () => S.stats.bosses >= 1 },
-  { id: 'boss5',   name: 'Regicide Habit',   c: () => S.stats.bosses >= 5 },
-  { id: 'land3',   name: 'Explorer',         c: () => S.zones.length >= 3 },
-  { id: 'land5',   name: 'Cartographer',     c: () => S.zones.length >= 5 },
-  { id: 'land8',   name: 'Empire',           c: () => S.zones.length >= 8 },
-  { id: 'rich10k', name: 'Tycoon',           c: () => S.stats.earned >= 10000 },
-  { id: 'gem1',    name: 'Shiny!',           c: () => S.stats.gemsFound >= 1 },
-  { id: 'mule',    name: 'Pack Mule',        c: () => S.player.helmets.length >= cap() },
-  { id: 'crown1',  name: 'New Kingdom',      c: () => S.crowns >= 1 },
-  { id: 'chest1',  name: 'Treasure Hunter',  c: () => (S.stats.chests || 0) >= 1 },
-  { id: 'tycoon2', name: 'Industrialist',    c: () => S.distPlate.built && S.d2Plate.farm.built && S.d2Plate.mine.built },
-  { id: 'guild',   name: 'Guildmaster',      c: () => S.d2Plate.artisan && S.d2Plate.artisan.built },
+  { id: 'blood',   ic: '🩸', name: 'First Blood',     d: 'Slay your first foe',            c: () => S.stats.kills >= 1 },
+  { id: 'k100',    ic: '⚔️', name: 'Century Slayer',   d: 'Slay 100 foes',                  c: () => S.stats.kills >= 100 },
+  { id: 'k1000',   ic: '💀', name: 'Thousand Cuts',    d: 'Slay 1,000 foes',                c: () => S.stats.kills >= 1000 },
+  { id: 'boss1',   ic: '👑', name: 'Kingslayer',       d: 'Defeat a boss king',             c: () => S.stats.bosses >= 1 },
+  { id: 'boss5',   ic: '☠️', name: 'Regicide Habit',   d: 'Defeat 5 boss kings',            c: () => S.stats.bosses >= 5 },
+  { id: 'land3',   ic: '🧭', name: 'Explorer',         d: 'Own 3 lands',                    c: () => S.zones.length >= 3 },
+  { id: 'land5',   ic: '🗺️', name: 'Cartographer',     d: 'Own 5 lands',                    c: () => S.zones.length >= 5 },
+  { id: 'land8',   ic: '🏰', name: 'Empire',           d: 'Own 8 lands',                    c: () => S.zones.length >= 8 },
+  { id: 'rich10k', ic: '🪙', name: 'Tycoon',           d: 'Earn 10,000 coins total',        c: () => S.stats.earned >= 10000 },
+  { id: 'gem1',    ic: '💎', name: 'Shiny!',           d: 'Collect a gem',                  c: () => S.stats.gemsFound >= 1 },
+  { id: 'mule',    ic: '🎒', name: 'Pack Mule',        d: 'Fill your backpack',             c: () => S.player.helmets.length >= cap() },
+  { id: 'crown1',  ic: '👑', name: 'New Kingdom',      d: 'Found a New Kingdom (prestige)', c: () => S.crowns >= 1 },
+  { id: 'chest1',  ic: '💰', name: 'Treasure Hunter',  d: 'Open a wandering chest',         c: () => (S.stats.chests || 0) >= 1 },
+  { id: 'craft50', ic: '🏭', name: 'Master Crafter',   d: 'Craft 50 industry goods',        c: () => (S.stats.crafted || 0) >= 50 },
+  { id: 'tycoon2', ic: '⚙️', name: 'Industrialist',    d: 'Own industry, farm & mine',      c: () => S.distPlate.built && S.d2Plate.farm.built && S.d2Plate.mine.built },
+  { id: 'guild',   ic: '🎨', name: 'Guildmaster',      d: 'Own the Artisan Quarter',        c: () => S.d2Plate.artisan && S.d2Plate.artisan.built },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -951,6 +952,7 @@ function checkAch() {
 function tick(dt) {
   if (!S.started) return;
   S.t += dt;
+  S.stats.playT = (S.stats.playT || 0) + dt;
   S.flowTouched = false;
   if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
   if (S.offlineMsg > 0) S.offlineMsg -= dt;
@@ -1115,7 +1117,7 @@ function tick(dt) {
         D.tool.t = 0;
         D.tool.wood.shift(); D.tool.stone.shift(); D.tool.stone.shift();
         D.tool.tray.push(fk);
-        questEvent('tool', 1); questEvent('craft', 1);
+        questEvent('tool', 1); questEvent('craft', 1); S.stats.crafted = (S.stats.crafted || 0) + 1;
         puff(DIST.toolTray.x, DIST.toolTray.y - 10, '#ffd94a', 5, true); sfx('built');
       }
     } else if (!(D.tool.wood.length >= 1 && D.tool.stone.length >= 2)) D.tool.t = 0;
@@ -1255,7 +1257,7 @@ function tick(dt) {
           c.t = 0;
           for (const r in cr.recipe) for (let i = 0; i < cr.recipe[r]; i++) c.in[r].shift();
           c.tray.push(fk);
-          questEvent('craft', 1);
+          questEvent('craft', 1); S.stats.crafted = (S.stats.crafted || 0) + 1;
           puff(cr.trayPos.x, cr.trayPos.y - 10, '#ffd94a', 4, true); sfx('smelt');
         }
       } else c.t = 0;
@@ -2825,6 +2827,9 @@ function drawHud() {
   ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 74, 128, 24, 8); ctx.fill();
   ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 11px sans-serif';
   ctx.fillText('LANDS ' + S.zones.length + '  ⚔ ' + fmt(S.stats.kills), 20, 90);
+  ctx.fillStyle = '#ffd94a'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText('🏆', 130, 90); ctx.textAlign = 'left';
+  hits.push({ x: 10, y: 74, w: 128, h: 24, act: () => { S.showStats = !S.showStats; } });
   if (S.gems > 0 || S.gemUp.magnet + S.gemUp.crit + S.gemUp.coin > 0) {
     ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 104, 128, 26, 8); ctx.fill();
     drawGemIcon(26, 117, 1);
@@ -2855,6 +2860,7 @@ function drawHud() {
   });
   drawMinimap();
   drawQuests();
+  drawStatsPanel();
   // quest-complete golden pulse
   if (S.goldPulse > 0) {
     ctx.strokeStyle = 'rgba(255,217,74,' + (S.goldPulse * 0.9) + ')';
@@ -2908,6 +2914,73 @@ function drawHud() {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
     ctx.fillText('▶ TAP TO PLAY', 0, 7);
     ctx.restore();
+  }
+}
+function fmtTime(s) {
+  s = Math.floor(s || 0);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  if (h > 0) return h + 'h ' + m + 'm';
+  return m + 'm ' + (s % 60) + 's';
+}
+function drawStatsPanel() {
+  if (!S.showStats) return;
+  const st = S.stats;
+  ctx.fillStyle = 'rgba(8,10,16,0.9)'; ctx.fillRect(0, 0, vw, vh);
+  // tap anywhere to close
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showStats = false; } });
+  const cx = vw / 2, top = Math.max(40, vh * 0.06);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 26px sans-serif';
+  ctx.fillText('🏆 KINGDOM RECORDS', cx, top);
+  const unlocked = ACH.filter(a => S.ach[a.id]).length;
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText(unlocked + ' / ' + ACH.length + ' milestones · tap anywhere to close', cx, top + 20);
+  // lifetime stats grid (two columns)
+  const stats = [
+    ['⚔️ Foes slain', fmt(st.kills)], ['💀 Bosses', fmt(st.bosses || 0)],
+    ['🪙 Coins earned', fmt(st.earned)], ['📦 Items sold', fmt(st.sold || 0)],
+    ['🏭 Goods crafted', fmt(st.crafted || 0)], ['💎 Gems found', fmt(st.gemsFound || 0)],
+    ['💰 Chests opened', fmt(st.chests || 0)], ['📜 Quests done', fmt(st.quests || 0)],
+    ['🗺️ Lands', fmt(S.zones.length)], ['👑 Crowns', fmt(S.crowns)],
+    ['🔁 Prestiges', fmt(S.prestiges)], ['⏱️ Played', fmtTime(st.playT)],
+    ['☠️ Deaths', fmt(S.player.deaths)], ['🔥 Streak', S.streak + 'd'],
+  ];
+  let sy = top + 44;
+  ctx.font = 'bold 13px sans-serif';
+  for (let i = 0; i < stats.length; i += 2) {
+    for (let c = 0; c < 2 && i + c < stats.length; c++) {
+      const x0 = c === 0 ? 18 : cx + 6, w = cx - 24;
+      const [label, val] = stats[i + c];
+      ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(x0, sy, w, 26, 6); ctx.fill();
+      ctx.fillStyle = '#c8d0da'; ctx.textAlign = 'left'; ctx.font = '12px sans-serif';
+      ctx.fillText(label, x0 + 8, sy + 17);
+      ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'right'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(val, x0 + w - 8, sy + 17);
+    }
+    sy += 30;
+  }
+  // milestones list
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('MILESTONES', 18, sy + 20);
+  sy += 32;
+  const rh = Math.min(30, Math.floor((vh - sy - 20) / ACH.length));
+  for (const a of ACH) {
+    const got = !!S.ach[a.id];
+    ctx.globalAlpha = got ? 1 : 0.5;
+    ctx.fillStyle = got ? 'rgba(110,203,90,0.16)' : 'rgba(20,25,36,0.7)';
+    rr(18, sy, vw - 36, rh - 3, 6); ctx.fill();
+    ctx.font = (rh > 22 ? 16 : 13) + 'px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(got ? a.ic : '🔒', 28, sy + rh / 2 + 4);
+    ctx.fillStyle = got ? '#6ecb5a' : '#c8d0da'; ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(a.name, 54, sy + (rh > 22 ? rh / 2 - 1 : rh / 2 + 4));
+    if (rh > 22) {
+      ctx.fillStyle = '#8792a0'; ctx.font = '10px sans-serif';
+      ctx.fillText(a.d, 54, sy + rh / 2 + 11);
+    }
+    if (got) { ctx.fillStyle = '#6ecb5a'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'right'; ctx.fillText('✓', vw - 30, sy + rh / 2 + 4); }
+    ctx.globalAlpha = 1;
+    sy += rh;
   }
 }
 function drawQuests() {
@@ -3032,6 +3105,7 @@ function onDown(ev) {
   audio();
   const p = pointerXY(ev);
   if (!S.started) { S.started = true; sfx('built', true); return; }
+  if (S.showStats) { S.showStats = false; return; } // records overlay: any tap closes
   for (const h of hits) {
     if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) { h.act(); return; }
   }
@@ -3090,7 +3164,7 @@ window.KS = {
   cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
-  questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry,
+  questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry, drawStatsPanel,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP },
   start() { S.started = true; },
