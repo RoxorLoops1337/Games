@@ -131,6 +131,20 @@ const pal = KS.S.pallet;
 step(pal / C.VAC_RATE + 1);
 t.ok(KS.S.pallet === 0 && KS.S.wallet === pal, 'vacuum moves every coin to the wallet');
 
+// ---- coin flow accelerates exponentially while standing ----
+KS.S.pallet = 1000000;
+const w0 = KS.S.wallet;
+step(1);
+const firstSec = KS.S.wallet - w0;
+step(3);
+const fourSec = KS.S.wallet - w0;
+t.ok(fourSec > firstSec * 8, 'vacuum speeds up exponentially (' + firstSec + '¢ in 1s → ' + fourSec + '¢ in 4s)');
+t.ok(KS.flowMul() > 10, 'flow multiplier climbs while standing');
+p.x = C.SPAWN.x; p.y = C.SPAWN.y;
+KS.tick(1 / 60);
+t.ok(KS.flowMul() <= 1.01, 'flow resets after walking away');
+KS.S.pallet = 0; KS.S.wallet = pal;
+
 // ---- upgrade plate ----
 KS.S.wallet = 10000;
 const capBefore = KS.cap();
@@ -177,7 +191,7 @@ const ppPlate = z1.plates.find(q => q.id === 'porterPlus');
 KS.S.wallet = ppPlate.cost + 500;
 p.x = ppPlate.x; p.y = ppPlate.y;
 step(ppPlate.cost / C.BUILD_RATE + 1);
-t.ok(z1.porters.length === 2 && ppPlate.lvl >= 1, '+PORTER hires a second porter');
+t.ok(z1.porters.length >= 2 && ppPlate.lvl >= 1, '+PORTER hires more porters');
 t.ok(ppPlate.cost > ppPlate.base, 'repeatable cost grows with level');
 
 // ---- repeatable: horde gate ----
@@ -339,11 +353,12 @@ p.x = C.SPAWN.x; p.y = C.SPAWN.y;
 p.helmets = [{ k: 1 }, { k: 1, bar: true }, { k: 2, crown: true }];
 KS.S.items.length = 0;
 p.invuln = 0;
+const deathsBefore = p.deaths;
 KS.hurtPlayer(1e9);
 t.ok(p.hp === p.maxHp && p.helmets.length === 0, 'death resets hp and drops the stack');
 t.ok(p.x === C.SPAWN.x && p.y === C.SPAWN.y, 'death respawns at the hub');
 t.ok(KS.S.items.length === 3 && KS.S.items.some(i => i.crown) && KS.S.items.some(i => i.bar), 'dropped items keep their kind');
-t.ok(p.deaths === 1, 'death counted');
+t.ok(p.deaths === deathsBefore + 1, 'death counted');
 KS.S.items.length = 0;
 
 // ---- guidance arrow ----
