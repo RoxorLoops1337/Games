@@ -232,6 +232,8 @@ function reset() {
     showQuests: false, goldPulse: 0, hitStop: 0, amb: [],
     district: null,
     distPlate: { cost: 400, paid: 0, built: false },
+    d2: { farm: null, mine: null },
+    d2Plate: { farm: { cost: 700, paid: 0, built: false }, mine: { cost: 1200, paid: 0, built: false } },
     zones: [mkZone(1)],
     enemies: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [],
     chest: null, chestCd: 100,
@@ -248,11 +250,15 @@ function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG *
 function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1); }
 function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet); }
 function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns); }
-function entryVal(e) {
-  const mul = e.crown ? CROWN_MUL : e.tool ? TOOL_MUL : e.plank ? PLANK_MUL : e.bar ? BAR_MUL : e.stone ? STONE_MUL : 1;
-  return Math.ceil(helmVal(e.k) * mul * coinMul());
-}
-function cloneEntry(e) { return { k: e.k, bar: !!e.bar, crown: !!e.crown, log: !!e.log, plank: !!e.plank, stone: !!e.stone, tool: !!e.tool }; }
+// value multipliers per carried resource kind (vs a frontier helmet)
+const RES_MUL = {
+  helm: 1, log: 1, stone: STONE_MUL, bar: BAR_MUL, plank: PLANK_MUL, tool: TOOL_MUL, crown: CROWN_MUL,
+  wheat: 1, apple: 1.3, flour: 3, pie: 11,
+  ore: 1.4, coal: 1.1, ingot: 6, sword: 20,
+};
+function entryRes(e) { return e.res || (e.crown ? 'crown' : e.tool ? 'tool' : e.plank ? 'plank' : e.bar ? 'bar' : e.log ? 'log' : e.stone ? 'stone' : 'helm'); }
+function entryVal(e) { return Math.ceil(helmVal(e.k) * (RES_MUL[entryRes(e)] || 1) * coinMul()); }
+function cloneEntry(e) { return { k: e.k, bar: !!e.bar, crown: !!e.crown, log: !!e.log, plank: !!e.plank, stone: !!e.stone, tool: !!e.tool, res: e.res }; }
 // coin flow ramps up exponentially the longer you keep transacting at
 // the same spot (vacuuming the pallet / pouring into a plate)
 function touchFlow(key, dt) {
@@ -266,6 +272,11 @@ function inCell(z, x, y, m) { m = m || 0; return x >= z.x0 - m && x < z.x1 + m &
 function inWalkable(x, y) {
   if (x >= 0 && x < CELL_W && y >= 0 && y < CELL_H) return true; // hub
   if (S.distPlate.built && x >= DX && x < DX + CELL_W && y >= DY && y < DY + CELL_H) return true; // industry district
+  for (const dk in D2CFG) {
+    if (!S.d2Plate[dk].built) continue;
+    const [cx, cy] = D2CFG[dk].cell;
+    if (x >= cx * CELL_W && x < (cx + 1) * CELL_W && y >= cy * CELL_H && y < (cy + 1) * CELL_H) return true;
+  }
   return !!zoneAt(x, y);
 }
 function worldBounds() {
@@ -275,8 +286,80 @@ function worldBounds() {
     if (z.y0 < minY) minY = z.y0; if (z.y1 > maxY) maxY = z.y1;
   }
   if (S.distPlate.built) { if (DX + CELL_W > maxX) maxX = DX + CELL_W; if (DY + CELL_H > maxY) maxY = DY + CELL_H; }
+  for (const dk in D2CFG) {
+    if (!S.d2Plate[dk].built) continue;
+    const [cx, cy] = D2CFG[dk].cell;
+    if (cx * CELL_W < minX) minX = cx * CELL_W; if ((cx + 1) * CELL_W > maxX) maxX = (cx + 1) * CELL_W;
+    if (cy * CELL_H < minY) minY = cy * CELL_H; if ((cy + 1) * CELL_H > maxY) maxY = (cy + 1) * CELL_H;
+  }
   return { minX, minY, maxX, maxY };
 }
+// ---- expansion districts: farmlands (SW) + deep mines (NW) ---
+// generic engine: producers grow piles, crafters combine recipes,
+// hauler/trader NPCs automate. Unlock ties to lands 3 and 4.
+const D2CFG = (() => {
+  const at = (cell, x, y, r) => ({ x: cell[0] * CELL_W + x, y: cell[1] * CELL_H + y, r: r || 55 });
+  const cfg = {
+    farm: {
+      key: 'farm', name: 'FARMLANDS', icon: '🌾', cell: [-1, 1], need: 3, cost: 700, ground: '#4c5a2e',
+      plate: { x: 60, y: CELL_H + 500 },              // land 2's west edge
+      producers: [
+        { id: 'wheat', icon: '🌾', name: 'WHEAT FIELD', cost: 300, out: 'wheat', t: 1.7 },
+        { id: 'orchard', icon: '🍎', name: 'ORCHARD', cost: 340, out: 'apple', t: 2.1 },
+      ],
+      crafters: [
+        { id: 'mill', icon: '🌬️', name: 'WINDMILL', cost: 420, recipe: { wheat: 2 }, out: 'flour', t: 2.2 },
+        { id: 'bakery', icon: '🥧', name: 'BAKERY', cost: 520, recipe: { flour: 1, apple: 1 }, out: 'pie', t: 2.8 },
+      ],
+    },
+    mine: {
+      key: 'mine', name: 'DEEP MINES', icon: '⚒️', cell: [-1, -1], need: 4, cost: 1200, ground: '#4a4448',
+      plate: { x: -CELL_W + 525, y: 60 },             // land 3's north edge
+      producers: [
+        { id: 'orevein', icon: '⛓️', name: 'ORE VEIN', cost: 500, out: 'ore', t: 2.6 },
+        { id: 'coal', icon: '⚫', name: 'COAL SEAM', cost: 450, out: 'coal', t: 2.3 },
+      ],
+      crafters: [
+        { id: 'smelter', icon: '🔥', name: 'SMELTERY', cost: 700, recipe: { ore: 2, coal: 1 }, out: 'ingot', t: 3.0 },
+        { id: 'smith', icon: '⚔️', name: 'WEAPONSMITH', cost: 900, recipe: { ingot: 1, plank: 1 }, out: 'sword', t: 3.4 },
+      ],
+    },
+  };
+  for (const k in cfg) {
+    const d = cfg[k];
+    d.producers[0].pos = at(d.cell, 250, 270, 60);
+    if (d.producers[1]) d.producers[1].pos = at(d.cell, 800, 270, 60);
+    d.crafters[0].pos = at(d.cell, 250, 660); d.crafters[0].trayPos = at(d.cell, 250, 820);
+    d.crafters[1].pos = at(d.cell, 800, 660); d.crafters[1].trayPos = at(d.cell, 800, 820);
+    d.hauler = at(d.cell, 525, 400, 46);
+    d.trader = at(d.cell, 525, 620, 46);
+    d.pad = at(d.cell, 80, 80, 44);
+  }
+  return cfg;
+})();
+function initD2(dk) {
+  const cfg = D2CFG[dk];
+  const plates = {};
+  for (const pr of cfg.producers) plates[pr.id] = { cost: pr.cost, paid: 0, built: false };
+  for (const cr of cfg.crafters) plates[cr.id] = { cost: cr.cost, paid: 0, built: false };
+  plates.hauler = { cost: 550, paid: 0, built: false };
+  plates.trader = { cost: 550, paid: 0, built: false };
+  const piles = {}, crafts = {};
+  for (const pr of cfg.producers) piles[pr.id] = { arr: [], t: 0 };
+  for (const cr of cfg.crafters) { const inp = {}; for (const r in cr.recipe) inp[r] = []; crafts[cr.id] = { in: inp, t: 0, tray: [] }; }
+  S.d2[dk] = { plates, piles, crafts, haulerNpc: null, traderNpc: null };
+}
+function spawnD2Hauler(dk) { S.d2[dk].haulerNpc = { x: D2CFG[dk].hauler.x, y: D2CFG[dk].hauler.y, state: 'idle', carry: [], job: null }; }
+function spawnD2Trader(dk) { S.d2[dk].traderNpc = { x: D2CFG[dk].trader.x, y: D2CFG[dk].trader.y, state: 'idle', carry: [] }; }
+// sources a hauler can pull a resource from (piles, trays, cross-district planks)
+function d2Sources(dk, res) {
+  const d = S.d2[dk], cfg = D2CFG[dk], out = [];
+  for (const pr of cfg.producers) if (pr.out === res && d.piles[pr.id].arr.length) out.push({ at: pr.pos, arr: d.piles[pr.id].arr });
+  for (const cr of cfg.crafters) if (cr.out === res && d.crafts[cr.id].tray.length) out.push({ at: cr.trayPos, arr: d.crafts[cr.id].tray });
+  if (res === 'plank' && S.district && S.district.plates.saw.built && S.district.saw.tray.length) out.push({ at: DIST.sawTray, arr: S.district.saw.tray });
+  return out;
+}
+
 function initDistrict() {
   S.district = {
     plates: Object.fromEntries(Object.keys(DIST_COSTS).map(id => [id, { cost: DIST_COSTS[id], paid: 0, built: false }])),
@@ -316,6 +399,14 @@ function save() {
         saw: { ks: S.district.saw.ks, tray: S.district.saw.tray },
         tool: { wood: S.district.tool.wood, stone: S.district.tool.stone, tray: S.district.tool.tray },
       } : null,
+      d2: Object.fromEntries(Object.keys(D2CFG).filter(dk => S.d2[dk]).map(dk => {
+        const d = S.d2[dk];
+        return [dk, {
+          plates: Object.fromEntries(Object.entries(d.plates).map(([id, pl]) => [id, { b: pl.built ? 1 : 0, p: pl.paid }])),
+          piles: Object.fromEntries(Object.entries(d.piles).map(([id, pi]) => [id, pi.arr])),
+          crafts: Object.fromEntries(Object.entries(d.crafts).map(([id, c]) => [id, { in: c.in, tray: c.tray }])),
+        }];
+      })),
       crowns: S.crowns, prestiges: S.prestiges,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
@@ -385,6 +476,23 @@ function load() {
     S.district.saw.ks = (d.district.saw || {}).ks || []; S.district.saw.tray = (d.district.saw || {}).tray || [];
     S.district.tool.wood = (d.district.tool || {}).wood || []; S.district.tool.stone = (d.district.tool || {}).stone || [];
     S.district.tool.tray = (d.district.tool || {}).tray || [];
+  }
+  for (const dk in (d.d2 || {})) {
+    if (!D2CFG[dk]) continue;
+    S.d2Plate[dk].built = true;
+    initD2(dk);
+    const dd = S.d2[dk], sv = d.d2[dk];
+    for (const id in sv.plates || {}) {
+      const pl = dd.plates[id]; if (!pl) continue;
+      pl.paid = sv.plates[id].p || 0;
+      if (sv.plates[id].b) { pl.built = true; if (id === 'hauler') spawnD2Hauler(dk); if (id === 'trader') spawnD2Trader(dk); }
+    }
+    for (const id in sv.piles || {}) if (dd.piles[id]) dd.piles[id].arr = sv.piles[id] || [];
+    for (const id in sv.crafts || {}) {
+      if (!dd.crafts[id]) continue;
+      dd.crafts[id].tray = (sv.crafts[id] || {}).tray || [];
+      for (const r in (sv.crafts[id] || {}).in || {}) if (dd.crafts[id].in[r]) dd.crafts[id].in[r] = sv.crafts[id].in[r] || [];
+    }
   }
   S.crowns = d.crowns || 0; S.prestiges = d.prestiges || 0;
   (d.ach || []).forEach(id => { S.ach[id] = true; });
@@ -690,6 +798,7 @@ const QTPL = [
   { id: 'gem',   icon: '💎', txt: 'Collect # gems',    n: t => 2 + Math.ceil(t / 2), ev: 'gem' },
   { id: 'land',  icon: '🌍', txt: 'Unlock # new land', n: () => 1, ev: 'land' },
   { id: 'tool',  icon: '🔨', txt: 'Craft # tools',     n: t => 2 + Math.ceil(t / 2), ev: 'tool' },
+  { id: 'craft', icon: '🏭', txt: 'Craft # goods',     n: t => 3 + t, ev: 'craft' },
 ];
 function qTier() { return S.zones.length - 1; }
 function streakMul() { return 1 + Math.min(1, 0.1 * Math.max(0, S.streak - 1)); }
@@ -778,6 +887,7 @@ const ACH = [
   { id: 'mule',    name: 'Pack Mule',        c: () => S.player.helmets.length >= cap() },
   { id: 'crown1',  name: 'New Kingdom',      c: () => S.crowns >= 1 },
   { id: 'chest1',  name: 'Treasure Hunter',  c: () => (S.stats.chests || 0) >= 1 },
+  { id: 'tycoon2', name: 'Industrialist',    c: () => S.distPlate.built && S.d2Plate.farm.built && S.d2Plate.mine.built },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -946,7 +1056,7 @@ function tick(dt) {
         D.tool.t = 0;
         D.tool.wood.shift(); D.tool.stone.shift(); D.tool.stone.shift();
         D.tool.tray.push(fk);
-        questEvent('tool', 1);
+        questEvent('tool', 1); questEvent('craft', 1);
         puff(DIST.toolTray.x, DIST.toolTray.y - 10, '#ffd94a', 5, true); sfx('built');
       }
     } else if (!(D.tool.wood.length >= 1 && D.tool.stone.length >= 2)) D.tool.t = 0;
@@ -1058,6 +1168,146 @@ function tick(dt) {
   // district purchase plate (at zone 1's south edge)
   if (!S.distPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, DIST.plate.x, DIST.plate.y) < 56 * 56)
     pourHub(S.distPlate, dt, () => { initDistrict(); float(DIST.plate.x, DIST.plate.y - 50, '🏭 INDUSTRY DISTRICT OPEN — head southeast!', '#ffd94a', true); });
+
+  // -- expansion districts (farmlands / deep mines)
+  for (const dk in D2CFG) {
+    const cfg = D2CFG[dk];
+    if (!S.d2Plate[dk].built) {
+      if (S.zones.length >= cfg.need && dist2(p.x, p.y, cfg.plate.x, cfg.plate.y) < 56 * 56)
+        pourHub(S.d2Plate[dk], dt, () => { initD2(dk); float(cfg.plate.x, cfg.plate.y - 50, cfg.icon + ' ' + cfg.name + ' OPEN!', '#ffd94a', true); });
+      continue;
+    }
+    const d = S.d2[dk], fk = S.zones.length;
+    // producers grow their piles
+    for (const pr of cfg.producers) {
+      const pile = d.piles[pr.id];
+      if (d.plates[pr.id].built && pile.arr.length < PILE_MAX) {
+        pile.t += dt;
+        if (pile.t >= pr.t) { pile.t = 0; pile.arr.push(fk); }
+      }
+    }
+    // crafters combine recipes
+    for (const cr of cfg.crafters) {
+      const c = d.crafts[cr.id];
+      const ready = d.plates[cr.id].built && c.tray.length < TRAY12 && Object.keys(cr.recipe).every(r => c.in[r].length >= cr.recipe[r]);
+      if (ready) {
+        c.t += dt;
+        if (c.t >= cr.t) {
+          c.t = 0;
+          for (const r in cr.recipe) for (let i = 0; i < cr.recipe[r]; i++) c.in[r].shift();
+          c.tray.push(fk);
+          questEvent('craft', 1);
+          puff(cr.trayPos.x, cr.trayPos.y - 10, '#ffd94a', 4, true); sfx('smelt');
+        }
+      } else c.t = 0;
+    }
+    // station purchase plates
+    for (const id in d.plates) {
+      const pl = d.plates[id];
+      if (pl.built) continue;
+      const pos = id === 'hauler' ? cfg.hauler : id === 'trader' ? cfg.trader
+        : (cfg.producers.find(q => q.id === id) || {}).pos || cfg.crafters.find(q => q.id === id).pos;
+      if (dist2(p.x, p.y, pos.x, pos.y) < 60 * 60)
+        pourHub(pl, dt, () => {
+          float(pos.x, pos.y - 50, 'BUILT!', '#6ecb5a', true);
+          if (id === 'hauler') spawnD2Hauler(dk);
+          if (id === 'trader') spawnD2Trader(dk);
+        });
+    }
+    // hand interactions: piles → stack, stack → crafter inputs, trays → stack
+    for (const pr of cfg.producers) {
+      if (!d.plates[pr.id].built) continue;
+      const pile = d.piles[pr.id];
+      if (pile.arr.length && p.helmets.length < cap() && dist2(p.x, p.y, pr.pos.x, pr.pos.y) < pr.pos.r * pr.pos.r) {
+        p.hAcc = (p.hAcc || 0) + dt * SELL_RATE;
+        while (p.hAcc >= 1 && pile.arr.length && p.helmets.length < cap()) { p.hAcc -= 1; p.helmets.push({ k: pile.arr.pop(), res: pr.out }); sfx('pick'); }
+      }
+    }
+    for (const cr of cfg.crafters) {
+      if (!d.plates[cr.id].built) continue;
+      const c = d.crafts[cr.id];
+      if (dist2(p.x, p.y, cr.pos.x, cr.pos.y) < cr.pos.r * cr.pos.r) {
+        p.cAcc = (p.cAcc || 0) + dt * SELL_RATE;
+        while (p.cAcc >= 1) {
+          p.cAcc -= 1;
+          let fed = false;
+          for (const r in cr.recipe) {
+            if (c.in[r].length >= TOOL_IN) continue;
+            const i = p.helmets.map(e => entryRes(e) === r).lastIndexOf(true);
+            if (i >= 0) { c.in[r].push(p.helmets.splice(i, 1)[0].k); sfx('smelt'); fed = true; break; }
+          }
+          if (!fed) break;
+        }
+      }
+      if (c.tray.length && p.helmets.length < cap() && dist2(p.x, p.y, cr.trayPos.x, cr.trayPos.y) < cr.trayPos.r * cr.trayPos.r) {
+        p.hAcc = (p.hAcc || 0) + dt * SELL_RATE;
+        while (p.hAcc >= 1 && c.tray.length && p.helmets.length < cap()) { p.hAcc -= 1; p.helmets.push({ k: c.tray.pop(), res: cr.out }); sfx('pick'); }
+      }
+    }
+    // hauler NPC: feed crafters from piles/trays (incl. cross-district planks)
+    const H = d.haulerNpc;
+    if (H) {
+      if (H.state === 'idle') {
+        let job = null;
+        for (const cr of cfg.crafters) {
+          if (!d.plates[cr.id].built) continue;
+          for (const r in cr.recipe) {
+            if (d.crafts[cr.id].in[r].length >= TOOL_IN - 3) continue;
+            const srcs = d2Sources(dk, r);
+            if (srcs.length) { job = { from: srcs[0], to: cr.pos, put: k => d.crafts[cr.id].in[r].push(k), res: r }; break; }
+          }
+          if (job) break;
+        }
+        if (job) { H.job = job; H.state = 'pick'; }
+        else { const dl = Math.hypot(cfg.hauler.x - H.x, cfg.hauler.y - H.y); if (dl > 12) { H.x += (cfg.hauler.x - H.x) / dl * PORTER_SPD * 0.6 * dt; H.y += (cfg.hauler.y - H.y) / dl * PORTER_SPD * 0.6 * dt; } }
+      } else if (H.state === 'pick') {
+        const dl = Math.hypot(H.job.from.at.x - H.x, H.job.from.at.y - H.y) || 1;
+        H.x += (H.job.from.at.x - H.x) / dl * PORTER_SPD * dt; H.y += (H.job.from.at.y - H.y) / dl * PORTER_SPD * dt;
+        if (dl < 30) {
+          H.carry = [];
+          while (H.carry.length < 4 && H.job.from.arr.length) H.carry.push(H.job.from.arr.pop());
+          H.state = H.carry.length ? 'drop' : 'idle';
+        }
+      } else {
+        const dl = Math.hypot(H.job.to.x - H.x, H.job.to.y - H.y) || 1;
+        H.x += (H.job.to.x - H.x) / dl * PORTER_SPD * dt; H.y += (H.job.to.y - H.y) / dl * PORTER_SPD * dt;
+        if (dl < 30) { for (const k of H.carry) H.job.put(k); H.carry = []; H.state = 'idle'; }
+      }
+    }
+    // trader NPC: sell the final product (or the first tray while the last crafter is unbuilt)
+    const T = d.traderNpc;
+    if (T) {
+      if (T.state === 'idle') {
+        const last = cfg.crafters[1], first = cfg.crafters[0];
+        const src = d.crafts[last.id].tray.length ? { at: last.trayPos, arr: d.crafts[last.id].tray, res: last.out }
+          : (!d.plates[last.id].built && d.crafts[first.id].tray.length >= 4 ? { at: first.trayPos, arr: d.crafts[first.id].tray, res: first.out } : null);
+        if (src) { T.src = src; T.state = 'pick'; }
+        else { const dl = Math.hypot(cfg.trader.x - T.x, cfg.trader.y - T.y); if (dl > 12) { T.x += (cfg.trader.x - T.x) / dl * PORTER_SPD * 0.6 * dt; T.y += (cfg.trader.y - T.y) / dl * PORTER_SPD * 0.6 * dt; } }
+      } else if (T.state === 'pick') {
+        const dl = Math.hypot(T.src.at.x - T.x, T.src.at.y - T.y) || 1;
+        T.x += (T.src.at.x - T.x) / dl * PORTER_SPD * dt; T.y += (T.src.at.y - T.y) / dl * PORTER_SPD * dt;
+        if (dl < 30) {
+          T.carry = [];
+          while (T.carry.length < 6 && T.src.arr.length) T.carry.push({ k: T.src.arr.pop(), res: T.src.res });
+          T.state = T.carry.length ? 'sell' : 'idle';
+        }
+      } else {
+        const dl = Math.hypot(SELL.x - T.x, SELL.y - T.y) || 1;
+        T.x += (SELL.x - T.x) / dl * PORTER_SPD * dt; T.y += (SELL.y - T.y) / dl * PORTER_SPD * dt;
+        if (dl < 46) {
+          T.cd = (T.cd || 0) - dt;
+          if (T.cd <= 0 && T.carry.length) {
+            T.cd = 0.15;
+            const v = entryVal(T.carry.pop());
+            S.pallet += v; S.stats.earned += v; S.stats.sold++;
+            questEvent('sell', 1); questEvent('earn', v);
+            puff(PALLET.x, PALLET.y - 30, '#ffd94a', 1, true);
+          }
+          if (!T.carry.length) T.state = 'idle';
+        }
+      }
+    }
+  }
 
   // -- vacuum coins from pallet (flow ramps up the longer you stand)
   if (S.pallet > 0 && dist2(p.x, p.y, PALLET.x, PALLET.y) < PALLET.r * PALLET.r) {
@@ -1407,6 +1657,7 @@ function warpPads() {
   pads.push({ x: HUBPAD.x, y: HUBPAD.y, r: HUBPAD.r, to: { x: newest.pad.x + nd[0] * 110, y: newest.pad.y + nd[1] * 110 } });
   for (const z of S.zones) pads.push({ x: z.pad.x, y: z.pad.y, r: z.pad.r, to: { x: HUBPAD.x, y: HUBPAD.y - 80 } });
   if (S.distPlate.built) pads.push({ x: DIST.pad.x, y: DIST.pad.y, r: DIST.pad.r, to: { x: HUBPAD.x, y: HUBPAD.y - 80 } });
+  for (const dk in D2CFG) if (S.d2Plate[dk].built) pads.push({ x: D2CFG[dk].pad.x, y: D2CFG[dk].pad.y, r: D2CFG[dk].pad.r, to: { x: HUBPAD.x, y: HUBPAD.y - 80 } });
   return pads;
 }
 
@@ -1515,14 +1766,74 @@ function drawToolIcon(x, y, s) {
   ctx.beginPath(); ctx.moveTo(x - 4 * s, y + 7 * s); ctx.lineTo(x + 4 * s, y - 4 * s); ctx.stroke();
   ctx.fillStyle = '#9aa0a8'; rr(x - 1 * s, y - 9 * s, 10 * s, 6 * s, 2 * s); ctx.fill();
 }
+function drawWheatIcon(x, y, s) {
+  s = s || 1;
+  ctx.strokeStyle = '#d9b93a'; ctx.lineWidth = 1.5 * s;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath(); ctx.moveTo(x + i * 4 * s, y + 7 * s); ctx.lineTo(x + i * 5 * s, y - 4 * s); ctx.stroke();
+    ctx.fillStyle = '#ecd05a';
+    ctx.beginPath(); ctx.ellipse(x + i * 5 * s, y - 6 * s, 2.2 * s, 4 * s, 0, 0, 6.29); ctx.fill();
+  }
+}
+function drawAppleIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#d1453f'; ctx.beginPath(); ctx.arc(x, y, 6.5 * s, 0, 6.29); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(x - 2 * s, y - 2 * s, 2 * s, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#3e6b2e'; ctx.beginPath(); ctx.ellipse(x + 2 * s, y - 7 * s, 3 * s, 1.6 * s, 0.6, 0, 6.29); ctx.fill();
+}
+function drawFlourIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#e8e0cc'; rr(x - 7 * s, y - 6 * s, 14 * s, 13 * s, 4 * s); ctx.fill();
+  ctx.fillStyle = '#c9bea0'; ctx.fillRect(x - 4 * s, y - 8 * s, 8 * s, 3 * s);
+  ctx.fillStyle = '#b8a878'; ctx.font = 'bold ' + Math.round(7 * s) + 'px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('F', x, y + 3 * s);
+}
+function drawPieIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#d9a45a'; ctx.beginPath(); ctx.ellipse(x, y + 1 * s, 8.5 * s, 5.5 * s, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#b8763a'; ctx.beginPath(); ctx.ellipse(x, y - 1.5 * s, 7 * s, 4 * s, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#d1453f'; ctx.beginPath(); ctx.arc(x, y - 2 * s, 1.6 * s, 0, 6.29); ctx.fill();
+}
+function drawOreIcon(x, y, s) {
+  s = s || 1;
+  drawStoneIcon(x, y, s);
+  ctx.fillStyle = '#6ec9e0';
+  ctx.fillRect(x - 3 * s, y - 1 * s, 2 * s, 2 * s); ctx.fillRect(x + 2 * s, y - 3 * s, 2 * s, 2 * s);
+}
+function drawCoalIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#2c2c34';
+  ctx.beginPath();
+  ctx.moveTo(x - 7 * s, y + 4 * s); ctx.lineTo(x - 5 * s, y - 4 * s); ctx.lineTo(x + 2 * s, y - 5 * s);
+  ctx.lineTo(x + 7 * s, y); ctx.lineTo(x + 5 * s, y + 4 * s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.beginPath(); ctx.arc(x - 1 * s, y - 2 * s, 1.6 * s, 0, 6.29); ctx.fill();
+}
+function drawIngotIcon(x, y, s) {
+  s = s || 1;
+  ctx.fillStyle = '#c9ccd2';
+  ctx.beginPath();
+  ctx.moveTo(x - 10 * s, y + 4 * s); ctx.lineTo(x - 7 * s, y - 4 * s);
+  ctx.lineTo(x + 7 * s, y - 4 * s); ctx.lineTo(x + 10 * s, y + 4 * s);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(x - 5 * s, y - 2.5 * s, 6 * s, 2 * s);
+}
+function drawSwordIcon(x, y, s) {
+  s = s || 1;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 2.5 * s;
+  ctx.beginPath(); ctx.moveTo(x - 5 * s, y + 5 * s); ctx.lineTo(x + 6 * s, y - 6 * s); ctx.stroke();
+  ctx.strokeStyle = '#8a5c30'; ctx.lineWidth = 2 * s;
+  ctx.beginPath(); ctx.moveTo(x - 7 * s, y + 3 * s); ctx.lineTo(x - 3 * s, y + 7 * s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 6.5 * s, y + 6.5 * s); ctx.lineTo(x - 8.5 * s, y + 8.5 * s); ctx.stroke();
+}
+const RES_ICON = {
+  log: drawLogIcon, stone: drawStoneIcon, bar: drawBarIcon, plank: drawPlankIcon, tool: drawToolIcon, crown: drawCrownIcon,
+  wheat: drawWheatIcon, apple: drawAppleIcon, flour: drawFlourIcon, pie: drawPieIcon,
+  ore: drawOreIcon, coal: drawCoalIcon, ingot: drawIngotIcon, sword: drawSwordIcon,
+};
 function drawStackEntry(e, x, y, s) {
-  if (e.crown) drawCrownIcon(x, y, s);
-  else if (e.tool) drawToolIcon(x, y, s);
-  else if (e.plank) drawPlankIcon(x, y, s);
-  else if (e.bar) drawBarIcon(x, y, s);
-  else if (e.log) drawLogIcon(x, y, s);
-  else if (e.stone) drawStoneIcon(x, y, s);
-  else drawHelmetIcon(x, y, e.k, s);
+  const r = entryRes(e);
+  if (r === 'helm') drawHelmetIcon(x, y, e.k, s);
+  else (RES_ICON[r] || drawHelmetIcon)(x, y, s);
 }
 function drawTree(x, y, s, c1, c2) {
   s = s || 1;
@@ -1547,6 +1858,7 @@ function plateCircle(x, y, r, stroke, paid, costV, fillCol) {
 function cellWalkable(cx, cy) {
   if (cx === 0 && cy === 0) return true;
   if (S.distPlate.built && cx === 1 && cy === 1) return true;
+  for (const dk in D2CFG) if (S.d2Plate[dk].built && D2CFG[dk].cell[0] === cx && D2CFG[dk].cell[1] === cy) return true;
   return S.zones.some(z => z.cx === cx && z.cy === cy);
 }
 function drawGround() {
@@ -1560,12 +1872,13 @@ function drawGround() {
   const GRASS = [['#405c38', '#3a563c'], ['#3b5748', '#365243'], ['#565a33', '#50542f'], ['#49584f', '#43524a']];
   const CANOPY = [['#24421f', '#2e5226'], ['#1f3d33', '#28493d'], ['#4a4d1e', '#575a28'], ['#2c443e', '#37524a']];
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
-  if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1 });
+  if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1, g: '#57543e' });
+  for (const dk in D2CFG) if (S.d2Plate[dk].built) cells.push({ cx: D2CFG[dk].cell[0], cy: D2CFG[dk].cell[1], k: -1, g: D2CFG[dk].ground });
   for (const c of cells) {
     const x0 = c.cx * CELL_W, y0 = c.cy * CELL_H;
     if (!rectVis(x0, y0, x0 + CELL_W, y0 + CELL_H)) continue;
     const dir = c.k <= 0 ? 0 : (c.k - 1) % 4;
-    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : c.k === -1 ? '#57543e' : GRASS[dir][c.k % 2];
+    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : c.k === -1 ? (c.g || '#57543e') : GRASS[dir][c.k % 2];
     ctx.fillRect(x0, y0, CELL_W, CELL_H);
     ctx.fillStyle = 'rgba(255,255,255,0.03)';
     for (let gx = x0; gx < x0 + CELL_W; gx += 160) ctx.fillRect(gx, y0, 80, CELL_H);
@@ -1728,6 +2041,12 @@ function drawStands() {
     if (S.distPlate.built) {
       const on3 = dist2(S.player.x, S.player.y, DIST.pad.x, DIST.pad.y) < DIST.pad.r * DIST.pad.r;
       drawPad(DIST.pad.x, DIST.pad.y, DIST.pad.r, '🌀 HOME', on3 ? S.player.warpT / WARP_T : 0);
+    }
+    for (const dk in D2CFG) {
+      if (!S.d2Plate[dk].built) continue;
+      const pd = D2CFG[dk].pad;
+      const on4 = dist2(S.player.x, S.player.y, pd.x, pd.y) < pd.r * pd.r;
+      drawPad(pd.x, pd.y, pd.r, '🌀 HOME', on4 ? S.player.warpT / WARP_T : 0);
     }
   } else if (S.zones.length >= 2) {
     plateCircle(HUBPAD.x, HUBPAD.y, 52, '#6ec9e0', S.wayPlate.paid, S.wayPlate.cost, 'rgba(110,201,224,0.35)');
@@ -2151,10 +2470,109 @@ function drawPlayer() {
     ctx.restore();
   }
 }
+function drawD2() {
+  for (const dk in D2CFG) {
+    const cfg = D2CFG[dk];
+    if (!S.d2Plate[dk].built) {
+      if (S.zones.length >= cfg.need && vis(cfg.plate.x, cfg.plate.y, 100)) {
+        plateCircle(cfg.plate.x, cfg.plate.y, 52, '#e0a13c', S.d2Plate[dk].paid, S.d2Plate[dk].cost, 'rgba(224,161,60,0.35)');
+        ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+        ctx.fillText(cfg.icon, cfg.plate.x, cfg.plate.y - 2);
+        ctx.font = 'bold 11px sans-serif'; ctx.fillText(cfg.name, cfg.plate.x, cfg.plate.y + 20);
+        ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(fmt(S.d2Plate[dk].cost - S.d2Plate[dk].paid) + ' ¢', cfg.plate.x, cfg.plate.y + 74);
+      }
+      continue;
+    }
+    const ox = cfg.cell[0] * CELL_W, oy = cfg.cell[1] * CELL_H;
+    if (!rectVis(ox, oy, ox + CELL_W, oy + CELL_H)) continue;
+    const d = S.d2[dk];
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 26px sans-serif';
+    ctx.fillText(cfg.icon + ' ' + cfg.name, ox + 525, oy + 130);
+    const plate = (id, pos, icon, name) => {
+      const pl = d.plates[id];
+      if (pl.built) return true;
+      plateCircle(pos.x, pos.y, 50, '#e0a13c', pl.paid, pl.cost, 'rgba(224,161,60,0.35)');
+      ctx.font = '26px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.fillText(icon, pos.x, pos.y - 2);
+      ctx.font = 'bold 10px sans-serif'; ctx.fillText(name, pos.x, pos.y + 18);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(fmt(pl.cost - pl.paid) + ' ¢', pos.x, pos.y + 70);
+      return false;
+    };
+    for (const pr of cfg.producers) {
+      if (!plate(pr.id, pr.pos, pr.icon, pr.name)) continue;
+      // scene décor per producer
+      if (pr.out === 'wheat') {
+        ctx.fillStyle = '#8a7a2e'; rr(pr.pos.x - 70, pr.pos.y - 66, 140, 52, 8); ctx.fill();
+        for (let i = 0; i < 14; i++) drawWheatIcon(pr.pos.x - 58 + (i % 7) * 20, pr.pos.y - 52 + Math.floor(i / 7) * 24, 0.9 + Math.sin(S.t * 2 + i) * 0.08);
+      } else if (pr.out === 'apple') {
+        for (let i = 0; i < 3; i++) {
+          drawTree(pr.pos.x - 46 + i * 46, pr.pos.y - 60, 1.1);
+          drawAppleIcon(pr.pos.x - 52 + i * 46, pr.pos.y - 84, 0.6); drawAppleIcon(pr.pos.x - 38 + i * 46, pr.pos.y - 76, 0.6);
+        }
+      } else if (pr.out === 'ore') {
+        ctx.fillStyle = '#565c64';
+        ctx.beginPath(); ctx.moveTo(pr.pos.x - 60, pr.pos.y - 16); ctx.lineTo(pr.pos.x - 20, pr.pos.y - 66); ctx.lineTo(pr.pos.x + 40, pr.pos.y - 52); ctx.lineTo(pr.pos.x + 60, pr.pos.y - 16); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#6ec9e0';
+        ctx.fillRect(pr.pos.x - 22, pr.pos.y - 44, 5, 5); ctx.fillRect(pr.pos.x + 8, pr.pos.y - 36, 5, 5); ctx.fillRect(pr.pos.x - 4, pr.pos.y - 28, 4, 4);
+      } else { // coal
+        ctx.fillStyle = '#33333b';
+        ctx.beginPath(); ctx.moveTo(pr.pos.x - 56, pr.pos.y - 14); ctx.lineTo(pr.pos.x - 12, pr.pos.y - 58); ctx.lineTo(pr.pos.x + 44, pr.pos.y - 44); ctx.lineTo(pr.pos.x + 56, pr.pos.y - 14); ctx.closePath(); ctx.fill();
+      }
+      // worker + pile + ring
+      const sw = Math.abs(Math.sin(S.t * 2.2 + pr.pos.x));
+      ctx.fillStyle = '#8a9a4a'; rr(pr.pos.x - 62, pr.pos.y - 24, 13, 17, 4); ctx.fill();
+      ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(pr.pos.x - 56, pr.pos.y - 30, 5.5, 0, 6.29); ctx.fill();
+      ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(pr.pos.x - 53, pr.pos.y - 22); ctx.lineTo(pr.pos.x - 42 + sw * 5, pr.pos.y - 34 + sw * 18); ctx.stroke();
+      const pile = d.piles[pr.id];
+      for (let i = 0; i < pile.arr.length; i++)
+        (RES_ICON[pr.out] || drawLogIcon)(pr.pos.x - 16 + (i % 6) * 13 - Math.floor(i / 6) * 6, pr.pos.y + 16 - Math.floor(i / 6) * 9, 0.8);
+      ctx.strokeStyle = 'rgba(224,161,60,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.pos.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(pr.icon + ' ' + pile.arr.length + '/' + PILE_MAX, pr.pos.x, pr.pos.y + 44);
+    }
+    for (const cr of cfg.crafters) {
+      if (!plate(cr.id, cr.pos, cr.icon, cr.name)) continue;
+      const c = d.crafts[cr.id];
+      shadow(cr.pos.x, cr.pos.y + 30, 46);
+      ctx.fillStyle = dk === 'farm' ? '#7a6242' : '#4e4a52'; rr(cr.pos.x - 44, cr.pos.y - 36, 88, 60, 8); ctx.fill();
+      if (cr.id === 'mill') { // spinning sails
+        const a = S.t * (c.tray.length < TRAY12 && c.in.wheat.length >= 2 ? 2.4 : 0.4);
+        ctx.save(); ctx.translate(cr.pos.x, cr.pos.y - 44); ctx.rotate(a);
+        ctx.fillStyle = '#e8dcc0';
+        for (let i = 0; i < 4; i++) { ctx.rotate(1.5708); rr(-4, 0, 8, 34, 3); ctx.fill(); }
+        ctx.restore();
+      } else if (cr.id === 'smelter') {
+        const glow = 0.5 + Math.sin(S.t * 5) * 0.3;
+        ctx.fillStyle = 'rgba(255,110,40,' + glow + ')'; rr(cr.pos.x - 20, cr.pos.y - 12, 40, 26, 7); ctx.fill();
+        ctx.fillStyle = '#332b28'; rr(cr.pos.x + 22, cr.pos.y - 58, 16, 26, 4); ctx.fill();
+      } else {
+        const bob = Math.abs(Math.sin(S.t * 5)) * 8;
+        (RES_ICON[cr.out] || drawToolIcon)(cr.pos.x, cr.pos.y - 48 - bob, 1.3);
+      }
+      const need = Object.keys(cr.recipe).map(r => cr.recipe[r] + ' ' + r + ' (' + c.in[r].length + ')').join(' + ');
+      ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(cr.icon + ' ' + need + ' → ' + cr.out, cr.pos.x, cr.pos.y + 40);
+      ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cr.trayPos.x, cr.trayPos.y, cr.trayPos.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
+      for (let i = 0; i < c.tray.length; i++)
+        (RES_ICON[cr.out] || drawToolIcon)(cr.trayPos.x - 20 + (i % 4) * 14, cr.trayPos.y - Math.floor(i / 4) * 11, 0.85);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(cr.out + ' (x' + RES_MUL[cr.out] + ')', cr.trayPos.x, cr.trayPos.y + 34);
+    }
+    plate('hauler', cfg.hauler, '🧑‍🌾', 'HAULER (auto-feed)');
+    plate('trader', cfg.trader, '🛒', 'TRADER (auto-sell)');
+  }
+}
 function drawWorld() {
   drawGround();
   drawStands();
   drawDistrict();
+  drawD2();
   for (const z of S.zones) if (z.drums && rectVis(z.x0, z.y0, z.x1, z.y1)) drawDrums(z);
   // treasure chest
   if (S.chest && vis(S.chest.x, S.chest.y, 60)) {
@@ -2195,6 +2613,13 @@ function drawWorld() {
     const H = S.district.haulerNpc, T = S.district.traderNpc;
     if (H && vis(H.x, H.y, 60)) actors.push({ y: H.y, f: () => drawWorker(H, '#8a9a4a', H.carry, H.job ? H.job.kind : null) });
     if (T && vis(T.x, T.y, 60)) actors.push({ y: T.y, f: () => drawWorker(T, '#c0605a', T.carry, 'entries') });
+  }
+  for (const dk in D2CFG) {
+    const d = S.d2[dk];
+    if (!d) continue;
+    const H2 = d.haulerNpc, T2 = d.traderNpc;
+    if (H2 && vis(H2.x, H2.y, 60)) actors.push({ y: H2.y, f: () => drawWorker(H2, '#8a9a4a', (H2.carry || []).map(k => ({ k, res: H2.job ? H2.job.res : 'log' })), 'entries') });
+    if (T2 && vis(T2.x, T2.y, 60)) actors.push({ y: T2.y, f: () => drawWorker(T2, '#c0605a', T2.carry, 'entries') });
   }
   if (S.dog) actors.push({ y: S.dog.y, f: () => drawDog(S.dog) });
   actors.push({ y: S.player.y, f: drawPlayer });
@@ -2395,6 +2820,7 @@ function drawMinimap() {
   // tiny map of the land grid in the top-right corner
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
   if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1 });
+  for (const dk in D2CFG) if (S.d2Plate[dk].built) cells.push({ cx: D2CFG[dk].cell[0], cy: D2CFG[dk].cell[1], k: -1 });
   const nxt = cellFor(S.zones.length + 1);
   let minC = 0, maxC = 0, minR = 0, maxR = 0;
   for (const c of cells.concat([nxt])) {
@@ -2536,6 +2962,7 @@ window.KS = {
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry,
+  initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T },
   start() { S.started = true; },
 };

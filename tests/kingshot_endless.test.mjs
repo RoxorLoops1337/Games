@@ -575,11 +575,118 @@ KS.start();
 const p4 = KS.S.player;
 drawSafe('draw() with industry district');
 
+// ---- farmlands (SW diagonal, unlocks with land 3) ----
+KS.S.zones.push(KS.mkZone(3));
+freezeSpawns(); KS.S.enemies.length = 0;
+const F = KS.D2CFG.farm;
+KS.S.wallet = KS.S.d2Plate.farm.cost + 100;
+p4.x = F.plate.x; p4.y = F.plate.y;
+step(KS.S.d2Plate.farm.cost / C.BUILD_RATE + 1);
+t.ok(KS.S.d2Plate.farm.built && !!KS.S.d2.farm, 'farmlands purchased from land 2\'s west edge');
+t.ok(KS.inWalkable(F.producers[0].pos.x, F.producers[0].pos.y) === true, 'farm cell is walkable');
+const fw = KS.S.d2.farm;
+// wheat field grows wheat
+KS.S.wallet = fw.plates.wheat.cost + 100;
+p4.x = F.producers[0].pos.x; p4.y = F.producers[0].pos.y;
+step(fw.plates.wheat.cost / C.BUILD_RATE + 1);
+t.ok(fw.plates.wheat.built, 'wheat field built');
+p4.helmets = [];
+p4.x = C.SPAWN.x; p4.y = C.SPAWN.y;
+fw.piles.wheat.arr.length = 0; fw.piles.wheat.t = 0;
+step(F.producers[0].t * 3 + 0.5);
+t.ok(fw.piles.wheat.arr.length === 3, 'wheat grows into a pile');
+// windmill: 2 wheat → flour
+KS.S.wallet = fw.plates.mill.cost + 100;
+p4.x = F.crafters[0].pos.x; p4.y = F.crafters[0].pos.y;
+step(fw.plates.mill.cost / C.BUILD_RATE + 1);
+t.ok(fw.plates.mill.built, 'windmill built');
+p4.helmets = [{ k: 3, res: 'wheat' }, { k: 3, res: 'wheat' }];
+step(1);
+t.ok(fw.crafts.mill.in.wheat.length >= 2 && p4.helmets.length === 0, 'windmill intake takes wheat');
+p4.x = C.SPAWN.x; p4.y = C.SPAWN.y;
+step(F.crafters[0].t + 1);
+t.ok(fw.crafts.mill.tray.length >= 1, '2 wheat became flour');
+t.ok(KS.entryVal({ k: 3, res: 'flour' }) === Math.ceil(KS.helmVal(3) * KS.RES_MUL.flour * KS.coinMul()), 'flour is worth x3');
+// bakery: flour + apple → pie
+KS.S.wallet = fw.plates.bakery.cost + 100;
+p4.x = F.crafters[1].pos.x; p4.y = F.crafters[1].pos.y;
+step(fw.plates.bakery.cost / C.BUILD_RATE + 1);
+t.ok(fw.plates.bakery.built, 'bakery built');
+p4.helmets = [{ k: 3, res: 'flour' }, { k: 3, res: 'apple' }];
+step(1);
+t.ok(fw.crafts.bakery.in.flour.length === 1 && fw.crafts.bakery.in.apple.length === 1, 'bakery takes flour + apple');
+p4.x = C.SPAWN.x; p4.y = C.SPAWN.y;
+step(F.crafters[1].t + 1);
+t.ok(fw.crafts.bakery.tray.length === 1, 'baked a pie');
+t.ok(KS.entryVal({ k: 3, res: 'pie' }) === Math.ceil(KS.helmVal(3) * KS.RES_MUL.pie * KS.coinMul()), 'pies are worth x11');
+// farm trader sells pies at the hub
+KS.S.wallet = fw.plates.trader.cost + 100;
+p4.x = F.trader.x; p4.y = F.trader.y;
+step(fw.plates.trader.cost / C.BUILD_RATE + 1);
+t.ok(fw.plates.trader.built && !!fw.traderNpc, 'farm trader hired');
+fw.crafts.bakery.tray.push(3);
+const palF = KS.S.pallet;
+p4.x = C.SPAWN.x; p4.y = C.SPAWN.y;
+step(40);
+t.ok(KS.S.pallet > palF, 'farm trader sold pies at the hub');
+
+// ---- deep mines (NW diagonal, unlocks with land 4) + cross-district sword ----
+KS.S.zones.push(KS.mkZone(4));
+freezeSpawns();
+const M = KS.D2CFG.mine;
+KS.S.wallet = KS.S.d2Plate.mine.cost + 200;
+p4.x = M.plate.x; p4.y = M.plate.y;
+step(KS.S.d2Plate.mine.cost / C.BUILD_RATE + 1.5);
+t.ok(KS.S.d2Plate.mine.built && !!KS.S.d2.mine, 'deep mines purchased from land 3\'s north edge');
+const mn = KS.S.d2.mine;
+// smeltery: 2 ore + 1 coal → ingot
+KS.S.wallet = mn.plates.smelter.cost + 100;
+p4.x = M.crafters[0].pos.x; p4.y = M.crafters[0].pos.y;
+step(mn.plates.smelter.cost / C.BUILD_RATE + 1);
+t.ok(mn.plates.smelter.built, 'smeltery built');
+p4.helmets = [{ k: 4, res: 'ore' }, { k: 4, res: 'ore' }, { k: 4, res: 'coal' }];
+step(1);
+t.ok(mn.crafts.smelter.in.ore.length === 2 && mn.crafts.smelter.in.coal.length === 1, 'smeltery takes ore + coal');
+p4.x = C.SPAWN.x; p4.y = C.SPAWN.y;
+step(M.crafters[0].t + 1);
+t.ok(mn.crafts.smelter.tray.length === 1, 'smelted an ingot');
+// weaponsmith: ingot + plank (from the industry sawmill!) → sword
+KS.S.wallet = mn.plates.smith.cost + 100;
+p4.x = M.crafters[1].pos.x; p4.y = M.crafters[1].pos.y;
+step(mn.plates.smith.cost / C.BUILD_RATE + 1);
+t.ok(mn.plates.smith.built, 'weaponsmith built');
+p4.helmets = [{ k: 4, res: 'ingot' }, { k: 4, plank: true }];
+step(1);
+t.ok(mn.crafts.smith.in.ingot.length === 1 && mn.crafts.smith.in.plank.length === 1, 'smith takes ingot + plank (legacy plank flag works)');
+p4.x = C.SPAWN.x; p4.y = C.SPAWN.y;
+step(M.crafters[1].t + 1);
+t.ok(mn.crafts.smith.tray.length === 1, 'forged a sword');
+t.ok(KS.entryVal({ k: 4, res: 'sword' }) === Math.ceil(KS.helmVal(4) * KS.RES_MUL.sword * KS.coinMul()), 'swords are worth x20');
+// mine hauler pulls planks from the industry district sawmill
+KS.S.wallet = mn.plates.hauler.cost + 100;
+p4.x = M.hauler.x; p4.y = M.hauler.y;
+step(mn.plates.hauler.cost / C.BUILD_RATE + 1);
+t.ok(mn.plates.hauler.built && !!mn.haulerNpc, 'mine hauler hired');
+KS.S.district.saw.tray.length = 0; KS.S.district.saw.tray.push(2, 2, 2);
+mn.crafts.smith.in.plank.length = 0; mn.crafts.smith.in.ingot.length = 0;
+mn.crafts.smelter.tray.length = 0; // no closer job: force the cross-district plank run
+p4.x = C.SPAWN.x; p4.y = C.SPAWN.y;
+step(60); // the sawmill is ~2600px away — a real haul
+t.ok(mn.crafts.smith.in.plank.length > 0, 'hauler ferries planks across districts to the smith');
+// persistence for both new districts
+fw.piles.wheat.arr = [1, 1];
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.d2Plate.farm.built && KS.S.d2.farm.plates.mill.built && KS.S.d2.farm.piles.wheat.arr.length === 2, 'farmlands survive save/load');
+t.ok(KS.S.d2Plate.mine.built && KS.S.d2.mine.plates.smith.built && !!KS.S.d2.mine.haulerNpc, 'deep mines + NPCs survive save/load');
+KS.start();
+const p5 = KS.S.player;
+drawSafe('draw() with all three districts');
+
 // ---- prestige: New Kingdom ----
 while (KS.S.zones.length < C.PRESTIGE_MIN) KS.S.zones.push(KS.mkZone(KS.S.zones.length + 1));
 KS.S.gems = 7; KS.S.wallet = 999;
 const gain = KS.crownsToGain();
-p4.x = C.MONU.x; p4.y = C.MONU.y; // stand still on the monument
+p5.x = C.MONU.x; p5.y = C.MONU.y; // stand still on the monument
 step(C.PREST_T + 1);
 t.ok(KS.S.crowns === gain && KS.S.prestiges === 1, 'holding the monument founds a New Kingdom');
 t.ok(KS.S.zones.length === 1 && KS.S.wallet === 0, 'prestige resets lands and coins');
