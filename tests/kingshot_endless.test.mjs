@@ -371,18 +371,22 @@ step(C.WARP_T + 0.5);
 t.ok(KS.zoneAt(p.x, p.y) === KS.S.zones[KS.S.zones.length - 1], 'warped from hub into the newest land');
 p.x = C.SPAWN.x; p.y = C.SPAWN.y;
 
-// ---- HP: hits are capped so you can't be one-shot from full ----
+// ---- HP: raw damage applies (neglect VITALITY and you CAN be one-shot) ----
 KS.S.up.hp = 0; KS.S.crowns = 0; p.maxHp = KS.pMaxHp(); p.hp = p.maxHp; p.invuln = 0;
-KS.hurtPlayer(1e9); // a huge hit
-t.ok(p.hp > 0, 'a single massive hit cannot drop you below zero from full HP');
-t.ok(Math.abs((p.maxHp - p.hp) - p.maxHp * C.HIT_CAP) < 1, 'the hit is capped at ' + Math.round(C.HIT_CAP * 100) + '% of max HP');
+const bigHit = p.maxHp + 50; // exceeds a fresh HP pool
+KS.hurtPlayer(bigHit);
+t.ok(p.deaths > 0 || p.hp === p.maxHp, 'a hit bigger than your HP pool one-shots you (no damage cap)');
 // vitality upgrade raises max HP; crowns add more
-KS.S.up.hp = 3;
+KS.S.up.hp = 3; p.invuln = 0;
 t.ok(KS.pMaxHp() === C.HP0 + C.HP_UP * 3, 'VITALITY levels raise max HP (+' + C.HP_UP + '/lvl)');
 const hpNoCrown = KS.pMaxHp();
 KS.S.crowns = 2;
 t.ok(Math.abs(KS.pMaxHp() - hpNoCrown * (1 + C.CROWN_HP * 2)) < 1, 'crowns add +' + Math.round(C.CROWN_HP * 100) + '% max HP each');
-KS.S.crowns = 0; KS.S.up.hp = 0;
+// with VITALITY, the same blow is survivable
+p.maxHp = KS.pMaxHp(); p.hp = p.maxHp; p.invuln = 0; const dBefore = p.deaths;
+KS.hurtPlayer(bigHit);
+t.ok(p.deaths === dBefore && p.hp > 0, 'upgraded max HP survives what would have been a one-shot');
+KS.S.crowns = 0; KS.S.up.hp = 0; p.maxHp = KS.pMaxHp(); p.hp = p.maxHp;
 
 // ---- player death scatters the stack ----
 p.helmets = [{ k: 1 }, { k: 1, bar: true }, { k: 2, crown: true }];
@@ -692,9 +696,72 @@ fw.piles.wheat.arr = [1, 1];
 KS.save(); KS.reset(); KS.load();
 t.ok(KS.S.d2Plate.farm.built && KS.S.d2.farm.plates.mill.built && KS.S.d2.farm.piles.wheat.arr.length === 2, 'farmlands survive save/load');
 t.ok(KS.S.d2Plate.mine.built && KS.S.d2.mine.plates.smith.built && !!KS.S.d2.mine.haulerNpc, 'deep mines + NPCs survive save/load');
+
+// ---- artisan quarter (NE diagonal, unlocks with land 6) + cross-district ingot ----
+// the mine save/load test above did reset()+load(), so re-grab the live player and
+// rebuild the industry+farm+mine districts we rely on for cross-district hauling
+KS.start();
+const p4b = KS.S.player;
+while (KS.S.zones.length < 6) KS.S.zones.push(KS.mkZone(KS.S.zones.length + 1));
+freezeSpawns();
+const A = KS.D2CFG.artisan;
+t.ok(A.cell[0] === 1 && A.cell[1] === -1 && A.need === 6, 'artisan quarter sits NE, needs 6 lands');
+KS.S.wallet = KS.S.d2Plate.artisan.cost + 200;
+p4b.x = A.plate.x; p4b.y = A.plate.y;
+step(KS.S.d2Plate.artisan.cost / C.BUILD_RATE + 1.5);
+t.ok(KS.S.d2Plate.artisan.built && !!KS.S.d2.artisan, 'artisan quarter purchased from land 1\'s north edge');
+const ar = KS.S.d2.artisan;
+// sheep pen grows wool
+KS.S.wallet = ar.plates.sheep.cost + 100;
+p4b.x = A.producers[0].pos.x; p4b.y = A.producers[0].pos.y;
+step(ar.plates.sheep.cost / C.BUILD_RATE + 1);
+t.ok(ar.plates.sheep.built, 'sheep pen built');
+p4b.helmets = [];
+p4b.x = C.SPAWN.x; p4b.y = C.SPAWN.y;
+ar.piles.sheep.arr.length = 0; ar.piles.sheep.t = 0;
+step(A.producers[0].t * 3 + 0.5);
+t.ok(ar.piles.sheep.arr.length === 3, 'sheep produce wool');
+// weaver: 2 wool → cloth
+KS.S.wallet = ar.plates.weaver.cost + 100;
+p4b.x = A.crafters[0].pos.x; p4b.y = A.crafters[0].pos.y;
+step(ar.plates.weaver.cost / C.BUILD_RATE + 1);
+t.ok(ar.plates.weaver.built, 'weaver built');
+p4b.helmets = [{ k: 6, res: 'wool' }, { k: 6, res: 'wool' }];
+step(1);
+t.ok(ar.crafts.weaver.in.wool.length >= 2 && p4b.helmets.length === 0, 'weaver takes wool');
+p4b.x = C.SPAWN.x; p4b.y = C.SPAWN.y;
+step(A.crafters[0].t + 1);
+t.ok(ar.crafts.weaver.tray.length >= 1, '2 wool became cloth');
+t.ok(KS.entryVal({ k: 6, res: 'cloth' }) === Math.ceil(KS.helmVal(6) * KS.RES_MUL.cloth * KS.coinMul()), 'cloth is worth x5');
+// grand atelier: cloth + dye + ingot → regalia (three-input, cross-district ingot)
+KS.S.wallet = ar.plates.atelier.cost + 100;
+p4b.x = A.crafters[1].pos.x; p4b.y = A.crafters[1].pos.y;
+step(ar.plates.atelier.cost / C.BUILD_RATE + 1);
+t.ok(ar.plates.atelier.built, 'grand atelier built');
+p4b.helmets = [{ k: 6, res: 'cloth' }, { k: 6, res: 'dye' }, { k: 6, res: 'ingot' }];
+step(1);
+t.ok(ar.crafts.atelier.in.cloth.length === 1 && ar.crafts.atelier.in.dye.length === 1 && ar.crafts.atelier.in.ingot.length === 1, 'atelier sorts a 3-ingredient recipe');
+p4b.x = C.SPAWN.x; p4b.y = C.SPAWN.y;
+step(A.crafters[1].t + 1);
+t.ok(ar.crafts.atelier.tray.length === 1, 'crafted royal regalia');
+t.ok(KS.entryVal({ k: 6, res: 'regalia' }) === Math.ceil(KS.helmVal(6) * KS.RES_MUL.regalia * KS.coinMul()), 'regalia is worth x34');
+// artisan hauler fetches ingots cross-district from the deep mines
+KS.S.wallet = ar.plates.hauler.cost + 100;
+p4b.x = A.hauler.x; p4b.y = A.hauler.y;
+step(ar.plates.hauler.cost / C.BUILD_RATE + 1);
+t.ok(ar.plates.hauler.built && !!ar.haulerNpc, 'artisan hauler hired');
+KS.S.d2.mine.haulerNpc = null; // stop the mine's own hauler from stealing the ingots first
+KS.S.d2.mine.crafts.smelter.tray.length = 0; KS.S.d2.mine.crafts.smelter.tray.push(6, 6, 6); // ingots waiting at the mine
+ar.crafts.atelier.in.ingot.length = 0; ar.crafts.atelier.in.cloth.length = 0; ar.crafts.atelier.in.dye.length = 0;
+// starve every LOCAL job so the ingot run across the map is the only work available
+ar.piles.sheep.arr.length = 0; ar.piles.dye.arr.length = 0; ar.crafts.weaver.tray.length = 0;
+p4b.x = C.SPAWN.x; p4b.y = C.SPAWN.y;
+step(90); // the mine is across the entire map
+t.ok(ar.crafts.atelier.in.ingot.length > 0, 'artisan hauler ferries ingots from the deep mines to the atelier');
+
 KS.start();
 const p5 = KS.S.player;
-drawSafe('draw() with all three districts');
+drawSafe('draw() with all four districts');
 
 // ---- prestige: New Kingdom ----
 while (KS.S.zones.length < C.PRESTIGE_MIN) KS.S.zones.push(KS.mkZone(KS.S.zones.length + 1));
