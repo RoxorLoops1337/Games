@@ -371,11 +371,25 @@ step(C.WARP_T + 0.5);
 t.ok(KS.zoneAt(p.x, p.y) === KS.S.zones[KS.S.zones.length - 1], 'warped from hub into the newest land');
 p.x = C.SPAWN.x; p.y = C.SPAWN.y;
 
+// ---- HP: hits are capped so you can't be one-shot from full ----
+KS.S.up.hp = 0; KS.S.crowns = 0; p.maxHp = KS.pMaxHp(); p.hp = p.maxHp; p.invuln = 0;
+KS.hurtPlayer(1e9); // a huge hit
+t.ok(p.hp > 0, 'a single massive hit cannot drop you below zero from full HP');
+t.ok(Math.abs((p.maxHp - p.hp) - p.maxHp * C.HIT_CAP) < 1, 'the hit is capped at ' + Math.round(C.HIT_CAP * 100) + '% of max HP');
+// vitality upgrade raises max HP; crowns add more
+KS.S.up.hp = 3;
+t.ok(KS.pMaxHp() === C.HP0 + C.HP_UP * 3, 'VITALITY levels raise max HP (+' + C.HP_UP + '/lvl)');
+const hpNoCrown = KS.pMaxHp();
+KS.S.crowns = 2;
+t.ok(Math.abs(KS.pMaxHp() - hpNoCrown * (1 + C.CROWN_HP * 2)) < 1, 'crowns add +' + Math.round(C.CROWN_HP * 100) + '% max HP each');
+KS.S.crowns = 0; KS.S.up.hp = 0;
+
 // ---- player death scatters the stack ----
 p.helmets = [{ k: 1 }, { k: 1, bar: true }, { k: 2, crown: true }];
 KS.S.items.length = 0;
 p.invuln = 0;
 const deathsBefore = p.deaths;
+p.maxHp = KS.pMaxHp(); p.hp = 1; // one hit away
 KS.hurtPlayer(1e9);
 t.ok(p.hp === p.maxHp && p.helmets.length === 0, 'death resets hp and drops the stack');
 t.ok(p.x === C.SPAWN.x && p.y === C.SPAWN.y, 'death respawns at the hub');
