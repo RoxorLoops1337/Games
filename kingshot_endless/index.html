@@ -647,20 +647,27 @@ function spawnEnemy(z, opts) {
   opts = opts || {};
   const boss = !!opts.boss;
   const gold = !boss && rnd() < GOLD_CHANCE;
-  const arch = boss ? 'melee' : foeArch(z.k);
+  // bosses inherit the land's archetype — spitter king bombards, fast king charges, tank king soaks
+  const arch = foeArch(z.k);
   const archHp = arch === 'tank' ? 1.8 : arch === 'fast' ? 0.7 : arch === 'spitter' ? 0.85 : 1;
-  const hp = Math.ceil(foeHp(z.k) * (boss ? 22 : gold ? 2 : 1) * archHp);
+  const bossHpMul = arch === 'tank' ? 1.5 : arch === 'fast' ? 0.7 : arch === 'spitter' ? 0.9 : 1.1;
+  const hp = Math.ceil(foeHp(z.k) * (boss ? 22 * bossHpMul : gold ? 2 : 1) * (boss ? 1 : archHp));
+  const bossSpd = arch === 'fast' ? 50 : arch === 'tank' ? 30 : 40;
   S.enemies.push({
     k: z.k, arch,
     x: z.gate.x + (rnd() - 0.5) * 80, y: z.gate.y + (rnd() - 0.5) * 80,
     hp, max: hp,
-    spd: (boss ? 26 : 42) * (0.92 + rnd() * 0.16),
-    dmg: foeDmg(z.k) * (boss ? 3.5 : arch === 'tank' ? 1.3 : 1),
+    spd: (boss ? bossSpd : 42) * (0.92 + rnd() * 0.16),
+    dmg: foeDmg(z.k) * (boss ? (arch === 'tank' ? 4.5 : 3.2) : arch === 'tank' ? 1.3 : 1),
     tx: z.pen.x0 + rnd() * (z.pen.x1 - z.pen.x0), ty: z.pen.y0 + rnd() * (z.pen.y1 - z.pen.y0),
     wanderT: 1 + rnd() * 2, atkCd: 0, hurt: 0, sway: rnd() * 6.28,
     r: (boss ? 34 : (15 + Math.min(9, z.k))) + (arch === 'tank' ? 4 : 0), boss, gold,
   });
-  if (boss) { float(z.gate.x, z.gate.y - 60, '💀 ' + foeName(z.k).toUpperCase() + ' KING!', '#ff6a5a', true); sfx('boss', true); S.shake = 12; }
+  if (boss) {
+    const title = { spitter: 'VENOM', tank: 'IRON', fast: 'SAVAGE', melee: 'DREAD' }[arch] || '';
+    float(z.gate.x, z.gate.y - 60, '💀 ' + title + ' ' + foeName(z.k).toUpperCase() + ' KING!', '#ff6a5a', true);
+    sfx('boss', true); S.shake = 12;
+  }
 }
 function summonBoss(z) {
   if (!z.altar || z.altar.cd > 0) return false;
@@ -1562,17 +1569,23 @@ function tick(dt) {
     const spdMul = e.arch === 'fast' ? 1.55 : e.arch === 'tank' ? 0.7 : 1;
     let tx = e.tx, ty = e.ty, spd = (e.boss ? e.spd : 42) * spdMul;
     if (nearPlayer) {
-      if (e.arch === 'spitter' && !e.boss) {
-        // keep range and spit
-        if (pd2 < 190 * 190) { tx = e.x + (e.x - p.x); ty = e.y + (e.y - p.y); }
-        else if (pd2 < 300 * 300) { tx = e.x; ty = e.y; }
+      if (e.arch === 'spitter') {
+        // keep range and spit (a boss hangs back further and fires a 3-shot spread)
+        const near = e.boss ? 280 : 190, far = e.boss ? 440 : 300, range = e.boss ? 560 : 320;
+        if (pd2 < near * near) { tx = e.x + (e.x - p.x); ty = e.y + (e.y - p.y); }
+        else if (pd2 < far * far) { tx = e.x; ty = e.y; }
         else { tx = p.x; ty = p.y; }
-        spd = 52 * spdMul;
+        spd = (e.boss ? e.spd : 52) * spdMul;
         e.atkCd -= dt;
-        if (e.atkCd <= 0 && pd2 < 320 * 320) {
-          e.atkCd = 1.6;
+        if (e.atkCd <= 0 && pd2 < range * range) {
+          e.atkCd = e.boss ? 1.1 : 1.6;
           const sl = Math.sqrt(pd2) || 1;
-          S.eshots.push({ x: e.x, y: e.y - 10, vx: (p.x - e.x) / sl * 300, vy: (p.y - 10 - e.y) / sl * 300, dmg: e.dmg, k: e.k, life: 0 });
+          const bvx = (p.x - e.x) / sl, bvy = (p.y - 10 - e.y) / sl;
+          const shots = e.boss ? 3 : 1;
+          for (let s = 0; s < shots; s++) {
+            const a = (s - (shots - 1) / 2) * 0.3, ca = Math.cos(a), sa = Math.sin(a);
+            S.eshots.push({ x: e.x, y: e.y - 10, vx: (bvx * ca - bvy * sa) * 320, vy: (bvx * sa + bvy * ca) * 320, dmg: e.dmg * (e.boss ? 0.6 : 1), k: e.k, life: 0, big: e.boss });
+          }
           sfx('shoot');
         }
       } else { tx = p.x; ty = p.y; spd = (e.boss ? e.spd : 62 + e.k * 2) * spdMul; }
@@ -1584,7 +1597,7 @@ function tick(dt) {
     if (dl > 30) { e.x += dx / dl * spd * dt; e.y += dy / dl * spd * dt; }
     e.x = Math.max(z.pen.x0, Math.min(z.pen.x1, e.x));
     e.y = Math.max(z.pen.y0, Math.min(z.pen.y1, e.y));
-    if (e.arch !== 'spitter' || e.boss) {
+    if (e.arch !== 'spitter') { // spitters (incl. bosses) attack only at range
       e.atkCd -= dt;
       if (e.atkCd <= 0 && dist2(e.x, e.y, p.x, p.y) < (e.r + 22) * (e.r + 22)) {
         e.atkCd = 0.85; hurtPlayer(e.dmg);
@@ -2550,11 +2563,11 @@ function drawEnemy(e) {
   ctx.fillStyle = e.hurt > 0 ? '#fff' : e.gold ? '#ffd94a' : foeCol(e.k);
   rr(e.x - e.r * 0.75, e.y - e.r * 0.8 - bob, e.r * 1.5, e.r * 1.4, 5); ctx.fill();
   ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 1.05 - bob, e.r * 0.5, 0, 6.29); ctx.fill();
-  if (e.arch === 'tank' && !e.boss) { // armor band
+  if (e.arch === 'tank') { // armor band (bosses too)
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.fillRect(e.x - e.r * 0.75, e.y - e.r * 0.25 - bob, e.r * 1.5, e.r * 0.4);
   }
-  if (e.arch === 'spitter' && !e.boss) { // open maw
+  if (e.arch === 'spitter') { // open maw (bosses too)
     ctx.fillStyle = '#241c30';
     ctx.beginPath(); ctx.ellipse(e.x, e.y - e.r * 0.95 - bob, e.r * 0.2, e.r * 0.28, 0, 0, 6.29); ctx.fill();
   }
@@ -2790,10 +2803,12 @@ function drawWorld() {
   // hostile spit
   for (const es of S.eshots) {
     if (!vis(es.x, es.y, 40)) continue;
+    const er = es.big ? 10 : 6;
+    if (es.big) { ctx.fillStyle = 'rgba(180,60,200,0.3)'; ctx.beginPath(); ctx.arc(es.x, es.y, er + 5, 0, 6.29); ctx.fill(); }
     ctx.fillStyle = foeCol(es.k);
-    ctx.beginPath(); ctx.arc(es.x, es.y, 6, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(es.x, es.y, er, 0, 6.29); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.beginPath(); ctx.arc(es.x - es.vx * 0.02, es.y - es.vy * 0.02, 3, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(es.x - es.vx * 0.02, es.y - es.vy * 0.02, er * 0.5, 0, 6.29); ctx.fill();
   }
   for (const sh of S.shots) {
     if (!vis(sh.x, sh.y, 40)) continue;
