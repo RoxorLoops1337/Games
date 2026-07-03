@@ -358,6 +358,30 @@ t.ok(Math.hypot(spit.x - p.x, spit.y - p.y) > 150, 'spitter keeps its distance')
 KS.S.enemies.length = 0; KS.S.eshots.length = 0; KS.S.shots.length = 0;
 p.x = C.SPAWN.x; p.y = C.SPAWN.y; p.hp = p.maxHp;
 
+// ---- boss variety: bosses inherit the land archetype ----
+KS.S.enemies.length = 0; freezeSpawns();
+KS.spawnEnemy(z2, { boss: true }); // zone 2 = fast land
+const fastBoss = KS.S.enemies[0];
+t.ok(fastBoss.boss && fastBoss.arch === 'fast', 'a fast-land boss is a charger, not plain melee');
+t.ok(fastBoss.max > KS.foeHp(2) * 10, 'boss is still a damage sponge');
+KS.S.enemies.length = 0; KS.S.eshots.length = 0;
+// a spitter-land boss bombards with a 3-shot spread from range (zone 4 = spitter land)
+while (KS.S.zones.length < 4) KS.S.zones.push(KS.mkZone(KS.S.zones.length + 1));
+const z4 = KS.S.zones[3];
+freezeSpawns();
+KS.spawnEnemy(z4, { boss: true });
+const spitBoss = KS.S.enemies.find(e => e.boss);
+t.ok(spitBoss && spitBoss.arch === 'spitter', 'a spitter-land boss inherits the spitter archetype');
+spitBoss.hp = spitBoss.max = 1e9; spitBoss.atkCd = 0;
+spitBoss.x = z4.pen.x0 + 300; spitBoss.y = z4.pen.y0 + 300; spitBoss.tx = spitBoss.x; spitBoss.ty = spitBoss.y; spitBoss.wanderT = 99;
+p.x = spitBoss.x + 300; p.y = spitBoss.y;
+KS.S.eshots.length = 0;
+KS.tick(1 / 60); // one volley
+t.ok(KS.S.eshots.filter(es => es.big).length >= 3, 'spitter boss fires a 3-shot big-projectile spread');
+KS.S.enemies.length = 0; KS.S.eshots.length = 0; KS.S.shots.length = 0;
+while (KS.S.zones.length > 2) KS.S.zones.pop(); // restore for later tests
+p.x = C.SPAWN.x; p.y = C.SPAWN.y; p.hp = p.maxHp;
+
 // ---- gem shrine upgrade ----
 KS.S.gems = 20;
 const pickBefore = KS.pickR();
