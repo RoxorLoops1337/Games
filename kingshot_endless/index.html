@@ -49,7 +49,7 @@ const FORGE   = { x: 730, y: 430, r: 55 };
 const TRAY    = { x: 730, y: 575, r: 55 };
 const HUBPAD  = { x: 790, y: 872, r: 44 };
 const SPAWN   = { x: 525, y: 720 };
-const UPG_X0  = 245, UPG_STEP = 165, UPG_Y = 190;
+const UPG_X0  = 225, UPG_STEP = 150, UPG_Y = 190;
 const GEM_X   = 225, GEM_Y0 = 480, GEM_STEP = 140;
 const MONU    = { x: 525, y: 315, r: 46 };     // New Kingdom monument (prestige)
 const KENNEL  = { x: 300, y: 872, r: 44 };     // war dog kennel
@@ -110,6 +110,9 @@ const PRESTIGE_MIN = 5;    // lands required to found a New Kingdom
 const PREST_T      = 3;    // s holding still on the monument
 const CROWN_BONUS  = 0.20; // +20% coin value per crown, forever
 const CROWN_DMG    = 0.30; // royal armory: +30% hero damage per crown
+const CROWN_HP     = 0.25; // royal vigor: +25% max HP per crown
+const HP0          = 60, HP_UP = 45;  // max HP: base + per VITALITY level
+const HIT_CAP      = 0.45; // a single hit can never take more than 45% of max HP
 const CHEST_CD     = 160;  // s between wandering treasure chests
 const DOG_SPD      = 250, DOG_FETCH_R = 320;
 
@@ -120,12 +123,13 @@ function foeDmg(k)   { return Math.ceil(4 * Math.pow(1.55, k - 1)); }
 function towerDmg(k) { return Math.ceil(9 * Math.pow(HP_T, k - 1)); }
 function unlockCost(k) { return Math.ceil(UNLOCK0 * Math.pow(UNLOCK_MUL, k - 1)); }
 const UPG = {
-  speed: { icon: '👟', name: 'SPEED',    base: 35 },
-  cap:   { icon: '🎒', name: 'CAPACITY', base: 30 },
-  dmg:   { icon: '⚔️', name: 'DAMAGE',   base: 45 },
-  rate:  { icon: '🏹', name: 'FIRE RATE', base: 55 },
+  speed: { icon: '👟', name: 'SPEED',    base: 35, grow: 1.75 },
+  cap:   { icon: '🎒', name: 'CAPACITY', base: 30, grow: 1.75 },
+  dmg:   { icon: '⚔️', name: 'DAMAGE',   base: 45, grow: 1.9 },
+  rate:  { icon: '🏹', name: 'FIRE RATE', base: 55, grow: 1.9 },
+  hp:    { icon: '❤️', name: 'VITALITY', base: 60, grow: 1.9 },
 };
-function upgCost(key, lvl) { return Math.ceil(UPG[key].base * Math.pow(1.65, lvl)); }
+function upgCost(key, lvl) { return Math.ceil(UPG[key].base * Math.pow(UPG[key].grow || 1.75, lvl)); }
 const GEMU = {
   magnet: { icon: '🧲', name: 'MAGNET',   what: '+30% pickup range' },
   crit:   { icon: '💥', name: 'CRIT',     what: '+10% chance, 3x dmg' },
@@ -208,14 +212,14 @@ function reset() {
   S = {
     started: false, t: 0,
     player: {
-      x: SPAWN.x, y: SPAWN.y, hp: 60, maxHp: 60, fireCd: 0, hurtT: 0, invuln: 0,
+      x: SPAWN.x, y: SPAWN.y, hp: HP0, maxHp: HP0, fireCd: 0, hurtT: 0, invuln: 0,
       helmets: [],           // stack entries: {k, bar?, crown?}
       face: 1, moving: 0, deaths: 0, warpT: 0, dustT: 0,
     },
     wallet: 0, gems: 0,
     pallet: 0,
-    up: { speed: 0, cap: 0, dmg: 0, rate: 0 },
-    upPaid: { speed: 0, cap: 0, dmg: 0, rate: 0 },
+    up: { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 },
+    upPaid: { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 },
     gemUp: { magnet: 0, crit: 0, coin: 0 },
     gemPaid: { magnet: 0, crit: 0, coin: 0 },
     forge: null,
@@ -245,6 +249,7 @@ function reset() {
   };
 }
 function cap()     { return CAP0 + CAP_UP * S.up.cap; }
+function pMaxHp()  { return Math.round((HP0 + HP_UP * S.up.hp) * (1 + CROWN_HP * S.crowns)); }
 function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed); }
 function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns); }
 function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1); }
@@ -653,6 +658,7 @@ function hurtEnemy(e, dmg) {
 function hurtPlayer(d) {
   const p = S.player;
   if (p.invuln > 0) return;
+  d = Math.min(d, p.maxHp * HIT_CAP); // no single hit can one-shot you from full HP
   p.hp -= d; p.hurtT = 0.15; p.invuln = 0.5; S.shake = Math.max(S.shake, 5);
   sfx('hurt', true); buzz(30);
   if (p.hp <= 0) playerDie();
@@ -770,15 +776,15 @@ function prestige() {
   S.crowns += gain; S.prestiges++;
   // burn the old kingdom; keep gems, shrines, crowns, achievements, stats
   S.wallet = 0; S.pallet = 0;
-  S.up = { speed: 0, cap: 0, dmg: 0, rate: 0 };
-  S.upPaid = { speed: 0, cap: 0, dmg: 0, rate: 0 };
+  S.up = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
+  S.upPaid = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
   S.forge = null; S.forgePlate = { cost: 260, paid: 0, built: false };
   S.waygate = false; S.wayPlate = { cost: 400, paid: 0, built: false };
   S.dog = null; S.dogPlate = { cost: 500, paid: 0, built: false };
   S.zones = [mkZone(1)];
   S.enemies = []; S.items = []; S.shots = [];
   const p = S.player;
-  p.helmets = []; p.hp = p.maxHp; p.x = SPAWN.x; p.y = SPAWN.y; p.invuln = 2;
+  p.helmets = []; p.maxHp = pMaxHp(); p.hp = p.maxHp; p.x = SPAWN.x; p.y = SPAWN.y; p.invuln = 2;
   S.cam.x = p.x; S.cam.y = p.y;
   float(SPAWN.x, SPAWN.y - 80, '👑 NEW KINGDOM!  +' + gain + ' crown' + (gain > 1 ? 's' : ''), '#ffd94a', true);
   float(SPAWN.x, SPAWN.y - 50, 'All coins now worth +' + Math.round(CROWN_BONUS * 100 * S.crowns) + '%', '#ffd94a', true);
@@ -908,7 +914,13 @@ function tick(dt) {
   const p = S.player;
   p.invuln = Math.max(0, p.invuln - dt);
   p.hurtT = Math.max(0, p.hurtT - dt);
-  if (p.hp < p.maxHp && p.invuln <= 0) p.hp = Math.min(p.maxHp, p.hp + 5 * dt);
+  // keep max HP in sync with VITALITY level + crowns; buying HP / prestige heals
+  const mh = pMaxHp();
+  if (mh > p.maxHp) p.hp += mh - p.maxHp;
+  p.maxHp = mh;
+  if (p.hp > p.maxHp) p.hp = p.maxHp;
+  // regen scales with the pool so it stays meaningful on a big HP bar
+  if (p.hp < p.maxHp && p.invuln <= 0) p.hp = Math.min(p.maxHp, p.hp + Math.max(5, p.maxHp * 0.04) * dt);
 
   // -- movement (joystick + keys), constrained to unlocked lands
   let mx = 0, my = 0;
@@ -2693,6 +2705,9 @@ function drawHud() {
   ctx.fillText('¢ ' + fmt(S.wallet), 22, 35);
   ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 52, 128, 16, 8); ctx.fill();
   ctx.fillStyle = '#d1553f'; rr(12, 54, 124 * Math.max(0, p.hp / p.maxHp), 12, 6); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('❤ ' + Math.ceil(p.hp) + ' / ' + p.maxHp, 74, 63);
+  ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 74, 128, 24, 8); ctx.fill();
   ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 11px sans-serif';
   ctx.fillText('LANDS ' + S.zones.length + '  ⚔ ' + fmt(S.stats.kills), 20, 90);
@@ -2957,13 +2972,13 @@ if (typeof window.__KS_HEADLESS__ === 'undefined') requestAnimationFrame(frame);
 // ---- test hooks ---------------------------------------------
 window.KS = {
   get S() { return S; }, reset, tick, draw, save, load, idleRate,
-  spawnEnemy, summonBoss, hurtEnemy, hurtPlayer, playerDie, buildPlate, applyPlate, mkZone, dropHelmet, dropItem,
+  spawnEnemy, summonBoss, hurtEnemy, hurtPlayer, playerDie, buildPlate, applyPlate, mkZone, dropHelmet, dropItem, pMaxHp, foeDmg,
   cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
   prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
   questEvent, rollDailies, streakMul, completeQuest, initDistrict, spawnHauler, spawnTrader, cloneEntry,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T },
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, HIT_CAP, CROWN_HP },
   start() { S.started = true; },
 };
 </script>
