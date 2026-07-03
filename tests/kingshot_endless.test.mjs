@@ -600,6 +600,37 @@ t.ok(KS.petLvl('wolf') === 3 && KS.S.activePet === 'wolf', 'pets + active choice
 KS.S.pets = {}; KS.S.activePet = null; KS.S.stats.hatches = 0; KS.S.gems = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- crown hall: permanent prestige perk tree ----
+KS.S.cperks = {}; KS.S.crowns = 20;
+t.ok(KS.cperkCost('wealth') === 1, 'first crown-perk level costs 1 crown');
+const coinBefore = KS.coinMul();
+t.ok(KS.buyCperk('wealth') === true, 'a crown perk can be bought with crowns');
+t.ok(KS.cpk('wealth') === 1 && KS.S.crowns === 19, 'perk leveled up and a crown was spent');
+t.ok(Math.abs(KS.cperkBonus('coin') - 0.08) < 1e-9, 'Royal Treasury adds +8% coin value');
+t.ok(KS.coinMul() > coinBefore, 'crown perk raises coin value');
+t.ok(KS.cperkCost('wealth') === 2, 'each crown-perk level costs more than the last');
+const dmgBefore = KS.pDmg();
+KS.buyCperk('might');
+t.ok(KS.pDmg() > dmgBefore, 'Warlord Blood raises damage');
+const gainBefore = KS.crownsToGain();
+KS.buyCperk('legacy');
+t.ok(KS.crownsToGain() === gainBefore + 1, 'Enduring Legacy grants +1 crown per New Kingdom');
+KS.S.crowns = 0;
+t.ok(KS.buyCperk('haste') === false, 'cannot buy a crown perk without enough crowns');
+KS.S.crowns = 999; KS.S.cperks.swift = 8; // swift caps at 8
+t.ok(KS.buyCperk('swift') === false, 'cannot exceed a crown perk max level');
+// persist through save/load; survive prestige (they are permanent)
+KS.S.cperks = { wealth: 3, might: 2 }; KS.S.crowns = 5;
+KS.save(); const worldSnap = store[C.SAVE_KEY];
+KS.reset(); KS.load();
+t.ok(KS.cpk('wealth') === 3 && KS.cpk('might') === 2, 'crown perks persist through save/load');
+KS.prestige();
+t.ok(KS.cpk('wealth') === 3 && KS.cpk('might') === 2, 'crown perks survive founding a New Kingdom');
+// restore the pre-prestige world for the remaining tests, then clear perks
+store[C.SAVE_KEY] = worldSnap; KS.reset(); KS.load();
+KS.S.cperks = {}; KS.S.crowns = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
