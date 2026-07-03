@@ -89,6 +89,8 @@ const CAMP_MAX     = 24;   // logs the pile can hold
 const PRESTIGE_MIN = 5;    // lands required to found a New Kingdom
 const PREST_T      = 3;    // s holding still on the monument
 const CROWN_BONUS  = 0.20; // +20% coin value per crown, forever
+const CROWN_DMG    = 0.30; // royal armory: +30% hero damage per crown
+const CHEST_CD     = 160;  // s between wandering treasure chests
 const DOG_SPD      = 250, DOG_FETCH_R = 320;
 
 function eco(k)      { return Math.pow(ECO, k - 1); }
@@ -112,6 +114,9 @@ const GEMU = {
 function gemUpCost(key, lvl) { return 2 + lvl * (key === 'magnet' ? 2 : 3); }
 const FOE_NAMES = ['Grunt', 'Raider', 'Ogre', 'Wraith', 'Golem', 'Demon', 'Titan', 'Dread'];
 const FOE_COLS  = ['#c15840', '#c99a3a', '#7c52c9', '#4ba8b5', '#8a9a4a', '#c94a8a', '#5a6dcf', '#3f3f4f'];
+// behavior archetype per foe family — every land plays differently
+const FOE_ARCH  = ['melee', 'fast', 'tank', 'spitter', 'tank', 'fast', 'tank', 'spitter'];
+function foeArch(k) { return FOE_ARCH[(k - 1) % FOE_ARCH.length]; }
 function foeName(k) { const i = (k - 1) % FOE_NAMES.length; const cyc = Math.floor((k - 1) / FOE_NAMES.length); return FOE_NAMES[i] + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''); }
 function foeCol(k)  { return FOE_COLS[(k - 1) % FOE_COLS.length]; }
 function hexRgb(h)  { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
@@ -204,7 +209,8 @@ function reset() {
     crowns: 0, prestiges: 0, prestT: 0,
     ach: {}, toasts: [], achCd: 0,
     zones: [mkZone(1)],
-    enemies: [], items: [], shots: [], parts: [], floats: [], fx: [],
+    enemies: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [],
+    chest: null, chestCd: 100,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -214,7 +220,7 @@ function reset() {
 }
 function cap()     { return CAP0 + CAP_UP * S.up.cap; }
 function speed()   { return SPEED0 * (1 + SPEED_UP * S.up.speed); }
-function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg); }
+function pDmg()    { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns); }
 function pRate()   { const z = zoneAt(S.player.x, S.player.y); return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1); }
 function pickR()   { return PICK_R * (1 + 0.3 * S.gemUp.magnet); }
 function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns); }
@@ -416,16 +422,18 @@ function spawnEnemy(z, opts) {
   opts = opts || {};
   const boss = !!opts.boss;
   const gold = !boss && rnd() < GOLD_CHANCE;
-  const hp = Math.ceil(foeHp(z.k) * (boss ? 22 : gold ? 2 : 1));
+  const arch = boss ? 'melee' : foeArch(z.k);
+  const archHp = arch === 'tank' ? 1.8 : arch === 'fast' ? 0.7 : arch === 'spitter' ? 0.85 : 1;
+  const hp = Math.ceil(foeHp(z.k) * (boss ? 22 : gold ? 2 : 1) * archHp);
   S.enemies.push({
-    k: z.k,
+    k: z.k, arch,
     x: z.gate.x + (rnd() - 0.5) * 80, y: z.gate.y + (rnd() - 0.5) * 80,
     hp, max: hp,
     spd: (boss ? 26 : 42) * (0.92 + rnd() * 0.16),
-    dmg: foeDmg(z.k) * (boss ? 3.5 : 1),
+    dmg: foeDmg(z.k) * (boss ? 3.5 : arch === 'tank' ? 1.3 : 1),
     tx: z.pen.x0 + rnd() * (z.pen.x1 - z.pen.x0), ty: z.pen.y0 + rnd() * (z.pen.y1 - z.pen.y0),
     wanderT: 1 + rnd() * 2, atkCd: 0, hurt: 0, sway: rnd() * 6.28,
-    r: boss ? 34 : (15 + Math.min(9, z.k)), boss, gold,
+    r: (boss ? 34 : (15 + Math.min(9, z.k))) + (arch === 'tank' ? 4 : 0), boss, gold,
   });
   if (boss) { float(z.gate.x, z.gate.y - 60, '💀 ' + foeName(z.k).toUpperCase() + ' KING!', '#ff6a5a', true); sfx('boss', true); S.shake = 12; }
 }
@@ -597,6 +605,19 @@ function prestige() {
   save();
 }
 
+// ---- treasure chest -----------------------------------------
+function spawnChest() {
+  const z = S.zones[Math.floor(rnd() * S.zones.length)];
+  S.chest = {
+    x: z.x0 + 180 + rnd() * (CELL_W - 360),
+    y: z.y0 + 220 + rnd() * (CELL_H - 440),
+    val: Math.ceil(15 * helmVal(S.zones.length) * coinMul()),
+    gem: rnd() < 0.5,
+  };
+  S.toasts.push({ txt: '💰 A treasure chest appeared!', t: 0 });
+  sfx('gem', true);
+}
+
 // ---- milestones ---------------------------------------------
 const ACH = [
   { id: 'blood',   name: 'First Blood',      c: () => S.stats.kills >= 1 },
@@ -611,6 +632,7 @@ const ACH = [
   { id: 'gem1',    name: 'Shiny!',           c: () => S.stats.gemsFound >= 1 },
   { id: 'mule',    name: 'Pack Mule',        c: () => S.player.helmets.length >= cap() },
   { id: 'crown1',  name: 'New Kingdom',      c: () => S.crowns >= 1 },
+  { id: 'chest1',  name: 'Treasure Hunter',  c: () => (S.stats.chests || 0) >= 1 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -839,6 +861,20 @@ function tick(dt) {
     if (S.prestT >= PREST_T) { S.prestT = 0; prestige(); }
   } else S.prestT = 0;
 
+  // -- wandering treasure chest
+  if (!S.chest) {
+    S.chestCd -= dt;
+    if (S.chestCd <= 0) spawnChest();
+  } else if (dist2(p.x, p.y, S.chest.x, S.chest.y) < 60 * 60) {
+    S.wallet += S.chest.val;
+    float(S.chest.x, S.chest.y - 40, '💰 +' + fmt(S.chest.val) + '¢', '#ffd94a', true);
+    if (S.chest.gem) { S.gems++; S.stats.gemsFound++; float(S.chest.x, S.chest.y - 66, '💎 +1', '#6ee0d8', true); }
+    for (let i = 0; i < 16; i++) puff(S.chest.x, S.chest.y, '#ffd94a', 1, true);
+    S.stats.chests = (S.stats.chests || 0) + 1;
+    sfx('unlock', true); buzz([30, 20, 50]);
+    S.chest = null; S.chestCd = CHEST_CD * (0.8 + rnd() * 0.5);
+  }
+
   // -- milestones + toasts
   S.achCd -= dt;
   if (S.achCd <= 0) { S.achCd = 0.5; checkAch(); }
@@ -865,26 +901,56 @@ function tick(dt) {
     if (z.spawnCd <= 0 && alive < maxAlive(z)) { z.spawnCd = spawnInt(z); spawnEnemy(z); }
   }
 
-  // -- enemies
+  // -- enemies (behavior varies by archetype)
   for (const e of S.enemies) {
     if (e.hp <= 0) continue;
     e.hurt = Math.max(0, e.hurt - dt);
     const z = S.zones[e.k - 1];
-    const aggroR = e.boss ? 1200 : 200;
-    const nearPlayer = dist2(e.x, e.y, p.x, p.y) < aggroR * aggroR && inCell(z, p.x, p.y, 60);
-    let tx = e.tx, ty = e.ty, spd = e.boss ? e.spd : 42;
-    if (nearPlayer) { tx = p.x; ty = p.y; spd = e.boss ? e.spd : 62 + e.k * 2; }
-    else { e.wanderT -= dt; if (e.wanderT <= 0) { e.wanderT = 1.5 + rnd() * 2.5; e.tx = z.pen.x0 + rnd() * (z.pen.x1 - z.pen.x0); e.ty = z.pen.y0 + rnd() * (z.pen.y1 - z.pen.y0); } }
+    const aggroR = e.boss ? 1200 : e.arch === 'spitter' ? 360 : 220;
+    const pd2 = dist2(e.x, e.y, p.x, p.y);
+    const nearPlayer = pd2 < aggroR * aggroR && inCell(z, p.x, p.y, 60);
+    const spdMul = e.arch === 'fast' ? 1.55 : e.arch === 'tank' ? 0.7 : 1;
+    let tx = e.tx, ty = e.ty, spd = (e.boss ? e.spd : 42) * spdMul;
+    if (nearPlayer) {
+      if (e.arch === 'spitter' && !e.boss) {
+        // keep range and spit
+        if (pd2 < 190 * 190) { tx = e.x + (e.x - p.x); ty = e.y + (e.y - p.y); }
+        else if (pd2 < 300 * 300) { tx = e.x; ty = e.y; }
+        else { tx = p.x; ty = p.y; }
+        spd = 52 * spdMul;
+        e.atkCd -= dt;
+        if (e.atkCd <= 0 && pd2 < 320 * 320) {
+          e.atkCd = 1.6;
+          const sl = Math.sqrt(pd2) || 1;
+          S.eshots.push({ x: e.x, y: e.y - 10, vx: (p.x - e.x) / sl * 300, vy: (p.y - 10 - e.y) / sl * 300, dmg: e.dmg, k: e.k, life: 0 });
+          sfx('shoot');
+        }
+      } else { tx = p.x; ty = p.y; spd = (e.boss ? e.spd : 62 + e.k * 2) * spdMul; }
+    } else {
+      e.wanderT -= dt;
+      if (e.wanderT <= 0) { e.wanderT = 1.5 + rnd() * 2.5; e.tx = z.pen.x0 + rnd() * (z.pen.x1 - z.pen.x0); e.ty = z.pen.y0 + rnd() * (z.pen.y1 - z.pen.y0); }
+    }
     const dx = tx - e.x, dy = ty - e.y, dl = Math.hypot(dx, dy) || 1;
     if (dl > 30) { e.x += dx / dl * spd * dt; e.y += dy / dl * spd * dt; }
     e.x = Math.max(z.pen.x0, Math.min(z.pen.x1, e.x));
     e.y = Math.max(z.pen.y0, Math.min(z.pen.y1, e.y));
-    e.atkCd -= dt;
-    if (e.atkCd <= 0 && dist2(e.x, e.y, p.x, p.y) < (e.r + 22) * (e.r + 22)) {
-      e.atkCd = 0.85; hurtPlayer(e.dmg);
+    if (e.arch !== 'spitter' || e.boss) {
+      e.atkCd -= dt;
+      if (e.atkCd <= 0 && dist2(e.x, e.y, p.x, p.y) < (e.r + 22) * (e.r + 22)) {
+        e.atkCd = 0.85; hurtPlayer(e.dmg);
+      }
     }
   }
   S.enemies = S.enemies.filter(e => e.hp > 0);
+
+  // -- hostile projectiles (spitters)
+  for (const es of S.eshots) {
+    es.life += dt;
+    es.x += es.vx * dt; es.y += es.vy * dt;
+    if (dist2(es.x, es.y, p.x, p.y - 10) < 22 * 22) { es.done = true; hurtPlayer(es.dmg); }
+    if (es.life > 2.2) es.done = true;
+  }
+  S.eshots = S.eshots.filter(es => !es.done);
 
   // -- towers
   for (const z of S.zones) {
@@ -1061,6 +1127,10 @@ function guideTarget() {
 
 // ---- drawing ------------------------------------------------
 let vw = 480, vh = 840, scl = 1, dpr = 1;
+// view rect (world coords) for offscreen culling, set each draw()
+let vL = -1e9, vT = -1e9, vR = 1e9, vB = 1e9;
+function vis(x, y, m) { m = m || 0; return x > vL - m && x < vR + m && y > vT - m && y < vB + m; }
+function rectVis(x0, y0, x1, y1) { return !(x1 < vL || x0 > vR || y1 < vT || y0 > vB); }
 function rr(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -1153,6 +1223,7 @@ function drawGround() {
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
   for (const c of cells) {
     const x0 = c.cx * CELL_W, y0 = c.cy * CELL_H;
+    if (!rectVis(x0, y0, x0 + CELL_W, y0 + CELL_H)) continue;
     ctx.fillStyle = c.k === 0 ? '#3d5a3a' : (c.k % 2 ? '#3a563c' : '#405c38');
     ctx.fillRect(x0, y0, CELL_W, CELL_H);
     ctx.fillStyle = 'rgba(255,255,255,0.03)';
@@ -1168,6 +1239,7 @@ function drawGround() {
   // next-land preview
   const nxt = cellFor(S.zones.length + 1);
   const px0 = nxt.cx * CELL_W, py0 = nxt.cy * CELL_H;
+  if (!rectVis(px0, py0, px0 + CELL_W, py0 + CELL_H)) { drawHubAndPens(); return; }
   ctx.fillStyle = 'rgba(30,40,34,0.9)'; ctx.fillRect(px0, py0, CELL_W, CELL_H);
   ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 4; ctx.setLineDash([18, 14]);
   ctx.strokeRect(px0 + 30, py0 + 30, CELL_W - 60, CELL_H - 60); ctx.setLineDash([]);
@@ -1175,12 +1247,18 @@ function drawGround() {
   ctx.fillText('🔒', px0 + CELL_W / 2, py0 + CELL_H / 2 - 10);
   ctx.font = 'bold 22px sans-serif';
   ctx.fillText('NEW LANDS — ' + DIR_NAME[nxt.dir], px0 + CELL_W / 2, py0 + CELL_H / 2 + 44);
+  drawHubAndPens();
+}
+function drawHubAndPens() {
   // hub plaza
-  ctx.fillStyle = '#8a7a5c'; rr(115, 90, 820, 820, 26); ctx.fill();
-  ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  for (let i = 0; i < 8; i++) ctx.fillRect(115, 90 + i * 110, 820, 3);
+  if (rectVis(0, 0, CELL_W, CELL_H)) {
+    ctx.fillStyle = '#8a7a5c'; rr(115, 90, 820, 820, 26); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.06)';
+    for (let i = 0; i < 8; i++) ctx.fillRect(115, 90 + i * 110, 820, 3);
+  }
   // zone pens
   for (const z of S.zones) {
+    if (!rectVis(z.x0, z.y0, z.x1, z.y1)) continue;
     ctx.fillStyle = z.k % 2 ? '#57503c' : '#5c483c';
     rr(z.pen.x0 - 20, z.pen.y0 - 20, z.pen.x1 - z.pen.x0 + 40, z.pen.y1 - z.pen.y0 + 40, 22); ctx.fill();
     const trgb = hexRgb(foeCol(z.k));
@@ -1259,6 +1337,7 @@ function drawCoinMountain() {
   ctx.fillText(S.pallet > 0 ? fmt(S.pallet) + ' ¢' : 'coin pallet', PALLET.x, PALLET.y + 56);
 }
 function drawStands() {
+  if (!rectVis(0, 0, CELL_W, CELL_H)) { drawZoneStands(); return; }
   // sell stand
   shadow(SELL.x, SELL.y + 34, 52);
   ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 7]);
@@ -1364,8 +1443,8 @@ function drawStands() {
       ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
       ctx.fillText('👑 NEW KINGDOM  +' + crownsToGain(), MONU.x, MONU.y + 48);
       ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '10px sans-serif';
-      ctx.fillText('hold still ' + PREST_T + 's: reset lands & coins,', MONU.x, MONU.y + 64);
-      ctx.fillText('earn crowns (+' + Math.round(CROWN_BONUS * 100) + '% coins each, forever)', MONU.x, MONU.y + 77);
+      ctx.fillText('hold still ' + PREST_T + 's: reset lands & coins, earn crowns', MONU.x, MONU.y + 64);
+      ctx.fillText('(+' + Math.round(CROWN_BONUS * 100) + '% coins & +' + Math.round(CROWN_DMG * 100) + '% damage each, forever)', MONU.x, MONU.y + 77);
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 12px sans-serif';
       ctx.fillText('👑 unlocks at ' + PRESTIGE_MIN + ' lands', MONU.x, MONU.y + 48);
@@ -1418,8 +1497,12 @@ function drawStands() {
     ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
     ctx.fillText(fmt(S.dogPlate.cost - S.dogPlate.paid) + ' ¢', KENNEL.x, KENNEL.y + 66);
   }
+  drawZoneStands();
+}
+function drawZoneStands() {
   // zone plates + altars
   for (const z of S.zones) {
+    if (!rectVis(z.x0, z.y0, z.x1, z.y1)) continue;
     for (const pl of z.plates) {
       if (pl.built) continue;
       if (pl.id === 'unlock' && z.k < S.zones.length) continue;
@@ -1532,6 +1615,14 @@ function drawEnemy(e) {
   ctx.fillStyle = e.hurt > 0 ? '#fff' : e.gold ? '#ffd94a' : foeCol(e.k);
   rr(e.x - e.r * 0.75, e.y - e.r * 0.8 - bob, e.r * 1.5, e.r * 1.4, 5); ctx.fill();
   ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 1.05 - bob, e.r * 0.5, 0, 6.29); ctx.fill();
+  if (e.arch === 'tank' && !e.boss) { // armor band
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(e.x - e.r * 0.75, e.y - e.r * 0.25 - bob, e.r * 1.5, e.r * 0.4);
+  }
+  if (e.arch === 'spitter' && !e.boss) { // open maw
+    ctx.fillStyle = '#241c30';
+    ctx.beginPath(); ctx.ellipse(e.x, e.y - e.r * 0.95 - bob, e.r * 0.2, e.r * 0.28, 0, 0, 6.29); ctx.fill();
+  }
   if (e.boss) drawCrownIcon(e.x, e.y - e.r * 1.55 - bob, e.r / 14);
   else drawHelmetIcon(e.x, e.y - e.r * 1.35 - bob, e.k, e.r / 18);
   if (e.gold && Math.floor(S.t * 8) % 3 === 0) puff(e.x + (rnd() - 0.5) * e.r * 2, e.y - e.r - bob, '#fff8c0', 1, true);
@@ -1595,8 +1686,23 @@ function drawPlayer() {
 function drawWorld() {
   drawGround();
   drawStands();
-  for (const z of S.zones) if (z.drums) drawDrums(z);
+  for (const z of S.zones) if (z.drums && rectVis(z.x0, z.y0, z.x1, z.y1)) drawDrums(z);
+  // treasure chest
+  if (S.chest && vis(S.chest.x, S.chest.y, 60)) {
+    const c = S.chest, gl = 0.4 + Math.sin(S.t * 5) * 0.25;
+    shadow(c.x, c.y + 14, 22);
+    ctx.fillStyle = 'rgba(255,217,74,' + gl * 0.4 + ')';
+    ctx.beginPath(); ctx.arc(c.x, c.y, 40 + Math.sin(S.t * 5) * 6, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#7a4a26'; rr(c.x - 18, c.y - 8, 36, 20, 4); ctx.fill();
+    ctx.fillStyle = '#9a6236'; rr(c.x - 18, c.y - 16, 36, 12, 5); ctx.fill();
+    ctx.fillStyle = '#ffd94a'; ctx.fillRect(c.x - 3, c.y - 12, 6, 18);
+    if (Math.floor(S.t * 3) % 2) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(c.x + 10, c.y - 24, 2, 8); ctx.fillRect(c.x + 7, c.y - 21, 8, 2);
+    }
+  }
   for (const it of S.items) {
+    if (!vis(it.x, it.y, 40)) continue;
     shadow(it.x, it.y + 6, 8);
     const wob = Math.sin(S.t * 3 + it.x) * 1.5;
     if (it.gem) drawGemIcon(it.x, it.y + wob, 1.1);
@@ -1607,15 +1713,24 @@ function drawWorld() {
   }
   const actors = [];
   for (const z of S.zones) {
-    for (const tw of z.towers) actors.push({ y: tw.y, f: () => drawTower(tw) });
-    for (const po of z.porters) actors.push({ y: po.y, f: () => drawPorter(po) });
+    for (const tw of z.towers) if (vis(tw.x, tw.y, 120)) actors.push({ y: tw.y, f: () => drawTower(tw) });
+    for (const po of z.porters) if (vis(po.x, po.y, 80)) actors.push({ y: po.y, f: () => drawPorter(po) });
   }
-  for (const e of S.enemies) actors.push({ y: e.y, f: () => drawEnemy(e) });
+  for (const e of S.enemies) if (vis(e.x, e.y, 100)) actors.push({ y: e.y, f: () => drawEnemy(e) });
   if (S.dog) actors.push({ y: S.dog.y, f: () => drawDog(S.dog) });
   actors.push({ y: S.player.y, f: drawPlayer });
   actors.sort((a, b) => a.y - b.y);
   for (const a of actors) a.f();
+  // hostile spit
+  for (const es of S.eshots) {
+    if (!vis(es.x, es.y, 40)) continue;
+    ctx.fillStyle = foeCol(es.k);
+    ctx.beginPath(); ctx.arc(es.x, es.y, 6, 0, 6.29); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.arc(es.x - es.vx * 0.02, es.y - es.vy * 0.02, 3, 0, 6.29); ctx.fill();
+  }
   for (const sh of S.shots) {
+    if (!vis(sh.x, sh.y, 40)) continue;
     if (sh.boulder) {
       ctx.fillStyle = '#5c5c66';
       ctx.beginPath(); ctx.arc(sh.x, sh.y, 9, 0, 6.29); ctx.fill();
@@ -1645,6 +1760,7 @@ function drawWorld() {
     }
   }
   for (const q of S.parts) {
+    if (!vis(q.x, q.y, 20)) continue;
     ctx.globalAlpha = 1 - q.t / q.dur;
     ctx.fillStyle = q.color;
     ctx.fillRect(q.x - q.r / 2, q.y - q.r / 2, q.r, q.r);
@@ -1780,6 +1896,13 @@ function drawMinimap() {
   const nq = cellXY(nxt.cx, nxt.cy);
   ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
   rr(nq.x + 1, nq.y + 1, cs - 2, cs - 2, 3); ctx.stroke(); ctx.setLineDash([]);
+  // treasure chest ping
+  if (S.chest) {
+    const ccx = Math.floor(S.chest.x / CELL_W), ccy = Math.floor(S.chest.y / CELL_H);
+    const cq = cellXY(ccx, ccy);
+    ctx.fillStyle = Math.floor(S.t * 3) % 2 ? '#ffd94a' : '#fff8c0';
+    ctx.beginPath(); ctx.arc(cq.x + cs / 2, cq.y + cs / 2, 3, 0, 6.29); ctx.fill();
+  }
   // player dot
   const pcx = Math.floor(S.player.x / CELL_W + (S.player.x < 0 ? -1e-9 : 0));
   const pcy = Math.floor(S.player.y / CELL_H + (S.player.y < 0 ? -1e-9 : 0));
@@ -1803,6 +1926,8 @@ function draw() {
   else cx = Math.max(b.minX + vwW / 2 - M, Math.min(b.maxX - vwW / 2 + M, S.cam.x));
   if (b.maxY - b.minY + 2 * M <= vhW) cy = (b.minY + b.maxY) / 2;
   else cy = Math.max(b.minY + vhW / 2 - M, Math.min(b.maxY - vhW / 2 + M, S.cam.y));
+  vL = cx - vwW / 2 - 120; vR = cx + vwW / 2 + 120;
+  vT = cy - vhW / 2 - 120; vB = cy + vhW / 2 + 120;
   ctx.translate(vw / 2 + shx, vh / 2 + shy);
   ctx.scale(scl, scl);
   ctx.translate(-cx, -cy);
@@ -1886,8 +2011,8 @@ window.KS = {
   spawnEnemy, summonBoss, hurtEnemy, hurtPlayer, playerDie, buildPlate, applyPlate, mkZone, dropHelmet, dropItem,
   cap, speed, pDmg, pRate, pickR, coinMul, entryVal, eco, helmVal, foeHp, towerDmg, unlockCost, upgCost, gemUpCost, fmt,
   guideTarget, zoneAt, inWalkable, worldBounds, cellFor, towerMul, maxAlive, spawnInt, foeName, warpPads,
-  prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap,
-  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX },
+  prestige, crownsToGain, spawnDog, checkAch, ACH, flowMul, musicTick, drawMinimap, foeArch, spawnChest,
+  constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD },
   start() { S.started = true; },
 };
 </script>
