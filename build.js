@@ -45,6 +45,7 @@ const STATIC_PATHS = [
   'chase_hq',
   'messenger',
   'kingshot_endless',
+  'headliner',
   'tools',
 ];
 
