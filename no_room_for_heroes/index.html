@@ -1938,6 +1938,12 @@ const rnd=(a,b)=>a+Math.random()*(b-a);
 const ri=(a,b)=>Math.floor(rnd(a,b+1));
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+// Order-preserving in-place compaction: keep entries where alive(e) is true.
+// The per-frame FX arrays (particles/floats/embers/…) used to be rebuilt with
+// .filter() every frame — steady allocation churn that shows up as GC hitches
+// on mobile. Compacting in place produces zero garbage.
+function compact(arr, alive){ let w=0; for(let i=0;i<arr.length;i++){ const e=arr[i]; if(alive(e)) arr[w++]=e; } arr.length=w; return arr; }
+const _liveLife=e=>e.life>0;
 // Load an art image with the standard graceful-fallback flag: `_ok` flips true
 // once it decodes, and a missing file is swallowed (the game draws procedurally
 // until/unless the PNG arrives). Returns the Image so callers can store it.
@@ -5674,16 +5680,16 @@ function renderTown(){
 function update(dt){
   if(G && G.tutorial && G.phase==='run' && tutRunTick()) return;   // auto-pause beat just triggered
   if(paused) return;                 // pause menu freezes the whole simulation
-  // animate floaters/particles always
-  floats.forEach(f=>{ f.y+=f.vy*dt; f.life-=dt*0.9; });
-  floats=floats.filter(f=>f.life>0);
-  particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt;
+  // animate floaters/particles always (compacted in place — no per-frame arrays)
+  for(const f of floats){ f.y+=f.vy*dt; f.life-=dt*0.9; }
+  compact(floats,_liveLife);
+  for(const p of particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt;
     if(p.blood && p.vy>0 && p.y>=FLOOR){ p.life=0;             // spray that lands soaks into the floor
       if(decals.length<DECAL_CAP && Math.random()<0.5)
-        decals.push({x:p.x, y:FLOOR-1, r:rnd(3,7), col:p.col, life:rnd(.6,1), seed:rnd(0,6.28)}); } });
-  particles=particles.filter(p=>p.life>0);
-  if(decals.length){ for(const d of decals) d.life-=dt*0.05; decals=decals.filter(d=>d.life>0); }   // blood dries slowly
-  if(embers.length){ embers.forEach(e=>{ e.x+=e.vx*dt; e.y+=e.vy*dt; e.life-=dt; }); embers=embers.filter(e=>e.life>0); }
+        decals.push({x:p.x, y:FLOOR-1, r:rnd(3,7), col:p.col, life:rnd(.6,1), seed:rnd(0,6.28)}); } }
+  compact(particles,_liveLife);
+  if(decals.length){ for(const d of decals) d.life-=dt*0.05; compact(decals,_liveLife); }   // blood dries slowly
+  if(embers.length){ for(const e of embers){ e.x+=e.vx*dt; e.y+=e.vy*dt; e.life-=dt; } compact(embers,_liveLife); }
   if(throneHitT>0) throneHitT=Math.max(0,throneHitT-dt);
   // background storm: a lightning bolt cracks over the castle/moon every few seconds
   if(G && (G.phase==='build'||G.phase==='run')){
@@ -5701,8 +5707,8 @@ function update(dt){
       embers.push({ x:camX+rnd(-30, VW/Math.max(.2,zoom)+30), y:FLOOR-rnd(8,200),
         vx:rnd(-5,9), vy:-rnd(5,16), life:rnd(2.4,4.6), max:4.6,
         col:Math.random()<0.5?'#b985ff':'#ffb066', sz:rnd(1,2.3) }); } }
-  if(bossBolts.length){ bossBolts.forEach(b=>{ b.t+=dt; }); bossBolts=bossBolts.filter(b=>b.t<b.dur); }
-  if(monBolts.length){ monBolts.forEach(b=>{ b.t+=dt; }); monBolts=monBolts.filter(b=>b.t<b.dur); }
+  if(bossBolts.length){ for(const b of bossBolts) b.t+=dt; compact(bossBolts,b=>b.t<b.dur); }
+  if(monBolts.length){ for(const b of monBolts) b.t+=dt; compact(monBolts,b=>b.t<b.dur); }
   if(shakeT>0) shakeT=Math.max(0,shakeT-dt);   // screen-shake decay
   if(flashT>0) flashT=Math.max(0,flashT-dt);   // screen-flash decay
   if(slowT>0) slowT=Math.max(0,slowT-dt);      // slow-mo decay (real time)
@@ -5801,7 +5807,8 @@ function simStep(h,dt){
     // a den goblin locked onto this hero holds it in place — but only ONCE THE
     // GOBLIN IS CLOSE. Until then keep marching toward it (the goblin closes from
     // its side too), so heroes don't freeze while a goblin ambles across the room.
-    if((G.minions||[]).some(g=>g.hp>0 && g.engaged===h && Math.abs(g.x-h.x)<=24)){ h.walkAnim+=dt*10; return; }
+    if(G.minions) for(const g of G.minions){
+      if(g.hp>0 && g.engaged===h && Math.abs(g.x-h.x)<=24){ h.walkAnim+=dt*10; return; } }
     const slow=(h.oil>0?0.6:1)*(h.chill>0?0.78:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone (chill eased from 0.7 — frost was too oppressive)
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
@@ -6361,8 +6368,8 @@ function draw(){
   drawDungeon(tx, 1, isBuild);
 
   // floaters & particles (world space)
-  particles.forEach(p=>{ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
-    const sx=tx(p.x); X.fillRect(sx, p.y, p.sz, p.sz); });
+  for(const p of particles){ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
+    X.fillRect(tx(p.x), p.y, p.sz, p.sz); }
   X.globalAlpha=1;
   // ambient embers + rising soul wisps (additive glow, world space)
   if(embers.length){ X.save(); X.globalCompositeOperation='lighter';
@@ -6402,7 +6409,7 @@ function draw(){
     }
     X.globalAlpha=1;
   }
-  floats.forEach(f=>{ X.globalAlpha=clamp(f.life,0,1); X.textAlign='center';
+  for(const f of floats){ X.globalAlpha=clamp(f.life,0,1); X.textAlign='center';
     if(f.big){ const sz=Math.round(22+(1-f.life)*8);   // big callouts grow as they rise
       X.font='bold '+sz+'px Trebuchet MS';
       X.lineWidth=4; X.strokeStyle='rgba(0,0,0,.65)'; X.strokeText(f.txt, tx(f.x), f.y);
@@ -6410,7 +6417,7 @@ function draw(){
     } else { const pop=f.life>0.86 ? 1+(f.life-0.86)/0.14*0.7 : 1;   // quick scale-in punch
       X.font='bold '+Math.round(16*pop)+'px Trebuchet MS';
       X.lineWidth=3; X.strokeStyle='rgba(0,0,0,.55)'; X.strokeText(f.txt, tx(f.x), f.y);
-      X.fillStyle=f.col; X.fillText(f.txt, tx(f.x), f.y); } });
+      X.fillStyle=f.col; X.fillText(f.txt, tx(f.x), f.y); } }
   X.globalAlpha=1; X.textAlign='left';
 
   // 💥 Overdrive shockwave — a bright ring sweeping out from the throne
@@ -6549,8 +6556,8 @@ function drawDungeon(tx, scale, isBuild){
   // hero
   // draw the whole raiding party (dead first so living draw on top)
   const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
-  party.filter(h=>h.state==='dead').forEach(h=>drawHeroDead(tx(h.x), h));
-  party.filter(h=>h.state!=='dead').forEach(h=>drawHero(tx(h.x), h));
+  for(const h of party) if(h.state==='dead') drawHeroDead(tx(h.x), h);
+  for(const h of party) if(h.state!=='dead') drawHero(tx(h.x), h);
   if(G.phase==='run') drawDenGoblins(tx);    // 👺 marching goblins from Den spawners
   // front-of-hero trap layers, replayed over the party (see HERO_LAYER)
   if(_frontTraps){ for(const f of _frontTraps) f(); _frontTraps=null; }
@@ -6593,7 +6600,7 @@ function drawWaitingHeroes(tx){
   let n;
   if(G.tutorial || G.mode==='campaign') n=Math.min(specs.length, 9);
   else n=specs[0].champion ? 1 : Math.min(specs.length, G.guildLvl+1+(hasEdict('warband')?1:0));
-  const hasChamp = specs.slice(0,n).some(s=>s.champion);
+  let hasChamp=false; for(let k=0;k<n;k++) if(specs[k].champion){ hasChamp=true; break; }
   const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
   for(let k=0;k<n;k++){
     const spec=specs[k];
@@ -6957,7 +6964,9 @@ function strikeIdx(N,firedAt,type){
 // The flame jet shows FOUR columns from the one uploaded animation: the single
 // part from the layout is duplicated (n) across the room with a per-column
 // fire cascade. (More efficient than baking 4 flames into the frames.)
+let _layoutRev=0;   // bumped on every (re)normalize so cached room draw-lists rebuild
 function normalizeLayout(){
+  _layoutRev++;
   const f=LAYOUT.traps&&LAYOUT.traps.flame;
   if(f && f.length===1 && !f[0].n){ f[0]=Object.assign({},f[0],{n:4,gap:.21}); }   // 4 columns around the owner's fx
   // light effects (owner-alignable): candle flicker, flame heat, poison vapor.
@@ -7283,29 +7292,42 @@ function drawRoomFull(x0,w,room,i){
   if(sa) drawRoomArt(x0,w,sa);
   drawRoomContents(x0,w,room,i);
 }
+// Per-room draw lists (parts split by kind + layer-sorted trap overlay items).
+// These only change when the room's units change or a fresh rooms/layout.json
+// lands — caching them on the room object removes a stack of per-room-per-frame
+// array builds + a sort from the draw loop.
+function roomDrawInfo(room){
+  const units=room.units;
+  let c=room._rdi;
+  if(!c || c.units!==units || c.len!==(units?units.length:-1) || c.rev!==_layoutRev || c.type!==room.type){
+    const parts=roomParts(room);
+    // Is THIS room (its CURRENT build state) a Goblin Den? Decide from the
+    // room itself, not the cell — G.cells is only rebuilt at startWave, so a stale
+    // cell.spawner would draw ghost goblins for, say, a Bone Pit built where a Den
+    // used to stand. Used to gate the den crowd-preview & badge below.
+    const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
+    const guardParts=monParts.filter(p=>p!=='goblin');         // non-goblin monsters draw as stationary guards
+    // traps: every layout PART carries a layer (override in align.html);
+    // defaults keep poison behind, flames over it, spikes ALWAYS on top.
+    const trapTypes=parts.filter(p=>ROOMS[p].kind==='trap');
+    const items=[];
+    for(const tp of trapTypes){
+      const pl=(LAYOUT.traps&&LAYOUT.traps[tp])||[{art:tp,fx:.5,fy:0,h:100}];
+      pl.forEach((pp,pi)=>items.push({type:tp,p:pp,pi,
+        layer:(pp.layer!=null?pp.layer:(TRAP_LAYER[tp]!=null?TRAP_LAYER[tp]:1))}));
+    }
+    items.sort((a,b)=>a.layer-b.layer);
+    c=room._rdi={units, len:(units?units.length:-1), rev:_layoutRev, type:room.type,
+      parts, monParts, guardParts, trapTypes, items, hasGob:monParts.includes('goblin')};
+  }
+  return c;
+}
 function drawRoomContents(x0,w,room,i){
   drawCandles(x0,w,i);                          // wall-torch flames over the room art
-  const cx=x0+w/2; const cell=G.cells[i]; const parts=roomParts(room);
-  // Is THIS room (its CURRENT build state) a pure Goblin Den? Decide from the
-  // room itself, not the cell — G.cells is only rebuilt at startWave, so a stale
-  // cell.spawner would draw ghost goblins for, say, a Bone Pit built where a Den
-  // used to stand. Used to gate the den crowd-preview & badge below.
-  const monParts=parts.filter(p=>ROOMS[p].kind==='monster');
-  const hasGob = monParts.includes('goblin');                  // room spawns a goblin den (possibly ALONGSIDE guards)
-  const guardParts = monParts.filter(p=>p!=='goblin');         // non-goblin monsters draw as stationary guards
-  const art=roomArtReady(room);                 // suppress props the art already shows
-  // traps: every layout PART carries a layer (override in align.html);
-  // defaults keep poison behind, flames over it, spikes ALWAYS on top.
-  // (Synergy rooms KEEP their trap overlays — the backdrop is ambient theme; the
-  // actual traps still sit in the room and fire.)
-  const trapTypes=parts.filter(p=>ROOMS[p].kind==='trap' && art!==p);
-  const items=[];
-  for(const tp of trapTypes){
-    const pl=(LAYOUT.traps&&LAYOUT.traps[tp])||[{art:tp,fx:.5,fy:0,h:100}];
-    pl.forEach((pp,pi)=>items.push({type:tp,p:pp,pi,
-      layer:(pp.layer!=null?pp.layer:(TRAP_LAYER[tp]!=null?TRAP_LAYER[tp]:1))}));
-  }
-  items.sort((a,b)=>a.layer-b.layer);
+  const cx=x0+w/2; const cell=G.cells[i];
+  const info=roomDrawInfo(room);
+  const parts=info.parts, hasGob=info.hasGob, guardParts=info.guardParts,
+    trapTypes=info.trapTypes, items=info.items;
   const drewType={};
   for(const it of items){
     // a part above the hero's layer is deferred so the party draws between the
