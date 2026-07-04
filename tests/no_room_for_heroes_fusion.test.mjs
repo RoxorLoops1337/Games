@@ -15,7 +15,7 @@ const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,ma
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
   gotoRelicChoice,rollRelicChoices,RELICS,MERCHANT_PRICE,TIER_ORDER,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
-  get G(){return G;},set G(v){G=v;}`);
+  get G(){return G;},set G(v){G=v;},get RB(){return RB;}`);
 const t = harness('rooms (slots/stacking/menu)');
 
 function freshBuild(){ A.G=A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots=5; A.G.phase='build'; A.G.gold=999999; }
@@ -240,5 +240,20 @@ t.ok(A.ROOMS.spike.dmg <= 5 && A.ROOMS.arrow.dmg <= 4, 'common traps are the wea
 t.ok(A.ROOMS.maul.dmg >= 18 && A.ROOMS.bombard.dmg >= 18, 'epic traps hit hard (a rare/epic feels good to get)');
 t.ok(A.ROOMS.goblin.hp < A.ROOMS.ogre.hp && A.ROOMS.skeleton.hp < A.ROOMS.ogre.hp, 'common monsters are frailer than the tougher tiers');
 t.ok(A.ROOMS.orc.atk > A.ROOMS.skeleton.atk && A.ROOMS.warden.hp > A.ROOMS.skeleton.hp, 'rare monsters out-stat the commons');
+
+// --- 📜 Deed to the Deep is a dead pick in Endless (slot cap is ∞ there) — never offered ---
+A.G = A.freshGame('endless'); A.chooseBoss('dragon');
+A.G.relics = Object.keys(A.RELICS).filter(id => id !== 'rDeed');   // only the Deed left in the vault
+t.ok(A.rollRelicChoices(3).length === 0, 'Endless never offers the Deed (its +slot cap does nothing there)');
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
+A.G.relics = Object.keys(A.RELICS).filter(id => id !== 'rDeed');
+t.ok(A.rollRelicChoices(3).includes('rDeed'), 'Campaign still offers the Deed (where it works)');
+
+// --- ⛏️ Excavator rune: "+5% synergy" now genuinely sharpens synergy rooms ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;
+A.G.rooms = [{ type:'flame', cap:2, kills:0, units:[{type:'flame',kind:'trap',lvl:1},{type:'oil',kind:'trap',lvl:1}] }];
+A.RB.synergy = 0.05; A.buildCells();
+t.ok(Math.abs(A.G.cells[0].syn - (1 + A.SYNERGY_TYPES.fire.amp + 0.05)) < 1e-9, 'RB.synergy folds into a synergy room\'s amp (Excavator does what it says)');
+A.RB.synergy = 0;
 
 t.done();

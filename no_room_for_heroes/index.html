@@ -673,7 +673,7 @@ const ROOMS = {
   oil:      {kind:'trap',   name:'Oil Slick',  ic:'🛢️', col:'#3a3a2a', dmg:3,  rate:0.7,  elem:'oil',  desc:'Coats heroes in oil — slows them, primes fire & lightning.'},
   // ---- SPECIAL traps: an element + a reaction ----
   flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, elem:'fire', desc:'Hits hard + burns. Ignites oiled heroes.'},
-  frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). Then any hit SHATTERS for a burst.'},
+  frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). A 💥phys/⚡shock hit then SHATTERS for a burst.'},
   tesla:    {kind:'trap',   name:'Tesla Coil', ic:'⚡', col:'#fff34d', dmg:9,  rate:0.7,  elem:'shock',desc:'Lightning. Chains across the party if they are oiled.'},
   venom:    {kind:'trap',   name:'Venom Vent', ic:'🐍', col:'#7bdc6b', dmg:3,  rate:0.7,  elem:'phys', poison:4, desc:'Weak hit, but injects STACKING poison. A 🔥flame room then COMBUSTS the stacks for a burst.'},
   // ---- RARE traps: specialists that hit noticeably harder than commons ----
@@ -688,13 +688,13 @@ const ROOMS = {
   runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.25, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +25%.'},
   // COMMON monsters: the cheap bodies (weakest — swarm/filler)
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Marching goblins that level up from their own kills.'},
-  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:28, atk:10,  desc:'Scales hard with levels.'},
+  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:28, atk:10,  desc:'A cheap, sturdy guard — stack copies to hold the line.'},
   // SPECIAL: a proper wall
   ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
   // RARE monsters: stronger bodies + a real trick
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:66, atk:9, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:58, atk:9, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
-  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:38, atk:8, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
+  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:38, atk:8, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks a ton of hits, but swings soft.'},
   orc:      {kind:'monster',name:'Orc Marauder',ic:'🪓', col:'#5a8f3a', hp:48, atk:16, desc:'A tusked green warrior — hits hard from the front line. No gimmicks, just a wall of muscle to anchor a room of traps.'},
   dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:44, atk:7, breath:{burn:3, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
   // EPIC support
@@ -933,7 +933,7 @@ const TOWN_SABOTAGE = {
 };
 // Town-wide schemes: broad strategic levers, dread-priced, last several waves.
 const TOWN_SCHEMES = {
-  well:   {name:'Poison the Well',  ic:'🩸', cost:6, waves:5, desc:'Next 5 heroes arrive burning.'},
+  well:   {name:'Poison the Well',  ic:'🩸', cost:6, waves:5, desc:'Heroes arrive burning for the next 5 waves.'},
   smith:  {name:'Bribe the Smith',  ic:'🔨', cost:5, waves:5, desc:'Disables the hero shop for 5 waves.'},
   temple: {name:'Burn the Temple',  ic:'🔥', cost:5, waves:5, desc:'No clerics arrive for 5 waves.'},
 };
@@ -1058,7 +1058,7 @@ const ABIL = {
            run:h=>{dealToHero(h, abilDmg(34+G.boss.lvl*5),'BURN', false, 'fire'); addBurn(h,6,4);}},
   bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged shock. Chains off oil.',
            run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT', false, 'shock')},
-  curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
+  curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Cuts the hero\'s attack by 45%.',
            run:h=>{ if(h.cursed) return; h.cursed=true; h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
   freeze: {name:'Freeze',  ic:'❄️', cost:34, cd:7,  desc:'Freezes in place — primes SHATTER. A costly lock.',
            run:h=>{h.freeze=Math.max(h.freeze||0,ccDur(h,2.2)); h.chill=Math.max(h.chill||0,ccDur(h,2.6)); floater(h.x,h.y-60,'FROZEN','#9adfff');}},
@@ -1149,7 +1149,7 @@ const RUNE_LIST=[
   rn('room1','Sharp Spikes','🦷','+6% trap damage',3,1, 5,1,{trapDmg:0.06},'root'),
   rn('room2','Feral','👹','+6% monster damage',3,2, 5,1,{monDmg:0.06},'room1'),
   rn('room3','Reinforced','🧱','+6% monster HP',3,3, 5,2,{monHp:0.06},'room2'),
-  rn('room4','Master Builder','📐','+1 room level cap',3,4, 2,3,{upCap:1},'room3'),
+  rn('room4','Master Builder','📐','+1 trap level cap',3,4, 2,3,{upCap:1},'room3'),
   rn('room5','Excavator','⛏️','+1 room-slot cap & +5% synergy',3,5, 1,5,{slotMax:1,synergy:0.05},'room4'),
   // 🧛 Warden
   rn('town1','Negotiator','🤝','town costs 6% less',4,1, 5,1,{townDisc:0.06},'root'),
@@ -1386,19 +1386,19 @@ const UNLOCK_CARD={ oil:25, frost:65, tesla:120, magebane:50, maul:105, gallows:
 // maps are kept separate because 'ogre' & 'dragon' are keys in BOTH BOSSES and ROOMS.
 const UNLOCK_BOSS_COND={
   ogre:  {stat:'throne',     n:30, label:'Slay 30 heroes that breach your throne'},
-  ent:   {stat:'poisoned',   n:40, label:'Poison 40 heroes to death'},
+  ent:   {stat:'poisoned',   n:40, label:'Slay 40 heroes while poisoned'},
   golem: {stat:'waves',      n:60, label:'Clear 60 waves'},
 };
 const UNLOCK_CARD_COND={
   oil:      {stat:'reactions',   n:15,    label:'Trigger 15 elemental reactions'},
-  frost:    {stat:'frozen',      n:25,    label:'Freeze 25 heroes to death'},
+  frost:    {stat:'frozen',      n:25,    label:'Slay 25 heroes while frozen'},
   tesla:    {stat:'abil',        n:60,    label:'Cast 60 boss abilities'},
   magebane: {stat:'casterKills', n:20,    label:'Slay 20 Mage & Cleric heroes'},
   maul:     {stat:'maxCombo',    n:8,     label:'Land an 8-kill combo streak'},
   gallows:  {stat:'champions',   n:12,    label:'Execute 12 champions'},
   hexward:  {stat:'relics',      n:25,    label:'Collect 25 relics'},
-  bombard:  {stat:'burned',      n:50,    label:'Burn 50 heroes to death'},
-  venom:    {stat:'poisoned',    n:20,    label:'Poison 20 heroes to death'},
+  bombard:  {stat:'burned',      n:50,    label:'Slay 50 heroes while burning'},
+  venom:    {stat:'poisoned',    n:20,    label:'Slay 20 heroes while poisoned'},
   corrode:  {stat:'merges',      n:25,    label:'Forge 25 gear merges'},
   hexbrand: {stat:'gold',        n:40000, label:'Loot 40,000 gold in total'},
   warden:   {stat:'tankKills',   n:25,    label:'Slay 25 Warrior heroes'},
@@ -1606,7 +1606,7 @@ function floorLootAt(wx){
 }
 function collectLoot(i){
   const arr=G.floorLoot||[]; const L=arr[i]; if(!L) return false;
-  if((G.chest||[]).length>=CHEST_MAX){ showHint('🧰 Chest full ('+CHEST_MAX+') — merge or scrap gear to make room.'); return false; }
+  if((G.chest||[]).length>=CHEST_MAX){ showHint('🧰 Chest full ('+CHEST_MAX+') — merge or equip gear to make room.'); return false; }
   G.chest=G.chest||[]; G.chest.push({k:L.k, t:L.t, v:L.v}); arr.splice(i,1);
   burst(L.x, FLOOR-16, RELIC_TIERS[L.t].col, 10); sfx('relic');
   showHint('🧰 Collected '+swordName(L)+' ('+RELIC_TIERS[L.t].name+', '+G.chest.length+'/'+CHEST_MAX+').');
@@ -1632,10 +1632,11 @@ function mergeGear(i,j){
   const nt=TIER_ORDER[ni+1];
   const hi=Math.max(i,j), lo=Math.min(i,j);
   G.chest.splice(hi,1); G.chest.splice(lo,1);          // remove both
-  G.chest.push({k:a.k, t:nt, v:gearRollV(a.k)});        // forge the upgrade (a fresh variant roll)
+  const nu={k:a.k, t:nt, v:gearRollV(a.k)};             // forge the upgrade (a fresh variant roll)
+  G.chest.push(nu);
   bumpStat('merges');                                   // feat: gear merges forged
   selGear=-1; sfx('relic');
-  showHint('⬆ Merged into '+swordName({k:a.k,t:nt})+' ('+RELIC_TIERS[nt].name+')!');
+  showHint('⬆ Merged into '+swordName(nu)+' ('+RELIC_TIERS[nt].name+')!');
   renderPanel();
   if(typeof tutEvent==='function') tutEvent('merge');     // tutorial: advances the "forge an upgrade" beat
 }
@@ -1822,9 +1823,10 @@ function rollRelicChoices(n){
   const picks=[]; let guard=0;
   while(picks.length<n && guard++<200){
     let t=rollTier(L);
-    let pool=RELIC_BY_TIER[t].filter(id=>!owned.has(id)&&!picks.includes(id));
+    const dead=id=>(id==='rDeed' && G.mode==='endless');   // Endless has no room-slot cap — the Deed would do nothing
+    let pool=RELIC_BY_TIER[t].filter(id=>!owned.has(id)&&!picks.includes(id)&&!dead(id));
     if(!pool.length){ // fall back across tiers
-      pool=Object.keys(RELICS).filter(id=>!owned.has(id)&&!picks.includes(id));
+      pool=Object.keys(RELICS).filter(id=>!owned.has(id)&&!picks.includes(id)&&!dead(id));
       if(!pool.length) break;
     }
     picks.push(pool[ri(0,pool.length-1)]);
@@ -2723,7 +2725,7 @@ function showHelp(){
         block, the shop arms them. Fire <b>boss abilities</b> (mana) any time.<br>
       <b>4. Loot.</b> When the hero dies you take their gold and draft a new card.<br>
       <b>Lose</b> if a hero reaches the throne and drops the boss to 0 HP.
-        Boss HP barely heals — only <b>Mend/Drain</b> abilities restore it, so don't
+        Boss HP barely heals — only <b>Mend/Drain</b>, 🧪 throne potions and a few passives restore it, so don't
         let anyone through.
     </p>
     <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
@@ -2837,7 +2839,7 @@ function openCodex(){
     <h2 style="margin:6px 0 4px">Reactions</h2>
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
     <h2 style="margin:12px 0 4px">Rooms</h2>
-    <p class="small" style="opacity:.85;margin:0 0 4px">Each room holds up to <b>${MAX_SLOTS} slots</b> — ⬆ spend gold to add one (every room starts with 1). At most <b>${MAX_TRAPS} traps</b>; fill the rest with monsters, mix &amp; match. Drop the <b>same trap</b> on itself to level it up (max ${MAX_LEVEL}); monsters <b>stack as independent copies</b> and toughen from the room's <b>veteran</b> kills. Synergy is emergent — line up statuses (oil → flame, frost → shatter) using the reactions above.</p>
+    <p class="small" style="opacity:.85;margin:0 0 4px">Each room holds up to <b>${MAX_SLOTS} slots</b> — ⬆ spend gold to add one (every room starts with 1). At most <b>${MAX_TRAPS} traps</b>; fill the rest with monsters, mix &amp; match. Drop the <b>same trap</b> on itself to level it up (max ${maxLevel()}); monsters <b>stack as independent copies</b> and toughen from the room's <b>veteran</b> kills. Pair the right two traps and the room becomes a 🔗 <b>synergy room</b> — bonus damage plus a signature effect — and elemental reactions stack on top.</p>
     <h2 style="margin:12px 0 4px">Keywords</h2>
     <div style="max-width:640px;text-align:left;margin:0 auto">${keys}</div>
     <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
@@ -4063,9 +4065,9 @@ function stockShop(itemKey){
   const shop=G.rooms.find(r=>r&&r.type==='shop' && (r.stock||[]).length<shopCap(r))
           || G.rooms.find(r=>r&&r.type==='shop');
   if(!shop){ showHint('Build a Shop room first.'); return; }
-  if((shop.stock||[]).length>=shopCap(shop)){ showHint('Shop is full — Lv '+shop.lvl+' holds '+shopCap(shop)+' items. Level it up for more slots.'); return; }
+  if((shop.stock||[]).length>=shopCap(shop)){ showHint('Shop is full — tier '+shopTier(shop)+' holds '+shopCap(shop)+' items. ⬆ Upgrade the room for more slots.'); return; }
   G.gold-=it.price; shop.stock.push({key:itemKey, sold:false});
-  showHint(it.name+' stocked. Heroes pay '+salePrice(shop,itemKey)+'g (Lv '+shop.lvl+' shop).');
+  showHint(it.name+' stocked. Heroes pay '+salePrice(shop,itemKey)+'g (tier '+shopTier(shop)+' shop).');
   render();
 }
 
@@ -4137,7 +4139,7 @@ function buildCells(){
       }
       // 🔗 trap synergy: a curated pair → a room-wide damage amp + a type rider (see trapTick)
       const synD=synergyFromTypes(cell.traps.map(t=>t.type));
-      if(synD){ cell.synType=synD.type; cell.syn=1+(SYNERGY_TYPES[synD.type].amp||0); }
+      if(synD){ cell.synType=synD.type; cell.syn=1+(SYNERGY_TYPES[synD.type].amp||0)+(RB.synergy||0); }   // ⛏️ Excavator rune sharpens synergy rooms
       cell.guards=guards;                        // every guard, front-to-back
       if(guards.length) cell.mon=guards[0];      // active guard; the next alive steps up when it falls
       cell.shop=hasShop;
@@ -4626,7 +4628,7 @@ const ELEM_COMBO={
   shock:'⚡ Conducts through <b>oiled</b> heroes to the party, and ⚡ <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
   phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
 };
-function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +50%
+function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +30%
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
@@ -5209,8 +5211,8 @@ function buildPostmortem(){
   const tips=[];
   if(k){
     if(k.traits.includes('swift')) tips.push('🏃 They were <b>Swift</b> — front-load your damage or slow them (oil/chill rooms, or the Overgrowth doctrine).');
-    if(k.cls==='rogue'||k.dodge>=0.3) tips.push('🗡️ Rogues <b>dodge ~35%</b> of direct hits — lean on burn DoT and crushers, which can’t be dodged.');
-    if(k.traits.includes('armored')||k.armor>=8) tips.push('🛡️ Heavy <b>armor</b> blunted your traps — add piercing rooms (🔱spikes pierce) or the Bastion doctrine.');
+    if(k.cls==='rogue'||k.dodge>=0.3) tips.push('🗡️ Rogues <b>dodge ~35%</b> of direct hits — lean on burn/poison DoT (never dodged) or an aimed ⚔️ Smite.');
+    if(k.traits.includes('armored')||k.armor>=8) tips.push('🛡️ Heavy <b>armor</b> blunted your traps — add piercing rooms (🎯darts pierce, 🔨crusher ignores ALL armor) or the Bastion doctrine.');
     if(k.traits.includes('hardy')) tips.push('❤️ A <b>Hardy</b> raider has huge HP — you need sustained damage: a longer corridor or stacked DoT.');
   }
   if(elems.size>=2 && (s.reactions||0)===0) tips.push('⚛️ Your elemental rooms <b>never combo’d</b> — order matters: oil BEFORE flame/tesla/frost, frost before crushers.');
@@ -5220,7 +5222,7 @@ function buildPostmortem(){
   else if(tot>0 && s.monDmg>s.trapDmg*5) tips.push('Almost all damage came from guards — traps soften the <b>whole</b> party, not just the front hero.');
   if((s.breaches||0)>=3) tips.push(`<b>${s.breaches}</b> heroes reached your throne this run — the corridor leaks; deepen it or add a chokepoint.`);
   if(G.slots<=2) tips.push('A <b>longer dungeon</b> (more slots) means more trap ticks before the throne.');
-  if(pct>=85) tips.push('So close — they reached the throne nearly dead. A little more corridor damage or 🩹 Repair would’ve held.');
+  if(pct>=85) tips.push('So close — they reached the throne nearly dead. A little more corridor damage or a 🧪 throne potion would’ve held.');
   else if(pct<40) tips.push('They barely took a scratch — your corridor needs more raw damage or better element combos.');
   const top = tips.slice(0,3);
   return `<div style="text-align:left;max-width:440px;margin:6px auto;background:#1b1430;border:1px solid #3a2c5a;border-radius:10px;padding:10px 13px">
@@ -5402,7 +5404,7 @@ const EVENTS = [
       {l:'Burn the caravan', run:()=>'The smuggler flees empty-handed.'} ]},
   { t:'Plague Rats 🐀', d:'Diseased rats nest beneath the town well.',
     opts:[
-      {l:'Loose the plague (poison next 5)', run:()=>{ G.fx.well=Math.max(G.fx.well,5); return 'The well runs foul.'; }},
+      {l:'Loose the plague (5 waves of burning heroes)', run:()=>{ G.fx.well=Math.max(G.fx.well,5); return 'The well runs foul.'; }},
       {l:'Sell the antidote (+5 ☠)', run:()=>{ G.dread+=5; return 'Coin from the desperate.'; }} ]},
   { t:'The Deserter 🚪', d:'A frightened recruit will betray his comrades for the right master.',
     opts:[
@@ -8124,7 +8126,7 @@ function renderPanel(){
         </button>`; })()}
       ${(()=>{ const ready=(b.rage||0)>=RAGE_MAX;
         return `<button class="abil overdrive${ready?' rdy':''}" onclick="castOverdrive()" ${ready?'':'disabled'}
-          title="OVERDRIVE — when Rage is full, blast EVERY raider for ~45% max HP (ignores armor), leaving survivors burning &amp; chilled. Hotkey: Q">
+          title="OVERDRIVE — when Rage is full, blast EVERY raider for ~45% max HP + a flat burst (ignores armor), leaving survivors burning &amp; chilled. Hotkey: Q">
           <span style="font-size:18px">💥</span>
           <span style="font-size:11px">Overdrive</span>
           <span class="c">${ready?'READY!':Math.floor(b.rage||0)+'%'}</span>
