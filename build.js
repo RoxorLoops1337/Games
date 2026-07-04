@@ -47,6 +47,7 @@ const STATIC_PATHS = [
   'kingshot_endless',
   'headliner',
   'horde_runner',
+  'spijker_master',
   'tools',
 ];
 

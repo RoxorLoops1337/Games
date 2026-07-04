@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Spijker Master</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#0e1526;
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif; touch-action:none;
+    -webkit-user-select:none; user-select:none; }
+  #cv { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #hud { position:fixed; top:0; left:0; right:0; display:flex; justify-content:space-between;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 0; pointer-events:none; z-index:5; }
+  .pill { background:rgba(10,16,32,.72); border:1px solid rgba(140,170,255,.25); color:#eaf0ff;
+    border-radius:999px; padding:7px 14px; font-weight:700; font-size:15px; letter-spacing:.3px;
+    box-shadow:0 2px 10px rgba(0,0,0,.35); }
+  .pill b { color:#ffd76a; }
+  #mute { pointer-events:auto; cursor:pointer; }
+  #bub { position:fixed; z-index:4; transform:translate(-50%,-100%); pointer-events:none;
+    background:#2f6bff; color:#fff; font-weight:900; font-size:18px; padding:4px 12px;
+    border-radius:999px; border:2px solid #dce8ff; box-shadow:0 3px 12px rgba(0,0,30,.45);
+    display:none; }
+  #bub:after { content:''; position:absolute; left:50%; bottom:-7px; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:#dce8ff; border-bottom:0; }
+  .pop { position:fixed; z-index:6; transform:translate(-50%,-50%); font-weight:900; font-size:26px;
+    pointer-events:none; text-shadow:0 2px 6px rgba(0,0,0,.5); animation:popfly 1s ease-out forwards; }
+  @keyframes popfly { 0%{opacity:0; margin-top:0; scale:.6} 15%{opacity:1; scale:1.15}
+    100%{opacity:0; margin-top:-70px; scale:1} }
+  #ov { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; background:radial-gradient(ellipse at 50% 35%, rgba(20,32,64,.55), rgba(6,10,22,.88));
+    color:#fff; text-align:center; padding:20px; }
+  #ovTitle { font-size:min(11vw,52px); font-weight:900; letter-spacing:1px; margin:0;
+    background:linear-gradient(180deg,#fff,#9db8ff); -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; filter:drop-shadow(0 4px 14px rgba(60,110,255,.45)); }
+  #ovSub { font-size:17px; color:#c7d4f5; max-width:340px; line-height:1.45; margin:0; white-space:pre-line; }
+  #ovBtn { font-size:20px; font-weight:800; color:#fff; background:linear-gradient(180deg,#4f8bff,#2c5ae0);
+    border:none; border-radius:16px; padding:15px 44px; cursor:pointer; letter-spacing:.5px;
+    box-shadow:0 6px 0 #1c3da0, 0 10px 24px rgba(0,0,40,.5); transition:transform .08s; }
+  #ovBtn:active { transform:translateY(4px); box-shadow:0 2px 0 #1c3da0; }
+  #ovHint { font-size:13px; color:#8fa3cf; margin:4px 0 0; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud">
+  <span class="pill">Level <b id="lvl">1</b></span>
+  <span class="pill" id="mute">🔊</span>
+  <span class="pill">🪙 <b id="coins">0</b></span>
+</div>
+<div id="bub">5</div>
+<div id="ov">
+  <h1 id="ovTitle">SPIJKER MASTER</h1>
+  <p id="ovSub">Steer your nails. Pick the best gates.\nHammer them home for coins!</p>
+  <button id="ovBtn">PLAY</button>
+  <p id="ovHint">drag left / right to steer</p>
+</div>
+<script src="three.min.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   SPIJKER MASTER — a 3D crowd-runner. You herd a swarm of nails
+   (spijkers) down a workbench: multiply through gates, dodge
+   saws/hammers/spike strips, brawl rival screw-crowds, and get
+   hammered into the multiplier plank at the end.
+
+   The SIM section below is fully headless-safe (no THREE, no
+   real DOM needed) — tests/spijker_master.test.mjs drives it
+   through window.SM. All rendering lives behind HEADLESS.
+   ============================================================ */
+
+// ---------------------------- SIM ----------------------------
+const C = {
+  TRACK_W: 9, XMAX: 3.6,
+  SPEED: 10,
+  START: 5,
+  CAP: 2000,       // hard crowd cap
+  VIS: 240,        // rendered instance cap per crowd
+  FIGHT_TICK: 0.055,
+  STEP_D: 2.2, STEP_H: 0.55,                       // finish stair size
+  STEPS: [0, 10, 25, 50, 90, 150, 250, 400, 650, 1000], // count needed per ×mult
+};
+
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+// deterministic per-level rng (mulberry32)
+function rngf(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function applyOp(c, op) {
+  if (op.t === 'mul') return c * op.v;
+  if (op.t === 'add') return c + op.v;
+  if (op.t === 'sub') return c - op.v;
+  return Math.max(1, Math.floor(c / op.v)); // div never zeroes you
+}
+const opLabel = (op) =>
+  op.t === 'mul' ? '×' + op.v : op.t === 'add' ? '+' + op.v :
+  op.t === 'sub' ? '−' + op.v : '÷' + op.v;
+const opGood = (op) => op.t === 'mul' || op.t === 'add';
+
+function genLevel(lv) {
+  const r = rngf((lv * 2654435761 + 7) % 4294967296);
+  const len = Math.min(900, 240 + lv * 28);
+  const gates = [], hazards = [], foes = [];
+  let e = C.START, z = 34;
+  while (z < len - 80) {
+    const roll = r();
+    if (roll < 0.52) {
+      // gate pair: one clearly good, one punishing
+      let good;
+      if (r() < 0.35 + Math.min(0.25, lv * 0.012)) good = { t: 'mul', v: r() < 0.75 ? 2 : 3 };
+      else good = { t: 'add', v: 4 + Math.floor(r() * (8 + lv * 2)) };
+      const bad = r() < 0.5
+        ? { t: 'sub', v: 2 + Math.floor(r() * (4 + lv)) }
+        : { t: 'div', v: 2 };
+      const gs = r() < 0.5 ? -1 : 1;
+      gates.push({ z, side: gs, op: good, used: false });
+      gates.push({ z, side: -gs, op: bad, used: false });
+      e = Math.max(1, Math.round(applyOp(e, good) * 0.82)); // imperfect-player estimate
+      z += 30 + r() * 18;
+    } else if (roll < 0.78 || e < 6 || z < 80) {
+      // (a too-early or too-big rival crowd would be a guaranteed wipe,
+      //  so those rolls fall back to a hazard)
+      const ht = r();
+      if (ht < 0.4) hazards.push({ k: 'saw', z, ph: r() * 6.28, sp: 1.1 + r() * 0.9 });
+      else if (ht < 0.7) hazards.push({ k: 'spikes', z, x: (r() * 2 - 1) * 2.2, w: 2.6 });
+      else hazards.push({ k: 'hammer', z, period: 1.5 + r() * 0.5, ph: r(), prev: 0 });
+      e = Math.max(1, Math.round(e * 0.9));
+      z += 26 + r() * 12;
+    } else {
+      const fc = Math.min(Math.round(e * 0.6), Math.max(2, Math.round(e * (0.3 + r() * 0.3))));
+      foes.push({ z, x: (r() * 2 - 1) * 1.6, count: fc, alive: true, boss: false });
+      e = Math.max(1, e - fc);
+      z += 30 + r() * 14;
+    }
+  }
+  // boss crowd guards the plank
+  const bc = Math.max(4, Math.round(e * (0.55 + r() * 0.25) + lv * 2));
+  foes.push({ z: len - 45, x: 0, count: bc, alive: true, boss: true });
+  return { len, gates, hazards, foes, finishZ: len - 18 };
+}
+
+// sunflower formation: unit i -> lateral/forward offset from the leader
+function fOff(i) {
+  let rr = 0.42 * Math.sqrt(i);
+  if (rr > 3.3) rr = Math.min(4.4, 3.3 + (rr - 3.3) * 0.22); // compress the outer rings
+  const th = i * 2.399963;
+  return [rr * Math.cos(th), rr * Math.sin(th) * 0.85];
+}
+
+let S = null;
+const hooks = { level: null, hud: null, over: null }; // render layer plugs in here
+
+function save() {
+  try {
+    localStorage.setItem('sm_lv', '' + S.nextLv);
+    localStorage.setItem('sm_coins', '' + S.coins);
+  } catch (e) {}
+}
+function loadMeta() {
+  let lv = 1, coins = 0, mute = false;
+  try {
+    lv = parseInt(localStorage.getItem('sm_lv') || '1', 10) || 1;
+    coins = parseInt(localStorage.getItem('sm_coins') || '0', 10) || 0;
+    mute = localStorage.getItem('sm_mute') === '1';
+  } catch (e) {}
+  return { lv, coins, mute };
+}
+
+function newRun(lv) {
+  const meta = S ? { coins: S.coins, mute: S.mute } : loadMeta();
+  S = {
+    phase: 'run', lv, nextLv: lv,
+    coins: meta.coins, mute: meta.mute,
+    z: 0, zPrev: 0, x: 0, tx: 0,
+    count: C.START,
+    time: 0, fight: null, fightT: 0,
+    finT: 0, finTarget: 0, res: null,
+    events: [],
+    lvl: genLevel(lv),
+  };
+  if (hooks.level) hooks.level();
+  if (hooks.hud) hooks.hud();
+  return S;
+}
+
+function pushEv(ev) {
+  S.events.push(ev);
+  if (S.events.length > 300) S.events.splice(0, S.events.length - 300);
+}
+
+function killN(n, x, z, side) {
+  n = Math.min(n, S.count);
+  if (n <= 0) return;
+  S.count -= n;
+  pushEv({ t: 'kill', n, x, z, side: side || 'p' });
+  if (S.count <= 0) doLose();
+}
+
+function doLose() {
+  S.count = Math.max(0, S.count);
+  S.phase = 'lose';
+  pushEv({ t: 'lose' });
+  if (hooks.over) hooks.over();
+}
+
+function applyGate(g) {
+  g.used = true;
+  const before = S.count;
+  S.count = clamp(Math.round(applyOp(S.count, g.op)), 0, C.CAP);
+  pushEv({ t: 'gate', good: opGood(g.op), d: S.count - before, x: g.side * C.TRACK_W / 4, z: g.z });
+  if (S.count <= 0) doLose();
+}
+
+// how many units currently satisfy pred(ux, uz, uzPrev)
+function countIn(pred) {
+  let k = 0;
+  for (let i = 0; i < S.count; i++) {
+    const o = fOff(i);
+    const ux = clamp(S.x + o[0], -C.XMAX, C.XMAX);
+    if (pred(ux, S.z + o[1], S.zPrev + o[1])) k++;
+  }
+  return k;
+}
+
+function sawX(h) { return Math.sin(S.time * h.sp + h.ph) * 2.5; }
+function hammerPhase(h) { return (S.time / h.period + h.ph) % 1; }
+
+function startFinish() {
+  const T = C.STEPS;
+  let step = 0;
+  while (step + 1 < T.length && S.count >= T[step + 1]) step++;
+  const mult = step + 1;
+  S.res = { step, mult, gain: S.count * mult };
+  S.finTarget = S.lvl.finishZ + (step + 0.5) * C.STEP_D + 1;
+  S.phase = 'finish';
+  S.finT = 0;
+  pushEv({ t: 'finish' });
+}
+
+function doWin() {
+  S.coins += S.res.gain;
+  S.nextLv = S.lv + 1;
+  S.phase = 'win';
+  save();
+  pushEv({ t: 'win' });
+  if (hooks.hud) hooks.hud();
+  if (hooks.over) hooks.over();
+}
+
+function tick(dt) {
+  if (!S) return;
+  S.time += dt;
+
+  if (S.phase === 'run') {
+    S.x += (S.tx - S.x) * Math.min(1, dt * 10);
+    S.zPrev = S.z;
+    const spd = C.SPEED * (1 + Math.min(0.5, S.lv * 0.015));
+    S.z += spd * dt;
+
+    // gates: leader crossing picks the side you're on
+    for (const g of S.lvl.gates) {
+      if (g.used || !(S.zPrev < g.z && g.z <= S.z)) continue;
+      const mySide = S.x <= 0 ? -1 : 1;
+      const pair = S.lvl.gates.filter(o => o.z === g.z);
+      for (const o of pair) o.used = true;
+      const hit = pair.find(o => o.side === mySide) || g;
+      hit.used = false; applyGate(hit); // applyGate re-marks it; keeps `used` semantics single-sourced
+      if (S.phase !== 'run') return;
+    }
+
+    // hazards
+    for (const h of S.lvl.hazards) {
+      if (Math.abs(h.z - S.z) > 8) continue;
+      if (h.k === 'saw') {
+        const sx = sawX(h);
+        let k = countIn((ux, uz) => Math.abs(uz - h.z) < 0.55 && Math.abs(ux - sx) < 1.0);
+        // the blade nicks the crowd, it doesn't liquefy it: cap the per-tick bite
+        if (k) k = Math.min(k, Math.max(1, Math.round(S.count * 0.03)));
+        if (k) killN(k, sx, h.z, 'p');
+      } else if (h.k === 'spikes') {
+        const k = countIn((ux, uz, uzp) => uzp < h.z && h.z <= uz && ux > h.x - h.w / 2 && ux < h.x + h.w / 2);
+        if (k) killN(k, h.x, h.z, 'p');
+      } else { // hammer: kills at the slam instant
+        const p = hammerPhase(h);
+        if (h.prev < 0.5 && p >= 0.5) {
+          const k = countIn((ux, uz) => Math.abs(ux) < 1.7 && Math.abs(uz - h.z) < 1.0);
+          if (k) killN(k, 0, h.z, 'p');
+          pushEv({ t: 'slam', z: h.z });
+        }
+        h.prev = p;
+      }
+      if (S.phase !== 'run') return;
+    }
+
+    // rival crowds
+    for (const f of S.lvl.foes) {
+      if (f.alive && S.z + 1.5 >= f.z - 1.4) {
+        S.phase = 'fight'; S.fight = f; S.fightT = 0;
+        pushEv({ t: 'clash', z: f.z });
+        return;
+      }
+    }
+
+    if (S.z >= S.lvl.finishZ) startFinish();
+
+  } else if (S.phase === 'fight') {
+    const f = S.fight;
+    S.fightT += dt;
+    while (S.fightT >= C.FIGHT_TICK && S.phase === 'fight') {
+      S.fightT -= C.FIGHT_TICK;
+      const k = Math.max(1, Math.round(Math.min(S.count, f.count) * 0.09));
+      const kf = Math.min(f.count, k);
+      f.count -= kf;
+      if (kf) pushEv({ t: 'kill', n: kf, x: f.x, z: f.z + 1, side: 'e' });
+      killN(Math.min(S.count, k), S.x, S.z + 1, 'p');
+      if (S.phase !== 'fight') return; // we died
+      if (f.count <= 0) {
+        f.alive = false; S.fight = null;
+        S.zPrev = S.z; S.phase = 'run';
+        pushEv({ t: 'won_fight', z: f.z });
+      }
+    }
+
+  } else if (S.phase === 'finish') {
+    S.finT += dt;
+    S.zPrev = S.z;
+    S.z = Math.min(S.finTarget, S.z + C.SPEED * 0.7 * dt);
+    if (S.z >= S.finTarget || S.finT > 6) doWin();
+  }
+
+  if (hooks.hud) hooks.hud();
+}
+
+// stair height under world-z (0 before the plank)
+function yAt(z) {
+  if (!S || z < S.lvl.finishZ) return 0;
+  const step = Math.min(C.STEPS.length - 1, Math.floor((z - S.lvl.finishZ) / C.STEP_D));
+  return (step + 1) * C.STEP_H;
+}
+
+// ---------------------------- UI shell (stub-safe DOM) ----------------------------
+const $ = (id) => document.getElementById(id);
+
+function hudSync() {
+  $('lvl').textContent = '' + (S ? S.lv : loadMeta().lv);
+  $('coins').textContent = '' + (S ? S.coins : loadMeta().coins);
+}
+function showOv(title, sub, btn) {
+  $('ovTitle').textContent = title;
+  $('ovSub').textContent = sub;
+  $('ovBtn').textContent = btn;
+  $('ov').style.display = 'flex';
+  $('bub').style.display = 'none';
+}
+function hideOv() {
+  $('ov').style.display = 'none';
+  $('bub').style.display = 'block';
+}
+function overSync() {
+  if (!S) return;
+  if (S.phase === 'win') {
+    showOv('LEVEL ' + S.lv + ' NAILED!',
+      '×' + S.res.mult + ' plank bonus\n🪙 +' + S.res.gain + ' coins', 'NEXT LEVEL');
+  } else if (S.phase === 'lose') {
+    showOv('BENT & BROKEN', 'Your last spijker went down.\nStraighten up and retry!', 'RETRY');
+  }
+}
+hooks.hud = hudSync;
+hooks.over = overSync;
+
+const meta0 = loadMeta();
+function onMainBtn() {
+  const next = !S ? meta0.lv : (S.phase === 'win' ? S.nextLv : S.lv);
+  newRun(next);
+  hideOv();
+  hudSync();
+  sfx('start');
+}
+$('ovBtn').onclick = onMainBtn;
+$('ovSub').textContent = 'Steer your nails. Pick the best gates.\nHammer them home for coins!';
+$('mute').onclick = () => {
+  const m = !(S ? S.mute : meta0.mute);
+  if (S) S.mute = m; meta0.mute = m;
+  try { localStorage.setItem('sm_mute', m ? '1' : '0'); } catch (e) {}
+  $('mute').textContent = m ? '🔇' : '🔊';
+};
+$('mute').textContent = meta0.mute ? '🔇' : '🔊';
+hudSync();
+
+// ---------------------------- audio (tiny synth) ----------------------------
+let AC = null;
+function sfx(kind) {
+  if ((S ? S.mute : meta0.mute)) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const t = AC.currentTime;
+    const tone = (f0, f1, dur, type, vol, at) => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t + at);
+      o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + at + dur);
+      g.gain.setValueAtTime(vol, t + at);
+      g.gain.exponentialRampToValueAtTime(0.001, t + at + dur);
+      o.connect(g); g.connect(AC.destination);
+      o.start(t + at); o.stop(t + at + dur + 0.02);
+    };
+    if (kind === 'good') tone(660, 990, 0.12, 'triangle', 0.25, 0);
+    else if (kind === 'bad') tone(300, 140, 0.2, 'sawtooth', 0.2, 0);
+    else if (kind === 'kill') tone(200, 90, 0.08, 'square', 0.12, 0);
+    else if (kind === 'clash') { tone(150, 90, 0.25, 'sawtooth', 0.25, 0); tone(400, 200, 0.15, 'square', 0.15, 0); }
+    else if (kind === 'slam') tone(90, 40, 0.3, 'sine', 0.4, 0);
+    else if (kind === 'start') { tone(440, 660, 0.1, 'triangle', 0.2, 0); tone(660, 880, 0.12, 'triangle', 0.2, 0.1); }
+    else if (kind === 'win') [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.16, 'triangle', 0.22, i * 0.11));
+    else if (kind === 'lose') [330, 262, 196, 131].forEach((f, i) => tone(f, f * 0.9, 0.2, 'sawtooth', 0.18, i * 0.14));
+  } catch (e) {}
+}
+
+// ---------------------------- headless API ----------------------------
+window.SM = {
+  C, get S() { return S; },
+  tick, newRun, genLevel, applyOp, applyGate, fOff, yAt, killN, startFinish,
+  setTX: (x) => { if (S) S.tx = clamp(x, -C.XMAX, C.XMAX); },
+  loadMeta, hooks,
+};
+
+// ---------------------------- RENDER (browser only) ----------------------------
+const HEADLESS = (typeof THREE === 'undefined');
+if (!HEADLESS) (function render() {
+
+  const cv = $('cv');
+  const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x18244a);
+  scene.fog = new THREE.Fog(0x18244a, 32, 95);
+
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 220);
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize); resize();
+
+  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x2a2036, 0.85));
+  const sun = new THREE.DirectionalLight(0xfff2dd, 1.0);
+  sun.position.set(6, 14, -6);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.left = -14; sun.shadow.camera.right = 14;
+  sun.shadow.camera.top = 24; sun.shadow.camera.bottom = -24;
+  sun.shadow.camera.far = 60;
+  scene.add(sun); scene.add(sun.target);
+
+  // --- helpers ---
+  function mergeGeoms(parts) { // parts: [{g, m?}] -> single non-indexed BufferGeometry
+    const pos = [], nrm = [];
+    for (const p of parts) {
+      const g = p.g.toNonIndexed();
+      if (p.m) g.applyMatrix4(p.m);
+      pos.push(...g.getAttribute('position').array);
+      nrm.push(...g.getAttribute('normal').array);
+      g.dispose();
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+    return out;
+  }
+  const M4 = () => new THREE.Matrix4();
+  const mT = (x, y, z) => M4().makeTranslation(x, y, z);
+
+  function textCanvas(text, fg, bg, px) {
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    px = px || 64;
+    ctx.font = '900 ' + px + 'px "Segoe UI", sans-serif';
+    const w = Math.ceil(ctx.measureText(text).width) + px * 0.8;
+    c.width = w; c.height = px * 1.6;
+    const x2 = c.getContext('2d');
+    if (bg) {
+      x2.fillStyle = bg;
+      x2.beginPath();
+      x2.roundRect ? x2.roundRect(0, 0, c.width, c.height, px * 0.5) : x2.rect(0, 0, c.width, c.height);
+      x2.fill();
+    }
+    x2.font = '900 ' + px + 'px "Segoe UI", sans-serif';
+    x2.textAlign = 'center'; x2.textBaseline = 'middle';
+    x2.fillStyle = fg;
+    x2.fillText(text, c.width / 2, c.height / 2 + px * 0.05);
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    return { tex, aspect: c.width / c.height };
+  }
+
+  // the hero of the show: a nail (point down, head up), ~0.8 tall
+  function nailGeo() {
+    return mergeGeoms([
+      { g: new THREE.ConeGeometry(0.07, 0.18, 6), m: M4().makeRotationX(Math.PI).setPosition(0, 0.09, 0) },
+      { g: new THREE.CylinderGeometry(0.06, 0.06, 0.5, 6), m: mT(0, 0.43, 0) },
+      { g: new THREE.CylinderGeometry(0.17, 0.17, 0.06, 10), m: mT(0, 0.71, 0) },
+    ]);
+  }
+  // rival: a screw — chunkier, cross-slot head
+  function screwGeo() {
+    return mergeGeoms([
+      { g: new THREE.ConeGeometry(0.08, 0.2, 6), m: M4().makeRotationX(Math.PI).setPosition(0, 0.1, 0) },
+      { g: new THREE.CylinderGeometry(0.08, 0.07, 0.42, 6), m: mT(0, 0.41, 0) },
+      { g: new THREE.CylinderGeometry(0.16, 0.19, 0.12, 10), m: mT(0, 0.68, 0) },
+      { g: new THREE.BoxGeometry(0.22, 0.03, 0.05), m: mT(0, 0.755, 0) },
+      { g: new THREE.BoxGeometry(0.05, 0.03, 0.22), m: mT(0, 0.755, 0) },
+    ]);
+  }
+
+  const playerMat = new THREE.MeshPhongMaterial({ color: 0x9fc2ff, shininess: 90, specular: 0xdfe9ff });
+  const foeMat = new THREE.MeshPhongMaterial({ color: 0xff6a55, shininess: 60, specular: 0xffd0c0 });
+  const crowd = new THREE.InstancedMesh(nailGeo(), playerMat, C.VIS);
+  crowd.castShadow = true;
+  crowd.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(crowd);
+  const foesMesh = new THREE.InstancedMesh(screwGeo(), foeMat, 400);
+  foesMesh.castShadow = true;
+  foesMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(foesMesh);
+
+  // particles for kills / gains / confetti
+  const P_MAX = 420;
+  const parts = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.13, 0.13, 0.13),
+    new THREE.MeshBasicMaterial({ color: 0xffffff }), P_MAX);
+  parts.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  parts.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(P_MAX * 3), 3);
+  scene.add(parts);
+  const pPool = [];
+  function burst(x, y, z, n, col) {
+    for (let i = 0; i < n && pPool.length < P_MAX; i++) {
+      pPool.push({
+        x: x + (Math.random() - 0.5) * 0.8, y: y + Math.random() * 0.6, z: z + (Math.random() - 0.5) * 0.8,
+        vx: (Math.random() - 0.5) * 4, vy: 2 + Math.random() * 4, vz: (Math.random() - 0.5) * 4,
+        life: 0.6 + Math.random() * 0.5, col,
+      });
+    }
+  }
+
+  // --- per-level scene group ---
+  let lvlGroup = null;
+  const dyn = { saws: [], hammers: [], foeLabels: [], gatePanels: [] };
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0xb4854f });
+  const woodDark = new THREE.MeshLambertMaterial({ color: 0x8a6238 });
+  const steelMat = new THREE.MeshPhongMaterial({ color: 0xb9c4d6, shininess: 100 });
+
+  function groundTexture() {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 128;
+    const x = c.getContext('2d');
+    x.fillStyle = '#c99a63'; x.fillRect(0, 0, 128, 128);
+    x.fillStyle = 'rgba(120,80,40,.25)';
+    for (let i = 0; i < 9; i++) { // plank grain
+      x.fillRect(0, i * 15 + ((i * 37) % 6), 128, 2);
+    }
+    x.fillStyle = 'rgba(90,60,30,.5)';
+    x.fillRect(0, 0, 128, 3); x.fillRect(0, 63, 128, 3);
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  function buildLevel() {
+    if (lvlGroup) {
+      scene.remove(lvlGroup);
+      lvlGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    }
+    dyn.saws = []; dyn.hammers = []; dyn.foeLabels = []; dyn.gatePanels = [];
+    lvlGroup = new THREE.Group();
+    const L = S.lvl;
+
+    // workbench floor
+    const gt = groundTexture();
+    gt.repeat.set(3, (L.len + 120) / 6);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(C.TRACK_W + 2.4, L.len + 120),
+      new THREE.MeshLambertMaterial({ map: gt }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(0, 0, L.len / 2 - 10);
+    ground.receiveShadow = true;
+    lvlGroup.add(ground);
+
+    // side rails
+    for (const sd of [-1, 1]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, L.len + 120), woodDark);
+      rail.position.set(sd * (C.TRACK_W / 2 + 0.45), 0.3, L.len / 2 - 10);
+      lvlGroup.add(rail);
+    }
+
+    // gates
+    for (const g of L.gates) {
+      const grp = new THREE.Group();
+      const xc = g.side * C.TRACK_W / 4;
+      const good = opGood(g.op);
+      const col = good ? 0x35d97b : 0xff5d5d;
+      const postMat = new THREE.MeshLambertMaterial({ color: 0xe8eef8 });
+      for (const px of [-2.05, 2.05]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.6, 0.22), postMat);
+        post.position.set(px, 1.3, 0);
+        grp.add(post);
+      }
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(4.35, 0.22, 0.22), postMat);
+      bar.position.set(0, 2.6, 0);
+      grp.add(bar);
+      const panel = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.1, 2.4),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+      panel.position.set(0, 1.3, 0);
+      grp.add(panel);
+      const lbl = textCanvas(opLabel(g.op), '#ffffff', good ? 'rgba(20,140,70,.92)' : 'rgba(190,40,40,.92)', 72);
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.5 * lbl.aspect, 1.5),
+        new THREE.MeshBasicMaterial({ map: lbl.tex, transparent: true, side: THREE.DoubleSide }));
+      sign.rotation.y = Math.PI; // face the approaching crowd (camera sits at -z)
+      sign.position.set(0, 1.55, -0.02);
+      grp.add(sign);
+      grp.position.set(xc, 0, g.z);
+      lvlGroup.add(grp);
+      dyn.gatePanels.push({ g, panel, sign });
+    }
+
+    // hazards
+    for (const h of L.hazards) {
+      if (h.k === 'saw') {
+        const saw = new THREE.Group();
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.1, 24), steelMat);
+        disc.rotation.z = Math.PI / 2;
+        for (let i = 0; i < 10; i++) {
+          const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.3, 4), steelMat);
+          const a = i / 10 * Math.PI * 2;
+          tooth.position.set(0, Math.cos(a) * 1.1, Math.sin(a) * 1.1);
+          tooth.rotation.x = -a;
+          disc.add(tooth);
+        }
+        saw.add(disc);
+        saw.position.set(0, 0.55, h.z);
+        saw.castShadow = true;
+        lvlGroup.add(saw);
+        dyn.saws.push({ h, mesh: saw, disc });
+      } else if (h.k === 'spikes') {
+        const strip = new THREE.Group();
+        const base = new THREE.Mesh(new THREE.BoxGeometry(h.w, 0.12, 1.2), woodDark);
+        base.position.y = 0.06;
+        strip.add(base);
+        for (let i = 0; i < 8; i++) {
+          const sp = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.5, 5), steelMat);
+          sp.position.set(-h.w / 2 + (i + 0.5) * (h.w / 8), 0.35, ((i % 2) - 0.5) * 0.5);
+          strip.add(sp);
+        }
+        strip.position.set(h.x, 0, h.z);
+        lvlGroup.add(strip);
+      } else { // hammer
+        const grp = new THREE.Group();
+        const pivot = new THREE.Group();
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 3.4, 0.35), woodMat);
+        arm.position.y = 1.7;
+        const head = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.1, 1.3), steelMat);
+        head.position.y = 3.6;
+        head.castShadow = true;
+        pivot.add(arm); pivot.add(head);
+        pivot.position.set(0, 0.2, 0);
+        const stand = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.6), woodDark);
+        stand.position.set(C.TRACK_W / 2 + 0.4, 0.2, 0);
+        grp.add(pivot); grp.add(stand);
+        grp.position.set(0, 0, h.z);
+        lvlGroup.add(grp);
+        dyn.hammers.push({ h, pivot });
+      }
+    }
+
+    // foe crowds get a floating count label
+    for (const f of L.foes) {
+      const lbl = textCanvas('' + f.count, '#fff', f.boss ? 'rgba(140,20,90,.95)' : 'rgba(190,40,40,.92)', 64);
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: lbl.tex, transparent: true }));
+      spr.scale.set(1.4 * lbl.aspect, 1.4, 1);
+      spr.position.set(f.x, 2.6, f.z);
+      lvlGroup.add(spr);
+      dyn.foeLabels.push({ f, spr, last: f.count });
+    }
+
+    // finish plank: golden stairs with multipliers
+    const T = C.STEPS;
+    for (let i = 0; i < T.length; i++) {
+      const hue = 0.13 - i * 0.008;
+      const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(Math.max(0, hue), 0.85, 0.55 + i * 0.02) });
+      const stepM = new THREE.Mesh(new THREE.BoxGeometry(C.TRACK_W, (i + 1) * C.STEP_H, C.STEP_D), mat);
+      stepM.position.set(0, (i + 1) * C.STEP_H / 2, S.lvl.finishZ + (i + 0.5) * C.STEP_D);
+      stepM.receiveShadow = true;
+      lvlGroup.add(stepM);
+      const lbl = textCanvas('×' + (i + 1), '#7a4a00', null, 72);
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.1 * lbl.aspect, 1.1),
+        new THREE.MeshBasicMaterial({ map: lbl.tex, transparent: true }));
+      sign.rotation.set(-Math.PI / 2, 0, Math.PI); // flat, readable when running up
+      sign.position.set(0, (i + 1) * C.STEP_H + 0.01, S.lvl.finishZ + (i + 0.5) * C.STEP_D);
+      lvlGroup.add(sign);
+    }
+    // finish arch
+    const archMat = new THREE.MeshLambertMaterial({ color: 0xffd76a });
+    for (const sd of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.4, 0.3), archMat);
+      p.position.set(sd * (C.TRACK_W / 2 - 0.2), 1.7, S.lvl.finishZ);
+      lvlGroup.add(p);
+    }
+    const top = new THREE.Mesh(new THREE.BoxGeometry(C.TRACK_W, 0.35, 0.35), archMat);
+    top.position.set(0, 3.4, S.lvl.finishZ);
+    lvlGroup.add(top);
+
+    scene.add(lvlGroup);
+  }
+  hooks.level = buildLevel;
+
+  // --- input ---
+  let dragging = false, lastPX = 0;
+  const px2world = () => (C.TRACK_W * 1.35) / window.innerWidth;
+  cv.addEventListener('pointerdown', (e) => { dragging = true; lastPX = e.clientX; });
+  window.addEventListener('pointermove', (e) => {
+    if (!dragging || !S) return;
+    S.tx = clamp(S.tx + (e.clientX - lastPX) * px2world(), -C.XMAX, C.XMAX);
+    lastPX = e.clientX;
+  });
+  window.addEventListener('pointerup', () => { dragging = false; });
+  const keys = {};
+  window.addEventListener('keydown', (e) => { keys[e.key] = true; });
+  window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+  // --- DOM popups ---
+  function popup(txt, color) {
+    const d = document.createElement('div');
+    d.className = 'pop';
+    d.style.color = color;
+    d.style.left = '50%';
+    d.style.top = '38%';
+    d.textContent = txt;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 1000);
+  }
+
+  // --- event drain (sim -> fx/sfx) ---
+  function drainEvents() {
+    for (const ev of S.events) {
+      if (ev.t === 'kill') {
+        burst(ev.x, 0.6, ev.z, Math.min(14, 3 + ev.n), ev.side === 'e' ? 0xff6a55 : 0x9fc2ff);
+        sfx('kill');
+      } else if (ev.t === 'gate') {
+        popup((ev.d >= 0 ? '+' : '') + ev.d, ev.good ? '#5cff9b' : '#ff7a6a');
+        burst(ev.x, 1.2, ev.z, 12, ev.good ? 0x35d97b : 0xff5d5d);
+        sfx(ev.good ? 'good' : 'bad');
+      } else if (ev.t === 'clash') sfx('clash');
+      else if (ev.t === 'slam') sfx('slam');
+      else if (ev.t === 'win') { sfx('win'); for (let i = 0; i < 8; i++) burst(S.x + (Math.random() - 0.5) * 4, 1 + Math.random() * 2, S.z + Math.random() * 3, 10, [0xffd76a, 0x5cff9b, 0x6ab8ff, 0xff8ad0][i % 4]); }
+      else if (ev.t === 'lose') sfx('lose');
+      else if (ev.t === 'won_fight') sfx('good');
+    }
+    S.events.length = 0;
+  }
+
+  // --- frame loop ---
+  const m4 = M4(), quat = new THREE.Quaternion(), sc1 = new THREE.Vector3(1, 1, 1),
+    posV = new THREE.Vector3(), eul = new THREE.Euler(), colV = new THREE.Color();
+  let lastT = 0;
+
+  function updateCrowd(t) {
+    const n = Math.min(S.count, C.VIS);
+    const active = S.phase === 'run' || S.phase === 'fight' || S.phase === 'finish';
+    for (let i = 0; i < n; i++) {
+      const o = fOff(i);
+      const ux = clamp(S.x + o[0], -C.XMAX, C.XMAX);
+      const uz = S.z + o[1];
+      const bob = active ? Math.abs(Math.sin(t * 9 + i * 1.7)) * 0.14 : 0;
+      posV.set(ux, yAt(uz) + bob, uz);
+      eul.set(active ? 0.14 : 0, Math.sin(i * 2.4) * 0.25, Math.sin(t * 9 + i * 1.7) * 0.06);
+      quat.setFromEuler(eul);
+      m4.compose(posV, quat, sc1);
+      crowd.setMatrixAt(i, m4);
+    }
+    crowd.count = n;
+    crowd.instanceMatrix.needsUpdate = true;
+  }
+
+  function updateFoes(t) {
+    let idx = 0;
+    for (const f of S.lvl.foes) {
+      if (!f.alive || Math.abs(f.z - S.z) > 70) continue;
+      const fighting = S.fight === f;
+      const n = Math.min(f.count, 130);
+      for (let i = 0; i < n && idx < 400; i++) {
+        const o = fOff(i);
+        const jig = fighting ? Math.sin(t * 22 + i * 3.1) * 0.12 : 0;
+        posV.set(clamp(f.x + o[0], -C.XMAX, C.XMAX) + jig, Math.abs(Math.sin(t * 4 + i * 2.1)) * 0.06, f.z + 1.2 + o[1] * 0.9);
+        eul.set(0, Math.PI + Math.sin(i * 1.3) * 0.3, 0);
+        quat.setFromEuler(eul);
+        m4.compose(posV, quat, sc1);
+        foesMesh.setMatrixAt(idx++, m4);
+      }
+    }
+    foesMesh.count = idx;
+    foesMesh.instanceMatrix.needsUpdate = true;
+    for (const fl of dyn.foeLabels) {
+      if (!fl.f.alive) { fl.spr.visible = false; continue; }
+      if (fl.f.count !== fl.last) {
+        fl.last = fl.f.count;
+        const lbl = textCanvas('' + fl.f.count, '#fff', fl.f.boss ? 'rgba(140,20,90,.95)' : 'rgba(190,40,40,.92)', 64);
+        fl.spr.material.map.dispose();
+        fl.spr.material.map = lbl.tex;
+        fl.spr.scale.set(1.4 * lbl.aspect, 1.4, 1);
+      }
+    }
+  }
+
+  function updateParts(dt) {
+    let i = 0;
+    for (let k = pPool.length - 1; k >= 0; k--) {
+      const p = pPool[k];
+      p.life -= dt;
+      if (p.life <= 0) { pPool.splice(k, 1); continue; }
+      p.vy -= 12 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.y < 0.05) { p.y = 0.05; p.vy *= -0.3; }
+      posV.set(p.x, p.y, p.z);
+      eul.set(p.life * 7, p.life * 9, 0);
+      quat.setFromEuler(eul);
+      const s = Math.min(1, p.life * 2.5);
+      m4.compose(posV, quat, new THREE.Vector3(s, s, s));
+      parts.setMatrixAt(i, m4);
+      parts.setColorAt(i, colV.setHex(p.col));
+      i++;
+    }
+    parts.count = i;
+    parts.instanceMatrix.needsUpdate = true;
+    if (parts.instanceColor) parts.instanceColor.needsUpdate = true;
+  }
+
+  function frame(tms) {
+    requestAnimationFrame(frame);
+    const t = tms / 1000;
+    let dt = Math.min(0.033, t - lastT || 0.016);
+    lastT = t;
+
+    if (S && (S.phase === 'run' || S.phase === 'fight' || S.phase === 'finish')) {
+      if (keys.ArrowLeft || keys.a) S.tx = clamp(S.tx - 8 * dt, -C.XMAX, C.XMAX);
+      if (keys.ArrowRight || keys.d) S.tx = clamp(S.tx + 8 * dt, -C.XMAX, C.XMAX);
+      tick(dt);
+    }
+
+    if (S) {
+      drainEvents();
+      updateCrowd(t);
+      updateFoes(t);
+
+      for (const s of dyn.saws) {
+        s.mesh.position.x = sawX(s.h);
+        s.disc.rotation.x += dt * 9;
+      }
+      for (const hm of dyn.hammers) {
+        const p = hammerPhase(hm.h);
+        const raise = Math.abs(p - 0.5) * 2;
+        hm.pivot.rotation.x = -Math.pow(raise, 0.7) * 1.15;
+      }
+      for (const gp of dyn.gatePanels) {
+        gp.panel.visible = !gp.g.used;
+        gp.sign.visible = !gp.g.used || gp.g.z > S.z;
+      }
+
+      // camera follows, rising with crowd size and the finish stairs
+      const camY = 5.2 + Math.min(3.5, S.count * 0.012) + yAt(S.z);
+      const camZ = S.z - 8.5 - Math.min(3, S.count * 0.008);
+      camera.position.lerp(posV.set(S.x * 0.55, camY, camZ), Math.min(1, dt * 4.5));
+      camera.lookAt(S.x * 0.4, 0.9 + yAt(S.z + 6) * 0.7, S.z + 9);
+      sun.position.set(camera.position.x + 6, camera.position.y + 10, S.z - 4);
+      sun.target.position.set(S.x, 0, S.z + 4);
+
+      // crowd count bubble
+      const bub = $('bub');
+      if (S.phase === 'run' || S.phase === 'fight' || S.phase === 'finish') {
+        posV.set(S.x, yAt(S.z) + 1.6 + Math.min(2.6, Math.sqrt(S.count) * 0.16), S.z);
+        posV.project(camera);
+        bub.style.left = ((posV.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+        bub.style.top = ((-posV.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+        bub.textContent = '' + S.count;
+      }
+    }
+
+    updateParts(dt);
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
