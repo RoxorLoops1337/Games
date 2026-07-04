@@ -82,12 +82,16 @@ drawSafe('draw() during run');
 
 // every gate pair offers a positive choice; the first is all-good;
 // the opening stretch is monster-free and brutes wait until mid-level
-const seen = { runner: 0, spitter: 0, pools: 0, nastyGate: 0 };
+const seen = { runner: 0, spitter: 0, pools: 0, nastyGate: 0, allBad: 0 };
 const isNasty = s => (s.kind === 'p' && s.op === '-') || (s.kind === 'n' && s.op === '/' && s.v >= 3);
 for (let lvl = 1; lvl <= 12; lvl++) {
   HR.buildLevel(lvl);
-  t.ok(S.gates.every(g => HR.gateIsGood(g.L) || HR.gateIsGood(g.R)),
-    'level ' + lvl + ': every gate pair has at least one good side');
+  if (lvl < C.BAD_PAIR_LVL) {
+    t.ok(S.gates.every(g => HR.gateIsGood(g.L) || HR.gateIsGood(g.R)),
+      'level ' + lvl + ': every gate pair has at least one good side');
+  } else {
+    seen.allBad += S.gates.filter(g => !HR.gateIsGood(g.L) && !HR.gateIsGood(g.R)).length;
+  }
   t.ok(HR.gateIsGood(S.gates[0].L) && HR.gateIsGood(S.gates[0].R),
     'level ' + lvl + ': first gate pair is all-good');
   const g0 = S.gates[0].z;
@@ -109,7 +113,15 @@ t.ok(seen.runner > 0, 'runners appear in the late game');
 t.ok(seen.spitter > 0, 'spitters appear in the late game');
 t.ok(seen.pools > 0, 'lava pools appear in the late game');
 t.ok(seen.nastyGate > 0, 'nastier gates appear in the late game');
+t.ok(seen.allBad > 0, 'bad-vs-bad gate pairs appear from wave ' + C.BAD_PAIR_LVL);
 HR.startLevel();
+
+// ---- big-number formatting + army cap ----
+t.ok(HR.fmt(999) === '999' && HR.fmt(2500) === '2.5k', 'fmt: small numbers');
+t.ok(HR.fmt(2500000) === '2.5M' && HR.fmt(3200000000) === '3.2B' && HR.fmt(4e12) === '4.0T', 'fmt: M/B/T tiers');
+HR.setUnits(2e15);
+t.ok(S.n === C.UNIT_MAX, 'army caps at a quadrillion, not 100k');
+S.n = 10;
 
 // deterministic layout per level
 const gatesA = JSON.stringify(S.gates.map(g => [g.z | 0, HR.gateLabel(g.L), HR.gateLabel(g.R)]));
@@ -261,6 +273,31 @@ t.ok(store.hr_best === '2', 'wave record saved to localStorage');
 drawSafe('draw() right after the boss falls');
 step(3);
 t.ok(S.phase === 'run' && S.dist > S.segStart - C.BOSS_DIST, 'the march continues into the new stretch');
+
+// ---- bosses scale with the army and come down to crush you ----
+HR.startLevel();
+clearField();
+S.n = 1000; S.pow = 2;
+S.dist = S.levelLen - C.BOSS_DIST - 5;
+step(0.2);
+t.ok(S.phase === 'boss', 'boss spawns for the scaling checks');
+t.ok(S.boss.max >= 1000 * 2 * C.UNIT_DPS * 4, 'boss hp scales with army firepower — no more one-taps');
+const hpBig = S.boss.max;
+S.boss.hp = S.boss.max = 1e18; // immortal while we watch it advance
+const r0 = S.boss.range;
+step(3.5); // 2s grace, then it marches
+t.ok(S.boss.range < r0 - 20, 'boss advances down the lane toward the crowd');
+S.boss.range = 110; S.boss.grace = 0; S.boss.crushT = 0.05;
+const nBeforeCrush = S.n;
+step(1);
+t.ok(S.n <= nBeforeCrush - Math.ceil(nBeforeCrush * 0.15), 'reaching the crowd crushes a % of the army');
+t.ok(S.boss.range > 110, 'boss rears back after a crush and comes again');
+HR.startLevel();
+clearField();
+S.n = 10; S.pow = 1;
+S.dist = S.levelLen - C.BOSS_DIST - 5;
+step(0.2);
+t.ok(S.boss.max < hpBig, 'boss hp adapts down for a small army (still winnable)');
 
 // ---- fresh run resets to wave 1 + record survives reload ----
 HR.startLevel();
