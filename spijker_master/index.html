@@ -181,7 +181,7 @@ function newRun(lv) {
     z: 0, zPrev: 0, x: 0, tx: 0,
     count: C.START,
     time: 0, fight: null, fightT: 0,
-    finT: 0, finTarget: 0, res: null,
+    finT: 0, finTarget: 0, res: null, planted: 0, slamT: 0,
     events: [],
     lvl: genLevel(lv),
   };
@@ -237,10 +237,10 @@ function startFinish() {
   let step = 0;
   while (step + 1 < T.length && S.count >= T[step + 1]) step++;
   const mult = step + 1;
-  S.res = { step, mult, gain: S.count * mult };
-  S.finTarget = S.lvl.finishZ + (step + 0.5) * C.STEP_D + 1;
+  S.res = { step, mult, start: S.count, gain: S.count * mult };
+  S.finTarget = S.lvl.finishZ + (step + 0.5) * C.STEP_D;
   S.phase = 'finish';
-  S.finT = 0;
+  S.finT = 0; S.planted = 0; S.slamT = 0;
   pushEv({ t: 'finish' });
 }
 
@@ -315,11 +315,11 @@ function tick(dt) {
     S.fightT += dt;
     while (S.fightT >= C.FIGHT_TICK && S.phase === 'fight') {
       S.fightT -= C.FIGHT_TICK;
-      const k = Math.max(1, Math.round(Math.min(S.count, f.count) * 0.09));
+      const k = Math.max(1, Math.round(Math.min(S.count, f.count) * 0.05));
       const kf = Math.min(f.count, k);
       f.count -= kf;
       if (kf) pushEv({ t: 'kill', n: kf, x: f.x, z: f.z + 1, side: 'e' });
-      killN(Math.min(S.count, k), S.x, S.z + 1, 'p');
+      killN(Math.min(S.count, k), S.x, S.z + 2.6, 'p'); // front rows, under the mallets
       if (S.phase !== 'fight') return; // we died
       if (f.count <= 0) {
         f.alive = false; S.fight = null;
@@ -329,10 +329,27 @@ function tick(dt) {
     }
 
   } else if (S.phase === 'finish') {
+    // the payoff: the crowd marches up the plank and every nail gets
+    // hammered in along the way; the last one lands on the top step
     S.finT += dt;
     S.zPrev = S.z;
-    S.z = Math.min(S.finTarget, S.z + C.SPEED * 0.7 * dt);
-    if (S.z >= S.finTarget || S.finT > 6) doWin();
+    S.x += (0 - S.x) * Math.min(1, dt * 4); // drift to the middle of the plank
+    S.z = Math.min(S.finTarget, S.z + C.SPEED * 0.42 * dt);
+    const z0 = S.lvl.finishZ - 1.5;
+    const prog = clamp((S.z - z0) / (S.finTarget - z0), 0, 1);
+    const want = Math.round(S.res.start * prog);
+    if (want > S.planted) {
+      const n = want - S.planted;
+      S.planted = want;
+      S.count = S.res.start - S.planted;
+      pushEv({ t: 'plant', n, x: S.x, z: S.z,
+        step: clamp(Math.floor((S.z - S.lvl.finishZ) / C.STEP_D), 0, S.res.step) });
+    }
+    if (S.z >= S.finTarget && S.planted >= S.res.start) {
+      if (S.slamT === 0) pushEv({ t: 'slam_final', z: S.z, step: S.res.step });
+      S.slamT += dt;
+      if (S.slamT > 1.1) doWin();
+    } else if (S.finT > 12) doWin(); // safety net, should never trigger
   }
 
   if (hooks.hud) hooks.hud();
@@ -415,6 +432,7 @@ function sfx(kind) {
     else if (kind === 'kill') tone(200, 90, 0.08, 'square', 0.12, 0);
     else if (kind === 'clash') { tone(150, 90, 0.25, 'sawtooth', 0.25, 0); tone(400, 200, 0.15, 'square', 0.15, 0); }
     else if (kind === 'slam') tone(90, 40, 0.3, 'sine', 0.4, 0);
+    else if (kind === 'plant') { tone(620, 320, 0.05, 'square', 0.14, 0); tone(140, 90, 0.07, 'sine', 0.2, 0); }
     else if (kind === 'start') { tone(440, 660, 0.1, 'triangle', 0.2, 0); tone(660, 880, 0.12, 'triangle', 0.2, 0.1); }
     else if (kind === 'win') [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.16, 'triangle', 0.22, i * 0.11));
     else if (kind === 'lose') [330, 262, 196, 131].forEach((f, i) => tone(f, f * 0.9, 0.2, 'sawtooth', 0.18, i * 0.14));
@@ -463,18 +481,26 @@ if (!HEADLESS) (function render() {
   scene.add(sun); scene.add(sun.target);
 
   // --- helpers ---
-  function mergeGeoms(parts) { // parts: [{g, m?}] -> single non-indexed BufferGeometry
-    const pos = [], nrm = [];
+  function mergeGeoms(parts) { // parts: [{g, m?, c?}] -> single non-indexed BufferGeometry
+    const pos = [], nrm = [], col = [];
+    let hasCol = false;
     for (const p of parts) {
       const g = p.g.toNonIndexed();
       if (p.m) g.applyMatrix4(p.m);
       pos.push(...g.getAttribute('position').array);
       nrm.push(...g.getAttribute('normal').array);
+      if (p.c !== undefined) {
+        hasCol = true;
+        const c = new THREE.Color(p.c);
+        const n = g.getAttribute('position').count;
+        for (let i = 0; i < n; i++) col.push(c.r, c.g, c.b);
+      }
       g.dispose();
     }
     const out = new THREE.BufferGeometry();
     out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     out.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+    if (hasCol) out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     return out;
   }
   const M4 = () => new THREE.Matrix4();
@@ -511,27 +537,80 @@ if (!HEADLESS) (function render() {
       { g: new THREE.CylinderGeometry(0.17, 0.17, 0.06, 10), m: mT(0, 0.71, 0) },
     ]);
   }
-  // rival: a screw — chunkier, cross-slot head
-  function screwGeo() {
+  // rival: a mean little mallet — wooden handle, angry red head slung along z
+  function malletGeo() {
     return mergeGeoms([
-      { g: new THREE.ConeGeometry(0.08, 0.2, 6), m: M4().makeRotationX(Math.PI).setPosition(0, 0.1, 0) },
-      { g: new THREE.CylinderGeometry(0.08, 0.07, 0.42, 6), m: mT(0, 0.41, 0) },
-      { g: new THREE.CylinderGeometry(0.16, 0.19, 0.12, 10), m: mT(0, 0.68, 0) },
-      { g: new THREE.BoxGeometry(0.22, 0.03, 0.05), m: mT(0, 0.755, 0) },
-      { g: new THREE.BoxGeometry(0.05, 0.03, 0.22), m: mT(0, 0.755, 0) },
+      { g: new THREE.CylinderGeometry(0.055, 0.07, 0.58, 6), m: mT(0, 0.29, 0), c: 0xa5713c },
+      { g: new THREE.CylinderGeometry(0.13, 0.13, 0.46, 10), m: M4().makeRotationX(Math.PI / 2).setPosition(0, 0.64, 0), c: 0xe8402c },
+      { g: new THREE.CylinderGeometry(0.15, 0.15, 0.07, 10), m: M4().makeRotationX(Math.PI / 2).setPosition(0, 0.64, 0.23), c: 0x8f1d12 },
+      { g: new THREE.CylinderGeometry(0.15, 0.15, 0.07, 10), m: M4().makeRotationX(Math.PI / 2).setPosition(0, 0.64, -0.23), c: 0x8f1d12 },
     ]);
   }
 
   const playerMat = new THREE.MeshPhongMaterial({ color: 0x9fc2ff, shininess: 90, specular: 0xdfe9ff });
-  const foeMat = new THREE.MeshPhongMaterial({ color: 0xff6a55, shininess: 60, specular: 0xffd0c0 });
-  const crowd = new THREE.InstancedMesh(nailGeo(), playerMat, C.VIS);
+  const foeMat = new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true, shininess: 50, specular: 0xffc0a0 });
+  const nailG = nailGeo();
+  const crowd = new THREE.InstancedMesh(nailG, playerMat, C.VIS);
   crowd.castShadow = true;
   crowd.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   scene.add(crowd);
-  const foesMesh = new THREE.InstancedMesh(screwGeo(), foeMat, 400);
+  const foesMesh = new THREE.InstancedMesh(malletGeo(), foeMat, 400);
   foesMesh.castShadow = true;
   foesMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   scene.add(foesMesh);
+
+  // nails that get pounded flush into the wood (fight/hammer casualties)
+  const SINK_MAX = 120;
+  const sinkMesh = new THREE.InstancedMesh(nailG,
+    new THREE.MeshPhongMaterial({ color: 0x7d97c4, shininess: 60 }), SINK_MAX);
+  sinkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(sinkMesh);
+  let sinks = []; // {x, z, y0, born} ring buffer, kept as set dressing
+  function addSinks(n, x, z, tNow, y0) {
+    for (let i = 0; i < n; i++) {
+      sinks.push({ x: x + (Math.random() - 0.5) * 1.6, z: z + (Math.random() - 0.5) * 1.4,
+        y0: y0 || 0, born: tNow, rot: (Math.random() - 0.5) * 0.5 });
+      if (sinks.length > SINK_MAX) sinks.shift();
+    }
+  }
+
+  // nails planted into the finish plank, one instance each, permanent
+  const PLANT_MAX = 420;
+  const plantMesh = new THREE.InstancedMesh(nailG,
+    new THREE.MeshPhongMaterial({ color: 0xbcd2ff, shininess: 110, specular: 0xffffff }), PLANT_MAX);
+  scene.add(plantMesh);
+  let plantN = 0;
+  function addPlanted(ev) {
+    const stepTop = (ev.step + 1) * C.STEP_H;
+    for (let i = 0; i < ev.n && plantN < PLANT_MAX; i++) {
+      posV.set((Math.random() - 0.5) * 6.4,
+        stepTop - 0.5, // sunk: just the head and a bit of shaft proud of the wood
+        S.lvl.finishZ + ev.step * C.STEP_D + 0.2 + Math.random() * (C.STEP_D * 0.75));
+      eul.set((Math.random() - 0.5) * 0.18, Math.random() * 6.28, (Math.random() - 0.5) * 0.18);
+      quat.setFromEuler(eul);
+      m4.compose(posV, quat, sc1);
+      plantMesh.setMatrixAt(plantN++, m4);
+    }
+    plantMesh.count = plantN;
+    plantMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // the giant golden mallet that hammers the crowd home on the plank
+  const gHammer = new THREE.Group();
+  {
+    const gold = new THREE.MeshPhongMaterial({ color: 0xffc94d, shininess: 80, specular: 0xfff2c0 });
+    const wood = new THREE.MeshLambertMaterial({ color: 0x9a6b3d });
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.8, 14), gold);
+    head.rotation.z = Math.PI / 2;
+    head.position.y = 0.55;
+    head.castShadow = true;
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 2.6, 8), wood);
+    handle.position.y = 2.35;
+    gHammer.add(head); gHammer.add(handle);
+    gHammer.visible = false;
+    scene.add(gHammer);
+  }
+  let shake = 0, finalBoom = false;
 
   // particles for kills / gains / confetti
   const P_MAX = 420;
@@ -582,6 +661,7 @@ if (!HEADLESS) (function render() {
       lvlGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); });
     }
     dyn.saws = []; dyn.hammers = []; dyn.foeLabels = []; dyn.gatePanels = [];
+    sinks = []; plantN = 0; plantMesh.count = 0; shake = 0; finalBoom = false;
     lvlGroup = new THREE.Group();
     const L = S.lvl;
 
@@ -732,7 +812,8 @@ if (!HEADLESS) (function render() {
   cv.addEventListener('pointerdown', (e) => { dragging = true; lastPX = e.clientX; });
   window.addEventListener('pointermove', (e) => {
     if (!dragging || !S) return;
-    S.tx = clamp(S.tx + (e.clientX - lastPX) * px2world(), -C.XMAX, C.XMAX);
+    // camera looks down +z, so world +x is screen-LEFT: negate the swipe
+    S.tx = clamp(S.tx - (e.clientX - lastPX) * px2world(), -C.XMAX, C.XMAX);
     lastPX = e.clientX;
   });
   window.addEventListener('pointerup', () => { dragging = false; });
@@ -753,17 +834,31 @@ if (!HEADLESS) (function render() {
   }
 
   // --- event drain (sim -> fx/sfx) ---
-  function drainEvents() {
+  function drainEvents(tNow) {
     for (const ev of S.events) {
       if (ev.t === 'kill') {
-        burst(ev.x, 0.6, ev.z, Math.min(14, 3 + ev.n), ev.side === 'e' ? 0xff6a55 : 0x9fc2ff);
+        if (ev.side === 'p') {
+          // our nails get pounded into the wood where they stood
+          addSinks(Math.min(ev.n, 5), ev.x, ev.z, tNow, SM.yAt(ev.z));
+          burst(ev.x, 0.4, ev.z, Math.min(8, 2 + ev.n), 0xcfa878); // wood dust
+        } else {
+          burst(ev.x, 0.6, ev.z, Math.min(14, 3 + ev.n), 0xff6a55);
+        }
         sfx('kill');
+      } else if (ev.t === 'plant') {
+        addPlanted(ev);
+        burst(ev.x, (ev.step + 1) * C.STEP_H + 0.4, ev.z, Math.min(8, 2 + ev.n), 0xffd76a);
+        sfx('plant');
+      } else if (ev.t === 'slam_final') {
+        shake = 0.5; finalBoom = true;
+        burst(S.x, SM.yAt(S.z) + 0.6, S.z, 46, 0xffd76a);
+        sfx('slam');
       } else if (ev.t === 'gate') {
         popup((ev.d >= 0 ? '+' : '') + ev.d, ev.good ? '#5cff9b' : '#ff7a6a');
         burst(ev.x, 1.2, ev.z, 12, ev.good ? 0x35d97b : 0xff5d5d);
         sfx(ev.good ? 'good' : 'bad');
       } else if (ev.t === 'clash') sfx('clash');
-      else if (ev.t === 'slam') sfx('slam');
+      else if (ev.t === 'slam') { shake = Math.max(shake, 0.22); sfx('slam'); }
       else if (ev.t === 'win') { sfx('win'); for (let i = 0; i < 8; i++) burst(S.x + (Math.random() - 0.5) * 4, 1 + Math.random() * 2, S.z + Math.random() * 3, 10, [0xffd76a, 0x5cff9b, 0x6ab8ff, 0xff8ad0][i % 4]); }
       else if (ev.t === 'lose') sfx('lose');
       else if (ev.t === 'won_fight') sfx('good');
@@ -779,10 +874,11 @@ if (!HEADLESS) (function render() {
   function updateCrowd(t) {
     const n = Math.min(S.count, C.VIS);
     const active = S.phase === 'run' || S.phase === 'fight' || S.phase === 'finish';
+    const squeeze = S.phase === 'finish' ? 0.55 : 1; // huddle up on the stairs
     for (let i = 0; i < n; i++) {
       const o = fOff(i);
-      const ux = clamp(S.x + o[0], -C.XMAX, C.XMAX);
-      const uz = S.z + o[1];
+      const ux = clamp(S.x + o[0] * squeeze, -C.XMAX, C.XMAX);
+      const uz = S.z + o[1] * squeeze;
       const bob = active ? Math.abs(Math.sin(t * 9 + i * 1.7)) * 0.14 : 0;
       posV.set(ux, yAt(uz) + bob, uz);
       eul.set(active ? 0.14 : 0, Math.sin(i * 2.4) * 0.25, Math.sin(t * 9 + i * 1.7) * 0.06);
@@ -802,9 +898,13 @@ if (!HEADLESS) (function render() {
       const n = Math.min(f.count, 130);
       for (let i = 0; i < n && idx < 400; i++) {
         const o = fOff(i);
-        const jig = fighting ? Math.sin(t * 22 + i * 3.1) * 0.12 : 0;
+        const jig = fighting ? Math.sin(t * 22 + i * 3.1) * 0.1 : 0;
+        // mallets rear back and pound toward the crowd (-z) while fighting
+        const swing = fighting
+          ? Math.pow(Math.max(0, Math.sin(t * 9 + i * 2.3)), 3) * 1.05
+          : Math.abs(Math.sin(t * 4 + i * 2.1)) * 0.1;
         posV.set(clamp(f.x + o[0], -C.XMAX, C.XMAX) + jig, Math.abs(Math.sin(t * 4 + i * 2.1)) * 0.06, f.z + 1.2 + o[1] * 0.9);
-        eul.set(0, Math.PI + Math.sin(i * 1.3) * 0.3, 0);
+        eul.set(-swing, Math.sin(i * 1.3) * 0.3, 0);
         quat.setFromEuler(eul);
         m4.compose(posV, quat, sc1);
         foesMesh.setMatrixAt(idx++, m4);
@@ -854,15 +954,41 @@ if (!HEADLESS) (function render() {
     lastT = t;
 
     if (S && (S.phase === 'run' || S.phase === 'fight' || S.phase === 'finish')) {
-      if (keys.ArrowLeft || keys.a) S.tx = clamp(S.tx - 8 * dt, -C.XMAX, C.XMAX);
-      if (keys.ArrowRight || keys.d) S.tx = clamp(S.tx + 8 * dt, -C.XMAX, C.XMAX);
+      if (keys.ArrowLeft || keys.a) S.tx = clamp(S.tx + 8 * dt, -C.XMAX, C.XMAX); // +x is screen-left
+      if (keys.ArrowRight || keys.d) S.tx = clamp(S.tx - 8 * dt, -C.XMAX, C.XMAX);
       tick(dt);
     }
 
     if (S) {
-      drainEvents();
+      drainEvents(t);
       updateCrowd(t);
       updateFoes(t);
+
+      // casualties sinking flush into the wood
+      for (let i = 0; i < sinks.length; i++) {
+        const sk = sinks[i];
+        const p = Math.min(1, (t - sk.born) / 0.35);
+        posV.set(sk.x, sk.y0 - 0.62 * p * p, sk.z);
+        eul.set(sk.rot * p, 0, sk.rot * 0.6 * p);
+        quat.setFromEuler(eul);
+        m4.compose(posV, quat, sc1);
+        sinkMesh.setMatrixAt(i, m4);
+      }
+      sinkMesh.count = sinks.length;
+      sinkMesh.instanceMatrix.needsUpdate = true;
+
+      // finale: the golden mallet pounds the crowd into the plank
+      gHammer.visible = S.phase === 'finish' || (S.phase === 'win' && finalBoom);
+      if (gHammer.visible) {
+        const gy = yAt(S.z);
+        const bounce = S.slamT > 0
+          ? Math.max(0, 1.9 - S.slamT * 7)          // the last, big slam comes all the way down
+          : 0.25 + Math.abs(Math.sin(t * 11)) * 1.35; // rapid tack-tack-tack while planting
+        gHammer.position.set(S.x, gy + bounce, S.z + 0.7);
+        gHammer.rotation.z = Math.sin(t * 11) * 0.06;
+        const gs = S.slamT > 0 ? 1.35 : 1;
+        gHammer.scale.set(gs, gs, gs);
+      }
 
       for (const s of dyn.saws) {
         s.mesh.position.x = sawX(s.h);
@@ -882,6 +1008,11 @@ if (!HEADLESS) (function render() {
       const camY = 5.2 + Math.min(3.5, S.count * 0.012) + yAt(S.z);
       const camZ = S.z - 8.5 - Math.min(3, S.count * 0.008);
       camera.position.lerp(posV.set(S.x * 0.55, camY, camZ), Math.min(1, dt * 4.5));
+      if (shake > 0.004) {
+        camera.position.x += (Math.random() - 0.5) * shake;
+        camera.position.y += (Math.random() - 0.5) * shake * 0.7;
+        shake *= Math.max(0, 1 - 5 * dt);
+      }
       camera.lookAt(S.x * 0.4, 0.9 + yAt(S.z + 6) * 0.7, S.z + 9);
       sun.position.set(camera.position.x + 6, camera.position.y + 10, S.z - 4);
       sun.target.position.set(S.x, 0, S.z + 4);
