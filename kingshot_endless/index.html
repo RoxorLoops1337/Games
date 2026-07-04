@@ -393,6 +393,18 @@ function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 
 let mseed = 424242;
 function mrnd() { mseed = (mseed * 1103515245 + 12345) & 0x7fffffff; return mseed / 0x7fffffff; }
 
+// ---- day / night cycle (cosmetic) ---------------------------
+const DAY_LEN = 96; // seconds for a full dawn→day→dusk→night loop
+function dayPhase() { return (((S.t % DAY_LEN) + DAY_LEN) % DAY_LEN) / DAY_LEN; } // 0..1, 0=midnight
+function daylight() { return (1 - Math.cos(dayPhase() * 6.2831853)) / 2; }        // 0 night .. 1 noon
+function skyName() { const p = dayPhase(); return (p < 0.17 || p >= 0.83) ? 'Night' : p < 0.33 ? 'Dawn' : p < 0.67 ? 'Day' : 'Dusk'; }
+// fixed star field on its own tiny RNG — never touches the game or merchant streams
+const STARS = (() => {
+  let s = 1234567; const r = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const a = []; for (let i = 0; i < 64; i++) a.push({ x: r(), y: r() * 0.55, r: 1 + Math.floor(r() * 2), tw: 2 + r() * 3, o: r() * 6.28 });
+  return a;
+})();
+
 // ---- zone factory -------------------------------------------
 // Every zone: archer tower, porter, horde gate (repeatable),
 // tower training (repeatable), +porter (repeatable), unlock.
@@ -3993,7 +4005,42 @@ function draw() {
   ctx.translate(-cx, -cy);
   drawWorld();
   ctx.restore();
+  drawSky();
   drawHud();
+}
+function drawSky() {
+  if (!S.started) return;
+  const b = daylight(), p = dayPhase();
+  // warm wash through the dawn (~0.25) and dusk (~0.75) transitions
+  const warm = Math.max(0, 1 - Math.abs(p - 0.25) / 0.12) + Math.max(0, 1 - Math.abs(p - 0.75) / 0.12);
+  if (warm > 0) { ctx.fillStyle = 'rgba(255,140,54,' + (0.16 * Math.min(1, warm)) + ')'; ctx.fillRect(0, 0, vw, vh); }
+  // night: deep-blue darkening, strongest at midnight
+  if (b < 0.5) {
+    const k = 1 - b * 2;
+    ctx.fillStyle = 'rgba(10,16,44,' + (0.42 * k) + ')'; ctx.fillRect(0, 0, vw, vh);
+  }
+  // stars fade in as it gets dark
+  if (b < 0.4) {
+    const sa = (0.4 - b) / 0.4;
+    for (const st of STARS) {
+      const tw = 0.5 + 0.5 * Math.sin(S.t * st.tw + st.o);
+      ctx.fillStyle = 'rgba(255,255,255,' + (sa * tw * 0.9) + ')';
+      ctx.fillRect(st.x * vw, st.y * vh, st.r, st.r);
+    }
+  }
+  // sun by day, moon by night — arcs across the sky
+  const sunUp = p >= 0.25 && p < 0.75;
+  const local = sunUp ? (p - 0.25) / 0.5 : (p < 0.25 ? (p + 0.25) / 0.5 : (p - 0.75) / 0.5);
+  const bx = local * vw, by = vh * 0.34 - Math.sin(Math.min(1, Math.max(0, local)) * Math.PI) * vh * 0.24;
+  if (sunUp) {
+    ctx.fillStyle = 'rgba(255,224,120,' + (0.35 + 0.4 * b) + ')';
+    ctx.beginPath(); ctx.arc(bx, by, 34, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#ffe9a0'; ctx.beginPath(); ctx.arc(bx, by, 16, 0, 6.29); ctx.fill();
+  } else {
+    ctx.fillStyle = 'rgba(220,228,255,' + (0.3 + 0.5 * (1 - b)) + ')';
+    ctx.beginPath(); ctx.arc(bx, by, 26, 0, 6.29); ctx.fill();
+    ctx.fillStyle = 'rgba(10,16,44,0.9)'; ctx.beginPath(); ctx.arc(bx + 8, by - 4, 22, 0, 6.29); ctx.fill();
+  }
 }
 
 // ---- input --------------------------------------------------
@@ -4086,6 +4133,7 @@ window.KS = {
   GEAR_SLOTS, RAR_MUL, rollGear, grantGear, gearBonus, gearCount, gearLabel, drawGear,
   gearAmt, enhCost, enhanceGear, ENH_STEP, ENH_MAX,
   DEALS, spawnMerchant, buyDeal, merchantLeaves, drawShop,
+  DAY_LEN, dayPhase, daylight, skyName, drawSky,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },

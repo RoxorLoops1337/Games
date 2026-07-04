@@ -762,6 +762,23 @@ t.ok(KS.S.merchant !== null, 'a new merchant appears when the cooldown elapses')
 KS.S.merchant = null; KS.S.merchantCd = 999; KS.S.stats.trades = 0; KS.S.wallet = 0; KS.S.gems = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- day / night cycle (cosmetic) ----
+const tSaved = KS.S.t;
+KS.S.t = 0;
+t.ok(KS.daylight() >= 0 && KS.daylight() <= 1, 'daylight is a 0..1 value');
+t.ok(KS.dayPhase() >= 0 && KS.dayPhase() < 1, 'dayPhase is a 0..1 fraction');
+t.ok(Math.abs(KS.daylight() - 0) < 1e-6, 'phase 0 is the middle of the night (darkest)');
+KS.S.t = KS.DAY_LEN / 2;
+t.ok(Math.abs(KS.daylight() - 1) < 1e-6, 'half a cycle later it is high noon (brightest)');
+t.ok(KS.skyName() === 'Day', 'noon reads as Day');
+KS.S.t = KS.DAY_LEN; // wraps back around
+t.ok(Math.abs(KS.dayPhase() - 0) < 1e-6, 'the cycle wraps after a full day length');
+t.ok(['Night', 'Dawn', 'Day', 'Dusk'].includes(KS.skyName()), 'skyName is always one of the four phases');
+// the sky overlay renders without throwing at every phase
+KS.start();
+for (let ph = 0; ph < 1; ph += 0.1) { KS.S.t = ph * KS.DAY_LEN; drawSafe('draw() sky phase ' + ph.toFixed(1)); }
+KS.S.t = tSaved;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
