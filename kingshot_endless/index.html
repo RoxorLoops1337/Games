@@ -663,7 +663,7 @@ function recruit() {
 // which workplaces exist right now → the job rows the panel shows
 function jobDefs() {
   const out = [
-    { id: 'collect', ic: '🧺', name: 'Gatherers', desc: 'Pick up drops & sell them' },
+    { id: 'collect', ic: '🧺', name: 'Gatherers', desc: 'Collecting: ' + (POP_FILTERS.find(fd => fd.id === (S.popFilter || 'all')) || POP_FILTERS[0]).label },
     { id: 'fight',   ic: '⚔️', name: 'Fighters',  desc: 'Follow you into battle' },
   ];
   if (S.campPlate.built)  out.push({ id: 'camp',  ic: '🪓', name: 'Lumber Camp', desc: '+' + WORK_BOOST * 100 + '% chopping each' });
@@ -4464,6 +4464,10 @@ function drawPop() {
   ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showPop = false; } });
   const cx = vw / 2, top = Math.max(38, vh * 0.045);
+  // the content column itself is inert — a near-miss on a button must not close
+  // the panel (height is set once the rows below have been laid out)
+  const inertPad = { x: cx - 195, y: top - 28, w: 390, h: 0, act: () => {} };
+  hits.push(inertPad);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 22px sans-serif';
   ctx.fillText('👥 TOWNSFOLK', cx, top);
@@ -4515,24 +4519,33 @@ function drawPop() {
       if (canPlus) hits.push({ x: cx + w / 2 - 40, y: byy, w: bs, h: bs, act: () => { movePop('collect', jd.id); } });
     }
     y += rh;
-    // gather-filter chips tucked under the Gatherers row
+    // gather-filter tabs tucked under the Gatherers row — labeled, with a
+    // filled selected state and a toast so the choice visibly does something
     if (pool) {
-      const chipW = Math.min(66, (w - 8) / POP_FILTERS.length);
+      const chipW = (w - 8) / POP_FILTERS.length, chipH = 40;
       for (let i = 0; i < POP_FILTERS.length; i++) {
         const fdef = POP_FILTERS[i], on = (S.popFilter || 'all') === fdef.id;
         const fx = cx - w / 2 + 4 + i * chipW;
-        ctx.fillStyle = on ? 'rgba(255,217,74,0.22)' : 'rgba(20,25,36,0.9)'; rr(fx, y, chipW - 4, 26, 7); ctx.fill();
-        ctx.strokeStyle = on ? '#ffd94a' : 'rgba(255,255,255,0.1)'; ctx.lineWidth = on ? 1.6 : 1; rr(fx, y, chipW - 4, 26, 7); ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(fdef.ic, fx + (chipW - 4) / 2, y + 18);
-        hits.push({ x: fx, y, w: chipW - 4, h: 26, act: () => { S.popFilter = fdef.id; sfx('built', true); save(); } });
+        ctx.fillStyle = on ? '#ffd94a' : 'rgba(20,25,36,0.9)'; rr(fx, y, chipW - 4, chipH, 8); ctx.fill();
+        ctx.strokeStyle = on ? '#ffd94a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; rr(fx, y, chipW - 4, chipH, 8); ctx.stroke();
+        ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+        ctx.fillText(fdef.ic, fx + (chipW - 4) / 2, y + 17);
+        ctx.font = 'bold 8px sans-serif'; ctx.fillStyle = on ? '#1a1208' : '#9aa7b5';
+        ctx.fillText(fdef.label.toUpperCase(), fx + (chipW - 4) / 2, y + 32);
+        hits.push({ x: fx, y, w: chipW - 4, h: chipH, act: () => {
+          if (S.popFilter === fdef.id) return;
+          S.popFilter = fdef.id;
+          S.toasts.push({ txt: '🧺 Gatherers now collect: ' + fdef.label, t: 0 });
+          sfx('built', true); buzz(15); save();
+        } });
       }
-      y += 32;
+      y += chipH + 8;
     }
   }
   ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '10px sans-serif';
   ctx.fillText('Build workplaces to unlock new jobs · workers speed them up & you see them working', cx, y + 12);
-  ctx.fillText('Tap empty space to close', cx, vh - 12);
+  ctx.fillText('Tap below to close', cx, y + 26);
+  inertPad.h = (y + 34) - inertPad.y;
 }
 function drawSkins() {
   if (anyPanelOpen() && !S.showSkins) return;
