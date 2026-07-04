@@ -133,10 +133,18 @@ function rollGate(rnd, diff) {
   if (def.kind === 'n' && (def.op === '+' || def.op === '-')) v = Math.round(v * Math.sqrt(diff));
   return { kind: def.kind, op: def.op, v, hits: 0 };
 }
-function makeGatePair(rnd, z, diff) {
-  // one side is always at least as good as the other so choices matter
-  let a = rollGate(rnd, diff), b = rollGate(rnd, diff), guard = 0;
-  while (guard++ < 8 && a.kind === b.kind && a.op === b.op && a.v === b.v) b = rollGate(rnd, diff);
+function rollGoodGate(rnd, diff) {
+  let g = rollGate(rnd, diff), guard = 0;
+  while (!gateIsGood(g) && guard++ < 20) g = rollGate(rnd, diff);
+  return g;
+}
+function makeGatePair(rnd, z, diff, bothGood) {
+  // one side is ALWAYS a positive choice — a −12 vs ÷2 pair is not a choice,
+  // it's a punishment. The first gate of a level is all-good (bothGood).
+  let a = rollGoodGate(rnd, diff);
+  const rollB = () => bothGood ? rollGoodGate(rnd, diff) : rollGate(rnd, diff);
+  let b = rollB(), guard = 0;
+  while (guard++ < 8 && a.kind === b.kind && a.op === b.op && a.v === b.v) b = rollB();
   const flip = rnd() < 0.5;
   return { z, L: flip ? a : b, R: flip ? b : a, applied: false };
 }
@@ -149,7 +157,7 @@ function buildLevel(lvl) {
   S.boss = null;
   // gates every ~600px
   for (let z = 620; z < S.levelLen - 500; z += 560 + rnd() * 160) {
-    S.gates.push(makeGatePair(rnd, z, diff));
+    S.gates.push(makeGatePair(rnd, z, diff, S.gates.length === 0));
   }
   // monster hordes between the gates
   for (let z = 420; z < S.levelLen - 320; z += 300 + rnd() * 260) {
@@ -788,7 +796,7 @@ if (!HEADLESS) {
 window.HR = {
   S, C, tick, draw, startLevel, buildLevel, applyOp, setUnits, grantBarrel,
   spawnBoss, doWin, doLose, fireVolley, crowdRadius, shooterCount,
-  makeGatePair, rollGate, mulberry32, difficulty, gateLabel, gateIsGood, press,
+  makeGatePair, rollGate, rollGoodGate, mulberry32, difficulty, gateLabel, gateIsGood, press,
 };
 </script>
 </body>
