@@ -92,6 +92,9 @@ const WIZ_RATE    = 2.0, WIZ_CHAIN = 3, WIZ_JUMP = 160;
 const CAT_RATE    = 4.2, CAT_AOE = 115;
 const DRUM_MUL    = 0.75;
 const PORTER_CAP  = 10, PORTER_SPD = 135;
+// townsfolk (recruitable inhabitants — collectors or fighters)
+const INHAB0      = 500, INHAB_MUL = 1.4;   // recruit cost grows per inhabitant
+const INHAB_SPD   = 130, FIGHTER_RATE = 1.05, FIGHTER_RANGE = 260, INHAB_CAP = 12;
 const FORGE_T     = 1.8;
 const FORGE_Q     = 12, TRAY_MAX = 10;
 const BAR_MUL     = 3;
@@ -393,7 +396,9 @@ function helmVal(k)  { return Math.ceil(5 * eco(k)); }
 function foeHp(k)    { return Math.ceil(13 * Math.pow(HP_T, k - 1)); }
 function foeDmg(k)   { return Math.ceil(4 * Math.pow(1.55, k - 1)); }
 function towerDmg(k) { return Math.ceil(9 * Math.pow(HP_T, k - 1)); }
-function unlockCost(k) { return Math.ceil(UNLOCK0 * Math.pow(UNLOCK_MUL, k - 1)); }
+// endless land: each block costs super-exponentially more (a quadratic term in
+// the exponent) so the map is an ever-hungry sink you can always pour coins into
+function unlockCost(k) { return Math.ceil(UNLOCK0 * Math.pow(UNLOCK_MUL, k - 1) * Math.pow(1.12, (k - 1) * (k - 2) / 2)); }
 const UPG = {
   speed: { icon: '👟', name: 'SPEED',    base: 35, grow: 1.9 },
   cap:   { icon: '🎒', name: 'CAPACITY', base: 30, grow: 1.9 },
@@ -568,6 +573,7 @@ function reset() {
     wheel: null, showWheel: false,
     settings: { shake: true, particles: true, dmgNums: true, weather: true }, showSettings: false,
     skins: { owned: { royal: true }, active: 'royal' }, showSkins: false,
+    pop: [], popFilter: 'all', showPop: false,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -607,6 +613,104 @@ const METALS = [
 function metal(k) { const cyc = Math.floor((k - 1) / METALS.length); const m = METALS[(k - 1) % METALS.length]; return { name: m.name + (cyc ? ' +' + cyc : ''), col: m.col, glow: (k % METALS.length) === 0 }; }
 function entryVal(e) { return Math.ceil(helmVal(e.k) * (RES_MUL[entryRes(e)] || 1) * coinMul()); }
 function cloneEntry(e) { return { k: e.k, bar: !!e.bar, crown: !!e.crown, log: !!e.log, plank: !!e.plank, stone: !!e.stone, tool: !!e.tool, res: e.res }; }
+
+// ---- townsfolk / inhabitants --------------------------------
+// A recruitable population you assign to jobs: COLLECT (gather a chosen
+// resource and sell/smelt it) or FIGHT (follow the king and shoot foes).
+const POP_FILTERS = [
+  { id: 'all',   ic: '📦', label: 'Everything' },
+  { id: 'helm',  ic: '🛡', label: 'Shields' },
+  { id: 'bar',   ic: '🥇', label: 'Metal bars' },
+  { id: 'log',   ic: '🪵', label: 'Logs' },
+  { id: 'stone', ic: '🪨', label: 'Stone' },
+];
+function mkInhab(role, i) {
+  return { role: role || 'collect', x: SPAWN.x + Math.cos(i * 1.3) * 60, y: SPAWN.y + 40 + Math.sin(i * 1.3) * 40,
+    state: 'seek', carry: [], cd: 0, dest: null, forgeWait: 0, fireCd: (i % 5) * 0.2, ph: i * 0.9 };
+}
+function popCount(role) { let n = 0; for (const q of (S.pop || [])) if (q.role === role) n++; return n; }
+function recruitCost() { return Math.ceil(INHAB0 * Math.pow(INHAB_MUL, (S.pop || []).length)); }
+function recruit() {
+  if ((S.pop || []).length >= 200) return false;
+  const c = recruitCost();
+  if (S.wallet < c) { float(S.player.x, S.player.y - 40, 'Need ' + fmt(c) + '¢', '#ffd94a'); return false; }
+  S.wallet -= c;
+  S.pop.push(mkInhab('collect', S.pop.length));
+  S.toasts.push({ txt: '👤 A new villager joined your realm!', t: 0 });
+  sfx('built', true); buzz(20); save();
+  return true;
+}
+function assignPop(toRole) {
+  // convert one inhabitant of the other role into toRole
+  const from = toRole === 'fight' ? 'collect' : 'fight';
+  const q = (S.pop || []).find(p => p.role === from);
+  if (!q) return false;
+  q.role = toRole; q.state = 'seek'; q.carry = []; q.dest = null;
+  sfx('built', true); save();
+  return true;
+}
+function fighterDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * 0.5; }
+// per-tick behaviour — rnd-free so it never perturbs the enemy-spawn stream
+function simInhabitants(dt) {
+  const pop = S.pop; if (!pop || !pop.length) return;
+  const p = S.player;
+  for (let idx = 0; idx < pop.length; idx++) {
+    const q = pop[idx];
+    if (q.role === 'fight') {
+      // hold a loose formation around the king and follow him everywhere
+      const ang = q.ph + S.t * 0.5, R = 52 + (idx % 3) * 15;
+      const tx = p.x + Math.cos(ang) * R, ty = p.y + Math.sin(ang) * R;
+      const dl = Math.hypot(tx - q.x, ty - q.y) || 1;
+      if (dl > 6) { const nx = q.x + (tx - q.x) / dl * INHAB_SPD * dt, ny = q.y + (ty - q.y) / dl * INHAB_SPD * dt; if (inWalkable(nx, ny)) { q.x = nx; q.y = ny; } else { q.x = p.x; q.y = p.y; } }
+      q.fireCd -= dt;
+      if (q.fireCd <= 0) {
+        let best = null, bd = FIGHTER_RANGE * FIGHTER_RANGE;
+        for (const e of S.enemies) if (e.hp > 0) { const d = dist2(e.x, e.y, q.x, q.y); if (d < bd) { bd = d; best = e; } }
+        if (best) { q.fireCd = FIGHTER_RATE; q.face = best.x > q.x ? 1 : -1; S.shots.push({ x: q.x, y: q.y - 14, tgt: best, dmg: fighterDmg(), spd: 430, crit: false, ally: true }); }
+        else q.fireCd = 0.3;
+      }
+    } else if (q.state === 'sell') {
+      // offload at the hub: smelt shields, sell the rest (committed dest, no rnd)
+      if (!q.dest) q.dest = (S.forge && q.carry.some(e => entryRes(e) === 'helm')) ? 'forge' : 'sell';
+      const tgt = q.dest === 'forge' ? FORGE : SELL;
+      const dl = Math.hypot(tgt.x - q.x, tgt.y - q.y) || 1;
+      q.x += (tgt.x - q.x) / dl * INHAB_SPD * dt; q.y += (tgt.y - q.y) / dl * INHAB_SPD * dt;
+      if (dl < 46) {
+        q.cd -= dt;
+        if (q.cd <= 0 && q.carry.length) {
+          q.cd = 0.12;
+          if (q.dest === 'forge') {
+            const i = q.carry.map(e => entryRes(e) === 'helm').lastIndexOf(true);
+            if (i < 0) q.dest = 'sell';
+            else if (S.forge.queue.length < FORGE_Q) { S.forge.queue.push(q.carry.splice(i, 1)[0].k); sfx('smelt'); q.forgeWait = 0; }
+            else { q.forgeWait = (q.forgeWait || 0) + 0.4; if (q.forgeWait > 4) { q.dest = 'sell'; q.forgeWait = 0; } }
+          } else {
+            const v = entryVal(q.carry.pop());
+            S.pallet += v; S.stats.earned += v; S.stats.sold++; questEvent('sell', 1); questEvent('earn', v);
+          }
+        }
+        if (!q.carry.length) { q.dest = null; q.forgeWait = 0; q.state = 'seek'; }
+      }
+    } else {
+      // collector — seek the chosen resource anywhere on the map
+      let it = null, bd = 1e15;
+      for (const i2 of S.items) {
+        if (i2.dead || i2.gem) continue;
+        if (S.popFilter && S.popFilter !== 'all' && entryRes(i2) !== S.popFilter) continue;
+        if (!zoneAt(i2.x, i2.y)) continue;
+        const d = dist2(i2.x, i2.y, q.x, q.y); if (d < bd) { bd = d; it = i2; }
+      }
+      if (!it) {
+        if (q.carry.length) q.state = 'sell';
+        else { const tx = SPAWN.x, ty = SPAWN.y + 50, dl = Math.hypot(tx - q.x, ty - q.y); if (dl > 16) { q.x += (tx - q.x) / dl * INHAB_SPD * 0.5 * dt; q.y += (ty - q.y) / dl * INHAB_SPD * 0.5 * dt; } }
+      } else {
+        const dl = Math.hypot(it.x - q.x, it.y - q.y) || 1;
+        q.x += (it.x - q.x) / dl * INHAB_SPD * dt; q.y += (it.y - q.y) / dl * INHAB_SPD * dt;
+        if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; q.carry.push(cloneEntry(it)); if (q.carry.length >= PORTER_CAP) q.state = 'sell'; }
+      }
+    }
+  }
+}
 // coin flow ramps up exponentially the longer you keep transacting at
 // the same spot (vacuuming the pallet / pouring into a plate)
 function touchFlow(key, dt) {
@@ -789,6 +893,7 @@ function save() {
         }];
       })),
       crowns: S.crowns, prestiges: S.prestiges, cperks: S.cperks, settings: S.settings, skins: S.skins,
+      pop: (S.pop || []).map(q => q.role), popFilter: S.popFilter,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
     }));
@@ -888,6 +993,8 @@ function load() {
   S.skins = d.skins && d.skins.owned ? d.skins : { owned: { royal: true }, active: 'royal' };
   if (!S.skins.owned.royal) S.skins.owned.royal = true;
   if (!skinOwned(S.skins.active)) S.skins.active = 'royal';
+  S.pop = Array.isArray(d.pop) ? d.pop.map((role, i) => mkInhab(role, i)) : [];
+  S.popFilter = d.popFilter || 'all';
   (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
   const amt = Math.floor(idleRate() * away);
@@ -2476,6 +2583,8 @@ function tick(dt) {
     }
   }
 
+  simInhabitants(dt);
+
   // -- items physics
   for (const it of S.items) {
     it.t += dt;
@@ -3291,6 +3400,23 @@ function drawPorter(po) {
   for (let i = 0; i < po.carry.length; i++)
     drawStackEntry(po.carry[i], po.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), po.y - 26 - i * 6, 0.7);
 }
+function drawInhab(q) {
+  const fight = q.role === 'fight', bob = Math.abs(Math.sin(S.t * 8 + q.ph)) * 2;
+  shadow(q.x, q.y + 13, 12);
+  // body — green tunic for fighters, blue for collectors
+  ctx.fillStyle = fight ? '#4a9a56' : '#4a78b0'; rr(q.x - 7, q.y - 9 - bob, 14, 16, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)'; rr(q.x - 7, q.y - 9 - bob, 14, 6, 4); ctx.fill();
+  // head
+  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(q.x, q.y - 15 - bob, 6, 0, 6.29); ctx.fill();
+  if (fight) {
+    const f = q.face || 1;
+    ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(q.x + f * 9, q.y - 6 - bob, 7, f > 0 ? -1.2 : 1.94, f > 0 ? 1.2 : 4.34); ctx.stroke();
+    ctx.fillStyle = '#2f5a36'; ctx.beginPath(); ctx.moveTo(q.x - 5, q.y - 20 - bob); ctx.lineTo(q.x, q.y - 26 - bob); ctx.lineTo(q.x + 5, q.y - 20 - bob); ctx.closePath(); ctx.fill(); // hood
+  } else {
+    for (let i = 0; i < q.carry.length; i++) drawStackEntry(q.carry[i], q.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), q.y - 24 - bob - i * 6, 0.66);
+  }
+}
 function drawWorker(w, col, carry, kind) {
   shadow(w.x, w.y + 14, 14);
   ctx.fillStyle = col; rr(w.x - 8, w.y - 10, 16, 18, 4); ctx.fill();
@@ -3581,6 +3707,7 @@ function drawWorld() {
     for (const tw of z.towers) if (vis(tw.x, tw.y, 120)) actors.push({ y: tw.y, f: () => drawTower(tw) });
     for (const po of z.porters) if (vis(po.x, po.y, 80)) actors.push({ y: po.y, f: () => drawPorter(po) });
   }
+  for (const q of (S.pop || [])) if (vis(q.x, q.y, 80)) actors.push({ y: q.y, f: () => drawInhab(q) });
   for (const e of S.enemies) if (vis(e.x, e.y, 100)) actors.push({ y: e.y, f: () => drawEnemy(e) });
   if (S.district) {
     const H = S.district.haulerNpc, T = S.district.traderNpc;
@@ -3676,7 +3803,7 @@ function hudBtn(x, y, w, h, label, act) {
 }
 function anyPanelOpen() {
   return S.showStats || S.showPets || S.showGear || S.showShop || S.showBestiary ||
-    S.showWheel || S.showSkins || S.showSettings || S.showCrownHall || S.showLogin;
+    S.showWheel || S.showSkins || S.showSettings || S.showCrownHall || S.showLogin || S.showPop;
 }
 function drawHud() {
   const p = S.player;
@@ -3754,6 +3881,7 @@ function drawHud() {
   drawBestiary();
   drawWheel();
   drawSkins();
+  drawPop();
   drawSettings();
   drawCrownHall();
   drawStatsPanel();
@@ -4168,6 +4296,61 @@ function drawWheel() {
   if (can) hits.push({ x: sbx, y: sby, w: sbw, h: 46, act: () => { spinWheel(); } });
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap empty space to close', cx, sby + 68);
+}
+function drawPop() {
+  if (anyPanelOpen() && !S.showPop) return;
+  hudBtn(vw - 46, 350, 36, 30, '👥', () => { S.showPop = !S.showPop; save(); });
+  const pop = S.pop || [];
+  if (S.wallet >= recruitCost()) { ctx.fillStyle = '#6ecb5a'; ctx.beginPath(); ctx.arc(vw - 14, 354, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill(); }
+  if (!S.showPop) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showPop = false; } });
+  const cx = vw / 2, top = Math.max(42, vh * 0.05);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('👥 TOWNSFOLK', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText(pop.length + ' villagers · 🪙 ' + fmt(S.wallet), cx, top + 20);
+  // recruit
+  const rw = 260, rx = cx - rw / 2, ry = top + 32, canR = S.wallet >= recruitCost();
+  ctx.fillStyle = canR ? '#2f7d4a' : 'rgba(40,48,60,0.9)'; rr(rx, ry, rw, 44, 10); ctx.fill();
+  ctx.fillStyle = canR ? '#eafff0' : '#7a8792'; ctx.font = 'bold 15px sans-serif';
+  ctx.fillText('👤 RECRUIT VILLAGER   ' + fmt(recruitCost()) + '¢', cx, ry + 27);
+  hits.push({ x: rx, y: ry, w: rw, h: 44, act: () => { recruit(); } });
+  // role split — collectors vs fighters
+  const nf = popCount('fight'), nc = popCount('collect');
+  let y = ry + 60;
+  const roleRow = (ic, name, count, toRole, desc) => {
+    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - 170, y, 340, 56, 10); ctx.fill();
+    ctx.textAlign = 'left'; ctx.font = '22px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(ic, cx - 158, y + 30);
+    ctx.font = 'bold 15px sans-serif'; ctx.fillText(name + ': ' + count, cx - 128, y + 24);
+    ctx.fillStyle = '#9aa7b5'; ctx.font = '10px sans-serif'; ctx.fillText(desc, cx - 128, y + 42);
+    // + button (convert one of the other role into this one)
+    const bw = 44, bx = cx + 170 - bw - 12, by = y + 12;
+    const can = (toRole === 'fight' ? nc : nf) > 0;
+    ctx.fillStyle = can ? '#3a6ea0' : 'rgba(50,56,66,0.9)'; rr(bx, by, bw, 32, 8); ctx.fill();
+    ctx.fillStyle = can ? '#fff' : '#6a7684'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('+', bx + bw / 2, by + 23);
+    if (can) hits.push({ x: bx, y: by, w: bw, h: 32, act: () => { assignPop(toRole); } });
+    y += 64;
+  };
+  roleRow('🧺', 'Collectors', nc, 'collect', 'Gather resources & sell them');
+  roleRow('⚔️', 'Fighters', nf, 'fight', 'Follow you and attack foes');
+  // collect filter
+  ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+  ctx.fillText('Collectors gather:', cx, y + 6);
+  y += 18;
+  const fw = Math.min(150, (vw - 40) / 2);
+  for (let i = 0; i < POP_FILTERS.length; i++) {
+    const fdef = POP_FILTERS[i], on = (S.popFilter || 'all') === fdef.id;
+    const col = i % 2, row = Math.floor(i / 2), fx = cx - fw + col * fw + (POP_FILTERS.length % 2 && i === POP_FILTERS.length - 1 ? fw / 2 : 0), fy = y + row * 40;
+    ctx.fillStyle = on ? 'rgba(255,217,74,0.2)' : 'rgba(20,25,36,0.9)'; rr(fx + 4, fy, fw - 8, 34, 8); ctx.fill();
+    ctx.strokeStyle = on ? '#ffd94a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = on ? 2 : 1; rr(fx + 4, fy, fw - 8, 34, 8); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(fdef.ic + ' ' + fdef.label, fx + 16, fy + 22);
+    hits.push({ x: fx + 4, y: fy, w: fw - 8, h: 34, act: () => { S.popFilter = fdef.id; sfx('built', true); save(); } });
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap empty space to close', cx, vh - 14);
 }
 function drawSkins() {
   if (anyPanelOpen() && !S.showSkins) return;
@@ -4715,6 +4898,7 @@ window.KS = {
   SKINS, skinDef, skinOwned, activeSkin, skinsOwnedCount, buySkin, drawSkins,
   COMBO_REWARDS, comboCoins, mapPings,
   PET_CD, petAbility, petAbilityReady,
+  POP_FILTERS, mkInhab, popCount, recruitCost, recruit, assignPop, fighterDmg, simInhabitants, drawPop, drawInhab,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
