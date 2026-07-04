@@ -13,7 +13,8 @@
     "test:kingshot": "node tests/kingshot_endless.test.mjs",
     "test:headliner": "node tests/headliner.test.mjs",
     "test:horde": "node tests/horde_runner.test.mjs",
-    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde"
+    "test:spijker": "node tests/spijker_master.test.mjs",
+    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
