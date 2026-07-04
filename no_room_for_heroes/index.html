@@ -59,18 +59,33 @@
      until a tap) AND goes fullscreen. Sits below #rotate so portrait still nags. */
   #startgate{display:none;position:fixed;inset:0;z-index:500;cursor:pointer;
     background:radial-gradient(120% 90% at 50% 38%,#241247 0%,#0c0916 60%,#05040a 100%);
-    flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    gap:min(5vh,32px);
+    padding:calc(10px + env(safe-area-inset-top,0px)) 14px calc(10px + env(safe-area-inset-bottom,0px));}
   #startgate.show{display:flex;}
-  #startgate .sg-logo{width:min(620px,72vw);height:auto;image-rendering:pixelated;
-    filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));margin:0 0 6vh;animation:sgIn .8s ease-out both;}
+  /* Logo is capped by the screen HEIGHT too (a landscape phone is ~400px tall —
+     width alone let it blow past the screen and push the button off). The CSS
+     replaced-element constraint rules keep the aspect ratio when max-height bites. */
+  #startgate .sg-logo{width:min(620px,72vw);max-height:52vh;height:auto;image-rendering:pixelated;
+    filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));margin:0;animation:sgIn .8s ease-out both;}
   h1.sg-logo{font-family:var(--pix);font-size:min(40px,7vw);line-height:1.3;color:var(--gold);
     text-shadow:0 3px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);}
-  #startgate .sg-btn{font-size:26px;padding:24px 60px;min-height:78px;letter-spacing:1px;border-radius:14px;
+  /* Flex-centred label: the ▶ and the pixel-font text are separate spans, each
+     vertically centred on its own — the pixel font's odd baseline metrics made a
+     single text node spill out the bottom of the pill on phones. */
+  #startgate .sg-btn{display:inline-flex;align-items:center;justify-content:center;gap:.55em;line-height:1;
+    font-size:26px;padding:22px 60px;min-height:78px;letter-spacing:1px;border-radius:14px;
     background:#b0202a;border:1px solid #ff6a72;color:#fff;cursor:pointer;font-weight:700;
     box-shadow:0 5px 0 #5a0d12;animation:titlePulse 1.6s ease-in-out infinite;}
+  #startgate .sg-btn .tri{font-size:.72em;transform:translateY(.04em);}
   #startgate .sg-btn:hover{background:#c8262f;}
   #startgate .sg-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #5a0d12;}
-  #startgate .sg-hint{margin-top:22px;font-size:14px;color:#cdbaff;opacity:.8;letter-spacing:.5px;}
+  #startgate .sg-hint{margin:0;font-size:14px;color:#cdbaff;opacity:.8;letter-spacing:.5px;}
+  /* short screens (landscape phones): trim the button + hint so everything fits */
+  @media (max-height:520px){
+    #startgate .sg-btn{font-size:19px;padding:13px 38px;min-height:0;border-radius:11px;}
+    #startgate .sg-hint{font-size:11.5px;}
+  }
   @keyframes sgIn{0%{opacity:0;transform:translateY(18px) scale(.96);}100%{opacity:1;transform:translateY(0) scale(1);}}
   /* ---- Support banner: a slim, non-intrusive ad strip pinned to the bottom. It
      reserves its own space (the game scales into the area ABOVE it via --adh), so
@@ -332,9 +347,11 @@
     transform-origin:50% 50%;animation:logoTwirl 2s cubic-bezier(.25,.46,.45,.94) both;}
   .titlestart{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);z-index:3;
     animation:titleStartIn .45s ease-out 1.9s both;}
-  .titlestart button{font-size:25px;padding:24px 54px;min-height:78px;letter-spacing:1px;
+  .titlestart button{display:inline-flex;align-items:center;justify-content:center;gap:.55em;line-height:1;
+    font-size:25px;padding:22px 54px;min-height:78px;letter-spacing:1px;
     background:#b0202a;border-color:#ff6a72;color:#fff;
     box-shadow:0 4px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);animation:titlePulse 1.6s ease-in-out infinite;}
+  .titlestart button .tri{font-size:.72em;transform:translateY(.04em);}
   .titlestart button:hover:not(:disabled){background:#c8262f;}
   .titlestart button:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #5a0d12, inset 0 0 0 1px rgba(255,255,255,.12);}
   /* "tap for sound" prompt: browsers block audio until a gesture, so the title
@@ -387,11 +404,15 @@
   .introdots{position:absolute;left:50%;bottom:3.4%;transform:translateX(-50%);z-index:5;display:flex;gap:7px;}
   .introdots i{width:8px;height:8px;border-radius:50%;background:#4a3a6e;transition:background .3s;}
   .introdots i.on{background:#ffd34d;}
-  /* small "replay the intro" button tucked in the corner of the title screen */
+  /* small "replay the intro" button tucked in the corner of the title screen.
+     NB: its own fade-in keyframes — titleStartIn ends at translateX(-50%), which
+     is right for the CENTRED start button but yanked this corner pill half off
+     the frame's left edge. */
   .titlereplay{position:absolute;left:16px;bottom:3.5%;z-index:3;font-size:12.5px;padding:8px 14px;min-height:0;
     background:rgba(20,14,34,.6);border:1px solid #3a2c5a;color:#cdbaff;border-radius:9px;cursor:pointer;
-    animation:titleStartIn .45s ease-out 2.4s both;}
+    animation:titleCornerIn .45s ease-out 2.4s both;}
   .titlereplay:hover{background:rgba(44,30,70,.85);color:#fff;}
+  @keyframes titleCornerIn{0%{opacity:0;transform:translateY(14px);}100%{opacity:1;transform:none;}}
   @keyframes introImg{0%{opacity:0;transform:scale(1.085);}15%{opacity:1;}100%{opacity:1;transform:scale(1);}}
   @keyframes introTextIn{0%{opacity:0;transform:translate(-50%,22px);}100%{opacity:1;transform:translate(-50%,0);}}
   @keyframes introFinalIn{0%{opacity:0;transform:translateY(22px);}100%{opacity:1;transform:translateY(0);}}
@@ -1865,7 +1886,12 @@ function resize(){
   // The whole game is one fixed 1280×(720|800) design that scales as a single unit to fit the
   // screen, like scaling a JPEG. Compute that scale and apply it as the #app transform.
   const designW = 1280, designH = (document.documentElement.classList && document.documentElement.classList.contains('ar-1610')) ? 800 : 720;
-  const vw = window.innerWidth || designW, vh = window.innerHeight || designH;
+  // Prefer the VISUAL viewport: around Android's fullscreen / orientation-lock
+  // transitions innerWidth/innerHeight can be stale, which scaled the game past
+  // the screen (art cut off, corner buttons clipped). visualViewport is live.
+  const _vv = (typeof window.visualViewport!=='undefined' && window.visualViewport) ? window.visualViewport : null;
+  const vw = (_vv && _vv.width)  || window.innerWidth  || designW;
+  const vh = (_vv && _vv.height) || window.innerHeight || designH;
   const adh = (typeof ADS!=='undefined' && ADS && ADS._on) ? ADS.height : 0;   // reserve the support-banner strip
   GSCALE = Math.min(vw/designW, (vh - adh)/designH) || 1;
   const _app = document.getElementById('app');
@@ -2304,7 +2330,7 @@ function titleScreen(){
     <div class="titlescreen">
       <div class="tbg" id="titlebg"></div>
       <img class="titlelogo" src="title/logo.png" alt="No Room For Heroes" onerror="titleLogoFail(this)">
-      <div class="titlestart"><button class="go" onclick="leaveTitle()">▶ Start Game</button></div>
+      <div class="titlestart"><button class="go" onclick="leaveTitle()"><span class="tri">▶</span><span>Start Game</span></button></div>
       <button class="titlereplay" onclick="replayIntro()">↻ Story</button>
       ${(typeof AC!=='undefined' && AC)?'':'<div class="titlehint" id="titlehint">🔊 tap for sound</div>'}
     </div>`;
@@ -2405,7 +2431,7 @@ function sgLogoFail(img){ const h=document.createElement('h1'); h.className='sg-
 function showStartGate(){
   const g=document.getElementById('startgate'); if(!g) return;
   g.innerHTML=`<img class="sg-logo" src="title/logo.png" alt="No Room For Heroes" onerror="sgLogoFail(this)">
-    <button class="sg-btn" onclick="startGo()">▶ Start</button>
+    <button class="sg-btn" onclick="startGo()"><span class="tri">▶</span><span>Start</span></button>
     <div class="sg-hint">🔊 enables sound · ⛶ goes fullscreen</div>`;
   g.classList.add('show');
 }
@@ -2415,6 +2441,9 @@ function startGo(){
   try{ const el=document.documentElement;                          // the explicit tap lets us go fullscreen
     if(el && el.requestFullscreen){ const p=el.requestFullscreen({navigationUI:'hide'}); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
   try{ if(typeof screen!=='undefined' && screen.orientation && screen.orientation.lock){ const p=screen.orientation.lock('landscape'); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
+  // the fullscreen/orientation transition settles asynchronously — re-fit a few
+  // times so the frame can't stay scaled for the OLD viewport (art off-screen)
+  try{ [120,350,700,1400].forEach(ms=>setTimeout(()=>{ try{ resize(); }catch(_){ } }, ms)); }catch(_){ }
 }
 
 // Options — music & SFX mixer, reachable from the main menu (the same
@@ -8847,6 +8876,10 @@ function tutPreviewInit(){
 /* keep the canvas matched to the stage (rotation, panel-height changes, etc.) */
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
+// Android fires these where a plain resize can go missing (fullscreen enter/exit,
+// keyboard, pinch-viewport). Re-fit on each so the frame never overflows the screen.
+if(window.visualViewport && window.visualViewport.addEventListener) window.visualViewport.addEventListener('resize', resize);
+document.addEventListener('fullscreenchange', ()=>{ resize(); setTimeout(resize,250); setTimeout(resize,800); });
 if(window.ResizeObserver){ new ResizeObserver(resize).observe(stage); }
 
 loadSlot();
