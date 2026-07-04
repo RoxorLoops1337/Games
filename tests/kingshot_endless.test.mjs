@@ -886,6 +886,36 @@ t.ok(KS.S.ach.elite1 === true, 'first champion kill unlocks Giant Slayer');
 KS.S.stats.elites = 0; KS.S.enemies.length = 0; KS.S.items.length = 0; KS.S.pallet = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- fortune wheel ----
+KS.start();
+KS.S.stats.spins = 0; KS.S.gems = 0;
+t.ok(KS.WHEEL.length >= 6 && KS.WHEEL.every(w => typeof w.apply === 'function' && w.w > 0), 'the wheel has weighted, applicable segments');
+t.ok(KS.spinWheel() === null && KS.S.stats.spins === 0, 'cannot spin without enough gems');
+// a wheel segment's reward applies deterministically (gems segment)
+const gemSeg = KS.WHEEL.find(w => w.id === 'gems');
+const gemsPreSeg = KS.S.gems; gemSeg.apply();
+t.ok(KS.S.gems === gemsPreSeg + 3, 'the gems segment awards 3 gems');
+// spinning deducts the cost, returns a segment and counts the spin
+KS.S.gems = KS.SPIN_COST + 50; const gemsPreSpin = KS.S.gems;
+const res = KS.spinWheel();
+t.ok(res && typeof res.id === 'string', 'a spin returns the landed segment');
+t.ok(KS.S.stats.spins === 1, 'the spin is counted');
+t.ok(KS.S.gems <= gemsPreSpin - KS.SPIN_COST + 15, 'the spin cost was deducted (net of any gem prize)');
+t.ok(KS.S.wheel && typeof KS.S.wheel.idx === 'number', 'the landed segment is recorded for the animation');
+KS.checkAch();
+t.ok(KS.S.ach.spin1 === true, 'a first spin unlocks the Lucky Spin milestone');
+// many spins never throw and always land on a valid segment
+KS.S.gems = 1e6; let allValid = true;
+for (let i = 0; i < 60; i++) { const s = KS.spinWheel(); if (!s || !KS.WHEEL.includes(s)) allValid = false; }
+t.ok(allValid && KS.S.stats.spins === 61, '60 more spins all land on real segments without error');
+KS.S.showWheel = true; drawSafe('draw() with fortune wheel open');
+// spin rewards may equip gear / hatch pets — clear so later exact-stat tests stay clean
+KS.S.showWheel = false; KS.S.wheel = null; KS.S.stats.spins = 0; KS.S.gems = 0;
+KS.S.gear = { weapon: null, armor: null, trinket: null };
+KS.S.pets = {}; KS.S.activePet = null; KS.S.perks = {}; KS.S.cperks = {};
+KS.S.frenzyT = 0; KS.S.goldRushT = 0; KS.S.xp = 0; KS.S.level = 1; KS.S.cards = null;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
