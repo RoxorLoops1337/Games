@@ -493,6 +493,7 @@ function reset() {
     loginDay: 0, lastLoginDay: '', loginAvail: false, showLogin: false,
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
     combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
+    ultCharge: 0, ultCasting: false,
     xp: 0, level: 1, cards: null, pendingLevels: 0, perks: {},
     pets: {}, activePet: null, showPets: false, petPos: { x: SPAWN.x - 30, y: SPAWN.y + 10 },
     gear: { weapon: null, armor: null, trinket: null }, showGear: false,
@@ -709,7 +710,7 @@ function save() {
       streak: S.streak, lastStreakDay: S.lastStreakDay,
       loginDay: S.loginDay, lastLoginDay: S.lastLoginDay,
       showQuests: S.showQuests ? 1 : 0,
-      xp: S.xp, level: S.level, perks: S.perks,
+      xp: S.xp, level: S.level, perks: S.perks, ultCharge: S.ultCharge,
       pets: S.pets, activePet: S.activePet, gear: S.gear,
       district: S.district ? {
         plates: Object.fromEntries(Object.entries(S.district.plates).map(([id, pl]) => [id, { b: pl.built ? 1 : 0, p: pl.paid }])),
@@ -783,6 +784,7 @@ function load() {
   S.loginDay = d.loginDay || 0; S.lastLoginDay = d.lastLoginDay || ''; checkLogin();
   S.showQuests = !!d.showQuests;
   S.xp = d.xp || 0; S.level = d.level || 1; S.perks = d.perks || {};
+  S.ultCharge = d.ultCharge || 0; S.ultCasting = false;
   S.pets = d.pets || {}; S.activePet = d.activePet || null;
   if (S.activePet && petLvl(S.activePet) <= 0) S.activePet = null;
   S.gear = Object.assign({ weapon: null, armor: null, trinket: null }, d.gear || {});
@@ -958,6 +960,7 @@ function hurtEnemy(e, dmg) {
   float(e.x, e.y - e.r - 12, Math.ceil(dmg), '#fff');
   if (e.hp <= 0) {
     S.stats.kills++;
+    if (!S.ultCasting) S.ultCharge = Math.min(ULT_NEED, ultCharge() + 1);
     questEvent('kill', 1);
     registerCombo(e);
     grantXp(e.boss ? 50 : e.gold ? 6 : 3 + Math.floor(e.k / 2));
@@ -1028,6 +1031,25 @@ function dashAbility() {
   if (Math.abs(dx) > 0.15) p.face = dx > 0 ? 1 : -1;
   puff(p.x, p.y, '#6ec9e0', 12, false);
   sfx('warp'); buzz(15);
+  return true;
+}
+// ---- hero ultimate: Arrow Storm (charges from kills) --------
+const ULT_NEED = 45, ULT_DMG = 9;
+function ultCharge() { return S.ultCharge || 0; }
+function ultFrac() { return Math.min(1, ultCharge() / ULT_NEED); }
+function ultReady() { return ultCharge() >= ULT_NEED; }
+function castUlt() {
+  if (!S.started || !ultReady()) return false;
+  S.ultCasting = true; // don't let the kills we're about to score re-charge it
+  const dmg = pDmg() * ULT_DMG;
+  for (const e of S.enemies.slice()) if (e.hp > 0) hurtEnemy(e, dmg);
+  S.ultCharge = 0; S.ultCasting = false;
+  S.frenzyT = Math.max(S.frenzyT, 4);
+  S.stats.ults = (S.stats.ults || 0) + 1;
+  S.shake = Math.max(S.shake, 14); S.goldPulse = Math.max(S.goldPulse, 0.7); S.hitStop = 0.12;
+  for (let i = 0; i < 46; i++) S.parts.push({ x: S.player.x + (mrnd() - 0.5) * 420, y: S.player.y - 320, vx: (mrnd() - 0.5) * 60, vy: 520 + mrnd() * 320, t: 0, dur: 0.5, r: 2.5, color: '#ffd94a', g: 0 });
+  float(S.player.x, S.player.y - 60, '☄️ ARROW STORM!', '#ffd94a', true);
+  sfx('boom', true); buzz([40, 20, 60]);
   return true;
 }
 function hurtPlayer(d, src) {
@@ -1417,6 +1439,8 @@ const ACH = [
   { id: 'smithX',  ic: '🔨', name: 'Master Smith',      d: 'Enhance gear 25 times',           c: () => (S.stats.enhanced || 0) >= 25 },
   { id: 'trade1',  ic: '🛒', name: 'Customer',          d: 'Buy from the wandering merchant', c: () => (S.stats.trades || 0) >= 1 },
   { id: 'trade15', ic: '💼', name: 'Regular Patron',    d: 'Make 15 merchant purchases',      c: () => (S.stats.trades || 0) >= 15 },
+  { id: 'ult1',    ic: '☄️', name: 'Storm Caller',      d: 'Unleash your first Arrow Storm',  c: () => (S.stats.ults || 0) >= 1 },
+  { id: 'ult25',   ic: '🌩️', name: 'Tempest',           d: 'Unleash 25 Arrow Storms',         c: () => (S.stats.ults || 0) >= 25 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -3497,6 +3521,20 @@ function drawHud() {
     ctx.font = 'bold 9px sans-serif'; ctx.fillStyle = ready ? '#cfeaf2' : '#6a7684';
     ctx.fillText('DASH', bx, by + 24);
     hits.push({ x: bx - r, y: by - r, w: r * 2, h: r * 2, act: dashAbility });
+    // ultimate button (bottom-left) — charges from kills, unleashes Arrow Storm
+    const ux = 58, uy = vh - 84, ur = 36, uReady = ultReady();
+    ctx.fillStyle = uReady ? 'rgba(150,90,40,0.9)' : 'rgba(30,38,52,0.8)';
+    ctx.beginPath(); ctx.arc(ux, uy, ur, 0, 6.29); ctx.fill();
+    // charge ring
+    ctx.strokeStyle = uReady ? 'rgba(255,210,90,' + (0.6 + Math.sin(S.t * 6) * 0.35) + ')' : '#c9873f';
+    ctx.lineWidth = uReady ? 4 : 4;
+    ctx.beginPath(); ctx.arc(ux, uy, ur - 3, -1.5708, -1.5708 + ultFrac() * 6.283); ctx.stroke();
+    ctx.fillStyle = uReady ? '#fff' : '#8a7a66';
+    ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('☄️', ux, uy + 8);
+    ctx.font = 'bold 9px sans-serif'; ctx.fillStyle = uReady ? '#ffe8b0' : '#8a7a66';
+    ctx.fillText(uReady ? 'STORM!' : Math.floor(ultFrac() * 100) + '%', ux, uy + 24);
+    if (uReady) hits.push({ x: ux - ur, y: uy - ur, w: ur * 2, h: ur * 2, act: castUlt });
   }
   if (!S.started) {
     ctx.fillStyle = 'rgba(8,10,16,0.8)'; ctx.fillRect(0, 0, vw, vh);
@@ -3630,7 +3668,7 @@ function drawStatsPanel() {
     ['🎁 Daily claims', fmt(S.stats.logins || 0)], ['🏛 Crown perks', fmt(CPERKS.reduce((s, p) => s + cpk(p.id), 0))],
     ['🗡 Gear found', fmt(S.stats.gearFound || 0)], ['🛡 Slots filled', gearCount() + '/3'],
     ['⚒️ Enhances', fmt(S.stats.enhanced || 0)], ['💎 Gems held', fmt(S.gems)],
-    ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['🪙 Wallet', fmt(S.wallet)],
+    ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -4093,6 +4131,7 @@ window.addEventListener('keydown', (ev) => {
   S.keys[k] = true;
   if (!S.started) { S.started = true; return; }
   if (k === ' ' || k === 'Shift') { ev.preventDefault(); dashAbility(); }
+  if (k === 'q' || k === 'e') { ev.preventDefault(); castUlt(); }
 });
 window.addEventListener('keyup', (ev) => {
   const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
@@ -4134,6 +4173,7 @@ window.KS = {
   gearAmt, enhCost, enhanceGear, ENH_STEP, ENH_MAX,
   DEALS, spawnMerchant, buyDeal, merchantLeaves, drawShop,
   DAY_LEN, dayPhase, daylight, skyName, drawSky,
+  ULT_NEED, ultCharge, ultFrac, ultReady, castUlt,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
