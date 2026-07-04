@@ -530,6 +530,7 @@ function reset() {
     enemies: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [],
     chest: null, chestCd: 100,
     merchant: null, merchantCd: 70, showShop: false,
+    eliteCd: 40,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -969,6 +970,25 @@ function spawnEnemy(z, opts) {
     sfx('boss', true); S.shake = 12;
   }
 }
+// ---- elite / champion foes ----------------------------------
+// Occasionally a living foe ASCENDS into a glowing champion — much tougher,
+// drops bonus loot. Promotion + its drops run on the isolated mrnd() stream
+// and an mrnd-jittered drop helper, so the deterministic spawn stream that
+// the tests calibrate against is never touched.
+const ELITE_CD = 46;
+function dropItemM(x, y, spec) { S.items.push(Object.assign({ x: x + (mrnd() - 0.5) * 46, y: y + (mrnd() - 0.5) * 36, t: 0, vy: -60 - mrnd() * 60, vx: (mrnd() - 0.5) * 80 }, spec)); }
+function promoteElite() {
+  const pool = S.enemies.filter(e => !e.boss && !e.gold && !e.elite && e.hp > 0);
+  if (!pool.length) return false;
+  const e = pool[Math.floor(mrnd() * pool.length)];
+  e.elite = true;
+  e.max = Math.ceil(e.max * 4) + 1; e.hp = e.max;
+  e.r += 6; e.dmg *= 1.5; e.spd *= 0.9;
+  S.toasts.push({ txt: '⭐ A Champion rises!', t: 0 });
+  float(e.x, e.y - 44, '⭐ CHAMPION', '#ffd94a', true);
+  S.shake = Math.max(S.shake, 8); sfx('boss', true); buzz(30);
+  return true;
+}
 function summonBoss(z) {
   if (!z.altar || z.altar.cd > 0) return false;
   z.altar.cd = BOSS_CD;
@@ -989,7 +1009,7 @@ function hurtEnemy(e, dmg) {
     recordKill(e);
     questEvent('kill', 1);
     registerCombo(e);
-    grantXp(e.boss ? 50 : e.gold ? 6 : 3 + Math.floor(e.k / 2));
+    grantXp(e.boss ? 50 : e.elite ? 20 : e.gold ? 6 : 3 + Math.floor(e.k / 2));
     if (pk('vamp') > 0) { const p = S.player; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02 * pk('vamp')); }
     if (e.boss) {
       S.stats.bosses++;
@@ -1006,6 +1026,14 @@ function hurtEnemy(e, dmg) {
       dropHelmet(e.x, e.y, e.k); dropHelmet(e.x, e.y, e.k);
       float(e.x, e.y - 30, '💎', '#6ee0d8', true);
       sfx('gem', true);
+    } else if (e.elite) {
+      // champion loot — mrnd-jittered so it never perturbs the spawn stream
+      S.stats.elites = (S.stats.elites || 0) + 1;
+      dropItemM(e.x, e.y, { gem: true }); dropItemM(e.x, e.y, { gem: true });
+      for (let i = 0; i < 4; i++) dropItemM(e.x, e.y, { k: e.k });
+      const g = Math.ceil(40 * helmVal(e.k) * coinMul()); S.pallet += g; S.stats.earned += g;
+      float(e.x, e.y - 44, '⭐ CHAMPION! +' + fmt(g) + '¢', '#ffd94a', true);
+      S.shake = Math.max(S.shake, 10); sfx('unlock', true); buzz([30, 20, 50]);
     } else {
       const drops = 1 + (rnd() < 0.55 ? 1 : 0);
       for (let i = 0; i < drops; i++) dropHelmet(e.x, e.y, e.k);
@@ -1469,6 +1497,8 @@ const ACH = [
   { id: 'ult25',   ic: '🌩️', name: 'Tempest',           d: 'Unleash 25 Arrow Storms',         c: () => (S.stats.ults || 0) >= 25 },
   { id: 'dex4',    ic: '📖', name: 'Naturalist',        d: 'Discover 4 foe families',         c: () => bestiarySeen() >= 4 },
   { id: 'dexAll',  ic: '📚', name: 'Bestiary Complete', d: 'Discover every foe family',       c: () => bestiarySeen() >= FOE_NAMES.length },
+  { id: 'elite1',  ic: '⭐', name: 'Giant Slayer',      d: 'Slay a champion foe',             c: () => (S.stats.elites || 0) >= 1 },
+  { id: 'elite25', ic: '🌟', name: 'Champion Bane',     d: 'Slay 25 champions',               c: () => (S.stats.elites || 0) >= 25 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -2044,6 +2074,12 @@ function tick(dt) {
   } else {
     S.merchant.t += dt; S.merchant.stay -= dt;
     if (S.merchant.stay <= 0) merchantLeaves('🛒 The merchant moves on…');
+  }
+
+  // -- elite champions: promote a foe now and then (isolated mrnd, one at a time)
+  if (!S.enemies.some(e => e.elite && e.hp > 0)) {
+    S.eliteCd = (S.eliteCd || 0) - dt;
+    if (S.eliteCd <= 0) { S.eliteCd = ELITE_CD * (0.7 + mrnd() * 0.6); promoteElite(); }
   }
 
   // -- quests housekeeping: keep 3 side quests rolling, roll dailies at midnight
@@ -3105,7 +3141,12 @@ function drawDog(d) {
 function drawEnemy(e) {
   const bob = Math.abs(Math.sin(S.t * 7 + e.sway)) * 2.5;
   shadow(e.x, e.y + e.r * 0.75, e.r);
-  ctx.fillStyle = e.hurt > 0 ? '#fff' : e.gold ? '#ffd94a' : foeCol(e.k);
+  if (e.elite) {
+    const gl = 0.4 + Math.sin(S.t * 5) * 0.25;
+    ctx.fillStyle = 'rgba(255,215,90,' + (gl * 0.4) + ')';
+    ctx.beginPath(); ctx.arc(e.x, e.y - bob, e.r + 9 + Math.sin(S.t * 5) * 3, 0, 6.29); ctx.fill();
+  }
+  ctx.fillStyle = e.hurt > 0 ? '#fff' : e.elite ? '#e8b93a' : e.gold ? '#ffd94a' : foeCol(e.k);
   rr(e.x - e.r * 0.75, e.y - e.r * 0.8 - bob, e.r * 1.5, e.r * 1.4, 5); ctx.fill();
   ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 1.05 - bob, e.r * 0.5, 0, 6.29); ctx.fill();
   if (e.arch === 'tank') { // armor band (bosses too)
@@ -3118,6 +3159,7 @@ function drawEnemy(e) {
   }
   if (e.boss) drawCrownIcon(e.x, e.y - e.r * 1.55 - bob, e.r / 14);
   else drawHelmetIcon(e.x, e.y - e.r * 1.35 - bob, e.k, e.r / 18);
+  if (e.elite) { ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⭐', e.x, e.y - e.r * 1.9 - bob); }
   if (e.gold && Math.floor(S.t * 8) % 3 === 0) puff(e.x + (rnd() - 0.5) * e.r * 2, e.y - e.r - bob, '#fff8c0', 1, true);
   ctx.fillStyle = e.gold ? '#7a5a10' : '#fff';
   ctx.fillRect(e.x - e.r * 0.28 - 2, e.y - e.r * 1.08 - bob, 4, 4);
@@ -3698,7 +3740,7 @@ function drawStatsPanel() {
     ['🗡 Gear found', fmt(S.stats.gearFound || 0)], ['🛡 Slots filled', gearCount() + '/3'],
     ['⚒️ Enhances', fmt(S.stats.enhanced || 0)], ['💎 Gems held', fmt(S.gems)],
     ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
-    ['📖 Bestiary', bestiarySeen() + '/' + FOE_NAMES.length], ['⚡ Ult charge', Math.floor(ultFrac() * 100) + '%'],
+    ['📖 Bestiary', bestiarySeen() + '/' + FOE_NAMES.length], ['⭐ Champions', fmt(S.stats.elites || 0)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -4283,6 +4325,7 @@ window.KS = {
   ULT_NEED, ultCharge, ultFrac, ultReady, castUlt,
   WEATHER_LEN, WEATHER_SEQ, weatherType, weatherBucket, drawWeather,
   recordKill, famOf, bestiarySeen, drawBestiary, FOE_NAMES,
+  ELITE_CD, promoteElite, dropItemM,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
