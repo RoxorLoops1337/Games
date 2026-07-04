@@ -86,6 +86,17 @@ t.eq(S.count, C.START * 3, 'mul gate multiplies');
 SM.applyGate({ z: 11, side: 1, op: { t: 'sub', v: S.count }, used: false });
 t.eq(S.phase, 'lose', 'sub to zero loses');
 
+// -------- milestones celebrate crossing thresholds --------
+S = SM.newRun(1);
+S.count = 20;
+S.events.length = 0;
+SM.applyGate({ z: 5, side: -1, op: { t: 'mul', v: 3 }, used: false });
+const mile = S.events.find(e => e.t === 'milestone');
+t.ok(mile && mile.v === 50, 'milestone fires at highest crossed threshold (20→60 = 50)');
+S.events.length = 0;
+SM.applyGate({ z: 6, side: -1, op: { t: 'add', v: 5 }, used: false });
+t.ok(!S.events.find(e => e.t === 'milestone'), 'no milestone without a crossing');
+
 // -------- steering clamps --------
 S = SM.newRun(1);
 SM.setTX(99);
@@ -164,14 +175,22 @@ SM.tick(DT);
 step(5);
 t.eq(S.phase, 'lose', 'outnumbered crowd loses');
 
-// -------- finish stairs: thresholds pick the right multiplier --------
+// -------- finish stairs: per-level thresholds, perfect run tops out --------
 S = SM.newRun(1);
-S.count = 100; // STEPS: 90 -> step 4 -> ×5
+const TH = S.lvl.steps;
+t.ok(Array.isArray(TH) && TH.length === 10 && TH[0] === 0, 'level carries 10 stair thresholds');
+{
+  let incOk = true;
+  for (let i = 1; i < 10; i++) if (TH[i] <= TH[i - 1]) incOk = false;
+  t.ok(incOk, 'thresholds strictly increase');
+}
+S.count = TH[9]; // the crowd a perfect run brings home
 S.z = S.lvl.finishZ; S.zPrev = S.z - 1;
 for (const f of S.lvl.foes) f.alive = false;
 SM.startFinish();
-t.eq(S.res.mult, 5, '100 nails reach ×5');
-t.eq(S.res.gain, 500, 'gain 100×5');
+t.eq(S.res.mult, 10, 'perfect crowd tops the stairs at ×10');
+t.eq(S.res.gain, TH[9] * 10, 'gain = count × 10');
+const expectPlant = TH[9];
 let plantEvOk = true, planted = 0;
 {
   let el = 0;
@@ -187,9 +206,17 @@ let plantEvOk = true, planted = 0;
   }
 }
 t.eq(S.phase, 'win', 'stairs climb ends in win');
-t.eq(planted, 100, 'plant events cover every nail');
+t.eq(planted, expectPlant, 'plant events cover every nail');
 t.ok(plantEvOk, 'plant events land on valid steps');
 t.eq(S.count, 0, 'crowd fully converted to planted nails');
+
+// mid-tier crowd lands on a middle step
+S = SM.newRun(1);
+S.count = S.lvl.steps[4];
+S.z = S.lvl.finishZ; S.zPrev = S.z - 1;
+for (const f of S.lvl.foes) f.alive = false;
+SM.startFinish();
+t.eq(S.res.mult, 5, 'mid crowd lands ×5');
 t.ok(SM.yAt(S.lvl.finishZ + 0.1) > 0, 'stairs have height');
 t.eq(SM.yAt(0), 0, 'flat bench before plank');
 
