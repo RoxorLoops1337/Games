@@ -531,6 +531,7 @@ function reset() {
     chest: null, chestCd: 100,
     merchant: null, merchantCd: 70, showShop: false,
     eliteCd: 40,
+    wheel: null, showWheel: false,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -1447,6 +1448,37 @@ function buyDeal(i) {
   return true;
 }
 
+// ---- fortune wheel (gem sink + gacha thrill) ----------------
+// Spend gems for a spin; the landing segment is picked on the isolated
+// mrnd() stream so it never perturbs the enemy-spawn sequence. Rewards
+// reuse the shared gacha systems (eggs, gear) so they feel consistent.
+const SPIN_COST = 4;
+const WHEEL = [
+  { id: 'coins', ic: '🪙', label: 'Coins',     col: '#ffd94a', w: 22, apply: () => { const g = Math.ceil(120 * helmVal(S.zones.length) * coinMul()); S.wallet += g; S.stats.earned += g; return '+' + fmt(g) + '¢'; } },
+  { id: 'gems',  ic: '💎', label: '3 Gems',    col: '#6ee0d8', w: 18, apply: () => { S.gems += 3; S.stats.gemsFound = (S.stats.gemsFound || 0) + 3; return '+3💎'; } },
+  { id: 'boon',  ic: '⚡', label: 'Frenzy',    col: '#c98aff', w: 14, apply: () => { S.frenzyT = Math.max(S.frenzyT, 12); return 'Frenzy 12s'; } },
+  { id: 'gold',  ic: '💰', label: 'Gold Rush', col: '#f0a63c', w: 12, apply: () => { S.goldRushT = Math.max(S.goldRushT, 15); return 'Gold Rush 15s'; } },
+  { id: 'egg',   ic: '🥚', label: 'Pet Egg',   col: '#6ecb5a', w: 10, apply: () => { S.gems += eggCost(); hatchEgg(); return 'a pet!'; } },
+  { id: 'gear',  ic: '🎁', label: 'Gear',      col: '#5aa9e0', w: 10, apply: () => { grantGear(rollGear()); return 'gear!'; } },
+  { id: 'xp',    ic: '⭐', label: 'XP Boost',  col: '#ff9a4a', w: 8,  apply: () => { grantXp(xpNeed(S.level) * 0.6); return 'XP boost'; } },
+  { id: 'jack',  ic: '🎰', label: 'JACKPOT',   col: '#ff5a8a', w: 6,  apply: () => { S.gems += 15; S.stats.gemsFound = (S.stats.gemsFound || 0) + 15; const g = Math.ceil(400 * helmVal(S.zones.length) * coinMul()); S.wallet += g; S.stats.earned += g; return 'JACKPOT! +15💎'; } },
+];
+function spinWheel() {
+  if ((S.gems || 0) < SPIN_COST) { float(S.player.x, S.player.y - 40, 'Need ' + SPIN_COST + '💎', '#6ee0d8'); return null; }
+  S.gems -= SPIN_COST;
+  const tot = WHEEL.reduce((s, w) => s + w.w, 0);
+  let x = mrnd() * tot, idx = 0;
+  for (let i = 0; i < WHEEL.length; i++) { x -= WHEEL[i].w; if (x < 0) { idx = i; break; } }
+  const seg = WHEEL[idx], msg = seg.apply();
+  S.stats.spins = (S.stats.spins || 0) + 1;
+  S.wheel = { idx, t: 0, msg: seg.label + ': ' + msg };
+  S.toasts.push({ txt: '🎡 ' + seg.label + ' — ' + msg, t: 0 });
+  S.goldPulse = Math.max(S.goldPulse, 0.5); S.shake = Math.max(S.shake, 6);
+  sfx('unlock', true); buzz([20, 15, 40]);
+  save();
+  return seg;
+}
+
 // ---- milestones ---------------------------------------------
 const ACH = [
   { id: 'blood',   ic: '🩸', name: 'First Blood',     d: 'Slay your first foe',            c: () => S.stats.kills >= 1 },
@@ -1499,6 +1531,8 @@ const ACH = [
   { id: 'dexAll',  ic: '📚', name: 'Bestiary Complete', d: 'Discover every foe family',       c: () => bestiarySeen() >= FOE_NAMES.length },
   { id: 'elite1',  ic: '⭐', name: 'Giant Slayer',      d: 'Slay a champion foe',             c: () => (S.stats.elites || 0) >= 1 },
   { id: 'elite25', ic: '🌟', name: 'Champion Bane',     d: 'Slay 25 champions',               c: () => (S.stats.elites || 0) >= 25 },
+  { id: 'spin1',   ic: '🎡', name: 'Lucky Spin',        d: 'Spin the fortune wheel',          c: () => (S.stats.spins || 0) >= 1 },
+  { id: 'spin30',  ic: '🎰', name: 'High Roller',       d: 'Spin the wheel 30 times',         c: () => (S.stats.spins || 0) >= 30 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -3536,6 +3570,7 @@ function drawHud() {
   drawGear();
   drawShop();
   drawBestiary();
+  drawWheel();
   drawCrownHall();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -3741,6 +3776,7 @@ function drawStatsPanel() {
     ['⚒️ Enhances', fmt(S.stats.enhanced || 0)], ['💎 Gems held', fmt(S.gems)],
     ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
     ['📖 Bestiary', bestiarySeen() + '/' + FOE_NAMES.length], ['⭐ Champions', fmt(S.stats.elites || 0)],
+    ['🎡 Wheel spins', fmt(S.stats.spins || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3868,6 +3904,54 @@ function drawPets() {
   }
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap an owned pet to make it your active companion · tap empty space to close', cx, vh - 16);
+}
+function drawWheel() {
+  // 🎡 button below the bestiary button; glows when you can afford a spin
+  const bx = vw - 46, by = 248;
+  hudBtn(bx, by, 36, 30, '🎡', () => { S.showWheel = !S.showWheel; save(); });
+  if ((S.gems || 0) >= SPIN_COST) {
+    ctx.fillStyle = '#ff5a8a';
+    ctx.beginPath(); ctx.arc(bx + 32, by + 4, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill();
+  }
+  if (!S.showWheel) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.94)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showWheel = false; } });
+  const cx = vw / 2, top = Math.max(44, vh * 0.08);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('🎡 FORTUNE WHEEL', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText('Spin for a random prize · you have ' + (S.gems || 0) + ' 💎', cx, top + 20);
+  // the wheel: N colored slices, icons around the rim, landed slice highlighted
+  const wy = top + 40 + Math.min(150, vh * 0.2), rad = Math.min(140, vw * 0.34, vh * 0.22);
+  const n = WHEEL.length, seg = 6.2831853 / n;
+  // idle drift; snap-highlight the last result
+  const spin = S.wheel ? (S.wheel.idx * seg) : 0;
+  const rot = -1.5708 - spin + Math.sin(S.t * 0.6) * 0.03;
+  for (let i = 0; i < n; i++) {
+    const a0 = rot + i * seg, a1 = a0 + seg, mid = a0 + seg / 2;
+    ctx.beginPath(); ctx.moveTo(cx, wy); ctx.arc(cx, wy, rad, a0, a1); ctx.closePath();
+    const landed = S.wheel && S.wheel.idx === i;
+    ctx.fillStyle = WHEEL[i].col; ctx.globalAlpha = landed ? 1 : 0.82; ctx.fill();
+    ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.save(); ctx.translate(cx + Math.cos(mid) * rad * 0.66, wy + Math.sin(mid) * rad * 0.66);
+    ctx.fillStyle = '#1a1208'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(WHEEL[i].ic, 0, 0); ctx.restore();
+  }
+  ctx.textBaseline = 'alphabetic';
+  // hub + top pointer
+  ctx.fillStyle = '#2a2f3a'; ctx.beginPath(); ctx.arc(cx, wy, rad * 0.2, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#ffd94a'; ctx.beginPath(); ctx.moveTo(cx, wy - rad - 4); ctx.lineTo(cx - 12, wy - rad - 24); ctx.lineTo(cx + 12, wy - rad - 24); ctx.closePath(); ctx.fill();
+  // result banner
+  if (S.wheel) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🎉 ' + S.wheel.msg, cx, wy + rad + 34); }
+  // spin button
+  const can = (S.gems || 0) >= SPIN_COST, sbw = 200, sbx = cx - sbw / 2, sby = wy + rad + 48;
+  ctx.fillStyle = can ? '#b0357a' : 'rgba(50,44,52,0.9)'; rr(sbx, sby, sbw, 46, 12); ctx.fill();
+  ctx.fillStyle = can ? '#ffe8f2' : '#7a6a72'; ctx.font = 'bold 17px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🎡 SPIN   ' + SPIN_COST + '💎', cx, sby + 29);
+  if (can) hits.push({ x: sbx, y: sby, w: sbw, h: 46, act: () => { spinWheel(); } });
+  ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap empty space to close', cx, sby + 68);
 }
 function drawBestiary() {
   // 📖 button below the gear button
@@ -4326,6 +4410,7 @@ window.KS = {
   WEATHER_LEN, WEATHER_SEQ, weatherType, weatherBucket, drawWeather,
   recordKill, famOf, bestiarySeen, drawBestiary, FOE_NAMES,
   ELITE_CD, promoteElite, dropItemM,
+  WHEEL, SPIN_COST, spinWheel, drawWheel,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
