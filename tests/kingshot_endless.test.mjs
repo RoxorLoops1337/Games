@@ -1025,6 +1025,27 @@ KS.S.showSkins = false; KS.S.skins = { owned: { royal: true }, active: 'royal' }
 KS.S.crowns = 0; KS.S.gems = 0;
 for (const k of Object.keys(KS.S.ach)) if (k === 'skin3' || k === 'crown1' || k === 'crown5') delete KS.S.ach[k];
 
+// ---- combo streak reward escalation ----
+KS.start(); freezeSpawns();
+KS.S.enemies.length = 0; KS.S.combo = 0; KS.S.comboRewardMax = 0; KS.S.comboTierShown = 0;
+KS.S.frenzyT = 0; KS.S.goldRushT = 0; KS.S.pallet = 0; KS.S.stats.combos = 0;
+const zkc = KS.S.zones[0]; KS.spawnEnemy(zkc); const kce = KS.S.enemies[KS.S.enemies.length - 1];
+for (let i = 0; i < 24; i++) KS.registerCombo(kce);
+t.ok(KS.S.combo === 24 && KS.S.frenzyT === 0 && (KS.S.stats.combos || 0) === 0, 'no streak reward before the first milestone');
+KS.registerCombo(kce); // 25th kill
+t.ok(KS.S.combo === 25 && KS.S.frenzyT > 0 && KS.S.pallet > 0 && KS.S.stats.combos === 1, 'crossing 25 fires the SPREE reward (frenzy + coins)');
+KS.S.pallet = 0;
+for (let i = 0; i < 25; i++) KS.registerCombo(kce); // → 50
+t.ok(KS.S.combo >= 50 && KS.S.goldRushT > 0 && KS.S.stats.combos === 2, 'crossing 50 fires RAMPAGE (gold rush), each milestone once');
+// a fresh streak re-earns the milestone rewards
+KS.S.combo = 0; KS.S.comboRewardMax = 0; KS.S.frenzyT = 0; KS.S.stats.combos = 0;
+for (let i = 0; i < 25; i++) KS.registerCombo(kce);
+t.ok(KS.S.stats.combos === 1 && KS.S.frenzyT > 0, 'a fresh streak re-arms and re-earns the milestone reward');
+KS.S.stats.comboBest = 50; KS.checkAch();
+t.ok(KS.S.ach.streak === true, 'a 50 kill streak unlocks On a Rampage');
+KS.S.combo = 0; KS.S.comboRewardMax = 0; KS.S.comboTierShown = 0; KS.S.frenzyT = 0; KS.S.goldRushT = 0;
+KS.S.pallet = 0; KS.S.stats.combos = 0; KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
