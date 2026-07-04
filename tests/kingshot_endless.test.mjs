@@ -990,6 +990,41 @@ t.ok(KS.setg('shake') === false && KS.setg('weather') === false && KS.setg('part
 KS.S.settings = { shake: true, particles: true, dmgNums: true, weather: true };
 KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
 
+// ---- hero skins / wardrobe ----
+KS.start();
+KS.S.skins = { owned: { royal: true }, active: 'royal' };
+t.ok(KS.skinsOwnedCount() === 1 && KS.activeSkin().id === 'royal', 'the default outfit starts owned + equipped');
+t.ok(KS.activeSkin().body === '#3f6fb5', 'the active skin drives the knight body colour');
+// buy a crown skin
+KS.S.crowns = 10; const crownsPreSkin = KS.S.crowns;
+t.ok(KS.buySkin('crimson') === true, 'a crown outfit can be bought');
+t.ok(KS.skinOwned('crimson') && KS.S.skins.active === 'crimson' && KS.S.crowns === crownsPreSkin - 3, 'buying unlocks, equips, and spends crowns');
+t.ok(KS.activeSkin().body === '#b5403f', 'equipping recolours the hero');
+// cannot buy without funds
+KS.S.crowns = 0; KS.S.gems = 0;
+t.ok(KS.buySkin('gold') === false && !KS.skinOwned('gold'), 'cannot buy an outfit you cannot afford');
+// re-buying an owned skin just equips it (no charge)
+KS.S.crowns = 5; const cr2 = KS.S.crowns;
+KS.buySkin('royal');
+t.ok(KS.S.skins.active === 'royal' && KS.S.crowns === cr2, 'tapping an owned outfit equips it for free');
+// the rank-locked skin unlocks only at Legend
+const kk = KS.S.stats.kills, kcr = KS.S.crowns;
+KS.S.stats.kills = 0; KS.S.crowns = 0;
+t.ok(KS.buySkin('legend') === false && !KS.skinOwned('legend'), 'the Legend outfit is locked below Legend rank');
+KS.S.crowns = 1000; // renown → past Legend
+t.ok(KS.buySkin('legend') === true && KS.skinOwned('legend'), 'reaching Legend rank unlocks its regalia for free');
+KS.S.stats.kills = kk; KS.S.crowns = kcr;
+// milestone + persistence
+KS.checkAch();
+t.ok(KS.S.ach.skin3 === true, 'owning three outfits unlocks Dressed Up');
+KS.S.skins = { owned: { royal: true, frost: true }, active: 'frost' };
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.skinOwned('frost') && KS.S.skins.active === 'frost', 'wardrobe persists through save/load');
+KS.S.showSkins = true; drawSafe('draw() with wardrobe open');
+KS.S.showSkins = false; KS.S.skins = { owned: { royal: true }, active: 'royal' };
+KS.S.crowns = 0; KS.S.gems = 0;
+for (const k of Object.keys(KS.S.ach)) if (k === 'skin3' || k === 'crown1' || k === 'crown5') delete KS.S.ach[k];
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');

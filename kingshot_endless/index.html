@@ -533,6 +533,7 @@ function reset() {
     eliteCd: 40,
     wheel: null, showWheel: false,
     settings: { shake: true, particles: true, dmgNums: true, weather: true }, showSettings: false,
+    skins: { owned: { royal: true }, active: 'royal' }, showSkins: false,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -753,7 +754,7 @@ function save() {
           crafts: Object.fromEntries(Object.entries(d.crafts).map(([id, c]) => [id, { in: c.in, tray: c.tray }])),
         }];
       })),
-      crowns: S.crowns, prestiges: S.prestiges, cperks: S.cperks, settings: S.settings,
+      crowns: S.crowns, prestiges: S.prestiges, cperks: S.cperks, settings: S.settings, skins: S.skins,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
     }));
@@ -850,6 +851,9 @@ function load() {
   }
   S.crowns = d.crowns || 0; S.prestiges = d.prestiges || 0; S.cperks = d.cperks || {};
   S.settings = Object.assign({ shake: true, particles: true, dmgNums: true, weather: true }, d.settings || {});
+  S.skins = d.skins && d.skins.owned ? d.skins : { owned: { royal: true }, active: 'royal' };
+  if (!S.skins.owned.royal) S.skins.owned.royal = true;
+  if (!skinOwned(S.skins.active)) S.skins.active = 'royal';
   (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
   const amt = Math.floor(idleRate() * away);
@@ -938,6 +942,41 @@ function fmt(n) {
   return (n / 1e9).toFixed(1) + 'B';
 }
 function dist2(ax, ay, bx, by) { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; }
+// ---- hero skins (cosmetic customization) --------------------
+// Recolor the knight's body + cape. Some bought with crowns/gems, one
+// unlocked by reaching Legend rank. Purely cosmetic — zero balance impact.
+const SKINS = [
+  { id: 'royal',   name: 'Royal Blue',     body: '#3f6fb5', cape: '#a03030', cost: 0,  cur: null },
+  { id: 'crimson', name: 'Crimson Guard',  body: '#b5403f', cape: '#5a1a1a', cost: 3,  cur: 'crown' },
+  { id: 'emerald', name: 'Emerald Knight', body: '#3faa6a', cape: '#1f5a3a', cost: 3,  cur: 'crown' },
+  { id: 'gold',    name: 'Golden King',    body: '#d9a93a', cape: '#8a6a10', cost: 6,  cur: 'crown' },
+  { id: 'shadow',  name: 'Shadowblade',    body: '#3a3a4a', cape: '#15151f', cost: 40, cur: 'gem' },
+  { id: 'frost',   name: 'Frostborn',      body: '#5aa9d0', cape: '#2a5a7a', cost: 40, cur: 'gem' },
+  { id: 'void',    name: 'Voidwalker',     body: '#7a3faa', cape: '#3a1a5a', cost: 80, cur: 'gem' },
+  { id: 'legend',  name: 'Legend Regalia', body: '#e8c44a', cape: '#b03030', cost: 0,  cur: null, need: () => heroRankIdx() >= 8, needTxt: 'Reach Legend rank' },
+];
+function skinDef(id) { return SKINS.find(s => s.id === id) || SKINS[0]; }
+function skinOwned(id) { return !!(S.skins && S.skins.owned && S.skins.owned[id]); }
+function activeSkin() { return skinDef(S.skins ? S.skins.active : 'royal'); }
+function skinsOwnedCount() { let n = 0; for (const s of SKINS) if (skinOwned(s.id)) n++; return n; }
+function buySkin(id) {
+  const s = skinDef(id); if (!S.skins) S.skins = { owned: { royal: true }, active: 'royal' };
+  if (skinOwned(id)) { S.skins.active = id; sfx('built', true); save(); return true; }
+  if (s.need) { // free unlock once the condition is met
+    if (!s.need()) { float(S.player.x, S.player.y - 40, s.needTxt || 'Locked', '#ffd94a'); return false; }
+    S.skins.owned[id] = true; S.skins.active = id;
+  } else {
+    const have = s.cur === 'crown' ? S.crowns : S.gems;
+    if (have < s.cost) { float(S.player.x, S.player.y - 40, 'Need ' + s.cost + (s.cur === 'crown' ? ' 👑' : '💎'), '#ffd94a'); return false; }
+    if (s.cur === 'crown') S.crowns -= s.cost; else S.gems -= s.cost;
+    S.skins.owned[id] = true; S.skins.active = id;
+  }
+  S.toasts.push({ txt: '👕 Unlocked ' + s.name + '!', t: 0 });
+  S.goldPulse = Math.max(S.goldPulse, 0.5); sfx('unlock', true); buzz(30);
+  save();
+  return true;
+}
+
 // accessibility settings — default ON so older saves behave unchanged
 function setg(k) { return !S.settings || S.settings[k] !== false; }
 const SETTINGS = [
@@ -1547,6 +1586,8 @@ const ACH = [
   { id: 'rankKn',  ic: '🛡', name: 'Knighted',          d: 'Reach the rank of Knight',        c: () => heroRankIdx() >= 2 },
   { id: 'rankWl',  ic: '⚔️', name: 'Warlord',           d: 'Reach the rank of Warlord',       c: () => heroRankIdx() >= 5 },
   { id: 'rankLg',  ic: '🌟', name: 'Living Legend',     d: 'Reach the rank of Legend',        c: () => heroRankIdx() >= 8 },
+  { id: 'skin3',   ic: '👕', name: 'Dressed Up',        d: 'Own 3 hero outfits',              c: () => skinsOwnedCount() >= 3 },
+  { id: 'skinAll', ic: '👑', name: 'Fashionista',       d: 'Collect every hero outfit',       c: () => skinsOwnedCount() >= SKINS.length },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -3269,15 +3310,16 @@ function drawPlayer() {
   shadow(p.x, p.y + 16, 18);
   if (p.invuln > 0 && Math.floor(S.t * 12) % 2) ctx.globalAlpha = 0.45;
   // cape
+  const skin = activeSkin();
   const flap = (p.moving ? Math.sin(S.t * 10) * 5 : Math.sin(S.t * 2) * 2);
-  ctx.fillStyle = '#a03030';
+  ctx.fillStyle = skin.cape;
   ctx.beginPath();
   ctx.moveTo(p.x - p.face * 4, p.y - 20 - bob);
   ctx.lineTo(p.x - p.face * (16 + Math.abs(flap)), p.y - 2 - bob + flap);
   ctx.lineTo(p.x - p.face * 8, p.y + 8 - bob);
   ctx.closePath(); ctx.fill();
   // body
-  ctx.fillStyle = p.hurtT > 0 ? '#fff' : '#3f6fb5';
+  ctx.fillStyle = p.hurtT > 0 ? '#fff' : skin.body;
   rr(p.x - 11, p.y - 14 - bob, 22, 26, 6); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.18)'; rr(p.x - 11, p.y - 14 - bob, 22, 8, 6); ctx.fill();
   // head + crown
@@ -3650,6 +3692,7 @@ function drawHud() {
   drawShop();
   drawBestiary();
   drawWheel();
+  drawSkins();
   drawSettings();
   drawCrownHall();
   drawStatsPanel();
@@ -3858,6 +3901,7 @@ function drawStatsPanel() {
     ['📖 Bestiary', bestiarySeen() + '/' + FOE_NAMES.length], ['⭐ Champions', fmt(S.stats.elites || 0)],
     ['🎡 Wheel spins', fmt(S.stats.spins || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
     [heroRank().ic + ' Rank', heroRank().name], ['🎗 Renown', fmt(renown())],
+    ['👕 Outfits', skinsOwnedCount() + '/' + SKINS.length], ['⭐ Champions', fmt(S.stats.elites || 0)],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -4033,6 +4077,43 @@ function drawWheel() {
   if (can) hits.push({ x: sbx, y: sby, w: sbw, h: 46, act: () => { spinWheel(); } });
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap empty space to close', cx, sby + 68);
+}
+function drawSkins() {
+  hudBtn(vw - 46, 316, 36, 30, '👕', () => { S.showSkins = !S.showSkins; save(); });
+  if (!S.showSkins) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showSkins = false; } });
+  const cx = vw / 2, top = Math.max(42, vh * 0.05);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('👕 WARDROBE', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText(skinsOwnedCount() + ' / ' + SKINS.length + ' outfits · 👑 ' + S.crowns + '   💎 ' + S.gems, cx, top + 20);
+  const cols = 2, cw = Math.min(180, (vw - 36) / cols), ch = Math.min(96, (vh - top - 50) / Math.ceil(SKINS.length / cols)), gx0 = cx - (cols * cw) / 2;
+  let gy = top + 34;
+  for (let i = 0; i < SKINS.length; i++) {
+    const s = SKINS[i], owned = skinOwned(s.id), active = S.skins.active === s.id;
+    const locked = !owned && s.need && !s.need();
+    const col = i % cols, row = Math.floor(i / cols), x = gx0 + col * cw, y = gy + row * ch;
+    ctx.fillStyle = active ? 'rgba(255,217,74,0.16)' : 'rgba(20,25,36,0.9)'; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.fill();
+    ctx.strokeStyle = active ? '#ffd94a' : owned ? '#6ecb5a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = active ? 2.5 : 1.2; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.stroke();
+    // little knight swatch
+    const kx = x + 28, ky = y + ch / 2;
+    ctx.fillStyle = s.cape; ctx.beginPath(); ctx.moveTo(kx - 4, ky - 8); ctx.lineTo(kx - 14, ky + 6); ctx.lineTo(kx - 6, ky + 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = s.body; rr(kx - 8, ky - 10, 16, 20, 4); ctx.fill();
+    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(kx, ky - 14, 6, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#ffd94a'; ctx.beginPath(); ctx.moveTo(kx - 6, ky - 17); ctx.lineTo(kx, ky - 23); ctx.lineTo(kx + 6, ky - 17); ctx.closePath(); ctx.fill();
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(s.name, x + 46, y + 30);
+    ctx.font = '10px sans-serif';
+    if (active) { ctx.fillStyle = '#ffd94a'; ctx.fillText('✓ Equipped', x + 46, y + 48); }
+    else if (owned) { ctx.fillStyle = '#6ecb5a'; ctx.fillText('Tap to equip', x + 46, y + 48); }
+    else if (locked) { ctx.fillStyle = '#8a7f5a'; ctx.fillText('🔒 ' + (s.needTxt || 'Locked'), x + 46, y + 48); }
+    else { ctx.fillStyle = '#ffd94a'; ctx.fillText((s.cur === 'crown' ? '👑 ' : '💎 ') + s.cost, x + 46, y + 48); }
+    hits.push({ x: x + 4, y: y + 4, w: cw - 8, h: ch - 8, act: () => { buySkin(s.id); } });
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap empty space to close', cx, vh - 14);
 }
 function toggleSetting(k) { if (!S.settings) S.settings = {}; S.settings[k] = S.settings[k] === false ? true : false; sfx('built', true); save(); }
 function drawSettings() {
@@ -4527,6 +4608,7 @@ window.KS = {
   WHEEL, SPIN_COST, spinWheel, drawWheel,
   RANKS, renown, heroRank, heroRankIdx, nextRank, checkRankUp,
   SETTINGS, setg, toggleSetting, drawSettings,
+  SKINS, skinDef, skinOwned, activeSkin, skinsOwnedCount, buySkin, drawSkins,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
