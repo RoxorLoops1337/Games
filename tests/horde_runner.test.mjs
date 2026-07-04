@@ -82,6 +82,8 @@ drawSafe('draw() during run');
 
 // every gate pair offers a positive choice; the first is all-good;
 // the opening stretch is monster-free and brutes wait until mid-level
+const seen = { runner: 0, spitter: 0, pools: 0, nastyGate: 0 };
+const isNasty = s => (s.kind === 'p' && s.op === '-') || (s.kind === 'n' && s.op === '/' && s.v >= 3);
 for (let lvl = 1; lvl <= 12; lvl++) {
   HR.buildLevel(lvl);
   t.ok(S.gates.every(g => HR.gateIsGood(g.L) || HR.gateIsGood(g.R)),
@@ -92,7 +94,21 @@ for (let lvl = 1; lvl <= 12; lvl++) {
   t.ok(S.mon.every(m => m.z > g0), 'level ' + lvl + ': no monsters before the first gate');
   t.ok(S.mon.every(m => !m.brute || m.z > g0 + 900), 'level ' + lvl + ': no brutes in the early stretch');
   t.ok(S.mon.length >= 5, 'level ' + lvl + ': still has real hordes');
+  // escalation ladder: nothing before its unlock level…
+  if (lvl < 4) t.ok(S.mon.every(m => m.kind !== 'runner'), 'level ' + lvl + ': no runners yet');
+  if (lvl < 5) t.ok(!S.gates.some(g => isNasty(g.L) || isNasty(g.R)), 'level ' + lvl + ': no nasty gates yet');
+  if (lvl < 7) t.ok(S.pools.length === 0, 'level ' + lvl + ': no lava pools yet');
+  if (lvl < 9) t.ok(S.mon.every(m => m.kind !== 'spitter'), 'level ' + lvl + ': no spitters yet');
+  seen.runner += S.mon.filter(m => m.kind === 'runner').length;
+  seen.spitter += S.mon.filter(m => m.kind === 'spitter').length;
+  seen.pools += S.pools.length;
+  seen.nastyGate += S.gates.filter(g => isNasty(g.L) || isNasty(g.R)).length;
 }
+// …and everything actually shows up once unlocked
+t.ok(seen.runner > 0, 'runners appear in the late game');
+t.ok(seen.spitter > 0, 'spitters appear in the late game');
+t.ok(seen.pools > 0, 'lava pools appear in the late game');
+t.ok(seen.nastyGate > 0, 'nastier gates appear in the late game');
 HR.startLevel();
 
 // deterministic layout per level
@@ -126,6 +142,12 @@ HR.applyOp({ kind: 'p', op: '+', v: 2 });
 t.ok(S.pow === 3, 'PWR +2 gate raises attack power');
 HR.applyOp({ kind: 'p', op: 'x', v: 2 });
 t.ok(S.pow === 6, 'PWR ×2 gate multiplies attack power');
+HR.applyOp({ kind: 'p', op: '-', v: 2 });
+t.ok(S.pow === 4, 'PWR −2 gate drains attack power');
+HR.applyOp({ kind: 'p', op: '-', v: 99 });
+t.ok(S.pow === 1, 'power drain never drops below 1');
+t.ok(!HR.gateIsGood({ kind: 'p', op: '-', v: 1 }), 'PWR − counts as a bad side');
+t.ok(HR.gateIsGood({ kind: 'p', op: '+', v: 1 }), 'PWR + still counts as a good side');
 
 // ---- gate crossing picks the side you steer to ----
 clearField();
@@ -185,45 +207,66 @@ S.rapidT = 0; S.dblT = 0;
 S.n = 30; S.cx = 0; S.cxTarget = 0;
 S.mon.push({ z: S.dist + 10, x: 0, hp: 999, max: 999, r: 15, spd: 0, dmg: 4, brute: false, flash: 0, seed: 0 });
 HR.tick(1 / 60);
-t.ok(S.n === 26, 'monster contact removes its dmg in units');
+t.ok(S.mon[0] && S.mon[0].attacking, 'monster winds up a pounce on contact');
+t.ok(S.n === 30, 'no damage during the windup');
+step(0.3);
+t.ok(S.n === 26, 'the pounce lands and removes its dmg in units');
 t.ok(S.mon.length === 0, 'the monster dies on impact');
+
+// ---- spitters lob telegraphed acid globs ----
+clearField();
+S.n = 50; S.cx = 0; S.cxTarget = 0;
+S.mon.push({ z: S.dist + 300, x: 100, hp: 9999, max: 9999, r: 17, spd: 42, dmg: 2, brute: false, kind: 'spitter', spitT: 0.05, flash: 0, seed: 0 });
+step(0.2);
+t.ok(S.telegraphs.some(tg => tg.kind === 'spit'), 'spitter lobs a telegraphed glob');
+drawSafe('draw() with an acid glob in flight');
+const nBeforeSpit = S.n;
+step(1.2);
+t.ok(S.n < nBeforeSpit, 'standing in the acid splash costs units');
 
 // ---- army wiped → lose ----
 clearField();
 S.n = 2;
 S.mon.push({ z: S.dist + 10, x: 0, hp: 999, max: 999, r: 15, spd: 0, dmg: 4, brute: false, flash: 0, seed: 0 });
-HR.tick(1 / 60);
+step(0.3);
 t.ok(S.phase === 'lose', 'losing every unit ends the run');
 drawSafe('draw() on lose overlay');
 HR.tick(1 / 60); // tick in lose phase must be inert
 t.ok(S.phase === 'lose', 'lose phase is stable');
 
-// ---- boss fight → win → save ----
+// ---- boss fight → next wave, the run never ends ----
 HR.startLevel();
 clearField();
 S.n = 500; S.pow = 3;
 S.dist = S.levelLen - C.BOSS_DIST - 5;
 step(0.2);
-t.ok(S.phase === 'boss' && S.boss, 'reaching the end of the lane spawns the boss');
+t.ok(S.phase === 'boss' && S.boss, 'reaching the end of the stretch spawns the boss');
 t.ok(S.boss.hp === S.boss.max && S.boss.hp > 0, 'boss spawns at full hp');
 drawSafe('draw() during boss fight');
+S.boss.hp = S.boss.max = 99999; // keep it alive while we watch it fight back
 step(2.5);
-t.ok(S.telegraphs.length > 0 || S.n < 500 || S.boss.hp < S.boss.max, 'boss fight is actually happening');
+t.ok(S.telegraphs.length > 0 || S.n < 500 || S.mon.length > 0, 'boss fight is actually happening');
+const lenBefore = S.levelLen;
 S.boss.hp = 1; // let one volley finish it
 guard = 0;
 while (S.phase === 'boss' && guard++ < 60 * 8) HR.tick(1 / 60);
-t.ok(S.phase === 'win', 'killing the boss wins the level');
-t.ok(S.level === 2, 'level advances after the win');
-t.ok(store.hr_level === '2', 'progress saved to localStorage');
-t.ok(store.hr_best === '2', 'best level saved');
-drawSafe('draw() on win overlay');
+t.ok(S.phase === 'run', 'killing the boss continues the run — no level end');
+t.ok(S.level === 2, 'wave counter advances');
+t.ok(S.boss === null, 'boss cleared from the field');
+t.ok(S.levelLen > lenBefore && S.segStart > 0, 'a fresh stretch of track was generated ahead');
+t.ok(S.gates.some(g => !g.applied && g.z > S.dist), 'new gates wait down the lane');
+t.ok(S.n > C.START_UNITS, 'the army carries over between waves');
+t.ok(S.banner && S.banner.msg.length > 0, 'the next wave is announced');
+t.ok(store.hr_best === '2', 'wave record saved to localStorage');
+drawSafe('draw() right after the boss falls');
+step(3);
+t.ok(S.phase === 'run' && S.dist > S.segStart - C.BOSS_DIST, 'the march continues into the new stretch');
 
-// ---- next level is harder + save/load round-trip ----
+// ---- fresh run resets to wave 1 + record survives reload ----
 HR.startLevel();
-t.ok(S.phase === 'run' && S.n === C.START_UNITS, 'level 2 starts fresh');
-t.ok(S.levelLen > 2600, 'later levels are longer');
+t.ok(S.phase === 'run' && S.n === C.START_UNITS && S.level === 1, 'a fresh run starts back at wave 1');
 const HR2 = loadGame(store);
-t.ok(HR2.S.level === 2, 'reloading the game resumes at the saved level');
-t.ok(HR2.S.best === 2, 'best level survives the reload');
+t.ok(HR2.S.best === 2, 'wave record survives a reload');
+t.ok(HR2.S.level === 1, 'a reloaded game still starts runs at wave 1');
 
 t.done();

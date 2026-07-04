@@ -52,7 +52,7 @@ function mulberry32(seed) {
 const fmt = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : '' + n;
 
 // ------------------------------------------------------------------- save
-const LS_LEVEL = 'hr_level', LS_BEST = 'hr_best', LS_MUTE = 'hr_muted';
+const LS_BEST = 'hr_best', LS_MUTE = 'hr_muted';
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, '' + v); } catch (e) {} },
@@ -94,19 +94,20 @@ const sfx = {
 
 // ------------------------------------------------------------------- state
 const S = {
-  phase: 'menu',          // menu | run | boss | win | lose
-  level: parseInt(store.get(LS_LEVEL, '1'), 10) || 1,
+  phase: 'menu',          // menu | run | boss | lose
+  level: 1,               // current wave — one endless run, waves never stop
   best: parseInt(store.get(LS_BEST, '1'), 10) || 1,
   time: 0,
   dist: 0,                // track distance travelled (px)
-  levelLen: 0,            // z where the boss waits
+  levelLen: 0,            // z where the current wave's boss waits
+  segStart: 0,            // z where the current wave's stretch began
   n: START_UNITS,         // army size
   pow: 1,                 // attack power per unit
   cx: 0, cxTarget: 0,     // crowd center (world x)
   rapidT: 0, dblT: 0,     // power-up timers (rapid fire / double damage)
   fireT: 0,
-  mon: [], bul: [], gates: [], barrels: [], fx: [], txt: [], telegraphs: [],
-  boss: null,
+  mon: [], bul: [], gates: [], barrels: [], fx: [], txt: [], telegraphs: [], pools: [],
+  boss: null, banner: null,
   shake: 0,
   kills: 0,
   peak: START_UNITS,
@@ -116,68 +117,108 @@ const S = {
 function difficulty(lvl) { return 1 + 0.35 * (lvl - 1); }
 
 // ------------------------------------------------------------ level layout
+// The run is endless — levels never stop. What DOES change is the threat
+// ladder: higher levels unlock nastier gates, new monster types and floor
+// hazards (see UNLOCKS for the announcement banners).
+const UNLOCKS = {
+  4: 'NEW THREAT: runners — fast little biters!',
+  5: 'NEW GATES: ÷3 and PWR − show up now',
+  7: 'NEW HAZARD: lava pools — steer around!',
+  9: 'NEW THREAT: acid spitters lob from range!',
+};
 const GATE_DEFS = [
   // kind n = army count, p = power. w = pick weight (higher = more common).
-  { kind: 'n', op: '+', vmin: 3, vmax: 14, w: 26 },
-  { kind: 'n', op: '-', vmin: 4, vmax: 18, w: 18 },
-  { kind: 'n', op: 'x', vmin: 2, vmax: 3, w: 10 },
-  { kind: 'n', op: '/', vmin: 2, vmax: 2, w: 9 },
-  { kind: 'p', op: '+', vmin: 1, vmax: 2, w: 8 },
-  { kind: 'p', op: 'x', vmin: 2, vmax: 2, w: 3 },
+  // minLvl gates the nastier ops into the late game.
+  { kind: 'n', op: '+', vmin: 3, vmax: 14, w: 26, minLvl: 1 },
+  { kind: 'n', op: '-', vmin: 4, vmax: 18, w: 18, minLvl: 1 },
+  { kind: 'n', op: 'x', vmin: 2, vmax: 3, w: 10, minLvl: 1 },
+  { kind: 'n', op: '/', vmin: 2, vmax: 2, w: 9, minLvl: 1 },
+  { kind: 'p', op: '+', vmin: 1, vmax: 2, w: 8, minLvl: 1 },
+  { kind: 'p', op: 'x', vmin: 2, vmax: 2, w: 3, minLvl: 1 },
+  { kind: 'n', op: '/', vmin: 3, vmax: 3, w: 6, minLvl: 5 },
+  { kind: 'p', op: '-', vmin: 1, vmax: 2, w: 6, minLvl: 5 },
 ];
-function rollGate(rnd, diff) {
-  const total = GATE_DEFS.reduce((s, g) => s + g.w, 0);
-  let r = rnd() * total, def = GATE_DEFS[0];
-  for (const g of GATE_DEFS) { r -= g.w; if (r <= 0) { def = g; break; } }
+function rollGate(rnd, diff, lvl) {
+  const defs = GATE_DEFS.filter(g => (lvl || 1) >= g.minLvl);
+  const total = defs.reduce((s, g) => s + g.w, 0);
+  let r = rnd() * total, def = defs[0];
+  for (const g of defs) { r -= g.w; if (r <= 0) { def = g; break; } }
   let v = def.vmin + Math.floor(rnd() * (def.vmax - def.vmin + 1));
   if (def.kind === 'n' && (def.op === '+' || def.op === '-')) v = Math.round(v * Math.sqrt(diff));
   return { kind: def.kind, op: def.op, v, hits: 0 };
 }
-function rollGoodGate(rnd, diff) {
-  let g = rollGate(rnd, diff), guard = 0;
-  while (!gateIsGood(g) && guard++ < 20) g = rollGate(rnd, diff);
+function rollGoodGate(rnd, diff, lvl) {
+  let g = rollGate(rnd, diff, lvl), guard = 0;
+  while (!gateIsGood(g) && guard++ < 20) g = rollGate(rnd, diff, lvl);
   return g;
 }
-function makeGatePair(rnd, z, diff, bothGood) {
+function makeGatePair(rnd, z, diff, bothGood, lvl) {
   // one side is ALWAYS a positive choice — a −12 vs ÷2 pair is not a choice,
   // it's a punishment. The first gate of a level is all-good (bothGood).
-  let a = rollGoodGate(rnd, diff);
-  const rollB = () => bothGood ? rollGoodGate(rnd, diff) : rollGate(rnd, diff);
+  let a = rollGoodGate(rnd, diff, lvl);
+  const rollB = () => bothGood ? rollGoodGate(rnd, diff, lvl) : rollGate(rnd, diff, lvl);
   let b = rollB(), guard = 0;
   while (guard++ < 8 && a.kind === b.kind && a.op === b.op && a.v === b.v) b = rollB();
   const flip = rnd() < 0.5;
   return { z, L: flip ? a : b, R: flip ? b : a, applied: false };
 }
 const BARREL_KINDS = ['rapid', 'double', 'units', 'bomb'];
-function buildLevel(lvl) {
+// Generates one wave's stretch of track starting at startZ. With startZ 0 it
+// resets the world (new run); with startZ > 0 it appends past the previous
+// boss so the run never ends.
+function buildLevel(lvl, startZ) {
+  const base = startZ || 0;
   const rnd = mulberry32(lvl * 7919 + 13);
   const diff = difficulty(lvl);
-  S.levelLen = 2600 + 350 * Math.min(lvl, 12);
-  S.gates = []; S.mon = []; S.barrels = []; S.bul = []; S.fx = []; S.txt = []; S.telegraphs = [];
-  S.boss = null;
-  // gates every ~600px
-  for (let z = 620; z < S.levelLen - 500; z += 560 + rnd() * 160) {
-    S.gates.push(makeGatePair(rnd, z, diff, S.gates.length === 0));
+  if (!base) {
+    S.gates = []; S.mon = []; S.barrels = []; S.bul = []; S.fx = []; S.txt = []; S.telegraphs = []; S.pools = [];
+    S.boss = null;
+  } else {
+    // prune what the army already ran past
+    S.gates = S.gates.filter(g => !g.applied);
+    S.barrels = S.barrels.filter(b => !b.broken && b.z > S.dist - 200);
+    S.pools = S.pools.filter(p => !p.used && p.z > S.dist - 200);
   }
-  // monster hordes between the gates — never before the first gate (the
-  // opening stretch is for aiming at that first all-good choice), and no
+  S.segStart = base;
+  S.levelLen = base + 2600 + 350 * Math.min(lvl, 12);
+  // gates every ~600px
+  const segGates = [];
+  for (let z = base + 620; z < S.levelLen - 500; z += 560 + rnd() * 160) {
+    const gp = makeGatePair(rnd, z, diff, segGates.length === 0, lvl);
+    segGates.push(gp); S.gates.push(gp);
+  }
+  // monster hordes between the gates — never before the segment's first gate
+  // (the opening stretch is for aiming at that first all-good choice), and no
   // brutes until the army has had a couple of gates to grow
-  const firstGateZ = S.gates.length ? S.gates[0].z : 620;
+  const firstGateZ = segGates.length ? segGates[0].z : base + 620;
   for (let z = firstGateZ + 280; z < S.levelLen - 320; z += 300 + rnd() * 260) {
     const horde = 2 + Math.floor(rnd() * 3) + Math.floor(diff);
     const cxx = (rnd() * 2 - 1) * (LANE - 50);
     for (let i = 0; i < horde; i++) {
-      const brute = rnd() < 0.14 + 0.02 * lvl && z > firstGateZ + 900;
+      const roll = rnd();
+      const brute = roll < 0.14 + 0.02 * lvl && z > firstGateZ + 900;
+      const runner = !brute && lvl >= 4 && roll > 0.72;
+      const spitter = !brute && !runner && lvl >= 9 && roll > 0.55 && z > firstGateZ + 600;
+      const kind = brute ? 'brute' : runner ? 'runner' : spitter ? 'spitter' : 'grunt';
+      const hp = brute ? 26 * diff : runner ? 4 * diff : spitter ? 10 * diff : 7 * diff;
       S.mon.push({
         z: z + rnd() * 120, x: clamp(cxx + (rnd() * 2 - 1) * 70, -LANE + 24, LANE - 24),
-        hp: brute ? 26 * diff : 7 * diff, max: brute ? 26 * diff : 7 * diff,
-        r: brute ? 26 : 15, spd: brute ? 46 : 68 + rnd() * 30,
-        dmg: brute ? 6 : 2, brute, flash: 0, seed: rnd() * 7,
+        hp, max: hp, kind,
+        r: brute ? 26 : runner ? 11 : spitter ? 17 : 15,
+        spd: brute ? 46 : runner ? 150 + rnd() * 24 : spitter ? 42 : 68 + rnd() * 30,
+        dmg: brute ? 6 : runner ? 1 : 2, brute, flash: 0, seed: rnd() * 7,
+        spitT: 1.4,
       });
     }
   }
+  // lava pools (lvl 7+): stationary floor hazards you steer around
+  if (lvl >= 7) {
+    for (let z = firstGateZ + 500; z < S.levelLen - 500; z += 700 + rnd() * 500) {
+      S.pools.push({ z, x: (rnd() * 2 - 1) * (LANE - 70), r: 52, used: false });
+    }
+  }
   // barrels
-  for (let z = 760; z < S.levelLen - 420; z += 640 + rnd() * 420) {
+  for (let z = base + 760; z < S.levelLen - 420; z += 640 + rnd() * 420) {
     S.barrels.push({
       z, x: (rnd() * 2 - 1) * (LANE - 60),
       hp: 8, max: 8, kind: BARREL_KINDS[Math.floor(rnd() * BARREL_KINDS.length)],
@@ -187,12 +228,16 @@ function buildLevel(lvl) {
 }
 
 function startLevel() {
+  // one endless run, always from wave 1 — dying means the horde got you,
+  // and hr_best remembers how deep you marched
   S.phase = 'run';
+  S.level = 1;
   S.time = 0; S.dist = 0;
   S.n = START_UNITS; S.pow = 1; S.peak = START_UNITS;
   S.cx = 0; S.cxTarget = 0;
   S.rapidT = 0; S.dblT = 0; S.fireT = 0; S.kills = 0; S.shake = 0;
-  buildLevel(S.level);
+  S.banner = null;
+  buildLevel(1);
 }
 
 // --------------------------------------------------------------- army math
@@ -206,10 +251,13 @@ function setUnits(v, label, good) {
 }
 function applyOp(gate) {
   if (gate.kind === 'p') {
-    if (gate.op === 'x') S.pow *= gate.v; else S.pow += gate.v;
+    if (gate.op === 'x') S.pow *= gate.v;
+    else if (gate.op === '-') S.pow = Math.max(1, S.pow - gate.v);
+    else S.pow += gate.v;
     S.pow = Math.min(S.pow, 999);
-    floater(S.cx, -30, 'PWR ' + (gate.op === 'x' ? '×' : '+') + gate.v, '#ffd75e');
-    sfx.power();
+    const good = gate.op !== '-';
+    floater(S.cx, -30, 'PWR ' + (gate.op === 'x' ? '×' : gate.op) + gate.v, good ? '#ffd75e' : '#ff7d7d');
+    if (good) sfx.power(); else sfx.gateBad();
     return;
   }
   let v = S.n, good = true;
@@ -224,7 +272,7 @@ function gateLabel(g) {
   const sym = g.op === 'x' ? '×' : g.op === '/' ? '÷' : g.op;
   return (g.kind === 'p' ? 'PWR ' : '') + sym + g.v;
 }
-function gateIsGood(g) { return g.kind === 'p' || g.op === '+' || g.op === 'x'; }
+function gateIsGood(g) { return g.kind === 'p' ? g.op !== '-' : (g.op === '+' || g.op === 'x'); }
 
 // power-up grants from barrels
 function grantBarrel(b) {
@@ -277,11 +325,17 @@ function spawnBoss() {
   sfx.boss();
   S.shake = Math.max(S.shake, 8);
 }
-function doWin() {
-  S.phase = 'win';
+function nextWave() {
+  // boss down — no victory screen, the run just keeps going
   S.level += 1;
   if (S.level > S.best) { S.best = S.level; store.set(LS_BEST, S.best); }
-  store.set(LS_LEVEL, S.level);
+  S.boss = null;
+  S.phase = 'run';
+  S.banner = UNLOCKS[S.level]
+    ? { msg: UNLOCKS[S.level], t: 4 }
+    : { msg: 'WAVE ' + S.level + ' — the horde thickens!', t: 3 };
+  setUnits(S.n + 10, '+10', true); // reinforcements for the road
+  buildLevel(S.level, S.levelLen + 300);
   sfx.win();
 }
 function doLose() {
@@ -394,14 +448,28 @@ function tick(dt) {
     const m = S.mon[i];
     if (m.flash > 0) m.flash -= dt;
     if (m.hp <= 0) { S.mon.splice(i, 1); continue; }
-    if (m.z - S.dist < 700) {
-      m.z -= m.spd * dt;
-      m.x = lerp(m.x, clamp(S.cx, -LANE + m.r, LANE - m.r), Math.min(1, dt * 0.7));
+    if (!m.attacking && m.z - S.dist < 700) {
+      if (m.kind === 'spitter' && m.z - S.dist < 430) {
+        // spitters hold their ground and lob acid at where you're standing
+        m.spitT -= dt;
+        if (m.spitT <= 0) {
+          m.spitT = 2.4;
+          S.telegraphs.push({ x: S.cx, r: 44, t: 1.0, max: 1.0, kind: 'spit', from: { x: m.x, z: m.z } });
+        }
+      } else {
+        m.z -= m.spd * dt;
+        m.x = lerp(m.x, clamp(S.cx, -LANE + m.r, LANE - m.r), Math.min(1, dt * 0.7));
+      }
     }
-    if (m.z - S.dist < 26 + cr * 0.35) {
-      if (Math.abs(m.x - S.cx) < cr * 0.8 + m.r) {
+    // reach the crowd → wind up a pounce, then bite (still shootable mid-pounce)
+    if (!m.attacking && m.z - S.dist < 26 + cr * 0.35 && Math.abs(m.x - S.cx) < cr * 0.8 + m.r) {
+      m.attacking = true; m.atk = 0.22;
+    }
+    if (m.attacking) {
+      m.atk -= dt;
+      if (m.atk <= 0) {
         setUnits(S.n - m.dmg, '-' + m.dmg, false);
-        boom(m.x, m.z, 20, '#ff7d7d'); sfx.ouch();
+        boom(m.x, m.z, 20, '#ff7d7d'); boom(m.x, m.z, 14, '#ffffff'); sfx.ouch();
         S.mon.splice(i, 1);
         continue;
       }
@@ -416,14 +484,14 @@ function tick(dt) {
     if (B.flash > 0) B.flash -= dt;
     if (B.dead) {
       B.deathT -= dt;
-      if (B.deathT <= 0) doWin();
+      if (B.deathT <= 0) nextWave();
     } else {
       B.x += B.vx * dt;
       if (B.x > LANE - 70 || B.x < -LANE + 70) B.vx *= -1;
       B.atkT -= dt;
       if (B.atkT <= 0) {
         B.atkT = Math.max(1.1, 2.2 - 0.08 * S.level);
-        S.telegraphs.push({ x: S.cx, r: 66, t: 1.1 });
+        S.telegraphs.push({ x: S.cx, r: 66, t: 1.1, max: 1.1, kind: 'slam' });
       }
       B.minionT -= dt;
       if (B.minionT <= 0) {
@@ -440,15 +508,30 @@ function tick(dt) {
     const tg = S.telegraphs[i];
     tg.t -= dt;
     if (tg.t <= 0) {
-      boom(tg.x, S.dist, 40, '#ff9d45');
+      boom(tg.x, S.dist, 40, tg.kind === 'spit' ? '#7dff8a' : '#ff9d45');
       if (Math.abs(tg.x - S.cx) < tg.r + cr * 0.4) {
-        const loss = Math.ceil(4 + S.level * 1.4 + S.n * 0.10);
+        const loss = tg.kind === 'spit'
+          ? Math.ceil(2 + S.n * 0.05)
+          : Math.ceil(4 + S.level * 1.4 + S.n * 0.10);
         setUnits(S.n - loss, '-' + loss, false);
         sfx.ouch();
       }
       S.telegraphs.splice(i, 1);
     }
   }
+
+  // lava pools burn a chunk of the army if you run through them
+  for (const pl of S.pools) {
+    if (!pl.used && Math.abs(pl.z - S.dist) < 22 && Math.abs(pl.x - S.cx) < pl.r + cr * 0.4) {
+      pl.used = true;
+      const loss = Math.ceil(3 + S.n * 0.08);
+      setUnits(S.n - loss, '-' + loss, false);
+      boom(pl.x, pl.z, 30, '#ff9d45'); sfx.ouch();
+    }
+  }
+
+  // banner countdown
+  if (S.banner && (S.banner.t -= dt) <= 0) S.banner = null;
 
   // fx + floaters
   for (let i = S.fx.length - 1; i >= 0; i--) {
@@ -510,7 +593,7 @@ function drawGate(g) {
   for (const h of halves) {
     const good = gateIsGood(h.s);
     const x0 = laneX(h.x0) + 6, x1 = laneX(h.x1) - 6;
-    const col = h.s.kind === 'p' ? '255,215,94' : good ? '94,203,255' : '255,94,120';
+    const col = !good ? '255,94,120' : h.s.kind === 'p' ? '255,215,94' : '94,203,255';
     ctx.fillStyle = `rgba(${col},0.20)`;
     ctx.fillRect(x0, y - 46, x1 - x0, 62);
     ctx.strokeStyle = `rgba(${col},0.9)`;
@@ -528,33 +611,89 @@ function drawGate(g) {
   }
 }
 
+const MON_PAL = {
+  brute: ['#a44fe0', '#7a2fb0'],
+  runner: ['#ff8c42', '#c9611e'],
+  spitter: ['#49b58a', '#2e8a63'],
+  grunt: ['#4fae56', '#337a3a'],
+};
 function drawMonster(m) {
-  const y = zToY(m.z);
-  if (y < -60 || y > H + 60) return;
+  const y0 = zToY(m.z);
+  if (y0 < -60 || y0 > H + 60) return;
   const x = laneX(m.x);
   const r = m.r * laneScale * 0.95;
-  const bob = Math.sin(S.wobble * 1.4 + m.seed) * 2;
+  // walk cycle: fast monsters scurry, brutes stomp
+  const gait = m.kind === 'runner' ? 2.4 : m.brute ? 0.9 : 1.5;
+  const ph = S.wobble * gait + m.seed * 10;
+  const stride = Math.sin(ph);
+  const bob = Math.abs(Math.cos(ph)) * r * 0.14;
+  // pounce: lunge toward the crowd during the attack windup
+  const lunge = m.attacking ? 1 - clamp(m.atk / 0.22, 0, 1) : 0;
+  const y = y0 + lunge * r * 0.6;
+  const pal = MON_PAL[m.kind] || MON_PAL.grunt;
+  const body = m.flash > 0 ? '#ffffff' : pal[0];
+  const dark = m.flash > 0 ? '#dddddd' : pal[1];
+  // shadow
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath(); ctx.ellipse(x, y + r * 0.8, r * 0.9, r * 0.32, 0, 0, 7); ctx.fill();
-  ctx.fillStyle = m.flash > 0 ? '#ffffff' : (m.brute ? '#a44fe0' : '#4fae56');
-  ctx.beginPath(); ctx.arc(x, y + bob, r, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x, y + r * 0.85, r * 0.95, r * 0.3, 0, 0, 7); ctx.fill();
+  // legs — alternating strides
+  ctx.fillStyle = dark;
+  ctx.beginPath(); ctx.ellipse(x - r * 0.45, y + r * 0.6 + stride * r * 0.22, r * 0.26, r * 0.4, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x + r * 0.45, y + r * 0.6 - stride * r * 0.22, r * 0.26, r * 0.4, 0, 0, 7); ctx.fill();
+  // arms — swing while running, both thrown up for the pounce
+  const armR = r * (m.brute ? 0.34 : 0.24);
+  if (m.attacking) {
+    ctx.beginPath(); ctx.arc(x - r * 0.8, y - r * (0.6 + lunge * 0.4), armR, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.8, y - r * (0.6 + lunge * 0.4), armR, 0, 7); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(x - r * 0.95, y + stride * r * 0.3, armR, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.95, y - stride * r * 0.3, armR, 0, 7); ctx.fill();
+  }
+  // body — squash & stretch with the gait, puff up for the pounce
+  const rx = r * (1 + lunge * 0.18);
+  const ry = r * (1 - bob / (r * 1.6) + lunge * 0.12);
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.ellipse(x, y - bob, rx, ry, 0, 0, 7); ctx.fill();
+  // belly shade
+  ctx.fillStyle = dark;
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath(); ctx.ellipse(x, y - bob + ry * 0.45, rx * 0.7, ry * 0.4, 0, 0, 7); ctx.fill();
+  ctx.globalAlpha = 1;
   // horns for brutes
   if (m.brute) {
     ctx.fillStyle = '#e8d9ff';
-    ctx.beginPath(); ctx.moveTo(x - r * 0.7, y + bob - r * 0.5); ctx.lineTo(x - r * 0.95, y + bob - r * 1.25); ctx.lineTo(x - r * 0.35, y + bob - r * 0.8); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(x + r * 0.7, y + bob - r * 0.5); ctx.lineTo(x + r * 0.95, y + bob - r * 1.25); ctx.lineTo(x + r * 0.35, y + bob - r * 0.8); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - r * 0.7, y - bob - r * 0.5); ctx.lineTo(x - r * 0.95, y - bob - r * 1.25); ctx.lineTo(x - r * 0.35, y - bob - r * 0.8); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + r * 0.7, y - bob - r * 0.5); ctx.lineTo(x + r * 0.95, y - bob - r * 1.25); ctx.lineTo(x + r * 0.35, y - bob - r * 0.8); ctx.fill();
   }
-  // angry eyes
+  // angry eyes + brows
   ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(x - r * 0.35, y + bob - r * 0.1, r * 0.22, 0, 7); ctx.arc(x + r * 0.35, y + bob - r * 0.1, r * 0.22, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(x - r * 0.35, y - bob - r * 0.15, r * 0.22, 0, 7); ctx.arc(x + r * 0.35, y - bob - r * 0.15, r * 0.22, 0, 7); ctx.fill();
   ctx.fillStyle = '#1a1a2e';
-  ctx.beginPath(); ctx.arc(x - r * 0.35, y + bob + r * 0.02, r * 0.11, 0, 7); ctx.arc(x + r * 0.35, y + bob + r * 0.02, r * 0.11, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(x - r * 0.35, y - bob - r * 0.03, r * 0.11, 0, 7); ctx.arc(x + r * 0.35, y - bob - r * 0.03, r * 0.11, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = Math.max(1.5, r * 0.09);
+  ctx.beginPath(); ctx.moveTo(x - r * 0.55, y - bob - r * 0.45); ctx.lineTo(x - r * 0.15, y - bob - r * 0.3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + r * 0.55, y - bob - r * 0.45); ctx.lineTo(x + r * 0.15, y - bob - r * 0.3); ctx.stroke();
+  // mouth: spitters gape wide as they wind up, everyone bares teeth to bite
+  const mouthW = m.kind === 'spitter'
+    ? r * (0.45 + 0.35 * clamp(1 - m.spitT / 2.4, 0, 1))
+    : r * (0.4 + lunge * 0.35);
+  const mouthY = y - bob + r * 0.35;
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath(); ctx.ellipse(x, mouthY, mouthW, mouthW * 0.7, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff';
+  for (let k = -1; k <= 1; k += 2) {
+    ctx.beginPath();
+    ctx.moveTo(x + k * mouthW * 0.55, mouthY - mouthW * 0.5);
+    ctx.lineTo(x + k * mouthW * 0.3, mouthY + mouthW * 0.1);
+    ctx.lineTo(x + k * mouthW * 0.1, mouthY - mouthW * 0.5);
+    ctx.fill();
+  }
   // hp sliver
   if (m.hp < m.max) {
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(x - r, y + bob - r - 9, r * 2, 4);
+    ctx.fillRect(x - r, y - bob - r - 9, r * 2, 4);
     ctx.fillStyle = '#7dff8a';
-    ctx.fillRect(x - r, y + bob - r - 9, r * 2 * clamp(m.hp / m.max, 0, 1), 4);
+    ctx.fillRect(x - r, y - bob - r - 9, r * 2 * clamp(m.hp / m.max, 0, 1), 4);
   }
 }
 
@@ -616,8 +755,15 @@ function drawBoss() {
   }
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath(); ctx.ellipse(x, y + r * 0.85, r, r * 0.3, 0, 0, 7); ctx.fill();
+  // fists — raised high during the slam windup, swinging otherwise
+  const windup = !B.dead && B.atkT < 0.45 ? 1 - B.atkT / 0.45 : 0;
+  ctx.fillStyle = '#a02038';
+  const fistY = y + bob + r * 0.3 - windup * r * 1.1;
+  const fistSwing = windup ? 0 : Math.sin(S.wobble * 1.2) * r * 0.15;
+  ctx.beginPath(); ctx.arc(x - r * 1.05, fistY + fistSwing, r * 0.32, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + r * 1.05, fistY - fistSwing, r * 0.32, 0, 7); ctx.fill();
   ctx.fillStyle = B.flash > 0 ? '#ffffff' : '#d1364f';
-  ctx.beginPath(); ctx.arc(x, y + bob, r, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y + bob, r * (1 + windup * 0.06), 0, 7); ctx.fill();
   // horns
   ctx.fillStyle = '#ffe9c9';
   ctx.beginPath(); ctx.moveTo(x - r * 0.6, y + bob - r * 0.55); ctx.lineTo(x - r * 1.05, y + bob - r * 1.3); ctx.lineTo(x - r * 0.25, y + bob - r * 0.85); ctx.fill();
@@ -639,7 +785,7 @@ function drawBoss() {
   if (frac > 0) { roundRect(W / 2 - 157, 67, 314 * frac, 12, 5); ctx.fill(); }
   ctx.fillStyle = '#ffd7de';
   ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('BOSS — LEVEL ' + S.level, W / 2, 54);
+  ctx.fillText('BOSS — WAVE ' + S.level, W / 2, 54);
 }
 
 function drawHud() {
@@ -648,7 +794,7 @@ function drawHud() {
   ctx.fillStyle = '#e8ecff';
   ctx.font = 'bold 15px system-ui, sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText('LEVEL ' + S.level, 22, 26);
+  ctx.fillText('WAVE ' + S.level, 22, 26);
   ctx.fillStyle = 'rgba(10,12,26,0.75)';
   roundRect(W - 160, 10, 150, 30, 9); ctx.fill();
   ctx.fillStyle = '#ffd75e';
@@ -661,7 +807,7 @@ function drawHud() {
   if (S.dblT > 0) { ctx.fillStyle = '#ffd75e'; ctx.fillText('DMG×2 ' + Math.ceil(S.dblT) + 's', px, pyy); }
   // progress bar (run phase)
   if (S.phase === 'run') {
-    const frac = clamp(S.dist / (S.levelLen - BOSS_DIST), 0, 1);
+    const frac = clamp((S.dist - S.segStart) / (S.levelLen - BOSS_DIST - S.segStart), 0, 1);
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     roundRect(W / 2 - 90, 16, 180, 10, 5); ctx.fill();
     ctx.fillStyle = '#7dff8a';
@@ -698,6 +844,17 @@ function draw() {
   ctx.save();
   if (S.shake > 0) ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
   drawGround();
+  // lava pools sit on the floor, under everything
+  for (const pl of S.pools) {
+    const y = zToY(pl.z);
+    if (y < -80 || y > H + 80 || pl.used) continue;
+    const x = laneX(pl.x), rr = pl.r * laneScale;
+    const pulse = 0.75 + 0.25 * Math.sin(S.wobble * 1.6 + pl.z);
+    ctx.fillStyle = `rgba(255,110,40,${0.5 * pulse})`;
+    ctx.beginPath(); ctx.ellipse(x, y, rr, rr * 0.45, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = `rgba(255,200,80,${0.55 * pulse})`;
+    ctx.beginPath(); ctx.ellipse(x, y, rr * 0.55, rr * 0.25, 0, 0, 7); ctx.fill();
+  }
   // far-to-near ordering
   for (const g of S.gates) drawGate(g);
   for (const b of S.barrels) drawBarrel(b);
@@ -705,11 +862,21 @@ function draw() {
   for (const m of S.mon) drawMonster(m);
   // telegraphs on the floor
   for (const tg of S.telegraphs) {
-    const k = 1 - clamp(tg.t / 1.1, 0, 1);
-    ctx.strokeStyle = 'rgba(255,157,69,0.9)'; ctx.lineWidth = 3;
+    const k = 1 - clamp(tg.t / (tg.max || 1.1), 0, 1);
+    const col = tg.kind === 'spit' ? '125,255,138' : '255,157,69';
+    ctx.strokeStyle = `rgba(${col},0.9)`; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(laneX(tg.x), PY, tg.r * laneScale, 0, 7); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,157,69,0.25)';
+    ctx.fillStyle = `rgba(${col},0.25)`;
     ctx.beginPath(); ctx.arc(laneX(tg.x), PY, tg.r * laneScale * k, 0, 7); ctx.fill();
+    // the acid glob arcs from the spitter's mouth to the target
+    if (tg.kind === 'spit' && tg.from) {
+      const gx = lerp(laneX(tg.from.x), laneX(tg.x), k);
+      const gy = lerp(zToY(tg.from.z), PY, k) - Math.sin(k * Math.PI) * 70;
+      ctx.fillStyle = '#7dff8a';
+      ctx.beginPath(); ctx.arc(gx, gy, 7, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(125,255,138,0.4)';
+      ctx.beginPath(); ctx.arc(gx, gy, 11, 0, 7); ctx.fill();
+    }
   }
   // bullets
   ctx.fillStyle = '#ffe082';
@@ -736,9 +903,19 @@ function draw() {
   }
   ctx.globalAlpha = 1;
   drawHud();
-  if (S.phase === 'menu') overlay('HORDE RUNNER', 'Level ' + S.level + (S.best > 1 ? '  ·  best ' + S.best : ''), 'tap to run  ·  drag to steer', '#8fd0ff');
-  else if (S.phase === 'win') overlay('LEVEL CLEAR!', 'Army peak ×' + fmt(S.peak) + '  ·  ' + S.kills + ' monsters down', 'tap for level ' + S.level, '#7dff8a');
-  else if (S.phase === 'lose') overlay('ARMY WIPED', 'Level ' + S.level + '  ·  ' + S.kills + ' monsters down', 'tap to retry', '#ff5e7d');
+  // unlock announcement banner
+  if (S.banner && (S.phase === 'run' || S.phase === 'boss')) {
+    ctx.globalAlpha = clamp(S.banner.t / 0.8, 0, 1);
+    ctx.fillStyle = 'rgba(10,12,26,0.85)';
+    roundRect(W / 2 - 200, 96, 400, 42, 12); ctx.fill();
+    ctx.fillStyle = '#ff9d45';
+    ctx.font = 'bold 17px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(S.banner.msg, W / 2, 117);
+    ctx.globalAlpha = 1;
+  }
+  if (S.phase === 'menu') overlay('HORDE RUNNER', S.best > 1 ? 'Wave record: ' + S.best : 'One endless run — how deep can you march?', 'tap to run  ·  drag to steer', '#8fd0ff');
+  else if (S.phase === 'lose') overlay('ARMY WIPED', 'Reached wave ' + S.level + '  ·  peak ×' + fmt(S.peak) + '  ·  ' + S.kills + ' monsters down', 'tap to march again', '#ff5e7d');
   ctx.restore();
 }
 
@@ -758,8 +935,7 @@ function press(clientX, clientY) {
     muted = !muted; store.set(LS_MUTE, muted ? '1' : '0');
     return;
   }
-  if (S.phase === 'menu' || S.phase === 'win') startLevel();
-  else if (S.phase === 'lose') startLevel();
+  if (S.phase === 'menu' || S.phase === 'lose') startLevel();
   else S.cxTarget = pointerToWorldX(clientX);
 }
 if (!HEADLESS) {
@@ -798,8 +974,8 @@ if (!HEADLESS) {
 // ---------------------------------------------------------- headless hooks
 window.HR = {
   S, C, tick, draw, startLevel, buildLevel, applyOp, setUnits, grantBarrel,
-  spawnBoss, doWin, doLose, fireVolley, crowdRadius, shooterCount,
-  makeGatePair, rollGate, rollGoodGate, mulberry32, difficulty, gateLabel, gateIsGood, press,
+  spawnBoss, nextWave, doLose, fireVolley, crowdRadius, shooterCount,
+  makeGatePair, rollGate, rollGoodGate, mulberry32, difficulty, gateLabel, gateIsGood, press, UNLOCKS,
 };
 </script>
 </body>
