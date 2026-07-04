@@ -237,8 +237,11 @@ p.x = C.FORGE.x; p.y = C.FORGE.y;
 step(KS.S.forgePlate.cost / C.BUILD_RATE + 1);
 t.ok(KS.S.forgePlate.built && !!KS.S.forge, 'forge built by pouring coins');
 KS.S.enemies.length = 0; freezeSpawns();
-// clean slate: earlier tests may have left strays in the stack/queue
+// clean slate: earlier tests may have left strays in the stack/queue — and in
+// porter hands (a mid-flight porter would otherwise feed the smelter mid-test)
 p.helmets = []; KS.S.forge.queue.length = 0; KS.S.forge.tray.length = 0; KS.S.forge.smeltT = 0;
+for (const z of KS.S.zones) for (const po of z.porters) { po.state = 'seek'; po.carry = []; po.dest = null; po.tgtIt = null; }
+for (const itc of KS.S.items) itc.dead = true;
 p.helmets = [{ k: 1 }, { k: 1 }, { k: 1 }];
 step(1.5);
 t.ok(KS.S.forge.queue.length === 3 && p.helmets.length === 0, 'intake eats plain helmets');

@@ -33,7 +33,7 @@
 // ============================================================
 
 const cvs = document.getElementById('game');
-const ctx = cvs.getContext('2d');
+let ctx = cvs.getContext('2d'); // let: temporarily swapped to offscreen canvases for sprite caching
 
 // ---- world geometry -----------------------------------------
 // The world is a grid of cells. The hub sits at cell (0,0);
@@ -755,13 +755,19 @@ function simInhabitants(dt) {
         if (!q.carry.length) { q.dest = null; q.forgeWait = 0; q.state = 'seek'; }
       }
     } else {
-      // collector — seek the chosen resource anywhere on the map
-      let it = null, bd = 1e15;
-      for (const i2 of S.items) {
-        if (i2.dead || i2.gem) continue;
-        if (S.popFilter && S.popFilter !== 'all' && entryRes(i2) !== S.popFilter) continue;
-        if (!zoneAt(i2.x, i2.y)) continue;
-        const d = dist2(i2.x, i2.y, q.x, q.y); if (d < bd) { bd = d; it = i2; }
+      // collector — seek the chosen resource anywhere on the map.
+      // Cached target + throttled re-scan (a fresh filter choice re-scans at once).
+      q.scanCd = (q.scanCd || 0) - dt;
+      let it = (q.tgtIt && !q.tgtIt.dead && q.scanF === S.popFilter) ? q.tgtIt : null;
+      if (!it && (q.scanCd <= 0 || q.scanF !== S.popFilter)) {
+        let bd = 1e15;
+        for (const i2 of S.items) {
+          if (i2.dead || i2.gem) continue;
+          if (S.popFilter && S.popFilter !== 'all' && entryRes(i2) !== S.popFilter) continue;
+          if (!zoneAt(i2.x, i2.y)) continue;
+          const d = dist2(i2.x, i2.y, q.x, q.y); if (d < bd) { bd = d; it = i2; }
+        }
+        q.tgtIt = it; q.scanF = S.popFilter; q.scanCd = 0.18 + (idx % 4) * 0.04;
       }
       if (!it) {
         if (q.carry.length) q.state = 'sell';
@@ -769,7 +775,7 @@ function simInhabitants(dt) {
       } else {
         const dl = Math.hypot(it.x - q.x, it.y - q.y) || 1;
         q.x += (it.x - q.x) / dl * INHAB_SPD * dt; q.y += (it.y - q.y) / dl * INHAB_SPD * dt;
-        if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; q.carry.push(cloneEntry(it)); if (q.carry.length >= PORTER_CAP) q.state = 'sell'; }
+        if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; q.tgtIt = null; q.carry.push(cloneEntry(it)); if (q.carry.length >= PORTER_CAP) q.state = 'sell'; }
       }
     }
   }
@@ -2469,7 +2475,7 @@ function tick(dt) {
   S.achCd -= dt;
   if (S.achCd <= 0) { S.achCd = 0.5; checkAch(); checkRankUp(); }
   for (const to of S.toasts) to.t += dt;
-  S.toasts = S.toasts.filter(to => to.t < 3);
+  compact(S.toasts, keepToast);
 
   // -- zone build plates + boss altars
   for (const z of S.zones) {
@@ -2484,11 +2490,16 @@ function tick(dt) {
     }
   }
 
-  // -- zone spawners
+  // -- zone spawners (per-land foe buckets: one pass instead of a scan per zone)
+  rebuildFoeBuckets();
   for (const z of S.zones) {
-    const alive = S.enemies.reduce((n, e) => n + (e.k === z.k && !e.boss ? 1 : 0), 0);
+    const bkt = FOE_BUCKETS.get(z.k);
     z.spawnCd -= dt;
-    if (z.spawnCd <= 0 && alive < maxAlive(z)) { z.spawnCd = spawnInt(z); spawnEnemy(z); }
+    if (z.spawnCd <= 0 && (bkt ? bkt.nb : 0) < maxAlive(z)) {
+      z.spawnCd = spawnInt(z); spawnEnemy(z);
+      const ne = S.enemies[S.enemies.length - 1], b2 = foeBucket(ne.k);
+      b2.push(ne); if (!ne.boss) b2.nb++; // keep the bucket live for this tick's towers
+    }
   }
 
   // -- enemies (behavior varies by archetype)
@@ -2537,7 +2548,7 @@ function tick(dt) {
       }
     }
   }
-  S.enemies = S.enemies.filter(e => e.hp > 0);
+  compact(S.enemies, keepAliveFoe);
 
   // -- hostile projectiles (spitters)
   for (const es of S.eshots) {
@@ -2546,7 +2557,7 @@ function tick(dt) {
     if (dist2(es.x, es.y, p.x, p.y - 10) < 22 * 22) { es.done = true; hurtPlayer(es.dmg); }
     if (es.life > 2.2) es.done = true;
   }
-  S.eshots = S.eshots.filter(es => !es.done);
+  compact(S.eshots, keepNotDone);
 
   // -- towers
   for (const z of S.zones) {
@@ -2555,21 +2566,22 @@ function tick(dt) {
     for (const tw of z.towers) {
       tw.cd -= dt;
       if (tw.cd > 0) continue;
+      const foes = foeBucket(z.k); // enemies never leave their land's pen
       if (tw.type === 'archer') {
         let tgt = null, bd = TOWER_RANGE * TOWER_RANGE;
-        for (const e of S.enemies) { if (e.k !== z.k || e.hp <= 0) continue; const d = dist2(e.x, e.y, tw.x, tw.y); if (d < bd) { bd = d; tgt = e; } }
+        for (const e of foes) { if (e.hp <= 0) continue; const d = dist2(e.x, e.y, tw.x, tw.y); if (d < bd) { bd = d; tgt = e; } }
         if (tgt) { tw.cd = TOWER_RATE * rateMul; S.shots.push({ x: tw.x, y: tw.y - 52, tgt, dmg: dmgBase, spd: 430 }); }
       } else if (tw.type === 'wizard') {
         let tgt = null, bd = TOWER_RANGE * TOWER_RANGE;
-        for (const e of S.enemies) { if (e.k !== z.k || e.hp <= 0) continue; const d = dist2(e.x, e.y, tw.x, tw.y); if (d < bd) { bd = d; tgt = e; } }
+        for (const e of foes) { if (e.hp <= 0) continue; const d = dist2(e.x, e.y, tw.x, tw.y); if (d < bd) { bd = d; tgt = e; } }
         if (tgt) {
           tw.cd = WIZ_RATE * rateMul;
           const hitOrder = [tgt];
           let cur = tgt;
           for (let j = 1; j < WIZ_CHAIN; j++) {
             let nxt = null, nb = WIZ_JUMP * WIZ_JUMP;
-            for (const e of S.enemies) {
-              if (e.k !== z.k || e.hp <= 0 || hitOrder.includes(e)) continue;
+            for (const e of foes) {
+              if (e.hp <= 0 || hitOrder.includes(e)) continue;
               const d = dist2(e.x, e.y, cur.x, cur.y); if (d < nb) { nb = d; nxt = e; }
             }
             if (!nxt) break;
@@ -2582,10 +2594,10 @@ function tick(dt) {
         }
       } else { // catapult: densest cluster
         let tgt = null, best = -1;
-        for (const e of S.enemies) {
-          if (e.k !== z.k || e.hp <= 0) continue;
+        for (const e of foes) {
+          if (e.hp <= 0) continue;
           let n = 0;
-          for (const e2 of S.enemies) if (e2.k === z.k && e2.hp > 0 && dist2(e.x, e.y, e2.x, e2.y) < 120 * 120) n++;
+          for (const e2 of foes) if (e2.hp > 0 && dist2(e.x, e.y, e2.x, e2.y) < 120 * 120) n++;
           if (n > best) { best = n; tgt = e; }
         }
         if (tgt) {
@@ -2600,10 +2612,16 @@ function tick(dt) {
   for (const z of S.zones) {
     for (const po of z.porters) {
       if (po.state === 'seek') {
-        let it = null, bd = 1e12;
-        for (const i2 of S.items) {
-          if (i2.dead || i2.gem || i2.x < z.x0 || i2.x >= z.x1 || i2.y < z.y0 || i2.y >= z.y1) continue;
-          const d = dist2(i2.x, i2.y, po.x, po.y); if (d < bd) { bd = d; it = i2; }
+        // keep a cached target and only re-scan the item list a few times a second
+        po.scanCd = (po.scanCd || 0) - dt;
+        let it = (po.tgtIt && !po.tgtIt.dead) ? po.tgtIt : null;
+        if (!it && po.scanCd <= 0) {
+          let bd = 1e12;
+          for (const i2 of S.items) {
+            if (i2.dead || i2.gem || i2.x < z.x0 || i2.x >= z.x1 || i2.y < z.y0 || i2.y >= z.y1) continue;
+            const d = dist2(i2.x, i2.y, po.x, po.y); if (d < bd) { bd = d; it = i2; }
+          }
+          po.tgtIt = it; po.scanCd = 0.18 + (z.k % 4) * 0.04;
         }
         if (!it) { if (po.carry.length) po.state = 'sell'; else {
             const dl = Math.hypot(po.hx - po.x, po.hy - po.y);
@@ -2611,7 +2629,7 @@ function tick(dt) {
         } else {
           const dl = Math.hypot(it.x - po.x, it.y - po.y) || 1;
           po.x += (it.x - po.x) / dl * PORTER_SPD * dt; po.y += (it.y - po.y) / dl * PORTER_SPD * dt;
-          if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; po.carry.push(cloneEntry(it)); if (po.carry.length >= PORTER_CAP) po.state = 'sell'; }
+          if (dl < 26 && it.t > 0.25 && !it.dead) { it.dead = true; po.tgtIt = null; po.carry.push(cloneEntry(it)); if (po.carry.length >= PORTER_CAP) po.state = 'sell'; }
         }
       } else {
         // offload at the hub. Commit to ONE destination per trip so porters never
@@ -2657,7 +2675,7 @@ function tick(dt) {
     it.t += dt;
     if (it.t < 0.4) { it.x += it.vx * dt; it.y += it.vy * dt; it.vy += 380 * dt; }
   }
-  S.items = S.items.filter(i => !i.dead);
+  compact(S.items, keepItem);
   if (S.items.length > 400) S.items.splice(0, S.items.length - 400);
 
   // -- shots
@@ -2690,15 +2708,15 @@ function tick(dt) {
     }
     sh.life = (sh.life || 0) + dt; if (sh.life > 3) sh.done = true;
   }
-  S.shots = S.shots.filter(sh => !sh.done);
+  compact(S.shots, keepNotDone);
 
   // -- fx / particles / floats
   for (const q of S.fx) q.t += dt;
-  S.fx = S.fx.filter(q => q.t < q.dur);
+  compact(S.fx, keepFx);
   for (const q of S.parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; if (q.g) q.vy += 420 * dt; }
-  S.parts = S.parts.filter(q => q.t < q.dur);
+  compact(S.parts, keepFx);
   for (const f of S.floats) { f.t += dt; f.y -= 30 * dt; }
-  S.floats = S.floats.filter(f => f.t < (f.big ? 1.6 : 0.8));
+  compact(S.floats, keepFloat);
 
   // -- flow decay: leaving the spot resets the speed ramp
   if (!S.flowTouched) { S.flowKey = null; S.flowT = 0; }
@@ -2764,13 +2782,54 @@ function shadow(x, y, w) {
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.4, 0, 0, 6.29); ctx.fill();
 }
-function drawHelmetIcon(x, y, k, s) {
-  s = s || 1;
+// ---- perf helpers -------------------------------------------
+// in-place array compaction: same order as filter(), zero allocation
+function compact(a, keep) { let w = 0; for (let i = 0; i < a.length; i++) { const v = a[i]; if (keep(v)) a[w++] = v; } a.length = w; }
+const keepAliveFoe = e => e.hp > 0, keepNotDone = o => !o.done, keepItem = i => !i.dead,
+      keepFx = q => q.t < q.dur, keepFloat = fl => fl.t < (fl.big ? 1.6 : 0.8), keepToast = to => to.t < 3;
+// offscreen sprite cache — pre-render hot icons once, then a single drawImage.
+// Falls back to direct painting when offscreen canvases aren't available (headless tests).
+const SPR = new Map();
+let sprOK = (typeof document !== 'undefined' && typeof document.createElement === 'function');
+function sprite(key, size, paint) {
+  if (!sprOK) return null;
+  let c = SPR.get(key);
+  if (c === undefined) {
+    try {
+      c = document.createElement('canvas');
+      c.width = c.height = size;
+      const g = c.getContext('2d');
+      if (!g || !g.beginPath) throw new Error('no 2d ctx');
+      const old = ctx; ctx = g;
+      try { g.translate(size / 2, size / 2); paint(); } finally { ctx = old; }
+    } catch (e) { sprOK = false; c = null; }
+    SPR.set(key, c);
+  }
+  return c;
+}
+// living foes bucketed per land, rebuilt once per tick — towers, catapults and
+// spawn gates read these instead of scanning the global enemy list each time
+const FOE_BUCKETS = new Map();
+function foeBucket(k) { let a = FOE_BUCKETS.get(k); if (!a) { a = []; a.nb = 0; FOE_BUCKETS.set(k, a); } return a; }
+function rebuildFoeBuckets() {
+  for (const a of FOE_BUCKETS.values()) { a.length = 0; a.nb = 0; }
+  for (const e of S.enemies) { if (e.hp <= 0) continue; const b = foeBucket(e.k); b.push(e); if (!e.boss) b.nb++; }
+}
+
+function drawHelmetIconRaw(x, y, k, s) {
   ctx.fillStyle = k === 1 ? '#b9c2cc' : foeCol(k);
   ctx.beginPath(); ctx.arc(x, y, 9 * s, 3.14159, 0); ctx.fill();
-  ctx.fillRect(x - 9 * s, y - 1, 18 * s, 3 * s);
+  ctx.fillRect(x - 9 * s, y - 1 * s, 18 * s, 3 * s);
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.beginPath(); ctx.arc(x - 3 * s, y - 4 * s, 2.5 * s, 0, 6.29); ctx.fill();
+}
+function drawHelmetIcon(x, y, k, s) {
+  s = s || 1;
+  // one pre-rendered 2x sprite per colour family (k=1 silver is its own)
+  let rep = ((k - 1) % 8) + 1; if (rep === 1 && k !== 1) rep = 9;
+  const c = sprite('helm' + (k === 1 ? 0 : rep), 64, () => drawHelmetIconRaw(0, 0, k === 1 ? 1 : rep, 2));
+  if (c) { ctx.drawImage(c, x - 16 * s, y - 16 * s, 32 * s, 32 * s); return; }
+  drawHelmetIconRaw(x, y, k, s);
 }
 function drawBarIcon(x, y, s, col, glow) {
   s = s || 1;
@@ -3083,15 +3142,22 @@ function drawCoinMountain() {
   ctx.beginPath(); ctx.arc(PALLET.x, PALLET.y, PALLET.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = '#7a5c38'; rr(PALLET.x - 62, PALLET.y - 4, 124, 36, 6); ctx.fill();
   const stacks = Math.min(56, Math.ceil(3 * Math.sqrt(S.pallet / 12)));
-  for (let i = 0; i < stacks; i++) {
-    const col = i % 8, row = Math.floor(i / 8);
-    const cx2 = PALLET.x - 52 + col * 15 + (row % 2) * 7, cy2 = PALLET.y + 6 - row * 11;
-    const hgt = 2 + (i * 7 + 3) % 5;
-    for (let j = 0; j < hgt; j++) {
-      ctx.fillStyle = j % 2 ? '#ffd94a' : '#e8b93a';
-      ctx.beginPath(); ctx.ellipse(cx2, cy2 - j * 4, 7, 3.4, 0, 0, 6.29); ctx.fill();
+  // the pile is ~340 ellipses at full size — pre-render it and redraw as one image,
+  // re-rendering only when the stack count actually changes
+  const paintStacks = (ox, oy, sc) => {
+    for (let i = 0; i < stacks; i++) {
+      const col = i % 8, row = Math.floor(i / 8);
+      const cx2 = ox + (-52 + col * 15 + (row % 2) * 7) * sc, cy2 = oy + (6 - row * 11) * sc;
+      const hgt = 2 + (i * 7 + 3) % 5;
+      for (let j = 0; j < hgt; j++) {
+        ctx.fillStyle = j % 2 ? '#ffd94a' : '#e8b93a';
+        ctx.beginPath(); ctx.ellipse(cx2, cy2 - j * 4 * sc, 7 * sc, 3.4 * sc, 0, 0, 6.29); ctx.fill();
+      }
     }
-  }
+  };
+  const cs2 = sprite('coins' + stacks, 296, () => paintStacks(0, 44, 2));
+  if (cs2) ctx.drawImage(cs2, PALLET.x - 74, PALLET.y - 96, 148, 148);
+  else paintStacks(PALLET.x, PALLET.y, 1);
   if (S.pallet > 0 && Math.floor(S.t * 4) % 3 === 0) {
     const sx = PALLET.x + (rnd() - 0.5) * 90, sy = PALLET.y - rnd() * 40;
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
@@ -4781,42 +4847,45 @@ function mapPings() {
   }
   return out;
 }
+let MM = null; // minimap layout cache — rebuilt only when the map actually changes
 function drawMinimap() {
   // tiny map of the land grid in the top-right corner
-  const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
-  if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1 });
-  for (const dk in D2CFG) if (S.d2Plate[dk].built) cells.push({ cx: D2CFG[dk].cell[0], cy: D2CFG[dk].cell[1], k: -1 });
-  const nxt = cellFor(S.zones.length + 1);
-  let minC = 0, maxC = 0, minR = 0, maxR = 0;
-  for (const c of cells.concat([nxt])) {
-    if (c.cx < minC) minC = c.cx; if (c.cx > maxC) maxC = c.cx;
-    if (c.cy < minR) minR = c.cy; if (c.cy > maxR) maxR = c.cy;
+  const mmKey = S.zones.length + '|' + (S.distPlate.built ? 1 : 0) + '|' +
+    Object.keys(D2CFG).map(dk => S.d2Plate[dk].built ? 1 : 0).join('') + '|' + vw;
+  if (!MM || MM.key !== mmKey) {
+    const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
+    if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1 });
+    for (const dk in D2CFG) if (S.d2Plate[dk].built) cells.push({ cx: D2CFG[dk].cell[0], cy: D2CFG[dk].cell[1], k: -1 });
+    const nxt = cellFor(S.zones.length + 1);
+    let minC = 0, maxC = 0, minR = 0, maxR = 0;
+    for (const c of cells.concat([nxt])) {
+      if (c.cx < minC) minC = c.cx; if (c.cx > maxC) maxC = c.cx;
+      if (c.cy < minR) minR = c.cy; if (c.cy > maxR) maxR = c.cy;
+    }
+    const cols = maxC - minC + 1, rows = maxR - minR + 1;
+    const size = 108, pad = 3;
+    const cs = Math.min(22, Math.floor((size - pad * 2) / Math.max(cols, rows)));
+    const w = cols * cs + pad * 2, h = rows * cs + pad * 2;
+    MM = { key: mmKey, cells, nxt, minC, minR, cs, pad, w, h, ox: vw - 10 - w, oy: 48 };
   }
-  const cols = maxC - minC + 1, rows = maxR - minR + 1;
-  const size = 108, pad = 3;
-  const cs = Math.min(22, Math.floor((size - pad * 2) / Math.max(cols, rows)));
-  const w = cols * cs + pad * 2, h = rows * cs + pad * 2;
-  const ox = vw - 10 - w, oy = 48;
+  const { cells, nxt, minC, minR, cs, pad, w, h, ox, oy } = MM;
   ctx.fillStyle = 'rgba(20,25,36,0.75)'; rr(ox, oy, w, h, 8); ctx.fill();
-  const cellXY = (cx2, cy2) => ({ x: ox + pad + (cx2 - minC) * cs, y: oy + pad + (cy2 - minR) * cs });
+  const cellX = (cx2) => ox + pad + (cx2 - minC) * cs, cellY = (cy2) => oy + pad + (cy2 - minR) * cs;
   for (const c of cells) {
-    const q = cellXY(c.cx, c.cy);
     ctx.fillStyle = c.k === 0 ? '#d9c9a0' : c.k === -1 ? '#e0a13c' : foeCol(c.k);
     ctx.globalAlpha = c.k === 0 ? 0.95 : 0.8;
-    rr(q.x + 1, q.y + 1, cs - 2, cs - 2, 3); ctx.fill();
+    rr(cellX(c.cx) + 1, cellY(c.cy) + 1, cs - 2, cs - 2, 3); ctx.fill();
     ctx.globalAlpha = 1;
   }
-  const nq = cellXY(nxt.cx, nxt.cy);
   ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
-  rr(nq.x + 1, nq.y + 1, cs - 2, cs - 2, 3); ctx.stroke(); ctx.setLineDash([]);
+  rr(cellX(nxt.cx) + 1, cellY(nxt.cy) + 1, cs - 2, cs - 2, 3); ctx.stroke(); ctx.setLineDash([]);
   // live event pings (chest / merchant / boss / champion) with a pulsing ring
   const blink = 0.55 + Math.sin(S.t * 6) * 0.45;
   for (const pg of mapPings()) {
     const gcx = Math.floor(pg.x / CELL_W + (pg.x < 0 ? -1e-9 : 0));
     const gcy = Math.floor(pg.y / CELL_H + (pg.y < 0 ? -1e-9 : 0));
-    const gq = cellXY(gcx, gcy);
     const gfx = (pg.x - gcx * CELL_W) / CELL_W, gfy = (pg.y - gcy * CELL_H) / CELL_H;
-    const px = gq.x + 1 + gfx * (cs - 2), py = gq.y + 1 + gfy * (cs - 2);
+    const px = cellX(gcx) + 1 + gfx * (cs - 2), py = cellY(gcy) + 1 + gfy * (cs - 2);
     ctx.strokeStyle = pg.color; ctx.globalAlpha = blink; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(px, py, 3.2 + blink * 2.2, 0, 6.29); ctx.stroke();
     ctx.globalAlpha = 1; ctx.fillStyle = pg.color;
@@ -4825,11 +4894,10 @@ function drawMinimap() {
   // player dot
   const pcx = Math.floor(S.player.x / CELL_W + (S.player.x < 0 ? -1e-9 : 0));
   const pcy = Math.floor(S.player.y / CELL_H + (S.player.y < 0 ? -1e-9 : 0));
-  const pq = cellXY(pcx, pcy);
   const fx = (S.player.x - pcx * CELL_W) / CELL_W, fy = (S.player.y - pcy * CELL_H) / CELL_H;
   const pulse = 2.4 + Math.sin(S.t * 6) * 0.7;
   ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(pq.x + 1 + fx * (cs - 2), pq.y + 1 + fy * (cs - 2), pulse, 0, 6.29); ctx.fill();
+  ctx.beginPath(); ctx.arc(cellX(pcx) + 1 + fx * (cs - 2), cellY(pcy) + 1 + fy * (cs - 2), pulse, 0, 6.29); ctx.fill();
 }
 function draw() {
   hits = [];
