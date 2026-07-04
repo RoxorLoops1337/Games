@@ -35,7 +35,7 @@ const RUN_SPD = 220;             // forward px/sec
 const BOSS_DIST = 500;           // boss stands this far ahead when locked
 const GATE_HITS = 2;             // bullet hits per ±1 on a shootable gate
 
-const C = { W, H, PY, LANE, UNIT_CAP, START_UNITS, VOLLEY, UNIT_DPS, BULLET_SPD, RUN_SPD, BOSS_DIST, GATE_HITS };
+const C = { W, H, PY, LANE, UNIT_CAP, START_UNITS, VOLLEY, UNIT_DPS, BULLET_SPD, RUN_SPD, BOSS_DIST, GATE_HITS, UNIT_MAX: 1e15, BAD_PAIR_LVL: 6 };
 
 // ---------------------------------------------------------------- utilities
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -49,7 +49,13 @@ function mulberry32(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const fmt = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : '' + n;
+const fmt = n => {
+  for (const [m, s] of [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']]) {
+    if (n >= m) return (n / m).toFixed(n >= m * 10 ? 0 : 1) + s;
+  }
+  return '' + n;
+};
+const UNIT_MAX = 1e15; // the army cap — a quadrillion before the counter pins
 
 // ------------------------------------------------------------------- save
 const LS_BEST = 'hr_best', LS_MUTE = 'hr_muted';
@@ -112,6 +118,13 @@ const S = {
   kills: 0,
   peak: START_UNITS,
   wobble: 0,
+  // juice
+  slowT: 0,               // hit-stop / slow-mo timer (real seconds)
+  flashT: 0, flashCol: '125,255,138', // fullscreen gate flash
+  hurtT: 0,               // red vignette when the army bleeds
+  badgePop: 0,            // army-count badge pop scale
+  streak: 0, streakT: 0,  // kill streak
+  dustT: 0,               // run dust emitter
 };
 
 function difficulty(lvl) { return 1 + 0.35 * (lvl - 1); }
@@ -123,9 +136,11 @@ function difficulty(lvl) { return 1 + 0.35 * (lvl - 1); }
 const UNLOCKS = {
   4: 'NEW THREAT: runners — fast little biters!',
   5: 'NEW GATES: ÷3 and PWR − show up now',
+  6: 'DANGER: some gates are ALL bad — pick the lesser evil!',
   7: 'NEW HAZARD: lava pools — steer around!',
   9: 'NEW THREAT: acid spitters lob from range!',
 };
+const BAD_PAIR_LVL = 6; // from this wave on, a pair can roll bad-vs-bad
 const GATE_DEFS = [
   // kind n = army count, p = power. w = pick weight (higher = more common).
   // minLvl gates the nastier ops into the late game.
@@ -152,12 +167,21 @@ function rollGoodGate(rnd, diff, lvl) {
   while (!gateIsGood(g) && guard++ < 20) g = rollGate(rnd, diff, lvl);
   return g;
 }
+function rollBadGate(rnd, diff, lvl) {
+  let g = rollGate(rnd, diff, lvl), guard = 0;
+  while (gateIsGood(g) && guard++ < 20) g = rollGate(rnd, diff, lvl);
+  return g;
+}
 function makeGatePair(rnd, z, diff, bothGood, lvl) {
-  // one side is ALWAYS a positive choice — a −12 vs ÷2 pair is not a choice,
-  // it's a punishment. The first gate of a level is all-good (bothGood).
-  let a = rollGoodGate(rnd, diff, lvl);
-  const rollB = () => bothGood ? rollGoodGate(rnd, diff, lvl) : rollGate(rnd, diff, lvl);
-  let b = rollB(), guard = 0;
+  // early waves: one side is ALWAYS a positive choice. From BAD_PAIR_LVL on,
+  // some pairs roll bad-vs-bad — pick the lesser evil (or shoot the − side
+  // down before you get there). The first gate of a wave stays all-good.
+  const allBad = !bothGood && (lvl || 1) >= BAD_PAIR_LVL
+    && rnd() < Math.min(0.12 + 0.02 * lvl, 0.38);
+  const rollA = () => allBad ? rollBadGate(rnd, diff, lvl) : rollGoodGate(rnd, diff, lvl);
+  const rollB = () => allBad ? rollBadGate(rnd, diff, lvl)
+    : bothGood ? rollGoodGate(rnd, diff, lvl) : rollGate(rnd, diff, lvl);
+  let a = rollA(), b = rollB(), guard = 0;
   while (guard++ < 8 && a.kind === b.kind && a.op === b.op && a.v === b.v) b = rollB();
   const flip = rnd() < 0.5;
   return { z, L: flip ? a : b, R: flip ? b : a, applied: false };
@@ -236,6 +260,7 @@ function startLevel() {
   S.n = START_UNITS; S.pow = 1; S.peak = START_UNITS;
   S.cx = 0; S.cxTarget = 0;
   S.rapidT = 0; S.dblT = 0; S.fireT = 0; S.kills = 0; S.shake = 0;
+  S.slowT = 0; S.flashT = 0; S.hurtT = 0; S.badgePop = 0; S.streak = 0; S.streakT = 0;
   S.banner = null;
   buildLevel(1);
 }
@@ -243,10 +268,11 @@ function startLevel() {
 // --------------------------------------------------------------- army math
 function setUnits(v, label, good) {
   const before = S.n;
-  S.n = clamp(Math.round(v), 0, 99999);
+  S.n = clamp(Math.round(v), 0, UNIT_MAX);
   if (S.n > S.peak) S.peak = S.n;
+  if (S.n !== before) S.badgePop = 1;
   if (label) floater(S.cx, 0, label, good ? '#7dff8a' : '#ff7d7d');
-  if (S.n < before) crowdSplat(Math.min(before - S.n, 14));
+  if (S.n < before) { crowdSplat(Math.min(before - S.n, 14)); S.hurtT = 0.35; }
   if (S.n <= 0 && (S.phase === 'run' || S.phase === 'boss')) doLose();
 }
 function applyOp(gate) {
@@ -257,6 +283,7 @@ function applyOp(gate) {
     S.pow = Math.min(S.pow, 999);
     const good = gate.op !== '-';
     floater(S.cx, -30, 'PWR ' + (gate.op === 'x' ? '×' : gate.op) + gate.v, good ? '#ffd75e' : '#ff7d7d');
+    gateJuice(good, good ? '255,215,94' : '255,94,120');
     if (good) sfx.power(); else sfx.gateBad();
     return;
   }
@@ -266,7 +293,13 @@ function applyOp(gate) {
   else if (gate.op === 'x') v *= gate.v;
   else if (gate.op === '/') { v = Math.ceil(v / gate.v); good = false; }
   setUnits(v, gateLabel(gate), good);
+  gateJuice(good, good ? '125,255,138' : '255,94,120');
   if (good) sfx.gateGood(); else sfx.gateBad();
+}
+function gateJuice(good, col) {
+  // fullscreen tint + an expanding ring around the crowd
+  S.flashT = 0.22; S.flashCol = col;
+  S.fx.push({ x: S.cx, z: S.dist, vx: 0, vz: 0, r: 12, col: good ? '#7dff8a' : '#ff5e7d', t: 0.35, ring: true });
 }
 function gateLabel(g) {
   const sym = g.op === 'x' ? '×' : g.op === '/' ? '÷' : g.op;
@@ -315,10 +348,19 @@ function crowdSplat(k) {
 // ------------------------------------------------------------------- boss
 function spawnBoss() {
   const diff = difficulty(S.level);
-  const hp = Math.round(360 * diff * (1 + 0.25 * S.level));
+  // hp scales with the army's actual firepower so a boss can NEVER be
+  // one-tapped: it takes `dur` seconds of sustained fire no matter how
+  // big the horde got — and `dur` grows every wave.
+  const dur = Math.min(5 + 0.75 * (S.level - 1), 15);
+  const hp = Math.max(Math.round(S.n * S.pow * UNIT_DPS * dur), Math.round(300 * diff));
   S.boss = {
     hp, max: hp, x: 0, vx: 60 + 8 * S.level,
     atkT: 1.6, minionT: 5, flash: 0, dead: false, deathT: 0,
+    range: BOSS_DIST,             // distance ahead of the crowd
+    grace: 2,                     // breather before it starts advancing
+    adv: 28 + 2.5 * S.level,      // advance speed (px/s)
+    crushT: 1.2,
+    crushFrac: Math.min(0.15 + 0.01 * S.level, 0.30),
     z: S.dist + BOSS_DIST,
   };
   S.phase = 'boss';
@@ -357,6 +399,9 @@ function fireVolley() {
   for (let i = 0; i < shooters; i++) {
     const fx = shooters === 1 ? 0 : -spread + (2 * spread * i) / (shooters - 1);
     S.bul.push({ x: S.cx + fx, z: S.dist + 40, dmg, t: 1.4 });
+    if (i < 6 && S.fx.length < 200) {
+      S.fx.push({ x: S.cx + fx, z: S.dist + 54, vx: 0, vz: 70, r: 3.2, col: '#ffe082', t: 0.07 });
+    }
   }
   if (S.bul.length > 260) S.bul.splice(0, S.bul.length - 260);
   sfx.shoot();
@@ -369,11 +414,30 @@ function zToY(z) { return PY - (z - S.dist); }
 function tick(dt) {
   dt = Math.min(dt, 0.05);
   if (S.phase !== 'run' && S.phase !== 'boss') return;
+  // hit-stop: big impacts briefly drop the world to 30% speed
+  const rdt = dt;
+  if (S.slowT > 0) { S.slowT -= rdt; dt *= 0.3; }
+  if (S.flashT > 0) S.flashT -= rdt;
+  if (S.hurtT > 0) S.hurtT -= rdt;
+  if (S.badgePop > 0) S.badgePop = Math.max(0, S.badgePop - rdt * 3);
+  if (S.streakT > 0) { S.streakT -= rdt; if (S.streakT <= 0) S.streak = 0; }
   S.time += dt;
   S.wobble += dt * 9;
-  if (S.shake > 0) S.shake = Math.max(0, S.shake - 60 * dt);
+  if (S.shake > 0) S.shake = Math.max(0, S.shake - 60 * rdt);
   if (S.rapidT > 0) S.rapidT -= dt;
   if (S.dblT > 0) S.dblT -= dt;
+  // dust kicked up by thousands of little boots
+  if (S.phase === 'run') {
+    S.dustT -= dt;
+    if (S.dustT <= 0) {
+      S.dustT = 0.09;
+      S.fx.push({
+        x: S.cx + (Math.random() * 2 - 1) * crowdRadius() * 0.8, z: S.dist - 22,
+        vx: (Math.random() - 0.5) * 30, vz: -80, r: 2 + Math.random() * 2.5,
+        col: 'rgba(205,210,235,0.55)', t: 0.4,
+      });
+    }
+  }
 
   // steer
   S.cx = lerp(S.cx, clamp(S.cxTarget, -LANE + 30, LANE - 30), Math.min(1, dt * 9));
@@ -398,7 +462,14 @@ function tick(dt) {
     if (!dead) for (const m of S.mon) {
       if (m.hp > 0 && Math.abs(b.z - m.z) < m.r + 10 && Math.abs(b.x - m.x) < m.r + 8) {
         m.hp -= b.dmg; m.flash = 0.12; dead = true;
-        if (m.hp <= 0) { S.kills++; boom(m.x, m.z, 24, m.brute ? '#c86bff' : '#7dff8a'); sfx.hit(); }
+        if (m.hp <= 0) {
+          S.kills++;
+          S.streak++; S.streakT = 1.5;
+          if ([5, 10, 25, 50, 100, 250].includes(S.streak)) floater(S.cx, -70, 'RAMPAGE ×' + S.streak + '!', '#ffd75e');
+          boom(m.x, m.z, 24, m.brute ? '#c86bff' : '#7dff8a'); sfx.hit();
+        } else if (S.fx.length < 200) {
+          S.fx.push({ x: b.x, z: m.z - m.r, vx: (Math.random() - 0.5) * 90, vz: -50, r: 2, col: '#ffffff', t: 0.15 });
+        }
         break;
       }
     }
@@ -428,6 +499,7 @@ function tick(dt) {
       S.boss.hp -= b.dmg; S.boss.flash = 0.1; dead = true;
       if (S.boss.hp <= 0) {
         S.boss.dead = true; S.boss.deathT = 1.2;
+        S.slowT = Math.max(S.slowT, 0.5);
         boom(S.boss.x, S.boss.z, 60, '#ff5e7d'); boom(S.boss.x, S.boss.z, 60, '#ffd75e');
       }
     }
@@ -480,14 +552,38 @@ function tick(dt) {
   // boss behaviour
   if (S.boss) {
     const B = S.boss;
-    B.z = S.dist + BOSS_DIST;
+    B.z = S.dist + B.range;
     if (B.flash > 0) B.flash -= dt;
     if (B.dead) {
       B.deathT -= dt;
+      // chain of explosions rippling across the corpse
+      B.boomT = (B.boomT || 0) - dt;
+      if (B.boomT <= 0) {
+        B.boomT = 0.12;
+        boom(B.x + (Math.random() * 2 - 1) * 50, B.z + (Math.random() * 2 - 1) * 40, 40,
+          Math.random() < 0.5 ? '#ffd75e' : '#ff5e7d');
+      }
       if (B.deathT <= 0) nextWave();
     } else {
       B.x += B.vx * dt;
       if (B.x > LANE - 70 || B.x < -LANE + 70) B.vx *= -1;
+      // it comes DOWN the lane for you — kill it before it arrives
+      if (B.grace > 0) B.grace -= dt;
+      else B.range = Math.max(105, B.range - B.adv * dt);
+      if (B.range <= 115) {
+        B.crushT -= dt;
+        if (B.crushT <= 0) {
+          // crush: stomps a chunk of the army, rears back, comes again
+          B.crushT = 1.5;
+          const loss = Math.ceil(S.n * B.crushFrac + 4);
+          setUnits(S.n - loss, '-' + fmt(loss), false);
+          boom(S.cx, S.dist + 30, 46, '#ff5e7d');
+          S.shake = Math.max(S.shake, 12);
+          S.slowT = Math.max(S.slowT, 0.25);
+          sfx.boss();
+          B.range += 80;
+        }
+      }
       B.atkT -= dt;
       if (B.atkT <= 0) {
         B.atkT = Math.max(1.1, 2.2 - 0.08 * S.level);
@@ -734,14 +830,16 @@ function drawCrowd() {
     ctx.fillStyle = i === 0 ? '#e0a72e' : '#4a90d9';
     roundRect(ux - 4.4, uy - 4 - hop, 8.8, 9, 3); ctx.fill();
   }
-  // count badge
+  // count badge — pops when the number changes
+  const pop = 1 + 0.35 * S.badgePop;
   ctx.fillStyle = 'rgba(10,12,26,0.85)';
   const label = '×' + fmt(S.n);
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  const tw = ctx.measureText(label).width + 18;
-  roundRect(cxp - tw / 2, PY - crowdRadius() * 0.55 - 58, tw, 28, 9); ctx.fill();
+  ctx.font = 'bold ' + Math.round(20 * pop) + 'px system-ui, sans-serif';
+  const tw = ctx.measureText(label).width + 18 * pop;
+  const bh = 28 * pop, by = PY - crowdRadius() * 0.55 - 58 - (bh - 28) / 2;
+  roundRect(cxp - tw / 2, by, tw, bh, 9); ctx.fill();
   ctx.fillStyle = '#8fd0ff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(label, cxp, PY - crowdRadius() * 0.55 - 44);
+  ctx.fillText(label, cxp, by + bh / 2);
 }
 
 function drawBoss() {
@@ -886,11 +984,16 @@ function draw() {
     ctx.fillRect(laneX(b.x) - 2, y - 9, 4, 12);
   }
   if (S.phase === 'run' || S.phase === 'boss' || S.phase === 'lose') drawCrowd();
-  // particles
+  // particles (+ expanding gate rings)
   for (const p of S.fx) {
     ctx.globalAlpha = clamp(p.t / 0.5, 0, 1);
-    ctx.fillStyle = p.col;
-    ctx.beginPath(); ctx.arc(laneX(p.x), zToY(p.z), p.r, 0, 7); ctx.fill();
+    if (p.ring) {
+      ctx.strokeStyle = p.col; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(laneX(p.x), zToY(p.z), p.r + (0.35 - p.t) * 220, 0, 7); ctx.stroke();
+    } else {
+      ctx.fillStyle = p.col;
+      ctx.beginPath(); ctx.arc(laneX(p.x), zToY(p.z), p.r, 0, 7); ctx.fill();
+    }
   }
   ctx.globalAlpha = 1;
   // floaters
@@ -902,6 +1005,21 @@ function draw() {
     ctx.fillText(f.msg, laneX(f.x), f.y);
   }
   ctx.globalAlpha = 1;
+  // gate-crossing fullscreen tint
+  if (S.flashT > 0) {
+    ctx.fillStyle = `rgba(${S.flashCol},${(S.flashT / 0.22) * 0.22})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // red vignette: bleeding army, or the boss looming close
+  let edge = S.hurtT > 0 ? (S.hurtT / 0.35) * 0.4 : 0;
+  if (S.boss && !S.boss.dead && S.boss.range < 220) {
+    edge = Math.max(edge, 0.14 + 0.1 * Math.sin(S.wobble * 2.5));
+  }
+  if (edge > 0) {
+    ctx.fillStyle = `rgba(255,40,60,${edge})`;
+    ctx.fillRect(0, 0, W, 26); ctx.fillRect(0, H - 26, W, 26);
+    ctx.fillRect(0, 26, 26, H - 52); ctx.fillRect(W - 26, 26, 26, H - 52);
+  }
   drawHud();
   // unlock announcement banner
   if (S.banner && (S.phase === 'run' || S.phase === 'boss')) {
@@ -975,7 +1093,7 @@ if (!HEADLESS) {
 window.HR = {
   S, C, tick, draw, startLevel, buildLevel, applyOp, setUnits, grantBarrel,
   spawnBoss, nextWave, doLose, fireVolley, crowdRadius, shooterCount,
-  makeGatePair, rollGate, rollGoodGate, mulberry32, difficulty, gateLabel, gateIsGood, press, UNLOCKS,
+  makeGatePair, rollGate, rollGoodGate, rollBadGate, mulberry32, difficulty, gateLabel, gateIsGood, press, UNLOCKS, fmt,
 };
 </script>
 </body>
