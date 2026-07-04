@@ -92,9 +92,13 @@ const WIZ_RATE    = 2.0, WIZ_CHAIN = 3, WIZ_JUMP = 160;
 const CAT_RATE    = 4.2, CAT_AOE = 115;
 const DRUM_MUL    = 0.75;
 const PORTER_CAP  = 10, PORTER_SPD = 135;
-// townsfolk (recruitable inhabitants — collectors or fighters)
+// townsfolk (recruitable inhabitants — gatherers, fighters, or workplace workers)
 const INHAB0      = 500, INHAB_MUL = 1.4;   // recruit cost grows per inhabitant
 const INHAB_SPD   = 130, FIGHTER_RATE = 1.05, FIGHTER_RANGE = 260, INHAB_CAP = 12;
+// housing: villagers need beds. Base beds + families settling each new land + cottages you build.
+const BEDS_BASE   = 4, BEDS_PER_LAND = 2, BEDS_PER_HOUSE = 4, HOUSE_MAX = 8;
+const HOUSE0      = 2500, HOUSE_MUL = 2.6;  // cottage cost grows steeply
+const WORK_BOOST  = 0.5, WORK_BOOST_CAP = 4; // each worker: +50% workplace speed, capped x4
 const FORGE_T     = 1.8;
 const FORGE_Q     = 12, TRAY_MAX = 10;
 const BAR_MUL     = 3;
@@ -573,7 +577,7 @@ function reset() {
     wheel: null, showWheel: false,
     settings: { shake: true, particles: true, dmgNums: true, weather: true }, showSettings: false,
     skins: { owned: { royal: true }, active: 'royal' }, showSkins: false,
-    pop: [], popFilter: 'all', showPop: false,
+    pop: [], popFilter: 'all', showPop: false, houses: 0,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -615,8 +619,12 @@ function entryVal(e) { return Math.ceil(helmVal(e.k) * (RES_MUL[entryRes(e)] || 
 function cloneEntry(e) { return { k: e.k, bar: !!e.bar, crown: !!e.crown, log: !!e.log, plank: !!e.plank, stone: !!e.stone, tool: !!e.tool, res: e.res }; }
 
 // ---- townsfolk / inhabitants --------------------------------
-// A recruitable population you assign to jobs: COLLECT (gather a chosen
-// resource and sell/smelt it) or FIGHT (follow the king and shoot foes).
+// A recruitable population you assign to jobs. Everyone starts as a
+// GATHERER (the idle pool, role 'collect'); you can promote them to
+// FIGHTERS (escort the king) or station them at any WORKPLACE you've
+// built — each worker there speeds its whole production chain and
+// visibly patrols between its stations. Jobs appear as you build, so
+// the system grows with the player.
 const POP_FILTERS = [
   { id: 'all',   ic: '📦', label: 'Everything' },
   { id: 'helm',  ic: '🛡', label: 'Shields' },
@@ -626,12 +634,24 @@ const POP_FILTERS = [
 ];
 function mkInhab(role, i) {
   return { role: role || 'collect', x: SPAWN.x + Math.cos(i * 1.3) * 60, y: SPAWN.y + 40 + Math.sin(i * 1.3) * 40,
-    state: 'seek', carry: [], cd: 0, dest: null, forgeWait: 0, fireCd: (i % 5) * 0.2, ph: i * 0.9 };
+    state: 'seek', carry: [], cd: 0, dest: null, forgeWait: 0, fireCd: (i % 5) * 0.2, ph: i * 0.9, pi: i % 3, waitT: 0 };
 }
 function popCount(role) { let n = 0; for (const q of (S.pop || [])) if (q.role === role) n++; return n; }
+function popCap() { return BEDS_BASE + BEDS_PER_LAND * Math.max(0, S.zones.length - 1) + BEDS_PER_HOUSE * (S.houses || 0); }
+function houseCost() { return Math.ceil(HOUSE0 * Math.pow(HOUSE_MUL, S.houses || 0)); }
+function buyHouse() {
+  if ((S.houses || 0) >= HOUSE_MAX) return false;
+  const c = houseCost();
+  if (S.wallet < c) { float(S.player.x, S.player.y - 40, 'Need ' + fmt(c) + '¢', '#ffd94a'); return false; }
+  S.wallet -= c;
+  S.houses = (S.houses || 0) + 1;
+  S.toasts.push({ txt: '🏠 A cottage was built — +' + BEDS_PER_HOUSE + ' beds!', t: 0 });
+  sfx('built', true); buzz(25); save();
+  return true;
+}
 function recruitCost() { return Math.ceil(INHAB0 * Math.pow(INHAB_MUL, (S.pop || []).length)); }
 function recruit() {
-  if ((S.pop || []).length >= 200) return false;
+  if ((S.pop || []).length >= popCap()) { float(S.player.x, S.player.y - 40, 'No free beds — build a cottage!', '#ffd94a'); return false; }
   const c = recruitCost();
   if (S.wallet < c) { float(S.player.x, S.player.y - 40, 'Need ' + fmt(c) + '¢', '#ffd94a'); return false; }
   S.wallet -= c;
@@ -640,14 +660,47 @@ function recruit() {
   sfx('built', true); buzz(20); save();
   return true;
 }
-function assignPop(toRole) {
-  // convert one inhabitant of the other role into toRole
-  const from = toRole === 'fight' ? 'collect' : 'fight';
+// which workplaces exist right now → the job rows the panel shows
+function jobDefs() {
+  const out = [
+    { id: 'collect', ic: '🧺', name: 'Gatherers', desc: 'Pick up drops & sell them' },
+    { id: 'fight',   ic: '⚔️', name: 'Fighters',  desc: 'Follow you into battle' },
+  ];
+  if (S.campPlate.built)  out.push({ id: 'camp',  ic: '🪓', name: 'Lumber Camp', desc: '+' + WORK_BOOST * 100 + '% chopping each' });
+  if (S.forgePlate.built) out.push({ id: 'forge', ic: '🔥', name: 'Smeltery',    desc: '+' + WORK_BOOST * 100 + '% smelting each' });
+  if (S.distPlate.built)  out.push({ id: 'ind',   ic: '🏭', name: 'Craftworks',  desc: '+' + WORK_BOOST * 100 + '% production each' });
+  for (const dk in D2CFG) if (S.d2Plate[dk].built) out.push({ id: dk, ic: D2CFG[dk].icon, name: D2CFG[dk].name, desc: '+' + WORK_BOOST * 100 + '% production each' });
+  return out;
+}
+function jobBoost(id) { return Math.min(WORK_BOOST_CAP, 1 + WORK_BOOST * popCount(id)); }
+// the real station points a stationed worker patrols between
+function jobSites(id) {
+  if (id === 'camp')  return [CAMP, { x: CAMP.x + 80, y: CAMP.y + 50 }];
+  if (id === 'forge') return [FORGE, TRAY];
+  if (id === 'ind')   return [DIST.grove, DIST.saw, DIST.sawTray, DIST.quarry, DIST.tool];
+  const cfg = D2CFG[id];
+  if (!cfg) return [SPAWN];
+  const pts = [cfg.producers[0].pos, cfg.crafters[0].pos];
+  if (cfg.producers[1]) pts.push(cfg.producers[1].pos);
+  pts.push(cfg.crafters[1].pos, cfg.crafters[1].trayPos);
+  return pts;
+}
+function movePop(from, to) {
   const q = (S.pop || []).find(p => p.role === from);
   if (!q) return false;
-  q.role = toRole; q.state = 'seek'; q.carry = []; q.dest = null;
+  q.role = to; q.state = 'seek'; q.carry = []; q.dest = null; q.pi = 0; q.waitT = 0;
   sfx('built', true); save();
   return true;
+}
+function assignPop(toRole) {
+  // back-compat helper: promote a gatherer, or return any specialist to the pool
+  if (toRole === 'collect') { const q = (S.pop || []).find(p => p.role !== 'collect'); return q ? movePop(q.role, 'collect') : false; }
+  return movePop('collect', toRole);
+}
+// after prestige / load, workers whose workplace no longer exists rejoin the pool
+function sanitizePop() {
+  const valid = new Set(jobDefs().map(j => j.id));
+  for (const q of (S.pop || [])) if (!valid.has(q.role)) { q.role = 'collect'; q.state = 'seek'; q.carry = []; q.dest = null; }
 }
 function fighterDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * 0.5; }
 // per-tick behaviour — rnd-free so it never perturbs the enemy-spawn stream
@@ -656,6 +709,16 @@ function simInhabitants(dt) {
   const p = S.player;
   for (let idx = 0; idx < pop.length; idx++) {
     const q = pop[idx];
+    if (q.role !== 'collect' && q.role !== 'fight') {
+      // stationed worker — patrol the workplace's real stations, pausing to "work"
+      const sites = jobSites(q.role);
+      const tgt = sites[(q.pi || 0) % sites.length];
+      if (q.waitT > 0) { q.waitT -= dt; continue; }
+      const dl = Math.hypot(tgt.x - q.x, tgt.y - q.y) || 1;
+      if (dl < 24) { q.pi = ((q.pi || 0) + 1) % sites.length; q.waitT = 1.1 + (idx % 3) * 0.3; }
+      else { q.x += (tgt.x - q.x) / dl * INHAB_SPD * 0.7 * dt; q.y += (tgt.y - q.y) / dl * INHAB_SPD * 0.7 * dt; }
+      continue;
+    }
     if (q.role === 'fight') {
       // hold a loose formation around the king and follow him everywhere
       const ang = q.ph + S.t * 0.5, R = 52 + (idx % 3) * 15;
@@ -893,7 +956,7 @@ function save() {
         }];
       })),
       crowns: S.crowns, prestiges: S.prestiges, cperks: S.cperks, settings: S.settings, skins: S.skins,
-      pop: (S.pop || []).map(q => q.role), popFilter: S.popFilter,
+      pop: (S.pop || []).map(q => q.role), popFilter: S.popFilter, houses: S.houses,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
     }));
@@ -995,6 +1058,8 @@ function load() {
   if (!skinOwned(S.skins.active)) S.skins.active = 'royal';
   S.pop = Array.isArray(d.pop) ? d.pop.map((role, i) => mkInhab(role, i)) : [];
   S.popFilter = d.popFilter || 'all';
+  S.houses = d.houses || 0;
+  sanitizePop(); // workers whose workplace isn't built (old saves / resets) rejoin the pool
   (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
   const amt = Math.floor(idleRate() * away);
@@ -1442,6 +1507,8 @@ function prestige() {
   S.dog = null; S.dogPlate = { cost: 500, paid: 0, built: false };
   S.zones = [mkZone(1)];
   S.enemies = []; S.items = []; S.shots = [];
+  // villagers + cottages are permanent — but workers at burned workplaces rejoin the pool
+  sanitizePop();
   const p = S.player;
   p.helmets = []; p.maxHp = pMaxHp(); p.hp = p.maxHp; p.x = SPAWN.x; p.y = SPAWN.y; p.invuln = 2;
   S.cam.x = p.x; S.cam.y = p.y;
@@ -1947,7 +2014,7 @@ function tick(dt) {
       }
     } else p.forgeAcc = 0;
     if (f.queue.length && f.tray.length < TRAY_MAX) {
-      f.smeltT += dt;
+      f.smeltT += dt * jobBoost('forge');
       if (f.smeltT >= FORGE_T) {
         f.smeltT = 0;
         const bk = f.queue.shift();
@@ -1974,22 +2041,22 @@ function tick(dt) {
     const D = S.district, fk = S.zones.length;
     // grove: two woodcutters chop logs
     if (D.plates.grove.built && D.grove.logs.length < PILE_MAX) {
-      D.grove.t += dt;
+      D.grove.t += dt * jobBoost('ind');
       if (D.grove.t >= GROVE_T) { D.grove.t = 0; D.grove.logs.push(fk); puff(DIST.grove.x - 40, DIST.grove.y - 20, '#8a5c30', 3, true); }
     }
     // quarry: miner chips stones
     if (D.plates.quarry.built && D.quarry.stones.length < PILE_MAX) {
-      D.quarry.t += dt;
+      D.quarry.t += dt * jobBoost('ind');
       if (D.quarry.t >= QUARRY_T) { D.quarry.t = 0; D.quarry.stones.push(fk); puff(DIST.quarry.x + 30, DIST.quarry.y - 20, '#9aa0a8', 3, true); }
     }
     // sawmill: 2 logs → 1 plank
     if (D.plates.saw.built && D.saw.ks.length >= 2 && D.saw.tray.length < TRAY12) {
-      D.saw.t += dt;
+      D.saw.t += dt * jobBoost('ind');
       if (D.saw.t >= SAW_T) { D.saw.t = 0; const a = D.saw.ks.shift(), b = D.saw.ks.shift(); D.saw.tray.push(Math.max(a, b)); puff(DIST.sawTray.x, DIST.sawTray.y - 10, '#d9b98a', 4, true); sfx('smelt'); }
     } else if (!(D.saw.ks.length >= 2)) D.saw.t = 0;
     // toolmaker: 1 plank + 2 stones → 1 tool
     if (D.plates.tool.built && D.tool.wood.length >= 1 && D.tool.stone.length >= 2 && D.tool.tray.length < TOOLTRAY_MAX) {
-      D.tool.t += dt;
+      D.tool.t += dt * jobBoost('ind');
       if (D.tool.t >= TOOL_T) {
         D.tool.t = 0;
         D.tool.wood.shift(); D.tool.stone.shift(); D.tool.stone.shift();
@@ -2120,7 +2187,7 @@ function tick(dt) {
     for (const pr of cfg.producers) {
       const pile = d.piles[pr.id];
       if (d.plates[pr.id].built && pile.arr.length < PILE_MAX) {
-        pile.t += dt;
+        pile.t += dt * jobBoost(dk);
         if (pile.t >= pr.t) { pile.t = 0; pile.arr.push(fk); }
       }
     }
@@ -2129,7 +2196,7 @@ function tick(dt) {
       const c = d.crafts[cr.id];
       const ready = d.plates[cr.id].built && c.tray.length < TRAY12 && Object.keys(cr.recipe).every(r => c.in[r].length >= cr.recipe[r]);
       if (ready) {
-        c.t += dt;
+        c.t += dt * jobBoost(dk);
         if (c.t >= cr.t) {
           c.t = 0;
           for (const r in cr.recipe) for (let i = 0; i < cr.recipe[r]; i++) c.in[r].shift();
@@ -2309,7 +2376,7 @@ function tick(dt) {
   // -- lumber camp: woodcutter chops, logs pile, player hauls them
   if (S.camp) {
     if (S.camp.logs.length < CAMP_MAX) {
-      S.camp.chopT += dt;
+      S.camp.chopT += dt * jobBoost('camp');
       if (S.camp.chopT >= CHOP_T) {
         S.camp.chopT = 0;
         S.camp.logs.push(S.zones.length); // log value tracks your frontier
@@ -2940,6 +3007,18 @@ function drawHubAndPens() {
     ctx.fillStyle = '#8a7a5c'; rr(115, 90, 820, 820, 26); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.06)';
     for (let i = 0; i < 8; i++) ctx.fillRect(115, 90 + i * 110, 820, 3);
+    // cottages — the village row along the top of the plaza (one per house built)
+    for (let i = 0; i < (S.houses || 0); i++) {
+      const hx = 190 + i * 96, hy = 118;
+      shadow(hx, hy + 22, 22);
+      ctx.fillStyle = i % 2 ? '#8a6a46' : '#7a5f42'; rr(hx - 20, hy - 8, 40, 30, 4); ctx.fill();       // walls
+      ctx.fillStyle = i % 2 ? '#a03030' : '#7a4a26';                                                    // roof
+      ctx.beginPath(); ctx.moveTo(hx - 26, hy - 6); ctx.lineTo(hx, hy - 30); ctx.lineTo(hx + 26, hy - 6); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#3a2e22'; rr(hx - 5, hy + 6, 10, 16, 2); ctx.fill();                              // door
+      const night = daylight() < 0.35;
+      ctx.fillStyle = night ? '#ffd94a' : '#2a2118'; ctx.fillRect(hx + 8, hy - 2, 7, 7);                 // window (lit at night)
+      if (night) { ctx.fillStyle = 'rgba(255,217,74,0.25)'; ctx.beginPath(); ctx.arc(hx + 11, hy + 1, 10, 0, 6.29); ctx.fill(); }
+    }
   }
   // zone pens
   for (const z of S.zones) {
@@ -3401,10 +3480,12 @@ function drawPorter(po) {
     drawStackEntry(po.carry[i], po.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), po.y - 26 - i * 6, 0.7);
 }
 function drawInhab(q) {
-  const fight = q.role === 'fight', bob = Math.abs(Math.sin(S.t * 8 + q.ph)) * 2;
+  const fight = q.role === 'fight', worker = q.role !== 'fight' && q.role !== 'collect';
+  const working = worker && q.waitT > 0;
+  const bob = Math.abs(Math.sin(S.t * (working ? 14 : 8) + q.ph)) * 2;
   shadow(q.x, q.y + 13, 12);
-  // body — green tunic for fighters, blue for collectors
-  ctx.fillStyle = fight ? '#4a9a56' : '#4a78b0'; rr(q.x - 7, q.y - 9 - bob, 14, 16, 4); ctx.fill();
+  // body — green tunic fighters, blue gatherers, ochre apron for stationed workers
+  ctx.fillStyle = fight ? '#4a9a56' : worker ? '#b07a3a' : '#4a78b0'; rr(q.x - 7, q.y - 9 - bob, 14, 16, 4); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.15)'; rr(q.x - 7, q.y - 9 - bob, 14, 6, 4); ctx.fill();
   // head
   ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(q.x, q.y - 15 - bob, 6, 0, 6.29); ctx.fill();
@@ -3413,6 +3494,17 @@ function drawInhab(q) {
     ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(q.x + f * 9, q.y - 6 - bob, 7, f > 0 ? -1.2 : 1.94, f > 0 ? 1.2 : 4.34); ctx.stroke();
     ctx.fillStyle = '#2f5a36'; ctx.beginPath(); ctx.moveTo(q.x - 5, q.y - 20 - bob); ctx.lineTo(q.x, q.y - 26 - bob); ctx.lineTo(q.x + 5, q.y - 20 - bob); ctx.closePath(); ctx.fill(); // hood
+  } else if (worker) {
+    // straw hat + a swinging hammer while working
+    ctx.fillStyle = '#d9b96a'; ctx.beginPath(); ctx.ellipse(q.x, q.y - 19 - bob, 8, 3, 0, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#c9a94a'; ctx.beginPath(); ctx.arc(q.x, q.y - 21 - bob, 4.5, 3.14159, 6.29); ctx.fill();
+    if (working) {
+      const swing = Math.sin(S.t * 14 + q.ph) * 0.9;
+      ctx.save(); ctx.translate(q.x + 8, q.y - 6 - bob); ctx.rotate(swing);
+      ctx.strokeStyle = '#8a6a3a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(8, -8); ctx.stroke();
+      ctx.fillStyle = '#7f858f'; ctx.fillRect(5, -13, 8, 7);
+      ctx.restore();
+    }
   } else {
     for (let i = 0; i < q.carry.length; i++) drawStackEntry(q.carry[i], q.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), q.y - 24 - bob - i * 6, 0.66);
   }
@@ -4301,56 +4393,80 @@ function drawPop() {
   if (anyPanelOpen() && !S.showPop) return;
   hudBtn(vw - 46, 350, 36, 30, '👥', () => { S.showPop = !S.showPop; save(); });
   const pop = S.pop || [];
-  if (S.wallet >= recruitCost()) { ctx.fillStyle = '#6ecb5a'; ctx.beginPath(); ctx.arc(vw - 14, 354, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill(); }
+  if (S.wallet >= recruitCost() && pop.length < popCap()) { ctx.fillStyle = '#6ecb5a'; ctx.beginPath(); ctx.arc(vw - 14, 354, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill(); }
   if (!S.showPop) return;
   ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showPop = false; } });
-  const cx = vw / 2, top = Math.max(42, vh * 0.05);
+  const cx = vw / 2, top = Math.max(38, vh * 0.045);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 22px sans-serif';
   ctx.fillText('👥 TOWNSFOLK', cx, top);
   ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
-  ctx.fillText(pop.length + ' villagers · 🪙 ' + fmt(S.wallet), cx, top + 20);
-  // recruit
-  const rw = 260, rx = cx - rw / 2, ry = top + 32, canR = S.wallet >= recruitCost();
-  ctx.fillStyle = canR ? '#2f7d4a' : 'rgba(40,48,60,0.9)'; rr(rx, ry, rw, 44, 10); ctx.fill();
-  ctx.fillStyle = canR ? '#eafff0' : '#7a8792'; ctx.font = 'bold 15px sans-serif';
-  ctx.fillText('👤 RECRUIT VILLAGER   ' + fmt(recruitCost()) + '¢', cx, ry + 27);
-  hits.push({ x: rx, y: ry, w: rw, h: 44, act: () => { recruit(); } });
-  // role split — collectors vs fighters
-  const nf = popCount('fight'), nc = popCount('collect');
-  let y = ry + 60;
-  const roleRow = (ic, name, count, toRole, desc) => {
-    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - 170, y, 340, 56, 10); ctx.fill();
-    ctx.textAlign = 'left'; ctx.font = '22px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(ic, cx - 158, y + 30);
-    ctx.font = 'bold 15px sans-serif'; ctx.fillText(name + ': ' + count, cx - 128, y + 24);
-    ctx.fillStyle = '#9aa7b5'; ctx.font = '10px sans-serif'; ctx.fillText(desc, cx - 128, y + 42);
-    // + button (convert one of the other role into this one)
-    const bw = 44, bx = cx + 170 - bw - 12, by = y + 12;
-    const can = (toRole === 'fight' ? nc : nf) > 0;
-    ctx.fillStyle = can ? '#3a6ea0' : 'rgba(50,56,66,0.9)'; rr(bx, by, bw, 32, 8); ctx.fill();
-    ctx.fillStyle = can ? '#fff' : '#6a7684'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('+', bx + bw / 2, by + 23);
-    if (can) hits.push({ x: bx, y: by, w: bw, h: 32, act: () => { assignPop(toRole); } });
-    y += 64;
-  };
-  roleRow('🧺', 'Collectors', nc, 'collect', 'Gather resources & sell them');
-  roleRow('⚔️', 'Fighters', nf, 'fight', 'Follow you and attack foes');
-  // collect filter
-  ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
-  ctx.fillText('Collectors gather:', cx, y + 6);
-  y += 18;
-  const fw = Math.min(150, (vw - 40) / 2);
-  for (let i = 0; i < POP_FILTERS.length; i++) {
-    const fdef = POP_FILTERS[i], on = (S.popFilter || 'all') === fdef.id;
-    const col = i % 2, row = Math.floor(i / 2), fx = cx - fw + col * fw + (POP_FILTERS.length % 2 && i === POP_FILTERS.length - 1 ? fw / 2 : 0), fy = y + row * 40;
-    ctx.fillStyle = on ? 'rgba(255,217,74,0.2)' : 'rgba(20,25,36,0.9)'; rr(fx + 4, fy, fw - 8, 34, 8); ctx.fill();
-    ctx.strokeStyle = on ? '#ffd94a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = on ? 2 : 1; rr(fx + 4, fy, fw - 8, 34, 8); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText(fdef.ic + ' ' + fdef.label, fx + 16, fy + 22);
-    hits.push({ x: fx + 4, y: fy, w: fw - 8, h: 34, act: () => { S.popFilter = fdef.id; sfx('built', true); save(); } });
+  ctx.fillText(pop.length + ' / ' + popCap() + ' beds' + (S.houses ? '  ·  🏠 ' + S.houses : '') + '  ·  🪙 ' + fmt(S.wallet), cx, top + 19);
+  // recruit + cottage, side by side
+  const bw2 = Math.min(178, (vw - 44) / 2), by2 = top + 30;
+  const canR = S.wallet >= recruitCost() && pop.length < popCap();
+  ctx.fillStyle = canR ? '#2f7d4a' : 'rgba(40,48,60,0.9)'; rr(cx - bw2 - 6, by2, bw2, 44, 10); ctx.fill();
+  ctx.fillStyle = canR ? '#eafff0' : '#7a8792'; ctx.font = 'bold 12px sans-serif';
+  ctx.fillText('👤 RECRUIT', cx - bw2 / 2 - 6, by2 + 19);
+  ctx.fillText(fmt(recruitCost()) + '¢', cx - bw2 / 2 - 6, by2 + 35);
+  hits.push({ x: cx - bw2 - 6, y: by2, w: bw2, h: 44, act: () => { recruit(); } });
+  const canH = (S.houses || 0) < HOUSE_MAX && S.wallet >= houseCost();
+  ctx.fillStyle = (S.houses || 0) >= HOUSE_MAX ? 'rgba(60,60,52,0.9)' : canH ? '#7a5a1e' : 'rgba(40,48,60,0.9)'; rr(cx + 6, by2, bw2, 44, 10); ctx.fill();
+  ctx.fillStyle = canH ? '#ffe8a8' : '#7a8792'; ctx.font = 'bold 12px sans-serif';
+  ctx.fillText((S.houses || 0) >= HOUSE_MAX ? '🏠 VILLAGE FULL' : '🏠 COTTAGE +' + BEDS_PER_HOUSE + ' beds', cx + bw2 / 2 + 6, by2 + 19);
+  if ((S.houses || 0) < HOUSE_MAX) ctx.fillText(fmt(houseCost()) + '¢', cx + bw2 / 2 + 6, by2 + 35);
+  if ((S.houses || 0) < HOUSE_MAX) hits.push({ x: cx + 6, y: by2, w: bw2, h: 44, act: () => { buyHouse(); } });
+  // job rows — only workplaces you have actually built appear
+  const defs = jobDefs();
+  const w = Math.min(370, vw - 24);
+  const rowsH = vh - (by2 + 56) - 92; // leave room for filter chips + footer
+  const rh = Math.max(40, Math.min(52, Math.floor(rowsH / defs.length)));
+  let y = by2 + 56;
+  for (const jd of defs) {
+    const n = popCount(jd.id), pool = jd.id === 'collect';
+    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rh - 6, 9); ctx.fill();
+    if (n > 0 && !pool) { ctx.strokeStyle = 'rgba(255,217,74,0.35)'; ctx.lineWidth = 1; rr(cx - w / 2, y, w, rh - 6, 9); ctx.stroke(); }
+    ctx.textAlign = 'left'; ctx.font = '18px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText(jd.ic, cx - w / 2 + 12, y + rh / 2 + 3);
+    ctx.font = 'bold 13px sans-serif'; ctx.fillText(jd.name, cx - w / 2 + 42, y + rh / 2 - 5);
+    ctx.fillStyle = '#8792a0'; ctx.font = '9px sans-serif'; ctx.fillText(jd.desc, cx - w / 2 + 42, y + rh / 2 + 9);
+    // count + [-][+] (the gatherer row is the idle pool — no buttons)
+    ctx.textAlign = 'center';
+    if (pool) {
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(String(n), cx + w / 2 - 26, y + rh / 2 + 6);
+    } else {
+      const bs = 30, byy = y + (rh - 6) / 2 - bs / 2;
+      const canMinus = n > 0, canPlus = popCount('collect') > 0;
+      ctx.fillStyle = canMinus ? '#7a3a3a' : 'rgba(50,56,66,0.9)'; rr(cx + w / 2 - 108, byy, bs, bs, 7); ctx.fill();
+      ctx.fillStyle = canMinus ? '#fff' : '#6a7684'; ctx.font = 'bold 18px sans-serif'; ctx.fillText('−', cx + w / 2 - 108 + bs / 2, byy + 21);
+      if (canMinus) hits.push({ x: cx + w / 2 - 108, y: byy, w: bs, h: bs, act: () => { movePop(jd.id, 'collect'); } });
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(String(n), cx + w / 2 - 62, y + rh / 2 + 6);
+      ctx.fillStyle = canPlus ? '#2f7d4a' : 'rgba(50,56,66,0.9)'; rr(cx + w / 2 - 40, byy, bs, bs, 7); ctx.fill();
+      ctx.fillStyle = canPlus ? '#fff' : '#6a7684'; ctx.font = 'bold 18px sans-serif'; ctx.fillText('+', cx + w / 2 - 40 + bs / 2, byy + 21);
+      if (canPlus) hits.push({ x: cx + w / 2 - 40, y: byy, w: bs, h: bs, act: () => { movePop('collect', jd.id); } });
+    }
+    y += rh;
+    // gather-filter chips tucked under the Gatherers row
+    if (pool) {
+      const chipW = Math.min(66, (w - 8) / POP_FILTERS.length);
+      for (let i = 0; i < POP_FILTERS.length; i++) {
+        const fdef = POP_FILTERS[i], on = (S.popFilter || 'all') === fdef.id;
+        const fx = cx - w / 2 + 4 + i * chipW;
+        ctx.fillStyle = on ? 'rgba(255,217,74,0.22)' : 'rgba(20,25,36,0.9)'; rr(fx, y, chipW - 4, 26, 7); ctx.fill();
+        ctx.strokeStyle = on ? '#ffd94a' : 'rgba(255,255,255,0.1)'; ctx.lineWidth = on ? 1.6 : 1; rr(fx, y, chipW - 4, 26, 7); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(fdef.ic, fx + (chipW - 4) / 2, y + 18);
+        hits.push({ x: fx, y, w: chipW - 4, h: 26, act: () => { S.popFilter = fdef.id; sfx('built', true); save(); } });
+      }
+      y += 32;
+    }
   }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
-  ctx.fillText('Tap empty space to close', cx, vh - 14);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '10px sans-serif';
+  ctx.fillText('Build workplaces to unlock new jobs · workers speed them up & you see them working', cx, y + 12);
+  ctx.fillText('Tap empty space to close', cx, vh - 12);
 }
 function drawSkins() {
   if (anyPanelOpen() && !S.showSkins) return;
@@ -4899,6 +5015,7 @@ window.KS = {
   COMBO_REWARDS, comboCoins, mapPings,
   PET_CD, petAbility, petAbilityReady,
   POP_FILTERS, mkInhab, popCount, recruitCost, recruit, assignPop, fighterDmg, simInhabitants, drawPop, drawInhab,
+  popCap, houseCost, buyHouse, jobDefs, jobBoost, jobSites, movePop, sanitizePop, BEDS_BASE, BEDS_PER_LAND, BEDS_PER_HOUSE, HOUSE_MAX, WORK_BOOST,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
