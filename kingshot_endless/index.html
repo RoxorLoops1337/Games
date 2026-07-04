@@ -384,6 +384,17 @@ function foeArch(k) { return FOE_ARCH[(k - 1) % FOE_ARCH.length]; }
 function foeName(k) { const i = (k - 1) % FOE_NAMES.length; const cyc = Math.floor((k - 1) / FOE_NAMES.length); return FOE_NAMES[i] + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''); }
 function foeCol(k)  { return FOE_COLS[(k - 1) % FOE_COLS.length]; }
 function hexRgb(h)  { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+// ---- bestiary: a collection log of every foe family + boss -----
+const ARCH_DESC = { melee: 'Melee bruiser', fast: 'Fast runner', tank: 'Armored tank', spitter: 'Ranged spitter' };
+function famOf(k) { return (k - 1) % FOE_NAMES.length; } // 0..7 base family
+function recordKill(e) {
+  const f = famOf(e.k);
+  if (!S.bestiary) S.bestiary = {};
+  if (!S.bestiary[f]) S.bestiary[f] = { k: 0, b: 0 };
+  S.bestiary[f].k++;
+  if (e.boss) S.bestiary[f].b++;
+}
+function bestiarySeen() { let n = 0; for (let f = 0; f < FOE_NAMES.length; f++) if (S.bestiary && S.bestiary[f] && S.bestiary[f].k > 0) n++; return n; }
 
 // ---- deterministic rng --------------------------------------
 let seed = 987654321;
@@ -506,6 +517,7 @@ function reset() {
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
     combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
     ultCharge: 0, ultCasting: false,
+    bestiary: {}, showBestiary: false,
     xp: 0, level: 1, cards: null, pendingLevels: 0, perks: {},
     pets: {}, activePet: null, showPets: false, petPos: { x: SPAWN.x - 30, y: SPAWN.y + 10 },
     gear: { weapon: null, armor: null, trinket: null }, showGear: false,
@@ -722,7 +734,7 @@ function save() {
       streak: S.streak, lastStreakDay: S.lastStreakDay,
       loginDay: S.loginDay, lastLoginDay: S.lastLoginDay,
       showQuests: S.showQuests ? 1 : 0,
-      xp: S.xp, level: S.level, perks: S.perks, ultCharge: S.ultCharge,
+      xp: S.xp, level: S.level, perks: S.perks, ultCharge: S.ultCharge, bestiary: S.bestiary,
       pets: S.pets, activePet: S.activePet, gear: S.gear,
       district: S.district ? {
         plates: Object.fromEntries(Object.entries(S.district.plates).map(([id, pl]) => [id, { b: pl.built ? 1 : 0, p: pl.paid }])),
@@ -797,6 +809,7 @@ function load() {
   S.showQuests = !!d.showQuests;
   S.xp = d.xp || 0; S.level = d.level || 1; S.perks = d.perks || {};
   S.ultCharge = d.ultCharge || 0; S.ultCasting = false;
+  S.bestiary = d.bestiary || {};
   S.pets = d.pets || {}; S.activePet = d.activePet || null;
   if (S.activePet && petLvl(S.activePet) <= 0) S.activePet = null;
   S.gear = Object.assign({ weapon: null, armor: null, trinket: null }, d.gear || {});
@@ -973,6 +986,7 @@ function hurtEnemy(e, dmg) {
   if (e.hp <= 0) {
     S.stats.kills++;
     if (!S.ultCasting) S.ultCharge = Math.min(ULT_NEED, ultCharge() + 1);
+    recordKill(e);
     questEvent('kill', 1);
     registerCombo(e);
     grantXp(e.boss ? 50 : e.gold ? 6 : 3 + Math.floor(e.k / 2));
@@ -1453,6 +1467,8 @@ const ACH = [
   { id: 'trade15', ic: '💼', name: 'Regular Patron',    d: 'Make 15 merchant purchases',      c: () => (S.stats.trades || 0) >= 15 },
   { id: 'ult1',    ic: '☄️', name: 'Storm Caller',      d: 'Unleash your first Arrow Storm',  c: () => (S.stats.ults || 0) >= 1 },
   { id: 'ult25',   ic: '🌩️', name: 'Tempest',           d: 'Unleash 25 Arrow Storms',         c: () => (S.stats.ults || 0) >= 25 },
+  { id: 'dex4',    ic: '📖', name: 'Naturalist',        d: 'Discover 4 foe families',         c: () => bestiarySeen() >= 4 },
+  { id: 'dexAll',  ic: '📚', name: 'Bestiary Complete', d: 'Discover every foe family',       c: () => bestiarySeen() >= FOE_NAMES.length },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -3477,6 +3493,7 @@ function drawHud() {
   drawLogin();
   drawGear();
   drawShop();
+  drawBestiary();
   drawCrownHall();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -3681,6 +3698,7 @@ function drawStatsPanel() {
     ['🗡 Gear found', fmt(S.stats.gearFound || 0)], ['🛡 Slots filled', gearCount() + '/3'],
     ['⚒️ Enhances', fmt(S.stats.enhanced || 0)], ['💎 Gems held', fmt(S.gems)],
     ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
+    ['📖 Bestiary', bestiarySeen() + '/' + FOE_NAMES.length], ['⚡ Ult charge', Math.floor(ultFrac() * 100) + '%'],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -3808,6 +3826,51 @@ function drawPets() {
   }
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap an owned pet to make it your active companion · tap empty space to close', cx, vh - 16);
+}
+function drawBestiary() {
+  // 📖 button below the gear button
+  hudBtn(vw - 46, 214, 36, 30, '📖', () => { S.showBestiary = !S.showBestiary; save(); });
+  if (!S.showBestiary) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.94)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showBestiary = false; } });
+  const cx = vw / 2, top = Math.max(40, vh * 0.05);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('📖 BESTIARY', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText(bestiarySeen() + ' / ' + FOE_NAMES.length + ' foe families discovered · tap empty space to close', cx, top + 20);
+  const cols = 2, cw = Math.min(210, (vw - 36) / cols), ch = Math.min(88, (vh - top - 60) / Math.ceil(FOE_NAMES.length / cols)), gx0 = cx - (cols * cw) / 2;
+  let gy = top + 34;
+  for (let f = 0; f < FOE_NAMES.length; f++) {
+    const rec = S.bestiary && S.bestiary[f], seen = rec && rec.k > 0;
+    const col = f % cols, row = Math.floor(f / cols);
+    const x = gx0 + col * cw, y = gy + row * ch;
+    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.fill();
+    ctx.strokeStyle = seen ? FOE_COLS[f] : 'rgba(255,255,255,0.1)'; ctx.lineWidth = seen ? 2 : 1; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.stroke();
+    // colored foe blob
+    const bxx = x + 30, byy = y + ch / 2;
+    if (seen) {
+      ctx.fillStyle = FOE_COLS[f]; ctx.beginPath(); ctx.arc(bxx, byy, 15, 0, 6.29); ctx.fill();
+      ctx.fillStyle = '#0d0f16'; ctx.fillRect(bxx - 6, byy - 4, 3, 4); ctx.fillRect(bxx + 3, byy - 4, 3, 4);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.arc(bxx, byy, 15, 0, 6.29); ctx.fill();
+      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', bxx, byy + 6);
+    }
+    ctx.textAlign = 'left';
+    if (seen) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(FOE_NAMES[f], x + 54, y + 26);
+      ctx.fillStyle = '#9aa7b5'; ctx.font = '10px sans-serif';
+      ctx.fillText(ARCH_DESC[FOE_ARCH[f]] || FOE_ARCH[f], x + 54, y + 42);
+      ctx.fillStyle = '#c8d0da'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('⚔ ' + fmt(rec.k) + '   👑 ' + fmt(rec.b || 0), x + 54, y + 60);
+    } else {
+      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('? ? ?', x + 54, y + 30);
+      ctx.fillStyle = '#55606c'; ctx.font = '10px sans-serif';
+      ctx.fillText('Undiscovered', x + 54, y + 46);
+    }
+  }
 }
 function drawShop() {
   if (!S.merchant) { S.showShop = false; return; }
@@ -4219,6 +4282,7 @@ window.KS = {
   DAY_LEN, dayPhase, daylight, skyName, drawSky,
   ULT_NEED, ultCharge, ultFrac, ultReady, castUlt,
   WEATHER_LEN, WEATHER_SEQ, weatherType, weatherBucket, drawWeather,
+  recordKill, famOf, bestiarySeen, drawBestiary, FOE_NAMES,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },

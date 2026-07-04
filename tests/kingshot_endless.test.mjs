@@ -826,6 +826,40 @@ KS.start();
 for (let i = 0; i < KS.WEATHER_SEQ.length; i++) { KS.S.t = i * KS.WEATHER_LEN + 8; drawSafe('draw() weather ' + KS.weatherType()); }
 KS.S.t = tW;
 
+// ---- bestiary: foe collection log ----
+KS.start(); freezeSpawns();
+KS.S.bestiary = {}; KS.S.enemies.length = 0;
+t.ok(KS.bestiarySeen() === 0, 'bestiary starts empty');
+t.ok(KS.famOf(1) === 0 && KS.famOf(9) === 0 && KS.famOf(2) === 1, 'foe family index wraps every 8 lands');
+// killing a foe records it in the bestiary
+const zb = KS.S.zones[0];
+KS.spawnEnemy(zb); const be = KS.S.enemies[KS.S.enemies.length - 1]; be.gold = false; be.boss = false;
+KS.hurtEnemy(be, 1e9);
+t.ok(KS.S.bestiary[0] && KS.S.bestiary[0].k >= 1, 'a slain foe is recorded under its family');
+t.ok(KS.bestiarySeen() === 1, 'that family now counts as discovered');
+// a boss kill bumps the boss tally
+KS.spawnEnemy(zb, { boss: true }); const bb = KS.S.enemies.find(e => e.boss);
+KS.hurtEnemy(bb, 1e12);
+t.ok(KS.S.bestiary[0].b >= 1, 'boss kills track separately per family');
+// discover several families → milestone
+for (let f = 1; f < 4; f++) KS.S.bestiary[f] = { k: 3, b: 0 };
+KS.checkAch();
+t.ok(KS.bestiarySeen() === 4 && KS.S.ach.dex4 === true, 'discovering 4 families unlocks the Naturalist milestone');
+// full completion milestone
+for (let f = 0; f < KS.FOE_NAMES.length; f++) KS.S.bestiary[f] = { k: 1, b: 0 };
+KS.checkAch();
+t.ok(KS.S.ach.dexAll === true, 'discovering every family completes the bestiary');
+// persists through save/load; panel renders
+KS.S.bestiary = { 0: { k: 12, b: 2 }, 3: { k: 5, b: 0 } };
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.bestiary[0] && KS.S.bestiary[0].k === 12 && KS.S.bestiary[0].b === 2, 'bestiary persists through save/load');
+KS.start(); KS.S.showBestiary = true; drawSafe('draw() with bestiary panel open');
+KS.S.showBestiary = false; KS.S.bestiary = {}; KS.S.enemies.length = 0;
+// the boss kill above dropped gear — clear it so later exact-stat tests are clean
+KS.S.gear = { weapon: null, armor: null, trinket: null };
+KS.S.perks = {}; KS.S.pets = {}; KS.S.activePet = null; KS.S.cperks = {};
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
