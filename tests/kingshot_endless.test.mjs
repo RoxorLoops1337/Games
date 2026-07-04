@@ -1138,6 +1138,55 @@ KS.start(); KS.S.showPop = true; drawSafe('draw() with townsfolk panel open');
 KS.S.showPop = false; KS.S.pop = []; KS.S.popFilter = 'all'; KS.S.items.length = 0; KS.S.shots.length = 0; KS.S.pallet = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- housing: beds gate the population ----
+KS.S.pop = []; KS.S.houses = 0; KS.S.wallet = 1e12;
+const cap0 = KS.popCap();
+t.ok(cap0 === KS.BEDS_BASE + KS.BEDS_PER_LAND * (KS.S.zones.length - 1), 'beds come from the base plus each settled land');
+for (let i = 0; i < cap0; i++) KS.recruit();
+t.ok(KS.S.pop.length === cap0 && KS.recruit() === false, 'recruiting stops when every bed is taken');
+const hc = KS.houseCost(), wPre = KS.S.wallet;
+t.ok(KS.buyHouse() === true && KS.S.houses === 1 && KS.S.wallet === wPre - hc, 'a cottage can be built for coins');
+t.ok(KS.popCap() === cap0 + KS.BEDS_PER_HOUSE, 'each cottage adds beds');
+t.ok(KS.houseCost() > hc, 'each cottage costs more than the last');
+t.ok(KS.recruit() === true, 'a fresh bed lets you recruit again');
+
+// ---- workplaces: jobs appear as you build, workers speed production ----
+const defIds = () => KS.jobDefs().map(j => j.id);
+t.ok(defIds().includes('collect') && defIds().includes('fight'), 'gatherer and fighter jobs always exist');
+const hadCamp = KS.S.campPlate.built;
+KS.S.campPlate.built = true; if (!KS.S.camp) KS.S.camp = { logs: [], chopT: 0 };
+t.ok(defIds().includes('camp'), 'building the lumber camp unlocks its job row');
+t.ok(KS.jobBoost('camp') === 1, 'an unstaffed workplace runs at normal speed');
+t.ok(KS.movePop('collect', 'camp') && KS.movePop('collect', 'camp'), 'two gatherers can be stationed at the camp');
+t.ok(KS.jobBoost('camp') === 1 + 2 * KS.WORK_BOOST, 'each worker adds +' + KS.WORK_BOOST * 100 + '% speed');
+// functional: with x2 boost the chop finishes in half the time
+KS.S.camp.logs.length = 0; KS.S.camp.chopT = 0;
+const halfChop = C.CHOP_T / (1 + 2 * KS.WORK_BOOST) + 0.15;
+step(halfChop);
+t.ok(KS.S.camp.logs.length >= 1, 'a staffed camp chops logs faster than its base time');
+// stationed workers patrol their workplace instead of gathering
+const wq = KS.S.pop.find(q => q.role === 'camp');
+const wx0 = wq.x, wy0 = wq.y;
+wq.waitT = 0; wq.x = C.CAMP.x + 300; wq.y = C.CAMP.y + 300;
+KS.simInhabitants(1 / 60);
+t.ok(Math.hypot(wq.x - (C.CAMP.x + 300), wq.y - (C.CAMP.y + 300)) > 0, 'a stationed worker walks toward his workplace');
+// un-station them again
+KS.movePop('camp', 'collect'); KS.movePop('camp', 'collect');
+t.ok(KS.jobBoost('camp') === 1, 'unassigned workers stop boosting');
+KS.S.campPlate.built = hadCamp; if (!hadCamp) KS.S.camp = null;
+// sanitize: a worker whose workplace vanished rejoins the pool
+KS.S.pop[0].role = 'farm';
+KS.sanitizePop();
+t.ok(KS.S.pop[0].role === (KS.S.d2Plate.farm.built ? 'farm' : 'collect'), 'workers at unbuilt workplaces rejoin the gatherer pool');
+// houses + jobs persist through save/load
+KS.S.houses = 2; KS.S.campPlate.built = true; if (!KS.S.camp) KS.S.camp = { logs: [], chopT: 0 };
+KS.S.pop.forEach(q => q.role = 'collect'); KS.S.pop[0].role = 'camp';
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.houses === 2 && KS.popCount('camp') === 1, 'cottages + stationed jobs persist through save/load');
+KS.start();
+KS.S.pop = []; KS.S.houses = 0; KS.S.wallet = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- endless land: cost climbs super-exponentially ----
 t.ok(KS.unlockCost(2) > KS.unlockCost(1) && KS.unlockCost(10) / KS.unlockCost(9) > KS.unlockCost(3) / KS.unlockCost(2), 'each land block costs disproportionately more than the last (super-exponential)');
 
