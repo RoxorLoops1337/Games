@@ -860,6 +860,32 @@ KS.S.gear = { weapon: null, armor: null, trinket: null };
 KS.S.perks = {}; KS.S.pets = {}; KS.S.activePet = null; KS.S.cperks = {};
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- elite / champion foes ----
+KS.start(); freezeSpawns();
+KS.S.enemies.length = 0; KS.S.items.length = 0; KS.S.stats.elites = 0;
+const ze = KS.S.zones[0];
+t.ok(KS.promoteElite() === false, 'no champion rises when there are no eligible foes');
+KS.spawnEnemy(ze); const nf = KS.S.enemies[KS.S.enemies.length - 1]; nf.gold = false; nf.boss = false;
+const hp0 = nf.max;
+t.ok(KS.promoteElite() === true, 'a living foe can be promoted to champion');
+t.ok(nf.elite === true && nf.max > hp0, 'the champion is much tougher than before');
+// champions never come from bosses or gold foes
+KS.S.enemies.length = 0;
+KS.spawnEnemy(ze, { boss: true }); KS.spawnEnemy(ze); KS.S.enemies[1].gold = true; KS.S.enemies[1].boss = false;
+t.ok(KS.promoteElite() === false, 'bosses and gold foes are never promoted');
+// killing a champion drops bonus loot and counts
+KS.S.enemies.length = 0; KS.S.items.length = 0; KS.S.pallet = 0;
+KS.spawnEnemy(ze); const elc = KS.S.enemies[KS.S.enemies.length - 1]; elc.gold = false; elc.boss = false;
+KS.promoteElite();
+const gemItems0 = KS.S.items.filter(it => it.gem).length;
+KS.hurtEnemy(elc, 1e12);
+t.ok(KS.S.stats.elites === 1, 'slaying a champion is counted');
+t.ok(KS.S.items.filter(it => it.gem).length >= gemItems0 + 2 && KS.S.pallet > 0, 'a champion drops bonus gems + coins');
+KS.checkAch();
+t.ok(KS.S.ach.elite1 === true, 'first champion kill unlocks Giant Slayer');
+KS.S.stats.elites = 0; KS.S.enemies.length = 0; KS.S.items.length = 0; KS.S.pallet = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
