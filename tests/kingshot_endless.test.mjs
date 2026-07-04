@@ -946,6 +946,23 @@ KS.S.stats.kills = rk0; KS.S.crowns = rc0; KS.S.stats.bosses = rb0; KS.S.stats.e
 for (const k of Object.keys(KS.S.ach)) if (!rankAchBefore.has(k)) delete KS.S.ach[k];
 KS.S.rankShown = KS.heroRankIdx(); KS.S.toasts.length = 0; KS.S.parts.length = 0;
 
+// ---- floating crit combat text ----
+KS.start(); freezeSpawns();
+KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
+const zc2 = KS.S.zones[0];
+KS.spawnEnemy(zc2); const che = KS.S.enemies[KS.S.enemies.length - 1]; che.boss = false; che.gold = false; che.hp = che.max = 1e9;
+KS.hurtEnemy(che, 100, false);
+const normalFloat = KS.S.floats[KS.S.floats.length - 1];
+t.ok(normalFloat && !normalFloat.crit, 'a normal hit shows a plain damage number');
+const partsBefore = KS.S.parts.length;
+KS.hurtEnemy(che, 300, true);
+const critFloat = KS.S.floats[KS.S.floats.length - 1];
+t.ok(critFloat && critFloat.crit === true, 'a critical hit is flagged on its damage float');
+t.ok(critFloat.big === true && critFloat.color === '#ff8a3c', 'crit combat text is bigger and orange');
+t.ok(KS.S.parts.length === partsBefore, 'hurtEnemy itself adds no crit sparks (those come from the arrow hit, deterministically)');
+KS.draw(); // crit float + pop renders without throwing
+KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
