@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Horde Runner</title>
+<style>
+  html, body { margin:0; padding:0; background:#0b0e1a; height:100%; overflow:hidden;
+    touch-action:none; -webkit-user-select:none; user-select:none; }
+  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas { display:block; background:#0b0e1a; touch-action:none; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="480" height="840"></canvas></div>
+<script>
+'use strict';
+// ============================================================================
+// HORDE RUNNER — a crowd-runner: steer your army down the lane, auto-shoot
+// the monster hordes, pick the right math gates (+5, ×2 … or −20 if you're
+// careless), crack barrels for power-ups, and take down the boss at the end.
+// One file, vanilla canvas. Headless hooks under window.HR for tests.
+// ============================================================================
+const HEADLESS = typeof __HR_HEADLESS__ !== 'undefined';
+
+const W = 480, H = 840;          // internal resolution
+const PY = 660;                  // crowd screen y
+const LANE = 170;                // half lane width (world x in [-LANE, LANE])
+const UNIT_CAP = 70;             // max rendered crowd dots
+const START_UNITS = 5;
+const VOLLEY = 5;                // volleys per second
+const UNIT_DPS = 2;              // damage/sec contributed by each unit at pow 1
+const BULLET_SPD = 900;
+const RUN_SPD = 220;             // forward px/sec
+const BOSS_DIST = 500;           // boss stands this far ahead when locked
+const GATE_HITS = 2;             // bullet hits per ±1 on a shootable gate
+
+const C = { W, H, PY, LANE, UNIT_CAP, START_UNITS, VOLLEY, UNIT_DPS, BULLET_SPD, RUN_SPD, BOSS_DIST, GATE_HITS };
+
+// ---------------------------------------------------------------- utilities
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const fmt = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : '' + n;
+
+// ------------------------------------------------------------------- save
+const LS_LEVEL = 'hr_level', LS_BEST = 'hr_best', LS_MUTE = 'hr_muted';
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, '' + v); } catch (e) {} },
+};
+
+// ------------------------------------------------------------------- audio
+let AC = null, muted = store.get(LS_MUTE, '0') === '1';
+function ac() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  return AC;
+}
+let lastShotSfx = 0;
+function beep(freq, dur, type, vol, slide) {
+  if (muted) return;
+  const a = ac(); if (!a) return;
+  try {
+    const o = a.createOscillator(), g = a.createGain(), t = a.currentTime;
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol || 0.08, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  } catch (e) {}
+}
+const sfx = {
+  shoot() { const now = S.time; if (now - lastShotSfx < 0.09) return; lastShotSfx = now; beep(720, 0.05, 'square', 0.025, -300); },
+  hit() { beep(220, 0.06, 'sawtooth', 0.05, -80); },
+  gateGood() { beep(520, 0.14, 'triangle', 0.12, 260); },
+  gateBad() { beep(180, 0.22, 'sawtooth', 0.12, -90); },
+  barrel() { beep(140, 0.25, 'square', 0.14, -80); },
+  power() { beep(660, 0.2, 'triangle', 0.12, 440); },
+  ouch() { beep(120, 0.12, 'sawtooth', 0.1, -60); },
+  boss() { beep(80, 0.6, 'sawtooth', 0.16, -30); },
+  win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.22, 'triangle', 0.12), i * 110)); },
+  lose() { [330, 262, 196, 131].forEach((f, i) => setTimeout(() => beep(f, 0.26, 'sawtooth', 0.1), i * 130)); },
+};
+
+// ------------------------------------------------------------------- state
+const S = {
+  phase: 'menu',          // menu | run | boss | win | lose
+  level: parseInt(store.get(LS_LEVEL, '1'), 10) || 1,
+  best: parseInt(store.get(LS_BEST, '1'), 10) || 1,
+  time: 0,
+  dist: 0,                // track distance travelled (px)
+  levelLen: 0,            // z where the boss waits
+  n: START_UNITS,         // army size
+  pow: 1,                 // attack power per unit
+  cx: 0, cxTarget: 0,     // crowd center (world x)
+  rapidT: 0, dblT: 0,     // power-up timers (rapid fire / double damage)
+  fireT: 0,
+  mon: [], bul: [], gates: [], barrels: [], fx: [], txt: [], telegraphs: [],
+  boss: null,
+  shake: 0,
+  kills: 0,
+  peak: START_UNITS,
+  wobble: 0,
+};
+
+function difficulty(lvl) { return 1 + 0.35 * (lvl - 1); }
+
+// ------------------------------------------------------------ level layout
+const GATE_DEFS = [
+  // kind n = army count, p = power. w = pick weight (higher = more common).
+  { kind: 'n', op: '+', vmin: 3, vmax: 14, w: 26 },
+  { kind: 'n', op: '-', vmin: 4, vmax: 18, w: 18 },
+  { kind: 'n', op: 'x', vmin: 2, vmax: 3, w: 10 },
+  { kind: 'n', op: '/', vmin: 2, vmax: 2, w: 9 },
+  { kind: 'p', op: '+', vmin: 1, vmax: 2, w: 8 },
+  { kind: 'p', op: 'x', vmin: 2, vmax: 2, w: 3 },
+];
+function rollGate(rnd, diff) {
+  const total = GATE_DEFS.reduce((s, g) => s + g.w, 0);
+  let r = rnd() * total, def = GATE_DEFS[0];
+  for (const g of GATE_DEFS) { r -= g.w; if (r <= 0) { def = g; break; } }
+  let v = def.vmin + Math.floor(rnd() * (def.vmax - def.vmin + 1));
+  if (def.kind === 'n' && (def.op === '+' || def.op === '-')) v = Math.round(v * Math.sqrt(diff));
+  return { kind: def.kind, op: def.op, v, hits: 0 };
+}
+function makeGatePair(rnd, z, diff) {
+  // one side is always at least as good as the other so choices matter
+  let a = rollGate(rnd, diff), b = rollGate(rnd, diff), guard = 0;
+  while (guard++ < 8 && a.kind === b.kind && a.op === b.op && a.v === b.v) b = rollGate(rnd, diff);
+  const flip = rnd() < 0.5;
+  return { z, L: flip ? a : b, R: flip ? b : a, applied: false };
+}
+const BARREL_KINDS = ['rapid', 'double', 'units', 'bomb'];
+function buildLevel(lvl) {
+  const rnd = mulberry32(lvl * 7919 + 13);
+  const diff = difficulty(lvl);
+  S.levelLen = 2600 + 350 * Math.min(lvl, 12);
+  S.gates = []; S.mon = []; S.barrels = []; S.bul = []; S.fx = []; S.txt = []; S.telegraphs = [];
+  S.boss = null;
+  // gates every ~600px
+  for (let z = 620; z < S.levelLen - 500; z += 560 + rnd() * 160) {
+    S.gates.push(makeGatePair(rnd, z, diff));
+  }
+  // monster hordes between the gates
+  for (let z = 420; z < S.levelLen - 320; z += 300 + rnd() * 260) {
+    const horde = 2 + Math.floor(rnd() * 3) + Math.floor(diff);
+    const cxx = (rnd() * 2 - 1) * (LANE - 50);
+    for (let i = 0; i < horde; i++) {
+      const brute = rnd() < 0.14 + 0.02 * lvl;
+      S.mon.push({
+        z: z + rnd() * 120, x: clamp(cxx + (rnd() * 2 - 1) * 70, -LANE + 24, LANE - 24),
+        hp: brute ? 26 * diff : 7 * diff, max: brute ? 26 * diff : 7 * diff,
+        r: brute ? 26 : 15, spd: brute ? 46 : 68 + rnd() * 30,
+        dmg: brute ? 6 : 2, brute, flash: 0, seed: rnd() * 7,
+      });
+    }
+  }
+  // barrels
+  for (let z = 760; z < S.levelLen - 420; z += 640 + rnd() * 420) {
+    S.barrels.push({
+      z, x: (rnd() * 2 - 1) * (LANE - 60),
+      hp: 8, max: 8, kind: BARREL_KINDS[Math.floor(rnd() * BARREL_KINDS.length)],
+      broken: false, flash: 0,
+    });
+  }
+}
+
+function startLevel() {
+  S.phase = 'run';
+  S.time = 0; S.dist = 0;
+  S.n = START_UNITS; S.pow = 1; S.peak = START_UNITS;
+  S.cx = 0; S.cxTarget = 0;
+  S.rapidT = 0; S.dblT = 0; S.fireT = 0; S.kills = 0; S.shake = 0;
+  buildLevel(S.level);
+}
+
+// --------------------------------------------------------------- army math
+function setUnits(v, label, good) {
+  const before = S.n;
+  S.n = clamp(Math.round(v), 0, 99999);
+  if (S.n > S.peak) S.peak = S.n;
+  if (label) floater(S.cx, 0, label, good ? '#7dff8a' : '#ff7d7d');
+  if (S.n < before) crowdSplat(Math.min(before - S.n, 14));
+  if (S.n <= 0 && (S.phase === 'run' || S.phase === 'boss')) doLose();
+}
+function applyOp(gate) {
+  if (gate.kind === 'p') {
+    if (gate.op === 'x') S.pow *= gate.v; else S.pow += gate.v;
+    S.pow = Math.min(S.pow, 999);
+    floater(S.cx, -30, 'PWR ' + (gate.op === 'x' ? '×' : '+') + gate.v, '#ffd75e');
+    sfx.power();
+    return;
+  }
+  let v = S.n, good = true;
+  if (gate.op === '+') v += gate.v;
+  else if (gate.op === '-') { v -= gate.v; good = false; }
+  else if (gate.op === 'x') v *= gate.v;
+  else if (gate.op === '/') { v = Math.ceil(v / gate.v); good = false; }
+  setUnits(v, gateLabel(gate), good);
+  if (good) sfx.gateGood(); else sfx.gateBad();
+}
+function gateLabel(g) {
+  const sym = g.op === 'x' ? '×' : g.op === '/' ? '÷' : g.op;
+  return (g.kind === 'p' ? 'PWR ' : '') + sym + g.v;
+}
+function gateIsGood(g) { return g.kind === 'p' || g.op === '+' || g.op === 'x'; }
+
+// power-up grants from barrels
+function grantBarrel(b) {
+  b.broken = true;
+  boom(b.x, b.z, b.kind === 'bomb' ? 46 : 26, b.kind === 'bomb' ? '#ff9d45' : '#c9924d');
+  sfx.barrel();
+  if (b.kind === 'rapid') { S.rapidT = 8; floater(b.x, PY - zToY(b.z), 'RAPID FIRE!', '#5ecbff'); }
+  else if (b.kind === 'double') { S.dblT = 8; floater(b.x, 0, 'DOUBLE DAMAGE!', '#ffd75e'); }
+  else if (b.kind === 'units') { setUnits(S.n + 8, '+8', true); }
+  else if (b.kind === 'bomb') {
+    let hitAny = false;
+    for (const m of S.mon) {
+      if (Math.abs(m.z - b.z) < 240 && Math.abs(m.x - b.x) < 160) { m.hp -= 60; m.flash = 0.15; hitAny = true; }
+    }
+    if (hitAny) sfx.hit();
+    S.shake = Math.max(S.shake, 10);
+  }
+}
+
+// -------------------------------------------------------------------- fx
+function floater(x, dy, msg, col) {
+  S.txt.push({ x, y: PY - 60 + (dy || 0), msg, col, t: 1.4 });
+  if (S.txt.length > 24) S.txt.shift();
+}
+function boom(x, z, r, col) {
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 160;
+    S.fx.push({ x, z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, r: 2 + Math.random() * 4, col, t: 0.5 + Math.random() * 0.3 });
+  }
+  if (S.fx.length > 220) S.fx.splice(0, S.fx.length - 220);
+  S.shake = Math.max(S.shake, r > 40 ? 9 : 5);
+}
+function crowdSplat(k) {
+  for (let i = 0; i < k; i++) {
+    const a = Math.random() * Math.PI * 2;
+    S.fx.push({ x: S.cx + Math.cos(a) * 24, z: S.dist + Math.sin(a) * 24, vx: Math.cos(a) * 120, vz: Math.sin(a) * 90, r: 3, col: '#8fd0ff', t: 0.45 });
+  }
+}
+
+// ------------------------------------------------------------------- boss
+function spawnBoss() {
+  const diff = difficulty(S.level);
+  const hp = Math.round(360 * diff * (1 + 0.25 * S.level));
+  S.boss = {
+    hp, max: hp, x: 0, vx: 60 + 8 * S.level,
+    atkT: 1.6, minionT: 5, flash: 0, dead: false, deathT: 0,
+    z: S.dist + BOSS_DIST,
+  };
+  S.phase = 'boss';
+  sfx.boss();
+  S.shake = Math.max(S.shake, 8);
+}
+function doWin() {
+  S.phase = 'win';
+  S.level += 1;
+  if (S.level > S.best) { S.best = S.level; store.set(LS_BEST, S.best); }
+  store.set(LS_LEVEL, S.level);
+  sfx.win();
+}
+function doLose() {
+  if (S.phase === 'lose') return;
+  S.phase = 'lose';
+  boom(S.cx, S.dist, 50, '#8fd0ff');
+  sfx.lose();
+}
+
+// ------------------------------------------------------------------ firing
+function shooterCount() { return Math.min(12, 1 + Math.ceil(Math.min(S.n, UNIT_CAP) / 6)); }
+function fireVolley() {
+  const shooters = shooterCount();
+  const rate = VOLLEY * (S.rapidT > 0 ? 2 : 1);
+  const dmgMul = S.dblT > 0 ? 2 : 1;
+  // total dps = n * pow * UNIT_DPS (× powerups); split across visible bullets
+  const dmg = (S.n * S.pow * UNIT_DPS * dmgMul) / (rate * shooters);
+  const spread = crowdRadius() * 0.9;
+  for (let i = 0; i < shooters; i++) {
+    const fx = shooters === 1 ? 0 : -spread + (2 * spread * i) / (shooters - 1);
+    S.bul.push({ x: S.cx + fx, z: S.dist + 40, dmg, t: 1.4 });
+  }
+  if (S.bul.length > 260) S.bul.splice(0, S.bul.length - 260);
+  sfx.shoot();
+}
+function crowdRadius() { return 10 + 7 * Math.sqrt(Math.min(S.n, UNIT_CAP)); }
+
+// ------------------------------------------------------------------- tick
+function zToY(z) { return PY - (z - S.dist); }
+
+function tick(dt) {
+  dt = Math.min(dt, 0.05);
+  if (S.phase !== 'run' && S.phase !== 'boss') return;
+  S.time += dt;
+  S.wobble += dt * 9;
+  if (S.shake > 0) S.shake = Math.max(0, S.shake - 60 * dt);
+  if (S.rapidT > 0) S.rapidT -= dt;
+  if (S.dblT > 0) S.dblT -= dt;
+
+  // steer
+  S.cx = lerp(S.cx, clamp(S.cxTarget, -LANE + 30, LANE - 30), Math.min(1, dt * 9));
+
+  // advance
+  if (S.phase === 'run') {
+    S.dist += RUN_SPD * dt;
+    if (S.dist >= S.levelLen - BOSS_DIST) { S.dist = S.levelLen - BOSS_DIST; spawnBoss(); }
+  }
+
+  // auto-fire
+  S.fireT -= dt;
+  const interval = 1 / (VOLLEY * (S.rapidT > 0 ? 2 : 1));
+  if (S.fireT <= 0) { S.fireT += interval; fireVolley(); }
+
+  // bullets
+  for (let i = S.bul.length - 1; i >= 0; i--) {
+    const b = S.bul[i];
+    b.z += BULLET_SPD * dt; b.t -= dt;
+    let dead = b.t <= 0 || zToY(b.z) < -60;
+    // monsters
+    if (!dead) for (const m of S.mon) {
+      if (m.hp > 0 && Math.abs(b.z - m.z) < m.r + 10 && Math.abs(b.x - m.x) < m.r + 8) {
+        m.hp -= b.dmg; m.flash = 0.12; dead = true;
+        if (m.hp <= 0) { S.kills++; boom(m.x, m.z, 24, m.brute ? '#c86bff' : '#7dff8a'); sfx.hit(); }
+        break;
+      }
+    }
+    // barrels
+    if (!dead) for (const br of S.barrels) {
+      if (!br.broken && Math.abs(b.z - br.z) < 26 && Math.abs(b.x - br.x) < 26) {
+        br.hp -= 1; br.flash = 0.12; dead = true;
+        if (br.hp <= 0) grantBarrel(br);
+        break;
+      }
+    }
+    // shootable gates (+ / − army gates improve when shot)
+    if (!dead) for (const g of S.gates) {
+      if (g.applied || Math.abs(b.z - g.z) > 14) continue;
+      const side = b.x < 0 ? g.L : g.R;
+      if (side.kind === 'n' && (side.op === '+' || side.op === '-')) {
+        side.hits++; dead = true;
+        if (side.hits % GATE_HITS === 0) {
+          if (side.op === '+') side.v += 1;
+          else if (side.v > 1) side.v -= 1;
+        }
+      }
+      break;
+    }
+    // boss
+    if (!dead && S.boss && !S.boss.dead && b.z > S.boss.z - 60 && Math.abs(b.x - S.boss.x) < 64) {
+      S.boss.hp -= b.dmg; S.boss.flash = 0.1; dead = true;
+      if (S.boss.hp <= 0) {
+        S.boss.dead = true; S.boss.deathT = 1.2;
+        boom(S.boss.x, S.boss.z, 60, '#ff5e7d'); boom(S.boss.x, S.boss.z, 60, '#ffd75e');
+      }
+    }
+    if (dead) S.bul.splice(i, 1);
+  }
+
+  // gates apply as the crowd crosses them
+  for (const g of S.gates) {
+    if (!g.applied && S.dist + 20 >= g.z) {
+      g.applied = true;
+      applyOp(S.cx < 0 ? g.L : g.R);
+    }
+  }
+
+  // monsters
+  const cr = crowdRadius();
+  for (let i = S.mon.length - 1; i >= 0; i--) {
+    const m = S.mon[i];
+    if (m.flash > 0) m.flash -= dt;
+    if (m.hp <= 0) { S.mon.splice(i, 1); continue; }
+    if (m.z - S.dist < 700) {
+      m.z -= m.spd * dt;
+      m.x = lerp(m.x, clamp(S.cx, -LANE + m.r, LANE - m.r), Math.min(1, dt * 0.7));
+    }
+    if (m.z - S.dist < 26 + cr * 0.35) {
+      if (Math.abs(m.x - S.cx) < cr * 0.8 + m.r) {
+        setUnits(S.n - m.dmg, '-' + m.dmg, false);
+        boom(m.x, m.z, 20, '#ff7d7d'); sfx.ouch();
+        S.mon.splice(i, 1);
+        continue;
+      }
+    }
+    if (m.z - S.dist < -160) S.mon.splice(i, 1);
+  }
+
+  // boss behaviour
+  if (S.boss) {
+    const B = S.boss;
+    B.z = S.dist + BOSS_DIST;
+    if (B.flash > 0) B.flash -= dt;
+    if (B.dead) {
+      B.deathT -= dt;
+      if (B.deathT <= 0) doWin();
+    } else {
+      B.x += B.vx * dt;
+      if (B.x > LANE - 70 || B.x < -LANE + 70) B.vx *= -1;
+      B.atkT -= dt;
+      if (B.atkT <= 0) {
+        B.atkT = Math.max(1.1, 2.2 - 0.08 * S.level);
+        S.telegraphs.push({ x: S.cx, r: 66, t: 1.1 });
+      }
+      B.minionT -= dt;
+      if (B.minionT <= 0) {
+        B.minionT = Math.max(3.2, 6 - 0.2 * S.level);
+        const diff = difficulty(S.level);
+        for (let k = 0; k < 2; k++) {
+          S.mon.push({ z: B.z - 40, x: B.x + (k ? 50 : -50), hp: 7 * diff, max: 7 * diff, r: 15, spd: 84, dmg: 2, brute: false, flash: 0, seed: Math.random() * 7 });
+        }
+      }
+    }
+  }
+  // telegraphed slams
+  for (let i = S.telegraphs.length - 1; i >= 0; i--) {
+    const tg = S.telegraphs[i];
+    tg.t -= dt;
+    if (tg.t <= 0) {
+      boom(tg.x, S.dist, 40, '#ff9d45');
+      if (Math.abs(tg.x - S.cx) < tg.r + cr * 0.4) {
+        const loss = Math.ceil(4 + S.level * 1.4 + S.n * 0.10);
+        setUnits(S.n - loss, '-' + loss, false);
+        sfx.ouch();
+      }
+      S.telegraphs.splice(i, 1);
+    }
+  }
+
+  // fx + floaters
+  for (let i = S.fx.length - 1; i >= 0; i--) {
+    const p = S.fx[i];
+    p.x += p.vx * dt; p.z += p.vz * dt; p.t -= dt;
+    if (p.t <= 0) S.fx.splice(i, 1);
+  }
+  for (let i = S.txt.length - 1; i >= 0; i--) {
+    const f = S.txt[i];
+    f.y -= 36 * dt; f.t -= dt;
+    if (f.t <= 0) S.txt.splice(i, 1);
+  }
+}
+
+// ------------------------------------------------------------------- draw
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+const laneX = wx => W / 2 + wx * (W * 0.94 / (2 * LANE));
+const laneScale = W * 0.94 / (2 * LANE);
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawGround() {
+  // scrolling lane
+  ctx.fillStyle = '#161a2e';
+  ctx.fillRect(0, 0, W, H);
+  const lx = laneX(-LANE), rx = laneX(LANE);
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#232946'); grad.addColorStop(1, '#2c3358');
+  ctx.fillStyle = grad;
+  ctx.fillRect(lx, 0, rx - lx, H);
+  // stripes give the speed feel
+  ctx.fillStyle = 'rgba(255,255,255,0.045)';
+  const period = 130;
+  let off = (S.dist % period);
+  for (let y = -period + off; y < H + period; y += period) {
+    ctx.fillRect(lx, y, rx - lx, 34);
+  }
+  // walls
+  ctx.fillStyle = '#0e1120';
+  ctx.fillRect(0, 0, lx, H); ctx.fillRect(rx, 0, W - rx, H);
+  ctx.fillStyle = '#3a4270';
+  ctx.fillRect(lx - 6, 0, 6, H); ctx.fillRect(rx, 0, 6, H);
+}
+
+function drawGate(g) {
+  const y = zToY(g.z);
+  if (y < -80 || y > H + 40 || g.applied) return;
+  const halves = [{ s: g.L, x0: -LANE, x1: 0 }, { s: g.R, x0: 0, x1: LANE }];
+  for (const h of halves) {
+    const good = gateIsGood(h.s);
+    const x0 = laneX(h.x0) + 6, x1 = laneX(h.x1) - 6;
+    const col = h.s.kind === 'p' ? '255,215,94' : good ? '94,203,255' : '255,94,120';
+    ctx.fillStyle = `rgba(${col},0.20)`;
+    ctx.fillRect(x0, y - 46, x1 - x0, 62);
+    ctx.strokeStyle = `rgba(${col},0.9)`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x0, y - 46, x1 - x0, 62);
+    ctx.fillStyle = `rgb(${col})`;
+    ctx.font = 'bold 30px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(gateLabel(h.s), (x0 + x1) / 2, y - 15);
+    if (h.s.kind === 'n' && (h.s.op === '+' || h.s.op === '-')) {
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillStyle = `rgba(${col},0.75)`;
+      ctx.fillText('shoot me!', (x0 + x1) / 2, y + 6);
+    }
+  }
+}
+
+function drawMonster(m) {
+  const y = zToY(m.z);
+  if (y < -60 || y > H + 60) return;
+  const x = laneX(m.x);
+  const r = m.r * laneScale * 0.95;
+  const bob = Math.sin(S.wobble * 1.4 + m.seed) * 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(x, y + r * 0.8, r * 0.9, r * 0.32, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = m.flash > 0 ? '#ffffff' : (m.brute ? '#a44fe0' : '#4fae56');
+  ctx.beginPath(); ctx.arc(x, y + bob, r, 0, 7); ctx.fill();
+  // horns for brutes
+  if (m.brute) {
+    ctx.fillStyle = '#e8d9ff';
+    ctx.beginPath(); ctx.moveTo(x - r * 0.7, y + bob - r * 0.5); ctx.lineTo(x - r * 0.95, y + bob - r * 1.25); ctx.lineTo(x - r * 0.35, y + bob - r * 0.8); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + r * 0.7, y + bob - r * 0.5); ctx.lineTo(x + r * 0.95, y + bob - r * 1.25); ctx.lineTo(x + r * 0.35, y + bob - r * 0.8); ctx.fill();
+  }
+  // angry eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x - r * 0.35, y + bob - r * 0.1, r * 0.22, 0, 7); ctx.arc(x + r * 0.35, y + bob - r * 0.1, r * 0.22, 0, 7); ctx.fill();
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath(); ctx.arc(x - r * 0.35, y + bob + r * 0.02, r * 0.11, 0, 7); ctx.arc(x + r * 0.35, y + bob + r * 0.02, r * 0.11, 0, 7); ctx.fill();
+  // hp sliver
+  if (m.hp < m.max) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(x - r, y + bob - r - 9, r * 2, 4);
+    ctx.fillStyle = '#7dff8a';
+    ctx.fillRect(x - r, y + bob - r - 9, r * 2 * clamp(m.hp / m.max, 0, 1), 4);
+  }
+}
+
+function drawBarrel(b) {
+  if (b.broken) return;
+  const y = zToY(b.z);
+  if (y < -50 || y > H + 50) return;
+  const x = laneX(b.x), r = 22;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(x, y + r * 0.9, r, r * 0.3, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = b.flash > 0 ? '#ffe9c9' : '#9a6b3f';
+  roundRect(x - r * 0.8, y - r, r * 1.6, r * 2, 6); ctx.fill();
+  ctx.fillStyle = '#6e4a28';
+  ctx.fillRect(x - r * 0.8, y - r * 0.55, r * 1.6, 5);
+  ctx.fillRect(x - r * 0.8, y + r * 0.35, r * 1.6, 5);
+  const icon = b.kind === 'rapid' ? '⚡' : b.kind === 'double' ? '×2' : b.kind === 'units' ? '+8' : '💥';
+  ctx.fillStyle = '#ffd75e';
+  ctx.font = 'bold 15px system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(icon, x, y);
+  if (b.flash > 0) b.flash -= 1 / 60;
+}
+
+function drawCrowd() {
+  const rendered = Math.min(S.n, UNIT_CAP);
+  const cxp = laneX(S.cx);
+  // shadow blob
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.beginPath(); ctx.ellipse(cxp, PY + 16, crowdRadius() * laneScale, crowdRadius() * laneScale * 0.4, 0, 0, 7); ctx.fill();
+  for (let i = rendered - 1; i >= 0; i--) {
+    const rr = 7 * Math.sqrt(i + 0.4), aa = i * 2.39996;
+    const ux = cxp + Math.cos(aa) * rr * laneScale;
+    const uy = PY + Math.sin(aa) * rr * 0.5;
+    const hop = Math.abs(Math.sin(S.wobble + i * 0.7)) * 3.4;
+    // body
+    ctx.fillStyle = i === 0 ? '#ffe082' : '#8fd0ff';
+    ctx.beginPath(); ctx.arc(ux, uy - 8 - hop, 6.4, 0, 7); ctx.fill();
+    ctx.fillStyle = i === 0 ? '#e0a72e' : '#4a90d9';
+    roundRect(ux - 4.4, uy - 4 - hop, 8.8, 9, 3); ctx.fill();
+  }
+  // count badge
+  ctx.fillStyle = 'rgba(10,12,26,0.85)';
+  const label = '×' + fmt(S.n);
+  ctx.font = 'bold 20px system-ui, sans-serif';
+  const tw = ctx.measureText(label).width + 18;
+  roundRect(cxp - tw / 2, PY - crowdRadius() * 0.55 - 58, tw, 28, 9); ctx.fill();
+  ctx.fillStyle = '#8fd0ff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, cxp, PY - crowdRadius() * 0.55 - 44);
+}
+
+function drawBoss() {
+  const B = S.boss; if (!B) return;
+  const x = laneX(B.x), y = zToY(B.z);
+  const r = 62;
+  const bob = Math.sin(S.wobble * 0.8) * 4;
+  if (B.dead) {
+    const k = clamp(B.deathT / 1.2, 0, 1);
+    ctx.globalAlpha = k;
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(x, y + r * 0.85, r, r * 0.3, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = B.flash > 0 ? '#ffffff' : '#d1364f';
+  ctx.beginPath(); ctx.arc(x, y + bob, r, 0, 7); ctx.fill();
+  // horns
+  ctx.fillStyle = '#ffe9c9';
+  ctx.beginPath(); ctx.moveTo(x - r * 0.6, y + bob - r * 0.55); ctx.lineTo(x - r * 1.05, y + bob - r * 1.3); ctx.lineTo(x - r * 0.25, y + bob - r * 0.85); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x + r * 0.6, y + bob - r * 0.55); ctx.lineTo(x + r * 1.05, y + bob - r * 1.3); ctx.lineTo(x + r * 0.25, y + bob - r * 0.85); ctx.fill();
+  // eyes
+  ctx.fillStyle = '#ffd75e';
+  ctx.beginPath(); ctx.arc(x - r * 0.32, y + bob - r * 0.12, r * 0.16, 0, 7); ctx.arc(x + r * 0.32, y + bob - r * 0.12, r * 0.16, 0, 7); ctx.fill();
+  ctx.fillStyle = '#3a0a12';
+  ctx.beginPath(); ctx.arc(x - r * 0.32, y + bob - r * 0.06, r * 0.07, 0, 7); ctx.arc(x + r * 0.32, y + bob - r * 0.06, r * 0.07, 0, 7); ctx.fill();
+  // frown
+  ctx.strokeStyle = '#3a0a12'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(x, y + bob + r * 0.55, r * 0.3, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+  ctx.globalAlpha = 1;
+  // hp bar
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  roundRect(W / 2 - 160, 64, 320, 18, 8); ctx.fill();
+  ctx.fillStyle = '#d1364f';
+  const frac = clamp(B.hp / B.max, 0, 1);
+  if (frac > 0) { roundRect(W / 2 - 157, 67, 314 * frac, 12, 5); ctx.fill(); }
+  ctx.fillStyle = '#ffd7de';
+  ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('BOSS — LEVEL ' + S.level, W / 2, 54);
+}
+
+function drawHud() {
+  ctx.fillStyle = 'rgba(10,12,26,0.75)';
+  roundRect(10, 10, 150, 30, 9); ctx.fill();
+  ctx.fillStyle = '#e8ecff';
+  ctx.font = 'bold 15px system-ui, sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('LEVEL ' + S.level, 22, 26);
+  ctx.fillStyle = 'rgba(10,12,26,0.75)';
+  roundRect(W - 160, 10, 150, 30, 9); ctx.fill();
+  ctx.fillStyle = '#ffd75e';
+  ctx.textAlign = 'right';
+  ctx.fillText('⚡ PWR ' + fmt(S.pow), W - 22, 26);
+  // powerup pips
+  let px = 12, pyy = 50;
+  ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'left';
+  if (S.rapidT > 0) { ctx.fillStyle = '#5ecbff'; ctx.fillText('RAPID ' + Math.ceil(S.rapidT) + 's', px, pyy); pyy += 16; }
+  if (S.dblT > 0) { ctx.fillStyle = '#ffd75e'; ctx.fillText('DMG×2 ' + Math.ceil(S.dblT) + 's', px, pyy); }
+  // progress bar (run phase)
+  if (S.phase === 'run') {
+    const frac = clamp(S.dist / (S.levelLen - BOSS_DIST), 0, 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    roundRect(W / 2 - 90, 16, 180, 10, 5); ctx.fill();
+    ctx.fillStyle = '#7dff8a';
+    if (frac > 0.02) { roundRect(W / 2 - 88, 18, 176 * frac, 6, 3); ctx.fill(); }
+    ctx.fillStyle = '#d1364f';
+    ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('👹', W / 2 + 96, 21);
+  }
+  // mute
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '16px system-ui, sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText(muted ? '🔇' : '🔊', W - 14, H - 18);
+}
+
+function overlay(title, sub, hint, col) {
+  ctx.fillStyle = 'rgba(8,10,22,0.72)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = col;
+  ctx.font = 'bold 46px system-ui, sans-serif';
+  ctx.fillText(title, W / 2, H * 0.36);
+  ctx.fillStyle = '#e8ecff';
+  ctx.font = '20px system-ui, sans-serif';
+  ctx.fillText(sub, W / 2, H * 0.36 + 52);
+  ctx.fillStyle = 'rgba(232,236,255,0.7)';
+  ctx.font = '16px system-ui, sans-serif';
+  const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 300);
+  ctx.globalAlpha = HEADLESS ? 1 : pulse;
+  ctx.fillText(hint, W / 2, H * 0.36 + 96);
+  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  ctx.save();
+  if (S.shake > 0) ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
+  drawGround();
+  // far-to-near ordering
+  for (const g of S.gates) drawGate(g);
+  for (const b of S.barrels) drawBarrel(b);
+  if (S.boss) drawBoss();
+  for (const m of S.mon) drawMonster(m);
+  // telegraphs on the floor
+  for (const tg of S.telegraphs) {
+    const k = 1 - clamp(tg.t / 1.1, 0, 1);
+    ctx.strokeStyle = 'rgba(255,157,69,0.9)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(laneX(tg.x), PY, tg.r * laneScale, 0, 7); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,157,69,0.25)';
+    ctx.beginPath(); ctx.arc(laneX(tg.x), PY, tg.r * laneScale * k, 0, 7); ctx.fill();
+  }
+  // bullets
+  ctx.fillStyle = '#ffe082';
+  for (const b of S.bul) {
+    const y = zToY(b.z);
+    if (y < -20 || y > H + 20) continue;
+    ctx.fillRect(laneX(b.x) - 2, y - 9, 4, 12);
+  }
+  if (S.phase === 'run' || S.phase === 'boss' || S.phase === 'lose') drawCrowd();
+  // particles
+  for (const p of S.fx) {
+    ctx.globalAlpha = clamp(p.t / 0.5, 0, 1);
+    ctx.fillStyle = p.col;
+    ctx.beginPath(); ctx.arc(laneX(p.x), zToY(p.z), p.r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // floaters
+  for (const f of S.txt) {
+    ctx.globalAlpha = clamp(f.t / 0.5, 0, 1);
+    ctx.fillStyle = f.col;
+    ctx.font = 'bold 26px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(f.msg, laneX(f.x), f.y);
+  }
+  ctx.globalAlpha = 1;
+  drawHud();
+  if (S.phase === 'menu') overlay('HORDE RUNNER', 'Level ' + S.level + (S.best > 1 ? '  ·  best ' + S.best : ''), 'tap to run  ·  drag to steer', '#8fd0ff');
+  else if (S.phase === 'win') overlay('LEVEL CLEAR!', 'Army peak ×' + fmt(S.peak) + '  ·  ' + S.kills + ' monsters down', 'tap for level ' + S.level, '#7dff8a');
+  else if (S.phase === 'lose') overlay('ARMY WIPED', 'Level ' + S.level + '  ·  ' + S.kills + ' monsters down', 'tap to retry', '#ff5e7d');
+  ctx.restore();
+}
+
+// ------------------------------------------------------------------- input
+function pointerToWorldX(clientX) {
+  const rect = cv.getBoundingClientRect();
+  const px = (clientX - rect.left) / rect.width * W;
+  return (px - W / 2) / laneScale;
+}
+function press(clientX, clientY) {
+  ac(); // unlock audio on gesture
+  // mute button corner
+  const rect = cv.getBoundingClientRect();
+  const px = (clientX - rect.left) / rect.width * W;
+  const py = (clientY - rect.top) / rect.height * H;
+  if (px > W - 50 && py > H - 44) {
+    muted = !muted; store.set(LS_MUTE, muted ? '1' : '0');
+    return;
+  }
+  if (S.phase === 'menu' || S.phase === 'win') startLevel();
+  else if (S.phase === 'lose') startLevel();
+  else S.cxTarget = pointerToWorldX(clientX);
+}
+if (!HEADLESS) {
+  let dragging = false;
+  cv.addEventListener('pointerdown', e => { dragging = true; press(e.clientX, e.clientY); e.preventDefault(); });
+  cv.addEventListener('pointermove', e => {
+    if (dragging && (S.phase === 'run' || S.phase === 'boss')) S.cxTarget = pointerToWorldX(e.clientX);
+  });
+  addEventListener('pointerup', () => { dragging = false; });
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') S.cxTarget -= 46;
+    else if (e.key === 'ArrowRight' || e.key === 'd') S.cxTarget += 46;
+    else if (e.key === ' ' || e.key === 'Enter') { if (S.phase !== 'run' && S.phase !== 'boss') startLevel(); }
+    else if (e.key === 'm') { muted = !muted; store.set(LS_MUTE, muted ? '1' : '0'); }
+    S.cxTarget = clamp(S.cxTarget, -LANE + 30, LANE - 30);
+  });
+
+  // fit canvas to window (keep 4:7, cap by both axes)
+  function fit() {
+    const scale = Math.min(innerWidth / W, innerHeight / H);
+    cv.style.width = Math.floor(W * scale) + 'px';
+    cv.style.height = Math.floor(H * scale) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = (now - last) / 1000; last = now;
+    tick(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------- headless hooks
+window.HR = {
+  S, C, tick, draw, startLevel, buildLevel, applyOp, setUnits, grantBarrel,
+  spawnBoss, doWin, doLose, fireVolley, crowdRadius, shooterCount,
+  makeGatePair, rollGate, mulberry32, difficulty, gateLabel, gateIsGood, press,
+};
+</script>
+</body>
+</html>

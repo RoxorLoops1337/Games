@@ -46,6 +46,7 @@ const STATIC_PATHS = [
   'messenger',
   'kingshot_endless',
   'headliner',
+  'horde_runner',
   'tools',
 ];
 
