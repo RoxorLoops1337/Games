@@ -806,6 +806,26 @@ t.ok(KS.ultCharge() === 20, 'ultimate charge persists through save/load');
 KS.S.ultCharge = 0; KS.S.stats.ults = 0; KS.S.enemies.length = 0; KS.S.frenzyT = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- weather (cosmetic, deterministic) ----
+const tW = KS.S.t;
+const WSET = ['clear', 'rain', 'snow', 'fog'];
+t.ok(WSET.includes(KS.weatherType()), 'weatherType is always a known kind');
+// the window index advances with time
+KS.S.t = 0; const wb0 = KS.weatherBucket();
+KS.S.t = KS.WEATHER_LEN + 1; const wb1 = KS.weatherBucket();
+t.ok(wb1 === wb0 + 1, 'the weather window advances after one window length');
+// across a full cycle every kind in the sequence shows up (incl. clear breaks)
+const seen = new Set();
+for (let i = 0; i < KS.WEATHER_SEQ.length; i++) { KS.S.t = i * KS.WEATHER_LEN + 5; seen.add(KS.weatherType()); }
+t.ok(seen.has('clear') && seen.has('rain') && seen.has('snow') && seen.has('fog'), 'the cycle rotates through clear, rain, snow and fog');
+// it's deterministic — same time, same weather
+KS.S.t = 3 * KS.WEATHER_LEN + 10; const wa = KS.weatherType();
+KS.S.t = 3 * KS.WEATHER_LEN + 10; t.ok(KS.weatherType() === wa, 'weather is a pure function of time (no rng drift)');
+// each weather kind renders without throwing
+KS.start();
+for (let i = 0; i < KS.WEATHER_SEQ.length; i++) { KS.S.t = i * KS.WEATHER_LEN + 8; drawSafe('draw() weather ' + KS.weatherType()); }
+KS.S.t = tW;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
