@@ -511,7 +511,7 @@ function reset() {
     camp: null,              // {logs:[tier..], chopT}
     campPlate: { cost: 350, paid: 0, built: false },
     crowns: 0, prestiges: 0, prestT: 0, cperks: {}, showCrownHall: false,
-    ach: {}, toasts: [], achCd: 0,
+    ach: {}, toasts: [], achCd: 0, rankShown: 0,
     quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
     loginDay: 0, lastLoginDay: '', loginAvail: false, showLogin: false,
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
@@ -812,6 +812,7 @@ function load() {
   S.xp = d.xp || 0; S.level = d.level || 1; S.perks = d.perks || {};
   S.ultCharge = d.ultCharge || 0; S.ultCasting = false;
   S.bestiary = d.bestiary || {};
+  S.rankShown = heroRankIdx(); // adopt current rank silently (no rank-up spam on load)
   S.pets = d.pets || {}; S.activePet = d.activePet || null;
   if (S.activePet && petLvl(S.activePet) <= 0) S.activePet = null;
   S.gear = Object.assign({ weapon: null, armor: null, trinket: null }, d.gear || {});
@@ -1533,6 +1534,9 @@ const ACH = [
   { id: 'elite25', ic: '🌟', name: 'Champion Bane',     d: 'Slay 25 champions',               c: () => (S.stats.elites || 0) >= 25 },
   { id: 'spin1',   ic: '🎡', name: 'Lucky Spin',        d: 'Spin the fortune wheel',          c: () => (S.stats.spins || 0) >= 1 },
   { id: 'spin30',  ic: '🎰', name: 'High Roller',       d: 'Spin the wheel 30 times',         c: () => (S.stats.spins || 0) >= 30 },
+  { id: 'rankKn',  ic: '🛡', name: 'Knighted',          d: 'Reach the rank of Knight',        c: () => heroRankIdx() >= 2 },
+  { id: 'rankWl',  ic: '⚔️', name: 'Warlord',           d: 'Reach the rank of Warlord',       c: () => heroRankIdx() >= 5 },
+  { id: 'rankLg',  ic: '🌟', name: 'Living Legend',     d: 'Reach the rank of Legend',        c: () => heroRankIdx() >= 8 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -1540,6 +1544,42 @@ function checkAch() {
     S.ach[a.id] = true;
     S.toasts.push({ txt: '🏆 ' + a.name, t: 0 });
     sfx('unlock', true); buzz(30);
+  }
+}
+
+// ---- hero rank / renown -------------------------------------
+// A persistent title ladder that blends every accomplishment into one
+// renown score, so all playstyles feed a single sense of growth. No rng.
+const RANKS = [
+  { name: 'Squire',    ic: '🪵', at: 0 },
+  { name: 'Footman',   ic: '🗡', at: 60 },
+  { name: 'Knight',    ic: '🛡', at: 220 },
+  { name: 'Captain',   ic: '🎖', at: 600 },
+  { name: 'Baron',     ic: '🏰', at: 1500 },
+  { name: 'Warlord',   ic: '⚔️', at: 3600 },
+  { name: 'Duke',      ic: '👑', at: 8000 },
+  { name: 'Champion',  ic: '🏆', at: 18000 },
+  { name: 'Legend',    ic: '🌟', at: 40000 },
+  { name: 'Myth',      ic: '☄️', at: 90000 },
+  { name: 'God-King',  ic: '⚡', at: 220000 },
+];
+function renown() {
+  return Math.floor(S.stats.kills + (S.stats.bosses || 0) * 50 + S.crowns * 500 + S.zones.length * 80 + (S.stats.elites || 0) * 30 + (S.stats.spins || 0) * 5);
+}
+function heroRankIdx() { const r = renown(); let i = 0; for (let k = 0; k < RANKS.length; k++) if (r >= RANKS[k].at) i = k; return i; }
+function heroRank() { return RANKS[heroRankIdx()]; }
+function nextRank() { const i = heroRankIdx(); return i + 1 < RANKS.length ? RANKS[i + 1] : null; }
+function checkRankUp() {
+  const i = heroRankIdx();
+  if (i > (S.rankShown || 0)) {
+    S.rankShown = i;
+    if (S.started) {
+      const r = RANKS[i];
+      S.toasts.push({ txt: '⚔️ RANK UP — ' + r.ic + ' ' + r.name.toUpperCase() + '!', t: 0 });
+      S.goldPulse = Math.max(S.goldPulse, 0.8); S.shake = Math.max(S.shake, 10);
+      for (let p = 0; p < 30; p++) { const a = p / 30 * 6.2831853; S.parts.push({ x: S.player.x, y: S.player.y - 20, vx: Math.cos(a) * 230, vy: Math.sin(a) * 210 - 120, t: 0, dur: 0.9, r: 3, color: '#ffd94a', g: 1 }); }
+      sfx('unlock', true); buzz([40, 30, 60]);
+    }
   }
 }
 
@@ -2149,7 +2189,7 @@ function tick(dt) {
 
   // -- milestones + toasts
   S.achCd -= dt;
-  if (S.achCd <= 0) { S.achCd = 0.5; checkAch(); }
+  if (S.achCd <= 0) { S.achCd = 0.5; checkAch(); checkRankUp(); }
   for (const to of S.toasts) to.t += dt;
   S.toasts = S.toasts.filter(to => to.t < 3);
 
@@ -3545,6 +3585,22 @@ function drawHud() {
       ctx.beginPath(); ctx.arc(130, 138, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill();
     }
   }
+  // hero rank badge (top-center) with progress to the next title
+  if (S.started) {
+    const rk = heroRank(), nx = nextRank(), rw = 156, rx = vw / 2 - rw / 2, ry = 8;
+    ctx.fillStyle = 'rgba(20,25,36,0.85)'; rr(rx, ry, rw, 30, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,217,74,0.35)'; ctx.lineWidth = 1; rr(rx, ry, rw, 30, 8); ctx.stroke();
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(rk.ic + ' ' + rk.name, vw / 2, ry + 14);
+    if (nx) {
+      const f = Math.min(1, (renown() - rk.at) / (nx.at - rk.at));
+      ctx.fillStyle = 'rgba(255,255,255,0.14)'; rr(rx + 12, ry + 20, rw - 24, 4, 2); ctx.fill();
+      ctx.fillStyle = '#6ecb5a'; rr(rx + 12, ry + 20, (rw - 24) * f, 4, 2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#9aa7b5'; ctx.font = '8px sans-serif'; ctx.fillText('MAX RANK', vw / 2, ry + 26);
+    }
+    hits.push({ x: rx, y: ry, w: rw, h: 30, act: () => { S.showStats = !S.showStats; } });
+  }
   // milestone toasts
   let ty = 70;
   for (const to of S.toasts) {
@@ -3777,6 +3833,7 @@ function drawStatsPanel() {
     ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
     ['📖 Bestiary', bestiarySeen() + '/' + FOE_NAMES.length], ['⭐ Champions', fmt(S.stats.elites || 0)],
     ['🎡 Wheel spins', fmt(S.stats.spins || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
+    [heroRank().ic + ' Rank', heroRank().name], ['🎗 Renown', fmt(renown())],
   ];
   let sy = top + 44;
   ctx.font = 'bold 13px sans-serif';
@@ -4411,6 +4468,7 @@ window.KS = {
   recordKill, famOf, bestiarySeen, drawBestiary, FOE_NAMES,
   ELITE_CD, promoteElite, dropItemM,
   WHEEL, SPIN_COST, spinWheel, drawWheel,
+  RANKS, renown, heroRank, heroRankIdx, nextRank, checkRankUp,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
