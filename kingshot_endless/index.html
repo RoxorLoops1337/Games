@@ -123,6 +123,14 @@ const COMBO_TIERS = [[80, 4, '#ff3a6b'], [40, 3, '#ff6a3a'], [20, 2, '#ff9a3a'],
 function comboMul() { for (const t of COMBO_TIERS) if (S.combo >= t[0]) return t[1]; return 1; }
 function comboTier() { for (let i = 0; i < COMBO_TIERS.length; i++) if (S.combo >= COMBO_TIERS[i][0]) return COMBO_TIERS.length - i; return 0; }
 function comboColor() { for (const t of COMBO_TIERS) if (S.combo >= t[0]) return t[2]; return '#c8d0da'; }
+// escalating streak payouts fired once per streak when you cross the count
+const COMBO_REWARDS = [
+  { at: 25,  label: '🔥 SPREE',        fx: () => { S.frenzyT = Math.max(S.frenzyT, 4);  comboCoins(0.6); } },
+  { at: 50,  label: '💥 RAMPAGE',      fx: () => { S.goldRushT = Math.max(S.goldRushT, 6); comboCoins(1.2); } },
+  { at: 100, label: '⚡ UNSTOPPABLE',  fx: () => { S.frenzyT = Math.max(S.frenzyT, 8);  S.gems += 2; S.stats.gemsFound = (S.stats.gemsFound || 0) + 2; comboCoins(2.5); } },
+  { at: 200, label: '☄️ GODLIKE',      fx: () => { S.goldRushT = Math.max(S.goldRushT, 10); S.gems += 5; S.stats.gemsFound = (S.stats.gemsFound || 0) + 5; comboCoins(5); } },
+];
+function comboCoins(m) { const g = Math.ceil(60 * m * helmVal(S.zones.length) * coinMul()); S.pallet += g; S.stats.earned += g; }
 
 // ---- hero XP + roguelite level-up upgrade draft --------------
 function pk(id) { return (S.perks && S.perks[id]) || 0; }
@@ -515,7 +523,7 @@ function reset() {
     quests: [], dailies: [], dailyDay: '', streak: 0, lastStreakDay: '',
     loginDay: 0, lastLoginDay: '', loginAvail: false, showLogin: false,
     showQuests: false, showStats: false, goldPulse: 0, hitStop: 0, amb: [],
-    combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0,
+    combo: 0, comboT: 0, comboFlash: 0, comboTierShown: 0, comboRewardMax: 0,
     ultCharge: 0, ultCasting: false,
     bestiary: {}, showBestiary: false,
     xp: 0, level: 1, cards: null, pendingLevels: 0, perks: {},
@@ -1115,6 +1123,18 @@ function registerCombo(e) {
     for (let i = 0; i < 14; i++) S.parts.push({ x: e.x, y: e.y, vx: (rnd() - 0.5) * 260, vy: -80 - rnd() * 180, t: 0, dur: 0.6, r: 3, color: comboColor(), g: 1 });
     sfx('gem', true); buzz(20);
   }
+  // escalating streak reward when you cross a milestone count (once per streak)
+  for (const r of COMBO_REWARDS) {
+    if (S.combo >= r.at && (S.comboRewardMax || 0) < r.at) {
+      S.comboRewardMax = r.at;
+      r.fx();
+      S.stats.combos = (S.stats.combos || 0) + 1;
+      S.toasts.push({ txt: r.label + '!  ' + S.combo + ' KILL STREAK', t: 0 });
+      S.comboFlash = 0.9; S.goldPulse = Math.max(S.goldPulse, 0.7); S.shake = Math.max(S.shake, 8);
+      for (let i = 0; i < 22; i++) { const a = i / 22 * 6.2831853; S.parts.push({ x: S.player.x, y: S.player.y - 20, vx: Math.cos(a) * 270, vy: Math.sin(a) * 240 - 100, t: 0, dur: 0.8, r: 3, color: comboColor(), g: 1 }); }
+      sfx('unlock', true); buzz([30, 20, 50]);
+    }
+  }
   // kill pitch rises with the streak (regular kills; boss/gold have their own sounds)
   if (!e.boss && !e.gold) sfx('kill', false, 1 + Math.min(1.4, S.combo * 0.02));
 }
@@ -1281,7 +1301,7 @@ function prestige() {
   // burn the old kingdom; keep gems, shrines, crowns, achievements, stats
   S.wallet = 0; S.pallet = 0;
   S.xp = 0; S.level = 1; S.perks = {}; S.cards = null; S.pendingLevels = 0;
-  S.combo = 0; S.comboTierShown = 0; S.frenzyT = 0; S.goldRushT = 0;
+  S.combo = 0; S.comboTierShown = 0; S.comboRewardMax = 0; S.frenzyT = 0; S.goldRushT = 0;
   S.up = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
   S.upPaid = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
   S.forge = null; S.forgePlate = { cost: 260, paid: 0, built: false };
@@ -1588,6 +1608,8 @@ const ACH = [
   { id: 'rankLg',  ic: '🌟', name: 'Living Legend',     d: 'Reach the rank of Legend',        c: () => heroRankIdx() >= 8 },
   { id: 'skin3',   ic: '👕', name: 'Dressed Up',        d: 'Own 3 hero outfits',              c: () => skinsOwnedCount() >= 3 },
   { id: 'skinAll', ic: '👑', name: 'Fashionista',       d: 'Collect every hero outfit',       c: () => skinsOwnedCount() >= SKINS.length },
+  { id: 'streak',  ic: '💥', name: 'On a Rampage',      d: 'Hit a 50 kill streak reward',     c: () => (S.stats.comboBest || 0) >= 50 },
+  { id: 'godlike', ic: '☄️', name: 'Godlike',           d: 'Hit a 200 kill streak',           c: () => (S.stats.comboBest || 0) >= 200 },
 ];
 function checkAch() {
   for (const a of ACH) {
@@ -1643,7 +1665,7 @@ function tick(dt) {
   // combo decays if you stop killing
   if (S.combo > 0) {
     S.comboT -= dt;
-    if (S.comboT <= 0) { S.combo = 0; S.comboTierShown = 0; }
+    if (S.comboT <= 0) { S.combo = 0; S.comboTierShown = 0; S.comboRewardMax = 0; }
   }
   if (S.comboFlash > 0) S.comboFlash -= dt;
   if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
@@ -4609,6 +4631,7 @@ window.KS = {
   RANKS, renown, heroRank, heroRankIdx, nextRank, checkRankUp,
   SETTINGS, setg, toggleSetting, drawSettings,
   SKINS, skinDef, skinOwned, activeSkin, skinsOwnedCount, buySkin, drawSkins,
+  COMBO_REWARDS, comboCoins,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
