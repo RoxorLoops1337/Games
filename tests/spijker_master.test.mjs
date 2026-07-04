@@ -130,7 +130,9 @@ let sawFight = false, gained = false;
 t.eq(S.phase, 'win', 'greedy pilot beats level 1');
 t.ok(sawFight, 'fought at least the boss crowd');
 t.ok(gained, 'good gates grew the crowd');
-t.ok(S.res && S.res.mult >= 1 && S.res.gain === S.res.mult * S.count, 'finish gain = count × mult');
+t.ok(S.res && S.res.mult >= 1 && S.res.gain === S.res.mult * S.res.start, 'finish gain = start count × mult');
+t.eq(S.count, 0, 'every nail was hammered into the plank');
+t.eq(S.planted, S.res.start, 'planted count matches the crowd that arrived');
 t.ok(S.coins >= S.res.gain, 'coins banked');
 t.eq(store.sm_lv, '2', 'next level persisted');
 t.eq(store.sm_coins, '' + S.coins, 'coins persisted');
@@ -170,8 +172,24 @@ for (const f of S.lvl.foes) f.alive = false;
 SM.startFinish();
 t.eq(S.res.mult, 5, '100 nails reach ×5');
 t.eq(S.res.gain, 500, 'gain 100×5');
-step(8);
+let plantEvOk = true, planted = 0;
+{
+  let el = 0;
+  while (S.phase === 'finish' && el < 12) {
+    SM.tick(DT); el += DT;
+    for (const ev of S.events) {
+      if (ev.t === 'plant') {
+        planted += ev.n;
+        if (ev.step < 0 || ev.step > S.res.step) plantEvOk = false;
+      }
+    }
+    S.events.length = 0;
+  }
+}
 t.eq(S.phase, 'win', 'stairs climb ends in win');
+t.eq(planted, 100, 'plant events cover every nail');
+t.ok(plantEvOk, 'plant events land on valid steps');
+t.eq(S.count, 0, 'crowd fully converted to planted nails');
 t.ok(SM.yAt(S.lvl.finishZ + 0.1) > 0, 'stairs have height');
 t.eq(SM.yAt(0), 0, 'flat bench before plank');
 
