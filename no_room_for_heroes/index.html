@@ -59,10 +59,15 @@
      until a tap) AND goes fullscreen. Sits below #rotate so portrait still nags. */
   #startgate{display:none;position:fixed;inset:0;z-index:500;cursor:pointer;
     background:radial-gradient(120% 90% at 50% 38%,#241247 0%,#0c0916 60%,#05040a 100%);
-    flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    gap:min(5vh,32px);
+    padding:calc(10px + env(safe-area-inset-top,0px)) 14px calc(10px + env(safe-area-inset-bottom,0px));}
   #startgate.show{display:flex;}
-  #startgate .sg-logo{width:min(620px,72vw);height:auto;image-rendering:pixelated;
-    filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));margin:0 0 6vh;animation:sgIn .8s ease-out both;}
+  /* Logo is capped by the screen HEIGHT too (a landscape phone is ~400px tall —
+     width alone let it blow past the screen and push the button off). The CSS
+     replaced-element constraint rules keep the aspect ratio when max-height bites. */
+  #startgate .sg-logo{width:min(620px,72vw);max-height:52vh;height:auto;image-rendering:pixelated;
+    filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));margin:0;animation:sgIn .8s ease-out both;}
   h1.sg-logo{font-family:var(--pix);font-size:min(40px,7vw);line-height:1.3;color:var(--gold);
     text-shadow:0 3px 0 #4a2e7a,0 0 18px rgba(185,133,255,.5);}
   #startgate .sg-btn{font-size:26px;padding:24px 60px;min-height:78px;letter-spacing:1px;border-radius:14px;
@@ -70,7 +75,12 @@
     box-shadow:0 5px 0 #5a0d12;animation:titlePulse 1.6s ease-in-out infinite;}
   #startgate .sg-btn:hover{background:#c8262f;}
   #startgate .sg-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #5a0d12;}
-  #startgate .sg-hint{margin-top:22px;font-size:14px;color:#cdbaff;opacity:.8;letter-spacing:.5px;}
+  #startgate .sg-hint{margin:0;font-size:14px;color:#cdbaff;opacity:.8;letter-spacing:.5px;}
+  /* short screens (landscape phones): trim the button + hint so everything fits */
+  @media (max-height:520px){
+    #startgate .sg-btn{font-size:19px;padding:13px 38px;min-height:0;border-radius:11px;}
+    #startgate .sg-hint{font-size:11.5px;}
+  }
   @keyframes sgIn{0%{opacity:0;transform:translateY(18px) scale(.96);}100%{opacity:1;transform:translateY(0) scale(1);}}
   /* ---- Support banner: a slim, non-intrusive ad strip pinned to the bottom. It
      reserves its own space (the game scales into the area ABOVE it via --adh), so
