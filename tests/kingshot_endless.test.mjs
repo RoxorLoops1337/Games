@@ -963,6 +963,33 @@ t.ok(KS.S.parts.length === partsBefore, 'hurtEnemy itself adds no crit sparks (t
 KS.draw(); // crit float + pop renders without throwing
 KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
 
+// ---- settings / accessibility toggles ----
+KS.start(); freezeSpawns();
+KS.S.settings = { shake: true, particles: true, dmgNums: true, weather: true };
+t.ok(KS.SETTINGS.length >= 4 && KS.setg('shake') === true, 'settings default to on');
+KS.toggleSetting('shake');
+t.ok(KS.setg('shake') === false && KS.S.settings.shake === false, 'toggling a setting flips it off');
+KS.toggleSetting('shake');
+t.ok(KS.setg('shake') === true, 'toggling again flips it back on');
+// damage-numbers off suppresses the enemy damage float
+KS.S.enemies.length = 0; KS.S.floats.length = 0;
+const zs2 = KS.S.zones[0]; KS.spawnEnemy(zs2); const se2 = KS.S.enemies[KS.S.enemies.length - 1]; se2.boss = false; se2.gold = false; se2.hp = se2.max = 1e9;
+KS.S.settings.dmgNums = false;
+KS.hurtEnemy(se2, 50, false);
+t.ok(KS.S.floats.length === 0, 'damage numbers off suppresses the damage float');
+KS.S.settings.dmgNums = true;
+KS.hurtEnemy(se2, 50, false);
+t.ok(KS.S.floats.length === 1, 'damage numbers on shows it again');
+// the game still renders with every effect toggled off (reduced-motion)
+KS.S.settings = { shake: false, particles: false, dmgNums: false, weather: false };
+drawSafe('draw() with all effects disabled');
+// settings persist through save/load; missing settings default on (old saves)
+KS.S.settings = { shake: false, particles: true, dmgNums: true, weather: false };
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.setg('shake') === false && KS.setg('weather') === false && KS.setg('particles') === true, 'settings persist through save/load');
+KS.S.settings = { shake: true, particles: true, dmgNums: true, weather: true };
+KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
