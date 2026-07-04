@@ -4395,6 +4395,18 @@ function drawCrownHall() {
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('Tap empty space to close', cx, vh - 16);
 }
+// live event markers for the minimap — so you never miss a timed event
+function mapPings() {
+  const out = [];
+  if (S.chest) out.push({ x: S.chest.x, y: S.chest.y, color: '#ffd94a', kind: 'chest' });
+  if (S.merchant) out.push({ x: S.merchant.x, y: S.merchant.y, color: '#f0a63c', kind: 'merchant' });
+  for (const e of S.enemies) {
+    if (e.hp <= 0) continue;
+    if (e.boss) out.push({ x: e.x, y: e.y, color: '#ff5a5a', kind: 'boss' });
+    else if (e.elite) out.push({ x: e.x, y: e.y, color: '#ffe07a', kind: 'elite' });
+  }
+  return out;
+}
 function drawMinimap() {
   // tiny map of the land grid in the top-right corner
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
@@ -4423,12 +4435,18 @@ function drawMinimap() {
   const nq = cellXY(nxt.cx, nxt.cy);
   ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
   rr(nq.x + 1, nq.y + 1, cs - 2, cs - 2, 3); ctx.stroke(); ctx.setLineDash([]);
-  // treasure chest ping
-  if (S.chest) {
-    const ccx = Math.floor(S.chest.x / CELL_W), ccy = Math.floor(S.chest.y / CELL_H);
-    const cq = cellXY(ccx, ccy);
-    ctx.fillStyle = Math.floor(S.t * 3) % 2 ? '#ffd94a' : '#fff8c0';
-    ctx.beginPath(); ctx.arc(cq.x + cs / 2, cq.y + cs / 2, 3, 0, 6.29); ctx.fill();
+  // live event pings (chest / merchant / boss / champion) with a pulsing ring
+  const blink = 0.55 + Math.sin(S.t * 6) * 0.45;
+  for (const pg of mapPings()) {
+    const gcx = Math.floor(pg.x / CELL_W + (pg.x < 0 ? -1e-9 : 0));
+    const gcy = Math.floor(pg.y / CELL_H + (pg.y < 0 ? -1e-9 : 0));
+    const gq = cellXY(gcx, gcy);
+    const gfx = (pg.x - gcx * CELL_W) / CELL_W, gfy = (pg.y - gcy * CELL_H) / CELL_H;
+    const px = gq.x + 1 + gfx * (cs - 2), py = gq.y + 1 + gfy * (cs - 2);
+    ctx.strokeStyle = pg.color; ctx.globalAlpha = blink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px, py, 3.2 + blink * 2.2, 0, 6.29); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.fillStyle = pg.color;
+    ctx.beginPath(); ctx.arc(px, py, 2.4, 0, 6.29); ctx.fill();
   }
   // player dot
   const pcx = Math.floor(S.player.x / CELL_W + (S.player.x < 0 ? -1e-9 : 0));
@@ -4631,7 +4649,7 @@ window.KS = {
   RANKS, renown, heroRank, heroRankIdx, nextRank, checkRankUp,
   SETTINGS, setg, toggleSetting, drawSettings,
   SKINS, skinDef, skinOwned, activeSkin, skinsOwnedCount, buySkin, drawSkins,
-  COMBO_REWARDS, comboCoins,
+  COMBO_REWARDS, comboCoins, mapPings,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
