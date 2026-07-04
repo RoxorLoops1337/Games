@@ -22,6 +22,8 @@
     display:none; }
   #bub:after { content:''; position:absolute; left:50%; bottom:-7px; transform:translateX(-50%);
     border:6px solid transparent; border-top-color:#dce8ff; border-bottom:0; }
+  #vin { position:fixed; inset:0; z-index:7; pointer-events:none; opacity:0; transition:opacity .35s;
+    background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(255,45,25,.55) 100%); }
   .pop { position:fixed; z-index:6; transform:translate(-50%,-50%); font-weight:900; font-size:26px;
     pointer-events:none; text-shadow:0 2px 6px rgba(0,0,0,.5); animation:popfly 1s ease-out forwards; }
   @keyframes popfly { 0%{opacity:0; margin-top:0; scale:.6} 15%{opacity:1; scale:1.15}
@@ -31,11 +33,15 @@
     color:#fff; text-align:center; padding:20px; }
   #ovTitle { font-size:min(11vw,52px); font-weight:900; letter-spacing:1px; margin:0;
     background:linear-gradient(180deg,#fff,#9db8ff); -webkit-background-clip:text; background-clip:text;
-    -webkit-text-fill-color:transparent; filter:drop-shadow(0 4px 14px rgba(60,110,255,.45)); }
+    -webkit-text-fill-color:transparent; filter:drop-shadow(0 4px 14px rgba(60,110,255,.45));
+    animation:floaty 2.4s ease-in-out infinite; }
+  @keyframes floaty { 0%,100%{transform:translateY(0) rotate(-.6deg)} 50%{transform:translateY(-8px) rotate(.6deg)} }
+  @keyframes btnpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.045)} }
   #ovSub { font-size:17px; color:#c7d4f5; max-width:340px; line-height:1.45; margin:0; white-space:pre-line; }
   #ovBtn { font-size:20px; font-weight:800; color:#fff; background:linear-gradient(180deg,#4f8bff,#2c5ae0);
     border:none; border-radius:16px; padding:15px 44px; cursor:pointer; letter-spacing:.5px;
-    box-shadow:0 6px 0 #1c3da0, 0 10px 24px rgba(0,0,40,.5); transition:transform .08s; }
+    box-shadow:0 6px 0 #1c3da0, 0 10px 24px rgba(0,0,40,.5); transition:transform .08s;
+    animation:btnpulse 1.7s ease-in-out infinite; }
   #ovBtn:active { transform:translateY(4px); box-shadow:0 2px 0 #1c3da0; }
   #ovHint { font-size:13px; color:#8fa3cf; margin:4px 0 0; }
 </style>
@@ -48,6 +54,7 @@
   <span class="pill">🪙 <b id="coins">0</b></span>
 </div>
 <div id="bub">5</div>
+<div id="vin"></div>
 <div id="ov">
   <h1 id="ovTitle">SPIJKER MASTER</h1>
   <p id="ovSub">Steer your nails. Pick the best gates.\nHammer them home for coins!</p>
@@ -78,6 +85,7 @@ const C = {
   FIGHT_TICK: 0.055,
   STEP_D: 2.2, STEP_H: 0.55,                       // finish stair size
   STEPS: [0, 10, 25, 50, 90, 150, 250, 400, 650, 1000], // count needed per ×mult
+  MILESTONES: [25, 50, 100, 250, 500, 1000],       // crowd sizes worth celebrating
 };
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -108,7 +116,7 @@ function genLevel(lv) {
   const r = rngf((lv * 2654435761 + 7) % 4294967296);
   const len = Math.min(900, 240 + lv * 28);
   const gates = [], hazards = [], foes = [];
-  let e = C.START, z = 34;
+  let e = C.START, ePerf = C.START, z = 34; // e: sloppy-player estimate, ePerf: perfect play
   while (z < len - 80) {
     const roll = r();
     if (roll < 0.52) {
@@ -123,6 +131,7 @@ function genLevel(lv) {
       gates.push({ z, side: gs, op: good, used: false });
       gates.push({ z, side: -gs, op: bad, used: false });
       e = Math.max(1, Math.round(applyOp(e, good) * 0.82)); // imperfect-player estimate
+      ePerf = Math.min(C.CAP, Math.round(applyOp(ePerf, good)));
       z += 30 + r() * 18;
     } else if (roll < 0.78 || e < 6 || z < 80) {
       // (a too-early or too-big rival crowd would be a guaranteed wipe,
@@ -132,18 +141,29 @@ function genLevel(lv) {
       else if (ht < 0.7) hazards.push({ k: 'spikes', z, x: (r() * 2 - 1) * 2.2, w: 2.6 });
       else hazards.push({ k: 'hammer', z, period: 1.5 + r() * 0.5, ph: r(), prev: 0 });
       e = Math.max(1, Math.round(e * 0.9));
+      ePerf = Math.max(1, Math.round(ePerf * 0.97)); // even aces clip a saw tooth now and then
       z += 26 + r() * 12;
     } else {
       const fc = Math.min(Math.round(e * 0.6), Math.max(2, Math.round(e * (0.3 + r() * 0.3))));
       foes.push({ z, x: (r() * 2 - 1) * 1.6, count: fc, alive: true, boss: false });
       e = Math.max(1, e - fc);
+      ePerf = Math.max(1, ePerf - fc);
       z += 30 + r() * 14;
     }
   }
   // boss crowd guards the plank
   const bc = Math.max(4, Math.round(e * (0.55 + r() * 0.25) + lv * 2));
   foes.push({ z: len - 45, x: 0, count: bc, alive: true, boss: true });
-  return { len, gates, hazards, foes, finishZ: len - 18 };
+  ePerf = Math.max(1, ePerf - bc);
+  // stair thresholds scale to THIS level: a near-perfect run tops out at ×10
+  const top = Math.max(15, Math.round(ePerf * 0.85));
+  const t1 = Math.max(3, Math.round(top * 0.05));
+  const ratio = Math.pow(top / t1, 1 / 8);
+  const steps = [0];
+  for (let i = 1; i < 10; i++) {
+    steps.push(Math.max(steps[i - 1] + 1, Math.round(t1 * Math.pow(ratio, i - 1))));
+  }
+  return { len, gates, hazards, foes, finishZ: len - 18, steps };
 }
 
 // sunflower formation: unit i -> lateral/forward offset from the leader
@@ -195,11 +215,11 @@ function pushEv(ev) {
   if (S.events.length > 300) S.events.splice(0, S.events.length - 300);
 }
 
-function killN(n, x, z, side) {
+function killN(n, x, z, side, src) {
   n = Math.min(n, S.count);
   if (n <= 0) return;
   S.count -= n;
-  pushEv({ t: 'kill', n, x, z, side: side || 'p' });
+  pushEv({ t: 'kill', n, x, z, side: side || 'p', src });
   if (S.count <= 0) doLose();
 }
 
@@ -215,6 +235,9 @@ function applyGate(g) {
   const before = S.count;
   S.count = clamp(Math.round(applyOp(S.count, g.op)), 0, C.CAP);
   pushEv({ t: 'gate', good: opGood(g.op), d: S.count - before, x: g.side * C.TRACK_W / 4, z: g.z });
+  let mile = 0;
+  for (const th of C.MILESTONES) if (before < th && S.count >= th) mile = th;
+  if (mile) pushEv({ t: 'milestone', v: mile });
   if (S.count <= 0) doLose();
 }
 
@@ -233,7 +256,7 @@ function sawX(h) { return Math.sin(S.time * h.sp + h.ph) * 2.5; }
 function hammerPhase(h) { return (S.time / h.period + h.ph) % 1; }
 
 function startFinish() {
-  const T = C.STEPS;
+  const T = S.lvl.steps || C.STEPS;
   let step = 0;
   while (step + 1 < T.length && S.count >= T[step + 1]) step++;
   const mult = step + 1;
@@ -283,7 +306,7 @@ function tick(dt) {
         let k = countIn((ux, uz) => Math.abs(uz - h.z) < 0.55 && Math.abs(ux - sx) < 1.0);
         // the blade nicks the crowd, it doesn't liquefy it: cap the per-tick bite
         if (k) k = Math.min(k, Math.max(1, Math.round(S.count * 0.03)));
-        if (k) killN(k, sx, h.z, 'p');
+        if (k) killN(k, sx, h.z, 'p', 'saw');
       } else if (h.k === 'spikes') {
         const k = countIn((ux, uz, uzp) => uzp < h.z && h.z <= uz && ux > h.x - h.w / 2 && ux < h.x + h.w / 2);
         if (k) killN(k, h.x, h.z, 'p');
@@ -433,6 +456,8 @@ function sfx(kind) {
     else if (kind === 'clash') { tone(150, 90, 0.25, 'sawtooth', 0.25, 0); tone(400, 200, 0.15, 'square', 0.15, 0); }
     else if (kind === 'slam') tone(90, 40, 0.3, 'sine', 0.4, 0);
     else if (kind === 'plant') { tone(620, 320, 0.05, 'square', 0.14, 0); tone(140, 90, 0.07, 'sine', 0.2, 0); }
+    else if (kind === 'milestone') [659, 784, 1046, 1318].forEach((f, i) => tone(f, f * 1.02, 0.09, 'triangle', 0.2, i * 0.055));
+    else if (kind === 'boss') { tone(110, 55, 0.5, 'sawtooth', 0.28, 0); tone(73, 48, 0.65, 'square', 0.22, 0.05); }
     else if (kind === 'start') { tone(440, 660, 0.1, 'triangle', 0.2, 0); tone(660, 880, 0.12, 'triangle', 0.2, 0.1); }
     else if (kind === 'win') [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.16, 'triangle', 0.22, i * 0.11));
     else if (kind === 'lose') [330, 262, 196, 131].forEach((f, i) => tone(f, f * 0.9, 0.2, 'sawtooth', 0.18, i * 0.14));
@@ -595,22 +620,42 @@ if (!HEADLESS) (function render() {
     plantMesh.instanceMatrix.needsUpdate = true;
   }
 
-  // the giant golden mallet that hammers the crowd home on the plank
+  // the giant golden mallet that hammers the crowd home on the plank.
+  // Pivot sits at the "hand": handle reaches out along -x, head at the far
+  // end with its striking face down — rotating the group about z swings the
+  // head through a real hammer arc onto the crowd.
   const gHammer = new THREE.Group();
   {
     const gold = new THREE.MeshPhongMaterial({ color: 0xffc94d, shininess: 80, specular: 0xfff2c0 });
     const wood = new THREE.MeshLambertMaterial({ color: 0x9a6b3d });
-    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.8, 14), gold);
-    head.rotation.z = Math.PI / 2;
-    head.position.y = 0.55;
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 2.6, 8), wood);
+    handle.rotation.z = Math.PI / 2;
+    handle.position.x = -1.3;
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 1.15, 14), gold);
+    head.position.x = -2.7;
     head.castShadow = true;
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 2.6, 8), wood);
-    handle.position.y = 2.35;
-    gHammer.add(head); gHammer.add(handle);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.18, 14), wood);
+    band.position.x = -2.7;
+    gHammer.add(handle); gHammer.add(head); gHammer.add(band);
     gHammer.visible = false;
     scene.add(gHammer);
   }
+  const HAM_IMP = 0.3, HAM_UP = -1.05; // rotation.z: + swings down onto the crowd, - cocks back
+  let hamPrevTh = 0, finalBoomFired = false;
   let shake = 0, finalBoom = false;
+
+  // --- juice state ---
+  let tScale = 1, fovKick = 0, bossWarned = false;
+  const spawnAt = new Float32Array(C.VIS); // pop-in time per crowd instance
+  let lastN = 0, lastBub = -1, bubPopT = -9, bubRedT = -9, dustAcc = 0, confAcc = 0;
+  const MILE_TXT = { 25: 'NICE CROWD!', 50: 'BIG CROWD!', 100: 'MEGA CROWD!',
+    250: 'NAIL ARMY!', 500: 'UNSTOPPABLE!', 1000: 'SPIJKER LEGION!' };
+  function flashVin(a) {
+    const v = $('vin');
+    v.style.opacity = a;
+    if (flashVin.t) clearTimeout(flashVin.t);
+    flashVin.t = setTimeout(() => { v.style.opacity = 0; }, 100);
+  }
 
   // particles for kills / gains / confetti
   const P_MAX = 420;
@@ -621,13 +666,21 @@ if (!HEADLESS) (function render() {
   parts.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(P_MAX * 3), 3);
   scene.add(parts);
   const pPool = [];
-  function burst(x, y, z, n, col) {
+  function burst(x, y, z, n, col, pow) {
+    pow = pow || 1;
     for (let i = 0; i < n && pPool.length < P_MAX; i++) {
       pPool.push({
         x: x + (Math.random() - 0.5) * 0.8, y: y + Math.random() * 0.6, z: z + (Math.random() - 0.5) * 0.8,
-        vx: (Math.random() - 0.5) * 4, vy: 2 + Math.random() * 4, vz: (Math.random() - 0.5) * 4,
-        life: 0.6 + Math.random() * 0.5, col,
+        vx: (Math.random() - 0.5) * 4 * pow, vy: (2 + Math.random() * 4) * pow, vz: (Math.random() - 0.5) * 4 * pow,
+        life: 0.6 + Math.random() * 0.5, col, grav: 12,
       });
+    }
+  }
+  function ring(x, y, z, col, spd) { // flat expanding ring, for celebrations
+    for (let i = 0; i < 16 && pPool.length < P_MAX; i++) {
+      const a = i / 16 * Math.PI * 2;
+      pPool.push({ x, y, z, vx: Math.cos(a) * (spd || 5.5), vy: 0.8, vz: Math.sin(a) * (spd || 5.5),
+        life: 0.55, col, grav: 2 });
     }
   }
 
@@ -662,6 +715,8 @@ if (!HEADLESS) (function render() {
     }
     dyn.saws = []; dyn.hammers = []; dyn.foeLabels = []; dyn.gatePanels = [];
     sinks = []; plantN = 0; plantMesh.count = 0; shake = 0; finalBoom = false;
+    bossWarned = false; lastN = 0; lastBub = -1; tScale = 1; fovKick = 0;
+    finalBoomFired = false; hamPrevTh = 0;
     lvlGroup = new THREE.Group();
     const L = S.lvl;
 
@@ -838,43 +893,64 @@ if (!HEADLESS) (function render() {
     for (const ev of S.events) {
       if (ev.t === 'kill') {
         if (ev.side === 'p') {
-          // our nails get pounded into the wood where they stood
-          addSinks(Math.min(ev.n, 5), ev.x, ev.z, tNow, SM.yAt(ev.z));
-          burst(ev.x, 0.4, ev.z, Math.min(8, 2 + ev.n), 0xcfa878); // wood dust
+          flashVin(Math.min(0.45, 0.15 + ev.n * 0.04));
+          if (ev.src === 'saw') {
+            // saw victims get launched in a shower of sparks, not hammered in
+            burst(ev.x, 0.7, ev.z, 8, 0xffa030, 1.5);
+            burst(ev.x, 0.6, ev.z, Math.min(10, 2 + ev.n), 0x9fc2ff, 1.6);
+          } else {
+            addSinks(Math.min(ev.n, 5), ev.x, ev.z, tNow, SM.yAt(ev.z));
+            burst(ev.x, 0.4, ev.z, Math.min(8, 2 + ev.n), 0xcfa878); // wood dust
+          }
         } else {
           burst(ev.x, 0.6, ev.z, Math.min(14, 3 + ev.n), 0xff6a55);
         }
         sfx('kill');
+      } else if (ev.t === 'milestone') {
+        popup(MILE_TXT[ev.v] || ev.v + '!', '#ffd76a');
+        ring(S.x, 1.1, S.z, 0xffd76a, 7);
+        ring(S.x, 0.5, S.z, 0xfff2c0, 5);
+        fovKick = 7;
+        sfx('milestone');
+      } else if (ev.t === 'won_fight') {
+        popup('CROWD CRUSHED!', '#5cff9b');
+        ring(S.x, 0.9, S.z + 2, 0x5cff9b, 6);
+        sfx('good');
       } else if (ev.t === 'plant') {
         addPlanted(ev);
         burst(ev.x, (ev.step + 1) * C.STEP_H + 0.4, ev.z, Math.min(8, 2 + ev.n), 0xffd76a);
         sfx('plant');
       } else if (ev.t === 'slam_final') {
-        shake = 0.5; finalBoom = true;
-        burst(S.x, SM.yAt(S.z) + 0.6, S.z, 46, 0xffd76a);
-        sfx('slam');
+        finalBoom = true; // the boom itself fires when the hammer actually lands
       } else if (ev.t === 'gate') {
         popup((ev.d >= 0 ? '+' : '') + ev.d, ev.good ? '#5cff9b' : '#ff7a6a');
         burst(ev.x, 1.2, ev.z, 12, ev.good ? 0x35d97b : 0xff5d5d);
+        if (ev.good) { fovKick = 5; ring(ev.x, 1.0, ev.z, 0x5cff9b, 6); }
+        else { flashVin(0.3); fovKick = -3; }
         sfx(ev.good ? 'good' : 'bad');
-      } else if (ev.t === 'clash') sfx('clash');
+      } else if (ev.t === 'clash') { tScale = 0.3; fovKick = -5; shake = Math.max(shake, 0.14); sfx('clash'); }
       else if (ev.t === 'slam') { shake = Math.max(shake, 0.22); sfx('slam'); }
       else if (ev.t === 'win') { sfx('win'); for (let i = 0; i < 8; i++) burst(S.x + (Math.random() - 0.5) * 4, 1 + Math.random() * 2, S.z + Math.random() * 3, 10, [0xffd76a, 0x5cff9b, 0x6ab8ff, 0xff8ad0][i % 4]); }
-      else if (ev.t === 'lose') sfx('lose');
-      else if (ev.t === 'won_fight') sfx('good');
+      else if (ev.t === 'lose') { flashVin(0.75); tScale = 0.35; shake = Math.max(shake, 0.35); sfx('lose'); }
     }
     S.events.length = 0;
   }
 
   // --- frame loop ---
   const m4 = M4(), quat = new THREE.Quaternion(), sc1 = new THREE.Vector3(1, 1, 1),
-    posV = new THREE.Vector3(), eul = new THREE.Euler(), colV = new THREE.Color();
+    posV = new THREE.Vector3(), eul = new THREE.Euler(), colV = new THREE.Color(),
+    scV = new THREE.Vector3();
   let lastT = 0;
+  // ease-out-back: 0 -> overshoot ~1.1 -> 1
+  const backEase = (p) => p >= 1 ? 1 : p <= 0 ? 0.001 :
+    1 + 2.7 * Math.pow(p - 1, 3) + 1.7 * Math.pow(p - 1, 2);
 
   function updateCrowd(t) {
     const n = Math.min(S.count, C.VIS);
     const active = S.phase === 'run' || S.phase === 'fight' || S.phase === 'finish';
     const squeeze = S.phase === 'finish' ? 0.55 : 1; // huddle up on the stairs
+    if (n > lastN) for (let i = lastN; i < n; i++) spawnAt[i] = t; // newcomers pop in
+    lastN = n;
     for (let i = 0; i < n; i++) {
       const o = fOff(i);
       const ux = clamp(S.x + o[0] * squeeze, -C.XMAX, C.XMAX);
@@ -883,7 +959,8 @@ if (!HEADLESS) (function render() {
       posV.set(ux, yAt(uz) + bob, uz);
       eul.set(active ? 0.14 : 0, Math.sin(i * 2.4) * 0.25, Math.sin(t * 9 + i * 1.7) * 0.06);
       quat.setFromEuler(eul);
-      m4.compose(posV, quat, sc1);
+      const sp = backEase((t - spawnAt[i]) / 0.32);
+      m4.compose(posV, quat, sp === 1 ? sc1 : scV.set(sp, sp, sp));
       crowd.setMatrixAt(i, m4);
     }
     crowd.count = n;
@@ -930,7 +1007,7 @@ if (!HEADLESS) (function render() {
       const p = pPool[k];
       p.life -= dt;
       if (p.life <= 0) { pPool.splice(k, 1); continue; }
-      p.vy -= 12 * dt;
+      p.vy -= (p.grav || 12) * dt;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       if (p.y < 0.05) { p.y = 0.05; p.vy *= -0.3; }
       posV.set(p.x, p.y, p.z);
@@ -950,8 +1027,13 @@ if (!HEADLESS) (function render() {
   function frame(tms) {
     requestAnimationFrame(frame);
     const t = tms / 1000;
-    let dt = Math.min(0.033, t - lastT || 0.016);
+    const rawDt = Math.min(0.033, t - lastT || 0.016);
     lastT = t;
+    let dt = rawDt * tScale; // slow-mo on clashes and defeat
+    tScale += (1 - tScale) * Math.min(1, rawDt * 3.2);
+    fovKick *= Math.max(0, 1 - 3.5 * rawDt);
+    camera.fov = 55 + fovKick;
+    camera.updateProjectionMatrix();
 
     if (S && (S.phase === 'run' || S.phase === 'fight' || S.phase === 'finish')) {
       if (keys.ArrowLeft || keys.a) S.tx = clamp(S.tx + 8 * dt, -C.XMAX, C.XMAX); // +x is screen-left
@@ -981,13 +1063,33 @@ if (!HEADLESS) (function render() {
       gHammer.visible = S.phase === 'finish' || (S.phase === 'win' && finalBoom);
       if (gHammer.visible) {
         const gy = yAt(S.z);
-        const bounce = S.slamT > 0
-          ? Math.max(0, 1.9 - S.slamT * 7)          // the last, big slam comes all the way down
-          : 0.25 + Math.abs(Math.sin(t * 11)) * 1.35; // rapid tack-tack-tack while planting
-        gHammer.position.set(S.x, gy + bounce, S.z + 0.7);
-        gHammer.rotation.z = Math.sin(t * 11) * 0.06;
-        const gs = S.slamT > 0 ? 1.35 : 1;
+        let th;
+        if (S.slamT > 0) {
+          // the last nail gets one big wind-up... and BOOM
+          const p = Math.min(1, S.slamT * 2.4);
+          th = -1.5 + (HAM_IMP + 1.5) * p * p * p;
+          if (p >= 1 && !finalBoomFired) {
+            finalBoomFired = true;
+            shake = Math.max(shake, 0.5);
+            burst(S.x, gy + 0.6, S.z, 40, 0xffd76a, 1.4);
+            ring(S.x, gy + 0.4, S.z, 0xfff2c0, 8);
+            sfx('slam');
+          }
+        } else {
+          // tack-tack-tack: slow raise, fast snap down, brief rest on the nail
+          const p = (t * 1.9) % 1;
+          th = p < 0.55 ? HAM_IMP + (HAM_UP - HAM_IMP) * (1 - Math.pow(1 - p / 0.55, 2))
+             : p < 0.72 ? HAM_UP + (HAM_IMP - HAM_UP) * Math.pow((p - 0.55) / 0.17, 3)
+             : HAM_IMP;
+          if (hamPrevTh < HAM_IMP - 0.01 && th >= HAM_IMP - 0.001 && p >= 0.7) {
+            shake = Math.max(shake, 0.05); // little thud on every strike
+          }
+          hamPrevTh = th;
+        }
+        gHammer.rotation.z = th;
+        const gs = S.slamT > 0 ? 1.3 : 1;
         gHammer.scale.set(gs, gs, gs);
+        gHammer.position.set(S.x + 2.7 * gs, gy + 1.35 * gs, S.z + 0.7);
       }
 
       for (const s of dyn.saws) {
@@ -1002,6 +1104,36 @@ if (!HEADLESS) (function render() {
       for (const gp of dyn.gatePanels) {
         gp.panel.visible = !gp.g.used;
         gp.sign.visible = !gp.g.used || gp.g.z > S.z;
+        if (gp.sign.visible && Math.abs(gp.g.z - S.z) < 60) {
+          gp.sign.position.y = 1.55 + Math.sin(t * 2.2 + gp.g.z) * 0.08; // gentle bob
+        }
+      }
+
+      // dust kicked up by all those little running feet
+      if (S.phase === 'run') {
+        dustAcc += dt;
+        while (dustAcc > 0.13) {
+          dustAcc -= 0.13;
+          burst(S.x + (Math.random() - 0.5) * 2.5, 0.05, S.z - 1.6, 1, 0xb9915e, 0.5);
+        }
+        // dramatic heads-up when the boss mob comes into view
+        const bossF = S.lvl.foes[S.lvl.foes.length - 1];
+        if (!bossWarned && bossF.alive && bossF.z - S.z < 42) {
+          bossWarned = true;
+          popup('🔨 BOSS MOB AHEAD!', '#ffd76a');
+          shake = Math.max(shake, 0.12);
+          sfx('boss');
+        }
+      }
+
+      // confetti rain while basking in victory
+      if (S.phase === 'win') {
+        confAcc += rawDt;
+        if (confAcc > 0.4) {
+          confAcc = 0;
+          burst(S.x + (Math.random() - 0.5) * 7, 3.5 + Math.random() * 2, S.z + (Math.random() - 0.5) * 6,
+            8, [0xffd76a, 0x5cff9b, 0x6ab8ff, 0xff8ad0][(Math.random() * 4) | 0], 0.8);
+        }
       }
 
       // camera follows, rising with crowd size and the finish stairs
@@ -1025,6 +1157,15 @@ if (!HEADLESS) (function render() {
         bub.style.left = ((posV.x * 0.5 + 0.5) * window.innerWidth) + 'px';
         bub.style.top = ((-posV.y * 0.5 + 0.5) * window.innerHeight) + 'px';
         bub.textContent = '' + S.count;
+        if (S.count !== lastBub) { // punch the counter on every change
+          bubPopT = t;
+          if (lastBub >= 0 && S.count < lastBub) bubRedT = t;
+          lastBub = S.count;
+        }
+        const bs = 1 + 0.4 * Math.max(0, 1 - (t - bubPopT) * 5);
+        bub.style.transform = 'translate(-50%,-100%) scale(' + bs.toFixed(3) + ')';
+        bub.style.background = S.phase === 'finish' ? '#d99a1f' // gold: shrinking is winning here
+          : (t - bubRedT < 0.28) ? '#e0402c' : '#2f6bff';
       }
     }
 
