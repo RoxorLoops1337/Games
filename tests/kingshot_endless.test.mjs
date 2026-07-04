@@ -1064,6 +1064,33 @@ KS.draw(); // minimap with pings renders without throwing
 KS.S.chest = null; KS.S.merchant = null; KS.S.enemies.length = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- pet active ability ----
+KS.start();
+KS.S.pets = {}; KS.S.activePet = null; KS.S.petCd = 0; KS.S.stats.petAbil = 0;
+t.ok(KS.petAbilityReady() === false && KS.petAbility() === false, 'no pet ability without an active pet');
+// a coin pet showers coins and goes on cooldown
+KS.S.pets = { piggy: 1 }; KS.S.activePet = 'piggy'; // piggy = coin kind
+KS.S.pallet = 0;
+t.ok(KS.petAbilityReady() === true, 'with an active pet the ability is ready');
+t.ok(KS.petAbility() === true, 'the pet ability fires');
+t.ok(KS.S.pallet > 0 && KS.S.stats.petAbil === 1, 'the coin pet ability showers coins and is counted');
+t.ok(KS.S.petCd > 0 && KS.petAbilityReady() === false, 'the ability goes on cooldown');
+t.ok(KS.petAbility() === false, 'it cannot fire again while on cooldown');
+// cooldown ticks down over time
+KS.S.petCd = 0.5; freezeSpawns();
+for (let i = 0; i < 60; i++) KS.tick(1 / 60);
+t.ok(KS.petAbilityReady() === true, 'the cooldown recovers over time');
+// an hp pet heals instead
+KS.S.pets = { boar: 1 }; KS.S.activePet = 'boar'; KS.S.petCd = 0; // boar = hp
+KS.S.player.maxHp = KS.pMaxHp(); KS.S.player.hp = 1;
+KS.petAbility();
+t.ok(KS.S.player.hp === KS.S.player.maxHp, 'an HP pet ability full-heals the hero');
+KS.checkAch();
+t.ok(KS.S.ach.petpow === true, 'using a pet ability unlocks Best Friend');
+KS.S.pets = {}; KS.S.activePet = null; KS.S.petCd = 0; KS.S.stats.petAbil = 0;
+KS.S.pallet = 0; KS.S.frenzyT = 0; KS.S.level = 1; KS.S.xp = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
