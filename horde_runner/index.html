@@ -159,12 +159,15 @@ function buildLevel(lvl) {
   for (let z = 620; z < S.levelLen - 500; z += 560 + rnd() * 160) {
     S.gates.push(makeGatePair(rnd, z, diff, S.gates.length === 0));
   }
-  // monster hordes between the gates
-  for (let z = 420; z < S.levelLen - 320; z += 300 + rnd() * 260) {
+  // monster hordes between the gates — never before the first gate (the
+  // opening stretch is for aiming at that first all-good choice), and no
+  // brutes until the army has had a couple of gates to grow
+  const firstGateZ = S.gates.length ? S.gates[0].z : 620;
+  for (let z = firstGateZ + 280; z < S.levelLen - 320; z += 300 + rnd() * 260) {
     const horde = 2 + Math.floor(rnd() * 3) + Math.floor(diff);
     const cxx = (rnd() * 2 - 1) * (LANE - 50);
     for (let i = 0; i < horde; i++) {
-      const brute = rnd() < 0.14 + 0.02 * lvl;
+      const brute = rnd() < 0.14 + 0.02 * lvl && z > firstGateZ + 900;
       S.mon.push({
         z: z + rnd() * 120, x: clamp(cxx + (rnd() * 2 - 1) * 70, -LANE + 24, LANE - 24),
         hp: brute ? 26 * diff : 7 * diff, max: brute ? 26 * diff : 7 * diff,

@@ -80,13 +80,18 @@ t.ok(S.mon.length >= 5, 'level has monster hordes');
 t.ok(S.barrels.length >= 2, 'level has barrels');
 drawSafe('draw() during run');
 
-// every gate pair offers a positive choice; the first is all-good
+// every gate pair offers a positive choice; the first is all-good;
+// the opening stretch is monster-free and brutes wait until mid-level
 for (let lvl = 1; lvl <= 12; lvl++) {
   HR.buildLevel(lvl);
   t.ok(S.gates.every(g => HR.gateIsGood(g.L) || HR.gateIsGood(g.R)),
     'level ' + lvl + ': every gate pair has at least one good side');
   t.ok(HR.gateIsGood(S.gates[0].L) && HR.gateIsGood(S.gates[0].R),
     'level ' + lvl + ': first gate pair is all-good');
+  const g0 = S.gates[0].z;
+  t.ok(S.mon.every(m => m.z > g0), 'level ' + lvl + ': no monsters before the first gate');
+  t.ok(S.mon.every(m => !m.brute || m.z > g0 + 900), 'level ' + lvl + ': no brutes in the early stretch');
+  t.ok(S.mon.length >= 5, 'level ' + lvl + ': still has real hordes');
 }
 HR.startLevel();
 
