@@ -1190,6 +1190,48 @@ KS.start();
 KS.S.pop = []; KS.S.houses = 0; KS.S.wallet = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- smeltery upgrades ----
+KS.start(); freezeSpawns();
+t.ok(KS.S.forgePlate.built && !!KS.S.forge, 'the smelter exists from earlier tests');
+KS.S.forgeLvl = 0; KS.S.forgeUpPlate = { cost: KS.forgeUpCost(), paid: 0, built: false };
+const q0 = KS.forgeQ(), t0 = KS.trayMax(), c0 = KS.forgeUpCost();
+KS.S.forgeLvl = 2;
+t.ok(KS.forgeQ() === q0 + 4 && KS.trayMax() === t0 + 4, 'each smelter level adds queue + tray slots');
+t.ok(Math.abs(KS.forgeSpeed() - 1.5) < 1e-9, 'each level smelts +25% faster');
+t.ok(KS.forgeUpCost() > c0 * 5, 'upgrade cost climbs steeply per level');
+// pour coins at the ⬆ pad to level up
+KS.S.forgeLvl = 0; KS.S.forgeUpPlate = { cost: KS.forgeUpCost(), paid: 0, built: false };
+KS.S.wallet = KS.forgeUpCost() + 500;
+const pF = KS.S.player; // re-grab: earlier save/load cycles replaced the player object
+pF.x = KS.FUP.x; pF.y = KS.FUP.y;
+step(KS.S.forgeUpPlate.cost / C.BUILD_RATE + 1.5);
+t.ok(KS.S.forgeLvl === 1, 'pouring coins at the pad upgrades the smeltery');
+t.ok(KS.S.forgeUpPlate.cost === KS.forgeUpCost() && KS.S.forgeUpPlate.paid <= 500, 'the pad re-arms at the next (pricier) level');
+pF.x = C.SPAWN.x; pF.y = C.SPAWN.y;
+// faster smelting is real: at LV3 a shield smelts in FORGE_T / 1.5
+KS.S.forgeLvl = 2; KS.S.forge.queue = [1]; KS.S.forge.tray.length = 0; KS.S.forge.smeltT = 0;
+step(C.FORGE_T / 1.5 + 0.15);
+t.ok(KS.S.forge.tray.length === 1, 'an upgraded smelter turns shields into bars faster');
+// level persists through save/load
+KS.S.forgeLvl = 3;
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.forgeLvl === 3, 'smelter level persists through save/load');
+KS.S.forgeLvl = 0; KS.S.forgeUpPlate = { cost: KS.forgeUpCost(), paid: 0, built: false };
+
+// ---- smeltery workers haul finished bars to the shop ----
+KS.start(); freezeSpawns();
+KS.S.pop = [KS.mkInhab('forge', 0)];
+const fwk = KS.S.pop[0];
+KS.S.forge.queue.length = 0; KS.S.forge.tray = [2, 2, 2]; KS.S.forge.smeltT = 0;
+KS.S.pallet = 0; const sold0 = KS.S.stats.sold;
+fwk.x = C.TRAY.x; fwk.y = C.TRAY.y; fwk.carry = [];
+KS.simInhabitants(1 / 60);
+t.ok(fwk.carry.length === 3 && KS.S.forge.tray.length === 0, 'a smeltery worker sweeps the bars off the tray');
+step(6); // walk to the sell stand and unload
+t.ok(fwk.carry.length === 0 && KS.S.pallet > 0 && KS.S.stats.sold === sold0 + 3, 'the worker carries the bars to the shop and sells them');
+KS.S.pop = []; KS.S.pallet = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- endless land: cost climbs super-exponentially ----
 t.ok(KS.unlockCost(2) > KS.unlockCost(1) && KS.unlockCost(10) / KS.unlockCost(9) > KS.unlockCost(3) / KS.unlockCost(2), 'each land block costs disproportionately more than the last (super-exponential)');
 
