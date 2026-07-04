@@ -343,9 +343,10 @@ KS.S.items.length = 0; KS.S.enemies.length = 0;
 // ---- enemy archetypes: every foe family behaves differently ----
 t.ok(KS.foeArch(1) === 'melee' && KS.foeArch(2) === 'fast' && KS.foeArch(3) === 'tank' && KS.foeArch(4) === 'spitter', 'foe families map to distinct archetypes');
 KS.S.enemies.length = 0; freezeSpawns();
-KS.spawnEnemy(z2); // Raider land → fast
-const fastFoe = KS.S.enemies[0];
-t.ok(fastFoe.arch === 'fast' && fastFoe.max < KS.foeHp(2), 'fast foes trade hp for speed');
+// spawn until we get a non-gold foe (gold doubles HP — irrelevant to the archetype test)
+let fastFoe = null;
+for (let i = 0; i < 40 && !fastFoe; i++) { KS.S.enemies.length = 0; KS.spawnEnemy(z2); if (!KS.S.enemies[0].gold) fastFoe = KS.S.enemies[0]; }
+t.ok(fastFoe && fastFoe.arch === 'fast' && fastFoe.max < KS.foeHp(2), 'fast foes trade hp for speed');
 KS.S.enemies.length = 0; KS.S.eshots.length = 0;
 KS.spawnEnemy(z1);
 const spit = KS.S.enemies[0];
@@ -424,6 +425,8 @@ t.ok(KS.zoneAt(p.x, p.y) === KS.S.zones[KS.S.zones.length - 1], 'warped from hub
 p.x = C.SPAWN.x; p.y = C.SPAWN.y;
 
 // ---- HP: raw damage applies (neglect VITALITY and you CAN be one-shot) ----
+// clear any gear/pet/perk that a stray boss/champion kill may have granted, so max-HP math is clean
+KS.S.gear = { weapon: null, armor: null, trinket: null }; KS.S.pets = {}; KS.S.activePet = null; KS.S.perks = {}; KS.S.cperks = {};
 KS.S.up.hp = 0; KS.S.crowns = 0; p.maxHp = KS.pMaxHp(); p.hp = p.maxHp; p.invuln = 0;
 const bigHit = p.maxHp + 50; // exceeds a fresh HP pool
 KS.hurtPlayer(bigHit);
