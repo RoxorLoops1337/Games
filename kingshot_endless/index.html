@@ -405,6 +405,18 @@ const STARS = (() => {
   return a;
 })();
 
+// ---- weather (cosmetic, fully deterministic — no rng) -------
+const WEATHER_LEN = 68; // seconds per weather window
+const WEATHER_SEQ = ['clear', 'rain', 'clear', 'snow', 'clear', 'fog', 'clear', 'rain', 'snow'];
+function weatherBucket() { const span = WEATHER_LEN * WEATHER_SEQ.length; return Math.floor((((S.t % span) + span) % span) / WEATHER_LEN); }
+function weatherType() { return WEATHER_SEQ[weatherBucket() % WEATHER_SEQ.length]; }
+// fixed precipitation field on its own local rng — animated purely from S.t
+const WEATHER_P = (() => {
+  let s = 9876543; const r = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const a = []; for (let i = 0; i < 90; i++) a.push({ x: r(), y: r(), sp: 0.6 + r() * 0.8, sz: 1 + r() * 1.6, ph: r() * 6.28 });
+  return a;
+})();
+
 // ---- zone factory -------------------------------------------
 // Every zone: archer tower, porter, horde gate (repeatable),
 // tower training (repeatable), +porter (repeatable), unlock.
@@ -4044,7 +4056,39 @@ function draw() {
   drawWorld();
   ctx.restore();
   drawSky();
+  drawWeather();
   drawHud();
+}
+function drawWeather() {
+  if (!S.started) return;
+  const w = weatherType();
+  if (w === 'clear') return;
+  // fade precipitation in/out at the edges of each window for smooth turns
+  const local = ((S.t % WEATHER_LEN) + WEATHER_LEN) % WEATHER_LEN / WEATHER_LEN;
+  const fade = Math.min(1, Math.min(local, 1 - local) * 5);
+  const wrap = (v, m) => ((v % m) + m) % m;
+  if (w === 'rain') {
+    ctx.strokeStyle = 'rgba(150,180,225,' + (0.34 * fade) + ')'; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (const p of WEATHER_P) {
+      const x = wrap(p.x * vw + S.t * 140, vw), y = wrap(p.y * vh + S.t * p.sp * 900, vh);
+      ctx.moveTo(x, y); ctx.lineTo(x - 6, y + 16);
+    }
+    ctx.stroke();
+  } else if (w === 'snow') {
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.72 * fade) + ')';
+    for (const p of WEATHER_P) {
+      const y = wrap(p.y * vh + S.t * p.sp * 110, vh), x = wrap(p.x * vw + Math.sin(S.t * 0.6 + p.ph) * 16, vw);
+      ctx.beginPath(); ctx.arc(x, y, p.sz, 0, 6.29); ctx.fill();
+    }
+  } else if (w === 'fog') {
+    for (let i = 0; i < 5; i++) {
+      const y = vh * (0.16 + i * 0.16), off = wrap(S.t * 18 * (i % 2 ? 1 : -1), vw + 240) - 120;
+      ctx.fillStyle = 'rgba(205,210,222,' + (0.05 * fade) + ')';
+      ctx.fillRect(0, y + Math.sin(S.t * 0.4 + i) * 10, vw, 64);
+      ctx.fillRect(off, y - 20, 180, 100);
+    }
+  }
 }
 function drawSky() {
   if (!S.started) return;
@@ -4174,6 +4218,7 @@ window.KS = {
   DEALS, spawnMerchant, buyDeal, merchantLeaves, drawShop,
   DAY_LEN, dayPhase, daylight, skyName, drawSky,
   ULT_NEED, ultCharge, ultFrac, ultReady, castUlt,
+  WEATHER_LEN, WEATHER_SEQ, weatherType, weatherBucket, drawWeather,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
