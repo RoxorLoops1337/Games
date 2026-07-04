@@ -779,6 +779,33 @@ KS.start();
 for (let ph = 0; ph < 1; ph += 0.1) { KS.S.t = ph * KS.DAY_LEN; drawSafe('draw() sky phase ' + ph.toFixed(1)); }
 KS.S.t = tSaved;
 
+// ---- hero ultimate: Arrow Storm ----
+KS.start(); freezeSpawns();
+KS.S.enemies.length = 0; KS.S.ultCharge = 0; KS.S.stats.ults = 0; KS.S.perks = {};
+t.ok(KS.ultReady() === false && KS.ultFrac() === 0, 'ultimate starts empty');
+const zu = KS.S.zones[0];
+for (let i = 0; i < 5; i++) { KS.spawnEnemy(zu); const e = KS.S.enemies[KS.S.enemies.length - 1]; e.gold = false; e.boss = false; KS.hurtEnemy(e, 1e9); }
+t.ok(KS.ultCharge() === 5, 'each kill adds a charge to the ultimate');
+t.ok(KS.castUlt() === false, 'the ultimate cannot fire until the meter is full');
+KS.S.ultCharge = KS.ULT_NEED;
+KS.S.enemies.length = 0;
+for (let i = 0; i < 6; i++) { KS.spawnEnemy(zu); const e = KS.S.enemies[KS.S.enemies.length - 1]; e.gold = false; e.boss = false; e.hp = e.max = 5; e.x = zu.pen.x0 + 200 + i * 20; e.y = 500; }
+const killsBeforeUlt = KS.S.stats.kills;
+t.ok(KS.ultReady() === true, 'a full meter is ready');
+t.ok(KS.castUlt() === true, 'the Arrow Storm fires when full');
+t.ok(KS.S.enemies.every(e => e.hp <= 0), 'the Arrow Storm damages every enemy on screen');
+t.ok(KS.S.stats.kills >= killsBeforeUlt + 6, 'storm kills score normally (loot + combo payoff)');
+t.ok(KS.ultCharge() === 0, 'casting drains the meter');
+t.ok(KS.S.frenzyT > 0, 'the storm grants a brief frenzy');
+t.ok(KS.S.stats.ults === 1, 'an Arrow Storm is counted');
+KS.checkAch();
+t.ok(KS.S.ach.ult1 === true, 'first storm unlocks the Storm Caller milestone');
+KS.S.ultCharge = 20; KS.S.frenzyT = 0;
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.ultCharge() === 20, 'ultimate charge persists through save/load');
+KS.S.ultCharge = 0; KS.S.stats.ults = 0; KS.S.enemies.length = 0; KS.S.frenzyT = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
