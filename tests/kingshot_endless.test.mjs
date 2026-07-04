@@ -1046,6 +1046,24 @@ t.ok(KS.S.ach.streak === true, 'a 50 kill streak unlocks On a Rampage');
 KS.S.combo = 0; KS.S.comboRewardMax = 0; KS.S.comboTierShown = 0; KS.S.frenzyT = 0; KS.S.goldRushT = 0;
 KS.S.pallet = 0; KS.S.stats.combos = 0; KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
 
+// ---- mini-map event pings ----
+KS.start(); freezeSpawns();
+KS.S.enemies.length = 0; KS.S.chest = null; KS.S.merchant = null;
+t.ok(KS.mapPings().length === 0, 'no pings when nothing is happening');
+KS.S.chest = { x: 500, y: 500, val: 10, gem: false };
+t.ok(KS.mapPings().some(p => p.kind === 'chest'), 'an active treasure chest shows a ping');
+KS.spawnMerchant();
+t.ok(KS.mapPings().some(p => p.kind === 'merchant'), 'a wandering merchant shows a ping');
+const zpm = KS.S.zones[0];
+KS.spawnEnemy(zpm, { boss: true });
+t.ok(KS.mapPings().some(p => p.kind === 'boss'), 'a boss king shows a ping');
+KS.S.enemies.length = 0; KS.spawnEnemy(zpm); const pel = KS.S.enemies[KS.S.enemies.length - 1]; pel.boss = false; pel.gold = false;
+KS.promoteElite();
+t.ok(KS.mapPings().some(p => p.kind === 'elite'), 'a champion shows a ping');
+KS.draw(); // minimap with pings renders without throwing
+KS.S.chest = null; KS.S.merchant = null; KS.S.enemies.length = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
