@@ -1094,6 +1094,53 @@ KS.S.pets = {}; KS.S.activePet = null; KS.S.petCd = 0; KS.S.stats.petAbil = 0;
 KS.S.pallet = 0; KS.S.frenzyT = 0; KS.S.level = 1; KS.S.xp = 0;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- townsfolk / inhabitants ----
+KS.start(); freezeSpawns();
+KS.S.pop = []; KS.S.popFilter = 'all'; KS.S.wallet = 0;
+t.ok(KS.recruit() === false && KS.S.pop.length === 0, 'cannot recruit without coins');
+KS.S.wallet = 1e9;
+const rc = KS.recruitCost();
+t.ok(KS.recruit() === true && KS.S.pop.length === 1 && KS.S.wallet === 1e9 - rc, 'recruiting adds a villager and spends coins');
+t.ok(KS.recruitCost() > rc, 'each villager costs more than the last');
+t.ok(KS.S.pop[0].role === 'collect', 'new villagers start as collectors');
+// assign roles
+KS.recruit(); KS.recruit(); // 3 total
+t.ok(KS.assignPop('fight') === true && KS.popCount('fight') === 1 && KS.popCount('collect') === 2, 'a collector can be reassigned to fight');
+t.ok(KS.assignPop('collect') === true && KS.popCount('fight') === 0, 'and back to collecting');
+// fighters shoot nearby foes
+KS.assignPop('fight');
+const zf = KS.S.zones[0]; KS.S.enemies.length = 0; KS.S.shots.length = 0;
+KS.spawnEnemy(zf); const fe = KS.S.enemies[KS.S.enemies.length - 1]; fe.hp = fe.max = 1e9;
+const fighter = KS.S.pop.find(q => q.role === 'fight');
+fighter.x = fe.x + 40; fighter.y = fe.y; fighter.fireCd = 0;
+KS.simInhabitants(1 / 60);
+t.ok(KS.S.shots.some(s => s.ally) && fighter.fireCd > 0, 'a fighter fires an arrow at a nearby foe and goes on cooldown');
+t.ok(KS.fighterDmg() > 0, 'fighter damage scales with the king');
+// collectors pick up matching items and haul them to be sold
+KS.S.pop.forEach(q => { q.role = 'collect'; q.state = 'seek'; q.carry = []; });
+KS.S.enemies.length = 0; KS.S.items.length = 0; KS.S.shots.length = 0; KS.S.pallet = 0;
+const col = KS.S.pop[0];
+KS.dropHelmet(zf.pen.x0 + 200, 500, zf.k); const drop = KS.S.items[KS.S.items.length - 1];
+drop.t = 1; col.x = drop.x; col.y = drop.y; col.state = 'seek';
+KS.simInhabitants(1 / 60);
+t.ok(col.carry.length === 1 && drop.dead, 'a collector picks up a matching dropped item');
+// filter: a stone-only collector ignores shields
+KS.S.popFilter = 'stone'; col.carry = []; col.state = 'seek';
+KS.S.items.length = 0; KS.dropHelmet(zf.pen.x0 + 220, 500, zf.k); const shield = KS.S.items[KS.S.items.length - 1]; shield.t = 1;
+col.x = shield.x; col.y = shield.y;
+KS.simInhabitants(1 / 60);
+t.ok(col.carry.length === 0, 'a filtered collector ignores resources it was not told to gather');
+// population + filter persist through save/load
+KS.S.pop.forEach((q, i) => q.role = i === 0 ? 'fight' : 'collect'); KS.S.popFilter = 'log';
+KS.save(); KS.reset(); KS.load();
+t.ok(KS.S.pop.length === 3 && KS.popCount('fight') === 1 && KS.S.popFilter === 'log', 'townsfolk roster + gather filter persist through save/load');
+KS.start(); KS.S.showPop = true; drawSafe('draw() with townsfolk panel open');
+KS.S.showPop = false; KS.S.pop = []; KS.S.popFilter = 'all'; KS.S.items.length = 0; KS.S.shots.length = 0; KS.S.pallet = 0;
+KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
+
+// ---- endless land: cost climbs super-exponentially ----
+t.ok(KS.unlockCost(2) > KS.unlockCost(1) && KS.unlockCost(10) / KS.unlockCost(9) > KS.unlockCost(3) / KS.unlockCost(2), 'each land block costs disproportionately more than the last (super-exponential)');
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
