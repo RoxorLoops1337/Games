@@ -12,7 +12,8 @@
     "test": "node tests/no_room_for_heroes_relics.test.mjs && node tests/no_room_for_heroes_champion.test.mjs && node tests/no_room_for_heroes_fusion.test.mjs && node tests/no_room_for_heroes_town.test.mjs && node tests/no_room_for_heroes_meta.test.mjs && node tests/no_room_for_heroes_board.test.mjs && node tests/no_room_for_heroes_cloud.test.mjs && node tests/no_room_for_heroes_campaign.test.mjs && node tests/no_room_for_heroes_music.test.mjs && node tests/no_room_for_heroes_juice.test.mjs && node tests/no_room_for_heroes_balance.test.mjs && node tests/no_room_for_heroes_tutorial.test.mjs && node tests/no_room_for_heroes_tutpreview.test.mjs && node tests/no_room_for_heroes_unlocks.test.mjs && node tests/no_room_for_heroes_intro.test.mjs",
     "test:kingshot": "node tests/kingshot_endless.test.mjs",
     "test:headliner": "node tests/headliner.test.mjs",
-    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner"
+    "test:horde": "node tests/horde_runner.test.mjs",
+    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
