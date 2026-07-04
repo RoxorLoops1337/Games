@@ -916,6 +916,36 @@ KS.S.pets = {}; KS.S.activePet = null; KS.S.perks = {}; KS.S.cperks = {};
 KS.S.frenzyT = 0; KS.S.goldRushT = 0; KS.S.xp = 0; KS.S.level = 1; KS.S.cards = null;
 KS.S.parts.length = 0; KS.S.toasts.length = 0; KS.S.floats.length = 0;
 
+// ---- hero rank / renown ----
+const rankAchBefore = new Set(Object.keys(KS.S.ach));
+const rk0 = KS.S.stats.kills, rc0 = KS.S.crowns, rb0 = KS.S.stats.bosses || 0, re0 = KS.S.stats.elites || 0, rsp0 = KS.S.stats.spins || 0;
+KS.S.stats.kills = 0; KS.S.crowns = 0; KS.S.stats.bosses = 0; KS.S.stats.elites = 0; KS.S.stats.spins = 0;
+const rlow = KS.renown(), ilow = KS.heroRankIdx();
+KS.S.stats.kills = 500;
+t.ok(KS.renown() > rlow, 'renown rises with accomplishments');
+t.ok(KS.heroRankIdx() >= ilow, 'rank never drops as renown rises');
+KS.S.crowns = 5; // crowns weigh heavily
+const ihigh = KS.heroRankIdx();
+t.ok(ihigh > ilow, 'big renown reaches a higher rank tier');
+t.ok(KS.RANKS[ihigh] === KS.heroRank(), 'heroRank matches the current tier');
+t.ok(KS.nextRank() === KS.RANKS[ihigh + 1] || KS.nextRank() === null, 'nextRank is the following tier (or null at max)');
+KS.S.stats.kills = 1e7; KS.S.crowns = 1000;
+t.ok(KS.heroRankIdx() === KS.RANKS.length - 1 && KS.nextRank() === null, 'enough renown reaches the final rank');
+// crossing a tier fires a one-time rank-up toast
+KS.start(); KS.S.rankShown = 0; KS.S.toasts.length = 0;
+KS.checkRankUp();
+t.ok(KS.S.rankShown === KS.heroRankIdx() && KS.S.toasts.some(t2 => /RANK UP/.test(t2.txt)), 'crossing a rank triggers a rank-up toast');
+KS.S.toasts.length = 0; KS.checkRankUp();
+t.ok(KS.S.toasts.length === 0, 'no repeat rank-up toast at the same rank');
+KS.checkAch();
+t.ok(KS.S.ach.rankLg === true, 'reaching Legend+ unlocks the Living Legend milestone');
+drawSafe('draw() with rank badge');
+// restore stats so later tests are unaffected
+KS.S.stats.kills = rk0; KS.S.crowns = rc0; KS.S.stats.bosses = rb0; KS.S.stats.elites = re0; KS.S.stats.spins = rsp0;
+// forget any milestones the inflated renown unlocked, so later tests see them fresh
+for (const k of Object.keys(KS.S.ach)) if (!rankAchBefore.has(k)) delete KS.S.ach[k];
+KS.S.rankShown = KS.heroRankIdx(); KS.S.toasts.length = 0; KS.S.parts.length = 0;
+
 // ---- guidance arrow ----
 const g = KS.guideTarget();
 t.ok(g && typeof g.x === 'number' && g.label, 'guide target exists');
