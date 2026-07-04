@@ -101,6 +101,13 @@ const HOUSE0      = 2500, HOUSE_MUL = 2.6;  // cottage cost grows steeply
 const WORK_BOOST  = 0.5, WORK_BOOST_CAP = 4; // each worker: +50% workplace speed, capped x4
 const FORGE_T     = 1.8;
 const FORGE_Q     = 12, TRAY_MAX = 10;
+// smeltery upgrades: pour coins at the ⬆ pad next to the forge
+const FUP = { x: 860, y: 470, r: 44 };
+const FORGE_UP0 = 4000, FORGE_UP_MUL = 2.7, FORGE_LVL_MAX = 10;
+function forgeQ()     { return FORGE_Q + 2 * (S.forgeLvl || 0); }     // queue slots grow per level
+function trayMax()    { return TRAY_MAX + 2 * (S.forgeLvl || 0); }    // tray slots grow per level
+function forgeSpeed() { return 1 + 0.25 * (S.forgeLvl || 0); }        // +25% smelt speed per level
+function forgeUpCost(){ return Math.ceil(FORGE_UP0 * Math.pow(FORGE_UP_MUL, S.forgeLvl || 0)); }
 const BAR_MUL     = 3;
 const CROWN_MUL   = 22;
 const STONE_MUL   = 1.2;   // raw stone sells slightly above a helmet
@@ -547,6 +554,7 @@ function reset() {
     gemPaid: { magnet: 0, crit: 0, coin: 0 },
     forge: null,
     forgePlate: { cost: 260, paid: 0, built: false },
+    forgeLvl: 0, forgeUpPlate: { cost: FORGE_UP0, paid: 0, built: false },
     waygate: false,
     wayPlate: { cost: 400, paid: 0, built: false },
     dog: null,
@@ -667,7 +675,7 @@ function jobDefs() {
     { id: 'fight',   ic: '⚔️', name: 'Fighters',  desc: 'Follow you into battle' },
   ];
   if (S.campPlate.built)  out.push({ id: 'camp',  ic: '🪓', name: 'Lumber Camp', desc: '+' + WORK_BOOST * 100 + '% chopping each' });
-  if (S.forgePlate.built) out.push({ id: 'forge', ic: '🔥', name: 'Smeltery',    desc: '+' + WORK_BOOST * 100 + '% smelting each' });
+  if (S.forgePlate.built) out.push({ id: 'forge', ic: '🔥', name: 'Smeltery',    desc: '+' + WORK_BOOST * 100 + '% speed · hauls bars to the shop' });
   if (S.distPlate.built)  out.push({ id: 'ind',   ic: '🏭', name: 'Craftworks',  desc: '+' + WORK_BOOST * 100 + '% production each' });
   for (const dk in D2CFG) if (S.d2Plate[dk].built) out.push({ id: dk, ic: D2CFG[dk].icon, name: D2CFG[dk].name, desc: '+' + WORK_BOOST * 100 + '% production each' });
   return out;
@@ -710,6 +718,33 @@ function simInhabitants(dt) {
   for (let idx = 0; idx < pop.length; idx++) {
     const q = pop[idx];
     if (q.role !== 'collect' && q.role !== 'fight') {
+      // smeltery workers do real hauling: sweep finished bars off the tray
+      // and carry them to the sell stand; otherwise they patrol like anyone
+      if (q.role === 'forge' && S.forge) {
+        if (q.carry.length) {
+          const dl = Math.hypot(SELL.x - q.x, SELL.y - q.y) || 1;
+          q.x += (SELL.x - q.x) / dl * INHAB_SPD * dt; q.y += (SELL.y - q.y) / dl * INHAB_SPD * dt;
+          if (dl < 46) {
+            q.cd -= dt;
+            if (q.cd <= 0 && q.carry.length) {
+              q.cd = 0.12;
+              const v = entryVal(q.carry.pop());
+              S.pallet += v; S.stats.earned += v; S.stats.sold++;
+              questEvent('sell', 1); questEvent('earn', v);
+            }
+          }
+          continue;
+        }
+        if (S.forge.tray.length) {
+          const dl = Math.hypot(TRAY.x - q.x, TRAY.y - q.y) || 1;
+          q.x += (TRAY.x - q.x) / dl * INHAB_SPD * dt; q.y += (TRAY.y - q.y) / dl * INHAB_SPD * dt;
+          if (dl < 30) {
+            while (q.carry.length < 5 && S.forge.tray.length) q.carry.push({ k: S.forge.tray.pop(), bar: true });
+            sfx('pick');
+          }
+          continue;
+        }
+      }
       // stationed worker — patrol the workplace's real stations, pausing to "work"
       const sites = jobSites(q.role);
       const tgt = sites[(q.pi || 0) % sites.length];
@@ -745,7 +780,7 @@ function simInhabitants(dt) {
           if (q.dest === 'forge') {
             const i = q.carry.map(e => entryRes(e) === 'helm').lastIndexOf(true);
             if (i < 0) q.dest = 'sell';
-            else if (S.forge.queue.length < FORGE_Q) { S.forge.queue.push(q.carry.splice(i, 1)[0].k); sfx('smelt'); q.forgeWait = 0; }
+            else if (S.forge.queue.length < forgeQ()) { S.forge.queue.push(q.carry.splice(i, 1)[0].k); sfx('smelt'); q.forgeWait = 0; }
             else { q.forgeWait = (q.forgeWait || 0) + 0.4; if (q.forgeWait > 4) { q.dest = 'sell'; q.forgeWait = 0; } }
           } else {
             const v = entryVal(q.carry.pop());
@@ -937,7 +972,7 @@ function save() {
         });
         return o;
       }),
-      forge: S.forge ? { queue: S.forge.queue, tray: S.forge.tray } : null,
+      forge: S.forge ? { queue: S.forge.queue, tray: S.forge.tray, lvl: S.forgeLvl || 0, upPaid: S.forgeUpPlate.paid } : null,
       waygate: S.waygate,
       dog: S.dogPlate.built,
       camp: S.camp ? { logs: S.camp.logs } : null,
@@ -1011,7 +1046,11 @@ function load() {
       }
     });
   }
-  if (d.forge) { S.forgePlate.built = true; S.forge = { queue: d.forge.queue || [], tray: d.forge.tray || [], smeltT: 0 }; }
+  if (d.forge) {
+    S.forgePlate.built = true; S.forge = { queue: d.forge.queue || [], tray: d.forge.tray || [], smeltT: 0 };
+    S.forgeLvl = d.forge.lvl || 0;
+    S.forgeUpPlate = { cost: forgeUpCost(), paid: d.forge.upPaid || 0, built: false };
+  }
   if (d.waygate) { S.wayPlate.built = true; S.waygate = true; }
   if (d.dog) { S.dogPlate.built = true; spawnDog(); }
   if (d.camp) { S.campPlate.built = true; S.camp = { logs: d.camp.logs || [], chopT: 0 }; }
@@ -1509,6 +1548,7 @@ function prestige() {
   S.up = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
   S.upPaid = { speed: 0, cap: 0, dmg: 0, rate: 0, hp: 0 };
   S.forge = null; S.forgePlate = { cost: 260, paid: 0, built: false };
+  S.forgeLvl = 0; S.forgeUpPlate = { cost: FORGE_UP0, paid: 0, built: false };
   S.waygate = false; S.wayPlate = { cost: 400, paid: 0, built: false };
   S.dog = null; S.dogPlate = { cost: 500, paid: 0, built: false };
   S.zones = [mkZone(1)];
@@ -2007,9 +2047,9 @@ function tick(dt) {
   // -- forge chain
   if (S.forge) {
     const f = S.forge;
-    if (dist2(p.x, p.y, FORGE.x, FORGE.y) < FORGE.r * FORGE.r && f.queue.length < FORGE_Q) {
+    if (dist2(p.x, p.y, FORGE.x, FORGE.y) < FORGE.r * FORGE.r && f.queue.length < forgeQ()) {
       p.forgeAcc = (p.forgeAcc || 0) + dt * SELL_RATE;
-      while (p.forgeAcc >= 1 && f.queue.length < FORGE_Q) {
+      while (p.forgeAcc >= 1 && f.queue.length < forgeQ()) {
         p.forgeAcc -= 1;
         // the forge ONLY smelts raw helmets (shields) — not bars, crowns, logs, ore, produce…
         let idx = -1;
@@ -2019,8 +2059,8 @@ function tick(dt) {
         sfx('smelt');
       }
     } else p.forgeAcc = 0;
-    if (f.queue.length && f.tray.length < TRAY_MAX) {
-      f.smeltT += dt * jobBoost('forge');
+    if (f.queue.length && f.tray.length < trayMax()) {
+      f.smeltT += dt * jobBoost('forge') * forgeSpeed();
       if (f.smeltT >= FORGE_T) {
         f.smeltT = 0;
         const bk = f.queue.shift();
@@ -2372,6 +2412,14 @@ function tick(dt) {
   // -- hub build plates: forge + waygate + kennel
   if (!S.forgePlate.built && dist2(p.x, p.y, FORGE.x, FORGE.y) < 56 * 56)
     pourHub(S.forgePlate, dt, () => { S.forge = { queue: [], tray: [], smeltT: 0 }; float(FORGE.x, FORGE.y - 50, 'SMELTER BUILT! Shields → metal bars (x' + BAR_MUL + ') — porters feed it', '#6ecb5a', true); });
+  // smeltery upgrades: faster smelting + bigger queue/tray per level
+  if (S.forgePlate.built && (S.forgeLvl || 0) < FORGE_LVL_MAX && dist2(p.x, p.y, FUP.x, FUP.y) < FUP.r * FUP.r)
+    pourHub(S.forgeUpPlate, dt, () => {
+      S.forgeLvl = (S.forgeLvl || 0) + 1;
+      S.forgeUpPlate = { cost: forgeUpCost(), paid: 0, built: false };
+      float(FUP.x, FUP.y - 50, '⚒ SMELTER LV' + (S.forgeLvl + 1) + '! Faster + bigger', '#6ecb5a', true);
+      S.shake = Math.max(S.shake, 6);
+    });
   if (!S.wayPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, HUBPAD.x, HUBPAD.y) < 56 * 56)
     pourHub(S.wayPlate, dt, () => { S.waygate = true; float(HUBPAD.x, HUBPAD.y - 50, 'WAYGATE OPEN! Stand still on it to warp', '#6ec9e0', true); });
   if (!S.dogPlate.built && S.zones.length >= 2 && dist2(p.x, p.y, KENNEL.x, KENNEL.y) < 56 * 56)
@@ -2647,7 +2695,7 @@ function tick(dt) {
             if (po.dest === 'forge') {
               const i = po.carry.map(e => entryRes(e) === 'helm').lastIndexOf(true);
               if (i < 0) { po.dest = 'sell'; }                          // no shields left → sell the rest
-              else if (S.forge.queue.length < FORGE_Q) { S.forge.queue.push(po.carry.splice(i, 1)[0].k); sfx('smelt'); po.forgeWait = 0; }
+              else if (S.forge.queue.length < forgeQ()) { S.forge.queue.push(po.carry.splice(i, 1)[0].k); sfx('smelt'); po.forgeWait = 0; }
               else { po.forgeWait = (po.forgeWait || 0) + 0.4; if (po.forgeWait > 4) { po.dest = 'sell'; po.forgeWait = 0; } } // queue jammed → just sell them
             } else {
               const v = entryVal(po.carry.pop());
@@ -2659,7 +2707,7 @@ function tick(dt) {
           if (!po.carry.length) {
             po.dest = null; po.forgeWait = 0;
             // relieve a nearly-full tray so the smelter never hard-stalls; otherwise leave the bars for you
-            if (S.forge && S.forge.tray.length >= TRAY_MAX - 2) {
+            if (S.forge && S.forge.tray.length >= trayMax() - 2) {
               while (po.carry.length < PORTER_CAP && S.forge.tray.length) po.carry.push({ k: S.forge.tray.pop(), bar: true });
             } else po.state = 'seek';
           }
@@ -3187,9 +3235,21 @@ function drawStands() {
     ctx.fillStyle = 'rgba(255,120,40,' + glow + ')';
     rr(FORGE.x - 22, FORGE.y - 12, 44, 28, 8); ctx.fill();
     ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('⚒ SMELTER  x' + BAR_MUL, FORGE.x, FORGE.y - 52);
+    ctx.fillText('⚒ SMELTER LV' + ((S.forgeLvl || 0) + 1) + '  x' + BAR_MUL, FORGE.x, FORGE.y - 52);
+    // upgrade pad
+    if ((S.forgeLvl || 0) < FORGE_LVL_MAX) {
+      plateCircle(FUP.x, FUP.y, 40, '#ffb060', S.forgeUpPlate.paid, S.forgeUpPlate.cost, 'rgba(255,176,96,0.3)');
+      ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+      ctx.fillText('⬆', FUP.x, FUP.y);
+      ctx.font = 'bold 10px sans-serif'; ctx.fillText('UPGRADE', FUP.x, FUP.y + 18);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(fmt(S.forgeUpPlate.cost - S.forgeUpPlate.paid) + ' ¢', FUP.x, FUP.y + 60);
+    } else {
+      ctx.fillStyle = '#8fa07a'; ctx.font = 'bold 10px sans-serif';
+      ctx.fillText('MAX LEVEL', FUP.x, FUP.y);
+    }
     ctx.fillStyle = '#ffb060'; ctx.font = 'bold 11px sans-serif';
-    ctx.fillText('shields only · ' + S.forge.queue.length + '/' + FORGE_Q, FORGE.x, FORGE.y + 44);
+    ctx.fillText('shields only · ' + S.forge.queue.length + '/' + forgeQ(), FORGE.x, FORGE.y + 44);
     ctx.strokeStyle = 'rgba(232,185,58,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(TRAY.x, TRAY.y, TRAY.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = '#5c4a30'; rr(TRAY.x - 40, TRAY.y - 6, 80, 22, 5); ctx.fill();
@@ -3560,6 +3620,8 @@ function drawInhab(q) {
     ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(q.x + f * 9, q.y - 6 - bob, 7, f > 0 ? -1.2 : 1.94, f > 0 ? 1.2 : 4.34); ctx.stroke();
     ctx.fillStyle = '#2f5a36'; ctx.beginPath(); ctx.moveTo(q.x - 5, q.y - 20 - bob); ctx.lineTo(q.x, q.y - 26 - bob); ctx.lineTo(q.x + 5, q.y - 20 - bob); ctx.closePath(); ctx.fill(); // hood
+  } else if (worker && q.carry && q.carry.length) {
+    for (let i = 0; i < q.carry.length; i++) drawStackEntry(q.carry[i], q.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), q.y - 24 - bob - i * 6, 0.66);
   } else if (worker) {
     // straw hat + a swinging hammer while working
     ctx.fillStyle = '#d9b96a'; ctx.beginPath(); ctx.ellipse(q.x, q.y - 19 - bob, 8, 3, 0, 0, 6.29); ctx.fill();
@@ -5097,6 +5159,7 @@ window.KS = {
   PET_CD, petAbility, petAbilityReady,
   POP_FILTERS, mkInhab, popCount, recruitCost, recruit, assignPop, fighterDmg, simInhabitants, drawPop, drawInhab,
   popCap, houseCost, buyHouse, jobDefs, jobBoost, jobSites, movePop, sanitizePop, BEDS_BASE, BEDS_PER_LAND, BEDS_PER_HOUSE, HOUSE_MAX, WORK_BOOST,
+  forgeQ, trayMax, forgeSpeed, forgeUpCost, FUP, FORGE_LVL_MAX,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
