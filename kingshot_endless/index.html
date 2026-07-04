@@ -532,6 +532,7 @@ function reset() {
     merchant: null, merchantCd: 70, showShop: false,
     eliteCd: 40,
     wheel: null, showWheel: false,
+    settings: { shake: true, particles: true, dmgNums: true, weather: true }, showSettings: false,
     stick: null, keys: {},
     cam: { x: SPAWN.x, y: SPAWN.y },
     stats: { kills: 0, earned: 0, sold: 0, bosses: 0, gemsFound: 0 },
@@ -752,7 +753,7 @@ function save() {
           crafts: Object.fromEntries(Object.entries(d.crafts).map(([id, c]) => [id, { in: c.in, tray: c.tray }])),
         }];
       })),
-      crowns: S.crowns, prestiges: S.prestiges, cperks: S.cperks,
+      crowns: S.crowns, prestiges: S.prestiges, cperks: S.cperks, settings: S.settings,
       ach: Object.keys(S.ach),
       stats: S.stats, deaths: S.player.deaths, last: Date.now(),
     }));
@@ -848,6 +849,7 @@ function load() {
     }
   }
   S.crowns = d.crowns || 0; S.prestiges = d.prestiges || 0; S.cperks = d.cperks || {};
+  S.settings = Object.assign({ shake: true, particles: true, dmgNums: true, weather: true }, d.settings || {});
   (d.ach || []).forEach(id => { S.ach[id] = true; });
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.last || Date.now())) / 1000));
   const amt = Math.floor(idleRate() * away);
@@ -936,6 +938,14 @@ function fmt(n) {
   return (n / 1e9).toFixed(1) + 'B';
 }
 function dist2(ax, ay, bx, by) { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; }
+// accessibility settings — default ON so older saves behave unchanged
+function setg(k) { return !S.settings || S.settings[k] !== false; }
+const SETTINGS = [
+  { k: 'shake',     ic: '📳', name: 'Screen shake' },
+  { k: 'particles', ic: '✨', name: 'Particle effects' },
+  { k: 'dmgNums',   ic: '🔢', name: 'Damage numbers' },
+  { k: 'weather',   ic: '🌦', name: 'Weather & sky' },
+];
 function float(x, y, txt, color, big, crit) {
   S.floats.push({ x, y, txt: String(txt), color, t: 0, big, crit, vx: crit ? 0 : 0 });
   if (S.floats.length > 50) S.floats.shift();
@@ -1004,7 +1014,7 @@ function dropHelmet(x, y, k) { dropItem(x, y, { k }); }
 function hurtEnemy(e, dmg, crit) {
   if (e.hp <= 0) return;
   e.hp -= dmg; e.hurt = 0.1;
-  float(e.x, e.y - e.r - 12, Math.ceil(dmg), crit ? '#ff8a3c' : '#fff', crit, crit);
+  if (setg('dmgNums')) float(e.x, e.y - e.r - 12, Math.ceil(dmg), crit ? '#ff8a3c' : '#fff', crit, crit);
   if (e.hp <= 0) {
     S.stats.kills++;
     if (!S.ultCasting) S.ultCharge = Math.min(ULT_NEED, ultCharge() + 1);
@@ -3529,7 +3539,7 @@ function drawWorld() {
       ctx.beginPath(); ctx.arc(q.x, q.y, q.r * (1 - f * 0.6), 0, 6.29); ctx.stroke();
     }
   }
-  for (const q of S.parts) {
+  if (setg('particles')) for (const q of S.parts) {
     if (!vis(q.x, q.y, 20)) continue;
     ctx.globalAlpha = 1 - q.t / q.dur;
     ctx.fillStyle = q.color;
@@ -3640,6 +3650,7 @@ function drawHud() {
   drawShop();
   drawBestiary();
   drawWheel();
+  drawSettings();
   drawCrownHall();
   drawStatsPanel();
   // quest-complete golden pulse
@@ -4023,6 +4034,38 @@ function drawWheel() {
   ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
   ctx.fillText('Tap empty space to close', cx, sby + 68);
 }
+function toggleSetting(k) { if (!S.settings) S.settings = {}; S.settings[k] = S.settings[k] === false ? true : false; sfx('built', true); save(); }
+function drawSettings() {
+  hudBtn(vw - 46, 282, 36, 30, '⚙️', () => { S.showSettings = !S.showSettings; save(); });
+  if (!S.showSettings) return;
+  ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
+  hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showSettings = false; } });
+  const cx = vw / 2, top = Math.max(50, vh * 0.16);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('⚙️ SETTINGS', cx, top);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillText('Tune the visuals — easier on the eyes, or the battery', cx, top + 20);
+  let y = top + 40;
+  const w = Math.min(320, vw - 40), rh = 48;
+  for (const s of SETTINGS) {
+    const on = setg(s.k);
+    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rh - 8, 10); ctx.fill();
+    ctx.textAlign = 'left'; ctx.font = '20px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText(s.ic, cx - w / 2 + 16, y + 27);
+    ctx.font = 'bold 14px sans-serif'; ctx.fillText(s.name, cx - w / 2 + 46, y + 26);
+    // toggle switch
+    const tw = 48, th = 24, tx = cx + w / 2 - tw - 14, ty = y + (rh - 8) / 2 - th / 2;
+    ctx.fillStyle = on ? '#2f7d4a' : 'rgba(90,96,108,0.9)'; rr(tx, ty, tw, th, th / 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(on ? tx + tw - th / 2 : tx + th / 2, ty + th / 2, th / 2 - 3, 0, 6.29); ctx.fill();
+    ctx.fillStyle = on ? '#bfe9cd' : '#c8ccd2'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(on ? 'ON' : 'OFF', tx + tw / 2, ty - 4);
+    hits.push({ x: cx - w / 2, y, w, h: rh - 8, act: () => { toggleSetting(s.k); } });
+    y += rh;
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillText('Tap a row to toggle · tap empty space to close', cx, y + 16);
+}
 function drawBestiary() {
   // 📖 button below the gear button
   hudBtn(vw - 46, 214, 36, 30, '📖', () => { S.showBestiary = !S.showBestiary; save(); });
@@ -4298,8 +4341,9 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = '#16241a'; ctx.fillRect(0, 0, vw, vh);
   ctx.save();
-  const shx = S.shake > 0 ? (rnd() - 0.5) * S.shake : 0;
-  const shy = S.shake > 0 ? (rnd() - 0.5) * S.shake : 0;
+  const shk = S.shake > 0 && setg('shake');
+  const shx = shk ? (rnd() - 0.5) * S.shake : 0;
+  const shy = shk ? (rnd() - 0.5) * S.shake : 0;
   const b = worldBounds();
   const vwW = vw / scl, vhW = vh / scl, M = 240;
   let cx, cy;
@@ -4319,7 +4363,7 @@ function draw() {
   drawHud();
 }
 function drawWeather() {
-  if (!S.started) return;
+  if (!S.started || !setg('weather')) return;
   const w = weatherType();
   if (w === 'clear') return;
   // fade precipitation in/out at the edges of each window for smooth turns
@@ -4350,7 +4394,7 @@ function drawWeather() {
   }
 }
 function drawSky() {
-  if (!S.started) return;
+  if (!S.started || !setg('weather')) return;
   const b = daylight(), p = dayPhase();
   // warm wash through the dawn (~0.25) and dusk (~0.75) transitions
   const warm = Math.max(0, 1 - Math.abs(p - 0.25) / 0.12) + Math.max(0, 1 - Math.abs(p - 0.75) / 0.12);
@@ -4482,6 +4526,7 @@ window.KS = {
   ELITE_CD, promoteElite, dropItemM,
   WHEEL, SPIN_COST, spinWheel, drawWheel,
   RANKS, renown, heroRank, heroRankIdx, nextRank, checkRankUp,
+  SETTINGS, setg, toggleSetting, drawSettings,
   initD2, spawnD2Hauler, spawnD2Trader, entryRes, D2CFG, RES_MUL, metal, METALS,
   constants: { CELL_W, CELL_H, SELL, PALLET, FORGE, TRAY, HUBPAD, SPAWN, MONU, KENNEL, UPG_X0, UPG_STEP, UPG_Y, GEM_X, GEM_Y0, GEM_STEP, CAP0, SELL_RATE, VAC_RATE, BUILD_RATE, SAVE_KEY, PORTER_CAP, FORGE_T, BAR_MUL, CROWN_MUL, BOSS_CD, WARP_T, DRUM_MUL, GOLD_CHANCE, TOWER_TRAIN, PRESTIGE_MIN, PREST_T, CROWN_BONUS, FLOW_ACCEL, FLOW_CAP, CAMP, CHOP_T, CAMP_MAX, CROWN_DMG, CHEST_CD, DIST, DIST_COSTS, STONE_MUL, PLANK_MUL, TOOL_MUL, GROVE_T, QUARRY_T, SAW_T, TOOL_T, HP0, HP_UP, CROWN_HP, DASH_TIME, DASH_CD, DASH_CD_CROWN, DASH_CD_MIN, COMBO_WINDOW },
   start() { S.started = true; },
