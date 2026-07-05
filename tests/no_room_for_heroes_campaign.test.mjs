@@ -8,6 +8,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 const A = loadGame(`freshGame,chooseBoss,prepCampaignWave,campLevel,BOSSES,
   campaignAdvance,skipDraft,SKIP_DRAFT_GOLD,startCampaign,gotoBossSelect,tutDoneSet,edictsIrrelevant,
   entityAt,stagedHeroX,afterReward,pickRelic,spawnGroup,faceTheKing,champSpec,
+  WAVE_ARCHETYPES,WAVE_ARCH_MIN_LVL,get bannerMsg(){return bannerMsg;},
   get overlay(){return overlay;},get RUNES(){return RUNES;},set RUNES(v){RUNES=v;},
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('campaign waves');
@@ -115,6 +116,41 @@ t.ok(A.G.phase === 'build' && A.G.kingDue === true, 'faceTheKing lands in a real
 t.ok(Object.keys(A.G.brokenCells || {}).length === 0, 'smashed doorways are patched for the finale');
 t.ok(A.G.cells[0]._disarmT === 0, 'stale disarm timers are cleared');
 t.ok(A.G.queue.length === 0, 'no phantom wave is rolled over the King (prepCampaignWave defers to him)');
+
+// --- 🎭 wave archetypes: named compositions reshape regular waves from L8 ---
+// compose() alone: THE HEIST turns the party into fast, frail rogues
+{
+  const specs = [1,2,3,4].map(() => ({cls:'warrior', power:5, traits:[], debuff:{atkMul:1, burn:0, robbed:false}}));
+  A.WAVE_ARCHETYPES.find(a => a.id === 'heist').compose(specs);
+  t.ok(specs.every(s => s.cls === 'rogue'), 'THE HEIST composes an all-rogue crew');
+  t.ok(specs.every(s => s.hpMul < 1 && s.spdMul > 1), 'heist rogues trade HP for speed (budget-neutral)');
+}
+// forced roll through prepCampaignWave (Math.random->0 passes the 35% gate and picks idx 0 = heist)
+A.G = A.freshGame('campaign'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+const _rand = Math.random;
+Math.random = () => 0;
+A.G.levelIdx = 8;                                   // L9 — a regular wave inside archetype range
+A.G.waveLevel = null; A.G.queue = [];
+A.prepCampaignWave();
+t.ok(A.G.waveArchetype && A.G.waveArchetype.id === 'heist', 'a forced roll stamps G.waveArchetype');
+t.ok(A.G.queue.length > 0 && A.G.queue.every(s => s.cls === 'rogue'), 'the CACHED wave is reshaped (preview == spawn)');
+// the banner fires when the wave actually starts, and the party matches
+A.G.phase = 'build';
+A.spawnGroup(2);
+t.ok(A.G.heroes.length > 0 && A.G.heroes.every(h => h.cls === 'rogue'), 'the spawned party matches the archetype');
+t.ok(((A.bannerMsg && A.bannerMsg.text) || '').includes('HEIST'), 'the archetype name banners at wave start');
+// never on a milestone (champion) wave — even with the roll forced
+A.G.levelIdx = 9;                                   // L10 — milestone
+A.G.waveLevel = null; A.G.queue = [];
+A.prepCampaignWave();
+t.ok(!A.G.waveArchetype, 'milestone waves never roll an archetype');
+t.ok(A.G.queue.some(s => s.champion), '(sanity) the milestone wave still carries its champion');
+// below the level floor: no archetype either
+A.G.levelIdx = A.WAVE_ARCH_MIN_LVL - 5;             // well under the floor
+A.G.waveLevel = null; A.G.queue = [];
+A.prepCampaignWave();
+t.ok(!A.G.waveArchetype, 'early levels (< L'+A.WAVE_ARCH_MIN_LVL+') stay archetype-free');
+Math.random = _rand;
 
 // --- champion doorway smash: once per cell per wave, patched up in build ---
 const B = loadGame(`freshGame,smashDoorway,cellArt,get G(){return G;},set G(v){G=v;}`);
