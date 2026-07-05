@@ -1065,6 +1065,23 @@ const MANDATES = {
 };
 const MANDATE_KEYS = Object.keys(MANDATES);
 function hasMandate(id){ return !!(G && G.mandates && G.mandates.includes(id)); }
+
+/* 🧬 ENDLESS MUTATIONS — the mutation ladder. Every 25 kills in Endless (alongside
+   the mandate milestone) the player picks 1 of 3 HERO-SIDE mutators: the realm
+   escalates, and each pick raises a VISIBLE score multiplier (+MUT_SCORE_STEP)
+   that scales the leaderboard submission. Campaign never rolls these. */
+const MUT_SCORE_STEP=0.15;
+const ENDLESS_MUTS = {
+  vigor:   {ic:'❤️', name:'Thick Blood',      desc:'Heroes arrive with +8% HP.'},
+  haste:   {ic:'💨', name:'Forced March',     desc:'Heroes move +15% faster.'},
+  ironward:{ic:'🛡️', name:'Iron Ward',        desc:'Heroes gain +1 armor for every room they march through.'},
+  choir:   {ic:'🙏', name:'Fervent Choir',    desc:'Cleric blessings last twice as long.'},
+  veterans:{ic:'⭐', name:'Veteran Levies',   desc:'+10% chance a hero rolls elite traits.'},
+  bulwark: {ic:'🧿', name:'Hexproof Banners', desc:'Heroes resist +15% of your control (freeze/oil/chill/shock).'},
+};
+const MUT_KEYS = Object.keys(ENDLESS_MUTS);
+function hasMut(id){ return !!(G && G.muts && G.muts.includes(id)); }
+function fmtMul(m){ return '×'+(Math.round((m||1)*100)/100); }   // 1.3, 1.15 — no trailing zeros
 // Bosses: differing stats, a passive, two SIGNATURE abilities (always equipped)
 // and a pool to pick a 3rd from — so each boss plays to its own identity.
 const BOSSES = {
@@ -1383,6 +1400,129 @@ function loadTown(){
 }
 function saveTown(){
   try{ localStorage.setItem(townKey(), JSON.stringify(TOWN)); }catch(_){ }
+}
+
+/* ===================== MID-RUN SAVE & RESUME (bm_run_<slot>) ==================
+   The run's persistent state is snapshotted at every build-phase boundary
+   (gotoBuild — one JSON.stringify per wave) into a NEW key, bm_run_<slot>.
+   Restore path: freshGame → chooseBoss (rebuilds the boss via the normal
+   rune/mastery/passive pipeline) → overwrite the mutable numbers from the
+   snapshot (relic boons are already baked into them) → gotoBuild(false).
+   Corrupt/old/foreign data must NEVER crash: everything is try/catch + shape-
+   checked, and a bad save is silently discarded. Tutorial runs never save.   */
+const RUN_SAVE_V=1;
+let _resumingRun=false;                  // chooseBoss must not clear the key mid-resume
+function runKey(){ return 'bm_run_'+saveSlot; }
+// Transient fields (all start with '_') never enter the snapshot; room.def is a
+// live reference into ROOMS and is re-linked on restore instead of serialized.
+function runSaveReplacer(k,v){ return (k && (k[0]==='_' || k==='def')) ? undefined : v; }
+function saveRun(){
+  if(!G || G.tutorial || !G.boss) return;                    // tutorial runs never save
+  try{
+    const b=G.boss;
+    const s={ v:RUN_SAVE_V, mode:G.mode, levelIdx:G.levelIdx, totalSlain:G.totalSlain,
+      survived:G.survived, heroNum:G.heroNum, heroSeq:G.heroSeq,
+      gold:G.gold, dread:G.dread, bounty:G.bounty, combo:G.combo,
+      slots:G.slots, rooms:G.rooms, hand:G.hand, chest:G.chest, floorLoot:G.floorLoot,
+      guildLvl:G.guildLvl, forgeUsed:G.forgeUsed, townBuys:G.townBuys, barracks:G.barracks, fx:G.fx,
+      relics:G.relics, shrineRelics:G.shrineRelics, mandates:G.mandates, edicts:G.edicts,
+      muts:G.muts, scoreMul:G.scoreMul, slotBonus:G.slotBonus,
+      drops:G.drops, runesBanked:G.runesBanked, killsBanked:G.killsBanked, bossXpBanked:G.bossXpBanked,
+      stats:G.stats, relicDue:G.relicDue, townDue:G.townDue, mandateDue:G.mandateDue, mutDue:G.mutDue,
+      queue:G.queue, waveLevel:G.waveLevel, waveArchetype:G.waveArchetype, pendingRivals:G.pendingRivals,
+      kingDue:G.kingDue,
+      boss:{ key:b.key, hp:b.hp, maxHp:b.maxHp, atk:b.atk, lvl:b.lvl, masteryLvl:b.masteryLvl,
+        mana:b.mana, maxMana:b.maxMana, manaRegen:b.manaRegen, potions:b.potions, rage:b.rage,
+        smiteCd:b.smiteCd, revived:!!b.revived, abil:(b.abil||[]).map(a=>({id:a.id, cd:a.cd||0})) } };
+    localStorage.setItem(runKey(), JSON.stringify(s, runSaveReplacer));
+  }catch(_){ }                                               // full storage / private mode: no save, no crash
+}
+// Parse + shape-check the slot's saved run. Anything off → null (never throws).
+function loadRunSave(){
+  try{
+    const s=JSON.parse(localStorage.getItem(runKey())||'null');
+    if(!s || s.v!==RUN_SAVE_V) return null;
+    if(s.mode!=='campaign' && s.mode!=='endless') return null;
+    if(!s.boss || !BOSSES[s.boss.key]) return null;
+    if(!Array.isArray(s.rooms) || !Array.isArray(s.hand)) return null;
+    if(!(s.boss.maxHp>0)) return null;
+    return s;
+  }catch(_){ return null; }
+}
+function clearRunSave(){ try{ localStorage.removeItem(runKey()); }catch(_){ } }
+function discardRunSave(){ clearRunSave(); showHint('🗑 Saved run discarded.'); gotoMenu(); }
+// The prominent menu offer: "▶ Resume siege — Level N (Boss)" + a 🗑 discard.
+function runResumeLine(){
+  const s=loadRunSave(); if(!s) return '';
+  const b=BOSSES[s.boss.key];
+  const lbl = s.mode==='campaign' ? `Level ${(s.levelIdx||0)+1}` : `Endless · ${s.totalSlain||0} slain`;
+  return `<div class="menu-btns" style="margin:2px 0 8px;gap:8px">
+    <button class="go" style="min-width:250px" onclick="resumeRun()">▶ Resume siege — ${lbl} (${b.ic} ${b.name})</button>
+    <button onclick="discardRunSave()" title="Discard the saved run" style="min-width:44px">🗑</button></div>`;
+}
+function resumeRun(){
+  const s=loadRunSave();
+  if(!s){ gotoMenu(); return; }
+  try{
+    _resumingRun=true;
+    G=freshGame(s.mode);
+    G.edicts=Array.isArray(s.edicts)?s.edicts.filter(id=>EDICTS[id]):[];   // before chooseBoss — Glass Throne shapes the boss
+    chooseBoss(s.boss.key);                        // full pipeline: runes, mastery, passive, cursor
+    const num=(v,d)=>(typeof v==='number'&&isFinite(v))?v:(d||0);
+    G.levelIdx=num(s.levelIdx); G.totalSlain=num(s.totalSlain); G.waveStartSlain=G.totalSlain;
+    G.survived=num(s.survived); G.heroNum=num(s.heroNum); G.heroSeq=num(s.heroSeq);
+    G.gold=num(s.gold); G.dread=num(s.dread); G.bounty=num(s.bounty); G.combo=num(s.combo);
+    G.guildLvl=num(s.guildLvl); G.forgeUsed=!!s.forgeUsed;
+    if(s.townBuys && typeof s.townBuys==='object') G.townBuys=s.townBuys;
+    if(s.barracks && typeof s.barracks==='object') G.barracks=s.barracks;
+    if(s.fx && typeof s.fx==='object') G.fx={well:num(s.fx.well), smith:num(s.fx.smith), temple:num(s.fx.temple)};
+    if(s.drops && typeof s.drops==='object') G.drops={wood:num(s.drops.wood), stone:num(s.drops.stone), shards:num(s.drops.shards), runes:num(s.drops.runes)};
+    G.runesBanked=num(s.runesBanked); G.killsBanked=num(s.killsBanked); G.bossXpBanked=num(s.bossXpBanked);
+    if(s.stats && typeof s.stats==='object') G.stats={...G.stats, ...s.stats};
+    // rooms: plain data + a re-linked def; unknown types (older build) are dropped
+    G.rooms=s.rooms.map(r=>{
+      if(!r || !ROOMS[r.type]) return null;
+      r.def=ROOMS[r.type];
+      if(!Array.isArray(r.units) || !r.units.length) r.units=[makeUnit(r.type, r.lvl||1)];
+      r.units=r.units.filter(u=>u && ROOMS[u.type]);
+      return r.units.length ? r : null;
+    });
+    G.slots=Math.max(1, G.rooms.length);
+    G.hand=s.hand.filter(c=>c && ROOMS[c.type]);
+    G.chest=Array.isArray(s.chest)?s.chest.filter(p=>p&&p.k&&p.t):[];
+    G.floorLoot=Array.isArray(s.floorLoot)?s.floorLoot.filter(p=>p&&p.k&&p.t):[];
+    // relics: restore the saved list then recompute RB — the boss's mutable numbers
+    // come from the snapshot below, so one-time boons are already baked in.
+    G.relics=Array.isArray(s.relics)?s.relics.filter(id=>RELICS[id]):[];
+    G.shrineRelics=Array.isArray(s.shrineRelics)?s.shrineRelics.filter(id=>RELICS[id]):[];
+    G.mandates=Array.isArray(s.mandates)?s.mandates.filter(id=>MANDATES[id]):[];
+    G.muts=Array.isArray(s.muts)?s.muts.filter(id=>ENDLESS_MUTS[id]):[];
+    G.scoreMul=Math.max(1, num(s.scoreMul,1)); G.slotBonus=num(s.slotBonus);
+    recomputeRB();
+    G.relicDue=num(s.relicDue); G.townDue=!!s.townDue; G.mandateDue=!!s.mandateDue; G.mutDue=!!s.mutDue;
+    G.queue=(Array.isArray(s.queue)?s.queue:[]).filter(sp=>sp && sp.cls && (sp.debuff||(sp.debuff={atkMul:1,burn:0,robbed:false})));
+    G.waveLevel=(typeof s.waveLevel==='number')?s.waveLevel:null;
+    G.waveArchetype=(s.waveArchetype && s.waveArchetype.name)?s.waveArchetype:null;
+    G.pendingRivals=(Array.isArray(s.pendingRivals)?s.pendingRivals:[]).filter(r=>r && r.spec && r.spec.cls);
+    G.kingDue=!!s.kingDue;
+    // boss: overwrite the mutable numbers (relic/mandate/potion state included)
+    const b=G.boss, sb=s.boss;
+    b.hp=num(sb.hp,b.hp); b.maxHp=num(sb.maxHp,b.maxHp); b.atk=num(sb.atk,b.atk);
+    b.lvl=num(sb.lvl,1)||1; b.mana=num(sb.mana); b.maxMana=num(sb.maxMana,b.maxMana);
+    b.manaRegen=num(sb.manaRegen,b.manaRegen); b.potions=num(sb.potions);
+    b.rage=num(sb.rage); b.smiteCd=num(sb.smiteCd); b.revived=!!sb.revived;
+    const abil=(Array.isArray(sb.abil)?sb.abil:[]).filter(a=>a && ABIL[a.id]).map(a=>({id:a.id, cd:num(a.cd)}));
+    if(abil.length) b.abil=abil;
+    b.hp=Math.min(b.hp, b.maxHp);
+    _resumingRun=false;
+    overlay.classList.remove('show');
+    tutBar.classList.remove('show');
+    gotoBuild(false);
+    showHint('▶ Siege resumed — '+(s.mode==='campaign'?'Level '+campLevel()+'/'+CAMP_LEVELS:'Endless, '+G.totalSlain+' slain')+'. Welcome back, '+b.name+'.');
+  }catch(_){
+    _resumingRun=false; clearRunSave();            // a bad save is discarded, never fatal
+    try{ gotoMenu(); showHint('⚠️ That saved run could not be restored.'); }catch(__){ }
+  }
 }
 function townLvl(id){ return Math.min((BUILDINGS[id]?BUILDINGS[id].max:9), TOWN.built[id]||0); }
 function townHas(id){ return townLvl(id)>0; }
@@ -2025,6 +2165,10 @@ function freshGame(mode){
     killer:null,          // snapshot of the hero who felled the throne
     mandates:[],          // rule-changing dungeon upgrades drafted mid-run
     mandateDue:false,     // a mandate draft is queued (endless milestone)
+    muts:[],              // 🧬 endless mutation ladder: hero-side mutators picked every 25 kills
+    mutDue:false,         // a mutation draft is queued (endless milestone)
+    scoreMul:1,           // 🧬 visible score multiplier (+MUT_SCORE_STEP per mutation) — scales the board submit
+    slotBonus:0,          // 🏔️ structural growth: +1 room-slot cap earned at campaign L20/L40
     relicDue:0,           // relic drafts queued — a COUNTER (champion kill + milestone can stack)
     kingDue:false,        // the King's final raid is queued for the next wave
     kingFight:false,      // the King is currently raiding the dungeon (finale)
@@ -2403,6 +2547,7 @@ function closeDungeon(){
   const earned=awardRunes();
   bankResources(1, true);
   lbAutoSubmit();                                          // endless: auto-push the run to the public board
+  clearRunSave();                                          // 💾 the run is over — drop the mid-run save
   G.phase='closed'; overlay.classList.add('show');
   const summary=`<h1 style="color:#9be86b">🏳️ DUNGEON CLOSED</h1>
     <div style="font-size:54px">${G.boss?G.boss.ic:'🐲'}🚪</div>
@@ -2600,6 +2745,7 @@ function gotoMenu(){
     <h2>Build the dungeon. Bury the heroes.</h2>
     <p style="opacity:.85;margin:2px 0 12px;font-size:15px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills${s.asc?` · <span style="color:#c79bff">👑 A${s.asc}</span>`:''}`:' · fresh profile'}</p>
     ${dailyMenuLine()}
+    ${runResumeLine()}
     <div style="display:flex;gap:22px;align-items:stretch;justify-content:center;flex-wrap:wrap;width:min(820px,100%);margin-top:6px">
       <div class="menu-btns" style="flex:1 1 320px;min-width:300px;flex-direction:column;align-items:stretch;gap:16px;margin-top:0">
       <button class="go${tutDoneGet()?'':' tut-pulse'}" style="min-width:250px;flex:1" onclick="openPlay()">⚔️ Start Game${sub('campaign · endless · tutorial')}</button>
@@ -2652,7 +2798,7 @@ async function lbSubmit(score){
 // falls back to "Anonymous" if no name is stored yet. Fully silent failure.
 function lbAutoSubmit(){
   if(!G || G.mode!=='endless') return;
-  const score = G.totalSlain||0;               // THIS run only — the daily/weekly boards must not echo the all-time PB
+  const score = Math.round((G.totalSlain||0) * (G.scoreMul||1));   // THIS run only, 🧬 mutation multiplier applied — never the all-time PB
   if(score<=0) return;
   let name='Anonymous';
   try{ name = (localStorage.getItem('bm_lbname')||'').trim() || 'Anonymous'; }catch(_){ }
@@ -3467,9 +3613,10 @@ function tutDoneSet(){ try{ localStorage.setItem('bm_tut_done','1'); }catch(_){ 
 function tutStepObj(){ return (G&&G.tutorial)?TUT[G.tutStep]:null; }
 function startTutorial(){
   G=freshGame('campaign');
+  G.tutorial=true;               // set BEFORE chooseBoss: the tutorial must never clear (or write) a real mid-run save
   chooseBoss('dragon');          // pick a starter boss + default kit (skip the menus)
   confirmLoadout();              // -> build phase
-  G.tutorial=true; G.tutStep=0; G._tutEntered=-1;
+  G.tutStep=0; G._tutEntered=-1;
   G._tutWave=null; G._tutDraft=null; G._tutTrap=null; G._tutEarned=0;
   G.slots=1; G.rooms=[null];
   G.hand=[]; G.boss.mana=G.boss.maxMana;
@@ -3995,6 +4142,9 @@ function setBossCursor(key){
   el.style.setProperty('--curB', `url(cursors/cursor_${dir}_selectlink.png) 8 3, pointer`);
 }
 function chooseBoss(key){
+  // Starting a NEW run invalidates any mid-run save (the resume offer already
+  // had its chance on the menu). Resuming and the tutorial must NOT clear it.
+  if(!_resumingRun && !(G&&G.tutorial)) clearRunSave();
   applyRunes();                                  // lock in this run's rune bonuses
   setBossCursor(key);                            // pointer takes on the boss's theme for the run
   G.hand=[];                                     // reset (safe if you backed out & re-picked)
@@ -4090,6 +4240,7 @@ function gotoBuild(first){
     else showHint('Tap a card then a room to build · tap a room to move it · drag to pan.');
     if(cssH>cssW*1.1) setTimeout(()=>showHint('↻ Tip: rotate to landscape for a wider dungeon view.'),2800);
   }
+  saveRun();                                      // 💾 mid-run autosave: one snapshot per build-phase boundary
   render();
 }
 
@@ -4110,7 +4261,9 @@ function slotCost(){
 const SLOT_CAP_BASE=5;
 function townSlotBonus(){ return [0,1,2][townLvl('foundry')]||0; }   // War Foundry: +1 cap per level (max 2)
 // The cap gates the campaign's power curve; Endless stays an uncapped sandbox.
-function slotCap(){ return (G&&G.mode==='endless') ? 99 : SLOT_CAP_BASE + (RB.slotMax||0) + townSlotBonus(); }
+// 🏔️ Structural growth: clearing L20 and L40 each grant +1 cap (G.slotBonus) so
+// the dungeon keeps VISIBLY growing mid-run.
+function slotCap(){ return (G&&G.mode==='endless') ? 99 : SLOT_CAP_BASE + (RB.slotMax||0) + townSlotBonus() + ((G&&G.slotBonus)||0); }
 
 function buySlot(){
   if(!tutAllow('buyroom')){ tutNudge(); return; }   // tutorial: only when prompted
@@ -4439,7 +4592,7 @@ function genHeroSpec(){
   // elite chance climbs with progress; later heroes can roll two traits.
   // Elite Vanguard edict pushes both far higher.
   const vanguard=hasEdict('eliteVanguard');
-  const eliteChance=clamp((vanguard?0.45:0.06) + power*0.02, 0, vanguard?0.95:0.7);
+  const eliteChance=clamp((vanguard?0.45:0.06) + power*0.02 + (hasMut('veterans')?0.10:0), 0, vanguard?0.95:0.7);   // 🧬 Veteran Levies mutation
   const traits=[];
   if(Math.random()<eliteChance){
     const pool=[...TRAIT_KEYS];
@@ -4517,6 +4670,9 @@ function buildHeroFromSpec(spec){
   if(hasEdict('ironHorde'))    hp*=1.35;
   if(hasEdict('bloodPact'))    atk*=1.25;
   if(hasEdict('swiftRaiders')) spd*=1.30;
+  // ---- 🧬 endless mutations (picked every 25 kills) ----
+  if(hasMut('vigor'))          hp*=1.08;
+  if(hasMut('haste'))          spd*=1.15;
   // ---- 📅 today's bounty (date-keyed daily modifier — see DAILY_MODS) ----
   if(dailyActive('swift'))     spd*=1.15;
   if(dailyActive('brittle'))   hp*=0.90;
@@ -4541,6 +4697,7 @@ function buildHeroFromSpec(spec){
     champion: spec.champion||null, champIc: champ?champ.ic:null, champCol: champ?champ.col:null,
     rival: !!spec.rival, rivalGen: spec.rivalGen||0,
     king: !!spec.king, kingGuard: !!spec.kingGuard,
+    ram: !!spec.ram,         // 🐏 L35 set-piece: demolishes the first room he enters
     specPower: n, specTraits: tr,
     maxHp:hp, hp:hp, atk, _atkBase:atk, armor, spd, atkSpeed,
     gold, bounty,
@@ -4608,15 +4765,31 @@ function prepCampaignWave(){
   if(G.waveLevel===campLevel()) return;   // already rolled for this level (an emptied
                                           // queue from corruption stays empty — don't re-roll)
   for(const r of G.pendingRivals) r.eta--;                  // rivals tick one wave closer (once per wave)
-  const comp=levelComp(campLevel());
+  const L=campLevel();
+  const comp=levelComp(L);
   const specs=[];
-  for(let i=0;i<comp.champs;i++)  specs.push(champSpec());
-  let normals=comp.normals + (hasEdict('warband')?1:0) + (dailyActive('horde')?1:0);   // 📅 The Horde bounty: +1 raider
-  for(let i=0;i<normals;i++)      specs.push(nextSpec());
-  if(!specs.length) specs.push(nextSpec());                 // safety: never an empty wave
+  // 🏛️ SET-PIECE MILESTONES — L20 and L35 arrive as NAMED champion waves that
+  // rehearse the King's drama (banner + a composition twist, power kept on-curve).
+  if(L===20){                                               // ⚔️ one champion + 4 armored honor guards (replaces 2 champs + escort)
+    specs.push(champSpec());
+    for(let i=0;i<4;i++){ const sp=nextSpec();
+      if(!sp.champion){ sp.cls='warrior'; if(!sp.traits.includes('armored')) sp.traits.push('armored'); }
+      specs.push(sp); }
+    specs[0].setName='⚔️ THE IRON COMPANY'; specs[0].setSub='a champion and his armored honor guard';
+  } else {
+    for(let i=0;i<comp.champs;i++)  specs.push(champSpec());
+    let normals=comp.normals + (hasEdict('warband')?1:0) + (dailyActive('horde')?1:0);   // 📅 The Horde bounty: +1 raider
+    for(let i=0;i<normals;i++)      specs.push(nextSpec());
+    if(!specs.length) specs.push(nextSpec());               // safety: never an empty wave
+    if(L===35){                                             // 🐏 the lead champion: +50% HP, DEMOLISHES the first room he enters
+      const lead=specs.find(sp=>sp.champion) || specs[0];
+      lead.hpMul=(lead.hpMul||1)*1.5; lead.ram=true;
+      lead.setName='🐏 THE BATTERING RAM'; lead.setSub='he smashes the first hall he enters — brace for it';
+    }
+  }
   rollWaveArchetype(specs);                                 // 🎭 maybe reshape into a named composition
   G.queue=specs;
-  G.waveLevel=campLevel();
+  G.waveLevel=L;
 }
 function spawnGroup(n){
   if(G.tutorial && G._tutWave){ tutSpawnWave(); return; }   // scripted tutorial wave
@@ -4670,7 +4843,11 @@ function spawnGroup(n){
   }
   const anyChamp=G.heroes.find(h=>h.champion);
   const anyRival=G.heroes.find(h=>h.rival && !h.champion);
-  if(anyChamp){
+  const setp=specs.find(s=>s && s.setName);          // 🏛️ L20/L35 set-piece: its title outranks the stock champion banner
+  if(setp){
+    banner(setp.setName, '#ffd34d', setp.setSub||'');
+    shake(8); sfx('boss'); }
+  else if(anyChamp){
     banner('⚔️ CHAMPION APPROACHES', anyChamp.champCol||'#ffd34d',
       anyChamp.heroName+(anyChamp.title?' '+anyChamp.title:''));
     shake(8); sfx('boss'); }
@@ -4970,6 +5147,7 @@ function statusResist(h){
   let r=Math.min(0.45, Math.max(0,lvl-1)*0.010);
   if(h.king) r+=0.42; else if(h.champion) r+=0.25; else if(h.elite) r+=0.10;   // 👑 the King shrugs off corruption & CC the hardest
   if(h.wardT>0) r+=0.28;                                       // 🧙 Wizard ward
+  if(hasMut('bulwark')) r+=0.15;                               // 🧬 Hexproof Banners mutation
   return Math.min(0.78, r);
 }
 function ccDur(h,dur){ return dur*(1-statusResist(h)); }       // resisted control duration
@@ -5280,10 +5458,11 @@ function afterWave(){
     G._waveBeat=false; G.waveEnding=false;
     if(G.phase!=='run') return;        // closed/lost during the beat
     if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
-    // Endless: town every 5 kills, relic every 10, mandate every 25
+    // Endless: town every 5 kills, relic every 10, mandate + 🧬 mutation every 25
     G.townDue   = G.townDue    || Math.floor(G.waveStartSlain/5)  !== Math.floor(G.totalSlain/5);
     G.relicDue  = (G.relicDue||0) + (Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10) ? 1 : 0);   // counter: a champion's guaranteed relic STACKS with the milestone one
     G.mandateDue= G.mandateDue || Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
+    G.mutDue    = G.mutDue     || Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
     gotoReward();
   }, 1300);
 }
@@ -5293,6 +5472,12 @@ function campaignAdvance(){
   const L=campLevel();                       // the level just beaten (1..50)
   if(L>=CAMP_LEVELS){ campaignVictory(); return; }
   G.gold += 25 + L*4;                          // per-level gold
+  // 🏔️ Structural growth beats: the mountain yields a new hall at L20 and L40.
+  if(L===20 || L===40){
+    G.slotBonus=(G.slotBonus||0)+1;
+    banner('THE MOUNTAIN YIELDS ANOTHER HALL', '#9be86b', 'room cap raised to '+slotCap());
+    sfx('unlock');
+  }
   if(L%5===0){
     if((L/5)%2===0){ G.mandateDue=true; G.townDue=true; }   // 10,20,30,40 → 📜 mandate + 🏚 town
     else { G.relicDue=(G.relicDue||0)+1; }                  // 5,15,25,35,45 → 🏺 relic (stacks with a champion's)
@@ -5346,7 +5531,7 @@ function kingGuardSpec(){
   return {cls:'warrior', power:Math.max(1,Math.round(campPower()*KING_GUARD_POWER)), traits:[],
           name:'Knight', title:'', kingGuard:true, debuff:{atkMul:1, burn:0, robbed:false}};
 }
-function destroyRoom(cell){
+function destroyRoom(cell, who){
   const idx=cell.index;
   if(idx<0 || idx>=G.rooms.length || !G.rooms[idx]) return;
   const nm=roomName(G.rooms[idx]);
@@ -5355,11 +5540,12 @@ function destroyRoom(cell){
   burst(cell.x0+ROOM_W/2, FLOOR-30, '#ff5470', 42); burst(cell.x0+ROOM_W/2, FLOOR-64,'#ffd34d',28);
   floater(cell.x0+ROOM_W/2, FLOOR-100, '💥 '+nm+' SMASHED!', '#ff5470', true);
   shake(12); flash('#ff5470',0.22,0.3); sfx('lose');
-  showHint('👑 The King smashes your '+nm+'!');
+  showHint((who||'👑 The King')+' smashes your '+nm+'!');
 }
 function trueVictory(){
   if(G.phase==='win') return;
   G.phase='win'; overlay.classList.add('show'); sfx('win');
+  clearRunSave();                                // 💾 the run is over — drop the mid-run save
   // 👑 ASCENSION: every crown taken raises the next campaign's difficulty —
   // the long-term ladder for an account that out-grew the base siege
   RUNES.asc=Math.min(9,(RUNES.asc||0)+1);
@@ -5395,6 +5581,7 @@ function bossDies(){
   }
   G.phase='lose'; overlay.classList.add('show');
   shake(12); sfx('lose');
+  clearRunSave();                                // 💾 the run is over — drop the mid-run save
   const earned=awardRunes();
   lbAutoSubmit();                                // endless: auto-push the run to the public board
   const keep=deathKeep(), lostPct=Math.round((1-keep)*100);
@@ -5403,7 +5590,8 @@ function bossDies(){
     ? `So close — the High King breached the throne after you survived all ${CAMP_LEVELS} waves. The crown endures… this time.`
     : G.mode==='campaign'
     ? `You fell on Level ${campLevel()}/${CAMP_LEVELS} after slaying ${totalKills()} heroes.`
-    : `You reigned ${G.survived} heroes before the throne fell.`;
+    : `You reigned ${G.survived} heroes before the throne fell.`
+      +((G.scoreMul||1)>1?` 🧬 Mutations ${fmtMul(G.scoreMul)} → board score <b style="color:#ffd34d">${Math.round((G.totalSlain||0)*G.scoreMul)}</b>.`:'');
   const summary=`<h1 style="color:#ff6b8a">THE THRONE HAS FALLEN</h1>
     <div style="font-size:54px">${G.boss.ic}💔</div>
     ${buildPostmortem()}
@@ -5764,7 +5952,11 @@ function afterReward(){
   afterRelicMaybeMandate();
 }
 function afterRelicMaybeMandate(){
-  if(G.mandateDue){ G.mandateDue=false; gotoMandateChoice(townOrBuild); return; }
+  if(G.mandateDue){ G.mandateDue=false; gotoMandateChoice(afterMandateMaybeMut); return; }
+  afterMandateMaybeMut();
+}
+function afterMandateMaybeMut(){
+  if(G.mutDue){ G.mutDue=false; gotoMutChoice(townOrBuild); return; }   // 🧬 endless mutation ladder
   townOrBuild();
 }
 function townOrBuild(){ if(G.townDue){ G.townDue=false; gotoTown(); } else gotoBuild(false); }
@@ -5827,6 +6019,44 @@ function pickMandate(i){
   if(id==='reinforced' && G.boss){ G.boss.maxHp=Math.round(G.boss.maxHp*1.20); G.boss.hp=G.boss.maxHp; }
   sfx('relic'); showHint(MANDATES[id].ic+' Mandate decreed: '+MANDATES[id].name);
   const done=G._mandatePick; G._mandateChoices=null; G._mandatePick=null;
+  overlay.classList.remove('show');
+  (done||townOrBuild)();
+}
+
+/* ========================= 🧬 ENDLESS MUTATION DRAFT =====================
+   Every 25 kills (with the mandate) the player picks how the REALM escalates:
+   1 of 3 hero-side mutators, each worth +MUT_SCORE_STEP on the visible score
+   multiplier that scales the leaderboard submission. Same skeleton as the
+   mandate draft. */
+function rollMutChoices(n){
+  const pool=MUT_KEYS.filter(id=>!hasMut(id));
+  const out=[]; const bag=[...pool];
+  while(out.length<n && bag.length) out.push(bag.splice(ri(0,bag.length-1),1)[0]);
+  return out;
+}
+function gotoMutChoice(onDone){
+  const choices=rollMutChoices(3);
+  if(!choices.length){ (onDone||townOrBuild)(); return; }   // every mutation active — skip
+  G.phase='mutate'; G._mutPick=onDone||null; G._mutChoices=choices;
+  overlay.classList.add('show');
+  overlay.innerHTML=`<h1 style="color:#7ad0c0">🧬 The Realm Mutates</h1>
+    <p>The kingdom escalates — <b>you</b> choose how. Each mutation raises your score multiplier
+       (now <b style="color:#ffd34d">${fmtMul(G.scoreMul)}</b>, +${MUT_SCORE_STEP} per pick).</p>
+    <div class="choices">${choices.map((id,i)=>{ const m=ENDLESS_MUTS[id];
+      return `<div class="choice" style="width:208px;border-color:#7ad0c0" onclick="pickMut(${i})">
+        <div class="big">${m.ic}</div>
+        <h3 style="margin:4px 0">${m.name}</h3>
+        <div class="desc">${m.desc}</div>
+        <div class="small" style="color:#ffd34d">score ${fmtMul((G.scoreMul||1)+MUT_SCORE_STEP)}</div></div>`;}).join('')}</div>
+    ${G.muts&&G.muts.length?`<p class="small" style="opacity:.75">Active: ${G.muts.map(id=>ENDLESS_MUTS[id].ic+' '+ENDLESS_MUTS[id].name).join(' · ')}</p>`:''}`;
+}
+function pickMut(i){
+  if(G.phase!=='mutate') return;
+  const id=G._mutChoices && G._mutChoices[i]; if(!id) return;
+  G.muts.push(id);
+  G.scoreMul=Math.round(((G.scoreMul||1)+MUT_SCORE_STEP)*100)/100;
+  sfx('relic'); showHint(ENDLESS_MUTS[id].ic+' The realm mutates: '+ENDLESS_MUTS[id].name+' — score '+fmtMul(G.scoreMul));
+  const done=G._mutPick; G._mutChoices=null; G._mutPick=null;
   overlay.classList.remove('show');
   (done||townOrBuild)();
 }
@@ -6404,11 +6634,15 @@ function smashDoorway(h,cell){
 }
 function onEnterCell(h,cell){
   if((h.champion||h.king) && cell.kind!=='boss') smashDoorway(h,cell);
+  // 🐏 THE BATTERING RAM (L35 set-piece): the champion DEMOLISHES the first
+  // room he enters — the flag is consumed on the first real room, King-style.
+  if(h.ram && cell.room && cell.kind!=='boss'){ h.ram=false; destroyRoom(cell, '🐏 '+(h.heroName||'The Ram')); }
   // 👑 The King shrugs off corruption and SMASHES rooms as he marches through.
   if(h.king){
     if(cell.room && cell.kind!=='boss' && Math.random()<KING_SMASH) destroyRoom(cell);
     // (no corruption toll, no shopping — fall through to the throne-room handling)
   } else {
+  if(hasMut('ironward') && cell.kind!=='boss') h.armor+=1;   // 🧬 Iron Ward mutation: +1 armor per room marched through
   // Corruption toll: every populated room a hero walks through drains a slice of
   // their MAX HP and leaves a corruption stack. Even a worthless early room still
   // softens the raider — and the deeper the dungeon, the more stacks pile up,
@@ -6479,7 +6713,7 @@ function heroSpellTick(h,dt){
     let cleansed=false;
     for(const o of allies){
       if(o.freeze>0||o.oil>0||o.chill>0||o.shock>0){ o.freeze=0; o.oil=0; o.chill=0; o.shock=0; o.refreezeT=Math.max(o.refreezeT||0,1.5); cleansed=true; }
-      o.blessT=4;
+      o.blessT=hasMut('choir')?8:4;   // 🧬 Fervent Choir mutation: blessings last twice as long
     }
     floater(h.x, h.y-78, cleansed?'🙏 CLEANSE':'🙏 BLESS', '#ffe9a8'); sfx('cast');
     h.spellT=ri(5,7);
@@ -8514,7 +8748,7 @@ function renderTop(){
     ? `👑 THE KING'S SIEGE · ${G.totalSlain} slain`
     : G.mode==='campaign'
     ? `⚔️ Level ${campLevel()}/${CAMP_LEVELS} · ${G.totalSlain} slain`
-    : `Endless · ${G.survived} slain`;
+    : `Endless · ${G.survived} slain${(G.scoreMul||1)>1?` · 🧬${fmtMul(G.scoreMul)}`:''}`;
   topbar.innerHTML=`
     <div class="stat">${b.ic}<span class="small">${b.name.split(' ')[0]}</span></div>
     <div class="stat">❤️<div class="bar"><i id="tbhp" style="width:${b.hp/b.maxHp*100}%;background:linear-gradient(90deg,#ff4d6d,#ff8a8a)"></i>
@@ -8551,7 +8785,7 @@ function updateTop(){
     ? `👑 THE KING'S SIEGE · ${G.totalSlain} slain`
     : G.mode==='campaign'
     ? `⚔️ Level ${campLevel()}/${CAMP_LEVELS} · ${G.totalSlain} slain`
-    : `Endless · ${G.survived} slain`;
+    : `Endless · ${G.survived} slain${(G.scoreMul||1)>1?` · 🧬${fmtMul(G.scoreMul)}`:''}`;
   setTxt($('tbmode'), modeLbl);
 }
 

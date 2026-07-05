@@ -8,6 +8,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 const A = loadGame(`freshGame,chooseBoss,prepCampaignWave,campLevel,BOSSES,
   campaignAdvance,skipDraft,SKIP_DRAFT_GOLD,startCampaign,gotoBossSelect,tutDoneSet,edictsIrrelevant,
   entityAt,stagedHeroX,afterReward,pickRelic,spawnGroup,faceTheKing,champSpec,
+  slotCap,makeRoom,onEnterCell,buildHeroFromSpec,
   WAVE_ARCHETYPES,WAVE_ARCH_MIN_LVL,get bannerMsg(){return bannerMsg;},
   get overlay(){return overlay;},get RUNES(){return RUNES;},set RUNES(v){RUNES=v;},
   get G(){return G;},set G(v){G=v;}`);
@@ -151,6 +152,45 @@ A.G.waveLevel = null; A.G.queue = [];
 A.prepCampaignWave();
 t.ok(!A.G.waveArchetype, 'early levels (< L'+A.WAVE_ARCH_MIN_LVL+') stay archetype-free');
 Math.random = _rand;
+
+// --- 🏔️ structural growth beats: clearing L20/L40 grants +1 room-slot cap ---
+A.G = A.freshGame('campaign'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+const cap0 = A.slotCap();
+A.G.levelIdx = 19; A.G.phase = 'run';               // the L20 wave was just cleared
+A.campaignAdvance();
+t.ok(A.G.slotBonus === 1 && A.slotCap() === cap0 + 1, 'clearing L20 grants +1 room cap (slotBonus)');
+t.ok(((A.bannerMsg && A.bannerMsg.text) || '').includes('THE MOUNTAIN YIELDS ANOTHER HALL'), 'the growth beat banners');
+A.G.levelIdx = 39; A.G.phase = 'run'; A.campaignAdvance();
+t.ok(A.G.slotBonus === 2 && A.slotCap() === cap0 + 2, 'clearing L40 grants the second hall');
+A.G.levelIdx = 24; A.G.phase = 'run'; A.campaignAdvance();
+t.ok(A.G.slotBonus === 2, 'other levels grant nothing');
+
+// --- 🏛️ set-piece milestones: L20 THE IRON COMPANY / L35 THE BATTERING RAM ---
+A.G = A.freshGame('campaign'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+A.G.levelIdx = 19; A.G.waveLevel = null; A.G.queue = [];
+A.prepCampaignWave();
+t.ok(A.G.queue.length === 5 && A.G.queue.filter(s => s.champion).length === 1, 'L20 rolls one champion + 4 escorts');
+t.ok(A.G.queue.slice(1).every(s => s.cls === 'warrior' && s.traits.includes('armored')), 'the escorts are armored warriors');
+t.ok((A.G.queue[0].setName || '').includes('IRON COMPANY'), 'the wave carries its title');
+A.G.phase = 'build'; A.spawnGroup(2);
+t.ok(((A.bannerMsg && A.bannerMsg.text) || '').includes('IRON COMPANY'),
+  'the set-piece title banners at spawn (outranks the stock champion banner)');
+// L35: the ram champion — +50% HP, demolishes the first room he enters
+A.G = A.freshGame('campaign'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+A.G.levelIdx = 34; A.G.waveLevel = null; A.G.queue = [];
+A.prepCampaignWave();
+const ram = A.G.queue.find(s => s.ram);
+t.ok(!!ram && !!ram.champion && Math.abs((ram.hpMul || 1) - 1.5) < 1e-9, 'L35 stamps the lead champion: ram flag + ×1.5 HP');
+t.ok((ram.setName || '').includes('BATTERING RAM'), '…and its title');
+const ramHero = A.buildHeroFromSpec(ram);
+t.ok(ramHero.ram === true, 'the built hero carries the ram flag');
+A.G.rooms = [A.makeRoom('skeleton', 1)]; A.G.slots = 1; A.G.brokenCells = {};
+const rcell = { index: 0, x0: 0, x1: 180, kind: 'room', room: A.G.rooms[0], traps: [], guards: [], mon: null, shop: false };
+A.onEnterCell(ramHero, rcell);
+t.ok(A.G.rooms[0] === null && ramHero.ram === false, 'the ram DEMOLISHES the first room he enters (flag consumed)');
+const room2 = A.makeRoom('skeleton', 1); A.G.rooms[0] = room2;
+A.onEnterCell(ramHero, { index: 0, x0: 0, x1: 180, kind: 'room', room: room2, traps: [], guards: [], mon: null, shop: false });
+t.ok(A.G.rooms[0] === room2, 'the second room is spared — one smash only');
 
 // --- champion doorway smash: once per cell per wave, patched up in build ---
 const B = loadGame(`freshGame,smashDoorway,cellArt,get G(){return G;},set G(v){G=v;}`);
