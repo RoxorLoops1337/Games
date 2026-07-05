@@ -193,6 +193,11 @@
     background:#1a1330;display:flex;flex-direction:column;align-items:center;justify-content:center;
     cursor:pointer;user-select:none;touch-action:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
   .gcell.sel{box-shadow:0 0 0 2px var(--gold) inset;}
+  /* ⚒ freshly-forged gear flashes in its new tier colour (mergeGear sets .forge) */
+  .gcell.forge{animation:forgeflash .9s ease-out;}
+  @keyframes forgeflash{0%{box-shadow:0 0 4px 2px var(--fcol),inset 0 0 14px var(--fcol);transform:scale(1.18);}
+    60%{box-shadow:0 0 18px 5px var(--fcol),inset 0 0 8px var(--fcol);transform:scale(1);}
+    100%{box-shadow:0 0 0 0 transparent;}}
   .gcell .gic{font-size:18px;line-height:1;}
   .gcell .gt{font-size:9px;font-weight:bold;line-height:1.1;}
   /* painted sword art for gear (gear/<kind>_<tier>.png) */
@@ -673,7 +678,7 @@ const ROOMS = {
   oil:      {kind:'trap',   name:'Oil Slick',  ic:'🛢️', col:'#3a3a2a', dmg:3,  rate:0.7,  elem:'oil',  desc:'Coats heroes in oil — slows them, primes fire & lightning.'},
   // ---- SPECIAL traps: an element + a reaction ----
   flame:    {kind:'trap',   name:'Flame Jet',  ic:'🔥', col:'#ff7a2e', dmg:11, rate:0.8,  burn:4, elem:'fire', desc:'Hits hard + burns. Ignites oiled heroes.'},
-  frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). Then any hit SHATTERS for a burst.'},
+  frost:    {kind:'trap',   name:'Frost Trap', ic:'❄️', col:'#9adfff', dmg:5,  rate:0.6,  elem:'ice',  desc:'Chills heroes (slow). A 💥phys/⚡shock hit then SHATTERS for a burst.'},
   tesla:    {kind:'trap',   name:'Tesla Coil', ic:'⚡', col:'#fff34d', dmg:9,  rate:0.7,  elem:'shock',desc:'Lightning. Chains across the party if they are oiled.'},
   venom:    {kind:'trap',   name:'Venom Vent', ic:'🐍', col:'#7bdc6b', dmg:3,  rate:0.7,  elem:'phys', poison:4, desc:'Weak hit, but injects STACKING poison. A 🔥flame room then COMBUSTS the stacks for a burst.'},
   // ---- RARE traps: specialists that hit noticeably harder than commons ----
@@ -688,15 +693,15 @@ const ROOMS = {
   runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.25, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +25%.'},
   // COMMON monsters: the cheap bodies (weakest — swarm/filler)
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Marching goblins that level up from their own kills.'},
-  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:28, atk:10,  desc:'Scales hard with levels.'},
+  skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:28, atk:10,  desc:'A cheap, sturdy guard — stack copies to hold the line.'},
   // SPECIAL: a proper wall
-  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
+  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:92, atk:26, desc:'Late-game wall of pain.'},
   // RARE monsters: stronger bodies + a real trick
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:66, atk:9, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:58, atk:9, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
-  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:38, atk:8, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks burst; weak to ☠poison & 💥AoE.'},
+  slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:38, atk:8, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks a ton of hits, but swings soft.'},
   orc:      {kind:'monster',name:'Orc Marauder',ic:'🪓', col:'#5a8f3a', hp:48, atk:16, desc:'A tusked green warrior — hits hard from the front line. No gimmicks, just a wall of muscle to anchor a room of traps.'},
-  dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:44, atk:7, breath:{burn:3, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
+  dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:44, atk:7, breath:{burn:2, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
   // EPIC support
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:36, atk:2, totem:true, desc:'Support: while it stands, +35% trap & guard output to its OWN room. Hide it behind a tank.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
@@ -725,7 +730,7 @@ const EDICT_ICON={ ironHorde:'iron', bloodPact:'blood', swiftRaiders:'swift', wa
 function edictFace(id){ return EDICT_ICON[id] ? '<img class="cardimg" src="modifiers/'+EDICT_ICON[id]+'.png" alt="" draggable="false">' : null; }
 // Painted relic icons (icons/relic_<word>.png) per relic key; emoji fallback.
 const RELIC_ICON={ cFang:'cracked', cEmber:'wildfire', sTooth:'serpent', sCharm:'charm', sPouch:'greedy', sMana:'mana', sCollar:'collar',
-  cShackle:'shackle', cCoin:'worncoin', cIdol:'idol', sWard:'wardingstone', eMidas:'alchemist', rBanner:'horn',
+  cShackle:'shackle', cCoin:'worncoin', cIdol:'idol', sWard:'wardingstone', eMidas:'alchemist', rBanner:'banner', eHorn:'horn',
   rScale:'dragonscale', rBlood:'bloodstone', rTome:'tome', rEye:'hoarder', rFrost:'frost', rDeed:'deed',
   eCore:'infernal', eStaff:'archmage', lPhyl:'phylactery', mRuin:'avatar', mEtern:'eternity' };
 function relicFace(id,cls){ return RELIC_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/relic_'+RELIC_ICON[id]+'.png" alt="" draggable="false">' : null; }
@@ -817,6 +822,31 @@ function synergyFromTypes(types){
   return SYNERGIES[t.slice().sort().join('+')]||null;
 }
 function roomSynergy(room){ return (room&&room.units) ? synergyFromTypes(room.units.map(u=>u.type)) : null; }
+// 🔗 Did the last unit change COMPLETE a synergy? (null→non-null transition —
+// placeCard captures the room's synergy BEFORE the placement and passes it here.)
+function synergyJustFormed(prevSyn, room){ const s=roomSynergy(room); return (!prevSyn && s) ? s : null; }
+// 🔗 Would this card COMPLETE a synergy pair in an existing room? Scans the
+// dungeon for the FIRST room where the pair would form (no synergy yet, a free
+// slot, and room for another trap). Damage traps only — amps never pair.
+function synergyHint(cardType){
+  const def=ROOMS[cardType];
+  if(!G || !G.rooms || !def || def.kind!=='trap' || def.amp) return null;
+  for(let i=0;i<G.rooms.length;i++){
+    const r=G.rooms[i]; if(!r || !r.units) continue;
+    if(roomSynergy(r)) continue;                                     // already formed
+    if(r.units.length>=(r.cap||1)) continue;                         // no free slot
+    const tt=roomTrapUnits(r).map(u=>u.type);
+    if(tt.length>=MAX_TRAPS) continue;                               // trap slots full
+    const syn=synergyFromTypes([...tt, cardType]);
+    if(syn) return {room:i, syn, st:SYNERGY_TYPES[syn.type]};
+  }
+  return null;
+}
+// One badge line for draft choices + hand-card tooltips (empty string if none).
+function synergyHintLine(cardType){
+  const h=synergyHint(cardType);
+  return h ? `<span style="color:${h.st.col};font-weight:bold">🔗 Forms <b>${h.st.name}</b> with room ${h.room+1}</span>` : '';
+}
 // The signature rider, run after a synergy room's trap lands a hit. (physical &
 // execution shape the DAMAGE instead — handled inline in trapTick.)
 function synergyOnHit(h, cell, tl, dmg){
@@ -933,7 +963,7 @@ const TOWN_SABOTAGE = {
 };
 // Town-wide schemes: broad strategic levers, dread-priced, last several waves.
 const TOWN_SCHEMES = {
-  well:   {name:'Poison the Well',  ic:'🩸', cost:6, waves:5, desc:'Next 5 heroes arrive burning.'},
+  well:   {name:'Poison the Well',  ic:'🩸', cost:6, waves:5, desc:'Heroes arrive burning for the next 5 waves.'},
   smith:  {name:'Bribe the Smith',  ic:'🔨', cost:5, waves:5, desc:'Disables the hero shop for 5 waves.'},
   temple: {name:'Burn the Temple',  ic:'🔥', cost:5, waves:5, desc:'No clerics arrive for 5 waves.'},
 };
@@ -1058,7 +1088,7 @@ const ABIL = {
            run:h=>{dealToHero(h, abilDmg(34+G.boss.lvl*5),'BURN', false, 'fire'); addBurn(h,6,4);}},
   bolt:   {name:'Bone Bolt',ic:'🦴', cost:18, cd:2.5,desc:'Quick ranged shock. Chains off oil.',
            run:h=>dealToHero(h, abilDmg(18+G.boss.lvl*3),'HIT', false, 'shock')},
-  curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Halves the hero\'s attack.',
+  curse:  {name:'Curse',   ic:'🟣', cost:24, cd:7,  desc:'Cuts the hero\'s attack by 45%.',
            run:h=>{ if(h.cursed) return; h.cursed=true; h.atk*=0.55; floater(h.x,h.y-60,'CURSED','#b985ff');}},
   freeze: {name:'Freeze',  ic:'❄️', cost:34, cd:7,  desc:'Freezes in place — primes SHATTER. A costly lock.',
            run:h=>{h.freeze=Math.max(h.freeze||0,ccDur(h,2.2)); h.chill=Math.max(h.chill||0,ccDur(h,2.6)); floater(h.x,h.y-60,'FROZEN','#9adfff');}},
@@ -1078,12 +1108,15 @@ const ABIL = {
              dealToHero(o, abilDmg(17+G.boss.lvl*3), 'BURN', false, 'fire'); if(o.state!=='dead'){ addBurn(o,5,4); } }
              floater(bossX(),FLOOR-92,'🔥 HELLFIRE','#ff7a2e'); shake(8); }},
   siphon: {name:'Mana Siphon',ic:'🔮',cost:14, cd:4, desc:'Bleeds the hero and converts the hit into boss mana.', sig:true,
-           run:h=>{ const dmg=abilDmg(14+G.boss.lvl*2); dealToHero(h, dmg, 'SIPHON', false, 'shock');
-             const gain=Math.round(dmg*0.7); G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+gain);
-             floater(bossX(),FLOOR-90,'🔮 +'+gain+' mana','#4dc3ff'); }},
-  devour: {name:'Devour',  ic:'😋', cost:30, cd:8,  desc:'Swallows a hero under 30% HP whole (instant kill + big heal); else bites deep.', sig:true,
-           run:h=>{ if(h.hp<=h.maxHp*0.30){ floater(h.x,h.y-70,'😋 DEVOURED','#ff5470'); burst(h.x,h.y-24,'#b0563a',24); shake(10);
-               h.hp=0; heroDies(h); healBoss(Math.round(G.boss.maxHp*0.12)); }
+           run:h=>{ const before=h.hp; dealToHero(h, abilDmg(14+G.boss.lvl*2), 'SIPHON', false, 'shock');
+             const dealt=Math.max(0, before-h.hp);   // refund only what actually LANDED (a dodge pays nothing)
+             const gain=Math.min(Math.round(ABIL.siphon.cost*0.5), Math.round(dealt*0.4));
+             if(gain>0){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+gain);
+               floater(bossX(),FLOOR-90,'🔮 +'+gain+' mana','#4dc3ff'); } }},
+  devour: {name:'Devour',  ic:'😋', cost:30, cd:8,  desc:'Swallows a hero under 30% HP whole (instant kill + big heal); champions & the King only suffer a deep bite.', sig:true,
+           run:h=>{ if(h.hp<=h.maxHp*0.30 && !h.champion && !h.king){ floater(h.x,h.y-70,'😋 DEVOURED','#ff5470'); burst(h.x,h.y-24,'#b0563a',24); shake(10);
+               h.hp=0; heroDies(h); healBoss(Math.round(G.boss.maxHp*0.12)); }   // the execute (and its feast) never swallows a champion/King
+             else if(h.champion||h.king){ dealToHero(h, abilDmg(28+(G.boss.lvl||1)*4)+Math.round(h.maxHp*0.08), 'BITE', 'full', 'phys', true); healBoss(Math.round(G.boss.maxHp*0.04)); }
              else { dealToHero(h, abilDmg(28+G.boss.lvl*4), 'BITE', true, 'phys'); healBoss(Math.round(G.boss.maxHp*0.04)); } }},
   raise:  {name:'Raise Dead',ic:'💀',cost:26, cd:7,  desc:'Hexes the hero; a kill heals the boss and terrifies the party.', sig:true,
            run:h=>{ const before=h.state; dealToHero(h, abilDmg(16+G.boss.lvl*3), 'HEX', false, 'shock');
@@ -1149,7 +1182,7 @@ const RUNE_LIST=[
   rn('room1','Sharp Spikes','🦷','+6% trap damage',3,1, 5,1,{trapDmg:0.06},'root'),
   rn('room2','Feral','👹','+6% monster damage',3,2, 5,1,{monDmg:0.06},'room1'),
   rn('room3','Reinforced','🧱','+6% monster HP',3,3, 5,2,{monHp:0.06},'room2'),
-  rn('room4','Master Builder','📐','+1 room level cap',3,4, 2,3,{upCap:1},'room3'),
+  rn('room4','Master Builder','📐','+1 trap level cap',3,4, 2,3,{upCap:1},'room3'),
   rn('room5','Excavator','⛏️','+1 room-slot cap & +5% synergy',3,5, 1,5,{slotMax:1,synergy:0.05},'room4'),
   // 🧛 Warden
   rn('town1','Negotiator','🤝','town costs 6% less',4,1, 5,1,{townDisc:0.06},'root'),
@@ -1351,7 +1384,8 @@ function pendingResources(){             // the haul you've gathered so far this
   // Per-kill loot rolls (see heroDies): 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing.
   // Champions roll twice. Quarry still scales the wood/stone/shards haul.
   const d=G.drops||{}, m=quarryMul();
-  return { wood:Math.floor((d.wood||0)*m), stone:Math.floor((d.stone||0)*m), shards:Math.floor((d.shards||0)*m) };
+  const shm=m*(dailyActive('rich_veins')?1.5:1);   // 📅 Rich Veins bounty: +50% shards
+  return { wood:Math.floor((d.wood||0)*m), stone:Math.floor((d.stone||0)*m), shards:Math.floor((d.shards||0)*shm) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -1386,19 +1420,19 @@ const UNLOCK_CARD={ oil:25, frost:65, tesla:120, magebane:50, maul:105, gallows:
 // maps are kept separate because 'ogre' & 'dragon' are keys in BOTH BOSSES and ROOMS.
 const UNLOCK_BOSS_COND={
   ogre:  {stat:'throne',     n:30, label:'Slay 30 heroes that breach your throne'},
-  ent:   {stat:'poisoned',   n:40, label:'Poison 40 heroes to death'},
+  ent:   {stat:'poisoned',   n:40, label:'Slay 40 heroes while poisoned'},
   golem: {stat:'waves',      n:60, label:'Clear 60 waves'},
 };
 const UNLOCK_CARD_COND={
   oil:      {stat:'reactions',   n:15,    label:'Trigger 15 elemental reactions'},
-  frost:    {stat:'frozen',      n:25,    label:'Freeze 25 heroes to death'},
+  frost:    {stat:'frozen',      n:25,    label:'Slay 25 heroes while frozen'},
   tesla:    {stat:'abil',        n:60,    label:'Cast 60 boss abilities'},
   magebane: {stat:'casterKills', n:20,    label:'Slay 20 Mage & Cleric heroes'},
   maul:     {stat:'maxCombo',    n:8,     label:'Land an 8-kill combo streak'},
   gallows:  {stat:'champions',   n:12,    label:'Execute 12 champions'},
   hexward:  {stat:'relics',      n:25,    label:'Collect 25 relics'},
-  bombard:  {stat:'burned',      n:50,    label:'Burn 50 heroes to death'},
-  venom:    {stat:'poisoned',    n:20,    label:'Poison 20 heroes to death'},
+  bombard:  {stat:'burned',      n:50,    label:'Slay 50 heroes while burning'},
+  venom:    {stat:'poisoned',    n:20,    label:'Slay 20 heroes while poisoned'},
   corrode:  {stat:'merges',      n:25,    label:'Forge 25 gear merges'},
   hexbrand: {stat:'gold',        n:40000, label:'Loot 40,000 gold in total'},
   warden:   {stat:'tankKills',   n:25,    label:'Slay 25 Warrior heroes'},
@@ -1606,7 +1640,7 @@ function floorLootAt(wx){
 }
 function collectLoot(i){
   const arr=G.floorLoot||[]; const L=arr[i]; if(!L) return false;
-  if((G.chest||[]).length>=CHEST_MAX){ showHint('🧰 Chest full ('+CHEST_MAX+') — merge or scrap gear to make room.'); return false; }
+  if((G.chest||[]).length>=CHEST_MAX){ showHint('🧰 Chest full ('+CHEST_MAX+') — merge or equip gear to make room.'); return false; }
   G.chest=G.chest||[]; G.chest.push({k:L.k, t:L.t, v:L.v}); arr.splice(i,1);
   burst(L.x, FLOOR-16, RELIC_TIERS[L.t].col, 10); sfx('relic');
   showHint('🧰 Collected '+swordName(L)+' ('+RELIC_TIERS[L.t].name+', '+G.chest.length+'/'+CHEST_MAX+').');
@@ -1632,10 +1666,12 @@ function mergeGear(i,j){
   const nt=TIER_ORDER[ni+1];
   const hi=Math.max(i,j), lo=Math.min(i,j);
   G.chest.splice(hi,1); G.chest.splice(lo,1);          // remove both
-  G.chest.push({k:a.k, t:nt, v:gearRollV(a.k)});        // forge the upgrade (a fresh variant roll)
+  const nu={k:a.k, t:nt, v:gearRollV(a.k)};             // forge the upgrade (a fresh variant roll)
+  G.chest.push(nu);
   bumpStat('merges');                                   // feat: gear merges forged
-  selGear=-1; sfx('relic');
-  showHint('⬆ Merged into '+swordName({k:a.k,t:nt})+' ('+RELIC_TIERS[nt].name+')!');
+  G._mergeFlashAt=performance.now(); G._mergeFlashIdx=G.chest.length-1;   // chest popup: flash the forged cell
+  selGear=-1; sfx('merge');
+  showHint('⬆ Merged into '+swordName(nu)+' ('+RELIC_TIERS[nt].name+')!');
   renderPanel();
   if(typeof tutEvent==='function') tutEvent('merge');     // tutorial: advances the "forge an upgrade" beat
 }
@@ -1714,6 +1750,7 @@ function effText(e){ const p=[];
   if(e.freeze)  p.push('❄️ '+Math.round(e.freeze.chance*100)+'% freeze');
   return p.join(' · '); }
 function equipGear(gi, slot){
+  if(G && G.tutorial){ tutNudge(); return; }   // merge beat needs BOTH swords in the chest — equip after the tutorial
   const g=G.chest[gi]; if(!g) return;
   const r=G.rooms[slot];
   const mons=r ? roomMonUnits(r).filter(u=>u.type!=='goblin') : [];   // goblin dens spawn — they can't wear gear
@@ -1822,9 +1859,10 @@ function rollRelicChoices(n){
   const picks=[]; let guard=0;
   while(picks.length<n && guard++<200){
     let t=rollTier(L);
-    let pool=RELIC_BY_TIER[t].filter(id=>!owned.has(id)&&!picks.includes(id));
+    const dead=id=>(id==='rDeed' && G.mode==='endless');   // Endless has no room-slot cap — the Deed would do nothing
+    let pool=RELIC_BY_TIER[t].filter(id=>!owned.has(id)&&!picks.includes(id)&&!dead(id));
     if(!pool.length){ // fall back across tiers
-      pool=Object.keys(RELICS).filter(id=>!owned.has(id)&&!picks.includes(id));
+      pool=Object.keys(RELICS).filter(id=>!owned.has(id)&&!picks.includes(id)&&!dead(id));
       if(!pool.length) break;
     }
     picks.push(pool[ri(0,pool.length-1)]);
@@ -1954,7 +1992,7 @@ function freshGame(mode){
     killer:null,          // snapshot of the hero who felled the throne
     mandates:[],          // rule-changing dungeon upgrades drafted mid-run
     mandateDue:false,     // a mandate draft is queued (endless milestone)
-    relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
+    relicDue:0,           // relic drafts queued — a COUNTER (champion kill + milestone can stack)
     kingDue:false,        // the King's final raid is queued for the next wave
     kingFight:false,      // the King is currently raiding the dungeon (finale)
     combo:0,              // kill streak (resets when a hero strikes the boss)
@@ -1996,6 +2034,25 @@ function countTo(el, target){
 function showHint(t){ hintEl.textContent=t; hintEl.classList.add('show');
   clearTimeout(showHint._t); showHint._t=setTimeout(()=>hintEl.classList.remove('show'),2200); }
 function floater(x,y,txt,col,big){ floats.push({x,y,txt,col,life:1,vy:big?-26:-34,big:!!big,fade:big?0.62:0.9}); }
+// Plain per-hero damage numbers coalesce so hordes don't wallpaper the screen:
+// hits inside a 0.4s window merge into ONE growing float (its text is updated in
+// place), and a hero shows at most DMG_FLOAT_CAP plain numbers at once — past
+// that, new hits fold into the newest one. Named floats (CRIT, DODGE, reactions,
+// SMITE, payouts) still use floater() directly and always show.
+const DMG_FLOAT_WIN=400, DMG_FLOAT_CAP=3;
+function dmgFloater(h,dmg,col){
+  const now=(typeof performance!=='undefined')?performance.now():Date.now();
+  h._dmgFls=(h._dmgFls||[]).filter(f=>f.life>0);
+  const live=h._dmgFls[h._dmgFls.length-1];
+  if(live && (now-(h._dmgAccT||0)<DMG_FLOAT_WIN || h._dmgFls.length>=DMG_FLOAT_CAP)){
+    h._dmgAcc=(h._dmgAcc||0)+dmg; h._dmgAccT=now;
+    live.txt='-'+h._dmgAcc; live.life=Math.max(live.life,0.9);   // the number grows in place
+    return;
+  }
+  h._dmgAcc=dmg; h._dmgAccT=now;
+  const f={x:h.x+ri(-8,8),y:h.y-44,txt:'-'+dmg,col,life:1,vy:-34,big:false,fade:0.9};
+  floats.push(f); h._dmgFls.push(f);
+}
 function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
   {x,y,vx:rnd(-90,90),vy:rnd(-150,-20),life:rnd(.4,.9),col,sz:rnd(2,5)}); }
 
@@ -2121,6 +2178,15 @@ const SFX={
   combo:()=>tone(880,0.08,'square',0.13,1320),
   plop:()=>tone(440,0.09,'sine',0.15,150),                                   // rune drops into the book
   ching:()=>{ tone(1568,0.06,'triangle',0.12); setTimeout(()=>tone(2349,0.09,'triangle',0.10),42); },  // coin into the chest
+  wavewin:()=>[659,880,1319].forEach((f,i)=>setTimeout(()=>tone(f,0.16,'square',0.14),i*95)),          // 🎉 wave-clear victory stinger
+  synergy:()=>{ tone(330,0.16,'sawtooth',0.13,990); setTimeout(()=>tone(660,0.14,'square',0.12,1980),70);
+    setTimeout(()=>tone(1320,0.18,'triangle',0.11,2200),150); },                                        // 🔗 synergy formed — rising elemental zap
+  merge:()=>{ tone(140,0.12,'square',0.18,60); noiseBurst(0.05,0.10,900);
+    setTimeout(()=>tone(1175,0.22,'triangle',0.09),55); },                                              // ⚒ gear forge — anvil clunk + metallic ring
+  unlock:()=>[784,988,1319,1760].forEach((f,i)=>setTimeout(()=>tone(f,0.12,'triangle',0.13),i*60)),     // 🔓 unlock — ascending sparkle
+  champdown:()=>{ tone(220,0.28,'sawtooth',0.18,58); noiseBurst(0.12,0.10,1500);
+    setTimeout(()=>tone(147,0.34,'square',0.16,49),110); },                                             // 👑 champion slain — dark heavy sting
+  go:()=>tone(880,0.07,'triangle',0.12,1320),                                                           // ▶ start-gate confirm blip
 };
 function sfx(name){
   const f=SFX[name]; if(!f) return;
@@ -2221,7 +2287,26 @@ function startMusic(){ if(!AC||_musicTimer) return; mtStart(musicMood||'title');
 function setMusicMood(mood){
   if(!MUSIC_TRACKS[mood] || mood===musicMood) return;
   musicMood=mood;
-  if(AC) mtStart(mood);
+  if(!AC) return;
+  // Gentle crossfade: duck the music bus 150ms, swap the track, ramp back up.
+  // Pure bus-gain work — the sequencer itself is untouched. Any failure (stubbed
+  // audio in tests, closed context) falls back to the old hard cut.
+  try{
+    const t=AC.currentTime;
+    musicBus.gain.cancelScheduledValues(t);
+    musicBus.gain.setValueAtTime(musicBus.gain.value, t);
+    musicBus.gain.linearRampToValueAtTime(0.0001, t+0.15);
+    setTimeout(()=>{
+      if(musicMood!==mood) return;                 // a newer mood swap won the race
+      try{ mtStart(mood); }catch(_){ }
+      try{
+        const t2=AC.currentTime;
+        musicBus.gain.cancelScheduledValues(t2);
+        musicBus.gain.setValueAtTime(0.0001, t2);
+        musicBus.gain.linearRampToValueAtTime(musVol, t2+0.15);
+      }catch(_){ try{ musicBus.gain.value=musVol; }catch(__){ } }
+    }, 160);
+  }catch(_){ mtStart(mood); }
 }
 // Pick the mood from the current game state (called each frame; no-ops if same).
 let uiScreen='title';   // which overlay screen is up when no run is active
@@ -2293,10 +2378,12 @@ function closeDungeon(){
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
+    ${nextGoalHTML()}
     <div class="menu-btns">
       <button class="go" onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="openRunes()">🔮 Rune Page</button>
       ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
+      <button onclick="shareRun()">📋 Share</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
   aftermathSequence(earned, summary, G.mode==='endless');   // endless → auto-open the leaderboard after the payout
@@ -2438,6 +2525,7 @@ function showStartGate(){
 function startGo(){
   const g=document.getElementById('startgate'); if(g) g.classList.remove('show');
   try{ if(audioOn) initAudio(); }catch(_){ }                       // unlock the audio context → title music starts
+  sfx('go');                                                       // tiny confirm blip on the very first tap
   try{ const el=document.documentElement;                          // the explicit tap lets us go fullscreen
     if(el && el.requestFullscreen){ const p=el.requestFullscreen({navigationUI:'hide'}); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
   try{ if(typeof screen!=='undefined' && screen.orientation && screen.orientation.lock){ const p=screen.orientation.lock('landscape'); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
@@ -2460,6 +2548,7 @@ function openOptions(){
       <div class="pauserow"><label>${audioOn?'\uD83D\uDD0A':'\uD83D\uDD07'} Audio</label>
         <button onclick="toggleAudio();openOptions()">${audioOn?'On \u2014 tap to mute':'Muted \u2014 tap to enable'}</button></div>
     </div>
+    ${(typeof SUPPORT_URL!=='undefined' && SUPPORT_URL)?`<p class="small" style="opacity:.7;margin:2px 0">\u2615 Enjoying the game? <a href="${SUPPORT_URL}" target="_blank" rel="noopener" style="color:#ffd34d">Support the dungeon</a></p>`:''}
     <div class="menu-btns"><button onclick="gotoMenu()">\u2190 Back</button></div>`;
 }
 // Four grouped buttons, each leading to a small submenu (no link clutter).
@@ -2477,6 +2566,7 @@ function gotoMenu(){
     <h1>NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
     <p style="opacity:.85;margin:2px 0 12px;font-size:15px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills${s.asc?` · <span style="color:#c79bff">👑 A${s.asc}</span>`:''}`:' · fresh profile'}</p>
+    ${dailyMenuLine()}
     <div style="display:flex;gap:22px;align-items:stretch;justify-content:center;flex-wrap:wrap;width:min(820px,100%);margin-top:6px">
       <div class="menu-btns" style="flex:1 1 320px;min-width:300px;flex-direction:column;align-items:stretch;gap:16px;margin-top:0">
       <button class="go${tutDoneGet()?'':' tut-pulse'}" style="min-width:250px;flex:1" onclick="openPlay()">⚔️ Start Game${sub('campaign · endless · tutorial')}</button>
@@ -2484,6 +2574,7 @@ function gotoMenu(){
       </div>
       <div class="menu-btns" style="flex:1 1 320px;min-width:300px;flex-direction:column;align-items:stretch;gap:16px;margin-top:0">
       <button style="min-width:250px" onclick="openLibrary()">📖 Library${sub('combo codex · how to play')}</button>
+      <button style="min-width:250px" onclick="openLeaderboard()">🏆 Leaderboard${sub('endless top raiders')}</button>
       <button style="min-width:250px" onclick="openTitle()">💾 Save Slots${sub('switch profile')}</button>
       <button style="min-width:250px" onclick="openOptions()">\u2699\uFE0F Options${sub('music & sfx mixer')}</button>
       </div>
@@ -2528,7 +2619,7 @@ async function lbSubmit(score){
 // falls back to "Anonymous" if no name is stored yet. Fully silent failure.
 function lbAutoSubmit(){
   if(!G || G.mode!=='endless') return;
-  const score = Math.max(G.totalSlain||0, RUNES.best||0);
+  const score = G.totalSlain||0;               // THIS run only — the daily/weekly boards must not echo the all-time PB
   if(score<=0) return;
   let name='Anonymous';
   try{ name = (localStorage.getItem('bm_lbname')||'').trim() || 'Anonymous'; }catch(_){ }
@@ -2711,6 +2802,84 @@ async function cloudRestore(){
     openCloud('✔ Restored into Slot '+saveSlot+'.');
   }catch(_){ showHint('☁️ Restore failed — check the code.'); }
 }
+// ☁️ Auto-backup: once a slot HAS a sync code, silently re-upload after every
+// run payout (awardRunes) so Safari's 7-day storage eviction can't wipe a lapsed
+// player's profile. Fire-and-forget, ≤1 upload per 60s, fully silent on failure.
+let _cloudPushT=0;
+function cloudAutoBackup(){
+  try{
+    const code=cloudCode(); if(!code) return;
+    const now=Date.now(); if(now-_cloudPushT<60000) return;
+    _cloudPushT=now;
+    fetch('/api/save',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({code, data:{v:1, runes:RUNES, town:TOWN}})}).catch(()=>{});
+  }catch(_){ }
+}
+
+/* ======================= DAILY BOUNTY & STREAK ==========================
+   📅 One date-keyed modifier per UTC day (every player shares it), applied in
+   BOTH modes at the existing spawn/award points via tiny dailyActive() guards,
+   plus a flat first-run-of-the-day rune bonus and a 🔥 consecutive-day streak
+   that sweetens rune DROPS (never the flat level pay — same rule as edicts).
+   State (NEW keys, per slot): bm_daily_<slot> = last claimed day,
+   bm_streak_<slot> = {day, count}. Helpers take an optional day key so tests
+   can inject dates without mocking Date. */
+function dailyKey(d){ return (d||new Date()).toISOString().slice(0,10); }   // UTC YYYY-MM-DD
+function prevDayKey(k){ return new Date(Date.parse(k)-86400000).toISOString().slice(0,10); }
+const DAILY_RUNE_BONUS=10;             // first run-end of the day pays this flat
+const DAILY_MODS=[
+  {id:'swift',      ic:'🥾', name:'Swift Boots',   desc:'heroes are 15% faster'},
+  {id:'gold',       ic:'💰', name:'Fat Purses',    desc:'+25% gold from kills'},
+  {id:'runes',      ic:'🔮', name:'Rune Tide',     desc:'+50% rune drops'},
+  {id:'brittle',    ic:'🦴', name:'Brittle Bones', desc:'heroes have 10% less HP'},
+  {id:'horde',      ic:'⚔️', name:'The Horde',     desc:'+1 raider per wave'},
+  {id:'rich_veins', ic:'💠', name:'Rich Veins',    desc:'+50% shards gathered'},
+];
+function dailyMod(key){                // deterministic: the day string hashes into the table
+  const k=key||dailyKey(); let h=0;
+  for(let i=0;i<k.length;i++) h=(h*31 + k.charCodeAt(i))>>>0;
+  return DAILY_MODS[h%DAILY_MODS.length];
+}
+// The one guard every apply-site uses. The scripted tutorial is exempt — its
+// beats are hand-tuned and must not drift with the calendar.
+function dailyActive(id){ return !(G&&G.tutorial) && dailyMod().id===id; }
+function dailyRuneMul(){ return dailyActive('runes')?1.5:1; }
+function dailyClaimedKey(){ try{ return localStorage.getItem('bm_daily_'+saveSlot); }catch(_){ return null; } }
+// First run-end of the day: pay the flat bonus once, then mark the day claimed.
+function dailyClaim(todayKey){
+  const k=todayKey||dailyKey();
+  if(dailyClaimedKey()===k) return 0;
+  try{ localStorage.setItem('bm_daily_'+saveSlot, k); }catch(_){ }
+  return DAILY_RUNE_BONUS;
+}
+// 🔥 Streak — {day, count} advances on the first run-end of each day: yesterday
+// kept it alive → count++, a gap resets to 1. Returns the current count.
+function streakGet(){ try{ const s=JSON.parse(localStorage.getItem('bm_streak_'+saveSlot)||'null'); return (s&&s.day&&(s.count>=1))?s:null; }catch(_){ return null; } }
+function streakBump(todayKey){
+  const k=todayKey||dailyKey(); const s=streakGet();
+  if(s && s.day===k) return s.count;                       // already counted today
+  const count=(s && s.day===prevDayKey(k)) ? s.count+1 : 1;
+  try{ localStorage.setItem('bm_streak_'+saveSlot, JSON.stringify({day:k, count})); }catch(_){ }
+  return count;
+}
+// A streak that wasn't fed today or yesterday is dead — shows (and pays) 0.
+function streakCount(){
+  const s=streakGet(); if(!s) return 0;
+  const k=dailyKey();
+  return (s.day===k || s.day===prevDayKey(k)) ? s.count : 0;
+}
+// +10% rune drops per streak day from the 2nd day on, capped at +50%. Day 1 is
+// just a normal run — the bonus starts once the streak is real.
+function streakMul(){ const n=streakCount(); return n>=2 ? 1+Math.min(0.5, n*0.10) : 1; }
+// One-liner for the main menu: today's bounty + unclaimed-bonus hint + streak.
+function dailyMenuLine(){
+  try{
+    const m=dailyMod(), n=streakCount();
+    const bonus=dailyClaimedKey()!==dailyKey() ? ` · first run today <b style="color:#ffd34d">+${DAILY_RUNE_BONUS} 🔮</b>` : '';
+    const streak=n>=2 ? `<br>🔥 Streak: <b>${n} days</b> (+${Math.min(50,n*10)}% runes)` : '';
+    return `<p class="small" style="margin:0 0 10px;color:#cdbaff">📅 Today's Bounty: <b>${m.ic} ${m.name}</b> — ${m.desc}${bonus}${streak}</p>`;
+  }catch(_){ return ''; }
+}
 function showHelp(){
   overlay.innerHTML = `
     <h1>How to play</h1>
@@ -2723,7 +2892,7 @@ function showHelp(){
         block, the shop arms them. Fire <b>boss abilities</b> (mana) any time.<br>
       <b>4. Loot.</b> When the hero dies you take their gold and draft a new card.<br>
       <b>Lose</b> if a hero reaches the throne and drops the boss to 0 HP.
-        Boss HP barely heals — only <b>Mend/Drain</b> abilities restore it, so don't
+        Boss HP barely heals — only <b>Mend/Drain</b>, 🧪 throne potions and a few passives restore it, so don't
         let anyone through.
     </p>
     <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
@@ -2837,7 +3006,7 @@ function openCodex(){
     <h2 style="margin:6px 0 4px">Reactions</h2>
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
     <h2 style="margin:12px 0 4px">Rooms</h2>
-    <p class="small" style="opacity:.85;margin:0 0 4px">Each room holds up to <b>${MAX_SLOTS} slots</b> — ⬆ spend gold to add one (every room starts with 1). At most <b>${MAX_TRAPS} traps</b>; fill the rest with monsters, mix &amp; match. Drop the <b>same trap</b> on itself to level it up (max ${MAX_LEVEL}); monsters <b>stack as independent copies</b> and toughen from the room's <b>veteran</b> kills. Synergy is emergent — line up statuses (oil → flame, frost → shatter) using the reactions above.</p>
+    <p class="small" style="opacity:.85;margin:0 0 4px">Each room holds up to <b>${MAX_SLOTS} slots</b> — ⬆ spend gold to add one (every room starts with 1). At most <b>${MAX_TRAPS} traps</b>; fill the rest with monsters, mix &amp; match. Drop the <b>same trap</b> on itself to level it up (max ${maxLevel()}); monsters <b>stack as independent copies</b> and toughen from the room's <b>veteran</b> kills. Pair the right two traps and the room becomes a 🔗 <b>synergy room</b> — bonus damage plus a signature effect — and elemental reactions stack on top.</p>
     <h2 style="margin:12px 0 4px">Keywords</h2>
     <div style="max-width:640px;text-align:left;margin:0 auto">${keys}</div>
     <div class="menu-btns"><button class="go" onclick="openLibrary()">← Back</button></div>`;
@@ -3275,7 +3444,7 @@ function startTutorial(){
   tutShow(); render();
 }
 // Generic modal painter (used by the scripted steps AND the finale).
-let tutBtnFn=null;
+let tutBtnFn=null, tutBtnFn2=null;   // primary + optional secondary button (finale offers two paths)
 /* ---- Tutorial layout overrides (designed in tutorial.html → tutorial.json) ----
    A downloaded tutorial.json may set, globally and per step (keyed by step index),
    the tip box's width/padding/font/alignment/position, the wording, and the arrow
@@ -3316,16 +3485,20 @@ function applyTutCam(i){
     if(typeof draw==='function') draw();
   }catch(_){}
 }
-function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
+function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; tutBtnFn2=null; f(); } }
+function tutBtn2(){ const f=tutBtnFn2; if(f){ tutBtnFn=null; tutBtnFn2=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
-  tutBtnFn=o.onNext||null;
+  tutBtnFn=o.onNext||null; tutBtnFn2=o.onNext2||null;
   m.removeAttribute('style');               // clear the previous step's inline overrides
   m.className='show low';   // every tip sits low (just under the floor) so the board stays visible
-  // No skip/✕ — the tutorial is a forced flow; you can't accidentally close out of it.
-  m.innerHTML=(o.title?`<h3>${o.title}</h3>`:'')
+  // Forced flow, but once the first beats have landed (step 5+) a muted "Skip"
+  // appears top-right — never on the finale screens (they pay the first-run gift).
+  const skip=(G && G.tutorial && G.tutStep>=5 && G.phase!=='tutend')
+    ? `<button class="tm-skip" onclick="tutSkip()">Skip tutorial ✕</button>` : '';
+  m.innerHTML=skip+(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
-    +(o.onNext?`<div class="tm-btns"><button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
+    +(o.onNext?`<div class="tm-btns">${o.onNext2?`<button onclick="tutBtn2()">${o.btn2||'…'}</button>`:''}<button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
   applyTutModalStyle(m, o.idx);             // apply any designed overrides
 }
 function tutModalHide(){ const m=document.getElementById('tutmodal'); if(m){ m.className=''; m.innerHTML=''; } }
@@ -3521,8 +3694,13 @@ function tutFinale2(){
   const gift = G._tutGifted
     ? `A parting gift for surviving your first siege: <b>${TUT_RUNE_GIFT} 🔮 rune points</b> and <b>🪵 ${g.wood} · 🪨 ${g.stone}</b>. `
     : ``;
-  tutModalPaint({ title:"🔮 Stronger every return", btn:"To the Stronghold →", onNext:()=>{ tutEnd(); try{ openStronghold(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
-    body:`${gift}Spend rune points &amp; resources in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you.` });
+  // Two exits: the primary drops the graduate straight into a real siege (the
+  // fast path — startCampaign honors the fresh-profile edicts skip); the quiet
+  // secondary tours the Stronghold first.
+  tutModalPaint({ title:"🔮 Stronger every return",
+    btn:"⚔️ Start your first siege", onNext:()=>{ tutEnd(); try{ startCampaign(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
+    btn2:"To the Stronghold →", onNext2:()=>{ tutEnd(); try{ openStronghold(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
+    body:`${gift}Spend rune points &amp; resources in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you. Or march straight back in.` });
 }
 function tutSkip(){ tutEnd(); try{ gotoMenu(); }catch(_){ } }
 function tutFinish(){ tutEnd(); }
@@ -3688,7 +3866,13 @@ function attachRuneGestures(vp){
 
 /* ============================== PHASE: EDICTS ============================ */
 // Optional run modifiers. Toggle any combination, then continue to boss select.
-function gotoEdicts(){ G.phase='edicts'; renderEdicts(); }
+// A truly fresh profile (no rune points earned or spent, no ascension, nothing
+// sworn) skips the screen — edicts are noise before the player knows what runes are.
+function edictsIrrelevant(){
+  return !(RUNES.points||0) && !(RUNES.asc||0) && !Object.keys(RUNES.ranks||{}).length
+      && !(G && G.edicts && G.edicts.length);
+}
+function gotoEdicts(){ if(edictsIrrelevant()){ gotoBossSelect(); return; } G.phase='edicts'; renderEdicts(); }
 function toggleEdict(id){
   if(!EDICTS[id]) return;
   const i=G.edicts.indexOf(id);
@@ -3717,7 +3901,7 @@ function gotoBossSelect(){
   G.phase='bossSelect'; overlay.classList.add('show');
   const edTag = G.edicts.length ? ` · <span style="color:#ffd34d">⚖️ ${G.edicts.map(id=>EDICTS[id].ic).join('')} ×${edictRewardMul().toFixed(2)} runes</span>` : '';
   overlay.innerHTML = `
-    <button onclick="gotoEdicts()" style="position:absolute;left:22px;top:22px;z-index:3;font-size:15px;padding:12px 22px">← Back</button>
+    <button onclick="${edictsIrrelevant()?'gotoMenu()':'gotoEdicts()'}" style="position:absolute;left:22px;top:22px;z-index:3;font-size:15px;padding:12px 22px">← Back</button>
     <h1>Choose your Boss</h1>
     <p>${G.mode==='campaign'?'Campaign — break a 50-wave siege, milestone mini-bosses & rewards.':'Endless — how long can you reign?'}${edTag}</p>
     <div class="bossnav">
@@ -3794,8 +3978,10 @@ function chooseBoss(key){
   // gold/dread lands on them instead of being overwritten; the base starting
   // amounts (and any relic rb bonuses, now folded into RB) are added afterwards.
   G.gold=0; G.dread=0;
-  // Relic Shrine: begin the run already bearing relic(s)
-  G.shrineRelics=[];
+  // Relic Shrine: begin the run already bearing relic(s). Reset the run's relics
+  // FIRST — backing out of the loadout and re-picking a boss reruns this grant,
+  // and without the reset that loop farmed unlimited free relics.
+  G.relics=[]; G.shrineRelics=[];
   for(let i=0;i<shrineRelics();i++){ const id=randomRelicId(townLvl('shrine')); if(id){ addRelic(id); G.shrineRelics.push(id); } }
   // 🧪 Throne potions: start each run with a full belt (cap reflects relics +
   // this boss's pPotionCap, both known by now). Bought back at the merchant.
@@ -3860,6 +4046,7 @@ function minCam(){
 function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1; selGear=-1;
   G.brokenCells={};                              // doorways get patched up between waves
+  if(G.cells) for(const c of G.cells){ c._disarmT=0; }   // a rogue's disarm must not blink over the BUILD screen (cells rebuild at startWave)
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
   else ensureQueue(Math.max(3, G.guildLvl+1+(hasEdict('warband')?1:0)));   // endless: pre-roll the next arrivals to preview (Warband +1)
   smithyRestock();                                // Dark Smithy: free shop stock
@@ -3934,6 +4121,7 @@ function selectCard(i){
 const SCRAP_GOLD={ common:10, special:16, rare:26, epic:40 };
 function cardScrapGold(type){ return SCRAP_GOLD[cardRarity(type)] || 10; }
 function discardCard(i){
+  if(G && G.tutorial){ tutNudge(); return; }   // scripted flow: scrapping the lesson card would strand the beat
   const card=G.hand[i]; if(!card) return;
   const g=cardScrapGold(card.type);
   G.gold+=g;
@@ -4002,9 +4190,11 @@ function placeCard(ci, idx){
   if(roomIsShop){
     showHint('A Shop takes the whole room — it can\'t share slots.'); return false;
   }
+  const prevSyn=roomSynergy(room);                    // 🔗 for the completed-a-pair fanfare below
   if(cdef.kind==='trap'){
     const existing=room.units.find(u=>u.kind==='trap' && u.type===T);
     if(existing){
+      if(cdef.amp){ showHint('Runestones don\'t stack — place it in another room.'); return false; }   // lvl++ on an amp trap changes nothing
       if(existing.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
       existing.lvl++;
       bumpStat('traps');                                 // feat: traps built (a level-up counts)
@@ -4019,8 +4209,22 @@ function placeCard(ci, idx){
     room.units.push(makeUnit(T, card.lvl, card));
     bumpStat('traps');                                 // feat: traps built
   } else {
-    // monster: always a fresh independent copy — five Bone Pits = five guards
-    if(roomFreeSlots(room)<=0){ showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false; }
+    // monster: a fresh independent copy while a slot is free — five Bone Pits =
+    // five guards. FULL room + the same type already inside → train it a level.
+    if(roomFreeSlots(room)<=0){
+      const same=room.units.find(u=>u.kind==='monster' && u.type===T);
+      if(same){
+        if(same.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
+        same.lvl++;
+        bumpStat('guards');                              // feat: monster guards stationed (a level-up counts)
+        G.hand.splice(ci,1);
+        burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
+        floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+same.lvl, '#ffd34d');
+        showHint(ROOMS[T].name+' trained to Lv '+same.lvl+(same.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('placed', idx);
+        selCard=-1; sfx('upgrade'); render(); return true;
+      }
+      showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false;
+    }
     const u=makeUnit(T, card.lvl, card);
     room.units.push(u);
     if(cdef.kind==='monster') bumpStat('guards');      // feat: monster guards stationed
@@ -4030,8 +4234,14 @@ function placeCard(ci, idx){
   G.hand.splice(ci,1);
   burst(cellX(idx)+ROOM_W/2, FLOOR-40, cdef.col, 18);
   floater(cellX(idx)+ROOM_W/2, FLOOR-80, '+ '+ROOMS[T].name, '#7bdc6b');
+  // 🔗 this trap COMPLETED a synergy pair → celebrate the new themed room
+  const newSyn=synergyJustFormed(prevSyn, room);
+  if(newSyn){ const st=SYNERGY_TYPES[newSyn.type];
+    burst(cellX(idx)+ROOM_W/2, FLOOR-90, st.col, 30);
+    banner('🔗 '+st.name.toUpperCase()+' SYNERGY!', st.col, st.desc);
+  }
   showHint('Added '+ROOMS[T].name+' → '+room.units.length+'/'+(room.cap||1)+' slots.'); tutEvent('placed', idx);
-  selCard=-1; sfx('upgrade'); render(); return true;
+  selCard=-1; sfx(newSyn?'synergy':'upgrade'); render(); return true;
 }
 
 function makeUnit(type, lvl, card){
@@ -4063,9 +4273,9 @@ function stockShop(itemKey){
   const shop=G.rooms.find(r=>r&&r.type==='shop' && (r.stock||[]).length<shopCap(r))
           || G.rooms.find(r=>r&&r.type==='shop');
   if(!shop){ showHint('Build a Shop room first.'); return; }
-  if((shop.stock||[]).length>=shopCap(shop)){ showHint('Shop is full — Lv '+shop.lvl+' holds '+shopCap(shop)+' items. Level it up for more slots.'); return; }
+  if((shop.stock||[]).length>=shopCap(shop)){ showHint('Shop is full — tier '+shopTier(shop)+' holds '+shopCap(shop)+' items. ⬆ Upgrade the room for more slots.'); return; }
   G.gold-=it.price; shop.stock.push({key:itemKey, sold:false});
-  showHint(it.name+' stocked. Heroes pay '+salePrice(shop,itemKey)+'g (Lv '+shop.lvl+' shop).');
+  showHint(it.name+' stocked. Heroes pay '+salePrice(shop,itemKey)+'g (tier '+shopTier(shop)+' shop).');
   render();
 }
 
@@ -4076,7 +4286,7 @@ function startWave(){
   buildCells();
   G._waveStartBreaches=(G.stats&&G.stats.breaches)||0;   // baseline for the "flawless wave" feat
   spawnGroup(G.guildLvl+1);
-  spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 20) marches out this wave
+  spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 12) marches out this wave
   G.phase='run'; speedMul=1; frameWaveRun();      // hug the right edge, heroes just in frame
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
@@ -4097,7 +4307,7 @@ function buildCells(){
     const r=G.rooms[i];
     const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:'empty', traps:[], mon:null, shop:false};
     if(r){
-      cell.syn=1;                                // synergies removed — units act independently
+      cell.syn=1;                                // base amp — a curated trap PAIR below raises it (🔗 synergy)
       const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank (room kills) powers this cell
       // 👺 Goblin Den = a SPAWNER — its goblins march out each wave instead of
       // standing guard. This works even when the den is MIXED with other monsters:
@@ -4137,7 +4347,7 @@ function buildCells(){
       }
       // 🔗 trap synergy: a curated pair → a room-wide damage amp + a type rider (see trapTick)
       const synD=synergyFromTypes(cell.traps.map(t=>t.type));
-      if(synD){ cell.synType=synD.type; cell.syn=1+(SYNERGY_TYPES[synD.type].amp||0); }
+      if(synD){ cell.synType=synD.type; cell.syn=1+(SYNERGY_TYPES[synD.type].amp||0)+(RB.synergy||0); }   // ⛏️ Excavator rune sharpens synergy rooms
       cell.guards=guards;                        // every guard, front-to-back
       if(guards.length) cell.mon=guards[0];      // active guard; the next alive steps up when it falls
       cell.shop=hasShop;
@@ -4259,6 +4469,9 @@ function buildHeroFromSpec(spec){
   if(hasEdict('ironHorde'))    hp*=1.35;
   if(hasEdict('bloodPact'))    atk*=1.25;
   if(hasEdict('swiftRaiders')) spd*=1.30;
+  // ---- 📅 today's bounty (date-keyed daily modifier — see DAILY_MODS) ----
+  if(dailyActive('swift'))     spd*=1.15;
+  if(dailyActive('brittle'))   hp*=0.90;
   // ---- town sabotage ----
   atk*=spec.debuff.atkMul;
   // ---- champion mini-boss ----
@@ -4307,14 +4520,15 @@ function champSpec(){
 // so the staging preview, the town roster, and any town meddling all act on the
 // SAME specs that will actually raid. (Endless keeps its rolling queue.)
 function prepCampaignWave(){
-  if(G.mode!=='campaign') return;
+  if(G.mode!=='campaign' || G.kingDue || G.kingFight) return;   // the finale spawns the King himself — never roll a phantom wave over him
+
   if(G.waveLevel===campLevel()) return;   // already rolled for this level (an emptied
                                           // queue from corruption stays empty — don't re-roll)
   for(const r of G.pendingRivals) r.eta--;                  // rivals tick one wave closer (once per wave)
   const comp=levelComp(campLevel());
   const specs=[];
   for(let i=0;i<comp.champs;i++)  specs.push(champSpec());
-  let normals=comp.normals + (hasEdict('warband')?1:0);
+  let normals=comp.normals + (hasEdict('warband')?1:0) + (dailyActive('horde')?1:0);   // 📅 The Horde bounty: +1 raider
   for(let i=0;i<normals;i++)      specs.push(nextSpec());
   if(!specs.length) specs.push(nextSpec());                 // safety: never an empty wave
   G.queue=specs;
@@ -4352,9 +4566,12 @@ function spawnGroup(n){
     for(const r of G.pendingRivals) r.eta--;   // endless: rivals tick per wave here
     ensureQueue(1);
     const champ = !!(G.queue[0] && G.queue[0].champion);
-    const count = champ ? 1 : n + (hasEdict('warband')?1:0);   // Warband edict: +1 raider per party
+    const count = champ ? 1 : n + (hasEdict('warband')?1:0) + (dailyActive('horde')?1:0);   // Warband edict / 📅 Horde bounty: +1 raider per party
     ensureQueue(count);
-    for(let k=0;k<count;k++) specs.push(G.queue.shift());
+    for(let k=0;k<count;k++){
+      if(k>0 && G.queue[0] && G.queue[0].champion) break;   // champions arrive ALONE — one mid-queue leads the NEXT wave instead
+      specs.push(G.queue.shift());
+    }
   }
   if(!specs.length) specs.push(nextSpec());    // never start with no heroes (e.g. corrupted the whole wave)
   G.heroes=[];
@@ -4389,13 +4606,13 @@ function leadHero(){
 /* ============================ GOBLIN DEN SPAWNERS ========================
    A pure Goblin Den is a spawner, not a stationary guard. room.goblins is
    an ARRAY of persistent units (each {kills}). Every wave the den adds
-   `goblinSpawnRate(lvl)` new units (cap 20). Goblins march LEFT through the
+   `goblinSpawnRate(lvl)` new units (cap 12). Goblins march LEFT through the
    dungeon (your own traps don't hurt them), attack any hero they meet,
    level up from kills (HP/ATK scale with level), and survivors are banked
    back into the den when the wave ends. Survivors heal to full between
    waves; the slain are gone.
 */
-const GOBLIN_DEN_CAP = 20;
+const GOBLIN_DEN_CAP = 12;
 const GOBLIN_HP_FRAC = 0.55, GOBLIN_ATK_FRAC = 0.34;   // hp raised: full-atk retaliation 1-shot them
 const GOBLIN_SPD = 50;                       // px/sec
 const GOBLIN_REACH = 16;                     // close to this then trade blows
@@ -4453,8 +4670,10 @@ function endWaveGoblins(){
   const byHome={};
   for(const g of G.minions){ if(g.hp>0) (byHome[g.home]=byHome[g.home]||[]).push({kills:g.kills||0}); }
   if(G.cells) for(const cell of G.cells){
-    if(cell.spawner!=='goblin' || !cell.room) continue;
-    cell.room.goblins = byHome[cell.index] || [];
+    if(cell.spawner!=='goblin') continue;
+    const r=cell.room || (G.rooms||[])[cell.index];   // cell.room can be nulled mid-wave (King smash) while the room object survives
+    if(!r) continue;
+    r.goblins = byHome[cell.index] || [];
   }
   G.minions = [];
 }
@@ -4576,7 +4795,7 @@ function isFrontHero(h){
 function heroDmg(h, raw, pierce){
   let armor = pierce==='full' ? 0 : pierce ? Math.max(0,h.armor-3) : h.armor;
   if(h.acid>0) armor=Math.max(0, armor - h.acid);     // Acid corrodes armor so later hits bite
-  return Math.max(1, Math.round(raw - armor));
+  return Math.max(1, Math.round(Math.max(raw - armor, raw*0.35)));   // armor floor: mitigation caps at 65% (flat armor used to reduce lvl5 traps to min-1 chip)
 }
 // While a ROOM (trap or guard) is dealing damage this is set to it, so the
 // battle report can attribute every point — including nested reaction chains —
@@ -4602,7 +4821,8 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
     blood(h.x, h.y-22, 14, -1); bloodPool(h.x, rnd(8,13)); flash('#ff2d4d',0.12,0.16);
     hitStop=0.06; sfx('crit'); }
-  else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
+  else { if(label==='HEAL') floater(h.x+ri(-8,8), h.y-44, '-'+dmg, '#7bdc6b');
+    else dmgFloater(h, dmg, '#ff7a8a');                        // plain hits coalesce per hero
     if(label==='HEAL') burst(h.x, h.y-20, '#ff4d6d', 6);
     else blood(h.x, h.y-22, Math.min(9,3+Math.ceil(dmg/14)), -1);   // bigger hits bleed more
     sfx('hit'); }
@@ -4626,7 +4846,7 @@ const ELEM_COMBO={
   shock:'⚡ Conducts through <b>oiled</b> heroes to the party, and ⚡ <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
   phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
 };
-function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +50%
+function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +30%
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
@@ -4644,7 +4864,10 @@ function popReact(h,label,col,x){
 // freeze / oil / chill / shock. Plus a no-refreeze window after thawing and a
 // burn cap so re-Ignite can't snowball.
 const FREEZE_IMMUNE=3;     // s a hero can't be RE-frozen right after thawing
-const BURN_CAP=22;         // ceiling on stacked burn-per-tick
+const BURN_CAP=22;         // BASE ceiling on stacked burn-per-tick (burnCap() scales it)
+// The burn ceiling grows with the siege (campaign: level; endless: kills) so the
+// mid-game workhorse doesn't cliff exactly where the difficulty ramp steepens.
+function burnCap(){ return BURN_CAP + Math.floor((G&&G.mode==='campaign'?campLevel():Math.min(60,((G&&G.totalSlain)||0)/5))*0.6); }
 function statusResist(h){
   if(!h) return 0;
   const lvl=(G && G.mode==='campaign') ? campLevel() : Math.min(50, 1+(G?G.survived:0)/3);
@@ -4659,7 +4882,15 @@ function applyFreeze(h,dur){                                   // freeze: respec
   const d=ccDur(h,dur); if(d<=0.05) return false;
   h.freeze=Math.max(h.freeze||0, d); return true;
 }
-function addBurn(h,amt,dur){ h.burn=Math.min(BURN_CAP,(h.burn||0)+amt); if(dur) h.burnT=Math.max(h.burnT||0,dur); }
+function addBurn(h,amt,dur){ h.burn=Math.min(burnCap(),(h.burn||0)+amt); if(dur) h.burnT=Math.max(h.burnT||0,dur); }
+// Reactions bypass dealToHero, so credit their damage the same way it does: the
+// firing room's _roomDmgCtx (battle report) + the hero's telemetry. Reactions run
+// INSIDE the trap/guard's room context, so reaction-heavy rooms report true output.
+function reactHit(h,x){
+  h.hp-=x;
+  h.dmgTaken=(h.dmgTaken||0)+x;
+  if(G.stats){ if(_roomDmgCtx) _roomDmgCtx.dmg=(_roomDmgCtx.dmg||0)+x; else G.stats.abilDmg=(G.stats.abilDmg||0)+x; }
+}
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
   const rm=reactMul(h);          // snapshot once — a single hit can't self-amplify across its own reactions
@@ -4670,38 +4901,38 @@ function elementReact(h, elem, baseDmg){
 
   // 🔥 IGNITE — fire on an OILED hero: the oil flashes off in a heavy burst + burn
   if(elem==='fire' && h.oil>0){
-    h.oil=0; const x=Math.round((baseDmg*1.3+18)*rm); h.hp-=x;
+    h.oil=0; const x=Math.round((baseDmg*1.3+18)*rm); reactHit(h,x);
     addBurn(h, 7, 5); popReact(h,'🔥 IGNITE','#ff7a2e',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ☠️ COMBUST — fire on a POISONED hero detonates the venom for a stack-scaled burst
   if(elem==='fire' && h.poison>0){
-    const x=Math.round((Math.min(h.poison,POISON_CAP)*3 + baseDmg*0.5 + 8)*rm); h.hp-=x; h.poison=0; h.poisonT=0;
+    const x=Math.round((Math.min(h.poison,POISON_CAP)*3 + baseDmg*0.5 + 8)*rm); reactHit(h,x); h.poison=0; h.poisonT=0;
     popReact(h,'☠️ COMBUST','#9be86b',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ⚡ OVERLOAD — lightning on a CHILLED hero stuns them solid
   if(elem==='shock' && h.chill>0 && !(h.freeze>0)){
-    const x=Math.round((baseDmg*0.6+8)*rm); h.hp-=x; h.chill=0; applyFreeze(h, 1.1);
+    const x=Math.round((baseDmg*0.6+8)*rm); reactHit(h,x); h.chill=0; applyFreeze(h, 1.1);
     popReact(h,'⚡ OVERLOAD','#fff34d',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 🧊 ENCASE — ice on an OILED hero: wet + cold freezes them SOLID (a sitting duck)
   else if(elem==='ice' && h.oil>0 && !(h.freeze>0)){
-    const x=Math.round((baseDmg*0.7+8)*rm); h.hp-=x;
+    const x=Math.round((baseDmg*0.7+8)*rm); reactHit(h,x);
     applyFreeze(h, 1.4); h.chill=Math.max(h.chill||0, ccDur(h,PRIME_ICE)); popReact(h,'🧊 ENCASE','#bfefff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ❄ SHATTER — a phys/shock impact on a CHILLED/frozen hero cracks the ice
   if((elem==='phys'||elem==='shock') && (h.chill>0||h.freeze>0)){
-    h.chill=0; const x=Math.round((baseDmg*0.9+12)*rm); h.hp-=x;
+    h.chill=0; const x=Math.round((baseDmg*0.9+12)*rm); reactHit(h,x);
     popReact(h,'❄ SHATTER','#9adfff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 💥 THERMAL SHOCK — opposite temperatures: fire on a CHILLED hero, or ice on a
   // BURNING hero. The sudden swing cracks them for a burst.
   if((elem==='fire' && h.chill>0) || (elem==='ice' && h.burn>0)){
-    const x=Math.round((baseDmg*1.0+12)*rm); h.hp-=x;
+    const x=Math.round((baseDmg*1.0+12)*rm); reactHit(h,x);
     if(elem==='fire') h.chill=0; else { h.burn=0; h.burnT=0; }
     popReact(h,'💥 THERMAL SHOCK','#ff5470',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
@@ -4711,7 +4942,7 @@ function elementReact(h, elem, baseDmg){
   if(elem==='shock' && h.oil>0){
     let arced=0;
     for(const o of G.heroes){ if(o===h||o.state==='dead') continue;
-      const cd=Math.round(baseDmg*0.6*rm); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
+      const cd=Math.round(baseDmg*0.6*rm); reactHit(o,cd); floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
     if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
       floater(h.x,h.y-66,'⚡ CONDUCT ×'+arced,'#fff34d'); sfx('crit'); }
@@ -4826,7 +5057,7 @@ function heroDies(h){
   }
   // loot: carried gold + bounty (threat dial + rune bonuses)
   // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
-  const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.3:1)) + (RB.goldKill||0);
+  const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.3:1) * (dailyActive('gold')?1.25:1)) + (RB.goldKill||0);
   G.gold+=loot;
   // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
@@ -4877,8 +5108,7 @@ function heroDies(h){
   // a hero who touched the throne returns with a grudge
   if(h.reachedThrone) makeRival(h);
   burst(h.x, h.y-20, '#ffd34d', 22);
-  floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
-  floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
+  floater(h.x, h.y-60, '+'+loot+'g · +'+dread+'☠', '#ffd34d');   // one combined payout float
   sfx('kill');
   if(h.loot) dropLoot(h);                 // 💎 carriers drop their gear on the floor to collect
   // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising
@@ -4892,10 +5122,11 @@ function heroDies(h){
   if(h.reachedThrone && !h.champion){ flash('#9be86b',0.16,0.2); }
   const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
   if(h.champion){
-    // a felled champion is a big payday + a guaranteed relic
-    G.dread+=6; G.relicDue=true;
+    // a felled champion is a big payday + a guaranteed relic + a guaranteed rune drop
+    G.dread+=6; G.relicDue=(G.relicDue||0)+1;
+    G.drops.runes++; bumpStat('drops'); floater(h.x+26, h.y-66, '+1 ᚱ', '#b985ff');
     floater(h.x, h.y-92, '👑 CHAMPION SLAIN! 🏺', h.champCol||'#ffd34d', true); burst(h.x,h.y-30,h.champCol||'#ffd34d',46);
-    flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('relic');
+    flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('champdown');
     showHint('🏆 '+nm+' is slain! Big loot + a relic awaits.');
   } else {
     showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
@@ -4916,6 +5147,7 @@ function waveWinBanner(){
     ? `Level ${campLevel()} of ${CAMP_LEVELS} cleared · ${G.totalSlain} heroes slain`
     : `Wave ${G._waveWins} survived · ${G.totalSlain} heroes slain`;
   banner('⚔️ '+phrase+'!', '#ffd34d', sub);
+  sfx('wavewin');                                        // 🎉 short 3-note victory stinger
 }
 function afterWave(){
   if(G.phase!=='run' || G._waveBeat) return;   // run already ended, or a victory beat is mid-flight
@@ -4929,9 +5161,9 @@ function afterWave(){
     if(G.phase!=='run') return;        // closed/lost during the beat
     if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
     // Endless: town every 5 kills, relic every 10, mandate every 25
-    G.townDue   = Math.floor(G.waveStartSlain/5)  !== Math.floor(G.totalSlain/5);
-    G.relicDue  = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
-    G.mandateDue= Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
+    G.townDue   = G.townDue    || Math.floor(G.waveStartSlain/5)  !== Math.floor(G.totalSlain/5);
+    G.relicDue  = (G.relicDue||0) + (Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10) ? 1 : 0);   // counter: a champion's guaranteed relic STACKS with the milestone one
+    G.mandateDue= G.mandateDue || Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
     gotoReward();
   }, 1300);
 }
@@ -4943,10 +5175,12 @@ function campaignAdvance(){
   G.gold += 25 + L*4;                          // per-level gold
   if(L%5===0){
     if((L/5)%2===0){ G.mandateDue=true; G.townDue=true; }   // 10,20,30,40 → 📜 mandate + 🏚 town
-    else { G.relicDue=true; }                               // 5,15,25,35,45 → 🏺 relic
+    else { G.relicDue=(G.relicDue||0)+1; }                  // 5,15,25,35,45 → 🏺 relic (stacks with a champion's)
     showHint('★ Level '+L+' cleared — milestone reward!');
   }
   G.levelIdx++;                                // next level
+  prepCampaignWave();                          // roll its wave NOW so the draft can counter-pick what's
+                                               // incoming (the waveLevel guard makes later calls no-ops)
   gotoReward();                                // card draft → (relic/mandate/town flags) → build next level
 }
 // ----------------------------- THE KING FINALE ---------------------------
@@ -4978,9 +5212,8 @@ function faceTheKing(){
   // One last prep phase, then the King raids as the next (and final) wave.
   overlay.classList.remove('show');
   G.kingDue=true; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+Math.round(G.boss.maxHp*0.5));  // a defiant second wind
-  G.phase='build';
+  gotoBuild(false);   // the FULL build reset (brokenCells, disarms, selections) — no stale siege state leaks into the finale
   showHint('👑 Fortify! The King attacks when you start the wave.');
-  render();
 }
 // The King: a lone, colossal raider who shrugs off corruption and smashes rooms.
 function kingSpec(){
@@ -5060,10 +5293,12 @@ function bossDies(){
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
+    ${nextGoalHTML()}
     <div class="menu-btns">
       <button class="go" onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="openTownBuilder()">🏗️ Town Builder</button>
       ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
+      <button onclick="shareRun()">📋 Share</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
   aftermathSequence(earned, summary, G.mode==='endless');   // endless → auto-open the leaderboard after the payout
@@ -5156,7 +5391,7 @@ function amStageUnlock(u){
       (desc?'<div class="amdesc">'+desc+'</div>':'')+
     '</div>'+
     '<div class="menu-btns"><button class="go" onclick="amNext()">Next ▶</button></div>';
-  sfx('relic');
+  sfx('unlock');
 }
 function amSkip(){ amClearTimers(); if(overlay&&overlay.querySelectorAll) overlay.querySelectorAll('.flyicon').forEach(e=>e.remove()); _amQueue=[]; amShowSummary(); }
 function amShowSummary(){
@@ -5209,8 +5444,8 @@ function buildPostmortem(){
   const tips=[];
   if(k){
     if(k.traits.includes('swift')) tips.push('🏃 They were <b>Swift</b> — front-load your damage or slow them (oil/chill rooms, or the Overgrowth doctrine).');
-    if(k.cls==='rogue'||k.dodge>=0.3) tips.push('🗡️ Rogues <b>dodge ~35%</b> of direct hits — lean on burn DoT and crushers, which can’t be dodged.');
-    if(k.traits.includes('armored')||k.armor>=8) tips.push('🛡️ Heavy <b>armor</b> blunted your traps — add piercing rooms (🔱spikes pierce) or the Bastion doctrine.');
+    if(k.cls==='rogue'||k.dodge>=0.3) tips.push('🗡️ Rogues <b>dodge ~35%</b> of direct hits — lean on burn/poison DoT (never dodged) or an aimed ⚔️ Smite.');
+    if(k.traits.includes('armored')||k.armor>=8) tips.push('🛡️ Heavy <b>armor</b> blunted your traps — add piercing rooms (🎯darts pierce, 🔨crusher ignores ALL armor) or the Bastion doctrine.');
     if(k.traits.includes('hardy')) tips.push('❤️ A <b>Hardy</b> raider has huge HP — you need sustained damage: a longer corridor or stacked DoT.');
   }
   if(elems.size>=2 && (s.reactions||0)===0) tips.push('⚛️ Your elemental rooms <b>never combo’d</b> — order matters: oil BEFORE flame/tesla/frost, frost before crushers.');
@@ -5220,7 +5455,7 @@ function buildPostmortem(){
   else if(tot>0 && s.monDmg>s.trapDmg*5) tips.push('Almost all damage came from guards — traps soften the <b>whole</b> party, not just the front hero.');
   if((s.breaches||0)>=3) tips.push(`<b>${s.breaches}</b> heroes reached your throne this run — the corridor leaks; deepen it or add a chokepoint.`);
   if(G.slots<=2) tips.push('A <b>longer dungeon</b> (more slots) means more trap ticks before the throne.');
-  if(pct>=85) tips.push('So close — they reached the throne nearly dead. A little more corridor damage or 🩹 Repair would’ve held.');
+  if(pct>=85) tips.push('So close — they reached the throne nearly dead. A little more corridor damage or a 🧪 throne potion would’ve held.');
   else if(pct<40) tips.push('They barely took a scratch — your corridor needs more raw damage or better element combos.');
   const top = tips.slice(0,3);
   return `<div style="text-align:left;max-width:440px;margin:6px auto;background:#1b1430;border:1px solid #3a2c5a;border-radius:10px;padding:10px 13px">
@@ -5229,13 +5464,67 @@ function buildPostmortem(){
     ${top.length?'<div class="small" style="color:#caa15e;font-weight:bold;margin-bottom:2px">What would’ve held the throne:</div>'+top.map(t=>`<div class="small" style="line-height:1.3;margin:3px 0">• ${t}</div>`).join(''):''}
   </div>`;
 }
+// 🎯 Next-goal teaser (death/close screens): the single nearest-to-complete
+// locked feat, so there is always a visible "one more run" carrot. Pure UI
+// reuse of the Unlocks progress data; empty once everything is earned.
+function nextGoalHTML(){
+  try{
+    let best=null;
+    const scan=(conds,isBoss)=>{ for(const k in conds){
+      if(isBoss ? bossUnlocked(k) : cardUnlocked(k)) continue;
+      const c=conds[k], v=Math.min(statVal(c.stat), c.n), r=v/c.n;
+      if(r<1 && (!best || r>best.r)) best={c,v,r};
+    } };
+    scan(UNLOCK_BOSS_COND,true); scan(UNLOCK_CARD_COND,false);
+    if(!best) return '';
+    const pct=Math.max(4,Math.round(best.r*100));
+    return `<div style="max-width:440px;margin:6px auto;text-align:left">
+      <div class="small" style="color:#cdbaff">🎯 Next unlock: <b>${best.c.label}</b> — ${best.v.toLocaleString()}/${best.c.n.toLocaleString()}</div>
+      <div class="ubar" style="height:8px;background:#241a3e;border-radius:5px;overflow:hidden;margin-top:3px"><i style="display:block;height:100%;width:${pct}%;background:linear-gradient(90deg,#7a3abf,#b985ff)"></i></div>
+    </div>`;
+  }catch(_){ return ''; }
+}
+// 📋 Shareable run card — a plain-text summary + the play URL. navigator.share
+// on mobile, clipboard elsewhere; every path harness-safe behind try/catch.
+const PLAY_URL='https://games-71g.pages.dev/no_room_for_heroes/';
+function shareText(){
+  try{
+    const lines=['☠️ No Room For Heroes — '+(G.boss?G.boss.name:'the dungeon')+' ('+G.mode+')'];
+    lines.push(G.mode==='campaign'
+      ? '⚔️ Level '+campLevel()+'/'+CAMP_LEVELS+' · '+(G.totalSlain||0)+' heroes slain'
+      : '♾️ '+(G.totalSlain||0)+' heroes slain');
+    const top=(G.rooms||[]).filter(r=>r && ((r.dmg||0)>0||(r.kills||0)>0)).sort((a,b)=>(b.dmg||0)-(a.dmg||0))[0];
+    if(top) lines.push('🏆 Top room: '+comboName(top)+' — '+(top.dmg||0)+' dmg · '+(top.kills||0)+' kills');
+    const k=G.killer;
+    if(k) lines.push('💀 Felled by '+(k.heroName ? k.heroName+(k.title?' '+k.title:'') : (CLASSES[k.cls]?CLASSES[k.cls].name:'a hero')));
+    lines.push('Can you do better? '+PLAY_URL);
+    return lines.join('\n');
+  }catch(_){ return 'No Room For Heroes — '+PLAY_URL; }
+}
+function shareRun(){
+  const txt=shareText();
+  try{
+    if(typeof navigator!=='undefined' && navigator.share){ navigator.share({text:txt}).catch(()=>{}); return; }
+    if(typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(()=>showHint('📋 Copied!')).catch(()=>{}); return; }
+  }catch(_){ }
+  try{ showHint('📋 Sharing isn\'t available here.'); }catch(_){ }
+}
 // Bank this run's rune points (delta since last banking) into the pool.
 // Income now flows from per-kill loot rolls (20% rune per slain hero, champions roll twice)
 // + 1 per campaign chapter cleared, then edict/library multipliers.
 function awardRunes(){
+  // 📅 daily bounty + 🔥 streak: the first run-end of each day advances the
+  // streak and pays the flat bonus once (tutorial runs don't count)
+  let dailyBonus=0;
+  if(!G.tutorial){
+    streakBump();
+    dailyBonus=dailyClaim();
+    if(dailyBonus>0) showHint('📅 First run today: +'+dailyBonus+' bonus rune points!');
+  }
   const drops = (G.drops && G.drops.runes) || 0;
-  const total = Math.floor((drops + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul());
-  const delta = Math.max(0, total - (G.runesBanked||0));
+  const total = Math.floor(drops * edictRewardMul() * libraryMul() * dailyRuneMul() * streakMul()) + (G.mode==='campaign'? G.levelIdx : 0);   // multipliers sweeten DROPS only — level progress pays flat
+  const delta = Math.max(0, total - (G.runesBanked||0)) + dailyBonus;
   G.runesBanked = total;
   RUNES.points += delta;
   // bank lifetime kills (still tracked for mastery, the title screen & grandfather)
@@ -5260,10 +5549,38 @@ function awardRunes(){
   }
   if(G.mode==='endless') RUNES.best=Math.max(RUNES.best||0, G.totalSlain||0);   // personal endless record
   saveRunes();
+  cloudAutoBackup();   // ☁️ silent re-upload if this slot already has a sync code (throttled)
   return delta;
 }
 
 /* ============================= PHASE: REWARD ============================= */
+// Compact one-line stats for a draft choice — on mobile tap = irreversible pick,
+// so the numbers must be readable BEFORE committing. Reuses the ROOMS def fields.
+function draftStats(d){
+  if(d.kind==='trap' && d.amp) return `🔯 +${Math.round(d.amp*100)}% to this & adjacent rooms`;
+  if(d.kind==='trap'){
+    let s=`⚔ ${d.dmg} dmg / ${d.rate}s · ~${Math.round(d.dmg/d.rate)}/s`;
+    if(d.burn) s+=' +burn'; if(d.poison) s+=' +☠'; if(d.acid) s+=' +🧪'; if(d.mark) s+=' +🎯'; if(d.aoe) s+=' · 💥AoE';
+    if(d.elem && d.elem!=='phys') s+=` · ⚛️${d.elem}`;
+    return s;
+  }
+  if(d.kind==='monster'){
+    let s=`❤️ ${d.hp} · 🗡️ ${d.atk}`;
+    if(d.taunt) s+=' · 🛡️taunt'; if(d.split) s+=' · 🟩splits'; if(d.breath) s+=' · 🔥breath';
+    if(d.feeds) s+=' · 👺spawner'; if(d.totem) s+=' · 🗿support'; if(d.warcamp) s+=' · 🏕️drills';
+    return s;
+  }
+  if(d.kind==='shop') return `💰 sells at ×${shopMarkup(1).toFixed(1)} markup — pure profit`;
+  return '';
+}
+// "Incoming next:" strip — the NEXT wave is already rolled (campaignAdvance),
+// so the draft can be a counter-pick instead of a blind one. Campaign only
+// (the endless queue may legitimately be empty at draft time).
+function incomingStrip(){
+  if(!G || G.mode!=='campaign' || !G.queue || !G.queue.length) return '';
+  const ics=G.queue.map(s=>(s.champion?'👑':'')+((CLASSES[s.cls]||{}).ic||'⚔️')+((s.traits&&s.traits.length)?'⭐':'')).join(' ');
+  return `<p class="small" style="margin:2px 0 4px;color:#cdbaff">⏳ Incoming next: <b>${G.queue.length}</b> raider${G.queue.length>1?'s':''} · ${ics}</p>`;
+}
 function gotoReward(){
   if(G.tutorial && G._tutDraft){ tutGotoReward(); return; }   // scripted tutorial draft
   G.phase='reward';
@@ -5287,13 +5604,17 @@ function gotoReward(){
   overlay.classList.add('show');
   overlay.innerHTML=`<h1>Spoils of War</h1>
     <p>Draft one room card. ${G.hand.length>=handCap()?`<b style="color:#ff8a8a">Hand full (${handCap()}) — picking will need a discard, or skip.</b>`:`Hold up to ${handCap()}.`}</p>
+    ${incomingStrip()}
     <div class="choices">${G.drafts.map((c,i)=>{
       const d=ROOMS[c.type]; const tr=cardRarity(c.type); const tc=(RELIC_TIERS[tr]||{}).col||'#888';
+      const sh=synergyHintLine(c.type);
       return `<div class="choice jz" onclick="takeDraft(${i})" style="border-color:${tc};box-shadow:0 0 10px ${tc}33;animation-delay:${i*70}ms">
         <div class="big">${cardFace(c.type)||d.ic}</div><h3>${d.name}</h3>
         <div class="desc">${d.desc}</div>
+        <div class="small" style="color:#cdbaff;margin:2px 0 0">${draftStats(d)}</div>
+        ${sh?`<div class="small" style="margin:1px 0 0">${sh}</div>`:''}
         <div class="stats" style="color:${tc};font-weight:bold;letter-spacing:.5px">${(RELIC_TIERS[tr]||{}).name||'Common'} · ${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>
-    <div class="menu-btns"><button onclick="skipDraft()">Skip draft</button></div>`;
+    <div class="menu-btns"><button onclick="skipDraft()">Skip draft (+${SKIP_DRAFT_GOLD}g)</button></div>`;
 }
 function takeDraft(i){
   const card=G.drafts[i]; if(!card) return;
@@ -5313,11 +5634,13 @@ function takeDraft(i){
   overlay.classList.remove('show');
   afterReward();
 }
-function skipDraft(){ overlay.classList.remove('show'); afterReward(); }
+const SKIP_DRAFT_GOLD=15;   // passing on a full hand pays scrap gold — not a pure penalty screen
+function skipDraft(){ G.gold+=SKIP_DRAFT_GOLD; sfx('ching'); showHint('Passed — +'+SKIP_DRAFT_GOLD+'g'); overlay.classList.remove('show'); afterReward(); }
 // After the card draft, drop into the town if a 5-kill interlude is due.
 function afterReward(){
-  if(G.relicDue){ G.relicDue=false;
-    gotoRelicChoice('Relic Unearthed', 'A power stirs in the deep — claim one.', afterRelicMaybeMandate); return; }
+  if(G.relicDue){                                      // counter — loop back here until every queued draft is served
+    G.relicDue=Math.max(0,(G.relicDue===true?1:G.relicDue)-1);   // (old saves may still carry a boolean)
+    gotoRelicChoice('Relic Unearthed', 'A power stirs in the deep — claim one.', afterReward); return; }
   afterRelicMaybeMandate();
 }
 function afterRelicMaybeMandate(){
@@ -5402,7 +5725,7 @@ const EVENTS = [
       {l:'Burn the caravan', run:()=>'The smuggler flees empty-handed.'} ]},
   { t:'Plague Rats 🐀', d:'Diseased rats nest beneath the town well.',
     opts:[
-      {l:'Loose the plague (poison next 5)', run:()=>{ G.fx.well=Math.max(G.fx.well,5); return 'The well runs foul.'; }},
+      {l:'Loose the plague (5 waves of burning heroes)', run:()=>{ G.fx.well=Math.max(G.fx.well,5); return 'The well runs foul.'; }},
       {l:'Sell the antidote (+5 ☠)', run:()=>{ G.dread+=5; return 'Coin from the desperate.'; }} ]},
   { t:'The Deserter 🚪', d:'A frightened recruit will betray his comrades for the right master.',
     opts:[
@@ -5472,8 +5795,8 @@ function buyGuild(){
 const BARRACKS_BUILD=160;           // gold to raise the camp
 const BARRACKS_MAX=8;               // max Monster Rank
 // Each rank costs WAY more than the last — a steep exponential gold sink
-// (~240, 456, 866, 1646, 3127, 5942, 11290, 21451).
-function barracksDrillCost(){ return Math.round(240 * Math.pow(1.9, (G.barracks&&G.barracks.lvl)||0)); }
+// (~240, 372, 577, 894, 1385, 2147, 3328, 5159).
+function barracksDrillCost(){ return Math.round(240 * Math.pow(1.55, (G.barracks&&G.barracks.lvl)||0)); }
 function buildBarracks(){
   if(!G.barracks) G.barracks={built:false,lvl:0};
   if(G.barracks.built) return;
@@ -5493,17 +5816,22 @@ function drillBarracks(){
 }
 
 // ---- Black Market: an adjustable gold <-> dread exchange (dread is precious) ----
-const BM_SELL=100;   // 1 dread  → 100 gold
-const BM_BUY=200;    // 1 dread ← 200 gold (buying fear costs dearly)
+// Prices scale with the run's difficulty (softened, like hero loot) — a flat
+// 200g per dread was pocket change by L30.
+const BM_SELL=100;   // base: 1 dread  → 100 gold
+const BM_BUY=200;    // base: 1 dread ← 200 gold (buying fear costs dearly)
+function bmSellPrice(){ return Math.round(BM_SELL*softGoldD(difficulty())); }
+function bmBuyPrice(){ return Math.round(BM_BUY*softGoldD(difficulty())); }
 function bmAdjust(d){ G.bmAmt=Math.max(1, Math.min(999, (G.bmAmt||1)+d)); renderTown(); }
 function bmSell(){   // dread → gold
   const n=G.bmAmt||1;
   if(G.dread<n){ showHint('Not enough dread.'); return; }
-  G.dread-=n; G.gold+=n*BM_SELL; sfx('buy');
-  showHint('💱 Sold '+n+' ☠ for '+(n*BM_SELL)+'g.'); renderTown(); renderTop();
+  const pay=n*bmSellPrice();
+  G.dread-=n; G.gold+=pay; sfx('buy');
+  showHint('💱 Sold '+n+' ☠ for '+pay+'g.'); renderTown(); renderTop();
 }
 function bmBuy(){     // gold → dread
-  const n=G.bmAmt||1; const cost=n*BM_BUY;
+  const n=G.bmAmt||1; const cost=n*bmBuyPrice();
   if(G.gold<cost){ showHint('Not enough gold.'); return; }
   G.gold-=cost; G.dread+=n; sfx('buy');
   showHint('💱 Bought '+n+' ☠ for '+cost+'g.'); renderTown(); renderTop();
@@ -5627,7 +5955,7 @@ function renderTown(){
   const amt=G.bmAmt||1;
   const bmHtml=`<div style="max-width:560px;margin:6px auto;padding:9px 14px;border:2px solid #b985ff;border-radius:12px;background:#1c1430">
       <h2 style="margin:0 0 2px;color:#c89bff">💱 Black Market</h2>
-      <div class="small" style="opacity:.8;margin-bottom:6px">Convert between coin and fear — sell 1 ☠ → <b>${BM_SELL}</b>💰, buy 1 ☠ ← <b>${BM_BUY}</b>💰.</div>
+      <div class="small" style="opacity:.8;margin-bottom:6px">Convert between coin and fear — sell 1 ☠ → <b>${bmSellPrice()}</b>💰, buy 1 ☠ ← <b>${bmBuyPrice()}</b>💰 (prices ride the siege).</div>
       <div class="row" style="justify-content:center;gap:5px;align-items:center;margin-bottom:7px">
         <button onclick="bmAdjust(-10)" ${amt<=1?'disabled':''} style="padding:5px 9px;min-height:0">⏪</button>
         <button onclick="bmAdjust(-1)" ${amt<=1?'disabled':''} style="padding:5px 10px;min-height:0">◄</button>
@@ -5636,8 +5964,8 @@ function renderTown(){
         <button onclick="bmAdjust(10)" style="padding:5px 9px;min-height:0">⏩</button>
       </div>
       <div class="row" style="justify-content:center;gap:10px">
-        <button ${G.dread<amt?'disabled':''} onclick="bmSell()" style="border-color:#5fd17a;padding:8px 12px">☠ ${amt} → 💰 +${amt*BM_SELL}</button>
-        <button ${G.gold<amt*BM_BUY?'disabled':''} onclick="bmBuy()" style="border-color:#ffd34d;padding:8px 12px">💰 −${amt*BM_BUY} → ☠ ${amt}</button>
+        <button ${G.dread<amt?'disabled':''} onclick="bmSell()" style="border-color:#5fd17a;padding:8px 12px">☠ ${amt} → 💰 +${amt*bmSellPrice()}</button>
+        <button ${G.gold<amt*bmBuyPrice()?'disabled':''} onclick="bmBuy()" style="border-color:#ffd34d;padding:8px 12px">💰 −${amt*bmBuyPrice()} → ☠ ${amt}</button>
       </div>
     </div>`;
   const threat = `<div class="row" style="justify-content:center;gap:8px;align-items:center">
@@ -6068,14 +6396,14 @@ function trapTick(h,cell,dt){
       if(d.vsLowHp && h.hp < h.maxHp*d.vsLowHp) dmg*=d.vsMult;
       if(cell.synType==='execution' && h.hp < h.maxHp*0.4) dmg*=1.6;   // 🔗 Gallows synergy: finish the wounded
       // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
-      const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
+      const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp*Math.min(1,d.rate); }   // bite prorated by rate — fast traps must not triple-dip per second
       if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
       if(amp<0) amp=ampAt(cell.index);
       dmg*=amp;                                                // Runestone / War Totem amplification
       const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : (!!d.pierce || cell.synType==='physical');  // Bastion/Piercing Halls & 🔗 Brutal synergy: ignore armor
       _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
       if(d.burn){ addBurn(h, d.burn+(tl-1)*2, 3); }
-      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(BURN_CAP, Math.max(h.burn||0, 2+(tl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
+      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(burnCap(), Math.max(h.burn||0, 2+(tl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
       applyTrapStatus(h, d, r);                                  // poison / acid / mark
       if(cell.synType) synergyOnHit(h, cell, tl, dmg);           // 🔗 synergy rider
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
@@ -6119,10 +6447,10 @@ function aoeTrapTick(dt){
       base*=ampAt(cell.index);                                  // Runestone / War Totem amplification
       const pierce=(doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll)?'full':(!!d.pierce||cell.synType==='physical');
       for(const o of targets){
-        let dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
+        let dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp*Math.min(1,d.rate):0));   // bite prorated by rate (see trapTick)
         if(cell.synType==='execution' && o.hp < o.maxHp*0.4) dmg=Math.round(dmg*1.6);   // 🔗 Gallows finisher
         _roomDmgCtx=r; dealToHero(o, dmg, 'BOOM', pierce, d.elem); _roomDmgCtx=null;
-        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(BURN_CAP, Math.max(o.burn||0, 2+(tl-1))); o.burnT=Math.max(o.burnT||0,3); }
+        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(burnCap(), Math.max(o.burn||0, 2+(tl-1))); o.burnT=Math.max(o.burnT||0,3); }
         applyTrapStatus(o, d, r);
         if(cell.synType) synergyOnHit(o, cell, tl, dmg);          // 🔗 synergy rider
         if(G.stats) G.stats.trapDmg+=dmg;
@@ -6217,7 +6545,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         maybePotion(t);
       }
       // 🐲 Drakeling fire breath: a ranged cone that ignites EVERY hero in the room,
-      // stacking burn (up to BURN_CAP) for breath.dur seconds — on top of the claw above.
+      // stacking burn (up to burnCap()) for breath.dur seconds — on top of the claw above.
       if(g.breath){
         const dx0=cell.x0+ROOM_W*0.82, dy0=FLOOR-DRAKE_HOVER;   // 🐲 hover spot — must match the draw
         let lit=0;
@@ -6254,6 +6582,9 @@ function maybePotion(h){
 }
 
 function doShopping(h, cell){
+  // the room can be GONE by now (a champion/King smashed it mid-browse) — walk on,
+  // don't dereference the rubble (this crashed the whole frame loop in the finale)
+  if(!cell || !cell.room || !cell.room.stock){ h.state='walking'; return; }
   // buy affordable, unsold items; price scales with the shop's level → you profit
   for(const s of cell.room.stock){
     if(s.sold) continue;
@@ -6602,7 +6933,7 @@ function drawDungeon(tx, scale, isBuild){
   // hero
   // draw the whole raiding party (dead first so living draw on top)
   const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
-  for(const h of party) if(h.state==='dead') drawHeroDead(tx(h.x), h);
+  for(const h of party) if(h.state==='dead' && !h.escaped) drawHeroDead(tx(h.x), h);   // an ESCAPED thief is gone, not a corpse
   for(const h of party) if(h.state!=='dead') drawHero(tx(h.x), h);
   if(G.phase==='run') drawDenGoblins(tx);    // 👺 marching goblins from Den spawners
   // front-of-hero trap layers, replayed over the party (see HERO_LAYER)
@@ -6623,6 +6954,12 @@ function previewHeroObj(spec){
 // Preview hero objects are CACHED per queue slot so their idle animation keeps
 // advancing (rebuilding them every frame would freeze the sprite on frame 0).
 let _waitAnim=[];
+// Staging-zone x for waiting hero k of n — the ONE formula shared by
+// drawWaitingHeroes (render) and entityAt (hit-test) so taps land on what's drawn.
+function stagedHeroX(k,n){
+  const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
+  return -STAGEW*0.5 - (n-1)*sp/2 + k*sp;
+}
 function drawWaitingHeroes(tx){
   let specs;
   if(G.tutorial){
@@ -6647,18 +6984,27 @@ function drawWaitingHeroes(tx){
   if(G.tutorial || G.mode==='campaign') n=Math.min(specs.length, 9);
   else n=specs[0].champion ? 1 : Math.min(specs.length, G.guildLvl+1+(hasEdict('warband')?1:0));
   let hasChamp=false; for(let k=0;k<n;k++) if(specs[k].champion){ hasChamp=true; break; }
-  const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
   for(let k=0;k<n;k++){
     const spec=specs[k];
     // reuse the cached object so _animT accumulates across frames (idle plays);
     // rebuild it only when the spec at this slot changes (new wave rolled)
     let e=_waitAnim[k]; if(!e || e.spec!==spec){ e=_waitAnim[k]={spec, h:previewHeroObj(spec)}; }
     const h=e.h;
-    const wx = -STAGEW*0.5 - (n-1)*sp/2 + k*sp;            // centred in the staging zone
+    const wx = stagedHeroX(k,n);                           // centred in the staging zone
     h.yOff = -LIFT;                                        // stand on the walking line (right height)
     X.globalAlpha=0.92; drawHero(tx(wx), h); X.globalAlpha=1;
   }
-  X.fillStyle=hasChamp?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
+  // one-line wave summary above the label: "9 raiders · ⚔️5 🗡️2 · ⭐2 · 👑"
+  const _cn={}; let _el=0, _ch=0;
+  for(let k=0;k<n;k++){ const s=specs[k];
+    if(s.champion){ _ch++; continue; }
+    _cn[s.cls]=(_cn[s.cls]||0)+1; if(s.traits&&s.traits.length) _el++; }
+  const _parts=[n+' raider'+(n>1?'s':'')];
+  const _cs=Object.keys(_cn).map(c=>((CLASSES[c]||{}).ic||'')+_cn[c]).join(' '); if(_cs) _parts.push(_cs);
+  if(_el) _parts.push('⭐'+_el); if(_ch) _parts.push('👑');
+  X.fillStyle='rgba(205,186,255,.75)'; X.font='10px Trebuchet MS'; X.textAlign='center';
+  X.fillText(_parts.join(' · '), tx(-STAGEW*0.5), FLOOR-141);
+  X.fillStyle=hasChamp?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS';
   X.fillText(hasChamp?'⚔️ CHAMPION!':'⏳ Next wave →', tx(-STAGEW*0.5), FLOOR-128);
   X.textAlign='left';
 }
@@ -8124,7 +8470,7 @@ function renderPanel(){
         </button>`; })()}
       ${(()=>{ const ready=(b.rage||0)>=RAGE_MAX;
         return `<button class="abil overdrive${ready?' rdy':''}" onclick="castOverdrive()" ${ready?'':'disabled'}
-          title="OVERDRIVE — when Rage is full, blast EVERY raider for ~45% max HP (ignores armor), leaving survivors burning &amp; chilled. Hotkey: Q">
+          title="OVERDRIVE — when Rage is full, blast EVERY raider for ~45% max HP + a flat burst (ignores armor), leaving survivors burning &amp; chilled. Hotkey: Q">
           <span style="font-size:18px">💥</span>
           <span style="font-size:11px">Overdrive</span>
           <span class="c">${ready?'READY!':Math.floor(b.rage||0)+'%'}</span>
@@ -8236,6 +8582,8 @@ function describeCard(card){
   } else if(def.kind==='shop'){
     lines.push(`Holds ${lvl+1} item${lvl+1>1?'s':''} (+1 slot/level). Heroes buy at ×${shopMarkup(lvl).toFixed(2)} — pure profit, and they still drop full loot.`);
   }
+  const _sh=synergyHintLine(card.type);   // 🔗 this card would complete a trap pair somewhere
+  if(_sh) lines.push(_sh);
   const tags=cardTags(def);
   if(tags.length) lines.push(tags.map(t=>`<span style="background:#2a2342;border:1px solid ${(KEYWORDS[t]||{}).col||'#888'};color:${(KEYWORDS[t]||{}).col||'#ccc'};border-radius:4px;padding:0 5px;font-size:10px;margin:1px 3px 0 0;white-space:nowrap">${t}</span>`).join(' '));
   lines.push(`<span style="opacity:.85">${def.desc}</span>`);
@@ -8280,7 +8628,9 @@ function renderChestPop(){
   let cells='';
   for(let i=0;i<CHEST_MAX;i++){ const g=chest[i];
     if(g){ const col=RELIC_TIERS[g.t].col;
-      cells+=`<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" onmouseenter="chestGearHover(${i})" onmouseleave="cardHoverOut()" title="${swordName(g)} · ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col}">${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
+      // ⚒ freshly-forged piece glows in its new tier colour for a beat (set by mergeGear)
+      const forge=(G && G._mergeFlashIdx===i && performance.now()-(G._mergeFlashAt||0)<900)?' forge':'';
+      cells+=`<div class="gcell${selGear===i?' sel':''}${forge}" data-gi="${i}" onmouseenter="chestGearHover(${i})" onmouseleave="cardHoverOut()" title="${swordName(g)} · ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col};--fcol:${col}">${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
     } else cells+='<div class="gcell empty"></div>';
   }
   const loot=(G&&G.floorLoot&&G.floorLoot.length)||0;
@@ -8309,7 +8659,7 @@ function entityAt(wx){
     const n = G.mode==='campaign' ? Math.min(G.queue.length, 9)
             : (G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0)));
     let best=-1,bd=24;
-    for(let k=0;k<n;k++){ const hx=-STAGEW*0.62+k*14; const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
+    for(let k=0;k<n;k++){ const hx=stagedHeroX(k,n); const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
     if(best>=0) return {kind:'queuehero', spec:G.queue[best]};
   }
   // 💎 dropped gear on the floor — foreground over the room behind it (but heroes win)
@@ -8366,7 +8716,7 @@ function describeRoom(room, detail){
       const hp=Math.round(bHp*(0.9+(lv-1)*0.85)*feed*bas*vm*(1+(RB.monHp||0))*bm*ge.hpMul);
       const atk=Math.round(bAtk*(1.0+(lv-1)*0.9)*feed*bas*vm*(1+(RB.monDmg||0))*bm*ge.atkMul)+(ge.atkFlat||0);
       const carries=(u.gear&&u.gear.length)?' · '+u.gear.map(g=>GEAR[g.k].ic).join(''):'';
-      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${def.breath?` · 🔥 burns the whole room (+${def.breath.burn}/hit, ${def.breath.dur}s)`:''}${carries}`);
+      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)} <span style="color:#ffd34d">Lv ${lv}/${maxLevel()}</span>: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${def.breath?` · 🔥 burns the whole room (+${def.breath.burn}/hit, ${def.breath.dur}s)`:''}${carries}`);
       if(u.gear&&u.gear.length) u.gear.forEach(g=>lines.push(`<span class="small" style="opacity:.9">&nbsp;&nbsp;🎒 ${gearTag(g)} — ${gearEffectText(g)}</span>`)); });
     if(guardUnits.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${guardUnits.length} guards — each steps up when the one before falls</span>`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feedMul(room.kills)-1)*100)}% (no cap)`); }
@@ -8923,6 +9273,11 @@ window.addEventListener('keydown', ()=>{ if(audioOn && !TUTPREVIEW) initAudio();
      3. Put your publisher id in `client`, the slot id in `slot`, set
         `enabled:true`, and redeploy. Done — no other change needed.
    Left OFF here, so the game is byte-for-byte the same until you configure it. */
+/* ☕ Support link (off by default, same opt-in pattern as ADS below): set
+   SUPPORT_URL to your donation page — e.g. 'https://ko-fi.com/yourname' — and
+   a quiet "Support the dungeon" row appears in Options. Leave it '' and the
+   row never renders. */
+const SUPPORT_URL='';
 const ADS = {
   enabled: false,                       // ← flip to true once the two ids below are filled in
   client:  'ca-pub-0000000000000000',   // ← your AdSense publisher id (ca-pub-…)

@@ -9,13 +9,13 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
-  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,describeGear,
+  roomSynergy,synergyFromTypes,synergyHint,synergyHintLine,describeCard,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,describeGear,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
-  MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
-  useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
-  gotoRelicChoice,rollRelicChoices,RELICS,MERCHANT_PRICE,TIER_ORDER,
+  MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,GOBLIN_DEN_CAP,
+  useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,doShopping,
+  gotoRelicChoice,rollRelicChoices,RELICS,RELIC_ICON,MERCHANT_PRICE,TIER_ORDER,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
-  get G(){return G;},set G(v){G=v;}`);
+  get G(){return G;},set G(v){G=v;},get RB(){return RB;}`);
 const t = harness('rooms (slots/stacking/menu)');
 
 function freshBuild(){ A.G=A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots=5; A.G.phase='build'; A.G.gold=999999; }
@@ -26,8 +26,10 @@ freshBuild();
 place('skeleton',1,0);
 let r=A.G.rooms[0];
 t.ok(r && r.units.length===1 && r.cap===1, 'placing a card builds a 1-unit room (cap 1)');
-t.ok(place('skeleton',1,0)===false, 'a 2nd unit is refused — the room is full at cap 1');
-t.ok(r.units.length===1, 'the refused placement added nothing');
+// full room + the SAME monster type → the copy trains that guard a level (no new slot)
+t.ok(place('skeleton',1,0)===true && r.units.length===1 && r.units[0].lvl===2,
+  'a same-type monster on a FULL room trains the guard to Lv 2 instead of refusing');
+t.ok(place('ogre',1,0)===false && r.units.length===1, 'a DIFFERENT monster is still refused at cap 1');
 
 // --- gold upgrade adds a slot; monsters STACK as independent copies ---
 A.G.gold=A.roomUpgradeCost(r); A.upgradeRoomGold(0);
@@ -37,7 +39,10 @@ t.ok(r.units.length===2 && A.roomMonUnits(r).length===2, 'a 2nd Bone Pit stacks 
 A.G.gold=999999; while(r.cap<A.MAX_SLOTS) A.upgradeRoomGold(0);
 while(r.units.length<A.MAX_SLOTS) place('skeleton',1,0);
 t.ok(r.units.length===5 && A.roomMonUnits(r).length===5, 'five Bone Pits live in one room');
-t.ok(place('skeleton',1,0)===false, 'a 6th unit is refused at the 5-slot cap');
+const lv6=r.units[0].lvl;
+t.ok(place('skeleton',1,0)===true && r.units.length===5 && r.units[0].lvl===lv6+1,
+  'a 6th copy at the 5-slot cap trains a level instead of refusing');
+t.ok(/Lv 3\//.test(A.describeRoom(r,true)), 'the room inspector shows the trained guard level');
 
 // --- buildCells turns the stack into 5 separate guards ---
 A.buildCells();
@@ -45,6 +50,7 @@ let cell=A.G.cells[0];
 t.ok(cell.guards && cell.guards.length===5, 'buildCells makes one guard per monster unit');
 t.ok(cell.mon===cell.guards[0] && cell.guards.every(g=>g.alive), 'front guard is active; every guard alive');
 t.ok(cell.guards.every(g=>g.type==='skeleton'), 'each guard remembers its type');
+t.ok(cell.guards[0].hp>cell.guards[1].hp, 'the trained (higher-Lv) guard is tougher than its fresh packmates');
 
 // --- TRAPS: same trap stacks into a LEVEL (one unit); max level then refuses ---
 freshBuild();
@@ -61,6 +67,14 @@ A.G.gold=999999; A.upgradeRoomGold(0);                 // cap 2
 t.ok(place('flame',1,0)!==false && A.roomTrapUnits(tr).length===2, 'a 2nd trap TYPE fills the new slot');
 A.upgradeRoomGold(0);                                  // cap 3
 t.ok(place('venom',1,0)===false, 'a 3rd trap is refused — max '+A.MAX_TRAPS+' traps per room');
+
+// --- 🔯 Runestone (amp trap): stacking is a no-op, so the stack is REFUSED ---
+freshBuild();
+place('runestone',1,1); const rs=A.G.rooms[1];
+A.G.gold=999999; A.upgradeRoomGold(1);                 // free slot available — still refused
+t.ok(place('runestone',1,1)===false, 'a 2nd Runestone on the same room is refused (lvl++ would change nothing)');
+t.ok(rs.units.length===1 && rs.units[0].lvl===1, 'the refused Runestone changed nothing');
+t.ok(place('runestone',1,0)!==false, 'the Runestone still places fine in ANOTHER room');
 
 // --- mix and match: 2 traps + 3 monsters in one 5-slot room ---
 freshBuild();
@@ -181,6 +195,17 @@ for(const k of synKeys){
   if(badSyn) break;
 }
 t.ok(!badSyn, 'every synergy: canonical key, known type, real trap ids, shipped art' + (badSyn ? ' — '+badSyn : ''));
+
+// 🏺 relic icons: the banner art sits on the Banner and the horn art on the Horn
+// (rBanner used to squat on 'horn' while relic_banner.png went unused), and every
+// mapped icon is a real relic with its PNG shipped in icons/.
+t.ok(A.RELIC_ICON.rBanner === 'banner' && A.RELIC_ICON.eHorn === 'horn', 'RELIC_ICON: rBanner→banner, eHorn→horn');
+let badRI = '';
+for(const k in A.RELIC_ICON){
+  if(!A.RELICS[k]) { badRI = k+' is not a relic id'; break; }
+  if(!existsSync(join(here, '..', 'no_room_for_heroes', 'icons', 'relic_'+A.RELIC_ICON[k]+'.png'))){ badRI = k+' art missing ('+A.RELIC_ICON[k]+')'; break; }
+}
+t.ok(!badRI, 'every relic icon maps a real relic to shipped art' + (badRI ? ' — '+badRI : ''));
 t.ok(Object.values(A.SYNERGY_TYPES).every(v => v.amp > 0 && v.name && v.col && v.desc), 'every synergy type has an amp + name + colour + blurb');
 
 // detection: a real pair synergizes; dupes / undefined pairs / lone traps do not
@@ -188,6 +213,20 @@ t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'oil',kind:'trap'}]}
 t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'flame',kind:'trap'}]}) === null, 'the same trap twice is not a synergy');
 t.ok(A.roomSynergy({units:[{type:'spike',kind:'trap'},{type:'flame',kind:'trap'}]}) === null, 'an undefined pair is not a synergy');
 t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'oil',kind:'trap'},{type:'runestone',kind:'trap'}]})?.type === 'fire', 'a Runestone (amp-only) does not break the pair');
+
+// 🔗 synergy badge: a card that would COMPLETE a pair in an existing room says so
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 2; A.G.phase = 'build';
+A.G.rooms = [{ type:'flame', cap:2, kills:0, units:[{type:'flame',kind:'trap',lvl:1}] }, null];
+const sHint = A.synergyHint('oil');
+t.ok(sHint && sHint.room === 0 && sHint.syn.type === 'fire', 'an Oil card reports it would form Inferno with room 1');
+t.ok(/Forms <b>Inferno<\/b> with room 1/.test(A.synergyHintLine('oil')), 'the badge line names the synergy + room');
+t.ok(A.describeCard({type:'oil',lvl:1}).includes('Forms <b>Inferno</b> with room 1'), 'the hand-card tooltip carries the badge');
+t.ok(A.synergyHint('spike') === null, 'a non-pairing trap gets no badge (spike+flame is not curated)');
+t.ok(A.synergyHint('skeleton') === null && A.synergyHint('runestone') === null, 'monsters and amp traps never badge');
+A.G.rooms[0].cap = 1;
+t.ok(A.synergyHint('oil') === null, 'a room with no free slot is not offered');
+A.G.rooms[0].cap = 2; A.G.rooms[0].units.push({type:'oil',kind:'trap',lvl:1});
+t.ok(A.synergyHint('venom') === null, 'a room whose synergy already formed is not offered again');
 
 // buildCells caches the type + a >1 damage amp on the cell
 A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;
@@ -240,5 +279,39 @@ t.ok(A.ROOMS.spike.dmg <= 5 && A.ROOMS.arrow.dmg <= 4, 'common traps are the wea
 t.ok(A.ROOMS.maul.dmg >= 18 && A.ROOMS.bombard.dmg >= 18, 'epic traps hit hard (a rare/epic feels good to get)');
 t.ok(A.ROOMS.goblin.hp < A.ROOMS.ogre.hp && A.ROOMS.skeleton.hp < A.ROOMS.ogre.hp, 'common monsters are frailer than the tougher tiers');
 t.ok(A.ROOMS.orc.atk > A.ROOMS.skeleton.atk && A.ROOMS.warden.hp > A.ROOMS.skeleton.hp, 'rare monsters out-stat the commons');
+// tier retune: the ogre is a TRUE wall now (it used to sit under the rare warden)
+t.ok(A.ROOMS.ogre.hp===92 && A.ROOMS.ogre.atk===26, `ogre retuned to a real late-game wall (${A.ROOMS.ogre.hp} HP / ${A.ROOMS.ogre.atk} atk)`);
+t.ok(A.ROOMS.ogre.hp > A.ROOMS.warden.hp, 'the special-tier ogre out-tanks the rare warden');
+t.ok(A.ROOMS.dragon.breath.burn===2, 'drakeling breath stacks +2 burn per puff (was 3 — whole-room burn was outpacing its tier)');
+t.ok(A.GOBLIN_DEN_CAP===12, 'goblin den banks at most 12 veterans (was 20)');
+
+// --- 📜 Deed to the Deep is a dead pick in Endless (slot cap is ∞ there) — never offered ---
+A.G = A.freshGame('endless'); A.chooseBoss('dragon');
+A.G.relics = Object.keys(A.RELICS).filter(id => id !== 'rDeed');   // only the Deed left in the vault
+t.ok(A.rollRelicChoices(3).length === 0, 'Endless never offers the Deed (its +slot cap does nothing there)');
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
+A.G.relics = Object.keys(A.RELICS).filter(id => id !== 'rDeed');
+t.ok(A.rollRelicChoices(3).includes('rDeed'), 'Campaign still offers the Deed (where it works)');
+
+// --- ⛏️ Excavator rune: "+5% synergy" now genuinely sharpens synergy rooms ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;
+A.G.rooms = [{ type:'flame', cap:2, kills:0, units:[{type:'flame',kind:'trap',lvl:1},{type:'oil',kind:'trap',lvl:1}] }];
+A.RB.synergy = 0.05; A.buildCells();
+t.ok(Math.abs(A.G.cells[0].syn - (1 + A.SYNERGY_TYPES.fire.amp + 0.05)) < 1e-9, 'RB.synergy folds into a synergy room\'s amp (Excavator does what it says)');
+A.RB.synergy = 0;
+
+// --- 💥 QA: shopping in a room the King just smashed must not crash the frame loop ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;
+A.G.rooms = [null]; A.buildCells();
+const shopper = { state:'shopping', shopT:0, x:10, cellIndex:0 };
+let shopThrew = false;
+try { A.doShopping(shopper, A.G.cells[0]); } catch(e){ shopThrew = true; }
+t.ok(!shopThrew && shopper.state === 'walking', 'a shopper in a smashed room walks on instead of crashing');
+
+// --- 🏺 QA: boss-select ⇄ loadout Back loop must not farm free relics ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
+A.G.relics = ['rFang','rTome'];                       // pretend a previous pick granted these
+A.chooseBoss('dragon');                               // back out → re-pick
+t.ok(!A.G.relics.includes('rFang') && !A.G.relics.includes('rTome'), 're-picking a boss resets run relics (no dupe farming)');
 
 t.done();
