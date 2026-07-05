@@ -6,7 +6,7 @@
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,bossUnlocked,cardUnlocked,bumpStat,statVal,
-  saveRunes,loadRunes,awardRunes,grandfatherUnlocks,gotoBossSelect,scrollBosses,updateBossArrows,BOSS_KEYS,
+  saveRunes,loadRunes,awardRunes,grandfatherUnlocks,gotoBossSelect,scrollBosses,updateBossArrows,BOSS_KEYS,nextGoalHTML,
   get RUNES(){return RUNES;},set RUNES(v){RUNES=v;},
   get UNLOCK_BOSS_COND(){return UNLOCK_BOSS_COND;},get UNLOCK_CARD_COND(){return UNLOCK_CARD_COND;},
   get overlay(){return overlay;},
@@ -98,5 +98,26 @@ t.ok(!bs.includes('makeHScrollDraggable'), 'the click-swallowing drag handler is
 let arrowsThrew = false;
 try { A.scrollBosses(1); A.scrollBosses(-1); A.updateBossArrows(); } catch(e){ arrowsThrew = true; }
 t.ok(!arrowsThrew, 'arrow paging + grey-out handlers run without throwing');
+
+// --- 🎯 next-goal teaser: the single HIGHEST-progress locked feat, with a bar ---
+fresh();
+A.bumpStat('frozen', 20);          // frost: 20/25 = 0.80 ← the closest carrot
+A.bumpStat('burned', 10);          // bombard: 10/50 = 0.20
+A.bumpStat('waves', 30);           // golem boss: 30/60 = 0.50
+const teaser = A.nextGoalHTML();
+t.ok(teaser.includes('Next unlock'), 'the teaser renders for a profile with locked feats');
+t.ok(teaser.includes(A.UNLOCK_CARD_COND.frost.label), 'it picks the highest-progress locked feat (frozen 80%)');
+t.ok(teaser.includes('20') && teaser.includes('25'), 'it shows v/n progress numbers');
+t.ok(teaser.includes('width:80%'), 'the progress bar width matches the ratio');
+// crossing a feat makes it unlocked → the teaser moves on to the next-closest
+A.bumpStat('frozen', 5);           // frost now earned (25/25)
+const teaser2 = A.nextGoalHTML();
+t.ok(!teaser2.includes(A.UNLOCK_CARD_COND.frost.label), 'an earned feat drops out of the teaser');
+t.ok(teaser2.includes(A.UNLOCK_BOSS_COND.golem.label), 'the next-closest locked feat (waves 50%) takes its place');
+// everything unlocked → no teaser at all
+A.RUNES.unlocked = {};
+for (const k in A.UNLOCK_BOSS_COND) A.RUNES.unlocked[k] = true;
+for (const k in A.UNLOCK_CARD_COND) A.RUNES.unlocked[k] = true;
+t.ok(A.nextGoalHTML() === '', 'a fully-unlocked profile shows no teaser');
 
 t.done();
