@@ -14,6 +14,8 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   goblinStep,fightTick,shake,
   collectLoot,collectAllLoot,mergeGear,autoMergeGear,assignLoot,GEAR,CHEST_MAX,TIER_ORDER,
   equipGear,roomMonUnits,renderPanel,describeHero,describeRoom,describeLoot,entityAt,gearEffectText,gearEffects,ampAt,
+  SFX,placeCard,roomSynergy,synergyJustFormed,DMG_FLOAT_CAP,
+  get bannerMsg(){ return bannerMsg; },
   get panelHTML(){ return panel.innerHTML; },
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
@@ -417,5 +419,57 @@ try{
   A.fightTick(hero, cell.mon, 0.05, cell, true, false);
   t.ok(hero.hp<before, 'thorns reflects damage back at a hero who strikes a legendary-Aegis guard');
 }catch(e){ t.ok(false, 'legendary-gear specials threw: '+e.message); }
+
+// 18) 🔊 Batch-C SFX recipes exist in the map (audio is noop-stubbed here — the
+//     keys are the contract: waveWinBanner/placeCard/mergeGear/heroDies/startGo fire them)
+try{
+  for(const k of ['wavewin','synergy','merge','unlock','champdown','go'])
+    t.ok(typeof A.SFX[k]==='function', `SFX recipe '${k}' exists`);
+}catch(e){ t.ok(false, 'SFX map check threw: '+e.message); }
+
+// 19) 🔗 synergy-formed fanfare: fires exactly on the placement that COMPLETES the
+//     pair (null→non-null transition), never on the first trap or once formed
+try{
+  A.G=A.freshGame('campaign'); A.chooseBoss(BOSS); A.G.phase='build';
+  A.G.slots=2; A.G.rooms=[null,null]; A.G.gold=9999;
+  A.G.hand=[{type:'flame',lvl:1}];
+  t.ok(A.placeCard(0,0)===true, 'first trap places');
+  const r=A.G.rooms[0];
+  t.ok(A.synergyJustFormed(null, r)===null, 'a lone trap forms nothing');
+  r.cap=2;                                              // free slot for the pair
+  const before=A.roomSynergy(r);
+  A.G.hand=[{type:'oil',lvl:1}];
+  t.ok(A.placeCard(0,0)===true, 'the pairing trap places');
+  const formed=A.synergyJustFormed(before, r);
+  t.ok(formed && formed.type==='fire', 'the completing placement reports the formed synergy (fire)');
+  t.ok(A.bannerMsg && /INFERNO SYNERGY/.test(A.bannerMsg.text), 'placeCard raised the synergy banner ('+(A.bannerMsg&&A.bannerMsg.text)+')');
+  t.ok(A.synergyJustFormed(A.roomSynergy(r), r)===null, 'an already-formed room never re-fires');
+}catch(e){ t.ok(false, 'synergy fanfare threw: '+e.message); }
+
+// 20) 💥 damage-float coalescing: 30 rapid hits on ONE hero merge into a single
+//     growing number (capped at DMG_FLOAT_CAP live floats) instead of 30 floats
+try{
+  freshRun([room('spike',1)]);
+  const h=A.G.heroes[0];
+  h.hp=h.maxHp=999999; h.dodge=0; h.evadeT=0;           // unkillable, no DODGE floats
+  A.floats.length=0;
+  for(let i=0;i<30;i++) A.dealToHero(h, 1, 'TEST', 'full', 'phys', true);
+  const plain=A.floats.filter(f=>/^-\d+$/.test(f.txt));
+  t.ok(plain.length>=1 && plain.length<=A.DMG_FLOAT_CAP, '30 rapid hits → ≤'+A.DMG_FLOAT_CAP+' plain damage floats (got '+plain.length+')');
+  t.ok(A.floats.length<30, 'the floats array stays bounded ('+A.floats.length+' total; uncoalesced would be ≥30)');
+  const merged=Math.max(...plain.map(f=>parseInt(f.txt.slice(1),10)));
+  t.ok(merged>1, 'the live float accumulates damage in place (grew to -'+merged+')');
+}catch(e){ t.ok(false, 'damage-float coalescing threw: '+e.message); }
+
+// 21) ☠ kill payout: gold + dread arrive as ONE combined float, not a pair
+try{
+  freshRun([room('spike',1)]);
+  const h=A.G.heroes[0]; h.champion=null; h.elite=false; h.king=false; h.reachedThrone=false;
+  A.floats.length=0;
+  A.heroDies(h);
+  const pay=A.floats.filter(f=>/^\+\d+g · \+\d+☠$/.test(f.txt));
+  t.ok(pay.length===1, 'kill payout is one combined "+Ng · +N☠" float (got '+pay.length+')');
+  t.ok(!A.floats.some(f=>/^\+\d+☠$/.test(f.txt)), 'no separate dread float remains');
+}catch(e){ t.ok(false, 'kill-payout float threw: '+e.message); }
 
 t.done();
