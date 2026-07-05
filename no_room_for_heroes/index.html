@@ -193,6 +193,11 @@
     background:#1a1330;display:flex;flex-direction:column;align-items:center;justify-content:center;
     cursor:pointer;user-select:none;touch-action:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
   .gcell.sel{box-shadow:0 0 0 2px var(--gold) inset;}
+  /* ⚒ freshly-forged gear flashes in its new tier colour (mergeGear sets .forge) */
+  .gcell.forge{animation:forgeflash .9s ease-out;}
+  @keyframes forgeflash{0%{box-shadow:0 0 4px 2px var(--fcol),inset 0 0 14px var(--fcol);transform:scale(1.18);}
+    60%{box-shadow:0 0 18px 5px var(--fcol),inset 0 0 8px var(--fcol);transform:scale(1);}
+    100%{box-shadow:0 0 0 0 transparent;}}
   .gcell .gic{font-size:18px;line-height:1;}
   .gcell .gt{font-size:9px;font-weight:bold;line-height:1.1;}
   /* painted sword art for gear (gear/<kind>_<tier>.png) */
@@ -725,7 +730,7 @@ const EDICT_ICON={ ironHorde:'iron', bloodPact:'blood', swiftRaiders:'swift', wa
 function edictFace(id){ return EDICT_ICON[id] ? '<img class="cardimg" src="modifiers/'+EDICT_ICON[id]+'.png" alt="" draggable="false">' : null; }
 // Painted relic icons (icons/relic_<word>.png) per relic key; emoji fallback.
 const RELIC_ICON={ cFang:'cracked', cEmber:'wildfire', sTooth:'serpent', sCharm:'charm', sPouch:'greedy', sMana:'mana', sCollar:'collar',
-  cShackle:'shackle', cCoin:'worncoin', cIdol:'idol', sWard:'wardingstone', eMidas:'alchemist', rBanner:'horn',
+  cShackle:'shackle', cCoin:'worncoin', cIdol:'idol', sWard:'wardingstone', eMidas:'alchemist', rBanner:'banner', eHorn:'horn',
   rScale:'dragonscale', rBlood:'bloodstone', rTome:'tome', rEye:'hoarder', rFrost:'frost', rDeed:'deed',
   eCore:'infernal', eStaff:'archmage', lPhyl:'phylactery', mRuin:'avatar', mEtern:'eternity' };
 function relicFace(id,cls){ return RELIC_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/relic_'+RELIC_ICON[id]+'.png" alt="" draggable="false">' : null; }
@@ -817,6 +822,9 @@ function synergyFromTypes(types){
   return SYNERGIES[t.slice().sort().join('+')]||null;
 }
 function roomSynergy(room){ return (room&&room.units) ? synergyFromTypes(room.units.map(u=>u.type)) : null; }
+// 🔗 Did the last unit change COMPLETE a synergy? (null→non-null transition —
+// placeCard captures the room's synergy BEFORE the placement and passes it here.)
+function synergyJustFormed(prevSyn, room){ const s=roomSynergy(room); return (!prevSyn && s) ? s : null; }
 // 🔗 Would this card COMPLETE a synergy pair in an existing room? Scans the
 // dungeon for the FIRST room where the pair would form (no synergy yet, a free
 // slot, and room for another trap). Damage traps only — amps never pair.
@@ -1660,7 +1668,8 @@ function mergeGear(i,j){
   const nu={k:a.k, t:nt, v:gearRollV(a.k)};             // forge the upgrade (a fresh variant roll)
   G.chest.push(nu);
   bumpStat('merges');                                   // feat: gear merges forged
-  selGear=-1; sfx('relic');
+  G._mergeFlashAt=performance.now(); G._mergeFlashIdx=G.chest.length-1;   // chest popup: flash the forged cell
+  selGear=-1; sfx('merge');
   showHint('⬆ Merged into '+swordName(nu)+' ('+RELIC_TIERS[nt].name+')!');
   renderPanel();
   if(typeof tutEvent==='function') tutEvent('merge');     // tutorial: advances the "forge an upgrade" beat
@@ -2024,6 +2033,25 @@ function countTo(el, target){
 function showHint(t){ hintEl.textContent=t; hintEl.classList.add('show');
   clearTimeout(showHint._t); showHint._t=setTimeout(()=>hintEl.classList.remove('show'),2200); }
 function floater(x,y,txt,col,big){ floats.push({x,y,txt,col,life:1,vy:big?-26:-34,big:!!big,fade:big?0.62:0.9}); }
+// Plain per-hero damage numbers coalesce so hordes don't wallpaper the screen:
+// hits inside a 0.4s window merge into ONE growing float (its text is updated in
+// place), and a hero shows at most DMG_FLOAT_CAP plain numbers at once — past
+// that, new hits fold into the newest one. Named floats (CRIT, DODGE, reactions,
+// SMITE, payouts) still use floater() directly and always show.
+const DMG_FLOAT_WIN=400, DMG_FLOAT_CAP=3;
+function dmgFloater(h,dmg,col){
+  const now=(typeof performance!=='undefined')?performance.now():Date.now();
+  h._dmgFls=(h._dmgFls||[]).filter(f=>f.life>0);
+  const live=h._dmgFls[h._dmgFls.length-1];
+  if(live && (now-(h._dmgAccT||0)<DMG_FLOAT_WIN || h._dmgFls.length>=DMG_FLOAT_CAP)){
+    h._dmgAcc=(h._dmgAcc||0)+dmg; h._dmgAccT=now;
+    live.txt='-'+h._dmgAcc; live.life=Math.max(live.life,0.9);   // the number grows in place
+    return;
+  }
+  h._dmgAcc=dmg; h._dmgAccT=now;
+  const f={x:h.x+ri(-8,8),y:h.y-44,txt:'-'+dmg,col,life:1,vy:-34,big:false,fade:0.9};
+  floats.push(f); h._dmgFls.push(f);
+}
 function burst(x,y,col,n=10){ for(let i=0;i<n;i++)particles.push(
   {x,y,vx:rnd(-90,90),vy:rnd(-150,-20),life:rnd(.4,.9),col,sz:rnd(2,5)}); }
 
@@ -2149,6 +2177,15 @@ const SFX={
   combo:()=>tone(880,0.08,'square',0.13,1320),
   plop:()=>tone(440,0.09,'sine',0.15,150),                                   // rune drops into the book
   ching:()=>{ tone(1568,0.06,'triangle',0.12); setTimeout(()=>tone(2349,0.09,'triangle',0.10),42); },  // coin into the chest
+  wavewin:()=>[659,880,1319].forEach((f,i)=>setTimeout(()=>tone(f,0.16,'square',0.14),i*95)),          // 🎉 wave-clear victory stinger
+  synergy:()=>{ tone(330,0.16,'sawtooth',0.13,990); setTimeout(()=>tone(660,0.14,'square',0.12,1980),70);
+    setTimeout(()=>tone(1320,0.18,'triangle',0.11,2200),150); },                                        // 🔗 synergy formed — rising elemental zap
+  merge:()=>{ tone(140,0.12,'square',0.18,60); noiseBurst(0.05,0.10,900);
+    setTimeout(()=>tone(1175,0.22,'triangle',0.09),55); },                                              // ⚒ gear forge — anvil clunk + metallic ring
+  unlock:()=>[784,988,1319,1760].forEach((f,i)=>setTimeout(()=>tone(f,0.12,'triangle',0.13),i*60)),     // 🔓 unlock — ascending sparkle
+  champdown:()=>{ tone(220,0.28,'sawtooth',0.18,58); noiseBurst(0.12,0.10,1500);
+    setTimeout(()=>tone(147,0.34,'square',0.16,49),110); },                                             // 👑 champion slain — dark heavy sting
+  go:()=>tone(880,0.07,'triangle',0.12,1320),                                                           // ▶ start-gate confirm blip
 };
 function sfx(name){
   const f=SFX[name]; if(!f) return;
@@ -2249,7 +2286,26 @@ function startMusic(){ if(!AC||_musicTimer) return; mtStart(musicMood||'title');
 function setMusicMood(mood){
   if(!MUSIC_TRACKS[mood] || mood===musicMood) return;
   musicMood=mood;
-  if(AC) mtStart(mood);
+  if(!AC) return;
+  // Gentle crossfade: duck the music bus 150ms, swap the track, ramp back up.
+  // Pure bus-gain work — the sequencer itself is untouched. Any failure (stubbed
+  // audio in tests, closed context) falls back to the old hard cut.
+  try{
+    const t=AC.currentTime;
+    musicBus.gain.cancelScheduledValues(t);
+    musicBus.gain.setValueAtTime(musicBus.gain.value, t);
+    musicBus.gain.linearRampToValueAtTime(0.0001, t+0.15);
+    setTimeout(()=>{
+      if(musicMood!==mood) return;                 // a newer mood swap won the race
+      try{ mtStart(mood); }catch(_){ }
+      try{
+        const t2=AC.currentTime;
+        musicBus.gain.cancelScheduledValues(t2);
+        musicBus.gain.setValueAtTime(0.0001, t2);
+        musicBus.gain.linearRampToValueAtTime(musVol, t2+0.15);
+      }catch(_){ try{ musicBus.gain.value=musVol; }catch(__){ } }
+    }, 160);
+  }catch(_){ mtStart(mood); }
 }
 // Pick the mood from the current game state (called each frame; no-ops if same).
 let uiScreen='title';   // which overlay screen is up when no run is active
@@ -2466,6 +2522,7 @@ function showStartGate(){
 function startGo(){
   const g=document.getElementById('startgate'); if(g) g.classList.remove('show');
   try{ if(audioOn) initAudio(); }catch(_){ }                       // unlock the audio context → title music starts
+  sfx('go');                                                       // tiny confirm blip on the very first tap
   try{ const el=document.documentElement;                          // the explicit tap lets us go fullscreen
     if(el && el.requestFullscreen){ const p=el.requestFullscreen({navigationUI:'hide'}); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
   try{ if(typeof screen!=='undefined' && screen.orientation && screen.orientation.lock){ const p=screen.orientation.lock('landscape'); if(p&&p.catch) p.catch(()=>{}); } }catch(_){ }
@@ -4043,6 +4100,7 @@ function placeCard(ci, idx){
   if(roomIsShop){
     showHint('A Shop takes the whole room — it can\'t share slots.'); return false;
   }
+  const prevSyn=roomSynergy(room);                    // 🔗 for the completed-a-pair fanfare below
   if(cdef.kind==='trap'){
     const existing=room.units.find(u=>u.kind==='trap' && u.type===T);
     if(existing){
@@ -4086,8 +4144,14 @@ function placeCard(ci, idx){
   G.hand.splice(ci,1);
   burst(cellX(idx)+ROOM_W/2, FLOOR-40, cdef.col, 18);
   floater(cellX(idx)+ROOM_W/2, FLOOR-80, '+ '+ROOMS[T].name, '#7bdc6b');
+  // 🔗 this trap COMPLETED a synergy pair → celebrate the new themed room
+  const newSyn=synergyJustFormed(prevSyn, room);
+  if(newSyn){ const st=SYNERGY_TYPES[newSyn.type];
+    burst(cellX(idx)+ROOM_W/2, FLOOR-90, st.col, 30);
+    banner('🔗 '+st.name.toUpperCase()+' SYNERGY!', st.col, st.desc);
+  }
   showHint('Added '+ROOMS[T].name+' → '+room.units.length+'/'+(room.cap||1)+' slots.'); tutEvent('placed', idx);
-  selCard=-1; sfx('upgrade'); render(); return true;
+  selCard=-1; sfx(newSyn?'synergy':'upgrade'); render(); return true;
 }
 
 function makeUnit(type, lvl, card){
@@ -4664,7 +4728,8 @@ function dealToHero(h, raw, label, pierce, elem, noDodge){
   if(crit){ floater(h.x, h.y-52, 'CRIT -'+dmg, '#ffd34d'); burst(h.x,h.y-20,'#ffd34d',12);
     blood(h.x, h.y-22, 14, -1); bloodPool(h.x, rnd(8,13)); flash('#ff2d4d',0.12,0.16);
     hitStop=0.06; sfx('crit'); }
-  else { floater(h.x+ri(-8,8), h.y-44, '-'+dmg, label==='HEAL'?'#7bdc6b':'#ff7a8a');
+  else { if(label==='HEAL') floater(h.x+ri(-8,8), h.y-44, '-'+dmg, '#7bdc6b');
+    else dmgFloater(h, dmg, '#ff7a8a');                        // plain hits coalesce per hero
     if(label==='HEAL') burst(h.x, h.y-20, '#ff4d6d', 6);
     else blood(h.x, h.y-22, Math.min(9,3+Math.ceil(dmg/14)), -1);   // bigger hits bleed more
     sfx('hit'); }
@@ -4950,8 +5015,7 @@ function heroDies(h){
   // a hero who touched the throne returns with a grudge
   if(h.reachedThrone) makeRival(h);
   burst(h.x, h.y-20, '#ffd34d', 22);
-  floater(h.x, h.y-60, '+'+loot+'g', '#ffd34d');
-  floater(h.x+18, h.y-44, '+'+dread+'☠', '#b985ff');
+  floater(h.x, h.y-60, '+'+loot+'g · +'+dread+'☠', '#ffd34d');   // one combined payout float
   sfx('kill');
   if(h.loot) dropLoot(h);                 // 💎 carriers drop their gear on the floor to collect
   // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising
@@ -4969,7 +5033,7 @@ function heroDies(h){
     G.dread+=6; G.relicDue=(G.relicDue||0)+1;
     G.drops.runes++; bumpStat('drops'); floater(h.x+26, h.y-66, '+1 ᚱ', '#b985ff');
     floater(h.x, h.y-92, '👑 CHAMPION SLAIN! 🏺', h.champCol||'#ffd34d', true); burst(h.x,h.y-30,h.champCol||'#ffd34d',46);
-    flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('relic');
+    flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('champdown');
     showHint('🏆 '+nm+' is slain! Big loot + a relic awaits.');
   } else {
     showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
@@ -4990,6 +5054,7 @@ function waveWinBanner(){
     ? `Level ${campLevel()} of ${CAMP_LEVELS} cleared · ${G.totalSlain} heroes slain`
     : `Wave ${G._waveWins} survived · ${G.totalSlain} heroes slain`;
   banner('⚔️ '+phrase+'!', '#ffd34d', sub);
+  sfx('wavewin');                                        // 🎉 short 3-note victory stinger
 }
 function afterWave(){
   if(G.phase!=='run' || G._waveBeat) return;   // run already ended, or a victory beat is mid-flight
@@ -5231,7 +5296,7 @@ function amStageUnlock(u){
       (desc?'<div class="amdesc">'+desc+'</div>':'')+
     '</div>'+
     '<div class="menu-btns"><button class="go" onclick="amNext()">Next ▶</button></div>';
-  sfx('relic');
+  sfx('unlock');
 }
 function amSkip(){ amClearTimers(); if(overlay&&overlay.querySelectorAll) overlay.querySelectorAll('.flyicon').forEach(e=>e.remove()); _amQueue=[]; amShowSummary(); }
 function amShowSummary(){
@@ -8413,7 +8478,9 @@ function renderChestPop(){
   let cells='';
   for(let i=0;i<CHEST_MAX;i++){ const g=chest[i];
     if(g){ const col=RELIC_TIERS[g.t].col;
-      cells+=`<div class="gcell${selGear===i?' sel':''}" data-gi="${i}" onmouseenter="chestGearHover(${i})" onmouseleave="cardHoverOut()" title="${swordName(g)} · ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col}">${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
+      // ⚒ freshly-forged piece glows in its new tier colour for a beat (set by mergeGear)
+      const forge=(G && G._mergeFlashIdx===i && performance.now()-(G._mergeFlashAt||0)<900)?' forge':'';
+      cells+=`<div class="gcell${selGear===i?' sel':''}${forge}" data-gi="${i}" onmouseenter="chestGearHover(${i})" onmouseleave="cardHoverOut()" title="${swordName(g)} · ${RELIC_TIERS[g.t].name} ${GEAR[g.k].name} — ${gearEffectText(g)}. Drag onto a monster to equip, or tap two matching to merge." style="border-color:${col};--fcol:${col}">${gearIcon(g)}<span class="gt" style="color:${col}">${TIER_ABBR[g.t]}</span></div>`;
     } else cells+='<div class="gcell empty"></div>';
   }
   const loot=(G&&G.floorLoot&&G.floorLoot.length)||0;

@@ -13,7 +13,7 @@ const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,ma
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,GOBLIN_DEN_CAP,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,doShopping,
-  gotoRelicChoice,rollRelicChoices,RELICS,MERCHANT_PRICE,TIER_ORDER,
+  gotoRelicChoice,rollRelicChoices,RELICS,RELIC_ICON,MERCHANT_PRICE,TIER_ORDER,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
   get G(){return G;},set G(v){G=v;},get RB(){return RB;}`);
 const t = harness('rooms (slots/stacking/menu)');
@@ -195,6 +195,17 @@ for(const k of synKeys){
   if(badSyn) break;
 }
 t.ok(!badSyn, 'every synergy: canonical key, known type, real trap ids, shipped art' + (badSyn ? ' — '+badSyn : ''));
+
+// 🏺 relic icons: the banner art sits on the Banner and the horn art on the Horn
+// (rBanner used to squat on 'horn' while relic_banner.png went unused), and every
+// mapped icon is a real relic with its PNG shipped in icons/.
+t.ok(A.RELIC_ICON.rBanner === 'banner' && A.RELIC_ICON.eHorn === 'horn', 'RELIC_ICON: rBanner→banner, eHorn→horn');
+let badRI = '';
+for(const k in A.RELIC_ICON){
+  if(!A.RELICS[k]) { badRI = k+' is not a relic id'; break; }
+  if(!existsSync(join(here, '..', 'no_room_for_heroes', 'icons', 'relic_'+A.RELIC_ICON[k]+'.png'))){ badRI = k+' art missing ('+A.RELIC_ICON[k]+')'; break; }
+}
+t.ok(!badRI, 'every relic icon maps a real relic to shipped art' + (badRI ? ' — '+badRI : ''));
 t.ok(Object.values(A.SYNERGY_TYPES).every(v => v.amp > 0 && v.name && v.col && v.desc), 'every synergy type has an amp + name + colour + blurb');
 
 // detection: a real pair synergizes; dupes / undefined pairs / lone traps do not
