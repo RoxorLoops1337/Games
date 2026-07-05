@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
-  roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,describeGear,
+  roomSynergy,synergyFromTypes,synergyHint,synergyHintLine,describeCard,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,describeGear,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,doShopping,
@@ -188,6 +188,20 @@ t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'oil',kind:'trap'}]}
 t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'flame',kind:'trap'}]}) === null, 'the same trap twice is not a synergy');
 t.ok(A.roomSynergy({units:[{type:'spike',kind:'trap'},{type:'flame',kind:'trap'}]}) === null, 'an undefined pair is not a synergy');
 t.ok(A.roomSynergy({units:[{type:'flame',kind:'trap'},{type:'oil',kind:'trap'},{type:'runestone',kind:'trap'}]})?.type === 'fire', 'a Runestone (amp-only) does not break the pair');
+
+// 🔗 synergy badge: a card that would COMPLETE a pair in an existing room says so
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 2; A.G.phase = 'build';
+A.G.rooms = [{ type:'flame', cap:2, kills:0, units:[{type:'flame',kind:'trap',lvl:1}] }, null];
+const sHint = A.synergyHint('oil');
+t.ok(sHint && sHint.room === 0 && sHint.syn.type === 'fire', 'an Oil card reports it would form Inferno with room 1');
+t.ok(/Forms <b>Inferno<\/b> with room 1/.test(A.synergyHintLine('oil')), 'the badge line names the synergy + room');
+t.ok(A.describeCard({type:'oil',lvl:1}).includes('Forms <b>Inferno</b> with room 1'), 'the hand-card tooltip carries the badge');
+t.ok(A.synergyHint('spike') === null, 'a non-pairing trap gets no badge (spike+flame is not curated)');
+t.ok(A.synergyHint('skeleton') === null && A.synergyHint('runestone') === null, 'monsters and amp traps never badge');
+A.G.rooms[0].cap = 1;
+t.ok(A.synergyHint('oil') === null, 'a room with no free slot is not offered');
+A.G.rooms[0].cap = 2; A.G.rooms[0].units.push({type:'oil',kind:'trap',lvl:1});
+t.ok(A.synergyHint('venom') === null, 'a room whose synergy already formed is not offered again');
 
 // buildCells caches the type + a >1 damage amp on the cell
 A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;

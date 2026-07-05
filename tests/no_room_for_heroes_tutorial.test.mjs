@@ -6,12 +6,20 @@
 //   node tests/no_room_for_heroes_tutorial.test.mjs
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
-const A = loadGame(`freshGame,startTutorial,tutAdvance,tutBtn,tutAllow,tutStepObj,tutText,
+const A = loadGame(`freshGame,startTutorial,tutAdvance,tutBtn,tutAllow,tutStepObj,tutText,tutSkip,
   startWave,placeCard,upgradeRoomGold,buySlot,moveRoom,takeDraft,pickRelic,heroDies,afterWave,bossDies,
   collectAllLoot,autoMergeGear,
   TUT,roomTrapUnits,roomMonUnits,draw,update,
   get G(){return G;},set G(v){G=v;},set TUT_CFG(v){TUT_CFG=v;}`);
 const t = harness('tutorial (guided run)');
+
+// A persistent #tutmodal stub so the painted HTML can be inspected (the default
+// document stub mints a fresh element per getElementById call).
+const _origGetEl = global.document.getElementById;
+const _tm = { style:{}, classList:{ add(){}, remove(){}, contains:()=>false },
+  removeAttribute(){}, setAttribute(){}, querySelector:()=>null, querySelectorAll:()=>[],
+  innerHTML:'', className:'' };
+global.document.getElementById = id => id === 'tutmodal' ? _tm : _origGetEl(id);
 
 A.startTutorial();
 t.ok(A.G.tutorial===true && A.G.tutStep===0, 'tutorial starts at beat 0');
@@ -24,10 +32,14 @@ t.ok(A.TUT[A.G.tutStep].gate==='start' && A.tutAllow('start')===true && A.tutAll
 
 // --- drive the entire script generically by each beat's gate ---
 let guard=0, err='', reachedHorde=false, builtTrap=false, stackedTrap=false, twoTraps=false, mixed=false, secondRoom=false, sawSwap=false, lootCollected=false, gearMerged=false;
+let skipShown=false, skipEarly=false;   // the muted "Skip tutorial ✕" appears from beat 5 on, never before
 try{
   while(A.G.tutorial && guard++ < 120){
     const before=A.G.tutStep;
     const st=A.TUT[before]; const g=st.gate;
+    const hasSkip=/tutSkip\(\)/.test(_tm.innerHTML||'');
+    if(hasSkip && (before<5 || A.G.phase==='tutend')) skipEarly=true;
+    if(hasSkip && before>=5 && A.G.phase!=='tutend') skipShown=true;
     A.draw(); A.update(0.05);                       // render-time + sim check (incl. the tutCell ring)
     if(g==='cont' || g==='menu'){ A.tutAdvance(); }
     else if(g==='start'){
@@ -76,6 +88,8 @@ t.ok(sawSwap, 'the rearrange-rooms beat was taught');
 t.ok(reachedHorde, 'reached the unbeatable-horde finale');
 t.ok(A.G.tutorial===false, 'finale ends the tutorial');
 t.ok(guard<120, 'finished in a bounded number of steps ('+guard+')');
+t.ok(skipShown, 'the modal offers "Skip tutorial ✕" from beat 5 on');
+t.ok(!skipEarly, 'no skip control during the first beats or the finale screens');
 
 // --- replaying after it's done: gating is inert when not in the tutorial ---
 t.ok(A.tutAllow('start')===true && A.tutAllow('ability')===true, 'outside the tutorial nothing is gated');
@@ -109,5 +123,11 @@ A.G.tutStep = 1;
 t.ok(A.tutText('body') === (A.TUT[1].body || ''), 'an un-overridden step keeps its built-in wording');
 A.TUT_CFG = null;
 t.ok(A.tutText('title') === (A.TUT[A.G.tutStep].title || ''), 'with no config, wording is the built-in default');
+
+// --- tutSkip() bails out of a mid-run tutorial cleanly ---
+A.startTutorial();
+A.G.tutStep = 6;
+A.tutSkip();
+t.ok(A.G.tutorial === false && A.G.phase === 'menu', 'tutSkip() ends the tutorial and returns to the menu');
 
 t.done();

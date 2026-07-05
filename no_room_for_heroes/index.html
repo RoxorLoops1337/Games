@@ -817,6 +817,28 @@ function synergyFromTypes(types){
   return SYNERGIES[t.slice().sort().join('+')]||null;
 }
 function roomSynergy(room){ return (room&&room.units) ? synergyFromTypes(room.units.map(u=>u.type)) : null; }
+// 🔗 Would this card COMPLETE a synergy pair in an existing room? Scans the
+// dungeon for the FIRST room where the pair would form (no synergy yet, a free
+// slot, and room for another trap). Damage traps only — amps never pair.
+function synergyHint(cardType){
+  const def=ROOMS[cardType];
+  if(!G || !G.rooms || !def || def.kind!=='trap' || def.amp) return null;
+  for(let i=0;i<G.rooms.length;i++){
+    const r=G.rooms[i]; if(!r || !r.units) continue;
+    if(roomSynergy(r)) continue;                                     // already formed
+    if(r.units.length>=(r.cap||1)) continue;                         // no free slot
+    const tt=roomTrapUnits(r).map(u=>u.type);
+    if(tt.length>=MAX_TRAPS) continue;                               // trap slots full
+    const syn=synergyFromTypes([...tt, cardType]);
+    if(syn) return {room:i, syn, st:SYNERGY_TYPES[syn.type]};
+  }
+  return null;
+}
+// One badge line for draft choices + hand-card tooltips (empty string if none).
+function synergyHintLine(cardType){
+  const h=synergyHint(cardType);
+  return h ? `<span style="color:${h.st.col};font-weight:bold">🔗 Forms <b>${h.st.name}</b> with room ${h.room+1}</span>` : '';
+}
 // The signature rider, run after a synergy room's trap lands a hit. (physical &
 // execution shape the DAMAGE instead — handled inline in trapTick.)
 function synergyOnHit(h, cell, tl, dmg){
@@ -3325,8 +3347,11 @@ function tutModalPaint(o){
   tutBtnFn=o.onNext||null;
   m.removeAttribute('style');               // clear the previous step's inline overrides
   m.className='show low';   // every tip sits low (just under the floor) so the board stays visible
-  // No skip/✕ — the tutorial is a forced flow; you can't accidentally close out of it.
-  m.innerHTML=(o.title?`<h3>${o.title}</h3>`:'')
+  // Forced flow, but once the first beats have landed (step 5+) a muted "Skip"
+  // appears top-right — never on the finale screens (they pay the first-run gift).
+  const skip=(G && G.tutorial && G.tutStep>=5 && G.phase!=='tutend')
+    ? `<button class="tm-skip" onclick="tutSkip()">Skip tutorial ✕</button>` : '';
+  m.innerHTML=skip+(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
     +(o.onNext?`<div class="tm-btns"><button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
   applyTutModalStyle(m, o.idx);             // apply any designed overrides
@@ -3691,7 +3716,13 @@ function attachRuneGestures(vp){
 
 /* ============================== PHASE: EDICTS ============================ */
 // Optional run modifiers. Toggle any combination, then continue to boss select.
-function gotoEdicts(){ G.phase='edicts'; renderEdicts(); }
+// A truly fresh profile (no rune points earned or spent, no ascension, nothing
+// sworn) skips the screen — edicts are noise before the player knows what runes are.
+function edictsIrrelevant(){
+  return !(RUNES.points||0) && !(RUNES.asc||0) && !Object.keys(RUNES.ranks||{}).length
+      && !(G && G.edicts && G.edicts.length);
+}
+function gotoEdicts(){ if(edictsIrrelevant()){ gotoBossSelect(); return; } G.phase='edicts'; renderEdicts(); }
 function toggleEdict(id){
   if(!EDICTS[id]) return;
   const i=G.edicts.indexOf(id);
@@ -3720,7 +3751,7 @@ function gotoBossSelect(){
   G.phase='bossSelect'; overlay.classList.add('show');
   const edTag = G.edicts.length ? ` · <span style="color:#ffd34d">⚖️ ${G.edicts.map(id=>EDICTS[id].ic).join('')} ×${edictRewardMul().toFixed(2)} runes</span>` : '';
   overlay.innerHTML = `
-    <button onclick="gotoEdicts()" style="position:absolute;left:22px;top:22px;z-index:3;font-size:15px;padding:12px 22px">← Back</button>
+    <button onclick="${edictsIrrelevant()?'gotoMenu()':'gotoEdicts()'}" style="position:absolute;left:22px;top:22px;z-index:3;font-size:15px;padding:12px 22px">← Back</button>
     <h1>Choose your Boss</h1>
     <p>${G.mode==='campaign'?'Campaign — break a 50-wave siege, milestone mini-bosses & rewards.':'Endless — how long can you reign?'}${edTag}</p>
     <div class="bossnav">
@@ -4954,6 +4985,8 @@ function campaignAdvance(){
     showHint('★ Level '+L+' cleared — milestone reward!');
   }
   G.levelIdx++;                                // next level
+  prepCampaignWave();                          // roll its wave NOW so the draft can counter-pick what's
+                                               // incoming (the waveLevel guard makes later calls no-ops)
   gotoReward();                                // card draft → (relic/mandate/town flags) → build next level
 }
 // ----------------------------- THE KING FINALE ---------------------------
@@ -5271,6 +5304,33 @@ function awardRunes(){
 }
 
 /* ============================= PHASE: REWARD ============================= */
+// Compact one-line stats for a draft choice — on mobile tap = irreversible pick,
+// so the numbers must be readable BEFORE committing. Reuses the ROOMS def fields.
+function draftStats(d){
+  if(d.kind==='trap' && d.amp) return `🔯 +${Math.round(d.amp*100)}% to this & adjacent rooms`;
+  if(d.kind==='trap'){
+    let s=`⚔ ${d.dmg} dmg / ${d.rate}s · ~${Math.round(d.dmg/d.rate)}/s`;
+    if(d.burn) s+=' +burn'; if(d.poison) s+=' +☠'; if(d.acid) s+=' +🧪'; if(d.mark) s+=' +🎯'; if(d.aoe) s+=' · 💥AoE';
+    if(d.elem && d.elem!=='phys') s+=` · ⚛️${d.elem}`;
+    return s;
+  }
+  if(d.kind==='monster'){
+    let s=`❤️ ${d.hp} · 🗡️ ${d.atk}`;
+    if(d.taunt) s+=' · 🛡️taunt'; if(d.split) s+=' · 🟩splits'; if(d.breath) s+=' · 🔥breath';
+    if(d.feeds) s+=' · 👺spawner'; if(d.totem) s+=' · 🗿support'; if(d.warcamp) s+=' · 🏕️drills';
+    return s;
+  }
+  if(d.kind==='shop') return `💰 sells at ×${shopMarkup(1).toFixed(1)} markup — pure profit`;
+  return '';
+}
+// "Incoming next:" strip — the NEXT wave is already rolled (campaignAdvance),
+// so the draft can be a counter-pick instead of a blind one. Campaign only
+// (the endless queue may legitimately be empty at draft time).
+function incomingStrip(){
+  if(!G || G.mode!=='campaign' || !G.queue || !G.queue.length) return '';
+  const ics=G.queue.map(s=>(s.champion?'👑':'')+((CLASSES[s.cls]||{}).ic||'⚔️')+((s.traits&&s.traits.length)?'⭐':'')).join(' ');
+  return `<p class="small" style="margin:2px 0 4px;color:#cdbaff">⏳ Incoming next: <b>${G.queue.length}</b> raider${G.queue.length>1?'s':''} · ${ics}</p>`;
+}
 function gotoReward(){
   if(G.tutorial && G._tutDraft){ tutGotoReward(); return; }   // scripted tutorial draft
   G.phase='reward';
@@ -5294,13 +5354,17 @@ function gotoReward(){
   overlay.classList.add('show');
   overlay.innerHTML=`<h1>Spoils of War</h1>
     <p>Draft one room card. ${G.hand.length>=handCap()?`<b style="color:#ff8a8a">Hand full (${handCap()}) — picking will need a discard, or skip.</b>`:`Hold up to ${handCap()}.`}</p>
+    ${incomingStrip()}
     <div class="choices">${G.drafts.map((c,i)=>{
       const d=ROOMS[c.type]; const tr=cardRarity(c.type); const tc=(RELIC_TIERS[tr]||{}).col||'#888';
+      const sh=synergyHintLine(c.type);
       return `<div class="choice jz" onclick="takeDraft(${i})" style="border-color:${tc};box-shadow:0 0 10px ${tc}33;animation-delay:${i*70}ms">
         <div class="big">${cardFace(c.type)||d.ic}</div><h3>${d.name}</h3>
         <div class="desc">${d.desc}</div>
+        <div class="small" style="color:#cdbaff;margin:2px 0 0">${draftStats(d)}</div>
+        ${sh?`<div class="small" style="margin:1px 0 0">${sh}</div>`:''}
         <div class="stats" style="color:${tc};font-weight:bold;letter-spacing:.5px">${(RELIC_TIERS[tr]||{}).name||'Common'} · ${d.kind.toUpperCase()}</div></div>`;}).join('')}</div>
-    <div class="menu-btns"><button onclick="skipDraft()">Skip draft</button></div>`;
+    <div class="menu-btns"><button onclick="skipDraft()">Skip draft (+${SKIP_DRAFT_GOLD}g)</button></div>`;
 }
 function takeDraft(i){
   const card=G.drafts[i]; if(!card) return;
@@ -5320,7 +5384,8 @@ function takeDraft(i){
   overlay.classList.remove('show');
   afterReward();
 }
-function skipDraft(){ overlay.classList.remove('show'); afterReward(); }
+const SKIP_DRAFT_GOLD=15;   // passing on a full hand pays scrap gold — not a pure penalty screen
+function skipDraft(){ G.gold+=SKIP_DRAFT_GOLD; sfx('ching'); showHint('Passed — +'+SKIP_DRAFT_GOLD+'g'); overlay.classList.remove('show'); afterReward(); }
 // After the card draft, drop into the town if a 5-kill interlude is due.
 function afterReward(){
   if(G.relicDue){ G.relicDue=false;
@@ -6633,6 +6698,12 @@ function previewHeroObj(spec){
 // Preview hero objects are CACHED per queue slot so their idle animation keeps
 // advancing (rebuilding them every frame would freeze the sprite on frame 0).
 let _waitAnim=[];
+// Staging-zone x for waiting hero k of n — the ONE formula shared by
+// drawWaitingHeroes (render) and entityAt (hit-test) so taps land on what's drawn.
+function stagedHeroX(k,n){
+  const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
+  return -STAGEW*0.5 - (n-1)*sp/2 + k*sp;
+}
 function drawWaitingHeroes(tx){
   let specs;
   if(G.tutorial){
@@ -6657,18 +6728,27 @@ function drawWaitingHeroes(tx){
   if(G.tutorial || G.mode==='campaign') n=Math.min(specs.length, 9);
   else n=specs[0].champion ? 1 : Math.min(specs.length, G.guildLvl+1+(hasEdict('warband')?1:0));
   let hasChamp=false; for(let k=0;k<n;k++) if(specs[k].champion){ hasChamp=true; break; }
-  const sp=Math.min(15, (STAGEW*0.78)/Math.max(1,n-1));   // pack them inside the staging zone
   for(let k=0;k<n;k++){
     const spec=specs[k];
     // reuse the cached object so _animT accumulates across frames (idle plays);
     // rebuild it only when the spec at this slot changes (new wave rolled)
     let e=_waitAnim[k]; if(!e || e.spec!==spec){ e=_waitAnim[k]={spec, h:previewHeroObj(spec)}; }
     const h=e.h;
-    const wx = -STAGEW*0.5 - (n-1)*sp/2 + k*sp;            // centred in the staging zone
+    const wx = stagedHeroX(k,n);                           // centred in the staging zone
     h.yOff = -LIFT;                                        // stand on the walking line (right height)
     X.globalAlpha=0.92; drawHero(tx(wx), h); X.globalAlpha=1;
   }
-  X.fillStyle=hasChamp?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS'; X.textAlign='center';
+  // one-line wave summary above the label: "9 raiders · ⚔️5 🗡️2 · ⭐2 · 👑"
+  const _cn={}; let _el=0, _ch=0;
+  for(let k=0;k<n;k++){ const s=specs[k];
+    if(s.champion){ _ch++; continue; }
+    _cn[s.cls]=(_cn[s.cls]||0)+1; if(s.traits&&s.traits.length) _el++; }
+  const _parts=[n+' raider'+(n>1?'s':'')];
+  const _cs=Object.keys(_cn).map(c=>((CLASSES[c]||{}).ic||'')+_cn[c]).join(' '); if(_cs) _parts.push(_cs);
+  if(_el) _parts.push('⭐'+_el); if(_ch) _parts.push('👑');
+  X.fillStyle='rgba(205,186,255,.75)'; X.font='10px Trebuchet MS'; X.textAlign='center';
+  X.fillText(_parts.join(' · '), tx(-STAGEW*0.5), FLOOR-141);
+  X.fillStyle=hasChamp?'#ff7a8a':'#cdbaff'; X.font='bold 11px Trebuchet MS';
   X.fillText(hasChamp?'⚔️ CHAMPION!':'⏳ Next wave →', tx(-STAGEW*0.5), FLOOR-128);
   X.textAlign='left';
 }
@@ -8246,6 +8326,8 @@ function describeCard(card){
   } else if(def.kind==='shop'){
     lines.push(`Holds ${lvl+1} item${lvl+1>1?'s':''} (+1 slot/level). Heroes buy at ×${shopMarkup(lvl).toFixed(2)} — pure profit, and they still drop full loot.`);
   }
+  const _sh=synergyHintLine(card.type);   // 🔗 this card would complete a trap pair somewhere
+  if(_sh) lines.push(_sh);
   const tags=cardTags(def);
   if(tags.length) lines.push(tags.map(t=>`<span style="background:#2a2342;border:1px solid ${(KEYWORDS[t]||{}).col||'#888'};color:${(KEYWORDS[t]||{}).col||'#ccc'};border-radius:4px;padding:0 5px;font-size:10px;margin:1px 3px 0 0;white-space:nowrap">${t}</span>`).join(' '));
   lines.push(`<span style="opacity:.85">${def.desc}</span>`);
@@ -8319,7 +8401,7 @@ function entityAt(wx){
     const n = G.mode==='campaign' ? Math.min(G.queue.length, 9)
             : (G.queue[0].champion ? 1 : Math.min(G.queue.length, G.guildLvl+1+(hasEdict('warband')?1:0)));
     let best=-1,bd=24;
-    for(let k=0;k<n;k++){ const hx=-STAGEW*0.62+k*14; const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
+    for(let k=0;k<n;k++){ const hx=stagedHeroX(k,n); const d=Math.abs(wx-hx); if(d<bd){bd=d;best=k;} }
     if(best>=0) return {kind:'queuehero', spec:G.queue[best]};
   }
   // 💎 dropped gear on the floor — foreground over the room behind it (but heroes win)
