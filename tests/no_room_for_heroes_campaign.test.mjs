@@ -7,7 +7,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,chooseBoss,prepCampaignWave,campLevel,BOSSES,
   campaignAdvance,skipDraft,SKIP_DRAFT_GOLD,startCampaign,gotoBossSelect,tutDoneSet,edictsIrrelevant,
-  entityAt,stagedHeroX,
+  entityAt,stagedHeroX,afterReward,pickRelic,spawnGroup,faceTheKing,champSpec,
   get overlay(){return overlay;},get RUNES(){return RUNES;},set RUNES(v){RUNES=v;},
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('campaign waves');
@@ -77,6 +77,44 @@ A.startCampaign();
 t.ok(A.G.phase === 'edicts', 'with rune points, the edicts screen fronts the run again');
 A.gotoBossSelect();
 t.ok((A.overlay.innerHTML || '').includes('gotoEdicts()'), 'and boss select Backs to edicts as before');
+
+// --- 🏺 relicDue is a COUNTER: champion + milestone relics queue up, not collapse ---
+A.G = A.freshGame('campaign'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+A.G.relicDue = 2; A.G.relics = [];
+A.afterReward();
+t.ok(A.G.phase === 'relic', 'first queued relic screen opens');
+A.pickRelic(0);
+t.ok(A.G.phase === 'relic', 'a SECOND relic screen follows immediately (counter, not boolean)');
+A.pickRelic(0);
+t.ok(A.G.phase === 'build', 'the drained counter falls through to build');
+t.ok(A.G.relics.length === 2, 'both queued relics were claimed');
+// boolean-truthiness compat: an old `true` flag still yields exactly one screen
+A.G.relicDue = true;
+A.afterReward();
+t.ok(A.G.phase === 'relic' && A.G.relicDue === 0, 'a legacy boolean flag yields exactly one screen');
+A.pickRelic(0);
+t.ok(A.G.phase === 'build', '…and drains clean');
+
+// --- 👑 endless: a champion NEVER spawns inside a group wave (queue look-ahead) ---
+A.G = A.freshGame('endless'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+const mook = () => ({cls:'warrior', power:2, traits:[], name:'Mook', rivalGen:0, debuff:{atkMul:1, burn:0, robbed:false}});
+A.G.queue = [mook(), A.champSpec(), mook()];
+A.spawnGroup(3);
+t.ok(A.G.heroes.length === 1 && !A.G.heroes[0].champion, 'the wave stops BEFORE the mid-queue champion (no escorts)');
+t.ok(A.G.queue[0] && A.G.queue[0].champion, 'the champion stays queued to lead the next wave');
+A.spawnGroup(3);
+t.ok(A.G.heroes.length === 1 && !!A.G.heroes[0].champion, 'the champion then raids ALONE');
+
+// --- 👑 faceTheKing routes through gotoBuild: no stale siege state into the finale ---
+A.G = A.freshGame('campaign'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+A.G.levelIdx = 49; A.G.phase = 'win';
+A.G.brokenCells = {2:true}; A.G.cells = [{index:0, _disarmT:3}];
+A.G.queue = []; A.G.waveLevel = null;
+A.faceTheKing();
+t.ok(A.G.phase === 'build' && A.G.kingDue === true, 'faceTheKing lands in a real build phase with the King queued');
+t.ok(Object.keys(A.G.brokenCells || {}).length === 0, 'smashed doorways are patched for the finale');
+t.ok(A.G.cells[0]._disarmT === 0, 'stale disarm timers are cleared');
+t.ok(A.G.queue.length === 0, 'no phantom wave is rolled over the King (prepCampaignWave defers to him)');
 
 // --- champion doorway smash: once per cell per wave, patched up in build ---
 const B = loadGame(`freshGame,smashDoorway,cellArt,get G(){return G;},set G(v){G=v;}`);

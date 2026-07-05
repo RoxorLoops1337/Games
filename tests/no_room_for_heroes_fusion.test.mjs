@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,makeRoom,
   roomSynergy,synergyFromTypes,synergyHint,synergyHintLine,describeCard,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,describeGear,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
-  MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
+  MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,GOBLIN_DEN_CAP,
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,doShopping,
   gotoRelicChoice,rollRelicChoices,RELICS,MERCHANT_PRICE,TIER_ORDER,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
@@ -26,8 +26,10 @@ freshBuild();
 place('skeleton',1,0);
 let r=A.G.rooms[0];
 t.ok(r && r.units.length===1 && r.cap===1, 'placing a card builds a 1-unit room (cap 1)');
-t.ok(place('skeleton',1,0)===false, 'a 2nd unit is refused — the room is full at cap 1');
-t.ok(r.units.length===1, 'the refused placement added nothing');
+// full room + the SAME monster type → the copy trains that guard a level (no new slot)
+t.ok(place('skeleton',1,0)===true && r.units.length===1 && r.units[0].lvl===2,
+  'a same-type monster on a FULL room trains the guard to Lv 2 instead of refusing');
+t.ok(place('ogre',1,0)===false && r.units.length===1, 'a DIFFERENT monster is still refused at cap 1');
 
 // --- gold upgrade adds a slot; monsters STACK as independent copies ---
 A.G.gold=A.roomUpgradeCost(r); A.upgradeRoomGold(0);
@@ -37,7 +39,10 @@ t.ok(r.units.length===2 && A.roomMonUnits(r).length===2, 'a 2nd Bone Pit stacks 
 A.G.gold=999999; while(r.cap<A.MAX_SLOTS) A.upgradeRoomGold(0);
 while(r.units.length<A.MAX_SLOTS) place('skeleton',1,0);
 t.ok(r.units.length===5 && A.roomMonUnits(r).length===5, 'five Bone Pits live in one room');
-t.ok(place('skeleton',1,0)===false, 'a 6th unit is refused at the 5-slot cap');
+const lv6=r.units[0].lvl;
+t.ok(place('skeleton',1,0)===true && r.units.length===5 && r.units[0].lvl===lv6+1,
+  'a 6th copy at the 5-slot cap trains a level instead of refusing');
+t.ok(/Lv 3\//.test(A.describeRoom(r,true)), 'the room inspector shows the trained guard level');
 
 // --- buildCells turns the stack into 5 separate guards ---
 A.buildCells();
@@ -45,6 +50,7 @@ let cell=A.G.cells[0];
 t.ok(cell.guards && cell.guards.length===5, 'buildCells makes one guard per monster unit');
 t.ok(cell.mon===cell.guards[0] && cell.guards.every(g=>g.alive), 'front guard is active; every guard alive');
 t.ok(cell.guards.every(g=>g.type==='skeleton'), 'each guard remembers its type');
+t.ok(cell.guards[0].hp>cell.guards[1].hp, 'the trained (higher-Lv) guard is tougher than its fresh packmates');
 
 // --- TRAPS: same trap stacks into a LEVEL (one unit); max level then refuses ---
 freshBuild();
@@ -61,6 +67,14 @@ A.G.gold=999999; A.upgradeRoomGold(0);                 // cap 2
 t.ok(place('flame',1,0)!==false && A.roomTrapUnits(tr).length===2, 'a 2nd trap TYPE fills the new slot');
 A.upgradeRoomGold(0);                                  // cap 3
 t.ok(place('venom',1,0)===false, 'a 3rd trap is refused — max '+A.MAX_TRAPS+' traps per room');
+
+// --- 🔯 Runestone (amp trap): stacking is a no-op, so the stack is REFUSED ---
+freshBuild();
+place('runestone',1,1); const rs=A.G.rooms[1];
+A.G.gold=999999; A.upgradeRoomGold(1);                 // free slot available — still refused
+t.ok(place('runestone',1,1)===false, 'a 2nd Runestone on the same room is refused (lvl++ would change nothing)');
+t.ok(rs.units.length===1 && rs.units[0].lvl===1, 'the refused Runestone changed nothing');
+t.ok(place('runestone',1,0)!==false, 'the Runestone still places fine in ANOTHER room');
 
 // --- mix and match: 2 traps + 3 monsters in one 5-slot room ---
 freshBuild();
@@ -254,6 +268,11 @@ t.ok(A.ROOMS.spike.dmg <= 5 && A.ROOMS.arrow.dmg <= 4, 'common traps are the wea
 t.ok(A.ROOMS.maul.dmg >= 18 && A.ROOMS.bombard.dmg >= 18, 'epic traps hit hard (a rare/epic feels good to get)');
 t.ok(A.ROOMS.goblin.hp < A.ROOMS.ogre.hp && A.ROOMS.skeleton.hp < A.ROOMS.ogre.hp, 'common monsters are frailer than the tougher tiers');
 t.ok(A.ROOMS.orc.atk > A.ROOMS.skeleton.atk && A.ROOMS.warden.hp > A.ROOMS.skeleton.hp, 'rare monsters out-stat the commons');
+// tier retune: the ogre is a TRUE wall now (it used to sit under the rare warden)
+t.ok(A.ROOMS.ogre.hp===92 && A.ROOMS.ogre.atk===26, `ogre retuned to a real late-game wall (${A.ROOMS.ogre.hp} HP / ${A.ROOMS.ogre.atk} atk)`);
+t.ok(A.ROOMS.ogre.hp > A.ROOMS.warden.hp, 'the special-tier ogre out-tanks the rare warden');
+t.ok(A.ROOMS.dragon.breath.burn===2, 'drakeling breath stacks +2 burn per puff (was 3 — whole-room burn was outpacing its tier)');
+t.ok(A.GOBLIN_DEN_CAP===12, 'goblin den banks at most 12 veterans (was 20)');
 
 // --- 📜 Deed to the Deep is a dead pick in Endless (slot cap is ∞ there) — never offered ---
 A.G = A.freshGame('endless'); A.chooseBoss('dragon');
