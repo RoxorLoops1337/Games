@@ -44,6 +44,52 @@
     animation:btnpulse 1.7s ease-in-out infinite; }
   #ovBtn:active { transform:translateY(4px); box-shadow:0 2px 0 #1c3da0; }
   #ovHint { font-size:13px; color:#8fa3cf; margin:4px 0 0; }
+  #ovShop { font-size:15px; font-weight:800; color:#ffd76a; background:rgba(10,16,32,.72);
+    border:1px solid rgba(255,215,106,.4); border-radius:12px; padding:10px 26px; cursor:pointer; }
+  #ovAlt { display:none; font-size:14px; color:#8fa3cf; text-decoration:underline; cursor:pointer; padding:4px; }
+  #tcard { position:fixed; top:22%; left:50%; transform:translateX(-50%); z-index:6; pointer-events:none;
+    font-weight:900; font-size:min(7.5vw,34px); letter-spacing:1px; color:#fff; white-space:nowrap;
+    text-shadow:0 3px 0 #1c3da0, 0 6px 18px rgba(0,0,30,.6); opacity:0; }
+  #tcard.show { animation:tcard 2.6s ease forwards; }
+  @keyframes tcard { 0%{opacity:0; transform:translateX(-50%) scale(.6)} 12%{opacity:1; transform:translateX(-50%) scale(1.08)}
+    20%{transform:translateX(-50%) scale(1)} 80%{opacity:1} 100%{opacity:0; transform:translateX(-50%) translateY(-30px) scale(.95)} }
+  #gift { background:rgba(10,16,32,.8); border:1px solid rgba(255,215,106,.45); border-radius:16px;
+    padding:12px 22px; text-align:center; display:none; }
+  #giftTitle { font-weight:900; font-size:16px; color:#ffd76a; letter-spacing:.5px; }
+  #giftDots { font-size:13px; color:#ffd76a; letter-spacing:3px; margin:4px 0; }
+  #giftSub { font-size:12px; color:#8fa3cf; margin-bottom:8px; }
+  #giftBtn { font-size:16px; font-weight:900; color:#5a3c00; background:linear-gradient(180deg,#ffd76a,#e0a92f);
+    border:none; border-radius:12px; padding:10px 26px; cursor:pointer; box-shadow:0 4px 0 #8a6a1a; }
+  #giftBtn:active { transform:translateY(3px); box-shadow:0 1px 0 #8a6a1a; }
+  #shop { position:fixed; inset:0; z-index:12; display:none; align-items:center; justify-content:center;
+    background:rgba(4,7,16,.6); }
+  #shopPanel { background:rgba(8,13,28,.96); border:1px solid rgba(140,170,255,.3); border-radius:18px;
+    padding:18px; width:min(92vw,360px); max-height:82vh; overflow-y:auto; color:#eaf0ff; }
+  #shopTitle { margin:0 0 10px; font-size:20px; font-weight:900; color:#ffd76a; letter-spacing:1px; text-align:center; }
+  .srow { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0;
+    border-bottom:1px solid rgba(140,170,255,.12); }
+  .sinfo b { color:#ffd76a; font-size:15px; display:block; }
+  .sinfo span { color:#c7d4f5; font-size:12.5px; display:block; }
+  .sinfo i { color:#5cff9b; font-style:normal; font-size:11px; letter-spacing:2px; }
+  .sbuy { font-size:13px; font-weight:800; color:#fff; background:linear-gradient(180deg,#4f8bff,#2c5ae0);
+    border:none; border-radius:10px; padding:9px 12px; cursor:pointer; white-space:nowrap; }
+  .sbuy[disabled] { opacity:.45; } .sbuy[data-poor] { opacity:.55; }
+  .shead { color:#ffd76a; font-size:12px; font-weight:800; letter-spacing:1.5px; margin:12px 0 6px; }
+  .skinrow { display:flex; flex-wrap:wrap; gap:6px; }
+  .schip { font-size:12px; font-weight:700; border-radius:10px; padding:7px 10px; cursor:pointer;
+    border:1px solid rgba(140,170,255,.3); background:rgba(10,16,32,.72); color:#eaf0ff; }
+  .schip em { display:block; font-style:normal; font-size:10px; color:#8fa3cf; }
+  .schip.sel { border-color:#5cff9b; box-shadow:0 0 8px rgba(92,255,155,.35); }
+  .skin0{color:#9fc2ff}.skin1{color:#e08a4e}.skin2{color:#ffd166}.skin3{color:#3dffa0}
+  .skin4{background:linear-gradient(90deg,#ff6a6a,#ffd76a,#5cff9b,#6ab8ff,#c28bff); -webkit-background-clip:text;
+    background-clip:text; -webkit-text-fill-color:transparent; border-color:rgba(255,255,255,.4); }
+  .sgrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .sgrid div { background:rgba(10,16,32,.72); border-radius:12px; padding:8px; text-align:center; }
+  .sgrid b { font-size:17px; display:block; }
+  .sgrid span { font-size:10.5px; color:#8fa3cf; text-transform:uppercase; letter-spacing:.5px; }
+  #shopBack { width:100%; margin-top:12px; font-size:15px; font-weight:800; color:#fff;
+    background:rgba(60,80,140,.5); border:1px solid rgba(140,170,255,.3); border-radius:12px;
+    padding:11px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -51,15 +97,32 @@
 <div id="hud">
   <span class="pill">Level <b id="lvl">1</b></span>
   <span class="pill" id="mute">🔊</span>
+  <span class="pill" id="music">🎵</span>
   <span class="pill">🪙 <b id="coins">0</b></span>
 </div>
+<div id="tcard"></div>
 <div id="bub">5</div>
 <div id="vin"></div>
 <div id="ov">
   <h1 id="ovTitle">SPIJKER MASTER</h1>
   <p id="ovSub">Steer your nails. Pick the best gates.\nHammer them home for coins!</p>
+  <div id="gift">
+    <div id="giftTitle">🎁 DAILY GIFT</div>
+    <div id="giftDots">●○○○○○○</div>
+    <div id="giftSub"></div>
+    <button id="giftBtn">CLAIM</button>
+  </div>
   <button id="ovBtn">PLAY</button>
+  <button id="ovShop">🛠 THE NAIL AISLE</button>
+  <span id="ovAlt"></span>
   <p id="ovHint">drag left / right to steer</p>
+</div>
+<div id="shop">
+  <div id="shopPanel">
+    <h2 id="shopTitle">THE NAIL AISLE</h2>
+    <div id="shopRows"></div>
+    <button id="shopBack">BACK</button>
+  </div>
 </div>
 <script src="three.min.js"></script>
 <script>
@@ -112,34 +175,74 @@ const opLabel = (op) =>
   op.t === 'sub' ? '−' + op.v : '÷' + op.v;
 const opGood = (op) => op.t === 'mul' || op.t === 'add';
 
-function genLevel(lv) {
+// Content unlock schedule: L1 teaches steering + saw/spikes; L2 golden nails +
+// mid foes; L3 hammer; L4 golden gates; L6 mystery gates; L7 pendulum;
+// L8 flanking; L16+ spicy numbers. Stairs & bosses calibrate to the player's
+// actual start count so upgrades raise the ceiling, not just the floor.
+function genLevel(lv, start) {
+  start = start || C.START;
   const r = rngf((lv * 2654435761 + 7) % 4294967296);
   const len = Math.min(900, 240 + lv * 28);
   const gates = [], hazards = [], foes = [];
-  let e = C.START, ePerf = C.START, z = 34; // e: sloppy-player estimate, ePerf: perfect play
+  let e = start, ePerf = start, z = 34; // e: sloppy-player estimate, ePerf: perfect play
+  let goldenPlaced = false, mystCount = 0;
   while (z < len - 80) {
     const roll = r();
-    if (roll < 0.52) {
-      // gate pair: one clearly good, one punishing
+    if (roll < (lv <= 2 ? 0.62 : 0.52)) {
+      // rare GOLDEN pair: both sides good, one huge — pure spectacle + choice
+      if (lv >= 4 && !goldenPlaced && z > len * 0.40 && r() < 0.10) {
+        goldenPlaced = true;
+        const huge = { t: 'mul', v: lv < 12 ? 3 : (lv < 20 ? 4 : 5) };
+        const small = { t: 'add', v: Math.min(60, 10 + lv + Math.floor(r() * 6)) };
+        const ggs = r() < 0.5 ? -1 : 1;
+        gates.push({ z, side: ggs, op: huge, used: false, gold: true });
+        gates.push({ z, side: -ggs, op: small, used: false, gold: true });
+        e = Math.max(1, Math.round(applyOp(e, small)));
+        ePerf = Math.min(C.CAP, Math.round(applyOp(ePerf, huge)));
+        z += 30 + r() * 18;
+        continue;
+      }
+      // normal pair: one clearly good, one punishing (or a mystery gamble)
       let good;
       if (r() < 0.35 + Math.min(0.25, lv * 0.012)) good = { t: 'mul', v: r() < 0.75 ? 2 : 3 };
       else good = { t: 'add', v: 4 + Math.floor(r() * (8 + lv * 2)) };
-      const bad = r() < 0.5
-        ? { t: 'sub', v: 2 + Math.floor(r() * (4 + lv)) }
-        : { t: 'div', v: 2 };
+      let bad = r() < 0.5
+        ? { t: 'sub', v: 2 + Math.floor(r() * (4 + Math.min(lv, 14))) }
+        : { t: 'div', v: (lv >= 16 && r() < 0.30) ? 3 : 2 };
+      let myst = false;
+      if (lv >= 6 && mystCount < 2 && r() < 0.18) {
+        // mystery '?' gate: outcome pre-rolled here (deterministic), hidden until hit
+        myst = true; mystCount++;
+        const q = r();
+        bad = q < 0.40 ? { t: 'add', v: 6 + Math.floor(r() * (10 + 2 * lv)) }
+            : q < 0.65 ? { t: 'mul', v: 2 }
+            : q < 0.75 ? { t: 'mul', v: 3 }
+            : q < 0.90 ? { t: 'sub', v: 3 + Math.floor(r() * Math.min(lv, 12)) }
+            : { t: 'div', v: 2 };
+      }
       const gs = r() < 0.5 ? -1 : 1;
       gates.push({ z, side: gs, op: good, used: false });
-      gates.push({ z, side: -gs, op: bad, used: false });
+      gates.push({ z, side: -gs, op: bad, used: false, myst });
       e = Math.max(1, Math.round(applyOp(e, good) * 0.82)); // imperfect-player estimate
       ePerf = Math.min(C.CAP, Math.round(applyOp(ePerf, good)));
       z += 30 + r() * 18;
-    } else if (roll < 0.78 || e < 6 || z < 80) {
+    } else if (roll < 0.78 || e < 6 || z < 120 || lv < 2) {
       // (a too-early or too-big rival crowd would be a guaranteed wipe,
       //  so those rolls fall back to a hazard)
       const ht = r();
-      if (ht < 0.4) hazards.push({ k: 'saw', z, ph: r() * 6.28, sp: 1.1 + r() * 0.9 });
-      else if (ht < 0.7) hazards.push({ k: 'spikes', z, x: (r() * 2 - 1) * 2.2, w: 2.6 });
-      else hazards.push({ k: 'hammer', z, period: 1.5 + r() * 0.5, ph: r(), prev: 0 });
+      if (lv < 3) { // teaching levels: only the two dodgeable-on-sight hazards
+        if (ht < 0.5) hazards.push({ k: 'saw', z, ph: r() * 6.28, sp: 1.1 + r() * 0.9 });
+        else hazards.push({ k: 'spikes', z, x: (r() * 2 - 1) * 2.2, w: 2.6 });
+      } else if (lv < 7) {
+        if (ht < 0.4) hazards.push({ k: 'saw', z, ph: r() * 6.28, sp: 1.1 + r() * 0.9 });
+        else if (ht < 0.7) hazards.push({ k: 'spikes', z, x: (r() * 2 - 1) * 2.2, w: 2.6 });
+        else hazards.push({ k: 'hammer', z, period: 1.5 + r() * 0.5, ph: r(), prev: 0 });
+      } else {
+        if (ht < 0.30) hazards.push({ k: 'saw', z, ph: r() * 6.28, sp: 1.1 + r() * 0.9 });
+        else if (ht < 0.55) hazards.push({ k: 'spikes', z, x: (r() * 2 - 1) * 2.2, w: 2.6 });
+        else if (ht < 0.78) hazards.push({ k: 'hammer', z, period: 1.5 + r() * 0.5, ph: r(), prev: 0 });
+        else hazards.push({ k: 'pend', z, w: 2.4 + r() * 0.8, ph: r() * 6.28 });
+      }
       e = Math.max(1, Math.round(e * 0.9));
       ePerf = Math.max(1, Math.round(ePerf * 0.97)); // even aces clip a saw tooth now and then
       z += 26 + r() * 12;
@@ -152,18 +255,24 @@ function genLevel(lv) {
     }
   }
   // boss crowd guards the plank
-  const bc = Math.max(4, Math.round(e * (0.55 + r() * 0.25) + lv * 2));
+  const bc = Math.max(4, Math.round(e * ((lv >= 16 ? 0.60 : 0.55) + r() * 0.25) + lv * (lv >= 16 ? 3 : 2)));
   foes.push({ z: len - 45, x: 0, count: bc, alive: true, boss: true });
   ePerf = Math.max(1, ePerf - bc);
   // stair thresholds scale to THIS level: a near-perfect run tops out at ×10
-  const top = Math.max(15, Math.round(ePerf * 0.85));
+  const top = Math.max(15, Math.round(ePerf * (lv <= 3 ? 0.75 : 0.85)));
   const t1 = Math.max(3, Math.round(top * 0.05));
   const ratio = Math.pow(top / t1, 1 / 8);
   const steps = [0];
   for (let i = 1; i < 10; i++) {
     steps.push(Math.max(steps[i - 1] + 1, Math.round(t1 * Math.pow(ratio, i - 1))));
   }
-  return { len, gates, hazards, foes, finishZ: len - 18, steps };
+  // golden nail pickups (drawn last so the layout above keeps its tuning)
+  const picks = [];
+  if (lv >= 2) {
+    picks.push({ z: 60 + r() * (len * 0.35), x: (r() * 2 - 1) * 2.8, taken: false });
+    if (lv >= 5 && r() < 0.5) picks.push({ z: len * 0.55 + r() * (len * 0.30), x: (r() * 2 - 1) * 2.8, taken: false });
+  }
+  return { len, gates, hazards, foes, finishZ: len - 18, steps, picks };
 }
 
 // sunflower formation: unit i -> lateral/forward offset from the leader
@@ -175,13 +284,92 @@ function fOff(i) {
 }
 
 let S = null;
-const hooks = { level: null, hud: null, over: null }; // render layer plugs in here
+const hooks = { level: null, hud: null, over: null, skin: null }; // render layer plugs in here
 
 function save() {
   try {
     localStorage.setItem('sm_lv', '' + S.nextLv);
     localStorage.setItem('sm_coins', '' + S.coins);
   } catch (e) {}
+}
+function lsInt(k) { try { return parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (e) { return 0; } }
+function lsSet(k, v) { try { localStorage.setItem(k, '' + v); } catch (e) {} }
+
+// --- permanent upgrades (bought with earned coins only) ---
+const UPG = {
+  crowd: { name: 'NAIL PACK',   max: 10, costs: [100, 160, 260, 410, 660, 1050, 1680, 2680, 4290, 6870],
+    desc: (l) => 'Start with ' + (C.START + 2 * l) + ' nails' },
+  tips:  { name: 'STEEL TIPS',  max: 6,  costs: [150, 300, 600, 1200, 2400, 4800],
+    desc: (l) => 'Brawl damage +' + (15 * l) + '%' },
+  grip:  { name: 'GOLDEN GRIP', max: 5,  costs: [250, 500, 1000, 2000, 4000],
+    desc: (l) => 'Plank coins +' + (10 * l) + '%' },
+};
+function upgLevels() { return { crowd: lsInt('sm_u_crowd'), tips: lsInt('sm_u_tips'), grip: lsInt('sm_u_grip') }; }
+function startCount() { return C.START + 2 * lsInt('sm_u_crowd'); }
+function buyUpg(id) {
+  const u = UPG[id], l = lsInt('sm_u_' + id);
+  if (!u || l >= u.max) return false;
+  const cost = u.costs[l];
+  const coins = S ? S.coins : loadMeta().coins;
+  if (coins < cost) return false;
+  if (S) S.coins = coins - cost;
+  lsSet('sm_coins', coins - cost);
+  lsSet('sm_u_' + id, l + 1);
+  if (hooks.hud) hooks.hud();
+  return true;
+}
+
+// --- crowd skins (cosmetic; material specs live in the render layer) ---
+const SKINS = [
+  { id: 0, name: 'Bench Steel',   price: 0,     flavor: 'Fresh from the box: straight, true, dependable.' },
+  { id: 1, name: 'Copper Crew',   price: 750,   flavor: 'Warm-rolled copper with a hand-hammered glow.' },
+  { id: 2, name: 'Gold Standard', price: 2500,  flavor: 'Solid gold. Even the mallet is impressed.' },
+  { id: 3, name: 'Neon Pulse',    price: 6000,  flavor: 'Glow-in-the-dark hardware from the future aisle.' },
+  { id: 4, name: 'Prisma',        price: 15000, flavor: 'Every color of the rainbow, one nail at a time.' },
+];
+function ownedSkins() {
+  try { return (localStorage.getItem('sm_owned') || '0').split(',').map(Number); } catch (e) { return [0]; }
+}
+function curSkin() { return lsInt('sm_skin'); }
+function buySkin(id) { // buys if needed, then selects; returns true on select
+  const sk = SKINS[id];
+  if (!sk) return false;
+  const owned = ownedSkins();
+  if (!owned.includes(id)) {
+    const coins = S ? S.coins : loadMeta().coins;
+    if (coins < sk.price) return false;
+    if (S) S.coins = coins - sk.price;
+    lsSet('sm_coins', coins - sk.price);
+    owned.push(id);
+    lsSet('sm_owned', owned.join(','));
+  }
+  lsSet('sm_skin', id);
+  if (hooks.hud) hooks.hud();
+  if (hooks.skin) hooks.skin();
+  return true;
+}
+
+// --- daily gift & streak (date string injected: the sim never reads the clock) ---
+const DAILY = [0, 100, 150, 225, 350, 500, 750, 1000];
+function dailyState(today) {
+  let last = null;
+  try { last = localStorage.getItem('sm_day'); } catch (e) {}
+  const streak = lsInt('sm_streak');
+  if (last === today) return { claimable: false, streak };
+  const diff = last ? Math.round((Date.parse(today) - Date.parse(last)) / 86400000) : 99;
+  const ns = diff === 1 ? streak + 1 : 1;
+  return { claimable: true, streak: ns, reward: DAILY[Math.min(ns, 7)], reset: diff >= 2 && streak >= 2 };
+}
+function claimDaily(today) {
+  const d = dailyState(today);
+  if (!d.claimable) return null;
+  const coins = (S ? S.coins : loadMeta().coins) + d.reward;
+  if (S) S.coins = coins;
+  lsSet('sm_coins', coins);
+  try { localStorage.setItem('sm_day', today); } catch (e) {}
+  lsSet('sm_streak', d.streak);
+  if (hooks.hud) hooks.hud();
+  return d;
 }
 function loadMeta() {
   let lv = 1, coins = 0, mute = false;
@@ -195,17 +383,21 @@ function loadMeta() {
 
 function newRun(lv) {
   const meta = S ? { coins: S.coins, mute: S.mute } : loadMeta();
+  const upg = upgLevels();
+  const start = C.START + 2 * upg.crowd;
   S = {
-    phase: 'run', lv, nextLv: lv,
+    phase: 'run', lv, nextLv: lv, upg,
     coins: meta.coins, mute: meta.mute,
     z: 0, zPrev: 0, x: 0, tx: 0,
-    count: C.START,
+    count: start, peak: start, revived: false,
     time: 0, fight: null, fightT: 0,
     finT: 0, finTarget: 0, res: null, planted: 0, slamT: 0,
     events: [],
-    lvl: genLevel(lv),
+    lvl: genLevel(lv, start),
   };
+  lsSet('sm_s_runs', lsInt('sm_s_runs') + 1);
   if (hooks.level) hooks.level();
+  pushEv({ t: 'title', lv });
   if (hooks.hud) hooks.hud();
   return S;
 }
@@ -226,15 +418,33 @@ function killN(n, x, z, side, src) {
 function doLose() {
   S.count = Math.max(0, S.count);
   S.phase = 'lose';
+  lsSet('sm_coins', S.coins); // golden-nail pickups survive a wipe
+  if (S.peak > lsInt('sm_s_peak')) lsSet('sm_s_peak', S.peak);
   pushEv({ t: 'lose' });
   if (hooks.over) hooks.over();
+}
+
+// once per level: half your peak crowd gets straightened back up
+function revive() {
+  if (!S || S.phase !== 'lose' || S.revived) return false;
+  S.revived = true;
+  S.upg = upgLevels(); // upgrades bought on the lose overlay apply to the revived run
+  S.count = Math.max(10, Math.ceil(S.peak * 0.5));
+  if (S.fight) { S.fight.alive = false; S.fight = null; } // whoever got you is cleared
+  S.z += 4; S.zPrev = S.z; S.tx = 0; S.x = 0;             // and you respawn past the scene
+  S.phase = 'run';
+  pushEv({ t: 'revive', n: S.count });
+  if (hooks.hud) hooks.hud();
+  return true;
 }
 
 function applyGate(g) {
   g.used = true;
   const before = S.count;
   S.count = clamp(Math.round(applyOp(S.count, g.op)), 0, C.CAP);
-  pushEv({ t: 'gate', good: opGood(g.op), d: S.count - before, x: g.side * C.TRACK_W / 4, z: g.z });
+  pushEv({ t: 'gate', good: opGood(g.op), d: S.count - before, x: g.side * C.TRACK_W / 4, z: g.z,
+    gold: !!g.gold, myst: !!g.myst, label: opLabel(g.op) });
+  if (S.count > S.peak) S.peak = S.count;
   let mile = 0;
   for (const th of C.MILESTONES) if (before < th && S.count >= th) mile = th;
   if (mile) pushEv({ t: 'milestone', v: mile });
@@ -254,13 +464,16 @@ function countIn(pred) {
 
 function sawX(h) { return Math.sin(S.time * h.sp + h.ph) * 2.5; }
 function hammerPhase(h) { return (S.time / h.period + h.ph) % 1; }
+function pendS(h) { return Math.sin(S.time * h.w + h.ph); }
+function pendX(h) { return 4.2 * Math.sin(0.9 * pendS(h)); }
 
 function startFinish() {
   const T = S.lvl.steps || C.STEPS;
   let step = 0;
   while (step + 1 < T.length && S.count >= T[step + 1]) step++;
   const mult = step + 1;
-  S.res = { step, mult, start: S.count, gain: S.count * mult };
+  if (S.count > S.peak) S.peak = S.count; // the crowd that reaches the plank counts
+  S.res = { step, mult, start: S.count, gain: Math.round(S.count * mult * (1 + 0.10 * S.upg.grip)) };
   S.finTarget = S.lvl.finishZ + (step + 0.5) * C.STEP_D;
   S.phase = 'finish';
   S.finT = 0; S.planted = 0; S.slamT = 0;
@@ -272,6 +485,9 @@ function doWin() {
   S.nextLv = S.lv + 1;
   S.phase = 'win';
   save();
+  lsSet('sm_s_wins', lsInt('sm_s_wins') + 1);
+  lsSet('sm_s_planted', lsInt('sm_s_planted') + S.res.start);
+  if (S.peak > lsInt('sm_s_peak')) lsSet('sm_s_peak', S.peak);
   pushEv({ t: 'win' });
   if (hooks.hud) hooks.hud();
   if (hooks.over) hooks.over();
@@ -284,7 +500,7 @@ function tick(dt) {
   if (S.phase === 'run') {
     S.x += (S.tx - S.x) * Math.min(1, dt * 10);
     S.zPrev = S.z;
-    const spd = C.SPEED * (1 + Math.min(0.5, S.lv * 0.015));
+    const spd = C.SPEED * (1 + Math.min(0.55, S.lv * 0.015));
     S.z += spd * dt;
 
     // gates: leader crossing picks the side you're on
@@ -296,6 +512,17 @@ function tick(dt) {
       const hit = pair.find(o => o.side === mySide) || g;
       hit.used = false; applyGate(hit); // applyGate re-marks it; keeps `used` semantics single-sourced
       if (S.phase !== 'run') return;
+    }
+
+    // golden nail pickups (before hazards: the coin lands even on a lethal tick)
+    for (const p of S.lvl.picks) {
+      if (!p.taken && S.zPrev < p.z && p.z <= S.z && Math.abs(S.x - p.x) < 1.2) {
+        p.taken = true;
+        const v = 25 + 5 * S.lv;
+        S.coins += v;
+        lsSet('sm_coins', S.coins);
+        pushEv({ t: 'pick', x: p.x, z: p.z, v });
+      }
     }
 
     // hazards
@@ -310,6 +537,14 @@ function tick(dt) {
       } else if (h.k === 'spikes') {
         const k = countIn((ux, uz, uzp) => uzp < h.z && h.z <= uz && ux > h.x - h.w / 2 && ux < h.x + h.w / 2);
         if (k) killN(k, h.x, h.z, 'p');
+      } else if (h.k === 'pend') { // pendulum: lethal only while the blade is low
+        const s = pendS(h);
+        if (Math.abs(s) < 0.65) {
+          const bx = pendX(h);
+          let k = countIn((ux, uz) => Math.abs(uz - h.z) < 0.5 && Math.abs(ux - bx) < 0.85);
+          if (k) k = Math.min(k, Math.max(1, Math.round(S.count * 0.04)));
+          if (k) killN(k, bx, h.z, 'p', 'pend');
+        }
       } else { // hammer: kills at the slam instant
         const p = hammerPhase(h);
         if (h.prev < 0.5 && p >= 0.5) {
@@ -335,14 +570,16 @@ function tick(dt) {
 
   } else if (S.phase === 'fight') {
     const f = S.fight;
+    S.x += (S.tx - S.x) * Math.min(1, dt * 6); // steering stays live: swing wide to flank
     S.fightT += dt;
     while (S.fightT >= C.FIGHT_TICK && S.phase === 'fight') {
       S.fightT -= C.FIGHT_TICK;
       const k = Math.max(1, Math.round(Math.min(S.count, f.count) * 0.05));
-      const kf = Math.min(f.count, k);
+      const kf = Math.min(f.count, Math.max(1, Math.round(k * (1 + 0.15 * S.upg.tips))));
       f.count -= kf;
       if (kf) pushEv({ t: 'kill', n: kf, x: f.x, z: f.z + 1, side: 'e' });
-      killN(Math.min(S.count, k), S.x, S.z + 2.6, 'p'); // front rows, under the mallets
+      const flank = S.lv >= 8 && Math.abs(S.x - f.x) >= 1.3; // unlocks at L8
+      killN(Math.min(S.count, flank ? Math.max(1, Math.round(k * 0.6)) : k), S.x, S.z + 2.6, 'p'); // flanked trade ≈ 0.6:1
       if (S.phase !== 'fight') return; // we died
       if (f.count <= 0) {
         f.alive = false; S.fight = null;
@@ -385,6 +622,33 @@ function yAt(z) {
   return (step + 1) * C.STEP_H;
 }
 
+// ---------------------------- copy deck (from the writers' room) ----------------------------
+const TITLES = ['THUMBS BEWARE', 'HAMMER TIME', 'TOUGH AS NAILS', 'HIT THE CEILING', 'KNOCK ON WOOD',
+  'SAW YOU COMING', 'THE DAILY GRIND', 'STUD FINDER', 'SHELF ESTEEM', 'PLANK YOU VERY MUCH',
+  'SPIJKERHARD', 'TACKS EVASION', 'PALLET CLEANSER', 'WALK THE PLANK', 'RUSTY BUSINESS',
+  'BENCH PRESSURE', 'CLAW AND ORDER', 'GOING DUTCH', 'MEASURE ONCE, PANIC', 'A FEW SCREWS LOOSE',
+  'DRILL SERGEANT', 'STAPLE DIET', 'BOLT FROM THE BLUE', 'VICE ADVICE', 'PLIER PRESSURE',
+  'RIVETING STUFF', 'HINGE WATCHING', 'BRACE YOURSELVES', 'OP DE KOP AF', 'FLATHEAD SOCIETY',
+  'COUNTERSUNK CITY', 'SAWDUST TILL DAWN', 'SPIRIT LEVEL UP', 'NUTS TO THIS', 'TACK TO THE FUTURE',
+  'GRIT HAPPENS', 'RASP AND FURIOUS', 'HOLDING IT TOGETHER', 'RECHT DOOR ZEE', 'DE GROTE KLAP'];
+const WIN_LINES = ['You really hit it on the head.', 'Flush finish. The plank is proud.',
+  'Straight in. Not even a wobble.', 'Your thumbs survived. Miracles!', 'The workbench will sing of this.',
+  "Lekker bezig! (That's Dutch for wow.)", 'Screws hate this one trick.', 'Certified spijker moment.',
+  'Flat pack furniture fears you.', 'Ten out of tin. Wait, steel.', 'Somewhere a toolbox is crying.',
+  'Hard as nails. Soft as victory.'];
+const LOSE_LINES = ['Bent, not broken. Go again!', 'Even hammers miss sometimes.',
+  'That plank had it coming. Round 2?', 'Rust off, dust off, run it back.', 'The saw got lucky. Very lucky.',
+  'Measure twice, run once more.', "You're one swing from glory.", 'Helaas pindakaas! Try again.',
+  'Screws win battles, nails win wars.', 'Losing builds character. And splinters.',
+  "Shake it off. Nails don't cry.", 'Plot twist: the sequel is free.'];
+const BOSS_NAMES = ['SIR SCREWSALOT', 'THE PHILLIPS MOB', 'BIG BENT', 'WINGNUT WILLEM',
+  'RUSTY & THE BOLTS', 'THE ALLEN KEY GANG', 'DE BOUWMARKT BOYS', 'THE TORQUE SQUAD', 'DRILLZILLA', 'THE HEX PACK'];
+const TIPS = ['Tip: ×3 beats +8 once your crowd is big.', 'Small crowd? +gates beat × gates early on.',
+  'Saws sweep in rhythm. Waltz through them.', 'Hug a lane edge to skip the spike strip.',
+  'Bring more nails to a fight than they do.', 'The stairs pay per step. Climb greedy.',
+  "Nails have no eyes. That's what you're for.", 'A ÷2 gate hurts more the richer you are.',
+  "Fun fact: 'spijker' is Dutch for nail.", 'Do not try this at a real hardware store.'];
+
 // ---------------------------- UI shell (stub-safe DOM) ----------------------------
 const $ = (id) => document.getElementById(id);
 
@@ -392,24 +656,44 @@ function hudSync() {
   $('lvl').textContent = '' + (S ? S.lv : loadMeta().lv);
   $('coins').textContent = '' + (S ? S.coins : loadMeta().coins);
 }
-function showOv(title, sub, btn) {
+function showOv(title, sub, btn, alt) {
   $('ovTitle').textContent = title;
   $('ovSub').textContent = sub;
   $('ovBtn').textContent = btn;
+  $('ovAlt').textContent = alt || '';
+  $('ovAlt').style.display = alt ? 'inline' : 'none';
   $('ov').style.display = 'flex';
   $('bub').style.display = 'none';
+  $('gift').style.display = 'none';
 }
 function hideOv() {
   $('ov').style.display = 'none';
+  $('shop').style.display = 'none';
   $('bub').style.display = 'block';
 }
 function overSync() {
   if (!S) return;
   if (S.phase === 'win') {
+    // cliffhanger: the next boss is deterministic, so tease it honestly
+    // (live upgrade level, not the run-start snapshot — newRun will use the same)
+    const nx = genLevel(S.lv + 1, startCount());
+    const nb = nx.foes[nx.foes.length - 1].count;
+    const taunt = nb >= 100
+      ? nb + ' mallets say your nails fold like tin.'
+      : 'a mob of ' + nb + ' mallets is already laughing at you.';
     showOv('LEVEL ' + S.lv + ' NAILED!',
-      '×' + S.res.mult + ' plank bonus\n🪙 +' + S.res.gain + ' coins', 'NEXT LEVEL');
+      WIN_LINES[S.lv % WIN_LINES.length] +
+      '\n×' + S.res.mult + ' plank bonus → 🪙 +' + S.res.gain +
+      '\n⚠️ Level ' + (S.lv + 1) + ': ' + taunt, 'NEXT LEVEL');
   } else if (S.phase === 'lose') {
-    showOv('BENT & BROKEN', 'Your last spijker went down.\nStraighten up and retry!', 'RETRY');
+    if (!S.revived) {
+      const n = Math.max(10, Math.ceil(S.peak * 0.5));
+      showOv('BENT & BROKEN',
+        'Your crowd peaked at ' + S.peak + ' nails.\nStraighten half of them back up — once!',
+        '🔨 SECOND WIND (' + n + ' nails)', 'no thanks, retry');
+    } else {
+      showOv('BENT & BROKEN', LOSE_LINES[(S.lv + S.peak) % LOSE_LINES.length], 'RETRY');
+    }
   }
 }
 hooks.hud = hudSync;
@@ -417,19 +701,91 @@ hooks.over = overSync;
 
 const meta0 = loadMeta();
 function onMainBtn() {
-  const next = !S ? meta0.lv : (S.phase === 'win' ? S.nextLv : S.lv);
+  if (S && S.phase === 'lose' && !S.revived) { // main button on first death = revive
+    revive();
+    hideOv();
+    hudSync();
+    sfx('start');
+    setMusic(MLOOP);
+    return;
+  }
+  const next = !S ? loadMeta().lv : (S.phase === 'win' ? S.nextLv : S.lv);
   newRun(next);
   hideOv();
   hudSync();
   sfx('start');
+  setMusic(MLOOP);
 }
 $('ovBtn').onclick = onMainBtn;
+$('ovAlt').onclick = () => { // decline revive -> plain retry
+  if (S && S.phase === 'lose') { newRun(S.lv); hideOv(); hudSync(); sfx('start'); setMusic(MLOOP); }
+};
+
+// --- shop (The Nail Aisle) ---
+function fmtV(v) { return v >= 10000 ? (v / 1000).toFixed(1) + 'k' : '' + v; }
+function shopSync() {
+  const coins = S ? S.coins : loadMeta().coins;
+  let h = '';
+  for (const id in UPG) {
+    const u = UPG[id], l = lsInt('sm_u_' + id);
+    const maxed = l >= u.max, cost = maxed ? 0 : u.costs[l];
+    h += '<div class="srow"><div class="sinfo"><b>' + u.name + '</b><span>' + u.desc(maxed ? l : l + 1) + '</span>' +
+      '<i>' + '●'.repeat(l) + '○'.repeat(u.max - l) + '</i></div>' +
+      '<button class="sbuy" data-u="' + id + '"' + (maxed ? ' disabled' : (coins < cost ? ' data-poor="1"' : '')) + '>' +
+      (maxed ? 'MAX' : 'UP ' + cost + ' 🪙') + '</button></div>';
+  }
+  h += '<div class="shead">NAIL SKINS</div><div class="skinrow">';
+  const owned = ownedSkins(), sel = curSkin();
+  for (const sk of SKINS) {
+    const own = owned.includes(sk.id);
+    h += '<button class="schip skin' + sk.id + (sk.id === sel ? ' sel' : '') + '" data-s="' + sk.id + '" title="' + sk.flavor + '">' +
+      sk.name + '<em>' + (own ? (sk.id === sel ? 'ON' : 'OWNED') : sk.price + ' 🪙') + '</em></button>';
+  }
+  h += '</div><div class="shead">YOUR NAIL TALE</div><div class="sgrid">' +
+    '<div><b>' + fmtV(lsInt('sm_s_planted')) + '</b><span>Nails hammered</span></div>' +
+    '<div><b>' + fmtV(lsInt('sm_s_wins')) + '</b><span>Levels nailed</span></div>' +
+    '<div><b>' + fmtV(lsInt('sm_s_runs')) + '</b><span>Runs taken</span></div>' +
+    '<div><b>' + fmtV(lsInt('sm_s_peak')) + '</b><span>Biggest crowd</span></div></div>';
+  $('shopRows').innerHTML = h;
+  for (const b of document.querySelectorAll('#shopRows .sbuy')) {
+    b.onclick = () => {
+      if (buyUpg(b.dataset.u)) {
+        sfx('good');
+        if (S && S.phase === 'win') overSync(); // NAIL PACK reshapes the next level: refresh the tease
+      } else sfx('bad');
+      shopSync(); hudSync();
+    };
+  }
+  for (const b of document.querySelectorAll('#shopRows .schip')) {
+    b.onclick = () => { if (buySkin(+b.dataset.s)) { sfx('good'); } else { sfx('bad'); } shopSync(); hudSync(); };
+  }
+}
+$('ovShop').onclick = () => { shopSync(); $('shop').style.display = 'flex'; };
+$('shopBack').onclick = () => { $('shop').style.display = 'none'; };
+
+// --- daily gift (menu only; the tap is the ritual) ---
+function giftSync() {
+  const d = dailyState(new Date().toISOString().slice(0, 10));
+  if (!d.claimable) { $('gift').style.display = 'none'; return; }
+  $('giftTitle').textContent = '🎁 DAILY GIFT — DAY ' + Math.min(d.streak, 7);
+  $('giftDots').textContent = '●'.repeat(Math.min(d.streak, 7)) + '○'.repeat(Math.max(0, 7 - d.streak));
+  $('giftSub').textContent = d.reset ? 'streak reset — day 1 again!' : 'streaks grow the gift, up to 1000';
+  $('giftBtn').textContent = 'CLAIM +' + d.reward + ' 🪙';
+  $('gift').style.display = 'block';
+}
+$('giftBtn').onclick = () => {
+  const d = claimDaily(new Date().toISOString().slice(0, 10));
+  if (d) { sfx('milestone'); $('gift').style.display = 'none'; hudSync(); }
+};
 $('ovSub').textContent = 'Steer your nails. Pick the best gates.\nHammer them home for coins!';
+$('ovHint').textContent = TIPS[lsInt('sm_s_runs') % TIPS.length];
+giftSync();
 $('mute').onclick = () => {
   const m = !(S ? S.mute : meta0.mute);
   if (S) S.mute = m; meta0.mute = m;
   try { localStorage.setItem('sm_mute', m ? '1' : '0'); } catch (e) {}
   $('mute').textContent = m ? '🔇' : '🔊';
+  setMusic(m ? null : loopForPhase());
 };
 $('mute').textContent = meta0.mute ? '🔇' : '🔊';
 hudSync();
@@ -450,11 +806,22 @@ function sfx(kind) {
       o.connect(g); g.connect(AC.destination);
       o.start(t + at); o.stop(t + at + dur + 0.02);
     };
-    if (kind === 'good') tone(660, 990, 0.12, 'triangle', 0.25, 0);
+    const crack = (vol, at) => { // white-noise transient: what makes wood impacts crunch
+      mkNoise();
+      const s = AC.createBufferSource(); s.buffer = NOISE;
+      const g = AC.createGain();
+      g.gain.setValueAtTime(vol, t + at);
+      g.gain.exponentialRampToValueAtTime(0.001, t + at + 0.07);
+      s.connect(g); g.connect(AC.destination);
+      s.start(t + at); s.stop(t + at + 0.08);
+    };
+    if (kind === 'good') { tone(987.77, 987.77, 0.075, 'square', 0.2, 0); tone(1318.51, 1318.51, 0.3, 'square', 0.16, 0.075); tone(2637.02, 2637.02, 0.12, 'triangle', 0.07, 0.075); }
     else if (kind === 'bad') tone(300, 140, 0.2, 'sawtooth', 0.2, 0);
     else if (kind === 'kill') tone(200, 90, 0.08, 'square', 0.12, 0);
     else if (kind === 'clash') { tone(150, 90, 0.25, 'sawtooth', 0.25, 0); tone(400, 200, 0.15, 'square', 0.15, 0); }
-    else if (kind === 'slam') tone(90, 40, 0.3, 'sine', 0.4, 0);
+    else if (kind === 'slam') { tone(120, 36, 0.28, 'sine', 0.45, 0); tone(320, 60, 0.09, 'square', 0.22, 0); crack(0.3, 0); }
+    else if (kind === 'pick') { tone(880, 1320, 0.12, 'triangle', 0.22, 0); tone(1320, 1760, 0.1, 'triangle', 0.18, 0.08); }
+    else if (kind === 'whoosh') tone(180, 320, 0.12, 'sine', 0.1, 0);
     else if (kind === 'plant') { tone(620, 320, 0.05, 'square', 0.14, 0); tone(140, 90, 0.07, 'sine', 0.2, 0); }
     else if (kind === 'milestone') [659, 784, 1046, 1318].forEach((f, i) => tone(f, f * 1.02, 0.09, 'triangle', 0.2, i * 0.055));
     else if (kind === 'boss') { tone(110, 55, 0.5, 'sawtooth', 0.28, 0); tone(73, 48, 0.65, 'square', 0.22, 0.05); }
@@ -464,10 +831,133 @@ function sfx(kind) {
   } catch (e) {}
 }
 
+// ---------------------------- music (procedural chiptune) ----------------------------
+// Three loops from the audio department: Workbench Whistle (run), Mallet Brawl
+// (fight/boss), Golden Plank Fanfare (finale). One lookahead scheduler; the
+// music bus sits under the sfx and ducks during slow-mo. sm_music toggles
+// music only; sm_mute remains the master kill.
+let MUSIC = null, NOISE = null, mTimer = null, mCur = null, mPend = null, mStep = 0, mNextT = 0;
+function mkNoise() {
+  if (NOISE || !AC) return;
+  const n = (AC.sampleRate * 0.1) | 0;
+  NOISE = AC.createBuffer(1, n, AC.sampleRate);
+  const d = NOISE.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+}
+const MLOOP = { bpm: 120, bt: 'triangle', bg: 0.13, bd: 0.16, lt: 'triangle', lg: 0.10, ld: 0.22,
+  bass: [
+    [65.41,0,0,0,98,0,0,0,65.41,0,0,0,98,0,0,0],
+    [65.41,0,0,0,98,0,0,0,65.41,0,0,0,110,0,123.47,0],
+    [87.31,0,0,0,130.81,0,0,0,87.31,0,0,0,130.81,0,0,0],
+    [65.41,0,0,0,98,0,0,0,65.41,0,0,0,82.41,0,87.31,0],
+    [98,0,0,0,146.83,0,0,0,98,0,0,0,146.83,0,0,0],
+    [87.31,0,0,0,130.81,0,0,0,87.31,0,0,0,110,0,123.47,0],
+    [65.41,0,0,0,82.41,0,0,0,98,0,0,0,98,0,73.42,0],
+    [65.41,0,0,0,98,0,0,0,65.41,0,82.41,0,98,0,110,0]],
+  lead: [
+    [659.25,0,783.99,0,659.25,0,523.25,0,587.33,0,659.25,0,523.25,0,0,0],
+    [659.25,0,783.99,0,880,0,783.99,0,659.25,0,587.33,0,0,0,523.25,587.33],
+    [698.46,0,880,0,698.46,0,587.33,0,523.25,0,587.33,0,698.46,0,0,0],
+    [659.25,0,523.25,0,392,0,440,0,493.88,0,523.25,0,0,0,0,0],
+    [587.33,0,783.99,0,587.33,0,493.88,0,440,0,493.88,0,587.33,0,0,0],
+    [698.46,0,587.33,0,523.25,0,587.33,0,698.46,0,880,0,0,0,783.99,0],
+    [659.25,0,523.25,0,659.25,0,783.99,0,880,0,987.77,0,880,0,783.99,0],
+    [1046.5,0,0,0,783.99,0,659.25,0,523.25,0,0,0,0,0,392,493.88]],
+  hat: [0,0,1,0,0.5,0,1,0,0,0,1,0,0.5,0,1,0.6] };
+const MFIGHT = { bpm: 150, bt: 'square', bg: 0.11, bd: 0.09, lt: 'square', lg: 0.07, ld: 0.16,
+  bass: [
+    [110,0,110,0,110,0,110,0,110,0,110,0,110,0,110,0],
+    [98,0,98,0,98,0,98,0,98,0,98,0,98,0,98,0],
+    [87.31,0,87.31,0,87.31,0,87.31,0,87.31,0,87.31,0,87.31,0,87.31,0],
+    [82.41,0,82.41,0,82.41,0,82.41,0,82.41,0,82.41,0,82.41,0,103.83,0]],
+  lead: [
+    [440,0,0,0,523.25,0,440,0,0,0,659.25,0,587.33,0,523.25,0],
+    [493.88,0,0,0,587.33,0,493.88,0,0,0,783.99,0,698.46,0,587.33,0],
+    [440,0,0,0,523.25,0,440,0,0,0,698.46,0,659.25,0,523.25,0],
+    [415.3,0,493.88,0,659.25,0,0,0,830.61,0,0,0,987.77,0,830.61,0]],
+  hat: [1,0.4,0.7,0.4,1,0.4,0.7,0.4,1,0.4,0.7,0.4,1,0.4,0.7,0.7] };
+const MFIN = { bpm: 132, bt: 'triangle', bg: 0.13, bd: 0.16, lt: 'square', lg: 0.09, ld: 0.30,
+  bass: [
+    [130.81,0,0,0,196,0,0,0,130.81,0,0,0,196,0,0,0],
+    [174.61,0,0,0,261.63,0,0,0,174.61,0,0,0,261.63,0,0,0],
+    [196,0,0,0,293.66,0,0,0,196,0,0,0,293.66,0,0,0],
+    [130.81,0,0,0,196,0,0,0,261.63,0,0,0,196,0,0,0]],
+  lead: [
+    [523.25,0,659.25,0,783.99,0,1046.5,0,783.99,0,1046.5,0,0,0,0,0],
+    [698.46,0,880,0,1046.5,0,0,0,880,0,1046.5,0,1174.66,0,0,0],
+    [1318.51,0,0,0,1174.66,0,1046.5,0,987.77,0,1046.5,0,1174.66,0,0,0],
+    [1046.5,0,0,0,0,0,783.99,0,1046.5,0,0,0,0,0,0,0]],
+  hat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1] };
+function musicEnabled() { try { return localStorage.getItem('sm_music') !== '0'; } catch (e) { return true; } }
+function mNote(f, type, g, at, dur) {
+  const o = AC.createOscillator(), gn = AC.createGain();
+  o.type = type; o.frequency.value = f;
+  gn.gain.setValueAtTime(g, at);
+  gn.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.connect(gn); gn.connect(MUSIC);
+  o.start(at); o.stop(at + dur + 0.02);
+}
+function mHat(v, at) {
+  mkNoise();
+  const s = AC.createBufferSource(); s.buffer = NOISE;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(v * 0.06, at);
+  g.gain.exponentialRampToValueAtTime(0.001, at + 0.035);
+  s.connect(g); g.connect(MUSIC);
+  s.start(at); s.stop(at + 0.04);
+}
+function mSched() {
+  try {
+    while (mCur && mNextT < AC.currentTime + 0.12) {
+      const b = (mStep / 16) | 0, i = mStep % 16;
+      if (mCur.bass[b][i]) mNote(mCur.bass[b][i], mCur.bt, mCur.bg, mNextT, mCur.bd);
+      if (mCur.lead[b][i]) mNote(mCur.lead[b][i], mCur.lt, mCur.lg, mNextT, mCur.ld);
+      if (mCur.hat[i]) mHat(mCur.hat[i], mNextT);
+      mNextT += 60 / mCur.bpm / 4;
+      mStep++;
+      if (mStep % 16 === 0 && mPend) { mCur = mPend; mPend = null; mStep = 0; }
+      if (mStep >= mCur.bass.length * 16) mStep = 0;
+    }
+  } catch (e) {}
+}
+function setMusic(loop) {
+  if ((S ? S.mute : meta0.mute) || !musicEnabled()) loop = null;
+  try {
+    if (!loop) {
+      if (MUSIC && AC) MUSIC.gain.setTargetAtTime(0.0001, AC.currentTime, 0.13);
+      if (mTimer) { clearInterval(mTimer); mTimer = null; }
+      mCur = null; mPend = null;
+      return;
+    }
+    if (loop === mCur) { mPend = null; return; } // cancel a stale queued switch
+    if (loop === mPend) return;
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.resume) AC.resume();
+    if (!MUSIC) { MUSIC = AC.createGain(); MUSIC.gain.value = 0.5; MUSIC.connect(AC.destination); }
+    MUSIC.gain.setTargetAtTime(0.5, AC.currentTime, 0.1);
+    if (!mCur) { mCur = loop; mStep = 0; mNextT = AC.currentTime + 0.06; if (!mTimer) mTimer = setInterval(mSched, 25); }
+    else mPend = loop; // switch on the next bar boundary
+  } catch (e) {}
+}
+function loopForPhase() {
+  if (!S) return null;
+  return S.phase === 'fight' ? MFIGHT : S.phase === 'finish' ? MFIN
+    : (S.phase === 'run' ? MLOOP : null);
+}
+$('music').onclick = () => {
+  const on = !musicEnabled();
+  lsSet('sm_music', on ? '1' : '0');
+  $('music').style.opacity = on ? '1' : '0.35';
+  setMusic(on ? loopForPhase() : null);
+};
+$('music').style.opacity = musicEnabled() ? '1' : '0.35';
+
 // ---------------------------- headless API ----------------------------
 window.SM = {
-  C, get S() { return S; },
+  C, UPG, SKINS, DAILY, get S() { return S; },
   tick, newRun, genLevel, applyOp, applyGate, fOff, yAt, killN, startFinish,
+  revive, buyUpg, upgLevels, startCount, buySkin, ownedSkins, curSkin,
+  dailyState, claimDaily, pendS, pendX,
   setTX: (x) => { if (S) S.tx = clamp(x, -C.XMAX, C.XMAX); },
   loadMeta, hooks,
 };
@@ -495,7 +985,8 @@ if (!HEADLESS) (function render() {
   }
   window.addEventListener('resize', resize); resize();
 
-  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x2a2036, 0.85));
+  const hemi = new THREE.HemisphereLight(0xbfd4ff, 0x2a2036, 0.85);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff2dd, 1.0);
   sun.position.set(6, 14, -6);
   sun.castShadow = true;
@@ -575,6 +1066,10 @@ if (!HEADLESS) (function render() {
   const playerMat = new THREE.MeshPhongMaterial({ color: 0x9fc2ff, shininess: 90, specular: 0xdfe9ff });
   const foeMat = new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true, shininess: 50, specular: 0xffc0a0 });
   const nailG = nailGeo();
+  // pickups get their own geometry/material: level teardown disposes lvlGroup
+  // geometries, and nailG also backs the live crowd/sink/plant meshes
+  const pickG = nailG.clone();
+  const pickMat = new THREE.MeshPhongMaterial({ color: 0xffc94d, shininess: 100, specular: 0xfff2c0 });
   const crowd = new THREE.InstancedMesh(nailG, playerMat, C.VIS);
   crowd.castShadow = true;
   crowd.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -642,10 +1137,32 @@ if (!HEADLESS) (function render() {
   }
   const HAM_IMP = 0.3, HAM_UP = -1.05; // rotation.z: + swings down onto the crowd, - cocks back
   let hamPrevTh = 0, finalBoomFired = false;
+
+  // --- crowd skins: mutate the shared player material in place ---
+  const SKIN_MATS = [
+    { c: 0x9fc2ff, e: 0x000000, ei: 0,   sh: 90,  sp: 0xdfe9ff },
+    { c: 0xe08a4e, e: 0x3d1a06, ei: 1,   sh: 60,  sp: 0xffd9b0 },
+    { c: 0xffd166, e: 0x4a2f00, ei: 1,   sh: 150, sp: 0xfff3c4 },
+    { c: 0x3dffa0, e: 0x00b35c, ei: 0.9, sh: 220, sp: 0xeaffff },
+    { c: 0xffffff, e: 0x222222, ei: 1,   sh: 180, sp: 0xffffff }, // Prisma: hue-cycled per frame
+  ];
+  let skinId = 0;
+  function applySkin() {
+    skinId = curSkin();
+    const m = SKIN_MATS[skinId] || SKIN_MATS[0];
+    playerMat.color.setHex(m.c);
+    playerMat.emissive.setHex(m.e);
+    playerMat.emissiveIntensity = m.ei;
+    playerMat.shininess = m.sh;
+    playerMat.specular.setHex(m.sp);
+    plantMesh.material.color.setHex(skinId === 0 || skinId === 4 ? 0xbcd2ff : m.c); // payoff matches the crowd
+  }
+  hooks.skin = applySkin;
+  applySkin();
   let shake = 0, finalBoom = false;
 
   // --- juice state ---
-  let tScale = 1, fovKick = 0, bossWarned = false;
+  let tScale = 1, fovKick = 0, bossWarned = false, flankTaught = false, mDucked = false;
   const spawnAt = new Float32Array(C.VIS); // pop-in time per crowd instance
   let lastN = 0, lastBub = -1, bubPopT = -9, bubRedT = -9, dustAcc = 0, confAcc = 0;
   const MILE_TXT = { 25: 'NICE CROWD!', 50: 'BIG CROWD!', 100: 'MEGA CROWD!',
@@ -684,23 +1201,48 @@ if (!HEADLESS) (function render() {
     }
   }
 
+  // --- environment themes: a new bench every 3 levels, cycling forever ---
+  const THEMES = [
+    { name: 'Warm Workbench', skyTop: 0x2b3a66, skyBot: 0x18244a, fog: 0x18244a, fogN: 32, fogF: 95,
+      gBase: '#c99a63', gGrain: 'rgba(120,80,40,.25)', gSeam: 'rgba(90,60,30,.5)', rail: 0x8a6238,
+      hemiSky: 0xbfd4ff, hemiGnd: 0x2a2036, hemiI: 0.85, sun: 0xfff2dd, sunI: 1.0,
+      dust: 0xb9915e, sil: 0x5a3f24, stars: false },
+    { name: 'Neon Night Garage', skyTop: 0x05060f, skyBot: 0x1a1440, fog: 0x141230, fogN: 26, fogF: 80,
+      gBase: '#232433', gGrain: 'rgba(58,61,85,.55)', gSeam: 'rgba(10,12,24,.6)', rail: 0x101322,
+      hemiSky: 0x5560ff, hemiGnd: 0x180f2e, hemiI: 0.65, sun: 0x9fb0ff, sunI: 0.5,
+      dust: 0x33e0ff, sil: 0x141830, stars: true },
+    { name: 'Sunset Rooftop', skyTop: 0x2e2a55, skyBot: 0xff9a56, fog: 0xff9a68, fogN: 38, fogF: 105,
+      gBase: '#9c8a8a', gGrain: 'rgba(110,92,100,.35)', gSeam: 'rgba(60,48,58,.5)', rail: 0x554457,
+      hemiSky: 0xffd9a8, hemiGnd: 0x63385c, hemiI: 0.9, sun: 0xffb35c, sunI: 1.3,
+      dust: 0xe8a06a, sil: 0x3a2f52, stars: false },
+    { name: 'Frostworks', skyTop: 0x9fc8e8, skyBot: 0xeaf6ff, fog: 0xdfeefa, fogN: 34, fogF: 100,
+      gBase: '#cfe2ee', gGrain: 'rgba(150,190,215,.4)', gSeam: 'rgba(110,150,180,.45)', rail: 0x7c99b5,
+      hemiSky: 0xffffff, hemiGnd: 0x9db4cd, hemiI: 1.05, sun: 0xfff6e8, sunI: 1.15,
+      dust: 0xffffff, sil: 0x9db8cc, stars: false },
+    { name: 'Candy Factory', skyTop: 0x8ad4ff, skyBot: 0xffd6ea, fog: 0xffd0e6, fogN: 36, fogF: 100,
+      gBase: '#f6a8c9', gGrain: 'rgba(255,240,248,.5)', gSeam: 'rgba(200,110,150,.5)', rail: 0xe4577f,
+      hemiSky: 0xfff2fb, hemiGnd: 0xd873ab, hemiI: 0.95, sun: 0xfff2cf, sunI: 1.0,
+      dust: 0xffb3d4, sil: 0xe98ab8, stars: false },
+  ];
+  let theme = THEMES[0], themeIdx = 0, sprinkleN = 0, snowAcc = 0;
+
   // --- per-level scene group ---
   let lvlGroup = null;
-  const dyn = { saws: [], hammers: [], foeLabels: [], gatePanels: [] };
+  const dyn = { saws: [], hammers: [], foeLabels: [], gatePanels: [], pends: [], picks: [] };
   const woodMat = new THREE.MeshLambertMaterial({ color: 0xb4854f });
   const woodDark = new THREE.MeshLambertMaterial({ color: 0x8a6238 });
   const steelMat = new THREE.MeshPhongMaterial({ color: 0xb9c4d6, shininess: 100 });
 
-  function groundTexture() {
+  function groundTexture(T) {
     const c = document.createElement('canvas');
     c.width = 128; c.height = 128;
     const x = c.getContext('2d');
-    x.fillStyle = '#c99a63'; x.fillRect(0, 0, 128, 128);
-    x.fillStyle = 'rgba(120,80,40,.25)';
+    x.fillStyle = T.gBase; x.fillRect(0, 0, 128, 128);
+    x.fillStyle = T.gGrain;
     for (let i = 0; i < 9; i++) { // plank grain
       x.fillRect(0, i * 15 + ((i * 37) % 6), 128, 2);
     }
-    x.fillStyle = 'rgba(90,60,30,.5)';
+    x.fillStyle = T.gSeam;
     x.fillRect(0, 0, 128, 3); x.fillRect(0, 63, 128, 3);
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -708,20 +1250,56 @@ if (!HEADLESS) (function render() {
     return tex;
   }
 
+  function skyTexture(T) {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 1024;
+    const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, 1024);
+    g.addColorStop(0, '#' + T.skyTop.toString(16).padStart(6, '0'));
+    g.addColorStop(1, '#' + T.skyBot.toString(16).padStart(6, '0'));
+    x.fillStyle = g; x.fillRect(0, 0, 512, 1024);
+    if (T.stars) {
+      for (let i = 0; i < 140; i++) {
+        x.fillStyle = 'rgba(255,255,255,' + (0.25 + Math.random() * 0.65).toFixed(2) + ')';
+        x.beginPath();
+        x.arc(Math.random() * 512, Math.random() * 620, 0.6 + Math.random() * 1.1, 0, 6.28);
+        x.fill();
+      }
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
   function buildLevel() {
     if (lvlGroup) {
       scene.remove(lvlGroup);
-      lvlGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      lvlGroup.traverse(o => { if (o.geometry && o.geometry !== pickG) o.geometry.dispose(); });
     }
     dyn.saws = []; dyn.hammers = []; dyn.foeLabels = []; dyn.gatePanels = [];
+    dyn.pends = []; dyn.picks = [];
     sinks = []; plantN = 0; plantMesh.count = 0; shake = 0; finalBoom = false;
     bossWarned = false; lastN = 0; lastBub = -1; tScale = 1; fovKick = 0;
-    finalBoomFired = false; hamPrevTh = 0;
+    finalBoomFired = false; hamPrevTh = 0; snowAcc = 0;
     lvlGroup = new THREE.Group();
     const L = S.lvl;
 
+    // dress the bench for this stretch of levels
+    themeIdx = Math.floor((S.lv - 1) / 3) % THEMES.length;
+    theme = THEMES[themeIdx];
+    scene.fog.color.setHex(theme.fog);
+    scene.fog.near = theme.fogN; scene.fog.far = theme.fogF;
+    hemi.color.setHex(theme.hemiSky);
+    hemi.groundColor.setHex(theme.hemiGnd);
+    hemi.intensity = theme.hemiI;
+    sun.color.setHex(theme.sun);
+    sun.intensity = theme.sunI;
+    woodDark.color.setHex(theme.rail);
+    if (scene.background && scene.background.isTexture) scene.background.dispose();
+    scene.background = skyTexture(theme);
+
     // workbench floor
-    const gt = groundTexture();
+    const gt = groundTexture(theme);
     gt.repeat.set(3, (L.len + 120) / 6);
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(C.TRACK_W + 2.4, L.len + 120),
@@ -738,13 +1316,13 @@ if (!HEADLESS) (function render() {
       lvlGroup.add(rail);
     }
 
-    // gates
+    // gates (green = good, red = bad, gold = jackpot pair, purple ? = gamble)
     for (const g of L.gates) {
       const grp = new THREE.Group();
       const xc = g.side * C.TRACK_W / 4;
       const good = opGood(g.op);
-      const col = good ? 0x35d97b : 0xff5d5d;
-      const postMat = new THREE.MeshLambertMaterial({ color: 0xe8eef8 });
+      const col = g.gold ? 0xffd76a : g.myst ? 0xb87aff : good ? 0x35d97b : 0xff5d5d;
+      const postMat = new THREE.MeshLambertMaterial({ color: g.gold ? 0xffe9a8 : 0xe8eef8 });
       for (const px of [-2.05, 2.05]) {
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.6, 0.22), postMat);
         post.position.set(px, 1.3, 0);
@@ -755,10 +1333,12 @@ if (!HEADLESS) (function render() {
       grp.add(bar);
       const panel = new THREE.Mesh(
         new THREE.PlaneGeometry(4.1, 2.4),
-        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: g.gold ? 0.38 : 0.32, side: THREE.DoubleSide, depthWrite: false }));
       panel.position.set(0, 1.3, 0);
       grp.add(panel);
-      const lbl = textCanvas(opLabel(g.op), '#ffffff', good ? 'rgba(20,140,70,.92)' : 'rgba(190,40,40,.92)', 72);
+      const lbl = textCanvas(g.myst ? '?' : opLabel(g.op), '#ffffff',
+        g.gold ? 'rgba(196,148,8,.95)' : g.myst ? 'rgba(122,52,196,.92)'
+          : good ? 'rgba(20,140,70,.92)' : 'rgba(190,40,40,.92)', 72);
       const sign = new THREE.Mesh(
         new THREE.PlaneGeometry(1.5 * lbl.aspect, 1.5),
         new THREE.MeshBasicMaterial({ map: lbl.tex, transparent: true, side: THREE.DoubleSide }));
@@ -800,6 +1380,28 @@ if (!HEADLESS) (function render() {
         }
         strip.position.set(h.x, 0, h.z);
         lvlGroup.add(strip);
+      } else if (h.k === 'pend') { // swinging pendulum blade
+        const grp = new THREE.Group();
+        for (const sd of [-1, 1]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 5.4, 0.35), woodDark);
+          post.position.set(sd * (C.TRACK_W / 2 + 0.4), 2.7, 0);
+          grp.add(post);
+        }
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(C.TRACK_W + 1.5, 0.35, 0.35), woodDark);
+        bar.position.set(0, 5.4, 0);
+        grp.add(bar);
+        const pivot = new THREE.Group();
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.2, 0.22), steelMat);
+        arm.position.y = -2.1;
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.9, 0.18), steelMat);
+        blade.position.y = -4.2;
+        blade.castShadow = true;
+        pivot.add(arm); pivot.add(blade);
+        pivot.position.set(0, 5.2, 0);
+        grp.add(pivot);
+        grp.position.set(0, 0, h.z);
+        lvlGroup.add(grp);
+        dyn.pends.push({ h, pivot, prevS: 0 });
       } else { // hammer
         const grp = new THREE.Group();
         const pivot = new THREE.Group();
@@ -817,6 +1419,33 @@ if (!HEADLESS) (function render() {
         lvlGroup.add(grp);
         dyn.hammers.push({ h, pivot });
       }
+    }
+
+    // golden nail pickups: spinning oversized nails worth instant coins
+    for (const p of L.picks) {
+      const gm = new THREE.Mesh(pickG, pickMat);
+      gm.scale.set(1.6, 1.6, 1.6);
+      gm.position.set(p.x, 0.9, p.z);
+      lvlGroup.add(gm);
+      dyn.picks.push({ p, mesh: gm });
+    }
+
+    // distant parallax silhouettes: unlit boxes melting into the fog
+    {
+      const silMat = new THREE.MeshBasicMaterial({ color: theme.sil, fog: true });
+      const sil = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), silMat, 48);
+      for (let i = 0; i < 48; i++) {
+        const sd = (i & 1) ? 1 : -1;
+        const sx = 1.2 + Math.random() * 2.4;
+        const sy = (themeIdx === 2 ? 4 + Math.random() * 7 : 2 + Math.random() * 5);
+        const sz = 1.2 + Math.random() * 2.4;
+        posV.set(sd * (C.TRACK_W / 2 + 5 + Math.random() * 7), sy / 2 - 0.2, (i >> 1) * (L.len / 24) + Math.random() * 6);
+        eul.set(0, 0, 0); quat.setFromEuler(eul);
+        m4.compose(posV, quat, scV.set(sx, sy, sz));
+        sil.setMatrixAt(i, m4);
+      }
+      sil.instanceMatrix.needsUpdate = true;
+      lvlGroup.add(sil);
     }
 
     // foe crowds get a floating count label
@@ -916,6 +1545,7 @@ if (!HEADLESS) (function render() {
         popup('CROWD CRUSHED!', '#5cff9b');
         ring(S.x, 0.9, S.z + 2, 0x5cff9b, 6);
         sfx('good');
+        setMusic(MLOOP);
       } else if (ev.t === 'plant') {
         addPlanted(ev);
         burst(ev.x, (ev.step + 1) * C.STEP_H + 0.4, ev.z, Math.min(8, 2 + ev.n), 0xffd76a);
@@ -923,15 +1553,54 @@ if (!HEADLESS) (function render() {
       } else if (ev.t === 'slam_final') {
         finalBoom = true; // the boom itself fires when the hammer actually lands
       } else if (ev.t === 'gate') {
-        popup((ev.d >= 0 ? '+' : '') + ev.d, ev.good ? '#5cff9b' : '#ff7a6a');
-        burst(ev.x, 1.2, ev.z, 12, ev.good ? 0x35d97b : 0xff5d5d);
-        if (ev.good) { fovKick = 5; ring(ev.x, 1.0, ev.z, 0x5cff9b, 6); }
-        else { flashVin(0.3); fovKick = -3; }
-        sfx(ev.good ? 'good' : 'bad');
-      } else if (ev.t === 'clash') { tScale = 0.3; fovKick = -5; shake = Math.max(shake, 0.14); sfx('clash'); }
+        if (ev.myst) { // the gamble reveals itself: swap the '?' sign for the real op
+          const gp = dyn.gatePanels.find(p => p.g.z === ev.z && p.g.myst);
+          if (gp) {
+            const lbl = textCanvas(ev.label, '#ffffff', ev.good ? 'rgba(20,140,70,.92)' : 'rgba(190,40,40,.92)', 72);
+            gp.sign.material.map.dispose();
+            gp.sign.material.map = lbl.tex;
+            gp.sign.scale.x = lbl.aspect / (gp.sign.geometry.parameters.width / gp.sign.geometry.parameters.height);
+          }
+          popup(ev.good ? 'LUCKY! ' + ev.label : 'OOF! ' + ev.label, ev.good ? '#c28bff' : '#ff7a6a');
+          ring(ev.x, 1.0, ev.z, 0xb87aff, 6);
+        } else if (ev.gold) {
+          popup('GOLDEN GATE! ' + (ev.d >= 0 ? '+' : '') + ev.d, '#ffd76a');
+          ring(ev.x, 1.0, ev.z, 0xffd76a, 7);
+          fovKick = 6;
+          sfx('milestone');
+        } else {
+          popup((ev.d >= 0 ? '+' : '') + ev.d, ev.good ? '#5cff9b' : '#ff7a6a');
+        }
+        burst(ev.x, 1.2, ev.z, 12, ev.gold ? 0xffd76a : ev.good ? 0x35d97b : 0xff5d5d);
+        if (ev.good && !ev.gold) { fovKick = 5; ring(ev.x, 1.0, ev.z, 0x5cff9b, 6); }
+        else if (!ev.good) { flashVin(0.3); fovKick = -3; }
+        if (!ev.gold) sfx(ev.good ? 'good' : 'bad');
+      } else if (ev.t === 'pick') {
+        popup('+' + ev.v + ' 🪙', '#ffd76a');
+        ring(ev.x, 0.9, ev.z, 0xffd76a, 6);
+        burst(ev.x, 1.0, ev.z, 10, 0xffd76a);
+        sfx('pick');
+      } else if (ev.t === 'title') {
+        const tc = $('tcard');
+        tc.textContent = 'LEVEL ' + ev.lv + ': ' + TITLES[(ev.lv - 1) % TITLES.length];
+        tc.classList.remove('show');
+        void tc.offsetWidth; // restart the animation
+        tc.classList.add('show');
+      } else if (ev.t === 'revive') {
+        popup('BACK IN THE FIGHT!', '#5cff9b');
+        ring(S.x, 0.9, S.z, 0x5cff9b, 7);
+        tScale = 0.5;
+        sfx('milestone');
+      } else if (ev.t === 'clash') {
+        tScale = 0.3; fovKick = -5; shake = Math.max(shake, 0.14);
+        if (!flankTaught && S.lv >= 8) { flankTaught = true; popup('SWING WIDE TO FLANK!', '#5cff9b'); }
+        sfx('clash');
+        setMusic(MFIGHT);
+      }
+      else if (ev.t === 'finish') setMusic(MFIN);
       else if (ev.t === 'slam') { shake = Math.max(shake, 0.22); sfx('slam'); }
-      else if (ev.t === 'win') { sfx('win'); for (let i = 0; i < 8; i++) burst(S.x + (Math.random() - 0.5) * 4, 1 + Math.random() * 2, S.z + Math.random() * 3, 10, [0xffd76a, 0x5cff9b, 0x6ab8ff, 0xff8ad0][i % 4]); }
-      else if (ev.t === 'lose') { flashVin(0.75); tScale = 0.35; shake = Math.max(shake, 0.35); sfx('lose'); }
+      else if (ev.t === 'win') { setMusic(null); sfx('win'); for (let i = 0; i < 8; i++) burst(S.x + (Math.random() - 0.5) * 4, 1 + Math.random() * 2, S.z + Math.random() * 3, 10, [0xffd76a, 0x5cff9b, 0x6ab8ff, 0xff8ad0][i % 4]); }
+      else if (ev.t === 'lose') { setMusic(null); flashVin(0.75); tScale = 0.35; shake = Math.max(shake, 0.35); sfx('lose'); }
     }
     S.events.length = 0;
   }
@@ -991,9 +1660,12 @@ if (!HEADLESS) (function render() {
     foesMesh.instanceMatrix.needsUpdate = true;
     for (const fl of dyn.foeLabels) {
       if (!fl.f.alive) { fl.spr.visible = false; continue; }
-      if (fl.f.count !== fl.last) {
-        fl.last = fl.f.count;
-        const lbl = textCanvas('' + fl.f.count, '#fff', fl.f.boss ? 'rgba(140,20,90,.95)' : 'rgba(190,40,40,.92)', 64);
+      // green label = you're flanking and winning the trade
+      const flanking = S.fight === fl.f && S.lv >= 8 && Math.abs(S.x - fl.f.x) >= 1.3;
+      if (fl.f.count !== fl.last || flanking !== fl.fl) {
+        fl.last = fl.f.count; fl.fl = flanking;
+        const bg = flanking ? 'rgba(30,120,60,.92)' : fl.f.boss ? 'rgba(140,20,90,.95)' : 'rgba(190,40,40,.92)';
+        const lbl = textCanvas('' + fl.f.count, '#fff', bg, 64);
         fl.spr.material.map.dispose();
         fl.spr.material.map = lbl.tex;
         fl.spr.scale.set(1.4 * lbl.aspect, 1.4, 1);
@@ -1007,7 +1679,7 @@ if (!HEADLESS) (function render() {
       const p = pPool[k];
       p.life -= dt;
       if (p.life <= 0) { pPool.splice(k, 1); continue; }
-      p.vy -= (p.grav || 12) * dt;
+      p.vy -= (p.grav === undefined ? 12 : p.grav) * dt;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       if (p.y < 0.05) { p.y = 0.05; p.vy *= -0.3; }
       posV.set(p.x, p.y, p.z);
@@ -1031,6 +1703,11 @@ if (!HEADLESS) (function render() {
     lastT = t;
     let dt = rawDt * tScale; // slow-mo on clashes and defeat
     tScale += (1 - tScale) * Math.min(1, rawDt * 3.2);
+    const wantDuck = tScale < 0.9; // music dips with the slow-mo, swells back after
+    if (wantDuck !== mDucked && MUSIC && AC) {
+      mDucked = wantDuck;
+      try { MUSIC.gain.setTargetAtTime(wantDuck ? 0.18 : 0.5, AC.currentTime, wantDuck ? 0.05 : 0.25); } catch (e) {}
+    }
     fovKick *= Math.max(0, 1 - 3.5 * rawDt);
     camera.fov = 55 + fovKick;
     camera.updateProjectionMatrix();
@@ -1096,6 +1773,24 @@ if (!HEADLESS) (function render() {
         s.mesh.position.x = sawX(s.h);
         s.disc.rotation.x += dt * 9;
       }
+      for (const pd of dyn.pends) {
+        const s = pendS(pd.h);
+        pd.pivot.rotation.z = 0.9 * s;
+        if (pd.prevS * s < 0 && Math.abs(pd.h.z - S.z) < 20) sfx('whoosh'); // bottom of the arc
+        pd.prevS = s;
+      }
+      for (const pk of dyn.picks) {
+        pk.mesh.visible = !pk.p.taken;
+        if (pk.mesh.visible) {
+          pk.mesh.rotation.y = t * 2.5;
+          pk.mesh.position.y = 0.9 + 0.15 * Math.sin(t * 3);
+        }
+      }
+      if (skinId === 4) { // Prisma: every color of the rainbow, one frame at a time
+        const hh = (t * 0.12) % 1;
+        playerMat.color.setHSL(hh, 0.85, 0.62);
+        playerMat.emissive.setHSL(hh, 0.9, 0.16);
+      }
       for (const hm of dyn.hammers) {
         const p = hammerPhase(hm.h);
         const raise = Math.abs(p - 0.5) * 2;
@@ -1103,26 +1798,42 @@ if (!HEADLESS) (function render() {
       }
       for (const gp of dyn.gatePanels) {
         gp.panel.visible = !gp.g.used;
-        gp.sign.visible = !gp.g.used || gp.g.z > S.z;
+        // used mystery gates keep their revealed sign up briefly so the swap is seen
+        gp.sign.visible = !gp.g.used || gp.g.z > S.z || (gp.g.myst && S.z - gp.g.z < 12);
         if (gp.sign.visible && Math.abs(gp.g.z - S.z) < 60) {
           gp.sign.position.y = 1.55 + Math.sin(t * 2.2 + gp.g.z) * 0.08; // gentle bob
         }
       }
 
-      // dust kicked up by all those little running feet
+      // dust kicked up by all those little running feet (theme-flavored:
+      // sparks in the garage, motes at sunset, sprinkles in the candy factory)
       if (S.phase === 'run') {
         dustAcc += dt;
         while (dustAcc > 0.13) {
           dustAcc -= 0.13;
-          burst(S.x + (Math.random() - 0.5) * 2.5, 0.05, S.z - 1.6, 1, 0xb9915e, 0.5);
+          const dcol = themeIdx === 4
+            ? [0x7ee8fa, 0xffe08a, 0xb28dff, 0xff8ad0][(sprinkleN++) & 3]
+            : theme.dust;
+          burst(S.x + (Math.random() - 0.5) * 2.5, 0.05, S.z - 1.6, 1, dcol, themeIdx === 2 ? 0.35 : 0.5);
         }
         // dramatic heads-up when the boss mob comes into view
         const bossF = S.lvl.foes[S.lvl.foes.length - 1];
         if (!bossWarned && bossF.alive && bossF.z - S.z < 42) {
           bossWarned = true;
-          popup('🔨 BOSS MOB AHEAD!', '#ffd76a');
+          popup('🔨 BOSS: ' + BOSS_NAMES[(S.lv - 1) % BOSS_NAMES.length], '#ffd76a');
           shake = Math.max(shake, 0.12);
           sfx('boss');
+        }
+      }
+      // Frostworks: gentle snowfall out of the existing particle pool
+      if (themeIdx === 3 && S.phase !== 'win') {
+        snowAcc += rawDt;
+        while (snowAcc > 0.12) {
+          snowAcc -= 0.12;
+          if (pPool.length < P_MAX) pPool.push({
+            x: S.x + (Math.random() - 0.5) * 14, y: 6.5, z: S.z + 4 + (Math.random() - 0.5) * 20,
+            vx: (Math.random() - 0.5) * 0.4, vy: -1.8, vz: 0, life: 3.8, col: 0xffffff, grav: 0, // 3.8s: reaches the bench from y=6.5
+          });
         }
       }
 
