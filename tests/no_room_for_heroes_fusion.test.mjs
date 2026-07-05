@@ -15,6 +15,8 @@ const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,ma
   useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,doShopping,
   gotoRelicChoice,rollRelicChoices,RELICS,RELIC_ICON,MERCHANT_PRICE,TIER_ORDER,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
+  tryTapEquip,equipGear,GEAR_SLOTS,discardCard,cardScrapGold,SCRAP_CONFIRM_MS,
+  get selGear(){return selGear;},set selGear(v){selGear=v;},get selCard(){return selCard;},set selCard(v){selCard=v;},
   get G(){return G;},set G(v){G=v;},get RB(){return RB;}`);
 const t = harness('rooms (slots/stacking/menu)');
 
@@ -313,5 +315,30 @@ A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
 A.G.relics = ['rFang','rTome'];                       // pretend a previous pick granted these
 A.chooseBoss('dragon');                               // back out → re-pick
 t.ok(!A.G.relics.includes('rFang') && !A.G.relics.includes('rTome'), 're-picking a boss resets run relics (no dupe farming)');
+
+// --- ⚔️ gear tap-to-equip: selected piece + a tap on a monster room routes through equipGear ---
+freshBuild();
+place('ogre', 1, 0);
+A.G.slots = 2; A.G.rooms[1] = null;                   // an empty neighbour to mis-tap
+A.G.chest = [{k:'blade', t:'common', v:0}];
+A.selCard = -1; A.selGear = 0;
+t.ok(A.tryTapEquip(1) === false, 'tapping an EMPTY room does not equip (falls through to room handling)');
+t.ok(A.tryTapEquip(0) === true, 'tapping the monster room equips the selected piece');
+t.ok(A.G.chest.length === 0, 'the piece left the chest');
+const worn = A.G.rooms[0].units[0].gear;
+t.ok(worn && worn.length === 1 && worn[0].k === 'blade', 'the ogre wears the blade');
+t.ok(A.selGear === -1, 'the selection clears after equipping');
+t.ok(A.tryTapEquip(0) === false, 'with nothing selected the tap is a normal room tap again');
+
+// --- ✕ scrap confirm: the first tap ARMS, the second within the window scraps ---
+freshBuild();
+A.G.hand = [{type:'spike', lvl:1}];
+const sg0 = A.G.gold;
+A.discardCard(0);
+t.ok(A.G.hand.length === 1 && A.G.gold === sg0, 'first ✕ tap only arms the scrap (nothing lost)');
+A.discardCard(0);
+t.ok(A.G.hand.length === 0 && A.G.gold === sg0 + A.cardScrapGold('spike'),
+  'the second tap inside the window scraps for gold');
+t.ok(A.SCRAP_CONFIRM_MS >= 1000, 'the confirm window is generous enough to hit on mobile');
 
 t.done();

@@ -8,6 +8,8 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,statusResist,ccDur,applyFreeze,addBurn,BURN_CAP,burnCap,FREEZE_IMMUNE,campLevel,
   heroDmg,ABIL,chooseBoss,heroDies,awardRunes,EDICTS,dailyKey,dailyMod,
+  castAbility,abilTarget,buildHeroFromSpec,trapTick,dealToHero,ROOMS,TRAITS,TRAIT_KEYS,
+  set _aimHero(v){_aimHero=v;},set _aimAt(v){_aimAt=v;},set _simTick(v){_simTick=v;},
   get RUNES(){return RUNES;},set RUNES(v){RUNES=v;},
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('balance: CC resist');
@@ -111,5 +113,98 @@ A.heroDies({state:'walking', hp:0, maxHp:100, armor:0, traits:[], cls:'warrior',
             x:50, y:330, gold:5, bounty:2});
 t.ok(A.G.drops.runes >= r0 + 1, 'a slain champion always drops at least one rune');
 t.ok(A.G.relicDue === rd0 + 1, 'the champion relic queues as a counter increment (stackable)');
+
+/* ================= Batch E: smart targeting + behavioral traits ================= */
+const mkSpec = over => ({cls:'warrior', power:5, traits:[], name:'T', debuff:{atkMul:1,burn:0,robbed:false}, ...over});
+const stage = fr => { const h=A.buildHeroFromSpec(mkSpec()); h.hp=Math.round(h.maxHp*fr); return h; };
+
+// --- 🎯 Devour picks the LOWEST hp% hero, not the front-most ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
+A.G.phase = 'run';
+A.G.boss.abil = [{id:'devour',cd:0},{id:'freeze',cd:0},{id:'curse',cd:0}];
+A.G.boss.maxMana = 999; A.G.boss.mana = 999;
+const front = stage(0.9), wounded = stage(0.2);
+front.x = 300; wounded.x = 100;                       // the wounded one is NOT the lead
+A.G.heroes = [front, wounded];
+A.castAbility(0);
+t.ok(wounded.state === 'dead', 'Devour executes the LOWEST-hp% hero (not the lead)');
+t.ok(front.state !== 'dead', 'the healthy front hero is spared');
+
+// --- ❄️ Freeze picks the hero CLOSEST to the throne (max x) ---
+A.G.boss.mana = 999; A.G.boss.abil[1].cd = 0;
+const near = stage(1), far = stage(1);
+near.x = 500; far.x = 120;
+A.G.heroes = [near, far];
+A.castAbility(1);
+t.ok(near.freeze > 0 && !(far.freeze > 0), 'Freeze locks the hero closest to the throne');
+
+// --- 🟣 Curse picks the highest-ATK hero ---
+A.G.boss.mana = 999; A.G.boss.abil[2].cd = 0;
+const weak = stage(1), strong = stage(1);
+weak.x = 400; strong.x = 100; strong.atk = weak.atk * 3;
+A.G.heroes = [weak, strong];
+A.castAbility(2);
+t.ok(strong.cursed === true && !weak.cursed, 'Curse defangs the highest-ATK hero');
+
+// --- ⚔️ a Smite tap-aim primes the NEXT single-target cast, then is consumed ---
+A.G.boss.mana = 999; A.G.boss.abil[1].cd = 0;
+const a1 = stage(1), a2 = stage(1);
+a1.x = 500; a2.x = 120;
+A.G.heroes = [a1, a2];
+A._aimHero = a2; A._aimAt = performance.now();
+A.castAbility(1);                                     // freeze would pick a1 (max x) — the aim wins
+t.ok(a2.freeze > 0 && !(a1.freeze > 0), 'a recent tap-aim overrides the pick for one cast');
+A.G.boss.mana = 999; A.G.boss.abil[1].cd = 0;
+a1.freeze = 0; a2.freeze = 0;
+A.castAbility(1);
+t.ok(a1.freeze > 0, 'the aim is consumed — the next cast falls back to the pick');
+
+// --- 👁️ Trap-sense: the FIRST trap strike in each room is ignored, per room ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.phase = 'run';
+const ts = A.buildHeroFromSpec(mkSpec({traits:['trapsense']}));
+ts.hp = ts.maxHp = 100000; ts.dodge = 0;
+const mkCell = idx => ({index:idx, x0:idx*260, x1:(idx+1)*260, syn:1,
+  room:{kills:0, units:[], def:A.ROOMS.spike},
+  traps:[{type:'spike', def:A.ROOMS.spike, lvl:1, fireT:0, stackMul:1}]});
+let _tick = 1;
+const fire = (h, cell) => { A._simTick = _tick++; cell.traps[0].fireT = 0; A.trapTick(h, cell, 0.016); };
+const c0 = mkCell(0), c1 = mkCell(1);
+const hpA = ts.hp;
+fire(ts, c0);
+t.ok(ts.hp === hpA, 'trap-sense: the first strike in a room is SENSED (no damage)');
+fire(ts, c0);
+t.ok(ts.hp < hpA, 'the second strike in the same room lands');
+const hpB = ts.hp;
+fire(ts, c1);
+t.ok(ts.hp === hpB, 'a NEW room re-arms the sense (first strike ignored again)');
+t.ok(A.TRAIT_KEYS.includes('trapsense') && A.TRAIT_KEYS.includes('phalanx') && A.TRAIT_KEYS.includes('martyr'),
+  'the three behavioral traits are in the elite roll pool');
+t.ok(['trapsense','phalanx','martyr'].every(k => A.TRAITS[k].beh && A.TRAITS[k].desc.length > 10),
+  'behavioral traits carry a tooltip-facing desc');
+
+// --- 🔰 Phalanx: 25% less damage while ≥2 living heroes share the room ---
+const ph = A.buildHeroFromSpec(mkSpec({traits:['phalanx']}));
+ph.hp = ph.maxHp = 100000; ph.dodge = 0; ph.cellIndex = 2;
+A.G.heroes = [ph];
+const _rand = Math.random; Math.random = () => 0.5;   // deterministic: no crit, no dodge roll flake
+let hp0 = ph.hp; A.dealToHero(ph, 100, 'HIT', 'full', 'phys', true);
+const solo = hp0 - ph.hp;
+const buddy = A.buildHeroFromSpec(mkSpec()); buddy.cellIndex = 2;
+A.G.heroes = [ph, buddy];
+hp0 = ph.hp; A.dealToHero(ph, 100, 'HIT', 'full', 'phys', true);
+const braced = hp0 - ph.hp;
+Math.random = _rand;
+t.ok(solo === 100 && braced === 75, `phalanx cuts damage 25% with a roommate (${solo} solo → ${braced} braced)`);
+
+// --- ✟ Martyr: its death heals every living ally 15% max HP ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
+const mart = A.buildHeroFromSpec(mkSpec({traits:['martyr']}));
+const ally = A.buildHeroFromSpec(mkSpec());
+const allyHp0 = Math.round(ally.maxHp * 0.5);
+ally.hp = allyHp0;
+A.G.heroes = [mart, ally];
+mart.hp = 0; A.heroDies(mart);
+t.ok(Math.abs(ally.hp - (allyHp0 + ally.maxHp * 0.15)) < 1.01, `martyr death heals the living ally 15% max HP (${allyHp0} → ${Math.round(ally.hp)})`);
+t.ok(mart.state === 'dead', '(sanity) the martyr itself still dies');
 
 t.done();

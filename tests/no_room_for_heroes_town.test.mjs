@@ -6,6 +6,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 const A = loadGame(`freshGame,openTownBuilder,renderTownBuilder,drawTownMap,townPlotAt,
   showTownPop,hideTownPop,buildTown,townLvl,buildingCost,canAfford,townClampCam,
   corruptHero,corruptCost,minionCardFromSpec,CHAMPIONS,
+  forgeCard,forgePrice,FORGE_GOLD,cardRarity,handCap,gotoTown,chooseBoss,BOSSES,get overlay(){return overlay;},
   get townZoom(){return townZoom;},set townZoom(v){townZoom=v;},
   get townCamX(){return townCamX;},set townCamX(v){townCamX=v;},
   get _tVisW(){return _tVisW;},
@@ -81,5 +82,32 @@ try {
 } catch (e) { cThrew = e.message; }
 finally { Math.random = _rand; }
 t.ok(cThrew === '', 'corruptHero runs clean' + (cThrew ? ' — ' + cThrew : ''));
+
+// ---- ⚒️ Town Forge: copy ONE hand card per visit, gold, rarity-priced ----
+A.G = A.freshGame('campaign');
+A.G.forgeUsed = false;
+A.G.hand = [{type:'spike', lvl:1}];
+A.G.gold = 1000;
+const fPrice = A.forgePrice('spike');
+t.ok(fPrice === A.FORGE_GOLD[A.cardRarity('spike')], 'forge price follows the rarity table');
+t.ok(A.FORGE_GOLD.common === 40 && A.FORGE_GOLD.special === 70 && A.FORGE_GOLD.rare === 120 && A.FORGE_GOLD.epic === 200,
+  'rarity prices: 40/70/120/200');
+A.forgeCard(0);
+t.ok(A.G.hand.length === 2 && A.G.hand[1].type === 'spike', 'the forge duplicates the card into the hand');
+t.ok(A.G.gold === 1000 - fPrice, 'the copy costs its rarity price');
+t.ok(A.G.forgeUsed === true, 'the forge is spent for the visit');
+A.forgeCard(0);
+t.ok(A.G.hand.length === 2 && A.G.gold === 1000 - fPrice, 'a second copy the same visit is refused');
+// a full hand refuses the copy (and does not burn the visit)
+A.G.forgeUsed = false;
+while (A.G.hand.length < A.handCap()) A.G.hand.push({type:'spike', lvl:1});
+A.forgeCard(0);
+t.ok(A.G.hand.length === A.handCap() && A.G.forgeUsed === false, 'a FULL hand refuses the forge without spending it');
+// gotoTown re-arms the forge and renders the stall
+A.G = A.freshGame('campaign'); A.chooseBoss(Object.keys(A.BOSSES)[0]);
+A.G.forgeUsed = true; A.G.hand = [{type:'spike', lvl:1}];
+A.gotoTown();
+t.ok(A.G.forgeUsed === false, 'a new town visit re-arms the forge');
+t.ok((A.overlay.innerHTML || '').includes('forgeCard(0)'), 'the town screen offers the hand card at the Forge stall');
 
 t.done();
