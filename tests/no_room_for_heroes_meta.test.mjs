@@ -26,6 +26,14 @@ t.ok((A.G.stats.abilDmg||0) > abil0, 'context-free damage attributed to boss buc
 const html = A.battleReportHTML();
 t.ok(html.includes('Goblin Den') && html.includes('Battle report'), 'report lists the room');
 
+// reaction damage is credited too (it bypasses dealToHero via reactHit) — an
+// IGNITE fired inside a room context must land on the room + the hero telemetry
+const oiled = { state:'walking', hp:5000, maxHp:5000, armor:0, x:100, y:330, traits:[], dodge:0, oil:10 };
+const fireRoom = { type:'flame', lvl:1, kills:0 };
+A._roomDmgCtx = fireRoom; A.dealToHero(oiled, 40, 'HIT', 'full', 'fire', true); A._roomDmgCtx = null;
+t.ok((fireRoom.dmg||0) > 40, `the IGNITE burst is credited to the firing room (${fireRoom.dmg} > the 40 base hit)`);
+t.ok((oiled.dmgTaken||0) === (fireRoom.dmg||0), 'hero telemetry matches the room credit exactly');
+
 // ascension: difficulty scales +18% per crown, campaign only
 A.G.levelIdx = 19;                       // some mid-campaign level
 A.RUNES.asc = 0; const d0 = A.difficulty();

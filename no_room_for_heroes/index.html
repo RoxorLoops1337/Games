@@ -690,13 +690,13 @@ const ROOMS = {
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Marching goblins that level up from their own kills.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:28, atk:10,  desc:'A cheap, sturdy guard — stack copies to hold the line.'},
   // SPECIAL: a proper wall
-  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:58, atk:19, desc:'Late-game wall of pain.'},
+  ogre:     {kind:'monster',name:'Ogre Lair',  ic:'👹', col:'#b0563a', hp:92, atk:26, desc:'Late-game wall of pain.'},
   // RARE monsters: stronger bodies + a real trick
   warden:   {kind:'monster',name:'Warden',     ic:'🛡️', col:'#c9a14d', hp:66, atk:9, taunt:true, desc:'Tanky jailer — strikes the WHOLE party stalled in its room. Load that room with traps.'},
   warcamp:  {kind:'monster',name:'War Camp',   ic:'🏕️', col:'#c98a3a', hp:58, atk:9, warcamp:true, desc:'A drill-yard: conditions THIS room and BOTH neighbours — guards regen HP & swing faster (sticks even after it falls).'},
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:38, atk:8, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks a ton of hits, but swings soft.'},
   orc:      {kind:'monster',name:'Orc Marauder',ic:'🪓', col:'#5a8f3a', hp:48, atk:16, desc:'A tusked green warrior — hits hard from the front line. No gimmicks, just a wall of muscle to anchor a room of traps.'},
-  dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:44, atk:7, breath:{burn:3, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
+  dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:44, atk:7, breath:{burn:2, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
   // EPIC support
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:36, atk:2, totem:true, desc:'Support: while it stands, +35% trap & guard output to its OWN room. Hide it behind a tank.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
@@ -1100,12 +1100,15 @@ const ABIL = {
              dealToHero(o, abilDmg(17+G.boss.lvl*3), 'BURN', false, 'fire'); if(o.state!=='dead'){ addBurn(o,5,4); } }
              floater(bossX(),FLOOR-92,'🔥 HELLFIRE','#ff7a2e'); shake(8); }},
   siphon: {name:'Mana Siphon',ic:'🔮',cost:14, cd:4, desc:'Bleeds the hero and converts the hit into boss mana.', sig:true,
-           run:h=>{ const dmg=abilDmg(14+G.boss.lvl*2); dealToHero(h, dmg, 'SIPHON', false, 'shock');
-             const gain=Math.round(dmg*0.7); G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+gain);
-             floater(bossX(),FLOOR-90,'🔮 +'+gain+' mana','#4dc3ff'); }},
-  devour: {name:'Devour',  ic:'😋', cost:30, cd:8,  desc:'Swallows a hero under 30% HP whole (instant kill + big heal); else bites deep.', sig:true,
-           run:h=>{ if(h.hp<=h.maxHp*0.30){ floater(h.x,h.y-70,'😋 DEVOURED','#ff5470'); burst(h.x,h.y-24,'#b0563a',24); shake(10);
-               h.hp=0; heroDies(h); healBoss(Math.round(G.boss.maxHp*0.12)); }
+           run:h=>{ const before=h.hp; dealToHero(h, abilDmg(14+G.boss.lvl*2), 'SIPHON', false, 'shock');
+             const dealt=Math.max(0, before-h.hp);   // refund only what actually LANDED (a dodge pays nothing)
+             const gain=Math.min(Math.round(ABIL.siphon.cost*0.5), Math.round(dealt*0.4));
+             if(gain>0){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+gain);
+               floater(bossX(),FLOOR-90,'🔮 +'+gain+' mana','#4dc3ff'); } }},
+  devour: {name:'Devour',  ic:'😋', cost:30, cd:8,  desc:'Swallows a hero under 30% HP whole (instant kill + big heal); champions & the King only suffer a deep bite.', sig:true,
+           run:h=>{ if(h.hp<=h.maxHp*0.30 && !h.champion && !h.king){ floater(h.x,h.y-70,'😋 DEVOURED','#ff5470'); burst(h.x,h.y-24,'#b0563a',24); shake(10);
+               h.hp=0; heroDies(h); healBoss(Math.round(G.boss.maxHp*0.12)); }   // the execute (and its feast) never swallows a champion/King
+             else if(h.champion||h.king){ dealToHero(h, abilDmg(28+(G.boss.lvl||1)*4)+Math.round(h.maxHp*0.08), 'BITE', 'full', 'phys', true); healBoss(Math.round(G.boss.maxHp*0.04)); }
              else { dealToHero(h, abilDmg(28+G.boss.lvl*4), 'BITE', true, 'phys'); healBoss(Math.round(G.boss.maxHp*0.04)); } }},
   raise:  {name:'Raise Dead',ic:'💀',cost:26, cd:7,  desc:'Hexes the hero; a kill heals the boss and terrifies the party.', sig:true,
            run:h=>{ const before=h.state; dealToHero(h, abilDmg(16+G.boss.lvl*3), 'HEX', false, 'shock');
@@ -1979,7 +1982,7 @@ function freshGame(mode){
     killer:null,          // snapshot of the hero who felled the throne
     mandates:[],          // rule-changing dungeon upgrades drafted mid-run
     mandateDue:false,     // a mandate draft is queued (endless milestone)
-    relicDue:false,       // a relic draft is queued (endless 10-kill milestone)
+    relicDue:0,           // relic drafts queued — a COUNTER (champion kill + milestone can stack)
     kingDue:false,        // the King's final raid is queued for the next wave
     kingFight:false,      // the King is currently raiding the dungeon (finale)
     combo:0,              // kill streak (resets when a hero strikes the boss)
@@ -4043,6 +4046,7 @@ function placeCard(ci, idx){
   if(cdef.kind==='trap'){
     const existing=room.units.find(u=>u.kind==='trap' && u.type===T);
     if(existing){
+      if(cdef.amp){ showHint('Runestones don\'t stack — place it in another room.'); return false; }   // lvl++ on an amp trap changes nothing
       if(existing.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
       existing.lvl++;
       bumpStat('traps');                                 // feat: traps built (a level-up counts)
@@ -4057,8 +4061,22 @@ function placeCard(ci, idx){
     room.units.push(makeUnit(T, card.lvl, card));
     bumpStat('traps');                                 // feat: traps built
   } else {
-    // monster: always a fresh independent copy — five Bone Pits = five guards
-    if(roomFreeSlots(room)<=0){ showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false; }
+    // monster: a fresh independent copy while a slot is free — five Bone Pits =
+    // five guards. FULL room + the same type already inside → train it a level.
+    if(roomFreeSlots(room)<=0){
+      const same=room.units.find(u=>u.kind==='monster' && u.type===T);
+      if(same){
+        if(same.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
+        same.lvl++;
+        bumpStat('guards');                              // feat: monster guards stationed (a level-up counts)
+        G.hand.splice(ci,1);
+        burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
+        floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'LVL '+same.lvl, '#ffd34d');
+        showHint(ROOMS[T].name+' trained to Lv '+same.lvl+(same.lvl>=maxLevel()?' (max)':'')+'!'); tutEvent('placed', idx);
+        selCard=-1; sfx('upgrade'); render(); return true;
+      }
+      showHint('No free slot — ⬆ upgrade the room (up to '+MAX_SLOTS+').'); return false;
+    }
     const u=makeUnit(T, card.lvl, card);
     room.units.push(u);
     if(cdef.kind==='monster') bumpStat('guards');      // feat: monster guards stationed
@@ -4114,7 +4132,7 @@ function startWave(){
   buildCells();
   G._waveStartBreaches=(G.stats&&G.stats.breaches)||0;   // baseline for the "flawless wave" feat
   spawnGroup(G.guildLvl+1);
-  spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 20) marches out this wave
+  spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 12) marches out this wave
   G.phase='run'; speedMul=1; frameWaveRun();      // hug the right edge, heroes just in frame
   // refill some mana each wave + rune-granted HP regen
   G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+30);
@@ -4135,7 +4153,7 @@ function buildCells(){
     const r=G.rooms[i];
     const cell={index:i, x0:cellX(i), x1:cellX(i)+ROOM_W, room:r, kind:'empty', traps:[], mon:null, shop:false};
     if(r){
-      cell.syn=1;                                // synergies removed — units act independently
+      cell.syn=1;                                // base amp — a curated trap PAIR below raises it (🔗 synergy)
       const vm=vetMul(r); cell.vet=vetRank(r);   // veteran rank (room kills) powers this cell
       // 👺 Goblin Den = a SPAWNER — its goblins march out each wave instead of
       // standing guard. This works even when the den is MIXED with other monsters:
@@ -4345,7 +4363,8 @@ function champSpec(){
 // so the staging preview, the town roster, and any town meddling all act on the
 // SAME specs that will actually raid. (Endless keeps its rolling queue.)
 function prepCampaignWave(){
-  if(G.mode!=='campaign') return;
+  if(G.mode!=='campaign' || G.kingDue || G.kingFight) return;   // the finale spawns the King himself — never roll a phantom wave over him
+
   if(G.waveLevel===campLevel()) return;   // already rolled for this level (an emptied
                                           // queue from corruption stays empty — don't re-roll)
   for(const r of G.pendingRivals) r.eta--;                  // rivals tick one wave closer (once per wave)
@@ -4392,7 +4411,10 @@ function spawnGroup(n){
     const champ = !!(G.queue[0] && G.queue[0].champion);
     const count = champ ? 1 : n + (hasEdict('warband')?1:0);   // Warband edict: +1 raider per party
     ensureQueue(count);
-    for(let k=0;k<count;k++) specs.push(G.queue.shift());
+    for(let k=0;k<count;k++){
+      if(k>0 && G.queue[0] && G.queue[0].champion) break;   // champions arrive ALONE — one mid-queue leads the NEXT wave instead
+      specs.push(G.queue.shift());
+    }
   }
   if(!specs.length) specs.push(nextSpec());    // never start with no heroes (e.g. corrupted the whole wave)
   G.heroes=[];
@@ -4427,13 +4449,13 @@ function leadHero(){
 /* ============================ GOBLIN DEN SPAWNERS ========================
    A pure Goblin Den is a spawner, not a stationary guard. room.goblins is
    an ARRAY of persistent units (each {kills}). Every wave the den adds
-   `goblinSpawnRate(lvl)` new units (cap 20). Goblins march LEFT through the
+   `goblinSpawnRate(lvl)` new units (cap 12). Goblins march LEFT through the
    dungeon (your own traps don't hurt them), attack any hero they meet,
    level up from kills (HP/ATK scale with level), and survivors are banked
    back into the den when the wave ends. Survivors heal to full between
    waves; the slain are gone.
 */
-const GOBLIN_DEN_CAP = 20;
+const GOBLIN_DEN_CAP = 12;
 const GOBLIN_HP_FRAC = 0.55, GOBLIN_ATK_FRAC = 0.34;   // hp raised: full-atk retaliation 1-shot them
 const GOBLIN_SPD = 50;                       // px/sec
 const GOBLIN_REACH = 16;                     // close to this then trade blows
@@ -4491,8 +4513,10 @@ function endWaveGoblins(){
   const byHome={};
   for(const g of G.minions){ if(g.hp>0) (byHome[g.home]=byHome[g.home]||[]).push({kills:g.kills||0}); }
   if(G.cells) for(const cell of G.cells){
-    if(cell.spawner!=='goblin' || !cell.room) continue;
-    cell.room.goblins = byHome[cell.index] || [];
+    if(cell.spawner!=='goblin') continue;
+    const r=cell.room || (G.rooms||[])[cell.index];   // cell.room can be nulled mid-wave (King smash) while the room object survives
+    if(!r) continue;
+    r.goblins = byHome[cell.index] || [];
   }
   G.minions = [];
 }
@@ -4614,7 +4638,7 @@ function isFrontHero(h){
 function heroDmg(h, raw, pierce){
   let armor = pierce==='full' ? 0 : pierce ? Math.max(0,h.armor-3) : h.armor;
   if(h.acid>0) armor=Math.max(0, armor - h.acid);     // Acid corrodes armor so later hits bite
-  return Math.max(1, Math.round(raw - armor));
+  return Math.max(1, Math.round(Math.max(raw - armor, raw*0.35)));   // armor floor: mitigation caps at 65% (flat armor used to reduce lvl5 traps to min-1 chip)
 }
 // While a ROOM (trap or guard) is dealing damage this is set to it, so the
 // battle report can attribute every point — including nested reaction chains —
@@ -4682,7 +4706,10 @@ function popReact(h,label,col,x){
 // freeze / oil / chill / shock. Plus a no-refreeze window after thawing and a
 // burn cap so re-Ignite can't snowball.
 const FREEZE_IMMUNE=3;     // s a hero can't be RE-frozen right after thawing
-const BURN_CAP=22;         // ceiling on stacked burn-per-tick
+const BURN_CAP=22;         // BASE ceiling on stacked burn-per-tick (burnCap() scales it)
+// The burn ceiling grows with the siege (campaign: level; endless: kills) so the
+// mid-game workhorse doesn't cliff exactly where the difficulty ramp steepens.
+function burnCap(){ return BURN_CAP + Math.floor((G&&G.mode==='campaign'?campLevel():Math.min(60,((G&&G.totalSlain)||0)/5))*0.6); }
 function statusResist(h){
   if(!h) return 0;
   const lvl=(G && G.mode==='campaign') ? campLevel() : Math.min(50, 1+(G?G.survived:0)/3);
@@ -4697,7 +4724,15 @@ function applyFreeze(h,dur){                                   // freeze: respec
   const d=ccDur(h,dur); if(d<=0.05) return false;
   h.freeze=Math.max(h.freeze||0, d); return true;
 }
-function addBurn(h,amt,dur){ h.burn=Math.min(BURN_CAP,(h.burn||0)+amt); if(dur) h.burnT=Math.max(h.burnT||0,dur); }
+function addBurn(h,amt,dur){ h.burn=Math.min(burnCap(),(h.burn||0)+amt); if(dur) h.burnT=Math.max(h.burnT||0,dur); }
+// Reactions bypass dealToHero, so credit their damage the same way it does: the
+// firing room's _roomDmgCtx (battle report) + the hero's telemetry. Reactions run
+// INSIDE the trap/guard's room context, so reaction-heavy rooms report true output.
+function reactHit(h,x){
+  h.hp-=x;
+  h.dmgTaken=(h.dmgTaken||0)+x;
+  if(G.stats){ if(_roomDmgCtx) _roomDmgCtx.dmg=(_roomDmgCtx.dmg||0)+x; else G.stats.abilDmg=(G.stats.abilDmg||0)+x; }
+}
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
   const rm=reactMul(h);          // snapshot once — a single hit can't self-amplify across its own reactions
@@ -4708,38 +4743,38 @@ function elementReact(h, elem, baseDmg){
 
   // 🔥 IGNITE — fire on an OILED hero: the oil flashes off in a heavy burst + burn
   if(elem==='fire' && h.oil>0){
-    h.oil=0; const x=Math.round((baseDmg*1.3+18)*rm); h.hp-=x;
+    h.oil=0; const x=Math.round((baseDmg*1.3+18)*rm); reactHit(h,x);
     addBurn(h, 7, 5); popReact(h,'🔥 IGNITE','#ff7a2e',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ☠️ COMBUST — fire on a POISONED hero detonates the venom for a stack-scaled burst
   if(elem==='fire' && h.poison>0){
-    const x=Math.round((Math.min(h.poison,POISON_CAP)*3 + baseDmg*0.5 + 8)*rm); h.hp-=x; h.poison=0; h.poisonT=0;
+    const x=Math.round((Math.min(h.poison,POISON_CAP)*3 + baseDmg*0.5 + 8)*rm); reactHit(h,x); h.poison=0; h.poisonT=0;
     popReact(h,'☠️ COMBUST','#9be86b',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ⚡ OVERLOAD — lightning on a CHILLED hero stuns them solid
   if(elem==='shock' && h.chill>0 && !(h.freeze>0)){
-    const x=Math.round((baseDmg*0.6+8)*rm); h.hp-=x; h.chill=0; applyFreeze(h, 1.1);
+    const x=Math.round((baseDmg*0.6+8)*rm); reactHit(h,x); h.chill=0; applyFreeze(h, 1.1);
     popReact(h,'⚡ OVERLOAD','#fff34d',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 🧊 ENCASE — ice on an OILED hero: wet + cold freezes them SOLID (a sitting duck)
   else if(elem==='ice' && h.oil>0 && !(h.freeze>0)){
-    const x=Math.round((baseDmg*0.7+8)*rm); h.hp-=x;
+    const x=Math.round((baseDmg*0.7+8)*rm); reactHit(h,x);
     applyFreeze(h, 1.4); h.chill=Math.max(h.chill||0, ccDur(h,PRIME_ICE)); popReact(h,'🧊 ENCASE','#bfefff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // ❄ SHATTER — a phys/shock impact on a CHILLED/frozen hero cracks the ice
   if((elem==='phys'||elem==='shock') && (h.chill>0||h.freeze>0)){
-    h.chill=0; const x=Math.round((baseDmg*0.9+12)*rm); h.hp-=x;
+    h.chill=0; const x=Math.round((baseDmg*0.9+12)*rm); reactHit(h,x);
     popReact(h,'❄ SHATTER','#9adfff',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
   }
   // 💥 THERMAL SHOCK — opposite temperatures: fire on a CHILLED hero, or ice on a
   // BURNING hero. The sudden swing cracks them for a burst.
   if((elem==='fire' && h.chill>0) || (elem==='ice' && h.burn>0)){
-    const x=Math.round((baseDmg*1.0+12)*rm); h.hp-=x;
+    const x=Math.round((baseDmg*1.0+12)*rm); reactHit(h,x);
     if(elem==='fire') h.chill=0; else { h.burn=0; h.burnT=0; }
     popReact(h,'💥 THERMAL SHOCK','#ff5470',x);
     if(h.hp<=0){h.hp=0;heroDies(h);return;}
@@ -4749,7 +4784,7 @@ function elementReact(h, elem, baseDmg){
   if(elem==='shock' && h.oil>0){
     let arced=0;
     for(const o of G.heroes){ if(o===h||o.state==='dead') continue;
-      const cd=Math.round(baseDmg*0.6*rm); o.hp-=cd; floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
+      const cd=Math.round(baseDmg*0.6*rm); reactHit(o,cd); floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
     if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
       floater(h.x,h.y-66,'⚡ CONDUCT ×'+arced,'#fff34d'); sfx('crit'); }
@@ -4930,8 +4965,9 @@ function heroDies(h){
   if(h.reachedThrone && !h.champion){ flash('#9be86b',0.16,0.2); }
   const nm = h.heroName ? h.heroName+(h.title?' '+h.title:'') : CLASSES[h.cls].name;
   if(h.champion){
-    // a felled champion is a big payday + a guaranteed relic
-    G.dread+=6; G.relicDue=true;
+    // a felled champion is a big payday + a guaranteed relic + a guaranteed rune drop
+    G.dread+=6; G.relicDue=(G.relicDue||0)+1;
+    G.drops.runes++; bumpStat('drops'); floater(h.x+26, h.y-66, '+1 ᚱ', '#b985ff');
     floater(h.x, h.y-92, '👑 CHAMPION SLAIN! 🏺', h.champCol||'#ffd34d', true); burst(h.x,h.y-30,h.champCol||'#ffd34d',46);
     flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('relic');
     showHint('🏆 '+nm+' is slain! Big loot + a relic awaits.');
@@ -4968,7 +5004,7 @@ function afterWave(){
     if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
     // Endless: town every 5 kills, relic every 10, mandate every 25
     G.townDue   = G.townDue    || Math.floor(G.waveStartSlain/5)  !== Math.floor(G.totalSlain/5);
-    G.relicDue  = G.relicDue   || Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);   // || : a champion's guaranteed relic must survive this recompute
+    G.relicDue  = (G.relicDue||0) + (Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10) ? 1 : 0);   // counter: a champion's guaranteed relic STACKS with the milestone one
     G.mandateDue= G.mandateDue || Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
     gotoReward();
   }, 1300);
@@ -4981,7 +5017,7 @@ function campaignAdvance(){
   G.gold += 25 + L*4;                          // per-level gold
   if(L%5===0){
     if((L/5)%2===0){ G.mandateDue=true; G.townDue=true; }   // 10,20,30,40 → 📜 mandate + 🏚 town
-    else { G.relicDue=true; }                               // 5,15,25,35,45 → 🏺 relic
+    else { G.relicDue=(G.relicDue||0)+1; }                  // 5,15,25,35,45 → 🏺 relic (stacks with a champion's)
     showHint('★ Level '+L+' cleared — milestone reward!');
   }
   G.levelIdx++;                                // next level
@@ -5018,9 +5054,8 @@ function faceTheKing(){
   // One last prep phase, then the King raids as the next (and final) wave.
   overlay.classList.remove('show');
   G.kingDue=true; G.boss.hp=Math.min(G.boss.maxHp, G.boss.hp+Math.round(G.boss.maxHp*0.5));  // a defiant second wind
-  G.phase='build';
+  gotoBuild(false);   // the FULL build reset (brokenCells, disarms, selections) — no stale siege state leaks into the finale
   showHint('👑 Fortify! The King attacks when you start the wave.');
-  render();
 }
 // The King: a lone, colossal raider who shrugs off corruption and smashes rooms.
 function kingSpec(){
@@ -5274,7 +5309,7 @@ function buildPostmortem(){
 // + 1 per campaign chapter cleared, then edict/library multipliers.
 function awardRunes(){
   const drops = (G.drops && G.drops.runes) || 0;
-  const total = Math.floor((drops + (G.mode==='campaign'? G.levelIdx : 0)) * edictRewardMul() * libraryMul());
+  const total = Math.floor(drops * edictRewardMul() * libraryMul()) + (G.mode==='campaign'? G.levelIdx : 0);   // multipliers sweeten DROPS only — level progress pays flat
   const delta = Math.max(0, total - (G.runesBanked||0));
   G.runesBanked = total;
   RUNES.points += delta;
@@ -5388,8 +5423,9 @@ const SKIP_DRAFT_GOLD=15;   // passing on a full hand pays scrap gold — not a 
 function skipDraft(){ G.gold+=SKIP_DRAFT_GOLD; sfx('ching'); showHint('Passed — +'+SKIP_DRAFT_GOLD+'g'); overlay.classList.remove('show'); afterReward(); }
 // After the card draft, drop into the town if a 5-kill interlude is due.
 function afterReward(){
-  if(G.relicDue){ G.relicDue=false;
-    gotoRelicChoice('Relic Unearthed', 'A power stirs in the deep — claim one.', afterRelicMaybeMandate); return; }
+  if(G.relicDue){                                      // counter — loop back here until every queued draft is served
+    G.relicDue=Math.max(0,(G.relicDue===true?1:G.relicDue)-1);   // (old saves may still carry a boolean)
+    gotoRelicChoice('Relic Unearthed', 'A power stirs in the deep — claim one.', afterReward); return; }
   afterRelicMaybeMandate();
 }
 function afterRelicMaybeMandate(){
@@ -5544,8 +5580,8 @@ function buyGuild(){
 const BARRACKS_BUILD=160;           // gold to raise the camp
 const BARRACKS_MAX=8;               // max Monster Rank
 // Each rank costs WAY more than the last — a steep exponential gold sink
-// (~240, 456, 866, 1646, 3127, 5942, 11290, 21451).
-function barracksDrillCost(){ return Math.round(240 * Math.pow(1.9, (G.barracks&&G.barracks.lvl)||0)); }
+// (~240, 372, 577, 894, 1385, 2147, 3328, 5159).
+function barracksDrillCost(){ return Math.round(240 * Math.pow(1.55, (G.barracks&&G.barracks.lvl)||0)); }
 function buildBarracks(){
   if(!G.barracks) G.barracks={built:false,lvl:0};
   if(G.barracks.built) return;
@@ -5565,17 +5601,22 @@ function drillBarracks(){
 }
 
 // ---- Black Market: an adjustable gold <-> dread exchange (dread is precious) ----
-const BM_SELL=100;   // 1 dread  → 100 gold
-const BM_BUY=200;    // 1 dread ← 200 gold (buying fear costs dearly)
+// Prices scale with the run's difficulty (softened, like hero loot) — a flat
+// 200g per dread was pocket change by L30.
+const BM_SELL=100;   // base: 1 dread  → 100 gold
+const BM_BUY=200;    // base: 1 dread ← 200 gold (buying fear costs dearly)
+function bmSellPrice(){ return Math.round(BM_SELL*softGoldD(difficulty())); }
+function bmBuyPrice(){ return Math.round(BM_BUY*softGoldD(difficulty())); }
 function bmAdjust(d){ G.bmAmt=Math.max(1, Math.min(999, (G.bmAmt||1)+d)); renderTown(); }
 function bmSell(){   // dread → gold
   const n=G.bmAmt||1;
   if(G.dread<n){ showHint('Not enough dread.'); return; }
-  G.dread-=n; G.gold+=n*BM_SELL; sfx('buy');
-  showHint('💱 Sold '+n+' ☠ for '+(n*BM_SELL)+'g.'); renderTown(); renderTop();
+  const pay=n*bmSellPrice();
+  G.dread-=n; G.gold+=pay; sfx('buy');
+  showHint('💱 Sold '+n+' ☠ for '+pay+'g.'); renderTown(); renderTop();
 }
 function bmBuy(){     // gold → dread
-  const n=G.bmAmt||1; const cost=n*BM_BUY;
+  const n=G.bmAmt||1; const cost=n*bmBuyPrice();
   if(G.gold<cost){ showHint('Not enough gold.'); return; }
   G.gold-=cost; G.dread+=n; sfx('buy');
   showHint('💱 Bought '+n+' ☠ for '+cost+'g.'); renderTown(); renderTop();
@@ -5699,7 +5740,7 @@ function renderTown(){
   const amt=G.bmAmt||1;
   const bmHtml=`<div style="max-width:560px;margin:6px auto;padding:9px 14px;border:2px solid #b985ff;border-radius:12px;background:#1c1430">
       <h2 style="margin:0 0 2px;color:#c89bff">💱 Black Market</h2>
-      <div class="small" style="opacity:.8;margin-bottom:6px">Convert between coin and fear — sell 1 ☠ → <b>${BM_SELL}</b>💰, buy 1 ☠ ← <b>${BM_BUY}</b>💰.</div>
+      <div class="small" style="opacity:.8;margin-bottom:6px">Convert between coin and fear — sell 1 ☠ → <b>${bmSellPrice()}</b>💰, buy 1 ☠ ← <b>${bmBuyPrice()}</b>💰 (prices ride the siege).</div>
       <div class="row" style="justify-content:center;gap:5px;align-items:center;margin-bottom:7px">
         <button onclick="bmAdjust(-10)" ${amt<=1?'disabled':''} style="padding:5px 9px;min-height:0">⏪</button>
         <button onclick="bmAdjust(-1)" ${amt<=1?'disabled':''} style="padding:5px 10px;min-height:0">◄</button>
@@ -5708,8 +5749,8 @@ function renderTown(){
         <button onclick="bmAdjust(10)" style="padding:5px 9px;min-height:0">⏩</button>
       </div>
       <div class="row" style="justify-content:center;gap:10px">
-        <button ${G.dread<amt?'disabled':''} onclick="bmSell()" style="border-color:#5fd17a;padding:8px 12px">☠ ${amt} → 💰 +${amt*BM_SELL}</button>
-        <button ${G.gold<amt*BM_BUY?'disabled':''} onclick="bmBuy()" style="border-color:#ffd34d;padding:8px 12px">💰 −${amt*BM_BUY} → ☠ ${amt}</button>
+        <button ${G.dread<amt?'disabled':''} onclick="bmSell()" style="border-color:#5fd17a;padding:8px 12px">☠ ${amt} → 💰 +${amt*bmSellPrice()}</button>
+        <button ${G.gold<amt*bmBuyPrice()?'disabled':''} onclick="bmBuy()" style="border-color:#ffd34d;padding:8px 12px">💰 −${amt*bmBuyPrice()} → ☠ ${amt}</button>
       </div>
     </div>`;
   const threat = `<div class="row" style="justify-content:center;gap:8px;align-items:center">
@@ -6140,14 +6181,14 @@ function trapTick(h,cell,dt){
       if(d.vsLowHp && h.hp < h.maxHp*d.vsLowHp) dmg*=d.vsMult;
       if(cell.synType==='execution' && h.hp < h.maxHp*0.4) dmg*=1.6;   // 🔗 Gallows synergy: finish the wounded
       // veteran rooms hit harder AND bite a slice of max HP (stays relevant late)
-      const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp; }
+      const vr=cell.vet||0; if(vr){ dmg=dmg*(1+vr*VET_DMG) + vr*VET_BITE*h.maxHp*Math.min(1,d.rate); }   // bite prorated by rate — fast traps must not triple-dip per second
       if(doc==='inferno') dmg*=1.2;                            // Inferno doctrine: +20% trap damage
       if(amp<0) amp=ampAt(cell.index);
       dmg*=amp;                                                // Runestone / War Totem amplification
       const pierce = (doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll) ? 'full' : (!!d.pierce || cell.synType==='physical');  // Bastion/Piercing Halls & 🔗 Brutal synergy: ignore armor
       _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
       if(d.burn){ addBurn(h, d.burn+(tl-1)*2, 3); }
-      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(BURN_CAP, Math.max(h.burn||0, 2+(tl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
+      else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(burnCap(), Math.max(h.burn||0, 2+(tl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
       applyTrapStatus(h, d, r);                                  // poison / acid / mark
       if(cell.synType) synergyOnHit(h, cell, tl, dmg);           // 🔗 synergy rider
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
@@ -6191,10 +6232,10 @@ function aoeTrapTick(dt){
       base*=ampAt(cell.index);                                  // Runestone / War Totem amplification
       const pierce=(doc==='bastion'||hasMandate('pierceHalls')||d.pierceAll)?'full':(!!d.pierce||cell.synType==='physical');
       for(const o of targets){
-        let dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp:0));
+        let dmg=Math.round(base + (vr?vr*VET_BITE*o.maxHp*Math.min(1,d.rate):0));   // bite prorated by rate (see trapTick)
         if(cell.synType==='execution' && o.hp < o.maxHp*0.4) dmg=Math.round(dmg*1.6);   // 🔗 Gallows finisher
         _roomDmgCtx=r; dealToHero(o, dmg, 'BOOM', pierce, d.elem); _roomDmgCtx=null;
-        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(BURN_CAP, Math.max(o.burn||0, 2+(tl-1))); o.burnT=Math.max(o.burnT||0,3); }
+        if(o.state!=='dead' && (doc==='inferno'||hasMandate('wildfire'))){ o.burn=Math.min(burnCap(), Math.max(o.burn||0, 2+(tl-1))); o.burnT=Math.max(o.burnT||0,3); }
         applyTrapStatus(o, d, r);
         if(cell.synType) synergyOnHit(o, cell, tl, dmg);          // 🔗 synergy rider
         if(G.stats) G.stats.trapDmg+=dmg;
@@ -6289,7 +6330,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         maybePotion(t);
       }
       // 🐲 Drakeling fire breath: a ranged cone that ignites EVERY hero in the room,
-      // stacking burn (up to BURN_CAP) for breath.dur seconds — on top of the claw above.
+      // stacking burn (up to burnCap()) for breath.dur seconds — on top of the claw above.
       if(g.breath){
         const dx0=cell.x0+ROOM_W*0.82, dy0=FLOOR-DRAKE_HOVER;   // 🐲 hover spot — must match the draw
         let lit=0;
@@ -8458,7 +8499,7 @@ function describeRoom(room, detail){
       const hp=Math.round(bHp*(0.9+(lv-1)*0.85)*feed*bas*vm*(1+(RB.monHp||0))*bm*ge.hpMul);
       const atk=Math.round(bAtk*(1.0+(lv-1)*0.9)*feed*bas*vm*(1+(RB.monDmg||0))*bm*ge.atkMul)+(ge.atkFlat||0);
       const carries=(u.gear&&u.gear.length)?' · '+u.gear.map(g=>GEAR[g.k].ic).join(''):'';
-      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)}: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${def.breath?` · 🔥 burns the whole room (+${def.breath.burn}/hit, ${def.breath.dur}s)`:''}${carries}`);
+      lines.push(`${def.ic} ${(u.type==='minion'?(u.label||'Corrupted'):def.name)} <span style="color:#ffd34d">Lv ${lv}/${maxLevel()}</span>: <b>${hp}</b> HP · <b>${atk}</b> atk /0.9s${def.taunt?' · 🛡️ hits whole party':''}${def.breath?` · 🔥 burns the whole room (+${def.breath.burn}/hit, ${def.breath.dur}s)`:''}${carries}`);
       if(u.gear&&u.gear.length) u.gear.forEach(g=>lines.push(`<span class="small" style="opacity:.9">&nbsp;&nbsp;🎒 ${gearTag(g)} — ${gearEffectText(g)}</span>`)); });
     if(guardUnits.length>1) lines.push(`<span class="small" style="opacity:.8">⚔️ ${guardUnits.length} guards — each steps up when the one before falls</span>`);
     if(fed) lines.push(`🍖 Fed: <b>${room.kills||0}</b> corpses · +${Math.round((feedMul(room.kills)-1)*100)}% (no cap)`); }
