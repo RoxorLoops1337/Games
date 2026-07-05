@@ -123,4 +123,107 @@ t.ok(txt.includes('Spike Pit') && txt.includes('340'), 'share text credits the t
 let shareThrew = ''; try { A.shareRun(); } catch (e) { shareThrew = e.message; }
 t.ok(shareThrew === '', 'shareRun is harness-safe without navigator.share/clipboard');
 
+/* ═══════════ 💾 MID-RUN SAVE & RESUME + 🧬 ENDLESS MUTATIONS (Batch F) ═══════════ */
+const S = loadGame(`freshGame,chooseBoss,saveRun,loadRunSave,clearRunSave,resumeRun,runKey,runResumeLine,
+  gotoMenu,gotoBuild,makeRoom,makeUnit,bossDies,closeDungeon,lbAutoSubmit,buildHeroFromSpec,
+  gotoMutChoice,pickMut,afterReward,pickMandate,ENDLESS_MUTS,MUT_SCORE_STEP,hasMut,slotCap,ROOMS,RELICS,
+  get overlay(){return overlay;},get G(){return G;},set G(v){G=v;}`);
+
+// capture network posts (board submit); everything else resolves ok
+let sentBody = null;
+global.fetch = (url, opts) => { if (opts && opts.body) { try { sentBody = JSON.parse(opts.body); } catch (_) {} }
+  return Promise.resolve({ ok: true, json: async () => ({}) }); };
+
+// ── round trip: build a lived-in mid-run G, save, wipe, resume ──────────────
+S.G = S.freshGame('campaign'); S.chooseBoss('dragon');
+const relicId = Object.keys(S.RELICS)[0];
+S.G.levelIdx = 22; S.G.totalSlain = 87; S.G.gold = 444; S.G.dread = 33; S.G.bounty = 2; S.G.guildLvl = 2;
+const sRoom = S.makeRoom('spike', 1);
+sRoom.units.push(S.makeUnit('flame', 3));
+const ogre = S.makeUnit('ogre', 2); ogre.gear = [{ k: 'blade', t: 'rare', v: 0 }]; sRoom.units.push(ogre);
+sRoom.kills = 7; sRoom.cap = 3; sRoom._preview = { junk: true };   // transient — must never serialize
+S.G.rooms = [sRoom, null]; S.G.slots = 2;
+S.G.hand = [{ type: 'tesla', lvl: 1 }];
+S.G.chest = [{ k: 'aegis', t: 'epic', v: 1 }];
+S.G.relics = [relicId]; S.G.mandates = ['goldVeins'];
+S.G.muts = ['vigor']; S.G.scoreMul = 1.3; S.G.slotBonus = 1;
+S.G.boss.maxHp = 400; S.G.boss.hp = 250; S.G.boss.mana = 42; S.G.boss.potions = 2;
+S.saveRun();
+const raw = global.localStorage.getItem(S.runKey());
+t.ok(!!raw, 'saveRun writes bm_run_<slot>');
+t.ok(raw.indexOf('_preview') === -1 && raw.indexOf('"def"') === -1, 'transient _fields and room.def never serialize');
+S.G = S.freshGame('campaign');                     // wipe the live run
+S.resumeRun();
+t.ok(S.G.phase === 'build', 'resume lands back in the build phase');
+t.ok(S.G.mode === 'campaign' && S.G.levelIdx === 22 && S.G.gold === 444 && S.G.dread === 33, 'level/gold/dread survive');
+const rr = S.G.rooms[0];
+t.ok(rr && rr.type === 'spike' && rr.kills === 7 && rr.cap === 3, 'room + veteran kills + slot cap survive');
+t.ok(rr && rr.def === S.ROOMS.spike, 'room.def is re-linked to the live ROOMS table');
+t.ok(rr && rr.units.length === 3 && rr.units[2].gear[0].k === 'blade', 'stacked units + equipped gear survive');
+t.ok(S.G.rooms[1] === null && S.G.slots === 2, 'empty slots survive');
+t.ok(S.G.hand.length === 1 && S.G.hand[0].type === 'tesla', 'hand survives');
+t.ok(S.G.chest.length === 1 && S.G.chest[0].t === 'epic', 'war chest survives');
+t.ok(S.G.relics.length === 1 && S.G.relics[0] === relicId && S.G.mandates[0] === 'goldVeins', 'relics + mandates survive');
+t.ok(S.G.boss.hp === 250 && S.G.boss.maxHp === 400 && S.G.boss.mana === 42 && S.G.boss.potions === 2,
+  'boss mutable numbers survive (relic boons stay baked in)');
+t.ok(S.G.muts[0] === 'vigor' && S.G.scoreMul === 1.3 && S.G.slotBonus === 1, 'mutations + score multiplier + growth beats survive');
+// the profile menu offers the resume (the gotoBuild autosave re-wrote the key)
+S.gotoMenu();
+const menuHtml = S.overlay.innerHTML || '';
+t.ok(menuHtml.includes('resumeRun()') && menuHtml.includes('Level 23'), 'the menu offers ▶ Resume with the level');
+t.ok(menuHtml.includes('discardRunSave()'), '…with a 🗑 discard next to it');
+
+// ── corrupt / legacy data is silently discarded, never fatal ────────────────
+global.localStorage.setItem(S.runKey(), '{corrupt!!!');
+t.ok(S.loadRunSave() === null && S.runResumeLine() === '', 'corrupt JSON → no offer, no throw');
+let resumeThrew = ''; try { S.resumeRun(); } catch (e) { resumeThrew = e.message || 'threw'; }
+t.ok(resumeThrew === '', 'resumeRun on corrupt data is a safe no-op');
+global.localStorage.setItem(S.runKey(), JSON.stringify({ v: 99, mode: 'campaign' }));
+t.ok(S.loadRunSave() === null, 'a future save version is ignored');
+global.localStorage.setItem(S.runKey(), JSON.stringify({ v: 1, mode: 'campaign', boss: { key: 'nosuchboss', maxHp: 100 }, rooms: [], hand: [] }));
+t.ok(S.loadRunSave() === null, 'an unknown boss key fails the shape check');
+
+// ── run-over paths clear the key; a new run clears it; the tutorial never touches it ──
+S.G = S.freshGame('endless'); S.chooseBoss('dragon'); S.G.totalSlain = 30; S.saveRun();
+t.ok(!!global.localStorage.getItem(S.runKey()), '(seed) endless run saved');
+S.G.phase = 'run'; S.bossDies();
+t.ok(global.localStorage.getItem(S.runKey()) === null, 'bossDies clears the mid-run save');
+S.G = S.freshGame('endless'); S.chooseBoss('dragon'); S.saveRun();
+S.closeDungeon();
+t.ok(global.localStorage.getItem(S.runKey()) === null, 'closeDungeon clears the mid-run save');
+S.G = S.freshGame('campaign'); S.chooseBoss('dragon'); S.G.levelIdx = 9; S.saveRun();
+S.G = S.freshGame('campaign'); S.chooseBoss('dragon');
+t.ok(global.localStorage.getItem(S.runKey()) === null, 'starting a NEW run clears the stale save');
+S.G = S.freshGame('campaign'); S.chooseBoss('dragon'); S.G.levelIdx = 9; S.saveRun();
+S.G = S.freshGame('campaign'); S.G.tutorial = true; S.chooseBoss('dragon');
+t.ok(!!global.localStorage.getItem(S.runKey()), 'a tutorial chooseBoss does NOT clear a real saved run');
+S.gotoBuild(false);
+t.ok(JSON.parse(global.localStorage.getItem(S.runKey())).levelIdx === 9, 'a tutorial gotoBuild never overwrites the real save');
+S.clearRunSave();
+
+// ── 🧬 mutation ladder: pick raises scoreMul + the hook bites ────────────────
+S.G = S.freshGame('endless'); S.chooseBoss('dragon');
+const mookSpec = { cls: 'warrior', power: 5, traits: [], debuff: { atkMul: 1, burn: 0, robbed: false } };
+const hp0 = S.buildHeroFromSpec(mookSpec).maxHp;
+S.gotoMutChoice(null);
+t.ok(S.G.phase === 'mutate' && (S.overlay.innerHTML || '').includes('Realm Mutates'), 'the mutation draft opens');
+S.G._mutChoices = ['vigor', 'haste', 'choir'];     // pin the choice
+S.pickMut(0);
+t.ok(S.G.muts.includes('vigor') && S.G.scoreMul === 1 + S.MUT_SCORE_STEP, 'a pick logs the mutation and raises the multiplier');
+t.ok(S.G.phase === 'build', 'the draft falls through to build');
+const hp1 = S.buildHeroFromSpec(mookSpec).maxHp;
+t.ok(Math.abs(hp1 / hp0 - 1.08) < 0.02, `Thick Blood: heroes spawn with +8% HP (${hp0} → ${hp1})`);
+// the 25-kill milestone chains mandate → mutation → build
+S.G.mandateDue = true; S.G.mutDue = true; S.G.relicDue = 0; S.G.townDue = false;
+S.afterReward();
+t.ok(S.G.phase === 'mandate', 'the milestone fronts the mandate…');
+S.pickMandate(0);
+t.ok(S.G.phase === 'mutate', '…then chains into the mutation draft');
+S.G._mutChoices = ['haste']; S.pickMut(0);
+t.ok(S.G.phase === 'build' && Math.abs(S.G.scoreMul - (1 + 2 * S.MUT_SCORE_STEP)) < 1e-9, 'both picks land; the multiplier stacks');
+// the board submit applies the multiplier: round(kills × scoreMul)
+sentBody = null; S.G.totalSlain = 100; S.G.scoreMul = 1.45;
+S.lbAutoSubmit();
+t.ok(sentBody && sentBody.score === 145, 'endless board submit = round(kills × scoreMul)');
+
 t.done();
