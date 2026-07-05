@@ -428,6 +428,7 @@ function doLose() {
 function revive() {
   if (!S || S.phase !== 'lose' || S.revived) return false;
   S.revived = true;
+  S.upg = upgLevels(); // upgrades bought on the lose overlay apply to the revived run
   S.count = Math.max(10, Math.ceil(S.peak * 0.5));
   if (S.fight) { S.fight.alive = false; S.fight = null; } // whoever got you is cleared
   S.z += 4; S.zPrev = S.z; S.tx = 0; S.x = 0;             // and you respawn past the scene
@@ -674,7 +675,8 @@ function overSync() {
   if (!S) return;
   if (S.phase === 'win') {
     // cliffhanger: the next boss is deterministic, so tease it honestly
-    const nx = genLevel(S.lv + 1, C.START + 2 * S.upg.crowd);
+    // (live upgrade level, not the run-start snapshot — newRun will use the same)
+    const nx = genLevel(S.lv + 1, startCount());
     const nb = nx.foes[nx.foes.length - 1].count;
     const taunt = nb >= 100
       ? nb + ' mallets say your nails fold like tin.'
@@ -746,7 +748,13 @@ function shopSync() {
     '<div><b>' + fmtV(lsInt('sm_s_peak')) + '</b><span>Biggest crowd</span></div></div>';
   $('shopRows').innerHTML = h;
   for (const b of document.querySelectorAll('#shopRows .sbuy')) {
-    b.onclick = () => { if (buyUpg(b.dataset.u)) { sfx('good'); } else { sfx('bad'); } shopSync(); hudSync(); };
+    b.onclick = () => {
+      if (buyUpg(b.dataset.u)) {
+        sfx('good');
+        if (S && S.phase === 'win') overSync(); // NAIL PACK reshapes the next level: refresh the tease
+      } else sfx('bad');
+      shopSync(); hudSync();
+    };
   }
   for (const b of document.querySelectorAll('#shopRows .schip')) {
     b.onclick = () => { if (buySkin(+b.dataset.s)) { sfx('good'); } else { sfx('bad'); } shopSync(); hudSync(); };
@@ -921,7 +929,8 @@ function setMusic(loop) {
       mCur = null; mPend = null;
       return;
     }
-    if (loop === mCur || loop === mPend) return;
+    if (loop === mCur) { mPend = null; return; } // cancel a stale queued switch
+    if (loop === mPend) return;
     AC = AC || new (window.AudioContext || window.webkitAudioContext)();
     if (AC.resume) AC.resume();
     if (!MUSIC) { MUSIC = AC.createGain(); MUSIC.gain.value = 0.5; MUSIC.connect(AC.destination); }
@@ -1057,6 +1066,10 @@ if (!HEADLESS) (function render() {
   const playerMat = new THREE.MeshPhongMaterial({ color: 0x9fc2ff, shininess: 90, specular: 0xdfe9ff });
   const foeMat = new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true, shininess: 50, specular: 0xffc0a0 });
   const nailG = nailGeo();
+  // pickups get their own geometry/material: level teardown disposes lvlGroup
+  // geometries, and nailG also backs the live crowd/sink/plant meshes
+  const pickG = nailG.clone();
+  const pickMat = new THREE.MeshPhongMaterial({ color: 0xffc94d, shininess: 100, specular: 0xfff2c0 });
   const crowd = new THREE.InstancedMesh(nailG, playerMat, C.VIS);
   crowd.castShadow = true;
   crowd.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -1261,7 +1274,7 @@ if (!HEADLESS) (function render() {
   function buildLevel() {
     if (lvlGroup) {
       scene.remove(lvlGroup);
-      lvlGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      lvlGroup.traverse(o => { if (o.geometry && o.geometry !== pickG) o.geometry.dispose(); });
     }
     dyn.saws = []; dyn.hammers = []; dyn.foeLabels = []; dyn.gatePanels = [];
     dyn.pends = []; dyn.picks = [];
@@ -1410,7 +1423,7 @@ if (!HEADLESS) (function render() {
 
     // golden nail pickups: spinning oversized nails worth instant coins
     for (const p of L.picks) {
-      const gm = new THREE.Mesh(nailG, new THREE.MeshPhongMaterial({ color: 0xffc94d, shininess: 100, specular: 0xfff2c0 }));
+      const gm = new THREE.Mesh(pickG, pickMat);
       gm.scale.set(1.6, 1.6, 1.6);
       gm.position.set(p.x, 0.9, p.z);
       lvlGroup.add(gm);
@@ -1785,7 +1798,8 @@ if (!HEADLESS) (function render() {
       }
       for (const gp of dyn.gatePanels) {
         gp.panel.visible = !gp.g.used;
-        gp.sign.visible = !gp.g.used || gp.g.z > S.z;
+        // used mystery gates keep their revealed sign up briefly so the swap is seen
+        gp.sign.visible = !gp.g.used || gp.g.z > S.z || (gp.g.myst && S.z - gp.g.z < 12);
         if (gp.sign.visible && Math.abs(gp.g.z - S.z) < 60) {
           gp.sign.position.y = 1.55 + Math.sin(t * 2.2 + gp.g.z) * 0.08; // gentle bob
         }
@@ -1818,7 +1832,7 @@ if (!HEADLESS) (function render() {
           snowAcc -= 0.12;
           if (pPool.length < P_MAX) pPool.push({
             x: S.x + (Math.random() - 0.5) * 14, y: 6.5, z: S.z + 4 + (Math.random() - 0.5) * 20,
-            vx: (Math.random() - 0.5) * 0.4, vy: -1.8, vz: 0, life: 2.4, col: 0xffffff, grav: 0,
+            vx: (Math.random() - 0.5) * 0.4, vy: -1.8, vz: 0, life: 3.8, col: 0xffffff, grav: 0, // 3.8s: reaches the bench from y=6.5
           });
         }
       }
