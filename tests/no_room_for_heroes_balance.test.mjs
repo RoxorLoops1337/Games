@@ -7,7 +7,7 @@
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 
 const A = loadGame(`freshGame,statusResist,ccDur,applyFreeze,addBurn,BURN_CAP,burnCap,FREEZE_IMMUNE,campLevel,
-  heroDmg,ABIL,chooseBoss,heroDies,awardRunes,EDICTS,
+  heroDmg,ABIL,chooseBoss,heroDies,awardRunes,EDICTS,dailyKey,dailyMod,
   get RUNES(){return RUNES;},set RUNES(v){RUNES=v;},
   get G(){return G;},set G(v){G=v;}`);
 const t = harness('balance: CC resist');
@@ -97,8 +97,12 @@ t.ok(A.G.boss.mana === 0, 'a dodged siphon refunds NOTHING (no free mana)');
 A.G = A.freshGame('campaign');
 A.G.levelIdx = 10; A.G.drops.runes = 8; A.G.edicts = ['ironHorde'];   // reward ×1.3
 A.RUNES = {points:0, ranks:{}, kills:0, bossXp:{}, best:0, asc:0, stats:{}, unlocked:{}, gf:1};
+// the daily bounty is date-keyed: pre-claim today's flat bonus and fold a possible
+// Rune Tide day (×1.5 on drops) into the expectation so the assert never flakes
+global.localStorage.setItem('bm_daily_1', A.dailyKey());
+const dMul = A.dailyMod().id === 'runes' ? 1.5 : 1;
 const dRunes = A.awardRunes();
-t.ok(dRunes === Math.floor(8*1.3) + 10, `edict multiplier applies to drops only (${dRunes} = floor(8×1.3)+10, not floor(18×1.3))`);
+t.ok(dRunes === Math.floor(8*1.3*dMul) + 10, `edict multiplier applies to drops only (${dRunes} = floor(8×1.3×${dMul})+10, not floor(18×1.3×${dMul}))`);
 
 // --- 👑 a champion kill guarantees a rune drop + queues its relic as a COUNTER ---
 A.G = A.freshGame('campaign'); A.chooseBoss('dragon');

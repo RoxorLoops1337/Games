@@ -1384,7 +1384,8 @@ function pendingResources(){             // the haul you've gathered so far this
   // Per-kill loot rolls (see heroDies): 20% wood / 20% stone / 20% rune / 10% shards / 30% nothing.
   // Champions roll twice. Quarry still scales the wood/stone/shards haul.
   const d=G.drops||{}, m=quarryMul();
-  return { wood:Math.floor((d.wood||0)*m), stone:Math.floor((d.stone||0)*m), shards:Math.floor((d.shards||0)*m) };
+  const shm=m*(dailyActive('rich_veins')?1.5:1);   // 📅 Rich Veins bounty: +50% shards
+  return { wood:Math.floor((d.wood||0)*m), stone:Math.floor((d.stone||0)*m), shards:Math.floor((d.shards||0)*shm) };
 }
 // Bank the run's haul into the persistent town. frac<1 = death penalty; withGold
 // converts leftover treasury gold into a bonus (only on a clean extraction/win).
@@ -2377,10 +2378,12 @@ function closeDungeon(){
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
+    ${nextGoalHTML()}
     <div class="menu-btns">
       <button class="go" onclick="openTownBuilder()">🏗️ Town Builder</button>
       <button onclick="openRunes()">🔮 Rune Page</button>
       ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
+      <button onclick="shareRun()">📋 Share</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
   aftermathSequence(earned, summary, G.mode==='endless');   // endless → auto-open the leaderboard after the payout
@@ -2545,6 +2548,7 @@ function openOptions(){
       <div class="pauserow"><label>${audioOn?'\uD83D\uDD0A':'\uD83D\uDD07'} Audio</label>
         <button onclick="toggleAudio();openOptions()">${audioOn?'On \u2014 tap to mute':'Muted \u2014 tap to enable'}</button></div>
     </div>
+    ${(typeof SUPPORT_URL!=='undefined' && SUPPORT_URL)?`<p class="small" style="opacity:.7;margin:2px 0">\u2615 Enjoying the game? <a href="${SUPPORT_URL}" target="_blank" rel="noopener" style="color:#ffd34d">Support the dungeon</a></p>`:''}
     <div class="menu-btns"><button onclick="gotoMenu()">\u2190 Back</button></div>`;
 }
 // Four grouped buttons, each leading to a small submenu (no link clutter).
@@ -2562,6 +2566,7 @@ function gotoMenu(){
     <h1>NO&nbsp;ROOM&nbsp;FOR&nbsp;HEROES</h1>
     <h2>Build the dungeon. Bury the heroes.</h2>
     <p style="opacity:.85;margin:2px 0 12px;font-size:15px">💾 Slot ${saveSlot}${s?` · 🔮 ${s.pts}◆ rune pts · ☠ ${s.kills} lifetime kills${s.asc?` · <span style="color:#c79bff">👑 A${s.asc}</span>`:''}`:' · fresh profile'}</p>
+    ${dailyMenuLine()}
     <div style="display:flex;gap:22px;align-items:stretch;justify-content:center;flex-wrap:wrap;width:min(820px,100%);margin-top:6px">
       <div class="menu-btns" style="flex:1 1 320px;min-width:300px;flex-direction:column;align-items:stretch;gap:16px;margin-top:0">
       <button class="go${tutDoneGet()?'':' tut-pulse'}" style="min-width:250px;flex:1" onclick="openPlay()">⚔️ Start Game${sub('campaign · endless · tutorial')}</button>
@@ -2569,6 +2574,7 @@ function gotoMenu(){
       </div>
       <div class="menu-btns" style="flex:1 1 320px;min-width:300px;flex-direction:column;align-items:stretch;gap:16px;margin-top:0">
       <button style="min-width:250px" onclick="openLibrary()">📖 Library${sub('combo codex · how to play')}</button>
+      <button style="min-width:250px" onclick="openLeaderboard()">🏆 Leaderboard${sub('endless top raiders')}</button>
       <button style="min-width:250px" onclick="openTitle()">💾 Save Slots${sub('switch profile')}</button>
       <button style="min-width:250px" onclick="openOptions()">\u2699\uFE0F Options${sub('music & sfx mixer')}</button>
       </div>
@@ -2795,6 +2801,84 @@ async function cloudRestore(){
     loadRunes(); applyRunes(); loadTown();
     openCloud('✔ Restored into Slot '+saveSlot+'.');
   }catch(_){ showHint('☁️ Restore failed — check the code.'); }
+}
+// ☁️ Auto-backup: once a slot HAS a sync code, silently re-upload after every
+// run payout (awardRunes) so Safari's 7-day storage eviction can't wipe a lapsed
+// player's profile. Fire-and-forget, ≤1 upload per 60s, fully silent on failure.
+let _cloudPushT=0;
+function cloudAutoBackup(){
+  try{
+    const code=cloudCode(); if(!code) return;
+    const now=Date.now(); if(now-_cloudPushT<60000) return;
+    _cloudPushT=now;
+    fetch('/api/save',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({code, data:{v:1, runes:RUNES, town:TOWN}})}).catch(()=>{});
+  }catch(_){ }
+}
+
+/* ======================= DAILY BOUNTY & STREAK ==========================
+   📅 One date-keyed modifier per UTC day (every player shares it), applied in
+   BOTH modes at the existing spawn/award points via tiny dailyActive() guards,
+   plus a flat first-run-of-the-day rune bonus and a 🔥 consecutive-day streak
+   that sweetens rune DROPS (never the flat level pay — same rule as edicts).
+   State (NEW keys, per slot): bm_daily_<slot> = last claimed day,
+   bm_streak_<slot> = {day, count}. Helpers take an optional day key so tests
+   can inject dates without mocking Date. */
+function dailyKey(d){ return (d||new Date()).toISOString().slice(0,10); }   // UTC YYYY-MM-DD
+function prevDayKey(k){ return new Date(Date.parse(k)-86400000).toISOString().slice(0,10); }
+const DAILY_RUNE_BONUS=10;             // first run-end of the day pays this flat
+const DAILY_MODS=[
+  {id:'swift',      ic:'🥾', name:'Swift Boots',   desc:'heroes are 15% faster'},
+  {id:'gold',       ic:'💰', name:'Fat Purses',    desc:'+25% gold from kills'},
+  {id:'runes',      ic:'🔮', name:'Rune Tide',     desc:'+50% rune drops'},
+  {id:'brittle',    ic:'🦴', name:'Brittle Bones', desc:'heroes have 10% less HP'},
+  {id:'horde',      ic:'⚔️', name:'The Horde',     desc:'+1 raider per wave'},
+  {id:'rich_veins', ic:'💠', name:'Rich Veins',    desc:'+50% shards gathered'},
+];
+function dailyMod(key){                // deterministic: the day string hashes into the table
+  const k=key||dailyKey(); let h=0;
+  for(let i=0;i<k.length;i++) h=(h*31 + k.charCodeAt(i))>>>0;
+  return DAILY_MODS[h%DAILY_MODS.length];
+}
+// The one guard every apply-site uses. The scripted tutorial is exempt — its
+// beats are hand-tuned and must not drift with the calendar.
+function dailyActive(id){ return !(G&&G.tutorial) && dailyMod().id===id; }
+function dailyRuneMul(){ return dailyActive('runes')?1.5:1; }
+function dailyClaimedKey(){ try{ return localStorage.getItem('bm_daily_'+saveSlot); }catch(_){ return null; } }
+// First run-end of the day: pay the flat bonus once, then mark the day claimed.
+function dailyClaim(todayKey){
+  const k=todayKey||dailyKey();
+  if(dailyClaimedKey()===k) return 0;
+  try{ localStorage.setItem('bm_daily_'+saveSlot, k); }catch(_){ }
+  return DAILY_RUNE_BONUS;
+}
+// 🔥 Streak — {day, count} advances on the first run-end of each day: yesterday
+// kept it alive → count++, a gap resets to 1. Returns the current count.
+function streakGet(){ try{ const s=JSON.parse(localStorage.getItem('bm_streak_'+saveSlot)||'null'); return (s&&s.day&&(s.count>=1))?s:null; }catch(_){ return null; } }
+function streakBump(todayKey){
+  const k=todayKey||dailyKey(); const s=streakGet();
+  if(s && s.day===k) return s.count;                       // already counted today
+  const count=(s && s.day===prevDayKey(k)) ? s.count+1 : 1;
+  try{ localStorage.setItem('bm_streak_'+saveSlot, JSON.stringify({day:k, count})); }catch(_){ }
+  return count;
+}
+// A streak that wasn't fed today or yesterday is dead — shows (and pays) 0.
+function streakCount(){
+  const s=streakGet(); if(!s) return 0;
+  const k=dailyKey();
+  return (s.day===k || s.day===prevDayKey(k)) ? s.count : 0;
+}
+// +10% rune drops per streak day from the 2nd day on, capped at +50%. Day 1 is
+// just a normal run — the bonus starts once the streak is real.
+function streakMul(){ const n=streakCount(); return n>=2 ? 1+Math.min(0.5, n*0.10) : 1; }
+// One-liner for the main menu: today's bounty + unclaimed-bonus hint + streak.
+function dailyMenuLine(){
+  try{
+    const m=dailyMod(), n=streakCount();
+    const bonus=dailyClaimedKey()!==dailyKey() ? ` · first run today <b style="color:#ffd34d">+${DAILY_RUNE_BONUS} 🔮</b>` : '';
+    const streak=n>=2 ? `<br>🔥 Streak: <b>${n} days</b> (+${Math.min(50,n*10)}% runes)` : '';
+    return `<p class="small" style="margin:0 0 10px;color:#cdbaff">📅 Today's Bounty: <b>${m.ic} ${m.name}</b> — ${m.desc}${bonus}${streak}</p>`;
+  }catch(_){ return ''; }
 }
 function showHelp(){
   overlay.innerHTML = `
@@ -3360,7 +3444,7 @@ function startTutorial(){
   tutShow(); render();
 }
 // Generic modal painter (used by the scripted steps AND the finale).
-let tutBtnFn=null;
+let tutBtnFn=null, tutBtnFn2=null;   // primary + optional secondary button (finale offers two paths)
 /* ---- Tutorial layout overrides (designed in tutorial.html → tutorial.json) ----
    A downloaded tutorial.json may set, globally and per step (keyed by step index),
    the tip box's width/padding/font/alignment/position, the wording, and the arrow
@@ -3401,10 +3485,11 @@ function applyTutCam(i){
     if(typeof draw==='function') draw();
   }catch(_){}
 }
-function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; f(); } }
+function tutBtn(){ const f=tutBtnFn; if(f){ tutBtnFn=null; tutBtnFn2=null; f(); } }
+function tutBtn2(){ const f=tutBtnFn2; if(f){ tutBtnFn=null; tutBtnFn2=null; f(); } }
 function tutModalPaint(o){
   const m=document.getElementById('tutmodal'); if(!m) return;
-  tutBtnFn=o.onNext||null;
+  tutBtnFn=o.onNext||null; tutBtnFn2=o.onNext2||null;
   m.removeAttribute('style');               // clear the previous step's inline overrides
   m.className='show low';   // every tip sits low (just under the floor) so the board stays visible
   // Forced flow, but once the first beats have landed (step 5+) a muted "Skip"
@@ -3413,7 +3498,7 @@ function tutModalPaint(o){
     ? `<button class="tm-skip" onclick="tutSkip()">Skip tutorial ✕</button>` : '';
   m.innerHTML=skip+(o.title?`<h3>${o.title}</h3>`:'')
     +`<div class="tm-body">${o.body||''}</div>`
-    +(o.onNext?`<div class="tm-btns"><button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
+    +(o.onNext?`<div class="tm-btns">${o.onNext2?`<button onclick="tutBtn2()">${o.btn2||'…'}</button>`:''}<button class="go" onclick="tutBtn()">${o.btn||'Next →'}</button></div>`:'');
   applyTutModalStyle(m, o.idx);             // apply any designed overrides
 }
 function tutModalHide(){ const m=document.getElementById('tutmodal'); if(m){ m.className=''; m.innerHTML=''; } }
@@ -3609,8 +3694,13 @@ function tutFinale2(){
   const gift = G._tutGifted
     ? `A parting gift for surviving your first siege: <b>${TUT_RUNE_GIFT} 🔮 rune points</b> and <b>🪵 ${g.wood} · 🪨 ${g.stone}</b>. `
     : ``;
-  tutModalPaint({ title:"🔮 Stronger every return", btn:"To the Stronghold →", onNext:()=>{ tutEnd(); try{ openStronghold(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
-    body:`${gift}Spend rune points &amp; resources in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you.` });
+  // Two exits: the primary drops the graduate straight into a real siege (the
+  // fast path — startCampaign honors the fresh-profile edicts skip); the quiet
+  // secondary tours the Stronghold first.
+  tutModalPaint({ title:"🔮 Stronger every return",
+    btn:"⚔️ Start your first siege", onNext:()=>{ tutEnd(); try{ startCampaign(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
+    btn2:"To the Stronghold →", onNext2:()=>{ tutEnd(); try{ openStronghold(); }catch(_){ try{ gotoMenu(); }catch(__){ } } },
+    body:`${gift}Spend rune points &amp; resources in the <b>Stronghold</b> — beef up your boss's health, abilities and rooms — then come back and crush the heroes who beat you. Or march straight back in.` });
 }
 function tutSkip(){ tutEnd(); try{ gotoMenu(); }catch(_){ } }
 function tutFinish(){ tutEnd(); }
@@ -4379,6 +4469,9 @@ function buildHeroFromSpec(spec){
   if(hasEdict('ironHorde'))    hp*=1.35;
   if(hasEdict('bloodPact'))    atk*=1.25;
   if(hasEdict('swiftRaiders')) spd*=1.30;
+  // ---- 📅 today's bounty (date-keyed daily modifier — see DAILY_MODS) ----
+  if(dailyActive('swift'))     spd*=1.15;
+  if(dailyActive('brittle'))   hp*=0.90;
   // ---- town sabotage ----
   atk*=spec.debuff.atkMul;
   // ---- champion mini-boss ----
@@ -4435,7 +4528,7 @@ function prepCampaignWave(){
   const comp=levelComp(campLevel());
   const specs=[];
   for(let i=0;i<comp.champs;i++)  specs.push(champSpec());
-  let normals=comp.normals + (hasEdict('warband')?1:0);
+  let normals=comp.normals + (hasEdict('warband')?1:0) + (dailyActive('horde')?1:0);   // 📅 The Horde bounty: +1 raider
   for(let i=0;i<normals;i++)      specs.push(nextSpec());
   if(!specs.length) specs.push(nextSpec());                 // safety: never an empty wave
   G.queue=specs;
@@ -4473,7 +4566,7 @@ function spawnGroup(n){
     for(const r of G.pendingRivals) r.eta--;   // endless: rivals tick per wave here
     ensureQueue(1);
     const champ = !!(G.queue[0] && G.queue[0].champion);
-    const count = champ ? 1 : n + (hasEdict('warband')?1:0);   // Warband edict: +1 raider per party
+    const count = champ ? 1 : n + (hasEdict('warband')?1:0) + (dailyActive('horde')?1:0);   // Warband edict / 📅 Horde bounty: +1 raider per party
     ensureQueue(count);
     for(let k=0;k<count;k++){
       if(k>0 && G.queue[0] && G.queue[0].champion) break;   // champions arrive ALONE — one mid-queue leads the NEXT wave instead
@@ -4964,7 +5057,7 @@ function heroDies(h){
   }
   // loot: carried gold + bounty (threat dial + rune bonuses)
   // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
-  const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.3:1)) + (RB.goldKill||0);
+  const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.3:1) * (dailyActive('gold')?1.25:1)) + (RB.goldKill||0);
   G.gold+=loot;
   // dread: 1 base + per trait + bonus for elites/rivals/throne-reachers + runes
   const dread=1 + h.traits.length + (h.elite?1:0) + (h.rival?2:0) + (h.reachedThrone?1:0)
@@ -5200,10 +5293,12 @@ function bossDies(){
     <p style="color:#ffd34d">🔮 +${earned} rune points earned (${RUNES.points}◆ total)</p>
     ${townGainLine('kept')}
     ${G.newUnlocks&&G.newUnlocks.length?`<p style="color:#6ad97e">🔓 Unlocked: ${G.newUnlocks.map(u=>(u.ic||'')+' '+(u.name||u)).join(', ')}!</p>`:''}
+    ${nextGoalHTML()}
     <div class="menu-btns">
       <button class="go" onclick="openRunes()">🔮 Rune Page</button>
       <button onclick="openTownBuilder()">🏗️ Town Builder</button>
       ${G.mode==='endless'?'<button onclick="openLeaderboard()">🏆 Leaderboard</button>':''}
+      <button onclick="shareRun()">📋 Share</button>
       <button onclick="gotoMenu()">Main menu</button>
     </div>`;
   aftermathSequence(earned, summary, G.mode==='endless');   // endless → auto-open the leaderboard after the payout
@@ -5369,13 +5464,67 @@ function buildPostmortem(){
     ${top.length?'<div class="small" style="color:#caa15e;font-weight:bold;margin-bottom:2px">What would’ve held the throne:</div>'+top.map(t=>`<div class="small" style="line-height:1.3;margin:3px 0">• ${t}</div>`).join(''):''}
   </div>`;
 }
+// 🎯 Next-goal teaser (death/close screens): the single nearest-to-complete
+// locked feat, so there is always a visible "one more run" carrot. Pure UI
+// reuse of the Unlocks progress data; empty once everything is earned.
+function nextGoalHTML(){
+  try{
+    let best=null;
+    const scan=(conds,isBoss)=>{ for(const k in conds){
+      if(isBoss ? bossUnlocked(k) : cardUnlocked(k)) continue;
+      const c=conds[k], v=Math.min(statVal(c.stat), c.n), r=v/c.n;
+      if(r<1 && (!best || r>best.r)) best={c,v,r};
+    } };
+    scan(UNLOCK_BOSS_COND,true); scan(UNLOCK_CARD_COND,false);
+    if(!best) return '';
+    const pct=Math.max(4,Math.round(best.r*100));
+    return `<div style="max-width:440px;margin:6px auto;text-align:left">
+      <div class="small" style="color:#cdbaff">🎯 Next unlock: <b>${best.c.label}</b> — ${best.v.toLocaleString()}/${best.c.n.toLocaleString()}</div>
+      <div class="ubar" style="height:8px;background:#241a3e;border-radius:5px;overflow:hidden;margin-top:3px"><i style="display:block;height:100%;width:${pct}%;background:linear-gradient(90deg,#7a3abf,#b985ff)"></i></div>
+    </div>`;
+  }catch(_){ return ''; }
+}
+// 📋 Shareable run card — a plain-text summary + the play URL. navigator.share
+// on mobile, clipboard elsewhere; every path harness-safe behind try/catch.
+const PLAY_URL='https://games-71g.pages.dev/no_room_for_heroes/';
+function shareText(){
+  try{
+    const lines=['☠️ No Room For Heroes — '+(G.boss?G.boss.name:'the dungeon')+' ('+G.mode+')'];
+    lines.push(G.mode==='campaign'
+      ? '⚔️ Level '+campLevel()+'/'+CAMP_LEVELS+' · '+(G.totalSlain||0)+' heroes slain'
+      : '♾️ '+(G.totalSlain||0)+' heroes slain');
+    const top=(G.rooms||[]).filter(r=>r && ((r.dmg||0)>0||(r.kills||0)>0)).sort((a,b)=>(b.dmg||0)-(a.dmg||0))[0];
+    if(top) lines.push('🏆 Top room: '+comboName(top)+' — '+(top.dmg||0)+' dmg · '+(top.kills||0)+' kills');
+    const k=G.killer;
+    if(k) lines.push('💀 Felled by '+(k.heroName ? k.heroName+(k.title?' '+k.title:'') : (CLASSES[k.cls]?CLASSES[k.cls].name:'a hero')));
+    lines.push('Can you do better? '+PLAY_URL);
+    return lines.join('\n');
+  }catch(_){ return 'No Room For Heroes — '+PLAY_URL; }
+}
+function shareRun(){
+  const txt=shareText();
+  try{
+    if(typeof navigator!=='undefined' && navigator.share){ navigator.share({text:txt}).catch(()=>{}); return; }
+    if(typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(()=>showHint('📋 Copied!')).catch(()=>{}); return; }
+  }catch(_){ }
+  try{ showHint('📋 Sharing isn\'t available here.'); }catch(_){ }
+}
 // Bank this run's rune points (delta since last banking) into the pool.
 // Income now flows from per-kill loot rolls (20% rune per slain hero, champions roll twice)
 // + 1 per campaign chapter cleared, then edict/library multipliers.
 function awardRunes(){
+  // 📅 daily bounty + 🔥 streak: the first run-end of each day advances the
+  // streak and pays the flat bonus once (tutorial runs don't count)
+  let dailyBonus=0;
+  if(!G.tutorial){
+    streakBump();
+    dailyBonus=dailyClaim();
+    if(dailyBonus>0) showHint('📅 First run today: +'+dailyBonus+' bonus rune points!');
+  }
   const drops = (G.drops && G.drops.runes) || 0;
-  const total = Math.floor(drops * edictRewardMul() * libraryMul()) + (G.mode==='campaign'? G.levelIdx : 0);   // multipliers sweeten DROPS only — level progress pays flat
-  const delta = Math.max(0, total - (G.runesBanked||0));
+  const total = Math.floor(drops * edictRewardMul() * libraryMul() * dailyRuneMul() * streakMul()) + (G.mode==='campaign'? G.levelIdx : 0);   // multipliers sweeten DROPS only — level progress pays flat
+  const delta = Math.max(0, total - (G.runesBanked||0)) + dailyBonus;
   G.runesBanked = total;
   RUNES.points += delta;
   // bank lifetime kills (still tracked for mastery, the title screen & grandfather)
@@ -5400,6 +5549,7 @@ function awardRunes(){
   }
   if(G.mode==='endless') RUNES.best=Math.max(RUNES.best||0, G.totalSlain||0);   // personal endless record
   saveRunes();
+  cloudAutoBackup();   // ☁️ silent re-upload if this slot already has a sync code (throttled)
   return delta;
 }
 
@@ -9123,6 +9273,11 @@ window.addEventListener('keydown', ()=>{ if(audioOn && !TUTPREVIEW) initAudio();
      3. Put your publisher id in `client`, the slot id in `slot`, set
         `enabled:true`, and redeploy. Done — no other change needed.
    Left OFF here, so the game is byte-for-byte the same until you configure it. */
+/* ☕ Support link (off by default, same opt-in pattern as ADS below): set
+   SUPPORT_URL to your donation page — e.g. 'https://ko-fi.com/yourname' — and
+   a quiet "Support the dungeon" row appears in Options. Leave it '' and the
+   row never renders. */
+const SUPPORT_URL='';
 const ADS = {
   enabled: false,                       // ← flip to true once the two ids below are filled in
   client:  'ca-pub-0000000000000000',   // ← your AdSense publisher id (ca-pub-…)
