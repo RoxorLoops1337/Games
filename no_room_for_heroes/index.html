@@ -1715,6 +1715,7 @@ function effText(e){ const p=[];
   if(e.freeze)  p.push('❄️ '+Math.round(e.freeze.chance*100)+'% freeze');
   return p.join(' · '); }
 function equipGear(gi, slot){
+  if(G && G.tutorial){ tutNudge(); return; }   // merge beat needs BOTH swords in the chest — equip after the tutorial
   const g=G.chest[gi]; if(!g) return;
   const r=G.rooms[slot];
   const mons=r ? roomMonUnits(r).filter(u=>u.type!=='goblin') : [];   // goblin dens spawn — they can't wear gear
@@ -2530,7 +2531,7 @@ async function lbSubmit(score){
 // falls back to "Anonymous" if no name is stored yet. Fully silent failure.
 function lbAutoSubmit(){
   if(!G || G.mode!=='endless') return;
-  const score = Math.max(G.totalSlain||0, RUNES.best||0);
+  const score = G.totalSlain||0;               // THIS run only — the daily/weekly boards must not echo the all-time PB
   if(score<=0) return;
   let name='Anonymous';
   try{ name = (localStorage.getItem('bm_lbname')||'').trim() || 'Anonymous'; }catch(_){ }
@@ -3796,8 +3797,10 @@ function chooseBoss(key){
   // gold/dread lands on them instead of being overwritten; the base starting
   // amounts (and any relic rb bonuses, now folded into RB) are added afterwards.
   G.gold=0; G.dread=0;
-  // Relic Shrine: begin the run already bearing relic(s)
-  G.shrineRelics=[];
+  // Relic Shrine: begin the run already bearing relic(s). Reset the run's relics
+  // FIRST — backing out of the loadout and re-picking a boss reruns this grant,
+  // and without the reset that loop farmed unlimited free relics.
+  G.relics=[]; G.shrineRelics=[];
   for(let i=0;i<shrineRelics();i++){ const id=randomRelicId(townLvl('shrine')); if(id){ addRelic(id); G.shrineRelics.push(id); } }
   // 🧪 Throne potions: start each run with a full belt (cap reflects relics +
   // this boss's pPotionCap, both known by now). Bought back at the merchant.
@@ -3862,6 +3865,7 @@ function minCam(){
 function gotoBuild(first){
   G.phase='build'; G.hero=null; G.heroes=[]; selCard=-1; pickupIdx=-1; selGear=-1;
   G.brokenCells={};                              // doorways get patched up between waves
+  if(G.cells) for(const c of G.cells){ c._disarmT=0; }   // a rogue's disarm must not blink over the BUILD screen (cells rebuild at startWave)
   if(G.mode==='campaign') prepCampaignWave();    // roll THIS level's wave so the staging preview matches the spawn
   else ensureQueue(Math.max(3, G.guildLvl+1+(hasEdict('warband')?1:0)));   // endless: pre-roll the next arrivals to preview (Warband +1)
   smithyRestock();                                // Dark Smithy: free shop stock
@@ -3936,6 +3940,7 @@ function selectCard(i){
 const SCRAP_GOLD={ common:10, special:16, rare:26, epic:40 };
 function cardScrapGold(type){ return SCRAP_GOLD[cardRarity(type)] || 10; }
 function discardCard(i){
+  if(G && G.tutorial){ tutNudge(); return; }   // scripted flow: scrapping the lesson card would strand the beat
   const card=G.hand[i]; if(!card) return;
   const g=cardScrapGold(card.type);
   G.gold+=g;
@@ -4931,9 +4936,9 @@ function afterWave(){
     if(G.phase!=='run') return;        // closed/lost during the beat
     if(G.mode==='campaign'){ campaignAdvance(); return; }   // each wave cleared = a level beaten
     // Endless: town every 5 kills, relic every 10, mandate every 25
-    G.townDue   = Math.floor(G.waveStartSlain/5)  !== Math.floor(G.totalSlain/5);
-    G.relicDue  = Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);
-    G.mandateDue= Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
+    G.townDue   = G.townDue    || Math.floor(G.waveStartSlain/5)  !== Math.floor(G.totalSlain/5);
+    G.relicDue  = G.relicDue   || Math.floor(G.waveStartSlain/10) !== Math.floor(G.totalSlain/10);   // || : a champion's guaranteed relic must survive this recompute
+    G.mandateDue= G.mandateDue || Math.floor(G.waveStartSlain/25) !== Math.floor(G.totalSlain/25);
     gotoReward();
   }, 1300);
 }
@@ -6256,6 +6261,9 @@ function maybePotion(h){
 }
 
 function doShopping(h, cell){
+  // the room can be GONE by now (a champion/King smashed it mid-browse) — walk on,
+  // don't dereference the rubble (this crashed the whole frame loop in the finale)
+  if(!cell || !cell.room || !cell.room.stock){ h.state='walking'; return; }
   // buy affordable, unsold items; price scales with the shop's level → you profit
   for(const s of cell.room.stock){
     if(s.sold) continue;
@@ -6604,7 +6612,7 @@ function drawDungeon(tx, scale, isBuild){
   // hero
   // draw the whole raiding party (dead first so living draw on top)
   const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
-  for(const h of party) if(h.state==='dead') drawHeroDead(tx(h.x), h);
+  for(const h of party) if(h.state==='dead' && !h.escaped) drawHeroDead(tx(h.x), h);   // an ESCAPED thief is gone, not a corpse
   for(const h of party) if(h.state!=='dead') drawHero(tx(h.x), h);
   if(G.phase==='run') drawDenGoblins(tx);    // 👺 marching goblins from Den spawners
   // front-of-hero trap layers, replayed over the party (see HERO_LAYER)
