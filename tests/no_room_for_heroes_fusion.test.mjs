@@ -12,7 +12,7 @@ const A = loadGame(`freshGame,buildCells,doDeleteRoom,askDeleteRoom,placeCard,ma
   roomSynergy,synergyFromTypes,SYNERGIES,SYNERGY_TYPES,spawnDenGoblinsForWave,cardWeight,pickCardWeighted,describeGear,
   upgradeRoomGold,roomTrapUnits,roomMonUnits,roomFreeSlots,maxLevel,roomUpgradeCost,vetRank,
   MAX_SLOTS,MAX_TRAPS,describeRoom,chooseBoss,feedMul,ROOMS,
-  useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,
+  useBossPotion,potionCap,POTION_HEAL,POTION_GOLD,addRelic,buyMerchantPotion,rollMerchant,doShopping,
   gotoRelicChoice,rollRelicChoices,RELICS,MERCHANT_PRICE,TIER_ORDER,
   openTitle,gotoMenu,openPlay,openStronghold,openLibrary,openCodex,openUnlocks,showHelp,pickSlot,
   get G(){return G;},set G(v){G=v;},get RB(){return RB;}`);
@@ -255,5 +255,19 @@ A.G.rooms = [{ type:'flame', cap:2, kills:0, units:[{type:'flame',kind:'trap',lv
 A.RB.synergy = 0.05; A.buildCells();
 t.ok(Math.abs(A.G.cells[0].syn - (1 + A.SYNERGY_TYPES.fire.amp + 0.05)) < 1e-9, 'RB.synergy folds into a synergy room\'s amp (Excavator does what it says)');
 A.RB.synergy = 0;
+
+// --- 💥 QA: shopping in a room the King just smashed must not crash the frame loop ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon'); A.G.slots = 1;
+A.G.rooms = [null]; A.buildCells();
+const shopper = { state:'shopping', shopT:0, x:10, cellIndex:0 };
+let shopThrew = false;
+try { A.doShopping(shopper, A.G.cells[0]); } catch(e){ shopThrew = true; }
+t.ok(!shopThrew && shopper.state === 'walking', 'a shopper in a smashed room walks on instead of crashing');
+
+// --- 🏺 QA: boss-select ⇄ loadout Back loop must not farm free relics ---
+A.G = A.freshGame('campaign'); A.chooseBoss('dragon');
+A.G.relics = ['rFang','rTome'];                       // pretend a previous pick granted these
+A.chooseBoss('dragon');                               // back out → re-pick
+t.ok(!A.G.relics.includes('rFang') && !A.G.relics.includes('rTome'), 're-picking a boss resets run relics (no dupe farming)');
 
 t.done();
