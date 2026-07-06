@@ -706,6 +706,10 @@ const ROOMS = {
   bombard:  {kind:'trap',   name:'Bombard',    ic:'💣', col:'#e0823a', dmg:18, rate:2.4,  elem:'phys', aoe:1, desc:'Lobs shells that hit EVERY hero within one room of the blast — punishes a strung-out corridor.'},
   hexbrand: {kind:'trap',   name:'Hex Brand',  ic:'🎯', col:'#ff5470', dmg:5,  rate:1.3,  elem:'phys', mark:true, desc:'Brands a hero — the NEXT hit on them DETONATES for +120%. Pair before a heavy hitter.'},
   runestone:{kind:'trap',   name:'Runestone',  ic:'🔯', col:'#b985ff', dmg:0,  rate:99,   elem:'phys', amp:0.25, desc:'Deals NO damage — AMPLIFIES every trap & guard in this room and the two beside it by +25%.'},
+  // ---- CC traps: pure crowd-control specialists (small hits, big tempo swings) ----
+  web:      {kind:'trap',   name:'Web Snare', ic:'🕸️', col:'#d8d2c2', dmg:2, rate:0.65, elem:'phys', root:1.6, desc:'Weak hit, but ROOTS heroes in place — pins them for your other traps.'},
+  horn:     {kind:'trap',   name:'Wailing Horn', ic:'📯', col:'#8a7a9e', dmg:2, rate:1.8, elem:'phys', fear:36, desc:'A dread wail that knocks heroes back, undoing their advance.'},
+  censer:   {kind:'trap',   name:'Confusion Censer', ic:'🌀', col:'#c9a14d', dmg:3, rate:0.85, elem:'phys', confuse:2.2, desc:'Addles the mind — a confused hero sometimes swings at their own ally.'},
   // COMMON monsters: the cheap bodies (weakest — swarm/filler)
   goblin:   {kind:'monster',name:'Goblin Den', ic:'👺', col:'#5fae54', hp:16, atk:6, feeds:true, desc:'Marching goblins that level up from their own kills.'},
   skeleton: {kind:'monster',name:'Bone Pit',   ic:'💀', col:'#d8d2c2', hp:28, atk:10,  desc:'A cheap, sturdy guard — stack copies to hold the line.'},
@@ -717,6 +721,10 @@ const ROOMS = {
   slime:    {kind:'monster',name:'Gel Cube',   ic:'🟩', col:'#6ad9b0', hp:38, atk:8, split:true, desc:'Splits into TWO smaller cubes (same stats) at 60% HP. Soaks a ton of hits, but swings soft.'},
   orc:      {kind:'monster',name:'Orc Marauder',ic:'🪓', col:'#5a8f3a', hp:48, atk:16, desc:'A tusked green warrior — hits hard from the front line. No gimmicks, just a wall of muscle to anchor a room of traps.'},
   dragon:   {kind:'monster',name:'Drakeling',  ic:'🐲', col:'#e0623a', hp:44, atk:7, breath:{burn:2, dur:4}, desc:'A little dragon: from the back row it breathes fire over the WHOLE room, stacking burn on every hero (and claws the front one).'},
+  // Fresh recruits: a flier that snipes casters, a wall that shrugs off hits, an ambusher
+  harpy:    {kind:'monster',name:'Harpy Roost',ic:'🦅', col:'#8a7a9e', hp:34, atk:11, sniper:true, desc:'A flier that swoops past the front line to snipe the mage or cleric in the back.'},
+  sentinel: {kind:'monster',name:'Stone Sentinel',ic:'🪨', col:'#7a7a82', hp:130, atk:20, dr:0.25, desc:'A living wall of stone — shrugs off a quarter of every blow it takes.'},
+  mimic:    {kind:'monster',name:'Mimic',      ic:'👄', col:'#9a5cff', hp:26, atk:9, ambush:true, desc:'Disguised as harmless clutter — its first strike against your foes is a brutal ambush.'},
   // EPIC support
   totem:    {kind:'monster',name:'War Totem',  ic:'🗿', col:'#7a9e6a', hp:36, atk:2, totem:true, desc:'Support: while it stands, +35% trap & guard output to its OWN room. Hide it behind a tank.'},
   shop:     {kind:'shop',   name:'Shop',       ic:'🛒', col:'#caa15e', desc:'Heroes buy your stock — you keep the gold. Higher levels sell at a steeper markup.'},
@@ -964,6 +972,7 @@ const TRAITS = {
   trapsense:{name:'Trap-sense',ic:'👁️', col:'#e8c56b', desc:'senses & sidesteps the FIRST trap strike in each room', beh:true},
   phalanx:  {name:'Phalanx',  ic:'🔰',  col:'#8fb7e8', desc:'takes 25% less damage while another hero shares its room', beh:true},
   martyr:   {name:'Martyr',   ic:'✟',  col:'#f0e6c8', desc:'on death, heals every living ally 15% of max HP', beh:true},
+  relicbearer:{name:'Relic-bearer',ic:'🏺', col:'#ffd34d', desc:'drops a bonus relic when slain', beh:true},
 };
 const TRAIT_KEYS = Object.keys(TRAITS);
 
@@ -1010,6 +1019,16 @@ const CHAMPIONS = {
                desc:'Grows stronger as its HP falls.'},
   necromancer:{cls:'mage',    title:'the Deathless',    ic:'💀', col:'#b163ff', hpMul:4.0, atkMul:1.10,
                desc:'Siphons life to heal itself.'},
+  sapper:     {cls:'rogue',   title:'the Sapper',       ic:'💣', col:'#e0823a', hpMul:3.2, atkMul:1.05,
+               desc:'Demolishes the first trap room it enters.'},
+  warlock:    {cls:'mage',    title:'the Unmade',       ic:'🔮', col:'#5a6cc4', hpMul:3.4, atkMul:1.15,
+               desc:'Periodically cleanses and wards itself against your elements.'},
+  beastmaster:{cls:'rogue',   title:'the Beastcaller',  ic:'🐺', col:'#c98a3a', hpMul:3.6, atkMul:1.05,
+               desc:'Calls a spectral pack that makes it harder to pin down.'},
+  duelist:    {cls:'warrior', title:'the Duelist',      ic:'⚔️', col:'#caa15e', hpMul:3.6, atkMul:1.20,
+               desc:'Fights with single-minded focus — hits harder, ignores traps mid-duel.'},
+  alchemist:  {cls:'mage',    title:'the Alchemist',    ic:'🧪', col:'#4dc3ff', hpMul:3.4, atkMul:1.10,
+               desc:'Chugs elixirs that ward off your elements.'},
 };
 const CHAMP_KEYS = Object.keys(CHAMPIONS);
 const CHAMP_EVERY = 8;   // every Nth arrival is a champion (mini-boss)
@@ -1078,6 +1097,8 @@ const ENDLESS_MUTS = {
   choir:   {ic:'🙏', name:'Fervent Choir',    desc:'Cleric blessings last twice as long.'},
   veterans:{ic:'⭐', name:'Veteran Levies',   desc:'+10% chance a hero rolls elite traits.'},
   bulwark: {ic:'🧿', name:'Hexproof Banners', desc:'Heroes resist +15% of your control (freeze/oil/chill/shock).'},
+  reckless:{ic:'⚔️', name:'Reckless Vanguard', desc:'Heroes deal +20% attack but arrive with −10% HP.'},
+  scavenger:{ic:'🦴', name:'Scavenger Instinct', desc:'Heroes heal 3% max HP whenever they down one of your guards.'},
 };
 const MUT_KEYS = Object.keys(ENDLESS_MUTS);
 function hasMut(id){ return !!(G && G.muts && G.muts.includes(id)); }
@@ -1251,7 +1272,7 @@ let RB={};   // aggregated bonuses for the active run
 function blankRB(){ return {gold0:0,goldKill:0,loot:0,slotCost:0,dread0:0,dreadKill:0,
   bossHpFlat:0,bossHp:0,bossDR:0,bossRegen:0,bossAtkFlat:0,bossAtk:0,manaFlat:0,manaRegen:0,
   abilDmg:0,abilCost:0,abilCd:0,trapDmg:0,monDmg:0,monHp:0,slot0:0,slotMax:0,upCap:0,
-  synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0,potionSlots:0}; }
+  synergy:0,townDisc:0,draft:0,hand:0,guild0:0,cards0:0,eliteDread:0,throneDread:0,potionSlots:0,heroSlow:0}; }
 // ---- save slots: independent profiles (own runes + town). Slot 1 inherits any
 // pre-slot save so existing players keep their progress. ----
 const SAVE_SLOTS=3;
@@ -1626,6 +1647,8 @@ const CARD_RARITY={
   magebane:'rare', gallows:'rare', hexward:'rare', corrode:'rare', warden:'rare', slime:'rare',
   maul:'epic', bombard:'epic', hexbrand:'epic', totem:'epic', runestone:'epic',
   warcamp:'rare', dragon:'rare', orc:'rare',
+  web:'special', horn:'special', censer:'rare',
+  harpy:'rare', mimic:'rare', sentinel:'epic',
 };
 const CARD_TIER_W={ common:100, special:50, rare:24, epic:10 };   // base offer weights
 function cardRarity(t){ return CARD_RARITY[t]||'common'; }
@@ -1999,11 +2022,13 @@ const RELICS={
   eHorn:  {tier:'epic',name:"Warlord's Horn",ic:'📯',desc:'+16% boss atk, +10% monster dmg',rb:{bossAtk:.16,monDmg:.10}},
   eMidas: {tier:'epic',name:'Midas Relic',ic:'🤑',desc:'+6 gold/kill, +28% loot',rb:{goldKill:6,loot:.28}},
   eVault: {tier:'epic',name:'Architect\'s Sigil',ic:'📐',desc:'+1 room-slot cap, +14% monster HP',rb:{slotMax:1,monHp:.14}},
+  eVulture:{tier:'epic',name:"Vulture's Contract",ic:'🪦',desc:'+5 gold/kill, +4 dread/kill, +15% loot',rb:{goldKill:5,dreadKill:4,loot:.15}},
   // ---- legendary ----
   lHeart: {tier:'legendary',name:'Heart of the Mountain',ic:'🏔️',desc:'+120 max HP, +10% DR',hp:120,rb:{bossDR:.10}},
   lBlade: {tier:'legendary',name:'Worldender Blade',ic:'⚔️',desc:'+26% ALL damage',rb:{trapDmg:.26,monDmg:.26,abilDmg:.26,bossAtk:.26}},
   lPhyl:  {tier:'legendary',name:'Phylactery',ic:'💜',desc:'+18 HP/wave, +8% DR, +14% ability dmg',rb:{bossRegen:18,bossDR:.08,abilDmg:.14}},
   lCrown: {tier:'legendary',name:'Crown of Avarice',ic:'👑',desc:'+8 gold/kill, +35% loot, +3 dread/kill',rb:{goldKill:8,loot:.35,dreadKill:3}},
+  lHourglass:{tier:'legendary',name:"Chronomancer's Hourglass",ic:'⏳',desc:'Every hero moves 12% slower through your halls',rb:{heroSlow:.12}},
   // ---- mythic ----
   mRuin:  {tier:'mythic',name:'Avatar of Ruin',ic:'😈',desc:'+40% all damage, +80 max HP',hp:80,rb:{trapDmg:.40,monDmg:.40,abilDmg:.40,bossAtk:.40}},
   mEtern: {tier:'mythic',name:'Eternity Stone',ic:'♾️',desc:'+13% DR, +20 HP/wave, +20% ability dmg, +60 HP',hp:60,rb:{bossDR:.13,bossRegen:20,abilDmg:.20}},
@@ -2364,7 +2389,15 @@ const SFX={
   champdown:()=>{ tone(220,0.28,'sawtooth',0.18,58); noiseBurst(0.12,0.10,1500);
     setTimeout(()=>tone(147,0.34,'square',0.16,49),110); },                                             // 👑 champion slain — dark heavy sting
   go:()=>tone(880,0.07,'triangle',0.12,1320),                                                           // ▶ start-gate confirm blip
+  // 🔊 boss-doctrine stings — a one-shot flourish when a raider first breaches the throne room this wave
+  doc_inferno:()=>{ tone(180,0.14,'sawtooth',0.16,60); setTimeout(()=>tone(90,0.22,'square',0.14,50),90); },      // 🔥 guttural fire pulse
+  doc_undeath:()=>{ tone(110,0.3,'square',0.14,70); setTimeout(()=>tone(70,0.4,'sawtooth',0.13,40),140); },       // 💀 low decaying groan
+  doc_soulengine:()=>{ tone(660,0.1,'sine',0.13,1400); setTimeout(()=>tone(1200,0.12,'triangle',0.10,2000),60); },// 🔮 arcane chime
+  doc_bastion:()=>{ tone(120,0.16,'square',0.17,90); noiseBurst(0.06,0.10,1800); },                               // 🛡️ heavy metallic thud
+  doc_overgrowth:()=>{ tone(300,0.2,'triangle',0.13,180); setTimeout(()=>tone(220,0.24,'sine',0.11,140),100); },  // 🌿 creeping woody drone
+  doc_gluttony:()=>{ tone(200,0.18,'sawtooth',0.15,60); setTimeout(()=>tone(260,0.16,'square',0.13,90),80); },    // 😋 hungry gurgle
 };
+function bossDocSting(){ sfx('doc_'+bossDoc()); }
 function sfx(name){
   const f=SFX[name]; if(!f) return;
   const now=(typeof performance!=='undefined'?performance.now():Date.now());
@@ -3170,6 +3203,12 @@ function cardTags(def){
   if(def.split) t.push('Split');
   if(def.feeds) t.push('Scaling');
   if(def.vsClass||def.vsElite||def.vsLowHp) t.push('Counter');
+  if(def.sniper) t.push('Sniper');
+  if(def.dr) t.push('Armored');
+  if(def.ambush) t.push('Ambush');
+  if(def.root) t.push('Root');
+  if(def.fear) t.push('Fear');
+  if(def.confuse) t.push('Confuse');
   return [...new Set(t)];
 }
 function openCodex(){
@@ -4538,8 +4577,8 @@ function buildCells(){
           const hp = Math.round(bHp  * (0.9 + (lvl-1)*0.85) * feed * bas * vm * (1+(RB.monHp||0)) * bm * ge.hpMul);
           const atk= Math.round(bAtk * (1.0 + (lvl-1)*0.9)  * feed * bas * vm * (1+(RB.monDmg||0)) * bm * ge.atkMul) + (ge.atkFlat||0);
           guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split,
-                       breath:def.breath||null, haste:ge.haste,
-                       dr:ge.dr, leech:ge.leech, proc:ge.proc, crush:ge.crush, poison:ge.poison, thorns:ge.thorns,
+                       breath:def.breath||null, haste:ge.haste, ambush:!!def.ambush,
+                       dr:Math.max(ge.dr||0, def.dr||0), leech:ge.leech, proc:ge.proc, crush:ge.crush, poison:ge.poison, thorns:ge.thorns,
                        gear:(u.gear||[]).slice()});
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
@@ -4673,6 +4712,7 @@ function buildHeroFromSpec(spec){
   // ---- 🧬 endless mutations (picked every 25 kills) ----
   if(hasMut('vigor'))          hp*=1.08;
   if(hasMut('haste'))          spd*=1.15;
+  if(hasMut('reckless')){ hp*=0.90; atk*=1.20; }
   // ---- 📅 today's bounty (date-keyed daily modifier — see DAILY_MODS) ----
   if(dailyActive('swift'))     spd*=1.15;
   if(dailyActive('brittle'))   hp*=0.90;
@@ -4689,13 +4729,14 @@ function buildHeroFromSpec(spec){
   if(champ){ hp*=champ.hpMul; atk*=champ.atkMul; armor+=2; gold=Math.round(gold*2.5); bounty=Math.round(bounty*3); }
   if(spec.king){ hp*=10; atk*=1.65; armor+=13; spd*=0.97; gold=0; bounty=0; }   // 👑 the finale boss-raider — deliberately punishing: far tankier, hits much harder at the throne, near-impervious armor and shrugs off CC (see statusResist). A solid dungeon still wins, but the margin is thin.
   if(spec.kingGuard){ hp*=0.5; atk*=0.55; armor=Math.max(0,armor-3); gold=Math.round(gold*0.2); bounty=Math.round(bounty*0.4); }   // 👑 little knights of the King's host: weak & expendable
+  if(spec.carrier) gold=Math.round(gold*3);   // 💰 The Convoy: the courier hauls a fat purse
   hp=Math.round(hp); atk=+atk.toFixed(1);
   const h={
     cls, ...c, name:cls, traits:tr,
     elite: tr.length>0 || !!champ,
     heroName: spec.name, title: spec.title || (champ?champ.title:null),
     champion: spec.champion||null, champIc: champ?champ.ic:null, champCol: champ?champ.col:null,
-    rival: !!spec.rival, rivalGen: spec.rivalGen||0,
+    rival: !!spec.rival, rivalGen: spec.rivalGen||0, carrier: !!spec.carrier,
     king: !!spec.king, kingGuard: !!spec.kingGuard,
     ram: !!spec.ram,         // 🐏 L35 set-piece: demolishes the first room he enters
     specPower: n, specTraits: tr,
@@ -4745,6 +4786,8 @@ const WAVE_ARCHETYPES=[
       for(const s of specs){ if(!s.champion) s.hpMul=(s.hpMul||1)*0.70; } }},
   {id:'arcane', name:'🔮 ARCANE STORM', sub:'a cabal of casters — mages and clerics',
     compose(specs){ specs.forEach((s,i)=>{ s.cls = i%3===2 ? 'cleric' : 'mage'; }); }},
+  {id:'convoy', name:'💰 THE CONVOY', sub:'a courier hauls the haul — cut them down for a bonus',
+    compose(specs){ const carrier=specs[specs.length-1]; if(carrier && !carrier.champion){ carrier.carrier=true; carrier.hpMul=(carrier.hpMul||1)*0.8; } }},
 ];
 function rollWaveArchetype(specs){
   G.waveArchetype=null;
@@ -4792,6 +4835,7 @@ function prepCampaignWave(){
   G.waveLevel=L;
 }
 function spawnGroup(n){
+  G._doctrineStung=false;   // 🔊 re-arm the boss-doctrine sting for this fresh wave
   if(G.tutorial && G._tutWave){ tutSpawnWave(); return; }   // scripted tutorial wave
   // 👑 THE KING — the finale raider no longer marches alone: an honor guard of
   // KING_GUARD little knights storms the dungeon with him. They're weak (your
@@ -5070,7 +5114,7 @@ let _roomDmgCtx=null;
 function dealToHero(h, raw, label, pierce, elem, noDodge){
   if(!h||h.state==='dead') return;
   // rogue dodge (an aimed Smite can't be dodged)
-  const dodgeCh=(h.dodge||0)+(h.evadeT>0?0.25:0);   // 🗡️ Evasion spell adds dodge
+  const dodgeCh=(h.dodge||0)+(h.evadeT>0?0.25:0)+(h.wolfT>0?0.25:0);   // 🗡️ Evasion spell / 🐺 Call of the Pack add dodge
   if(!noDodge && dodgeCh>0 && Math.random()<dodgeCh){ floater(h.x, h.y-50,'DODGE','#9adfff'); return; }
   let dmg=heroDmg(h,raw,pierce);
   // 🔰 Phalanx elite: braced shoulder-to-shoulder — 25% less damage while ≥2 living
@@ -5353,6 +5397,11 @@ function heroDies(h){
     floater(h.x, h.y-84, '✟ MARTYR', '#f0e6c8', true);
     for(const o of (G.heroes||[])){ if(o && o!==h && o.state!=='dead') healHero(o, o.maxHp*0.15); }
   }
+  // 🏺 Relic-bearer elite: a bonus relic drops when it falls
+  if(h.traits && h.traits.includes('relicbearer')){
+    G.relicDue=(G.relicDue||0)+1;
+    floater(h.x, h.y-78, '🏺 BONUS RELIC', '#ffd34d');
+  }
   // loot: carried gold + bounty (threat dial + rune bonuses)
   // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
   const loot=Math.round((h.gold + (h.spent||0) + h.bounty) * (1 + G.bounty*0.12) * (1+(RB.loot||0)) * (hasEdict('leanCoffers')?0.60:1) * (hasMandate('goldVeins')?1.3:1) * (dailyActive('gold')?1.25:1)) + (RB.goldKill||0);
@@ -5426,6 +5475,10 @@ function heroDies(h){
     floater(h.x, h.y-92, '👑 CHAMPION SLAIN! 🏺', h.champCol||'#ffd34d', true); burst(h.x,h.y-30,h.champCol||'#ffd34d',46);
     flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('champdown');
     showHint('🏆 '+nm+' is slain! Big loot + a relic awaits.');
+  } else if(h.carrier){
+    // 💰 The Convoy: the courier carries a fat purse — its death is the whole point
+    floater(h.x, h.y-92, '💰 COURIER DOWN — HAUL SEIZED!', '#ffd34d', true);
+    showHint('💰 '+nm+' the courier is slain! Big haul: +'+loot+'g, +'+dread+' dread.');
   } else {
     showHint(nm+' slain! +'+loot+'g, +'+dread+' dread'+(h.reachedThrone?' — but they vow to return…':'.'));
   }
@@ -5869,6 +5922,7 @@ function draftStats(d){
   if(d.kind==='trap'){
     let s=`⚔ ${d.dmg} dmg / ${d.rate}s · ~${Math.round(d.dmg/d.rate)}/s`;
     if(d.burn) s+=' +burn'; if(d.poison) s+=' +☠'; if(d.acid) s+=' +🧪'; if(d.mark) s+=' +🎯'; if(d.aoe) s+=' · 💥AoE';
+    if(d.root) s+=' · 🕸️root'; if(d.fear) s+=' · 📯fear'; if(d.confuse) s+=' · 🌀confuse';
     if(d.elem && d.elem!=='phys') s+=` · ⚛️${d.elem}`;
     return s;
   }
@@ -5876,6 +5930,7 @@ function draftStats(d){
     let s=`❤️ ${d.hp} · 🗡️ ${d.atk}`;
     if(d.taunt) s+=' · 🛡️taunt'; if(d.split) s+=' · 🟩splits'; if(d.breath) s+=' · 🔥breath';
     if(d.feeds) s+=' · 👺spawner'; if(d.totem) s+=' · 🗿support'; if(d.warcamp) s+=' · 🏕️drills';
+    if(d.sniper) s+=' · 🦅snipes casters'; if(d.dr) s+=' · 🪨-'+Math.round(d.dr*100)+'% dmg'; if(d.ambush) s+=' · 👄ambush';
     return s;
   }
   if(d.kind==='shop') return `💰 sells at ×${shopMarkup(1).toFixed(1)} markup — pure profit`;
@@ -5886,7 +5941,7 @@ function draftStats(d){
 // (the endless queue may legitimately be empty at draft time).
 function incomingStrip(){
   if(!G || G.mode!=='campaign' || !G.queue || !G.queue.length) return '';
-  const ics=G.queue.map(s=>(s.champion?'👑':'')+((CLASSES[s.cls]||{}).ic||'⚔️')+((s.traits&&s.traits.length)?'⭐':'')).join(' ');
+  const ics=G.queue.map(s=>(s.champion?'👑':(s.carrier?'💰':''))+((CLASSES[s.cls]||{}).ic||'⚔️')+((s.traits&&s.traits.length)?'⭐':'')).join(' ');
   return `<p class="small" style="margin:2px 0 4px;color:#cdbaff">⏳ Incoming next: <b>${G.queue.length}</b> raider${G.queue.length>1?'s':''} · ${ics}</p>`;
 }
 function gotoReward(){
@@ -6541,6 +6596,8 @@ function simStep(h,dt){
   if(h.wardT>0) h.wardT-=dt;             // 🧙 Wizard ward
   if(h.acid>0){ h.acidT-=dt; if(h.acidT<=0) h.acid=0; }   // corrosion wears off
   if(h.mark>0){ h.markT-=dt; if(h.markT<=0) h.mark=0; }   // brand fades if no hit lands
+  if(h.root>0) h.root-=dt;                                // 🕸️ Web Snare wears off
+  if(h.confuseT>0) h.confuseT-=dt;                        // 🌀 Confusion Censer wears off
   // reaction-chain window: combo decays if no new reaction lands in time
   if(h.reactT>0){ h.reactT-=dt; if(h.reactT<=0) h.reactCount=0; }
   // freeze: the HERO is immobilised (can't move or attack) — but the dungeon's
@@ -6562,7 +6619,8 @@ function simStep(h,dt){
     // its side too), so heroes don't freeze while a goblin ambles across the room.
     if(G.minions) for(const g of G.minions){
       if(g.hp>0 && g.engaged===h && Math.abs(g.x-h.x)<=24){ h.walkAnim+=dt*10; return; } }
-    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.78:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1);   // oil & chill slow movement; Overgrowth/Quicksand slow everyone (chill eased from 0.7 — frost was too oppressive)
+    if(h.root>0){ h.walkAnim+=dt*10; return; }   // 🕸️ Web Snare: rooted in place, can't advance
+    const slow=(h.oil>0?0.6:1)*(h.chill>0?0.78:1)*(bossDoc()==='overgrowth'?0.75:1)*(hasMandate('quicksand')?0.88:1)*(1-(RB.heroSlow||0));   // oil & chill slow movement; Overgrowth/Quicksand/Hourglass slow everyone (chill eased from 0.7 — frost was too oppressive)
     h.x += h.spd*slow*dt;
     h.walkAnim+=dt*10;
     // a living monster blocks: keep walking until the monster's advancing sprite
@@ -6584,13 +6642,15 @@ function simStep(h,dt){
       // is gate:'free' / adv:'never' and is MEANT to breach the throne.)
       if(G.tutorial){ const ts=tutStepObj(); if(ts && (ts.gate==='abil'||ts.adv==='kill')){ heroDies(h); return; } }
       if(!h.reachedThrone && G.stats) G.stats.breaches++;
+      if(!G._doctrineStung){ G._doctrineStung=true; bossDocSting(); }   // 🔊 one boss-doctrine flavored sting per wave, on first breach
       h.state='boss'; h.reachedThrone=true; h.x=cellX(G.slots)+ROOM_W*0.44;
     }
   }
   else if(h.state==='fighting'){
     const cellM=G.cells[h.cellIndex];
-    // combo synergy: traps keep chipping while the monster pins the hero
-    if(cellM && cellM.traps && cellM.traps.length) trapTick(h,cellM,dt);
+    // combo synergy: traps keep chipping while the monster pins the hero — a
+    // Duelist ignores them, single-mindedly focused on the guard alone
+    if(cellM && cellM.traps && cellM.traps.length && h.champion!=='duelist') trapTick(h,cellM,dt);
     if(h.state==='dead') return;
     if(!cellM||!cellM.mon||!cellM.mon.alive){ if(!frozen) h.state='walking'; return; }
     fightTick(h, cellM.mon, dt, cellM, isFrontHero(h), frozen);
@@ -6637,6 +6697,10 @@ function onEnterCell(h,cell){
   // 🐏 THE BATTERING RAM (L35 set-piece): the champion DEMOLISHES the first
   // room he enters — the flag is consumed on the first real room, King-style.
   if(h.ram && cell.room && cell.kind!=='boss'){ h.ram=false; destroyRoom(cell, '🐏 '+(h.heroName||'The Ram')); }
+  // 💣 Sapper champion: demolishes the FIRST trap room it enters (once per raid)
+  if(h.champion==='sapper' && !h._sapped && cell.room && cell.kind!=='boss' && cell.traps && cell.traps.length){
+    h._sapped=true; destroyRoom(cell, '💣 '+(h.heroName||'The Sapper'));
+  }
   // 👑 The King shrugs off corruption and SMASHES rooms as he marches through.
   if(h.king){
     if(cell.room && cell.kind!=='boss' && Math.random()<KING_SMASH) destroyRoom(cell);
@@ -6666,6 +6730,7 @@ function onEnterCell(h,cell){
     if(h.champion==='thief'){ thiefSteal(h); return; }
     // step inside the throne room rather than stopping at the door
     if(!h.reachedThrone && G.stats) G.stats.breaches++;
+    if(!G._doctrineStung){ G._doctrineStung=true; bossDocSting(); }   // 🔊 one boss-doctrine flavored sting per wave, on first breach
     h.state='boss'; h.reachedThrone=true; h.x=cell.x0+ROOM_W*0.44;
   }
 }
@@ -6673,6 +6738,7 @@ function onEnterCell(h,cell){
 // Champion specials, ticked each frame for champion heroes.
 function championTick(h,dt){
   if(h.shieldT>0) h.shieldT-=dt;
+  if(h.wolfT>0) h.wolfT-=dt;
   if(h.champion==='berserker'){
     let m = 1 + (1 - h.hp/h.maxHp)*0.6;                    // enrage as HP drops (max +60%)
     if(h.cursed)  m *= 0.55;                               // boss debuffs must survive the
@@ -6689,6 +6755,19 @@ function championTick(h,dt){
     h.specialT=6; const heal=Math.round(h.maxHp*0.10);
     h.hp=Math.min(h.maxHp, h.hp+heal);
     floater(h.x, h.y-72, '💀 SIPHON +'+heal, '#b163ff'); healHero(h,0); sfx('cast');
+  } else if(h.champion==='warlock'){
+    // 🔮 anti-reaction ward: periodically dispels whatever elements it's carrying
+    // and briefly wards against fresh ones (reuses the Wizard's wardT resist bonus)
+    h.specialT=6;
+    h.freeze=0; h.oil=0; h.chill=0; h.shock=0; h.poison=0; h.acid=0; h.mark=0;
+    h.wardT=Math.max(h.wardT||0, 3);
+    floater(h.x, h.y-72, '🔮 WARD OF UNMAKING', '#5a6cc4'); sfx('cast');
+  } else if(h.champion==='beastmaster'){
+    h.specialT=7; h.wolfT=Math.max(h.wolfT||0, 3);
+    floater(h.x, h.y-72, '🐺 CALL OF THE PACK', '#c98a3a'); sfx('cast');
+  } else if(h.champion==='alchemist'){
+    h.specialT=6; h.wardT=Math.max(h.wardT||0, 4);
+    floater(h.x, h.y-72, '🧪 ELIXIR', '#4dc3ff'); sfx('cast');
   }
 }
 // ---- class spells: every regular hero auto-casts a signature ability on its
@@ -6762,6 +6841,8 @@ function applyTrapStatus(h, d, r){
   if(d.poison){ h.poison=Math.min(POISON_CAP, (h.poison||0)+d.poison+((r&&r.lvl||1)-1)); h.poisonT=4; }   // stacks (capped), +1/level
   if(d.acid){ h.acid=(h.acid||0)+d.acid; h.acidT=4; }
   if(d.mark && !(h.mark>0)){ h.mark=1; h.markT=4; floater(h.x,h.y-58,'🎯 MARKED','#ff5470'); }
+  if(d.root){ h.root=Math.max(h.root||0, ccDur(h, d.root)); }               // 🕸️ Web Snare: rooted in place
+  if(d.confuse){ h.confuseT=Math.max(h.confuseT||0, ccDur(h, d.confuse)); } // 🌀 Confusion Censer
 }
 const DISARM_DUR=3;   // 🗡️ a rogue who enters a trap room shuts its traps off for this many seconds
 function trapTick(h,cell,dt){
@@ -6800,7 +6881,8 @@ function trapTick(h,cell,dt){
       _roomDmgCtx=r; dealToHero(h, Math.round(dmg), 'HIT', pierce, d.elem); _roomDmgCtx=null;
       if(d.burn){ addBurn(h, d.burn+(tl-1)*2, 3); }
       else if((doc==='inferno'||hasMandate('wildfire')) && h.state!=='dead'){ h.burn=Math.min(burnCap(), Math.max(h.burn||0, 2+(tl-1))); h.burnT=Math.max(h.burnT||0,3); }  // Inferno/Wildfire: every trap sets ablaze (capped)
-      applyTrapStatus(h, d, r);                                  // poison / acid / mark
+      applyTrapStatus(h, d, r);                                  // poison / acid / mark / root / confuse
+      if(d.fear && h.state==='walking'){ h.x=Math.max(0,h.x-d.fear); floater(h.x,h.y-60,'😱 FLEE','#8a7a9e'); }   // 📯 Wailing Horn: knock back
       if(cell.synType) synergyOnHit(h, cell, tl, dmg);           // 🔗 synergy rider
       if(doc==='soulengine' && G.boss){ G.boss.mana=Math.min(G.boss.maxMana, G.boss.mana+1); }            // Soul Engine: traps fuel mana
       if(G.stats) G.stats.trapDmg+=Math.round(dmg);
@@ -6864,7 +6946,18 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
     h.atkT-=dt;
     if(h.atkT<=0){
       h.atkT=0.7*h.atkSpeed;
-      let dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)));
+      // 🌀 Confusion Censer: a confused hero sometimes swings at an ally instead of the guard
+      if(h.confuseT>0 && Math.random()<0.4){
+        const allies=(G.heroes||[]).filter(o=>o&&o!==h&&o.state!=='dead'&&o.cellIndex===h.cellIndex);
+        if(allies.length){
+          const ally=pick(allies);
+          const cdmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)*0.6));
+          _roomDmgCtx=cell.room; dealToHero(ally, cdmg, 'CONFUSED', false, 'phys'); _roomDmgCtx=null;
+          floater(h.x, h.y-60, '🌀 CONFUSED', '#c9a14d');
+          return;
+        }
+      }
+      let dmg=Math.max(1,Math.round(h.atk*heroAtkMul(h)*(h.champion==='duelist'?1.3:1)));
       if(mon.dr) dmg=Math.max(1,Math.round(dmg*(1-mon.dr)));   // 🛡️ Aegis: looted damage reduction
       mon.hp-=dmg; mon.flashAt=performance.now();
       if(mon.thorns){                                          // ✦ legendary Aegis: reflect a slice back at the attacker
@@ -6895,6 +6988,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         mon.alive=false; burst(cell.x0+ROOM_W*0.68,FLOOR-30,cell.room.def.col,16);
         blood(cell.x0+ROOM_W*0.66, FLOOR-30, 13, 1); bloodPool(cell.x0+ROOM_W*0.66, rnd(10,15));
         floater(cell.x0+ROOM_W*0.68,FLOOR-70,'SLAIN','#ff9a9a');
+        if(hasMut('scavenger')) healHero(h, h.maxHp*0.03);   // 🧬 Scavenger Instinct: heal off a felled guard
         // the next guard in the room steps up to take its place (up to 5 in a row)
         const next=(cell.guards||[]).find(g=>g&&g.alive);
         if(next){ cell.mon=next; cell.mon.atkT=0.3;
@@ -6919,13 +7013,22 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
       g.atkT=0.9*(g.haste||1);
       if(amp<0) amp=ampAt(cell.index);
       const taunt = ROOMS[g.type] && ROOMS[g.type].taunt;
-      const targets = taunt
-        ? G.heroes.filter(o=>o && o.state==='fighting' && o.cellIndex===cell.index)   // taunt: hit everyone stalled here
-        : [h];
+      const sniper = ROOMS[g.type] && ROOMS[g.type].sniper;
+      let targets;
+      if(taunt){
+        targets = G.heroes.filter(o=>o && o.state==='fighting' && o.cellIndex===cell.index);   // taunt: hit everyone stalled here
+      } else if(sniper){
+        // 🦅 Harpy Roost: swoops past the front line for the party's mage/cleric, if one is present
+        const casters=G.heroes.filter(o=>o && o.state==='fighting' && o.cellIndex===cell.index && (o.cls==='mage'||o.cls==='cleric'));
+        targets = casters.length ? [pick(casters)] : [h];
+      } else {
+        targets = [h];
+      }
       for(const t of targets){
         if(!t || t.state==='dead') continue;
         const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*t.maxHp):0;
-        const dmg=Math.round((g.atk+bite)*amp);
+        let dmg=Math.round((g.atk+bite)*amp);
+        if(g.ambush && !g.ambushDone){ g.ambushDone=true; dmg*=3; floater(cell.x0+ROOM_W*0.6, FLOOR-90, '👄 AMBUSH!', '#9a5cff'); }
         _roomDmgCtx=cell.room; dealToHero(t, dmg, 'HIT'); _roomDmgCtx=null;
         if(G.stats) G.stats.monDmg+=dmg;
         if(g.leech){ const heal=Math.round(dmg*g.leech);   // 💍 Charm: the monster drinks the wound
@@ -8974,6 +9077,9 @@ function describeCard(card){
     if(def.taunt) lines.push('🛡️ <b style="color:#c9a14d">Taunt</b> — strikes EVERY hero stalled in its room');
     if(def.totem) lines.push('🗿 <b style="color:#7a9e6a">Support</b> — +30% to THIS room\'s traps & guards while it stands');
     if(def.split) lines.push('🟩 <b style="color:#6ad9b0">Split</b> — at 60% HP it splits into two smaller cubes (same stats)');
+    if(def.sniper) lines.push('🦅 <b style="color:#8a7a9e">Sniper</b> — targets the party\'s mage or cleric instead of the front hero');
+    if(def.dr) lines.push('🪨 <b style="color:#7a7a82">Armored</b> — takes '+Math.round(def.dr*100)+'% less damage from every hit');
+    if(def.ambush) lines.push('👄 <b style="color:#9a5cff">Ambush</b> — its first strike lands for 3× damage');
     if(monFeeds(def)) lines.push('🍖 Grows stronger per hero that dies in its room (no cap)'+(def.feeds?'':' (Undeath)'));
   } else if(def.kind==='shop'){
     lines.push(`Holds ${lvl+1} item${lvl+1>1?'s':''} (+1 slot/level). Heroes buy at ×${shopMarkup(lvl).toFixed(2)} — pure profit, and they still drop full loot.`);
