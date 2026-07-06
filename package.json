@@ -15,7 +15,8 @@
     "test:horde": "node tests/horde_runner.test.mjs",
     "test:spijker": "node tests/spijker_master.test.mjs",
     "test:cars": "node tests/nineties_cars.test.mjs",
-    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars"
+    "test:frietkot": "node tests/frietkot_tycoon.test.mjs",
+    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",

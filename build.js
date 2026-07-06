@@ -49,6 +49,7 @@ const STATIC_PATHS = [
   'horde_runner',
   'spijker_master',
   'nineties_cars',
+  'frietkot_tycoon',
   'tools',
 ];
 
