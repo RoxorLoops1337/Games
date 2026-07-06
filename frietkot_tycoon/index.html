@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Frietkot Tycoon</title>
+<style>
+  :root{
+    --bg:#1b1524; --panel:#2b2033; --panel2:#372a42; --edge:#0d0a12;
+    --ink:#f7ecd6; --ink2:#c9b48f; --gold:#ffd447; --gold2:#e8a63b;
+    --good:#7bd66b; --bad:#e5624a; --warn:#f0a93b; --blue:#5cc0e8;
+    --slot:#160f1e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:#0c0910;
+    color:var(--ink);
+    font-family:"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;
+    overscroll-behavior:none;
+    user-select:none;-webkit-user-select:none;
+  }
+  #app{
+    width:100%;max-width:560px;min-height:100%;
+    background:linear-gradient(#150f1d,#0c0910);
+    display:flex;flex-direction:column;
+    box-shadow:0 0 40px #000;
+  }
+  /* ---- top HUD ---- */
+  #hud{
+    display:flex;align-items:center;gap:8px;
+    padding:7px 10px;background:linear-gradient(#2b2033,#20182a);
+    border-bottom:2px solid var(--edge);
+    font-size:13px;
+  }
+  #hud .name{font-weight:800;color:var(--gold);letter-spacing:.3px;font-size:13px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;max-width:38%}
+  #hud .spacer{flex:1}
+  .chip{background:var(--slot);border:1px solid #0d0a12;border-radius:6px;
+    padding:3px 7px;display:flex;align-items:center;gap:4px;white-space:nowrap;
+    box-shadow:inset 0 1px 0 #ffffff10;font-variant-numeric:tabular-nums;font-weight:700}
+  .chip b{color:var(--gold);font-weight:800}
+  .chip.day b{color:var(--blue)}
+  .chip.rep b{color:var(--good)}
+  /* ---- canvas ---- */
+  #stage{position:relative;width:100%;background:#0a0710;line-height:0;
+    border-bottom:2px solid var(--edge)}
+  #scene{width:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;
+    touch-action:none}
+  #float{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .pop{position:absolute;font-weight:800;font-size:13px;color:var(--gold);
+    text-shadow:0 1px 0 #000,0 0 6px #0008;animation:rise 1.1s ease-out forwards;white-space:nowrap}
+  .pop.bad{color:var(--bad)} .pop.good{color:var(--good)} .pop.rep{color:var(--blue)}
+  @keyframes rise{0%{transform:translateY(0);opacity:0}12%{opacity:1}100%{transform:translateY(-34px);opacity:0}}
+  #news{position:absolute;left:0;right:0;bottom:0;background:#000a;color:var(--ink);
+    font-size:11px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    border-top:1px solid #ffffff14}
+  #news b{color:var(--gold)}
+  /* ---- customer card ---- */
+  #order{padding:8px 10px;background:linear-gradient(#332741,#2a2036);
+    border-bottom:2px solid var(--edge);min-height:58px;display:flex;gap:9px;align-items:center}
+  #order .who{flex:1}
+  #order .arch{font-weight:800;font-size:13px;color:var(--ink)}
+  #order .want{font-size:12px;color:var(--ink2);margin-top:2px;line-height:1.35}
+  #order .want em{color:var(--gold);font-style:normal;font-weight:700}
+  #order .pat{width:74px;height:8px;background:#160f1e;border-radius:4px;overflow:hidden;
+    margin-top:5px;border:1px solid #0d0a12}
+  #order .pat i{display:block;height:100%;background:linear-gradient(90deg,#e5624a,#f0a93b,#7bd66b);
+    transition:width .1s linear}
+  #order.idle .who{color:var(--ink2)}
+  .avatar{width:40px;height:40px;border-radius:8px;background:var(--slot);
+    display:flex;align-items:center;justify-content:center;font-size:24px;border:1px solid #0d0a12;flex:0 0 auto}
+  /* ---- controls ---- */
+  #ctrls{padding:9px 10px 12px;display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;gap:9px;align-items:stretch}
+  .ctl{background:var(--panel);border:1px solid var(--edge);border-radius:9px;
+    padding:8px 9px;box-shadow:inset 0 1px 0 #ffffff0d}
+  .ctl.grow{flex:1}
+  .lab{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink2);
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:700}
+  .lab b{color:var(--ink);font-size:12px;font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:5px;
+    background:linear-gradient(90deg,#e5624a 0%,#f0d040 50%,#7bd66b 78%,#c98b3a 100%);outline:none;margin:2px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--gold);border:2px solid #7a5a12;cursor:pointer;box-shadow:0 1px 3px #000a}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--gold);
+    border:2px solid #7a5a12;cursor:pointer}
+  input.price{background:linear-gradient(90deg,#7bd66b,#f0d040,#e5624a)}
+  .seg{display:flex;gap:4px}
+  .seg button{flex:1;background:var(--slot);color:var(--ink2);border:1px solid var(--edge);
+    border-radius:7px;padding:7px 2px;font-weight:800;font-size:12px;cursor:pointer;transition:.08s}
+  .seg button.on{background:var(--gold);color:#2a1c05;border-color:var(--gold2);box-shadow:0 2px 0 var(--gold2)}
+  .oilbar{height:12px;border-radius:6px;background:#160f1e;overflow:hidden;border:1px solid #0d0a12;margin-top:2px}
+  .oilbar i{display:block;height:100%;transition:width .2s,background .3s}
+  .btn{border:none;border-radius:9px;font-weight:800;cursor:pointer;font-size:13px;
+    padding:10px;box-shadow:0 3px 0 #0006;transition:.06s;color:#2a1c05}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #0006}
+  .btn.serve{flex:2;background:linear-gradient(#ffd447,#e8a63b);font-size:16px}
+  .btn.oil{flex:1;background:linear-gradient(#8fd6ff,#5cc0e8)}
+  .btn.oil.low{background:linear-gradient(#f0a93b,#e5624a);color:#fff;animation:pulse 1s infinite}
+  .btn:disabled{opacity:.45;cursor:default;box-shadow:0 3px 0 #0006}
+  @keyframes pulse{50%{filter:brightness(1.25)}}
+  .fats{display:flex;gap:4px;margin-top:2px}
+  .fats button{flex:1;background:var(--slot);color:var(--ink2);border:1px solid var(--edge);
+    border-radius:6px;padding:5px 2px;font-weight:700;font-size:11px;cursor:pointer}
+  .fats button.on{background:var(--panel2);color:var(--gold);border-color:var(--gold2)}
+  #foot{display:flex;gap:8px;align-items:center;padding:0 10px 12px}
+  #foot .mini{font-size:11px;color:var(--ink2)}
+  #foot .spacer{flex:1}
+  .txtbtn{background:none;border:1px solid var(--edge);color:var(--ink2);border-radius:6px;
+    padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer}
+  /* ---- toast ---- */
+  #toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+    background:#000c;color:var(--ink);padding:9px 14px;border-radius:9px;font-size:13px;
+    border:1px solid #ffffff20;max-width:90%;text-align:center;opacity:0;pointer-events:none;
+    transition:opacity .25s;z-index:9}
+  #toast.show{opacity:1}
+  #toast b{color:var(--gold)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="name" id="shopName">Frituur 't Hoekske</div>
+    <div class="spacer"></div>
+    <div class="chip day">Dag <b id="dayN">1</b></div>
+    <div class="chip rep">★<b id="repN">0</b></div>
+    <div class="chip">💰 <b id="money">0</b> fr.</div>
+  </div>
+
+  <div id="stage">
+    <canvas id="scene" width="192" height="128"></canvas>
+    <div id="float"></div>
+    <div id="news">📻 <b id="newsTxt">Welkom in de frituur…</b></div>
+  </div>
+
+  <div id="order" class="idle">
+    <div class="avatar" id="custAv">🙂</div>
+    <div class="who">
+      <div class="arch" id="custArch">Nog geen klant…</div>
+      <div class="want" id="custWant">Zet je frietketel klaar. De eerste klant komt zo.</div>
+      <div class="pat"><i id="patBar" style="width:0%"></i></div>
+    </div>
+  </div>
+
+  <div id="ctrls">
+    <div class="ctl">
+      <div class="lab">🍟 Bakwijze (krokantheid) <b id="crispV">klassiek</b></div>
+      <input type="range" id="crisp" min="0" max="100" value="52">
+    </div>
+    <div class="row">
+      <div class="ctl grow">
+        <div class="lab">📦 Portie <b id="sizeV">medium</b></div>
+        <div class="seg" id="sizeSeg"></div>
+      </div>
+    </div>
+    <div class="ctl">
+      <div class="lab">🏷️ Prijs <b><span id="priceV">70</span> fr.</b></div>
+      <input type="range" class="price" id="price" min="30" max="160" value="70">
+    </div>
+    <div class="row">
+      <div class="ctl grow">
+        <div class="lab">🛢️ Frietvet <b id="oilPct">100%</b></div>
+        <div class="oilbar"><i id="oilBar" style="width:100%"></i></div>
+        <div class="fats" id="fatSeg"></div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn oil" id="oilBtn">Ververs vet<br><small id="oilCost">−350 fr.</small></button>
+      <button class="btn serve" id="serveBtn">🍟 Bak &amp; serveer</button>
+    </div>
+  </div>
+
+  <div id="foot">
+    <span class="mini" id="rate">0,0 fr./sec</span>
+    <span class="spacer"></span>
+    <button class="txtbtn" id="resetBtn">nieuw spel</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* =========================================================================
+   FRIETKOT TYCOON — vertical slice 1: "the living frietkot"
+   Cozy hand-drawn pixel art on <canvas> + DOM sliders/buttons.
+   One shop, tune crispness/portion/price, manage the frying fat, serve
+   customers whose taste you must match, watch idle income tick.  Belgian
+   franc economy, 1990s. Grounded in research/*.md.  All logic top-level so
+   tests can eval this script headless.
+   ========================================================================= */
+
+/* ---------- tiny helpers ---------- */
+var clamp=function(v,a,b){return v<a?a:v>b?b:v;};
+var lerp=function(a,b,t){return a+(b-a)*t;};
+var rnd=function(a,b){return a+Math.random()*(b-a);};
+var randi=function(a,b){return Math.floor(rnd(a,b+1));};
+var pick=function(arr){return arr[Math.floor(Math.random()*arr.length)];};
+var fmtFr=function(n){                       // thousands with a dot, Belgian style
+  n=Math.round(n);
+  var s=Math.abs(n).toString(),out='';
+  for(var i=0;i<s.length;i++){ if(i>0 && (s.length-i)%3===0) out+='.'; out+=s[i]; }
+  return (n<0?'-':'')+out;
+};
+
+/* ---------- data: sizes, fats, archetypes ---------- */
+// portionGrams / base cost & price in francs (period-flavoured, research H7)
+var SIZES=[
+  {id:'klein',  label:'klein',  grams:150, base:45, cost:14},
+  {id:'medium', label:'medium', grams:220, base:65, cost:20},
+  {id:'groot',  label:'groot',  grams:320, base:90, cost:28},
+  {id:'familie',label:'familie',grams:600, base:150,cost:52}
+];
+var sizeById=function(id){ for(var i=0;i<SIZES.length;i++) if(SIZES[i].id===id) return SIZES[i]; return SIZES[1]; };
+
+// frying fat: flavour vs cost vs market-reach (research H6)
+var FATS=[
+  {id:'veg',   label:'plantaardig', tasteMul:0.90, reach:1.00, decay:1.10, refill:280},
+  {id:'blend', label:'mengvet',     tasteMul:1.00, reach:0.98, decay:1.00, refill:350},
+  {id:'ossewit',label:'ossewit',    tasteMul:1.14, reach:0.90, decay:0.90, refill:460}
+];
+var fatById=function(id){ for(var i=0;i<FATS.length;i++) if(FATS[i].id===id) return FATS[i]; return FATS[1]; };
+
+// crispness label for a 0-100 value (research: slap→klassiek→krokant, both ends defect)
+var crispLabel=function(v){
+  if(v<18) return 'papperig'; if(v<38) return 'zacht';
+  if(v<62) return 'klassiek'; if(v<84) return 'krokant'; return 'verbrand';
+};
+
+// customer archetypes: preferred crispness band, size wish, patience, tip, emoji, shirt color
+var ARCHETYPES=[
+  {id:'vaste',  name:'De Vaste Klant', emoji:'🧑', band:[42,62], sizes:['klein','medium'],  pat:26, tip:0.06, col:'brn', line:'"Doe mij mijn gewone, zeg."'},
+  {id:'student',name:'Student',        emoji:'🧑‍🎓',band:[30,55], sizes:['groot','medium'],  pat:17, tip:0.04, col:'red', line:'"Iets groots, en goedkoop hé!"'},
+  {id:'werk',   name:'Werkman',        emoji:'👷', band:[45,65], sizes:['groot','familie'], pat:12, tip:0.09, col:'yel', line:'"Snel, \'k moet terug werken."'},
+  {id:'familie',name:'Familie',        emoji:'👨‍👩‍👧',band:[35,58],sizes:['familie','groot'],pat:22, tip:0.08, col:'grn', line:'"Een grote om te delen!"'},
+  {id:'nacht',  name:'Nachtklant',     emoji:'🥴', band:[25,70], sizes:['groot','medium'],  pat:14, tip:0.16, col:'pur', line:'"…friet. Nu. Veel saus."'},
+  {id:'purist', name:'Frietkenner',    emoji:'🧐', band:[66,82], sizes:['klein','medium'],  pat:24, tip:0.20, col:'blu', line:'"Enkel écht krokant, jongen."'},
+  {id:'toerist',name:'Toerist',        emoji:'📸', band:[38,60], sizes:['klein','medium'],  pat:30, tip:0.14, col:'cyn', line:'"Are these… French fries?"'}
+];
+
+/* ---------- pure scoring logic (unit-tested) ---------- */
+// how well crispness hits the customer's preferred band → 0..1
+var crispQuality=function(crisp,band){
+  var lo=band[0],hi=band[1],c=(lo+hi)/2,half=(hi-lo)/2;
+  var dist=Math.max(0,Math.abs(crisp-c)-half);
+  return clamp(1-dist/34,0,1);
+};
+// fat freshness → quality multiplier (research H4 thresholds 60/35/20)
+var oilQuality=function(oil){
+  if(oil>=60) return 1;
+  if(oil>=35) return lerp(0.72,1,(oil-35)/25);
+  if(oil>=20) return lerp(0.45,0.72,(oil-20)/15);
+  return lerp(0.18,0.45,clamp(oil,0,20)/20);
+};
+// price fairness vs a fair price → appeal 0.1..1.3 (drives idle footfall & tips)
+var priceAppeal=function(price,fair){
+  var r=price/fair;
+  return clamp(1.28-0.92*(r-0.78),0.10,1.30);
+};
+// overall serve quality 0..1 from the levers
+var serveQuality=function(o){
+  // o: {crisp, band, oil, potato, fat}
+  var q = crispQuality(o.crisp,o.band)*0.55
+        + oilQuality(o.oil)*0.30
+        + (o.potato||0.8)*0.15;
+  q *= (o.fat!=null?o.fat:1);           // fat taste multiplier
+  return clamp(q,0,1.05);
+};
+
+/* ---------- fresh game state ---------- */
+var SHOP_NAMES=["Frituur 't Hoekske","Frituur 't Pleintje","Frituur De Bocht","'t Vetste Kotje",
+  "Frituur Rita","Frituur De Gouden Friet","Frietopia","Fritkot Bompa","Frituur N°1","Frituur Nonkel Frit"];
+
+var freshGame=function(){
+  return {
+    v:1,
+    shop: SHOP_NAMES[Math.floor(Math.random()*SHOP_NAMES.length)],
+    money:2000, day:1, rep:6, served:0,
+    oil:100, fat:'blend', potato:0.82,
+    crisp:52, size:'medium', price:70,
+    dayT:0, dayLen:48,          // seconds per in-game day
+    news:"Welkom! Zet je eerste puntzak klaar.",
+    cust:null, sinceCust:2.2, demandMod:1
+  };
+};
+
+/* ---------- customer generation ---------- */
+var makeCustomer=function(G){
+  var a=pick(ARCHETYPES);
+  var size=pick(a.sizes);
+  var wantSauce=Math.random()<0.7;
+  return {
+    arch:a, size:size, sauce:wantSauce,
+    pat:a.pat, patMax:a.pat,
+    crispWord: crispLabel((a.band[0]+a.band[1])/2)
+  };
+};
+
+/* =========================================================================
+   Everything below is the live game (DOM + canvas). Guarded so it also
+   survives a headless stub-DOM eval (tests only read the pure fns above).
+   ========================================================================= */
+var G=freshGame();
+var SAVE_KEY='ft_save_v1';
+
+/* ---------- persistence ---------- */
+var save=function(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){} };
+var load=function(){
+  try{
+    var s=localStorage.getItem(SAVE_KEY); if(!s) return false;
+    var o=JSON.parse(s); if(!o||o.v!==1) return false;
+    for(var k in o) if(o.hasOwnProperty(k)) G[k]=o[k];
+    G.cust=null; G.sinceCust=1.2;  // don't restore a mid-order customer
+    return true;
+  }catch(e){ return false; }
+};
+
+/* ---------- DOM refs (all optional under stub) ---------- */
+var $=function(id){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById(id):null; };
+var scene=$('scene'), ctx=scene&&scene.getContext?scene.getContext('2d'):null;
+var floatL=$('float');
+
+/* =========================================================================
+   PIXEL ART  — cozy hand-drawn frituur at dusk.  Virtual 192x128 grid.
+   ========================================================================= */
+var VW=192, VH=128;
+// palette
+var C={
+  sky1:'#241a3a', sky2:'#4a2f52', sky3:'#c9683f', star:'#fff4c2', moon:'#f7ecc0',
+  brick:'#5a3733', brick2:'#4a2c29', mortar:'#3a2320', win:'#2a2036', winlit:'#ffd36b',
+  wood:'#7a4a28', wood2:'#603a1f', wooddk:'#472a16', counter:'#8a5a30',
+  metal:'#8f97a6', metal2:'#6a707d', metaldk:'#474b56',
+  signbg:'#1a1220', signOn:'#ffd447', signGlow:'#ffb02e',
+  ground:'#241a26', ground2:'#1a121c', pave:'#2e2330',
+  skin:'#e5b78e', apron:'#f2ede0', apron2:'#d8d0bd',
+  fry:'#e8b84a', frydk:'#c78e2f', sauceA:'#e5624a', sauceB:'#f0d040', sauceC:'#e8e2cf',
+  steam:'#ffffff', black:'#120c18'
+};
+var SHIRTS={brn:'#8a5a30',red:'#c0453a',yel:'#d8a53a',grn:'#4f9a55',pur:'#7a4f9a',blu:'#3f6fb0',cyn:'#3fa7b0'};
+
+// pixel primitives
+var px=function(x,y,w,h,col){ if(!ctx)return; ctx.fillStyle=col; ctx.fillRect(x|0,y|0,w|0,h|0); };
+// sprite: array of strings + palette map ('.'=transparent)
+var spr=function(rows,ox,oy,pal){
+  if(!ctx) return;
+  for(var y=0;y<rows.length;y++){ var r=rows[y];
+    for(var x=0;x<r.length;x++){ var ch=r[x]; if(ch===' '||ch==='.') continue;
+      var col=pal[ch]; if(col){ ctx.fillStyle=col; ctx.fillRect(ox+x,oy+y,1,1); } }
+  }
+};
+
+// ---- sprite: the uitbater (owner) behind the counter ----
+var OWNER=[
+  "..hhh..",
+  ".hhhhh.",
+  ".sksks.",   // face
+  ".sssss.",
+  "..mmm..",
+  ".aaaaa.",   // apron
+  "aaAAAaa",
+  "aaAAAaa",
+  ".a.a.a.",
+  ".w...w."
+];
+var ownerPal=function(){ return {h:'#3a2a1e',s:C.skin,k:C.black,m:'#c88',a:C.apron,A:C.apron2,w:C.wooddk}; };
+
+// ---- sprite: a customer (recolored by shirt) ----
+var CUST=[
+  "..hhh..",
+  ".hhhhh.",
+  ".sssss.",
+  ".s.s.s.",   // face w/ eyes gap
+  ".sssss.",
+  "..ttt..",
+  ".ttttt.",
+  "tttttt t",
+  ".t...t.",
+  ".t...t.",
+  ".L...L."
+];
+var custPal=function(shirt){ return {h:'#2c211a',s:C.skin,t:shirt,L:'#3a2f26'}; };
+
+// ---- sprite: parked 90s boxy car ----
+var CAR=[
+  "..bbbbbbbb..",
+  ".bbwwwwwwbb.",
+  "bbbbbbbbbbbb",
+  "bBbbbbbbbBbb",
+  ".oo......oo."
+];
+var carPal=function(body){ return {b:body,w:'#bfe0ff',B:'#ffe27a',o:'#1a1a1a'}; };
+
+// ---- sprite: puntzak of fries ----
+var CONE=[
+  "ffff",
+  "ffFf",
+  "fFff",
+  ".ww.",
+  ".ww.",
+  "..w."
+];
+var conePal={f:C.fry,F:C.frydk,w:'#e9e0cc'};
+
+// particles (bubbles + steam)
+var parts=[];
+var emit=function(x,y,kind){ parts.push({x:x,y:y,vy:kind==='steam'?-0.28:-0.5,life:kind==='steam'?rnd(20,34):rnd(10,20),kind:kind,r:kind==='steam'?1:1}); };
+
+var T=0; // anim clock (seconds)
+
+var drawScene=function(){
+  if(!ctx) return;
+  // resize backing store to element (crisp integer scale handled by CSS pixelated)
+  // ---- sky ----
+  var g=ctx.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,C.sky1); g.addColorStop(0.55,C.sky2); g.addColorStop(1,C.sky3);
+  ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+  // stars
+  for(var i=0;i<34;i++){ var sx=(i*53%VW), sy=(i*29%54); var tw=(Math.sin(T*2+i)*0.5+0.5);
+    ctx.fillStyle=C.star; ctx.globalAlpha=0.35+tw*0.5; ctx.fillRect(sx,sy,1,1); }
+  ctx.globalAlpha=1;
+  // moon
+  px(150,14,10,10,C.moon); px(150,14,3,3,C.sky2);
+  // ---- back row houses (silhouette w/ lit windows) ----
+  var roof=64;
+  px(0,roof,VW,VH-roof,C.brick2);
+  for(var hx=0;hx<VW;hx+=26){
+    px(hx,roof-10,24,10,C.brick);
+    // windows
+    var lit=((hx/26|0)+G.day)%3===0;
+    px(hx+5,roof-7,5,5, lit?C.winlit:C.win);
+    px(hx+14,roof-7,5,5, ((hx/26|0)%2)?C.winlit:C.win);
+    px(hx,roof-11,24,1,C.mortar);
+  }
+  // ground / pavement
+  px(0,VH-16,VW,16,C.ground); px(0,VH-16,VW,2,C.pave);
+  for(var pv=0;pv<VW;pv+=12) px(pv,VH-15,1,13,C.ground2);
+
+  // ---- parked car on the left (drives the 90s vibe) ----
+  spr(CAR,6,VH-30,carPal('#5a7d9a'));
+
+  // lamppost
+  px(44,VH-52,2,40,C.metaldk); px(41,VH-54,8,4,C.metal2);
+  ctx.fillStyle='#ffdf9a'; ctx.globalAlpha=0.18; ctx.beginPath?0:0; px(38,VH-52,14,10,'#ffdf9a'); ctx.globalAlpha=1;
+
+  // =================== THE FRIETKOT ===================
+  var bx=70, by=40, bw=112, bh=72;
+  // body
+  px(bx,by,bw,bh,C.wood); px(bx,by,bw,3,C.wood2);
+  for(var pl=bx;pl<bx+bw;pl+=8) px(pl,by,1,bh,C.wooddk); // planks
+  px(bx,by+bh-4,bw,4,C.wooddk);
+  // roof/awning
+  px(bx-4,by-6,bw+8,7,C.brick); px(bx-4,by-6,bw+8,2,'#7a4d48');
+  for(var st=bx-4;st<bx+bw+4;st+=10){ px(st,by-6,5,7,'#c0453a'); } // red/white stripes
+  // ---- backlit FRITUUR sign ----
+  var flick=0.7+0.3*Math.sin(T*7)+ (Math.random()<0.03?-0.4:0);
+  px(bx+18,by-20,76,14,C.signbg);
+  ctx.globalAlpha=clamp(flick,0.3,1); px(bx+18,by-20,76,14,'#2a1f10'); ctx.globalAlpha=1;
+  // sign text (blocky letters)
+  drawSign(bx+22,by-17, "FRITUUR", clamp(flick,0.4,1));
+  // sign glow
+  ctx.globalAlpha=0.12*clamp(flick,0,1); px(bx+10,by-24,92,24,C.signGlow); ctx.globalAlpha=1;
+
+  // ---- serving window (dark interior, warm light) ----
+  var wx=bx+10, wy=by+10, ww=92, wh=40;
+  px(wx-2,wy-2,ww+4,wh+4,C.wooddk);
+  px(wx,wy,ww,wh,'#241a22');
+  // warm interior glow
+  var ig=ctx.createRadialGradient(wx+ww/2,wy+wh/2,4,wx+ww/2,wy+wh/2,60);
+  ig.addColorStop(0,'#5a3d20'); ig.addColorStop(1,'#241a22');
+  ctx.fillStyle=ig; ctx.fillRect(wx,wy,ww,wh);
+  // hanging bulb
+  px(wx+30,wy,1,5,'#000'); px(wx+28,wy+5,5,4,'#ffdf9a');
+  ctx.globalAlpha=0.15; px(wx+24,wy+3,13,12,'#ffdf9a'); ctx.globalAlpha=1;
+
+  // ---- menu board (franc prices) ----
+  px(wx+ww-22,wy+3,20,26,'#20304a'); px(wx+ww-22,wy+3,20,1,'#3f6fb0');
+  for(var ml=0;ml<4;ml++){ px(wx+ww-19,wy+7+ml*5,10,1,'#8fb4d8'); px(wx+ww-7,wy+7+ml*5,4,1,C.signOn); }
+
+  // ---- the fryer (oil color = freshness) ----
+  var frx=wx+6, fry=wy+wh-16;
+  px(frx-1,fry-1,34,15,C.metaldk);
+  px(frx,fry,32,13,C.metal2);
+  px(frx+2,fry+2,28,3,C.metal); // rim highlight
+  // oil surface colour by freshness
+  var oilc = G.oil>=60?'#e8c85a' : G.oil>=35?'#c79a34' : G.oil>=20?'#8f6a22' : '#4a3414';
+  px(frx+2,fry+5,28,6,oilc);
+  // basket
+  px(frx+6,fry+3,16,7,C.metaldk); px(frx+7,fry+4,14,1,C.metal);
+  // frying fries wiggling
+  for(var fpi=0;fpi<9;fpi++){ var fxp=frx+8+fpi*1.5, fyp=fry+4+Math.sin(T*6+fpi)*0.6;
+    px(fxp,fyp,1,4,C.fry); }
+  // bubbles
+  if(Math.random()<0.5) emit(frx+8+Math.random()*14, fry+6,'bubble');
+  if(G.oil<25 && Math.random()<0.4) emit(frx+8+Math.random()*14, fry+3,'steam'); // smoke when old
+
+  // ---- sauce fridge ----
+  px(wx+40,wy+8,16,21,C.metaldk); px(wx+41,wy+9,14,19,'#2a3a44');
+  px(wx+42,wy+11,3,6,C.sauceA); px(wx+46,wy+11,3,6,C.sauceB); px(wx+50,wy+11,3,6,C.sauceC);
+  px(wx+42,wy+19,3,6,C.sauceB); px(wx+46,wy+19,3,6,C.sauceA); px(wx+50,wy+19,3,6,'#c98b3a');
+  px(wx+40,wy+8,16,1,'#8fb4d8');
+
+  // ---- the owner (you) behind the counter ----
+  spr(OWNER, wx+20, wy+18, ownerPal());
+
+  // ---- counter ledge ----
+  px(bx+6,by+bh-8,bw-12,6,C.counter); px(bx+6,by+bh-8,bw-12,1,'#a9743e');
+
+  // =================== CUSTOMER out front ===================
+  if(G.cust){
+    var cbob=Math.sin(T*3)*1;
+    spr(CUST, 96, VH-27+cbob, custPal(SHIRTS[G.cust.arch.col]||'#888'));
+    // little cone in hand when close
+  } else {
+    // idle: a lone puntzak on the counter
+    spr(CONE, bx+50, by+bh-16, conePal);
+  }
+
+  // =================== particles ===================
+  for(var p=parts.length-1;p>=0;p--){ var pt=parts[p]; pt.y+=pt.vy; pt.life--;
+    if(pt.life<=0){ parts.splice(p,1); continue; }
+    ctx.globalAlpha = pt.kind==='steam'? clamp(pt.life/34,0,0.5) : clamp(pt.life/20,0,0.8);
+    ctx.fillStyle = pt.kind==='steam'? '#d9c9a9' : '#fff2c8';
+    ctx.fillRect(pt.x|0,pt.y|0,1,1);
+  }
+  ctx.globalAlpha=1;
+
+  // dusk tint by day-progress (evening → night)
+  var night=clamp((G.dayT/G.dayLen),0,1);
+  ctx.globalAlpha=0.18*night; ctx.fillStyle='#0a0a2a'; ctx.fillRect(0,0,VW,VH); ctx.globalAlpha=1;
+};
+
+// blocky 5px sign font (only the letters we need)
+var FONT={
+  F:["111","100","110","100","100"], R:["110","101","110","101","101"],
+  I:["111","010","010","010","111"], T:["111","010","010","010","010"],
+  U:["101","101","101","101","111"]
+};
+var drawSign=function(x,y,txt,glow){
+  var cx=x;
+  for(var i=0;i<txt.length;i++){ var gl=FONT[txt[i]]; if(!gl){cx+=4;continue;}
+    for(var yy=0;yy<gl.length;yy++) for(var xx=0;xx<3;xx++)
+      if(gl[yy][xx]==='1'){ ctx.fillStyle=C.signOn; ctx.globalAlpha=glow; ctx.fillRect(cx+xx,y+yy,1,1); }
+    cx+=4;
+  }
+  ctx.globalAlpha=1;
+};
+
+/* =========================================================================
+   UI wiring
+   ========================================================================= */
+var el={};
+var bindUI=function(){
+  if(typeof document==='undefined'||!document.getElementById) return;
+  ['shopName','dayN','repN','money','newsTxt','custAv','custArch','custWant','patBar',
+   'crisp','crispV','sizeV','sizeSeg','price','priceV','oilPct','oilBar','fatSeg',
+   'oilBtn','oilCost','serveBtn','rate','resetBtn'].forEach(function(id){ el[id]=$(id); });
+
+  // size segmented control
+  if(el.sizeSeg){ el.sizeSeg.innerHTML='';
+    SIZES.forEach(function(s){ var b=document.createElement('button'); b.textContent=s.label; b.dataset.id=s.id;
+      b.onclick=function(){ G.size=s.id; syncControls(); };
+      el.sizeSeg.appendChild(b); }); }
+  // fat segmented
+  if(el.fatSeg){ el.fatSeg.innerHTML='';
+    FATS.forEach(function(f){ var b=document.createElement('button'); b.textContent=f.label; b.dataset.id=f.id;
+      b.onclick=function(){ G.fat=f.id; syncControls(); toast('Vet: <b>'+f.label+'</b>'); };
+      el.fatSeg.appendChild(b); }); }
+  if(el.crisp) el.crisp.oninput=function(){ G.crisp=+el.crisp.value; syncControls(); };
+  if(el.price) el.price.oninput=function(){ G.price=+el.price.value; syncControls(); };
+  if(el.serveBtn) el.serveBtn.onclick=serve;
+  if(el.oilBtn) el.oilBtn.onclick=refreshOil;
+  if(el.resetBtn) el.resetBtn.onclick=function(){
+    if(typeof confirm==='undefined'||confirm('Nieuw spel starten? Je huidige frituur gaat verloren.')){
+      G=freshGame(); save(); syncControls(); nextCustomerSoon(0.5); toast('Nieuwe frituur geopend!');
+    }
+  };
+  syncControls();
+};
+
+var syncControls=function(){
+  if(!el.money) return;
+  el.shopName.textContent=G.shop;
+  el.dayN.textContent=G.day;
+  el.repN.textContent=Math.round(G.rep);
+  el.money.textContent=fmtFr(G.money);
+  el.crisp.value=G.crisp; el.crispV.textContent=crispLabel(G.crisp);
+  el.price.value=G.price; el.priceV.textContent=G.price;
+  el.sizeV.textContent=sizeById(G.size).label;
+  Array.prototype.forEach.call(el.sizeSeg.children,function(b){ b.classList.toggle('on',b.dataset.id===G.size); });
+  Array.prototype.forEach.call(el.fatSeg.children,function(b){ b.classList.toggle('on',b.dataset.id===G.fat); });
+  var f=fatById(G.fat);
+  el.oilCost.textContent='−'+f.refill+' fr.';
+  el.oilPct.textContent=Math.round(G.oil)+'%';
+  var ob=el.oilBar;
+  ob.style.width=clamp(G.oil,0,100)+'%';
+  ob.style.background = G.oil>=60?'linear-gradient(90deg,#e8c85a,#ffd447)'
+    : G.oil>=35?'linear-gradient(90deg,#c79a34,#f0a93b)'
+    : G.oil>=20?'linear-gradient(90deg,#8f6a22,#e5624a)':'#4a3414';
+  el.oilBtn.classList.toggle('low',G.oil<30);
+  el.oilBtn.disabled = G.oil>=99 || G.money<f.refill;
+  el.newsTxt.textContent=G.news;
+};
+
+/* ---------- customer flow ---------- */
+var nextCustomerSoon=function(sec){ G.cust=null; G.sinceCust=-(sec||rnd(1.4,3.2)); showOrder(); };
+var showOrder=function(){
+  if(!el.custArch) return;
+  if(!G.cust){
+    el.custArch.textContent='Nog geen klant…';
+    el.custWant.textContent='De volgende klant is onderweg. Stel ondertussen je friet af.';
+    el.custAv.textContent='🙂';
+    el.patBar.style.width='0%';
+    document.getElementById('order').classList.add('idle');
+    return;
+  }
+  var c=G.cust, a=c.arch, s=sizeById(c.size);
+  document.getElementById('order').classList.remove('idle');
+  el.custAv.textContent=a.emoji;
+  el.custArch.textContent=a.name;
+  el.custWant.innerHTML=a.line+'<br>Wil <em>'+c.crispWord+'e</em> friet, portie <em>'+s.label+'</em>'
+    +(c.sauce?', <em>met</em> saus':', <em>zonder</em> saus')+'.';
+};
+
+var serve=function(){
+  if(!G.cust){ toast('Er staat nog geen klant aan de toog.'); return; }
+  var c=G.cust, a=c.arch, s=sizeById(G.size), want=sizeById(c.size), f=fatById(G.fat);
+  // quality of the fries
+  var q=serveQuality({crisp:G.crisp,band:a.band,oil:G.oil,potato:G.potato,fat:f.tasteMul});
+  // size mismatch penalty (gave smaller than they wanted hurts more)
+  var sizeGap=Math.abs(SIZES.indexOf(s)-SIZES.indexOf(want));
+  var sizeMul=clamp(1-sizeGap*0.14,0.5,1);
+  // sauce
+  var sauceMul=(c.sauce)?1:0.94;
+  var sat=clamp(q*sizeMul*sauceMul,0,1.05); // satisfaction 0..1
+  // money: price + tip (tip scales with satisfaction & archetype generosity)
+  var revenue=G.price - s.cost;
+  var tip=Math.round(G.price*a.tip*sat*2);
+  G.money += G.price + tip;
+  G.served++;
+  // reputation swing
+  var dRep = (sat-0.62)*7;                // >0.62 gains, below loses
+  if(G.oil<20) dRep-=2;                    // black-oil disgust
+  G.rep=clamp(G.rep+dRep,0,100);
+  // oil decays per batch (bigger portion = more decay)
+  var decay=(2.2+ s.grams/260) * f.decay;
+  G.oil=clamp(G.oil-decay,0,100);
+  // feedback
+  var lab = sat>0.85?'Perfect! ':sat>0.62?'Tevreden. ':sat>0.4?'Njah… ':'Ontevreden! ';
+  popScene((sat>0.6?'good':'bad'), (sat>0.6?'+':'')+fmtFr(G.price+tip)+' fr.');
+  if(tip>0 && sat>0.6) setTimeout(function(){ popScene('rep','fooi +'+tip); },160);
+  toast(lab + (dRep>=0?'★ +':'★ ')+dRep.toFixed(1)+' reputatie');
+  save(); syncControls();
+  nextCustomerSoon(rnd(1.6,3.4));
+};
+
+var refreshOil=function(){
+  var f=fatById(G.fat);
+  if(G.oil>=99){ toast('Het vet is nog vers.'); return; }
+  if(G.money<f.refill){ toast('Te weinig geld voor vers vet.'); return; }
+  G.money-=f.refill; G.oil=100;
+  popScene('bad','−'+f.refill+' fr.'); toast('Vers <b>'+f.label+'</b>! De friet wordt weer goudgeel.');
+  save(); syncControls();
+};
+
+/* ---------- floating popups & toast ---------- */
+var popScene=function(kind,txt){
+  if(!floatL||!document.createElement) return;
+  var d=document.createElement('div'); d.className='pop '+kind; d.textContent=txt;
+  d.style.left=(38+Math.random()*20)+'%'; d.style.top=(52+Math.random()*10)+'%';
+  floatL.appendChild(d); setTimeout(function(){ d.remove&&d.remove(); },1150);
+};
+var toastT=null;
+var toast=function(html){
+  var t=$('toast'); if(!t) return; t.innerHTML=html; t.classList.add('show');
+  if(toastT) clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove('show'); },2200);
+};
+
+/* ---------- news / day events (seed of the 'event day' model) ---------- */
+var NEWS=[
+  {t:"📻 Mooi weer vandaag — meer wandelaars, meer klanten!",d:1.25},
+  {t:"⚽ De match is bezig — het wordt druk na affluiten.",d:1.35},
+  {t:"🌧️ Regen op komst. Minder passage aan de toog.",d:0.75},
+  {t:"🎡 Kermis op het plein! Volk alom.",d:1.5},
+  {t:"🥔 Aardappelprijs stijgt licht deze week.",d:0.95},
+  {t:"🎉 Er is een fuif in de parochiezaal — nachtwerk!",d:1.3},
+  {t:"😴 Rustige dag in 't dorp.",d:0.9}
+];
+var newDay=function(){
+  G.day++; G.dayT=0;
+  var n=pick(NEWS); G.news=n.t; G.demandMod=n.d;
+  toast('<b>Dag '+G.day+'</b> — '+n.t);
+  save();
+};
+
+/* ---------- main loop ---------- */
+var last=0, acc=0;
+var frame=function(ts){
+  if(typeof requestAnimationFrame==='undefined') return;
+  var dt=last?Math.min((ts-last)/1000,0.1):0.016; last=ts; T+=dt;
+  // day clock
+  G.dayT+=dt; if(G.dayT>=G.dayLen) newDay();
+  // customer arrival
+  if(!G.cust){ G.sinceCust+=dt; if(G.sinceCust>=0){ G.cust=makeCustomer(G); G.sinceCust=0; showOrder(); } }
+  else {
+    G.cust.pat-=dt;
+    if(el.patBar) el.patBar.style.width=clamp(G.cust.pat/G.cust.patMax*100,0,100)+'%';
+    if(G.cust.pat<=0){ // walked away
+      G.rep=clamp(G.rep-1.5,0,100); popScene('bad','klant weg!'); toast('De klant is het beu en vertrekt. ★ −1,5');
+      save(); syncControls(); nextCustomerSoon(rnd(1.5,3));
+    }
+  }
+  // idle income: passers-by buying at the window
+  var fair=sizeById(G.size).base;
+  var appeal=priceAppeal(G.price,fair);
+  var foot=0.55*appeal*(0.45+G.rep/90)*G.demandMod*oilQuality(G.oil);
+  var perSec=foot*(G.price-sizeById(G.size).cost*0.6);
+  acc+=foot*dt;
+  if(acc>=1){ var n=Math.floor(acc); acc-=n;
+    G.money+= n*Math.max(6,(G.price-sizeById(G.size).cost));
+    G.oil=clamp(G.oil-n*0.35*fatById(G.fat).decay,0,100);
+  }
+  if(el.rate) el.rate.textContent=perSec.toFixed(1).replace('.',',')+' fr./sec  ·  '+G.served+' geserveerd';
+  if(el.money) el.money.textContent=fmtFr(G.money);
+
+  drawScene();
+  requestAnimationFrame(frame);
+};
+
+/* ---------- boot ---------- */
+var boot=function(){
+  var had=load();
+  bindUI();
+  if(!had){ toast('🍟 Welkom bij <b>'+G.shop+'</b>! Bak de perfecte friet.'); }
+  nextCustomerSoon(2.0);
+  syncControls();
+  if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
+  // autosave
+  if(typeof setInterval!=='undefined') setInterval(save,5000);
+};
+if(typeof document!=='undefined' && document.addEventListener){
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+}
+
+/* ---------- test surface ---------- */
+if(typeof globalThis!=='undefined'){
+  globalThis.__FT={ clamp:clamp, lerp:lerp, fmtFr:fmtFr, SIZES:SIZES, FATS:FATS, ARCHETYPES:ARCHETYPES,
+    sizeById:sizeById, fatById:fatById, crispLabel:crispLabel, crispQuality:crispQuality,
+    oilQuality:oilQuality, priceAppeal:priceAppeal, serveQuality:serveQuality,
+    freshGame:freshGame, makeCustomer:makeCustomer };
+}
+</script>
+</body>
+</html>
