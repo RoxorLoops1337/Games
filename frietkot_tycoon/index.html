@@ -102,6 +102,7 @@
     <div class="chip" id="season">🌸 Lente</div>
     <div class="chip">✨<b id="appeal">0</b></div>
     <div class="chip">🎯<b id="goalN">0/0</b></div>
+    <div class="chip" id="contest" title="Weekuitdaging">🏆 –</div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
     <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
@@ -259,6 +260,18 @@ var SEASONS=[
 ];
 var SEASON_LEN=3;
 var seasonFor=function(week){ return SEASONS[Math.floor(((week||1)-1)/SEASON_LEN)%4]; };
+
+// weekly contests: a rotating bonus objective on top of the serve-goal
+var CONTESTS=[
+  {id:'tourists', tag:'Toeristen',  metric:'tourist', target:5,   desc:'Bedien 5 toeristen 📸', reward:{faam:4,cash:250}},
+  {id:'earn',     tag:'Kassa',      metric:'cash',    target:700, desc:'Verdien €700 deze week', reward:{faam:5,cash:0}},
+  {id:'teens',    tag:'Jeugd',      metric:'teen',    target:6,   desc:'Bedien 6 jongeren 🧑‍🎓', reward:{faam:4,cash:250}},
+  {id:'merges',   tag:'Fusie',      metric:'merges',  target:4,   desc:'Voer 4 merges uit ✨', reward:{faam:3,cash:300}},
+  {id:'busy',     tag:'Drukte',     metric:'served',  target:22,  desc:'Bedien 22 klanten', reward:{faam:4,cash:200}}
+];
+var contestDef=function(id){ for(var i=0;i<CONTESTS.length;i++) if(CONTESTS[i].id===id) return CONTESTS[i]; return null; };
+var contestFor=function(week){ return CONTESTS[(((week||1)-1)%CONTESTS.length+CONTESTS.length)%CONTESTS.length]; };
+var newContest=function(week){ return { id:contestFor(week).id, progress:0, done:false }; };
 
 var RANKS=[ [0,'Buurtfrituur'],[12,'Gekend frietkot'],[30,'Frietbaron'],[60,'Stadslegende'],
   [110,'Nationale trots'],[200,'Frietkeizer'] ];
@@ -429,7 +442,8 @@ var freshGame=function(){
     research:{}, staff:0, crew:[], custs:[], spawnT:1.0, placing:null, selected:null, milestone:0, running:false,
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
-    floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices() };
+    floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices(),
+    contest:newContest(1), weekCash:0, weekMerges:0 };
   return g;
 };
 var SAVE_KEY='ftstory_save';
@@ -437,10 +451,12 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,bought:G.bought,
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
-  floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices })); }catch(e){} };
+  floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
+  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  if(!G.contest||!contestDef(G.contest.id)) G.contest=newContest(G.week);
   if(!G.prices) G.prices=defaultPrices(); SIZES.forEach(function(z){ if(G.prices[z.id]==null) G.prices[z.id]=z.fair; });
   if(!G.crew) G.crew=[]; if(!G.crew.length && G.staff>0){ for(var ci=0;ci<G.staff;ci++) G.crew.push({name:STAFF_NAMES[ci%STAFF_NAMES.length],spdLv:1,sklLv:1}); } G.staff=G.crew.length;
   if(!G.bought) G.bought={};
@@ -449,14 +465,23 @@ var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) retur
   G.objs.forEach(function(x){ if(x.lvl==null) x.lvl=1; });
   if(!G.dish) G.dish={friet:{rank:1}}; dishesUnlocked(G).forEach(function(id){ if(!G.dish[id]) G.dish[id]={rank:1}; });
   G.custs=[]; G.running=true; return true; }catch(e){ return false; } };
+// contest progress: called from serve/merge with a metric + amount
+var awardContest=function(c){ G.faam+=c.reward.faam||0; G.money+=c.reward.cash||0;
+  bigPop('UITDAGING! 🏆','#ffd447'); confetti(); starRing(worldW()/2,GH*TS/2,14); chime([700,940,1180],0.1);
+  toast('🏆 Uitdaging voltooid: <b>'+c.desc+'</b> — +★'+(c.reward.faam||0)+(c.reward.cash?' +'+fmt(c.reward.cash)+'💶':'')); };
+var bumpContest=function(metric,amt){ if(!G.contest||G.contest.done) return; var c=contestDef(G.contest.id); if(!c||c.metric!==metric) return;
+  G.contest.progress+=amt; if(G.contest.progress>=c.target){ G.contest.done=true; awardContest(c); }
+  if(el.contest) syncHUD(); };
 var newWeek=function(){
   if(G.weekServed>=G.goalTarget){ var rw=Math.round(2+G.week*0.8), cash=Math.round(150+G.week*45);
     G.faam+=rw; G.money+=cash; confetti(); bigPop('WEEKDOEL!','#7bd66b');
     toast('🎯 Weekdoel gehaald! <b>+★'+rw+'</b> +'+fmt(cash)+' 💶'); beep(680,0.1,0.06); setTimeout(function(){ beep(900,0.12,0.06); },110); }
   var prevSeason=seasonFor(G.week);
   G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week);
+  G.contest=newContest(G.week); G.weekCash=0; G.weekMerges=0;    // fresh weekly challenge
   if(G.week>=2 && !G.criticPending && Math.random()<0.4) G.criticPending=true;   // a critic may drop by this week
   var s=seasonFor(G.week); if(s!==prevSeason){ toast(s.emoji+' Het is nu <b>'+s.nm+'</b>!'); }
+  var nc=contestDef(G.contest.id); if(nc) toast('🏆 Nieuwe uitdaging: <b>'+nc.desc+'</b>');
   save(); syncHUD();
 };
 var occupied=function(gx,gy){ if(gx<0||gy<0||gx>=GW||gy>=GH) return true; if(gx===DOOR.gx&&gy===DOOR.gy) return true;
@@ -494,6 +519,7 @@ var serveDone=function(c){
   var v=orderValue(G,c.type,comboMulNow());
   c.val=v; G.money+=v; G.served++; G.weekServed++;
   if(G.rush) rushServed++;
+  G.weekCash=(G.weekCash||0)+v; bumpContest('served',1); bumpContest('cash',v); if(c.type&&c.type.id) bumpContest(c.type.id,1);
   if(Math.random()<0.25) G.regulars++;                 // happy customer becomes a regular → compounding traffic
   var hearts=Math.max(1,Math.round(1*c.type.heart));
   c.hearts=hearts;
@@ -798,11 +824,12 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','season','appeal','rankChip','shopList','menuBody','resList','staffList','floorList',
+var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','shopList','menuBody','resList','staffList','floorList',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
   if(el.season){ var ss=seasonFor(G.week); el.season.textContent=ss.emoji+' '+ss.nm; }
+  if(el.contest){ var cc=G.contest&&contestDef(G.contest.id); el.contest.textContent=cc?('🏆 '+cc.tag+' '+(G.contest.done?'✓':Math.min(G.contest.progress,cc.target)+'/'+cc.target)):'🏆 –'; if(cc) el.contest.title='Weekuitdaging: '+cc.desc; }
   if(el.goalN) el.goalN.textContent=Math.min(G.weekServed,G.goalTarget)+'/'+G.goalTarget;
   var rp=rankProgress(G.served);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
@@ -1026,7 +1053,7 @@ var onUp=function(ev){ delete ptrs[pid(ev)]; if(Object.keys(ptrs).length<2) pinc
     if(!d.moved){ drag=null; toast('Sleep <b>'+objDef(o.id).nm+' Lv'+(o.lvl||1)+'</b> op een gelijke om te <b>verbeteren</b> · sleep de vloer om rond te kijken, scroll/knijp om te zoomen.'); return; }
     var c=dropCell(); drag=null; var res=applyDrop(o,c.gx,c.gy);
     if(res==='merge'){ var dst=objAt(c.gx,c.gy); dst._pop=POP_DUR; var mc=tileC(dst.gx,dst.gy);
-      bigPop('Lv'+dst.lvl+'!','#ffd447'); mergeBurst(mc.x,mc.y,dst.lvl);
+      bigPop('Lv'+dst.lvl+'!','#ffd447'); mergeBurst(mc.x,mc.y,dst.lvl); G.weekMerges=(G.weekMerges||0)+1; bumpContest('merges',1);
       var dd=objDef(dst.id); toast('🔧 '+dd.nm+' → <b>niveau '+dst.lvl+'</b> · ×'+power(dst.lvl).toFixed(2)+' op 1 tegel!'); renderAll(); }
     else if(res==='move'){ beep(360,0.05,0.04); renderAll(); }
     else { beep(200,0.06,0.05); } return; }
@@ -1109,6 +1136,7 @@ if(typeof globalThis!=='undefined'){
     SEASONS:SEASONS, seasonFor:seasonFor,
     staffSpeed:staffSpeed, staffSkill:staffSkill, serviceBonus:serviceBonus, trainCost:trainCost, crewCount:crewCount,
     SIZES:SIZES, sizeDef:sizeDef, defaultPrices:defaultPrices, priceOf:priceOf, menuAvg:menuAvg, valueFactor:valueFactor,
+    CONTESTS:CONTESTS, contestDef:contestDef, contestFor:contestFor, newContest:newContest,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,

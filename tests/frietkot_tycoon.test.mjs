@@ -355,5 +355,17 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.orderValue(ranked, { fav: null, spend: 1 }, 1) > base, 'higher friet rank raises the ticket at the same prices');
 }
 
+// ---- weekly contests ----
+{
+  ok(FS.CONTESTS.length >= 4, 'a rotation of weekly contests');
+  ok(FS.contestFor(1).id !== FS.contestFor(2).id, 'the contest rotates week to week');
+  ok(FS.contestFor(1).id === FS.contestFor(1 + FS.CONTESTS.length).id, 'contests cycle');
+  const c = FS.newContest(1);
+  ok(c.progress === 0 && c.done === false && FS.contestDef(c.id), 'a fresh contest starts at 0 and is real');
+  FS.CONTESTS.forEach(ct => { ok(ct.target > 0 && ct.reward && (ct.reward.faam || ct.reward.cash), `contest ${ct.id} has a target and a reward`); });
+  const g = FS.freshGame();
+  ok(g.contest && FS.contestDef(g.contest.id), 'fresh game carries a live contest');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
