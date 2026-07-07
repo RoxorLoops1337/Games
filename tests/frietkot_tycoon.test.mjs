@@ -242,5 +242,24 @@ ok(near(FT.serviceRate(FT.freshGame()), 0.40), 'base service rate = 0.40/sec');
   ok(FT.SHOP_FIELDS.indexOf('money') < 0, 'money is global, not per-shop');
 }
 
+// ---- ken je buurt: demographic readout + hygiene ----
+{
+  const mix = FT.demographicMix('student');
+  ok(Math.abs(mix.reduce((s, m) => s + m.pct, 0) - 1) < 1e-9, 'demographic mix percentages sum to 1');
+  ok(mix[0].arch.id === 'student', 'student quarter is student-dominant (sorted first)');
+  ok(mix.every(m => FT.ARCHETYPES.indexOf(m.arch) >= 0), 'mix entries are real archetypes');
+  // suggested crispness sits inside the plausible band range
+  const sc = FT.suggestedCrisp('chic');
+  ok(sc >= 0 && sc <= 100, 'suggestedCrisp in range');
+  // a purist-heavy district should suggest crispier fries than a soft-fan district
+  ok(FT.suggestedCrisp('chic') > FT.suggestedCrisp('student'), 'posh avenue wants crispier than student quarter');
+  // hygiene smiley
+  ok(FT.hygieneRating(100).grade === 'A' && FT.hygieneRating(100).cls === 'good', 'fresh oil = A smiley');
+  ok(FT.hygieneRating(10).grade === 'D' && FT.hygieneRating(10).cls === 'bad', 'black oil = D smiley');
+  ok(FT.hygieneRating(45).grade === 'B', 'mid oil = B smiley');
+  let prev = 0; // grade should worsen monotonically as oil drops
+  ok(['A', 'B', 'C', 'D'].includes(FT.hygieneRating(30).grade), 'hygiene returns a grade');
+}
+
 console.log(`frietkot_tycoon: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

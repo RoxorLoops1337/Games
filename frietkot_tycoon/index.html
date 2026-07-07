@@ -70,6 +70,8 @@
   #order .pat i{display:block;height:100%;background:linear-gradient(90deg,#e5624a,#f0a93b,#7bd66b);
     transition:width .1s linear}
   #order.idle .who{color:var(--ink2)}
+  #order{cursor:pointer}
+  #order:active{filter:brightness(1.08)}
   .avatar{width:40px;height:40px;border-radius:8px;background:var(--slot);
     display:flex;align-items:center;justify-content:center;font-size:24px;border:1px solid #0d0a12;flex:0 0 auto}
   /* ---- controls ---- */
@@ -240,6 +242,17 @@
     <div class="scont">
       <div id="mapList"></div>
       <p style="font-size:11px;color:var(--ink2);padding:6px 2px 0;line-height:1.4">Open een frietkot in een nieuwe buurt — elke buurt heeft z'n eigen publiek. Je andere frietkoten blijven verdienen terwijl jij er ééntje beheert.</p>
+    </div>
+  </div>
+</div>
+
+<div id="buurtinfo" class="hidden">
+  <div class="sheet">
+    <div class="shead"><span>🏘️ <span id="biName">Buurt</span></span><button class="x" id="biClose">✕</button></div>
+    <div class="scont">
+      <div id="biTip"></div>
+      <div class="ssec"><h3>👥 Wie komt hier?</h3><div id="biMix"></div></div>
+      <div class="ssec"><h3>🧼 Hygiëne</h3><div id="biHyg"></div></div>
     </div>
   </div>
 </div>
@@ -484,6 +497,22 @@ var archetypeFor=function(weights,r){
   for(i=0;i<ids.length;i++){ x-=weights[ids[i]]; if(x<=0) return archById(ids[i]); }
   return archById(ids[ids.length-1]);
 };
+
+/* ---------- "ken je buurt": read the local demographic mix ---------- */
+// the customer mix of a district as [{arch, pct}] sorted most-common first
+var demographicMix=function(districtId){ var w=districtById(districtId).weights, tot=0, out=[], k;
+  for(k in w) tot+=w[k];
+  for(k in w) out.push({ arch:archById(k), pct:w[k]/tot });
+  out.sort(function(a,b){ return b.pct-a.pct; }); return out; };
+// the crispness that best fits the whole neighbourhood (demand-weighted band centre)
+var suggestedCrisp=function(districtId){ var s=0; demographicMix(districtId).forEach(function(m){
+  s+=m.pct*(m.arch.band[0]+m.arch.band[1])/2; }); return Math.round(s); };
+// AFSCA-style hygiene "Smiley" from the frying-fat freshness
+var hygieneRating=function(oil){
+  if(oil>=60) return {emoji:'😊', label:'proper',        grade:'A', cls:'good'};
+  if(oil>=35) return {emoji:'🙂', label:'oké',           grade:'B', cls:'good'};
+  if(oil>=20) return {emoji:'😐', label:'twijfelachtig', grade:'C', cls:'warn'};
+  return          {emoji:'🤢', label:'vies',          grade:'D', cls:'bad'}; };
 
 /* ---------- customer generation ---------- */
 var makeCustomer=function(G){
@@ -775,7 +804,7 @@ var bindUI=function(){
    'oilBtn','oilCost','rate','resetBtn',
    'shopBtn','shopClose','upgList','staffBox','snackList','sauceList',
    'pricesBtn','pricesSheet','pricesClose','priceSizes','priceSnacks','priceSauces',
-   'mapBtn','mapClose','mapList'].forEach(function(id){ el[id]=$(id); });
+   'mapBtn','mapClose','mapList','order','biClose','biMix','biHyg'].forEach(function(id){ el[id]=$(id); });
 
   // fat segmented
   if(el.fatSeg){ el.fatSeg.innerHTML='';
@@ -790,6 +819,8 @@ var bindUI=function(){
   if(el.pricesClose) el.pricesClose.onclick=closePrices;
   if(el.mapBtn) el.mapBtn.onclick=openMap;
   if(el.mapClose) el.mapClose.onclick=closeMap;
+  if(el.order) el.order.onclick=openBuurtInfo;
+  if(el.biClose) el.biClose.onclick=closeBuurtInfo;
   if(el.resetBtn) el.resetBtn.onclick=function(){
     if(typeof confirm==='undefined'||confirm('Nieuw spel starten? Je huidige frituur gaat verloren.')){
       G=freshGame(); save(); syncControls(); updateBuurt(); toast('Nieuwe frituur geopend!');
@@ -827,8 +858,10 @@ var updateBuurt=function(){
   var arr=arrivalRate(G,G.demandMod), srv=serviceRate(G);
   var thru=Math.min(arr,srv);                       // effective customers/sec actually served
   var satPct=Math.round(G.satAvg*100);
+  var hy=hygieneRating(G.oil);
   el.buurtAv.textContent=d.emoji;
-  el.buurtName.textContent='Buurt: '+d.name;
+  el.buurtName.innerHTML='Buurt: '+d.name+'  <span style="color:var(--'+hy.cls+')">'+hy.emoji+' '+hy.grade+'</span>'
+    +'  <span style="font-weight:600;color:var(--ink2);font-size:11px">ⓘ ken je buurt</span>';
   el.buurtStat.innerHTML='Rij <em>'+G.queue.length+'</em> · tevredenheid <em>'+satPct+'%</em>'
     +' · <em>'+(arr*60).toFixed(0)+'</em> klanten/min'
     +(srv<arr?' · <em style="color:var(--bad)">rij groeit!</em>':'');
@@ -994,6 +1027,30 @@ var renderMap=function(){
   }
 };
 
+/* ---------- "ken je buurt" info sheet ---------- */
+var openBuurtInfo=function(){ var m=$('buurtinfo'); if(m){ m.classList.remove('hidden'); renderBuurtInfo(); } };
+var closeBuurtInfo=function(){ var m=$('buurtinfo'); if(m) m.classList.add('hidden'); };
+var renderBuurtInfo=function(){
+  if(!el.biMix) return;
+  var d=districtById(G.district), sc=suggestedCrisp(G.district);
+  var nm=$('biName'); if(nm) nm.textContent=d.name;
+  var tip=$('biTip'); if(tip) tip.innerHTML='<div class="item"><div class="ic">🍟</div><div class="info">'
+    +'<div class="t">Tip: zet je krokantheid rond <b style="color:var(--gold)">'+sc+'</b> ('+crispLabel(sc)+')</div>'
+    +'<div class="s">Dat past het best bij de mix hier. Drukte in deze buurt: ×'+d.foot.toFixed(2)+'.</div></div></div>';
+  el.biMix.innerHTML=demographicMix(G.district).map(function(m){ var a=m.arch, pct=Math.round(m.pct*100);
+    var sizes=a.sizes.map(function(id){ return sizeById(id).label; }).join(' / ');
+    return '<div class="item"><div class="ic">'+a.emoji+'</div><div class="info">'
+      +'<div class="t">'+a.name+' <span style="color:var(--gold)">'+pct+'%</span></div>'
+      +'<div class="s">wil <b>'+crispLabel((a.band[0]+a.band[1])/2)+'e</b> friet ('+a.band[0]+'–'+a.band[1]+') · '+sizes+'</div></div>'
+      +'<div style="width:60px;height:8px;background:var(--slot);border-radius:4px;overflow:hidden;flex:0 0 auto">'
+      +'<i style="display:block;height:100%;width:'+pct+'%;background:var(--gold)"></i></div></div>';
+  }).join('');
+  var hy=hygieneRating(G.oil), hb=el.biHyg;
+  if(hb) hb.innerHTML='<div class="item"><div class="ic">'+hy.emoji+'</div><div class="info">'
+    +'<div class="t">Smiley: <span style="color:var(--'+hy.cls+')">'+hy.grade+' — '+hy.label+'</span></div>'
+    +'<div class="s">Volgt je frituurvet ('+Math.round(G.oil)+'%). Vers vet = betere Smiley &amp; meer volk; oud vet schrikt klanten af (en straks de inspecteur).</div></div></div>';
+};
+
 /* ---------- news / day events (seed of the 'event day' model) ---------- */
 var NEWS=[
   {t:"📻 Mooi weer vandaag — meer wandelaars, meer klanten!",d:1.25},
@@ -1093,6 +1150,7 @@ if(typeof globalThis!=='undefined'){
     FAIR_PRICE:FAIR_PRICE, defaultPrices:defaultPrices, priceOf:priceOf, itemAppeal:itemAppeal,
     friesAppeal:friesAppeal, itemCost:itemCost,
     newShop:newShop, openCost:openCost, SHOP_FIELDS:SHOP_FIELDS,
+    demographicMix:demographicMix, suggestedCrisp:suggestedCrisp, hygieneRating:hygieneRating,
     freshGame:freshGame, makeCustomer:makeCustomer };
 }
 </script>
