@@ -113,8 +113,13 @@ var pick=function(a){return a[Math.floor(Math.random()*a.length)];};
 var fmt=function(n){ n=Math.round(n); var s=Math.abs(n)+'',o='';for(var i=0;i<s.length;i++){if(i>0&&(s.length-i)%3===0)o+='.';o+=s[i];}return (n<0?'-':'')+o; };
 
 /* ---------- tuning (single table) ---------- */
-var BAL={ GW:7, GH:5, TS:32, spawnBase:4.5, spawnMin:1.3, serviceBase:2.6, eatTime:5.0,
-  weekLen:34, custSpeed:36, queuePatience:14, frietPrice:30, saucePrice:8, staffBase:220, staffStep:1.7 };
+var BAL={ GW:6, GH:4, TS:32, spawnBase:4.5, spawnMin:1.3, serviceBase:2.6, eatTime:5.0,
+  weekLen:34, custSpeed:36, queuePatience:16, frietPrice:30, saucePrice:8, staffBase:220, staffStep:1.7 };
+// the shop starts small & cosy (6×4) and can be expanded — each level costs more.
+var GRID_LEVELS=[ {gw:6,gh:4}, {gw:7,gh:5}, {gw:8,gh:5}, {gw:8,gh:6}, {gw:9,gh:6}, {gw:10,gh:7} ];
+var expandCost=function(lvl){ return Math.round(500*Math.pow(2.6, lvl)); };  // €cost to go from lvl → lvl+1
+var shopSize=function(G){ var i=clamp((G&&G.expand)||0,0,GRID_LEVELS.length-1); return GRID_LEVELS[i]; };
+var maxExpand=function(){ return GRID_LEVELS.length-1; };
 
 /* ---------- placeable objects ---------- */
 var OBJECTS=[
@@ -269,6 +274,18 @@ var $=function(id){ return (typeof document!=='undefined'&&document.getElementBy
 var scene=$('scene'), ctx=scene&&scene.getContext?scene.getContext('2d'):null;
 var fxL=$('fx');
 var DOOR={gx:(GW>>1), gy:GH-1};
+// world = the grid floor + a pavement strip below the door where the outside queue waits.
+var OUTH=44;
+var worldW=function(){ return GW*TS; };
+var worldH=function(){ return GH*TS + OUTH; };
+// camera: zoom 1 = whole shop visible (centred); zoom>1 pans around. View-only, not saved.
+var cam={ zoom:1, cx:0, cy:0 }, ZMAX=2.8;
+var applySize=function(){ var s=shopSize(G); GW=s.gw; GH=s.gh; DOOR={gx:(GW>>1), gy:GH-1}; };
+var recenterCam=function(){ cam.zoom=1; cam.cx=worldW()/2; cam.cy=worldH()/2; };
+var clampCam=function(){ if(cam.zoom<1) cam.zoom=1; if(cam.zoom>ZMAX) cam.zoom=ZMAX;
+  var hw=worldW()/(2*cam.zoom), hh=worldH()/(2*cam.zoom);
+  cam.cx=clamp(cam.cx, hw, worldW()-hw); cam.cy=clamp(cam.cy, hh, worldH()-hh);
+  if(cam.zoom<=1.0001){ cam.cx=worldW()/2; cam.cy=worldH()/2; } };
 // toog merge-level art: counter_01 (simpel hout) → counter_75 (sci-fi "all friet is one"). Graceful: emoji fallback.
 var MAX_TOOG=75;
 var COUNTER_IMG=[];
@@ -306,9 +323,9 @@ var loadFloors=function(){ if(typeof Image==='undefined') return;
 
 var G=null;
 var freshGame=function(){
-  var g={ money:400, faam:0, week:1, weekT:0, served:0, rank:RANKS[0][1],
+  var g={ money:400, faam:0, week:1, weekT:0, served:0, rank:RANKS[0][1], expand:0,
     objs:[ {id:'friteuse',gx:1,gy:0,lvl:1},{id:'toog',gx:2,gy:0,lvl:1},{id:'toog',gx:4,gy:0,lvl:1},
-      {id:'staantafel',gx:6,gy:1,lvl:1},{id:'staantafel',gx:6,gy:2,lvl:1},{id:'plant',gx:6,gy:0,lvl:1} ],
+      {id:'staantafel',gx:5,gy:1,lvl:1},{id:'staantafel',gx:5,gy:2,lvl:1},{id:'plant',gx:0,gy:0,lvl:1} ],
     research:{}, staff:0, custs:[], spawnT:1.0, placing:null, selected:null, milestone:0, running:false,
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
@@ -320,12 +337,13 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,bought:G.bought,
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
-  floor:G.floor,floorsOwned:G.floorsOwned })); }catch(e){} };
+  floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
   if(!G.bought) G.bought={};
   if(!G.floor) G.floor='planken'; if(!G.floorsOwned) G.floorsOwned={}; G.floorsOwned.planken=true;
+  G.expand=clamp(G.expand||0,0,maxExpand()); applySize(); recenterCam();
   G.objs.forEach(function(x){ if(x.lvl==null) x.lvl=1; });
   if(!G.dish) G.dish={friet:{rank:1}}; dishesUnlocked(G).forEach(function(id){ if(!G.dish[id]) G.dish[id]={rank:1}; });
   G.custs=[]; G.running=true; return true; }catch(e){ return false; } };
@@ -341,10 +359,19 @@ var objsOfKind=function(kind){ return G.objs.filter(function(o){ var d=objDef(o.
 var tileC=function(gx,gy){ return {x:gx*TS+TS/2, y:gy*TS+TS/2}; };
 
 /* ---------- spawn & sim ---------- */
+var qseq=0;
 var makeCust=function(){
-  var t=rollType(G); var d=tileC(DOOR.gx,DOOR.gy);
-  return { type:t, x:d.x, y:TS*GH+8, tx:d.x, ty:d.y, state:'enter', counter:null, leaner:null,
-    timer:0, wait:0, val:0, hearts:0, emoji:t.emoji, bob:Math.random()*6, animT:Math.random()*2, moving:false };
+  var t=rollType(G); var dx=tileC(DOOR.gx,DOOR.gy).x;
+  return { type:t, x:dx+rnd(-30,30), y:worldH()+16, tx:dx, ty:worldH()+16, state:'queue', qorder:qseq++,
+    counter:null, leaner:null, timer:0, wait:0, val:0, hearts:0, emoji:t.emoji, bob:Math.random()*6, animT:Math.random()*2, moving:false };
+};
+// lay out the outside queue (single file leading left from the door) + admit the front when a counter frees
+var layoutQueue=function(){
+  var q=G.custs.filter(function(c){ return c.state==='queue'; }).sort(function(a,b){ return a.qorder-b.qorder; });
+  var doorX=tileC(DOOR.gx,DOOR.gy).x, qy=GH*TS+OUTH*0.46;
+  for(var i=0;i<q.length;i++){ q[i].tx=clamp(doorX-i*13,9,worldW()-9); q[i].ty=qy; }
+  var fc; while(q.length && (fc=freeCounter())){ var head=q.shift(); fc._busy=head; head.counter=fc;
+    var t=tileC(fc.gx,fc.gy); head.tx=t.x; head.ty=t.y+2; head.state='enter'; head.wait=0; }
 };
 var freeCounter=function(){ var cs=objsOfKind('counter'); for(var i=0;i<cs.length;i++){ if(!cs[i]._busy) return cs[i]; } return null; };
 var freeLeaner=function(){ var ls=objsOfKind('leaner'); for(var i=0;i<ls.length;i++){ if(!ls[i]._busy) return ls[i]; } return null; };
@@ -370,16 +397,16 @@ var serveDone=function(c){
   // go eat at a leaner if one's free, else leave
   var ln=freeLeaner();
   if(ln){ ln._busy=c; c.leaner=ln; var t=tileC(ln.gx,ln.gy); c.tx=t.x; c.ty=t.y; c.state='toseat'; }
-  else { var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=TS*GH+8; c.state='leave'; }
+  else { var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=worldH()+22; c.state='leave'; }
   checkMilestone();
 };
 
 var updateCust=function(c,dt){
   c.moving=false; c.animT=(c.animT||0)+dt;
-  if(c.state==='enter'){
-    if(!c.counter){ var fc=freeCounter(); if(fc){ fc._busy=c; c.counter=fc; var t=tileC(fc.gx,fc.gy); c.tx=t.x; c.ty=t.y+2; }
-      else { c.wait+=dt; c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=TS*GH-14; moveTo(c,dt);
-        if(c.wait>BAL.queuePatience){ c.state='leave'; emote(c.x,c.y-16,'💢','#e5624a'); c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=TS*GH+8; } return; } }
+  if(c.state==='queue'){                                   // waiting in line outside
+    moveTo(c,dt); c.wait+=dt;
+    if(c.wait>BAL.queuePatience*1.7){ c.state='leave'; emote(c.x,c.y-16,'💢','#e5624a'); c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=worldH()+22; }
+  } else if(c.state==='enter'){                              // admitted → walk to the counter
     if(moveTo(c,dt)){ c.state='order'; c.svcMax=serviceTime(G, c.counter?c.counter.lvl:1); c.timer=c.svcMax; }
   } else if(c.state==='order'){
     c.timer-=dt; if(c.timer<=0) serveDone(c);
@@ -387,7 +414,7 @@ var updateCust=function(c,dt){
     if(moveTo(c,dt)){ c.state='eat'; c.timer=BAL.eatTime; }
   } else if(c.state==='eat'){
     c.timer-=dt; if(c.timer<=0){ var hb=Math.max(1,Math.round(power(c.leaner?c.leaner.lvl:1))); heartPop(c.x,c.y-6,hb); emote(c.x,c.y-15,'😊','#ff9ecb'); spawnSparks(c.x,c.y-8,3,'#ff9ecb'); G.faam+=hb;
-      if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=TS*GH+8; c.state='leave'; }
+      if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=worldH()+22; c.state='leave'; }
   } else if(c.state==='leave'){
     if(moveTo(c,dt)) c._dead=true;
   }
@@ -407,14 +434,16 @@ var T=0;
 var fitCanvas=function(){
   if(!scene||!ctx||!ctx.setTransform) return;
   var dpr=(typeof window!=='undefined' && window.devicePixelRatio)?window.devicePixelRatio:1;
-  var cssW=scene.clientWidth; if(!cssW||typeof cssW!=='number') cssW=GW*TS;
-  var cssH=cssW*(GH/GW);
+  var cssW=scene.clientWidth; if(!cssW||typeof cssW!=='number') cssW=worldW();
+  var cssH=cssW*(worldH()/worldW());
   scene.style.height=cssH+'px';
   var bw=Math.max(1,Math.round(cssW*dpr)), bh=Math.max(1,Math.round(cssH*dpr));
   if(scene.width!==bw) scene.width=bw;
   if(scene.height!==bh) scene.height=bh;
-  var s=bw/(GW*TS);
-  ctx.setTransform(s,0,0,s,0,0);
+  clampCam();
+  var fit=bw/worldW(), eff=fit*cam.zoom;
+  var tx=bw/2-cam.cx*eff, ty=bh/2-cam.cy*eff;
+  ctx.setTransform(eff,0,0,eff,tx,ty);
   ctx.imageSmoothingEnabled=true; try{ ctx.imageSmoothingQuality='high'; }catch(e){}
 };
 var drawScene=function(){
@@ -430,8 +459,15 @@ var drawScene=function(){
   }
   // back wall band
   ctx.fillStyle='#4a2c29'; ctx.fillRect(0,0,GW*TS,6);
-  // door
-  var dc=tileC(DOOR.gx,DOOR.gy); ctx.fillStyle='#5a3a1e'; ctx.fillRect(DOOR.gx*TS+4,DOOR.gy*TS+TS-5,TS-8,5);
+  // outside: pavement strip below the shopfront where the queue waits
+  var fh=GH*TS;
+  ctx.fillStyle='#5b5d63'; ctx.fillRect(0,fh,GW*TS,OUTH);                 // sidewalk
+  ctx.fillStyle='#4a4c52'; ctx.fillRect(0,fh,GW*TS,4);                    // curb shadow at the threshold
+  ctx.fillStyle='#666870'; for(var pv=0;pv<GW*TS;pv+=18){ ctx.fillRect(pv,fh+4,1,OUTH-4); } // paving seams
+  ctx.strokeStyle='#7a7c84'; ctx.lineWidth=1; ctx.strokeRect(0.5,fh+0.5,GW*TS-1,OUTH-1);
+  // shopfront threshold + door
+  var dc=tileC(DOOR.gx,DOOR.gy); ctx.fillStyle='#3a2a18'; ctx.fillRect(DOOR.gx*TS+2,fh-2,TS-4,4);
+  ctx.fillStyle='#5a3a1e'; ctx.fillRect(DOOR.gx*TS+4,DOOR.gy*TS+TS-5,TS-8,5);
   emoji('🚪',dc.x,dc.y+8,16);
   // combo glow
   detectCombos(G.objs).forEach(function(cb){ var t=tileC(cb.at.gx,cb.at.gy);
@@ -588,14 +624,29 @@ var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money);
   var rp=rankProgress(G.served);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
   if(el.goalTxt) el.goalTxt.textContent= rp.next? ('Volgende rang: '+rp.nextName+'  ('+G.served+'/'+rp.next+')') : 'Hoogste rang bereikt! ⭐'; };
-var renderShop=function(){ if(!el.shopList) return; var h='';
+var renderShop=function(){ if(!el.shopList) return; var s=shopSize(G), h='';
+  // expand-shop banner
+  if(G.expand<maxExpand()){ var ec=expandCost(G.expand), ns=GRID_LEVELS[G.expand+1];
+    h+='<div class="item" style="border-color:#5cc0e8">'+'<div class="ic">🏗️</div><div class="info">'
+      +'<div class="t">Vergroot de winkel</div><div class="s">Nu '+s.gw+'×'+s.gh+' → <b>'+ns.gw+'×'+ns.gh+'</b> tegels · meer plaats!</div></div>'
+      +'<button class="buy" id="expandBtn"'+(G.money<ec?' disabled':'')+'>'+fmt(ec)+' 💶</button></div>';
+  } else {
+    h+='<div class="item"><div class="ic">🏛️</div><div class="info"><div class="t">Grootste winkel ('+s.gw+'×'+s.gh+')</div><div class="s">Maximale grootte bereikt.</div></div><button class="buy owned">✓ max</button></div>';
+  }
   OBJECTS.forEach(function(o){ var cost=buyCost(G,o.id), n=(G.bought&&G.bought[o.id])||0;
     h+='<div class="item"><div class="ic">'+o.emoji+'</div><div class="info">'
     +'<div class="t">'+o.nm+(n?' <span style="color:var(--ink2);font-weight:600">×'+n+'</span>':'')+'</div>'
     +'<div class="s">'+o.desc+' · ✨'+o.appeal+'</div></div>'
     +'<button class="buy" data-obj="'+o.id+'"'+(G.money<cost?' disabled':'')+'>'+fmt(cost)+' 💶</button></div>'; });
   el.shopList.innerHTML=h;
+  var eb=$('expandBtn'); if(eb) eb.onclick=buyExpand;
   each('[data-obj]',function(b){ return function(){ startPlacing(b.getAttribute('data-obj')); }; }); };
+var buyExpand=function(){ if(G.expand>=maxExpand()){ toast('Maximale grootte bereikt!'); return; }
+  var cost=expandCost(G.expand); if(G.money<cost){ toast('Te weinig geld om uit te breiden.'); return; }
+  G.money-=cost; G.expand++; applySize();
+  var occ=objAt(DOOR.gx,DOOR.gy); if(occ){ for(var gy=0;gy<GH;gy++) for(var gx=0;gx<GW;gx++){ if(!occupied(gx,gy)){ occ.gx=gx; occ.gy=gy; gy=GH; break; } } }
+  recenterCam(); addShake(2.6); starRing(worldW()/2,GH*TS/2,16); chime([500,700,900],0.1);
+  var ns=shopSize(G); toast('🏗️ Winkel uitgebreid naar <b>'+ns.gw+'×'+ns.gh+'</b>! Zoom uit (scroll/knijp) om alles te zien.'); renderAll(); };
 var renderRes=function(){ if(!el.resList) return; var h='';
   RESEARCH.forEach(function(r){ var owned=!!G.research[r.id];
     h+='<div class="item"><div class="ic">'+r.emoji+'</div><div class="info"><div class="t">'+r.nm+'</div>'
@@ -702,29 +753,53 @@ var doMerge=function(src,dst){ mergeCore(src,dst);
   renderAll(); };
 // ---- drag-and-drop: sleep een item om te verplaatsen, of laat het op een gelijk item vallen om te mergen ----
 var drag=null, DRAG_THRESH=4;
-var evPos=function(ev){ var r=scene.getBoundingClientRect(); var s=(r.width/(GW*TS))||1;
+// screen (client px) → world coords, inverting the camera transform
+var evPos=function(ev){ var r=scene.getBoundingClientRect();
   var t=(ev.touches&&ev.touches[0])||(ev.changedTouches&&ev.changedTouches[0])||ev;
-  return { px:(t.clientX-r.left)/s, py:(t.clientY-r.top)/s }; };
-var onDown=function(ev){ if(!G||!G.running||!scene) return; var p=evPos(ev);
-  var gx=Math.floor(p.px/TS), gy=Math.floor(p.py/TS);
-  if(G.placing){ placeAt(gx,gy); return; }
-  var o=objAt(gx,gy); if(!o) return;
-  drag={ obj:o, px:p.px, py:p.py, ox:p.px-(o.gx*TS+TS/2), oy:p.py-(o.gy*TS+TS/2), moved:false };
+  var cssFit=(r.width/worldW())||1, eff=cssFit*cam.zoom;
+  var tx=r.width/2-cam.cx*eff, ty=r.height/2-cam.cy*eff;
+  return { px:(t.clientX-r.left-tx)/eff, py:(t.clientY-r.top-ty)/eff }; };
+var ptrs={}, pan=null, pinch=null;
+var pid=function(ev){ return (ev.pointerId!=null)?ev.pointerId:'m'; };
+var startPinch=function(){ var ids=Object.keys(ptrs); if(ids.length<2) return; var a=ptrs[ids[0]],b=ptrs[ids[1]];
+  var r=scene.getBoundingClientRect(), d=Math.hypot(a.x-b.x,a.y-b.y)||1;
+  var mcx=(a.x+b.x)/2-r.left, mcy=(a.y+b.y)/2-r.top, cssFit=(r.width/worldW())||1, eff=cssFit*cam.zoom;
+  var tx=r.width/2-cam.cx*eff, ty=r.height/2-cam.cy*eff;
+  drag=null; pan=null; pinch={ d0:d, z0:cam.zoom, wx:(mcx-tx)/eff, wy:(mcy-ty)/eff }; };
+var doPinch=function(){ var ids=Object.keys(ptrs); if(ids.length<2||!pinch) return; var a=ptrs[ids[0]],b=ptrs[ids[1]];
+  var r=scene.getBoundingClientRect(), d=Math.hypot(a.x-b.x,a.y-b.y)||1;
+  cam.zoom=clamp(pinch.z0*d/pinch.d0,1,ZMAX);
+  var mcx=(a.x+b.x)/2-r.left, mcy=(a.y+b.y)/2-r.top, cssFit=(r.width/worldW())||1, eff=cssFit*cam.zoom;
+  cam.cx=pinch.wx-(mcx-r.width/2)/eff; cam.cy=pinch.wy-(mcy-r.height/2)/eff; clampCam(); };
+var onDown=function(ev){ if(!G||!G.running||!scene) return; ptrs[pid(ev)]={x:ev.clientX,y:ev.clientY};
+  if(Object.keys(ptrs).length>=2){ startPinch(); if(ev.preventDefault) ev.preventDefault(); return; }
+  var p=evPos(ev), gx=Math.floor(p.px/TS), gy=Math.floor(p.py/TS);
+  if(G.placing){ if(gx>=0&&gx<GW&&gy>=0&&gy<GH) placeAt(gx,gy); return; }
+  var o=(gy>=0&&gy<GH&&gx>=0&&gx<GW)?objAt(gx,gy):null;
+  if(o){ drag={ obj:o, px:p.px, py:p.py, ox:p.px-(o.gx*TS+TS/2), oy:p.py-(o.gy*TS+TS/2), moved:false }; }
+  else { pan={ sx:ev.clientX, sy:ev.clientY, camx:cam.cx, camy:cam.cy }; }
   if(ev.preventDefault) ev.preventDefault(); };
-var onMove=function(ev){ if(!drag) return; var p=evPos(ev);
-  if(Math.abs(p.px-drag.px)>DRAG_THRESH||Math.abs(p.py-drag.py)>DRAG_THRESH) drag.moved=true;
-  drag.px=p.px; drag.py=p.py; if(ev.preventDefault) ev.preventDefault(); };
+var onMove=function(ev){ if(ptrs[pid(ev)]) ptrs[pid(ev)]={x:ev.clientX,y:ev.clientY};
+  if(pinch && Object.keys(ptrs).length>=2){ doPinch(); if(ev.preventDefault) ev.preventDefault(); return; }
+  if(drag){ var p=evPos(ev); if(Math.abs(p.px-drag.px)>DRAG_THRESH||Math.abs(p.py-drag.py)>DRAG_THRESH) drag.moved=true;
+    drag.px=p.px; drag.py=p.py; if(ev.preventDefault) ev.preventDefault(); return; }
+  if(pan){ var r=scene.getBoundingClientRect(), eff=((r.width/worldW())||1)*cam.zoom;
+    cam.cx=pan.camx-(ev.clientX-pan.sx)/eff; cam.cy=pan.camy-(ev.clientY-pan.sy)/eff; clampCam(); if(ev.preventDefault) ev.preventDefault(); } };
 var dropCell=function(){ var cx=drag.px-drag.ox, cy=drag.py-drag.oy;
   return { gx:clamp(Math.floor(cx/TS),0,GW-1), gy:clamp(Math.floor(cy/TS),0,GH-1) }; };
-var onUp=function(ev){ if(!drag) return; var d=drag, o=d.obj;
-  if(!d.moved){ drag=null; toast('Sleep <b>'+objDef(o.id).nm+' Lv'+(o.lvl||1)+'</b> op een gelijke om te <b>verbeteren</b>.'); return; }
-  var c=dropCell(); drag=null;
-  var res=applyDrop(o,c.gx,c.gy);
-  if(res==='merge'){ var dst=objAt(c.gx,c.gy); dst._pop=POP_DUR; var mc=tileC(dst.gx,dst.gy);
-    bigPop('Lv'+dst.lvl+'!','#ffd447'); mergeBurst(mc.x,mc.y,dst.lvl);
-    var dd=objDef(dst.id); toast('🔧 '+dd.nm+' → <b>niveau '+dst.lvl+'</b> · ×'+power(dst.lvl).toFixed(2)+' op 1 tegel!'); renderAll(); }
-  else if(res==='move'){ beep(360,0.05,0.04); renderAll(); }
-  else { beep(200,0.06,0.05); } };
+var onUp=function(ev){ delete ptrs[pid(ev)]; if(Object.keys(ptrs).length<2) pinch=null;
+  if(drag){ var d=drag, o=d.obj;
+    if(!d.moved){ drag=null; toast('Sleep <b>'+objDef(o.id).nm+' Lv'+(o.lvl||1)+'</b> op een gelijke om te <b>verbeteren</b> · sleep de vloer om rond te kijken, scroll/knijp om te zoomen.'); return; }
+    var c=dropCell(); drag=null; var res=applyDrop(o,c.gx,c.gy);
+    if(res==='merge'){ var dst=objAt(c.gx,c.gy); dst._pop=POP_DUR; var mc=tileC(dst.gx,dst.gy);
+      bigPop('Lv'+dst.lvl+'!','#ffd447'); mergeBurst(mc.x,mc.y,dst.lvl);
+      var dd=objDef(dst.id); toast('🔧 '+dd.nm+' → <b>niveau '+dst.lvl+'</b> · ×'+power(dst.lvl).toFixed(2)+' op 1 tegel!'); renderAll(); }
+    else if(res==='move'){ beep(360,0.05,0.04); renderAll(); }
+    else { beep(200,0.06,0.05); } return; }
+  pan=null; };
+var onWheel=function(ev){ if(!G||!G.running) return; if(ev.preventDefault) ev.preventDefault();
+  var p=evPos(ev), oz=cam.zoom; cam.zoom=clamp(cam.zoom*(ev.deltaY<0?1.15:0.87),1,ZMAX);
+  cam.cx=p.px-(p.px-cam.cx)*(oz/cam.zoom); cam.cy=p.py-(p.py-cam.cy)*(oz/cam.zoom); clampCam(); };
 
 /* ---------- loop ---------- */
 var last=0;
@@ -738,6 +813,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
       if(G.custs.length<30){ G.custs.push(makeCust());
         if(G.regulars>3 && G.custs.length<30 && Math.random()<Math.min(0.20,G.regulars*0.007)) G.custs.push(makeCust()); } }
     // sim
+    layoutQueue();
     for(var i=G.custs.length-1;i>=0;i--){ updateCust(G.custs[i],dt); if(G.custs[i]._dead) G.custs.splice(i,1); }
     if(el.money){ el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam); }
     juiceTick(dt);
@@ -749,7 +825,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 /* ---------- boot ---------- */
 var tab=function(which){ ['shop','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
-  refEls(); loadCounters(); loadFryers(); loadSeats(); loadCustomers(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
+  refEls(); loadCounters(); loadFryers(); loadSeats(); loadCustomers(); loadFloors(); var loaded=loadSave(); if(!loaded){ G=freshGame(); applySize(); recenterCam(); } renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
   var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor');
@@ -767,6 +843,7 @@ var boot=function(){
       scene.addEventListener('touchmove',function(e){ onMove(e); },{passive:false});
       scene.addEventListener('touchend',onUp); scene.addEventListener('touchcancel',onUp);
     }
+    scene.addEventListener('wheel',onWheel,{passive:false});
   }
   fitCanvas(); if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('resize',fitCanvas);
   if(el.startBtn) el.startBtn.onclick=function(){ try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
@@ -787,6 +864,7 @@ if(typeof globalThis!=='undefined'){
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
+    GRID_LEVELS:GRID_LEVELS, shopSize:shopSize, expandCost:expandCost, maxExpand:maxExpand,
     applyDrop:function(g,obj,gx,gy){ var prev=G; G=g; try{ return applyDrop(obj,gx,gy); } finally{ G=prev; } } };
 }
 </script>

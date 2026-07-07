@@ -216,8 +216,8 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   // drag to an empty tile -> move
   const g = FS.freshGame();
   const a = g.objs.find(o => o.id === 'toog');
-  const res = FS.applyDrop(g, a, 3, 3);
-  ok(res === 'move' && a.gx === 3 && a.gy === 3, 'dragging to a free tile moves the object');
+  const res = FS.applyDrop(g, a, 1, 2);
+  ok(res === 'move' && a.gx === 1 && a.gy === 2, 'dragging to a free tile moves the object');
 }
 {
   // drop on a non-matching object -> reject (no change)
@@ -253,6 +253,25 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   // even a very popular shop never floods the door
   ok(FS.spawnInterval(9999) >= 1, 'peak spawn rate is capped to a leisurely minimum');
   ok(FS.spawnInterval(3) > FS.spawnInterval(60), 'appeal still speeds arrivals, just gently');
+}
+
+// ---- expandable shop (starts small & cosy, grows on unlock) ----
+{
+  ok(FS.BAL.GW === 6 && FS.BAL.GH === 4, 'the shop starts at a cosy, zoomed-in 6×4');
+  ok(FS.GRID_LEVELS[0].gw === 6 && FS.GRID_LEVELS[0].gh === 4, 'first grid level is 6×4');
+  const g = FS.freshGame();
+  ok(g.expand === 0, 'fresh game starts un-expanded');
+  ok(FS.shopSize(g).gw === 6 && FS.shopSize(g).gh === 4, 'shopSize reflects the expand level');
+  g.expand = 1;
+  ok(FS.shopSize(g).gw >= 7, 'expanding grows the grid');
+  ok(FS.expandCost(1) > FS.expandCost(0), 'each expansion costs more than the last');
+  ok(FS.maxExpand() === FS.GRID_LEVELS.length - 1, 'maxExpand points at the last grid level');
+  // every level only grows (never shrinks) so placed furniture stays in-bounds
+  for (let i = 1; i < FS.GRID_LEVELS.length; i++) {
+    ok(FS.GRID_LEVELS[i].gw >= FS.GRID_LEVELS[i-1].gw && FS.GRID_LEVELS[i].gh >= FS.GRID_LEVELS[i-1].gh, `level ${i} is at least as big as level ${i-1}`);
+  }
+  // starting furniture fits inside the 6×4 grid
+  ok(g.objs.every(o => o.gx < 6 && o.gy < 4), 'starting furniture fits the 6×4 shop');
 }
 
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
