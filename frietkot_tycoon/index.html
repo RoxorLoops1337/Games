@@ -18,6 +18,16 @@
   #rushBanner{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:linear-gradient(#e5624a,#c23a28);color:#fff;font-weight:900;font-size:13px;letter-spacing:.5px;padding:5px 14px;border-radius:20px;border:1px solid #ffffff40;box-shadow:0 3px 10px #0008;z-index:6;display:none;pointer-events:none;text-shadow:0 1px 1px #0007}
   #rushBanner.on{display:block;animation:rushpulse .7s ease-in-out infinite}
   @keyframes rushpulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.09)}}
+  .tips{position:absolute;inset:0;background:#0c0910d0;z-index:11;display:none;align-items:center;justify-content:center;padding:22px}
+  .tips.on{display:flex}
+  .tipcard{background:linear-gradient(#2b2033,#20182a);border:1px solid var(--gold);border-radius:16px;max-width:330px;padding:20px 18px 16px;box-shadow:0 10px 40px #000b;text-align:center}
+  .tipstep{font-size:11px;font-weight:800;letter-spacing:1px;color:var(--gold2);margin-bottom:8px}
+  #tipBody{font-size:15px;line-height:1.5;color:var(--ink);min-height:78px}
+  #tipBody b{color:var(--gold)}
+  .tiprow{display:flex;gap:8px;margin-top:16px}
+  .tipskip{flex:0 0 auto;background:var(--panel2);color:var(--ink2);border:1px solid var(--edge);border-radius:10px;font-weight:800;font-size:13px;padding:11px 14px;cursor:pointer}
+  .tipnext{flex:1;background:linear-gradient(#ffd447,#e8a63b);color:#2a1c05;border:none;border-radius:10px;font-weight:900;font-size:14px;padding:11px;cursor:pointer;box-shadow:0 3px 0 #0006}
+  .tipnext:active{transform:translateY(2px);box-shadow:0 1px 0 #0006}
   #money.bump{display:inline-block;animation:moneybump .26s ease-out}
   @keyframes moneybump{0%{transform:scale(1)}40%{transform:scale(1.32);color:#fff0a0}100%{transform:scale(1)}}
   #rankChip{color:var(--gold);font-weight:800;font-size:12px}
@@ -94,6 +104,7 @@
     <div class="chip">🎯<b id="goalN">0/0</b></div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
+    <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
     <div class="chip" id="muteBtn" style="cursor:pointer" title="Geluid aan/uit">🔊</div>
   </div>
   <div id="goalbar"><i id="goalfill"></i><span id="goalTxt"></span></div>
@@ -121,6 +132,11 @@
     <p>Bouw je frituur uit: koop friteuzen, toog, staantafels en decor, neem personeel aan en <b>onderzoek</b> nieuwe snacks &amp; sauzen. Trek meer &amp; nieuwe klanten aan en word de <b>bekendste frituur</b> van 't land.</p>
     <button class="startbtn" id="startBtn">▶ Open je frietkot</button>
   </div>
+  <div id="tips" class="tips"><div class="tipcard">
+    <div class="tipstep" id="tipStep"></div>
+    <div id="tipBody"></div>
+    <div class="tiprow"><button class="tipskip" id="tipSkip">Overslaan</button><button class="tipnext" id="tipNext">Volgende ▶</button></div>
+  </div></div>
 </div>
 <div id="toast"></div>
 
@@ -663,6 +679,24 @@ var sizzle=function(v){ if(!sfxOn) return; var a=actx(); if(!a) return; try{
   src.connect(f); f.connect(g); g.connect(a.destination); src.start(); src.stop(a.currentTime+0.45); }catch(e){} };
 var toggleSfx=function(){ sfxOn=!sfxOn; try{ localStorage.setItem('ft_sfx', sfxOn?'1':'0'); }catch(e){}
   var mb=$('muteBtn'); if(mb) mb.textContent=sfxOn?'🔊':'🔇'; if(sfxOn) doorbell(); };
+/* ---------- first-run tutorial ---------- */
+var TUT=[
+ '👋 Welkom bij <b>Rudy Friet</b>! Even snel de kneepjes van \'t vak.',
+ '🛒 <b>Koop &amp; plaats</b> gear: open de <b>Winkel</b>, kies iets en tik op een lege tegel om het neer te zetten.',
+ '✨ <b>Verbeteren = mergen</b>: <b>sleep</b> twee <b>dezelfde</b> items van <b>hetzelfde niveau</b> op elkaar → één sterker exemplaar op 1 tegel!',
+ '🖐️ <b>Verplaats &amp; kijk rond</b>: sleep een item naar een lege tegel. Sleep de <b>lege vloer</b> om te pannen en <b>scroll of knijp</b> om te zoomen.',
+ '🍟 <b>Bedien klanten</b>: ze schuiven buiten aan en komen naar de <b>toog</b>. Meer togen = sneller bedienen; <b>zithoeken</b> laten ze langer blijven.',
+ '🔬 <b>Groei</b>: onderzoek snacks &amp; sauzen in het <b>Lab</b> (kost ★), bedenk recepten in de <b>Keuken</b>, en <b>vergroot</b> je winkel. Succes, patron!'
+];
+var tutI=0;
+var tutDone=function(){ try{ return localStorage.getItem('ft_tut_done')==='1'; }catch(e){ return false; } };
+var showTip=function(i){ tutI=i; var tp=$('tips'); if(!tp) return;
+  if(i>=TUT.length){ tp.classList.remove('on'); try{ localStorage.setItem('ft_tut_done','1'); }catch(e){} return; }
+  var st=$('tipStep'), tb=$('tipBody'), nx=$('tipNext');
+  if(st) st.textContent='TIP '+(i+1)+' / '+TUT.length; if(tb) tb.innerHTML=TUT[i];
+  if(nx) nx.textContent=(i===TUT.length-1?'Aan de slag! 🍟':'Volgende ▶');
+  tp.classList.add('on'); beep(540+i*45,0.05,0.03); };
+var closeTutorial=function(){ var tp=$('tips'); if(tp) tp.classList.remove('on'); try{ localStorage.setItem('ft_tut_done','1'); }catch(e){} };
 var rankUp=function(nm){ confetti(); bigPop('RANG OMHOOG!','#ffd447'); toast('🏅 Je bent nu een <b>'+nm+'</b>!');
   G.faam+=5; addShake(2.2); chime([660,880,1100],0.09); starRing(GW*TS/2,GH*TS/2,14); syncHUD(); };
 
@@ -954,6 +988,9 @@ var boot=function(){
   if(lt) lt.onclick=function(){ tab('floor'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   var mb=$('muteBtn'); if(mb){ mb.textContent=sfxOn?'🔊':'🔇'; mb.onclick=toggleSfx; }
+  var hb=$('helpBtn'); if(hb) hb.onclick=function(){ showTip(0); };
+  var tn=$('tipNext'); if(tn) tn.onclick=function(){ showTip(tutI+1); };
+  var tk=$('tipSkip'); if(tk) tk.onclick=closeTutorial;
   if(scene&&scene.addEventListener){
     if(typeof window!=='undefined' && 'PointerEvent' in window){
       scene.addEventListener('pointerdown',function(e){ onDown(e); });
@@ -968,7 +1005,8 @@ var boot=function(){
   }
   fitCanvas(); if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('resize',fitCanvas);
   if(el.startBtn) el.startBtn.onclick=function(){ try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
-    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden'); toast('🍟 Welkom! Koop gear in de Winkel — en <b>sleep</b> twee gelijke toogs op elkaar om te <b>verbeteren</b> (1 tegel!).'); };
+    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden');
+    if(!tutDone()) showTip(0); else toast('🍟 Welkom terug! Sleep 2 gelijke items op elkaar om te <b>verbeteren</b>.'); };
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
 };
 if(typeof document!=='undefined' && document.addEventListener){
