@@ -340,8 +340,26 @@ var checkMilestone=function(){
 
 /* ---------- rendering ---------- */
 var T=0;
+/* Match the canvas backing store to real device pixels so sprites + emoji
+   render crisp on hi-DPI phones instead of being upscaled from a 224x160
+   buffer. Game logic keeps drawing in the GW*TS x GH*TS coordinate space;
+   we scale the context to fit. */
+var fitCanvas=function(){
+  if(!scene||!ctx||!ctx.setTransform) return;
+  var dpr=(typeof window!=='undefined' && window.devicePixelRatio)?window.devicePixelRatio:1;
+  var cssW=scene.clientWidth; if(!cssW||typeof cssW!=='number') cssW=GW*TS;
+  var cssH=cssW*(GH/GW);
+  scene.style.height=cssH+'px';
+  var bw=Math.max(1,Math.round(cssW*dpr)), bh=Math.max(1,Math.round(cssH*dpr));
+  if(scene.width!==bw) scene.width=bw;
+  if(scene.height!==bh) scene.height=bh;
+  var s=bw/(GW*TS);
+  ctx.setTransform(s,0,0,s,0,0);
+  ctx.imageSmoothingEnabled=true; try{ ctx.imageSmoothingQuality='high'; }catch(e){}
+};
 var drawScene=function(){
   if(!ctx) return;
+  fitCanvas();
   // floor tiles
   for(var gy=0;gy<GH;gy++) for(var gx=0;gx<GW;gx++){
     ctx.fillStyle=((gx+gy)&1)?'#3a2c24':'#33271f'; ctx.fillRect(gx*TS,gy*TS,TS,TS);
@@ -551,6 +569,7 @@ var boot=function(){
   if(ft) ft.onclick=function(){ tab('staff'); }; if(kt) kt.onclick=function(){ tab('keuken'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   if(scene&&scene.addEventListener){ scene.addEventListener('click',onCanvas); scene.addEventListener('touchstart',function(e){ e.preventDefault(); onCanvas(e); },{passive:false}); }
+  fitCanvas(); if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('resize',fitCanvas);
   if(el.startBtn) el.startBtn.onclick=function(){ try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
     G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden'); toast('🍟 Welkom! Koop &amp; plaats gear — of tik 2 dezelfde samen om ze te <b>verbeteren</b> (1 tegel!).'); };
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
