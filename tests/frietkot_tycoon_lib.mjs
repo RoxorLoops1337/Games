@@ -38,5 +38,5 @@ export function loadFT() {
   global.window.addEventListener = noop;
 
   eval('(function(){' + code + '\n})()');
-  return globalThis.__FT;
+  return globalThis.__FR;
 }
