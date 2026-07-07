@@ -231,6 +231,9 @@ var rankProgress=function(served){ var prev=0, next=null, nextName=null;
 // this week's serve-goal target, scaling with week number
 var weekGoal=function(week){ return Math.round(5+week*1.6); };
 var staffCost=function(n){ return Math.round(BAL.staffBase*Math.pow(BAL.staffStep,n)); };
+// every purchase of an object makes the NEXT one much pricier (x2 each time)
+var BUY_MULT=2.0;
+var buyCost=function(G,id){ var o=objDef(id); if(!o) return 0; var n=(G.bought&&G.bought[id])||0; return Math.round(o.cost*Math.pow(BUY_MULT,n)); };
 var canAfford=function(G,cost){ return G.money>=cost; };
 
 /* =========================================================================
@@ -255,17 +258,18 @@ var freshGame=function(){
       {id:'staantafel',gx:6,gy:1,lvl:1},{id:'staantafel',gx:6,gy:2,lvl:1},{id:'plant',gx:6,gy:0,lvl:1} ],
     research:{}, staff:0, custs:[], spawnT:1.0, placing:null, selected:null, milestone:0, running:false,
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
-    dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[] };
+    dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{} };
   return g;
 };
 var SAVE_KEY='ftstory_save';
 var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.stringify({
-  money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,
+  money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,bought:G.bought,
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish','bought'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  if(!G.bought) G.bought={};
   G.objs.forEach(function(x){ if(x.lvl==null) x.lvl=1; });
   if(!G.dish) G.dish={friet:{rank:1}}; dishesUnlocked(G).forEach(function(id){ if(!G.dish[id]) G.dish[id]={rank:1}; });
   G.custs=[]; G.running=true; return true; }catch(e){ return false; } };
@@ -359,7 +363,7 @@ var drawScene=function(){
     if(d.kind==='counter'){
       if(o._busy){ ctx.fillStyle='#7bd66b22'; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); }
       var lvl=clamp(o.lvl||1,1,25), im=COUNTER_IMG[lvl];
-      if(im&&im._ok){ var iw=TS*2.2, ih=iw*im.height/im.width; ctx.drawImage(im, c.x-iw/2, c.y+TS*0.5-ih, iw, ih); }
+      if(im&&im._ok){ var iw=TS*1.02, ih=iw*im.height/im.width; ctx.drawImage(im, c.x-iw/2, c.y-ih/2+1, iw, ih); }
       else { ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill(); emoji(d.emoji,c.x,c.y,20); }
     } else {
       ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill();
@@ -421,9 +425,11 @@ var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
   if(el.goalTxt) el.goalTxt.textContent= rp.next? ('Volgende rang: '+rp.nextName+'  ('+G.served+'/'+rp.next+')') : 'Hoogste rang bereikt! ⭐'; };
 var renderShop=function(){ if(!el.shopList) return; var h='';
-  OBJECTS.forEach(function(o){ h+='<div class="item"><div class="ic">'+o.emoji+'</div><div class="info">'
-    +'<div class="t">'+o.nm+'</div><div class="s">'+o.desc+' · ✨'+o.appeal+'</div></div>'
-    +'<button class="buy" data-obj="'+o.id+'"'+(G.money<o.cost?' disabled':'')+'>'+fmt(o.cost)+' 💶</button></div>'; });
+  OBJECTS.forEach(function(o){ var cost=buyCost(G,o.id), n=(G.bought&&G.bought[o.id])||0;
+    h+='<div class="item"><div class="ic">'+o.emoji+'</div><div class="info">'
+    +'<div class="t">'+o.nm+(n?' <span style="color:var(--ink2);font-weight:600">×'+n+'</span>':'')+'</div>'
+    +'<div class="s">'+o.desc+' · ✨'+o.appeal+'</div></div>'
+    +'<button class="buy" data-obj="'+o.id+'"'+(G.money<cost?' disabled':'')+'>'+fmt(cost)+' 💶</button></div>'; });
   el.shopList.innerHTML=h;
   each('[data-obj]',function(b){ return function(){ startPlacing(b.getAttribute('data-obj')); }; }); };
 var renderRes=function(){ if(!el.resList) return; var h='';
@@ -442,15 +448,16 @@ var each=function(sel,mk){ if(typeof document==='undefined'||!document.querySele
   Array.prototype.forEach.call(document.querySelectorAll(sel),function(b){ b.onclick=mk(b); }); };
 var renderAll=function(){ renderShop(); renderRes(); renderStaff(); renderKeuken(); syncHUD(); save(); };
 
-var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<o.cost){ toast('Te weinig geld.'); return; }
+var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<buyCost(G,id)){ toast('Te weinig geld.'); return; }
   G.placing=id; G.selected=null; if(el.placebar) el.placebar.classList.add('on'); toast('Tik op een lege tegel voor je <b>'+o.nm+'</b>.'); };
 var cancelPlacing=function(){ G.placing=null; if(el.placebar) el.placebar.classList.remove('on'); };
 var placeAt=function(gx,gy){ if(!G.placing) return; if(occupied(gx,gy)){ toast('Die tegel is bezet.'); return; }
-  var o=objDef(G.placing); if(G.money<o.cost){ cancelPlacing(); return; }
-  G.money-=o.cost; G.objs.push({id:o.id,gx:gx,gy:gy,lvl:1}); beep(440,0.08,0.05);
+  var id=G.placing, cost=buyCost(G,id); if(G.money<cost){ cancelPlacing(); return; }
+  G.money-=cost; if(!G.bought) G.bought={}; G.bought[id]=(G.bought[id]||0)+1;
+  G.objs.push({id:id,gx:gx,gy:gy,lvl:1}); beep(440,0.08,0.05);
   var newCombos=detectCombos(G.objs); if(newCombos.length){ bigPop('COMBO! '+newCombos[0].name,'#ffd447'); beep(700,0.1,0.06); }
   cancelPlacing(); renderAll();
-  coinPop(gx*TS+TS/2,gy*TS+TS/2,'-'+fmt(o.cost)); };
+  coinPop(gx*TS+TS/2,gy*TS+TS/2,'-'+fmt(cost)); };
 var doResearch=function(id){ var r=resDef(id); if(!r||G.research[id]) return; if(G.faam<r.cost){ toast('Te weinig ★ Faam.'); return; }
   G.faam-=r.cost; G.research[id]=true; if(r.kind==='snack'&&!G.dish[id]) G.dish[id]={rank:1};
   bigPop('ONTGRENDELD!','#5cc0e8'); beep(600,0.12,0.06);
@@ -560,7 +567,7 @@ if(typeof globalThis!=='undefined'){
     orderValue:orderValue, rollType:rollType, rankFor:rankFor, rankProgress:rankProgress, weekGoal:weekGoal,
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
-    staffCost:staffCost, canAfford:canAfford, freshGame:freshGame };
+    staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame };
 }
 </script>
 </body>
