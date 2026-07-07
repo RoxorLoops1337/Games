@@ -287,5 +287,17 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.dishEmoji('friet') === '🍟' && FS.dishName('friet') === 'Friet', 'dish presentation helpers');
 }
 
+// ---- VIP critic rating ----
+{
+  const g = FS.freshGame();
+  const r = FS.criticRating(g);
+  ok(r.stars >= 1 && r.stars <= 5, 'critic gives a 1–5 star rating');
+  ok(r.faam > 0 && r.cash > 0, 'a critic visit rewards Faam and money');
+  // a great frituur scores better than a bare one
+  const g2 = FS.freshGame(); g2.dish.friet.rank = 6; g2.objs.push({ id: 'neon', gx: 0, gy: 1, lvl: 3 }); g2.research.reclame = true;
+  ok(FS.criticRating(g2).stars >= FS.criticRating(g).stars, 'a fancier shop earns at least as many stars');
+  ok(FS.criticRating(g2).stars >= 4, 'a high-rank, high-appeal shop pleases the critic');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
