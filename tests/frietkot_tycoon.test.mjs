@@ -286,5 +286,26 @@ ok(near(FT.serviceRate(FT.freshGame()), 0.40), 'base service rate = 0.40/sec');
   ok(g.shops[0].shady && Object.keys(g.shops[0].shady).length === 0, 'new shop plays it straight');
 }
 
+// ---- era clock + event days ----
+{
+  const g = FT.freshGame();
+  ok(g.year === FT.START_YEAR && FT.START_YEAR === 1990, 'game starts in 1990');
+  ok(Array.isArray(g.firedEvents) && g.firedEvents.length === 0, 'no events fired yet');
+  ok(FT.EVENTS.length >= 5, 'several historical events');
+  // historical events are keyed to real years and each has 2+ choices with effects
+  ok(FT.EVENTS.every(e => e.year >= 1990 && e.year <= 2025), 'events sit in the real era range');
+  ok(FT.EVENTS.every(e => e.choices && e.choices.length >= 2 && e.choices.every(c => c.ef)), 'events offer choices with effects');
+  ok(FT.historicFor(1999).id === 'dioxine', '1999 = dioxine crisis');
+  ok(FT.historicFor(2002).id === 'euro', '2002 = euro changeover');
+  ok(FT.historicFor(2020).id === 'covid', '2020 = covid');
+  ok(FT.historicFor(1994) === null, 'no historical event in 1994');
+  // recurring events have choices too
+  ok(FT.RECURRING.length >= 3 && FT.RECURRING.every(e => e.choices.length >= 2), 'recurring event days with choices');
+  // the dioxine "throw it away" choice costs money but lifts reputation
+  const dio = FT.historicFor(1999);
+  const clean = dio.choices.find(c => c.ef.repAll > 0);
+  ok(clean && clean.ef.money < 0 && clean.ef.repAll > 0, 'doing the right thing costs money, gains rep');
+}
+
 console.log(`frietkot_tycoon: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

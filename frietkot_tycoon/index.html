@@ -150,6 +150,16 @@
   .buy:active{transform:translateY(1px);box-shadow:0 1px 0 #0006}
   .buy.owned{background:var(--panel2);color:var(--good);cursor:default;box-shadow:none}
   .item.activeShop{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold2) inset}
+  /* ---- event-day modal ---- */
+  #event{position:fixed;inset:0;background:#000d;display:flex;align-items:center;justify-content:center;z-index:30;padding:18px}
+  #event.hidden{display:none}
+  .evcard{width:100%;max-width:420px;background:linear-gradient(#2f2338,#1a121f);border:2px solid var(--gold2);
+    border-radius:16px;padding:18px;box-shadow:0 12px 44px #000;animation:evpop .25s ease-out}
+  @keyframes evpop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+  .evcard .evyr{display:inline-block;background:var(--slot);color:var(--blue);font-weight:800;
+    border-radius:6px;padding:2px 9px;font-size:12px;margin-bottom:9px}
+  .evcard h2{margin:0 0 9px;color:var(--gold);font-size:19px;line-height:1.2}
+  .evcard p{margin:0 0 4px;color:var(--ink);font-size:14px;line-height:1.45}
   .buy:disabled{opacity:.4;cursor:default;box-shadow:0 2px 0 #0006}
   .dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle}
   .dots i{width:6px;height:6px;border-radius:50%;background:#0d0a12;display:inline-block}
@@ -175,6 +185,7 @@
     <div class="name" id="shopName">Frituur 't Hoekske</div>
     <div class="spacer"></div>
     <div class="chip">🏪<b id="shopsN">1</b></div>
+    <div class="chip day">📅<b id="yearN">1990</b></div>
     <div class="chip day">Dag <b id="dayN">1</b></div>
     <div class="chip rep">★<b id="repN">0</b></div>
     <div class="chip">💰 <b id="money">0</b> fr.</div>
@@ -266,6 +277,15 @@
       <div class="ssec"><h3>🌭 Snackprijzen</h3><div id="priceSnacks"></div></div>
       <div class="ssec"><h3>🥫 Sausprijzen</h3><div id="priceSauces"></div></div>
     </div>
+  </div>
+</div>
+
+<div id="event" class="hidden">
+  <div class="evcard">
+    <div class="evyr" id="evYear">1990</div>
+    <h2 id="evTitle">Gebeurtenis</h2>
+    <p id="evDesc"></p>
+    <div id="evChoices"></div>
   </div>
 </div>
 
@@ -469,6 +489,7 @@ var snapshotActive=function(){ if(G.shops&&G.shops[G.active]) mirrorInto(G.shops
 var freshGame=function(){
   var g={
     v:1, money:2000, day:1, dayT:0, dayLen:48, demandMod:1,
+    year:START_YEAR, firedEvents:[], eventDaysLeft:0, // era clock + played events
     news:"Welkom! Zet je eerste puntzak klaar.",
     menu:{ snacks:{}, sauces:{mayo:true} },         // recipe unlocks are global across shops
     shops:[ newShop('dorp') ], active:0,
@@ -578,6 +599,7 @@ var load=function(){
       if(s.crisp==null) s.crisp=52; if(s.served==null) s.served=0; if(!s.shop) s.shop=pickShopName();
       if(!s.shady) s.shady={}; if(s.heat==null) s.heat=0; if(s.closedDays==null) s.closedDays=0;
     });
+    if(G.year==null) G.year=START_YEAR; if(!G.firedEvents) G.firedEvents=[]; if(G.eventDaysLeft==null) G.eventDaysLeft=0;
     mirrorFrom(G.shops[G.active]);           // load the active shop into the live fields
     G.queue=[]; G.arrAcc=0; G.srvAcc=0;       // rebuild the line fresh
     return true;
@@ -819,7 +841,7 @@ var drawSign=function(x,y,txt,glow){
 var el={};
 var bindUI=function(){
   if(typeof document==='undefined'||!document.getElementById) return;
-  ['shopName','dayN','repN','money','shopsN','newsTxt','buurtAv','buurtName','buurtStat','satBar',
+  ['shopName','dayN','repN','money','shopsN','yearN','newsTxt','buurtAv','buurtName','buurtStat','satBar',
    'crisp','crispV','oilPct','oilBar','fatSeg',
    'oilBtn','oilCost','rate','resetBtn',
    'shopBtn','shopClose','upgList','staffBox','snackList','sauceList','shadyBox',
@@ -853,6 +875,7 @@ var syncControls=function(){
   if(!el.money) return;
   el.shopName.textContent=G.shop;
   if(el.shopsN) el.shopsN.textContent=G.shops.length;
+  if(el.yearN) el.yearN.textContent=G.year;
   el.dayN.textContent=G.day;
   el.repN.textContent=Math.round(G.rep);
   el.money.textContent=fmtFr(G.money);
@@ -1101,6 +1124,64 @@ var NEWS=[
   {t:"🎉 Er is een fuif in de parochiezaal — nachtwerk!",d:1.3},
   {t:"😴 Rustige dag in 't dorp.",d:0.9}
 ];
+
+/* ---------- the era clock + event days (research TIMELINE.md) ---------- */
+var START_YEAR=1990, YEAR_LEN=4;                     // 4 in-game days = 1 jaar
+// real historical events fire ONCE when their year is reached; each is a played choice
+var EVENTS=[
+  {id:'dioxine', year:1999, emoji:'🧪', title:'Dioxinecrisis!',
+    desc:'Heel België is in paniek over besmet voedsel. De pers staat aan je toog.',
+    choices:[
+      {label:'Gooi verdachte voorraad weg', ef:{money:-1500, repAll:8}, toast:'De klanten vertrouwen je — ★ omhoog.'},
+      {label:'Doe alsof er niets aan de hand is', ef:{money:0, repAll:-6, heatAll:25, demand:0.7, demandDays:2}, toast:'Riskant… de heat stijgt.'}
+    ]},
+  {id:'euro', year:2002, emoji:'💶', title:'De euro komt eraan',
+    desc:'De Belgische frank verdwijnt. Tijd om alles om te rekenen (≈40,34 fr. = 1 €).',
+    choices:[
+      {label:'Rond eerlijk af', ef:{repAll:5}, toast:'Eerlijk duurt het langst.'},
+      {label:'Rond alles stiekem naar boven af', ef:{money:2000, repAll:-5}, toast:'Snel geld, maar de klant merkt het.'}
+    ]},
+  {id:'rookverbod', year:2007, emoji:'🚭', title:'Rookverbod in de horeca',
+    desc:'Nieuwe regels: geen sigaret meer binnen. Sommige stamgasten pruttelen.',
+    choices:[
+      {label:'Zet een gezellig terras', ef:{money:-800, repAll:6}, toast:'Fris terras — meer volk.'},
+      {label:'Trek je er niets van aan', ef:{repAll:-3}, toast:'De vaste klant moppert.'}
+    ]},
+  {id:'aardappel', year:2018, emoji:'🥔', title:'Hittegolf — aardappeltekort',
+    desc:'De oogst mislukt door de droogte. Bintjes worden schaars en duur.',
+    choices:[
+      {label:'Koop duur bij', ef:{money:-2000}, toast:'Kwaliteit kost geld.'},
+      {label:'Werk met minder', ef:{repAll:-5, demand:0.8, demandDays:2}, toast:'Kleinere porties, minder volk.'}
+    ]},
+  {id:'covid', year:2020, emoji:'😷', title:'COVID-19 — lockdown',
+    desc:'De horeca sluit, maar frituren mogen afhalen. Iedereen wil comfort-friet.',
+    choices:[
+      {label:'Ga vol voor afhaal', ef:{money:-500, demand:1.4, demandDays:3}, toast:'Afhaal-boom!'},
+      {label:'Sluit even veilig', ef:{repAll:4, demand:0.5, demandDays:2}, toast:'Veiligheid eerst.'}
+    ]},
+  {id:'energie', year:2022, emoji:'⚡', title:'Energiecrisis',
+    desc:'De energieprijzen ontploffen — een frituur draaien wordt peperduur.',
+    choices:[
+      {label:'Slik de kosten', ef:{money:-3000}, toast:'Auw, dat doet pijn.'},
+      {label:'Verhoog de prijzen stilletjes', ef:{repAll:-4, demand:0.9, demandDays:2}, toast:'De klant voelt \'t in z\'n portefeuille.'}
+    ]}
+];
+var historicFor=function(year){ for(var i=0;i<EVENTS.length;i++) if(EVENTS[i].year===year) return EVENTS[i]; return null; };
+// lighter recurring event-days (any year), each a quick choice
+var RECURRING=[
+  {id:'match', emoji:'⚽', title:'Rode Duivels spelen vanavond!',
+    desc:'Na affluiten stroomt heel de gemeente jouw kant op — als je open blijft.',
+    choices:[ {label:'Blijf laat open', ef:{demand:1.6, demandDays:1}, toast:'Wat een nachtdrukte!'},
+              {label:'Sluit gewoon op tijd', ef:{}, toast:'Rustig naar huis.'} ]},
+  {id:'kermis', emoji:'🎡', title:'Kermis op het plein!',
+    desc:'Volk alom. Extra kraam bemannen kost, maar levert veel op.',
+    choices:[ {label:'Extra kraam (−300 fr.)', ef:{money:-300, demand:1.6, demandDays:1}, toast:'De kassa rinkelt!'},
+              {label:'Gewoon open', ef:{demand:1.2, demandDays:1}, toast:'Toch mooi volk.'} ]},
+  {id:'fuif', emoji:'🎉', title:'Grote fuif in de parochiezaal',
+    desc:'Om 3u komt de hele fuif friet halen. Doe je een nachtshift?',
+    choices:[ {label:'Nachtshift draaien', ef:{demand:1.4, demandDays:1}, toast:'Na de fuif = friet!'},
+              {label:'Vroeg dicht', ef:{}, toast:'Slaap is ook wat waard.'} ]}
+];
 var inspect=function(s){
   var hy=hygieneRating(s.oil||0);
   var sev=(s.heat||0)/100 + (hy.grade==='D'?0.45:hy.grade==='C'?0.2:0);
@@ -1123,10 +1204,41 @@ var newDay=function(){
     if(s.closedDays<=0 && Math.random()<inspectionRisk(s)) inspect(s);
   });
   mirrorFrom(G.shops[G.active]);
-  var n=pick(NEWS); G.news=n.t; G.demandMod=n.d;
-  toast('<b>Dag '+G.day+'</b> — '+n.t);
+  // --- era clock ---
+  if(G.day%YEAR_LEN===0 && G.year<2025) G.year++;
+  // lasting event demand ticks down
+  if(G.eventDaysLeft>0){ G.eventDaysLeft--; if(G.eventDaysLeft<=0) G.demandMod=1; }
+  // --- fire an event day, or ordinary news ---
+  if(!eventOpen){
+    var hev=historicFor(G.year);
+    if(hev && G.firedEvents.indexOf(hev.id)<0){ G.firedEvents.push(hev.id); G.news='📣 '+hev.title; save(); syncControls(); openEvent(hev); return; }
+    if(G.eventDaysLeft<=0 && Math.random()<0.26){ var rev=pick(RECURRING); G.news='📣 '+rev.title; save(); syncControls(); openEvent(rev); return; }
+  }
+  var n=pick(NEWS); G.news=n.t; if(G.eventDaysLeft<=0) G.demandMod=n.d;
+  toast('<b>'+G.year+' · dag '+G.day+'</b> — '+n.t);
   save();
 };
+/* ---------- event-day modal ---------- */
+var eventOpen=false, curEvent=null;
+var applyEventEffect=function(ef){ ef=ef||{};
+  if(ef.money) G.money+=ef.money;
+  if(ef.repAll) G.shops.forEach(function(s){ s.rep=clamp(s.rep+ef.repAll,0,100); });
+  if(ef.heatAll) G.shops.forEach(function(s){ s.heat=clamp((s.heat||0)+ef.heatAll,0,100); });
+  if(ef.demand!=null){ G.demandMod=ef.demand; G.eventDaysLeft=ef.demandDays||1; }
+  mirrorFrom(G.shops[G.active]); save(); syncControls(); updateBuurt();
+};
+var openEvent=function(ev){ curEvent=ev; eventOpen=true;
+  var m=$('event');
+  if(!m){ if(ev.choices&&ev.choices[0]) applyEventEffect(ev.choices[0].ef); eventOpen=false; return; } // headless
+  var t=$('evTitle'), d=$('evDesc'), c=$('evYear'), ch=$('evChoices');
+  if(t) t.textContent=ev.emoji+' '+ev.title; if(d) d.textContent=ev.desc; if(c) c.textContent=G.year;
+  if(ch){ ch.innerHTML=''; ev.choices.forEach(function(ci){ var b=document.createElement('button');
+    b.className='btn serve'; b.style.flex='1'; b.style.marginTop='8px'; b.style.width='100%'; b.textContent=ci.label;
+    b.onclick=function(){ chooseEvent(ci); }; ch.appendChild(b); }); }
+  m.classList.remove('hidden');
+};
+var chooseEvent=function(ci){ var m=$('event'); if(m) m.classList.add('hidden'); eventOpen=false;
+  applyEventEffect(ci.ef); if(ci.toast) toast(ci.toast); };
 
 /* ---------- main loop ---------- */
 var last=0, acc=0;
@@ -1212,6 +1324,7 @@ if(typeof globalThis!=='undefined'){
     demographicMix:demographicMix, suggestedCrisp:suggestedCrisp, hygieneRating:hygieneRating,
     SHADY:SHADY, shadyOn:shadyOn, shadyIncomeMul:shadyIncomeMul, shadySatPenalty:shadySatPenalty,
     heatRate:heatRate, inspectionRisk:inspectionRisk,
+    EVENTS:EVENTS, RECURRING:RECURRING, historicFor:historicFor, START_YEAR:START_YEAR, YEAR_LEN:YEAR_LEN,
     freshGame:freshGame, makeCustomer:makeCustomer };
 }
 </script>
