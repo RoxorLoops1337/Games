@@ -288,33 +288,33 @@ var ARCHETYPES=[
 /* ---------- menu: snacks & sauces (research SNACKS.md / SAUCES.md) ---------- */
 // franc cost/price; unlock = one-time recipe cost bought in the Uitbreidingen sheet
 var SNACKS=[
-  {id:'frikandel', label:'frikandel',    emoji:'🌭', cost:12, price:45, unlock:400},
-  {id:'kroket',    label:'kaaskroket',   emoji:'🧀', cost:15, price:50, unlock:650},
-  {id:'mexicano',  label:'mexicano',     emoji:'🌶️', cost:18, price:55, unlock:900},
-  {id:'bicky',     label:'bicky burger', emoji:'🍔', cost:30, price:95, unlock:1600},
-  {id:'stoofvlees',label:'stoofvlees',   emoji:'🍲', cost:35, price:75, unlock:2600}
+  {id:'frikandel', label:'frikandel',    emoji:'🌭', cost:12, price:45, unlock:1400},
+  {id:'kroket',    label:'kaaskroket',   emoji:'🧀', cost:15, price:50, unlock:2400},
+  {id:'mexicano',  label:'mexicano',     emoji:'🌶️', cost:18, price:55, unlock:3600},
+  {id:'bicky',     label:'bicky burger', emoji:'🍔', cost:30, price:95, unlock:6500},
+  {id:'stoofvlees',label:'stoofvlees',   emoji:'🍲', cost:35, price:75, unlock:11000}
 ];
 var snackById=function(id){ for(var i=0;i<SNACKS.length;i++) if(SNACKS[i].id===id) return SNACKS[i]; return null; };
 var SAUCES=[
   {id:'mayo',        label:'mayonaise',      cost:3, price:15, unlock:0},
-  {id:'curryketchup',label:'curryketchup',   cost:3, price:15, unlock:150},
-  {id:'andalouse',   label:'andalouse',      cost:4, price:20, unlock:300},
-  {id:'samurai',     label:'samurai',        cost:4, price:20, unlock:450},
-  {id:'brasil',      label:'brasil',         cost:5, price:20, unlock:650},
-  {id:'stoofsaus',   label:'stoofvleessaus', cost:8, price:25, unlock:950}
+  {id:'curryketchup',label:'curryketchup',   cost:3, price:15, unlock:600},
+  {id:'andalouse',   label:'andalouse',      cost:4, price:20, unlock:1300},
+  {id:'samurai',     label:'samurai',        cost:4, price:20, unlock:1900},
+  {id:'brasil',      label:'brasil',         cost:5, price:20, unlock:2800},
+  {id:'stoofsaus',   label:'stoofvleessaus', cost:8, price:25, unlock:4000}
 ];
 var sauceById=function(id){ for(var i=0;i<SAUCES.length;i++) if(SAUCES[i].id===id) return SAUCES[i]; return SAUCES[0]; };
 
 /* ---------- upgrades & staff (research H2/H6 + PROGRESSION idle core) ---------- */
 var upgradeCost=function(base,lvl){ return Math.round(base*Math.pow(1.7,lvl)); };
 var UPG=[
-  {id:'potato',   name:'Betere Bintjes',     emoji:'🥔', desc:'Hoger kwaliteitsplafond',   base:700,  max:3},
-  {id:'fryer',    name:'Grotere friteuse',   emoji:'🍟', desc:'Meer passage, trager vetverval', base:900, max:4},
-  {id:'doublefry',name:'Dubbel-bak station', emoji:'♨️', desc:'Krokanter, vergeeft missers', base:1200, max:1},
-  {id:'filter',   name:'Vetfilter',          emoji:'🛢️', desc:'Vet gaat veel langer mee',   base:1000, max:1}
+  {id:'potato',   name:'Betere Bintjes',     emoji:'🥔', desc:'Hoger kwaliteitsplafond',   base:2800,  max:3},
+  {id:'fryer',    name:'Grotere friteuse',   emoji:'🍟', desc:'Meer passage, trager vetverval', base:3600, max:4},
+  {id:'doublefry',name:'Dubbel-bak station', emoji:'♨️', desc:'Krokanter, vergeeft missers', base:6500, max:1},
+  {id:'filter',   name:'Vetfilter',          emoji:'🛢️', desc:'Vet gaat veel langer mee',   base:4800, max:1}
 ];
 var upgById=function(id){ for(var i=0;i<UPG.length;i++) if(UPG[i].id===id) return UPG[i]; return null; };
-var STAFF_WAGE=280, STAFF_MAX=3, STAFF_HIRE=840;
+var STAFF_WAGE=340, STAFF_MAX=3, STAFF_HIRE=4200;
 // effective stats derived from owned upgrades
 var effPotato=function(lvl){ return clamp(0.82+(lvl||0)*0.05,0,0.99); };
 var fryerFootMul=function(lvl){ return 1+0.24*(lvl||0); };
