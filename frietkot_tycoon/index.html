@@ -243,6 +243,14 @@ var computeAppeal=function(G){
   a+=floorAppeal(G);                                         // a nicer floor draws a few more customers
   return Math.round(a);
 };
+// VIP food critic: rates the frituur on friet taste-rank + appeal + menu variety → 1-5 stars & rewards
+var criticRating=function(G){
+  var snacks=0; ['frikandel','bicky'].forEach(function(id){ if(G.research[id]&&dishRank(G,id)>=2) snacks++; });
+  var score=1 + (dishRank(G,'friet')-1)*0.55 + computeAppeal(G)/24 + snacks*0.6;
+  var stars=clamp(Math.round(score),1,5);
+  return { stars:stars, faam:stars*4, cash:stars*70 };
+};
+var CRITIC_QUOTES={1:'Bleekjes en flauw. Doe beter.',2:'Matig — mist pit.',3:'Degelijke frituur, netjes.',4:'Heerlijk! Krokant en gul.',5:'Legendarisch! De beste friet van \'t land.'};
 var spawnInterval=function(appeal){ return clamp(BAL.spawnBase/(0.6+appeal/22), BAL.spawnMin, BAL.spawnBase); };
 // throughput multiplier from fryers + staff + snelbak research
 var throughput=function(G){ return 1 + 0.4*Math.max(0,kindPower(G.objs,'fryer')-1) + 0.3*G.staff + (G.research.snelbak?0.4:0); };
@@ -363,7 +371,7 @@ var freshGame=function(){
     research:{}, staff:0, custs:[], spawnT:1.0, placing:null, selected:null, milestone:0, running:false,
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
-    floor:'planken', floorsOwned:{planken:true} };
+    floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0 };
   return g;
 };
 var SAVE_KEY='ftstory_save';
@@ -371,10 +379,10 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,bought:G.bought,
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
-  floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand })); }catch(e){} };
+  floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
   if(!G.bought) G.bought={};
   if(!G.floor) G.floor='planken'; if(!G.floorsOwned) G.floorsOwned={}; G.floorsOwned.planken=true;
   G.expand=clamp(G.expand||0,0,maxExpand()); applySize(); recenterCam();
@@ -385,7 +393,9 @@ var newWeek=function(){
   if(G.weekServed>=G.goalTarget){ var rw=Math.round(2+G.week*0.8), cash=Math.round(150+G.week*45);
     G.faam+=rw; G.money+=cash; confetti(); bigPop('WEEKDOEL!','#7bd66b');
     toast('🎯 Weekdoel gehaald! <b>+★'+rw+'</b> +'+fmt(cash)+' 💶'); beep(680,0.1,0.06); setTimeout(function(){ beep(900,0.12,0.06); },110); }
-  G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week); save(); syncHUD();
+  G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week);
+  if(G.week>=2 && !G.criticPending && Math.random()<0.4) G.criticPending=true;   // a critic may drop by this week
+  save(); syncHUD();
 };
 var occupied=function(gx,gy){ if(gx<0||gy<0||gx>=GW||gy>=GH) return true; if(gx===DOOR.gx&&gy===DOOR.gy) return true;
   for(var i=0;i<G.objs.length;i++) if(G.objs[i].gx===gx&&G.objs[i].gy===gy) return true; return false; };
@@ -399,6 +409,8 @@ var makeCust=function(){
   return { type:t, x:dx+rnd(-30,30), y:worldH()+16, tx:dx, ty:worldH()+16, state:'queue', qorder:qseq++,
     counter:null, leaner:null, timer:0, wait:0, val:0, hearts:0, emoji:t.emoji, bob:Math.random()*6, animT:Math.random()*2, moving:false };
 };
+// the VIP critic arrives as a special customer (real sprite + top hat) with priority in line
+var makeCritic=function(){ var c=makeCust(); c.critic=true; c.qorder=-1; return c; };
 // lay out the outside queue (single file leading left from the door) + admit the front when a counter frees
 var layoutQueue=function(){
   var q=G.custs.filter(function(c){ return c.state==='queue'; }).sort(function(a,b){ return a.qorder-b.qorder; });
@@ -428,6 +440,10 @@ var serveDone=function(c){
   if(el.money){ el.money.classList&&el.money.classList.add('bump'); setTimeout(function(){ el.money.classList&&el.money.classList.remove('bump'); },260); }
   // Faam (★ reputation) is a slow meta-currency now: only some happy customers boost it.
   if(Math.random() < 0.20 + 0.10*(hearts-1)) G.faam+=1;
+  if(c.critic){ var cr=criticRating(G); G.faam+=cr.faam; G.money+=cr.cash; if(cr.stars>(G.critBest||0)) G.critBest=cr.stars;
+    var st=''; for(var s=0;s<cr.stars;s++) st+='⭐';
+    bigPop('Keurmeester '+cr.stars+'★','#ffd447'); starRing(sc.x,sc.y,16); confetti(); chime([700,900,1150,1400],0.1);
+    toast('🎩 <b>Keurmeester</b> '+st+' — "'+CRITIC_QUOTES[cr.stars]+'" (+★'+cr.faam+' +'+fmt(cr.cash)+'💶)'); }
   c.counter._busy=null; c.counter=null;
   // go eat at a leaner if one's free, else leave
   var ln=freeLeaner();
@@ -562,6 +578,8 @@ var drawScene=function(){
     }
     if(!drawn) emoji(c.emoji,c.x,yy,17);
     if(seated){ emoji('🍟',c.x,c.y+TS*0.26,12); }               // a little pak friet on the table
+    if(c.critic){ ctx.save(); ctx.globalAlpha=.35+.25*Math.sin(T*4); ctx.strokeStyle=var_gold; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(c.x,c.y+TS*0.12,TS*0.44,0,6.283); ctx.stroke(); ctx.restore(); emoji('🎩',c.x,headY-4,13); }
     if(c.state==='order'){ // service progress ring above the head
       var p=1-clamp(c.timer/(c.svcMax||serviceTime(G,1)),0,1); ctx.strokeStyle=var_gold; ctx.lineWidth=2; ctx.beginPath();
       ctx.arc(c.x,headY,5,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.stroke(); }
@@ -885,6 +903,9 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.35)*rnd(0.75,1.35);
       if(G.custs.length<30){ G.custs.push(makeCust());
         if(G.regulars>3 && G.custs.length<30 && Math.random()<Math.min(0.20,G.regulars*0.007)) G.custs.push(makeCust()); } }
+    // the critic slips into the line as its own arrival
+    if(G.criticPending && !G.custs.some(function(c){ return c.critic; })){ G.criticPending=false;
+      G.custs.push(makeCritic()); toast('🎩 De <b>keurmeester</b> is er! Zorg voor top friet…'); doorbell(); }
     // sim
     layoutQueue();
     for(var i=G.custs.length-1;i>=0;i--){ updateCust(G.custs[i],dt); if(G.custs[i]._dead) G.custs.splice(i,1); }
@@ -935,7 +956,7 @@ if(typeof globalThis!=='undefined'){
     computeAppeal:computeAppeal, spawnInterval:spawnInterval, throughput:throughput, serviceTime:serviceTime,
     orderValue:orderValue, rollType:rollType, rankFor:rankFor, rankProgress:rankProgress, weekGoal:weekGoal,
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
-    affinity:affinity, sigTitle:sigTitle, dishEmoji:dishEmoji, dishName:dishName,
+    affinity:affinity, sigTitle:sigTitle, dishEmoji:dishEmoji, dishName:dishName, criticRating:criticRating,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
