@@ -20,7 +20,7 @@
   #goalfill{display:block;height:100%;width:0%;background:linear-gradient(90deg,#e8a63b,#ffd447);transition:width .3s}
   #goalTxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--ink);text-shadow:0 1px 1px #000}
   #stage{position:relative;width:100%;background:#241a26;line-height:0;border-bottom:2px solid var(--edge)}
-  #scene{width:100%;display:block}
+  #scene{width:100%;display:block;touch-action:none}
   #fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
   .pop{position:absolute;font-weight:900;font-size:15px;white-space:nowrap;text-shadow:0 2px 0 #000,0 0 7px #0008;animation:rise 1s ease-out forwards}
   .pop.big{font-size:22px}
@@ -408,11 +408,18 @@ var drawScene=function(){
   // combo glow
   detectCombos(G.objs).forEach(function(cb){ var t=tileC(cb.at.gx,cb.at.gy);
     ctx.globalAlpha=.25+.15*Math.sin(T*5); ctx.fillStyle=var_gold; ctx.fillRect(cb.at.gx*TS,cb.at.gy*TS,TS,TS); ctx.globalAlpha=1; });
-  // placing highlight follows nothing; objects
-  G.objs.forEach(function(o){ var d=objDef(o.id); if(!d) return; var c=tileC(o.gx,o.gy);
-    // merge selection glow
-    if(G.selected){ if(o===G.selected){ ctx.globalAlpha=.45+.3*Math.sin(T*6); ctx.fillStyle=var_good; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); ctx.globalAlpha=1; }
-      else if(canMerge(G.selected,o)){ ctx.globalAlpha=.25+.2*Math.sin(T*6); ctx.fillStyle=var_gold; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); ctx.globalAlpha=1; } }
+  // drop-target highlights while dragging: gold = mergeable here, green = free tile
+  var dobj=drag&&drag.obj;
+  if(dobj){ var hc=dropCell();
+    for(var hgy=0;hgy<GH;hgy++) for(var hgx=0;hgx<GW;hgx++){ if(hgx===DOOR.gx&&hgy===DOOR.gy) continue;
+      var oo=objAtExcept(hgx,hgy,dobj), hov=(hgx===hc.gx&&hgy===hc.gy);
+      var kind = oo? (canMerge(dobj,oo)?'merge':null) : 'move';
+      if(!kind) continue;
+      ctx.globalAlpha=(kind==='merge'?.30:.14)+(hov?.30:0)+(kind==='merge'?.12:.08)*Math.sin(T*6);
+      ctx.fillStyle=(kind==='merge')?var_gold:var_good; ctx.fillRect(hgx*TS,hgy*TS,TS,TS); ctx.globalAlpha=1;
+      if(hov){ ctx.strokeStyle=(kind==='merge')?var_gold:var_good; ctx.lineWidth=2; ctx.strokeRect(hgx*TS+1,hgy*TS+1,TS-2,TS-2); } } }
+  // objects (skip the one being dragged — it's drawn on top, following the finger)
+  G.objs.forEach(function(o){ if(o===dobj) return; var d=objDef(o.id); if(!d) return; var c=tileC(o.gx,o.gy);
     if(d.kind==='counter'){
       if(o._busy){ ctx.fillStyle='#7bd66b22'; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); }
       var lvl=clamp(o.lvl||1,1,MAX_TOOG), im=COUNTER_IMG[lvl];
@@ -436,6 +443,15 @@ var drawScene=function(){
   // placing hint
   if(G.placing){ ctx.strokeStyle=var_good; ctx.lineWidth=1.5;
     for(var gy2=0;gy2<GH;gy2++) for(var gx2=0;gx2<GW;gx2++) if(!occupied(gx2,gy2)){ ctx.globalAlpha=.5+.3*Math.sin(T*6); ctx.strokeRect(gx2*TS+2,gy2*TS+2,TS-4,TS-4);} ctx.globalAlpha=1; }
+  // the dragged sprite rides above everything, slightly lifted, following the finger
+  if(dobj){ var dd=objDef(dobj.id), gx3=drag.px-drag.ox, gy3=drag.py-drag.oy-3;
+    ctx.globalAlpha=.25; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(gx3,gy3+TS*0.42,TS*0.34,TS*0.13,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+    if(dd&&dd.kind==='counter'){ var lv=clamp(dobj.lvl||1,1,MAX_TOOG), im2=COUNTER_IMG[lv];
+      if(im2&&im2._ok){ var iw2=TS*1.18, ih2=iw2*im2.height/im2.width; ctx.drawImage(im2, gx3-iw2/2, gy3-ih2/2, iw2, ih2); }
+      else { emoji(dd.emoji,gx3,gy3,22); } }
+    else if(dd){ ctx.fillStyle='#241a2f'; roundRect(gx3-TS/2+3,gy3-TS/2+3,TS-6,TS-6,5); ctx.fill(); emoji(dd.emoji,gx3,gy3,22); }
+    if((dobj.lvl||1)>1){ ctx.fillStyle='#2a1c05'; ctx.fillRect(gx3+TS/2-13,gy3-TS/2+2,12,9);
+      ctx.fillStyle=var_gold; ctx.font='bold 8px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('L'+dobj.lvl,gx3+TS/2-7,gy3-TS/2+7); } }
 };
 var var_gold='#ffd447', var_good='#7bd66b';
 var emoji=function(e,x,y,sz){ ctx.font=sz+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(e,x,y); };
@@ -574,21 +590,45 @@ var hireStaff=function(){ var c=staffCost(G.staff); if(G.money<c){ toast('Te wei
 
 /* ---------- input ---------- */
 var objAt=function(gx,gy){ for(var i=0;i<G.objs.length;i++) if(G.objs[i].gx===gx&&G.objs[i].gy===gy) return G.objs[i]; return null; };
-var doMerge=function(src,dst){ dst.lvl=(dst.lvl||1)+1; var i=G.objs.indexOf(src); if(i>=0) G.objs.splice(i,1);
+var objAtExcept=function(gx,gy,skip){ for(var i=0;i<G.objs.length;i++){ var q=G.objs[i]; if(q!==skip&&q.gx===gx&&q.gy===gy) return q; } return null; };
+var mergeCore=function(src,dst){ dst.lvl=(dst.lvl||1)+1; var i=G.objs.indexOf(src); if(i>=0) G.objs.splice(i,1); };
+// pure drop resolver: drop `obj` on cell (gx,gy) → 'merge' | 'move' | 'reject'. Mutates G.objs on merge/move.
+var applyDrop=function(obj,gx,gy){
+  if(gx<0||gy<0||gx>=GW||gy>=GH) return 'reject';
+  if(gx===DOOR.gx&&gy===DOOR.gy) return 'reject';
+  var tgt=objAtExcept(gx,gy,obj);
+  if(tgt){ if(canMerge(obj,tgt)){ mergeCore(obj,tgt); return 'merge'; } return 'reject'; }
+  obj.gx=gx; obj.gy=gy; return 'move';
+};
+var doMerge=function(src,dst){ mergeCore(src,dst);
   bigPop('Lv'+dst.lvl+'!','#ffd447'); beep(720,0.1,0.06); setTimeout(function(){ beep(960,0.12,0.06); },90);
   var d=objDef(dst.id); toast('🔧 '+d.nm+' samengevoegd → <b>niveau '+dst.lvl+'</b> · ×'+power(dst.lvl).toFixed(2)+' op 1 tegel!');
   renderAll(); };
-var onCanvas=function(ev){ if(!G||!G.running) return; var r=scene.getBoundingClientRect();
-  var cx=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left, cy=(ev.touches?ev.touches[0].clientY:ev.clientY)-r.top;
-  var s=r.width/(GW*TS); var gx=Math.floor(cx/(TS*s)), gy=Math.floor(cy/(TS*s));
+// ---- drag-and-drop: sleep een item om te verplaatsen, of laat het op een gelijk item vallen om te mergen ----
+var drag=null, DRAG_THRESH=4;
+var evPos=function(ev){ var r=scene.getBoundingClientRect(); var s=(r.width/(GW*TS))||1;
+  var t=(ev.touches&&ev.touches[0])||(ev.changedTouches&&ev.changedTouches[0])||ev;
+  return { px:(t.clientX-r.left)/s, py:(t.clientY-r.top)/s }; };
+var onDown=function(ev){ if(!G||!G.running||!scene) return; var p=evPos(ev);
+  var gx=Math.floor(p.px/TS), gy=Math.floor(p.py/TS);
   if(G.placing){ placeAt(gx,gy); return; }
-  // merge mode: tap one, tap a matching one to fuse
-  var o=objAt(gx,gy);
-  if(!o){ G.selected=null; return; }
-  if(!G.selected){ G.selected=o; toast('Tik op nog een <b>'+objDef(o.id).nm+' Lv'+(o.lvl||1)+'</b> om samen te voegen.'); return; }
-  if(o===G.selected){ G.selected=null; return; }
-  if(canMerge(G.selected,o)){ doMerge(G.selected,o); G.selected=null; return; }
-  G.selected=o; };
+  var o=objAt(gx,gy); if(!o) return;
+  drag={ obj:o, px:p.px, py:p.py, ox:p.px-(o.gx*TS+TS/2), oy:p.py-(o.gy*TS+TS/2), moved:false };
+  if(ev.preventDefault) ev.preventDefault(); };
+var onMove=function(ev){ if(!drag) return; var p=evPos(ev);
+  if(Math.abs(p.px-drag.px)>DRAG_THRESH||Math.abs(p.py-drag.py)>DRAG_THRESH) drag.moved=true;
+  drag.px=p.px; drag.py=p.py; if(ev.preventDefault) ev.preventDefault(); };
+var dropCell=function(){ var cx=drag.px-drag.ox, cy=drag.py-drag.oy;
+  return { gx:clamp(Math.floor(cx/TS),0,GW-1), gy:clamp(Math.floor(cy/TS),0,GH-1) }; };
+var onUp=function(ev){ if(!drag) return; var d=drag, o=d.obj;
+  if(!d.moved){ drag=null; toast('Sleep <b>'+objDef(o.id).nm+' Lv'+(o.lvl||1)+'</b> op een gelijke om te <b>verbeteren</b>.'); return; }
+  var c=dropCell(); drag=null;
+  var res=applyDrop(o,c.gx,c.gy);
+  if(res==='merge'){ var dst=objAt(c.gx,c.gy);
+    bigPop('Lv'+dst.lvl+'!','#ffd447'); beep(720,0.1,0.06); setTimeout(function(){ beep(960,0.12,0.06); },90);
+    var dd=objDef(dst.id); toast('🔧 '+dd.nm+' → <b>niveau '+dst.lvl+'</b> · ×'+power(dst.lvl).toFixed(2)+' op 1 tegel!'); renderAll(); }
+  else if(res==='move'){ beep(360,0.05,0.04); renderAll(); }
+  else { beep(200,0.06,0.05); } };
 
 /* ---------- loop ---------- */
 var last=0;
@@ -620,10 +660,20 @@ var boot=function(){
   if(ft) ft.onclick=function(){ tab('staff'); }; if(kt) kt.onclick=function(){ tab('keuken'); };
   if(lt) lt.onclick=function(){ tab('floor'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
-  if(scene&&scene.addEventListener){ scene.addEventListener('click',onCanvas); scene.addEventListener('touchstart',function(e){ e.preventDefault(); onCanvas(e); },{passive:false}); }
+  if(scene&&scene.addEventListener){
+    if(typeof window!=='undefined' && 'PointerEvent' in window){
+      scene.addEventListener('pointerdown',function(e){ onDown(e); });
+      window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp); window.addEventListener('pointercancel',onUp);
+    } else {
+      scene.addEventListener('mousedown',onDown); window.addEventListener('mousemove',onMove); window.addEventListener('mouseup',onUp);
+      scene.addEventListener('touchstart',function(e){ onDown(e); },{passive:false});
+      scene.addEventListener('touchmove',function(e){ onMove(e); },{passive:false});
+      scene.addEventListener('touchend',onUp); scene.addEventListener('touchcancel',onUp);
+    }
+  }
   fitCanvas(); if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('resize',fitCanvas);
   if(el.startBtn) el.startBtn.onclick=function(){ try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
-    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden'); toast('🍟 Welkom! Koop &amp; plaats gear — of tik 2 dezelfde samen om ze te <b>verbeteren</b> (1 tegel!).'); };
+    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden'); toast('🍟 Welkom! Koop gear in de Winkel — en <b>sleep</b> twee gelijke toogs op elkaar om te <b>verbeteren</b> (1 tegel!).'); };
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
 };
 if(typeof document!=='undefined' && document.addEventListener){
@@ -639,7 +689,8 @@ if(typeof globalThis!=='undefined'){
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
-    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG };
+    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG,
+    applyDrop:function(g,obj,gx,gy){ var prev=G; G=g; try{ return applyDrop(obj,gx,gy); } finally{ G=prev; } } };
 }
 </script>
 </body>

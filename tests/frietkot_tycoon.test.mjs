@@ -178,5 +178,49 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.canMerge({ id: 'toog', lvl: 40 }, { id: 'toog', lvl: 40 }) === true, 'high-tier toogs still merge');
 }
 
+// ---- drag & drop: move to an empty tile, drop on a match to merge ----
+{
+  // drop a toog onto a matching toog -> merge (level up, one fewer object)
+  const g = FS.freshGame();
+  const a = g.objs.find(o => o.id === 'toog');
+  const b = g.objs.filter(o => o.id === 'toog')[1];
+  const before = g.objs.length;
+  const res = FS.applyDrop(g, a, b.gx, b.gy);
+  ok(res === 'merge', 'dropping a toog on a matching toog merges');
+  ok(b.lvl === 2 && g.objs.indexOf(a) === -1 && g.objs.length === before - 1, 'merge levels the target and removes the dragged one');
+}
+{
+  // drag to an empty tile -> move
+  const g = FS.freshGame();
+  const a = g.objs.find(o => o.id === 'toog');
+  const res = FS.applyDrop(g, a, 3, 3);
+  ok(res === 'move' && a.gx === 3 && a.gy === 3, 'dragging to a free tile moves the object');
+}
+{
+  // drop on a non-matching object -> reject (no change)
+  const g = FS.freshGame();
+  const toog = g.objs.find(o => o.id === 'toog');
+  const fry = g.objs.find(o => o.id === 'friteuse');
+  const res = FS.applyDrop(g, toog, fry.gx, fry.gy);
+  ok(res === 'reject', 'dropping on a different kind is rejected');
+  ok(toog.gx !== fry.gx || toog.gy !== fry.gy, 'a rejected drop does not move onto the occupant');
+}
+{
+  // cannot drop onto the door tile
+  const g = FS.freshGame();
+  const a = g.objs.find(o => o.id === 'toog');
+  const door = { gx: (FS.BAL.GW >> 1), gy: FS.BAL.GH - 1 };
+  const res = FS.applyDrop(g, a, door.gx, door.gy);
+  ok(res === 'reject', 'the door tile rejects drops');
+}
+{
+  // different-level toogs do not merge
+  const g = FS.freshGame();
+  const a = g.objs.find(o => o.id === 'toog');
+  const b = g.objs.filter(o => o.id === 'toog')[1];
+  b.lvl = 2;
+  ok(FS.applyDrop(g, a, b.gx, b.gy) === 'reject', 'a level-1 toog cannot merge onto a level-2 toog');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
