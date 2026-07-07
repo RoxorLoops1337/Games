@@ -103,6 +103,7 @@
     <div class="chip">✨<b id="appeal">0</b></div>
     <div class="chip">🎯<b id="goalN">0/0</b></div>
     <div class="chip" id="contest" title="Weekuitdaging">🏆 –</div>
+    <div class="chip" id="campaignChip" style="display:none;color:var(--gold)" title="Actieve campagne"></div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
     <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
@@ -200,9 +201,22 @@ var RESEARCH=[
   {id:'frikandel', nm:'Frikandel',      emoji:'🌭', cost:9,  kind:'snack', price:25, desc:'Nieuwe snack op de kaart'},
   {id:'reclame',   nm:'Reclamefolders', emoji:'📣', cost:12, kind:'boost', desc:'+8 vaste aantrek (appeal)'},
   {id:'bicky',     nm:'Bicky Burger',   emoji:'🍔', cost:16, kind:'snack', price:45, desc:'Populaire, dure snack'},
-  {id:'snelbak',   nm:'Snelbak-techniek',emoji:'⚡', cost:22, kind:'boost', desc:'+40% baksnelheid overal'}
+  {id:'snelbak',   nm:'Snelbak-techniek',emoji:'⚡', cost:22, kind:'boost', desc:'+40% baksnelheid overal'},
+  {id:'ad_flyers', nm:'Flyers',          emoji:'📄', cost:5,  kind:'ad', desc:'Ontgrendel flyer-campagnes'},
+  {id:'ad_radio',  nm:'Radio-reclame',   emoji:'📻', cost:11, kind:'ad', desc:'Ontgrendel radio-spots'},
+  {id:'ad_social', nm:'Sociale media',   emoji:'📱', cost:15, kind:'ad', desc:'Ontgrendel virale posts'},
+  {id:'ad_tv',     nm:'TV-reclame',      emoji:'📺', cost:24, kind:'ad', desc:'Ontgrendel TV-spots'}
 ];
 var resDef=function(id){ for(var i=0;i<RESEARCH.length;i++) if(RESEARCH[i].id===id) return RESEARCH[i]; return null; };
+// marketing campaigns you RUN (after researching them): pay money for a timed appeal/traffic surge
+var CAMPAIGNS=[
+  {id:'flyers', nm:'Flyer-actie',   emoji:'📄', req:'ad_flyers', cost:150,  appeal:9,  dur:20, desc:'Buurt-boost'},
+  {id:'radio',  nm:'Radio-spot',    emoji:'📻', req:'ad_radio',  cost:400,  appeal:18, dur:22, desc:'De stad hoort je'},
+  {id:'social', nm:'Virale post',   emoji:'📱', req:'ad_social', cost:650,  appeal:22, dur:26, desc:'Trekt jongeren', pull:'teen'},
+  {id:'tv',     nm:'TV-reclame',    emoji:'📺', req:'ad_tv',     cost:1400, appeal:38, dur:26, desc:'Massale toeloop'}
+];
+var campDef=function(id){ for(var i=0;i<CAMPAIGNS.length;i++) if(CAMPAIGNS[i].id===id) return CAMPAIGNS[i]; return null; };
+var campaignAppeal=function(G){ if(!G.campaign||!(G.campaign.left>0)) return 0; var c=campDef(G.campaign.id); return c?c.appeal:0; };
 
 /* ---------- dish development (the ingredient-compatibility puzzle) ---------- */
 // dishes you can rank up: friet (always) + researched snacks
@@ -302,6 +316,7 @@ var computeAppeal=function(G){
   if(G.research.reclame) a+=8;
   a+=staffSpeed(G)*1;
   a+=floorAppeal(G);                                         // a nicer floor draws a few more customers
+  a+=campaignAppeal(G);                                      // an active ad campaign spikes traffic
   return Math.round(a);
 };
 // VIP food critic: rates the frituur on friet taste-rank + appeal + menu variety → 1-5 stars & rewards
@@ -443,7 +458,7 @@ var freshGame=function(){
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
     floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices(),
-    contest:newContest(1), weekCash:0, weekMerges:0 };
+    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null };
   return g;
 };
 var SAVE_KEY='ftstory_save';
@@ -452,10 +467,10 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
   floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
-  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges })); }catch(e){} };
+  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
   if(!G.contest||!contestDef(G.contest.id)) G.contest=newContest(G.week);
   if(!G.prices) G.prices=defaultPrices(); SIZES.forEach(function(z){ if(G.prices[z.id]==null) G.prices[z.id]=z.fair; });
   if(!G.crew) G.crew=[]; if(!G.crew.length && G.staff>0){ for(var ci=0;ci<G.staff;ci++) G.crew.push({name:STAFF_NAMES[ci%STAFF_NAMES.length],spdLv:1,sklLv:1}); } G.staff=G.crew.length;
@@ -794,6 +809,16 @@ var startRush=function(){ rushLeft=rnd(9,13); G.rush=true; rushServed=0; var rb=
 var endRush=function(){ G.rush=false; var rb=$('rushBanner'); if(rb) rb.classList.remove('on'); rushGap=rnd(26,44);
   if(rushServed>0){ var fb=Math.max(1,Math.round(rushServed/5)); G.faam+=fb; toast('😮‍💨 Spitsuur voorbij — '+rushServed+' klanten bediend! +★'+fb); } };
 var rushTick=function(dt){ if(rushLeft>0){ rushLeft-=dt; if(rushLeft<=0) endRush(); } else { rushGap-=dt; if(rushGap<=0) startRush(); } };
+// marketing campaigns: launch one (money) for a timed traffic surge
+var startCampaign=function(id){ var c=campDef(id); if(!c) return;
+  if(!G.research[c.req]){ toast('Onderzoek dit eerst in het Lab.'); return; }
+  if(G.campaign&&G.campaign.left>0){ toast('Er loopt al een campagne.'); return; }
+  if(G.money<c.cost){ toast('Te weinig geld voor deze campagne.'); return; }
+  G.money-=c.cost; G.campaign={id:id,left:c.dur}; addShake(1.6); chime([620,820,1040,1240],0.09); starRing(worldW()/2,GH*TS/2,14);
+  toast(c.emoji+' <b>'+c.nm+'</b> gestart! +'+c.appeal+' ✨ aantrek voor '+c.dur+'s.'); renderAll(); };
+var campaignTick=function(dt){ if(!G.campaign) return; if(G.campaign.left>0){ G.campaign.left-=dt;
+    if(G.campaign.left<=0){ var c=campDef(G.campaign.id); G.campaign=null; if(c) toast(c.emoji+' Campagne afgelopen.'); syncHUD(); }
+    else if(el.campaignChip){ var ac=campDef(G.campaign.id); if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } } } };
 var mergeBurst=function(x,y,lvl){ spawnSparks(x,y,10,'#fff2b0'); starRing(x,y,Math.min(12,6+Math.floor(lvl/2))); addShake(1.4+Math.min(2,lvl*0.06)); chime([680,900,1180],0.08); };
 var serveBurst=function(x,y,hearts){ spawnCoins(x,y,5+Math.min(5,hearts)); spawnSparks(x,y,4,'#ffe7a0'); addShake(0.8); beep(560+rnd(-40,60),0.06,0.045); };
 var placePuff=function(x,y){ for(var i=0;i<6;i++){ var a=rnd(2.4,3.9); pfx('spark',x,y+TS*0.28,{vx:Math.cos(a)*rnd(14,34),vy:-rnd(6,20),g:60,life:rnd(0.3,0.5),size:rnd(1.6,2.6),col:'#c9b48f'}); } };
@@ -824,12 +849,13 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','shopList','menuBody','resList','staffList','floorList',
+var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','shopList','menuBody','resList','staffList','floorList',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
   if(el.season){ var ss=seasonFor(G.week); el.season.textContent=ss.emoji+' '+ss.nm; }
   if(el.contest){ var cc=G.contest&&contestDef(G.contest.id); el.contest.textContent=cc?('🏆 '+cc.tag+' '+(G.contest.done?'✓':Math.min(G.contest.progress,cc.target)+'/'+cc.target)):'🏆 –'; if(cc) el.contest.title='Weekuitdaging: '+cc.desc; }
+  if(el.campaignChip){ var ac=G.campaign&&G.campaign.left>0?campDef(G.campaign.id):null; if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } else el.campaignChip.style.display='none'; }
   if(el.goalN) el.goalN.textContent=Math.min(G.weekServed,G.goalTarget)+'/'+G.goalTarget;
   var rp=rankProgress(G.served);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
@@ -862,8 +888,17 @@ var renderRes=function(){ if(!el.resList) return; var h='';
     h+='<div class="item"><div class="ic">'+r.emoji+'</div><div class="info"><div class="t">'+r.nm+'</div>'
       +'<div class="s">'+r.desc+'</div></div>'
       +(owned?'<button class="buy owned">✓ klaar</button>':'<button class="buy f" data-res="'+r.id+'"'+(G.faam<r.cost?' disabled':'')+'>★'+r.cost+'</button>')+'</div>'; });
+  // marketing campaigns (unlocked ones become runnable)
+  var unlocked=CAMPAIGNS.filter(function(c){ return G.research[c.req]; });
+  if(unlocked.length){ h+='<div class="klabel" style="margin-top:12px">📣 Reclamecampagnes</div>';
+    var act=G.campaign&&G.campaign.left>0?campDef(G.campaign.id):null;
+    unlocked.forEach(function(c){ var running=act&&act.id===c.id;
+      h+='<div class="item"'+(running?' style="border-color:var(--gold)"':'')+'><div class="ic">'+c.emoji+'</div><div class="info"><div class="t">'+c.nm+'</div>'
+        +'<div class="s">+'+c.appeal+' ✨ · '+c.dur+'s · '+c.desc+(running?' — <b style="color:var(--gold)">loopt '+Math.ceil(G.campaign.left)+'s</b>':'')+'</div></div>'
+        +(running?'<button class="buy owned">📣 bezig</button>':'<button class="buy" data-camp="'+c.id+'"'+((act||G.money<c.cost)?' disabled':'')+'>'+fmt(c.cost)+' 💶</button>')+'</div>'; }); }
   el.resList.innerHTML=h;
-  each('[data-res]',function(b){ return function(){ doResearch(b.getAttribute('data-res')); }; }); };
+  each('[data-res]',function(b){ return function(){ doResearch(b.getAttribute('data-res')); }; });
+  each('[data-camp]',function(b){ return function(){ startCampaign(b.getAttribute('data-camp')); }; }); };
 var renderStaff=function(){ if(!el.staffList) return; if(!G.crew) G.crew=[];
   var h='<div class="s" style="margin:0 2px 8px;color:var(--ink2);font-size:11px">Neem <b>friturists</b> aan en <b>train</b> ze: ⚡ Snelheid = meer doorstroom, 🎓 Vakmanschap = dikkere tickets.</div>';
   G.crew.forEach(function(m,idx){ var cS=trainCost(m.spdLv||1), cK=trainCost(m.sklLv||1);
@@ -1070,7 +1105,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     // week clock + weekly goal
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
-    rushTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
+    rushTick(dt); campaignTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
     G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)*valueFactor(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
       if(G.custs.length<ccap){ G.custs.push(makeCust());
         if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
@@ -1137,6 +1172,7 @@ if(typeof globalThis!=='undefined'){
     staffSpeed:staffSpeed, staffSkill:staffSkill, serviceBonus:serviceBonus, trainCost:trainCost, crewCount:crewCount,
     SIZES:SIZES, sizeDef:sizeDef, defaultPrices:defaultPrices, priceOf:priceOf, menuAvg:menuAvg, valueFactor:valueFactor,
     CONTESTS:CONTESTS, contestDef:contestDef, contestFor:contestFor, newContest:newContest,
+    CAMPAIGNS:CAMPAIGNS, campDef:campDef, campaignAppeal:campaignAppeal,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
