@@ -52,7 +52,7 @@ ok(FS.serviceTime(Gf) < FS.serviceTime(G), 'higher throughput = faster service')
 // ---- order value ----
 const local = FS.CUSTTYPES.find(t => t.id === 'local');
 const base = FS.orderValue(G, { fav: null, spend: 1 }, 1);
-ok(base === FS.BAL.frietPrice, 'plain order with no research = fries price');
+ok(base === Math.round(FS.menuAvg(G)), 'plain order = the menu-average friet ticket');
 const Gsauce = FS.freshGame(); Gsauce.research.andalouse = true;
 ok(FS.orderValue(Gsauce, { fav: null, spend: 1 }, 1) > base, 'unlocked sauce raises order value');
 const worker = { fav: 'bicky', spend: 1.2 };
@@ -334,6 +334,25 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.serviceBonus(g4) > 1, 'trained skill raises the service bonus');
   ok(FS.orderValue(g4, { fav: null, spend: 1 }, 1) > FS.orderValue(g2, { fav: null, spend: 1 }, 1), 'a skilled crew earns bigger tickets');
   ok(FS.trainCost(2) > FS.trainCost(1), 'each training level costs more');
+}
+
+// ---- menu pricing per portion size ----
+{
+  ok(FS.SIZES.length === 4, 'four portion sizes (klein → familiepak)');
+  const g = FS.freshGame();
+  ok(FS.priceOf(g, 'middel') === FS.sizeDef('middel').fair, 'prices default to the fair price');
+  ok(Math.abs(FS.valueFactor(g) - 1) < 1e-9, 'at fair prices, value factor is neutral');
+  // raise prices → bigger tickets but fewer customers (lower value factor)
+  const dear = FS.freshGame(); FS.SIZES.forEach(z => dear.prices[z.id] = z.fair * 2);
+  ok(FS.orderValue(dear, { fav: null, spend: 1 }, 1) > FS.orderValue(g, { fav: null, spend: 1 }, 1), 'higher prices earn more per order');
+  ok(FS.valueFactor(dear) < 1, 'over-pricing hurts value-for-money (less traffic)');
+  // cut prices → smaller tickets but more traffic
+  const cheap = FS.freshGame(); FS.SIZES.forEach(z => cheap.prices[z.id] = Math.round(z.fair * 0.6));
+  ok(FS.valueFactor(cheap) > 1, 'a bargain menu pulls more people');
+  ok(FS.orderValue(cheap, { fav: null, spend: 1 }, 1) < base, 'but each order earns less');
+  // a higher-rank friet lifts the whole menu
+  const ranked = FS.freshGame(); ranked.dish.friet.rank = 5;
+  ok(FS.orderValue(ranked, { fav: null, spend: 1 }, 1) > base, 'higher friet rank raises the ticket at the same prices');
 }
 
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
