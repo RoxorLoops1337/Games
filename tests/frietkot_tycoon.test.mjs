@@ -85,7 +85,9 @@ ok(FT.SAUCES.length === 6, 'six sauces');
 ok(FT.SAUCES[0].id === 'mayo' && FT.SAUCES[0].unlock === 0, 'mayo is free/default');
 ok(FT.SNACKS.every(s => s.price > s.cost && s.unlock > 0), 'snacks priced above cost, cost to unlock');
 ok(FT.SAUCES.every(s => s.price > s.cost), 'sauces priced above cost');
-ok(FT.snackById('bicky').label === 'bicky burger', 'snackById lookup');
+ok(FT.snackById('bicky').label === 'bickyburger', 'snackById lookup');
+ok(FT.snackById('curryworst').label === 'curryworst', 'frikandel is curryworst in BE');
+ok(FT.snackById('frikandel') === null, 'no Dutch "frikandel" id remains');
 ok(FT.snackById('nope') === null, 'snackById miss = null');
 ok(FT.sauceById('andalouse').label === 'andalouse', 'sauceById lookup');
 
@@ -120,7 +122,7 @@ ok(FT.oilDecayMul(Gfryer) < baseDecay, 'bigger fryer slows oil decay');
 // ---- unlockedCount ignores default mayo ----
 const Gm = FT.freshGame();
 ok(FT.unlockedCount(Gm) === 0, 'fresh game: only free mayo, count 0');
-Gm.menu.sauces.andalouse = true; Gm.menu.snacks.frikandel = true;
+Gm.menu.sauces.andalouse = true; Gm.menu.snacks.curryworst = true;
 ok(FT.unlockedCount(Gm) === 2, 'unlockedCount counts extras');
 
 // ---- idlePerSec grows with staff, menu, fryer ----

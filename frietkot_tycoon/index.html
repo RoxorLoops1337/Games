@@ -195,7 +195,7 @@
     </div>
     <div class="row">
       <div class="ctl grow">
-        <div class="lab">🛢️ Frietvet <b id="oilPct">100%</b></div>
+        <div class="lab">🛢️ Frituurvet <b id="oilPct">100%</b></div>
         <div class="oilbar"><i id="oilBar" style="width:100%"></i></div>
         <div class="fats" id="fatSeg"></div>
       </div>
@@ -253,10 +253,10 @@ var fmtFr=function(n){                       // thousands with a dot, Belgian st
 /* ---------- data: sizes, fats, archetypes ---------- */
 // portionGrams / base cost & price in francs (period-flavoured, research H7)
 var SIZES=[
-  {id:'klein',  label:'klein',  grams:150, base:45, cost:14},
-  {id:'medium', label:'medium', grams:220, base:65, cost:20},
-  {id:'groot',  label:'groot',  grams:320, base:90, cost:28},
-  {id:'familie',label:'familie',grams:600, base:150,cost:52}
+  {id:'klein',  label:'klein',     grams:150, base:45, cost:14},
+  {id:'medium', label:'middel',    grams:220, base:65, cost:20},
+  {id:'groot',  label:'groot',     grams:320, base:90, cost:28},
+  {id:'familie',label:'familiezak',grams:600, base:150,cost:52}
 ];
 var sizeById=function(id){ for(var i=0;i<SIZES.length;i++) if(SIZES[i].id===id) return SIZES[i]; return SIZES[1]; };
 
@@ -288,11 +288,11 @@ var ARCHETYPES=[
 /* ---------- menu: snacks & sauces (research SNACKS.md / SAUCES.md) ---------- */
 // franc cost/price; unlock = one-time recipe cost bought in the Uitbreidingen sheet
 var SNACKS=[
-  {id:'frikandel', label:'frikandel',    emoji:'🌭', cost:12, price:45, unlock:1400},
-  {id:'kroket',    label:'kaaskroket',   emoji:'🧀', cost:15, price:50, unlock:2400},
-  {id:'mexicano',  label:'mexicano',     emoji:'🌶️', cost:18, price:55, unlock:3600},
-  {id:'bicky',     label:'bicky burger', emoji:'🍔', cost:30, price:95, unlock:6500},
-  {id:'stoofvlees',label:'stoofvlees',   emoji:'🍲', cost:35, price:75, unlock:11000}
+  {id:'curryworst',label:'curryworst',  emoji:'🌭', cost:12, price:45, unlock:1400},
+  {id:'kroket',    label:'kaaskroket',  emoji:'🧀', cost:15, price:50, unlock:2400},
+  {id:'cervela',   label:'cervela',     emoji:'🥓', cost:18, price:55, unlock:3600},
+  {id:'bicky',     label:'bickyburger', emoji:'🍔', cost:30, price:95, unlock:6500},
+  {id:'stoofvlees',label:'stoofvlees',  emoji:'🍲', cost:35, price:75, unlock:11000}
 ];
 var snackById=function(id){ for(var i=0;i<SNACKS.length;i++) if(SNACKS[i].id===id) return SNACKS[i]; return null; };
 var SAUCES=[
@@ -465,6 +465,9 @@ var load=function(){
     if(!G.menu) G.menu={snacks:{},sauces:{mayo:true}};
     if(!G.menu.snacks) G.menu.snacks={};
     if(!G.menu.sauces) G.menu.sauces={mayo:true};
+    // Belgian rename migration: frikandel->curryworst, mexicano->cervela
+    if(G.menu.snacks.frikandel){ G.menu.snacks.curryworst=true; delete G.menu.snacks.frikandel; }
+    if(G.menu.snacks.mexicano){ G.menu.snacks.cervela=true; delete G.menu.snacks.mexicano; }
     if(G.staff==null) G.staff=0;
     if(!G.district) G.district='dorp';
     G.queue=[]; G.arrAcc=0; G.srvAcc=0; if(G.satAvg==null) G.satAvg=0; // rebuild the line fresh
