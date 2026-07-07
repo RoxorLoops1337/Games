@@ -143,6 +143,12 @@ var RANKS=[ [0,'Buurtfrituur'],[12,'Gekend frietkot'],[30,'Frietbaron'],[60,'Sta
    PURE LOGIC (unit-tested)
    ========================================================================= */
 var countKind=function(objs,kind){ var n=0; for(var i=0;i<objs.length;i++) if(objDef(objs[i].id)&&objDef(objs[i].id).kind===kind) n++; return n; };
+// MERGE: two equal objects fuse into one of the next level. A level-L object has
+// power 1.5^(L-1) — so a merged pair is 1.5x one, i.e. 75% of the two it replaced,
+// but frees a tile. Merging again keeps that ratio at every level.
+var power=function(lvl){ return Math.pow(1.5,(lvl||1)-1); };
+var kindPower=function(objs,kind){ var s=0; for(var i=0;i<objs.length;i++){ var d=objDef(objs[i].id); if(d&&d.kind===kind) s+=power(objs[i].lvl); } return s; };
+var canMerge=function(a,b){ return !!a&&!!b&&a!==b&&a.id===b.id&&(a.lvl||1)===(b.lvl||1); };
 var adjacent=function(a,b){ return Math.abs(a.gx-b.gx)+Math.abs(a.gy-b.gy)===1; };
 // active furniture combos (adjacency set bonuses — Kairosoft's soul)
 var detectCombos=function(objs){
@@ -154,7 +160,7 @@ var detectCombos=function(objs){
 };
 // shop-wide appeal drives foot traffic
 var computeAppeal=function(G){
-  var a=0; for(var i=0;i<G.objs.length;i++){ var d=objDef(G.objs[i].id); if(d) a+=d.appeal; }
+  var a=0; for(var i=0;i<G.objs.length;i++){ var d=objDef(G.objs[i].id); if(d) a+=d.appeal*power(G.objs[i].lvl); }
   detectCombos(G.objs).forEach(function(){ a+=4; });        // combos add appeal too
   if(G.research.reclame) a+=8;
   a+=G.staff*1;
@@ -162,8 +168,9 @@ var computeAppeal=function(G){
 };
 var spawnInterval=function(appeal){ return clamp(BAL.spawnBase/(0.6+appeal/12), BAL.spawnMin, BAL.spawnBase); };
 // throughput multiplier from fryers + staff + snelbak research
-var throughput=function(G){ return 1 + 0.4*Math.max(0,countKind(G.objs,'fryer')-1) + 0.3*G.staff + (G.research.snelbak?0.4:0); };
-var serviceTime=function(G){ return BAL.serviceBase/throughput(G); };
+var throughput=function(G){ return 1 + 0.4*Math.max(0,kindPower(G.objs,'fryer')-1) + 0.3*G.staff + (G.research.snelbak?0.4:0); };
+// a leveled toog serves faster (its power multiplies the global throughput)
+var serviceTime=function(G,cLvl){ return BAL.serviceBase/(throughput(G)*power(cLvl)); };
 // value of one order (fries + optional snack + sauce), scaled by type spend & combos
 var orderValue=function(G,type,comboMul){
   var v=BAL.frietPrice;
@@ -201,8 +208,8 @@ var DOOR={gx:(GW>>1), gy:GH-1};
 var G=null;
 var freshGame=function(){
   var g={ money:400, faam:0, week:1, weekT:0, served:0, rank:RANKS[0][1],
-    objs:[ {id:'friteuse',gx:1,gy:0},{id:'toog',gx:3,gy:0},{id:'staantafel',gx:5,gy:1},{id:'plant',gx:5,gy:0} ],
-    research:{}, staff:0, custs:[], spawnT:1.2, placing:null, milestone:0, running:false };
+    objs:[ {id:'friteuse',gx:1,gy:0,lvl:1},{id:'toog',gx:3,gy:0,lvl:1},{id:'staantafel',gx:5,gy:1,lvl:1},{id:'plant',gx:5,gy:0,lvl:1} ],
+    research:{}, staff:0, custs:[], spawnT:1.2, placing:null, selected:null, milestone:0, running:false };
   return g;
 };
 var occupied=function(gx,gy){ if(gx<0||gy<0||gx>=GW||gy>=GH) return true; if(gx===DOOR.gx&&gy===DOOR.gy) return true;
@@ -245,13 +252,13 @@ var updateCust=function(c,dt){
     if(!c.counter){ var fc=freeCounter(); if(fc){ fc._busy=c; c.counter=fc; var t=tileC(fc.gx,fc.gy); c.tx=t.x; c.ty=t.y+2; }
       else { c.wait+=dt; c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=TS*GH-14; moveTo(c,dt);
         if(c.wait>BAL.queuePatience){ c.state='leave'; c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=TS*GH+8; } return; } }
-    if(moveTo(c,dt)){ c.state='order'; c.timer=serviceTime(G); }
+    if(moveTo(c,dt)){ c.state='order'; c.svcMax=serviceTime(G, c.counter?c.counter.lvl:1); c.timer=c.svcMax; }
   } else if(c.state==='order'){
     c.timer-=dt; if(c.timer<=0) serveDone(c);
   } else if(c.state==='toseat'){
     if(moveTo(c,dt)){ c.state='eat'; c.timer=BAL.eatTime; }
   } else if(c.state==='eat'){
-    c.timer-=dt; if(c.timer<=0){ heartPop(c.x,c.y-6,1); G.faam+=1;
+    c.timer-=dt; if(c.timer<=0){ var hb=Math.max(1,Math.round(power(c.leaner?c.leaner.lvl:1))); heartPop(c.x,c.y-6,hb); G.faam+=hb;
       if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=TS*GH+8; c.state='leave'; }
   } else if(c.state==='leave'){
     if(moveTo(c,dt)) c._dead=true;
@@ -282,15 +289,21 @@ var drawScene=function(){
     ctx.globalAlpha=.25+.15*Math.sin(T*5); ctx.fillStyle=var_gold; ctx.fillRect(cb.at.gx*TS,cb.at.gy*TS,TS,TS); ctx.globalAlpha=1; });
   // placing highlight follows nothing; objects
   G.objs.forEach(function(o){ var d=objDef(o.id); if(!d) return; var c=tileC(o.gx,o.gy);
+    // merge selection glow
+    if(G.selected){ if(o===G.selected){ ctx.globalAlpha=.45+.3*Math.sin(T*6); ctx.fillStyle=var_good; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); ctx.globalAlpha=1; }
+      else if(canMerge(G.selected,o)){ ctx.globalAlpha=.25+.2*Math.sin(T*6); ctx.fillStyle=var_gold; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); ctx.globalAlpha=1; } }
     ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill();
     if(d.kind==='counter'&&o._busy){ ctx.fillStyle='#7bd66b22'; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); }
     emoji(d.emoji,c.x,c.y,20);
+    if((o.lvl||1)>1){ ctx.fillStyle='#2a1c05'; ctx.fillRect(o.gx*TS+TS-13,o.gy*TS+2,12,9);
+      ctx.fillStyle=var_gold; ctx.font='bold 8px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('L'+o.lvl,o.gx*TS+TS-7,o.gy*TS+7); }
   });
   // customers
   G.custs.forEach(function(c){ var yy=c.y+Math.sin(T*6+c.bob)*1.2;
     emoji(c.emoji,c.x,yy,17);
     if(c.state==='order'){ // service progress ring
-      var p=1-clamp(c.timer/serviceTime(G),0,1); ctx.strokeStyle=var_gold; ctx.lineWidth=2; ctx.beginPath();
+      var p=1-clamp(c.timer/(c.svcMax||serviceTime(G,1)),0,1); ctx.strokeStyle=var_gold; ctx.lineWidth=2; ctx.beginPath();
       ctx.arc(c.x,yy-13,6,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.stroke(); }
   });
   // placing hint
@@ -356,11 +369,11 @@ var each=function(sel,mk){ if(typeof document==='undefined'||!document.querySele
 var renderAll=function(){ renderShop(); renderRes(); renderStaff(); syncHUD(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<o.cost){ toast('Te weinig geld.'); return; }
-  G.placing=id; if(el.placebar) el.placebar.classList.add('on'); toast('Tik op een lege tegel voor je <b>'+o.nm+'</b>.'); };
+  G.placing=id; G.selected=null; if(el.placebar) el.placebar.classList.add('on'); toast('Tik op een lege tegel voor je <b>'+o.nm+'</b>.'); };
 var cancelPlacing=function(){ G.placing=null; if(el.placebar) el.placebar.classList.remove('on'); };
 var placeAt=function(gx,gy){ if(!G.placing) return; if(occupied(gx,gy)){ toast('Die tegel is bezet.'); return; }
   var o=objDef(G.placing); if(G.money<o.cost){ cancelPlacing(); return; }
-  G.money-=o.cost; G.objs.push({id:o.id,gx:gx,gy:gy}); beep(440,0.08,0.05);
+  G.money-=o.cost; G.objs.push({id:o.id,gx:gx,gy:gy,lvl:1}); beep(440,0.08,0.05);
   var newCombos=detectCombos(G.objs); if(newCombos.length){ bigPop('COMBO! '+newCombos[0].name,'#ffd447'); beep(700,0.1,0.06); }
   cancelPlacing(); renderAll();
   coinPop(gx*TS+TS/2,gy*TS+TS/2,'-'+fmt(o.cost)); };
@@ -371,10 +384,22 @@ var hireStaff=function(){ var c=staffCost(G.staff); if(G.money<c){ toast('Te wei
   G.money-=c; G.staff++; toast('🧑‍🍳 Friturist aangenomen!'); beep(500,0.1,0.05); renderAll(); };
 
 /* ---------- input ---------- */
+var objAt=function(gx,gy){ for(var i=0;i<G.objs.length;i++) if(G.objs[i].gx===gx&&G.objs[i].gy===gy) return G.objs[i]; return null; };
+var doMerge=function(src,dst){ dst.lvl=(dst.lvl||1)+1; var i=G.objs.indexOf(src); if(i>=0) G.objs.splice(i,1);
+  bigPop('Lv'+dst.lvl+'!','#ffd447'); beep(720,0.1,0.06); setTimeout(function(){ beep(960,0.12,0.06); },90);
+  var d=objDef(dst.id); toast('🔧 '+d.nm+' samengevoegd → <b>niveau '+dst.lvl+'</b> · ×'+power(dst.lvl).toFixed(2)+' op 1 tegel!');
+  renderAll(); };
 var onCanvas=function(ev){ if(!G||!G.running) return; var r=scene.getBoundingClientRect();
   var cx=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left, cy=(ev.touches?ev.touches[0].clientY:ev.clientY)-r.top;
   var s=r.width/(GW*TS); var gx=Math.floor(cx/(TS*s)), gy=Math.floor(cy/(TS*s));
-  if(G.placing) placeAt(gx,gy); };
+  if(G.placing){ placeAt(gx,gy); return; }
+  // merge mode: tap one, tap a matching one to fuse
+  var o=objAt(gx,gy);
+  if(!o){ G.selected=null; return; }
+  if(!G.selected){ G.selected=o; toast('Tik op nog een <b>'+objDef(o.id).nm+' Lv'+(o.lvl||1)+'</b> om samen te voegen.'); return; }
+  if(o===G.selected){ G.selected=null; return; }
+  if(canMerge(G.selected,o)){ doMerge(G.selected,o); G.selected=null; return; }
+  G.selected=o; };
 
 /* ---------- loop ---------- */
 var last=0;
@@ -403,7 +428,7 @@ var boot=function(){
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   if(scene&&scene.addEventListener){ scene.addEventListener('click',onCanvas); scene.addEventListener('touchstart',function(e){ e.preventDefault(); onCanvas(e); },{passive:false}); }
   if(el.startBtn) el.startBtn.onclick=function(){ try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
-    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden'); toast('🍟 Welkom! Bouw je frituur uit met de tabbladen onderaan.'); };
+    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden'); toast('🍟 Welkom! Koop &amp; plaats gear — of tik 2 dezelfde samen om ze te <b>verbeteren</b> (1 tegel!).'); };
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
 };
 if(typeof document!=='undefined' && document.addEventListener){
@@ -413,7 +438,7 @@ if(typeof document!=='undefined' && document.addEventListener){
 /* ---------- test surface ---------- */
 if(typeof globalThis!=='undefined'){
   globalThis.__FS={ clamp:clamp, fmt:fmt, BAL:BAL, OBJECTS:OBJECTS, RESEARCH:RESEARCH, CUSTTYPES:CUSTTYPES, RANKS:RANKS,
-    objDef:objDef, resDef:resDef, countKind:countKind, adjacent:adjacent, detectCombos:detectCombos,
+    objDef:objDef, resDef:resDef, countKind:countKind, power:power, kindPower:kindPower, canMerge:canMerge, adjacent:adjacent, detectCombos:detectCombos,
     computeAppeal:computeAppeal, spawnInterval:spawnInterval, throughput:throughput, serviceTime:serviceTime,
     orderValue:orderValue, rollType:rollType, rankFor:rankFor, staffCost:staffCost, canAfford:canAfford, freshGame:freshGame };
 }
