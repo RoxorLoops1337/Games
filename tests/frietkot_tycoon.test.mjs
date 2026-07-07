@@ -81,5 +81,29 @@ ok(FS.rankFor(30) !== FS.rankFor(0), 'rank climbs with customers served');
 ok(FS.staffCost(1) > FS.staffCost(0), 'each hire costs more');
 ok(FS.canAfford(G, 400) && !FS.canAfford(G, 401), 'canAfford checks money');
 
+// ---- merge mechanic ----
+ok(FS.power(1) === 1, 'level 1 power = 1');
+ok(Math.abs(FS.power(2) - 1.5) < 1e-9, 'level 2 power = 1.5x');
+ok(Math.abs(FS.power(3) - 2.25) < 1e-9, 'level 3 = 1.5^2');
+ok(FS.power(2) < 2 * FS.power(1), 'a merged pair is weaker than the two it replaced (space tradeoff)');
+ok(Math.abs(FS.power(3) / (2 * FS.power(2)) - 0.75) < 1e-9, 'merged is always 75% of the two inputs');
+ok(FS.canMerge({ id: 'toog', lvl: 1 }, { id: 'toog', lvl: 1 }) === true, 'same id+level can merge');
+ok(FS.canMerge({ id: 'toog', lvl: 1 }, { id: 'toog', lvl: 2 }) === false, 'different level cannot merge');
+ok(FS.canMerge({ id: 'toog', lvl: 1 }, { id: 'friteuse', lvl: 1 }) === false, 'different type cannot merge');
+{
+  const a = { id: 'toog', lvl: 1 };
+  ok(FS.canMerge(a, a) === false, 'cannot merge an object with itself');
+}
+{
+  const g = FS.freshGame(); const a0 = FS.computeAppeal(g);
+  g.objs[3].lvl = 2;  // level up the plant
+  ok(FS.computeAppeal(g) > a0, 'a higher-level object contributes more appeal');
+  const gf = FS.freshGame(); const t0 = FS.throughput(gf); gf.objs[0].lvl = 3; // fryer to level 3
+  ok(FS.throughput(gf) > t0, 'a higher-level fryer raises throughput');
+  ok(Math.abs(FS.kindPower(gf.objs, 'fryer') - FS.power(3)) < 1e-9, 'kindPower sums level powers');
+  const gc = FS.freshGame();
+  ok(FS.serviceTime(gc, 2) < FS.serviceTime(gc, 1), 'a leveled toog serves faster');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
