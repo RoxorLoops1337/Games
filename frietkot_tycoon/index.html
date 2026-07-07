@@ -322,8 +322,10 @@ var rankProgress=function(served){ var prev=0, next=null, nextName=null;
 var weekGoal=function(week){ return Math.round(5+week*1.6); };
 var staffCost=function(n){ return Math.round(BAL.staffBase*Math.pow(BAL.staffStep,n)); };
 // every purchase of an object makes the NEXT one much pricier (x2 each time)
-var BUY_MULT=2.0;
-var buyCost=function(G,id){ var o=objDef(id); if(!o) return 0; var n=(G.bought&&G.bought[id])||0; return Math.round(o.cost*Math.pow(BUY_MULT,n)); };
+var BUY_MULT=1.55, BUY_SOFT=6;   // escalate steeply at first, then soften so you can keep feeding merges toward high tiers
+var buyCost=function(G,id){ var o=objDef(id); if(!o) return 0; var n=(G.bought&&G.bought[id])||0;
+  var e = n<=BUY_SOFT ? Math.pow(BUY_MULT,n) : Math.pow(BUY_MULT,BUY_SOFT)*(1+(n-BUY_SOFT)*0.5);
+  return Math.round(o.cost*e); };
 var canAfford=function(G,cost){ return G.money>=cost; };
 // floors: one-time cosmetic buys (own it forever, then switch free); nicer floor = a little appeal.
 var FLOORS=[
@@ -1050,7 +1052,7 @@ if(typeof globalThis!=='undefined'){
     SEASONS:SEASONS, seasonFor:seasonFor,
     staffSpeed:staffSpeed, staffSkill:staffSkill, serviceBonus:serviceBonus, trainCost:trainCost, crewCount:crewCount,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
-    staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
+    staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
     GRID_LEVELS:GRID_LEVELS, shopSize:shopSize, expandCost:expandCost, maxExpand:maxExpand,
     applyDrop:function(g,obj,gx,gy){ var prev=G; G=g; try{ return applyDrop(obj,gx,gy); } finally{ G=prev; } } };

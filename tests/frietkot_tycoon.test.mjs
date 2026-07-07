@@ -149,8 +149,14 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   g.bought.toog = 1;
   ok(FS.buyCost(g, 'toog') === Math.round(FS.objDef('toog').cost * FS.BUY_MULT), '2nd buy scaled by BUY_MULT');
   g.bought.toog = 4;
-  ok(FS.buyCost(g, 'toog') > FS.objDef('toog').cost * 10, '5th toog is much pricier');
-  ok(FS.BUY_MULT >= 1.8, 'purchases climb steeply');
+  ok(FS.buyCost(g, 'toog') > FS.objDef('toog').cost * 4, '5th toog is much pricier');
+  ok(FS.BUY_MULT >= 1.4, 'purchases still climb');
+  // the escalation softens past the cap so high tiers stay reachable
+  const gEarly = FS.freshGame(); gEarly.bought.toog = FS.BUY_SOFT;
+  const gLate = FS.freshGame(); gLate.bought.toog = FS.BUY_SOFT + 4;
+  const early = FS.buyCost(gEarly, 'toog'), late = FS.buyCost(gLate, 'toog');
+  ok(late > early, 'buying still gets pricier past the soft cap');
+  ok(late < early * Math.pow(FS.BUY_MULT, 4), 'but softer than pure exponential (so merges stay affordable)');
   const g2 = FS.freshGame(); g2.bought.friteuse = 2;
   ok(FS.buyCost(g2, 'friteuse') > FS.buyCost(FS.freshGame(), 'friteuse'), 'each item escalates independently');
 }
