@@ -89,6 +89,7 @@
     <div class="chip">💶<b id="money">0</b></div>
     <div class="chip f">★<b id="faam">0</b></div>
     <div class="chip">📅 wk<b id="week">1</b></div>
+    <div class="chip" id="season">🌸 Lente</div>
     <div class="chip">✨<b id="appeal">0</b></div>
     <div class="chip">🎯<b id="goalN">0/0</b></div>
     <div class="spacer"></div>
@@ -215,6 +216,16 @@ var CUSTTYPES=[
   {id:'tourist',  emoji:'📸',  fav:'bicky',    spend:1.4, heart:1.7, base:0.6, pull:'tourist'}
 ];
 
+// seasons cycle over the weeks and nudge traffic + how much people spend
+var SEASONS=[
+  {id:'lente', nm:'Lente',  emoji:'🌸', traffic:1.06, spend:1.00},
+  {id:'zomer', nm:'Zomer',  emoji:'☀️', traffic:1.24, spend:1.05},
+  {id:'herfst',nm:'Herfst', emoji:'🍂', traffic:1.00, spend:1.00},
+  {id:'winter',nm:'Winter', emoji:'❄️', traffic:0.88, spend:1.14}
+];
+var SEASON_LEN=3;
+var seasonFor=function(week){ return SEASONS[Math.floor(((week||1)-1)/SEASON_LEN)%4]; };
+
 var RANKS=[ [0,'Buurtfrituur'],[12,'Gekend frietkot'],[30,'Frietbaron'],[60,'Stadslegende'],
   [110,'Nationale trots'],[200,'Frietkeizer'] ];
 
@@ -266,7 +277,7 @@ var orderValue=function(G,type,comboMul){
   else { var snacks=RESEARCH.filter(function(r){return r.kind==='snack'&&G.research[r.id];});
     if(snacks.length && Math.random()<0.5){ var s=pick(snacks); v+=dishPrice(DISH_BASE[s.id]||s.price, dishRank(G,s.id)); } }
   if(G.research.andalouse) v+=BAL.saucePrice;
-  v*=type.spend; v*=(comboMul||1);
+  v*=type.spend; v*=(comboMul||1); v*=seasonFor(G.week).spend;   // winter = comfort-food splurge
   return Math.round(v);
 };
 // weighted customer-type roll: base weight + bonus if a decor pulls that type
@@ -396,8 +407,10 @@ var newWeek=function(){
   if(G.weekServed>=G.goalTarget){ var rw=Math.round(2+G.week*0.8), cash=Math.round(150+G.week*45);
     G.faam+=rw; G.money+=cash; confetti(); bigPop('WEEKDOEL!','#7bd66b');
     toast('🎯 Weekdoel gehaald! <b>+★'+rw+'</b> +'+fmt(cash)+' 💶'); beep(680,0.1,0.06); setTimeout(function(){ beep(900,0.12,0.06); },110); }
+  var prevSeason=seasonFor(G.week);
   G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week);
   if(G.week>=2 && !G.criticPending && Math.random()<0.4) G.criticPending=true;   // a critic may drop by this week
+  var s=seasonFor(G.week); if(s!==prevSeason){ toast(s.emoji+' Het is nu <b>'+s.nm+'</b>!'); }
   save(); syncHUD();
 };
 var occupied=function(gx,gy){ if(gx<0||gy<0||gx>=GW||gy>=GH) return true; if(gx===DOOR.gx&&gy===DOOR.gy) return true;
@@ -701,10 +714,11 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','appeal','rankChip','shopList','resList','staffList','floorList',
+var refEls=function(){ ['money','faam','week','season','appeal','rankChip','shopList','resList','staffList','floorList',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
+  if(el.season){ var ss=seasonFor(G.week); el.season.textContent=ss.emoji+' '+ss.nm; }
   if(el.goalN) el.goalN.textContent=Math.min(G.weekServed,G.goalTarget)+'/'+G.goalTarget;
   var rp=rankProgress(G.served);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
@@ -911,8 +925,8 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     // week clock + weekly goal
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
-    rushTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30;
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul;
+    rushTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
       if(G.custs.length<ccap){ G.custs.push(makeCust());
         if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
     // the critic slips into the line as its own arrival
@@ -969,6 +983,7 @@ if(typeof globalThis!=='undefined'){
     orderValue:orderValue, rollType:rollType, rankFor:rankFor, rankProgress:rankProgress, weekGoal:weekGoal,
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
     affinity:affinity, sigTitle:sigTitle, dishEmoji:dishEmoji, dishName:dishName, criticRating:criticRating,
+    SEASONS:SEASONS, seasonFor:seasonFor,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
