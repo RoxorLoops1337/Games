@@ -114,6 +114,7 @@
 
   <div id="tabs">
     <div class="tab" id="tabShop">🛒 Winkel</div>
+    <div class="tab" id="tabMenu">💶 Menu</div>
     <div class="tab" id="tabRes">🔬 Lab</div>
     <div class="tab" id="tabKeuken">🍳 Keuken</div>
     <div class="tab" id="tabFloor">🧱 Vloer</div>
@@ -121,6 +122,7 @@
   </div>
   <div id="sheetHost">
     <div class="sheet on" id="shopSheet"><h3>🛒 Koop &amp; plaats</h3><div id="shopList"></div></div>
+    <div class="sheet" id="menuSheet"><h3>💶 Menukaart — zet je prijzen</h3><div id="menuBody"></div></div>
     <div class="sheet" id="resSheet"><h3>🔬 Onderzoek (kost ★ Faam)</h3><div id="resList"></div></div>
     <div class="sheet" id="keukenSheet"><h3>🍳 Keuken — bedenk recepten</h3><div id="keukenBody"></div></div>
     <div class="sheet" id="floorSheet"><h3>🧱 Kies je vloer</h3><div id="floorList"></div></div>
@@ -174,6 +176,21 @@ var OBJECTS=[
   {id:'plant',     nm:'Plant',      emoji:'🪴', cost:70,  kind:'decor',   appeal:2, desc:'Beetje gezelligheid'}
 ];
 var objDef=function(id){ for(var i=0;i<OBJECTS.length;i++) if(OBJECTS[i].id===id) return OBJECTS[i]; return null; };
+
+/* ---------- menu: friet portion sizes you price yourself ---------- */
+var SIZES=[
+  {id:'klein',  nm:'Klein pakske',  emoji:'🍟', fair:18, w:0.34},
+  {id:'middel', nm:'Middel pak',    emoji:'🍟', fair:28, w:0.34},
+  {id:'groot',  nm:'Groot pak',     emoji:'🍟', fair:44, w:0.22},
+  {id:'familie',nm:'Familiepak',    emoji:'🍟', fair:70, w:0.10}
+];
+var sizeDef=function(id){ for(var i=0;i<SIZES.length;i++) if(SIZES[i].id===id) return SIZES[i]; return null; };
+var defaultPrices=function(){ var p={}; SIZES.forEach(function(z){ p[z.id]=z.fair; }); return p; };
+var priceOf=function(G,id){ var z=sizeDef(id); if(!z) return 0; return (G.prices&&G.prices[id]!=null)?G.prices[id]:z.fair; };
+// popularity-weighted average ticket for a friet portion (before dish-rank/season/etc.)
+var menuAvg=function(G){ var s=0,w=0; SIZES.forEach(function(z){ s+=priceOf(G,z.id)*z.w; w+=z.w; }); return w?s/w:0; };
+// value-for-money vs the "fair" prices → nudges foot traffic (cheaper menu pulls more people)
+var valueFactor=function(G){ var f=0,c=0; SIZES.forEach(function(z){ f+=z.fair; c+=priceOf(G,z.id); }); return clamp(c>0?f/c:1, 0.55, 1.6); };
 
 /* ---------- research (★-gated unlocks) ---------- */
 var RESEARCH=[
@@ -296,7 +313,7 @@ var throughput=function(G){ return 1 + 0.4*Math.max(0,kindPower(G.objs,'fryer')-
 var serviceTime=function(G,cLvl){ return BAL.serviceBase/(throughput(G)*power(cLvl)); };
 // value of one order (fries + optional snack + sauce), scaled by type spend & combos
 var orderValue=function(G,type,comboMul){
-  var v=dishPrice(DISH_BASE.friet, dishRank(G,'friet'));          // fries, scaled by their dish rank
+  var v=menuAvg(G)*(1+(dishRank(G,'friet')-1)*0.20);             // friet portion: your menu prices, scaled by dish rank
   if(type.fav && G.research[type.fav]){ var r=resDef(type.fav); if(r&&r.price) v+=dishPrice(DISH_BASE[type.fav]||r.price, dishRank(G,type.fav)); }
   else { var snacks=RESEARCH.filter(function(r){return r.kind==='snack'&&G.research[r.id];});
     if(snacks.length && Math.random()<0.5){ var s=pick(snacks); v+=dishPrice(DISH_BASE[s.id]||s.price, dishRank(G,s.id)); } }
@@ -411,7 +428,7 @@ var freshGame=function(){
     research:{}, staff:0, crew:[], custs:[], spawnT:1.0, placing:null, selected:null, milestone:0, running:false,
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
-    floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0 };
+    floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices() };
   return g;
 };
 var SAVE_KEY='ftstory_save';
@@ -419,10 +436,11 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,bought:G.bought,
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
-  floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending })); }catch(e){} };
+  floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  if(!G.prices) G.prices=defaultPrices(); SIZES.forEach(function(z){ if(G.prices[z.id]==null) G.prices[z.id]=z.fair; });
   if(!G.crew) G.crew=[]; if(!G.crew.length && G.staff>0){ for(var ci=0;ci<G.staff;ci++) G.crew.push({name:STAFF_NAMES[ci%STAFF_NAMES.length],spdLv:1,sklLv:1}); } G.staff=G.crew.length;
   if(!G.bought) G.bought={};
   if(!G.floor) G.floor='planken'; if(!G.floorsOwned) G.floorsOwned={}; G.floorsOwned.planken=true;
@@ -759,7 +777,7 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','season','appeal','rankChip','shopList','resList','staffList','floorList',
+var refEls=function(){ ['money','faam','week','season','appeal','rankChip','shopList','menuBody','resList','staffList','floorList',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
@@ -835,7 +853,24 @@ var buyFloor=function(id){ var f=floorDef(id); if(!f) return; if(!G.floorsOwned)
   toast('🧱 <b>'+f.nm+'</b> gelegd!'); renderAll(); };
 var each=function(sel,mk){ if(typeof document==='undefined'||!document.querySelectorAll) return;
   Array.prototype.forEach.call(document.querySelectorAll(sel),function(b){ b.onclick=mk(b); }); };
-var renderAll=function(){ renderShop(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); syncHUD(); save(); };
+var renderMenu=function(){ if(!el.menuBody) return; if(!G.prices) G.prices=defaultPrices();
+  var vf=valueFactor(G), demand=vf>=1.12?'druk 🔥':vf>=0.95?'normaal':vf>=0.8?'rustiger':'stil 😬';
+  var h='<div class="s" style="margin:0 2px 9px;color:var(--ink2);font-size:11px">Zet je prijs per <b>pak friet</b>. Hoger = meer winst per klant, maar <b>minder volk</b>. Lager = meer volk, kleinere marge. (Rang van je friet in de Keuken tilt alles op.)</div>';
+  SIZES.forEach(function(z){ var p=priceOf(G,z.id), rel=p/z.fair;
+    var tag=rel>1.18?'💸 duur':rel<0.85?'🏷️ koopje':'👌 eerlijk', col=rel>1.18?'var(--bad)':rel<0.85?'var(--good)':'var(--ink2)';
+    h+='<div class="item"><div class="ic">'+z.emoji+'</div><div class="info"><div class="t">'+z.nm+'</div>'
+      +'<div class="s">Eerlijk ~'+z.fair+'💶 · <span style="color:'+col+'">'+tag+'</span></div></div>'
+      +'<div style="display:flex;align-items:center;gap:6px">'
+      +'<button class="buy" data-price="'+z.id+':-2" style="padding:8px 11px">−</button>'
+      +'<b style="min-width:44px;text-align:center;color:var(--gold);font-size:15px">'+p+'💶</b>'
+      +'<button class="buy" data-price="'+z.id+':2" style="padding:8px 11px">+</button></div></div>'; });
+  h+='<div class="item" style="border-color:#5cc0e8"><div class="ic">📊</div><div class="info"><div class="t">Gemiddeld ticket: '+Math.round(menuAvg(G))+'💶</div>'
+    +'<div class="s">Toeloop nu: <b>'+demand+'</b> (prijs t.o.v. eerlijk)</div></div></div>';
+  el.menuBody.innerHTML=h;
+  each('[data-price]',function(b){ return function(){ var p=b.getAttribute('data-price').split(':'); setPrice(p[0],parseInt(p[1],10)); }; }); };
+var setPrice=function(id,delta){ var z=sizeDef(id); if(!z) return; if(!G.prices) G.prices=defaultPrices();
+  G.prices[id]=clamp(Math.round((priceOf(G,id)+delta)), Math.round(z.fair*0.5), Math.round(z.fair*2)); beep(delta>0?600:420,0.04,0.03); renderMenu(); syncHUD(); save(); };
+var renderAll=function(){ renderShop(); renderMenu(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); syncHUD(); save(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<buyCost(G,id)){ toast('Te weinig geld.'); return; }
   G.placing=id; G.selected=null; if(el.placebar) el.placebar.classList.add('on'); toast('Tik op een lege tegel voor je <b>'+o.nm+'</b>.'); };
@@ -988,7 +1023,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
     rushTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)*valueFactor(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
       if(G.custs.length<ccap){ G.custs.push(makeCust());
         if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
     // the critic slips into the line as its own arrival
@@ -1005,15 +1040,15 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 };
 
 /* ---------- boot ---------- */
-var tab=function(which){ ['shop','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
+var tab=function(which){ ['shop','menu','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
   refEls(); loadCounters(); loadFryers(); loadSeats(); loadCustomers(); loadFloors(); var loaded=loadSave(); if(!loaded){ G=freshGame(); applySize(); recenterCam(); } renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
-  var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor');
+  var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor'), mt=$('tabMenu');
   if(st) st.onclick=function(){ tab('shop'); }; if(rt) rt.onclick=function(){ tab('res'); };
   if(ft) ft.onclick=function(){ tab('staff'); }; if(kt) kt.onclick=function(){ tab('keuken'); };
-  if(lt) lt.onclick=function(){ tab('floor'); };
+  if(lt) lt.onclick=function(){ tab('floor'); }; if(mt) mt.onclick=function(){ tab('menu'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   var mb=$('muteBtn'); if(mb){ mb.textContent=sfxOn?'🔊':'🔇'; mb.onclick=toggleSfx; }
   var hb=$('helpBtn'); if(hb) hb.onclick=function(){ showTip(0); };
@@ -1051,6 +1086,7 @@ if(typeof globalThis!=='undefined'){
     affinity:affinity, sigTitle:sigTitle, dishEmoji:dishEmoji, dishName:dishName, criticRating:criticRating,
     SEASONS:SEASONS, seasonFor:seasonFor,
     staffSpeed:staffSpeed, staffSkill:staffSkill, serviceBonus:serviceBonus, trainCost:trainCost, crewCount:crewCount,
+    SIZES:SIZES, sizeDef:sizeDef, defaultPrices:defaultPrices, priceOf:priceOf, menuAvg:menuAvg, valueFactor:valueFactor,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
