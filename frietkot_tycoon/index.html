@@ -111,8 +111,8 @@ var pick=function(a){return a[Math.floor(Math.random()*a.length)];};
 var fmt=function(n){ n=Math.round(n); var s=Math.abs(n)+'',o='';for(var i=0;i<s.length;i++){if(i>0&&(s.length-i)%3===0)o+='.';o+=s[i];}return (n<0?'-':'')+o; };
 
 /* ---------- tuning (single table) ---------- */
-var BAL={ GW:7, GH:5, TS:32, spawnBase:2.4, spawnMin:0.45, serviceBase:2.0, eatTime:3.0,
-  weekLen:22, custSpeed:46, queuePatience:10, frietPrice:30, saucePrice:8, staffBase:220, staffStep:1.7 };
+var BAL={ GW:7, GH:5, TS:32, spawnBase:4.5, spawnMin:1.3, serviceBase:2.6, eatTime:5.0,
+  weekLen:34, custSpeed:36, queuePatience:14, frietPrice:30, saucePrice:8, staffBase:220, staffStep:1.7 };
 
 /* ---------- placeable objects ---------- */
 var OBJECTS=[
@@ -202,7 +202,7 @@ var computeAppeal=function(G){
   a+=floorAppeal(G);                                         // a nicer floor draws a few more customers
   return Math.round(a);
 };
-var spawnInterval=function(appeal){ return clamp(BAL.spawnBase/(0.6+appeal/12), BAL.spawnMin, BAL.spawnBase); };
+var spawnInterval=function(appeal){ return clamp(BAL.spawnBase/(0.6+appeal/22), BAL.spawnMin, BAL.spawnBase); };
 // throughput multiplier from fryers + staff + snelbak research
 var throughput=function(G){ return 1 + 0.4*Math.max(0,kindPower(G.objs,'fryer')-1) + 0.3*G.staff + (G.research.snelbak?0.4:0); };
 // a leveled toog serves faster (its power multiplies the global throughput)
@@ -288,6 +288,13 @@ var loadSeats=function(){ if(typeof Image==='undefined') return;
   for(var i=1;i<=MAX_SEAT;i++){ (function(i){ var im=new Image(); im._ok=false;
     im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
     im.src='sprites/seats/seat_'+(i<10?('0'+i):i)+'.png'; SEAT_IMG[i]=im; })(i); } };
+// little animated pixel customers: 5 types × 4 walk frames. Graceful: emoji fallback.
+var CUST_IMG={};
+var loadCustomers=function(){ if(typeof Image==='undefined') return;
+  ['local','teen','worker','pensioner','tourist'].forEach(function(t){ CUST_IMG[t]=[];
+    for(var f=0;f<4;f++){ (function(t,f){ var im=new Image(); im._ok=false;
+      im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
+      im.src='sprites/customers/'+t+'_'+f+'.png'; CUST_IMG[t][f]=im; })(t,f); } }); };
 // floor tile textures (graceful: fall back to the painted checker if an image is missing).
 var FLOOR_IMG={};
 var loadFloors=function(){ if(typeof Image==='undefined') return;
@@ -335,12 +342,13 @@ var tileC=function(gx,gy){ return {x:gx*TS+TS/2, y:gy*TS+TS/2}; };
 var makeCust=function(){
   var t=rollType(G); var d=tileC(DOOR.gx,DOOR.gy);
   return { type:t, x:d.x, y:TS*GH+8, tx:d.x, ty:d.y, state:'enter', counter:null, leaner:null,
-    timer:0, wait:0, val:0, hearts:0, emoji:t.emoji, bob:Math.random()*6 };
+    timer:0, wait:0, val:0, hearts:0, emoji:t.emoji, bob:Math.random()*6, animT:Math.random()*2, moving:false };
 };
 var freeCounter=function(){ var cs=objsOfKind('counter'); for(var i=0;i<cs.length;i++){ if(!cs[i]._busy) return cs[i]; } return null; };
 var freeLeaner=function(){ var ls=objsOfKind('leaner'); for(var i=0;i<ls.length;i++){ if(!ls[i]._busy) return ls[i]; } return null; };
 
 var moveTo=function(c,dt){ var dx=c.tx-c.x, dy=c.ty-c.y, dist=Math.hypot(dx,dy);
+  if(dist>0.5) c.moving=true;
   var step=BAL.custSpeed*dt; if(dist<=step){ c.x=c.tx; c.y=c.ty; return true; } c.x+=dx/dist*step; c.y+=dy/dist*step; return false; };
 
 var comboMulNow=function(){ var cs=detectCombos(G.objs); var m=1; cs.forEach(function(c){ m*=c.valueMul; }); return m; };
@@ -348,7 +356,7 @@ var comboMulNow=function(){ var cs=detectCombos(G.objs); var m=1; cs.forEach(fun
 var serveDone=function(c){
   var v=orderValue(G,c.type,comboMulNow());
   c.val=v; G.money+=v; G.served++; G.weekServed++;
-  if(Math.random()<0.35) G.regulars++;                 // happy customer becomes a regular → compounding traffic
+  if(Math.random()<0.25) G.regulars++;                 // happy customer becomes a regular → compounding traffic
   var hearts=Math.max(1,Math.round(1*c.type.heart));
   c.hearts=hearts;
   var sc=tileC(c.counter.gx,c.counter.gy);
@@ -363,6 +371,7 @@ var serveDone=function(c){
 };
 
 var updateCust=function(c,dt){
+  c.moving=false; c.animT=(c.animT||0)+dt;
   if(c.state==='enter'){
     if(!c.counter){ var fc=freeCounter(); if(fc){ fc._busy=c; c.counter=fc; var t=tileC(fc.gx,fc.gy); c.tx=t.x; c.ty=t.y+2; }
       else { c.wait+=dt; c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=TS*GH-14; moveTo(c,dt);
@@ -458,11 +467,21 @@ var drawScene=function(){
       ctx.fillText('L'+o.lvl,o.gx*TS+TS-7,o.gy*TS+7); }
   });
   // customers
-  G.custs.forEach(function(c){ var yy=c.y+Math.sin(T*6+c.bob)*1.2;
-    emoji(c.emoji,c.x,yy,17);
-    if(c.state==='order'){ // service progress ring
+  G.custs.forEach(function(c){
+    var idle=Math.sin(T*4+c.bob)*0.7, yy=c.y+(c.moving?0:idle);
+    var frames=CUST_IMG[c.type.id], drawn=false, headY=yy-15;
+    if(frames && frames[0] && frames[0]._ok){
+      var fr=c.moving?(Math.floor(c.animT*8)%4):0, im=frames[fr]||frames[0];
+      var h=TS*0.92, w=h*im.width/im.height, sm=ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled=false;
+      ctx.globalAlpha=.22; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(c.x,c.y+TS*0.30,w*0.42,3,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+      ctx.drawImage(im, c.x-w/2, c.y+TS*0.32-h+(c.moving?0:idle), w, h);
+      ctx.imageSmoothingEnabled=sm; headY=c.y+TS*0.32-h-2; drawn=true;
+    }
+    if(!drawn) emoji(c.emoji,c.x,yy,17);
+    if(c.state==='order'){ // service progress ring above the head
       var p=1-clamp(c.timer/(c.svcMax||serviceTime(G,1)),0,1); ctx.strokeStyle=var_gold; ctx.lineWidth=2; ctx.beginPath();
-      ctx.arc(c.x,yy-13,6,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.stroke(); }
+      ctx.arc(c.x,headY,5,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.stroke(); }
   });
   // placing hint
   if(G.placing){ ctx.strokeStyle=var_good; ctx.lineWidth=1.5;
@@ -668,9 +687,9 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     // week clock + weekly goal
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.5)*rnd(0.7,1.3);
-      if(G.custs.length<44){ G.custs.push(makeCust());
-        if(G.regulars>2 && G.custs.length<44 && Math.random()<Math.min(0.35,G.regulars*0.012)) G.custs.push(makeCust()); } }
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.35)*rnd(0.75,1.35);
+      if(G.custs.length<30){ G.custs.push(makeCust());
+        if(G.regulars>3 && G.custs.length<30 && Math.random()<Math.min(0.20,G.regulars*0.007)) G.custs.push(makeCust()); } }
     // sim
     for(var i=G.custs.length-1;i>=0;i--){ updateCust(G.custs[i],dt); if(G.custs[i]._dead) G.custs.splice(i,1); }
     if(el.money){ el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam); }
@@ -682,7 +701,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 /* ---------- boot ---------- */
 var tab=function(which){ ['shop','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
-  refEls(); loadCounters(); loadFryers(); loadSeats(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
+  refEls(); loadCounters(); loadFryers(); loadSeats(); loadCustomers(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
   var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor');
