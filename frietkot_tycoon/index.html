@@ -118,6 +118,39 @@
     transition:opacity .25s;z-index:9}
   #toast.show{opacity:1}
   #toast b{color:var(--gold)}
+  /* ---- upgrades / menu sheet ---- */
+  #shop{position:fixed;inset:0;background:#000b;display:flex;justify-content:center;align-items:flex-end;
+    z-index:20;opacity:1;transition:opacity .2s}
+  #shop.hidden{opacity:0;pointer-events:none}
+  #shop .sheet{width:100%;max-width:560px;max-height:88%;background:linear-gradient(#241a2f,#1a121f);
+    border-top-left-radius:16px;border-top-right-radius:16px;border:2px solid var(--edge);border-bottom:none;
+    display:flex;flex-direction:column;box-shadow:0 -8px 30px #000a;transform:translateY(0);transition:transform .22s}
+  #shop.hidden .sheet{transform:translateY(20px)}
+  .shead{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+    border-bottom:2px solid var(--edge);font-size:15px;color:var(--gold);position:sticky;top:0;
+    background:#241a2f;border-top-left-radius:14px;border-top-right-radius:14px}
+  .shead .x{background:var(--slot);border:1px solid var(--edge);color:var(--ink);border-radius:8px;
+    width:32px;height:32px;font-size:15px;cursor:pointer;font-weight:800}
+  .scont{overflow-y:auto;padding:6px 12px 20px;-webkit-overflow-scrolling:touch}
+  .ssec{margin-top:12px}
+  .ssec h3{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--ink2);
+    margin:0 0 7px;font-weight:800}
+  .item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--edge);
+    border-radius:10px;padding:8px 10px;margin-bottom:7px}
+  .item .ic{width:34px;height:34px;flex:0 0 auto;border-radius:8px;background:var(--slot);
+    display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid #0d0a12}
+  .item .info{flex:1;min-width:0}
+  .item .t{font-weight:800;font-size:13px;color:var(--ink)}
+  .item .s{font-size:11px;color:var(--ink2);margin-top:1px;line-height:1.3}
+  .item .s b{color:var(--gold);font-weight:700}
+  .buy{border:none;border-radius:8px;font-weight:800;font-size:12px;padding:9px 11px;cursor:pointer;
+    background:linear-gradient(#ffd447,#e8a63b);color:#2a1c05;box-shadow:0 2px 0 #0006;white-space:nowrap;flex:0 0 auto}
+  .buy:active{transform:translateY(1px);box-shadow:0 1px 0 #0006}
+  .buy.owned{background:var(--panel2);color:var(--good);cursor:default;box-shadow:none}
+  .buy:disabled{opacity:.4;cursor:default;box-shadow:0 2px 0 #0006}
+  .dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle}
+  .dots i{width:6px;height:6px;border-radius:50%;background:#0d0a12;display:inline-block}
+  .dots i.on{background:var(--gold)}
 </style>
 </head>
 <body>
@@ -176,9 +209,23 @@
   <div id="foot">
     <span class="mini" id="rate">0,0 fr./sec</span>
     <span class="spacer"></span>
+    <button class="txtbtn" id="shopBtn">🛠️ Uitbreidingen</button>
     <button class="txtbtn" id="resetBtn">nieuw spel</button>
   </div>
 </div>
+
+<div id="shop" class="hidden">
+  <div class="sheet">
+    <div class="shead"><span>🛠️ Uitbreidingen &amp; Menukaart</span><button class="x" id="shopClose">✕</button></div>
+    <div class="scont">
+      <div class="ssec"><h3>🔧 Uitrusting</h3><div id="upgList"></div></div>
+      <div class="ssec"><h3>🧑‍🍳 Personeel — automatiseer je toog</h3><div id="staffBox"></div></div>
+      <div class="ssec"><h3>🌭 Menukaart — snacks</h3><div id="snackList"></div></div>
+      <div class="ssec"><h3>🥫 Menukaart — sauzen</h3><div id="sauceList"></div></div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -239,6 +286,54 @@ var ARCHETYPES=[
   {id:'toerist',name:'Toerist',        emoji:'📸', band:[38,60], sizes:['klein','medium'],  pat:30, tip:0.14, col:'cyn', line:'"Are these… French fries?"'}
 ];
 
+/* ---------- menu: snacks & sauces (research SNACKS.md / SAUCES.md) ---------- */
+// franc cost/price; unlock = one-time recipe cost bought in the Uitbreidingen sheet
+var SNACKS=[
+  {id:'frikandel', label:'frikandel',    emoji:'🌭', cost:12, price:45, unlock:400},
+  {id:'kroket',    label:'kaaskroket',   emoji:'🧀', cost:15, price:50, unlock:650},
+  {id:'mexicano',  label:'mexicano',     emoji:'🌶️', cost:18, price:55, unlock:900},
+  {id:'bicky',     label:'bicky burger', emoji:'🍔', cost:30, price:95, unlock:1600},
+  {id:'stoofvlees',label:'stoofvlees',   emoji:'🍲', cost:35, price:75, unlock:2600}
+];
+var snackById=function(id){ for(var i=0;i<SNACKS.length;i++) if(SNACKS[i].id===id) return SNACKS[i]; return null; };
+var SAUCES=[
+  {id:'mayo',        label:'mayonaise',      cost:3, price:15, unlock:0},
+  {id:'curryketchup',label:'curryketchup',   cost:3, price:15, unlock:150},
+  {id:'andalouse',   label:'andalouse',      cost:4, price:20, unlock:300},
+  {id:'samurai',     label:'samurai',        cost:4, price:20, unlock:450},
+  {id:'brasil',      label:'brasil',         cost:5, price:20, unlock:650},
+  {id:'stoofsaus',   label:'stoofvleessaus', cost:8, price:25, unlock:950}
+];
+var sauceById=function(id){ for(var i=0;i<SAUCES.length;i++) if(SAUCES[i].id===id) return SAUCES[i]; return SAUCES[0]; };
+
+/* ---------- upgrades & staff (research H2/H6 + PROGRESSION idle core) ---------- */
+var upgradeCost=function(base,lvl){ return Math.round(base*Math.pow(1.7,lvl)); };
+var UPG=[
+  {id:'potato',   name:'Betere Bintjes',     emoji:'🥔', desc:'Hoger kwaliteitsplafond',   base:700,  max:3},
+  {id:'fryer',    name:'Grotere friteuse',   emoji:'🍟', desc:'Meer passage, trager vetverval', base:900, max:4},
+  {id:'doublefry',name:'Dubbel-bak station', emoji:'♨️', desc:'Krokanter, vergeeft missers', base:1200, max:1},
+  {id:'filter',   name:'Vetfilter',          emoji:'🛢️', desc:'Vet gaat veel langer mee',   base:1000, max:1}
+];
+var upgById=function(id){ for(var i=0;i<UPG.length;i++) if(UPG[i].id===id) return UPG[i]; return null; };
+var STAFF_WAGE=280, STAFF_MAX=3, STAFF_HIRE=840;
+// effective stats derived from owned upgrades
+var effPotato=function(lvl){ return clamp(0.82+(lvl||0)*0.05,0,0.99); };
+var fryerFootMul=function(lvl){ return 1+0.24*(lvl||0); };
+var oilDecayMul=function(G){ var m=fatById(G.fat).decay;
+  if(G.up&&G.up.filter) m*=0.6; if(G.up) m*=(1-0.05*(G.up.fryer||0)); return m; };
+var wage=function(staff){ return (staff||0)*STAFF_WAGE; };
+var unlockedCount=function(G){ var n=0,k;
+  for(k in G.menu.snacks) if(G.menu.snacks[k]) n++;
+  for(k in G.menu.sauces) if(G.menu.sauces[k]&&k!=='mayo') n++; return n; };
+// rough passive income/sec at current settings (used by loop + offline earnings)
+var idlePerSec=function(G,demand){
+  var fair=sizeById(G.size).base, appeal=priceAppeal(G.price,fair), menuMul=1+0.05*unlockedCount(G);
+  var foot=0.5*appeal*(0.45+G.rep/90)*(demand||1)*oilQuality(G.oil)
+           *fryerFootMul(G.up.fryer)*menuMul*(1+0.3*(G.staff||0));
+  var idleVal=Math.max(6,(G.price-sizeById(G.size).cost))*menuMul;
+  return { foot:foot, idleVal:idleVal, perSec:foot*idleVal };
+};
+
 /* ---------- pure scoring logic (unit-tested) ---------- */
 // how well crispness hits the customer's preferred band → 0..1
 var crispQuality=function(crisp,band){
@@ -260,12 +355,15 @@ var priceAppeal=function(price,fair){
 };
 // overall serve quality 0..1 from the levers
 var serveQuality=function(o){
-  // o: {crisp, band, oil, potato, fat}
-  var q = crispQuality(o.crisp,o.band)*0.55
+  // o: {crisp, band, oil, potato, fat, doublefry}
+  var cq=crispQuality(o.crisp,o.band);
+  if(o.doublefry) cq=clamp(cq+(1-cq)*0.4,0,1);   // double-fry forgives mismatch & lifts the ceiling
+  var q = cq*0.55
         + oilQuality(o.oil)*0.30
         + (o.potato||0.8)*0.15;
   q *= (o.fat!=null?o.fat:1);           // fat taste multiplier
-  return clamp(q,0,1.05);
+  if(o.doublefry) q*=1.04;
+  return clamp(q,0,1.08);
 };
 
 /* ---------- fresh game state ---------- */
@@ -277,11 +375,14 @@ var freshGame=function(){
     v:1,
     shop: SHOP_NAMES[Math.floor(Math.random()*SHOP_NAMES.length)],
     money:2000, day:1, rep:6, served:0,
-    oil:100, fat:'blend', potato:0.82,
+    oil:100, fat:'blend',
     crisp:52, size:'medium', price:70,
     dayT:0, dayLen:48,          // seconds per in-game day
     news:"Welkom! Zet je eerste puntzak klaar.",
-    cust:null, sinceCust:2.2, demandMod:1
+    cust:null, sinceCust:2.2, demandMod:1,
+    up:{potato:0,fryer:0,doublefry:0,filter:0}, staff:0, autoT:0,
+    menu:{ snacks:{}, sauces:{mayo:true} },
+    lastSeen:0
   };
 };
 
@@ -289,9 +390,10 @@ var freshGame=function(){
 var makeCustomer=function(G){
   var a=pick(ARCHETYPES);
   var size=pick(a.sizes);
-  var wantSauce=Math.random()<0.7;
+  var sauce=(Math.random()<0.78)?pick(SAUCES):null;   // may want a sauce you haven't unlocked yet
+  var snack=(Math.random()<0.5)?pick(SNACKS):null;    // ... same for a snack
   return {
-    arch:a, size:size, sauce:wantSauce,
+    arch:a, size:size, sauce:sauce, snack:snack,
     pat:a.pat, patMax:a.pat,
     crispWord: crispLabel((a.band[0]+a.band[1])/2)
   };
@@ -305,12 +407,18 @@ var G=freshGame();
 var SAVE_KEY='ft_save_v1';
 
 /* ---------- persistence ---------- */
-var save=function(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){} };
+var save=function(){ try{ G.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){} };
 var load=function(){
   try{
     var s=localStorage.getItem(SAVE_KEY); if(!s) return false;
     var o=JSON.parse(s); if(!o||o.v!==1) return false;
     for(var k in o) if(o.hasOwnProperty(k)) G[k]=o[k];
+    // migrate / guard fields added after the first slice
+    if(!G.up) G.up={potato:0,fryer:0,doublefry:0,filter:0};
+    if(!G.menu) G.menu={snacks:{},sauces:{mayo:true}};
+    if(!G.menu.snacks) G.menu.snacks={};
+    if(!G.menu.sauces) G.menu.sauces={mayo:true};
+    if(G.staff==null) G.staff=0; G.autoT=0;
     G.cust=null; G.sinceCust=1.2;  // don't restore a mid-order customer
     return true;
   }catch(e){ return false; }
@@ -554,7 +662,8 @@ var bindUI=function(){
   if(typeof document==='undefined'||!document.getElementById) return;
   ['shopName','dayN','repN','money','newsTxt','custAv','custArch','custWant','patBar',
    'crisp','crispV','sizeV','sizeSeg','price','priceV','oilPct','oilBar','fatSeg',
-   'oilBtn','oilCost','serveBtn','rate','resetBtn'].forEach(function(id){ el[id]=$(id); });
+   'oilBtn','oilCost','serveBtn','rate','resetBtn',
+   'shopBtn','shopClose','upgList','staffBox','snackList','sauceList'].forEach(function(id){ el[id]=$(id); });
 
   // size segmented control
   if(el.sizeSeg){ el.sizeSeg.innerHTML='';
@@ -570,6 +679,8 @@ var bindUI=function(){
   if(el.price) el.price.oninput=function(){ G.price=+el.price.value; syncControls(); };
   if(el.serveBtn) el.serveBtn.onclick=serve;
   if(el.oilBtn) el.oilBtn.onclick=refreshOil;
+  if(el.shopBtn) el.shopBtn.onclick=openShop;
+  if(el.shopClose) el.shopClose.onclick=closeShop;
   if(el.resetBtn) el.resetBtn.onclick=function(){
     if(typeof confirm==='undefined'||confirm('Nieuw spel starten? Je huidige frituur gaat verloren.')){
       G=freshGame(); save(); syncControls(); nextCustomerSoon(0.5); toast('Nieuwe frituur geopend!');
@@ -618,40 +729,50 @@ var showOrder=function(){
   document.getElementById('order').classList.remove('idle');
   el.custAv.textContent=a.emoji;
   el.custArch.textContent=a.name;
-  el.custWant.innerHTML=a.line+'<br>Wil <em>'+c.crispWord+'e</em> friet, portie <em>'+s.label+'</em>'
-    +(c.sauce?', <em>met</em> saus':', <em>zonder</em> saus')+'.';
+  el.custWant.innerHTML=a.line+'<br>Wil <em>'+c.crispWord+'e</em> friet ('+s.label+')'
+    +(c.sauce?', met <em>'+c.sauce.label+'</em>':'')
+    +(c.snack?' + <em>'+c.snack.label+'</em>':'')+'.';
 };
 
 var serve=function(){
   if(!G.cust){ toast('Er staat nog geen klant aan de toog.'); return; }
-  var c=G.cust, a=c.arch, s=sizeById(G.size), want=sizeById(c.size), f=fatById(G.fat);
-  // quality of the fries
-  var q=serveQuality({crisp:G.crisp,band:a.band,oil:G.oil,potato:G.potato,fat:f.tasteMul});
-  // size mismatch penalty (gave smaller than they wanted hurts more)
+  doServe(false);
+};
+// shared serve path — called by the player (auto=false) and by staff (auto=true)
+var doServe=function(auto){
+  var c=G.cust; if(!c) return;
+  var a=c.arch, s=sizeById(G.size), want=sizeById(c.size), f=fatById(G.fat);
+  var q=serveQuality({crisp:G.crisp,band:a.band,oil:G.oil,potato:effPotato(G.up.potato),
+                      fat:f.tasteMul, doublefry:G.up.doublefry});
+  if(auto) q*=0.92;                          // staff are a touch less attentive than you
   var sizeGap=Math.abs(SIZES.indexOf(s)-SIZES.indexOf(want));
   var sizeMul=clamp(1-sizeGap*0.14,0.5,1);
-  // sauce
-  var sauceMul=(c.sauce)?1:0.94;
-  var sat=clamp(q*sizeMul*sauceMul,0,1.05); // satisfaction 0..1
-  // money: price + tip (tip scales with satisfaction & archetype generosity)
-  var revenue=G.price - s.cost;
+  var ticket=G.price, sat=q*sizeMul, hint='';
+  // sauce: matched & unlocked adds margin + satisfaction; wanted-but-locked disappoints
+  if(c.sauce){
+    if(G.menu.sauces[c.sauce.id]){ ticket+=c.sauce.price; sat+=0.03; }
+    else { sat-=0.06; hint='wou '+c.sauce.label; }
+  }
+  // snack
+  if(c.snack){
+    if(G.menu.snacks[c.snack.id]){ ticket+=c.snack.price; sat+=0.05; }
+    else { sat-=0.07; hint=(hint?hint+' + ':'wou ')+'een '+c.snack.label; }
+  }
+  sat=clamp(sat,0,1.05);
   var tip=Math.round(G.price*a.tip*sat*2);
-  G.money += G.price + tip;
-  G.served++;
-  // reputation swing
-  var dRep = (sat-0.62)*7;                // >0.62 gains, below loses
-  if(G.oil<20) dRep-=2;                    // black-oil disgust
-  G.rep=clamp(G.rep+dRep,0,100);
-  // oil decays per batch (bigger portion = more decay)
-  var decay=(2.2+ s.grams/260) * f.decay;
-  G.oil=clamp(G.oil-decay,0,100);
+  G.money+=ticket+tip; G.served++;
+  var dRep=(sat-0.62)*7; if(G.oil<20) dRep-=2; G.rep=clamp(G.rep+dRep,0,100);
+  var decay=(2.2+s.grams/260)*oilDecayMul(G); G.oil=clamp(G.oil-decay,0,100);
   // feedback
-  var lab = sat>0.85?'Perfect! ':sat>0.62?'Tevreden. ':sat>0.4?'Njah… ':'Ontevreden! ';
-  popScene((sat>0.6?'good':'bad'), (sat>0.6?'+':'')+fmtFr(G.price+tip)+' fr.');
-  if(tip>0 && sat>0.6) setTimeout(function(){ popScene('rep','fooi +'+tip); },160);
-  toast(lab + (dRep>=0?'★ +':'★ ')+dRep.toFixed(1)+' reputatie');
+  popScene((sat>0.6?'good':'bad'),(sat>0.6?'+':'')+fmtFr(ticket+tip)+' fr.');
+  if(!auto){
+    if(tip>0 && sat>0.6) setTimeout(function(){ popScene('rep','fooi +'+tip); },160);
+    if(hint) toast('💡 De klant '+hint+' — zet \'t op je menukaart!');
+    else{ var lab=sat>0.85?'Perfect! ':sat>0.62?'Tevreden. ':sat>0.4?'Njah… ':'Ontevreden! ';
+      toast(lab+(dRep>=0?'★ +':'★ ')+dRep.toFixed(1)+' reputatie'); }
+  }
   save(); syncControls();
-  nextCustomerSoon(rnd(1.6,3.4));
+  nextCustomerSoon(rnd(auto?0.8:1.6, auto?1.9:3.4));
 };
 
 var refreshOil=function(){
@@ -676,6 +797,57 @@ var toast=function(html){
   if(toastT) clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove('show'); },2200);
 };
 
+/* ---------- upgrades / menu sheet ---------- */
+var openShop=function(){ var s=$('shop'); if(s){ s.classList.remove('hidden'); renderShop(); } };
+var closeShop=function(){ var s=$('shop'); if(s) s.classList.add('hidden'); };
+var itemRow=function(icon,title,sub,btnHTML){
+  return '<div class="item"><div class="ic">'+icon+'</div><div class="info"><div class="t">'+title+
+    '</div><div class="s">'+sub+'</div></div>'+btnHTML+'</div>';
+};
+var dotsHTML=function(lvl,max){ var h=' <span class="dots">';
+  for(var i=0;i<max;i++) h+='<i class="'+(i<lvl?'on':'')+'"></i>'; return h+'</span>'; };
+var buyUpg=function(id){ var u=upgById(id); if(!u) return; var lvl=G.up[id]||0; if(lvl>=u.max) return;
+  var cost=upgradeCost(u.base,lvl); if(G.money<cost){ toast('Te weinig geld.'); return; }
+  G.money-=cost; G.up[id]=lvl+1; toast('🔧 <b>'+u.name+'</b> gekocht!'); save(); syncControls(); renderShop(); };
+var hireStaff=function(){ if(G.staff>=STAFF_MAX) return; if(G.money<STAFF_HIRE){ toast('Te weinig geld.'); return; }
+  G.money-=STAFF_HIRE; G.staff++; toast('🧑‍🍳 Uitbater aangenomen — hij bedient nu mee!'); save(); syncControls(); renderShop(); };
+var buyMenu=function(kind,id){ var m=(kind==='snacks'?snackById(id):sauceById(id)); if(!m) return;
+  if(G.menu[kind][id]) return; if(G.money<m.unlock){ toast('Te weinig geld.'); return; }
+  G.money-=m.unlock; G.menu[kind][id]=true; toast('📋 <b>'+m.label+'</b> staat nu op de kaart!'); save(); syncControls(); renderShop(); };
+var wireShopButtons=function(){
+  if(typeof document==='undefined'||!document.querySelectorAll) return;
+  var each=function(sel,mk){ Array.prototype.forEach.call(document.querySelectorAll(sel),function(b){ b.onclick=mk(b); }); };
+  each('[data-upg]',  function(b){ return function(){ buyUpg(b.getAttribute('data-upg')); }; });
+  each('[data-snack]',function(b){ return function(){ buyMenu('snacks',b.getAttribute('data-snack')); }; });
+  each('[data-sauce]',function(b){ return function(){ buyMenu('sauces',b.getAttribute('data-sauce')); }; });
+  var hb=document.getElementById('hireBtn'); if(hb) hb.onclick=hireStaff;
+};
+var renderShop=function(){
+  if(!el.upgList) return;
+  var h='';
+  UPG.forEach(function(u){ var lvl=G.up[u.id]||0, maxed=lvl>=u.max, cost=upgradeCost(u.base,lvl);
+    var btn=maxed?'<button class="buy owned">✓ max</button>'
+      :'<button class="buy" data-upg="'+u.id+'"'+(G.money<cost?' disabled':'')+'>'+fmtFr(cost)+' fr.</button>';
+    h+=itemRow(u.emoji,u.name+(u.max>1?dotsHTML(lvl,u.max):''),u.desc,btn); });
+  el.upgList.innerHTML=h;
+  var sMax=G.staff>=STAFF_MAX;
+  var sBtn=sMax?'<button class="buy owned">✓ vol</button>'
+    :'<button class="buy" id="hireBtn"'+(G.money<STAFF_HIRE?' disabled':'')+'>'+fmtFr(STAFF_HIRE)+' fr.</button>';
+  el.staffBox.innerHTML=itemRow('🧑‍🍳','Frituuruitbater ('+G.staff+'/'+STAFF_MAX+')',
+    'Bedient je klanten automatisch. Loon <b>'+STAFF_WAGE+' fr./dag</b>. Verdient ook terwijl je weg bent.',sBtn);
+  var sn=''; SNACKS.forEach(function(m){ var owned=!!G.menu.snacks[m.id];
+    var btn=owned?'<button class="buy owned">✓ op de kaart</button>'
+      :'<button class="buy" data-snack="'+m.id+'"'+(G.money<m.unlock?' disabled':'')+'>'+fmtFr(m.unlock)+' fr.</button>';
+    sn+=itemRow(m.emoji,m.label,'Verkoop <b>'+m.price+' fr.</b> · inkoop '+m.cost+' fr.',btn); });
+  el.snackList.innerHTML=sn;
+  var sc=''; SAUCES.forEach(function(m){ var owned=(m.unlock===0)||!!G.menu.sauces[m.id];
+    var btn=owned?'<button class="buy owned">✓ op de kaart</button>'
+      :'<button class="buy" data-sauce="'+m.id+'"'+(G.money<m.unlock?' disabled':'')+'>'+fmtFr(m.unlock)+' fr.</button>';
+    sc+=itemRow('🥫',m.label,'Verkoop <b>'+m.price+' fr.</b> · inkoop '+m.cost+' fr.',btn); });
+  el.sauceList.innerHTML=sc;
+  wireShopButtons();
+};
+
 /* ---------- news / day events (seed of the 'event day' model) ---------- */
 var NEWS=[
   {t:"📻 Mooi weer vandaag — meer wandelaars, meer klanten!",d:1.25},
@@ -688,6 +860,11 @@ var NEWS=[
 ];
 var newDay=function(){
   G.day++; G.dayT=0;
+  // pay the staff their daily wage; an unpaid uitbater walks out
+  if(G.staff>0){ var w=wage(G.staff);
+    if(G.money>=w){ G.money-=w; }
+    else { G.staff--; toast('😞 Een uitbater vertrekt — het loon raakte niet betaald.'); }
+  }
   var n=pick(NEWS); G.news=n.t; G.demandMod=n.d;
   toast('<b>Dag '+G.day+'</b> — '+n.t);
   save();
@@ -705,22 +882,22 @@ var frame=function(ts){
   else {
     G.cust.pat-=dt;
     if(el.patBar) el.patBar.style.width=clamp(G.cust.pat/G.cust.patMax*100,0,100)+'%';
-    if(G.cust.pat<=0){ // walked away
+    // staff auto-serve the counter customer (this is the automation payoff)
+    if(G.staff>0){ G.autoT+=dt; if(G.autoT>=3.4/G.staff){ G.autoT=0; doServe(true); } }
+    if(G.cust && G.cust.pat<=0){ // walked away
       G.rep=clamp(G.rep-1.5,0,100); popScene('bad','klant weg!'); toast('De klant is het beu en vertrekt. ★ −1,5');
       save(); syncControls(); nextCustomerSoon(rnd(1.5,3));
     }
   }
-  // idle income: passers-by buying at the window
-  var fair=sizeById(G.size).base;
-  var appeal=priceAppeal(G.price,fair);
-  var foot=0.55*appeal*(0.45+G.rep/90)*G.demandMod*oilQuality(G.oil);
-  var perSec=foot*(G.price-sizeById(G.size).cost*0.6);
-  acc+=foot*dt;
+  // idle income: passers-by buying at the window (scaled by fryer / menu / staff)
+  var ips=idlePerSec(G,G.demandMod);
+  acc+=ips.foot*dt;
   if(acc>=1){ var n=Math.floor(acc); acc-=n;
-    G.money+= n*Math.max(6,(G.price-sizeById(G.size).cost));
-    G.oil=clamp(G.oil-n*0.35*fatById(G.fat).decay,0,100);
+    G.money+= n*ips.idleVal;
+    G.oil=clamp(G.oil-n*0.3*oilDecayMul(G),0,100);
   }
-  if(el.rate) el.rate.textContent=perSec.toFixed(1).replace('.',',')+' fr./sec  ·  '+G.served+' geserveerd';
+  if(el.rate) el.rate.textContent=ips.perSec.toFixed(1).replace('.',',')+' fr./sec  ·  '+G.served
+    +' geserveerd'+(G.staff>0?'  ·  👤×'+G.staff:'');
   if(el.money) el.money.textContent=fmtFr(G.money);
 
   drawScene();
@@ -730,6 +907,13 @@ var frame=function(ts){
 /* ---------- boot ---------- */
 var boot=function(){
   var had=load();
+  // offline earnings — your staff keep the toog running while you're away (capped 6h)
+  if(had && G.staff>0 && G.lastSeen){
+    var away=clamp((Date.now()-G.lastSeen)/1000,0,6*3600);
+    if(away>60){ var gain=Math.round(idlePerSec(G,1).perSec*away*0.35);
+      if(gain>0){ G.money+=gain;
+        setTimeout(function(){ toast('💤 Terwijl je weg was hield je toog open: <b>+'+fmtFr(gain)+' fr.</b>'); },700); } }
+  }
   bindUI();
   if(!had){ toast('🍟 Welkom bij <b>'+G.shop+'</b>! Bak de perfecte friet.'); }
   nextCustomerSoon(2.0);
@@ -745,8 +929,11 @@ if(typeof document!=='undefined' && document.addEventListener){
 /* ---------- test surface ---------- */
 if(typeof globalThis!=='undefined'){
   globalThis.__FT={ clamp:clamp, lerp:lerp, fmtFr:fmtFr, SIZES:SIZES, FATS:FATS, ARCHETYPES:ARCHETYPES,
-    sizeById:sizeById, fatById:fatById, crispLabel:crispLabel, crispQuality:crispQuality,
-    oilQuality:oilQuality, priceAppeal:priceAppeal, serveQuality:serveQuality,
+    SNACKS:SNACKS, SAUCES:SAUCES, UPG:UPG, STAFF_WAGE:STAFF_WAGE, STAFF_MAX:STAFF_MAX, STAFF_HIRE:STAFF_HIRE,
+    sizeById:sizeById, fatById:fatById, snackById:snackById, sauceById:sauceById, upgById:upgById,
+    crispLabel:crispLabel, crispQuality:crispQuality, oilQuality:oilQuality, priceAppeal:priceAppeal,
+    serveQuality:serveQuality, upgradeCost:upgradeCost, effPotato:effPotato, fryerFootMul:fryerFootMul,
+    oilDecayMul:oilDecayMul, wage:wage, unlockedCount:unlockedCount, idlePerSec:idlePerSec,
     freshGame:freshGame, makeCustomer:makeCustomer };
 }
 </script>
