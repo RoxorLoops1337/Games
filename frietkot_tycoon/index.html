@@ -118,7 +118,7 @@ var BAL={ GW:7, GH:5, TS:32, spawnBase:2.4, spawnMin:0.45, serviceBase:2.0, eatT
 var OBJECTS=[
   {id:'friteuse',  nm:'Friteuse',   emoji:'🍟', cost:250, kind:'fryer',   appeal:2, desc:'Sneller bakken (meer doorstroom)'},
   {id:'toog',      nm:'Toog',       emoji:'🧾', cost:200, kind:'counter', appeal:1, desc:'Extra bedienpunt (parallel bedienen)'},
-  {id:'staantafel',nm:'Staantafel', emoji:'🍽️', cost:90,  kind:'leaner',  appeal:1, desc:'Klanten blijven eten → meer ♥'},
+  {id:'staantafel',nm:'Zithoek', emoji:'🪑', cost:90,  kind:'leaner',  appeal:1, desc:'Klanten blijven eten → meer ♥'},
   {id:'sausbar',   nm:'Sausbar',    emoji:'🥫', cost:180, kind:'decor',   appeal:3, combo:'fryer', desc:'Combo naast friteuse!'},
   {id:'jukebox',   nm:'Jukebox',    emoji:'🎵', cost:260, kind:'decor',   appeal:4, pulls:'teen', desc:'Trekt jongeren'},
   {id:'neon',      nm:'Neonbord',   emoji:'🪧', cost:300, kind:'decor',   appeal:6, pulls:'tourist', desc:'Veel aantrek + toeristen'},
@@ -281,6 +281,13 @@ var loadFryers=function(){ if(typeof Image==='undefined') return;
   for(var i=1;i<=MAX_FRYER;i++){ (function(i){ var im=new Image(); im._ok=false;
     im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
     im.src='sprites/fryers/fryer_'+(i<10?('0'+i):i)+'.png'; FRYER_IMG[i]=im; })(i); } };
+// zithoek merge-level art: seat_01 (houten bank) → seat_40 (neon booth). Graceful: emoji fallback.
+var MAX_SEAT=40;
+var SEAT_IMG=[];
+var loadSeats=function(){ if(typeof Image==='undefined') return;
+  for(var i=1;i<=MAX_SEAT;i++){ (function(i){ var im=new Image(); im._ok=false;
+    im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
+    im.src='sprites/seats/seat_'+(i<10?('0'+i):i)+'.png'; SEAT_IMG[i]=im; })(i); } };
 // floor tile textures (graceful: fall back to the painted checker if an image is missing).
 var FLOOR_IMG={};
 var loadFloors=function(){ if(typeof Image==='undefined') return;
@@ -437,6 +444,11 @@ var drawScene=function(){
       var lvf=clamp(o.lvl||1,1,MAX_FRYER), imf=FRYER_IMG[lvf];
       if(imf&&imf._ok){ var scf=Math.min(TS*1.06/imf.width, TS*1.28/imf.height), iwf=imf.width*scf, ihf=imf.height*scf; ctx.drawImage(imf, c.x-iwf/2, c.y-ihf/2+2, iwf, ihf); }
       else { ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill(); emoji(d.emoji,c.x,c.y,20); }
+    } else if(d.kind==='leaner'){
+      if(o._busy){ ctx.fillStyle='#7bd66b22'; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); }
+      var lvs=clamp(o.lvl||1,1,MAX_SEAT), ims=SEAT_IMG[lvs];
+      if(ims&&ims._ok){ var scs=Math.min(TS*1.10/ims.width, TS*1.20/ims.height), iws=ims.width*scs, ihs=ims.height*scs; ctx.drawImage(ims, c.x-iws/2, c.y-ihs/2+1, iws, ihs); }
+      else { ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill(); emoji(d.emoji,c.x,c.y,20); }
     } else {
       ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill();
       emoji(d.emoji,c.x,c.y,20);
@@ -463,6 +475,9 @@ var drawScene=function(){
       else { emoji(dd.emoji,gx3,gy3,22); } }
     else if(dd&&dd.kind==='fryer'){ var lvf2=clamp(dobj.lvl||1,1,MAX_FRYER), im3=FRYER_IMG[lvf2];
       if(im3&&im3._ok){ var scf2=Math.min(TS*1.22/im3.width, TS*1.46/im3.height), iw3=im3.width*scf2, ih3=im3.height*scf2; ctx.drawImage(im3, gx3-iw3/2, gy3-ih3/2, iw3, ih3); }
+      else { emoji(dd.emoji,gx3,gy3,22); } }
+    else if(dd&&dd.kind==='leaner'){ var lvs2=clamp(dobj.lvl||1,1,MAX_SEAT), im4=SEAT_IMG[lvs2];
+      if(im4&&im4._ok){ var scs2=Math.min(TS*1.26/im4.width, TS*1.38/im4.height), iw4=im4.width*scs2, ih4=im4.height*scs2; ctx.drawImage(im4, gx3-iw4/2, gy3-ih4/2, iw4, ih4); }
       else { emoji(dd.emoji,gx3,gy3,22); } }
     else if(dd){ ctx.fillStyle='#241a2f'; roundRect(gx3-TS/2+3,gy3-TS/2+3,TS-6,TS-6,5); ctx.fill(); emoji(dd.emoji,gx3,gy3,22); }
     if((dobj.lvl||1)>1){ ctx.fillStyle='#2a1c05'; ctx.fillRect(gx3+TS/2-13,gy3-TS/2+2,12,9);
@@ -667,7 +682,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 /* ---------- boot ---------- */
 var tab=function(which){ ['shop','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
-  refEls(); loadCounters(); loadFryers(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
+  refEls(); loadCounters(); loadFryers(); loadSeats(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
   var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor');
@@ -704,7 +719,7 @@ if(typeof globalThis!=='undefined'){
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
-    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER,
+    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
     applyDrop:function(g,obj,gx,gy){ var prev=G; G=g; try{ return applyDrop(obj,gx,gy); } finally{ G=prev; } } };
 }
 </script>

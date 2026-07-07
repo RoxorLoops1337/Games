@@ -190,6 +190,17 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(other.lvl === 2, 'merged friteuse levels up (its art advances a tier)');
 }
 
+// ---- zithoek (seating) merge ladder: 40 booth tiers ----
+{
+  ok(FS.MAX_SEAT === 40, 'seat/zithoek art ladder runs to 40 tiers');
+  ok(FS.objDef('staantafel').kind === 'leaner', 'the seating object drives the booth ladder');
+  const g = FS.freshGame();
+  const s = g.objs.find(o => o.id === 'staantafel');
+  const other = g.objs.filter(o => o.id === 'staantafel')[1];
+  ok(FS.applyDrop(g, s, other.gx, other.gy) === 'merge', 'a zithoek drops onto a matching zithoek to merge');
+  ok(other.lvl === 2, 'merged zithoek levels up (its booth art advances a tier)');
+}
+
 // ---- drag & drop: move to an empty tile, drop on a match to merge ----
 {
   // drop a toog onto a matching toog -> merge (level up, one fewer object)
