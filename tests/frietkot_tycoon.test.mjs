@@ -155,5 +155,20 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.buyCost(g2, 'friteuse') > FS.buyCost(FS.freshGame(), 'friteuse'), 'each item escalates independently');
 }
 
+// ---- floors ----
+{
+  ok(FS.FLOORS.length === 15, '15 floor textures');
+  ok(FS.floorDef('planken').cost === 0, 'planken is the free starter floor');
+  ok(FS.floorDef('marmer').appeal >= FS.floorDef('planken').appeal, 'marmer is at least as appealing as planken');
+  ok(FS.floorDef('nope') === null, 'floorDef miss = null');
+  const g = FS.freshGame();
+  ok(g.floor === 'planken' && g.floorsOwned.planken === true, 'fresh game starts on the free planken floor');
+  ok(FS.floorAppeal(g) === 0, 'the starter floor adds no appeal');
+  const a0 = FS.computeAppeal(g);
+  g.floor = 'marmer';
+  ok(FS.floorAppeal(g) === FS.floorDef('marmer').appeal, 'floorAppeal reflects the active floor');
+  ok(FS.computeAppeal(g) > a0, 'a fancier floor raises overall appeal');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

@@ -77,12 +77,14 @@
     <div class="tab" id="tabShop">🛒 Winkel</div>
     <div class="tab" id="tabRes">🔬 Lab</div>
     <div class="tab" id="tabKeuken">🍳 Keuken</div>
+    <div class="tab" id="tabFloor">🧱 Vloer</div>
     <div class="tab" id="tabStaff">🧑‍🍳 Team</div>
   </div>
   <div id="sheetHost">
     <div class="sheet on" id="shopSheet"><h3>🛒 Koop &amp; plaats</h3><div id="shopList"></div></div>
     <div class="sheet" id="resSheet"><h3>🔬 Onderzoek (kost ★ Faam)</h3><div id="resList"></div></div>
     <div class="sheet" id="keukenSheet"><h3>🍳 Ontwikkel een gerecht</h3><div id="keukenBody"></div></div>
+    <div class="sheet" id="floorSheet"><h3>🧱 Kies je vloer</h3><div id="floorList"></div></div>
     <div class="sheet" id="staffSheet"><h3>🧑‍🍳 Personeel</h3><div id="staffList"></div></div>
   </div>
 
@@ -197,6 +199,7 @@ var computeAppeal=function(G){
   detectCombos(G.objs).forEach(function(){ a+=4; });        // combos add appeal too
   if(G.research.reclame) a+=8;
   a+=G.staff*1;
+  a+=floorAppeal(G);                                         // a nicer floor draws a few more customers
   return Math.round(a);
 };
 var spawnInterval=function(appeal){ return clamp(BAL.spawnBase/(0.6+appeal/12), BAL.spawnMin, BAL.spawnBase); };
@@ -235,6 +238,26 @@ var staffCost=function(n){ return Math.round(BAL.staffBase*Math.pow(BAL.staffSte
 var BUY_MULT=2.0;
 var buyCost=function(G,id){ var o=objDef(id); if(!o) return 0; var n=(G.bought&&G.bought[id])||0; return Math.round(o.cost*Math.pow(BUY_MULT,n)); };
 var canAfford=function(G,cost){ return G.money>=cost; };
+// floors: one-time cosmetic buys (own it forever, then switch free); nicer floor = a little appeal.
+var FLOORS=[
+  {id:'planken',   nm:'Houten planken',  cost:0,   appeal:0},
+  {id:'beton',     nm:'Beton',           cost:80,  appeal:0},
+  {id:'creme',     nm:'Crème tegel',     cost:140, appeal:1},
+  {id:'zand',      nm:'Zandsteen',       cost:150, appeal:1},
+  {id:'kassei',    nm:'Kasseien',        cost:170, appeal:2},
+  {id:'baksteen',  nm:'Baksteen',        cost:200, appeal:2},
+  {id:'dam',       nm:'Dambord',         cost:220, appeal:2},
+  {id:'mozaiek',   nm:'Rode mozaïek',    cost:240, appeal:3},
+  {id:'rood_wit',  nm:'Rood-wit tegel',  cost:280, appeal:3},
+  {id:'terracotta',nm:'Terracotta',      cost:300, appeal:3},
+  {id:'leisteen',  nm:'Leisteen',        cost:340, appeal:3},
+  {id:'zwart',     nm:'Zwarte tegel',    cost:420, appeal:4},
+  {id:'azulejo',   nm:'Azulejo',         cost:480, appeal:4},
+  {id:'visgraat',  nm:'Visgraat parket', cost:540, appeal:4},
+  {id:'marmer',    nm:'Marmer',          cost:650, appeal:5}
+];
+var floorDef=function(id){ for(var i=0;i<FLOORS.length;i++) if(FLOORS[i].id===id) return FLOORS[i]; return null; };
+var floorAppeal=function(G){ var f=floorDef(G&&G.floor); return f?f.appeal:0; };
 
 /* =========================================================================
    LIVE GAME
@@ -250,6 +273,12 @@ var loadCounters=function(){ if(typeof Image==='undefined') return;
   for(var i=1;i<=25;i++){ (function(i){ var im=new Image(); im._ok=false;
     im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
     im.src='sprites/counters/counter_'+(i<10?('0'+i):i)+'.png'; COUNTER_IMG[i]=im; })(i); } };
+// floor tile textures (graceful: fall back to the painted checker if an image is missing).
+var FLOOR_IMG={};
+var loadFloors=function(){ if(typeof Image==='undefined') return;
+  FLOORS.forEach(function(f){ var im=new Image(); im._ok=false;
+    im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
+    im.src='sprites/floors/'+f.id+'.png'; FLOOR_IMG[f.id]=im; }); };
 
 var G=null;
 var freshGame=function(){
@@ -258,18 +287,21 @@ var freshGame=function(){
       {id:'staantafel',gx:6,gy:1,lvl:1},{id:'staantafel',gx:6,gy:2,lvl:1},{id:'plant',gx:6,gy:0,lvl:1} ],
     research:{}, staff:0, custs:[], spawnT:1.0, placing:null, selected:null, milestone:0, running:false,
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
-    dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{} };
+    dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
+    floor:'planken', floorsOwned:{planken:true} };
   return g;
 };
 var SAVE_KEY='ftstory_save';
 var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.stringify({
   money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,bought:G.bought,
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
-  research:G.research,staff:G.staff,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish })); }catch(e){} };
+  research:G.research,staff:G.staff,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
+  floor:G.floor,floorsOwned:G.floorsOwned })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish','bought'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
   if(!G.bought) G.bought={};
+  if(!G.floor) G.floor='planken'; if(!G.floorsOwned) G.floorsOwned={}; G.floorsOwned.planken=true;
   G.objs.forEach(function(x){ if(x.lvl==null) x.lvl=1; });
   if(!G.dish) G.dish={friet:{rank:1}}; dishesUnlocked(G).forEach(function(id){ if(!G.dish[id]) G.dish[id]={rank:1}; });
   G.custs=[]; G.running=true; return true; }catch(e){ return false; } };
@@ -360,10 +392,12 @@ var fitCanvas=function(){
 var drawScene=function(){
   if(!ctx) return;
   fitCanvas();
-  // floor tiles
+  // floor tiles — chosen floor texture per cell, else painted checker fallback
+  var fim=FLOOR_IMG[G&&G.floor];
   for(var gy=0;gy<GH;gy++) for(var gx=0;gx<GW;gx++){
-    ctx.fillStyle=((gx+gy)&1)?'#3a2c24':'#33271f'; ctx.fillRect(gx*TS,gy*TS,TS,TS);
-    ctx.fillStyle='#2a1f19'; ctx.fillRect(gx*TS,gy*TS,TS,1); ctx.fillRect(gx*TS,gy*TS,1,TS);
+    if(fim&&fim._ok){ ctx.drawImage(fim, gx*TS,gy*TS, TS,TS); }
+    else { ctx.fillStyle=((gx+gy)&1)?'#3a2c24':'#33271f'; ctx.fillRect(gx*TS,gy*TS,TS,TS); }
+    ctx.fillStyle='#0000001f'; ctx.fillRect(gx*TS,gy*TS,TS,1); ctx.fillRect(gx*TS,gy*TS,1,TS);
   }
   // back wall band
   ctx.fillStyle='#4a2c29'; ctx.fillRect(0,0,GW*TS,6);
@@ -434,7 +468,7 @@ var rankUp=function(nm){ confetti(); bigPop('RANG OMHOOG!','#ffd447'); toast('�
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','appeal','rankChip','shopList','resList','staffList',
+var refEls=function(){ ['money','faam','week','appeal','rankChip','shopList','resList','staffList','floorList',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
@@ -462,9 +496,25 @@ var renderStaff=function(){ if(!el.staffList) return; var c=staffCost(G.staff);
     +'<div class="s">Sneller bedienen &amp; bakken (+30% doorstroom elk).</div></div>'
     +'<button class="buy" id="hireBtn"'+(G.money<c?' disabled':'')+'>'+fmt(c)+' 💶</button></div>';
   var hb=$('hireBtn'); if(hb) hb.onclick=hireStaff; };
+var renderFloors=function(){ if(!el.floorList) return; var h='';
+  FLOORS.forEach(function(f){ var owned=!!(G.floorsOwned&&G.floorsOwned[f.id]), cur=(G.floor===f.id);
+    h+='<div class="item"><div class="ic" style="background:url(sprites/floors/'+f.id+'.png) center/cover;font-size:0">·</div>'
+      +'<div class="info"><div class="t">'+f.nm+'</div>'
+      +'<div class="s">'+(f.appeal>0?('Sfeer ✨+'+f.appeal):'Basisvloer')+'</div></div>'
+      +(cur?'<button class="buy owned">✓ actief</button>'
+        : owned?'<button class="buy" data-floor="'+f.id+'" style="background:var(--panel2);color:var(--ink)">Kies</button>'
+        : '<button class="buy" data-floor="'+f.id+'"'+(G.money<f.cost?' disabled':'')+'>'+fmt(f.cost)+' 💶</button>')
+      +'</div>'; });
+  el.floorList.innerHTML=h;
+  each('[data-floor]',function(b){ return function(){ buyFloor(b.getAttribute('data-floor')); }; }); };
+var buyFloor=function(id){ var f=floorDef(id); if(!f) return; if(!G.floorsOwned) G.floorsOwned={};
+  if(G.floorsOwned[id]){ G.floor=id; beep(520,0.06,0.04); renderFloors(); syncHUD(); save(); return; }
+  if(G.money<f.cost){ toast('Te weinig geld.'); return; }
+  G.money-=f.cost; G.floorsOwned[id]=true; G.floor=id; beep(560,0.09,0.05);
+  toast('🧱 <b>'+f.nm+'</b> gelegd!'); renderAll(); };
 var each=function(sel,mk){ if(typeof document==='undefined'||!document.querySelectorAll) return;
   Array.prototype.forEach.call(document.querySelectorAll(sel),function(b){ b.onclick=mk(b); }); };
-var renderAll=function(){ renderShop(); renderRes(); renderStaff(); renderKeuken(); syncHUD(); save(); };
+var renderAll=function(){ renderShop(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); syncHUD(); save(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<buyCost(G,id)){ toast('Te weinig geld.'); return; }
   G.placing=id; G.selected=null; if(el.placebar) el.placebar.classList.add('on'); toast('Tik op een lege tegel voor je <b>'+o.nm+'</b>.'); };
@@ -559,14 +609,15 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 };
 
 /* ---------- boot ---------- */
-var tab=function(which){ ['shop','res','keuken','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
+var tab=function(which){ ['shop','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
-  refEls(); loadCounters(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
+  refEls(); loadCounters(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
-  var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken');
+  var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor');
   if(st) st.onclick=function(){ tab('shop'); }; if(rt) rt.onclick=function(){ tab('res'); };
   if(ft) ft.onclick=function(){ tab('staff'); }; if(kt) kt.onclick=function(){ tab('keuken'); };
+  if(lt) lt.onclick=function(){ tab('floor'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   if(scene&&scene.addEventListener){ scene.addEventListener('click',onCanvas); scene.addEventListener('touchstart',function(e){ e.preventDefault(); onCanvas(e); },{passive:false}); }
   fitCanvas(); if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('resize',fitCanvas);
@@ -586,7 +637,8 @@ if(typeof globalThis!=='undefined'){
     orderValue:orderValue, rollType:rollType, rankFor:rankFor, rankProgress:rankProgress, weekGoal:weekGoal,
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
-    staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame };
+    staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
+    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal };
 }
 </script>
 </body>
