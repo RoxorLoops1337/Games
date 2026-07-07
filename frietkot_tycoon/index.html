@@ -57,6 +57,27 @@
   .startbtn:active{transform:translateY(3px);box-shadow:0 2px 0 #0006}
   #toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#000d;color:var(--ink);padding:9px 14px;border-radius:9px;font-size:13px;border:1px solid #ffffff20;max-width:90%;text-align:center;opacity:0;pointer-events:none;transition:opacity .25s;z-index:12}
   #toast.show{opacity:1} #toast b{color:var(--gold)}
+  /* --- kitchen: invent recipes --- */
+  .kintro{font-size:11px;color:var(--ink2);margin:0 2px 9px;line-height:1.45}
+  .klabel{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2);font-weight:800;margin:2px 2px 5px}
+  .kbases{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px}
+  .kbase{background:var(--panel2);border:1px solid var(--edge);border-radius:10px;padding:7px 11px 6px;font-weight:800;font-size:12px;color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:62px}
+  .kbase.on{background:linear-gradient(#ffd447,#e8a63b);color:#2a1c05;box-shadow:0 2px 0 #0006}
+  .kbase .em{font-size:20px} .kbase .r{font-size:9.5px;opacity:.85;font-weight:700}
+  .plate{background:radial-gradient(circle at 50% 42%,#4a3a52,#241a2f);border:1px solid var(--edge);border-radius:14px;padding:12px 10px;display:flex;align-items:center;justify-content:center;gap:5px;min-height:60px;margin-bottom:11px;position:relative;flex-wrap:wrap;box-shadow:inset 0 2px 10px #0007}
+  .plate .base{font-size:40px;line-height:1;filter:drop-shadow(0 2px 2px #0008)}
+  .plate .top{font-size:23px;line-height:1;filter:drop-shadow(0 1px 1px #0008)}
+  .plate .ph{color:var(--ink2);font-size:12px;font-weight:700}
+  .plate .tag{position:absolute;left:9px;top:7px;font-size:10px;color:var(--ink2);font-weight:800}
+  .kings{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:11px}
+  .king{background:var(--slot);border:1px solid var(--edge);border-radius:10px;padding:7px 2px 5px;font-size:21px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;position:relative;transition:transform .05s}
+  .king:active{transform:translateY(1px)}
+  .king.sel{background:var(--panel2);border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+  .king .kn{font-size:9px;color:var(--ink2);font-weight:700}
+  .king .aff{position:absolute;right:3px;top:2px;font-size:10px;line-height:1}
+  .kmenu .row{display:flex;align-items:center;gap:8px;background:var(--slot);border:1px solid var(--edge);border-radius:9px;padding:7px 10px;margin-bottom:5px;font-size:12px}
+  .kmenu .row .em{font-size:17px} .kmenu .row .rc{opacity:.85;font-size:14px;letter-spacing:1px}
+  .kmenu .row .price{margin-left:auto;color:var(--gold);font-weight:800;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -85,7 +106,7 @@
   <div id="sheetHost">
     <div class="sheet on" id="shopSheet"><h3>🛒 Koop &amp; plaats</h3><div id="shopList"></div></div>
     <div class="sheet" id="resSheet"><h3>🔬 Onderzoek (kost ★ Faam)</h3><div id="resList"></div></div>
-    <div class="sheet" id="keukenSheet"><h3>🍳 Ontwikkel een gerecht</h3><div id="keukenBody"></div></div>
+    <div class="sheet" id="keukenSheet"><h3>🍳 Keuken — bedenk recepten</h3><div id="keukenBody"></div></div>
     <div class="sheet" id="floorSheet"><h3>🧱 Kies je vloer</h3><div id="floorList"></div></div>
     <div class="sheet" id="staffSheet"><h3>🧑‍🍳 Personeel</h3><div id="staffList"></div></div>
   </div>
@@ -147,16 +168,28 @@ var resDef=function(id){ for(var i=0;i<RESEARCH.length;i++) if(RESEARCH[i].id===
 // dishes you can rank up: friet (always) + researched snacks
 var DISH_BASE={ friet:30, frikandel:25, bicky:45 };
 var INGREDIENTS=[
-  {id:'ajuin', nm:'Ajuin',       emoji:'🧅', good:['friet','frikandel','bicky'], bad:['kroket']},
+  {id:'ajuin', nm:'Ajuin',       emoji:'🧅', good:['friet','frikandel','bicky'], bad:[]},
+  {id:'mayo',  nm:'Mayo',        emoji:'🫙', good:['friet','bicky'],             bad:[]},
+  {id:'curry', nm:'Currysaus',   emoji:'🍛', good:['frikandel','friet'],          bad:['bicky']},
   {id:'pickle',nm:'Pickle',      emoji:'🥒', good:['bicky','frikandel'],         bad:['friet']},
-  {id:'curry', nm:'Currykruiden', emoji:'🍛', good:['frikandel','friet'],          bad:['bicky']},
-  {id:'brood', nm:'Brood',       emoji:'🍞', good:['bicky'],                      bad:['friet','frikandel']},
-  {id:'kaas',  nm:'Kaas',        emoji:'🧀', good:['bicky'],                      bad:['friet']},
+  {id:'kaas',  nm:'Kaas',        emoji:'🧀', good:['bicky','frikandel'],         bad:['friet']},
+  {id:'spek',  nm:'Spek',        emoji:'🥓', good:['bicky','friet'],             bad:['frikandel']},
   {id:'chili', nm:'Chili',       emoji:'🌶️', good:['bicky','frikandel'],          bad:['friet']},
-  {id:'ei',    nm:'Ei',          emoji:'🥚', good:['friet'],                       bad:[]},
-  {id:'look',  nm:'Look',        emoji:'🧄', good:['frikandel'],                   bad:['friet']}
+  {id:'ei',    nm:'Ei',          emoji:'🥚', good:['friet','bicky'],             bad:['frikandel']},
+  {id:'sla',   nm:'Sla',         emoji:'🥬', good:['bicky'],                      bad:['friet']},
+  {id:'brood', nm:'Brood',       emoji:'🍞', good:['bicky'],                      bad:['friet','frikandel']},
+  {id:'look',  nm:'Look',        emoji:'🧄', good:['frikandel'],                   bad:['bicky']},
+  {id:'ketchup',nm:'Ketchup',    emoji:'🍅', good:['friet','bicky'],             bad:['frikandel']}
 ];
 var ingDef=function(id){ for(var i=0;i<INGREDIENTS.length;i++) if(INGREDIENTS[i].id===id) return INGREDIENTS[i]; return null; };
+var DISH_EMOJI={ friet:'🍟', frikandel:'🌭', bicky:'🍔' };
+var dishEmoji=function(id){ return DISH_EMOJI[id]||'🍽️'; };
+var dishName=function(id){ return id==='friet'?'Friet':(resDef(id)?resDef(id).nm:id); };
+// a single ingredient's affinity with a base dish: +2 loves it, -1 clashes, 0 neutral
+var affinity=function(iid,dishId){ var d=ingDef(iid); if(!d) return 0; if(d.good.indexOf(dishId)>=0) return 2; if(d.bad.indexOf(dishId)>=0) return -1; return 0; };
+// your creation earns a fancier title as its taste-rank climbs
+var SIG_TITLES=['Classic','Speciaal','Maison','Deluxe','Royale','Supreme','Legendarisch','Bomma’s Beste'];
+var sigTitle=function(rank){ return SIG_TITLES[clamp((rank||1)-1,0,SIG_TITLES.length-1)]; };
 // which dishes are available to develop for this game
 var dishesUnlocked=function(G){ var out=['friet'];
   ['frikandel','bicky'].forEach(function(id){ if(G.research[id]) out.push(id); }); return out; };
@@ -348,7 +381,7 @@ var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) retur
   if(!G.dish) G.dish={friet:{rank:1}}; dishesUnlocked(G).forEach(function(id){ if(!G.dish[id]) G.dish[id]={rank:1}; });
   G.custs=[]; G.running=true; return true; }catch(e){ return false; } };
 var newWeek=function(){
-  if(G.weekServed>=G.goalTarget){ var rw=Math.round(3+G.week*1.5), cash=Math.round(150+G.week*45);
+  if(G.weekServed>=G.goalTarget){ var rw=Math.round(2+G.week*0.8), cash=Math.round(150+G.week*45);
     G.faam+=rw; G.money+=cash; confetti(); bigPop('WEEKDOEL!','#7bd66b');
     toast('🎯 Weekdoel gehaald! <b>+★'+rw+'</b> +'+fmt(cash)+' 💶'); beep(680,0.1,0.06); setTimeout(function(){ beep(900,0.12,0.06); },110); }
   G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week); save(); syncHUD();
@@ -392,7 +425,8 @@ var serveDone=function(c){
   coinPop(sc.x,sc.y,'+'+v); serveBurst(sc.x,sc.y,hearts); emote(c.x,c.y-16, hearts>=2?'😍':'😋','#ff9ecb');
   if(c.counter) c.counter._pop=POP_DUR*0.7;
   if(el.money){ el.money.classList&&el.money.classList.add('bump'); setTimeout(function(){ el.money.classList&&el.money.classList.remove('bump'); },260); }
-  G.faam+=hearts;
+  // Faam (★ reputation) is a slow meta-currency now: only some happy customers boost it.
+  if(Math.random() < 0.20 + 0.10*(hearts-1)) G.faam+=1;
   c.counter._busy=null; c.counter=null;
   // go eat at a leaner if one's free, else leave
   var ln=freeLeaner();
@@ -413,7 +447,7 @@ var updateCust=function(c,dt){
   } else if(c.state==='toseat'){
     if(moveTo(c,dt)){ c.state='eat'; c.timer=BAL.eatTime; }
   } else if(c.state==='eat'){
-    c.timer-=dt; if(c.timer<=0){ var hb=Math.max(1,Math.round(power(c.leaner?c.leaner.lvl:1))); heartPop(c.x,c.y-6,hb); emote(c.x,c.y-15,'😊','#ff9ecb'); spawnSparks(c.x,c.y-8,3,'#ff9ecb'); G.faam+=hb;
+    c.timer-=dt; if(c.timer<=0){ var hb=Math.max(1,Math.round(power(c.leaner?c.leaner.lvl:1))); heartPop(c.x,c.y-6,hb); emote(c.x,c.y-15,'😊','#ff9ecb'); spawnSparks(c.x,c.y-8,3,'#ff9ecb'); if(Math.random()<0.28) G.faam+=1;
       if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=worldH()+22; c.state='leave'; }
   } else if(c.state==='leave'){
     if(moveTo(c,dt)) c._dead=true;
@@ -700,33 +734,50 @@ var toggleIng=function(id){ var i=G.devIngs.indexOf(id);
   if(i>=0) G.devIngs.splice(i,1); else { if(G.devIngs.length>=2) G.devIngs.shift(); G.devIngs.push(id); }
   renderKeuken(); };
 var develop=function(){ var id=G.devDish||'friet'; if(!G.dish[id]) G.dish[id]={rank:1};
-  if(!G.devIngs.length){ toast('Kies eerst 1 of 2 ingrediënten.'); return; }
-  var cost=developCost(G.dish[id].rank); if(G.money<cost){ toast('Te weinig geld om te ontwikkelen.'); return; }
+  if(!G.devIngs.length){ toast('Sleep eerst 1 of 2 ingrediënten op je bord.'); return; }
+  var cost=developCost(G.dish[id].rank); if(G.money<cost){ toast('Te weinig geld om te koken.'); return; }
   G.money-=cost; var compat=compatScore(id,G.devIngs), gain=devGain(compat);
-  if(gain>0){ G.dish[id].rank+=gain; var nm=(id==='friet'?'Friet':resDef(id)?resDef(id).nm:id);
-    bigPop('SMAAK +'+gain+'!', '#ffd447'); toast('🍳 <b>'+nm+'</b> → rang '+G.dish[id].rank+'! Duurder &amp; geliefder.');
-    beep(680,0.1,0.06); setTimeout(function(){ beep(920,0.12,0.06); },100); confetti(); }
-  else { toast('😕 Die combo botst — geen verbetering. (probeer betere ingrediënten)'); beep(180,0.2,0.05); }
+  if(gain>0){ G.dish[id].rank+=gain; G.dish[id].recipe=G.devIngs.slice();   // remember the winning recipe → your signature
+    var title=sigTitle(G.dish[id].rank);
+    bigPop(dishName(id)+' '+title+'!','#ffd447'); starRing(worldW()/2,GH*TS/2,12); chime([620,820,1040],0.09); confetti();
+    toast('🍳 Nieuw op je menu: <b>'+dishName(id)+' '+title+'</b> — smaakrang '+G.dish[id].rank+', duurder &amp; geliefder!'); }
+  else { toast('😕 Die smaken botsen — geen verbetering. Let op de 👍/👎 bij elk ingrediënt.'); beep(180,0.22,0.05); addShake(0.5); }
   G.devIngs=[]; renderAll(); };
 var renderKeuken=function(){ if(!el.keukenBody) return;
-  var dishes=dishesUnlocked(G);
-  var h='<div class="s" style="margin:0 2px 6px;color:var(--ink2);font-size:11px">Kies een gerecht + 1–2 ingrediënten. Goeie combo = hogere <b>rang</b> = meer € en meer klanten.</div>';
-  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
-  dishes.forEach(function(id){ var nm=(id==='friet'?'Friet':resDef(id)?resDef(id).nm:id); var rk=dishRank(G,id);
-    var bp=DISH_BASE[id]||30;
-    h+='<button class="buy'+(G.devDish===id?'':' ')+'" data-dish="'+id+'" style="'+(G.devDish===id?'':'background:var(--panel2);color:var(--ink)')+'">'+nm+' · R'+rk+' ('+dishPrice(bp,rk)+'💶)</button>'; });
+  var dishes=dishesUnlocked(G), dd=G.devDish||'friet';
+  var h='<div class="kintro">👨‍🍳 <b>Bedenk je eigen recepten.</b> Kies een basis, tik kruiden &amp; toppings op je bord, en <b>kook</b> ze. Een lekkere combo (let op de 👍) verhoogt de <b>smaakrang</b> → duurdere, geliefdere gerechten op jouw menu.</div>';
+  // base picker
+  h+='<div class="klabel">1 · Kies je basis</div><div class="kbases">';
+  dishes.forEach(function(id){ var rk=dishRank(G,id), bp=DISH_BASE[id]||30;
+    h+='<button class="kbase'+(dd===id?' on':'')+'" data-dish="'+id+'"><span class="em">'+dishEmoji(id)+'</span><span>'+dishName(id)+'</span><span class="r">R'+rk+' · '+dishPrice(bp,rk)+'💶</span></button>'; });
   h+='</div>';
-  h+='<div class="s" style="margin:0 2px 5px;color:var(--ink2);font-size:11px">Ingrediënten (max 2):</div>';
-  h+='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">';
-  INGREDIENTS.forEach(function(g){ var sel=G.devIngs.indexOf(g.id)>=0;
-    h+='<button class="st'+(sel?' sel':'')+'" data-ing="'+g.id+'" style="flex:0 0 auto;min-width:56px">'+g.emoji+'<span class="nm">'+g.nm+'</span></button>'; });
+  // the plate preview — what you're making, shown for real
+  h+='<div class="klabel">2 · Je bord</div><div class="plate"><span class="tag">'+dishName(dd)+' · '+sigTitle(dishRank(G,dd))+'</span>';
+  h+='<span class="base">'+dishEmoji(dd)+'</span>';
+  if(G.devIngs.length){ G.devIngs.forEach(function(iid){ var g=ingDef(iid); if(g) h+='<span class="top">'+g.emoji+'</span>'; }); }
+  else h+='<span class="ph">+ voeg kruiden toe ↓</span>';
   h+='</div>';
-  var compat=compatScore(G.devDish,G.devIngs), gain=devGain(compat);
-  var face=compat>=3?'👍👍 top combo!':compat>0?'👍 lekker':compat===0?'😐 neutraal':'👎 botst';
-  var cost=developCost(dishRank(G,G.devDish));
-  h+='<div class="item"><div class="ic">🍳</div><div class="info"><div class="t">Voorspelling: '+face+'</div>'
-    +'<div class="s">Bij succes: rang <b style="color:var(--gold)">+'+gain+'</b>.</div></div>'
-    +'<button class="buy" id="devBtn"'+(G.money<cost||!G.devIngs.length?' disabled':'')+'>Ontwikkel · '+fmt(cost)+'💶</button></div>';
+  // ingredients with affinity badges (no more blind guessing)
+  h+='<div class="klabel">3 · Kruiden &amp; toppings (max 2)</div><div class="kings">';
+  INGREDIENTS.forEach(function(g){ var sel=G.devIngs.indexOf(g.id)>=0, a=affinity(g.id,dd);
+    var badge=a>0?'👍':a<0?'👎':'·';
+    h+='<button class="king'+(sel?' sel':'')+'" data-ing="'+g.id+'"><span class="aff">'+badge+'</span>'+g.emoji+'<span class="kn">'+g.nm+'</span></button>'; });
+  h+='</div>';
+  // prediction + cook
+  var bp=DISH_BASE[dd]||30, rk=dishRank(G,dd), compat=compatScore(dd,G.devIngs), gain=devGain(compat);
+  var face=!G.devIngs.length?'🤔':gain>=3?'😍':gain>0?'😋':'😖';
+  var lbl=!G.devIngs.length?'Kies ingrediënten…':gain>=3?'Zalig! Top recept':gain>0?'Lekker!':'Botst — probeer 👍';
+  var pNow=dishPrice(bp,rk), pAfter=dishPrice(bp,rk+gain), cost=developCost(rk);
+  h+='<div class="item"><div class="ic">'+face+'</div><div class="info"><div class="t">'+lbl+'</div>'
+    +'<div class="s">Smaakrang +'+gain+' · prijs '+pNow+'💶'+(gain>0?' → <b style="color:var(--gold)">'+pAfter+'💶</b>':'')+'</div></div>'
+    +'<button class="buy" id="devBtn"'+(G.money<cost||!G.devIngs.length?' disabled':'')+'>Kook! · '+fmt(cost)+'💶</button></div>';
+  // your invented menu
+  h+='<div class="klabel" style="margin-top:12px">Jouw menu</div><div class="kmenu">';
+  dishes.forEach(function(id){ var d=G.dish[id]||{rank:1}, bp2=DISH_BASE[id]||30, rec=d.recipe;
+    h+='<div class="row"><span class="em">'+dishEmoji(id)+'</span><span><b>'+dishName(id)+' '+sigTitle(d.rank)+'</b>'
+      +(rec&&rec.length?' <span class="rc">'+rec.map(function(iid){ var g=ingDef(iid); return g?g.emoji:''; }).join('')+'</span>':'')
+      +'</span><span class="price">'+dishPrice(bp2,d.rank)+'💶</span></div>'; });
+  h+='</div>';
   el.keukenBody.innerHTML=h;
   each('[data-dish]',function(b){ return function(){ selectDevDish(b.getAttribute('data-dish')); }; });
   each('[data-ing]',function(b){ return function(){ toggleIng(b.getAttribute('data-ing')); }; });
@@ -861,6 +912,7 @@ if(typeof globalThis!=='undefined'){
     computeAppeal:computeAppeal, spawnInterval:spawnInterval, throughput:throughput, serviceTime:serviceTime,
     orderValue:orderValue, rollType:rollType, rankFor:rankFor, rankProgress:rankProgress, weekGoal:weekGoal,
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
+    affinity:affinity, sigTitle:sigTitle, dishEmoji:dishEmoji, dishName:dishName,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
