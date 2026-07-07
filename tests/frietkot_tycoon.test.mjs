@@ -367,5 +367,19 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(g.contest && FS.contestDef(g.contest.id), 'fresh game carries a live contest');
 }
 
+// ---- marketing campaigns ----
+{
+  ok(FS.CAMPAIGNS.length >= 3, 'several ad campaigns to unlock + run');
+  FS.CAMPAIGNS.forEach(c => { ok(c.req && FS.RESEARCH.find(r => r.id === c.req), `campaign ${c.id} needs a research unlock`); ok(c.cost > 0 && c.appeal > 0 && c.dur > 0, `campaign ${c.id} has cost/appeal/duration`); });
+  const g = FS.freshGame();
+  ok(FS.campaignAppeal(g) === 0, 'no appeal boost with no active campaign');
+  const a0 = FS.computeAppeal(g);
+  g.campaign = { id: FS.CAMPAIGNS[0].id, left: 10 };
+  ok(FS.campaignAppeal(g) === FS.CAMPAIGNS[0].appeal, 'an active campaign adds its appeal');
+  ok(FS.computeAppeal(g) > a0, 'running a campaign lifts overall appeal (more traffic)');
+  g.campaign.left = 0;
+  ok(FS.campaignAppeal(g) === 0, 'an expired campaign gives no boost');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
