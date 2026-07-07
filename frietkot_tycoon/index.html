@@ -448,6 +448,7 @@ var updateCust=function(c,dt){
   } else if(c.state==='toseat'){
     if(moveTo(c,dt)){ c.state='eat'; c.timer=BAL.eatTime; }
   } else if(c.state==='eat'){
+    if(Math.random()<dt*0.5) emote(c.x,c.y-13,'😋','#ff9ecb');   // enjoying the fries
     c.timer-=dt; if(c.timer<=0){ var hb=Math.max(1,Math.round(power(c.leaner?c.leaner.lvl:1))); heartPop(c.x,c.y-6,hb); emote(c.x,c.y-15,'😊','#ff9ecb'); spawnSparks(c.x,c.y-8,3,'#ff9ecb'); if(Math.random()<0.28) G.faam+=1;
       if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=worldH()+22; c.state='leave'; }
   } else if(c.state==='leave'){
@@ -546,17 +547,21 @@ var drawScene=function(){
   });
   // customers
   G.custs.forEach(function(c){
+    var seated=c.state==='eat';
+    var munch=seated?Math.abs(Math.sin(T*5+c.bob))*1.1:0;      // gentle chewing bob
     var idle=Math.sin(T*4+c.bob)*0.7, yy=c.y+(c.moving?0:idle);
     var frames=CUST_IMG[c.type.id], drawn=false, headY=yy-15;
     if(frames && frames[0] && frames[0]._ok){
       var fr=c.moving?(Math.floor(c.animT*8)%4):0, im=frames[fr]||frames[0];
-      var h=TS*0.92, w=h*im.width/im.height, sm=ctx.imageSmoothingEnabled;
+      var scale=seated?0.72:0.92, h=TS*scale, w=h*im.width/im.height, sm=ctx.imageSmoothingEnabled;
+      var footY=seated?(c.y+TS*0.04):(c.y+TS*0.32);            // seated → sit at the back of the booth, behind the table
       ctx.imageSmoothingEnabled=false;
-      ctx.globalAlpha=.22; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(c.x,c.y+TS*0.30,w*0.42,3,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
-      ctx.drawImage(im, c.x-w/2, c.y+TS*0.32-h+(c.moving?0:idle), w, h);
-      ctx.imageSmoothingEnabled=sm; headY=c.y+TS*0.32-h-2; drawn=true;
+      if(!seated){ ctx.globalAlpha=.22; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(c.x,c.y+TS*0.30,w*0.42,3,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+      ctx.drawImage(im, c.x-w/2, footY-h-(c.moving?0:(seated?munch:idle)), w, h);
+      ctx.imageSmoothingEnabled=sm; headY=footY-h-2; drawn=true;
     }
     if(!drawn) emoji(c.emoji,c.x,yy,17);
+    if(seated){ emoji('🍟',c.x,c.y+TS*0.26,12); }               // a little pak friet on the table
     if(c.state==='order'){ // service progress ring above the head
       var p=1-clamp(c.timer/(c.svcMax||serviceTime(G,1)),0,1); ctx.strokeStyle=var_gold; ctx.lineWidth=2; ctx.beginPath();
       ctx.arc(c.x,headY,5,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.stroke(); }
