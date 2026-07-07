@@ -141,5 +141,19 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.orderValue(g2, { fav: null, spend: 1 }, 1) > FS.orderValue(g1, { fav: null, spend: 1 }, 1), 'a higher-rank friet earns more per order');
 }
 
+// ---- escalating purchase prices ----
+{
+  const g = FS.freshGame();
+  ok(g.bought && Object.keys(g.bought).length === 0, 'fresh game has no purchases yet');
+  ok(FS.buyCost(g, 'toog') === FS.objDef('toog').cost, 'first buy = base cost');
+  g.bought.toog = 1;
+  ok(FS.buyCost(g, 'toog') === Math.round(FS.objDef('toog').cost * FS.BUY_MULT), '2nd buy scaled by BUY_MULT');
+  g.bought.toog = 4;
+  ok(FS.buyCost(g, 'toog') > FS.objDef('toog').cost * 10, '5th toog is much pricier');
+  ok(FS.BUY_MULT >= 1.8, 'purchases climb steeply');
+  const g2 = FS.freshGame(); g2.bought.friteuse = 2;
+  ok(FS.buyCost(g2, 'friteuse') > FS.buyCost(FS.freshGame(), 'friteuse'), 'each item escalates independently');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
