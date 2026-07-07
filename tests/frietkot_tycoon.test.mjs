@@ -261,5 +261,30 @@ ok(near(FT.serviceRate(FT.freshGame()), 0.40), 'base service rate = 0.40/sec');
   ok(['A', 'B', 'C', 'D'].includes(FT.hygieneRating(30).grade), 'hygiene returns a grade');
 }
 
+// ---- shady operations & the inspector ----
+{
+  const clean = FT.newShop('dorp');
+  ok(FT.SHADY.length >= 4, 'several shady toggles');
+  ok(FT.shadyIncomeMul(clean) === 1, 'clean shop earns the normal amount');
+  ok(FT.shadySatPenalty(clean) === 0, 'clean shop has no satisfaction penalty');
+  ok(FT.heatRate(clean) === 0, 'clean shop gains no heat');
+  const dirty = FT.newShop('dorp'); dirty.shady = { cheapMeat: true, taxDodge: true, shortPortion: true };
+  ok(FT.shadyIncomeMul(dirty) > 1, 'cutting corners raises income');
+  ok(FT.shadySatPenalty(dirty) > 0, 'cutting corners lowers satisfaction');
+  ok(FT.heatRate(dirty) > FT.heatRate(clean), 'shady toggles generate heat');
+  ok(FT.shadyOn(dirty, 'cheapMeat') && !FT.shadyOn(dirty, 'underpay'), 'shadyOn reads toggles');
+  // inspection risk rises with heat and with bad hygiene
+  const lowHeat = FT.newShop('dorp'); lowHeat.heat = 0; lowHeat.oil = 100;
+  const hiHeat = FT.newShop('dorp'); hiHeat.heat = 90; hiHeat.oil = 100;
+  ok(FT.inspectionRisk(hiHeat) > FT.inspectionRisk(lowHeat), 'more heat = more inspection risk');
+  const dirtyOil = FT.newShop('dorp'); dirtyOil.heat = 0; dirtyOil.oil = 5;
+  ok(FT.inspectionRisk(dirtyOil) > FT.inspectionRisk(lowHeat), 'bad hygiene = more inspection risk');
+  ok(FT.inspectionRisk(hiHeat) <= 0.85, 'inspection risk is capped');
+  // a new shop starts clean
+  const g = FT.freshGame();
+  ok(g.shops[0].heat === 0 && g.shops[0].closedDays === 0, 'new shop starts with no heat, open');
+  ok(g.shops[0].shady && Object.keys(g.shops[0].shady).length === 0, 'new shop plays it straight');
+}
+
 console.log(`frietkot_tycoon: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

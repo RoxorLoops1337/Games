@@ -232,6 +232,7 @@
       <div class="ssec"><h3>🧑‍🍳 Personeel — automatiseer je toog</h3><div id="staffBox"></div></div>
       <div class="ssec"><h3>🌭 Menukaart — snacks</h3><div id="snackList"></div></div>
       <div class="ssec"><h3>🥫 Menukaart — sauzen</h3><div id="sauceList"></div></div>
+      <div class="ssec"><h3>🕵️ Sjoemelen — risico</h3><div id="shadyBox"></div></div>
     </div>
   </div>
 </div>
@@ -437,6 +438,7 @@ var evalServe=function(G,c){
   else if(c.sauce){ sat-=0.06; }
   if(c.snack && G.menu.snacks[c.snack.id]){ ticket+=priceOf(G,c.snack.id); sat+=0.05*clamp(itemAppeal(G,c.snack.id),0,1.2); }
   else if(c.snack){ sat-=0.07; }
+  ticket*=shadyIncomeMul(G); sat-=shadySatPenalty(G);      // cutting corners: more money, less happy
   sat=clamp(sat,0,1.1);
   var tip=Math.round(sizePrice*a.tip*sat*2);
   var dRep=(sat-0.62)*4; if(G.oil<20) dRep-=1.2;               // gentler per-head: many customers now
@@ -450,11 +452,12 @@ var SHOP_NAMES=["Frituur 't Hoekske","Frituur 't Pleintje","Frituur De Bocht","'
 
 // per-shop state (each frietkot has its own location, house style, kit, staff & prices).
 // money / day / menu-unlocks are global (account-level); everything here is per shop.
-var SHOP_FIELDS=['shop','district','crisp','fat','oil','staff','up','prices','rep','served','satAvg'];
+var SHOP_FIELDS=['shop','district','crisp','fat','oil','staff','up','prices','rep','served','satAvg','shady','heat','closedDays'];
 var pickShopName=function(){ return SHOP_NAMES[Math.floor(Math.random()*SHOP_NAMES.length)]; };
 var newShop=function(district){
   return { shop:pickShopName(), district:district||'dorp', crisp:52, fat:'blend', oil:100,
-    staff:0, up:{potato:0,fryer:0,doublefry:0,filter:0}, prices:defaultPrices(), rep:6, served:0, satAvg:0 };
+    staff:0, up:{potato:0,fryer:0,doublefry:0,filter:0}, prices:defaultPrices(), rep:6, served:0, satAvg:0,
+    shady:{}, heat:0, closedDays:0 };
 };
 var OPEN_BASE=6000;                                   // cost of your 2nd frietkot; rises after
 var openCost=function(owned){ return Math.round(OPEN_BASE*Math.pow(2.3,(owned||1)-1)); };
@@ -514,6 +517,22 @@ var hygieneRating=function(oil){
   if(oil>=20) return {emoji:'😐', label:'twijfelachtig', grade:'C', cls:'warn'};
   return          {emoji:'🤢', label:'vies',          grade:'D', cls:'bad'}; };
 
+/* ---------- shady operations & the inspector (research COMPETITORS_AND_SHADY.md) ---------- */
+// satirical, fictional risk/reward toggles. Each raises HEAT (0-100) which drives inspections.
+var SHADY=[
+  {id:'cheapMeat',   name:'Goedkoop vlees',  emoji:'🐀', heat:0.55, desc:'+6% inkomsten · −tevredenheid · schandaalrisico'},
+  {id:'shortPortion',name:'Krappe porties',  emoji:'📏', heat:0.45, desc:'+8% inkomsten · −tevredenheid'},
+  {id:'taxDodge',    name:'Zwart geld',       emoji:'💸', heat:0.40, desc:'+12% inkomsten · fiscaal risico'},
+  {id:'underpay',    name:'Onderbetalen',     emoji:'⛓️', heat:0.35, desc:'Halve lonen · personeel loopt weg'}
+];
+var shadyOn=function(sh,id){ return !!(sh.shady&&sh.shady[id]); };
+var shadyIncomeMul=function(sh){ return (shadyOn(sh,'taxDodge')?1.12:1)*(shadyOn(sh,'shortPortion')?1.08:1)*(shadyOn(sh,'cheapMeat')?1.06:1); };
+var shadySatPenalty=function(sh){ return (shadyOn(sh,'shortPortion')?0.06:0)+(shadyOn(sh,'cheapMeat')?0.05:0); };
+var heatRate=function(sh){ var r=0; SHADY.forEach(function(x){ if(shadyOn(sh,x.id)) r+=x.heat; }); return r; };
+// chance of an AFSCA/tax inspection at day's end, from HEAT + poor hygiene
+var inspectionRisk=function(sh){ var hy=hygieneRating(sh.oil||0);
+  return clamp(0.04 + (sh.heat||0)/260 + (hy.grade==='D'?0.18:hy.grade==='C'?0.08:0), 0, 0.85); };
+
 /* ---------- customer generation ---------- */
 var makeCustomer=function(G){
   var a=archetypeFor(districtById(G.district).weights);
@@ -557,6 +576,7 @@ var load=function(){
       if(s.staff==null) s.staff=0; if(s.rep==null) s.rep=6; if(s.satAvg==null) s.satAvg=0;
       if(s.oil==null) s.oil=100; if(!s.district) s.district='dorp'; if(!s.fat) s.fat='blend';
       if(s.crisp==null) s.crisp=52; if(s.served==null) s.served=0; if(!s.shop) s.shop=pickShopName();
+      if(!s.shady) s.shady={}; if(s.heat==null) s.heat=0; if(s.closedDays==null) s.closedDays=0;
     });
     mirrorFrom(G.shops[G.active]);           // load the active shop into the live fields
     G.queue=[]; G.arrAcc=0; G.srvAcc=0;       // rebuild the line fresh
@@ -802,7 +822,7 @@ var bindUI=function(){
   ['shopName','dayN','repN','money','shopsN','newsTxt','buurtAv','buurtName','buurtStat','satBar',
    'crisp','crispV','oilPct','oilBar','fatSeg',
    'oilBtn','oilCost','rate','resetBtn',
-   'shopBtn','shopClose','upgList','staffBox','snackList','sauceList',
+   'shopBtn','shopClose','upgList','staffBox','snackList','sauceList','shadyBox',
    'pricesBtn','pricesSheet','pricesClose','priceSizes','priceSnacks','priceSauces',
    'mapBtn','mapClose','mapList','order','biClose','biMix','biHyg'].forEach(function(id){ el[id]=$(id); });
 
@@ -860,11 +880,14 @@ var updateBuurt=function(){
   var satPct=Math.round(G.satAvg*100);
   var hy=hygieneRating(G.oil);
   el.buurtAv.textContent=d.emoji;
-  el.buurtName.innerHTML='Buurt: '+d.name+'  <span style="color:var(--'+hy.cls+')">'+hy.emoji+' '+hy.grade+'</span>'
+  var heatTxt=(G.heat>=8)?'  <span style="color:var(--'+(G.heat>=55?'bad':'warn')+')">🔥'+Math.round(G.heat)+'</span>':'';
+  el.buurtName.innerHTML='Buurt: '+d.name+'  <span style="color:var(--'+hy.cls+')">'+hy.emoji+' '+hy.grade+'</span>'+heatTxt
     +'  <span style="font-weight:600;color:var(--ink2);font-size:11px">ⓘ ken je buurt</span>';
-  el.buurtStat.innerHTML='Rij <em>'+G.queue.length+'</em> · tevredenheid <em>'+satPct+'%</em>'
-    +' · <em>'+(arr*60).toFixed(0)+'</em> klanten/min'
-    +(srv<arr?' · <em style="color:var(--bad)">rij groeit!</em>':'');
+  el.buurtStat.innerHTML=(G.closedDays>0)
+    ? '<em style="color:var(--bad)">🚔 GESLOTEN door controle — morgen weer open</em>'
+    : 'Rij <em>'+G.queue.length+'</em> · tevredenheid <em>'+satPct+'%</em>'
+      +' · <em>'+(arr*60).toFixed(0)+'</em> klanten/min'
+      +(srv<arr?' · <em style="color:var(--bad)">rij groeit!</em>':'');
   el.satBar.style.width=clamp(satPct,0,100)+'%';
   if(el.rate) el.rate.textContent='≈ '+(thru*avgTicket(G)).toFixed(0)+' fr./sec  ·  '+G.served
     +' geserveerd'+(G.staff>0?'  ·  👤×'+G.staff:'');
@@ -918,6 +941,7 @@ var wireShopButtons=function(){
   each('[data-upg]',  function(b){ return function(){ buyUpg(b.getAttribute('data-upg')); }; });
   each('[data-snack]',function(b){ return function(){ buyMenu('snacks',b.getAttribute('data-snack')); }; });
   each('[data-sauce]',function(b){ return function(){ buyMenu('sauces',b.getAttribute('data-sauce')); }; });
+  each('[data-shady]',function(b){ return function(){ toggleShady(b.getAttribute('data-shady')); }; });
   var hb=document.getElementById('hireBtn'); if(hb) hb.onclick=hireStaff;
 };
 var renderShop=function(){
@@ -943,8 +967,24 @@ var renderShop=function(){
       :'<button class="buy" data-sauce="'+m.id+'"'+(G.money<m.unlock?' disabled':'')+'>'+fmtFr(m.unlock)+' fr.</button>';
     sc+=itemRow('🥫',m.label,'Verkoop <b>'+m.price+' fr.</b> · inkoop '+m.cost+' fr.',btn); });
   el.sauceList.innerHTML=sc;
+  // shady operations + Heat meter
+  if(el.shadyBox){
+    var risk=Math.round(inspectionRisk(G)*100), hy=hygieneRating(G.oil), hcol=risk>40?'bad':risk>18?'warn':'good';
+    var sh='<div class="prow"><div class="top"><div class="ic">🔥</div><div><div class="pt">Heat '+Math.round(G.heat||0)+'/100</div>'
+      +'<div class="psub">Inspectiekans/dag: <b style="color:var(--'+hcol+')">'+risk+'%</b> · hygiëne '+hy.grade+'</div></div></div>'
+      +'<div class="oilbar" style="margin-top:7px"><i style="width:'+clamp(G.heat||0,0,100)+'%;background:linear-gradient(90deg,#f0a93b,#e5624a)"></i></div></div>';
+    SHADY.forEach(function(x){ var on=shadyOn(G,x.id);
+      sh+='<div class="item"><div class="ic">'+x.emoji+'</div><div class="info"><div class="t">'+x.name+'</div>'
+        +'<div class="s">'+x.desc+'</div></div>'
+        +'<button class="buy" data-shady="'+x.id+'" style="'+(on?'background:linear-gradient(#e5624a,#c0453a);color:#fff':'background:var(--panel2);color:var(--ink2)')+'">'+(on?'AAN':'uit')+'</button></div>'; });
+    el.shadyBox.innerHTML=sh;
+  }
   wireShopButtons();
 };
+var toggleShady=function(id){ if(!G.shady) G.shady={}; G.shady[id]=!G.shady[id];
+  var x=null; SHADY.forEach(function(y){ if(y.id===id) x=y; });
+  toast(G.shady[id]?'🕵️ <b>'+(x?x.name:id)+'</b> aan — pas op voor de controle!':'✅ <b>'+(x?x.name:id)+'</b> uit — terug netjes.');
+  save(); syncControls(); renderShop(); };
 
 /* ---------- price sheet (set a price per item, per shop) ---------- */
 var openPrices=function(){ var s=$('prices'); if(s){ s.classList.remove('hidden'); renderPrices(); } };
@@ -1061,13 +1101,27 @@ var NEWS=[
   {t:"🎉 Er is een fuif in de parochiezaal — nachtwerk!",d:1.3},
   {t:"😴 Rustige dag in 't dorp.",d:0.9}
 ];
+var inspect=function(s){
+  var hy=hygieneRating(s.oil||0);
+  var sev=(s.heat||0)/100 + (hy.grade==='D'?0.45:hy.grade==='C'?0.2:0);
+  if(sev>0.95){ s.closedDays=1; s.rep=clamp(s.rep-15,0,100); s.heat=clamp((s.heat||0)*0.5,0,100);
+    toast('🚨 <b>'+s.shop+'</b> is DICHT — het FAVV grijpt in!'); }
+  else { var fine=Math.round(250+(s.heat||0)*35); G.money-=fine; s.rep=clamp(s.rep-5,0,100); s.heat=clamp((s.heat||0)*0.35,0,100);
+    toast('🚨 Controle bij <b>'+s.shop+'</b>: boete −'+fmtFr(fine)+' fr.'); }
+};
 var newDay=function(){
   G.day++; G.dayT=0;
-  // pay every shop's staff their daily wage; an unpaid uitbater walks out
   snapshotActive();
-  G.shops.forEach(function(s){ if(s.staff>0){ var w=wage(s.staff);
-    if(G.money>=w){ G.money-=w; }
-    else { s.staff--; toast('😞 Een uitbater bij '+s.shop+' vertrekt — loon niet betaald.'); } } });
+  G.shops.forEach(function(s){
+    if(s.closedDays>0){ s.closedDays--; if(s.closedDays<=0) toast('🔓 '+s.shop+' mag weer open.'); }
+    // wages — halved if underpaying, but staff may walk out
+    if(s.staff>0){ var w=Math.round(wage(s.staff)*(shadyOn(s,'underpay')?0.5:1));
+      if(G.money>=w){ G.money-=w; } else { s.staff--; toast('😞 Een uitbater bij '+s.shop+' vertrekt — loon niet betaald.'); }
+      if(shadyOn(s,'underpay') && s.staff>0 && Math.random()<0.2){ s.staff--; toast('😠 Onderbetaald personeel bij '+s.shop+' stapt op.'); }
+    }
+    // day's-end inspection risk (scales with Heat + poor hygiene)
+    if(s.closedDays<=0 && Math.random()<inspectionRisk(s)) inspect(s);
+  });
   mirrorFrom(G.shops[G.active]);
   var n=pick(NEWS); G.news=n.t; G.demandMod=n.d;
   toast('<b>Dag '+G.day+'</b> — '+n.t);
@@ -1082,7 +1136,8 @@ var frame=function(ts){
   // day clock
   G.dayT+=dt; if(G.dayT>=G.dayLen) newDay();
   // === demographics-driven queue economy (hands-off) ===
-  var arr=arrivalRate(G,G.demandMod), srv=serviceRate(G);
+  if(G.closedDays>0) G.queue.length=0;             // shut by the inspector — no trade today
+  var arr=(G.closedDays>0)?0:arrivalRate(G,G.demandMod), srv=(G.closedDays>0)?0:serviceRate(G);
   var maxLine=7+G.staff*2+(G.up.fryer||0);
   // arrivals join the line (or balk away if it's already full)
   G.arrAcc+=arr*dt;
@@ -1102,10 +1157,14 @@ var frame=function(ts){
     if(servedThis<2) popScene(r.sat>0.6?'good':'bad',(r.sat>0.6?'+':'')+fmtFr(r.ticket+r.tip));
     servedThis++;
   }
+  // Heat drifts up while cutting corners, decays otherwise (every shop)
+  for(var hi=0;hi<G.shops.length;hi++){ var htgt=(hi===G.active)?G:G.shops[hi]; var hr=heatRate(htgt);
+    htgt.heat=clamp((htgt.heat||0)+(hr>0?hr:-0.25)*dt,0,100); }
   // background frietkoten keep earning on their own settings (lightweight, no queue sim)
   if(G.shops.length>1){ for(var bi=0;bi<G.shops.length;bi++){ if(bi===G.active) continue; var bs=G.shops[bi];
-    var ctx={menu:G.menu,prices:bs.prices,district:bs.district,oil:bs.oil,rep:bs.rep,up:bs.up,staff:bs.staff,satAvg:bs.satAvg};
-    G.money+=Math.min(arrivalRate(ctx,G.demandMod),serviceRate(ctx))*avgTicket(ctx)*dt;
+    if(bs.closedDays>0) continue;
+    var ctx={menu:G.menu,prices:bs.prices,district:bs.district,oil:bs.oil,rep:bs.rep,up:bs.up,staff:bs.staff,satAvg:bs.satAvg,shady:bs.shady};
+    G.money+=Math.min(arrivalRate(ctx,G.demandMod),serviceRate(ctx))*avgTicket(ctx)*shadyIncomeMul(bs)*dt;
   } }
   if(el.money) el.money.textContent=fmtFr(G.money);
   updateBuurt();
@@ -1151,6 +1210,8 @@ if(typeof globalThis!=='undefined'){
     friesAppeal:friesAppeal, itemCost:itemCost,
     newShop:newShop, openCost:openCost, SHOP_FIELDS:SHOP_FIELDS,
     demographicMix:demographicMix, suggestedCrisp:suggestedCrisp, hygieneRating:hygieneRating,
+    SHADY:SHADY, shadyOn:shadyOn, shadyIncomeMul:shadyIncomeMul, shadySatPenalty:shadySatPenalty,
+    heatRate:heatRate, inspectionRisk:inspectionRisk,
     freshGame:freshGame, makeCustomer:makeCustomer };
 }
 </script>
