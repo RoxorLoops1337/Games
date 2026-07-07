@@ -15,6 +15,9 @@
   #hud{display:flex;align-items:center;gap:5px;padding:7px 8px;background:linear-gradient(#2b2033,#20182a);border-bottom:2px solid var(--edge);font-size:13px;flex-wrap:wrap}
   .chip{background:var(--slot);border:1px solid #0d0a12;border-radius:6px;padding:3px 7px;display:flex;align-items:center;gap:4px;white-space:nowrap;font-weight:800;font-variant-numeric:tabular-nums}
   .chip b{color:var(--gold)} .chip.f b{color:var(--blue)} .spacer{flex:1}
+  #rushBanner{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:linear-gradient(#e5624a,#c23a28);color:#fff;font-weight:900;font-size:13px;letter-spacing:.5px;padding:5px 14px;border-radius:20px;border:1px solid #ffffff40;box-shadow:0 3px 10px #0008;z-index:6;display:none;pointer-events:none;text-shadow:0 1px 1px #0007}
+  #rushBanner.on{display:block;animation:rushpulse .7s ease-in-out infinite}
+  @keyframes rushpulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.09)}}
   #money.bump{display:inline-block;animation:moneybump .26s ease-out}
   @keyframes moneybump{0%{transform:scale(1)}40%{transform:scale(1.32);color:#fff0a0}100%{transform:scale(1)}}
   #rankChip{color:var(--gold);font-weight:800;font-size:12px}
@@ -94,7 +97,7 @@
   </div>
   <div id="goalbar"><i id="goalfill"></i><span id="goalTxt"></span></div>
 
-  <div id="stage"><canvas id="scene" width="224" height="160"></canvas><div id="fx"></div></div>
+  <div id="stage"><canvas id="scene" width="224" height="160"></canvas><div id="fx"></div><div id="rushBanner">🔥 SPITSUUR!</div></div>
   <div id="placebar">Tik op een lege tegel om te plaatsen <button id="cancelPlace">annuleer</button></div>
 
   <div id="tabs">
@@ -431,6 +434,7 @@ var comboMulNow=function(){ var cs=detectCombos(G.objs); var m=1; cs.forEach(fun
 var serveDone=function(c){
   var v=orderValue(G,c.type,comboMulNow());
   c.val=v; G.money+=v; G.served++; G.weekServed++;
+  if(G.rush) rushServed++;
   if(Math.random()<0.25) G.regulars++;                 // happy customer becomes a regular → compounding traffic
   var hearts=Math.max(1,Math.round(1*c.type.heart));
   c.hearts=hearts;
@@ -660,6 +664,13 @@ var starRing=function(x,y,n){ for(var i=0;i<n;i++){ var a=i/n*6.283,sp=rnd(30,58
 var spawnSteam=function(x,y,col){ pfx('steam',x+rnd(-3,3),y,{vx:rnd(-6,6),vy:rnd(-20,-11),life:rnd(0.8,1.5),size:rnd(2.5,4.5),col:col||'#ffffff'}); };
 var emote=function(x,y,txt,col){ pfx('text',x,y,{vy:-24,g:8,life:1.0,txt:txt,col:col||'#fff',size:11}); };
 var chime=function(freqs,d){ for(var i=0;i<freqs.length;i++){ (function(f,i){ setTimeout(function(){ beep(f,d||0.09,0.055); },i*70); })(freqs[i],i); } };
+// rush hour: periodic surges of customers with a banner + reward
+var rushGap=rnd(16,28), rushLeft=0, rushServed=0;
+var startRush=function(){ rushLeft=rnd(9,13); G.rush=true; rushServed=0; var rb=$('rushBanner'); if(rb) rb.classList.add('on');
+  toast('🔥 <b>SPITSUUR!</b> Iedereen wil friet — bedien snel!'); chime([500,660,820],0.1); addShake(1.5); };
+var endRush=function(){ G.rush=false; var rb=$('rushBanner'); if(rb) rb.classList.remove('on'); rushGap=rnd(26,44);
+  if(rushServed>0){ var fb=Math.max(1,Math.round(rushServed/5)); G.faam+=fb; toast('😮‍💨 Spitsuur voorbij — '+rushServed+' klanten bediend! +★'+fb); } };
+var rushTick=function(dt){ if(rushLeft>0){ rushLeft-=dt; if(rushLeft<=0) endRush(); } else { rushGap-=dt; if(rushGap<=0) startRush(); } };
 var mergeBurst=function(x,y,lvl){ spawnSparks(x,y,10,'#fff2b0'); starRing(x,y,Math.min(12,6+Math.floor(lvl/2))); addShake(1.4+Math.min(2,lvl*0.06)); chime([680,900,1180],0.08); };
 var serveBurst=function(x,y,hearts){ spawnCoins(x,y,5+Math.min(5,hearts)); spawnSparks(x,y,4,'#ffe7a0'); addShake(0.8); beep(560+rnd(-40,60),0.06,0.045); };
 var placePuff=function(x,y){ for(var i=0;i<6;i++){ var a=rnd(2.4,3.9); pfx('spark',x,y+TS*0.28,{vx:Math.cos(a)*rnd(14,34),vy:-rnd(6,20),g:60,life:rnd(0.3,0.5),size:rnd(1.6,2.6),col:'#c9b48f'}); } };
@@ -900,9 +911,10 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     // week clock + weekly goal
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.35)*rnd(0.75,1.35);
-      if(G.custs.length<30){ G.custs.push(makeCust());
-        if(G.regulars>3 && G.custs.length<30 && Math.random()<Math.min(0.20,G.regulars*0.007)) G.custs.push(makeCust()); } }
+    rushTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30;
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul;
+      if(G.custs.length<ccap){ G.custs.push(makeCust());
+        if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
     // the critic slips into the line as its own arrival
     if(G.criticPending && !G.custs.some(function(c){ return c.critic; })){ G.criticPending=false;
       G.custs.push(makeCritic()); toast('🎩 De <b>keurmeester</b> is er! Zorg voor top friet…'); doorbell(); }
