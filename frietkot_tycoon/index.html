@@ -3,1306 +3,480 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Frietkot Tycoon</title>
+<title>Frietkot Rush</title>
 <style>
   :root{
     --bg:#1b1524; --panel:#2b2033; --panel2:#372a42; --edge:#0d0a12;
     --ink:#f7ecd6; --ink2:#c9b48f; --gold:#ffd447; --gold2:#e8a63b;
-    --good:#7bd66b; --bad:#e5624a; --warn:#f0a93b; --blue:#5cc0e8;
-    --slot:#160f1e;
+    --good:#7bd66b; --bad:#e5624a; --warn:#f0a93b; --blue:#5cc0e8; --slot:#160f1e;
   }
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%}
-  body{
-    background:#0c0910;
-    color:var(--ink);
-    font-family:"Segoe UI",system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    display:flex;justify-content:center;
-    overscroll-behavior:none;
-    user-select:none;-webkit-user-select:none;
-  }
-  #app{
-    width:100%;max-width:560px;min-height:100%;
-    background:linear-gradient(#150f1d,#0c0910);
-    display:flex;flex-direction:column;
-    box-shadow:0 0 40px #000;
-  }
-  /* ---- top HUD ---- */
-  #hud{
-    display:flex;align-items:center;gap:8px;
-    padding:7px 10px;background:linear-gradient(#2b2033,#20182a);
-    border-bottom:2px solid var(--edge);
-    font-size:13px;
-  }
-  #hud .name{font-weight:800;color:var(--gold);letter-spacing:.3px;font-size:13px;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;max-width:38%}
-  #hud .spacer{flex:1}
-  .chip{background:var(--slot);border:1px solid #0d0a12;border-radius:6px;
-    padding:3px 7px;display:flex;align-items:center;gap:4px;white-space:nowrap;
-    box-shadow:inset 0 1px 0 #ffffff10;font-variant-numeric:tabular-nums;font-weight:700}
-  .chip b{color:var(--gold);font-weight:800}
-  .chip.day b{color:var(--blue)}
-  .chip.rep b{color:var(--good)}
-  /* ---- canvas ---- */
-  #stage{position:relative;width:100%;background:#0a0710;line-height:0;
-    border-bottom:2px solid var(--edge)}
-  #scene{width:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;
-    touch-action:none}
-  #float{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-  .pop{position:absolute;font-weight:800;font-size:13px;color:var(--gold);
-    text-shadow:0 1px 0 #000,0 0 6px #0008;animation:rise 1.1s ease-out forwards;white-space:nowrap}
-  .pop.bad{color:var(--bad)} .pop.good{color:var(--good)} .pop.rep{color:var(--blue)}
-  @keyframes rise{0%{transform:translateY(0);opacity:0}12%{opacity:1}100%{transform:translateY(-34px);opacity:0}}
-  #news{background:linear-gradient(#20182a,#1a121f);color:var(--ink2);
-    font-size:11px;padding:5px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    border-bottom:2px solid var(--edge)}
-  #news b{color:var(--gold);font-weight:700}
-  /* ---- customer card ---- */
-  #order{padding:8px 10px;background:linear-gradient(#332741,#2a2036);
-    border-bottom:2px solid var(--edge);min-height:58px;display:flex;gap:9px;align-items:center}
-  #order .who{flex:1}
-  #order .arch{font-weight:800;font-size:13px;color:var(--ink)}
-  #order .want{font-size:12px;color:var(--ink2);margin-top:2px;line-height:1.35}
-  #order .want em{color:var(--gold);font-style:normal;font-weight:700}
-  #order .pat{width:74px;height:8px;background:#160f1e;border-radius:4px;overflow:hidden;
-    margin-top:5px;border:1px solid #0d0a12}
-  #order .pat i{display:block;height:100%;background:linear-gradient(90deg,#e5624a,#f0a93b,#7bd66b);
-    transition:width .1s linear}
-  #order.idle .who{color:var(--ink2)}
-  #order{cursor:pointer}
-  #order:active{filter:brightness(1.08)}
-  .avatar{width:40px;height:40px;border-radius:8px;background:var(--slot);
-    display:flex;align-items:center;justify-content:center;font-size:24px;border:1px solid #0d0a12;flex:0 0 auto}
-  /* ---- controls ---- */
-  #ctrls{padding:9px 10px 12px;display:flex;flex-direction:column;gap:10px}
-  .row{display:flex;gap:9px;align-items:stretch}
-  .ctl{background:var(--panel);border:1px solid var(--edge);border-radius:9px;
-    padding:8px 9px;box-shadow:inset 0 1px 0 #ffffff0d}
-  .ctl.grow{flex:1}
-  .lab{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink2);
-    display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:700}
-  .lab b{color:var(--ink);font-size:12px;font-variant-numeric:tabular-nums}
-  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:5px;
-    background:linear-gradient(90deg,#e5624a 0%,#f0d040 50%,#7bd66b 78%,#c98b3a 100%);outline:none;margin:2px 0}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
-    background:var(--gold);border:2px solid #7a5a12;cursor:pointer;box-shadow:0 1px 3px #000a}
-  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--gold);
-    border:2px solid #7a5a12;cursor:pointer}
-  input.price{background:linear-gradient(90deg,#7bd66b,#f0d040,#e5624a)}
-  .seg{display:flex;gap:4px}
-  .seg button{flex:1;background:var(--slot);color:var(--ink2);border:1px solid var(--edge);
-    border-radius:7px;padding:7px 2px;font-weight:800;font-size:12px;cursor:pointer;transition:.08s}
-  .seg button.on{background:var(--gold);color:#2a1c05;border-color:var(--gold2);box-shadow:0 2px 0 var(--gold2)}
-  .oilbar{height:12px;border-radius:6px;background:#160f1e;overflow:hidden;border:1px solid #0d0a12;margin-top:2px}
-  .oilbar i{display:block;height:100%;transition:width .2s,background .3s}
-  .btn{border:none;border-radius:9px;font-weight:800;cursor:pointer;font-size:13px;
-    padding:10px;box-shadow:0 3px 0 #0006;transition:.06s;color:#2a1c05}
-  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #0006}
-  .btn.serve{flex:2;background:linear-gradient(#ffd447,#e8a63b);font-size:16px}
-  .btn.oil{flex:1;background:linear-gradient(#8fd6ff,#5cc0e8)}
-  .btn.oil.low{background:linear-gradient(#f0a93b,#e5624a);color:#fff;animation:pulse 1s infinite}
-  .btn:disabled{opacity:.45;cursor:default;box-shadow:0 3px 0 #0006}
-  @keyframes pulse{50%{filter:brightness(1.25)}}
-  .fats{display:flex;gap:4px;margin-top:2px}
-  .fats button{flex:1;background:var(--slot);color:var(--ink2);border:1px solid var(--edge);
-    border-radius:6px;padding:5px 2px;font-weight:700;font-size:11px;cursor:pointer}
-  .fats button.on{background:var(--panel2);color:var(--gold);border-color:var(--gold2)}
-  #foot{display:flex;gap:8px;align-items:center;padding:0 10px 12px}
-  #foot .mini{font-size:11px;color:var(--ink2)}
-  #foot .spacer{flex:1}
-  .txtbtn{background:none;border:1px solid var(--edge);color:var(--ink2);border-radius:6px;
-    padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer}
-  /* ---- toast ---- */
-  #toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
-    background:#000c;color:var(--ink);padding:9px 14px;border-radius:9px;font-size:13px;
-    border:1px solid #ffffff20;max-width:90%;text-align:center;opacity:0;pointer-events:none;
-    transition:opacity .25s;z-index:9}
-  #toast.show{opacity:1}
-  #toast b{color:var(--gold)}
-  /* ---- upgrades / menu sheet ---- */
-  #shop{position:fixed;inset:0;background:#000b;display:flex;justify-content:center;align-items:flex-end;
-    z-index:20;opacity:1;transition:opacity .2s}
-  #shop.hidden{opacity:0;pointer-events:none}
-  #shop .sheet{width:100%;max-width:560px;max-height:88%;background:linear-gradient(#241a2f,#1a121f);
-    border-top-left-radius:16px;border-top-right-radius:16px;border:2px solid var(--edge);border-bottom:none;
-    display:flex;flex-direction:column;box-shadow:0 -8px 30px #000a;transform:translateY(0);transition:transform .22s}
-  #shop.hidden .sheet{transform:translateY(20px)}
-  .shead{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
-    border-bottom:2px solid var(--edge);font-size:15px;color:var(--gold);position:sticky;top:0;
-    background:#241a2f;border-top-left-radius:14px;border-top-right-radius:14px}
-  .shead .x{background:var(--slot);border:1px solid var(--edge);color:var(--ink);border-radius:8px;
-    width:32px;height:32px;font-size:15px;cursor:pointer;font-weight:800}
-  .scont{overflow-y:auto;padding:6px 12px 20px;-webkit-overflow-scrolling:touch}
-  .ssec{margin-top:12px}
-  .ssec h3{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--ink2);
-    margin:0 0 7px;font-weight:800}
-  .item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--edge);
-    border-radius:10px;padding:8px 10px;margin-bottom:7px}
-  .item .ic{width:34px;height:34px;flex:0 0 auto;border-radius:8px;background:var(--slot);
-    display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid #0d0a12}
-  .item .info{flex:1;min-width:0}
-  .item .t{font-weight:800;font-size:13px;color:var(--ink)}
-  .item .s{font-size:11px;color:var(--ink2);margin-top:1px;line-height:1.3}
-  .item .s b{color:var(--gold);font-weight:700}
-  .buy{border:none;border-radius:8px;font-weight:800;font-size:12px;padding:9px 11px;cursor:pointer;
-    background:linear-gradient(#ffd447,#e8a63b);color:#2a1c05;box-shadow:0 2px 0 #0006;white-space:nowrap;flex:0 0 auto}
-  .buy:active{transform:translateY(1px);box-shadow:0 1px 0 #0006}
-  .buy.owned{background:var(--panel2);color:var(--good);cursor:default;box-shadow:none}
-  .item.activeShop{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold2) inset}
-  /* ---- event-day modal ---- */
-  #event{position:fixed;inset:0;background:#000d;display:flex;align-items:center;justify-content:center;z-index:30;padding:18px}
-  #event.hidden{display:none}
-  .evcard{width:100%;max-width:420px;background:linear-gradient(#2f2338,#1a121f);border:2px solid var(--gold2);
-    border-radius:16px;padding:18px;box-shadow:0 12px 44px #000;animation:evpop .25s ease-out}
-  @keyframes evpop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
-  .evcard .evyr{display:inline-block;background:var(--slot);color:var(--blue);font-weight:800;
-    border-radius:6px;padding:2px 9px;font-size:12px;margin-bottom:9px}
-  .evcard h2{margin:0 0 9px;color:var(--gold);font-size:19px;line-height:1.2}
-  .evcard p{margin:0 0 4px;color:var(--ink);font-size:14px;line-height:1.45}
-  .buy:disabled{opacity:.4;cursor:default;box-shadow:0 2px 0 #0006}
-  .dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle}
-  .dots i{width:6px;height:6px;border-radius:50%;background:#0d0a12;display:inline-block}
-  .dots i.on{background:var(--gold)}
-  /* ---- price rows ---- */
-  .prow{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:8px 10px;margin-bottom:7px}
-  .prow.locked{opacity:.5}
-  .prow .top{display:flex;align-items:center;gap:9px}
-  .prow .ic{width:30px;height:30px;flex:0 0 auto;border-radius:7px;background:var(--slot);
-    display:flex;align-items:center;justify-content:center;font-size:17px;border:1px solid #0d0a12}
-  .prow .pt{font-weight:800;font-size:13px;color:var(--ink)}
-  .prow .psub{font-size:11px;color:var(--ink2)}
-  .prow .pv{margin-left:auto;font-weight:800;font-size:15px;color:var(--gold);
-    font-variant-numeric:tabular-nums;white-space:nowrap}
-  .prow .marg{font-size:11px;font-weight:700;margin-left:6px}
-  .prow input[type=range]{width:100%;margin-top:7px;
-    background:linear-gradient(90deg,#7bd66b,#f0d040,#e5624a)}
+  body{background:#0c0910;color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;display:flex;justify-content:center;
+    overscroll-behavior:none;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+  #app{width:100%;max-width:540px;min-height:100%;background:linear-gradient(#150f1d,#0c0910);
+    display:flex;flex-direction:column;box-shadow:0 0 40px #000;position:relative}
+  /* HUD */
+  #hud{display:flex;align-items:center;gap:6px;padding:7px 9px;
+    background:linear-gradient(#2b2033,#20182a);border-bottom:2px solid var(--edge);font-size:13px}
+  .chip{background:var(--slot);border:1px solid #0d0a12;border-radius:6px;padding:3px 7px;
+    display:flex;align-items:center;gap:4px;white-space:nowrap;font-weight:800;font-variant-numeric:tabular-nums}
+  .chip b{color:var(--gold)} .spacer{flex:1}
+  #combo{color:var(--gold);font-weight:900;font-size:15px;transition:transform .1s}
+  #combo.pop{transform:scale(1.4)}
+  .strikes{letter-spacing:2px;font-size:15px}
+  /* stage */
+  #stage{position:relative;width:100%;background:#0a0710;line-height:0;border-bottom:2px solid var(--edge)}
+  #scene{width:100%;display:block;image-rendering:pixelated}
+  #fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .pop{position:absolute;font-weight:900;font-size:18px;white-space:nowrap;
+    text-shadow:0 2px 0 #000,0 0 8px #0008;animation:rise 1s ease-out forwards}
+  .pop.big{font-size:26px}
+  @keyframes rise{0%{transform:translateY(0) scale(.6);opacity:0}15%{opacity:1;transform:translateY(-4px) scale(1.1)}100%{transform:translateY(-46px) scale(1);opacity:0}}
+  .coin{position:absolute;width:12px;height:12px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff3b0,#e8a63b);border:1px solid #a0700f;pointer-events:none}
+  /* order card */
+  #order{padding:8px 10px;background:linear-gradient(#332741,#2a2036);border-bottom:2px solid var(--edge);
+    min-height:74px;display:flex;gap:10px;align-items:center}
+  #order .who{flex:1;min-width:0}
+  #order .line1{font-weight:800;font-size:13px;color:var(--ink);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .tok{background:var(--slot);border:1px solid #0d0a12;border-radius:7px;padding:3px 8px;font-size:14px;font-weight:800;
+    display:inline-flex;gap:4px;align-items:center}
+  .tok.ok{background:#294a2a;border-color:#3f7a44;color:var(--good)}
+  .avatar{width:46px;height:46px;border-radius:10px;background:var(--slot);display:flex;align-items:center;
+    justify-content:center;font-size:28px;border:1px solid #0d0a12;flex:0 0 auto;transition:transform .1s}
+  .avatar.shake{animation:sh .3s}
+  @keyframes sh{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .patwrap{height:9px;background:#160f1e;border-radius:5px;overflow:hidden;margin-top:7px;border:1px solid #0d0a12}
+  .patwrap i{display:block;height:100%;background:linear-gradient(90deg,#e5624a,#f0a93b,#7bd66b);transition:width .12s linear}
+  #order.empty .who{color:var(--ink2);font-weight:600}
+  /* controls */
+  #ctrls{padding:9px 10px 12px;display:flex;flex-direction:column;gap:9px}
+  /* fryer */
+  .fryer{background:var(--panel);border:1px solid var(--edge);border-radius:11px;padding:9px 10px}
+  .donewrap{position:relative;height:22px;background:#160f1e;border-radius:7px;overflow:hidden;border:1px solid #0d0a12}
+  .zone{position:absolute;top:0;bottom:0;background:rgba(123,214,107,.30)}
+  .zone.edge{background:rgba(240,169,59,.18)}
+  .zone.burn{background:rgba(229,98,74,.28)}
+  .marker{position:absolute;top:-2px;bottom:-2px;width:4px;background:var(--ink);box-shadow:0 0 6px #fff;border-radius:2px}
+  .donelbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;color:#fff;text-shadow:0 1px 2px #000}
+  .btn{border:none;border-radius:11px;font-weight:900;cursor:pointer;padding:13px;
+    box-shadow:0 4px 0 #0006;transition:transform .05s,box-shadow .05s;color:#2a1c05;font-size:15px}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #0006}
+  .frybtn{width:100%;margin-top:8px;background:linear-gradient(#e8c85a,#c78e2f)}
+  .frybtn.pull{background:linear-gradient(#7bd66b,#4f9a55);color:#0a2a0f;animation:pulse .5s infinite}
+  .frybtn.ready{background:var(--panel2);color:var(--good);box-shadow:0 4px 0 #0006}
+  @keyframes pulse{50%{filter:brightness(1.28)}}
+  .stationrow{display:flex;gap:6px}
+  .stationrow .lab{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2);
+    width:20px;writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;font-weight:800;flex:0 0 auto}
+  .st{flex:1;background:var(--slot);border:1px solid var(--edge);border-radius:9px;padding:8px 2px;
+    font-size:22px;cursor:pointer;position:relative;transition:transform .05s}
+  .st:active{transform:translateY(2px)}
+  .st .nm{display:block;font-size:9px;color:var(--ink2);font-weight:700;margin-top:1px}
+  .st.sel{background:var(--gold);border-color:var(--gold2);box-shadow:0 2px 0 var(--gold2)}
+  .st.sel .nm{color:#2a1c05}
+  .st.want{border-color:var(--good);box-shadow:0 0 0 2px var(--good) inset}
+  .servebtn{width:100%;background:linear-gradient(#ffd447,#e8a63b);font-size:18px;margin-top:2px}
+  .servebtn:disabled{opacity:.5;box-shadow:0 4px 0 #0006}
+  /* overlays */
+  .screen{position:absolute;inset:0;background:#0c0910ee;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;z-index:10;padding:24px;gap:12px}
+  .screen.hidden{display:none}
+  .screen h1{margin:0;font-size:34px;color:var(--gold);letter-spacing:1px;line-height:1}
+  .screen h1 small{display:block;font-size:14px;color:var(--ink2);letter-spacing:3px;margin-top:6px;font-weight:700}
+  .screen p{margin:0;color:var(--ink);font-size:15px;max-width:340px;line-height:1.5}
+  .screen .big{font-size:44px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums}
+  .startbtn{background:linear-gradient(#ffd447,#e8a63b);color:#2a1c05;border:none;border-radius:12px;
+    font-weight:900;font-size:18px;padding:15px 34px;box-shadow:0 5px 0 #0006;cursor:pointer}
+  .startbtn:active{transform:translateY(3px);box-shadow:0 2px 0 #0006}
+  .hs{color:var(--ink2);font-size:13px}
+  #shakehost{position:relative}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="hud">
-    <div class="name" id="shopName">Frituur 't Hoekske</div>
+    <div class="chip">🏆 <b id="score">0</b></div>
+    <div class="chip">💶 <b id="tips">0</b></div>
     <div class="spacer"></div>
-    <div class="chip">🏪<b id="shopsN">1</b></div>
-    <div class="chip day">📅<b id="yearN">1990</b></div>
-    <div class="chip day">Dag <b id="dayN">1</b></div>
-    <div class="chip rep">★<b id="repN">0</b></div>
-    <div class="chip">💰 <b id="money">0</b> fr.</div>
+    <div id="combo">×1</div>
+    <div class="spacer"></div>
+    <div class="chip strikes" id="strikes">❤️❤️❤️</div>
   </div>
 
-  <div id="stage">
-    <canvas id="scene" width="192" height="128"></canvas>
-    <div id="float"></div>
-  </div>
-  <div id="news">📻 <b id="newsTxt">Welkom in de frituur…</b></div>
-
-  <div id="order">
-    <div class="avatar" id="buurtAv">🏘️</div>
-    <div class="who">
-      <div class="arch" id="buurtName">Buurt: 't Dorpsplein</div>
-      <div class="want" id="buurtStat">Rij <em>0</em> · tevredenheid <em>0%</em> · <em>0</em> klanten/min</div>
-      <div class="pat"><i id="satBar" style="width:0%"></i></div>
+  <div id="shakehost">
+    <div id="stage">
+      <canvas id="scene" width="200" height="120"></canvas>
+      <div id="fx"></div>
     </div>
-  </div>
 
-  <div id="ctrls">
-    <div class="ctl">
-      <div class="lab">🍟 Bakwijze (krokantheid) <b id="crispV">klassiek</b></div>
-      <input type="range" id="crisp" min="0" max="100" value="52">
-    </div>
-    <div class="row">
-      <div class="ctl grow">
-        <div class="lab">🛢️ Frituurvet <b id="oilPct">100%</b></div>
-        <div class="oilbar"><i id="oilBar" style="width:100%"></i></div>
-        <div class="fats" id="fatSeg"></div>
+    <div id="order" class="empty">
+      <div class="avatar" id="custAv">🙂</div>
+      <div class="who">
+        <div class="line1" id="orderTokens">Tik op start…</div>
+        <div class="patwrap"><i id="patBar" style="width:0%"></i></div>
       </div>
     </div>
-    <div class="row">
-      <button class="btn oil" id="oilBtn">Ververs vet<br><small id="oilCost">−350 fr.</small></button>
-      <button class="btn serve" id="pricesBtn">💰 Prijzen</button>
-    </div>
-    <div class="row">
-      <button class="btn serve" id="mapBtn" style="flex:1">🗺️ Kaart</button>
-      <button class="btn serve" id="shopBtn" style="flex:1">🛠️ Uitbreidingen</button>
-    </div>
-  </div>
 
-  <div id="foot">
-    <span class="mini" id="rate">0,0 fr./sec</span>
-    <span class="spacer"></span>
-    <button class="txtbtn" id="resetBtn">nieuw spel</button>
-  </div>
-</div>
-
-<div id="shop" class="hidden">
-  <div class="sheet">
-    <div class="shead"><span>🛠️ Uitbreidingen &amp; Menukaart</span><button class="x" id="shopClose">✕</button></div>
-    <div class="scont">
-      <div class="ssec"><h3>🔧 Uitrusting</h3><div id="upgList"></div></div>
-      <div class="ssec"><h3>🧑‍🍳 Personeel — automatiseer je toog</h3><div id="staffBox"></div></div>
-      <div class="ssec"><h3>🌭 Menukaart — snacks</h3><div id="snackList"></div></div>
-      <div class="ssec"><h3>🥫 Menukaart — sauzen</h3><div id="sauceList"></div></div>
-      <div class="ssec"><h3>🕵️ Sjoemelen — risico</h3><div id="shadyBox"></div></div>
+    <div id="ctrls">
+      <div class="fryer">
+        <div class="donewrap">
+          <div class="zone edge" id="zoneLo"></div>
+          <div class="zone" id="zoneMid"></div>
+          <div class="zone edge" id="zoneHi"></div>
+          <div class="zone burn" id="zoneBurn"></div>
+          <div class="marker" id="marker" style="left:0%"></div>
+          <div class="donelbl" id="doneLbl">friet</div>
+        </div>
+        <button class="btn frybtn" id="fryBtn">🥔 Friet in de olie</button>
+      </div>
+      <div class="stationrow" id="snackRow"></div>
+      <div class="stationrow" id="sauceRow"></div>
+      <button class="btn servebtn" id="serveBtn" disabled>🍟 SERVEER</button>
     </div>
   </div>
-</div>
 
-<div id="map" class="hidden">
-  <div class="sheet">
-    <div class="shead"><span>🗺️ De stad — <span id="mapCount">1</span> frietkot(en)</span><button class="x" id="mapClose">✕</button></div>
-    <div class="scont">
-      <div id="mapList"></div>
-      <p style="font-size:11px;color:var(--ink2);padding:6px 2px 0;line-height:1.4">Open een frietkot in een nieuwe buurt — elke buurt heeft z'n eigen publiek. Je andere frietkoten blijven verdienen terwijl jij er ééntje beheert.</p>
-    </div>
+  <div class="screen" id="startScreen">
+    <h1>FRIETKOT<small>R U S H</small></h1>
+    <p>Bak de friet <b>goudgeel</b>, gooi de juiste snack &amp; saus erbij, en <b>serveer</b> vóór de klant kwaad wordt. Bouw je combo, jaag op de topscore!</p>
+    <button class="startbtn" id="startBtn">▶ Start je shift</button>
+    <div class="hs" id="startHs"></div>
+  </div>
+
+  <div class="screen hidden" id="overScreen">
+    <h1 style="font-size:26px">Shift gedaan!</h1>
+    <div class="big" id="finalScore">0</div>
+    <p id="overMsg"></p>
+    <div class="hs" id="overHs"></div>
+    <button class="startbtn" id="againBtn">↻ Opnieuw</button>
   </div>
 </div>
-
-<div id="buurtinfo" class="hidden">
-  <div class="sheet">
-    <div class="shead"><span>🏘️ <span id="biName">Buurt</span></span><button class="x" id="biClose">✕</button></div>
-    <div class="scont">
-      <div id="biTip"></div>
-      <div class="ssec"><h3>👥 Wie komt hier?</h3><div id="biMix"></div></div>
-      <div class="ssec"><h3>🧼 Hygiëne</h3><div id="biHyg"></div></div>
-    </div>
-  </div>
-</div>
-
-<div id="prices" class="hidden">
-  <div class="sheet">
-    <div class="shead"><span>💰 Prijzen — <span id="pricesShop"></span></span><button class="x" id="pricesClose">✕</button></div>
-    <div class="scont">
-      <div class="ssec"><h3>🍟 Frietprijzen (per pak)</h3><div id="priceSizes"></div></div>
-      <div class="ssec"><h3>🌭 Snackprijzen</h3><div id="priceSnacks"></div></div>
-      <div class="ssec"><h3>🥫 Sausprijzen</h3><div id="priceSauces"></div></div>
-    </div>
-  </div>
-</div>
-
-<div id="event" class="hidden">
-  <div class="evcard">
-    <div class="evyr" id="evYear">1990</div>
-    <h2 id="evTitle">Gebeurtenis</h2>
-    <p id="evDesc"></p>
-    <div id="evChoices"></div>
-  </div>
-</div>
-
-<div id="toast"></div>
 
 <script>
 /* =========================================================================
-   FRIETKOT TYCOON — vertical slice 1: "the living frietkot"
-   Cozy hand-drawn pixel art on <canvas> + DOM sliders/buttons.
-   One shop, tune crispness/portion/price, manage the frying fat, serve
-   customers whose taste you must match, watch idle income tick.  Belgian
-   franc economy, 1990s. Grounded in research/*.md.  All logic top-level so
-   tests can eval this script headless.
+   FRIETKOT RUSH — an active, tactile frituur arcade.
+   Bake the fries to golden, add the wanted snack + sauce, SERVE before the
+   customer's patience runs out. Combo multiplier, tips, high score. A total
+   pivot away from the idle sim: skill, flow, juice.  Vanilla canvas + DOM.
+   Pure logic sits up top (unit-tested); the live game is DOM-guarded.
    ========================================================================= */
 
-/* ---------- tiny helpers ---------- */
 var clamp=function(v,a,b){return v<a?a:v>b?b:v;};
-var lerp=function(a,b,t){return a+(b-a)*t;};
 var rnd=function(a,b){return a+Math.random()*(b-a);};
-var randi=function(a,b){return Math.floor(rnd(a,b+1));};
-var pick=function(arr){return arr[Math.floor(Math.random()*arr.length)];};
-var fmtFr=function(n){                       // thousands with a dot, Belgian style
-  n=Math.round(n);
-  var s=Math.abs(n).toString(),out='';
-  for(var i=0;i<s.length;i++){ if(i>0 && (s.length-i)%3===0) out+='.'; out+=s[i]; }
-  return (n<0?'-':'')+out;
-};
+var pick=function(a){return a[Math.floor(Math.random()*a.length)];};
 
-/* ---------- data: sizes, fats, archetypes ---------- */
-// portionGrams / base cost & price in francs (period-flavoured, research H7)
-var SIZES=[
-  {id:'klein',  label:'klein pak', grams:150, base:45, cost:14},
-  {id:'medium', label:'middel',    grams:220, base:65, cost:20},
-  {id:'groot',  label:'groot',     grams:320, base:90, cost:28},
-  {id:'familie',label:'familiepak',grams:600, base:150,cost:52}
-];
-var sizeById=function(id){ for(var i=0;i<SIZES.length;i++) if(SIZES[i].id===id) return SIZES[i]; return SIZES[1]; };
-
-// frying fat: flavour vs cost vs market-reach (research H6)
-var FATS=[
-  {id:'veg',   label:'plantaardig', tasteMul:0.90, reach:1.00, decay:1.10, refill:280},
-  {id:'blend', label:'mengvet',     tasteMul:1.00, reach:0.98, decay:1.00, refill:350},
-  {id:'ossewit',label:'ossewit',    tasteMul:1.14, reach:0.90, decay:0.90, refill:460}
-];
-var fatById=function(id){ for(var i=0;i<FATS.length;i++) if(FATS[i].id===id) return FATS[i]; return FATS[1]; };
-
-// crispness label for a 0-100 value (research: slap→klassiek→krokant, both ends defect)
-var crispLabel=function(v){
-  if(v<18) return 'papperig'; if(v<38) return 'zacht';
-  if(v<62) return 'klassiek'; if(v<84) return 'krokant'; return 'verbrand';
-};
-
-// customer archetypes: preferred crispness band, size wish, patience, tip, emoji, shirt color
-var ARCHETYPES=[
-  {id:'vaste',  name:'De Vaste Klant', emoji:'🧑', band:[42,62], sizes:['klein','medium'],  pat:26, tip:0.06, col:'brn', line:'"Doe mij mijn gewone, zeg."'},
-  {id:'student',name:'Student',        emoji:'🧑‍🎓',band:[30,55], sizes:['groot','medium'],  pat:17, tip:0.04, col:'red', line:'"Iets groots, en goedkoop hé!"'},
-  {id:'werk',   name:'Werkman',        emoji:'👷', band:[45,65], sizes:['groot','familie'], pat:12, tip:0.09, col:'yel', line:'"Snel, \'k moet terug werken."'},
-  {id:'familie',name:'Familie',        emoji:'👨‍👩‍👧',band:[35,58],sizes:['familie','groot'],pat:22, tip:0.08, col:'grn', line:'"Een grote om te delen!"'},
-  {id:'nacht',  name:'Nachtklant',     emoji:'🥴', band:[25,70], sizes:['groot','medium'],  pat:14, tip:0.16, col:'pur', line:'"…friet. Nu. Veel saus."'},
-  {id:'purist', name:'Frietkenner',    emoji:'🧐', band:[66,82], sizes:['klein','medium'],  pat:24, tip:0.20, col:'blu', line:'"Enkel écht krokant, jongen."'},
-  {id:'toerist',name:'Toerist',        emoji:'📸', band:[38,60], sizes:['klein','medium'],  pat:30, tip:0.14, col:'cyn', line:'"Are these… French fries?"'}
-];
-
-/* ---------- menu: snacks & sauces (research SNACKS.md / SAUCES.md) ---------- */
-// franc cost/price; unlock = one-time recipe cost bought in the Uitbreidingen sheet
+/* ---------- menu (Belgian/Flemish) ---------- */
 var SNACKS=[
-  {id:'curryworst',   label:'curryworst',    emoji:'🌭', cost:12, price:45, unlock:1400},
-  {id:'viandel',      label:'viandel',       emoji:'🍢', cost:14, price:50, unlock:2000},
-  {id:'kroket',       label:'kaaskroket',    emoji:'🧀', cost:15, price:50, unlock:2400},
-  {id:'boulet',       label:'boulet',        emoji:'🧆', cost:16, price:55, unlock:3000},
-  {id:'loempia',      label:'loempia',       emoji:'🥟', cost:16, price:55, unlock:3200},
-  {id:'cervela',      label:'cervela',       emoji:'🥓', cost:18, price:55, unlock:3600},
-  {id:'bicky',        label:'bickyburger',   emoji:'🍔', cost:30, price:95, unlock:6500},
-  {id:'garnaalkroket',label:'garnaalkroket', emoji:'🍤', cost:28, price:85, unlock:7000},
-  {id:'stoofvlees',   label:'stoofvlees',    emoji:'🍲', cost:35, price:75, unlock:11000}
+  {id:'curryworst',emoji:'🌭',nm:'curryworst'},
+  {id:'bicky',     emoji:'🍔',nm:'bicky'},
+  {id:'kroket',    emoji:'🧀',nm:'kroket'}
 ];
-var snackById=function(id){ for(var i=0;i<SNACKS.length;i++) if(SNACKS[i].id===id) return SNACKS[i]; return null; };
 var SAUCES=[
-  {id:'mayo',        label:'mayonaise',      cost:3, price:15, unlock:0},
-  {id:'curryketchup',label:'curryketchup',   cost:3, price:15, unlock:600},
-  {id:'andalouse',   label:'andalouse',      cost:4, price:20, unlock:1300},
-  {id:'samurai',     label:'samurai',        cost:4, price:20, unlock:1900},
-  {id:'brasil',      label:'brasil',         cost:5, price:20, unlock:2800},
-  {id:'stoofsaus',   label:'stoofvleessaus', cost:8, price:25, unlock:4000}
+  {id:'mayo',     emoji:'🥛',nm:'mayo'},
+  {id:'andalouse',emoji:'🟠',nm:'andalouse'},
+  {id:'samurai',  emoji:'🌶️',nm:'samurai'}
 ];
-var sauceById=function(id){ for(var i=0;i<SAUCES.length;i++) if(SAUCES[i].id===id) return SAUCES[i]; return SAUCES[0]; };
-
-/* ---------- per-shop price sheet (you set a price for every item) ---------- */
-// the "fair" reference price for each id (drives appeal / satisfaction fairness)
-var FAIR_PRICE={}; SIZES.forEach(function(s){FAIR_PRICE[s.id]=s.base;});
-  SNACKS.forEach(function(s){FAIR_PRICE[s.id]=s.price;}); SAUCES.forEach(function(s){FAIR_PRICE[s.id]=s.price;});
-var itemCost=function(id){ var s=sizeById(id); if(s&&s.id===id) return s.cost;
-  var sn=snackById(id); if(sn) return sn.cost; var sa=sauceById(id); if(sa&&sa.id===id) return sa.cost; return 0; };
-var defaultPrices=function(){ var p={}; for(var k in FAIR_PRICE) p[k]=FAIR_PRICE[k]; return p; };
-var priceOf=function(G,id){ var v=G.prices&&G.prices[id]; return (v!=null)?v:(FAIR_PRICE[id]||0); };
-// price fairness for one item → 0.1..1.3 (cheap = appealing, dear = off-putting)
-var itemAppeal=function(G,id){ return priceAppeal(priceOf(G,id), FAIR_PRICE[id]||1); };
-// average fries-price appeal across the four packs (drives overall footfall)
-var friesAppeal=function(G){ var t=0,n=0; SIZES.forEach(function(s){ t+=itemAppeal(G,s.id); n++; }); return t/n; };
-
-/* ---------- upgrades & staff (research H2/H6 + PROGRESSION idle core) ---------- */
-var upgradeCost=function(base,lvl){ return Math.round(base*Math.pow(1.7,lvl)); };
-var UPG=[
-  {id:'potato',   name:'Betere Bintjes',     emoji:'🥔', desc:'Hoger kwaliteitsplafond',   base:2800,  max:3},
-  {id:'fryer',    name:'Grotere friteuse',   emoji:'🍟', desc:'Meer passage, trager vetverval', base:3600, max:4},
-  {id:'doublefry',name:'Dubbel-bak station', emoji:'♨️', desc:'Krokanter, vergeeft missers', base:6500, max:1},
-  {id:'filter',   name:'Vetfilter',          emoji:'🛢️', desc:'Vet gaat veel langer mee',   base:4800, max:1}
+// fries crispness the customer wants → a target doneness band on the fryer bar
+var CRISP=[
+  {id:'zacht',   nm:'zacht',   emoji:'🍟', band:[30,50]},
+  {id:'klassiek',nm:'klassiek',emoji:'🍟', band:[50,70]},
+  {id:'krokant', nm:'krokant', emoji:'🍟', band:[70,88]}
 ];
-var upgById=function(id){ for(var i=0;i<UPG.length;i++) if(UPG[i].id===id) return UPG[i]; return null; };
-var STAFF_WAGE=340, STAFF_MAX=3, STAFF_HIRE=4200;
-// effective stats derived from owned upgrades
-var effPotato=function(lvl){ return clamp(0.82+(lvl||0)*0.05,0,0.99); };
-var fryerFootMul=function(lvl){ return 1+0.24*(lvl||0); };
-var oilDecayMul=function(G){ var m=fatById(G.fat).decay;
-  if(G.up&&G.up.filter) m*=0.6; if(G.up) m*=(1-0.05*(G.up.fryer||0)); return m; };
-var wage=function(staff){ return (staff||0)*STAFF_WAGE; };
-var unlockedCount=function(G){ var n=0,k;
-  for(k in G.menu.snacks) if(G.menu.snacks[k]) n++;
-  for(k in G.menu.sauces) if(G.menu.sauces[k]&&k!=='mayo') n++; return n; };
+var byId=function(arr,id){ for(var i=0;i<arr.length;i++) if(arr[i].id===id) return arr[i]; return null; };
 
-/* ---------- pure scoring logic (unit-tested) ---------- */
-// how well crispness hits the customer's preferred band → 0..1
-var crispQuality=function(crisp,band){
-  var lo=band[0],hi=band[1],c=(lo+hi)/2,half=(hi-lo)/2;
-  var dist=Math.max(0,Math.abs(crisp-c)-half);
-  return clamp(1-dist/34,0,1);
-};
-// fat freshness → quality multiplier (research H4 thresholds 60/35/20)
-var oilQuality=function(oil){
-  if(oil>=60) return 1;
-  if(oil>=35) return lerp(0.72,1,(oil-35)/25);
-  if(oil>=20) return lerp(0.45,0.72,(oil-20)/15);
-  return lerp(0.18,0.45,clamp(oil,0,20)/20);
-};
-// price fairness vs a fair price → appeal 0.1..1.3 (drives idle footfall & tips)
-var priceAppeal=function(price,fair){
-  var r=price/fair;
-  return clamp(1.28-0.92*(r-0.78),0.10,1.30);
-};
-// overall serve quality 0..1 from the levers
-var serveQuality=function(o){
-  // o: {crisp, band, oil, potato, fat, doublefry}
-  var cq=crispQuality(o.crisp,o.band);
-  if(o.doublefry) cq=clamp(cq+(1-cq)*0.4,0,1);   // double-fry forgives mismatch & lifts the ceiling
-  var q = cq*0.55
-        + oilQuality(o.oil)*0.30
-        + (o.potato||0.8)*0.15;
-  q *= (o.fat!=null?o.fat:1);           // fat taste multiplier
-  if(o.doublefry) q*=1.04;
-  return clamp(q,0,1.08);
-};
-
-// how fast customers ARRIVE (per sec): driven by appeal × reputation × neighbourhood foot traffic
-var arrivalRate=function(G,demand){
-  var appeal=friesAppeal(G), menuMul=1+0.05*unlockedCount(G);
-  return 0.70*appeal*(0.6+G.rep/70)*(demand||1)*oilQuality(G.oil)*menuMul*districtById(G.district).foot;
-};
-// how fast you can SERVE the line (per sec): throughput from staff + fryer. Base is deliberately
-// below early arrivals so a queue forms — the pressure that makes you hire & upgrade.
-var serviceRate=function(G){ return 0.40+0.40*(G.staff||0)+0.12*((G.up&&G.up.fryer)||0); };
-// evaluate one auto-served customer against your fixed policy → ticket / satisfaction / rep / oil hit
-var evalServe=function(G,c){
-  var a=c.arch, want=sizeById(c.size), f=fatById(G.fat);
-  var q=serveQuality({crisp:G.crisp,band:a.band,oil:G.oil,potato:effPotato(G.up.potato),
-                      fat:f.tasteMul, doublefry:G.up.doublefry});
-  // they buy the pack they wanted (shop sells all sizes) at YOUR price for it
-  var sizePrice=priceOf(G,want.id), sizeFair=itemAppeal(G,want.id);
-  var ticket=sizePrice, sat=q*clamp(0.55+0.5*sizeFair,0,1.1);   // overpricing hurts satisfaction
-  if(c.sauce && G.menu.sauces[c.sauce.id]){ ticket+=priceOf(G,c.sauce.id); sat+=0.03*clamp(itemAppeal(G,c.sauce.id),0,1.2); }
-  else if(c.sauce){ sat-=0.06; }
-  if(c.snack && G.menu.snacks[c.snack.id]){ ticket+=priceOf(G,c.snack.id); sat+=0.05*clamp(itemAppeal(G,c.snack.id),0,1.2); }
-  else if(c.snack){ sat-=0.07; }
-  ticket*=shadyIncomeMul(G); sat-=shadySatPenalty(G);      // cutting corners: more money, less happy
-  sat=clamp(sat,0,1.1);
-  var tip=Math.round(sizePrice*a.tip*sat*2);
-  var dRep=(sat-0.62)*4; if(G.oil<20) dRep-=1.2;               // gentler per-head: many customers now
-  var decay=(0.35+want.grams/1100)*oilDecayMul(G);            // softened for higher customer volume
-  return { ticket:ticket, tip:tip, sat:sat, dRep:dRep, decay:decay };
-};
-
-/* ---------- fresh game state ---------- */
-var SHOP_NAMES=["Frituur 't Hoekske","Frituur 't Pleintje","Frituur De Bocht","'t Vetste Kotje",
-  "Frituur Rita","Frituur De Gouden Friet","Frietopia","Fritkot Bompa","Frituur N°1","Frituur Nonkel Frit"];
-
-// per-shop state (each frietkot has its own location, house style, kit, staff & prices).
-// money / day / menu-unlocks are global (account-level); everything here is per shop.
-var SHOP_FIELDS=['shop','district','crisp','fat','oil','staff','up','prices','rep','served','satAvg','shady','heat','closedDays'];
-var pickShopName=function(){ return SHOP_NAMES[Math.floor(Math.random()*SHOP_NAMES.length)]; };
-var newShop=function(district){
-  return { shop:pickShopName(), district:district||'dorp', crisp:52, fat:'blend', oil:100,
-    staff:0, up:{potato:0,fryer:0,doublefry:0,filter:0}, prices:defaultPrices(), rep:6, served:0, satAvg:0,
-    shady:{}, heat:0, closedDays:0 };
-};
-var OPEN_BASE=6000;                                   // cost of your 2nd frietkot; rises after
-var openCost=function(owned){ return Math.round(OPEN_BASE*Math.pow(2.3,(owned||1)-1)); };
-// copy the SHOP_FIELDS between G (the live, active shop) and a stored shop slot
-var mirrorFrom=function(s){ for(var i=0;i<SHOP_FIELDS.length;i++) G[SHOP_FIELDS[i]]=s[SHOP_FIELDS[i]]; };
-var mirrorInto=function(s){ for(var i=0;i<SHOP_FIELDS.length;i++) s[SHOP_FIELDS[i]]=G[SHOP_FIELDS[i]]; };
-var snapshotActive=function(){ if(G.shops&&G.shops[G.active]) mirrorInto(G.shops[G.active]); };
-
-var freshGame=function(){
-  var g={
-    v:1, money:2000, day:1, dayT:0, dayLen:48, demandMod:1,
-    year:START_YEAR, firedEvents:[], eventDaysLeft:0, // era clock + played events
-    news:"Welkom! Zet je eerste puntzak klaar.",
-    menu:{ snacks:{}, sauces:{mayo:true} },         // recipe unlocks are global across shops
-    shops:[ newShop('dorp') ], active:0,
-    queue:[], arrAcc:0, srvAcc:0,                   // runtime queue economy (active shop only)
-    lastSeen:0
-  };
-  G=g; mirrorFrom(g.shops[0]);                       // mirror the active shop's fields onto G
-  return g;
-};
-
-/* ---------- neighbourhoods & demographics (research CULTURE.md; map-ready) ---------- */
-// each district draws its customers from a different archetype mix + base foot traffic.
-// You set ONE shop policy (sliders + menu); who lines up depends on WHERE you are.
-var archById=function(id){ for(var i=0;i<ARCHETYPES.length;i++) if(ARCHETYPES[i].id===id) return ARCHETYPES[i]; return ARCHETYPES[0]; };
-var DISTRICTS=[
-  {id:'dorp',    name:"'t Dorpsplein",     emoji:'🏘️', foot:1.00, weights:{vaste:3,werk:2,familie:2,student:1,purist:1,nacht:1,toerist:0.6}},
-  {id:'student', name:'Studentenwijk',     emoji:'🎓', foot:1.25, weights:{student:5,nacht:2,werk:1,vaste:1,toerist:1}},
-  {id:'uitgaan', name:'Uitgaansbuurt',     emoji:'🌃', foot:1.15, weights:{nacht:5,student:2,toerist:1,werk:1}},
-  {id:'chic',    name:'Deftige laan',      emoji:'🎩', foot:0.85, weights:{purist:4,toerist:2,vaste:2,familie:1}},
-  {id:'markt',   name:'Marktplein',        emoji:'🧺', foot:1.10, weights:{familie:3,vaste:3,werk:2,toerist:2,purist:1}},
-  {id:'toerist', name:'Toeristische kern', emoji:'📸', foot:1.20, weights:{toerist:5,vaste:1,familie:1,purist:1}}
-];
-var districtById=function(id){ for(var i=0;i<DISTRICTS.length;i++) if(DISTRICTS[i].id===id) return DISTRICTS[i]; return DISTRICTS[0]; };
-// weighted archetype draw from a district's demographic mix
-var archetypeFor=function(weights,r){
-  var ids=Object.keys(weights), tot=0, i;
-  for(i=0;i<ids.length;i++) tot+=weights[ids[i]];
-  var x=(r==null?Math.random():r)*tot;
-  for(i=0;i<ids.length;i++){ x-=weights[ids[i]]; if(x<=0) return archById(ids[i]); }
-  return archById(ids[ids.length-1]);
-};
-
-/* ---------- "ken je buurt": read the local demographic mix ---------- */
-// the customer mix of a district as [{arch, pct}] sorted most-common first
-var demographicMix=function(districtId){ var w=districtById(districtId).weights, tot=0, out=[], k;
-  for(k in w) tot+=w[k];
-  for(k in w) out.push({ arch:archById(k), pct:w[k]/tot });
-  out.sort(function(a,b){ return b.pct-a.pct; }); return out; };
-// the crispness that best fits the whole neighbourhood (demand-weighted band centre)
-var suggestedCrisp=function(districtId){ var s=0; demographicMix(districtId).forEach(function(m){
-  s+=m.pct*(m.arch.band[0]+m.arch.band[1])/2; }); return Math.round(s); };
-// AFSCA-style hygiene "Smiley" from the frying-fat freshness
-var hygieneRating=function(oil){
-  if(oil>=60) return {emoji:'😊', label:'proper',        grade:'A', cls:'good'};
-  if(oil>=35) return {emoji:'🙂', label:'oké',           grade:'B', cls:'good'};
-  if(oil>=20) return {emoji:'😐', label:'twijfelachtig', grade:'C', cls:'warn'};
-  return          {emoji:'🤢', label:'vies',          grade:'D', cls:'bad'}; };
-
-/* ---------- shady operations & the inspector (research COMPETITORS_AND_SHADY.md) ---------- */
-// satirical, fictional risk/reward toggles. Each raises HEAT (0-100) which drives inspections.
-var SHADY=[
-  {id:'cheapMeat',   name:'Goedkoop vlees',  emoji:'🐀', heat:0.55, desc:'+6% inkomsten · −tevredenheid · schandaalrisico'},
-  {id:'shortPortion',name:'Krappe porties',  emoji:'📏', heat:0.45, desc:'+8% inkomsten · −tevredenheid'},
-  {id:'taxDodge',    name:'Zwart geld',       emoji:'💸', heat:0.40, desc:'+12% inkomsten · fiscaal risico'},
-  {id:'underpay',    name:'Onderbetalen',     emoji:'⛓️', heat:0.35, desc:'Halve lonen · personeel loopt weg'}
-];
-var shadyOn=function(sh,id){ return !!(sh.shady&&sh.shady[id]); };
-var shadyIncomeMul=function(sh){ return (shadyOn(sh,'taxDodge')?1.12:1)*(shadyOn(sh,'shortPortion')?1.08:1)*(shadyOn(sh,'cheapMeat')?1.06:1); };
-var shadySatPenalty=function(sh){ return (shadyOn(sh,'shortPortion')?0.06:0)+(shadyOn(sh,'cheapMeat')?0.05:0); };
-var heatRate=function(sh){ var r=0; SHADY.forEach(function(x){ if(shadyOn(sh,x.id)) r+=x.heat; }); return r; };
-// chance of an AFSCA/tax inspection at day's end, from HEAT + poor hygiene
-var inspectionRisk=function(sh){ var hy=hygieneRating(sh.oil||0);
-  return clamp(0.04 + (sh.heat||0)/260 + (hy.grade==='D'?0.18:hy.grade==='C'?0.08:0), 0, 0.85); };
-
-/* ---------- customer generation ---------- */
-var makeCustomer=function(G){
-  var a=archetypeFor(districtById(G.district).weights);
-  var size=pick(a.sizes);
-  var sauce=(Math.random()<0.78)?pick(SAUCES):null;   // may want a sauce you haven't unlocked yet
-  var snack=(Math.random()<0.5)?pick(SNACKS):null;    // ... same for a snack
+/* ---------- pure game logic ---------- */
+// difficulty ramps with how many you've served
+var diffOf=function(served){ return 1+served*0.06; };
+// a new order; harder diff → more likely to want a snack and a sauce, less patience
+var newOrder=function(served){
+  var d=diffOf(served);
+  var crisp=pick(CRISP);
+  var wantSnack=Math.random()<clamp(0.35+served*0.03,0,0.9);
+  var wantSauce=Math.random()<clamp(0.5+served*0.03,0,0.95);
+  var patience=clamp(11-served*0.28, 4.5, 11);           // seconds
   return {
-    arch:a, size:size, sauce:sauce, snack:snack,
-    pat:a.pat*3, patMax:a.pat*3, wait:0,               // patience = seconds willing to wait in line
-    crispWord: crispLabel((a.band[0]+a.band[1])/2), shirt: SHIRTS[a.col]||'#888'
+    crisp:crisp.id, band:crisp.band.slice(),
+    snack: wantSnack? pick(SNACKS).id : null,
+    sauce: wantSauce? pick(SAUCES).id : null,
+    pat:patience, patMax:patience
   };
+};
+// fries doneness → quality vs the wanted band (0..1). Both raw and burnt are bad.
+var friesQuality=function(done,band){
+  if(done>=92) return clamp(0.25-(done-92)*0.03,0,0.25);   // burnt
+  var lo=band[0],hi=band[1],c=(lo+hi)/2,half=(hi-lo)/2;
+  var dist=Math.max(0,Math.abs(done-c)-half);
+  return clamp(1-dist/26,0,1);
+};
+// score a served tray against the order → {ok, quality, perfect, tip}
+var scoreServe=function(order,tray,patienceFrac,combo){
+  var fq = (tray.friesQ==null)? 0 : friesQuality(tray.friesQ, order.band);
+  var snackOK = (order.snack||null)===(tray.snack||null);
+  var sauceOK = (order.sauce||null)===(tray.sauce||null);
+  var quality = fq*0.5 + (snackOK?0.25:0) + (sauceOK?0.25:0);
+  var perfect = fq>=0.85 && snackOK && sauceOK;
+  var speed = clamp(patienceFrac,0,1);
+  var mult = 1 + Math.min(combo,20)*0.15;
+  var base = 10 + (order.snack?6:0) + (order.sauce?4:0);
+  var tip = Math.round(base*(0.35+quality)*(1+speed*0.8)*mult);
+  return { ok:quality>=0.6, quality:quality, perfect:perfect, tip:tip, snackOK:snackOK, sauceOK:sauceOK, fq:fq };
 };
 
 /* =========================================================================
-   Everything below is the live game (DOM + canvas). Guarded so it also
-   survives a headless stub-DOM eval (tests only read the pure fns above).
+   Live game (DOM + canvas). Guarded for headless eval (tests read pure fns).
    ========================================================================= */
-var G=freshGame();
-var SAVE_KEY='ft_save_v1';
-
-/* ---------- persistence ---------- */
-var save=function(){ try{ snapshotActive(); G.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){} };
-var load=function(){
-  try{
-    var s=localStorage.getItem(SAVE_KEY); if(!s) return false;
-    var o=JSON.parse(s); if(!o||o.v!==1) return false;
-    for(var k in o) if(o.hasOwnProperty(k)) G[k]=o[k];
-    // global menu-unlocks migration/guards
-    if(!G.menu) G.menu={snacks:{},sauces:{mayo:true}};
-    if(!G.menu.snacks) G.menu.snacks={};
-    if(!G.menu.sauces) G.menu.sauces={mayo:true};
-    if(G.menu.snacks.frikandel){ G.menu.snacks.curryworst=true; delete G.menu.snacks.frikandel; }
-    if(G.menu.snacks.mexicano){ G.menu.snacks.cervela=true; delete G.menu.snacks.mexicano; }
-    // multi-shop migration: wrap a pre-multishop flat save into one shop
-    if(!G.shops){ var s0={}; for(var i=0;i<SHOP_FIELDS.length;i++) s0[SHOP_FIELDS[i]]=G[SHOP_FIELDS[i]]; G.shops=[s0]; G.active=0; }
-    if(G.active==null||G.active<0||G.active>=G.shops.length) G.active=0;
-    // fill each shop's fields with sane defaults (backfills newly-added items too)
-    G.shops.forEach(function(s){
-      s.prices=Object.assign(defaultPrices(), s.prices||{});
-      if(!s.up) s.up={potato:0,fryer:0,doublefry:0,filter:0};
-      if(s.staff==null) s.staff=0; if(s.rep==null) s.rep=6; if(s.satAvg==null) s.satAvg=0;
-      if(s.oil==null) s.oil=100; if(!s.district) s.district='dorp'; if(!s.fat) s.fat='blend';
-      if(s.crisp==null) s.crisp=52; if(s.served==null) s.served=0; if(!s.shop) s.shop=pickShopName();
-      if(!s.shady) s.shady={}; if(s.heat==null) s.heat=0; if(s.closedDays==null) s.closedDays=0;
-    });
-    if(G.year==null) G.year=START_YEAR; if(!G.firedEvents) G.firedEvents=[]; if(G.eventDaysLeft==null) G.eventDaysLeft=0;
-    mirrorFrom(G.shops[G.active]);           // load the active shop into the live fields
-    G.queue=[]; G.arrAcc=0; G.srvAcc=0;       // rebuild the line fresh
-    return true;
-  }catch(e){ return false; }
-};
-
-/* ---------- DOM refs (all optional under stub) ---------- */
+var HS_KEY='ftrush_hs';
 var $=function(id){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById(id):null; };
 var scene=$('scene'), ctx=scene&&scene.getContext?scene.getContext('2d'):null;
-var floatL=$('float');
+var fxL=$('fx');
 
-/* =========================================================================
-   PIXEL ART  — cozy hand-drawn frituur at dusk.  Virtual 192x128 grid.
-   ========================================================================= */
-var VW=192, VH=128;
-// palette
-var C={
-  sky1:'#241a3a', sky2:'#4a2f52', sky3:'#c9683f', star:'#fff4c2', moon:'#f7ecc0',
-  brick:'#5a3733', brick2:'#4a2c29', mortar:'#3a2320', win:'#2a2036', winlit:'#ffd36b',
-  wood:'#7a4a28', wood2:'#603a1f', wooddk:'#472a16', counter:'#8a5a30',
-  metal:'#8f97a6', metal2:'#6a707d', metaldk:'#474b56',
-  signbg:'#1a1220', signOn:'#ffd447', signGlow:'#ffb02e',
-  ground:'#241a26', ground2:'#1a121c', pave:'#2e2330',
-  skin:'#e5b78e', apron:'#f2ede0', apron2:'#d8d0bd',
-  fry:'#e8b84a', frydk:'#c78e2f', sauceA:'#e5624a', sauceB:'#f0d040', sauceC:'#e8e2cf',
-  steam:'#ffffff', black:'#120c18'
+var G=null;
+var freshRun=function(){
+  return { running:false, score:0, tips:0, combo:0, strikes:0, served:0,
+    order:null, tray:{friesQ:null,snack:null,sauce:null},
+    basket:'empty', done:0, sinceServe:0, T:0 };
 };
-var SHIRTS={brn:'#8a5a30',red:'#c0453a',yel:'#d8a53a',grn:'#4f9a55',pur:'#7a4f9a',blu:'#3f6fb0',cyn:'#3fa7b0'};
 
-// pixel primitives
+/* ---------- pixel scene ---------- */
+var VW=200, VH=120;
+var C={ sky1:'#241a3a',sky2:'#4a2f52',sky3:'#c9683f',star:'#fff4c2',
+  brick:'#5a3733',win:'#2a2036',winlit:'#ffd36b',wood:'#7a4a28',wood2:'#603a1f',wooddk:'#472a16',
+  metal:'#8f97a6',metal2:'#6a707d',metaldk:'#474b56',fry:'#e8b84a',frydk:'#c78e2f',
+  counter:'#8a5a30',skin:'#e5b78e',apron:'#f2ede0',black:'#120c18',signOn:'#ffd447' };
+var SHIRTS=['#8a5a30','#c0453a','#d8a53a','#4f9a55','#7a4f9a','#3f6fb0','#3fa7b0'];
 var px=function(x,y,w,h,col){ if(!ctx)return; ctx.fillStyle=col; ctx.fillRect(x|0,y|0,w|0,h|0); };
-// sprite: array of strings + palette map ('.'=transparent)
-var spr=function(rows,ox,oy,pal){
-  if(!ctx) return;
-  for(var y=0;y<rows.length;y++){ var r=rows[y];
-    for(var x=0;x<r.length;x++){ var ch=r[x]; if(ch===' '||ch==='.') continue;
-      var col=pal[ch]; if(col){ ctx.fillStyle=col; ctx.fillRect(ox+x,oy+y,1,1); } }
-  }
+var CUST=["..hhh..",".hhhhh.",".sssss.",".s.s.s.",".sssss.","..ttt..",".ttttt.","tttttt.",".t...t.",".L...L."];
+var drawCust=function(ox,oy,shirt,mood){
+  var pal={h:'#2c211a',s:C.skin,t:shirt,L:'#3a2f26'};
+  for(var y=0;y<CUST.length;y++){var r=CUST[y];for(var x=0;x<r.length;x++){var ch=r[x];if(ch==='.'||ch===' ')continue;
+    ctx.fillStyle=pal[ch];ctx.fillRect(ox+x,oy+y,1,1);}}
+  // mood dot
+  ctx.fillStyle= mood>0.5?'#7bd66b':mood>0.25?'#f0a93b':'#e5624a';
+  ctx.fillRect(ox+2,oy+3,1,1); ctx.fillRect(ox+4,oy+3,1,1);
 };
-
-// ---- sprite: the uitbater (owner) behind the counter ----
-var OWNER=[
-  "..hhh..",
-  ".hhhhh.",
-  ".sksks.",   // face
-  ".sssss.",
-  "..mmm..",
-  ".aaaaa.",   // apron
-  "aaAAAaa",
-  "aaAAAaa",
-  ".a.a.a.",
-  ".w...w."
-];
-var ownerPal=function(){ return {h:'#3a2a1e',s:C.skin,k:C.black,m:'#c88',a:C.apron,A:C.apron2,w:C.wooddk}; };
-
-// ---- sprite: a customer (recolored by shirt) ----
-var CUST=[
-  "..hhh..",
-  ".hhhhh.",
-  ".sssss.",
-  ".s.s.s.",   // face w/ eyes gap
-  ".sssss.",
-  "..ttt..",
-  ".ttttt.",
-  "tttttt t",
-  ".t...t.",
-  ".t...t.",
-  ".L...L."
-];
-var custPal=function(shirt){ return {h:'#2c211a',s:C.skin,t:shirt,L:'#3a2f26'}; };
-
-// ---- sprite: parked 90s boxy car ----
-var CAR=[
-  "..bbbbbbbb..",
-  ".bbwwwwwwbb.",
-  "bbbbbbbbbbbb",
-  "bBbbbbbbbBbb",
-  ".oo......oo."
-];
-var carPal=function(body){ return {b:body,w:'#bfe0ff',B:'#ffe27a',o:'#1a1a1a'}; };
-
-// ---- sprite: puntzak of fries ----
-var CONE=[
-  "ffff",
-  "ffFf",
-  "fFff",
-  ".ww.",
-  ".ww.",
-  "..w."
-];
-var conePal={f:C.fry,F:C.frydk,w:'#e9e0cc'};
-
-// particles (bubbles + steam)
 var parts=[];
-var emit=function(x,y,kind){ parts.push({x:x,y:y,vy:kind==='steam'?-0.28:-0.5,life:kind==='steam'?rnd(20,34):rnd(10,20),kind:kind,r:kind==='steam'?1:1}); };
-
-var T=0; // anim clock (seconds)
-
+var T=0;
 var drawScene=function(){
   if(!ctx) return;
-  // resize backing store to element (crisp integer scale handled by CSS pixelated)
-  // ---- sky ----
-  var g=ctx.createLinearGradient(0,0,0,VH);
-  g.addColorStop(0,C.sky1); g.addColorStop(0.55,C.sky2); g.addColorStop(1,C.sky3);
+  var g=ctx.createLinearGradient(0,0,0,VH); g.addColorStop(0,C.sky1);g.addColorStop(.55,C.sky2);g.addColorStop(1,C.sky3);
   ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
-  // stars
-  for(var i=0;i<34;i++){ var sx=(i*53%VW), sy=(i*29%54); var tw=(Math.sin(T*2+i)*0.5+0.5);
-    ctx.fillStyle=C.star; ctx.globalAlpha=0.35+tw*0.5; ctx.fillRect(sx,sy,1,1); }
+  for(var i=0;i<26;i++){var sx=(i*61%VW),sy=(i*29%46);ctx.globalAlpha=.3+.5*(Math.sin(T*2+i)*.5+.5);ctx.fillStyle=C.star;ctx.fillRect(sx,sy,1,1);}
   ctx.globalAlpha=1;
-  // moon
-  px(150,14,10,10,C.moon); px(150,14,3,3,C.sky2);
-  // ---- back row houses (silhouette w/ lit windows) ----
-  var roof=64;
-  px(0,roof,VW,VH-roof,C.brick2);
-  for(var hx=0;hx<VW;hx+=26){
-    px(hx,roof-10,24,10,C.brick);
-    // windows
-    var lit=((hx/26|0)+G.day)%3===0;
-    px(hx+5,roof-7,5,5, lit?C.winlit:C.win);
-    px(hx+14,roof-7,5,5, ((hx/26|0)%2)?C.winlit:C.win);
-    px(hx,roof-11,24,1,C.mortar);
+  // building
+  var by=42,bh=64,bx=44,bw=112;
+  px(0,by+2,VW,VH,C.brick);
+  for(var hx=0;hx<VW;hx+=24){ px(hx+4,by-6,5,5,((hx/24|0)+ (G?G.served:0))%3?C.win:C.winlit); }
+  px(bx,by,bw,bh,C.wood); for(var pl=bx;pl<bx+bw;pl+=8) px(pl,by,1,bh,C.wooddk);
+  px(bx-4,by-7,bw+8,7,C.brick); for(var st=bx-4;st<bx+bw+4;st+=10) px(st,by-7,5,7,'#c0453a');
+  // sign
+  var fl=.7+.3*Math.sin(T*7); ctx.globalAlpha=clamp(fl,.4,1);
+  drawSign(bx+30,by-20,"FRIETKOT",clamp(fl,.5,1)); ctx.globalAlpha=1;
+  // window + fryer
+  var wx=bx+8,wy=by+8,ww=96,wh=42; px(wx-2,wy-2,ww+4,wh+4,C.wooddk); px(wx,wy,ww,wh,'#241a22');
+  var ig=ctx.createRadialGradient(wx+ww/2,wy+wh/2,4,wx+ww/2,wy+wh/2,60);ig.addColorStop(0,'#5a3d20');ig.addColorStop(1,'#241a22');
+  ctx.fillStyle=ig;ctx.fillRect(wx,wy,ww,wh);
+  // owner (you)
+  px(wx+42,wy+14,7,3,'#3a2a1e'); px(wx+42,wy+17,7,4,C.skin); px(wx+42,wy+21,7,6,C.apron);
+  // fryer with baskets
+  var frx=wx+8,fry=wy+wh-18; px(frx-1,fry-1,40,16,C.metaldk); px(frx,fry,38,14,C.metal2); px(frx+2,fry+2,34,3,C.metal);
+  var oilc=(G&&G.basket==='frying')? (G.done>=92?'#4a3414':'#e8c85a') : '#c79a34';
+  px(frx+2,fry+6,34,6,oilc);
+  if(G&&G.basket!=='empty'){ // basket in oil with fries
+    var col=G.done>=92?'#3a2a12':(G.done>=70?'#e8b84a':G.done>=45?'#e8c85a':'#f0e0a0');
+    for(var f=0;f<10;f++){ px(frx+8+f*2, fry+3+Math.sin(T*8+f)*0.6,1,4,col); }
+    if(G.basket==='frying' && Math.random()<0.5) parts.push({x:frx+8+Math.random()*20,y:fry+4,vy:-0.5,life:rnd(8,16),c:'#fff2c8'});
   }
-  // ground / pavement
-  px(0,VH-16,VW,16,C.ground); px(0,VH-16,VW,2,C.pave);
-  for(var pv=0;pv<VW;pv+=12) px(pv,VH-15,1,13,C.ground2);
-
-  // ---- parked car on the left (drives the 90s vibe) ----
-  spr(CAR,6,VH-30,carPal('#5a7d9a'));
-
-  // lamppost
-  px(44,VH-52,2,40,C.metaldk); px(41,VH-54,8,4,C.metal2);
-  ctx.fillStyle='#ffdf9a'; ctx.globalAlpha=0.18; ctx.beginPath?0:0; px(38,VH-52,14,10,'#ffdf9a'); ctx.globalAlpha=1;
-
-  // =================== THE FRIETKOT ===================
-  var bx=70, by=40, bw=112, bh=72;
-  // body
-  px(bx,by,bw,bh,C.wood); px(bx,by,bw,3,C.wood2);
-  for(var pl=bx;pl<bx+bw;pl+=8) px(pl,by,1,bh,C.wooddk); // planks
-  px(bx,by+bh-4,bw,4,C.wooddk);
-  // roof/awning
-  px(bx-4,by-6,bw+8,7,C.brick); px(bx-4,by-6,bw+8,2,'#7a4d48');
-  for(var st=bx-4;st<bx+bw+4;st+=10){ px(st,by-6,5,7,'#c0453a'); } // red/white stripes
-  // ---- backlit FRITUUR sign ----
-  var flick=0.7+0.3*Math.sin(T*7)+ (Math.random()<0.03?-0.4:0);
-  px(bx+18,by-20,76,14,C.signbg);
-  ctx.globalAlpha=clamp(flick,0.3,1); px(bx+18,by-20,76,14,'#2a1f10'); ctx.globalAlpha=1;
-  // sign text (blocky letters)
-  drawSign(bx+22,by-17, "FRITUUR", clamp(flick,0.4,1));
-  // sign glow
-  ctx.globalAlpha=0.12*clamp(flick,0,1); px(bx+10,by-24,92,24,C.signGlow); ctx.globalAlpha=1;
-
-  // ---- serving window (dark interior, warm light) ----
-  var wx=bx+10, wy=by+10, ww=92, wh=40;
-  px(wx-2,wy-2,ww+4,wh+4,C.wooddk);
-  px(wx,wy,ww,wh,'#241a22');
-  // warm interior glow
-  var ig=ctx.createRadialGradient(wx+ww/2,wy+wh/2,4,wx+ww/2,wy+wh/2,60);
-  ig.addColorStop(0,'#5a3d20'); ig.addColorStop(1,'#241a22');
-  ctx.fillStyle=ig; ctx.fillRect(wx,wy,ww,wh);
-  // hanging bulb
-  px(wx+30,wy,1,5,'#000'); px(wx+28,wy+5,5,4,'#ffdf9a');
-  ctx.globalAlpha=0.15; px(wx+24,wy+3,13,12,'#ffdf9a'); ctx.globalAlpha=1;
-
-  // ---- menu board (franc prices) ----
-  px(wx+ww-22,wy+3,20,26,'#20304a'); px(wx+ww-22,wy+3,20,1,'#3f6fb0');
-  for(var ml=0;ml<4;ml++){ px(wx+ww-19,wy+7+ml*5,10,1,'#8fb4d8'); px(wx+ww-7,wy+7+ml*5,4,1,C.signOn); }
-
-  // ---- the fryer (oil color = freshness) ----
-  var frx=wx+6, fry=wy+wh-16;
-  px(frx-1,fry-1,34,15,C.metaldk);
-  px(frx,fry,32,13,C.metal2);
-  px(frx+2,fry+2,28,3,C.metal); // rim highlight
-  // oil surface colour by freshness
-  var oilc = G.oil>=60?'#e8c85a' : G.oil>=35?'#c79a34' : G.oil>=20?'#8f6a22' : '#4a3414';
-  px(frx+2,fry+5,28,6,oilc);
-  // basket
-  px(frx+6,fry+3,16,7,C.metaldk); px(frx+7,fry+4,14,1,C.metal);
-  // frying fries wiggling
-  for(var fpi=0;fpi<9;fpi++){ var fxp=frx+8+fpi*1.5, fyp=fry+4+Math.sin(T*6+fpi)*0.6;
-    px(fxp,fyp,1,4,C.fry); }
-  // bubbles
-  if(Math.random()<0.5) emit(frx+8+Math.random()*14, fry+6,'bubble');
-  if(G.oil<25 && Math.random()<0.4) emit(frx+8+Math.random()*14, fry+3,'steam'); // smoke when old
-
-  // ---- sauce fridge ----
-  px(wx+40,wy+8,16,21,C.metaldk); px(wx+41,wy+9,14,19,'#2a3a44');
-  px(wx+42,wy+11,3,6,C.sauceA); px(wx+46,wy+11,3,6,C.sauceB); px(wx+50,wy+11,3,6,C.sauceC);
-  px(wx+42,wy+19,3,6,C.sauceB); px(wx+46,wy+19,3,6,C.sauceA); px(wx+50,wy+19,3,6,'#c98b3a');
-  px(wx+40,wy+8,16,1,'#8fb4d8');
-
-  // ---- the owner (you) behind the counter ----
-  spr(OWNER, wx+20, wy+18, ownerPal());
-
-  // ---- counter ledge ----
-  px(bx+6,by+bh-8,bw-12,6,C.counter); px(bx+6,by+bh-8,bw-12,1,'#a9743e');
-
-  // =================== THE QUEUE lining up out front ===================
-  var qn=Math.min(G.queue.length,7);
-  if(qn>0){
-    for(var qq=qn-1;qq>=0;qq--){ var cbob=Math.sin(T*3+qq*1.7)*1;   // draw back-to-front
-      spr(CUST, 98-qq*13, VH-27+cbob, custPal(G.queue[qq].shirt||'#888')); }
-  } else {
-    spr(CONE, bx+50, by+bh-16, conePal); // empty: a lone puntzak on the counter
-  }
-
-  // =================== particles ===================
-  for(var p=parts.length-1;p>=0;p--){ var pt=parts[p]; pt.y+=pt.vy; pt.life--;
-    if(pt.life<=0){ parts.splice(p,1); continue; }
-    ctx.globalAlpha = pt.kind==='steam'? clamp(pt.life/34,0,0.5) : clamp(pt.life/20,0,0.8);
-    ctx.fillStyle = pt.kind==='steam'? '#d9c9a9' : '#fff2c8';
-    ctx.fillRect(pt.x|0,pt.y|0,1,1);
-  }
-  ctx.globalAlpha=1;
-
-  // dusk tint by day-progress (evening → night)
-  var night=clamp((G.dayT/G.dayLen),0,1);
-  ctx.globalAlpha=0.18*night; ctx.fillStyle='#0a0a2a'; ctx.fillRect(0,0,VW,VH); ctx.globalAlpha=1;
-};
-
-// blocky 5px sign font (only the letters we need)
-var FONT={
-  F:["111","100","110","100","100"], R:["110","101","110","101","101"],
-  I:["111","010","010","010","111"], T:["111","010","010","010","010"],
-  U:["101","101","101","101","111"]
-};
-var drawSign=function(x,y,txt,glow){
-  var cx=x;
-  for(var i=0;i<txt.length;i++){ var gl=FONT[txt[i]]; if(!gl){cx+=4;continue;}
-    for(var yy=0;yy<gl.length;yy++) for(var xx=0;xx<3;xx++)
-      if(gl[yy][xx]==='1'){ ctx.fillStyle=C.signOn; ctx.globalAlpha=glow; ctx.fillRect(cx+xx,y+yy,1,1); }
-    cx+=4;
-  }
+  // sauce fridge
+  px(wx+58,wy+8,16,22,C.metaldk); px(wx+59,wy+9,14,20,'#2a3a44');
+  px(wx+61,wy+11,3,6,'#e5624a');px(wx+65,wy+11,3,6,'#f0d040');px(wx+69,wy+11,3,6,'#e8e2cf');
+  // counter ledge
+  px(bx+6,by+bh-8,bw-12,6,C.counter);
+  // waiting customer(s)
+  if(G&&G.order){ var mood=G.order.pat/G.order.patMax; drawCust(96,VH-24+Math.sin(T*3),SHIRTS[G.served%SHIRTS.length],mood); }
+  // particles
+  for(var p=parts.length-1;p>=0;p--){var pt=parts[p];pt.y+=pt.vy;pt.life--;if(pt.life<=0){parts.splice(p,1);continue;}
+    ctx.globalAlpha=clamp(pt.life/16,0,.8);ctx.fillStyle=pt.c;ctx.fillRect(pt.x|0,pt.y|0,1,1);}
   ctx.globalAlpha=1;
 };
+var FONT={F:["111","100","110","100","100"],R:["110","101","110","101","101"],I:["111","010","010","010","111"],
+  E:["111","100","110","100","111"],T:["111","010","010","010","010"],K:["101","110","100","110","101"],O:["111","101","101","101","111"]};
+var drawSign=function(x,y,txt,glow){var cx=x;for(var i=0;i<txt.length;i++){var gl=FONT[txt[i]];if(!gl){cx+=4;continue;}
+  for(var yy=0;yy<5;yy++)for(var xx=0;xx<3;xx++)if(gl[yy][xx]==='1'){ctx.fillStyle=C.signOn;ctx.globalAlpha=glow;ctx.fillRect(cx+xx,y+yy,1,1);}cx+=4;}ctx.globalAlpha=1;};
 
-/* =========================================================================
-   UI wiring
-   ========================================================================= */
+/* ---------- audio (tiny synth, guarded) ---------- */
+var AC=null;
+var beep=function(freq,dur,type,vol){ try{
+  if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); }
+  var o=AC.createOscillator(),g=AC.createGain(); o.type=type||'square'; o.frequency.value=freq;
+  g.gain.value=vol||0.06; o.connect(g); g.connect(AC.destination); o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime+(dur||0.1)); o.stop(AC.currentTime+(dur||0.1));
+}catch(e){} };
+var sfxDrop=function(){ beep(180,0.12,'sawtooth',0.05); };
+var sfxLift=function(ok){ beep(ok?520:200,0.12,'square',0.06); };
+var sfxServe=function(perfect){ if(perfect){ beep(660,0.09,'square',0.07); setTimeout(function(){beep(880,0.12,'square',0.07);},90);} else beep(440,0.1,'square',0.06); };
+var sfxFail=function(){ beep(120,0.25,'sawtooth',0.07); };
+
+/* ---------- DOM refs & UI build ---------- */
 var el={};
-var bindUI=function(){
-  if(typeof document==='undefined'||!document.getElementById) return;
-  ['shopName','dayN','repN','money','shopsN','yearN','newsTxt','buurtAv','buurtName','buurtStat','satBar',
-   'crisp','crispV','oilPct','oilBar','fatSeg',
-   'oilBtn','oilCost','rate','resetBtn',
-   'shopBtn','shopClose','upgList','staffBox','snackList','sauceList','shadyBox',
-   'pricesBtn','pricesSheet','pricesClose','priceSizes','priceSnacks','priceSauces',
-   'mapBtn','mapClose','mapList','order','biClose','biMix','biHyg'].forEach(function(id){ el[id]=$(id); });
+var buildStations=function(){
+  if(!$('snackRow')) return;
+  var sr=$('snackRow'); sr.innerHTML='<div class="lab">snack</div>';
+  SNACKS.forEach(function(s){ var b=document.createElement('div'); b.className='st'; b.dataset.snack=s.id;
+    b.innerHTML=s.emoji+'<span class="nm">'+s.nm+'</span>'; b.onclick=function(){ tapSnack(s.id); }; sr.appendChild(b); });
+  var qr=$('sauceRow'); qr.innerHTML='<div class="lab">saus</div>';
+  SAUCES.forEach(function(s){ var b=document.createElement('div'); b.className='st'; b.dataset.sauce=s.id;
+    b.innerHTML=s.emoji+'<span class="nm">'+s.nm+'</span>'; b.onclick=function(){ tapSauce(s.id); }; qr.appendChild(b); });
+};
+var refEls=function(){ ['score','tips','combo','strikes','custAv','orderTokens','patBar','fryBtn','serveBtn',
+  'doneLbl','marker','zoneLo','zoneMid','zoneHi','zoneBurn','startScreen','overScreen','startBtn','againBtn',
+  'startHs','overHs','finalScore','overMsg'].forEach(function(id){ el[id]=$(id); }); };
 
-  // fat segmented
-  if(el.fatSeg){ el.fatSeg.innerHTML='';
-    FATS.forEach(function(f){ var b=document.createElement('button'); b.textContent=f.label; b.dataset.id=f.id;
-      b.onclick=function(){ G.fat=f.id; syncControls(); toast('Vet: <b>'+f.label+'</b>'); };
-      el.fatSeg.appendChild(b); }); }
-  if(el.crisp) el.crisp.oninput=function(){ G.crisp=+el.crisp.value; syncControls(); };
-  if(el.oilBtn) el.oilBtn.onclick=refreshOil;
-  if(el.shopBtn) el.shopBtn.onclick=openShop;
-  if(el.shopClose) el.shopClose.onclick=closeShop;
-  if(el.pricesBtn) el.pricesBtn.onclick=openPrices;
-  if(el.pricesClose) el.pricesClose.onclick=closePrices;
-  if(el.mapBtn) el.mapBtn.onclick=openMap;
-  if(el.mapClose) el.mapClose.onclick=closeMap;
-  if(el.order) el.order.onclick=openBuurtInfo;
-  if(el.biClose) el.biClose.onclick=closeBuurtInfo;
-  if(el.resetBtn) el.resetBtn.onclick=function(){
-    if(typeof confirm==='undefined'||confirm('Nieuw spel starten? Je huidige frituur gaat verloren.')){
-      G=freshGame(); save(); syncControls(); updateBuurt(); toast('Nieuwe frituur geopend!');
-    }
-  };
-  syncControls();
+/* ---------- gameplay actions ---------- */
+var startGame=function(){
+  G=freshRun(); G.running=true;
+  if(el.startScreen) el.startScreen.classList.add('hidden');
+  if(el.overScreen) el.overScreen.classList.add('hidden');
+  nextCustomer(); syncHUD();
 };
-
-var syncControls=function(){
-  if(!el.money) return;
-  el.shopName.textContent=G.shop;
-  if(el.shopsN) el.shopsN.textContent=G.shops.length;
-  if(el.yearN) el.yearN.textContent=G.year;
-  el.dayN.textContent=G.day;
-  el.repN.textContent=Math.round(G.rep);
-  el.money.textContent=fmtFr(G.money);
-  el.crisp.value=G.crisp; el.crispV.textContent=crispLabel(G.crisp);
-  Array.prototype.forEach.call(el.fatSeg.children,function(b){ b.classList.toggle('on',b.dataset.id===G.fat); });
-  var f=fatById(G.fat);
-  el.oilCost.textContent='−'+f.refill+' fr.';
-  el.oilPct.textContent=Math.round(G.oil)+'%';
-  var ob=el.oilBar;
-  ob.style.width=clamp(G.oil,0,100)+'%';
-  ob.style.background = G.oil>=60?'linear-gradient(90deg,#e8c85a,#ffd447)'
-    : G.oil>=35?'linear-gradient(90deg,#c79a34,#f0a93b)'
-    : G.oil>=20?'linear-gradient(90deg,#8f6a22,#e5624a)':'#4a3414';
-  el.oilBtn.classList.toggle('low',G.oil<30);
-  el.oilBtn.disabled = G.oil>=99 || G.money<f.refill;
-  el.newsTxt.textContent=G.news;
+var nextCustomer=function(){
+  G.order=newOrder(G.served);
+  G.tray={friesQ:null,snack:null,sauce:null}; G.basket='empty'; G.done=0;
+  renderOrder(); syncStations(); syncFry();
 };
-
-/* ---------- neighbourhood panel (hands-off: you set policy, the line serves itself) ---------- */
-var updateBuurt=function(){
-  if(!el.buurtName) return;
-  var d=districtById(G.district);
-  var arr=arrivalRate(G,G.demandMod), srv=serviceRate(G);
-  var thru=Math.min(arr,srv);                       // effective customers/sec actually served
-  var satPct=Math.round(G.satAvg*100);
-  var hy=hygieneRating(G.oil);
-  el.buurtAv.textContent=d.emoji;
-  var heatTxt=(G.heat>=8)?'  <span style="color:var(--'+(G.heat>=55?'bad':'warn')+')">🔥'+Math.round(G.heat)+'</span>':'';
-  el.buurtName.innerHTML='Buurt: '+d.name+'  <span style="color:var(--'+hy.cls+')">'+hy.emoji+' '+hy.grade+'</span>'+heatTxt
-    +'  <span style="font-weight:600;color:var(--ink2);font-size:11px">ⓘ ken je buurt</span>';
-  el.buurtStat.innerHTML=(G.closedDays>0)
-    ? '<em style="color:var(--bad)">🚔 GESLOTEN door controle — morgen weer open</em>'
-    : 'Rij <em>'+G.queue.length+'</em> · tevredenheid <em>'+satPct+'%</em>'
-      +' · <em>'+(arr*60).toFixed(0)+'</em> klanten/min'
-      +(srv<arr?' · <em style="color:var(--bad)">rij groeit!</em>':'');
-  el.satBar.style.width=clamp(satPct,0,100)+'%';
-  if(el.rate) el.rate.textContent='≈ '+(thru*avgTicket(G)).toFixed(0)+' fr./sec  ·  '+G.served
-    +' geserveerd'+(G.staff>0?'  ·  👤×'+G.staff:'');
+var tapFry=function(){
+  if(!G||!G.running||!G.order) return;
+  if(G.basket==='empty'){ G.basket='frying'; G.done=0; sfxDrop(); }
+  else if(G.basket==='frying'){ G.basket='ready'; G.tray.friesQ=G.done; sfxLift(friesQuality(G.done,G.order.band)>0.6); }
+  else if(G.basket==='ready'){ G.basket='frying'; G.done=0; G.tray.friesQ=null; sfxDrop(); } // re-fry
+  syncFry(); syncServe();
 };
-// rough average ticket used only for the fr./sec readout & offline estimate
-var avgTicket=function(G){ var t=0,n=0; SIZES.forEach(function(s){ t+=Math.max(6,priceOf(G,s.id)-s.cost); n++; });
-  return (t/n)*(1+0.55*(G.satAvg||0.5)); };
-
-var refreshOil=function(){
-  var f=fatById(G.fat);
-  if(G.oil>=99){ toast('Het vet is nog vers.'); return; }
-  if(G.money<f.refill){ toast('Te weinig geld voor vers vet.'); return; }
-  G.money-=f.refill; G.oil=100;
-  popScene('bad','−'+f.refill+' fr.'); toast('Vers <b>'+f.label+'</b>! De friet wordt weer goudgeel.');
-  save(); syncControls();
-};
-
-/* ---------- floating popups & toast ---------- */
-var popScene=function(kind,txt){
-  if(!floatL||!document.createElement) return;
-  var d=document.createElement('div'); d.className='pop '+kind; d.textContent=txt;
-  d.style.left=(38+Math.random()*20)+'%'; d.style.top=(52+Math.random()*10)+'%';
-  floatL.appendChild(d); setTimeout(function(){ d.remove&&d.remove(); },1150);
-};
-var toastT=null;
-var toast=function(html){
-  var t=$('toast'); if(!t) return; t.innerHTML=html; t.classList.add('show');
-  if(toastT) clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove('show'); },2200);
-};
-
-/* ---------- upgrades / menu sheet ---------- */
-var openShop=function(){ var s=$('shop'); if(s){ s.classList.remove('hidden'); renderShop(); } };
-var closeShop=function(){ var s=$('shop'); if(s) s.classList.add('hidden'); };
-var itemRow=function(icon,title,sub,btnHTML){
-  return '<div class="item"><div class="ic">'+icon+'</div><div class="info"><div class="t">'+title+
-    '</div><div class="s">'+sub+'</div></div>'+btnHTML+'</div>';
-};
-var dotsHTML=function(lvl,max){ var h=' <span class="dots">';
-  for(var i=0;i<max;i++) h+='<i class="'+(i<lvl?'on':'')+'"></i>'; return h+'</span>'; };
-var buyUpg=function(id){ var u=upgById(id); if(!u) return; var lvl=G.up[id]||0; if(lvl>=u.max) return;
-  var cost=upgradeCost(u.base,lvl); if(G.money<cost){ toast('Te weinig geld.'); return; }
-  G.money-=cost; G.up[id]=lvl+1; toast('🔧 <b>'+u.name+'</b> gekocht!'); save(); syncControls(); renderShop(); };
-var hireStaff=function(){ if(G.staff>=STAFF_MAX) return; if(G.money<STAFF_HIRE){ toast('Te weinig geld.'); return; }
-  G.money-=STAFF_HIRE; G.staff++; toast('🧑‍🍳 Uitbater aangenomen — hij bedient nu mee!'); save(); syncControls(); renderShop(); };
-var buyMenu=function(kind,id){ var m=(kind==='snacks'?snackById(id):sauceById(id)); if(!m) return;
-  if(G.menu[kind][id]) return; if(G.money<m.unlock){ toast('Te weinig geld.'); return; }
-  G.money-=m.unlock; G.menu[kind][id]=true; toast('📋 <b>'+m.label+'</b> staat nu op de kaart!'); save(); syncControls(); renderShop(); };
-var wireShopButtons=function(){
-  if(typeof document==='undefined'||!document.querySelectorAll) return;
-  var each=function(sel,mk){ Array.prototype.forEach.call(document.querySelectorAll(sel),function(b){ b.onclick=mk(b); }); };
-  each('[data-upg]',  function(b){ return function(){ buyUpg(b.getAttribute('data-upg')); }; });
-  each('[data-snack]',function(b){ return function(){ buyMenu('snacks',b.getAttribute('data-snack')); }; });
-  each('[data-sauce]',function(b){ return function(){ buyMenu('sauces',b.getAttribute('data-sauce')); }; });
-  each('[data-shady]',function(b){ return function(){ toggleShady(b.getAttribute('data-shady')); }; });
-  var hb=document.getElementById('hireBtn'); if(hb) hb.onclick=hireStaff;
-};
-var renderShop=function(){
-  if(!el.upgList) return;
-  var h='';
-  UPG.forEach(function(u){ var lvl=G.up[u.id]||0, maxed=lvl>=u.max, cost=upgradeCost(u.base,lvl);
-    var btn=maxed?'<button class="buy owned">✓ max</button>'
-      :'<button class="buy" data-upg="'+u.id+'"'+(G.money<cost?' disabled':'')+'>'+fmtFr(cost)+' fr.</button>';
-    h+=itemRow(u.emoji,u.name+(u.max>1?dotsHTML(lvl,u.max):''),u.desc,btn); });
-  el.upgList.innerHTML=h;
-  var sMax=G.staff>=STAFF_MAX;
-  var sBtn=sMax?'<button class="buy owned">✓ vol</button>'
-    :'<button class="buy" id="hireBtn"'+(G.money<STAFF_HIRE?' disabled':'')+'>'+fmtFr(STAFF_HIRE)+' fr.</button>';
-  el.staffBox.innerHTML=itemRow('🧑‍🍳','Frituuruitbater ('+G.staff+'/'+STAFF_MAX+')',
-    'Bedient je klanten automatisch. Loon <b>'+STAFF_WAGE+' fr./dag</b>. Verdient ook terwijl je weg bent.',sBtn);
-  var sn=''; SNACKS.forEach(function(m){ var owned=!!G.menu.snacks[m.id];
-    var btn=owned?'<button class="buy owned">✓ op de kaart</button>'
-      :'<button class="buy" data-snack="'+m.id+'"'+(G.money<m.unlock?' disabled':'')+'>'+fmtFr(m.unlock)+' fr.</button>';
-    sn+=itemRow(m.emoji,m.label,'Verkoop <b>'+m.price+' fr.</b> · inkoop '+m.cost+' fr.',btn); });
-  el.snackList.innerHTML=sn;
-  var sc=''; SAUCES.forEach(function(m){ var owned=(m.unlock===0)||!!G.menu.sauces[m.id];
-    var btn=owned?'<button class="buy owned">✓ op de kaart</button>'
-      :'<button class="buy" data-sauce="'+m.id+'"'+(G.money<m.unlock?' disabled':'')+'>'+fmtFr(m.unlock)+' fr.</button>';
-    sc+=itemRow('🥫',m.label,'Verkoop <b>'+m.price+' fr.</b> · inkoop '+m.cost+' fr.',btn); });
-  el.sauceList.innerHTML=sc;
-  // shady operations + Heat meter
-  if(el.shadyBox){
-    var risk=Math.round(inspectionRisk(G)*100), hy=hygieneRating(G.oil), hcol=risk>40?'bad':risk>18?'warn':'good';
-    var sh='<div class="prow"><div class="top"><div class="ic">🔥</div><div><div class="pt">Heat '+Math.round(G.heat||0)+'/100</div>'
-      +'<div class="psub">Inspectiekans/dag: <b style="color:var(--'+hcol+')">'+risk+'%</b> · hygiëne '+hy.grade+'</div></div></div>'
-      +'<div class="oilbar" style="margin-top:7px"><i style="width:'+clamp(G.heat||0,0,100)+'%;background:linear-gradient(90deg,#f0a93b,#e5624a)"></i></div></div>';
-    SHADY.forEach(function(x){ var on=shadyOn(G,x.id);
-      sh+='<div class="item"><div class="ic">'+x.emoji+'</div><div class="info"><div class="t">'+x.name+'</div>'
-        +'<div class="s">'+x.desc+'</div></div>'
-        +'<button class="buy" data-shady="'+x.id+'" style="'+(on?'background:linear-gradient(#e5624a,#c0453a);color:#fff':'background:var(--panel2);color:var(--ink2)')+'">'+(on?'AAN':'uit')+'</button></div>'; });
-    el.shadyBox.innerHTML=sh;
+var tapSnack=function(id){ if(!G||!G.running) return; G.tray.snack=(G.tray.snack===id)?null:id; syncStations(); syncServe(); beep(300,0.05,'square',0.04); };
+var tapSauce=function(id){ if(!G||!G.running) return; G.tray.sauce=(G.tray.sauce===id)?null:id; syncStations(); syncServe(); beep(360,0.05,'square',0.04); };
+var canServe=function(){ return G&&G.order&&G.tray.friesQ!=null; };
+var doServe=function(){
+  if(!canServe()) return;
+  var pf=G.order.pat/G.order.patMax;
+  var r=scoreServe(G.order,G.tray,pf,G.combo);
+  if(r.ok){ G.combo++; G.tips+=r.tip; G.score+=r.tip; G.served++;
+    var lab=r.perfect?'PERFECT!':r.quality>0.8?'Lekker!':'Goe zo';
+    popFx(lab,r.perfect?'#ffd447':'#7bd66b',r.perfect); coinBurst(Math.min(2+Math.round(r.tip/6),14));
+    popFx('+'+r.tip,'#ffd447',false,18); sfxServe(r.perfect); flashCombo();
+    if(r.perfect) shake();
+  } else {
+    G.combo=0; G.score+=Math.round(r.tip*0.3); G.served++;
+    popFx('bwah…','#e5624a',false); sfxFail(); shakeAvatar();
   }
-  wireShopButtons();
+  syncHUD(); nextCustomer();
 };
-var toggleShady=function(id){ if(!G.shady) G.shady={}; G.shady[id]=!G.shady[id];
-  var x=null; SHADY.forEach(function(y){ if(y.id===id) x=y; });
-  toast(G.shady[id]?'🕵️ <b>'+(x?x.name:id)+'</b> aan — pas op voor de controle!':'✅ <b>'+(x?x.name:id)+'</b> uit — terug netjes.');
-  save(); syncControls(); renderShop(); };
-
-/* ---------- price sheet (set a price per item, per shop) ---------- */
-var openPrices=function(){ var s=$('prices'); if(s){ s.classList.remove('hidden'); renderPrices(); } };
-var closePrices=function(){ var s=$('prices'); if(s) s.classList.add('hidden'); };
-var margNote=function(price,cost){ var m=price-cost, c=m>cost*1.5?'var(--good)':m>0?'var(--warn)':'var(--bad)';
-  return 'inkoop '+cost+' fr. · marge <b style="color:'+c+'">'+(m>=0?'+':'')+m+' fr.</b>'; };
-var priceRowHTML=function(sp){
-  var pr=priceOf(G,sp.id);
-  return '<div class="prow'+(sp.locked?' locked':'')+'"><div class="top">'
-    +'<div class="ic">'+sp.emoji+'</div>'
-    +'<div><div class="pt">'+sp.label+'</div><div class="psub">'
-    +(sp.locked?'inkoop '+sp.cost+' fr. · <b style="color:var(--warn)">nog niet op de kaart</b>':margNote(pr,sp.cost))
-    +'</div></div><div class="pv" data-pv="'+sp.id+'">'+pr+' fr.</div></div>'
-    +(sp.locked?'':'<input type="range" data-price="'+sp.id+'" min="'+sp.min+'" max="'+sp.max+'" step="5" value="'+pr+'">')
-    +'</div>';
+var walkout=function(){
+  G.combo=0; G.strikes++; popFx('KLANT WEG!','#e5624a',true); sfxFail(); shakeAvatar();
+  syncHUD();
+  if(G.strikes>=3){ gameOver(); } else nextCustomer();
 };
-var renderPrices=function(){
-  if(!el.priceSizes) return;
-  var ps=$('pricesShop'); if(ps) ps.textContent=G.shop;
-  el.priceSizes.innerHTML=SIZES.map(function(s){ return priceRowHTML({id:s.id,emoji:'🍟',label:s.label,cost:s.cost,
-    min:Math.max(15,Math.round(s.cost*1.3)),max:Math.round(s.base*2.6),locked:false}); }).join('');
-  el.priceSnacks.innerHTML=SNACKS.map(function(s){ return priceRowHTML({id:s.id,emoji:s.emoji,label:s.label,cost:s.cost,
-    min:Math.max(15,Math.round(s.cost*1.3)),max:Math.round(s.price*2.6),locked:!G.menu.snacks[s.id]}); }).join('');
-  el.priceSauces.innerHTML=SAUCES.map(function(s){ var unlocked=(s.unlock===0)||G.menu.sauces[s.id];
-    return priceRowHTML({id:s.id,emoji:'🥫',label:s.label,cost:s.cost,
-      min:Math.max(5,Math.round(s.cost*1.3)),max:Math.round(s.price*2.6),locked:!unlocked}); }).join('');
-  wirePriceSliders();
-};
-var wirePriceSliders=function(){
-  if(typeof document==='undefined'||!document.querySelectorAll) return;
-  Array.prototype.forEach.call(document.querySelectorAll('[data-price]'),function(inp){
-    inp.oninput=function(){ var id=inp.getAttribute('data-price'); G.prices[id]=+inp.value;
-      var pv=document.querySelector('[data-pv="'+id+'"]'); if(pv) pv.textContent=inp.value+' fr.';
-      var sub=inp.parentNode.querySelector('.psub'); if(sub) sub.innerHTML=margNote(+inp.value,itemCost(id));
-      save();
-    };
-  });
+var gameOver=function(){
+  G.running=false;
+  var hs=0; try{ hs=+localStorage.getItem(HS_KEY)||0; }catch(e){}
+  var isHS=G.score>hs; if(isHS){ try{ localStorage.setItem(HS_KEY,G.score); }catch(e){} }
+  if(el.finalScore) el.finalScore.textContent=G.score;
+  if(el.overMsg) el.overMsg.innerHTML=G.served+' klanten bediend'+(isHS?' · <b style="color:var(--gold)">NIEUW RECORD!</b>':'');
+  if(el.overHs) el.overHs.textContent='Record: '+Math.max(hs,G.score);
+  if(el.overScreen) el.overScreen.classList.remove('hidden');
 };
 
-/* ---------- the map: multiple frietkoten across the town ---------- */
-var ownsDistrict=function(id){ for(var i=0;i<G.shops.length;i++) if(G.shops[i].district===id) return i; return -1; };
-var topArch=function(d){ var best=null,bw=-1; for(var k in d.weights) if(d.weights[k]>bw){bw=d.weights[k];best=k;}
-  var a=archById(best); return a?a.name:'iedereen'; };
-var activateShop=function(i){ if(i===G.active||!G.shops[i]) return;
-  snapshotActive(); G.active=i; mirrorFrom(G.shops[i]); G.queue=[]; G.arrAcc=0; G.srvAcc=0;
-  save(); syncControls(); updateBuurt(); toast('Nu aan het beheren: <b>'+G.shop+'</b>'); };
-var openFrietkot=function(districtId){
-  if(ownsDistrict(districtId)>=0){ toast('Je hebt hier al een frietkot.'); return; }
-  var cost=openCost(G.shops.length);
-  if(G.money<cost){ toast('Te weinig geld — je hebt '+fmtFr(cost)+' fr. nodig.'); return; }
-  snapshotActive(); G.money-=cost; var s=newShop(districtId); G.shops.push(s); G.active=G.shops.length-1;
-  mirrorFrom(s); G.queue=[]; G.arrAcc=0; G.srvAcc=0;
-  save(); syncControls(); updateBuurt(); renderMap();
-  toast('🎉 Nieuwe frietkot geopend in <b>'+districtById(districtId).name+'</b>!');
+/* ---------- rendering ---------- */
+var renderOrder=function(){
+  if(!el.orderTokens||!G.order) return;
+  var o=G.order, c=byId(CRISP,o.crisp);
+  $('order').classList.remove('empty');
+  el.custAv.textContent='🙂';
+  var h='<span class="tok" id="tokFries">🍟 '+c.nm+'</span>';
+  if(o.snack){ var s=byId(SNACKS,o.snack); h+='<span class="tok" id="tokSnack">'+s.emoji+' '+s.nm+'</span>'; }
+  if(o.sauce){ var q=byId(SAUCES,o.sauce); h+='<span class="tok" id="tokSauce">'+q.emoji+' '+q.nm+'</span>'; }
+  el.orderTokens.innerHTML=h;
+  // zones on the doneness bar for THIS order's wanted band
+  var b=o.band;
+  if(el.zoneMid){ el.zoneMid.style.left=b[0]+'%'; el.zoneMid.style.width=(b[1]-b[0])+'%';
+    el.zoneLo.style.left=(b[0]-8)+'%'; el.zoneLo.style.width='8%';
+    el.zoneHi.style.left=b[1]+'%'; el.zoneHi.style.width='8%';
+    el.zoneBurn.style.left='92%'; el.zoneBurn.style.width='8%'; }
 };
-var openMap=function(){ var m=$('map'); if(m){ m.classList.remove('hidden'); renderMap(); } };
-var closeMap=function(){ var m=$('map'); if(m) m.classList.add('hidden'); };
-var renderMap=function(){
-  if(!el.mapList) return;
-  var mc=$('mapCount'); if(mc) mc.textContent=G.shops.length;
-  var cost=openCost(G.shops.length), html='';
-  DISTRICTS.forEach(function(d){
-    var owned=ownsDistrict(d.id);
-    if(owned>=0){ var s=G.shops[owned], isA=(owned===G.active);
-      html+='<div class="item'+(isA?' activeShop':'')+'"><div class="ic">'+d.emoji+'</div>'
-        +'<div class="info"><div class="t">'+d.name+(isA?' · <span style="color:var(--good)">nu actief</span>':'')+'</div>'
-        +'<div class="s">'+s.shop+' · ★ '+Math.round(s.rep)+' · '+Math.round((s.satAvg||0)*100)+'% tevreden</div></div>'
-        +(isA?'<button class="buy owned">✓ actief</button>':'<button class="buy" data-goto="'+owned+'">Beheer</button>')+'</div>';
-    } else {
-      html+='<div class="item"><div class="ic">'+d.emoji+'</div>'
-        +'<div class="info"><div class="t">'+d.name+'</div>'
-        +'<div class="s">Vooral <b>'+topArch(d)+'</b> · drukte ×'+d.foot.toFixed(2)+'</div></div>'
-        +'<button class="buy" data-open="'+d.id+'"'+(G.money<cost?' disabled':'')+'>'+fmtFr(cost)+' fr.</button></div>';
-    }
-  });
-  el.mapList.innerHTML=html;
-  if(typeof document!=='undefined'&&document.querySelectorAll){
-    Array.prototype.forEach.call(document.querySelectorAll('[data-goto]'),function(b){ b.onclick=function(){ activateShop(+b.getAttribute('data-goto')); renderMap(); }; });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-open]'),function(b){ b.onclick=function(){ openFrietkot(b.getAttribute('data-open')); }; });
-  }
+var syncFry=function(){
+  if(!el.fryBtn) return;
+  el.fryBtn.classList.remove('pull','ready');
+  if(!G||G.basket==='empty'){ el.fryBtn.textContent='🥔 Friet in de olie'; }
+  else if(G.basket==='frying'){
+    var inZone=G.order&&G.done>=G.order.band[0]&&G.done<=G.order.band[1];
+    el.fryBtn.textContent= inZone?'✋ NU ERUIT!':'🔥 aan het bakken…';
+    if(inZone) el.fryBtn.classList.add('pull');
+  } else { el.fryBtn.textContent='✓ friet klaar (tik = opnieuw)'; el.fryBtn.classList.add('ready'); }
+  if(el.marker) el.marker.style.left=clamp(G?G.done:0,0,100)+'%';
+  if(el.doneLbl) el.doneLbl.textContent=(G&&G.basket!=='empty')?(G.done>=92?'verbrand!':Math.round(G.done)):'friet';
 };
-
-/* ---------- "ken je buurt" info sheet ---------- */
-var openBuurtInfo=function(){ var m=$('buurtinfo'); if(m){ m.classList.remove('hidden'); renderBuurtInfo(); } };
-var closeBuurtInfo=function(){ var m=$('buurtinfo'); if(m) m.classList.add('hidden'); };
-var renderBuurtInfo=function(){
-  if(!el.biMix) return;
-  var d=districtById(G.district), sc=suggestedCrisp(G.district);
-  var nm=$('biName'); if(nm) nm.textContent=d.name;
-  var tip=$('biTip'); if(tip) tip.innerHTML='<div class="item"><div class="ic">🍟</div><div class="info">'
-    +'<div class="t">Tip: zet je krokantheid rond <b style="color:var(--gold)">'+sc+'</b> ('+crispLabel(sc)+')</div>'
-    +'<div class="s">Dat past het best bij de mix hier. Drukte in deze buurt: ×'+d.foot.toFixed(2)+'.</div></div></div>';
-  el.biMix.innerHTML=demographicMix(G.district).map(function(m){ var a=m.arch, pct=Math.round(m.pct*100);
-    var sizes=a.sizes.map(function(id){ return sizeById(id).label; }).join(' / ');
-    return '<div class="item"><div class="ic">'+a.emoji+'</div><div class="info">'
-      +'<div class="t">'+a.name+' <span style="color:var(--gold)">'+pct+'%</span></div>'
-      +'<div class="s">wil <b>'+crispLabel((a.band[0]+a.band[1])/2)+'e</b> friet ('+a.band[0]+'–'+a.band[1]+') · '+sizes+'</div></div>'
-      +'<div style="width:60px;height:8px;background:var(--slot);border-radius:4px;overflow:hidden;flex:0 0 auto">'
-      +'<i style="display:block;height:100%;width:'+pct+'%;background:var(--gold)"></i></div></div>';
-  }).join('');
-  var hy=hygieneRating(G.oil), hb=el.biHyg;
-  if(hb) hb.innerHTML='<div class="item"><div class="ic">'+hy.emoji+'</div><div class="info">'
-    +'<div class="t">Smiley: <span style="color:var(--'+hy.cls+')">'+hy.grade+' — '+hy.label+'</span></div>'
-    +'<div class="s">Volgt je frituurvet ('+Math.round(G.oil)+'%). Vers vet = betere Smiley &amp; meer volk; oud vet schrikt klanten af (en straks de inspecteur).</div></div></div>';
+var syncStations=function(){
+  if(typeof document==='undefined') return;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-snack]'),function(b){var id=b.dataset.snack;
+    b.classList.toggle('sel',G&&G.tray.snack===id); b.classList.toggle('want',G&&G.order&&G.order.snack===id); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sauce]'),function(b){var id=b.dataset.sauce;
+    b.classList.toggle('sel',G&&G.tray.sauce===id); b.classList.toggle('want',G&&G.order&&G.order.sauce===id); });
 };
-
-/* ---------- news / day events (seed of the 'event day' model) ---------- */
-var NEWS=[
-  {t:"📻 Mooi weer vandaag — meer wandelaars, meer klanten!",d:1.25},
-  {t:"⚽ De match is bezig — het wordt druk na affluiten.",d:1.35},
-  {t:"🌧️ Regen op komst. Minder passage aan de toog.",d:0.75},
-  {t:"🎡 Kermis op het plein! Volk alom.",d:1.5},
-  {t:"🥔 Aardappelprijs stijgt licht deze week.",d:0.95},
-  {t:"🎉 Er is een fuif in de parochiezaal — nachtwerk!",d:1.3},
-  {t:"😴 Rustige dag in 't dorp.",d:0.9}
-];
-
-/* ---------- the era clock + event days (research TIMELINE.md) ---------- */
-var START_YEAR=1990, YEAR_LEN=4;                     // 4 in-game days = 1 jaar
-// real historical events fire ONCE when their year is reached; each is a played choice
-var EVENTS=[
-  {id:'dioxine', year:1999, emoji:'🧪', title:'Dioxinecrisis!',
-    desc:'Heel België is in paniek over besmet voedsel. De pers staat aan je toog.',
-    choices:[
-      {label:'Gooi verdachte voorraad weg', ef:{money:-1500, repAll:8}, toast:'De klanten vertrouwen je — ★ omhoog.'},
-      {label:'Doe alsof er niets aan de hand is', ef:{money:0, repAll:-6, heatAll:25, demand:0.7, demandDays:2}, toast:'Riskant… de heat stijgt.'}
-    ]},
-  {id:'euro', year:2002, emoji:'💶', title:'De euro komt eraan',
-    desc:'De Belgische frank verdwijnt. Tijd om alles om te rekenen (≈40,34 fr. = 1 €).',
-    choices:[
-      {label:'Rond eerlijk af', ef:{repAll:5}, toast:'Eerlijk duurt het langst.'},
-      {label:'Rond alles stiekem naar boven af', ef:{money:2000, repAll:-5}, toast:'Snel geld, maar de klant merkt het.'}
-    ]},
-  {id:'rookverbod', year:2007, emoji:'🚭', title:'Rookverbod in de horeca',
-    desc:'Nieuwe regels: geen sigaret meer binnen. Sommige stamgasten pruttelen.',
-    choices:[
-      {label:'Zet een gezellig terras', ef:{money:-800, repAll:6}, toast:'Fris terras — meer volk.'},
-      {label:'Trek je er niets van aan', ef:{repAll:-3}, toast:'De vaste klant moppert.'}
-    ]},
-  {id:'aardappel', year:2018, emoji:'🥔', title:'Hittegolf — aardappeltekort',
-    desc:'De oogst mislukt door de droogte. Bintjes worden schaars en duur.',
-    choices:[
-      {label:'Koop duur bij', ef:{money:-2000}, toast:'Kwaliteit kost geld.'},
-      {label:'Werk met minder', ef:{repAll:-5, demand:0.8, demandDays:2}, toast:'Kleinere porties, minder volk.'}
-    ]},
-  {id:'covid', year:2020, emoji:'😷', title:'COVID-19 — lockdown',
-    desc:'De horeca sluit, maar frituren mogen afhalen. Iedereen wil comfort-friet.',
-    choices:[
-      {label:'Ga vol voor afhaal', ef:{money:-500, demand:1.4, demandDays:3}, toast:'Afhaal-boom!'},
-      {label:'Sluit even veilig', ef:{repAll:4, demand:0.5, demandDays:2}, toast:'Veiligheid eerst.'}
-    ]},
-  {id:'energie', year:2022, emoji:'⚡', title:'Energiecrisis',
-    desc:'De energieprijzen ontploffen — een frituur draaien wordt peperduur.',
-    choices:[
-      {label:'Slik de kosten', ef:{money:-3000}, toast:'Auw, dat doet pijn.'},
-      {label:'Verhoog de prijzen stilletjes', ef:{repAll:-4, demand:0.9, demandDays:2}, toast:'De klant voelt \'t in z\'n portefeuille.'}
-    ]}
-];
-var historicFor=function(year){ for(var i=0;i<EVENTS.length;i++) if(EVENTS[i].year===year) return EVENTS[i]; return null; };
-// lighter recurring event-days (any year), each a quick choice
-var RECURRING=[
-  {id:'match', emoji:'⚽', title:'Rode Duivels spelen vanavond!',
-    desc:'Na affluiten stroomt heel de gemeente jouw kant op — als je open blijft.',
-    choices:[ {label:'Blijf laat open', ef:{demand:1.6, demandDays:1}, toast:'Wat een nachtdrukte!'},
-              {label:'Sluit gewoon op tijd', ef:{}, toast:'Rustig naar huis.'} ]},
-  {id:'kermis', emoji:'🎡', title:'Kermis op het plein!',
-    desc:'Volk alom. Extra kraam bemannen kost, maar levert veel op.',
-    choices:[ {label:'Extra kraam (−300 fr.)', ef:{money:-300, demand:1.6, demandDays:1}, toast:'De kassa rinkelt!'},
-              {label:'Gewoon open', ef:{demand:1.2, demandDays:1}, toast:'Toch mooi volk.'} ]},
-  {id:'fuif', emoji:'🎉', title:'Grote fuif in de parochiezaal',
-    desc:'Om 3u komt de hele fuif friet halen. Doe je een nachtshift?',
-    choices:[ {label:'Nachtshift draaien', ef:{demand:1.4, demandDays:1}, toast:'Na de fuif = friet!'},
-              {label:'Vroeg dicht', ef:{}, toast:'Slaap is ook wat waard.'} ]}
-];
-var inspect=function(s){
-  var hy=hygieneRating(s.oil||0);
-  var sev=(s.heat||0)/100 + (hy.grade==='D'?0.45:hy.grade==='C'?0.2:0);
-  if(sev>0.95){ s.closedDays=1; s.rep=clamp(s.rep-15,0,100); s.heat=clamp((s.heat||0)*0.5,0,100);
-    toast('🚨 <b>'+s.shop+'</b> is DICHT — het FAVV grijpt in!'); }
-  else { var fine=Math.round(250+(s.heat||0)*35); G.money-=fine; s.rep=clamp(s.rep-5,0,100); s.heat=clamp((s.heat||0)*0.35,0,100);
-    toast('🚨 Controle bij <b>'+s.shop+'</b>: boete −'+fmtFr(fine)+' fr.'); }
+var syncServe=function(){ if(el.serveBtn) el.serveBtn.disabled=!canServe(); };
+var syncHUD=function(){
+  if(!el.score) return;
+  el.score.textContent=G.score; el.tips.textContent=G.tips;
+  el.combo.textContent='×'+(1+Math.round(Math.min(G.combo,20)*0.15*10)/10);
+  el.strikes.textContent=['❤️','❤️','❤️'].map(function(h,i){return i<3-G.strikes?'❤️':'🖤';}).join('');
 };
-var newDay=function(){
-  G.day++; G.dayT=0;
-  snapshotActive();
-  G.shops.forEach(function(s){
-    if(s.closedDays>0){ s.closedDays--; if(s.closedDays<=0) toast('🔓 '+s.shop+' mag weer open.'); }
-    // wages — halved if underpaying, but staff may walk out
-    if(s.staff>0){ var w=Math.round(wage(s.staff)*(shadyOn(s,'underpay')?0.5:1));
-      if(G.money>=w){ G.money-=w; } else { s.staff--; toast('😞 Een uitbater bij '+s.shop+' vertrekt — loon niet betaald.'); }
-      if(shadyOn(s,'underpay') && s.staff>0 && Math.random()<0.2){ s.staff--; toast('😠 Onderbetaald personeel bij '+s.shop+' stapt op.'); }
-    }
-    // day's-end inspection risk (scales with Heat + poor hygiene)
-    if(s.closedDays<=0 && Math.random()<inspectionRisk(s)) inspect(s);
-  });
-  mirrorFrom(G.shops[G.active]);
-  // --- era clock ---
-  if(G.day%YEAR_LEN===0 && G.year<2025) G.year++;
-  // lasting event demand ticks down
-  if(G.eventDaysLeft>0){ G.eventDaysLeft--; if(G.eventDaysLeft<=0) G.demandMod=1; }
-  // --- fire an event day, or ordinary news ---
-  if(!eventOpen){
-    var hev=historicFor(G.year);
-    if(hev && G.firedEvents.indexOf(hev.id)<0){ G.firedEvents.push(hev.id); G.news='📣 '+hev.title; save(); syncControls(); openEvent(hev); return; }
-    if(G.eventDaysLeft<=0 && Math.random()<0.26){ var rev=pick(RECURRING); G.news='📣 '+rev.title; save(); syncControls(); openEvent(rev); return; }
-  }
-  var n=pick(NEWS); G.news=n.t; if(G.eventDaysLeft<=0) G.demandMod=n.d;
-  toast('<b>'+G.year+' · dag '+G.day+'</b> — '+n.t);
-  save();
+var flashCombo=function(){ if(!el.combo)return; el.combo.classList.add('pop'); setTimeout(function(){el.combo.classList.remove('pop');},120); };
+var shake=function(){ var h=$('shakehost'); if(!h)return; h.style.transition='transform .05s'; var n=0;
+  var iv=setInterval(function(){ n++; h.style.transform='translate('+(Math.random()*6-3)+'px,'+(Math.random()*6-3)+'px)'; if(n>4){clearInterval(iv);h.style.transform='';} },40); };
+var shakeAvatar=function(){ if(el.custAv){el.custAv.classList.add('shake');setTimeout(function(){el.custAv.classList.remove('shake');},300);} };
+var popFx=function(txt,col,big,size){ if(!fxL||!document.createElement)return; var d=document.createElement('div');
+  d.className='pop'+(big?' big':''); d.textContent=txt; d.style.color=col; if(size)d.style.fontSize=size+'px';
+  d.style.left=(30+Math.random()*40)+'%'; d.style.top=(20+Math.random()*30)+'%'; fxL.appendChild(d);
+  setTimeout(function(){ d.remove&&d.remove(); },1000); };
+var coinBurst=function(n){ if(!fxL||!document.createElement)return;
+  for(var i=0;i<n;i++){ (function(){ var c=document.createElement('div'); c.className='coin';
+    var x=44+Math.random()*12, y=44; c.style.left=x+'%'; c.style.top=y+'%'; fxL.appendChild(c);
+    var vx=(Math.random()*2-1)*3, vy=-(2+Math.random()*3), life=0;
+    var iv=setInterval(function(){ life++; vy+=0.35; x+=vx*0.5; y+=vy*0.5;
+      c.style.left=x+'%'; c.style.top=y+'%'; c.style.opacity=String(clamp(1-life/26,0,1));
+      if(life>26){ clearInterval(iv); c.remove&&c.remove(); } },24);
+  })(); }
 };
-/* ---------- event-day modal ---------- */
-var eventOpen=false, curEvent=null;
-var applyEventEffect=function(ef){ ef=ef||{};
-  if(ef.money) G.money+=ef.money;
-  if(ef.repAll) G.shops.forEach(function(s){ s.rep=clamp(s.rep+ef.repAll,0,100); });
-  if(ef.heatAll) G.shops.forEach(function(s){ s.heat=clamp((s.heat||0)+ef.heatAll,0,100); });
-  if(ef.demand!=null){ G.demandMod=ef.demand; G.eventDaysLeft=ef.demandDays||1; }
-  mirrorFrom(G.shops[G.active]); save(); syncControls(); updateBuurt();
-};
-var openEvent=function(ev){ curEvent=ev; eventOpen=true;
-  var m=$('event');
-  if(!m){ if(ev.choices&&ev.choices[0]) applyEventEffect(ev.choices[0].ef); eventOpen=false; return; } // headless
-  var t=$('evTitle'), d=$('evDesc'), c=$('evYear'), ch=$('evChoices');
-  if(t) t.textContent=ev.emoji+' '+ev.title; if(d) d.textContent=ev.desc; if(c) c.textContent=G.year;
-  if(ch){ ch.innerHTML=''; ev.choices.forEach(function(ci){ var b=document.createElement('button');
-    b.className='btn serve'; b.style.flex='1'; b.style.marginTop='8px'; b.style.width='100%'; b.textContent=ci.label;
-    b.onclick=function(){ chooseEvent(ci); }; ch.appendChild(b); }); }
-  m.classList.remove('hidden');
-};
-var chooseEvent=function(ci){ var m=$('event'); if(m) m.classList.add('hidden'); eventOpen=false;
-  applyEventEffect(ci.ef); if(ci.toast) toast(ci.toast); };
 
 /* ---------- main loop ---------- */
-var last=0, acc=0;
+var last=0;
 var frame=function(ts){
   if(typeof requestAnimationFrame==='undefined') return;
-  var dt=last?Math.min((ts-last)/1000,0.1):0.016; last=ts; T+=dt;
-  // day clock
-  G.dayT+=dt; if(G.dayT>=G.dayLen) newDay();
-  // === demographics-driven queue economy (hands-off) ===
-  if(G.closedDays>0) G.queue.length=0;             // shut by the inspector — no trade today
-  var arr=(G.closedDays>0)?0:arrivalRate(G,G.demandMod), srv=(G.closedDays>0)?0:serviceRate(G);
-  var maxLine=7+G.staff*2+(G.up.fryer||0);
-  // arrivals join the line (or balk away if it's already full)
-  G.arrAcc+=arr*dt;
-  while(G.arrAcc>=1){ G.arrAcc-=1; if(G.queue.length<maxLine) G.queue.push(makeCustomer(G)); }
-  // waiting patience — fed-up customers give up and leave the line
-  for(var qi=G.queue.length-1;qi>=0;qi--){ G.queue[qi].wait+=dt;
-    if(G.queue[qi].wait>G.queue[qi].pat){ G.queue.splice(qi,1); G.rep=clamp(G.rep-0.15,0,100); } }
-  // service — the front of the line is auto-served at your throughput
-  G.srvAcc+=srv*dt;
-  var servedThis=0;
-  while(G.srvAcc>=1 && G.queue.length>0){ G.srvAcc-=1;
-    var c=G.queue.shift(), r=evalServe(G,c);
-    G.money+=r.ticket+r.tip; G.served++;
-    G.rep=clamp(G.rep+r.dRep,0,100);
-    G.oil=clamp(G.oil-r.decay,0,100);
-    G.satAvg = G.satAvg ? G.satAvg*0.92+r.sat*0.08 : r.sat;
-    if(servedThis<2) popScene(r.sat>0.6?'good':'bad',(r.sat>0.6?'+':'')+fmtFr(r.ticket+r.tip));
-    servedThis++;
+  var dt=last?Math.min((ts-last)/1000,0.05):0.016; last=ts; T+=dt; if(G) G.T=T;
+  if(G&&G.running&&G.order){
+    // fry doneness rises
+    if(G.basket==='frying'){ G.done+=48*dt;
+      if(G.done>=100){ G.done=100; if(G.basket==='frying'){ G.basket='ready'; G.tray.friesQ=100; sfxLift(false); syncFry(); syncServe(); } }
+      syncFry();
+    }
+    // patience ticks down
+    G.order.pat-=dt;
+    if(el.patBar) el.patBar.style.width=clamp(G.order.pat/G.order.patMax*100,0,100)+'%';
+    if(G.order.pat<=0){ walkout(); }
   }
-  // Heat drifts up while cutting corners, decays otherwise (every shop)
-  for(var hi=0;hi<G.shops.length;hi++){ var htgt=(hi===G.active)?G:G.shops[hi]; var hr=heatRate(htgt);
-    htgt.heat=clamp((htgt.heat||0)+(hr>0?hr:-0.25)*dt,0,100); }
-  // background frietkoten keep earning on their own settings (lightweight, no queue sim)
-  if(G.shops.length>1){ for(var bi=0;bi<G.shops.length;bi++){ if(bi===G.active) continue; var bs=G.shops[bi];
-    if(bs.closedDays>0) continue;
-    var ctx={menu:G.menu,prices:bs.prices,district:bs.district,oil:bs.oil,rep:bs.rep,up:bs.up,staff:bs.staff,satAvg:bs.satAvg,shady:bs.shady};
-    G.money+=Math.min(arrivalRate(ctx,G.demandMod),serviceRate(ctx))*avgTicket(ctx)*shadyIncomeMul(bs)*dt;
-  } }
-  if(el.money) el.money.textContent=fmtFr(G.money);
-  updateBuurt();
-
   drawScene();
   requestAnimationFrame(frame);
 };
 
 /* ---------- boot ---------- */
 var boot=function(){
-  var had=load();
-  // offline earnings — your staff keep the toog running while you're away (capped 6h)
-  if(had && G.lastSeen){
-    var away=clamp((Date.now()-G.lastSeen)/1000,0,6*3600), ps=0;
-    G.shops.forEach(function(s){ if(s.staff>0){ var ctx={menu:G.menu,prices:s.prices,district:s.district,oil:s.oil,rep:s.rep,up:s.up,staff:s.staff,satAvg:s.satAvg};
-      ps+=Math.min(arrivalRate(ctx,1),serviceRate(ctx))*avgTicket(ctx); } });
-    if(away>60 && ps>0){ var gain=Math.round(ps*away*0.35);
-      if(gain>0){ G.money+=gain;
-        setTimeout(function(){ toast('💤 Terwijl je weg was verdienden je frietkoten <b>+'+fmtFr(gain)+' fr.</b>'); },700); } }
-  }
-  bindUI();
-  if(!had){ toast('🍟 Welkom bij <b>'+G.shop+'</b>! Stel je friet af — de klanten komen vanzelf.'); }
-  syncControls(); updateBuurt();
+  refEls(); buildStations(); G=freshRun();
+  if(el.startBtn) el.startBtn.onclick=function(){ try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){} startGame(); };
+  if(el.againBtn) el.againBtn.onclick=startGame;
+  if(el.fryBtn) el.fryBtn.onclick=tapFry;
+  if(el.serveBtn) el.serveBtn.onclick=doServe;
+  var hs=0; try{ hs=+localStorage.getItem(HS_KEY)||0; }catch(e){}
+  if(el.startHs) el.startHs.textContent= hs? 'Record: '+hs : '';
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
-  // autosave
-  if(typeof setInterval!=='undefined') setInterval(save,5000);
 };
 if(typeof document!=='undefined' && document.addEventListener){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
@@ -1310,22 +484,8 @@ if(typeof document!=='undefined' && document.addEventListener){
 
 /* ---------- test surface ---------- */
 if(typeof globalThis!=='undefined'){
-  globalThis.__FT={ clamp:clamp, lerp:lerp, fmtFr:fmtFr, SIZES:SIZES, FATS:FATS, ARCHETYPES:ARCHETYPES,
-    SNACKS:SNACKS, SAUCES:SAUCES, UPG:UPG, STAFF_WAGE:STAFF_WAGE, STAFF_MAX:STAFF_MAX, STAFF_HIRE:STAFF_HIRE,
-    sizeById:sizeById, fatById:fatById, snackById:snackById, sauceById:sauceById, upgById:upgById,
-    crispLabel:crispLabel, crispQuality:crispQuality, oilQuality:oilQuality, priceAppeal:priceAppeal,
-    serveQuality:serveQuality, upgradeCost:upgradeCost, effPotato:effPotato, fryerFootMul:fryerFootMul,
-    oilDecayMul:oilDecayMul, wage:wage, unlockedCount:unlockedCount,
-    DISTRICTS:DISTRICTS, districtById:districtById, archById:archById, archetypeFor:archetypeFor,
-    arrivalRate:arrivalRate, serviceRate:serviceRate, evalServe:evalServe,
-    FAIR_PRICE:FAIR_PRICE, defaultPrices:defaultPrices, priceOf:priceOf, itemAppeal:itemAppeal,
-    friesAppeal:friesAppeal, itemCost:itemCost,
-    newShop:newShop, openCost:openCost, SHOP_FIELDS:SHOP_FIELDS,
-    demographicMix:demographicMix, suggestedCrisp:suggestedCrisp, hygieneRating:hygieneRating,
-    SHADY:SHADY, shadyOn:shadyOn, shadyIncomeMul:shadyIncomeMul, shadySatPenalty:shadySatPenalty,
-    heatRate:heatRate, inspectionRisk:inspectionRisk,
-    EVENTS:EVENTS, RECURRING:RECURRING, historicFor:historicFor, START_YEAR:START_YEAR, YEAR_LEN:YEAR_LEN,
-    freshGame:freshGame, makeCustomer:makeCustomer };
+  globalThis.__FR={ clamp:clamp, SNACKS:SNACKS, SAUCES:SAUCES, CRISP:CRISP, byId:byId,
+    diffOf:diffOf, newOrder:newOrder, friesQuality:friesQuality, scoreServe:scoreServe, freshRun:freshRun };
 }
 </script>
 </body>
