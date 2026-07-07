@@ -274,6 +274,13 @@ var loadCounters=function(){ if(typeof Image==='undefined') return;
   for(var i=1;i<=MAX_TOOG;i++){ (function(i){ var im=new Image(); im._ok=false;
     im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
     im.src='sprites/counters/counter_'+(i<10?('0'+i):i)+'.png'; COUNTER_IMG[i]=im; })(i); } };
+// friteuse merge-level art: fryer_01 (single well) → fryer_60 (sci-fi mega-desk). Graceful: emoji fallback.
+var MAX_FRYER=60;
+var FRYER_IMG=[];
+var loadFryers=function(){ if(typeof Image==='undefined') return;
+  for(var i=1;i<=MAX_FRYER;i++){ (function(i){ var im=new Image(); im._ok=false;
+    im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
+    im.src='sprites/fryers/fryer_'+(i<10?('0'+i):i)+'.png'; FRYER_IMG[i]=im; })(i); } };
 // floor tile textures (graceful: fall back to the painted checker if an image is missing).
 var FLOOR_IMG={};
 var loadFloors=function(){ if(typeof Image==='undefined') return;
@@ -425,6 +432,11 @@ var drawScene=function(){
       var lvl=clamp(o.lvl||1,1,MAX_TOOG), im=COUNTER_IMG[lvl];
       if(im&&im._ok){ var iw=TS*1.02, ih=iw*im.height/im.width; ctx.drawImage(im, c.x-iw/2, c.y-ih/2+1, iw, ih); }
       else { ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill(); emoji(d.emoji,c.x,c.y,20); }
+    } else if(d.kind==='fryer'){
+      if(o._busy){ ctx.fillStyle='#7bd66b22'; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); }
+      var lvf=clamp(o.lvl||1,1,MAX_FRYER), imf=FRYER_IMG[lvf];
+      if(imf&&imf._ok){ var scf=Math.min(TS*1.06/imf.width, TS*1.28/imf.height), iwf=imf.width*scf, ihf=imf.height*scf; ctx.drawImage(imf, c.x-iwf/2, c.y-ihf/2+2, iwf, ihf); }
+      else { ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill(); emoji(d.emoji,c.x,c.y,20); }
     } else {
       ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill();
       emoji(d.emoji,c.x,c.y,20);
@@ -448,6 +460,9 @@ var drawScene=function(){
     ctx.globalAlpha=.25; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(gx3,gy3+TS*0.42,TS*0.34,TS*0.13,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
     if(dd&&dd.kind==='counter'){ var lv=clamp(dobj.lvl||1,1,MAX_TOOG), im2=COUNTER_IMG[lv];
       if(im2&&im2._ok){ var iw2=TS*1.18, ih2=iw2*im2.height/im2.width; ctx.drawImage(im2, gx3-iw2/2, gy3-ih2/2, iw2, ih2); }
+      else { emoji(dd.emoji,gx3,gy3,22); } }
+    else if(dd&&dd.kind==='fryer'){ var lvf2=clamp(dobj.lvl||1,1,MAX_FRYER), im3=FRYER_IMG[lvf2];
+      if(im3&&im3._ok){ var scf2=Math.min(TS*1.22/im3.width, TS*1.46/im3.height), iw3=im3.width*scf2, ih3=im3.height*scf2; ctx.drawImage(im3, gx3-iw3/2, gy3-ih3/2, iw3, ih3); }
       else { emoji(dd.emoji,gx3,gy3,22); } }
     else if(dd){ ctx.fillStyle='#241a2f'; roundRect(gx3-TS/2+3,gy3-TS/2+3,TS-6,TS-6,5); ctx.fill(); emoji(dd.emoji,gx3,gy3,22); }
     if((dobj.lvl||1)>1){ ctx.fillStyle='#2a1c05'; ctx.fillRect(gx3+TS/2-13,gy3-TS/2+2,12,9);
@@ -652,7 +667,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 /* ---------- boot ---------- */
 var tab=function(which){ ['shop','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
-  refEls(); loadCounters(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
+  refEls(); loadCounters(); loadFryers(); loadFloors(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
   var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor');
@@ -689,7 +704,7 @@ if(typeof globalThis!=='undefined'){
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
-    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG,
+    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER,
     applyDrop:function(g,obj,gx,gy){ var prev=G; G=g; try{ return applyDrop(obj,gx,gy); } finally{ G=prev; } } };
 }
 </script>
