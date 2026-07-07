@@ -299,5 +299,16 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.criticRating(g2).stars >= 4, 'a high-rank, high-appeal shop pleases the critic');
 }
 
+// ---- seasons ----
+{
+  ok(FS.SEASONS.length === 4, 'four seasons');
+  ok(FS.seasonFor(1).id === 'lente', 'the year starts in spring');
+  ok(FS.seasonFor(4).id !== FS.seasonFor(1).id, 'the season changes after a few weeks');
+  ok(FS.seasonFor(1).id === FS.seasonFor(13).id, 'seasons cycle back after a full year');
+  const summer = FS.SEASONS.find(s => s.id === 'zomer'), winter = FS.SEASONS.find(s => s.id === 'winter');
+  ok(summer.traffic > 1 && winter.traffic < 1, 'summer is busier, winter quieter');
+  ok(winter.spend > 1, 'winter comfort-food splurge raises spend');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
