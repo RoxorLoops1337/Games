@@ -170,5 +170,13 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.computeAppeal(g) > a0, 'a fancier floor raises overall appeal');
 }
 
+// ---- extended toog merge ladder (75 Rudy Friet counter tiers) ----
+{
+  ok(FS.MAX_TOOG === 75, 'toog art ladder runs to 75 tiers');
+  ok(FS.power(FS.MAX_TOOG) > FS.power(25), 'a tier-75 toog is stronger than a tier-25 one');
+  // merging keeps climbing past the old cap; art clamps but level keeps rising
+  ok(FS.canMerge({ id: 'toog', lvl: 40 }, { id: 'toog', lvl: 40 }) === true, 'high-tier toogs still merge');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
