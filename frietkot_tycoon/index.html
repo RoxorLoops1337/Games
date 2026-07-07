@@ -151,6 +151,19 @@
   .dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle}
   .dots i{width:6px;height:6px;border-radius:50%;background:#0d0a12;display:inline-block}
   .dots i.on{background:var(--gold)}
+  /* ---- price rows ---- */
+  .prow{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:8px 10px;margin-bottom:7px}
+  .prow.locked{opacity:.5}
+  .prow .top{display:flex;align-items:center;gap:9px}
+  .prow .ic{width:30px;height:30px;flex:0 0 auto;border-radius:7px;background:var(--slot);
+    display:flex;align-items:center;justify-content:center;font-size:17px;border:1px solid #0d0a12}
+  .prow .pt{font-weight:800;font-size:13px;color:var(--ink)}
+  .prow .psub{font-size:11px;color:var(--ink2)}
+  .prow .pv{margin-left:auto;font-weight:800;font-size:15px;color:var(--gold);
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+  .prow .marg{font-size:11px;font-weight:700;margin-left:6px}
+  .prow input[type=range]{width:100%;margin-top:7px;
+    background:linear-gradient(90deg,#7bd66b,#f0d040,#e5624a)}
 </style>
 </head>
 <body>
@@ -185,16 +198,6 @@
     </div>
     <div class="row">
       <div class="ctl grow">
-        <div class="lab">📦 Portie <b id="sizeV">medium</b></div>
-        <div class="seg" id="sizeSeg"></div>
-      </div>
-    </div>
-    <div class="ctl">
-      <div class="lab">🏷️ Prijs <b><span id="priceV">70</span> fr.</b></div>
-      <input type="range" class="price" id="price" min="30" max="160" value="70">
-    </div>
-    <div class="row">
-      <div class="ctl grow">
         <div class="lab">🛢️ Frituurvet <b id="oilPct">100%</b></div>
         <div class="oilbar"><i id="oilBar" style="width:100%"></i></div>
         <div class="fats" id="fatSeg"></div>
@@ -202,7 +205,10 @@
     </div>
     <div class="row">
       <button class="btn oil" id="oilBtn">Ververs vet<br><small id="oilCost">−350 fr.</small></button>
-      <button class="btn serve" id="shopBtn">🛠️ Uitbreidingen &amp; menu</button>
+      <button class="btn serve" id="pricesBtn">💰 Prijzen</button>
+    </div>
+    <div class="row">
+      <button class="btn serve" id="shopBtn" style="flex:1">🛠️ Uitbreidingen &amp; menukaart</button>
     </div>
   </div>
 
@@ -221,6 +227,17 @@
       <div class="ssec"><h3>🧑‍🍳 Personeel — automatiseer je toog</h3><div id="staffBox"></div></div>
       <div class="ssec"><h3>🌭 Menukaart — snacks</h3><div id="snackList"></div></div>
       <div class="ssec"><h3>🥫 Menukaart — sauzen</h3><div id="sauceList"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="prices" class="hidden">
+  <div class="sheet">
+    <div class="shead"><span>💰 Prijzen — <span id="pricesShop"></span></span><button class="x" id="pricesClose">✕</button></div>
+    <div class="scont">
+      <div class="ssec"><h3>🍟 Frietprijzen (per pak)</h3><div id="priceSizes"></div></div>
+      <div class="ssec"><h3>🌭 Snackprijzen</h3><div id="priceSnacks"></div></div>
+      <div class="ssec"><h3>🥫 Sausprijzen</h3><div id="priceSauces"></div></div>
     </div>
   </div>
 </div>
@@ -253,10 +270,10 @@ var fmtFr=function(n){                       // thousands with a dot, Belgian st
 /* ---------- data: sizes, fats, archetypes ---------- */
 // portionGrams / base cost & price in francs (period-flavoured, research H7)
 var SIZES=[
-  {id:'klein',  label:'klein',     grams:150, base:45, cost:14},
+  {id:'klein',  label:'klein pak', grams:150, base:45, cost:14},
   {id:'medium', label:'middel',    grams:220, base:65, cost:20},
   {id:'groot',  label:'groot',     grams:320, base:90, cost:28},
-  {id:'familie',label:'familiezak',grams:600, base:150,cost:52}
+  {id:'familie',label:'familiepak',grams:600, base:150,cost:52}
 ];
 var sizeById=function(id){ for(var i=0;i<SIZES.length;i++) if(SIZES[i].id===id) return SIZES[i]; return SIZES[1]; };
 
@@ -288,11 +305,15 @@ var ARCHETYPES=[
 /* ---------- menu: snacks & sauces (research SNACKS.md / SAUCES.md) ---------- */
 // franc cost/price; unlock = one-time recipe cost bought in the Uitbreidingen sheet
 var SNACKS=[
-  {id:'curryworst',label:'curryworst',  emoji:'🌭', cost:12, price:45, unlock:1400},
-  {id:'kroket',    label:'kaaskroket',  emoji:'🧀', cost:15, price:50, unlock:2400},
-  {id:'cervela',   label:'cervela',     emoji:'🥓', cost:18, price:55, unlock:3600},
-  {id:'bicky',     label:'bickyburger', emoji:'🍔', cost:30, price:95, unlock:6500},
-  {id:'stoofvlees',label:'stoofvlees',  emoji:'🍲', cost:35, price:75, unlock:11000}
+  {id:'curryworst',   label:'curryworst',    emoji:'🌭', cost:12, price:45, unlock:1400},
+  {id:'viandel',      label:'viandel',       emoji:'🍢', cost:14, price:50, unlock:2000},
+  {id:'kroket',       label:'kaaskroket',    emoji:'🧀', cost:15, price:50, unlock:2400},
+  {id:'boulet',       label:'boulet',        emoji:'🧆', cost:16, price:55, unlock:3000},
+  {id:'loempia',      label:'loempia',       emoji:'🥟', cost:16, price:55, unlock:3200},
+  {id:'cervela',      label:'cervela',       emoji:'🥓', cost:18, price:55, unlock:3600},
+  {id:'bicky',        label:'bickyburger',   emoji:'🍔', cost:30, price:95, unlock:6500},
+  {id:'garnaalkroket',label:'garnaalkroket', emoji:'🍤', cost:28, price:85, unlock:7000},
+  {id:'stoofvlees',   label:'stoofvlees',    emoji:'🍲', cost:35, price:75, unlock:11000}
 ];
 var snackById=function(id){ for(var i=0;i<SNACKS.length;i++) if(SNACKS[i].id===id) return SNACKS[i]; return null; };
 var SAUCES=[
@@ -304,6 +325,19 @@ var SAUCES=[
   {id:'stoofsaus',   label:'stoofvleessaus', cost:8, price:25, unlock:4000}
 ];
 var sauceById=function(id){ for(var i=0;i<SAUCES.length;i++) if(SAUCES[i].id===id) return SAUCES[i]; return SAUCES[0]; };
+
+/* ---------- per-shop price sheet (you set a price for every item) ---------- */
+// the "fair" reference price for each id (drives appeal / satisfaction fairness)
+var FAIR_PRICE={}; SIZES.forEach(function(s){FAIR_PRICE[s.id]=s.base;});
+  SNACKS.forEach(function(s){FAIR_PRICE[s.id]=s.price;}); SAUCES.forEach(function(s){FAIR_PRICE[s.id]=s.price;});
+var itemCost=function(id){ var s=sizeById(id); if(s&&s.id===id) return s.cost;
+  var sn=snackById(id); if(sn) return sn.cost; var sa=sauceById(id); if(sa&&sa.id===id) return sa.cost; return 0; };
+var defaultPrices=function(){ var p={}; for(var k in FAIR_PRICE) p[k]=FAIR_PRICE[k]; return p; };
+var priceOf=function(G,id){ var v=G.prices&&G.prices[id]; return (v!=null)?v:(FAIR_PRICE[id]||0); };
+// price fairness for one item → 0.1..1.3 (cheap = appealing, dear = off-putting)
+var itemAppeal=function(G,id){ return priceAppeal(priceOf(G,id), FAIR_PRICE[id]||1); };
+// average fries-price appeal across the four packs (drives overall footfall)
+var friesAppeal=function(G){ var t=0,n=0; SIZES.forEach(function(s){ t+=itemAppeal(G,s.id); n++; }); return t/n; };
 
 /* ---------- upgrades & staff (research H2/H6 + PROGRESSION idle core) ---------- */
 var upgradeCost=function(base,lvl){ return Math.round(base*Math.pow(1.7,lvl)); };
@@ -324,14 +358,6 @@ var wage=function(staff){ return (staff||0)*STAFF_WAGE; };
 var unlockedCount=function(G){ var n=0,k;
   for(k in G.menu.snacks) if(G.menu.snacks[k]) n++;
   for(k in G.menu.sauces) if(G.menu.sauces[k]&&k!=='mayo') n++; return n; };
-// rough passive income/sec at current settings (used by loop + offline earnings)
-var idlePerSec=function(G,demand){
-  var fair=sizeById(G.size).base, appeal=priceAppeal(G.price,fair), menuMul=1+0.05*unlockedCount(G);
-  var foot=0.5*appeal*(0.45+G.rep/90)*(demand||1)*oilQuality(G.oil)
-           *fryerFootMul(G.up.fryer)*menuMul*(1+0.3*(G.staff||0));
-  var idleVal=Math.max(6,(G.price-sizeById(G.size).cost))*menuMul;
-  return { foot:foot, idleVal:idleVal, perSec:foot*idleVal };
-};
 
 /* ---------- pure scoring logic (unit-tested) ---------- */
 // how well crispness hits the customer's preferred band → 0..1
@@ -367,7 +393,7 @@ var serveQuality=function(o){
 
 // how fast customers ARRIVE (per sec): driven by appeal × reputation × neighbourhood foot traffic
 var arrivalRate=function(G,demand){
-  var fair=sizeById(G.size).base, appeal=priceAppeal(G.price,fair), menuMul=1+0.05*unlockedCount(G);
+  var appeal=friesAppeal(G), menuMul=1+0.05*unlockedCount(G);
   return 0.70*appeal*(0.6+G.rep/70)*(demand||1)*oilQuality(G.oil)*menuMul*districtById(G.district).foot;
 };
 // how fast you can SERVE the line (per sec): throughput from staff + fryer. Base is deliberately
@@ -375,18 +401,20 @@ var arrivalRate=function(G,demand){
 var serviceRate=function(G){ return 0.40+0.40*(G.staff||0)+0.12*((G.up&&G.up.fryer)||0); };
 // evaluate one auto-served customer against your fixed policy → ticket / satisfaction / rep / oil hit
 var evalServe=function(G,c){
-  var a=c.arch, s=sizeById(G.size), want=sizeById(c.size), f=fatById(G.fat);
+  var a=c.arch, want=sizeById(c.size), f=fatById(G.fat);
   var q=serveQuality({crisp:G.crisp,band:a.band,oil:G.oil,potato:effPotato(G.up.potato),
                       fat:f.tasteMul, doublefry:G.up.doublefry});
-  var sizeGap=Math.abs(SIZES.indexOf(s)-SIZES.indexOf(want));
-  var sizeMul=clamp(1-sizeGap*0.14,0.5,1);
-  var ticket=G.price, sat=q*sizeMul;
-  if(c.sauce){ if(G.menu.sauces[c.sauce.id]){ ticket+=c.sauce.price; sat+=0.03; } else sat-=0.06; }
-  if(c.snack){ if(G.menu.snacks[c.snack.id]){ ticket+=c.snack.price; sat+=0.05; } else sat-=0.07; }
-  sat=clamp(sat,0,1.05);
-  var tip=Math.round(G.price*a.tip*sat*2);
+  // they buy the pack they wanted (shop sells all sizes) at YOUR price for it
+  var sizePrice=priceOf(G,want.id), sizeFair=itemAppeal(G,want.id);
+  var ticket=sizePrice, sat=q*clamp(0.55+0.5*sizeFair,0,1.1);   // overpricing hurts satisfaction
+  if(c.sauce && G.menu.sauces[c.sauce.id]){ ticket+=priceOf(G,c.sauce.id); sat+=0.03*clamp(itemAppeal(G,c.sauce.id),0,1.2); }
+  else if(c.sauce){ sat-=0.06; }
+  if(c.snack && G.menu.snacks[c.snack.id]){ ticket+=priceOf(G,c.snack.id); sat+=0.05*clamp(itemAppeal(G,c.snack.id),0,1.2); }
+  else if(c.snack){ sat-=0.07; }
+  sat=clamp(sat,0,1.1);
+  var tip=Math.round(sizePrice*a.tip*sat*2);
   var dRep=(sat-0.62)*4; if(G.oil<20) dRep-=1.2;               // gentler per-head: many customers now
-  var decay=(0.35+s.grams/1100)*oilDecayMul(G);               // softened for higher customer volume
+  var decay=(0.35+want.grams/1100)*oilDecayMul(G);            // softened for higher customer volume
   return { ticket:ticket, tip:tip, sat:sat, dRep:dRep, decay:decay };
 };
 
@@ -399,13 +427,13 @@ var freshGame=function(){
     v:1,
     shop: SHOP_NAMES[Math.floor(Math.random()*SHOP_NAMES.length)],
     money:2000, day:1, rep:6, served:0,
-    oil:100, fat:'blend',
-    crisp:52, size:'medium', price:70,
+    oil:100, fat:'blend', crisp:52,
     dayT:0, dayLen:48,          // seconds per in-game day
     news:"Welkom! Zet je eerste puntzak klaar.",
     district:'dorp', demandMod:1,
     up:{potato:0,fryer:0,doublefry:0,filter:0}, staff:0,
     menu:{ snacks:{}, sauces:{mayo:true} },
+    prices:defaultPrices(),     // per-shop price for every pack / snack / sauce
     queue:[], arrAcc:0, srvAcc:0, satAvg:0,   // runtime queue economy
     lastSeen:0
   };
@@ -470,6 +498,7 @@ var load=function(){
     if(G.menu.snacks.mexicano){ G.menu.snacks.cervela=true; delete G.menu.snacks.mexicano; }
     if(G.staff==null) G.staff=0;
     if(!G.district) G.district='dorp';
+    G.prices=Object.assign(defaultPrices(), G.prices||{}); // fill any newly-added items with defaults
     G.queue=[]; G.arrAcc=0; G.srvAcc=0; if(G.satAvg==null) G.satAvg=0; // rebuild the line fresh
     return true;
   }catch(e){ return false; }
@@ -711,25 +740,22 @@ var el={};
 var bindUI=function(){
   if(typeof document==='undefined'||!document.getElementById) return;
   ['shopName','dayN','repN','money','newsTxt','buurtAv','buurtName','buurtStat','satBar',
-   'crisp','crispV','sizeV','sizeSeg','price','priceV','oilPct','oilBar','fatSeg',
+   'crisp','crispV','oilPct','oilBar','fatSeg',
    'oilBtn','oilCost','rate','resetBtn',
-   'shopBtn','shopClose','upgList','staffBox','snackList','sauceList'].forEach(function(id){ el[id]=$(id); });
+   'shopBtn','shopClose','upgList','staffBox','snackList','sauceList',
+   'pricesBtn','pricesSheet','pricesClose','priceSizes','priceSnacks','priceSauces'].forEach(function(id){ el[id]=$(id); });
 
-  // size segmented control
-  if(el.sizeSeg){ el.sizeSeg.innerHTML='';
-    SIZES.forEach(function(s){ var b=document.createElement('button'); b.textContent=s.label; b.dataset.id=s.id;
-      b.onclick=function(){ G.size=s.id; syncControls(); };
-      el.sizeSeg.appendChild(b); }); }
   // fat segmented
   if(el.fatSeg){ el.fatSeg.innerHTML='';
     FATS.forEach(function(f){ var b=document.createElement('button'); b.textContent=f.label; b.dataset.id=f.id;
       b.onclick=function(){ G.fat=f.id; syncControls(); toast('Vet: <b>'+f.label+'</b>'); };
       el.fatSeg.appendChild(b); }); }
   if(el.crisp) el.crisp.oninput=function(){ G.crisp=+el.crisp.value; syncControls(); };
-  if(el.price) el.price.oninput=function(){ G.price=+el.price.value; syncControls(); };
   if(el.oilBtn) el.oilBtn.onclick=refreshOil;
   if(el.shopBtn) el.shopBtn.onclick=openShop;
   if(el.shopClose) el.shopClose.onclick=closeShop;
+  if(el.pricesBtn) el.pricesBtn.onclick=openPrices;
+  if(el.pricesClose) el.pricesClose.onclick=closePrices;
   if(el.resetBtn) el.resetBtn.onclick=function(){
     if(typeof confirm==='undefined'||confirm('Nieuw spel starten? Je huidige frituur gaat verloren.')){
       G=freshGame(); save(); syncControls(); updateBuurt(); toast('Nieuwe frituur geopend!');
@@ -745,9 +771,6 @@ var syncControls=function(){
   el.repN.textContent=Math.round(G.rep);
   el.money.textContent=fmtFr(G.money);
   el.crisp.value=G.crisp; el.crispV.textContent=crispLabel(G.crisp);
-  el.price.value=G.price; el.priceV.textContent=G.price;
-  el.sizeV.textContent=sizeById(G.size).label;
-  Array.prototype.forEach.call(el.sizeSeg.children,function(b){ b.classList.toggle('on',b.dataset.id===G.size); });
   Array.prototype.forEach.call(el.fatSeg.children,function(b){ b.classList.toggle('on',b.dataset.id===G.fat); });
   var f=fatById(G.fat);
   el.oilCost.textContent='−'+f.refill+' fr.';
@@ -779,7 +802,8 @@ var updateBuurt=function(){
     +' geserveerd'+(G.staff>0?'  ·  👤×'+G.staff:'');
 };
 // rough average ticket used only for the fr./sec readout & offline estimate
-var avgTicket=function(G){ return Math.max(6,(G.price-sizeById(G.size).cost))*(1+0.55*(G.satAvg||0.5)); };
+var avgTicket=function(G){ var t=0,n=0; SIZES.forEach(function(s){ t+=Math.max(6,priceOf(G,s.id)-s.cost); n++; });
+  return (t/n)*(1+0.55*(G.satAvg||0.5)); };
 
 var refreshOil=function(){
   var f=fatById(G.fat);
@@ -852,6 +876,44 @@ var renderShop=function(){
     sc+=itemRow('🥫',m.label,'Verkoop <b>'+m.price+' fr.</b> · inkoop '+m.cost+' fr.',btn); });
   el.sauceList.innerHTML=sc;
   wireShopButtons();
+};
+
+/* ---------- price sheet (set a price per item, per shop) ---------- */
+var openPrices=function(){ var s=$('prices'); if(s){ s.classList.remove('hidden'); renderPrices(); } };
+var closePrices=function(){ var s=$('prices'); if(s) s.classList.add('hidden'); };
+var margNote=function(price,cost){ var m=price-cost, c=m>cost*1.5?'var(--good)':m>0?'var(--warn)':'var(--bad)';
+  return 'inkoop '+cost+' fr. · marge <b style="color:'+c+'">'+(m>=0?'+':'')+m+' fr.</b>'; };
+var priceRowHTML=function(sp){
+  var pr=priceOf(G,sp.id);
+  return '<div class="prow'+(sp.locked?' locked':'')+'"><div class="top">'
+    +'<div class="ic">'+sp.emoji+'</div>'
+    +'<div><div class="pt">'+sp.label+'</div><div class="psub">'
+    +(sp.locked?'inkoop '+sp.cost+' fr. · <b style="color:var(--warn)">nog niet op de kaart</b>':margNote(pr,sp.cost))
+    +'</div></div><div class="pv" data-pv="'+sp.id+'">'+pr+' fr.</div></div>'
+    +(sp.locked?'':'<input type="range" data-price="'+sp.id+'" min="'+sp.min+'" max="'+sp.max+'" step="5" value="'+pr+'">')
+    +'</div>';
+};
+var renderPrices=function(){
+  if(!el.priceSizes) return;
+  var ps=$('pricesShop'); if(ps) ps.textContent=G.shop;
+  el.priceSizes.innerHTML=SIZES.map(function(s){ return priceRowHTML({id:s.id,emoji:'🍟',label:s.label,cost:s.cost,
+    min:Math.max(15,Math.round(s.cost*1.3)),max:Math.round(s.base*2.6),locked:false}); }).join('');
+  el.priceSnacks.innerHTML=SNACKS.map(function(s){ return priceRowHTML({id:s.id,emoji:s.emoji,label:s.label,cost:s.cost,
+    min:Math.max(15,Math.round(s.cost*1.3)),max:Math.round(s.price*2.6),locked:!G.menu.snacks[s.id]}); }).join('');
+  el.priceSauces.innerHTML=SAUCES.map(function(s){ var unlocked=(s.unlock===0)||G.menu.sauces[s.id];
+    return priceRowHTML({id:s.id,emoji:'🥫',label:s.label,cost:s.cost,
+      min:Math.max(5,Math.round(s.cost*1.3)),max:Math.round(s.price*2.6),locked:!unlocked}); }).join('');
+  wirePriceSliders();
+};
+var wirePriceSliders=function(){
+  if(typeof document==='undefined'||!document.querySelectorAll) return;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-price]'),function(inp){
+    inp.oninput=function(){ var id=inp.getAttribute('data-price'); G.prices[id]=+inp.value;
+      var pv=document.querySelector('[data-pv="'+id+'"]'); if(pv) pv.textContent=inp.value+' fr.';
+      var sub=inp.parentNode.querySelector('.psub'); if(sub) sub.innerHTML=margNote(+inp.value,itemCost(id));
+      save();
+    };
+  });
 };
 
 /* ---------- news / day events (seed of the 'event day' model) ---------- */
@@ -939,9 +1001,11 @@ if(typeof globalThis!=='undefined'){
     sizeById:sizeById, fatById:fatById, snackById:snackById, sauceById:sauceById, upgById:upgById,
     crispLabel:crispLabel, crispQuality:crispQuality, oilQuality:oilQuality, priceAppeal:priceAppeal,
     serveQuality:serveQuality, upgradeCost:upgradeCost, effPotato:effPotato, fryerFootMul:fryerFootMul,
-    oilDecayMul:oilDecayMul, wage:wage, unlockedCount:unlockedCount, idlePerSec:idlePerSec,
+    oilDecayMul:oilDecayMul, wage:wage, unlockedCount:unlockedCount,
     DISTRICTS:DISTRICTS, districtById:districtById, archById:archById, archetypeFor:archetypeFor,
     arrivalRate:arrivalRate, serviceRate:serviceRate, evalServe:evalServe,
+    FAIR_PRICE:FAIR_PRICE, defaultPrices:defaultPrices, priceOf:priceOf, itemAppeal:itemAppeal,
+    friesAppeal:friesAppeal, itemCost:itemCost,
     freshGame:freshGame, makeCustomer:makeCustomer };
 }
 </script>
