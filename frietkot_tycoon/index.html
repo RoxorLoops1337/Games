@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Frietkot Story</title>
+<title>Rudy Friet — Frituur Story</title>
 <style>
   :root{--bg:#1b1524;--panel:#2b2033;--panel2:#372a42;--edge:#0d0a12;--ink:#f7ecd6;--ink2:#c9b48f;
     --gold:#ffd447;--gold2:#e8a63b;--good:#7bd66b;--bad:#e5624a;--warn:#f0a93b;--blue:#5cc0e8;--slot:#160f1e;}
@@ -89,7 +89,7 @@
   </div>
 
   <div class="screen" id="startScreen">
-    <h1>FRIETKOT<small>S T O R Y</small></h1>
+    <h1>RUDY FRIET<small>F R I T U U R   S T O R Y</small></h1>
     <p>Bouw je frituur uit: koop friteuzen, toog, staantafels en decor, neem personeel aan en <b>onderzoek</b> nieuwe snacks &amp; sauzen. Trek meer &amp; nieuwe klanten aan en word de <b>bekendste frituur</b> van 't land.</p>
     <button class="startbtn" id="startBtn">▶ Open je frietkot</button>
   </div>
@@ -267,10 +267,11 @@ var $=function(id){ return (typeof document!=='undefined'&&document.getElementBy
 var scene=$('scene'), ctx=scene&&scene.getContext?scene.getContext('2d'):null;
 var fxL=$('fx');
 var DOOR={gx:(GW>>1), gy:GH-1};
-// toog merge-level art: counter_01 (simpel hout) → counter_25 (neon deluxe). Graceful: emoji fallback.
+// toog merge-level art: counter_01 (simpel hout) → counter_75 (sci-fi "all friet is one"). Graceful: emoji fallback.
+var MAX_TOOG=75;
 var COUNTER_IMG=[];
 var loadCounters=function(){ if(typeof Image==='undefined') return;
-  for(var i=1;i<=25;i++){ (function(i){ var im=new Image(); im._ok=false;
+  for(var i=1;i<=MAX_TOOG;i++){ (function(i){ var im=new Image(); im._ok=false;
     im.onload=function(){ im._ok=true; }; im.onerror=function(){ im._ok=false; };
     im.src='sprites/counters/counter_'+(i<10?('0'+i):i)+'.png'; COUNTER_IMG[i]=im; })(i); } };
 // floor tile textures (graceful: fall back to the painted checker if an image is missing).
@@ -414,7 +415,7 @@ var drawScene=function(){
       else if(canMerge(G.selected,o)){ ctx.globalAlpha=.25+.2*Math.sin(T*6); ctx.fillStyle=var_gold; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); ctx.globalAlpha=1; } }
     if(d.kind==='counter'){
       if(o._busy){ ctx.fillStyle='#7bd66b22'; ctx.fillRect(o.gx*TS,o.gy*TS,TS,TS); }
-      var lvl=clamp(o.lvl||1,1,25), im=COUNTER_IMG[lvl];
+      var lvl=clamp(o.lvl||1,1,MAX_TOOG), im=COUNTER_IMG[lvl];
       if(im&&im._ok){ var iw=TS*1.02, ih=iw*im.height/im.width; ctx.drawImage(im, c.x-iw/2, c.y-ih/2+1, iw, ih); }
       else { ctx.fillStyle='#241a2f'; roundRect(o.gx*TS+3,o.gy*TS+3,TS-6,TS-6,5); ctx.fill(); emoji(d.emoji,c.x,c.y,20); }
     } else {
@@ -638,7 +639,7 @@ if(typeof globalThis!=='undefined'){
     DISH_BASE:DISH_BASE, INGREDIENTS:INGREDIENTS, ingDef:ingDef, dishesUnlocked:dishesUnlocked, dishRank:dishRank,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, canAfford:canAfford, freshGame:freshGame,
-    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal };
+    FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG };
 }
 </script>
 </body>
