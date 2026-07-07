@@ -310,5 +310,25 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(winter.spend > 1, 'winter comfort-food splurge raises spend');
 }
 
+// ---- staff crew with stats + training ----
+{
+  const g = FS.freshGame();
+  ok(Array.isArray(g.crew) && g.crew.length === 0, 'fresh game starts with no crew');
+  // a flat legacy staff count still works via fallback
+  const legacy = FS.freshGame(); legacy.crew = []; legacy.staff = 2;
+  ok(FS.staffSpeed(legacy) === 2, 'a legacy flat staff count falls back to speed');
+  // a hired, level-1 crew member contributes like one old staff
+  const g2 = FS.freshGame(); g2.crew = [{ name: 'Rudy', spdLv: 1, sklLv: 1 }];
+  ok(Math.abs(FS.staffSpeed(g2) - 1) < 1e-9, 'a level-1 friturist contributes 1.0 speed');
+  ok(FS.throughput(g2) > FS.throughput(g), 'hiring raises throughput');
+  // training speed raises throughput, training skill raises order value
+  const g3 = FS.freshGame(); g3.crew = [{ name: 'Fien', spdLv: 3, sklLv: 1 }];
+  ok(FS.staffSpeed(g3) > FS.staffSpeed(g2), 'a trained-speed friturist is faster');
+  const g4 = FS.freshGame(); g4.crew = [{ name: 'Jos', spdLv: 1, sklLv: 4 }];
+  ok(FS.serviceBonus(g4) > 1, 'trained skill raises the service bonus');
+  ok(FS.orderValue(g4, { fav: null, spend: 1 }, 1) > FS.orderValue(g2, { fav: null, spend: 1 }, 1), 'a skilled crew earns bigger tickets');
+  ok(FS.trainCost(2) > FS.trainCost(1), 'each training level costs more');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
