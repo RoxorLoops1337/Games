@@ -90,6 +90,7 @@
     <div class="chip">🎯<b id="goalN">0/0</b></div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
+    <div class="chip" id="muteBtn" style="cursor:pointer" title="Geluid aan/uit">🔊</div>
   </div>
   <div id="goalbar"><i id="goalfill"></i><span id="goalTxt"></span></div>
 
@@ -404,7 +405,7 @@ var layoutQueue=function(){
   var doorX=tileC(DOOR.gx,DOOR.gy).x, qy=GH*TS+OUTH*0.46;
   for(var i=0;i<q.length;i++){ q[i].tx=clamp(doorX-i*13,9,worldW()-9); q[i].ty=qy; }
   var fc; while(q.length && (fc=freeCounter())){ var head=q.shift(); fc._busy=head; head.counter=fc;
-    var t=tileC(fc.gx,fc.gy); head.tx=t.x; head.ty=t.y+2; head.state='enter'; head.wait=0; }
+    var t=tileC(fc.gx,fc.gy); head.tx=t.x; head.ty=t.y+2; head.state='enter'; head.wait=0; doorbell(); }
 };
 var freeCounter=function(){ var cs=objsOfKind('counter'); for(var i=0;i<cs.length;i++){ if(!cs[i]._busy) return cs[i]; } return null; };
 var freeLeaner=function(){ var ls=objsOfKind('leaner'); for(var i=0;i<ls.length;i++){ if(!ls[i]._busy) return ls[i]; } return null; };
@@ -422,7 +423,7 @@ var serveDone=function(c){
   var hearts=Math.max(1,Math.round(1*c.type.heart));
   c.hearts=hearts;
   var sc=tileC(c.counter.gx,c.counter.gy);
-  coinPop(sc.x,sc.y,'+'+v); serveBurst(sc.x,sc.y,hearts); emote(c.x,c.y-16, hearts>=2?'😍':'😋','#ff9ecb');
+  coinPop(sc.x,sc.y,'+'+v); serveBurst(sc.x,sc.y,hearts); kaching(); emote(c.x,c.y-16, hearts>=2?'😍':'😋','#ff9ecb');
   if(c.counter) c.counter._pop=POP_DUR*0.7;
   if(el.money){ el.money.classList&&el.money.classList.add('bump'); setTimeout(function(){ el.money.classList&&el.money.classList.remove('bump'); },260); }
   // Faam (★ reputation) is a slow meta-currency now: only some happy customers boost it.
@@ -603,10 +604,25 @@ var confetti=function(){ if(!fxL||!document.createElement) return; for(var i=0;i
 var toastT=null;
 var toast=function(html){ var t=$('toast'); if(!t) return; t.innerHTML=html; t.classList.add('show');
   if(toastT) clearTimeout(toastT); toastT=setTimeout(function(){t.classList.remove('show');},2400); };
-var beep=function(f,d,v){ try{ if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)(); var o=AC.createOscillator(),g=AC.createGain();
-  o.type='square';o.frequency.value=f;g.gain.value=v||0.05;o.connect(g);g.connect(AC.destination);o.start();
-  g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+(d||0.1));o.stop(AC.currentTime+(d||0.1)); }catch(e){} };
-var AC=null;
+/* ---------- sound ---------- */
+var AC=null, sfxOn=true;
+try{ if(typeof localStorage!=='undefined' && localStorage.getItem('ft_sfx')==='0') sfxOn=false; }catch(e){}
+var actx=function(){ if(!AC){ try{ AC=new(window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; };
+var tone=function(f,d,v,type,t0){ if(!sfxOn) return; var a=actx(); if(!a) return; try{ var o=a.createOscillator(),g=a.createGain();
+  o.type=type||'square'; o.frequency.value=f; var st=a.currentTime+(t0||0);
+  g.gain.setValueAtTime(Math.max(0.0001,v||0.05),st); g.gain.exponentialRampToValueAtTime(0.0001,st+(d||0.1));
+  o.connect(g); g.connect(a.destination); o.start(st); o.stop(st+(d||0.1)+0.02); }catch(e){} };
+var beep=function(f,d,v){ tone(f,d||0.1,v||0.05,'square',0); };
+var kaching=function(){ tone(1050,0.06,0.05,'square',0); tone(1500,0.14,0.05,'square',0.055); };  // cash register
+var doorbell=function(){ tone(1245,0.12,0.045,'sine',0); tone(933,0.18,0.045,'sine',0.11); };       // ding-dong
+var noiseBuf=null, sizzleT=0;
+var sizzle=function(v){ if(!sfxOn) return; var a=actx(); if(!a) return; try{
+  if(!noiseBuf){ noiseBuf=a.createBuffer(1,Math.floor(a.sampleRate*0.5),a.sampleRate); var ch=noiseBuf.getChannelData(0); for(var i=0;i<ch.length;i++) ch[i]=Math.random()*2-1; }
+  var src=a.createBufferSource(); src.buffer=noiseBuf; var f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=3400; f.Q.value=0.6;
+  var g=a.createGain(); g.gain.setValueAtTime(v||0.012,a.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+0.4);
+  src.connect(f); f.connect(g); g.connect(a.destination); src.start(); src.stop(a.currentTime+0.45); }catch(e){} };
+var toggleSfx=function(){ sfxOn=!sfxOn; try{ localStorage.setItem('ft_sfx', sfxOn?'1':'0'); }catch(e){}
+  var mb=$('muteBtn'); if(mb) mb.textContent=sfxOn?'🔊':'🔇'; if(sfxOn) doorbell(); };
 var rankUp=function(nm){ confetti(); bigPop('RANG OMHOOG!','#ffd447'); toast('🏅 Je bent nu een <b>'+nm+'</b>!');
   G.faam+=5; addShake(2.2); chime([660,880,1100],0.09); starRing(GW*TS/2,GH*TS/2,14); syncHUD(); };
 
@@ -642,6 +658,7 @@ var drawFX=function(){ if(!ctx) return; for(var i=0;i<FX.length;i++){ var p=FX[i
 var steamT=0;
 var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT-dt*4.2); }
   for(var i=0;i<G.objs.length;i++){ var o=G.objs[i]; if(o._pop>0) o._pop=Math.max(0,o._pop-dt); }
+  sizzleT-=dt; if(sizzleT<=0){ sizzleT=rnd(1.6,3.2); if(countKind(G.objs,'fryer')>0) sizzle(0.010); }
   steamT-=dt; if(steamT<=0){ steamT=0.22;
     for(var j=0;j<G.objs.length;j++){ var q=G.objs[j], d=objDef(q.id); if(!d) continue; var cc=tileC(q.gx,q.gy);
       if(d.kind==='fryer' && Math.random()<0.7) spawnSteam(cc.x+rnd(-5,5), cc.y-TS*0.18);
@@ -884,6 +901,7 @@ var boot=function(){
   if(ft) ft.onclick=function(){ tab('staff'); }; if(kt) kt.onclick=function(){ tab('keuken'); };
   if(lt) lt.onclick=function(){ tab('floor'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
+  var mb=$('muteBtn'); if(mb){ mb.textContent=sfxOn?'🔊':'🔇'; mb.onclick=toggleSfx; }
   if(scene&&scene.addEventListener){
     if(typeof window!=='undefined' && 'PointerEvent' in window){
       scene.addEventListener('pointerdown',function(e){ onDown(e); });
