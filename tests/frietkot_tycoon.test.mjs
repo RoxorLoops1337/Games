@@ -274,5 +274,18 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(g.objs.every(o => o.gx < 6 && o.gy < 4), 'starting furniture fits the 6×4 shop');
 }
 
+// ---- kitchen: clearer recipe-inventing ----
+{
+  ok(FS.INGREDIENTS.length >= 10, 'a richer pantry of ingredients to invent with');
+  // affinity mirrors compat for a single ingredient (drives the 👍/👎 badges)
+  ok(FS.affinity('ajuin', 'friet') === 2, 'a loved ingredient shows positive affinity');
+  ok(FS.affinity('brood', 'friet') === -1, 'a clashing ingredient shows negative affinity');
+  ok(FS.affinity('ei', 'frikandel') <= 0, 'a neutral/clashing ingredient is not positive');
+  // signature titles climb as the dish taste-rank grows (the "creation" feel)
+  ok(FS.sigTitle(1) !== FS.sigTitle(5), 'a higher-rank dish earns a fancier title');
+  ok(typeof FS.sigTitle(99) === 'string', 'title is capped, not undefined, at very high rank');
+  ok(FS.dishEmoji('friet') === '🍟' && FS.dishName('friet') === 'Friet', 'dish presentation helpers');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
