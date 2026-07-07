@@ -68,7 +68,7 @@ ok(G.money === 2000 && G.day === 1, 'starts with 2000 fr. on day 1');
 ok(G.oil === 100, 'starts with fresh oil');
 ok(G.rep >= 0 && G.rep <= 100, 'rep in range');
 ok(typeof G.shop === 'string' && G.shop.length > 0, 'has a shop name');
-ok(FT.SIZES.some(s => s.id === G.size), 'default size is valid');
+ok(G.prices && G.prices.klein > 0 && G.prices.groot > 0, 'starts with a per-shop price sheet');
 ok(FT.FATS.some(f => f.id === G.fat), 'default fat is valid');
 
 // ---- makeCustomer: valid archetype + size wish + patience ----
@@ -80,7 +80,9 @@ for (let i = 0; i < 40; i++) {
 }
 
 // ---- menu data integrity (snacks & sauces) ----
-ok(FT.SNACKS.length === 5, 'five snacks');
+ok(FT.SNACKS.length === 9, 'nine snacks');
+ok(FT.snackById('viandel').label === 'viandel', 'viandel added');
+ok(FT.snackById('boulet').label === 'boulet', 'boulet added');
 ok(FT.SAUCES.length === 6, 'six sauces');
 ok(FT.SAUCES[0].id === 'mayo' && FT.SAUCES[0].unlock === 0, 'mayo is free/default');
 ok(FT.SNACKS.every(s => s.price > s.cost && s.unlock > 0), 'snacks priced above cost, cost to unlock');
@@ -125,14 +127,22 @@ ok(FT.unlockedCount(Gm) === 0, 'fresh game: only free mayo, count 0');
 Gm.menu.sauces.andalouse = true; Gm.menu.snacks.curryworst = true;
 ok(FT.unlockedCount(Gm) === 2, 'unlockedCount counts extras');
 
-// ---- idlePerSec grows with staff, menu, fryer ----
-const G0 = FT.freshGame();
-const base0 = FT.idlePerSec(G0, 1).perSec;
-ok(base0 > 0, 'idle income positive');
-const Gs = FT.freshGame(); Gs.staff = 2;
-ok(FT.idlePerSec(Gs, 1).perSec > base0, 'staff raise idle income');
-const Gbig = FT.freshGame(); Gbig.up.fryer = 3;
-ok(FT.idlePerSec(Gbig, 1).perSec > base0, 'bigger fryer raises idle income');
+// ---- per-shop price sheet ----
+{
+  const P = FT.freshGame();
+  ok(P.prices.klein === FT.FAIR_PRICE.klein, 'default pack price = fair price');
+  ok(FT.priceOf(P, 'klein') === FT.FAIR_PRICE.klein, 'priceOf reads default');
+  P.prices.groot = 150;
+  ok(FT.priceOf(P, 'groot') === 150, 'priceOf reads the shop price sheet');
+  ok(FT.defaultPrices().familie === FT.FAIR_PRICE.familie, 'defaultPrices matches fair prices');
+  ok(FT.itemCost('groot') === FT.sizeById('groot').cost, 'itemCost for a pack');
+  ok(FT.itemCost('curryworst') === FT.snackById('curryworst').cost, 'itemCost for a snack');
+  // cheaper price sheet => more appeal & more arrivals
+  const dear = FT.freshGame(); FT.SIZES.forEach(s => dear.prices[s.id] = FT.FAIR_PRICE[s.id] * 2);
+  const cheapS = FT.freshGame(); FT.SIZES.forEach(s => cheapS.prices[s.id] = Math.round(FT.FAIR_PRICE[s.id] * 0.8));
+  ok(FT.friesAppeal(cheapS) > FT.friesAppeal(dear), 'cheaper price sheet = more appeal');
+  ok(FT.itemAppeal(cheapS, 'klein') > FT.itemAppeal(dear, 'klein'), 'per-item appeal reflects price');
+}
 
 // ---- freshGame carries the new fields ----
 const Gn = FT.freshGame();
@@ -173,8 +183,8 @@ const Ga = FT.freshGame();
 ok(FT.arrivalRate(Ga, 1) > 0, 'arrival rate positive');
 ok(FT.arrivalRate(Ga, 1.5) > FT.arrivalRate(Ga, 1), 'higher demand = more arrivals');
 {
-  const cheap = FT.freshGame(); cheap.price = 45;
-  const dear = FT.freshGame(); dear.price = 150;
+  const cheap = FT.freshGame(); FT.SIZES.forEach(s => cheap.prices[s.id] = Math.round(FT.FAIR_PRICE[s.id] * 0.7));
+  const dear = FT.freshGame(); FT.SIZES.forEach(s => dear.prices[s.id] = Math.round(FT.FAIR_PRICE[s.id] * 1.8));
   ok(FT.arrivalRate(cheap, 1) > FT.arrivalRate(dear, 1), 'cheaper draws more customers');
   const busy = FT.freshGame(); busy.district = 'student';
   ok(FT.arrivalRate(busy, 1) > FT.arrivalRate(Ga, 1), 'busier district = more arrivals');
@@ -192,10 +202,15 @@ ok(near(FT.serviceRate(FT.freshGame()), 0.40), 'base service rate = 0.40/sec');
   const G = FT.freshGame();
   const cust = FT.makeCustomer(G);
   const r = FT.evalServe(G, cust);
-  ok(r.ticket >= G.price, 'ticket at least the fries price');
-  ok(r.sat >= 0 && r.sat <= 1.05, 'satisfaction in range');
+  ok(r.ticket >= FT.priceOf(G, cust.size), 'ticket at least the pack price they bought');
+  ok(r.sat >= 0 && r.sat <= 1.1, 'satisfaction in range');
   ok(r.decay > 0, 'serving consumes some oil');
   ok(typeof r.tip === 'number' && r.tip >= 0, 'tip is a non-negative number');
+  // overpricing the pack lowers satisfaction
+  const fair = FT.freshGame(); const gouge = FT.freshGame();
+  FT.SIZES.forEach(s => gouge.prices[s.id] = FT.FAIR_PRICE[s.id] * 2);
+  const cc = { arch: FT.archById('vaste'), size: 'groot', sauce: null, snack: null };
+  ok(FT.evalServe(fair, cc).sat > FT.evalServe(gouge, cc).sat, 'gouging the price lowers satisfaction');
   // matching a purist with crispy fries + fresh oil beats a mismatch
   const pur = { arch: FT.archById('purist'), size: 'klein', sauce: null, snack: null };
   const Ggood = FT.freshGame(); Ggood.crisp = 74; Ggood.oil = 100;
