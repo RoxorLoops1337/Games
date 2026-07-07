@@ -16,6 +16,9 @@
   .chip{background:var(--slot);border:1px solid #0d0a12;border-radius:6px;padding:3px 7px;display:flex;align-items:center;gap:4px;white-space:nowrap;font-weight:800;font-variant-numeric:tabular-nums}
   .chip b{color:var(--gold)} .chip.f b{color:var(--blue)} .spacer{flex:1}
   #rankChip{color:var(--gold);font-weight:800;font-size:12px}
+  #goalbar{position:relative;height:16px;background:#160f1e;border-bottom:2px solid var(--edge);overflow:hidden}
+  #goalfill{display:block;height:100%;width:0%;background:linear-gradient(90deg,#e8a63b,#ffd447);transition:width .3s}
+  #goalTxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--ink);text-shadow:0 1px 1px #000}
   #stage{position:relative;width:100%;background:#241a26;line-height:0;border-bottom:2px solid var(--edge)}
   #scene{width:100%;display:block}
   #fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
@@ -61,9 +64,11 @@
     <div class="chip f">★<b id="faam">0</b></div>
     <div class="chip">📅 wk<b id="week">1</b></div>
     <div class="chip">✨<b id="appeal">0</b></div>
+    <div class="chip">🎯<b id="goalN">0/0</b></div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
   </div>
+  <div id="goalbar"><i id="goalfill"></i><span id="goalTxt"></span></div>
 
   <div id="stage"><canvas id="scene" width="224" height="160"></canvas><div id="fx"></div></div>
   <div id="placebar">Tik op een lege tegel om te plaatsen <button id="cancelPlace">annuleer</button></div>
@@ -102,8 +107,8 @@ var pick=function(a){return a[Math.floor(Math.random()*a.length)];};
 var fmt=function(n){ n=Math.round(n); var s=Math.abs(n)+'',o='';for(var i=0;i<s.length;i++){if(i>0&&(s.length-i)%3===0)o+='.';o+=s[i];}return (n<0?'-':'')+o; };
 
 /* ---------- tuning (single table) ---------- */
-var BAL={ GW:7, GH:5, TS:32, spawnBase:3.6, spawnMin:0.75, serviceBase:2.6, eatTime:3.4,
-  weekLen:20, custSpeed:34, queuePatience:9, frietPrice:30, saucePrice:8, staffBase:220, staffStep:1.7 };
+var BAL={ GW:7, GH:5, TS:32, spawnBase:2.4, spawnMin:0.45, serviceBase:2.0, eatTime:3.0,
+  weekLen:22, custSpeed:46, queuePatience:10, frietPrice:30, saucePrice:8, staffBase:220, staffStep:1.7 };
 
 /* ---------- placeable objects ---------- */
 var OBJECTS=[
@@ -193,6 +198,13 @@ var rollType=function(G){
   return CUSTTYPES[0];
 };
 var rankFor=function(served){ var nm=RANKS[0][1]; for(var i=0;i<RANKS.length;i++) if(served>=RANKS[i][0]) nm=RANKS[i][1]; return nm; };
+// progress toward the NEXT rank (for the always-visible goal bar)
+var rankProgress=function(served){ var prev=0, next=null, nextName=null;
+  for(var i=0;i<RANKS.length;i++){ if(served>=RANKS[i][0]) prev=RANKS[i][0]; else { next=RANKS[i][0]; nextName=RANKS[i][1]; break; } }
+  if(next==null) return {frac:1, next:null, nextName:null};
+  return {frac:clamp((served-prev)/(next-prev),0,1), next:next, nextName:nextName}; };
+// this week's serve-goal target, scaling with week number
+var weekGoal=function(week){ return Math.round(5+week*1.6); };
 var staffCost=function(n){ return Math.round(BAL.staffBase*Math.pow(BAL.staffStep,n)); };
 var canAfford=function(G,cost){ return G.money>=cost; };
 
@@ -208,9 +220,26 @@ var DOOR={gx:(GW>>1), gy:GH-1};
 var G=null;
 var freshGame=function(){
   var g={ money:400, faam:0, week:1, weekT:0, served:0, rank:RANKS[0][1],
-    objs:[ {id:'friteuse',gx:1,gy:0,lvl:1},{id:'toog',gx:3,gy:0,lvl:1},{id:'staantafel',gx:5,gy:1,lvl:1},{id:'plant',gx:5,gy:0,lvl:1} ],
-    research:{}, staff:0, custs:[], spawnT:1.2, placing:null, selected:null, milestone:0, running:false };
+    objs:[ {id:'friteuse',gx:1,gy:0,lvl:1},{id:'toog',gx:2,gy:0,lvl:1},{id:'toog',gx:4,gy:0,lvl:1},
+      {id:'staantafel',gx:6,gy:1,lvl:1},{id:'staantafel',gx:6,gy:2,lvl:1},{id:'plant',gx:6,gy:0,lvl:1} ],
+    research:{}, staff:0, custs:[], spawnT:1.0, placing:null, selected:null, milestone:0, running:false,
+    regulars:0, weekServed:0, goalTarget:weekGoal(1) };
   return g;
+};
+var SAVE_KEY='ftstory_save';
+var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.stringify({
+  money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,
+  objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
+  research:G.research,staff:G.staff,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget })); }catch(e){} };
+var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
+  G=freshGame();
+  ['money','faam','week','weekT','served','rank','objs','research','staff','regulars','weekServed','goalTarget'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  G.objs.forEach(function(x){ if(x.lvl==null) x.lvl=1; }); G.custs=[]; G.running=true; return true; }catch(e){ return false; } };
+var newWeek=function(){
+  if(G.weekServed>=G.goalTarget){ var rw=Math.round(3+G.week*1.5), cash=Math.round(150+G.week*45);
+    G.faam+=rw; G.money+=cash; confetti(); bigPop('WEEKDOEL!','#7bd66b');
+    toast('🎯 Weekdoel gehaald! <b>+★'+rw+'</b> +'+fmt(cash)+' 💶'); beep(680,0.1,0.06); setTimeout(function(){ beep(900,0.12,0.06); },110); }
+  G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week); save(); syncHUD();
 };
 var occupied=function(gx,gy){ if(gx<0||gy<0||gx>=GW||gy>=GH) return true; if(gx===DOOR.gx&&gy===DOOR.gy) return true;
   for(var i=0;i<G.objs.length;i++) if(G.objs[i].gx===gx&&G.objs[i].gy===gy) return true; return false; };
@@ -233,7 +262,8 @@ var comboMulNow=function(){ var cs=detectCombos(G.objs); var m=1; cs.forEach(fun
 
 var serveDone=function(c){
   var v=orderValue(G,c.type,comboMulNow());
-  c.val=v; G.money+=v; G.served++;
+  c.val=v; G.money+=v; G.served++; G.weekServed++;
+  if(Math.random()<0.35) G.regulars++;                 // happy customer becomes a regular → compounding traffic
   var hearts=Math.max(1,Math.round(1*c.type.heart));
   c.hearts=hearts;
   var sc=tileC(c.counter.gx,c.counter.gy);
@@ -343,9 +373,13 @@ var rankUp=function(nm){ confetti(); bigPop('RANG OMHOOG!','#ffd447'); toast('�
 /* ---------- UI ---------- */
 var el={};
 var refEls=function(){ ['money','faam','week','appeal','rankChip','shopList','resList','staffList',
-  'placebar','cancelPlace','startScreen','startBtn'].forEach(function(id){ el[id]=$(id); }); };
+  'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
-  el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank; };
+  el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
+  if(el.goalN) el.goalN.textContent=Math.min(G.weekServed,G.goalTarget)+'/'+G.goalTarget;
+  var rp=rankProgress(G.served);
+  if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
+  if(el.goalTxt) el.goalTxt.textContent= rp.next? ('Volgende rang: '+rp.nextName+'  ('+G.served+'/'+rp.next+')') : 'Hoogste rang bereikt! ⭐'; };
 var renderShop=function(){ if(!el.shopList) return; var h='';
   OBJECTS.forEach(function(o){ h+='<div class="item"><div class="ic">'+o.emoji+'</div><div class="info">'
     +'<div class="t">'+o.nm+'</div><div class="s">'+o.desc+' · ✨'+o.appeal+'</div></div>'
@@ -366,7 +400,7 @@ var renderStaff=function(){ if(!el.staffList) return; var c=staffCost(G.staff);
   var hb=$('hireBtn'); if(hb) hb.onclick=hireStaff; };
 var each=function(sel,mk){ if(typeof document==='undefined'||!document.querySelectorAll) return;
   Array.prototype.forEach.call(document.querySelectorAll(sel),function(b){ b.onclick=mk(b); }); };
-var renderAll=function(){ renderShop(); renderRes(); renderStaff(); syncHUD(); };
+var renderAll=function(){ renderShop(); renderRes(); renderStaff(); syncHUD(); save(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<o.cost){ toast('Te weinig geld.'); return; }
   G.placing=id; G.selected=null; if(el.placebar) el.placebar.classList.add('on'); toast('Tik op een lege tegel voor je <b>'+o.nm+'</b>.'); };
@@ -406,11 +440,12 @@ var last=0;
 var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
   var dt=last?Math.min((ts-last)/1000,0.05):0.016; last=ts; T+=dt;
   if(G&&G.running){
-    // week clock
-    G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; G.week++; if(el.week) el.week.textContent=G.week; }
-    // spawns
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G))*rnd(0.7,1.3);
-      if(G.custs.length<40) G.custs.push(makeCust()); }
+    // week clock + weekly goal
+    G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
+    // spawns (regulars boost traffic + occasionally bring a friend)
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)+G.regulars*0.5)*rnd(0.7,1.3);
+      if(G.custs.length<44){ G.custs.push(makeCust());
+        if(G.regulars>2 && G.custs.length<44 && Math.random()<Math.min(0.35,G.regulars*0.012)) G.custs.push(makeCust()); } }
     // sim
     for(var i=G.custs.length-1;i>=0;i--){ updateCust(G.custs[i],dt); if(G.custs[i]._dead) G.custs.splice(i,1); }
     if(el.money){ el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam); }
@@ -422,7 +457,9 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 /* ---------- boot ---------- */
 var tab=function(which){ ['shop','res','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
-  refEls(); G=freshGame(); renderAll();
+  refEls(); var loaded=loadSave(); if(!loaded) G=freshGame(); renderAll();
+  if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
+  if(typeof setInterval!=='undefined') setInterval(save,4000);
   var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff');
   if(st) st.onclick=function(){ tab('shop'); }; if(rt) rt.onclick=function(){ tab('res'); }; if(ft) ft.onclick=function(){ tab('staff'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
@@ -440,7 +477,8 @@ if(typeof globalThis!=='undefined'){
   globalThis.__FS={ clamp:clamp, fmt:fmt, BAL:BAL, OBJECTS:OBJECTS, RESEARCH:RESEARCH, CUSTTYPES:CUSTTYPES, RANKS:RANKS,
     objDef:objDef, resDef:resDef, countKind:countKind, power:power, kindPower:kindPower, canMerge:canMerge, adjacent:adjacent, detectCombos:detectCombos,
     computeAppeal:computeAppeal, spawnInterval:spawnInterval, throughput:throughput, serviceTime:serviceTime,
-    orderValue:orderValue, rollType:rollType, rankFor:rankFor, staffCost:staffCost, canAfford:canAfford, freshGame:freshGame };
+    orderValue:orderValue, rollType:rollType, rankFor:rankFor, rankProgress:rankProgress, weekGoal:weekGoal,
+    staffCost:staffCost, canAfford:canAfford, freshGame:freshGame };
 }
 </script>
 </body>

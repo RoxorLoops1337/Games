@@ -15,7 +15,7 @@ ok(FS.resDef('bicky').kind === 'snack', 'resDef lookup');
 // ---- fresh game ----
 const G = FS.freshGame();
 ok(G.money === 400 && G.faam === 0 && G.week === 1, 'starts with €400, 0 faam, week 1');
-ok(Array.isArray(G.objs) && FS.countKind(G.objs, 'fryer') === 1 && FS.countKind(G.objs, 'counter') === 1, 'starts with a fryer and a counter');
+ok(Array.isArray(G.objs) && FS.countKind(G.objs, 'fryer') === 1 && FS.countKind(G.objs, 'counter') === 2, 'starts with a fryer and two toogs');
 ok(G.staff === 0 && Object.keys(G.research).length === 0, 'no staff / research yet');
 
 // ---- adjacency + combos ----
@@ -104,6 +104,15 @@ ok(FS.canMerge({ id: 'toog', lvl: 1 }, { id: 'friteuse', lvl: 1 }) === false, 'd
   const gc = FS.freshGame();
   ok(FS.serviceTime(gc, 2) < FS.serviceTime(gc, 1), 'a leveled toog serves faster');
 }
+
+// ---- hook layer: rank progress + weekly goals + regulars ----
+ok(FS.rankProgress(0).next === FS.RANKS[1][0], 'rank progress points at the next threshold');
+ok(FS.rankProgress(0).frac >= 0 && FS.rankProgress(0).frac < 1, 'not maxed at the start');
+ok(FS.rankProgress(99999).next === null, 'top rank has no next target');
+{ const p = FS.rankProgress(6); ok(p.frac > 0 && p.frac < 1, 'partial progress mid-rank'); }
+ok(FS.weekGoal(1) < FS.weekGoal(10), 'weekly serve-goal scales up over weeks');
+ok(FS.weekGoal(1) > 0, 'weekly goal is a positive target');
+{ const g = FS.freshGame(); ok(g.regulars === 0 && g.weekServed === 0 && g.goalTarget > 0, 'fresh game carries hook-layer fields'); }
 
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
