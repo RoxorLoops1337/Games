@@ -381,5 +381,20 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.campaignAppeal(g) === 0, 'an expired campaign gives no boost');
 }
 
+// ---- shady mechanics ----
+{
+  ok(FS.SHADY.length >= 2, 'several louche practices');
+  const g = FS.freshGame();
+  ok(FS.shadyIncomeMul(g) === 1 && FS.shadyAppeal(g) === 0 && FS.shadyHeatRate(g) === 0, 'clean shop: no shady effects');
+  g.shady = { tax: true };
+  const tax = FS.shadyDef('tax');
+  ok(Math.abs(FS.shadyIncomeMul(g) - tax.income) < 1e-9, 'zwart geld raises the income multiplier');
+  ok(FS.shadyHeatRate(g) === tax.heat, 'an active shady practice builds heat');
+  ok(FS.orderValue(g, { fav: null, spend: 1 }, 1) > FS.orderValue(FS.freshGame(), { fav: null, spend: 1 }, 1), 'louche margin earns more per order');
+  g.shady = { oil: true };
+  ok(FS.shadyAppeal(g) < 0, 'dirty oil hurts appeal');
+  ok(FS.computeAppeal(g) < FS.computeAppeal(FS.freshGame()), 'cutting corners lowers overall appeal');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

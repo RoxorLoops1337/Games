@@ -104,6 +104,7 @@
     <div class="chip">🎯<b id="goalN">0/0</b></div>
     <div class="chip" id="contest" title="Weekuitdaging">🏆 –</div>
     <div class="chip" id="campaignChip" style="display:none;color:var(--gold)" title="Actieve campagne"></div>
+    <div class="chip" id="heatChip" style="display:none" title="Verdenking"></div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
     <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
@@ -217,6 +218,16 @@ var CAMPAIGNS=[
 ];
 var campDef=function(id){ for(var i=0;i<CAMPAIGNS.length;i++) if(CAMPAIGNS[i].id===id) return CAMPAIGNS[i]; return null; };
 var campaignAppeal=function(G){ if(!G.campaign||!(G.campaign.left>0)) return 0; var c=campDef(G.campaign.id); return c?c.appeal:0; };
+// louche practices: more profit now, but the "verdenking" (heat) rises → the inspector may fine you
+var SHADY=[
+  {id:'oil', nm:'Oude olie hergebruiken', emoji:'🛢️', income:1.12, appeal:-6, heat:1.6, desc:'+12% winst · −6 sfeer'},
+  {id:'rats',nm:'Ongedierte negeren',      emoji:'🐀', income:1.08, appeal:-4, heat:2.0, desc:'+8% winst · −4 sfeer'},
+  {id:'tax', nm:'Zwart geld',              emoji:'💰', income:1.22, appeal:0,  heat:2.8, desc:'+22% winst · veel verdenking'}
+];
+var shadyDef=function(id){ for(var i=0;i<SHADY.length;i++) if(SHADY[i].id===id) return SHADY[i]; return null; };
+var shadyIncomeMul=function(G){ var m=1; if(G&&G.shady) SHADY.forEach(function(s){ if(G.shady[s.id]) m*=s.income; }); return m; };
+var shadyAppeal=function(G){ var a=0; if(G&&G.shady) SHADY.forEach(function(s){ if(G.shady[s.id]) a+=s.appeal; }); return a; };
+var shadyHeatRate=function(G){ var r=0; if(G&&G.shady) SHADY.forEach(function(s){ if(G.shady[s.id]) r+=s.heat; }); return r; };
 
 /* ---------- dish development (the ingredient-compatibility puzzle) ---------- */
 // dishes you can rank up: friet (always) + researched snacks
@@ -317,6 +328,7 @@ var computeAppeal=function(G){
   a+=staffSpeed(G)*1;
   a+=floorAppeal(G);                                         // a nicer floor draws a few more customers
   a+=campaignAppeal(G);                                      // an active ad campaign spikes traffic
+  a+=shadyAppeal(G);                                         // cutting corners hurts the vibe
   return Math.round(a);
 };
 // VIP food critic: rates the frituur on friet taste-rank + appeal + menu variety → 1-5 stars & rewards
@@ -342,7 +354,7 @@ var throughput=function(G){ return 1 + 0.4*Math.max(0,kindPower(G.objs,'fryer')-
 var serviceTime=function(G,cLvl){ return BAL.serviceBase/(throughput(G)*power(cLvl)); };
 // value of one order (fries + optional snack + sauce), scaled by type spend & combos
 var orderValue=function(G,type,comboMul){
-  var v=menuAvg(G)*(1+(dishRank(G,'friet')-1)*0.20);             // friet portion: your menu prices, scaled by dish rank
+  var v=menuAvg(G)*(1+(dishRank(G,'friet')-1)*0.20)*shadyIncomeMul(G);  // friet portion: menu prices, dish rank, louche margin
   if(type.fav && G.research[type.fav]){ var r=resDef(type.fav); if(r&&r.price) v+=dishPrice(DISH_BASE[type.fav]||r.price, dishRank(G,type.fav)); }
   else { var snacks=RESEARCH.filter(function(r){return r.kind==='snack'&&G.research[r.id];});
     if(snacks.length && Math.random()<0.5){ var s=pick(snacks); v+=dishPrice(DISH_BASE[s.id]||s.price, dishRank(G,s.id)); } }
@@ -458,7 +470,7 @@ var freshGame=function(){
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
     floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices(),
-    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null };
+    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0 };
   return g;
 };
 var SAVE_KEY='ftstory_save';
@@ -467,10 +479,11 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
   floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
-  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign })); }catch(e){} };
+  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  if(!G.shady) G.shady={};
   if(!G.contest||!contestDef(G.contest.id)) G.contest=newContest(G.week);
   if(!G.prices) G.prices=defaultPrices(); SIZES.forEach(function(z){ if(G.prices[z.id]==null) G.prices[z.id]=z.fair; });
   if(!G.crew) G.crew=[]; if(!G.crew.length && G.staff>0){ for(var ci=0;ci<G.staff;ci++) G.crew.push({name:STAFF_NAMES[ci%STAFF_NAMES.length],spdLv:1,sklLv:1}); } G.staff=G.crew.length;
@@ -494,6 +507,7 @@ var newWeek=function(){
   var prevSeason=seasonFor(G.week);
   G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week);
   G.contest=newContest(G.week); G.weekCash=0; G.weekMerges=0;    // fresh weekly challenge
+  if((G.heat||0)>35 && Math.random() < (G.heat/170)) setTimeout(inspector,600);   // high suspicion → a raid this week
   if(G.week>=2 && !G.criticPending && Math.random()<0.4) G.criticPending=true;   // a critic may drop by this week
   var s=seasonFor(G.week); if(s!==prevSeason){ toast(s.emoji+' Het is nu <b>'+s.nm+'</b>!'); }
   var nc=contestDef(G.contest.id); if(nc) toast('🏆 Nieuwe uitdaging: <b>'+nc.desc+'</b>');
@@ -816,6 +830,13 @@ var startCampaign=function(id){ var c=campDef(id); if(!c) return;
   if(G.money<c.cost){ toast('Te weinig geld voor deze campagne.'); return; }
   G.money-=c.cost; G.campaign={id:id,left:c.dur}; addShake(1.6); chime([620,820,1040,1240],0.09); starRing(worldW()/2,GH*TS/2,14);
   toast(c.emoji+' <b>'+c.nm+'</b> gestart! +'+c.appeal+' ✨ aantrek voor '+c.dur+'s.'); renderAll(); };
+// suspicion (heat) builds while louche practices are on; the inspector may raid on high heat
+var heatTick=function(dt){ var r=shadyHeatRate(G); if(r>0){ G.heat=Math.min(100,(G.heat||0)+r*dt); } else if(G.heat>0){ G.heat=Math.max(0,G.heat-0.6*dt); } };
+var inspector=function(){ var fine=Math.round(G.money*clamp((G.heat||0)/280,0.06,0.32));
+  G.money-=fine; G.heat=12; addShake(2.8); chime([320,250,190],0.16);
+  bigPop('INSPECTIE! 🚨','#e5624a'); toast('🚨 <b>Voedselinspecteur!</b> Betrapt — boete '+fmt(fine)+'💶. Verdenking gereset.'); };
+var toggleShady=function(id){ var s=shadyDef(id); if(!s) return; if(!G.shady) G.shady={}; G.shady[id]=!G.shady[id];
+  beep(G.shady[id]?300:520,0.06,0.04); toast((G.shady[id]?'🕶️ '+s.nm+' AAN — meer winst, meer risico.':'✅ '+s.nm+' uit.')); renderAll(); };
 var campaignTick=function(dt){ if(!G.campaign) return; if(G.campaign.left>0){ G.campaign.left-=dt;
     if(G.campaign.left<=0){ var c=campDef(G.campaign.id); G.campaign=null; if(c) toast(c.emoji+' Campagne afgelopen.'); syncHUD(); }
     else if(el.campaignChip){ var ac=campDef(G.campaign.id); if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } } } };
@@ -849,13 +870,14 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','shopList','menuBody','resList','staffList','floorList',
+var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','heatChip','shopList','menuBody','resList','staffList','floorList',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
   if(el.season){ var ss=seasonFor(G.week); el.season.textContent=ss.emoji+' '+ss.nm; }
   if(el.contest){ var cc=G.contest&&contestDef(G.contest.id); el.contest.textContent=cc?('🏆 '+cc.tag+' '+(G.contest.done?'✓':Math.min(G.contest.progress,cc.target)+'/'+cc.target)):'🏆 –'; if(cc) el.contest.title='Weekuitdaging: '+cc.desc; }
   if(el.campaignChip){ var ac=G.campaign&&G.campaign.left>0?campDef(G.campaign.id):null; if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } else el.campaignChip.style.display='none'; }
+  if(el.heatChip){ var ht=Math.round(G.heat||0); if(ht>20){ el.heatChip.style.display=''; el.heatChip.textContent='🚨 '+ht+'%'; el.heatChip.style.color=ht>60?'var(--bad)':'var(--warn)'; } else el.heatChip.style.display='none'; }
   if(el.goalN) el.goalN.textContent=Math.min(G.weekServed,G.goalTarget)+'/'+G.goalTarget;
   var rp=rankProgress(G.served);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
@@ -911,9 +933,21 @@ var renderStaff=function(){ if(!el.staffList) return; if(!G.crew) G.crew=[];
   h+='<div class="item" style="border-color:#5cc0e8"><div class="ic">➕</div><div class="info"><div class="t">Neem een friturist aan</div>'
     +'<div class="s">'+(G.crew.length?G.crew.length+' in dienst':'Nog niemand in dienst')+' · sneller bedienen &amp; bakken</div></div>'
     +'<button class="buy" id="hireBtn"'+(G.money<c?' disabled':'')+'>'+fmt(c)+' 💶</button></div>';
+  // 🤫 louche practices
+  var heat=Math.round(G.heat||0);
+  h+='<div class="klabel" style="margin-top:13px">🤫 Onder de toonbank</div>';
+  h+='<div class="s" style="margin:0 2px 7px;color:var(--ink2);font-size:11px">Louche trucs = meer winst nu, maar de <b>verdenking</b> stijgt. Bij hoge verdenking valt de <b>inspecteur</b> binnen (dikke boete!).</div>';
+  var hcol=heat>60?'var(--bad)':heat>30?'var(--warn)':'var(--good)';
+  h+='<div class="item"><div class="ic">🚨</div><div class="info"><div class="t">Verdenking: <b style="color:'+hcol+'">'+heat+'%</b></div>'
+    +'<div style="height:7px;background:#160f1e;border-radius:5px;overflow:hidden;margin-top:4px"><i style="display:block;height:100%;width:'+heat+'%;background:'+hcol+'"></i></div></div></div>';
+  SHADY.forEach(function(s){ var on=G.shady&&G.shady[s.id];
+    h+='<div class="item"'+(on?' style="border-color:var(--bad)"':'')+'><div class="ic">'+s.emoji+'</div><div class="info"><div class="t">'+s.nm+'</div>'
+      +'<div class="s">'+s.desc+'</div></div>'
+      +'<button class="buy" data-shady="'+s.id+'" style="'+(on?'background:var(--bad);color:#fff':'background:var(--panel2);color:var(--ink)')+'">'+(on?'AAN':'uit')+'</button></div>'; });
   el.staffList.innerHTML=h;
   var hb=$('hireBtn'); if(hb) hb.onclick=hireStaff;
-  each('[data-train]',function(b){ return function(){ var p=b.getAttribute('data-train').split(':'); trainCrew(parseInt(p[0],10),p[1]); }; }); };
+  each('[data-train]',function(b){ return function(){ var p=b.getAttribute('data-train').split(':'); trainCrew(parseInt(p[0],10),p[1]); }; });
+  each('[data-shady]',function(b){ return function(){ toggleShady(b.getAttribute('data-shady')); }; }); };
 var trainCrew=function(idx,stat){ if(!G.crew||!G.crew[idx]) return; var m=G.crew[idx]; var key=stat==='skl'?'sklLv':'spdLv';
   var cost=trainCost(m[key]||1); if(G.money<cost){ toast('Te weinig geld om te trainen.'); return; }
   G.money-=cost; m[key]=(m[key]||1)+1; beep(620,0.08,0.05); spawnSparks(worldW()/2,GH*TS/2,6,'#7bd66b');
@@ -1105,7 +1139,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     // week clock + weekly goal
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
-    rushTick(dt); campaignTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
+    rushTick(dt); campaignTick(dt); heatTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
     G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)*valueFactor(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
       if(G.custs.length<ccap){ G.custs.push(makeCust());
         if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
@@ -1173,6 +1207,7 @@ if(typeof globalThis!=='undefined'){
     SIZES:SIZES, sizeDef:sizeDef, defaultPrices:defaultPrices, priceOf:priceOf, menuAvg:menuAvg, valueFactor:valueFactor,
     CONTESTS:CONTESTS, contestDef:contestDef, contestFor:contestFor, newContest:newContest,
     CAMPAIGNS:CAMPAIGNS, campDef:campDef, campaignAppeal:campaignAppeal,
+    SHADY:SHADY, shadyDef:shadyDef, shadyIncomeMul:shadyIncomeMul, shadyAppeal:shadyAppeal, shadyHeatRate:shadyHeatRate,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
