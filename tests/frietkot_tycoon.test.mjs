@@ -178,6 +178,18 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.canMerge({ id: 'toog', lvl: 40 }, { id: 'toog', lvl: 40 }) === true, 'high-tier toogs still merge');
 }
 
+// ---- fryer (friteuse) merge ladder: 60 Rudy Fryers tiers ----
+{
+  ok(FS.MAX_FRYER === 60, 'fryer art ladder runs to 60 tiers');
+  // a dragged friteuse merges onto a matching friteuse just like a toog
+  const g = FS.freshGame();
+  const f = g.objs.find(o => o.id === 'friteuse');
+  g.objs.push({ id: 'friteuse', gx: 3, gy: 2, lvl: 1 });
+  const other = g.objs.filter(o => o.id === 'friteuse')[1];
+  ok(FS.applyDrop(g, f, other.gx, other.gy) === 'merge', 'a friteuse drops onto a matching friteuse to merge');
+  ok(other.lvl === 2, 'merged friteuse levels up (its art advances a tier)');
+}
+
 // ---- drag & drop: move to an empty tile, drop on a match to merge ----
 {
   // drop a toog onto a matching toog -> merge (level up, one fewer object)
