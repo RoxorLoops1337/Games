@@ -105,6 +105,7 @@
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
     <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
+    <div class="chip" id="musicBtn" style="cursor:pointer" title="Muziek aan/uit">🎵</div>
     <div class="chip" id="muteBtn" style="cursor:pointer" title="Geluid aan/uit">🔊</div>
   </div>
   <div id="goalbar"><i id="goalfill"></i><span id="goalTxt"></span></div>
@@ -693,10 +694,11 @@ var toast=function(html){ var t=$('toast'); if(!t) return; t.innerHTML=html; t.c
 var AC=null, sfxOn=true;
 try{ if(typeof localStorage!=='undefined' && localStorage.getItem('ft_sfx')==='0') sfxOn=false; }catch(e){}
 var actx=function(){ if(!AC){ try{ AC=new(window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; };
-var tone=function(f,d,v,type,t0){ if(!sfxOn) return; var a=actx(); if(!a) return; try{ var o=a.createOscillator(),g=a.createGain();
+var synth=function(f,d,v,type,t0){ var a=actx(); if(!a) return; try{ var o=a.createOscillator(),g=a.createGain();
   o.type=type||'square'; o.frequency.value=f; var st=a.currentTime+(t0||0);
   g.gain.setValueAtTime(Math.max(0.0001,v||0.05),st); g.gain.exponentialRampToValueAtTime(0.0001,st+(d||0.1));
   o.connect(g); g.connect(a.destination); o.start(st); o.stop(st+(d||0.1)+0.02); }catch(e){} };
+var tone=function(f,d,v,type,t0){ if(!sfxOn) return; synth(f,d,v,type,t0); };
 var beep=function(f,d,v){ tone(f,d||0.1,v||0.05,'square',0); };
 var kaching=function(){ tone(1050,0.06,0.05,'square',0); tone(1500,0.14,0.05,'square',0.055); };  // cash register
 var doorbell=function(){ tone(1245,0.12,0.045,'sine',0); tone(933,0.18,0.045,'sine',0.11); };       // ding-dong
@@ -708,6 +710,25 @@ var sizzle=function(v){ if(!sfxOn) return; var a=actx(); if(!a) return; try{
   src.connect(f); f.connect(g); g.connect(a.destination); src.start(); src.stop(a.currentTime+0.45); }catch(e){} };
 var toggleSfx=function(){ sfxOn=!sfxOn; try{ localStorage.setItem('ft_sfx', sfxOn?'1':'0'); }catch(e){}
   var mb=$('muteBtn'); if(mb) mb.textContent=sfxOn?'🔊':'🔇'; if(sfxOn) doorbell(); };
+/* ---------- ambient chiptune (cosy loop under the SFX) ---------- */
+var musicOn=true; try{ if(typeof localStorage!=='undefined' && localStorage.getItem('ft_music')==='0') musicOn=false; }catch(e){}
+var MUSIC_VOL=0.028;
+// gentle C-major-pentatonic riff (0 = rest), bass changes per 4-step bar
+var MT_MEL=[392,0,329.63,392, 440,0,392,329.63, 587.33,0,440,392, 329.63,0,293.66,0];
+var MT_BASS=[130.81,98.00,110.00,87.31];
+var musicStep=0, musicTimer=null;
+var musicTick=function(){ if(!musicOn){ stopMusic(); return; } if(!AC) return;
+  var s=musicStep%16, mel=MT_MEL[s];
+  if(mel) synth(mel,0.22,MUSIC_VOL,'triangle');
+  if(s%4===0){ var bass=MT_BASS[(s/4)|0]; synth(bass,0.55,MUSIC_VOL*1.15,'square'); synth(bass*2,0.28,MUSIC_VOL*0.45,'triangle'); }
+  if(s%2===1) synth(1046.5,0.04,MUSIC_VOL*0.35,'square');   // soft off-beat blip
+  musicStep=(musicStep+1)%16;
+};
+var startMusic=function(){ if(musicTimer||!musicOn) return; if(!actx()) return; musicStep=0;
+  if(typeof setInterval!=='undefined') musicTimer=setInterval(musicTick,250); };
+var stopMusic=function(){ if(musicTimer){ clearInterval(musicTimer); musicTimer=null; } };
+var toggleMusic=function(){ musicOn=!musicOn; try{ localStorage.setItem('ft_music', musicOn?'1':'0'); }catch(e){}
+  var mb=$('musicBtn'); if(mb) mb.style.opacity=musicOn?'1':'0.4'; if(musicOn) startMusic(); else stopMusic(); };
 /* ---------- first-run tutorial ---------- */
 var TUT=[
  '👋 Welkom bij <b>Rudy Friet</b>! Even snel de kneepjes van \'t vak.',
@@ -984,7 +1005,7 @@ var doPinch=function(){ var ids=Object.keys(ptrs); if(ids.length<2||!pinch) retu
   cam.zoom=clamp(pinch.z0*d/pinch.d0,1,ZMAX);
   var mcx=(a.x+b.x)/2-r.left, mcy=(a.y+b.y)/2-r.top, cssFit=(r.width/worldW())||1, eff=cssFit*cam.zoom;
   cam.cx=pinch.wx-(mcx-r.width/2)/eff; cam.cy=pinch.wy-(mcy-r.height/2)/eff; clampCam(); };
-var onDown=function(ev){ if(!G||!G.running||!scene) return; ptrs[pid(ev)]={x:ev.clientX,y:ev.clientY};
+var onDown=function(ev){ if(!G||!G.running||!scene) return; if(musicOn&&!musicTimer) startMusic(); ptrs[pid(ev)]={x:ev.clientX,y:ev.clientY};
   if(Object.keys(ptrs).length>=2){ startPinch(); if(ev.preventDefault) ev.preventDefault(); return; }
   var p=evPos(ev), gx=Math.floor(p.px/TS), gy=Math.floor(p.py/TS);
   if(G.placing){ if(gx>=0&&gx<GW&&gy>=0&&gy<GH) placeAt(gx,gy); return; }
@@ -1051,6 +1072,7 @@ var boot=function(){
   if(lt) lt.onclick=function(){ tab('floor'); }; if(mt) mt.onclick=function(){ tab('menu'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   var mb=$('muteBtn'); if(mb){ mb.textContent=sfxOn?'🔊':'🔇'; mb.onclick=toggleSfx; }
+  var mub=$('musicBtn'); if(mub){ mub.style.opacity=musicOn?'1':'0.4'; mub.onclick=toggleMusic; }
   var hb=$('helpBtn'); if(hb) hb.onclick=function(){ showTip(0); };
   var tn=$('tipNext'); if(tn) tn.onclick=function(){ showTip(tutI+1); };
   var tk=$('tipSkip'); if(tk) tk.onclick=closeTutorial;
@@ -1068,7 +1090,7 @@ var boot=function(){
   }
   fitCanvas(); if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('resize',fitCanvas);
   if(el.startBtn) el.startBtn.onclick=function(){ try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
-    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden');
+    G.running=true; if(el.startScreen) el.startScreen.classList.add('hidden'); startMusic();
     if(!tutDone()) showTip(0); else toast('🍟 Welkom terug! Sleep 2 gelijke items op elkaar om te <b>verbeteren</b>.'); };
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
 };
