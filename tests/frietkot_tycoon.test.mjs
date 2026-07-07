@@ -149,5 +149,64 @@ for (let i = 0; i < 60; i++) {
 ok(sawSnack, 'some customers want a snack');
 ok(sawSauce, 'some customers want a sauce');
 
+// ---- districts / demographics ----
+ok(FT.DISTRICTS.length >= 5, 'several districts defined');
+ok(FT.districtById('student').weights.student > FT.districtById('student').weights.werk, 'student quarter skews student');
+ok(FT.districtById('nope').id === 'dorp', 'districtById fallback = dorp');
+ok(FT.archById('purist').id === 'purist', 'archById lookup');
+ok(FT.archById('nope') === FT.ARCHETYPES[0], 'archById fallback');
+
+// archetypeFor: single-weight always returns that archetype; weighted respects the split
+ok(FT.archetypeFor({ purist: 1 }).id === 'purist', 'archetypeFor single key');
+ok(FT.archetypeFor({ student: 1 }, 0.99).id === 'student', 'archetypeFor honours only key');
+{
+  const w = { student: 9, purist: 1 };
+  let stu = 0;
+  for (let i = 0; i < 400; i++) if (FT.archetypeFor(w).id === 'student') stu++;
+  ok(stu > 280, 'archetypeFor weights the draw (student dominant)');
+}
+
+// ---- arrival & service rates ----
+const Ga = FT.freshGame();
+ok(FT.arrivalRate(Ga, 1) > 0, 'arrival rate positive');
+ok(FT.arrivalRate(Ga, 1.5) > FT.arrivalRate(Ga, 1), 'higher demand = more arrivals');
+{
+  const cheap = FT.freshGame(); cheap.price = 45;
+  const dear = FT.freshGame(); dear.price = 150;
+  ok(FT.arrivalRate(cheap, 1) > FT.arrivalRate(dear, 1), 'cheaper draws more customers');
+  const busy = FT.freshGame(); busy.district = 'student';
+  ok(FT.arrivalRate(busy, 1) > FT.arrivalRate(Ga, 1), 'busier district = more arrivals');
+}
+ok(near(FT.serviceRate(FT.freshGame()), 0.40), 'base service rate = 0.40/sec');
+{
+  const staffed = FT.freshGame(); staffed.staff = 2;
+  ok(FT.serviceRate(staffed) > FT.serviceRate(FT.freshGame()), 'staff raise throughput');
+  const bigFry = FT.freshGame(); bigFry.up.fryer = 3;
+  ok(FT.serviceRate(bigFry) > FT.serviceRate(FT.freshGame()), 'bigger fryer raises throughput');
+}
+
+// ---- evalServe: auto-serve a queued customer ----
+{
+  const G = FT.freshGame();
+  const cust = FT.makeCustomer(G);
+  const r = FT.evalServe(G, cust);
+  ok(r.ticket >= G.price, 'ticket at least the fries price');
+  ok(r.sat >= 0 && r.sat <= 1.05, 'satisfaction in range');
+  ok(r.decay > 0, 'serving consumes some oil');
+  ok(typeof r.tip === 'number' && r.tip >= 0, 'tip is a non-negative number');
+  // matching a purist with crispy fries + fresh oil beats a mismatch
+  const pur = { arch: FT.archById('purist'), size: 'klein', sauce: null, snack: null };
+  const Ggood = FT.freshGame(); Ggood.crisp = 74; Ggood.oil = 100;
+  const Gbad = FT.freshGame(); Gbad.crisp = 20; Gbad.oil = 10;
+  ok(FT.evalServe(Ggood, pur).sat > FT.evalServe(Gbad, pur).sat, 'matched policy satisfies the purist more');
+}
+
+// ---- makeCustomer now carries queue fields ----
+{
+  const c = FT.makeCustomer(FT.freshGame());
+  ok(c.wait === 0 && c.pat > 0, 'queued customer has a wait timer and patience');
+  ok(typeof c.shirt === 'string', 'customer has a shirt colour for the sprite');
+}
+
 console.log(`frietkot_tycoon: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

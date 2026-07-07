@@ -54,10 +54,10 @@
     text-shadow:0 1px 0 #000,0 0 6px #0008;animation:rise 1.1s ease-out forwards;white-space:nowrap}
   .pop.bad{color:var(--bad)} .pop.good{color:var(--good)} .pop.rep{color:var(--blue)}
   @keyframes rise{0%{transform:translateY(0);opacity:0}12%{opacity:1}100%{transform:translateY(-34px);opacity:0}}
-  #news{position:absolute;left:0;right:0;bottom:0;background:#000a;color:var(--ink);
-    font-size:11px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    border-top:1px solid #ffffff14}
-  #news b{color:var(--gold)}
+  #news{background:linear-gradient(#20182a,#1a121f);color:var(--ink2);
+    font-size:11px;padding:5px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    border-bottom:2px solid var(--edge)}
+  #news b{color:var(--gold);font-weight:700}
   /* ---- customer card ---- */
   #order{padding:8px 10px;background:linear-gradient(#332741,#2a2036);
     border-bottom:2px solid var(--edge);min-height:58px;display:flex;gap:9px;align-items:center}
@@ -166,15 +166,15 @@
   <div id="stage">
     <canvas id="scene" width="192" height="128"></canvas>
     <div id="float"></div>
-    <div id="news">📻 <b id="newsTxt">Welkom in de frituur…</b></div>
   </div>
+  <div id="news">📻 <b id="newsTxt">Welkom in de frituur…</b></div>
 
-  <div id="order" class="idle">
-    <div class="avatar" id="custAv">🙂</div>
+  <div id="order">
+    <div class="avatar" id="buurtAv">🏘️</div>
     <div class="who">
-      <div class="arch" id="custArch">Nog geen klant…</div>
-      <div class="want" id="custWant">Zet je frietketel klaar. De eerste klant komt zo.</div>
-      <div class="pat"><i id="patBar" style="width:0%"></i></div>
+      <div class="arch" id="buurtName">Buurt: 't Dorpsplein</div>
+      <div class="want" id="buurtStat">Rij <em>0</em> · tevredenheid <em>0%</em> · <em>0</em> klanten/min</div>
+      <div class="pat"><i id="satBar" style="width:0%"></i></div>
     </div>
   </div>
 
@@ -202,14 +202,13 @@
     </div>
     <div class="row">
       <button class="btn oil" id="oilBtn">Ververs vet<br><small id="oilCost">−350 fr.</small></button>
-      <button class="btn serve" id="serveBtn">🍟 Bak &amp; serveer</button>
+      <button class="btn serve" id="shopBtn">🛠️ Uitbreidingen &amp; menu</button>
     </div>
   </div>
 
   <div id="foot">
     <span class="mini" id="rate">0,0 fr./sec</span>
     <span class="spacer"></span>
-    <button class="txtbtn" id="shopBtn">🛠️ Uitbreidingen</button>
     <button class="txtbtn" id="resetBtn">nieuw spel</button>
   </div>
 </div>
@@ -366,6 +365,31 @@ var serveQuality=function(o){
   return clamp(q,0,1.08);
 };
 
+// how fast customers ARRIVE (per sec): driven by appeal × reputation × neighbourhood foot traffic
+var arrivalRate=function(G,demand){
+  var fair=sizeById(G.size).base, appeal=priceAppeal(G.price,fair), menuMul=1+0.05*unlockedCount(G);
+  return 0.70*appeal*(0.6+G.rep/70)*(demand||1)*oilQuality(G.oil)*menuMul*districtById(G.district).foot;
+};
+// how fast you can SERVE the line (per sec): throughput from staff + fryer. Base is deliberately
+// below early arrivals so a queue forms — the pressure that makes you hire & upgrade.
+var serviceRate=function(G){ return 0.40+0.40*(G.staff||0)+0.12*((G.up&&G.up.fryer)||0); };
+// evaluate one auto-served customer against your fixed policy → ticket / satisfaction / rep / oil hit
+var evalServe=function(G,c){
+  var a=c.arch, s=sizeById(G.size), want=sizeById(c.size), f=fatById(G.fat);
+  var q=serveQuality({crisp:G.crisp,band:a.band,oil:G.oil,potato:effPotato(G.up.potato),
+                      fat:f.tasteMul, doublefry:G.up.doublefry});
+  var sizeGap=Math.abs(SIZES.indexOf(s)-SIZES.indexOf(want));
+  var sizeMul=clamp(1-sizeGap*0.14,0.5,1);
+  var ticket=G.price, sat=q*sizeMul;
+  if(c.sauce){ if(G.menu.sauces[c.sauce.id]){ ticket+=c.sauce.price; sat+=0.03; } else sat-=0.06; }
+  if(c.snack){ if(G.menu.snacks[c.snack.id]){ ticket+=c.snack.price; sat+=0.05; } else sat-=0.07; }
+  sat=clamp(sat,0,1.05);
+  var tip=Math.round(G.price*a.tip*sat*2);
+  var dRep=(sat-0.62)*4; if(G.oil<20) dRep-=1.2;               // gentler per-head: many customers now
+  var decay=(0.35+s.grams/1100)*oilDecayMul(G);               // softened for higher customer volume
+  return { ticket:ticket, tip:tip, sat:sat, dRep:dRep, decay:decay };
+};
+
 /* ---------- fresh game state ---------- */
 var SHOP_NAMES=["Frituur 't Hoekske","Frituur 't Pleintje","Frituur De Bocht","'t Vetste Kotje",
   "Frituur Rita","Frituur De Gouden Friet","Frietopia","Fritkot Bompa","Frituur N°1","Frituur Nonkel Frit"];
@@ -379,23 +403,46 @@ var freshGame=function(){
     crisp:52, size:'medium', price:70,
     dayT:0, dayLen:48,          // seconds per in-game day
     news:"Welkom! Zet je eerste puntzak klaar.",
-    cust:null, sinceCust:2.2, demandMod:1,
-    up:{potato:0,fryer:0,doublefry:0,filter:0}, staff:0, autoT:0,
+    district:'dorp', demandMod:1,
+    up:{potato:0,fryer:0,doublefry:0,filter:0}, staff:0,
     menu:{ snacks:{}, sauces:{mayo:true} },
+    queue:[], arrAcc:0, srvAcc:0, satAvg:0,   // runtime queue economy
     lastSeen:0
   };
 };
 
+/* ---------- neighbourhoods & demographics (research CULTURE.md; map-ready) ---------- */
+// each district draws its customers from a different archetype mix + base foot traffic.
+// You set ONE shop policy (sliders + menu); who lines up depends on WHERE you are.
+var archById=function(id){ for(var i=0;i<ARCHETYPES.length;i++) if(ARCHETYPES[i].id===id) return ARCHETYPES[i]; return ARCHETYPES[0]; };
+var DISTRICTS=[
+  {id:'dorp',    name:"'t Dorpsplein",     emoji:'🏘️', foot:1.00, weights:{vaste:3,werk:2,familie:2,student:1,purist:1,nacht:1,toerist:0.6}},
+  {id:'student', name:'Studentenwijk',     emoji:'🎓', foot:1.25, weights:{student:5,nacht:2,werk:1,vaste:1,toerist:1}},
+  {id:'uitgaan', name:'Uitgaansbuurt',     emoji:'🌃', foot:1.15, weights:{nacht:5,student:2,toerist:1,werk:1}},
+  {id:'chic',    name:'Deftige laan',      emoji:'🎩', foot:0.85, weights:{purist:4,toerist:2,vaste:2,familie:1}},
+  {id:'markt',   name:'Marktplein',        emoji:'🧺', foot:1.10, weights:{familie:3,vaste:3,werk:2,toerist:2,purist:1}},
+  {id:'toerist', name:'Toeristische kern', emoji:'📸', foot:1.20, weights:{toerist:5,vaste:1,familie:1,purist:1}}
+];
+var districtById=function(id){ for(var i=0;i<DISTRICTS.length;i++) if(DISTRICTS[i].id===id) return DISTRICTS[i]; return DISTRICTS[0]; };
+// weighted archetype draw from a district's demographic mix
+var archetypeFor=function(weights,r){
+  var ids=Object.keys(weights), tot=0, i;
+  for(i=0;i<ids.length;i++) tot+=weights[ids[i]];
+  var x=(r==null?Math.random():r)*tot;
+  for(i=0;i<ids.length;i++){ x-=weights[ids[i]]; if(x<=0) return archById(ids[i]); }
+  return archById(ids[ids.length-1]);
+};
+
 /* ---------- customer generation ---------- */
 var makeCustomer=function(G){
-  var a=pick(ARCHETYPES);
+  var a=archetypeFor(districtById(G.district).weights);
   var size=pick(a.sizes);
   var sauce=(Math.random()<0.78)?pick(SAUCES):null;   // may want a sauce you haven't unlocked yet
   var snack=(Math.random()<0.5)?pick(SNACKS):null;    // ... same for a snack
   return {
     arch:a, size:size, sauce:sauce, snack:snack,
-    pat:a.pat, patMax:a.pat,
-    crispWord: crispLabel((a.band[0]+a.band[1])/2)
+    pat:a.pat*3, patMax:a.pat*3, wait:0,               // patience = seconds willing to wait in line
+    crispWord: crispLabel((a.band[0]+a.band[1])/2), shirt: SHIRTS[a.col]||'#888'
   };
 };
 
@@ -418,8 +465,9 @@ var load=function(){
     if(!G.menu) G.menu={snacks:{},sauces:{mayo:true}};
     if(!G.menu.snacks) G.menu.snacks={};
     if(!G.menu.sauces) G.menu.sauces={mayo:true};
-    if(G.staff==null) G.staff=0; G.autoT=0;
-    G.cust=null; G.sinceCust=1.2;  // don't restore a mid-order customer
+    if(G.staff==null) G.staff=0;
+    if(!G.district) G.district='dorp';
+    G.queue=[]; G.arrAcc=0; G.srvAcc=0; if(G.satAvg==null) G.satAvg=0; // rebuild the line fresh
     return true;
   }catch(e){ return false; }
 };
@@ -614,14 +662,13 @@ var drawScene=function(){
   // ---- counter ledge ----
   px(bx+6,by+bh-8,bw-12,6,C.counter); px(bx+6,by+bh-8,bw-12,1,'#a9743e');
 
-  // =================== CUSTOMER out front ===================
-  if(G.cust){
-    var cbob=Math.sin(T*3)*1;
-    spr(CUST, 96, VH-27+cbob, custPal(SHIRTS[G.cust.arch.col]||'#888'));
-    // little cone in hand when close
+  // =================== THE QUEUE lining up out front ===================
+  var qn=Math.min(G.queue.length,7);
+  if(qn>0){
+    for(var qq=qn-1;qq>=0;qq--){ var cbob=Math.sin(T*3+qq*1.7)*1;   // draw back-to-front
+      spr(CUST, 98-qq*13, VH-27+cbob, custPal(G.queue[qq].shirt||'#888')); }
   } else {
-    // idle: a lone puntzak on the counter
-    spr(CONE, bx+50, by+bh-16, conePal);
+    spr(CONE, bx+50, by+bh-16, conePal); // empty: a lone puntzak on the counter
   }
 
   // =================== particles ===================
@@ -660,9 +707,9 @@ var drawSign=function(x,y,txt,glow){
 var el={};
 var bindUI=function(){
   if(typeof document==='undefined'||!document.getElementById) return;
-  ['shopName','dayN','repN','money','newsTxt','custAv','custArch','custWant','patBar',
+  ['shopName','dayN','repN','money','newsTxt','buurtAv','buurtName','buurtStat','satBar',
    'crisp','crispV','sizeV','sizeSeg','price','priceV','oilPct','oilBar','fatSeg',
-   'oilBtn','oilCost','serveBtn','rate','resetBtn',
+   'oilBtn','oilCost','rate','resetBtn',
    'shopBtn','shopClose','upgList','staffBox','snackList','sauceList'].forEach(function(id){ el[id]=$(id); });
 
   // size segmented control
@@ -677,13 +724,12 @@ var bindUI=function(){
       el.fatSeg.appendChild(b); }); }
   if(el.crisp) el.crisp.oninput=function(){ G.crisp=+el.crisp.value; syncControls(); };
   if(el.price) el.price.oninput=function(){ G.price=+el.price.value; syncControls(); };
-  if(el.serveBtn) el.serveBtn.onclick=serve;
   if(el.oilBtn) el.oilBtn.onclick=refreshOil;
   if(el.shopBtn) el.shopBtn.onclick=openShop;
   if(el.shopClose) el.shopClose.onclick=closeShop;
   if(el.resetBtn) el.resetBtn.onclick=function(){
     if(typeof confirm==='undefined'||confirm('Nieuw spel starten? Je huidige frituur gaat verloren.')){
-      G=freshGame(); save(); syncControls(); nextCustomerSoon(0.5); toast('Nieuwe frituur geopend!');
+      G=freshGame(); save(); syncControls(); updateBuurt(); toast('Nieuwe frituur geopend!');
     }
   };
   syncControls();
@@ -713,67 +759,24 @@ var syncControls=function(){
   el.newsTxt.textContent=G.news;
 };
 
-/* ---------- customer flow ---------- */
-var nextCustomerSoon=function(sec){ G.cust=null; G.sinceCust=-(sec||rnd(1.4,3.2)); showOrder(); };
-var showOrder=function(){
-  if(!el.custArch) return;
-  if(!G.cust){
-    el.custArch.textContent='Nog geen klant…';
-    el.custWant.textContent='De volgende klant is onderweg. Stel ondertussen je friet af.';
-    el.custAv.textContent='🙂';
-    el.patBar.style.width='0%';
-    document.getElementById('order').classList.add('idle');
-    return;
-  }
-  var c=G.cust, a=c.arch, s=sizeById(c.size);
-  document.getElementById('order').classList.remove('idle');
-  el.custAv.textContent=a.emoji;
-  el.custArch.textContent=a.name;
-  el.custWant.innerHTML=a.line+'<br>Wil <em>'+c.crispWord+'e</em> friet ('+s.label+')'
-    +(c.sauce?', met <em>'+c.sauce.label+'</em>':'')
-    +(c.snack?' + <em>'+c.snack.label+'</em>':'')+'.';
+/* ---------- neighbourhood panel (hands-off: you set policy, the line serves itself) ---------- */
+var updateBuurt=function(){
+  if(!el.buurtName) return;
+  var d=districtById(G.district);
+  var arr=arrivalRate(G,G.demandMod), srv=serviceRate(G);
+  var thru=Math.min(arr,srv);                       // effective customers/sec actually served
+  var satPct=Math.round(G.satAvg*100);
+  el.buurtAv.textContent=d.emoji;
+  el.buurtName.textContent='Buurt: '+d.name;
+  el.buurtStat.innerHTML='Rij <em>'+G.queue.length+'</em> · tevredenheid <em>'+satPct+'%</em>'
+    +' · <em>'+(arr*60).toFixed(0)+'</em> klanten/min'
+    +(srv<arr?' · <em style="color:var(--bad)">rij groeit!</em>':'');
+  el.satBar.style.width=clamp(satPct,0,100)+'%';
+  if(el.rate) el.rate.textContent='≈ '+(thru*avgTicket(G)).toFixed(0)+' fr./sec  ·  '+G.served
+    +' geserveerd'+(G.staff>0?'  ·  👤×'+G.staff:'');
 };
-
-var serve=function(){
-  if(!G.cust){ toast('Er staat nog geen klant aan de toog.'); return; }
-  doServe(false);
-};
-// shared serve path — called by the player (auto=false) and by staff (auto=true)
-var doServe=function(auto){
-  var c=G.cust; if(!c) return;
-  var a=c.arch, s=sizeById(G.size), want=sizeById(c.size), f=fatById(G.fat);
-  var q=serveQuality({crisp:G.crisp,band:a.band,oil:G.oil,potato:effPotato(G.up.potato),
-                      fat:f.tasteMul, doublefry:G.up.doublefry});
-  if(auto) q*=0.92;                          // staff are a touch less attentive than you
-  var sizeGap=Math.abs(SIZES.indexOf(s)-SIZES.indexOf(want));
-  var sizeMul=clamp(1-sizeGap*0.14,0.5,1);
-  var ticket=G.price, sat=q*sizeMul, hint='';
-  // sauce: matched & unlocked adds margin + satisfaction; wanted-but-locked disappoints
-  if(c.sauce){
-    if(G.menu.sauces[c.sauce.id]){ ticket+=c.sauce.price; sat+=0.03; }
-    else { sat-=0.06; hint='wou '+c.sauce.label; }
-  }
-  // snack
-  if(c.snack){
-    if(G.menu.snacks[c.snack.id]){ ticket+=c.snack.price; sat+=0.05; }
-    else { sat-=0.07; hint=(hint?hint+' + ':'wou ')+'een '+c.snack.label; }
-  }
-  sat=clamp(sat,0,1.05);
-  var tip=Math.round(G.price*a.tip*sat*2);
-  G.money+=ticket+tip; G.served++;
-  var dRep=(sat-0.62)*7; if(G.oil<20) dRep-=2; G.rep=clamp(G.rep+dRep,0,100);
-  var decay=(2.2+s.grams/260)*oilDecayMul(G); G.oil=clamp(G.oil-decay,0,100);
-  // feedback
-  popScene((sat>0.6?'good':'bad'),(sat>0.6?'+':'')+fmtFr(ticket+tip)+' fr.');
-  if(!auto){
-    if(tip>0 && sat>0.6) setTimeout(function(){ popScene('rep','fooi +'+tip); },160);
-    if(hint) toast('💡 De klant '+hint+' — zet \'t op je menukaart!');
-    else{ var lab=sat>0.85?'Perfect! ':sat>0.62?'Tevreden. ':sat>0.4?'Njah… ':'Ontevreden! ';
-      toast(lab+(dRep>=0?'★ +':'★ ')+dRep.toFixed(1)+' reputatie'); }
-  }
-  save(); syncControls();
-  nextCustomerSoon(rnd(auto?0.8:1.6, auto?1.9:3.4));
-};
+// rough average ticket used only for the fr./sec readout & offline estimate
+var avgTicket=function(G){ return Math.max(6,(G.price-sizeById(G.size).cost))*(1+0.55*(G.satAvg||0.5)); };
 
 var refreshOil=function(){
   var f=fatById(G.fat);
@@ -877,28 +880,29 @@ var frame=function(ts){
   var dt=last?Math.min((ts-last)/1000,0.1):0.016; last=ts; T+=dt;
   // day clock
   G.dayT+=dt; if(G.dayT>=G.dayLen) newDay();
-  // customer arrival
-  if(!G.cust){ G.sinceCust+=dt; if(G.sinceCust>=0){ G.cust=makeCustomer(G); G.sinceCust=0; showOrder(); } }
-  else {
-    G.cust.pat-=dt;
-    if(el.patBar) el.patBar.style.width=clamp(G.cust.pat/G.cust.patMax*100,0,100)+'%';
-    // staff auto-serve the counter customer (this is the automation payoff)
-    if(G.staff>0){ G.autoT+=dt; if(G.autoT>=3.4/G.staff){ G.autoT=0; doServe(true); } }
-    if(G.cust && G.cust.pat<=0){ // walked away
-      G.rep=clamp(G.rep-1.5,0,100); popScene('bad','klant weg!'); toast('De klant is het beu en vertrekt. ★ −1,5');
-      save(); syncControls(); nextCustomerSoon(rnd(1.5,3));
-    }
+  // === demographics-driven queue economy (hands-off) ===
+  var arr=arrivalRate(G,G.demandMod), srv=serviceRate(G);
+  var maxLine=7+G.staff*2+(G.up.fryer||0);
+  // arrivals join the line (or balk away if it's already full)
+  G.arrAcc+=arr*dt;
+  while(G.arrAcc>=1){ G.arrAcc-=1; if(G.queue.length<maxLine) G.queue.push(makeCustomer(G)); }
+  // waiting patience — fed-up customers give up and leave the line
+  for(var qi=G.queue.length-1;qi>=0;qi--){ G.queue[qi].wait+=dt;
+    if(G.queue[qi].wait>G.queue[qi].pat){ G.queue.splice(qi,1); G.rep=clamp(G.rep-0.15,0,100); } }
+  // service — the front of the line is auto-served at your throughput
+  G.srvAcc+=srv*dt;
+  var servedThis=0;
+  while(G.srvAcc>=1 && G.queue.length>0){ G.srvAcc-=1;
+    var c=G.queue.shift(), r=evalServe(G,c);
+    G.money+=r.ticket+r.tip; G.served++;
+    G.rep=clamp(G.rep+r.dRep,0,100);
+    G.oil=clamp(G.oil-r.decay,0,100);
+    G.satAvg = G.satAvg ? G.satAvg*0.92+r.sat*0.08 : r.sat;
+    if(servedThis<2) popScene(r.sat>0.6?'good':'bad',(r.sat>0.6?'+':'')+fmtFr(r.ticket+r.tip));
+    servedThis++;
   }
-  // idle income: passers-by buying at the window (scaled by fryer / menu / staff)
-  var ips=idlePerSec(G,G.demandMod);
-  acc+=ips.foot*dt;
-  if(acc>=1){ var n=Math.floor(acc); acc-=n;
-    G.money+= n*ips.idleVal;
-    G.oil=clamp(G.oil-n*0.3*oilDecayMul(G),0,100);
-  }
-  if(el.rate) el.rate.textContent=ips.perSec.toFixed(1).replace('.',',')+' fr./sec  ·  '+G.served
-    +' geserveerd'+(G.staff>0?'  ·  👤×'+G.staff:'');
   if(el.money) el.money.textContent=fmtFr(G.money);
+  updateBuurt();
 
   drawScene();
   requestAnimationFrame(frame);
@@ -910,14 +914,13 @@ var boot=function(){
   // offline earnings — your staff keep the toog running while you're away (capped 6h)
   if(had && G.staff>0 && G.lastSeen){
     var away=clamp((Date.now()-G.lastSeen)/1000,0,6*3600);
-    if(away>60){ var gain=Math.round(idlePerSec(G,1).perSec*away*0.35);
+    if(away>60){ var gain=Math.round(Math.min(arrivalRate(G,1),serviceRate(G))*avgTicket(G)*away*0.35);
       if(gain>0){ G.money+=gain;
-        setTimeout(function(){ toast('💤 Terwijl je weg was hield je toog open: <b>+'+fmtFr(gain)+' fr.</b>'); },700); } }
+        setTimeout(function(){ toast('💤 Terwijl je weg was hield je personeel de toog open: <b>+'+fmtFr(gain)+' fr.</b>'); },700); } }
   }
   bindUI();
-  if(!had){ toast('🍟 Welkom bij <b>'+G.shop+'</b>! Bak de perfecte friet.'); }
-  nextCustomerSoon(2.0);
-  syncControls();
+  if(!had){ toast('🍟 Welkom bij <b>'+G.shop+'</b>! Stel je friet af — de klanten komen vanzelf.'); }
+  syncControls(); updateBuurt();
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(frame);
   // autosave
   if(typeof setInterval!=='undefined') setInterval(save,5000);
@@ -934,6 +937,8 @@ if(typeof globalThis!=='undefined'){
     crispLabel:crispLabel, crispQuality:crispQuality, oilQuality:oilQuality, priceAppeal:priceAppeal,
     serveQuality:serveQuality, upgradeCost:upgradeCost, effPotato:effPotato, fryerFootMul:fryerFootMul,
     oilDecayMul:oilDecayMul, wage:wage, unlockedCount:unlockedCount, idlePerSec:idlePerSec,
+    DISTRICTS:DISTRICTS, districtById:districtById, archById:archById, archetypeFor:archetypeFor,
+    arrivalRate:arrivalRate, serviceRate:serviceRate, evalServe:evalServe,
     freshGame:freshGame, makeCustomer:makeCustomer };
 }
 </script>
