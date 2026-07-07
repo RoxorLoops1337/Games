@@ -245,5 +245,15 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.applyDrop(g, a, b.gx, b.gy) === 'reject', 'a level-1 toog cannot merge onto a level-2 toog');
 }
 
+// ---- relaxed pacing (calmer, more enjoyable tempo) ----
+{
+  ok(FS.BAL.spawnBase >= 4 && FS.BAL.spawnMin >= 1, 'customers arrive at a relaxed pace, even when busy');
+  ok(FS.BAL.weekLen >= 30, 'weeks breathe (longer week clock)');
+  ok(FS.BAL.eatTime >= 4, 'customers linger and eat longer');
+  // even a very popular shop never floods the door
+  ok(FS.spawnInterval(9999) >= 1, 'peak spawn rate is capped to a leisurely minimum');
+  ok(FS.spawnInterval(3) > FS.spawnInterval(60), 'appeal still speeds arrivals, just gently');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
