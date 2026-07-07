@@ -225,5 +225,22 @@ ok(near(FT.serviceRate(FT.freshGame()), 0.40), 'base service rate = 0.40/sec');
   ok(typeof c.shirt === 'string', 'customer has a shirt colour for the sprite');
 }
 
+// ---- multiple frietkoten / the map ----
+{
+  const g = FT.freshGame();
+  ok(Array.isArray(g.shops) && g.shops.length === 1, 'starts with one frietkot');
+  ok(g.active === 0, 'active shop index is 0');
+  ok(g.shops[0].district === 'dorp', 'first shop is in the dorp');
+  ok(g.shop === g.shops[0].shop && g.district === g.shops[0].district, 'active shop mirrored onto G');
+  const s = FT.newShop('student');
+  ok(s.district === 'student' && s.oil === 100 && s.rep === 6, 'newShop has fresh per-shop state');
+  ok(s.prices && s.prices.groot > 0, 'newShop gets its own price sheet');
+  ok(s.up && s.up.fryer === 0 && s.staff === 0, 'newShop starts unequipped');
+  ok(FT.openCost(1) > 0, 'a 2nd frietkot costs money');
+  ok(FT.openCost(3) > FT.openCost(2) && FT.openCost(2) > FT.openCost(1), 'each extra frietkot costs more');
+  ok(FT.SHOP_FIELDS.indexOf('prices') >= 0 && FT.SHOP_FIELDS.indexOf('district') >= 0, 'per-shop fields include prices & district');
+  ok(FT.SHOP_FIELDS.indexOf('money') < 0, 'money is global, not per-shop');
+}
+
 console.log(`frietkot_tycoon: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
