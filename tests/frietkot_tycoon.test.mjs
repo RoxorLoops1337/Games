@@ -1,77 +1,85 @@
-// Frietkot Rush — logic tests for the active arcade.
+// Frietkot Story — logic tests for the Kairosoft-style manager.
 import { loadFT } from './frietkot_tycoon_lib.mjs';
 
-const FR = loadFT();
+const FS = loadFT();
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  FAIL:', msg); } };
-const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 
-// ---- surface loaded ----
-ok(FR && typeof FR.newOrder === 'function', 'FR surface exposed');
+// ---- surface + data ----
+ok(FS && typeof FS.freshGame === 'function', 'FS surface exposed');
+ok(FS.OBJECTS.length >= 6 && FS.RESEARCH.length >= 4 && FS.CUSTTYPES.length >= 4, 'data tables present');
+ok(FS.objDef('friteuse').kind === 'fryer', 'objDef lookup');
+ok(FS.objDef('nope') === null, 'objDef miss = null');
+ok(FS.resDef('bicky').kind === 'snack', 'resDef lookup');
 
-// ---- menu data ----
-ok(FR.SNACKS.length === 3 && FR.SAUCES.length === 3, 'snacks & sauces present');
-ok(FR.CRISP.length === 3, 'three crispness targets');
-ok(FR.CRISP.every(c => c.band[0] < c.band[1]), 'crisp bands valid');
-ok(FR.byId(FR.SNACKS, 'curryworst').nm === 'curryworst', 'byId lookup');
-ok(FR.byId(FR.SNACKS, 'nope') === null, 'byId miss = null');
+// ---- fresh game ----
+const G = FS.freshGame();
+ok(G.money === 400 && G.faam === 0 && G.week === 1, 'starts with €400, 0 faam, week 1');
+ok(Array.isArray(G.objs) && FS.countKind(G.objs, 'fryer') === 1 && FS.countKind(G.objs, 'counter') === 1, 'starts with a fryer and a counter');
+ok(G.staff === 0 && Object.keys(G.research).length === 0, 'no staff / research yet');
 
-// ---- difficulty ramps ----
-ok(FR.diffOf(0) === 1, 'base difficulty 1');
-ok(FR.diffOf(10) > FR.diffOf(0), 'difficulty rises with served count');
-
-// ---- newOrder ----
-for (let i = 0; i < 60; i++) {
-  const o = FR.newOrder(i);
-  ok(FR.CRISP.some(c => c.id === o.crisp), 'order has a real crisp target');
-  ok(Array.isArray(o.band) && o.band.length === 2, 'order carries a doneness band');
-  ok(o.snack === null || FR.SNACKS.some(s => s.id === o.snack), 'snack is null or real');
-  ok(o.sauce === null || FR.SAUCES.some(s => s.id === o.sauce), 'sauce is null or real');
-  ok(o.pat === o.patMax && o.pat >= 4 && o.pat <= 11, 'patience initialised and clamped');
+// ---- adjacency + combos ----
+ok(FS.adjacent({ gx: 1, gy: 0 }, { gx: 2, gy: 0 }) === true, 'orthogonal adjacency');
+ok(FS.adjacent({ gx: 1, gy: 0 }, { gx: 2, gy: 1 }) === false, 'diagonal is not adjacent');
+{
+  const objs = [{ id: 'friteuse', gx: 1, gy: 0 }, { id: 'sausbar', gx: 2, gy: 0 }];
+  const cb = FS.detectCombos(objs);
+  ok(cb.length === 1 && cb[0].name === 'Vol-au-saus' && cb[0].valueMul > 1, 'sausbar next to fryer = combo');
+  const objs2 = [{ id: 'friteuse', gx: 1, gy: 0 }, { id: 'sausbar', gx: 4, gy: 4 }];
+  ok(FS.detectCombos(objs2).length === 0, 'combo needs adjacency');
 }
-// later orders are tighter on patience than the very first
-ok(FR.newOrder(20).patMax < FR.newOrder(0).patMax, 'patience shrinks as the shift heats up');
 
-// ---- friesQuality: golden band is best, raw & burnt are bad ----
-const band = [70, 88];
-ok(near(FR.friesQuality(79, band), 1), 'centre of band = perfect');
-ok(near(FR.friesQuality(70, band), 1), 'band edge = perfect');
-ok(FR.friesQuality(50, band) < 1 && FR.friesQuality(50, band) >= 0, 'undercooked = partial');
-ok(FR.friesQuality(99, band) < 0.3, 'burnt = bad');
-ok(FR.friesQuality(0, band) < FR.friesQuality(60, band), 'raw worse than nearly-done');
-ok(FR.friesQuality(120, band) >= 0, 'quality never negative');
+// ---- appeal drives spawn rate ----
+const a0 = FS.computeAppeal(G);
+ok(a0 > 0, 'appeal positive from starting furniture');
+const G2 = FS.freshGame(); G2.objs.push({ id: 'neon', gx: 4, gy: 0 });
+ok(FS.computeAppeal(G2) > a0, 'adding a neon sign raises appeal');
+const G3 = FS.freshGame(); G3.research.reclame = true;
+ok(FS.computeAppeal(G3) > a0, 'reclame research raises appeal');
+ok(FS.spawnInterval(50) < FS.spawnInterval(5), 'more appeal = customers arrive faster');
+ok(FS.spawnInterval(9999) >= FS.BAL.spawnMin, 'spawn interval is floored');
 
-// ---- scoreServe ----
-const order = { crisp: 'krokant', band: [70, 88], snack: 'bicky', sauce: 'samurai' };
-// a flawless, fast serve high in combo
-const perfect = FR.scoreServe(order, { friesQ: 79, snack: 'bicky', sauce: 'samurai' }, 1, 5);
-ok(perfect.perfect === true, 'exact + golden + fast = perfect');
-ok(perfect.ok === true && perfect.quality > 0.95, 'perfect serve high quality');
-// wrong sauce breaks perfect and lowers quality
-const wrongSauce = FR.scoreServe(order, { friesQ: 79, snack: 'bicky', sauce: 'mayo' }, 1, 5);
-ok(wrongSauce.perfect === false, 'wrong sauce is not perfect');
-ok(wrongSauce.quality < perfect.quality, 'wrong sauce lowers quality');
-// missing fries entirely fails
-const noFries = FR.scoreServe(order, { friesQ: null, snack: 'bicky', sauce: 'samurai' }, 1, 0);
-ok(noFries.ok === false && noFries.fq === 0, 'no fries = failed serve');
-// combo multiplies the tip
-const lowCombo = FR.scoreServe(order, { friesQ: 79, snack: 'bicky', sauce: 'samurai' }, 1, 0);
-const hiCombo = FR.scoreServe(order, { friesQ: 79, snack: 'bicky', sauce: 'samurai' }, 1, 15);
-ok(hiCombo.tip > lowCombo.tip, 'higher combo pays more');
-// speed matters
-const slow = FR.scoreServe(order, { friesQ: 79, snack: 'bicky', sauce: 'samurai' }, 0.05, 5);
-ok(perfect.tip > slow.tip, 'serving faster pays more');
-// an order that wants nothing extra: giving nothing is correct
-const plain = { crisp: 'klassiek', band: [50, 70], snack: null, sauce: null };
-const plainOK = FR.scoreServe(plain, { friesQ: 60, snack: null, sauce: null }, 1, 0);
-ok(plainOK.perfect === true, 'plain order served plain = perfect');
-const plainWrong = FR.scoreServe(plain, { friesQ: 60, snack: 'bicky', sauce: null }, 1, 0);
-ok(plainWrong.quality < plainOK.quality, 'adding an unwanted snack hurts');
+// ---- throughput / service ----
+ok(Math.abs(FS.throughput(G) - 1) < 1e-9, 'base throughput = 1 (one fryer, no staff)');
+const Gf = FS.freshGame(); Gf.objs.push({ id: 'friteuse', gx: 2, gy: 0 });
+ok(FS.throughput(Gf) > FS.throughput(G), 'a second fryer raises throughput');
+const Gs = FS.freshGame(); Gs.staff = 2;
+ok(FS.throughput(Gs) > FS.throughput(G), 'staff raise throughput');
+const Gr = FS.freshGame(); Gr.research.snelbak = true;
+ok(FS.throughput(Gr) > FS.throughput(G), 'snelbak research raises throughput');
+ok(FS.serviceTime(Gf) < FS.serviceTime(G), 'higher throughput = faster service');
 
-// ---- freshRun ----
-const R = FR.freshRun();
-ok(R.score === 0 && R.combo === 0 && R.strikes === 0 && R.served === 0, 'fresh run zeroed');
-ok(R.tray && R.tray.friesQ === null && R.basket === 'empty', 'fresh run has an empty tray & basket');
+// ---- order value ----
+const local = FS.CUSTTYPES.find(t => t.id === 'local');
+const base = FS.orderValue(G, { fav: null, spend: 1 }, 1);
+ok(base === FS.BAL.frietPrice, 'plain order with no research = fries price');
+const Gsauce = FS.freshGame(); Gsauce.research.andalouse = true;
+ok(FS.orderValue(Gsauce, { fav: null, spend: 1 }, 1) > base, 'unlocked sauce raises order value');
+const worker = { fav: 'bicky', spend: 1.2 };
+const Gb = FS.freshGame(); Gb.research.bicky = true;
+ok(FS.orderValue(Gb, worker, 1) > base, 'worker who wants an unlocked bicky pays more');
+ok(FS.orderValue(G, { fav: null, spend: 1 }, 1.5) > base, 'a combo multiplier raises the ticket');
 
-console.log(`frietkot_rush: ${pass} passed, ${fail} failed`);
+// ---- customer type roll respects decor pulls ----
+{
+  const plain = FS.freshGame();
+  const withJuke = FS.freshGame();
+  for (let i = 0; i < 6; i++) withJuke.objs.push({ id: 'jukebox', gx: i % 7, gy: 3 });
+  let teenPlain = 0, teenJuke = 0;
+  for (let i = 0; i < 500; i++) {
+    if (FS.rollType(plain).id === 'teen') teenPlain++;
+    if (FS.rollType(withJuke).id === 'teen') teenJuke++;
+  }
+  ok(teenJuke > teenPlain, 'jukeboxes pull more teens');
+  ok(FS.rollType(plain, 0).id === FS.CUSTTYPES[0].id, 'rollType is deterministic with a supplied roll');
+}
+
+// ---- ranks + staff cost ----
+ok(FS.rankFor(0) === FS.RANKS[0][1], 'start rank');
+ok(FS.rankFor(9999) === FS.RANKS[FS.RANKS.length - 1][1], 'top rank at high served count');
+ok(FS.rankFor(30) !== FS.rankFor(0), 'rank climbs with customers served');
+ok(FS.staffCost(1) > FS.staffCost(0), 'each hire costs more');
+ok(FS.canAfford(G, 400) && !FS.canAfford(G, 401), 'canAfford checks money');
+
+console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
