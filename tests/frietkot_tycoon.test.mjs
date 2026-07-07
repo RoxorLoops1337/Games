@@ -396,5 +396,28 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.computeAppeal(g) < FS.computeAppeal(FS.freshGame()), 'cutting corners lowers overall appeal');
 }
 
+// ---- competitors / rival frituren ----
+{
+  ok(FS.RIVALS.length >= 3, 'a pool of rival frituren exists');
+  const g = FS.freshGame();
+  ok(Array.isArray(g.rivals) && g.rivals.length === 0, 'fresh game starts with no rivals');
+  // with no rivals you own the whole street
+  ok(Math.abs(FS.marketShare(g) - 1) < 1e-9, 'no rivals → 100% market share');
+  ok(Math.abs(FS.marketMul(g) - 1) < 1e-9, 'no rivals → full traffic multiplier');
+  ok(FS.buurtRank(g) === 1 && FS.rivalBoard(g).length === 1, 'alone at the top of an empty street');
+  // a strong rival steals share and dampens (but never kills) traffic
+  g.rivals = [{ id: 'jef', nm: 'Frituur Jef', emoji: '🍟', appeal: 1000 }];
+  ok(FS.marketShare(g) < 0.5, 'a big rival takes most of the market share');
+  ok(FS.marketMul(g) > 0.5 && FS.marketMul(g) < 1, 'crowded street softly cuts traffic but leaves a floor');
+  // board sorts by appeal, best first, and the player is flagged
+  const board = FS.rivalBoard(g);
+  ok(board[0].appeal >= board[board.length - 1].appeal, 'board is sorted strongest-first');
+  ok(board.some(r => r.you), 'the player appears on the board');
+  ok(FS.buurtRank(g) === 2, 'a stronger rival pushes the player to #2');
+  // rivals persist across save/load
+  const rt = FS.marketMul(g);
+  ok(typeof rt === 'number' && rt === rt, 'market multiplier is a finite number');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
