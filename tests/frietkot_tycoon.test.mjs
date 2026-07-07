@@ -114,5 +114,32 @@ ok(FS.weekGoal(1) < FS.weekGoal(10), 'weekly serve-goal scales up over weeks');
 ok(FS.weekGoal(1) > 0, 'weekly goal is a positive target');
 { const g = FS.freshGame(); ok(g.regulars === 0 && g.weekServed === 0 && g.goalTarget > 0, 'fresh game carries hook-layer fields'); }
 
+// ---- dish development (ingredient combos) ----
+ok(FS.INGREDIENTS.length >= 6, 'ingredients present');
+ok(FS.ingDef('ajuin').good.includes('friet'), 'ajuin pairs well with friet');
+ok(FS.dishesUnlocked(G).includes('friet'), 'friet is always developable');
+{
+  const gu = FS.freshGame(); gu.research.frikandel = true; gu.dish.frikandel = { rank: 1 };
+  ok(FS.dishesUnlocked(gu).includes('frikandel'), 'researched snack becomes developable');
+}
+// compatibility scoring
+ok(FS.compatScore('friet', ['ajuin']) === 2, 'good ingredient = +2');
+ok(FS.compatScore('friet', ['brood']) === -1, 'bad ingredient = -1');
+ok(FS.compatScore('friet', ['ajuin', 'ei']) === 4, 'two good ingredients stack');
+ok(FS.compatScore('friet', ['ajuin', 'brood']) === 1, 'good + bad mix');
+// rank gain from compatibility
+ok(FS.devGain(4) === 3, 'great combo = +3 rank (capped)');
+ok(FS.devGain(0) === 1, 'neutral still nudges +1');
+ok(FS.devGain(-2) === 0, 'a clashing combo flops (0)');
+// price + cost scale with rank
+ok(FS.dishPrice(30, 2) > FS.dishPrice(30, 1), 'higher-rank dish is pricier');
+ok(FS.dishRank(G, 'friet') === 1, 'dishes start at rank 1');
+ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs more');
+// ranking a dish up raises what customers pay
+{
+  const g1 = FS.freshGame(); const g2 = FS.freshGame(); g2.dish.friet.rank = 4;
+  ok(FS.orderValue(g2, { fav: null, spend: 1 }, 1) > FS.orderValue(g1, { fav: null, spend: 1 }, 1), 'a higher-rank friet earns more per order');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
