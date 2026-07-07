@@ -147,6 +147,7 @@
     background:linear-gradient(#ffd447,#e8a63b);color:#2a1c05;box-shadow:0 2px 0 #0006;white-space:nowrap;flex:0 0 auto}
   .buy:active{transform:translateY(1px);box-shadow:0 1px 0 #0006}
   .buy.owned{background:var(--panel2);color:var(--good);cursor:default;box-shadow:none}
+  .item.activeShop{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold2) inset}
   .buy:disabled{opacity:.4;cursor:default;box-shadow:0 2px 0 #0006}
   .dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle}
   .dots i{width:6px;height:6px;border-radius:50%;background:#0d0a12;display:inline-block}
@@ -171,6 +172,7 @@
   <div id="hud">
     <div class="name" id="shopName">Frituur 't Hoekske</div>
     <div class="spacer"></div>
+    <div class="chip">🏪<b id="shopsN">1</b></div>
     <div class="chip day">Dag <b id="dayN">1</b></div>
     <div class="chip rep">★<b id="repN">0</b></div>
     <div class="chip">💰 <b id="money">0</b> fr.</div>
@@ -208,7 +210,8 @@
       <button class="btn serve" id="pricesBtn">💰 Prijzen</button>
     </div>
     <div class="row">
-      <button class="btn serve" id="shopBtn" style="flex:1">🛠️ Uitbreidingen &amp; menukaart</button>
+      <button class="btn serve" id="mapBtn" style="flex:1">🗺️ Kaart</button>
+      <button class="btn serve" id="shopBtn" style="flex:1">🛠️ Uitbreidingen</button>
     </div>
   </div>
 
@@ -227,6 +230,16 @@
       <div class="ssec"><h3>🧑‍🍳 Personeel — automatiseer je toog</h3><div id="staffBox"></div></div>
       <div class="ssec"><h3>🌭 Menukaart — snacks</h3><div id="snackList"></div></div>
       <div class="ssec"><h3>🥫 Menukaart — sauzen</h3><div id="sauceList"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="map" class="hidden">
+  <div class="sheet">
+    <div class="shead"><span>🗺️ De stad — <span id="mapCount">1</span> frietkot(en)</span><button class="x" id="mapClose">✕</button></div>
+    <div class="scont">
+      <div id="mapList"></div>
+      <p style="font-size:11px;color:var(--ink2);padding:6px 2px 0;line-height:1.4">Open een frietkot in een nieuwe buurt — elke buurt heeft z'n eigen publiek. Je andere frietkoten blijven verdienen terwijl jij er ééntje beheert.</p>
     </div>
   </div>
 </div>
@@ -422,21 +435,32 @@ var evalServe=function(G,c){
 var SHOP_NAMES=["Frituur 't Hoekske","Frituur 't Pleintje","Frituur De Bocht","'t Vetste Kotje",
   "Frituur Rita","Frituur De Gouden Friet","Frietopia","Fritkot Bompa","Frituur N°1","Frituur Nonkel Frit"];
 
+// per-shop state (each frietkot has its own location, house style, kit, staff & prices).
+// money / day / menu-unlocks are global (account-level); everything here is per shop.
+var SHOP_FIELDS=['shop','district','crisp','fat','oil','staff','up','prices','rep','served','satAvg'];
+var pickShopName=function(){ return SHOP_NAMES[Math.floor(Math.random()*SHOP_NAMES.length)]; };
+var newShop=function(district){
+  return { shop:pickShopName(), district:district||'dorp', crisp:52, fat:'blend', oil:100,
+    staff:0, up:{potato:0,fryer:0,doublefry:0,filter:0}, prices:defaultPrices(), rep:6, served:0, satAvg:0 };
+};
+var OPEN_BASE=6000;                                   // cost of your 2nd frietkot; rises after
+var openCost=function(owned){ return Math.round(OPEN_BASE*Math.pow(2.3,(owned||1)-1)); };
+// copy the SHOP_FIELDS between G (the live, active shop) and a stored shop slot
+var mirrorFrom=function(s){ for(var i=0;i<SHOP_FIELDS.length;i++) G[SHOP_FIELDS[i]]=s[SHOP_FIELDS[i]]; };
+var mirrorInto=function(s){ for(var i=0;i<SHOP_FIELDS.length;i++) s[SHOP_FIELDS[i]]=G[SHOP_FIELDS[i]]; };
+var snapshotActive=function(){ if(G.shops&&G.shops[G.active]) mirrorInto(G.shops[G.active]); };
+
 var freshGame=function(){
-  return {
-    v:1,
-    shop: SHOP_NAMES[Math.floor(Math.random()*SHOP_NAMES.length)],
-    money:2000, day:1, rep:6, served:0,
-    oil:100, fat:'blend', crisp:52,
-    dayT:0, dayLen:48,          // seconds per in-game day
+  var g={
+    v:1, money:2000, day:1, dayT:0, dayLen:48, demandMod:1,
     news:"Welkom! Zet je eerste puntzak klaar.",
-    district:'dorp', demandMod:1,
-    up:{potato:0,fryer:0,doublefry:0,filter:0}, staff:0,
-    menu:{ snacks:{}, sauces:{mayo:true} },
-    prices:defaultPrices(),     // per-shop price for every pack / snack / sauce
-    queue:[], arrAcc:0, srvAcc:0, satAvg:0,   // runtime queue economy
+    menu:{ snacks:{}, sauces:{mayo:true} },         // recipe unlocks are global across shops
+    shops:[ newShop('dorp') ], active:0,
+    queue:[], arrAcc:0, srvAcc:0,                   // runtime queue economy (active shop only)
     lastSeen:0
   };
+  G=g; mirrorFrom(g.shops[0]);                       // mirror the active shop's fields onto G
+  return g;
 };
 
 /* ---------- neighbourhoods & demographics (research CULTURE.md; map-ready) ---------- */
@@ -482,24 +506,31 @@ var G=freshGame();
 var SAVE_KEY='ft_save_v1';
 
 /* ---------- persistence ---------- */
-var save=function(){ try{ G.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){} };
+var save=function(){ try{ snapshotActive(); G.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){} };
 var load=function(){
   try{
     var s=localStorage.getItem(SAVE_KEY); if(!s) return false;
     var o=JSON.parse(s); if(!o||o.v!==1) return false;
     for(var k in o) if(o.hasOwnProperty(k)) G[k]=o[k];
-    // migrate / guard fields added after the first slice
-    if(!G.up) G.up={potato:0,fryer:0,doublefry:0,filter:0};
+    // global menu-unlocks migration/guards
     if(!G.menu) G.menu={snacks:{},sauces:{mayo:true}};
     if(!G.menu.snacks) G.menu.snacks={};
     if(!G.menu.sauces) G.menu.sauces={mayo:true};
-    // Belgian rename migration: frikandel->curryworst, mexicano->cervela
     if(G.menu.snacks.frikandel){ G.menu.snacks.curryworst=true; delete G.menu.snacks.frikandel; }
     if(G.menu.snacks.mexicano){ G.menu.snacks.cervela=true; delete G.menu.snacks.mexicano; }
-    if(G.staff==null) G.staff=0;
-    if(!G.district) G.district='dorp';
-    G.prices=Object.assign(defaultPrices(), G.prices||{}); // fill any newly-added items with defaults
-    G.queue=[]; G.arrAcc=0; G.srvAcc=0; if(G.satAvg==null) G.satAvg=0; // rebuild the line fresh
+    // multi-shop migration: wrap a pre-multishop flat save into one shop
+    if(!G.shops){ var s0={}; for(var i=0;i<SHOP_FIELDS.length;i++) s0[SHOP_FIELDS[i]]=G[SHOP_FIELDS[i]]; G.shops=[s0]; G.active=0; }
+    if(G.active==null||G.active<0||G.active>=G.shops.length) G.active=0;
+    // fill each shop's fields with sane defaults (backfills newly-added items too)
+    G.shops.forEach(function(s){
+      s.prices=Object.assign(defaultPrices(), s.prices||{});
+      if(!s.up) s.up={potato:0,fryer:0,doublefry:0,filter:0};
+      if(s.staff==null) s.staff=0; if(s.rep==null) s.rep=6; if(s.satAvg==null) s.satAvg=0;
+      if(s.oil==null) s.oil=100; if(!s.district) s.district='dorp'; if(!s.fat) s.fat='blend';
+      if(s.crisp==null) s.crisp=52; if(s.served==null) s.served=0; if(!s.shop) s.shop=pickShopName();
+    });
+    mirrorFrom(G.shops[G.active]);           // load the active shop into the live fields
+    G.queue=[]; G.arrAcc=0; G.srvAcc=0;       // rebuild the line fresh
     return true;
   }catch(e){ return false; }
 };
@@ -739,11 +770,12 @@ var drawSign=function(x,y,txt,glow){
 var el={};
 var bindUI=function(){
   if(typeof document==='undefined'||!document.getElementById) return;
-  ['shopName','dayN','repN','money','newsTxt','buurtAv','buurtName','buurtStat','satBar',
+  ['shopName','dayN','repN','money','shopsN','newsTxt','buurtAv','buurtName','buurtStat','satBar',
    'crisp','crispV','oilPct','oilBar','fatSeg',
    'oilBtn','oilCost','rate','resetBtn',
    'shopBtn','shopClose','upgList','staffBox','snackList','sauceList',
-   'pricesBtn','pricesSheet','pricesClose','priceSizes','priceSnacks','priceSauces'].forEach(function(id){ el[id]=$(id); });
+   'pricesBtn','pricesSheet','pricesClose','priceSizes','priceSnacks','priceSauces',
+   'mapBtn','mapClose','mapList'].forEach(function(id){ el[id]=$(id); });
 
   // fat segmented
   if(el.fatSeg){ el.fatSeg.innerHTML='';
@@ -756,6 +788,8 @@ var bindUI=function(){
   if(el.shopClose) el.shopClose.onclick=closeShop;
   if(el.pricesBtn) el.pricesBtn.onclick=openPrices;
   if(el.pricesClose) el.pricesClose.onclick=closePrices;
+  if(el.mapBtn) el.mapBtn.onclick=openMap;
+  if(el.mapClose) el.mapClose.onclick=closeMap;
   if(el.resetBtn) el.resetBtn.onclick=function(){
     if(typeof confirm==='undefined'||confirm('Nieuw spel starten? Je huidige frituur gaat verloren.')){
       G=freshGame(); save(); syncControls(); updateBuurt(); toast('Nieuwe frituur geopend!');
@@ -767,6 +801,7 @@ var bindUI=function(){
 var syncControls=function(){
   if(!el.money) return;
   el.shopName.textContent=G.shop;
+  if(el.shopsN) el.shopsN.textContent=G.shops.length;
   el.dayN.textContent=G.day;
   el.repN.textContent=Math.round(G.rep);
   el.money.textContent=fmtFr(G.money);
@@ -916,6 +951,49 @@ var wirePriceSliders=function(){
   });
 };
 
+/* ---------- the map: multiple frietkoten across the town ---------- */
+var ownsDistrict=function(id){ for(var i=0;i<G.shops.length;i++) if(G.shops[i].district===id) return i; return -1; };
+var topArch=function(d){ var best=null,bw=-1; for(var k in d.weights) if(d.weights[k]>bw){bw=d.weights[k];best=k;}
+  var a=archById(best); return a?a.name:'iedereen'; };
+var activateShop=function(i){ if(i===G.active||!G.shops[i]) return;
+  snapshotActive(); G.active=i; mirrorFrom(G.shops[i]); G.queue=[]; G.arrAcc=0; G.srvAcc=0;
+  save(); syncControls(); updateBuurt(); toast('Nu aan het beheren: <b>'+G.shop+'</b>'); };
+var openFrietkot=function(districtId){
+  if(ownsDistrict(districtId)>=0){ toast('Je hebt hier al een frietkot.'); return; }
+  var cost=openCost(G.shops.length);
+  if(G.money<cost){ toast('Te weinig geld — je hebt '+fmtFr(cost)+' fr. nodig.'); return; }
+  snapshotActive(); G.money-=cost; var s=newShop(districtId); G.shops.push(s); G.active=G.shops.length-1;
+  mirrorFrom(s); G.queue=[]; G.arrAcc=0; G.srvAcc=0;
+  save(); syncControls(); updateBuurt(); renderMap();
+  toast('🎉 Nieuwe frietkot geopend in <b>'+districtById(districtId).name+'</b>!');
+};
+var openMap=function(){ var m=$('map'); if(m){ m.classList.remove('hidden'); renderMap(); } };
+var closeMap=function(){ var m=$('map'); if(m) m.classList.add('hidden'); };
+var renderMap=function(){
+  if(!el.mapList) return;
+  var mc=$('mapCount'); if(mc) mc.textContent=G.shops.length;
+  var cost=openCost(G.shops.length), html='';
+  DISTRICTS.forEach(function(d){
+    var owned=ownsDistrict(d.id);
+    if(owned>=0){ var s=G.shops[owned], isA=(owned===G.active);
+      html+='<div class="item'+(isA?' activeShop':'')+'"><div class="ic">'+d.emoji+'</div>'
+        +'<div class="info"><div class="t">'+d.name+(isA?' · <span style="color:var(--good)">nu actief</span>':'')+'</div>'
+        +'<div class="s">'+s.shop+' · ★ '+Math.round(s.rep)+' · '+Math.round((s.satAvg||0)*100)+'% tevreden</div></div>'
+        +(isA?'<button class="buy owned">✓ actief</button>':'<button class="buy" data-goto="'+owned+'">Beheer</button>')+'</div>';
+    } else {
+      html+='<div class="item"><div class="ic">'+d.emoji+'</div>'
+        +'<div class="info"><div class="t">'+d.name+'</div>'
+        +'<div class="s">Vooral <b>'+topArch(d)+'</b> · drukte ×'+d.foot.toFixed(2)+'</div></div>'
+        +'<button class="buy" data-open="'+d.id+'"'+(G.money<cost?' disabled':'')+'>'+fmtFr(cost)+' fr.</button></div>';
+    }
+  });
+  el.mapList.innerHTML=html;
+  if(typeof document!=='undefined'&&document.querySelectorAll){
+    Array.prototype.forEach.call(document.querySelectorAll('[data-goto]'),function(b){ b.onclick=function(){ activateShop(+b.getAttribute('data-goto')); renderMap(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-open]'),function(b){ b.onclick=function(){ openFrietkot(b.getAttribute('data-open')); }; });
+  }
+};
+
 /* ---------- news / day events (seed of the 'event day' model) ---------- */
 var NEWS=[
   {t:"📻 Mooi weer vandaag — meer wandelaars, meer klanten!",d:1.25},
@@ -928,11 +1006,12 @@ var NEWS=[
 ];
 var newDay=function(){
   G.day++; G.dayT=0;
-  // pay the staff their daily wage; an unpaid uitbater walks out
-  if(G.staff>0){ var w=wage(G.staff);
+  // pay every shop's staff their daily wage; an unpaid uitbater walks out
+  snapshotActive();
+  G.shops.forEach(function(s){ if(s.staff>0){ var w=wage(s.staff);
     if(G.money>=w){ G.money-=w; }
-    else { G.staff--; toast('😞 Een uitbater vertrekt — het loon raakte niet betaald.'); }
-  }
+    else { s.staff--; toast('😞 Een uitbater bij '+s.shop+' vertrekt — loon niet betaald.'); } } });
+  mirrorFrom(G.shops[G.active]);
   var n=pick(NEWS); G.news=n.t; G.demandMod=n.d;
   toast('<b>Dag '+G.day+'</b> — '+n.t);
   save();
@@ -966,6 +1045,11 @@ var frame=function(ts){
     if(servedThis<2) popScene(r.sat>0.6?'good':'bad',(r.sat>0.6?'+':'')+fmtFr(r.ticket+r.tip));
     servedThis++;
   }
+  // background frietkoten keep earning on their own settings (lightweight, no queue sim)
+  if(G.shops.length>1){ for(var bi=0;bi<G.shops.length;bi++){ if(bi===G.active) continue; var bs=G.shops[bi];
+    var ctx={menu:G.menu,prices:bs.prices,district:bs.district,oil:bs.oil,rep:bs.rep,up:bs.up,staff:bs.staff,satAvg:bs.satAvg};
+    G.money+=Math.min(arrivalRate(ctx,G.demandMod),serviceRate(ctx))*avgTicket(ctx)*dt;
+  } }
   if(el.money) el.money.textContent=fmtFr(G.money);
   updateBuurt();
 
@@ -977,11 +1061,13 @@ var frame=function(ts){
 var boot=function(){
   var had=load();
   // offline earnings — your staff keep the toog running while you're away (capped 6h)
-  if(had && G.staff>0 && G.lastSeen){
-    var away=clamp((Date.now()-G.lastSeen)/1000,0,6*3600);
-    if(away>60){ var gain=Math.round(Math.min(arrivalRate(G,1),serviceRate(G))*avgTicket(G)*away*0.35);
+  if(had && G.lastSeen){
+    var away=clamp((Date.now()-G.lastSeen)/1000,0,6*3600), ps=0;
+    G.shops.forEach(function(s){ if(s.staff>0){ var ctx={menu:G.menu,prices:s.prices,district:s.district,oil:s.oil,rep:s.rep,up:s.up,staff:s.staff,satAvg:s.satAvg};
+      ps+=Math.min(arrivalRate(ctx,1),serviceRate(ctx))*avgTicket(ctx); } });
+    if(away>60 && ps>0){ var gain=Math.round(ps*away*0.35);
       if(gain>0){ G.money+=gain;
-        setTimeout(function(){ toast('💤 Terwijl je weg was hield je personeel de toog open: <b>+'+fmtFr(gain)+' fr.</b>'); },700); } }
+        setTimeout(function(){ toast('💤 Terwijl je weg was verdienden je frietkoten <b>+'+fmtFr(gain)+' fr.</b>'); },700); } }
   }
   bindUI();
   if(!had){ toast('🍟 Welkom bij <b>'+G.shop+'</b>! Stel je friet af — de klanten komen vanzelf.'); }
@@ -1006,6 +1092,7 @@ if(typeof globalThis!=='undefined'){
     arrivalRate:arrivalRate, serviceRate:serviceRate, evalServe:evalServe,
     FAIR_PRICE:FAIR_PRICE, defaultPrices:defaultPrices, priceOf:priceOf, itemAppeal:itemAppeal,
     friesAppeal:friesAppeal, itemCost:itemCost,
+    newShop:newShop, openCost:openCost, SHOP_FIELDS:SHOP_FIELDS,
     freshGame:freshGame, makeCustomer:makeCustomer };
 }
 </script>
