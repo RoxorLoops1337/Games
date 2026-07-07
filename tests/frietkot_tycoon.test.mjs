@@ -79,5 +79,75 @@ for (let i = 0; i < 40; i++) {
   ok(c.pat > 0 && c.pat === c.patMax, 'customer patience initialised');
 }
 
+// ---- menu data integrity (snacks & sauces) ----
+ok(FT.SNACKS.length === 5, 'five snacks');
+ok(FT.SAUCES.length === 6, 'six sauces');
+ok(FT.SAUCES[0].id === 'mayo' && FT.SAUCES[0].unlock === 0, 'mayo is free/default');
+ok(FT.SNACKS.every(s => s.price > s.cost && s.unlock > 0), 'snacks priced above cost, cost to unlock');
+ok(FT.SAUCES.every(s => s.price > s.cost), 'sauces priced above cost');
+ok(FT.snackById('bicky').label === 'bicky burger', 'snackById lookup');
+ok(FT.snackById('nope') === null, 'snackById miss = null');
+ok(FT.sauceById('andalouse').label === 'andalouse', 'sauceById lookup');
+
+// ---- upgrades ----
+ok(FT.UPG.length === 4, 'four equipment upgrades');
+ok(FT.upgById('fryer').max === 4, 'fryer upgradeable 4x');
+ok(FT.upgradeCost(700, 0) === 700, 'upgradeCost lvl0 = base');
+ok(FT.upgradeCost(700, 1) > FT.upgradeCost(700, 0), 'upgradeCost rises with level');
+ok(FT.upgradeCost(700, 3) > FT.upgradeCost(700, 2), 'upgradeCost keeps rising');
+
+// ---- derived stats ----
+ok(near(FT.effPotato(0), 0.82), 'effPotato base = 0.82');
+ok(FT.effPotato(3) > FT.effPotato(1), 'better Bintjes raise quality');
+ok(FT.effPotato(99) <= 0.99, 'potato quality capped');
+ok(near(FT.fryerFootMul(0), 1), 'fryerFootMul base = 1');
+ok(FT.fryerFootMul(4) > FT.fryerFootMul(0), 'bigger fryer = more footfall');
+ok(FT.wage(0) === 0 && FT.wage(2) === 2 * FT.STAFF_WAGE, 'wage linear in staff');
+
+// ---- double-fry helps a mismatched serve ----
+const noDF = FT.serveQuality({ crisp: 90, band: [40, 60], oil: 100, potato: 0.82, fat: 1 });
+const withDF = FT.serveQuality({ crisp: 90, band: [40, 60], oil: 100, potato: 0.82, fat: 1, doublefry: 1 });
+ok(withDF > noDF, 'double-fry forgives a crispness miss');
+
+// ---- oilDecayMul: filter & fryer both slow decay ----
+const Gbase = FT.freshGame();
+const baseDecay = FT.oilDecayMul(Gbase);
+const Gfilter = FT.freshGame(); Gfilter.up.filter = 1;
+ok(FT.oilDecayMul(Gfilter) < baseDecay, 'vetfilter slows oil decay');
+const Gfryer = FT.freshGame(); Gfryer.up.fryer = 4;
+ok(FT.oilDecayMul(Gfryer) < baseDecay, 'bigger fryer slows oil decay');
+
+// ---- unlockedCount ignores default mayo ----
+const Gm = FT.freshGame();
+ok(FT.unlockedCount(Gm) === 0, 'fresh game: only free mayo, count 0');
+Gm.menu.sauces.andalouse = true; Gm.menu.snacks.frikandel = true;
+ok(FT.unlockedCount(Gm) === 2, 'unlockedCount counts extras');
+
+// ---- idlePerSec grows with staff, menu, fryer ----
+const G0 = FT.freshGame();
+const base0 = FT.idlePerSec(G0, 1).perSec;
+ok(base0 > 0, 'idle income positive');
+const Gs = FT.freshGame(); Gs.staff = 2;
+ok(FT.idlePerSec(Gs, 1).perSec > base0, 'staff raise idle income');
+const Gbig = FT.freshGame(); Gbig.up.fryer = 3;
+ok(FT.idlePerSec(Gbig, 1).perSec > base0, 'bigger fryer raises idle income');
+
+// ---- freshGame carries the new fields ----
+const Gn = FT.freshGame();
+ok(Gn.up && Gn.up.fryer === 0 && Gn.up.doublefry === 0, 'starts with no upgrades');
+ok(Gn.staff === 0, 'starts with no staff');
+ok(Gn.menu && Gn.menu.sauces.mayo === true, 'starts with mayo on the menu');
+ok(Object.keys(Gn.menu.snacks).length === 0, 'starts with no snacks unlocked');
+
+// ---- makeCustomer now carries snack/sauce wishes (object or null) ----
+let sawSnack = false, sawSauce = false;
+for (let i = 0; i < 60; i++) {
+  const c = FT.makeCustomer(Gn);
+  if (c.snack) { sawSnack = true; ok(FT.SNACKS.indexOf(c.snack) >= 0, 'wanted snack is real'); }
+  if (c.sauce) { sawSauce = true; ok(FT.SAUCES.indexOf(c.sauce) >= 0, 'wanted sauce is real'); }
+}
+ok(sawSnack, 'some customers want a snack');
+ok(sawSauce, 'some customers want a sauce');
+
 console.log(`frietkot_tycoon: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
