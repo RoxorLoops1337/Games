@@ -207,6 +207,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.auctionsWon = 1; // satisfies auction goal
   g.decor.owned = ['flowers']; // satisfies décor goal
   for (const id of HR.NEED_IDS) g.horses[0].needs[id] = 100; // satisfies the care goal (a pampered horse)
+  g.tack.owned = [HR.TACK[0].id]; HR.equipTack(g, g.horses[0], HR.TACK[0].id); // satisfies the tack goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1203,6 +1204,105 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(goal && goal.done(g), 'the Top-3 goal completes once the player is high enough');
   const fresh = HR.freshGame(); fresh.day = 20;
   ok(!goal.done(fresh), 'the Top-3 goal is unmet for a bottom-table newcomer');
+}
+
+// ---- tack & equipment (round 23) ----
+{
+  // config surface
+  ok(Array.isArray(HR.TACK) && HR.TACK.length >= 6, 'a tack catalogue exists');
+  ok(new Set(HR.TACK.map(t => t.id)).size === HR.TACK.length, 'tack ids are unique');
+  ok(HR.TACK.every(t => t.cost > 0 && t.repReq >= 0 && t.emoji && t.name && HR.TACK_SLOTS.indexOf(t.slot) >= 0), 'each tack item has cost, repReq, emoji, name, valid slot');
+  ok(HR.TACK_SLOTS.length === 3, 'three equipment slots');
+  ok(HR.tackDef(HR.TACK[0].id) && HR.tackDef('nope') === null, 'tackDef lookup + miss');
+  const h = HR.mkHorse({ breed: 'arabian', age: 12 });
+  ok(h.tack && HR.TACK_SLOTS.every(sl => h.tack[sl] === null), 'mkHorse seeds empty tack slots');
+  ok(HR.equippedTack(h).length === 0, 'a new horse wears no tack');
+}
+{
+  // buy → own → equip → bonus; rep-gating & affordability
+  const g = HR.freshGame(); g.money = 100000; g.rep = 0;
+  const cheap = HR.TACK.find(t => t.repReq === 0 && t.show);
+  const m0 = g.money;
+  const rb = HR.buyTack(g, cheap.id);
+  ok(rb.ok && HR.hasTack(g, cheap.id) && g.money === m0 - cheap.cost, 'buying tack marks it owned and spends coins');
+  ok(!HR.buyTack(g, cheap.id).ok, 'cannot buy the same item twice');
+  const h = g.horses[0];
+  const re = HR.equipTack(g, h, cheap.id);
+  ok(re.ok && HR.equippedIn(h, cheap.slot).id === cheap.id, 'equip places the item in its slot');
+  ok(HR.tackShowMult(h) > 1, 'a show item raises the tack show multiplier');
+  // rep-gated item blocked then allowed
+  const fancy = HR.TACK.find(t => t.repReq >= 40);
+  g.rep = fancy.repReq - 1;
+  ok(!HR.tackUnlocked(g, fancy.id) && !HR.buyTack(g, fancy.id).ok, 'rep-gated tack is locked below its requirement');
+  g.rep = fancy.repReq;
+  ok(HR.buyTack(g, fancy.id).ok, 'rep-gated tack unlocks at its requirement');
+  // affordability + not-owned guards
+  const poor = HR.freshGame(); poor.money = 0; poor.rep = 9999;
+  ok(!HR.tackAffordable(poor, cheap.id) && !HR.buyTack(poor, cheap.id).ok, 'cannot buy tack you cannot afford');
+  ok(!HR.equipTack(poor, poor.horses[0], cheap.id).ok, 'cannot equip tack you do not own');
+}
+{
+  // a single physical item lives on only ONE horse — equipping moves it
+  const g = HR.freshGame(); g.money = 100000;
+  const a = g.horses[0], b = g.horses[1];
+  const item = HR.TACK.find(t => t.repReq === 0);
+  HR.buyTack(g, item.id);
+  HR.equipTack(g, a, item.id);
+  ok(HR.tackWearer(g, item.id).id === a.id, 'the item is worn by the first horse');
+  HR.equipTack(g, b, item.id);
+  ok(HR.tackWearer(g, item.id).id === b.id, 'equipping elsewhere moves the item');
+  ok(HR.equippedIn(a, item.slot) === null, 'the first horse no longer wears it');
+  HR.unequipTack(g, b, item.slot);
+  ok(HR.equippedIn(b, item.slot) === null && HR.hasTack(g, item.id), 'unequip frees the slot but keeps it owned');
+}
+{
+  // the show bonus actually moves discipline scores, and is capped
+  const disc = HR.DISCIPLINES[0];
+  const g = HR.freshGame(); g.money = 100000; g.rep = 9999;
+  const base = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  const kitted = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  for (const id of HR.NEED_IDS) { base.needs[id] = 100; kitted.needs[id] = 100; }
+  g.horses = [base, kitted];
+  HR.TACK.filter(t => t.show).forEach(t => { HR.buyTack(g, t.id); HR.equipTack(g, kitted, t.id); });
+  ok(HR.disciplineScore(kitted, disc) > HR.disciplineScore(base, disc), 'a tacked-up horse out-scores a bare twin');
+  ok(HR.tackShowMult(kitted) <= 1 + HR.TACK_SHOW_CAP + 1e-9, 'total show bonus is capped');
+  // a discipline-specific item helps its discipline specifically
+  const halterItem = HR.TACK.find(t => t.disc && t.disc.id === 'halter');
+  if (halterItem) { ok(HR.tackDiscMult(kitted, 'halter') >= 1, 'discipline tack multiplier is >= 1'); }
+}
+{
+  // accessory effects: grooming kit slows groom decay; weather gear cuts seasonal stress
+  const gkit = HR.TACK.find(t => t.groomDecay), fly = HR.TACK.find(t => t.stressCut);
+  const g = HR.freshGame(); g.money = 100000;
+  const bare = g.horses[0], kept = g.horses[1];
+  HR.buyTack(g, gkit.id); HR.equipTack(g, kept, gkit.id);
+  const groomNeed = HR.NEEDS.find(n => n.id === 'groom');
+  ok(HR.needDecayFor(g, groomNeed, kept) < HR.needDecayFor(g, groomNeed, bare), 'grooming kit slows the grooming need decay');
+  // weather stress: a summer day raises exercise decay; a fly mask reduces the extra
+  const summer = { day: HR.SEASON_LEN + 1 }; // day 15 = summer
+  ok(HR.seasonOf(summer.day).id === 'summer', 'test day lands in summer');
+  const exNeed = HR.NEEDS.find(n => n.id === 'exercise');
+  HR.buyTack(g, fly.id); HR.equipTack(g, kept, fly.id);
+  ok(HR.needDecayFor(summer, exNeed, kept) < HR.needDecayFor(summer, exNeed, bare), 'weather gear eases summer need stress');
+}
+{
+  // save migration: pre-tack horses & saves get safe empty slots; bad ids dropped
+  const legacy = { breed: 'mustang', age: 14, speed: 60, stamina: 60, temperament: 60, health: 90, happy: 85 };
+  HR.tackInit(legacy);
+  ok(legacy.tack && HR.TACK_SLOTS.every(sl => legacy.tack[sl] === null), 'tackInit gives legacy horses empty slots');
+  // an item in the wrong slot is cleared
+  legacy.tack.saddle = HR.TACK.find(t => t.slot === 'accessory').id;
+  HR.tackInit(legacy);
+  ok(legacy.tack.saddle === null, 'tackInit clears gear that no longer fits its slot');
+  // goal + achievement
+  const g = HR.freshGame(); g.money = 100000;
+  const goal = HR.GOALS.find(x => x.id === 'tack1');
+  ok(goal && !goal.done(g), 'the tack goal is unmet on a fresh game');
+  const it = HR.TACK.find(t => t.repReq === 0);
+  HR.buyTack(g, it.id); HR.equipTack(g, g.horses[0], it.id);
+  ok(goal.done(g), 'the tack goal completes once a horse is equipped');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'fulltack');
+  ok(ach && !ach.check(g), 'Fully Tacked is not yet unlocked with one item');
 }
 
 // ---- clamp helper ----

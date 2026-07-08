@@ -270,6 +270,13 @@
   .lbsub{font-size:10px;color:var(--ink2)}
   .lbscore{margin-left:auto;font-weight:900;font-size:13px;color:var(--ink)}
   .lbmove{font-size:11px;font-weight:800;width:20px;text-align:center}
+  .tackslot{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #0c110a}
+  .tackslot:last-child{border-bottom:none}
+  .tackslot .te{font-size:22px;width:30px;text-align:center}
+  .tackitem{display:flex;align-items:center;gap:10px;padding:7px 0}
+  .tackitem .te{font-size:22px;width:28px;text-align:center}
+  .tackitem.locked{opacity:.55}
+  .slotlabel{font-size:10px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px}
 </style>
 </head>
 <body>
@@ -549,19 +556,23 @@ function careTier(h){ const c=careScore(h);
        : c>=34?{id:'restless',label:'Needs care',emoji:'😕'} : {id:'neglected',label:'Neglected',emoji:'😟'}; }
 // a gentle performance/mood multiplier: careScore 100→+6%, ~62→neutral, 0→-10%
 function careBonusMult(h){ return 0.9 + 0.16*(careScore(h)/100); }
-// how fast a given need decays today — season/weather stress raises it; care day eases it
-function needDecayFor(game,n){
-  let d=n.decay;
+// how fast a given need decays today — season/weather stress raises it; care day &
+// equipped tack (fly mask / rug / grooming kit) ease it
+function needDecayFor(game,n,h){
+  let d=n.decay, stress=0;
   if(game){ const day=game.day||0, seas=seasonOf(day).id;
-    if(seas==='winter'&&(n.id==='rest'||n.id==='groom')) d+=3;   // cold is hard on rest & coat
-    if(seas==='summer'&&n.id==='exercise') d+=3;                 // heat raises turnout/water needs
-    if(isCareDay(day)) d=Math.max(2,d-2);                        // Vet & Farrier day: lighter upkeep
+    if(seas==='winter'&&(n.id==='rest'||n.id==='groom')) stress+=3;   // cold is hard on rest & coat
+    if(seas==='summer'&&n.id==='exercise') stress+=3;                 // heat raises turnout/water needs
+    if(h&&stress>0) stress=Math.max(0,stress-tackStressCut(h));       // fly mask / winter rug ease weather stress
+    d+=stress;
+    if(isCareDay(day)) d=Math.max(2,d-2);                            // Vet & Farrier day: lighter upkeep
   }
+  if(h&&n.id==='groom') d*=tackGroomDecayMult(h);                     // grooming kit slows coat fade
   return d;
 }
 // decay one horse's needs by a day (mutates); bonding level tracks how well the bond need is kept
 function decayNeeds(game,h){ needsInit(h);
-  for(const n of NEEDS) h.needs[n.id]=clamp(h.needs[n.id]-needDecayFor(game,n),0,100);
+  for(const n of NEEDS) h.needs[n.id]=clamp(h.needs[n.id]-needDecayFor(game,n,h),0,100);
   const bl=h.needs.bond; h.bond=clamp((h.bond||0)+(bl>=70?1.2:bl>=40?0:-1.4),0,100);
   return careScore(h);
 }
@@ -602,6 +613,65 @@ function applyDailyRoutine(game){ if(!game||!game.horses) return {horses:0,fille
 }
 function routineDoneToday(game){ return !!game && game.lastRoutineDay===game.day; }
 
+// ---------- Tack & equipment: buyable gear equipped per horse ----------
+// Fleur buys gear once (owned inventory), then equips it into one of a horse's
+// three slots (saddle / bridle / accessory). Each physical item lives on ONE horse
+// at a time — equipping it elsewhere moves it — so the player chooses who gets the
+// good tack. Effects are small, capped and economy-safe (they never touch valueOf).
+const TACK_SLOTS=['saddle','bridle','accessory'];
+const TACK_SLOT_LABEL={saddle:'Saddle',bridle:'Bridle',accessory:'Accessory'};
+const TACK_SHOW_CAP=0.12; // total show bonus from a horse's tack is capped at +12%
+const TACK=[
+  // — saddles (show form) —
+  {id:'saddle_training',name:'Training Saddle',    emoji:'💺', slot:'saddle',    cost:500,  repReq:0,  show:0.02, desc:'A dependable everyday saddle. +2% show form.'},
+  {id:'saddle_show',    name:'Competition Saddle', emoji:'🏆', slot:'saddle',    cost:2400, repReq:60, show:0.05, desc:'Feather-light competition saddle. +5% show form.'},
+  // — bridles (show form / control) —
+  {id:'bridle_leather', name:'Leather Bridle',     emoji:'🪢', slot:'bridle',    cost:420,  repReq:0,  show:0.02, desc:'Supple, well-fitted bridle. +2% show form.'},
+  {id:'bridle_show',    name:'Silver Show Bridle', emoji:'🎀', slot:'bridle',    cost:1900, repReq:40, show:0.04, disc:{id:'dressage',mult:0.05}, desc:'Elegant bridle. +4% show form, +5% Dressage.'},
+  // — accessories (utility: care / weather / a discipline) —
+  {id:'groom_kit',      name:'Grooming Kit',       emoji:'🪮', slot:'accessory', cost:650,  repReq:0,  groomDecay:0.5, desc:'Brushes & combs — grooming fades half as fast.'},
+  {id:'fly_mask',       name:'Fly Mask',           emoji:'🥽', slot:'accessory', cost:480,  repReq:0,  stressCut:3, desc:'Keeps flies & sun off — eases hot-weather needs.'},
+  {id:'winter_rug',     name:'Winter Rug',         emoji:'🧥', slot:'accessory', cost:760,  repReq:0,  stressCut:3, desc:'A warm rug — eases cold-weather needs.'},
+  {id:'leg_wraps',      name:'Leg Wraps',          emoji:'🧦', slot:'accessory', cost:980,  repReq:20, disc:{id:'jump',mult:0.06}, desc:'Support & protection. +6% Show-Jumping.'},
+  {id:'show_halter',    name:'Show Halter',        emoji:'🎗️', slot:'accessory', cost:1600, repReq:40, disc:{id:'halter',mult:0.08}, desc:'A gleaming halter for the ring. +8% Showing.'},
+];
+function tackDef(id){ return TACK.find(t=>t.id===id)||null; }
+// ensure a horse has a valid 3-slot tack record (drops gear that no longer fits its slot)
+function tackInit(h){ if(!h) return h; if(!h.tack||typeof h.tack!=='object') h.tack={};
+  for(const sl of TACK_SLOTS){ const id=h.tack[sl]; const t=id?tackDef(id):null;
+    h.tack[sl]=(t&&t.slot===sl)?id:null; }
+  return h; }
+function equippedTack(h){ tackInit(h); return TACK_SLOTS.map(sl=>h.tack[sl]).filter(Boolean).map(tackDef).filter(Boolean); }
+function equippedIn(h,slot){ tackInit(h); return h.tack[slot]?tackDef(h.tack[slot]):null; }
+// owned inventory (ids the player has bought)
+function ownedTack(game){ return (game&&game.tack&&Array.isArray(game.tack.owned))?game.tack.owned:[]; }
+function hasTack(game,id){ return ownedTack(game).indexOf(id)>=0; }
+function tackUnlocked(game,id){ const t=tackDef(id); return !!t && ((game&&game.rep)||0)>=t.repReq; }
+function tackAffordable(game,id){ const t=tackDef(id); return !!t && !hasTack(game,id) && tackUnlocked(game,id) && ((game&&game.money)||0)>=t.cost; }
+function buyTack(game,id){ const t=tackDef(id); if(!t) return {ok:false,why:'No such item.'};
+  if(!game.tack) game.tack={owned:[]};
+  if(hasTack(game,id)) return {ok:false,why:'Already owned.'};
+  if((game.rep||0)<t.repReq) return {ok:false,why:'Needs ⭐'+t.repReq+' reputation.'};
+  if((game.money||0)<t.cost) return {ok:false,why:'Not enough coins.'};
+  game.money-=t.cost; game.tack.owned.push(id); return {ok:true,item:t}; }
+// which horse currently wears an owned item (single physical item), or null
+function tackWearer(game,id){ if(!game||!game.horses) return null;
+  return game.horses.find(h=>{ tackInit(h); return TACK_SLOTS.some(sl=>h.tack[sl]===id); })||null; }
+// equip an owned item onto a horse's slot; moves it off any other horse first
+function equipTack(game,h,id){ const t=tackDef(id); if(!t) return {ok:false,why:'No such item.'};
+  if(!hasTack(game,id)) return {ok:false,why:'You don’t own that yet.'};
+  tackInit(h);
+  const cur=tackWearer(game,id); if(cur){ tackInit(cur); for(const sl of TACK_SLOTS) if(cur.tack[sl]===id) cur.tack[sl]=null; }
+  h.tack[t.slot]=id; return {ok:true,item:t,slot:t.slot}; }
+function unequipTack(game,h,slot){ tackInit(h); const id=h.tack[slot]; h.tack[slot]=null; return {ok:true,id}; }
+// small, capped bonus accessors
+function tackShowMult(h){ let s=0; for(const t of equippedTack(h)) s+=(t.show||0); return 1+Math.min(TACK_SHOW_CAP,s); }
+function tackDiscMult(h,discId){ let m=1; for(const t of equippedTack(h)) if(t.disc&&t.disc.id===discId) m*=(1+t.disc.mult); return m; }
+function tackGroomDecayMult(h){ let m=1; for(const t of equippedTack(h)) if(t.groomDecay) m=Math.min(m,t.groomDecay); return m; }
+function tackStressCut(h){ let c=0; for(const t of equippedTack(h)) c+=(t.stressCut||0); return c; }
+// total show multiplier a horse's tack gives in a discipline (for display)
+function tackShowMultFor(h,discId){ return tackShowMult(h)*tackDiscMult(h,discId); }
+
 function mkHorse(o){
   o=o||{}; const rng=o.rng||Math.random;
   const b=breedDef(o.breed)||BREEDS[0];
@@ -631,8 +701,9 @@ function mkHorse(o){
     rentDays:0, rentRate:0,   // >0 = out on rent
     stable:o.stable!=null?o.stable:0,
     needs:o.needs||null, bond:o.bond,  // daily care needs + bonding level (needsInit fills defaults)
+    tack:o.tack||null,                 // equipped gear per slot (tackInit fills defaults)
   };
-  needsInit(h);
+  needsInit(h); tackInit(h);
   return h;
 }
 
@@ -941,6 +1012,7 @@ function freshGame(){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
+    tack:{owned:[]},
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -1129,7 +1201,7 @@ function disciplineScore(h,disc){
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*careBonusMult(h)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, personality & age shape aptitude
+  return s*form*careBonusMult(h)*tackShowMult(h)*tackDiscMult(h,disc.id)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, tack, personality & age shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -1419,6 +1491,7 @@ const ACHIEVEMENTS=[
   {id:'legendrank', icon:'🌟', name:'Legendary Rancher',  desc:'Reach the top reputation rank.',               check:g=>g.rep>=8000},
   {id:'auction',    icon:'🔨', name:'Going Once...',       desc:'Win a horse at auction.',                      check:g=>(g.stats.auctionsWon||0)>=1},
   {id:'topranch',   icon:'👑', name:'Top of the Region',   desc:'Reach #1 on the regional leaderboard.',        check:g=>playerRank(g)===1},
+  {id:'fulltack',   icon:'🎽', name:'Fully Tacked',        desc:'Equip all three tack slots on one horse.',     check:g=>g.horses.some(h=>equippedTack(h).length>=3)},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1500,6 +1573,7 @@ const GOALS=[
   {id:'decor1',  desc:'Personalise your ranch (🎨 décor)', tip:g=>ownedDecor(g).length+' items',   done:g=>ownedDecor(g).length>=1,                                reward:{money:600,rep:20}},
   {id:'care1',   desc:'Pamper a horse (✨ full care)',      tip:g=>'best care '+Math.max(0,...g.horses.map(h=>careScore(h)))+'%',done:g=>g.horses.some(h=>careScore(h)>=88),           reward:{money:500,rep:20}},
   {id:'top3',    desc:'Break into the Top 3 ranches',       tip:g=>'now #'+playerRank(g)+' of '+(rivalCount()+1),done:g=>playerRank(g)<=3,                                       reward:{money:2000,rep:50}},
+  {id:'tack1',   desc:'Kit out a horse (🧰 equip tack)',     tip:g=>'',                              done:g=>g.horses.some(h=>equippedTack(h).length>=1),            reward:{money:600,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1555,6 +1629,9 @@ const HR = {
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
   RIVALS, rivalDef, rivalShowDays, rivalRep, playerScore, standings, playerRank,
   leaderRanch, rivalCount, tickStandings,
+  TACK, TACK_SLOTS, TACK_SLOT_LABEL, TACK_SHOW_CAP, tackDef, tackInit, equippedTack, equippedIn,
+  ownedTack, hasTack, tackUnlocked, tackAffordable, buyTack, tackWearer, equipTack, unequipTack,
+  tackShowMult, tackDiscMult, tackGroomDecayMult, tackStressCut, tackShowMultFor,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
 
@@ -1603,6 +1680,8 @@ function load(){
     if(!G.achievements) G.achievements=[];
     if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
     if(G.lastRank==null){ G.lastRank=playerRank(G); G.prevRank=G.lastRank; G.bestRank=G.lastRank; } // regional standings history
+    if(!G.tack||!Array.isArray(G.tack.owned)) G.tack={owned:[]}; // tack & equipment inventory
+    G.tack.owned=G.tack.owned.filter(id=>!!tackDef(id)).filter((v,i,a)=>a.indexOf(v)===i);
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
@@ -1617,6 +1696,7 @@ function load(){
       if(h.entries==null) h.entries=0; if(h.compCd==null) h.compCd=0;
       if(h.atStud==null) h.atStud=false;
       needsInit(h); // seed daily care needs on pre-needs horses (content defaults — no sudden misery)
+      tackInit(h);  // seed empty tack slots on pre-tack horses
     });
     return true;
   }catch(e){ return false; }
@@ -1688,6 +1768,8 @@ function horseCard(h,actionsHtml){
   { const ct2=careTier(h), cc=careTierColor(ct2.id);
     tags.push('<span class="tag" title="Care '+careScore(h)+'%" style="color:'+cc+';border-color:'+cc+'55">'+ct2.emoji+' '+ct2.label+'</span>'); }
   if((h.bond||0)>=70) tags.push('<span class="tag" style="color:#d15a8a;border-color:#5f2640">❤ Bonded</span>');
+  { const eq=equippedTack(h); if(eq.length){ const icons=eq.map(t=>t.emoji).join('');
+    tags.push('<span class="tag" title="'+eq.map(t=>t.name).join(', ')+'" style="color:#c9a24a;border-color:#5f4a1c">'+icons+' Tacked</span>'); } }
   if(h.rentDays>0) tags.push('<span class="tag busy">🚜 Rented ('+h.rentDays+'d)</span>');
   if(h.atStud) tags.push('<span class="tag" style="color:var(--good);border-color:#2f4a1c">♞ At stud</span>');
   const c=el('div','card');
@@ -1943,6 +2025,7 @@ function renderRanch(){
   G.horses.forEach(h=>{
     let acts='';
     { const low=lowNeeds(h).length; acts+='<button class="btn sm '+(low?'':'ghost')+'" data-care="'+h.id+'">🧡 Care'+(low?' ('+low+')':'')+'</button>'; }
+    { const ne=equippedTack(h).length; acts+='<button class="btn sm ghost" data-tack="'+h.id+'">🎽 Tack'+(ne?' ('+ne+'/3)':'')+'</button>'; }
     acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
     acts+='<button class="btn sm ghost" data-card="'+h.id+'">🖼️ Card</button>';
     if(isAdult(h)&&!tooOldToCompete(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
@@ -1950,6 +2033,7 @@ function renderRanch(){
     if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
     const c=horseCard(h,acts);
     c.querySelectorAll('[data-care]').forEach(btn=>btn.onclick=()=>openCare(h));
+    c.querySelectorAll('[data-tack]').forEach(btn=>btn.onclick=()=>openTack(h));
     c.querySelectorAll('[data-ped]').forEach(btn=>btn.onclick=()=>openPedigree(h));
     c.querySelectorAll('[data-card]').forEach(btn=>btn.onclick=()=>openCard(h));
     c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
@@ -2407,6 +2491,29 @@ function renderEstate(){
     s.appendChild(row);
   });
 
+  // ---- Tack Room (equipment shop) ----
+  s.appendChild(el('h2','head','🧰 Tack Room'));
+  s.appendChild(el('div','sub','Buy saddles, bridles &amp; accessories, then fit them to a horse from its 🎽 Tack panel. Each item boosts a horse a little in shows or care — small, but it adds up.'));
+  TACK_SLOTS.forEach(sl=>{
+    const items=TACK.filter(t=>t.slot===sl); if(!items.length) return;
+    s.appendChild(el('div','slotlabel',TACK_SLOT_LABEL[sl]+'s'));
+    items.forEach(t=>{
+      const has=hasTack(G,t.id), unlocked=tackUnlocked(G,t.id), afford=tackAffordable(G,t.id);
+      const wearer=has?tackWearer(G,t.id):null;
+      const right = has
+        ? (wearer?'<span class="pill" style="color:var(--good)">'+wearer.emoji+' '+wearer.name+'</span>':'<span class="pill">In tack room</span>')
+        : !unlocked ? '<span class="pill">🔒 ⭐'+t.repReq+'</span>'
+        : '<button class="btn sm" data-buytack="'+t.id+'" '+(afford?'':'disabled')+'>🪙'+fmt(t.cost)+'</button>';
+      const c=el('div','tackitem'+((!has&&!unlocked)?' locked':''));
+      c.innerHTML='<div class="te">'+t.emoji+'</div><div class="grow"><div class="hname" style="font-size:13px">'+t.name+(has?' <span class="pill" style="color:var(--good)">Owned</span>':'')+'</div>'+
+        '<div class="hbreed">'+t.desc+'</div></div>'+right;
+      const bb=c.querySelector('[data-buytack]');
+      if(bb) bb.onclick=()=>{ const r=buyTack(G,t.id); if(!r.ok){ toast(r.why,'bad'); return; }
+        coinPop(-r.item.cost); burst(r.item.emoji+'✨',10); playSfx('coin'); toast('🧰 Bought '+r.item.name+'! Fit it from a horse’s 🎽 Tack panel.','good'); refresh(); };
+      s.appendChild(c);
+    });
+  });
+
   // ---- Canteen ----
   const lv=canteenLevel(G);
   const cc=el('div','card'); cc.style.borderLeft='4px solid var(--gold2)';
@@ -2522,6 +2629,58 @@ function openCare(h){
     if(!r.ok){ toast(r.why,'bad'); return; } if(r.cost>0) coinPop(-r.cost); playSfx('coin'); reopen(); });
   { const f=$('fullCare'); if(f) f.onclick=()=>{ const r=applyFullCare(G,h); if(!r.ok){ toast(r.why,'bad'); return; }
     if(r.cost>0) coinPop(-r.cost); burst('✨🧡',10); playSfx('goal'); toast('✨ '+h.name+' is fully cared for!','good'); reopen(); }; }
+}
+// ---- Tack & equipment: per-horse equip panel ----
+function tackEffectLine(t){
+  const bits=[];
+  if(t.show) bits.push('+'+Math.round(t.show*100)+'% show');
+  if(t.disc){ const d=disciplineDef(t.disc.id); bits.push('+'+Math.round(t.disc.mult*100)+'% '+(d?d.name:t.disc.id)); }
+  if(t.groomDecay) bits.push('grooming lasts longer');
+  if(t.stressCut) bits.push('eases weather needs');
+  return bits.join(' · ');
+}
+function openTack(h){
+  const reopen=()=>{ save(); renderHUD(); renderTab(); openTack(h); };
+  const rows=TACK_SLOTS.map(sl=>{ const eq=equippedIn(h,sl);
+    const body = eq
+      ? '<div class="grow"><div class="hname" style="font-size:13px">'+eq.emoji+' '+eq.name+'</div><div class="hbreed">'+tackEffectLine(eq)+'</div></div>'
+        +'<button class="btn sm ghost" data-unequip="'+sl+'">Remove</button>'
+      : '<div class="grow"><div class="hname" style="font-size:13px;color:var(--ink2)">— empty —</div><div class="hbreed">Equip a '+TACK_SLOT_LABEL[sl].toLowerCase()+' from your tack room.</div></div>'
+        +'<button class="btn sm" data-pick="'+sl+'">Equip</button>';
+    return '<div class="tackslot"><div class="te">'+(eq?eq.emoji:'▫️')+'</div><div class="grow" style="display:flex;align-items:center;gap:8px">'+
+      '<div style="min-width:64px"><div class="slotlabel">'+TACK_SLOT_LABEL[sl]+'</div></div>'+body+'</div></div>'; }).join('');
+  modal('<h3>🎽 Tack for '+h.name+'</h3>'+
+    '<div class="row" style="align-items:center;gap:10px;margin-bottom:6px"><div class="hface">'+horseArt(h)+'</div>'+
+      '<div class="grow"><div class="hname">'+h.name+'</div>'+
+      '<div class="hbreed">Equip gear into three slots. Each item lives on one horse at a time — kit out your show stars.</div></div></div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn" id="tackShopBtn" style="flex:1">🧰 Tack Shop</button>'+
+      '<button class="btn ghost" id="tackClose" style="flex:1">Done</button></div>');
+  $('tackClose').onclick=closeModal;
+  $('tackShopBtn').onclick=()=>{ closeModal(); setTab('estate'); toast('🧰 Buy new gear in the Tack Room.','info'); };
+  document.querySelectorAll('[data-unequip]').forEach(b=>b.onclick=()=>{ unequipTack(G,h,b.getAttribute('data-unequip')); playSfx('tap'); reopen(); });
+  document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>openTackPicker(h,b.getAttribute('data-pick')));
+}
+// choose which owned item to slot (only items you own, matching the slot)
+function openTackPicker(h,slot){
+  const owned=ownedTack(G).map(tackDef).filter(t=>t&&t.slot===slot);
+  const back=()=>openTack(h);
+  let body;
+  if(!owned.length){
+    body='<div class="empty">You don’t own any '+TACK_SLOT_LABEL[slot].toLowerCase()+' gear yet.<br>Buy some in the 🧰 Tack Room (Estate tab).</div>';
+  } else {
+    body=owned.map(t=>{ const wearer=tackWearer(G,t.id); const onThis=wearer&&wearer.id===h.id;
+      return '<div class="tackitem"><div class="te">'+t.emoji+'</div>'+
+        '<div class="grow"><div class="hname" style="font-size:13px">'+t.name+'</div>'+
+        '<div class="hbreed">'+tackEffectLine(t)+(wearer&&!onThis?' · <span style="color:var(--gold)">on '+wearer.name+'</span>':'')+'</div></div>'+
+        (onThis?'<span class="pill" style="color:var(--good)">✓ On '+h.name+'</span>':'<button class="btn sm" data-eq="'+t.id+'">'+(wearer?'Move here':'Equip')+'</button>')+'</div>'; }).join('');
+  }
+  modal('<h3>🎽 Choose a '+TACK_SLOT_LABEL[slot]+'</h3><div>'+body+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="pkBack" style="width:100%">‹ Back</button></div>');
+  $('pkBack').onclick=back;
+  document.querySelectorAll('[data-eq]').forEach(b=>b.onclick=()=>{ const r=equipTack(G,h,b.getAttribute('data-eq'));
+    if(!r.ok){ toast(r.why,'bad'); return; } burst(r.item.emoji+'✨',8); playSfx('coin');
+    toast('🎽 '+r.item.name+' equipped on '+h.name+'.','good'); save(); renderHUD(); renderTab(); openTack(h); });
 }
 function buyHorse(h){
   const price=buyPrice(h); if(G.money<price){ toast('Not enough coins.','bad'); return; }
