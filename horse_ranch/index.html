@@ -587,9 +587,10 @@ function decayNeeds(game,h){ needsInit(h);
   const bl=h.needs.bond; h.bond=clamp((h.bond||0)+(bl>=70?1.2:bl>=40?0:-1.4),0,100);
   return careScore(h);
 }
-// cost to restore one need now (0 = free), discounted on the care weekday
+// cost to restore one need now (0 = free), discounted on the care weekday & by a Farrier
 function careCost(game,id){ const n=needDef(id); if(!n||!n.cost) return 0;
-  let c=n.cost; if(game&&isCareDay(game.day)) c=Math.round(c*0.6); return c; }
+  let c=n.cost; if(game&&isCareDay(game.day)) c=Math.round(c*0.6);
+  if(game) c=Math.round(c*staffEffect(game,'careCostMult')); return Math.max(0,c); }
 // full cost to satisfy every unmet paid need for a horse (a "Full care" bundle)
 function fullCareCost(game,h){ needsInit(h); let c=0;
   for(const n of NEEDS){ if(n.cost && h.needs[n.id]<100) c+=careCost(game,n.id); } return c; }
@@ -623,6 +624,46 @@ function applyDailyRoutine(game){ if(!game||!game.horses) return {horses:0,fille
   game.lastRoutineDay=game.day; return {horses:game.horses.length, filled};
 }
 function routineDoneToday(game){ return !!game && game.lastRoutineDay===game.day; }
+
+// ---------- Stable staff: hire ranch hands who ease the daily chores ----------
+// Distinct from Riding-School teachers (who earn lesson income). Each role is a
+// single hire (no stacking) with a daily salary — a coin sink — and one bounded,
+// legible benefit folded into advanceDay / care / economy. Hire nobody → unaffected.
+const MAX_STAFF=6; // one of each role
+const STAFF_ROLES=[
+  {id:'groom',        name:'Groom',         emoji:'🧹', salary:38, repReq:0,   kind:'careTopUp',    amount:16, desc:'Tops up every horse’s care needs a little each day.'},
+  {id:'hand',         name:'Stable Hand',   emoji:'🧺', salary:30, repReq:0,   kind:'autoRoutine',             desc:'Runs the free daily stable routine every morning.'},
+  {id:'farrier',      name:'Farrier',       emoji:'🧰', salary:34, repReq:150, kind:'careCostMult', mult:0.65, desc:'Cuts paid care costs (grooming & hooves) by 35%.'},
+  {id:'groundskeeper',name:'Groundskeeper', emoji:'🌾', salary:28, repReq:150, kind:'feedMult',     mult:0.9,  desc:'Careful feeding — the herd eats 10% less hay.'},
+  {id:'vet',          name:'Vet',           emoji:'🩺', salary:42, repReq:400, kind:'vetCare',                 desc:'Heals horses a little daily and heads off vet call-outs.'},
+  {id:'trainer',      name:'Trainer',       emoji:'🏋️', salary:44, repReq:400, kind:'trainCostMult',mult:0.75, desc:'Training sessions cost 25% less.'},
+];
+function staffDef(id){ return STAFF_ROLES.find(r=>r.id===id)||null; }
+function staffList(game){ return (game&&Array.isArray(game.staff))?game.staff:[]; }
+function hasStaff(game,id){ return staffList(game).indexOf(id)>=0; }
+function staffCount(game){ return staffList(game).length; }
+function staffPayroll(game){ return staffList(game).reduce((n,id)=>{ const r=staffDef(id); return n+(r?r.salary:0); },0); }
+function staffUnlocked(game,id){ const r=staffDef(id); return !!r && ((game&&game.rep)||0)>=r.repReq; }
+function staffAffordable(game,id){ return staffUnlocked(game,id) && !hasStaff(game,id); }
+function hireStaff(game,id){ const r=staffDef(id); if(!r) return {ok:false,why:'No such role.'};
+  if(!game.staff) game.staff=[];
+  if(hasStaff(game,id)) return {ok:false,why:'Already on the payroll.'};
+  if((game.rep||0)<r.repReq) return {ok:false,why:'Needs ⭐'+r.repReq+' reputation.'};
+  game.staff.push(id); return {ok:true,role:r}; }
+function fireStaff(game,id){ if(!game||!Array.isArray(game.staff)) return {ok:false}; const had=hasStaff(game,id); game.staff=game.staff.filter(x=>x!==id); return {ok:had}; }
+// aggregate staff effect for a given kind (single-hire roles, so a simple lookup)
+function staffEffect(game,kind){
+  switch(kind){
+    case 'careTopUp':     return hasStaff(game,'groom')? staffDef('groom').amount : 0;
+    case 'autoRoutine':   return hasStaff(game,'hand');
+    case 'careCostMult':  return hasStaff(game,'farrier')? staffDef('farrier').mult : 1;
+    case 'feedMult':      return hasStaff(game,'groundskeeper')? staffDef('groundskeeper').mult : 1;
+    case 'trainCostMult': return hasStaff(game,'trainer')? staffDef('trainer').mult : 1;
+    case 'vetHeal':       return hasStaff(game,'vet')? 5 : 0;
+    case 'vetChanceMult': return hasStaff(game,'vet')? 0.4 : 1;
+    default: return 0;
+  }
+}
 
 // ---------- Tack & equipment: buyable gear equipped per horse ----------
 // Fleur buys gear once (owned inventory), then equips it into one of a horse's
@@ -1023,7 +1064,7 @@ function freshGame(){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[]}, board:null,
+    tack:{owned:[]}, board:null, staff:[],
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -1047,6 +1088,7 @@ function advanceDay(game,rng){
   let need=0; for(const h of game.horses) need+=feedPerDay(h);
   need += game.boarders*2; // boarders eat too (you supply the hay)
   need += (game.horses.length+game.boarders)*feedExtraFor(game.day); // cold weather = extra hay
+  need = Math.round(need*staffEffect(game,'feedMult')); // a Groundskeeper trims hay use
   if(game.feed>=need){
     game.feed-=need;
     for(const h of game.horses){ h.happy=clamp(h.happy+3,0,100); if(h.happy>70) h.health=clamp(h.health+2,0,100); }
@@ -1056,12 +1098,19 @@ function advanceDay(game,rng){
     notes.push({t:'bad',m:'🌾 Out of feed! Your horses are hungry.'});
   }
 
+  // staff: a Stable Hand runs the free routine each morning (before decay)
+  if(staffEffect(game,'autoRoutine')) applyDailyRoutine(game);
+  const staffTop=staffEffect(game,'careTopUp'), staffHeal=staffEffect(game,'vetHeal');
+
   // age + growth + pregnancy + rent
   const born=[];
   for(const h of game.horses){
     h.age++; h.trains=0; // fresh training energy each day
     // daily care needs decay; neglect drags mood/health, a pampered horse gets a small lift
     decayNeeds(game,h);
+    // staff chores: a Groom tops up care needs, a Vet heals a little (bounded — not free full care)
+    if(staffTop>0){ needsInit(h); for(const id of NEED_IDS) h.needs[id]=clamp(h.needs[id]+staffTop,0,100); }
+    if(staffHeal>0) h.health=clamp(h.health+staffHeal,0,100);
     { const cs=careScore(h);
       if(cs<35){ h.happy=clamp(h.happy-5,0,100); h.health=clamp(h.health-2,0,100); }
       else if(cs>=80){ h.happy=clamp(h.happy+2,0,100); } }
@@ -1116,6 +1165,8 @@ function advanceDay(game,rng){
     game.stats.lessons=(game.stats.lessons||0)+served;
     game.rep += Math.min(3, Math.floor(served/3)); // a busy school builds reputation
   }
+  // stable staff wages (daily coin sink; only if you've hired anyone)
+  { const pay=staffPayroll(game); if(pay>0){ game.money-=pay; game.stats.staffWages=(game.stats.staffWages||0)+pay; } }
   // stud fees — visiting mares pay to breed with your at-stud stallions (no foals in your stalls)
   { const si=studIncome(game); if(si>0){ game.money+=si; game.stats.studIncome=(game.stats.studIncome||0)+si; } }
 
@@ -1161,7 +1212,10 @@ function rollEvent(game,rng){
   const care=isCareDay(game.day), showDay=isShowDay(game.day);
   // 'show' invitations only turn up on show days; vet visits cluster on Vet & Farrier day
   const pool=EVENTS.filter(e=>game.day>=e.min && (e.id!=='show'||showDay));
-  const weighted=[]; pool.forEach(e=>{ let w=e.weight; if(e.id==='vet'&&care) w+=3; if(e.id==='show') w+=2; for(let i=0;i<w;i++) weighted.push(e); });
+  const weighted=[]; pool.forEach(e=>{ let w=e.weight;
+    if(e.id==='vet'){ w=Math.max(0,Math.round(w*staffEffect(game,'vetChanceMult'))); if(care) w+=3; } // a Vet heads off call-outs
+    else if(e.id==='show') w+=2;
+    for(let i=0;i<w;i++) weighted.push(e); });
   if(!weighted.length) return null;
   const e=weighted[Math.floor(rng()*weighted.length)];
   if(e.id==='buyer'){
@@ -1590,6 +1644,7 @@ const ACHIEVEMENTS=[
   {id:'fulltack',   icon:'🎽', name:'Fully Tacked',        desc:'Equip all three tack slots on one horse.',     check:g=>g.horses.some(h=>equippedTack(h).length>=3)},
   {id:'flawless',   icon:'🎯', name:'Clear Round',          desc:'Ride a near-flawless show round.',             check:g=>((g.stats&&g.stats.bestShowPerf)||0)>=0.95},
   {id:'contractor', icon:'📋', name:'Reliable Hand',        desc:'Complete 10 notice-board contracts.',          check:g=>((g.stats&&g.stats.contractsDone)||0)>=10},
+  {id:'fullcrew',   icon:'👥', name:'Full Crew',            desc:'Employ all six stable staff at once.',         check:g=>staffCount(g)>=MAX_STAFF},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1628,6 +1683,7 @@ const TRAIN_LABEL={speed:'Speed',stamina:'Stamina',temperament:'Temperament'};
 const TRAIN_PER_DAY=3;
 function statCap(h,stat){ const b=breedDef(h.breed)||BREEDS[0]; return clamp(Math.round(b[stat]+18),40,100); }
 function trainCost(h,stat){ const b=breedDef(h.breed)||BREEDS[0]; return Math.round(50*(1+h[stat]*0.03)*RARITY_MULT[b.rarity]); }
+function trainCostFor(game,h,stat){ return Math.max(1,Math.round(trainCost(h,stat)*staffEffect(game,'trainCostMult'))); } // Trainer discount
 function trainGain(h,stat){ const room=statCap(h,stat)-h[stat]; return room<=0?0:Math.max(1,Math.round(room*0.28*traitMult(h,'train'))); }
 function canTrain(h,stat){
   if(!isAdult(h)) return {ok:false,why:'Only adults can train.'};
@@ -1674,6 +1730,7 @@ const GOALS=[
   {id:'tack1',   desc:'Kit out a horse (🧰 equip tack)',     tip:g=>'',                              done:g=>g.horses.some(h=>equippedTack(h).length>=1),            reward:{money:600,rep:20}},
   {id:'ride1',   desc:'Ride a show round yourself',          tip:g=>((g.stats&&g.stats.showGamesPlayed)||0)+'/1',done:g=>((g.stats&&g.stats.showGamesPlayed)||0)>=1,           reward:{money:700,rep:25}},
   {id:'contract1',desc:'Complete a notice-board contract',    tip:g=>((g.stats&&g.stats.contractsDone)||0)+'/1',done:g=>((g.stats&&g.stats.contractsDone)||0)>=1,             reward:{money:600,rep:20}},
+  {id:'staff1',  desc:'Hire your first stable hand',          tip:g=>staffCount(g)+'/1',              done:g=>staffCount(g)>=1,                                       reward:{money:600,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1704,6 +1761,8 @@ const HR = {
   CONTRACTS, BOARD_SIZE, contractDef, contractsForWeek, boardBaseSnapshot, refreshBoard,
   contractProgress, contractDone, currentContracts, claimableContracts, claimContract, daysUntilBoardRefresh,
   CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
+  STAFF_ROLES, MAX_STAFF, staffDef, staffList, hasStaff, staffCount, staffPayroll,
+  staffUnlocked, staffAffordable, hireStaff, fireStaff, staffEffect, trainCostFor,
   mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
   lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet, schoolLessonMult,
   TRAITS, traitDef, pickTrait, traitMult,
@@ -1783,6 +1842,7 @@ function load(){
     if(G.stats.showGamesPlayed==null) G.stats.showGamesPlayed=0;
     if(G.stats.clearRounds==null) G.stats.clearRounds=0;
     if(G.stats.contractsDone==null) G.stats.contractsDone=0;
+    if(G.stats.staffWages==null) G.stats.staffWages=0;
     if(G.stats.bestShowPerf==null) G.stats.bestShowPerf=0;
     if(!G.achievements) G.achievements=[];
     if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
@@ -1790,6 +1850,7 @@ function load(){
     if(!G.tack||!Array.isArray(G.tack.owned)) G.tack={owned:[]}; // tack & equipment inventory
     G.tack.owned=G.tack.owned.filter(id=>!!tackDef(id)).filter((v,i,a)=>a.indexOf(v)===i);
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
+    if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
@@ -2684,6 +2745,24 @@ function renderEstate(){
   if(cb) cb.onclick=()=>{ if(G.money<cost) return; G.money-=cost; G.canteen.level=lv+1; coinPop(-cost);
     toast(lv?'🍺 Canteen upgraded to Lv '+(lv+1)+'!':'🍺 The Canteen is open for business!','good'); refresh(); };
 
+  // ---- Stable Staff ----
+  s.appendChild(el('h2','head','👥 Stable Staff'));
+  s.appendChild(el('div','sub','Hire ranch hands to ease the daily chores — separate from your riding teachers. Each draws a daily wage. Crew: <b>'+staffCount(G)+'/'+MAX_STAFF+'</b> · payroll <b>🪙'+fmt(staffPayroll(G))+'/day</b>.'));
+  STAFF_ROLES.forEach(r=>{
+    const hired=hasStaff(G,r.id), unlocked=staffUnlocked(G,r.id);
+    const c=el('div','card'); if(hired) c.style.borderLeft='4px solid var(--gold2)';
+    const right = hired ? '<button class="btn sm ghost" data-fire="'+r.id+'">Let go</button>'
+      : !unlocked ? '<span class="pill">🔒 ⭐'+r.repReq+'</span>'
+      : '<button class="btn sm" data-hire="'+r.id+'">Hire 🪙'+r.salary+'/day</button>';
+    c.innerHTML='<div class="row"><div class="hface">'+r.emoji+'</div>'+
+      '<div class="grow"><div class="hname">'+r.name+(hired?' <span class="pill" style="color:var(--good)">On staff</span>':'')+'</div>'+
+      '<div class="hbreed">'+r.desc+' · 🪙'+r.salary+'/day</div></div>'+right+'</div>';
+    const hb=c.querySelector('[data-hire]'); if(hb) hb.onclick=()=>{ const res=hireStaff(G,r.id); if(!res.ok){ toast(res.why,'bad'); return; }
+      burst(r.emoji+'✨',10); playSfx('coin'); toast('👥 '+r.name+' joined the crew!','good'); refresh(); };
+    const fb=c.querySelector('[data-fire]'); if(fb) fb.onclick=()=>{ fireStaff(G,r.id); toast('👋 '+r.name+' has left the ranch.','info'); refresh(); };
+    s.appendChild(c);
+  });
+
   // ---- Riding School ----
   s.appendChild(el('h2','head','🎓 Riding School'));
   const nH=schoolHorses(G), served=lessonsPerDay(G), inc=schoolIncome(G), sal=teacherSalaries(G), net=schoolNet(G);
@@ -2870,7 +2949,7 @@ function openTrain(h){
   if(!isAdult(h)){ toast('Only adults can train.','info'); return; }
   const left=TRAIN_PER_DAY-(h.trains||0);
   const rows=TRAIN_STATS.map(st=>{
-    const ck=canTrain(h,st), cost=trainCost(h,st), gain=trainGain(h,st), cap=statCap(h,st);
+    const ck=canTrain(h,st), cost=trainCostFor(G,h,st), gain=trainGain(h,st), cap=statCap(h,st);
     const afford=G.money>=cost, live=ck.ok&&afford;
     const to=Math.min(cap,Math.round(h[st])+gain);
     return '<div class="opt" '+(live?'data-tr="'+st+'"':'style="opacity:.5"')+'>'+
@@ -2886,7 +2965,7 @@ function openTrain(h){
     '<div class="btnrow"><button class="btn ghost" id="trDone" style="width:100%">Done</button></div>');
   $('trDone').onclick=closeModal;
   sh.querySelectorAll('[data-tr]').forEach(o=>o.onclick=()=>{
-    const st=o.getAttribute('data-tr'), ck=canTrain(h,st), cost=trainCost(h,st);
+    const st=o.getAttribute('data-tr'), ck=canTrain(h,st), cost=trainCostFor(G,h,st);
     if(!ck.ok){ toast(ck.why,'info'); return; }
     if(G.money<cost){ toast('Not enough coins.','bad'); return; }
     G.money-=cost; const g=applyTrain(h,st); G.stats.trained=(G.stats.trained||0)+1;

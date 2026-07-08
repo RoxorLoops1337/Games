@@ -210,6 +210,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.tack.owned = [HR.TACK[0].id]; HR.equipTack(g, g.horses[0], HR.TACK[0].id); // satisfies the tack goal
   g.stats.showGamesPlayed = 1; // satisfies the ride-a-round goal
   g.stats.contractsDone = 1; // satisfies the contract goal
+  g.staff = ['groom']; // satisfies the hire-staff goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1449,6 +1450,91 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'contractor');
   const g2 = HR.freshGame(); g2.stats.contractsDone = 10;
   ok(ach && ach.check(g2) && !ach.check(g), 'completing 10 contracts unlocks Reliable Hand');
+}
+
+// ---- stable staff / hiring (round 26) ----
+{
+  // config + hire/fire + payroll
+  ok(Array.isArray(HR.STAFF_ROLES) && HR.STAFF_ROLES.length >= 4, 'a staff roster exists');
+  ok(new Set(HR.STAFF_ROLES.map(r => r.id)).size === HR.STAFF_ROLES.length, 'staff ids are unique');
+  ok(HR.STAFF_ROLES.every(r => r.salary > 0 && r.emoji && r.name && r.desc), 'each role has a salary, emoji, name, desc');
+  ok(HR.MAX_STAFF === HR.STAFF_ROLES.length, 'the crew cap equals the number of distinct roles');
+  ok(HR.staffDef('groom') && HR.staffDef('nope') === null, 'staffDef lookup + miss');
+  const g = HR.freshGame(); g.rep = 9999;
+  ok(HR.staffCount(g) === 0 && HR.staffPayroll(g) === 0, 'a fresh ranch has no staff and no payroll');
+  const r = HR.hireStaff(g, 'groom');
+  ok(r.ok && HR.hasStaff(g, 'groom') && HR.staffCount(g) === 1, 'hiring adds the role to the crew');
+  ok(!HR.hireStaff(g, 'groom').ok, 'cannot hire the same role twice');
+  ok(HR.staffPayroll(g) === HR.staffDef('groom').salary, 'payroll sums the hired salaries');
+  HR.hireStaff(g, 'hand');
+  ok(HR.staffPayroll(g) === HR.staffDef('groom').salary + HR.staffDef('hand').salary, 'payroll adds up across multiple staff');
+  HR.fireStaff(g, 'groom');
+  ok(!HR.hasStaff(g, 'groom') && HR.staffCount(g) === 1, 'firing removes the role');
+  // rep-gating
+  const poor = HR.freshGame(); poor.rep = 0;
+  const gated = HR.STAFF_ROLES.find(x => x.repReq > 0);
+  ok(!HR.staffUnlocked(poor, gated.id) && !HR.hireStaff(poor, gated.id).ok, 'rep-gated roles cannot be hired below their requirement');
+}
+{
+  // salaries are deducted daily in advanceDay
+  const g = HR.freshGame(); g.rep = 9999; g.money = 5000; g.feed = 9999;
+  HR.hireStaff(g, 'groom');
+  const m0 = g.money;
+  HR.advanceDay(g, rng(5));
+  ok(g.money < m0, 'staff wages are deducted each day');
+  ok((g.stats.staffWages || 0) >= HR.staffDef('groom').salary, 'wages are tracked in stats');
+  // no staff → no wage line at all
+  const g2 = HR.freshGame(); g2.feed = 9999; const m2 = g2.money;
+  HR.advanceDay(g2, rng(5));
+  ok((g2.stats.staffWages || 0) === 0, 'hiring nobody costs no wages');
+}
+{
+  // Groom tops up care needs each day but does NOT fully replace manual care
+  const withGroom = HR.freshGame(); withGroom.rep = 9999; withGroom.feed = 9999; HR.hireStaff(withGroom, 'groom');
+  const without = HR.freshGame(); without.feed = 9999;
+  // start both herds at a middling care level
+  for (const h of withGroom.horses) for (const id of HR.NEED_IDS) h.needs[id] = 50;
+  for (const h of without.horses) for (const id of HR.NEED_IDS) h.needs[id] = 50;
+  HR.advanceDay(withGroom, rng(9)); HR.advanceDay(without, rng(9));
+  ok(HR.careScore(withGroom.horses[0]) > HR.careScore(without.horses[0]), 'a Groom keeps horses better cared-for');
+  ok(HR.careScore(withGroom.horses[0]) < 100, 'but a Groom does not top care to a free perfect 100');
+}
+{
+  // Stable Hand auto-runs the free routine; Groundskeeper trims hay; Farrier cuts care cost; Trainer cuts training cost
+  const g = HR.freshGame(); g.rep = 9999; g.feed = 9999;
+  for (const h of g.horses) for (const id of HR.freeNeedIds()) h.needs[id] = 20;
+  HR.hireStaff(g, 'hand'); HR.advanceDay(g, rng(3));
+  ok(g.horses.every(h => HR.freeNeedIds().every(id => h.needs[id] >= 80)), 'a Stable Hand refreshes the free needs each day');
+  // farrier care-cost discount
+  const gf = HR.freshGame(); gf.rep = 9999; const paid = HR.NEEDS.find(n => n.cost);
+  const full = HR.careCost(gf, paid.id);
+  HR.hireStaff(gf, 'farrier');
+  ok(HR.careCost(gf, paid.id) < full, 'a Farrier reduces paid care costs');
+  // groundskeeper feed reduction (fewer hay eaten per day) — use a big herd so 10% is a clear gap
+  const noGk = HR.freshGame(); noGk.feed = 5000; const withGk = HR.freshGame(); withGk.rep = 9999; withGk.feed = 5000; HR.hireStaff(withGk, 'groundskeeper');
+  for (let i = 0; i < 12; i++) { noGk.horses.push(HR.mkHorse({ breed: 'mustang', age: 20 })); withGk.horses.push(HR.mkHorse({ breed: 'mustang', age: 20 })); }
+  HR.advanceDay(noGk, rng(1)); HR.advanceDay(withGk, rng(1));
+  ok(withGk.feed > noGk.feed, 'a Groundskeeper makes the herd eat less hay');
+  // trainer training discount
+  const gt = HR.freshGame(); gt.rep = 9999; const h = gt.horses[0];
+  const base = HR.trainCostFor(gt, h, 'speed');
+  HR.hireStaff(gt, 'trainer');
+  ok(HR.trainCostFor(gt, h, 'speed') < base, 'a Trainer makes training cheaper');
+  ok(HR.trainCostFor(HR.freshGame(), h, 'speed') === HR.trainCost(h, 'speed'), 'no trainer → trainCostFor equals the base cost');
+}
+{
+  // staffEffect defaults are neutral with no staff; save migration keeps only valid roles
+  const g = HR.freshGame();
+  ok(HR.staffEffect(g, 'careTopUp') === 0 && HR.staffEffect(g, 'feedMult') === 1 && HR.staffEffect(g, 'trainCostMult') === 1, 'no staff → neutral effects');
+  ok(HR.staffEffect(undefined, 'feedMult') === 1, 'staffEffect tolerates a missing game');
+  // goal + achievement
+  const goal = HR.GOALS.find(x => x.id === 'staff1');
+  ok(goal && !goal.done(g), 'the hire-staff goal is unmet on a fresh ranch');
+  HR.hireStaff(g, 'hand');
+  ok(goal.done(g), 'the hire-staff goal completes after a hire');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'fullcrew');
+  const full = HR.freshGame(); full.staff = HR.STAFF_ROLES.map(r => r.id);
+  ok(ach && ach.check(full) && !ach.check(g), 'employing the whole crew unlocks Full Crew');
 }
 
 // ---- clamp helper ----
