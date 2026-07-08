@@ -230,6 +230,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.trips = 1; // satisfies the away-trip goal
   g.stats.storeBuys = 1; // satisfies the general-store goal
   g.breeder = { points: 100 }; // satisfies the breeder-prestige goal (past Established)
+  g.stats.studBookings = 1; // satisfies the stud-directory goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -3355,6 +3356,91 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g2), 'Master of Bloodlines needs the Master tier');
   g2.breeder = { points: 400 };
   ok(ach.check(g2), 'reaching Master unlocks Master of Bloodlines');
+}
+
+// ---- stud directory / outside-mares bookings (round 48) ----
+function studGame(day) {
+  const g = HR.freshGame(); g.day = day || 5; g.money = 5000; g.feed = 9999; g.rep = 500;
+  const st = HR.mkHorse({ breed: 'akhalteke', sex: 'stallion', age: 20, id: 'sire1', name: 'Comet', wins: 3, speed: 90, stamina: 90, temperament: 80, coat: { name: 'Golden', tier: 3 }, trait: 'bold', generation: 1 });
+  st.atStud = true; g.horses = [st];
+  return { g, st };
+}
+{
+  // the directory is deterministic per day and rotates across refresh cycles
+  const { g } = studGame(5);
+  const a = HR.studDirectory(g).map(m => m.id), b = HR.studDirectory(g).map(m => m.id);
+  ok(JSON.stringify(a) === JSON.stringify(b), 'the directory is deterministic for a given day');
+  ok(a.length === 3 && new Set(a).size === 3, 'a roster of distinct visiting mares');
+  const g2 = studGame(5).g; g2.day = 5 + 4; // next refresh cycle
+  ok(JSON.stringify(HR.studDirectory(g2).map(m => m.id)) !== JSON.stringify(a), 'the roster rotates on the next refresh');
+  // with no standing stallion the roster still lists but offers no fee
+  const bare = HR.freshGame(); bare.day = 5;
+  ok(HR.studDirectory(bare).every(m => m.fee === 0), 'no standing stallion → no offered fee');
+}
+{
+  // booking validates the stallion can stand + capacity + not-already-booked, and schedules it
+  const { g, st } = studGame(5);
+  const mares = HR.studDirectory(g);
+  const r = HR.bookStudCovering(g, st.id, mares[0].id, g.day);
+  ok(r.ok && r.booking.due === g.day + HR.STUD_GESTATION, 'a covering books and is scheduled');
+  ok(r.fee > 0 && r.fee <= 1400, 'the booking fee is bounded (economy-safe)');
+  ok(HR.bookStudCovering(g, st.id, mares[0].id, g.day).ok === false, 'the same mare cannot be booked twice');
+  ok(HR.studDirectory(g).find(m => m.id === mares[0].id).booked === true, 'the mare shows as booked');
+  // a non-standing stallion is rejected
+  const off = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, id: 'off' }); g.horses.push(off);
+  ok(HR.bookStudCovering(g, 'off', mares[1].id, g.day).ok === false, 'a stallion not at stud cannot be booked');
+  ok(HR.bookStudCovering(g, 'ghost', mares[1].id, g.day).ok === false, 'an unknown stallion is rejected');
+}
+{
+  // a stallion's concurrent bookings are capped
+  const { g, st } = studGame(5);
+  const mares = HR.studDirectory(g);
+  ok(HR.studCapacityLeft(g, st) === HR.STUD_MAX_BOOKINGS, 'a fresh stallion has full capacity');
+  HR.bookStudCovering(g, st.id, mares[0].id, g.day);
+  HR.bookStudCovering(g, st.id, mares[1].id, g.day);
+  ok(HR.studCapacityLeft(g, st) === 0, 'capacity is consumed by bookings');
+  ok(HR.bookStudCovering(g, st.id, mares[2].id, g.day).ok === false, 'a fully-booked stallion takes no more');
+}
+{
+  // resolveStudBookings pays a bounded fee once on the resolve day (via advanceDay) and frees capacity
+  const { g, st } = studGame(5);
+  const mares = HR.studDirectory(g);
+  const r = HR.bookStudCovering(g, st.id, mares[0].id, g.day);
+  const money0 = g.money, studInc0 = g.stats.studIncome || 0;
+  const rr = rng(1); for (let d = 0; d < HR.STUD_GESTATION + 1 && HR.studCapacityLeft(g, st) < HR.STUD_MAX_BOOKINGS; d++) HR.advanceDay(g, rr);
+  ok(g.money >= money0 + r.fee - 1, 'the booking fee is paid on resolve');
+  ok((g.stats.studBookings || 0) === 1, 'the resolved booking is counted');
+  ok((g.stats.studIncome || 0) >= studInc0 + r.fee, 'the fee counts as stud income');
+  ok(HR.studCapacityLeft(g, st) === HR.STUD_MAX_BOOKINGS, 'capacity frees up after the covering');
+  // no double-pay: resolving again pays nothing more
+  const money1 = g.money; HR.resolveStudBookings(g, g.day + 50);
+  ok(g.money === money1, 'a resolved booking never pays twice');
+}
+{
+  // retiring/selling the stallion before the covering cancels it gracefully (no fee)
+  const { g, st } = studGame(5);
+  const mares = HR.studDirectory(g);
+  HR.bookStudCovering(g, st.id, mares[0].id, g.day);
+  st.atStud = false; // owner pulls him from stud
+  const money0 = g.money;
+  const paid = HR.resolveStudBookings(g, g.day + HR.STUD_GESTATION);
+  ok(paid.length === 0 && g.money === money0, 'a covering by an ineligible stallion pays nothing');
+}
+{
+  // determinism, migration safety, goal & achievement
+  const mk = () => { const { g, st } = studGame(5); HR.bookStudCovering(g, st.id, HR.studDirectory(g)[0].id, g.day); const r = rng(3); for (let d = 0; d < HR.STUD_GESTATION + 1; d++) HR.advanceDay(g, r); return g.money; };
+  ok(mk() === mk(), 'the stud booking loop is deterministic for a fixed rng+state');
+  const legacy = HR.freshGame(); delete legacy.studBookings;
+  ok(HR.resolveStudBookings(legacy, legacy.day + 1).length === 0 && Array.isArray(legacy.studBookings), 'resolve is safe & initialises on an old save');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'studbook1');
+  ok(goal && !goal.done(g), 'the stud-directory goal is unmet before a booking');
+  g.stats.studBookings = 1;
+  ok(goal.done(g), 'a fulfilled booking satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'soughtsire');
+  ok(ach && !ach.check(g), 'Sought-After Sire needs ten bookings');
+  g.stats.studBookings = 10;
+  ok(ach.check(g), 'ten bookings unlock Sought-After Sire');
 }
 
 // ---- clamp helper ----
