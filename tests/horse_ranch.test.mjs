@@ -211,6 +211,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.showGamesPlayed = 1; // satisfies the ride-a-round goal
   g.stats.contractsDone = 1; // satisfies the contract goal
   g.staff = ['groom']; // satisfies the hire-staff goal
+  HR.gainAffinity(g.horses[0], 'race', HR.SPECIALIST_AT); // satisfies the specialist goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1609,6 +1610,93 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const gL = HR.freshGame({ points: 300, resets: 2 });
   ok(gL.money > g0.money, 'a legacy head-start grants more starting coins');
   ok(HR.normLegacy({ points: -5, resets: 2.9 }).points === 0 && HR.normLegacy({ points: 3.9 }).resets === 0, 'normLegacy floors & clamps');
+}
+
+// ---- temperament & discipline affinity (round 28) ----
+{
+  // init + accessors
+  const h = HR.mkHorse({ breed: 'arabian', age: 12 });
+  ok(h.aff && HR.DISC_IDS.every(id => h.aff[id] === 0), 'mkHorse seeds zeroed affinity for every discipline');
+  ok(HR.affinity(h, 'race') === 0 && HR.affinityMult(h, 'race') === 1, 'a green horse has no affinity bonus');
+  HR.gainAffinity(h, 'race', 40);
+  ok(HR.affinity(h, 'race') === 40, 'gainAffinity accumulates points');
+  ok(HR.affinityMult(h, 'race') > 1, 'affinity raises the discipline multiplier');
+  ok(HR.gainAffinity(h, 'nope', 10) === 0, 'affinity for an unknown discipline is a no-op');
+}
+{
+  // affinity is bounded at the cap
+  const h = HR.mkHorse({ breed: 'quarter', age: 12 });
+  HR.gainAffinity(h, 'race', 99999);
+  ok(HR.affinity(h, 'race') === HR.AFF_MAX, 'affinity is capped at AFF_MAX');
+  ok(Math.abs(HR.affinityMult(h, 'race') - (1 + HR.AFF_CAP)) < 1e-9, 'a fully-schooled horse gets exactly +cap');
+  ok(HR.AFF_CAP <= 0.15, 'the affinity bonus stays small (<=15%)');
+}
+{
+  // training a stat develops the disciplines that use it (racing leans on speed)
+  const h = HR.mkHorse({ breed: 'quarter', age: 12, speed: 50, stamina: 50, temperament: 50 });
+  for (let i = 0; i < 8; i++) HR.developAffinityFromTraining(h, 'speed');
+  ok(HR.affinity(h, 'race') > HR.affinity(h, 'dressage'), 'schooling speed builds racing affinity faster than dressage');
+  // applyTrain also grows affinity as a side effect
+  const h2 = HR.mkHorse({ breed: 'arabian', age: 12, speed: 40 });
+  const a0 = HR.affinity(h2, 'race');
+  HR.applyTrain(h2, 'speed');
+  ok(HR.affinity(h2, 'race') > a0, 'applyTrain develops discipline affinity');
+}
+{
+  // competing builds affinity for that discipline (via applyCompetition)
+  const g = HR.freshGame(); g.rep = 5000;
+  const h = g.horses[0]; const disc = HR.disciplineDef('dressage'), tier = HR.COMP_TIERS[0];
+  const a0 = HR.affinity(h, 'dressage');
+  HR.applyCompetition(g, h, disc, tier, rng(3));
+  ok(HR.affinity(h, 'dressage') > a0, 'competing in a discipline deepens its affinity');
+}
+{
+  // a schooled specialist out-scores an equal-stat generalist in its discipline
+  const disc = HR.disciplineDef('race');
+  const spec = HR.mkHorse({ breed: 'thoroughbred', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  const gen = HR.mkHorse({ breed: 'thoroughbred', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  gen.trait = spec.trait; // same personality so only schooling differs
+  for (const id of HR.NEED_IDS) { spec.needs[id] = 100; gen.needs[id] = 100; }
+  HR.gainAffinity(spec, 'race', HR.AFF_MAX);
+  ok(HR.disciplineScore(spec, disc) > HR.disciplineScore(gen, disc), 'a racing specialist beats an unschooled twin on the track');
+  ok(HR.specialtyOf(spec) === 'race' && HR.specialtyOf(gen) === null, 'the schooled horse has settled into a speciality');
+  ok(HR.topAffinity(spec).id === 'race' && HR.topAffinity(spec).pts === HR.AFF_MAX, 'topAffinity reports the speciality');
+}
+{
+  // composure is a derived read of bond/happy/care and trends with them
+  const h = HR.mkHorse({ breed: 'welsh', age: 12, happy: 20 }); h.bond = 10; for (const id of HR.NEED_IDS) h.needs[id] = 20;
+  const low = HR.composure(h);
+  h.happy = 95; h.bond = 90; for (const id of HR.NEED_IDS) h.needs[id] = 100;
+  const high = HR.composure(h);
+  ok(high > low, 'composure rises with better bonding, mood & care');
+  ok(HR.composure(h) >= 0 && HR.composure(h) <= 100, 'composure stays in 0..100');
+  ok(HR.composureTier(h).id === 'serene' || HR.composureTier(h).id === 'settled', 'a well-kept horse reads as settled/serene');
+}
+{
+  // foals inherit a hint of their parents' best affinity
+  const mare = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20, genes: HR.seedGenes('arabian', rng(1)) });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, genes: HR.seedGenes('arabian', rng(2)) });
+  HR.gainAffinity(mare, 'dressage', HR.AFF_MAX);
+  const foal = HR.breedFoal(mare, stal, rng(7));
+  ok(HR.affinity(foal, 'dressage') > 0, 'a foal is born leaning toward a parent’s speciality');
+  ok(HR.affinity(foal, 'dressage') < HR.affinity(mare, 'dressage'), 'but only a hint — far below the parent (must still be schooled)');
+  ok(HR.affinity(foal, 'race') === 0, 'disciplines neither parent trained start at zero');
+}
+{
+  // save migration: pre-affinity horses get zeroed slots; goal + achievement
+  const legacy = { breed: 'mustang', age: 14, speed: 60, stamina: 60, temperament: 60 };
+  HR.affInit(legacy);
+  ok(legacy.aff && HR.DISC_IDS.every(id => legacy.aff[id] === 0), 'affInit seeds legacy horses with zero affinity');
+  legacy.aff.race = 9999; HR.affInit(legacy);
+  ok(legacy.aff.race === HR.AFF_MAX, 'affInit clamps out-of-range affinity values');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'special1');
+  ok(goal && !goal.done(g), 'the specialist goal is unmet on a fresh ranch');
+  HR.gainAffinity(g.horses[0], 'jump', HR.SPECIALIST_AT);
+  ok(goal.done(g), 'the specialist goal completes once a horse settles into a discipline');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'schooled');
+  const g2 = HR.freshGame(); HR.gainAffinity(g2.horses[0], 'race', HR.AFF_MAX);
+  ok(ach && ach.check(g2) && !ach.check(g), 'fully schooling a horse unlocks Master of the Craft');
 }
 
 // ---- clamp helper ----
