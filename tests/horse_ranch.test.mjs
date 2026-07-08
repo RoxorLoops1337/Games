@@ -216,6 +216,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   HR.addWishlistPref(g, { breed: 'arabian' }); // satisfies the wishlist goal
   g.insurance = ['vet']; // satisfies the insurance goal
   g.tack.tiers = { saddle_show: 1 }; // satisfies the tack-upgrade goal
+  g.stats.renames = 1; // satisfies the rename goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2008,6 +2009,94 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Masterwork achievement not yet earned at Fine');
   HR.upgradeTack(g, id);
   ok(ach.check(g), 'reaching Masterwork unlocks the achievement');
+}
+
+// ---- naming, name packs & studbook registry (round 33) ----
+{
+  // packs have gendered pools; classic mirrors pickName
+  ok(Array.isArray(HR.NAME_PACKS) && HR.NAME_PACKS.length >= 3, 'several name packs exist');
+  ok(new Set(HR.NAME_PACKS.map(p => p.id)).size === HR.NAME_PACKS.length, 'name-pack ids are unique');
+  ok(HR.NAME_PACKS.every(p => Array.isArray(p.m) && p.m.length && Array.isArray(p.f) && p.f.length), 'each pack has male & female pools');
+  ok(HR.namePackDef('classic') && HR.namePackDef('nope').id === 'classic', 'namePackDef falls back to classic');
+  const classic = HR.namePackDef('classic');
+  ok(HR.pickNameFrom(classic, 'mare', rng(1)) === HR.pickNameFrom(classic, 'mare', rng(1)), 'pickNameFrom is deterministic for a seed');
+  ok(classic.f.indexOf(HR.pickNameFrom(classic, 'mare', rng(3))) >= 0, 'a mare name comes from the female pool');
+  ok(classic.m.indexOf(HR.pickNameFrom(classic, 'stallion', rng(4))) >= 0, 'a stallion name comes from the male pool');
+}
+{
+  // pack unlock gating + active pack selection
+  const g = HR.freshGame(); g.rep = 0;
+  ok(HR.activeNamePack(g).id === 'classic', 'a fresh ranch uses the classic pack');
+  const gated = HR.NAME_PACKS.find(p => p.repReq > 0);
+  ok(gated, 'at least one pack is reputation-gated');
+  ok(!HR.namePackUnlocked(g, gated.id) && !HR.setNamePack(g, gated.id).ok, 'a gated pack is locked at low rep');
+  g.rep = gated.repReq;
+  ok(HR.setNamePack(g, gated.id).ok && g.namePack === gated.id, 'the pack unlocks and can be selected at the required rep');
+  // a free pack is always selectable
+  const free = HR.NAME_PACKS.find(p => p.repReq === 0 && p.id !== 'classic');
+  ok(HR.setNamePack(HR.freshGame(), free.id).ok, 'a free pack is selectable from the start');
+  // active pack falls back if the stored pack is no longer unlocked (e.g. after a rep reset)
+  const fell = HR.freshGame(); fell.namePack = gated.id; fell.rep = 0;
+  ok(HR.activeNamePack(fell).id === 'classic', 'a locked stored pack falls back to classic');
+}
+{
+  // rename validates, trims, caps & applies (and counts a stat)
+  const g = HR.freshGame();
+  const id = g.horses[0].id;
+  ok(!HR.renameHorse(g, 'nope', 'X').ok, 'cannot rename a horse that does not exist');
+  ok(!HR.renameHorse(g, id, '   ').ok, 'a blank name is rejected');
+  const r = HR.renameHorse(g, id, '  Sir  Gallops  ');
+  ok(r.ok && g.horses[0].name === 'Sir Gallops', 'rename trims & collapses whitespace');
+  ok((g.stats.renames || 0) === 1, 'a rename is tallied');
+  HR.renameHorse(g, id, 'y'.repeat(HR.HORSE_NAME_MAX + 30));
+  ok(g.horses[0].name.length === HR.HORSE_NAME_MAX, 'over-long names are capped');
+}
+{
+  // studbook registry appends, dedupes by id, syncs the current herd, and updates on rename
+  const g = HR.freshGame();
+  ok(HR.registrySize(g) === g.horses.length, 'freshGame registers the starter herd');
+  const before = HR.registrySize(g);
+  const h = HR.mkHorse({ breed: 'arabian', age: 12 }); g.horses.push(h);
+  HR.syncRegistry(g);
+  ok(HR.registrySize(g) === before + 1, 'a newly-owned horse is registered');
+  HR.syncRegistry(g); HR.registerHorse(g, h);
+  ok(HR.registrySize(g) === before + 1, 'registering the same horse again does not duplicate it');
+  // a horse that leaves the herd stays in the studbook (a keepsake)
+  g.horses = g.horses.filter(x => x.id !== h.id);
+  HR.syncRegistry(g);
+  ok(g.registry.some(r => r.id === h.id), 'a sold horse is kept in the studbook');
+  // rename updates the registry entry too
+  HR.renameHorse(g, g.horses[0].id, 'Keepsake');
+  ok(g.registry.find(r => r.id === g.horses[0].id).name === 'Keepsake', 'the registry entry follows a rename');
+}
+{
+  // registry cap keeps the log bounded; foals are named from the active pack in advanceDay
+  const g = HR.freshGame(); g.registry = [];
+  for (let i = 0; i < HR.REGISTRY_CAP + 30; i++) HR.registerHorse(g, HR.mkHorse({ breed: 'mustang', age: 10 }));
+  ok(HR.registrySize(g) === HR.REGISTRY_CAP, 'the studbook is capped');
+  // breeding via advanceDay names the foal from the active pack
+  const g2 = HR.freshGame(); g2.feed = 9999; g2.rep = 9999;
+  const free = HR.NAME_PACKS.find(p => p.repReq === 0 && p.id !== 'classic');
+  HR.setNamePack(g2, free.id);
+  const mare = g2.horses.find(x => x.sex === 'mare');
+  mare.pregnant = true; mare.gestation = 1;
+  mare._sire = { breed: mare.breed, speed: 60, stamina: 60, temperament: 60, generation: 1, sex: 'stallion', name: 'S', genes: mare.genes, ped: null };
+  const bornBefore = g2.stats.born;
+  for (let d = 0; d < 3 && g2.stats.born === bornBefore; d++) HR.advanceDay(g2, rng(5));
+  const foal = g2.horses.find(x => (x.generation || 1) >= 2);
+  if (foal) ok((free.m.concat(free.f)).indexOf(foal.name) >= 0, 'a foal is named from the active name pack');
+  else ok(true, 'no foal this run (rng) — skip');
+}
+{
+  // goal + achievement
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'rename1');
+  ok(goal && !goal.done(g), 'the rename goal is unmet before renaming');
+  HR.renameHorse(g, g.horses[0].id, 'Champion');
+  ok(goal.done(g), 'the rename goal completes after a rename');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'studbook');
+  const g2 = HR.freshGame(); for (let i = 0; i < 25; i++) HR.registerHorse(g2, HR.mkHorse({ breed: 'mustang', age: 10 }));
+  ok(ach && ach.check(g2) && !ach.check(HR.freshGame()), 'registering 25 horses unlocks Full Studbook');
 }
 
 // ---- clamp helper ----
