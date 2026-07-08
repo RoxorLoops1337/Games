@@ -754,8 +754,9 @@ function mkHorse(o){
     stable:o.stable!=null?o.stable:0,
     needs:o.needs||null, bond:o.bond,  // daily care needs + bonding level (needsInit fills defaults)
     tack:o.tack||null,                 // equipped gear per slot (tackInit fills defaults)
+    aff:o.aff||null,                   // per-discipline affinity (affInit fills defaults)
   };
-  needsInit(h); tackInit(h);
+  needsInit(h); tackInit(h); affInit(h);
   return h;
 }
 
@@ -846,6 +847,9 @@ function breedFoal(mare,stallion,rng){
     ped:{ dam:{name:mare.name,breed:mare.breed,id:mare.id,ped:mare.ped||null},
           sire:{name:stallion.name,breed:stallion.breed,id:stallion.id,ped:stallion.ped||null} },
   });
+  // affinity hint: a foal is born leaning toward its parents' best disciplines (a fraction of the higher parent)
+  affInit(foal);
+  for(const id of DISC_IDS){ const best=Math.max(affinity(mare,id),affinity(stallion,id)); if(best>0) foal.aff[id]=clamp(Math.round(best*0.25),0,AFF_MAX); }
   // rare trait mutation: champion bloodline (stat boost, separate from coat)
   if(rng()<0.05){
     foal.rare='Champion Bloodline';
@@ -1303,12 +1307,42 @@ const COMP_TIERS=[
 function tierDef(id){ return COMP_TIERS.find(t=>t.id===id)||null; }
 function tierUnlocked(game,tier){ return game.rep>=tier.rep; }
 function highestTier(game){ let t=COMP_TIERS[0]; for(const x of COMP_TIERS){ if(tierUnlocked(game,x)) t=x; } return t; }
+// ---------- Temperament & discipline affinity (a horse develops over time) ----------
+// On top of the fixed inheritable TRAIT, each horse builds per-discipline AFFINITY the
+// more you train & compete it in that discipline — so it specialises and earns a small,
+// bounded aptitude bonus. Composure (mood) is a derived read of bonding + happiness + care.
+const DISC_IDS=DISCIPLINES.map(d=>d.id);
+const AFF_MAX=100;            // affinity points per discipline
+const AFF_CAP=0.10;          // a fully-schooled horse gets +10% in its discipline (bounded)
+const SPECIALIST_AT=60;      // affinity at which a horse "settles into" a speciality
+const TRAIN_AFF_GAIN=6;      // schooling a stat feeds the disciplines that use it
+const COMPETE_AFF_GAIN=7;    // competing in a discipline builds affinity for it
+function affInit(h){ if(!h) return h; if(!h.aff||typeof h.aff!=='object') h.aff={};
+  for(const id of DISC_IDS){ const v=h.aff[id]; h.aff[id]=(typeof v==='number'&&isFinite(v))?clamp(v,0,AFF_MAX):0; }
+  return h; }
+function affinity(h,discId){ if(!h) return 0; affInit(h); const v=h.aff[discId]; return typeof v==='number'?clamp(v,0,AFF_MAX):0; }
+function gainAffinity(h,discId,amt){ if(!h||!disciplineDef(discId)) return 0; affInit(h);
+  h.aff[discId]=clamp(h.aff[discId]+(amt||0),0,AFF_MAX); return h.aff[discId]; }
+// a horse's schooling in a discipline gives a small, capped aptitude multiplier
+function affinityMult(h,discId){ return 1 + AFF_CAP*(affinity(h,discId)/AFF_MAX); }
+// the discipline a horse leans into most
+function topAffinity(h){ affInit(h); let best=DISC_IDS[0], pts=affinity(h,best);
+  for(const id of DISC_IDS){ const v=affinity(h,id); if(v>pts){ pts=v; best=id; } } return {id:best, pts}; }
+function specialtyOf(h){ const t=topAffinity(h); return t.pts>=SPECIALIST_AT?t.id:null; } // null until settled
+// composure/mood — a derived read of how settled & well-handled the horse is (0..100)
+function composure(h){ if(!h) return 0; return clamp(Math.round(0.45*(h.bond||0)+0.35*(h.happy||0)+0.20*careScore(h)),0,100); }
+function composureTier(h){ const c=composure(h);
+  return c>=80?{id:'serene',label:'Serene',emoji:'🧘'} : c>=58?{id:'settled',label:'Settled',emoji:'🙂'}
+       : c>=34?{id:'restless',label:'Restless',emoji:'😟'} : {id:'skittish',label:'Skittish',emoji:'😰'}; }
+// schooling a stat develops the disciplines that rely on it (called from applyTrain)
+function developAffinityFromTraining(h,stat){ for(const d of DISCIPLINES){ const w=d.w[stat]||0; if(w>0) gainAffinity(h,d.id, w*TRAIN_AFF_GAIN); } }
+
 function disciplineScore(h,disc){
   const w=disc.w;
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*careBonusMult(h)*tackShowMult(h)*tackDiscMult(h,disc.id)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, tack, personality & age shape aptitude
+  return s*form*careBonusMult(h)*affinityMult(h,disc.id)*tackShowMult(h)*tackDiscMult(h,disc.id)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, schooling, tack, personality & age shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -1346,6 +1380,7 @@ function applyCompetition(game,h,disc,tier,rng,perf){
   res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)*legacyBonus(game.legacy,'showPrize')); // summer + festivals + legacy pay more
   game.money += res.prize; game.rep += res.rep; game.stats.goldEarned=(game.stats.goldEarned||0)+res.prize;
   h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
+  gainAffinity(h,disc.id, COMPETE_AFF_GAIN + (res.place===1?3:res.place<=3?1:0)); // competing (esp. placing) deepens affinity
   h.happy=clamp(h.happy-8,0,100); h.health=clamp(h.health-4,0,100); // fatigue
   if(res.place===1){ h.wins=(h.wins||0)+1; game.stats.showWins=(game.stats.showWins||0)+1; game.stats.bestTierWin=Math.max(game.stats.bestTierWin||0,tier.id);
     game.stats.disciplinesWon=game.stats.disciplinesWon||{}; game.stats.disciplinesWon[disc.id]=true; }
@@ -1682,6 +1717,7 @@ const ACHIEVEMENTS=[
   {id:'flawless',   icon:'🎯', name:'Clear Round',          desc:'Ride a near-flawless show round.',             check:g=>((g.stats&&g.stats.bestShowPerf)||0)>=0.95},
   {id:'contractor', icon:'📋', name:'Reliable Hand',        desc:'Complete 10 notice-board contracts.',          check:g=>((g.stats&&g.stats.contractsDone)||0)>=10},
   {id:'fullcrew',   icon:'👥', name:'Full Crew',            desc:'Employ all six stable staff at once.',         check:g=>staffCount(g)>=MAX_STAFF},
+  {id:'schooled',   icon:'🎓', name:'Master of the Craft',  desc:'Fully school a horse in a discipline (100 affinity).', check:g=>g.horses.some(h=>topAffinity(h).pts>=AFF_MAX)},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1730,7 +1766,8 @@ function canTrain(h,stat){
   if(trainGain(h,stat)<=0) return {ok:false,why:'At breed potential.'};
   return {ok:true};
 }
-function applyTrain(h,stat){ const g=trainGain(h,stat); h[stat]=clamp(h[stat]+g,8,100); h.trains=(h.trains||0)+1; h.happy=clamp(h.happy-4,0,100); return g; }
+function applyTrain(h,stat){ const g=trainGain(h,stat); h[stat]=clamp(h[stat]+g,8,100); h.trains=(h.trains||0)+1; h.happy=clamp(h.happy-4,0,100);
+  developAffinityFromTraining(h,stat); return g; } // schooling builds discipline affinity
 
 // ---------- Goals / milestone chain (gives the game direction) ----------
 const GOALS=[
@@ -1768,6 +1805,7 @@ const GOALS=[
   {id:'ride1',   desc:'Ride a show round yourself',          tip:g=>((g.stats&&g.stats.showGamesPlayed)||0)+'/1',done:g=>((g.stats&&g.stats.showGamesPlayed)||0)>=1,           reward:{money:700,rep:25}},
   {id:'contract1',desc:'Complete a notice-board contract',    tip:g=>((g.stats&&g.stats.contractsDone)||0)+'/1',done:g=>((g.stats&&g.stats.contractsDone)||0)>=1,             reward:{money:600,rep:20}},
   {id:'staff1',  desc:'Hire your first stable hand',          tip:g=>staffCount(g)+'/1',              done:g=>staffCount(g)>=1,                                       reward:{money:600,rep:20}},
+  {id:'special1',desc:'Develop a discipline specialist',      tip:g=>'best affinity '+Math.max(0,...g.horses.map(h=>topAffinity(h).pts))+'/'+SPECIALIST_AT,done:g=>g.horses.some(h=>specialtyOf(h)),reward:{money:900,rep:25}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1795,6 +1833,8 @@ const HR = {
   DISCIPLINES, disciplineDef, COMP_TIERS, tierDef, tierUnlocked, highestTier,
   disciplineScore, canEnterShow, runCompetition, applyCompetition,
   SHOW_GAME, SHOW_PERF_CAP, fenceScore, showPerfMult,
+  DISC_IDS, AFF_MAX, AFF_CAP, SPECIALIST_AT, affInit, affinity, gainAffinity, affinityMult,
+  topAffinity, specialtyOf, composure, composureTier, developAffinityFromTraining,
   CONTRACTS, BOARD_SIZE, contractDef, contractsForWeek, boardBaseSnapshot, refreshBoard,
   contractProgress, contractDone, currentContracts, claimableContracts, claimContract, daysUntilBoardRefresh,
   CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
@@ -1911,6 +1951,7 @@ function load(){
       if(h.atStud==null) h.atStud=false;
       needsInit(h); // seed daily care needs on pre-needs horses (content defaults — no sudden misery)
       tackInit(h);  // seed empty tack slots on pre-tack horses
+      affInit(h);   // seed per-discipline affinity on pre-affinity horses
     });
     return true;
   }catch(e){ return false; }
@@ -1982,6 +2023,7 @@ function horseCard(h,actionsHtml){
   { const ct2=careTier(h), cc=careTierColor(ct2.id);
     tags.push('<span class="tag" title="Care '+careScore(h)+'%" style="color:'+cc+';border-color:'+cc+'55">'+ct2.emoji+' '+ct2.label+'</span>'); }
   if((h.bond||0)>=70) tags.push('<span class="tag" style="color:#d15a8a;border-color:#5f2640">❤ Bonded</span>');
+  { const sp=specialtyOf(h); if(sp){ const d=disciplineDef(sp); tags.push('<span class="tag" title="Schooled specialist" style="color:#7bb0e0;border-color:#264a5f">'+(d?d.emoji+' '+d.name:'')+' Specialist</span>'); } }
   { const eq=equippedTack(h); if(eq.length){ const icons=eq.map(t=>t.emoji).join('');
     tags.push('<span class="tag" title="'+eq.map(t=>t.name).join(', ')+'" style="color:#c9a24a;border-color:#5f4a1c">'+icons+' Tacked</span>'); } }
   if(h.rentDays>0) tags.push('<span class="tag busy">🚜 Rented ('+h.rentDays+'d)</span>');
@@ -2242,6 +2284,7 @@ function renderRanch(){
     let acts='';
     { const low=lowNeeds(h).length; acts+='<button class="btn sm '+(low?'':'ghost')+'" data-care="'+h.id+'">🧡 Care'+(low?' ('+low+')':'')+'</button>'; }
     { const ne=equippedTack(h).length; acts+='<button class="btn sm ghost" data-tack="'+h.id+'">🎽 Tack'+(ne?' ('+ne+'/3)':'')+'</button>'; }
+    acts+='<button class="btn sm ghost" data-temper="'+h.id+'">🧠 Temperament</button>';
     acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
     acts+='<button class="btn sm ghost" data-card="'+h.id+'">🖼️ Card</button>';
     if(isAdult(h)&&!tooOldToCompete(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
@@ -2250,6 +2293,7 @@ function renderRanch(){
     const c=horseCard(h,acts);
     c.querySelectorAll('[data-care]').forEach(btn=>btn.onclick=()=>openCare(h));
     c.querySelectorAll('[data-tack]').forEach(btn=>btn.onclick=()=>openTack(h));
+    c.querySelectorAll('[data-temper]').forEach(btn=>btn.onclick=()=>openTemperament(h));
     c.querySelectorAll('[data-ped]').forEach(btn=>btn.onclick=()=>openPedigree(h));
     c.querySelectorAll('[data-card]').forEach(btn=>btn.onclick=()=>openCard(h));
     c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
@@ -2928,6 +2972,25 @@ function openCare(h){
     if(!r.ok){ toast(r.why,'bad'); return; } if(r.cost>0) coinPop(-r.cost); playSfx('coin'); reopen(); });
   { const f=$('fullCare'); if(f) f.onclick=()=>{ const r=applyFullCare(G,h); if(!r.ok){ toast(r.why,'bad'); return; }
     if(r.cost>0) coinPop(-r.cost); burst('✨🧡',10); playSfx('goal'); toast('✨ '+h.name+' is fully cared for!','good'); reopen(); }; }
+}
+// ---- Temperament & discipline affinity panel ----
+function openTemperament(h){
+  const comp=composure(h), ct=composureTier(h), sp=specialtyOf(h);
+  const rows=DISCIPLINES.map(d=>{ const pts=affinity(h,d.id), pct=Math.round(pts/AFF_MAX*100), bonus=Math.round((affinityMult(h,d.id)-1)*100);
+    const spec=sp===d.id;
+    return '<div class="careitem"><div class="ce">'+d.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:13px">'+d.name+(spec?' <span class="pill" style="color:var(--blue)">Specialist</span>':'')+' <span class="hbreed" style="display:inline">+'+bonus+'%</span></div>'+
+      '<div class="cbar"><i style="display:block;height:100%;width:'+pct+'%;background:'+(spec?'var(--blue)':pts>0?'var(--gold)':'#2a3320')+'"></i></div></div>'+
+      '<span class="pill">'+pts+'/'+AFF_MAX+'</span></div>'; }).join('');
+  const tr=traitDef(h.trait);
+  modal('<h3>🧠 '+h.name+'’s Temperament</h3>'+
+    '<div class="row" style="align-items:center;gap:10px;margin-bottom:6px"><div class="hface">'+horseArt(h)+'</div>'+
+      '<div class="grow"><div class="hname">'+h.name+' <span class="caretier" style="color:var(--good);background:#12210d">'+ct.emoji+' '+ct.label+' · mood '+comp+'%</span></div>'+
+      '<div class="hbreed">'+(tr?tr.emoji+' '+tr.name+' (inborn) · ':'')+'Bond '+Math.round(h.bond||0)+'%'+(sp?' · settled into '+(disciplineDef(sp)||{}).name:'')+'</div></div></div>'+
+    '<div class="sub" style="margin-bottom:4px">Discipline affinity grows as you <b>train</b> &amp; <b>compete</b> a horse — it schools in and earns a small bonus (up to +'+Math.round(AFF_CAP*100)+'%). Settle a horse past '+SPECIALIST_AT+' to make it a Specialist.</div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="tmpClose" style="width:100%">Done</button></div>');
+  $('tmpClose').onclick=closeModal;
 }
 // ---- Tack & equipment: per-horse equip panel ----
 function tackEffectLine(t){
