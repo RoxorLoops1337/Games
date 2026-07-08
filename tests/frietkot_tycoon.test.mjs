@@ -465,12 +465,41 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
 {
   ok(FS.COUNTRY.length >= 3, 'the country has several cities');
   ok(FS.COUNTRY.every(c => c.id && c.nm && c.sub && typeof c.x === 'number' && typeof c.y === 'number'), 'each city is well-formed');
-  ok(FS.cityDef(FS.COUNTRY[0].id) === FS.COUNTRY[0], 'city lookup by id works');
-  ok(FS.cityDef('atlantis') === null, 'unknown city → null');
-  ok(typeof FS.START_CITY === 'string' && FS.cityDef(FS.START_CITY), 'the starting city is a real city');
-  // city ids are unique
+  ok(FS.cityDef(FS.START_COUNTRY, FS.COUNTRY[0].id) === FS.COUNTRY[0], 'city lookup within a country works');
+  ok(FS.cityDef(FS.START_COUNTRY, 'atlantis') === null, 'unknown city → null');
+  ok(typeof FS.START_CITY === 'string' && FS.cityDef(FS.START_COUNTRY, FS.START_CITY), 'the starting city is a real city in the start country');
+  // city ids are unique within the home country
   const ids = FS.COUNTRY.map(c => c.id);
   ok(new Set(ids).size === ids.length, 'city ids are unique');
+}
+
+// ---- empire: globe of countries (Stage 3) ----
+{
+  ok(FS.WORLD.length >= 3, 'the globe has several countries');
+  ok(FS.WORLD.every(c => c.id && c.nm && c.sub && c.emoji && Array.isArray(c.cities) && c.cities.length >= 1
+    && typeof c.x === 'number' && typeof c.y === 'number'), 'each country is well-formed with its own cities');
+  ok(FS.countryDef(FS.WORLD[0].id) === FS.WORLD[0], 'country lookup by id works');
+  ok(FS.countryDef('narnia') === null, 'unknown country → null');
+  ok(typeof FS.START_COUNTRY === 'string' && FS.countryDef(FS.START_COUNTRY), 'the starting country is a real country');
+  // the home country nests the Belgian cities
+  ok(FS.countryDef(FS.START_COUNTRY).cities === FS.COUNTRY, 'the start country holds the home cities');
+  ok(FS.citiesOf(FS.START_COUNTRY) === FS.COUNTRY, 'citiesOf returns a country\'s cities');
+  ok(FS.citiesOf('narnia').length === 0, 'citiesOf an unknown country is empty');
+  // country ids are unique
+  const cids = FS.WORLD.map(c => c.id);
+  ok(new Set(cids).size === cids.length, 'country ids are unique');
+  // city ids within each country are unique, and cityDef resolves per-country
+  let allUnique = true, resolves = true;
+  FS.WORLD.forEach(co => {
+    const ids = co.cities.map(c => c.id);
+    if (new Set(ids).size !== ids.length) allUnique = false;
+    co.cities.forEach(c => { if (FS.cityDef(co.id, c.id) !== c) resolves = false; });
+  });
+  ok(allUnique, 'city ids are unique within each country');
+  ok(resolves, 'cityDef resolves every city within its own country');
+  // a different country has its own distinct cities
+  const other = FS.WORLD.find(c => c.id !== FS.START_COUNTRY);
+  ok(other && FS.cityDef(other.id, other.cities[0].id) === other.cities[0], 'a foreign country\'s cities resolve too');
 }
 
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
