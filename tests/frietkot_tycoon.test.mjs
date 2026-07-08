@@ -465,9 +465,9 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
 {
   ok(FS.COUNTRY.length >= 3, 'the country has several cities');
   ok(FS.COUNTRY.every(c => c.id && c.nm && c.sub && typeof c.x === 'number' && typeof c.y === 'number'), 'each city is well-formed');
-  ok(FS.cityDef(FS.START_COUNTRY, FS.COUNTRY[0].id) === FS.COUNTRY[0], 'city lookup within a country works');
-  ok(FS.cityDef(FS.START_COUNTRY, 'atlantis') === null, 'unknown city → null');
-  ok(typeof FS.START_CITY === 'string' && FS.cityDef(FS.START_COUNTRY, FS.START_CITY), 'the starting city is a real city in the start country');
+  ok(FS.cityDef(FS.START_PLANET, FS.START_COUNTRY, FS.COUNTRY[0].id) === FS.COUNTRY[0], 'city lookup within a country works');
+  ok(FS.cityDef(FS.START_PLANET, FS.START_COUNTRY, 'atlantis') === null, 'unknown city → null');
+  ok(typeof FS.START_CITY === 'string' && FS.cityDef(FS.START_PLANET, FS.START_COUNTRY, FS.START_CITY), 'the starting city is a real city in the start country');
   // city ids are unique within the home country
   const ids = FS.COUNTRY.map(c => c.id);
   ok(new Set(ids).size === ids.length, 'city ids are unique');
@@ -478,14 +478,14 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.WORLD.length >= 3, 'the globe has several countries');
   ok(FS.WORLD.every(c => c.id && c.nm && c.sub && c.emoji && Array.isArray(c.cities) && c.cities.length >= 1
     && typeof c.x === 'number' && typeof c.y === 'number'), 'each country is well-formed with its own cities');
-  ok(FS.countryDef(FS.WORLD[0].id) === FS.WORLD[0], 'country lookup by id works');
-  ok(FS.countryDef('narnia') === null, 'unknown country → null');
-  ok(typeof FS.START_COUNTRY === 'string' && FS.countryDef(FS.START_COUNTRY), 'the starting country is a real country');
+  ok(FS.countryDef(FS.START_PLANET, FS.WORLD[0].id) === FS.WORLD[0], 'country lookup within a planet works');
+  ok(FS.countryDef(FS.START_PLANET, 'narnia') === null, 'unknown country → null');
+  ok(typeof FS.START_COUNTRY === 'string' && FS.countryDef(FS.START_PLANET, FS.START_COUNTRY), 'the starting country is a real country on the start planet');
   // the home country nests the Belgian cities
-  ok(FS.countryDef(FS.START_COUNTRY).cities === FS.COUNTRY, 'the start country holds the home cities');
-  ok(FS.citiesOf(FS.START_COUNTRY) === FS.COUNTRY, 'citiesOf returns a country\'s cities');
-  ok(FS.citiesOf('narnia').length === 0, 'citiesOf an unknown country is empty');
-  // country ids are unique
+  ok(FS.countryDef(FS.START_PLANET, FS.START_COUNTRY).cities === FS.COUNTRY, 'the start country holds the home cities');
+  ok(FS.citiesOf(FS.START_PLANET, FS.START_COUNTRY) === FS.COUNTRY, 'citiesOf returns a country\'s cities');
+  ok(FS.citiesOf(FS.START_PLANET, 'narnia').length === 0, 'citiesOf an unknown country is empty');
+  // country ids are unique on Earth
   const cids = FS.WORLD.map(c => c.id);
   ok(new Set(cids).size === cids.length, 'country ids are unique');
   // city ids within each country are unique, and cityDef resolves per-country
@@ -493,13 +493,46 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   FS.WORLD.forEach(co => {
     const ids = co.cities.map(c => c.id);
     if (new Set(ids).size !== ids.length) allUnique = false;
-    co.cities.forEach(c => { if (FS.cityDef(co.id, c.id) !== c) resolves = false; });
+    co.cities.forEach(c => { if (FS.cityDef(FS.START_PLANET, co.id, c.id) !== c) resolves = false; });
   });
   ok(allUnique, 'city ids are unique within each country');
   ok(resolves, 'cityDef resolves every city within its own country');
   // a different country has its own distinct cities
   const other = FS.WORLD.find(c => c.id !== FS.START_COUNTRY);
-  ok(other && FS.cityDef(other.id, other.cities[0].id) === other.cities[0], 'a foreign country\'s cities resolve too');
+  ok(other && FS.cityDef(FS.START_PLANET, other.id, other.cities[0].id) === other.cities[0], 'a foreign country\'s cities resolve too');
+}
+
+// ---- empire: galaxy of planets (Stage 4, final) ----
+{
+  ok(FS.GALAXY.length >= 3, 'the galaxy has several planets');
+  ok(FS.GALAXY.every(p => p.id && p.nm && p.sub && p.emoji && Array.isArray(p.countries) && p.countries.length >= 1
+    && typeof p.x === 'number' && typeof p.y === 'number'), 'each planet is well-formed with its own countries');
+  ok(FS.planetDef(FS.GALAXY[0].id) === FS.GALAXY[0], 'planet lookup by id works');
+  ok(FS.planetDef('pluto') === null, 'unknown planet → null');
+  ok(typeof FS.START_PLANET === 'string' && FS.planetDef(FS.START_PLANET), 'the starting planet is a real planet');
+  // Earth nests the whole WORLD
+  ok(FS.planetDef(FS.START_PLANET).countries === FS.WORLD, 'the start planet holds the Earth countries');
+  ok(FS.countriesOf(FS.START_PLANET) === FS.WORLD, 'countriesOf returns a planet\'s countries');
+  ok(FS.countriesOf('pluto').length === 0, 'countriesOf an unknown planet is empty');
+  // planet ids unique
+  const pids = FS.GALAXY.map(p => p.id);
+  ok(new Set(pids).size === pids.length, 'planet ids are unique');
+  // full four-tier resolution works on every planet: planet → country → city
+  let resolves = true, hasScifi = false;
+  FS.GALAXY.forEach(pl => {
+    pl.countries.forEach(co => {
+      if (FS.countryDef(pl.id, co.id) !== co) resolves = false;
+      co.cities.forEach(c => { if (FS.cityDef(pl.id, co.id, c.id) !== c) resolves = false; });
+    });
+    if (pl.id !== FS.START_PLANET) hasScifi = true;
+  });
+  ok(resolves, 'cityDef resolves every city on every planet');
+  ok(hasScifi, 'there are planets beyond Earth to expand to');
+  // a sci-fi planet's country resolves only under its own planet, not Earth
+  const scifi = FS.GALAXY.find(p => p.id !== FS.START_PLANET);
+  const foreignCo = scifi.countries[0];
+  ok(FS.countryDef(scifi.id, foreignCo.id) === foreignCo, 'a sci-fi planet\'s country resolves under its planet');
+  ok(FS.countryDef(FS.START_PLANET, foreignCo.id) === null, 'that country does NOT resolve under Earth (planets are isolated)');
 }
 
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
