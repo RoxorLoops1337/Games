@@ -220,6 +220,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.dailyClaims = 1; // satisfies the daily-reward goal
   HR.sendToPasture(g, g.horses[0], 'retired', g.day); // satisfies the pasture goal
   g.breedGoal = 'rarecoat'; // satisfies the breeding-planner goal
+  for (const b of ['welsh', 'mustang', 'fjord']) g.horses.push(HR.mkHorse({ breed: b, age: 20 })); // ≥5 distinct breeds → codex discovery goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2355,6 +2356,103 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const r = rng(5); for (let d = 0; d < 4 && mare.pregnant; d++) HR.advanceDay(g, r);
   ok(!mare.pregnant, 'the mare foals within the gestation window');
   ok((g.stats.goalsMet || 0) >= 1, 'a purebred foal born under a purebred goal is credited');
+}
+
+// ---- in-game encyclopedia / codex (round 37) ----
+{
+  // every breed is represented, once, and derived facts match the BREEDS table exactly
+  const cb = HR.codexBreeds();
+  ok(cb.length === HR.BREEDS.length, 'the codex lists every breed');
+  ok(new Set(cb.map(b => b.id)).size === cb.length, 'no breed is listed twice');
+  for (const b of cb) {
+    const src = HR.BREEDS.find(x => x.id === b.id);
+    ok(src && b.name === src.name && b.speed === src.speed && b.stamina === src.stamina && b.temperament === src.temperament && b.base === src.base,
+      'codex breed facts mirror the sim: ' + b.id);
+    ok(typeof b.rarityName === 'string' && b.rarityName.length > 0, 'each breed has a rarity name: ' + b.id);
+    ok(typeof b.coatLean === 'string' && b.coatLean.length > 0 && Array.isArray(b.colors), 'each breed has a coat note & colours: ' + b.id);
+  }
+  ok(cb.every((b, i) => i === 0 || cb[i - 1].rarity <= b.rarity), 'codex breeds are ordered common→rare');
+}
+{
+  // coat codex: names & tiers are read back FROM phenotype(), so they can never drift
+  const cc = HR.codexCoats();
+  ok(cc.length >= 12, 'the codex enumerates every coat the cross can produce');
+  ok(new Set(cc.map(c => c.name)).size === cc.length, 'no coat is listed twice');
+  // spot-check that the codex tier for a coat equals phenotype()'s own tier
+  const bay = HR.phenotype({ E: ['E', 'E'], A: ['A', 'A'], Cr: ['n', 'n'], G: ['n', 'n'], mut: null });
+  const buckskin = HR.phenotype({ E: ['E', 'E'], A: ['A', 'A'], Cr: ['C', 'n'], G: ['n', 'n'], mut: null });
+  const cremello = HR.phenotype({ E: ['e', 'e'], A: ['A', 'A'], Cr: ['C', 'C'], G: ['n', 'n'], mut: null });
+  const grey = HR.phenotype({ E: ['E', 'E'], A: ['A', 'A'], Cr: ['n', 'n'], G: ['G', 'n'], mut: null });
+  const golden = HR.phenotype({ mut: 'Golden' });
+  for (const ph of [bay, buckskin, cremello, grey, golden]) {
+    const entry = cc.find(c => c.name === ph.name);
+    ok(entry && entry.tier === ph.tier, 'codex tier matches phenotype for ' + ph.name);
+  }
+  ok(cc.find(c => c.name === 'Golden').tier === 3 && cc.find(c => c.name === 'Pearl').tier === 3, 'mutations are the top tier');
+  ok(cc.every((c, i) => i === 0 || cc[i - 1].tier <= c.tier), 'coats are grouped low→high tier');
+  // every coat a real cross throws is in the codex (sampled against breedFoal)
+  const mare = HR.mkHorse({ breed: 'akhalteke' }), stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion' });
+  const r = rng(9); const names = new Set(HR.codexCoats().map(c => c.name));
+  for (let i = 0; i < 500; i++) ok(names.has(HR.breedFoal(mare, stal, r).coat.name), 'a produced coat is catalogued');
+}
+{
+  // discipline codex: every discipline, correct top stat, trait synergies derived from TRAITS
+  const cd = HR.codexDisciplines();
+  ok(cd.length === HR.DISCIPLINES.length, 'the codex lists every discipline');
+  const race = cd.find(d => d.id === 'race');
+  ok(race.topStat === 'speed' && race.coatMatters === false, 'racing is speed-led and coat-blind');
+  const halter = cd.find(d => d.id === 'halter');
+  ok(halter.coatMatters === true, 'showing (halter) is flagged as coat-dependent');
+  // a trait that boosts racing shows up in racing's synergy list with the right multiplier
+  const boldRace = HR.TRAITS.find(t => t.id === 'bold').disc.race;
+  const synBold = race.synergyTraits.find(t => t.id === 'bold');
+  ok(boldRace ? (synBold && Math.abs(synBold.mult - boldRace) < 1e-9) : !synBold, 'racing synergy mirrors the TRAITS table');
+  ok(cd.every(d => { const s = d.weights.speed + d.weights.stamina + d.weights.temperament; return s > 0 && s <= 1 + 1e-9; }), 'each discipline’s stat weights are a valid share (≤1; the remainder is looks for coat disciplines)');
+}
+{
+  // discovery tracker: complete & safe at zero progress, and monotonic as horses are owned
+  const g0 = HR.freshGame();
+  const p0 = HR.codexProgress(g0);
+  ok(p0.breedsTotal === HR.BREEDS.length && p0.coatsTotal === HR.codexCoats().length, 'progress totals match the codex size');
+  ok(p0.breedsSeen >= 1 && p0.breedsSeen <= p0.breedsTotal, 'the starter pair counts as discovered, within bounds');
+  ok(HR.codexBreeds().length === p0.breedsTotal && HR.codexDisciplines().length === p0.disciplinesTotal, 'the codex is fully readable at zero progress');
+  // a brand-new empty game (no horses) is still safe
+  const empty = { registry: [], horses: [], hallOfFame: [], pasture: [] };
+  const pe = HR.codexProgress(empty);
+  ok(pe.breedsSeen === 0 && pe.complete === false, 'an empty ranch has discovered nothing but does not throw');
+  // monotonic: owning a new breed only ever raises the count
+  const g = HR.freshGame(); const before = HR.codexProgress(g).breedsSeen;
+  const fresh = HR.BREEDS.map(b => b.id).find(id => !HR.codexHasBreed(g, id));
+  g.horses.push(HR.mkHorse({ breed: fresh, age: 20 })); HR.syncRegistry(g);
+  ok(HR.codexProgress(g).breedsSeen === before + 1, 'discovering a new breed raises the count by one');
+  ok(HR.codexHasBreed(g, fresh), 'the newly-owned breed reads as discovered');
+  // registered-but-not-in-herd horses still count (the studbook remembers)
+  const sold = HR.freshGame(); HR.registerHorse(sold, HR.mkHorse({ breed: 'lipizzaner', age: 20, id: 'sold1' }));
+  sold.horses = sold.horses.filter(h => h.id !== 'sold1');
+  ok(HR.codexHasBreed(sold, 'lipizzaner'), 'a sold horse is still remembered as discovered');
+}
+{
+  // the codex goal & Naturalist achievement
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'codex1');
+  ok(goal && !goal.done(g), 'the codex goal is unmet with only the starter breeds');
+  const ids = HR.BREEDS.map(b => b.id);
+  for (let i = 0; i < 5; i++) g.horses.push(HR.mkHorse({ breed: ids[i], age: 20 }));
+  HR.syncRegistry(g);
+  ok(goal.done(g), 'discovering 5 breeds completes the codex goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'naturalist');
+  ok(ach && !ach.check(g), 'Naturalist stays locked until every breed is seen');
+  const all = HR.freshGame();
+  for (const id of ids) all.horses.push(HR.mkHorse({ breed: id, age: 20 }));
+  HR.syncRegistry(all);
+  ok(ach.check(all), 'owning one of every breed unlocks Naturalist');
+}
+{
+  // the codex is read-only — building it must not touch game state
+  const g = HR.freshGame();
+  const snap = JSON.stringify(g);
+  HR.codexBreeds(); HR.codexCoats(); HR.codexDisciplines(); HR.codexProgress(g); HR.codexSeenSets(g);
+  ok(JSON.stringify(g) === snap, 'reading the codex never mutates the game');
 }
 
 // ---- clamp helper ----

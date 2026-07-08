@@ -308,6 +308,7 @@
     <div class="spacer"></div>
     <button class="sbtn" id="boardBtn" title="Contracts board" style="margin-right:4px;position:relative">📋<span id="boardBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="regBtn" title="Studbook & names" style="margin-right:4px">📖</button>
+    <button class="sbtn" id="codexBtn" title="Codex — breeds, coats & disciplines" style="margin-right:4px">📚</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1657,6 +1658,71 @@ function composureTier(h){ const c=composure(h);
 // schooling a stat develops the disciplines that rely on it (called from applyTrain)
 function developAffinityFromTraining(h,stat){ for(const d of DISCIPLINES){ const w=d.w[stat]||0; if(w>0) gainAffinity(h,d.id, w*TRAIN_AFF_GAIN); } }
 
+// ---------- Codex / Encyclopedia (read-only reference, entirely DERIVED from the sim's own tables) ----------
+// Nothing here mutates state — it just explains breeds, coat genetics & disciplines using the
+// same constants and phenotype() the simulation runs on, so the guide can never drift from reality.
+function capFirst(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
+function codexSizeLabel(sz){ sz=sz||1; return sz>=1.4?'Draft':sz>=1.05?'Large':sz>=0.85?'Standard':'Pony'; }
+// a plain-language note on a breed's coat tendencies, read straight from COAT_PROFILE
+function coatLeanNote(breedId){
+  const p=COAT_PROFILE[breedId]; if(!p) return 'A balanced spread of base colours.';
+  const bits=[];
+  if(p.gold) bits.push('can throw the rare Golden mutation');
+  if((p.grey||0)>=0.6) bits.push('very often grey (whitens with age)');
+  else if((p.grey||0)>=0.2) bits.push('sometimes grey');
+  if((p.E||0)>=0.95) bits.push('always black-pigmented');
+  else if((p.E||0)<=0.05) bits.push('always red-based (chestnut lines)');
+  else if((p.A||0)<=0.05) bits.push('leans solid black');
+  if((p.cream||0)>=0.3) bits.push('cream dilutes are common (palomino/buckskin)');
+  else if((p.cream||0)>=0.15) bits.push('the odd cream dilute');
+  return bits.length?capFirst(bits.join('; '))+'.':'A balanced spread of base colours.';
+}
+function codexBreeds(){
+  return BREEDS.map(b=>({ id:b.id, name:b.name, emoji:b.emoji, rarity:b.rarity, rarityName:(RARITY_NAME[b.rarity]||('Tier '+b.rarity)),
+    base:b.base, speed:b.speed, stamina:b.stamina, temperament:b.temperament, size:b.size, sizeLabel:codexSizeLabel(b.size),
+    colors:(b.colors||[]).slice(), desc:b.desc, coatLean:coatLeanNote(b.id) }))
+    .sort((x,y)=> x.rarity-y.rarity || x.base-y.base);
+}
+function codexDisciplines(){
+  return DISCIPLINES.map(d=>{
+    const w=d.w||{}, top=Object.keys(w).sort((a,b)=>(w[b]||0)-(w[a]||0))[0];
+    const synergyTraits=TRAITS.filter(t=>t.disc&&t.disc[d.id]).map(t=>({id:t.id,name:t.name,emoji:t.emoji,mult:t.disc[d.id]})).sort((a,b)=>b.mult-a.mult);
+    return { id:d.id, name:d.name, emoji:d.emoji, desc:d.desc,
+      weights:{speed:w.speed||0,stamina:w.stamina||0,temperament:w.temperament||0}, topStat:top, coatMatters:!!d.coat, synergyTraits };
+  });
+}
+// every coat phenotype() can actually produce — name & tier are read back FROM phenotype(), never re-listed
+function codexCoats(){
+  const out=[], seen={};
+  const push=(genes,family,note)=>{ const ph=phenotype(genes); if(seen[ph.name]) return;
+    seen[ph.name]={ name:ph.name, tier:ph.tier, tierName:(COAT_TIER_NAME[ph.tier]||('Tier '+ph.tier)), valueMult:(COAT_TIER_MULT[ph.tier]||1), family, note, css:coatColor(ph.name) };
+    out.push(seen[ph.name]); };
+  const cream=[['n','n'],['C','n'],['C','C']], creamNote=['solid — no cream','single cream dilute','double cream dilute'];
+  const bases=[ {E:['e','e'],A:['A','A'],family:'Red (chestnut) base'}, {E:['E','E'],A:['A','A'],family:'Bay base'}, {E:['E','E'],A:['a','a'],family:'Black base'} ];
+  bases.forEach(b=>cream.forEach((cr,i)=>push({E:b.E,A:b.A,Cr:cr,G:['n','n'],mut:null}, b.family, creamNote[i])));
+  push({E:['E','E'],A:['A','A'],Cr:['n','n'],G:['G','n'],mut:null}, 'Grey (masks the base)', 'dominant G — greys out with age');
+  ['Golden','Pearl'].forEach(m=>push({mut:m}, 'Rare mutation', 'a prized metallic/pearl sheen'));
+  return out.sort((a,b)=> a.tier-b.tier);
+}
+// collection tracker — which breeds & coats the player has actually owned or bred (registry + herd + legends + pasture)
+function codexSeenSets(game){
+  const breeds=new Set(), coats=new Set(), add=(b,c)=>{ if(b) breeds.add(b); if(c) coats.add(c); };
+  ((game&&game.registry)||[]).forEach(r=>add(r.breed, r.coat));
+  ((game&&game.horses)||[]).forEach(h=>add(h.breed, coatOf(h).name));
+  ((game&&game.hallOfFame)||[]).forEach(r=>add(r.breed, r.coat));
+  ((game&&game.pasture)||[]).forEach(r=>add(r.breed, r.coat));
+  return { breeds, coats };
+}
+function codexProgress(game){
+  const s=codexSeenSets(game), breedIds=new Set(BREEDS.map(b=>b.id)), coatNames=codexCoats().map(c=>c.name);
+  const breedsSeen=[...s.breeds].filter(b=>breedIds.has(b)).length;
+  const coatsSeen=coatNames.filter(n=>s.coats.has(n)).length;
+  return { breedsSeen, breedsTotal:BREEDS.length, coatsSeen, coatsTotal:coatNames.length, disciplinesTotal:DISCIPLINES.length,
+    complete:(breedsSeen>=BREEDS.length && coatsSeen>=coatNames.length) };
+}
+function codexHasBreed(game,id){ return codexSeenSets(game).breeds.has(id); }
+function codexHasCoat(game,name){ return codexSeenSets(game).coats.has(name); }
+
 function disciplineScore(h,disc,game){
   const w=disc.w;
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
@@ -2100,6 +2166,7 @@ const ACHIEVEMENTS=[
   {id:'loyal',      icon:'🎁', name:'Loyal Rancher',        desc:'Reach a 7-day login streak.',                  check:g=>((g.stats&&g.stats.bestStreak)||0)>=7},
   {id:'sanctuary',  icon:'🌾', name:'Sanctuary',            desc:'Give five horses a home in the pasture.',      check:g=>pastureSize(g)>=5},
   {id:'planner',    icon:'🔮', name:'Master Planner',        desc:'Breed a foal that fulfils your breeding goal.', check:g=>((g.stats&&g.stats.goalsMet)||0)>=1},
+  {id:'naturalist', icon:'📚', name:'Naturalist',            desc:'Discover every breed in the Codex.',           check:g=>codexProgress(g).breedsSeen>=BREEDS.length},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2196,6 +2263,7 @@ const GOALS=[
   {id:'daily1',  desc:'Claim a daily welcome-back reward (🎁)',tip:g=>((g.stats&&g.stats.dailyClaims)||0)+'/1',done:g=>((g.stats&&g.stats.dailyClaims)||0)>=1,               reward:{money:200,rep:5}},
   {id:'pasture1',desc:'Retire a horse to the pasture (🌾)',    tip:g=>pastureSize(g)+' grazing',       done:g=>pastureSize(g)>=1,                                      reward:{money:500,rep:20}},
   {id:'plan1',   desc:'Set a breeding goal (🔮 planner)',      tip:g=>'',                              done:g=>!!(g.breedGoal&&breedGoalDef(g.breedGoal)),             reward:{money:300,rep:10}},
+  {id:'codex1',  desc:'Discover 5 breeds in the Codex (📚)',    tip:g=>codexProgress(g).breedsSeen+'/5 breeds',done:g=>codexProgress(g).breedsSeen>=5,                    reward:{money:600,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2217,6 +2285,7 @@ const HR = {
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
   coatOddsFor, traitOddsFor, affinityHintsFor, predictFoal, BREED_GOALS, breedGoalDef, matchesBreedingGoal, foalMeetsGoal,
+  codexBreeds, codexCoats, codexDisciplines, codexProgress, codexSeenSets, codexHasBreed, codexHasCoat, coatLeanNote,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -4129,6 +4198,52 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+let codexTab='breeds';
+function openCodex(){
+  syncRegistry(G); // fold the current herd into the studbook so discovery is up to date
+  const prog=codexProgress(G);
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const tabs=[['breeds','🐴 Breeds'],['coats','🎨 Coats'],['disc','🏆 Disciplines']].map(([id,lbl])=>
+    '<span class="wlchip" data-cx="'+id+'" style="cursor:pointer;'+(codexTab===id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+lbl+'</span>').join('');
+  let body='';
+  if(codexTab==='breeds'){
+    const seen=codexSeenSets(G).breeds;
+    body='<div class="swlabel">The region’s breeds — rarity, temperament & typical coats. Own or breed one to mark it <b>discovered</b>. <span class="pill">'+prog.breedsSeen+'/'+prog.breedsTotal+' seen</span></div>';
+    body+=codexBreeds().map(b=>{ const disc=seen.has(b.id);
+      return '<div class="lbrow" style="align-items:flex-start"><div class="lbemoji" style="font-size:20px">'+b.emoji+'</div>'+
+        '<div class="grow"><div class="lbname">'+esc(b.name)+' <span class="pill">'+b.rarityName+'</span> <span class="pill">'+b.sizeLabel+'</span>'+(disc?' <span class="pill" style="color:var(--good)">✓ seen</span>':' <span class="pill" style="opacity:.55">🔒 undiscovered</span>')+'</div>'+
+        '<div class="lbsub">'+esc(b.desc)+'</div>'+
+        '<div class="lbsub">⚡ Spd '+b.speed+' · 🫁 Sta '+b.stamina+' · 🧠 Tmp '+b.temperament+' · 🪙 base '+fmt(b.base)+'</div>'+
+        '<div class="lbsub">🎨 Coats: '+b.colors.map(esc).join(', ')+' — '+esc(b.coatLean)+'</div></div></div>'; }).join('');
+  } else if(codexTab==='coats'){
+    const seen=codexSeenSets(G).coats;
+    body='<div class="swlabel">Coat genetics — four loci (E/A/Cr/G) plus rare Golden/Pearl mutations decide a foal’s colour & rarity tier. <span class="pill">'+prog.coatsSeen+'/'+prog.coatsTotal+' seen</span></div>';
+    body+='<div class="msg" style="font-size:12px"><b>E</b> black vs red pigment · <b>A</b> agouti (bay) · <b>Cr</b> cream dilute (0/1/2 copies) · <b>G</b> grey masks the base & whitens with age. More dilution & mutations = a higher-value coat.</div>';
+    let lastTier=-1;
+    body+=codexCoats().map(c=>{ const disc=seen.has(c.name); let head='';
+      if(c.tier!==lastTier){ lastTier=c.tier; head='<div class="swlabel" style="margin-top:8px">Tier '+c.tier+' · '+c.tierName+' <span class="pill">×'+c.valueMult.toFixed(2)+' value</span></div>'; }
+      return head+'<div class="lbrow"><div class="hface" style="width:26px;height:26px;background:radial-gradient(circle at 50% 35%,'+c.css.body+',#1c2711)"></div>'+
+        '<div class="grow"><div class="lbname">'+esc(c.name)+(c.tier>=2?' 🎨':'')+(disc?' <span class="pill" style="color:var(--good)">✓</span>':'')+'</div>'+
+        '<div class="lbsub">'+esc(c.family)+' · '+esc(c.note)+'</div></div></div>'; }).join('');
+  } else {
+    body='<div class="swlabel">Show disciplines — what each rewards, and the traits that shine in it.</div>';
+    body+=codexDisciplines().map(d=>{ const w=d.weights; const bars=[['⚡ Speed',w.speed],['🫁 Stamina',w.stamina],['🧠 Temperament',w.temperament]]
+        .filter(x=>x[1]>0).map(x=>x[0]+' '+Math.round(x[1]*100)+'%').join(' · ');
+      const syn=d.synergyTraits.length? d.synergyTraits.map(t=>t.emoji+' '+t.name+' ×'+t.mult.toFixed(2)).join(', '):'no standout trait';
+      return '<div class="lbrow" style="align-items:flex-start"><div class="lbemoji" style="font-size:20px">'+d.emoji+'</div>'+
+        '<div class="grow"><div class="lbname">'+esc(d.name)+(d.coatMatters?' <span class="pill" style="color:var(--gold)">🎨 looks count</span>':'')+'</div>'+
+        '<div class="lbsub">'+esc(d.desc)+'</div>'+
+        '<div class="lbsub">Scoring: '+bars+'</div>'+
+        '<div class="lbsub">🧬 Trait synergy: '+esc(syn)+'</div></div></div>'; }).join('');
+  }
+  modal('<h3>📚 Codex</h3>'+
+    '<div style="margin-bottom:8px">'+tabs+'</div>'+
+    '<div class="divider"></div>'+
+    '<div>'+body+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="cxClose" style="width:100%">Done</button></div>');
+  $('cxClose').onclick=closeModal;
+  document.querySelectorAll('[data-cx]').forEach(x=>x.onclick=()=>{ codexTab=x.getAttribute('data-cx'); playSfx('tap'); openCodex(); });
+}
 function openRegistry(){
   syncRegistry(G);
   const active=activeNamePack(G);
@@ -4244,6 +4359,7 @@ function boot(){
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
+  { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
