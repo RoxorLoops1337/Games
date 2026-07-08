@@ -258,6 +258,8 @@
   .decoritem .de{font-size:24px;width:30px;text-align:center}
   .decoritem.locked{opacity:.55}
   .pips{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+  .labcards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+  @media(max-width:520px){ .labcards{grid-template-columns:1fr} }
   .pip{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;color:var(--ink2);background:#0d130a;border:1px solid #0c110a;border-radius:20px;padding:2px 7px}
   .pip .pdot{width:7px;height:7px;border-radius:50%}
   .careitem{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #0c110a}
@@ -328,6 +330,7 @@
     <button class="sbtn" id="almanacBtn" title="Almanac — weather & season forecast" style="margin-right:4px">🌤️</button>
     <button class="sbtn" id="cerBtn" title="Coming-of-age ceremonies" style="margin-right:4px;position:relative">🎓<span id="cerBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="newsBtn" title="Skyhorse Gazette — weekly recap" style="margin-right:4px">📰</button>
+    <button class="sbtn" id="labBtn" title="Genetics Lab — test-mating coat calculator" style="margin-right:4px">🧬</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1166,6 +1169,103 @@ function coatOddsFor(mareGenes, stallionGenes){
   const E=combos('E'),A=combos('A'),Cr=combos('Cr'),G=combos('G'); const cell=pNone/256;
   for(const e of E) for(const a of A) for(const cr of Cr) for(const g of G){ const ph=phenotype({E:e,A:a,Cr:cr,G:g,mut:null}); add(ph.name,ph.tier,cell); }
   return Object.keys(odds).map(k=>odds[k]).sort((x,y)=>y.p-x.p);
+}
+// ---------- Coat-genetics lab / test-mating (read-only study bench) ----------
+// A teaching tool built entirely on the existing enumeration (coatOddsFor/phenotype);
+// it never breeds anything and never touches the economy. Deterministic — no Date/Math.random.
+const GENE_LOCI=[
+  {key:'E',  name:'Extension', dom:'E', rec:'e', dLabel:'black pigment (E)', rLabel:'red (e)'},
+  {key:'A',  name:'Agouti',    dom:'A', rec:'a', dLabel:'bay pattern (A)',   rLabel:'uniform (a)'},
+  {key:'Cr', name:'Cream',     dom:'C', rec:'n', dLabel:'cream dilute (Cr)', rLabel:'no cream (n)', incomplete:true},
+  {key:'G',  name:'Grey',      dom:'G', rec:'n', dLabel:'grey (G)',          rLabel:'no grey (n)'},
+];
+function geneLocusDef(key){ return GENE_LOCI.find(l=>l.key===key)||null; }
+// Preset genotypes so the bench is usable even with a thin herd.
+const LAB_PRESETS=[
+  {id:'p_chest', name:'Chestnut (e/e)',       genes:{E:['e','e'],A:['a','a'],Cr:['n','n'],G:['n','n'],mut:null}},
+  {id:'p_bayhet',name:'Bay carrying red',     genes:{E:['E','e'],A:['A','a'],Cr:['n','n'],G:['n','n'],mut:null}},
+  {id:'p_cream', name:'Palomino (1 cream)',   genes:{E:['e','e'],A:['a','a'],Cr:['C','n'],G:['n','n'],mut:null}},
+  {id:'p_grey',  name:'Grey carrier',         genes:{E:['E','E'],A:['A','a'],Cr:['n','n'],G:['G','n'],mut:null}},
+  {id:'p_gold',  name:'Golden mutation',      genes:{E:['E','e'],A:['A','a'],Cr:['n','n'],G:['n','n'],mut:'Golden'}},
+];
+function labPresetDef(id){ return LAB_PRESETS.find(p=>p.id===id)||null; }
+// Resolve a horse / genes-object / breed-ish into a genes object, DEFENSIVELY and deterministically.
+function labGenes(x){
+  if(!x) return seedGenes(null, seededOnce(0x5eed15));
+  if(Array.isArray(x.E)||Array.isArray(x.A)||Array.isArray(x.Cr)||Array.isArray(x.G)) return x; // already a genes object
+  if(x.genes && (Array.isArray(x.genes.E)||Array.isArray(x.genes.Cr)||Array.isArray(x.genes.A)||Array.isArray(x.genes.G))) return x.genes; // a horse with genes
+  // a horse (or {breed}) lacking genes → deterministic seed from breed+id+name (never Math.random)
+  const key=''+(x.id!=null?x.id:'')+'|'+(x.breed||'')+'|'+(x.name||'');
+  let h=2166136261>>>0; for(let i=0;i<key.length;i++){ h=Math.imul(h^key.charCodeAt(i),16777619)>>>0; }
+  return seedGenes(x.breed, seededOnce(h||1));
+}
+// Which notable alleles a set of genes carries (some hidden/masked from the coat you see).
+function carrierFlags(genes){
+  const g=genes||{};
+  const E=g.E||['n','n'], A=g.A||['a','a'], Cr=g.Cr||['n','n'], G=g.G||['n','n'];
+  const cnt=(arr,al)=>arr.filter(a=>a===al).length;
+  const creamN=cnt(Cr,'C'), eN=cnt(E,'e'), EN=cnt(E,'E');
+  const flags={
+    red:          eN>=1,             // carries a red allele
+    hiddenRed:    EN>=1 && eN>=1,    // black-based coat that quietly hides a red allele
+    cream:        creamN>=1,         // carries the cream dilution
+    creamCarrier: creamN===1,        // a single cream copy
+    doubleCream:  creamN===2,        // two cream copies (double dilute)
+    grey:         cnt(G,'G')>=1,     // carries grey (dominant → expressed)
+    greyCarrier:  cnt(G,'G')===1 && cnt(G,'n')===1,
+    mutation:     !!g.mut,
+    mutationName: g.mut||null,
+  };
+  const list=[];
+  if(flags.hiddenRed) list.push('red');
+  if(flags.cream)     list.push('cream');
+  if(flags.grey)      list.push('grey');
+  if(flags.mutation)  list.push('mutation');
+  flags.list=list;
+  return flags;
+}
+// Per-locus + phenotype + carrier breakdown for one horse (or genes-object / breed-ish).
+function genotypeReadout(horse){
+  const genes=labGenes(horse);
+  const ph=phenotype(genes);
+  const loci=GENE_LOCI.map(L=>{
+    const pair=(genes[L.key]||[L.rec,L.rec]).slice(0,2);
+    const a=pair[0], b=pair[1], homo=a===b;
+    const hasDom=pair.indexOf(L.dom)>=0, hasRec=pair.indexOf(L.rec)>=0;
+    let note;
+    if(L.incomplete){ const c=pair.filter(x=>x===L.dom).length; note=c===2?'double dilute':c===1?'single dilute (visible)':'no dilution'; }
+    else if(hasDom && hasRec) note='shows '+L.dLabel+', carries '+L.rLabel;
+    else if(hasDom) note='pure '+L.dLabel;
+    else note='pure '+L.rLabel;
+    return { key:L.key, name:L.name, pair:[a,b], label:a+'/'+b, homozygous:homo,
+             zygosity:homo?'homozygous':'heterozygous', carriesDom:hasDom, carriesRec:hasRec, note };
+  });
+  return { genes, phenotype:ph, coat:ph.name, tier:ph.tier, tierName:(COAT_TIER_NAME[ph.tier]||('Tier '+ph.tier)),
+           mutation:genes.mut||null, loci, carriers:carrierFlags(genes) };
+}
+function testMatingReads(top, rare, grey, mut){
+  const pc=x=>Math.round(x*100), out=[];
+  if(top) out.push('Most likely a '+top.name+' (~'+pc(top.p)+'%).');
+  out.push(rare>=0.5 ? ('Strong odds of a rare coat — ~'+pc(rare)+'% tier-2 or better.')
+    : rare>0 ? ('~'+pc(rare)+'% chance of a rare (tier-2+) coat.')
+    : 'No chance of a rare tier-2+ coat from this pairing.');
+  if(grey>0) out.push('~'+pc(grey)+'% chance the foal greys out with age.');
+  if(mut>0)  out.push('~'+pc(mut)+'% shot at a prized mutation coat (Golden/Pearl).');
+  return out;
+}
+// Full predicted foal-coat distribution + a plain-language summary for a cross. Read-only.
+function testMating(a, b){
+  const mg=labGenes(a), sg=labGenes(b);
+  const raw=coatOddsFor(mg, sg);
+  const total=raw.reduce((s,o)=>s+o.p,0)||1;
+  const odds=raw.map(o=>({ name:o.name, tier:o.tier, tierName:(COAT_TIER_NAME[o.tier]||('Tier '+o.tier)), p:o.p, pct:o.p/total }));
+  const top=odds[0]||null;
+  const sumP=(pred)=>odds.filter(pred).reduce((s,o)=>s+o.p,0);
+  const rareChance=sumP(o=>o.tier>=2), greyChance=sumP(o=>o.name==='Grey'), mutationChance=sumP(o=>o.name==='Golden'||o.name==='Pearl');
+  return { mareGenes:mg, stallionGenes:sg, odds, total,
+    mostLikely: top?{name:top.name, tier:top.tier, p:top.p, pct:top.p/total}:null,
+    rareChance, greyChance, mutationChance,
+    reads: testMatingReads(top, rareChance, greyChance, mutationChance) };
 }
 function traitOddsFor(mareTrait, stallionTrait){
   const rnd=0.12/TRAITS.length, odds={}; TRAITS.forEach(t=>odds[t.id]=rnd);
@@ -3112,6 +3212,7 @@ const ACHIEVEMENTS=[
   {id:'yearround',  icon:'🌤️', name:'Year-Round Rancher',     desc:'Run the ranch through a full year of seasons.',check:g=>((g.day)||1)>=SEASON_LEN*4},
   {id:'raisedfoal', icon:'🎓', name:'Raised from a Foal',      desc:'Raise a foal all the way to its coming of age.', check:g=>((g.horses)||[]).some(h=>h.ceremonies&&h.ceremonies.comingofage==='done')},
   {id:'bannerweek', icon:'📰', name:'Banner Week',            desc:'Win three shows in a single week.',            check:g=>weeklyRecap(g).trophies.gold>=3},
+  {id:'geneticist', icon:'🧬', name:'Coat Geneticist',        desc:'Study ten test-matings in the Genetics Lab.', check:g=>((g.stats&&g.stats.labTests)||0)>=10},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3260,6 +3361,7 @@ const GOALS=[
   {id:'trophy1', desc:'Earn 5 achievements (🏆 trophy room)',       tip:g=>achievementProgress(g).unlocked+'/5 unlocked',done:g=>achievementProgress(g).unlocked>=5,           reward:{money:700,rep:25}},
   {id:'grudge1', desc:'Win a grudge match vs a rival (⚔️)',          tip:g=>{const r=grudgeRecord(g);return r.w+'W–'+r.l+'L';},done:g=>((g.stats&&g.stats.grudgeWins)||0)>=1,        reward:{money:800,rep:30}},
   {id:'cer1',    desc:'Hold a coming-of-age ceremony (🎓)',          tip:g=>((g.stats&&g.stats.ceremonies)||0)+' held',done:g=>((g.stats&&g.stats.ceremonies)||0)>=1,             reward:{money:400,rep:15}},
+  {id:'lab1',    desc:'Run a test-mating in the Genetics Lab (🧬)',   tip:g=>((g.stats&&g.stats.labTests)||0)+'/1',done:g=>((g.stats&&g.stats.labTests)||0)>=1,               reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3281,6 +3383,7 @@ const HR = {
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
   coatOddsFor, traitOddsFor, affinityHintsFor, predictFoal, BREED_GOALS, breedGoalDef, matchesBreedingGoal, foalMeetsGoal,
+  GENE_LOCI, geneLocusDef, LAB_PRESETS, labPresetDef, labGenes, carrierFlags, genotypeReadout, testMating, testMatingReads,
   codexBreeds, codexCoats, codexDisciplines, codexProgress, codexSeenSets, codexHasBreed, codexHasCoat, coatLeanNote,
   SCRAPBOOK_CAP, MOMENT_KINDS, momentKindDef, addScrapbookEntry, scrapbookList, scrapbookSize, scrapbookPinned, toggleScrapbookPin, captureMoment,
   VISITOR_COOLDOWN, VISITOR_FIRST_DAY, ranchAppealScore, nextVisitorDay, visitorDaysUntil, visitorDayAvailable, previewVisitorDay, hostVisitorDay, visitorHighlight,
@@ -5326,6 +5429,75 @@ function openNewsletter(){
     '<div class="btnrow"><button class="btn ghost" id="newsClose" style="width:100%">Done</button></div>');
   $('newsClose').onclick=closeModal;
 }
+let labSel={a:null, b:null, revealed:false};
+function labResolveSel(sel){
+  if(!sel) return null;
+  const p=labPresetDef(sel); if(p) return {name:p.name, genes:p.genes, preset:true};
+  const h=(G.horses||[]).find(x=>x.id===sel); if(h) return {name:h.name, genes:h.genes, horse:h};
+  return null;
+}
+function labGenoCard(sel){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ro=genotypeReadout(sel.genes), css=coatColor(ro.coat);
+  const dot=c=>'<span style="display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:middle;background:'+c+';border:1px solid #0004"></span>';
+  const loci=ro.loci.map(l=>'<div class="lbsub"><b>'+l.name+'</b> <span class="pill">'+l.label+'</span> <span style="opacity:.72">'+l.zygosity+' — '+esc(l.note)+'</span></div>').join('');
+  const carr=ro.carriers.list.length?ro.carriers.list.map(c=>'<span class="pill" style="color:var(--gold)">carries '+esc(c)+'</span>').join(' '):'<span class="hbreed" style="opacity:.6">no hidden carriers</span>';
+  return '<div class="card"><div class="hname">'+dot(css.body)+' '+esc(sel.name)+' — '+esc(ro.coat)+' <span class="pill">'+esc(ro.tierName)+'</span>'+(sel.preset?' <span class="pill" style="opacity:.7">preset</span>':'')+'</div>'+
+    '<div style="margin-top:4px">'+loci+'</div>'+
+    '<div class="swlabel" style="margin-top:6px">Carries (hidden)</div><div>'+carr+'</div></div>';
+}
+function openGeneticsLab(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // validate selections (a horse may have been sold since)
+  if(labSel.a && !labResolveSel(labSel.a)){ labSel.a=null; labSel.revealed=false; }
+  if(labSel.b && !labResolveSel(labSel.b)){ labSel.b=null; labSel.revealed=false; }
+  const horses=(G.horses||[]);
+  const chipRow=which=>{
+    const cur=labSel[which];
+    const hs=horses.map(h=>{ const c=coatOf(h);
+      return '<span class="wlchip" data-lab'+which+'="'+esc(h.id)+'" style="cursor:pointer;'+(cur===h.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(h.name)+' · '+esc(c.name)+'</span>'; }).join(' ');
+    const ps=LAB_PRESETS.map(p=>'<span class="wlchip" data-lab'+which+'="'+esc(p.id)+'" style="cursor:pointer;opacity:.9;'+(cur===p.id?'border-color:var(--gold2);color:var(--gold)':'')+'">🧪 '+esc(p.name)+'</span>').join(' ');
+    return (horses.length?hs+' ':'')+ps;
+  };
+  const A=labResolveSel(labSel.a), B=labResolveSel(labSel.b);
+  let panel='';
+  if(A && B){
+    const cards='<div class="labcards">'+labGenoCard(A)+labGenoCard(B)+'</div>';
+    let reveal;
+    if(labSel.revealed){
+      const tm=testMating(A.genes, B.genes);
+      const bars=tm.odds.map(o=>{ const css=coatColor(o.name), w=Math.max(2,Math.round(o.pct*100));
+        return '<div class="lbsub" style="display:flex;align-items:center;gap:6px;margin:3px 0">'+
+          '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:'+css.body+';border:1px solid #0004"></span>'+
+          '<span style="width:96px;flex:0 0 auto">'+esc(o.name)+'</span>'+
+          '<span style="flex:1;background:#0002;border-radius:4px;overflow:hidden"><span style="display:block;height:9px;width:'+w+'%;background:'+css.body+'"></span></span>'+
+          '<b style="width:40px;text-align:right">'+Math.round(o.pct*100)+'%</b></div>'; }).join('');
+      const chips='<span class="pill">🎨 rare '+Math.round(tm.rareChance*100)+'%</span> <span class="pill">⚪ grey '+Math.round(tm.greyChance*100)+'%</span> <span class="pill">✨ mutation '+Math.round(tm.mutationChance*100)+'%</span>';
+      const reads=tm.reads.map(r=>'<div class="lbsub">• '+esc(r)+'</div>').join('');
+      reveal='<div class="swlabel" style="margin-top:8px">🔬 Predicted foal-coat odds</div>'+
+        '<div style="margin-top:3px">'+bars+'</div>'+
+        '<div class="pips" style="margin-top:6px">'+chips+'</div>'+
+        '<div class="swlabel" style="margin-top:8px">📖 The read</div><div>'+reads+'</div>';
+    } else {
+      reveal='<div class="btnrow"><button class="btn blue" id="labReveal" style="width:100%">🔬 Reveal foal-coat odds</button></div>';
+    }
+    panel=cards+reveal;
+  } else {
+    panel='<div class="sub" style="margin-top:6px">Pick two horses (or 🧪 presets) to study the genotypes, then reveal the full coat-colour odds of their potential foal. Nothing is bred — it’s just the bench.</div>';
+  }
+  modal('<h3>🧬 Genetics Lab</h3>'+
+    '<div class="swlabel">A test-mating bench for the coat-colour system. Study any pairing’s genotypes and the odds every colour the foal could throw.</div>'+
+    '<div class="swlabel" style="margin-top:6px">First horse</div><div>'+chipRow('a')+'</div>'+
+    '<div class="swlabel" style="margin-top:6px">Second horse</div><div>'+chipRow('b')+'</div>'+
+    panel+
+    '<div class="btnrow"><button class="btn ghost" id="labClose" style="width:100%">Done</button></div>');
+  $('labClose').onclick=closeModal;
+  document.querySelectorAll('[data-laba]').forEach(x=>x.onclick=()=>{ labSel.a=x.getAttribute('data-laba'); labSel.revealed=false; playSfx('tap'); openGeneticsLab(); });
+  document.querySelectorAll('[data-labb]').forEach(x=>x.onclick=()=>{ labSel.b=x.getAttribute('data-labb'); labSel.revealed=false; playSfx('tap'); openGeneticsLab(); });
+  { const rb=$('labReveal'); if(rb) rb.onclick=()=>{ labSel.revealed=true; G.stats=G.stats||{}; G.stats.labTests=(G.stats.labTests||0)+1;
+      const fresh=checkAchievements(G); const gg=checkGoals(G); save(); if(fresh.length||gg.length){ renderHUD(); }
+      playSfx('tap'); burst('🧬🔬✨',12); openGeneticsLab(); }; }
+}
 function openCeremonies(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const due=comingOfAgeDue(G);
@@ -5885,6 +6057,7 @@ function boot(){
   { const ab=$('almanacBtn'); if(ab) ab.onclick=openAlmanac; }
   { const cb=$('cerBtn'); if(cb) cb.onclick=openCeremonies; }
   { const nb=$('newsBtn'); if(nb) nb.onclick=openNewsletter; }
+  { const lb=$('labBtn'); if(lb) lb.onclick=openGeneticsLab; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
