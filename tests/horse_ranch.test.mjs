@@ -225,6 +225,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.visitorDays = 1; // satisfies the visitor-day goal
   g.stats.appointments = 1; // satisfies the farrier/vet appointment goal
   g.stats.groundwork = 1; // satisfies the bonding/groundwork goal
+  g.stats.fairsWon = 1; // satisfies the seasonal-fair goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2950,6 +2951,78 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Sprawling Estate needs three barns');
   g.stables = [{ id: 'st1' }, { id: 'st2' }, { id: 'st3' }];
   ok(ach.check(g), 'three barns unlock Sprawling Estate');
+}
+
+// ---- seasonal fairs / themed limited-time events (round 43) ----
+{
+  // a fair activates on its scheduled window (spring: season-days 3..7) and deactivates after
+  const at = d => { const g = HR.freshGame(); g.day = d; return g; };
+  ok(!HR.fairActive(at(2)), 'no fair before the window opens');
+  ok(HR.fairActive(at(3)) && HR.currentFair(at(3)).id === 'springfair', 'the Spring Foal Fair opens on season-day 3');
+  ok(HR.fairActive(at(7)) && HR.currentFair(at(7)).id === 'springfair', 'the fair is still on at the end of its window');
+  ok(!HR.fairActive(at(8)), 'the fair closes after its window');
+  ok(HR.currentFair(at(17)) && HR.currentFair(at(17)).id === 'summerfair', 'summer has its own fair (day 17)');
+  // nextFair points at the next opening
+  const nx = HR.nextFair(at(2));
+  ok(nx && nx.fair.id === 'springfair' && nx.inDays === 1, 'nextFair finds the imminent Spring fair');
+  ok(HR.nextFair(at(8)) && HR.nextFair(at(8)).fair.id === 'summerfair', 'after spring, the next fair is summer');
+  ok(HR.fairProgress(at(2)) === null, 'no fair progress outside a fair window');
+}
+{
+  // the objective reads existing state; claiming pays ONCE per occurrence and is economy-safe
+  const g = HR.freshGame(); g.day = 5; // spring fair active; objective: keep a young horse
+  ok(HR.fairProgress(g).met === false, 'the starter herd (all grown) has not met the foal-fair objective');
+  ok(HR.claimFairReward(g).ok === false, 'you cannot claim before the objective is met');
+  g.horses.push(HR.mkHorse({ breed: 'arabian', age: 2 })); // a foal → objective met
+  const p = HR.fairProgress(g);
+  ok(p.met === true && p.canClaim === true, 'adding a young horse meets the objective');
+  const money0 = g.money, rep0 = g.rep;
+  const r = HR.claimFairReward(g);
+  ok(r.ok && g.money === money0 + r.reward.money && g.rep === rep0 + r.reward.rep, 'the reward is applied');
+  ok(r.reward.money > 0 && r.reward.money <= 2000, 'the fair payout is bounded (economy-safe)');
+  ok((g.stats.fairsWon || 0) === 1, 'the win is counted');
+  // cannot claim again this occurrence — not farmable within the fair
+  ok(HR.claimFairReward(g).ok === false, 'the same fair pays only once');
+  ok(HR.fairProgress(g).claimed === true, 'progress reflects the claimed reward');
+  // advancing a day inside the same occurrence still cannot re-claim
+  g.day = 6;
+  ok(HR.fairProgress(g).claimed === true && HR.claimFairReward(g).ok === false, 'you cannot farm the reward across days of one fair');
+}
+{
+  // a new occurrence next year can be claimed again (once-per-occurrence, not once-ever)
+  const g = HR.freshGame(); g.day = 5;
+  g.horses.push(HR.mkHorse({ breed: 'arabian', age: 2 }));
+  ok(HR.claimFairReward(g).ok, 'claim this year’s spring fair');
+  g.day = 5 + 56; // one full year later → same fair, new occurrence
+  ok(HR.fairProgress(g).claimed === false, 'next year’s fair is a fresh occurrence');
+  ok(HR.claimFairReward(g).ok, 'the reward can be claimed again next year');
+  ok(g.fairsClaimed.length === 2, 'both occurrences are logged distinctly');
+}
+{
+  // each season's fair objective is met by the right existing-state condition
+  const summer = HR.freshGame(); summer.day = 17; // summer fair: 70+ overall horse
+  ok(HR.fairProgress(summer).met === false, 'no ring-ready horse yet');
+  summer.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, speed: 95, stamina: 95, temperament: 90 }));
+  ok(HR.fairProgress(summer).met === true, 'a 70+ OVR horse meets the summer fair');
+  const autumn = HR.freshGame(); autumn.day = 5 + 28; autumn.feed = 80; // autumn fair: 60+ hay
+  ok(HR.currentFair(autumn).id === 'autumnfair' && HR.fairProgress(autumn).met === true, 'stocked hay meets the harvest fair');
+  autumn.feed = 10; ok(HR.fairProgress(autumn).met === false, 'low hay misses the harvest fair');
+}
+{
+  // determinism, migration safety, goal & achievement
+  const mk = () => { const g = HR.freshGame(); g.day = 5; g.horses.push(HR.mkHorse({ breed: 'arabian', age: 2, id: 'f' })); HR.claimFairReward(g); return g.money; };
+  ok(mk() === mk(), 'same day + state → same fair payout');
+  const legacy = HR.freshGame(); delete legacy.fairsClaimed; legacy.day = 5; legacy.horses.push(HR.mkHorse({ breed: 'arabian', age: 2 }));
+  ok(HR.claimFairReward(legacy).ok && Array.isArray(legacy.fairsClaimed), 'claiming initialises the log on an old save');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'fair1');
+  ok(goal && !goal.done(g), 'the fair goal is unmet before winning one');
+  g.stats.fairsWon = 1;
+  ok(goal.done(g), 'winning a fair satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'fairgoer');
+  ok(ach && !ach.check(g), 'Fairgoer needs all four fairs');
+  g.fairsClaimed = ['springfair-y1', 'summerfair-y1', 'autumnfair-y1', 'winterfair-y2'];
+  ok(ach.check(g), 'winning all four distinct fairs unlocks Fairgoer');
 }
 
 // ---- clamp helper ----
