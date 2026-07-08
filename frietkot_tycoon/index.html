@@ -454,6 +454,32 @@ var cityDef=function(planetId,countryId,cityId){ var cs=citiesOf(planetId,countr
 var START_PLANET='aarde';                                 // pre-galaxy shops migrate to Earth
 var START_COUNTRY='belgie';                               // pre-globe shops migrate to Belgium
 var START_CITY='brussel';                                 // Stage-1 shops migrate to the capital
+// LOCATION TRAITS: every place can tweak traffic (👥 more people), spend (💎 richer people)
+// and opening cost (💶). They MULTIPLY down the hierarchy (planet × country × city), so a
+// fancy district on a rich planet stacks. Missing → 1 (neutral). Keyed by def id.
+var LOC_TRAITS={
+  // — Belgian cities —
+  brussel:{traf:1.25,cost:1.4}, antwerpen:{traf:1.15,cost:1.3}, gent:{traf:1.12,cost:1.15},
+  brugge:{spend:1.25,cost:1.2}, oostende:{spend:1.15,cost:1.1}, luik:{traf:1.08}, hasselt:{spend:1.10},
+  // — countries (stack on top of their cities) —
+  belgie:{}, nederland:{spend:1.12,cost:1.5}, frankrijk:{spend:1.30,cost:1.9},
+  duitsland:{traf:1.20,cost:1.7}, usa:{traf:1.45,cost:2.3}, japan:{spend:1.55,cost:2.6},
+  // — sci-fi worlds & their districts (the lucrative late game) —
+  aarde:{}, mars:{spend:1.6,cost:5}, frietopia:{traf:2.2,cost:6}, neonix:{spend:3.0,cost:9},
+  mayostad:{spend:1.3}, curryburcht:{spend:1.4}, neobrussel:{traf:1.5}, orbit9:{spend:1.6}
+};
+// stamp traf/spend/cost onto every def (default 1) once, so lookups are plain reads
+(function(){ var put=function(d){ var t=LOC_TRAITS[d.id]||{}; d.traf=t.traf||1; d.spend=t.spend||1; d.cost=t.cost||1; };
+  GALAXY.forEach(function(pl){ put(pl); pl.countries.forEach(function(co){ put(co); co.cities.forEach(put); }); }); })();
+var traitOf=function(def,field){ return (def&&def[field])||1; };
+// combined multiplier for a (planet,country,city) location on a given field
+var locMul=function(planetId,countryId,cityId,field){
+  return traitOf(planetDef(planetId),field)*traitOf(countryDef(planetId,countryId),field)*traitOf(cityDef(planetId,countryId,cityId),field); };
+// short human blurb of a place's perks, e.g. "👥+25% 💎+20%"
+var traitBlurb=function(def){ if(!def) return ''; var b=[];
+  if(def.traf>1) b.push('👥+'+Math.round((def.traf-1)*100)+'%');
+  if(def.spend>1) b.push('💎+'+Math.round((def.spend-1)*100)+'%');
+  return b.join(' '); };
 var IDLE_CAP_SEC=8*3600;                                  // passive income accrues up to 8h offline
 // passive €/sec a parked shop earns, from its snapshotted appeal + lifetime serves
 var idleRate=function(blob){ if(!blob) return 0; var ap=Math.max(0,blob.appealSnap||0), sv=Math.max(0,blob.servedSnap||0);
@@ -520,7 +546,7 @@ var orderValue=function(G,type,comboMul){
   else { var snacks=RESEARCH.filter(function(r){return r.kind==='snack'&&G.research[r.id];});
     if(snacks.length && Math.random()<0.5){ var s=pick(snacks); v+=dishPrice(DISH_BASE[s.id]||s.price, dishRank(G,s.id)); } }
   if(G.research.andalouse) v+=BAL.saucePrice;
-  v*=type.spend; v*=(comboMul||1); v*=seasonFor(G.week).spend; v*=serviceBonus(G); v*=eventSpendMul(G);   // winter splurge + trained crew + news events
+  v*=type.spend; v*=(comboMul||1); v*=seasonFor(G.week).spend; v*=serviceBonus(G); v*=eventSpendMul(G); v*=(G.locSpend||1);   // winter splurge + trained crew + news events + richer locations
   return Math.round(v);
 };
 // weighted customer-type roll: base weight + bonus if a decor pulls that type
@@ -643,12 +669,20 @@ var serializeShop=function(){ return {
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
   floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
   contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals,timeline:G.timeline }; };
-var META=null;   // { shops:[{lot,name,blob,t}], active:0 }
+var META=null;   // { shops:[{planet,country,city,lot,name,blob,t}], active, bank, lastSeen }
 var saveMeta=function(){ try{ if(META) localStorage.setItem(META_KEY, JSON.stringify(META)); }catch(e){} };
 var save=function(){ if(!G) return; try{ var blob=serializeShop(); localStorage.setItem(SAVE_KEY, JSON.stringify(blob));
   if(META && META.shops[META.active]){ var rec=META.shops[META.active];
-    blob.appealSnap=computeAppeal(G); blob.servedSnap=G.served; rec.blob=blob; rec.t=nowMs(); saveMeta(); }
+    blob.appealSnap=computeAppeal(G); blob.servedSnap=G.served; rec.blob=blob; rec.t=nowMs();
+    META.bank=G.money; META.lastSeen=nowMs();    // G.money IS the shared empire wallet
+    saveMeta(); }
   }catch(e){} };
+// the empire's combined passive €/sec (optionally excluding the shop you're actively playing)
+var empireIdleRate=function(excludeActive){ var r=0; if(META) META.shops.forEach(function(s,i){ if(excludeActive&&i===META.active) return; r+=idleRate(s.blob); }); return r; };
+// stamp the active shop's location multipliers onto G (recomputed, never serialized)
+var applyActiveLoc=function(){ if(!G) return; var rec=META&&META.shops[META.active];
+  if(rec){ G.locTraffic=locMul(shopPlanet(rec),shopCountry(rec),shopCity(rec),'traf'); G.locSpend=locMul(shopPlanet(rec),shopCountry(rec),shopCity(rec),'spend'); }
+  else { G.locTraffic=1; G.locSpend=1; } };
 // hydrate G from a blob object (shared by disk-load and shop-switch)
 var applyBlob=function(o){ if(!o||!o.objs) return false;
   G=freshGame();
@@ -662,14 +696,13 @@ var applyBlob=function(o){ if(!o||!o.objs) return false;
   G.expand=clamp(G.expand||0,0,maxExpand()); applySize(); recenterCam();
   G.objs.forEach(function(x){ if(x.lvl==null) x.lvl=1; });
   if(!G.dish) G.dish={friet:{rank:1}}; dishesUnlocked(G).forEach(function(id){ if(!G.dish[id]) G.dish[id]={rank:1}; });
+  if(META && META.bank!=null) G.money=META.bank;                 // money is shared across the empire
+  applyActiveLoc();
   G.custs=[]; G.running=true; return true; };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; return applyBlob(JSON.parse(s)); }catch(e){ return false; } };
 // ---- empire meta: snapshot / switch / open / offline income ----
 var snapshotActiveInto=function(){ if(!META) return; var rec=META.shops[META.active]; if(!rec) return;
-  var b=serializeShop(); b.appealSnap=computeAppeal(G); b.servedSnap=G.served; rec.blob=b; rec.t=nowMs(); };
-var collectIdle=function(rec){ if(!rec||!rec.blob) return 0; var secs=(nowMs()-(rec.t||nowMs()))/1000;
-  var g=idleIncome(rec.blob,secs); if(g>0) rec.blob.money=(rec.blob.money||0)+g; return g; };
-var pendingIdle=function(rec){ if(!rec||!rec.blob) return 0; return idleIncome(rec.blob,(nowMs()-(rec.t||nowMs()))/1000); };
+  var b=serializeShop(); b.appealSnap=computeAppeal(G); b.servedSnap=G.served; rec.blob=b; rec.t=nowMs(); META.bank=G.money; };
 var shopPlanet=function(rec){ return (rec&&rec.planet)||START_PLANET; };      // pre-galaxy shops → Earth
 var shopCountry=function(rec){ return (rec&&rec.country)||START_COUNTRY; };   // pre-globe shops → Belgium
 var shopCity=function(rec){ return (rec&&rec.city)||START_CITY; };            // Stage-1 shops → capital
@@ -678,36 +711,46 @@ var shopAt=function(planetId,countryId,cityId,lotId){ if(!META) return -1; for(v
 var cityShops=function(planetId,countryId,cityId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopPlanet(s)===planetId && shopCountry(s)===countryId && shopCity(s)===cityId) out.push({i:i,rec:s}); }); return out; };
 var countryShops=function(planetId,countryId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopPlanet(s)===planetId && shopCountry(s)===countryId) out.push({i:i,rec:s}); }); return out; };
 var planetShops=function(planetId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopPlanet(s)===planetId) out.push({i:i,rec:s}); }); return out; };
-var sumShops=function(list){ var till=0, idle=0; list.forEach(function(o){ till+=(o.rec.blob&&o.rec.blob.money)||0; if(META&&o.i!==META.active) idle+=pendingIdle(o.rec); }); return { count:list.length, till:till, idle:idle }; };
+// group summary: shop count + combined passive €/sec (money itself is one shared bank)
+var sumShops=function(list){ var rate=0; list.forEach(function(o){ rate+=idleRate(o.rec.blob); }); return { count:list.length, rate:rate }; };
 // roll shops up into totals for a city / a country / a whole planet
 var cityTotals=function(planetId,countryId,cityId){ return sumShops(cityShops(planetId,countryId,cityId)); };
 var countryTotals=function(planetId,countryId){ return sumShops(countryShops(planetId,countryId)); };
 var planetTotals=function(planetId){ return sumShops(planetShops(planetId)); };
+// cost to open a shop at a location: escalating base × the place's cost multiplier
+var openCostAt=function(planetId,countryId,cityId){ return Math.round(openShopCost(META?META.shops.length:1)*locMul(planetId,countryId,cityId,'cost')); };
 var initMeta=function(){ var m=null; try{ m=JSON.parse(localStorage.getItem(META_KEY)||'null'); }catch(e){ m=null; }
   if(m && m.shops && m.shops.length){ META=m; if(META.active==null||META.active>=META.shops.length) META.active=0; }
   else { META={ shops:[{ planet:START_PLANET, country:START_COUNTRY, city:START_CITY, lot:'markt', name:'Rudy Friet', blob:null, t:nowMs() }], active:0 }; }
   META.shops.forEach(function(s){ if(!s.planet) s.planet=START_PLANET; if(!s.country) s.country=START_COUNTRY; if(!s.city) s.city=START_CITY; });   // migrate pre-galaxy/globe/country saves
+  // one shared wallet: first time, consolidate any per-shop tills (old saves) into the bank
+  if(META.bank==null){ var sum=0, any=false; META.shops.forEach(function(s){ if(s.blob&&s.blob.money!=null){ sum+=s.blob.money; any=true; } });
+    META.bank=any?sum:(G?G.money:400); }
+  // offline income: the whole empire earns (capped) while the game was closed
+  var el2=clamp((nowMs()-(META.lastSeen||nowMs()))/1000,0,IDLE_CAP_SEC), off=0;
+  if(el2>1) META.shops.forEach(function(s){ off+=idleIncome(s.blob,el2); });
+  if(off>0){ META.bank+=off; setTimeout(function(){ toast('💤 Terwijl je weg was verdiende je imperium <b>+'+fmt(off)+'💶</b>.'); },900); }
+  if(G) G.money=META.bank; applyActiveLoc(); META.lastSeen=nowMs();
   snapshotActiveInto(); saveMeta(); };
 var switchShop=function(idx){ if(!META||idx<0||idx>=META.shops.length||idx===META.active) return;
-  snapshotActiveInto();
-  var rec=META.shops[idx], gain=collectIdle(rec);
-  applyBlob(rec.blob); META.active=idx; rec.t=nowMs(); save();
+  snapshotActiveInto();                                   // bank + active blob saved
+  var rec=META.shops[idx];
+  applyBlob(rec.blob); META.active=idx; rec.t=nowMs(); applyActiveLoc(); save();   // applyBlob sets G.money = shared bank
   if(el.mapScreen) el.mapScreen.classList.add('hidden');
   renderAll(); var ld=lotDef(rec.lot), cd=cityDef(shopPlanet(rec),shopCountry(rec),shopCity(rec)), co=countryDef(shopPlanet(rec),shopCountry(rec)), pl=planetDef(shopPlanet(rec));
   var where=(ld?ld.nm:'')+(cd?', '+cd.nm:'')+(pl&&pl.id!==START_PLANET?' '+pl.emoji:(co&&co.id!==START_COUNTRY?' '+co.emoji:''));
   addShake(1.4); chime([520,700,900],0.09);
-  if(gain>0) toast('🏪 <b>'+rec.name+'</b>'+(where?' — '+where:'')+': onderweg <b>+'+fmt(gain)+'💶</b> verdiend!');
-  else toast('🏪 Nu aan de slag in <b>'+rec.name+'</b>'+(where?' — '+where:'')+'.'); };
+  toast('🏪 Nu aan de slag in <b>'+rec.name+'</b>'+(where?' — '+where:'')+'.'); };
 var openShopAt=function(planetId,countryId,cityId,lotId){ if(!META||!lotDef(lotId)||!cityDef(planetId,countryId,cityId)) return;
   if(shopAt(planetId,countryId,cityId,lotId)>=0){ toast('Hier staat al een frituur.'); return; }
-  var cost=openShopCost(META.shops.length);
+  var cost=openCostAt(planetId,countryId,cityId);
   if(G.money<cost){ toast('Te weinig geld — een frituur hier kost '+fmt(cost)+'💶.'); return; }
-  G.money-=cost; snapshotActiveInto();
+  G.money-=cost; META.bank=G.money; snapshotActiveInto();
   var pg=G; G=freshGame(); var blob=serializeShop(); blob.appealSnap=computeAppeal(G); blob.servedSnap=0; G=pg;
   META.shops.push({ planet:planetId, country:countryId, city:cityId, lot:lotId, name:'Rudy Friet '+(META.shops.length+1), blob:blob, t:nowMs() });
   var ld=lotDef(lotId), cd=cityDef(planetId,countryId,cityId), pl=planetDef(planetId); bigPop('🏗️ '+ld.nm,'#7bd66b'); confetti();
   switchShop(META.shops.length-1);
-  toast('🎉 Nieuwe frituur op <b>'+ld.nm+'</b> in <b>'+cd.nm+'</b> '+(pl?pl.emoji:'')+'! Bouw ze uit tot een topzaak.'); };
+  toast('🎉 Nieuwe frituur op <b>'+ld.nm+'</b> in <b>'+cd.nm+'</b> '+(pl?pl.emoji:'')+' voor '+fmt(cost)+'💶! Bouw ze uit.'); };
 // contest progress: called from serve/merge with a metric + amount
 var awardContest=function(c){ G.faam+=c.reward.faam||0; G.money+=c.reward.cash||0;
   bigPop('UITDAGING! 🏆','#ffd447'); confetti(); starRing(worldW()/2,GH*TS/2,14); chime([700,940,1180],0.1);
@@ -1261,73 +1304,66 @@ var setPrice=function(id,delta){ var z=sizeDef(id); if(!z) return; if(!G.prices)
   G.prices[id]=clamp(Math.round((priceOf(G,id)+delta)), Math.round(z.fair*0.5), Math.round(z.fair*2)); beep(delta>0?600:420,0.04,0.03); renderMenu(); syncHUD(); save(); };
 // four-tier map overlay: galaxy (planets) → world (countries) → country (cities) → city (lots)
 var mapView='galaxy', mapPlanet=null, mapCountry=null, mapCity=null;
+var rateStr=function(rate){ return rate>0? '≈'+fmt(Math.round(rate*60))+'/min' : ''; };
+// the shared wallet + shop count + passive rate — shown under every map view
+var shopWord=function(n){ return n===1?'frituur':'frituren'; };
+var bankLine=function(){ var r=empireIdleRate(true); return '💰 <b>'+fmt(Math.round(G.money))+'💶</b> · 🏪 '+META.shops.length+' '+shopWord(META.shops.length)+(r>0?' · passief ≈'+fmt(Math.round(r*60))+'/min':''); };
+// a pin's summary line: owned → count + passive rate; empty → sub + perks
+var pinInfo=function(def,t,ownedIcon){ if(t.count>0) return '<div class="lottill">'+t.count+'🏪'+(t.rate>0?' · '+rateStr(t.rate):'')+'</div>';
+  var bl=traitBlurb(def); return '<div class="lotcost">'+def.sub+'</div>'+(bl?'<div class="lotidle" style="color:var(--blue)">'+bl+'</div>':''); };
 // GALAXY view: each planet is a pin rolling up ALL its shops (across every country)
-var renderGalaxy=function(){ var h='<div class="stars"></div>', totShops=META.shops.length, totTill=0;
-  GALAXY.forEach(function(pl){ var t=planetTotals(pl.id); totTill+=t.till; var owned=t.count>0;
-    var pos='left:'+pl.x+'%;top:'+pl.y+'%';
+var renderGalaxy=function(){ var h='<div class="stars"></div>';
+  GALAXY.forEach(function(pl){ var t=planetTotals(pl.id), owned=t.count>0, pos='left:'+pl.x+'%;top:'+pl.y+'%';
     h+='<div class="lot '+(owned?'own':'empty')+'" data-planet="'+pl.id+'" style="'+pos+'">'
-      +'<div class="lotpin">'+pl.emoji+'</div>'
-      +'<div class="lotnm">'+pl.nm+'</div>'
-      +(owned?'<div class="lottill">'+t.count+'🏪 · '+fmt(t.till)+'💶</div>'+(t.idle>0?'<div class="lotidle">+'+fmt(t.idle)+' onderweg</div>':'')
-             :'<div class="lotcost">'+pl.sub+'</div>')+'</div>';
+      +'<div class="lotpin">'+pl.emoji+'</div><div class="lotnm">'+pl.nm+'</div>'+pinInfo(pl,t)+'</div>';
   });
   el.mapArea.innerHTML=h;
   if(el.mapTitle) el.mapTitle.innerHTML='🌌 De Melkweg<small>F R I T U U R - I M P E R I U M</small>';
-  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+totShops+' frituur'+(totShops!==1?'en':'')+' in het heelal · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapTotal) el.mapTotal.innerHTML=bankLine();
   if(el.mapBack) el.mapBack.style.display='none';
   each('[data-planet]',function(b){ return function(){ mapPlanet=b.getAttribute('data-planet'); mapView='world'; renderMap(); }; }); };
 // WORLD view: each country of one planet is a pin rolling up all its shops
 var renderWorld=function(planetId){ var pl=planetDef(planetId); if(!pl){ mapView='galaxy'; return renderGalaxy(); }
-  var h=(planetId===START_PLANET?'':'<div class="stars"></div>'), totTill=0;
-  pl.countries.forEach(function(co){ var t=countryTotals(planetId,co.id); totTill+=t.till; var owned=t.count>0;
-    var pos='left:'+co.x+'%;top:'+co.y+'%';
+  var h=(planetId===START_PLANET?'':'<div class="stars"></div>');
+  pl.countries.forEach(function(co){ var t=countryTotals(planetId,co.id), owned=t.count>0, pos='left:'+co.x+'%;top:'+co.y+'%';
     h+='<div class="lot '+(owned?'own':'empty')+'" data-country="'+co.id+'" style="'+pos+'">'
-      +'<div class="lotpin">'+co.emoji+'</div>'
-      +'<div class="lotnm">'+co.nm+'</div>'
-      +(owned?'<div class="lottill">'+t.count+'🏪 · '+fmt(t.till)+'💶</div>'+(t.idle>0?'<div class="lotidle">+'+fmt(t.idle)+' onderweg</div>':'')
-             :'<div class="lotcost">'+co.sub+'</div>')+'</div>';
+      +'<div class="lotpin">'+co.emoji+'</div><div class="lotnm">'+co.nm+'</div>'+pinInfo(co,t)+'</div>';
   });
   el.mapArea.innerHTML=h;
-  if(el.mapTitle) el.mapTitle.innerHTML=pl.emoji+' '+pl.nm+'<small>'+pl.sub.toUpperCase()+'</small>';
-  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+planetTotals(planetId).count+' op '+pl.nm+' · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapTitle) el.mapTitle.innerHTML=pl.emoji+' '+pl.nm+'<small>'+pl.sub.toUpperCase()+(traitBlurb(pl)?' · '+traitBlurb(pl):'')+'</small>';
+  if(el.mapTotal) el.mapTotal.innerHTML=bankLine();
   if(el.mapBack) el.mapBack.style.display='';
   each('[data-country]',function(b){ return function(){ mapCountry=b.getAttribute('data-country'); mapView='country'; renderMap(); }; }); };
 // COUNTRY view: each city of one country is a pin rolling up its shops
 var renderCountryMap=function(planetId,countryId){ var co=countryDef(planetId,countryId); if(!co){ mapView='world'; return renderWorld(planetId); }
-  var h='', totTill=0;
-  co.cities.forEach(function(city){ var t=cityTotals(planetId,countryId,city.id); totTill+=t.till; var owned=t.count>0;
-    var pos='left:'+city.x+'%;top:'+city.y+'%';
+  var h='';
+  co.cities.forEach(function(city){ var t=cityTotals(planetId,countryId,city.id), owned=t.count>0, pos='left:'+city.x+'%;top:'+city.y+'%';
     h+='<div class="lot '+(owned?'own':'empty')+'" data-city="'+city.id+'" style="'+pos+'">'
-      +'<div class="lotpin">'+(owned?'🏙️':'📍')+'</div>'
-      +'<div class="lotnm">'+city.nm+'</div>'
-      +(owned?'<div class="lottill">'+t.count+'🏪 · '+fmt(t.till)+'💶</div>'+(t.idle>0?'<div class="lotidle">+'+fmt(t.idle)+' onderweg</div>':'')
-             :'<div class="lotcost">'+city.sub+'</div>')+'</div>';
+      +'<div class="lotpin">'+(owned?'🏙️':'📍')+'</div><div class="lotnm">'+city.nm+'</div>'+pinInfo(city,t)+'</div>';
   });
   el.mapArea.innerHTML=h;
-  if(el.mapTitle) el.mapTitle.innerHTML=co.emoji+' '+co.nm+'<small>'+co.sub.toUpperCase()+'</small>';
-  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+countryTotals(planetId,countryId).count+' hier · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapTitle) el.mapTitle.innerHTML=co.emoji+' '+co.nm+'<small>'+co.sub.toUpperCase()+(traitBlurb(co)?' · '+traitBlurb(co):'')+'</small>';
+  if(el.mapTotal) el.mapTotal.innerHTML=bankLine();
   if(el.mapBack) el.mapBack.style.display='';
   each('[data-city]',function(b){ return function(){ mapCity=b.getAttribute('data-city'); mapView='city'; renderMap(); }; }); };
-// CITY view: the five lots of one city — your shops and empty lots to open
+// CITY view: the five lots of one city — your shops and empty lots to open (money is shared)
 var renderCity=function(planetId,countryId,cityId){ var cd=cityDef(planetId,countryId,cityId); if(!cd){ mapView='country'; return renderCountryMap(planetId,countryId); }
-  var h='<div class="river"></div>', total=0;
+  var h='<div class="river"></div>', cost=openCostAt(planetId,countryId,cityId), afford=G.money>=cost;
   CITY_LOTS.forEach(function(lot){ var idx=shopAt(planetId,countryId,cityId,lot.id), pos='left:'+lot.x+'%;top:'+lot.y+'%';
-    if(idx>=0){ var rec=META.shops[idx], active=idx===META.active, till=(rec.blob&&rec.blob.money)||0; total+=till;
-      var idle=active?0:pendingIdle(rec);
+    if(idx>=0){ var rec=META.shops[idx], active=idx===META.active, rate=idleRate(rec.blob);
       h+='<div class="lot own'+(active?' active':'')+'" data-switch="'+idx+'" style="'+pos+'">'
         +'<div class="lotpin">'+(active?'🍟':'🏪')+'</div>'
         +'<div class="lotnm">'+rec.name+(active?' ▸nu':'')+'</div>'
-        +'<div class="lottill">'+fmt(till)+'💶</div>'
-        +(idle>0?'<div class="lotidle">+'+fmt(idle)+' onderweg</div>':'')+'</div>';
-    } else { var cost=openShopCost(META.shops.length), afford=G.money>=cost;
+        +(rate>0?'<div class="lotidle">'+rateStr(rate)+'</div>':'')+'</div>';
+    } else {
       h+='<div class="lot empty" data-open="'+lot.id+'" style="'+pos+';opacity:'+(afford?1:0.72)+'">'
         +'<div class="lotpin">➕</div><div class="lotnm">'+lot.nm+'</div>'
-        +'<div class="lotcost">'+(afford?'open · ':'')+fmt(cost)+'💶</div></div>';
+        +'<div class="lotcost">'+fmt(cost)+'💶</div></div>';
     }
   });
-  el.mapArea.innerHTML=h; var co=countryDef(planetId,countryId), t=cityTotals(planetId,countryId,cityId);
-  if(el.mapTitle) el.mapTitle.innerHTML='🏙️ '+cd.nm+'<small>'+(co?co.nm.toUpperCase()+' · ':'')+cd.sub.toUpperCase()+'</small>';
-  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+t.count+' hier · kassa <b>'+fmt(total)+'💶</b>';
+  el.mapArea.innerHTML=h; var co=countryDef(planetId,countryId), bl=traitBlurb(cd);
+  if(el.mapTitle) el.mapTitle.innerHTML='🏙️ '+cd.nm+'<small>'+(co?co.nm.toUpperCase()+' · ':'')+cd.sub.toUpperCase()+(bl?' · '+bl:'')+'</small>';
+  if(el.mapTotal) el.mapTotal.innerHTML=bankLine()+' · nieuw hier: '+fmt(cost)+'💶';
   if(el.mapBack) el.mapBack.style.display='';
   each('[data-switch]',function(b){ return function(){ switchShop(parseInt(b.getAttribute('data-switch'),10)); }; });
   each('[data-open]',function(b){ return function(){ openShopAt(mapPlanet,mapCountry,mapCity,b.getAttribute('data-open')); }; }); };
@@ -1494,7 +1530,8 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
     rushTick(dt); campaignTick(dt); heatTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval((computeAppeal(G)*valueFactor(G)*marketMul(G)*eventTrafficMul(G))+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
+    if(META){ var eir=empireIdleRate(true); if(eir>0){ G.money+=eir*dt; META.bank=G.money; } }   // parked shops pump the shared bank
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval((computeAppeal(G)*valueFactor(G)*marketMul(G)*eventTrafficMul(G)*(G.locTraffic||1))+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
       if(G.custs.length<ccap){ G.custs.push(makeCust());
         if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
     // the critic slips into the line as its own arrival
@@ -1572,6 +1609,7 @@ if(typeof globalThis!=='undefined'){
     CITY_LOTS:CITY_LOTS, lotDef:lotDef, idleRate:idleRate, idleIncome:idleIncome, openShopCost:openShopCost, IDLE_CAP_SEC:IDLE_CAP_SEC,
     COUNTRY:COUNTRY, WORLD:WORLD, GALAXY:GALAXY, planetDef:planetDef, countriesOf:countriesOf, countryDef:countryDef, citiesOf:citiesOf, cityDef:cityDef,
     START_CITY:START_CITY, START_COUNTRY:START_COUNTRY, START_PLANET:START_PLANET,
+    LOC_TRAITS:LOC_TRAITS, traitOf:traitOf, locMul:locMul, openCostAt:openCostAt,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,

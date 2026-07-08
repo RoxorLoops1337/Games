@@ -535,5 +535,31 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.countryDef(FS.START_PLANET, foreignCo.id) === null, 'that country does NOT resolve under Earth (planets are isolated)');
 }
 
+// ---- empire: shared money + location traits (rework A) ----
+{
+  // every place carries neutral-or-better traits after the stamping pass
+  const homeCity = FS.cityDef(FS.START_PLANET, FS.START_COUNTRY, FS.START_CITY);
+  ok(homeCity.traf >= 1 && homeCity.spend >= 1 && homeCity.cost >= 1, 'places have traf/spend/cost fields (default 1)');
+  ok(FS.traitOf(homeCity, 'traf') === homeCity.traf, 'traitOf reads a field');
+  ok(FS.traitOf(null, 'traf') === 1, 'traitOf of nothing is neutral');
+  // Brussel is a busy capital → traffic > 1
+  ok(homeCity.traf > 1, 'the capital draws extra traffic');
+  // location multiplier stacks planet × country × city
+  const scifi = FS.GALAXY.find(p => p.id !== FS.START_PLANET);
+  const co = scifi.countries[0], ci = co.cities[0];
+  const expected = FS.traitOf(scifi, 'spend') * FS.traitOf(co, 'spend') * FS.traitOf(ci, 'spend');
+  ok(Math.abs(FS.locMul(scifi.id, co.id, ci.id, 'spend') - expected) < 1e-9, 'locMul multiplies down the hierarchy');
+  // a rich sci-fi world pays more than the neutral home city
+  ok(FS.locMul(scifi.id, co.id, ci.id, 'spend') > FS.locMul(FS.START_PLANET, FS.START_COUNTRY, FS.START_CITY, 'spend'), 'sci-fi worlds pay better');
+  // opening cost scales with the location's cost multiplier
+  const cheap = FS.openCostAt(FS.START_PLANET, FS.START_COUNTRY, 'luik');       // luik: no cost mult
+  const dear  = FS.openCostAt(scifi.id, co.id, ci.id);                          // sci-fi: big cost mult
+  ok(dear > cheap, 'a fancy location costs more to open');
+  ok(FS.openCostAt(FS.START_PLANET, FS.START_COUNTRY, 'brussel') > FS.openCostAt(FS.START_PLANET, FS.START_COUNTRY, 'luik'), 'the capital costs more than a plain city');
+  // location spend multiplier fattens an order
+  const g = FS.freshGame(); g.locSpend = 2;
+  ok(FS.orderValue(g, { fav: null, spend: 1 }, 1) > FS.orderValue(FS.freshGame(), { fav: null, spend: 1 }, 1), 'a richer location earns more per order');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
