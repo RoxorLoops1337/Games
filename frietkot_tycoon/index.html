@@ -816,7 +816,7 @@ var layoutQueue=function(){
   var doorX=tileC(DOOR.gx,DOOR.gy).x, qy=laneInY();
   for(var i=0;i<q.length;i++){ q[i].tx=clamp(doorX-i*13,9,worldW()-9); q[i].ty=qy; }
   var fc; while(q.length && (fc=freeCounter())){ var head=q.shift(); fc._busy=head; head.counter=fc;
-    var t=tileC(fc.gx,fc.gy); head.tx=t.x; head.ty=t.y+2; head.state='enter'; head.wait=0; doorbell(); }
+    head.tx=doorX; head.ty=qy; head.state='approach'; head.wait=0; doorbell(); }   // walk to the door first, then in
 };
 var freeCounter=function(){ var cs=objsOfKind('counter'); for(var i=0;i<cs.length;i++){ if(!cs[i]._busy) return cs[i]; } return null; };
 var freeLeaner=function(){ var ls=objsOfKind('leaner'); for(var i=0;i<ls.length;i++){ if(!ls[i]._busy) return ls[i]; } return null; };
@@ -849,7 +849,7 @@ var serveDone=function(c){
   // go eat at a leaner if one's free, else leave
   var ln=freeLeaner();
   if(ln){ ln._busy=c; c.leaner=ln; var t=tileC(ln.gx,ln.gy); c.tx=t.x; c.ty=t.y; c.state='toseat'; }
-  else { var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=laneOutY(); c.state='exit'; }   // step out onto the lower lane
+  else { var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=d.y; c.state='toDoor'; }   // head to the door to leave
   checkMilestone();
 };
 
@@ -858,7 +858,11 @@ var updateCust=function(c,dt){
   if(c.state==='queue'){                                   // strolling in along the building toward the line
     moveTo(c,dt); c.wait+=dt;
     if(c.wait>BAL.queuePatience*1.7){ c.state='leave'; emote(c.x,c.y-16,'💢','#e5624a'); c.tx=(c.exitSide<0?-16:worldW()+16); c.ty=laneOutY(); }
-  } else if(c.state==='enter'){                              // admitted → walk to the counter
+  } else if(c.state==='approach'){                          // admitted → walk along the street to the door
+    if(moveTo(c,dt)){ var di=tileC(DOOR.gx,DOOR.gy); c.state='enter'; c.tx=di.x; c.ty=di.y; }
+  } else if(c.state==='enter'){                             // step straight up through the doorway
+    if(moveTo(c,dt)){ var t=tileC(c.counter.gx,c.counter.gy); c.state='toCounter'; c.tx=t.x; c.ty=t.y+2; }
+  } else if(c.state==='toCounter'){                         // inside now → walk to the counter
     if(moveTo(c,dt)){ c.state='order'; c.svcMax=serviceTime(G, c.counter?c.counter.lvl:1); c.timer=c.svcMax; }
   } else if(c.state==='order'){
     c.timer-=dt; if(c.timer<=0) serveDone(c);
@@ -867,8 +871,10 @@ var updateCust=function(c,dt){
   } else if(c.state==='eat'){
     if(Math.random()<dt*0.5) emote(c.x,c.y-13,'😋','#ff9ecb');   // enjoying the fries
     c.timer-=dt; if(c.timer<=0){ var hb=Math.max(1,Math.round(power(c.leaner?c.leaner.lvl:1))); heartPop(c.x,c.y-6,hb); emote(c.x,c.y-15,'😊','#ff9ecb'); spawnSparks(c.x,c.y-8,3,'#ff9ecb'); if(Math.random()<0.28) G.faam+=1;
-      if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=laneOutY(); c.state='exit'; }
-  } else if(c.state==='exit'){                              // out the door onto the lower lane → head for an edge
+      if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=d.y; c.state='toDoor'; }
+  } else if(c.state==='toDoor'){                            // walk back to the door from inside
+    if(moveTo(c,dt)){ c.state='exitDoor'; c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=laneOutY(); }
+  } else if(c.state==='exitDoor'){                          // step straight down through the door onto the lower lane
     if(moveTo(c,dt)){ c.state='leave'; c.tx=(c.exitSide<0?-16:worldW()+16); c.ty=laneOutY(); }
   } else if(c.state==='leave'){                             // amble off down the street, left or right
     if(moveTo(c,dt)) c._dead=true;
