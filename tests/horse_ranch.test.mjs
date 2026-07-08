@@ -187,6 +187,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stables.push({ id: 'st2', level: 1, baseStalls: 4 });
   for (let i = 0; i < 6; i++) g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20 }));
   g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, coat: { name: 'Golden', tier: 3 }, wins: 4 })); // satisfies rare-coat + champion goals
+  g.canteen = { level: 2 }; g.teachers = [HR.mkTeacher(g, rng(1))]; // satisfies canteen + teacher goals
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -320,6 +321,66 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(!HR.canEnterShow(g, HR.mkHorse({ breed: 'arabian', age: 2 })).ok, 'foals cannot compete');
   const preg = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20 }); preg.pregnant = true;
   ok(!HR.canEnterShow(g, preg).ok, 'pregnant mares cannot compete');
+}
+
+// ---- canteen ----
+{
+  const g = HR.freshGame();
+  ok(HR.canteenLevel(g) === 0, 'canteen not built at start');
+  ok(HR.canteenIncome(g) === 0, 'no canteen income before building');
+  const c1 = HR.canteenCost(g);
+  g.canteen.level = 1;
+  ok(HR.canteenIncome(g) > 0, 'a built canteen earns daily income');
+  const c2 = HR.canteenCost(g);
+  ok(c2 > c1, 'each canteen upgrade costs more');
+  g.canteen.level = HR.CANTEEN_MAX;
+  ok(HR.canteenCost(g) === 0, 'no cost once canteen is maxed');
+  // higher reputation & bigger herd => more visitors => more income
+  const g2 = HR.freshGame(); g2.canteen.level = 1; g2.rep = 3000;
+  ok(HR.canteenIncome(g2) > HR.canteenIncome({ canteen: { level: 1 }, rep: 0, horses: [], teachers: [] }), 'reputation lifts canteen income');
+}
+
+// ---- riding school / teachers ----
+{
+  const g = HR.freshGame();
+  ok(Array.isArray(g.teacherMarket) && g.teacherMarket.length >= 1, 'teacher applicants available at start');
+  ok(g.teacherMarket.every(t => t.skill >= 1 && t.skill <= 5 && t.salary > 0 && t.capacity > 0), 'teachers have skill/salary/capacity');
+  ok(HR.teacherCount(g) === 0 && HR.schoolIncome(g) === 0 && HR.schoolNet(g) === 0, 'no school income with no teachers');
+}
+{
+  // hire a teacher: income needs available horses; net = fees - salary
+  const g = HR.freshGame(); g.rep = 500;
+  const t = HR.mkTeacher(g, rng(3)); t.capacity = 6; t.salary = 40; t.skill = 3;
+  g.teachers.push(t);
+  ok(HR.schoolHorses(g) === 2, 'two starter adults are available for lessons');
+  ok(HR.lessonsPerDay(g) > 0, 'lessons run when teachers and horses are present');
+  ok(HR.schoolIncome(g) > 0, 'school earns lesson fees');
+  ok(HR.schoolNet(g) === HR.schoolIncome(g) - HR.teacherSalaries(g), 'net = income minus salaries');
+  // no horses => no lessons even with a teacher
+  const g2 = HR.freshGame(); g2.horses = []; g2.teachers.push(HR.mkTeacher(g2, rng(4)));
+  ok(HR.lessonsPerDay(g2) === 0 && HR.schoolIncome(g2) === 0, 'lessons need horses to teach on');
+  ok(HR.schoolNet(g2) < 0, 'idle teachers still cost their salary');
+}
+{
+  // capacity is capped by both teachers and horses
+  const g = HR.freshGame();
+  const t = HR.mkTeacher(g, rng(7)); t.capacity = 2; g.teachers = [t];
+  ok(HR.lessonsPerDay(g) === Math.min(2, HR.schoolHorses(g) * 3), 'lessons capped by teacher capacity');
+}
+{
+  // canteen + school income flows through advanceDay
+  const g = HR.freshGame(); g.feed = 9999; g.canteen.level = 2; g.rep = 400;
+  const t = HR.mkTeacher(g, rng(9)); t.capacity = 6; t.salary = 20; g.teachers.push(t);
+  const m0 = g.money;
+  HR.advanceDay(g, rng(11));
+  ok(g.money > m0, 'canteen + lessons pay out overnight');
+  ok(g.stats.lessons > 0, 'lessons given are tracked');
+}
+{
+  // restockTeachers refreshes the applicant pool
+  const g = HR.freshGame(); g.teacherMarket = [];
+  HR.restockTeachers(g, rng(2));
+  ok(g.teacherMarket.length >= 1, 'restockTeachers refills applicants');
 }
 
 // ---- clamp helper ----
