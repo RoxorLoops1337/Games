@@ -50,6 +50,7 @@ const STATIC_PATHS = [
   'spijker_master',
   'nineties_cars',
   'frietkot_tycoon',
+  'horse_ranch',
   'tools',
 ];
 
