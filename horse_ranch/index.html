@@ -277,6 +277,9 @@
   .tackitem .te{font-size:22px;width:28px;text-align:center}
   .tackitem.locked{opacity:.55}
   .slotlabel{font-size:10px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px}
+  .sgbar{position:relative;height:26px;border-radius:13px;background:#0d130a;border:1px solid #0c110a;overflow:hidden;margin:4px 0 12px}
+  .sgzone{position:absolute;top:0;bottom:0;background:linear-gradient(var(--good),#3f7d3a);opacity:.55;border-radius:6px}
+  .sgmark{position:absolute;top:-3px;bottom:-3px;width:5px;margin-left:-2.5px;background:var(--gold);box-shadow:0 0 8px var(--gold2);border-radius:3px;left:0}
 </style>
 </head>
 <body>
@@ -1008,7 +1011,7 @@ function freshGame(){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1212,17 +1215,29 @@ function canEnterShow(game,h){
   if((h.compCd||0)>game.day) return {ok:false,why:'Resting until day '+h.compCd+'.'};
   return {ok:true};
 }
-function runCompetition(h,disc,tier,rng){
+// ---- Optional "ride the round" minigame scoring (pure) ----
+// A run produces a performance 0..1; it nudges the horse's effective score by a
+// small, BOUNDED amount so a good run helps but a skilled horse still matters most.
+const SHOW_GAME={fences:5, zoneHalf:0.22}; // 5 fences; generous green zone (mobile-friendly)
+const SHOW_PERF_CAP=0.12;                  // max ±12% swing from the minigame
+// score a single fence from where the timing marker landed (0..1, centre = perfect)
+function fenceScore(pos){ const d=Math.abs(clamp(pos,0,1)-0.5)/0.5; return clamp(1-d*d*0.9,0,1); }
+// map a run performance 0..1 to a bounded score multiplier (0.5 = neutral 1.0)
+function showPerfMult(perf){ return 1 + (clamp(perf,0,1)*2-1)*SHOW_PERF_CAP; }
+
+function runCompetition(h,disc,tier,rng,perf){
   rng=rng||Math.random;
-  const my=disciplineScore(h,disc)*(0.9+0.2*rng()) + (h.wins||0)*1.5; // experience edge
+  const pm=(perf==null)?1:showPerfMult(perf); // no minigame → neutral (backward-compatible)
+  const my=disciplineScore(h,disc)*(0.9+0.2*rng())*pm + (h.wins||0)*1.5; // experience edge
   const N=5; let better=0;
   for(let i=0;i<N;i++){ const opp=tier.fieldAvg + (rng()*2-1)*tier.fieldSpread; if(opp>my) better++; }
   const place = better===0?1 : better===1?2 : better===2?3 : 4;
   return { place, score:Math.round(my), prize:tier.prize[place]||0, rep:(tier.repGain[place]!=null?tier.repGain[place]:tier.repGain[4]) };
 }
 // apply a competition result to game+horse (mutates), returns the result
-function applyCompetition(game,h,disc,tier,rng){
-  const res=runCompetition(h,disc,tier,rng);
+function applyCompetition(game,h,disc,tier,rng,perf){
+  const res=runCompetition(h,disc,tier,rng,perf);
+  if(perf!=null){ game.stats.showGamesPlayed=(game.stats.showGamesPlayed||0)+1; game.stats.bestShowPerf=Math.max(game.stats.bestShowPerf||0, clamp(perf,0,1)); }
   res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)); // summer + festivals pay more
   game.money += res.prize; game.rep += res.rep; game.stats.goldEarned=(game.stats.goldEarned||0)+res.prize;
   h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
@@ -1492,6 +1507,7 @@ const ACHIEVEMENTS=[
   {id:'auction',    icon:'🔨', name:'Going Once...',       desc:'Win a horse at auction.',                      check:g=>(g.stats.auctionsWon||0)>=1},
   {id:'topranch',   icon:'👑', name:'Top of the Region',   desc:'Reach #1 on the regional leaderboard.',        check:g=>playerRank(g)===1},
   {id:'fulltack',   icon:'🎽', name:'Fully Tacked',        desc:'Equip all three tack slots on one horse.',     check:g=>g.horses.some(h=>equippedTack(h).length>=3)},
+  {id:'flawless',   icon:'🎯', name:'Clear Round',          desc:'Ride a near-flawless show round.',             check:g=>((g.stats&&g.stats.bestShowPerf)||0)>=0.95},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1574,6 +1590,7 @@ const GOALS=[
   {id:'care1',   desc:'Pamper a horse (✨ full care)',      tip:g=>'best care '+Math.max(0,...g.horses.map(h=>careScore(h)))+'%',done:g=>g.horses.some(h=>careScore(h)>=88),           reward:{money:500,rep:20}},
   {id:'top3',    desc:'Break into the Top 3 ranches',       tip:g=>'now #'+playerRank(g)+' of '+(rivalCount()+1),done:g=>playerRank(g)<=3,                                       reward:{money:2000,rep:50}},
   {id:'tack1',   desc:'Kit out a horse (🧰 equip tack)',     tip:g=>'',                              done:g=>g.horses.some(h=>equippedTack(h).length>=1),            reward:{money:600,rep:20}},
+  {id:'ride1',   desc:'Ride a show round yourself',          tip:g=>((g.stats&&g.stats.showGamesPlayed)||0)+'/1',done:g=>((g.stats&&g.stats.showGamesPlayed)||0)>=1,           reward:{money:700,rep:25}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1600,6 +1617,7 @@ const HR = {
   COAT_TIER_MULT, COAT_TIER_NAME, COAT_PROFILE,
   DISCIPLINES, disciplineDef, COMP_TIERS, tierDef, tierUnlocked, highestTier,
   disciplineScore, canEnterShow, runCompetition, applyCompetition,
+  SHOW_GAME, SHOW_PERF_CAP, fenceScore, showPerfMult,
   CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
   mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
   lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet, schoolLessonMult,
@@ -1677,6 +1695,8 @@ function load(){
     if(!G.stats.disciplinesWon) G.stats.disciplinesWon={};
     if(G.stats.auctionsWon==null) G.stats.auctionsWon=0;
     if(G.stats.consigned==null) G.stats.consigned=0;
+    if(G.stats.showGamesPlayed==null) G.stats.showGamesPlayed=0;
+    if(G.stats.bestShowPerf==null) G.stats.bestShowPerf=0;
     if(!G.achievements) G.achievements=[];
     if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
     if(G.lastRank==null){ G.lastRank=playerRank(G); G.prevRank=G.lastRank; G.bestRank=G.lastRank; } // regional standings history
@@ -2452,18 +2472,63 @@ function openShowPickHorse(tier,disc){
 function doEnterShow(h,disc,tier){
   const ck=canEnterShow(G,h); if(!ck.ok){ toast(ck.why,'info'); return; }
   if(G.money<tier.fee){ toast('Not enough coins for the entry fee.','bad'); return; }
-  G.money-=tier.fee;
-  const res=applyCompetition(G,h,disc,tier,Math.random);
+  G.money-=tier.fee; save(); coinPop(-tier.fee);
+  // offer the optional ride-the-round minigame, or an instant result
+  modal('<h3>'+disc.emoji+' '+disc.name+' — '+tier.name+'</h3>'+
+    '<div class="msg" style="text-align:center">Entry fee paid. <b>'+h.name+'</b> is at the start.<br>'+
+    'Ride the round yourself for a small edge (±'+Math.round(SHOW_PERF_CAP*100)+'%) — or take a quick result. Your horse’s ability still matters most.</div>'+
+    '<div class="btnrow"><button class="btn" id="rideBtn" style="flex:1">▶ Ride the round</button>'+
+    '<button class="btn ghost" id="quickBtn" style="flex:1">⏭ Quick result</button></div>',{center:true});
+  $('rideBtn').onclick=()=>playShowGame(h,disc,tier);
+  $('quickBtn').onclick=()=>finishShow(h,disc,tier,null);
+}
+// present the result of a competition (perf = optional minigame performance 0..1, or null)
+function finishShow(h,disc,tier,perf){
+  const res=applyCompetition(G,h,disc,tier,Math.random,perf);
   const pn=['','🥇 1st place!','🥈 2nd place','🥉 3rd place','No placing'][res.place];
   const bits=[]; if(res.prize>0) bits.push('🪙'+fmt(res.prize)); if(res.rep>0) bits.push(res.rep+'⭐');
+  const perfLine = (perf!=null) ? '<br><span style="font-size:11px;color:var(--gold)">Your ride: '+Math.round(perf*100)+'% — '+(perf>=0.9?'a clear round! 🎯':perf>=0.6?'well ridden.':'shaky, but you finished.')+'</span>' : '';
   modal('<h3>'+disc.emoji+' '+disc.name+' — '+tier.name+'</h3>'+
     '<div class="msg" style="text-align:center;font-size:15px">'+medal(res.place)+' <b>'+h.name+'</b><br>'+pn+'<br>'+
     (bits.length?'<span class="val">+'+bits.join('  +')+'</span>':'Better luck next time.')+
-    '<br><span style="font-size:11px;color:var(--ink2)">Score '+res.score+' · rests '+tier.rest+' days</span></div>'+
+    '<br><span style="font-size:11px;color:var(--ink2)">Score '+res.score+' · rests '+tier.rest+' days</span>'+perfLine+'</div>'+
     '<div class="btnrow"><button class="btn" id="xOk" style="width:100%">'+(res.place===1?'🎉 Champion!':'OK')+'</button></div>',{center:true});
   if(res.prize>0) coinPop(res.prize);
   if(res.place===1){ burst('🏆🥇🎉✨',18); playSfx('win'); } else if(res.place<=3) burst('🎉✨',10);
   $('xOk').onclick=()=>{ closeModal(); toast(medal(res.place)+' '+h.name+': '+pn.replace('!','')+(bits.length?' ('+bits.join(' ')+')':''), res.place<=3?'good':'info'); refresh(); };
+}
+// the optional "ride the round" timing minigame — a few fences, tap in the green zone
+function playShowGame(h,disc,tier){
+  const N=SHOW_GAME.fences, zoneHalf=SHOW_GAME.zoneHalf;
+  let fence=0, scores=[], marker=0, dir=1, tPrev=null, raf=null, waited=0, speed=0.9, done=false;
+  const sh=modal('<h3>'+disc.emoji+' '+disc.name+' — Ride!</h3>'+
+    '<div class="msg" id="sgMsg" style="text-align:center">Tap <b>JUMP</b> as the marker crosses the <b style="color:var(--good)">green</b> zone. '+N+' fences!</div>'+
+    '<div id="sgPips" style="text-align:center;font-size:15px;margin-bottom:9px;letter-spacing:2px"></div>'+
+    '<div class="sgbar"><div class="sgzone" style="left:'+((0.5-zoneHalf)*100)+'%;width:'+(zoneHalf*2*100)+'%"></div><div class="sgmark" id="sgMark"></div></div>'+
+    '<div class="btnrow"><button class="btn" id="sgJump" style="flex:2;font-size:18px;padding:14px 0">⬆️ JUMP</button>'+
+    '<button class="btn ghost" id="sgSkip" style="flex:1">Quick result</button></div>',{center:true});
+  const mark=$('sgMark'), pips=$('sgPips');
+  const drawPips=()=>{ if(pips) pips.innerHTML=scores.map(s=>s>=0.66?'🟢':s>=0.33?'🟡':'🔴').join(' ')+(scores.length<N?' '+'▫️'.repeat(N-scores.length):''); };
+  drawPips();
+  const perfNow=()=>scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:0;
+  const cleanup=()=>{ done=true; if(raf&&typeof cancelAnimationFrame!=='undefined') cancelAnimationFrame(raf); if(typeof document!=='undefined') document.removeEventListener('keydown',onKey); };
+  const finish=()=>{ const p=perfNow(); cleanup(); closeModal(); finishShow(h,disc,tier,p); };
+  const advance=(s)=>{ scores.push(s); fence++; marker=0; dir=1; speed+=0.18; waited=0; drawPips();
+    if(fence>=N){ finish(); } };
+  const jump=()=>{ if(done) return; const s=fenceScore(marker); burst(s>=0.66?'✨🐴':'💨',6); playSfx(s>=0.66?'coin':'tap'); advance(s); };
+  const skip=()=>{ cleanup(); closeModal(); finishShow(h,disc,tier,null); };
+  const onKey=(e)=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); jump(); } };
+  { const j=$('sgJump'); if(j) j.onclick=jump; } { const k=$('sgSkip'); if(k) k.onclick=skip; }
+  if(typeof document!=='undefined') document.addEventListener('keydown',onKey);
+  const step=(ts)=>{ if(done) return;
+    if(!$('modal')||!/\bon\b/.test($('modal').className||'')){ cleanup(); finishShow(h,disc,tier, scores.length?perfNow():null); return; } // closed via ✕
+    if(tPrev==null) tPrev=ts; const dt=Math.min(0.05,(ts-tPrev)/1000); tPrev=ts;
+    marker+=dir*speed*dt; if(marker>=1){ marker=1; dir=-1; } else if(marker<=0){ marker=0; dir=1; }
+    waited+=dt; if(waited>2.6){ advance(0); if(done) return; }
+    if(mark) mark.style.left=(marker*100)+'%';
+    raf=requestAnimationFrame(step);
+  };
+  if(typeof requestAnimationFrame!=='undefined') raf=requestAnimationFrame(step);
 }
 
 // ---------------- Estate: Canteen + Riding School ----------------
