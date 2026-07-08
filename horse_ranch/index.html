@@ -304,6 +304,7 @@
     <div class="chip day" id="dayChip" style="cursor:pointer"><span id="hudWd">🗓️ Mon</span> · Day <b id="hudDay">1</b></div>
     <div class="spacer"></div>
     <button class="sbtn" id="boardBtn" title="Contracts board" style="margin-right:4px;position:relative">📋<span id="boardBadge" class="hudbadge" style="display:none">0</span></button>
+    <button class="sbtn" id="regBtn" title="Studbook & names" style="margin-right:4px">📖</button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
@@ -437,6 +438,50 @@ function ageLabel(h){ const a=h.age||0; if(a>=LIFESPAN-8) return 'Venerable'; if
 const NAMES_M=['Thunder','Comet','Bandit','Diesel','Ranger','Apollo','Blaze','Rocky','Titan','Dusty','Chief','Maverick','Zeus','Storm','Rebel','Duke','Cash','Rusty','Jasper','Odin'];
 const NAMES_F=['Bella','Luna','Willow','Star','Ginger','Daisy','Misty','Ruby','Pearl','Aurora','Ivy','Sadie','Rosie','Clover','Hazel','Poppy','Juno','Maple','Coco','Fern'];
 function pickName(sex,rng){ const a=sex==='mare'?NAMES_F:NAMES_M; return a[Math.floor(rng()*a.length)]; }
+
+// ---------- Themed name packs, rename & the studbook registry ----------
+// Curated name pools the player can switch between; some unlock with reputation.
+// 'classic' reuses the base lists so pickName() behaviour is unchanged.
+const NAME_PACKS=[
+  {id:'classic',  name:'Classic',   emoji:'🐴', repReq:0,    m:NAMES_M, f:NAMES_F},
+  {id:'nature',   name:'Nature',    emoji:'🌿', repReq:0,
+    m:['River','Cedar','Flint','Boulder','Thorn','Ridge','Timber','Cliff','Marsh','Onyx'],
+    f:['Meadow','Brook','Petal','Dawn','Breeze','Aspen','Juniper','Laurel','Heather','Wren']},
+  {id:'whimsical',name:'Whimsical', emoji:'🎠', repReq:0,
+    m:['Waffles','Pumpkin','Biscuit','Noodle','Sprocket','Pickles','Domino','Peanut','Nacho','Wiggles'],
+    f:['Cupcake','Bubbles','Twinkle','Sprinkles','Muffin','Cookie','Jellybean','Buttercup','Waffle','Cocoa']},
+  {id:'mythic',   name:'Mythic',    emoji:'🐉', repReq:300,
+    m:['Pegasus','Griffin','Draco','Phoenix','Atlas','Orion','Fenrir','Helios','Hydra','Titanus'],
+    f:['Nyx','Selene','Freya','Athena','Iris','Echo','Gaia','Lyra','Elara','Nova']},
+  {id:'regal',    name:'Regal',     emoji:'👑', repReq:1000,
+    m:['Baron','Sterling','Regent','Sovereign','Kingsley','Emperor','Crownley','Valiant','Monarch','Ambassador'],
+    f:['Duchess','Countess','Majesty','Empress','Reina','Seraphina','Isabella','Victoria','Anastasia','Guinevere']},
+];
+const HORSE_NAME_MAX=18;
+function namePackDef(id){ return NAME_PACKS.find(p=>p.id===id)||NAME_PACKS[0]; }
+function namePackUnlocked(game,id){ const p=namePackDef(id); return ((game&&game.rep)||0)>=(p.repReq||0); }
+function activeNamePack(game){ const id=game&&game.namePack; return (id&&namePackUnlocked(game,id))?namePackDef(id):NAME_PACKS[0]; }
+function setNamePack(game,id){ const p=namePackDef(id); if(!namePackUnlocked(game,id)) return {ok:false,why:'Reach ⭐'+p.repReq+' to unlock '+p.name+'.'}; game.namePack=p.id; return {ok:true,pack:p}; }
+function pickNameFrom(pack,sex,rng){ pack=pack||NAME_PACKS[0]; rng=rng||Math.random; const a=(sex==='mare'?pack.f:pack.m)||[]; return a.length?a[Math.floor(rng()*a.length)]:pickName(sex,rng); }
+// rename a horse (validated, trimmed & capped)
+function renameHorse(game,horseId,newName){ const h=((game&&game.horses)||[]).find(x=>x.id===horseId); if(!h) return {ok:false,why:'No such horse.'};
+  let t=(newName==null?'':(''+newName)).replace(/\s+/g,' ').trim().slice(0,HORSE_NAME_MAX);
+  if(!t) return {ok:false,why:'Name can’t be empty.'};
+  h.name=t;
+  if(game.stats) game.stats.renames=(game.stats.renames||0)+1;
+  if(Array.isArray(game.registry)){ const e=game.registry.find(r=>r.id===h.id); if(e) e.name=t; }
+  return {ok:true, name:t}; }
+// ---- Studbook registry (a keepsake record of every horse you've owned) ----
+const REGISTRY_CAP=250;
+function registerHorse(game,h){ if(!game||!h) return null; if(!Array.isArray(game.registry)) game.registry=[];
+  const ex=game.registry.find(r=>r.id===h.id);
+  if(ex){ ex.name=h.name; ex.coat=coatOf(h).name; ex.wins=Math.max(ex.wins||0,h.wins||0); return ex; }
+  const e={id:h.id, name:h.name, breed:h.breed, sex:h.sex, coat:coatOf(h).name, gen:h.generation||1, wins:h.wins||0, day:game.day||1};
+  game.registry.push(e);
+  if(game.registry.length>REGISTRY_CAP) game.registry.splice(0, game.registry.length-REGISTRY_CAP);
+  return e; }
+function syncRegistry(game){ if(!game||!Array.isArray(game.horses)) return 0; for(const h of game.horses) registerHorse(game,h); return game.registry.length; }
+function registrySize(game){ return (game&&Array.isArray(game.registry))?game.registry.length:0; }
 
 // ---------- Coat-colour genetics (simplified real dominant/recessive) ----------
 // Four loci, two alleles each:
@@ -1182,7 +1227,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1190,6 +1235,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
+    namePack:'classic', registry:[],
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1202,6 +1248,7 @@ function freshGame(legacy){
   restockTeachers(g, seededOnce(13));
   refreshBoard(g); // post the first week's contracts
   refreshFeatured(g); // showcase the first featured horse
+  syncRegistry(g);    // register the starter pair in the studbook
   return g;
 }
 // tiny deterministic rng so a fresh game is identical every load (nice for tutorial + tests)
@@ -1251,6 +1298,7 @@ function advanceDay(game,rng){
         h.pregnant=false;
         const sire = h._sire || {breed:h.sireBreed||h.breed,speed:h._sireSpeed||h.speed,stamina:h._sireStam||h.stamina,temperament:h._sireTemp||h.temperament,generation:h._sireGen||1,sex:'stallion',name:'Unknown Sire',genes:h.genes,ped:null};
         const foal=breedFoal(h, sire, rng);
+        foal.name=pickNameFrom(activeNamePack(game), foal.sex, rng); // foals are named from the active pack
         foal.stable=h.stable;
         born.push(foal);
       }
@@ -1259,7 +1307,7 @@ function advanceDay(game,rng){
   // place newborns if room, else auto-sell
   for(const f of born){
     game.stats.maxGen=Math.max(game.stats.maxGen||1, f.generation);
-    if(freeStalls(game)>0){ game.horses.push(f); game.stats.born++;
+    if(freeStalls(game)>0){ game.horses.push(f); game.stats.born++; registerHorse(game,f);
       notes.push({t:'good',m:'🐣 A '+breedDef(f.breed).name+' foal was born: '+f.name+'!'});
     } else {
       const q=sellQuote(f); game.money+=q; game.rep+=2;
@@ -1348,6 +1396,7 @@ function advanceDay(game,rng){
   // lifetime stats: gross gold earned overnight + best overall horse ever
   if(game.money>money0) game.stats.goldEarned=(game.stats.goldEarned||0)+(game.money-money0);
   for(const h of game.horses) game.stats.bestOVR=Math.max(game.stats.bestOVR||0, overall(h));
+  syncRegistry(game); // keep the studbook up to date with the current herd
 
   // regional leaderboard: refresh the player's rank (movement arrows), announce climbs to the top
   { const before=game.lastRank; const pr=tickStandings(game);
@@ -1927,6 +1976,7 @@ const ACHIEVEMENTS=[
   {id:'patron',     icon:'⭐', name:'Discerning Patron',     desc:'Buy a Featured horse from the market.',        check:g=>((g.stats&&g.stats.featuredBought)||0)>=1},
   {id:'weathered',  icon:'🛡️', name:'Weathered the Storm',   desc:'Come through five seasonal disasters.',         check:g=>((g.stats&&g.stats.disasters)||0)>=5},
   {id:'masterwork', icon:'✦', name:'Masterwork',            desc:'Upgrade a piece of tack to Masterwork.',       check:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=TACK_MAX_TIER)},
+  {id:'studbook',   icon:'📖', name:'Full Studbook',        desc:'Register 25 horses in your studbook.',         check:g=>registrySize(g)>=25},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2019,6 +2069,7 @@ const GOALS=[
   {id:'wish1',   desc:'Add a horse to your wishlist (⭐)',     tip:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)+' prefs',done:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)>=1,   reward:{money:300,rep:10}},
   {id:'insure1', desc:'Take out an insurance policy (🛡️)',     tip:g=>(insuranceList(g).length)+' held',done:g=>insuranceList(g).length>=1,                                       reward:{money:400,rep:10}},
   {id:'upgrade1',desc:'Upgrade a piece of tack (✦)',           tip:g=>'',                              done:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=1),reward:{money:700,rep:15}},
+  {id:'rename1', desc:'Name a horse your own way (✏️)',        tip:g=>'',                              done:g=>((g.stats&&g.stats.renames)||0)>=1,                     reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2087,6 +2138,8 @@ const HR = {
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
+  NAME_PACKS, HORSE_NAME_MAX, namePackDef, namePackUnlocked, activeNamePack, setNamePack,
+  pickNameFrom, renameHorse, REGISTRY_CAP, registerHorse, syncRegistry, registrySize,
   PRESTIGE_REP, normLegacy, legacyPointsFor, legacyLevel, legacyBonus, canPrestige, applyPrestige,
   RIVALS, rivalDef, rivalShowDays, rivalRep, playerScore, standings, playerRank,
   leaderRanch, rivalCount, tickStandings,
@@ -2152,6 +2205,9 @@ function load(){
     if(G.stats.seasonTitles==null) G.stats.seasonTitles=0;
     if(G.stats.featuredBought==null) G.stats.featuredBought=0;
     if(G.stats.disasters==null) G.stats.disasters=0;
+    if(G.stats.renames==null) G.stats.renames=0;
+    if(typeof G.namePack!=='string'||!namePackDef(G.namePack)) G.namePack='classic'; // themed name packs
+    if(!Array.isArray(G.registry)) G.registry=[]; syncRegistry(G); // studbook registry
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
     G.wishlist=normWishlist(G.wishlist); if(G.featured===undefined) G.featured=null; refreshFeatured(G); // marketplace: wishlist + featured listing
@@ -2517,6 +2573,7 @@ function renderRanch(){
     { const low=lowNeeds(h).length; acts+='<button class="btn sm '+(low?'':'ghost')+'" data-care="'+h.id+'">🧡 Care'+(low?' ('+low+')':'')+'</button>'; }
     { const ne=equippedTack(h).length; acts+='<button class="btn sm ghost" data-tack="'+h.id+'">🎽 Tack'+(ne?' ('+ne+'/3)':'')+'</button>'; }
     acts+='<button class="btn sm ghost" data-temper="'+h.id+'">🧠 Temperament</button>';
+    acts+='<button class="btn sm ghost" data-rename="'+h.id+'">✏️ Name</button>';
     acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
     acts+='<button class="btn sm ghost" data-card="'+h.id+'">🖼️ Card</button>';
     if(isAdult(h)&&!tooOldToCompete(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
@@ -2526,6 +2583,7 @@ function renderRanch(){
     c.querySelectorAll('[data-care]').forEach(btn=>btn.onclick=()=>openCare(h));
     c.querySelectorAll('[data-tack]').forEach(btn=>btn.onclick=()=>openTack(h));
     c.querySelectorAll('[data-temper]').forEach(btn=>btn.onclick=()=>openTemperament(h));
+    c.querySelectorAll('[data-rename]').forEach(btn=>btn.onclick=()=>openRename(h));
     c.querySelectorAll('[data-ped]').forEach(btn=>btn.onclick=()=>openPedigree(h));
     c.querySelectorAll('[data-card]').forEach(btn=>btn.onclick=()=>openCard(h));
     c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
@@ -3701,6 +3759,7 @@ function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='marke
 function refresh(){
   // keep best-OVR current so 'elite' achievement unlocks the moment you own a great horse
   if(G.stats) for(const h of G.horses) G.stats.bestOVR=Math.max(G.stats.bestOVR||0, overall(h));
+  syncRegistry(G); // register any newly-acquired horse in the studbook
   const done=checkGoals(G);
   const newAch=checkAchievements(G);
   renderHUD(); renderGoal(); renderTab(); bindFeedButtons(); save();
@@ -3832,6 +3891,46 @@ function openDecor(){
     toast('🎨 '+r.item.name+' added to your ranch!','good'); reopen(); });
 }
 // ---------------- Weekly contracts / notice board ----------------
+// ---------------- Naming: rename + studbook registry ----------------
+function openRename(h){
+  const pack=activeNamePack(G);
+  modal('<h3>✏️ Name '+h.name+'</h3>'+
+    '<div class="msg">Give '+(h.sex==='mare'?'her':'him')+' a name all your own — or draw one from the <b>'+pack.emoji+' '+pack.name+'</b> pack.</div>'+
+    '<div class="row" style="gap:8px"><input class="nameIn" id="hnIn" maxlength="'+HORSE_NAME_MAX+'" value="'+(''+h.name).replace(/"/g,'&quot;')+'"><button class="btn sm ghost" id="hnRoll">🎲</button></div>'+
+    '<div class="btnrow"><button class="btn" id="hnSave" style="flex:1">Save name</button><button class="btn ghost" id="hnClose" style="flex:1">Cancel</button></div>');
+  const inp=$('hnIn');
+  $('hnClose').onclick=closeModal;
+  { const r=$('hnRoll'); if(r) r.onclick=()=>{ if(inp) inp.value=pickNameFrom(activeNamePack(G), h.sex, Math.random); playSfx('tap'); }; }
+  const save2=()=>{ const res=renameHorse(G, h.id, inp?inp.value:''); if(!res.ok){ toast(res.why,'bad'); return; }
+    burst('✏️✨',8); playSfx('coin'); toast('✏️ Renamed to '+res.name+'.','good'); closeModal(); save(); refresh(); };
+  $('hnSave').onclick=save2;
+  if(inp&&inp.addEventListener) inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); save2(); } });
+}
+let regQuery='';
+function openRegistry(){
+  syncRegistry(G);
+  const active=activeNamePack(G);
+  const packChips=NAME_PACKS.map(p=>{ const unl=namePackUnlocked(G,p.id), on=active.id===p.id;
+    return '<span class="wlchip" data-pack="'+p.id+'" style="cursor:pointer;'+(on?'border-color:var(--gold2);color:var(--gold)':(unl?'':'opacity:.5'))+'">'+p.emoji+' '+p.name+(unl?'':' 🔒⭐'+p.repReq)+(on?' ✓':'')+'</span>'; }).join('');
+  const q=regQuery.trim().toLowerCase();
+  const all=(G.registry||[]).slice().reverse();
+  const rows=all.filter(r=>!q || (r.name||'').toLowerCase().indexOf(q)>=0 || (breedDef(r.breed)||{name:''}).name.toLowerCase().indexOf(q)>=0);
+  const list = rows.length ? rows.slice(0,60).map(r=>{ const cc=r.coat?coatColor(r.coat):{body:'#7c4a26'}; const b=breedDef(r.breed)||{name:r.breed,emoji:'🐴'};
+      return '<div class="lbrow"><div class="hface" style="width:30px;height:30px;background:radial-gradient(circle at 50% 35%,'+cc.body+'55,#1c2711)"></div>'+
+        '<div class="grow"><div class="lbname">'+r.name+(r.wins>=3?' <span class="pill" style="color:var(--gold)">🏆</span>':'')+'</div>'+
+        '<div class="lbsub">'+b.name+' · '+(r.coat||'—')+' · Gen '+(r.gen||1)+(r.wins?' · '+r.wins+'🥇':'')+'</div></div></div>'; }).join('')
+    : '<div class="empty">'+(q?'No horses match “'+regQuery+'”.':'No horses registered yet.')+'</div>';
+  modal('<h3>📖 Studbook</h3>'+
+    '<div class="swlabel">Name pack for new foals</div><div style="margin-bottom:8px">'+packChips+'</div>'+
+    '<div class="divider"></div>'+
+    '<div class="swlabel">Registered horses <span class="pill">'+registrySize(G)+'</span></div>'+
+    '<input class="nameIn" id="regSearch" placeholder="Search by name or breed…" value="'+regQuery.replace(/"/g,'&quot;')+'" style="margin:4px 0 8px">'+
+    '<div>'+list+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="regClose" style="width:100%">Done</button></div>');
+  $('regClose').onclick=closeModal;
+  { const se=$('regSearch'); if(se&&se.addEventListener) se.addEventListener('input',()=>{ regQuery=se.value; const f=document.activeElement; openRegistry(); const s2=$('regSearch'); if(s2){ s2.focus(); try{ s2.setSelectionRange(regQuery.length,regQuery.length); }catch(e){} } }); }
+  document.querySelectorAll('[data-pack]').forEach(x=>x.onclick=()=>{ const r=setNamePack(G, x.getAttribute('data-pack')); if(!r.ok){ toast(r.why,'info'); return; } playSfx('tap'); toast(r.pack.emoji+' '+r.pack.name+' names selected.','good'); save(); openRegistry(); });
+}
 function openBoard(){
   const list=currentContracts(G);
   const left=daysUntilBoardRefresh(G);
@@ -3922,6 +4021,7 @@ function boot(){
   { const hb=$('helpBtn'); if(hb) hb.onclick=openHelp; }
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
+  { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ playSfx('tap'); setTab(t.getAttribute('data-tab')); });
