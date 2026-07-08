@@ -183,9 +183,10 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 }
 {
   // checkGoals can chain several completions and is idempotent afterwards
-  const g = HR.freshGame(); g.rep = 999999; g.stats.born = 5; g.stats.bestSale = 99999; g.stats.showWins = 5; g.stats.maxGen = 9;
+  const g = HR.freshGame(); g.rep = 999999; g.stats.born = 5; g.stats.bestSale = 99999; g.stats.showWins = 5; g.stats.maxGen = 9; g.stats.bestTierWin = 4;
   g.stables.push({ id: 'st2', level: 1, baseStalls: 4 });
   for (let i = 0; i < 6; i++) g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20 }));
+  g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, coat: { name: 'Golden', tier: 3 }, wins: 4 })); // satisfies rare-coat + champion goals
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -262,6 +263,63 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const foal = HR.breedFoal(mare, stal, rng(9));
   const ids = HR.ancestorIds(foal, 2);
   ok(ids.has(foal.id) && ids.has(mare.id) && ids.has(stal.id), 'ancestorIds includes self and parents');
+}
+
+// ---- shows & competitions ----
+{
+  ok(HR.DISCIPLINES.length === 4 && HR.disciplineDef('race'), 'four disciplines with lookup');
+  ok(HR.COMP_TIERS.length === 4 && HR.tierDef(1).name === 'Local Fair', 'four competition tiers');
+  ok(HR.tierUnlocked({ rep: 0 }, HR.tierDef(1)) && !HR.tierUnlocked({ rep: 0 }, HR.tierDef(4)), 'tiers gate on reputation');
+  ok(HR.highestTier({ rep: 5000 }).id === 4 && HR.highestTier({ rep: 0 }).id === 1, 'highestTier tracks unlocked tiers');
+}
+{
+  // discipline scoring weights the right stats
+  const sprinter = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 98, stamina: 50, temperament: 50, health: 100, happy: 100 });
+  const stayer = HR.mkHorse({ breed: 'arabian', age: 20, speed: 50, stamina: 98, temperament: 50, health: 100, happy: 100 });
+  ok(HR.disciplineScore(sprinter, HR.disciplineDef('race')) > HR.disciplineScore(stayer, HR.disciplineDef('race')), 'sprinter wins the racing score');
+  ok(HR.disciplineScore(stayer, HR.disciplineDef('endurance')) > HR.disciplineScore(sprinter, HR.disciplineDef('endurance')), 'stayer wins the endurance score');
+  const gentle = HR.mkHorse({ breed: 'friesian', age: 20, speed: 50, stamina: 50, temperament: 95, health: 100, happy: 100 });
+  ok(HR.disciplineScore(gentle, HR.disciplineDef('dressage')) > HR.disciplineScore(sprinter, HR.disciplineDef('dressage')), 'calm horse wins dressage');
+  // Showing rewards a fancy coat
+  const plainShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Bay', tier: 0 } });
+  const fancyShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Cremello', tier: 2 } });
+  ok(HR.disciplineScore(fancyShow, HR.disciplineDef('halter')) > HR.disciplineScore(plainShow, HR.disciplineDef('halter')), 'coat tier boosts the Showing score');
+}
+{
+  // a dominant horse wins; a hopeless one places last — deterministically at the extremes
+  const star = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 100, stamina: 100, temperament: 100, health: 100, happy: 100 });
+  const dud = HR.mkHorse({ breed: 'shetland', age: 20, speed: 10, stamina: 10, temperament: 10, health: 40, happy: 40 });
+  const t1 = HR.tierDef(1), race = HR.disciplineDef('race');
+  ok(HR.runCompetition(star, race, t1, rng(1)).place === 1, 'a dominant horse wins tier 1');
+  ok(HR.runCompetition(dud, race, HR.tierDef(4), rng(1)).place === 4, 'a weak horse fails at the top tier');
+}
+{
+  // applyCompetition mutates game + horse and records a trophy on a podium
+  const g = HR.freshGame();
+  const star = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 100, stamina: 100, temperament: 100, health: 100, happy: 100, name: 'Rocket' });
+  g.horses.push(star);
+  const m0 = g.money, rep0 = g.rep;
+  const res = HR.applyCompetition(g, star, HR.disciplineDef('race'), HR.tierDef(1), rng(2));
+  ok(res.place === 1, 'star wins');
+  ok(g.money === m0 + res.prize && g.rep === rep0 + res.rep, 'prize + reputation awarded');
+  ok(star.wins === 1 && star.entries === 1 && star.podiums === 1, 'career record updated');
+  ok(g.trophies.length === 1 && g.trophies[0].horse === 'Rocket', 'trophy added to the cabinet');
+  ok(star.compCd > g.day, 'horse goes on a rest cooldown after competing');
+  ok(!HR.canEnterShow(g, star).ok, 'cannot re-enter while resting');
+  ok(g.stats.bestTierWin === 1, 'best tier win tracked');
+}
+{
+  // championship wins raise a horse's value
+  const base = HR.mkHorse({ breed: 'arabian', age: 20, speed: 70, stamina: 70, temperament: 70, health: 100, happy: 100 });
+  const champ = HR.mkHorse({ breed: 'arabian', age: 20, speed: 70, stamina: 70, temperament: 70, health: 100, happy: 100, wins: 5 });
+  ok(HR.valueOf(champ) > HR.valueOf(base), 'a proven champion is worth more');
+}
+{
+  // eligibility rules
+  const g = HR.freshGame();
+  ok(!HR.canEnterShow(g, HR.mkHorse({ breed: 'arabian', age: 2 })).ok, 'foals cannot compete');
+  const preg = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20 }); preg.pregnant = true;
+  ok(!HR.canEnterShow(g, preg).ok, 'pregnant mares cannot compete');
 }
 
 // ---- clamp helper ----

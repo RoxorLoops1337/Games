@@ -90,6 +90,7 @@
 
   /* Stable card */
   .stable{border-left:4px solid var(--wood2)}
+  .card.locked{opacity:.6;border-left:4px solid #3a4a24}
   .stalls{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
   .stallDot{width:15px;height:15px;border-radius:4px;background:#0d130a;border:1px solid #0c110a}
   .stallDot.full{background:linear-gradient(var(--gold),var(--gold2));border-color:var(--gold2)}
@@ -347,6 +348,7 @@ function mkHorse(o){
     generation:o.generation||1,
     rare:o.rare||null,        // rare trait tag e.g. 'Champion Bloodline'
     ped:o.ped||null, inbred:o.inbred||false,
+    wins:o.wins||0, podiums:o.podiums||0, entries:o.entries||0, compCd:o.compCd||0, // show career
     pregnant:false, gestation:0, sireBreed:null,
     rentDays:0, rentRate:0,   // >0 = out on rent
     stable:o.stable!=null?o.stable:0,
@@ -365,7 +367,8 @@ function valueOf(h){
   const pedF = (h.purebred?1.12:0.82) * (1 + Math.min(0.4, (h.generation-1)*0.06));
   const rareF = h.rare?1.35:1;
   const coatF = coatValueMult(h);
-  const v = b.base * st.factor * statF * healthF * pedF * rareF * coatF * RARITY_MULT[b.rarity];
+  const winsF = 1 + Math.min(0.6, (h.wins||0)*0.05); // championship prestige
+  const v = b.base * st.factor * statF * healthF * pedF * rareF * coatF * winsF * RARITY_MULT[b.rarity];
   return Math.max(50, Math.round(v));
 }
 function buyPrice(h){ return Math.round(valueOf(h)*1.16); }
@@ -476,8 +479,8 @@ function freshGame(){
     v:1, money:1500, feed:30, rep:0, day:1,
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0},
-    goalIdx:0, seenIntro:false,
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0},
+    trophies:[], goalIdx:0, seenIntro:false,
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -579,8 +582,63 @@ function rollEvent(game,rng){
   return null;
 }
 
-// show competition scoring
+// show competition scoring (legacy helper, kept for compatibility)
 function showScore(h,rng){ return statAvg(h)*(0.85+ (rng?rng():Math.random())*0.4) + h.health*0.2; }
+
+// ---------- Shows & Competitions ----------
+const DISCIPLINES=[
+  {id:'race',      name:'Racing',     emoji:'🏇', w:{speed:0.70,stamina:0.25,temperament:0.05}, coat:false, desc:'Raw speed with a burst of stamina.'},
+  {id:'endurance', name:'Endurance',  emoji:'🥾', w:{speed:0.20,stamina:0.70,temperament:0.10}, coat:false, desc:'Long-distance stamina and steadiness.'},
+  {id:'dressage',  name:'Dressage',   emoji:'🎩', w:{speed:0.10,stamina:0.35,temperament:0.55}, coat:false, desc:'Grace, obedience and temperament.'},
+  {id:'halter',    name:'Showing',    emoji:'✨', w:{speed:0.10,stamina:0.20,temperament:0.40}, coat:true,  desc:'Conformation & looks — coat and breed matter.'},
+];
+function disciplineDef(id){ return DISCIPLINES.find(d=>d.id===id)||null; }
+// tiers gated by reputation; prize/repGain indexed by place (1..3, 4=also-ran)
+const COMP_TIERS=[
+  {id:1, name:'Local Fair',            rep:0,    fee:40,  prize:[0,300,150,60,0],     repGain:[0,20,12,6,3],  fieldAvg:48, fieldSpread:16, rest:2},
+  {id:2, name:'County Show',           rep:150,  fee:90,  prize:[0,700,350,140,0],    repGain:[0,32,19,9,4],  fieldAvg:60, fieldSpread:16, rest:3},
+  {id:3, name:'Regional Championship', rep:800,  fee:200, prize:[0,1600,800,320,0],   repGain:[0,58,34,17,6], fieldAvg:73, fieldSpread:15, rest:3},
+  {id:4, name:'National Grand Prix',   rep:2500, fee:450, prize:[0,4000,2000,800,0],  repGain:[0,120,66,33,10],fieldAvg:85, fieldSpread:13, rest:4},
+];
+function tierDef(id){ return COMP_TIERS.find(t=>t.id===id)||null; }
+function tierUnlocked(game,tier){ return game.rep>=tier.rep; }
+function highestTier(game){ let t=COMP_TIERS[0]; for(const x of COMP_TIERS){ if(tierUnlocked(game,x)) t=x; } return t; }
+function disciplineScore(h,disc){
+  const w=disc.w;
+  let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
+  if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
+  const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
+  return s*form;
+}
+function canEnterShow(game,h){
+  if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
+  if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
+  if(h.pregnant) return {ok:false,why:'In foal — resting.'};
+  if((h.compCd||0)>game.day) return {ok:false,why:'Resting until day '+h.compCd+'.'};
+  return {ok:true};
+}
+function runCompetition(h,disc,tier,rng){
+  rng=rng||Math.random;
+  const my=disciplineScore(h,disc)*(0.9+0.2*rng()) + (h.wins||0)*1.5; // experience edge
+  const N=5; let better=0;
+  for(let i=0;i<N;i++){ const opp=tier.fieldAvg + (rng()*2-1)*tier.fieldSpread; if(opp>my) better++; }
+  const place = better===0?1 : better===1?2 : better===2?3 : 4;
+  return { place, score:Math.round(my), prize:tier.prize[place]||0, rep:(tier.repGain[place]!=null?tier.repGain[place]:tier.repGain[4]) };
+}
+// apply a competition result to game+horse (mutates), returns the result
+function applyCompetition(game,h,disc,tier,rng){
+  const res=runCompetition(h,disc,tier,rng);
+  game.money += res.prize; game.rep += res.rep;
+  h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
+  h.happy=clamp(h.happy-8,0,100); h.health=clamp(h.health-4,0,100); // fatigue
+  if(res.place===1){ h.wins=(h.wins||0)+1; game.stats.showWins=(game.stats.showWins||0)+1; game.stats.bestTierWin=Math.max(game.stats.bestTierWin||0,tier.id); }
+  if(res.place<=3){ h.podiums=(h.podiums||0)+1;
+    game.trophies=game.trophies||[];
+    game.trophies.unshift({horse:h.name,breed:h.breed,disc:disc.id,tier:tier.id,place:res.place,day:game.day});
+    if(game.trophies.length>60) game.trophies.length=60;
+  }
+  return res;
+}
 
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
@@ -616,6 +674,8 @@ const GOALS=[
   {id:'legend', desc:'Own a Legendary breed',        tip:g=>'',                              done:g=>g.horses.some(h=>(breedDef(h.breed)||{rarity:1}).rarity>=5), reward:{money:3000,rep:60}},
   {id:'coat',   desc:'Own a rare-coat horse (🎨)',    tip:g=>'',                              done:g=>g.horses.some(h=>coatOf(h).tier>=2),                    reward:{money:1500,rep:30}},
   {id:'gen5',   desc:'Breed a 5th-generation horse',  tip:g=>'best gen '+(g.stats.maxGen||1), done:g=>(g.stats.maxGen||1)>=5,                                 reward:{money:4000,rep:80}},
+  {id:'champ',  desc:'Raise a Champion (3+ show wins)',tip:g=>'',                              done:g=>g.horses.some(h=>(h.wins||0)>=3),                       reward:{money:2500,rep:50}},
+  {id:'grandprix',desc:'Win a Regional Championship+', tip:g=>'best tier '+(g.stats.bestTierWin||0),done:g=>(g.stats.bestTierWin||0)>=3,                        reward:{money:6000,rep:120}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -640,6 +700,8 @@ const HR = {
   currentGoal, checkGoals,
   seedGenes, phenotype, crossGenes, coatOf, coatValueMult, ancestorIds, relatedness,
   COAT_TIER_MULT, COAT_TIER_NAME, COAT_PROFILE,
+  DISCIPLINES, disciplineDef, COMP_TIERS, tierDef, tierUnlocked, highestTier,
+  disciplineScore, canEnterShow, runCompetition, applyCompetition,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -670,13 +732,16 @@ function load(){
     if(G.stats.bestSale==null) G.stats.bestSale=0;
     if(G.stats.showWins==null) G.stats.showWins=0;
     if(G.stats.maxGen==null) G.stats.maxGen=Math.max(1,...G.horses.map(h=>h.generation||1));
-    // genetics/pedigree migration for pre-round-3 saves
+    if(!G.trophies) G.trophies=[];
+    // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
       if(!h.genes) h.genes=seedGenes(h.breed,Math.random);
       if(!h.coat) h.coat=phenotype(h.genes);
       if(h.color==null) h.color=h.coat.name;
       if(h.ped===undefined) h.ped=null;
       if(h.inbred===undefined) h.inbred=false;
+      if(h.wins==null) h.wins=0; if(h.podiums==null) h.podiums=0;
+      if(h.entries==null) h.entries=0; if(h.compCd==null) h.compCd=0;
     });
     return true;
   }catch(e){ return false; }
@@ -715,6 +780,8 @@ function horseCard(h,actionsHtml){
   if(h.generation>1) tags.push('<span class="tag">Gen '+h.generation+'</span>');
   const ct=coatOf(h);
   if(ct.tier>=2) tags.push('<span class="tag rare">🎨 '+ct.name+'</span>');
+  if((h.wins||0)>=3) tags.push('<span class="tag" style="color:var(--gold);border-color:var(--gold2)">🏆 Champion ('+h.wins+')</span>');
+  else if((h.wins||0)>0) tags.push('<span class="tag" style="color:var(--gold)">🏅 '+h.wins+' win'+(h.wins>1?'s':'')+'</span>');
   if(h.rare) tags.push('<span class="tag rare">✦ '+h.rare+'</span>');
   if(h.inbred) tags.push('<span class="tag busy">⚠️ Inbred</span>');
   if(h.pregnant) tags.push('<span class="tag preg">🤰 In foal ('+h.gestation+'d)</span>');
@@ -954,7 +1021,8 @@ function renderBiz(){
   const s=$('sec-biz'); s.innerHTML='';
   s.appendChild(el('h2','head','Business'));
   const seg=el('div','seg');
-  ['rent','board','sell'].forEach(k=>{ const b=el('div','segb'+(bizSub===k?' on':''), k==='rent'?'🐴 Rent Out':k==='board'?'🏨 Boarding':'💰 Sell'); b.onclick=()=>{bizSub=k;renderBiz();}; seg.appendChild(b); });
+  const segLabel={rent:'🐴 Rent',board:'🏨 Board',shows:'🏆 Shows',sell:'💰 Sell'};
+  ['rent','board','shows','sell'].forEach(k=>{ const b=el('div','segb'+(bizSub===k?' on':''), segLabel[k]); b.onclick=()=>{bizSub=k;renderBiz();}; seg.appendChild(b); });
   s.appendChild(seg);
 
   if(bizSub==='rent'){
@@ -990,6 +1058,9 @@ function renderBiz(){
     c.querySelector('#boardRem').onclick=()=>{ if(G.boarders>0){ G.boarders--; toast('Boarder released.','info'); refresh(); } };
     // rent out whole stable stalls also raises rep slightly (handled in daily)
   }
+  else if(bizSub==='shows'){
+    renderShows(s);
+  }
   else {
     s.appendChild(el('div','sub','Sell horses at market value. Quality sales raise your reputation.'));
     const sellable=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
@@ -999,6 +1070,107 @@ function renderBiz(){
       const c=horseCard(h,acts); c.querySelector('[data-sell]').onclick=()=>sellHorse(h); s.appendChild(c);
     });
   }
+}
+
+// ---------------- Shows UI ----------------
+function medal(place){ return place===1?'🥇':place===2?'🥈':place===3?'🥉':'▫️'; }
+function renderShows(s){
+  s.appendChild(el('div','sub','Enter horses in competitions to win prizes, reputation and trophies. Champions gain lasting value. Winning tiers unlock as your reputation grows.'));
+  // event cards per tier
+  COMP_TIERS.forEach(tier=>{
+    const unlocked=tierUnlocked(G,tier);
+    const c=el('div','card'+(unlocked?'':' locked'));
+    c.innerHTML='<div class="row"><div class="grow">'+
+      '<div class="hname">🏆 '+tier.name+' <span class="pill">Tier '+tier.id+'</span></div>'+
+      '<div class="hbreed">'+(unlocked?('Entry 🪙'+tier.fee+' · 1st 🪙'+tier.prize[1]+' · '+tier.repGain[1]+'⭐'):('🔒 Reach '+tier.rep+' reputation to unlock'))+'</div>'+
+      '</div>'+(unlocked?'<button class="btn sm" data-enter="'+tier.id+'">Enter</button>':'<span class="pill">🔒</span>')+'</div>';
+    if(unlocked) c.querySelector('[data-enter]').onclick=()=>openShowPickDiscipline(tier);
+    s.appendChild(c);
+  });
+  // career summary
+  const champs=G.horses.filter(h=>(h.wins||0)>0).sort((a,b)=>(b.wins||0)-(a.wins||0));
+  if(champs.length){
+    s.appendChild(el('h2','head','Your Competitors'));
+    champs.forEach(h=>{
+      const ck=canEnterShow(G,h);
+      const acts='<button class="btn sm" data-cc="'+h.id+'" '+(ck.ok?'':'disabled')+'>'+(ck.ok?'🏇 Compete':(h.compCd>G.day?'😴 Resting':'—'))+'</button>';
+      const c=horseCard(h,acts);
+      const rec=el('div','kv'); rec.innerHTML='Career<b>'+medal(1)+' '+(h.wins||0)+' wins · '+(h.podiums||0)+' podiums · '+(h.entries||0)+' starts</b>';
+      c.appendChild(rec);
+      const btn=c.querySelector('[data-cc]'); if(btn&&ck.ok) btn.onclick=()=>openShowPickTier(h);
+      s.appendChild(c);
+    });
+  }
+  // trophy cabinet
+  s.appendChild(el('h2','head','🏆 Trophy Cabinet'));
+  const tr=G.trophies||[];
+  if(!tr.length){ s.appendChild(el('div','empty','No trophies yet.<br>Win a top-3 placing to start your cabinet!')); }
+  else {
+    const gold=tr.filter(t=>t.place===1).length, sil=tr.filter(t=>t.place===2).length, bro=tr.filter(t=>t.place===3).length;
+    const sum=el('div','card'); sum.innerHTML='<div class="row" style="justify-content:space-around;font-size:20px;font-weight:900">'+
+      '<span>🥇 '+gold+'</span><span>🥈 '+sil+'</span><span>🥉 '+bro+'</span></div>';
+    s.appendChild(sum);
+    tr.slice(0,14).forEach(t=>{
+      const d=disciplineDef(t.disc), ti=tierDef(t.tier);
+      const row=el('div','card'); row.style.padding='8px 10px';
+      row.innerHTML='<div class="row"><span style="font-size:20px">'+medal(t.place)+'</span>'+
+        '<div class="grow"><div class="hname" style="font-size:13px">'+t.horse+'</div>'+
+        '<div class="hbreed">'+(d?d.emoji+' '+d.name:'')+' · '+(ti?ti.name:'')+' · day '+t.day+'</div></div></div>';
+      s.appendChild(row);
+    });
+  }
+}
+function openShowPickTier(h){ // pick tier for a given horse
+  let html='<h3>🏆 Enter '+h.name+'</h3><div class="msg">Choose a competition tier.</div><div class="optlist">';
+  COMP_TIERS.forEach(tier=>{ const u=tierUnlocked(G,tier); html+='<div class="opt" '+(u?'data-tier="'+tier.id+'"':'style="opacity:.45"')+'>'+
+    '<div class="grow"><div class="hname">'+tier.name+'</div><div class="hbreed">'+(u?('Entry 🪙'+tier.fee+' · 1st 🪙'+tier.prize[1]):'🔒 Reach '+tier.rep+' rep')+'</div></div>'+
+    '<span class="pill">T'+tier.id+'</span></div>'; });
+  html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
+  const sh=modal(html); $('xDone').onclick=closeModal;
+  sh.querySelectorAll('[data-tier]').forEach(o=>o.onclick=()=>{ const tier=tierDef(parseInt(o.getAttribute('data-tier'),10)); openShowPickDisciplineFor(h,tier); });
+}
+function openShowPickDiscipline(tier){ // tier chosen first → pick discipline, then horse
+  let html='<h3>🏆 '+tier.name+'</h3><div class="msg">Pick a discipline. Entry fee 🪙'+tier.fee+'.</div><div class="optlist">';
+  DISCIPLINES.forEach(d=>{ html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
+    '<div class="grow"><div class="hname">'+d.name+'</div><div class="hbreed">'+d.desc+'</div></div></div>'; });
+  html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
+  const sh=modal(html); $('xDone').onclick=closeModal;
+  sh.querySelectorAll('[data-disc]').forEach(o=>o.onclick=()=>openShowPickHorse(tier,disciplineDef(o.getAttribute('data-disc'))));
+}
+function openShowPickDisciplineFor(h,tier){ // horse+tier known → pick discipline → run
+  let html='<h3>🏆 '+h.name+' · '+tier.name+'</h3><div class="msg">Pick a discipline. Entry fee 🪙'+tier.fee+'.</div><div class="optlist">';
+  DISCIPLINES.forEach(d=>{ const sc=Math.round(disciplineScore(h,d)); html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
+    '<div class="grow"><div class="hname">'+d.name+'</div><div class="hbreed">'+d.desc+'</div></div><div class="val">'+sc+'</div></div>'; });
+  html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
+  const sh=modal(html); $('xDone').onclick=closeModal;
+  sh.querySelectorAll('[data-disc]').forEach(o=>o.onclick=()=>doEnterShow(h,disciplineDef(o.getAttribute('data-disc')),tier));
+}
+function openShowPickHorse(tier,disc){
+  const cands=G.horses.filter(h=>canEnterShow(G,h).ok);
+  if(!cands.length){ toast('No eligible horses (need a rested adult).','info'); return; }
+  let html='<h3>'+disc.emoji+' '+disc.name+' · '+tier.name+'</h3><div class="msg">Pick your horse. Predicted form shown.</div><div class="optlist">';
+  cands.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{
+    html+='<div class="opt" data-h="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
+    '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div>'+
+    '<div class="val">'+Math.round(disciplineScore(h,disc))+'</div></div>'; });
+  html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
+  const sh=modal(html); $('xDone').onclick=closeModal;
+  sh.querySelectorAll('[data-h]').forEach(o=>o.onclick=()=>{ const h=G.horses.find(x=>x.id===o.getAttribute('data-h')); doEnterShow(h,disc,tier); });
+}
+function doEnterShow(h,disc,tier){
+  const ck=canEnterShow(G,h); if(!ck.ok){ toast(ck.why,'info'); return; }
+  if(G.money<tier.fee){ toast('Not enough coins for the entry fee.','bad'); return; }
+  G.money-=tier.fee;
+  const res=applyCompetition(G,h,disc,tier,Math.random);
+  const pn=['','🥇 1st place!','🥈 2nd place','🥉 3rd place','No placing'][res.place];
+  const bits=[]; if(res.prize>0) bits.push('🪙'+fmt(res.prize)); if(res.rep>0) bits.push(res.rep+'⭐');
+  modal('<h3>'+disc.emoji+' '+disc.name+' — '+tier.name+'</h3>'+
+    '<div class="msg" style="text-align:center;font-size:15px">'+medal(res.place)+' <b>'+h.name+'</b><br>'+pn+'<br>'+
+    (bits.length?'<span class="val">+'+bits.join('  +')+'</span>':'Better luck next time.')+
+    '<br><span style="font-size:11px;color:var(--ink2)">Score '+res.score+' · rests '+tier.rest+' days</span></div>'+
+    '<div class="btnrow"><button class="btn" id="xOk" style="width:100%">'+(res.place===1?'🎉 Champion!':'OK')+'</button></div>',{center:true});
+  if(res.prize>0) coinPop(res.prize);
+  $('xOk').onclick=()=>{ closeModal(); toast(medal(res.place)+' '+h.name+': '+pn.replace('!','')+(bits.length?' ('+bits.join(' ')+')':''), res.place<=3?'good':'info'); refresh(); };
 }
 
 // ---------------- Actions ----------------
@@ -1109,23 +1281,19 @@ function showEvent(ev){
     return;
   }
   if(ev.id==='show'){
-    const eligible=G.horses.filter(h=>isAdult(h)&&h.rentDays===0);
+    const eligible=G.horses.filter(h=>canEnterShow(G,h).ok);
     if(!eligible.length) return;
-    let html='<h3>🏆 County Horse Show</h3><div class="msg">Enter a horse (fee 🪙60). Win prize money and reputation based on its stats!</div><div class="optlist">';
-    eligible.forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
-      '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · OVR '+overall(h)+'</div></div></div>'; });
+    const tier=highestTier(G); const disc=DISCIPLINES[Math.floor(Math.random()*DISCIPLINES.length)];
+    let html='<h3>'+disc.emoji+' Show Invitation!</h3><div class="msg">You’re invited to the <b>'+tier.name+'</b> '+disc.name+' event — <b>entry waived</b>! Pick a horse to compete.</div><div class="optlist">';
+    eligible.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
+      '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div><div class="val">'+Math.round(disciplineScore(h,disc))+'</div></div>'; });
     html+='</div><div class="btnrow"><button class="btn ghost" id="evNo">Skip</button></div>';
     const sh=modal(html,{center:true});
     $('evNo').onclick=closeModal;
     sh.querySelectorAll('[data-show]').forEach(o=>o.onclick=()=>{
-      if(G.money<60){ toast('Need 🪙60 entry fee.','bad'); return; }
-      const h=G.horses.find(x=>x.id===o.getAttribute('data-show')); G.money-=60;
-      const sc=showScore(h,Math.random); const place = sc>95?1: sc>78?2: sc>60?3:4;
-      const prize=[0,600,300,120,0][place]; const rep=[0,40,22,10,3][place];
-      G.money+=prize; G.rep+=rep; if(place<=2) G.stats.showWins=(G.stats.showWins||0)+1;
-      if(prize>0) coinPop(prize); closeModal();
-      const pn=['','🥇 1st place','🥈 2nd place','🥉 3rd place','Participated'][place];
-      toast('🏆 '+h.name+': '+pn+'! +🪙'+prize+' +'+rep+'⭐', place<=2?'good':'info'); refresh();
+      const h=G.horses.find(x=>x.id===o.getAttribute('data-show')); closeModal();
+      const feeTier=Object.assign({},tier,{fee:0}); // free entry
+      doEnterShow(h,disc,feeTier);
     });
     return;
   }
@@ -1174,6 +1342,7 @@ function showIntro(){
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
     '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
     '• 🌳 Build <b>bloodlines</b> — pedigree rewards planned pairings<br>'+
+    '• 🏆 <b>Compete</b> in shows across 4 disciplines &amp; tiers<br>'+
     '• 💼 <b>Sell, rent &amp; board</b> horses for income<br>'+
     '• 🎯 Follow the <b>goals</b> up top to grow your ranch<br><br>'+
     'You start with a mare, a stallion and 🪙1,500. Good luck, rancher!</div>'+
