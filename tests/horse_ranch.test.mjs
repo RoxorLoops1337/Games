@@ -183,7 +183,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 }
 {
   // checkGoals can chain several completions and is idempotent afterwards
-  const g = HR.freshGame(); g.rep = 999999; g.stats.born = 5; g.stats.bestSale = 99999; g.stats.showWins = 5; g.stats.maxGen = 9; g.stats.bestTierWin = 4;
+  const g = HR.freshGame(); g.rep = 999999; g.stats.born = 5; g.stats.bestSale = 99999; g.stats.showWins = 5; g.stats.maxGen = 9; g.stats.bestTierWin = 4; g.day = 22;
   g.stables.push({ id: 'st2', level: 1, baseStalls: 4 });
   for (let i = 0; i < 6; i++) g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20 }));
   g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, coat: { name: 'Golden', tier: 3 }, wins: 4 })); // satisfies rare-coat + champion goals
@@ -421,6 +421,60 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const t2 = HR.mkTeacher(gLazy, rng(1)); t2.capacity = 6; t2.skill = 3; gLazy.teachers.push(t2);
   ok(HR.schoolLessonMult(gGentle) > HR.schoolLessonMult(gLazy), 'gentle horses raise the lesson multiplier');
   ok(HR.schoolIncome(gGentle) > HR.schoolIncome(gLazy), 'a gentle string earns more from lessons');
+}
+
+// ---- weekday calendar ----
+{
+  ok(HR.WEEKDAYS.length === 7 && HR.SCHEDULE.length === 7, 'a 7-day week with a schedule per day');
+  ok(HR.weekdayIndex(1) === 0, 'day 1 is Monday (index 0)');
+  ok(HR.weekdayIndex(7) === 6 && HR.weekdayIndex(8) === 0, 'the week wraps after Sunday');
+  ok(HR.weekOf(1) === 1 && HR.weekOf(7) === 1 && HR.weekOf(8) === 2 && HR.weekOf(22) === 4, 'weeks count in 7-day blocks');
+  // every discipline runs on at least one weekday, and some day has no show
+  const allShown = new Set();
+  let hasQuietDay = false;
+  for (let d = 1; d <= 7; d++) { HR.showsToday(d).forEach(x => allShown.add(x)); if (!HR.isShowDay(d)) hasQuietDay = true; }
+  ok(HR.DISCIPLINES.every(x => allShown.has(x.id)), 'each discipline is scheduled some day of the week');
+  ok(hasQuietDay, 'at least one weekday has no competitions');
+  // find a show day and a non-show day and check gating
+  let showD = null, quietD = null;
+  for (let d = 1; d <= 7; d++) { if (HR.isShowDay(d) && showD === null) showD = d; if (!HR.isShowDay(d) && quietD === null) quietD = d; }
+  ok(HR.disciplineOpenToday(showD, HR.showsToday(showD)[0]) === true, 'a scheduled discipline is open on its day');
+  ok(HR.showsToday(quietD).length === 0, 'no disciplines open on a quiet day');
+  // nextShowDay always finds one within a week
+  const ns = HR.nextShowDay(quietD);
+  ok(ns && ns.inDays >= 1 && ns.inDays <= 7, 'nextShowDay points at an upcoming show day');
+  // exactly one market day and one hay day in the week
+  let markets = 0, hays = 0, cares = 0;
+  for (let d = 1; d <= 7; d++) { if (HR.isMarketDay(d)) markets++; if (HR.isHayDay(d)) hays++; if (HR.isCareDay(d)) cares++; }
+  ok(markets === 1 && hays === 1 && cares === 1, 'market, hay and care days each occur once a week');
+}
+{
+  // market restocks when the simulation lands on a market day
+  const marketWd = HR.SCHEDULE.findIndex(s => s.market);
+  const g = HR.freshGame();
+  g.day = marketWd + 7; // so that advanceDay's ++ lands on a market weekday
+  const beforeMarket = g.market.map(h => h.id).join(',');
+  HR.advanceDay(g, rng(4));
+  ok(HR.isMarketDay(g.day), 'advanced onto a market day');
+  ok(g.market.map(h => h.id).join(',') !== beforeMarket, 'market restocks on market day');
+}
+{
+  // busy-day multipliers lift canteen + lesson income through advanceDay
+  const busyWd = HR.SCHEDULE.findIndex(s => s.canteenBoost);
+  ok(busyWd >= 0, 'there is a busy canteen day');
+  ok(HR.canteenDayMult(busyWd + 1) > 1, 'canteen boost applies on the busy day');
+  ok(HR.lessonDayMult(busyWd + 1) > 1, 'lesson boost applies on the busy day');
+  ok(HR.canteenDayMult(1) === 1, 'ordinary days have no canteen boost');
+}
+{
+  // show-invitation events only surface on show days
+  const g = HR.freshGame(); g.horses.forEach(h => { h.health = 100; });
+  // force a quiet day and confirm rollEvent never returns a 'show'
+  let quietD = null; for (let d = 3; d <= 10; d++) { if (!HR.isShowDay(d)) { quietD = d; break; } }
+  g.day = quietD;
+  let sawShow = false;
+  for (let i = 0; i < 50; i++) { const e = HR.rollEvent(g, rng(i + 1)); if (e && e.id === 'show') sawShow = true; }
+  ok(!sawShow, 'no show invitations on a quiet day');
 }
 
 // ---- clamp helper ----
