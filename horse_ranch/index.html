@@ -322,6 +322,7 @@
     <button class="sbtn" id="choreBtn" title="Daily chores / to-do board" style="margin-right:4px;position:relative">✅<span id="choreBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="tripBtn" title="Horse trailer — away trips" style="margin-right:4px;position:relative">🚚<span id="tripBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="storeBtn" title="General store — rotating deals" style="margin-right:4px;position:relative">🏪<span id="storeBadge" class="hudbadge" style="display:none">0</span></button>
+    <button class="sbtn" id="trophyBtn" title="Trophy room — achievements & career" style="margin-right:4px">🏆</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -2854,6 +2855,7 @@ const ACHIEVEMENTS=[
   {id:'regular',    icon:'🏪', name:'Store Regular',         desc:'Buy fifteen deals from the general store.',    check:g=>((g.stats&&g.stats.storeBuys)||0)>=15},
   {id:'masterbred', icon:'👑', name:'Master of Bloodlines',  desc:'Reach the Master Breeder prestige tier.',      check:g=>breederPoints(g)>=breederTierDef('master').minPoints},
   {id:'soughtsire', icon:'♞', name:'Sought-After Sire',     desc:'Fulfil ten stud-directory bookings.',          check:g=>((g.stats&&g.stats.studBookings)||0)>=10},
+  {id:'cabinet',    icon:'🏆', name:'Full Trophy Cabinet',   desc:'Collect 20 show placings in your trophy room.',check:g=>((g.trophies)||[]).length>=20},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2864,6 +2866,43 @@ function checkAchievements(game){ // returns newly-unlocked definitions (mutates
 }
 function achievementState(game){ const un=game.achievements||[]; return { unlocked:un.length, total:ACHIEVEMENTS.length,
   list:ACHIEVEMENTS.map(a=>({def:a, unlocked:un.indexOf(a.id)>=0})) }; }
+
+// ---------- Trophy Room (a READ-ONLY showcase aggregating achievements, trophies, titles & career stats) ----------
+// Composes existing data only — ACHIEVEMENTS/achievementState, trophies[], hallOfFame & stats. Never mutates.
+const CURATOR_RANKS=[
+  {min:0,  id:'newcomer',  name:'Newcomer',            emoji:'🌱'},
+  {min:3,  id:'ribbons',   name:'Ribbon Collector',    emoji:'🎗️'},
+  {min:8,  id:'hunter',    name:'Trophy Hunter',       emoji:'🏅'},
+  {min:15, id:'celebrated',name:'Celebrated Rancher',  emoji:'🏆'},
+  {min:24, id:'legend',    name:'Living Legend',       emoji:'👑'},
+];
+function curatorRank(game){ const n=achievementState(game).unlocked; let r=CURATOR_RANKS[0]; for(const x of CURATOR_RANKS){ if(n>=x.min) r=x; } return r; }
+function achievementProgress(game){ const a=achievementState(game); return { unlocked:a.unlocked, total:a.total, pct: a.total?Math.round(100*a.unlocked/a.total):0 }; }
+function trophyRoom(game){
+  const ach=achievementState(game);
+  const tr=(game&&Array.isArray(game.trophies))?game.trophies:[];
+  const gold=tr.filter(t=>t.place===1).length, silver=tr.filter(t=>t.place===2).length, bronze=tr.filter(t=>t.place===3).length;
+  const st=(game&&game.stats)||{};
+  const highlights=[
+    {id:'wins',    label:'Show wins',         emoji:'🥇', value:st.showWins||0},
+    {id:'bestOVR', label:'Finest horse (OVR)',emoji:'⭐', value:st.bestOVR||0},
+    {id:'bestSale',label:'Top sale',          emoji:'🪙', value:st.bestSale||0},
+    {id:'born',    label:'Foals raised',      emoji:'🐣', value:st.born||0},
+    {id:'maxGen',  label:'Deepest bloodline', emoji:'🧬', value:'Gen '+(st.maxGen||1)},
+    {id:'titles',  label:'Season titles',     emoji:'🏆', value:st.seasonTitles||0},
+    {id:'gold',    label:'Lifetime earnings', emoji:'💰', value:st.goldEarned||0},
+    {id:'breeder', label:'Breeder prestige',  emoji:'🏵️', value:breederPoints(game)},
+  ];
+  return {
+    achievements:ach,
+    completionPct: ach.total?Math.round(100*ach.unlocked/ach.total):0,
+    trophies:{ gold, silver, bronze, total:tr.length, recent:tr.slice(0,8) },
+    seasonTitles: st.seasonTitles||0,
+    hallOfFame: ((game&&game.hallOfFame)||[]).length,
+    highlights,
+    curator: curatorRank(game),
+  };
+}
 
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
@@ -2962,6 +3001,7 @@ const GOALS=[
   {id:'store1',  desc:'Grab a deal at the general store (🏪)',      tip:g=>((g.stats&&g.stats.storeBuys)||0)+' bought',done:g=>((g.stats&&g.stats.storeBuys)||0)>=1,           reward:{money:300,rep:10}},
   {id:'breeder1',desc:'Become an Established Breeder (🏵️ prestige)',tip:g=>breederPoints(g)+'/'+breederTierDef('established').minPoints+' pts',done:g=>breederTier(g).id!=='novice',reward:{money:800,rep:25}},
   {id:'studbook1',desc:'Book a covering in the stud directory (♞)', tip:g=>((g.stats&&g.stats.studBookings)||0)+' bookings',done:g=>((g.stats&&g.stats.studBookings)||0)>=1,     reward:{money:600,rep:20}},
+  {id:'trophy1', desc:'Earn 5 achievements (🏆 trophy room)',       tip:g=>achievementProgress(g).unlocked+'/5 unlocked',done:g=>achievementProgress(g).unlocked>=5,           reward:{money:700,rep:25}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3041,6 +3081,7 @@ const HR = {
   isAuctionDay, nextAuction, makeAuctionLot, makeAuctionLots, aiCounter, resolveAuction, consignValue,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
+  CURATOR_RANKS, curatorRank, achievementProgress, trophyRoom,
   isHofChampion, inductHof, retireHorse,
   PASTURE_CAP, PASTURE_REP_CAP, sendToPasture, pastureList, pastureSize, pastureRepBonus,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
@@ -4998,6 +5039,32 @@ function storeEffectLine(it){
   if(e.kind==='rep') return '⭐ +'+e.rep+' reputation';
   return '';
 }
+function openTrophyRoom(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const r=trophyRoom(G), c=r.curator;
+  // career highlights grid
+  const hl=r.highlights.map(h=>'<div class="stat"><div class="sv" style="font-size:13px">'+h.emoji+' '+(typeof h.value==='number'?fmt(h.value):esc(h.value))+'</div><div class="sl">'+esc(h.label)+'</div></div>').join('');
+  // trophy cabinet
+  const cab='<span class="pill">🥇 '+r.trophies.gold+'</span> <span class="pill">🥈 '+r.trophies.silver+'</span> <span class="pill">🥉 '+r.trophies.bronze+'</span>'+
+    (r.seasonTitles?' <span class="pill" style="color:var(--gold)">🏆 '+r.seasonTitles+' titles</span>':'')+(r.hallOfFame?' <span class="pill">🏛️ '+r.hallOfFame+' legends</span>':'');
+  const recent = r.trophies.recent.length ? '<div class="pips" style="margin-top:5px">'+r.trophies.recent.map(t=>{ const m=t.place===1?'🥇':t.place===2?'🥈':'🥉'; const d=disciplineDef(t.disc)||{name:t.disc,emoji:'🏅'};
+      return '<span class="pip" title="Day '+t.day+'">'+m+' '+esc(t.horse)+' · '+d.emoji+'</span>'; }).join('')+'</div>' : '<div class="hbreed" style="opacity:.6;margin-top:4px">No show placings yet — enter a show to fill the cabinet.</div>';
+  // achievements gallery
+  const ach=r.achievements.list.map(a=>{ const u=a.unlocked;
+    return '<div class="lbrow" style="'+(u?'':'opacity:.5')+'"><div class="hface" style="background:none;font-size:20px;display:flex;align-items:center;justify-content:center">'+(u?a.def.icon:'🔒')+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(a.def.name)+(u?' <span class="pill" style="color:var(--good)">✓</span>':'')+'</div>'+
+      '<div class="lbsub">'+esc(a.def.desc)+'</div></div></div>'; }).join('');
+  modal('<h3>🏆 Trophy Room</h3>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface" style="background:none;font-size:24px;display:flex;align-items:center;justify-content:center">'+c.emoji+'</div>'+
+      '<div class="grow"><div class="hname">'+c.name+' <span class="pill" style="color:var(--gold)">'+r.achievements.unlocked+'/'+r.achievements.total+' achievements</span></div>'+
+      '<div class="hbreed">'+r.completionPct+'% complete — a showcase of everything '+esc(ranchName(G))+' has earned.</div>'+
+      '<div class="cbar" style="margin-top:5px"><i style="display:block;height:100%;width:'+r.completionPct+'%;background:var(--gold)"></i></div></div></div></div>'+
+    '<div class="swlabel">🏅 Trophy cabinet</div><div>'+cab+'</div>'+recent+
+    '<div class="swlabel" style="margin-top:8px">📊 Career highlights</div><div class="stats">'+hl+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">🎖️ Achievements</div><div>'+ach+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="trophyClose" style="width:100%">Done</button></div>');
+  $('trophyClose').onclick=closeModal;
+}
 function openStore(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const stock=storeStock(G), left=storeDaysLeft(G);
@@ -5421,6 +5488,7 @@ function boot(){
   { const cb=$('choreBtn'); if(cb) cb.onclick=openChores; }
   { const tb=$('tripBtn'); if(tb) tb.onclick=openTrips; }
   { const sb=$('storeBtn'); if(sb) sb.onclick=openStore; }
+  { const tb=$('trophyBtn'); if(tb) tb.onclick=openTrophyRoom; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }

@@ -231,6 +231,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.storeBuys = 1; // satisfies the general-store goal
   g.breeder = { points: 100 }; // satisfies the breeder-prestige goal (past Established)
   g.stats.studBookings = 1; // satisfies the stud-directory goal
+  HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -3441,6 +3442,80 @@ function studGame(day) {
   ok(ach && !ach.check(g), 'Sought-After Sire needs ten bookings');
   g.stats.studBookings = 10;
   ok(ach.check(g), 'ten bookings unlock Sought-After Sire');
+}
+
+// ---- trophy room / achievements gallery (round 49) ----
+{
+  // reports unlocked/total achievements and a completion percentage
+  const g = HR.freshGame();
+  const r0 = HR.trophyRoom(g);
+  ok(r0.achievements.total === HR.ACHIEVEMENTS.length, 'the room counts every achievement');
+  ok(r0.achievements.unlocked === 0 && r0.completionPct === 0, 'a fresh ranch has 0% completion');
+  // locked achievements are included with their def
+  ok(r0.achievements.list.length === HR.ACHIEVEMENTS.length && r0.achievements.list.every(a => a.def && a.unlocked === false), 'locked achievements appear with their def');
+  // unlock a couple and re-check
+  g.achievements = [HR.ACHIEVEMENTS[0].id, HR.ACHIEVEMENTS[1].id];
+  const r1 = HR.trophyRoom(g);
+  ok(r1.achievements.unlocked === 2, 'unlocked achievements are counted');
+  ok(r1.completionPct === Math.round(100 * 2 / HR.ACHIEVEMENTS.length), 'completion percentage matches');
+  ok(r1.achievements.list.filter(a => a.unlocked).length === 2, 'the list flags the unlocked ones');
+}
+{
+  // trophies are grouped/counted correctly from trophies[]
+  const g = HR.freshGame();
+  g.trophies = [
+    { horse: 'A', disc: 'race', place: 1, day: 3 }, { horse: 'B', disc: 'jump', place: 1, day: 5 },
+    { horse: 'C', disc: 'race', place: 2, day: 6 }, { horse: 'D', disc: 'dressage', place: 3, day: 7 },
+  ];
+  const r = HR.trophyRoom(g);
+  ok(r.trophies.gold === 2 && r.trophies.silver === 1 && r.trophies.bronze === 1, 'placings are grouped by medal');
+  ok(r.trophies.total === 4, 'the cabinet total matches');
+  ok(r.trophies.recent.length === 4 && r.trophies.recent[0].horse === 'A', 'recent placings are listed');
+}
+{
+  // career highlights read the right stats and are safe when stats are missing
+  const g = HR.freshGame();
+  g.stats.showWins = 12; g.stats.bestOVR = 88; g.stats.bestSale = 4200; g.stats.born = 9; g.stats.maxGen = 6; g.stats.seasonTitles = 2; g.stats.goldEarned = 50000;
+  const r = HR.trophyRoom(g);
+  const byId = id => r.highlights.find(h => h.id === id);
+  ok(byId('wins').value === 12 && byId('bestOVR').value === 88 && byId('bestSale').value === 4200, 'highlights read the stats');
+  ok(byId('maxGen').value === 'Gen 6' && byId('titles').value === 2, 'formatted highlights are correct');
+  // sparse save: no stats object
+  const bare = { achievements: [], trophies: [] };
+  const rb = HR.trophyRoom(bare);
+  ok(rb.highlights.every(h => h.value != null) && rb.completionPct === 0, 'the room is safe on a sparse save');
+}
+{
+  // curatorRank returns the correct tier by unlocked count
+  const at = n => { const g = HR.freshGame(); g.achievements = HR.ACHIEVEMENTS.slice(0, n).map(a => a.id); return g; };
+  ok(HR.curatorRank(at(0)).id === 'newcomer', '0 unlocked → Newcomer');
+  ok(HR.curatorRank(at(3)).id === 'ribbons', '3 → Ribbon Collector');
+  ok(HR.curatorRank(at(8)).id === 'hunter', '8 → Trophy Hunter');
+  ok(HR.curatorRank(at(15)).id === 'celebrated', '15 → Celebrated Rancher');
+  ok(HR.curatorRank(at(24)).id === 'legend', '24 → Living Legend');
+  ok(HR.achievementProgress(at(10)).unlocked === 10, 'achievementProgress reports the count');
+}
+{
+  // read-only: building the room never mutates the game
+  const g = HR.freshGame(); g.trophies = [{ horse: 'A', disc: 'race', place: 1, day: 1 }]; g.achievements = [HR.ACHIEVEMENTS[0].id];
+  const snap = JSON.stringify(g);
+  HR.trophyRoom(g); HR.curatorRank(g); HR.achievementProgress(g);
+  ok(JSON.stringify(g) === snap, 'the trophy room is read-only');
+  // determinism
+  ok(JSON.stringify(HR.trophyRoom(g)) === JSON.stringify(HR.trophyRoom(g)), 'trophyRoom is deterministic');
+}
+{
+  // goal + achievement
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'trophy1');
+  ok(goal && !goal.done(g), 'the trophy goal is unmet with no achievements');
+  g.achievements = HR.ACHIEVEMENTS.slice(0, 5).map(a => a.id);
+  ok(goal.done(g), 'earning 5 achievements completes the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'cabinet');
+  const g2 = HR.freshGame();
+  ok(ach && !ach.check(g2), 'Full Trophy Cabinet needs 20 placings');
+  g2.trophies = Array.from({ length: 20 }, (_, i) => ({ horse: 'H' + i, disc: 'race', place: 1, day: i }));
+  ok(ach.check(g2), '20 placings unlock Full Trophy Cabinet');
 }
 
 // ---- clamp helper ----
