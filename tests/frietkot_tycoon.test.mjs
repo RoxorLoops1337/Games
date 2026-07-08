@@ -583,5 +583,27 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.tierUnlockedWith(start, 'city') === true, 'the city tier is never gated');
 }
 
+// ---- street decor (pavement signs that attract customers) ----
+{
+  ok(FS.STREET_OBJECTS.length >= 3, 'several street decorations exist');
+  ok(FS.STREET_OBJECTS.every(o => o.id && o.nm && o.emoji && o.appeal > 0 && o.cost > 0), 'each street item is well-formed');
+  ok(FS.streetDef(FS.STREET_OBJECTS[0].id) === FS.STREET_OBJECTS[0], 'street lookup by id works');
+  ok(FS.streetDef('nope') === null, 'unknown street item → null');
+  const g = FS.freshGame();
+  ok(Array.isArray(g.street) && g.street.length === 0, 'fresh game starts with no street decor');
+  ok(FS.streetAppeal(g) === 0, 'no street decor → no street appeal');
+  // placing decor on the pavement raises appeal
+  const before = FS.computeAppeal(g);
+  const neon = FS.STREET_OBJECTS[0];
+  g.street.push({ id: neon.id, col: 0, lvl: 1 });
+  ok(FS.streetAppeal(g) === neon.appeal, 'one sign adds its appeal');
+  ok(FS.computeAppeal(g) === before + neon.appeal, 'street decor lifts overall appeal');
+  // a second sign stacks; leveling scales by power()
+  g.street.push({ id: neon.id, col: 1, lvl: 1 });
+  ok(FS.streetAppeal(g) === neon.appeal * 2, 'a second sign stacks');
+  g.street[0].lvl = 2;
+  ok(FS.streetAppeal(g) > neon.appeal * 2, 'a higher-level sign is worth more');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

@@ -222,6 +222,18 @@ var OBJECTS=[
   {id:'plant',     nm:'Plant',      emoji:'🪴', cost:70,  kind:'decor',   appeal:2, desc:'Beetje gezelligheid'}
 ];
 var objDef=function(id){ for(var i=0;i<OBJECTS.length;i++) if(OBJECTS[i].id===id) return OBJECTS[i]; return null; };
+// STREET decor: signs & props mounted on the pavement/facade to pull more people in.
+// They live OUTSIDE the grid (one per street column, skipping the door), so they add
+// appeal without eating interior tiles — handy once the shop is expanded and crowded.
+var STREET_OBJECTS=[
+  {id:'straatneon', nm:'Neonbord',     emoji:'🪧',  cost:340, appeal:7, pulls:'tourist', desc:'Fel neon aan de gevel — trekt toeristen'},
+  {id:'stoepbord',  nm:'Stoepbord',    emoji:'🍟',  cost:150, appeal:4, desc:'"VERSE FRIET!" lokt voorbijgangers'},
+  {id:'slinger',    nm:'Lichtslinger', emoji:'🎉',  cost:210, appeal:5, desc:'Feestelijke sfeer aan de gevel'},
+  {id:'bloembak',   nm:'Bloembak',     emoji:'🌷',  cost:110, appeal:3, desc:'Gezellige, verzorgde gevel'},
+  {id:'terras',     nm:'Terrasje',     emoji:'⛱️',  cost:290, appeal:6, pulls:'teen', desc:'Buiten zitten — jongeren blijven hangen'}
+];
+var streetDef=function(id){ for(var i=0;i<STREET_OBJECTS.length;i++) if(STREET_OBJECTS[i].id===id) return STREET_OBJECTS[i]; return null; };
+var streetAppeal=function(G){ var a=0; if(G&&G.street) G.street.forEach(function(s){ var d=streetDef(s.id); if(d) a+=d.appeal*power(s.lvl||1); }); return a; };
 
 /* ---------- menu: friet portion sizes you price yourself ---------- */
 var SIZES=[
@@ -514,6 +526,7 @@ var computeAppeal=function(G){
   if(G.research.reclame) a+=8;
   a+=staffSpeed(G)*1;
   a+=floorAppeal(G);                                         // a nicer floor draws a few more customers
+  a+=streetAppeal(G);                                        // signs & props on the pavement pull people in
   a+=campaignAppeal(G);                                      // an active ad campaign spikes traffic
   a+=shadyAppeal(G);                                         // cutting corners hurts the vibe
   return Math.round(a);
@@ -552,6 +565,7 @@ var orderValue=function(G,type,comboMul){
 // weighted customer-type roll: base weight + bonus if a decor pulls that type
 var rollType=function(G){
   var pulls={}; G.objs.forEach(function(o){ var d=objDef(o.id); if(d&&d.pulls) pulls[d.pulls]=(pulls[d.pulls]||0)+1; });
+  if(G.street) G.street.forEach(function(s){ var d=streetDef(s.id); if(d&&d.pulls) pulls[d.pulls]=(pulls[d.pulls]||0)+(s.lvl||1); });
   var tot=0, w=CUSTTYPES.map(function(t){ var x=t.base+(t.pull&&pulls[t.pull]?pulls[t.pull]*3:0); tot+=x; return x; });
   var r=(arguments[1]==null?Math.random():arguments[1])*tot;
   for(var i=0;i<CUSTTYPES.length;i++){ r-=w[i]; if(r<=0) return CUSTTYPES[i]; }
@@ -661,7 +675,7 @@ var freshGame=function(){
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
     floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices(),
-    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0, rivals:[], timeline:{seen:{},mod:null} };
+    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0, rivals:[], timeline:{seen:{},mod:null}, street:[] };
   return g;
 };
 var SAVE_KEY='ftstory_save', META_KEY='ftstory_meta';
@@ -672,7 +686,7 @@ var serializeShop=function(){ return {
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
   floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
-  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals,timeline:G.timeline }; };
+  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals,timeline:G.timeline,street:G.street }; };
 var META=null;   // { shops:[{planet,country,city,lot,name,blob,t}], active, bank, lastSeen }
 var saveMeta=function(){ try{ if(META) localStorage.setItem(META_KEY, JSON.stringify(META)); }catch(e){} };
 var save=function(){ if(!G) return; try{ var blob=serializeShop(); localStorage.setItem(SAVE_KEY, JSON.stringify(blob));
@@ -694,8 +708,8 @@ var applyActiveLoc=function(){ if(!G) return; var rec=META&&META.shops[META.acti
 // hydrate G from a blob object (shared by disk-load and shop-switch)
 var applyBlob=function(o){ if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat','rivals','timeline'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
-  if(!G.shady) G.shady={}; if(!G.rivals) G.rivals=[]; if(!G.timeline||typeof G.timeline!=='object') G.timeline={seen:{},mod:null}; if(!G.timeline.seen) G.timeline.seen={};
+  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat','rivals','timeline','street'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  if(!G.shady) G.shady={}; if(!G.rivals) G.rivals=[]; if(!G.street) G.street=[]; if(!G.timeline||typeof G.timeline!=='object') G.timeline={seen:{},mod:null}; if(!G.timeline.seen) G.timeline.seen={};
   if(!G.contest||!contestDef(G.contest.id)) G.contest=newContest(G.week);
   if(!G.prices) G.prices=defaultPrices(); SIZES.forEach(function(z){ if(G.prices[z.id]==null) G.prices[z.id]=z.fair; });
   if(!G.crew) G.crew=[]; if(!G.crew.length && G.staff>0){ for(var ci=0;ci<G.staff;ci++) G.crew.push({name:STAFF_NAMES[ci%STAFF_NAMES.length],spdLv:1,sklLv:1}); } G.staff=G.crew.length;
@@ -970,6 +984,15 @@ var drawScene=function(){
       ctx.fillText('L'+o.lvl,o.gx*TS+TS-7,o.gy*TS+7); }
     if(pm!==1) ctx.restore();
   });
+  // street decor on the pavement/facade (behind the passing crowd)
+  if(G.street) G.street.forEach(function(s){ var d=streetDef(s.id); if(!d) return; var cx=s.col*TS+TS/2, cy=GH*TS+2;
+    if(s.id==='straatneon'){ ctx.save(); ctx.globalAlpha=.25+.20*Math.abs(Math.sin(T*3+s.col)); ctx.fillStyle='#ff5ea8';
+      ctx.beginPath(); ctx.arc(cx,cy-3,14,0,6.283); ctx.fill(); ctx.restore(); }
+    else if(s.id==='slinger'){ ctx.save(); ctx.globalAlpha=.5+.3*Math.sin(T*4+s.col); ctx.fillStyle=var_gold;
+      ctx.beginPath(); ctx.arc(cx,cy-6,3,0,6.283); ctx.fill(); ctx.restore(); }
+    emoji(d.emoji,cx,cy,18);
+    if((s.lvl||1)>1){ ctx.fillStyle='#2a1c05'; ctx.fillRect(cx+5,cy-11,12,9); ctx.fillStyle=var_gold; ctx.font='bold 8px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('L'+s.lvl,cx+11,cy-6); }
+  });
   // customers
   G.custs.forEach(function(c){
     var seated=c.state==='eat';
@@ -1232,9 +1255,30 @@ var renderShop=function(){ if(!el.shopList) return; var s=shopSize(G), h='';
     +'<div class="t">'+o.nm+(n?' <span style="color:var(--ink2);font-weight:600">×'+n+'</span>':'')+'</div>'
     +'<div class="s">'+o.desc+' · ✨'+o.appeal+'</div></div>'
     +'<button class="buy" data-obj="'+o.id+'"'+(G.money<cost?' disabled':'')+'>'+fmt(cost)+' 💶</button></div>'; });
+  // 🛣️ street decor — mounted outside on the pavement, one per column (skips the door)
+  var free=streetFreeCount();
+  h+='<div class="klabel" style="margin-top:13px">🛣️ Straatversiering ('+((G.street&&G.street.length)||0)+'/'+(streetCols().length)+' plekken)</div>';
+  h+='<div class="s" style="margin:0 2px 7px;color:var(--ink2);font-size:11px">Signs &amp; decor op de <b>stoep</b> — trekken extra volk zonder tegels binnen te kosten. Meer gevel als je de winkel uitbreidt.</div>';
+  STREET_OBJECTS.forEach(function(o){ var n=streetCount(o.id);
+    h+='<div class="item"><div class="ic">'+o.emoji+'</div><div class="info">'
+    +'<div class="t">'+o.nm+(n?' <span style="color:var(--ink2);font-weight:600">×'+n+'</span>':'')+'</div>'
+    +'<div class="s">'+o.desc+' · ✨'+o.appeal+(o.pulls?' · trekt '+(o.pulls==='tourist'?'toeristen 📸':'jongeren 🧑‍🎓'):'')+'</div></div>'
+    +'<button class="buy" data-street="'+o.id+'"'+((G.money<o.cost||free<=0)?' disabled':'')+'>'+(free<=0?'vol':fmt(o.cost)+' 💶')+'</button></div>'; });
   el.shopList.innerHTML=h;
   var eb=$('expandBtn'); if(eb) eb.onclick=buyExpand;
-  each('[data-obj]',function(b){ return function(){ startPlacing(b.getAttribute('data-obj')); }; }); };
+  each('[data-obj]',function(b){ return function(){ startPlacing(b.getAttribute('data-obj')); }; });
+  each('[data-street]',function(b){ return function(){ buyStreet(b.getAttribute('data-street')); }; }); };
+// street slots: every grid column except the door; a decor item stores the column it sits on
+var streetCols=function(){ var out=[]; for(var c=0;c<GW;c++) if(c!==DOOR.gx) out.push(c); return out; };
+var streetCount=function(id){ var n=0; if(G.street) G.street.forEach(function(s){ if(s.id===id) n++; }); return n; };
+var streetFreeCount=function(){ return streetCols().length-((G.street&&G.street.length)||0); };
+var freeStreetCol=function(){ var cols=streetCols(); for(var i=0;i<cols.length;i++){ var c=cols[i], used=false;
+  if(G.street) for(var j=0;j<G.street.length;j++) if(G.street[j].col===c){ used=true; break; } if(!used) return c; } return -1; };
+var buyStreet=function(id){ var d=streetDef(id); if(!d) return; if(G.money<d.cost){ toast('Te weinig geld.'); return; }
+  var col=freeStreetCol(); if(col<0){ toast('Geen plek meer op de stoep — <b>breid je winkel uit</b> voor meer gevel.'); return; }
+  G.money-=d.cost; if(!G.street) G.street=[]; G.street.push({ id:id, col:col, lvl:1 });
+  var cx=col*TS+TS/2, cy=GH*TS; placePuff(cx,cy); starRing(cx,cy,11); chime([600,820,1040],0.08); addShake(1.2);
+  toast(d.emoji+' <b>'+d.nm+'</b> op de stoep! +✨'+d.appeal+' aantrek.'); renderAll(); };
 var buyExpand=function(){ if(G.expand>=maxExpand()){ toast('Maximale grootte bereikt!'); return; }
   var cost=expandCost(G.expand); if(G.money<cost){ toast('Te weinig geld om uit te breiden.'); return; }
   G.money-=cost; G.expand++; applySize();
@@ -1660,6 +1704,7 @@ if(typeof globalThis!=='undefined'){
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
+    STREET_OBJECTS:STREET_OBJECTS, streetDef:streetDef, streetAppeal:streetAppeal,
     GRID_LEVELS:GRID_LEVELS, shopSize:shopSize, expandCost:expandCost, maxExpand:maxExpand,
     applyDrop:function(g,obj,gx,gy){ var prev=G; G=g; try{ return applyDrop(obj,gx,gy); } finally{ G=prev; } } };
 }
