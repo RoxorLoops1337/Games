@@ -310,6 +310,7 @@
     <button class="sbtn" id="regBtn" title="Studbook & names" style="margin-right:4px">📖</button>
     <button class="sbtn" id="codexBtn" title="Codex — breeds, coats & disciplines" style="margin-right:4px">📚</button>
     <button class="sbtn" id="scrapBtn" title="Scrapbook — your keepsake memories" style="margin-right:4px">📸</button>
+    <button class="sbtn" id="visitBtn" title="Visitor Day — open your ranch to the public" style="margin-right:4px;position:relative">🎪<span id="visitBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1330,7 +1331,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1338,7 +1339,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[],
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0,
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1791,6 +1792,81 @@ function captureMoment(game, kind, horse, extra){
     gen:horse.generation||1, caption, day:extra.day });
 }
 
+// ---------- Stable-Tour / Visitor Day (open the ranch to the public for a bounded, appeal-scaled payout) ----------
+// Everything scales off EXISTING ranch state (herd quality, rare coats, champions, décor, care, pasture legends).
+// No new resources; economy-safe (bounded + diminishing) and gated by a cooldown so it can't be farmed.
+const VISITOR_COOLDOWN=7;     // days between Visitor Days
+const VISITOR_FIRST_DAY=5;    // earliest a Visitor Day can be hosted in a fresh ranch
+const VISITOR_TICKET=6;       // base coins spent per visitor
+// a derived 0..100 rating of how impressive the ranch is right now
+function ranchAppealScore(game){
+  if(!game) return 0;
+  const horses=game.horses||[];
+  const topOVR = horses.length ? Math.max(0,...horses.map(h=>overall(h))) : 0;
+  const champions = horses.filter(h=>(h.wins||0)>=3).length;
+  const rareCoats = horses.filter(h=>((coatOf(h).tier||0)>=2)||h.rare).length;
+  const decorN = ownedDecor(game).length;
+  const avgCare = horses.length ? horses.reduce((s,h)=>s+careScore(h),0)/horses.length : 0;
+  const legends = pastureSize(game);
+  let s=0;
+  s += (topOVR/100)*34;                                 // the headline horse
+  s += Math.min(15, 15*(1-Math.exp(-champions/3)));     // champions (diminishing)
+  s += Math.min(15, 15*(1-Math.exp(-rareCoats/3)));     // rare coats (diminishing)
+  s += (decorN/DECOR.length)*16;                        // a well-dressed ranch
+  s += (avgCare/100)*12;                                // visible welfare
+  s += Math.min(8, 8*(1-Math.exp(-legends/4)));         // pasture legends
+  return Math.round(clamp(s,0,100));
+}
+function nextVisitorDay(game){ const last=(game&&game.lastVisitorDay)||0; return last>0 ? last+VISITOR_COOLDOWN : VISITOR_FIRST_DAY; }
+function visitorDaysUntil(game){ return Math.max(0, nextVisitorDay(game)-((game&&game.day)||1)); }
+function visitorDayAvailable(game){ return !!game && ((game.day||1)>=nextVisitorDay(game)) && ((game.horses||[]).length>0); }
+// expected turnout/earnings for the current state (no RNG — what the player is shown before committing)
+function previewVisitorDay(game){
+  const appeal=ranchAppealScore(game);
+  const repDraw=Math.min(1, ((game&&game.rep)||0)/1500); // reputation pulls a bigger crowd, capped
+  const isWeekend=(weekdayIndex((game&&game.day)||1)>=5); // Sat/Sun draw more
+  const crowdMul=isWeekend?1.15:1.0;
+  const visitors=Math.max(1, Math.round((8 + appeal*0.9 + repDraw*40)*crowdMul));
+  const coins=Math.round(visitors*VISITOR_TICKET*(0.6 + appeal/100*0.9));
+  const rep=Math.round(4 + appeal*0.12); // bounded ~4..16
+  return { appeal, visitors, coins, rep, weekend:isWeekend };
+}
+// pick the horse visitors love most, for the flavour highlight
+function visitorAppealOf(h){ return (h.wins||0)*10 + (((coatOf(h).tier||0)>=2)?15:0) + (h.rare?12:0) + overall(h)*0.3; }
+function visitorHighlight(game){
+  const horses=(game&&game.horses)||[];
+  if(!horses.length) return { horse:null, text:'The quiet paddocks still charmed a few passers-by.' };
+  const pick=horses.slice().sort((a,b)=>visitorAppealOf(b)-visitorAppealOf(a))[0];
+  const co=coatOf(pick), bd=breedDef(pick.breed)||{name:pick.breed};
+  let text;
+  if((pick.wins||0)>=3) text='Visitors crowded around your champion '+pick.name+'!';
+  else if((co.tier||0)>=2 || pick.rare) text='Visitors adored '+pick.name+'’s rare '+co.name+' coat!';
+  else text='Visitors loved meeting '+pick.name+', your '+bd.name+'.';
+  return { horse:pick, text };
+}
+// resolve a Visitor Day: apply the bounded payout, stamp the cooldown, return the outcome
+function hostVisitorDay(game, opts){
+  opts=opts||{}; const rng=opts.rng||Math.random;
+  if(!visitorDayAvailable(game)) return { ok:false, why:'No Visitor Day is available yet.' };
+  const p=previewVisitorDay(game);
+  const varMul=0.85 + 0.30*rng(); // ±15% turnout variance
+  const visitors=Math.max(1, Math.round(p.visitors*varMul));
+  const coins=Math.max(0, Math.round(p.coins*varMul));
+  const rep=p.rep;
+  if(!game.stats) game.stats={};
+  const prevBest=game.stats.bestVisitorDay||0;
+  game.money=(game.money||0)+coins;
+  game.rep=(game.rep||0)+rep;
+  game.stats.goldEarned=(game.stats.goldEarned||0)+coins;
+  game.stats.visitorDays=(game.stats.visitorDays||0)+1;
+  game.stats.bestVisitorDay=Math.max(prevBest, coins);
+  game.lastVisitorDay=game.day||1;
+  const hl=visitorHighlight(game);
+  // scrapbook keepsake on a record-breaking day (read-only observer of the sim)
+  if(coins>prevBest && coins>0 && hl.horse) captureMoment(game,'snapshot',hl.horse,{caption:'Visitor Day at '+ranchName(game)+' — '+visitors+' guests, 🪙'+coins+'!'});
+  return { ok:true, visitors, coins, rep, appeal:p.appeal, weekend:p.weekend, highlight:hl.text, record:(coins>prevBest) };
+}
+
 function disciplineScore(h,disc,game){
   const w=disc.w;
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
@@ -2238,6 +2314,7 @@ const ACHIEVEMENTS=[
   {id:'planner',    icon:'🔮', name:'Master Planner',        desc:'Breed a foal that fulfils your breeding goal.', check:g=>((g.stats&&g.stats.goalsMet)||0)>=1},
   {id:'naturalist', icon:'📚', name:'Naturalist',            desc:'Discover every breed in the Codex.',           check:g=>codexProgress(g).breedsSeen>=BREEDS.length},
   {id:'chronicler', icon:'📸', name:'Chronicler',            desc:'Fill your scrapbook with 15 memories.',        check:g=>scrapbookSize(g)>=15},
+  {id:'crowdpleaser',icon:'🎪', name:'Crowd-Pleaser',        desc:'Host five Visitor Days at your ranch.',        check:g=>((g.stats&&g.stats.visitorDays)||0)>=5},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2336,6 +2413,7 @@ const GOALS=[
   {id:'plan1',   desc:'Set a breeding goal (🔮 planner)',      tip:g=>'',                              done:g=>!!(g.breedGoal&&breedGoalDef(g.breedGoal)),             reward:{money:300,rep:10}},
   {id:'codex1',  desc:'Discover 5 breeds in the Codex (📚)',    tip:g=>codexProgress(g).breedsSeen+'/5 breeds',done:g=>codexProgress(g).breedsSeen>=5,                    reward:{money:600,rep:20}},
   {id:'scrap1',  desc:'Save your first memory (📸 scrapbook)',   tip:g=>scrapbookSize(g)+' saved',       done:g=>scrapbookSize(g)>=1,                                    reward:{money:400,rep:15}},
+  {id:'visit1',  desc:'Host a Visitor Day (🎪 stable tour)',      tip:g=>((g.stats&&g.stats.visitorDays)||0)+'/1',done:g=>((g.stats&&g.stats.visitorDays)||0)>=1,               reward:{money:800,rep:25}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2359,6 +2437,7 @@ const HR = {
   coatOddsFor, traitOddsFor, affinityHintsFor, predictFoal, BREED_GOALS, breedGoalDef, matchesBreedingGoal, foalMeetsGoal,
   codexBreeds, codexCoats, codexDisciplines, codexProgress, codexSeenSets, codexHasBreed, codexHasCoat, coatLeanNote,
   SCRAPBOOK_CAP, MOMENT_KINDS, momentKindDef, addScrapbookEntry, scrapbookList, scrapbookSize, scrapbookPinned, toggleScrapbookPin, captureMoment,
+  VISITOR_COOLDOWN, VISITOR_FIRST_DAY, ranchAppealScore, nextVisitorDay, visitorDaysUntil, visitorDayAvailable, previewVisitorDay, hostVisitorDay, visitorHighlight,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2487,6 +2566,7 @@ function load(){
     if(!Array.isArray(G.registry)) G.registry=[]; syncRegistry(G); // studbook registry
     if(!Array.isArray(G.pasture)) G.pasture=[]; // retirement pasture roster
     if(!Array.isArray(G.scrapbook)) G.scrapbook=[]; // photo-mode scrapbook of memories
+    if(typeof G.lastVisitorDay!=='number') G.lastVisitorDay=0; // stable-tour / visitor-day cooldown stamp
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -2659,6 +2739,8 @@ function renderHUD(){
   { const cb=$('boardBadge'); if(cb){ const n=claimableContracts(G); cb.textContent=n; cb.style.display=n?'block':'none'; } }
   // daily reward badge
   { const gb=$('dailyBadge'); if(gb){ const on=dailyClaimable(); gb.style.display=on?'block':'none'; } }
+  // visitor-day availability badge
+  { const vb=$('visitBadge'); if(vb){ const on=visitorDayAvailable(G); vb.style.display=on?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -4272,6 +4354,48 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+function openVisitorDay(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const avail=visitorDayAvailable(G), until=visitorDaysUntil(G);
+  const p=previewVisitorDay(G), appeal=p.appeal;
+  const hl=visitorHighlight(G);
+  const appealTier = appeal>=80?'Legendary':appeal>=60?'Renowned':appeal>=40?'Well-known':appeal>=20?'Up-and-coming':'Humble';
+  const hosted=(G.stats&&G.stats.visitorDays)||0, bestDay=(G.stats&&G.stats.bestVisitorDay)||0;
+  let body='<div class="swlabel">Open '+esc(ranchName(G))+' to the public for the day. Turnout & takings scale with your ranch’s <b>appeal</b> — top horses, rare coats, champions, décor, care & pasture legends.</div>';
+  body+='<div class="card"><div class="row"><div class="hface">🎪</div><div class="grow">'+
+    '<div class="hname">Ranch Appeal <span class="pill" style="color:var(--gold)">'+appeal+'/100</span> <span class="pill">'+appealTier+'</span></div>'+
+    '<div class="hbreed">'+esc(hl.text)+'</div></div></div>'+
+    '<div class="stats" style="margin-top:6px">'+
+      '<div class="stat"><div class="sv" style="font-size:13px">~'+p.visitors+'</div><div class="sl">Visitors</div></div>'+
+      '<div class="stat"><div class="sv" style="font-size:13px">🪙'+fmt(p.coins)+'</div><div class="sl">Est. take</div></div>'+
+      '<div class="stat"><div class="sv" style="font-size:13px">+'+p.rep+'⭐</div><div class="sl">Rep</div></div>'+
+      (p.weekend?'<div class="stat"><div class="sv" style="font-size:13px">🎉</div><div class="sl">Weekend</div></div>':'')+
+    '</div></div>';
+  body+='<div class="msg" style="font-size:12px">Hosted <b>'+hosted+'</b> Visitor Day'+(hosted!==1?'s':'')+(bestDay?' · best 🪙'+fmt(bestDay):'')+'. A ranch can host one every '+VISITOR_COOLDOWN+' days.</div>';
+  const btn = avail
+    ? '<button class="btn" id="vdHost" style="width:100%">🎪 Host Visitor Day</button>'
+    : '<button class="btn ghost" style="width:100%" disabled>Next Visitor Day in '+until+' day'+(until!==1?'s':'')+'</button>';
+  modal('<h3>🎪 Visitor Day</h3>'+body+'<div class="btnrow">'+btn+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="vdClose" style="width:100%">Done</button></div>');
+  $('vdClose').onclick=closeModal;
+  { const hb=$('vdHost'); if(hb) hb.onclick=()=>{
+      const res=hostVisitorDay(G,{rng:Math.random});
+      if(!res.ok){ toast(res.why,'info'); return; }
+      coinPop(res.coins); burst('🎪🎉🪙✨',16); playSfx('goal');
+      toast('🎪 '+res.visitors+' visitors! +🪙'+fmt(res.coins)+' +'+res.rep+'⭐'+(res.record?' — a record day!':''),'good');
+      save(); renderHUD();
+      modal('<h3>🎪 Visitor Day — Results</h3>'+
+        '<div class="card"><div class="hname">'+res.visitors+' visitors came to '+esc(ranchName(G))+'!</div>'+
+        '<div class="hbreed" style="margin-top:4px">'+esc(res.highlight)+'</div>'+
+        '<div class="stats" style="margin-top:8px">'+
+          '<div class="stat"><div class="sv" style="font-size:13px">🪙'+fmt(res.coins)+'</div><div class="sl">Earned</div></div>'+
+          '<div class="stat"><div class="sv" style="font-size:13px">+'+res.rep+'⭐</div><div class="sl">Reputation</div></div>'+
+          '<div class="stat"><div class="sv" style="font-size:13px">'+res.appeal+'</div><div class="sl">Appeal</div></div>'+
+        '</div>'+(res.record?'<div class="msg" style="color:var(--gold);margin-top:6px">🏅 A record Visitor Day — saved to your scrapbook!</div>':'')+'</div>'+
+        '<div class="btnrow"><button class="btn" id="vdOk" style="width:100%">🎉 Wonderful!</button></div>',{center:true});
+      { const ok=$('vdOk'); if(ok) ok.onclick=closeModal; }
+    }; }
+}
 function openScrapbook(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const list=scrapbookList(G);
@@ -4459,6 +4583,7 @@ function boot(){
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
   { const sb=$('scrapBtn'); if(sb) sb.onclick=openScrapbook; }
+  { const vb=$('visitBtn'); if(vb) vb.onclick=openVisitorDay; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
