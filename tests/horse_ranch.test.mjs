@@ -2877,6 +2877,81 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach.check(g2), 'a Devoted (90%+) horse unlocks Horse Whisperer');
 }
 
+// ---- ranch map / paddock layout view (round 42) ----
+{
+  // ranchMap reports per-stable stall/used/free counts that match the herd
+  const g = HR.freshGame();
+  g.stables = [{ id: 'st1', name: 'Old Barn', level: 1, baseStalls: 4 }, { id: 'st2', name: 'Oak Stable', level: 2, baseStalls: 4 }];
+  g.horses = [];
+  for (let i = 0; i < 3; i++) g.horses.push(HR.mkHorse({ breed: 'arabian', age: 20, stable: 0 }));
+  for (let i = 0; i < 2; i++) g.horses.push(HR.mkHorse({ breed: 'welsh', age: 20, stable: 1 }));
+  const m = HR.ranchMap(g);
+  ok(m.stables.length === 2, 'the map lists every barn');
+  const s1 = m.stables.find(s => s.id === 'st1'), s2 = m.stables.find(s => s.id === 'st2');
+  ok(s1.used === 3 && s2.used === 2, 'each barn shows the right resident count');
+  ok(s1.stalls === 4 && s2.stalls === 6, 'stalls reflect baseStalls + level (Lv2 → +2)');
+  ok(s1.free === 1 && s2.free === 4, 'free = stalls - used');
+  ok(s1.residents.length === 3 && s1.residents.every(r => r.name && r.breed), 'residents carry identity');
+  // totals equal the sum of stables; free never negative
+  ok(m.totals.stalls === s1.stalls + s2.stalls, 'total stalls = sum of barns');
+  ok(m.totals.horses === g.horses.length, 'total horses matches the herd');
+  ok(m.stables.reduce((n, s) => n + s.used, 0) === g.horses.length, 'per-barn used sums to the whole herd');
+  ok(m.totals.free === m.totals.stalls - g.horses.length && m.totals.free >= 0, 'total free = stalls - horses, never negative');
+  ok(m.stables.every(s => s.free >= 0), 'no barn reports negative free');
+}
+{
+  // pasture, décor & canteen are reflected
+  const g = HR.freshGame();
+  g.decor.owned = ['flowers', 'trees']; g.canteen = { level: 2 };
+  for (let i = 0; i < 3; i++) HR.sendToPasture(g, HR.mkHorse({ breed: 'mustang', age: 25 }), 'retired', i);
+  const m = HR.ranchMap(g);
+  ok(m.pasture === 3, 'the map counts pastured horses');
+  ok(m.decor.length === 2 && m.decor.every(d => d.emoji), 'décor is listed with emoji');
+  ok(m.canteen === 2, 'the canteen level is reported');
+}
+{
+  // stableOccupancy for a single barn
+  const g = HR.freshGame();
+  g.stables = [{ id: 'st1', name: 'Old Barn', level: 1, baseStalls: 4 }];
+  g.horses = [HR.mkHorse({ breed: 'arabian', age: 20, stable: 0 })];
+  const occ = HR.stableOccupancy(g, 'st1');
+  ok(occ && occ.used === 1 && occ.free === 3 && occ.stalls === 4, 'stableOccupancy reports a single barn');
+  ok(HR.stableOccupancy(g, 'nope') === null, 'an unknown barn returns null');
+}
+{
+  // moving a horse validates capacity, updates h.stable, and is a no-op when full or same barn
+  const g = HR.freshGame();
+  g.stables = [{ id: 'st1', name: 'Old Barn', level: 1, baseStalls: 4 }, { id: 'st2', name: 'Oak Stable', level: 1, baseStalls: 1 }];
+  const a = HR.mkHorse({ breed: 'arabian', age: 20, id: 'a', stable: 0 });
+  const b = HR.mkHorse({ breed: 'arabian', age: 20, id: 'b', stable: 0 });
+  g.horses = [a, b];
+  const r = HR.moveHorseToStable(g, 'a', 'st2');
+  ok(r.ok && a.stable === 1, 'a horse moves to another barn and h.stable updates');
+  ok(HR.stableOccupancy(g, 'st2').free === 0, 'the destination is now full (1 stall)');
+  ok(HR.moveHorseToStable(g, 'b', 'st2').ok === false && b.stable === 0, 'a move into a full barn is a no-op');
+  ok(HR.moveHorseToStable(g, 'a', 'st2').ok === false, 'moving to the same barn is a no-op');
+  ok(HR.moveHorseToStable(g, 'a', 'nope').ok === false, 'moving to an unknown barn is rejected');
+  ok(HR.moveHorseToStable(g, 'ghost', 'st1').ok === false, 'moving an unknown horse is rejected');
+  // capacity is never exceeded across a barn
+  ok(HR.stableOccupancy(g, 'st2').used <= HR.stableOccupancy(g, 'st2').stalls, 'a barn never exceeds its stalls');
+}
+{
+  // safe on an old save where a horse points at a missing barn
+  const g = HR.freshGame();
+  g.stables = [{ id: 'st1', name: 'Old Barn', level: 1, baseStalls: 4 }];
+  const h = HR.mkHorse({ breed: 'arabian', age: 20 }); h.stable = 7; // stale index beyond stables.length
+  g.horses = [h];
+  ok(HR.stableIndexOf(g, h) === 0, 'a stray barn index normalises to the first barn');
+  const m = HR.ranchMap(g);
+  ok(m.stables[0].used === 1, 'the map still places the horse (defensive)');
+  ok(m.totals.free >= 0, 'totals stay sane with a stray index');
+  // achievement
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'sprawling');
+  ok(ach && !ach.check(g), 'Sprawling Estate needs three barns');
+  g.stables = [{ id: 'st1' }, { id: 'st2' }, { id: 'st3' }];
+  ok(ach.check(g), 'three barns unlock Sprawling Estate');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 

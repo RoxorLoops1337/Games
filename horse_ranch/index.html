@@ -114,6 +114,11 @@
   .stallDot{width:15px;height:15px;border-radius:4px;background:#0d130a;border:1px solid #0c110a}
   .stallDot.full{background:linear-gradient(var(--gold),var(--gold2));border-color:var(--gold2)}
   .stallDot.board{background:linear-gradient(#7fd3ec,#4aa9c8);border-color:#4aa9c8}
+  .mapGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0}
+  .mapBarn{background:#0e150b;border:1px solid #223018;border-radius:10px;padding:8px}
+  .mapBarn.sel{border-color:var(--gold2);box-shadow:0 0 0 1px var(--gold2) inset}
+  .mapStalls{display:flex;flex-wrap:wrap;gap:3px;margin:5px 0}
+  .mapStalls .stallDot{width:12px;height:12px}
 
   /* Breeding picker */
   .pickgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -312,6 +317,7 @@
     <button class="sbtn" id="scrapBtn" title="Scrapbook — your keepsake memories" style="margin-right:4px">📸</button>
     <button class="sbtn" id="visitBtn" title="Visitor Day — open your ranch to the public" style="margin-right:4px;position:relative">🎪<span id="visitBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="apptBtn" title="Farrier & vet appointments" style="margin-right:4px;position:relative">🩺<span id="apptBadge" class="hudbadge" style="display:none">0</span></button>
+    <button class="sbtn" id="mapBtn" title="Ranch map — barns, stalls & paddocks" style="margin-right:4px">🗺️</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -888,6 +894,41 @@ function stallsOf(st){ return st.baseStalls + (st.level-1)*2; }
 function totalStalls(game){ return game.stables.reduce((n,s)=>n+stallsOf(s),0); }
 function usedStalls(game){ return game.horses.length + game.boarders; }
 function freeStalls(game){ return totalStalls(game)-usedStalls(game); }
+// ---------- Ranch map / paddock layout (read-only structured overview of the property) ----------
+// A plan view derived entirely from EXISTING state: stables[], the per-horse `stable` index,
+// pasture, décor & canteen. Defensive against saves where a horse points at a missing barn.
+function stableIndexOf(game,h){ const n=((game&&game.stables)||[]).length;
+  const s=(h&&typeof h.stable==='number'&&h.stable>=0&&h.stable<n)?h.stable:0; return s; }
+function ranchMap(game){
+  const stables=(game&&game.stables)||[], horses=(game&&game.horses)||[];
+  const perStable=stables.map((st,idx)=>{
+    const residents=horses.filter(h=>stableIndexOf(game,h)===idx);
+    const stalls=stallsOf(st), used=residents.length;
+    return { id:st.id, name:st.name, level:st.level||1, stalls, used, free:Math.max(0,stalls-used),
+      residents:residents.map(h=>({ id:h.id, name:h.name, breed:h.breed, sex:h.sex, coat:coatOf(h).name, overall:overall(h) })) };
+  });
+  const stallSum=perStable.reduce((n,s)=>n+s.stalls,0), boarders=(game&&game.boarders)||0;
+  return {
+    stables:perStable,
+    totals:{ stalls:stallSum, horses:horses.length, boarders, free:Math.max(0, stallSum-horses.length-boarders) },
+    pasture:pastureSize(game),
+    decor:ownedDecor(game).map(id=>{ const d=decorDef(id); return { id, name:d?d.name:id, emoji:d?d.emoji:'🎀' }; }),
+    canteen:canteenLevel(game),
+  };
+}
+function stableOccupancy(game,stableId){ const s=ranchMap(game).stables.find(x=>x.id===stableId); if(!s) return null;
+  return { id:s.id, name:s.name, level:s.level, stalls:s.stalls, used:s.used, free:s.free, residents:s.residents }; }
+// move a horse to another barn — free, bounded by stall capacity (no economy change)
+function moveHorseToStable(game,horseId,stableId){
+  const stables=(game&&game.stables)||[]; const idx=stables.findIndex(s=>s.id===stableId);
+  if(idx<0) return {ok:false,why:'No such stable.'};
+  const h=((game&&game.horses)||[]).find(x=>x.id===horseId); if(!h) return {ok:false,why:'No such horse.'};
+  const cur=stableIndexOf(game,h);
+  if(cur===idx) return {ok:false,why:h.name+' is already in '+stables[idx].name+'.'};
+  const occ=stableOccupancy(game,stableId); if(!occ||occ.free<=0) return {ok:false,why:stables[idx].name+' is full.'};
+  h.stable=idx;
+  return {ok:true, horse:h, stable:stables[idx], from:cur, to:idx};
+}
 function stableQuality(game){ // avg level, drives boarding rate & happiness
   if(!game.stables.length) return 1;
   return game.stables.reduce((n,s)=>n+s.level,0)/game.stables.length;
@@ -2441,6 +2482,7 @@ const ACHIEVEMENTS=[
   {id:'crowdpleaser',icon:'🎪', name:'Crowd-Pleaser',        desc:'Host five Visitor Days at your ranch.',        check:g=>((g.stats&&g.stats.visitorDays)||0)>=5},
   {id:'wellkept',   icon:'🩺', name:'Well-Kept Stable',      desc:'Complete 12 farrier & vet appointments.',      check:g=>((g.stats&&g.stats.appointments)||0)>=12},
   {id:'whisperer',  icon:'💖', name:'Horse Whisperer',       desc:'Bond with a horse until it is Devoted (90%).',  check:g=>((g.horses)||[]).some(h=>(h.bond||0)>=90)},
+  {id:'sprawling',  icon:'🗺️', name:'Sprawling Estate',      desc:'Grow your ranch to three barns.',              check:g=>((g.stables)||[]).length>=3},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2568,6 +2610,7 @@ const HR = {
   VISITOR_COOLDOWN, VISITOR_FIRST_DAY, ranchAppealScore, nextVisitorDay, visitorDaysUntil, visitorDayAvailable, previewVisitorDay, hostVisitorDay, visitorHighlight,
   APPOINTMENT_TYPES, appointmentTypeDef, appointmentFee, bookAppointment, dueForCare, horsesDueForCare, careTypeDue, resolveAppointments, activeCareBuff,
   GROUNDWORK_ACTIVITIES, GROUNDWORK_ENERGY, BOND_CAP, BONDED_AT, groundworkActivityDef, groundworkEnergyLeft, canDoGroundwork, doGroundwork, bondTier, bondLabel, bondPoiseMult,
+  ranchMap, stableOccupancy, stableIndexOf, moveHorseToStable,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2699,6 +2742,7 @@ function load(){
     if(typeof G.lastVisitorDay!=='number') G.lastVisitorDay=0; // stable-tour / visitor-day cooldown stamp
     if(!Array.isArray(G.appointments)) G.appointments=[]; // farrier & vet appointments
     for(const h of (G.horses||[])){ if(typeof h.gwDay!=='number') h.gwDay=0; if(typeof h.gwEnergy!=='number') h.gwEnergy=0; } // groundwork energy
+    { const ns=(G.stables||[]).length; for(const h of (G.horses||[])){ if(typeof h.stable!=='number'||h.stable<0||h.stable>=ns) h.stable=0; } } // ranch map: normalise stray barn indices
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -4504,6 +4548,51 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+let mapSel=null; // selected stable id for the resident/move panel
+function openRanchMap(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const m=ranchMap(G);
+  if(mapSel && !m.stables.some(s=>s.id===mapSel)) mapSel=null;
+  // top-down barn grid: each barn is a card with a stall dot-grid + occupancy
+  const barns=m.stables.map(s=>{
+    let dots=''; for(let i=0;i<s.stalls;i++) dots+='<span class="stallDot'+(i<s.used?' full':'')+'"></span>';
+    const on=mapSel===s.id;
+    return '<div class="mapBarn'+(on?' sel':'')+'" data-barn="'+esc(s.id)+'" style="cursor:pointer">'+
+      '<div class="hname" style="font-size:13px">🏚️ '+esc(s.name)+' <span class="pill">Lv '+s.level+'</span></div>'+
+      '<div class="mapStalls">'+dots+'</div>'+
+      '<div class="hbreed">'+s.used+'/'+s.stalls+' stalls · '+s.free+' free</div></div>';
+  }).join('');
+  // paddock/pasture + décor tiles
+  const extra='<div class="mapBarn" style="border-style:dashed">'+
+    '<div class="hname" style="font-size:13px">🌾 Pasture</div>'+
+    '<div class="hbreed">'+m.pasture+' retired grazing</div>'+
+    (m.canteen>0?'<div class="hbreed">🍺 Canteen Lv '+m.canteen+'</div>':'')+
+    (m.decor.length?'<div class="mapStalls" style="margin-top:4px">'+m.decor.map(d=>'<span title="'+esc(d.name)+'" style="font-size:15px">'+d.emoji+'</span>').join(' ')+'</div>':'<div class="hbreed" style="opacity:.6">no décor yet</div>')+
+    '</div>';
+  // resident / move panel for the selected barn
+  let panel='';
+  if(mapSel){ const occ=stableOccupancy(G,mapSel);
+    const others=m.stables.filter(s=>s.id!==mapSel);
+    const rows = occ.residents.length ? occ.residents.map(r=>{
+      const moves=others.map(o=>'<button class="btn sm ghost" data-move="'+esc(r.id)+'" data-to="'+esc(o.id)+'"'+(o.free<=0?' disabled':'')+'>→ '+esc(o.name)+(o.free<=0?' (full)':'')+'</button>').join(' ');
+      return '<div class="lbrow"><div class="hface">'+horseArt(G.horses.find(h=>h.id===r.id)||{},28)+'</div>'+
+        '<div class="grow"><div class="lbname">'+esc(r.name)+'</div><div class="lbsub">'+esc(r.coat)+' '+esc((breedDef(r.breed)||{name:r.breed}).name)+' · OVR '+r.overall+'</div>'+
+        (moves?'<div class="btnrow" style="margin-top:3px">'+moves+'</div>':'')+'</div></div>'; }).join('')
+      : '<div class="empty">This barn is empty.</div>';
+    panel='<div class="divider"></div><div class="swlabel">🏚️ '+esc(occ.name)+' — '+occ.used+'/'+occ.stalls+' stalls'+(occ.free>0?' ('+occ.free+' free)':' (full)')+'</div>'+rows;
+  } else {
+    panel='<div class="sub" style="margin-top:6px">Tap a barn to see its residents'+(m.stables.length>1?' and move horses between barns.':'.')+'</div>';
+  }
+  modal('<h3>🗺️ Ranch Map</h3>'+
+    '<div class="swlabel">'+esc(ranchName(G))+' — '+m.totals.horses+' horse'+(m.totals.horses!==1?'s':'')+' · '+m.totals.free+' free stall'+(m.totals.free!==1?'s':'')+(m.totals.boarders?' · '+m.totals.boarders+' boarding':'')+'</div>'+
+    '<div class="mapGrid">'+barns+extra+'</div>'+
+    panel+
+    '<div class="btnrow"><button class="btn ghost" id="mapClose" style="width:100%">Done</button></div>');
+  $('mapClose').onclick=closeModal;
+  document.querySelectorAll('[data-barn]').forEach(b=>b.onclick=()=>{ mapSel=(mapSel===b.getAttribute('data-barn'))?null:b.getAttribute('data-barn'); playSfx('tap'); openRanchMap(); });
+  document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{ const r=moveHorseToStable(G, b.getAttribute('data-move'), b.getAttribute('data-to'));
+    if(!r.ok){ toast(r.why,'info'); return; } playSfx('tap'); toast('🐴 '+r.horse.name+' moved to '+r.stable.name+'.','good'); save(); renderTab(); openRanchMap(); });
+}
 function openAppointments(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const adults=(G.horses||[]).filter(h=>isAdult(h));
@@ -4775,6 +4864,7 @@ function boot(){
   { const sb=$('scrapBtn'); if(sb) sb.onclick=openScrapbook; }
   { const vb=$('visitBtn'); if(vb) vb.onclick=openVisitorDay; }
   { const ab=$('apptBtn'); if(ab) ab.onclick=openAppointments; }
+  { const mb=$('mapBtn'); if(mb) mb.onclick=openRanchMap; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
