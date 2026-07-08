@@ -208,6 +208,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.decor.owned = ['flowers']; // satisfies décor goal
   for (const id of HR.NEED_IDS) g.horses[0].needs[id] = 100; // satisfies the care goal (a pampered horse)
   g.tack.owned = [HR.TACK[0].id]; HR.equipTack(g, g.horses[0], HR.TACK[0].id); // satisfies the tack goal
+  g.stats.showGamesPlayed = 1; // satisfies the ride-a-round goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1303,6 +1304,70 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(goal.done(g), 'the tack goal completes once a horse is equipped');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'fulltack');
   ok(ach && !ach.check(g), 'Fully Tacked is not yet unlocked with one item');
+}
+
+// ---- show minigame ("ride the round") scoring (round 24) ----
+{
+  // config + fence scoring
+  ok(HR.SHOW_GAME && HR.SHOW_GAME.fences >= 3 && HR.SHOW_GAME.zoneHalf > 0, 'minigame config exists');
+  ok(HR.SHOW_PERF_CAP > 0 && HR.SHOW_PERF_CAP <= 0.2, 'the minigame swing is capped small (<=20%)');
+  ok(Math.abs(HR.fenceScore(0.5) - 1) < 1e-9, 'a perfectly-centred jump scores 1');
+  ok(HR.fenceScore(0) < 0.2 && HR.fenceScore(1) < 0.2, 'edge-of-bar jumps score near zero');
+  ok(HR.fenceScore(0.5) > HR.fenceScore(0.7) && HR.fenceScore(0.7) > HR.fenceScore(0.95), 'fenceScore falls off from the centre');
+  ok(HR.fenceScore(-5) >= 0 && HR.fenceScore(9) >= 0, 'fenceScore clamps out-of-range input');
+}
+{
+  // perf multiplier is neutral at 0.5, bounded at the extremes
+  ok(Math.abs(HR.showPerfMult(0.5) - 1) < 1e-9, 'perf 0.5 is neutral (×1.0)');
+  ok(Math.abs(HR.showPerfMult(1) - (1 + HR.SHOW_PERF_CAP)) < 1e-9, 'a perfect run gives +cap');
+  ok(Math.abs(HR.showPerfMult(0) - (1 - HR.SHOW_PERF_CAP)) < 1e-9, 'a botched run gives -cap');
+  ok(HR.showPerfMult(5) <= 1 + HR.SHOW_PERF_CAP + 1e-9 && HR.showPerfMult(-5) >= 1 - HR.SHOW_PERF_CAP - 1e-9, 'multiplier stays within the cap');
+}
+{
+  // a great run outperforms a poor run for the SAME horse at the same tier
+  const tier = HR.COMP_TIERS[0], disc = HR.DISCIPLINES[0];
+  const h = HR.mkHorse({ breed: 'quarter', age: 12, speed: 62, stamina: 62, temperament: 62, health: 100, happy: 100 });
+  let goodScore = 0, poorScore = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    goodScore += HR.runCompetition(h, disc, tier, rng(seed), 1).score;
+    poorScore += HR.runCompetition(h, disc, tier, rng(seed), 0).score;
+  }
+  ok(goodScore > poorScore, 'a perfect ride beats a botched ride for the same horse');
+  // backward-compatible: omitting perf equals a neutral run
+  const s0 = HR.runCompetition(h, disc, tier, rng(7)).score;
+  const s5 = HR.runCompetition(h, disc, tier, rng(7), 0.5).score;
+  ok(s0 === s5, 'instant-resolve (no perf) matches a neutral 0.5 run — backward compatible');
+}
+{
+  // a skilled horse still beats a klutz who nailed the minigame, at the same tier
+  const tier = HR.COMP_TIERS[1], disc = HR.DISCIPLINES[0];
+  const ace = HR.mkHorse({ breed: 'thoroughbred', age: 12, speed: 95, stamina: 92, temperament: 90, health: 100, happy: 100 });
+  const dud = HR.mkHorse({ breed: 'shetland', age: 12, speed: 40, stamina: 40, temperament: 40, health: 100, happy: 100 });
+  let aceWorse = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const aceScore = HR.runCompetition(ace, disc, tier, rng(seed), 0).score;  // ace rides badly
+    const dudScore = HR.runCompetition(dud, disc, tier, rng(seed), 1).score;  // dud rides perfectly
+    if (aceScore <= dudScore) aceWorse++;
+  }
+  ok(aceWorse === 0, 'a strong horse riding badly still out-scores a weak horse riding perfectly');
+}
+{
+  // applyCompetition threads perf through and records the ride stats
+  const g = HR.freshGame(); g.rep = 5000;
+  const tier = HR.COMP_TIERS[0], disc = HR.DISCIPLINES[0], h = g.horses[0];
+  HR.applyCompetition(g, h, disc, tier, rng(3), 0.9);
+  ok((g.stats.showGamesPlayed || 0) === 1, 'playing the minigame increments showGamesPlayed');
+  ok(Math.abs((g.stats.bestShowPerf || 0) - 0.9) < 1e-9, 'best ride performance is recorded');
+  HR.applyCompetition(g, h, disc, tier, rng(4), null); // quick result does not count as played
+  ok((g.stats.showGamesPlayed || 0) === 1, 'a quick result does not increment the ride counter');
+  // goal + achievement
+  const goal = HR.GOALS.find(x => x.id === 'ride1');
+  ok(goal && goal.done(g), 'the ride-a-round goal completes once played');
+  const fresh = HR.freshGame();
+  ok(!goal.done(fresh), 'the ride goal is unmet on a fresh game');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'flawless');
+  const g2 = HR.freshGame(); g2.stats.bestShowPerf = 0.98;
+  ok(ach && ach.check(g2) && !ach.check(fresh), 'a near-flawless ride unlocks the Clear Round achievement');
 }
 
 // ---- clamp helper ----
