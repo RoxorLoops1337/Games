@@ -498,6 +498,20 @@ function mkHorse(o){
 function statAvg(h){ return h.speed*0.4 + h.stamina*0.35 + h.temperament*0.25; }
 function overall(h){ return Math.round(statAvg(h)); }
 
+/* ============================================================ *
+ *  ECONOMY DIALS (round 18 balancing pass) — tune here.
+ *  Goal: early not grindy · mid rewarding · late not trivially rich.
+ *  Passive streams have REPUTATION-CAPPED terms so they plateau; the
+ *  biggest rewards stay with ACTIVE play (shows, sales, auctions).
+ *   - buyPrice ×1.16 / sellQuote ×0.86–0.98 (buy>sell spread holds)
+ *   - canteen visitors: rep term capped at +60 (≈rep 4000)
+ *   - lesson fee: 11 + rep bonus capped at +30 (≈rep 5000)
+ *   - boarding: 14 + quality·7 + rep term capped at +55
+ *   - stud: fee valueOf·0.04 + rep mult ≤×1.4; demand ≤2.0;
+ *     MULTIPLE at-stud stallions get diminishing weights (limited mares)
+ *   - a single passive stream/day should stay below a top-tier show win (4000)
+ * ============================================================ */
+
 // ---------- Valuation ----------
 function valueOf(h){
   const b=breedDef(h.breed)||BREEDS[0];
@@ -527,7 +541,7 @@ function stableQuality(game){ // avg level, drives boarding rate & happiness
   if(!game.stables.length) return 1;
   return game.stables.reduce((n,s)=>n+s.level,0)/game.stables.length;
 }
-function boardRatePerStall(game){ return Math.round(14 + stableQuality(game)*7 + game.rep*0.03); }
+function boardRatePerStall(game){ return Math.round(14 + stableQuality(game)*7 + Math.min(55, (game.rep||0)*0.02)); } // rep term capped so boarding plateaus
 
 // ---------- Breeding ----------
 function canBreed(mare,stallion){
@@ -949,10 +963,10 @@ function applyCompetition(game,h,disc,tier,rng){
 const CANTEEN_MAX=5;
 function canteenLevel(game){ return (game.canteen&&game.canteen.level)||0; }
 function canteenCost(game){ const lv=canteenLevel(game); return lv>=CANTEEN_MAX?0:Math.round(700*Math.pow(1.75,lv)); } // build lv0->1, then upgrades
-function canteenIncome(game){ // visitors scale with reputation, herd size and lessons buzz
+function canteenIncome(game){ // visitors scale with reputation (capped), herd size and lessons buzz
   const lv=canteenLevel(game); if(!lv) return 0;
-  const visitors = 6 + game.rep*0.02 + game.horses.length*1.5 + teacherCount(game)*4;
-  return Math.round((8 + lv*6) + visitors*lv*0.9);
+  const visitors = 6 + Math.min(60,(game.rep||0)*0.015) + game.horses.length*1.5 + teacherCount(game)*4; // rep term capped → plateaus
+  return Math.round((8 + lv*6) + visitors*lv*0.85);
 }
 
 // ---------- Riding School — hire teachers who give lessons ----------
@@ -975,7 +989,7 @@ function teacherCount(game){ return (game.teachers||[]).length; }
 function schoolHorses(game){ return game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant).length; }
 function teacherCapacityTotal(game){ return (game.teachers||[]).reduce((n,t)=>n+t.capacity,0); }
 function lessonsPerDay(game){ return Math.min(teacherCapacityTotal(game), schoolHorses(game)*3); }
-function lessonFee(game){ return 11 + Math.round(game.rep*0.008); }
+function lessonFee(game){ return 11 + Math.min(30, Math.round((game.rep||0)*0.006)); } // rep bonus capped so lessons plateau
 function schoolLessonMult(game){ // gentle horses make better lesson mounts
   const hs=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
   if(!hs.length) return 1;
@@ -998,19 +1012,23 @@ function canStand(h){
   if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
   return {ok:true};
 }
-function studFee(game,h){ // what one visiting mare pays — scales with quality & your reputation
-  let fee = valueOf(h)*0.06 + (h.wins||0)*40 + (coatOf(h).tier||0)*30 + ((h.generation||1)-1)*15;
-  fee *= (1 + Math.min(0.6, (game.rep||0)*0.0002));
+function studFee(game,h){ // what one visiting mare pays — scales with quality & your reputation (softened)
+  let fee = valueOf(h)*0.04 + (h.wins||0)*35 + (coatOf(h).tier||0)*25 + ((h.generation||1)-1)*12;
+  fee *= (1 + Math.min(0.4, (game.rep||0)*0.0002)); // rep premium capped at +40%
   return Math.max(20, Math.round(fee));
 }
 function studDemand(game,h){ // visiting mares per day (better stallion + reputation + spring → more)
-  let d = 0.5 + (h.wins||0)*0.15 + (game.rep||0)*0.0006 + (coatOf(h).tier||0)*0.2;
-  d *= (seasonOf(game.day).id==='spring'?1.6:1.0); // spring is the breeding season
-  return clamp(d,0,4);
+  let d = 0.35 + (h.wins||0)*0.10 + Math.min(1.5,(game.rep||0)*0.0003) + (coatOf(h).tier||0)*0.15;
+  d *= (seasonOf(game.day).id==='spring'?1.4:1.0); // spring is the breeding season
+  return clamp(d,0,2.0); // fewer mares overall — a passive supplement, not a jackpot
 }
 function studIncomeFor(game,h){ return Math.round(studFee(game,h)*studDemand(game,h)); }
 function studStallions(game){ return (game.horses||[]).filter(h=>h.atStud && canStand(h).ok); }
-function studIncome(game){ return studStallions(game).reduce((n,h)=>n+studIncomeFor(game,h),0); }
+const STUD_STACK_W=[1,0.6,0.4,0.3,0.25]; // limited visiting mares → extra stallions earn less
+function studIncome(game){
+  const vals=studStallions(game).map(h=>studIncomeFor(game,h)).sort((a,b)=>b-a);
+  return vals.reduce((n,v,i)=>n+Math.round(v*(STUD_STACK_W[i]!=null?STUD_STACK_W[i]:0.2)),0);
+}
 
 // ---------- Retirement & Hall of Fame ----------
 function canRetire(h){
