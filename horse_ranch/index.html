@@ -252,6 +252,14 @@
   .decoritem{display:flex;align-items:center;gap:10px;padding:8px 0}
   .decoritem .de{font-size:24px;width:30px;text-align:center}
   .decoritem.locked{opacity:.55}
+  .pips{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+  .pip{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;color:var(--ink2);background:#0d130a;border:1px solid #0c110a;border-radius:20px;padding:2px 7px}
+  .pip .pdot{width:7px;height:7px;border-radius:50%}
+  .careitem{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #0c110a}
+  .careitem:last-child{border-bottom:none}
+  .careitem .ce{font-size:20px;width:26px;text-align:center}
+  .careitem .cbar{height:6px;border-radius:3px;background:#0d130a;overflow:hidden;margin-top:3px}
+  .caretier{font-size:11px;font-weight:800;padding:2px 9px;border-radius:20px}
 </style>
 </head>
 <body>
@@ -499,6 +507,91 @@ function traitMult(h,key,sub){ const t=traitDef(h&&h.trait); if(!t) return 1; if
 
 // ---------- Horse factory ----------
 let _idc=1;
+// ---------- Horse care: daily needs, bonding & the care bonus ----------
+// Every horse has a few needs that gently decay day-to-day and are topped up by
+// care actions (some free, some small coin sinks). Well-kept horses earn a modest
+// mood/form edge; neglect nudges happiness & health down. Deliberately forgiving —
+// a "Full care" per horse and a once-a-day stable routine keep it from being a chore.
+const NEEDS=[
+  {id:'groom',    label:'Grooming', emoji:'🧼', decay:11, cost:8,  desc:'Brush the coat, mane & tail to a shine.'},
+  {id:'exercise', label:'Exercise', emoji:'🏇', decay:13, cost:0,  desc:'Turnout and a good daily workout.'},
+  {id:'hooves',   label:'Farrier',  emoji:'🧰', decay:6,  cost:16, desc:'Pick, trim & check the hooves.'},
+  {id:'rest',     label:'Rest',     emoji:'😴', decay:14, cost:0,  desc:'Quiet time in a clean, bedded stall.'},
+  {id:'bond',     label:'Bonding',  emoji:'💗', decay:9,  cost:0,  desc:'Time & affection — builds your bond.'},
+];
+const NEED_IDS=NEEDS.map(n=>n.id);
+function needDef(id){ return NEEDS.find(n=>n.id===id)||null; }
+function freeNeedIds(){ return NEEDS.filter(n=>!n.cost).map(n=>n.id); }
+// give a horse a full needs record with sensible (content) defaults — safe to call anytime
+function needsInit(h){
+  if(!h) return h;
+  if(!h.needs||typeof h.needs!=='object') h.needs={};
+  for(const n of NEEDS){ const v=h.needs[n.id];
+    h.needs[n.id]=(typeof v==='number'&&isFinite(v))?clamp(v,0,100):(n.id==='bond'?60:78); }
+  if(typeof h.bond!=='number'||!isFinite(h.bond)) h.bond=clamp(h.needs.bond*0.4,0,100);
+  return h;
+}
+function needLevel(h,id){ if(!h) return 0; needsInit(h); const v=h.needs[id]; return typeof v==='number'?clamp(v,0,100):0; }
+// overall care 0..100 = mean of all needs
+function careScore(h){ if(!h) return 0; needsInit(h); let s=0; for(const id of NEED_IDS) s+=needLevel(h,id); return Math.round(s/NEED_IDS.length); }
+function careTier(h){ const c=careScore(h);
+  return c>=82?{id:'pampered',label:'Pampered',emoji:'✨'} : c>=58?{id:'content',label:'Content',emoji:'😊'}
+       : c>=34?{id:'restless',label:'Needs care',emoji:'😕'} : {id:'neglected',label:'Neglected',emoji:'😟'}; }
+// a gentle performance/mood multiplier: careScore 100→+6%, ~62→neutral, 0→-10%
+function careBonusMult(h){ return 0.9 + 0.16*(careScore(h)/100); }
+// how fast a given need decays today — season/weather stress raises it; care day eases it
+function needDecayFor(game,n){
+  let d=n.decay;
+  if(game){ const day=game.day||0, seas=seasonOf(day).id;
+    if(seas==='winter'&&(n.id==='rest'||n.id==='groom')) d+=3;   // cold is hard on rest & coat
+    if(seas==='summer'&&n.id==='exercise') d+=3;                 // heat raises turnout/water needs
+    if(isCareDay(day)) d=Math.max(2,d-2);                        // Vet & Farrier day: lighter upkeep
+  }
+  return d;
+}
+// decay one horse's needs by a day (mutates); bonding level tracks how well the bond need is kept
+function decayNeeds(game,h){ needsInit(h);
+  for(const n of NEEDS) h.needs[n.id]=clamp(h.needs[n.id]-needDecayFor(game,n),0,100);
+  const bl=h.needs.bond; h.bond=clamp((h.bond||0)+(bl>=70?1.2:bl>=40?0:-1.4),0,100);
+  return careScore(h);
+}
+// cost to restore one need now (0 = free), discounted on the care weekday
+function careCost(game,id){ const n=needDef(id); if(!n||!n.cost) return 0;
+  let c=n.cost; if(game&&isCareDay(game.day)) c=Math.round(c*0.6); return c; }
+// full cost to satisfy every unmet paid need for a horse (a "Full care" bundle)
+function fullCareCost(game,h){ needsInit(h); let c=0;
+  for(const n of NEEDS){ if(n.cost && h.needs[n.id]<100) c+=careCost(game,n.id); } return c; }
+// restore a single need to full (mutates game+horse). returns {ok, cost, need, gain, why}
+function applyCare(game,h,id){ const n=needDef(id); if(!n) return {ok:false,why:'Unknown need.'};
+  needsInit(h);
+  const cost=careCost(game,id);
+  if(cost>0){ if(!game||(game.money||0)<cost) return {ok:false,cost,why:'Not enough coins.'}; game.money-=cost; }
+  const before=h.needs[id], gain=Math.max(0,100-before);
+  h.needs[id]=100;
+  // small mood/health payoff, tapering if it was already high (anti-spam)
+  h.happy=clamp(h.happy+Math.round(gain*0.06)+(id==='bond'?1:0),0,100);
+  if(id==='hooves'||id==='groom') h.health=clamp(h.health+Math.round(gain*0.03),0,100);
+  if(id==='bond') h.bond=clamp((h.bond||0)+3,0,100);
+  return {ok:true, cost, need:n, gain};
+}
+// restore every need for one horse (pays the paid ones). returns {ok, cost, filled, why}
+function applyFullCare(game,h){ needsInit(h); const cost=fullCareCost(game,h);
+  if(cost>0 && (!game||(game.money||0)<cost)) return {ok:false,cost,why:'Not enough coins for full care.'};
+  let filled=0; for(const id of NEED_IDS){ if(h.needs[id]<100){ applyCare(game,h,id); filled++; } }
+  return {ok:true, cost, filled};
+}
+// which needs are below a threshold (for card pips / prompts)
+function lowNeeds(h,thresh){ thresh=thresh==null?60:thresh; needsInit(h); return NEED_IDS.filter(id=>needLevel(h,id)<thresh); }
+// stable routine: top up all FREE needs for every horse at once (once/day convenience)
+function applyDailyRoutine(game){ if(!game||!game.horses) return {horses:0,filled:0};
+  let filled=0; const free=freeNeedIds();
+  for(const h of game.horses){ needsInit(h);
+    for(const id of free){ if(h.needs[id]<100) filled++; h.needs[id]=100; }
+    h.happy=clamp(h.happy+1,0,100); if(h.needs.bond>=60) h.bond=clamp((h.bond||0)+1,0,100); }
+  game.lastRoutineDay=game.day; return {horses:game.horses.length, filled};
+}
+function routineDoneToday(game){ return !!game && game.lastRoutineDay===game.day; }
+
 function mkHorse(o){
   o=o||{}; const rng=o.rng||Math.random;
   const b=breedDef(o.breed)||BREEDS[0];
@@ -506,7 +599,7 @@ function mkHorse(o){
   const vary=(base,amt)=>clamp(Math.round(base+(rng()*2-1)*amt),8,100);
   const genes=o.genes||seedGenes(b.id,rng);
   const coat=o.coat||phenotype(genes);
-  return {
+  const h={
     id:o.id||('h'+(_idc++)),
     name:o.name||pickName(sex,rng),
     breed:b.id, sex,
@@ -527,7 +620,10 @@ function mkHorse(o){
     pregnant:false, gestation:0, sireBreed:null,
     rentDays:0, rentRate:0,   // >0 = out on rent
     stable:o.stable!=null?o.stable:0,
+    needs:o.needs||null, bond:o.bond,  // daily care needs + bonding level (needsInit fills defaults)
   };
+  needsInit(h);
+  return h;
 }
 
 function statAvg(h){ return h.speed*0.4 + h.stamina*0.35 + h.temperament*0.25; }
@@ -785,7 +881,7 @@ function freshGame(){
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
-    decor:normDecor(null),
+    decor:normDecor(null), lastRoutineDay:0,
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -821,6 +917,11 @@ function advanceDay(game,rng){
   const born=[];
   for(const h of game.horses){
     h.age++; h.trains=0; // fresh training energy each day
+    // daily care needs decay; neglect drags mood/health, a pampered horse gets a small lift
+    decayNeeds(game,h);
+    { const cs=careScore(h);
+      if(cs<35){ h.happy=clamp(h.happy-5,0,100); h.health=clamp(h.health-2,0,100); }
+      else if(cs>=80){ h.happy=clamp(h.happy+2,0,100); } }
     if(h.rentDays>0){ h.rentDays--; if(h.rentDays===0){ h.happy=clamp(h.happy-6,0,100);} }
     if(h.pregnant){
       h.gestation--;
@@ -852,6 +953,10 @@ function advanceDay(game,rng){
     inductHof(game,rec);
     notes.push({t:'info',m:'🕊️ '+h.name+' passed peacefully after a long life and enters the Hall of Fame.'});
   }
+
+  // a gentle, once-a-day nudge if some horses are being neglected (never spammy)
+  { const neg=game.horses.filter(h=>careScore(h)<34);
+    if(neg.length) notes.push({t:'info',m:'🧡 '+(neg.length===1?neg[0].name+' needs':neg.length+' horses need')+' some care — visit the 🧡 Care panel or run the daily routine.'}); }
 
   // boarding income
   if(game.boarders>0){ const inc=game.boarders*boardRatePerStall(game); game.money+=inc; }
@@ -960,7 +1065,7 @@ function disciplineScore(h,disc){
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // personality & age shape aptitude
+  return s*form*careBonusMult(h)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, personality & age shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -1328,6 +1433,7 @@ const GOALS=[
   {id:'fest4',   desc:'Attend all four seasonal festivals',tip:g=>((g.stats&&g.stats.festivals)||0)+'/4',done:g=>((g.stats&&g.stats.festivals)||0)>=4,               reward:{money:3500,rep:90}},
   {id:'auction1',desc:'Win a horse at auction',           tip:g=>((g.stats&&g.stats.auctionsWon)||0)+'/1',done:g=>((g.stats&&g.stats.auctionsWon)||0)>=1,             reward:{money:1500,rep:35}},
   {id:'decor1',  desc:'Personalise your ranch (🎨 décor)', tip:g=>ownedDecor(g).length+' items',   done:g=>ownedDecor(g).length>=1,                                reward:{money:600,rep:20}},
+  {id:'care1',   desc:'Pamper a horse (✨ full care)',      tip:g=>'best care '+Math.max(0,...g.horses.map(h=>careScore(h)))+'%',done:g=>g.horses.some(h=>careScore(h)>=88),           reward:{money:500,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1358,6 +1464,9 @@ const HR = {
   mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
   lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet, schoolLessonMult,
   TRAITS, traitDef, pickTrait, traitMult,
+  NEEDS, NEED_IDS, needDef, freeNeedIds, needsInit, needLevel, careScore, careTier, careBonusMult,
+  needDecayFor, decayNeeds, careCost, fullCareCost, applyCare, applyFullCare, lowNeeds,
+  applyDailyRoutine, routineDoneToday,
   WEEKDAYS, WEEKDAY_FULL, SCHEDULE, weekdayIndex, weekOf, scheduleFor, showsToday, isShowDay,
   disciplineOpenToday, isMarketDay, isHayDay, isCareDay, canteenDayMult, lessonDayMult, nextShowDay,
   WEATHER, weatherDef, weatherFor, hashDay, canteenWeatherMult, feedExtraFor,
@@ -1424,6 +1533,7 @@ function load(){
     if(G.stats.auctionsWon==null) G.stats.auctionsWon=0;
     if(G.stats.consigned==null) G.stats.consigned=0;
     if(!G.achievements) G.achievements=[];
+    if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
@@ -1437,6 +1547,7 @@ function load(){
       if(h.wins==null) h.wins=0; if(h.podiums==null) h.podiums=0;
       if(h.entries==null) h.entries=0; if(h.compCd==null) h.compCd=0;
       if(h.atStud==null) h.atStud=false;
+      needsInit(h); // seed daily care needs on pre-needs horses (content defaults — no sudden misery)
     });
     return true;
   }catch(e){ return false; }
@@ -1505,6 +1616,9 @@ function horseCard(h,actionsHtml){
   if(h.rare) tags.push('<span class="tag rare">✦ '+h.rare+'</span>');
   if(h.inbred) tags.push('<span class="tag busy">⚠️ Inbred</span>');
   if(h.pregnant) tags.push('<span class="tag preg">🤰 In foal ('+h.gestation+'d)</span>');
+  { const ct2=careTier(h), cc=careTierColor(ct2.id);
+    tags.push('<span class="tag" title="Care '+careScore(h)+'%" style="color:'+cc+';border-color:'+cc+'55">'+ct2.emoji+' '+ct2.label+'</span>'); }
+  if((h.bond||0)>=70) tags.push('<span class="tag" style="color:#d15a8a;border-color:#5f2640">❤ Bonded</span>');
   if(h.rentDays>0) tags.push('<span class="tag busy">🚜 Rented ('+h.rentDays+'d)</span>');
   if(h.atStud) tags.push('<span class="tag" style="color:var(--good);border-color:#2f4a1c">♞ At stud</span>');
   const c=el('div','card');
@@ -1521,8 +1635,17 @@ function horseCard(h,actionsHtml){
       statCell('SPD',h.speed)+statCell('STA',h.stamina)+statCell('TMP',h.temperament)+
       statCell('HP',h.health,true)+statCell('JOY',h.happy,true)+
     '</div>'+
+    carePips(h)+
     (actionsHtml?'<div class="btnrow">'+actionsHtml+'</div>':'');
   return c;
+}
+function careTierColor(id){ return id==='pampered'?'var(--gold)':id==='content'?'var(--good)':id==='restless'?'var(--gold)':'var(--bad)'; }
+// compact per-need pip row on the horse card
+function carePips(h){
+  needsInit(h);
+  const pips=NEEDS.map(n=>{ const v=needLevel(h,n.id); const col=barColor(v);
+    return '<span class="pip" title="'+n.label+' '+Math.round(v)+'%"><span class="pdot" style="background:'+col+'"></span>'+n.emoji+'</span>'; }).join('');
+  return '<div class="pips">'+pips+'</div>';
 }
 function statCell(label,v,pct){
   return '<div class="stat"><div class="sv">'+Math.round(v)+'</div>'+
@@ -1719,6 +1842,17 @@ function renderRanch(){
     '</div>';
   s.appendChild(feedBar);
 
+  // daily stable routine — one-tap free care (turnout, rest, bonding) for the whole herd
+  if(G.horses.length){
+    const done=routineDoneToday(G);
+    const rc=el('div','card'); rc.style.borderLeft='4px solid #d15a8a';
+    rc.innerHTML='<div class="row"><div class="grow"><div class="hname">🧡 Daily Stable Routine</div>'+
+      '<div class="hbreed">'+(done?'Done for today — free care refreshes tomorrow.':'Turnout, rest &amp; a little affection for every horse. Free, once a day.')+'</div></div>'+
+      '<button class="btn sm" id="routineBtn" '+(done?'disabled':'')+'>'+(done?'✓ Done':'🧡 Do routine')+'</button></div>';
+    s.appendChild(rc);
+    const rb=rc.querySelector('#routineBtn'); if(rb&&!done) rb.onclick=()=>doRoutine();
+  }
+
   // stables
   s.appendChild(el('h2','head','Stables ('+usedStalls(G)+'/'+totalStalls(G)+' stalls)'));
   G.stables.forEach(st=>s.appendChild(stableCard(st)));
@@ -1739,14 +1873,14 @@ function renderRanch(){
   if(!G.horses.length){ s.appendChild(el('div','empty','No horses yet.<br>Visit the 🛒 Market to buy your first horse!')); }
   G.horses.forEach(h=>{
     let acts='';
-    acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom 🪙'+groomCost()+'</button>';
+    { const low=lowNeeds(h).length; acts+='<button class="btn sm '+(low?'':'ghost')+'" data-care="'+h.id+'">🧡 Care'+(low?' ('+low+')':'')+'</button>'; }
     acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
     acts+='<button class="btn sm ghost" data-card="'+h.id+'">🖼️ Card</button>';
     if(isAdult(h)&&!tooOldToCompete(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
     if(isAdult(h)) acts+='<button class="btn sm ghost" data-retire="'+h.id+'">🏵️ Retire</button>';
     if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
     const c=horseCard(h,acts);
-    c.querySelectorAll('[data-groom]').forEach(btn=>btn.onclick=()=>groom(h));
+    c.querySelectorAll('[data-care]').forEach(btn=>btn.onclick=()=>openCare(h));
     c.querySelectorAll('[data-ped]').forEach(btn=>btn.onclick=()=>openPedigree(h));
     c.querySelectorAll('[data-card]').forEach(btn=>btn.onclick=()=>openCard(h));
     c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
@@ -1758,7 +1892,6 @@ function renderRanch(){
 function buyFeedBtn(n){ const cost=Math.round(n*hayPrice()); return '<button class="btn sm ghost" data-feed="'+n+'" '+(G.money<cost?'disabled':'')+'>+'+n+' 🪙'+cost+'</button>'; }
 function barnName(i){ const nm=['Old Barn','Oak Stable','Meadow Barn','Sunrise Stable','Willow Barn','Grand Stable']; return nm[i]||('Stable '+(i+1)); }
 function hayPrice(){ let p=(G.hayMod?G.hayMod:3)*seasonHayMul(G.day)*festivalMod(G.day,'hayMul',1); if(isHayDay(G.day)) p=p*0.5; return Math.max(1,Math.round(p)); } // autumn/harvest cheap; half price on Hay Delivery day
-function groomCost(){ return isCareDay(G.day)?12:20; } // cheaper on Vet & Farrier day
 
 function stableCard(st){
   const c=el('div','card stable');
@@ -2272,7 +2405,37 @@ function renderEstate(){
 
 // ---------------- Actions ----------------
 function buyFeedDelegate(n){ const cost=Math.round(n*hayPrice()); if(G.money<cost){ toast('Not enough coins.','bad'); return; } G.money-=cost; G.feed+=n; toast('🌾 Bought '+n+' bales.','good'); refresh(); }
-function groom(h){ const c=groomCost(); if(G.money<c){ toast('Not enough coins.','bad'); return; } G.money-=c; h.happy=clamp(h.happy+12,0,100); h.health=clamp(h.health+6,0,100); coinPop(-c); toast('🧹 '+h.name+' looks happy!','good'); refresh(); }
+// ---- Horse care actions ----
+function doRoutine(){ if(routineDoneToday(G)){ toast('Already done today.','info'); return; }
+  const r=applyDailyRoutine(G); burst('🧡✨',12); playSfx('goal');
+  toast('🧡 Stable routine done — turnout, rest & bonding for all '+r.horses+' horses.','good'); refresh(); }
+function openCare(h){
+  const ct=careTier(h), col=careTierColor(ct.id);
+  const rows=NEEDS.map(n=>{ const v=needLevel(h,n.id); const cost=careCost(G,n.id); const full=v>=100;
+    const label = full?'<span class="pill" style="color:var(--good)">✓ Full</span>'
+      : cost>0 ? '<button class="btn sm" data-need="'+n.id+'" '+(G.money<cost?'disabled':'')+'>🪙'+cost+'</button>'
+               : '<button class="btn sm ghost" data-need="'+n.id+'">Top up</button>';
+    return '<div class="careitem"><div class="ce">'+n.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:13px">'+n.label+' <span class="hbreed" style="display:inline">'+Math.round(v)+'%</span></div>'+
+      '<div class="cbar"><i style="display:block;height:100%;width:'+clamp(v,0,100)+'%;background:'+barColor(v)+'"></i></div>'+
+      '<div class="hbreed">'+n.desc+(cost>0?' · 🪙'+cost:' · free')+'</div></div>'+label+'</div>'; }).join('');
+  const fc=fullCareCost(G,h); const anyLow=lowNeeds(h,100).length;
+  modal('<h3>🧡 Caring for '+h.name+'</h3>'+
+    '<div class="row" style="align-items:center;gap:10px;margin-bottom:6px">'+
+      '<div class="hface">'+horseArt(h)+'</div><div class="grow">'+
+      '<div class="hname">'+h.name+' <span class="caretier" style="color:'+col+';background:'+col+'22">'+ct.emoji+' '+ct.label+' · '+careScore(h)+'%</span></div>'+
+      '<div class="hbreed">Bond '+Math.round(h.bond||0)+'% '+((h.bond||0)>=70?'❤':'')+' · well-kept horses show a little better &amp; sell for more.</div></div></div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow">'+
+      (anyLow?'<button class="btn" id="fullCare" style="flex:1" '+(fc>0&&G.money<fc?'disabled':'')+'>✨ Full care'+(fc>0?' 🪙'+fc:' (free)')+'</button>':'<span class="pill" style="flex:1;justify-content:center;color:var(--good)">✨ Fully cared for</span>')+
+      '<button class="btn ghost" id="careClose" style="flex:1">Done</button></div>');
+  const reopen=()=>{ save(); renderHUD(); renderTab(); openCare(h); };
+  $('careClose').onclick=closeModal;
+  document.querySelectorAll('[data-need]').forEach(b=>b.onclick=()=>{ const id=b.getAttribute('data-need'); const r=applyCare(G,h,id);
+    if(!r.ok){ toast(r.why,'bad'); return; } if(r.cost>0) coinPop(-r.cost); playSfx('coin'); reopen(); });
+  { const f=$('fullCare'); if(f) f.onclick=()=>{ const r=applyFullCare(G,h); if(!r.ok){ toast(r.why,'bad'); return; }
+    if(r.cost>0) coinPop(-r.cost); burst('✨🧡',10); playSfx('goal'); toast('✨ '+h.name+' is fully cared for!','good'); reopen(); }; }
+}
 function buyHorse(h){
   const price=buyPrice(h); if(G.money<price){ toast('Not enough coins.','bad'); return; }
   if(freeStalls(G)<=0){ toast('No free stalls — build or upgrade a stable.','bad'); return; }
