@@ -190,6 +190,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.canteen = { level: 2 }; g.teachers = [HR.mkTeacher(g, rng(1))]; // satisfies canteen + teacher goals
   g.hallOfFame = [HR.hofRecord(HR.mkHorse({ breed: 'arabian', age: 40, wins: 5 }), 'retired', 40)]; // satisfies HoF goals
   g.horses.push(HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, atStud: true })); g.stats.studIncome = 5000; // satisfies stud goals
+  g.stats.festivals = 4; // satisfies festival goals
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -716,6 +717,61 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(m.legend === true && m.champion === true, 'a legendary record makes a champion legend card');
   ok(m.name === rec.name && m.overall === rec.overall && m.breedName === 'Arabian', 'legend card mirrors the record');
   ok(m.coatBody && m.stable === 'Skyhorse Stables', 'legend card has a portrait colour and footer');
+}
+
+// ---- seasonal festivals ----
+{
+  ok(HR.FESTIVALS.length === 4, 'one festival per season');
+  // each festival lands on its scheduled season-day, deterministically
+  HR.FESTIVALS.forEach(f => {
+    const seasonIdx = HR.SEASONS.findIndex(s => s.id === f.season);
+    const day = seasonIdx * HR.SEASON_LEN + f.sday;
+    const hit = HR.festivalOn(day);
+    ok(hit && hit.id === f.id, f.name + ' occurs on its season-day');
+    ok(HR.isFestival(day), 'isFestival true on a festival day');
+  });
+  // non-festival day
+  ok(HR.festivalOn(2) === null && !HR.isFestival(2), 'ordinary days have no festival');
+  // festivals recur each year
+  const spring = HR.festivalOn(7), springY2 = HR.festivalOn(7 + HR.SEASON_LEN * 4);
+  ok(spring && springY2 && spring.id === springY2.id, 'festivals recur the next year');
+  // forecast helpers
+  const nf = HR.nextFestival(1);
+  ok(nf && nf.inDays >= 1 && HR.festivalOn(1 + nf.inDays).id === nf.fest.id, 'nextFestival forecasts the upcoming one');
+  ok(HR.upcomingFestivals(1, HR.SEASON_LEN).length >= 1, 'upcomingFestivals lists festivals within a window');
+  ok(HR.festivalMod(7, 'breedFeeMul', 1) < 1, 'the Foal Festival discounts breeding');
+  ok(HR.festivalMod(HR.SEASON_LEN + 7, 'showPrizeMul', 1) > 1, 'the Grand Fair boosts show prizes');
+  ok(HR.festivalMod(2, 'showPrizeMul', 1) === 1, 'no festival modifier on ordinary days');
+}
+{
+  // the Summer Grand Fair opens every discipline regardless of weekday
+  const fairDay = HR.SEASON_LEN + 7;
+  ok(HR.showsToday(fairDay).length === HR.DISCIPLINES.length && HR.isShowDay(fairDay), 'Grand Fair runs every discipline');
+}
+{
+  // Harvest festival flows through advanceDay: hay gift, rare market horse, counter
+  const g = HR.freshGame(); g.feed = 100; g.rep = 500;
+  const harvestDay = HR.SEASON_LEN * 2 + 7; // Autumn Harvest Market
+  g.day = harvestDay - 1;
+  const feed0 = g.feed;
+  const res = HR.advanceDay(g, rng(4));
+  ok(g.day === harvestDay && res.event && res.event.id === 'festival', 'landing on a festival day fires a festival event');
+  ok(g.feed > feed0, 'harvest festival gifts hay');
+  ok(g.market.some(h => HR.breedDef(h.breed).rarity >= 4), 'harvest festival brings a fine (rare) horse to market');
+  ok(g.stats.festivals === 1, 'festivals attended are counted');
+  // Winter Solstice gifts reputation
+  const gw = HR.freshGame(); gw.feed = 100; gw.rep = 500;
+  const solstice = HR.SEASON_LEN * 3 + 7; gw.day = solstice - 1;
+  const rep0 = gw.rep;
+  HR.advanceDay(gw, rng(4));
+  ok(gw.day === solstice && gw.rep > rep0, 'the Winter Solstice gifts reputation');
+}
+{
+  // festivals bias breeding/canteen mults through the pure helper
+  const foalDay = 7;
+  ok(HR.festivalMod(foalDay, 'happyBoon', 0) > 0, 'the Foal Festival lifts spirits');
+  const solstice = HR.SEASON_LEN * 3 + 7;
+  ok(HR.festivalMod(solstice, 'canteenMul', 1) > 1, 'the Winter Solstice boosts the canteen');
 }
 
 // ---- clamp helper ----
