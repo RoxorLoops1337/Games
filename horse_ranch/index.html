@@ -325,6 +325,7 @@
     <button class="sbtn" id="trophyBtn" title="Trophy room — achievements & career" style="margin-right:4px">🏆</button>
     <button class="sbtn" id="diaryBtn" title="Ranch diary — how your horses are feeling" style="margin-right:4px">📓</button>
     <button class="sbtn" id="grudgeBtn" title="Grudge match — challenge a rival ranch" style="margin-right:4px">⚔️</button>
+    <button class="sbtn" id="almanacBtn" title="Almanac — weather & season forecast" style="margin-right:4px">🌤️</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1599,6 +1600,46 @@ function hashDay(day){ let x=(Math.floor(day)*2654435761)>>>0; x^=x>>>15; x=Math
 function weatherFor(day){ const c=seasonOf(day).wx; const r=hashDay(day)%100; return r<c[0]?WEATHER[0] : r<c[1]?WEATHER[1] : r<c[2]?WEATHER[2] : WEATHER[3]; }
 function canteenWeatherMult(day){ return weatherFor(day).canteen; }
 function feedExtraFor(day){ return weatherFor(day).feedExtra + seasonOf(day).feedExtra; } // cold weather & winter both add hay
+
+// ---------- Weather & season forecast / almanac (READ-ONLY look-ahead, fully derived from game.day) ----------
+// A deterministic outlook over the season/weekday calendar, weather (weatherFor is hashDay-deterministic)
+// and every scheduled event (festival, fair window, auction, market/hay/show days, season finale). No state change.
+function dayForecast(game, day){
+  day=Math.floor(day||1);
+  const season=seasonOf(day), sd=seasonDay(day), wd=weekdayIndex(day), sched=scheduleFor(day), wx=weatherFor(day);
+  const events=[];
+  const fest=festivalOn(day); if(fest) events.push({type:'festival', id:fest.id, name:fest.name, emoji:fest.emoji});
+  const fair=(typeof fairFor==='function')?fairFor(day):null; if(fair) events.push({type:'fair', id:fair.id, name:fair.name, emoji:fair.emoji});
+  if(isAuctionDay(day)) events.push({type:'auction', name:'Auction House', emoji:'🔨'});
+  if(isMarketDay(day)) events.push({type:'market', name:'Market Day', emoji:'🛒'});
+  if(isHayDay(day)) events.push({type:'hay', name:'Hay Delivery', emoji:'🌾'});
+  const shows=showsToday(day); if(shows.length) events.push({type:'shows', name:sched.label, emoji:sched.emoji, shows:shows.slice()});
+  if(sd===SEASON_LEN) events.push({type:'championship', name:season.name+' Championship finale', emoji:'🏆'});
+  return { day, season:{id:season.id, name:season.name, emoji:season.emoji}, seasonDay:sd, year:yearOf(day),
+    weekday:WEEKDAYS[wd], weekdayFull:WEEKDAY_FULL[wd], weather:{id:wx.id, name:wx.name, emoji:wx.emoji},
+    scheduleLabel:sched.label, scheduleEmoji:sched.emoji, events };
+}
+function forecast(game, days){ const start=(game&&game.day)||1, n=Math.max(1, Math.min(60, days||10)), out=[];
+  for(let i=0;i<n;i++) out.push(dayForecast(game, start+i)); return out; }
+// the next occurrence of each planning-worthy event (festival/fair/auction/championship) within a window
+function upcomingEvents(game, withinDays){ const start=(game&&game.day)||1, within=Math.min(SEASON_LEN*4, withinDays||(SEASON_LEN*2)), out=[], seen={};
+  for(let i=0;i<=within;i++){ const day=start+i, f=dayForecast(game, day);
+    for(const e of f.events){ if(e.type==='shows'||e.type==='market'||e.type==='hay') continue; // headline events only
+      const key=e.type+':'+(e.id||e.name); if(seen[key]) continue; seen[key]=1; out.push({inDays:i, day, type:e.type, name:e.name, emoji:e.emoji}); } }
+  return out.sort((a,b)=>a.inDays-b.inDays); }
+// the current season's climate band + its planning modifiers + what's coming
+function seasonAlmanac(game){ const day=(game&&game.day)||1, s=seasonOf(day), sd=seasonDay(day);
+  const mods=[];
+  if(s.breedFeeMul!==1) mods.push({label:'Breeding fees', value:(s.breedFeeMul<1?'':'+')+Math.round((s.breedFeeMul-1)*100)+'%', good:s.breedFeeMul<1});
+  if(s.showPrizeMul!==1) mods.push({label:'Show prizes', value:'+'+Math.round((s.showPrizeMul-1)*100)+'%', good:s.showPrizeMul>1});
+  if(s.hayMul!==1) mods.push({label:'Hay price', value:(s.hayMul<1?'':'+')+Math.round((s.hayMul-1)*100)+'%', good:s.hayMul<1});
+  if(s.canteenMul!==1) mods.push({label:'Canteen trade', value:(s.canteenMul>1?'+':'')+Math.round((s.canteenMul-1)*100)+'%', good:s.canteenMul>1});
+  if(s.marketBonus) mods.push({label:'Market stock', value:'+'+s.marketBonus, good:true});
+  if(s.gestationAdj) mods.push({label:'Gestation', value:s.gestationAdj+'d', good:s.gestationAdj<0});
+  if(s.feedExtra) mods.push({label:'Feed use', value:'+'+s.feedExtra+'/horse', good:false});
+  return { season:{id:s.id, name:s.name, emoji:s.emoji, note:s.note}, seasonDay:sd, seasonLen:SEASON_LEN,
+    daysLeft:SEASON_LEN-sd+1, year:yearOf(day), wxBand:s.wx.slice(), modifiers:mods, upcoming:upcomingEvents(game, SEASON_LEN) };
+}
 
 const EVENTS=[
   {id:'buyer', weight:3, min:1},
@@ -2968,6 +3009,7 @@ const ACHIEVEMENTS=[
   {id:'cabinet',    icon:'🏆', name:'Full Trophy Cabinet',   desc:'Collect 20 show placings in your trophy room.',check:g=>((g.trophies)||[]).length>=20},
   {id:'contentherd',icon:'🌿', name:'A Contented Herd',       desc:'Keep a herd of five with none unhappy or unwell.',check:g=>{const hs=(g.horses)||[]; return hs.length>=5 && hs.every(h=>['sad','sick'].indexOf(horseMood(h))<0);}},
   {id:'rivalslayer',icon:'⚔️', name:'Rival Slayer',           desc:'Beat every rival ranch in a grudge match.',    check:g=>{const vs=(g.grudge&&g.grudge.vs)||{}; return RIVALS.every(r=>(vs[r.id]&&vs[r.id].w>0));}},
+  {id:'yearround',  icon:'🌤️', name:'Year-Round Rancher',     desc:'Run the ranch through a full year of seasons.',check:g=>((g.day)||1)>=SEASON_LEN*4},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3197,6 +3239,7 @@ const HR = {
   CURATOR_RANKS, curatorRank, achievementProgress, trophyRoom,
   DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
   GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
+  dayForecast, forecast, upcomingEvents, seasonAlmanac,
   isHofChampion, inductHof, retireHorse,
   PASTURE_CAP, PASTURE_REP_CAP, sendToPasture, pastureList, pastureSize, pastureRepBonus,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
@@ -5156,6 +5199,27 @@ function storeEffectLine(it){
   if(e.kind==='rep') return '⭐ +'+e.rep+' reputation';
   return '';
 }
+function openAlmanac(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const a=seasonAlmanac(G);
+  const mods = a.modifiers.length ? a.modifiers.map(m=>'<span class="pill" style="color:'+(m.good?'var(--good)':'var(--warn)')+'">'+esc(m.label)+' '+esc(m.value)+'</span>').join(' ') : '<span class="hbreed" style="opacity:.6">a steady, ordinary season</span>';
+  const upc = a.upcoming.length ? a.upcoming.slice(0,5).map(e=>'<div class="lbsub">'+e.emoji+' <b>'+esc(e.name)+'</b> — '+(e.inDays===0?'today':'in '+e.inDays+' day'+(e.inDays!==1?'s':''))+'</div>').join('') : '<div class="lbsub" style="opacity:.6">nothing special on the horizon</div>';
+  const days = forecast(G, 10).map(f=>{
+    const ev = f.events.filter(e=>e.type!=='shows').map(e=>e.emoji).join('');
+    const showTag = f.events.some(e=>e.type==='shows') ? '<span class="pill">'+f.scheduleEmoji+' shows</span>' : '';
+    return '<div class="lbrow"><div class="hface" style="background:none;font-size:20px;display:flex;align-items:center;justify-content:center">'+f.weather.emoji+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(f.weekday)+' · Day '+f.day+' <span class="pill">'+f.season.emoji+' '+esc(f.season.name)+'</span></div>'+
+      '<div class="lbsub">'+esc(f.weather.name)+' · '+esc(f.scheduleLabel)+' '+showTag+' '+ev+'</div></div></div>';
+  }).join('');
+  modal('<h3>🌤️ Almanac</h3>'+
+    '<div class="card" style="border-left:4px solid var(--blue)"><div class="hname">'+a.season.emoji+' '+esc(a.season.name)+' <span class="pill">Year '+a.year+' · day '+a.seasonDay+'/'+a.seasonLen+'</span></div>'+
+    '<div class="hbreed" style="margin-top:3px">'+esc(a.season.note)+'</div>'+
+    '<div class="pips" style="margin-top:6px">'+mods+'</div></div>'+
+    '<div class="swlabel">📅 Coming up</div><div>'+upc+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">🔭 10-day outlook</div><div>'+days+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="almClose" style="width:100%">Done</button></div>');
+  $('almClose').onclick=closeModal;
+}
 let grudgeSel={rival:null, horse:null};
 function openGrudge(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -5672,6 +5736,7 @@ function boot(){
   { const tb=$('trophyBtn'); if(tb) tb.onclick=openTrophyRoom; }
   { const db=$('diaryBtn'); if(db) db.onclick=openDiary; }
   { const gb=$('grudgeBtn'); if(gb) gb.onclick=openGrudge; }
+  { const ab=$('almanacBtn'); if(ab) ab.onclick=openAlmanac; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }

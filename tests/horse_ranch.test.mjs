@@ -3657,6 +3657,71 @@ function studGame(day) {
   ok(ach.check(g2), 'beating every rival unlocks Rival Slayer');
 }
 
+// ---- weather & season forecast / almanac (round 52) ----
+{
+  // dayForecast returns the right season/weekday/events for known days
+  const g = HR.freshGame();
+  const f7 = HR.dayForecast(g, 7);   // spring, season-day 7 → festival + fair finale day, Sunday shows
+  ok(f7.season.id === 'spring' && f7.weekday === 'Sun', 'day 7 is a spring Sunday');
+  ok(f7.events.some(e => e.type === 'festival'), 'the season-day-7 festival is forecast');
+  ok(f7.events.some(e => e.type === 'fair'), 'the fair window (days 3–7) is forecast on day 7');
+  ok(f7.events.some(e => e.type === 'shows'), 'Sunday show day is forecast');
+  const f10 = HR.dayForecast(g, 10);  // season-day 10 → auction
+  ok(f10.events.some(e => e.type === 'auction'), 'the auction day is forecast');
+  const f5 = HR.dayForecast(g, 5);    // Friday → hay delivery, in the fair window
+  ok(f5.events.some(e => e.type === 'hay') && f5.events.some(e => e.type === 'fair'), 'a Friday in the fair window shows hay + fair');
+  ok(typeof f5.weather.emoji === 'string' && f5.weather.name, 'each day carries a weather read');
+  const f14 = HR.dayForecast(g, 14);  // last day of spring → championship finale
+  ok(f14.events.some(e => e.type === 'championship'), 'the season finale is flagged');
+}
+{
+  // forecast(days) returns that many entries and is deterministic
+  const g = HR.freshGame(); g.day = 5;
+  const fc = HR.forecast(g, 10);
+  ok(fc.length === 10 && fc[0].day === 5 && fc[9].day === 14, 'forecast spans the requested days from today');
+  ok(JSON.stringify(HR.forecast(g, 10)) === JSON.stringify(HR.forecast(g, 10)), 'the forecast is deterministic');
+  // weather matches the sim’s own deterministic weatherFor read (spot-check via re-derivation is covered by the sim); just confirm stability across calls
+  ok(HR.dayForecast(g, 8).weather.id === HR.dayForecast(g, 8).weather.id, 'a given day’s weather is stable');
+}
+{
+  // upcomingEvents lists the next festival/fair/auction with correct day offsets
+  const g = HR.freshGame(); g.day = 1;
+  const up = HR.upcomingEvents(g, 14);
+  const fair = up.find(e => e.type === 'fair'), fest = up.find(e => e.type === 'festival'), auc = up.find(e => e.type === 'auction');
+  ok(fair && fair.inDays === 2, 'the spring fair opens in 2 days (season-day 3)');
+  ok(fest && fest.inDays === 6, 'the spring festival is in 6 days (season-day 7)');
+  ok(auc && auc.inDays === 9, 'the auction is in 9 days (season-day 10)');
+  ok(up.every((e, i) => i === 0 || up[i - 1].inDays <= e.inDays), 'upcoming events are sorted soonest-first');
+  ok(!up.some(e => e.type === 'shows' || e.type === 'hay' || e.type === 'market'), 'routine weekly days are not headline events');
+}
+{
+  // seasonAlmanac reflects the current season's modifiers
+  const spring = HR.freshGame(); spring.day = 2;
+  const a = HR.seasonAlmanac(spring);
+  ok(a.season.id === 'spring' && a.year === 1 && a.seasonLen === 14, 'the almanac reads the current season');
+  ok(a.modifiers.some(m => /Breeding/.test(m.label) && m.good), 'spring flags cheaper breeding as a boon');
+  ok(a.daysLeft === 14 - 2 + 1, 'days-left in the season is correct');
+  const summer = HR.freshGame(); summer.day = 16;
+  ok(HR.seasonAlmanac(summer).modifiers.some(m => /Show prizes/.test(m.label) && m.good), 'summer flags bigger show prizes');
+  const autumn = HR.freshGame(); autumn.day = 30;
+  ok(HR.seasonAlmanac(autumn).modifiers.some(m => /Hay/.test(m.label) && m.good), 'autumn flags cheap hay');
+}
+{
+  // read-only + determinism + sparse safety
+  const g = HR.freshGame(); g.day = 9;
+  const snap = JSON.stringify(g);
+  HR.dayForecast(g, 9); HR.forecast(g, 12); HR.upcomingEvents(g, 20); HR.seasonAlmanac(g);
+  ok(JSON.stringify(g) === snap, 'the almanac never mutates the game');
+  ok(JSON.stringify(HR.seasonAlmanac(g)) === JSON.stringify(HR.seasonAlmanac(g)), 'seasonAlmanac is deterministic');
+  ok(Array.isArray(HR.forecast({}, 5)) && HR.forecast({}, 5).length === 5, 'forecast is safe on a sparse game');
+  // achievement
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'yearround');
+  const young = HR.freshGame(); young.day = 30;
+  ok(ach && !ach.check(young), 'Year-Round Rancher needs a full year');
+  const veteran = HR.freshGame(); veteran.day = 56;
+  ok(ach.check(veteran), 'reaching day 56 (a full year) unlocks Year-Round Rancher');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
