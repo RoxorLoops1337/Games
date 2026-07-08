@@ -323,6 +323,7 @@
     <button class="sbtn" id="tripBtn" title="Horse trailer — away trips" style="margin-right:4px;position:relative">🚚<span id="tripBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="storeBtn" title="General store — rotating deals" style="margin-right:4px;position:relative">🏪<span id="storeBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="trophyBtn" title="Trophy room — achievements & career" style="margin-right:4px">🏆</button>
+    <button class="sbtn" id="diaryBtn" title="Ranch diary — how your horses are feeling" style="margin-right:4px">📓</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -637,6 +638,62 @@ function careTier(h){ const c=careScore(h);
        : c>=34?{id:'restless',label:'Needs care',emoji:'😕'} : {id:'neglected',label:'Neglected',emoji:'😟'}; }
 // a gentle performance/mood multiplier: careScore 100→+6%, ~62→neutral, 0→-10%
 function careBonusMult(h){ return 0.9 + 0.16*(careScore(h)/100); }
+
+// ---------- Horse diary / mood flavour feed (READ-ONLY charm derived from existing state) ----------
+// A short, deterministic flavour line per horse, keyed to its condition + game.day. No state change.
+const DIARY_LINES={
+  foal:    ['{name} kicked up their heels across the paddock. 🐣','{name} is all long legs and curiosity today.','{name} chased a butterfly and forgot what they were doing.','{name} napped in the sun after a big morning of play.'],
+  pregnant:['{name} is nesting quietly, due before long. 🤰','{name} ate for two and dozed in the deep straw.','{name} moved a little slower today, minding the foal to come.'],
+  away:    ['{name} is off on their travels — a postcard would be nice. ✈️','{name} is away from the ranch, working hard.','The stall sits empty; {name} is on the road.'],
+  atstud:  ['{name} held court at stud, every inch the sire. ♞','{name} strutted the fence line, showing off.','Visiting mares admired {name} today.'],
+  rented:  ['{name} is out on hire, earning their keep. 🚜','{name} spent the day with a paying rider.'],
+  sick:    ['{name} is under the weather and needs the vet. 🩺','{name} looked peaky today — some rest and care, please.','{name} isn’t themselves; check on them.'],
+  sad:     ['{name} sulked in the corner, feeling neglected. 😟','{name} pinned their ears — someone needs a little attention.','{name} pawed at an empty feed bucket, unimpressed.','{name} misses a bit of fuss and grooming.'],
+  elderly: ['{name} watched the youngsters with wise old eyes. 👴','{name} took a gentle turn about the yard, in no hurry.','{name} soaked up the afternoon sun, a life well lived.'],
+  champion:['{name} pranced past the trophy shelf, well aware of it. 🏆','{name} carried themselves like the champion they are.','{name} got extra treats and clearly expected them.'],
+  bonded:  ['{name} nickered a warm hello and leaned in for scratches. ❤','{name} followed Fleur around like a shadow today.','{name} rested their head on your shoulder — pure trust.'],
+  happy:   ['{name} is bright-eyed and full of beans today. 😊','{name} trotted the fence line just for the joy of it.','{name} looks a picture of health and contentment.'],
+  content: ['{name} had a quiet, ordinary, contented sort of day.','{name} grazed, dozed, and grazed some more.','{name} flicked their tail and watched the world go by.','{name} stood hip-shot in the shade, perfectly at ease.'],
+};
+const DIARY_MOOD_META={
+  foal:{emoji:'🐣',label:'Playful',w:7}, pregnant:{emoji:'🤰',label:'Expecting',w:8}, away:{emoji:'✈️',label:'Away',w:6},
+  atstud:{emoji:'♞',label:'At stud',w:4}, rented:{emoji:'🚜',label:'On hire',w:3}, sick:{emoji:'🩺',label:'Unwell',w:10},
+  sad:{emoji:'😟',label:'Unhappy',w:9}, elderly:{emoji:'👴',label:'Venerable',w:4}, champion:{emoji:'🏆',label:'Proud',w:6},
+  bonded:{emoji:'❤',label:'Devoted',w:5}, happy:{emoji:'😊',label:'Happy',w:2}, content:{emoji:'🌿',label:'Content',w:1},
+};
+function diaryMoodMeta(mood){ return DIARY_MOOD_META[mood]||DIARY_MOOD_META.content; }
+// a derived mood tag from EXISTING state (life-state first, then welfare, then temperament)
+function horseMood(h){
+  if(!h) return 'content';
+  if(stageForAge(h.age||0).id==='foal') return 'foal';
+  if(h.pregnant) return 'pregnant';
+  if(typeof horseAway==='function' && horseAway(h)) return 'away';
+  if(h.atStud) return 'atstud';
+  if((h.rentDays||0)>0) return 'rented';
+  const hp=(h.happy==null?85:h.happy), hl=(h.health==null?92:h.health), cs=careScore(h), bd=h.bond||0;
+  if(hl<45) return 'sick';
+  if(hp<35 || cs<34) return 'sad';
+  if(isElderly(h)) return 'elderly';
+  if((h.wins||0)>=3 && hp>=60) return 'champion';
+  if(bd>=70 && hp>=60) return 'bonded';
+  if(hp>=75 && cs>=58) return 'happy';
+  return 'content';
+}
+function diaryHash(s){ let x=2166136261>>>0; s=''+s; for(let i=0;i<s.length;i++){ x^=s.charCodeAt(i); x=Math.imul(x,16777619); } return x>>>0; }
+// the deterministic flavour line for a horse on a given day (stable within a day, varies day to day)
+function horseDiaryLine(h, day){
+  if(!h) return '';
+  const mood=horseMood(h); const pool=DIARY_LINES[mood]||DIARY_LINES.content;
+  const idx=diaryHash((h.id||'h')+':'+Math.floor(day||1))%pool.length;
+  return pool[idx].replace(/\{name\}/g, h.name||'This horse');
+}
+// the top-N noteworthy diary lines across the herd (welfare & special events rank highest)
+function ranchDiary(game, limit){
+  const horses=(game&&game.horses)||[], day=(game&&game.day)||1;
+  const rows=horses.map(h=>{ const mood=horseMood(h); return { horseId:h.id, name:h.name, mood, emoji:diaryMoodMeta(mood).emoji, line:horseDiaryLine(h,day), w:diaryMoodMeta(mood).w }; });
+  rows.sort((a,b)=> (b.w-a.w) || (''+a.horseId).localeCompare(''+b.horseId));
+  return rows.slice(0, limit||8);
+}
 // how fast a given need decays today — season/weather stress raises it; care day &
 // equipped tack (fly mask / rug / grooming kit) ease it
 function needDecayFor(game,n,h){
@@ -2856,6 +2913,7 @@ const ACHIEVEMENTS=[
   {id:'masterbred', icon:'👑', name:'Master of Bloodlines',  desc:'Reach the Master Breeder prestige tier.',      check:g=>breederPoints(g)>=breederTierDef('master').minPoints},
   {id:'soughtsire', icon:'♞', name:'Sought-After Sire',     desc:'Fulfil ten stud-directory bookings.',          check:g=>((g.stats&&g.stats.studBookings)||0)>=10},
   {id:'cabinet',    icon:'🏆', name:'Full Trophy Cabinet',   desc:'Collect 20 show placings in your trophy room.',check:g=>((g.trophies)||[]).length>=20},
+  {id:'contentherd',icon:'🌿', name:'A Contented Herd',       desc:'Keep a herd of five with none unhappy or unwell.',check:g=>{const hs=(g.horses)||[]; return hs.length>=5 && hs.every(h=>['sad','sick'].indexOf(horseMood(h))<0);}},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3082,6 +3140,7 @@ const HR = {
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   CURATOR_RANKS, curatorRank, achievementProgress, trophyRoom,
+  DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
   isHofChampion, inductHof, retireHorse,
   PASTURE_CAP, PASTURE_REP_CAP, sendToPasture, pastureList, pastureSize, pastureRepBonus,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
@@ -3300,6 +3359,7 @@ function horseCard(h,actionsHtml){
       statCell('HP',h.health,true)+statCell('JOY',h.happy,true)+
     '</div>'+
     carePips(h)+
+    '<div class="hbreed diaryline" style="font-style:italic;opacity:.85;margin-top:4px">'+diaryMoodMeta(horseMood(h)).emoji+' '+horseDiaryLine(h, G?G.day:1)+'</div>'+
     (actionsHtml?'<div class="btnrow">'+actionsHtml+'</div>':'');
   return c;
 }
@@ -5039,6 +5099,20 @@ function storeEffectLine(it){
   if(e.kind==='rep') return '⭐ +'+e.rep+' reputation';
   return '';
 }
+function openDiary(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const feed=ranchDiary(G, 12);
+  const rows = feed.length ? feed.map(e=>{ const h=(G.horses||[]).find(x=>x.id===e.horseId);
+    return '<div class="lbrow"><div class="hface">'+(h?horseArt(h,30):'🐴')+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(e.name)+' <span class="pill">'+e.emoji+' '+esc(diaryMoodMeta(e.mood).label)+'</span></div>'+
+      '<div class="lbsub" style="font-style:italic">'+esc(e.line)+'</div></div></div>'; }).join('')
+    : '<div class="empty">No horses in the stable yet — buy or breed one to start the diary.</div>';
+  modal('<h3>📓 Ranch Diary</h3>'+
+    '<div class="swlabel">How everyone at '+esc(ranchName(G))+' is feeling today — day '+G.day+'. Care, bonding and good feed keep the mood bright.</div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="diaryClose" style="width:100%">Done</button></div>');
+  $('diaryClose').onclick=closeModal;
+}
 function openTrophyRoom(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const r=trophyRoom(G), c=r.curator;
@@ -5489,6 +5563,7 @@ function boot(){
   { const tb=$('tripBtn'); if(tb) tb.onclick=openTrips; }
   { const sb=$('storeBtn'); if(sb) sb.onclick=openStore; }
   { const tb=$('trophyBtn'); if(tb) tb.onclick=openTrophyRoom; }
+  { const db=$('diaryBtn'); if(db) db.onclick=openDiary; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }

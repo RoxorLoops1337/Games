@@ -3518,6 +3518,73 @@ function studGame(day) {
   ok(ach.check(g2), '20 placings unlock Full Trophy Cabinet');
 }
 
+// ---- horse diary / mood flavour feed (round 50) ----
+{
+  // horseMood returns the right tag for representative states (life-state first, then welfare, then temperament)
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 1 })) === 'foal', 'a foal reads as playful');
+  const preg = HR.mkHorse({ breed: 'arabian', age: 20 }); preg.pregnant = true;
+  ok(HR.horseMood(preg) === 'pregnant', 'a pregnant mare reads as expecting');
+  const away = HR.mkHorse({ breed: 'arabian', age: 20 }); away.tripType = 'clinic'; away.tripBack = 100;
+  ok(HR.horseMood(away) === 'away', 'an away horse reads as away');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, atStud: true })) === 'atstud', 'a stud stallion reads as at-stud');
+  const rent = HR.mkHorse({ breed: 'arabian', age: 20 }); rent.rentDays = 3;
+  ok(HR.horseMood(rent) === 'rented', 'a rented horse reads as on-hire');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 20, health: 30 })) === 'sick', 'a low-health horse reads as unwell');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 20, happy: 20, health: 90 })) === 'sad', 'an unhappy horse reads as sad');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 70, happy: 85, health: 90 })) === 'elderly', 'a venerable horse reads as elderly');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 20, wins: 4, happy: 85 })) === 'champion', 'a winning horse reads as proud');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 20, wins: 0, bond: 85, happy: 85 })) === 'bonded', 'a bonded horse reads as devoted');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 20, wins: 0, bond: 30, happy: 90 })) === 'happy', 'a bright horse reads as happy');
+  ok(HR.horseMood(HR.mkHorse({ breed: 'arabian', age: 20, wins: 0, bond: 20, happy: 50 })) === 'content', 'an ordinary horse reads as content');
+  ok(HR.horseMood(null) === 'content', 'a missing horse defaults to content');
+}
+{
+  // horseDiaryLine is deterministic per horse+day, stable within a day, varies across days, non-empty, substitutes {name}
+  const h = HR.mkHorse({ breed: 'welsh', age: 20, id: 'diary1', name: 'Pip', wins: 0, bond: 20, happy: 50 });
+  const l5a = HR.horseDiaryLine(h, 5), l5b = HR.horseDiaryLine(h, 5);
+  ok(l5a === l5b && l5a.length > 0, 'the line is deterministic & non-empty for a given day');
+  ok(l5a.indexOf('Pip') >= 0 && l5a.indexOf('{name}') < 0, 'the horse’s name is substituted in');
+  // varies across days (over a span, not every single day)
+  let distinct = new Set(); for (let d = 1; d <= 12; d++) distinct.add(HR.horseDiaryLine(h, d));
+  ok(distinct.size > 1, 'the line varies from day to day');
+  // two different horses (different ids) can differ on the same day
+  const h2 = HR.mkHorse({ breed: 'welsh', age: 20, id: 'diary2', name: 'Bo', wins: 0, bond: 20, happy: 50 });
+  ok(typeof HR.horseDiaryLine(h2, 5) === 'string' && HR.horseDiaryLine(h2, 5).indexOf('Bo') >= 0, 'a second horse gets its own line');
+}
+{
+  // ranchDiary returns up to `limit` lines ordered by noteworthiness, safe on empty/sparse herds
+  const g = HR.freshGame(); g.day = 5;
+  g.horses = [
+    HR.mkHorse({ breed: 'arabian', age: 20, id: 'ok', wins: 0, bond: 20, happy: 60 }),        // content
+    HR.mkHorse({ breed: 'arabian', age: 20, id: 'ill', health: 20 }),                          // sick (most noteworthy)
+    HR.mkHorse({ breed: 'arabian', age: 20, id: 'blue', happy: 20, health: 90 }),              // sad
+  ];
+  const feed = HR.ranchDiary(g, 2);
+  ok(feed.length === 2, 'ranchDiary respects the limit');
+  ok(feed[0].mood === 'sick' && feed[1].mood === 'sad', 'welfare concerns are surfaced first');
+  ok(feed.every(e => e.name && e.line && e.emoji), 'each entry carries name, line & mood emoji');
+  ok(HR.ranchDiary({ horses: [] }, 5).length === 0, 'an empty herd yields an empty diary');
+  ok(Array.isArray(HR.ranchDiary({}, 5)), 'ranchDiary is safe on a sparse game');
+}
+{
+  // read-only + determinism
+  const g = HR.freshGame(); g.day = 7;
+  const snap = JSON.stringify(g);
+  HR.ranchDiary(g, 8); HR.horseMood(g.horses[0]); HR.horseDiaryLine(g.horses[0], g.day);
+  ok(JSON.stringify(g) === snap, 'the diary never mutates the game');
+  ok(JSON.stringify(HR.ranchDiary(g, 8)) === JSON.stringify(HR.ranchDiary(g, 8)), 'ranchDiary is deterministic');
+}
+{
+  // the "A Contented Herd" achievement
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'contentherd');
+  const g = HR.freshGame();
+  g.horses = []; for (let i = 0; i < 5; i++) g.horses.push(HR.mkHorse({ breed: 'welsh', age: 20, id: 'c' + i, happy: 80, health: 90, bond: 40 }));
+  ok(ach && ach.check(g), 'five happy horses make a contented herd');
+  g.horses[0].health = 20; // one falls ill
+  ok(!ach.check(g), 'an unwell horse breaks the contented herd');
+  const small = HR.freshGame(); ok(!ach.check(small), 'a herd of fewer than five does not qualify');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
