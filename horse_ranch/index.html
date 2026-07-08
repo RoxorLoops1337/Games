@@ -136,6 +136,17 @@
   #hudMoney.bump{display:inline-block;animation:hudbump .3s ease-out}
   @keyframes hudbump{0%{transform:scale(1)}40%{transform:scale(1.28);color:#fff2b0}100%{transform:scale(1)}}
   .goalpop{border-color:var(--good)!important}
+  /* Pedigree tree */
+  .pedwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:4px 0 6px}
+  .pedtree{display:flex;gap:8px;align-items:center;min-width:min-content}
+  .pcol{display:flex;flex-direction:column;gap:6px;justify-content:space-around;flex:0 0 auto}
+  .pcol:nth-child(2){min-height:120px} .pcol:nth-child(3){min-height:160px}
+  .pnode{background:#0d130a;border:1px solid #0c110a;border-radius:8px;padding:6px 8px;min-width:96px}
+  .pnode.self{border-color:var(--gold2);background:linear-gradient(var(--panel2),var(--panel))}
+  .pnode.empty2{opacity:.45;border-style:dashed}
+  .pn2{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ps2{font-size:10px;color:var(--ink2);white-space:nowrap}
+  .pedkey{font-size:10.5px;color:var(--ink2);text-align:center;margin-bottom:4px}
   .seg{display:flex;gap:6px;margin-bottom:10px}
   .segb{flex:1;text-align:center;background:#0d130a;border:1px solid #0c110a;border-radius:8px;padding:7px;font-size:11.5px;font-weight:800;color:var(--ink2);cursor:pointer}
   .segb.on{background:linear-gradient(var(--panel2),var(--panel));color:var(--gold);border-color:var(--gold2)}
@@ -243,6 +254,75 @@ const NAMES_M=['Thunder','Comet','Bandit','Diesel','Ranger','Apollo','Blaze','Ro
 const NAMES_F=['Bella','Luna','Willow','Star','Ginger','Daisy','Misty','Ruby','Pearl','Aurora','Ivy','Sadie','Rosie','Clover','Hazel','Poppy','Juno','Maple','Coco','Fern'];
 function pickName(sex,rng){ const a=sex==='mare'?NAMES_F:NAMES_M; return a[Math.floor(rng()*a.length)]; }
 
+// ---------- Coat-colour genetics (simplified real dominant/recessive) ----------
+// Four loci, two alleles each:
+//   E : 'E' black pigment (dominant) / 'e' red (recessive)
+//   A : 'A' agouti→bay (dominant) / 'a' uniform (recessive), only shows with E
+//   Cr: 'C' cream (incomplete dominant, counts 0/1/2) / 'n' none
+//   G : 'G' grey (dominant, masks base) / 'n' none
+// Plus an occasional rare mutation coat ('Golden'/'Pearl').
+const COAT_TIER_MULT=[1, 1.07, 1.20, 1.42];
+const COAT_TIER_NAME=['Standard','Uncommon','Rare','Legendary'];
+// per-breed allele frequencies so market/starter coats look plausible
+const COAT_PROFILE={
+  friesian:  {E:1.0,A:0.0,cream:0.00,grey:0.00},
+  akhalteke: {E:0.5,A:0.6,cream:0.55,grey:0.05,gold:0.30},
+  arabian:   {E:0.6,A:0.5,cream:0.10,grey:0.50},
+  andalusian:{E:0.6,A:0.4,cream:0.10,grey:0.55},
+  shetland:  {E:0.5,A:0.5,cream:0.20,grey:0.15},
+  clydesdale:{E:0.6,A:0.7,cream:0.05,grey:0.20},
+  thoroughbred:{E:0.6,A:0.6,cream:0.05,grey:0.15},
+  quarter:   {E:0.4,A:0.5,cream:0.30,grey:0.10},
+  appaloosa: {E:0.5,A:0.5,cream:0.20,grey:0.20},
+  mustang:   {E:0.5,A:0.6,cream:0.25,grey:0.10},
+};
+const COAT_MAP={ red:['Chestnut','Palomino','Cremello'], bay:['Bay','Buckskin','Perlino'], black:['Black','Smoky Black','Smoky Cream'] };
+function seedGenes(breed,rng){
+  rng=rng||Math.random;
+  const p=COAT_PROFILE[breed]||{E:0.5,A:0.5,cream:0.20,grey:0.10};
+  const al=(f,dom,rec)=> rng()<f?dom:rec;
+  const genes={
+    E:[al(p.E,'E','e'), al(p.E,'E','e')],
+    A:[al(p.A,'A','a'), al(p.A,'A','a')],
+    Cr:[al(p.cream,'C','n'), al(p.cream*0.5,'C','n')],
+    G:[al(p.grey,'G','n'), al(p.grey*0.4,'G','n')],
+    mut:null,
+  };
+  if(p.gold && rng()<p.gold) genes.mut='Golden';
+  return genes;
+}
+function phenotype(genes){
+  if(!genes) return {name:'Bay', tier:0};
+  const carries=(loc,al,def)=>(genes[loc]||def).indexOf(al)>=0;
+  if(genes.mut) return {name:genes.mut, tier:3};
+  if(carries('G','G',['n','n'])) return {name:'Grey', tier:1};
+  const creamCount=(genes.Cr||['n','n']).filter(a=>a==='C').length;
+  const black=carries('E','E',['e','e']);
+  const base = !black ? 'red' : (carries('A','A',['a','a'])?'bay':'black');
+  return {name:COAT_MAP[base][creamCount], tier:(creamCount===2?2:creamCount===1?1:0)};
+}
+function crossGenes(a,b,rng){
+  rng=rng||Math.random; a=a||seedGenes(null,rng); b=b||seedGenes(null,rng);
+  const one=arr=>arr[rng()<0.5?0:1];
+  const child={ E:[one(a.E),one(b.E)], A:[one(a.A),one(b.A)], Cr:[one(a.Cr),one(b.Cr)], G:[one(a.G),one(b.G)], mut:null };
+  const pm=a.mut||b.mut;
+  if(pm && rng()<0.4) child.mut=pm; else if(rng()<0.02) child.mut = rng()<0.5?'Pearl':'Golden';
+  return child;
+}
+function coatOf(h){ if(h.coat) return h.coat; return {name:h.color||'Bay', tier:0}; }
+function coatValueMult(h){ return COAT_TIER_MULT[coatOf(h).tier||0]||1; }
+
+// ---------- Pedigree helpers ----------
+function ancestorIds(h,depth){
+  const s=new Set(); if(!h) return s;
+  if(h.id) s.add(h.id);
+  (function rec(ped,d){ if(!ped||d<=0) return; ['dam','sire'].forEach(k=>{ const p=ped[k]; if(p){ if(p.id) s.add(p.id); rec(p.ped,d-1);} }); })(h.ped,depth);
+  return s;
+}
+function relatedness(mare,stallion){ // shared ancestors within ~2 generations
+  const a=ancestorIds(mare,2), b=ancestorIds(stallion,2); let n=0; a.forEach(id=>{ if(b.has(id)) n++; }); return n;
+}
+
 // ---------- Horse factory ----------
 let _idc=1;
 function mkHorse(o){
@@ -250,11 +330,13 @@ function mkHorse(o){
   const b=breedDef(o.breed)||BREEDS[0];
   const sex=o.sex||(rng()<0.5?'mare':'stallion');
   const vary=(base,amt)=>clamp(Math.round(base+(rng()*2-1)*amt),8,100);
+  const genes=o.genes||seedGenes(b.id,rng);
+  const coat=o.coat||phenotype(genes);
   return {
     id:o.id||('h'+(_idc++)),
     name:o.name||pickName(sex,rng),
     breed:b.id, sex,
-    color:o.color||b.colors[Math.floor(rng()*b.colors.length)],
+    genes, coat, color:coat.name,
     age:o.age==null?12:o.age,
     speed:o.speed!=null?o.speed:vary(b.speed,10),
     stamina:o.stamina!=null?o.stamina:vary(b.stamina,10),
@@ -263,7 +345,8 @@ function mkHorse(o){
     happy:o.happy==null?85:o.happy,
     purebred:o.purebred!==undefined?o.purebred:true,
     generation:o.generation||1,
-    rare:o.rare||null,        // rare trait tag e.g. 'Golden Coat'
+    rare:o.rare||null,        // rare trait tag e.g. 'Champion Bloodline'
+    ped:o.ped||null, inbred:o.inbred||false,
     pregnant:false, gestation:0, sireBreed:null,
     rentDays:0, rentRate:0,   // >0 = out on rent
     stable:o.stable!=null?o.stable:0,
@@ -281,7 +364,8 @@ function valueOf(h){
   const healthF = 0.55 + 0.0045*h.health;
   const pedF = (h.purebred?1.12:0.82) * (1 + Math.min(0.4, (h.generation-1)*0.06));
   const rareF = h.rare?1.35:1;
-  const v = b.base * st.factor * statF * healthF * pedF * rareF * RARITY_MULT[b.rarity];
+  const coatF = coatValueMult(h);
+  const v = b.base * st.factor * statF * healthF * pedF * rareF * coatF * RARITY_MULT[b.rarity];
   return Math.max(50, Math.round(v));
 }
 function buyPrice(h){ return Math.round(valueOf(h)*1.16); }
@@ -321,18 +405,25 @@ function breedFoal(mare,stallion,rng){
   const breed = samebreed?mb.id:dom.id;
   const mix=(a,b,amt)=> clamp(Math.round((a+b)/2 + (rng()*2-1)*amt),8,100);
   const sex = rng()<0.5?'mare':'stallion';
-  const colorSrc = rng()<0.5?mare:stallion;
-  const gen = Math.max(mare.generation,stallion.generation)+1;
+  const gen = Math.max(mare.generation||1,stallion.generation||1)+1;
+  // coat genetics: child inherits one allele per locus from each parent
+  const genes = crossGenes(mare.genes||seedGenes(mare.breed,rng), stallion.genes||seedGenes(stallion.breed,rng), rng);
+  const coat = phenotype(genes);
+  // inbreeding: shared recent ancestors hurt the foal (rewards diverse lines)
+  const inbred = relatedness(mare,stallion) > 0;
+  const penalty = inbred?0.94:1;
   const foal = mkHorse({
-    breed, sex, rng, age:0, color:colorSrc.color,
-    speed:mix(mare.speed,stallion.speed, samebreed?9:13),
-    stamina:mix(mare.stamina,stallion.stamina, samebreed?9:13),
-    temperament:mix(mare.temperament,stallion.temperament, samebreed?9:13),
-    health:96, happy:92, purebred:samebreed, generation:gen,
+    breed, sex, rng, age:0, genes, coat,
+    speed:Math.round(mix(mare.speed,stallion.speed, samebreed?9:13)*penalty),
+    stamina:Math.round(mix(mare.stamina,stallion.stamina, samebreed?9:13)*penalty),
+    temperament:Math.round(mix(mare.temperament,stallion.temperament, samebreed?9:13)*penalty),
+    health:inbred?86:96, happy:92, purebred:samebreed, generation:gen, inbred,
+    ped:{ dam:{name:mare.name,breed:mare.breed,id:mare.id,ped:mare.ped||null},
+          sire:{name:stallion.name,breed:stallion.breed,id:stallion.id,ped:stallion.ped||null} },
   });
-  // rare mutation: shimmering / champion foal
+  // rare trait mutation: champion bloodline (stat boost, separate from coat)
   if(rng()<0.05){
-    foal.rare = samebreed && breed==='akhalteke' ? 'Metallic Sheen' : 'Champion Bloodline';
+    foal.rare='Champion Bloodline';
     foal.speed=clamp(foal.speed+8,8,100); foal.stamina=clamp(foal.stamina+8,8,100);
   }
   return foal;
@@ -424,8 +515,8 @@ function advanceDay(game,rng){
       h.gestation--;
       if(h.gestation<=0){
         h.pregnant=false;
-        const stallionBreed=h.sireBreed||h.breed;
-        const foal=breedFoal(h, {breed:stallionBreed,speed:h._sireSpeed||h.speed,stamina:h._sireStam||h.stamina,temperament:h._sireTemp||h.temperament,generation:h._sireGen||1,sex:'stallion'}, rng);
+        const sire = h._sire || {breed:h.sireBreed||h.breed,speed:h._sireSpeed||h.speed,stamina:h._sireStam||h.stamina,temperament:h._sireTemp||h.temperament,generation:h._sireGen||1,sex:'stallion',name:'Unknown Sire',genes:h.genes,ped:null};
+        const foal=breedFoal(h, sire, rng);
         foal.stable=h.stable;
         born.push(foal);
       }
@@ -523,6 +614,8 @@ const GOALS=[
   {id:'gen3',   desc:'Breed a 3rd-generation foal',  tip:g=>'best gen '+(g.stats.maxGen||1), done:g=>(g.stats.maxGen||1)>=3,                                 reward:{money:1000,rep:40}},
   {id:'master', desc:'Reach Master Breeder rank',    tip:g=>rankFor(g.rep).name,             done:g=>g.rep>=2200,                                            reward:{money:2000,feed:150}},
   {id:'legend', desc:'Own a Legendary breed',        tip:g=>'',                              done:g=>g.horses.some(h=>(breedDef(h.breed)||{rarity:1}).rarity>=5), reward:{money:3000,rep:60}},
+  {id:'coat',   desc:'Own a rare-coat horse (🎨)',    tip:g=>'',                              done:g=>g.horses.some(h=>coatOf(h).tier>=2),                    reward:{money:1500,rep:30}},
+  {id:'gen5',   desc:'Breed a 5th-generation horse',  tip:g=>'best gen '+(g.stats.maxGen||1), done:g=>(g.stats.maxGen||1)>=5,                                 reward:{money:4000,rep:80}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -545,6 +638,8 @@ const HR = {
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
   statCap, trainCost, trainGain, canTrain, applyTrain,
   currentGoal, checkGoals,
+  seedGenes, phenotype, crossGenes, coatOf, coatValueMult, ancestorIds, relatedness,
+  COAT_TIER_MULT, COAT_TIER_NAME, COAT_PROFILE,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -575,6 +670,14 @@ function load(){
     if(G.stats.bestSale==null) G.stats.bestSale=0;
     if(G.stats.showWins==null) G.stats.showWins=0;
     if(G.stats.maxGen==null) G.stats.maxGen=Math.max(1,...G.horses.map(h=>h.generation||1));
+    // genetics/pedigree migration for pre-round-3 saves
+    (G.horses||[]).concat(G.market||[]).forEach(h=>{
+      if(!h.genes) h.genes=seedGenes(h.breed,Math.random);
+      if(!h.coat) h.coat=phenotype(h.genes);
+      if(h.color==null) h.color=h.coat.name;
+      if(h.ped===undefined) h.ped=null;
+      if(h.inbred===undefined) h.inbred=false;
+    });
     return true;
   }catch(e){ return false; }
 }
@@ -610,7 +713,10 @@ function horseCard(h,actionsHtml){
   if(h.purebred) tags.push('<span class="tag pure">Purebred</span>');
   else tags.push('<span class="tag">Grade</span>');
   if(h.generation>1) tags.push('<span class="tag">Gen '+h.generation+'</span>');
+  const ct=coatOf(h);
+  if(ct.tier>=2) tags.push('<span class="tag rare">🎨 '+ct.name+'</span>');
   if(h.rare) tags.push('<span class="tag rare">✦ '+h.rare+'</span>');
+  if(h.inbred) tags.push('<span class="tag busy">⚠️ Inbred</span>');
   if(h.pregnant) tags.push('<span class="tag preg">🤰 In foal ('+h.gestation+'d)</span>');
   if(h.rentDays>0) tags.push('<span class="tag busy">🚜 Rented ('+h.rentDays+'d)</span>');
   const c=el('div','card');
@@ -708,10 +814,12 @@ function renderRanch(){
   G.horses.forEach(h=>{
     let acts='';
     acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom (🪙20)</button>';
+    acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
     if(isAdult(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
     if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
     const c=horseCard(h,acts);
     c.querySelectorAll('[data-groom]').forEach(btn=>btn.onclick=()=>groom(h));
+    c.querySelectorAll('[data-ped]').forEach(btn=>btn.onclick=()=>openPedigree(h));
     c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
     c.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellHorse(h));
     s.appendChild(c);
@@ -781,8 +889,11 @@ function renderBreed(){
   const gest= mare&&stal ? gestationDays(mare,stal):5;
   const info=el('div','card');
   if(chk.ok){
+    const related=relatedness(mare,stal)>0;
     info.innerHTML='<div class="kv">Gestation<b>'+gest+' days</b></div>'+
       '<div class="kv">Foal breed<b>'+(mare.breed===stal.breed?breedDef(mare.breed).name+' (purebred)':'Cross — '+breedDef((breedDef(stal.breed).rarity>breedDef(mare.breed).rarity?stal:mare).breed).name)+'</b></div>'+
+      '<div class="kv">Coats<b>'+coatOf(mare).name+' × '+coatOf(stal).name+'</b></div>'+
+      (related?'<div class="kv" style="color:var(--warn)">Bloodline<b style="color:var(--warn)">⚠️ related — weaker foal</b></div>':'')+
       '<div class="kv">Breeding fee<b>🪙'+breedFee(mare,stal)+'</b></div>';
   } else {
     info.innerHTML='<div class="empty" style="padding:12px">'+chk.why+'</div>';
@@ -827,8 +938,13 @@ function doBreed(mare,stal){
   G.money-=fee;
   mare.pregnant=true; mare.gestation=gestationDays(mare,stal);
   mare.sireBreed=stal.breed; mare._sireSpeed=stal.speed; mare._sireStam=stal.stamina; mare._sireTemp=stal.temperament; mare._sireGen=stal.generation;
+  // snapshot the full sire so the foal gets its coat genetics + pedigree
+  mare._sire={ id:stal.id, name:stal.name, breed:stal.breed, sex:'stallion',
+    speed:stal.speed, stamina:stal.stamina, temperament:stal.temperament,
+    generation:stal.generation, genes:stal.genes, ped:stal.ped||null };
   breedPick.mare=null; breedPick.stallion=null;
-  toast('💞 '+mare.name+' is in foal! Due in '+mare.gestation+' days.','good');
+  const warn = relatedness(mare,stal)>0 ? ' ⚠️ These horses share bloodlines — the foal may be weaker.' : '';
+  toast('💞 '+mare.name+' is in foal! Due in '+mare.gestation+' days.'+warn, warn?'info':'good');
   refresh();
 }
 
@@ -935,6 +1051,40 @@ function openTrain(h){
   });
 }
 
+// ---------------- Pedigree / family tree ----------------
+function pedNode(rec,gen){
+  // rec: {name,breed,ped} or null
+  if(!rec) return '<div class="pnode empty2"><div class="pn2">Unknown</div></div>';
+  const b=breedDef(rec.breed);
+  return '<div class="pnode"><div class="pn2">'+(rec.name||'Unknown')+'</div>'+
+    '<div class="ps2">'+(b?b.name:'—')+'</div></div>';
+}
+function openPedigree(h){
+  const b=breedDef(h.breed), ct=coatOf(h);
+  const p=h.ped;
+  const dam=p&&p.dam, sire=p&&p.sire;
+  const dPed=dam&&dam.ped, sPed=sire&&sire.ped;
+  const cols =
+    '<div class="pcol">'+
+      '<div class="pnode self"><div class="pn2">'+h.name+'</div><div class="ps2">'+ct.name+' '+b.name+'</div></div>'+
+    '</div>'+
+    '<div class="pcol">'+
+      pedNode(dam,1)+pedNode(sire,1)+
+    '</div>'+
+    '<div class="pcol">'+
+      pedNode(dPed&&dPed.dam)+pedNode(dPed&&dPed.sire)+
+      pedNode(sPed&&sPed.dam)+pedNode(sPed&&sPed.sire)+
+    '</div>';
+  const lineage = !p ? 'Foundation stock — no recorded parents yet. Breed this horse to start a bloodline!' :
+    'Generation '+h.generation+(h.purebred?' · Purebred '+b.name:' · Grade')+(h.inbred?' · ⚠️ inbred':'');
+  modal('<h3>🌳 '+h.name+"'s Pedigree</h3>"+
+    '<div class="msg">'+lineage+'</div>'+
+    '<div class="pedwrap"><div class="pedtree">'+cols+'</div></div>'+
+    '<div class=" pedkey">Left → right: the horse, its parents, then grandparents.</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="pDone" style="width:100%">Close</button></div>');
+  $('pDone').onclick=closeModal;
+}
+
 // ---------------- Events UI ----------------
 function showEvent(ev){
   if(!ev) return;
@@ -1022,7 +1172,8 @@ function showIntro(){
     '<div class="msg">Build a thriving horse ranch from a single old barn.<br><br>'+
     '• 🛒 <b>Buy</b> mares &amp; stallions of real breeds<br>'+
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
-    '• 🏋️ <b>Train</b> horses to raise their stats<br>'+
+    '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
+    '• 🌳 Build <b>bloodlines</b> — pedigree rewards planned pairings<br>'+
     '• 💼 <b>Sell, rent &amp; board</b> horses for income<br>'+
     '• 🎯 Follow the <b>goals</b> up top to grow your ranch<br><br>'+
     'You start with a mare, a stallion and 🪙1,500. Good luck, rancher!</div>'+
