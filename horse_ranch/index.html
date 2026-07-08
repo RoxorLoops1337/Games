@@ -294,6 +294,18 @@ function stageForAge(age){ for(const s of STAGES){ if(age < s.max) return s; } r
 function isAdult(h){ const s=stageForAge(h.age); return s.id==='adult'||s.id==='senior'; }
 function feedPerDay(h){ const s=stageForAge(h.age); const draft=(breedDef(h.breed)||{size:1}).size>=1.4?1:0; return s.feed+draft; }
 
+// ---------- Aging: prime, decline, breeding/competing limits ----------
+const PRIME_END=30;   // performance starts to gently ebb after this age
+const BREED_MAX=56;   // too old to breed beyond here
+const OLD_AGE=64;     // "elderly" — past competing age; retirement encouraged
+const LIFESPAN=82;    // horses may peacefully pass around here (with long warning)
+function agePerformanceMult(h){ const a=h.age||0; return a<=PRIME_END?1:clamp(1-(a-PRIME_END)*0.008,0.55,1); }
+function isElderly(h){ return (h.age||0)>=OLD_AGE; }
+function pastPrime(h){ return (h.age||0)>PRIME_END; }
+function tooOldToBreed(h){ return (h.age||0)>BREED_MAX; }
+function tooOldToCompete(h){ return (h.age||0)>=OLD_AGE; }
+function ageLabel(h){ const a=h.age||0; if(a>=LIFESPAN-8) return 'Venerable'; if(a>=OLD_AGE) return 'Elderly'; if(a>PRIME_END) return 'Past prime'; if(stageForAge(a).id==='adult') return 'In prime'; return stageForAge(a).name; }
+
 // ---------- Names ----------
 const NAMES_M=['Thunder','Comet','Bandit','Diesel','Ranger','Apollo','Blaze','Rocky','Titan','Dusty','Chief','Maverick','Zeus','Storm','Rebel','Duke','Cash','Rusty','Jasper','Odin'];
 const NAMES_F=['Bella','Luna','Willow','Star','Ginger','Daisy','Misty','Ruby','Pearl','Aurora','Ivy','Sadie','Rosie','Clover','Hazel','Poppy','Juno','Maple','Coco','Fern'];
@@ -444,7 +456,7 @@ function valueOf(h){
 }
 function buyPrice(h){ return Math.round(valueOf(h)*1.16); }
 function sellQuote(h){ return Math.round(valueOf(h)*(0.86 + 0.12*(h.happy/100))); }
-function rentRate(h){ return Math.max(6, Math.round(valueOf(h)*0.028*(h.temperament/70)*(h.health/100)*traitMult(h,'rent'))); }
+function rentRate(h){ return Math.max(6, Math.round(valueOf(h)*0.028*(h.temperament/70)*(h.health/100)*traitMult(h,'rent')*agePerformanceMult(h))); }
 
 // ---------- Stables ----------
 const STARTER_STALLS=4;
@@ -466,6 +478,7 @@ function canBreed(mare,stallion){
   if(mare.sex!=='mare') return {ok:false,why:'First pick must be a mare.'};
   if(stallion.sex!=='stallion') return {ok:false,why:'Second pick must be a stallion.'};
   if(!isAdult(mare)||!isAdult(stallion)) return {ok:false,why:'Both horses must be adults.'};
+  if(tooOldToBreed(mare)||tooOldToBreed(stallion)) return {ok:false,why:'Too old to breed — honour them in retirement.'};
   if(mare.pregnant) return {ok:false,why:'This mare is already pregnant.'};
   if(mare.rentDays>0||stallion.rentDays>0) return {ok:false,why:'A horse is out on rent.'};
   return {ok:true};
@@ -613,7 +626,7 @@ function freshGame(){
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0},
-    trophies:[], goalIdx:0, seenIntro:false, audio:{on:false,vol:0.6},
+    trophies:[], hallOfFame:[], prestige:0, goalIdx:0, seenIntro:false, audio:{on:false,vol:0.6},
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -669,6 +682,15 @@ function advanceDay(game,rng){
       const q=sellQuote(f); game.money+=q; game.rep+=2;
       notes.push({t:'info',m:'🐣 '+f.name+' was born but the stalls are full — sold for 🪙'+q+'.'});
     }
+  }
+
+  // peaceful passing of the very old — long warning first (elderly from OLD_AGE), then a gentle end
+  const gone=game.horses.filter(h=>(h.age||0)>=LIFESPAN && h.rentDays===0 && !h.pregnant && rng()<0.10);
+  for(const h of gone){
+    const rec=hofRecord(h,'passed',game.day);
+    game.horses=game.horses.filter(x=>x.id!==h.id);
+    inductHof(game,rec);
+    notes.push({t:'info',m:'🕊️ '+h.name+' passed peacefully after a long life and enters the Hall of Fame.'});
   }
 
   // boarding income
@@ -757,10 +779,11 @@ function disciplineScore(h,disc){
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*traitMult(h,'show')*traitMult(h,'disc',disc.id); // personality shapes aptitude
+  return s*form*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // personality & age shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
+  if(tooOldToCompete(h)) return {ok:false,why:'Past competing age — time for a proud retirement.'};
   if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
   if(h.pregnant) return {ok:false,why:'In foal — resting.'};
   if((h.compCd||0)>game.day) return {ok:false,why:'Resting until day '+h.compCd+'.'};
@@ -835,6 +858,44 @@ function schoolIncome(game){
 function teacherSalaries(game){ return (game.teachers||[]).reduce((n,t)=>n+t.salary,0); }
 function schoolNet(game){ return schoolIncome(game)-teacherSalaries(game); }
 
+// ---------- Retirement & Hall of Fame ----------
+function canRetire(h){
+  if(!isAdult(h)) return {ok:false,why:'Only grown horses can retire.'};
+  if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
+  if(h.pregnant) return {ok:false,why:'Wait until after foaling.'};
+  return {ok:true};
+}
+function hofRecord(h,reason,day){
+  const b=breedDef(h.breed)||BREEDS[0], ct=coatOf(h);
+  return { id:h.id, name:h.name, breed:h.breed, breedName:b.name, coat:ct.name, coatTier:ct.tier||0,
+    sex:h.sex, trait:h.trait||null, speed:Math.round(h.speed), stamina:Math.round(h.stamina), temperament:Math.round(h.temperament),
+    overall:overall(h), wins:h.wins||0, podiums:h.podiums||0, generation:h.generation||1, purebred:!!h.purebred,
+    rare:h.rare||null, age:h.age||0, reason:reason||'retired', day:day||0 };
+}
+function prestigeOf(rec){ return Math.round((rec.wins||0)*10 + (rec.podiums||0)*3 + (rec.overall||0)*0.3 + (rec.coatTier||0)*8 + ((rec.generation||1)-1)*4 + (rec.rare?15:0)); }
+function legacyLine(rec){
+  const bits=[];
+  if(rec.wins>=5) bits.push('a legendary champion with '+rec.wins+' victories');
+  else if(rec.wins>=3) bits.push('a celebrated champion ('+rec.wins+' wins)');
+  else if(rec.wins>0) bits.push(rec.wins+'-time show winner');
+  if((rec.coatTier||0)>=2) bits.push('bearer of a rare '+rec.coat+' coat');
+  if((rec.generation||1)>=4) bits.push('crown of a '+rec.generation+'-generation Skyhorse bloodline');
+  if(!bits.length) bits.push('a beloved '+rec.breedName+' of Skyhorse Stables');
+  return (rec.reason==='passed'?'Passed peacefully at':'Retired at')+' age '+rec.age+' — '+bits.join(', ')+'.';
+}
+function isHofChampion(rec){ return (rec.wins||0)>=3 || (rec.coatTier||0)>=2 || (rec.generation||1)>=4; }
+function inductHof(game,rec){
+  game.hallOfFame=game.hallOfFame||[]; game.hallOfFame.unshift(rec);
+  const p=prestigeOf(rec); game.prestige=(game.prestige||0)+p;
+  game.rep += Math.round(p*0.5); // honouring a great horse lifts the estate's standing
+  return p;
+}
+function retireHorse(game,h,day){
+  const rec=hofRecord(h,'retired',day!=null?day:game.day);
+  game.horses=game.horses.filter(x=>x.id!==h.id);
+  return { rec, prestige:inductHof(game,rec) };
+}
+
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
 // ---------- Audio model (pure data + settings reducer; the audio graph is DOM-only) ----------
@@ -895,6 +956,8 @@ const GOALS=[
   {id:'week4',   desc:'Keep Skyhorse running to Week 4',tip:g=>'week '+weekOf(g.day)+'/4',      done:g=>g.day>=22,                                             reward:{money:1200,rep:30}},
   {id:'winter1', desc:'Weather your first Winter',      tip:g=>seasonOf(g.day).name,            done:g=>g.day>=SEASON_LEN*3+1,                                  reward:{money:1800,feed:100,rep:35}},
   {id:'year2',   desc:'Complete a full year (4 seasons)',tip:g=>'year '+yearOf(g.day),           done:g=>g.day>=SEASON_LEN*4+1,                                  reward:{money:3000,rep:60}},
+  {id:'hof1',    desc:'Induct your first Hall-of-Famer', tip:g=>((g.hallOfFame||[]).length)+'/1',done:g=>((g.hallOfFame||[]).length)>=1,                         reward:{money:1500,rep:40}},
+  {id:'hofchamp',desc:'Retire a Champion to the Hall',   tip:g=>'',                              done:g=>(g.hallOfFame||[]).some(r=>(r.wins||0)>=3),             reward:{money:3000,rep:80}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -932,6 +995,9 @@ const HR = {
   seasonShowPrizeMul, seasonCanteenMul, seasonHayMul, seasonMarketBonus,
   COAT_CSS, coatColor,
   NOTE_HZ, noteHz, SFX, sfxDef, normAudio, toggleAudio, setAudioVol,
+  PRIME_END, BREED_MAX, OLD_AGE, LIFESPAN, agePerformanceMult, isElderly, pastPrime,
+  tooOldToBreed, tooOldToCompete, ageLabel, canRetire, hofRecord, prestigeOf, legacyLine,
+  isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -964,6 +1030,8 @@ function load(){
     if(G.stats.showWins==null) G.stats.showWins=0;
     if(G.stats.maxGen==null) G.stats.maxGen=Math.max(1,...G.horses.map(h=>h.generation||1));
     if(!G.trophies) G.trophies=[];
+    if(!G.hallOfFame) G.hallOfFame=[];
+    if(G.prestige==null) G.prestige=0;
     G.audio=normAudio(G.audio);
     if(!G.canteen) G.canteen={level:0};
     if(!G.teachers) G.teachers=[];
@@ -1034,6 +1102,8 @@ function horseCard(h,actionsHtml){
   const tags=[];
   tags.push('<span class="tag sex-'+(h.sex==='mare'?'f':'m')+'">'+(h.sex==='mare'?'♀ Mare':'♂ Stallion')+'</span>');
   tags.push('<span class="tag stage">'+st.name+'</span>');
+  if(isElderly(h)) tags.push('<span class="tag" style="color:#c9b6e0;border-color:#4a2f5f">👴 '+ageLabel(h)+'</span>');
+  else if(pastPrime(h)) tags.push('<span class="tag" style="color:var(--ink2)">🕰️ Past prime</span>');
   { const tr=traitDef(h.trait); if(tr) tags.push('<span class="tag" title="'+tr.desc+'" style="color:var(--blue);border-color:#26405f">'+tr.emoji+' '+tr.name+'</span>'); }
   if(h.purebred) tags.push('<span class="tag pure">Purebred</span>');
   else tags.push('<span class="tag">Grade</span>');
@@ -1247,12 +1317,14 @@ function renderRanch(){
     let acts='';
     acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom 🪙'+groomCost()+'</button>';
     acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
-    if(isAdult(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
+    if(isAdult(h)&&!tooOldToCompete(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
+    if(isAdult(h)) acts+='<button class="btn sm ghost" data-retire="'+h.id+'">🏵️ Retire</button>';
     if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
     const c=horseCard(h,acts);
     c.querySelectorAll('[data-groom]').forEach(btn=>btn.onclick=()=>groom(h));
     c.querySelectorAll('[data-ped]').forEach(btn=>btn.onclick=()=>openPedigree(h));
     c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
+    c.querySelectorAll('[data-retire]').forEach(btn=>btn.onclick=()=>openRetire(h));
     c.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellHorse(h));
     s.appendChild(c);
   });
@@ -1632,6 +1704,28 @@ function renderEstate(){
     s.appendChild(c);
   });
   if(!(G.teacherMarket||[]).length) s.appendChild(el('div','empty','No applicants right now — check back in a few days.'));
+
+  // ---- Hall of Fame ----
+  s.appendChild(el('h2','head','🏛️ Hall of Fame'));
+  const hof=G.hallOfFame||[];
+  const hdr=el('div','card');
+  hdr.innerHTML='<div class="row" style="justify-content:space-around;text-align:center">'+
+    '<div><div class="hname" style="font-size:18px">'+hof.length+'</div><div class="hbreed">Legends</div></div>'+
+    '<div><div class="hname" style="font-size:18px;color:var(--gold)">'+fmt(G.prestige||0)+'</div><div class="hbreed">Estate prestige</div></div>'+
+    '<div><div class="hname" style="font-size:18px">'+hof.filter(isHofChampion).length+'</div><div class="hbreed">Champions ⭐</div></div></div>';
+  s.appendChild(hdr);
+  s.appendChild(el('div','sub','Retire beloved horses (from the Ranch tab) to honour them here forever. Champions, rare coats and deep bloodlines earn special renown.'));
+  if(!hof.length){ s.appendChild(el('div','empty','No inductees yet.<br>Retire a treasured horse to begin your Hall of Fame.')); }
+  hof.slice(0,20).forEach(r=>{
+    const champ=isHofChampion(r); const cc=coatColor(r.coat);
+    const c=el('div','card'); if(champ) c.style.borderLeft='4px solid var(--gold2)';
+    c.innerHTML='<div class="row"><div class="hface" style="background:radial-gradient(circle at 50% 35%,'+cc.body+'55,#1c2711)">'+
+      (r.reason==='passed'?'🕊️':(champ?'🏆':'🏵️'))+'</div>'+
+      '<div class="grow"><div class="hname">'+r.name+(champ?' <span class="pill" style="color:var(--gold)">Champion</span>':'')+'</div>'+
+      '<div class="hbreed">'+r.coat+' '+r.breedName+' · OVR '+r.overall+' · '+(r.wins||0)+'🥇 '+(r.podiums||0)+'🏅 · Gen '+r.generation+'</div>'+
+      '<div class="wddesc" style="margin-top:3px">'+legacyLine(r)+'</div></div></div>';
+    s.appendChild(c);
+  });
 }
 
 // ---------------- Actions ----------------
@@ -1653,6 +1747,17 @@ function sellHorse(h){
     coinPop(q); closeModal(); toast('💰 Sold '+h.name+' for 🪙'+fmt(q)+' (+'+rg+'⭐)','good'); refresh(); };
 }
 function rentOut(h,days){ h.rentDays=days; h.rentRate=rentRate(h); G.stats.rented++; toast('🐴 '+h.name+' rented out for '+days+' days.','good'); refresh(); }
+function openRetire(h){
+  const ck=canRetire(h); if(!ck.ok){ toast(ck.why,'info'); return; }
+  const rec=hofRecord(h,'retired',G.day); const p=prestigeOf(rec); const champ=isHofChampion(rec);
+  modal('<h3>🏵️ Retire '+h.name+'?</h3>'+
+    '<div class="msg">'+(champ?'A worthy champion. ':'')+'Retiring honours '+h.name+' forever in the <b>Hall of Fame</b> and frees their stall — but they’ll leave your active herd.<br><br>'+
+    legacyLine(rec)+'<br><br>Estate prestige <b class="val">+'+p+'</b> · reputation <b class="val">+'+Math.round(p*0.5)+'⭐</b></div>'+
+    '<div class="btnrow"><button class="btn" id="rGo">🏵️ Retire with honour</button><button class="btn ghost" id="rNo">Keep</button></div>');
+  $('rNo').onclick=closeModal;
+  $('rGo').onclick=()=>{ const res=retireHorse(G,h,G.day); closeModal(); burst('🏵️🏆✨🎉',16); playSfx('goal');
+    toast('🏵️ '+h.name+' retired to the Hall of Fame (+'+res.prestige+' prestige)','good'); refresh(); };
+}
 
 // ---------------- Training UI ----------------
 function openTrain(h){
@@ -1827,7 +1932,7 @@ function showIntro(){
     '• 🛒 <b>Buy</b> mares &amp; stallions of real breeds<br>'+
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
     '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
-    '• 🌳 Build <b>bloodlines</b> — every horse has an inheritable <b>personality</b><br>'+
+    '• 🌳 Build <b>bloodlines</b> &amp; retire legends to the <b>Hall of Fame</b><br>'+
     '• 🗓️ Live the <b>seasons</b> &amp; weekly rhythm — shows, hay &amp; weather<br>'+
     '• 🏆 <b>Compete</b> in shows across 4 disciplines &amp; tiers<br>'+
     '• 🍺 Open a <b>canteen</b> &amp; hire <b>teachers</b> for lessons<br>'+

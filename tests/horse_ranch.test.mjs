@@ -188,6 +188,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   for (let i = 0; i < 6; i++) g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20 }));
   g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, coat: { name: 'Golden', tier: 3 }, wins: 4 })); // satisfies rare-coat + champion goals
   g.canteen = { level: 2 }; g.teachers = [HR.mkTeacher(g, rng(1))]; // satisfies canteen + teacher goals
+  g.hallOfFame = [HR.hofRecord(HR.mkHorse({ breed: 'arabian', age: 40, wins: 5 }), 'retired', 40)]; // satisfies HoF goals
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -600,6 +601,58 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   // a fresh game ships with audio off; save-load keeps it forward-compatible
   const g = HR.freshGame();
   ok(g.audio && g.audio.on === false && g.audio.vol === 0.6, 'fresh game has audio off by default');
+}
+
+// ---- aging & prime ----
+{
+  ok(HR.agePerformanceMult({ age: 20 }) === 1, 'young horses are at full performance');
+  ok(HR.agePerformanceMult({ age: HR.PRIME_END }) === 1, 'still full at the end of prime');
+  ok(HR.agePerformanceMult({ age: HR.OLD_AGE }) < 1, 'performance ebbs with old age');
+  ok(HR.agePerformanceMult({ age: 200 }) >= 0.55, 'the age penalty has a floor');
+  ok(HR.agePerformanceMult({ age: 50 }) > HR.agePerformanceMult({ age: 70 }), 'older = lower performance');
+  ok(!HR.pastPrime({ age: 20 }) && HR.pastPrime({ age: HR.PRIME_END + 5 }), 'pastPrime tracks the prime cutoff');
+  ok(!HR.isElderly({ age: 40 }) && HR.isElderly({ age: HR.OLD_AGE }), 'elderly starts at OLD_AGE');
+  // old age blocks breeding and competing
+  const old = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: HR.BREED_MAX + 2 });
+  const stud = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20 });
+  ok(HR.tooOldToBreed(old) && !HR.canBreed(old, stud).ok, 'a horse past BREED_MAX cannot breed');
+  const elder = HR.mkHorse({ breed: 'arabian', age: HR.OLD_AGE + 1 });
+  ok(HR.tooOldToCompete(elder) && !HR.canEnterShow(HR.freshGame(), elder).ok, 'a horse past OLD_AGE cannot compete');
+  // an old horse scores lower in a discipline than an identical young one
+  const base = { breed: 'quarter', speed: 80, stamina: 70, temperament: 70, health: 100, happy: 100, trait: 'steady' };
+  const young = HR.mkHorse({ ...base, age: 20 }); const aged = HR.mkHorse({ ...base, age: HR.OLD_AGE });
+  ok(HR.disciplineScore(aged, HR.disciplineDef('race')) < HR.disciplineScore(young, HR.disciplineDef('race')), 'age lowers competition score');
+}
+
+// ---- retirement & Hall of Fame ----
+{
+  const g = HR.freshGame();
+  ok(Array.isArray(g.hallOfFame) && g.hallOfFame.length === 0 && g.prestige === 0, 'fresh game starts with an empty Hall of Fame');
+  const champ = HR.mkHorse({ breed: 'friesian', age: 40, name: 'Legend', wins: 5, podiums: 8, coat: { name: 'Black', tier: 0 }, generation: 4 });
+  g.horses.push(champ);
+  ok(HR.canRetire(champ).ok, 'an adult can retire');
+  ok(!HR.canRetire(HR.mkHorse({ breed: 'arabian', age: 2 })).ok, 'a foal cannot retire');
+  const rec = HR.hofRecord(champ, 'retired', 40);
+  ok(rec.name === 'Legend' && rec.wins === 5 && rec.breedName === 'Friesian', 'record captures the horse');
+  ok(HR.isHofChampion(rec), 'a 5-win, gen-4 horse is a Hall-of-Fame champion');
+  ok(HR.prestigeOf(rec) > HR.prestigeOf(HR.hofRecord(HR.mkHorse({ breed: 'shetland', age: 20 }), 'retired', 20)), 'a champion is worth more prestige than a plain horse');
+  ok(typeof HR.legacyLine(rec) === 'string' && HR.legacyLine(rec).includes('champion'), 'legacy line reads well');
+  // retire mutates the game: horse leaves, HoF grows, prestige + rep rise
+  const n0 = g.horses.length, rep0 = g.rep;
+  const res = HR.retireHorse(g, champ, 40);
+  ok(g.horses.length === n0 - 1, 'retired horse leaves the active herd (frees a stall)');
+  ok(g.hallOfFame.length === 1 && g.hallOfFame[0].name === 'Legend', 'inducted into the Hall of Fame');
+  ok(g.prestige === res.prestige && res.prestige > 0, 'estate prestige recorded');
+  ok(g.rep > rep0, 'honouring a great horse lifts reputation');
+}
+{
+  // the very old can pass peacefully into the Hall of Fame via advanceDay
+  const g = HR.freshGame(); g.feed = 9999;
+  g.horses.forEach(h => h.age = HR.LIFESPAN + 5);
+  let passedSomeone = false;
+  for (let i = 0; i < 60 && !passedSomeone; i++) { HR.advanceDay(g, rng(i + 1)); if (g.hallOfFame.length > 0) passedSomeone = true; }
+  ok(passedSomeone, 'a very old horse eventually passes into the Hall of Fame');
+  ok(g.hallOfFame.every(r => r.reason === 'passed' || r.reason === 'retired'), 'Hall records carry a reason');
 }
 
 // ---- clamp helper ----
