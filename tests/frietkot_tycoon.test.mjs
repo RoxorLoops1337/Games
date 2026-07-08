@@ -561,5 +561,27 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.orderValue(g, { fav: null, spend: 1 }, 1) > FS.orderValue(FS.freshGame(), { fav: null, spend: 1 }, 1), 'a richer location earns more per order');
 }
 
+// ---- empire: progressive zoom-out unlocking (rework B) ----
+{
+  // gate thresholds: 3 shops in a city → country, 3 cities → world, 3 countries → galaxy
+  ok(FS.UNLOCK.country.metric === 'maxCity' && FS.UNLOCK.country.n === 3, 'country unlocks at 3 shops in one city');
+  ok(FS.UNLOCK.world.metric === 'cities' && FS.UNLOCK.world.n === 3, 'world unlocks at 3 cities');
+  ok(FS.UNLOCK.galaxy.metric === 'countries' && FS.UNLOCK.galaxy.n === 3, 'galaxy unlocks at 3 countries');
+  // a brand-new empire (1 shop, 1 city) can zoom nowhere
+  const start = { maxCity: 1, cities: 1, countries: 1 };
+  ok(!FS.tierUnlockedWith(start, 'country'), 'a single shop cannot zoom out to the country');
+  ok(!FS.tierUnlockedWith(start, 'world') && !FS.tierUnlockedWith(start, 'galaxy'), 'nothing higher is unlocked either');
+  // fill the home city to 3 shops → country unlocks (but not world yet)
+  const cityFull = { maxCity: 3, cities: 1, countries: 1 };
+  ok(FS.tierUnlockedWith(cityFull, 'country'), '3 shops in a city unlocks the country map');
+  ok(!FS.tierUnlockedWith(cityFull, 'world'), 'but the world stays locked until 3 cities');
+  // 3 cities → world; 3 countries → galaxy
+  ok(FS.tierUnlockedWith({ maxCity: 3, cities: 3, countries: 1 }, 'world'), '3 cities unlocks the world');
+  ok(!FS.tierUnlockedWith({ maxCity: 3, cities: 3, countries: 1 }, 'galaxy'), 'galaxy still locked at 1 country');
+  ok(FS.tierUnlockedWith({ maxCity: 3, cities: 3, countries: 3 }, 'galaxy'), '3 countries unlocks the galaxy');
+  // an unknown tier is treated as always-open (no gate)
+  ok(FS.tierUnlockedWith(start, 'city') === true, 'the city tier is never gated');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
