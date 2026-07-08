@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Stable Story — Horse Ranch Simulator</title>
+<title>Skyhorse Stables — Horse Ranch Simulator</title>
 <style>
   :root{
     --bg:#1a2416;--panel:#243019;--panel2:#2f3f22;--edge:#0c110a;--ink:#f4efdf;--ink2:#c3c9a6;
@@ -32,6 +32,7 @@
   #scene .barn:before{content:"";position:absolute;top:-16px;left:-4px;right:-4px;height:18px;background:#5a2018;clip-path:polygon(0 100%,50% 0,100% 100%)}
   #scene .barn:after{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:20px;height:26px;background:#4a1a13;border-radius:3px 3px 0 0}
   #scene .horse{position:absolute;bottom:20px;font-size:26px;filter:drop-shadow(0 2px 1px #0004);animation:graze 3s ease-in-out infinite}
+  #sceneCanteen{position:absolute;bottom:22px;right:20px;font-size:30px;filter:drop-shadow(0 2px 2px #0005)}
   @keyframes graze{0%,100%{transform:translateY(0) scaleX(1)}50%{transform:translateY(-2px)}}
   #sceneTitle{position:absolute;top:8px;left:12px;font-size:13px;font-weight:900;color:#2a3a18;text-shadow:0 1px 0 #ffffff70;letter-spacing:.5px}
   #sceneRank{position:absolute;top:26px;left:12px;font-size:11px;font-weight:800;color:#3a4a24;text-shadow:0 1px 0 #ffffff55}
@@ -176,8 +177,9 @@
   <div id="scene">
     <div class="sun"></div>
     <div class="barn"></div>
-    <div id="sceneTitle">🐴 Stable Story</div>
-    <div id="sceneRank">Ranch Hand</div>
+    <div id="sceneCanteen" style="display:none">🍺</div>
+    <div id="sceneTitle">🐴 Skyhorse Stables</div>
+    <div id="sceneRank">Ranch Hand · Fleur</div>
     <div id="sceneHorses"></div>
   </div>
 
@@ -185,6 +187,7 @@
     <div class="tab on" data-tab="ranch"><span class="ti">🏡</span>Ranch</div>
     <div class="tab" data-tab="market"><span class="ti">🛒</span>Market</div>
     <div class="tab" data-tab="breed"><span class="ti">💞</span>Breed</div>
+    <div class="tab" data-tab="estate"><span class="ti">🍺</span>Estate</div>
     <div class="tab" data-tab="biz"><span class="ti">💼</span>Business</div>
   </div>
 
@@ -194,6 +197,7 @@
     <div class="sec on" id="sec-ranch"></div>
     <div class="sec" id="sec-market"></div>
     <div class="sec" id="sec-breed"></div>
+    <div class="sec" id="sec-estate"></div>
     <div class="sec" id="sec-biz"></div>
   </div>
 </div>
@@ -479,13 +483,15 @@ function freshGame(){
     v:1, money:1500, feed:30, rep:0, day:1,
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0},
+    canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0},
     trophies:[], goalIdx:0, seenIntro:false,
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
   g.horses.push(mkHorse({breed:'mustang',sex:'stallion',age:16,name:'Bandit',stable:0,rng:seededOnce(29)}));
   restockMarket(g, seededOnce(7));
+  restockTeachers(g, seededOnce(13));
   return g;
 }
 // tiny deterministic rng so a fresh game is identical every load (nice for tutorial + tests)
@@ -542,8 +548,18 @@ function advanceDay(game,rng){
   // rent income (paid daily while out)
   for(const h of game.horses){ if(h.rentDays>0){ game.money+=h.rentRate; } }
 
+  // canteen income + riding-school net (lesson fees minus teacher salaries)
+  if(canteenLevel(game)>0) game.money+=canteenIncome(game);
+  if(teacherCount(game)>0){
+    const served=lessonsPerDay(game);
+    game.money += schoolNet(game);
+    game.stats.lessons=(game.stats.lessons||0)+served;
+    game.rep += Math.min(3, Math.floor(served/3)); // a busy school builds reputation
+  }
+
   // market restock every 4 days
   if(game.day-game.marketDay>=4) restockMarket(game,rng);
+  if(game.day-(game.teacherDay||0)>=5) restockTeachers(game,rng);
 
   // random event (~18% per day once past day 2)
   let event=null;
@@ -640,6 +656,46 @@ function applyCompetition(game,h,disc,tier,rng){
   return res;
 }
 
+// ---------- The Canteen (a little bar where visitors relax) ----------
+const CANTEEN_MAX=5;
+function canteenLevel(game){ return (game.canteen&&game.canteen.level)||0; }
+function canteenCost(game){ const lv=canteenLevel(game); return lv>=CANTEEN_MAX?0:Math.round(700*Math.pow(1.75,lv)); } // build lv0->1, then upgrades
+function canteenIncome(game){ // visitors scale with reputation, herd size and lessons buzz
+  const lv=canteenLevel(game); if(!lv) return 0;
+  const visitors = 6 + game.rep*0.02 + game.horses.length*1.5 + teacherCount(game)*4;
+  return Math.round((8 + lv*6) + visitors*lv*0.9);
+}
+
+// ---------- Riding School — hire teachers who give lessons ----------
+const TEACHER_NAMES=['Margot','Sofie','Hans','Lena','Pieter','Anke','Bram','Nadia','Tom','Elke','Joris','Fien','Ruben','Saar'];
+const TEACHER_TITLES=['Riding Instructor','Dressage Coach','Show Trainer','Vaulting Teacher','Pony Club Lead','Eventing Mentor'];
+function mkTeacher(game,rng){
+  rng=rng||Math.random;
+  const skill=1+Math.floor(rng()*5); // 1..5 stars
+  const disc=DISCIPLINES[Math.floor(rng()*DISCIPLINES.length)].id;
+  return { id:'t'+(_idc++), name:TEACHER_NAMES[Math.floor(rng()*TEACHER_NAMES.length)],
+    title:TEACHER_TITLES[Math.floor(rng()*TEACHER_TITLES.length)],
+    skill, disc, capacity:2+skill, salary:18+skill*14, hireFee:(18+skill*14)*3 };
+}
+function restockTeachers(game,rng){
+  rng=rng||Math.random; const n=3;
+  game.teacherMarket=[]; for(let i=0;i<n;i++) game.teacherMarket.push(mkTeacher(game,rng));
+  game.teacherDay=game.day;
+}
+function teacherCount(game){ return (game.teachers||[]).length; }
+function schoolHorses(game){ return game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant).length; }
+function teacherCapacityTotal(game){ return (game.teachers||[]).reduce((n,t)=>n+t.capacity,0); }
+function lessonsPerDay(game){ return Math.min(teacherCapacityTotal(game), schoolHorses(game)*3); }
+function lessonFee(game){ return 11 + Math.round(game.rep*0.008); }
+function schoolIncome(game){
+  const cap=teacherCapacityTotal(game); if(!cap) return 0;
+  const served=lessonsPerDay(game);
+  const avgSkill=game.teachers.reduce((n,t)=>n+t.skill,0)/game.teachers.length;
+  return Math.round(served*lessonFee(game)*(0.7+0.06*avgSkill));
+}
+function teacherSalaries(game){ return (game.teachers||[]).reduce((n,t)=>n+t.salary,0); }
+function schoolNet(game){ return schoolIncome(game)-teacherSalaries(game); }
+
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
 // ---------- Training (raise stats toward each horse's breed potential) ----------
@@ -676,6 +732,8 @@ const GOALS=[
   {id:'gen5',   desc:'Breed a 5th-generation horse',  tip:g=>'best gen '+(g.stats.maxGen||1), done:g=>(g.stats.maxGen||1)>=5,                                 reward:{money:4000,rep:80}},
   {id:'champ',  desc:'Raise a Champion (3+ show wins)',tip:g=>'',                              done:g=>g.horses.some(h=>(h.wins||0)>=3),                       reward:{money:2500,rep:50}},
   {id:'grandprix',desc:'Win a Regional Championship+', tip:g=>'best tier '+(g.stats.bestTierWin||0),done:g=>(g.stats.bestTierWin||0)>=3,                        reward:{money:6000,rep:120}},
+  {id:'canteen', desc:'Open the Canteen (🍺 Estate)',  tip:g=>'',                              done:g=>canteenLevel(g)>0,                                      reward:{money:800,rep:20}},
+  {id:'teacher', desc:'Hire your first teacher',       tip:g=>teacherCount(g)+'/1',            done:g=>teacherCount(g)>=1,                                     reward:{money:600,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -702,6 +760,9 @@ const HR = {
   COAT_TIER_MULT, COAT_TIER_NAME, COAT_PROFILE,
   DISCIPLINES, disciplineDef, COMP_TIERS, tierDef, tierUnlocked, highestTier,
   disciplineScore, canEnterShow, runCompetition, applyCompetition,
+  CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
+  mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
+  lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -733,6 +794,10 @@ function load(){
     if(G.stats.showWins==null) G.stats.showWins=0;
     if(G.stats.maxGen==null) G.stats.maxGen=Math.max(1,...G.horses.map(h=>h.generation||1));
     if(!G.trophies) G.trophies=[];
+    if(!G.canteen) G.canteen={level:0};
+    if(!G.teachers) G.teachers=[];
+    if(!G.teacherMarket||!G.teacherMarket.length){ restockTeachers(G,Math.random); }
+    if(G.stats.lessons==null) G.stats.lessons=0;
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
       if(!h.genes) h.genes=seedGenes(h.breed,Math.random);
@@ -815,7 +880,8 @@ function renderHUD(){
   $('hudRep').textContent=fmt(G.rep);
   $('hudDay').textContent=G.day;
   const rank=rankFor(G.rep);
-  $('sceneRank').textContent=rank.name;
+  $('sceneRank').textContent=rank.name+' · Fleur';
+  { const sc=$('sceneCanteen'); if(sc) sc.style.display=canteenLevel(G)>0?'block':'none'; }
   // scene horses
   const sh=$('sceneHorses'); sh.innerHTML='';
   const show=G.horses.slice(0,6);
@@ -1173,6 +1239,72 @@ function doEnterShow(h,disc,tier){
   $('xOk').onclick=()=>{ closeModal(); toast(medal(res.place)+' '+h.name+': '+pn.replace('!','')+(bits.length?' ('+bits.join(' ')+')':''), res.place<=3?'good':'info'); refresh(); };
 }
 
+// ---------------- Estate: Canteen + Riding School ----------------
+function stars(n){ return '★'.repeat(n)+'☆'.repeat(5-n); }
+function renderEstate(){
+  const s=$('sec-estate'); s.innerHTML='';
+  s.appendChild(el('h2','head','Skyhorse Estate'));
+  s.appendChild(el('div','sub','Fleur’s estate is more than stables — build a canteen for visitors and run a riding school to earn steady daily income.'));
+
+  // ---- Canteen ----
+  const lv=canteenLevel(G);
+  const cc=el('div','card'); cc.style.borderLeft='4px solid var(--gold2)';
+  const cost=canteenCost(G);
+  cc.innerHTML='<div class="row"><div class="grow"><div class="hname">🍺 The Canteen '+(lv?'<span class="pill">Lv '+lv+'</span>':'')+'</div>'+
+    '<div class="hbreed">'+(lv? ('A cosy bar where visitors relax · earns 🪙'+canteenIncome(G)+'/day') : 'A little bar &amp; café — build it to draw paying visitors.')+'</div></div>'+
+    (lv>=CANTEEN_MAX
+      ? '<span class="pill">MAX</span>'
+      : '<button class="btn sm" id="canteenBtn" '+(G.money<cost?'disabled':'')+'>'+(lv?'⬆️ ':'🔨 Build ')+'🪙'+fmt(cost)+'</button>')+
+    '</div>';
+  s.appendChild(cc);
+  const cb=cc.querySelector('#canteenBtn');
+  if(cb) cb.onclick=()=>{ if(G.money<cost) return; G.money-=cost; G.canteen.level=lv+1; coinPop(-cost);
+    toast(lv?'🍺 Canteen upgraded to Lv '+(lv+1)+'!':'🍺 The Canteen is open for business!','good'); refresh(); };
+
+  // ---- Riding School ----
+  s.appendChild(el('h2','head','🎓 Riding School'));
+  const nH=schoolHorses(G), served=lessonsPerDay(G), inc=schoolIncome(G), sal=teacherSalaries(G), net=schoolNet(G);
+  const sc=el('div','card');
+  sc.innerHTML='<div class="kv">Teachers hired<b>'+teacherCount(G)+'</b></div>'+
+    '<div class="kv">Horses available for lessons<b>'+nH+'</b></div>'+
+    '<div class="kv">Lessons given / day<b>'+served+' (fee 🪙'+lessonFee(G)+')</b></div>'+
+    '<div class="kv">Lesson income / day<b>🪙'+fmt(inc)+'</b></div>'+
+    '<div class="kv">Teacher salaries / day<b>🪙'+fmt(sal)+'</b></div>'+
+    '<div class="kv">Net / day<b style="color:'+(net>=0?'var(--good)':'var(--bad)')+'">'+(net>=0?'+':'')+'🪙'+fmt(net)+'</b></div>';
+  s.appendChild(sc);
+  if(teacherCount(G) && nH===0) s.appendChild(el('div','sub','⚠️ You have teachers but no free adult horses — lessons need horses. Buy/raise horses or free them up from rent.'));
+
+  // hired teachers
+  (G.teachers||[]).forEach(t=>{
+    const d=disciplineDef(t.disc);
+    const c=el('div','card'); c.innerHTML='<div class="row"><div class="hface">🧑‍🏫</div>'+
+      '<div class="grow"><div class="hname">'+t.name+' <span class="pill">'+stars(t.skill)+'</span></div>'+
+      '<div class="hbreed">'+t.title+' · '+(d?d.emoji+' '+d.name:'')+' · caps '+t.capacity+' lessons · 🪙'+t.salary+'/day</div></div>'+
+      '<button class="btn sm ghost" data-fire="'+t.id+'">Let go</button></div>';
+    c.querySelector('[data-fire]').onclick=()=>{ G.teachers=G.teachers.filter(x=>x.id!==t.id); toast('👋 '+t.name+' has left the school.','info'); refresh(); };
+    s.appendChild(c);
+  });
+
+  // hire market
+  s.appendChild(el('h2','head','Available Teachers'));
+  s.appendChild(el('div','sub','New applicants arrive every few days. Pay a one-off hiring fee, then a daily salary.'));
+  (G.teacherMarket||[]).forEach(t=>{
+    const d=disciplineDef(t.disc);
+    const c=el('div','card'); c.innerHTML='<div class="row"><div class="hface">🧑‍🏫</div>'+
+      '<div class="grow"><div class="hname">'+t.name+' <span class="pill">'+stars(t.skill)+'</span></div>'+
+      '<div class="hbreed">'+t.title+' · '+(d?d.emoji+' '+d.name:'')+' · caps '+t.capacity+'/day · 🪙'+t.salary+'/day</div></div>'+
+      '<button class="btn sm" data-hire="'+t.id+'" '+(G.money<t.hireFee?'disabled':'')+'>Hire 🪙'+fmt(t.hireFee)+'</button></div>';
+    c.querySelector('[data-hire]').onclick=()=>{
+      if(G.money<t.hireFee){ toast('Not enough coins to hire.','bad'); return; }
+      G.money-=t.hireFee; coinPop(-t.hireFee);
+      G.teachers.push(t); G.teacherMarket=G.teacherMarket.filter(x=>x.id!==t.id);
+      toast('🎓 Hired '+t.name+' ('+stars(t.skill)+')!','good'); refresh();
+    };
+    s.appendChild(c);
+  });
+  if(!(G.teacherMarket||[]).length) s.appendChild(el('div','empty','No applicants right now — check back in a few days.'));
+}
+
 // ---------------- Actions ----------------
 function buyFeedDelegate(n){ const cost=Math.round(n*hayPrice()); if(G.money<cost){ toast('Not enough coins.','bad'); return; } G.money-=cost; G.feed+=n; toast('🌾 Bought '+n+' bales.','good'); refresh(); }
 function groom(h){ if(G.money<20){ toast('Not enough coins.','bad'); return; } G.money-=20; h.happy=clamp(h.happy+12,0,100); h.health=clamp(h.health+6,0,100); toast('🧹 '+h.name+' looks happy!','good'); refresh(); }
@@ -1325,7 +1457,7 @@ function doDay(){
 // ---------------- Nav / refresh ----------------
 function setTab(t){ curTab=t; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.getAttribute('data-tab')===t));
   document.querySelectorAll('.sec').forEach(x=>x.classList.remove('on')); $('sec-'+t).classList.add('on'); renderTab(); }
-function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='market')renderMarket(); else if(curTab==='breed')renderBreed(); else renderBiz(); }
+function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='market')renderMarket(); else if(curTab==='breed')renderBreed(); else if(curTab==='estate')renderEstate(); else renderBiz(); }
 function refresh(){
   const done=checkGoals(G);
   renderHUD(); renderGoal(); renderTab(); bindFeedButtons(); save();
@@ -1336,16 +1468,16 @@ function bindFeedButtons(){ document.querySelectorAll('[data-feed]').forEach(b=>
 
 // ---------------- Intro ----------------
 function showIntro(){
-  modal('<h3>🐴 Welcome to Stable Story!</h3>'+
-    '<div class="msg">Build a thriving horse ranch from a single old barn.<br><br>'+
+  modal('<h3>🐴 Welcome to Skyhorse Stables!</h3>'+
+    '<div class="msg">You’re <b>Fleur</b>, the new manager of Skyhorse Stables. Grow it from a single old barn into a bustling equestrian estate.<br><br>'+
     '• 🛒 <b>Buy</b> mares &amp; stallions of real breeds<br>'+
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
     '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
     '• 🌳 Build <b>bloodlines</b> — pedigree rewards planned pairings<br>'+
     '• 🏆 <b>Compete</b> in shows across 4 disciplines &amp; tiers<br>'+
-    '• 💼 <b>Sell, rent &amp; board</b> horses for income<br>'+
-    '• 🎯 Follow the <b>goals</b> up top to grow your ranch<br><br>'+
-    'You start with a mare, a stallion and 🪙1,500. Good luck, rancher!</div>'+
+    '• 🍺 Open a <b>canteen</b> &amp; hire <b>teachers</b> for lessons<br>'+
+    '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+
+    'You start with a mare, a stallion and 🪙1,500. Good luck, Fleur!</div>'+
     '<div class="btnrow"><button class="btn" id="introGo" style="width:100%">Start Ranching!</button></div>',{center:true});
   $('introGo').onclick=()=>{ G.seenIntro=true; save(); closeModal(); };
 }
