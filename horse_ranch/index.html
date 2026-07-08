@@ -166,6 +166,28 @@
   .pn2{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ps2{font-size:10px;color:var(--ink2);white-space:nowrap}
   .pedkey{font-size:10.5px;color:var(--ink2);text-align:center;margin-bottom:4px}
+  /* Trading card preview */
+  .tcwrap{display:flex;justify-content:center;margin:4px 0 10px}
+  .tcard{width:260px;background:linear-gradient(#243019,#141d0c);border:3px solid #3a4a24;border-radius:16px;padding:12px;box-shadow:0 8px 24px #000a}
+  .tcard.tchamp{border-color:var(--gold2);box-shadow:0 8px 26px #000a,0 0 0 1px #ffd35a44 inset}
+  .tctop{text-align:center;margin-bottom:6px}
+  .tcname{font-weight:900;font-size:18px;color:var(--gold)}
+  .tcbreed{font-size:11px;color:var(--ink2)}
+  .tcport{height:132px;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid #0c110a;margin-bottom:8px}
+  .tcport .hsvg{width:120px;height:auto;filter:drop-shadow(0 3px 3px #0006)}
+  .tctags{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-bottom:8px}
+  .cchip{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px;background:#0d130a;border:1px solid #0c110a;color:var(--ink2)}
+  .cchip.sex-m{color:#7fb8ff} .cchip.sex-f{color:var(--pink)} .cchip.good{color:var(--good)} .cchip.rare{color:#d9a3ff} .cchip.gold{color:var(--gold);border-color:var(--gold2)}
+  .csRow{display:flex;align-items:center;gap:6px;margin:3px 0}
+  .csL{width:34px;font-size:10px;font-weight:800;color:var(--ink2)}
+  .csBar{flex:1;height:8px;background:#0d130a;border-radius:5px;overflow:hidden}
+  .csBar>i{display:block;height:100%;border-radius:5px}
+  .csV{width:24px;text-align:right;font-size:11px;font-weight:900;font-variant-numeric:tabular-nums}
+  .tcmeta{display:flex;justify-content:space-around;margin:8px 0 4px;font-size:12px;color:var(--ink2)}
+  .tcmeta b{color:var(--ink)}
+  .tccareer{text-align:center;font-size:10.5px;color:var(--ink2);margin-bottom:8px}
+  .tcfoot{display:flex;flex-direction:column;gap:2px;background:#0d130a;border-radius:10px;padding:6px 9px;font-size:10px}
+  .tcfoot span:first-child{color:var(--gold);font-weight:800} .tcfoot span:last-child{color:var(--ink2)}
   /* This Week schedule */
   .weeklist{display:flex;flex-direction:column;gap:5px;margin:4px 0 8px}
   .weekrow{background:#0d130a;border:1px solid #0c110a;border-radius:9px;padding:7px 9px}
@@ -922,6 +944,41 @@ function retireHorse(game,h,day){
   return { rec, prestige:inductHof(game,rec) };
 }
 
+// ---------- Shareable "trading card" data model (rendering is DOM-only) ----------
+function stampFor(game){
+  if(!game||game.day==null) return { day:1, year:1, season:'Spring', weekday:'Monday' };
+  return { day:game.day, year:yearOf(game.day), season:seasonOf(game.day).name, weekday:WEEKDAY_FULL[weekdayIndex(game.day)] };
+}
+function cardModel(h,game){
+  const b=breedDef(h.breed)||BREEDS[0], ct=coatOf(h), st=stageForAge(h.age), tr=traitDef(h.trait);
+  const cc=coatColor(ct.name);
+  return {
+    name:h.name, sex:h.sex, breed:b.id, breedName:b.name, rarity:b.rarity, rarityName:RARITY_NAME[b.rarity],
+    coat:ct.name, coatTier:ct.tier||0, coatBody:cc.body, coatMane:cc.mane,
+    trait:h.trait||null, traitName:tr?tr.name:null, traitEmoji:tr?tr.emoji:'',
+    stage:st.name, ageLabel:ageLabel(h), age:h.age||0, foal:st.id==='foal',
+    speed:Math.round(h.speed), stamina:Math.round(h.stamina), temperament:Math.round(h.temperament),
+    health:Math.round(h.health), happy:Math.round(h.happy), overall:overall(h),
+    wins:h.wins||0, podiums:h.podiums||0, generation:h.generation||1, purebred:!!h.purebred, rare:h.rare||null,
+    value:valueOf(h), champion:(h.wins||0)>=3, atStud:!!h.atStud,
+    sire:(h.ped&&h.ped.sire)?h.ped.sire.name:null, dam:(h.ped&&h.ped.dam)?h.ped.dam.name:null,
+    stamp:stampFor(game), stable:'Skyhorse Stables', manager:'Fleur'
+  };
+}
+function hofToModel(rec,game){
+  const cc=coatColor(rec.coat), tr=traitDef(rec.trait);
+  return {
+    name:rec.name, sex:rec.sex, breed:rec.breed, breedName:rec.breedName, rarity:(breedDef(rec.breed)||{rarity:1}).rarity,
+    rarityName:RARITY_NAME[(breedDef(rec.breed)||{rarity:1}).rarity], coat:rec.coat, coatTier:rec.coatTier||0, coatBody:cc.body, coatMane:cc.mane,
+    trait:rec.trait||null, traitName:tr?tr.name:null, traitEmoji:tr?tr.emoji:'',
+    stage:'Legend', ageLabel:'Hall of Fame', age:rec.age||0, foal:false,
+    speed:rec.speed, stamina:rec.stamina, temperament:rec.temperament, health:100, happy:100, overall:rec.overall,
+    wins:rec.wins||0, podiums:rec.podiums||0, generation:rec.generation||1, purebred:!!rec.purebred, rare:rec.rare||null,
+    value:0, champion:isHofChampion(rec), atStud:false, sire:null, dam:null, legend:true,
+    stamp:stampFor(game), stable:'Skyhorse Stables', manager:'Fleur'
+  };
+}
+
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
 // ---------- Audio model (pure data + settings reducer; the audio graph is DOM-only) ----------
@@ -1026,6 +1083,7 @@ const HR = {
   PRIME_END, BREED_MAX, OLD_AGE, LIFESPAN, agePerformanceMult, isElderly, pastPrime,
   tooOldToBreed, tooOldToCompete, ageLabel, canRetire, hofRecord, prestigeOf, legacyLine,
   canStand, studFee, studDemand, studIncomeFor, studStallions, studIncome,
+  cardModel, hofToModel, stampFor,
   isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
@@ -1349,12 +1407,14 @@ function renderRanch(){
     let acts='';
     acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom 🪙'+groomCost()+'</button>';
     acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
+    acts+='<button class="btn sm ghost" data-card="'+h.id+'">🖼️ Card</button>';
     if(isAdult(h)&&!tooOldToCompete(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
     if(isAdult(h)) acts+='<button class="btn sm ghost" data-retire="'+h.id+'">🏵️ Retire</button>';
     if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
     const c=horseCard(h,acts);
     c.querySelectorAll('[data-groom]').forEach(btn=>btn.onclick=()=>groom(h));
     c.querySelectorAll('[data-ped]').forEach(btn=>btn.onclick=()=>openPedigree(h));
+    c.querySelectorAll('[data-card]').forEach(btn=>btn.onclick=()=>openCard(h));
     c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
     c.querySelectorAll('[data-retire]').forEach(btn=>btn.onclick=()=>openRetire(h));
     c.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellHorse(h));
@@ -1779,14 +1839,16 @@ function renderEstate(){
   s.appendChild(hdr);
   s.appendChild(el('div','sub','Retire beloved horses (from the Ranch tab) to honour them here forever. Champions, rare coats and deep bloodlines earn special renown.'));
   if(!hof.length){ s.appendChild(el('div','empty','No inductees yet.<br>Retire a treasured horse to begin your Hall of Fame.')); }
-  hof.slice(0,20).forEach(r=>{
+  hof.slice(0,20).forEach((r,i)=>{
     const champ=isHofChampion(r); const cc=coatColor(r.coat);
     const c=el('div','card'); if(champ) c.style.borderLeft='4px solid var(--gold2)';
     c.innerHTML='<div class="row"><div class="hface" style="background:radial-gradient(circle at 50% 35%,'+cc.body+'55,#1c2711)">'+
       (r.reason==='passed'?'🕊️':(champ?'🏆':'🏵️'))+'</div>'+
       '<div class="grow"><div class="hname">'+r.name+(champ?' <span class="pill" style="color:var(--gold)">Champion</span>':'')+'</div>'+
       '<div class="hbreed">'+r.coat+' '+r.breedName+' · OVR '+r.overall+' · '+(r.wins||0)+'🥇 '+(r.podiums||0)+'🏅 · Gen '+r.generation+'</div>'+
-      '<div class="wddesc" style="margin-top:3px">'+legacyLine(r)+'</div></div></div>';
+      '<div class="wddesc" style="margin-top:3px">'+legacyLine(r)+'</div></div>'+
+      '<button class="btn sm ghost" data-hcard="'+i+'">🖼️</button></div>';
+    c.querySelector('[data-hcard]').onclick=()=>openCardModel(hofToModel(r,G));
     s.appendChild(c);
   });
 }
@@ -1884,6 +1946,117 @@ function openPedigree(h){
     '<div class=" pedkey">Left → right: the horse, its parents, then grandparents.</div>'+
     '<div class="btnrow"><button class="btn ghost" id="pDone" style="width:100%">Close</button></div>');
   $('pDone').onclick=closeModal;
+}
+
+// ---------------- Shareable trading card ----------------
+function cardStatRow(label,v){
+  const col=v>=75?'#8bd36b':v>=45?'#ffd35a':'#e5624a';
+  return '<div class="csRow"><span class="csL">'+label+'</span><span class="csBar"><i style="width:'+clamp(v,0,100)+'%;background:'+col+'"></i></span><span class="csV">'+Math.round(v)+'</span></div>';
+}
+function cardPreviewHTML(m,h){
+  const tags=[];
+  tags.push('<span class="cchip sex-'+(m.sex==='mare'?'f':'m')+'">'+(m.sex==='mare'?'♀':'♂')+' '+(m.sex==='mare'?'Mare':(m.sex==='stallion'?'Stallion':'Horse'))+'</span>');
+  tags.push('<span class="cchip">'+m.stage+'</span>');
+  if(m.traitName) tags.push('<span class="cchip">'+m.traitEmoji+' '+m.traitName+'</span>');
+  if(m.purebred) tags.push('<span class="cchip good">Purebred</span>');
+  if(m.coatTier>=2) tags.push('<span class="cchip rare">🎨 '+m.coat+'</span>');
+  if(m.champion) tags.push('<span class="cchip gold">🏆 Champion</span>');
+  if(m.legend) tags.push('<span class="cchip gold">🏛️ Legend</span>');
+  const portrait = h?horseArt(h,120):('<div style="font-size:70px">🐴</div>');
+  const career = (m.wins||m.podiums)?('🥇 '+m.wins+' wins · 🏅 '+m.podiums+' podiums'):'No show record yet';
+  return '<div class="tcard'+(m.champion||m.legend?' tchamp':'')+'" id="tcard">'+
+    '<div class="tctop"><div class="tcname">'+m.name+'</div><div class="tcbreed">'+m.coat+' '+m.breedName+' · '+m.rarityName+'</div></div>'+
+    '<div class="tcport" style="background:radial-gradient(circle at 50% 42%,'+m.coatBody+'44,#16210f)">'+portrait+'</div>'+
+    '<div class="tctags">'+tags.join('')+'</div>'+
+    '<div class="tcstats">'+cardStatRow('SPD',m.speed)+cardStatRow('STA',m.stamina)+cardStatRow('TMP',m.temperament)+cardStatRow('HP',m.health)+cardStatRow('JOY',m.happy)+'</div>'+
+    '<div class="tcmeta"><span>OVR <b>'+m.overall+'</b></span><span>Gen <b>'+m.generation+'</b></span>'+(m.value?'<span>🪙 <b>'+fmt(m.value)+'</b></span>':'')+'</div>'+
+    '<div class="tccareer">'+career+(m.sire||m.dam?(' · '+(m.dam||'?')+' × '+(m.sire||'?')):'')+'</div>'+
+    '<div class="tcfoot"><span>🐴 '+m.stable+' · '+m.manager+'</span><span>'+m.stamp.season+' · Yr '+m.stamp.year+' · Day '+m.stamp.day+'</span></div>'+
+    '</div>';
+}
+function openCard(h){ showCard(cardModel(h,G), h); }
+function openCardModel(m){ showCard(m, null); }
+function showCard(m,h){
+  const shareable = (typeof navigator!=='undefined' && (navigator.share||navigator.clipboard));
+  modal('<h3>🖼️ '+m.name+' — Keepsake Card</h3>'+
+    '<div class="tcwrap">'+cardPreviewHTML(m,h)+'</div>'+
+    '<div class="btnrow"><button class="btn" id="cDl" style="flex:1">⬇️ Download PNG</button>'+
+    (shareable?'<button class="btn ghost" id="cSh">📤 Share</button>':'')+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="cClose" style="width:100%">Close</button></div>',{center:true});
+  $('cClose').onclick=closeModal;
+  playSfx('goal'); burst('🖼️✨🐴',10);
+  const fname=(m.name||'horse').replace(/[^a-z0-9]+/gi,'_').toLowerCase()+'_skyhorse.png';
+  $('cDl').onclick=()=>{ try{ const cv=drawCardPNG(m); downloadCanvas(cv,fname); playSfx('coin'); }catch(e){ toast('Could not render the card here.','bad'); } };
+  const sh=$('cSh'); if(sh) sh.onclick=()=>shareCard(m,fname);
+}
+// draw the whole card on a canvas for a crisp downloadable PNG (no external assets)
+function drawCardPNG(m){
+  const W=640,H=900,S=2; const cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S;
+  const x=cv.getContext('2d'); x.scale(S,S);
+  const rr=(px,py,w,h,r)=>{ x.beginPath(); x.moveTo(px+r,py); x.arcTo(px+w,py,px+w,py+h,r); x.arcTo(px+w,py+h,px,py+h,r); x.arcTo(px,py+h,px,py,r); x.arcTo(px,py,px+w,py,r); x.closePath(); };
+  // background
+  const bg=x.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#243019'); bg.addColorStop(1,'#141d0c');
+  x.fillStyle=bg; x.fillRect(0,0,W,H);
+  // frame
+  const champ=m.champion||m.legend; x.lineWidth=6; x.strokeStyle=champ?'#e0a53a':'#3a4a24'; rr(14,14,W-28,H-28,22); x.stroke();
+  // header
+  x.textAlign='left'; x.fillStyle='#ffd35a'; x.font='800 40px Segoe UI, system-ui, sans-serif'; x.fillText(m.name, 40, 74);
+  x.fillStyle='#c3c9a6'; x.font='600 20px Segoe UI, system-ui, sans-serif'; x.fillText(m.coat+' '+m.breedName+' · '+m.rarityName, 40, 104);
+  // portrait panel
+  rr(40,128,W-80,300,18); const pg=x.createRadialGradient(W/2,270,20,W/2,270,260); pg.addColorStop(0,m.coatBody); pg.addColorStop(1,'#16210f'); x.fillStyle=pg; x.fill();
+  drawHorseCanvas(x, W/2-150, 200, 6.6, m.coatBody, m.coatMane);
+  if(champ){ x.textAlign='right'; x.font='700 22px Segoe UI'; x.fillStyle='#ffd35a'; x.fillText(m.legend?'🏛️ LEGEND':'🏆 CHAMPION', W-52, 160); x.textAlign='left'; }
+  // stat bars
+  let sy=470; const stats=[['SPEED',m.speed],['STAMINA',m.stamina],['TEMPERAMENT',m.temperament],['HEALTH',m.health],['SPIRIT',m.happy]];
+  x.font='700 20px Segoe UI';
+  stats.forEach(([lab,v])=>{ x.fillStyle='#c3c9a6'; x.textAlign='left'; x.fillText(lab,44,sy+16);
+    const bx=250,bw=300; x.fillStyle='#0d130a'; rr(bx,sy,bw,16,8); x.fill();
+    const col=v>=75?'#8bd36b':v>=45?'#ffd35a':'#e5624a'; x.fillStyle=col; rr(bx,sy,Math.max(10,bw*clamp(v,0,100)/100),16,8); x.fill();
+    x.fillStyle='#f4efdf'; x.textAlign='right'; x.fillText(''+Math.round(v), W-44, sy+16); sy+=44; });
+  // meta row
+  sy+=6; x.textAlign='left'; x.font='800 26px Segoe UI'; x.fillStyle='#f4efdf';
+  x.fillText('OVR '+m.overall, 44, sy); x.fillText('Gen '+m.generation, 240, sy); if(m.value) x.fillText('🪙 '+fmt(m.value), 420, sy);
+  // trait + career
+  sy+=44; x.font='600 20px Segoe UI'; x.fillStyle='#69c7e0';
+  if(m.traitName) x.fillText(m.traitEmoji+' '+m.traitName+' · '+m.ageLabel, 44, sy); else x.fillText(m.ageLabel, 44, sy);
+  sy+=32; x.fillStyle='#c3c9a6'; x.font='500 19px Segoe UI';
+  x.fillText((m.wins||m.podiums)?('🥇 '+m.wins+' wins · 🏅 '+m.podiums+' podiums'):'No show record yet', 44, sy);
+  if(m.dam||m.sire){ sy+=28; x.fillText('Sire '+(m.sire||'?')+' × Dam '+(m.dam||'?'), 44, sy); }
+  // footer
+  x.fillStyle='#0d130a'; rr(28,H-92,W-56,60,14); x.fill();
+  x.fillStyle='#ffd35a'; x.font='800 22px Segoe UI'; x.textAlign='left'; x.fillText('🐴 '+m.stable, 44, H-54);
+  x.fillStyle='#c3c9a6'; x.font='600 17px Segoe UI'; x.fillText('Manager '+m.manager, 44, H-34);
+  x.textAlign='right'; x.fillStyle='#c3c9a6'; x.font='600 17px Segoe UI'; x.fillText(m.stamp.season+' · Year '+m.stamp.year+' · Day '+m.stamp.day, W-44, H-44);
+  x.textAlign='left';
+  return cv;
+}
+// canvas twin of horseArt() — same shapes, tinted to the coat
+function drawHorseCanvas(x,ox,oy,s,body,mane){
+  const P=(d)=>{ x.beginPath(); let cx=0,cy=0; d.forEach(c=>{ if(c[0]==='M'){cx=ox+c[1]*s;cy=oy+c[2]*s;x.moveTo(cx,cy);} else if(c[0]==='L'){cx=ox+c[1]*s;cy=oy+c[2]*s;x.lineTo(cx,cy);} else if(c[0]==='Q'){x.quadraticCurveTo(ox+c[1]*s,oy+c[2]*s,ox+c[3]*s,oy+c[4]*s);} }); x.closePath(); };
+  x.fillStyle=mane; P([['M',7,13],['Q',1,17,3,26],['Q',6,21,9,21]]); x.fill();            // tail
+  x.fillStyle=body; x.beginPath(); x.ellipse(ox+21*s,oy+18*s,13*s,8*s,0,0,Math.PI*2); x.fill(); // body
+  P([['M',30,13],['L',37,4],['L',41,6],['L',35,17]]); x.fill();                              // neck
+  P([['M',35,3],['L',44,6],['L',43,12],['L',34,12]]); x.fill();                              // head
+  x.fillStyle=mane; P([['M',31,12],['L',37,3],['L',39,4.5],['L',34,15]]); x.fill();          // mane
+  x.fillStyle=body; [13,19,25,29.5].forEach(lx=>{ x.beginPath(); x.rect(ox+lx*s,oy+23*s,3.2*s,9*s); x.fill(); }); // legs
+  x.fillStyle='#140f0b'; x.beginPath(); x.arc(ox+41*s,oy+8*s,1*s,0,Math.PI*2); x.fill();      // eye
+}
+function downloadCanvas(cv,name){
+  try{ if(cv.toBlob){ cv.toBlob(function(bl){ if(!bl){ dataUrlDownload(cv,name); return; } const u=URL.createObjectURL(bl); const a=el('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>{try{URL.revokeObjectURL(u);}catch(e){}},1500); }); }
+    else dataUrlDownload(cv,name);
+  }catch(e){ dataUrlDownload(cv,name); }
+}
+function dataUrlDownload(cv,name){ try{ const a=el('a'); a.href=cv.toDataURL('image/png'); a.download=name; document.body.appendChild(a); a.click(); a.remove(); }catch(e){ toast('Download not supported here.','bad'); } }
+function shareCard(m,fname){
+  try{
+    const cv=drawCardPNG(m);
+    if(navigator.share && navigator.canShare && cv.toBlob){
+      cv.toBlob(function(bl){ try{ const file=new File([bl],fname,{type:'image/png'});
+        if(navigator.canShare({files:[file]})){ navigator.share({files:[file], title:m.name+' — Skyhorse Stables'}); return; }
+        navigator.share({title:m.name+' — Skyhorse Stables', text:m.name+', a '+m.coat+' '+m.breedName+' at Skyhorse Stables.'});
+      }catch(e){ downloadCanvas(cv,fname); } });
+    } else { downloadCanvas(cv,fname); }
+  }catch(e){ toast('Sharing not supported — try Download.','info'); }
 }
 
 // ---------------- Events UI ----------------

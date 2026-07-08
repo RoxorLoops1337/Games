@@ -691,6 +691,33 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.studIncome(g2) === 0, 'a stallion not standing at stud earns nothing');
 }
 
+// ---- shareable card model ----
+{
+  const g = HR.freshGame(); g.day = HR.SEASON_LEN + 3; // summer, week 3
+  const h = HR.mkHorse({ breed: 'friesian', sex: 'stallion', age: 20, speed: 88, stamina: 80, temperament: 82, health: 100, happy: 90, wins: 4, generation: 3, coat: { name: 'Black', tier: 0 }, trait: 'gentle', name: 'Onyx' });
+  const m = HR.cardModel(h, g);
+  ok(m.name === 'Onyx' && m.breedName === 'Friesian' && m.sex === 'stallion', 'card carries identity');
+  ok(m.speed === 88 && m.stamina === 80 && m.temperament === 82 && m.overall === HR.overall(h), 'card carries stats + overall');
+  ok(m.coatBody && m.coatMane && m.coat === 'Black', 'card carries coat colours for the portrait');
+  ok(m.traitName === 'Gentle' && m.wins === 4 && m.generation === 3, 'card carries trait & career');
+  ok(m.champion === true, 'a 4-win horse is flagged champion on its card');
+  ok(m.value > 0, 'card shows a value');
+  ok(m.stamp && m.stamp.season === 'Summer' && m.stamp.year >= 1 && m.stamp.day === g.day, 'card stamps the in-game date/season');
+  ok(m.stable === 'Skyhorse Stables' && m.manager === 'Fleur', 'card footer credits the stable & Fleur');
+  // works with no game passed (defaults)
+  const m2 = HR.cardModel(h, null);
+  ok(m2.stamp && m2.stamp.season === 'Spring', 'card model defaults gracefully without a game');
+}
+{
+  // Hall-of-Fame legends produce a card model too
+  const g = HR.freshGame();
+  const rec = HR.hofRecord(HR.mkHorse({ breed: 'arabian', age: 45, wins: 6, generation: 4, coat: { name: 'Grey', tier: 1 } }), 'retired', 40);
+  const m = HR.hofToModel(rec, g);
+  ok(m.legend === true && m.champion === true, 'a legendary record makes a champion legend card');
+  ok(m.name === rec.name && m.overall === rec.overall && m.breedName === 'Arabian', 'legend card mirrors the record');
+  ok(m.coatBody && m.stable === 'Skyhorse Stables', 'legend card has a portrait colour and footer');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
