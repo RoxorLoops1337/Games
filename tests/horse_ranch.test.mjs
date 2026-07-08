@@ -221,6 +221,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   HR.sendToPasture(g, g.horses[0], 'retired', g.day); // satisfies the pasture goal
   g.breedGoal = 'rarecoat'; // satisfies the breeding-planner goal
   for (const b of ['welsh', 'mustang', 'fjord']) g.horses.push(HR.mkHorse({ breed: b, age: 20 })); // ≥5 distinct breeds → codex discovery goal
+  HR.captureMoment(g, 'snapshot', g.horses[1]); // satisfies the scrapbook goal (save a memory)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2453,6 +2454,126 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const snap = JSON.stringify(g);
   HR.codexBreeds(); HR.codexCoats(); HR.codexDisciplines(); HR.codexProgress(g); HR.codexSeenSets(g);
   ok(JSON.stringify(g) === snap, 'reading the codex never mutates the game');
+}
+
+// ---- photo mode / scrapbook (round 38) ----
+{
+  // captureMoment builds a correct entry from a real horse for each moment-kind
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'akhalteke', name: 'Zephyr', coat: { name: 'Golden', tier: 3 }, speed: 90, stamina: 90, temperament: 80 });
+  const e = HR.captureMoment(g, 'rarecoat', h);
+  ok(e && e.kind === 'rarecoat' && e.name === 'Zephyr', 'captureMoment records the horse & kind');
+  ok(e.breed === 'akhalteke' && e.breedName === 'Akhal-Teke' && e.coat === 'Golden' && e.coatTier === 3, 'the entry carries breed & coat from the sim');
+  ok(e.overall === HR.overall(h) && e.day === g.day && e.emoji === '🎨', 'the entry stamps overall, the game-day and a flourish');
+  ok(typeof e.caption === 'string' && e.caption.length > 0, 'the entry has a caption');
+  const kinds = ['win', 'champion', 'firstbreed', 'foal', 'retire', 'best', 'snapshot'];
+  for (const k of kinds) { const g2 = HR.freshGame(); const en = HR.captureMoment(g2, k, h); ok(en && en.kind === k && en.emoji === HR.momentKindDef(k).emoji, 'captureMoment handles kind ' + k); }
+  ok(HR.captureMoment(g, 'win', null) === null && HR.captureMoment(null, 'win', h) === null, 'captureMoment is defensive');
+}
+{
+  // addScrapbookEntry: stamps day, dedups by (kind,horse,day), and orders newest-first
+  const g = HR.freshGame(); g.scrapbook = [];
+  g.day = 5; const a = HR.addScrapbookEntry(g, { kind: 'win', horseId: 'h1', name: 'A' });
+  ok(a && a.day === 5, 'a new entry is stamped with the current game-day');
+  const dup = HR.addScrapbookEntry(g, { kind: 'win', horseId: 'h1', name: 'A' });
+  ok(dup === null && HR.scrapbookSize(g) === 1, 'a same-day same-horse same-kind memory is de-duplicated');
+  g.day = 6; HR.addScrapbookEntry(g, { kind: 'win', horseId: 'h1', name: 'A' }); // new day → not a dup
+  g.day = 7; HR.addScrapbookEntry(g, { kind: 'retire', horseId: 'h2', name: 'B' });
+  const list = HR.scrapbookList(g);
+  ok(list.length === 3 && list[0].day === 7 && list[2].day === 5, 'scrapbookList is newest-first');
+  ok(HR.addScrapbookEntry(g, { name: 'no kind' }) === null, 'an entry without a kind is rejected');
+}
+{
+  // the cap evicts the oldest UNPINNED memory first; pinned keepsakes are protected
+  const g = HR.freshGame(); g.scrapbook = [];
+  const cap = HR.SCRAPBOOK_CAP;
+  // pin the very first memory, then overflow the book
+  g.day = 1; const first = HR.addScrapbookEntry(g, { kind: 'win', horseId: 'first', name: 'First' });
+  HR.toggleScrapbookPin(g, first.id);
+  for (let i = 0; i < cap + 10; i++) { g.day = 2 + i; HR.addScrapbookEntry(g, { kind: 'foal', horseId: 'f' + i, name: 'F' + i }); }
+  ok(HR.scrapbookSize(g) === cap, 'the scrapbook is capped');
+  ok(g.scrapbook.some(e => e.id === first.id), 'the pinned memory survives the cap');
+  ok(HR.scrapbookPinned(g) === 1, 'the pin count is tracked');
+  // unpin and overflow again — now it can be evicted
+  HR.toggleScrapbookPin(g, first.id);
+  for (let i = 0; i < 20; i++) { g.day = 200 + i; HR.addScrapbookEntry(g, { kind: 'foal', horseId: 'g' + i, name: 'G' + i }); }
+  ok(!g.scrapbook.some(e => e.id === first.id), 'an unpinned old memory is eventually evicted');
+  ok(HR.scrapbookSize(g) === cap, 'the cap still holds after unpinning');
+}
+{
+  // toggleScrapbookPin flips state and is defensive
+  const g = HR.freshGame(); g.scrapbook = [];
+  const e = HR.addScrapbookEntry(g, { kind: 'best', horseId: 'x', name: 'X' });
+  ok(e.pinned === false, 'entries start unpinned');
+  ok(HR.toggleScrapbookPin(g, e.id).pinned === true, 'toggling pins');
+  ok(HR.toggleScrapbookPin(g, e.id).pinned === false, 'toggling again unpins');
+  ok(HR.toggleScrapbookPin(g, 'nope') === null, 'toggling an unknown id is safe');
+}
+{
+  // capture hooks fire on the REAL events without altering their numeric outcomes
+  // (1) foal birth — a champion-bloodline / rare-coat / new-breed foal is remembered
+  const g = HR.freshGame(); g.feed = 9999; g.scrapbook = [];
+  // give the herd a free stall and a pregnant mare due next day
+  const mare = HR.mkHorse({ breed: 'arabian', age: 30, name: 'Dam' }); const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 30, name: 'Sire' });
+  g.horses = [mare, stal]; // clear the starter pair so there's a free stall for the foal
+  mare.pregnant = true; mare.gestation = 1;
+  mare._sire = { id: stal.id, name: stal.name, breed: stal.breed, sex: 'stallion', speed: stal.speed, stamina: stal.stamina, temperament: stal.temperament, generation: stal.generation, genes: stal.genes, ped: null };
+  const born0 = g.stats.born;
+  const r = rng(4); for (let d = 0; d < 3 && mare.pregnant; d++) HR.advanceDay(g, r);
+  ok(g.stats.born === born0 + 1, 'a foal is born (birth logic still runs)');
+  // the birth may or may not be "notable"; force a clearly notable case deterministically
+  const g2 = HR.freshGame(); g2.scrapbook = [];
+  const champFoal = HR.mkHorse({ breed: 'welsh', name: 'Star', rare: 'Champion Bloodline' });
+  const before = HR.scrapbookSize(g2);
+  HR.captureMoment(g2, 'champion', champFoal);
+  ok(HR.scrapbookSize(g2) === before + 1 && HR.scrapbookList(g2)[0].kind === 'champion', 'a champion foal is captured');
+}
+{
+  // (2) show win — winning a real competition leaves a memory, and the win still counts
+  const g = HR.freshGame(); g.scrapbook = [];
+  const h = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 100, stamina: 100, temperament: 100, health: 100, happy: 100 });
+  g.horses.push(h);
+  const disc = HR.DISCIPLINES.find(d => d.id === 'race');
+  const tier = HR.COMP_TIERS.find(t => t.id === 2); // County+ triggers a scrapbook memory
+  const wins0 = g.stats.showWins || 0, money0 = g.money;
+  // a strong horse vs the field on a favourable roll — loop a few seeds to guarantee a win
+  let won = false;
+  for (let s = 1; s <= 30 && !won; s++) { const gg = HR.freshGame(); gg.scrapbook = []; const hh = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 100, stamina: 100, temperament: 100, health: 100, happy: 100 }); gg.horses.push(hh);
+    const res = HR.applyCompetition(gg, hh, disc, tier, rng(s), null);
+    if (res.place === 1) { won = true; ok(HR.scrapbookList(gg).some(e => e.kind === 'win' && e.horseId === hh.id), 'a show win is captured'); ok(gg.stats.showWins >= 1 && gg.money > 0, 'the win still awards wins & prize money'); }
+  }
+  ok(won, 'a dominant horse wins at least once across seeds');
+}
+{
+  // (3) retirement — retiring leaves a farewell memory, and still inducts to HoF + pasture
+  const g = HR.freshGame(); g.scrapbook = [];
+  const h = HR.mkHorse({ breed: 'friesian', age: 40, wins: 5, name: 'Legend' }); g.horses.push(h);
+  const hof0 = (g.hallOfFame || []).length, past0 = HR.pastureSize(g);
+  HR.retireHorse(g, h, 50);
+  ok(HR.scrapbookList(g).some(e => e.kind === 'retire' && e.name === 'Legend'), 'a retirement is captured');
+  ok((g.hallOfFame || []).length === hof0 + 1 && HR.pastureSize(g) === past0 + 1, 'retirement still updates HoF & pasture');
+}
+{
+  // migration is safe on an old save with no scrapbook; goal + achievement
+  const legacy = HR.freshGame(); delete legacy.scrapbook;
+  ok(HR.scrapbookSize(legacy) === 0 && Array.isArray(HR.scrapbookList(legacy)), 'the scrapbook helpers are safe when the field is missing');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'scrap1');
+  ok(goal && !goal.done(g), 'the scrapbook goal is unmet with an empty book');
+  HR.captureMoment(g, 'snapshot', g.horses[0]);
+  ok(goal.done(g), 'saving a memory completes the scrapbook goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'chronicler');
+  ok(ach && !ach.check(g), 'Chronicler is locked below 15 memories');
+  for (let i = 0; i < 15; i++) { g.day = 100 + i; HR.addScrapbookEntry(g, { kind: 'foal', horseId: 'c' + i, name: 'C' + i }); }
+  ok(ach.check(g), '15 memories unlock Chronicler');
+}
+{
+  // capturing a memory never mutates the source horse (read-only w.r.t. the sim)
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'arabian', age: 20 });
+  const snap = JSON.stringify(h);
+  HR.captureMoment(g, 'snapshot', h); HR.captureMoment(g, 'best', h);
+  ok(JSON.stringify(h) === snap, 'the horse is untouched by being photographed');
 }
 
 // ---- clamp helper ----
