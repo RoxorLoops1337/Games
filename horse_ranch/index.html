@@ -318,6 +318,7 @@
     <button class="sbtn" id="visitBtn" title="Visitor Day — open your ranch to the public" style="margin-right:4px;position:relative">🎪<span id="visitBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="apptBtn" title="Farrier & vet appointments" style="margin-right:4px;position:relative">🩺<span id="apptBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="mapBtn" title="Ranch map — barns, stalls & paddocks" style="margin-right:4px">🗺️</button>
+    <button class="sbtn" id="fairBtn" title="Seasonal fair" style="margin-right:4px;position:relative">🎡<span id="fairBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1252,6 +1253,58 @@ function festivalMod(day,key,dflt){ const f=festivalOn(day); const d=(dflt!=null
 function nextFestival(day){ for(let i=1;i<=SEASON_LEN*4;i++){ const f=festivalOn(day+i); if(f) return {inDays:i, fest:f, day:day+i}; } return null; }
 function upcomingFestivals(day,within){ within=within||7; const out=[]; for(let i=0;i<=within;i++){ const f=festivalOn(day+i); if(f) out.push({inDays:i, fest:f, day:day+i}); } return out; }
 
+// ---------- Seasonal Fairs (multi-day headline events with a claimable, themed objective) ----------
+// DISTINCT from the single-day FESTIVALS (which are passive modifiers) — a fair is a multi-day window
+// with a themed mini-goal you complete for a bounded, once-per-occurrence reward. Composes with
+// seasons/festivals (the season festival on sday 7 lands on the fair's final day — a crescendo).
+const FAIR_LEN=5; // a fair runs season-days sday .. sday+FAIR_LEN-1 (3..7)
+const FAIRS=[
+  {id:'springfair', season:'spring', sday:3, name:'Spring Foal Fair', emoji:'🐣',
+   theme:'Breeders show off the season’s new arrivals.', objective:'Keep a young horse (foal or yearling) in your herd',
+   reward:{money:900, rep:20}, met:g=>((g.horses)||[]).some(h=>(h.age||0)<=10)},
+  {id:'summerfair', season:'summer', sday:3, name:'Summer Championship Fair', emoji:'🏆',
+   theme:'The show grounds are packed — bring a ring-ready horse.', objective:'Own a show-ready horse (70+ overall)',
+   reward:{money:1200, rep:28}, met:g=>((g.horses)||[]).some(h=>overall(h)>=70)},
+  {id:'autumnfair', season:'autumn', sday:3, name:'Autumn Harvest Market', emoji:'🧺',
+   theme:'Stalls overflow with feed — stock up for winter.', objective:'Have 60+ hay in store',
+   reward:{money:800, rep:16, feed:20}, met:g=>((g.feed)||0)>=60},
+  {id:'winterfair', season:'winter', sday:3, name:'Winter Gala', emoji:'🎇',
+   theme:'A glittering gala — present a beautifully-kept ranch.', objective:'Reach a ranch appeal of 45+',
+   reward:{money:1400, rep:32}, met:g=>ranchAppealScore(g)>=45},
+];
+function fairDef(id){ return FAIRS.find(f=>f.id===id)||null; }
+function fairFor(day){ const s=seasonOf(day).id, sd=seasonDay(day); return FAIRS.find(f=>f.season===s && sd>=f.sday && sd<f.sday+FAIR_LEN)||null; }
+function currentFair(game){ return fairFor((game&&game.day)||1); }
+function fairActive(game){ return !!currentFair(game); }
+function fairKeyFor(day){ const f=fairFor(day); return f? f.id+'-y'+yearOf(day) : null; }
+function fairKey(game){ return fairKeyFor((game&&game.day)||1); }
+function fairDaysLeft(game){ const day=(game&&game.day)||1, f=fairFor(day); if(!f) return 0; return (f.sday+FAIR_LEN)-seasonDay(day); }
+function nextFair(game){ const day=(game&&game.day)||1;
+  for(let i=1;i<=SEASON_LEN*4;i++){ if(fairFor(day+i) && !fairFor(day+i-1)) return {inDays:i, fair:fairFor(day+i), day:day+i}; } return null; }
+function fairClaimed(game,key){ key=key||fairKey(game); return Array.isArray(game&&game.fairsClaimed) && game.fairsClaimed.indexOf(key)>=0; }
+function fairProgress(game){
+  const f=currentFair(game); if(!f) return null;
+  const key=fairKey(game), met=!!f.met(game), claimed=fairClaimed(game,key);
+  return { fair:f, key, active:true, met, claimed, daysLeft:fairDaysLeft(game), reward:f.reward, objective:f.objective, canClaim:(met&&!claimed) };
+}
+// claim a fair's reward — validates active + objective met + not already claimed; pays ONCE per occurrence
+function claimFairReward(game){
+  const p=fairProgress(game); if(!p) return {ok:false,why:'No fair is on right now.'};
+  if(p.claimed) return {ok:false,why:'You’ve already claimed this fair’s reward.'};
+  if(!p.met) return {ok:false,why:'Objective not met yet — '+p.objective.toLowerCase()+'.'};
+  if(!Array.isArray(game.fairsClaimed)) game.fairsClaimed=[];
+  game.fairsClaimed.push(p.key);
+  if(game.fairsClaimed.length>40) game.fairsClaimed=game.fairsClaimed.slice(-40); // bounded
+  const r=p.reward||{};
+  if(r.money) game.money=(game.money||0)+r.money;
+  if(r.rep) game.rep=(game.rep||0)+r.rep;
+  if(r.feed) game.feed=(game.feed||0)+r.feed;
+  if(game.stats) game.stats.fairsWon=(game.stats.fairsWon||0)+1;
+  const best=((game.horses)||[]).slice().sort((a,b)=>overall(b)-overall(a))[0];
+  if(best && typeof captureMoment==='function') captureMoment(game,'snapshot',best,{caption:'Won the '+p.fair.name+'! '+p.fair.emoji});
+  return {ok:true, fair:p.fair, reward:r, key:p.key};
+}
+
 // ---------- Auction house (one auction per season on season-day 10) ----------
 function isAuctionDay(day){ return seasonDay(day)===10; }
 function nextAuction(day){ for(let i=1;i<=SEASON_LEN*4;i++){ if(isAuctionDay(day+i)) return {inDays:i, day:day+i}; } return null; }
@@ -1374,7 +1427,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1382,7 +1435,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[],
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[],
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1411,6 +1464,9 @@ function advanceDay(game,rng){
   // farrier & vet appointments booked for today resolve now (before care decay)
   { const done=resolveAppointments(game, game.day);
     for(const r of done) notes.push({t:'good',m:r.emoji+' '+r.name+'’s '+appointmentTypeDef(r.type).name.toLowerCase()+' visit went well.'}); }
+
+  // a seasonal fair opening today gets a headline announcement
+  { const f=fairFor(game.day); if(f && !fairFor(game.day-1)) notes.push({t:'good',m:f.emoji+' The '+f.name+' has begun! '+f.theme+' Complete its objective for a reward.'}); }
 
   // feed consumption
   let need=0; for(const h of game.horses) need+=feedPerDay(h);
@@ -2483,6 +2539,7 @@ const ACHIEVEMENTS=[
   {id:'wellkept',   icon:'🩺', name:'Well-Kept Stable',      desc:'Complete 12 farrier & vet appointments.',      check:g=>((g.stats&&g.stats.appointments)||0)>=12},
   {id:'whisperer',  icon:'💖', name:'Horse Whisperer',       desc:'Bond with a horse until it is Devoted (90%).',  check:g=>((g.horses)||[]).some(h=>(h.bond||0)>=90)},
   {id:'sprawling',  icon:'🗺️', name:'Sprawling Estate',      desc:'Grow your ranch to three barns.',              check:g=>((g.stables)||[]).length>=3},
+  {id:'fairgoer',   icon:'🎡', name:'Fairgoer',              desc:'Win all four seasonal fairs.',                 check:g=>new Set(((g.fairsClaimed)||[]).map(k=>(''+k).split('-y')[0])).size>=4},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2584,6 +2641,7 @@ const GOALS=[
   {id:'visit1',  desc:'Host a Visitor Day (🎪 stable tour)',      tip:g=>((g.stats&&g.stats.visitorDays)||0)+'/1',done:g=>((g.stats&&g.stats.visitorDays)||0)>=1,               reward:{money:800,rep:25}},
   {id:'appt1',   desc:'Book a farrier or vet visit (🩺)',         tip:g=>((g.stats&&g.stats.appointments)||0)+' done',done:g=>((g.stats&&g.stats.appointments)||0)>=1,          reward:{money:400,rep:15}},
   {id:'bond1',   desc:'Do groundwork with a horse (🤝 bonding)',   tip:g=>((g.stats&&g.stats.groundwork)||0)+' sessions',done:g=>((g.stats&&g.stats.groundwork)||0)>=1,           reward:{money:300,rep:10}},
+  {id:'fair1',   desc:'Win a seasonal fair (🎡 fairs)',            tip:g=>((g.stats&&g.stats.fairsWon)||0)+' won',done:g=>((g.stats&&g.stats.fairsWon)||0)>=1,                   reward:{money:600,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2611,6 +2669,7 @@ const HR = {
   APPOINTMENT_TYPES, appointmentTypeDef, appointmentFee, bookAppointment, dueForCare, horsesDueForCare, careTypeDue, resolveAppointments, activeCareBuff,
   GROUNDWORK_ACTIVITIES, GROUNDWORK_ENERGY, BOND_CAP, BONDED_AT, groundworkActivityDef, groundworkEnergyLeft, canDoGroundwork, doGroundwork, bondTier, bondLabel, bondPoiseMult,
   ranchMap, stableOccupancy, stableIndexOf, moveHorseToStable,
+  FAIRS, FAIR_LEN, fairDef, currentFair, fairActive, fairKey, fairDaysLeft, nextFair, fairClaimed, fairProgress, claimFairReward,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2743,6 +2802,7 @@ function load(){
     if(!Array.isArray(G.appointments)) G.appointments=[]; // farrier & vet appointments
     for(const h of (G.horses||[])){ if(typeof h.gwDay!=='number') h.gwDay=0; if(typeof h.gwEnergy!=='number') h.gwEnergy=0; } // groundwork energy
     { const ns=(G.stables||[]).length; for(const h of (G.horses||[])){ if(typeof h.stable!=='number'||h.stable<0||h.stable>=ns) h.stable=0; } } // ranch map: normalise stray barn indices
+    if(!Array.isArray(G.fairsClaimed)) G.fairsClaimed=[]; // seasonal fairs claimed-reward log
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -2919,6 +2979,8 @@ function renderHUD(){
   { const vb=$('visitBadge'); if(vb){ const on=visitorDayAvailable(G); vb.style.display=on?'block':'none'; } }
   // farrier/vet due badge
   { const ab=$('apptBadge'); if(ab){ const n=horsesDueForCare(G).length; ab.textContent=n; ab.style.display=n?'block':'none'; } }
+  // seasonal fair: show the button only during a fair, badge when a reward is claimable
+  { const fb=$('fairBtn'); if(fb){ fb.style.display=fairActive(G)?'':'none'; } const fbg=$('fairBadge'); if(fbg){ const p=fairProgress(G); fbg.style.display=(p&&p.canClaim)?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -4548,6 +4610,38 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+function openFair(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const p=fairProgress(G);
+  if(!p){ const nx=nextFair(G);
+    modal('<h3>🎡 Seasonal Fair</h3>'+
+      '<div class="empty">No fair is on right now.'+(nx?' The next one — '+nx.fair.emoji+' <b>'+esc(nx.fair.name)+'</b> — arrives in <b>'+nx.inDays+' day'+(nx.inDays!==1?'s':'')+'</b>.':'')+'</div>'+
+      '<div class="btnrow"><button class="btn ghost" id="fairClose" style="width:100%">Done</button></div>');
+    $('fairClose').onclick=closeModal; return;
+  }
+  const f=p.fair, r=p.reward||{};
+  const rew=[]; if(r.money) rew.push('🪙'+fmt(r.money)); if(r.rep) rew.push(r.rep+'⭐'); if(r.feed) rew.push('🌾'+r.feed);
+  const status = p.claimed ? '<span class="pill" style="color:var(--good)">✓ Reward claimed</span>'
+    : p.met ? '<span class="pill" style="color:var(--gold)">🎁 Ready to claim!</span>'
+    : '<span class="pill">Objective not met yet</span>';
+  modal('<h3>'+f.emoji+' '+esc(f.name)+'</h3>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)">'+
+      '<div class="hname">'+f.emoji+' '+esc(f.name)+' <span class="pill">'+p.daysLeft+' day'+(p.daysLeft!==1?'s':'')+' left</span></div>'+
+      '<div class="hbreed" style="margin-top:3px">'+esc(f.theme)+'</div>'+
+      '<div class="divider" style="margin:7px 0"></div>'+
+      '<div class="swlabel">🎯 '+esc(f.objective)+' '+status+'</div>'+
+      '<div class="hbreed" style="margin-top:3px">Reward: <b>'+(rew.join(' · ')||'—')+'</b></div>'+
+    '</div>'+
+    '<div class="btnrow">'+
+      (p.canClaim?'<button class="btn" id="fairClaim" style="flex:1">🎁 Claim reward</button>':'<button class="btn ghost" style="flex:1" disabled>'+(p.claimed?'Already claimed':'Objective not met')+'</button>')+
+      '<button class="btn ghost" id="fairClose" style="flex:1">Done</button></div>');
+  $('fairClose').onclick=closeModal;
+  { const cb=$('fairClaim'); if(cb) cb.onclick=()=>{ const res=claimFairReward(G);
+    if(!res.ok){ toast(res.why,'info'); return; }
+    if(res.reward.money) coinPop(res.reward.money); burst(f.emoji+'🎉🪙✨',16); playSfx('goal');
+    const bits=[]; if(res.reward.money) bits.push('🪙'+fmt(res.reward.money)); if(res.reward.rep) bits.push(res.reward.rep+'⭐'); if(res.reward.feed) bits.push('🌾'+res.reward.feed);
+    toast('🎡 '+f.name+' reward! +'+bits.join(' +'),'good'); save(); renderHUD(); openFair(); }; }
+}
 let mapSel=null; // selected stable id for the resident/move panel
 function openRanchMap(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -4865,6 +4959,7 @@ function boot(){
   { const vb=$('visitBtn'); if(vb) vb.onclick=openVisitorDay; }
   { const ab=$('apptBtn'); if(ab) ab.onclick=openAppointments; }
   { const mb=$('mapBtn'); if(mb) mb.onclick=openRanchMap; }
+  { const fb=$('fairBtn'); if(fb) fb.onclick=openFair; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
