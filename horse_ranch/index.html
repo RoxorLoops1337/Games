@@ -327,6 +327,7 @@
     <button class="sbtn" id="grudgeBtn" title="Grudge match — challenge a rival ranch" style="margin-right:4px">⚔️</button>
     <button class="sbtn" id="almanacBtn" title="Almanac — weather & season forecast" style="margin-right:4px">🌤️</button>
     <button class="sbtn" id="cerBtn" title="Coming-of-age ceremonies" style="margin-right:4px;position:relative">🎓<span id="cerBadge" class="hudbadge" style="display:none">0</span></button>
+    <button class="sbtn" id="newsBtn" title="Skyhorse Gazette — weekly recap" style="margin-right:4px">📰</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1643,6 +1644,68 @@ function seasonAlmanac(game){ const day=(game&&game.day)||1, s=seasonOf(day), sd
     daysLeft:SEASON_LEN-sd+1, year:yearOf(day), wxBand:s.wx.slice(), modifiers:mods, upcoming:upcomingEvents(game, SEASON_LEN) };
 }
 
+// ---------- Ranch newsletter / weekly recap (READ-ONLY "this week at the ranch" gazette) ----------
+// Aggregates the week's activity from EXISTING data. Exact week-over-week deltas come from a tiny weekly
+// baseline snapshot (game.weekly) rolled at each week boundary in advanceDay; the recap itself never mutates.
+function weeklyBaseline(game){ const s=(game&&game.stats)||{};
+  return { day:(game&&game.day)||1, money:(game&&game.money)||0, rep:(game&&game.rep)||0,
+    goldEarned:s.goldEarned||0, born:s.born||0, showWins:s.showWins||0, ceremonies:s.ceremonies||0,
+    grudgeWins:s.grudgeWins||0, sold:s.sold||0, bestSale:s.bestSale||0,
+    achievements:((game&&game.achievements)||[]).length }; }
+// snapshot this week's baseline when the week changes (called from advanceDay). Returns true if it rolled.
+function rollWeeklyStats(game){ if(!game) return false; const wk=weekOf(game.day||1);
+  if(!game.weekly||typeof game.weekly!=='object'||game.weekly.week!==wk){ game.weekly={ week:wk, start:weeklyBaseline(game) }; return true; }
+  return false; }
+function recapHeadlineFor(st){
+  if((st.wins||0)>=3) return 'A triumphant week in the show ring!';
+  if((st.foals||0)>=2) return 'New life fills the foaling barn.';
+  if((st.gold||0)>=1500) return 'The coffers are overflowing.';
+  if((st.ceremonies||0)>=1) return 'A young horse comes of age.';
+  if((st.wins||0)>=1) return 'Ribbons on the wall this week.';
+  if((st.foals||0)>=1) return 'A new foal on the ground.';
+  if((st.gold||0)>=400) return 'A tidy week of trade.';
+  return 'Another week of quiet ranch life at the stables.';
+}
+function weeklyRecap(game){
+  const day=(game&&game.day)||1, wk=weekOf(day), s=(game&&game.stats)||{};
+  const base=(game&&game.weekly&&game.weekly.week===wk&&game.weekly.start)?game.weekly.start
+    :{ goldEarned:0, born:0, showWins:0, ceremonies:0, grudgeWins:0, rep:(game&&game.rep)||0, achievements:((game&&game.achievements)||[]).length };
+  const weekStartDay=(wk-1)*7+1, weekEndDay=wk*7;
+  const trs=((game&&game.trophies)||[]).filter(t=>t && t.day>=weekStartDay && t.day<=day);
+  const st={
+    gold:Math.max(0,(s.goldEarned||0)-(base.goldEarned||0)),
+    foals:Math.max(0,(s.born||0)-(base.born||0)),
+    wins:Math.max(0,(s.showWins||0)-(base.showWins||0)),
+    repGain:Math.max(0,((game&&game.rep)||0)-(base.rep||0)),
+    ceremonies:Math.max(0,(s.ceremonies||0)-(base.ceremonies||0)),
+    grudgeWins:Math.max(0,(s.grudgeWins||0)-(base.grudgeWins||0)),
+    newAchievements:Math.max(0,((game&&game.achievements)||[]).length-(base.achievements||0)),
+  };
+  const top=((game&&game.horses)||[]).slice().sort((a,b)=>overall(b)-overall(a))[0]||null;
+  return {
+    week:wk, day, weekStartDay, weekEndDay, season:seasonOf(day).name, seasonEmoji:seasonOf(day).emoji, ranch:ranchName(game),
+    stats:st,
+    trophies:{ gold:trs.filter(t=>t.place===1).length, silver:trs.filter(t=>t.place===2).length, bronze:trs.filter(t=>t.place===3).length, list:trs.slice(0,6) },
+    topHorse: top?{ id:top.id, name:top.name, overall:overall(top), breedName:(breedDef(top.breed)||{name:top.breed}).name }:null,
+    rank: (typeof playerRank==='function')?playerRank(game):null,
+    upcoming: (typeof upcomingEvents==='function')?upcomingEvents(game, 7):[],
+    headline: recapHeadlineFor(st),
+  };
+}
+function recapHeadlines(game){
+  const r=weeklyRecap(game), out=[], st=r.stats;
+  if(r.trophies.gold) out.push({emoji:'🥇', text:r.trophies.gold+' show win'+(r.trophies.gold!==1?'s':'')+' this week!'});
+  if(st.foals) out.push({emoji:'🐣', text:st.foals+' foal'+(st.foals!==1?'s':'')+' born.'});
+  if(st.gold) out.push({emoji:'🪙', text:'Earned '+st.gold+' coins.'});
+  if(st.grudgeWins) out.push({emoji:'⚔️', text:st.grudgeWins+' grudge match'+(st.grudgeWins!==1?'es':'')+' won.'});
+  if(st.ceremonies) out.push({emoji:'🎓', text:st.ceremonies+' coming-of-age ceremon'+(st.ceremonies!==1?'ies':'y')+' held.'});
+  if(st.newAchievements) out.push({emoji:'🏆', text:st.newAchievements+' new achievement'+(st.newAchievements!==1?'s':'')+' unlocked.'});
+  if(r.trophies.silver||r.trophies.bronze) out.push({emoji:'🎗️', text:(r.trophies.silver+r.trophies.bronze)+' podium place'+((r.trophies.silver+r.trophies.bronze)!==1?'s':'')+'.'});
+  if(st.repGain) out.push({emoji:'⭐', text:'+'+st.repGain+' reputation.'});
+  if(!out.length) out.push({emoji:'🌿', text:'A quiet, steady week — grooming, grazing and planning ahead.'});
+  return out;
+}
+
 const EVENTS=[
   {id:'buyer', weight:3, min:1},
   {id:'hay',   weight:2, min:3},
@@ -1732,7 +1795,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]}, breeder:{points:0}, studBookings:[], grudge:{record:{w:0,l:0},last:{},vs:{}},
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]}, breeder:{points:0}, studBookings:[], grudge:{record:{w:0,l:0},last:{},vs:{}}, weekly:null,
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1746,6 +1809,7 @@ function freshGame(legacy){
   refreshBoard(g); // post the first week's contracts
   refreshFeatured(g); // showcase the first featured horse
   syncRegistry(g);    // register the starter pair in the studbook
+  g.weekly={week:weekOf(g.day), start:weeklyBaseline(g)}; // seed the weekly-recap baseline
   return g;
 }
 // tiny deterministic rng so a fresh game is identical every load (nice for tutorial + tests)
@@ -1759,6 +1823,8 @@ function advanceDay(game,rng){
   const choreResult=resolveDailyChores(game, game.day);
   game.day++; game.stats.days++;
   const notes=[];
+  // roll the weekly-recap baseline at the start of a new week, and nudge a fresh gazette issue
+  if(rollWeeklyStats(game) && game.day>1) notes.push({t:'info',m:'📰 A new issue of the Skyhorse Gazette is out — see last week’s recap.'});
   if(choreResult.awarded){ const b=choreResult.bonus, bits=['🪙'+b.money, b.rep+'⭐']; if(b.feed) bits.push('🌾'+b.feed);
     notes.push({t:'good',m:'✅ All chores done! Streak '+choreResult.streak+' · +'+bits.join(' +')}); }
 
@@ -3045,6 +3111,7 @@ const ACHIEVEMENTS=[
   {id:'rivalslayer',icon:'⚔️', name:'Rival Slayer',           desc:'Beat every rival ranch in a grudge match.',    check:g=>{const vs=(g.grudge&&g.grudge.vs)||{}; return RIVALS.every(r=>(vs[r.id]&&vs[r.id].w>0));}},
   {id:'yearround',  icon:'🌤️', name:'Year-Round Rancher',     desc:'Run the ranch through a full year of seasons.',check:g=>((g.day)||1)>=SEASON_LEN*4},
   {id:'raisedfoal', icon:'🎓', name:'Raised from a Foal',      desc:'Raise a foal all the way to its coming of age.', check:g=>((g.horses)||[]).some(h=>h.ceremonies&&h.ceremonies.comingofage==='done')},
+  {id:'bannerweek', icon:'📰', name:'Banner Week',            desc:'Win three shows in a single week.',            check:g=>weeklyRecap(g).trophies.gold>=3},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3276,6 +3343,7 @@ const HR = {
   DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
   GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
   dayForecast, forecast, upcomingEvents, seasonAlmanac,
+  weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
   PASTURE_CAP, PASTURE_REP_CAP, sendToPasture, pastureList, pastureSize, pastureRepBonus,
@@ -3370,6 +3438,7 @@ function load(){
     if(!G.breeder||typeof G.breeder!=='object'){ G.breeder={points:(G.stats&&G.stats.breederPoints)||0}; } else if(typeof G.breeder.points!=='number') G.breeder.points=0; // breeder's prestige track
     if(!Array.isArray(G.studBookings)) G.studBookings=[]; // stud-directory outside-mare bookings
     if(!G.grudge||typeof G.grudge!=='object'){ G.grudge={record:{w:0,l:0},last:{},vs:{}}; } else { if(!G.grudge.record) G.grudge.record={w:0,l:0}; if(!G.grudge.last) G.grudge.last={}; if(!G.grudge.vs) G.grudge.vs={}; } // rival grudge-match record
+    if(!G.weekly||typeof G.weekly!=='object'||G.weekly.week!==weekOf(G.day)){ G.weekly={week:weekOf(G.day), start:weeklyBaseline(G)}; } // weekly-recap baseline
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -5238,6 +5307,25 @@ function storeEffectLine(it){
   if(e.kind==='rep') return '⭐ +'+e.rep+' reputation';
   return '';
 }
+function openNewsletter(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const r=weeklyRecap(G), heads=recapHeadlines(G);
+  const headlines=heads.map(h=>'<div class="lbsub" style="font-size:13px">'+h.emoji+' '+esc(h.text)+'</div>').join('');
+  const cabinet = (r.trophies.gold||r.trophies.silver||r.trophies.bronze)
+    ? '<span class="pill">🥇 '+r.trophies.gold+'</span> <span class="pill">🥈 '+r.trophies.silver+'</span> <span class="pill">🥉 '+r.trophies.bronze+'</span>'
+    : '<span class="hbreed" style="opacity:.6">no ribbons this week</span>';
+  const top = r.topHorse ? r.topHorse.name+' — '+esc(r.topHorse.breedName)+' · OVR '+r.topHorse.overall : '—';
+  const upc = r.upcoming.length ? r.upcoming.slice(0,4).map(e=>'<div class="lbsub">'+e.emoji+' '+esc(e.name)+' — '+(e.inDays===0?'today':'in '+e.inDays+'d')+'</div>').join('') : '<div class="lbsub" style="opacity:.6">a calm week ahead</div>';
+  modal('<h3>📰 Skyhorse Gazette</h3>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname" style="font-size:15px">'+esc(r.headline)+'</div>'+
+    '<div class="hbreed" style="margin-top:2px">'+r.seasonEmoji+' '+esc(r.ranch)+' · Week '+r.week+' ('+r.season+')'+(r.rank?' · ranked #'+r.rank:'')+'</div></div>'+
+    '<div class="swlabel">📋 This week</div><div>'+headlines+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">🏅 Ribbon cabinet</div><div style="margin-top:2px">'+cabinet+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">⭐ Star of the stable</div><div class="lbsub">'+esc(top)+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">📅 Next week</div><div>'+upc+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="newsClose" style="width:100%">Done</button></div>');
+  $('newsClose').onclick=closeModal;
+}
 function openCeremonies(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const due=comingOfAgeDue(G);
@@ -5796,6 +5884,7 @@ function boot(){
   { const gb=$('grudgeBtn'); if(gb) gb.onclick=openGrudge; }
   { const ab=$('almanacBtn'); if(ab) ab.onclick=openAlmanac; }
   { const cb=$('cerBtn'); if(cb) cb.onclick=openCeremonies; }
+  { const nb=$('newsBtn'); if(nb) nb.onclick=openNewsletter; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }

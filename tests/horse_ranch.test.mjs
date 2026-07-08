@@ -3793,6 +3793,72 @@ function studGame(day) {
   ok(!ach.check(g2), 'a ranch with no raised foal has not earned it');
 }
 
+// ---- ranch newsletter / weekly recap (round 54) ----
+{
+  // weeklyRecap reports the right week number and headline figures for a known state
+  const g = HR.freshGame();
+  ok(HR.weeklyRecap(g).week === 1, 'a fresh ranch is in week 1');
+  g.day = 8;
+  ok(HR.weeklyRecap(g).week === 2, 'day 8 is week 2');
+  // this-week deltas measured against the seeded baseline
+  const g2 = HR.freshGame(); // baseline goldEarned=0 at day 1
+  g2.stats.goldEarned = 300; g2.stats.born = 2; g2.stats.showWins = 1; g2.rep = (g2.rep || 0) + 40;
+  const r = HR.weeklyRecap(g2);
+  ok(r.stats.gold === 300 && r.stats.foals === 2 && r.stats.wins === 1, 'the recap totals this week’s deltas');
+  ok(r.stats.repGain === 40, 'reputation gained this week is measured');
+  ok(typeof r.headline === 'string' && r.headline.length > 0, 'there is a flavour headline');
+}
+{
+  // trophies this week are filtered by the week window
+  const g = HR.freshGame(); g.day = 14; // week 2 (days 8–14)
+  g.trophies = [
+    { horse: 'A', disc: 'race', place: 1, day: 9 },   // this week
+    { horse: 'B', disc: 'jump', place: 2, day: 12 },  // this week
+    { horse: 'C', disc: 'race', place: 1, day: 3 },   // last week — excluded
+  ];
+  const r = HR.weeklyRecap(g);
+  ok(r.trophies.gold === 1 && r.trophies.silver === 1, 'only this week’s placings are counted');
+  ok(r.trophies.list.length === 2, 'the trophy list is windowed to this week');
+}
+{
+  // deltas are exact after a week passes (rollWeeklyStats re-baselines at the boundary)
+  const g = HR.freshGame(); // day 1, week 1, baseline goldEarned 0
+  g.stats.goldEarned = 300; // earned in week 1
+  ok(HR.weeklyRecap(g).stats.gold === 300, 'week-1 earnings show');
+  g.day = 8; HR.rollWeeklyStats(g); // new week → baseline snapshots goldEarned=300
+  ok(g.weekly.week === 2 && g.weekly.start.goldEarned === 300, 'the baseline rolls to the new week');
+  g.stats.goldEarned = 500; // earned 200 in week 2
+  ok(HR.weeklyRecap(g).stats.gold === 200, 'week-2 earnings are measured from the new baseline');
+  // rolling again within the same week is a no-op
+  ok(HR.rollWeeklyStats(g) === false, 'the baseline does not re-roll mid-week');
+}
+{
+  // recapHeadlines is ordered & non-empty; upcoming comes from the forecast
+  const quiet = HR.freshGame();
+  const hq = HR.recapHeadlines(quiet);
+  ok(hq.length >= 1 && hq.every(h => h.text && h.emoji), 'a quiet week still yields a headline line');
+  const busy = HR.freshGame(); busy.stats.goldEarned = 900; busy.stats.born = 3; busy.stats.showWins = 2; busy.trophies = [{ place: 1, day: 1 }, { place: 1, day: 1 }];
+  const hb = HR.recapHeadlines(busy);
+  ok(hb[0].text.indexOf('win') >= 0, 'show wins lead the headlines');
+  ok(hb.length > hq.length, 'a busier week has more headlines');
+  ok(Array.isArray(HR.weeklyRecap(busy).upcoming), 'the recap carries the upcoming-events forecast');
+}
+{
+  // read-only + determinism + sparse safety
+  const g = HR.freshGame(); g.day = 5; g.stats.goldEarned = 120;
+  const snap = JSON.stringify(g);
+  HR.weeklyRecap(g); HR.recapHeadlines(g);
+  ok(JSON.stringify(g) === snap, 'building the recap never mutates the game');
+  ok(JSON.stringify(HR.weeklyRecap(g)) === JSON.stringify(HR.weeklyRecap(g)), 'the recap is deterministic');
+  ok(HR.weeklyRecap({}).week === 1 && Array.isArray(HR.recapHeadlines({})), 'the recap is safe on a sparse game');
+  // achievement
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'bannerweek');
+  const one = HR.freshGame(); one.day = 3; one.trophies = [{ place: 1, day: 1 }, { place: 1, day: 2 }];
+  ok(ach && !ach.check(one), 'Banner Week needs three wins in a week');
+  const three = HR.freshGame(); three.day = 3; three.trophies = [{ place: 1, day: 1 }, { place: 1, day: 2 }, { place: 1, day: 3 }];
+  ok(ach.check(three), 'three show wins in a week unlock Banner Week');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
