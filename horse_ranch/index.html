@@ -939,6 +939,70 @@ function breedFoal(mare,stallion,rng){
   return foal;
 }
 
+// ---------- Breeding planner (read-only forecast of a pairing; never changes the RNG outcome) ----------
+// Estimates the likely foal from a mare×stallion, using the SAME genetics/stat maths as breedFoal.
+// Per-locus coat odds from the parents' alleles; trait & affinity inheritance probabilities.
+function coatOddsFor(mareGenes, stallionGenes){
+  const mg=mareGenes||{}, sg=stallionGenes||{};
+  const combos=(L)=>{ const a=mg[L]||['n','n'], b=sg[L]||['n','n']; const out=[]; for(const x of a) for(const y of b) out.push([x,y]); return out; }; // 4 combos, each p=0.25
+  // mutation distribution (mirrors crossGenes)
+  const pm=mg.mut||sg.mut, mut={}; if(pm) mut[pm]=(mut[pm]||0)+0.4;
+  const rest=pm?0.6:1.0; mut['Pearl']=(mut['Pearl']||0)+rest*0.02*0.5; mut['Golden']=(mut['Golden']||0)+rest*0.02*0.5;
+  let pMut=0; for(const k in mut) pMut+=mut[k]; const pNone=Math.max(0,1-pMut);
+  const odds={}; const add=(name,tier,p)=>{ if(p<=1e-9) return; if(!odds[name]) odds[name]={name,tier,p:0}; odds[name].p+=p; };
+  for(const k in mut) add(k,3,mut[k]); // mutation coats (tier 3), phenotype checks mut first
+  const E=combos('E'),A=combos('A'),Cr=combos('Cr'),G=combos('G'); const cell=pNone/256;
+  for(const e of E) for(const a of A) for(const cr of Cr) for(const g of G){ const ph=phenotype({E:e,A:a,Cr:cr,G:g,mut:null}); add(ph.name,ph.tier,cell); }
+  return Object.keys(odds).map(k=>odds[k]).sort((x,y)=>y.p-x.p);
+}
+function traitOddsFor(mareTrait, stallionTrait){
+  const rnd=0.12/TRAITS.length, odds={}; TRAITS.forEach(t=>odds[t.id]=rnd);
+  [mareTrait,stallionTrait].forEach(tr=>{ if(tr&&odds[tr]!=null) odds[tr]+=0.44; }); // 0.88 kept × 0.5 each parent
+  return TRAITS.map(t=>({id:t.id,name:t.name,emoji:t.emoji,p:odds[t.id]})).sort((a,b)=>b.p-a.p);
+}
+function affinityHintsFor(mare, stallion){ const out=[];
+  for(const id of DISC_IDS){ const best=Math.max(affinity(mare,id),affinity(stallion,id)); const pts=Math.round(best*0.25); if(pts>0) out.push({id, pts}); }
+  return out.sort((a,b)=>b.pts-a.pts); }
+function predictFoal(mare, stallion){
+  if(!mare||!stallion) return null;
+  const samebreed=mare.breed===stallion.breed;
+  const mb=breedDef(mare.breed)||BREEDS[0], sb=breedDef(stallion.breed)||BREEDS[0];
+  const breed=samebreed?mb.id:((sb.rarity>mb.rarity)?sb.id:mb.id);
+  const amt=samebreed?9:13, inbred=relatedness(mare,stallion)>0, penalty=inbred?0.94:1;
+  const range=(a,b)=>{ const c=(a+b)/2;
+    return { lo:Math.round(clamp(c-amt,8,100)*penalty), mid:Math.round(clamp(c,8,100)*penalty), hi:Math.round(clamp(c+amt,8,100)*penalty) }; };
+  const sr={ speed:range(mare.speed,stallion.speed), stamina:range(mare.stamina,stallion.stamina), temperament:range(mare.temperament,stallion.temperament) };
+  const ovr=(k)=>Math.round(sr.speed[k]*0.4 + sr.stamina[k]*0.35 + sr.temperament[k]*0.25);
+  return { breed, breedName:(breedDef(breed)||{name:breed}).name, rarity:(breedDef(breed)||{rarity:1}).rarity,
+    purebred:samebreed, generation:Math.max(mare.generation||1,stallion.generation||1)+1, inbred,
+    statRanges:sr, overall:{lo:ovr('lo'),mid:ovr('mid'),hi:ovr('hi')},
+    coatOdds:coatOddsFor(mare.genes||seedGenes(mare.breed), stallion.genes||seedGenes(stallion.breed)),
+    traitOdds:traitOddsFor(mare.trait, stallion.trait), affinityHints:affinityHintsFor(mare,stallion), championChance:0.05 }; }
+// optional breeding goals — the planner flags whether a pairing moves toward the target
+const BREED_GOALS=[
+  {id:'rarecoat', kind:'coatTier', value:2, label:'a rare coat 🎨'},
+  {id:'grey',     kind:'coat',     value:'Grey', label:'a Grey coat'},
+  {id:'palomino', kind:'coat',     value:'Palomino', label:'a Palomino coat'},
+  {id:'purebred', kind:'purebred', label:'a purebred foal'},
+  {id:'elite',    kind:'rarity',   value:4, label:'an Elite+ breed'},
+];
+function breedGoalDef(id){ return BREED_GOALS.find(g=>g.id===id)||null; }
+function matchesBreedingGoal(pred, goalId){ if(!pred) return null; const g=breedGoalDef(goalId); if(!g) return null;
+  let chance=0;
+  if(g.kind==='coat') chance=(pred.coatOdds.find(c=>c.name===g.value)||{p:0}).p;
+  else if(g.kind==='coatTier') chance=pred.coatOdds.filter(c=>(c.tier||0)>=g.value).reduce((n,c)=>n+c.p,0);
+  else if(g.kind==='purebred') chance=pred.purebred?1:0;
+  else if(g.kind==='rarity') chance=(pred.rarity>=g.value)?1:0;
+  return { goal:g, chance, onTrack:chance>0.02, label:g.label }; }
+// did an actual foal fulfil a breeding goal? (checked at birth against the goal that was set)
+function foalMeetsGoal(foal, goalId){ if(!foal) return false; const g=breedGoalDef(goalId); if(!g) return false;
+  const coat=foal.coat||{name:foal.color,tier:0};
+  if(g.kind==='coat') return coat.name===g.value;
+  if(g.kind==='coatTier') return (coat.tier||0)>=g.value;
+  if(g.kind==='purebred') return !!foal.purebred;
+  if(g.kind==='rarity') return ((breedDef(foal.breed)||{rarity:1}).rarity)>=g.value;
+  return false; }
+
 // ---------- Market stock ----------
 function marketPickBreed(game,rng){
   // higher reputation unlocks rarer stock
@@ -1272,7 +1336,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[],
+    namePack:'classic', registry:[], pasture:[], breedGoal:null,
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1337,6 +1401,7 @@ function advanceDay(game,rng){
         const foal=breedFoal(h, sire, rng);
         foal.name=pickNameFrom(activeNamePack(game), foal.sex, rng); // foals are named from the active pack
         foal.stable=h.stable;
+        if(game.breedGoal && foalMeetsGoal(foal, game.breedGoal)){ game.stats.goalsMet=(game.stats.goalsMet||0)+1; foal._metGoal=game.breedGoal; }
         born.push(foal);
       }
     }
@@ -2034,6 +2099,7 @@ const ACHIEVEMENTS=[
   {id:'studbook',   icon:'📖', name:'Full Studbook',        desc:'Register 25 horses in your studbook.',         check:g=>registrySize(g)>=25},
   {id:'loyal',      icon:'🎁', name:'Loyal Rancher',        desc:'Reach a 7-day login streak.',                  check:g=>((g.stats&&g.stats.bestStreak)||0)>=7},
   {id:'sanctuary',  icon:'🌾', name:'Sanctuary',            desc:'Give five horses a home in the pasture.',      check:g=>pastureSize(g)>=5},
+  {id:'planner',    icon:'🔮', name:'Master Planner',        desc:'Breed a foal that fulfils your breeding goal.', check:g=>((g.stats&&g.stats.goalsMet)||0)>=1},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2129,6 +2195,7 @@ const GOALS=[
   {id:'rename1', desc:'Name a horse your own way (✏️)',        tip:g=>'',                              done:g=>((g.stats&&g.stats.renames)||0)>=1,                     reward:{money:200,rep:10}},
   {id:'daily1',  desc:'Claim a daily welcome-back reward (🎁)',tip:g=>((g.stats&&g.stats.dailyClaims)||0)+'/1',done:g=>((g.stats&&g.stats.dailyClaims)||0)>=1,               reward:{money:200,rep:5}},
   {id:'pasture1',desc:'Retire a horse to the pasture (🌾)',    tip:g=>pastureSize(g)+' grazing',       done:g=>pastureSize(g)>=1,                                      reward:{money:500,rep:20}},
+  {id:'plan1',   desc:'Set a breeding goal (🔮 planner)',      tip:g=>'',                              done:g=>!!(g.breedGoal&&breedGoalDef(g.breedGoal)),             reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2149,6 +2216,7 @@ const HR = {
   mkHorse, valueOf, buyPrice, sellQuote, rentRate,
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
+  coatOddsFor, traitOddsFor, affinityHintsFor, predictFoal, BREED_GOALS, breedGoalDef, matchesBreedingGoal, foalMeetsGoal,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2276,6 +2344,7 @@ function load(){
     if(typeof G.namePack!=='string'||!namePackDef(G.namePack)) G.namePack='classic'; // themed name packs
     if(!Array.isArray(G.registry)) G.registry=[]; syncRegistry(G); // studbook registry
     if(!Array.isArray(G.pasture)) G.pasture=[]; // retirement pasture roster
+    if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
     G.wishlist=normWishlist(G.wishlist); if(G.featured===undefined) G.featured=null; refreshFeatured(G); // marketplace: wishlist + featured listing
@@ -2764,6 +2833,35 @@ function renderBreed(){
   bbtn.onclick=()=>doBreed(mare,stal);
   info.appendChild(bbtn);
   s.appendChild(info);
+
+  // ---- Breeding planner: read-only predicted-foal forecast ----
+  if(chk.ok){
+    const pred=predictFoal(mare,stal); const pct=p=>Math.round(p*100)+'%';
+    const sr=pred.statRanges;
+    const statRow=(lbl,r)=>'<div class="stat"><div class="sv" style="font-size:12px">'+r.lo+'–'+r.hi+'</div><div class="sl">'+lbl+'</div></div>';
+    const coats=pred.coatOdds.slice(0,4).map(c=>{ const cc=coatColor(c.name); return '<span class="pip" title="'+pct(c.p)+'"><span class="pdot" style="background:'+cc.body+'"></span>'+c.name+(c.tier>=2?' 🎨':'')+' '+pct(c.p)+'</span>'; }).join('');
+    const tr=pred.traitOdds[0], tr2=pred.traitOdds[1];
+    const aff=pred.affinityHints[0];
+    const card=el('div','card'); card.style.borderLeft='4px solid var(--blue)';
+    let inner='<div class="hname" style="font-size:13px">🔮 Predicted Foal <span class="pill">'+pred.breedName+(pred.purebred?' · purebred':' · cross')+'</span> <span class="pill">Gen '+pred.generation+'</span>'+(pred.inbred?' <span class="pill busy" style="color:var(--bad)">⚠️ inbred</span>':'')+'</div>'+
+      '<div class="stats" style="margin-top:6px">'+statRow('SPD',sr.speed)+statRow('STA',sr.stamina)+statRow('TMP',sr.temperament)+'<div class="stat"><div class="sv" style="font-size:12px">'+pred.overall.lo+'–'+pred.overall.hi+'</div><div class="sl">OVR</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px">🎨 Coat odds:</div><div class="pips">'+coats+'</div>'+
+      '<div class="hbreed" style="margin-top:5px">🧬 Likely trait: <b>'+tr.emoji+' '+tr.name+'</b> ('+pct(tr.p)+')'+(tr2&&tr2.p>0.1?' · '+tr2.emoji+' '+tr2.name+' ('+pct(tr2.p)+')':'')+
+        (aff?' · 🧠 leans '+(disciplineDef(aff.id)||{name:''}).name+' (+'+aff.pts+' affinity)':'')+
+        ' · ✦ '+pct(pred.championChance)+' Champion Bloodline chance</div>';
+    // breeding goal check
+    if(G.breedGoal){ const m=matchesBreedingGoal(pred, G.breedGoal);
+      if(m) inner+='<div class="hbreed" style="margin-top:5px;color:'+(m.onTrack?'var(--good)':'var(--ink2)')+'">🎯 Goal: '+m.label+' — '+(m.onTrack?('✓ possible ('+pct(m.chance)+')'):'✗ not from this pairing')+'</div>'; }
+    card.innerHTML=inner;
+    // goal selector row
+    const gsel=el('div','pips'); gsel.style.marginTop='7px';
+    gsel.innerHTML='<span class="hbreed" style="align-self:center;margin-right:2px">Goal:</span>'+
+      '<span class="pip'+(!G.breedGoal?' pdot':'')+'" data-bg="" style="cursor:pointer;'+(!G.breedGoal?'color:var(--gold);border-color:var(--gold2)':'')+'">none</span>'+
+      BREED_GOALS.map(g=>'<span class="pip" data-bg="'+g.id+'" style="cursor:pointer;'+(G.breedGoal===g.id?'color:var(--gold);border-color:var(--gold2)':'')+'">'+g.label+'</span>').join('');
+    card.appendChild(gsel);
+    s.appendChild(card);
+    gsel.querySelectorAll('[data-bg]').forEach(x=>x.onclick=()=>{ const id=x.getAttribute('data-bg')||null; G.breedGoal=id; playSfx('tap'); save(); renderBreed(); });
+  }
 
   // pregnant mares status
   const preg=G.horses.filter(h=>h.pregnant);
