@@ -432,6 +432,7 @@ function mkHorse(o){
     rare:o.rare||null,        // rare trait tag e.g. 'Champion Bloodline'
     ped:o.ped||null, inbred:o.inbred||false,
     wins:o.wins||0, podiums:o.podiums||0, entries:o.entries||0, compCd:o.compCd||0, // show career
+    atStud:o.atStud||false, // standing at public stud
     pregnant:false, gestation:0, sireBreed:null,
     rentDays:0, rentRate:0,   // >0 = out on rent
     stable:o.stable!=null?o.stable:0,
@@ -625,7 +626,7 @@ function freshGame(){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0},
     trophies:[], hallOfFame:[], prestige:0, goalIdx:0, seenIntro:false, audio:{on:false,vol:0.6},
   };
   // start with one mare + one stallion so the player can breed immediately
@@ -708,6 +709,8 @@ function advanceDay(game,rng){
     game.stats.lessons=(game.stats.lessons||0)+served;
     game.rep += Math.min(3, Math.floor(served/3)); // a busy school builds reputation
   }
+  // stud fees — visiting mares pay to breed with your at-stud stallions (no foals in your stalls)
+  { const si=studIncome(game); if(si>0){ game.money+=si; game.stats.studIncome=(game.stats.studIncome||0)+si; } }
 
   // Market Day (weekly): fresh horses & teacher applicants arrive
   if(isMarketDay(game.day)){ restockMarket(game,rng); restockTeachers(game,rng);
@@ -784,6 +787,7 @@ function disciplineScore(h,disc){
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
   if(tooOldToCompete(h)) return {ok:false,why:'Past competing age — time for a proud retirement.'};
+  if(h.atStud) return {ok:false,why:'Standing at stud — retire from stud to compete.'};
   if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
   if(h.pregnant) return {ok:false,why:'In foal — resting.'};
   if((h.compCd||0)>game.day) return {ok:false,why:'Resting until day '+h.compCd+'.'};
@@ -857,6 +861,28 @@ function schoolIncome(game){
 }
 function teacherSalaries(game){ return (game.teachers||[]).reduce((n,t)=>n+t.salary,0); }
 function schoolNet(game){ return schoolIncome(game)-teacherSalaries(game); }
+
+// ---------- Stud farm — stand a top stallion at public stud for recurring income ----------
+function canStand(h){
+  if(!h||h.sex!=='stallion') return {ok:false,why:'Only stallions can stand at stud.'};
+  if(!isAdult(h)) return {ok:false,why:'Must be a grown stallion.'};
+  if(tooOldToBreed(h)) return {ok:false,why:'Too old to stand at stud.'};
+  if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
+  return {ok:true};
+}
+function studFee(game,h){ // what one visiting mare pays — scales with quality & your reputation
+  let fee = valueOf(h)*0.06 + (h.wins||0)*40 + (coatOf(h).tier||0)*30 + ((h.generation||1)-1)*15;
+  fee *= (1 + Math.min(0.6, (game.rep||0)*0.0002));
+  return Math.max(20, Math.round(fee));
+}
+function studDemand(game,h){ // visiting mares per day (better stallion + reputation + spring → more)
+  let d = 0.5 + (h.wins||0)*0.15 + (game.rep||0)*0.0006 + (coatOf(h).tier||0)*0.2;
+  d *= (seasonOf(game.day).id==='spring'?1.6:1.0); // spring is the breeding season
+  return clamp(d,0,4);
+}
+function studIncomeFor(game,h){ return Math.round(studFee(game,h)*studDemand(game,h)); }
+function studStallions(game){ return (game.horses||[]).filter(h=>h.atStud && canStand(h).ok); }
+function studIncome(game){ return studStallions(game).reduce((n,h)=>n+studIncomeFor(game,h),0); }
 
 // ---------- Retirement & Hall of Fame ----------
 function canRetire(h){
@@ -958,6 +984,8 @@ const GOALS=[
   {id:'year2',   desc:'Complete a full year (4 seasons)',tip:g=>'year '+yearOf(g.day),           done:g=>g.day>=SEASON_LEN*4+1,                                  reward:{money:3000,rep:60}},
   {id:'hof1',    desc:'Induct your first Hall-of-Famer', tip:g=>((g.hallOfFame||[]).length)+'/1',done:g=>((g.hallOfFame||[]).length)>=1,                         reward:{money:1500,rep:40}},
   {id:'hofchamp',desc:'Retire a Champion to the Hall',   tip:g=>'',                              done:g=>(g.hallOfFame||[]).some(r=>(r.wins||0)>=3),             reward:{money:3000,rep:80}},
+  {id:'stud1',   desc:'Stand a stallion at stud',        tip:g=>'',                              done:g=>(g.horses||[]).some(h=>h.atStud),                       reward:{money:1000,rep:25}},
+  {id:'studinc', desc:'Earn 🪙3,000 in stud fees',       tip:g=>'🪙'+((g.stats&&g.stats.studIncome)||0),done:g=>((g.stats&&g.stats.studIncome)||0)>=3000,            reward:{money:2500,rep:60}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -997,6 +1025,7 @@ const HR = {
   NOTE_HZ, noteHz, SFX, sfxDef, normAudio, toggleAudio, setAudioVol,
   PRIME_END, BREED_MAX, OLD_AGE, LIFESPAN, agePerformanceMult, isElderly, pastPrime,
   tooOldToBreed, tooOldToCompete, ageLabel, canRetire, hofRecord, prestigeOf, legacyLine,
+  canStand, studFee, studDemand, studIncomeFor, studStallions, studIncome,
   isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
@@ -1037,6 +1066,7 @@ function load(){
     if(!G.teachers) G.teachers=[];
     if(!G.teacherMarket||!G.teacherMarket.length){ restockTeachers(G,Math.random); }
     if(G.stats.lessons==null) G.stats.lessons=0;
+    if(G.stats.studIncome==null) G.stats.studIncome=0;
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
       if(!h.genes) h.genes=seedGenes(h.breed,Math.random);
@@ -1047,6 +1077,7 @@ function load(){
       if(!h.trait) h.trait=pickTrait(Math.random);
       if(h.wins==null) h.wins=0; if(h.podiums==null) h.podiums=0;
       if(h.entries==null) h.entries=0; if(h.compCd==null) h.compCd=0;
+      if(h.atStud==null) h.atStud=false;
     });
     return true;
   }catch(e){ return false; }
@@ -1116,6 +1147,7 @@ function horseCard(h,actionsHtml){
   if(h.inbred) tags.push('<span class="tag busy">⚠️ Inbred</span>');
   if(h.pregnant) tags.push('<span class="tag preg">🤰 In foal ('+h.gestation+'d)</span>');
   if(h.rentDays>0) tags.push('<span class="tag busy">🚜 Rented ('+h.rentDays+'d)</span>');
+  if(h.atStud) tags.push('<span class="tag" style="color:var(--good);border-color:#2f4a1c">♞ At stud</span>');
   const c=el('div','card');
   c.innerHTML=
     '<div class="row">'+
@@ -1460,13 +1492,13 @@ function renderBiz(){
   const s=$('sec-biz'); s.innerHTML='';
   s.appendChild(el('h2','head','Business'));
   const seg=el('div','seg');
-  const segLabel={rent:'🐴 Rent',board:'🏨 Board',shows:'🏆 Shows',sell:'💰 Sell'};
-  ['rent','board','shows','sell'].forEach(k=>{ const b=el('div','segb'+(bizSub===k?' on':''), segLabel[k]); b.onclick=()=>{bizSub=k;renderBiz();}; seg.appendChild(b); });
+  const segLabel={rent:'🐴 Rent',board:'🏨 Board',stud:'♞ Stud',shows:'🏆 Shows',sell:'💰 Sell'};
+  ['rent','board','stud','shows','sell'].forEach(k=>{ const b=el('div','segb'+(bizSub===k?' on':''), segLabel[k]); b.onclick=()=>{bizSub=k;renderBiz();}; seg.appendChild(b); });
   s.appendChild(seg);
 
   if(bizSub==='rent'){
     s.appendChild(el('div','sub','Rent horses for riding lessons & shows. They earn coins daily but are unavailable while out.'));
-    const avail=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+    const avail=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant&&!h.atStud);
     if(!avail.length) s.appendChild(el('div','empty','No horses available to rent right now.'));
     avail.forEach(h=>{
       const rate=rentRate(h);
@@ -1497,6 +1529,9 @@ function renderBiz(){
     c.querySelector('#boardRem').onclick=()=>{ if(G.boarders>0){ G.boarders--; toast('Boarder released.','info'); refresh(); } };
     // rent out whole stable stalls also raises rep slightly (handled in daily)
   }
+  else if(bizSub==='stud'){
+    renderStud(s);
+  }
   else if(bizSub==='shows'){
     renderShows(s);
   }
@@ -1509,6 +1544,34 @@ function renderBiz(){
       const c=horseCard(h,acts); c.querySelector('[data-sell]').onclick=()=>sellHorse(h); s.appendChild(c);
     });
   }
+}
+
+// ---------------- Stud farm UI ----------------
+function renderStud(s){
+  s.appendChild(el('div','sub','Stand a prized stallion at public stud: visiting mares pay a fee to breed with him — steady income, and no foals in your own stalls. A stallion at stud can’t compete or be rented that day.'));
+  const spring=seasonOf(G.day).id==='spring';
+  const active=studStallions(G);
+  const sum=el('div','card');
+  sum.innerHTML='<div class="kv">Stallions at stud<b>'+active.length+'</b></div>'+
+    '<div class="kv">Est. stud income / day<b style="color:var(--good)">🪙'+fmt(studIncome(G))+'</b></div>'+
+    '<div class="kv">Total stud fees earned<b>🪙'+fmt((G.stats&&G.stats.studIncome)||0)+'</b></div>'+
+    (spring?'<div class="kv" style="color:var(--good)">🌸 Spring<b style="color:var(--good)">breeding season — more visiting mares!</b></div>':'');
+  s.appendChild(sum);
+  const stallions=G.horses.filter(h=>h.sex==='stallion'&&isAdult(h));
+  if(!stallions.length) s.appendChild(el('div','empty','No grown stallions yet. Raise or buy a stallion to offer at stud.'));
+  stallions.slice().sort((a,b)=>studFee(G,b)-studFee(G,a)).forEach(h=>{
+    const ck=canStand(h); const fee=studFee(G,h); const perDay=studIncomeFor(G,h);
+    let acts;
+    if(h.atStud){ acts='<button class="btn sm ghost" data-unstud="'+h.id+'">Retire from stud</button>'; }
+    else if(ck.ok){ acts='<button class="btn sm blue" data-stud="'+h.id+'">♞ Stand at stud</button>'; }
+    else { acts='<button class="btn sm ghost" disabled>'+ck.why+'</button>'; }
+    const c=horseCard(h,acts);
+    const info=el('div','kv'); info.innerHTML=(h.atStud?'<b style="color:var(--good)">♞ At stud · ~🪙'+fmt(perDay)+'/day</b>':'Stud fee<b>🪙'+fmt(fee)+' · ~🪙'+fmt(perDay)+'/day</b>');
+    c.appendChild(info);
+    const sb=c.querySelector('[data-stud]'); if(sb) sb.onclick=()=>{ const r=canStand(h); if(!r.ok){ toast(r.why,'info'); return; } h.atStud=true; toast('♞ '+h.name+' is now standing at stud.','good'); refresh(); };
+    const ub=c.querySelector('[data-unstud]'); if(ub) ub.onclick=()=>{ h.atStud=false; toast(h.name+' retired from stud.','info'); refresh(); };
+    s.appendChild(c);
+  });
 }
 
 // ---------------- Shows UI ----------------

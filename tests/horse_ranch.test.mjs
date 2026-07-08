@@ -189,6 +189,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, coat: { name: 'Golden', tier: 3 }, wins: 4 })); // satisfies rare-coat + champion goals
   g.canteen = { level: 2 }; g.teachers = [HR.mkTeacher(g, rng(1))]; // satisfies canteen + teacher goals
   g.hallOfFame = [HR.hofRecord(HR.mkHorse({ breed: 'arabian', age: 40, wins: 5 }), 'retired', 40)]; // satisfies HoF goals
+  g.horses.push(HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, atStud: true })); g.stats.studIncome = 5000; // satisfies stud goals
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -653,6 +654,41 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   for (let i = 0; i < 60 && !passedSomeone; i++) { HR.advanceDay(g, rng(i + 1)); if (g.hallOfFame.length > 0) passedSomeone = true; }
   ok(passedSomeone, 'a very old horse eventually passes into the Hall of Fame');
   ok(g.hallOfFame.every(r => r.reason === 'passed' || r.reason === 'retired'), 'Hall records carry a reason');
+}
+
+// ---- stud farm / stud fees ----
+{
+  const g = HR.freshGame(); g.rep = 500;
+  const stud = HR.mkHorse({ breed: 'friesian', sex: 'stallion', age: 20, speed: 90, stamina: 85, temperament: 85, wins: 4, coat: { name: 'Black', tier: 0 }, generation: 3 });
+  const mare = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20 });
+  const foal = HR.mkHorse({ breed: 'arabian', age: 2, sex: 'stallion' });
+  ok(HR.canStand(stud).ok, 'an adult stallion can stand at stud');
+  ok(!HR.canStand(mare).ok, 'a mare cannot stand at stud');
+  ok(!HR.canStand(foal).ok, 'a foal cannot stand at stud');
+  ok(!HR.canStand(HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: HR.BREED_MAX + 2 })).ok, 'too-old stallions cannot stand at stud');
+  // fee scales with quality and reputation
+  const plain = HR.mkHorse({ breed: 'shetland', sex: 'stallion', age: 20, speed: 30, stamina: 40, temperament: 50 });
+  ok(HR.studFee(g, stud) > HR.studFee(g, plain), 'a better stallion commands a higher stud fee');
+  const gRich = HR.freshGame(); gRich.rep = 5000;
+  ok(HR.studFee(gRich, stud) > HR.studFee(g, stud), 'reputation raises the stud fee');
+  // demand: spring is busier than winter
+  const gSpring = HR.freshGame(); gSpring.rep = 500; gSpring.day = 3;
+  const gWinter = HR.freshGame(); gWinter.rep = 500; gWinter.day = HR.SEASON_LEN * 3 + 3;
+  ok(HR.studDemand(gSpring, stud) > HR.studDemand(gWinter, stud), 'spring brings more visiting mares');
+}
+{
+  // standing at stud earns income through advanceDay and blocks competing
+  const g = HR.freshGame(); g.feed = 9999; g.rep = 800; g.day = 3;
+  const stud = HR.mkHorse({ breed: 'friesian', sex: 'stallion', age: 20, speed: 90, stamina: 85, temperament: 85, wins: 3, atStud: true });
+  g.horses.push(stud);
+  ok(HR.studStallions(g).length === 1 && HR.studIncome(g) > 0, 'an at-stud stallion produces stud income');
+  ok(!HR.canEnterShow(g, stud).ok, 'a stallion at stud cannot compete that day');
+  const m0 = g.money;
+  HR.advanceDay(g, rng(3));
+  ok(g.money > m0 && g.stats.studIncome > 0, 'stud fees are collected and logged each day');
+  // not at stud → no stud income
+  const g2 = HR.freshGame(); g2.horses.push(HR.mkHorse({ breed: 'friesian', sex: 'stallion', age: 20 }));
+  ok(HR.studIncome(g2) === 0, 'a stallion not standing at stud earns nothing');
 }
 
 // ---- clamp helper ----
