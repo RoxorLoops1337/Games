@@ -192,6 +192,78 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.checkGoals(g).length === 0, 'checkGoals is a no-op after the chain is done');
 }
 
+// ---- coat-colour genetics ----
+{
+  // phenotype mapping from allele sets
+  const chestnut = HR.phenotype({ E: ['e', 'e'], A: ['a', 'a'], Cr: ['n', 'n'], G: ['n', 'n'] });
+  ok(chestnut.name === 'Chestnut' && chestnut.tier === 0, 'ee = Chestnut (red base)');
+  const bay = HR.phenotype({ E: ['E', 'e'], A: ['A', 'a'], Cr: ['n', 'n'], G: ['n', 'n'] });
+  ok(bay.name === 'Bay', 'E_ A_ = Bay');
+  const black = HR.phenotype({ E: ['E', 'E'], A: ['a', 'a'], Cr: ['n', 'n'], G: ['n', 'n'] });
+  ok(black.name === 'Black', 'E_ aa = Black');
+  const palomino = HR.phenotype({ E: ['e', 'e'], A: ['a', 'a'], Cr: ['C', 'n'], G: ['n', 'n'] });
+  ok(palomino.name === 'Palomino' && palomino.tier === 1, 'red + single cream = Palomino (uncommon)');
+  const cremello = HR.phenotype({ E: ['e', 'e'], A: ['a', 'a'], Cr: ['C', 'C'], G: ['n', 'n'] });
+  ok(cremello.name === 'Cremello' && cremello.tier === 2, 'red + double cream = Cremello (rare)');
+  const grey = HR.phenotype({ E: ['E', 'e'], A: ['A', 'a'], Cr: ['n', 'n'], G: ['G', 'n'] });
+  ok(grey.name === 'Grey', 'grey allele masks the base colour');
+  const golden = HR.phenotype({ E: ['e', 'e'], A: ['a', 'a'], Cr: ['n', 'n'], G: ['n', 'n'], mut: 'Golden' });
+  ok(golden.name === 'Golden' && golden.tier === 3, 'mutation coat is legendary tier');
+}
+{
+  // dominant/recessive inheritance: two single-cream parents CAN throw a double-dilute
+  const a = { E: ['e', 'e'], A: ['a', 'a'], Cr: ['C', 'n'], G: ['n', 'n'], mut: null };
+  const b = { E: ['e', 'e'], A: ['a', 'a'], Cr: ['C', 'n'], G: ['n', 'n'], mut: null };
+  let sawDouble = false, sawZero = false;
+  const r = rng(123);
+  for (let i = 0; i < 200; i++) {
+    const child = HR.crossGenes(a, b, r);
+    const cc = child.Cr.filter(x => x === 'C').length;
+    if (cc === 2) sawDouble = true;
+    if (cc === 0) sawZero = true;
+  }
+  ok(sawDouble, 'two single-cream parents can produce a double-dilute foal');
+  ok(sawZero, 'and can also produce a non-dilute foal (recessive segregation)');
+}
+{
+  // rare coats are worth more
+  const plain = HR.mkHorse({ breed: 'quarter', age: 20, speed: 70, stamina: 60, temperament: 70, health: 100, happy: 100, coat: { name: 'Bay', tier: 0 } });
+  const fancy = HR.mkHorse({ breed: 'quarter', age: 20, speed: 70, stamina: 60, temperament: 70, health: 100, happy: 100, coat: { name: 'Cremello', tier: 2 } });
+  ok(HR.coatValueMult(fancy) > HR.coatValueMult(plain), 'rarer coat tier = higher coat multiplier');
+  ok(HR.valueOf(fancy) > HR.valueOf(plain), 'a rare-coat horse is worth more than a plain one');
+  ok(HR.coatValueMult({ color: 'Bay' }) === 1, 'legacy horse with no coat defaults to ×1');
+}
+{
+  // every fresh/market horse has genes + a coat now
+  const g = HR.freshGame();
+  ok(g.horses.every(h => h.genes && h.coat && h.coat.name), 'starter horses carry genes + a coat');
+  ok(g.market.every(h => h.genes && h.coat), 'market horses carry genes + a coat');
+}
+
+// ---- pedigree + inbreeding ----
+{
+  const mare = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20, name: 'Mira' });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, name: 'Sol' });
+  const foal = HR.breedFoal(mare, stal, rng(5));
+  ok(foal.ped && foal.ped.dam.name === 'Mira' && foal.ped.sire.name === 'Sol', 'foal records both parents in its pedigree');
+  ok(foal.coat && foal.coat.name, 'foal has a genetically-derived coat');
+  ok(HR.relatedness(mare, stal) === 0, 'unrelated founders are not related');
+  // inbreeding: breed the foal (as a dam) back to its own sire → shares an ancestor
+  foal.sex = 'mare'; foal.age = 20;
+  ok(HR.relatedness(foal, stal) > 0, 'a foal and its own sire are detected as related');
+  const inbredFoal = HR.breedFoal(foal, stal, rng(6));
+  ok(inbredFoal.inbred === true, 'breeding related horses flags the foal as inbred');
+  ok(inbredFoal.health < 96, 'inbred foal starts with reduced health');
+}
+{
+  // ancestorIds collects the horse + its recorded ancestors
+  const mare = HR.mkHorse({ breed: 'shetland', sex: 'mare', age: 20 });
+  const stal = HR.mkHorse({ breed: 'shetland', sex: 'stallion', age: 20 });
+  const foal = HR.breedFoal(mare, stal, rng(9));
+  const ids = HR.ancestorIds(foal, 2);
+  ok(ids.has(foal.id) && ids.has(mare.id) && ids.has(stal.id), 'ancestorIds includes self and parents');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
