@@ -123,6 +123,19 @@
   .toast.good{border-color:var(--good)} .toast.bad{border-color:var(--bad)} .toast.info{border-color:var(--blue)}
   @keyframes tin{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
 
+  /* Goal bar */
+  #goalBar{display:flex;align-items:center;gap:7px;padding:6px 10px;background:linear-gradient(#2a3a1c,#20301a);border-bottom:2px solid var(--edge);font-size:12px;font-weight:800}
+  #goalBar .gicon{font-size:13px}
+  #goalText{color:var(--gold);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #goalTip{color:var(--ink2);font-variant-numeric:tabular-nums;font-size:11px;white-space:nowrap}
+  #goalBar.done #goalText{color:var(--good)}
+  /* Coin pops + hud bump */
+  .coinpop{position:fixed;z-index:40;font-weight:900;font-size:14px;color:var(--gold);text-shadow:0 2px 0 #000,0 0 8px #0008;pointer-events:none;animation:coinrise 1.1s ease-out forwards;white-space:nowrap}
+  .coinpop.neg{color:var(--bad)}
+  @keyframes coinrise{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(-34px);opacity:0}}
+  #hudMoney.bump{display:inline-block;animation:hudbump .3s ease-out}
+  @keyframes hudbump{0%{transform:scale(1)}40%{transform:scale(1.28);color:#fff2b0}100%{transform:scale(1)}}
+  .goalpop{border-color:var(--good)!important}
   .seg{display:flex;gap:6px;margin-bottom:10px}
   .segb{flex:1;text-align:center;background:#0d130a;border:1px solid #0c110a;border-radius:8px;padding:7px;font-size:11.5px;font-weight:800;color:var(--ink2);cursor:pointer}
   .segb.on{background:linear-gradient(var(--panel2),var(--panel));color:var(--gold);border-color:var(--gold2)}
@@ -162,6 +175,8 @@
     <div class="tab" data-tab="breed"><span class="ti">💞</span>Breed</div>
     <div class="tab" data-tab="biz"><span class="ti">💼</span>Business</div>
   </div>
+
+  <div id="goalBar"><span class="gicon">🎯</span><span id="goalText">—</span><span id="goalTip"></span></div>
 
   <div id="main">
     <div class="sec on" id="sec-ranch"></div>
@@ -370,8 +385,8 @@ function freshGame(){
     v:1, money:1500, feed:30, rep:0, day:1,
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0},
-    seenIntro:false,
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0},
+    goalIdx:0, seenIntro:false,
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -403,7 +418,7 @@ function advanceDay(game,rng){
   // age + growth + pregnancy + rent
   const born=[];
   for(const h of game.horses){
-    h.age++;
+    h.age++; h.trains=0; // fresh training energy each day
     if(h.rentDays>0){ h.rentDays--; if(h.rentDays===0){ h.happy=clamp(h.happy-6,0,100);} }
     if(h.pregnant){
       h.gestation--;
@@ -418,6 +433,7 @@ function advanceDay(game,rng){
   }
   // place newborns if room, else auto-sell
   for(const f of born){
+    game.stats.maxGen=Math.max(game.stats.maxGen||1, f.generation);
     if(freeStalls(game)>0){ game.horses.push(f); game.stats.born++;
       notes.push({t:'good',m:'🐣 A '+breedDef(f.breed).name+' foal was born: '+f.name+'!'});
     } else {
@@ -477,13 +493,58 @@ function showScore(h,rng){ return statAvg(h)*(0.85+ (rng?rng():Math.random())*0.
 
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
+// ---------- Training (raise stats toward each horse's breed potential) ----------
+const TRAIN_STATS=['speed','stamina','temperament'];
+const TRAIN_LABEL={speed:'Speed',stamina:'Stamina',temperament:'Temperament'};
+const TRAIN_PER_DAY=3;
+function statCap(h,stat){ const b=breedDef(h.breed)||BREEDS[0]; return clamp(Math.round(b[stat]+18),40,100); }
+function trainCost(h,stat){ const b=breedDef(h.breed)||BREEDS[0]; return Math.round(50*(1+h[stat]*0.03)*RARITY_MULT[b.rarity]); }
+function trainGain(h,stat){ const room=statCap(h,stat)-h[stat]; return room<=0?0:Math.max(1,Math.round(room*0.28)); }
+function canTrain(h,stat){
+  if(!isAdult(h)) return {ok:false,why:'Only adults can train.'};
+  if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
+  if(h.pregnant) return {ok:false,why:'In foal — no training.'};
+  if((h.trains||0)>=TRAIN_PER_DAY) return {ok:false,why:'Rested out — try tomorrow.'};
+  if(trainGain(h,stat)<=0) return {ok:false,why:'At breed potential.'};
+  return {ok:true};
+}
+function applyTrain(h,stat){ const g=trainGain(h,stat); h[stat]=clamp(h[stat]+g,8,100); h.trains=(h.trains||0)+1; h.happy=clamp(h.happy-4,0,100); return g; }
+
+// ---------- Goals / milestone chain (gives the game direction) ----------
+const GOALS=[
+  {id:'own3',   desc:'Own 3 horses',                 tip:g=>g.horses.length+'/3',            done:g=>g.horses.length>=3,                                     reward:{money:300}},
+  {id:'foal1',  desc:'Breed your first foal',        tip:g=>(g.stats.born||0)+'/1',          done:g=>(g.stats.born||0)>=1,                                   reward:{money:400,rep:15}},
+  {id:'rep200', desc:'Reach 200 reputation',         tip:g=>Math.min(g.rep,200)+'/200',      done:g=>g.rep>=200,                                             reward:{feed:80}},
+  {id:'rare',   desc:'Own a Rare-tier horse',        tip:g=>'',                              done:g=>g.horses.some(h=>(breedDef(h.breed)||{rarity:1}).rarity>=3), reward:{money:600}},
+  {id:'stable2',desc:'Build a second stable',        tip:g=>g.stables.length+'/2',           done:g=>g.stables.length>=2,                                    reward:{rep:20}},
+  {id:'sale1k', desc:'Sell a horse for 1,000+',      tip:g=>'best 🪙'+(g.stats.bestSale||0), done:g=>(g.stats.bestSale||0)>=1000,                            reward:{money:500,rep:20}},
+  {id:'own6',   desc:'Own 6 horses at once',         tip:g=>g.horses.length+'/6',            done:g=>g.horses.length>=6,                                     reward:{money:800}},
+  {id:'show1',  desc:'Place top-2 at a horse show',  tip:g=>(g.stats.showWins||0)+'/1',      done:g=>(g.stats.showWins||0)>=1,                               reward:{money:700,rep:30}},
+  {id:'gen3',   desc:'Breed a 3rd-generation foal',  tip:g=>'best gen '+(g.stats.maxGen||1), done:g=>(g.stats.maxGen||1)>=3,                                 reward:{money:1000,rep:40}},
+  {id:'master', desc:'Reach Master Breeder rank',    tip:g=>rankFor(g.rep).name,             done:g=>g.rep>=2200,                                            reward:{money:2000,feed:150}},
+  {id:'legend', desc:'Own a Legendary breed',        tip:g=>'',                              done:g=>g.horses.some(h=>(breedDef(h.breed)||{rarity:1}).rarity>=5), reward:{money:3000,rep:60}},
+];
+function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
+function checkGoals(g){
+  const done=[];
+  while(g.goalIdx<GOALS.length && GOALS[g.goalIdx].done(g)){
+    const goal=GOALS[g.goalIdx], r=goal.reward||{};
+    if(r.money) g.money+=r.money; if(r.feed) g.feed+=r.feed; if(r.rep) g.rep+=r.rep;
+    done.push(goal); g.goalIdx++;
+  }
+  return done;
+}
+
 // ---------- Expose logic surface for headless tests ----------
 const HR = {
-  BREEDS, breedDef, RARITY_MULT, RARITY_NAME, STAGES, RANKS, EVENTS,
+  BREEDS, breedDef, RARITY_MULT, RARITY_NAME, STAGES, RANKS, EVENTS, GOALS,
+  TRAIN_STATS, TRAIN_LABEL, TRAIN_PER_DAY,
   stageForAge, isAdult, feedPerDay, statAvg, overall,
   mkHorse, valueOf, buyPrice, sellQuote, rentRate,
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
+  statCap, trainCost, trainGain, canTrain, applyTrain,
+  currentGoal, checkGoals,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -508,6 +569,12 @@ function load(){
     // forward-compat guards
     if(!G.market) restockMarket(G,Math.random);
     if(G.boarders==null) G.boarders=0;
+    if(G.goalIdx==null) G.goalIdx=0;
+    if(!G.stats) G.stats={};
+    ['born','sold','bought','rented','days'].forEach(k=>{ if(G.stats[k]==null) G.stats[k]=0; });
+    if(G.stats.bestSale==null) G.stats.bestSale=0;
+    if(G.stats.showWins==null) G.stats.showWins=0;
+    if(G.stats.maxGen==null) G.stats.maxGen=Math.max(1,...G.horses.map(h=>h.generation||1));
     return true;
   }catch(e){ return false; }
 }
@@ -588,6 +655,24 @@ function renderHUD(){
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
+function renderGoal(){
+  const bar=$('goalBar'); if(!bar) return;
+  const g=currentGoal(G);
+  if(!g){ bar.className='done'; $('goalText').textContent='🏆 All goals complete — you’re a legend!'; $('goalTip').textContent=''; return; }
+  bar.className='';
+  $('goalText').textContent='Goal: '+g.desc;
+  try{ $('goalTip').textContent=g.tip(G)||''; }catch(e){ $('goalTip').textContent=''; }
+}
+// floating coin pop above the money chip + hud pulse
+function coinPop(amount){
+  const chip=$('hudMoney'); if(!chip||!chip.getBoundingClientRect) return;
+  const r=chip.getBoundingClientRect();
+  if(amount){ const p=el('div','coinpop'+(amount<0?' neg':''),(amount>0?'+':'-')+'🪙'+fmt(Math.abs(amount)));
+    p.style.left=Math.max(6,(r.left||40)-6)+'px'; p.style.top=((r.top||30)-2)+'px'; document.body.appendChild(p);
+    setTimeout(()=>p.remove(),1100); }
+  chip.classList.add('bump'); setTimeout(()=>chip.classList.remove('bump'),300);
+}
+
 // ---- RANCH tab ----
 function renderRanch(){
   const s=$('sec-ranch'); s.innerHTML='';
@@ -623,9 +708,11 @@ function renderRanch(){
   G.horses.forEach(h=>{
     let acts='';
     acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom (🪙20)</button>';
+    if(isAdult(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
     if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
     const c=horseCard(h,acts);
     c.querySelectorAll('[data-groom]').forEach(btn=>btn.onclick=()=>groom(h));
+    c.querySelectorAll('[data-train]').forEach(btn=>btn.onclick=()=>openTrain(h));
     c.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellHorse(h));
     s.appendChild(c);
   });
@@ -812,11 +899,41 @@ function sellHorse(h){
   modal('<h3>Sell '+h.name+'?</h3><div class="msg">'+breedDef(h.breed).name+' · OVR '+overall(h)+'<br>Market offer: <b class="val">🪙'+fmt(q)+'</b></div>'+
     '<div class="btnrow"><button class="btn red" id="cSell">Confirm Sale</button><button class="btn ghost" id="cCancel">Keep</button></div>');
   $('cCancel').onclick=closeModal;
-  $('cSell').onclick=()=>{ G.money+=q; G.horses=G.horses.filter(x=>x.id!==h.id);
+  $('cSell').onclick=()=>{ G.money+=q; G.stats.bestSale=Math.max(G.stats.bestSale||0,q); G.horses=G.horses.filter(x=>x.id!==h.id);
     const rg=Math.round(overall(h)*0.3 + (breedDef(h.breed).rarity)*4); G.rep+=rg; G.stats.sold++;
-    closeModal(); toast('💰 Sold '+h.name+' for 🪙'+fmt(q)+' (+'+rg+'⭐)','good'); refresh(); };
+    coinPop(q); closeModal(); toast('💰 Sold '+h.name+' for 🪙'+fmt(q)+' (+'+rg+'⭐)','good'); refresh(); };
 }
 function rentOut(h,days){ h.rentDays=days; h.rentRate=rentRate(h); G.stats.rented++; toast('🐴 '+h.name+' rented out for '+days+' days.','good'); refresh(); }
+
+// ---------------- Training UI ----------------
+function openTrain(h){
+  if(!isAdult(h)){ toast('Only adults can train.','info'); return; }
+  const left=TRAIN_PER_DAY-(h.trains||0);
+  const rows=TRAIN_STATS.map(st=>{
+    const ck=canTrain(h,st), cost=trainCost(h,st), gain=trainGain(h,st), cap=statCap(h,st);
+    const afford=G.money>=cost, live=ck.ok&&afford;
+    const to=Math.min(cap,Math.round(h[st])+gain);
+    return '<div class="opt" '+(live?'data-tr="'+st+'"':'style="opacity:.5"')+'>'+
+      '<div class="grow"><div class="hname">'+TRAIN_LABEL[st]+' '+Math.round(h[st])+(gain>0?' → '+to:'')+'</div>'+
+      '<div class="hbreed">potential '+cap+(ck.ok?(afford?'':' · need coins'):' · '+ck.why)+'</div>'+
+      '<div class="bar" style="margin-top:4px"><i style="width:'+clamp(h[st],0,100)+'%;background:'+barColor(h[st])+'"></i></div></div>'+
+      '<div class="val">🪙'+fmt(cost)+'</div></div>';
+  }).join('');
+  const sh=modal('<h3>🏋️ Train '+h.name+'</h3>'+
+    '<div class="msg">Training sharpens a horse’s stats toward its breed potential (diminishing returns). '+
+    '<b>'+left+'/'+TRAIN_PER_DAY+'</b> sessions left today.</div>'+
+    '<div class="optlist">'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="trDone" style="width:100%">Done</button></div>');
+  $('trDone').onclick=closeModal;
+  sh.querySelectorAll('[data-tr]').forEach(o=>o.onclick=()=>{
+    const st=o.getAttribute('data-tr'), ck=canTrain(h,st), cost=trainCost(h,st);
+    if(!ck.ok){ toast(ck.why,'info'); return; }
+    if(G.money<cost){ toast('Not enough coins.','bad'); return; }
+    G.money-=cost; const g=applyTrain(h,st); G.stats.trained=(G.stats.trained||0)+1;
+    coinPop(-cost); toast('🏋️ '+h.name+': +'+g+' '+TRAIN_LABEL[st]+'!','good');
+    refresh(); openTrain(h); // reopen with fresh numbers
+  });
+}
 
 // ---------------- Events UI ----------------
 function showEvent(ev){
@@ -830,7 +947,7 @@ function showEvent(ev){
     modal('<h3>💰 Premium Buyer</h3><div class="msg">'+ev.msg+'</div>'+
       '<div class="btnrow"><button class="btn" id="evYes">Sell for 🪙'+fmt(ev.offer)+'</button><button class="btn ghost" id="evNo">Decline</button></div>',{center:true});
     $('evNo').onclick=closeModal;
-    $('evYes').onclick=()=>{ G.money+=ev.offer; G.horses=G.horses.filter(x=>x.id!==h.id); G.rep+=8; closeModal(); toast('💰 Sold '+h.name+' to the premium buyer!','good'); refresh(); };
+    $('evYes').onclick=()=>{ G.money+=ev.offer; G.stats.bestSale=Math.max(G.stats.bestSale||0,ev.offer); G.horses=G.horses.filter(x=>x.id!==h.id); G.rep+=8; coinPop(ev.offer); closeModal(); toast('💰 Sold '+h.name+' to the premium buyer!','good'); refresh(); };
     return;
   }
   if(ev.id==='vet'){
@@ -855,7 +972,8 @@ function showEvent(ev){
       const h=G.horses.find(x=>x.id===o.getAttribute('data-show')); G.money-=60;
       const sc=showScore(h,Math.random); const place = sc>95?1: sc>78?2: sc>60?3:4;
       const prize=[0,600,300,120,0][place]; const rep=[0,40,22,10,3][place];
-      G.money+=prize; G.rep+=rep; closeModal();
+      G.money+=prize; G.rep+=rep; if(place<=2) G.stats.showWins=(G.stats.showWins||0)+1;
+      if(prize>0) coinPop(prize); closeModal();
       const pn=['','🥇 1st place','🥈 2nd place','🥉 3rd place','Participated'][place];
       toast('🏆 '+h.name+': '+pn+'! +🪙'+prize+' +'+rep+'⭐', place<=2?'good':'info'); refresh();
     });
@@ -877,8 +995,11 @@ function isModalOpen(){ return $('modal').className.indexOf('on')>=0; }
 function doDay(){
   // expire hay modifier
   if(G.hayExpire && G.day>=G.hayExpire){ G.hayMod=null; G.hayExpire=null; }
+  const money0=G.money;
   const res=advanceDay(G,Math.random);
   (res.notes||[]).forEach(n=>toast(n.m,n.t));
+  const net=G.money-money0; // rent + boarding income earned overnight
+  if(net>0) coinPop(net);
   if(res.event) showEvent(res.event);
   save(); refresh();
 }
@@ -887,7 +1008,12 @@ function doDay(){
 function setTab(t){ curTab=t; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.getAttribute('data-tab')===t));
   document.querySelectorAll('.sec').forEach(x=>x.classList.remove('on')); $('sec-'+t).classList.add('on'); renderTab(); }
 function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='market')renderMarket(); else if(curTab==='breed')renderBreed(); else renderBiz(); }
-function refresh(){ renderHUD(); renderTab(); bindFeedButtons(); save(); }
+function refresh(){
+  const done=checkGoals(G);
+  renderHUD(); renderGoal(); renderTab(); bindFeedButtons(); save();
+  done.forEach(g=>{ const r=g.reward||{}; const bits=[]; if(r.money)bits.push('🪙'+r.money); if(r.feed)bits.push('🌾'+r.feed); if(r.rep)bits.push(r.rep+'⭐');
+    toast('🎯 Goal complete: '+g.desc+(bits.length?' — +'+bits.join(' +'):''),'good'); });
+}
 function bindFeedButtons(){ document.querySelectorAll('[data-feed]').forEach(b=>{ b.onclick=()=>buyFeedDelegate(parseInt(b.getAttribute('data-feed'),10)); }); }
 
 // ---------------- Intro ----------------
@@ -896,8 +1022,9 @@ function showIntro(){
     '<div class="msg">Build a thriving horse ranch from a single old barn.<br><br>'+
     '• 🛒 <b>Buy</b> mares &amp; stallions of real breeds<br>'+
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
-    '• 🏡 <b>Upgrade</b> stables &amp; keep hay in the store<br>'+
-    '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+
+    '• 🏋️ <b>Train</b> horses to raise their stats<br>'+
+    '• 💼 <b>Sell, rent &amp; board</b> horses for income<br>'+
+    '• 🎯 Follow the <b>goals</b> up top to grow your ranch<br><br>'+
     'You start with a mare, a stallion and 🪙1,500. Good luck, rancher!</div>'+
     '<div class="btnrow"><button class="btn" id="introGo" style="width:100%">Start Ranching!</button></div>',{center:true});
   $('introGo').onclick=()=>{ G.seenIntro=true; save(); closeModal(); };
