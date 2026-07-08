@@ -203,7 +203,7 @@ var pick=function(a){return a[Math.floor(Math.random()*a.length)];};
 var fmt=function(n){ n=Math.round(n); var s=Math.abs(n)+'',o='';for(var i=0;i<s.length;i++){if(i>0&&(s.length-i)%3===0)o+='.';o+=s[i];}return (n<0?'-':'')+o; };
 
 /* ---------- tuning (single table) ---------- */
-var BAL={ GW:6, GH:4, TS:32, spawnBase:4.5, spawnMin:1.3, serviceBase:2.6, eatTime:5.0,
+var BAL={ GW:6, GH:4, TS:32, spawnBase:4.5, spawnMin:1.3, serviceBase:5.0, eatTime:5.0,
   weekLen:34, custSpeed:36, queuePatience:16, frietPrice:30, saucePrice:8, staffBase:220, staffStep:1.7 };
 // the shop starts small & cosy (6×4) and can be expanded — each level costs more.
 var GRID_LEVELS=[ {gw:6,gh:4}, {gw:7,gh:5}, {gw:8,gh:5}, {gw:8,gh:6}, {gw:9,gh:6}, {gw:10,gh:7} ];
@@ -493,9 +493,10 @@ var traitBlurb=function(def){ if(!def) return ''; var b=[];
   if(def.spend>1) b.push('💎+'+Math.round((def.spend-1)*100)+'%');
   return b.join(' '); };
 var IDLE_CAP_SEC=8*3600;                                  // passive income accrues up to 8h offline
-// passive €/sec a parked shop earns, from its snapshotted appeal + lifetime serves
+// passive €/sec a parked shop earns, from its snapshotted appeal + lifetime serves.
+// bumped ~5x so a shop you've built up keeps a meaningful pile waiting while you're away.
 var idleRate=function(blob){ if(!blob) return 0; var ap=Math.max(0,blob.appealSnap||0), sv=Math.max(0,blob.servedSnap||0);
-  return ap*0.03 + sv*0.003; };
+  return ap*0.15 + sv*0.015; };
 var idleIncome=function(blob,secs){ return Math.round(idleRate(blob)*clamp(secs||0,0,IDLE_CAP_SEC)); };
 // cost to open one more shop when you already run `existing` (first shop is free)
 var openShopCost=function(existing){ return Math.round(2000*Math.pow(2.4,Math.max(0,(existing||1)-1))); };
@@ -550,8 +551,10 @@ var trainCost=function(lv){ return Math.round(140*Math.pow(1.6,(lv||1)-1)); };
 var STAFF_NAMES=['Rudy','Marcel','Fien','Jos','Rita','Gaston','Nele','André','Suzy','Freddy','Katrien','Wim','Chantal','Danny','Godelieve','Achiel'];
 // throughput multiplier from fryers + staff speed + snelbak research
 var throughput=function(G){ return 1 + 0.4*Math.max(0,kindPower(G.objs,'fryer')-1) + 0.3*staffSpeed(G) + (G.research.snelbak?0.4:0); };
-// a leveled toog serves faster (its power multiplies the global throughput)
-var serviceTime=function(G,cLvl){ return BAL.serviceBase/(throughput(G)*power(cLvl)); };
+// a leveled toog serves faster (its power multiplies the global throughput), but there's a
+// floor so even a maxed counter with lots of speed still takes a couple seconds per customer
+var SERVICE_MIN=2.0;
+var serviceTime=function(G,cLvl){ return Math.max(SERVICE_MIN, BAL.serviceBase/(throughput(G)*power(cLvl))); };
 // value of one order (fries + optional snack + sauce), scaled by type spend & combos
 var orderValue=function(G,type,comboMul){
   var v=menuAvg(G)*(1+(dishRank(G,'friet')-1)*0.20)*shadyIncomeMul(G);  // friet portion: menu prices, dish rank, louche margin
