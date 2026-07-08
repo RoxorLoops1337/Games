@@ -136,6 +136,19 @@
 
   /* Toast */
   #toasts{position:fixed;top:64px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:6px;z-index:30;pointer-events:none}
+  /* Guided tutorial coach-marks (non-blocking hints) */
+  #tutRing{position:fixed;z-index:48;border:3px solid var(--gold);border-radius:12px;box-shadow:0 0 0 4000px #0a0d0866,0 0 16px #ffd35a;pointer-events:none;display:none;transition:all .25s ease}
+  #tutBubble{position:fixed;z-index:49;max-width:300px;width:calc(100% - 32px);background:linear-gradient(#2f3f22,#233016);border:1px solid var(--gold2);border-radius:14px;padding:12px 13px;box-shadow:0 10px 30px #000b;display:none}
+  #tutBubble.on{display:block;animation:tin .25s ease-out}
+  .tbHead{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .tbAvatar{font-size:22px}
+  .tbTitle{font-weight:900;font-size:14px;color:var(--gold)}
+  .tbText{font-size:13px;line-height:1.5;color:var(--ink)}
+  .tbBtns{display:flex;align-items:center;gap:8px;margin-top:11px}
+  .tbSkip{background:none;border:none;color:var(--ink2);font-size:12px;font-weight:700;cursor:pointer;padding:6px 2px}
+  .tbStep{flex:1;text-align:center;font-size:11px;color:var(--ink2);font-weight:800}
+  .tbNext{background:linear-gradient(var(--gold),var(--gold2));color:#2a1c05;border:none;border-radius:9px;font-weight:900;font-size:13px;padding:8px 14px;cursor:pointer;box-shadow:0 3px 0 #0006}
+  .tbNext:active{transform:translateY(2px);box-shadow:0 1px 0 #0006}
   .toast{background:#0d130af0;border:1px solid var(--gold2);color:var(--ink);font-weight:800;font-size:13px;padding:8px 14px;border-radius:20px;box-shadow:0 4px 12px #000a;animation:tin .3s ease-out;max-width:90%;text-align:center}
   .toast.good{border-color:var(--good)} .toast.bad{border-color:var(--bad)} .toast.info{border-color:var(--blue)}
   @keyframes tin{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -222,6 +235,7 @@
     <div class="chip rep"><span>⭐</span><b id="hudRep">0</b></div>
     <div class="chip day" id="dayChip" style="cursor:pointer"><span id="hudWd">🗓️ Mon</span> · Day <b id="hudDay">1</b></div>
     <div class="spacer"></div>
+    <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <div id="speedBtns">
       <button class="sbtn" data-sp="0">⏸</button>
@@ -267,6 +281,12 @@
 
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <div id="toasts"></div>
+<div id="tutRing"></div>
+<div id="tutBubble">
+  <div class="tbHead"><span class="tbAvatar">👩‍🌾</span><span class="tbTitle" id="tbTitle"></span></div>
+  <div class="tbText" id="tbText"></div>
+  <div class="tbBtns"><button id="tbSkip" class="tbSkip">Skip tour</button><span class="tbStep" id="tbStep"></span><button id="tbNext" class="tbNext">Next ▸</button></div>
+</div>
 
 <script>
 (function(){
@@ -674,7 +694,7 @@ function freshGame(){
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0},
-    trophies:[], hallOfFame:[], prestige:0, goalIdx:0, seenIntro:false, audio:{on:false,vol:0.6},
+    trophies:[], hallOfFame:[], prestige:0, goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -1018,6 +1038,24 @@ function hofToModel(rec,game){
   };
 }
 
+// ---------- Guided tutorial (data only; the spotlight/positioning is DOM) ----------
+// Each step points at a real element and tab; `done(game)` (optional) auto-advances.
+const TUTORIAL=[
+  {id:'welcome', tab:'ranch',  target:null,                      title:'Welcome to Skyhorse Stables!', text:"I'm Fleur, your stable hand. Let me show you around — it only takes a minute."},
+  {id:'hud',     tab:'ranch',  target:'#hud',                    title:'Your ranch at a glance',       text:'Coins 🪙, hay 🌾, reputation ⭐ and the date live up here. Keep hay stocked — hungry horses get grumpy!'},
+  {id:'ranch',   tab:'ranch',  target:'#sec-ranch',              title:'The stables',                  text:'Your horses live here. Feed, groom, train, make keepsake cards, or sell them — and tap 🌾 to buy hay.'},
+  {id:'market',  tab:'market',  target:'.tab[data-tab="market"]',title:'The Market',                   text:'Buy mares & stallions here. Fresh stock arrives on Market Day. Grab one to keep growing!', done:g=>(g.stats.bought||0)>0},
+  {id:'breed',   tab:'breed',   target:'.tab[data-tab="breed"]', title:'Breeding',                     text:'Pair an adult mare with a stallion to raise a foal. Same breed = purebred; chase rare coats & bloodlines!', done:g=>g.horses.some(h=>h.pregnant)||(g.stats.born||0)>0},
+  {id:'biz',     tab:'biz',     target:'.tab[data-tab="biz"]',   title:'Business & Shows',             text:'Sell, rent, board, stand a stallion at stud, or enter shows to win prizes and fame.'},
+  {id:'estate',  tab:'estate',  target:'.tab[data-tab="estate"]',title:'The Estate',                   text:'Build a canteen and hire teachers for steady daily income — and honour your legends in the Hall of Fame.'},
+  {id:'calendar',tab:'ranch',   target:'#dayChip',               title:'The living calendar',          text:'Tap the date to see the week ahead — seasons, weather, show days and festivals. Plan around them!'},
+  {id:'goal',    tab:'ranch',   target:'#goalBar',               title:'Your next goal',               text:'Follow the goals up here for coins & reputation. That’s everything — enjoy Skyhorse Stables!'},
+];
+function tutorialStep(i){ return TUTORIAL[i]||null; }
+function tutorialLen(){ return TUTORIAL.length; }
+function stepSatisfied(step,game){ return !!(step && typeof step.done==='function' && step.done(game)); }
+function tutorialActive(game){ return !!(game && game.tut && !game.tut.done); }
+
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
 // ---------- Audio model (pure data + settings reducer; the audio graph is DOM-only) ----------
@@ -1126,6 +1164,7 @@ const HR = {
   canStand, studFee, studDemand, studIncomeFor, studStallions, studIncome,
   cardModel, hofToModel, stampFor,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
+  TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
   isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
@@ -1168,6 +1207,7 @@ function load(){
     if(G.stats.lessons==null) G.stats.lessons=0;
     if(G.stats.studIncome==null) G.stats.studIncome=0;
     if(G.stats.festivals==null) G.stats.festivals=0;
+    if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
       if(!h.genes) h.genes=seedGenes(h.breed,Math.random);
@@ -2224,6 +2264,9 @@ function refresh(){
   if(done.length){ burst('🎯⭐🎉✨',16); playSfx('goal'); }
   done.forEach(g=>{ const r=g.reward||{}; const bits=[]; if(r.money)bits.push('🪙'+r.money); if(r.feed)bits.push('🌾'+r.feed); if(r.rep)bits.push(r.rep+'⭐');
     toast('🎯 Goal complete: '+g.desc+(bits.length?' — +'+bits.join(' +'):''),'good'); });
+  // tutorial: auto-advance when the current step's action is done, else keep the coach-mark aligned
+  if(tutOpen && G.tut && !G.tut.done){ const st=tutorialStep(G.tut.step);
+    if(st){ if(stepSatisfied(st,G)) showTutStep(G.tut.step+1); else positionTut(st); } }
 }
 function bindFeedButtons(){ document.querySelectorAll('[data-feed]').forEach(b=>{ b.onclick=()=>buyFeedDelegate(parseInt(b.getAttribute('data-feed'),10)); }); }
 
@@ -2241,7 +2284,7 @@ function showIntro(){
     '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+
     'You start with a mare, a stallion and 🪙1,500. Good luck, Fleur!</div>'+
     '<div class="btnrow"><button class="btn" id="introGo" style="width:100%">Start Ranching!</button></div>',{center:true});
-  $('introGo').onclick=()=>{ G.seenIntro=true; save(); closeModal(); };
+  $('introGo').onclick=()=>{ G.seenIntro=true; save(); closeModal(); if(!(G.tut&&G.tut.done)) startTutorial(); };
 }
 
 // ---------------- Boot ----------------
@@ -2268,10 +2311,54 @@ function openWeek(){
   $('wkOk').onclick=closeModal;
 }
 
+// ---------------- Guided tutorial (coach-marks) ----------------
+let tutOpen=false;
+function startTutorial(){ G.tut={step:0,done:false}; save(); tutOpen=true; showTutStep(0); }
+function finishTutorial(skip){ tutOpen=false; G.tut=G.tut||{step:0}; G.tut.done=true; save();
+  const r=$('tutRing'), bb=$('tutBubble'); if(r)r.style.display='none'; if(bb)bb.className='';
+  if(skip) toast('Tour skipped — replay anytime via ℹ️','info'); }
+function showTutStep(i){
+  const step=tutorialStep(i); if(!step){ finishTutorial(); toast('🎉 You’re all set — enjoy Skyhorse Stables!','good'); return; }
+  tutOpen=true; G.tut=G.tut||{}; G.tut.step=i; save();
+  if(step.tab && curTab!==step.tab) setTab(step.tab);
+  const t=$('tbTitle'), tx=$('tbText'), stp=$('tbStep'), nx=$('tbNext');
+  if(t) t.textContent=step.title; if(tx) tx.textContent=step.text; if(stp) stp.textContent=(i+1)+' / '+tutorialLen();
+  if(nx) nx.textContent=(i>=tutorialLen()-1)?'Finish ✓':'Next ▸';
+  positionTut(step);
+  const bb=$('tutBubble'); if(bb) bb.className='on';
+  playSfx('tap');
+}
+function positionTut(step){
+  const ring=$('tutRing'), bb=$('tutBubble'); if(!ring||!bb) return;
+  let tgt=null; try{ tgt=step.target?document.querySelector(step.target):null; }catch(e){ tgt=null; }
+  const vw=(typeof window!=='undefined'&&window.innerWidth)||360, vh=(typeof window!=='undefined'&&window.innerHeight)||640;
+  if(tgt&&tgt.getBoundingClientRect){ const r=tgt.getBoundingClientRect();
+    if(r.width>0&&r.height>0){
+      ring.style.display='block'; ring.style.left=(r.left-6)+'px'; ring.style.top=(r.top-6)+'px'; ring.style.width=(r.width+12)+'px'; ring.style.height=(r.height+12)+'px';
+      const bh=180, below=r.bottom+bh<vh;
+      bb.style.transform=''; bb.style.left=Math.max(12,Math.min(vw-312,r.left))+'px';
+      bb.style.top=(below?(r.bottom+14):Math.max(12,r.top-bh))+'px';
+      return;
+    }
+  }
+  ring.style.display='none'; bb.style.left='50%'; bb.style.top='42%'; bb.style.transform='translate(-50%,-50%)';
+}
+function openHelp(){
+  modal('<h3>ℹ️ Help &amp; About</h3>'+
+    '<div class="msg"><b>Skyhorse Stables</b> — you’re Fleur, raising, breeding, training and showing horses across the seasons. Buy hay, grow your herd, chase rare coats and champions, and build your estate.<br><br>Fancy a refresher tour?</div>'+
+    '<div class="btnrow"><button class="btn" id="hReplay" style="width:100%">▶ Replay the tutorial</button></div>'+
+    '<div class="btnrow"><button class="btn ghost" id="hClose" style="width:100%">Close</button></div>',{center:true});
+  $('hClose').onclick=closeModal;
+  $('hReplay').onclick=()=>{ closeModal(); startTutorial(); };
+}
+
 function boot(){
   if(!load()){ G=freshGame(); }
   if(_idc<1000) _idc=1000+G.horses.length+G.market.length;
   { const dc=$('dayChip'); if(dc) dc.onclick=openWeek; }
+  { const hb=$('helpBtn'); if(hb) hb.onclick=openHelp; }
+  { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
+  { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ playSfx('tap'); setTab(t.getAttribute('data-tab')); });
   document.querySelectorAll('#speedBtns .sbtn').forEach(b=>b.onclick=()=>{ speed=parseInt(b.getAttribute('data-sp'),10); playSfx('tap');
     document.querySelectorAll('#speedBtns .sbtn').forEach(x=>x.classList.toggle('on',x===b)); });
