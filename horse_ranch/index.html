@@ -1096,12 +1096,13 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[]}, board:null, staff:[],
     legacy:normLegacy(legacy),
+    champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1218,6 +1219,14 @@ function advanceDay(game,rng){
   // weekly contracts board — refreshes when the week rolls over
   { const hadWeek=game.board&&game.board.week; refreshBoard(game);
     if(hadWeek!=null && hadWeek!==game.board.week) notes.push({t:'info',m:'📋 New contracts are posted on the notice board!'}); }
+
+  // seasonal championship — crown the season leader when the season rolls over
+  { ensureChamp(game);
+    if(game.champ.season!==seasonIndex(game.day)){
+      const award=closeSeason(game);
+      if(award) notes.push({t:'good',m:'🏆 '+award.champ.name+' is crowned '+award.champ.seasonName+' Champion! +🪙'+award.prize+' +'+award.rep+'⭐'});
+      else notes.push({t:'info',m:'🏆 A new championship season has begun — enter shows to score points!'});
+    } }
 
   // seasonal festival! (deterministic, pre-announced)
   const fest=festivalOn(game.day);
@@ -1389,8 +1398,46 @@ function applyCompetition(game,h,disc,tier,rng,perf){
     game.trophies.unshift({horse:h.name,breed:h.breed,disc:disc.id,tier:tier.id,place:res.place,day:game.day});
     if(game.trophies.length>60) game.trophies.length=60;
   }
+  awardChampionshipPoints(game,h,tier,res.place); // season-long championship points
   return res;
 }
+
+// ---------- Seasonal Championship Series (a season-long points league) ----------
+// Show placings earn championship points across the 14-day season; at season's end
+// the leading horse is crowned and paid a bounded reward, then the tally resets.
+const CHAMP_POINTS={1:10, 2:6, 3:3, 4:1};   // base points by finishing place
+const CHAMP_PRIZE_BASE=1200, CHAMP_PRIZE_PER_PT=12, CHAMP_PRIZE_CAP=6000; // end-of-season purse (capped, economy-safe)
+function seasonIndex(day){ return Math.floor((Math.floor(day)-1)/SEASON_LEN); } // absolute season number (0-based)
+function daysLeftInSeason(game){ return SEASON_LEN - seasonDay(game.day||1) + 1; } // days remaining incl. today
+function champPointsFor(place, tier){ const base=CHAMP_POINTS[place]!=null?CHAMP_POINTS[place]:CHAMP_POINTS[4]; return base*((tier&&tier.id)||1); } // higher tiers worth more
+function ensureChamp(game){ if(!game.champ||typeof game.champ!=='object') game.champ={season:seasonIndex(game.day||1), points:{}, meta:{}, lastChampion:null};
+  if(!game.champ.points||typeof game.champ.points!=='object') game.champ.points={};
+  if(!game.champ.meta||typeof game.champ.meta!=='object') game.champ.meta={};
+  if(game.champ.season==null) game.champ.season=seasonIndex(game.day||1);
+  return game.champ; }
+function awardChampionshipPoints(game,h,tier,place){ const c=ensureChamp(game);
+  if(c.season!==seasonIndex(game.day)){ c.season=seasonIndex(game.day); c.points={}; c.meta={}; } // defensive: never carry points across a season
+  const pts=champPointsFor(place,tier);
+  if(pts>0){ c.points[h.id]=(c.points[h.id]||0)+pts; c.meta[h.id]={name:h.name, breed:h.breed, coat:coatOf(h).name}; }
+  return pts; }
+function seasonStandings(game){ const c=ensureChamp(game);
+  const rows=Object.keys(c.points).map(id=>{ const m=c.meta[id]||{}; return {id, points:c.points[id]||0, name:m.name||'—', breed:m.breed||null, coat:m.coat||null}; });
+  rows.sort((a,b)=> b.points-a.points || (a.name<b.name?-1:1)); rows.forEach((r,i)=>r.rank=i+1); return rows; }
+function seasonLeader(game){ return seasonStandings(game)[0]||null; }
+function champTotalPoints(game){ const c=ensureChamp(game); return Object.keys(c.points).reduce((n,id)=>n+c.points[id],0); }
+function seasonPrize(points){ return Math.min(CHAMP_PRIZE_CAP, Math.round(CHAMP_PRIZE_BASE + (points||0)*CHAMP_PRIZE_PER_PT)); }
+// crown the leader (if any), pay the bounded purse, record the champion, and reset for the new season
+function closeSeason(game){ const c=ensureChamp(game); const closed=c.season; const leader=seasonLeader(game); let award=null;
+  if(leader && leader.points>0){
+    const prize=seasonPrize(leader.points), rep=Math.min(120, 20+Math.round(leader.points*0.6));
+    game.money+=prize; game.rep+=rep; game.stats.goldEarned=(game.stats.goldEarned||0)+prize;
+    game.stats.seasonTitles=(game.stats.seasonTitles||0)+1;
+    c.lastChampion={ name:leader.name, breed:leader.breed, coat:leader.coat, points:leader.points,
+      season:closed, seasonName:SEASONS[((closed%4)+4)%4].name, year:yearOf(closed*SEASON_LEN+1), prize, rep };
+    award={ champ:c.lastChampion, prize, rep };
+  }
+  c.season=seasonIndex(game.day); c.points={}; c.meta={}; // start the new season fresh
+  return award; }
 
 // ---------- Weekly contracts / notice board ----------
 // A small board of short-term jobs that refreshes each week. Deterministic from
@@ -1718,6 +1765,7 @@ const ACHIEVEMENTS=[
   {id:'contractor', icon:'📋', name:'Reliable Hand',        desc:'Complete 10 notice-board contracts.',          check:g=>((g.stats&&g.stats.contractsDone)||0)>=10},
   {id:'fullcrew',   icon:'👥', name:'Full Crew',            desc:'Employ all six stable staff at once.',         check:g=>staffCount(g)>=MAX_STAFF},
   {id:'schooled',   icon:'🎓', name:'Master of the Craft',  desc:'Fully school a horse in a discipline (100 affinity).', check:g=>g.horses.some(h=>topAffinity(h).pts>=AFF_MAX)},
+  {id:'seasonlord', icon:'🏆', name:'Season Champion',       desc:'Win three Seasonal Championships.',            check:g=>((g.stats&&g.stats.seasonTitles)||0)>=3},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1806,6 +1854,7 @@ const GOALS=[
   {id:'contract1',desc:'Complete a notice-board contract',    tip:g=>((g.stats&&g.stats.contractsDone)||0)+'/1',done:g=>((g.stats&&g.stats.contractsDone)||0)>=1,             reward:{money:600,rep:20}},
   {id:'staff1',  desc:'Hire your first stable hand',          tip:g=>staffCount(g)+'/1',              done:g=>staffCount(g)>=1,                                       reward:{money:600,rep:20}},
   {id:'special1',desc:'Develop a discipline specialist',      tip:g=>'best affinity '+Math.max(0,...g.horses.map(h=>topAffinity(h).pts))+'/'+SPECIALIST_AT,done:g=>g.horses.some(h=>specialtyOf(h)),reward:{money:900,rep:25}},
+  {id:'champ1',  desc:'Win a Seasonal Championship',          tip:g=>((g.stats&&g.stats.seasonTitles)||0)+'/1',done:g=>((g.stats&&g.stats.seasonTitles)||0)>=1,               reward:{money:2000,rep:50}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1835,6 +1884,8 @@ const HR = {
   SHOW_GAME, SHOW_PERF_CAP, fenceScore, showPerfMult,
   DISC_IDS, AFF_MAX, AFF_CAP, SPECIALIST_AT, affInit, affinity, gainAffinity, affinityMult,
   topAffinity, specialtyOf, composure, composureTier, developAffinityFromTraining,
+  CHAMP_POINTS, CHAMP_PRIZE_CAP, seasonIndex, daysLeftInSeason, champPointsFor, ensureChamp,
+  awardChampionshipPoints, seasonStandings, seasonLeader, champTotalPoints, seasonPrize, closeSeason,
   CONTRACTS, BOARD_SIZE, contractDef, contractsForWeek, boardBaseSnapshot, refreshBoard,
   contractProgress, contractDone, currentContracts, claimableContracts, claimContract, daysUntilBoardRefresh,
   CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
@@ -1926,6 +1977,8 @@ function load(){
     if(G.stats.clearRounds==null) G.stats.clearRounds=0;
     if(G.stats.contractsDone==null) G.stats.contractsDone=0;
     if(G.stats.staffWages==null) G.stats.staffWages=0;
+    if(G.stats.seasonTitles==null) G.stats.seasonTitles=0;
+    ensureChamp(G); // seasonal championship tally
     if(G.stats.bestShowPerf==null) G.stats.bestShowPerf=0;
     if(!G.achievements) G.achievements=[];
     if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
@@ -2634,6 +2687,26 @@ function renderShows(s){
     if(canEnter) c.querySelector('[data-enter]').onclick=()=>openShowPickDiscipline(tier);
     s.appendChild(c);
   });
+
+  // ---- Seasonal Championship standings ----
+  { const se=seasonOf(G.day); ensureChamp(G);
+    s.appendChild(el('h2','head',se.emoji+' '+se.name+' Championship'));
+    const left=daysLeftInSeason(G), leader=seasonLeader(G), total=champTotalPoints(G);
+    s.appendChild(el('div','sub','Show placings score points all season. The leading horse is crowned when the season ends in <b>'+left+' day'+(left!==1?'s':'')+'</b> — winner takes a purse up to 🪙'+fmt(CHAMP_PRIZE_CAP)+'.'));
+    const rows=seasonStandings(G);
+    if(!rows.length){ s.appendChild(el('div','empty','No points yet this season.<br>Place in a show to get on the board!')); }
+    rows.slice(0,8).forEach(r=>{ const cc=r.coat?coatColor(r.coat):{body:'#7c4a26'};
+      const row=el('div','lbrow'+(r.rank===1?' lead':''));
+      row.innerHTML='<div class="lbrank">'+(r.rank===1?'👑':'#'+r.rank)+'</div>'+
+        '<div class="hface" style="width:30px;height:30px;background:radial-gradient(circle at 50% 35%,'+cc.body+'55,#1c2711)"></div>'+
+        '<div class="grow"><div class="lbname">'+r.name+'</div><div class="lbsub">'+(r.breed?(breedDef(r.breed)||{name:''}).name:'')+(r.coat?' · '+r.coat:'')+'</div></div>'+
+        '<div class="lbscore">'+fmt(r.points)+' pts</div>';
+      s.appendChild(row);
+    });
+    const last=G.champ&&G.champ.lastChampion;
+    if(last){ s.appendChild(el('div','sub','Last season’s champion: <b style="color:var(--gold)">'+last.name+'</b> ('+last.seasonName+' Yr '+last.year+') — '+fmt(last.points)+' pts, purse 🪙'+fmt(last.prize)+'.')); }
+  }
+
   // career summary
   const champs=G.horses.filter(h=>(h.wins||0)>0).sort((a,b)=>(b.wins||0)-(a.wins||0));
   if(champs.length){

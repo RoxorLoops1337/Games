@@ -212,6 +212,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.contractsDone = 1; // satisfies the contract goal
   g.staff = ['groom']; // satisfies the hire-staff goal
   HR.gainAffinity(g.horses[0], 'race', HR.SPECIALIST_AT); // satisfies the specialist goal
+  g.stats.seasonTitles = 1; // satisfies the championship goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1697,6 +1698,82 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'schooled');
   const g2 = HR.freshGame(); HR.gainAffinity(g2.horses[0], 'race', HR.AFF_MAX);
   ok(ach && ach.check(g2) && !ach.check(g), 'fully schooling a horse unlocks Master of the Craft');
+}
+
+// ---- seasonal championship series (round 29) ----
+{
+  // points by place & tier; season boundaries deterministic
+  ok(HR.champPointsFor(1, HR.COMP_TIERS[0]) > HR.champPointsFor(2, HR.COMP_TIERS[0]), 'a win scores more than 2nd');
+  ok(HR.champPointsFor(2, HR.COMP_TIERS[0]) > HR.champPointsFor(3, HR.COMP_TIERS[0]), '2nd scores more than 3rd');
+  ok(HR.champPointsFor(1, HR.COMP_TIERS[3]) > HR.champPointsFor(1, HR.COMP_TIERS[0]), 'higher tiers are worth more points');
+  ok(HR.seasonIndex(1) === 0 && HR.seasonIndex(HR.SEASON_LEN) === 0 && HR.seasonIndex(HR.SEASON_LEN + 1) === 1, 'season index steps every SEASON_LEN days');
+  ok(HR.daysLeftInSeason({ day: 1 }) === HR.SEASON_LEN && HR.daysLeftInSeason({ day: HR.SEASON_LEN }) === 1, 'days-left counts down within a season');
+}
+{
+  // applyCompetition awards championship points; standings sort; fresh game seeds a tally
+  const g = HR.freshGame(); g.rep = 5000; g.day = 3;
+  ok(g.champ && g.champ.season === HR.seasonIndex(g.day) && Object.keys(g.champ.points).length === 0, 'freshGame seeds an empty championship tally');
+  const a = g.horses[0], bHorse = g.horses[1];
+  // force a strong horse so it places, then award
+  a.speed = a.stamina = a.temperament = 99;
+  HR.awardChampionshipPoints(g, a, HR.COMP_TIERS[3], 1); // Grand Prix win
+  HR.awardChampionshipPoints(g, bHorse, HR.COMP_TIERS[0], 2); // small 2nd
+  const s = HR.seasonStandings(g);
+  ok(s.length === 2 && s[0].id === a.id && s[0].points > s[1].points, 'standings rank horses by season points');
+  ok(HR.seasonLeader(g).id === a.id, 'seasonLeader is the top scorer');
+  ok(HR.champTotalPoints(g) === s[0].points + s[1].points, 'champTotalPoints sums the board');
+  // a real applyCompetition also feeds the tally
+  const g2 = HR.freshGame(); g2.rep = 5000;
+  const h2 = g2.horses[0]; h2.speed = h2.stamina = h2.temperament = 99;
+  const p0 = HR.champTotalPoints(g2);
+  HR.applyCompetition(g2, h2, HR.disciplineDef('race'), HR.COMP_TIERS[0], rng(2));
+  ok(HR.champTotalPoints(g2) > p0, 'applyCompetition awards championship points');
+}
+{
+  // season prize is bounded, and closeSeason crowns + pays + resets
+  ok(HR.seasonPrize(0) > 0 && HR.seasonPrize(999999) <= HR.CHAMP_PRIZE_CAP, 'the season purse is capped');
+  const g = HR.freshGame(); g.day = 5; g.money = 1000; g.rep = 100;
+  HR.awardChampionshipPoints(g, g.horses[0], HR.COMP_TIERS[2], 1);
+  const leader = HR.seasonLeader(g), m0 = g.money, rep0 = g.rep;
+  // simulate the season having rolled over: advance day into the next season, then close
+  g.day = HR.SEASON_LEN + 2;
+  const award = HR.closeSeason(g);
+  ok(award && award.champ.name === leader.name, 'closeSeason crowns the season leader');
+  ok(g.money === m0 + award.prize && g.rep === rep0 + award.rep, 'the champion is paid the purse + reputation');
+  ok(g.money - m0 <= HR.CHAMP_PRIZE_CAP, 'the payout never exceeds the cap');
+  ok(g.stats.seasonTitles === 1 && g.champ.lastChampion && g.champ.lastChampion.name === leader.name, 'the title is recorded');
+  ok(Object.keys(g.champ.points).length === 0 && g.champ.season === HR.seasonIndex(g.day), 'the tally resets for the new season');
+  // closing an empty season crowns nobody and pays nothing
+  const g2 = HR.freshGame(); g2.day = HR.SEASON_LEN + 1; const mm = g2.money;
+  ok(HR.closeSeason(g2) === null && g2.money === mm, 'an empty season crowns nobody and pays nothing');
+}
+{
+  // advanceDay crowns at the season rollover, exactly once, and doesn't double-award
+  const g = HR.freshGame(); g.feed = 9999; g.rep = 200; g.money = 1000;
+  g.day = HR.SEASON_LEN - 1; // near the end of season 0
+  HR.awardChampionshipPoints(g, g.horses[0], HR.COMP_TIERS[1], 1);
+  const before = g.stats.seasonTitles || 0;
+  HR.advanceDay(g, rng(1)); // → day SEASON_LEN (still season 0), no crown yet
+  ok((g.stats.seasonTitles || 0) === before, 'no crown before the season actually ends');
+  const m1 = g.money;
+  HR.advanceDay(g, rng(1)); // → day SEASON_LEN+1 (season 1): crown season 0
+  ok((g.stats.seasonTitles || 0) === before + 1, 'advanceDay crowns exactly once at the rollover');
+  HR.advanceDay(g, rng(1)); // deeper into season 1: no extra crown
+  ok((g.stats.seasonTitles || 0) === before + 1, 'no repeat crown on later days of the new season');
+}
+{
+  // save migration + goal/achievement
+  const legacy = HR.freshGame(); delete legacy.champ;
+  HR.ensureChamp(legacy);
+  ok(legacy.champ && typeof legacy.champ.points === 'object', 'ensureChamp repairs a pre-championship save');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'champ1');
+  ok(goal && !goal.done(g), 'the championship goal is unmet before a title');
+  g.stats.seasonTitles = 1;
+  ok(goal.done(g), 'the championship goal completes with a title');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'seasonlord');
+  const g3 = HR.freshGame(); g3.stats.seasonTitles = 3;
+  ok(ach && ach.check(g3) && !ach.check(g), 'three titles unlock Season Champion');
 }
 
 // ---- clamp helper ----
