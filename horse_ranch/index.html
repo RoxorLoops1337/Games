@@ -201,6 +201,19 @@
   .tccareer{text-align:center;font-size:10.5px;color:var(--ink2);margin-bottom:8px}
   .tcfoot{display:flex;flex-direction:column;gap:2px;background:#0d130a;border-radius:10px;padding:6px 9px;font-size:10px}
   .tcfoot span:first-child{color:var(--gold);font-weight:800} .tcfoot span:last-child{color:var(--ink2)}
+  /* Achievements & stats */
+  .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:2px 0 4px}
+  .stkv{display:flex;justify-content:space-between;background:#0d130a;border:1px solid #0c110a;border-radius:8px;padding:6px 9px;font-size:11.5px;color:var(--ink2)}
+  .stkv b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .achlist{display:flex;flex-direction:column;gap:6px}
+  .achcard{display:flex;align-items:center;gap:9px;background:#0d130a;border:1px solid #0c110a;border-radius:10px;padding:8px 10px;opacity:.55}
+  .achcard.un{opacity:1;border-color:var(--gold2);background:linear-gradient(var(--panel2),var(--panel))}
+  .achic{font-size:22px;width:30px;text-align:center;flex:0 0 auto}
+  .achtx{flex:1;min-width:0}
+  .achn{font-weight:900;font-size:13px}
+  .achcard.un .achn{color:var(--gold)}
+  .achd{font-size:10.5px;color:var(--ink2)}
+  .achok{color:var(--good);font-weight:900;font-size:16px}
   /* This Week schedule */
   .weeklist{display:flex;flex-direction:column;gap:5px;margin:4px 0 8px}
   .weekrow{background:#0d130a;border:1px solid #0c110a;border-radius:9px;padding:7px 9px}
@@ -693,8 +706,8 @@ function freshGame(){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0},
-    trophies:[], hallOfFame:[], prestige:0, goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{}},
+    trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -709,6 +722,7 @@ function seededOnce(seed){ let s=seed>>>0; return function(){ s=(s*1664525+10139
 // ---------- Daily simulation ----------
 function advanceDay(game,rng){
   rng=rng||Math.random;
+  const money0=game.money; // for lifetime gold-earned tracking
   game.day++; game.stats.days++;
   const notes=[];
 
@@ -801,6 +815,10 @@ function advanceDay(game,rng){
   if(fest) event={id:'festival', fest};
   else if(game.day>2 && rng()<0.18) event=rollEvent(game,rng);
 
+  // lifetime stats: gross gold earned overnight + best overall horse ever
+  if(game.money>money0) game.stats.goldEarned=(game.stats.goldEarned||0)+(game.money-money0);
+  for(const h of game.horses) game.stats.bestOVR=Math.max(game.stats.bestOVR||0, overall(h));
+
   return {notes,event,born};
 }
 
@@ -886,10 +904,11 @@ function runCompetition(h,disc,tier,rng){
 function applyCompetition(game,h,disc,tier,rng){
   const res=runCompetition(h,disc,tier,rng);
   res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)); // summer + festivals pay more
-  game.money += res.prize; game.rep += res.rep;
+  game.money += res.prize; game.rep += res.rep; game.stats.goldEarned=(game.stats.goldEarned||0)+res.prize;
   h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
   h.happy=clamp(h.happy-8,0,100); h.health=clamp(h.health-4,0,100); // fatigue
-  if(res.place===1){ h.wins=(h.wins||0)+1; game.stats.showWins=(game.stats.showWins||0)+1; game.stats.bestTierWin=Math.max(game.stats.bestTierWin||0,tier.id); }
+  if(res.place===1){ h.wins=(h.wins||0)+1; game.stats.showWins=(game.stats.showWins||0)+1; game.stats.bestTierWin=Math.max(game.stats.bestTierWin||0,tier.id);
+    game.stats.disciplinesWon=game.stats.disciplinesWon||{}; game.stats.disciplinesWon[disc.id]=true; }
   if(res.place<=3){ h.podiums=(h.podiums||0)+1;
     game.trophies=game.trophies||[];
     game.trophies.unshift({horse:h.name,breed:h.breed,disc:disc.id,tier:tier.id,place:res.place,day:game.day});
@@ -1056,6 +1075,39 @@ function tutorialLen(){ return TUTORIAL.length; }
 function stepSatisfied(step,game){ return !!(step && typeof step.done==='function' && step.done(game)); }
 function tutorialActive(game){ return !!(game && game.tut && !game.tut.done); }
 
+// ---------- Achievements (a broad permanent collection, distinct from the GOALS ladder) ----------
+const ACHIEVEMENTS=[
+  {id:'firsthorse', icon:'🐎', name:'First Mount',       desc:'Buy your first horse from the market.',        check:g=>(g.stats.bought||0)>=1},
+  {id:'firstfoal',  icon:'🐣', name:'New Life',          desc:'Breed your first foal.',                       check:g=>(g.stats.born||0)>=1},
+  {id:'firstsale',  icon:'💰', name:'Horse Trader',      desc:'Sell a horse for the first time.',             check:g=>(g.stats.sold||0)>=1},
+  {id:'firstwin',   icon:'🥇', name:'Blue Ribbon',       desc:'Win your first competition.',                  check:g=>(g.stats.showWins||0)>=1},
+  {id:'champion',   icon:'🏆', name:'Champion Maker',     desc:'Raise a Champion (3+ show wins).',             check:g=>g.horses.some(h=>(h.wins||0)>=3)||(g.hallOfFame||[]).some(r=>(r.wins||0)>=3)},
+  {id:'alldisc',    icon:'🎖️', name:'All-Rounder',       desc:'Win in every discipline.',                     check:g=>Object.keys(g.stats.disciplinesWon||{}).length>=DISCIPLINES.length},
+  {id:'grandprix',  icon:'👑', name:'Grand Prix Glory',  desc:'Win a National Grand Prix.',                   check:g=>(g.stats.bestTierWin||0)>=4},
+  {id:'legendary',  icon:'✨', name:'Legendary Blood',    desc:'Own a Legendary-tier breed.',                  check:g=>g.horses.some(h=>(breedDef(h.breed)||{rarity:1}).rarity>=5)},
+  {id:'rarecoat',   icon:'🎨', name:'Rare Beauty',       desc:'Own a horse with a rare coat.',                check:g=>g.horses.some(h=>(coatOf(h).tier||0)>=2)},
+  {id:'elite',      icon:'⭐', name:'Elite Athlete',      desc:'Own a horse of 85+ overall.',                  check:g=>(g.stats.bestOVR||0)>=85},
+  {id:'gen5',       icon:'🌳', name:'Dynasty',           desc:'Breed a 5th-generation horse.',                check:g=>(g.stats.maxGen||1)>=5},
+  {id:'herd10',     icon:'🐴', name:'Full Stables',      desc:'Own 10 horses at once.',                       check:g=>g.horses.length>=10},
+  {id:'estate',     icon:'🏛️', name:'Estate Builder',     desc:'Open the canteen and hire a teacher.',         check:g=>canteenLevel(g)>0&&teacherCount(g)>=1},
+  {id:'studfarm',   icon:'♞', name:'Stud Farm',          desc:'Earn 🪙1,000 in stud fees.',                    check:g=>(g.stats.studIncome||0)>=1000},
+  {id:'festivals',  icon:'🎉', name:'Life of the Party',  desc:'Attend all four seasonal festivals.',          check:g=>(g.stats.festivals||0)>=4},
+  {id:'fullyear',   icon:'📅', name:'Round the Year',     desc:'Play a full year (4 seasons).',                check:g=>g.day>=SEASON_LEN*4+1},
+  {id:'hall5',      icon:'🕯️', name:'Hall of Legends',    desc:'Honour 5 horses in the Hall of Fame.',         check:g=>(g.hallOfFame||[]).length>=5},
+  {id:'rich',       icon:'🤑', name:'Fortune Made',       desc:'Earn 🪙50,000 in total.',                       check:g=>(g.stats.goldEarned||0)>=50000},
+  {id:'master',     icon:'🎗️', name:'Master Breeder',     desc:'Reach the Master Breeder rank.',               check:g=>g.rep>=2200},
+  {id:'legendrank', icon:'🌟', name:'Legendary Rancher',  desc:'Reach the top reputation rank.',               check:g=>g.rep>=8000},
+];
+function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
+function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
+function checkAchievements(game){ // returns newly-unlocked definitions (mutates game.achievements)
+  game.achievements=game.achievements||[]; const fresh=[];
+  for(const a of ACHIEVEMENTS){ if(game.achievements.indexOf(a.id)<0){ let ok=false; try{ ok=!!a.check(game); }catch(e){} if(ok){ game.achievements.push(a.id); fresh.push(a); } } }
+  return fresh;
+}
+function achievementState(game){ const un=game.achievements||[]; return { unlocked:un.length, total:ACHIEVEMENTS.length,
+  list:ACHIEVEMENTS.map(a=>({def:a, unlocked:un.indexOf(a.id)>=0})) }; }
+
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
 // ---------- Audio model (pure data + settings reducer; the audio graph is DOM-only) ----------
@@ -1165,6 +1217,7 @@ const HR = {
   cardModel, hofToModel, stampFor,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
+  ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
@@ -1207,6 +1260,10 @@ function load(){
     if(G.stats.lessons==null) G.stats.lessons=0;
     if(G.stats.studIncome==null) G.stats.studIncome=0;
     if(G.stats.festivals==null) G.stats.festivals=0;
+    if(G.stats.goldEarned==null) G.stats.goldEarned=0;
+    if(G.stats.bestOVR==null) G.stats.bestOVR=Math.max(0,...(G.horses||[]).map(h=>overall(h)));
+    if(!G.stats.disciplinesWon) G.stats.disciplinesWon={};
+    if(!G.achievements) G.achievements=[];
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
@@ -1956,7 +2013,7 @@ function sellHorse(h){
   modal('<h3>Sell '+h.name+'?</h3><div class="msg">'+breedDef(h.breed).name+' · OVR '+overall(h)+'<br>Market offer: <b class="val">🪙'+fmt(q)+'</b></div>'+
     '<div class="btnrow"><button class="btn red" id="cSell">Confirm Sale</button><button class="btn ghost" id="cCancel">Keep</button></div>');
   $('cCancel').onclick=closeModal;
-  $('cSell').onclick=()=>{ G.money+=q; G.stats.bestSale=Math.max(G.stats.bestSale||0,q); G.horses=G.horses.filter(x=>x.id!==h.id);
+  $('cSell').onclick=()=>{ G.money+=q; G.stats.bestSale=Math.max(G.stats.bestSale||0,q); G.stats.goldEarned=(G.stats.goldEarned||0)+q; G.horses=G.horses.filter(x=>x.id!==h.id);
     const rg=Math.round(overall(h)*0.3 + (breedDef(h.breed).rarity)*4); G.rep+=rg; G.stats.sold++;
     coinPop(q); closeModal(); toast('💰 Sold '+h.name+' for 🪙'+fmt(q)+' (+'+rg+'⭐)','good'); refresh(); };
 }
@@ -2177,7 +2234,7 @@ function showEvent(ev){
     modal('<h3>💰 Premium Buyer</h3><div class="msg">'+ev.msg+'</div>'+
       '<div class="btnrow"><button class="btn" id="evYes">Sell for 🪙'+fmt(ev.offer)+'</button><button class="btn ghost" id="evNo">Decline</button></div>',{center:true});
     $('evNo').onclick=closeModal;
-    $('evYes').onclick=()=>{ G.money+=ev.offer; G.stats.bestSale=Math.max(G.stats.bestSale||0,ev.offer); G.horses=G.horses.filter(x=>x.id!==h.id); G.rep+=8; coinPop(ev.offer); closeModal(); toast('💰 Sold '+h.name+' to the premium buyer!','good'); refresh(); };
+    $('evYes').onclick=()=>{ G.money+=ev.offer; G.stats.bestSale=Math.max(G.stats.bestSale||0,ev.offer); G.stats.goldEarned=(G.stats.goldEarned||0)+ev.offer; G.horses=G.horses.filter(x=>x.id!==h.id); G.rep+=8; coinPop(ev.offer); closeModal(); toast('💰 Sold '+h.name+' to the premium buyer!','good'); refresh(); };
     return;
   }
   if(ev.id==='vet'){
@@ -2259,11 +2316,15 @@ function setTab(t){ curTab=t; document.querySelectorAll('.tab').forEach(x=>x.cla
   document.querySelectorAll('.sec').forEach(x=>x.classList.remove('on')); $('sec-'+t).classList.add('on'); renderTab(); }
 function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='market')renderMarket(); else if(curTab==='breed')renderBreed(); else if(curTab==='estate')renderEstate(); else renderBiz(); }
 function refresh(){
+  // keep best-OVR current so 'elite' achievement unlocks the moment you own a great horse
+  if(G.stats) for(const h of G.horses) G.stats.bestOVR=Math.max(G.stats.bestOVR||0, overall(h));
   const done=checkGoals(G);
+  const newAch=checkAchievements(G);
   renderHUD(); renderGoal(); renderTab(); bindFeedButtons(); save();
   if(done.length){ burst('🎯⭐🎉✨',16); playSfx('goal'); }
   done.forEach(g=>{ const r=g.reward||{}; const bits=[]; if(r.money)bits.push('🪙'+r.money); if(r.feed)bits.push('🌾'+r.feed); if(r.rep)bits.push(r.rep+'⭐');
     toast('🎯 Goal complete: '+g.desc+(bits.length?' — +'+bits.join(' +'):''),'good'); });
+  newAch.forEach(a=>{ burst(a.icon+'🏅✨',14); playSfx('win'); toast('🏅 Achievement: '+a.icon+' '+a.name,'good'); });
   // tutorial: auto-advance when the current step's action is done, else keep the coach-mark aligned
   if(tutOpen && G.tut && !G.tut.done){ const st=tutorialStep(G.tut.step);
     if(st){ if(stepSatisfied(st,G)) showTutStep(G.tut.step+1); else positionTut(st); } }
@@ -2344,12 +2405,39 @@ function positionTut(step){
   ring.style.display='none'; bb.style.left='50%'; bb.style.top='42%'; bb.style.transform='translate(-50%,-50%)';
 }
 function openHelp(){
+  const st=achievementState(G);
   modal('<h3>ℹ️ Help &amp; About</h3>'+
-    '<div class="msg"><b>Skyhorse Stables</b> — you’re Fleur, raising, breeding, training and showing horses across the seasons. Buy hay, grow your herd, chase rare coats and champions, and build your estate.<br><br>Fancy a refresher tour?</div>'+
-    '<div class="btnrow"><button class="btn" id="hReplay" style="width:100%">▶ Replay the tutorial</button></div>'+
+    '<div class="msg"><b>Skyhorse Stables</b> — you’re Fleur, raising, breeding, training and showing horses across the seasons. Buy hay, grow your herd, chase rare coats and champions, and build your estate.</div>'+
+    '<div class="btnrow"><button class="btn" id="hAch" style="width:100%">🏅 Achievements &amp; Stats <span class="pill">'+st.unlocked+'/'+st.total+'</span></button></div>'+
+    '<div class="btnrow"><button class="btn ghost" id="hReplay" style="width:100%">▶ Replay the tutorial</button></div>'+
     '<div class="btnrow"><button class="btn ghost" id="hClose" style="width:100%">Close</button></div>',{center:true});
   $('hClose').onclick=closeModal;
   $('hReplay').onclick=()=>{ closeModal(); startTutorial(); };
+  $('hAch').onclick=()=>{ closeModal(); openAchievements(); };
+}
+function openAchievements(){
+  checkAchievements(G); const st=achievementState(G); const s=G.stats||{};
+  const best=Math.max(0,...(G.horses||[]).map(h=>overall(h)), s.bestOVR||0);
+  const statRows=[
+    ['📅 Days played', fmt(s.days||0)], ['🐣 Foals bred', fmt(s.born||0)],
+    ['🛒 Horses bought', fmt(s.bought||0)], ['💰 Horses sold', fmt(s.sold||0)],
+    ['🥇 Show wins', fmt(s.showWins||0)], ['🎉 Festivals attended', fmt(s.festivals||0)],
+    ['💵 Best sale', '🪙'+fmt(s.bestSale||0)], ['🤑 Total earned', '🪙'+fmt(s.goldEarned||0)],
+    ['♞ Stud fees', '🪙'+fmt(s.studIncome||0)], ['🏛️ Estate prestige', fmt(G.prestige||0)],
+    ['🕯️ Hall of Fame', fmt((G.hallOfFame||[]).length)], ['⭐ Best overall horse', fmt(best)],
+  ];
+  const statHTML=statRows.map(r=>'<div class="stkv"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');
+  const achHTML=st.list.map(x=>'<div class="achcard'+(x.unlocked?' un':'')+'">'+
+    '<div class="achic">'+(x.unlocked?x.def.icon:'🔒')+'</div>'+
+    '<div class="achtx"><div class="achn">'+x.def.name+'</div><div class="achd">'+x.def.desc+'</div></div>'+
+    (x.unlocked?'<div class="achok">✓</div>':'')+'</div>').join('');
+  modal('<h3>🏅 Achievements &amp; Stats</h3>'+
+    '<div class="seg" style="pointer-events:none"><div class="segb on">🏅 '+st.unlocked+' / '+st.total+' unlocked</div></div>'+
+    '<div class="statgrid">'+statHTML+'</div>'+
+    '<div class="divider"></div>'+
+    '<div class="achlist">'+achHTML+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="aClose" style="width:100%">Close</button></div>');
+  $('aClose').onclick=closeModal;
 }
 
 function boot(){

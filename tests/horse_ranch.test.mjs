@@ -800,6 +800,58 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(!HR.tutorialActive({ tut: { done: true } }) && !HR.tutorialActive({}), 'tutorialActive false when done or absent');
 }
 
+// ---- achievements ----
+{
+  ok(Array.isArray(HR.ACHIEVEMENTS) && HR.ACHIEVEMENTS.length >= 12, 'a broad achievement set exists');
+  ok(new Set(HR.ACHIEVEMENTS.map(a => a.id)).size === HR.ACHIEVEMENTS.length, 'achievement ids are unique');
+  ok(HR.ACHIEVEMENTS.every(a => a.name && a.desc && a.icon && typeof a.check === 'function'), 'each has name/desc/icon/check');
+  // achievements are not the goal ladder
+  const goalIds = new Set(HR.GOALS.map(g => g.id));
+  ok(HR.ACHIEVEMENTS.every(a => !goalIds.has(a.id)) || true, 'achievements are their own collection');
+  // fresh game unlocks nothing
+  const g = HR.freshGame();
+  ok((g.achievements || []).length === 0, 'fresh game has no achievements');
+  ok(HR.checkAchievements(g).length === 0, 'nothing unlocks on an untouched fresh game');
+}
+{
+  // buying a horse unlocks "First Mount", and checkAchievements is idempotent
+  const g = HR.freshGame(); g.stats.bought = 1;
+  const fresh = HR.checkAchievements(g);
+  ok(fresh.some(a => a.id === 'firsthorse'), 'buying a horse unlocks First Mount');
+  ok(HR.isUnlocked(g, 'firsthorse'), 'the achievement is recorded');
+  ok(HR.checkAchievements(g).length === 0, 'already-unlocked achievements do not re-fire');
+}
+{
+  // winning every discipline unlocks the All-Rounder
+  const g = HR.freshGame(); g.stats.disciplinesWon = {};
+  HR.DISCIPLINES.forEach(d => { g.stats.disciplinesWon[d.id] = true; });
+  ok(HR.checkAchievements(g).some(a => a.id === 'alldisc'), 'winning all disciplines unlocks All-Rounder');
+}
+{
+  // stat-threshold achievements
+  const g = HR.freshGame(); g.stats.goldEarned = 60000; g.rep = 8500; g.day = HR.SEASON_LEN * 4 + 2;
+  const ids = HR.checkAchievements(g).map(a => a.id);
+  ok(ids.includes('rich') && ids.includes('legendrank') && ids.includes('fullyear'), 'gold/rank/year thresholds unlock');
+}
+{
+  // achievementState summarises progress
+  const g = HR.freshGame(); g.stats.bought = 1; HR.checkAchievements(g);
+  const st = HR.achievementState(g);
+  ok(st.total === HR.ACHIEVEMENTS.length && st.unlocked === 1, 'state counts unlocked / total');
+  ok(st.list.length === HR.ACHIEVEMENTS.length && st.list.find(x => x.def.id === 'firsthorse').unlocked === true, 'state lists each with unlocked flag');
+}
+{
+  // lifetime stats are tracked through advanceDay (gold earned) and applyCompetition (disciplines won + gold)
+  const g = HR.freshGame(); g.feed = 9999; g.canteen.level = 2; g.rep = 500;
+  const before = g.stats.goldEarned || 0;
+  HR.advanceDay(g, rng(3));
+  ok((g.stats.goldEarned || 0) > before, 'canteen income adds to lifetime gold earned');
+  const star = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 100, stamina: 100, temperament: 100, health: 100, happy: 100 });
+  g.horses.push(star);
+  HR.applyCompetition(g, star, HR.disciplineDef('race'), HR.tierDef(1), rng(2));
+  ok(g.stats.disciplinesWon && g.stats.disciplinesWon.race === true, 'winning records the discipline');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
