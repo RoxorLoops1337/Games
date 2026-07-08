@@ -461,5 +461,17 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.idleRate(rich) > FS.idleRate(poor), 'a higher-appeal shop earns more while idle');
 }
 
+// ---- empire: country map of cities (Stage 2) ----
+{
+  ok(FS.COUNTRY.length >= 3, 'the country has several cities');
+  ok(FS.COUNTRY.every(c => c.id && c.nm && c.sub && typeof c.x === 'number' && typeof c.y === 'number'), 'each city is well-formed');
+  ok(FS.cityDef(FS.COUNTRY[0].id) === FS.COUNTRY[0], 'city lookup by id works');
+  ok(FS.cityDef('atlantis') === null, 'unknown city → null');
+  ok(typeof FS.START_CITY === 'string' && FS.cityDef(FS.START_CITY), 'the starting city is a real city');
+  // city ids are unique
+  const ids = FS.COUNTRY.map(c => c.id);
+  ok(new Set(ids).size === ids.length, 'city ids are unique');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
