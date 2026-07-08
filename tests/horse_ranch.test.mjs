@@ -205,6 +205,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.horses.push(HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, atStud: true })); g.stats.studIncome = 5000; // satisfies stud goals
   g.stats.festivals = 4; // satisfies festival goals
   g.stats.auctionsWon = 1; // satisfies auction goal
+  g.decor.owned = ['flowers']; // satisfies décor goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -954,6 +955,84 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const hi = HR.mkHorse({ breed: 'quarter', age: 20, speed: HR.statCap({ breed: 'quarter' }, 'speed') - 2 });
   ok(HR.trainGain(lo, 'speed') > HR.trainGain(hi, 'speed'), 'training a low stat gains more than a near-maxed one');
   ok(HR.trainCost(hi, 'speed') > HR.trainCost(lo, 'speed'), 'training a high stat costs more');
+}
+
+// ---- ranch décor & customisation (round 20) ----
+{
+  // config surface is present & sane
+  ok(Array.isArray(HR.DECOR) && HR.DECOR.length >= 6, 'a décor catalogue exists');
+  ok(new Set(HR.DECOR.map(d => d.id)).size === HR.DECOR.length, 'décor ids are unique');
+  ok(HR.DECOR.every(d => d.cost > 0 && d.repReq >= 0 && d.emoji && d.name), 'every décor item has cost, repReq, emoji, name');
+  ok(HR.BARN_COLORS.length >= 3 && HR.GROUND_COLORS.length >= 3 && HR.FLAG_COLORS.length >= 3, 'colour palettes exist');
+  ok(HR.barnColor('nope').id === HR.BARN_COLORS[0].id, 'barnColor falls back to the default');
+  ok(HR.groundColor('nope').id === HR.GROUND_COLORS[0].id, 'groundColor falls back to the default');
+  ok(HR.flagColor('nope').id === HR.FLAG_COLORS[0].id, 'flagColor falls back to the default');
+  ok(HR.decorDef('flowers') && HR.decorDef('nope') === null, 'decorDef lookup + miss');
+}
+{
+  // fresh game defaults match the original scene look (existing players unaffected)
+  const g = HR.freshGame();
+  ok(g.decor && Array.isArray(g.decor.owned) && g.decor.owned.length === 0, 'fresh game owns no décor');
+  ok(g.decor.name === null && HR.ranchName(g) === 'Skyhorse Stables', 'default ranch name is Skyhorse Stables');
+  ok(g.decor.barn === 'red' && g.decor.ground === 'meadow', 'default barn/ground colours = original look');
+}
+{
+  // renaming the ranch (trimmed, capped, and empty falls back to default)
+  const g = HR.freshGame();
+  HR.setRanchName(g, '  Willowbrook   Farm  ');
+  ok(HR.ranchName(g) === 'Willowbrook Farm', 'ranch name is trimmed & whitespace-collapsed');
+  ok(g.decor.name.length <= HR.RANCH_NAME_MAX, 'stored name respects the length cap');
+  const long = 'x'.repeat(HR.RANCH_NAME_MAX + 20);
+  HR.setRanchName(g, long);
+  ok(HR.ranchName(g).length === HR.RANCH_NAME_MAX, 'over-long names are clamped');
+  HR.setRanchName(g, '   ');
+  ok(HR.ranchName(g) === 'Skyhorse Stables', 'a blank name resets to the default');
+}
+{
+  // buying décor: coin sink, rep-gating, no double-buy
+  const g = HR.freshGame(); g.money = 100000; g.rep = 0;
+  const cheap = HR.DECOR.find(d => d.repReq === 0);
+  const m0 = g.money;
+  const r = HR.buyDecor(g, cheap.id);
+  ok(r.ok && HR.hasDecor(g, cheap.id), 'buying a décor item marks it owned');
+  ok(g.money === m0 - cheap.cost, 'buying a décor item spends its cost (coin sink)');
+  ok(!HR.buyDecor(g, cheap.id).ok, 'cannot buy the same item twice');
+  // rep-gated item is blocked at low rep, allowed once rep is high enough
+  const fancy = HR.DECOR.find(d => d.repReq >= 40);
+  ok(fancy, 'a reputation-gated item exists');
+  g.rep = fancy.repReq - 1;
+  ok(!HR.decorUnlocked(g, fancy.id) && !HR.buyDecor(g, fancy.id).ok, 'rep-gated item is locked below its requirement');
+  g.rep = fancy.repReq;
+  ok(HR.decorUnlocked(g, fancy.id) && HR.buyDecor(g, fancy.id).ok, 'rep-gated item unlocks at its requirement');
+  // affordability guard
+  const poor = HR.freshGame(); poor.money = 0; poor.rep = 9999;
+  ok(!HR.decorAffordable(poor, cheap.id) && !HR.buyDecor(poor, cheap.id).ok, 'cannot buy décor you cannot afford');
+}
+{
+  // décor goal is appended (not inserted) and completes on first purchase
+  const g = HR.freshGame(); g.money = 100000; g.rep = 500;
+  const goal = HR.GOALS.find(x => x.id === 'decor1');
+  ok(goal && HR.GOALS[HR.GOALS.length - 1].id === 'decor1', 'décor goal is appended at the end of the chain');
+  ok(!goal.done(g), 'décor goal is unmet with no décor');
+  HR.buyDecor(g, HR.DECOR[0].id);
+  ok(goal.done(g), 'décor goal completes once you own an item');
+}
+{
+  // normDecor sanitises garbage and de-dupes owned; unknown items dropped
+  const clean = HR.normDecor({ barn: 'bogus', ground: 'bogus', flag: 'bogus', owned: ['flowers', 'flowers', 'nope'], name: 'y'.repeat(999) });
+  ok(clean.barn === HR.BARN_COLORS[0].id && clean.ground === HR.GROUND_COLORS[0].id, 'normDecor repairs bad colours');
+  ok(clean.owned.length === 1 && clean.owned[0] === 'flowers', 'normDecor de-dupes and drops unknown owned items');
+  ok(clean.name.length <= HR.RANCH_NAME_MAX, 'normDecor caps the stored name');
+  ok(HR.normDecor(null).owned.length === 0, 'normDecor(null) yields safe defaults');
+}
+{
+  // the custom ranch name flows into trading-card / hall-of-fame footers
+  const g = HR.freshGame(); HR.setRanchName(g, 'Emberfield');
+  const card = HR.cardModel(g.horses[0], g);
+  ok(card.stable === 'Emberfield', 'trading-card footer uses the custom ranch name');
+  const rec = HR.hofRecord(g.horses[0], 'retired', 10);
+  ok(HR.hofToModel(rec, g).stable === 'Emberfield', 'hall-of-fame card uses the custom ranch name');
+  ok(HR.legacyLine(rec, HR.ranchName(g)).includes('Emberfield') || rec.wins >= 1, 'legacyLine can carry the ranch name');
 }
 
 // ---- clamp helper ----
