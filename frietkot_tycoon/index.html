@@ -601,10 +601,14 @@ var $=function(id){ return (typeof document!=='undefined'&&document.getElementBy
 var scene=$('scene'), ctx=scene&&scene.getContext?scene.getContext('2d'):null;
 var fxL=$('fx');
 var DOOR={gx:(GW>>1), gy:GH-1};
-// world = the grid floor + a pavement strip below the door where the outside queue waits.
-var OUTH=44;
+// world = the grid floor + a pavement strip below the door where the street runs.
+var OUTH=52;
 var worldW=function(){ return GW*TS; };
 var worldH=function(){ return GH*TS + OUTH; };
+// two sidewalk lanes: people arriving walk the upper lane (along the building) toward the
+// door & queue there; people leaving step down to the lower lane and stroll off left/right.
+var laneInY=function(){ return GH*TS + OUTH*0.30; };
+var laneOutY=function(){ return GH*TS + OUTH*0.72; };
 // camera: zoom 1 = whole shop visible (centred); zoom>1 pans around. View-only, not saved.
 var cam={ zoom:1, cx:0, cy:0 }, ZMAX=2.8;
 var applySize=function(){ var s=shopSize(G); GW=s.gw; GH=s.gh; DOOR={gx:(GW>>1), gy:GH-1}; };
@@ -800,8 +804,8 @@ var tileC=function(gx,gy){ return {x:gx*TS+TS/2, y:gy*TS+TS/2}; };
 /* ---------- spawn & sim ---------- */
 var qseq=0;
 var makeCust=function(){
-  var t=rollType(G); var dx=tileC(DOOR.gx,DOOR.gy).x;
-  return { type:t, x:dx+rnd(-30,30), y:worldH()+16, tx:dx, ty:worldH()+16, state:'queue', qorder:qseq++,
+  var t=rollType(G), side=Math.random()<0.5?-1:1, sx=side<0? -14 : worldW()+14;   // stroll in from a street edge
+  return { type:t, x:sx, y:laneInY(), tx:sx, ty:laneInY(), state:'queue', qorder:qseq++, side:side, exitSide:(Math.random()<0.5?-1:1), face:(side<0?1:-1),
     counter:null, leaner:null, timer:0, wait:0, val:0, hearts:0, emoji:t.emoji, bob:Math.random()*6, animT:Math.random()*2, moving:false };
 };
 // the VIP critic arrives as a special customer (real sprite + top hat) with priority in line
@@ -809,7 +813,7 @@ var makeCritic=function(){ var c=makeCust(); c.critic=true; c.qorder=-1; return 
 // lay out the outside queue (single file leading left from the door) + admit the front when a counter frees
 var layoutQueue=function(){
   var q=G.custs.filter(function(c){ return c.state==='queue'; }).sort(function(a,b){ return a.qorder-b.qorder; });
-  var doorX=tileC(DOOR.gx,DOOR.gy).x, qy=GH*TS+OUTH*0.46;
+  var doorX=tileC(DOOR.gx,DOOR.gy).x, qy=laneInY();
   for(var i=0;i<q.length;i++){ q[i].tx=clamp(doorX-i*13,9,worldW()-9); q[i].ty=qy; }
   var fc; while(q.length && (fc=freeCounter())){ var head=q.shift(); fc._busy=head; head.counter=fc;
     var t=tileC(fc.gx,fc.gy); head.tx=t.x; head.ty=t.y+2; head.state='enter'; head.wait=0; doorbell(); }
@@ -818,7 +822,7 @@ var freeCounter=function(){ var cs=objsOfKind('counter'); for(var i=0;i<cs.lengt
 var freeLeaner=function(){ var ls=objsOfKind('leaner'); for(var i=0;i<ls.length;i++){ if(!ls[i]._busy) return ls[i]; } return null; };
 
 var moveTo=function(c,dt){ var dx=c.tx-c.x, dy=c.ty-c.y, dist=Math.hypot(dx,dy);
-  if(dist>0.5) c.moving=true;
+  if(dist>0.5){ c.moving=true; if(Math.abs(dx)>0.5) c.face=dx<0?-1:1; }   // face the walking direction
   var step=BAL.custSpeed*dt; if(dist<=step){ c.x=c.tx; c.y=c.ty; return true; } c.x+=dx/dist*step; c.y+=dy/dist*step; return false; };
 
 var comboMulNow=function(){ var cs=detectCombos(G.objs); var m=1; cs.forEach(function(c){ m*=c.valueMul; }); return m; };
@@ -845,15 +849,15 @@ var serveDone=function(c){
   // go eat at a leaner if one's free, else leave
   var ln=freeLeaner();
   if(ln){ ln._busy=c; c.leaner=ln; var t=tileC(ln.gx,ln.gy); c.tx=t.x; c.ty=t.y; c.state='toseat'; }
-  else { var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=worldH()+22; c.state='leave'; }
+  else { var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=laneOutY(); c.state='exit'; }   // step out onto the lower lane
   checkMilestone();
 };
 
 var updateCust=function(c,dt){
   c.moving=false; c.animT=(c.animT||0)+dt;
-  if(c.state==='queue'){                                   // waiting in line outside
+  if(c.state==='queue'){                                   // strolling in along the building toward the line
     moveTo(c,dt); c.wait+=dt;
-    if(c.wait>BAL.queuePatience*1.7){ c.state='leave'; emote(c.x,c.y-16,'💢','#e5624a'); c.tx=tileC(DOOR.gx,DOOR.gy).x; c.ty=worldH()+22; }
+    if(c.wait>BAL.queuePatience*1.7){ c.state='leave'; emote(c.x,c.y-16,'💢','#e5624a'); c.tx=(c.exitSide<0?-16:worldW()+16); c.ty=laneOutY(); }
   } else if(c.state==='enter'){                              // admitted → walk to the counter
     if(moveTo(c,dt)){ c.state='order'; c.svcMax=serviceTime(G, c.counter?c.counter.lvl:1); c.timer=c.svcMax; }
   } else if(c.state==='order'){
@@ -863,8 +867,10 @@ var updateCust=function(c,dt){
   } else if(c.state==='eat'){
     if(Math.random()<dt*0.5) emote(c.x,c.y-13,'😋','#ff9ecb');   // enjoying the fries
     c.timer-=dt; if(c.timer<=0){ var hb=Math.max(1,Math.round(power(c.leaner?c.leaner.lvl:1))); heartPop(c.x,c.y-6,hb); emote(c.x,c.y-15,'😊','#ff9ecb'); spawnSparks(c.x,c.y-8,3,'#ff9ecb'); if(Math.random()<0.28) G.faam+=1;
-      if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=worldH()+22; c.state='leave'; }
-  } else if(c.state==='leave'){
+      if(c.leaner){ c.leaner._busy=null; c.leaner=null; } var d=tileC(DOOR.gx,DOOR.gy); c.tx=d.x; c.ty=laneOutY(); c.state='exit'; }
+  } else if(c.state==='exit'){                              // out the door onto the lower lane → head for an edge
+    if(moveTo(c,dt)){ c.state='leave'; c.tx=(c.exitSide<0?-16:worldW()+16); c.ty=laneOutY(); }
+  } else if(c.state==='leave'){                             // amble off down the street, left or right
     if(moveTo(c,dt)) c._dead=true;
   }
 };
@@ -970,7 +976,9 @@ var drawScene=function(){
       var footY=seated?(c.y+TS*0.04):(c.y+TS*0.32);            // seated → sit at the back of the booth, behind the table
       ctx.imageSmoothingEnabled=false;
       if(!seated){ ctx.globalAlpha=.22; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(c.x,c.y+TS*0.30,w*0.42,3,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+      var flip=c.face===-1; if(flip){ ctx.save(); ctx.translate(2*c.x,0); ctx.scale(-1,1); }   // mirror to face walking direction
       ctx.drawImage(im, c.x-w/2, footY-h-(c.moving?0:(seated?munch:idle)), w, h);
+      if(flip) ctx.restore();
       ctx.imageSmoothingEnabled=sm; headY=footY-h-2; drawn=true;
     }
     if(!drawn) emoji(c.emoji,c.x,yy,17);
