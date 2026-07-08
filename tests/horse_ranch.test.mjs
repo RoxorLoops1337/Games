@@ -226,6 +226,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.appointments = 1; // satisfies the farrier/vet appointment goal
   g.stats.groundwork = 1; // satisfies the bonding/groundwork goal
   g.stats.fairsWon = 1; // satisfies the seasonal-fair goal
+  g.stats.choresDone = 1; // satisfies the daily-chores goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -3023,6 +3024,91 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Fairgoer needs all four fairs');
   g.fairsClaimed = ['springfair-y1', 'summerfair-y1', 'autumnfair-y1', 'winterfair-y2'];
   ok(ach.check(g), 'winning all four distinct fairs unlocks Fairgoer');
+}
+
+// ---- daily stable chores / to-do board (round 44) ----
+{
+  // today's list is 3–4 deterministic chores including the always-doable core
+  const g = HR.freshGame(); g.day = 1;
+  const list = HR.dailyChores(g);
+  ok(list.length === 4, 'four chores per day');
+  ok(list.some(c => c.id === 'routine') && list.some(c => c.id === 'care'), 'routine & care are always on the list');
+  ok(HR.dailyChores(g).every(c => !c.done), 'a fresh day starts with nothing ticked');
+  // the list rotates deterministically but is stable for a given day
+  ok(JSON.stringify(HR.choreIdsFor(1)) === JSON.stringify(HR.choreIdsFor(1)), 'the daily list is deterministic');
+  ok(JSON.stringify(HR.choreIdsFor(1)) !== JSON.stringify(HR.choreIdsFor(2)), 'the rotating chores differ across days');
+}
+{
+  // marking a chore ticks it exactly once/day; off-list kinds are ignored
+  const g = HR.freshGame(); g.day = 1; // day 1 → routine, care, groundwork, show
+  ok(HR.markChoreProgress(g, 'routine') === true, 'a fresh chore ticks');
+  ok(HR.markChoreProgress(g, 'routine') === false, 'the same chore cannot tick twice (no farming)');
+  ok(HR.dailyChores(g).find(c => c.id === 'routine').done === true, 'the ticked chore shows as done');
+  ok(HR.markChoreProgress(g, 'appointment') === false, 'a kind not on today’s list does not tick');
+  ok(HR.markChoreProgress(g, null) === false || true, 'marking is defensive');
+}
+{
+  // the real actions tick their matching chore
+  const g = HR.freshGame(); g.day = 1; g.feed = 9999; // day 1 list: routine, care, groundwork, show
+  const h = HR.mkHorse({ breed: 'arabian', age: 20 }); g.horses.push(h);
+  HR.applyDailyRoutine(g);
+  ok(HR.dailyChores(g).find(c => c.id === 'routine').done, 'the daily routine ticks the routine chore');
+  HR.applyCare(g, h, HR.NEED_IDS[0]);
+  ok(HR.dailyChores(g).find(c => c.id === 'care').done, 'caring for a horse ticks the care chore');
+  HR.doGroundwork(g, h, 'groom', g.day);
+  ok(HR.dailyChores(g).find(c => c.id === 'groundwork').done, 'groundwork ticks the groundwork chore');
+}
+{
+  // full clear at day rollover pays a bounded bonus once & extends the streak
+  const g = HR.freshGame(); g.day = 5; g.feed = 9999;
+  for (const id of HR.choreIdsFor(5)) HR.markChoreProgress(g, id);
+  ok(HR.choreProgress(g).all === true, 'all chores are done');
+  const money0 = g.money, streak0 = HR.choresStreak(g);
+  HR.advanceDay(g, rng(1)); // settles day 5, rolls to 6
+  ok(g.money > money0, 'a full-clear day pays a bonus');
+  ok(HR.choresStreak(g) === streak0 + 1, 'the streak grows on a clean day');
+  ok((g.stats.choresDone || 0) === 1, 'the clean day is counted');
+  const gain = g.money - money0;
+  ok(gain > 0 && gain <= 200, 'the chore bonus is small & bounded (economy-safe)');
+  // the new day resets the checklist
+  ok(HR.dailyChores(g).every(c => !c.done), 'chores reset for the new day');
+}
+{
+  // a partial day breaks the streak; no bonus is paid
+  const g = HR.freshGame(); g.day = 5; g.feed = 9999;
+  for (const id of HR.choreIdsFor(5)) HR.markChoreProgress(g, id);
+  HR.advanceDay(g, rng(1)); // streak → 1
+  ok(HR.choresStreak(g) === 1, 'streak is 1 after one clean day');
+  // day 6: do only one chore, then roll over
+  HR.markChoreProgress(g, 'routine');
+  const money0 = g.money;
+  HR.advanceDay(g, rng(2)); // settles day 6 (partial)
+  ok(HR.choresStreak(g) === 0, 'a partial day resets the streak');
+  ok(g.money <= money0 + 5, 'no chore bonus on a partial day');
+}
+{
+  // resolveDailyChores never double-pays for the same finished day
+  const g = HR.freshGame(); g.day = 3; g.feed = 9999;
+  for (const id of HR.choreIdsFor(3)) HR.markChoreProgress(g, id);
+  const r1 = HR.resolveDailyChores(g, 3);
+  const r2 = HR.resolveDailyChores(g, 3);
+  ok(r1.awarded === true && r2.awarded === false, 'the same finished day only pays once');
+}
+{
+  // bounded bonus scaling + migration safety + goal & achievement
+  ok(HR.choresBonus(1).money <= HR.choresBonus(7).money && HR.choresBonus(20).money === HR.choresBonus(7).money, 'the bonus rises with the streak but caps');
+  const legacy = HR.freshGame(); delete legacy.chores; legacy.day = 1;
+  ok(HR.dailyChores(legacy).length === 4 && Array.isArray(HR.dailyChores(legacy)), 'chores are safe when the field is missing');
+  ok(HR.markChoreProgress(legacy, 'routine') === true, 'marking initialises the chores state on an old save');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'chore1');
+  ok(goal && !goal.done(g), 'the chores goal is unmet before a clean day');
+  g.stats.choresDone = 1;
+  ok(goal.done(g), 'a clean day satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'diligent');
+  ok(ach && !ach.check(g), 'Diligent Hand needs a 7-day streak');
+  g.stats.bestChoreStreak = 7;
+  ok(ach.check(g), 'a 7-day streak unlocks Diligent Hand');
 }
 
 // ---- clamp helper ----

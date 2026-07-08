@@ -319,6 +319,7 @@
     <button class="sbtn" id="apptBtn" title="Farrier & vet appointments" style="margin-right:4px;position:relative">🩺<span id="apptBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="mapBtn" title="Ranch map — barns, stalls & paddocks" style="margin-right:4px">🗺️</button>
     <button class="sbtn" id="fairBtn" title="Seasonal fair" style="margin-right:4px;position:relative">🎡<span id="fairBadge" class="hudbadge" style="display:none">!</span></button>
+    <button class="sbtn" id="choreBtn" title="Daily chores / to-do board" style="margin-right:4px;position:relative">✅<span id="choreBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -671,6 +672,7 @@ function applyCare(game,h,id){ const n=needDef(id); if(!n) return {ok:false,why:
   h.happy=clamp(h.happy+Math.round(gain*0.06)+(id==='bond'?1:0),0,100);
   if(id==='hooves'||id==='groom') h.health=clamp(h.health+Math.round(gain*0.03),0,100);
   if(id==='bond') h.bond=clamp((h.bond||0)+3,0,100);
+  markChoreProgress(game,'care');
   return {ok:true, cost, need:n, gain};
 }
 // restore every need for one horse (pays the paid ones). returns {ok, cost, filled, why}
@@ -687,9 +689,55 @@ function applyDailyRoutine(game){ if(!game||!game.horses) return {horses:0,fille
   for(const h of game.horses){ needsInit(h);
     for(const id of free){ if(h.needs[id]<100) filled++; h.needs[id]=100; }
     h.happy=clamp(h.happy+1,0,100); if(h.needs.bond>=60) h.bond=clamp((h.bond||0)+1,0,100); }
-  game.lastRoutineDay=game.day; return {horses:game.horses.length, filled};
+  game.lastRoutineDay=game.day; markChoreProgress(game,'routine'); return {horses:game.horses.length, filled};
 }
 function routineDoneToday(game){ return !!game && game.lastRoutineDay===game.day; }
+
+// ---------- Daily stable chores / to-do board (a gentle in-game-day checklist + small streak) ----------
+// 3–4 bite-sized tasks each in-game day, drawn from EXISTING actions. Doing an action ticks its chore
+// (once/day); clearing the whole list at day rollover pays a small, bounded bonus and feeds a streak.
+// DISTINCT from the real-world daily-LOGIN streak and the weekly contracts board.
+const CHORE_TYPES=[
+  {id:'routine',    label:'Muck out & run the daily routine', emoji:'🧹'},
+  {id:'care',       label:'Groom or care for a horse',        emoji:'🧴'},
+  {id:'groundwork', label:'Do groundwork with a horse',       emoji:'🤝'},
+  {id:'train',      label:'Train a horse',                    emoji:'🏋️'},
+  {id:'show',       label:'Enter a horse in a show',          emoji:'🏆'},
+  {id:'appointment',label:'Book a farrier or vet visit',      emoji:'🩺'},
+];
+function choreTypeDef(id){ return CHORE_TYPES.find(c=>c.id===id)||null; }
+// today's deterministic list: always the two always-doable core chores + two rotating ones
+function choreIdsFor(day){ const d=Math.floor(day)||1; const pool=['groundwork','train','show','appointment'];
+  const i=(d-1)%pool.length; return ['routine','care', pool[i], pool[(i+2)%pool.length]]; }
+function choresState(game){ if(!game) return {day:0,done:{},streak:0,lastFull:0};
+  if(!game.chores||typeof game.chores!=='object') game.chores={day:0,done:{},streak:0,lastFull:0};
+  if(!game.chores.done||typeof game.chores.done!=='object') game.chores.done={};
+  return game.chores; }
+function choresReset(game,day){ const c=choresState(game); if(c.day!==day){ c.day=day; c.done={}; } return c; }
+function dailyChores(game){ const day=(game&&game.day)||1; const c=choresReset(game,day);
+  return choreIdsFor(day).map(id=>{ const t=choreTypeDef(id); return {id, label:t.label, emoji:t.emoji, done:!!c.done[id]}; }); }
+// tick a chore for today (once per kind per day); no-op if the kind isn't on today's list or already done
+function markChoreProgress(game,kind){ if(!game) return false; const day=game.day||1;
+  if(choreIdsFor(day).indexOf(kind)<0) return false; const c=choresReset(game,day);
+  if(c.done[kind]) return false; c.done[kind]=true; return true; }
+function choreProgress(game){ const list=dailyChores(game); const done=list.filter(x=>x.done).length;
+  return {done, total:list.length, all:done>=list.length && list.length>0, list}; }
+function choresStreak(game){ return (game&&game.chores&&game.chores.streak)||0; }
+function choresBonus(streak){ const s=Math.max(1,Math.min(streak||1,7)); return {money:40+10*s, rep:2+Math.floor(s/2), feed:(s>=5?5:0)}; } // small, bounded, caps at streak 7
+// settle the day that just finished: full-clear pays the bounded bonus once & extends the streak; a miss breaks it
+function resolveDailyChores(game, finishedDay){
+  const c=choresState(game); const ids=choreIdsFor(finishedDay);
+  const allDone = (c.day===finishedDay) && ids.every(id=>c.done[id]);
+  let bonus=null;
+  if(allDone && c.lastFull!==finishedDay){
+    c.lastFull=finishedDay; c.streak=(c.streak||0)+1; bonus=choresBonus(c.streak);
+    game.money=(game.money||0)+bonus.money; game.rep=(game.rep||0)+bonus.rep; if(bonus.feed) game.feed=(game.feed||0)+bonus.feed;
+    if(game.stats){ game.stats.choresDone=(game.stats.choresDone||0)+1; game.stats.bestChoreStreak=Math.max(game.stats.bestChoreStreak||0,c.streak); }
+  } else {
+    c.streak=0; // a partial or skipped day breaks the streak
+  }
+  return {awarded:!!bonus, bonus, allDone, streak:c.streak};
+}
 
 // ---------- Stable staff: hire ranch hands who ease the daily chores ----------
 // Distinct from Riding-School teachers (who earn lesson income). Each role is a
@@ -1427,7 +1475,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1435,7 +1483,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[],
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0},
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1458,8 +1506,12 @@ function seededOnce(seed){ let s=seed>>>0; return function(){ s=(s*1664525+10139
 function advanceDay(game,rng){
   rng=rng||Math.random;
   const money0=game.money; // for lifetime gold-earned tracking
+  // settle the day that's ending: a full chore clear pays a small bonus & extends the streak
+  const choreResult=resolveDailyChores(game, game.day);
   game.day++; game.stats.days++;
   const notes=[];
+  if(choreResult.awarded){ const b=choreResult.bonus, bits=['🪙'+b.money, b.rep+'⭐']; if(b.feed) bits.push('🌾'+b.feed);
+    notes.push({t:'good',m:'✅ All chores done! Streak '+choreResult.streak+' · +'+bits.join(' +')}); }
 
   // farrier & vet appointments booked for today resolve now (before care decay)
   { const done=resolveAppointments(game, game.day);
@@ -1808,6 +1860,7 @@ function doGroundwork(game, h, activityId, day){
   h.happy=clamp((h.happy||0)+a.happy,0,100);
   h.needs.bond=clamp((h.needs.bond||0)+Math.round(a.bond*0.5),0,100); // the bond need reflects the session too
   if(game&&game.stats) game.stats.groundwork=(game.stats.groundwork||0)+1;
+  markChoreProgress(game,'groundwork');
   // scrapbook keepsake the first time a horse crosses into "Bonded"
   let bonded=false;
   if(before<BONDED_AT && h.bond>=BONDED_AT){ bonded=true; if(typeof captureMoment==='function') captureMoment(game,'snapshot',h,{caption:h.name+' and Fleur are truly bonded now. ❤'}); }
@@ -2051,6 +2104,7 @@ function bookAppointment(game,type,horseId,day){
   const due=((day!=null?day:game.day)||1)+t.lead;
   const b={ id:'ap'+(game._apc=(game._apc||0)+1), type, horseId, name:h.name, booked:game.day||1, due, fee, done:false };
   appointmentsArr(game).push(b);
+  markChoreProgress(game,'appointment');
   return {ok:true, booking:b, fee};
 }
 // apply a matured appointment's effect to the horse (bounded; no stacking beyond one active buff per type)
@@ -2130,7 +2184,7 @@ function applyCompetition(game,h,disc,tier,rng,perf){
     if(perf>=0.9) game.stats.clearRounds=(game.stats.clearRounds||0)+1; }
   res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)*legacyBonus(game.legacy,'showPrize')); // summer + festivals + legacy pay more
   game.money += res.prize; game.rep += res.rep; game.stats.goldEarned=(game.stats.goldEarned||0)+res.prize;
-  h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
+  h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest; markChoreProgress(game,'show');
   gainAffinity(h,disc.id, COMPETE_AFF_GAIN + (res.place===1?3:res.place<=3?1:0)); // competing (esp. placing) deepens affinity
   h.happy=clamp(h.happy-8,0,100); h.health=clamp(h.health-4,0,100); // fatigue
   if(res.place===1){ h.wins=(h.wins||0)+1; game.stats.showWins=(game.stats.showWins||0)+1; game.stats.bestTierWin=Math.max(game.stats.bestTierWin||0,tier.id);
@@ -2540,6 +2594,7 @@ const ACHIEVEMENTS=[
   {id:'whisperer',  icon:'💖', name:'Horse Whisperer',       desc:'Bond with a horse until it is Devoted (90%).',  check:g=>((g.horses)||[]).some(h=>(h.bond||0)>=90)},
   {id:'sprawling',  icon:'🗺️', name:'Sprawling Estate',      desc:'Grow your ranch to three barns.',              check:g=>((g.stables)||[]).length>=3},
   {id:'fairgoer',   icon:'🎡', name:'Fairgoer',              desc:'Win all four seasonal fairs.',                 check:g=>new Set(((g.fairsClaimed)||[]).map(k=>(''+k).split('-y')[0])).size>=4},
+  {id:'diligent',   icon:'✅', name:'Diligent Hand',         desc:'Keep a 7-day daily-chores streak.',            check:g=>((g.stats&&g.stats.bestChoreStreak)||0)>=7},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2642,6 +2697,7 @@ const GOALS=[
   {id:'appt1',   desc:'Book a farrier or vet visit (🩺)',         tip:g=>((g.stats&&g.stats.appointments)||0)+' done',done:g=>((g.stats&&g.stats.appointments)||0)>=1,          reward:{money:400,rep:15}},
   {id:'bond1',   desc:'Do groundwork with a horse (🤝 bonding)',   tip:g=>((g.stats&&g.stats.groundwork)||0)+' sessions',done:g=>((g.stats&&g.stats.groundwork)||0)>=1,           reward:{money:300,rep:10}},
   {id:'fair1',   desc:'Win a seasonal fair (🎡 fairs)',            tip:g=>((g.stats&&g.stats.fairsWon)||0)+' won',done:g=>((g.stats&&g.stats.fairsWon)||0)>=1,                   reward:{money:600,rep:20}},
+  {id:'chore1',  desc:'Finish all your daily chores (✅ to-do)',   tip:g=>((g.stats&&g.stats.choresDone)||0)+' clean days',done:g=>((g.stats&&g.stats.choresDone)||0)>=1,       reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2670,6 +2726,7 @@ const HR = {
   GROUNDWORK_ACTIVITIES, GROUNDWORK_ENERGY, BOND_CAP, BONDED_AT, groundworkActivityDef, groundworkEnergyLeft, canDoGroundwork, doGroundwork, bondTier, bondLabel, bondPoiseMult,
   ranchMap, stableOccupancy, stableIndexOf, moveHorseToStable,
   FAIRS, FAIR_LEN, fairDef, currentFair, fairActive, fairKey, fairDaysLeft, nextFair, fairClaimed, fairProgress, claimFairReward,
+  CHORE_TYPES, choreTypeDef, choreIdsFor, dailyChores, markChoreProgress, choreProgress, choresStreak, choresBonus, resolveDailyChores,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2803,6 +2860,7 @@ function load(){
     for(const h of (G.horses||[])){ if(typeof h.gwDay!=='number') h.gwDay=0; if(typeof h.gwEnergy!=='number') h.gwEnergy=0; } // groundwork energy
     { const ns=(G.stables||[]).length; for(const h of (G.horses||[])){ if(typeof h.stable!=='number'||h.stable<0||h.stable>=ns) h.stable=0; } } // ranch map: normalise stray barn indices
     if(!Array.isArray(G.fairsClaimed)) G.fairsClaimed=[]; // seasonal fairs claimed-reward log
+    if(!G.chores||typeof G.chores!=='object'){ G.chores={day:0,done:{},streak:0,lastFull:0}; } else { if(!G.chores.done||typeof G.chores.done!=='object') G.chores.done={}; if(typeof G.chores.streak!=='number') G.chores.streak=0; } // daily chores board
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -2981,6 +3039,8 @@ function renderHUD(){
   { const ab=$('apptBadge'); if(ab){ const n=horsesDueForCare(G).length; ab.textContent=n; ab.style.display=n?'block':'none'; } }
   // seasonal fair: show the button only during a fair, badge when a reward is claimable
   { const fb=$('fairBtn'); if(fb){ fb.style.display=fairActive(G)?'':'none'; } const fbg=$('fairBadge'); if(fbg){ const p=fairProgress(G); fbg.style.display=(p&&p.canClaim)?'block':'none'; } }
+  // daily chores: badge shows how many remain today (hidden when all done)
+  { const cb=$('choreBadge'); if(cb){ const cp=choreProgress(G); const left=cp.total-cp.done; cb.textContent=left; cb.style.display=left>0?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -4169,7 +4229,7 @@ function openTrain(h){
     const st=o.getAttribute('data-tr'), ck=canTrain(h,st), cost=trainCostFor(G,h,st);
     if(!ck.ok){ toast(ck.why,'info'); return; }
     if(G.money<cost){ toast('Not enough coins.','bad'); return; }
-    G.money-=cost; const g=applyTrain(h,st); G.stats.trained=(G.stats.trained||0)+1;
+    G.money-=cost; const g=applyTrain(h,st); G.stats.trained=(G.stats.trained||0)+1; markChoreProgress(G,'train');
     coinPop(-cost); toast('🏋️ '+h.name+': +'+g+' '+TRAIN_LABEL[st]+'!','good');
     refresh(); openTrain(h); // reopen with fresh numbers
   });
@@ -4610,6 +4670,22 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+function openChores(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cp=choreProgress(G), streak=choresStreak(G);
+  const next=choresBonus(streak+1);
+  const rows=cp.list.map(c=>'<div class="lbrow"><div class="hface" style="background:none;font-size:20px;display:flex;align-items:center;justify-content:center">'+(c.done?'✅':c.emoji)+'</div>'+
+    '<div class="grow"><div class="lbname"'+(c.done?' style="opacity:.6;text-decoration:line-through"':'')+'>'+esc(c.label)+'</div></div>'+
+    (c.done?'<span class="pill" style="color:var(--good)">done</span>':'<span class="pill">to do</span>')+'</div>').join('');
+  const bar=Math.round(100*cp.done/Math.max(1,cp.total));
+  modal('<h3>✅ Today’s Chores</h3>'+
+    '<div class="swlabel">A gentle daily checklist drawn from your ranch work. Clear them all before the day ends for a small bonus. <span class="pill">🔥 '+streak+'-day streak</span></div>'+
+    '<div class="cbar" style="margin:4px 0 8px"><i style="display:block;height:100%;width:'+bar+'%;background:'+(cp.all?'var(--good)':'var(--gold)')+'"></i></div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="msg" style="font-size:12px;margin-top:6px">'+(cp.all?'🎉 All done! Your bonus arrives at day’s end.':'Do these through the day — they tick off automatically. Full clear pays <b>🪙'+next.money+' +'+next.rep+'⭐</b>'+(next.feed?' +🌾'+next.feed:'')+' and grows your streak.')+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="choreClose" style="width:100%">Done</button></div>');
+  $('choreClose').onclick=closeModal;
+}
 function openFair(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const p=fairProgress(G);
@@ -4960,6 +5036,7 @@ function boot(){
   { const ab=$('apptBtn'); if(ab) ab.onclick=openAppointments; }
   { const mb=$('mapBtn'); if(mb) mb.onclick=openRanchMap; }
   { const fb=$('fairBtn'); if(fb) fb.onclick=openFair; }
+  { const cb=$('choreBtn'); if(cb) cb.onclick=openChores; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
