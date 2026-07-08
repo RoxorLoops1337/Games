@@ -477,6 +477,50 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(!sawShow, 'no show invitations on a quiet day');
 }
 
+// ---- weather ----
+{
+  ok(HR.WEATHER.length === 4 && HR.weatherDef('rain').id === 'rain', 'four weather types with lookup');
+  // deterministic: same day → same weather
+  ok(HR.weatherFor(37).id === HR.weatherFor(37).id, 'weather is stable for a given day');
+  ok(HR.weatherFor(37) === HR.weatherFor(37), 'weatherFor returns the same object for the same day');
+  // effect direction
+  ok(typeof HR.canteenWeatherMult(1) === 'number', 'canteenWeatherMult returns a number');
+  ok(HR.weatherDef('sunny').canteen > 1 && HR.weatherDef('rain').canteen < 1, 'sunny helps the canteen, rain hurts it');
+  ok(HR.weatherDef('snow').feedExtra > 0 && HR.weatherDef('sunny').feedExtra === 0, 'only cold weather adds feed cost');
+  // find a sunny and a snowy day deterministically and confirm the spread exists
+  let sunnyD = null, snowD = null;
+  for (let d = 1; d <= 400 && (sunnyD === null || snowD === null); d++) {
+    const w = HR.weatherFor(d).id;
+    if (w === 'sunny' && sunnyD === null) sunnyD = d;
+    if (w === 'snow' && snowD === null) snowD = d;
+  }
+  ok(sunnyD !== null && snowD !== null, 'both sunny and snowy days occur over a season');
+  ok(HR.feedExtraFor(snowD) > HR.feedExtraFor(sunnyD), 'snowy days demand more hay than sunny days');
+  ok(HR.canteenWeatherMult(sunnyD) > HR.canteenWeatherMult(snowD), 'canteen does better in sun than snow');
+}
+{
+  // weather feeds through advanceDay: a snowy day burns more hay than a sunny one
+  let sunnyD = null, snowD = null;
+  for (let d = 3; d <= 400 && (sunnyD === null || snowD === null); d++) {
+    const w = HR.weatherFor(d).id;
+    if (w === 'sunny' && sunnyD === null) sunnyD = d;
+    if (w === 'snow' && snowD === null) snowD = d;
+  }
+  const gSun = HR.freshGame(); gSun.feed = 9999; gSun.day = sunnyD - 1; HR.advanceDay(gSun, rng(1));
+  const gSnow = HR.freshGame(); gSnow.feed = 9999; gSnow.day = snowD - 1; HR.advanceDay(gSnow, rng(1));
+  ok(gSnow.day === snowD && gSun.day === sunnyD, 'advanced onto the intended weather days');
+  ok((9999 - gSnow.feed) > (9999 - gSun.feed), 'the same herd eats more hay on a snowy day');
+}
+
+// ---- coat colours (drives the drawn horses) ----
+{
+  // every phenotype the genetics can produce should map to a CSS colour
+  ['Chestnut', 'Bay', 'Black', 'Palomino', 'Buckskin', 'Grey', 'Cremello', 'Perlino', 'Smoky Black', 'Smoky Cream', 'Golden', 'Pearl']
+    .forEach(n => ok(HR.COAT_CSS[n] && HR.COAT_CSS[n].body, 'coat "' + n + '" has a body colour'));
+  ok(HR.coatColor('Palomino').body !== HR.coatColor('Black').body, 'different coats render different colours');
+  ok(HR.coatColor('not-a-coat').body, 'unknown coat falls back to a default colour');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
