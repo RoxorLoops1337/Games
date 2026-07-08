@@ -321,6 +321,7 @@
     <button class="sbtn" id="fairBtn" title="Seasonal fair" style="margin-right:4px;position:relative">🎡<span id="fairBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="choreBtn" title="Daily chores / to-do board" style="margin-right:4px;position:relative">✅<span id="choreBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="tripBtn" title="Horse trailer — away trips" style="margin-right:4px;position:relative">🚚<span id="tripBadge" class="hudbadge" style="display:none">0</span></button>
+    <button class="sbtn" id="storeBtn" title="General store — rotating deals" style="margin-right:4px;position:relative">🏪<span id="storeBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -738,6 +739,56 @@ function resolveDailyChores(game, finishedDay){
     c.streak=0; // a partial or skipped day breaks the streak
   }
   return {awarded:!!bonus, bonus, allDone, streak:c.streak};
+}
+
+// ---------- General store / supply restock cycle (a small rotating shop of bounded deals) ----------
+// A few slots that restock every STORE_CYCLE days; the catalogue is a DETERMINISTIC seeded pick by
+// restock index (same day → same stock). Each slot buys once per restock and applies an EXISTING-system
+// effect (feed / care needs / condition / rep). Economy-safe: bounded effects, limited stock, feed is
+// never sellable so discounted hay can't be arbitraged.
+const STORE_CYCLE=3;   // days between restocks
+const STORE_SLOTS=3;   // items shown per restock
+const STORE_ITEMS=[
+  {id:'haylot',   name:'Hay Bulk Lot',   emoji:'🌾', price:60,  effect:{kind:'feed', amount:40},            desc:'A discounted lot — 40 hay bales.'},
+  {id:'haycart',  name:'Feed Cart',      emoji:'🛒', price:110, effect:{kind:'feed', amount:80},            desc:'A big feed haul — 80 bales, cheap.'},
+  {id:'carekit',  name:'Grooming Kit',   emoji:'🧼', price:140, effect:{kind:'carekit'},                    desc:'Top up every horse’s daily care needs at once.'},
+  {id:'tonic',    name:'Wellness Tonic', emoji:'💊', price:120, effect:{kind:'tonic', health:10, happy:8},  desc:'A herd-wide pick-me-up (+condition & mood).'},
+  {id:'treats',   name:'Horse Treats',   emoji:'🍎', price:70,  effect:{kind:'tonic', health:2,  happy:10}, desc:'Sweet treats — the whole herd cheers up.'},
+  {id:'liniment', name:'Liniment Rub',   emoji:'🧴', price:90,  effect:{kind:'tonic', health:14, happy:2},  desc:'A soothing rub — restores condition herd-wide.'},
+  {id:'advert',   name:'Village Notice', emoji:'📣', price:200, effect:{kind:'rep', rep:12},                desc:'Post a notice in the square for a reputation boost.'},
+];
+function storeItemDef(id){ return STORE_ITEMS.find(i=>i.id===id)||null; }
+function storeRestockIndex(day){ return Math.floor((Math.floor(day||1)-1)/STORE_CYCLE); }
+function storeRestockDay(game){ return storeRestockIndex((game&&game.day)||1)*STORE_CYCLE+1; }
+function nextStoreRestock(game){ return (storeRestockIndex((game&&game.day)||1)+1)*STORE_CYCLE+1; }
+function storeDaysLeft(game){ return nextStoreRestock(game)-((game&&game.day)||1); }
+// deterministic seeded pick of STORE_SLOTS items for a restock index (no Date/Math.random)
+function storeCatalogueFor(idx){ const rng=seededOnce((idx>>>0)*2654435761+12345); const pool=STORE_ITEMS.slice(), out=[];
+  for(let i=0;i<STORE_SLOTS && pool.length;i++){ const j=Math.floor(rng()*pool.length); out.push(pool.splice(j,1)[0]); }
+  return out; }
+function storeState(game){ if(!game) return {stock:-1,sold:[]}; if(!game.store||typeof game.store!=='object') game.store={stock:-1,sold:[]};
+  if(!Array.isArray(game.store.sold)) game.store.sold=[]; return game.store; }
+function storeStock(game){ const idx=storeRestockIndex((game&&game.day)||1), st=storeState(game);
+  if(st.stock!==idx){ st.stock=idx; st.sold=[]; }
+  return storeCatalogueFor(idx).map(it=>({ id:it.id, name:it.name, emoji:it.emoji, desc:it.desc, price:it.price, effect:it.effect, sold:st.sold.indexOf(it.id)>=0 })); }
+function storeItemAffordable(game,itemId){ const s=storeStock(game).find(x=>x.id===itemId); return !!s && !s.sold && ((game&&game.money)||0)>=s.price; }
+// apply a store item's effect through the existing system it touches (bounded)
+function applyStoreEffect(game,itemId){ const it=storeItemDef(itemId); if(!it) return null; const e=it.effect;
+  if(e.kind==='feed'){ game.feed=(game.feed||0)+e.amount; return {feed:e.amount}; }
+  if(e.kind==='carekit'){ let n=0; for(const h of (game.horses||[])){ needsInit(h); for(const id of NEED_IDS){ if(h.needs[id]<100) n++; h.needs[id]=100; } } return {caredNeeds:n}; }
+  if(e.kind==='tonic'){ for(const h of (game.horses||[])){ h.health=clamp((h.health||0)+(e.health||0),0,100); h.happy=clamp((h.happy||0)+(e.happy||0),0,100); } return {horses:(game.horses||[]).length}; }
+  if(e.kind==='rep'){ game.rep=(game.rep||0)+e.rep; return {rep:e.rep}; }
+  return null; }
+function buyStoreItem(game,itemId){
+  const stock=storeStock(game), slot=stock.find(s=>s.id===itemId);
+  if(!slot) return {ok:false,why:'Not in stock this restock.'};
+  if(slot.sold) return {ok:false,why:'Already bought — back next restock.'};
+  if((game.money||0)<slot.price) return {ok:false,why:'Not enough coins.'};
+  game.money-=slot.price;
+  storeState(game).sold.push(itemId);
+  const effect=applyStoreEffect(game,itemId);
+  if(game.stats){ game.stats.storeBuys=(game.stats.storeBuys||0)+1; game.stats.storeSpent=(game.stats.storeSpent||0)+slot.price; }
+  return {ok:true, item:slot, price:slot.price, effect};
 }
 
 // ---------- Stable staff: hire ranch hands who ease the daily chores ----------
@@ -1478,7 +1529,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1486,7 +1537,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0},
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]},
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -2681,6 +2732,7 @@ const ACHIEVEMENTS=[
   {id:'fairgoer',   icon:'🎡', name:'Fairgoer',              desc:'Win all four seasonal fairs.',                 check:g=>new Set(((g.fairsClaimed)||[]).map(k=>(''+k).split('-y')[0])).size>=4},
   {id:'diligent',   icon:'✅', name:'Diligent Hand',         desc:'Keep a 7-day daily-chores streak.',            check:g=>((g.stats&&g.stats.bestChoreStreak)||0)>=7},
   {id:'traveller',  icon:'🚚', name:'Seasoned Traveller',    desc:'Complete ten away trips.',                     check:g=>((g.stats&&g.stats.trips)||0)>=10},
+  {id:'regular',    icon:'🏪', name:'Store Regular',         desc:'Buy fifteen deals from the general store.',    check:g=>((g.stats&&g.stats.storeBuys)||0)>=15},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2786,6 +2838,7 @@ const GOALS=[
   {id:'fair1',   desc:'Win a seasonal fair (🎡 fairs)',            tip:g=>((g.stats&&g.stats.fairsWon)||0)+' won',done:g=>((g.stats&&g.stats.fairsWon)||0)>=1,                   reward:{money:600,rep:20}},
   {id:'chore1',  desc:'Finish all your daily chores (✅ to-do)',   tip:g=>((g.stats&&g.stats.choresDone)||0)+' clean days',done:g=>((g.stats&&g.stats.choresDone)||0)>=1,       reward:{money:300,rep:10}},
   {id:'trip1',   desc:'Send a horse on an away trip (🚚 trailer)',  tip:g=>((g.stats&&g.stats.trips)||0)+' trips',done:g=>((g.stats&&g.stats.trips)||0)>=1,                     reward:{money:500,rep:15}},
+  {id:'store1',  desc:'Grab a deal at the general store (🏪)',      tip:g=>((g.stats&&g.stats.storeBuys)||0)+' bought',done:g=>((g.stats&&g.stats.storeBuys)||0)>=1,           reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2816,6 +2869,7 @@ const HR = {
   FAIRS, FAIR_LEN, fairDef, currentFair, fairActive, fairKey, fairDaysLeft, nextFair, fairClaimed, fairProgress, claimFairReward,
   CHORE_TYPES, choreTypeDef, choreIdsFor, dailyChores, markChoreProgress, choreProgress, choresStreak, choresBonus, resolveDailyChores,
   TRIP_TYPES, tripTypeDef, tripFee, horseAway, canSendOnTrip, tripReturnPreview, tripDaysLeft, horsesAway, sendHorseOnTrip, resolveTrips,
+  STORE_ITEMS, STORE_CYCLE, storeItemDef, storeStock, storeRestockDay, nextStoreRestock, storeDaysLeft, storeItemAffordable, buyStoreItem, applyStoreEffect,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2951,6 +3005,7 @@ function load(){
     if(!Array.isArray(G.fairsClaimed)) G.fairsClaimed=[]; // seasonal fairs claimed-reward log
     if(!G.chores||typeof G.chores!=='object'){ G.chores={day:0,done:{},streak:0,lastFull:0}; } else { if(!G.chores.done||typeof G.chores.done!=='object') G.chores.done={}; if(typeof G.chores.streak!=='number') G.chores.streak=0; } // daily chores board
     for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; } // away-trip state
+    if(!G.store||typeof G.store!=='object'){ G.store={stock:-1,sold:[]}; } else if(!Array.isArray(G.store.sold)) G.store.sold=[]; // general store restock state
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -3134,6 +3189,8 @@ function renderHUD(){
   { const cb=$('choreBadge'); if(cb){ const cp=choreProgress(G); const left=cp.total-cp.done; cb.textContent=left; cb.style.display=left>0?'block':'none'; } }
   // away trips: badge shows how many horses are currently away
   { const tb=$('tripBadge'); if(tb){ const n=horsesAway(G).length; tb.textContent=n; tb.style.display=n>0?'block':'none'; } }
+  // general store: badge shows how many affordable deals are still in stock
+  { const sb=$('storeBadge'); if(sb){ const n=storeStock(G).filter(s=>!s.sold&&(G.money||0)>=s.price).length; sb.textContent=n; sb.style.display=n>0?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -4763,6 +4820,34 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+function storeEffectLine(it){
+  const e=it.effect||{};
+  if(e.kind==='feed') return '🌾 +'+e.amount+' hay';
+  if(e.kind==='carekit') return '🧡 fills every horse’s care needs';
+  if(e.kind==='tonic') return '🐴 herd '+(e.health?'+'+e.health+' condition':'')+(e.health&&e.happy?' · ':'')+(e.happy?'+'+e.happy+' mood':'');
+  if(e.kind==='rep') return '⭐ +'+e.rep+' reputation';
+  return '';
+}
+function openStore(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const stock=storeStock(G), left=storeDaysLeft(G);
+  const rows=stock.map(it=>{
+    const afford=!it.sold && (G.money||0)>=it.price;
+    const right = it.sold ? '<span class="pill" style="color:var(--good)">✓ bought</span>'
+      : '<button class="btn sm'+(afford?'':' ghost')+'" data-buy="'+esc(it.id)+'"'+(afford?'':' disabled')+'>🪙'+fmt(it.price)+'</button>';
+    return '<div class="lbrow"><div class="hface" style="background:none;font-size:20px;display:flex;align-items:center;justify-content:center">'+it.emoji+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(it.name)+'</div>'+
+      '<div class="lbsub">'+esc(it.desc)+'</div><div class="lbsub" style="color:var(--good)">'+storeEffectLine(it)+'</div></div>'+right+'</div>';
+  }).join('');
+  modal('<h3>🏪 General Store</h3>'+
+    '<div class="swlabel">A rotating stock of supply deals. Each buys once — fresh stock in <b>'+left+' day'+(left!==1?'s':'')+'</b>. <span class="pill">🪙'+fmt(G.money)+'</span></div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="storeClose" style="width:100%">Done</button></div>');
+  $('storeClose').onclick=closeModal;
+  document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{ const r=buyStoreItem(G, b.getAttribute('data-buy'));
+    if(!r.ok){ toast(r.why,'info'); return; } coinPop(-r.price); burst(r.item.emoji+'🛍️✨',10); playSfx('coin');
+    toast(r.item.emoji+' '+r.item.name+' — '+storeEffectLine(r.item)+'!','good'); save(); renderHUD(); renderTab(); openStore(); });
+}
 let tripSel=null; // selected trip type id for the send panel
 function openTrips(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -5165,6 +5250,7 @@ function boot(){
   { const fb=$('fairBtn'); if(fb) fb.onclick=openFair; }
   { const cb=$('choreBtn'); if(cb) cb.onclick=openChores; }
   { const tb=$('tripBtn'); if(tb) tb.onclick=openTrips; }
+  { const sb=$('storeBtn'); if(sb) sb.onclick=openStore; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
