@@ -9,12 +9,25 @@ const rng = (seed) => { let s = seed >>> 0; return () => { s = (s * 1664525 + 10
 
 // ---- surface + data ----
 ok(HR && typeof HR.freshGame === 'function', 'HR surface exposed');
-ok(HR.BREEDS.length >= 10, 'at least 10 real breeds');
+ok(HR.BREEDS.length >= 16, 'at least 16 real breeds');
 ok(HR.breedDef('arabian').name === 'Arabian', 'breedDef lookup');
 ok(HR.breedDef('nope') === null, 'breedDef miss = null');
 ok(HR.STAGES.length === 4 && HR.STAGES[0].id === 'foal', 'four life stages, foal first');
 ok(new Set(HR.BREEDS.map(b => b.id)).size === HR.BREEDS.length, 'breed ids unique');
 ok(HR.BREEDS.every(b => b.base > 0 && b.colors.length && b.rarity >= 1), 'every breed has price, colors, rarity');
+// newcomers (round 19) — present, in-range, coat profile wired, genetics produce a valid coat
+{
+  const newbies = ['welsh', 'fjord', 'haflinger', 'paint', 'hanoverian', 'lipizzaner'];
+  ok(newbies.every(id => HR.breedDef(id)), 'all six new breeds exist');
+  ok(newbies.every(id => { const b = HR.breedDef(id); return b.speed > 0 && b.speed <= 100 && b.stamina > 0 && b.stamina <= 100 && b.temperament > 0 && b.temperament <= 100 && b.rarity >= 1 && b.rarity <= 5 && b.size > 0; }), 'new breeds have in-range stats/size/rarity');
+  ok(newbies.every(id => HR.COAT_PROFILE[id]), 'each new breed has a coat profile');
+  ok(HR.BREEDS.every(b => HR.COAT_PROFILE[b.id]), 'every breed has a coat profile');
+  // genetics produce a valid, mapped coat for a new breed
+  const seeded = (s) => { let x = s >>> 0; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; };
+  newbies.forEach(id => { const h = HR.mkHorse({ breed: id, rng: seeded(7) }); ok(h.coat && h.coat.name && HR.COAT_CSS[h.coat.name], 'genetics give ' + id + ' a rendered coat'); });
+  // rarity spread keeps the market ladder sensible
+  ok(HR.breedDef('welsh').rarity === 1 && HR.breedDef('paint').rarity === 2 && HR.breedDef('hanoverian').rarity === 3 && HR.breedDef('lipizzaner').rarity === 4, 'new breeds slot across the rarity tiers');
+}
 
 // ---- fresh game ----
 const G = HR.freshGame();
@@ -272,7 +285,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 
 // ---- shows & competitions ----
 {
-  ok(HR.DISCIPLINES.length === 4 && HR.disciplineDef('race'), 'four disciplines with lookup');
+  ok(HR.DISCIPLINES.length === 5 && HR.disciplineDef('race') && HR.disciplineDef('jump'), 'five disciplines with lookup');
   ok(HR.COMP_TIERS.length === 4 && HR.tierDef(1).name === 'Local Fair', 'four competition tiers');
   ok(HR.tierUnlocked({ rep: 0 }, HR.tierDef(1)) && !HR.tierUnlocked({ rep: 0 }, HR.tierDef(4)), 'tiers gate on reputation');
   ok(HR.highestTier({ rep: 5000 }).id === 4 && HR.highestTier({ rep: 0 }).id === 1, 'highestTier tracks unlocked tiers');
@@ -289,6 +302,11 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const plainShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Bay', tier: 0 }, trait: 'steady' });
   const fancyShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Cremello', tier: 2 }, trait: 'steady' });
   ok(HR.disciplineScore(fancyShow, HR.disciplineDef('halter')) > HR.disciplineScore(plainShow, HR.disciplineDef('halter')), 'coat tier boosts the Showing score');
+  // Show-Jumping rewards athletic speed + a cool head over a pure plodder
+  const athlete = HR.mkHorse({ breed: 'hanoverian', age: 20, speed: 85, stamina: 70, temperament: 82, health: 100, happy: 100, trait: 'steady' });
+  const plodder = HR.mkHorse({ breed: 'clydesdale', age: 20, speed: 40, stamina: 88, temperament: 60, health: 100, happy: 100, trait: 'steady' });
+  ok(HR.disciplineScore(athlete, HR.disciplineDef('jump')) > HR.disciplineScore(plodder, HR.disciplineDef('jump')), 'an athletic jumper out-scores a plodder over fences');
+  ok(HR.disciplineOpenToday(3, 'jump') && HR.disciplineOpenToday(6, 'jump'), 'jumping is scheduled on club-show and race days');
 }
 {
   // a dominant horse wins; a hopeless one places last — deterministically at the extremes

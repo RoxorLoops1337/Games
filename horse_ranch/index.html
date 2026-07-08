@@ -334,6 +334,18 @@ const BREEDS = [
    colors:['Black'], desc:'Jet-black mane and majestic trot. A living work of art.'},
   {id:'akhalteke', name:'Akhal-Teke',    emoji:'🐎', rarity:5, base:4600, speed:90, stamina:98, temperament:60, size:1.0,
    colors:['Golden','Palomino','Cremello','Bay'], desc:'The rarest of all — a metallic, shimmering coat.'},
+  {id:'welsh',     name:'Welsh Pony',     emoji:'🐴', rarity:1, base:300,  speed:55, stamina:64, temperament:78, size:0.78,
+   colors:['Bay','Chestnut','Grey','Palomino'], desc:'Clever, versatile and kind — a favourite first pony.'},
+  {id:'fjord',     name:'Norwegian Fjord',emoji:'🐴', rarity:1, base:340,  speed:46, stamina:80, temperament:84, size:0.9,
+   colors:['Dun','Bay','Grey'], desc:'Ancient dun pony with a dorsal stripe and an unflappable heart.'},
+  {id:'haflinger', name:'Haflinger',      emoji:'🐴', rarity:2, base:660,  speed:54, stamina:72, temperament:86, size:0.9,
+   colors:['Chestnut','Palomino'], desc:'Golden chestnut with a flaxen mane — sweet-natured and sturdy.'},
+  {id:'paint',     name:'Paint Horse',    emoji:'🐎', rarity:2, base:720,  speed:78, stamina:62, temperament:72, size:1.0,
+   colors:['Tobiano','Overo','Bay','Chestnut'], desc:'Bold patched stock horse — flashy and quick off the mark.'},
+  {id:'hanoverian',name:'Hanoverian',     emoji:'🐎', rarity:3, base:1600, speed:80, stamina:82, temperament:76, size:1.1,
+   colors:['Bay','Chestnut','Grey','Black'], desc:'Elite German warmblood — powerful, scopey, born to jump.'},
+  {id:'lipizzaner',name:'Lipizzaner',     emoji:'🐎', rarity:4, base:2700, speed:70, stamina:82, temperament:88, size:1.0,
+   colors:['Grey','White','Bay'], desc:'The famous white stallions of classical high-school dressage.'},
 ];
 const breedDef = id => BREEDS.find(b=>b.id===id) || null;
 const RARITY_MULT = {1:1, 2:1.08, 3:1.18, 4:1.32, 5:1.5};
@@ -388,6 +400,12 @@ const COAT_PROFILE={
   quarter:   {E:0.4,A:0.5,cream:0.30,grey:0.10},
   appaloosa: {E:0.5,A:0.5,cream:0.20,grey:0.20},
   mustang:   {E:0.5,A:0.6,cream:0.25,grey:0.10},
+  welsh:     {E:0.5,A:0.5,cream:0.20,grey:0.25},
+  fjord:     {E:0.6,A:0.7,cream:0.10,grey:0.10},
+  haflinger: {E:0.0,A:0.0,cream:0.35,grey:0.02}, // always red-based (chestnut/palomino)
+  paint:     {E:0.5,A:0.55,cream:0.25,grey:0.10},
+  hanoverian:{E:0.6,A:0.55,cream:0.05,grey:0.30},
+  lipizzaner:{E:0.6,A:0.4,cream:0.05,grey:0.85}, // mostly greys → white with age
 };
 const COAT_MAP={ red:['Chestnut','Palomino','Cremello'], bay:['Bay','Buckskin','Perlino'], black:['Black','Smoky Black','Smoky Cream'] };
 function seedGenes(breed,rng){
@@ -450,11 +468,11 @@ function relatedness(mare,stallion){ // shared ancestors within ~2 generations
 // Each horse has one trait that nudges training, show aptitude, lessons & rent.
 // Multipliers default to 1; disc{} keys are per-discipline show bonuses.
 const TRAITS=[
-  {id:'bold',   name:'Bold',      emoji:'🦁', desc:'Fearless in the ring — no show nerves.',      train:1.0,  lesson:1.0,  rent:1.06, show:1.08, disc:{race:1.05,halter:1.05}},
+  {id:'bold',   name:'Bold',      emoji:'🦁', desc:'Fearless in the ring — no show nerves.',      train:1.0,  lesson:1.0,  rent:1.06, show:1.08, disc:{race:1.05,halter:1.05,jump:1.08}},
   {id:'gentle', name:'Gentle',    emoji:'🕊️', desc:'Wonderful with students and calm at home.',   train:1.0,  lesson:1.22, rent:1.08, show:1.0,  disc:{dressage:1.06}},
   {id:'clever', name:'Clever',    emoji:'🧠', desc:'Learns fast — training pays off more.',        train:1.28, lesson:1.05, rent:1.02, show:1.0,  disc:{dressage:1.05}},
   {id:'lazy',   name:'Lazy',      emoji:'😴', desc:'Hard to motivate, but low-maintenance.',       train:0.72, lesson:0.9,  rent:0.94, show:0.97, disc:{}},
-  {id:'hot',    name:'Hot-headed',emoji:'🔥', desc:'Fiery and quick, but tricky to handle.',       train:0.95, lesson:0.82, rent:1.0,  show:0.98, disc:{race:1.12,dressage:0.88}},
+  {id:'hot',    name:'Hot-headed',emoji:'🔥', desc:'Fiery and quick, but tricky to handle.',       train:0.95, lesson:0.82, rent:1.0,  show:0.98, disc:{race:1.12,dressage:0.88,jump:0.94}},
   {id:'steady', name:'Steady',    emoji:'🪨', desc:'Calm, reliable and tireless.',                 train:1.0,  lesson:1.1,  rent:1.03, show:1.0,  disc:{endurance:1.10}},
   {id:'spirited',name:'Spirited', emoji:'✨', desc:'Flashy and full of heart — the crowds love it.',train:1.05, lesson:1.0,  rent:1.05, show:1.05, disc:{halter:1.08}},
 ];
@@ -633,11 +651,11 @@ function weekOf(day){ return Math.floor((Math.floor(day)-1)/7)+1; }
 const SCHEDULE=[
   {wd:0, emoji:'🧹', label:'Chore Day',    shows:[],                                       note:'A quiet start — groom, plan and rest up.'},
   {wd:1, emoji:'🛒', label:'Market Day',   shows:[],                 market:true,           note:'Fresh horses & teachers arrive — everything restocks.'},
-  {wd:2, emoji:'🎩', label:'Club Shows',   shows:['dressage','endurance'],                  note:'Midweek club competitions: Dressage & Endurance.'},
+  {wd:2, emoji:'🎩', label:'Club Shows',   shows:['dressage','endurance','jump'],           note:'Midweek club competitions: Dressage, Endurance & Jumping.'},
   {wd:3, emoji:'🩺', label:'Vet & Farrier',shows:[],                 care:true,             note:'The vet & farrier visit — grooming is cheaper today.'},
   {wd:4, emoji:'🌾', label:'Hay Delivery', shows:[],                 hayCheap:true,         note:'The hay cart rolls in — hay is half price!'},
-  {wd:5, emoji:'🏇', label:'Race Day',     shows:['race','halter'],                         note:'Weekend racing & showing at every tier.'},
-  {wd:6, emoji:'🍺', label:'Family Sunday',shows:['race','endurance','dressage','halter'],  canteenBoost:1.6, lessonBoost:1.5, note:'Crowds pack the canteen; families take lessons; all disciplines run.'},
+  {wd:5, emoji:'🏇', label:'Race Day',     shows:['race','halter','jump'],                  note:'Weekend racing, jumping & showing at every tier.'},
+  {wd:6, emoji:'🍺', label:'Family Sunday',shows:['race','endurance','dressage','halter','jump'], canteenBoost:1.6, lessonBoost:1.5, note:'Crowds pack the canteen; families take lessons; all disciplines run.'},
 ];
 function scheduleFor(day){ return SCHEDULE[weekdayIndex(day)]; }
 function showsToday(day){ if(festivalMod(day,'allShows',false)) return DISCIPLINES.map(d=>d.id); return scheduleFor(day).shows; }
@@ -906,6 +924,7 @@ const DISCIPLINES=[
   {id:'endurance', name:'Endurance',  emoji:'🥾', w:{speed:0.20,stamina:0.70,temperament:0.10}, coat:false, desc:'Long-distance stamina and steadiness.'},
   {id:'dressage',  name:'Dressage',   emoji:'🎩', w:{speed:0.10,stamina:0.35,temperament:0.55}, coat:false, desc:'Grace, obedience and temperament.'},
   {id:'halter',    name:'Showing',    emoji:'✨', w:{speed:0.10,stamina:0.20,temperament:0.40}, coat:true,  desc:'Conformation & looks — coat and breed matter.'},
+  {id:'jump',      name:'Show-Jumping',emoji:'🚧', w:{speed:0.40,stamina:0.25,temperament:0.35}, coat:false, desc:'Athletic power & a cool head over the fences.'},
 ];
 function disciplineDef(id){ return DISCIPLINES.find(d=>d.id===id)||null; }
 // tiers gated by reputation; prize/repGain indexed by place (1..3, 4=also-ran)
