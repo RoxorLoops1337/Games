@@ -153,6 +153,22 @@
   .pn2{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ps2{font-size:10px;color:var(--ink2);white-space:nowrap}
   .pedkey{font-size:10.5px;color:var(--ink2);text-align:center;margin-bottom:4px}
+  /* This Week schedule */
+  .weeklist{display:flex;flex-direction:column;gap:5px;margin:4px 0 8px}
+  .weekrow{background:#0d130a;border:1px solid #0c110a;border-radius:9px;padding:7px 9px}
+  .weekrow.today{border-color:var(--gold2);background:linear-gradient(var(--panel2),var(--panel))}
+  .wdname{font-weight:900;font-size:13px}
+  .wdnote{font-size:11px;color:var(--gold);font-weight:700;margin-top:1px}
+  .wddesc{font-size:10.5px;color:var(--ink2);margin-top:2px}
+  .todaystrip{display:flex;align-items:center;gap:8px;background:linear-gradient(var(--panel2),var(--panel));border:1px solid var(--gold2);border-radius:11px;padding:9px 11px;margin-bottom:9px}
+  .todaystrip .tsimoji{font-size:24px}
+  .todaystrip .tslabel{font-weight:900;font-size:14px;color:var(--gold)}
+  .todaystrip .tsnote{font-size:11px;color:var(--ink2)}
+  .weekstrip{display:flex;gap:3px;margin-bottom:9px}
+  .wchip{flex:1;text-align:center;background:#0d130a;border:1px solid #0c110a;border-radius:7px;padding:5px 2px;font-size:10px;font-weight:800;color:var(--ink2);cursor:pointer}
+  .wchip .we{font-size:14px;display:block;line-height:1.2}
+  .wchip.on{background:linear-gradient(var(--gold),var(--gold2));color:#2a1c05;border-color:var(--gold2)}
+  .wchip.showday{border-color:#4a5a2c;color:var(--good)}
   .seg{display:flex;gap:6px;margin-bottom:10px}
   .segb{flex:1;text-align:center;background:#0d130a;border:1px solid #0c110a;border-radius:8px;padding:7px;font-size:11.5px;font-weight:800;color:var(--ink2);cursor:pointer}
   .segb.on{background:linear-gradient(var(--panel2),var(--panel));color:var(--gold);border-color:var(--gold2)}
@@ -168,7 +184,7 @@
     <div class="chip"><span>🪙</span><b id="hudMoney">0</b></div>
     <div class="chip feed"><span>🌾</span><b id="hudFeed">0</b></div>
     <div class="chip rep"><span>⭐</span><b id="hudRep">0</b></div>
-    <div class="chip day"><span>📅</span>Day <b id="hudDay">1</b></div>
+    <div class="chip day" id="dayChip" style="cursor:pointer"><span id="hudWd">🗓️ Mon</span> · Day <b id="hudDay">1</b></div>
     <div class="spacer"></div>
     <div id="speedBtns">
       <button class="sbtn" data-sp="0">⏸</button>
@@ -492,6 +508,32 @@ const RANKS=[
 function rankFor(rep){ let r=RANKS[0]; for(const x of RANKS){ if(rep>=x.rep) r=x; } return r; }
 
 // ---------- Events ----------
+// ---------- Weekday calendar (a 7-day week layered over the day counter) ----------
+const WEEKDAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const WEEKDAY_FULL=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+function weekdayIndex(day){ return ((Math.floor(day)-1)%7+7)%7; } // day 1 = Monday
+function weekOf(day){ return Math.floor((Math.floor(day)-1)/7)+1; }
+// Each weekday has a theme, which show disciplines run, and economic modifiers.
+const SCHEDULE=[
+  {wd:0, emoji:'🧹', label:'Chore Day',    shows:[],                                       note:'A quiet start — groom, plan and rest up.'},
+  {wd:1, emoji:'🛒', label:'Market Day',   shows:[],                 market:true,           note:'Fresh horses & teachers arrive — everything restocks.'},
+  {wd:2, emoji:'🎩', label:'Club Shows',   shows:['dressage','endurance'],                  note:'Midweek club competitions: Dressage & Endurance.'},
+  {wd:3, emoji:'🩺', label:'Vet & Farrier',shows:[],                 care:true,             note:'The vet & farrier visit — grooming is cheaper today.'},
+  {wd:4, emoji:'🌾', label:'Hay Delivery', shows:[],                 hayCheap:true,         note:'The hay cart rolls in — hay is half price!'},
+  {wd:5, emoji:'🏇', label:'Race Day',     shows:['race','halter'],                         note:'Weekend racing & showing at every tier.'},
+  {wd:6, emoji:'🍺', label:'Family Sunday',shows:['race','endurance','dressage','halter'],  canteenBoost:1.6, lessonBoost:1.5, note:'Crowds pack the canteen; families take lessons; all disciplines run.'},
+];
+function scheduleFor(day){ return SCHEDULE[weekdayIndex(day)]; }
+function showsToday(day){ return scheduleFor(day).shows; }
+function isShowDay(day){ return showsToday(day).length>0; }
+function disciplineOpenToday(day,discId){ return showsToday(day).indexOf(discId)>=0; }
+function isMarketDay(day){ return !!scheduleFor(day).market; }
+function isHayDay(day){ return !!scheduleFor(day).hayCheap; }
+function isCareDay(day){ return !!scheduleFor(day).care; }
+function canteenDayMult(day){ return scheduleFor(day).canteenBoost||1; }
+function lessonDayMult(day){ return scheduleFor(day).lessonBoost||1; }
+function nextShowDay(day){ for(let i=1;i<=7;i++){ if(isShowDay(day+i)) return {inDays:i, wd:weekdayIndex(day+i)}; } return null; }
+
 const EVENTS=[
   {id:'buyer', weight:3, min:1},
   {id:'hay',   weight:2, min:3},
@@ -573,17 +615,18 @@ function advanceDay(game,rng){
   for(const h of game.horses){ if(h.rentDays>0){ game.money+=h.rentRate; } }
 
   // canteen income + riding-school net (lesson fees minus teacher salaries)
-  if(canteenLevel(game)>0) game.money+=canteenIncome(game);
+  // — both get a weekday boost on busy days (e.g. Family Sunday).
+  if(canteenLevel(game)>0) game.money+=Math.round(canteenIncome(game)*canteenDayMult(game.day));
   if(teacherCount(game)>0){
     const served=lessonsPerDay(game);
-    game.money += schoolNet(game);
+    game.money += Math.round(schoolIncome(game)*lessonDayMult(game.day)) - teacherSalaries(game);
     game.stats.lessons=(game.stats.lessons||0)+served;
     game.rep += Math.min(3, Math.floor(served/3)); // a busy school builds reputation
   }
 
-  // market restock every 4 days
-  if(game.day-game.marketDay>=4) restockMarket(game,rng);
-  if(game.day-(game.teacherDay||0)>=5) restockTeachers(game,rng);
+  // Market Day (weekly): fresh horses & teacher applicants arrive
+  if(isMarketDay(game.day)){ restockMarket(game,rng); restockTeachers(game,rng);
+    notes.push({t:'info',m:'🛒 Market Day! Fresh horses and teachers have arrived.'}); }
 
   // random event (~18% per day once past day 2)
   let event=null;
@@ -593,8 +636,11 @@ function advanceDay(game,rng){
 }
 
 function rollEvent(game,rng){
-  const pool=EVENTS.filter(e=>game.day>=e.min);
-  const weighted=[]; pool.forEach(e=>{ for(let i=0;i<e.weight;i++) weighted.push(e); });
+  const care=isCareDay(game.day), showDay=isShowDay(game.day);
+  // 'show' invitations only turn up on show days; vet visits cluster on Vet & Farrier day
+  const pool=EVENTS.filter(e=>game.day>=e.min && (e.id!=='show'||showDay));
+  const weighted=[]; pool.forEach(e=>{ let w=e.weight; if(e.id==='vet'&&care) w+=3; if(e.id==='show') w+=2; for(let i=0;i<w;i++) weighted.push(e); });
+  if(!weighted.length) return null;
   const e=weighted[Math.floor(rng()*weighted.length)];
   if(e.id==='buyer'){
     const owned=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
@@ -763,6 +809,7 @@ const GOALS=[
   {id:'grandprix',desc:'Win a Regional Championship+', tip:g=>'best tier '+(g.stats.bestTierWin||0),done:g=>(g.stats.bestTierWin||0)>=3,                        reward:{money:6000,rep:120}},
   {id:'canteen', desc:'Open the Canteen (🍺 Estate)',  tip:g=>'',                              done:g=>canteenLevel(g)>0,                                      reward:{money:800,rep:20}},
   {id:'teacher', desc:'Hire your first teacher',       tip:g=>teacherCount(g)+'/1',            done:g=>teacherCount(g)>=1,                                     reward:{money:600,rep:20}},
+  {id:'week4',   desc:'Keep Skyhorse running to Week 4',tip:g=>'week '+weekOf(g.day)+'/4',      done:g=>g.day>=22,                                             reward:{money:1200,rep:30}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -793,6 +840,8 @@ const HR = {
   mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
   lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet, schoolLessonMult,
   TRAITS, traitDef, pickTrait, traitMult,
+  WEEKDAYS, WEEKDAY_FULL, SCHEDULE, weekdayIndex, weekOf, scheduleFor, showsToday, isShowDay,
+  disciplineOpenToday, isMarketDay, isHayDay, isCareDay, canteenDayMult, lessonDayMult, nextShowDay,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -913,6 +962,7 @@ function renderHUD(){
   $('hudFeed').textContent=fmt(G.feed);
   $('hudRep').textContent=fmt(G.rep);
   $('hudDay').textContent=G.day;
+  { const sd=scheduleFor(G.day); const w=$('hudWd'); if(w) w.textContent=sd.emoji+' '+WEEKDAYS[weekdayIndex(G.day)]; }
   const rank=rankFor(G.rep);
   $('sceneRank').textContent=rank.name+' · Fleur';
   { const sc=$('sceneCanteen'); if(sc) sc.style.display=canteenLevel(G)>0?'block':'none'; }
@@ -997,7 +1047,7 @@ function renderRanch(){
   if(!G.horses.length){ s.appendChild(el('div','empty','No horses yet.<br>Visit the 🛒 Market to buy your first horse!')); }
   G.horses.forEach(h=>{
     let acts='';
-    acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom (🪙20)</button>';
+    acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom 🪙'+groomCost()+'</button>';
     acts+='<button class="btn sm ghost" data-ped="'+h.id+'">🌳 Pedigree</button>';
     if(isAdult(h)) acts+='<button class="btn sm ghost" data-train="'+h.id+'">🏋️ Train</button>';
     if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
@@ -1011,7 +1061,8 @@ function renderRanch(){
 }
 function buyFeedBtn(n){ const cost=Math.round(n*hayPrice()); return '<button class="btn sm ghost" data-feed="'+n+'" '+(G.money<cost?'disabled':'')+'>+'+n+' 🪙'+cost+'</button>'; }
 function barnName(i){ const nm=['Old Barn','Oak Stable','Meadow Barn','Sunrise Stable','Willow Barn','Grand Stable']; return nm[i]||('Stable '+(i+1)); }
-function hayPrice(){ return G.hayMod?G.hayMod:3; }
+function hayPrice(){ let p=G.hayMod?G.hayMod:3; if(isHayDay(G.day)) p=p*0.5; return Math.max(1,Math.round(p)); } // half price on Hay Delivery day
+function groomCost(){ return isCareDay(G.day)?12:20; } // cheaper on Vet & Farrier day
 
 function stableCard(st){
   const c=el('div','card stable');
@@ -1191,30 +1242,53 @@ function renderBiz(){
 
 // ---------------- Shows UI ----------------
 function medal(place){ return place===1?'🥇':place===2?'🥈':place===3?'🥉':'▫️'; }
+function weekStrip(){
+  const strip=el('div','weekstrip'); const todayI=weekdayIndex(G.day);
+  SCHEDULE.forEach((sd,i)=>{
+    const w=el('div','wchip'+(i===todayI?' on':'')+(sd.shows.length?' showday':''));
+    w.innerHTML='<span class="we">'+sd.emoji+'</span>'+WEEKDAYS[i];
+    w.onclick=openWeek; strip.appendChild(w);
+  });
+  return strip;
+}
 function renderShows(s){
-  s.appendChild(el('div','sub','Enter horses in competitions to win prizes, reputation and trophies. Champions gain lasting value. Winning tiers unlock as your reputation grows.'));
+  s.appendChild(el('div','sub','Competitions run on set weekdays. Tap any day for the full week’s schedule.'));
+  s.appendChild(weekStrip());
+  // today's theme banner
+  const sd=scheduleFor(G.day);
+  const ts=el('div','todaystrip');
+  const open=showsToday(G.day);
+  ts.innerHTML='<div class="tsimoji">'+sd.emoji+'</div><div class="grow"><div class="tslabel">'+WEEKDAY_FULL[weekdayIndex(G.day)]+' · '+sd.label+'</div>'+
+    '<div class="tsnote">'+(open.length?('Today’s shows: '+open.map(id=>{const d=disciplineDef(id);return d?d.emoji+' '+d.name:'';}).join(', ')):sd.note)+'</div></div>';
+  s.appendChild(ts);
+  const showDay=isShowDay(G.day);
+  if(!showDay){ const ns=nextShowDay(G.day);
+    s.appendChild(el('div','sub','No competitions today. '+(ns?('Next show day: '+WEEKDAY_FULL[ns.wd]+' (in '+ns.inDays+' day'+(ns.inDays>1?'s':'')+').'):''))); }
   // event cards per tier
   COMP_TIERS.forEach(tier=>{
     const unlocked=tierUnlocked(G,tier);
+    const canEnter=unlocked&&showDay;
     const c=el('div','card'+(unlocked?'':' locked'));
     c.innerHTML='<div class="row"><div class="grow">'+
       '<div class="hname">🏆 '+tier.name+' <span class="pill">Tier '+tier.id+'</span></div>'+
       '<div class="hbreed">'+(unlocked?('Entry 🪙'+tier.fee+' · 1st 🪙'+tier.prize[1]+' · '+tier.repGain[1]+'⭐'):('🔒 Reach '+tier.rep+' reputation to unlock'))+'</div>'+
-      '</div>'+(unlocked?'<button class="btn sm" data-enter="'+tier.id+'">Enter</button>':'<span class="pill">🔒</span>')+'</div>';
-    if(unlocked) c.querySelector('[data-enter]').onclick=()=>openShowPickDiscipline(tier);
+      '</div>'+(unlocked?('<button class="btn sm" data-enter="'+tier.id+'" '+(canEnter?'':'disabled')+'>'+(canEnter?'Enter':'Closed')+'</button>'):'<span class="pill">🔒</span>')+'</div>';
+    if(canEnter) c.querySelector('[data-enter]').onclick=()=>openShowPickDiscipline(tier);
     s.appendChild(c);
   });
   // career summary
   const champs=G.horses.filter(h=>(h.wins||0)>0).sort((a,b)=>(b.wins||0)-(a.wins||0));
   if(champs.length){
     s.appendChild(el('h2','head','Your Competitors'));
+    const showDayNow=isShowDay(G.day);
     champs.forEach(h=>{
-      const ck=canEnterShow(G,h);
-      const acts='<button class="btn sm" data-cc="'+h.id+'" '+(ck.ok?'':'disabled')+'>'+(ck.ok?'🏇 Compete':(h.compCd>G.day?'😴 Resting':'—'))+'</button>';
+      const ck=canEnterShow(G,h); const live=ck.ok&&showDayNow;
+      const label=live?'🏇 Compete':(!showDayNow?'🗓️ No show today':(h.compCd>G.day?'😴 Resting':'—'));
+      const acts='<button class="btn sm" data-cc="'+h.id+'" '+(live?'':'disabled')+'>'+label+'</button>';
       const c=horseCard(h,acts);
       const rec=el('div','kv'); rec.innerHTML='Career<b>'+medal(1)+' '+(h.wins||0)+' wins · '+(h.podiums||0)+' podiums · '+(h.entries||0)+' starts</b>';
       c.appendChild(rec);
-      const btn=c.querySelector('[data-cc]'); if(btn&&ck.ok) btn.onclick=()=>openShowPickTier(h);
+      const btn=c.querySelector('[data-cc]'); if(btn&&live) btn.onclick=()=>openShowPickTier(h);
       s.appendChild(c);
     });
   }
@@ -1246,17 +1320,20 @@ function openShowPickTier(h){ // pick tier for a given horse
   const sh=modal(html); $('xDone').onclick=closeModal;
   sh.querySelectorAll('[data-tier]').forEach(o=>o.onclick=()=>{ const tier=tierDef(parseInt(o.getAttribute('data-tier'),10)); openShowPickDisciplineFor(h,tier); });
 }
+function todayDisciplines(){ return DISCIPLINES.filter(d=>disciplineOpenToday(G.day,d.id)); }
 function openShowPickDiscipline(tier){ // tier chosen first → pick discipline, then horse
-  let html='<h3>🏆 '+tier.name+'</h3><div class="msg">Pick a discipline. Entry fee 🪙'+tier.fee+'.</div><div class="optlist">';
-  DISCIPLINES.forEach(d=>{ html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
+  const list=todayDisciplines(); if(!list.length){ toast('No competitions scheduled today.','info'); return; }
+  let html='<h3>🏆 '+tier.name+'</h3><div class="msg">'+WEEKDAY_FULL[weekdayIndex(G.day)]+'’s events. Entry fee 🪙'+tier.fee+'.</div><div class="optlist">';
+  list.forEach(d=>{ html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
     '<div class="grow"><div class="hname">'+d.name+'</div><div class="hbreed">'+d.desc+'</div></div></div>'; });
   html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
   const sh=modal(html); $('xDone').onclick=closeModal;
   sh.querySelectorAll('[data-disc]').forEach(o=>o.onclick=()=>openShowPickHorse(tier,disciplineDef(o.getAttribute('data-disc'))));
 }
 function openShowPickDisciplineFor(h,tier){ // horse+tier known → pick discipline → run
-  let html='<h3>🏆 '+h.name+' · '+tier.name+'</h3><div class="msg">Pick a discipline. Entry fee 🪙'+tier.fee+'.</div><div class="optlist">';
-  DISCIPLINES.forEach(d=>{ const sc=Math.round(disciplineScore(h,d)); html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
+  const list=todayDisciplines(); if(!list.length){ toast('No competitions scheduled today.','info'); return; }
+  let html='<h3>🏆 '+h.name+' · '+tier.name+'</h3><div class="msg">'+WEEKDAY_FULL[weekdayIndex(G.day)]+'’s events. Entry fee 🪙'+tier.fee+'.</div><div class="optlist">';
+  list.forEach(d=>{ const sc=Math.round(disciplineScore(h,d)); html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
     '<div class="grow"><div class="hname">'+d.name+'</div><div class="hbreed">'+d.desc+'</div></div><div class="val">'+sc+'</div></div>'; });
   html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
   const sh=modal(html); $('xDone').onclick=closeModal;
@@ -1359,7 +1436,7 @@ function renderEstate(){
 
 // ---------------- Actions ----------------
 function buyFeedDelegate(n){ const cost=Math.round(n*hayPrice()); if(G.money<cost){ toast('Not enough coins.','bad'); return; } G.money-=cost; G.feed+=n; toast('🌾 Bought '+n+' bales.','good'); refresh(); }
-function groom(h){ if(G.money<20){ toast('Not enough coins.','bad'); return; } G.money-=20; h.happy=clamp(h.happy+12,0,100); h.health=clamp(h.health+6,0,100); toast('🧹 '+h.name+' looks happy!','good'); refresh(); }
+function groom(h){ const c=groomCost(); if(G.money<c){ toast('Not enough coins.','bad'); return; } G.money-=c; h.happy=clamp(h.happy+12,0,100); h.health=clamp(h.health+6,0,100); coinPop(-c); toast('🧹 '+h.name+' looks happy!','good'); refresh(); }
 function buyHorse(h){
   const price=buyPrice(h); if(G.money<price){ toast('Not enough coins.','bad'); return; }
   if(freeStalls(G)<=0){ toast('No free stalls — build or upgrade a stable.','bad'); return; }
@@ -1467,7 +1544,8 @@ function showEvent(ev){
   if(ev.id==='show'){
     const eligible=G.horses.filter(h=>canEnterShow(G,h).ok);
     if(!eligible.length) return;
-    const tier=highestTier(G); const disc=DISCIPLINES[Math.floor(Math.random()*DISCIPLINES.length)];
+    const todays=DISCIPLINES.filter(d=>disciplineOpenToday(G.day,d.id)); if(!todays.length) return;
+    const tier=highestTier(G); const disc=todays[Math.floor(Math.random()*todays.length)];
     let html='<h3>'+disc.emoji+' Show Invitation!</h3><div class="msg">You’re invited to the <b>'+tier.name+'</b> '+disc.name+' event — <b>entry waived</b>! Pick a horse to compete.</div><div class="optlist">';
     eligible.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
       '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div><div class="val">'+Math.round(disciplineScore(h,disc))+'</div></div>'; });
@@ -1528,6 +1606,7 @@ function showIntro(){
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
     '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
     '• 🌳 Build <b>bloodlines</b> — every horse has an inheritable <b>personality</b><br>'+
+    '• 🗓️ Follow the <b>weekly rhythm</b> — shows, market &amp; hay days<br>'+
     '• 🏆 <b>Compete</b> in shows across 4 disciplines &amp; tiers<br>'+
     '• 🍺 Open a <b>canteen</b> &amp; hire <b>teachers</b> for lessons<br>'+
     '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+
@@ -1537,9 +1616,29 @@ function showIntro(){
 }
 
 // ---------------- Boot ----------------
+// ---------------- This Week schedule ----------------
+function openWeek(){
+  const todayI=weekdayIndex(G.day);
+  let rows='';
+  SCHEDULE.forEach((sd,i)=>{
+    const isToday=i===todayI;
+    const showTxt = sd.shows.length ? sd.shows.map(id=>{ const d=disciplineDef(id); return d?d.emoji:''; }).join(' ')+' shows' : '';
+    rows+='<div class="weekrow'+(isToday?' today':'')+'">'+
+      '<div class="wdname">'+sd.emoji+' '+WEEKDAY_FULL[i]+(isToday?' <span class="pill">TODAY</span>':'')+'</div>'+
+      '<div class="wdnote">'+sd.label+(showTxt?' · '+showTxt:'')+'</div>'+
+      '<div class="wddesc">'+sd.note+'</div></div>';
+  });
+  modal('<h3>🗓️ This Week at Skyhorse</h3>'+
+    '<div class="msg">Week '+weekOf(G.day)+' · '+WEEKDAY_FULL[todayI]+'. Each day has its own rhythm — shows, market, hay, care and busy canteen nights.</div>'+
+    '<div class="weeklist">'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn" id="wkOk" style="width:100%">Got it</button></div>');
+  $('wkOk').onclick=closeModal;
+}
+
 function boot(){
   if(!load()){ G=freshGame(); }
   if(_idc<1000) _idc=1000+G.horses.length+G.market.length;
+  { const dc=$('dayChip'); if(dc) dc.onclick=openWeek; }
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setTab(t.getAttribute('data-tab')));
   document.querySelectorAll('.sbtn').forEach(b=>b.onclick=()=>{ speed=parseInt(b.getAttribute('data-sp'),10);
     document.querySelectorAll('.sbtn').forEach(x=>x.classList.toggle('on',x===b)); });
