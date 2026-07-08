@@ -222,6 +222,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.breedGoal = 'rarecoat'; // satisfies the breeding-planner goal
   for (const b of ['welsh', 'mustang', 'fjord']) g.horses.push(HR.mkHorse({ breed: b, age: 20 })); // ≥5 distinct breeds → codex discovery goal
   HR.captureMoment(g, 'snapshot', g.horses[1]); // satisfies the scrapbook goal (save a memory)
+  g.stats.visitorDays = 1; // satisfies the visitor-day goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2574,6 +2575,97 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const snap = JSON.stringify(h);
   HR.captureMoment(g, 'snapshot', h); HR.captureMoment(g, 'best', h);
   ok(JSON.stringify(h) === snap, 'the horse is untouched by being photographed');
+}
+
+// ---- stable-tour / visitor-day event (round 39) ----
+{
+  // ranchAppealScore is bounded and rises with a better ranch
+  const g = HR.freshGame();
+  const base = HR.ranchAppealScore(g);
+  ok(base >= 0 && base <= 100, 'appeal is bounded 0..100');
+  // a stronger herd + décor + champions lifts appeal
+  const g2 = HR.freshGame();
+  g2.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, speed: 98, stamina: 98, temperament: 90, wins: 5, coat: { name: 'Golden', tier: 3 } }));
+  g2.decor.owned = HR.DECOR.map(d => d.id);
+  const better = HR.ranchAppealScore(g2);
+  ok(better > base, 'a champion, rare coat & full décor raise appeal');
+  ok(HR.ranchAppealScore(null) === 0, 'appeal is safe with no game');
+  // monotonic in décor
+  const g3 = HR.freshGame(); const a0 = HR.ranchAppealScore(g3);
+  g3.decor.owned = ['flowers', 'trees', 'sign'];
+  ok(HR.ranchAppealScore(g3) >= a0, 'adding décor never lowers appeal');
+}
+{
+  // availability + cooldown gating: available → host → not available until the cooldown elapses
+  const g = HR.freshGame();
+  g.day = 1;
+  ok(!HR.visitorDayAvailable(g), 'no Visitor Day before the first-day threshold');
+  g.day = HR.VISITOR_FIRST_DAY;
+  ok(HR.visitorDayAvailable(g), 'a Visitor Day is available once the ranch is established');
+  const res = HR.hostVisitorDay(g, { rng: rng(1) });
+  ok(res.ok && res.visitors >= 1, 'hosting resolves with visitors');
+  ok(!HR.visitorDayAvailable(g), 'hosting starts the cooldown — not available again immediately');
+  ok(g.lastVisitorDay === g.day, 'the cooldown is stamped to the current day');
+  g.day += HR.VISITOR_COOLDOWN - 1;
+  ok(!HR.visitorDayAvailable(g), 'still on cooldown a day early');
+  g.day += 1;
+  ok(HR.visitorDayAvailable(g), 'available again once the full cooldown passes');
+  ok(HR.visitorDaysUntil(HR.freshGame()) >= 0, 'days-until is never negative');
+}
+{
+  // the payout is bounded, economy-safe, and applied to the game
+  const g = HR.freshGame(); g.day = HR.VISITOR_FIRST_DAY;
+  // even a maxed ranch stays bounded
+  for (let i = 0; i < 6; i++) g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, speed: 99, stamina: 99, temperament: 99, wins: 8, coat: { name: 'Golden', tier: 3 } }));
+  g.decor.owned = HR.DECOR.map(d => d.id); g.rep = 100000;
+  const money0 = g.money, rep0 = g.rep;
+  const res = HR.hostVisitorDay(g, { rng: rng(2) });
+  ok(res.coins > 0 && res.coins < 4000, 'a single Visitor Day payout is capped (economy-safe)');
+  ok(res.rep >= 4 && res.rep <= 20, 'rep gain is bounded');
+  ok(g.money === money0 + res.coins && g.rep === rep0 + res.rep, 'the payout is applied to the game');
+  ok((g.stats.visitorDays || 0) === 1 && (g.stats.bestVisitorDay || 0) === res.coins, 'stats track the day');
+  ok(typeof res.highlight === 'string' && res.highlight.length > 0, 'the result carries a flavour highlight');
+}
+{
+  // hosting when unavailable is a no-op
+  const g = HR.freshGame(); g.day = 1;
+  const money0 = g.money;
+  const res = HR.hostVisitorDay(g, { rng: rng(1) });
+  ok(!res.ok && g.money === money0 && (g.stats.visitorDays || 0) === 0, 'you cannot host before it is available');
+}
+{
+  // determinism: same rng + same state → same outcome (preview matches the deterministic core)
+  const mk = () => { const g = HR.freshGame(); g.day = HR.VISITOR_FIRST_DAY; g.horses.push(HR.mkHorse({ breed: 'arabian', age: 20, speed: 80, stamina: 80, temperament: 70, wins: 3 })); return g; };
+  const a = HR.hostVisitorDay(mk(), { rng: rng(42) });
+  const b = HR.hostVisitorDay(mk(), { rng: rng(42) });
+  ok(a.coins === b.coins && a.visitors === b.visitors && a.rep === b.rep, 'same rng + state yields the same outcome');
+  // preview is stable and rng-free
+  const g = mk();
+  ok(JSON.stringify(HR.previewVisitorDay(g)) === JSON.stringify(HR.previewVisitorDay(g)), 'the preview is deterministic');
+  ok(HR.previewVisitorDay(g).rep === a.rep, 'the preview rep matches the hosted rep (rng only shifts turnout)');
+}
+{
+  // a record-breaking Visitor Day saves a scrapbook keepsake (reuses captureMoment)
+  const g = HR.freshGame(); g.day = HR.VISITOR_FIRST_DAY; g.scrapbook = [];
+  g.horses.push(HR.mkHorse({ breed: 'friesian', age: 20, name: 'Onyx', wins: 4 }));
+  const res = HR.hostVisitorDay(g, { rng: rng(3) });
+  ok(res.record === true, 'the first Visitor Day is a record');
+  ok(HR.scrapbookList(g).some(e => e.kind === 'snapshot'), 'a record day is saved to the scrapbook');
+}
+{
+  // migration is safe on an old save; goal + achievement
+  const legacy = HR.freshGame(); delete legacy.lastVisitorDay;
+  ok(HR.nextVisitorDay(legacy) === HR.VISITOR_FIRST_DAY, 'a save with no cooldown stamp behaves like a fresh ranch');
+  ok(typeof HR.ranchAppealScore(legacy) === 'number', 'appeal is safe on an old save');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'visit1');
+  ok(goal && !goal.done(g), 'the visitor-day goal is unmet before hosting');
+  g.stats.visitorDays = 1;
+  ok(goal.done(g), 'hosting a Visitor Day completes the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'crowdpleaser');
+  ok(ach && !ach.check(g), 'Crowd-Pleaser needs five Visitor Days');
+  g.stats.visitorDays = 5;
+  ok(ach.check(g), 'five Visitor Days unlock Crowd-Pleaser');
 }
 
 // ---- clamp helper ----
