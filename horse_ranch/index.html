@@ -1570,7 +1570,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1578,7 +1578,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]}, breeder:{points:0},
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]}, breeder:{points:0}, studBookings:[],
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1619,6 +1619,10 @@ function advanceDay(game,rng){
   { const arrivals=resolveTrips(game, game.day);
     for(const a of arrivals){ const rw=a.reward||{}; const bits=[]; if(rw.money) bits.push('🪙'+rw.money); if(rw.rep) bits.push(rw.rep+'⭐');
       notes.push({t:'good',m:a.trip.emoji+' '+a.horse.name+' is back from the '+a.trip.name+' — '+a.reward.note+(bits.length?' (+'+bits.join(' +')+')':'')+'.'}); } }
+
+  // stud-directory bookings that mature today pay their fee
+  { const covers=resolveStudBookings(game, game.day);
+    for(const c of covers) notes.push({t:'good',m:'♞ '+c.stallionName+' covered '+c.mareName+' — stud fee 🪙'+fmt(c.fee)+'.'}); }
 
   // feed consumption
   let need=0; for(const h of game.horses) need+=feedPerDay(h);
@@ -2552,6 +2556,79 @@ function studIncome(game){
   return vals.reduce((n,v,i)=>n+Math.round(v*(STUD_STACK_W[i]!=null?STUD_STACK_W[i]:0.2)),0);
 }
 
+// ---------- Stud directory / outside-mares bookings (a scheduled fee-for-service income loop) ----------
+// A rotating roster of named visiting mares who book YOUR standing stallions. A booking schedules a
+// covering that pays a BOUNDED fee after STUD_GESTATION days (composing with canStand/studFee/atStud).
+// The visiting mare leaves with the foal — no herd change. Economy-safe: fee cap, limited roster & per-
+// stallion capacity, deterministic roster keyed to game.day.
+const STUD_BOOK_CYCLE=4;    // days between roster refreshes
+const STUD_ROSTER=3;        // visiting mares per refresh
+const STUD_MAX_BOOKINGS=2;  // concurrent bookings a single stallion can carry
+const STUD_GESTATION=3;     // days until a booking pays out
+const STUD_FEE_CAP=1400;    // hard cap on any single booking fee
+const STUD_VISIT_BREEDS=['welsh','quarter','arabian','hanoverian','thoroughbred','andalusian','friesian','haflinger','appaloosa','mustang'];
+function studRosterIndex(day){ return Math.floor((Math.floor(day||1)-1)/STUD_BOOK_CYCLE); }
+function nextStudRoster(game){ return (studRosterIndex((game&&game.day)||1)+1)*STUD_BOOK_CYCLE+1; }
+function studRosterDaysLeft(game){ return nextStudRoster(game)-((game&&game.day)||1); }
+// deterministic roster of visiting mares for a refresh index (no Date/Math.random)
+function studVisitingMares(idx){ const rng=seededOnce((idx>>>0)*40503+77), out=[];
+  for(let i=0;i<STUD_ROSTER;i++){
+    const name=NAMES_F[Math.floor(rng()*NAMES_F.length)];
+    const breed=STUD_VISIT_BREEDS[Math.floor(rng()*STUD_VISIT_BREEDS.length)];
+    const quality=Math.round((0.7+rng()*0.9)*100)/100;        // 0.7..1.6 fee multiplier
+    const coatTier=(rng()<0.14?2:(rng()<0.34?1:0));
+    out.push({ id:'vm'+idx+'-'+i, name, breed, breedName:(breedDef(breed)||{name:breed}).name, quality, coatTier, prestige:Math.round(quality*70) });
+  } return out; }
+function studBookingFee(game, stallion, mare){ if(!stallion||!mare) return 0;
+  const base=studFee(game, stallion);                          // reuse existing quality/rep scaling
+  const mareMult=(mare.quality||1)+(mare.coatTier||0)*0.1;
+  return Math.min(STUD_FEE_CAP, Math.round(base*mareMult*1.8)); } // a booked covering pays more than a passive walk-in, but capped
+function studBookingsActive(game){ return ((game&&game.studBookings)||[]).filter(b=>!b.done); }
+function studCapacityLeft(game, stallion){ if(!stallion) return 0;
+  const used=studBookingsActive(game).filter(b=>b.stallionId===stallion.id).length; return Math.max(0, STUD_MAX_BOOKINGS-used); }
+function studMareBooked(game, mareId){ return studBookingsActive(game).some(b=>b.mareId===mareId); }
+// today's directory: each visiting mare + the offered fee for your best eligible stallion + booked flag
+function studDirectory(game){
+  const idx=studRosterIndex((game&&game.day)||1);
+  const stallions=studStallions(game);
+  const top=stallions.slice().sort((a,b)=>studFee(game,b)-studFee(game,a))[0]||null;
+  return studVisitingMares(idx).map(m=>({ id:m.id, name:m.name, breed:m.breed, breedName:m.breedName, quality:m.quality, coatTier:m.coatTier,
+    fee: top?studBookingFee(game,top,m):0, booked:studMareBooked(game,m.id), topStallion: top?top.id:null })); }
+// book a covering: validate the stallion can stand + has capacity + the mare isn't already booked; schedule it
+function bookStudCovering(game, stallionId, mareId, day){
+  const st=((game&&game.horses)||[]).find(h=>h.id===stallionId); if(!st) return {ok:false,why:'No such stallion.'};
+  if(!st.atStud) return {ok:false,why:st.name+' isn’t standing at stud.'};
+  const cs=canStand(st); if(!cs.ok) return {ok:false,why:cs.why};
+  const idx=studRosterIndex((day!=null?day:(game&&game.day))||1);
+  const mare=studVisitingMares(idx).find(m=>m.id===mareId); if(!mare) return {ok:false,why:'That mare isn’t in the directory now.'};
+  if(!Array.isArray(game.studBookings)) game.studBookings=[];
+  if(studMareBooked(game, mareId)) return {ok:false,why:mare.name+' is already booked.'};
+  if(studCapacityLeft(game, st)<=0) return {ok:false,why:st.name+' is fully booked ('+STUD_MAX_BOOKINGS+').'};
+  const fee=studBookingFee(game, st, mare);
+  const d0=(day!=null?day:game.day)||1;
+  const b={ id:'sb'+(game._sbc=(game._sbc||0)+1), stallionId, stallionName:st.name, mareId, mareName:mare.name, breed:mare.breed, fee, booked:d0, due:d0+STUD_GESTATION, done:false };
+  game.studBookings.push(b);
+  return {ok:true, booking:b, fee, stallion:st, mare};
+}
+// resolve matured bookings (called from advanceDay): pay the fee ONCE, free capacity; cancel if the stallion is gone/ineligible
+function resolveStudBookings(game, day){
+  if(!Array.isArray(game.studBookings)){ game.studBookings=[]; return []; }
+  const paid=[];
+  for(const b of game.studBookings){
+    if(b.done || b.due>day) continue;
+    b.done=true;
+    const st=((game.horses)||[]).find(h=>h.id===b.stallionId);
+    if(!st || !st.atStud || !canStand(st).ok){ b.cancelled=true; continue; } // stallion sold/retired/ineligible → no fee
+    game.money=(game.money||0)+b.fee; game.rep=(game.rep||0)+1;
+    if(!game.stats) game.stats={};
+    game.stats.studIncome=(game.stats.studIncome||0)+b.fee;       // counts as stud earnings
+    game.stats.studBookings=(game.stats.studBookings||0)+1;
+    paid.push({ stallionId:b.stallionId, stallionName:st.name, mareName:b.mareName, fee:b.fee });
+  }
+  game.studBookings=game.studBookings.filter(b=>!b.done || b.due>=day-20); // prune old
+  return paid;
+}
+
 // ---------- Retirement & Hall of Fame ----------
 function canRetire(h){
   if(!isAdult(h)) return {ok:false,why:'Only grown horses can retire.'};
@@ -2776,6 +2853,7 @@ const ACHIEVEMENTS=[
   {id:'traveller',  icon:'🚚', name:'Seasoned Traveller',    desc:'Complete ten away trips.',                     check:g=>((g.stats&&g.stats.trips)||0)>=10},
   {id:'regular',    icon:'🏪', name:'Store Regular',         desc:'Buy fifteen deals from the general store.',    check:g=>((g.stats&&g.stats.storeBuys)||0)>=15},
   {id:'masterbred', icon:'👑', name:'Master of Bloodlines',  desc:'Reach the Master Breeder prestige tier.',      check:g=>breederPoints(g)>=breederTierDef('master').minPoints},
+  {id:'soughtsire', icon:'♞', name:'Sought-After Sire',     desc:'Fulfil ten stud-directory bookings.',          check:g=>((g.stats&&g.stats.studBookings)||0)>=10},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2883,6 +2961,7 @@ const GOALS=[
   {id:'trip1',   desc:'Send a horse on an away trip (🚚 trailer)',  tip:g=>((g.stats&&g.stats.trips)||0)+' trips',done:g=>((g.stats&&g.stats.trips)||0)>=1,                     reward:{money:500,rep:15}},
   {id:'store1',  desc:'Grab a deal at the general store (🏪)',      tip:g=>((g.stats&&g.stats.storeBuys)||0)+' bought',done:g=>((g.stats&&g.stats.storeBuys)||0)>=1,           reward:{money:300,rep:10}},
   {id:'breeder1',desc:'Become an Established Breeder (🏵️ prestige)',tip:g=>breederPoints(g)+'/'+breederTierDef('established').minPoints+' pts',done:g=>breederTier(g).id!=='novice',reward:{money:800,rep:25}},
+  {id:'studbook1',desc:'Book a covering in the stud directory (♞)', tip:g=>((g.stats&&g.stats.studBookings)||0)+' bookings',done:g=>((g.stats&&g.stats.studBookings)||0)>=1,     reward:{money:600,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2915,6 +2994,7 @@ const HR = {
   TRIP_TYPES, tripTypeDef, tripFee, horseAway, canSendOnTrip, tripReturnPreview, tripDaysLeft, horsesAway, sendHorseOnTrip, resolveTrips,
   STORE_ITEMS, STORE_CYCLE, storeItemDef, storeStock, storeRestockDay, nextStoreRestock, storeDaysLeft, storeItemAffordable, buyStoreItem, applyStoreEffect,
   BREEDER_TIERS, breederTierDef, breederPointsFor, awardBreederPoints, breederPoints, breederTier, nextBreederTier, breederPerk, breederFeeMult, breederProgress,
+  STUD_MAX_BOOKINGS, STUD_GESTATION, studVisitingMares, studDirectory, studBookingFee, studCapacityLeft, bookStudCovering, resolveStudBookings, nextStudRoster, studRosterDaysLeft,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -3052,6 +3132,7 @@ function load(){
     for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; } // away-trip state
     if(!G.store||typeof G.store!=='object'){ G.store={stock:-1,sold:[]}; } else if(!Array.isArray(G.store.sold)) G.store.sold=[]; // general store restock state
     if(!G.breeder||typeof G.breeder!=='object'){ G.breeder={points:(G.stats&&G.stats.breederPoints)||0}; } else if(typeof G.breeder.points!=='number') G.breeder.points=0; // breeder's prestige track
+    if(!Array.isArray(G.studBookings)) G.studBookings=[]; // stud-directory outside-mare bookings
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -3802,6 +3883,36 @@ function renderStud(s){
     const sb=c.querySelector('[data-stud]'); if(sb) sb.onclick=()=>{ const r=canStand(h); if(!r.ok){ toast(r.why,'info'); return; } h.atStud=true; toast('♞ '+h.name+' is now standing at stud.','good'); refresh(); };
     const ub=c.querySelector('[data-unstud]'); if(ub) ub.onclick=()=>{ h.atStud=false; toast(h.name+' retired from stud.','info'); refresh(); };
     s.appendChild(c);
+  });
+
+  // ---- Stud directory: visiting mares booking your standing stallions ----
+  const esc=x=>(''+x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  s.appendChild(el('h2','head','📖 Stud Directory'));
+  const standing=studStallions(G);
+  if(!standing.length){ s.appendChild(el('div','empty','Stand a stallion at stud to receive booking requests from visiting mares.')); return; }
+  s.appendChild(el('div','sub','Visiting mares book your standing stallions for a covering — a fee paid after '+STUD_GESTATION+' days. New clients arrive every '+STUD_BOOK_CYCLE+' days ('+studRosterDaysLeft(G)+' left). Each stallion serves up to '+STUD_MAX_BOOKINGS+' at once.'));
+  // pending bookings
+  const pend=(G.studBookings||[]).filter(b=>!b.done);
+  if(pend.length){ const pc=el('div','card'); pc.innerHTML='<div class="swlabel">Booked coverings</div>'+
+    pend.map(b=>'<div class="lbsub">♞ '+esc(b.stallionName)+' × '+esc(b.mareName)+' — 🪙'+fmt(b.fee)+' due day '+b.due+'</div>').join(''); s.appendChild(pc); }
+  // the directory roster
+  studDirectory(G).forEach(m=>{
+    const cc=coatTier=>coatTier>=2?' 🎨':'';
+    const card=el('div','card');
+    // choose the best-fee stallion that still has capacity for the action
+    const withCap=standing.slice().sort((a,b)=>studFee(G,b)-studFee(G,a)).find(h=>studCapacityLeft(G,h)>0);
+    const feeFor = withCap?studBookingFee(G,withCap,m):m.fee;
+    let right;
+    if(m.booked) right='<span class="pill" style="color:var(--good)">✓ booked</span>';
+    else if(!withCap) right='<span class="pill">stallions full</span>';
+    else right='<button class="btn sm blue" data-book="'+esc(m.id)+'" data-st="'+esc(withCap.id)+'">Book 🪙'+fmt(feeFor)+'</button>';
+    card.innerHTML='<div class="row"><div class="hface" style="background:none;font-size:20px;display:flex;align-items:center;justify-content:center">🐴</div>'+
+      '<div class="grow"><div class="hname">'+esc(m.name)+' <span class="pill">'+esc(m.breedName)+'</span>'+(m.coatTier>=2?' <span class="pill" style="color:var(--gold)">🎨 fine coat</span>':'')+'</div>'+
+      '<div class="hbreed">A '+(m.quality>=1.3?'top-class':m.quality>=1.0?'quality':'modest')+' visiting mare'+(withCap?' · offers 🪙'+fmt(feeFor)+' to '+esc(withCap.name):'')+'</div></div>'+right+'</div>';
+    s.appendChild(card);
+    const bb=card.querySelector('[data-book]'); if(bb) bb.onclick=()=>{ const r=bookStudCovering(G, bb.getAttribute('data-st'), bb.getAttribute('data-book'), G.day);
+      if(!r.ok){ toast(r.why,'info'); return; } burst('♞💕✨',10); playSfx('tap');
+      toast('♞ '+r.stallion.name+' booked to cover '+r.mare.name+' — 🪙'+fmt(r.fee)+' due day '+r.booking.due+'.','good'); save(); renderBiz(); };
   });
 }
 
