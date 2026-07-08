@@ -260,6 +260,16 @@
   .careitem .ce{font-size:20px;width:26px;text-align:center}
   .careitem .cbar{height:6px;border-radius:3px;background:#0d130a;overflow:hidden;margin-top:3px}
   .caretier{font-size:11px;font-weight:800;padding:2px 9px;border-radius:20px}
+  .lbrow{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:9px;background:#0d130a;border:1px solid #0c110a;margin-bottom:6px}
+  .lbrow.me{border-color:var(--gold2);background:linear-gradient(#1a1c0d,#14170d);box-shadow:0 0 0 1px var(--gold2)}
+  .lbrow.lead .lbname{color:var(--gold)}
+  .lbrank{font-size:14px;font-weight:900;width:30px;text-align:center;color:var(--ink2)}
+  .lbrow.me .lbrank{color:var(--gold)}
+  .lbemoji{font-size:20px;width:24px;text-align:center}
+  .lbname{font-weight:800;font-size:13px}
+  .lbsub{font-size:10px;color:var(--ink2)}
+  .lbscore{margin-left:auto;font-weight:900;font-size:13px;color:var(--ink)}
+  .lbmove{font-size:11px;font-weight:800;width:20px;text-align:center}
 </style>
 </head>
 <body>
@@ -754,6 +764,54 @@ const RANKS=[
 ];
 function rankFor(rep){ let r=RANKS[0]; for(const x of RANKS){ if(rep>=x.rep) r=x; } return r; }
 
+// ---------- Rival ranches & the regional leaderboard ----------
+// Named AI ranches whose reputation grows deterministically from the day counter
+// (each with its own pace + favoured discipline), giving the player a living
+// standings table to climb. No heavy save state — only the player's rank history
+// is persisted, for movement arrows.
+const RIVALS=[
+  {id:'ironhoof',   name:'Ironhoof Farm',  emoji:'⚒️', disc:'race',      base:360,  pace:15, seed:11, blurb:'Blood-and-thunder racing yard.'},
+  {id:'sunfire',    name:'Sunfire Ranch',  emoji:'🔥', disc:'jump',      base:220,  pace:14, seed:13, blurb:'Fearless show-jumpers.'},
+  {id:'ravenwood',  name:'Ravenwood Stud', emoji:'🖤', disc:'dressage',  base:820,  pace:11, seed:3,  blurb:'Elegant dressage dynasty.'},
+  {id:'golden',     name:'Golden Meadows', emoji:'🌻', disc:'halter',    base:1450, pace:8,  seed:7,  blurb:'Show-ring beauties & rare coats.'},
+  {id:'silvercreek',name:'Silvercreek',    emoji:'💧', disc:'endurance', base:1850, pace:6,  seed:5,  blurb:'Old-money endurance champions.'},
+];
+function rivalDef(id){ return RIVALS.find(r=>r.id===id)||null; }
+// how many of this rival's favoured show days have elapsed by `day` (cheap, no loop)
+function rivalShowDays(rv,day){
+  const per=SCHEDULE.filter(sd=>(sd.shows||[]).indexOf(rv.disc)>=0).length;
+  return Math.floor(Math.max(0,day||0)/7)*per;
+}
+// deterministic rival reputation on a day — base + pace·day + discipline momentum + gentle wobble
+function rivalRep(game,id){
+  const rv=(id&&typeof id==='object')?id:rivalDef(id); if(!rv) return 0;
+  const day=(game&&game.day)||1;
+  let rep=rv.base + rv.pace*day + rivalShowDays(rv,day)*4;
+  rep += ((hashDay(day+rv.seed)%100)-50)/50 * rv.pace*3; // ±~3 paces of deterministic wobble
+  return Math.max(0,Math.round(rep));
+}
+// the player's leaderboard score: reputation plus half of estate prestige
+function playerScore(game){ return Math.round(((game&&game.rep)||0) + ((game&&game.prestige)||0)*0.5); }
+// full standings, sorted desc, player included & flagged, ranks assigned
+function standings(game){
+  const rows=RIVALS.map(rv=>({id:rv.id,name:rv.name,emoji:rv.emoji,disc:rv.disc,score:rivalRep(game,rv),isPlayer:false}));
+  rows.push({id:'player',name:ranchName(game),emoji:'🐴',disc:null,score:playerScore(game),isPlayer:true});
+  rows.sort((a,b)=> (b.score-a.score) || (a.isPlayer? -1 : b.isPlayer? 1 : a.id<b.id?-1:1));
+  rows.forEach((r,i)=>r.rank=i+1);
+  return rows;
+}
+function playerRank(game){ const p=standings(game).find(r=>r.isPlayer); return p?p.rank:RIVALS.length+1; }
+function leaderRanch(game){ return standings(game)[0]; }
+function rivalCount(){ return RIVALS.length; }
+// update the player's rank history (call once per day) — powers movement arrows & best-rank
+function tickStandings(game){
+  const pr=playerRank(game);
+  game.prevRank=(game.lastRank!=null)?game.lastRank:pr;
+  game.lastRank=pr;
+  game.bestRank=(game.bestRank==null)?pr:Math.min(game.bestRank,pr);
+  return pr;
+}
+
 // ---------- Events ----------
 // ---------- Weekday calendar (a 7-day week layered over the day counter) ----------
 const WEEKDAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -882,6 +940,7 @@ function freshGame(){
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
+    prevRank:null, lastRank:null, bestRank:null,
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -1001,6 +1060,11 @@ function advanceDay(game,rng){
   // lifetime stats: gross gold earned overnight + best overall horse ever
   if(game.money>money0) game.stats.goldEarned=(game.stats.goldEarned||0)+(game.money-money0);
   for(const h of game.horses) game.stats.bestOVR=Math.max(game.stats.bestOVR||0, overall(h));
+
+  // regional leaderboard: refresh the player's rank (movement arrows), announce climbs to the top
+  { const before=game.lastRank; const pr=tickStandings(game);
+    if(before!=null && pr<before && pr<=3) notes.push({t:'good',m:'📈 '+ranchName(game)+' climbed to #'+pr+' in the regional standings!'});
+    if(before!=null && before!==1 && pr===1) notes.push({t:'good',m:'👑 '+ranchName(game)+' is now the #1 ranch in the region!'}); }
 
   return {notes,event,born};
 }
@@ -1354,6 +1418,7 @@ const ACHIEVEMENTS=[
   {id:'master',     icon:'🎗️', name:'Master Breeder',     desc:'Reach the Master Breeder rank.',               check:g=>g.rep>=2200},
   {id:'legendrank', icon:'🌟', name:'Legendary Rancher',  desc:'Reach the top reputation rank.',               check:g=>g.rep>=8000},
   {id:'auction',    icon:'🔨', name:'Going Once...',       desc:'Win a horse at auction.',                      check:g=>(g.stats.auctionsWon||0)>=1},
+  {id:'topranch',   icon:'👑', name:'Top of the Region',   desc:'Reach #1 on the regional leaderboard.',        check:g=>playerRank(g)===1},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1434,6 +1499,7 @@ const GOALS=[
   {id:'auction1',desc:'Win a horse at auction',           tip:g=>((g.stats&&g.stats.auctionsWon)||0)+'/1',done:g=>((g.stats&&g.stats.auctionsWon)||0)>=1,             reward:{money:1500,rep:35}},
   {id:'decor1',  desc:'Personalise your ranch (🎨 décor)', tip:g=>ownedDecor(g).length+' items',   done:g=>ownedDecor(g).length>=1,                                reward:{money:600,rep:20}},
   {id:'care1',   desc:'Pamper a horse (✨ full care)',      tip:g=>'best care '+Math.max(0,...g.horses.map(h=>careScore(h)))+'%',done:g=>g.horses.some(h=>careScore(h)>=88),           reward:{money:500,rep:20}},
+  {id:'top3',    desc:'Break into the Top 3 ranches',       tip:g=>'now #'+playerRank(g)+' of '+(rivalCount()+1),done:g=>playerRank(g)<=3,                                       reward:{money:2000,rep:50}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1487,6 +1553,8 @@ const HR = {
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
+  RIVALS, rivalDef, rivalShowDays, rivalRep, playerScore, standings, playerRank,
+  leaderRanch, rivalCount, tickStandings,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
 
@@ -1534,6 +1602,7 @@ function load(){
     if(G.stats.consigned==null) G.stats.consigned=0;
     if(!G.achievements) G.achievements=[];
     if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
+    if(G.lastRank==null){ G.lastRank=playerRank(G); G.prevRank=G.lastRank; G.bestRank=G.lastRank; } // regional standings history
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
@@ -1661,7 +1730,7 @@ function renderHUD(){
   { const sd=scheduleFor(G.day); const w=$('hudWd'); if(w) w.textContent=sd.emoji+' '+WEEKDAYS[weekdayIndex(G.day)]; }
   const rank=rankFor(G.rep);
   { const st=$('sceneTitle'); if(st) st.textContent='🐴 '+ranchName(G); }
-  $('sceneRank').textContent=rank.name+' · Fleur';
+  { const pr=playerRank(G); $('sceneRank').textContent=rank.name+' · Fleur · '+(pr===1?'👑 ':'')+'#'+pr+'/'+(rivalCount()+1); }
   { const sc=$('sceneCanteen'); if(sc) sc.style.display=canteenLevel(G)>0?'block':'none'; }
   renderScene();
   // today's season + weather (deterministic per day) — badge, tint & particle layer
@@ -2319,6 +2388,24 @@ function renderEstate(){
   const s=$('sec-estate'); s.innerHTML='';
   s.appendChild(el('h2','head','🏡 '+ranchName(G)));
   s.appendChild(el('div','sub','Fleur’s estate is more than stables — build a canteen for visitors and run a riding school to earn steady daily income.'));
+
+  // ---- Regional Standings (rival ranches leaderboard) ----
+  s.appendChild(el('h2','head','🏆 Regional Standings'));
+  const pr=playerRank(G), lead=leaderRanch(G);
+  const move = (G.prevRank!=null && G.lastRank!=null) ? (G.prevRank - G.lastRank) : 0; // + = climbed
+  s.appendChild(el('div','sub','How '+ranchName(G)+' ranks among the region’s ranches by reputation &amp; prestige. Win shows, auctions and build fame to climb.'
+    + (pr===1?' You’re on top — <b style="color:var(--gold)">the ranch to beat!</b>':(' You’re <b>#'+pr+' of '+(rivalCount()+1)+'</b>'+(move>0?' — climbing 📈':(move<0?' — slipping 📉':''))+(G.bestRank!=null?' · best #'+G.bestRank:'')+'.'))));
+  standings(G).forEach(r=>{
+    const rv=r.isPlayer?null:rivalDef(r.id);
+    const mv = r.isPlayer ? (move>0?'<span class="lbmove" style="color:var(--good)">▲</span>':move<0?'<span class="lbmove" style="color:var(--bad)">▼</span>':'<span class="lbmove">·</span>') : '<span class="lbmove"></span>';
+    const sub = r.isPlayer ? 'You · Fleur, manager' : (rv?rv.blurb+' · '+(disciplineDef(rv.disc)||{name:''}).name:'');
+    const row=el('div','lbrow'+(r.isPlayer?' me':'')+(r.rank===1?' lead':''));
+    row.innerHTML='<div class="lbrank">'+(r.rank===1?'👑':'#'+r.rank)+'</div>'+
+      '<div class="lbemoji">'+r.emoji+'</div>'+
+      '<div><div class="lbname">'+r.name+'</div><div class="lbsub">'+sub+'</div></div>'+
+      '<div class="lbscore">'+fmt(r.score)+'</div>'+mv;
+    s.appendChild(row);
+  });
 
   // ---- Canteen ----
   const lv=canteenLevel(G);

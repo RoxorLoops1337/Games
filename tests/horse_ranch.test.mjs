@@ -1129,10 +1129,80 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   // care goal is appended and completes on a pampered horse
   const g = HR.freshGame();
   const goal = HR.GOALS.find(x => x.id === 'care1');
-  ok(goal && HR.GOALS[HR.GOALS.length - 1].id === 'care1', 'care goal is appended at the end of the chain');
+  ok(goal, 'care goal exists in the chain');
   ok(!goal.done(g), 'care goal is unmet on a fresh game');
   for (const id of HR.NEED_IDS) g.horses[0].needs[id] = 100;
   ok(goal.done(g), 'care goal completes once a horse is fully pampered');
+}
+
+// ---- rival ranches & regional leaderboard (round 22) ----
+{
+  // config surface
+  ok(Array.isArray(HR.RIVALS) && HR.RIVALS.length >= 4, 'a set of rival ranches exists');
+  ok(new Set(HR.RIVALS.map(r => r.id)).size === HR.RIVALS.length, 'rival ids are unique');
+  ok(HR.RIVALS.every(r => r.name && r.emoji && r.disc && r.pace > 0), 'every rival has a name, emoji, discipline, pace');
+  ok(HR.RIVALS.every(r => HR.disciplineDef(r.disc)), 'every rival favours a real discipline');
+  ok(HR.rivalDef(HR.RIVALS[0].id) && HR.rivalDef('nope') === null, 'rivalDef lookup + miss');
+  ok(HR.rivalCount() === HR.RIVALS.length, 'rivalCount matches the roster');
+}
+{
+  // rival reputation is deterministic and grows over time
+  const g1 = HR.freshGame(); g1.day = 10;
+  const g2 = HR.freshGame(); g2.day = 10;
+  const id = HR.RIVALS[0].id;
+  ok(HR.rivalRep(g1, id) === HR.rivalRep(g2, id), 'rivalRep is deterministic for a given day');
+  const early = HR.rivalRep({ day: 5 }, id), late = HR.rivalRep({ day: 200 }, id);
+  ok(late > early, 'rival reputation grows as days pass');
+  ok(HR.rivalRep({ day: 10 }, 'nope') === 0, 'unknown rival has zero rep');
+}
+{
+  // standings include the player, are sorted desc, and assign 1-based ranks
+  const g = HR.freshGame(); g.day = 20; g.rep = 0; g.prestige = 0;
+  const s = HR.standings(g);
+  ok(s.length === HR.RIVALS.length + 1, 'standings include every rival plus the player');
+  ok(s.filter(r => r.isPlayer).length === 1, 'exactly one player row');
+  for (let i = 1; i < s.length; i++) ok(s[i - 1].score >= s[i].score, 'standings sorted by score desc');
+  ok(s.every((r, i) => r.rank === i + 1), 'ranks are 1-based and contiguous');
+  // a broke, fameless start sits near the bottom
+  ok(HR.playerRank(g) >= HR.RIVALS.length, 'a fresh ranch starts near the bottom of the table');
+}
+{
+  // the player climbs as reputation/prestige rise, and can reach #1
+  const g = HR.freshGame(); g.day = 15;
+  const low = HR.playerRank(g);
+  g.rep = 50000; g.prestige = 20000;
+  const high = HR.playerRank(g);
+  ok(high < low, 'gaining reputation & prestige improves the player rank');
+  ok(high === 1, 'a dominant ranch reaches #1');
+  ok(HR.leaderRanch(g).isPlayer, 'leaderRanch is the player when they top the table');
+  ok(HR.playerScore(g) === Math.round(g.rep + g.prestige * 0.5), 'playerScore = rep + half prestige');
+}
+{
+  // tickStandings records rank history for movement arrows
+  const g = HR.freshGame(); g.day = 12; g.rep = 0; g.prestige = 0;
+  HR.tickStandings(g);
+  const startRank = g.lastRank;
+  ok(typeof startRank === 'number' && g.bestRank === startRank, 'first tick seeds lastRank & bestRank');
+  g.rep = 60000; g.prestige = 30000; // now dominant
+  HR.tickStandings(g);
+  ok(g.prevRank === startRank && g.lastRank < startRank, 'a big rep jump is reflected as a climb (prev>last)');
+  ok(g.bestRank === g.lastRank, 'bestRank tracks the best (lowest) rank achieved');
+  // best rank does not regress if the player later slips
+  const best = g.bestRank; g.rep = 0; g.prestige = 0; HR.tickStandings(g);
+  ok(g.bestRank === best, 'bestRank never regresses after slipping');
+}
+{
+  // advanceDay refreshes standings each day, and #1 unlocks the top-of-region achievement
+  const g = HR.freshGame(); g.feed = 9999; g.rep = 80000; g.prestige = 40000;
+  HR.advanceDay(g, rng(4));
+  ok(g.lastRank === 1, 'advanceDay keeps the rank fresh (dominant ranch is #1)');
+  HR.checkAchievements(g);
+  ok((g.achievements || []).indexOf('topranch') >= 0, 'reaching #1 unlocks the Top of the Region achievement');
+  // the Top-3 goal exists and completes for a top ranch
+  const goal = HR.GOALS.find(x => x.id === 'top3');
+  ok(goal && goal.done(g), 'the Top-3 goal completes once the player is high enough');
+  const fresh = HR.freshGame(); fresh.day = 20;
+  ok(!goal.done(fresh), 'the Top-3 goal is unmet for a bottom-table newcomer');
 }
 
 // ---- clamp helper ----
