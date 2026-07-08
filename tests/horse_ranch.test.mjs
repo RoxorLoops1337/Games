@@ -234,6 +234,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.grudgeWins = 1; // satisfies the grudge-match goal
   g.stats.ceremonies = 1; // satisfies the coming-of-age ceremony goal
   g.stats.labTests = 10; // satisfies the genetics-lab goal
+  g.stats.profilesRead = 10; // satisfies the personality-profile goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -380,6 +381,83 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && ach.check(g), 'Coat Geneticist unlocks at 10 studies');
   ok(HR.ACHIEVEMENTS.filter(a => a.id === 'geneticist').length === 1, 'geneticist achievement id is unique');
   ok(HR.GOALS.filter(x => x.id === 'lab1').length === 1, 'lab1 goal id is unique');
+}
+
+// ---- horse personality profile / temperament reveal (read-only flavour lens) ----
+{
+  // temperamentAxes: values in range and move with stats/trait/bond
+  const fiery = HR.temperamentAxes({ trait: 'hot', speed: 90, stamina: 40, temperament: 40, bond: 10, happy: 80 });
+  const calm = HR.temperamentAxes({ trait: 'gentle', speed: 45, stamina: 80, temperament: 90, bond: 90, happy: 90 });
+  const fireA = fiery.find(a => a.id === 'fire').value, fireB = calm.find(a => a.id === 'fire').value;
+  ok(fiery.every(a => a.value >= 0 && a.value <= 100), 'all axis values are within 0..100');
+  ok(fireA > fireB, 'a hot, low-temperament horse reads more fiery than a gentle, calm one');
+  const runA = fiery.find(a => a.id === 'run').value, runB = calm.find(a => a.id === 'run').value;
+  ok(runA > runB, 'speed-heavy horse leans sprinter; stamina-heavy leans stayer');
+  const warmA = calm.find(a => a.id === 'warmth').value, warmB = fiery.find(a => a.id === 'warmth').value;
+  ok(warmA > warmB, 'a highly-bonded horse reads more affectionate');
+  ok(fiery.find(a => a.id === 'fire').leaning === 'high' && fiery.find(a => a.id === 'fire').label === 'Fiery', 'a fiery axis is labelled and leaning high');
+}
+{
+  // personalityProfile: stable archetypes for known constructed horses
+  const bold = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 92, stamina: 40, temperament: 45, trait: 'bold', bond: 20, happy: 80 });
+  const p1 = HR.personalityProfile(bold);
+  ok(['firebrand', 'sprinter'].indexOf(p1.archetype.id) >= 0, 'a bold, high-speed horse reads as a fiery/sprinter archetype');
+  ok(p1.tags.length > 0, 'profile carries descriptive tags');
+  ok(p1.tags.indexOf('fiery') >= 0 || p1.tags.indexOf('sprinter') >= 0, 'tags reflect the fiery/sprinter nature');
+  ok(p1.quiz.length >= 3 && p1.quiz.every(q => q.q && q.a), 'the quiz reflects the horse back in 3-4 lines');
+
+  const gentle = HR.mkHorse({ breed: 'friesian', age: 22, speed: 45, stamina: 70, temperament: 90, trait: 'gentle', bond: 88, happy: 92 });
+  const p2 = HR.personalityProfile(gentle);
+  ok(['gentle', 'devoted'].indexOf(p2.archetype.id) >= 0, 'a calm, high-temperament, bonded horse reads as gentle/affectionate');
+  ok(p2.tags.indexOf('affectionate') >= 0 || p2.tags.indexOf('level-headed') >= 0, 'tags reflect the gentle/affectionate nature');
+
+  const old = HR.mkHorse({ breed: 'arabian', age: 66, speed: 55, stamina: 55, temperament: 70, trait: 'steady', bond: 60, happy: 80 });
+  ok(HR.personalityProfile(old).archetype.id === 'oldsoul', 'a senior horse reads as The Old Soul');
+
+  const foal = HR.mkHorse({ breed: 'welsh', age: 3, speed: 40, stamina: 40, temperament: 50, trait: 'spirited' });
+  ok(HR.personalityProfile(foal).archetype.id === 'sprout', 'a foal reads as The Little Sprout');
+
+  // bestDiscipline honours a settled specialty
+  const runner = HR.mkHorse({ breed: 'quarter', age: 20, speed: 88, stamina: 55, temperament: 50, trait: 'bold' });
+  HR.gainAffinity(runner, 'race', HR.SPECIALIST_AT);
+  const pr = HR.personalityProfile(runner);
+  ok(pr.bestDiscipline.id === 'race' && pr.bestDiscipline.basis === 'specialty', 'a settled specialist is best-suited to that discipline');
+}
+{
+  // personalityMatch: sensible compatibility read
+  const fiery = HR.mkHorse({ breed: 'akhalteke', age: 20, speed: 90, stamina: 40, temperament: 40, trait: 'hot', bond: 30, happy: 80 });
+  const calm = HR.mkHorse({ breed: 'friesian', age: 20, speed: 45, stamina: 80, temperament: 88, trait: 'gentle', bond: 85, happy: 90 });
+  const m = HR.personalityMatch(fiery, calm);
+  ok(m.score >= 0 && m.score <= 100, 'match score is within 0..100');
+  ok(typeof m.label === 'string' && typeof m.note === 'string', 'match gives a label + note');
+  ok(m.fireGap >= 20, 'a fiery↔calm pairing registers a large temperament gap');
+  const twoFire = HR.personalityMatch(fiery, HR.mkHorse({ breed: 'akhalteke', age: 20, speed: 88, stamina: 42, temperament: 42, trait: 'hot', bond: 30, happy: 80 }));
+  ok(/firebrand/i.test(twoFire.note), 'two firebrands are flagged as a spark-prone pairing');
+}
+{
+  // read-only + deterministic + sparse-safe
+  const g = HR.freshGame();
+  const before = JSON.stringify(g);
+  HR.personalityProfile(g.horses[0]);
+  HR.temperamentAxes(g.horses[0]);
+  HR.personalityMatch(g.horses[0], g.horses[1]);
+  ok(JSON.stringify(g) === before, 'the personality lens never mutates the game (read-only)');
+  const a1 = HR.personalityProfile(g.horses[0]), a2 = HR.personalityProfile(g.horses[0]);
+  ok(JSON.stringify(a1) === JSON.stringify(a2), 'personalityProfile is deterministic');
+  // sparse horse: no trait/aff/bond
+  const sparse = HR.personalityProfile({ age: 20 });
+  ok(sparse.archetype && sparse.archetype.id && sparse.tags.length >= 1, 'a sparse horse still yields an archetype + tags');
+  ok(HR.temperamentAxes({}).length === 3, 'temperamentAxes is safe on an empty object');
+  ok(HR.personalityProfile(null).archetype, 'personalityProfile is null-safe');
+}
+{
+  // the personality goal + achievement track profile reads; ids unique
+  const g = HR.freshGame();
+  g.stats.profilesRead = 1;
+  ok(HR.GOALS.find(x => x.id === 'quiz1').done(g), 'quiz1 goal completes after reading a profile');
+  g.stats.profilesRead = 10;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'characterstudy').check(g), 'Character Study unlocks at 10 reads');
+  ok(HR.GOALS.filter(x => x.id === 'quiz1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'characterstudy').length === 1, 'new goal/achievement ids are unique');
 }
 
 // ---- pedigree + inbreeding ----

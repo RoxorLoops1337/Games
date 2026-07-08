@@ -331,6 +331,7 @@
     <button class="sbtn" id="cerBtn" title="Coming-of-age ceremonies" style="margin-right:4px;position:relative">🎓<span id="cerBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="newsBtn" title="Skyhorse Gazette — weekly recap" style="margin-right:4px">📰</button>
     <button class="sbtn" id="labBtn" title="Genetics Lab — test-mating coat calculator" style="margin-right:4px">🧬</button>
+    <button class="sbtn" id="persBtn" title="Personality profiles — get to know your horses" style="margin-right:4px">🎭</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -2271,6 +2272,90 @@ function bondTier(h){ const b=(h&&h.bond)||0;
   return b>=90?{id:'devoted',label:'Devoted',emoji:'💖'} : b>=BONDED_AT?{id:'bonded',label:'Bonded',emoji:'❤'}
        : b>=40?{id:'warming',label:'Warming Up',emoji:'🙂'} : {id:'new',label:'Getting Acquainted',emoji:'👋'}; }
 function bondLabel(h){ return bondTier(h).label; }
+// ---------- Horse personality profile / temperament reveal (read-only flavour lens) ----------
+// A rounded character read derived purely from a horse's EXISTING fields (trait, stats, bond,
+// affinity, mood, life stage). No stat/economy change; deterministic — no Date/Math.random.
+// Uses read-only affinity reads so it never mutates the horse.
+const TRAIT_FIRE={ hot:30, bold:16, spirited:14, clever:2, lazy:-14, steady:-20, gentle:-22 };
+function affinityRO(h,id){ if(!h||!h.aff||typeof h.aff!=='object') return 0; const v=h.aff[id]; return (typeof v==='number'&&isFinite(v))?clamp(v,0,AFF_MAX):0; }
+function topAffinityRO(h){ let best=DISC_IDS[0], pts=affinityRO(h,best); for(const id of DISC_IDS){ const v=affinityRO(h,id); if(v>pts){ pts=v; best=id; } } return {id:best, pts}; }
+function temperamentAxes(h){
+  h=h||{};
+  const sp=(typeof h.speed==='number'?h.speed:50), st=(typeof h.stamina==='number'?h.stamina:50), tm=(typeof h.temperament==='number'?h.temperament:55);
+  const bond=(typeof h.bond==='number'?h.bond:0), happy=(h.happy==null?85:h.happy);
+  const fire=clamp(Math.round(50 + (TRAIT_FIRE[h.trait]||0) + (70-tm)*0.5), 0, 100);
+  const run =clamp(Math.round(50 + (sp-st)*0.8), 0, 100);
+  const warmth=clamp(Math.round(0.6*bond + 0.4*happy), 0, 100);
+  const mk=(id,low,high,value)=>({ id, low, high, value, leaning:(value>=60?'high':value<=40?'low':'mid'),
+    label:(value>=60?high:value<=40?low:'Balanced') });
+  return [ mk('fire','Calm','Fiery',fire), mk('run','Stayer','Sprinter',run), mk('warmth','Aloof','Affectionate',warmth) ];
+}
+function axisVal(axes,id){ const a=axes.find(x=>x.id===id); return a?a.value:50; }
+// natural discipline aptitude from the stat balance (independent of any trained affinity)
+function naturalAptitude(h){ h=h||{};
+  const sp=(typeof h.speed==='number'?h.speed:50), st=(typeof h.stamina==='number'?h.stamina:50), tm=(typeof h.temperament==='number'?h.temperament:55);
+  return DISCIPLINES.map(d=>({ id:d.id, name:d.name, emoji:d.emoji, score: d.w.speed*sp + d.w.stamina*st + d.w.temperament*tm }))
+    .sort((a,b)=>b.score-a.score); }
+function bestDisciplineFor(h){
+  const top=topAffinityRO(h);
+  if(top.pts>=SPECIALIST_AT){ const d=disciplineDef(top.id); return { id:d.id, name:d.name, emoji:d.emoji, basis:'specialty' }; }
+  if(top.pts>0){ const d=disciplineDef(top.id); return { id:d.id, name:d.name, emoji:d.emoji, basis:'developing' }; }
+  const nat=naturalAptitude(h)[0]; return { id:nat.id, name:nat.name, emoji:nat.emoji, basis:'aptitude' };
+}
+const PERSONALITY_ARCHETYPES=[
+  {id:'oldsoul',  name:'The Old Soul',         emoji:'🌙', blurb:'Wise, unflappable and full of stories — a steadying presence in the yard.',   match:c=>c.senior},
+  {id:'sprout',   name:'The Little Sprout',    emoji:'🌱', blurb:'All legs and curiosity — a youngster still discovering the world.',           match:c=>c.foal},
+  {id:'devoted',  name:'The Devoted Companion',emoji:'💖', blurb:'Bonded to the core — lives for a scratch on the neck and your company.',       match:c=>c.warmth>=75},
+  {id:'firebrand',name:'The Firebrand',        emoji:'🔥', blurb:'Hot-blooded and electric — a handful to hold, but pure fire when it counts.',  match:c=>c.fire>=65},
+  {id:'gentle',   name:'The Gentle Giant',     emoji:'🕊️', blurb:'Calm, kind and endlessly patient — the horse you trust with anyone.',          match:c=>c.fire<=35 && c.warmth>=50},
+  {id:'sprinter', name:'The Sprinter',         emoji:'💨', blurb:'Explosive off the mark — built to burn up short distances.',                   match:c=>c.run>=68},
+  {id:'stayer',   name:'The Marathoner',       emoji:'🥾', blurb:'Tireless and metronomic — happiest eating up the long miles.',                 match:c=>c.run<=32},
+  {id:'showman',  name:'The Showman',          emoji:'✨', blurb:'Flashy and self-aware — plays to the crowd and loves the spotlight.',          match:c=>c.trait==='spirited'||c.specialty==='halter'},
+  {id:'scholar',  name:'The Scholar',          emoji:'🧠', blurb:'Sharp and quick to learn — give it a puzzle and watch it work.',               match:c=>c.trait==='clever'},
+  {id:'steadfast',name:'The Steady Hand',      emoji:'🪨', blurb:'Dependable and easy-going — no drama, just quiet consistency.',                match:c=>c.trait==='steady'||c.trait==='lazy'},
+  {id:'allrounder',name:'The All-Rounder',     emoji:'🐴', blurb:'Well-balanced and adaptable — a little good at everything.',                   match:c=>true},
+];
+function personalityArchetypeDef(id){ return PERSONALITY_ARCHETYPES.find(a=>a.id===id)||null; }
+function personalityProfile(h){
+  h=h||{};
+  const axes=temperamentAxes(h);
+  const fire=axisVal(axes,'fire'), run=axisVal(axes,'run'), warmth=axisVal(axes,'warmth');
+  const stageId=stageForAge(h.age||0).id;
+  const spTop=topAffinityRO(h), specialty=spTop.pts>=SPECIALIST_AT?spTop.id:null;
+  const ctx={ fire, run, warmth, trait:h.trait||null, stageId,
+    senior:(stageId==='senior'||isElderly(h)), foal:(stageId==='foal'),
+    overall:overall(h), bond:(h.bond||0), temperament:(h.temperament||0), speed:(h.speed||0), stamina:(h.stamina||0), specialty };
+  const arch=PERSONALITY_ARCHETYPES.find(a=>{ try{ return !!a.match(ctx); }catch(e){ return false; } })||PERSONALITY_ARCHETYPES[PERSONALITY_ARCHETYPES.length-1];
+  const best=bestDisciplineFor(h);
+  const mood=horseMood(h);
+  const tags=[], push=t=>{ if(t && tags.indexOf(t)<0) tags.push(t); };
+  if(fire>=60) push('fiery'); else if(fire<=40) push('level-headed');
+  if(run>=60) push('sprinter'); else if(run<=40) push('stayer');
+  if(warmth>=60) push('affectionate'); else if(warmth<=40) push('independent');
+  const td=traitDef(h.trait); if(td) push(td.name.toLowerCase());
+  if(specialty){ const d=disciplineDef(specialty); if(d) push(d.name.toLowerCase()+' specialist'); }
+  if(ctx.senior) push('seasoned'); else if(ctx.foal) push('youthful');
+  if(!tags.length) push('easy-going');
+  const quiz=[
+    {q:'How do they handle a buzzing show ring?', a: fire>=60?'Lit up and raring to go.' : fire<=40?'Cool as you like.' : 'Takes it all in stride.'},
+    {q:'Sprint, or the long haul?',                a: run>=60?'Explosive over a short dash.' : run<=40?'Built to go all day.' : 'Comfortable at any distance.'},
+    {q:'Warm to their people?',                    a: warmth>=60?'An absolute sweetheart.' : warmth<=40?'Keeps their own counsel.' : 'Friendly once they know you.'},
+    {q:'Where do they shine?',                     a:'Best suited to '+best.name+'.'},
+  ];
+  return { archetype:{ id:arch.id, name:arch.name, emoji:arch.emoji, blurb:arch.blurb },
+    tags: tags.slice(0,6), axes, bestDiscipline:best, mood, bond:bondTier(h), stage:stageId, ageLabel:ageLabel(h),
+    overall:ctx.overall, quiz };
+}
+function personalityMatch(a,b){
+  const A=temperamentAxes(a), B=temperamentAxes(b);
+  const fa=axisVal(A,'fire'), fb=axisVal(B,'fire'), wa=axisVal(A,'warmth'), wb=axisVal(B,'warmth'), ra=axisVal(A,'run'), rb=axisVal(B,'run');
+  const fireGap=Math.abs(fa-fb), warmthAvg=(wa+wb)/2, runGap=Math.abs(ra-rb);
+  let score=50 + (warmthAvg-50)*0.4 + ((fireGap>=20&&fireGap<=60)?12:0) - ((fa>=70&&fb>=70)?18:0) + (runGap<=30?6:0);
+  score=clamp(Math.round(score),0,100);
+  const label=score>=70?'Great match':score>=50?'Workable pairing':'Tricky mix';
+  const note=(fa>=70&&fb>=70)?'Two firebrands — expect sparks.' : (fireGap>=20?'One tempers the other nicely.' : 'Kindred temperaments.');
+  return { score, label, note, warmthAvg:Math.round(warmthAvg), fireGap, runGap };
+}
 // do a groundwork activity with a horse — bounded, deterministic; returns the outcome
 function doGroundwork(game, h, activityId, day){
   const a=groundworkActivityDef(activityId); if(!a) return {ok:false,why:'Unknown activity.'};
@@ -3213,6 +3298,7 @@ const ACHIEVEMENTS=[
   {id:'raisedfoal', icon:'🎓', name:'Raised from a Foal',      desc:'Raise a foal all the way to its coming of age.', check:g=>((g.horses)||[]).some(h=>h.ceremonies&&h.ceremonies.comingofage==='done')},
   {id:'bannerweek', icon:'📰', name:'Banner Week',            desc:'Win three shows in a single week.',            check:g=>weeklyRecap(g).trophies.gold>=3},
   {id:'geneticist', icon:'🧬', name:'Coat Geneticist',        desc:'Study ten test-matings in the Genetics Lab.', check:g=>((g.stats&&g.stats.labTests)||0)>=10},
+  {id:'characterstudy', icon:'🎭', name:'Character Study',    desc:'Read ten horse personality profiles.',         check:g=>((g.stats&&g.stats.profilesRead)||0)>=10},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3362,6 +3448,7 @@ const GOALS=[
   {id:'grudge1', desc:'Win a grudge match vs a rival (⚔️)',          tip:g=>{const r=grudgeRecord(g);return r.w+'W–'+r.l+'L';},done:g=>((g.stats&&g.stats.grudgeWins)||0)>=1,        reward:{money:800,rep:30}},
   {id:'cer1',    desc:'Hold a coming-of-age ceremony (🎓)',          tip:g=>((g.stats&&g.stats.ceremonies)||0)+' held',done:g=>((g.stats&&g.stats.ceremonies)||0)>=1,             reward:{money:400,rep:15}},
   {id:'lab1',    desc:'Run a test-mating in the Genetics Lab (🧬)',   tip:g=>((g.stats&&g.stats.labTests)||0)+'/1',done:g=>((g.stats&&g.stats.labTests)||0)>=1,               reward:{money:400,rep:15}},
+  {id:'quiz1',   desc:'Read a horse’s personality profile (🎭)',       tip:g=>((g.stats&&g.stats.profilesRead)||0)+'/1',done:g=>((g.stats&&g.stats.profilesRead)||0)>=1,        reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3389,6 +3476,7 @@ const HR = {
   VISITOR_COOLDOWN, VISITOR_FIRST_DAY, ranchAppealScore, nextVisitorDay, visitorDaysUntil, visitorDayAvailable, previewVisitorDay, hostVisitorDay, visitorHighlight,
   APPOINTMENT_TYPES, appointmentTypeDef, appointmentFee, bookAppointment, dueForCare, horsesDueForCare, careTypeDue, resolveAppointments, activeCareBuff,
   GROUNDWORK_ACTIVITIES, GROUNDWORK_ENERGY, BOND_CAP, BONDED_AT, groundworkActivityDef, groundworkEnergyLeft, canDoGroundwork, doGroundwork, bondTier, bondLabel, bondPoiseMult,
+  PERSONALITY_ARCHETYPES, personalityArchetypeDef, temperamentAxes, naturalAptitude, bestDisciplineFor, personalityProfile, personalityMatch,
   ranchMap, stableOccupancy, stableIndexOf, moveHorseToStable,
   FAIRS, FAIR_LEN, fairDef, currentFair, fairActive, fairKey, fairDaysLeft, nextFair, fairClaimed, fairProgress, claimFairReward,
   CHORE_TYPES, choreTypeDef, choreIdsFor, dailyChores, markChoreProgress, choreProgress, choresStreak, choresBonus, resolveDailyChores,
@@ -5498,6 +5586,67 @@ function openGeneticsLab(){
       const fresh=checkAchievements(G); const gg=checkGoals(G); save(); if(fresh.length||gg.length){ renderHUD(); }
       playSfx('tap'); burst('🧬🔬✨',12); openGeneticsLab(); }; }
 }
+let persSel={horse:null, partner:null};
+function persAxisBar(ax){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const v=ax.value, strong=(ax.leaning!=='mid');
+  return '<div style="margin:5px 0">'+
+    '<div class="lbsub" style="display:flex;justify-content:space-between;opacity:.8"><span'+(v<=40?' style="color:var(--gold)"':'')+'>'+esc(ax.low)+'</span>'+
+      '<b style="'+(strong?'color:var(--gold)':'opacity:.7')+'">'+esc(ax.label)+'</b>'+
+      '<span'+(v>=60?' style="color:var(--gold)"':'')+'>'+esc(ax.high)+'</span></div>'+
+    '<div style="position:relative;height:8px;background:#0002;border-radius:5px;margin-top:2px">'+
+      '<div style="position:absolute;left:calc('+v+'% - 5px);top:-2px;width:11px;height:11px;border-radius:50%;background:var(--gold2);border:1px solid #0006"></div></div></div>';
+}
+function openPersonality(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(persSel.horse && !horses.some(h=>h.id===persSel.horse)) persSel.horse=null;
+  if(persSel.partner && !horses.some(h=>h.id===persSel.partner)) persSel.partner=null;
+  if(!persSel.horse && horses.length) persSel.horse=horses[0].id;
+  const chips=horses.length?horses.map(h=>'<span class="wlchip" data-pers="'+esc(h.id)+'" style="cursor:pointer;'+(persSel.horse===h.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(h.name)+'</span>').join(' ')
+    :'<span class="empty">No horses in the stable yet — buy or breed one to meet its character.</span>';
+  const h=persSel.horse?horses.find(x=>x.id===persSel.horse):null;
+  let body='';
+  if(h){
+    const p=personalityProfile(h);
+    const axes=p.axes.map(persAxisBar).join('');
+    const tags=p.tags.map(t=>'<span class="pill">'+esc(t)+'</span>').join(' ');
+    const bd=p.bestDiscipline, bdNote=bd.basis==='specialty'?'settled specialty':bd.basis==='developing'?'developing':'natural aptitude';
+    const quiz=p.quiz.map(q=>'<div class="lbsub" style="margin:2px 0"><b>'+esc(q.q)+'</b><br><span style="font-style:italic;opacity:.9">'+esc(q.a)+'</span></div>').join('');
+    // optional partner for compatibility
+    const partners=horses.filter(x=>x.id!==h.id);
+    if(persSel.partner===persSel.horse) persSel.partner=null;
+    const pchips=partners.length?partners.map(x=>'<span class="wlchip" data-perspart="'+esc(x.id)+'" style="cursor:pointer;'+(persSel.partner===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' '):'<span class="hbreed" style="opacity:.6">need a second horse</span>';
+    let matchBox='';
+    const partner=persSel.partner?horses.find(x=>x.id===persSel.partner):null;
+    if(partner){ const m=personalityMatch(h,partner);
+      const col=m.score>=70?'var(--good)':m.score>=50?'var(--gold)':'var(--warn)';
+      matchBox='<div class="card" style="border-left:4px solid '+col+';margin-top:4px"><div class="hname">🤝 '+esc(h.name)+' &amp; '+esc(partner.name)+' — <span style="color:'+col+'">'+esc(m.label)+'</span> <span class="pill">'+m.score+'/100</span></div>'+
+        '<div class="hbreed" style="margin-top:3px">'+esc(m.note)+'</div></div>'; }
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname" style="font-size:16px">'+p.archetype.emoji+' '+esc(p.archetype.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(h.name)+' · '+esc(ageLabel(h))+' · '+p.bond.emoji+' '+esc(p.bond.label)+' · OVR '+p.overall+'</div>'+
+      '<div class="hbreed" style="margin-top:4px;font-style:italic">“'+esc(p.archetype.blurb)+'”</div></div>'+
+      '<div class="swlabel" style="margin-top:8px">🎚️ Temperament</div><div>'+axes+'</div>'+
+      '<div class="swlabel" style="margin-top:6px">🏷️ Character tags</div><div class="pips">'+tags+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">🎯 Best suited to</div><div class="lbsub">'+bd.emoji+' <b>'+esc(bd.name)+'</b> <span style="opacity:.7">('+bdNote+')</span></div>'+
+      '<div class="swlabel" style="margin-top:8px">🗒️ Getting to know them</div><div>'+quiz+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">🤝 Compatibility with…</div><div>'+pchips+'</div>'+matchBox;
+  } else {
+    body='<div class="sub" style="margin-top:6px">Pick a horse to reveal its character — a friendly read of its temperament drawn from everything it already is.</div>';
+  }
+  modal('<h3>🎭 Personality</h3>'+
+    '<div class="swlabel">Every horse has a character all its own. Choose one to meet them properly.</div>'+
+    '<div class="swlabel" style="margin-top:6px">Your horses</div><div>'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="persClose" style="width:100%">Done</button></div>');
+  $('persClose').onclick=closeModal;
+  document.querySelectorAll('[data-pers]').forEach(x=>x.onclick=()=>{ const id=x.getAttribute('data-pers');
+    const changed=(persSel.horse!==id); persSel.horse=id; if(changed) persSel.partner=null;
+    G.stats=G.stats||{}; G.stats.profilesRead=(G.stats.profilesRead||0)+1;
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD();
+    playSfx('tap'); openPersonality(); });
+  document.querySelectorAll('[data-perspart]').forEach(x=>x.onclick=()=>{ persSel.partner=x.getAttribute('data-perspart'); playSfx('tap'); openPersonality(); });
+}
 function openCeremonies(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const due=comingOfAgeDue(G);
@@ -6058,6 +6207,7 @@ function boot(){
   { const cb=$('cerBtn'); if(cb) cb.onclick=openCeremonies; }
   { const nb=$('newsBtn'); if(nb) nb.onclick=openNewsletter; }
   { const lb=$('labBtn'); if(lb) lb.onclick=openGeneticsLab; }
+  { const pb=$('persBtn'); if(pb) pb.onclick=openPersonality; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
