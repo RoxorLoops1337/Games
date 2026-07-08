@@ -27,15 +27,27 @@
 
   /* Scene banner */
   #scene{position:relative;height:96px;background:linear-gradient(#a9d0ec 0%,#c9e4f2 55%,#8fbf68 55%,#6ea34a 100%);border-bottom:2px solid var(--edge);overflow:hidden;line-height:0}
-  #scene .sun{position:absolute;top:12px;right:22px;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,#fff2b0,#ffd35a 70%,#e0a53a);box-shadow:0 0 24px #ffd35a88}
-  #scene .barn{position:absolute;bottom:24px;left:18px;width:70px;height:46px;background:linear-gradient(#a23c2e,#7d2c22);border:2px solid #4a1a13;border-radius:3px}
+  #skyWarm,#skyNight{position:absolute;inset:0;pointer-events:none;opacity:0}
+  #skyWarm{background:linear-gradient(#ff9e5a55,#ffd08a22 55%,transparent 55%)}
+  #skyNight{background:linear-gradient(#0a1330,#1b2547 40%,#0d2a33 55%,#0a1f12 100%)}
+  #scene .sun,#scene .moon{position:absolute;top:12px;left:60%;width:34px;height:34px;border-radius:50%}
+  #scene .sun{background:radial-gradient(circle,#fff2b0,#ffd35a 70%,#e0a53a);box-shadow:0 0 24px #ffd35a88}
+  #scene .moon{width:26px;height:26px;background:radial-gradient(circle at 38% 38%,#fdfbf0,#d9dce6 70%,#aab0c2);box-shadow:0 0 18px #cdd6ff66;opacity:0}
+  #scene .barn{position:absolute;bottom:24px;left:18px;width:70px;height:46px;background:linear-gradient(#a23c2e,#7d2c22);border:2px solid #4a1a13;border-radius:3px;z-index:2}
   #scene .barn:before{content:"";position:absolute;top:-16px;left:-4px;right:-4px;height:18px;background:#5a2018;clip-path:polygon(0 100%,50% 0,100% 100%)}
   #scene .barn:after{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:20px;height:26px;background:#4a1a13;border-radius:3px 3px 0 0}
-  #scene .horse{position:absolute;bottom:20px;font-size:26px;filter:drop-shadow(0 2px 1px #0004);animation:graze 3s ease-in-out infinite}
-  #sceneCanteen{position:absolute;bottom:22px;right:20px;font-size:30px;filter:drop-shadow(0 2px 2px #0005)}
+  #scene .horse{position:absolute;bottom:18px;z-index:3;filter:drop-shadow(0 2px 1px #0005);animation:graze 3s ease-in-out infinite}
+  #scene .horse .hsvg{display:block}
+  #sceneCanteen{position:absolute;bottom:22px;right:20px;font-size:30px;filter:drop-shadow(0 2px 2px #0005);z-index:2}
   @keyframes graze{0%,100%{transform:translateY(0) scaleX(1)}50%{transform:translateY(-2px)}}
-  #sceneTitle{position:absolute;top:8px;left:12px;font-size:13px;font-weight:900;color:#2a3a18;text-shadow:0 1px 0 #ffffff70;letter-spacing:.5px}
-  #sceneRank{position:absolute;top:26px;left:12px;font-size:11px;font-weight:800;color:#3a4a24;text-shadow:0 1px 0 #ffffff55}
+  #wx{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4}
+  .drop{position:absolute;top:-12px;width:1.5px;height:9px;background:linear-gradient(#bcd8f0,#8fb4d8);border-radius:1px;opacity:.55;animation:rainfall linear infinite}
+  .flake{position:absolute;top:-10px;color:#fff;font-size:9px;opacity:.85;animation:snowfall linear infinite}
+  @keyframes rainfall{0%{transform:translateY(-12px)}100%{transform:translateY(108px)}}
+  @keyframes snowfall{0%{transform:translateY(-10px) translateX(0)}100%{transform:translateY(108px) translateX(8px)}}
+  #sceneTitle{position:absolute;top:8px;left:12px;font-size:13px;font-weight:900;color:#2a3a18;text-shadow:0 1px 0 #ffffff70;letter-spacing:.5px;z-index:5}
+  #sceneRank{position:absolute;top:26px;left:12px;font-size:11px;font-weight:800;color:#3a4a24;text-shadow:0 1px 0 #ffffff55;z-index:5}
+  #sceneWeather{position:absolute;top:8px;right:12px;font-size:16px;z-index:5;text-shadow:0 1px 2px #0004}
 
   /* Tabs */
   #tabs{display:flex;background:#1b2411;border-bottom:2px solid var(--edge)}
@@ -195,11 +207,16 @@
   </div>
 
   <div id="scene">
-    <div class="sun"></div>
+    <div id="skyWarm"></div>
+    <div id="skyNight"></div>
+    <div class="moon" id="sceneMoon"></div>
+    <div class="sun" id="sceneSun"></div>
     <div class="barn"></div>
     <div id="sceneCanteen" style="display:none">🍺</div>
+    <div id="wx"></div>
     <div id="sceneTitle">🐴 Skyhorse Stables</div>
     <div id="sceneRank">Ranch Hand · Fleur</div>
+    <div id="sceneWeather"></div>
     <div id="sceneHorses"></div>
   </div>
 
@@ -336,6 +353,16 @@ function crossGenes(a,b,rng){
 }
 function coatOf(h){ if(h.coat) return h.coat; return {name:h.color||'Bay', tier:0}; }
 function coatValueMult(h){ return COAT_TIER_MULT[coatOf(h).tier||0]||1; }
+// body/mane CSS colours per coat name — drives the drawn horses in the scene & cards
+const COAT_CSS={
+  Chestnut:{body:'#9a5a2b',mane:'#6b3c17'}, Bay:{body:'#7c4a26',mane:'#221610'},
+  Black:{body:'#2c2724',mane:'#141010'},   Palomino:{body:'#d8ad5e',mane:'#f5e6c4'},
+  Buckskin:{body:'#c69a52',mane:'#241810'},Grey:{body:'#b9bdc4',mane:'#888d95'},
+  Cremello:{body:'#f0e6cc',mane:'#e4d1a6'},Perlino:{body:'#ecdcc2',mane:'#d7c298'},
+  'Smoky Black':{body:'#3b342f',mane:'#181310'},'Smoky Cream':{body:'#e5d7bf',mane:'#ccb691'},
+  Golden:{body:'#e1a938',mane:'#c4870f'},  Pearl:{body:'#e9dccb',mane:'#c9b598'},
+};
+function coatColor(name){ return COAT_CSS[name]||{body:'#7c4a26',mane:'#221610'}; }
 
 // ---------- Pedigree helpers ----------
 function ancestorIds(h,depth){
@@ -534,6 +561,19 @@ function canteenDayMult(day){ return scheduleFor(day).canteenBoost||1; }
 function lessonDayMult(day){ return scheduleFor(day).lessonBoost||1; }
 function nextShowDay(day){ for(let i=1;i<=7;i++){ if(isShowDay(day+i)) return {inDays:i, wd:weekdayIndex(day+i)}; } return null; }
 
+// ---------- Weather (deterministic per day, small gameplay effects) ----------
+const WEATHER=[
+  {id:'sunny', name:'Sunny',  emoji:'☀️', canteen:1.12, feedExtra:0},
+  {id:'cloudy',name:'Cloudy', emoji:'☁️', canteen:1.00, feedExtra:0},
+  {id:'rain',  name:'Rainy',  emoji:'🌧️', canteen:0.85, feedExtra:0},
+  {id:'snow',  name:'Snowy',  emoji:'❄️', canteen:0.80, feedExtra:1},
+];
+function weatherDef(id){ return WEATHER.find(w=>w.id===id)||WEATHER[1]; }
+function hashDay(day){ let x=(Math.floor(day)*2654435761)>>>0; x^=x>>>15; x=Math.imul(x,2246822519)>>>0; x^=x>>>13; return x>>>0; }
+function weatherFor(day){ const r=hashDay(day)%100; return r<45?WEATHER[0] : r<75?WEATHER[1] : r<93?WEATHER[2] : WEATHER[3]; }
+function canteenWeatherMult(day){ return weatherFor(day).canteen; }
+function feedExtraFor(day){ return weatherFor(day).feedExtra; } // extra hay per horse on cold days
+
 const EVENTS=[
   {id:'buyer', weight:3, min:1},
   {id:'hay',   weight:2, min:3},
@@ -572,6 +612,7 @@ function advanceDay(game,rng){
   // feed consumption
   let need=0; for(const h of game.horses) need+=feedPerDay(h);
   need += game.boarders*2; // boarders eat too (you supply the hay)
+  need += (game.horses.length+game.boarders)*feedExtraFor(game.day); // cold weather = extra hay
   if(game.feed>=need){
     game.feed-=need;
     for(const h of game.horses){ h.happy=clamp(h.happy+3,0,100); if(h.happy>70) h.health=clamp(h.health+2,0,100); }
@@ -616,7 +657,7 @@ function advanceDay(game,rng){
 
   // canteen income + riding-school net (lesson fees minus teacher salaries)
   // — both get a weekday boost on busy days (e.g. Family Sunday).
-  if(canteenLevel(game)>0) game.money+=Math.round(canteenIncome(game)*canteenDayMult(game.day));
+  if(canteenLevel(game)>0) game.money+=Math.round(canteenIncome(game)*canteenDayMult(game.day)*canteenWeatherMult(game.day));
   if(teacherCount(game)>0){
     const served=lessonsPerDay(game);
     game.money += Math.round(schoolIncome(game)*lessonDayMult(game.day)) - teacherSalaries(game);
@@ -842,6 +883,8 @@ const HR = {
   TRAITS, traitDef, pickTrait, traitMult,
   WEEKDAYS, WEEKDAY_FULL, SCHEDULE, weekdayIndex, weekOf, scheduleFor, showsToday, isShowDay,
   disciplineOpenToday, isMarketDay, isHayDay, isCareDay, canteenDayMult, lessonDayMult, nextShowDay,
+  WEATHER, weatherDef, weatherFor, hashDay, canteenWeatherMult, feedExtraFor,
+  COAT_CSS, coatColor,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -857,6 +900,7 @@ const SAVE_KEY='horseranch_save_v1';
 
 let G=null, breedPick={mare:null,stallion:null}, curTab='ranch', speed=1, tickHandle=null, acc=0, lastTs=0;
 const DAY_MS=8400; // one game-day at 1x (slower, relaxed pace)
+let skyT=18000, curWx=null; const SKY_CYCLE=90000; // real-time day/night cycle (ms), speed-independent
 
 // ----- persistence -----
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({G,_idc})); }catch(e){} }
@@ -915,6 +959,25 @@ function closeModal(){ $('modal').className='modal'; }
 
 // ---------------- Rendering ----------------
 function coatEmoji(h){ const b=breedDef(h.breed); const st=stageForAge(h.age); return st.id==='foal'?'🐴':b.emoji; }
+// A small side-profile horse drawn as inline SVG, tinted to the horse's real coat colour.
+function horseArt(h,px){
+  const c=coatColor(coatOf(h).name);
+  const foal=stageForAge(h.age).id==='foal';
+  const w=px||(foal?30:38);
+  return '<svg class="hsvg" viewBox="0 0 46 34" width="'+w+'" height="'+Math.round(w*34/46)+'" aria-hidden="true">'
+    + '<path d="M7 13 Q1 17 3 26 Q6 21 9 21 Z" fill="'+c.mane+'"/>'               // tail
+    + '<ellipse cx="21" cy="18" rx="13" ry="8" fill="'+c.body+'"/>'                // body
+    + '<path d="M30 13 L37 4 L41 6 L35 17 Z" fill="'+c.body+'"/>'                  // neck
+    + '<path d="M35 3 L44 6 L43 12 L34 12 Z" fill="'+c.body+'"/>'                  // head
+    + '<path d="M31 12 L37 3 L39 4.5 L34 15 Z" fill="'+c.mane+'"/>'               // mane
+    + '<rect x="13" y="23" width="3.2" height="9" rx="1" fill="'+c.body+'"/>'
+    + '<rect x="19" y="23" width="3.2" height="9" rx="1" fill="'+c.body+'"/>'
+    + '<rect x="25" y="23" width="3.2" height="9" rx="1" fill="'+c.body+'"/>'
+    + '<rect x="29.5" y="23" width="3.2" height="9" rx="1" fill="'+c.body+'"/>'
+    + '<circle cx="41" cy="8" r="0.9" fill="#140f0b"/>'                            // eye
+    + (coatOf(h).tier>=2?'<circle cx="21" cy="18" r="12.5" fill="none" stroke="#fff6cc" stroke-width="0.7" opacity="0.55"/>':'') // rare-coat sheen
+    + '</svg>';
+}
 function barColor(v){ return v>=75?'var(--good)':v>=45?'var(--gold)':'var(--bad)'; }
 
 function horseCard(h,actionsHtml){
@@ -937,7 +1000,7 @@ function horseCard(h,actionsHtml){
   const c=el('div','card');
   c.innerHTML=
     '<div class="row">'+
-      '<div class="hface">'+coatEmoji(h)+'</div>'+
+      '<div class="hface">'+horseArt(h)+'</div>'+
       '<div class="grow">'+
         '<div class="hname">'+h.name+' <span class="val" style="font-size:12px">🪙'+fmt(valueOf(h))+'</span></div>'+
         '<div class="hbreed">'+h.color+' '+b.name+' · '+RARITY_NAME[b.rarity]+'</div>'+
@@ -966,10 +1029,13 @@ function renderHUD(){
   const rank=rankFor(G.rep);
   $('sceneRank').textContent=rank.name+' · Fleur';
   { const sc=$('sceneCanteen'); if(sc) sc.style.display=canteenLevel(G)>0?'block':'none'; }
+  // today's weather (deterministic per day) — badge + particle layer
+  { const wthr=weatherFor(G.day); const sw=$('sceneWeather'); if(sw) sw.textContent=wthr.emoji;
+    if(curWx!==wthr.id){ curWx=wthr.id; buildWeather(wthr.id); } }
   // scene horses
   const sh=$('sceneHorses'); sh.innerHTML='';
   const show=G.horses.slice(0,6);
-  show.forEach((h,i)=>{ const s=el('div','horse',coatEmoji(h));
+  show.forEach((h,i)=>{ const s=el('div','horse',horseArt(h));
     s.style.left=(96+i*62)+'px'; s.style.animationDelay=(i*0.4)+'s'; sh.appendChild(s); });
   // tab badges
   document.querySelectorAll('.tab .badge').forEach(b=>b.remove());
@@ -1147,7 +1213,7 @@ function renderBreed(){
 }
 function pickBox(role,h,placeholder){
   const box=el('div','pickbox'+(h?' filled':''));
-  if(h){ box.innerHTML='<div class="pf">'+coatEmoji(h)+'</div><div class="pn">'+h.name+'</div>'+
+  if(h){ box.innerHTML='<div class="pf">'+horseArt(h,44)+'</div><div class="pn">'+h.name+'</div>'+
     '<div class="ps">'+breedDef(h.breed).name+'</div>'; }
   else box.innerHTML='<div class="pf" style="opacity:.4">'+(role==='mare'?'♀':'♂')+'</div><div class="ps">'+placeholder+'</div>';
   box.onclick=()=>openPicker(role);
@@ -1158,7 +1224,7 @@ function openPicker(role){
   const cands=G.horses.filter(h=>h.sex===want && isAdult(h) && h.rentDays===0 && !(want==='mare'&&h.pregnant));
   if(!cands.length){ toast('No eligible '+(want)+'s. Buy or raise one!','info'); return; }
   let html='<h3>Pick a '+want+'</h3><div class="optlist">';
-  cands.forEach(h=>{ html+='<div class="opt" data-pick="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
+  cands.forEach(h=>{ html+='<div class="opt" data-pick="'+h.id+'"><div class="hface">'+horseArt(h)+'</div>'+
     '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · OVR '+overall(h)+'</div></div>'+
     '<div class="val">🪙'+fmt(valueOf(h))+'</div></div>'; });
   html+='</div>';
@@ -1258,7 +1324,8 @@ function renderShows(s){
   const sd=scheduleFor(G.day);
   const ts=el('div','todaystrip');
   const open=showsToday(G.day);
-  ts.innerHTML='<div class="tsimoji">'+sd.emoji+'</div><div class="grow"><div class="tslabel">'+WEEKDAY_FULL[weekdayIndex(G.day)]+' · '+sd.label+'</div>'+
+  const wthr=weatherFor(G.day);
+  ts.innerHTML='<div class="tsimoji">'+sd.emoji+'</div><div class="grow"><div class="tslabel">'+WEEKDAY_FULL[weekdayIndex(G.day)]+' · '+sd.label+' · '+wthr.emoji+' '+wthr.name+'</div>'+
     '<div class="tsnote">'+(open.length?('Today’s shows: '+open.map(id=>{const d=disciplineDef(id);return d?d.emoji+' '+d.name:'';}).join(', ')):sd.note)+'</div></div>';
   s.appendChild(ts);
   const showDay=isShowDay(G.day);
@@ -1344,7 +1411,7 @@ function openShowPickHorse(tier,disc){
   if(!cands.length){ toast('No eligible horses (need a rested adult).','info'); return; }
   let html='<h3>'+disc.emoji+' '+disc.name+' · '+tier.name+'</h3><div class="msg">Pick your horse. Predicted form shown.</div><div class="optlist">';
   cands.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{
-    html+='<div class="opt" data-h="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
+    html+='<div class="opt" data-h="'+h.id+'"><div class="hface">'+horseArt(h)+'</div>'+
     '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div>'+
     '<div class="val">'+Math.round(disciplineScore(h,disc))+'</div></div>'; });
   html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
@@ -1547,7 +1614,7 @@ function showEvent(ev){
     const todays=DISCIPLINES.filter(d=>disciplineOpenToday(G.day,d.id)); if(!todays.length) return;
     const tier=highestTier(G); const disc=todays[Math.floor(Math.random()*todays.length)];
     let html='<h3>'+disc.emoji+' Show Invitation!</h3><div class="msg">You’re invited to the <b>'+tier.name+'</b> '+disc.name+' event — <b>entry waived</b>! Pick a horse to compete.</div><div class="optlist">';
-    eligible.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
+    eligible.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+horseArt(h)+'</div>'+
       '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div><div class="val">'+Math.round(disciplineScore(h,disc))+'</div></div>'; });
     html+='</div><div class="btnrow"><button class="btn ghost" id="evNo">Skip</button></div>';
     const sh=modal(html,{center:true});
@@ -1569,9 +1636,31 @@ function step(ts){
     acc+=dt*speed;
     if(acc>=DAY_MS){ acc=0; doDay(); }
   } else acc=0;
+  skyT+=Math.min(dt,100); updateSky(); // day/night breathes regardless of game speed
   tickHandle=requestAnimationFrame(step);
 }
 function isModalOpen(){ return $('modal').className.indexOf('on')>=0; }
+// ---- day/night sky ----
+function updateSky(){
+  const scn=$('scene'); if(!scn) return;
+  const phase=((skyT/SKY_CYCLE)%1+1)%1; // 0 midnight → 0.5 noon → 1 midnight
+  const dist=Math.abs(phase-0.5);                       // 0 at noon, 0.5 at midnight
+  const night=clamp((dist-0.20)/0.20,0,1);              // 0 day, 1 deep night
+  const warm=clamp(1-Math.abs(dist-0.27)/0.09,0,1);     // dawn/dusk glow
+  const sn=$('skyNight'), sw=$('skyWarm'); if(sn) sn.style.opacity=(night*0.82).toFixed(3); if(sw) sw.style.opacity=(warm*0.9).toFixed(3);
+  // sun/moon travel an arc; sun up in the day, moon up at night
+  const t=clamp((phase-0.22)/0.56,0,1);                 // 0 dawn → 1 dusk
+  const x=8+t*80, arc=Math.sin(t*Math.PI), y=54-arc*40;
+  const sun=$('sceneSun'); if(sun){ sun.style.left=x+'%'; sun.style.top=y+'px'; sun.style.opacity=(1-night).toFixed(3); }
+  const mt=((phase+0.5)%1-0.22)/0.56; const mx=8+clamp(mt,0,1)*80, my=54-Math.sin(clamp(mt,0,1)*Math.PI)*40;
+  const moon=$('sceneMoon'); if(moon){ moon.style.left=mx+'%'; moon.style.top=my+'px'; moon.style.opacity=night.toFixed(3); }
+}
+// ---- weather particle layer ----
+function buildWeather(wxId){
+  const wx=$('wx'); if(!wx) return; wx.innerHTML='';
+  if(wxId==='rain'){ for(let i=0;i<16;i++){ const d=el('div','drop'); d.style.left=(4+i*6)+'%'; d.style.animationDuration=(0.5+ (i%4)*0.12)+'s'; d.style.animationDelay=(-(i%7)*0.13)+'s'; wx.appendChild(d);} }
+  else if(wxId==='snow'){ for(let i=0;i<16;i++){ const f=el('div','flake','❄'); f.style.left=(3+i*6)+'%'; f.style.animationDuration=(2.4+ (i%5)*0.5)+'s'; f.style.animationDelay=(-(i%8)*0.4)+'s'; wx.appendChild(f);} }
+}
 function doDay(){
   // expire hay modifier
   if(G.hayExpire && G.day>=G.hayExpire){ G.hayMod=null; G.hayExpire=null; }
@@ -1606,7 +1695,7 @@ function showIntro(){
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
     '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
     '• 🌳 Build <b>bloodlines</b> — every horse has an inheritable <b>personality</b><br>'+
-    '• 🗓️ Follow the <b>weekly rhythm</b> — shows, market &amp; hay days<br>'+
+    '• 🗓️ Follow the <b>weekly rhythm</b> — shows, market, hay &amp; weather<br>'+
     '• 🏆 <b>Compete</b> in shows across 4 disciplines &amp; tiers<br>'+
     '• 🍺 Open a <b>canteen</b> &amp; hire <b>teachers</b> for lessons<br>'+
     '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+
@@ -1618,18 +1707,18 @@ function showIntro(){
 // ---------------- Boot ----------------
 // ---------------- This Week schedule ----------------
 function openWeek(){
-  const todayI=weekdayIndex(G.day);
+  const todayI=weekdayIndex(G.day), weekStart=G.day-todayI;
   let rows='';
   SCHEDULE.forEach((sd,i)=>{
-    const isToday=i===todayI;
+    const isToday=i===todayI; const dnum=weekStart+i; const wthr=weatherFor(dnum);
     const showTxt = sd.shows.length ? sd.shows.map(id=>{ const d=disciplineDef(id); return d?d.emoji:''; }).join(' ')+' shows' : '';
     rows+='<div class="weekrow'+(isToday?' today':'')+'">'+
-      '<div class="wdname">'+sd.emoji+' '+WEEKDAY_FULL[i]+(isToday?' <span class="pill">TODAY</span>':'')+'</div>'+
+      '<div class="wdname">'+sd.emoji+' '+WEEKDAY_FULL[i]+' <span style="font-weight:400">'+wthr.emoji+'</span>'+(isToday?' <span class="pill">TODAY</span>':'')+'</div>'+
       '<div class="wdnote">'+sd.label+(showTxt?' · '+showTxt:'')+'</div>'+
-      '<div class="wddesc">'+sd.note+'</div></div>';
+      '<div class="wddesc">'+sd.note+' · '+wthr.name+'.</div></div>';
   });
   modal('<h3>🗓️ This Week at Skyhorse</h3>'+
-    '<div class="msg">Week '+weekOf(G.day)+' · '+WEEKDAY_FULL[todayI]+'. Each day has its own rhythm — shows, market, hay, care and busy canteen nights.</div>'+
+    '<div class="msg">Week '+weekOf(G.day)+' · '+WEEKDAY_FULL[todayI]+', '+weatherFor(G.day).name+' '+weatherFor(G.day).emoji+'. Each day has its own rhythm — shows, market, hay, care and busy canteen nights.</div>'+
     '<div class="weeklist">'+rows+'</div>'+
     '<div class="btnrow"><button class="btn" id="wkOk" style="width:100%">Got it</button></div>');
   $('wkOk').onclick=closeModal;
