@@ -233,6 +233,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.studBookings = 1; // satisfies the stud-directory goal
   g.stats.grudgeWins = 1; // satisfies the grudge-match goal
   g.stats.ceremonies = 1; // satisfies the coming-of-age ceremony goal
+  g.stats.labTests = 10; // satisfies the genetics-lab goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -286,6 +287,99 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const g = HR.freshGame();
   ok(g.horses.every(h => h.genes && h.coat && h.coat.name), 'starter horses carry genes + a coat');
   ok(g.market.every(h => h.genes && h.coat), 'market horses carry genes + a coat');
+}
+
+// ---- coat-genetics lab / test-mating calculator (read-only study bench) ----
+{
+  // genotypeReadout: per-locus zygosity + carrier flags + phenotype
+  const bayCarriesRed = HR.genotypeReadout({ E: ['E', 'e'], A: ['A', 'A'], Cr: ['n', 'n'], G: ['n', 'n'], mut: null });
+  ok(bayCarriesRed.coat === 'Bay', 'readout reports the visible coat (Bay)');
+  const eLocus = bayCarriesRed.loci.find(l => l.key === 'E');
+  ok(eLocus.zygosity === 'heterozygous' && eLocus.homozygous === false, 'E/e is reported heterozygous');
+  ok(bayCarriesRed.carriers.hiddenRed === true && bayCarriesRed.carriers.red === true, 'a black-based E/e horse carries red (hidden)');
+  ok(bayCarriesRed.carriers.list.indexOf('red') >= 0, 'carrier list surfaces the hidden red allele');
+  const aLocus = bayCarriesRed.loci.find(l => l.key === 'A');
+  ok(aLocus.zygosity === 'homozygous', 'A/A is reported homozygous');
+
+  // carrierFlags: hidden recessives
+  const creamCarrier = HR.carrierFlags({ E: ['E', 'E'], A: ['A', 'A'], Cr: ['C', 'n'], G: ['n', 'n'], mut: null });
+  ok(creamCarrier.cream === true && creamCarrier.creamCarrier === true && creamCarrier.doubleCream === false, 'a Cr/n horse is a single-copy cream carrier');
+  const dbl = HR.carrierFlags({ E: ['e', 'e'], A: ['a', 'a'], Cr: ['C', 'C'], G: ['n', 'n'], mut: null });
+  ok(dbl.doubleCream === true, 'two cream copies flagged as a double dilute');
+  const greyC = HR.carrierFlags({ E: ['E', 'E'], A: ['A', 'A'], Cr: ['n', 'n'], G: ['G', 'n'], mut: null });
+  ok(greyC.grey === true && greyC.list.indexOf('grey') >= 0, 'a G/n horse carries grey');
+  const clean = HR.carrierFlags({ E: ['e', 'e'], A: ['a', 'a'], Cr: ['n', 'n'], G: ['n', 'n'], mut: null });
+  ok(clean.list.length === 0, 'a pure chestnut carries no hidden recessives');
+}
+{
+  // testMating: odds sum to ~1 and exactly mirror coatOddsFor for the same inputs
+  const a = { E: ['E', 'e'], A: ['A', 'a'], Cr: ['C', 'n'], G: ['n', 'n'], mut: null };
+  const b = { E: ['E', 'e'], A: ['A', 'a'], Cr: ['n', 'n'], G: ['G', 'n'], mut: null };
+  const tm = HR.testMating(a, b);
+  const sum = tm.odds.reduce((s, o) => s + o.p, 0);
+  ok(Math.abs(sum - 1) < 1e-6, 'testMating coat odds sum to ~1');
+  ok(Math.abs(tm.total - 1) < 1e-6, 'testMating total is ~1');
+  const raw = HR.coatOddsFor(a, b);
+  const rawMap = {}; raw.forEach(o => rawMap[o.name] = o.p);
+  ok(tm.odds.every(o => Math.abs(o.p - rawMap[o.name]) < 1e-9), 'testMating odds match coatOddsFor exactly');
+  ok(tm.odds.length === raw.length, 'testMating enumerates the same coats as coatOddsFor');
+  ok(tm.mostLikely && tm.mostLikely.name === tm.odds[0].name, 'mostLikely is the top-probability coat');
+}
+{
+  // two single-cream red parents → ~25% double-dilute (Cremello, tier 2)
+  const a = { E: ['e', 'e'], A: ['a', 'a'], Cr: ['C', 'n'], G: ['n', 'n'], mut: null };
+  const tm = HR.testMating(a, a);
+  const crem = tm.odds.find(o => o.name === 'Cremello');
+  ok(crem && Math.abs(crem.p - 0.245) < 0.01, 'two cream carriers throw a Cremello ~24.5% of the time');
+  ok(tm.rareChance > 0.24, 'rareChance reflects the tier-2 Cremello odds');
+  const palo = tm.odds.find(o => o.name === 'Palomino');
+  ok(palo && Math.abs(palo.p - 0.49) < 0.02, 'and a single-dilute Palomino ~49%');
+  ok(tm.greyChance === 0, 'no grey allele in the pool → 0% grey');
+}
+{
+  // a grey parent gives ~50% grey; mutation parent gives mutation odds
+  const grey = { E: ['E', 'E'], A: ['A', 'A'], Cr: ['n', 'n'], G: ['G', 'n'], mut: null };
+  const plain = { E: ['E', 'E'], A: ['A', 'A'], Cr: ['n', 'n'], G: ['n', 'n'], mut: null };
+  const tm = HR.testMating(grey, plain);
+  ok(tm.greyChance > 0.45 && tm.greyChance < 0.5, 'a single grey parent yields ~49% grey foals');
+  const golden = { E: ['E', 'e'], A: ['A', 'a'], Cr: ['n', 'n'], G: ['n', 'n'], mut: 'Golden' };
+  const tm2 = HR.testMating(golden, plain);
+  ok(tm2.mutationChance > 0.39, 'a Golden parent passes the mutation ~40% of the time');
+  ok(tm2.odds.some(o => o.name === 'Golden'), 'the mutation coat appears in the distribution');
+  ok(tm.reads.length >= 2 && tm.reads.every(r => typeof r === 'string'), 'reads gives plain-language lines');
+}
+{
+  // defensive: falls back to seedGenes by breed for a horse with no genes; deterministic; read-only
+  const bare = { id: 'z1', breed: 'arabian', name: 'Ghost' };
+  const r1 = HR.genotypeReadout(bare), r2 = HR.genotypeReadout(bare);
+  ok(r1.coat && r1.loci.length === 4, 'genotypeReadout works on a genes-less horse (seeds by breed)');
+  ok(JSON.stringify(r1.genes) === JSON.stringify(r2.genes), 'the breed fallback is deterministic (no Math.random)');
+  const tmA = HR.testMating(bare, bare), tmB = HR.testMating(bare, bare);
+  ok(JSON.stringify(tmA.odds) === JSON.stringify(tmB.odds), 'testMating on genes-less horses is deterministic');
+  // read-only: no mutation of inputs or game
+  const g = HR.freshGame();
+  const before = JSON.stringify(g);
+  HR.testMating(g.horses[0], g.horses[1]);
+  HR.genotypeReadout(g.horses[0]);
+  ok(JSON.stringify(g) === before, 'the lab never mutates the game (read-only study bench)');
+  // presets resolve to valid genotypes
+  ok(HR.LAB_PRESETS.length >= 3 && HR.LAB_PRESETS.every(p => HR.genotypeReadout(p.genes).coat), 'every lab preset is a valid, readable genotype');
+  ok(HR.labPresetDef('p_gold') && HR.labPresetDef('p_gold').genes.mut === 'Golden', 'labPresetDef looks up presets by id');
+  // null-safe
+  ok(HR.carrierFlags(null).list.length === 0, 'carrierFlags is null-safe');
+  ok(HR.testMating(null, null).odds.length >= 1, 'testMating is null-safe (seeds defaults)');
+}
+{
+  // the genetics-lab goal + achievement track lab usage
+  const g = HR.freshGame();
+  g.stats.labTests = 1;
+  const lab1 = HR.GOALS.find(x => x.id === 'lab1');
+  ok(lab1 && lab1.done(g), 'lab1 goal completes after a test-mating is run');
+  g.stats.labTests = 10;
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'geneticist');
+  ok(ach && ach.check(g), 'Coat Geneticist unlocks at 10 studies');
+  ok(HR.ACHIEVEMENTS.filter(a => a.id === 'geneticist').length === 1, 'geneticist achievement id is unique');
+  ok(HR.GOALS.filter(x => x.id === 'lab1').length === 1, 'lab1 goal id is unique');
 }
 
 // ---- pedigree + inbreeding ----
