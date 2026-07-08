@@ -218,6 +218,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.tack.tiers = { saddle_show: 1 }; // satisfies the tack-upgrade goal
   g.stats.renames = 1; // satisfies the rename goal
   g.stats.dailyClaims = 1; // satisfies the daily-reward goal
+  HR.sendToPasture(g, g.horses[0], 'retired', g.day); // satisfies the pasture goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2152,6 +2153,74 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'loyal');
   const g2 = HR.freshGame(); g2.stats.bestStreak = 7;
   ok(ach && ach.check(g2) && !ach.check(g), 'a 7-day streak unlocks Loyal Rancher');
+}
+
+// ---- retirement pasture / sanctuary (round 35) ----
+{
+  // retiring adds to BOTH the pasture and the Hall of Fame (separate rosters, no double-count within one)
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'arabian', age: 30, wins: 4 }); g.horses.push(h);
+  const hofBefore = (g.hallOfFame || []).length, pastBefore = HR.pastureSize(g);
+  HR.retireHorse(g, h, 40);
+  ok(HR.pastureSize(g) === pastBefore + 1, 'retiring sends the horse to the pasture');
+  ok((g.hallOfFame || []).length === hofBefore + 1, 'retiring still inducts into the Hall of Fame');
+  ok(!g.horses.some(x => x.id === h.id), 'the horse leaves the active herd');
+  const e = HR.pastureList(g)[0];
+  ok(e.id === h.id && e.name === h.name && e.reason === 'retired', 'the pasture entry keeps the horse’s identity');
+  ok(typeof HR.legacyLine(e, 'Skyhorse Stables') === 'string' && HR.legacyLine(e).length > 0, 'a pastured horse has a legacy line');
+}
+{
+  // no double-add of the same horse; roster caps
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'mustang', age: 25 }); g.horses.push(h);
+  HR.sendToPasture(g, h, 'retired', 5);
+  const n = HR.pastureSize(g);
+  ok(HR.sendToPasture(g, h, 'retired', 6) === null && HR.pastureSize(g) === n, 'the same horse is never added twice');
+  const big = HR.freshGame();
+  for (let i = 0; i < HR.PASTURE_CAP + 20; i++) HR.sendToPasture(big, HR.mkHorse({ breed: 'mustang', age: 25 }), 'retired', i);
+  ok(HR.pastureSize(big) === HR.PASTURE_CAP, 'the pasture roster is capped');
+}
+{
+  // the ambassadors reputation bonus is bounded and applied in advanceDay
+  const g = HR.freshGame();
+  ok(HR.pastureRepBonus(g) === 0, 'an empty pasture draws no bonus');
+  for (let i = 0; i < 4; i++) HR.sendToPasture(g, HR.mkHorse({ breed: 'mustang', age: 25 }), 'retired', i);
+  ok(HR.pastureRepBonus(g) === 2, 'four pastured horses draw +2⭐/day');
+  for (let i = 0; i < 40; i++) HR.sendToPasture(g, HR.mkHorse({ breed: 'mustang', age: 25 }), 'retired', 100 + i);
+  ok(HR.pastureRepBonus(g) <= HR.PASTURE_REP_CAP, 'the pasture reputation draw is capped');
+  // advanceDay applies the bonus
+  const g2 = HR.freshGame(); g2.feed = 9999;
+  for (let i = 0; i < 10; i++) HR.sendToPasture(g2, HR.mkHorse({ breed: 'mustang', age: 25 }), 'retired', i);
+  const rep0 = g2.rep;
+  HR.advanceDay(g2, rng(1));
+  ok(g2.rep >= rep0 + HR.pastureRepBonus(g2), 'advanceDay adds the pasture reputation draw');
+}
+{
+  // gentle passing goes to the Hall of Fame but NOT the living pasture
+  const g = HR.freshGame(); g.feed = 9999;
+  const old = HR.mkHorse({ breed: 'shetland', age: 200 }); g.horses.push(old); // well past LIFESPAN
+  const pastBefore = HR.pastureSize(g);
+  // advance until it passes — one rng stream so the 10%/day chance is a proper random walk
+  const r = rng(3);
+  for (let d = 0; d < 120 && g.horses.some(x => x.id === old.id); d++) HR.advanceDay(g, r);
+  ok(!g.horses.some(x => x.id === old.id), 'the very old horse passes on');
+  ok(HR.pastureSize(g) === pastBefore, 'a passed horse is memorialised in the Hall of Fame, not the living pasture');
+  ok((g.hallOfFame || []).some(r => r.id === old.id && r.reason === 'passed'), 'the passed horse is in the Hall of Fame');
+}
+{
+  // save migration + goal/achievement
+  const legacy = HR.freshGame(); delete legacy.pasture;
+  ok(HR.pastureList(legacy).length === 0, 'pastureList is safe when the roster is missing');
+  legacy.pasture = Array.isArray(legacy.pasture) ? legacy.pasture : []; // mirrors the load guard
+  ok(Array.isArray(legacy.pasture), 'migration gives a pasture array');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'pasture1');
+  ok(goal && !goal.done(g), 'the pasture goal is unmet before retiring anyone');
+  HR.sendToPasture(g, g.horses[0], 'retired', g.day);
+  ok(goal.done(g), 'the pasture goal completes once a horse is retired there');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'sanctuary');
+  const g2 = HR.freshGame(); for (let i = 0; i < 5; i++) HR.sendToPasture(g2, HR.mkHorse({ breed: 'mustang', age: 25 }), 'retired', i);
+  ok(ach && ach.check(g2) && !ach.check(g), 'five pastured horses unlock Sanctuary');
 }
 
 // ---- clamp helper ----
