@@ -1156,14 +1156,14 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[]}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
-    featured:null, wishlist:{prefs:[]},
+    featured:null, wishlist:{prefs:[]}, insurance:[],
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1271,6 +1271,8 @@ function advanceDay(game,rng){
   }
   // stable staff wages (daily coin sink; only if you've hired anyone)
   { const pay=staffPayroll(game); if(pay>0){ game.money-=pay; game.stats.staffWages=(game.stats.staffWages||0)+pay; } }
+  // insurance premiums (daily coin sink; only if you hold a policy)
+  { const prem=insurancePremium(game); if(prem>0){ game.money-=prem; game.stats.insurancePremiums=(game.stats.insurancePremiums||0)+prem; } }
   // stud fees — visiting mares pay to breed with your at-stud stallions (no foals in your stalls)
   { const si=studIncome(game); if(si>0){ game.money+=si; game.stats.studIncome=(game.stats.studIncome||0)+si; } }
 
@@ -1311,6 +1313,11 @@ function advanceDay(game,rng){
   let event=null;
   if(fest) event={id:'festival', fest};
   else if(game.day>2 && rng()<0.18) event=rollEvent(game,rng);
+
+  // occasional seasonal disaster (bounded; insurance softens the hit) — never on a festival day
+  if(!fest){ const dis=rollDisaster(game,rng);
+    if(dis){ const r=applyDisaster(game,dis,rng);
+      notes.push({t:'bad',m:dis.emoji+' '+dis.name+' — '+dis.desc+'! −🪙'+r.net+(r.covered>0?' (insurance saved 🪙'+r.covered+')':'')}); } }
 
   // lifetime stats: gross gold earned overnight + best overall horse ever
   if(game.money>money0) game.stats.goldEarned=(game.stats.goldEarned||0)+(game.money-money0);
@@ -1359,6 +1366,65 @@ function rollEvent(game,rng){
   if(e.id==='gift'){ const amt=30+Math.floor(rng()*8)*10; return {id:'gift',amt,msg:'🎁 A neighbour thanks you for your help and drops off <b>'+amt+' bales of hay</b>!'}; }
   return null;
 }
+
+// ---------- Seasonal disasters + insurance (bounded setbacks you can protect against) ----------
+// A rare adverse-event layer ON TOP of the existing weather/seasons. Every hit is small,
+// capped and recoverable; buying an insurance policy softens the matching kind of loss.
+const DISASTERS=[
+  {id:'blizzard', name:'Blizzard',    emoji:'❄️', seasons:['winter'],                        weight:3, kind:'weather',  desc:'buried paddocks & emergency hay'},
+  {id:'coldsnap', name:'Cold Snap',   emoji:'🥶', seasons:['winter'],                        weight:2, kind:'weather',  desc:'a hard frost chills the herd'},
+  {id:'drought',  name:'Drought',     emoji:'🌵', seasons:['summer'],                        weight:3, kind:'weather',  desc:'water hauling & pricey hay'},
+  {id:'heatwave', name:'Heatwave',    emoji:'🥵', seasons:['summer'],                        weight:2, kind:'health',   desc:'the heat saps the horses'},
+  {id:'storm',    name:'Storm',       emoji:'⛈️', seasons:['spring','autumn'],               weight:3, kind:'property', desc:'wind damage to the barn'},
+  {id:'colic',    name:'Colic Scare', emoji:'🩺', seasons:['spring','summer','autumn','winter'],weight:2, kind:'health', desc:'a horse takes ill'},
+];
+function disasterDef(id){ return DISASTERS.find(d=>d.id===id)||null; }
+function disastersForSeason(seasonId){ return DISASTERS.filter(d=>d.seasons.indexOf(seasonId)>=0); }
+const DISASTER_CHANCE=0.06; // ~6% per day once the ranch is established
+function rollDisaster(game,rng){ rng=rng||Math.random;
+  if((game.day||0)<=SEASON_LEN) return null;                 // grace period: no disasters in the first season
+  if(rng()>=DISASTER_CHANCE) return null;
+  const pool=disastersForSeason(seasonOf(game.day).id); if(!pool.length) return null;
+  const weighted=[]; pool.forEach(d=>{ for(let i=0;i<d.weight;i++) weighted.push(d); });
+  return weighted[Math.floor(rng()*weighted.length)]||null;
+}
+// apply a disaster (mutates game); insurance for its kind softens BOTH the coin loss and the stat dip.
+function applyDisaster(game,dis,rng){ rng=rng||Math.random; if(!dis) return null;
+  const herd=game.horses.length, frac=insuranceCovers(game,dis.kind), dip=b=>Math.max(0,Math.round(b*(1-frac)));
+  let coin=0;
+  switch(dis.id){
+    case 'blizzard': coin=Math.min(400, 80+herd*28); for(const h of game.horses) h.happy=clamp(h.happy-dip(7),0,100); break;
+    case 'coldsnap': coin=Math.min(250, 60+herd*18); for(const h of game.horses) h.happy=clamp(h.happy-dip(5),0,100); break;
+    case 'drought':  coin=Math.min(350, 70+herd*22); for(const h of game.horses) h.happy=clamp(h.happy-dip(4),0,100); break;
+    case 'heatwave': coin=Math.min(220, 60+herd*12); for(const h of game.horses) h.health=clamp(h.health-dip(7),0,100); break;
+    case 'storm':    coin=Math.min(450, 150+herd*20); if(herd){ const h=game.horses[Math.floor(rng()*herd)]; h.health=clamp(h.health-dip(8),0,100); } break;
+    case 'colic':    coin=Math.min(320, 120+herd*8);  if(herd){ const h=game.horses[Math.floor(rng()*herd)]; h.health=clamp(h.health-dip(12),0,100); } break;
+    default: coin=100;
+  }
+  const ins=applyInsurance(game,dis.kind,coin);
+  game.money-=ins.net; game.stats.disasterLosses=(game.stats.disasterLosses||0)+ins.net;
+  if(ins.covered>0) game.stats.insurancePaid=(game.stats.insurancePaid||0)+ins.covered;
+  game.stats.disasters=(game.stats.disasters||0)+1;
+  return { id:dis.id, coin, net:ins.net, covered:ins.covered };
+}
+// ---- Insurance policies (a coin sink that caps disaster losses) ----
+const INSURANCE=[
+  {id:'vet',      name:'Vet Cover',     emoji:'🩺', kind:'health',   premium:12, cover:0.7, desc:'Covers 70% of illness, colic & heat costs.'},
+  {id:'weather',  name:'Weather Cover', emoji:'⛈️', kind:'weather',  premium:10, cover:0.7, desc:'Softens blizzards, cold snaps & drought.'},
+  {id:'property', name:'Barn Cover',    emoji:'🏚️', kind:'property', premium:10, cover:0.7, desc:'Reimburses 70% of storm & barn damage.'},
+];
+function insuranceDef(id){ return INSURANCE.find(p=>p.id===id)||null; }
+function insuranceList(game){ return (game&&Array.isArray(game.insurance))?game.insurance:[]; }
+function hasInsurance(game,id){ return insuranceList(game).indexOf(id)>=0; }
+function insurancePremium(game){ return insuranceList(game).reduce((n,id)=>{ const p=insuranceDef(id); return n+(p?p.premium:0); },0); }
+function insuranceCovers(game,kind){ let best=0; for(const id of insuranceList(game)){ const p=insuranceDef(id); if(p&&p.kind===kind) best=Math.max(best,p.cover); } return best; }
+function buyInsurance(game,id){ const p=insuranceDef(id); if(!p) return {ok:false,why:'No such policy.'};
+  if(!game.insurance) game.insurance=[];
+  if(hasInsurance(game,id)) return {ok:false,why:'Already insured.'};
+  game.insurance.push(id); return {ok:true,policy:p}; }
+function cancelInsurance(game,id){ if(!game||!Array.isArray(game.insurance)) return {ok:false}; const had=hasInsurance(game,id); game.insurance=game.insurance.filter(x=>x!==id); return {ok:had}; }
+// reduce a coin loss by the coverage fraction for its kind; returns {net, covered}
+function applyInsurance(game,kind,loss){ const frac=insuranceCovers(game,kind); const covered=Math.round((loss||0)*frac); return {net:Math.max(0,(loss||0)-covered), covered}; }
 
 // show competition scoring (legacy helper, kept for compatibility)
 function showScore(h,rng){ return statAvg(h)*(0.85+ (rng?rng():Math.random())*0.4) + h.health*0.2; }
@@ -1833,6 +1899,7 @@ const ACHIEVEMENTS=[
   {id:'schooled',   icon:'🎓', name:'Master of the Craft',  desc:'Fully school a horse in a discipline (100 affinity).', check:g=>g.horses.some(h=>topAffinity(h).pts>=AFF_MAX)},
   {id:'seasonlord', icon:'🏆', name:'Season Champion',       desc:'Win three Seasonal Championships.',            check:g=>((g.stats&&g.stats.seasonTitles)||0)>=3},
   {id:'patron',     icon:'⭐', name:'Discerning Patron',     desc:'Buy a Featured horse from the market.',        check:g=>((g.stats&&g.stats.featuredBought)||0)>=1},
+  {id:'weathered',  icon:'🛡️', name:'Weathered the Storm',   desc:'Come through five seasonal disasters.',         check:g=>((g.stats&&g.stats.disasters)||0)>=5},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1923,6 +1990,7 @@ const GOALS=[
   {id:'special1',desc:'Develop a discipline specialist',      tip:g=>'best affinity '+Math.max(0,...g.horses.map(h=>topAffinity(h).pts))+'/'+SPECIALIST_AT,done:g=>g.horses.some(h=>specialtyOf(h)),reward:{money:900,rep:25}},
   {id:'champ1',  desc:'Win a Seasonal Championship',          tip:g=>((g.stats&&g.stats.seasonTitles)||0)+'/1',done:g=>((g.stats&&g.stats.seasonTitles)||0)>=1,               reward:{money:2000,rep:50}},
   {id:'wish1',   desc:'Add a horse to your wishlist (⭐)',     tip:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)+' prefs',done:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)>=1,   reward:{money:300,rep:10}},
+  {id:'insure1', desc:'Take out an insurance policy (🛡️)',     tip:g=>(insuranceList(g).length)+' held',done:g=>insuranceList(g).length>=1,                                       reward:{money:400,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1957,6 +2025,9 @@ const HR = {
   topAffinity, specialtyOf, composure, composureTier, developAffinityFromTraining,
   CHAMP_POINTS, CHAMP_PRIZE_CAP, seasonIndex, daysLeftInSeason, champPointsFor, ensureChamp,
   awardChampionshipPoints, seasonStandings, seasonLeader, champTotalPoints, seasonPrize, closeSeason,
+  DISASTERS, DISASTER_CHANCE, disasterDef, disastersForSeason, rollDisaster, applyDisaster,
+  INSURANCE, insuranceDef, insuranceList, hasInsurance, insurancePremium, insuranceCovers,
+  buyInsurance, cancelInsurance, applyInsurance,
   CONTRACTS, BOARD_SIZE, contractDef, contractsForWeek, boardBaseSnapshot, refreshBoard,
   contractProgress, contractDone, currentContracts, claimableContracts, claimContract, daysUntilBoardRefresh,
   CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
@@ -2050,6 +2121,8 @@ function load(){
     if(G.stats.staffWages==null) G.stats.staffWages=0;
     if(G.stats.seasonTitles==null) G.stats.seasonTitles=0;
     if(G.stats.featuredBought==null) G.stats.featuredBought=0;
+    if(G.stats.disasters==null) G.stats.disasters=0;
+    if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
     G.wishlist=normWishlist(G.wishlist); if(G.featured===undefined) G.featured=null; refreshFeatured(G); // marketplace: wishlist + featured listing
     if(G.stats.bestShowPerf==null) G.stats.bestShowPerf=0;
@@ -3036,6 +3109,24 @@ function renderEstate(){
     const hb=c.querySelector('[data-hire]'); if(hb) hb.onclick=()=>{ const res=hireStaff(G,r.id); if(!res.ok){ toast(res.why,'bad'); return; }
       burst(r.emoji+'✨',10); playSfx('coin'); toast('👥 '+r.name+' joined the crew!','good'); refresh(); };
     const fb=c.querySelector('[data-fire]'); if(fb) fb.onclick=()=>{ fireStaff(G,r.id); toast('👋 '+r.name+' has left the ranch.','info'); refresh(); };
+    s.appendChild(c);
+  });
+
+  // ---- Insurance ----
+  s.appendChild(el('h2','head','🛡️ Insurance'));
+  { const se=seasonOf(G.day); const haz=disastersForSeason(se.id).map(d=>d.emoji+' '+d.name).join(', ');
+    s.appendChild(el('div','sub','Storms, cold snaps, drought &amp; illness strike now and then. A policy softens the matching losses for a daily premium. Total premium: <b>🪙'+fmt(insurancePremium(G))+'/day</b>.'+(haz?'<br>This '+se.name+' watch for: '+haz+'.':''))); }
+  INSURANCE.forEach(p=>{
+    const held=hasInsurance(G,p.id);
+    const c=el('div','card'); if(held) c.style.borderLeft='4px solid var(--gold2)';
+    const right = held ? '<button class="btn sm ghost" data-insoff="'+p.id+'">Cancel</button>'
+      : '<button class="btn sm" data-inson="'+p.id+'">Insure 🪙'+p.premium+'/day</button>';
+    c.innerHTML='<div class="row"><div class="hface">'+p.emoji+'</div>'+
+      '<div class="grow"><div class="hname">'+p.name+(held?' <span class="pill" style="color:var(--good)">Active</span>':'')+'</div>'+
+      '<div class="hbreed">'+p.desc+' · 🪙'+p.premium+'/day</div></div>'+right+'</div>';
+    const on=c.querySelector('[data-inson]'); if(on) on.onclick=()=>{ const r=buyInsurance(G,p.id); if(!r.ok){ toast(r.why,'bad'); return; }
+      burst(p.emoji+'🛡️',10); playSfx('coin'); toast('🛡️ '+p.name+' is now active.','good'); refresh(); };
+    const off=c.querySelector('[data-insoff]'); if(off) off.onclick=()=>{ cancelInsurance(G,p.id); toast('Policy cancelled: '+p.name+'.','info'); refresh(); };
     s.appendChild(c);
   });
 
