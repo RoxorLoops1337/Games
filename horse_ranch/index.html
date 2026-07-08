@@ -309,6 +309,7 @@
     <button class="sbtn" id="boardBtn" title="Contracts board" style="margin-right:4px;position:relative">📋<span id="boardBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="regBtn" title="Studbook & names" style="margin-right:4px">📖</button>
     <button class="sbtn" id="codexBtn" title="Codex — breeds, coats & disciplines" style="margin-right:4px">📚</button>
+    <button class="sbtn" id="scrapBtn" title="Scrapbook — your keepsake memories" style="margin-right:4px">📸</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1337,7 +1338,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null,
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[],
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1410,8 +1411,13 @@ function advanceDay(game,rng){
   // place newborns if room, else auto-sell
   for(const f of born){
     game.stats.maxGen=Math.max(game.stats.maxGen||1, f.generation);
+    const newBreed=!codexHasBreed(game,f.breed); // first of its breed? (check before registering)
     if(freeStalls(game)>0){ game.horses.push(f); game.stats.born++; registerHorse(game,f);
       notes.push({t:'good',m:'🐣 A '+breedDef(f.breed).name+' foal was born: '+f.name+'!'});
+      // scrapbook: remember standout foals (only observes — never changes the foal)
+      if(f.rare) captureMoment(game,'champion',f);
+      else if((coatOf(f).tier||0)>=2) captureMoment(game,'rarecoat',f);
+      else if(newBreed) captureMoment(game,'firstbreed',f);
     } else {
       const q=sellQuote(f); game.money+=q; game.rep+=2;
       notes.push({t:'info',m:'🐣 '+f.name+' was born but the stalls are full — sold for 🪙'+q+'.'});
@@ -1723,6 +1729,68 @@ function codexProgress(game){
 function codexHasBreed(game,id){ return codexSeenSets(game).breeds.has(id); }
 function codexHasCoat(game,name){ return codexSeenSets(game).coats.has(name); }
 
+// ---------- Photo Mode / Scrapbook (a keepsake gallery of memorable moments) ----------
+// A per-run collection of snapshots. The capture hooks only OBSERVE the sim (they never change
+// stats/economy/breeding) — they just append to game.scrapbook. Bounded; pinned memories are protected.
+const SCRAPBOOK_CAP=40;
+const MOMENT_KINDS={
+  win:       {emoji:'🏆', title:'Show Win'},
+  champion:  {emoji:'✦', title:'Champion Bloodline'},
+  rarecoat:  {emoji:'🎨', title:'Rare Coat'},
+  firstbreed:{emoji:'🌱', title:'New Breed'},
+  foal:      {emoji:'🐣', title:'Foal Born'},
+  retire:    {emoji:'🌾', title:'Retirement'},
+  best:      {emoji:'⭐', title:'Personal Best'},
+  snapshot:  {emoji:'📸', title:'Snapshot'},
+};
+function momentKindDef(kind){ return MOMENT_KINDS[kind]||{emoji:'📸', title:'Memory'}; }
+function scrapbookArr(game){ if(!game) return []; if(!Array.isArray(game.scrapbook)) game.scrapbook=[]; return game.scrapbook; }
+function scrapbookNextSeq(game){ let m=0; for(const e of scrapbookArr(game)){ if((e.seq||0)>m) m=e.seq; } return m+1; }
+function addScrapbookEntry(game, entry){
+  if(!game || !entry || !entry.kind) return null;
+  const a=scrapbookArr(game);
+  const day=(entry.day!=null)?entry.day:(game.day||1);
+  const id=entry.id || (entry.kind+':'+(entry.horseId||'')+':'+day);
+  if(a.some(e=>e.id===id)) return null; // dedup: one memory per (kind, horse, day)
+  const md=momentKindDef(entry.kind);
+  const e={ id, kind:entry.kind, emoji:entry.emoji||md.emoji, title:entry.title||md.title,
+    horseId:entry.horseId||null, name:entry.name||'', breed:entry.breed||null, breedName:entry.breedName||'',
+    coat:entry.coat||null, coatTier:entry.coatTier||0, overall:entry.overall||0, gen:entry.gen||1,
+    caption:entry.caption||'', day, pinned:!!entry.pinned, seq:scrapbookNextSeq(game) };
+  a.push(e);
+  // cap: evict the oldest UNPINNED memory first; pinned keepsakes are protected
+  while(a.length>SCRAPBOOK_CAP){
+    let idx=-1, lo=Infinity;
+    for(let i=0;i<a.length;i++){ if(!a[i].pinned && a[i].seq<lo){ lo=a[i].seq; idx=i; } }
+    if(idx<0){ for(let i=0;i<a.length;i++){ if(a[i].seq<lo){ lo=a[i].seq; idx=i; } } } // all pinned → drop oldest overall
+    if(idx<0) break; a.splice(idx,1);
+  }
+  return e;
+}
+function scrapbookList(game){ return scrapbookArr(game).slice().sort((x,y)=> (y.day-x.day) || (y.seq-x.seq)); } // newest-first
+function scrapbookSize(game){ return scrapbookArr(game).length; }
+function scrapbookPinned(game){ return scrapbookArr(game).filter(e=>e.pinned).length; }
+function toggleScrapbookPin(game,id){ const e=scrapbookArr(game).find(x=>x.id===id); if(!e) return null; e.pinned=!e.pinned; return e; }
+// build a scrapbook entry from a real horse + moment-kind, using the sim's own data (read-only)
+function captureMoment(game, kind, horse, extra){
+  if(!game || !horse) return null; extra=extra||{};
+  const md=momentKindDef(kind), co=coatOf(horse), bd=breedDef(horse.breed)||{name:horse.breed};
+  let caption=extra.caption||'';
+  if(!caption){
+    if(kind==='win') caption=horse.name+' won '+(extra.tierName||'a show')+(extra.discName?' — '+extra.discName:'')+'!';
+    else if(kind==='champion') caption=horse.name+' was born carrying the Champion Bloodline.';
+    else if(kind==='rarecoat') caption='A rare '+co.name+' coat — '+horse.name+' shimmers in the sun.';
+    else if(kind==='firstbreed') caption='Your first '+bd.name+', '+horse.name+', joins '+ranchName(game)+'.';
+    else if(kind==='foal') caption=horse.name+' was born at '+ranchName(game)+'.';
+    else if(kind==='retire') caption=horse.name+' retires to the pasture, a living legend.';
+    else if(kind==='best') caption=horse.name+' set a personal-best '+overall(horse)+' overall.';
+    else caption='A snapshot of '+horse.name+', a '+co.name+' '+bd.name+'.';
+  }
+  return addScrapbookEntry(game, { kind, emoji:md.emoji, title:md.title, horseId:horse.id, name:horse.name,
+    breed:horse.breed, breedName:bd.name, coat:co.name, coatTier:co.tier||0, overall:overall(horse),
+    gen:horse.generation||1, caption, day:extra.day });
+}
+
 function disciplineScore(h,disc,game){
   const w=disc.w;
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
@@ -1769,7 +1837,8 @@ function applyCompetition(game,h,disc,tier,rng,perf){
   gainAffinity(h,disc.id, COMPETE_AFF_GAIN + (res.place===1?3:res.place<=3?1:0)); // competing (esp. placing) deepens affinity
   h.happy=clamp(h.happy-8,0,100); h.health=clamp(h.health-4,0,100); // fatigue
   if(res.place===1){ h.wins=(h.wins||0)+1; game.stats.showWins=(game.stats.showWins||0)+1; game.stats.bestTierWin=Math.max(game.stats.bestTierWin||0,tier.id);
-    game.stats.disciplinesWon=game.stats.disciplinesWon||{}; game.stats.disciplinesWon[disc.id]=true; }
+    game.stats.disciplinesWon=game.stats.disciplinesWon||{}; game.stats.disciplinesWon[disc.id]=true;
+    if(tier.id>=2) captureMoment(game,'win',h,{tierName:tier.name, discName:disc.name}); } // scrapbook: remember bigger wins (County+)
   if(res.place<=3){ h.podiums=(h.podiums||0)+1;
     game.trophies=game.trophies||[];
     game.trophies.unshift({horse:h.name,breed:h.breed,disc:disc.id,tier:tier.id,place:res.place,day:game.day});
@@ -1989,6 +2058,7 @@ function inductHof(game,rec){
 }
 function retireHorse(game,h,day){
   const rec=hofRecord(h,'retired',day!=null?day:game.day);
+  captureMoment(game,'retire',h,{day:day!=null?day:game.day}); // scrapbook: a farewell keepsake
   sendToPasture(game,h,'retired',day!=null?day:game.day); // a living legend grazes on in the pasture
   game.horses=game.horses.filter(x=>x.id!==h.id);
   return { rec, prestige:inductHof(game,rec) };
@@ -2167,6 +2237,7 @@ const ACHIEVEMENTS=[
   {id:'sanctuary',  icon:'🌾', name:'Sanctuary',            desc:'Give five horses a home in the pasture.',      check:g=>pastureSize(g)>=5},
   {id:'planner',    icon:'🔮', name:'Master Planner',        desc:'Breed a foal that fulfils your breeding goal.', check:g=>((g.stats&&g.stats.goalsMet)||0)>=1},
   {id:'naturalist', icon:'📚', name:'Naturalist',            desc:'Discover every breed in the Codex.',           check:g=>codexProgress(g).breedsSeen>=BREEDS.length},
+  {id:'chronicler', icon:'📸', name:'Chronicler',            desc:'Fill your scrapbook with 15 memories.',        check:g=>scrapbookSize(g)>=15},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2264,6 +2335,7 @@ const GOALS=[
   {id:'pasture1',desc:'Retire a horse to the pasture (🌾)',    tip:g=>pastureSize(g)+' grazing',       done:g=>pastureSize(g)>=1,                                      reward:{money:500,rep:20}},
   {id:'plan1',   desc:'Set a breeding goal (🔮 planner)',      tip:g=>'',                              done:g=>!!(g.breedGoal&&breedGoalDef(g.breedGoal)),             reward:{money:300,rep:10}},
   {id:'codex1',  desc:'Discover 5 breeds in the Codex (📚)',    tip:g=>codexProgress(g).breedsSeen+'/5 breeds',done:g=>codexProgress(g).breedsSeen>=5,                    reward:{money:600,rep:20}},
+  {id:'scrap1',  desc:'Save your first memory (📸 scrapbook)',   tip:g=>scrapbookSize(g)+' saved',       done:g=>scrapbookSize(g)>=1,                                    reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2286,6 +2358,7 @@ const HR = {
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
   coatOddsFor, traitOddsFor, affinityHintsFor, predictFoal, BREED_GOALS, breedGoalDef, matchesBreedingGoal, foalMeetsGoal,
   codexBreeds, codexCoats, codexDisciplines, codexProgress, codexSeenSets, codexHasBreed, codexHasCoat, coatLeanNote,
+  SCRAPBOOK_CAP, MOMENT_KINDS, momentKindDef, addScrapbookEntry, scrapbookList, scrapbookSize, scrapbookPinned, toggleScrapbookPin, captureMoment,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2413,6 +2486,7 @@ function load(){
     if(typeof G.namePack!=='string'||!namePackDef(G.namePack)) G.namePack='classic'; // themed name packs
     if(!Array.isArray(G.registry)) G.registry=[]; syncRegistry(G); // studbook registry
     if(!Array.isArray(G.pasture)) G.pasture=[]; // retirement pasture roster
+    if(!Array.isArray(G.scrapbook)) G.scrapbook=[]; // photo-mode scrapbook of memories
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -4198,6 +4272,30 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+function openScrapbook(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const list=scrapbookList(G);
+  const best=(G.horses||[]).slice().sort((a,b)=>overall(b)-overall(a))[0];
+  const total=scrapbookSize(G), pinned=scrapbookPinned(G);
+  const rows = list.length ? list.map(e=>{ const cc=e.coat?coatColor(e.coat):{body:'#7c4a26'};
+      return '<div class="lbrow"'+(e.pinned?' style="border:1px solid var(--gold2);border-radius:8px"':'')+'>'+
+        '<div class="hface" style="width:34px;height:34px;background:radial-gradient(circle at 50% 35%,'+cc.body+'aa,#1c2711)">'+
+        '<span style="position:absolute;font-size:15px">'+e.emoji+'</span></div>'+
+        '<div class="grow"><div class="lbname">'+esc(e.name||e.title)+' <span class="pill">'+esc(e.title)+'</span>'+(e.coatTier>=2?' <span class="pill" style="color:var(--gold)">🎨</span>':'')+'</div>'+
+        '<div class="lbsub">'+esc(e.caption)+'</div>'+
+        '<div class="lbsub">'+(e.breedName?esc(e.breedName)+' · ':'')+(e.coat?esc(e.coat)+' · ':'')+(e.overall?'OVR '+e.overall+' · ':'')+'Day '+e.day+'</div></div>'+
+        '<button class="btn sm '+(e.pinned?'':'ghost')+'" data-pin="'+esc(e.id)+'" title="'+(e.pinned?'Unpin':'Pin')+'">'+(e.pinned?'📌':'📍')+'</button></div>'; }).join('')
+    : '<div class="empty">No memories yet. Win a show, breed a standout foal or retire a legend — moments are saved here. You can also snapshot your best horse below.</div>';
+  modal('<h3>📸 Scrapbook</h3>'+
+    '<div class="swlabel">Keepsakes from '+esc(ranchName(G))+' <span class="pill">'+total+'/'+SCRAPBOOK_CAP+'</span>'+(pinned?' <span class="pill" style="color:var(--gold)">📌 '+pinned+'</span>':'')+'</div>'+
+    (best?'<div class="btnrow"><button class="btn" id="scrapSnap" style="width:100%">📸 Snapshot '+esc(best.name)+' (OVR '+overall(best)+')</button></div>':'')+
+    '<div class="divider"></div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="scrapClose" style="width:100%">Done</button></div>');
+  $('scrapClose').onclick=closeModal;
+  { const sn=$('scrapSnap'); if(sn) sn.onclick=()=>{ const e=captureMoment(G,'snapshot',best); if(e){ burst('📸✨',10); playSfx('goal'); toast('📸 Saved a snapshot of '+best.name+'.','good'); save(); openScrapbook(); } else { toast('Already snapped today.','info'); } }; }
+  document.querySelectorAll('[data-pin]').forEach(b=>b.onclick=()=>{ toggleScrapbookPin(G, b.getAttribute('data-pin')); playSfx('tap'); save(); openScrapbook(); });
+}
 let codexTab='breeds';
 function openCodex(){
   syncRegistry(G); // fold the current herd into the studbook so discovery is up to date
@@ -4360,6 +4458,7 @@ function boot(){
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
+  { const sb=$('scrapBtn'); if(sb) sb.onclick=openScrapbook; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
