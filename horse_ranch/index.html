@@ -199,6 +199,7 @@
     <div class="chip rep"><span>⭐</span><b id="hudRep">0</b></div>
     <div class="chip day" id="dayChip" style="cursor:pointer"><span id="hudWd">🗓️ Mon</span> · Day <b id="hudDay">1</b></div>
     <div class="spacer"></div>
+    <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <div id="speedBtns">
       <button class="sbtn" data-sp="0">⏸</button>
       <button class="sbtn on" data-sp="1">▶</button>
@@ -612,7 +613,7 @@ function freshGame(){
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0},
-    trophies:[], goalIdx:0, seenIntro:false,
+    trophies:[], goalIdx:0, seenIntro:false, audio:{on:false,vol:0.6},
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
@@ -836,6 +837,25 @@ function schoolNet(game){ return schoolIncome(game)-teacherSalaries(game); }
 
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
+// ---------- Audio model (pure data + settings reducer; the audio graph is DOM-only) ----------
+const NOTE_HZ={ A3:220.00,C4:261.63,D4:293.66,E4:329.63,F4:349.23,G4:392.00,A4:440.00,
+  B4:493.88,C5:523.25,D5:587.33,E5:659.25,G5:783.99,A5:880.00,C6:1046.50,E6:1318.51 };
+function noteHz(name){ return NOTE_HZ[name]||440; }
+// short synthesized cues: an arpeggio of notes with a wave type & step time
+const SFX={
+  tap:  {notes:['A4'],                     step:0.045, type:'sine',     gain:0.22},
+  coin: {notes:['E5','A5'],                step:0.06,  type:'triangle', gain:0.34},
+  sale: {notes:['C5','E5','A5'],           step:0.07,  type:'triangle', gain:0.40},
+  foal: {notes:['C5','E5','G5','C6'],      step:0.10,  type:'sine',     gain:0.42},
+  win:  {notes:['G4','C5','E5','G5','C6'], step:0.09,  type:'square',   gain:0.32},
+  goal: {notes:['E5','A5','E6'],           step:0.10,  type:'triangle', gain:0.42},
+  error:{notes:['A3'],                     step:0.10,  type:'sawtooth', gain:0.22},
+};
+function sfxDef(id){ return SFX[id]||null; }
+function normAudio(a){ a=a||{}; return { on:a.on===true, vol:(typeof a.vol==='number')?clamp(a.vol,0,1):0.6 }; }
+function toggleAudio(a){ const n=normAudio(a); return { on:!n.on, vol:n.vol }; }
+function setAudioVol(a,v){ const n=normAudio(a); return { on:n.on, vol:clamp(v,0,1) }; }
+
 // ---------- Training (raise stats toward each horse's breed potential) ----------
 const TRAIN_STATS=['speed','stamina','temperament'];
 const TRAIN_LABEL={speed:'Speed',stamina:'Stamina',temperament:'Temperament'};
@@ -911,6 +931,7 @@ const HR = {
   SEASONS, SEASON_LEN, seasonOf, yearOf, seasonDay, seasonBreedFeeMul, seasonGestationAdj,
   seasonShowPrizeMul, seasonCanteenMul, seasonHayMul, seasonMarketBonus,
   COAT_CSS, coatColor,
+  NOTE_HZ, noteHz, SFX, sfxDef, normAudio, toggleAudio, setAudioVol,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -943,6 +964,7 @@ function load(){
     if(G.stats.showWins==null) G.stats.showWins=0;
     if(G.stats.maxGen==null) G.stats.maxGen=Math.max(1,...G.horses.map(h=>h.generation||1));
     if(!G.trophies) G.trophies=[];
+    G.audio=normAudio(G.audio);
     if(!G.canteen) G.canteen={level:0};
     if(!G.teachers) G.teachers=[];
     if(!G.teacherMarket||!G.teacherMarket.length){ restockTeachers(G,Math.random); }
@@ -967,6 +989,7 @@ function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
 // ----- toasts -----
 function toast(msg,kind){
   const box=$('toasts'); const t=el('div','toast '+(kind||''),msg); box.appendChild(t);
+  if(kind==='bad') playSfx('error');
   setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 2600);
 }
 
@@ -1087,8 +1110,89 @@ function coinPop(amount){
   if(amount){ const p=el('div','coinpop'+(amount<0?' neg':''),(amount>0?'+':'-')+'🪙'+fmt(Math.abs(amount)));
     p.style.left=Math.max(6,(r.left||40)-6)+'px'; p.style.top=((r.top||30)-2)+'px'; document.body.appendChild(p);
     setTimeout(()=>p.remove(),1100); }
+  if(amount>0) playSfx('coin');
   chip.classList.add('bump'); setTimeout(()=>chip.classList.remove('bump'),300);
 }
+// ---------------- Audio engine (Web Audio, optional, default off) ----------------
+let AC=null, masterGain=null, ambGain=null, ambTimer=null, lastSfx=0;
+function audioAvailable(){ return typeof window!=='undefined' && (window.AudioContext||window.webkitAudioContext); }
+function ensureAudio(){ // must be called from a user gesture
+  if(AC) return true;
+  if(!audioAvailable()) return false;
+  try{
+    const Ctor=window.AudioContext||window.webkitAudioContext; AC=new Ctor();
+    masterGain=AC.createGain(); masterGain.gain.value=(G.audio&&G.audio.vol!=null?G.audio.vol:0.6)*0.5; masterGain.connect(AC.destination);
+    ambGain=AC.createGain(); ambGain.gain.value=0; ambGain.connect(masterGain);
+    startAmbientBed();
+    return true;
+  }catch(e){ AC=null; return false; }
+}
+function applyMasterVol(){ if(masterGain&&AC) try{ masterGain.gain.setTargetAtTime((G.audio.vol||0)*0.5, AC.currentTime, 0.05); }catch(e){} }
+function playSfx(id){
+  try{
+    if(!G||!G.audio||!G.audio.on||!AC) return;
+    const now=(typeof performance!=='undefined'&&performance.now)?performance.now():0;
+    if(now-lastSfx<45) return; lastSfx=now; // throttle rapid triggers
+    const def=sfxDef(id); if(!def) return;
+    const t0=AC.currentTime;
+    def.notes.forEach((nm,i)=>{
+      const o=AC.createOscillator(), g=AC.createGain();
+      o.type=def.type; o.frequency.value=noteHz(nm);
+      const st=t0+i*def.step, len=def.step*1.7;
+      g.gain.setValueAtTime(0,st); g.gain.linearRampToValueAtTime(def.gain,st+0.008);
+      g.gain.exponentialRampToValueAtTime(0.0008,st+len);
+      o.connect(g); g.connect(masterGain); o.start(st); o.stop(st+len+0.02);
+    });
+  }catch(e){}
+}
+// very quiet ambient: a filtered-noise bed (louder in rain/snow) + occasional bird/cricket chirps
+function startAmbientBed(){
+  try{
+    const buf=AC.createBuffer(1, AC.sampleRate*2, AC.sampleRate); const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.5;
+    const src=AC.createBufferSource(); src.buffer=buf; src.loop=true;
+    const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+    src.connect(lp); lp.connect(ambGain); src.start();
+    scheduleChirp();
+  }catch(e){}
+}
+function scheduleChirp(){
+  if(ambTimer) return;
+  const tick=()=>{
+    try{
+      if(G&&G.audio&&G.audio.on&&AC){
+        // day → soft high bird; night → lower cricket-ish; rain hiss handled by bed gain
+        const phase=((skyT/SKY_CYCLE)%1+1)%1; const night=Math.abs(phase-0.5)>0.30;
+        const wx=weatherFor(G.day).id; const raining=(wx==='rain'||wx==='snow');
+        // bed volume: near-silent when clear, a soft hiss in rain/snow
+        if(ambGain) try{ ambGain.gain.setTargetAtTime(raining?0.05:0.012, AC.currentTime, 0.6); }catch(e){}
+        if(!raining && Math.random()<0.6){ const o=AC.createOscillator(), g=AC.createGain();
+          o.type='sine'; o.frequency.value=night?(280+Math.random()*80):(1400+Math.random()*700);
+          const t=AC.currentTime; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(night?0.03:0.05,t+0.02);
+          g.gain.exponentialRampToValueAtTime(0.0006,t+ (night?0.5:0.18)); o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.6); }
+      } else if(ambGain&&AC){ try{ ambGain.gain.setTargetAtTime(0, AC.currentTime, 0.3); }catch(e){} }
+    }catch(e){}
+    ambTimer=setTimeout(tick, 1800+Math.random()*2400);
+  };
+  ambTimer=setTimeout(tick, 1500);
+}
+function updateAudioBtn(){ const b=$('audioBtn'); if(b) b.textContent=(G.audio&&G.audio.on)?'🔊':'🔇'; }
+function openAudio(){
+  const on=G.audio.on, vol=Math.round((G.audio.vol||0)*100);
+  modal('<h3>🔊 Sound</h3>'+
+    '<div class="msg">Tiny synthesized sound effects &amp; a soft ambient layer. Off by default — turn it on whenever you like.</div>'+
+    '<div class="btnrow"><button class="btn '+(on?'':'ghost')+'" id="aOn" style="flex:1">'+(on?'🔊 Sound On':'🔇 Sound Off')+'</button></div>'+
+    '<div class="kv" style="margin-top:12px">Volume<b><span id="aVolTxt">'+vol+'%</span></b></div>'+
+    '<input type="range" id="aVol" min="0" max="100" value="'+vol+'" style="width:100%">'+
+    '<div class="btnrow"><button class="btn ghost" id="aDone" style="width:100%">Done</button></div>');
+  $('aDone').onclick=closeModal;
+  $('aOn').onclick=()=>{ G.audio=toggleAudio(G.audio); if(G.audio.on){ ensureAudio(); if(AC&&AC.state==='suspended'){ try{AC.resume();}catch(e){} } playSfx('tap'); }
+    save(); updateAudioBtn(); openAudio(); };
+  $('aVol').oninput=(e)=>{ G.audio=setAudioVol(G.audio, (parseInt(e.target.value,10)||0)/100); const tx=$('aVolTxt'); if(tx) tx.textContent=Math.round(G.audio.vol*100)+'%'; applyMasterVol(); };
+  $('aVol').onchange=()=>{ save(); if(G.audio.on){ ensureAudio(); playSfx('coin'); } };
+}
+function toggleAudioBtn(){ G.audio=toggleAudio(G.audio); if(G.audio.on){ ensureAudio(); if(AC&&AC.state==='suspended'){ try{AC.resume();}catch(e){} } playSfx('tap'); toast('🔊 Sound on','info'); } else { toast('🔇 Sound off','info'); } save(); updateAudioBtn(); }
+
 // celebratory emoji burst from the scene banner (births, wins, goals)
 function burst(emojis,count){
   if(typeof document==='undefined') return;
@@ -1460,7 +1564,7 @@ function doEnterShow(h,disc,tier){
     '<br><span style="font-size:11px;color:var(--ink2)">Score '+res.score+' · rests '+tier.rest+' days</span></div>'+
     '<div class="btnrow"><button class="btn" id="xOk" style="width:100%">'+(res.place===1?'🎉 Champion!':'OK')+'</button></div>',{center:true});
   if(res.prize>0) coinPop(res.prize);
-  if(res.place===1) burst('🏆🥇🎉✨',18); else if(res.place<=3) burst('🎉✨',10);
+  if(res.place===1){ burst('🏆🥇🎉✨',18); playSfx('win'); } else if(res.place<=3) burst('🎉✨',10);
   $('xOk').onclick=()=>{ closeModal(); toast(medal(res.place)+' '+h.name+': '+pn.replace('!','')+(bits.length?' ('+bits.join(' ')+')':''), res.place<=3?'good':'info'); refresh(); };
 }
 
@@ -1698,7 +1802,7 @@ function doDay(){
   (res.notes||[]).forEach(n=>toast(n.m,n.t));
   const net=G.money-money0; // rent + boarding income earned overnight
   if(net>0) coinPop(net);
-  if(res.born && res.born.length) burst('🎉🐴✨🎊',16); // celebrate new foals
+  if(res.born && res.born.length){ burst('🎉🐴✨🎊',16); playSfx('foal'); } // celebrate new foals
   if(res.event) showEvent(res.event);
   save(); refresh();
 }
@@ -1710,7 +1814,7 @@ function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='marke
 function refresh(){
   const done=checkGoals(G);
   renderHUD(); renderGoal(); renderTab(); bindFeedButtons(); save();
-  if(done.length) burst('🎯⭐🎉✨',16);
+  if(done.length){ burst('🎯⭐🎉✨',16); playSfx('goal'); }
   done.forEach(g=>{ const r=g.reward||{}; const bits=[]; if(r.money)bits.push('🪙'+r.money); if(r.feed)bits.push('🌾'+r.feed); if(r.rep)bits.push(r.rep+'⭐');
     toast('🎯 Goal complete: '+g.desc+(bits.length?' — +'+bits.join(' +'):''),'good'); });
 }
@@ -1759,9 +1863,10 @@ function boot(){
   if(!load()){ G=freshGame(); }
   if(_idc<1000) _idc=1000+G.horses.length+G.market.length;
   { const dc=$('dayChip'); if(dc) dc.onclick=openWeek; }
-  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setTab(t.getAttribute('data-tab')));
-  document.querySelectorAll('.sbtn').forEach(b=>b.onclick=()=>{ speed=parseInt(b.getAttribute('data-sp'),10);
-    document.querySelectorAll('.sbtn').forEach(x=>x.classList.toggle('on',x===b)); });
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ playSfx('tap'); setTab(t.getAttribute('data-tab')); });
+  document.querySelectorAll('#speedBtns .sbtn').forEach(b=>b.onclick=()=>{ speed=parseInt(b.getAttribute('data-sp'),10); playSfx('tap');
+    document.querySelectorAll('#speedBtns .sbtn').forEach(x=>x.classList.toggle('on',x===b)); });
+  { const ab=$('audioBtn'); if(ab) ab.onclick=openAudio; updateAudioBtn(); }
   setTab('ranch'); refresh();
   if(!G.seenIntro) showIntro();
   tickHandle=requestAnimationFrame(step);

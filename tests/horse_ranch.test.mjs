@@ -576,6 +576,32 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.coatColor('not-a-coat').body, 'unknown coat falls back to a default colour');
 }
 
+// ---- audio model (pure bits; the audio graph itself is DOM-only) ----
+{
+  ok(HR.noteHz('A4') === 440 && HR.noteHz('C5') > HR.noteHz('C4'), 'note frequency table is sane');
+  ok(HR.noteHz('not-a-note') === 440, 'unknown note falls back to A4');
+  // every SFX references only defined notes and has a positive gain
+  const ids = Object.keys(HR.SFX);
+  ok(ids.length >= 5 && ids.includes('coin') && ids.includes('foal') && ids.includes('win'), 'a set of named cues exists');
+  ok(ids.every(id => { const d = HR.sfxDef(id); return d && d.notes.length && d.gain > 0 && d.notes.every(n => HR.NOTE_HZ[n]); }),
+    'every cue uses in-table notes and a positive gain');
+  ok(HR.sfxDef('nope') === null, 'unknown cue id returns null');
+  // settings reducer
+  ok(HR.normAudio(undefined).on === false, 'audio defaults OFF (no autoplay)');
+  ok(HR.normAudio(undefined).vol === 0.6, 'default volume is set');
+  ok(HR.normAudio({ on: 'yes' }).on === false, 'only strict true counts as on');
+  ok(HR.toggleAudio({ on: false, vol: 0.5 }).on === true, 'toggle flips off → on');
+  ok(HR.toggleAudio({ on: true, vol: 0.5 }).on === false, 'toggle flips on → off');
+  ok(HR.toggleAudio({ on: false, vol: 0.5 }).vol === 0.5, 'toggle preserves volume');
+  ok(HR.setAudioVol({ on: true, vol: 0.5 }, 2).vol === 1 && HR.setAudioVol({ on: true, vol: 0.5 }, -1).vol === 0, 'volume is clamped 0..1');
+  ok(HR.setAudioVol({ on: true, vol: 0.5 }, 0.3).on === true, 'setting volume preserves on/off');
+}
+{
+  // a fresh game ships with audio off; save-load keeps it forward-compatible
+  const g = HR.freshGame();
+  ok(g.audio && g.audio.on === false && g.audio.vol === 0.6, 'fresh game has audio off by default');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
