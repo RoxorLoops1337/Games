@@ -1053,7 +1053,39 @@ const EVENTS=[
 ];
 
 // ---------- Fresh game ----------
-function freshGame(){
+// ---------- New Game+ / Prestige (Legacy) ----------
+// An optional late-game "retire the ranch" that banks persistent Legacy points
+// (kept separately from the ranch save). Legacy grants small, capped permanent
+// perks on future runs — a New Game+ loop. Purely opt-in and gated behind a
+// well-established ranch. All bounded so it never runs away.
+const PRESTIGE_REP=2200;   // Master Breeder rank
+function normLegacy(l){ l=l||{}; return {points:Math.max(0,Math.floor(l.points||0)), resets:Math.max(0,Math.floor(l.resets||0))}; }
+// projected Legacy points this run would bank — diminishing (sqrt) in every input, so bounded & monotonic
+function legacyPointsFor(game){
+  if(!game) return 0;
+  const rep=game.rep||0, pres=game.prestige||0, hof=(game.hallOfFame||[]).length,
+        best=(game.stats&&game.stats.bestOVR)||0, wins=(game.stats&&game.stats.showWins)||0;
+  const p = Math.sqrt(rep)/3 + Math.sqrt(pres)*1.2 + hof*2 + Math.max(0,best-50)*0.3 + Math.sqrt(wins)*1.5;
+  return Math.max(0, Math.floor(p));
+}
+function legacyLevel(legacy){ return Math.floor(Math.sqrt(((legacy&&legacy.points)||0)/25)); } // 25→L1, 100→L2, 225→L3…
+// permanent, CAPPED bonuses from banked Legacy points
+function legacyBonus(legacy, kind){
+  const p=(legacy&&legacy.points)||0;
+  if(kind==='showPrize')  return 1 + Math.min(0.40, p*0.0016);       // up to +40% show prize (~250 pts)
+  if(kind==='startCoins') return Math.min(15000, Math.round(p*30));  // up to +🪙15,000 starting (~500 pts)
+  if(kind==='startFeed')  return Math.min(200, Math.round(p*0.5));   // up to +200 hay starting (~400 pts)
+  return 0;
+}
+function canPrestige(game){ return !!game && (game.rep||0)>=PRESTIGE_REP && ((game.hallOfFame||[]).length)>=1; }
+// perform a prestige: bank this run's Legacy and return a fresh ranch seeded with the new total
+function applyPrestige(game, legacy){
+  const cur=normLegacy(legacy||(game&&game.legacy));
+  const gain=legacyPointsFor(game);
+  return freshGame({points:cur.points+gain, resets:cur.resets+1});
+}
+
+function freshGame(legacy){
   _idc=1;
   const g={
     v:1, money:1500, feed:30, rep:0, day:1,
@@ -1065,7 +1097,12 @@ function freshGame(){
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[]}, board:null, staff:[],
+    legacy:normLegacy(legacy),
   };
+  // New Game+ head-start: banked Legacy grants capped starting coins/hay
+  g.money += legacyBonus(g.legacy,'startCoins');
+  g.feed  += legacyBonus(g.legacy,'startFeed');
+  if(g.legacy.resets>0){ g.seenIntro=true; g.tut={step:0,done:true}; } // veterans skip the intro/tour
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
   g.horses.push(mkHorse({breed:'mustang',sex:'stallion',age:16,name:'Bandit',stable:0,rng:seededOnce(29)}));
@@ -1306,7 +1343,7 @@ function applyCompetition(game,h,disc,tier,rng,perf){
   const res=runCompetition(h,disc,tier,rng,perf);
   if(perf!=null){ game.stats.showGamesPlayed=(game.stats.showGamesPlayed||0)+1; game.stats.bestShowPerf=Math.max(game.stats.bestShowPerf||0, clamp(perf,0,1));
     if(perf>=0.9) game.stats.clearRounds=(game.stats.clearRounds||0)+1; }
-  res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)); // summer + festivals pay more
+  res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)*legacyBonus(game.legacy,'showPrize')); // summer + festivals + legacy pay more
   game.money += res.prize; game.rep += res.rep; game.stats.goldEarned=(game.stats.goldEarned||0)+res.prize;
   h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
   h.happy=clamp(h.happy-8,0,100); h.health=clamp(h.health-4,0,100); // fatigue
@@ -1789,6 +1826,7 @@ const HR = {
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   isHofChampion, inductHof, retireHorse,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
+  PRESTIGE_REP, normLegacy, legacyPointsFor, legacyLevel, legacyBonus, canPrestige, applyPrestige,
   RIVALS, rivalDef, rivalShowDays, rivalRep, playerScore, standings, playerRank,
   leaderRanch, rivalCount, tickStandings,
   TACK, TACK_SLOTS, TACK_SLOT_LABEL, TACK_SHOW_CAP, tackDef, tackInit, equippedTack, equippedIn,
@@ -1805,17 +1843,22 @@ if(typeof document==='undefined' || !document.getElementById){ return; }
 const $=id=>document.getElementById(id);
 const el=(t,c,h)=>{ const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; };
 const SAVE_KEY='horseranch_save_v1';
+const LEGACY_KEY='horseranch_legacy_v1'; // New Game+ Legacy — kept separate so it survives a prestige reset
 
 let G=null, breedPick={mare:null,stallion:null}, curTab='ranch', speed=1, tickHandle=null, acc=0, lastTs=0;
 const DAY_MS=8400; // one game-day at 1x (slower, relaxed pace)
 let skyT=18000, curWx=null; const SKY_CYCLE=90000; // real-time day/night cycle (ms), speed-independent
 
 // ----- persistence -----
-function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({G,_idc})); }catch(e){} }
+function loadLegacy(){ try{ const raw=localStorage.getItem(LEGACY_KEY); if(!raw) return normLegacy(null); return normLegacy(JSON.parse(raw)); }catch(e){ return normLegacy(null); } }
+function saveLegacy(l){ try{ localStorage.setItem(LEGACY_KEY, JSON.stringify(normLegacy(l))); }catch(e){} }
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({G,_idc})); if(G&&G.legacy) saveLegacy(G.legacy); }catch(e){} }
 function load(){
   try{ const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
     const d=JSON.parse(raw); if(!d||!d.G) return false; G=d.G; _idc=d._idc||1000;
     // forward-compat guards
+    if(!Array.isArray(G.stables)||!G.stables.length) G.stables=[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}];
+    if(!Array.isArray(G.horses)) G.horses=[];
     if(!G.market) restockMarket(G,Math.random);
     if(G.boarders==null) G.boarders=0;
     if(G.goalIdx==null) G.goalIdx=0;
@@ -1851,6 +1894,8 @@ function load(){
     G.tack.owned=G.tack.owned.filter(id=>!!tackDef(id)).filter((v,i,a)=>a.indexOf(v)===i);
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
+    // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
+    { const store=loadLegacy(), saved=normLegacy(G.legacy); G.legacy=(store.points>=saved.points)?store:saved; saveLegacy(G.legacy); }
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
@@ -2689,6 +2734,26 @@ function renderEstate(){
   s.appendChild(el('h2','head','🏡 '+ranchName(G)));
   s.appendChild(el('div','sub','Fleur’s estate is more than stables — build a canteen for visitors and run a riding school to earn steady daily income.'));
 
+  // ---- Legacy / New Game+ ----
+  { const lg=G.legacy||{points:0,resets:0}, lvl=legacyLevel(lg);
+    const prizePct=Math.round((legacyBonus(lg,'showPrize')-1)*100), coins=legacyBonus(lg,'startCoins'), feed=legacyBonus(lg,'startFeed');
+    if(lg.points>0 || lg.resets>0 || canPrestige(G)){
+      const lc=el('div','card'); lc.style.borderLeft='4px solid var(--gold2)';
+      let inner='<div class="row"><div class="hface">🌟</div><div class="grow">'+
+        '<div class="hname">Legacy '+(lvl>0?('Lv '+lvl):'')+' <span class="pill" style="color:var(--gold)">'+fmt(lg.points)+' pts</span>'+(lg.resets>0?' <span class="pill">'+lg.resets+'× retired</span>':'')+'</div>'+
+        '<div class="hbreed">Permanent perks: +'+prizePct+'% show prizes'+(coins?' · +🪙'+fmt(coins)+' start':'')+(feed?' · +🌾'+feed+' start':'')+'</div></div></div>';
+      lc.innerHTML=inner; s.appendChild(lc);
+      const proj=legacyPointsFor(G);
+      if(canPrestige(G)){
+        s.appendChild(el('div','sub','You could <b>retire this ranch</b> and pass the torch — banking <b style="color:var(--gold)">+'+fmt(proj)+' Legacy</b> for a fresh New Game+ start.'));
+        const pb=el('button','btn','🌟 Retire the Ranch (New Game+)'); pb.style.width='100%'; pb.style.marginBottom='9px';
+        pb.onclick=openPrestige; s.appendChild(pb);
+      } else if(lg.resets===0){
+        s.appendChild(el('div','sub','Reach <b>Master Breeder</b> (⭐'+PRESTIGE_REP+') with a Hall-of-Fame legend to unlock retiring your ranch for permanent Legacy perks.'));
+      }
+    }
+  }
+
   // ---- Regional Standings (rival ranches leaderboard) ----
   s.appendChild(el('h2','head','🏆 Regional Standings'));
   const pr=playerRank(G), lead=leaderRanch(G);
@@ -3386,6 +3451,28 @@ function openBoard(){
     burst('📋✨🪙',12); playSfx('goal'); const bits=[]; if(rw.money)bits.push('🪙'+fmt(rw.money)); if(rw.rep)bits.push(rw.rep+'⭐'); if(rw.feed)bits.push('🌾'+rw.feed);
     toast('📋 Contract complete! +'+bits.join(' +'),'good'); save(); renderHUD(); openBoard(); });
 }
+// ---------------- Prestige / New Game+ ----------------
+function openPrestige(){
+  if(!canPrestige(G)){ toast('Not yet — reach Master Breeder with a Hall-of-Fame legend first.','info'); return; }
+  const proj=legacyPointsFor(G); const lg=G.legacy||{points:0,resets:0};
+  const after={points:lg.points+proj, resets:lg.resets+1};
+  const nowPct=Math.round((legacyBonus(lg,'showPrize')-1)*100), newPct=Math.round((legacyBonus(after,'showPrize')-1)*100);
+  const newCoins=legacyBonus(after,'startCoins');
+  modal('<h3>🌟 Retire the Ranch?</h3>'+
+    '<div class="msg">Fleur passes the reins and starts anew. This <b>resets your ranch</b> — horses, coins, buildings, staff and progress all begin fresh — but your <b>Legacy is forever</b>.<br><br>'+
+    'Bank <b style="color:var(--gold)">+'+fmt(proj)+' Legacy</b> (total '+fmt(after.points)+', Lv '+legacyLevel(after)+').<br>'+
+    'Permanent perks grow: show prizes +'+nowPct+'% → <b>+'+newPct+'%</b>'+(newCoins?', start with <b>🪙'+fmt(newCoins)+'</b>':'')+'.<br><br>'+
+    '<span style="color:var(--ink2);font-size:12px">Your Hall of Fame lives on in legend, but this ranch’s horses will be gone. This cannot be undone.</span></div>'+
+    '<div class="btnrow"><button class="btn" id="pgYes" style="flex:1">🌟 Retire &amp; begin anew</button>'+
+    '<button class="btn ghost" id="pgNo" style="flex:1">Not yet</button></div>',{center:true});
+  $('pgNo').onclick=closeModal;
+  $('pgYes').onclick=()=>{
+    const ng=applyPrestige(G); G=ng; saveLegacy(G.legacy); save();
+    closeModal(); burst('🌟✨🐴🏆',22); playSfx('win');
+    setTab('ranch'); refresh();
+    toast('🌟 A new chapter begins — Legacy '+fmt(G.legacy.points)+' pts. Welcome back, Fleur!','good');
+  };
+}
 function openHelp(){
   const st=achievementState(G);
   modal('<h3>ℹ️ Help &amp; About</h3>'+
@@ -3425,7 +3512,7 @@ function openAchievements(){
 }
 
 function boot(){
-  if(!load()){ G=freshGame(); }
+  if(!load()){ G=freshGame(loadLegacy()); }
   if(_idc<1000) _idc=1000+G.horses.length+G.market.length;
   { const dc=$('dayChip'); if(dc) dc.onclick=openWeek; }
   { const hb=$('helpBtn'); if(hb) hb.onclick=openHelp; }

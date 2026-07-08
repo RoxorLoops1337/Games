@@ -1066,6 +1066,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const disc = HR.DISCIPLINES[0];
   const good = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
   const bad = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  bad.trait = good.trait; // same personality so only the care level differs
   for (const id of HR.NEED_IDS) { good.needs[id] = 100; bad.needs[id] = 0; }
   ok(HR.disciplineScore(good, disc) > HR.disciplineScore(bad, disc), 'a well-cared horse out-scores a neglected twin');
 }
@@ -1264,6 +1265,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const g = HR.freshGame(); g.money = 100000; g.rep = 9999;
   const base = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
   const kitted = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  kitted.trait = base.trait; // same personality so only the tack differs (traitMult is equal)
   for (const id of HR.NEED_IDS) { base.needs[id] = 100; kitted.needs[id] = 100; }
   g.horses = [base, kitted];
   HR.TACK.filter(t => t.show).forEach(t => { HR.buyTack(g, t.id); HR.equipTack(g, kitted, t.id); });
@@ -1535,6 +1537,78 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'fullcrew');
   const full = HR.freshGame(); full.staff = HR.STAFF_ROLES.map(r => r.id);
   ok(ach && ach.check(full) && !ach.check(g), 'employing the whole crew unlocks Full Crew');
+}
+
+// ---- New Game+ / prestige (Legacy) (round 27) ----
+{
+  // legacy points: 0 on a fresh ranch, monotonic, bounded (diminishing)
+  const fresh = HR.freshGame();
+  ok(HR.legacyPointsFor(fresh) === 0, 'a brand-new ranch banks no Legacy');
+  const mid = HR.freshGame(); mid.rep = 3000; mid.prestige = 200; mid.hallOfFame = [1, 2]; mid.stats.bestOVR = 80; mid.stats.showWins = 9;
+  const more = HR.freshGame(); more.rep = 6000; more.prestige = 500; more.hallOfFame = [1, 2, 3, 4]; more.stats.bestOVR = 95; more.stats.showWins = 25;
+  ok(HR.legacyPointsFor(mid) > 0, 'an established ranch banks Legacy');
+  ok(HR.legacyPointsFor(more) > HR.legacyPointsFor(mid), 'more accomplished runs bank more Legacy (monotonic)');
+  // diminishing: doubling rep does NOT double the points
+  const a = HR.freshGame(); a.rep = 2500; a.hallOfFame = [1];
+  const b = HR.freshGame(); b.rep = 5000; b.hallOfFame = [1];
+  ok(HR.legacyPointsFor(b) < 2 * HR.legacyPointsFor(a), 'Legacy gain has diminishing returns');
+}
+{
+  // legacy bonuses are capped & increasing
+  ok(Math.abs(HR.legacyBonus({ points: 0 }, 'showPrize') - 1) < 1e-9, 'no legacy → neutral show-prize bonus');
+  ok(HR.legacyBonus({ points: 100 }, 'showPrize') > 1, 'legacy points raise the show-prize bonus');
+  ok(HR.legacyBonus({ points: 999999 }, 'showPrize') <= 1.40 + 1e-9, 'show-prize bonus is capped at +40%');
+  ok(HR.legacyBonus({ points: 999999 }, 'startCoins') <= 15000, 'starting coins bonus is capped');
+  ok(HR.legacyBonus({ points: 999999 }, 'startFeed') <= 200, 'starting feed bonus is capped');
+  ok(HR.legacyLevel({ points: 0 }) === 0 && HR.legacyLevel({ points: 100 }) >= 1, 'legacy level grows with points');
+}
+{
+  // the show-prize bonus actually pays more via applyCompetition
+  const tier = HR.COMP_TIERS[0], disc = HR.DISCIPLINES[0];
+  const mk = () => HR.mkHorse({ breed: 'arabian', age: 12, speed: 99, stamina: 99, temperament: 99, health: 100, happy: 100 });
+  let plain = 0, veteran = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const g0 = HR.freshGame(); g0.legacy = { points: 0, resets: 0 };
+    const g1 = HR.freshGame({ points: 250, resets: 3 });
+    plain += HR.applyCompetition(g0, mk(), disc, tier, rng(seed)).prize;
+    veteran += HR.applyCompetition(g1, mk(), disc, tier, rng(seed)).prize;
+  }
+  ok(veteran > plain, 'a high-Legacy ranch earns bigger show prizes');
+}
+{
+  // prestige gating: cannot retire an unestablished ranch
+  const g = HR.freshGame();
+  ok(!HR.canPrestige(g), 'a fresh ranch cannot prestige');
+  g.rep = HR.PRESTIGE_REP;
+  ok(!HR.canPrestige(g), 'reputation alone is not enough (needs a Hall-of-Famer)');
+  g.hallOfFame = [HR.hofRecord(HR.mkHorse({ breed: 'arabian', age: 30, wins: 4 }), 'retired', 30)];
+  ok(HR.canPrestige(g), 'Master-Breeder rep + a Hall-of-Fame legend unlocks prestige');
+}
+{
+  // applyPrestige banks legacy, resets the ranch, and carries the total forward
+  const g = HR.freshGame(); g.rep = 4000; g.money = 99999; g.prestige = 300;
+  g.hallOfFame = [1, 2]; g.stats.bestOVR = 88; g.stats.showWins = 12;
+  g.horses.push(HR.mkHorse({ breed: 'friesian', age: 12 })); // 3 horses now
+  const gain = HR.legacyPointsFor(g);
+  ok(gain > 0, 'there is Legacy to bank');
+  const ng = HR.applyPrestige(g);
+  ok(ng.legacy.points === gain && ng.legacy.resets === 1, 'prestige banks the Legacy and counts the reset');
+  ok(ng.horses.length === 2 && ng.day === 1 && ng.rep === 0, 'the ranch itself resets (starter pair, day 1, no rep)');
+  ok(ng.hallOfFame.length === 0, 'the new ranch starts with an empty Hall of Fame');
+  // start bonuses reflect the banked legacy
+  ok(ng.money >= 1500 + HR.legacyBonus(ng.legacy, 'startCoins') - 1, 'New Game+ starts with the legacy coin bonus');
+  ok(ng.seenIntro === true && ng.tut.done === true, 'veterans skip the intro/tutorial on New Game+');
+  // a second prestige accumulates
+  ng.rep = 5000; ng.hallOfFame = [1]; ng.prestige = 100; ng.stats.showWins = 5;
+  const ng2 = HR.applyPrestige(ng);
+  ok(ng2.legacy.points > ng.legacy.points && ng2.legacy.resets === 2, 'a second prestige accumulates Legacy and resets');
+}
+{
+  // freshGame is deterministic given the same legacy; higher legacy → more starting coins
+  const g0 = HR.freshGame({ points: 0, resets: 0 });
+  const gL = HR.freshGame({ points: 300, resets: 2 });
+  ok(gL.money > g0.money, 'a legacy head-start grants more starting coins');
+  ok(HR.normLegacy({ points: -5, resets: 2.9 }).points === 0 && HR.normLegacy({ points: 3.9 }).resets === 0, 'normLegacy floors & clamps');
 }
 
 // ---- clamp helper ----
