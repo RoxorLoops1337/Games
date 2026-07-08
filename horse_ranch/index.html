@@ -677,6 +677,34 @@ function festivalMod(day,key,dflt){ const f=festivalOn(day); const d=(dflt!=null
 function nextFestival(day){ for(let i=1;i<=SEASON_LEN*4;i++){ const f=festivalOn(day+i); if(f) return {inDays:i, fest:f, day:day+i}; } return null; }
 function upcomingFestivals(day,within){ within=within||7; const out=[]; for(let i=0;i<=within;i++){ const f=festivalOn(day+i); if(f) out.push({inDays:i, fest:f, day:day+i}); } return out; }
 
+// ---------- Auction house (one auction per season on season-day 10) ----------
+function isAuctionDay(day){ return seasonDay(day)===10; }
+function nextAuction(day){ for(let i=1;i<=SEASON_LEN*4;i++){ if(isAuctionDay(day+i)) return {inDays:i, day:day+i}; } return null; }
+// a standout lot — rarer/higher-quality than normal market stock, sometimes a proven champion or rare coat
+function makeAuctionLot(game,rng){
+  rng=rng||Math.random;
+  const maxR = (game.rep||0)>2600?5 : (game.rep||0)>1000?4 : 3;
+  const pool=BREEDS.filter(b=>b.rarity>=3 && b.rarity<=maxR); const b=pool[Math.floor(rng()*pool.length)]||BREEDS.filter(x=>x.rarity>=3)[0];
+  const sex=rng()<0.5?'mare':'stallion', age=10+Math.floor(rng()*14);
+  const strong=base=>clamp(Math.round(base+6+rng()*10),8,100);
+  const h=mkHorse({breed:b.id,sex,age,rng,purebred:true,generation:1,
+    speed:strong(b.speed),stamina:strong(b.stamina),temperament:strong(b.temperament),health:98,happy:95});
+  if(rng()<0.30){ h.coat={name:'Cremello',tier:2}; h.color='Cremello'; } // a flashy rare coat
+  if(rng()<0.35){ h.wins=1+Math.floor(rng()*3); }                        // sometimes a proven winner
+  const v=valueOf(h);
+  const minInc=Math.max(20,Math.round(v*0.05));
+  return { horse:h, value:v, minInc, start:Math.round(v*0.55), high:Math.round(v*0.55),
+    bidder:'house', aiMax:Math.round(v*(0.95+rng()*0.45)) };
+}
+function makeAuctionLots(game,rng){ rng=rng||Math.random; const n=1+Math.floor(rng()*3); const out=[]; for(let i=0;i<n;i++) out.push(makeAuctionLot(game,rng)); return out; }
+// after the player bids, the AI counter-bids one increment (never above its hidden ceiling), or drops out (null)
+function aiCounter(lot,rng){ rng=rng||Math.random; if(!lot||lot.high>=lot.aiMax) return null; const next=lot.high+lot.minInc; if(next>lot.aiMax) return null; return next; }
+// whoever holds the top bid when the hammer falls wins
+function resolveAuction(lot){ return { winner:(lot&&lot.bidder==='you')?'you':'ai', price:lot?lot.high:0 }; }
+// what an AI buyer pays when you consign your own horse — a chance above market for a great horse
+function consignValue(h,game,rng){ rng=rng||Math.random; const v=valueOf(h);
+  let f=0.9+rng()*0.4; if((h.wins||0)>=3) f+=0.12; if((coatOf(h).tier||0)>=2) f+=0.1; return Math.max(50,Math.round(v*f)); }
+
 // ---------- Weather (deterministic per day, biased by season) ----------
 const WEATHER=[
   {id:'sunny', name:'Sunny',  emoji:'☀️', canteen:1.12, feedExtra:0},
@@ -706,7 +734,7 @@ function freshGame(){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{}},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
   };
   // start with one mare + one stallion so the player can breed immediately
@@ -1097,6 +1125,7 @@ const ACHIEVEMENTS=[
   {id:'rich',       icon:'🤑', name:'Fortune Made',       desc:'Earn 🪙50,000 in total.',                       check:g=>(g.stats.goldEarned||0)>=50000},
   {id:'master',     icon:'🎗️', name:'Master Breeder',     desc:'Reach the Master Breeder rank.',               check:g=>g.rep>=2200},
   {id:'legendrank', icon:'🌟', name:'Legendary Rancher',  desc:'Reach the top reputation rank.',               check:g=>g.rep>=8000},
+  {id:'auction',    icon:'🔨', name:'Going Once...',       desc:'Win a horse at auction.',                      check:g=>(g.stats.auctionsWon||0)>=1},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1174,6 +1203,7 @@ const GOALS=[
   {id:'studinc', desc:'Earn 🪙3,000 in stud fees',       tip:g=>'🪙'+((g.stats&&g.stats.studIncome)||0),done:g=>((g.stats&&g.stats.studIncome)||0)>=3000,            reward:{money:2500,rep:60}},
   {id:'fest1',   desc:'Celebrate your first festival',   tip:g=>((g.stats&&g.stats.festivals)||0)+'/1',done:g=>((g.stats&&g.stats.festivals)||0)>=1,                 reward:{money:800,rep:20}},
   {id:'fest4',   desc:'Attend all four seasonal festivals',tip:g=>((g.stats&&g.stats.festivals)||0)+'/4',done:g=>((g.stats&&g.stats.festivals)||0)>=4,               reward:{money:3500,rep:90}},
+  {id:'auction1',desc:'Win a horse at auction',           tip:g=>((g.stats&&g.stats.auctionsWon)||0)+'/1',done:g=>((g.stats&&g.stats.auctionsWon)||0)>=1,             reward:{money:1500,rep:35}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1216,6 +1246,7 @@ const HR = {
   canStand, studFee, studDemand, studIncomeFor, studStallions, studIncome,
   cardModel, hofToModel, stampFor,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
+  isAuctionDay, nextAuction, makeAuctionLot, makeAuctionLots, aiCounter, resolveAuction, consignValue,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   isHofChampion, inductHof, retireHorse,
@@ -1263,6 +1294,8 @@ function load(){
     if(G.stats.goldEarned==null) G.stats.goldEarned=0;
     if(G.stats.bestOVR==null) G.stats.bestOVR=Math.max(0,...(G.horses||[]).map(h=>overall(h)));
     if(!G.stats.disciplinesWon) G.stats.disciplinesWon={};
+    if(G.stats.auctionsWon==null) G.stats.auctionsWon=0;
+    if(G.stats.consigned==null) G.stats.consigned=0;
     if(!G.achievements) G.achievements=[];
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
@@ -1692,8 +1725,8 @@ function renderBiz(){
   const s=$('sec-biz'); s.innerHTML='';
   s.appendChild(el('h2','head','Business'));
   const seg=el('div','seg');
-  const segLabel={rent:'🐴 Rent',board:'🏨 Board',stud:'♞ Stud',shows:'🏆 Shows',sell:'💰 Sell'};
-  ['rent','board','stud','shows','sell'].forEach(k=>{ const b=el('div','segb'+(bizSub===k?' on':''), segLabel[k]); b.onclick=()=>{bizSub=k;renderBiz();}; seg.appendChild(b); });
+  const segLabel={rent:'🐴 Rent',board:'🏨 Board',stud:'♞ Stud',auction:'🔨 Auction',shows:'🏆 Shows',sell:'💰 Sell'};
+  ['rent','board','stud','auction','shows','sell'].forEach(k=>{ const b=el('div','segb'+(bizSub===k?' on':''), segLabel[k]); b.onclick=()=>{bizSub=k;renderBiz();}; seg.appendChild(b); });
   s.appendChild(seg);
 
   if(bizSub==='rent'){
@@ -1729,6 +1762,9 @@ function renderBiz(){
     c.querySelector('#boardRem').onclick=()=>{ if(G.boarders>0){ G.boarders--; toast('Boarder released.','info'); refresh(); } };
     // rent out whole stable stalls also raises rep slightly (handled in daily)
   }
+  else if(bizSub==='auction'){
+    renderAuction(s);
+  }
   else if(bizSub==='stud'){
     renderStud(s);
   }
@@ -1747,6 +1783,80 @@ function renderBiz(){
 }
 
 // ---------------- Stud farm UI ----------------
+// ---------------- Auction house UI ----------------
+function ensureAuction(){ // lazily generate today's lots on an auction day
+  if(!isAuctionDay(G.day)){ return false; }
+  if(!G.auction || G.auction.day!==G.day){ G.auction={day:G.day, lots:makeAuctionLots(G,Math.random)}; save(); }
+  return true;
+}
+function renderAuction(s){
+  s.appendChild(el('div','sub','Standout horses — rare breeds, fine coats, proven winners — come to auction once a season. Bid against other buyers, or consign one of yours for a shot at top price.'));
+  const live=ensureAuction();
+  if(!live){ const na=nextAuction(G.day);
+    s.appendChild(el('div','empty','🔨 No auction today.<br>'+(na?('Next auction in '+na.inDays+' day'+(na.inDays>1?'s':'')+' (Season day 10).'):'')));
+  } else {
+    const banner=el('div','todaystrip'); banner.style.borderColor='var(--gold)';
+    banner.innerHTML='<div class="tsimoji">🔨</div><div class="grow"><div class="tslabel">The Auction is live!</div><div class="tsnote">'+G.auction.lots.filter(l=>!l.closed).length+' lot(s) under the hammer today.</div></div>';
+    s.appendChild(banner);
+    G.auction.lots.forEach((lot,i)=>{
+      const h=lot.horse, b=breedDef(h.breed);
+      const c=el('div','card'); if(lot.won) c.style.borderLeft='4px solid var(--good)';
+      let status;
+      if(lot.won) status='<div class="kv">Status<b style="color:var(--good)">✔ Won for 🪙'+fmt(lot.high)+'</b></div>';
+      else if(lot.closed) status='<div class="kv">Status<b style="color:var(--bad)">Sold to another buyer (🪙'+fmt(lot.high)+')</b></div>';
+      else status='<div class="kv">Current bid<b>🪙'+fmt(lot.high)+(lot.bidder==='you'?' (you)':(lot.bidder==='ai'?' (rival)':''))+'</b></div>';
+      const acts = (lot.won||lot.closed)?'' :
+        ('<button class="btn sm blue" data-bid="'+i+'" '+(G.money<lot.high+lot.minInc?'disabled':'')+'>Bid 🪙'+fmt(lot.high+lot.minInc)+'</button>'+
+         (lot.bidder==='you'?'<button class="btn sm" data-close="'+i+'">🔨 Claim</button>':'<button class="btn sm ghost" data-pass="'+i+'">Pass</button>'));
+      const card=horseCard(h,acts);
+      const meta=el('div',''); meta.innerHTML=status; card.appendChild(meta);
+      s.appendChild(card);
+      const bb=card.querySelector('[data-bid]'); if(bb) bb.onclick=()=>auctionBid(i);
+      const cl=card.querySelector('[data-close]'); if(cl) cl.onclick=()=>auctionClose(i);
+      const ps=card.querySelector('[data-pass]'); if(ps) ps.onclick=()=>auctionPass(i);
+    });
+  }
+  // consignment
+  s.appendChild(el('h2','head','🏷️ Consign a Horse'));
+  s.appendChild(el('div','sub','Send one of your horses to the auction block — buyers may pay above market for a great one (a small gamble).'));
+  const mine=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant&&!h.atStud);
+  if(!mine.length) s.appendChild(el('div','empty','No adult horses free to consign.'));
+  mine.slice().sort((a,b)=>valueOf(b)-valueOf(a)).forEach(h=>{
+    const c=horseCard(h,'<button class="btn sm blue" data-consign="'+h.id+'">🔨 Consign</button>');
+    c.querySelector('[data-consign]').onclick=()=>consignHorse(h);
+    s.appendChild(c);
+  });
+}
+function auctionBid(i){ const lot=G.auction&&G.auction.lots[i]; if(!lot||lot.won||lot.closed) return;
+  const bid=lot.high+lot.minInc; if(G.money<bid){ toast('You can’t afford that bid.','bad'); return; }
+  lot.high=bid; lot.bidder='you'; playSfx('tap');
+  // rival responds
+  const counter=aiCounter(lot,Math.random);
+  if(counter!=null){ lot.high=counter; lot.bidder='ai'; toast('A rival buyer bids 🪙'+fmt(counter)+'!','info'); }
+  else { toast('You’re the top bidder — claim it with 🔨!','good'); }
+  save(); refresh();
+}
+function auctionClose(i){ const lot=G.auction&&G.auction.lots[i]; if(!lot||lot.won||lot.closed) return;
+  const res=resolveAuction(lot);
+  if(res.winner==='you'){
+    if(freeStalls(G)<=0){ toast('No free stalls — build or upgrade a stable first!','bad'); return; }
+    if(G.money<lot.high){ toast('You can’t afford the winning bid.','bad'); return; }
+    G.money-=lot.high; lot.won=true; lot.closed=true; lot.horse.stable=0; G.horses.push(lot.horse);
+    G.stats.auctionsWon=(G.stats.auctionsWon||0)+1; G.stats.bought=(G.stats.bought||0)+1;
+    coinPop(-lot.high); burst('🔨🏆✨',14); playSfx('win'); toast('🔨 Sold! '+lot.horse.name+' is yours for 🪙'+fmt(lot.high)+'.','good');
+  } else { lot.closed=true; toast('Outbid — the lot went to another buyer.','info'); }
+  save(); refresh();
+}
+function auctionPass(i){ const lot=G.auction&&G.auction.lots[i]; if(!lot||lot.won||lot.closed) return; lot.closed=true; toast('You passed on '+lot.horse.name+'.','info'); save(); refresh(); }
+function consignHorse(h){
+  const price=consignValue(h,G,Math.random); const over=price>valueOf(h);
+  modal('<h3>🔨 Consign '+h.name+'?</h3><div class="msg">'+breedDef(h.breed).name+' · OVR '+overall(h)+'<br>The auction block’s best bid: <b class="val">🪙'+fmt(price)+'</b>'+(over?' <span style="color:var(--good)">(above market!)</span>':'')+'</div>'+
+    '<div class="btnrow"><button class="btn" id="coYes">Sell for 🪙'+fmt(price)+'</button><button class="btn ghost" id="coNo">Keep</button></div>');
+  $('coNo').onclick=closeModal;
+  $('coYes').onclick=()=>{ G.money+=price; G.stats.bestSale=Math.max(G.stats.bestSale||0,price); G.stats.goldEarned=(G.stats.goldEarned||0)+price; G.stats.consigned=(G.stats.consigned||0)+1; G.stats.sold=(G.stats.sold||0)+1;
+    G.horses=G.horses.filter(x=>x.id!==h.id); const rg=Math.round(overall(h)*0.3+(breedDef(h.breed).rarity)*4); G.rep+=rg;
+    coinPop(price); closeModal(); toast('🔨 '+h.name+' sold at auction for 🪙'+fmt(price)+' (+'+rg+'⭐)','good'); refresh(); };
+}
 function renderStud(s){
   s.appendChild(el('div','sub','Stand a prized stallion at public stud: visiting mares pay a fee to breed with him — steady income, and no foals in your own stalls. A stallion at stud can’t compete or be rented that day.'));
   const spring=seasonOf(G.day).id==='spring';
@@ -2354,16 +2464,18 @@ function openWeek(){
   const todayI=weekdayIndex(G.day), weekStart=G.day-todayI;
   let rows='';
   SCHEDULE.forEach((sd,i)=>{
-    const isToday=i===todayI; const dnum=weekStart+i; const wthr=weatherFor(dnum); const fest=festivalOn(dnum);
+    const isToday=i===todayI; const dnum=weekStart+i; const wthr=weatherFor(dnum); const fest=festivalOn(dnum); const auc=isAuctionDay(dnum);
     const showTxt = sd.shows.length ? sd.shows.map(id=>{ const d=disciplineDef(id); return d?d.emoji:''; }).join(' ')+' shows' : '';
-    rows+='<div class="weekrow'+(isToday?' today':'')+(fest?' fest':'')+'">'+
-      '<div class="wdname">'+sd.emoji+' '+WEEKDAY_FULL[i]+' <span style="font-weight:400">'+wthr.emoji+'</span>'+(isToday?' <span class="pill">TODAY</span>':'')+(fest?' <span class="pill" style="color:var(--gold)">'+fest.emoji+' '+fest.name+'</span>':'')+'</div>'+
-      '<div class="wdnote">'+(fest?fest.emoji+' '+fest.name:sd.label)+(showTxt?' · '+showTxt:'')+'</div>'+
-      '<div class="wddesc">'+(fest?fest.note:sd.note)+' · '+wthr.name+'.</div></div>';
+    rows+='<div class="weekrow'+(isToday?' today':'')+(fest||auc?' fest':'')+'">'+
+      '<div class="wdname">'+sd.emoji+' '+WEEKDAY_FULL[i]+' <span style="font-weight:400">'+wthr.emoji+'</span>'+(isToday?' <span class="pill">TODAY</span>':'')+(fest?' <span class="pill" style="color:var(--gold)">'+fest.emoji+' '+fest.name+'</span>':'')+(auc?' <span class="pill" style="color:var(--gold)">🔨 Auction</span>':'')+'</div>'+
+      '<div class="wdnote">'+(fest?fest.emoji+' '+fest.name:(auc?'🔨 Auction Day':sd.label))+(showTxt?' · '+showTxt:'')+'</div>'+
+      '<div class="wddesc">'+(fest?fest.note:(auc?'Standout horses go under the hammer — come and bid!':sd.note))+' · '+wthr.name+'.</div></div>';
   });
-  const se=seasonOf(G.day); const nf=nextFestival(G.day);
+  const se=seasonOf(G.day); const nf=nextFestival(G.day); const nau=nextAuction(G.day);
   const festLine = festivalOn(G.day) ? ('<b style="color:var(--gold)">'+festivalOn(G.day).emoji+' '+festivalOn(G.day).name+' is today!</b>') :
-    (nf?('Next festival: '+nf.fest.emoji+' <b>'+nf.fest.name+'</b> in '+nf.inDays+' day'+(nf.inDays>1?'s':'')+'.'):'');
+    isAuctionDay(G.day) ? '<b style="color:var(--gold)">🔨 Auction Day — bid in the Business tab!</b>' :
+    (nf&&nau ? (nf.inDays<=nau.inDays?('Next festival: '+nf.fest.emoji+' <b>'+nf.fest.name+'</b> in '+nf.inDays+'d.'):('Next auction 🔨 in '+nau.inDays+'d.')) :
+     nf?('Next festival: '+nf.fest.emoji+' <b>'+nf.fest.name+'</b> in '+nf.inDays+' day'+(nf.inDays>1?'s':'')+'.'):'');
   modal('<h3>'+se.emoji+' '+se.name+' — This Week</h3>'+
     '<div class="msg"><b>'+se.emoji+' '+se.name+'</b> · Year '+yearOf(G.day)+' · day '+seasonDay(G.day)+'/'+SEASON_LEN+' — '+se.note+'<br>'+
     'Week '+weekOf(G.day)+' · today is '+WEEKDAY_FULL[todayI]+', '+weatherFor(G.day).name+' '+weatherFor(G.day).emoji+'.'+(festLine?'<br>'+festLine:'')+'</div>'+

@@ -191,6 +191,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.hallOfFame = [HR.hofRecord(HR.mkHorse({ breed: 'arabian', age: 40, wins: 5 }), 'retired', 40)]; // satisfies HoF goals
   g.horses.push(HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, atStud: true })); g.stats.studIncome = 5000; // satisfies stud goals
   g.stats.festivals = 4; // satisfies festival goals
+  g.stats.auctionsWon = 1; // satisfies auction goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -850,6 +851,50 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.horses.push(star);
   HR.applyCompetition(g, star, HR.disciplineDef('race'), HR.tierDef(1), rng(2));
   ok(g.stats.disciplinesWon && g.stats.disciplinesWon.race === true, 'winning records the discipline');
+}
+
+// ---- auction house ----
+{
+  // one auction per season on season-day 10, forecastable
+  ok(HR.isAuctionDay(10) && !HR.isAuctionDay(9) && !HR.isAuctionDay(7), 'auction lands on season-day 10');
+  ok(HR.isAuctionDay(HR.SEASON_LEN + 10), 'auctions recur each season');
+  const na = HR.nextAuction(1);
+  ok(na && na.inDays >= 1 && HR.isAuctionDay(1 + na.inDays), 'nextAuction forecasts the upcoming one');
+}
+{
+  // lots are standout — rare-tier breeds
+  const g = HR.freshGame(); g.rep = 3000;
+  let allRare = true;
+  const r = rng(9);
+  for (let i = 0; i < 20; i++) { const lot = HR.makeAuctionLot(g, r); if ((HR.breedDef(lot.horse.breed) || {}).rarity < 3) allRare = false; }
+  ok(allRare, 'auction lots are always rare-tier or better');
+  const lot = HR.makeAuctionLot(g, rng(3));
+  ok(lot.start < lot.value && lot.high === lot.start && lot.minInc > 0, 'lot has a starting bid below value + a min increment');
+  ok(lot.aiMax > 0 && lot.bidder === 'house', 'lot has a hidden AI ceiling and starts unbid');
+  const lots = HR.makeAuctionLots(g, rng(5));
+  ok(lots.length >= 1 && lots.length <= 3, 'an auction offers 1-3 lots');
+}
+{
+  // AI counters up to its ceiling then drops out; whoever holds the top bid wins
+  const lot = { high: 100, minInc: 50, aiMax: 220, bidder: 'you' };
+  const c1 = HR.aiCounter(lot, rng(1));
+  ok(c1 === 150, 'AI counters one increment above the current bid');
+  lot.high = 200; lot.bidder = 'you';
+  ok(HR.aiCounter(lot, rng(1)) === null, 'AI drops out when the next bid would exceed its ceiling');
+  ok(HR.resolveAuction({ high: 300, bidder: 'you' }).winner === 'you', 'top bidder (you) wins');
+  ok(HR.resolveAuction({ high: 300, bidder: 'ai' }).winner === 'ai', 'top bidder (AI) wins');
+  // bidding above the AI ceiling secures the lot
+  const lot2 = { high: 100, minInc: 50, aiMax: 120, bidder: 'house' };
+  lot2.high = lot2.high + lot2.minInc; lot2.bidder = 'you'; // player bids 150 (> aiMax 120)
+  ok(HR.aiCounter(lot2, rng(1)) === null && HR.resolveAuction(lot2).winner === 'you', 'a bid above the ceiling wins outright');
+}
+{
+  // consignment can pay above market for a great horse (never absurdly low)
+  const g = HR.freshGame();
+  const champ = HR.mkHorse({ breed: 'friesian', age: 20, speed: 90, stamina: 88, temperament: 88, health: 100, happy: 100, wins: 4, coat: { name: 'Cremello', tier: 2 } });
+  let sawOver = false;
+  for (let i = 0; i < 40; i++) { const p = HR.consignValue(champ, g, rng(i + 1)); if (p > HR.valueOf(champ)) sawOver = true; ok(p >= 50, 'consign price has a floor'); }
+  ok(sawOver, 'a great horse can fetch above market at auction');
 }
 
 // ---- clamp helper ----
