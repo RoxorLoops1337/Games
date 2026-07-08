@@ -1152,6 +1152,47 @@ function foalMeetsGoal(foal, goalId){ if(!foal) return false; const g=breedGoalD
   if(g.kind==='rarity') return ((breedDef(foal.breed)||{rarity:1}).rarity)>=g.value;
   return false; }
 
+// ---------- Breeder's prestige / bloodline track (a long-horizon breeding progression) ----------
+// Points come ONLY from real breeding events (awarded at foal birth). Accumulated points unlock named
+// tiers with small, bounded, ADDITIVE perks (a breeding-fee discount + a cosmetic title). DISTINCT from
+// the ⭐ reputation and the New Game+/Legacy prestige. Never touches the breeding RNG or foal stats.
+const BREEDER_TIERS=[
+  {id:'novice',     name:'Novice Breeder',      emoji:'🌱', minPoints:0,   perk:{feeDisc:0.00}},
+  {id:'established',name:'Established Breeder',  emoji:'🐴', minPoints:60,  perk:{feeDisc:0.05}},
+  {id:'renowned',   name:'Renowned Breeder',    emoji:'🏵️', minPoints:180, perk:{feeDisc:0.10}},
+  {id:'master',     name:'Master Breeder',      emoji:'🎖️', minPoints:400, perk:{feeDisc:0.15}},
+  {id:'legendary',  name:'Legendary Bloodline', emoji:'👑', minPoints:800, perk:{feeDisc:0.20}},
+];
+function breederTierDef(id){ return BREEDER_TIERS.find(t=>t.id===id)||BREEDER_TIERS[0]; }
+// bounded points a single foal is worth, from its generation / coat / bloodline vs its parents
+function breederPointsFor(foal, parents){
+  if(!foal) return 0;
+  let p=2; // every foal is a step in the line
+  const gen=foal.generation||1;
+  p += Math.min(21, (gen-1)*3);                 // deeper lines are worth more (capped)
+  if(foal.purebred) p += 4;
+  const tier=(coatOf(foal).tier||0); if(tier>=2) p += 6; else if(tier>=1) p += 2; // rare coats
+  if(foal.rare) p += 10;                         // champion bloodline
+  const dam=parents&&parents.mare, sire=parents&&parents.sire;
+  if(dam&&sire){ const best=Math.max(overall(dam), overall(sire)); if(overall(foal)>best) p += 6; } // improves on the pairing
+  if(gen===5) p += 8; if(gen>=10) p += 20;       // generation milestones
+  return Math.min(60, Math.round(p));            // hard per-foal cap (economy-safe)
+}
+function awardBreederPoints(game, foal, parents){
+  if(!game) return 0; const pts=breederPointsFor(foal, parents);
+  if(!game.breeder||typeof game.breeder!=='object') game.breeder={points:0};
+  game.breeder.points=(game.breeder.points||0)+pts;
+  if(game.stats) game.stats.breederPoints=game.breeder.points; // mirror for goals/achievements
+  return pts;
+}
+function breederPoints(game){ return (game&&game.breeder&&game.breeder.points)||0; }
+function breederTier(game){ const p=breederPoints(game); let t=BREEDER_TIERS[0]; for(const x of BREEDER_TIERS){ if(p>=x.minPoints) t=x; } return t; }
+function nextBreederTier(game){ const p=breederPoints(game); for(const x of BREEDER_TIERS){ if(x.minPoints>p) return x; } return null; }
+function breederPerk(game,key){ const t=breederTier(game); return (t.perk&&t.perk[key]!=null)?t.perk[key]:0; }
+function breederFeeMult(game){ return 1 - Math.min(0.20, breederPerk(game,'feeDisc')||0); } // bounded breeding-fee discount
+function breederProgress(game){ const p=breederPoints(game), t=breederTier(game), nx=nextBreederTier(game);
+  return { points:p, tier:t, next:nx, toNext: nx?Math.max(0,nx.minPoints-p):0, span: nx?(nx.minPoints-t.minPoints):0, into: p-t.minPoints }; }
+
 // ---------- Market stock ----------
 function marketPickBreed(game,rng){
   // higher reputation unlocks rarer stock
@@ -1529,7 +1570,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1537,7 +1578,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]},
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]}, breeder:{points:0},
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1619,6 +1660,7 @@ function advanceDay(game,rng){
         foal.name=pickNameFrom(activeNamePack(game), foal.sex, rng); // foals are named from the active pack
         foal.stable=h.stable;
         if(game.breedGoal && foalMeetsGoal(foal, game.breedGoal)){ game.stats.goalsMet=(game.stats.goalsMet||0)+1; foal._metGoal=game.breedGoal; }
+        awardBreederPoints(game, foal, {mare:h, sire}); // breeder's-prestige points for this bloodline event
         born.push(foal);
       }
     }
@@ -2733,6 +2775,7 @@ const ACHIEVEMENTS=[
   {id:'diligent',   icon:'✅', name:'Diligent Hand',         desc:'Keep a 7-day daily-chores streak.',            check:g=>((g.stats&&g.stats.bestChoreStreak)||0)>=7},
   {id:'traveller',  icon:'🚚', name:'Seasoned Traveller',    desc:'Complete ten away trips.',                     check:g=>((g.stats&&g.stats.trips)||0)>=10},
   {id:'regular',    icon:'🏪', name:'Store Regular',         desc:'Buy fifteen deals from the general store.',    check:g=>((g.stats&&g.stats.storeBuys)||0)>=15},
+  {id:'masterbred', icon:'👑', name:'Master of Bloodlines',  desc:'Reach the Master Breeder prestige tier.',      check:g=>breederPoints(g)>=breederTierDef('master').minPoints},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2839,6 +2882,7 @@ const GOALS=[
   {id:'chore1',  desc:'Finish all your daily chores (✅ to-do)',   tip:g=>((g.stats&&g.stats.choresDone)||0)+' clean days',done:g=>((g.stats&&g.stats.choresDone)||0)>=1,       reward:{money:300,rep:10}},
   {id:'trip1',   desc:'Send a horse on an away trip (🚚 trailer)',  tip:g=>((g.stats&&g.stats.trips)||0)+' trips',done:g=>((g.stats&&g.stats.trips)||0)>=1,                     reward:{money:500,rep:15}},
   {id:'store1',  desc:'Grab a deal at the general store (🏪)',      tip:g=>((g.stats&&g.stats.storeBuys)||0)+' bought',done:g=>((g.stats&&g.stats.storeBuys)||0)>=1,           reward:{money:300,rep:10}},
+  {id:'breeder1',desc:'Become an Established Breeder (🏵️ prestige)',tip:g=>breederPoints(g)+'/'+breederTierDef('established').minPoints+' pts',done:g=>breederTier(g).id!=='novice',reward:{money:800,rep:25}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2870,6 +2914,7 @@ const HR = {
   CHORE_TYPES, choreTypeDef, choreIdsFor, dailyChores, markChoreProgress, choreProgress, choresStreak, choresBonus, resolveDailyChores,
   TRIP_TYPES, tripTypeDef, tripFee, horseAway, canSendOnTrip, tripReturnPreview, tripDaysLeft, horsesAway, sendHorseOnTrip, resolveTrips,
   STORE_ITEMS, STORE_CYCLE, storeItemDef, storeStock, storeRestockDay, nextStoreRestock, storeDaysLeft, storeItemAffordable, buyStoreItem, applyStoreEffect,
+  BREEDER_TIERS, breederTierDef, breederPointsFor, awardBreederPoints, breederPoints, breederTier, nextBreederTier, breederPerk, breederFeeMult, breederProgress,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -3006,6 +3051,7 @@ function load(){
     if(!G.chores||typeof G.chores!=='object'){ G.chores={day:0,done:{},streak:0,lastFull:0}; } else { if(!G.chores.done||typeof G.chores.done!=='object') G.chores.done={}; if(typeof G.chores.streak!=='number') G.chores.streak=0; } // daily chores board
     for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; } // away-trip state
     if(!G.store||typeof G.store!=='object'){ G.store={stock:-1,sold:[]}; } else if(!Array.isArray(G.store.sold)) G.store.sold=[]; // general store restock state
+    if(!G.breeder||typeof G.breeder!=='object'){ G.breeder={points:(G.stats&&G.stats.breederPoints)||0}; } else if(typeof G.breeder.points!=='number') G.breeder.points=0; // breeder's prestige track
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -3476,6 +3522,19 @@ function renderBreed(){
   const s=$('sec-breed'); s.innerHTML='';
   s.appendChild(el('h2','head','Breeding Barn'));
   s.appendChild(el('div','sub','Pair an adult mare with a stallion. Same breed = purebred foal (worth more). Cross-breed for surprises!'));
+
+  // ---- Breeder's prestige / bloodline track ----
+  { const bp=breederProgress(G), t=bp.tier, disc=Math.round((breederPerk(G,'feeDisc')||0)*100);
+    const pct = bp.span>0 ? Math.round(100*bp.into/bp.span) : 100;
+    const card=el('div','card'); card.style.borderLeft='4px solid var(--gold2)';
+    card.innerHTML='<div class="row"><div class="hface" style="background:none;font-size:22px;display:flex;align-items:center;justify-content:center">'+t.emoji+'</div>'+
+      '<div class="grow"><div class="hname">'+t.name+' <span class="pill" style="color:var(--gold)">'+bp.points+' pts</span></div>'+
+      '<div class="hbreed">Bloodline prestige — grows as you raise deeper, finer lines.'+(disc>0?' Perk: <b>-'+disc+'% breeding fees</b>.':'')+'</div>'+
+      '<div class="cbar" style="margin-top:5px"><i style="display:block;height:100%;width:'+pct+'%;background:var(--gold)"></i></div>'+
+      '<div class="hbreed" style="margin-top:3px">'+(bp.next?('Next: '+bp.next.emoji+' '+bp.next.name+' in '+bp.toNext+' pts'):'Top tier reached — a Legendary Bloodline!')+'</div>'+
+      '</div></div>';
+    s.appendChild(card);
+  }
   // validate picks still exist/eligible
   if(breedPick.mare && !G.horses.find(h=>h.id===breedPick.mare)) breedPick.mare=null;
   if(breedPick.stallion && !G.horses.find(h=>h.id===breedPick.stallion)) breedPick.stallion=null;
@@ -3564,7 +3623,7 @@ function openPicker(role){
   sh.querySelectorAll('[data-pick]').forEach(o=>o.onclick=()=>{ breedPick[role]=o.getAttribute('data-pick'); closeModal(); renderBreed(); });
 }
 function gestationDays(mare,stal){ const r=Math.max(breedDef(mare.breed).rarity,breedDef(stal.breed).rarity); return Math.max(3, 4+r+seasonGestationAdj(G.day)); } // spring shortens gestation
-function breedFee(mare,stal){ if(!mare||!stal) return 0; return Math.round((80+valueOf(stal)*0.05)*seasonBreedFeeMul(G.day)*festivalMod(G.day,'breedFeeMul',1)); } // spring + Foal Festival are cheaper
+function breedFee(mare,stal){ if(!mare||!stal) return 0; return Math.round((80+valueOf(stal)*0.05)*seasonBreedFeeMul(G.day)*festivalMod(G.day,'breedFeeMul',1)*breederFeeMult(G)); } // spring + Foal Festival + breeder-tier discount
 function doBreed(mare,stal){
   const chk=canBreed(mare,stal); if(!chk.ok) return;
   const fee=breedFee(mare,stal); if(G.money<fee){ toast('Not enough coins for the breeding fee.','bad'); return; }

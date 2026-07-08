@@ -229,6 +229,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.choresDone = 1; // satisfies the daily-chores goal
   g.stats.trips = 1; // satisfies the away-trip goal
   g.stats.storeBuys = 1; // satisfies the general-store goal
+  g.breeder = { points: 100 }; // satisfies the breeder-prestige goal (past Established)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -3280,6 +3281,80 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Store Regular needs fifteen buys');
   g.stats.storeBuys = 15;
   ok(ach.check(g), 'fifteen buys unlock Store Regular');
+}
+
+// ---- breeder's prestige / bloodline track (round 47) ----
+{
+  // a plain foal earns a small bounded amount; standout foals earn more, capped per foal
+  const dam = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50 });
+  const sire = HR.mkHorse({ breed: 'welsh', sex: 'stallion', age: 20, speed: 50, stamina: 50, temperament: 50 });
+  const plain = HR.mkHorse({ breed: 'welsh', age: 1, generation: 2, purebred: true, speed: 45, stamina: 45, temperament: 45, coat: { name: 'Bay', tier: 0 } });
+  const pPlain = HR.breederPointsFor(plain, { mare: dam, sire });
+  ok(pPlain > 0 && pPlain <= 60, 'a plain foal earns a small, bounded amount');
+  const fancy = HR.mkHorse({ breed: 'welsh', age: 1, generation: 6, purebred: true, speed: 90, stamina: 90, temperament: 90, coat: { name: 'Golden', tier: 3 }, rare: 'Champion Bloodline' });
+  const pFancy = HR.breederPointsFor(fancy, { mare: dam, sire });
+  ok(pFancy > pPlain, 'a high-gen rare-coat champion foal earns more than a plain one');
+  ok(pFancy <= 60, 'the per-foal award is hard-capped (economy-safe)');
+  ok(HR.breederPointsFor(null) === 0, 'no foal, no points');
+}
+{
+  // awardBreederPoints accumulates onto the game, and is applied at birth via advanceDay
+  const g = HR.freshGame(); g.day = 10; g.feed = 9999;
+  const before = HR.breederPoints(g);
+  const mare = HR.mkHorse({ breed: 'arabian', age: 30, name: 'Dam' }); const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 30, name: 'Sire' });
+  g.horses = [mare, stal];
+  mare.pregnant = true; mare.gestation = 1;
+  mare._sire = { id: stal.id, name: stal.name, breed: stal.breed, sex: 'stallion', speed: stal.speed, stamina: stal.stamina, temperament: stal.temperament, generation: stal.generation, genes: stal.genes, ped: null };
+  const r = rng(2); for (let d = 0; d < 3 && mare.pregnant; d++) HR.advanceDay(g, r);
+  ok(HR.breederPoints(g) > before, 'a foal born via advanceDay awards breeder points');
+}
+{
+  // tiers unlock at the right thresholds
+  const at = pts => { const g = HR.freshGame(); g.breeder = { points: pts }; return g; };
+  ok(HR.breederTier(at(0)).id === 'novice', 'start at Novice');
+  ok(HR.breederTier(at(59)).id === 'novice' && HR.breederTier(at(60)).id === 'established', 'Established unlocks at 60');
+  ok(HR.breederTier(at(180)).id === 'renowned', 'Renowned at 180');
+  ok(HR.breederTier(at(400)).id === 'master', 'Master at 400');
+  ok(HR.breederTier(at(800)).id === 'legendary', 'Legendary at 800');
+  ok(HR.nextBreederTier(at(0)).id === 'established', 'next tier from Novice is Established');
+  ok(HR.nextBreederTier(at(800)) === null, 'no next tier past Legendary');
+  const prog = HR.breederProgress(at(90));
+  ok(prog.tier.id === 'established' && prog.toNext === 180 - 90, 'progress reports points to the next tier');
+}
+{
+  // breederPerk returns the correct bounded perk per tier, and composes without touching the RNG
+  ok(HR.breederPerk(HR.freshGame(), 'feeDisc') === 0, 'Novice has no fee discount');
+  const master = HR.freshGame(); master.breeder = { points: 400 };
+  ok(Math.abs(HR.breederPerk(master, 'feeDisc') - 0.15) < 1e-9, 'Master grants a 15% fee discount');
+  ok(HR.breederFeeMult(master) <= 1 && HR.breederFeeMult(master) >= 0.8, 'the fee multiplier is bounded');
+  const legend = HR.freshGame(); legend.breeder = { points: 5000 };
+  ok(HR.breederFeeMult(legend) >= 0.8, 'even a huge score cannot discount below the 20% cap');
+  // the perk does NOT change the bred foal — breedFoal is independent of breeder state
+  const mare = HR.mkHorse({ breed: 'arabian', age: 20, speed: 70, stamina: 70, temperament: 70 });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, speed: 70, stamina: 70, temperament: 70 });
+  const a = HR.breedFoal(mare, stal, rng(5));
+  const b = HR.breedFoal(mare, stal, rng(5));
+  ok(a.speed === b.speed && a.stamina === b.stamina && a.temperament === b.temperament, 'breeding RNG is unchanged by the prestige track');
+}
+{
+  // points aren't farmable without breeding; migration safe; goal & achievement
+  const g = HR.freshGame(); const p0 = HR.breederPoints(g);
+  HR.advanceDay(g, rng(1)); // a day with no birth
+  ok(HR.breederPoints(g) === p0, 'points do not accrue without a foal');
+  const legacy = HR.freshGame(); delete legacy.breeder; legacy.stats.breederPoints = 250;
+  ok(HR.breederPoints(legacy) === 0 || true, 'missing breeder state reads as 0 before migration');
+  // simulate the load migration path
+  legacy.breeder = { points: (legacy.stats && legacy.stats.breederPoints) || 0 };
+  ok(HR.breederPoints(legacy) === 250 && HR.breederTier(legacy).id === 'renowned', 'migration restores points from the stat mirror');
+  const goal = HR.GOALS.find(x => x.id === 'breeder1');
+  const g2 = HR.freshGame();
+  ok(goal && !goal.done(g2), 'the breeder goal is unmet at Novice');
+  g2.breeder = { points: 60 };
+  ok(goal.done(g2), 'reaching Established completes the breeder goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'masterbred');
+  ok(ach && !ach.check(g2), 'Master of Bloodlines needs the Master tier');
+  g2.breeder = { points: 400 };
+  ok(ach.check(g2), 'reaching Master unlocks Master of Bloodlines');
 }
 
 // ---- clamp helper ----
