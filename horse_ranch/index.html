@@ -326,6 +326,7 @@
     <button class="sbtn" id="diaryBtn" title="Ranch diary — how your horses are feeling" style="margin-right:4px">📓</button>
     <button class="sbtn" id="grudgeBtn" title="Grudge match — challenge a rival ranch" style="margin-right:4px">⚔️</button>
     <button class="sbtn" id="almanacBtn" title="Almanac — weather & season forecast" style="margin-right:4px">🌤️</button>
+    <button class="sbtn" id="cerBtn" title="Coming-of-age ceremonies" style="margin-right:4px;position:relative">🎓<span id="cerBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1004,6 +1005,7 @@ function mkHorse(o){
     pregnant:false, gestation:0, sireBreed:null,
     rentDays:0, rentRate:0,   // >0 = out on rent
     tripType:o.tripType||null, tripBack:o.tripBack||0,   // away on a trailer trip (unavailable until tripBack)
+    ceremonies:o.ceremonies||{},   // coming-of-age milestones (pending/done per milestone id)
     stable:o.stable!=null?o.stable:0,
     needs:o.needs||null, bond:o.bond,  // daily care needs + bonding level (needsInit fills defaults)
     gwDay:o.gwDay||0, gwEnergy:o.gwEnergy||0, // groundwork handling energy (per-day, auto-resets)
@@ -1722,7 +1724,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0,ceremonies:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1798,6 +1800,7 @@ function advanceDay(game,rng){
   const born=[];
   for(const h of game.horses){
     h.age++; h.trains=0; // fresh training energy each day
+    { const ms=checkFoalMilestone(h); if(ms) notes.push({t:'good',m:ms.emoji+' '+h.name+' reached '+ms.name+' — hold a ceremony to celebrate!'}); } // coming-of-age milestone
     // daily care needs decay; neglect drags mood/health, a pampered horse gets a small lift
     decayNeeds(game,h);
     // staff chores: a Groom tops up care needs, a Vet heals a little (bounded — not free full care)
@@ -2251,6 +2254,37 @@ function captureMoment(game, kind, horse, extra){
   return addScrapbookEntry(game, { kind, emoji:md.emoji, title:md.title, horseId:horse.id, name:horse.name,
     breed:horse.breed, breedName:bd.name, coat:co.name, coatTier:co.tier||0, overall:overall(horse),
     gen:horse.generation||1, caption, day:extra.day });
+}
+
+// ---------- Foal coming-of-age ceremonies (a one-time milestone beat as a foal grows up) ----------
+// When a horse crosses a life-stage boundary (in advanceDay), a ceremony is queued. Holding it grants a
+// small, BOUNDED keepsake bonus (happy/bond/rep) + a scrapbook memory — once per horse per milestone.
+const FOAL_MILESTONES=[
+  {id:'yearling',    age:5,  name:'First Birthday', emoji:'🎂', happy:8,  bond:4, rep:2, note:'{name} turned a yearling — a proud first birthday! 🎂'},
+  {id:'comingofage', age:10, name:'Coming of Age',  emoji:'🎓', happy:10, bond:6, rep:5, note:'{name} came of age and joined the grown horses. 🎓'},
+];
+function foalMilestoneDef(id){ return FOAL_MILESTONES.find(m=>m.id===id)||null; }
+function horseCeremonies(h){ if(!h) return {}; if(!h.ceremonies||typeof h.ceremonies!=='object') h.ceremonies={}; return h.ceremonies; }
+// the milestone a horse is currently PENDING (queued but not yet held), if any
+function foalMilestonePending(horse){ const c=horseCeremonies(horse); for(const m of FOAL_MILESTONES){ if(c[m.id]==='pending') return m; } return null; }
+function foalMilestoneFor(horse){ return foalMilestonePending(horse); }
+// detector: called right after a horse ages a day — flags a ceremony ONLY on the exact crossing day (so an
+// already-grown horse loaded from an old save never fires retroactively). Returns the milestone if flagged.
+function checkFoalMilestone(h){ if(!h) return null; const c=horseCeremonies(h);
+  for(const m of FOAL_MILESTONES){ if((h.age||0)===m.age && !c[m.id]){ c[m.id]='pending'; return m; } }
+  return null; }
+function comingOfAgeDue(game){ return ((game&&game.horses)||[]).filter(h=>!!foalMilestonePending(h)); }
+// hold a pending ceremony: apply the bounded bonus once, mark it done, capture a keepsake
+function holdCeremony(game, horseId){
+  const h=((game&&game.horses)||[]).find(x=>x.id===horseId); if(!h) return {ok:false,why:'No such horse.'};
+  const m=foalMilestonePending(h); if(!m) return {ok:false,why:'No ceremony is pending for '+(h.name||'this horse')+'.'};
+  horseCeremonies(h)[m.id]='done';
+  h.happy=clamp((h.happy||0)+m.happy,0,100);
+  h.bond=clamp((h.bond||0)+m.bond,0,100);
+  game.rep=(game.rep||0)+m.rep;
+  if(!game.stats) game.stats={}; game.stats.ceremonies=(game.stats.ceremonies||0)+1;
+  if(typeof captureMoment==='function') captureMoment(game,'snapshot',h,{caption:m.note.replace(/\{name\}/g, h.name||'A young horse')});
+  return {ok:true, milestone:m, horse:h, rep:m.rep, happy:m.happy, bond:m.bond };
 }
 
 // ---------- Stable-Tour / Visitor Day (open the ranch to the public for a bounded, appeal-scaled payout) ----------
@@ -3010,6 +3044,7 @@ const ACHIEVEMENTS=[
   {id:'contentherd',icon:'🌿', name:'A Contented Herd',       desc:'Keep a herd of five with none unhappy or unwell.',check:g=>{const hs=(g.horses)||[]; return hs.length>=5 && hs.every(h=>['sad','sick'].indexOf(horseMood(h))<0);}},
   {id:'rivalslayer',icon:'⚔️', name:'Rival Slayer',           desc:'Beat every rival ranch in a grudge match.',    check:g=>{const vs=(g.grudge&&g.grudge.vs)||{}; return RIVALS.every(r=>(vs[r.id]&&vs[r.id].w>0));}},
   {id:'yearround',  icon:'🌤️', name:'Year-Round Rancher',     desc:'Run the ranch through a full year of seasons.',check:g=>((g.day)||1)>=SEASON_LEN*4},
+  {id:'raisedfoal', icon:'🎓', name:'Raised from a Foal',      desc:'Raise a foal all the way to its coming of age.', check:g=>((g.horses)||[]).some(h=>h.ceremonies&&h.ceremonies.comingofage==='done')},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3157,6 +3192,7 @@ const GOALS=[
   {id:'studbook1',desc:'Book a covering in the stud directory (♞)', tip:g=>((g.stats&&g.stats.studBookings)||0)+' bookings',done:g=>((g.stats&&g.stats.studBookings)||0)>=1,     reward:{money:600,rep:20}},
   {id:'trophy1', desc:'Earn 5 achievements (🏆 trophy room)',       tip:g=>achievementProgress(g).unlocked+'/5 unlocked',done:g=>achievementProgress(g).unlocked>=5,           reward:{money:700,rep:25}},
   {id:'grudge1', desc:'Win a grudge match vs a rival (⚔️)',          tip:g=>{const r=grudgeRecord(g);return r.w+'W–'+r.l+'L';},done:g=>((g.stats&&g.stats.grudgeWins)||0)>=1,        reward:{money:800,rep:30}},
+  {id:'cer1',    desc:'Hold a coming-of-age ceremony (🎓)',          tip:g=>((g.stats&&g.stats.ceremonies)||0)+' held',done:g=>((g.stats&&g.stats.ceremonies)||0)>=1,             reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3240,6 +3276,7 @@ const HR = {
   DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
   GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
   dayForecast, forecast, upcomingEvents, seasonAlmanac,
+  FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
   PASTURE_CAP, PASTURE_REP_CAP, sendToPasture, pastureList, pastureSize, pastureRepBonus,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
@@ -3328,7 +3365,7 @@ function load(){
     { const ns=(G.stables||[]).length; for(const h of (G.horses||[])){ if(typeof h.stable!=='number'||h.stable<0||h.stable>=ns) h.stable=0; } } // ranch map: normalise stray barn indices
     if(!Array.isArray(G.fairsClaimed)) G.fairsClaimed=[]; // seasonal fairs claimed-reward log
     if(!G.chores||typeof G.chores!=='object'){ G.chores={day:0,done:{},streak:0,lastFull:0}; } else { if(!G.chores.done||typeof G.chores.done!=='object') G.chores.done={}; if(typeof G.chores.streak!=='number') G.chores.streak=0; } // daily chores board
-    for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; } // away-trip state
+    for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; if(!h.ceremonies||typeof h.ceremonies!=='object') h.ceremonies={}; } // away-trip & coming-of-age state
     if(!G.store||typeof G.store!=='object'){ G.store={stock:-1,sold:[]}; } else if(!Array.isArray(G.store.sold)) G.store.sold=[]; // general store restock state
     if(!G.breeder||typeof G.breeder!=='object'){ G.breeder={points:(G.stats&&G.stats.breederPoints)||0}; } else if(typeof G.breeder.points!=='number') G.breeder.points=0; // breeder's prestige track
     if(!Array.isArray(G.studBookings)) G.studBookings=[]; // stud-directory outside-mare bookings
@@ -3519,6 +3556,8 @@ function renderHUD(){
   { const tb=$('tripBadge'); if(tb){ const n=horsesAway(G).length; tb.textContent=n; tb.style.display=n>0?'block':'none'; } }
   // general store: badge shows how many affordable deals are still in stock
   { const sb=$('storeBadge'); if(sb){ const n=storeStock(G).filter(s=>!s.sold&&(G.money||0)>=s.price).length; sb.textContent=n; sb.style.display=n>0?'block':'none'; } }
+  // coming-of-age: badge shows how many horses have a pending ceremony
+  { const cb=$('cerBadge'); if(cb){ const n=comingOfAgeDue(G).length; cb.textContent=n; cb.style.display=n>0?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -5199,6 +5238,25 @@ function storeEffectLine(it){
   if(e.kind==='rep') return '⭐ +'+e.rep+' reputation';
   return '';
 }
+function openCeremonies(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const due=comingOfAgeDue(G);
+  const rows = due.length ? due.map(h=>{ const m=foalMilestoneFor(h);
+    return '<div class="lbrow"><div class="hface">'+horseArt(h,32)+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(h.name)+' <span class="pill" style="color:var(--gold)">'+m.emoji+' '+esc(m.name)+'</span></div>'+
+      '<div class="lbsub">'+esc((breedDef(h.breed)||{name:h.breed}).name)+' · '+esc(ageLabel(h))+' — celebrate for +'+m.happy+' mood, +'+m.bond+' bond, +'+m.rep+'⭐</div></div>'+
+      '<button class="btn sm blue" data-cer="'+esc(h.id)+'">'+m.emoji+' Hold</button></div>'; }).join('')
+    : '<div class="empty">No ceremonies right now. When a foal turns a yearling or comes of age, you can celebrate it here.</div>';
+  modal('<h3>🎓 Coming-of-Age</h3>'+
+    '<div class="swlabel">A milestone in a young horse’s life. Hold a little ceremony to mark it — a keepsake moment and a small, lasting lift.</div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="cerClose" style="width:100%">Done</button></div>');
+  $('cerClose').onclick=closeModal;
+  document.querySelectorAll('[data-cer]').forEach(b=>b.onclick=()=>{ const r=holdCeremony(G, b.getAttribute('data-cer'));
+    if(!r.ok){ toast(r.why,'info'); return; } burst(r.milestone.emoji+'🎉✨',16); playSfx('goal');
+    toast(r.milestone.emoji+' '+r.horse.name+'’s '+r.milestone.name+'! +'+r.happy+' mood · +'+r.bond+' bond · +'+r.rep+'⭐','good');
+    save(); renderHUD(); renderTab(); openCeremonies(); });
+}
 function openAlmanac(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const a=seasonAlmanac(G);
@@ -5737,6 +5795,7 @@ function boot(){
   { const db=$('diaryBtn'); if(db) db.onclick=openDiary; }
   { const gb=$('grudgeBtn'); if(gb) gb.onclick=openGrudge; }
   { const ab=$('almanacBtn'); if(ab) ab.onclick=openAlmanac; }
+  { const cb=$('cerBtn'); if(cb) cb.onclick=openCeremonies; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
