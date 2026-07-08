@@ -224,6 +224,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   HR.captureMoment(g, 'snapshot', g.horses[1]); // satisfies the scrapbook goal (save a memory)
   g.stats.visitorDays = 1; // satisfies the visitor-day goal
   g.stats.appointments = 1; // satisfies the farrier/vet appointment goal
+  g.stats.groundwork = 1; // satisfies the bonding/groundwork goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2781,6 +2782,99 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Well-Kept Stable needs 12 visits');
   g.stats.appointments = 12;
   ok(ach.check(g), '12 visits unlock Well-Kept Stable');
+}
+
+// ---- bonding / groundwork mini-activities (round 41) ----
+{
+  // an activity raises bond & happy by bounded amounts and counts the session
+  const g = HR.freshGame(); g.day = 5;
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, name: 'Kes', bond: 30, happy: 50 }); g.horses.push(h);
+  const b0 = h.bond, hp0 = h.happy;
+  const r = HR.doGroundwork(g, h, 'groom', g.day);
+  ok(r.ok && r.bondGain > 0, 'grooming raises the bond');
+  ok(h.bond > b0 && h.happy > hp0, 'both bond and mood rise');
+  ok(h.bond - b0 <= 8 && h.happy - hp0 <= 10, 'the gains are bounded per session');
+  ok((g.stats.groundwork || 0) === 1, 'the session is counted');
+  ok(HR.doGroundwork(g, h, 'nope', g.day).ok === false, 'an unknown activity is rejected');
+  ok(HR.doGroundwork(g, null, 'groom', g.day).ok === false, 'a missing horse is rejected');
+}
+{
+  // the per-horse daily energy cap blocks over-farming and resets across days (advanceDay)
+  const g = HR.freshGame(); g.day = 5; g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'welsh', age: 20, bond: 20 }); g.horses.push(h);
+  ok(HR.groundworkEnergyLeft(g, h, g.day) === HR.GROUNDWORK_ENERGY, 'a fresh day starts with full energy');
+  // spend all energy (3) with two round-pen sessions (2 energy each would overshoot; do 1+2)
+  ok(HR.doGroundwork(g, h, 'groom', g.day).ok, 'first session (1 energy) works');       // 1 used
+  ok(HR.doGroundwork(g, h, 'roundpen', g.day).ok, 'second session (2 energy) works');    // 3 used
+  ok(HR.groundworkEnergyLeft(g, h, g.day) === 0, 'energy is spent');
+  ok(HR.doGroundwork(g, h, 'groom', g.day).ok === false, 'no energy left → blocked (un-farmable)');
+  ok(!HR.canDoGroundwork(g, h, 'groom', g.day), 'canDoGroundwork reflects the empty budget');
+  // advancing a day restores the energy
+  HR.advanceDay(g, rng(1));
+  ok(HR.groundworkEnergyLeft(g, h, g.day) === HR.GROUNDWORK_ENERGY, 'a new day resets the handling energy');
+  ok(HR.doGroundwork(g, h, 'groom', g.day).ok, 'you can handle the horse again the next day');
+}
+{
+  // diminishing returns near the cap, and bond never exceeds its cap
+  const g = HR.freshGame(); g.day = 1;
+  const low = HR.mkHorse({ breed: 'arabian', age: 20, bond: 10 });
+  const high = HR.mkHorse({ breed: 'arabian', age: 20, bond: 95 });
+  g.horses.push(low, high);
+  const gainLow = HR.doGroundwork(g, low, 'roundpen', g.day).bondGain;
+  const gainHigh = HR.doGroundwork(g, high, 'roundpen', g.day).bondGain;
+  ok(gainLow > gainHigh, 'the same activity gives less bond to an already-devoted horse');
+  ok(high.bond <= HR.BOND_CAP, 'bond never exceeds the cap');
+  // hammer the cap over many days — it saturates, never overflows
+  const g2 = HR.freshGame(); g2.feed = 9999; const h = HR.mkHorse({ breed: 'welsh', age: 20, bond: 50 }); g2.horses.push(h);
+  const r = rng(2);
+  for (let d = 0; d < 60; d++) { HR.doGroundwork(g2, h, 'roundpen', g2.day); HR.advanceDay(g2, r); }
+  ok(h.bond > 80 && h.bond <= HR.BOND_CAP, 'sustained groundwork drives the bond high and never past the cap');
+}
+{
+  // bonding matters: a devoted horse gets a small, bounded readiness (poise) benefit
+  const g = HR.freshGame(); g.day = 30;
+  const base = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 80, stamina: 70, temperament: 60, health: 100, happy: 100, bond: 10 });
+  const devoted = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 80, stamina: 70, temperament: 60, health: 100, happy: 100, bond: 100 });
+  devoted.needs = JSON.parse(JSON.stringify(base.needs)); devoted.trait = base.trait; // equal care & trait so only bond differs
+  const disc = HR.DISCIPLINES.find(d => d.id === 'race');
+  const sb = HR.disciplineScore(base, disc, g), sd = HR.disciplineScore(devoted, disc, g);
+  ok(sd > sb, 'a devoted horse out-scores an aloof twin');
+  ok(sd / sb <= 1.06, 'the poise benefit is small & bounded (~≤5%)');
+  ok(HR.bondPoiseMult(devoted) <= 1.05 + 1e-9, 'the poise multiplier is capped');
+}
+{
+  // bondTier/label track the bond value
+  ok(HR.bondTier(HR.mkHorse({ breed: 'arabian', bond: 5 })).id === 'new', 'a new horse is "getting acquainted"');
+  ok(HR.bondTier(HR.mkHorse({ breed: 'arabian', bond: 75 })).id === 'bonded', 'past 70 it is Bonded');
+  ok(HR.bondTier(HR.mkHorse({ breed: 'arabian', bond: 95 })).id === 'devoted', 'past 90 it is Devoted');
+}
+{
+  // a horse crossing into "Bonded" saves a scrapbook keepsake (reuses captureMoment)
+  const g = HR.freshGame(); g.day = 3; g.scrapbook = [];
+  const h = HR.mkHorse({ breed: 'friesian', age: 20, name: 'Duke', bond: 66 }); g.horses.push(h);
+  const r = HR.doGroundwork(g, h, 'roundpen', g.day); // +~8 → crosses 70
+  ok(h.bond >= HR.BONDED_AT && r.bonded === true, 'the horse crosses into Bonded');
+  ok(HR.scrapbookList(g).some(e => e.kind === 'snapshot' && e.horseId === h.id), 'crossing into Bonded is remembered');
+}
+{
+  // determinism + migration safety
+  const mk = () => { const g = HR.freshGame(); g.day = 4; const h = HR.mkHorse({ breed: 'arabian', age: 20, id: 'fix', bond: 40 }); g.horses.push(h); HR.doGroundwork(g, h, 'liberty', g.day); return g.horses.find(x => x.id === 'fix').bond; };
+  ok(mk() === mk(), 'groundwork is deterministic for a fixed state');
+  // an old horse with no groundwork fields is handled safely
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, bond: 30 }); delete h.gwDay; delete h.gwEnergy;
+  const g = HR.freshGame(); g.horses.push(h);
+  ok(HR.groundworkEnergyLeft(g, h, g.day) === HR.GROUNDWORK_ENERGY, 'energy is full when the field is missing');
+  ok(HR.doGroundwork(g, h, 'groom', g.day).ok, 'groundwork works on a migrated horse');
+  // goal + achievement
+  const g2 = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'bond1');
+  ok(goal && !goal.done(g2), 'the bonding goal is unmet before any groundwork');
+  g2.stats.groundwork = 1;
+  ok(goal.done(g2), 'a groundwork session satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'whisperer');
+  ok(ach && !ach.check(g2), 'Horse Whisperer needs a Devoted horse');
+  g2.horses[0].bond = 92;
+  ok(ach.check(g2), 'a Devoted (90%+) horse unlocks Horse Whisperer');
 }
 
 // ---- clamp helper ----
