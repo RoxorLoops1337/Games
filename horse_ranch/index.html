@@ -27,6 +27,7 @@
 
   /* Scene banner */
   #scene{position:relative;height:96px;background:linear-gradient(#a9d0ec 0%,#c9e4f2 55%,#8fbf68 55%,#6ea34a 100%);border-bottom:2px solid var(--edge);overflow:hidden;line-height:0}
+  #seasonGlass{position:absolute;inset:0;pointer-events:none;background:transparent;transition:background .8s ease}
   #skyWarm,#skyNight{position:absolute;inset:0;pointer-events:none;opacity:0}
   #skyWarm{background:linear-gradient(#ff9e5a55,#ffd08a22 55%,transparent 55%)}
   #skyNight{background:linear-gradient(#0a1330,#1b2547 40%,#0d2a33 55%,#0a1f12 100%)}
@@ -207,6 +208,7 @@
   </div>
 
   <div id="scene">
+    <div id="seasonGlass"></div>
     <div id="skyWarm"></div>
     <div id="skyNight"></div>
     <div class="moon" id="sceneMoon"></div>
@@ -521,7 +523,7 @@ function makeMarketHorse(game,rng){
 }
 function restockMarket(game,rng){
   rng=rng||Math.random;
-  const n=4+Math.floor(rng()*2);
+  const n=4+Math.floor(rng()*2)+seasonMarketBonus(game.day); // autumn brings extra stock
   game.market=[]; for(let i=0;i<n;i++) game.market.push(makeMarketHorse(game,rng));
   game.marketDay=game.day;
 }
@@ -561,7 +563,26 @@ function canteenDayMult(day){ return scheduleFor(day).canteenBoost||1; }
 function lessonDayMult(day){ return scheduleFor(day).lessonBoost||1; }
 function nextShowDay(day){ for(let i=1;i<=7;i++){ if(isShowDay(day+i)) return {inDays:i, wd:weekdayIndex(day+i)}; } return null; }
 
-// ---------- Weather (deterministic per day, small gameplay effects) ----------
+// ---------- Seasons (4 seasons of 2 weeks each, layered over the days) ----------
+const SEASON_LEN=14; // days per season → 56-day year
+// wx = cumulative weather thresholds [sunny,cloudy,rain] (else snow); mods tie into other systems.
+const SEASONS=[
+  {id:'spring', name:'Spring', emoji:'🌸', wx:[40,70,95], breedFeeMul:0.70, gestationAdj:-1, showPrizeMul:1.00, canteenMul:1.00, feedExtra:0, hayMul:1.00, marketBonus:0, tint:'#7ec86033', note:'Foaling season — breeding is cheaper and foals come quicker.'},
+  {id:'summer', name:'Summer', emoji:'🌞', wx:[66,88,99], breedFeeMul:1.00, gestationAdj:0,  showPrizeMul:1.15, canteenMul:1.12, feedExtra:0, hayMul:1.00, marketBonus:0, tint:'#ffd35a22', note:'Peak show season — prizes are bigger and the canteen is busy.'},
+  {id:'autumn', name:'Autumn', emoji:'🍂', wx:[40,73,95], breedFeeMul:1.00, gestationAdj:0,  showPrizeMul:1.00, canteenMul:1.00, feedExtra:0, hayMul:0.70, marketBonus:2, tint:'#e08a3a2e', note:'Harvest — hay is cheap and the market is well stocked.'},
+  {id:'winter', name:'Winter', emoji:'❄️', wx:[20,50,65], breedFeeMul:1.00, gestationAdj:0,  showPrizeMul:1.00, canteenMul:0.90, feedExtra:1, hayMul:1.00, marketBonus:0, tint:'#aad6f028', note:'Cold snaps — horses eat more and fewer visitors brave the chill.'},
+];
+function seasonOf(day){ return SEASONS[Math.floor((Math.floor(day)-1)/SEASON_LEN)%4]; }
+function yearOf(day){ return Math.floor((Math.floor(day)-1)/(SEASON_LEN*4))+1; }
+function seasonDay(day){ return ((Math.floor(day)-1)%SEASON_LEN)+1; } // 1..SEASON_LEN
+function seasonBreedFeeMul(day){ return seasonOf(day).breedFeeMul; }
+function seasonGestationAdj(day){ return seasonOf(day).gestationAdj; }
+function seasonShowPrizeMul(day){ return seasonOf(day).showPrizeMul; }
+function seasonCanteenMul(day){ return seasonOf(day).canteenMul; }
+function seasonHayMul(day){ return seasonOf(day).hayMul; }
+function seasonMarketBonus(day){ return seasonOf(day).marketBonus; }
+
+// ---------- Weather (deterministic per day, biased by season) ----------
 const WEATHER=[
   {id:'sunny', name:'Sunny',  emoji:'☀️', canteen:1.12, feedExtra:0},
   {id:'cloudy',name:'Cloudy', emoji:'☁️', canteen:1.00, feedExtra:0},
@@ -570,9 +591,9 @@ const WEATHER=[
 ];
 function weatherDef(id){ return WEATHER.find(w=>w.id===id)||WEATHER[1]; }
 function hashDay(day){ let x=(Math.floor(day)*2654435761)>>>0; x^=x>>>15; x=Math.imul(x,2246822519)>>>0; x^=x>>>13; return x>>>0; }
-function weatherFor(day){ const r=hashDay(day)%100; return r<45?WEATHER[0] : r<75?WEATHER[1] : r<93?WEATHER[2] : WEATHER[3]; }
+function weatherFor(day){ const c=seasonOf(day).wx; const r=hashDay(day)%100; return r<c[0]?WEATHER[0] : r<c[1]?WEATHER[1] : r<c[2]?WEATHER[2] : WEATHER[3]; }
 function canteenWeatherMult(day){ return weatherFor(day).canteen; }
-function feedExtraFor(day){ return weatherFor(day).feedExtra; } // extra hay per horse on cold days
+function feedExtraFor(day){ return weatherFor(day).feedExtra + seasonOf(day).feedExtra; } // cold weather & winter both add hay
 
 const EVENTS=[
   {id:'buyer', weight:3, min:1},
@@ -657,7 +678,7 @@ function advanceDay(game,rng){
 
   // canteen income + riding-school net (lesson fees minus teacher salaries)
   // — both get a weekday boost on busy days (e.g. Family Sunday).
-  if(canteenLevel(game)>0) game.money+=Math.round(canteenIncome(game)*canteenDayMult(game.day)*canteenWeatherMult(game.day));
+  if(canteenLevel(game)>0) game.money+=Math.round(canteenIncome(game)*canteenDayMult(game.day)*canteenWeatherMult(game.day)*seasonCanteenMul(game.day));
   if(teacherCount(game)>0){
     const served=lessonsPerDay(game);
     game.money += Math.round(schoolIncome(game)*lessonDayMult(game.day)) - teacherSalaries(game);
@@ -755,6 +776,7 @@ function runCompetition(h,disc,tier,rng){
 // apply a competition result to game+horse (mutates), returns the result
 function applyCompetition(game,h,disc,tier,rng){
   const res=runCompetition(h,disc,tier,rng);
+  res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)); // summer show season pays more
   game.money += res.prize; game.rep += res.rep;
   h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
   h.happy=clamp(h.happy-8,0,100); h.health=clamp(h.health-4,0,100); // fatigue
@@ -851,6 +873,8 @@ const GOALS=[
   {id:'canteen', desc:'Open the Canteen (🍺 Estate)',  tip:g=>'',                              done:g=>canteenLevel(g)>0,                                      reward:{money:800,rep:20}},
   {id:'teacher', desc:'Hire your first teacher',       tip:g=>teacherCount(g)+'/1',            done:g=>teacherCount(g)>=1,                                     reward:{money:600,rep:20}},
   {id:'week4',   desc:'Keep Skyhorse running to Week 4',tip:g=>'week '+weekOf(g.day)+'/4',      done:g=>g.day>=22,                                             reward:{money:1200,rep:30}},
+  {id:'winter1', desc:'Weather your first Winter',      tip:g=>seasonOf(g.day).name,            done:g=>g.day>=SEASON_LEN*3+1,                                  reward:{money:1800,feed:100,rep:35}},
+  {id:'year2',   desc:'Complete a full year (4 seasons)',tip:g=>'year '+yearOf(g.day),           done:g=>g.day>=SEASON_LEN*4+1,                                  reward:{money:3000,rep:60}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -884,6 +908,8 @@ const HR = {
   WEEKDAYS, WEEKDAY_FULL, SCHEDULE, weekdayIndex, weekOf, scheduleFor, showsToday, isShowDay,
   disciplineOpenToday, isMarketDay, isHayDay, isCareDay, canteenDayMult, lessonDayMult, nextShowDay,
   WEATHER, weatherDef, weatherFor, hashDay, canteenWeatherMult, feedExtraFor,
+  SEASONS, SEASON_LEN, seasonOf, yearOf, seasonDay, seasonBreedFeeMul, seasonGestationAdj,
+  seasonShowPrizeMul, seasonCanteenMul, seasonHayMul, seasonMarketBonus,
   COAT_CSS, coatColor,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
@@ -1029,8 +1055,10 @@ function renderHUD(){
   const rank=rankFor(G.rep);
   $('sceneRank').textContent=rank.name+' · Fleur';
   { const sc=$('sceneCanteen'); if(sc) sc.style.display=canteenLevel(G)>0?'block':'none'; }
-  // today's weather (deterministic per day) — badge + particle layer
-  { const wthr=weatherFor(G.day); const sw=$('sceneWeather'); if(sw) sw.textContent=wthr.emoji;
+  // today's season + weather (deterministic per day) — badge, tint & particle layer
+  { const se=seasonOf(G.day), wthr=weatherFor(G.day);
+    const sw=$('sceneWeather'); if(sw) sw.textContent=se.emoji+' '+wthr.emoji;
+    const sg=$('seasonGlass'); if(sg) sg.style.background=se.tint;
     if(curWx!==wthr.id){ curWx=wthr.id; buildWeather(wthr.id); } }
   // scene horses
   const sh=$('sceneHorses'); sh.innerHTML='';
@@ -1127,7 +1155,7 @@ function renderRanch(){
 }
 function buyFeedBtn(n){ const cost=Math.round(n*hayPrice()); return '<button class="btn sm ghost" data-feed="'+n+'" '+(G.money<cost?'disabled':'')+'>+'+n+' 🪙'+cost+'</button>'; }
 function barnName(i){ const nm=['Old Barn','Oak Stable','Meadow Barn','Sunrise Stable','Willow Barn','Grand Stable']; return nm[i]||('Stable '+(i+1)); }
-function hayPrice(){ let p=G.hayMod?G.hayMod:3; if(isHayDay(G.day)) p=p*0.5; return Math.max(1,Math.round(p)); } // half price on Hay Delivery day
+function hayPrice(){ let p=(G.hayMod?G.hayMod:3)*seasonHayMul(G.day); if(isHayDay(G.day)) p=p*0.5; return Math.max(1,Math.round(p)); } // autumn cheap; half price on Hay Delivery day
 function groomCost(){ return isCareDay(G.day)?12:20; } // cheaper on Vet & Farrier day
 
 function stableCard(st){
@@ -1195,6 +1223,7 @@ function renderBreed(){
       '<div class="kv">Foal breed<b>'+(mare.breed===stal.breed?breedDef(mare.breed).name+' (purebred)':'Cross — '+breedDef((breedDef(stal.breed).rarity>breedDef(mare.breed).rarity?stal:mare).breed).name)+'</b></div>'+
       '<div class="kv">Coats<b>'+coatOf(mare).name+' × '+coatOf(stal).name+'</b></div>'+
       (related?'<div class="kv" style="color:var(--warn)">Bloodline<b style="color:var(--warn)">⚠️ related — weaker foal</b></div>':'')+
+      (seasonOf(G.day).id==='spring'?'<div class="kv" style="color:var(--good)">🌸 Spring<b style="color:var(--good)">cheaper &amp; quicker!</b></div>':'')+
       '<div class="kv">Breeding fee<b>🪙'+breedFee(mare,stal)+'</b></div>';
   } else {
     info.innerHTML='<div class="empty" style="padding:12px">'+chk.why+'</div>';
@@ -1231,8 +1260,8 @@ function openPicker(role){
   const sh=modal(html);
   sh.querySelectorAll('[data-pick]').forEach(o=>o.onclick=()=>{ breedPick[role]=o.getAttribute('data-pick'); closeModal(); renderBreed(); });
 }
-function gestationDays(mare,stal){ const r=Math.max(breedDef(mare.breed).rarity,breedDef(stal.breed).rarity); return 4+r; }
-function breedFee(mare,stal){ if(!mare||!stal) return 0; return Math.round(80+valueOf(stal)*0.05); }
+function gestationDays(mare,stal){ const r=Math.max(breedDef(mare.breed).rarity,breedDef(stal.breed).rarity); return Math.max(3, 4+r+seasonGestationAdj(G.day)); } // spring shortens gestation
+function breedFee(mare,stal){ if(!mare||!stal) return 0; return Math.round((80+valueOf(stal)*0.05)*seasonBreedFeeMul(G.day)); } // spring is cheaper
 function doBreed(mare,stal){
   const chk=canBreed(mare,stal); if(!chk.ok) return;
   const fee=breedFee(mare,stal); if(G.money<fee){ toast('Not enough coins for the breeding fee.','bad'); return; }
@@ -1695,7 +1724,7 @@ function showIntro(){
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
     '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
     '• 🌳 Build <b>bloodlines</b> — every horse has an inheritable <b>personality</b><br>'+
-    '• 🗓️ Follow the <b>weekly rhythm</b> — shows, market, hay &amp; weather<br>'+
+    '• 🗓️ Live the <b>seasons</b> &amp; weekly rhythm — shows, hay &amp; weather<br>'+
     '• 🏆 <b>Compete</b> in shows across 4 disciplines &amp; tiers<br>'+
     '• 🍺 Open a <b>canteen</b> &amp; hire <b>teachers</b> for lessons<br>'+
     '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+
@@ -1717,8 +1746,10 @@ function openWeek(){
       '<div class="wdnote">'+sd.label+(showTxt?' · '+showTxt:'')+'</div>'+
       '<div class="wddesc">'+sd.note+' · '+wthr.name+'.</div></div>';
   });
-  modal('<h3>🗓️ This Week at Skyhorse</h3>'+
-    '<div class="msg">Week '+weekOf(G.day)+' · '+WEEKDAY_FULL[todayI]+', '+weatherFor(G.day).name+' '+weatherFor(G.day).emoji+'. Each day has its own rhythm — shows, market, hay, care and busy canteen nights.</div>'+
+  const se=seasonOf(G.day);
+  modal('<h3>'+se.emoji+' '+se.name+' — This Week</h3>'+
+    '<div class="msg"><b>'+se.emoji+' '+se.name+'</b> · Year '+yearOf(G.day)+' · day '+seasonDay(G.day)+'/'+SEASON_LEN+' — '+se.note+'<br><br>'+
+    'Week '+weekOf(G.day)+' · today is '+WEEKDAY_FULL[todayI]+', '+weatherFor(G.day).name+' '+weatherFor(G.day).emoji+'.</div>'+
     '<div class="weeklist">'+rows+'</div>'+
     '<div class="btnrow"><button class="btn" id="wkOk" style="width:100%">Got it</button></div>');
   $('wkOk').onclick=closeModal;

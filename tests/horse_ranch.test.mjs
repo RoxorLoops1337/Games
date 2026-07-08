@@ -183,7 +183,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 }
 {
   // checkGoals can chain several completions and is idempotent afterwards
-  const g = HR.freshGame(); g.rep = 999999; g.stats.born = 5; g.stats.bestSale = 99999; g.stats.showWins = 5; g.stats.maxGen = 9; g.stats.bestTierWin = 4; g.day = 22;
+  const g = HR.freshGame(); g.rep = 999999; g.stats.born = 5; g.stats.bestSale = 99999; g.stats.showWins = 5; g.stats.maxGen = 9; g.stats.bestTierWin = 4; g.day = 60;
   g.stables.push({ id: 'st2', level: 1, baseStalls: 4 });
   for (let i = 0; i < 6; i++) g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20 }));
   g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20, coat: { name: 'Golden', tier: 3 }, wins: 4 })); // satisfies rare-coat + champion goals
@@ -475,6 +475,61 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   let sawShow = false;
   for (let i = 0; i < 50; i++) { const e = HR.rollEvent(g, rng(i + 1)); if (e && e.id === 'show') sawShow = true; }
   ok(!sawShow, 'no show invitations on a quiet day');
+}
+
+// ---- seasons ----
+{
+  ok(HR.SEASONS.length === 4 && HR.SEASON_LEN >= 7, 'four seasons of a few weeks each');
+  ok(HR.seasonOf(1).id === 'spring', 'the game opens in Spring');
+  ok(HR.seasonOf(HR.SEASON_LEN).id === 'spring' && HR.seasonOf(HR.SEASON_LEN + 1).id === 'summer', 'seasons roll after SEASON_LEN days');
+  ok(HR.seasonOf(HR.SEASON_LEN * 3 + 1).id === 'winter', 'winter is the fourth season');
+  ok(HR.seasonOf(HR.SEASON_LEN * 4 + 1).id === 'spring', 'the year wraps back to Spring');
+  ok(HR.yearOf(1) === 1 && HR.yearOf(HR.SEASON_LEN * 4 + 1) === 2, 'a year is four seasons');
+  ok(HR.seasonDay(1) === 1 && HR.seasonDay(HR.SEASON_LEN) === HR.SEASON_LEN, 'seasonDay counts within the season');
+  // gameplay mods point the right way
+  ok(HR.seasonBreedFeeMul(1) < 1, 'Spring makes breeding cheaper');
+  ok(HR.seasonGestationAdj(1) < 0, 'Spring shortens gestation');
+  ok(HR.seasonShowPrizeMul(HR.SEASON_LEN + 1) > 1, 'Summer boosts show prizes');
+  ok(HR.seasonHayMul(HR.SEASON_LEN * 2 + 1) < 1, 'Autumn makes hay cheaper');
+  ok(HR.seasonMarketBonus(HR.SEASON_LEN * 2 + 1) > 0, 'Autumn stocks a bigger market');
+  ok(HR.seasonCanteenMul(HR.SEASON_LEN * 3 + 1) < 1, 'Winter thins the canteen crowd');
+  ok(HR.seasonOf(HR.SEASON_LEN * 3 + 1).feedExtra > 0, 'Winter costs extra hay');
+}
+{
+  // season biases the weather: winter is snowier than summer
+  const summer0 = HR.SEASON_LEN, winter0 = HR.SEASON_LEN * 3;
+  let sSnow = 0, wSnow = 0;
+  for (let i = 1; i <= HR.SEASON_LEN; i++) {
+    if (HR.weatherFor(summer0 + i).id === 'snow') sSnow++;
+    if (HR.weatherFor(winter0 + i).id === 'snow') wSnow++;
+  }
+  ok(wSnow > sSnow, 'winter sees more snow than summer');
+  let sSun = 0, wSun = 0;
+  for (let i = 1; i <= HR.SEASON_LEN; i++) {
+    if (HR.weatherFor(summer0 + i).id === 'sunny') sSun++;
+    if (HR.weatherFor(winter0 + i).id === 'sunny') wSun++;
+  }
+  ok(sSun > wSun, 'summer is sunnier than winter');
+}
+{
+  // Autumn market restock brings extra stock vs a plain season
+  const gAut = HR.freshGame(); gAut.day = HR.SEASON_LEN * 2 + 2; // autumn
+  const gSpr = HR.freshGame(); gSpr.day = 2; // spring
+  HR.restockMarket(gAut, rng(4)); HR.restockMarket(gSpr, rng(4));
+  ok(gAut.market.length > gSpr.market.length, 'autumn restock is larger than spring restock');
+}
+{
+  // Summer boosts a competition payout through applyCompetition
+  const star = { breed: 'thoroughbred', age: 20, speed: 100, stamina: 100, temperament: 100, health: 100, happy: 100 };
+  const gSummer = HR.freshGame(); gSummer.day = HR.SEASON_LEN + 3; // summer
+  const gSpring = HR.freshGame(); gSpring.day = 3; // spring
+  const hS = HR.mkHorse({ ...star, name: 'A' }); const hP = HR.mkHorse({ ...star, name: 'B' });
+  gSummer.horses.push(hS); gSpring.horses.push(hP);
+  const m0s = gSummer.money, m0p = gSpring.money;
+  const rS = HR.applyCompetition(gSummer, hS, HR.disciplineDef('race'), HR.tierDef(1), rng(2));
+  const rP = HR.applyCompetition(gSpring, hP, HR.disciplineDef('race'), HR.tierDef(1), rng(2));
+  ok(rS.place === 1 && rP.place === 1, 'both stars win their tier-1 race');
+  ok((gSummer.money - m0s) > (gSpring.money - m0p), 'summer pays a bigger show prize than spring');
 }
 
 // ---- weather ----
