@@ -287,6 +287,12 @@
   .ctr .ctre{font-size:20px;width:26px;text-align:center}
   .ctr .ctrrew{margin-left:auto;font-size:11px;font-weight:800;color:var(--gold)}
   .ctr .cbar2{height:6px;border-radius:3px;background:#080c06;overflow:hidden;margin-top:7px}
+  .card.featured{border:1px solid var(--gold2);box-shadow:0 0 0 1px var(--gold2),0 2px 0 #0006;background:linear-gradient(#1c1e0e,#15170d)}
+  .card.wishmatch{border-color:#7bb0e0;box-shadow:0 0 0 1px #7bb0e0,0 2px 0 #0006}
+  .featbadge{display:inline-block;font-size:10px;font-weight:900;color:#2a1c05;background:linear-gradient(var(--gold),var(--gold2));border-radius:20px;padding:2px 8px;margin-bottom:5px}
+  .wlchip{display:inline-flex;align-items:center;gap:5px;background:#0d130a;border:1px solid #26405f;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800;color:#9cc4e6;margin:0 5px 5px 0}
+  .wlchip b{color:var(--ink)}
+  .wlsel{background:#0d130a;border:1px solid #0c110a;border-radius:8px;padding:7px;color:var(--ink);font-size:12px;font-weight:700;font-family:inherit;flex:1;min-width:0}
 </style>
 </head>
 <body>
@@ -883,6 +889,60 @@ function restockMarket(game,rng,opts){
   game.marketDay=game.day;
 }
 
+// ---------- Featured listing + buyer's wishlist ----------
+// A rotating "Featured horse of the week" — a genuine standout at a premium —
+// plus a persistent wishlist that badges matching market/auction horses.
+const FEATURED_MARKUP=1.25; // premium over normal buy price for the showcased horse
+function featuredPrice(h){ return Math.round(buyPrice(h)*FEATURED_MARKUP); }
+function makeFeaturedHorse(game,rng){
+  rng=rng||Math.random;
+  const maxR=(game.rep||0)>1300?5:(game.rep||0)>400?4:3;
+  const pool=BREEDS.filter(b=>b.rarity>=3&&b.rarity<=maxR); const b=pool[Math.floor(rng()*pool.length)]||BREEDS.filter(x=>x.rarity>=3)[0];
+  const sex=rng()<0.5?'mare':'stallion', age=8+Math.floor(rng()*12);
+  const strong=base=>clamp(Math.round(base+8+rng()*12),8,100);
+  const h=mkHorse({breed:b.id,sex,age,rng,purebred:true,generation:2+Math.floor(rng()*3),
+    speed:strong(b.speed),stamina:strong(b.stamina),temperament:strong(b.temperament),health:98,happy:95});
+  const reasons=[];
+  if(rng()<0.55){ const rare=rng()<0.5?{name:'Golden',tier:3}:{name:'Cremello',tier:2}; h.coat=rare; h.color=rare.name; }
+  if((coatOf(h).tier||0)>=2) reasons.push('rare '+coatOf(h).name+' coat');
+  if(rng()<0.5){ h.wins=2+Math.floor(rng()*4); h.podiums=h.wins+Math.floor(rng()*3); reasons.push(h.wins+'-time show winner'); }
+  if(h.generation>=3) reasons.push('gen-'+h.generation+' bloodline');
+  if(!reasons.length) reasons.push('exceptional conformation');
+  h.featured=true;
+  return {horse:h, reason:reasons.join(', ')};
+}
+function refreshFeatured(game){ const wk=weekOf(game.day||1);
+  if(!game.featured || game.featured.week!==wk){
+    const made=makeFeaturedHorse(game, seededOnce(hashDay(wk*7919+13)));
+    game.featured={week:wk, horse:made.horse, reason:made.reason, sold:false};
+  }
+  return game.featured; }
+function featuredHorse(game){ refreshFeatured(game); return (game.featured && !game.featured.sold)?game.featured.horse:null; }
+function isFeatured(h){ return !!(h&&h.featured); }
+
+function normWishlist(w){ w=w||{}; return {prefs:Array.isArray(w.prefs)?w.prefs.filter(p=>p&&typeof p==='object').slice(0,8):[]}; }
+function matchesPref(h,pref){ if(!h||!pref) return false;
+  if(!pref.breed&&!pref.sex&&!pref.coat&&!pref.rarity) return false; // an empty pref matches nothing
+  if(pref.breed && h.breed!==pref.breed) return false;
+  if(pref.sex && h.sex!==pref.sex) return false;
+  if(pref.coat && coatOf(h).name!==pref.coat) return false;
+  if(pref.rarity && (breedDef(h.breed)||{rarity:1}).rarity < pref.rarity) return false;
+  return true; }
+function matchesWishlist(h,wishlist){ const w=normWishlist(wishlist); return w.prefs.some(p=>matchesPref(h,p)); }
+function addWishlistPref(game,pref){ if(!game.wishlist) game.wishlist={prefs:[]};
+  pref=pref||{}; const clean={}; if(pref.breed)clean.breed=pref.breed; if(pref.sex)clean.sex=pref.sex; if(pref.coat)clean.coat=pref.coat; if(pref.rarity)clean.rarity=+pref.rarity;
+  if(!Object.keys(clean).length) return {ok:false,why:'Pick at least one criterion.'};
+  if(game.wishlist.prefs.some(p=>JSON.stringify(p)===JSON.stringify(clean))) return {ok:false,why:'Already on your wishlist.'};
+  if(game.wishlist.prefs.length>=8) return {ok:false,why:'Wishlist is full (8).'};
+  game.wishlist.prefs.push(clean); return {ok:true,pref:clean}; }
+function removeWishlistPref(game,index){ if(!game.wishlist||!Array.isArray(game.wishlist.prefs)) return {ok:false}; if(index<0||index>=game.wishlist.prefs.length) return {ok:false}; game.wishlist.prefs.splice(index,1); return {ok:true}; }
+function marketMatches(game){ const w=game&&game.wishlist; if(!w||!w.prefs||!w.prefs.length) return [];
+  const pool=(game.market||[]).slice(); const f=featuredHorse(game); if(f) pool.push(f);
+  return pool.filter(h=>matchesWishlist(h,w)); }
+function auctionMatches(game){ const w=game&&game.wishlist; if(!w||!w.prefs||!w.prefs.length) return [];
+  const lots=(game.auction&&game.auction.lots)||[]; return lots.filter(l=>l&&l.horse&&!l.won&&!l.closed&&matchesWishlist(l.horse,w)).map(l=>l.horse); }
+function wishlistMatches(game){ return marketMatches(game).length + auctionMatches(game).length; }
+
 // ---------- Rank / reputation ----------
 const RANKS=[
   {rep:0,name:'Ranch Hand'},{rep:150,name:'Stablekeeper'},{rep:450,name:'Horse Breeder'},
@@ -1103,6 +1163,7 @@ function freshGame(legacy){
     tack:{owned:[]}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
+    featured:null, wishlist:{prefs:[]},
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1114,6 +1175,7 @@ function freshGame(legacy){
   restockMarket(g, seededOnce(7));
   restockTeachers(g, seededOnce(13));
   refreshBoard(g); // post the first week's contracts
+  refreshFeatured(g); // showcase the first featured horse
   return g;
 }
 // tiny deterministic rng so a fresh game is identical every load (nice for tutorial + tests)
@@ -1215,6 +1277,10 @@ function advanceDay(game,rng){
   // Market Day (weekly): fresh horses & teacher applicants arrive
   if(isMarketDay(game.day)){ restockMarket(game,rng); restockTeachers(game,rng);
     notes.push({t:'info',m:'🛒 Market Day! Fresh horses and teachers have arrived.'}); }
+
+  // rotating Featured listing (weekly) + wishlist alert when a match appears
+  refreshFeatured(game);
+  { const m=wishlistMatches(game); if(m>0 && isMarketDay(game.day)) notes.push({t:'good',m:'⭐ A horse on your wishlist is available — check the Market!'}); }
 
   // weekly contracts board — refreshes when the week rolls over
   { const hadWeek=game.board&&game.board.week; refreshBoard(game);
@@ -1766,6 +1832,7 @@ const ACHIEVEMENTS=[
   {id:'fullcrew',   icon:'👥', name:'Full Crew',            desc:'Employ all six stable staff at once.',         check:g=>staffCount(g)>=MAX_STAFF},
   {id:'schooled',   icon:'🎓', name:'Master of the Craft',  desc:'Fully school a horse in a discipline (100 affinity).', check:g=>g.horses.some(h=>topAffinity(h).pts>=AFF_MAX)},
   {id:'seasonlord', icon:'🏆', name:'Season Champion',       desc:'Win three Seasonal Championships.',            check:g=>((g.stats&&g.stats.seasonTitles)||0)>=3},
+  {id:'patron',     icon:'⭐', name:'Discerning Patron',     desc:'Buy a Featured horse from the market.',        check:g=>((g.stats&&g.stats.featuredBought)||0)>=1},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1855,6 +1922,7 @@ const GOALS=[
   {id:'staff1',  desc:'Hire your first stable hand',          tip:g=>staffCount(g)+'/1',              done:g=>staffCount(g)>=1,                                       reward:{money:600,rep:20}},
   {id:'special1',desc:'Develop a discipline specialist',      tip:g=>'best affinity '+Math.max(0,...g.horses.map(h=>topAffinity(h).pts))+'/'+SPECIALIST_AT,done:g=>g.horses.some(h=>specialtyOf(h)),reward:{money:900,rep:25}},
   {id:'champ1',  desc:'Win a Seasonal Championship',          tip:g=>((g.stats&&g.stats.seasonTitles)||0)+'/1',done:g=>((g.stats&&g.stats.seasonTitles)||0)>=1,               reward:{money:2000,rep:50}},
+  {id:'wish1',   desc:'Add a horse to your wishlist (⭐)',     tip:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)+' prefs',done:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)>=1,   reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1875,6 +1943,9 @@ const HR = {
   mkHorse, valueOf, buyPrice, sellQuote, rentRate,
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
+  FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
+  normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
+  marketMatches, auctionMatches, wishlistMatches,
   statCap, trainCost, trainGain, canTrain, applyTrain,
   currentGoal, checkGoals,
   seedGenes, phenotype, crossGenes, coatOf, coatValueMult, ancestorIds, relatedness,
@@ -1978,7 +2049,9 @@ function load(){
     if(G.stats.contractsDone==null) G.stats.contractsDone=0;
     if(G.stats.staffWages==null) G.stats.staffWages=0;
     if(G.stats.seasonTitles==null) G.stats.seasonTitles=0;
+    if(G.stats.featuredBought==null) G.stats.featuredBought=0;
     ensureChamp(G); // seasonal championship tally
+    G.wishlist=normWishlist(G.wishlist); if(G.featured===undefined) G.featured=null; refreshFeatured(G); // marketplace: wishlist + featured listing
     if(G.stats.bestShowPerf==null) G.stats.bestShowPerf=0;
     if(!G.achievements) G.achievements=[];
     if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
@@ -2136,8 +2209,9 @@ function renderHUD(){
     s.style.left=(96+i*62)+'px'; s.style.animationDelay=(i*0.4)+'s'; sh.appendChild(s); });
   // tab badges
   document.querySelectorAll('.tab .badge').forEach(b=>b.remove());
-  const buyable=G.market.filter(h=>buyPrice(h)<=G.money).length;
-  if(buyable) addBadge('market',buyable);
+  const wlm=marketMatches(G).length;
+  if(wlm) addBadge('market','⭐'+wlm); // a wishlist match takes priority on the badge
+  else { const buyable=G.market.filter(h=>buyPrice(h)<=G.money).length; if(buyable) addBadge('market',buyable); }
   // contracts board badge (claimable count)
   { const cb=$('boardBadge'); if(cb){ const n=claimableContracts(G); cb.textContent=n; cb.style.display=n?'block':'none'; } }
 }
@@ -2380,14 +2454,34 @@ function stableCard(st){
 // ---- MARKET tab ----
 function renderMarket(){
   const s=$('sec-market'); s.innerHTML='';
-  s.appendChild(el('h2','head','Horse Market'));
-  s.appendChild(el('div','sub','Fresh stock every 4 days. Higher reputation attracts rarer breeds.'));
+  // header with a wishlist entry point
+  const head=el('div','row'); head.style.alignItems='center';
+  head.innerHTML='<h2 class="head" style="margin:0;flex:1">Horse Market</h2>';
+  const wlN=marketMatches(G).length;
+  const wb=el('button','btn sm ghost','⭐ Wishlist'+(((G.wishlist&&G.wishlist.prefs)||[]).length?' ('+G.wishlist.prefs.length+')':'')); wb.onclick=openWishlist;
+  head.appendChild(wb); s.appendChild(head);
+  s.appendChild(el('div','sub','Fresh stock every 4 days. Higher reputation attracts rarer breeds.'+(wlN?' <b style="color:#7bb0e0">⭐ '+wlN+' wishlist match'+(wlN>1?'es':'')+' below!</b>':'')));
+
+  // ---- Featured horse of the week ----
+  const feat=featuredHorse(G);
+  if(feat){
+    const price=featuredPrice(feat), full=freeStalls(G)<=0;
+    const acts='<button class="btn sm" data-buyfeat="1" '+((G.money<price||full)?'disabled':'')+'>'+(full?'No stalls':'⭐ Buy 🪙'+fmt(price))+'</button>';
+    const c=horseCard(feat,acts); c.classList.add('featured');
+    const badge=el('div','featbadge','⭐ FEATURED · '+(G.featured.reason||'a standout')); c.insertBefore(badge,c.firstChild);
+    const bf=c.querySelector('[data-buyfeat]'); if(bf) bf.onclick=buyFeatured;
+    s.appendChild(c);
+    s.appendChild(el('div','divider'));
+  }
+
+  s.appendChild(el('h2','head','This week’s stock'));
   if(!G.market.length) s.appendChild(el('div','empty','Market is restocking...'));
   G.market.forEach(h=>{
     const price=buyPrice(h);
     const full=freeStalls(G)<=0;
     const acts='<button class="btn sm" data-buy="'+h.id+'" '+((G.money<price||full)?'disabled':'')+'>'+(full?'No stalls':'🛒 Buy 🪙'+fmt(price))+'</button>';
     const c=horseCard(h,acts);
+    if(matchesWishlist(h,G.wishlist)){ c.classList.add('wishmatch'); const b=el('div','featbadge','⭐ ON YOUR WISHLIST'); b.style.background='linear-gradient(#7bb0e0,#4a80b0)'; b.style.color='#0b1220'; c.insertBefore(b,c.firstChild); }
     c.querySelectorAll('[data-buy]').forEach(btn=>btn.onclick=()=>buyHorse(h));
     s.appendChild(c);
   });
@@ -3122,6 +3216,43 @@ function buyHorse(h){
   if(freeStalls(G)<=0){ toast('No free stalls — build or upgrade a stable.','bad'); return; }
   G.money-=price; G.market=G.market.filter(m=>m.id!==h.id); h.stable=0; G.horses.push(h); G.stats.bought++;
   toast('🛒 Welcome home, '+h.name+'!','good'); refresh();
+}
+function buyFeatured(){
+  const f=featuredHorse(G); if(!f) return;
+  const price=featuredPrice(f);
+  if(G.money<price){ toast('Not enough coins.','bad'); return; }
+  if(freeStalls(G)<=0){ toast('No free stalls — build or upgrade a stable.','bad'); return; }
+  G.money-=price; f.featured=false; f.stable=0; G.horses.push(f); G.stats.bought=(G.stats.bought||0)+1; G.stats.featuredBought=(G.stats.featuredBought||0)+1;
+  G.featured.sold=true; coinPop(-price); burst('⭐🐴✨',14); playSfx('coin');
+  toast('⭐ '+f.name+' joins '+ranchName(G)+' — a real showpiece!','good'); refresh();
+}
+// ---- Buyer's wishlist ----
+const WL_COATS=['Bay','Chestnut','Black','Grey','Palomino','Buckskin','Dun','Roan','Cremello','Golden','Pearl','Leopard'];
+function openWishlist(){
+  const prefs=(G.wishlist&&G.wishlist.prefs)||[];
+  const chips = prefs.length ? prefs.map((p,i)=>{ const bits=[];
+      if(p.rarity) bits.push((RARITY_NAME[p.rarity]||('R'+p.rarity))+'+');
+      if(p.breed) bits.push((breedDef(p.breed)||{name:p.breed}).name);
+      if(p.coat) bits.push(p.coat);
+      if(p.sex) bits.push(p.sex==='mare'?'♀':'♂');
+      return '<span class="wlchip"><b>'+(bits.join(' · ')||'any')+'</b><span data-wldel="'+i+'" style="cursor:pointer">✕</span></span>'; }).join('')
+    : '<div class="empty" style="margin:4px 0">No wishes yet. Add what you’re hunting for below — matches get starred in the market &amp; auction.</div>';
+  const breedOpts='<option value="">Any breed</option>'+BREEDS.map(b=>'<option value="'+b.id+'">'+b.name+'</option>').join('');
+  const coatOpts='<option value="">Any coat</option>'+WL_COATS.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+  const rarOpts='<option value="">Any rarity</option>'+[2,3,4,5].map(r=>'<option value="'+r+'">'+RARITY_NAME[r]+'+</option>').join('');
+  modal('<h3>⭐ Your Wishlist</h3>'+
+    '<div class="msg">Tell Fleur what to watch for. Any horse in the market or auction matching a wish gets highlighted.</div>'+
+    '<div style="margin-bottom:8px">'+chips+'</div>'+
+    '<div class="divider"></div>'+
+    '<div class="swlabel">Add a wish</div>'+
+    '<div class="row" style="gap:6px;margin-bottom:6px"><select class="wlsel" id="wlBreed">'+breedOpts+'</select><select class="wlsel" id="wlSex"><option value="">Any sex</option><option value="mare">♀ Mare</option><option value="stallion">♂ Stallion</option></select></div>'+
+    '<div class="row" style="gap:6px;margin-bottom:8px"><select class="wlsel" id="wlRarity">'+rarOpts+'</select><select class="wlsel" id="wlCoat">'+coatOpts+'</select></div>'+
+    '<div class="btnrow"><button class="btn" id="wlAdd" style="flex:1">➕ Add wish</button><button class="btn ghost" id="wlClose" style="flex:1">Done</button></div>');
+  const reopen=()=>{ save(); renderHUD(); renderTab(); openWishlist(); };
+  $('wlClose').onclick=closeModal;
+  document.querySelectorAll('[data-wldel]').forEach(x=>x.onclick=()=>{ removeWishlistPref(G,parseInt(x.getAttribute('data-wldel'),10)); playSfx('tap'); reopen(); });
+  $('wlAdd').onclick=()=>{ const pref={ breed:$('wlBreed').value||undefined, sex:$('wlSex').value||undefined, coat:$('wlCoat').value||undefined, rarity:$('wlRarity').value?parseInt($('wlRarity').value,10):undefined };
+    const r=addWishlistPref(G,pref); if(!r.ok){ toast(r.why,'bad'); return; } burst('⭐',6); playSfx('coin'); toast('⭐ Added to your wishlist.','good'); reopen(); };
 }
 function sellHorse(h){
   const q=sellQuote(h);
