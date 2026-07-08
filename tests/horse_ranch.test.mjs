@@ -127,6 +127,71 @@ ok(HR.rankFor(0).name === 'Ranch Hand', 'starting rank');
 ok(HR.rankFor(99999).rep >= HR.rankFor(0).rep, 'top rank reachable');
 ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 
+// ---- training ----
+{
+  const h = HR.mkHorse({ breed: 'quarter', sex: 'stallion', age: 20, speed: 60, stamina: 55, temperament: 60 });
+  ok(HR.statCap(h, 'speed') <= 100 && HR.statCap(h, 'speed') > h.speed, 'stat cap is above current, capped at 100');
+  ok(HR.trainGain(h, 'speed') > 0, 'training gain positive below cap');
+  const cheap = HR.trainCost(h, 'speed');
+  h.speed = HR.statCap(h, 'speed'); // maxed
+  ok(HR.trainGain(h, 'speed') === 0, 'no gain once at breed potential');
+  ok(!HR.canTrain(h, 'speed').ok, 'cannot train a maxed stat');
+  const lo = HR.mkHorse({ breed: 'quarter', age: 20, speed: 40 });
+  const hi = HR.mkHorse({ breed: 'quarter', age: 20, speed: 78 });
+  ok(HR.trainCost(hi, 'speed') > HR.trainCost(lo, 'speed'), 'training a higher stat costs more');
+  const foal = HR.mkHorse({ breed: 'quarter', age: 2 });
+  ok(!HR.canTrain(foal, 'speed').ok, 'foals cannot train');
+}
+{
+  const h = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20, speed: 60, stamina: 60, temperament: 60 });
+  const before = h.speed;
+  const g = HR.applyTrain(h, 'speed');
+  ok(g > 0 && h.speed === before + g, 'applyTrain raises the stat by the gain');
+  ok(h.trains === 1, 'applyTrain records a session');
+  h.trains = HR.TRAIN_PER_DAY;
+  ok(!HR.canTrain(h, 'speed').ok, 'daily training sessions are limited');
+  const preg = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20 }); preg.pregnant = true;
+  ok(!HR.canTrain(preg, 'speed').ok, 'a pregnant mare cannot train');
+  const rented = HR.mkHorse({ breed: 'arabian', age: 20 }); rented.rentDays = 2;
+  ok(!HR.canTrain(rented, 'speed').ok, 'a rented-out horse cannot train');
+}
+{
+  // training resets each day
+  const g = HR.freshGame(); g.feed = 9999;
+  g.horses[0].trains = 3;
+  HR.advanceDay(g, rng(2));
+  ok(g.horses[0].trains === 0, 'training energy refreshes each day');
+}
+
+// ---- goals / milestone chain ----
+{
+  const g = HR.freshGame();
+  ok(HR.GOALS.length >= 8, 'a milestone chain exists');
+  ok(g.goalIdx === 0, 'fresh game starts on the first goal');
+  ok(HR.currentGoal(g) === HR.GOALS[0], 'currentGoal points at the active goal');
+  ok(HR.checkGoals(g).length === 0, 'no goal completes on an untouched fresh game');
+}
+{
+  // completing the first goal (own 3 horses) advances and pays out
+  const g = HR.freshGame();
+  const m0 = g.money;
+  g.horses.push(HR.mkHorse({ breed: 'mustang', age: 20 })); // now 3 horses
+  const done = HR.checkGoals(g);
+  ok(done.length >= 1 && done[0].id === 'own3', 'reaching 3 horses completes the first goal');
+  ok(g.money > m0, 'goal reward paid out coins');
+  ok(g.goalIdx >= 1, 'goal index advanced past the completed goal');
+}
+{
+  // checkGoals can chain several completions and is idempotent afterwards
+  const g = HR.freshGame(); g.rep = 999999; g.stats.born = 5; g.stats.bestSale = 99999; g.stats.showWins = 5; g.stats.maxGen = 9;
+  g.stables.push({ id: 'st2', level: 1, baseStalls: 4 });
+  for (let i = 0; i < 6; i++) g.horses.push(HR.mkHorse({ breed: 'akhalteke', age: 20 }));
+  HR.checkGoals(g);
+  ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
+  ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
+  ok(HR.checkGoals(g).length === 0, 'checkGoals is a no-op after the chain is done');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
