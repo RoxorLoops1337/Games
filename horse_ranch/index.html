@@ -311,6 +311,7 @@
     <button class="sbtn" id="codexBtn" title="Codex — breeds, coats & disciplines" style="margin-right:4px">📚</button>
     <button class="sbtn" id="scrapBtn" title="Scrapbook — your keepsake memories" style="margin-right:4px">📸</button>
     <button class="sbtn" id="visitBtn" title="Visitor Day — open your ranch to the public" style="margin-right:4px;position:relative">🎪<span id="visitBadge" class="hudbadge" style="display:none">!</span></button>
+    <button class="sbtn" id="apptBtn" title="Farrier & vet appointments" style="margin-right:4px;position:relative">🩺<span id="apptBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1331,7 +1332,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1339,7 +1340,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0,
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[],
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1364,6 +1365,10 @@ function advanceDay(game,rng){
   const money0=game.money; // for lifetime gold-earned tracking
   game.day++; game.stats.days++;
   const notes=[];
+
+  // farrier & vet appointments booked for today resolve now (before care decay)
+  { const done=resolveAppointments(game, game.day);
+    for(const r of done) notes.push({t:'good',m:r.emoji+' '+r.name+'’s '+appointmentTypeDef(r.type).name.toLowerCase()+' visit went well.'}); }
 
   // feed consumption
   let need=0; for(const h of game.horses) need+=feedPerDay(h);
@@ -1544,7 +1549,7 @@ function rollEvent(game,rng){
     return {id:'show',msg:'🏆 The county horse show is on! Enter a horse to compete for prize money and reputation.'};
   }
   if(e.id==='vet'){
-    const sick=game.horses.filter(h=>h.health<95);
+    const sick=game.horses.filter(h=>h.health<95 && activeCareBuff(h,game.day).guard<=0); // a recent vet visit wards off the colic scare
     if(!sick.length) return null;
     const h=sick[Math.floor(rng()*sick.length)];
     const bill=Math.round(40+rng()*120);
@@ -1867,12 +1872,82 @@ function hostVisitorDay(game, opts){
   return { ok:true, visitors, coins, rep, appeal:p.appeal, weekend:p.weekend, highlight:hl.text, record:(coins>prevBest) };
 }
 
+// ---------- Farrier & Vet appointments (routine upkeep → bounded, temporary buffs) ----------
+// Book a farrier (soundness/shoeing) or vet (checkup) visit; it resolves in advanceDay and grants a
+// small, capped, time-limited edge tied to the EXISTING health/soundness/readiness systems.
+const APPOINTMENT_TYPES=[
+  {id:'farrier', name:'Farrier', emoji:'🧲', fee:120, lead:1, duration:6,  cooldown:10, show:0.05, health:3, guard:0,
+   desc:'Fresh shoes & balanced hooves — a few days of surer, sounder movement in the ring.'},
+  {id:'vet',     name:'Vet',     emoji:'🩺', fee:180, lead:1, duration:8,  cooldown:14, show:0.03, health:16, guard:0.6,
+   desc:'A checkup, teeth & vaccinations — restores condition and wards off illness for a spell.'},
+];
+function appointmentTypeDef(id){ return APPOINTMENT_TYPES.find(t=>t.id===id)||null; }
+function appointmentsArr(game){ if(!game) return []; if(!Array.isArray(game.appointments)) game.appointments=[]; return game.appointments; }
+function appointmentFee(game,type,horse){ const t=appointmentTypeDef(type); if(!t) return 0;
+  // a gentle scale by the horse's value tier so prized horses cost a little more (bounded)
+  const r=horse?((breedDef(horse.breed)||{rarity:1}).rarity):1; return Math.round(t.fee*(0.9+0.06*(r-1))); }
+function careLastOf(horse,type){ return (horse&&horse.careLast&&typeof horse.careLast[type]==='number')?horse.careLast[type]:null; }
+function hasPendingAppointment(game,horseId,type){ return appointmentsArr(game).some(a=>a.horseId===horseId && a.type===type && !a.done); }
+// is a horse due for a given care type (never had it, or its cooldown has elapsed) and not already booked?
+function careTypeDue(game,horse,type){ const t=appointmentTypeDef(type); if(!t||!horse||!isAdult(horse)) return false;
+  if(hasPendingAppointment(game,horse.id,type)) return false;
+  const last=careLastOf(horse,type); return (last==null) || (((game&&game.day)||1)-last)>=t.cooldown; }
+function dueForCare(game,horse){ return APPOINTMENT_TYPES.filter(t=>careTypeDue(game,horse,t.id)).map(t=>t.id); }
+function horsesDueForCare(game){ return ((game&&game.horses)||[]).filter(h=>dueForCare(game,h).length>0); }
+function bookAppointment(game,type,horseId,day){
+  const t=appointmentTypeDef(type); if(!t) return {ok:false,why:'Unknown appointment.'};
+  const h=((game&&game.horses)||[]).find(x=>x.id===horseId); if(!h) return {ok:false,why:'No such horse.'};
+  if(!isAdult(h)) return {ok:false,why:'Only adult horses need the farrier or vet.'};
+  if(hasPendingAppointment(game,horseId,type)) return {ok:false,why:'Already booked.'};
+  const last=careLastOf(h,type); if(last!=null && (game.day-last)<t.cooldown) return {ok:false,why:h.name+' had the '+t.name.toLowerCase()+' recently.'};
+  const fee=appointmentFee(game,type,h); if((game.money||0)<fee) return {ok:false,why:'Not enough coins for the '+t.name.toLowerCase()+'.'};
+  game.money-=fee;
+  const due=((day!=null?day:game.day)||1)+t.lead;
+  const b={ id:'ap'+(game._apc=(game._apc||0)+1), type, horseId, name:h.name, booked:game.day||1, due, fee, done:false };
+  appointmentsArr(game).push(b);
+  return {ok:true, booking:b, fee};
+}
+// apply a matured appointment's effect to the horse (bounded; no stacking beyond one active buff per type)
+function applyCareBuff(game,h,type,day){
+  const t=appointmentTypeDef(type); if(!t||!h) return;
+  if(!h.careLast) h.careLast={}; h.careLast[type]=day;
+  if(t.health) h.health=clamp((h.health||0)+t.health,0,100);
+  if(type==='vet') h.happy=clamp((h.happy||0)+2,0,100);
+  if(!h.careBuff) h.careBuff={};
+  h.careBuff[type]={ until:day+t.duration, show:t.show, guard:t.guard||0 };
+}
+// resolve every appointment that has matured on/before `day` (called from advanceDay)
+function resolveAppointments(game,day){
+  if(!Array.isArray(game.appointments)) { game.appointments=[]; return []; }
+  const resolved=[];
+  for(const a of game.appointments){
+    if(a.done || a.due>day) continue;
+    a.done=true;
+    const h=((game.horses)||[]).find(x=>x.id===a.horseId);
+    if(!h) continue; // horse sold/gone — the booking simply lapses
+    applyCareBuff(game,h,a.type,day);
+    if(!game.stats) game.stats={}; game.stats.appointments=(game.stats.appointments||0)+1;
+    resolved.push({ type:a.type, horseId:a.horseId, name:h.name, emoji:appointmentTypeDef(a.type).emoji });
+  }
+  // keep the list bounded — drop old resolved bookings
+  game.appointments=game.appointments.filter(a=>!a.done || a.due>=day-30);
+  return resolved;
+}
+// the current, bounded upkeep effect on a horse (show multiplier + illness guard 0..1)
+function activeCareBuff(h,day){
+  const out={show:1, guard:0}; if(!h||!h.careBuff) return out;
+  for(const k in h.careBuff){ const b=h.careBuff[k]; if(b && (b.until==null || b.until>=day)){ out.show*=(1+(b.show||0)); out.guard=Math.max(out.guard, b.guard||0); } }
+  out.show=Math.min(out.show, 1.10); out.guard=Math.min(out.guard, 0.8); // hard caps — no runaway stacking
+  return out;
+}
+function careAppointmentMult(h,game){ return game ? activeCareBuff(h, game.day||0).show : 1; }
+
 function disciplineScore(h,disc,game){
   const w=disc.w;
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*careBonusMult(h)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, schooling, tack(+tiers), personality & age shape aptitude
+  return s*form*careBonusMult(h)*careAppointmentMult(h,game)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, appointments, schooling, tack(+tiers), personality & age shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -2315,6 +2390,7 @@ const ACHIEVEMENTS=[
   {id:'naturalist', icon:'📚', name:'Naturalist',            desc:'Discover every breed in the Codex.',           check:g=>codexProgress(g).breedsSeen>=BREEDS.length},
   {id:'chronicler', icon:'📸', name:'Chronicler',            desc:'Fill your scrapbook with 15 memories.',        check:g=>scrapbookSize(g)>=15},
   {id:'crowdpleaser',icon:'🎪', name:'Crowd-Pleaser',        desc:'Host five Visitor Days at your ranch.',        check:g=>((g.stats&&g.stats.visitorDays)||0)>=5},
+  {id:'wellkept',   icon:'🩺', name:'Well-Kept Stable',      desc:'Complete 12 farrier & vet appointments.',      check:g=>((g.stats&&g.stats.appointments)||0)>=12},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2414,6 +2490,7 @@ const GOALS=[
   {id:'codex1',  desc:'Discover 5 breeds in the Codex (📚)',    tip:g=>codexProgress(g).breedsSeen+'/5 breeds',done:g=>codexProgress(g).breedsSeen>=5,                    reward:{money:600,rep:20}},
   {id:'scrap1',  desc:'Save your first memory (📸 scrapbook)',   tip:g=>scrapbookSize(g)+' saved',       done:g=>scrapbookSize(g)>=1,                                    reward:{money:400,rep:15}},
   {id:'visit1',  desc:'Host a Visitor Day (🎪 stable tour)',      tip:g=>((g.stats&&g.stats.visitorDays)||0)+'/1',done:g=>((g.stats&&g.stats.visitorDays)||0)>=1,               reward:{money:800,rep:25}},
+  {id:'appt1',   desc:'Book a farrier or vet visit (🩺)',         tip:g=>((g.stats&&g.stats.appointments)||0)+' done',done:g=>((g.stats&&g.stats.appointments)||0)>=1,          reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2438,6 +2515,7 @@ const HR = {
   codexBreeds, codexCoats, codexDisciplines, codexProgress, codexSeenSets, codexHasBreed, codexHasCoat, coatLeanNote,
   SCRAPBOOK_CAP, MOMENT_KINDS, momentKindDef, addScrapbookEntry, scrapbookList, scrapbookSize, scrapbookPinned, toggleScrapbookPin, captureMoment,
   VISITOR_COOLDOWN, VISITOR_FIRST_DAY, ranchAppealScore, nextVisitorDay, visitorDaysUntil, visitorDayAvailable, previewVisitorDay, hostVisitorDay, visitorHighlight,
+  APPOINTMENT_TYPES, appointmentTypeDef, appointmentFee, bookAppointment, dueForCare, horsesDueForCare, careTypeDue, resolveAppointments, activeCareBuff,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2567,6 +2645,7 @@ function load(){
     if(!Array.isArray(G.pasture)) G.pasture=[]; // retirement pasture roster
     if(!Array.isArray(G.scrapbook)) G.scrapbook=[]; // photo-mode scrapbook of memories
     if(typeof G.lastVisitorDay!=='number') G.lastVisitorDay=0; // stable-tour / visitor-day cooldown stamp
+    if(!Array.isArray(G.appointments)) G.appointments=[]; // farrier & vet appointments
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -2741,6 +2820,8 @@ function renderHUD(){
   { const gb=$('dailyBadge'); if(gb){ const on=dailyClaimable(); gb.style.display=on?'block':'none'; } }
   // visitor-day availability badge
   { const vb=$('visitBadge'); if(vb){ const on=visitorDayAvailable(G); vb.style.display=on?'block':'none'; } }
+  // farrier/vet due badge
+  { const ab=$('apptBadge'); if(ab){ const n=horsesDueForCare(G).length; ab.textContent=n; ab.style.display=n?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -4354,6 +4435,46 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+function openAppointments(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const adults=(G.horses||[]).filter(h=>isAdult(h));
+  const typeCard=APPOINTMENT_TYPES.map(t=>'<span class="pill">'+t.emoji+' '+t.name+' 🪙'+t.fee+' · '+t.duration+'d</span>').join(' ');
+  let rows='';
+  if(!adults.length){ rows='<div class="empty">No adult horses yet — the farrier and vet see grown horses.</div>'; }
+  else rows=adults.map(h=>{
+    const due=dueForCare(G,h), buff=activeCareBuff(h,G.day);
+    const buffTag = buff.show>1 ? '<span class="pill" style="color:var(--good)">✨ +'+Math.round((buff.show-1)*100)+'% soundness</span>' : (buff.guard>0?'<span class="pill" style="color:var(--good)">🛡️ vet-guarded</span>':'');
+    const btns=APPOINTMENT_TYPES.map(t=>{
+      const pending=hasPendingAppointment(G,h.id,t.id);
+      const last=careLastOf(h,t.id), cd=(last!=null)?Math.max(0,t.cooldown-(G.day-last)):0;
+      const fee=appointmentFee(G,t.id,h);
+      if(pending) return '<span class="pill">'+t.emoji+' booked</span>';
+      if(cd>0) return '<span class="pill" style="opacity:.6">'+t.emoji+' '+cd+'d</span>';
+      const afford=(G.money||0)>=fee;
+      return '<button class="btn sm'+(afford?'':' ghost')+'" data-appt="'+t.id+'" data-h="'+esc(h.id)+'"'+(afford?'':' disabled')+'>'+t.emoji+' '+t.name+' 🪙'+fee+'</button>';
+    }).join(' ');
+    return '<div class="lbrow"'+(due.length?' style="border-left:3px solid var(--gold)"':'')+'><div class="hface">'+horseArt(h,30)+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(h.name)+(due.length?' <span class="pill" style="color:var(--gold)">due</span>':'')+' '+buffTag+'</div>'+
+      '<div class="lbsub">'+esc((breedDef(h.breed)||{name:h.breed}).name)+' · HP '+Math.round(h.health)+' · OVR '+overall(h)+'</div>'+
+      '<div class="btnrow" style="margin-top:4px">'+btns+'</div></div></div>';
+  }).join('');
+  const pend=appointmentsArr(G).filter(a=>!a.done);
+  const pendHtml = pend.length ? '<div class="swlabel" style="margin-top:8px">Upcoming</div>'+pend.map(a=>'<div class="lbsub">'+appointmentTypeDef(a.type).emoji+' '+esc(a.name)+' — '+appointmentTypeDef(a.type).name+' on day '+a.due+'</div>').join('') : '';
+  modal('<h3>🩺 Farrier &amp; Vet</h3>'+
+    '<div class="swlabel">Book routine care. Visits resolve the next day and give a bounded, temporary edge — surer movement in the ring and, from the vet, protection against illness.</div>'+
+    '<div class="msg" style="font-size:12px">'+typeCard+'</div>'+
+    '<div class="divider"></div>'+
+    '<div>'+rows+'</div>'+pendHtml+
+    '<div class="btnrow"><button class="btn ghost" id="apptClose" style="width:100%">Done</button></div>');
+  $('apptClose').onclick=closeModal;
+  document.querySelectorAll('[data-appt]').forEach(b=>b.onclick=()=>{
+    const r=bookAppointment(G, b.getAttribute('data-appt'), b.getAttribute('data-h'), G.day);
+    if(!r.ok){ toast(r.why,'info'); return; }
+    const t=appointmentTypeDef(r.booking.type); coinPop(-r.fee); playSfx('tap');
+    toast(t.emoji+' '+t.name+' booked for '+r.booking.name+' — visits on day '+r.booking.due+'.','good');
+    save(); renderHUD(); openAppointments();
+  });
+}
 function openVisitorDay(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const avail=visitorDayAvailable(G), until=visitorDaysUntil(G);
@@ -4584,6 +4705,7 @@ function boot(){
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
   { const sb=$('scrapBtn'); if(sb) sb.onclick=openScrapbook; }
   { const vb=$('visitBtn'); if(vb) vb.onclick=openVisitorDay; }
+  { const ab=$('apptBtn'); if(ab) ab.onclick=openAppointments; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }

@@ -223,6 +223,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   for (const b of ['welsh', 'mustang', 'fjord']) g.horses.push(HR.mkHorse({ breed: b, age: 20 })); // ≥5 distinct breeds → codex discovery goal
   HR.captureMoment(g, 'snapshot', g.horses[1]); // satisfies the scrapbook goal (save a memory)
   g.stats.visitorDays = 1; // satisfies the visitor-day goal
+  g.stats.appointments = 1; // satisfies the farrier/vet appointment goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2666,6 +2667,120 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Crowd-Pleaser needs five Visitor Days');
   g.stats.visitorDays = 5;
   ok(ach.check(g), 'five Visitor Days unlock Crowd-Pleaser');
+}
+
+// ---- farrier & vet appointments scheduler (round 40) ----
+{
+  // booking validates funds, eligibility & cooldown, and deducts the fee once
+  const g = HR.freshGame(); g.day = 10; g.money = 10000;
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, name: 'Sol' }); g.horses.push(h);
+  const fee = HR.appointmentFee(g, 'farrier', h);
+  const money0 = g.money;
+  const r = HR.bookAppointment(g, 'farrier', h.id, g.day);
+  ok(r.ok && r.booking.type === 'farrier', 'a farrier visit books');
+  ok(g.money === money0 - fee, 'the fee is deducted once');
+  ok(r.booking.due === g.day + HR.appointmentTypeDef('farrier').lead, 'the visit is scheduled for its lead day');
+  // no double-booking the same pending type
+  ok(HR.bookAppointment(g, 'farrier', h.id, g.day).ok === false, 'the same pending appointment cannot be double-booked');
+  // a different type is still bookable
+  ok(HR.bookAppointment(g, 'vet', h.id, g.day).ok === true, 'a different care type can be booked alongside');
+  // unknown type / horse / poverty are rejected
+  ok(HR.bookAppointment(g, 'nope', h.id, g.day).ok === false, 'an unknown type is rejected');
+  ok(HR.bookAppointment(g, 'farrier', 'ghost', g.day).ok === false, 'an unknown horse is rejected');
+  const poor = HR.freshGame(); poor.day = 10; poor.money = 0; const ph = HR.mkHorse({ breed: 'arabian', age: 20 }); poor.horses.push(ph);
+  ok(HR.bookAppointment(poor, 'vet', ph.id, poor.day).ok === false, 'you cannot book without the fee');
+  // foals are ineligible
+  const foalG = HR.freshGame(); foalG.day = 10; const foal = HR.mkHorse({ breed: 'arabian', age: 1 }); foalG.horses.push(foal);
+  ok(HR.bookAppointment(foalG, 'farrier', foal.id, foalG.day).ok === false, 'foals do not book farrier/vet visits');
+}
+{
+  // an appointment resolves on its due day via advanceDay and applies a BOUNDED, expiring buff
+  const g = HR.freshGame(); g.day = 10; g.money = 10000; g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, name: 'Vela', health: 60 }); g.horses.push(h);
+  const hp0 = h.health;
+  HR.bookAppointment(g, 'vet', h.id, g.day); // due day 11
+  ok(HR.activeCareBuff(h, g.day).show === 1, 'no buff before the visit resolves');
+  const appt0 = g.stats.appointments || 0;
+  HR.advanceDay(g, rng(1)); // day → 11, resolves
+  ok((g.stats.appointments || 0) === appt0 + 1, 'the appointment is counted when it resolves');
+  ok(h.health > hp0, 'the vet restores some condition');
+  const buff = HR.activeCareBuff(h, g.day);
+  ok(buff.show > 1 && buff.guard > 0, 'a vet visit grants a soundness edge and an illness guard');
+  ok(buff.show <= 1.10 && buff.guard <= 0.8, 'the buff is capped');
+  // the buff expires after its duration
+  const dur = HR.appointmentTypeDef('vet').duration;
+  ok(HR.activeCareBuff(h, g.day + dur).show > 1, 'the buff holds through its window');
+  ok(HR.activeCareBuff(h, g.day + dur + 1).show === 1, 'the buff expires after its duration');
+}
+{
+  // the soundness buff lifts competition readiness (disciplineScore) but stays bounded
+  const g = HR.freshGame(); g.day = 30;
+  const h = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 80, stamina: 70, temperament: 60, health: 100, happy: 100 }); g.horses.push(h);
+  const disc = HR.DISCIPLINES.find(d => d.id === 'race');
+  const base = HR.disciplineScore(h, disc, g);
+  h.careBuff = { farrier: { until: g.day + 5, show: 0.05, guard: 0 } };
+  const buffed = HR.disciplineScore(h, disc, g);
+  ok(buffed > base, 'an active farrier buff raises the show score');
+  ok(buffed / base <= 1.11, 'the readiness lift is bounded (~≤10%)');
+  // stacking farrier+vet cannot exceed the cap
+  h.careBuff = { farrier: { until: g.day + 5, show: 0.05, guard: 0 }, vet: { until: g.day + 5, show: 0.03, guard: 0.6 } };
+  ok(HR.activeCareBuff(h, g.day).show <= 1.10, 'combined buffs are still capped — no runaway stacking');
+}
+{
+  // dueForCare flags horses sensibly, and clears after a visit until the cooldown elapses
+  const g = HR.freshGame(); g.day = 20; g.money = 10000; g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'welsh', age: 20 }); g.horses.push(h);
+  ok(HR.dueForCare(g, h).indexOf('farrier') >= 0, 'a horse that has never seen the farrier is due');
+  HR.bookAppointment(g, 'farrier', h.id, g.day);
+  ok(HR.dueForCare(g, h).indexOf('farrier') < 0, 'a booked type is no longer flagged as due');
+  HR.advanceDay(g, rng(2)); // resolves
+  ok(HR.dueForCare(g, h).indexOf('farrier') < 0, 'freshly-shod, the horse is not due again yet');
+  ok(!HR.careTypeDue(g, h, 'farrier'), 'careTypeDue respects the cooldown');
+  g.day += HR.appointmentTypeDef('farrier').cooldown;
+  ok(HR.careTypeDue(g, h, 'farrier'), 'once the cooldown elapses the horse is due again');
+  ok(HR.horsesDueForCare(g).some(x => x.id === h.id), 'horsesDueForCare lists it');
+}
+{
+  // the cooldown prevents farming: you cannot immediately re-book after a visit
+  const g = HR.freshGame(); g.day = 15; g.money = 100000; g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'arabian', age: 20 }); g.horses.push(h);
+  HR.bookAppointment(g, 'farrier', h.id, g.day);
+  HR.advanceDay(g, rng(3));
+  const money0 = g.money;
+  const again = HR.bookAppointment(g, 'farrier', h.id, g.day);
+  ok(!again.ok && g.money === money0, 'you cannot re-book the farrier during its cooldown (no fee taken)');
+}
+{
+  // a vet-guarded horse is shielded from the colic random-event targeting (illness-risk reduction)
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, health: 50 }); g.horses.push(h); // sick enough to be a colic target
+  g.day = 5;
+  // without a guard, the horse is a valid colic target; with one, it is shielded
+  h.careBuff = { vet: { until: g.day + 8, show: 0.03, guard: 0.6 } };
+  ok(HR.activeCareBuff(h, g.day).guard > 0, 'the guard is active');
+  // determinism: resolving the same booking on the same day+state is repeatable
+  const mk = () => { const gg = HR.freshGame(); gg.day = 10; gg.money = 9999; gg.feed = 9999; const hh = HR.mkHorse({ breed: 'arabian', age: 20, id: 'fix', health: 55 }); gg.horses.push(hh); HR.bookAppointment(gg, 'vet', 'fix', gg.day); HR.advanceDay(gg, rng(7)); return gg.horses.find(x => x.id === 'fix').health; };
+  ok(mk() === mk(), 'appointment resolution is deterministic for a fixed rng+state');
+}
+{
+  // migration is safe on an old save with no appointments; advanceDay resolves harmlessly
+  const legacy = HR.freshGame(); delete legacy.appointments;
+  legacy.feed = 9999;
+  ok(HR.horsesDueForCare(legacy).length >= 0, 'due-list is safe when appointments is missing');
+  HR.resolveAppointments(legacy, legacy.day + 1); // must not throw
+  ok(Array.isArray(legacy.appointments), 'resolveAppointments initialises the array');
+  HR.advanceDay(legacy, rng(1)); // must not throw on a migrated save
+  ok(true, 'advanceDay is safe on a migrated save');
+  // goal + achievement
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'appt1');
+  ok(goal && !goal.done(g), 'the appointment goal is unmet before any visit');
+  g.stats.appointments = 1;
+  ok(goal.done(g), 'completing a visit satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'wellkept');
+  ok(ach && !ach.check(g), 'Well-Kept Stable needs 12 visits');
+  g.stats.appointments = 12;
+  ok(ach.check(g), '12 visits unlock Well-Kept Stable');
 }
 
 // ---- clamp helper ----
