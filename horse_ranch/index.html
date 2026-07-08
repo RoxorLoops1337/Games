@@ -320,6 +320,7 @@
     <button class="sbtn" id="mapBtn" title="Ranch map — barns, stalls & paddocks" style="margin-right:4px">🗺️</button>
     <button class="sbtn" id="fairBtn" title="Seasonal fair" style="margin-right:4px;position:relative">🎡<span id="fairBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="choreBtn" title="Daily chores / to-do board" style="margin-right:4px;position:relative">✅<span id="choreBadge" class="hudbadge" style="display:none">0</span></button>
+    <button class="sbtn" id="tripBtn" title="Horse trailer — away trips" style="margin-right:4px;position:relative">🚚<span id="tripBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -891,6 +892,7 @@ function mkHorse(o){
     atStud:o.atStud||false, // standing at public stud
     pregnant:false, gestation:0, sireBreed:null,
     rentDays:0, rentRate:0,   // >0 = out on rent
+    tripType:o.tripType||null, tripBack:o.tripBack||0,   // away on a trailer trip (unavailable until tripBack)
     stable:o.stable!=null?o.stable:0,
     needs:o.needs||null, bond:o.bond,  // daily care needs + bonding level (needsInit fills defaults)
     gwDay:o.gwDay||0, gwEnergy:o.gwEnergy||0, // groundwork handling energy (per-day, auto-resets)
@@ -993,6 +995,7 @@ function canBreed(mare,stallion){
   if(tooOldToBreed(mare)||tooOldToBreed(stallion)) return {ok:false,why:'Too old to breed — honour them in retirement.'};
   if(mare.pregnant) return {ok:false,why:'This mare is already pregnant.'};
   if(mare.rentDays>0||stallion.rentDays>0) return {ok:false,why:'A horse is out on rent.'};
+  if(horseAway(mare)||horseAway(stallion)) return {ok:false,why:'A horse is away on a trip.'};
   return {ok:true};
 }
 function breedFoal(mare,stallion,rng){
@@ -1475,7 +1478,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1519,6 +1522,11 @@ function advanceDay(game,rng){
 
   // a seasonal fair opening today gets a headline announcement
   { const f=fairFor(game.day); if(f && !fairFor(game.day-1)) notes.push({t:'good',m:f.emoji+' The '+f.name+' has begun! '+f.theme+' Complete its objective for a reward.'}); }
+
+  // horses away in the trailer return today with their trip reward
+  { const arrivals=resolveTrips(game, game.day);
+    for(const a of arrivals){ const rw=a.reward||{}; const bits=[]; if(rw.money) bits.push('🪙'+rw.money); if(rw.rep) bits.push(rw.rep+'⭐');
+      notes.push({t:'good',m:a.trip.emoji+' '+a.horse.name+' is back from the '+a.trip.name+' — '+a.reward.note+(bits.length?' (+'+bits.join(' +')+')':'')+'.'}); } }
 
   // feed consumption
   let need=0; for(const h of game.horses) need+=feedPerDay(h);
@@ -1581,7 +1589,7 @@ function advanceDay(game,rng){
   }
 
   // peaceful passing of the very old — long warning first (elderly from OLD_AGE), then a gentle end
-  const gone=game.horses.filter(h=>(h.age||0)>=LIFESPAN && h.rentDays===0 && !h.pregnant && rng()<0.10);
+  const gone=game.horses.filter(h=>(h.age||0)>=LIFESPAN && h.rentDays===0 && !horseAway(h) && !h.pregnant && rng()<0.10);
   for(const h of gone){
     const rec=hofRecord(h,'passed',game.day);
     game.horses=game.horses.filter(x=>x.id!==h.id);
@@ -1684,7 +1692,7 @@ function rollEvent(game,rng){
   if(!weighted.length) return null;
   const e=weighted[Math.floor(rng()*weighted.length)];
   if(e.id==='buyer'){
-    const owned=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+    const owned=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant);
     if(!owned.length) return null;
     const h=owned[Math.floor(rng()*owned.length)];
     const offer=Math.round(sellQuote(h)*(1.3+rng()*0.5));
@@ -1694,7 +1702,7 @@ function rollEvent(game,rng){
   if(e.id==='hay'){ const up=rng()<0.5; return {id:'hay',up,
     msg: up?'☀️ A dry spell hit — hay prices are high this week.':'🌧️ A bumper harvest — hay is cheap this week!'}; }
   if(e.id==='show'){
-    const owned=game.horses.filter(h=>isAdult(h)&&h.rentDays===0);
+    const owned=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h));
     if(!owned.length) return null;
     return {id:'show',msg:'🏆 The county horse show is on! Enter a horse to compete for prize money and reputation.'};
   }
@@ -2155,9 +2163,85 @@ function canEnterShow(game,h){
   if(h.atStud) return {ok:false,why:'Standing at stud — retire from stud to compete.'};
   if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
   if(h.pregnant) return {ok:false,why:'In foal — resting.'};
+  if(horseAway(h)) return {ok:false,why:'Away on a trip.'};
   if((h.compCd||0)>game.day) return {ok:false,why:'Resting until day '+h.compCd+'.'};
   return {ok:true};
 }
+
+// ---------- Horse-trailer / away-trip expeditions (send a horse away for a bounded reward) ----------
+// A horse loaded in the trailer is UNAVAILABLE (like rent/stud) until it returns after N days, when the
+// trip resolves in advanceDay with a themed, BOUNDED payoff. Reuses existing stats/affinity/coins — no
+// new resources. Economy-safe: a fee, one trip per horse at a time, and capped/diminishing gains.
+const TRIP_STAT_MAX=3;   // most a clinic can add to any one stat in a single trip
+const TRIP_TYPES=[
+  {id:'clinic', name:'Training Clinic', emoji:'🎓', days:4, fee:260, kind:'clinic',
+   desc:'Coached by the pros — comes home a touch stronger for good.'},
+  {id:'trek',   name:'Endurance Trek',  emoji:'🥾', days:3, fee:160, kind:'trek',
+   desc:'A long trail trek — earns coins & rep and returns fit.'},
+  {id:'tour',   name:'Show Tour',        emoji:'🚌', days:5, fee:340, kind:'tour',
+   desc:'A regional show circuit — bigger coins & fame, and poise from the road.'},
+];
+function tripTypeDef(id){ return TRIP_TYPES.find(t=>t.id===id)||null; }
+function horseAway(h){ return !!(h && h.tripType && (h.tripBack||0)>0); }
+function tripFee(game,type,horse){ const t=tripTypeDef(type); return t?t.fee:0; }
+function canSendOnTrip(game,h){
+  if(!h) return {ok:false,why:'No such horse.'};
+  if(!isAdult(h)) return {ok:false,why:'Only adult horses can travel.'};
+  if(horseAway(h)) return {ok:false,why:h.name+' is already away on a trip.'};
+  if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
+  if(h.pregnant) return {ok:false,why:'In foal — resting at home.'};
+  if(h.atStud) return {ok:false,why:'Standing at stud.'};
+  return {ok:true};
+}
+function tripReturnPreview(type,horse){ const t=tripTypeDef(type); if(!t||!horse) return null;
+  if(t.kind==='clinic') return {kind:'clinic', stats:'+1–'+TRIP_STAT_MAX+' to each stat (permanent) & a little schooling'};
+  if(t.kind==='trek')   return {kind:'trek',  money:Math.min(700, 120+Math.round(overall(horse)*4)),  rep:Math.min(20, 6+Math.round(overall(horse)*0.1))};
+  return {kind:'tour',  money:Math.min(1200, 220+Math.round(overall(horse)*7)), rep:Math.min(34, 12+Math.round(overall(horse)*0.2))}; }
+function tripDaysLeft(game,h){ return horseAway(h)?Math.max(0,(h.tripBack||0)-((game&&game.day)||1)):0; }
+function horsesAway(game){ return ((game&&game.horses)||[]).filter(horseAway); }
+// send a horse on a trip: validate eligibility + funds + not-already-away; deduct fee; schedule return
+function sendHorseOnTrip(game,type,horseId,day){
+  const t=tripTypeDef(type); if(!t) return {ok:false,why:'Unknown trip.'};
+  const h=((game&&game.horses)||[]).find(x=>x.id===horseId); if(!h) return {ok:false,why:'No such horse.'};
+  const elig=canSendOnTrip(game,h); if(!elig.ok) return elig;
+  const fee=tripFee(game,type,h); if((game.money||0)<fee) return {ok:false,why:'Not enough coins for the '+t.name.toLowerCase()+'.'};
+  game.money-=fee;
+  h.tripType=t.id; h.tripBack=((day!=null?day:game.day)||1)+t.days;
+  return {ok:true, horse:h, trip:t, back:h.tripBack, fee};
+}
+// apply a trip's bounded reward to a returning horse (mutates), returns the reward summary
+function applyTripReward(game,h,typeId){
+  const t=tripTypeDef(typeId)||TRIP_TYPES[0]; const out={money:0, rep:0, stat:{}, aff:0, note:''};
+  if(t.kind==='clinic'){
+    for(const s of ['speed','stamina','temperament']){ const gain=Math.min(TRIP_STAT_MAX, Math.max(1,Math.round((100-(h[s]||0))*0.06))); // diminishing near the cap
+      const before=h[s]||0; h[s]=clamp(before+gain,8,100); out.stat[s]=h[s]-before; }
+    const top=topAffinity(h); if(top){ gainAffinity(h,top.id,6); out.aff=6; }
+    h.happy=clamp((h.happy||0)+4,0,100); out.note='came home sharper from the clinic';
+  } else if(t.kind==='trek'){
+    out.money=Math.min(700, 120+Math.round(overall(h)*4)); out.rep=Math.min(20, 6+Math.round(overall(h)*0.1));
+    game.money=(game.money||0)+out.money; game.rep=(game.rep||0)+out.rep;
+    h.health=clamp((h.health||0)+10,0,100); h.happy=clamp((h.happy||0)+8,0,100); out.note='earned coins on the trail and came back fit';
+  } else {
+    out.money=Math.min(1200, 220+Math.round(overall(h)*7)); out.rep=Math.min(34, 12+Math.round(overall(h)*0.2));
+    game.money=(game.money||0)+out.money; game.rep=(game.rep||0)+out.rep;
+    const before=h.temperament||0; h.temperament=clamp(before+2,8,100); out.stat.temperament=h.temperament-before; // poise from the road
+    h.happy=clamp((h.happy||0)+6,0,100); out.note='toured the region and made a name for itself';
+  }
+  if(game.stats){ game.stats.trips=(game.stats.trips||0)+1; game.stats.tripCoins=(game.stats.tripCoins||0)+(out.money||0); }
+  return out;
+}
+// resolve every trip that has matured on/before `day` (called from advanceDay); returns the arrivals
+function resolveTrips(game,day){
+  const back=[];
+  for(const h of ((game&&game.horses)||[])){
+    if(horseAway(h) && (h.tripBack||0)<=day){
+      const t=tripTypeDef(h.tripType)||TRIP_TYPES[0]; const reward=applyTripReward(game,h,t.id);
+      h.tripType=null; h.tripBack=0; back.push({horse:h, trip:t, reward});
+    }
+  }
+  return back;
+}
+
 // ---- Optional "ride the round" minigame scoring (pure) ----
 // A run produces a performance 0..1; it nudges the horse's effective score by a
 // small, BOUNDED amount so a good run helps but a skilled horse still matters most.
@@ -2330,12 +2414,12 @@ function restockTeachers(game,rng){
   game.teacherDay=game.day;
 }
 function teacherCount(game){ return (game.teachers||[]).length; }
-function schoolHorses(game){ return game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant).length; }
+function schoolHorses(game){ return game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant).length; }
 function teacherCapacityTotal(game){ return (game.teachers||[]).reduce((n,t)=>n+t.capacity,0); }
 function lessonsPerDay(game){ return Math.min(teacherCapacityTotal(game), schoolHorses(game)*3); }
 function lessonFee(game){ return 11 + Math.min(30, Math.round((game.rep||0)*0.006)); } // rep bonus capped so lessons plateau
 function schoolLessonMult(game){ // gentle horses make better lesson mounts
-  const hs=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+  const hs=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant);
   if(!hs.length) return 1;
   return hs.reduce((n,h)=>n+traitMult(h,'lesson'),0)/hs.length;
 }
@@ -2354,6 +2438,7 @@ function canStand(h){
   if(!isAdult(h)) return {ok:false,why:'Must be a grown stallion.'};
   if(tooOldToBreed(h)) return {ok:false,why:'Too old to stand at stud.'};
   if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
+  if(horseAway(h)) return {ok:false,why:'Away on a trip.'};
   return {ok:true};
 }
 function studFee(game,h){ // what one visiting mare pays — scales with quality & your reputation (softened)
@@ -2595,6 +2680,7 @@ const ACHIEVEMENTS=[
   {id:'sprawling',  icon:'🗺️', name:'Sprawling Estate',      desc:'Grow your ranch to three barns.',              check:g=>((g.stables)||[]).length>=3},
   {id:'fairgoer',   icon:'🎡', name:'Fairgoer',              desc:'Win all four seasonal fairs.',                 check:g=>new Set(((g.fairsClaimed)||[]).map(k=>(''+k).split('-y')[0])).size>=4},
   {id:'diligent',   icon:'✅', name:'Diligent Hand',         desc:'Keep a 7-day daily-chores streak.',            check:g=>((g.stats&&g.stats.bestChoreStreak)||0)>=7},
+  {id:'traveller',  icon:'🚚', name:'Seasoned Traveller',    desc:'Complete ten away trips.',                     check:g=>((g.stats&&g.stats.trips)||0)>=10},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2638,6 +2724,7 @@ function trainGain(h,stat){ const room=statCap(h,stat)-h[stat]; return room<=0?0
 function canTrain(h,stat){
   if(!isAdult(h)) return {ok:false,why:'Only adults can train.'};
   if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
+  if(horseAway(h)) return {ok:false,why:'Away on a trip.'};
   if(h.pregnant) return {ok:false,why:'In foal — no training.'};
   if((h.trains||0)>=TRAIN_PER_DAY) return {ok:false,why:'Rested out — try tomorrow.'};
   if(trainGain(h,stat)<=0) return {ok:false,why:'At breed potential.'};
@@ -2698,6 +2785,7 @@ const GOALS=[
   {id:'bond1',   desc:'Do groundwork with a horse (🤝 bonding)',   tip:g=>((g.stats&&g.stats.groundwork)||0)+' sessions',done:g=>((g.stats&&g.stats.groundwork)||0)>=1,           reward:{money:300,rep:10}},
   {id:'fair1',   desc:'Win a seasonal fair (🎡 fairs)',            tip:g=>((g.stats&&g.stats.fairsWon)||0)+' won',done:g=>((g.stats&&g.stats.fairsWon)||0)>=1,                   reward:{money:600,rep:20}},
   {id:'chore1',  desc:'Finish all your daily chores (✅ to-do)',   tip:g=>((g.stats&&g.stats.choresDone)||0)+' clean days',done:g=>((g.stats&&g.stats.choresDone)||0)>=1,       reward:{money:300,rep:10}},
+  {id:'trip1',   desc:'Send a horse on an away trip (🚚 trailer)',  tip:g=>((g.stats&&g.stats.trips)||0)+' trips',done:g=>((g.stats&&g.stats.trips)||0)>=1,                     reward:{money:500,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2727,6 +2815,7 @@ const HR = {
   ranchMap, stableOccupancy, stableIndexOf, moveHorseToStable,
   FAIRS, FAIR_LEN, fairDef, currentFair, fairActive, fairKey, fairDaysLeft, nextFair, fairClaimed, fairProgress, claimFairReward,
   CHORE_TYPES, choreTypeDef, choreIdsFor, dailyChores, markChoreProgress, choreProgress, choresStreak, choresBonus, resolveDailyChores,
+  TRIP_TYPES, tripTypeDef, tripFee, horseAway, canSendOnTrip, tripReturnPreview, tripDaysLeft, horsesAway, sendHorseOnTrip, resolveTrips,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2861,6 +2950,7 @@ function load(){
     { const ns=(G.stables||[]).length; for(const h of (G.horses||[])){ if(typeof h.stable!=='number'||h.stable<0||h.stable>=ns) h.stable=0; } } // ranch map: normalise stray barn indices
     if(!Array.isArray(G.fairsClaimed)) G.fairsClaimed=[]; // seasonal fairs claimed-reward log
     if(!G.chores||typeof G.chores!=='object'){ G.chores={day:0,done:{},streak:0,lastFull:0}; } else { if(!G.chores.done||typeof G.chores.done!=='object') G.chores.done={}; if(typeof G.chores.streak!=='number') G.chores.streak=0; } // daily chores board
+    for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; } // away-trip state
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -2970,6 +3060,7 @@ function horseCard(h,actionsHtml){
   { const eq=equippedTack(h); if(eq.length){ const icons=eq.map(t=>t.emoji).join('');
     tags.push('<span class="tag" title="'+eq.map(t=>t.name).join(', ')+'" style="color:#c9a24a;border-color:#5f4a1c">'+icons+' Tacked</span>'); } }
   if(h.rentDays>0) tags.push('<span class="tag busy">🚜 Rented ('+h.rentDays+'d)</span>');
+  if(horseAway(h)) tags.push('<span class="tag busy">'+(tripTypeDef(h.tripType)||{emoji:'🚚'}).emoji+' Away ('+tripDaysLeft(G,h)+'d)</span>');
   if(h.atStud) tags.push('<span class="tag" style="color:var(--good);border-color:#2f4a1c">♞ At stud</span>');
   const c=el('div','card');
   c.innerHTML=
@@ -3041,6 +3132,8 @@ function renderHUD(){
   { const fb=$('fairBtn'); if(fb){ fb.style.display=fairActive(G)?'':'none'; } const fbg=$('fairBadge'); if(fbg){ const p=fairProgress(G); fbg.style.display=(p&&p.canClaim)?'block':'none'; } }
   // daily chores: badge shows how many remain today (hidden when all done)
   { const cb=$('choreBadge'); if(cb){ const cp=choreProgress(G); const left=cp.total-cp.done; cb.textContent=left; cb.style.display=left>0?'block':'none'; } }
+  // away trips: badge shows how many horses are currently away
+  { const tb=$('tripBadge'); if(tb){ const n=horsesAway(G).length; tb.textContent=n; tb.style.display=n>0?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -3403,7 +3496,7 @@ function pickBox(role,h,placeholder){
 }
 function openPicker(role){
   const want=role==='mare'?'mare':'stallion';
-  const cands=G.horses.filter(h=>h.sex===want && isAdult(h) && h.rentDays===0 && !(want==='mare'&&h.pregnant));
+  const cands=G.horses.filter(h=>h.sex===want && isAdult(h) && h.rentDays===0 && !horseAway(h) && !(want==='mare'&&h.pregnant));
   if(!cands.length){ toast('No eligible '+(want)+'s. Buy or raise one!','info'); return; }
   let html='<h3>Pick a '+want+'</h3><div class="optlist">';
   cands.forEach(h=>{ html+='<div class="opt" data-pick="'+h.id+'"><div class="hface">'+horseArt(h)+'</div>'+
@@ -3443,7 +3536,7 @@ function renderBiz(){
 
   if(bizSub==='rent'){
     s.appendChild(el('div','sub','Rent horses for riding lessons & shows. They earn coins daily but are unavailable while out.'));
-    const avail=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant&&!h.atStud);
+    const avail=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant&&!h.atStud);
     if(!avail.length) s.appendChild(el('div','empty','No horses available to rent right now.'));
     avail.forEach(h=>{
       const rate=rentRate(h);
@@ -3485,7 +3578,7 @@ function renderBiz(){
   }
   else {
     s.appendChild(el('div','sub','Sell horses at market value. Quality sales raise your reputation.'));
-    const sellable=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+    const sellable=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant);
     if(!sellable.length) s.appendChild(el('div','empty','No adult horses to sell.'));
     sellable.slice().sort((a,b)=>valueOf(b)-valueOf(a)).forEach(h=>{
       const acts='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell 🪙'+fmt(sellQuote(h))+'</button>';
@@ -3531,7 +3624,7 @@ function renderAuction(s){
   // consignment
   s.appendChild(el('h2','head','🏷️ Consign a Horse'));
   s.appendChild(el('div','sub','Send one of your horses to the auction block — buyers may pay above market for a great one (a small gamble).'));
-  const mine=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant&&!h.atStud);
+  const mine=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant&&!h.atStud);
   if(!mine.length) s.appendChild(el('div','empty','No adult horses free to consign.'));
   mine.slice().sort((a,b)=>valueOf(b)-valueOf(a)).forEach(h=>{
     const c=horseCard(h,'<button class="btn sm blue" data-consign="'+h.id+'">🔨 Consign</button>');
@@ -4670,6 +4763,40 @@ function openDaily(){
     toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
 }
 let regQuery='';
+let tripSel=null; // selected trip type id for the send panel
+function openTrips(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if(tripSel && !tripTypeDef(tripSel)) tripSel=null;
+  const away=horsesAway(G);
+  // trip-type chooser
+  const chips=TRIP_TYPES.map(t=>'<span class="wlchip" data-trip="'+t.id+'" style="cursor:pointer;'+(tripSel===t.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+t.emoji+' '+t.name+' · 🪙'+t.fee+' · '+t.days+'d</span>').join(' ');
+  let panel='';
+  if(tripSel){ const t=tripTypeDef(tripSel);
+    const eligible=(G.horses||[]).filter(h=>canSendOnTrip(G,h).ok);
+    const rows = eligible.length ? eligible.map(h=>{ const pv=tripReturnPreview(t.id,h); const afford=(G.money||0)>=t.fee;
+        const rewTxt = pv.kind==='clinic' ? pv.stats : ('🪙'+fmt(pv.money)+' +'+pv.rep+'⭐');
+        return '<div class="lbrow"><div class="hface">'+horseArt(h,30)+'</div>'+
+          '<div class="grow"><div class="lbname">'+esc(h.name)+'</div><div class="lbsub">'+esc((breedDef(h.breed)||{name:h.breed}).name)+' · OVR '+overall(h)+' · returns: '+rewTxt+'</div></div>'+
+          '<button class="btn sm'+(afford?'':' ghost')+'" data-send="'+esc(h.id)+'"'+(afford?'':' disabled')+'>'+t.emoji+' Send 🪙'+t.fee+'</button></div>'; }).join('')
+      : '<div class="empty">No eligible horses right now (adults not rented, in foal, at stud or already away).</div>';
+    panel='<div class="divider"></div><div class="swlabel">'+t.emoji+' '+esc(t.name)+' — '+esc(t.desc)+'</div>'+rows;
+  } else {
+    panel='<div class="sub" style="margin-top:6px">Pick a trip above, then choose a horse to send. Away horses can’t compete, breed, train or rent until they return.</div>';
+  }
+  const awayHtml = away.length ? '<div class="divider"></div><div class="swlabel">🚚 Away now ('+away.length+')</div>'+
+    away.map(h=>{ const t=tripTypeDef(h.tripType)||{name:'Trip',emoji:'🚚'}; return '<div class="lbrow"><div class="hface">'+horseArt(h,28)+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(h.name)+'</div><div class="lbsub">'+t.emoji+' '+esc(t.name)+' · back in '+tripDaysLeft(G,h)+' day'+(tripDaysLeft(G,h)!==1?'s':'')+'</div></div></div>'; }).join('') : '';
+  modal('<h3>🚚 Horse Trailer — Away Trips</h3>'+
+    '<div class="swlabel">Send a horse away for a few days for a themed reward. <span class="pill">🪙'+fmt(G.money)+'</span></div>'+
+    '<div style="margin:4px 0 6px">'+chips+'</div>'+
+    panel + awayHtml +
+    '<div class="btnrow"><button class="btn ghost" id="tripClose" style="width:100%">Done</button></div>');
+  $('tripClose').onclick=closeModal;
+  document.querySelectorAll('[data-trip]').forEach(x=>x.onclick=()=>{ tripSel=(tripSel===x.getAttribute('data-trip'))?null:x.getAttribute('data-trip'); playSfx('tap'); openTrips(); });
+  document.querySelectorAll('[data-send]').forEach(b=>b.onclick=()=>{ const r=sendHorseOnTrip(G, tripSel, b.getAttribute('data-send'), G.day);
+    if(!r.ok){ toast(r.why,'info'); return; } coinPop(-r.fee); burst(r.trip.emoji+'👋',10); playSfx('tap');
+    toast(r.trip.emoji+' '+r.horse.name+' set off on the '+r.trip.name+' — back on day '+r.back+'.','good'); save(); renderHUD(); renderTab(); openTrips(); });
+}
 function openChores(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const cp=choreProgress(G), streak=choresStreak(G);
@@ -5037,6 +5164,7 @@ function boot(){
   { const mb=$('mapBtn'); if(mb) mb.onclick=openRanchMap; }
   { const fb=$('fairBtn'); if(fb) fb.onclick=openFair; }
   { const cb=$('choreBtn'); if(cb) cb.onclick=openChores; }
+  { const tb=$('tripBtn'); if(tb) tb.onclick=openTrips; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
