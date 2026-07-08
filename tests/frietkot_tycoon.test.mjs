@@ -419,5 +419,28 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(typeof rt === 'number' && rt === rt, 'market multiplier is a finite number');
 }
 
+// ---- historical timeline events ----
+{
+  ok(FS.TIMELINE.length >= 5, 'a run of historical events exists');
+  ok(FS.TIMELINE.every(e => typeof e.week === 'number' && e.title && e.emoji), 'each event is well-formed');
+  const g = FS.freshGame();
+  ok(g.timeline && g.timeline.seen && typeof g.timeline.seen === 'object', 'fresh game seeds a timeline');
+  ok(FS.eventMod(g) === null, 'no active event modifier on a fresh game');
+  ok(FS.eventTrafficMul(g) === 1 && FS.eventSpendMul(g) === 1, 'no modifier → neutral multipliers');
+  // a traffic modifier boosts foot traffic
+  g.timeline.mod = { id: 'wk', emoji: '⚽', label: '⚽ Test', weeksLeft: 2, traffic: 1.5, spend: 1 };
+  ok(FS.eventTrafficMul(g) === 1.5 && FS.eventSpendMul(g) === 1, 'a traffic event scales traffic only');
+  // a spend modifier raises the ticket
+  const gs = FS.freshGame();
+  gs.timeline.mod = { id: 'heat', emoji: '🥵', label: '🥵 Test', weeksLeft: 1, traffic: 1, spend: 1.3 };
+  ok(FS.orderValue(gs, { fav: null, spend: 1 }, 1) > FS.orderValue(FS.freshGame(), { fav: null, spend: 1 }, 1), 'a spend event fattens each ticket');
+  // a crisis modifier shrinks the ticket
+  const gc = FS.freshGame();
+  gc.timeline.mod = { id: 'crisis', emoji: '📉', label: '📉 Test', weeksLeft: 1, traffic: 1, spend: 0.8 };
+  ok(FS.orderValue(gc, { fav: null, spend: 1 }, 1) < FS.orderValue(FS.freshGame(), { fav: null, spend: 1 }, 1), 'a crisis event trims each ticket');
+  // events look up cleanly by id
+  ok(FS.timelineDef(FS.TIMELINE[0].id) === FS.TIMELINE[0], 'event lookup by id works');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

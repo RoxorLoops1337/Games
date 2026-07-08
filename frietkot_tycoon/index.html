@@ -106,6 +106,7 @@
     <div class="chip" id="campaignChip" style="display:none;color:var(--gold)" title="Actieve campagne"></div>
     <div class="chip" id="heatChip" style="display:none" title="Verdenking"></div>
     <div class="chip" id="buurtChip" style="display:none;cursor:pointer" title="Jouw plek in de buurt">🏙️ –</div>
+    <div class="chip" id="eventChip" style="display:none;color:var(--gold)" title="Actuele gebeurtenis"></div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
     <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
@@ -327,6 +328,26 @@ var rivalBoard=function(G){ var b=[{ id:'you', nm:'Rudy Friet', emoji:'🍟', ap
 // your 1-based position in the street ranking
 var buurtRank=function(G){ var b=rivalBoard(G); for(var i=0;i<b.length;i++) if(b[i].you) return i+1; return 1; };
 
+// historical timeline: Belgian-flavoured news events fire as the weeks (years) roll by.
+// each fires once; some give an instant reward, some set a multi-week modifier on traffic/spend.
+var TIMELINE=[
+  {week:3,  id:'euro',      emoji:'💶', title:'De euro komt eraan',   news:'België stapt over op de euro. Nieuwe prijzen, zelfde goei friet!', cash:220},
+  {week:5,  id:'wk',        emoji:'⚽', title:'Voetbalkoorts',        news:'Groot scherm in de buurt — iedereen wil friet bij de match!', mod:{weeks:2, traffic:1.35, label:'⚽ Voetbalkoorts'}},
+  {week:8,  id:'internet',  emoji:'💻', title:'Internet in \'t kot',  news:'Je hangt een bordje "wij hebben internet" — de jeugd stroomt toe.', faam:6},
+  {week:11, id:'heat',      emoji:'🥵', title:'Hittegolf',            news:'Snikheet! Minder volk, maar wie komt bestelt gul frisdrank én friet.', mod:{weeks:2, traffic:0.85, spend:1.22, label:'🥵 Hittegolf'}},
+  {week:14, id:'smoke',     emoji:'🚭', title:'Rookverbod',           news:'Roken verboden binnen — nette families komen nu liever langs.', mod:{weeks:3, traffic:1.12, label:'🚭 Rookvrij'}},
+  {week:17, id:'crisis',    emoji:'📉', title:'Bankencrisis',         news:'De crisis slaat toe. Mensen tellen hun centen twee keer.', mod:{weeks:3, spend:0.82, label:'📉 Crisis'}},
+  {week:21, id:'reddevils', emoji:'😈', title:'De Rode Duivels!',     news:'WK-tijd! De Rode Duivels spelen — de frituur puilt uit!', mod:{weeks:2, traffic:1.5, spend:1.15, label:'😈 Rode Duivels'}},
+  {week:25, id:'foodtruck', emoji:'🚚', title:'Foodtruck-hype',       news:'Foodtrucks overal, maar klanten willen échte friet. Jouw moment!', faam:10},
+  {week:29, id:'viral',     emoji:'📱', title:'Virale friet',         news:'Een influencer filmt jouw friet — het gaat viraal!', mod:{weeks:2, traffic:1.6, label:'📱 Viraal'}},
+  {week:34, id:'museum',    emoji:'🏛️', title:'Frietmuseum',          news:'Er opent een frietmuseum: friet is officieel erfgoed!', faam:15, cash:800},
+  {week:40, id:'space',     emoji:'🚀', title:'Friet de ruimte in',   news:'Een frietkot op het ruimtestation — jij bent de inspiratie!', faam:25, cash:2000}
+];
+var timelineDef=function(id){ for(var i=0;i<TIMELINE.length;i++) if(TIMELINE[i].id===id) return TIMELINE[i]; return null; };
+var eventMod=function(G){ return (G.timeline&&G.timeline.mod)||null; };
+var eventTrafficMul=function(G){ var m=eventMod(G); return (m&&m.traffic)||1; };
+var eventSpendMul=function(G){ var m=eventMod(G); return (m&&m.spend)||1; };
+
 /* =========================================================================
    PURE LOGIC (unit-tested)
    ========================================================================= */
@@ -385,7 +406,7 @@ var orderValue=function(G,type,comboMul){
   else { var snacks=RESEARCH.filter(function(r){return r.kind==='snack'&&G.research[r.id];});
     if(snacks.length && Math.random()<0.5){ var s=pick(snacks); v+=dishPrice(DISH_BASE[s.id]||s.price, dishRank(G,s.id)); } }
   if(G.research.andalouse) v+=BAL.saucePrice;
-  v*=type.spend; v*=(comboMul||1); v*=seasonFor(G.week).spend; v*=serviceBonus(G);   // winter splurge + trained crew
+  v*=type.spend; v*=(comboMul||1); v*=seasonFor(G.week).spend; v*=serviceBonus(G); v*=eventSpendMul(G);   // winter splurge + trained crew + news events
   return Math.round(v);
 };
 // weighted customer-type roll: base weight + bonus if a decor pulls that type
@@ -496,7 +517,7 @@ var freshGame=function(){
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
     floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices(),
-    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0, rivals:[] };
+    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0, rivals:[], timeline:{seen:{},mod:null} };
   return g;
 };
 var SAVE_KEY='ftstory_save';
@@ -505,11 +526,11 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
   floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
-  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals })); }catch(e){} };
+  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals,timeline:G.timeline })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat','rivals'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
-  if(!G.shady) G.shady={}; if(!G.rivals) G.rivals=[];
+  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat','rivals','timeline'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  if(!G.shady) G.shady={}; if(!G.rivals) G.rivals=[]; if(!G.timeline||typeof G.timeline!=='object') G.timeline={seen:{},mod:null}; if(!G.timeline.seen) G.timeline.seen={};
   if(!G.contest||!contestDef(G.contest.id)) G.contest=newContest(G.week);
   if(!G.prices) G.prices=defaultPrices(); SIZES.forEach(function(z){ if(G.prices[z.id]==null) G.prices[z.id]=z.fair; });
   if(!G.crew) G.crew=[]; if(!G.crew.length && G.staff>0){ for(var ci=0;ci<G.staff;ci++) G.crew.push({name:STAFF_NAMES[ci%STAFF_NAMES.length],spdLv:1,sklLv:1}); } G.staff=G.crew.length;
@@ -534,6 +555,7 @@ var newWeek=function(){
   G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week);
   G.contest=newContest(G.week); G.weekCash=0; G.weekMerges=0;    // fresh weekly challenge
   rivalWeek();                                                                    // rivals open & grow; you climb or slip
+  timelineWeek();                                                                 // Belgian history rolls by: news events fire
   if((G.heat||0)>35 && Math.random() < (G.heat/170)) setTimeout(inspector,600);   // high suspicion → a raid this week
   if(G.week>=2 && !G.criticPending && Math.random()<0.4) G.criticPending=true;   // a critic may drop by this week
   var s=seasonFor(G.week); if(s!==prevSeason){ toast(s.emoji+' Het is nu <b>'+s.nm+'</b>!'); }
@@ -888,6 +910,23 @@ var rivalWeek=function(){
     }
   }
 };
+// historical timeline: age the active modifier, then fire any newly-due news event
+var timelineWeek=function(){
+  if(!G.timeline) G.timeline={seen:{},mod:null};
+  var m=G.timeline.mod;
+  if(m){ m.weeksLeft-=1; if(m.weeksLeft<=0){ G.timeline.mod=null; toast(m.emoji+' '+m.label.replace(/^[^ ]+ /,'')+' voorbij.'); } }
+  for(var i=0;i<TIMELINE.length;i++){ var e=TIMELINE[i];
+    if(G.week>=e.week && !G.timeline.seen[e.id]){ G.timeline.seen[e.id]=1;
+      var extra='';
+      if(e.cash){ G.money+=e.cash; extra+=' +'+fmt(e.cash)+'💶'; }
+      if(e.faam){ G.faam+=e.faam; extra+=' +★'+e.faam; }
+      if(e.mod){ G.timeline.mod={ id:e.id, emoji:e.emoji, label:e.mod.label, weeksLeft:e.mod.weeks, traffic:e.mod.traffic||1, spend:e.mod.spend||1 }; }
+      bigPop(e.emoji+' '+e.title,'#ffd447'); confetti(); chime([560,760,980,1180],0.09); addShake(1.8);
+      toast('📰 <b>'+e.title+'</b> — '+e.news+(extra?' <b>('+extra.trim()+')</b>':'')+(e.mod?' <i>['+e.mod.label+', '+e.mod.weeks+' wk]</i>':''));
+      break;   // one headline per week keeps them from stacking
+    }
+  }
+};
 var campaignTick=function(dt){ if(!G.campaign) return; if(G.campaign.left>0){ G.campaign.left-=dt;
     if(G.campaign.left<=0){ var c=campDef(G.campaign.id); G.campaign=null; if(c) toast(c.emoji+' Campagne afgelopen.'); syncHUD(); }
     else if(el.campaignChip){ var ac=campDef(G.campaign.id); if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } } } };
@@ -921,7 +960,7 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','heatChip','buurtChip','shopList','menuBody','resList','staffList','floorList','buurtBody',
+var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','heatChip','buurtChip','eventChip','shopList','menuBody','resList','staffList','floorList','buurtBody',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
@@ -930,6 +969,7 @@ var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money);
   if(el.campaignChip){ var ac=G.campaign&&G.campaign.left>0?campDef(G.campaign.id):null; if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } else el.campaignChip.style.display='none'; }
   if(el.heatChip){ var ht=Math.round(G.heat||0); if(ht>20){ el.heatChip.style.display=''; el.heatChip.textContent='🚨 '+ht+'%'; el.heatChip.style.color=ht>60?'var(--bad)':'var(--warn)'; } else el.heatChip.style.display='none'; }
   if(el.buurtChip){ if(G.rivals&&G.rivals.length){ var rk=buurtRank(G), rn=G.rivals.length+1; el.buurtChip.style.display=''; el.buurtChip.textContent='🏙️ #'+rk+'/'+rn; el.buurtChip.style.color=rk===1?'var(--gold)':rk<=Math.ceil(rn/2)?'var(--ink)':'var(--warn)'; } else el.buurtChip.style.display='none'; }
+  if(el.eventChip){ var em=eventMod(G); if(em){ el.eventChip.style.display=''; el.eventChip.textContent=em.label+' ('+em.weeksLeft+'wk)'; el.eventChip.title=em.label+' — nog '+em.weeksLeft+' week actief'; } else el.eventChip.style.display='none'; }
   if(el.goalN) el.goalN.textContent=Math.min(G.weekServed,G.goalTarget)+'/'+G.goalTarget;
   var rp=rankProgress(G.served);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
@@ -1204,7 +1244,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
     rushTick(dt); campaignTick(dt); heatTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval((computeAppeal(G)*valueFactor(G)*marketMul(G))+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval((computeAppeal(G)*valueFactor(G)*marketMul(G)*eventTrafficMul(G))+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
       if(G.custs.length<ccap){ G.custs.push(makeCust());
         if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
     // the critic slips into the line as its own arrival
@@ -1275,6 +1315,7 @@ if(typeof globalThis!=='undefined'){
     CAMPAIGNS:CAMPAIGNS, campDef:campDef, campaignAppeal:campaignAppeal,
     SHADY:SHADY, shadyDef:shadyDef, shadyIncomeMul:shadyIncomeMul, shadyAppeal:shadyAppeal, shadyHeatRate:shadyHeatRate,
     RIVALS:RIVALS, rivalDef:rivalDef, marketShare:marketShare, marketMul:marketMul, rivalBoard:rivalBoard, buurtRank:buurtRank,
+    TIMELINE:TIMELINE, timelineDef:timelineDef, eventMod:eventMod, eventTrafficMul:eventTrafficMul, eventSpendMul:eventSpendMul,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
