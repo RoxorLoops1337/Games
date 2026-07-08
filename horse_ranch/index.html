@@ -280,6 +280,13 @@
   .sgbar{position:relative;height:26px;border-radius:13px;background:#0d130a;border:1px solid #0c110a;overflow:hidden;margin:4px 0 12px}
   .sgzone{position:absolute;top:0;bottom:0;background:linear-gradient(var(--good),#3f7d3a);opacity:.55;border-radius:6px}
   .sgmark{position:absolute;top:-3px;bottom:-3px;width:5px;margin-left:-2.5px;background:var(--gold);box-shadow:0 0 8px var(--gold2);border-radius:3px;left:0}
+  .hudbadge{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:var(--good);color:#0b1207;font-size:10px;font-weight:900;line-height:15px;text-align:center;box-shadow:0 0 0 1px #0b1207}
+  .ctr{background:#0d130a;border:1px solid #0c110a;border-radius:10px;padding:9px 10px;margin-bottom:8px}
+  .ctr.claimable{border-color:var(--gold2);box-shadow:0 0 0 1px var(--gold2)}
+  .ctr .ctrtop{display:flex;align-items:center;gap:9px}
+  .ctr .ctre{font-size:20px;width:26px;text-align:center}
+  .ctr .ctrrew{margin-left:auto;font-size:11px;font-weight:800;color:var(--gold)}
+  .ctr .cbar2{height:6px;border-radius:3px;background:#080c06;overflow:hidden;margin-top:7px}
 </style>
 </head>
 <body>
@@ -290,6 +297,7 @@
     <div class="chip rep"><span>⭐</span><b id="hudRep">0</b></div>
     <div class="chip day" id="dayChip" style="cursor:pointer"><span id="hudWd">🗓️ Mon</span> · Day <b id="hudDay">1</b></div>
     <div class="spacer"></div>
+    <button class="sbtn" id="boardBtn" title="Contracts board" style="margin-right:4px;position:relative">📋<span id="boardBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
@@ -1011,17 +1019,18 @@ function freshGame(){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[]},
+    tack:{owned:[]}, board:null,
   };
   // start with one mare + one stallion so the player can breed immediately
   g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
   g.horses.push(mkHorse({breed:'mustang',sex:'stallion',age:16,name:'Bandit',stable:0,rng:seededOnce(29)}));
   restockMarket(g, seededOnce(7));
   restockTeachers(g, seededOnce(13));
+  refreshBoard(g); // post the first week's contracts
   return g;
 }
 // tiny deterministic rng so a fresh game is identical every load (nice for tutorial + tests)
@@ -1113,6 +1122,10 @@ function advanceDay(game,rng){
   // Market Day (weekly): fresh horses & teacher applicants arrive
   if(isMarketDay(game.day)){ restockMarket(game,rng); restockTeachers(game,rng);
     notes.push({t:'info',m:'🛒 Market Day! Fresh horses and teachers have arrived.'}); }
+
+  // weekly contracts board — refreshes when the week rolls over
+  { const hadWeek=game.board&&game.board.week; refreshBoard(game);
+    if(hadWeek!=null && hadWeek!==game.board.week) notes.push({t:'info',m:'📋 New contracts are posted on the notice board!'}); }
 
   // seasonal festival! (deterministic, pre-announced)
   const fest=festivalOn(game.day);
@@ -1237,7 +1250,8 @@ function runCompetition(h,disc,tier,rng,perf){
 // apply a competition result to game+horse (mutates), returns the result
 function applyCompetition(game,h,disc,tier,rng,perf){
   const res=runCompetition(h,disc,tier,rng,perf);
-  if(perf!=null){ game.stats.showGamesPlayed=(game.stats.showGamesPlayed||0)+1; game.stats.bestShowPerf=Math.max(game.stats.bestShowPerf||0, clamp(perf,0,1)); }
+  if(perf!=null){ game.stats.showGamesPlayed=(game.stats.showGamesPlayed||0)+1; game.stats.bestShowPerf=Math.max(game.stats.bestShowPerf||0, clamp(perf,0,1));
+    if(perf>=0.9) game.stats.clearRounds=(game.stats.clearRounds||0)+1; }
   res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)); // summer + festivals pay more
   game.money += res.prize; game.rep += res.rep; game.stats.goldEarned=(game.stats.goldEarned||0)+res.prize;
   h.entries=(h.entries||0)+1; h.compCd=game.day+tier.rest;
@@ -1251,6 +1265,73 @@ function applyCompetition(game,h,disc,tier,rng,perf){
   }
   return res;
 }
+
+// ---------- Weekly contracts / notice board ----------
+// A small board of short-term jobs that refreshes each week. Deterministic from
+// weekOf(day); the only persisted state is which contracts are on the board this
+// week, a stats snapshot at week-start (for "…this week" deltas) and what's claimed.
+const BOARD_SIZE=3;
+// 'delta' contracts measure progress since the week began; 'state' read live game state.
+const CONTRACTS=[
+  {id:'sell2',   s:11, icon:'💰', kind:'delta', stat:'sold',        target:2,    desc:t=>'Sell '+t+' horses this week',            reward:{money:600,rep:12}},
+  {id:'win1',    s:23, icon:'🥇', kind:'delta', stat:'showWins',    target:1,    desc:t=>'Win a show this week',                   reward:{money:700,rep:18}},
+  {id:'breed1',  s:37, icon:'🐣', kind:'delta', stat:'born',        target:1,    desc:t=>'Breed a foal this week',                reward:{money:500,rep:14}},
+  {id:'train3',  s:41, icon:'🏋️', kind:'delta', stat:'trained',     target:3,    desc:t=>'Train horses '+t+' times this week',     reward:{money:400,feed:60}},
+  {id:'gold3k',  s:53, icon:'🤑', kind:'delta', stat:'goldEarned',  target:3000, desc:t=>'Earn 🪙'+fmt(t)+' this week',            reward:{money:800,rep:16}},
+  {id:'lessons10',s:59,icon:'🎓', kind:'delta', stat:'lessons',     target:10,   desc:t=>'Give '+t+' lessons this week',          reward:{money:500,rep:14}},
+  {id:'clear1',  s:67, icon:'🎯', kind:'delta', stat:'clearRounds', target:1,    desc:t=>'Finish a show with a clear round (ride ≥90%)', reward:{money:700,rep:20}},
+  {id:'care90',  s:71, icon:'🧡', kind:'state', target:90,  cur:g=>Math.max(0,...(g.horses||[]).map(h=>careScore(h))), desc:t=>'Get any horse to '+t+'% care', reward:{money:450,rep:12}},
+  {id:'herd8',   s:83, icon:'🐴', kind:'state', target:8,   cur:g=>(g.horses||[]).length,                             desc:t=>'Keep a herd of '+t+' horses',  reward:{money:500,rep:12}},
+  // reputation-gated, richer rewards
+  {id:'auction1',s:97, icon:'🔨', kind:'delta', stat:'auctionsWon', target:1, repReq:150, desc:t=>'Win a horse at auction this week',   reward:{money:1000,rep:24}},
+  {id:'stud1k',  s:103,icon:'♞', kind:'delta', stat:'studIncome',  target:1000, repReq:400, desc:t=>'Earn 🪙'+fmt(t)+' in stud fees this week', reward:{money:1200,rep:26}},
+  {id:'rare1',   s:109,icon:'💎', kind:'state', target:3,   cur:g=>Math.max(0,...(g.horses||[]).map(h=>(breedDef(h.breed)||{rarity:1}).rarity)), repReq:250, desc:t=>'Own a Rare-tier (or better) horse', reward:{money:900,rep:22}},
+];
+function contractDef(id){ return CONTRACTS.find(c=>c.id===id)||null; }
+// this week's board = a deterministic pick of eligible templates, ordered by a week-seeded key
+function contractsForWeek(game){
+  const wk=weekOf(game.day||1);
+  const eligible=CONTRACTS.filter(c=>!c.repReq||(game.rep||0)>=c.repReq);
+  const ordered=eligible.map(c=>({c,k:hashDay(wk*131+c.s)})).sort((a,b)=>a.k-b.k || (a.c.id<b.c.id?-1:1));
+  return ordered.slice(0,BOARD_SIZE).map(o=>o.c);
+}
+function boardBaseSnapshot(game){ const s=game.stats||{};
+  const keys=['sold','showWins','born','trained','goldEarned','lessons','clearRounds','auctionsWon','studIncome','rented','bought'];
+  const b={}; keys.forEach(k=>b[k]=s[k]||0); return b; }
+// (re)generate the board when the week rolls over; returns game.board
+function refreshBoard(game){ const wk=weekOf(game.day||1);
+  if(!game.board || game.board.week!==wk){
+    game.board={ week:wk, ids:contractsForWeek(game).map(c=>c.id), base:boardBaseSnapshot(game), claimed:[] };
+  }
+  if(!Array.isArray(game.board.claimed)) game.board.claimed=[];
+  if(!game.board.base) game.board.base=boardBaseSnapshot(game);
+  return game.board;
+}
+// progress toward a contract: {cur, target, done}
+function contractProgress(game,c){
+  let cur;
+  if(c.kind==='state'){ cur=c.cur(game); }
+  else { const base=(game.board&&game.board.base&&game.board.base[c.stat])||0; cur=(game.stats&&game.stats[c.stat]||0)-base; }
+  cur=Math.max(0,cur); return {cur, target:c.target, done:cur>=c.target};
+}
+function contractDone(game,c){ return contractProgress(game,c).done; }
+// resolved view of the current board (for UI): id, icon, desc, progress, claim state
+function currentContracts(game){ refreshBoard(game);
+  return (game.board.ids||[]).map(contractDef).filter(Boolean).map(c=>{ const pr=contractProgress(game,c);
+    const claimed=game.board.claimed.indexOf(c.id)>=0;
+    return {id:c.id, icon:c.icon, desc:c.desc(c.target), target:c.target, reward:c.reward, repReq:c.repReq||0,
+      cur:pr.cur, done:pr.done, claimed, claimable:pr.done&&!claimed}; });
+}
+function claimableContracts(game){ return currentContracts(game).filter(c=>c.claimable).length; }
+// claim a completed contract exactly once; pays the reward
+function claimContract(game,id){ refreshBoard(game); const c=contractDef(id); if(!c) return {ok:false,why:'No such contract.'};
+  if((game.board.ids||[]).indexOf(id)<0) return {ok:false,why:'Not on this week’s board.'};
+  if(game.board.claimed.indexOf(id)>=0) return {ok:false,why:'Already claimed.'};
+  if(!contractProgress(game,c).done) return {ok:false,why:'Not complete yet.'};
+  const r=c.reward||{}; if(r.money) game.money+=r.money; if(r.feed) game.feed+=r.feed; if(r.rep) game.rep+=r.rep;
+  game.board.claimed.push(id); game.stats.contractsDone=(game.stats.contractsDone||0)+1;
+  return {ok:true, reward:r, contract:c}; }
+function daysUntilBoardRefresh(game){ const d=game.day||1; return 7-(((Math.floor(d)-1)%7)); } // days left in the week (incl today)
 
 // ---------- The Canteen (a little bar where visitors relax) ----------
 const CANTEEN_MAX=5;
@@ -1508,6 +1589,7 @@ const ACHIEVEMENTS=[
   {id:'topranch',   icon:'👑', name:'Top of the Region',   desc:'Reach #1 on the regional leaderboard.',        check:g=>playerRank(g)===1},
   {id:'fulltack',   icon:'🎽', name:'Fully Tacked',        desc:'Equip all three tack slots on one horse.',     check:g=>g.horses.some(h=>equippedTack(h).length>=3)},
   {id:'flawless',   icon:'🎯', name:'Clear Round',          desc:'Ride a near-flawless show round.',             check:g=>((g.stats&&g.stats.bestShowPerf)||0)>=0.95},
+  {id:'contractor', icon:'📋', name:'Reliable Hand',        desc:'Complete 10 notice-board contracts.',          check:g=>((g.stats&&g.stats.contractsDone)||0)>=10},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1591,6 +1673,7 @@ const GOALS=[
   {id:'top3',    desc:'Break into the Top 3 ranches',       tip:g=>'now #'+playerRank(g)+' of '+(rivalCount()+1),done:g=>playerRank(g)<=3,                                       reward:{money:2000,rep:50}},
   {id:'tack1',   desc:'Kit out a horse (🧰 equip tack)',     tip:g=>'',                              done:g=>g.horses.some(h=>equippedTack(h).length>=1),            reward:{money:600,rep:20}},
   {id:'ride1',   desc:'Ride a show round yourself',          tip:g=>((g.stats&&g.stats.showGamesPlayed)||0)+'/1',done:g=>((g.stats&&g.stats.showGamesPlayed)||0)>=1,           reward:{money:700,rep:25}},
+  {id:'contract1',desc:'Complete a notice-board contract',    tip:g=>((g.stats&&g.stats.contractsDone)||0)+'/1',done:g=>((g.stats&&g.stats.contractsDone)||0)>=1,             reward:{money:600,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -1618,6 +1701,8 @@ const HR = {
   DISCIPLINES, disciplineDef, COMP_TIERS, tierDef, tierUnlocked, highestTier,
   disciplineScore, canEnterShow, runCompetition, applyCompetition,
   SHOW_GAME, SHOW_PERF_CAP, fenceScore, showPerfMult,
+  CONTRACTS, BOARD_SIZE, contractDef, contractsForWeek, boardBaseSnapshot, refreshBoard,
+  contractProgress, contractDone, currentContracts, claimableContracts, claimContract, daysUntilBoardRefresh,
   CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
   mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
   lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet, schoolLessonMult,
@@ -1696,12 +1781,15 @@ function load(){
     if(G.stats.auctionsWon==null) G.stats.auctionsWon=0;
     if(G.stats.consigned==null) G.stats.consigned=0;
     if(G.stats.showGamesPlayed==null) G.stats.showGamesPlayed=0;
+    if(G.stats.clearRounds==null) G.stats.clearRounds=0;
+    if(G.stats.contractsDone==null) G.stats.contractsDone=0;
     if(G.stats.bestShowPerf==null) G.stats.bestShowPerf=0;
     if(!G.achievements) G.achievements=[];
     if(G.lastRoutineDay==null) G.lastRoutineDay=0; // horse-care daily routine tracker
     if(G.lastRank==null){ G.lastRank=playerRank(G); G.prevRank=G.lastRank; G.bestRank=G.lastRank; } // regional standings history
     if(!G.tack||!Array.isArray(G.tack.owned)) G.tack={owned:[]}; // tack & equipment inventory
     G.tack.owned=G.tack.owned.filter(id=>!!tackDef(id)).filter((v,i,a)=>a.indexOf(v)===i);
+    if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
@@ -1849,6 +1937,8 @@ function renderHUD(){
   document.querySelectorAll('.tab .badge').forEach(b=>b.remove());
   const buyable=G.market.filter(h=>buyPrice(h)<=G.money).length;
   if(buyable) addBadge('market',buyable);
+  // contracts board badge (claimable count)
+  { const cb=$('boardBadge'); if(cb){ const n=claimableContracts(G); cb.textContent=n; cb.style.display=n?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -3193,6 +3283,30 @@ function openDecor(){
     if(!r.ok){ toast(r.why,'bad'); return; } coinPop(-r.item.cost); burst(r.item.emoji+'✨',10); playSfx('coin');
     toast('🎨 '+r.item.name+' added to your ranch!','good'); reopen(); });
 }
+// ---------------- Weekly contracts / notice board ----------------
+function openBoard(){
+  const list=currentContracts(G);
+  const left=daysUntilBoardRefresh(G);
+  const rows=list.map(c=>{
+    const rew=[]; const r=c.reward||{}; if(r.money) rew.push('🪙'+fmt(r.money)); if(r.rep) rew.push(r.rep+'⭐'); if(r.feed) rew.push('🌾'+r.feed);
+    const pct=Math.min(100, Math.round(100*c.cur/c.target));
+    const right = c.claimed ? '<span class="pill" style="color:var(--good)">✓ Claimed</span>'
+      : c.claimable ? '<button class="btn sm" data-claim="'+c.id+'">Claim</button>'
+      : '<span class="pill">'+Math.min(c.cur,c.target)+'/'+c.target+'</span>';
+    return '<div class="ctr'+(c.claimable?' claimable':'')+'"><div class="ctrtop"><div class="ctre">'+c.icon+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:13px">'+c.desc+(c.repReq?' <span class="pill">⭐'+c.repReq+'</span>':'')+'</div>'+
+      '<div class="ctrrew">'+(rew.length?rew.join(' · '):'—')+'</div></div>'+right+'</div>'+
+      '<div class="cbar2"><i style="display:block;height:100%;width:'+pct+'%;background:'+(c.done?'var(--good)':'var(--gold)')+'"></i></div></div>'; }).join('');
+  modal('<h3>📋 Notice Board</h3>'+
+    '<div class="msg">Short jobs around the region. Complete them and come back to claim your reward. Fresh contracts in <b>'+left+' day'+(left!==1?'s':'')+'</b>.</div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="boardClose" style="width:100%">Done</button></div>');
+  $('boardClose').onclick=closeModal;
+  document.querySelectorAll('[data-claim]').forEach(b=>b.onclick=()=>{ const r=claimContract(G,b.getAttribute('data-claim'));
+    if(!r.ok){ toast(r.why,'bad'); return; } const rw=r.reward||{}; if(rw.money) coinPop(rw.money);
+    burst('📋✨🪙',12); playSfx('goal'); const bits=[]; if(rw.money)bits.push('🪙'+fmt(rw.money)); if(rw.rep)bits.push(rw.rep+'⭐'); if(rw.feed)bits.push('🌾'+rw.feed);
+    toast('📋 Contract complete! +'+bits.join(' +'),'good'); save(); renderHUD(); openBoard(); });
+}
 function openHelp(){
   const st=achievementState(G);
   modal('<h3>ℹ️ Help &amp; About</h3>'+
@@ -3237,6 +3351,7 @@ function boot(){
   { const dc=$('dayChip'); if(dc) dc.onclick=openWeek; }
   { const hb=$('helpBtn'); if(hb) hb.onclick=openHelp; }
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
+  { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ playSfx('tap'); setTab(t.getAttribute('data-tab')); });

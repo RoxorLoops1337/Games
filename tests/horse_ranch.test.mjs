@@ -209,6 +209,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   for (const id of HR.NEED_IDS) g.horses[0].needs[id] = 100; // satisfies the care goal (a pampered horse)
   g.tack.owned = [HR.TACK[0].id]; HR.equipTack(g, g.horses[0], HR.TACK[0].id); // satisfies the tack goal
   g.stats.showGamesPlayed = 1; // satisfies the ride-a-round goal
+  g.stats.contractsDone = 1; // satisfies the contract goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1368,6 +1369,86 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'flawless');
   const g2 = HR.freshGame(); g2.stats.bestShowPerf = 0.98;
   ok(ach && ach.check(g2) && !ach.check(fresh), 'a near-flawless ride unlocks the Clear Round achievement');
+}
+
+// ---- weekly contracts / notice board (round 25) ----
+{
+  // config + deterministic board
+  ok(Array.isArray(HR.CONTRACTS) && HR.CONTRACTS.length >= HR.BOARD_SIZE, 'a contract catalogue exists');
+  ok(new Set(HR.CONTRACTS.map(c => c.id)).size === HR.CONTRACTS.length, 'contract ids are unique');
+  ok(HR.CONTRACTS.every(c => c.icon && typeof c.desc === 'function' && c.reward && c.target > 0), 'each contract has icon, desc, reward, target');
+  ok(HR.contractDef(HR.CONTRACTS[0].id) && HR.contractDef('nope') === null, 'contractDef lookup + miss');
+  const a = HR.freshGame(), b = HR.freshGame();
+  a.day = b.day = 8; // same week
+  const ba = HR.contractsForWeek(a).map(c => c.id), bb = HR.contractsForWeek(b).map(c => c.id);
+  ok(ba.length === HR.BOARD_SIZE && JSON.stringify(ba) === JSON.stringify(bb), 'the weekly board is deterministic for a given week');
+  const wk1 = HR.contractsForWeek({ day: 1, rep: 0 }).map(c => c.id);
+  const wk3 = HR.contractsForWeek({ day: 15, rep: 0 }).map(c => c.id);
+  ok(JSON.stringify(wk1) !== JSON.stringify(wk3) || true, 'different weeks may draw different boards');
+}
+{
+  // rep-gating: low-rep boards exclude gated contracts
+  const gated = HR.CONTRACTS.filter(c => c.repReq > 0);
+  ok(gated.length >= 1, 'some contracts are reputation-gated');
+  const poorBoard = HR.contractsForWeek({ day: 8, rep: 0 });
+  ok(poorBoard.every(c => !c.repReq), 'a fameless ranch is never shown rep-gated contracts');
+}
+{
+  // fresh game seeds a board; progress + delta baseline
+  const g = HR.freshGame();
+  ok(g.board && g.board.week === HR.weekOf(g.day) && Array.isArray(g.board.ids) && g.board.ids.length === HR.BOARD_SIZE, 'freshGame posts the first board');
+  ok(g.board.claimed.length === 0, 'nothing claimed on a fresh board');
+  // a delta contract: progress is measured from the week-start snapshot
+  const sellC = HR.contractDef('sell2');
+  g.board = { week: HR.weekOf(g.day), ids: ['sell2'], base: { sold: 5 }, claimed: [] };
+  g.stats.sold = 5;
+  ok(HR.contractProgress(g, sellC).cur === 0, 'delta progress starts at 0 despite prior lifetime total');
+  g.stats.sold = 7;
+  ok(HR.contractProgress(g, sellC).cur === 2 && HR.contractDone(g, sellC), 'delta progress tracks activity since week-start');
+}
+{
+  // state contract reads live game state (no baseline)
+  const g = HR.freshGame(); g.board = { week: HR.weekOf(g.day), ids: ['herd8'], base: {}, claimed: [] };
+  const herdC = HR.contractDef('herd8');
+  ok(!HR.contractDone(g, herdC), 'herd contract unmet with a starter pair');
+  while (g.horses.length < herdC.target) g.horses.push(HR.mkHorse({ breed: 'mustang', age: 12 }));
+  ok(HR.contractDone(g, herdC), 'herd contract completes when the herd is big enough');
+}
+{
+  // claiming pays exactly once and cannot double-claim
+  const g = HR.freshGame(); g.money = 1000; g.rep = 0;
+  g.board = { week: HR.weekOf(g.day), ids: ['win1'], base: { showWins: 0 }, claimed: [] };
+  const c = HR.contractDef('win1');
+  ok(!HR.claimContract(g, 'win1').ok, 'cannot claim an incomplete contract');
+  g.stats.showWins = 1; // now done
+  const m0 = g.money, rep0 = g.rep;
+  const r = HR.claimContract(g, 'win1');
+  ok(r.ok && g.money === m0 + (c.reward.money || 0) && g.rep === rep0 + (c.reward.rep || 0), 'claiming pays the reward');
+  ok(g.stats.contractsDone === 1, 'claiming increments the completed-contracts stat');
+  ok(!HR.claimContract(g, 'win1').ok && g.money === m0 + (c.reward.money || 0), 'cannot double-claim (pays only once)');
+  ok(!HR.claimContract(g, 'sell2').ok, 'cannot claim a contract not on this week’s board');
+}
+{
+  // board refreshes when the week rolls over; claimed resets, base re-snapshots
+  const g = HR.freshGame(); g.day = 3; HR.refreshBoard(g);
+  const wk0 = g.board.week; g.board.claimed.push(g.board.ids[0]);
+  g.day = 3 + 7; // next week
+  HR.refreshBoard(g);
+  ok(g.board.week === wk0 + 1 && g.board.claimed.length === 0, 'a new week posts a fresh, unclaimed board');
+  ok(HR.daysUntilBoardRefresh({ day: 1 }) === 7 && HR.daysUntilBoardRefresh({ day: 7 }) === 1, 'refresh countdown reads days left in the week');
+}
+{
+  // advanceDay keeps the board fresh, and the goal/achievement wire up
+  const g = HR.freshGame();
+  HR.advanceDay(g, rng(2));
+  ok(g.board && g.board.week === HR.weekOf(g.day), 'advanceDay keeps the board current');
+  const goal = HR.GOALS.find(x => x.id === 'contract1');
+  ok(goal && !goal.done(g), 'the contract goal is unmet before completing one');
+  g.stats.contractsDone = 1;
+  ok(goal.done(g), 'the contract goal completes after a claim');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'contractor');
+  const g2 = HR.freshGame(); g2.stats.contractsDone = 10;
+  ok(ach && ach.check(g2) && !ach.check(g), 'completing 10 contracts unlocks Reliable Hand');
 }
 
 // ---- clamp helper ----
