@@ -774,6 +774,32 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.festivalMod(solstice, 'canteenMul', 1) > 1, 'the Winter Solstice boosts the canteen');
 }
 
+// ---- guided tutorial ----
+{
+  ok(Array.isArray(HR.TUTORIAL) && HR.TUTORIAL.length >= 6, 'a multi-step tutorial exists');
+  ok(HR.tutorialLen() === HR.TUTORIAL.length, 'tutorialLen matches the step count');
+  ok(new Set(HR.TUTORIAL.map(s => s.id)).size === HR.TUTORIAL.length, 'tutorial step ids are unique');
+  ok(HR.TUTORIAL.every(s => typeof s.title === 'string' && s.title && typeof s.text === 'string' && s.text), 'every step has a title & Fleur line');
+  ok(HR.TUTORIAL.every(s => s.target === null || typeof s.target === 'string'), 'targets are a selector string or null');
+  ok(HR.TUTORIAL.every(s => s.done === undefined || typeof s.done === 'function'), 'completion predicates are functions when present');
+  ok(HR.TUTORIAL[0].target === null, 'the welcome step is centred (no target)');
+  ok(HR.tutorialStep(0) === HR.TUTORIAL[0] && HR.tutorialStep(999) === null, 'tutorialStep indexes safely');
+  // the market step completes once you have bought a horse
+  const market = HR.TUTORIAL.find(s => s.id === 'market');
+  ok(market && typeof market.done === 'function', 'the market step has an action');
+  ok(!HR.stepSatisfied(market, { stats: { bought: 0 }, horses: [] }), 'market step not done before buying');
+  ok(HR.stepSatisfied(market, { stats: { bought: 1 }, horses: [] }), 'market step done after buying a horse');
+  // the breed step completes when a mare is in foal (or one has been born)
+  const breed = HR.TUTORIAL.find(s => s.id === 'breed');
+  ok(HR.stepSatisfied(breed, { stats: {}, horses: [{ pregnant: true }] }), 'breed step done when a mare is pregnant');
+  ok(!HR.stepSatisfied(breed, { stats: { born: 0 }, horses: [{ pregnant: false }] }), 'breed step not done otherwise');
+  // active-state helper + fresh-game default
+  const g = HR.freshGame();
+  ok(g.tut && g.tut.done === false && g.tut.step === 0, 'a fresh game starts the tutorial unseen');
+  ok(HR.tutorialActive(g), 'tutorialActive true on a fresh game');
+  ok(!HR.tutorialActive({ tut: { done: true } }) && !HR.tutorialActive({}), 'tutorialActive false when done or absent');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
