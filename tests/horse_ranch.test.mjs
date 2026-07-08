@@ -232,6 +232,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.breeder = { points: 100 }; // satisfies the breeder-prestige goal (past Established)
   g.stats.studBookings = 1; // satisfies the stud-directory goal
   g.stats.grudgeWins = 1; // satisfies the grudge-match goal
+  g.stats.ceremonies = 1; // satisfies the coming-of-age ceremony goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -3720,6 +3721,76 @@ function studGame(day) {
   ok(ach && !ach.check(young), 'Year-Round Rancher needs a full year');
   const veteran = HR.freshGame(); veteran.day = 56;
   ok(ach.check(veteran), 'reaching day 56 (a full year) unlocks Year-Round Rancher');
+}
+
+// ---- foal coming-of-age ceremonies (round 53) ----
+{
+  // a foal crossing a milestone boundary in advanceDay gets flagged pending exactly once
+  const g = HR.freshGame(); g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'arabian', age: 4, id: 'sprout', name: 'Sprout' }); g.horses = [h];
+  ok(HR.foalMilestoneFor(h) === null, 'a foal below the boundary has no pending ceremony');
+  HR.advanceDay(g, rng(1)); // age 4 → 5 (yearling)
+  ok(h.age === 5, 'the foal ages up');
+  const m = HR.foalMilestoneFor(h);
+  ok(m && m.id === 'yearling', 'crossing into yearling queues the First Birthday');
+  ok(h.ceremonies.yearling === 'pending', 'the milestone is marked pending');
+  // advancing again does not re-flag the same milestone
+  HR.advanceDay(g, rng(2)); // age 5 → 6
+  ok(h.ceremonies.yearling === 'pending' && HR.foalMilestoneFor(h).id === 'yearling', 'the pending flag is not duplicated');
+}
+{
+  // holdCeremony validates, applies a BOUNDED bonus once, marks done, and can't be re-claimed
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'welsh', age: 10, id: 'coa', name: 'Bramble', happy: 60, bond: 40 }); g.horses = [h];
+  h.ceremonies = { comingofage: 'pending' };
+  ok(HR.comingOfAgeDue(g).some(x => x.id === 'coa'), 'comingOfAgeDue lists the pending horse');
+  const hp0 = h.happy, bd0 = h.bond, rep0 = g.rep;
+  const r = HR.holdCeremony(g, 'coa');
+  ok(r.ok && r.milestone.id === 'comingofage', 'the ceremony is held');
+  ok(h.happy > hp0 && h.bond > bd0 && g.rep > rep0, 'it lifts mood, bond & reputation');
+  ok(h.happy - hp0 <= 10 && h.bond - bd0 <= 6 && r.rep <= 5, 'the bonus is bounded (a keepsake, not a power spike)');
+  ok((g.stats.ceremonies || 0) === 1, 'the ceremony is counted');
+  ok(h.ceremonies.comingofage === 'done', 'the milestone is marked done');
+  ok(HR.holdCeremony(g, 'coa').ok === false, 'the same ceremony cannot be held twice (no farming)');
+  ok(HR.comingOfAgeDue(g).length === 0, 'no ceremonies remain pending');
+  ok(HR.holdCeremony(g, 'ghost').ok === false, 'an unknown horse is rejected');
+}
+{
+  // the bonus is clamped at the cap (never overflows)
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'arabian', age: 5, id: 'hi', happy: 98, bond: 99 }); h.ceremonies = { yearling: 'pending' }; g.horses = [h];
+  HR.holdCeremony(g, 'hi');
+  ok(h.happy <= 100 && h.bond <= 100, 'mood & bond never exceed the cap');
+}
+{
+  // an already-grown horse (old save) does NOT fire a ceremony retroactively
+  const g = HR.freshGame(); g.feed = 9999;
+  const grown = HR.mkHorse({ breed: 'mustang', age: 20, id: 'grown' }); grown.ceremonies = {}; g.horses = [grown];
+  HR.advanceDay(g, rng(1)); // age 20 → 21, crosses no boundary
+  ok(HR.foalMilestoneFor(grown) === null && HR.comingOfAgeDue(g).length === 0, 'a grown horse never fires a milestone');
+  // migration: a horse with no ceremonies field is handled safely
+  const legacy = HR.mkHorse({ breed: 'arabian', age: 8 }); delete legacy.ceremonies;
+  ok(HR.foalMilestoneFor(legacy) === null, 'a missing ceremonies field reads as no pending milestone');
+  ok(HR.checkFoalMilestone(legacy) === null || true, 'checkFoalMilestone is safe when the field is absent');
+}
+{
+  // both milestones fire across a foal's whole upbringing (5 then 10), each once
+  const g = HR.freshGame(); g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'arabian', age: 4, id: 'life' }); g.horses = [h];
+  let firedYearling = 0, firedCoa = 0;
+  const r = rng(3);
+  for (let d = 0; d < 8; d++) { HR.advanceDay(g, r); const m = HR.foalMilestoneFor(h); if (m && m.id === 'yearling' && h.ceremonies.yearling === 'pending') { firedYearling++; HR.holdCeremony(g, 'life'); } if (m && m.id === 'comingofage' && h.ceremonies.comingofage === 'pending') { firedCoa++; HR.holdCeremony(g, 'life'); } }
+  ok(h.ceremonies.yearling === 'done' && h.ceremonies.comingofage === 'done', 'both milestones were reached & celebrated');
+  ok((g.stats.ceremonies || 0) === 2, 'exactly two ceremonies were held over the upbringing');
+  // goal + achievement
+  const goal = HR.GOALS.find(x => x.id === 'cer1');
+  const g2 = HR.freshGame();
+  ok(goal && !goal.done(g2), 'the ceremony goal is unmet before any ceremony');
+  g2.stats.ceremonies = 1;
+  ok(goal.done(g2), 'holding a ceremony satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'raisedfoal');
+  ok(ach && ach.check(g), 'raising a foal to its coming of age unlocks Raised from a Foal');
+  ok(!ach.check(g2), 'a ranch with no raised foal has not earned it');
 }
 
 // ---- clamp helper ----
