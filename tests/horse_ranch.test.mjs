@@ -217,6 +217,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.insurance = ['vet']; // satisfies the insurance goal
   g.tack.tiers = { saddle_show: 1 }; // satisfies the tack-upgrade goal
   g.stats.renames = 1; // satisfies the rename goal
+  g.stats.dailyClaims = 1; // satisfies the daily-reward goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2097,6 +2098,60 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'studbook');
   const g2 = HR.freshGame(); for (let i = 0; i < 25; i++) HR.registerHorse(g2, HR.mkHorse({ breed: 'mustang', age: 10 }));
   ok(ach && ach.check(g2) && !ach.check(HR.freshGame()), 'registering 25 horses unlocks Full Studbook');
+}
+
+// ---- daily login streak rewards (round 34) ----
+{
+  // new-day detection & streak transitions (stamp-driven, no Date)
+  ok(HR.isNewDay(null, 100) === true, 'a never-claimed state is claimable');
+  ok(HR.isNewDay(100, 101) === true && HR.isNewDay(100, 100) === false && HR.isNewDay(100, 99) === false, 'isNewDay compares stamps');
+  ok(HR.streakAfter(0, null, 100) === 1, 'first claim starts the streak at 1');
+  ok(HR.streakAfter(3, 100, 101) === 4, 'a consecutive day grows the streak');
+  ok(HR.streakAfter(9, 100, 105) === 1, 'a gap resets the streak to 1');
+  ok(HR.streakAfter(5, 100, 100) === 5, 'same-day is unchanged');
+}
+{
+  // reward scales but is capped, with a weekly milestone
+  const r1 = HR.dailyReward(1), r10 = HR.dailyReward(10), r99 = HR.dailyReward(99);
+  ok(r10.money > r1.money, 'a longer streak pays more');
+  ok(r99.money <= 1500 && r99.feed <= 90 && r99.rep <= 30, 'the reward is capped (economy-safe)');
+  ok(HR.dailyReward(HR.DAILY_CYCLE).milestone === true && HR.dailyReward(HR.DAILY_CYCLE - 1).milestone === false, 'every 7th day is a milestone');
+  ok(HR.dailyReward(HR.DAILY_CYCLE).money > HR.dailyReward(HR.DAILY_CYCLE - 1).money, 'the milestone day pays a bonus');
+}
+{
+  // claimDaily: applies once per day, grows on consecutive days, resets on a gap, tracks longest
+  let st = HR.normDaily(null);
+  ok(st.last === null && st.streak === 0 && st.longest === 0, 'a fresh daily state is empty');
+  const c1 = HR.claimDaily(st, 200);
+  ok(c1.claimed && c1.streak === 1 && c1.reward, 'first claim pays and sets streak 1');
+  st = c1.state;
+  const again = HR.claimDaily(st, 200);
+  ok(!again.claimed, 'cannot double-claim the same day');
+  const c2 = HR.claimDaily(st, 201);
+  ok(c2.claimed && c2.streak === 2, 'the next consecutive day grows the streak');
+  st = c2.state;
+  const c3 = HR.claimDaily(st, 210); // a gap
+  ok(c3.claimed && c3.streak === 1, 'a gap day resets the streak to 1');
+  st = c3.state;
+  ok(st.longest === 2, 'the longest streak is remembered');
+}
+{
+  // dailyState is a non-mutating view for the UI
+  let st = HR.normDaily({ last: 300, streak: 4, longest: 6 });
+  const view = HR.dailyState(st, 301);
+  ok(view.claimable === true && view.nextStreak === 5, 'a new day is claimable and previews the next streak');
+  ok(st.last === 300 && st.streak === 4, 'dailyState does not mutate the state');
+  const same = HR.dailyState(st, 300);
+  ok(same.claimable === false, 'the same day is not claimable');
+  // goal + achievement
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'daily1');
+  ok(goal && !goal.done(g), 'the daily goal is unmet before claiming');
+  g.stats.dailyClaims = 1;
+  ok(goal.done(g), 'the daily goal completes after a claim');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'loyal');
+  const g2 = HR.freshGame(); g2.stats.bestStreak = 7;
+  ok(ach && ach.check(g2) && !ach.check(g), 'a 7-day streak unlocks Loyal Rancher');
 }
 
 // ---- clamp helper ----

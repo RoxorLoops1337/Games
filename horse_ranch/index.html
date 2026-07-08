@@ -305,6 +305,7 @@
     <div class="spacer"></div>
     <button class="sbtn" id="boardBtn" title="Contracts board" style="margin-right:4px;position:relative">📋<span id="boardBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="regBtn" title="Studbook & names" style="margin-right:4px">📖</button>
+    <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
@@ -1220,6 +1221,39 @@ function applyPrestige(game, legacy){
   return freshGame({points:cur.points+gain, resets:cur.resets+1});
 }
 
+// ---------- Daily login streak rewards (real-world days; pure logic is stamp-driven) ----------
+// The DOM supplies a real calendar-day stamp (e.g. floor(Date.now()/86400000)); these
+// functions never touch Date, so they stay deterministic + testable. Bounded, non-punishing:
+// missing a day just resets the streak. State persists in a separate store (survives prestige).
+const DAILY_CYCLE=7;
+function normDaily(d){ d=d||{}; return {last:(typeof d.last==='number'&&isFinite(d.last))?Math.floor(d.last):null, streak:Math.max(0,Math.floor(d.streak||0)), longest:Math.max(0,Math.floor(d.longest||0))}; }
+function isNewDay(lastStamp, todayStamp){ return lastStamp==null || todayStamp>lastStamp; }
+function streakAfter(prevStreak, lastStamp, todayStamp){
+  if(lastStamp==null) return 1;                                 // first ever claim
+  if(todayStamp<=lastStamp) return Math.max(1,prevStreak||1);   // already claimed today → unchanged
+  if(todayStamp===lastStamp+1) return (prevStreak||0)+1;        // consecutive day → grows
+  return 1;                                                     // a gap → streak resets (no penalty)
+}
+// bounded, gently-scaling reward with a weekly milestone bump
+function dailyReward(streak){
+  const s=Math.max(1,Math.floor(streak||1)), step=Math.min(s,14);
+  let money=Math.min(800, 120+step*45), feed=Math.min(50, 8+step*3), rep=Math.min(15, 2+Math.floor(step/2));
+  const milestone=(s%DAILY_CYCLE===0);
+  if(milestone){ money=Math.min(1500,money+500); feed=Math.min(90,feed+40); rep=Math.min(30,rep+10); }
+  return {money, feed, rep, milestone};
+}
+// a non-mutating view for the UI
+function dailyState(state, todayStamp){ const d=normDaily(state);
+  const claimable=isNewDay(d.last, todayStamp);
+  const nextStreak=claimable?streakAfter(d.streak,d.last,todayStamp):Math.max(1,d.streak||1);
+  return {last:d.last, streak:d.streak, longest:d.longest, claimable, nextStreak, reward:dailyReward(nextStreak)}; }
+// claim today's reward (mutates a copy + returns it). The caller applies the reward to the game.
+function claimDaily(state, todayStamp){ const d=normDaily(state);
+  if(!isNewDay(d.last, todayStamp)) return {claimed:false, streak:d.streak, state:d};
+  const streak=streakAfter(d.streak, d.last, todayStamp), reward=dailyReward(streak);
+  d.streak=streak; d.last=todayStamp; d.longest=Math.max(d.longest, streak);
+  return {claimed:true, reward, streak, milestone:reward.milestone, state:d}; }
+
 function freshGame(legacy){
   _idc=1;
   const g={
@@ -1227,7 +1261,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1977,6 +2011,7 @@ const ACHIEVEMENTS=[
   {id:'weathered',  icon:'🛡️', name:'Weathered the Storm',   desc:'Come through five seasonal disasters.',         check:g=>((g.stats&&g.stats.disasters)||0)>=5},
   {id:'masterwork', icon:'✦', name:'Masterwork',            desc:'Upgrade a piece of tack to Masterwork.',       check:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=TACK_MAX_TIER)},
   {id:'studbook',   icon:'📖', name:'Full Studbook',        desc:'Register 25 horses in your studbook.',         check:g=>registrySize(g)>=25},
+  {id:'loyal',      icon:'🎁', name:'Loyal Rancher',        desc:'Reach a 7-day login streak.',                  check:g=>((g.stats&&g.stats.bestStreak)||0)>=7},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2070,6 +2105,7 @@ const GOALS=[
   {id:'insure1', desc:'Take out an insurance policy (🛡️)',     tip:g=>(insuranceList(g).length)+' held',done:g=>insuranceList(g).length>=1,                                       reward:{money:400,rep:10}},
   {id:'upgrade1',desc:'Upgrade a piece of tack (✦)',           tip:g=>'',                              done:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=1),reward:{money:700,rep:15}},
   {id:'rename1', desc:'Name a horse your own way (✏️)',        tip:g=>'',                              done:g=>((g.stats&&g.stats.renames)||0)>=1,                     reward:{money:200,rep:10}},
+  {id:'daily1',  desc:'Claim a daily welcome-back reward (🎁)',tip:g=>((g.stats&&g.stats.dailyClaims)||0)+'/1',done:g=>((g.stats&&g.stats.dailyClaims)||0)>=1,               reward:{money:200,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2140,6 +2176,7 @@ const HR = {
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
   NAME_PACKS, HORSE_NAME_MAX, namePackDef, namePackUnlocked, activeNamePack, setNamePack,
   pickNameFrom, renameHorse, REGISTRY_CAP, registerHorse, syncRegistry, registrySize,
+  DAILY_CYCLE, normDaily, isNewDay, streakAfter, dailyReward, dailyState, claimDaily,
   PRESTIGE_REP, normLegacy, legacyPointsFor, legacyLevel, legacyBonus, canPrestige, applyPrestige,
   RIVALS, rivalDef, rivalShowDays, rivalRep, playerScore, standings, playerRank,
   leaderRanch, rivalCount, tickStandings,
@@ -2168,6 +2205,10 @@ let skyT=18000, curWx=null; const SKY_CYCLE=90000; // real-time day/night cycle 
 // ----- persistence -----
 function loadLegacy(){ try{ const raw=localStorage.getItem(LEGACY_KEY); if(!raw) return normLegacy(null); return normLegacy(JSON.parse(raw)); }catch(e){ return normLegacy(null); } }
 function saveLegacy(l){ try{ localStorage.setItem(LEGACY_KEY, JSON.stringify(normLegacy(l))); }catch(e){} }
+const DAILY_KEY='horseranch_daily_v1'; // login-streak state — separate so it survives a prestige reset
+function loadDaily(){ try{ const raw=localStorage.getItem(DAILY_KEY); return normDaily(raw?JSON.parse(raw):null); }catch(e){ return normDaily(null); } }
+function saveDaily(d){ try{ localStorage.setItem(DAILY_KEY, JSON.stringify(normDaily(d))); }catch(e){} }
+function todayStamp(){ try{ return Math.floor(Date.now()/86400000); }catch(e){ return 0; } } // UTC calendar-day index
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({G,_idc})); if(G&&G.legacy) saveLegacy(G.legacy); }catch(e){} }
 function load(){
   try{ const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
@@ -2206,6 +2247,8 @@ function load(){
     if(G.stats.featuredBought==null) G.stats.featuredBought=0;
     if(G.stats.disasters==null) G.stats.disasters=0;
     if(G.stats.renames==null) G.stats.renames=0;
+    if(G.stats.dailyClaims==null) G.stats.dailyClaims=0;
+    if(G.stats.bestStreak==null) G.stats.bestStreak=0;
     if(typeof G.namePack!=='string'||!namePackDef(G.namePack)) G.namePack='classic'; // themed name packs
     if(!Array.isArray(G.registry)) G.registry=[]; syncRegistry(G); // studbook registry
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
@@ -2375,6 +2418,8 @@ function renderHUD(){
   else { const buyable=G.market.filter(h=>buyPrice(h)<=G.money).length; if(buyable) addBadge('market',buyable); }
   // contracts board badge (claimable count)
   { const cb=$('boardBadge'); if(cb){ const n=claimableContracts(G); cb.textContent=n; cb.style.display=n?'block':'none'; } }
+  // daily reward badge
+  { const gb=$('dailyBadge'); if(gb){ const on=dailyClaimable(); gb.style.display=on?'block':'none'; } }
 }
 function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
 
@@ -3906,6 +3951,35 @@ function openRename(h){
   $('hnSave').onclick=save2;
   if(inp&&inp.addEventListener) inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); save2(); } });
 }
+// ---------------- Daily login streak reward ----------------
+let dailyData=null;
+function dailyClaimable(){ if(!dailyData) dailyData=loadDaily(); return isNewDay(dailyData.last, todayStamp()); }
+function openDaily(){
+  if(!dailyData) dailyData=loadDaily();
+  const st=dailyState(dailyData, todayStamp());
+  const cycleDay=((Math.max(1,st.claimable?st.nextStreak:st.streak)-1)%DAILY_CYCLE); // 0..6 position this week
+  let track='';
+  for(let i=0;i<DAILY_CYCLE;i++){ const isMile=i===DAILY_CYCLE-1; const done=st.claimable? i<cycleDay : i<=cycleDay; const here=st.claimable && i===cycleDay;
+    track+='<div style="flex:1;text-align:center;padding:6px 2px;border-radius:8px;margin:0 2px;font-size:11px;font-weight:800;'+
+      (here?'background:linear-gradient(var(--gold),var(--gold2));color:#2a1c05':(done?'background:#1a2410;color:var(--good)':'background:#0d130a;color:var(--ink2)'))+'">'+
+      (isMile?'🎁':'Day')+'<br>'+(i+1)+'</div>'; }
+  const r=st.reward, bits=[]; if(r.money)bits.push('🪙'+fmt(r.money)); if(r.feed)bits.push('🌾'+r.feed); if(r.rep)bits.push(r.rep+'⭐');
+  modal('<h3>🎁 Daily Welcome-Back</h3>'+
+    '<div class="msg">Come back each day for a growing reward — a '+DAILY_CYCLE+'-day streak lands a 🎁 milestone bonus. Miss a day and the streak restarts (no penalty).</div>'+
+    '<div class="row" style="gap:0;margin-bottom:8px">'+track+'</div>'+
+    '<div class="sub">Current streak <b>'+st.streak+'</b> · best <b>'+st.longest+'</b>'+(st.claimable?' · today’s reward: <b style="color:var(--gold)">'+bits.join(' + ')+'</b>'+(r.milestone?' 🎁':''):'')+'</div>'+
+    '<div class="btnrow">'+(st.claimable
+      ? '<button class="btn" id="dClaim" style="flex:1">🎁 Claim '+bits.join(' + ')+'</button>'
+      : '<span class="pill" style="flex:1;justify-content:center;color:var(--good)">✓ Claimed today — see you tomorrow!</span>')+
+      '<button class="btn ghost" id="dClose" style="flex:1">Close</button></div>');
+  $('dClose').onclick=closeModal;
+  { const c=$('dClaim'); if(c) c.onclick=()=>{ const res=claimDaily(dailyData, todayStamp()); if(!res.claimed){ toast('Already claimed today.','info'); return; }
+    dailyData=res.state; saveDaily(dailyData);
+    G.money+=res.reward.money; G.feed+=res.reward.feed; G.rep+=res.reward.rep;
+    G.stats.dailyClaims=(G.stats.dailyClaims||0)+1; G.stats.bestStreak=Math.max(G.stats.bestStreak||0, res.streak);
+    coinPop(res.reward.money); burst(res.milestone?'🎁🎉✨🪙':'🎁✨🪙',res.milestone?18:12); playSfx(res.milestone?'win':'goal');
+    toast('🎁 Day '+res.streak+' reward claimed!'+(res.milestone?' 🎉 Milestone bonus!':''),'good'); closeModal(); refresh(); }; }
+}
 let regQuery='';
 function openRegistry(){
   syncRegistry(G);
@@ -4022,6 +4096,7 @@ function boot(){
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
+  { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ playSfx('tap'); setTab(t.getAttribute('data-tab')); });
@@ -4030,6 +4105,7 @@ function boot(){
   { const ab=$('audioBtn'); if(ab) ab.onclick=openAudio; updateAudioBtn(); }
   setTab('ranch'); refresh();
   if(!G.seenIntro) showIntro();
+  else if(dailyClaimable()) openDaily(); // returning players get their welcome-back reward
   tickHandle=requestAnimationFrame(step);
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
