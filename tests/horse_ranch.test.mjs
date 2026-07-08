@@ -219,6 +219,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.renames = 1; // satisfies the rename goal
   g.stats.dailyClaims = 1; // satisfies the daily-reward goal
   HR.sendToPasture(g, g.horses[0], 'retired', g.day); // satisfies the pasture goal
+  g.breedGoal = 'rarecoat'; // satisfies the breeding-planner goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -2221,6 +2222,139 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'sanctuary');
   const g2 = HR.freshGame(); for (let i = 0; i < 5; i++) HR.sendToPasture(g2, HR.mkHorse({ breed: 'mustang', age: 25 }), 'retired', i);
   ok(ach && ach.check(g2) && !ach.check(g), 'five pastured horses unlock Sanctuary');
+}
+
+// ---- breeding-goals / target-foal planner (round 36) ----
+{
+  // predictFoal is defensive with missing parents
+  const h = HR.mkHorse({ breed: 'arabian' });
+  ok(HR.predictFoal(null, h) === null && HR.predictFoal(h, null) === null, 'predictFoal is null without both parents');
+}
+{
+  // predicted stat ranges bracket what breedFoal actually produces (same maths, no RNG in the predictor)
+  const mare = HR.mkHorse({ breed: 'arabian', speed: 50, stamina: 40, temperament: 60 });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', speed: 60, stamina: 70, temperament: 50 });
+  const pred = HR.predictFoal(mare, stal);
+  ok(pred.purebred === true, 'a same-breed pairing predicts a purebred foal');
+  ok(pred.generation === 2, 'the predicted generation is one past the parents');
+  ok(pred.inbred === false, 'unrelated parents are not flagged inbred');
+  // sample a big batch on one rng stream and confirm the ranges hold
+  const r = rng(7); const sp = [], st = [], tm = [];
+  for (let i = 0; i < 500; i++) { const f = HR.breedFoal(mare, stal, r); sp.push(f.speed); st.push(f.stamina); tm.push(f.temperament); }
+  const mean = a => a.reduce((n, x) => n + x, 0) / a.length;
+  const within = (a, lo, hi) => a.every(x => x >= lo - 1 && x <= hi + 9); // rounding ±1 + the +8 champion bloodline
+  ok(pred.statRanges.speed.lo <= mean(sp) && mean(sp) <= pred.statRanges.speed.hi, 'speed mean lands inside the predicted range');
+  ok(pred.statRanges.stamina.lo <= mean(st) && mean(st) <= pred.statRanges.stamina.hi, 'stamina mean lands inside the predicted range');
+  ok(pred.statRanges.temperament.lo <= mean(tm) && mean(tm) <= pred.statRanges.temperament.hi, 'temperament mean lands inside the predicted range');
+  ok(within(sp, pred.statRanges.speed.lo, pred.statRanges.speed.hi), 'every sampled speed sits within the predicted band');
+  ok(within(st, pred.statRanges.stamina.lo, pred.statRanges.stamina.hi), 'every sampled stamina sits within the predicted band');
+  ok(pred.overall.lo <= pred.overall.mid && pred.overall.mid <= pred.overall.hi, 'the overall band is ordered lo→mid→hi');
+  // the predictor is pure — same inputs, identical output
+  ok(JSON.stringify(pred) === JSON.stringify(HR.predictFoal(mare, stal)), 'predictFoal is deterministic');
+}
+{
+  // coat odds enumerate every phenotype the real cross can throw, and sum to ~1
+  const mg = { E: ['E', 'e'], A: ['A', 'a'], Cr: ['C', 'n'], G: ['G', 'n'], mut: null };
+  const sg = { E: ['E', 'e'], A: ['A', 'a'], Cr: ['n', 'n'], G: ['n', 'n'], mut: null };
+  const odds = HR.coatOddsFor(mg, sg);
+  const sum = odds.reduce((n, c) => n + c.p, 0);
+  ok(Math.abs(sum - 1) < 0.001, 'coat odds sum to 1');
+  ok(odds.every((c, i) => i === 0 || odds[i - 1].p >= c.p), 'coat odds are sorted most-likely first');
+  // sample real foals and confirm every coat that appears was predicted with p>0
+  const mare = HR.mkHorse({ breed: 'arabian', genes: mg });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', genes: sg });
+  const r = rng(11); const seen = new Set();
+  for (let i = 0; i < 600; i++) seen.add(HR.breedFoal(mare, stal, r).coat.name);
+  ok([...seen].every(name => odds.some(c => c.name === name && c.p > 0)), 'every coat the cross produces is in the odds');
+}
+{
+  // a parent carrying a mutation lifts that mutation's odds far above the baseline sprinkle
+  const golden = { E: ['E', 'e'], A: ['A', 'a'], Cr: ['n', 'n'], G: ['n', 'n'], mut: 'Golden' };
+  const plain = { E: ['E', 'e'], A: ['A', 'a'], Cr: ['n', 'n'], G: ['n', 'n'], mut: null };
+  const g = HR.coatOddsFor(golden, plain).find(c => c.name === 'Golden');
+  const base = HR.coatOddsFor(plain, plain).find(c => c.name === 'Golden');
+  ok(g && g.p > 0.39, 'a Golden parent gives ~40% Golden foals');
+  ok(base && base.p < 0.02, 'without a mutation carrier Golden stays rare');
+}
+{
+  // trait odds: each parent trait is favoured, everything sums to 1
+  const odds = HR.traitOddsFor('bold', 'clever');
+  const sum = odds.reduce((n, t) => n + t.p, 0);
+  ok(Math.abs(sum - 1) < 0.001, 'trait odds sum to 1');
+  const bold = odds.find(t => t.id === 'bold'), clever = odds.find(t => t.id === 'clever'), lazy = odds.find(t => t.id === 'lazy');
+  ok(bold.p > lazy.p && clever.p > lazy.p, 'the parents’ traits outrank a trait neither carries');
+}
+{
+  // inbreeding is detected and drags the predicted band down
+  const mare = HR.mkHorse({ breed: 'arabian', speed: 60, stamina: 60, temperament: 60 });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', speed: 60, stamina: 60, temperament: 60 });
+  const foal = HR.breedFoal(mare, stal, rng(3)); // foal's pedigree names both parents
+  const pIn = HR.predictFoal(foal, mare); // breeding the foal back to its dam
+  const pOut = HR.predictFoal(mare, HR.mkHorse({ breed: 'arabian', sex: 'stallion', speed: 60, stamina: 60, temperament: 60 }));
+  ok(pIn.inbred === true, 'a foal bred back to its dam is flagged inbred');
+  ok(pIn.statRanges.speed.hi < pOut.statRanges.speed.hi, 'the inbreeding penalty lowers the predicted ceiling');
+}
+{
+  // cross-breed prediction takes the rarer parent's breed
+  const common = HR.mkHorse({ breed: 'shetland' });
+  const rare = HR.mkHorse({ breed: 'akhalteke', sex: 'stallion' });
+  const pred = HR.predictFoal(common, rare);
+  ok(pred.breed === 'akhalteke' && pred.purebred === false, 'a cross predicts the rarer parent’s breed, not purebred');
+}
+{
+  // matchesBreedingGoal: purebred + rarity are certainties; coat matches the odds
+  const pureArab = HR.predictFoal(HR.mkHorse({ breed: 'arabian' }), HR.mkHorse({ breed: 'arabian', sex: 'stallion' }));
+  const pb = HR.matchesBreedingGoal(pureArab, 'purebred');
+  ok(pb && pb.chance === 1 && pb.onTrack, 'a purebred pairing is on track for the purebred goal');
+  const elitePred = HR.predictFoal(HR.mkHorse({ breed: 'akhalteke' }), HR.mkHorse({ breed: 'akhalteke', sex: 'stallion' }));
+  const el = HR.matchesBreedingGoal(elitePred, 'elite');
+  ok(el && el.chance === 1, 'an Elite+ breed pairing satisfies the elite goal');
+  const cross = HR.predictFoal(HR.mkHorse({ breed: 'shetland' }), HR.mkHorse({ breed: 'shetland', sex: 'stallion' }));
+  ok(HR.matchesBreedingGoal(cross, 'elite').chance === 0, 'a common breed misses the elite goal');
+  // coat goal chance equals that coat's odds in the prediction
+  const cg = HR.matchesBreedingGoal(pureArab, 'grey');
+  const greyP = (pureArab.coatOdds.find(c => c.name === 'Grey') || { p: 0 }).p;
+  ok(Math.abs(cg.chance - greyP) < 1e-9, 'a coat goal reports that coat’s exact odds');
+  ok(HR.matchesBreedingGoal(pureArab, 'bogus') === null, 'an unknown goal id matches nothing');
+  ok(HR.matchesBreedingGoal(null, 'purebred') === null, 'a null prediction matches nothing');
+}
+{
+  // foalMeetsGoal grades a real foal against a goal
+  const pure = HR.mkHorse({ breed: 'arabian', purebred: true, coat: { name: 'Bay', tier: 0 } });
+  const rare = HR.mkHorse({ breed: 'akhalteke', purebred: false, coat: { name: 'Golden', tier: 3 } });
+  ok(HR.foalMeetsGoal(pure, 'purebred') === true, 'a purebred foal meets the purebred goal');
+  ok(HR.foalMeetsGoal(rare, 'purebred') === false, 'a non-purebred foal misses the purebred goal');
+  ok(HR.foalMeetsGoal(rare, 'rarecoat') === true, 'a tier-3 coat meets the rare-coat goal');
+  ok(HR.foalMeetsGoal(pure, 'rarecoat') === false, 'a plain coat misses the rare-coat goal');
+  ok(HR.foalMeetsGoal(rare, 'elite') === true, 'an Akhal-Teke meets the Elite+ goal');
+  ok(HR.foalMeetsGoal(null, 'purebred') === false && HR.foalMeetsGoal(pure, 'bogus') === false, 'foalMeetsGoal is defensive');
+}
+{
+  // freshGame default, goal, migration and the Master Planner achievement
+  const g = HR.freshGame();
+  ok(g.breedGoal === null, 'a fresh ranch starts with no breeding goal');
+  const goal = HR.GOALS.find(x => x.id === 'plan1');
+  ok(goal && !goal.done(g), 'the planner goal is unmet until a goal is set');
+  g.breedGoal = 'rarecoat';
+  ok(goal.done(g), 'setting a valid breeding goal completes the planner goal');
+  g.breedGoal = 'bogus'; // migration should discard unknown ids
+  ok(HR.breedGoalDef(g.breedGoal) === null && !goal.done(g), 'an unknown goal id does not satisfy the planner goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'planner');
+  ok(ach && !ach.check(g), 'Master Planner is locked before a goal is fulfilled');
+  g.stats.goalsMet = 1;
+  ok(ach.check(g), 'fulfilling a breeding goal unlocks Master Planner');
+}
+{
+  // the birth hook credits a fulfilled goal — breed same-breed with a purebred goal set
+  const g = HR.freshGame(); g.feed = 9999;
+  const mare = HR.mkHorse({ breed: 'arabian', age: 30 }); const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 30 });
+  g.horses.push(mare, stal);
+  g.breedGoal = 'purebred';
+  mare.pregnant = true; mare.gestation = 2;
+  mare._sire = { id: stal.id, name: stal.name, breed: stal.breed, sex: 'stallion', speed: stal.speed, stamina: stal.stamina, temperament: stal.temperament, generation: stal.generation, genes: stal.genes, ped: stal.ped || null };
+  const r = rng(5); for (let d = 0; d < 4 && mare.pregnant; d++) HR.advanceDay(g, r);
+  ok(!mare.pregnant, 'the mare foals within the gestation window');
+  ok((g.stats.goalsMet || 0) >= 1, 'a purebred foal born under a purebred goal is credited');
 }
 
 // ---- clamp helper ----
