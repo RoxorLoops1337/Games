@@ -206,6 +206,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.festivals = 4; // satisfies festival goals
   g.stats.auctionsWon = 1; // satisfies auction goal
   g.decor.owned = ['flowers']; // satisfies décor goal
+  for (const id of HR.NEED_IDS) g.horses[0].needs[id] = 100; // satisfies the care goal (a pampered horse)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1012,7 +1013,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   // décor goal is appended (not inserted) and completes on first purchase
   const g = HR.freshGame(); g.money = 100000; g.rep = 500;
   const goal = HR.GOALS.find(x => x.id === 'decor1');
-  ok(goal && HR.GOALS[HR.GOALS.length - 1].id === 'decor1', 'décor goal is appended at the end of the chain');
+  ok(goal, 'décor goal exists in the chain');
   ok(!goal.done(g), 'décor goal is unmet with no décor');
   HR.buyDecor(g, HR.DECOR[0].id);
   ok(goal.done(g), 'décor goal completes once you own an item');
@@ -1033,6 +1034,105 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const rec = HR.hofRecord(g.horses[0], 'retired', 10);
   ok(HR.hofToModel(rec, g).stable === 'Emberfield', 'hall-of-fame card uses the custom ranch name');
   ok(HR.legacyLine(rec, HR.ranchName(g)).includes('Emberfield') || rec.wins >= 1, 'legacyLine can carry the ranch name');
+}
+
+// ---- horse care / needs system (round 21) ----
+{
+  // config surface + per-horse init
+  ok(Array.isArray(HR.NEEDS) && HR.NEEDS.length >= 4, 'a needs catalogue exists');
+  ok(new Set(HR.NEEDS.map(n => n.id)).size === HR.NEEDS.length, 'need ids are unique');
+  ok(HR.NEEDS.every(n => n.decay > 0 && n.cost >= 0 && n.emoji && n.label), 'every need has decay, cost, emoji, label');
+  ok(HR.needDef('groom') && HR.needDef('nope') === null, 'needDef lookup + miss');
+  const h = HR.mkHorse({ breed: 'arabian', age: 12 });
+  ok(h.needs && HR.NEED_IDS.every(id => typeof h.needs[id] === 'number'), 'mkHorse seeds a full needs record');
+  ok(typeof h.bond === 'number', 'mkHorse seeds a bond level');
+  ok(HR.careScore(h) > 0 && HR.careScore(h) <= 100, 'careScore is a sane 0..100');
+}
+{
+  // careScore = mean of needs; careTier + careBonusMult track it
+  const h = HR.mkHorse({ breed: 'quarter', age: 12 });
+  for (const id of HR.NEED_IDS) h.needs[id] = 100;
+  ok(HR.careScore(h) === 100, 'all needs full → careScore 100');
+  ok(HR.careTier(h).id === 'pampered', 'full care → Pampered tier');
+  ok(Math.abs(HR.careBonusMult(h) - 1.06) < 1e-9, 'pampered horse gets a +6% care bonus');
+  for (const id of HR.NEED_IDS) h.needs[id] = 0;
+  ok(HR.careScore(h) === 0 && HR.careTier(h).id === 'neglected', 'zero needs → Neglected');
+  ok(Math.abs(HR.careBonusMult(h) - 0.9) < 1e-9, 'neglected horse is capped at -10% form');
+  // the care bonus actually moves show scores
+  const disc = HR.DISCIPLINES[0];
+  const good = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  const bad = HR.mkHorse({ breed: 'arabian', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  for (const id of HR.NEED_IDS) { good.needs[id] = 100; bad.needs[id] = 0; }
+  ok(HR.disciplineScore(good, disc) > HR.disciplineScore(bad, disc), 'a well-cared horse out-scores a neglected twin');
+}
+{
+  // needs decay over a simulated day and neglect drags happiness/health
+  const g = HR.freshGame(); g.feed = 9999;
+  const h = g.horses[0]; for (const id of HR.NEED_IDS) h.needs[id] = 100;
+  const c0 = HR.careScore(h);
+  HR.advanceDay(g, rng(3));
+  ok(HR.careScore(h) < c0, 'careScore falls after a day passes (needs decay in advanceDay)');
+  // a neglected horse loses happiness over a day vs a pampered one
+  const g2 = HR.freshGame(); g2.feed = 9999;
+  const neg = g2.horses[0], pam = g2.horses[1];
+  for (const id of HR.NEED_IDS) { neg.needs[id] = 2; pam.needs[id] = 100; }
+  const nh0 = neg.happy, ph0 = pam.happy;
+  HR.advanceDay(g2, rng(9));
+  ok(neg.happy < nh0, 'a neglected horse loses happiness over the day');
+  ok(pam.happy >= ph0 - 1, 'a pampered horse holds or gains happiness');
+}
+{
+  // restoring needs: free vs paid, coin sink, care-day discount
+  const g = HR.freshGame(); g.money = 100000;
+  const h = g.horses[0]; for (const id of HR.NEED_IDS) h.needs[id] = 10;
+  const free = HR.NEEDS.find(n => !n.cost), paid = HR.NEEDS.find(n => n.cost);
+  ok(HR.careCost(g, free.id) === 0, 'a free need costs nothing');
+  const rf = HR.applyCare(g, h, free.id);
+  ok(rf.ok && h.needs[free.id] === 100 && rf.cost === 0, 'restoring a free need fills it at no cost');
+  const m0 = g.money, cost = HR.careCost(g, paid.id);
+  ok(cost > 0, 'a paid need has a positive cost');
+  const rp = HR.applyCare(g, h, paid.id);
+  ok(rp.ok && h.needs[paid.id] === 100 && g.money === m0 - cost, 'restoring a paid need spends coins (sink)');
+  // affordability guard
+  const poor = HR.freshGame(); poor.money = 0; const ph = poor.horses[0]; ph.needs[paid.id] = 0;
+  ok(!HR.applyCare(poor, ph, paid.id).ok, 'cannot pay for care you cannot afford');
+  ok(ph.needs[paid.id] === 0, 'a failed paid-care leaves the need untouched');
+}
+{
+  // full care bundle + daily routine convenience
+  const g = HR.freshGame(); g.money = 100000;
+  const h = g.horses[0]; for (const id of HR.NEED_IDS) h.needs[id] = 20;
+  const r = HR.applyFullCare(g, h);
+  ok(r.ok && HR.NEED_IDS.every(id => h.needs[id] === 100), 'full care fills every need');
+  ok(r.cost === 0 || g.money < 100000, 'full care charges for the paid needs');
+  // daily routine tops up FREE needs for the whole herd, once/day
+  const g2 = HR.freshGame();
+  for (const hh of g2.horses) for (const id of HR.NEED_IDS) hh.needs[id] = 15;
+  ok(!HR.routineDoneToday(g2), 'routine starts not-done for the day');
+  HR.applyDailyRoutine(g2);
+  ok(HR.routineDoneToday(g2), 'routine marks itself done for the day');
+  ok(g2.horses.every(hh => HR.freeNeedIds().every(id => hh.needs[id] === 100)), 'routine fills all free needs for every horse');
+  ok(g2.horses.some(hh => HR.NEEDS.some(n => n.cost && hh.needs[n.id] < 100)), 'routine leaves paid needs for hands-on care');
+}
+{
+  // save migration: a pre-needs horse gets content defaults, not sudden misery
+  const legacy = { breed: 'mustang', sex: 'mare', age: 14, speed: 60, stamina: 60, temperament: 60, health: 90, happy: 85 };
+  HR.needsInit(legacy);
+  ok(legacy.needs && HR.NEED_IDS.every(id => legacy.needs[id] >= 50), 'needsInit gives legacy horses comfortable defaults');
+  ok(HR.careTier(legacy).id === 'content' || HR.careTier(legacy).id === 'pampered', 'a migrated horse is at least Content');
+  // needsInit is idempotent and clamps garbage
+  legacy.needs.groom = 999; legacy.needs.rest = -50;
+  HR.needsInit(legacy);
+  ok(legacy.needs.groom === 100 && legacy.needs.rest === 0, 'needsInit clamps out-of-range need values');
+}
+{
+  // care goal is appended and completes on a pampered horse
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'care1');
+  ok(goal && HR.GOALS[HR.GOALS.length - 1].id === 'care1', 'care goal is appended at the end of the chain');
+  ok(!goal.done(g), 'care goal is unmet on a fresh game');
+  for (const id of HR.NEED_IDS) g.horses[0].needs[id] = 100;
+  ok(goal.done(g), 'care goal completes once a horse is fully pampered');
 }
 
 // ---- clamp helper ----
