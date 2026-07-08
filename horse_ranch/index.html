@@ -838,6 +838,7 @@ function mkHorse(o){
     rentDays:0, rentRate:0,   // >0 = out on rent
     stable:o.stable!=null?o.stable:0,
     needs:o.needs||null, bond:o.bond,  // daily care needs + bonding level (needsInit fills defaults)
+    gwDay:o.gwDay||0, gwEnergy:o.gwEnergy||0, // groundwork handling energy (per-day, auto-resets)
     tack:o.tack||null,                 // equipped gear per slot (tackInit fills defaults)
     aff:o.aff||null,                   // per-discipline affinity (affInit fills defaults)
   };
@@ -1332,7 +1333,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1667,6 +1668,54 @@ function composure(h){ if(!h) return 0; return clamp(Math.round(0.45*(h.bond||0)
 function composureTier(h){ const c=composure(h);
   return c>=80?{id:'serene',label:'Serene',emoji:'🧘'} : c>=58?{id:'settled',label:'Settled',emoji:'🙂'}
        : c>=34?{id:'restless',label:'Restless',emoji:'😟'} : {id:'skittish',label:'Skittish',emoji:'😰'}; }
+// a settled, well-bonded horse keeps its poise in the ring — a small, bounded readiness benefit
+const BOND_POISE_CAP=0.05; // up to +5% from composure (bond+happy+care) — gentle & economy-safe
+function bondPoiseMult(h){ return 1 + BOND_POISE_CAP*(composure(h)/100); }
+
+// ---------- Bonding / groundwork mini-activities (build a relationship with a horse) ----------
+// Short, optional handling sessions that raise the EXISTING h.bond & happy (feeding composure).
+// Per-horse daily energy cap (un-farmable) + diminishing returns as bond nears the cap. No coins.
+const BOND_CAP=100;
+const BONDED_AT=70;            // matches the ❤ Bonded tag threshold
+const GROUNDWORK_ENERGY=3;     // handling "energy" per horse per day
+const GROUNDWORK_ACTIVITIES=[
+  {id:'groom',    name:'Grooming',      emoji:'🧽', bond:5, happy:6, energy:1, desc:'A calm mutual grooming session — soothing and trust-building.'},
+  {id:'handwalk', name:'Hand-Walk',     emoji:'🚶', bond:4, happy:4, energy:1, desc:'A quiet walk in-hand around the yard.'},
+  {id:'desensit', name:'Desensitising', emoji:'🎈', bond:6, happy:2, energy:1, desc:'Tarps, flags & odd noises — builds a braver, calmer horse.'},
+  {id:'roundpen', name:'Round-Pen',     emoji:'🔄', bond:8, happy:3, energy:2, desc:'Join-up groundwork — asks focus, earns real trust.'},
+  {id:'liberty',  name:'Liberty Play',  emoji:'🎠', bond:7, happy:8, energy:2, desc:'Playful liberty work — joyful and connecting.'},
+  {id:'trail',    name:'Trail Hack',    emoji:'🌲', bond:6, happy:7, energy:2, desc:'A relaxed hack down the trail together.'},
+];
+function groundworkActivityDef(id){ return GROUNDWORK_ACTIVITIES.find(a=>a.id===id)||null; }
+function groundworkReset(h,day){ if(!h) return; if(h.gwDay!==day){ h.gwDay=day; h.gwEnergy=0; } }
+function groundworkEnergyLeft(game,h,day){ if(!h) return 0; day=(day!=null?day:((game&&game.day)||1));
+  const used=(h.gwDay===day)?(h.gwEnergy||0):0; return Math.max(0, GROUNDWORK_ENERGY-used); }
+function canDoGroundwork(game,h,activityId,day){ const a=groundworkActivityDef(activityId); if(!a||!h) return false;
+  return groundworkEnergyLeft(game,h,day)>=a.energy; }
+function bondTier(h){ const b=(h&&h.bond)||0;
+  return b>=90?{id:'devoted',label:'Devoted',emoji:'💖'} : b>=BONDED_AT?{id:'bonded',label:'Bonded',emoji:'❤'}
+       : b>=40?{id:'warming',label:'Warming Up',emoji:'🙂'} : {id:'new',label:'Getting Acquainted',emoji:'👋'}; }
+function bondLabel(h){ return bondTier(h).label; }
+// do a groundwork activity with a horse — bounded, deterministic; returns the outcome
+function doGroundwork(game, h, activityId, day){
+  const a=groundworkActivityDef(activityId); if(!a) return {ok:false,why:'Unknown activity.'};
+  if(!h) return {ok:false,why:'No such horse.'};
+  day=(day!=null?day:((game&&game.day)||1));
+  groundworkReset(h,day);
+  if(groundworkEnergyLeft(game,h,day)<a.energy) return {ok:false,why:h.name+' has had enough handling for today.'};
+  h.gwEnergy=(h.gwEnergy||0)+a.energy;
+  needsInit(h);
+  const before=h.bond||0;
+  const bondGain=Math.max(1, Math.round(a.bond*(1-(before/BOND_CAP)*0.7))); // diminishing near the cap
+  h.bond=clamp(before+bondGain,0,BOND_CAP);
+  h.happy=clamp((h.happy||0)+a.happy,0,100);
+  h.needs.bond=clamp((h.needs.bond||0)+Math.round(a.bond*0.5),0,100); // the bond need reflects the session too
+  if(game&&game.stats) game.stats.groundwork=(game.stats.groundwork||0)+1;
+  // scrapbook keepsake the first time a horse crosses into "Bonded"
+  let bonded=false;
+  if(before<BONDED_AT && h.bond>=BONDED_AT){ bonded=true; if(typeof captureMoment==='function') captureMoment(game,'snapshot',h,{caption:h.name+' and Fleur are truly bonded now. ❤'}); }
+  return {ok:true, activity:a, bondGain:(h.bond-before), happyGain:a.happy, bond:h.bond, energyLeft:groundworkEnergyLeft(game,h,day), bonded};
+}
 // schooling a stat develops the disciplines that rely on it (called from applyTrain)
 function developAffinityFromTraining(h,stat){ for(const d of DISCIPLINES){ const w=d.w[stat]||0; if(w>0) gainAffinity(h,d.id, w*TRAIN_AFF_GAIN); } }
 
@@ -1947,7 +1996,7 @@ function disciplineScore(h,disc,game){
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*careBonusMult(h)*careAppointmentMult(h,game)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, appointments, schooling, tack(+tiers), personality & age shape aptitude
+  return s*form*careBonusMult(h)*bondPoiseMult(h)*careAppointmentMult(h,game)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, bond-poise, appointments, schooling, tack(+tiers), personality & age shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -2391,6 +2440,7 @@ const ACHIEVEMENTS=[
   {id:'chronicler', icon:'📸', name:'Chronicler',            desc:'Fill your scrapbook with 15 memories.',        check:g=>scrapbookSize(g)>=15},
   {id:'crowdpleaser',icon:'🎪', name:'Crowd-Pleaser',        desc:'Host five Visitor Days at your ranch.',        check:g=>((g.stats&&g.stats.visitorDays)||0)>=5},
   {id:'wellkept',   icon:'🩺', name:'Well-Kept Stable',      desc:'Complete 12 farrier & vet appointments.',      check:g=>((g.stats&&g.stats.appointments)||0)>=12},
+  {id:'whisperer',  icon:'💖', name:'Horse Whisperer',       desc:'Bond with a horse until it is Devoted (90%).',  check:g=>((g.horses)||[]).some(h=>(h.bond||0)>=90)},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2491,6 +2541,7 @@ const GOALS=[
   {id:'scrap1',  desc:'Save your first memory (📸 scrapbook)',   tip:g=>scrapbookSize(g)+' saved',       done:g=>scrapbookSize(g)>=1,                                    reward:{money:400,rep:15}},
   {id:'visit1',  desc:'Host a Visitor Day (🎪 stable tour)',      tip:g=>((g.stats&&g.stats.visitorDays)||0)+'/1',done:g=>((g.stats&&g.stats.visitorDays)||0)>=1,               reward:{money:800,rep:25}},
   {id:'appt1',   desc:'Book a farrier or vet visit (🩺)',         tip:g=>((g.stats&&g.stats.appointments)||0)+' done',done:g=>((g.stats&&g.stats.appointments)||0)>=1,          reward:{money:400,rep:15}},
+  {id:'bond1',   desc:'Do groundwork with a horse (🤝 bonding)',   tip:g=>((g.stats&&g.stats.groundwork)||0)+' sessions',done:g=>((g.stats&&g.stats.groundwork)||0)>=1,           reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2516,6 +2567,7 @@ const HR = {
   SCRAPBOOK_CAP, MOMENT_KINDS, momentKindDef, addScrapbookEntry, scrapbookList, scrapbookSize, scrapbookPinned, toggleScrapbookPin, captureMoment,
   VISITOR_COOLDOWN, VISITOR_FIRST_DAY, ranchAppealScore, nextVisitorDay, visitorDaysUntil, visitorDayAvailable, previewVisitorDay, hostVisitorDay, visitorHighlight,
   APPOINTMENT_TYPES, appointmentTypeDef, appointmentFee, bookAppointment, dueForCare, horsesDueForCare, careTypeDue, resolveAppointments, activeCareBuff,
+  GROUNDWORK_ACTIVITIES, GROUNDWORK_ENERGY, BOND_CAP, BONDED_AT, groundworkActivityDef, groundworkEnergyLeft, canDoGroundwork, doGroundwork, bondTier, bondLabel, bondPoiseMult,
   FEATURED_MARKUP, featuredPrice, makeFeaturedHorse, refreshFeatured, featuredHorse, isFeatured,
   normWishlist, matchesPref, matchesWishlist, addWishlistPref, removeWishlistPref,
   marketMatches, auctionMatches, wishlistMatches,
@@ -2646,6 +2698,7 @@ function load(){
     if(!Array.isArray(G.scrapbook)) G.scrapbook=[]; // photo-mode scrapbook of memories
     if(typeof G.lastVisitorDay!=='number') G.lastVisitorDay=0; // stable-tour / visitor-day cooldown stamp
     if(!Array.isArray(G.appointments)) G.appointments=[]; // farrier & vet appointments
+    for(const h of (G.horses||[])){ if(typeof h.gwDay!=='number') h.gwDay=0; if(typeof h.gwEnergy!=='number') h.gwEnergy=0; } // groundwork energy
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -3844,14 +3897,30 @@ function openTemperament(h){
       '<div class="cbar"><i style="display:block;height:100%;width:'+pct+'%;background:'+(spec?'var(--blue)':pts>0?'var(--gold)':'#2a3320')+'"></i></div></div>'+
       '<span class="pill">'+pts+'/'+AFF_MAX+'</span></div>'; }).join('');
   const tr=traitDef(h.trait);
+  const bt=bondTier(h), energy=groundworkEnergyLeft(G,h,G.day);
+  const gwBtns=GROUNDWORK_ACTIVITIES.map(a=>{ const able=canDoGroundwork(G,h,a.id,G.day);
+    return '<button class="btn sm'+(able?'':' ghost')+'" data-gw="'+a.id+'" title="'+a.desc+'"'+(able?'':' disabled')+'>'+a.emoji+' '+a.name+' <span class="pill">⚡'+a.energy+'</span></button>'; }).join(' ');
+  const gwSection='<div class="divider"></div>'+
+    '<div class="swlabel">🤝 Groundwork with '+h.name+' <span class="pill">'+bt.emoji+' '+bt.label+'</span> <span class="pill">⚡ '+energy+'/'+GROUNDWORK_ENERGY+' today</span></div>'+
+    '<div class="cbar" style="margin:2px 0 6px"><i style="display:block;height:100%;width:'+Math.round(h.bond||0)+'%;background:#d15a8a"></i></div>'+
+    '<div class="sub" style="margin-bottom:4px">Spend time together to deepen the bond &amp; lift mood — a settled, devoted horse keeps its poise in the ring. '+(energy>0?'':'<b>Rested for today — come back tomorrow.</b>')+'</div>'+
+    '<div class="btnrow" style="flex-wrap:wrap;gap:5px">'+gwBtns+'</div>';
   modal('<h3>🧠 '+h.name+'’s Temperament</h3>'+
     '<div class="row" style="align-items:center;gap:10px;margin-bottom:6px"><div class="hface">'+horseArt(h)+'</div>'+
       '<div class="grow"><div class="hname">'+h.name+' <span class="caretier" style="color:var(--good);background:#12210d">'+ct.emoji+' '+ct.label+' · mood '+comp+'%</span></div>'+
       '<div class="hbreed">'+(tr?tr.emoji+' '+tr.name+' (inborn) · ':'')+'Bond '+Math.round(h.bond||0)+'%'+(sp?' · settled into '+(disciplineDef(sp)||{}).name:'')+'</div></div></div>'+
     '<div class="sub" style="margin-bottom:4px">Discipline affinity grows as you <b>train</b> &amp; <b>compete</b> a horse — it schools in and earns a small bonus (up to +'+Math.round(AFF_CAP*100)+'%). Settle a horse past '+SPECIALIST_AT+' to make it a Specialist.</div>'+
     '<div>'+rows+'</div>'+
+    gwSection+
     '<div class="btnrow"><button class="btn ghost" id="tmpClose" style="width:100%">Done</button></div>');
   $('tmpClose').onclick=closeModal;
+  document.querySelectorAll('[data-gw]').forEach(b=>b.onclick=()=>{
+    const r=doGroundwork(G,h,b.getAttribute('data-gw'),G.day);
+    if(!r.ok){ toast(r.why,'info'); return; }
+    burst(r.activity.emoji+'❤✨',10); playSfx(r.bonded?'goal':'tap');
+    toast(r.activity.emoji+' '+r.activity.name+' with '+h.name+' — bond +'+r.bondGain+', mood +'+r.happyGain+(r.bonded?' · ❤ now Bonded!':''),'good');
+    save(); renderHUD(); renderTab(); openTemperament(h);
+  });
 }
 // ---- Tack & equipment: per-horse equip panel ----
 function tackEffectLine(t){
