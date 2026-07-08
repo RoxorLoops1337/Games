@@ -227,6 +227,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.groundwork = 1; // satisfies the bonding/groundwork goal
   g.stats.fairsWon = 1; // satisfies the seasonal-fair goal
   g.stats.choresDone = 1; // satisfies the daily-chores goal
+  g.stats.trips = 1; // satisfies the away-trip goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -3109,6 +3110,90 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Diligent Hand needs a 7-day streak');
   g.stats.bestChoreStreak = 7;
   ok(ach.check(g), 'a 7-day streak unlocks Diligent Hand');
+}
+
+// ---- horse-trailer / away-trip expeditions (round 45) ----
+{
+  // sending validates eligibility & funds, deducts the fee once, and marks the horse away
+  const g = HR.freshGame(); g.day = 10; g.money = 5000;
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, name: 'Rae' }); g.horses.push(h);
+  const fee = HR.tripFee(g, 'clinic', h), money0 = g.money;
+  const r = HR.sendHorseOnTrip(g, 'clinic', h.id, g.day);
+  ok(r.ok && HR.horseAway(h), 'a horse can be sent on a trip and is marked away');
+  ok(g.money === money0 - fee, 'the fee is deducted once');
+  ok(h.tripBack === g.day + HR.tripTypeDef('clinic').days, 'the return day is scheduled');
+  ok(HR.sendHorseOnTrip(g, 'trek', h.id, g.day).ok === false, 'a horse already away cannot be double-sent');
+  ok(HR.sendHorseOnTrip(g, 'nope', h.id, g.day).ok === false, 'an unknown trip is rejected');
+  const poor = HR.freshGame(); poor.day = 10; poor.money = 0; const ph = HR.mkHorse({ breed: 'arabian', age: 20 }); poor.horses.push(ph);
+  ok(HR.sendHorseOnTrip(poor, 'tour', ph.id, poor.day).ok === false, 'you cannot afford a trip with no coins');
+  const foalG = HR.freshGame(); const foal = HR.mkHorse({ breed: 'arabian', age: 1 }); foalG.horses.push(foal);
+  ok(HR.canSendOnTrip(foalG, foal).ok === false, 'foals cannot travel');
+}
+{
+  // an away horse is excluded from competing / breeding / training / rent / stud (reuses the busy checks)
+  const g = HR.freshGame(); g.day = 10; g.money = 5000;
+  const mare = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20 });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20 });
+  g.horses.push(mare, stal);
+  HR.sendHorseOnTrip(g, 'clinic', mare.id, g.day);
+  ok(HR.canEnterShow(g, mare).ok === false, 'an away horse cannot compete');
+  ok(HR.canBreed(mare, stal).ok === false, 'an away mare cannot breed');
+  ok(HR.canTrain(mare, 'speed').ok === false, 'an away horse cannot train');
+  HR.sendHorseOnTrip(g, 'tour', stal.id, g.day);
+  ok(HR.canStand(stal).ok === false, 'an away stallion cannot stand at stud');
+}
+{
+  // the trip resolves on its return day via advanceDay and applies a BOUNDED reward
+  const g = HR.freshGame(); g.day = 10; g.money = 5000; g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 60, stamina: 60, temperament: 60 }); g.horses.push(h);
+  HR.sendHorseOnTrip(g, 'clinic', h.id, g.day); // returns day 14
+  const sp0 = h.speed;
+  const r = rng(1);
+  for (let d = 0; d < 5 && HR.horseAway(h); d++) HR.advanceDay(g, r);
+  ok(!HR.horseAway(h), 'the horse returns after the trip duration');
+  ok(h.speed > sp0, 'the clinic nudged a stat upward');
+  ok(h.speed - sp0 <= 3, 'clinic stat gains are capped per trip (never a fast-track to max)');
+  ok((g.stats.trips || 0) === 1, 'the completed trip is counted');
+}
+{
+  // clinic gains diminish near the cap (can’t be farmed to max)
+  const g = HR.freshGame(); g.day = 1; g.money = 99999; g.feed = 9999;
+  const lo = HR.mkHorse({ breed: 'arabian', age: 20, id: 'lo', speed: 40, stamina: 40, temperament: 40 });
+  const hi = HR.mkHorse({ breed: 'arabian', age: 20, id: 'hi', speed: 96, stamina: 96, temperament: 96 });
+  g.horses.push(lo, hi);
+  HR.sendHorseOnTrip(g, 'clinic', 'lo', g.day); HR.sendHorseOnTrip(g, 'clinic', 'hi', g.day);
+  const loSp0 = lo.speed, hiSp0 = hi.speed;
+  const r = rng(2); for (let d = 0; d < 5 && (HR.horseAway(lo) || HR.horseAway(hi)); d++) HR.advanceDay(g, r);
+  ok((lo.speed - loSp0) >= (hi.speed - hiSp0), 'a low-stat horse gains at least as much as a near-capped one');
+  ok(hi.speed <= 100, 'stats never exceed the cap');
+}
+{
+  // trek/tour pay bounded coins; the money lands and stays within the cap
+  const g = HR.freshGame(); g.day = 10; g.money = 5000; g.feed = 9999;
+  const h = HR.mkHorse({ breed: 'akhalteke', age: 20, speed: 99, stamina: 99, temperament: 99 }); g.horses.push(h);
+  const pv = HR.tripReturnPreview('tour', h);
+  ok(pv.money > 0 && pv.money <= 1200, 'the tour payout preview is bounded');
+  const money0 = g.money - HR.tripFee(g, 'tour', h);
+  HR.sendHorseOnTrip(g, 'tour', h.id, g.day);
+  const r = rng(3); for (let d = 0; d < 6 && HR.horseAway(h); d++) HR.advanceDay(g, r);
+  ok(g.money >= money0, 'the tour reward coins are credited on return');
+  ok((g.stats.tripCoins || 0) <= 1200, 'trip coins are bounded');
+}
+{
+  // determinism, migration safety, goal & achievement
+  const mk = () => { const g = HR.freshGame(); g.day = 10; g.money = 5000; g.feed = 9999; const h = HR.mkHorse({ breed: 'arabian', age: 20, id: 'fx', speed: 55, stamina: 55, temperament: 55 }); g.horses.push(h); HR.sendHorseOnTrip(g, 'clinic', 'fx', g.day); const r = rng(9); for (let d = 0; d < 5 && HR.horseAway(h); d++) HR.advanceDay(g, r); return g.horses.find(x => x.id === 'fx').speed; };
+  ok(mk() === mk(), 'trip resolution is deterministic for a fixed rng+state');
+  const h = HR.mkHorse({ breed: 'arabian', age: 20 }); delete h.tripType; delete h.tripBack;
+  ok(HR.horseAway(h) === false && HR.canSendOnTrip(HR.freshGame(), h).ok, 'a horse with no trip fields is handled safely');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'trip1');
+  ok(goal && !goal.done(g), 'the trip goal is unmet before any trip');
+  g.stats.trips = 1;
+  ok(goal.done(g), 'completing a trip satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'traveller');
+  ok(ach && !ach.check(g), 'Seasoned Traveller needs ten trips');
+  g.stats.trips = 10;
+  ok(ach.check(g), 'ten trips unlock Seasoned Traveller');
 }
 
 // ---- clamp helper ----
