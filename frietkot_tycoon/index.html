@@ -105,6 +105,7 @@
     <div class="chip" id="contest" title="Weekuitdaging">🏆 –</div>
     <div class="chip" id="campaignChip" style="display:none;color:var(--gold)" title="Actieve campagne"></div>
     <div class="chip" id="heatChip" style="display:none" title="Verdenking"></div>
+    <div class="chip" id="buurtChip" style="display:none;cursor:pointer" title="Jouw plek in de buurt">🏙️ –</div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
     <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
@@ -123,6 +124,7 @@
     <div class="tab" id="tabKeuken">🍳 Keuken</div>
     <div class="tab" id="tabFloor">🧱 Vloer</div>
     <div class="tab" id="tabStaff">🧑‍🍳 Team</div>
+    <div class="tab" id="tabBuurt">🏙️ Buurt</div>
   </div>
   <div id="sheetHost">
     <div class="sheet on" id="shopSheet"><h3>🛒 Koop &amp; plaats</h3><div id="shopList"></div></div>
@@ -131,6 +133,7 @@
     <div class="sheet" id="keukenSheet"><h3>🍳 Keuken — bedenk recepten</h3><div id="keukenBody"></div></div>
     <div class="sheet" id="floorSheet"><h3>🧱 Kies je vloer</h3><div id="floorList"></div></div>
     <div class="sheet" id="staffSheet"><h3>🧑‍🍳 Personeel</h3><div id="staffList"></div></div>
+    <div class="sheet" id="buurtSheet"><h3>🏙️ De buurt — jouw concurrentie</h3><div id="buurtBody"></div></div>
   </div>
 
   <div class="screen" id="startScreen">
@@ -301,6 +304,29 @@ var newContest=function(week){ return { id:contestFor(week).id, progress:0, done
 var RANKS=[ [0,'Buurtfrituur'],[12,'Gekend frietkot'],[30,'Frietbaron'],[60,'Stadslegende'],
   [110,'Nationale trots'],[200,'Frietkeizer'] ];
 
+// rival frituren: they open in the neighbourhood over time and split the foot traffic.
+// each has a growing appeal; your market share (your appeal vs the whole street) scales spawns.
+var RIVALS=[
+  {id:'jef',    nm:'Frituur Jef',      emoji:'🍟', week:2,  base:8,  grow:0.9},
+  {id:'bompa',  nm:'Chez Bompa',       emoji:'🥖', week:4,  base:14, grow:1.1},
+  {id:'bea',    nm:'Bij Tante Bea',    emoji:'🧇', week:7,  base:22, grow:1.3},
+  {id:'max',    nm:'Frituur Max',      emoji:'🌭', week:11, base:34, grow:1.6},
+  {id:'gouden', nm:'De Gouden Frik',   emoji:'🏆', week:16, base:50, grow:2.0},
+  {id:'palace', nm:'Snackpaleis 2000', emoji:'🛸', week:22, base:72, grow:2.5}
+];
+var rivalDef=function(id){ for(var i=0;i<RIVALS.length;i++) if(RIVALS[i].id===id) return RIVALS[i]; return null; };
+// your slice of the street's foot traffic (0..1): your appeal over everyone's
+var marketShare=function(G){ var mine=Math.max(1,computeAppeal(G)), tot=mine;
+  (G.rivals||[]).forEach(function(r){ tot+=Math.max(0,r.appeal||0); }); return mine/tot; };
+// soft traffic multiplier from the market share — even a crowded street leaves you ~55%
+var marketMul=function(G){ return 0.55+0.45*marketShare(G); };
+// full standings (you + rivals) sorted by appeal, best first
+var rivalBoard=function(G){ var b=[{ id:'you', nm:'Rudy Friet', emoji:'🍟', appeal:computeAppeal(G), you:true }];
+  (G.rivals||[]).forEach(function(r){ b.push({ id:r.id, nm:r.nm, emoji:r.emoji, appeal:Math.round(r.appeal||0), you:false }); });
+  b.sort(function(a,c){ return c.appeal-a.appeal; }); return b; };
+// your 1-based position in the street ranking
+var buurtRank=function(G){ var b=rivalBoard(G); for(var i=0;i<b.length;i++) if(b[i].you) return i+1; return 1; };
+
 /* =========================================================================
    PURE LOGIC (unit-tested)
    ========================================================================= */
@@ -470,7 +496,7 @@ var freshGame=function(){
     regulars:0, weekServed:0, goalTarget:weekGoal(1),
     dish:{ friet:{rank:1} }, devDish:'friet', devIngs:[], bought:{},
     floor:'planken', floorsOwned:{planken:true}, criticPending:false, critBest:0, prices:defaultPrices(),
-    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0 };
+    contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0, rivals:[] };
   return g;
 };
 var SAVE_KEY='ftstory_save';
@@ -479,11 +505,11 @@ var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.str
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
   floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
-  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat })); }catch(e){} };
+  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals })); }catch(e){} };
 var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
   G=freshGame();
-  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
-  if(!G.shady) G.shady={};
+  ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat','rivals'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
+  if(!G.shady) G.shady={}; if(!G.rivals) G.rivals=[];
   if(!G.contest||!contestDef(G.contest.id)) G.contest=newContest(G.week);
   if(!G.prices) G.prices=defaultPrices(); SIZES.forEach(function(z){ if(G.prices[z.id]==null) G.prices[z.id]=z.fair; });
   if(!G.crew) G.crew=[]; if(!G.crew.length && G.staff>0){ for(var ci=0;ci<G.staff;ci++) G.crew.push({name:STAFF_NAMES[ci%STAFF_NAMES.length],spdLv:1,sklLv:1}); } G.staff=G.crew.length;
@@ -507,6 +533,7 @@ var newWeek=function(){
   var prevSeason=seasonFor(G.week);
   G.week++; G.weekServed=0; G.goalTarget=weekGoal(G.week);
   G.contest=newContest(G.week); G.weekCash=0; G.weekMerges=0;    // fresh weekly challenge
+  rivalWeek();                                                                    // rivals open & grow; you climb or slip
   if((G.heat||0)>35 && Math.random() < (G.heat/170)) setTimeout(inspector,600);   // high suspicion → a raid this week
   if(G.week>=2 && !G.criticPending && Math.random()<0.4) G.criticPending=true;   // a critic may drop by this week
   var s=seasonFor(G.week); if(s!==prevSeason){ toast(s.emoji+' Het is nu <b>'+s.nm+'</b>!'); }
@@ -837,6 +864,30 @@ var inspector=function(){ var fine=Math.round(G.money*clamp((G.heat||0)/280,0.06
   bigPop('INSPECTIE! 🚨','#e5624a'); toast('🚨 <b>Voedselinspecteur!</b> Betrapt — boete '+fmt(fine)+'💶. Verdenking gereset.'); };
 var toggleShady=function(id){ var s=shadyDef(id); if(!s) return; if(!G.shady) G.shady={}; G.shady[id]=!G.shady[id];
   beep(G.shady[id]?300:520,0.06,0.04); toast((G.shady[id]?'🕶️ '+s.nm+' AAN — meer winst, meer risico.':'✅ '+s.nm+' uit.')); renderAll(); };
+// weekly rival update: open any newly-due frituur, let the street grow, announce overtakes
+var rivalWeek=function(){
+  if(!G.rivals) G.rivals=[];
+  var oldRank=buurtRank(G);
+  // open new rivals whose debut week has arrived (start near the player's current appeal so it's a real race)
+  RIVALS.forEach(function(def){ if(G.week>=def.week && !G.rivals.some(function(r){ return r.id===def.id; })){
+    var start=def.base+computeAppeal(G)*0.55;
+    G.rivals.push({ id:def.id, nm:def.nm, emoji:def.emoji, appeal:Math.round(start) });
+    toast(def.emoji+' <b>'+def.nm+'</b> opent verderop in de straat! De concurrentie is begonnen.');
+    beep(300,0.09,0.05); addShake(1.4);
+  } });
+  // every open rival keeps grinding — flat growth plus a fraction of how big the street has become
+  G.rivals.forEach(function(r){ var def=rivalDef(r.id); var g=(def?def.grow:1)*(1+G.week*0.06);
+    r.appeal=Math.max(0,(r.appeal||0)+g+rnd(0,1.4)); });
+  var newRank=buurtRank(G);
+  if(G.rivals.length){ var board=rivalBoard(G);
+    if(newRank<oldRank){ var passed=board[newRank]; // the shop now just below you
+      toast('📈 Je klom naar <b>#'+newRank+'</b> in de buurt'+(passed&&!passed.you?' — voorbij '+passed.emoji+' '+passed.nm:'')+'!');
+      confetti(); chime([620,820,1040],0.09);
+    } else if(newRank>oldRank){ var by=board[newRank-2]; // the shop now just above you
+      toast('📉 '+(by&&!by.you?by.emoji+' '+by.nm+' stak je voorbij — ':'')+'je zakte naar <b>#'+newRank+'</b>. Verbeter je frituur!');
+    }
+  }
+};
 var campaignTick=function(dt){ if(!G.campaign) return; if(G.campaign.left>0){ G.campaign.left-=dt;
     if(G.campaign.left<=0){ var c=campDef(G.campaign.id); G.campaign=null; if(c) toast(c.emoji+' Campagne afgelopen.'); syncHUD(); }
     else if(el.campaignChip){ var ac=campDef(G.campaign.id); if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } } } };
@@ -870,7 +921,7 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 
 /* ---------- UI ---------- */
 var el={};
-var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','heatChip','shopList','menuBody','resList','staffList','floorList',
+var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','heatChip','buurtChip','shopList','menuBody','resList','staffList','floorList','buurtBody',
   'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
@@ -878,6 +929,7 @@ var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money);
   if(el.contest){ var cc=G.contest&&contestDef(G.contest.id); el.contest.textContent=cc?('🏆 '+cc.tag+' '+(G.contest.done?'✓':Math.min(G.contest.progress,cc.target)+'/'+cc.target)):'🏆 –'; if(cc) el.contest.title='Weekuitdaging: '+cc.desc; }
   if(el.campaignChip){ var ac=G.campaign&&G.campaign.left>0?campDef(G.campaign.id):null; if(ac){ el.campaignChip.style.display=''; el.campaignChip.textContent=ac.emoji+' '+Math.ceil(G.campaign.left)+'s'; } else el.campaignChip.style.display='none'; }
   if(el.heatChip){ var ht=Math.round(G.heat||0); if(ht>20){ el.heatChip.style.display=''; el.heatChip.textContent='🚨 '+ht+'%'; el.heatChip.style.color=ht>60?'var(--bad)':'var(--warn)'; } else el.heatChip.style.display='none'; }
+  if(el.buurtChip){ if(G.rivals&&G.rivals.length){ var rk=buurtRank(G), rn=G.rivals.length+1; el.buurtChip.style.display=''; el.buurtChip.textContent='🏙️ #'+rk+'/'+rn; el.buurtChip.style.color=rk===1?'var(--gold)':rk<=Math.ceil(rn/2)?'var(--ink)':'var(--warn)'; } else el.buurtChip.style.display='none'; }
   if(el.goalN) el.goalN.textContent=Math.min(G.weekServed,G.goalTarget)+'/'+G.goalTarget;
   var rp=rankProgress(G.served);
   if(el.goalfill) el.goalfill.style.width=(rp.frac*100)+'%';
@@ -952,6 +1004,18 @@ var trainCrew=function(idx,stat){ if(!G.crew||!G.crew[idx]) return; var m=G.crew
   var cost=trainCost(m[key]||1); if(G.money<cost){ toast('Te weinig geld om te trainen.'); return; }
   G.money-=cost; m[key]=(m[key]||1)+1; beep(620,0.08,0.05); spawnSparks(worldW()/2,GH*TS/2,6,'#7bd66b');
   toast('🎓 <b>'+m.name+'</b> getraind → '+(stat==='skl'?'🎓 Vakmanschap':'⚡ Snelheid')+' Lv'+m[key]+'!'); renderAll(); };
+var renderBuurt=function(){ if(!el.buurtBody) return; var board=rivalBoard(G), share=Math.round(marketShare(G)*100), rank=buurtRank(G);
+  var h='<div class="s" style="margin:0 2px 9px;color:var(--ink2);font-size:11px">Andere frituren openen in de straat en pikken klanten in. Jouw <b>marktaandeel</b> bepaalt hoeveel volk er binnenkomt — bouw de <b>bekendste</b> frituur en klim naar #1.</div>';
+  h+='<div class="item" style="border-color:var(--gold)"><div class="ic">🏙️</div><div class="info"><div class="t">Jouw plek: <b>#'+rank+'</b> van '+board.length+'</div>'
+    +'<div class="s">Marktaandeel <b>'+share+'%</b> · ✨'+computeAppeal(G)+' aantrek</div></div></div>';
+  board.forEach(function(r,i){ var pct=board[0].appeal>0?Math.round(r.appeal/board[0].appeal*100):0;
+    var col=r.you?'var(--gold)':'#5a4a63';
+    h+='<div class="item"'+(r.you?' style="border-color:var(--gold);background:#241a10"':'')+'><div class="ic">'+(i===0?'👑':'#'+(i+1))+'</div>'
+      +'<div class="info"><div class="t">'+r.emoji+' '+r.nm+(r.you?' <span style="color:var(--gold)">(jij)</span>':'')+'</div>'
+      +'<div class="s">✨ '+r.appeal+' aantrek</div>'
+      +'<div style="height:6px;background:#160f1e;border-radius:5px;overflow:hidden;margin-top:4px"><i style="display:block;height:100%;width:'+pct+'%;background:'+col+'"></i></div></div></div>'; });
+  if(board.length===1) h+='<div class="s" style="margin:8px 2px;color:var(--ink2);font-size:11px">Nog geen concurrentie — geniet ervan zolang het duurt. 😏</div>';
+  el.buurtBody.innerHTML=h; };
 var renderFloors=function(){ if(!el.floorList) return; var h='';
   FLOORS.forEach(function(f){ var owned=!!(G.floorsOwned&&G.floorsOwned[f.id]), cur=(G.floor===f.id);
     h+='<div class="item"><div class="ic" style="background:url(sprites/floors/'+f.id+'.png) center/cover;font-size:0">·</div>'
@@ -987,7 +1051,7 @@ var renderMenu=function(){ if(!el.menuBody) return; if(!G.prices) G.prices=defau
   each('[data-price]',function(b){ return function(){ var p=b.getAttribute('data-price').split(':'); setPrice(p[0],parseInt(p[1],10)); }; }); };
 var setPrice=function(id,delta){ var z=sizeDef(id); if(!z) return; if(!G.prices) G.prices=defaultPrices();
   G.prices[id]=clamp(Math.round((priceOf(G,id)+delta)), Math.round(z.fair*0.5), Math.round(z.fair*2)); beep(delta>0?600:420,0.04,0.03); renderMenu(); syncHUD(); save(); };
-var renderAll=function(){ renderShop(); renderMenu(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); syncHUD(); save(); };
+var renderAll=function(){ renderShop(); renderMenu(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); renderBuurt(); syncHUD(); save(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<buyCost(G,id)){ toast('Te weinig geld.'); return; }
   G.placing=id; G.selected=null; if(el.placebar) el.placebar.classList.add('on'); toast('Tik op een lege tegel voor je <b>'+o.nm+'</b>.'); };
@@ -1140,7 +1204,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
     G.weekT+=dt; if(G.weekT>=BAL.weekLen){ G.weekT=0; newWeek(); }
     // spawns (regulars boost traffic + occasionally bring a friend)
     rushTick(dt); campaignTick(dt); heatTick(dt); var rmul=G.rush?0.4:1, ccap=G.rush?44:30, smul=1/seasonFor(G.week).traffic;
-    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval(computeAppeal(G)*valueFactor(G)+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
+    G.spawnT-=dt; if(G.spawnT<=0){ G.spawnT=spawnInterval((computeAppeal(G)*valueFactor(G)*marketMul(G))+G.regulars*0.35)*rnd(0.75,1.35)*rmul*smul;
       if(G.custs.length<ccap){ G.custs.push(makeCust());
         if((G.rush||G.regulars>3) && G.custs.length<ccap && Math.random()<(G.rush?0.5:Math.min(0.20,G.regulars*0.007))) G.custs.push(makeCust()); } }
     // the critic slips into the line as its own arrival
@@ -1157,15 +1221,17 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 };
 
 /* ---------- boot ---------- */
-var tab=function(which){ ['shop','menu','res','keuken','floor','staff'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
+var tab=function(which){ ['shop','menu','res','keuken','floor','staff','buurt'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
   refEls(); loadCounters(); loadFryers(); loadSeats(); loadCustomers(); loadFloors(); var loaded=loadSave(); if(!loaded){ G=freshGame(); applySize(); recenterCam(); } renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
-  var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor'), mt=$('tabMenu');
+  var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor'), mt=$('tabMenu'), bt=$('tabBuurt');
   if(st) st.onclick=function(){ tab('shop'); }; if(rt) rt.onclick=function(){ tab('res'); };
   if(ft) ft.onclick=function(){ tab('staff'); }; if(kt) kt.onclick=function(){ tab('keuken'); };
   if(lt) lt.onclick=function(){ tab('floor'); }; if(mt) mt.onclick=function(){ tab('menu'); };
+  if(bt) bt.onclick=function(){ tab('buurt'); };
+  if(el.buurtChip) el.buurtChip.onclick=function(){ tab('buurt'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   var mb=$('muteBtn'); if(mb){ mb.textContent=sfxOn?'🔊':'🔇'; mb.onclick=toggleSfx; }
   var mub=$('musicBtn'); if(mub){ mub.style.opacity=musicOn?'1':'0.4'; mub.onclick=toggleMusic; }
@@ -1208,6 +1274,7 @@ if(typeof globalThis!=='undefined'){
     CONTESTS:CONTESTS, contestDef:contestDef, contestFor:contestFor, newContest:newContest,
     CAMPAIGNS:CAMPAIGNS, campDef:campDef, campaignAppeal:campaignAppeal,
     SHADY:SHADY, shadyDef:shadyDef, shadyIncomeMul:shadyIncomeMul, shadyAppeal:shadyAppeal, shadyHeatRate:shadyHeatRate,
+    RIVALS:RIVALS, rivalDef:rivalDef, marketShare:marketShare, marketMul:marketMul, rivalBoard:rivalBoard, buurtRank:buurtRank,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
