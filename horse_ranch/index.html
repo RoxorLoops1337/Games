@@ -722,13 +722,39 @@ function equipTack(game,h,id){ const t=tackDef(id); if(!t) return {ok:false,why:
   const cur=tackWearer(game,id); if(cur){ tackInit(cur); for(const sl of TACK_SLOTS) if(cur.tack[sl]===id) cur.tack[sl]=null; }
   h.tack[t.slot]=id; return {ok:true,item:t,slot:t.slot}; }
 function unequipTack(game,h,slot){ tackInit(h); const id=h.tack[slot]; h.tack[slot]=null; return {ok:true,id}; }
-// small, capped bonus accessors
-function tackShowMult(h){ let s=0; for(const t of equippedTack(h)) s+=(t.show||0); return 1+Math.min(TACK_SHOW_CAP,s); }
-function tackDiscMult(h,discId){ let m=1; for(const t of equippedTack(h)) if(t.disc&&t.disc.id===discId) m*=(1+t.disc.mult); return m; }
+// ---- Tack crafting / upgrade tiers (Standard → Fine → Masterwork) ----
+// Owned gear can be upgraded through tiers; each tier lifts that item's small show/disc
+// bonus a little (still under the hard caps). Tier is stored per owned item on the game.
+const TACK_DISC_CAP=0.18; // a single discipline's tack bonus is capped at +18%
+const TACK_TIERS=[
+  {name:'Standard',   mark:'',   mult:1.00, costMul:0},
+  {name:'Fine',       mark:'✦',  mult:1.40, costMul:1.5},
+  {name:'Masterwork', mark:'✦✦', mult:1.80, costMul:2.6},
+];
+const TACK_MAX_TIER=TACK_TIERS.length-1;
+function tackUpgradable(id){ const t=tackDef(id); return !!t && !!(t.show||t.disc); } // only performance gear tiers up
+function tackTier(game,id){ const t=(game&&game.tack&&game.tack.tiers)||{}; const v=t[id]; return (typeof v==='number'&&v>0)?Math.min(Math.floor(v),TACK_MAX_TIER):0; }
+function tackTierMult(game,id){ return TACK_TIERS[tackTier(game,id)].mult; }
+function tackTierName(game,id){ return TACK_TIERS[tackTier(game,id)].name; }
+function tackTierMark(game,id){ return TACK_TIERS[tackTier(game,id)].mark; }
+function upgradeTackCost(game,id){ const t=tackDef(id); if(!t) return 0; const next=tackTier(game,id)+1; if(next>TACK_MAX_TIER) return 0; return Math.round(t.cost*TACK_TIERS[next].costMul); }
+function canUpgradeTack(game,id){ return tackUpgradable(id) && hasTack(game,id) && tackTier(game,id)<TACK_MAX_TIER; }
+function upgradeTack(game,id){
+  if(!tackUpgradable(id)) return {ok:false,why:'This item can’t be upgraded.'};
+  if(!hasTack(game,id)) return {ok:false,why:'You don’t own that yet.'};
+  if(tackTier(game,id)>=TACK_MAX_TIER) return {ok:false,why:'Already Masterwork.'};
+  const cost=upgradeTackCost(game,id); if((game.money||0)<cost) return {ok:false,why:'Not enough coins.'};
+  if(!game.tack) game.tack={owned:[]}; if(!game.tack.tiers||typeof game.tack.tiers!=='object') game.tack.tiers={};
+  game.money-=cost; game.tack.tiers[id]=tackTier(game,id)+1;
+  return {ok:true, tier:game.tack.tiers[id], name:TACK_TIERS[game.tack.tiers[id]].name, cost}; }
+
+// small, capped bonus accessors — pass `game` to include per-item upgrade tiers
+function tackShowMult(h,game){ let s=0; for(const t of equippedTack(h)) s+=(t.show||0)*(game?tackTierMult(game,t.id):1); return 1+Math.min(TACK_SHOW_CAP,s); }
+function tackDiscMult(h,discId,game){ let s=0; for(const t of equippedTack(h)) if(t.disc&&t.disc.id===discId) s+=t.disc.mult*(game?tackTierMult(game,t.id):1); return 1+Math.min(TACK_DISC_CAP,s); }
 function tackGroomDecayMult(h){ let m=1; for(const t of equippedTack(h)) if(t.groomDecay) m=Math.min(m,t.groomDecay); return m; }
 function tackStressCut(h){ let c=0; for(const t of equippedTack(h)) c+=(t.stressCut||0); return c; }
 // total show multiplier a horse's tack gives in a discipline (for display)
-function tackShowMultFor(h,discId){ return tackShowMult(h)*tackDiscMult(h,discId); }
+function tackShowMultFor(h,discId,game){ return tackShowMult(h,game)*tackDiscMult(h,discId,game); }
 
 function mkHorse(o){
   o=o||{}; const rng=o.rng||Math.random;
@@ -1160,7 +1186,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[]}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -1478,12 +1504,12 @@ function composureTier(h){ const c=composure(h);
 // schooling a stat develops the disciplines that rely on it (called from applyTrain)
 function developAffinityFromTraining(h,stat){ for(const d of DISCIPLINES){ const w=d.w[stat]||0; if(w>0) gainAffinity(h,d.id, w*TRAIN_AFF_GAIN); } }
 
-function disciplineScore(h,disc){
+function disciplineScore(h,disc,game){
   const w=disc.w;
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*careBonusMult(h)*affinityMult(h,disc.id)*tackShowMult(h)*tackDiscMult(h,disc.id)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, schooling, tack, personality & age shape aptitude
+  return s*form*careBonusMult(h)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, schooling, tack(+tiers), personality & age shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -1504,10 +1530,10 @@ function fenceScore(pos){ const d=Math.abs(clamp(pos,0,1)-0.5)/0.5; return clamp
 // map a run performance 0..1 to a bounded score multiplier (0.5 = neutral 1.0)
 function showPerfMult(perf){ return 1 + (clamp(perf,0,1)*2-1)*SHOW_PERF_CAP; }
 
-function runCompetition(h,disc,tier,rng,perf){
+function runCompetition(h,disc,tier,rng,perf,game){
   rng=rng||Math.random;
   const pm=(perf==null)?1:showPerfMult(perf); // no minigame → neutral (backward-compatible)
-  const my=disciplineScore(h,disc)*(0.9+0.2*rng())*pm + (h.wins||0)*1.5; // experience edge
+  const my=disciplineScore(h,disc,game)*(0.9+0.2*rng())*pm + (h.wins||0)*1.5; // experience edge
   const N=5; let better=0;
   for(let i=0;i<N;i++){ const opp=tier.fieldAvg + (rng()*2-1)*tier.fieldSpread; if(opp>my) better++; }
   const place = better===0?1 : better===1?2 : better===2?3 : 4;
@@ -1515,7 +1541,7 @@ function runCompetition(h,disc,tier,rng,perf){
 }
 // apply a competition result to game+horse (mutates), returns the result
 function applyCompetition(game,h,disc,tier,rng,perf){
-  const res=runCompetition(h,disc,tier,rng,perf);
+  const res=runCompetition(h,disc,tier,rng,perf,game);
   if(perf!=null){ game.stats.showGamesPlayed=(game.stats.showGamesPlayed||0)+1; game.stats.bestShowPerf=Math.max(game.stats.bestShowPerf||0, clamp(perf,0,1));
     if(perf>=0.9) game.stats.clearRounds=(game.stats.clearRounds||0)+1; }
   res.prize=Math.round(res.prize*seasonShowPrizeMul(game.day)*festivalMod(game.day,'showPrizeMul',1)*legacyBonus(game.legacy,'showPrize')); // summer + festivals + legacy pay more
@@ -1900,6 +1926,7 @@ const ACHIEVEMENTS=[
   {id:'seasonlord', icon:'🏆', name:'Season Champion',       desc:'Win three Seasonal Championships.',            check:g=>((g.stats&&g.stats.seasonTitles)||0)>=3},
   {id:'patron',     icon:'⭐', name:'Discerning Patron',     desc:'Buy a Featured horse from the market.',        check:g=>((g.stats&&g.stats.featuredBought)||0)>=1},
   {id:'weathered',  icon:'🛡️', name:'Weathered the Storm',   desc:'Come through five seasonal disasters.',         check:g=>((g.stats&&g.stats.disasters)||0)>=5},
+  {id:'masterwork', icon:'✦', name:'Masterwork',            desc:'Upgrade a piece of tack to Masterwork.',       check:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=TACK_MAX_TIER)},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -1991,6 +2018,7 @@ const GOALS=[
   {id:'champ1',  desc:'Win a Seasonal Championship',          tip:g=>((g.stats&&g.stats.seasonTitles)||0)+'/1',done:g=>((g.stats&&g.stats.seasonTitles)||0)>=1,               reward:{money:2000,rep:50}},
   {id:'wish1',   desc:'Add a horse to your wishlist (⭐)',     tip:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)+' prefs',done:g=>(((g.wishlist&&g.wishlist.prefs)||[]).length)>=1,   reward:{money:300,rep:10}},
   {id:'insure1', desc:'Take out an insurance policy (🛡️)',     tip:g=>(insuranceList(g).length)+' held',done:g=>insuranceList(g).length>=1,                                       reward:{money:400,rep:10}},
+  {id:'upgrade1',desc:'Upgrade a piece of tack (✦)',           tip:g=>'',                              done:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=1),reward:{money:700,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2065,6 +2093,8 @@ const HR = {
   TACK, TACK_SLOTS, TACK_SLOT_LABEL, TACK_SHOW_CAP, tackDef, tackInit, equippedTack, equippedIn,
   ownedTack, hasTack, tackUnlocked, tackAffordable, buyTack, tackWearer, equipTack, unequipTack,
   tackShowMult, tackDiscMult, tackGroomDecayMult, tackStressCut, tackShowMultFor,
+  TACK_TIERS, TACK_MAX_TIER, TACK_DISC_CAP, tackUpgradable, tackTier, tackTierMult, tackTierName,
+  tackTierMark, upgradeTackCost, canUpgradeTack, upgradeTack,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
 
@@ -2131,6 +2161,8 @@ function load(){
     if(G.lastRank==null){ G.lastRank=playerRank(G); G.prevRank=G.lastRank; G.bestRank=G.lastRank; } // regional standings history
     if(!G.tack||!Array.isArray(G.tack.owned)) G.tack={owned:[]}; // tack & equipment inventory
     G.tack.owned=G.tack.owned.filter(id=>!!tackDef(id)).filter((v,i,a)=>a.indexOf(v)===i);
+    if(!G.tack.tiers||typeof G.tack.tiers!=='object') G.tack.tiers={}; // crafting/upgrade tiers (pre-tier tack → Standard)
+    Object.keys(G.tack.tiers).forEach(id=>{ if(!tackDef(id)) delete G.tack.tiers[id]; else G.tack.tiers[id]=Math.max(0,Math.min(TACK_MAX_TIER,Math.floor(G.tack.tiers[id])||0)); });
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -2931,7 +2963,7 @@ function openShowPickDiscipline(tier){ // tier chosen first → pick discipline,
 function openShowPickDisciplineFor(h,tier){ // horse+tier known → pick discipline → run
   const list=todayDisciplines(); if(!list.length){ toast('No competitions scheduled today.','info'); return; }
   let html='<h3>🏆 '+h.name+' · '+tier.name+'</h3><div class="msg">'+WEEKDAY_FULL[weekdayIndex(G.day)]+'’s events. Entry fee 🪙'+tier.fee+'.</div><div class="optlist">';
-  list.forEach(d=>{ const sc=Math.round(disciplineScore(h,d)); html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
+  list.forEach(d=>{ const sc=Math.round(disciplineScore(h,d,G)); html+='<div class="opt" data-disc="'+d.id+'"><span style="font-size:22px">'+d.emoji+'</span>'+
     '<div class="grow"><div class="hname">'+d.name+'</div><div class="hbreed">'+d.desc+'</div></div><div class="val">'+sc+'</div></div>'; });
   html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
   const sh=modal(html); $('xDone').onclick=closeModal;
@@ -2941,10 +2973,10 @@ function openShowPickHorse(tier,disc){
   const cands=G.horses.filter(h=>canEnterShow(G,h).ok);
   if(!cands.length){ toast('No eligible horses (need a rested adult).','info'); return; }
   let html='<h3>'+disc.emoji+' '+disc.name+' · '+tier.name+'</h3><div class="msg">Pick your horse. Predicted form shown.</div><div class="optlist">';
-  cands.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{
+  cands.slice().sort((a,b)=>disciplineScore(b,disc,G)-disciplineScore(a,disc,G)).forEach(h=>{
     html+='<div class="opt" data-h="'+h.id+'"><div class="hface">'+horseArt(h)+'</div>'+
     '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div>'+
-    '<div class="val">'+Math.round(disciplineScore(h,disc))+'</div></div>'; });
+    '<div class="val">'+Math.round(disciplineScore(h,disc,G))+'</div></div>'; });
   html+='</div><div class="btnrow"><button class="btn ghost" id="xDone" style="width:100%">Cancel</button></div>';
   const sh=modal(html); $('xDone').onclick=closeModal;
   sh.querySelectorAll('[data-h]').forEach(o=>o.onclick=()=>{ const h=G.horses.find(x=>x.id===o.getAttribute('data-h')); doEnterShow(h,disc,tier); });
@@ -3056,26 +3088,40 @@ function renderEstate(){
     s.appendChild(row);
   });
 
-  // ---- Tack Room (equipment shop) ----
+  // ---- Tack Room (equipment shop + crafting) ----
   s.appendChild(el('h2','head','🧰 Tack Room'));
-  s.appendChild(el('div','sub','Buy saddles, bridles &amp; accessories, then fit them to a horse from its 🎽 Tack panel. Each item boosts a horse a little in shows or care — small, but it adds up.'));
+  s.appendChild(el('div','sub','Buy saddles, bridles &amp; accessories, then fit them to a horse from its 🎽 Tack panel. Upgrade performance gear ✦ Standard → Fine → ✦✦ Masterwork for a bigger (still capped) bonus.'));
   TACK_SLOTS.forEach(sl=>{
     const items=TACK.filter(t=>t.slot===sl); if(!items.length) return;
     s.appendChild(el('div','slotlabel',TACK_SLOT_LABEL[sl]+'s'));
     items.forEach(t=>{
       const has=hasTack(G,t.id), unlocked=tackUnlocked(G,t.id), afford=tackAffordable(G,t.id);
       const wearer=has?tackWearer(G,t.id):null;
+      const tier=tackTier(G,t.id), mark=tackTierMark(G,t.id);
       const right = has
         ? (wearer?'<span class="pill" style="color:var(--good)">'+wearer.emoji+' '+wearer.name+'</span>':'<span class="pill">In tack room</span>')
         : !unlocked ? '<span class="pill">🔒 ⭐'+t.repReq+'</span>'
         : '<button class="btn sm" data-buytack="'+t.id+'" '+(afford?'':'disabled')+'>🪙'+fmt(t.cost)+'</button>';
       const c=el('div','tackitem'+((!has&&!unlocked)?' locked':''));
-      c.innerHTML='<div class="te">'+t.emoji+'</div><div class="grow"><div class="hname" style="font-size:13px">'+t.name+(has?' <span class="pill" style="color:var(--good)">Owned</span>':'')+'</div>'+
+      c.innerHTML='<div class="te">'+t.emoji+'</div><div class="grow"><div class="hname" style="font-size:13px">'+t.name+(mark?' <span class="pill" style="color:var(--gold)">'+mark+' '+tackTierName(G,t.id)+'</span>':(has?' <span class="pill" style="color:var(--good)">Owned</span>':''))+'</div>'+
         '<div class="hbreed">'+t.desc+'</div></div>'+right;
+      s.appendChild(c);
       const bb=c.querySelector('[data-buytack]');
       if(bb) bb.onclick=()=>{ const r=buyTack(G,t.id); if(!r.ok){ toast(r.why,'bad'); return; }
         coinPop(-r.item.cost); burst(r.item.emoji+'✨',10); playSfx('coin'); toast('🧰 Bought '+r.item.name+'! Fit it from a horse’s 🎽 Tack panel.','good'); refresh(); };
-      s.appendChild(c);
+      // upgrade row for owned performance gear
+      if(has && tackUpgradable(t.id)){
+        const up=el('div','tackitem'); up.style.paddingLeft='36px'; up.style.opacity='.95';
+        if(tier>=TACK_MAX_TIER){ up.innerHTML='<div class="grow"><div class="hbreed">✦✦ Masterwork — the finest craft.</div></div><span class="pill" style="color:var(--gold)">Maxed</span>'; }
+        else { const cost=upgradeTackCost(G,t.id), nextName=TACK_TIERS[tier+1].name;
+          const eff = t.show?('show '+Math.round(t.show*tackTierMult(G,t.id)*100)+'% → '+Math.round(t.show*TACK_TIERS[tier+1].mult*100)+'%')
+            : t.disc?((disciplineDef(t.disc.id)||{name:''}).name+' '+Math.round(t.disc.mult*tackTierMult(G,t.id)*100)+'% → '+Math.round(t.disc.mult*TACK_TIERS[tier+1].mult*100)+'%'):'';
+          up.innerHTML='<div class="grow"><div class="hbreed">Craft to '+nextName+' — '+eff+'</div></div><button class="btn sm" data-uptack="'+t.id+'" '+(G.money<cost?'disabled':'')+'>🔨 🪙'+fmt(cost)+'</button>';
+          const ub=up.querySelector('[data-uptack]'); if(ub) ub.onclick=()=>{ const r=upgradeTack(G,t.id); if(!r.ok){ toast(r.why,'bad'); return; }
+            coinPop(-r.cost); burst('🔨✦✨',12); playSfx('goal'); toast('🔨 '+t.name+' upgraded to '+r.name+'!','good'); refresh(); };
+        }
+        s.appendChild(up);
+      }
     });
   });
 
@@ -3252,12 +3298,12 @@ function openTemperament(h){
 }
 // ---- Tack & equipment: per-horse equip panel ----
 function tackEffectLine(t){
-  const bits=[];
-  if(t.show) bits.push('+'+Math.round(t.show*100)+'% show');
-  if(t.disc){ const d=disciplineDef(t.disc.id); bits.push('+'+Math.round(t.disc.mult*100)+'% '+(d?d.name:t.disc.id)); }
+  const bits=[]; const tm=tackTierMult(G,t.id); // reflect the item's current upgrade tier
+  if(t.show) bits.push('+'+Math.round(t.show*tm*100)+'% show');
+  if(t.disc){ const d=disciplineDef(t.disc.id); bits.push('+'+Math.round(t.disc.mult*tm*100)+'% '+(d?d.name:t.disc.id)); }
   if(t.groomDecay) bits.push('grooming lasts longer');
   if(t.stressCut) bits.push('eases weather needs');
-  return bits.join(' · ');
+  const mark=tackTierMark(G,t.id); return (mark?mark+' ':'')+bits.join(' · ');
 }
 function openTack(h){
   const reopen=()=>{ save(); renderHUD(); renderTab(); openTack(h); };
@@ -3588,8 +3634,8 @@ function showEvent(ev){
     const todays=DISCIPLINES.filter(d=>disciplineOpenToday(G.day,d.id)); if(!todays.length) return;
     const tier=highestTier(G); const disc=todays[Math.floor(Math.random()*todays.length)];
     let html='<h3>'+disc.emoji+' Show Invitation!</h3><div class="msg">You’re invited to the <b>'+tier.name+'</b> '+disc.name+' event — <b>entry waived</b>! Pick a horse to compete.</div><div class="optlist">';
-    eligible.slice().sort((a,b)=>disciplineScore(b,disc)-disciplineScore(a,disc)).forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+horseArt(h)+'</div>'+
-      '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div><div class="val">'+Math.round(disciplineScore(h,disc))+'</div></div>'; });
+    eligible.slice().sort((a,b)=>disciplineScore(b,disc,G)-disciplineScore(a,disc,G)).forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+horseArt(h)+'</div>'+
+      '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · '+coatOf(h).name+'</div></div><div class="val">'+Math.round(disciplineScore(h,disc,G))+'</div></div>'; });
     html+='</div><div class="btnrow"><button class="btn ghost" id="evNo">Skip</button></div>';
     const sh=modal(html,{center:true});
     $('evNo').onclick=closeModal;

@@ -215,6 +215,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.seasonTitles = 1; // satisfies the championship goal
   HR.addWishlistPref(g, { breed: 'arabian' }); // satisfies the wishlist goal
   g.insurance = ['vet']; // satisfies the insurance goal
+  g.tack.tiers = { saddle_show: 1 }; // satisfies the tack-upgrade goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1934,6 +1935,79 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'weathered');
   const g2 = HR.freshGame(); g2.stats.disasters = 5;
   ok(ach && ach.check(g2) && !ach.check(g), 'weathering five disasters unlocks the achievement');
+}
+
+// ---- tack crafting / upgrade tiers (round 32) ----
+{
+  // tier config + which items are upgradable
+  ok(Array.isArray(HR.TACK_TIERS) && HR.TACK_TIERS.length >= 2 && HR.TACK_MAX_TIER === HR.TACK_TIERS.length - 1, 'a tier ladder exists');
+  ok(HR.TACK_TIERS[0].mult === 1 && HR.TACK_TIERS[HR.TACK_MAX_TIER].mult > 1, 'Standard is neutral, top tier is stronger');
+  const showItem = HR.TACK.find(t => t.show), utilItem = HR.TACK.find(t => t.groomDecay && !t.show && !t.disc);
+  ok(HR.tackUpgradable(showItem.id), 'performance gear is upgradable');
+  ok(utilItem && !HR.tackUpgradable(utilItem.id), 'pure-utility gear is not upgradable');
+}
+{
+  // upgrading raises the tier, costs coins, and can't exceed Masterwork
+  const g = HR.freshGame(); g.money = 100000; g.rep = 9999;
+  const id = HR.TACK.find(t => t.show).id;
+  HR.buyTack(g, id);
+  ok(HR.tackTier(g, id) === 0 && HR.tackTierMult(g, id) === 1, 'a fresh item is Standard');
+  ok(!HR.upgradeTack(g, 'nope').ok, 'cannot upgrade an unknown item');
+  const cost1 = HR.upgradeTackCost(g, id), m0 = g.money;
+  const r1 = HR.upgradeTack(g, id);
+  ok(r1.ok && HR.tackTier(g, id) === 1 && g.money === m0 - cost1, 'upgrading steps up a tier and spends coins');
+  ok(HR.tackTierMult(g, id) > 1, 'the tier multiplier grows');
+  const cost2 = HR.upgradeTackCost(g, id);
+  ok(cost2 > cost1, 'each tier costs more than the last');
+  HR.upgradeTack(g, id); // → Masterwork
+  ok(HR.tackTier(g, id) === HR.TACK_MAX_TIER, 'reaches the top tier');
+  ok(!HR.canUpgradeTack(g, id) && !HR.upgradeTack(g, id).ok && HR.upgradeTackCost(g, id) === 0, 'cannot upgrade beyond Masterwork');
+  // affordability + ownership guards
+  const poor = HR.freshGame(); poor.money = 0; poor.rep = 9999; HR.buyTack(poor, id);
+  ok(!HR.upgradeTack(poor, id).ok, 'cannot upgrade what you cannot afford');
+  const notowned = HR.freshGame(); notowned.money = 100000;
+  ok(!HR.upgradeTack(notowned, id).ok, 'cannot upgrade tack you do not own');
+}
+{
+  // the upgraded bonus folds into disciplineScore but stays under the cap
+  const g = HR.freshGame(); g.money = 500000; g.rep = 9999;
+  const disc = HR.disciplineDef('race');
+  const base = HR.mkHorse({ breed: 'thoroughbred', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  const kitted = HR.mkHorse({ breed: 'thoroughbred', age: 12, speed: 80, stamina: 80, temperament: 80, health: 100, happy: 100 });
+  kitted.trait = base.trait;
+  for (const nid of HR.NEED_IDS) { base.needs[nid] = 100; kitted.needs[nid] = 100; }
+  g.horses = [base, kitted];
+  const saddle = HR.TACK.find(t => t.slot === 'saddle' && t.show).id;
+  HR.buyTack(g, saddle); HR.equipTack(g, kitted, saddle);
+  const stdScore = HR.disciplineScore(kitted, disc, g);
+  HR.upgradeTack(g, saddle); HR.upgradeTack(g, saddle); // → Masterwork
+  const mwScore = HR.disciplineScore(kitted, disc, g);
+  ok(mwScore > stdScore, 'a Masterwork saddle out-performs the same Standard saddle');
+  ok(HR.tackShowMult(kitted, g) <= 1 + HR.TACK_SHOW_CAP + 1e-9, 'the total show bonus is still capped');
+  // a discipline item is likewise capped
+  const halter = HR.TACK.find(t => t.disc);
+  const hh = HR.mkHorse({ breed: 'arabian', age: 12 }); g.horses.push(hh);
+  HR.buyTack(g, halter.id); HR.equipTack(g, hh, halter.id); HR.upgradeTack(g, halter.id); HR.upgradeTack(g, halter.id);
+  ok(HR.tackDiscMult(hh, halter.disc.id, g) <= 1 + HR.TACK_DISC_CAP + 1e-9, 'a discipline tack bonus is capped');
+  // omitting game → base tier (backward compatible with existing callers)
+  ok(HR.tackShowMult(kitted) <= HR.tackShowMult(kitted, g) + 1e-9, 'no-game tackShowMult uses the base tier');
+}
+{
+  // save migration + goal/achievement
+  const legacy = HR.freshGame(); legacy.tack = { owned: [] }; // pre-tier tack (no tiers map)
+  legacy.tack.tiers = legacy.tack.tiers || {}; // mirrors the load guard
+  ok(typeof legacy.tack.tiers === 'object', 'migration gives a tiers map');
+  ok(HR.tackTier(legacy, 'saddle_show') === 0, 'pre-tier tack reads as Standard');
+  const g = HR.freshGame(); g.money = 100000; g.rep = 9999;
+  const id = HR.TACK.find(t => t.show).id; HR.buyTack(g, id);
+  const goal = HR.GOALS.find(x => x.id === 'upgrade1');
+  ok(goal && !goal.done(g), 'the upgrade goal is unmet before upgrading');
+  HR.upgradeTack(g, id);
+  ok(goal.done(g), 'the upgrade goal completes after one upgrade');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'masterwork');
+  ok(ach && !ach.check(g), 'Masterwork achievement not yet earned at Fine');
+  HR.upgradeTack(g, id);
+  ok(ach.check(g), 'reaching Masterwork unlocks the achievement');
 }
 
 // ---- clamp helper ----
