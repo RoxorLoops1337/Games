@@ -897,6 +897,47 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(sawOver, 'a great horse can fetch above market at auction');
 }
 
+// ---- economy balance (round 18) — lock in the intended relationships ----
+{
+  // buy > sell spread always holds (you can't flip a horse for profit at market)
+  for (const breed of ['shetland', 'quarter', 'friesian', 'akhalteke']) {
+    const h = HR.mkHorse({ breed, age: 20, health: 100, happy: 100 });
+    ok(HR.buyPrice(h) > HR.valueOf(h) && HR.sellQuote(h) < HR.valueOf(h) && HR.buyPrice(h) > HR.sellQuote(h), 'buy>value>sell for ' + breed);
+  }
+}
+{
+  // passive rep-scaled streams PLATEAU (capped) instead of running away
+  const canteenAt = rep => HR.canteenIncome({ canteen: { level: 5 }, rep, horses: [], teachers: [] });
+  ok(canteenAt(4000) === canteenAt(1000000), 'canteen income plateaus past the reputation cap');
+  ok(canteenAt(0) < canteenAt(4000), 'but reputation still helps up to the cap');
+  ok(HR.boardRatePerStall({ stables: [{ level: 3 }], rep: 1000000 }) === HR.boardRatePerStall({ stables: [{ level: 3 }], rep: 100000 }), 'boarding rate plateaus');
+  ok(HR.lessonFee({ rep: 1000000 }) === HR.lessonFee({ rep: 200000 }), 'lesson fee plateaus');
+  // and every single passive stream/day stays well under a top-tier show win (4000)
+  ok(canteenAt(1000000) < 4000, 'even a maxed canteen earns less per day than a Grand Prix win');
+}
+{
+  // stud is a supplement, not a jackpot: one great stallion earns a bounded daily sum...
+  const g = HR.freshGame(); g.rep = 5000; g.day = 30; // non-spring
+  const champ = HR.mkHorse({ breed: 'friesian', sex: 'stallion', age: 20, speed: 92, stamina: 88, temperament: 88, wins: 4, coat: { name: 'Cremello', tier: 2 }, generation: 4, atStud: true });
+  ok(HR.studIncomeFor(g, champ) < 2000, 'a top stallion at stud earns a bounded amount per day');
+  // ...and stacking stallions gives DIMINISHING returns (limited visiting mares)
+  const one = HR.freshGame(); one.rep = 5000; one.day = 30;
+  const three = HR.freshGame(); three.rep = 5000; three.day = 30;
+  const mk = () => HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, speed: 85, stamina: 90, temperament: 80, wins: 2, atStud: true });
+  one.horses.push(mk());
+  const a = mk(), b = mk(), c = mk(); three.horses.push(a, b, c);
+  ok(HR.studIncome(three) < 3 * HR.studIncome(one), 'three at-stud stallions earn less than 3× one (diminishing)');
+  ok(HR.studIncome(three) > HR.studIncome(one), 'but more stallions still earn more overall');
+  ok(HR.studDemand({ rep: 1000000, day: 30 }, mk()) <= 2.0, 'visiting-mare demand is capped');
+}
+{
+  // training has diminishing returns: a nearly-maxed stat gains less and costs more
+  const lo = HR.mkHorse({ breed: 'quarter', age: 20, speed: 45 });
+  const hi = HR.mkHorse({ breed: 'quarter', age: 20, speed: HR.statCap({ breed: 'quarter' }, 'speed') - 2 });
+  ok(HR.trainGain(lo, 'speed') > HR.trainGain(hi, 'speed'), 'training a low stat gains more than a near-maxed one');
+  ok(HR.trainCost(hi, 'speed') > HR.trainCost(lo, 'speed'), 'training a high stat costs more');
+}
+
 // ---- clamp helper ----
 ok(HR.clamp(150, 0, 100) === 100 && HR.clamp(-5, 0, 100) === 0 && HR.clamp(50, 0, 100) === 50, 'clamp bounds values');
 
