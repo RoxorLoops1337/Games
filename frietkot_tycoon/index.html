@@ -68,6 +68,25 @@
   .screen p{margin:0;color:var(--ink);font-size:15px;max-width:330px;line-height:1.5}
   .startbtn{background:linear-gradient(#ffd447,#e8a63b);color:#2a1c05;border:none;border-radius:12px;font-weight:900;font-size:18px;padding:15px 34px;box-shadow:0 5px 0 #0006;cursor:pointer}
   .startbtn:active{transform:translateY(3px);box-shadow:0 2px 0 #0006}
+  /* --- city map (empire) --- */
+  #mapArea{position:relative;width:100%;max-width:360px;aspect-ratio:1/1;border-radius:16px;border:2px solid #0d0a12;
+    background:linear-gradient(135deg,#26343a,#1a2430);box-shadow:inset 0 0 40px #0009;overflow:hidden}
+  #mapArea::before{content:"";position:absolute;inset:0;opacity:.5;
+    background:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);background-size:28px 28px}
+  #mapArea .river{position:absolute;left:-5%;top:44%;width:110%;height:15%;background:#2f6d86aa;opacity:.55;transform:rotate(-8deg);border-radius:40px;filter:blur(1px)}
+  .lot{position:absolute;transform:translate(-50%,-50%);width:96px;text-align:center;cursor:pointer}
+  .lotpin{width:44px;height:44px;margin:0 auto 3px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:23px;
+    border:2px solid #0d0a12;box-shadow:0 3px 8px #0007}
+  .lot.own .lotpin{background:linear-gradient(#ffd447,#e8a63b)}
+  .lot.active .lotpin{box-shadow:0 0 0 3px var(--good),0 3px 8px #0007;animation:lotpulse 1.4s ease-in-out infinite}
+  .lot.empty .lotpin{background:#2b2033;border-style:dashed;border-color:#5a4a63;color:#8a7a93}
+  @keyframes lotpulse{0%,100%{box-shadow:0 0 0 3px var(--good),0 3px 8px #0007}50%{box-shadow:0 0 0 6px #7bd66b55,0 3px 8px #0007}}
+  .lotnm{font-size:11px;font-weight:800;color:var(--ink);text-shadow:0 1px 2px #000;line-height:1.15}
+  .lottill{font-size:10.5px;font-weight:800;color:var(--gold);text-shadow:0 1px 2px #000}
+  .lotidle{font-size:9.5px;font-weight:700;color:var(--good);text-shadow:0 1px 2px #000}
+  .lotcost{font-size:10px;font-weight:800;color:var(--ink2);text-shadow:0 1px 2px #000}
+  #mapTotal{font-size:14px;font-weight:800;color:var(--ink)}
+  #mapTotal b{color:var(--gold)}
   #toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#000d;color:var(--ink);padding:9px 14px;border-radius:9px;font-size:13px;border:1px solid #ffffff20;max-width:90%;text-align:center;opacity:0;pointer-events:none;transition:opacity .25s;z-index:12}
   #toast.show{opacity:1} #toast b{color:var(--gold)}
   /* --- kitchen: invent recipes --- */
@@ -107,6 +126,7 @@
     <div class="chip" id="heatChip" style="display:none" title="Verdenking"></div>
     <div class="chip" id="buurtChip" style="display:none;cursor:pointer" title="Jouw plek in de buurt">🏙️ –</div>
     <div class="chip" id="eventChip" style="display:none;color:var(--gold)" title="Actuele gebeurtenis"></div>
+    <div class="chip" id="mapBtn" style="cursor:pointer" title="Stadskaart — jouw frituren">🗺️</div>
     <div class="spacer"></div>
     <div id="rankChip">Buurtfrituur</div>
     <div class="chip" id="helpBtn" style="cursor:pointer" title="Uitleg">❓</div>
@@ -141,6 +161,12 @@
     <h1>RUDY FRIET<small>F R I T U U R   S T O R Y</small></h1>
     <p>Bouw je frituur uit: koop friteuzen, toog, staantafels en decor, neem personeel aan en <b>onderzoek</b> nieuwe snacks &amp; sauzen. Trek meer &amp; nieuwe klanten aan en word de <b>bekendste frituur</b> van 't land.</p>
     <button class="startbtn" id="startBtn">▶ Open je frietkot</button>
+  </div>
+  <div class="screen hidden" id="mapScreen">
+    <h1 style="font-size:24px">🗺️ Jouw stad<small>F R I T U U R - I M P E R I U M</small></h1>
+    <div id="mapArea"></div>
+    <div id="mapTotal"></div>
+    <button class="startbtn" id="mapClose" style="font-size:15px;padding:12px 26px">▶ Verder bakken</button>
   </div>
   <div id="tips" class="tips"><div class="tipcard">
     <div class="tipstep" id="tipStep"></div>
@@ -348,6 +374,27 @@ var eventMod=function(G){ return (G.timeline&&G.timeline.mod)||null; };
 var eventTrafficMul=function(G){ var m=eventMod(G); return (m&&m.traffic)||1; };
 var eventSpendMul=function(G){ var m=eventMod(G); return (m&&m.spend)||1; };
 
+// ========================================================================
+//  EMPIRE: multiple shops across the city map (Stage 1 of the nested map)
+//  Each shop is a full save-blob parked on a city lot. You run one at a
+//  time; the others earn a modest passive income while you're away.
+// ========================================================================
+var CITY_LOTS=[
+  {id:'markt',  nm:'Grote Markt',   sub:'Het bruisende hart',     x:31, y:32},
+  {id:'station',nm:'Stationsplein',  sub:'Pendelaars & reizigers', x:66, y:20},
+  {id:'haven',  nm:'Oude Haven',     sub:'Toeristen & vissers',    x:79, y:57},
+  {id:'park',   nm:'Stadspark',      sub:'Families & jongeren',    x:20, y:64},
+  {id:'plein',  nm:'Dorpsplein',     sub:'Trouwe stamgasten',      x:49, y:82}
+];
+var lotDef=function(id){ for(var i=0;i<CITY_LOTS.length;i++) if(CITY_LOTS[i].id===id) return CITY_LOTS[i]; return null; };
+var IDLE_CAP_SEC=8*3600;                                  // passive income accrues up to 8h offline
+// passive €/sec a parked shop earns, from its snapshotted appeal + lifetime serves
+var idleRate=function(blob){ if(!blob) return 0; var ap=Math.max(0,blob.appealSnap||0), sv=Math.max(0,blob.servedSnap||0);
+  return ap*0.03 + sv*0.003; };
+var idleIncome=function(blob,secs){ return Math.round(idleRate(blob)*clamp(secs||0,0,IDLE_CAP_SEC)); };
+// cost to open one more shop when you already run `existing` (first shop is free)
+var openShopCost=function(existing){ return Math.round(2000*Math.pow(2.4,Math.max(0,(existing||1)-1))); };
+
 /* =========================================================================
    PURE LOGIC (unit-tested)
    ========================================================================= */
@@ -520,14 +567,23 @@ var freshGame=function(){
     contest:newContest(1), weekCash:0, weekMerges:0, campaign:null, shady:{}, heat:0, rivals:[], timeline:{seen:{},mod:null} };
   return g;
 };
-var SAVE_KEY='ftstory_save';
-var save=function(){ if(!G) return; try{ localStorage.setItem(SAVE_KEY, JSON.stringify({
+var SAVE_KEY='ftstory_save', META_KEY='ftstory_meta';
+var nowMs=function(){ return (typeof Date!=='undefined'&&Date.now)?Date.now():0; };
+// the persisted shop blob (one frituur's whole state)
+var serializeShop=function(){ return {
   money:G.money,faam:G.faam,week:G.week,weekT:G.weekT,served:G.served,rank:G.rank,bought:G.bought,
   objs:G.objs.map(function(o){ return {id:o.id,gx:o.gx,gy:o.gy,lvl:o.lvl||1}; }),   // strip runtime _busy (circular)
   research:G.research,staff:G.staff,crew:G.crew,regulars:G.regulars,weekServed:G.weekServed,goalTarget:G.goalTarget,dish:G.dish,
   floor:G.floor,floorsOwned:G.floorsOwned,expand:G.expand,critBest:G.critBest,criticPending:G.criticPending,prices:G.prices,
-  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals,timeline:G.timeline })); }catch(e){} };
-var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; var o=JSON.parse(s); if(!o||!o.objs) return false;
+  contest:G.contest,weekCash:G.weekCash,weekMerges:G.weekMerges,campaign:G.campaign,shady:G.shady,heat:G.heat,rivals:G.rivals,timeline:G.timeline }; };
+var META=null;   // { shops:[{lot,name,blob,t}], active:0 }
+var saveMeta=function(){ try{ if(META) localStorage.setItem(META_KEY, JSON.stringify(META)); }catch(e){} };
+var save=function(){ if(!G) return; try{ var blob=serializeShop(); localStorage.setItem(SAVE_KEY, JSON.stringify(blob));
+  if(META && META.shops[META.active]){ var rec=META.shops[META.active];
+    blob.appealSnap=computeAppeal(G); blob.servedSnap=G.served; rec.blob=blob; rec.t=nowMs(); saveMeta(); }
+  }catch(e){} };
+// hydrate G from a blob object (shared by disk-load and shop-switch)
+var applyBlob=function(o){ if(!o||!o.objs) return false;
   G=freshGame();
   ['money','faam','week','weekT','served','rank','objs','research','staff','crew','regulars','weekServed','goalTarget','dish','bought','floor','floorsOwned','expand','critBest','criticPending','prices','contest','weekCash','weekMerges','campaign','shady','heat','rivals','timeline'].forEach(function(k){ if(o[k]!=null) G[k]=o[k]; });
   if(!G.shady) G.shady={}; if(!G.rivals) G.rivals=[]; if(!G.timeline||typeof G.timeline!=='object') G.timeline={seen:{},mod:null}; if(!G.timeline.seen) G.timeline.seen={};
@@ -539,7 +595,37 @@ var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) retur
   G.expand=clamp(G.expand||0,0,maxExpand()); applySize(); recenterCam();
   G.objs.forEach(function(x){ if(x.lvl==null) x.lvl=1; });
   if(!G.dish) G.dish={friet:{rank:1}}; dishesUnlocked(G).forEach(function(id){ if(!G.dish[id]) G.dish[id]={rank:1}; });
-  G.custs=[]; G.running=true; return true; }catch(e){ return false; } };
+  G.custs=[]; G.running=true; return true; };
+var loadSave=function(){ try{ var s=localStorage.getItem(SAVE_KEY); if(!s) return false; return applyBlob(JSON.parse(s)); }catch(e){ return false; } };
+// ---- empire meta: snapshot / switch / open / offline income ----
+var snapshotActiveInto=function(){ if(!META) return; var rec=META.shops[META.active]; if(!rec) return;
+  var b=serializeShop(); b.appealSnap=computeAppeal(G); b.servedSnap=G.served; rec.blob=b; rec.t=nowMs(); };
+var collectIdle=function(rec){ if(!rec||!rec.blob) return 0; var secs=(nowMs()-(rec.t||nowMs()))/1000;
+  var g=idleIncome(rec.blob,secs); if(g>0) rec.blob.money=(rec.blob.money||0)+g; return g; };
+var pendingIdle=function(rec){ if(!rec||!rec.blob) return 0; return idleIncome(rec.blob,(nowMs()-(rec.t||nowMs()))/1000); };
+var initMeta=function(){ var m=null; try{ m=JSON.parse(localStorage.getItem(META_KEY)||'null'); }catch(e){ m=null; }
+  if(m && m.shops && m.shops.length){ META=m; if(META.active==null||META.active>=META.shops.length) META.active=0; }
+  else { META={ shops:[{ lot:'markt', name:'Rudy Friet', blob:null, t:nowMs() }], active:0 }; }
+  snapshotActiveInto(); saveMeta(); };
+var switchShop=function(idx){ if(!META||idx<0||idx>=META.shops.length||idx===META.active) return;
+  snapshotActiveInto();
+  var rec=META.shops[idx], gain=collectIdle(rec);
+  applyBlob(rec.blob); META.active=idx; rec.t=nowMs(); save();
+  if(el.mapScreen) el.mapScreen.classList.add('hidden');
+  renderAll(); var ld=lotDef(rec.lot);
+  addShake(1.4); chime([520,700,900],0.09);
+  if(gain>0) toast('🏪 <b>'+rec.name+'</b>'+(ld?' — '+ld.nm:'')+': onderweg <b>+'+fmt(gain)+'💶</b> verdiend!');
+  else toast('🏪 Nu aan de slag in <b>'+rec.name+'</b>'+(ld?' — '+ld.nm:'')+'.'); };
+var openShopAt=function(lotId){ if(!META||!lotDef(lotId)) return;
+  if(META.shops.some(function(s){ return s.lot===lotId; })){ toast('Hier staat al een frituur.'); return; }
+  var cost=openShopCost(META.shops.length);
+  if(G.money<cost){ toast('Te weinig geld — een frituur hier kost '+fmt(cost)+'💶.'); return; }
+  G.money-=cost; snapshotActiveInto();
+  var pg=G; G=freshGame(); var blob=serializeShop(); blob.appealSnap=computeAppeal(G); blob.servedSnap=0; G=pg;
+  META.shops.push({ lot:lotId, name:'Rudy Friet '+(META.shops.length+1), blob:blob, t:nowMs() });
+  var ld=lotDef(lotId); bigPop('🏗️ '+ld.nm,'#7bd66b'); confetti();
+  switchShop(META.shops.length-1);
+  toast('🎉 Nieuwe frituur geopend op <b>'+ld.nm+'</b>! Bouw ze uit tot een topzaak.'); };
 // contest progress: called from serve/merge with a metric + amount
 var awardContest=function(c){ G.faam+=c.reward.faam||0; G.money+=c.reward.cash||0;
   bigPop('UITDAGING! 🏆','#ffd447'); confetti(); starRing(worldW()/2,GH*TS/2,14); chime([700,940,1180],0.1);
@@ -961,7 +1047,7 @@ var juiceTick=function(dt){ updateFX(dt); if(shakeT>0){ shakeT=Math.max(0,shakeT
 /* ---------- UI ---------- */
 var el={};
 var refEls=function(){ ['money','faam','week','season','appeal','rankChip','contest','campaignChip','heatChip','buurtChip','eventChip','shopList','menuBody','resList','staffList','floorList','buurtBody',
-  'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody'].forEach(function(id){ el[id]=$(id); }); };
+  'placebar','cancelPlace','startScreen','startBtn','goalN','goalfill','goalTxt','keukenBody','mapScreen','mapArea','mapTotal','mapBtn','mapClose'].forEach(function(id){ el[id]=$(id); }); };
 var syncHUD=function(){ if(!el.money) return; el.money.textContent=fmt(G.money); el.faam.textContent=fmt(G.faam);
   el.week.textContent=G.week; el.appeal.textContent=computeAppeal(G); el.rankChip.textContent=G.rank;
   if(el.season){ var ss=seasonFor(G.week); el.season.textContent=ss.emoji+' '+ss.nm; }
@@ -1091,6 +1177,32 @@ var renderMenu=function(){ if(!el.menuBody) return; if(!G.prices) G.prices=defau
   each('[data-price]',function(b){ return function(){ var p=b.getAttribute('data-price').split(':'); setPrice(p[0],parseInt(p[1],10)); }; }); };
 var setPrice=function(id,delta){ var z=sizeDef(id); if(!z) return; if(!G.prices) G.prices=defaultPrices();
   G.prices[id]=clamp(Math.round((priceOf(G,id)+delta)), Math.round(z.fair*0.5), Math.round(z.fair*2)); beep(delta>0?600:420,0.04,0.03); renderMenu(); syncHUD(); save(); };
+// city map overlay: every lot is a pin — your shops (with till + offline income) and empty lots to open
+var renderMap=function(){ if(!el.mapArea||!META) return; snapshotActiveInto();
+  var byLot={}; META.shops.forEach(function(s,i){ byLot[s.lot]={i:i,rec:s}; });
+  var h='<div class="river"></div>', total=0;
+  CITY_LOTS.forEach(function(lot){ var slot=byLot[lot.id];
+    var pos='left:'+lot.x+'%;top:'+lot.y+'%';
+    if(slot){ var rec=slot.rec, active=slot.i===META.active;
+      var till=rec.blob?rec.blob.money||0:0; total+=till;
+      var idle=active?0:pendingIdle(rec);
+      h+='<div class="lot own'+(active?' active':'')+'" data-switch="'+slot.i+'" style="'+pos+'">'
+        +'<div class="lotpin">'+(active?'🍟':'🏪')+'</div>'
+        +'<div class="lotnm">'+rec.name+(active?' ▸nu':'')+'</div>'
+        +'<div class="lottill">'+fmt(till)+'💶</div>'
+        +(idle>0?'<div class="lotidle">+'+fmt(idle)+' onderweg</div>':'')+'</div>';
+    } else { var cost=openShopCost(META.shops.length), afford=G.money>=cost;
+      h+='<div class="lot empty" data-open="'+lot.id+'" style="'+pos+';opacity:'+(afford?1:0.72)+'">'
+        +'<div class="lotpin">➕</div>'
+        +'<div class="lotnm">'+lot.nm+'</div>'
+        +'<div class="lotcost">'+(afford?'open · ':'')+fmt(cost)+'💶</div></div>';
+    }
+  });
+  el.mapArea.innerHTML=h;
+  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+META.shops.length+' frituur'+(META.shops.length>1?'en':'')+' · totaal in kassa <b>'+fmt(total)+'💶</b>';
+  each('[data-switch]',function(b){ return function(){ switchShop(parseInt(b.getAttribute('data-switch'),10)); }; });
+  each('[data-open]',function(b){ return function(){ openShopAt(b.getAttribute('data-open')); }; }); };
+var openMap=function(){ if(!el.mapScreen||!META) return; renderMap(); el.mapScreen.classList.remove('hidden'); };
 var renderAll=function(){ renderShop(); renderMenu(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); renderBuurt(); syncHUD(); save(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<buyCost(G,id)){ toast('Te weinig geld.'); return; }
@@ -1263,7 +1375,7 @@ var frame=function(ts){ if(typeof requestAnimationFrame==='undefined') return;
 /* ---------- boot ---------- */
 var tab=function(which){ ['shop','menu','res','keuken','floor','staff','buurt'].forEach(function(k){ var s=$(k+'Sheet'); if(s) s.classList.toggle('on',k===which); }); };
 var boot=function(){
-  refEls(); loadCounters(); loadFryers(); loadSeats(); loadCustomers(); loadFloors(); var loaded=loadSave(); if(!loaded){ G=freshGame(); applySize(); recenterCam(); } renderAll();
+  refEls(); loadCounters(); loadFryers(); loadSeats(); loadCustomers(); loadFloors(); var loaded=loadSave(); if(!loaded){ G=freshGame(); applySize(); recenterCam(); } initMeta(); renderAll();
   if(loaded && el.startScreen) el.startScreen.classList.add('hidden');
   if(typeof setInterval!=='undefined') setInterval(save,4000);
   var st=$('tabShop'), rt=$('tabRes'), ft=$('tabStaff'), kt=$('tabKeuken'), lt=$('tabFloor'), mt=$('tabMenu'), bt=$('tabBuurt');
@@ -1272,6 +1384,8 @@ var boot=function(){
   if(lt) lt.onclick=function(){ tab('floor'); }; if(mt) mt.onclick=function(){ tab('menu'); };
   if(bt) bt.onclick=function(){ tab('buurt'); };
   if(el.buurtChip) el.buurtChip.onclick=function(){ tab('buurt'); };
+  if(el.mapBtn) el.mapBtn.onclick=openMap;
+  if(el.mapClose) el.mapClose.onclick=function(){ if(el.mapScreen) el.mapScreen.classList.add('hidden'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   var mb=$('muteBtn'); if(mb){ mb.textContent=sfxOn?'🔊':'🔇'; mb.onclick=toggleSfx; }
   var mub=$('musicBtn'); if(mub){ mub.style.opacity=musicOn?'1':'0.4'; mub.onclick=toggleMusic; }
@@ -1316,6 +1430,7 @@ if(typeof globalThis!=='undefined'){
     SHADY:SHADY, shadyDef:shadyDef, shadyIncomeMul:shadyIncomeMul, shadyAppeal:shadyAppeal, shadyHeatRate:shadyHeatRate,
     RIVALS:RIVALS, rivalDef:rivalDef, marketShare:marketShare, marketMul:marketMul, rivalBoard:rivalBoard, buurtRank:buurtRank,
     TIMELINE:TIMELINE, timelineDef:timelineDef, eventMod:eventMod, eventTrafficMul:eventTrafficMul, eventSpendMul:eventSpendMul,
+    CITY_LOTS:CITY_LOTS, lotDef:lotDef, idleRate:idleRate, idleIncome:idleIncome, openShopCost:openShopCost, IDLE_CAP_SEC:IDLE_CAP_SEC,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
