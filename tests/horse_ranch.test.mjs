@@ -213,6 +213,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.staff = ['groom']; // satisfies the hire-staff goal
   HR.gainAffinity(g.horses[0], 'race', HR.SPECIALIST_AT); // satisfies the specialist goal
   g.stats.seasonTitles = 1; // satisfies the championship goal
+  HR.addWishlistPref(g, { breed: 'arabian' }); // satisfies the wishlist goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1774,6 +1775,86 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'seasonlord');
   const g3 = HR.freshGame(); g3.stats.seasonTitles = 3;
   ok(ach && ach.check(g3) && !ach.check(g), 'three titles unlock Season Champion');
+}
+
+// ---- marketplace: featured listing + wishlist (round 30) ----
+{
+  // freshGame seeds a featured horse; it's a premium standout
+  const g = HR.freshGame(); g.rep = 3000;
+  HR.refreshFeatured(g);
+  const f = HR.featuredHorse(g);
+  ok(f && HR.isFeatured(f), 'freshGame showcases a featured horse');
+  ok((HR.breedDef(f.breed) || { rarity: 1 }).rarity >= 3, 'the featured horse is a rarer breed (a standout)');
+  ok(HR.featuredPrice(f) > HR.buyPrice(f), 'the featured horse carries a premium price');
+  ok(Math.abs(HR.featuredPrice(f) - Math.round(HR.buyPrice(f) * HR.FEATURED_MARKUP)) < 1e-9, 'featured price = buyPrice × markup');
+}
+{
+  // featured is deterministic per week (same attributes for the same week/rep)
+  const a = HR.freshGame(); a.rep = 2000; a.day = 8;
+  const b = HR.freshGame(); b.rep = 2000; b.day = 8;
+  a.featured = null; b.featured = null;
+  const fa = HR.featuredHorse(a), fb = HR.featuredHorse(b);
+  ok(fa.breed === fb.breed && fa.sex === fb.sex && HR.valueOf(fa) === HR.valueOf(fb), 'the featured horse is deterministic per week');
+  // and stable within a week (same object across calls)
+  ok(HR.featuredHorse(a) === fa, 'featuredHorse is stable within the week');
+  // rolling into a later week (same game) showcases a fresh listing
+  a.day = 22; // week 4
+  const fa2 = HR.featuredHorse(a);
+  ok(fa2 && fa2 !== fa && fa2.id !== fa.id, 'a later week showcases a different listing');
+}
+{
+  // wishlist matching by breed / coat / rarity / sex
+  const h = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 12, coat: { name: 'Golden', tier: 3 } });
+  ok(HR.matchesPref(h, { breed: 'arabian' }), 'matches by breed');
+  ok(!HR.matchesPref(h, { breed: 'mustang' }), 'rejects a different breed');
+  ok(HR.matchesPref(h, { sex: 'mare' }) && !HR.matchesPref(h, { sex: 'stallion' }), 'matches by sex');
+  ok(HR.matchesPref(h, { coat: 'Golden' }) && !HR.matchesPref(h, { coat: 'Bay' }), 'matches by coat');
+  ok(HR.matchesPref(h, { rarity: 3 }) && HR.matchesPref(h, { rarity: (HR.breedDef('arabian').rarity) }), 'matches rarity threshold (>=)');
+  ok(!HR.matchesPref(h, { rarity: 5 }) || HR.breedDef('arabian').rarity >= 5, 'rejects too-high a rarity threshold');
+  ok(!HR.matchesPref(h, {}), 'an empty pref matches nothing (no match-all)');
+  // combined criteria must ALL hold
+  ok(HR.matchesPref(h, { breed: 'arabian', sex: 'mare' }) && !HR.matchesPref(h, { breed: 'arabian', sex: 'stallion' }), 'combined criteria must all hold');
+}
+{
+  // add/remove wishlist prefs + dedupe + cap; matchesWishlist is OR across prefs
+  const g = HR.freshGame();
+  ok(!HR.addWishlistPref(g, {}).ok, 'cannot add an empty wish');
+  ok(HR.addWishlistPref(g, { breed: 'friesian' }).ok && g.wishlist.prefs.length === 1, 'adding a wish works');
+  ok(!HR.addWishlistPref(g, { breed: 'friesian' }).ok, 'duplicate wishes are rejected');
+  HR.addWishlistPref(g, { sex: 'stallion' }); // a second, orthogonal wish
+  const h1 = HR.mkHorse({ breed: 'friesian', sex: 'mare', age: 12 }); // matches only the breed wish
+  const h2 = HR.mkHorse({ breed: 'shetland', sex: 'mare', age: 12 }); // matches neither
+  ok(HR.matchesWishlist(h1, g.wishlist) && !HR.matchesWishlist(h2, g.wishlist), 'wishlist matches if ANY pref matches');
+  HR.removeWishlistPref(g, 0); // drop the breed wish, leaving only sex:stallion
+  ok(g.wishlist.prefs.length === 1 && !HR.matchesWishlist(h1, g.wishlist), 'removing a wish drops its matches');
+}
+{
+  // match counting across market + auction
+  const g = HR.freshGame(); g.featured = null; g.market = [];
+  HR.addWishlistPref(g, { breed: 'mustang' });
+  g.market = [HR.mkHorse({ breed: 'mustang', age: 12 }), HR.mkHorse({ breed: 'shetland', age: 12 })];
+  ok(HR.marketMatches(g).length === 1, 'marketMatches counts matching market horses');
+  g.auction = { day: g.day, lots: [{ horse: HR.mkHorse({ breed: 'mustang', age: 12 }), won: false, closed: false }, { horse: HR.mkHorse({ breed: 'arabian', age: 12 }), won: false, closed: false }] };
+  ok(HR.auctionMatches(g).length === 1, 'auctionMatches counts matching open lots');
+  ok(HR.wishlistMatches(g) === 2, 'wishlistMatches sums market + auction matches');
+  // a closed/won lot does not count
+  g.auction.lots[0].closed = true;
+  ok(HR.auctionMatches(g).length === 0, 'closed lots are not matched');
+}
+{
+  // save migration + goal/achievement; economy-safe pricing (featured never cheaper than normal)
+  const legacy = HR.freshGame(); delete legacy.wishlist; delete legacy.featured;
+  legacy.wishlist = HR.normWishlist(legacy.wishlist); if (legacy.featured === undefined) legacy.featured = null; HR.refreshFeatured(legacy);
+  ok(legacy.wishlist && Array.isArray(legacy.wishlist.prefs) && legacy.featured, 'migration repairs wishlist + featured');
+  ok(HR.FEATURED_MARKUP > 1, 'the featured markup is a genuine premium (economy-safe)');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'wish1');
+  ok(goal && !goal.done(g), 'the wishlist goal is unmet with no wishes');
+  HR.addWishlistPref(g, { coat: 'Cremello' });
+  ok(goal.done(g), 'the wishlist goal completes once a wish is added');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'patron');
+  const g2 = HR.freshGame(); g2.stats.featuredBought = 1;
+  ok(ach && ach.check(g2) && !ach.check(g), 'buying a featured horse unlocks Discerning Patron');
 }
 
 // ---- clamp helper ----
