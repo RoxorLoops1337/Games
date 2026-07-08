@@ -281,6 +281,9 @@
   .sgzone{position:absolute;top:0;bottom:0;background:linear-gradient(var(--good),#3f7d3a);opacity:.55;border-radius:6px}
   .sgmark{position:absolute;top:-3px;bottom:-3px;width:5px;margin-left:-2.5px;background:var(--gold);box-shadow:0 0 8px var(--gold2);border-radius:3px;left:0}
   .hudbadge{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:var(--good);color:#0b1207;font-size:10px;font-weight:900;line-height:15px;text-align:center;box-shadow:0 0 0 1px #0b1207}
+  .pasture{position:relative;min-height:64px;border-radius:10px;padding:6px 6px 4px;background:linear-gradient(#a9d0ec 0%,#c9e4f2 42%,#8fbf68 42%,#6ea34a 100%);border:1px solid var(--edge);margin-bottom:8px;display:flex;flex-wrap:wrap;gap:2px;align-items:flex-end;overflow:hidden}
+  .pasture .grazer{filter:drop-shadow(0 2px 1px #0004);animation:graze 3s ease-in-out infinite}
+  .pasture .pmore{align-self:center;font-size:11px;font-weight:800;color:#2a3a18;padding:0 6px}
   .ctr{background:#0d130a;border:1px solid #0c110a;border-radius:10px;padding:9px 10px;margin-bottom:8px}
   .ctr.claimable{border-color:var(--gold2);box-shadow:0 0 0 1px var(--gold2)}
   .ctr .ctrtop{display:flex;align-items:center;gap:9px}
@@ -1269,7 +1272,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[],
+    namePack:'classic', registry:[], pasture:[],
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -1379,6 +1382,8 @@ function advanceDay(game,rng){
   }
   // stable staff wages (daily coin sink; only if you've hired anyone)
   { const pay=staffPayroll(game); if(pay>0){ game.money-=pay; game.stats.staffWages=(game.stats.staffWages||0)+pay; } }
+  // retired horses in the pasture draw a small, capped stream of admiring visitors
+  { const pb=pastureRepBonus(game); if(pb>0) game.rep+=pb; }
   // insurance premiums (daily coin sink; only if you hold a policy)
   { const prem=insurancePremium(game); if(prem>0){ game.money-=prem; game.stats.insurancePremiums=(game.stats.insurancePremiums||0)+prem; } }
   // stud fees — visiting mares pay to breed with your at-stud stallions (no foals in your stalls)
@@ -1853,9 +1858,25 @@ function inductHof(game,rec){
 }
 function retireHorse(game,h,day){
   const rec=hofRecord(h,'retired',day!=null?day:game.day);
+  sendToPasture(game,h,'retired',day!=null?day:game.day); // a living legend grazes on in the pasture
   game.horses=game.horses.filter(x=>x.id!==h.id);
   return { rec, prestige:inductHof(game,rec) };
 }
+
+// ---------- Retirement Pasture / sanctuary (a visible home for retired horses) ----------
+// Retired horses live on here (grazing, coat-tinted). Distinct from the Hall of Fame record.
+// Their presence gives a tiny, CAPPED "ambassadors" reputation draw.
+const PASTURE_CAP=60;
+const PASTURE_REP_CAP=5; // most reputation/day the whole pasture can draw (economy-safe)
+function sendToPasture(game,h,reason,day){ if(!game||!h) return null; if(!Array.isArray(game.pasture)) game.pasture=[];
+  if(game.pasture.some(e=>e.id===h.id)) return null; // never double-add the same horse
+  const rec=hofRecord(h, reason||'retired', day!=null?day:game.day);
+  game.pasture.unshift(rec);
+  if(game.pasture.length>PASTURE_CAP) game.pasture.length=PASTURE_CAP;
+  return rec; }
+function pastureList(game){ return (game&&Array.isArray(game.pasture))?game.pasture:[]; }
+function pastureSize(game){ return pastureList(game).length; }
+function pastureRepBonus(game){ return Math.min(PASTURE_REP_CAP, Math.floor(pastureSize(game)/2)); } // ambassadors draw visitors
 
 // ---------- Ranch décor & customisation (config + helpers; scene render is DOM-only) ----------
 const RANCH_NAME_MAX=24;
@@ -2012,6 +2033,7 @@ const ACHIEVEMENTS=[
   {id:'masterwork', icon:'✦', name:'Masterwork',            desc:'Upgrade a piece of tack to Masterwork.',       check:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=TACK_MAX_TIER)},
   {id:'studbook',   icon:'📖', name:'Full Studbook',        desc:'Register 25 horses in your studbook.',         check:g=>registrySize(g)>=25},
   {id:'loyal',      icon:'🎁', name:'Loyal Rancher',        desc:'Reach a 7-day login streak.',                  check:g=>((g.stats&&g.stats.bestStreak)||0)>=7},
+  {id:'sanctuary',  icon:'🌾', name:'Sanctuary',            desc:'Give five horses a home in the pasture.',      check:g=>pastureSize(g)>=5},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -2106,6 +2128,7 @@ const GOALS=[
   {id:'upgrade1',desc:'Upgrade a piece of tack (✦)',           tip:g=>'',                              done:g=>Object.keys((g.tack&&g.tack.tiers)||{}).some(id=>tackTier(g,id)>=1),reward:{money:700,rep:15}},
   {id:'rename1', desc:'Name a horse your own way (✏️)',        tip:g=>'',                              done:g=>((g.stats&&g.stats.renames)||0)>=1,                     reward:{money:200,rep:10}},
   {id:'daily1',  desc:'Claim a daily welcome-back reward (🎁)',tip:g=>((g.stats&&g.stats.dailyClaims)||0)+'/1',done:g=>((g.stats&&g.stats.dailyClaims)||0)>=1,               reward:{money:200,rep:5}},
+  {id:'pasture1',desc:'Retire a horse to the pasture (🌾)',    tip:g=>pastureSize(g)+' grazing',       done:g=>pastureSize(g)>=1,                                      reward:{money:500,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -2173,6 +2196,7 @@ const HR = {
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   isHofChampion, inductHof, retireHorse,
+  PASTURE_CAP, PASTURE_REP_CAP, sendToPasture, pastureList, pastureSize, pastureRepBonus,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
   NAME_PACKS, HORSE_NAME_MAX, namePackDef, namePackUnlocked, activeNamePack, setNamePack,
   pickNameFrom, renameHorse, REGISTRY_CAP, registerHorse, syncRegistry, registrySize,
@@ -2251,6 +2275,7 @@ function load(){
     if(G.stats.bestStreak==null) G.stats.bestStreak=0;
     if(typeof G.namePack!=='string'||!namePackDef(G.namePack)) G.namePack='classic'; // themed name packs
     if(!Array.isArray(G.registry)) G.registry=[]; syncRegistry(G); // studbook registry
+    if(!Array.isArray(G.pasture)) G.pasture=[]; // retirement pasture roster
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
     G.wishlist=normWishlist(G.wishlist); if(G.featured===undefined) G.featured=null; refreshFeatured(G); // marketplace: wishlist + featured listing
@@ -2312,6 +2337,8 @@ function closeModal(){ $('modal').className='modal'; }
 // ---------------- Rendering ----------------
 function coatEmoji(h){ const b=breedDef(h.breed); const st=stageForAge(h.age); return st.id==='foal'?'🐴':b.emoji; }
 // A small side-profile horse drawn as inline SVG, tinted to the horse's real coat colour.
+// render a pasture roster entry (a hofRecord) as a coat-tinted grazing horse
+function pastureArt(e,px){ return horseArt({coat:{name:e.coat,tier:e.coatTier||0}, color:e.coat, age:e.age||30, breed:e.breed}, px); }
 function horseArt(h,px){
   const c=coatColor(coatOf(h).name);
   const foal=stageForAge(h.age).id==='foal';
@@ -3321,6 +3348,29 @@ function renderEstate(){
     s.appendChild(c);
   });
   if(!(G.teacherMarket||[]).length) s.appendChild(el('div','empty','No applicants right now — check back in a few days.'));
+
+  // ---- Retirement Pasture ----
+  s.appendChild(el('h2','head','🌾 Retirement Pasture'));
+  const past=pastureList(G);
+  { const pb=pastureRepBonus(G);
+    s.appendChild(el('div','sub','Where your retired horses graze out their days as living legends'+(pb>0?' — their fans draw <b>+'+pb+'⭐/day</b>':'')+'. '+past.length+' at pasture.')); }
+  if(!past.length){ s.appendChild(el('div','empty','The pasture is quiet for now.<br>Retire a treasured horse (from the Ranch tab) to give it a gentle home here.')); }
+  else {
+    // grazing scene — coat-tinted SVG horses on the grass
+    const scene=el('div','pasture');
+    past.slice(0,10).forEach((e,i)=>{ const g=el('div','grazer',pastureArt(e)); g.style.animationDelay=(i*0.35)+'s'; scene.appendChild(g); });
+    if(past.length>10) scene.appendChild(el('div','pmore','+'+(past.length-10)+' more'));
+    s.appendChild(scene);
+    // roll of honour with legacy lines
+    past.slice(0,20).forEach(e=>{ const cc=coatColor(e.coat); const champ=isHofChampion(e);
+      const c=el('div','card'); if(champ) c.style.borderLeft='4px solid var(--gold2)';
+      c.innerHTML='<div class="row"><div class="hface">'+pastureArt(e)+'</div>'+
+        '<div class="grow"><div class="hname">'+e.name+(champ?' <span class="pill" style="color:var(--gold)">Champion</span>':'')+'</div>'+
+        '<div class="hbreed">'+e.coat+' '+e.breedName+' · age '+e.age+' · Gen '+(e.generation||1)+'</div>'+
+        '<div class="wddesc" style="margin-top:3px">'+legacyLine(e, ranchName(G))+'</div></div></div>';
+      s.appendChild(c);
+    });
+  }
 
   // ---- Hall of Fame ----
   s.appendChild(el('h2','head','🏛️ Hall of Fame'));
