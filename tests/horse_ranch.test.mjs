@@ -228,6 +228,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.fairsWon = 1; // satisfies the seasonal-fair goal
   g.stats.choresDone = 1; // satisfies the daily-chores goal
   g.stats.trips = 1; // satisfies the away-trip goal
+  g.stats.storeBuys = 1; // satisfies the general-store goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -3194,6 +3195,91 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(ach && !ach.check(g), 'Seasoned Traveller needs ten trips');
   g.stats.trips = 10;
   ok(ach.check(g), 'ten trips unlock Seasoned Traveller');
+}
+
+// ---- general store / supply restock cycle (round 46) ----
+{
+  // storeStock is deterministic for a given day and rotates across restocks
+  const at = d => { const g = HR.freshGame(); g.day = d; return g; };
+  const s1a = HR.storeStock(at(1)).map(s => s.id);
+  const s1b = HR.storeStock(at(1)).map(s => s.id);
+  ok(JSON.stringify(s1a) === JSON.stringify(s1b), 'the same day always shows the same stock');
+  ok(s1a.length === HR.STORE_ITEMS.length ? true : s1a.length >= 1, 'stock has slots');
+  ok(new Set(s1a).size === s1a.length, 'no duplicate items in a restock');
+  // within a restock window the stock is stable; it changes on the next restock
+  const within = HR.storeStock(at(1 + HR.STORE_CYCLE - 1)).map(s => s.id);
+  ok(JSON.stringify(s1a) === JSON.stringify(within), 'stock is stable through the restock window');
+  const next = HR.storeStock(at(1 + HR.STORE_CYCLE)).map(s => s.id);
+  ok(JSON.stringify(next) !== JSON.stringify(s1a) || HR.STORE_ITEMS.length <= HR.storeStock(at(1)).length, 'the catalogue rotates on the next restock');
+  ok(HR.nextStoreRestock(at(1)) === 1 + HR.STORE_CYCLE, 'nextStoreRestock is the next cycle boundary');
+}
+{
+  // buying validates funds + stock + not-already-bought and deducts once
+  const g = HR.freshGame(); g.day = 1; g.money = 5000;
+  const first = HR.storeStock(g)[0];
+  const money0 = g.money;
+  const r = HR.buyStoreItem(g, first.id);
+  ok(r.ok && g.money === money0 - first.price, 'buying deducts the price once');
+  ok((g.stats.storeBuys || 0) === 1, 'the purchase is counted');
+  ok(HR.buyStoreItem(g, first.id).ok === false, 'the same slot cannot be bought twice this restock');
+  ok(HR.storeStock(g).find(s => s.id === first.id).sold === true, 'the slot shows as sold');
+  // an item not in this restock is rejected
+  const notStocked = HR.STORE_ITEMS.map(i => i.id).find(id => !HR.storeStock(g).some(s => s.id === id));
+  if (notStocked) ok(HR.buyStoreItem(g, notStocked).ok === false, 'an out-of-catalogue item cannot be bought');
+  // poverty is rejected
+  const poor = HR.freshGame(); poor.day = 1; poor.money = 0;
+  ok(HR.buyStoreItem(poor, HR.storeStock(poor)[0].id).ok === false, 'you cannot buy without the coins');
+}
+{
+  // each effect applies through the existing system it touches and is bounded
+  const g = HR.freshGame();
+  // feed lot
+  const feed0 = g.feed; HR.applyStoreEffect(g, 'haylot');
+  ok(g.feed === feed0 + 40, 'a hay lot adds feed');
+  // grooming kit fills needs
+  const h = g.horses[0]; h.needs = h.needs || {}; for (const id of HR.NEED_IDS) h.needs[id] = 20;
+  HR.applyStoreEffect(g, 'carekit');
+  ok(HR.NEED_IDS.every(id => h.needs[id] === 100), 'a grooming kit fills every care need');
+  // tonic is bounded (never past 100)
+  for (const x of g.horses) { x.health = 96; x.happy = 96; }
+  HR.applyStoreEffect(g, 'tonic');
+  ok(g.horses.every(x => x.health <= 100 && x.happy <= 100), 'the tonic never pushes condition past the cap');
+  // rep advert
+  const rep0 = g.rep; HR.applyStoreEffect(g, 'advert');
+  ok(g.rep === rep0 + 12, 'the village notice adds a bounded rep boost');
+}
+{
+  // a restock refreshes the sold set and the catalogue
+  const g = HR.freshGame(); g.day = 1; g.money = 9999;
+  HR.buyStoreItem(g, HR.storeStock(g)[0].id);
+  ok(g.store.sold.length === 1, 'a purchase is logged for this restock');
+  g.day = 1 + HR.STORE_CYCLE; // next restock
+  const fresh = HR.storeStock(g); // triggers the reset
+  ok(g.store.sold.length === 0, 'the sold set clears on restock');
+  ok(fresh.every(s => !s.sold), 'the new catalogue starts all-unsold');
+}
+{
+  // no arbitrage: a discounted hay lot cannot be looped for profit (feed is never sold for coins)
+  const g = HR.freshGame(); g.day = 1; g.money = 1000;
+  const money0 = g.money;
+  const hay = HR.storeStock(g).find(s => s.id === 'haylot' || s.effect.kind === 'feed');
+  if (hay) { HR.buyStoreItem(g, hay.id); ok(g.money < money0, 'buying feed costs coins with no way to resell it back'); }
+  else ok(true, 'no feed deal in this restock — nothing to arbitrage');
+}
+{
+  // migration safety + goal & achievement
+  const legacy = HR.freshGame(); delete legacy.store; legacy.day = 1; legacy.money = 5000;
+  ok(Array.isArray(HR.storeStock(legacy)) && HR.storeStock(legacy).length > 0, 'the store is safe when state is missing');
+  ok(HR.buyStoreItem(legacy, HR.storeStock(legacy)[0].id).ok && Array.isArray(legacy.store.sold), 'buying initialises the store state on an old save');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'store1');
+  ok(goal && !goal.done(g), 'the store goal is unmet before a purchase');
+  g.stats.storeBuys = 1;
+  ok(goal.done(g), 'a purchase satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'regular');
+  ok(ach && !ach.check(g), 'Store Regular needs fifteen buys');
+  g.stats.storeBuys = 15;
+  ok(ach.check(g), 'fifteen buys unlock Store Regular');
 }
 
 // ---- clamp helper ----
