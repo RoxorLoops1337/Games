@@ -324,6 +324,7 @@
     <button class="sbtn" id="storeBtn" title="General store — rotating deals" style="margin-right:4px;position:relative">🏪<span id="storeBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="trophyBtn" title="Trophy room — achievements & career" style="margin-right:4px">🏆</button>
     <button class="sbtn" id="diaryBtn" title="Ranch diary — how your horses are feeling" style="margin-right:4px">📓</button>
+    <button class="sbtn" id="grudgeBtn" title="Grudge match — challenge a rival ranch" style="margin-right:4px">⚔️</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
@@ -1386,6 +1387,58 @@ function tickStandings(game){
   return pr;
 }
 
+// ---------- Rival grudge match (a distinct 1v1 challenge on top of the rivals leaderboard) ----------
+// Pick one of your horses and challenge a named rival head-to-head in a discipline: your disciplineScore
+// vs a rating derived from the rival's live reputation. Bounded stake/reward + a per-rival cooldown.
+const GRUDGE_STAKE=200;      // entry fee (a coin sink)
+const GRUDGE_COOLDOWN=5;     // days before you can re-challenge the SAME rival
+const GRUDGE_WIN_CAP=900;    // hard cap on winnings
+// a 0..100-ish "power" number from the rival's live reputation (grows through the game)
+function grudgeRating(game, rival){ const r=(rival&&typeof rival==='object')?rival:rivalDef(rival); if(!r) return 0;
+  return clamp(46 + rivalRep(game,r)/44, 46, 96); }
+// the opponent's score for a given discipline (weaker outside the rival's speciality); optional rng adds ±10%
+function grudgeOpponentScore(game, rival, discId, rng){ const r=(rival&&typeof rival==='object')?rival:rivalDef(rival); if(!r) return 0;
+  const base=grudgeRating(game, r), discMult=(discId===r.disc)?1.0:0.86, variance=rng?(0.9+0.2*rng()):1;
+  return Math.round(base*discMult*variance); }
+function grudgeStateOf(game){ if(!game.grudge||typeof game.grudge!=='object') game.grudge={record:{w:0,l:0}, last:{}, vs:{}};
+  if(!game.grudge.record) game.grudge.record={w:0,l:0}; if(!game.grudge.last) game.grudge.last={}; if(!game.grudge.vs) game.grudge.vs={}; return game.grudge; }
+function grudgeLast(game, rivalId){ const g=(game&&game.grudge&&game.grudge.last)||{}; return g[rivalId]||0; }
+function rivalChallengeReady(game, rivalId){ const last=grudgeLast(game,rivalId); return last===0 || (((game&&game.day)||1)-last)>=GRUDGE_COOLDOWN; }
+function grudgeCooldownLeft(game, rivalId){ const last=grudgeLast(game,rivalId); return last===0?0:Math.max(0, GRUDGE_COOLDOWN-(((game&&game.day)||1)-last)); }
+function nextGrudgeDay(game, rivalId){ const last=grudgeLast(game,rivalId); return last===0?((game&&game.day)||1):last+GRUDGE_COOLDOWN; }
+function grudgeRecord(game){ const r=(game&&game.grudge&&game.grudge.record)||{w:0,l:0}; return { w:r.w||0, l:r.l||0 }; }
+function grudgeRecordVs(game, rivalId){ const v=(game&&game.grudge&&game.grudge.vs&&game.grudge.vs[rivalId])||{w:0,l:0}; return { w:v.w||0, l:v.l||0 }; }
+// resolve a grudge match: validate eligibility + funds + cooldown; apply the bounded stake/reward; record the result
+function runGrudgeMatch(game, horseId, rivalId, discId, rng){
+  rng=rng||Math.random;
+  const rv=rivalDef(rivalId); if(!rv) return {ok:false,why:'No such rival.'};
+  const h=((game&&game.horses)||[]).find(x=>x.id===horseId); if(!h) return {ok:false,why:'No such horse.'};
+  const d=discId||rv.disc, disc=disciplineDef(d); if(!disc) return {ok:false,why:'Unknown discipline.'};
+  const elig=canEnterShow(game,h); if(!elig.ok) return {ok:false,why:elig.why};       // reuse the show-eligibility rules
+  if(!rivalChallengeReady(game, rivalId)) return {ok:false,why:'Challenge '+rv.name+' again in '+grudgeCooldownLeft(game,rivalId)+' day(s).'};
+  if((game.money||0)<GRUDGE_STAKE) return {ok:false,why:'Not enough coins for the 🪙'+GRUDGE_STAKE+' stake.'};
+  game.money-=GRUDGE_STAKE;
+  const my=disciplineScore(h, disc, game)*(0.9+0.2*rng());
+  const opp=grudgeOpponentScore(game, rv, d, rng);
+  const win = my>=opp;
+  const st=grudgeStateOf(game); st.last[rivalId]=(game.day||1);
+  if(!st.vs[rivalId]) st.vs[rivalId]={w:0,l:0};
+  if(!game.stats) game.stats={};
+  let reward={money:0, rep:0};
+  if(win){
+    reward.money=Math.min(GRUDGE_WIN_CAP, GRUDGE_STAKE*2 + Math.round(grudgeRating(game,rv)*4));
+    reward.rep=Math.min(30, 8+Math.round(grudgeRating(game,rv)*0.2));
+    game.money+=reward.money; game.rep=(game.rep||0)+reward.rep;
+    st.record.w=(st.record.w||0)+1; st.vs[rivalId].w++; game.stats.grudgeWins=(game.stats.grudgeWins||0)+1;
+  } else {
+    reward.rep=-Math.min(8, 3+Math.round(grudgeRating(game,rv)*0.06));
+    game.rep=Math.max(0,(game.rep||0)+reward.rep);
+    st.record.l=(st.record.l||0)+1; st.vs[rivalId].l++;
+  }
+  game.stats.grudgeMatches=(game.stats.grudgeMatches||0)+1;
+  return {ok:true, win, my:Math.round(my), opp, reward, rival:rv, disc:d, stake:GRUDGE_STAKE, record:grudgeRecord(game), vs:grudgeRecordVs(game,rivalId) };
+}
+
 // ---------- Events ----------
 // ---------- Weekday calendar (a 7-day week layered over the day counter) ----------
 const WEEKDAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -1628,7 +1681,7 @@ function freshGame(legacy){
     stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
     horses:[], boarders:0, market:[], marketDay:1,
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
-    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0},
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6},
     decor:normDecor(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
@@ -1636,7 +1689,7 @@ function freshGame(legacy){
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
-    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]}, breeder:{points:0}, studBookings:[],
+    namePack:'classic', registry:[], pasture:[], breedGoal:null, scrapbook:[], lastVisitorDay:0, appointments:[], fairsClaimed:[], chores:{day:0,done:{},streak:0,lastFull:0}, store:{stock:-1,sold:[]}, breeder:{points:0}, studBookings:[], grudge:{record:{w:0,l:0},last:{},vs:{}},
   };
   // New Game+ head-start: banked Legacy grants capped starting coins/hay
   g.money += legacyBonus(g.legacy,'startCoins');
@@ -2914,6 +2967,7 @@ const ACHIEVEMENTS=[
   {id:'soughtsire', icon:'♞', name:'Sought-After Sire',     desc:'Fulfil ten stud-directory bookings.',          check:g=>((g.stats&&g.stats.studBookings)||0)>=10},
   {id:'cabinet',    icon:'🏆', name:'Full Trophy Cabinet',   desc:'Collect 20 show placings in your trophy room.',check:g=>((g.trophies)||[]).length>=20},
   {id:'contentherd',icon:'🌿', name:'A Contented Herd',       desc:'Keep a herd of five with none unhappy or unwell.',check:g=>{const hs=(g.horses)||[]; return hs.length>=5 && hs.every(h=>['sad','sick'].indexOf(horseMood(h))<0);}},
+  {id:'rivalslayer',icon:'⚔️', name:'Rival Slayer',           desc:'Beat every rival ranch in a grudge match.',    check:g=>{const vs=(g.grudge&&g.grudge.vs)||{}; return RIVALS.every(r=>(vs[r.id]&&vs[r.id].w>0));}},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3060,6 +3114,7 @@ const GOALS=[
   {id:'breeder1',desc:'Become an Established Breeder (🏵️ prestige)',tip:g=>breederPoints(g)+'/'+breederTierDef('established').minPoints+' pts',done:g=>breederTier(g).id!=='novice',reward:{money:800,rep:25}},
   {id:'studbook1',desc:'Book a covering in the stud directory (♞)', tip:g=>((g.stats&&g.stats.studBookings)||0)+' bookings',done:g=>((g.stats&&g.stats.studBookings)||0)>=1,     reward:{money:600,rep:20}},
   {id:'trophy1', desc:'Earn 5 achievements (🏆 trophy room)',       tip:g=>achievementProgress(g).unlocked+'/5 unlocked',done:g=>achievementProgress(g).unlocked>=5,           reward:{money:700,rep:25}},
+  {id:'grudge1', desc:'Win a grudge match vs a rival (⚔️)',          tip:g=>{const r=grudgeRecord(g);return r.w+'W–'+r.l+'L';},done:g=>((g.stats&&g.stats.grudgeWins)||0)>=1,        reward:{money:800,rep:30}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3141,6 +3196,7 @@ const HR = {
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   CURATOR_RANKS, curatorRank, achievementProgress, trophyRoom,
   DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
+  GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
   isHofChampion, inductHof, retireHorse,
   PASTURE_CAP, PASTURE_REP_CAP, sendToPasture, pastureList, pastureSize, pastureRepBonus,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
@@ -3233,6 +3289,7 @@ function load(){
     if(!G.store||typeof G.store!=='object'){ G.store={stock:-1,sold:[]}; } else if(!Array.isArray(G.store.sold)) G.store.sold=[]; // general store restock state
     if(!G.breeder||typeof G.breeder!=='object'){ G.breeder={points:(G.stats&&G.stats.breederPoints)||0}; } else if(typeof G.breeder.points!=='number') G.breeder.points=0; // breeder's prestige track
     if(!Array.isArray(G.studBookings)) G.studBookings=[]; // stud-directory outside-mare bookings
+    if(!G.grudge||typeof G.grudge!=='object'){ G.grudge={record:{w:0,l:0},last:{},vs:{}}; } else { if(!G.grudge.record) G.grudge.record={w:0,l:0}; if(!G.grudge.last) G.grudge.last={}; if(!G.grudge.vs) G.grudge.vs={}; } // rival grudge-match record
     if(G.breedGoal!==undefined && G.breedGoal!==null && !breedGoalDef(G.breedGoal)) G.breedGoal=null; if(G.breedGoal===undefined) G.breedGoal=null; // breeding planner goal
     if(!Array.isArray(G.insurance)) G.insurance=[]; G.insurance=G.insurance.filter(id=>!!insuranceDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // insurance policies
     ensureChamp(G); // seasonal championship tally
@@ -5099,6 +5156,56 @@ function storeEffectLine(it){
   if(e.kind==='rep') return '⭐ +'+e.rep+' reputation';
   return '';
 }
+let grudgeSel={rival:null, horse:null};
+function openGrudge(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const rec=grudgeRecord(G);
+  const eligible=(G.horses||[]).filter(h=>canEnterShow(G,h).ok);
+  if(grudgeSel.horse && !eligible.some(h=>h.id===grudgeSel.horse)) grudgeSel.horse=null;
+  if(!grudgeSel.horse && eligible.length) grudgeSel.horse=eligible.slice().sort((a,b)=>overall(b)-overall(a))[0].id;
+  // rival chooser
+  const rivalChips=RIVALS.map(rv=>{ const ready=rivalChallengeReady(G,rv.id), v=grudgeRecordVs(G,rv.id);
+    return '<span class="wlchip" data-grival="'+rv.id+'" style="cursor:pointer;'+(grudgeSel.rival===rv.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+rv.emoji+' '+rv.name+(v.w||v.l?' ('+v.w+'–'+v.l+')':'')+(ready?'':' ⏳')+'</span>'; }).join(' ');
+  // horse chooser
+  const horseChips=eligible.length?eligible.map(h=>'<span class="wlchip" data-ghorse="'+esc(h.id)+'" style="cursor:pointer;'+(grudgeSel.horse===h.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(h.name)+' · OVR '+overall(h)+'</span>').join(' '):'<span class="empty">No eligible horse — need an adult that isn’t rented, away, at stud, in foal or resting.</span>';
+  let panel='';
+  const rv=grudgeSel.rival?rivalDef(grudgeSel.rival):null;
+  const h=grudgeSel.horse?(G.horses||[]).find(x=>x.id===grudgeSel.horse):null;
+  if(rv && h){ const d=rv.disc, disc=disciplineDef(d); const ready=rivalChallengeReady(G,grudgeSel.rival), left=grudgeCooldownLeft(G,grudgeSel.rival);
+    const oppEst=grudgeOpponentScore(G,rv,d); const myEst=Math.round(disciplineScore(h,disc,G));
+    panel='<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname">'+rv.emoji+' '+esc(rv.name)+' — '+(disc?disc.emoji+' '+disc.name:d)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(rv.blurb)+'</div>'+
+      '<div class="stats" style="margin-top:6px"><div class="stat"><div class="sv" style="font-size:13px">~'+myEst+'</div><div class="sl">'+esc(h.name)+'</div></div>'+
+      '<div class="stat"><div class="sv" style="font-size:13px">~'+oppEst+'</div><div class="sl">Rival</div></div>'+
+      '<div class="stat"><div class="sv" style="font-size:13px">🪙'+GRUDGE_STAKE+'</div><div class="sl">Stake</div></div></div>'+
+      '<div class="btnrow" style="margin-top:6px">'+(ready
+        ?'<button class="btn" id="grudgeGo" style="width:100%"'+((G.money||0)<GRUDGE_STAKE?' disabled':'')+'>⚔️ Challenge (🪙'+GRUDGE_STAKE+' stake)</button>'
+        :'<button class="btn ghost" style="width:100%" disabled>Rematch in '+left+' day(s)</button>')+'</div></div>';
+  } else { panel='<div class="sub" style="margin-top:6px">Pick a rival and one of your horses to set up the duel.</div>'; }
+  modal('<h3>⚔️ Grudge Match</h3>'+
+    '<div class="swlabel">Challenge a rival ranch head-to-head. Overall record: <b>'+rec.w+'W–'+rec.l+'L</b>. <span class="pill">🪙'+fmt(G.money)+'</span></div>'+
+    '<div class="swlabel" style="margin-top:6px">Rival</div><div>'+rivalChips+'</div>'+
+    '<div class="swlabel" style="margin-top:6px">Your horse</div><div>'+horseChips+'</div>'+
+    panel+
+    '<div class="btnrow"><button class="btn ghost" id="grudgeClose" style="width:100%">Done</button></div>');
+  $('grudgeClose').onclick=closeModal;
+  document.querySelectorAll('[data-grival]').forEach(x=>x.onclick=()=>{ grudgeSel.rival=x.getAttribute('data-grival'); playSfx('tap'); openGrudge(); });
+  document.querySelectorAll('[data-ghorse]').forEach(x=>x.onclick=()=>{ grudgeSel.horse=x.getAttribute('data-ghorse'); playSfx('tap'); openGrudge(); });
+  { const go=$('grudgeGo'); if(go) go.onclick=()=>{ const res=runGrudgeMatch(G, grudgeSel.horse, grudgeSel.rival, null, Math.random);
+    if(!res.ok){ toast(res.why,'info'); return; }
+    if(res.win){ coinPop(res.reward.money); burst('⚔️🏆🪙✨',18); playSfx('win'); }
+    else { burst('⚔️💦',10); playSfx('tap'); }
+    save(); renderHUD();
+    const dd=disciplineDef(res.disc);
+    modal('<h3>'+(res.win?'🏆 Victory!':'😤 Defeated')+'</h3>'+
+      '<div class="card"><div class="hname">'+(res.win?res.rival.name+' bested!':'Lost to '+res.rival.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:3px">'+(dd?dd.emoji+' '+dd.name:res.disc)+' — your '+res.my+' vs their '+res.opp+'.</div>'+
+      '<div class="hbreed" style="margin-top:4px">'+(res.win?('Winnings: <b style="color:var(--good)">🪙'+fmt(res.reward.money)+' +'+res.reward.rep+'⭐</b>'):('Reputation '+res.reward.rep+'⭐ — better luck next time.'))+'</div>'+
+      '<div class="hbreed" style="margin-top:4px">Record vs '+esc(res.rival.name)+': <b>'+res.vs.w+'W–'+res.vs.l+'L</b> · overall '+res.record.w+'W–'+res.record.l+'L</div></div>'+
+      '<div class="btnrow"><button class="btn" id="grOk" style="width:100%">'+(res.win?'🎉 Glorious!':'OK')+'</button></div>',{center:true});
+    { const ok=$('grOk'); if(ok) ok.onclick=()=>{ closeModal(); openGrudge(); }; }
+  }; }
+}
 function openDiary(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const feed=ranchDiary(G, 12);
@@ -5564,6 +5671,7 @@ function boot(){
   { const sb=$('storeBtn'); if(sb) sb.onclick=openStore; }
   { const tb=$('trophyBtn'); if(tb) tb.onclick=openTrophyRoom; }
   { const db=$('diaryBtn'); if(db) db.onclick=openDiary; }
+  { const gb=$('grudgeBtn'); if(gb) gb.onclick=openGrudge; }
   { const gb=$('dailyBtn'); if(gb) gb.onclick=openDaily; dailyData=loadDaily(); }
   { const nx=$('tbNext'); if(nx) nx.onclick=()=>showTutStep((G.tut&&G.tut.step||0)+1); }
   { const sk=$('tbSkip'); if(sk) sk.onclick=()=>finishTutorial(true); }

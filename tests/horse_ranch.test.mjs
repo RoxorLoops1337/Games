@@ -231,6 +231,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.storeBuys = 1; // satisfies the general-store goal
   g.breeder = { points: 100 }; // satisfies the breeder-prestige goal (past Established)
   g.stats.studBookings = 1; // satisfies the stud-directory goal
+  g.stats.grudgeWins = 1; // satisfies the grudge-match goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -3583,6 +3584,77 @@ function studGame(day) {
   g.horses[0].health = 20; // one falls ill
   ok(!ach.check(g), 'an unwell horse breaks the contented herd');
   const small = HR.freshGame(); ok(!ach.check(small), 'a herd of fewer than five does not qualify');
+}
+
+// ---- rival grudge match (round 51) ----
+{
+  // grudgeOpponentScore scales with rival strength (a stronger rival = a higher number)
+  const g = HR.freshGame(); g.day = 20;
+  const weak = HR.RIVALS.find(r => r.id === 'ironhoof'), strong = HR.RIVALS.find(r => r.id === 'silvercreek');
+  ok(HR.grudgeRating(g, strong) > HR.grudgeRating(g, weak), 'a higher-reputation rival has a higher rating');
+  ok(HR.grudgeOpponentScore(g, strong, strong.disc) > HR.grudgeOpponentScore(g, weak, weak.disc), 'opponent score tracks rival strength');
+  ok(HR.grudgeOpponentScore(g, strong, 'race') < HR.grudgeOpponentScore(g, strong, strong.disc), 'a rival is weaker outside its speciality');
+}
+{
+  // a strong horse reliably beats a weak rival, and a weak horse loses to a strong rival, across seeds
+  const mkGame = () => { const g = HR.freshGame(); g.day = 3; g.money = 5000; return g; };
+  const star = HR.mkHorse({ breed: 'thoroughbred', age: 20, id: 'star', speed: 99, stamina: 99, temperament: 95, health: 100, happy: 100 });
+  let wins = 0; for (let s = 1; s <= 12; s++) { const g = mkGame(); g.horses = [Object.assign({}, star)]; const r = HR.runGrudgeMatch(g, 'star', 'ironhoof', 'race', rng(s)); if (r.ok && r.win) wins++; }
+  ok(wins >= 11, 'a top horse beats the weakest rival almost every time');
+  const dud = HR.mkHorse({ breed: 'shetland', age: 20, id: 'dud', speed: 30, stamina: 30, temperament: 30, health: 80, happy: 80 });
+  let losses = 0; for (let s = 1; s <= 12; s++) { const g = mkGame(); g.day = 40; g.horses = [Object.assign({}, dud)]; const r = HR.runGrudgeMatch(g, 'dud', 'silvercreek', 'endurance', rng(s)); if (r.ok && !r.win) losses++; }
+  ok(losses >= 11, 'a weak horse loses to the strongest rival almost every time');
+}
+{
+  // runGrudgeMatch validates eligibility + funds + cooldown; the stake/reward is bounded and applied; record updates
+  const g = HR.freshGame(); g.day = 5; g.money = 5000;
+  const h = HR.mkHorse({ breed: 'akhalteke', age: 20, id: 'ace', speed: 95, stamina: 95, temperament: 90, health: 100, happy: 100 }); g.horses = [h];
+  const money0 = g.money;
+  const r = HR.runGrudgeMatch(g, 'ace', 'ironhoof', 'race', rng(1));
+  ok(r.ok, 'a valid challenge runs');
+  ok(g.money >= money0 - HR.GRUDGE_STAKE, 'the stake is taken');
+  if (r.win) { ok(r.reward.money > 0 && r.reward.money <= 900, 'winnings are bounded'); ok(g.stats.grudgeWins === 1, 'a win is recorded'); }
+  ok((g.stats.grudgeMatches || 0) === 1, 'the match is counted');
+  const rec = HR.grudgeRecord(g); ok(rec.w + rec.l === 1, 'the W/L record updates');
+  // cooldown now blocks a rematch with the same rival
+  ok(HR.rivalChallengeReady(g, 'ironhoof') === false, 'the rival is on cooldown after a match');
+  const money1 = g.money;
+  ok(HR.runGrudgeMatch(g, 'ace', 'ironhoof', 'race', rng(2)).ok === false && g.money === money1, 'a rematch during cooldown is a no-op (no stake taken)');
+  // a different rival is still available
+  ok(HR.rivalChallengeReady(g, 'sunfire') === true, 'a different rival can be challenged');
+  // cooldown elapses
+  g.day += HR.GRUDGE_COOLDOWN;
+  ok(HR.rivalChallengeReady(g, 'ironhoof') === true, 'the rival is challengeable again after the cooldown');
+}
+{
+  // eligibility & funds rejections
+  const g = HR.freshGame(); g.day = 5; g.money = 5000;
+  const foal = HR.mkHorse({ breed: 'arabian', age: 1, id: 'foal' }); g.horses = [foal];
+  ok(HR.runGrudgeMatch(g, 'foal', 'ironhoof', 'race', rng(1)).ok === false, 'a foal cannot compete');
+  ok(HR.runGrudgeMatch(g, 'ghost', 'ironhoof', 'race', rng(1)).ok === false, 'an unknown horse is rejected');
+  ok(HR.runGrudgeMatch(g, 'foal', 'nope', 'race', rng(1)).ok === false, 'an unknown rival is rejected');
+  const poor = HR.freshGame(); poor.day = 5; poor.money = 0;
+  const ph = HR.mkHorse({ breed: 'arabian', age: 20, id: 'p' }); poor.horses = [ph];
+  ok(HR.runGrudgeMatch(poor, 'p', 'ironhoof', 'race', rng(1)).ok === false, 'you cannot pay the stake with no coins');
+}
+{
+  // determinism, migration safety, goal & achievement
+  const mk = () => { const g = HR.freshGame(); g.day = 5; g.money = 5000; const h = HR.mkHorse({ breed: 'arabian', age: 20, id: 'x', speed: 80, stamina: 80, temperament: 70, health: 100, happy: 100, trait: 'bold', coat: { name: 'Bay', tier: 0 } }); g.horses = [h]; const r = HR.runGrudgeMatch(g, 'x', 'sunfire', 'jump', rng(42)); return [r.win, r.my, r.opp, g.money]; };
+  ok(JSON.stringify(mk()) === JSON.stringify(mk()), 'same horse + rival + rng → same result');
+  const legacy = HR.freshGame(); delete legacy.grudge; legacy.day = 5; legacy.money = 5000;
+  const lh = HR.mkHorse({ breed: 'arabian', age: 20, id: 'l', speed: 90, stamina: 90, temperament: 90, health: 100, happy: 100 }); legacy.horses = [lh];
+  ok(HR.runGrudgeMatch(legacy, 'l', 'ironhoof', 'race', rng(1)).ok && legacy.grudge && legacy.grudge.record, 'a match initialises the grudge state on an old save');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'grudge1');
+  ok(goal && !goal.done(g), 'the grudge goal is unmet before a win');
+  g.stats.grudgeWins = 1;
+  ok(goal.done(g), 'a grudge win satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'rivalslayer');
+  const g2 = HR.freshGame(); g2.grudge = { record: { w: 4, l: 0 }, last: {}, vs: {} };
+  HR.RIVALS.forEach((r, i) => { if (i < HR.RIVALS.length - 1) g2.grudge.vs[r.id] = { w: 1, l: 0 }; });
+  ok(ach && !ach.check(g2), 'Rival Slayer needs a win over every rival');
+  HR.RIVALS.forEach(r => g2.grudge.vs[r.id] = { w: 1, l: 0 });
+  ok(ach.check(g2), 'beating every rival unlocks Rival Slayer');
 }
 
 // ---- clamp helper ----
