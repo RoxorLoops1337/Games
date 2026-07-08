@@ -74,6 +74,11 @@
   #mapArea::before{content:"";position:absolute;inset:0;opacity:.5;
     background:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);background-size:28px 28px}
   #mapArea .river{position:absolute;left:-5%;top:44%;width:110%;height:15%;background:#2f6d86aa;opacity:.55;transform:rotate(-8deg);border-radius:40px;filter:blur(1px)}
+  #mapArea .stars{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(1px 1px at 20% 30%,#fff,transparent),radial-gradient(1px 1px at 70% 20%,#fff,transparent),
+      radial-gradient(1px 1px at 40% 70%,#cfe,transparent),radial-gradient(1px 1px at 85% 55%,#fff,transparent),
+      radial-gradient(1px 1px at 55% 85%,#fff,transparent),radial-gradient(1px 1px at 10% 80%,#adf,transparent),
+      radial-gradient(1.5px 1.5px at 90% 88%,#fff,transparent),radial-gradient(1px 1px at 30% 12%,#fff,transparent);opacity:.85}
   /* only the pin is tappable so close-together city pins never steal each other's clicks
      (the click still bubbles to the .lot handler); labels are visual-only */
   .lot{position:absolute;transform:translate(-50%,-50%);width:96px;text-align:center;pointer-events:none;z-index:1}
@@ -424,9 +429,29 @@ var WORLD=[
     {id:'tokio',nm:'Tokio',sub:'Metropool',x:66,y:42},{id:'osaka',nm:'Osaka',sub:'Keukenstad',x:42,y:60},
     {id:'kyoto',nm:'Kyoto',sub:'Tempelstad',x:50,y:48},{id:'sapporo',nm:'Sapporo',sub:'Het noorden',x:72,y:14}]}
 ];
-var countryDef=function(id){ for(var i=0;i<WORLD.length;i++) if(WORLD[i].id===id) return WORLD[i]; return null; };
-var citiesOf=function(countryId){ var c=countryDef(countryId); return c?c.cities:[]; };
-var cityDef=function(countryId,cityId){ var cs=citiesOf(countryId); for(var i=0;i<cs.length;i++) if(cs[i].id===cityId) return cs[i]; return null; };
+// GALAXY tier (final): planets, each nesting its own globe of countries.
+// Earth nests the whole WORLD; sci-fi worlds get their own compact country/city sets.
+var GALAXY=[
+  {id:'aarde',    nm:'Aarde',     sub:'De frietplaneet',   emoji:'🌍', x:38, y:54, countries:WORLD},
+  {id:'mars',     nm:'Mars',      sub:'Rode friet',         emoji:'🔴', x:63, y:30, countries:[
+    {id:'olympus', nm:'Olympus', sub:'Kolonie', emoji:'🛰️', x:48, y:44, cities:[
+      {id:'basisalfa',nm:'Basis Alfa',sub:'Eerste kolonie',x:38,y:38},{id:'basisbeta',nm:'Basis Beta',sub:'Kraterstad',x:62,y:58},
+      {id:'koepel',nm:'De Koepel',sub:'Onder glas',x:32,y:70}]}]},
+  {id:'frietopia',nm:'Frietopia', sub:'Utopisch fritland',  emoji:'🍟', x:20, y:28, countries:[
+    {id:'sausland', nm:'Sausland', sub:'Rivieren van saus', emoji:'🥫', x:45, y:42, cities:[
+      {id:'mayostad',nm:'Mayostad',sub:'Wit goud',x:34,y:36},{id:'curryburcht',nm:'Curryburcht',sub:'Kruidig',x:60,y:52},
+      {id:'stoofdorp',nm:'Stoofdorp',sub:'Vlaamse stoof',x:44,y:76}]}]},
+  {id:'neonix',   nm:'Neonix',    sub:'Neon-scifi wereld',  emoji:'🛸', x:80, y:66, countries:[
+    {id:'cybersektor', nm:'Cyber-Sektor', sub:'Neonstad', emoji:'🌌', x:52, y:40, cities:[
+      {id:'neobrussel',nm:'Neo-Brussel',sub:'Hologram-friet',x:38,y:38},{id:'chromadam',nm:'Chromadam',sub:'Chroomstad',x:64,y:56},
+      {id:'orbit9',nm:'Orbit-9',sub:'Ruimtestation',x:46,y:76}]}]}
+];
+var planetDef=function(id){ for(var i=0;i<GALAXY.length;i++) if(GALAXY[i].id===id) return GALAXY[i]; return null; };
+var countriesOf=function(planetId){ var p=planetDef(planetId); return p?p.countries:[]; };
+var countryDef=function(planetId,countryId){ var cs=countriesOf(planetId); for(var i=0;i<cs.length;i++) if(cs[i].id===countryId) return cs[i]; return null; };
+var citiesOf=function(planetId,countryId){ var c=countryDef(planetId,countryId); return c?c.cities:[]; };
+var cityDef=function(planetId,countryId,cityId){ var cs=citiesOf(planetId,countryId); for(var i=0;i<cs.length;i++) if(cs[i].id===cityId) return cs[i]; return null; };
+var START_PLANET='aarde';                                 // pre-galaxy shops migrate to Earth
 var START_COUNTRY='belgie';                               // pre-globe shops migrate to Belgium
 var START_CITY='brussel';                                 // Stage-1 shops migrate to the capital
 var IDLE_CAP_SEC=8*3600;                                  // passive income accrues up to 8h offline
@@ -645,41 +670,44 @@ var snapshotActiveInto=function(){ if(!META) return; var rec=META.shops[META.act
 var collectIdle=function(rec){ if(!rec||!rec.blob) return 0; var secs=(nowMs()-(rec.t||nowMs()))/1000;
   var g=idleIncome(rec.blob,secs); if(g>0) rec.blob.money=(rec.blob.money||0)+g; return g; };
 var pendingIdle=function(rec){ if(!rec||!rec.blob) return 0; return idleIncome(rec.blob,(nowMs()-(rec.t||nowMs()))/1000); };
+var shopPlanet=function(rec){ return (rec&&rec.planet)||START_PLANET; };      // pre-galaxy shops → Earth
 var shopCountry=function(rec){ return (rec&&rec.country)||START_COUNTRY; };   // pre-globe shops → Belgium
 var shopCity=function(rec){ return (rec&&rec.city)||START_CITY; };            // Stage-1 shops → capital
-// index of the shop on (country, city, lot), or -1
-var shopAt=function(countryId,cityId,lotId){ if(!META) return -1; for(var i=0;i<META.shops.length;i++){ var s=META.shops[i]; if(shopCountry(s)===countryId && shopCity(s)===cityId && s.lot===lotId) return i; } return -1; };
-var cityShops=function(countryId,cityId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopCountry(s)===countryId && shopCity(s)===cityId) out.push({i:i,rec:s}); }); return out; };
-var countryShops=function(countryId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopCountry(s)===countryId) out.push({i:i,rec:s}); }); return out; };
+// index of the shop on (planet, country, city, lot), or -1
+var shopAt=function(planetId,countryId,cityId,lotId){ if(!META) return -1; for(var i=0;i<META.shops.length;i++){ var s=META.shops[i]; if(shopPlanet(s)===planetId && shopCountry(s)===countryId && shopCity(s)===cityId && s.lot===lotId) return i; } return -1; };
+var cityShops=function(planetId,countryId,cityId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopPlanet(s)===planetId && shopCountry(s)===countryId && shopCity(s)===cityId) out.push({i:i,rec:s}); }); return out; };
+var countryShops=function(planetId,countryId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopPlanet(s)===planetId && shopCountry(s)===countryId) out.push({i:i,rec:s}); }); return out; };
+var planetShops=function(planetId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopPlanet(s)===planetId) out.push({i:i,rec:s}); }); return out; };
 var sumShops=function(list){ var till=0, idle=0; list.forEach(function(o){ till+=(o.rec.blob&&o.rec.blob.money)||0; if(META&&o.i!==META.active) idle+=pendingIdle(o.rec); }); return { count:list.length, till:till, idle:idle }; };
-// roll shops up into totals for a city / a whole country
-var cityTotals=function(countryId,cityId){ return sumShops(cityShops(countryId,cityId)); };
-var countryTotals=function(countryId){ return sumShops(countryShops(countryId)); };
+// roll shops up into totals for a city / a country / a whole planet
+var cityTotals=function(planetId,countryId,cityId){ return sumShops(cityShops(planetId,countryId,cityId)); };
+var countryTotals=function(planetId,countryId){ return sumShops(countryShops(planetId,countryId)); };
+var planetTotals=function(planetId){ return sumShops(planetShops(planetId)); };
 var initMeta=function(){ var m=null; try{ m=JSON.parse(localStorage.getItem(META_KEY)||'null'); }catch(e){ m=null; }
   if(m && m.shops && m.shops.length){ META=m; if(META.active==null||META.active>=META.shops.length) META.active=0; }
-  else { META={ shops:[{ country:START_COUNTRY, city:START_CITY, lot:'markt', name:'Rudy Friet', blob:null, t:nowMs() }], active:0 }; }
-  META.shops.forEach(function(s){ if(!s.country) s.country=START_COUNTRY; if(!s.city) s.city=START_CITY; });   // migrate pre-globe/pre-country saves
+  else { META={ shops:[{ planet:START_PLANET, country:START_COUNTRY, city:START_CITY, lot:'markt', name:'Rudy Friet', blob:null, t:nowMs() }], active:0 }; }
+  META.shops.forEach(function(s){ if(!s.planet) s.planet=START_PLANET; if(!s.country) s.country=START_COUNTRY; if(!s.city) s.city=START_CITY; });   // migrate pre-galaxy/globe/country saves
   snapshotActiveInto(); saveMeta(); };
 var switchShop=function(idx){ if(!META||idx<0||idx>=META.shops.length||idx===META.active) return;
   snapshotActiveInto();
   var rec=META.shops[idx], gain=collectIdle(rec);
   applyBlob(rec.blob); META.active=idx; rec.t=nowMs(); save();
   if(el.mapScreen) el.mapScreen.classList.add('hidden');
-  renderAll(); var ld=lotDef(rec.lot), cd=cityDef(shopCountry(rec),shopCity(rec)), co=countryDef(shopCountry(rec));
-  var where=(ld?ld.nm:'')+(cd?', '+cd.nm:'')+(co&&co.id!==START_COUNTRY?' '+co.emoji:'');
+  renderAll(); var ld=lotDef(rec.lot), cd=cityDef(shopPlanet(rec),shopCountry(rec),shopCity(rec)), co=countryDef(shopPlanet(rec),shopCountry(rec)), pl=planetDef(shopPlanet(rec));
+  var where=(ld?ld.nm:'')+(cd?', '+cd.nm:'')+(pl&&pl.id!==START_PLANET?' '+pl.emoji:(co&&co.id!==START_COUNTRY?' '+co.emoji:''));
   addShake(1.4); chime([520,700,900],0.09);
   if(gain>0) toast('🏪 <b>'+rec.name+'</b>'+(where?' — '+where:'')+': onderweg <b>+'+fmt(gain)+'💶</b> verdiend!');
   else toast('🏪 Nu aan de slag in <b>'+rec.name+'</b>'+(where?' — '+where:'')+'.'); };
-var openShopAt=function(countryId,cityId,lotId){ if(!META||!lotDef(lotId)||!cityDef(countryId,cityId)) return;
-  if(shopAt(countryId,cityId,lotId)>=0){ toast('Hier staat al een frituur.'); return; }
+var openShopAt=function(planetId,countryId,cityId,lotId){ if(!META||!lotDef(lotId)||!cityDef(planetId,countryId,cityId)) return;
+  if(shopAt(planetId,countryId,cityId,lotId)>=0){ toast('Hier staat al een frituur.'); return; }
   var cost=openShopCost(META.shops.length);
   if(G.money<cost){ toast('Te weinig geld — een frituur hier kost '+fmt(cost)+'💶.'); return; }
   G.money-=cost; snapshotActiveInto();
   var pg=G; G=freshGame(); var blob=serializeShop(); blob.appealSnap=computeAppeal(G); blob.servedSnap=0; G=pg;
-  META.shops.push({ country:countryId, city:cityId, lot:lotId, name:'Rudy Friet '+(META.shops.length+1), blob:blob, t:nowMs() });
-  var ld=lotDef(lotId), cd=cityDef(countryId,cityId), co=countryDef(countryId); bigPop('🏗️ '+ld.nm,'#7bd66b'); confetti();
+  META.shops.push({ planet:planetId, country:countryId, city:cityId, lot:lotId, name:'Rudy Friet '+(META.shops.length+1), blob:blob, t:nowMs() });
+  var ld=lotDef(lotId), cd=cityDef(planetId,countryId,cityId), pl=planetDef(planetId); bigPop('🏗️ '+ld.nm,'#7bd66b'); confetti();
   switchShop(META.shops.length-1);
-  toast('🎉 Nieuwe frituur op <b>'+ld.nm+'</b> in <b>'+cd.nm+'</b> '+(co?co.emoji:'')+'! Bouw ze uit tot een topzaak.'); };
+  toast('🎉 Nieuwe frituur op <b>'+ld.nm+'</b> in <b>'+cd.nm+'</b> '+(pl?pl.emoji:'')+'! Bouw ze uit tot een topzaak.'); };
 // contest progress: called from serve/merge with a metric + amount
 var awardContest=function(c){ G.faam+=c.reward.faam||0; G.money+=c.reward.cash||0;
   bigPop('UITDAGING! 🏆','#ffd447'); confetti(); starRing(worldW()/2,GH*TS/2,14); chime([700,940,1180],0.1);
@@ -1231,11 +1259,27 @@ var renderMenu=function(){ if(!el.menuBody) return; if(!G.prices) G.prices=defau
   each('[data-price]',function(b){ return function(){ var p=b.getAttribute('data-price').split(':'); setPrice(p[0],parseInt(p[1],10)); }; }); };
 var setPrice=function(id,delta){ var z=sizeDef(id); if(!z) return; if(!G.prices) G.prices=defaultPrices();
   G.prices[id]=clamp(Math.round((priceOf(G,id)+delta)), Math.round(z.fair*0.5), Math.round(z.fair*2)); beep(delta>0?600:420,0.04,0.03); renderMenu(); syncHUD(); save(); };
-// three-tier map overlay: world (countries) → country (cities) → city (its lots)
-var mapView='world', mapCountry=null, mapCity=null;
-// WORLD view: each country is a pin rolling up ALL its shops' count + till + pending idle
-var renderWorld=function(){ var h='', totShops=META.shops.length, totTill=0;
-  WORLD.forEach(function(co){ var t=countryTotals(co.id); totTill+=t.till; var owned=t.count>0;
+// four-tier map overlay: galaxy (planets) → world (countries) → country (cities) → city (lots)
+var mapView='galaxy', mapPlanet=null, mapCountry=null, mapCity=null;
+// GALAXY view: each planet is a pin rolling up ALL its shops (across every country)
+var renderGalaxy=function(){ var h='<div class="stars"></div>', totShops=META.shops.length, totTill=0;
+  GALAXY.forEach(function(pl){ var t=planetTotals(pl.id); totTill+=t.till; var owned=t.count>0;
+    var pos='left:'+pl.x+'%;top:'+pl.y+'%';
+    h+='<div class="lot '+(owned?'own':'empty')+'" data-planet="'+pl.id+'" style="'+pos+'">'
+      +'<div class="lotpin">'+pl.emoji+'</div>'
+      +'<div class="lotnm">'+pl.nm+'</div>'
+      +(owned?'<div class="lottill">'+t.count+'🏪 · '+fmt(t.till)+'💶</div>'+(t.idle>0?'<div class="lotidle">+'+fmt(t.idle)+' onderweg</div>':'')
+             :'<div class="lotcost">'+pl.sub+'</div>')+'</div>';
+  });
+  el.mapArea.innerHTML=h;
+  if(el.mapTitle) el.mapTitle.innerHTML='🌌 De Melkweg<small>F R I T U U R - I M P E R I U M</small>';
+  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+totShops+' frituur'+(totShops!==1?'en':'')+' in het heelal · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapBack) el.mapBack.style.display='none';
+  each('[data-planet]',function(b){ return function(){ mapPlanet=b.getAttribute('data-planet'); mapView='world'; renderMap(); }; }); };
+// WORLD view: each country of one planet is a pin rolling up all its shops
+var renderWorld=function(planetId){ var pl=planetDef(planetId); if(!pl){ mapView='galaxy'; return renderGalaxy(); }
+  var h=(planetId===START_PLANET?'':'<div class="stars"></div>'), totTill=0;
+  pl.countries.forEach(function(co){ var t=countryTotals(planetId,co.id); totTill+=t.till; var owned=t.count>0;
     var pos='left:'+co.x+'%;top:'+co.y+'%';
     h+='<div class="lot '+(owned?'own':'empty')+'" data-country="'+co.id+'" style="'+pos+'">'
       +'<div class="lotpin">'+co.emoji+'</div>'
@@ -1244,14 +1288,14 @@ var renderWorld=function(){ var h='', totShops=META.shops.length, totTill=0;
              :'<div class="lotcost">'+co.sub+'</div>')+'</div>';
   });
   el.mapArea.innerHTML=h;
-  if(el.mapTitle) el.mapTitle.innerHTML='🌍 De wereld<small>F R I T U U R - I M P E R I U M</small>';
-  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+totShops+' frituur'+(totShops!==1?'en':'')+' wereldwijd · totaal <b>'+fmt(totTill)+'💶</b>';
-  if(el.mapBack) el.mapBack.style.display='none';
+  if(el.mapTitle) el.mapTitle.innerHTML=pl.emoji+' '+pl.nm+'<small>'+pl.sub.toUpperCase()+'</small>';
+  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+planetTotals(planetId).count+' op '+pl.nm+' · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapBack) el.mapBack.style.display='';
   each('[data-country]',function(b){ return function(){ mapCountry=b.getAttribute('data-country'); mapView='country'; renderMap(); }; }); };
-// COUNTRY view: each city of one country is a pin rolling up its shops' count + till + idle
-var renderCountryMap=function(countryId){ var co=countryDef(countryId); if(!co){ mapView='world'; return renderWorld(); }
+// COUNTRY view: each city of one country is a pin rolling up its shops
+var renderCountryMap=function(planetId,countryId){ var co=countryDef(planetId,countryId); if(!co){ mapView='world'; return renderWorld(planetId); }
   var h='', totTill=0;
-  co.cities.forEach(function(city){ var t=cityTotals(countryId,city.id); totTill+=t.till; var owned=t.count>0;
+  co.cities.forEach(function(city){ var t=cityTotals(planetId,countryId,city.id); totTill+=t.till; var owned=t.count>0;
     var pos='left:'+city.x+'%;top:'+city.y+'%';
     h+='<div class="lot '+(owned?'own':'empty')+'" data-city="'+city.id+'" style="'+pos+'">'
       +'<div class="lotpin">'+(owned?'🏙️':'📍')+'</div>'
@@ -1261,13 +1305,13 @@ var renderCountryMap=function(countryId){ var co=countryDef(countryId); if(!co){
   });
   el.mapArea.innerHTML=h;
   if(el.mapTitle) el.mapTitle.innerHTML=co.emoji+' '+co.nm+'<small>'+co.sub.toUpperCase()+'</small>';
-  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+countryTotals(countryId).count+' hier · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+countryTotals(planetId,countryId).count+' hier · totaal <b>'+fmt(totTill)+'💶</b>';
   if(el.mapBack) el.mapBack.style.display='';
   each('[data-city]',function(b){ return function(){ mapCity=b.getAttribute('data-city'); mapView='city'; renderMap(); }; }); };
 // CITY view: the five lots of one city — your shops and empty lots to open
-var renderCity=function(countryId,cityId){ var cd=cityDef(countryId,cityId); if(!cd){ mapView='country'; return renderCountryMap(countryId); }
+var renderCity=function(planetId,countryId,cityId){ var cd=cityDef(planetId,countryId,cityId); if(!cd){ mapView='country'; return renderCountryMap(planetId,countryId); }
   var h='<div class="river"></div>', total=0;
-  CITY_LOTS.forEach(function(lot){ var idx=shopAt(countryId,cityId,lot.id), pos='left:'+lot.x+'%;top:'+lot.y+'%';
+  CITY_LOTS.forEach(function(lot){ var idx=shopAt(planetId,countryId,cityId,lot.id), pos='left:'+lot.x+'%;top:'+lot.y+'%';
     if(idx>=0){ var rec=META.shops[idx], active=idx===META.active, till=(rec.blob&&rec.blob.money)||0; total+=till;
       var idle=active?0:pendingIdle(rec);
       h+='<div class="lot own'+(active?' active':'')+'" data-switch="'+idx+'" style="'+pos+'">'
@@ -1281,19 +1325,22 @@ var renderCity=function(countryId,cityId){ var cd=cityDef(countryId,cityId); if(
         +'<div class="lotcost">'+(afford?'open · ':'')+fmt(cost)+'💶</div></div>';
     }
   });
-  el.mapArea.innerHTML=h; var co=countryDef(countryId), t=cityTotals(countryId,cityId);
+  el.mapArea.innerHTML=h; var co=countryDef(planetId,countryId), t=cityTotals(planetId,countryId,cityId);
   if(el.mapTitle) el.mapTitle.innerHTML='🏙️ '+cd.nm+'<small>'+(co?co.nm.toUpperCase()+' · ':'')+cd.sub.toUpperCase()+'</small>';
   if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+t.count+' hier · kassa <b>'+fmt(total)+'💶</b>';
   if(el.mapBack) el.mapBack.style.display='';
   each('[data-switch]',function(b){ return function(){ switchShop(parseInt(b.getAttribute('data-switch'),10)); }; });
-  each('[data-open]',function(b){ return function(){ openShopAt(countryId,mapCity,b.getAttribute('data-open')); }; }); };
+  each('[data-open]',function(b){ return function(){ openShopAt(mapPlanet,mapCountry,mapCity,b.getAttribute('data-open')); }; }); };
 var renderMap=function(){ if(!el.mapArea||!META) return; snapshotActiveInto();
-  if(mapView==='city' && mapCountry && mapCity) renderCity(mapCountry,mapCity);
-  else if(mapView==='country' && mapCountry) renderCountryMap(mapCountry);
-  else { mapView='world'; renderWorld(); } };
-// walk up one tier: city → country → world
-var mapUp=function(){ if(mapView==='city'){ mapView='country'; mapCity=null; } else { mapView='world'; mapCountry=null; mapCity=null; } renderMap(); };
-var openMap=function(){ if(!el.mapScreen||!META) return; mapView='world'; mapCountry=null; mapCity=null; renderMap(); el.mapScreen.classList.remove('hidden'); };
+  if(mapView==='city' && mapPlanet && mapCountry && mapCity) renderCity(mapPlanet,mapCountry,mapCity);
+  else if(mapView==='country' && mapPlanet && mapCountry) renderCountryMap(mapPlanet,mapCountry);
+  else if(mapView==='world' && mapPlanet) renderWorld(mapPlanet);
+  else { mapView='galaxy'; renderGalaxy(); } };
+// walk up one tier: city → country → world → galaxy
+var mapUp=function(){ if(mapView==='city'){ mapView='country'; mapCity=null; }
+  else if(mapView==='country'){ mapView='world'; mapCountry=null; }
+  else { mapView='galaxy'; mapPlanet=null; mapCountry=null; mapCity=null; } renderMap(); };
+var openMap=function(){ if(!el.mapScreen||!META) return; mapView='galaxy'; mapPlanet=null; mapCountry=null; mapCity=null; renderMap(); el.mapScreen.classList.remove('hidden'); };
 var renderAll=function(){ renderShop(); renderMenu(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); renderBuurt(); syncHUD(); save(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<buyCost(G,id)){ toast('Te weinig geld.'); return; }
@@ -1523,7 +1570,8 @@ if(typeof globalThis!=='undefined'){
     RIVALS:RIVALS, rivalDef:rivalDef, marketShare:marketShare, marketMul:marketMul, rivalBoard:rivalBoard, buurtRank:buurtRank,
     TIMELINE:TIMELINE, timelineDef:timelineDef, eventMod:eventMod, eventTrafficMul:eventTrafficMul, eventSpendMul:eventSpendMul,
     CITY_LOTS:CITY_LOTS, lotDef:lotDef, idleRate:idleRate, idleIncome:idleIncome, openShopCost:openShopCost, IDLE_CAP_SEC:IDLE_CAP_SEC,
-    COUNTRY:COUNTRY, WORLD:WORLD, countryDef:countryDef, citiesOf:citiesOf, cityDef:cityDef, START_CITY:START_CITY, START_COUNTRY:START_COUNTRY,
+    COUNTRY:COUNTRY, WORLD:WORLD, GALAXY:GALAXY, planetDef:planetDef, countriesOf:countriesOf, countryDef:countryDef, citiesOf:citiesOf, cityDef:cityDef,
+    START_CITY:START_CITY, START_COUNTRY:START_COUNTRY, START_PLANET:START_PLANET,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
