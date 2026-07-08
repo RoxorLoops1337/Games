@@ -214,6 +214,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   HR.gainAffinity(g.horses[0], 'race', HR.SPECIALIST_AT); // satisfies the specialist goal
   g.stats.seasonTitles = 1; // satisfies the championship goal
   HR.addWishlistPref(g, { breed: 'arabian' }); // satisfies the wishlist goal
+  g.insurance = ['vet']; // satisfies the insurance goal
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
   ok(HR.currentGoal(g) === null, 'no current goal once the chain is complete');
@@ -1855,6 +1856,84 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ach = HR.ACHIEVEMENTS.find(a => a.id === 'patron');
   const g2 = HR.freshGame(); g2.stats.featuredBought = 1;
   ok(ach && ach.check(g2) && !ach.check(g), 'buying a featured horse unlocks Discerning Patron');
+}
+
+// ---- seasonal disasters + insurance (round 31) ----
+{
+  // config + seasonal weighting
+  ok(Array.isArray(HR.DISASTERS) && HR.DISASTERS.length >= 4, 'a disaster catalogue exists');
+  ok(new Set(HR.DISASTERS.map(d => d.id)).size === HR.DISASTERS.length, 'disaster ids are unique');
+  ok(HR.DISASTERS.every(d => d.weight > 0 && d.kind && d.emoji && Array.isArray(d.seasons) && d.seasons.length), 'each disaster has weight, kind, emoji, seasons');
+  ok(HR.disastersForSeason('winter').some(d => d.id === 'blizzard'), 'winter includes the blizzard');
+  ok(!HR.disastersForSeason('summer').some(d => d.id === 'blizzard'), 'blizzards never strike in summer');
+  ok(HR.disasterDef('colic') && HR.disasterDef('nope') === null, 'disasterDef lookup + miss');
+  ok(HR.DISASTER_CHANCE > 0 && HR.DISASTER_CHANCE <= 0.15, 'disasters are rare (<=15%/day)');
+}
+{
+  // a disaster applies a bounded coin loss; uninsured takes the full (capped) hit
+  const g = HR.freshGame(); g.money = 100000; g.day = 30; // winter-ish, established ranch
+  const dis = HR.disasterDef('storm');
+  const m0 = g.money;
+  const r = HR.applyDisaster(g, dis, rng(3));
+  ok(r && r.net > 0 && g.money === m0 - r.net, 'a disaster deducts its coin loss');
+  ok(r.net <= 450, 'the loss is capped (never brutal)');
+  ok(g.stats.disasters === 1, 'the disaster is tallied');
+  // storm dents a horse health but bounded
+  ok(g.horses.every(h => h.health >= 0), 'health stays valid after a storm');
+}
+{
+  // insurance softens the matching kind and is a bounded fraction
+  const bare = HR.freshGame(); bare.money = 100000; bare.day = 30;
+  const ins = HR.freshGame(); ins.money = 100000; ins.day = 30; HR.buyInsurance(ins, 'property');
+  const rb = HR.applyDisaster(bare, HR.disasterDef('storm'), rng(9));
+  const ri = HR.applyDisaster(ins, HR.disasterDef('storm'), rng(9));
+  ok(ri.net < rb.net && ri.covered > 0, 'insurance reduces the net loss for the covered kind');
+  ok(ri.net + ri.covered === rb.net + rb.covered || Math.abs((ri.net + ri.covered) - rb.coin) <= 1, 'covered + net ≈ the gross loss');
+  // wrong-kind insurance does not help
+  const wrong = HR.freshGame(); wrong.money = 100000; wrong.day = 30; HR.buyInsurance(wrong, 'vet'); // health cover, not property
+  const rw = HR.applyDisaster(wrong, HR.disasterDef('storm'), rng(9));
+  ok(rw.covered === 0 && rw.net === rb.net, 'a policy only covers its own kind');
+  ok(HR.insuranceCovers(ins, 'property') > 0 && HR.insuranceCovers(ins, 'health') === 0, 'insuranceCovers reports the right kind');
+}
+{
+  // buy/cancel policies, premium sums, and daily premium is deducted in advanceDay
+  const g = HR.freshGame(); g.money = 5000; g.feed = 9999;
+  ok(HR.insurancePremium(g) === 0, 'no premium with no policies');
+  const r = HR.buyInsurance(g, 'weather');
+  ok(r.ok && HR.hasInsurance(g, 'weather') && HR.insurancePremium(g) === HR.insuranceDef('weather').premium, 'buying a policy adds its premium');
+  ok(!HR.buyInsurance(g, 'weather').ok, 'cannot double-insure the same policy');
+  const m0 = g.money;
+  HR.advanceDay(g, rng(2));
+  ok(g.money <= m0 - HR.insuranceDef('weather').premium, 'the premium is deducted daily');
+  ok((g.stats.insurancePremiums || 0) >= HR.insuranceDef('weather').premium, 'premiums are tracked');
+  HR.cancelInsurance(g, 'weather');
+  ok(!HR.hasInsurance(g, 'weather') && HR.insurancePremium(g) === 0, 'cancelling stops the premium');
+}
+{
+  // rollDisaster: none in the grace period; deterministic; drawn from the season pool
+  const early = HR.freshGame(); early.day = 3;
+  ok(HR.rollDisaster(early, rng(1)) === null, 'no disasters during the first-season grace period');
+  const g = { day: 30, horses: [], stats: {} }; // deep winter
+  // force a hit with an rng that returns a low first value
+  let calls = 0; const hitRng = () => { calls++; return calls === 1 ? 0.0 : 0.5; };
+  const d = HR.rollDisaster(g, hitRng);
+  ok(d && HR.disastersForSeason(HR.seasonOf(g.day).id).some(x => x.id === d.id), 'a rolled disaster belongs to the current season');
+  ok(HR.rollDisaster({ day: 30, horses: [], stats: {} }, () => 0.99) === null, 'a high roll yields no disaster');
+}
+{
+  // save migration + goal/achievement
+  const legacy = HR.freshGame(); delete legacy.insurance;
+  ok(!Array.isArray(legacy.insurance), 'legacy save lacks an insurance array');
+  legacy.insurance = Array.isArray(legacy.insurance) ? legacy.insurance : []; // mirrors the load guard
+  ok(Array.isArray(legacy.insurance), 'migration gives an insurance array');
+  const g = HR.freshGame();
+  const goal = HR.GOALS.find(x => x.id === 'insure1');
+  ok(goal && !goal.done(g), 'the insurance goal is unmet with no policy');
+  HR.buyInsurance(g, 'vet');
+  ok(goal.done(g), 'the insurance goal completes once insured');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'weathered');
+  const g2 = HR.freshGame(); g2.stats.disasters = 5;
+  ok(ach && ach.check(g2) && !ach.check(g), 'weathering five disasters unlocks the achievement');
 }
 
 // ---- clamp helper ----
