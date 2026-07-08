@@ -442,5 +442,24 @@ ok(FS.developCost(3) > FS.developCost(1), 'developing a higher-rank dish costs m
   ok(FS.timelineDef(FS.TIMELINE[0].id) === FS.TIMELINE[0], 'event lookup by id works');
 }
 
+// ---- empire: multi-shop city map (Stage 1) ----
+{
+  ok(FS.CITY_LOTS.length >= 3, 'the city has several lots');
+  ok(FS.CITY_LOTS.every(l => l.id && l.nm && typeof l.x === 'number' && typeof l.y === 'number'), 'each lot is well-formed');
+  ok(FS.lotDef(FS.CITY_LOTS[0].id) === FS.CITY_LOTS[0], 'lot lookup by id works');
+  ok(FS.lotDef('nope') === null, 'unknown lot → null');
+  // opening cost escalates with each shop, first extra shop is the base
+  ok(FS.openShopCost(1) < FS.openShopCost(2), 'each new shop costs more than the last');
+  ok(FS.openShopCost(1) === 2000, 'the second shop costs the base price');
+  // idle income: none for an empty blob, scales with appeal + serves, caps offline
+  ok(FS.idleRate(null) === 0 && FS.idleIncome(null, 9999) === 0, 'a missing shop earns nothing');
+  const blob = { appealSnap: 40, servedSnap: 100 };
+  ok(FS.idleRate(blob) > 0, 'a developed shop has a positive idle rate');
+  ok(FS.idleIncome(blob, 100) === Math.round(FS.idleRate(blob) * 100), 'idle income is rate × seconds');
+  ok(FS.idleIncome(blob, FS.IDLE_CAP_SEC * 5) === FS.idleIncome(blob, FS.IDLE_CAP_SEC), 'idle income caps at the offline limit');
+  const rich = { appealSnap: 80, servedSnap: 100 }, poor = { appealSnap: 10, servedSnap: 100 };
+  ok(FS.idleRate(rich) > FS.idleRate(poor), 'a higher-appeal shop earns more while idle');
+}
+
 console.log(`frietkot_story: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
