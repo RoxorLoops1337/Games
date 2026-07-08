@@ -109,9 +109,11 @@
   /* Modal */
   .modal{position:fixed;inset:0;background:#0a0d08d8;z-index:20;display:none;align-items:flex-end;justify-content:center}
   .modal.on{display:flex}
-  .sheet{width:100%;max-width:560px;background:linear-gradient(#2f3f22,#233016);border-top:2px solid var(--gold2);border-radius:16px 16px 0 0;padding:16px 14px 22px;max-height:82vh;overflow-y:auto;animation:slideup .22s ease-out}
+  .sheet{position:relative;width:100%;max-width:560px;background:linear-gradient(#2f3f22,#233016);border-top:2px solid var(--gold2);border-radius:16px 16px 0 0;padding:16px 14px 22px;max-height:82vh;overflow-y:auto;animation:slideup .22s ease-out}
+  .sheetX{position:absolute;top:10px;right:10px;z-index:3;width:32px;height:32px;border-radius:50%;border:1px solid var(--edge);background:var(--slot);color:var(--ink2);font-size:15px;font-weight:900;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .sheetX:active{transform:scale(.9)} .sheetX:hover{color:var(--ink);background:#0d130a}
   @keyframes slideup{from{transform:translateY(30px);opacity:.4}to{transform:translateY(0);opacity:1}}
-  .sheet h3{margin:0 0 4px;font-size:16px;color:var(--gold)}
+  .sheet h3{margin:0 40px 4px 0;font-size:16px;color:var(--gold)}
   .sheet .msg{font-size:13px;line-height:1.5;color:var(--ink);margin:6px 0 12px}
   .optlist{display:flex;flex-direction:column;gap:7px}
   .opt{background:#0d130a;border:1px solid #0c110a;border-radius:9px;padding:10px;display:flex;gap:8px;align-items:center;cursor:pointer}
@@ -138,6 +140,8 @@
   #hudMoney.bump{display:inline-block;animation:hudbump .3s ease-out}
   @keyframes hudbump{0%{transform:scale(1)}40%{transform:scale(1.28);color:#fff2b0}100%{transform:scale(1)}}
   .goalpop{border-color:var(--good)!important}
+  .burst{position:fixed;z-index:45;font-size:20px;pointer-events:none;will-change:transform,opacity;animation:burstfly 1.2s ease-out forwards;text-shadow:0 1px 3px #0006}
+  @keyframes burstfly{0%{transform:translate(0,0) scale(.4);opacity:0}18%{opacity:1;transform:translate(calc(var(--dx)*.4),calc(var(--dy)*.5)) scale(1.1)}100%{transform:translate(var(--dx),calc(var(--dy) + 120px)) scale(.9) rotate(30deg);opacity:0}}
   /* Pedigree tree */
   .pedwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:4px 0 6px}
   .pedtree{display:flex;gap:8px;align-items:center;min-width:min-content}
@@ -328,6 +332,22 @@ function relatedness(mare,stallion){ // shared ancestors within ~2 generations
   const a=ancestorIds(mare,2), b=ancestorIds(stallion,2); let n=0; a.forEach(id=>{ if(b.has(id)) n++; }); return n;
 }
 
+// ---------- Personality traits (inheritable quirks) ----------
+// Each horse has one trait that nudges training, show aptitude, lessons & rent.
+// Multipliers default to 1; disc{} keys are per-discipline show bonuses.
+const TRAITS=[
+  {id:'bold',   name:'Bold',      emoji:'🦁', desc:'Fearless in the ring — no show nerves.',      train:1.0,  lesson:1.0,  rent:1.06, show:1.08, disc:{race:1.05,halter:1.05}},
+  {id:'gentle', name:'Gentle',    emoji:'🕊️', desc:'Wonderful with students and calm at home.',   train:1.0,  lesson:1.22, rent:1.08, show:1.0,  disc:{dressage:1.06}},
+  {id:'clever', name:'Clever',    emoji:'🧠', desc:'Learns fast — training pays off more.',        train:1.28, lesson:1.05, rent:1.02, show:1.0,  disc:{dressage:1.05}},
+  {id:'lazy',   name:'Lazy',      emoji:'😴', desc:'Hard to motivate, but low-maintenance.',       train:0.72, lesson:0.9,  rent:0.94, show:0.97, disc:{}},
+  {id:'hot',    name:'Hot-headed',emoji:'🔥', desc:'Fiery and quick, but tricky to handle.',       train:0.95, lesson:0.82, rent:1.0,  show:0.98, disc:{race:1.12,dressage:0.88}},
+  {id:'steady', name:'Steady',    emoji:'🪨', desc:'Calm, reliable and tireless.',                 train:1.0,  lesson:1.1,  rent:1.03, show:1.0,  disc:{endurance:1.10}},
+  {id:'spirited',name:'Spirited', emoji:'✨', desc:'Flashy and full of heart — the crowds love it.',train:1.05, lesson:1.0,  rent:1.05, show:1.05, disc:{halter:1.08}},
+];
+function traitDef(id){ return TRAITS.find(t=>t.id===id)||null; }
+function pickTrait(rng){ rng=rng||Math.random; return TRAITS[Math.floor(rng()*TRAITS.length)].id; }
+function traitMult(h,key,sub){ const t=traitDef(h&&h.trait); if(!t) return 1; if(sub!=null){ return (t[key]&&t[key][sub])||1; } return t[key]!=null?t[key]:1; }
+
 // ---------- Horse factory ----------
 let _idc=1;
 function mkHorse(o){
@@ -342,6 +362,7 @@ function mkHorse(o){
     name:o.name||pickName(sex,rng),
     breed:b.id, sex,
     genes, coat, color:coat.name,
+    trait:o.trait||pickTrait(rng),
     age:o.age==null?12:o.age,
     speed:o.speed!=null?o.speed:vary(b.speed,10),
     stamina:o.stamina!=null?o.stamina:vary(b.stamina,10),
@@ -377,7 +398,7 @@ function valueOf(h){
 }
 function buyPrice(h){ return Math.round(valueOf(h)*1.16); }
 function sellQuote(h){ return Math.round(valueOf(h)*(0.86 + 0.12*(h.happy/100))); }
-function rentRate(h){ return Math.max(6, Math.round(valueOf(h)*0.028*(h.temperament/70)*(h.health/100))); }
+function rentRate(h){ return Math.max(6, Math.round(valueOf(h)*0.028*(h.temperament/70)*(h.health/100)*traitMult(h,'rent'))); }
 
 // ---------- Stables ----------
 const STARTER_STALLS=4;
@@ -419,8 +440,11 @@ function breedFoal(mare,stallion,rng){
   // inbreeding: shared recent ancestors hurt the foal (rewards diverse lines)
   const inbred = relatedness(mare,stallion) > 0;
   const penalty = inbred?0.94:1;
+  // trait inheritance: take a parent's trait, with a small chance of a fresh quirk
+  const parentTrait = (rng()<0.5?mare.trait:stallion.trait) || pickTrait(rng);
+  const foalTrait = rng()<0.12 ? pickTrait(rng) : parentTrait;
   const foal = mkHorse({
-    breed, sex, rng, age:0, genes, coat,
+    breed, sex, rng, age:0, genes, coat, trait:foalTrait,
     speed:Math.round(mix(mare.speed,stallion.speed, samebreed?9:13)*penalty),
     stamina:Math.round(mix(mare.stamina,stallion.stamina, samebreed?9:13)*penalty),
     temperament:Math.round(mix(mare.temperament,stallion.temperament, samebreed?9:13)*penalty),
@@ -624,7 +648,7 @@ function disciplineScore(h,disc){
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form;
+  return s*form*traitMult(h,'show')*traitMult(h,'disc',disc.id); // personality shapes aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -687,11 +711,16 @@ function schoolHorses(game){ return game.horses.filter(h=>isAdult(h)&&h.rentDays
 function teacherCapacityTotal(game){ return (game.teachers||[]).reduce((n,t)=>n+t.capacity,0); }
 function lessonsPerDay(game){ return Math.min(teacherCapacityTotal(game), schoolHorses(game)*3); }
 function lessonFee(game){ return 11 + Math.round(game.rep*0.008); }
+function schoolLessonMult(game){ // gentle horses make better lesson mounts
+  const hs=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+  if(!hs.length) return 1;
+  return hs.reduce((n,h)=>n+traitMult(h,'lesson'),0)/hs.length;
+}
 function schoolIncome(game){
   const cap=teacherCapacityTotal(game); if(!cap) return 0;
   const served=lessonsPerDay(game);
   const avgSkill=game.teachers.reduce((n,t)=>n+t.skill,0)/game.teachers.length;
-  return Math.round(served*lessonFee(game)*(0.7+0.06*avgSkill));
+  return Math.round(served*lessonFee(game)*(0.7+0.06*avgSkill)*schoolLessonMult(game));
 }
 function teacherSalaries(game){ return (game.teachers||[]).reduce((n,t)=>n+t.salary,0); }
 function schoolNet(game){ return schoolIncome(game)-teacherSalaries(game); }
@@ -704,7 +733,7 @@ const TRAIN_LABEL={speed:'Speed',stamina:'Stamina',temperament:'Temperament'};
 const TRAIN_PER_DAY=3;
 function statCap(h,stat){ const b=breedDef(h.breed)||BREEDS[0]; return clamp(Math.round(b[stat]+18),40,100); }
 function trainCost(h,stat){ const b=breedDef(h.breed)||BREEDS[0]; return Math.round(50*(1+h[stat]*0.03)*RARITY_MULT[b.rarity]); }
-function trainGain(h,stat){ const room=statCap(h,stat)-h[stat]; return room<=0?0:Math.max(1,Math.round(room*0.28)); }
+function trainGain(h,stat){ const room=statCap(h,stat)-h[stat]; return room<=0?0:Math.max(1,Math.round(room*0.28*traitMult(h,'train'))); }
 function canTrain(h,stat){
   if(!isAdult(h)) return {ok:false,why:'Only adults can train.'};
   if(h.rentDays>0) return {ok:false,why:'Out on rent.'};
@@ -762,7 +791,8 @@ const HR = {
   disciplineScore, canEnterShow, runCompetition, applyCompetition,
   CANTEEN_MAX, canteenLevel, canteenCost, canteenIncome,
   mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
-  lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet,
+  lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet, schoolLessonMult,
+  TRAITS, traitDef, pickTrait, traitMult,
   rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
 };
 if(typeof globalThis!=='undefined') globalThis.__HR = HR;
@@ -777,7 +807,7 @@ const el=(t,c,h)=>{ const e=document.createElement(t); if(c)e.className=c; if(h!
 const SAVE_KEY='horseranch_save_v1';
 
 let G=null, breedPick={mare:null,stallion:null}, curTab='ranch', speed=1, tickHandle=null, acc=0, lastTs=0;
-const DAY_MS=4200; // one game-day at 1x
+const DAY_MS=8400; // one game-day at 1x (slower, relaxed pace)
 
 // ----- persistence -----
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({G,_idc})); }catch(e){} }
@@ -805,6 +835,7 @@ function load(){
       if(h.color==null) h.color=h.coat.name;
       if(h.ped===undefined) h.ped=null;
       if(h.inbred===undefined) h.inbred=false;
+      if(!h.trait) h.trait=pickTrait(Math.random);
       if(h.wins==null) h.wins=0; if(h.podiums==null) h.podiums=0;
       if(h.entries==null) h.entries=0; if(h.compCd==null) h.compCd=0;
     });
@@ -825,11 +856,13 @@ function modal(html,opts){
   opts=opts||{}; const sh=$('sheet');
   $('modal').className='modal on'+(opts.center?' center':'');
   sh.className='sheet'+(opts.center?' card2':'');
-  sh.innerHTML=html;
+  // every popup gets a top-right ✕ — the ONLY tap-away close (no backdrop dismiss)
+  sh.innerHTML='<button class="sheetX" id="sheetX" aria-label="Close">✕</button>'+html;
+  const x=$('sheetX'); if(x) x.onclick=closeModal;
   return sh;
 }
 function closeModal(){ $('modal').className='modal'; }
-$('modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
+// NOTE: backdrop clicks no longer dismiss — close only via the ✕ or an action button.
 
 // ---------------- Rendering ----------------
 function coatEmoji(h){ const b=breedDef(h.breed); const st=stageForAge(h.age); return st.id==='foal'?'🐴':b.emoji; }
@@ -840,6 +873,7 @@ function horseCard(h,actionsHtml){
   const tags=[];
   tags.push('<span class="tag sex-'+(h.sex==='mare'?'f':'m')+'">'+(h.sex==='mare'?'♀ Mare':'♂ Stallion')+'</span>');
   tags.push('<span class="tag stage">'+st.name+'</span>');
+  { const tr=traitDef(h.trait); if(tr) tags.push('<span class="tag" title="'+tr.desc+'" style="color:var(--blue);border-color:#26405f">'+tr.emoji+' '+tr.name+'</span>'); }
   if(h.purebred) tags.push('<span class="tag pure">Purebred</span>');
   else tags.push('<span class="tag">Grade</span>');
   if(h.generation>1) tags.push('<span class="tag">Gen '+h.generation+'</span>');
@@ -910,6 +944,23 @@ function coinPop(amount){
     p.style.left=Math.max(6,(r.left||40)-6)+'px'; p.style.top=((r.top||30)-2)+'px'; document.body.appendChild(p);
     setTimeout(()=>p.remove(),1100); }
   chip.classList.add('bump'); setTimeout(()=>chip.classList.remove('bump'),300);
+}
+// celebratory emoji burst from the scene banner (births, wins, goals)
+function burst(emojis,count){
+  if(typeof document==='undefined') return;
+  const host=$('scene')||document.body; const rect=host.getBoundingClientRect?host.getBoundingClientRect():{left:0,top:0,width:360,height:96};
+  const cx=(rect.left||0)+(rect.width||360)/2, cy=(rect.top||0)+(rect.height||96)*0.55;
+  const arr=Array.from(emojis||'🎉✨'); const n=count||14;
+  for(let i=0;i<n;i++){
+    const p=el('div','burst',arr[i%arr.length]);
+    const ang=(Math.PI* (0.15+ (i/n)*0.7)) ; const spd=60+ (i%5)*22;
+    const dx=(i%2?1:-1)*Math.cos(ang)*spd*(0.6+ (i%3)*0.3);
+    const dy=-(Math.sin(ang)*spd)-40;
+    p.style.left=cx+'px'; p.style.top=cy+'px';
+    p.style.setProperty('--dx',dx+'px'); p.style.setProperty('--dy',dy+'px');
+    p.style.animationDelay=(i*14)+'ms';
+    document.body.appendChild(p); setTimeout(()=>p.remove(),1300);
+  }
 }
 
 // ---- RANCH tab ----
@@ -1236,6 +1287,7 @@ function doEnterShow(h,disc,tier){
     '<br><span style="font-size:11px;color:var(--ink2)">Score '+res.score+' · rests '+tier.rest+' days</span></div>'+
     '<div class="btnrow"><button class="btn" id="xOk" style="width:100%">'+(res.place===1?'🎉 Champion!':'OK')+'</button></div>',{center:true});
   if(res.prize>0) coinPop(res.prize);
+  if(res.place===1) burst('🏆🥇🎉✨',18); else if(res.place<=3) burst('🎉✨',10);
   $('xOk').onclick=()=>{ closeModal(); toast(medal(res.place)+' '+h.name+': '+pn.replace('!','')+(bits.length?' ('+bits.join(' ')+')':''), res.place<=3?'good':'info'); refresh(); };
 }
 
@@ -1450,6 +1502,7 @@ function doDay(){
   (res.notes||[]).forEach(n=>toast(n.m,n.t));
   const net=G.money-money0; // rent + boarding income earned overnight
   if(net>0) coinPop(net);
+  if(res.born && res.born.length) burst('🎉🐴✨🎊',16); // celebrate new foals
   if(res.event) showEvent(res.event);
   save(); refresh();
 }
@@ -1461,6 +1514,7 @@ function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='marke
 function refresh(){
   const done=checkGoals(G);
   renderHUD(); renderGoal(); renderTab(); bindFeedButtons(); save();
+  if(done.length) burst('🎯⭐🎉✨',16);
   done.forEach(g=>{ const r=g.reward||{}; const bits=[]; if(r.money)bits.push('🪙'+r.money); if(r.feed)bits.push('🌾'+r.feed); if(r.rep)bits.push(r.rep+'⭐');
     toast('🎯 Goal complete: '+g.desc+(bits.length?' — +'+bits.join(' +'):''),'good'); });
 }
@@ -1473,7 +1527,7 @@ function showIntro(){
     '• 🛒 <b>Buy</b> mares &amp; stallions of real breeds<br>'+
     '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
     '• 🏋️ <b>Train</b> horses &amp; chase rare <b>coat colours</b><br>'+
-    '• 🌳 Build <b>bloodlines</b> — pedigree rewards planned pairings<br>'+
+    '• 🌳 Build <b>bloodlines</b> — every horse has an inheritable <b>personality</b><br>'+
     '• 🏆 <b>Compete</b> in shows across 4 disciplines &amp; tiers<br>'+
     '• 🍺 Open a <b>canteen</b> &amp; hire <b>teachers</b> for lessons<br>'+
     '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+

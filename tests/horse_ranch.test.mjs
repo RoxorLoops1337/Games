@@ -275,15 +275,15 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 }
 {
   // discipline scoring weights the right stats
-  const sprinter = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 98, stamina: 50, temperament: 50, health: 100, happy: 100 });
-  const stayer = HR.mkHorse({ breed: 'arabian', age: 20, speed: 50, stamina: 98, temperament: 50, health: 100, happy: 100 });
+  const sprinter = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 98, stamina: 50, temperament: 50, health: 100, happy: 100, trait: 'steady' });
+  const stayer = HR.mkHorse({ breed: 'arabian', age: 20, speed: 50, stamina: 98, temperament: 50, health: 100, happy: 100, trait: 'steady' });
   ok(HR.disciplineScore(sprinter, HR.disciplineDef('race')) > HR.disciplineScore(stayer, HR.disciplineDef('race')), 'sprinter wins the racing score');
   ok(HR.disciplineScore(stayer, HR.disciplineDef('endurance')) > HR.disciplineScore(sprinter, HR.disciplineDef('endurance')), 'stayer wins the endurance score');
-  const gentle = HR.mkHorse({ breed: 'friesian', age: 20, speed: 50, stamina: 50, temperament: 95, health: 100, happy: 100 });
+  const gentle = HR.mkHorse({ breed: 'friesian', age: 20, speed: 50, stamina: 50, temperament: 95, health: 100, happy: 100, trait: 'steady' });
   ok(HR.disciplineScore(gentle, HR.disciplineDef('dressage')) > HR.disciplineScore(sprinter, HR.disciplineDef('dressage')), 'calm horse wins dressage');
   // Showing rewards a fancy coat
-  const plainShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Bay', tier: 0 } });
-  const fancyShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Cremello', tier: 2 } });
+  const plainShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Bay', tier: 0 }, trait: 'steady' });
+  const fancyShow = HR.mkHorse({ breed: 'quarter', age: 20, speed: 60, stamina: 60, temperament: 60, health: 100, happy: 100, coat: { name: 'Cremello', tier: 2 }, trait: 'steady' });
   ok(HR.disciplineScore(fancyShow, HR.disciplineDef('halter')) > HR.disciplineScore(plainShow, HR.disciplineDef('halter')), 'coat tier boosts the Showing score');
 }
 {
@@ -381,6 +381,46 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const g = HR.freshGame(); g.teacherMarket = [];
   HR.restockTeachers(g, rng(2));
   ok(g.teacherMarket.length >= 1, 'restockTeachers refills applicants');
+}
+
+// ---- personality traits ----
+{
+  ok(HR.TRAITS.length >= 6 && HR.traitDef('clever'), 'a set of personality traits exists');
+  ok(HR.mkHorse({ breed: 'arabian', age: 20 }).trait, 'every horse gets a trait');
+  ok(HR.traitMult({ trait: 'clever' }, 'train') > 1, 'clever boosts training gain');
+  ok(HR.traitMult({ trait: 'lazy' }, 'train') < 1, 'lazy reduces training gain');
+  ok(HR.traitMult({ trait: 'gentle' }, 'lesson') > 1, 'gentle makes a better lesson mount');
+  ok(HR.traitMult({ trait: 'hot' }, 'disc', 'race') > 1, 'hot-headed horses are quicker racers');
+  ok(HR.traitMult({ trait: 'hot' }, 'disc', 'dressage') < 1, 'hot-headed horses struggle at dressage');
+  ok(HR.traitMult({ trait: 'clever' }, 'disc', 'race') === 1, 'unlisted discipline is neutral (×1)');
+  ok(HR.traitMult({}, 'train') === 1 && HR.traitMult({ trait: 'nope' }, 'train') === 1, 'missing/unknown trait is neutral');
+}
+{
+  // trait actually changes derived numbers
+  const clever = HR.mkHorse({ breed: 'quarter', age: 20, speed: 50, trait: 'clever' });
+  const lazy = HR.mkHorse({ breed: 'quarter', age: 20, speed: 50, trait: 'lazy' });
+  ok(HR.trainGain(clever, 'speed') > HR.trainGain(lazy, 'speed'), 'clever out-trains lazy on the same stat');
+  const hot = HR.mkHorse({ breed: 'quarter', age: 20, speed: 70, stamina: 60, temperament: 60, health: 100, happy: 100, trait: 'hot' });
+  const calm = HR.mkHorse({ breed: 'quarter', age: 20, speed: 70, stamina: 60, temperament: 60, health: 100, happy: 100, trait: 'steady' });
+  ok(HR.disciplineScore(hot, HR.disciplineDef('race')) > HR.disciplineScore(calm, HR.disciplineDef('race')), 'hot-headed scores higher in racing');
+}
+{
+  // traits are inherited (with a small mutation chance)
+  const mare = HR.mkHorse({ breed: 'arabian', sex: 'mare', age: 20, trait: 'gentle' });
+  const stal = HR.mkHorse({ breed: 'arabian', sex: 'stallion', age: 20, trait: 'gentle' });
+  let inherited = 0;
+  for (let i = 0; i < 40; i++) { if (HR.breedFoal(mare, stal, rng(100 + i)).trait === 'gentle') inherited++; }
+  ok(inherited >= 30, 'foals usually inherit a parent trait (both parents gentle)');
+  ok(HR.breedFoal(mare, stal, rng(7)).trait, 'foal always ends up with some trait');
+}
+{
+  // gentle horses lift riding-school income
+  const gGentle = HR.freshGame(); gGentle.horses.forEach(h => h.trait = 'gentle'); gGentle.rep = 500;
+  const gLazy = HR.freshGame(); gLazy.horses.forEach(h => h.trait = 'lazy'); gLazy.rep = 500;
+  const t1 = HR.mkTeacher(gGentle, rng(1)); t1.capacity = 6; t1.skill = 3; gGentle.teachers.push(t1);
+  const t2 = HR.mkTeacher(gLazy, rng(1)); t2.capacity = 6; t2.skill = 3; gLazy.teachers.push(t2);
+  ok(HR.schoolLessonMult(gGentle) > HR.schoolLessonMult(gLazy), 'gentle horses raise the lesson multiplier');
+  ok(HR.schoolIncome(gGentle) > HR.schoolIncome(gLazy), 'a gentle string earns more from lessons');
 }
 
 // ---- clamp helper ----
