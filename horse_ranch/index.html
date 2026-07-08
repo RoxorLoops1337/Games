@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Stable Story — Horse Ranch Simulator</title>
+<style>
+  :root{
+    --bg:#1a2416;--panel:#243019;--panel2:#2f3f22;--edge:#0c110a;--ink:#f4efdf;--ink2:#c3c9a6;
+    --gold:#ffd35a;--gold2:#e0a53a;--good:#8bd36b;--bad:#e5624a;--warn:#f0a93b;--blue:#69c7e0;
+    --pink:#f28bb0;--slot:#161f10;--wood:#6b4a2b;--wood2:#8a6238;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{background:#0a0d08;color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;overscroll-behavior:none;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+  #app{width:100%;max-width:560px;min-height:100%;background:linear-gradient(#182110,#0d1109);display:flex;flex-direction:column;box-shadow:0 0 40px #000;position:relative}
+
+  /* HUD */
+  #hud{display:flex;align-items:center;gap:5px;padding:8px;background:linear-gradient(#2f3f22,#233016);border-bottom:2px solid var(--edge);font-size:13px;flex-wrap:wrap}
+  .chip{background:var(--slot);border:1px solid var(--edge);border-radius:7px;padding:4px 8px;display:flex;align-items:center;gap:4px;white-space:nowrap;font-weight:800;font-variant-numeric:tabular-nums}
+  .chip b{color:var(--gold)} .chip.feed b{color:var(--good)} .chip.rep b{color:var(--blue)} .chip.day b{color:var(--ink)}
+  .spacer{flex:1}
+  #speedBtns{display:flex;gap:3px}
+  .sbtn{background:var(--slot);border:1px solid var(--edge);border-radius:6px;color:var(--ink2);font-weight:900;font-size:12px;padding:4px 8px;cursor:pointer;min-width:30px}
+  .sbtn.on{background:linear-gradient(var(--gold),var(--gold2));color:#2a1c05;border-color:var(--gold2)}
+
+  /* Scene banner */
+  #scene{position:relative;height:96px;background:linear-gradient(#a9d0ec 0%,#c9e4f2 55%,#8fbf68 55%,#6ea34a 100%);border-bottom:2px solid var(--edge);overflow:hidden;line-height:0}
+  #scene .sun{position:absolute;top:12px;right:22px;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,#fff2b0,#ffd35a 70%,#e0a53a);box-shadow:0 0 24px #ffd35a88}
+  #scene .barn{position:absolute;bottom:24px;left:18px;width:70px;height:46px;background:linear-gradient(#a23c2e,#7d2c22);border:2px solid #4a1a13;border-radius:3px}
+  #scene .barn:before{content:"";position:absolute;top:-16px;left:-4px;right:-4px;height:18px;background:#5a2018;clip-path:polygon(0 100%,50% 0,100% 100%)}
+  #scene .barn:after{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:20px;height:26px;background:#4a1a13;border-radius:3px 3px 0 0}
+  #scene .horse{position:absolute;bottom:20px;font-size:26px;filter:drop-shadow(0 2px 1px #0004);animation:graze 3s ease-in-out infinite}
+  @keyframes graze{0%,100%{transform:translateY(0) scaleX(1)}50%{transform:translateY(-2px)}}
+  #sceneTitle{position:absolute;top:8px;left:12px;font-size:13px;font-weight:900;color:#2a3a18;text-shadow:0 1px 0 #ffffff70;letter-spacing:.5px}
+  #sceneRank{position:absolute;top:26px;left:12px;font-size:11px;font-weight:800;color:#3a4a24;text-shadow:0 1px 0 #ffffff55}
+
+  /* Tabs */
+  #tabs{display:flex;background:#1b2411;border-bottom:2px solid var(--edge)}
+  .tab{flex:1;text-align:center;padding:9px 2px 7px;font-size:11px;font-weight:800;color:var(--ink2);cursor:pointer;border-right:1px solid #0c110a;position:relative}
+  .tab:last-child{border-right:none}
+  .tab .ti{font-size:18px;display:block;line-height:1.1}
+  .tab.on{background:linear-gradient(#2f3f22,#26331a);color:var(--gold)}
+  .tab.on:after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;background:var(--gold)}
+  .tab .badge{position:absolute;top:4px;right:calc(50% - 22px);background:var(--bad);color:#fff;font-size:9px;font-weight:900;border-radius:8px;padding:0 4px;min-width:14px}
+
+  /* Content */
+  #main{flex:1;overflow-y:auto;padding:10px 10px 90px;-webkit-overflow-scrolling:touch}
+  .sec{display:none} .sec.on{display:block}
+  h2.head{font-size:13px;letter-spacing:.5px;color:var(--gold);margin:2px 0 8px;text-transform:uppercase}
+  .sub{font-size:11px;color:var(--ink2);margin:-4px 0 10px}
+
+  /* Cards */
+  .card{background:linear-gradient(var(--panel2),var(--panel));border:1px solid var(--edge);border-radius:11px;padding:10px;margin-bottom:9px;box-shadow:0 2px 0 #0006}
+  .row{display:flex;gap:8px;align-items:center}
+  .grow{flex:1;min-width:0}
+  .hname{font-weight:900;font-size:14px;display:flex;align-items:center;gap:6px}
+  .hbreed{font-size:11px;color:var(--ink2);margin-top:1px}
+  .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .tag{font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:20px;background:#0d130a;border:1px solid #0c110a;color:var(--ink2)}
+  .tag.sex-m{color:#7fb8ff;border-color:#26405f} .tag.sex-f{color:var(--pink);border-color:#5f2640}
+  .tag.stage{color:var(--gold)} .tag.pure{color:var(--good);border-color:#2f4a1c}
+  .tag.preg{color:var(--pink);border-color:#5f2640;background:#2a1420}
+  .tag.busy{color:var(--warn);border-color:#4a3612}
+  .tag.rare{color:#d9a3ff;border-color:#4a2f5f}
+  .hface{width:46px;height:46px;border-radius:10px;background:radial-gradient(circle at 50% 35%,#3a4a24,#1c2711);display:flex;align-items:center;justify-content:center;font-size:28px;border:1px solid #0c110a;flex-shrink:0}
+  .stats{display:flex;gap:6px;margin-top:7px}
+  .stat{flex:1;background:#0d130a;border-radius:6px;padding:3px 5px;text-align:center}
+  .stat .sv{font-weight:900;font-size:13px;font-variant-numeric:tabular-nums}
+  .stat .sl{font-size:8.5px;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px}
+  .bar{height:5px;border-radius:3px;background:#0d130a;overflow:hidden;margin-top:2px}
+  .bar>i{display:block;height:100%;border-radius:3px}
+  .val{color:var(--gold);font-weight:900;font-variant-numeric:tabular-nums}
+
+  /* Buttons */
+  .btn{background:linear-gradient(var(--gold),var(--gold2));color:#2a1c05;border:none;border-radius:9px;font-weight:900;font-size:13px;padding:9px 12px;cursor:pointer;box-shadow:0 3px 0 #0006;white-space:nowrap}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #0006}
+  .btn.sm{padding:7px 10px;font-size:12px}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);box-shadow:0 2px 0 #0006}
+  .btn.blue{background:linear-gradient(#7fd3ec,#4aa9c8);color:#06212b}
+  .btn.pink{background:linear-gradient(#f7a8c6,#df6f9c);color:#3a0a20}
+  .btn.red{background:linear-gradient(#f0836e,#c73f2b);color:#2a0a05}
+  .btn:disabled{filter:grayscale(.7) brightness(.7);cursor:not-allowed}
+  .btnrow{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+
+  .empty{text-align:center;color:var(--ink2);font-size:13px;padding:26px 10px;line-height:1.6}
+  .money-need{color:var(--bad)}
+  .pill{display:inline-flex;align-items:center;gap:3px;background:#0d130a;border:1px solid #0c110a;border-radius:20px;padding:2px 8px;font-size:11px;font-weight:800}
+
+  /* Stable card */
+  .stable{border-left:4px solid var(--wood2)}
+  .stalls{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+  .stallDot{width:15px;height:15px;border-radius:4px;background:#0d130a;border:1px solid #0c110a}
+  .stallDot.full{background:linear-gradient(var(--gold),var(--gold2));border-color:var(--gold2)}
+  .stallDot.board{background:linear-gradient(#7fd3ec,#4aa9c8);border-color:#4aa9c8}
+
+  /* Breeding picker */
+  .pickgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .pickbox{background:#0d130a;border:2px dashed #3a4a24;border-radius:11px;min-height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;cursor:pointer}
+  .pickbox.filled{border-style:solid;border-color:var(--gold2);background:linear-gradient(var(--panel2),var(--panel))}
+  .pickbox .pf{font-size:34px}
+  .pickbox .pn{font-weight:900;font-size:12px;margin-top:3px}
+  .pickbox .ps{font-size:10px;color:var(--ink2)}
+  .heart{text-align:center;font-size:22px;margin:8px 0}
+
+  /* Modal */
+  .modal{position:fixed;inset:0;background:#0a0d08d8;z-index:20;display:none;align-items:flex-end;justify-content:center}
+  .modal.on{display:flex}
+  .sheet{width:100%;max-width:560px;background:linear-gradient(#2f3f22,#233016);border-top:2px solid var(--gold2);border-radius:16px 16px 0 0;padding:16px 14px 22px;max-height:82vh;overflow-y:auto;animation:slideup .22s ease-out}
+  @keyframes slideup{from{transform:translateY(30px);opacity:.4}to{transform:translateY(0);opacity:1}}
+  .sheet h3{margin:0 0 4px;font-size:16px;color:var(--gold)}
+  .sheet .msg{font-size:13px;line-height:1.5;color:var(--ink);margin:6px 0 12px}
+  .optlist{display:flex;flex-direction:column;gap:7px}
+  .opt{background:#0d130a;border:1px solid #0c110a;border-radius:9px;padding:10px;display:flex;gap:8px;align-items:center;cursor:pointer}
+  .opt:active{background:#131c0d}
+  .modal.center{align-items:center}
+  .sheet.card2{border-radius:16px;max-width:360px;margin:0 14px}
+
+  /* Toast */
+  #toasts{position:fixed;top:64px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:6px;z-index:30;pointer-events:none}
+  .toast{background:#0d130af0;border:1px solid var(--gold2);color:var(--ink);font-weight:800;font-size:13px;padding:8px 14px;border-radius:20px;box-shadow:0 4px 12px #000a;animation:tin .3s ease-out;max-width:90%;text-align:center}
+  .toast.good{border-color:var(--good)} .toast.bad{border-color:var(--bad)} .toast.info{border-color:var(--blue)}
+  @keyframes tin{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  .seg{display:flex;gap:6px;margin-bottom:10px}
+  .segb{flex:1;text-align:center;background:#0d130a;border:1px solid #0c110a;border-radius:8px;padding:7px;font-size:11.5px;font-weight:800;color:var(--ink2);cursor:pointer}
+  .segb.on{background:linear-gradient(var(--panel2),var(--panel));color:var(--gold);border-color:var(--gold2)}
+  .divider{height:1px;background:#0c110a;margin:12px 0}
+  .kv{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--ink2)}
+  .kv b{color:var(--ink)}
+  a.credit{color:var(--ink2);font-size:11px;text-decoration:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="chip"><span>🪙</span><b id="hudMoney">0</b></div>
+    <div class="chip feed"><span>🌾</span><b id="hudFeed">0</b></div>
+    <div class="chip rep"><span>⭐</span><b id="hudRep">0</b></div>
+    <div class="chip day"><span>📅</span>Day <b id="hudDay">1</b></div>
+    <div class="spacer"></div>
+    <div id="speedBtns">
+      <button class="sbtn" data-sp="0">⏸</button>
+      <button class="sbtn on" data-sp="1">▶</button>
+      <button class="sbtn" data-sp="2">▶▶</button>
+      <button class="sbtn" data-sp="4">⏩</button>
+    </div>
+  </div>
+
+  <div id="scene">
+    <div class="sun"></div>
+    <div class="barn"></div>
+    <div id="sceneTitle">🐴 Stable Story</div>
+    <div id="sceneRank">Ranch Hand</div>
+    <div id="sceneHorses"></div>
+  </div>
+
+  <div id="tabs">
+    <div class="tab on" data-tab="ranch"><span class="ti">🏡</span>Ranch</div>
+    <div class="tab" data-tab="market"><span class="ti">🛒</span>Market</div>
+    <div class="tab" data-tab="breed"><span class="ti">💞</span>Breed</div>
+    <div class="tab" data-tab="biz"><span class="ti">💼</span>Business</div>
+  </div>
+
+  <div id="main">
+    <div class="sec on" id="sec-ranch"></div>
+    <div class="sec" id="sec-market"></div>
+    <div class="sec" id="sec-breed"></div>
+    <div class="sec" id="sec-biz"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<div id="toasts"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ============================================================ *
+ *  STABLE STORY — Horse Ranch Simulator                        *
+ *  Pure game logic is exposed on globalThis.__HR for tests.    *
+ *  DOM wiring lives below the logic and is guarded so the       *
+ *  headless test harness (stubbed DOM) never crashes.           *
+ * ============================================================ */
+
+// ---------- Breeds (based on real horse breeds) ----------
+const BREEDS = [
+  {id:'shetland',  name:'Shetland Pony', emoji:'🐴', rarity:1, base:240,  speed:32, stamina:58, temperament:74, size:0.7,
+   colors:['Bay','Chestnut','Black','Piebald'], desc:'Tiny, hardy and gentle — the perfect starter pony.'},
+  {id:'mustang',   name:'Mustang',       emoji:'🐎', rarity:1, base:360,  speed:60, stamina:74, temperament:44, size:1.0,
+   colors:['Dun','Bay','Grullo','Roan'], desc:'Wild-blooded, tough and cheap. Spirited but stubborn.'},
+  {id:'quarter',   name:'Quarter Horse', emoji:'🐎', rarity:2, base:620,  speed:80, stamina:60, temperament:74, size:1.0,
+   colors:['Sorrel','Palomino','Buckskin','Bay'], desc:'Explosive sprinter and America’s all-round favourite.'},
+  {id:'appaloosa', name:'Appaloosa',     emoji:'🐎', rarity:2, base:760,  speed:70, stamina:72, temperament:68, size:1.0,
+   colors:['Leopard','Blanket','Snowflake','Roan'], desc:'Famous spotted coat — flashy and versatile.'},
+  {id:'clydesdale',name:'Clydesdale',    emoji:'🐴', rarity:2, base:980,  speed:40, stamina:88, temperament:80, size:1.5,
+   colors:['Bay','Roan','Black','Chestnut'], desc:'Gentle giant draft horse with feathered feet.'},
+  {id:'arabian',   name:'Arabian',       emoji:'🐎', rarity:3, base:1350, speed:82, stamina:96, temperament:58, size:0.95,
+   colors:['Grey','Bay','Chestnut','Black'], desc:'Ancient desert breed. Legendary endurance and elegance.'},
+  {id:'andalusian',name:'Andalusian',    emoji:'🐎', rarity:3, base:1650, speed:74, stamina:80, temperament:78, size:1.05,
+   colors:['Grey','White','Bay','Black'], desc:'Noble Iberian breed — the dancing horse of dressage.'},
+  {id:'thoroughbred',name:'Thoroughbred',emoji:'🐎', rarity:3, base:1750, speed:98, stamina:76, temperament:48, size:1.05,
+   colors:['Bay','Chestnut','Brown','Grey'], desc:'Born to race. Pure speed, hot temper, big money.'},
+  {id:'friesian',  name:'Friesian',      emoji:'🐎', rarity:4, base:2900, speed:66, stamina:82, temperament:82, size:1.15,
+   colors:['Black'], desc:'Jet-black mane and majestic trot. A living work of art.'},
+  {id:'akhalteke', name:'Akhal-Teke',    emoji:'🐎', rarity:5, base:4600, speed:90, stamina:98, temperament:60, size:1.0,
+   colors:['Golden','Palomino','Cremello','Bay'], desc:'The rarest of all — a metallic, shimmering coat.'},
+];
+const breedDef = id => BREEDS.find(b=>b.id===id) || null;
+const RARITY_MULT = {1:1, 2:1.08, 3:1.18, 4:1.32, 5:1.5};
+const RARITY_NAME = {1:'Common',2:'Uncommon',3:'Rare',4:'Elite',5:'Legendary'};
+
+// ---------- Life stages (age is in game-days) ----------
+const STAGES = [
+  {id:'foal',    name:'Foal',    max:5,        factor:0.5,  feed:1},
+  {id:'yearling',name:'Yearling',max:10,       factor:0.72, feed:1},
+  {id:'adult',   name:'Adult',   max:46,       factor:1.0,  feed:2},
+  {id:'senior',  name:'Senior',  max:Infinity, factor:0.62, feed:2},
+];
+function stageForAge(age){ for(const s of STAGES){ if(age < s.max) return s; } return STAGES[STAGES.length-1]; }
+function isAdult(h){ const s=stageForAge(h.age); return s.id==='adult'||s.id==='senior'; }
+function feedPerDay(h){ const s=stageForAge(h.age); const draft=(breedDef(h.breed)||{size:1}).size>=1.4?1:0; return s.feed+draft; }
+
+// ---------- Names ----------
+const NAMES_M=['Thunder','Comet','Bandit','Diesel','Ranger','Apollo','Blaze','Rocky','Titan','Dusty','Chief','Maverick','Zeus','Storm','Rebel','Duke','Cash','Rusty','Jasper','Odin'];
+const NAMES_F=['Bella','Luna','Willow','Star','Ginger','Daisy','Misty','Ruby','Pearl','Aurora','Ivy','Sadie','Rosie','Clover','Hazel','Poppy','Juno','Maple','Coco','Fern'];
+function pickName(sex,rng){ const a=sex==='mare'?NAMES_F:NAMES_M; return a[Math.floor(rng()*a.length)]; }
+
+// ---------- Horse factory ----------
+let _idc=1;
+function mkHorse(o){
+  o=o||{}; const rng=o.rng||Math.random;
+  const b=breedDef(o.breed)||BREEDS[0];
+  const sex=o.sex||(rng()<0.5?'mare':'stallion');
+  const vary=(base,amt)=>clamp(Math.round(base+(rng()*2-1)*amt),8,100);
+  return {
+    id:o.id||('h'+(_idc++)),
+    name:o.name||pickName(sex,rng),
+    breed:b.id, sex,
+    color:o.color||b.colors[Math.floor(rng()*b.colors.length)],
+    age:o.age==null?12:o.age,
+    speed:o.speed!=null?o.speed:vary(b.speed,10),
+    stamina:o.stamina!=null?o.stamina:vary(b.stamina,10),
+    temperament:o.temperament!=null?o.temperament:vary(b.temperament,10),
+    health:o.health==null?92:o.health,
+    happy:o.happy==null?85:o.happy,
+    purebred:o.purebred!==undefined?o.purebred:true,
+    generation:o.generation||1,
+    rare:o.rare||null,        // rare trait tag e.g. 'Golden Coat'
+    pregnant:false, gestation:0, sireBreed:null,
+    rentDays:0, rentRate:0,   // >0 = out on rent
+    stable:o.stable!=null?o.stable:0,
+  };
+}
+
+function statAvg(h){ return h.speed*0.4 + h.stamina*0.35 + h.temperament*0.25; }
+function overall(h){ return Math.round(statAvg(h)); }
+
+// ---------- Valuation ----------
+function valueOf(h){
+  const b=breedDef(h.breed)||BREEDS[0];
+  const st=stageForAge(h.age);
+  const statF = 0.55 + 0.009*statAvg(h);            // 50avg ~1.0, 100 ~1.45
+  const healthF = 0.55 + 0.0045*h.health;
+  const pedF = (h.purebred?1.12:0.82) * (1 + Math.min(0.4, (h.generation-1)*0.06));
+  const rareF = h.rare?1.35:1;
+  const v = b.base * st.factor * statF * healthF * pedF * rareF * RARITY_MULT[b.rarity];
+  return Math.max(50, Math.round(v));
+}
+function buyPrice(h){ return Math.round(valueOf(h)*1.16); }
+function sellQuote(h){ return Math.round(valueOf(h)*(0.86 + 0.12*(h.happy/100))); }
+function rentRate(h){ return Math.max(6, Math.round(valueOf(h)*0.028*(h.temperament/70)*(h.health/100))); }
+
+// ---------- Stables ----------
+const STARTER_STALLS=4;
+function stableCost(game){ return Math.round(1200 * Math.pow(1.9, game.stables.length-1)); }
+function upgradeCost(st){ return Math.round(500 * Math.pow(1.7, st.level-1)); }
+function stallsOf(st){ return st.baseStalls + (st.level-1)*2; }
+function totalStalls(game){ return game.stables.reduce((n,s)=>n+stallsOf(s),0); }
+function usedStalls(game){ return game.horses.length + game.boarders; }
+function freeStalls(game){ return totalStalls(game)-usedStalls(game); }
+function stableQuality(game){ // avg level, drives boarding rate & happiness
+  if(!game.stables.length) return 1;
+  return game.stables.reduce((n,s)=>n+s.level,0)/game.stables.length;
+}
+function boardRatePerStall(game){ return Math.round(14 + stableQuality(game)*7 + game.rep*0.03); }
+
+// ---------- Breeding ----------
+function canBreed(mare,stallion){
+  if(!mare||!stallion) return {ok:false,why:'Pick a mare and a stallion.'};
+  if(mare.sex!=='mare') return {ok:false,why:'First pick must be a mare.'};
+  if(stallion.sex!=='stallion') return {ok:false,why:'Second pick must be a stallion.'};
+  if(!isAdult(mare)||!isAdult(stallion)) return {ok:false,why:'Both horses must be adults.'};
+  if(mare.pregnant) return {ok:false,why:'This mare is already pregnant.'};
+  if(mare.rentDays>0||stallion.rentDays>0) return {ok:false,why:'A horse is out on rent.'};
+  return {ok:true};
+}
+function breedFoal(mare,stallion,rng){
+  rng=rng||Math.random;
+  const samebreed = mare.breed===stallion.breed;
+  const mb=breedDef(mare.breed), sb=breedDef(stallion.breed);
+  // dominant breed = rarer parent (grade horses take the flashier line)
+  const dom = (sb.rarity>mb.rarity)?sb:mb;
+  const breed = samebreed?mb.id:dom.id;
+  const mix=(a,b,amt)=> clamp(Math.round((a+b)/2 + (rng()*2-1)*amt),8,100);
+  const sex = rng()<0.5?'mare':'stallion';
+  const colorSrc = rng()<0.5?mare:stallion;
+  const gen = Math.max(mare.generation,stallion.generation)+1;
+  const foal = mkHorse({
+    breed, sex, rng, age:0, color:colorSrc.color,
+    speed:mix(mare.speed,stallion.speed, samebreed?9:13),
+    stamina:mix(mare.stamina,stallion.stamina, samebreed?9:13),
+    temperament:mix(mare.temperament,stallion.temperament, samebreed?9:13),
+    health:96, happy:92, purebred:samebreed, generation:gen,
+  });
+  // rare mutation: shimmering / champion foal
+  if(rng()<0.05){
+    foal.rare = samebreed && breed==='akhalteke' ? 'Metallic Sheen' : 'Champion Bloodline';
+    foal.speed=clamp(foal.speed+8,8,100); foal.stamina=clamp(foal.stamina+8,8,100);
+  }
+  return foal;
+}
+
+// ---------- Market stock ----------
+function marketPickBreed(game,rng){
+  // higher reputation unlocks rarer stock
+  const maxR = game.rep>2600?5 : game.rep>1300?4 : game.rep>500?3 : game.rep>120?2 : 2;
+  const pool = BREEDS.filter(b=>b.rarity<=maxR);
+  // weight toward commons
+  const weighted=[]; pool.forEach(b=>{ const w=Math.max(1,6-b.rarity*1.2); for(let i=0;i<w;i++) weighted.push(b); });
+  return weighted[Math.floor(rng()*weighted.length)];
+}
+function makeMarketHorse(game,rng){
+  rng=rng||Math.random;
+  const b=marketPickBreed(game,rng);
+  const sex = rng()<0.5?'mare':'stallion';
+  const age = 8+Math.floor(rng()*20); // sold as young adults
+  return mkHorse({breed:b.id,sex,age,rng,purebred:true,generation:1});
+}
+function restockMarket(game,rng){
+  rng=rng||Math.random;
+  const n=4+Math.floor(rng()*2);
+  game.market=[]; for(let i=0;i<n;i++) game.market.push(makeMarketHorse(game,rng));
+  game.marketDay=game.day;
+}
+
+// ---------- Rank / reputation ----------
+const RANKS=[
+  {rep:0,name:'Ranch Hand'},{rep:150,name:'Stablekeeper'},{rep:450,name:'Horse Breeder'},
+  {rep:1000,name:'Ranch Owner'},{rep:2200,name:'Master Breeder'},{rep:4500,name:'Champion Stud'},
+  {rep:8000,name:'Legendary Rancher'},
+];
+function rankFor(rep){ let r=RANKS[0]; for(const x of RANKS){ if(rep>=x.rep) r=x; } return r; }
+
+// ---------- Events ----------
+const EVENTS=[
+  {id:'buyer', weight:3, min:1},
+  {id:'hay',   weight:2, min:3},
+  {id:'show',  weight:2, min:2},
+  {id:'vet',   weight:2, min:2},
+  {id:'gift',  weight:1, min:0},
+];
+
+// ---------- Fresh game ----------
+function freshGame(){
+  _idc=1;
+  const g={
+    v:1, money:1500, feed:30, rep:0, day:1,
+    stables:[{id:'st1',name:'Old Barn',level:1,baseStalls:STARTER_STALLS}],
+    horses:[], boarders:0, market:[], marketDay:1,
+    log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0},
+    seenIntro:false,
+  };
+  // start with one mare + one stallion so the player can breed immediately
+  g.horses.push(mkHorse({breed:'shetland',sex:'mare',age:14,name:'Daisy',stable:0,rng:seededOnce(11)}));
+  g.horses.push(mkHorse({breed:'mustang',sex:'stallion',age:16,name:'Bandit',stable:0,rng:seededOnce(29)}));
+  restockMarket(g, seededOnce(7));
+  return g;
+}
+// tiny deterministic rng so a fresh game is identical every load (nice for tutorial + tests)
+function seededOnce(seed){ let s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+
+// ---------- Daily simulation ----------
+function advanceDay(game,rng){
+  rng=rng||Math.random;
+  game.day++; game.stats.days++;
+  const notes=[];
+
+  // feed consumption
+  let need=0; for(const h of game.horses) need+=feedPerDay(h);
+  need += game.boarders*2; // boarders eat too (you supply the hay)
+  if(game.feed>=need){
+    game.feed-=need;
+    for(const h of game.horses){ h.happy=clamp(h.happy+3,0,100); if(h.happy>70) h.health=clamp(h.health+2,0,100); }
+  } else {
+    game.feed=0;
+    for(const h of game.horses){ h.happy=clamp(h.happy-14,0,100); h.health=clamp(h.health-6,0,100); }
+    notes.push({t:'bad',m:'🌾 Out of feed! Your horses are hungry.'});
+  }
+
+  // age + growth + pregnancy + rent
+  const born=[];
+  for(const h of game.horses){
+    h.age++;
+    if(h.rentDays>0){ h.rentDays--; if(h.rentDays===0){ h.happy=clamp(h.happy-6,0,100);} }
+    if(h.pregnant){
+      h.gestation--;
+      if(h.gestation<=0){
+        h.pregnant=false;
+        const stallionBreed=h.sireBreed||h.breed;
+        const foal=breedFoal(h, {breed:stallionBreed,speed:h._sireSpeed||h.speed,stamina:h._sireStam||h.stamina,temperament:h._sireTemp||h.temperament,generation:h._sireGen||1,sex:'stallion'}, rng);
+        foal.stable=h.stable;
+        born.push(foal);
+      }
+    }
+  }
+  // place newborns if room, else auto-sell
+  for(const f of born){
+    if(freeStalls(game)>0){ game.horses.push(f); game.stats.born++;
+      notes.push({t:'good',m:'🐣 A '+breedDef(f.breed).name+' foal was born: '+f.name+'!'});
+    } else {
+      const q=sellQuote(f); game.money+=q; game.rep+=2;
+      notes.push({t:'info',m:'🐣 '+f.name+' was born but the stalls are full — sold for 🪙'+q+'.'});
+    }
+  }
+
+  // boarding income
+  if(game.boarders>0){ const inc=game.boarders*boardRatePerStall(game); game.money+=inc; }
+
+  // rent income (paid daily while out)
+  for(const h of game.horses){ if(h.rentDays>0){ game.money+=h.rentRate; } }
+
+  // market restock every 4 days
+  if(game.day-game.marketDay>=4) restockMarket(game,rng);
+
+  // random event (~18% per day once past day 2)
+  let event=null;
+  if(game.day>2 && rng()<0.18) event=rollEvent(game,rng);
+
+  return {notes,event,born};
+}
+
+function rollEvent(game,rng){
+  const pool=EVENTS.filter(e=>game.day>=e.min);
+  const weighted=[]; pool.forEach(e=>{ for(let i=0;i<e.weight;i++) weighted.push(e); });
+  const e=weighted[Math.floor(rng()*weighted.length)];
+  if(e.id==='buyer'){
+    const owned=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+    if(!owned.length) return null;
+    const h=owned[Math.floor(rng()*owned.length)];
+    const offer=Math.round(sellQuote(h)*(1.3+rng()*0.5));
+    return {id:'buyer',title:'💰 Premium Buyer',horse:h.id,offer,
+      msg:'A wealthy buyer fell in love with <b>'+h.name+'</b> ('+breedDef(h.breed).name+') and offers <b>🪙'+offer+'</b> — well above market. Sell?'};
+  }
+  if(e.id==='hay'){ const up=rng()<0.5; return {id:'hay',up,
+    msg: up?'☀️ A dry spell hit — hay prices are high this week.':'🌧️ A bumper harvest — hay is cheap this week!'}; }
+  if(e.id==='show'){
+    const owned=game.horses.filter(h=>isAdult(h)&&h.rentDays===0);
+    if(!owned.length) return null;
+    return {id:'show',msg:'🏆 The county horse show is on! Enter a horse to compete for prize money and reputation.'};
+  }
+  if(e.id==='vet'){
+    const sick=game.horses.filter(h=>h.health<95);
+    if(!sick.length) return null;
+    const h=sick[Math.floor(rng()*sick.length)];
+    const bill=Math.round(40+rng()*120);
+    return {id:'vet',horse:h.id,bill,msg:'🩺 <b>'+h.name+'</b> came down with a mild colic. The vet can treat it for <b>🪙'+bill+'</b>. Pay up?'};
+  }
+  if(e.id==='gift'){ const amt=30+Math.floor(rng()*8)*10; return {id:'gift',amt,msg:'🎁 A neighbour thanks you for your help and drops off <b>'+amt+' bales of hay</b>!'}; }
+  return null;
+}
+
+// show competition scoring
+function showScore(h,rng){ return statAvg(h)*(0.85+ (rng?rng():Math.random())*0.4) + h.health*0.2; }
+
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+
+// ---------- Expose logic surface for headless tests ----------
+const HR = {
+  BREEDS, breedDef, RARITY_MULT, RARITY_NAME, STAGES, RANKS, EVENTS,
+  stageForAge, isAdult, feedPerDay, statAvg, overall,
+  mkHorse, valueOf, buyPrice, sellQuote, rentRate,
+  stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
+  canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
+  rankFor, freshGame, advanceDay, rollEvent, showScore, clamp, pickName, seededOnce,
+};
+if(typeof globalThis!=='undefined') globalThis.__HR = HR;
+
+/* ============================================================ *
+ *  DOM / UI layer                                              *
+ * ============================================================ */
+if(typeof document==='undefined' || !document.getElementById){ return; }
+
+const $=id=>document.getElementById(id);
+const el=(t,c,h)=>{ const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; };
+const SAVE_KEY='horseranch_save_v1';
+
+let G=null, breedPick={mare:null,stallion:null}, curTab='ranch', speed=1, tickHandle=null, acc=0, lastTs=0;
+const DAY_MS=4200; // one game-day at 1x
+
+// ----- persistence -----
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({G,_idc})); }catch(e){} }
+function load(){
+  try{ const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
+    const d=JSON.parse(raw); if(!d||!d.G) return false; G=d.G; _idc=d._idc||1000;
+    // forward-compat guards
+    if(!G.market) restockMarket(G,Math.random);
+    if(G.boarders==null) G.boarders=0;
+    return true;
+  }catch(e){ return false; }
+}
+
+function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
+
+// ----- toasts -----
+function toast(msg,kind){
+  const box=$('toasts'); const t=el('div','toast '+(kind||''),msg); box.appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 2600);
+}
+
+// ----- modal -----
+function modal(html,opts){
+  opts=opts||{}; const sh=$('sheet');
+  $('modal').className='modal on'+(opts.center?' center':'');
+  sh.className='sheet'+(opts.center?' card2':'');
+  sh.innerHTML=html;
+  return sh;
+}
+function closeModal(){ $('modal').className='modal'; }
+$('modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
+
+// ---------------- Rendering ----------------
+function coatEmoji(h){ const b=breedDef(h.breed); const st=stageForAge(h.age); return st.id==='foal'?'🐴':b.emoji; }
+function barColor(v){ return v>=75?'var(--good)':v>=45?'var(--gold)':'var(--bad)'; }
+
+function horseCard(h,actionsHtml){
+  const b=breedDef(h.breed), st=stageForAge(h.age);
+  const tags=[];
+  tags.push('<span class="tag sex-'+(h.sex==='mare'?'f':'m')+'">'+(h.sex==='mare'?'♀ Mare':'♂ Stallion')+'</span>');
+  tags.push('<span class="tag stage">'+st.name+'</span>');
+  if(h.purebred) tags.push('<span class="tag pure">Purebred</span>');
+  else tags.push('<span class="tag">Grade</span>');
+  if(h.generation>1) tags.push('<span class="tag">Gen '+h.generation+'</span>');
+  if(h.rare) tags.push('<span class="tag rare">✦ '+h.rare+'</span>');
+  if(h.pregnant) tags.push('<span class="tag preg">🤰 In foal ('+h.gestation+'d)</span>');
+  if(h.rentDays>0) tags.push('<span class="tag busy">🚜 Rented ('+h.rentDays+'d)</span>');
+  const c=el('div','card');
+  c.innerHTML=
+    '<div class="row">'+
+      '<div class="hface">'+coatEmoji(h)+'</div>'+
+      '<div class="grow">'+
+        '<div class="hname">'+h.name+' <span class="val" style="font-size:12px">🪙'+fmt(valueOf(h))+'</span></div>'+
+        '<div class="hbreed">'+h.color+' '+b.name+' · '+RARITY_NAME[b.rarity]+'</div>'+
+        '<div class="tags">'+tags.join('')+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="stats">'+
+      statCell('SPD',h.speed)+statCell('STA',h.stamina)+statCell('TMP',h.temperament)+
+      statCell('HP',h.health,true)+statCell('JOY',h.happy,true)+
+    '</div>'+
+    (actionsHtml?'<div class="btnrow">'+actionsHtml+'</div>':'');
+  return c;
+}
+function statCell(label,v,pct){
+  return '<div class="stat"><div class="sv">'+Math.round(v)+'</div>'+
+    '<div class="bar"><i style="width:'+clamp(v,0,100)+'%;background:'+barColor(v)+'"></i></div>'+
+    '<div class="sl">'+label+'</div></div>';
+}
+
+function renderHUD(){
+  $('hudMoney').textContent=fmt(G.money);
+  $('hudFeed').textContent=fmt(G.feed);
+  $('hudRep').textContent=fmt(G.rep);
+  $('hudDay').textContent=G.day;
+  const rank=rankFor(G.rep);
+  $('sceneRank').textContent=rank.name;
+  // scene horses
+  const sh=$('sceneHorses'); sh.innerHTML='';
+  const show=G.horses.slice(0,6);
+  show.forEach((h,i)=>{ const s=el('div','horse',coatEmoji(h));
+    s.style.left=(96+i*62)+'px'; s.style.animationDelay=(i*0.4)+'s'; sh.appendChild(s); });
+  // tab badges
+  document.querySelectorAll('.tab .badge').forEach(b=>b.remove());
+  const buyable=G.market.filter(h=>buyPrice(h)<=G.money).length;
+  if(buyable) addBadge('market',buyable);
+}
+function addBadge(tab,n){ const t=document.querySelector('.tab[data-tab="'+tab+'"]'); if(t){ t.appendChild(el('span','badge',n)); } }
+
+// ---- RANCH tab ----
+function renderRanch(){
+  const s=$('sec-ranch'); s.innerHTML='';
+  s.appendChild(el('h2','head','My Ranch'));
+  // feed store quick bar
+  const feedBar=el('div','card');
+  const need=G.horses.reduce((n,h)=>n+feedPerDay(h),0)+G.boarders*2;
+  feedBar.innerHTML='<div class="row"><div class="grow"><div class="hname">🌾 Hay Store</div>'+
+    '<div class="hbreed">'+fmt(G.feed)+' bales · uses ~'+need+'/day</div></div></div>'+
+    '<div class="btnrow">'+
+      buyFeedBtn(20)+buyFeedBtn(50)+buyFeedBtn(100)+
+    '</div>';
+  s.appendChild(feedBar);
+
+  // stables
+  s.appendChild(el('h2','head','Stables ('+usedStalls(G)+'/'+totalStalls(G)+' stalls)'));
+  G.stables.forEach(st=>s.appendChild(stableCard(st)));
+  const nc=stableCost(G);
+  const addC=el('div','card');
+  addC.innerHTML='<div class="row"><div class="grow"><div class="hname">🏗️ Build New Stable</div>'+
+    '<div class="hbreed">Adds a barn with '+STARTER_STALLS+' stalls</div></div>'+
+    '<button class="btn '+(G.money<nc?'':'')+'" id="buyStable" '+(G.money<nc?'disabled':'')+'>🪙 '+fmt(nc)+'</button></div>';
+  s.appendChild(addC);
+  addC.querySelector('#buyStable').onclick=()=>{
+    if(G.money<nc) return;
+    G.money-=nc; G.stables.push({id:'st'+(G.stables.length+1),name:barnName(G.stables.length),level:1,baseStalls:STARTER_STALLS});
+    toast('🏗️ New stable built!','good'); refresh();
+  };
+
+  // horses
+  s.appendChild(el('h2','head','My Horses ('+G.horses.length+')'));
+  if(!G.horses.length){ s.appendChild(el('div','empty','No horses yet.<br>Visit the 🛒 Market to buy your first horse!')); }
+  G.horses.forEach(h=>{
+    let acts='';
+    acts+='<button class="btn sm ghost" data-groom="'+h.id+'">🧹 Groom (🪙20)</button>';
+    if(isAdult(h)) acts+='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell '+fmt(sellQuote(h))+'</button>';
+    const c=horseCard(h,acts);
+    c.querySelectorAll('[data-groom]').forEach(btn=>btn.onclick=()=>groom(h));
+    c.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellHorse(h));
+    s.appendChild(c);
+  });
+}
+function buyFeedBtn(n){ const cost=Math.round(n*hayPrice()); return '<button class="btn sm ghost" data-feed="'+n+'" '+(G.money<cost?'disabled':'')+'>+'+n+' 🪙'+cost+'</button>'; }
+function barnName(i){ const nm=['Old Barn','Oak Stable','Meadow Barn','Sunrise Stable','Willow Barn','Grand Stable']; return nm[i]||('Stable '+(i+1)); }
+function hayPrice(){ return G.hayMod?G.hayMod:3; }
+
+function stableCard(st){
+  const c=el('div','card stable');
+  const stalls=stallsOf(st);
+  // build stall dots
+  let dots=''; let filled=Math.min(G.horses.filter(h=>h.stable===G.stables.indexOf(st)).length, stalls);
+  // simplistic: distribute horses/boarders visually across all stables handled globally; here show this stable's cap
+  for(let i=0;i<stalls;i++){ dots+='<div class="stallDot'+(i<filled?' full':'')+'"></div>'; }
+  const uc=upgradeCost(st);
+  c.innerHTML='<div class="row"><div class="grow"><div class="hname">🏚️ '+st.name+' <span class="pill">Lv '+st.level+'</span></div>'+
+    '<div class="hbreed">'+stalls+' stalls · quality ★'+st.level+'</div></div>'+
+    '<button class="btn sm" data-up="'+st.id+'" '+(G.money<uc?'disabled':'')+'>⬆️ '+fmt(uc)+'</button></div>'+
+    '<div class="stalls">'+dots+'</div>';
+  c.querySelector('[data-up]').onclick=()=>{
+    if(G.money<uc) return; G.money-=uc; st.level++; toast('⬆️ '+st.name+' upgraded to Lv '+st.level+'!','good'); refresh();
+  };
+  return c;
+}
+
+// ---- MARKET tab ----
+function renderMarket(){
+  const s=$('sec-market'); s.innerHTML='';
+  s.appendChild(el('h2','head','Horse Market'));
+  s.appendChild(el('div','sub','Fresh stock every 4 days. Higher reputation attracts rarer breeds.'));
+  if(!G.market.length) s.appendChild(el('div','empty','Market is restocking...'));
+  G.market.forEach(h=>{
+    const price=buyPrice(h);
+    const full=freeStalls(G)<=0;
+    const acts='<button class="btn sm" data-buy="'+h.id+'" '+((G.money<price||full)?'disabled':'')+'>'+(full?'No stalls':'🛒 Buy 🪙'+fmt(price))+'</button>';
+    const c=horseCard(h,acts);
+    c.querySelectorAll('[data-buy]').forEach(btn=>btn.onclick=()=>buyHorse(h));
+    s.appendChild(c);
+  });
+  s.appendChild(el('div','divider'));
+  const feedC=el('div','card');
+  feedC.innerHTML='<div class="hname">🌾 Hay Supplier</div><div class="hbreed">'+fmt(G.feed)+' bales in store · 🪙'+hayPrice()+'/bale</div>'+
+    '<div class="btnrow">'+buyFeedBtn(20)+buyFeedBtn(50)+buyFeedBtn(100)+buyFeedBtn(250)+'</div>';
+  s.appendChild(feedC);
+}
+
+// ---- BREED tab ----
+function renderBreed(){
+  const s=$('sec-breed'); s.innerHTML='';
+  s.appendChild(el('h2','head','Breeding Barn'));
+  s.appendChild(el('div','sub','Pair an adult mare with a stallion. Same breed = purebred foal (worth more). Cross-breed for surprises!'));
+  // validate picks still exist/eligible
+  if(breedPick.mare && !G.horses.find(h=>h.id===breedPick.mare)) breedPick.mare=null;
+  if(breedPick.stallion && !G.horses.find(h=>h.id===breedPick.stallion)) breedPick.stallion=null;
+  const mare=G.horses.find(h=>h.id===breedPick.mare);
+  const stal=G.horses.find(h=>h.id===breedPick.stallion);
+
+  const grid=el('div','pickgrid');
+  grid.appendChild(pickBox('mare',mare,'♀ Tap to pick mare'));
+  grid.appendChild(pickBox('stallion',stal,'♂ Tap to pick stallion'));
+  s.appendChild(grid);
+  s.appendChild(el('div','heart','💞'));
+
+  const chk=canBreed(mare,stal);
+  const gest= mare&&stal ? gestationDays(mare,stal):5;
+  const info=el('div','card');
+  if(chk.ok){
+    info.innerHTML='<div class="kv">Gestation<b>'+gest+' days</b></div>'+
+      '<div class="kv">Foal breed<b>'+(mare.breed===stal.breed?breedDef(mare.breed).name+' (purebred)':'Cross — '+breedDef((breedDef(stal.breed).rarity>breedDef(mare.breed).rarity?stal:mare).breed).name)+'</b></div>'+
+      '<div class="kv">Breeding fee<b>🪙'+breedFee(mare,stal)+'</b></div>';
+  } else {
+    info.innerHTML='<div class="empty" style="padding:12px">'+chk.why+'</div>';
+  }
+  const bbtn=el('button','btn pink',(chk.ok?'💞 Breed (🪙'+breedFee(mare,stal)+')':'Breed'));
+  bbtn.style.width='100%'; bbtn.style.marginTop='4px';
+  bbtn.disabled=!chk.ok||G.money<(chk.ok?breedFee(mare,stal):0);
+  bbtn.onclick=()=>doBreed(mare,stal);
+  info.appendChild(bbtn);
+  s.appendChild(info);
+
+  // pregnant mares status
+  const preg=G.horses.filter(h=>h.pregnant);
+  if(preg.length){ s.appendChild(el('h2','head','Expecting ('+preg.length+')'));
+    preg.forEach(h=>s.appendChild(horseCard(h,''))); }
+}
+function pickBox(role,h,placeholder){
+  const box=el('div','pickbox'+(h?' filled':''));
+  if(h){ box.innerHTML='<div class="pf">'+coatEmoji(h)+'</div><div class="pn">'+h.name+'</div>'+
+    '<div class="ps">'+breedDef(h.breed).name+'</div>'; }
+  else box.innerHTML='<div class="pf" style="opacity:.4">'+(role==='mare'?'♀':'♂')+'</div><div class="ps">'+placeholder+'</div>';
+  box.onclick=()=>openPicker(role);
+  return box;
+}
+function openPicker(role){
+  const want=role==='mare'?'mare':'stallion';
+  const cands=G.horses.filter(h=>h.sex===want && isAdult(h) && h.rentDays===0 && !(want==='mare'&&h.pregnant));
+  if(!cands.length){ toast('No eligible '+(want)+'s. Buy or raise one!','info'); return; }
+  let html='<h3>Pick a '+want+'</h3><div class="optlist">';
+  cands.forEach(h=>{ html+='<div class="opt" data-pick="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
+    '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · OVR '+overall(h)+'</div></div>'+
+    '<div class="val">🪙'+fmt(valueOf(h))+'</div></div>'; });
+  html+='</div>';
+  const sh=modal(html);
+  sh.querySelectorAll('[data-pick]').forEach(o=>o.onclick=()=>{ breedPick[role]=o.getAttribute('data-pick'); closeModal(); renderBreed(); });
+}
+function gestationDays(mare,stal){ const r=Math.max(breedDef(mare.breed).rarity,breedDef(stal.breed).rarity); return 4+r; }
+function breedFee(mare,stal){ if(!mare||!stal) return 0; return Math.round(80+valueOf(stal)*0.05); }
+function doBreed(mare,stal){
+  const chk=canBreed(mare,stal); if(!chk.ok) return;
+  const fee=breedFee(mare,stal); if(G.money<fee){ toast('Not enough coins for the breeding fee.','bad'); return; }
+  G.money-=fee;
+  mare.pregnant=true; mare.gestation=gestationDays(mare,stal);
+  mare.sireBreed=stal.breed; mare._sireSpeed=stal.speed; mare._sireStam=stal.stamina; mare._sireTemp=stal.temperament; mare._sireGen=stal.generation;
+  breedPick.mare=null; breedPick.stallion=null;
+  toast('💞 '+mare.name+' is in foal! Due in '+mare.gestation+' days.','good');
+  refresh();
+}
+
+// ---- BUSINESS tab ----
+let bizSub='rent';
+function renderBiz(){
+  const s=$('sec-biz'); s.innerHTML='';
+  s.appendChild(el('h2','head','Business'));
+  const seg=el('div','seg');
+  ['rent','board','sell'].forEach(k=>{ const b=el('div','segb'+(bizSub===k?' on':''), k==='rent'?'🐴 Rent Out':k==='board'?'🏨 Boarding':'💰 Sell'); b.onclick=()=>{bizSub=k;renderBiz();}; seg.appendChild(b); });
+  s.appendChild(seg);
+
+  if(bizSub==='rent'){
+    s.appendChild(el('div','sub','Rent horses for riding lessons & shows. They earn coins daily but are unavailable while out.'));
+    const avail=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+    if(!avail.length) s.appendChild(el('div','empty','No horses available to rent right now.'));
+    avail.forEach(h=>{
+      const rate=rentRate(h);
+      const acts='<button class="btn sm blue" data-rent3="'+h.id+'">3d · 🪙'+(rate*3)+'</button>'+
+                 '<button class="btn sm blue" data-rent7="'+h.id+'">7d · 🪙'+(rate*7)+'</button>';
+      const c=horseCard(h,acts);
+      c.querySelector('[data-rent3]').onclick=()=>rentOut(h,3);
+      c.querySelector('[data-rent7]').onclick=()=>rentOut(h,7);
+      s.appendChild(c);
+    });
+    const out=G.horses.filter(h=>h.rentDays>0);
+    if(out.length){ s.appendChild(el('h2','head','Currently Out ('+out.length+')')); out.forEach(h=>s.appendChild(horseCard(h,''))); }
+  }
+  else if(bizSub==='board'){
+    s.appendChild(el('div','sub','Board other people’s horses in your empty stalls for steady passive income. Uses stalls & a little hay.'));
+    const c=el('div','card');
+    const rate=boardRatePerStall(G);
+    c.innerHTML='<div class="kv">Empty stalls<b>'+freeStalls(G)+'</b></div>'+
+      '<div class="kv">Boarders in<b>'+G.boarders+'</b></div>'+
+      '<div class="kv">Income / boarder / day<b>🪙'+rate+'</b></div>'+
+      '<div class="kv">Total per day<b>🪙'+(G.boarders*rate)+'</b></div>'+
+      '<div class="btnrow">'+
+        '<button class="btn sm blue" id="boardAdd" '+(freeStalls(G)<=0?'disabled':'')+'>+ Take Boarder</button>'+
+        '<button class="btn sm ghost" id="boardRem" '+(G.boarders<=0?'disabled':'')+'>- Release</button>'+
+      '</div>';
+    s.appendChild(c);
+    c.querySelector('#boardAdd').onclick=()=>{ if(freeStalls(G)>0){ G.boarders++; toast('🏨 Took in a boarding horse.','good'); refresh(); } };
+    c.querySelector('#boardRem').onclick=()=>{ if(G.boarders>0){ G.boarders--; toast('Boarder released.','info'); refresh(); } };
+    // rent out whole stable stalls also raises rep slightly (handled in daily)
+  }
+  else {
+    s.appendChild(el('div','sub','Sell horses at market value. Quality sales raise your reputation.'));
+    const sellable=G.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!h.pregnant);
+    if(!sellable.length) s.appendChild(el('div','empty','No adult horses to sell.'));
+    sellable.slice().sort((a,b)=>valueOf(b)-valueOf(a)).forEach(h=>{
+      const acts='<button class="btn sm blue" data-sell="'+h.id+'">💰 Sell 🪙'+fmt(sellQuote(h))+'</button>';
+      const c=horseCard(h,acts); c.querySelector('[data-sell]').onclick=()=>sellHorse(h); s.appendChild(c);
+    });
+  }
+}
+
+// ---------------- Actions ----------------
+function buyFeedDelegate(n){ const cost=Math.round(n*hayPrice()); if(G.money<cost){ toast('Not enough coins.','bad'); return; } G.money-=cost; G.feed+=n; toast('🌾 Bought '+n+' bales.','good'); refresh(); }
+function groom(h){ if(G.money<20){ toast('Not enough coins.','bad'); return; } G.money-=20; h.happy=clamp(h.happy+12,0,100); h.health=clamp(h.health+6,0,100); toast('🧹 '+h.name+' looks happy!','good'); refresh(); }
+function buyHorse(h){
+  const price=buyPrice(h); if(G.money<price){ toast('Not enough coins.','bad'); return; }
+  if(freeStalls(G)<=0){ toast('No free stalls — build or upgrade a stable.','bad'); return; }
+  G.money-=price; G.market=G.market.filter(m=>m.id!==h.id); h.stable=0; G.horses.push(h); G.stats.bought++;
+  toast('🛒 Welcome home, '+h.name+'!','good'); refresh();
+}
+function sellHorse(h){
+  const q=sellQuote(h);
+  modal('<h3>Sell '+h.name+'?</h3><div class="msg">'+breedDef(h.breed).name+' · OVR '+overall(h)+'<br>Market offer: <b class="val">🪙'+fmt(q)+'</b></div>'+
+    '<div class="btnrow"><button class="btn red" id="cSell">Confirm Sale</button><button class="btn ghost" id="cCancel">Keep</button></div>');
+  $('cCancel').onclick=closeModal;
+  $('cSell').onclick=()=>{ G.money+=q; G.horses=G.horses.filter(x=>x.id!==h.id);
+    const rg=Math.round(overall(h)*0.3 + (breedDef(h.breed).rarity)*4); G.rep+=rg; G.stats.sold++;
+    closeModal(); toast('💰 Sold '+h.name+' for 🪙'+fmt(q)+' (+'+rg+'⭐)','good'); refresh(); };
+}
+function rentOut(h,days){ h.rentDays=days; h.rentRate=rentRate(h); G.stats.rented++; toast('🐴 '+h.name+' rented out for '+days+' days.','good'); refresh(); }
+
+// ---------------- Events UI ----------------
+function showEvent(ev){
+  if(!ev) return;
+  if(ev.id==='hay'){ G.hayMod = ev.up?5:1.5; toast(ev.up?'☀️ Hay prices up this week':'🌧️ Hay is cheap this week','info');
+    setTimeout(()=>{G.hayMod=null;}, 1); // reset next restock-ish; simple: expire after some days
+    G.hayExpire=G.day+4; return; }
+  if(ev.id==='gift'){ G.feed+=ev.amt; toast('🎁 +'+ev.amt+' bales of hay!','good'); return; }
+  if(ev.id==='buyer'){
+    const h=G.horses.find(x=>x.id===ev.horse); if(!h) return;
+    modal('<h3>💰 Premium Buyer</h3><div class="msg">'+ev.msg+'</div>'+
+      '<div class="btnrow"><button class="btn" id="evYes">Sell for 🪙'+fmt(ev.offer)+'</button><button class="btn ghost" id="evNo">Decline</button></div>',{center:true});
+    $('evNo').onclick=closeModal;
+    $('evYes').onclick=()=>{ G.money+=ev.offer; G.horses=G.horses.filter(x=>x.id!==h.id); G.rep+=8; closeModal(); toast('💰 Sold '+h.name+' to the premium buyer!','good'); refresh(); };
+    return;
+  }
+  if(ev.id==='vet'){
+    const h=G.horses.find(x=>x.id===ev.horse); if(!h) return;
+    modal('<h3>🩺 Vet Visit</h3><div class="msg">'+ev.msg+'</div>'+
+      '<div class="btnrow"><button class="btn" id="evYes">Pay 🪙'+ev.bill+'</button><button class="btn ghost" id="evNo">Refuse</button></div>',{center:true});
+    $('evNo').onclick=()=>{ h.health=clamp(h.health-18,0,100); h.happy=clamp(h.happy-10,0,100); closeModal(); toast('🩺 '+h.name+' suffered without treatment.','bad'); refresh(); };
+    $('evYes').onclick=()=>{ if(G.money<ev.bill){ toast('Not enough coins!','bad'); return; } G.money-=ev.bill; h.health=clamp(h.health+20,0,100); closeModal(); toast('🩺 '+h.name+' is healthy again.','good'); refresh(); };
+    return;
+  }
+  if(ev.id==='show'){
+    const eligible=G.horses.filter(h=>isAdult(h)&&h.rentDays===0);
+    if(!eligible.length) return;
+    let html='<h3>🏆 County Horse Show</h3><div class="msg">Enter a horse (fee 🪙60). Win prize money and reputation based on its stats!</div><div class="optlist">';
+    eligible.forEach(h=>{ html+='<div class="opt" data-show="'+h.id+'"><div class="hface">'+coatEmoji(h)+'</div>'+
+      '<div class="grow"><div class="hname">'+h.name+'</div><div class="hbreed">'+breedDef(h.breed).name+' · OVR '+overall(h)+'</div></div></div>'; });
+    html+='</div><div class="btnrow"><button class="btn ghost" id="evNo">Skip</button></div>';
+    const sh=modal(html,{center:true});
+    $('evNo').onclick=closeModal;
+    sh.querySelectorAll('[data-show]').forEach(o=>o.onclick=()=>{
+      if(G.money<60){ toast('Need 🪙60 entry fee.','bad'); return; }
+      const h=G.horses.find(x=>x.id===o.getAttribute('data-show')); G.money-=60;
+      const sc=showScore(h,Math.random); const place = sc>95?1: sc>78?2: sc>60?3:4;
+      const prize=[0,600,300,120,0][place]; const rep=[0,40,22,10,3][place];
+      G.money+=prize; G.rep+=rep; closeModal();
+      const pn=['','🥇 1st place','🥈 2nd place','🥉 3rd place','Participated'][place];
+      toast('🏆 '+h.name+': '+pn+'! +🪙'+prize+' +'+rep+'⭐', place<=2?'good':'info'); refresh();
+    });
+    return;
+  }
+}
+
+// ---------------- Tick loop ----------------
+function step(ts){
+  if(!lastTs) lastTs=ts;
+  const dt=ts-lastTs; lastTs=ts;
+  if(speed>0 && !isModalOpen()){
+    acc+=dt*speed;
+    if(acc>=DAY_MS){ acc=0; doDay(); }
+  } else acc=0;
+  tickHandle=requestAnimationFrame(step);
+}
+function isModalOpen(){ return $('modal').className.indexOf('on')>=0; }
+function doDay(){
+  // expire hay modifier
+  if(G.hayExpire && G.day>=G.hayExpire){ G.hayMod=null; G.hayExpire=null; }
+  const res=advanceDay(G,Math.random);
+  (res.notes||[]).forEach(n=>toast(n.m,n.t));
+  if(res.event) showEvent(res.event);
+  save(); refresh();
+}
+
+// ---------------- Nav / refresh ----------------
+function setTab(t){ curTab=t; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.getAttribute('data-tab')===t));
+  document.querySelectorAll('.sec').forEach(x=>x.classList.remove('on')); $('sec-'+t).classList.add('on'); renderTab(); }
+function renderTab(){ if(curTab==='ranch')renderRanch(); else if(curTab==='market')renderMarket(); else if(curTab==='breed')renderBreed(); else renderBiz(); }
+function refresh(){ renderHUD(); renderTab(); bindFeedButtons(); save(); }
+function bindFeedButtons(){ document.querySelectorAll('[data-feed]').forEach(b=>{ b.onclick=()=>buyFeedDelegate(parseInt(b.getAttribute('data-feed'),10)); }); }
+
+// ---------------- Intro ----------------
+function showIntro(){
+  modal('<h3>🐴 Welcome to Stable Story!</h3>'+
+    '<div class="msg">Build a thriving horse ranch from a single old barn.<br><br>'+
+    '• 🛒 <b>Buy</b> mares &amp; stallions of real breeds<br>'+
+    '• 💞 <b>Breed</b> them for foals that grow up over time<br>'+
+    '• 🏡 <b>Upgrade</b> stables &amp; keep hay in the store<br>'+
+    '• 💼 <b>Sell, rent &amp; board</b> horses for income<br><br>'+
+    'You start with a mare, a stallion and 🪙1,500. Good luck, rancher!</div>'+
+    '<div class="btnrow"><button class="btn" id="introGo" style="width:100%">Start Ranching!</button></div>',{center:true});
+  $('introGo').onclick=()=>{ G.seenIntro=true; save(); closeModal(); };
+}
+
+// ---------------- Boot ----------------
+function boot(){
+  if(!load()){ G=freshGame(); }
+  if(_idc<1000) _idc=1000+G.horses.length+G.market.length;
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setTab(t.getAttribute('data-tab')));
+  document.querySelectorAll('.sbtn').forEach(b=>b.onclick=()=>{ speed=parseInt(b.getAttribute('data-sp'),10);
+    document.querySelectorAll('.sbtn').forEach(x=>x.classList.toggle('on',x===b)); });
+  setTab('ranch'); refresh();
+  if(!G.seenIntro) showIntro();
+  tickHandle=requestAnimationFrame(step);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+
+})();
+</script>
+</body>
+</html>
