@@ -395,6 +395,7 @@ var CITY_LOTS=[
 ];
 var lotDef=function(id){ for(var i=0;i<CITY_LOTS.length;i++) if(CITY_LOTS[i].id===id) return CITY_LOTS[i]; return null; };
 // COUNTRY tier: Belgian cities, each nesting its own set of city lots above.
+// België's cities (the home country's country-map). Kept as COUNTRY for continuity.
 var COUNTRY=[
   {id:'brussel',  nm:'Brussel',   sub:'De hoofdstad',      x:47, y:50},
   {id:'antwerpen',nm:'Antwerpen', sub:'Havenstad',         x:52, y:22},
@@ -404,7 +405,29 @@ var COUNTRY=[
   {id:'luik',     nm:'Luik',      sub:'Vurige stede',      x:74, y:60},
   {id:'hasselt',  nm:'Hasselt',   sub:'Jeneverstad',       x:70, y:34}
 ];
-var cityDef=function(id){ for(var i=0;i<COUNTRY.length;i++) if(COUNTRY[i].id===id) return COUNTRY[i]; return null; };
+// GLOBE tier: countries, each nesting its own set of cities.
+var WORLD=[
+  {id:'belgie',    nm:'België',    sub:'Het frietwalhalla', emoji:'🇧🇪', x:48, y:33, cities:COUNTRY},
+  {id:'nederland', nm:'Nederland', sub:'Patatje oorlog',    emoji:'🇳🇱', x:52, y:22, cities:[
+    {id:'amsterdam',nm:'Amsterdam',sub:'Grachtenstad',x:40,y:28},{id:'rotterdam',nm:'Rotterdam',sub:'Wereldhaven',x:32,y:50},
+    {id:'utrecht',nm:'Utrecht',sub:'Domstad',x:56,y:40},{id:'eindhoven',nm:'Eindhoven',sub:'Lichtstad',x:62,y:66}]},
+  {id:'frankrijk', nm:'Frankrijk', sub:'Les frites',        emoji:'🇫🇷', x:41, y:50, cities:[
+    {id:'parijs',nm:'Parijs',sub:'La capitale',x:46,y:30},{id:'rijsel',nm:'Rijsel',sub:'Ch\'ti-land',x:52,y:12},
+    {id:'lyon',nm:'Lyon',sub:'Gastronomie',x:62,y:56},{id:'marseille',nm:'Marseille',sub:'Zuiderzon',x:66,y:82}]},
+  {id:'duitsland', nm:'Duitsland', sub:'Pommes rot-weiß',   emoji:'🇩🇪', x:57, y:37, cities:[
+    {id:'berlijn',nm:'Berlijn',sub:'Hauptstadt',x:72,y:26},{id:'keulen',nm:'Keulen',sub:'Domstad',x:24,y:42},
+    {id:'munchen',nm:'München',sub:'Bierstad',x:54,y:76},{id:'hamburg',nm:'Hamburg',sub:'Havenstad',x:40,y:12}]},
+  {id:'usa',       nm:'USA',       sub:'French fries',      emoji:'🇺🇸', x:16, y:44, cities:[
+    {id:'newyork',nm:'New York',sub:'Big Apple',x:80,y:36},{id:'chicago',nm:'Chicago',sub:'Windy City',x:58,y:30},
+    {id:'la',nm:'Los Angeles',sub:'West Coast',x:12,y:56},{id:'miami',nm:'Miami',sub:'Sunshine',x:76,y:82}]},
+  {id:'japan',     nm:'Japan',     sub:'フライドポテト',       emoji:'🇯🇵', x:85, y:46, cities:[
+    {id:'tokio',nm:'Tokio',sub:'Metropool',x:66,y:42},{id:'osaka',nm:'Osaka',sub:'Keukenstad',x:42,y:60},
+    {id:'kyoto',nm:'Kyoto',sub:'Tempelstad',x:50,y:48},{id:'sapporo',nm:'Sapporo',sub:'Het noorden',x:72,y:14}]}
+];
+var countryDef=function(id){ for(var i=0;i<WORLD.length;i++) if(WORLD[i].id===id) return WORLD[i]; return null; };
+var citiesOf=function(countryId){ var c=countryDef(countryId); return c?c.cities:[]; };
+var cityDef=function(countryId,cityId){ var cs=citiesOf(countryId); for(var i=0;i<cs.length;i++) if(cs[i].id===cityId) return cs[i]; return null; };
+var START_COUNTRY='belgie';                               // pre-globe shops migrate to Belgium
 var START_CITY='brussel';                                 // Stage-1 shops migrate to the capital
 var IDLE_CAP_SEC=8*3600;                                  // passive income accrues up to 8h offline
 // passive €/sec a parked shop earns, from its snapshotted appeal + lifetime serves
@@ -622,38 +645,41 @@ var snapshotActiveInto=function(){ if(!META) return; var rec=META.shops[META.act
 var collectIdle=function(rec){ if(!rec||!rec.blob) return 0; var secs=(nowMs()-(rec.t||nowMs()))/1000;
   var g=idleIncome(rec.blob,secs); if(g>0) rec.blob.money=(rec.blob.money||0)+g; return g; };
 var pendingIdle=function(rec){ if(!rec||!rec.blob) return 0; return idleIncome(rec.blob,(nowMs()-(rec.t||nowMs()))/1000); };
+var shopCountry=function(rec){ return (rec&&rec.country)||START_COUNTRY; };   // pre-globe shops → Belgium
 var shopCity=function(rec){ return (rec&&rec.city)||START_CITY; };            // Stage-1 shops → capital
-// index of the shop on (city, lot), or -1
-var shopAt=function(cityId,lotId){ if(!META) return -1; for(var i=0;i<META.shops.length;i++){ var s=META.shops[i]; if(shopCity(s)===cityId && s.lot===lotId) return i; } return -1; };
-var cityShops=function(cityId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopCity(s)===cityId) out.push({i:i,rec:s}); }); return out; };
-// roll a city's shops up into totals for the country view
-var cityTotals=function(cityId){ var shops=cityShops(cityId), till=0, idle=0; shops.forEach(function(o){
-  till+=(o.rec.blob&&o.rec.blob.money)||0; if(META&&o.i!==META.active) idle+=pendingIdle(o.rec); });
-  return { count:shops.length, till:till, idle:idle }; };
+// index of the shop on (country, city, lot), or -1
+var shopAt=function(countryId,cityId,lotId){ if(!META) return -1; for(var i=0;i<META.shops.length;i++){ var s=META.shops[i]; if(shopCountry(s)===countryId && shopCity(s)===cityId && s.lot===lotId) return i; } return -1; };
+var cityShops=function(countryId,cityId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopCountry(s)===countryId && shopCity(s)===cityId) out.push({i:i,rec:s}); }); return out; };
+var countryShops=function(countryId){ var out=[]; if(META) META.shops.forEach(function(s,i){ if(shopCountry(s)===countryId) out.push({i:i,rec:s}); }); return out; };
+var sumShops=function(list){ var till=0, idle=0; list.forEach(function(o){ till+=(o.rec.blob&&o.rec.blob.money)||0; if(META&&o.i!==META.active) idle+=pendingIdle(o.rec); }); return { count:list.length, till:till, idle:idle }; };
+// roll shops up into totals for a city / a whole country
+var cityTotals=function(countryId,cityId){ return sumShops(cityShops(countryId,cityId)); };
+var countryTotals=function(countryId){ return sumShops(countryShops(countryId)); };
 var initMeta=function(){ var m=null; try{ m=JSON.parse(localStorage.getItem(META_KEY)||'null'); }catch(e){ m=null; }
   if(m && m.shops && m.shops.length){ META=m; if(META.active==null||META.active>=META.shops.length) META.active=0; }
-  else { META={ shops:[{ city:START_CITY, lot:'markt', name:'Rudy Friet', blob:null, t:nowMs() }], active:0 }; }
-  META.shops.forEach(function(s){ if(!s.city) s.city=START_CITY; });          // migrate pre-country saves
+  else { META={ shops:[{ country:START_COUNTRY, city:START_CITY, lot:'markt', name:'Rudy Friet', blob:null, t:nowMs() }], active:0 }; }
+  META.shops.forEach(function(s){ if(!s.country) s.country=START_COUNTRY; if(!s.city) s.city=START_CITY; });   // migrate pre-globe/pre-country saves
   snapshotActiveInto(); saveMeta(); };
 var switchShop=function(idx){ if(!META||idx<0||idx>=META.shops.length||idx===META.active) return;
   snapshotActiveInto();
   var rec=META.shops[idx], gain=collectIdle(rec);
   applyBlob(rec.blob); META.active=idx; rec.t=nowMs(); save();
   if(el.mapScreen) el.mapScreen.classList.add('hidden');
-  renderAll(); var ld=lotDef(rec.lot), cd=cityDef(shopCity(rec)), where=(ld?ld.nm:'')+(cd?', '+cd.nm:'');
+  renderAll(); var ld=lotDef(rec.lot), cd=cityDef(shopCountry(rec),shopCity(rec)), co=countryDef(shopCountry(rec));
+  var where=(ld?ld.nm:'')+(cd?', '+cd.nm:'')+(co&&co.id!==START_COUNTRY?' '+co.emoji:'');
   addShake(1.4); chime([520,700,900],0.09);
   if(gain>0) toast('🏪 <b>'+rec.name+'</b>'+(where?' — '+where:'')+': onderweg <b>+'+fmt(gain)+'💶</b> verdiend!');
   else toast('🏪 Nu aan de slag in <b>'+rec.name+'</b>'+(where?' — '+where:'')+'.'); };
-var openShopAt=function(cityId,lotId){ if(!META||!lotDef(lotId)||!cityDef(cityId)) return;
-  if(shopAt(cityId,lotId)>=0){ toast('Hier staat al een frituur.'); return; }
+var openShopAt=function(countryId,cityId,lotId){ if(!META||!lotDef(lotId)||!cityDef(countryId,cityId)) return;
+  if(shopAt(countryId,cityId,lotId)>=0){ toast('Hier staat al een frituur.'); return; }
   var cost=openShopCost(META.shops.length);
   if(G.money<cost){ toast('Te weinig geld — een frituur hier kost '+fmt(cost)+'💶.'); return; }
   G.money-=cost; snapshotActiveInto();
   var pg=G; G=freshGame(); var blob=serializeShop(); blob.appealSnap=computeAppeal(G); blob.servedSnap=0; G=pg;
-  META.shops.push({ city:cityId, lot:lotId, name:'Rudy Friet '+(META.shops.length+1), blob:blob, t:nowMs() });
-  var ld=lotDef(lotId), cd=cityDef(cityId); bigPop('🏗️ '+ld.nm,'#7bd66b'); confetti();
+  META.shops.push({ country:countryId, city:cityId, lot:lotId, name:'Rudy Friet '+(META.shops.length+1), blob:blob, t:nowMs() });
+  var ld=lotDef(lotId), cd=cityDef(countryId,cityId), co=countryDef(countryId); bigPop('🏗️ '+ld.nm,'#7bd66b'); confetti();
   switchShop(META.shops.length-1);
-  toast('🎉 Nieuwe frituur op <b>'+ld.nm+'</b> in <b>'+cd.nm+'</b>! Bouw ze uit tot een topzaak.'); };
+  toast('🎉 Nieuwe frituur op <b>'+ld.nm+'</b> in <b>'+cd.nm+'</b> '+(co?co.emoji:'')+'! Bouw ze uit tot een topzaak.'); };
 // contest progress: called from serve/merge with a metric + amount
 var awardContest=function(c){ G.faam+=c.reward.faam||0; G.money+=c.reward.cash||0;
   bigPop('UITDAGING! 🏆','#ffd447'); confetti(); starRing(worldW()/2,GH*TS/2,14); chime([700,940,1180],0.1);
@@ -1205,11 +1231,27 @@ var renderMenu=function(){ if(!el.menuBody) return; if(!G.prices) G.prices=defau
   each('[data-price]',function(b){ return function(){ var p=b.getAttribute('data-price').split(':'); setPrice(p[0],parseInt(p[1],10)); }; }); };
 var setPrice=function(id,delta){ var z=sizeDef(id); if(!z) return; if(!G.prices) G.prices=defaultPrices();
   G.prices[id]=clamp(Math.round((priceOf(G,id)+delta)), Math.round(z.fair*0.5), Math.round(z.fair*2)); beep(delta>0?600:420,0.04,0.03); renderMenu(); syncHUD(); save(); };
-// two-tier map overlay: country (cities) → drill into a city (its lots)
-var mapView='country', mapCity=null;
-// COUNTRY view: each city is a pin rolling up its shops' count + till + pending idle
-var renderCountry=function(){ var h='', totShops=META.shops.length, totTill=0;
-  COUNTRY.forEach(function(city){ var t=cityTotals(city.id); totTill+=t.till; var owned=t.count>0;
+// three-tier map overlay: world (countries) → country (cities) → city (its lots)
+var mapView='world', mapCountry=null, mapCity=null;
+// WORLD view: each country is a pin rolling up ALL its shops' count + till + pending idle
+var renderWorld=function(){ var h='', totShops=META.shops.length, totTill=0;
+  WORLD.forEach(function(co){ var t=countryTotals(co.id); totTill+=t.till; var owned=t.count>0;
+    var pos='left:'+co.x+'%;top:'+co.y+'%';
+    h+='<div class="lot '+(owned?'own':'empty')+'" data-country="'+co.id+'" style="'+pos+'">'
+      +'<div class="lotpin">'+co.emoji+'</div>'
+      +'<div class="lotnm">'+co.nm+'</div>'
+      +(owned?'<div class="lottill">'+t.count+'🏪 · '+fmt(t.till)+'💶</div>'+(t.idle>0?'<div class="lotidle">+'+fmt(t.idle)+' onderweg</div>':'')
+             :'<div class="lotcost">'+co.sub+'</div>')+'</div>';
+  });
+  el.mapArea.innerHTML=h;
+  if(el.mapTitle) el.mapTitle.innerHTML='🌍 De wereld<small>F R I T U U R - I M P E R I U M</small>';
+  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+totShops+' frituur'+(totShops!==1?'en':'')+' wereldwijd · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapBack) el.mapBack.style.display='none';
+  each('[data-country]',function(b){ return function(){ mapCountry=b.getAttribute('data-country'); mapView='country'; renderMap(); }; }); };
+// COUNTRY view: each city of one country is a pin rolling up its shops' count + till + idle
+var renderCountryMap=function(countryId){ var co=countryDef(countryId); if(!co){ mapView='world'; return renderWorld(); }
+  var h='', totTill=0;
+  co.cities.forEach(function(city){ var t=cityTotals(countryId,city.id); totTill+=t.till; var owned=t.count>0;
     var pos='left:'+city.x+'%;top:'+city.y+'%';
     h+='<div class="lot '+(owned?'own':'empty')+'" data-city="'+city.id+'" style="'+pos+'">'
       +'<div class="lotpin">'+(owned?'🏙️':'📍')+'</div>'
@@ -1218,14 +1260,14 @@ var renderCountry=function(){ var h='', totShops=META.shops.length, totTill=0;
              :'<div class="lotcost">'+city.sub+'</div>')+'</div>';
   });
   el.mapArea.innerHTML=h;
-  if(el.mapTitle) el.mapTitle.innerHTML='🗺️ België<small>F R I T U U R - I M P E R I U M</small>';
-  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+totShops+' frituur'+(totShops!==1?'en':'')+' · totaal <b>'+fmt(totTill)+'💶</b>';
-  if(el.mapBack) el.mapBack.style.display='none';
+  if(el.mapTitle) el.mapTitle.innerHTML=co.emoji+' '+co.nm+'<small>'+co.sub.toUpperCase()+'</small>';
+  if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+countryTotals(countryId).count+' hier · totaal <b>'+fmt(totTill)+'💶</b>';
+  if(el.mapBack) el.mapBack.style.display='';
   each('[data-city]',function(b){ return function(){ mapCity=b.getAttribute('data-city'); mapView='city'; renderMap(); }; }); };
 // CITY view: the five lots of one city — your shops and empty lots to open
-var renderCity=function(cityId){ var cd=cityDef(cityId); if(!cd){ mapView='country'; return renderCountry(); }
+var renderCity=function(countryId,cityId){ var cd=cityDef(countryId,cityId); if(!cd){ mapView='country'; return renderCountryMap(countryId); }
   var h='<div class="river"></div>', total=0;
-  CITY_LOTS.forEach(function(lot){ var idx=shopAt(cityId,lot.id), pos='left:'+lot.x+'%;top:'+lot.y+'%';
+  CITY_LOTS.forEach(function(lot){ var idx=shopAt(countryId,cityId,lot.id), pos='left:'+lot.x+'%;top:'+lot.y+'%';
     if(idx>=0){ var rec=META.shops[idx], active=idx===META.active, till=(rec.blob&&rec.blob.money)||0; total+=till;
       var idle=active?0:pendingIdle(rec);
       h+='<div class="lot own'+(active?' active':'')+'" data-switch="'+idx+'" style="'+pos+'">'
@@ -1239,15 +1281,19 @@ var renderCity=function(cityId){ var cd=cityDef(cityId); if(!cd){ mapView='count
         +'<div class="lotcost">'+(afford?'open · ':'')+fmt(cost)+'💶</div></div>';
     }
   });
-  el.mapArea.innerHTML=h; var t=cityTotals(cityId);
-  if(el.mapTitle) el.mapTitle.innerHTML='🏙️ '+cd.nm+'<small>'+cd.sub.toUpperCase()+'</small>';
+  el.mapArea.innerHTML=h; var co=countryDef(countryId), t=cityTotals(countryId,cityId);
+  if(el.mapTitle) el.mapTitle.innerHTML='🏙️ '+cd.nm+'<small>'+(co?co.nm.toUpperCase()+' · ':'')+cd.sub.toUpperCase()+'</small>';
   if(el.mapTotal) el.mapTotal.innerHTML='🏪 '+t.count+' hier · kassa <b>'+fmt(total)+'💶</b>';
   if(el.mapBack) el.mapBack.style.display='';
   each('[data-switch]',function(b){ return function(){ switchShop(parseInt(b.getAttribute('data-switch'),10)); }; });
-  each('[data-open]',function(b){ return function(){ openShopAt(cityId,b.getAttribute('data-open')); }; }); };
+  each('[data-open]',function(b){ return function(){ openShopAt(countryId,mapCity,b.getAttribute('data-open')); }; }); };
 var renderMap=function(){ if(!el.mapArea||!META) return; snapshotActiveInto();
-  if(mapView==='city' && mapCity) renderCity(mapCity); else renderCountry(); };
-var openMap=function(){ if(!el.mapScreen||!META) return; mapView='country'; mapCity=null; renderMap(); el.mapScreen.classList.remove('hidden'); };
+  if(mapView==='city' && mapCountry && mapCity) renderCity(mapCountry,mapCity);
+  else if(mapView==='country' && mapCountry) renderCountryMap(mapCountry);
+  else { mapView='world'; renderWorld(); } };
+// walk up one tier: city → country → world
+var mapUp=function(){ if(mapView==='city'){ mapView='country'; mapCity=null; } else { mapView='world'; mapCountry=null; mapCity=null; } renderMap(); };
+var openMap=function(){ if(!el.mapScreen||!META) return; mapView='world'; mapCountry=null; mapCity=null; renderMap(); el.mapScreen.classList.remove('hidden'); };
 var renderAll=function(){ renderShop(); renderMenu(); renderRes(); renderStaff(); renderKeuken(); renderFloors(); renderBuurt(); syncHUD(); save(); };
 
 var startPlacing=function(id){ var o=objDef(id); if(!o) return; if(G.money<buyCost(G,id)){ toast('Te weinig geld.'); return; }
@@ -1430,7 +1476,7 @@ var boot=function(){
   if(bt) bt.onclick=function(){ tab('buurt'); };
   if(el.buurtChip) el.buurtChip.onclick=function(){ tab('buurt'); };
   if(el.mapBtn) el.mapBtn.onclick=openMap;
-  if(el.mapBack) el.mapBack.onclick=function(){ mapView='country'; mapCity=null; renderMap(); };
+  if(el.mapBack) el.mapBack.onclick=mapUp;
   if(el.mapClose) el.mapClose.onclick=function(){ if(el.mapScreen) el.mapScreen.classList.add('hidden'); };
   if(el.cancelPlace) el.cancelPlace.onclick=cancelPlacing;
   var mb=$('muteBtn'); if(mb){ mb.textContent=sfxOn?'🔊':'🔇'; mb.onclick=toggleSfx; }
@@ -1477,7 +1523,7 @@ if(typeof globalThis!=='undefined'){
     RIVALS:RIVALS, rivalDef:rivalDef, marketShare:marketShare, marketMul:marketMul, rivalBoard:rivalBoard, buurtRank:buurtRank,
     TIMELINE:TIMELINE, timelineDef:timelineDef, eventMod:eventMod, eventTrafficMul:eventTrafficMul, eventSpendMul:eventSpendMul,
     CITY_LOTS:CITY_LOTS, lotDef:lotDef, idleRate:idleRate, idleIncome:idleIncome, openShopCost:openShopCost, IDLE_CAP_SEC:IDLE_CAP_SEC,
-    COUNTRY:COUNTRY, cityDef:cityDef, START_CITY:START_CITY,
+    COUNTRY:COUNTRY, WORLD:WORLD, countryDef:countryDef, citiesOf:citiesOf, cityDef:cityDef, START_CITY:START_CITY, START_COUNTRY:START_COUNTRY,
     dishPrice:dishPrice, compatScore:compatScore, devGain:devGain, developCost:developCost,
     staffCost:staffCost, buyCost:buyCost, BUY_MULT:BUY_MULT, BUY_SOFT:BUY_SOFT, canAfford:canAfford, freshGame:freshGame,
     FLOORS:FLOORS, floorDef:floorDef, floorAppeal:floorAppeal, MAX_TOOG:MAX_TOOG, MAX_FRYER:MAX_FRYER, MAX_SEAT:MAX_SEAT,
