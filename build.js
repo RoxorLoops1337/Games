@@ -51,6 +51,7 @@ const STATIC_PATHS = [
   'nineties_cars',
   'frietkot_tycoon',
   'horse_ranch',
+  'wildwalk',
   'tools',
 ];
 
