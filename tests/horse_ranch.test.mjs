@@ -257,6 +257,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.birthdays = 1; // satisfies the birthday goal
   g.stats.vetReports = 1; // satisfies the vet health-report goal
   g.stats.rotations = 1; // satisfies the paddock-rotation goal
+  g.companion = { type: 'dog', name: 'Rex', bond: 20, pettedDay: 0 }; // satisfies the ranch-companion goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5167,6 +5168,49 @@ function studGame(day) {
   ok(ach && !ach.check(gv2), 'Rotational Grazier needs fifteen rotations');
   gv2.stats.rotations = 15;
   ok(ach.check(gv2), 'fifteen rotations unlock Rotational Grazier');
+}
+{
+  // ---- Ranch companion animal (distinct from the mascot) ----
+  ok(HR.COMPANIONS.length >= 2 && HR.COMPANIONS.every(c => c.id && c.emoji && c.cost > 0), 'the companion catalogue is populated');
+  const g = HR.freshGame(); g.day = 5;
+  ok(!HR.companionState(g).has && HR.normCompanion(g).type === null, 'a fresh ranch has no companion');
+  // adopting charges the cost, sets the new companion field, and leaves the mascot system untouched
+  const dog = HR.companionDef('dog'); g.money = dog.cost + 100; const m0 = g.money; const mascotBefore = JSON.stringify(g.mascot);
+  const r = HR.adoptCompanion(g, 'dog', 'Rex');
+  ok(r.ok && g.money === m0 - dog.cost && g.companion.type === 'dog', 'adopting a companion charges the cost and stores it on game.companion');
+  ok(JSON.stringify(g.mascot) === mascotBefore, 'adopting a companion does not touch the mascot system');
+  ok(HR.companionState(g).has && HR.companionState(g).name === 'Rex' && HR.companionState(g).bond === 20, 'the companion reads back with its starting bond');
+  // re-adopting the SAME type is free (a rename), not a second charge
+  const m1 = g.money; const r2 = HR.adoptCompanion(g, 'dog', 'Rexy');
+  ok(r2.ok && g.money === m1 && HR.companionState(g).name === 'Rexy', 're-adopting the same companion is free and just renames');
+  // petting: once-a-day, bounded bond gain, guarded
+  const b0 = HR.companionState(g).bond, pr = HR.petCompanion(g);
+  ok(pr.ok && HR.companionState(g).bond === Math.min(100, b0 + HR.COMPANION_PET_BOND), 'spending time raises the bond by the fixed amount');
+  ok(!HR.petCompanion(g).ok && !HR.companionState(g).canPet, 'you can only spend time together once a day');
+  g.day = 6; ok(HR.petCompanion(g).ok, 'a new day allows spending time again');
+  // bond is clamped at 100
+  g.companion.bond = 99; g.day = 20; HR.petCompanion(g);
+  ok(HR.companionState(g).bond === 100, 'the bond is clamped at 100');
+  // the daily quip is deterministic and names the companion
+  ok(HR.companionQuip(g, 12) === HR.companionQuip(g, 12) && HR.companionQuip(g, 12).indexOf('Rexy') >= 0, 'the daily quip is deterministic and names the companion');
+  // read-only: state/quip readers never mutate
+  const snap = JSON.stringify(g);
+  HR.companionState(g); HR.companionQuip(g, 30); HR.normCompanion(g); HR.companionBondTier(50);
+  ok(JSON.stringify(g) === snap, 'reading companion state never mutates the game');
+  // sparse safety
+  ok(HR.companionState({}).has === false && HR.normCompanion({}).type === null && HR.companionQuip({}) === '', 'the companion helpers are safe on a sparse game');
+  // invalid adoption / not-enough-coins are rejected
+  ok(!HR.adoptCompanion(g, 'dragon').ok, 'an unknown companion cannot be adopted');
+  const poor = HR.freshGame(); poor.money = 0; ok(!HR.adoptCompanion(poor, 'dog').ok, 'adoption is rejected without enough coins');
+  // goal + achievement
+  const gg = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'comp1').done(gg), 'the companion goal is unmet before adopting');
+  gg.companion = { type: 'goat', name: 'Billy', bond: 20, pettedDay: 0 };
+  ok(HR.GOALS.find(x => x.id === 'comp1').done(gg), 'adopting a companion satisfies the goal');
+  const bf = HR.ACHIEVEMENTS.find(a => a.id === 'bestfriend');
+  ok(bf && !bf.check(gg), 'Best Friend needs a full bond');
+  gg.companion.bond = 100;
+  ok(bf.check(gg), 'a full bond unlocks Best Friend');
 }
 {
   // read-only + determinism + sparse safety

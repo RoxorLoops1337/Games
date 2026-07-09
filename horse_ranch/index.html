@@ -356,6 +356,7 @@
     <button class="sbtn" id="bdayBtn" title="Birthdays — foaling-day celebrations" style="margin-right:4px">🎂</button>
     <button class="sbtn" id="vetBtn" title="Vet report card — herd health grades" style="margin-right:4px">🩺</button>
     <button class="sbtn" id="grazeBtn" title="Grazing map — rotate the paddocks" style="margin-right:4px">🌱</button>
+    <button class="sbtn" id="compBtn" title="Ranch companion — your stable dog & friends" style="margin-right:4px">🐕</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -2422,7 +2423,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, wildlife:{seen:[]}, silks:normSilksParts(null), rotation:{active:PADDOCKS[0].id, since:{}}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, wildlife:{seen:[]}, silks:normSilksParts(null), rotation:{active:PADDOCKS[0].id, since:{}}, companion:{type:null,name:null,bond:0,pettedDay:0}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -4055,6 +4056,62 @@ function mascotPerk(game){
 function mascotQuip(game,day){ const m=activeMascot(game); if(!m) return '';
   day=(day!=null?day:((game&&game.day)||1)); const qs=MASCOT_QUIPS[m.type]||['{name} watches over the yard.'];
   const i=hashDay(day)%qs.length; return (qs[i]||'{name} is about the yard.').replace(/\{name\}/g, m.name); }
+
+// ---------- Ranch companion animal (a personal pet you bond with — DISTINCT from the herd-perk mascot) ----------
+// A stable dog / duck / goat you adopt & name; it has its OWN bond meter (grown once a day by spending time with
+// it, bounded & clamped) and a deterministic daily quip keyed to game.day. Purely a personal-flavour companion —
+// no herd perk, no free resources, no core-stat change (adoption is a bounded one-time coin sink). Stored on the
+// NEW game.companion field (the mascot system on game.mascot is untouched). Deterministic — no Date/Math.random.
+const COMPANIONS=[
+  {id:'dog',  name:'Stable Dog', emoji:'🐕', cost:400, blurb:'A loyal shadow at your heels from dawn chores to lock-up.'},
+  {id:'duck', name:'Yard Duck',  emoji:'🦆', cost:250, blurb:'Waddles the puddles quacking at everything — endlessly cheerful.'},
+  {id:'goat', name:'Ranch Goat', emoji:'🐐', cost:300, blurb:'Mischief on four legs — never a dull moment in the yard.'},
+];
+const COMPANION_NAME_MAX=18;
+const COMPANION_INIT_BOND=20;  // starting rapport when first adopted
+const COMPANION_PET_BOND=6;    // bond gained per day spent together (clamped 0..100, once a day)
+function companionDef(id){ return COMPANIONS.find(c=>c.id===id)||null; }
+const COMPANION_QUIPS={
+  dog: ['{name} trotted the fence line on patrol.','{name} flopped in the sun outside the tack room.','{name} escorted you on the morning feed round.','{name} barked once at the postman, then wagged.'],
+  duck:['{name} led a proud parade across the yard.','{name} splashed in the water-trough overflow all morning.','{name} quacked a hello at every passing horse.','{name} tucked their head under a wing for a midday nap.'],
+  goat:['{name} balanced atop the muck heap, king of the hill.','{name} nibbled a rope halter someone left out.','{name} headbutted the gate until you laughed.','{name} befriended the shyest foal today.'],
+};
+function normCompanion(game){ const c=(game&&game.companion&&typeof game.companion==='object')?game.companion:{};
+  const type=companionDef(c.type)?c.type:null;
+  const name=type?(((''+(c.name||'')).trim().slice(0,COMPANION_NAME_MAX))||companionDef(type).name):null;
+  const bond=(typeof c.bond==='number'&&isFinite(c.bond))?clamp(Math.round(c.bond),0,100):0;
+  const pettedDay=(typeof c.pettedDay==='number'&&isFinite(c.pettedDay))?c.pettedDay:0;
+  return { type, name, bond:type?bond:0, pettedDay:type?pettedDay:0 }; }
+function companionBondTier(bond){ bond=bond||0;
+  return bond>=100?{id:'inseparable',label:'Inseparable',emoji:'💞'} : bond>=75?{id:'devoted',label:'Devoted',emoji:'❤'}
+    : bond>=45?{id:'pals',label:'Good pals',emoji:'💛'} : bond>=20?{id:'friendly',label:'Friendly',emoji:'🙂'} : {id:'new',label:'Getting acquainted',emoji:'👋'}; }
+// a deterministic daily quip keyed to game.day
+function companionQuip(game, day){ const c=normCompanion(game); if(!c.type) return '';
+  day=(day!=null?Math.floor(day):Math.floor((game&&game.day)||1)); const qs=COMPANION_QUIPS[c.type]||['{name} pottered about the yard.'];
+  return (qs[hashDay(day*3+7)%qs.length]||'{name} is nearby.').replace(/\{name\}/g, c.name); }
+// adopt (or swap to) a companion — a bounded one-time coin sink per new pet; renaming the same one is free
+function adoptCompanion(game, type, name){ const d=companionDef(type); if(!d) return {ok:false,why:'No such companion.'}; if(!game) return {ok:false,why:'No ranch.'};
+  const cur=normCompanion(game), swapping=(cur.type!==type);
+  if(swapping){ if((game.money||0)<d.cost) return {ok:false,why:'Not enough coins.'}; game.money-=d.cost;
+    game.stats=game.stats||{}; game.stats.companionsAdopted=(game.stats.companionsAdopted||0)+1; }
+  const nm=(((''+(name||'')).trim().slice(0,COMPANION_NAME_MAX))||d.name);
+  game.companion = swapping ? {type, name:nm, bond:COMPANION_INIT_BOND, pettedDay:0} : {type, name:nm, bond:cur.bond, pettedDay:cur.pettedDay};
+  return {ok:true, companion:companionState(game), charged:swapping?d.cost:0}; }
+function renameCompanion(game, name){ const cur=normCompanion(game); if(!cur.type) return {ok:false,why:'No companion to name.'};
+  const nm=(((''+(name||'')).trim().slice(0,COMPANION_NAME_MAX))||companionDef(cur.type).name);
+  game.companion={type:cur.type, name:nm, bond:cur.bond, pettedDay:cur.pettedDay}; return {ok:true, name:nm}; }
+// spend time with your companion — once a day, a small clamped bond gain (no other reward)
+function petCompanion(game){ const c=normCompanion(game); if(!c.type) return {ok:false,why:'No companion yet.'};
+  const day=Math.floor((game&&game.day)||1);
+  if(c.pettedDay===day) return {ok:false, already:true, why:'You’ve already spent time together today.'};
+  const bond=clamp(c.bond+COMPANION_PET_BOND,0,100);
+  game.companion={type:c.type, name:c.name, bond, pettedDay:day};
+  game.stats=game.stats||{}; game.stats.companionPets=(game.stats.companionPets||0)+1;
+  return {ok:true, bond, gained:bond-c.bond}; }
+function companionState(game){ const c=normCompanion(game); if(!c.type) return {has:false, type:null};
+  const d=companionDef(c.type), day=Math.floor((game&&game.day)||1);
+  return { has:true, type:c.type, name:c.name, emoji:d.emoji, species:d.name, bond:c.bond, tier:companionBondTier(c.bond),
+    quip:companionQuip(game,day), canPet:c.pettedDay!==day, pettedToday:c.pettedDay===day }; }
 // ---------- Seasonal hay-meadow / produce garden (a bounded, cooldown-gated home hay plot) ----------
 // Sow once (a one-off cost), then harvest a CAPPED hay yield on a growth cooldown. Season-aware:
 // grows faster in summer, dormant in winter. Economy-safe — a real cost, capped yield, cooldown, and
@@ -4465,6 +4522,7 @@ const ACHIEVEMENTS=[
   {id:'partyplanner',   icon:'🎂', name:'Party Planner',         desc:'Celebrate ten horse birthdays.',               check:g=>((g.stats&&g.stats.birthdays)||0)>=10},
   {id:'cleanbill',      icon:'🩺', name:'Clean Bill of Health',  desc:'Have a herd of three or more all graded A or better.', check:g=>{const s=herdHealthSummary(g); return s.count>=3 && s.allA;}},
   {id:'grazier',        icon:'🌱', name:'Rotational Grazier',    desc:'Rotate your grazing paddocks fifteen times.',  check:g=>((g.stats&&g.stats.rotations)||0)>=15},
+  {id:'bestfriend',     icon:'🐕', name:'Best Friend',            desc:'Reach a full bond with a ranch companion.',    check:g=>normCompanion(g).bond>=100},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4730,6 +4788,7 @@ const GOALS=[
   {id:'bday1',   desc:'Celebrate a horse’s birthday (🎂)',             tip:g=>((g.stats&&g.stats.birthdays)||0)+'/1',done:g=>((g.stats&&g.stats.birthdays)||0)>=1,             reward:{money:200,rep:10}},
   {id:'vet1',    desc:'Read a horse’s health report (🩺)',             tip:g=>((g.stats&&g.stats.vetReports)||0)+'/1',done:g=>((g.stats&&g.stats.vetReports)||0)>=1,           reward:{money:200,rep:10}},
   {id:'graze1',  desc:'Rotate your grazing paddocks (🌱)',             tip:g=>((g.stats&&g.stats.rotations)||0)+'/1',done:g=>((g.stats&&g.stats.rotations)||0)>=1,             reward:{money:200,rep:10}},
+  {id:'comp1',   desc:'Adopt a ranch companion (🐕)',                  tip:g=>{const c=normCompanion(g);return c.type?c.name:'none yet';},done:g=>!!normCompanion(g).type,                reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4930,6 +4989,7 @@ const HR = {
   BDAY_YEAR_DAYS, BDAY_HAPPY, BDAY_BOND, ageYears, birthDayOf, birthDateOfYear, daysToBirthday, isBirthdayToday, nextBirthday, birthdayCelebrated, canCelebrateBirthday, birthdaysToday, upcomingBirthdays, celebrateBirthday,
   HEALTH_GRADES, reportGrade, healthReport, herdHealthSummary,
   PADDOCKS, paddockDef, paddockRegrowPerDay, normRotation, grazeLevel, grazeStatus, paddockState, bestPaddock, activePaddock, rotateTo,
+  COMPANIONS, COMPANION_NAME_MAX, COMPANION_PET_BOND, companionDef, normCompanion, companionBondTier, companionQuip, adoptCompanion, renameCompanion, petCompanion, companionState,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -5048,6 +5108,7 @@ function load(){
     G.wildlife=normWildlifeLog(G); // paddock wildlife life-list — safe on old saves
     G.silks=normSilks(G); // stable colours / racing silks — safe on old saves
     G.rotation=normRotation(G); // paddock-rotation preference — safe on old saves
+    { const nc=normCompanion(G); G.companion={type:nc.type, name:nc.name, bond:nc.bond, pettedDay:nc.pettedDay}; } // ranch companion — safe on old saves
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -7474,6 +7535,42 @@ function openGrazing(){
     toast('🌱 Herd moved to '+(paddockDef(r.active)||{name:'the field'}).name+'.','good');
     const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); openGrazing(); });
 }
+function openCompanion(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const st=companionState(G);
+  let body;
+  if(st.has){
+    const bondBar='<div style="height:9px;background:#0002;border-radius:5px;margin-top:4px;overflow:hidden"><div style="height:9px;border-radius:5px;width:'+st.bond+'%;background:'+(st.bond>=75?'var(--good)':st.bond>=45?'var(--gold2)':'var(--warn)')+'"></div></div>';
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row" style="align-items:center">'+
+      '<div style="font-size:40px">'+st.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(st.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(st.species)+' · '+st.tier.emoji+' '+esc(st.tier.label)+'</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px;font-style:italic">“'+esc(st.quip)+'”</div>'+
+      '<div class="swlabel" style="margin-top:8px">Bond '+st.bond+'/100</div>'+bondBar+
+      '<div class="row" style="gap:8px;margin-top:8px"><input class="nameIn" id="compName" maxlength="'+COMPANION_NAME_MAX+'" placeholder="Rename…" value="'+esc(st.name)+'">'+
+      '<button class="btn sm ghost" id="compRename">✏️</button></div>'+
+      '<div class="btnrow" style="margin-top:8px"><button class="btn blue" id="compPet" style="width:100%"'+(st.canPet?'':' disabled')+'>'+(st.canPet?'🤗 Spend time together (+'+COMPANION_PET_BOND+' bond)':'✓ Already visited today')+'</button></div></div>'+
+      '<div class="swlabel" style="margin-top:8px">🔄 Adopt a different companion</div>';
+  } else {
+    body='<div class="msg">Every good yard has a four-legged (or feathered) friend. Adopt a companion to keep you company on your rounds.</div><div class="swlabel">Choose a companion</div>';
+  }
+  const choices=COMPANIONS.map(c=>{ const isCur=st.has&&st.type===c.id; const afford=(G.money||0)>=c.cost;
+    return '<div class="decoritem"><div class="de">'+c.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:13px">'+esc(c.name)+'</div><div class="hbreed">'+esc(c.blurb)+'</div></div>'+
+      (isCur?'<span class="pill" style="color:var(--good)">✓ Here</span>':'<button class="btn sm" data-compadopt="'+c.id+'" '+(afford?'':'disabled')+'>🪙'+fmt(c.cost)+'</button>')+'</div>'; }).join('');
+  modal('<h3>🐕 Ranch Companion</h3>'+
+    body+'<div>'+choices+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="compClose" style="width:100%">Done</button></div>');
+  $('compClose').onclick=closeModal;
+  const reopen=()=>{ const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); openCompanion(); };
+  document.querySelectorAll('[data-compadopt]').forEach(b=>b.onclick=()=>{ const r=adoptCompanion(G, b.getAttribute('data-compadopt'));
+    if(!r.ok){ toast(r.why,'bad'); return; } if(r.charged) coinPop(-r.charged); burst(r.companion.emoji+'✨',12); playSfx('coin');
+    toast('🐾 '+r.companion.name+' has joined the ranch!','good'); reopen(); });
+  { const pet=$('compPet'); if(pet) pet.onclick=()=>{ const r=petCompanion(G); if(!r.ok){ toast(r.why,'info'); return; }
+      burst('🤗💛',10); playSfx('tap'); toast('💛 +'+r.gained+' bond with your companion.','good'); reopen(); }; }
+  { const rn=$('compRename'); if(rn) rn.onclick=()=>{ const nm=$('compName'); const r=renameCompanion(G, nm?nm.value:''); if(!r.ok){ toast(r.why,'info'); return; }
+      playSfx('tap'); toast('✏️ Renamed to '+r.name+'.','good'); reopen(); }; }
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8381,6 +8478,7 @@ function boot(){
   { const bdb=$('bdayBtn'); if(bdb) bdb.onclick=openBirthdays; }
   { const vtb=$('vetBtn'); if(vtb) vtb.onclick=openHealthReport; }
   { const gzb=$('grazeBtn'); if(gzb) gzb.onclick=openGrazing; }
+  { const cpb=$('compBtn'); if(cpb) cpb.onclick=openCompanion; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
