@@ -326,6 +326,7 @@
     <button class="sbtn" id="storeBtn" title="General store — rotating deals" style="margin-right:4px;position:relative">🏪<span id="storeBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="trophyBtn" title="Trophy room — achievements & career" style="margin-right:4px">🏆</button>
     <button class="sbtn" id="ribbonBtn" title="Ribbon wall — your rosettes & placings" style="margin-right:4px">🎗️</button>
+    <button class="sbtn" id="financeBtn" title="Balance sheet — the ranch finances" style="margin-right:4px">💷</button>
     <button class="sbtn" id="diaryBtn" title="Ranch diary — how your horses are feeling" style="margin-right:4px">📓</button>
     <button class="sbtn" id="grudgeBtn" title="Grudge match — challenge a rival ranch" style="margin-right:4px">⚔️</button>
     <button class="sbtn" id="almanacBtn" title="Almanac — weather & season forecast" style="margin-right:4px">🌤️</button>
@@ -3018,6 +3019,58 @@ function studIncome(game){
   const vals=studStallions(game).map(h=>studIncomeFor(game,h)).sort((a,b)=>b-a);
   return vals.reduce((n,v,i)=>n+Math.round(v*(STUD_STACK_W[i]!=null?STUD_STACK_W[i]:0.2)),0);
 }
+// ---------- Balance sheet / finances summary (read-only reporting lens over the live economy) ----------
+// Aggregates the SAME per-day money flows advanceDay credits (boarding, rent, canteen, lessons, stud
+// income; teacher salaries, staff payroll, insurance) into a tidy accountant's view — plus lifetime
+// totals from stats. No new faucet, no state change. Deterministic (derived from game state + day).
+const LEDGER_CATEGORIES=[
+  {id:'boarding', label:'Boarding',        emoji:'🏠',   kind:'income'},
+  {id:'rent',     label:'Horse rentals',   emoji:'🐴',   kind:'income'},
+  {id:'canteen',  label:'Canteen',         emoji:'🍺',   kind:'income'},
+  {id:'lessons',  label:'Riding lessons',  emoji:'🎓',   kind:'income'},
+  {id:'stud',     label:'Stud fees',       emoji:'♞',    kind:'income'},
+  {id:'salaries', label:'Teacher salaries',emoji:'🧑‍🏫', kind:'expense'},
+  {id:'staff',    label:'Stable staff',    emoji:'👥',   kind:'expense'},
+  {id:'insurance',label:'Insurance',       emoji:'🛡️',   kind:'expense'},
+];
+function ledgerCategoryDef(id){ return LEDGER_CATEGORIES.find(c=>c.id===id)||null; }
+function dailyLedger(game){
+  const g=game||{}, day=g.day||1, horses=g.horses||[];
+  const rentAmt=horses.reduce((n,h)=>n+((h&&(h.rentDays||0)>0)?(h.rentRate||0):0),0);
+  const boardingAmt=((g.boarders||0)>0)?g.boarders*boardRatePerStall(g):0;
+  const canteenAmt=(canteenLevel(g)>0)?Math.round(canteenIncome(g)*canteenDayMult(day)*canteenWeatherMult(day)*seasonCanteenMul(day)*festivalMod(day,'canteenMul',1)):0;
+  const teachers=teacherCount(g);
+  const lessonsAmt=teachers>0?Math.round(schoolIncome(g)*lessonDayMult(day)):0;
+  const salariesAmt=teachers>0?teacherSalaries(g):0;
+  const raw={ boarding:boardingAmt, rent:rentAmt, canteen:canteenAmt, lessons:lessonsAmt,
+    stud:studIncome(g), salaries:salariesAmt, staff:staffPayroll(g), insurance:insurancePremium(g) };
+  const line=id=>{ const d=ledgerCategoryDef(id); return { id, label:d.label, emoji:d.emoji, amount:Math.round(raw[id]||0) }; };
+  const income=LEDGER_CATEGORIES.filter(c=>c.kind==='income').map(c=>line(c.id));
+  const expense=LEDGER_CATEGORIES.filter(c=>c.kind==='expense').map(c=>line(c.id));
+  const incomeTotal=income.reduce((n,x)=>n+x.amount,0), expenseTotal=expense.reduce((n,x)=>n+x.amount,0);
+  return { day, income, expense, incomeTotal, expenseTotal, net:incomeTotal-expenseTotal };
+}
+function financeSummary(game){
+  const led=dailyLedger(game);
+  const pos=led.income.filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
+  const neg=led.expense.filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
+  return { net:led.net, incomeTotal:led.incomeTotal, expenseTotal:led.expenseTotal,
+    biggestEarner:pos[0]||null, biggestCost:neg[0]||null, profitable:led.net>=0 };
+}
+function balanceSheet(game){
+  const g=game||{}, st=g.stats||{}, led=dailyLedger(g);
+  const lifetime=[
+    {id:'earned',   label:'Total earned',        emoji:'💰',  value:st.goldEarned||0},
+    {id:'bestSale', label:'Biggest single sale', emoji:'🪙',  value:st.bestSale||0},
+    {id:'studInc',  label:'Stud fees earned',    emoji:'♞',   value:st.studIncome||0},
+    {id:'wages',    label:'Staff wages paid',    emoji:'👥',  value:st.staffWages||0},
+    {id:'premiums', label:'Insurance paid',      emoji:'🛡️',  value:st.insurancePremiums||0},
+    {id:'lessons',  label:'Lessons taught',      emoji:'🎓',  value:st.lessons||0},
+  ];
+  return { cash:g.money||0, feed:g.feed||0, day:g.day||1,
+    ledger:led, net:led.net, projection7:led.net*7, projection30:led.net*30,
+    lifetime, summary:financeSummary(g) };
+}
 
 // ---------- Stud directory / outside-mares bookings (a scheduled fee-for-service income loop) ----------
 // A rotating roster of named visiting mares who book YOUR standing stallions. A booking schedules a
@@ -3327,6 +3380,7 @@ const ACHIEVEMENTS=[
   {id:'characterstudy', icon:'🎭', name:'Character Study',    desc:'Read ten horse personality profiles.',         check:g=>((g.stats&&g.stats.profilesRead)||0)>=10},
   {id:'headofschool',   icon:'🎓', name:'Head of School',     desc:'Grow the riding school to its Competition Squad curriculum.', check:g=>curriculumTierIndex(g)>=CURRICULUM_TIERS.length-1},
   {id:'rosetteroyalty', icon:'🏵️', name:'Rosette Royalty',    desc:'Earn fifteen first-place gold rosettes.',      check:g=>ribbonTally(g).gold>=15},
+  {id:'intheblack',     icon:'💷', name:'In the Black',        desc:'Run the ranch at a daily surplus of 🪙300+.',  check:g=>dailyLedger(g).net>=300},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3535,6 +3589,7 @@ const GOALS=[
   {id:'quiz1',   desc:'Read a horse’s personality profile (🎭)',       tip:g=>((g.stats&&g.stats.profilesRead)||0)+'/1',done:g=>((g.stats&&g.stats.profilesRead)||0)>=1,        reward:{money:300,rep:10}},
   {id:'curric1', desc:'Grow the riding school past Lead-Rein (🎓)',    tip:g=>curriculumTier(g).name+' · '+schoolLessonsTaught(g)+' lessons',done:g=>curriculumTierIndex(g)>=1,   reward:{money:800,rep:25}},
   {id:'ribbon1', desc:'Pin 5 rosettes on the ribbon wall (🎗️)',        tip:g=>ribbonTally(g).ribbons+'/5 ribbons',done:g=>ribbonTally(g).ribbons>=5,                        reward:{money:700,rep:25}},
+  {id:'books1',  desc:'Open the ranch books (💷 balance sheet)',        tip:g=>((g.stats&&g.stats.ledgerViews)||0)+'/1',done:g=>((g.stats&&g.stats.ledgerViews)||0)>=1,        reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3609,6 +3664,7 @@ const HR = {
   PRIME_END, BREED_MAX, OLD_AGE, LIFESPAN, agePerformanceMult, isElderly, pastPrime,
   tooOldToBreed, tooOldToCompete, ageLabel, canRetire, hofRecord, prestigeOf, legacyLine,
   canStand, studFee, studDemand, studIncomeFor, studStallions, studIncome,
+  LEDGER_CATEGORIES, ledgerCategoryDef, dailyLedger, financeSummary, balanceSheet,
   cardModel, hofToModel, stampFor,
   RANCH_NAME_MAX, ranchName, setRanchName, BARN_COLORS, GROUND_COLORS, FLAG_COLORS,
   barnColor, groundColor, flagColor, DECOR, decorDef, normDecor, ownedDecor, hasDecor,
@@ -5910,6 +5966,33 @@ function openRibbonWall(){
     '<div class="btnrow"><button class="btn ghost" id="ribbonClose" style="width:100%">Done</button></div>');
   $('ribbonClose').onclick=closeModal;
 }
+function openFinances(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // opening the books counts toward the finances goal (a usage stat — no economy change)
+  G.stats=G.stats||{}; G.stats.ledgerViews=(G.stats.ledgerViews||0)+1;
+  const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD();
+  const bs=balanceSheet(G), led=bs.ledger, fs=bs.summary;
+  const money=v=>(v<0?'-🪙':'🪙')+fmt(Math.abs(v));
+  const incRows = led.income.filter(x=>x.amount>0).map(x=>'<div class="kv">'+x.emoji+' '+esc(x.label)+'<b style="color:var(--good)">+🪙'+fmt(x.amount)+'</b></div>').join('')
+    || '<div class="hbreed" style="opacity:.6">No income yet — rent horses, open the canteen, teach lessons or stand a stud.</div>';
+  const expRows = led.expense.filter(x=>x.amount>0).map(x=>'<div class="kv">'+x.emoji+' '+esc(x.label)+'<b style="color:var(--bad)">-🪙'+fmt(x.amount)+'</b></div>').join('')
+    || '<div class="hbreed" style="opacity:.6">No running costs right now.</div>';
+  const netCol = led.net>=0?'var(--good)':'var(--bad)';
+  const life = bs.lifetime.map(l=>'<div class="stat"><div class="sv" style="font-size:13px">'+l.emoji+' '+(typeof l.value==='number'?fmt(l.value):esc(l.value))+'</div><div class="sl">'+esc(l.label)+'</div></div>').join('');
+  const heads = (fs.biggestEarner?'<span class="pill" style="color:var(--good)">Top earner: '+fs.biggestEarner.emoji+' '+esc(fs.biggestEarner.label)+'</span> ':'')+
+    (fs.biggestCost?'<span class="pill" style="color:var(--warn)">Top cost: '+fs.biggestCost.emoji+' '+esc(fs.biggestCost.label)+'</span>':'');
+  modal('<h3>💷 Balance Sheet</h3>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)"><div class="kv">Cash on hand<b>🪙'+fmt(bs.cash)+'</b></div>'+
+    '<div class="kv">Hay in the barn<b>🌾 '+fmt(bs.feed)+'</b></div>'+
+    '<div class="kv">Net cash-flow / day<b style="color:'+netCol+'">'+(led.net>=0?'+':'')+money(led.net)+'</b></div>'+
+    '<div class="hbreed" style="margin-top:3px">30-day projection <b style="color:'+netCol+'">'+(bs.projection30>=0?'+':'')+money(bs.projection30)+'</b></div>'+
+    (heads?'<div class="pips" style="margin-top:6px">'+heads+'</div>':'')+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">📈 Daily income <span style="color:var(--good)">+🪙'+fmt(led.incomeTotal)+'</span></div><div>'+incRows+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">📉 Daily costs <span style="color:var(--bad)">-🪙'+fmt(led.expenseTotal)+'</span></div><div>'+expRows+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">🏛️ Lifetime</div><div class="stats">'+life+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="finClose" style="width:100%">Done</button></div>');
+  $('finClose').onclick=closeModal;
+}
 function openStore(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const stock=storeStock(G), left=storeDaysLeft(G);
@@ -6335,6 +6418,7 @@ function boot(){
   { const sb=$('storeBtn'); if(sb) sb.onclick=openStore; }
   { const tb=$('trophyBtn'); if(tb) tb.onclick=openTrophyRoom; }
   { const rb=$('ribbonBtn'); if(rb) rb.onclick=openRibbonWall; }
+  { const fb=$('financeBtn'); if(fb) fb.onclick=openFinances; }
   { const db=$('diaryBtn'); if(db) db.onclick=openDiary; }
   { const gb=$('grudgeBtn'); if(gb) gb.onclick=openGrudge; }
   { const ab=$('almanacBtn'); if(ab) ab.onclick=openAlmanac; }
