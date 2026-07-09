@@ -325,6 +325,7 @@
     <button class="sbtn" id="tripBtn" title="Horse trailer — away trips" style="margin-right:4px;position:relative">🚚<span id="tripBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="storeBtn" title="General store — rotating deals" style="margin-right:4px;position:relative">🏪<span id="storeBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="trophyBtn" title="Trophy room — achievements & career" style="margin-right:4px">🏆</button>
+    <button class="sbtn" id="ribbonBtn" title="Ribbon wall — your rosettes & placings" style="margin-right:4px">🎗️</button>
     <button class="sbtn" id="diaryBtn" title="Ranch diary — how your horses are feeling" style="margin-right:4px">📓</button>
     <button class="sbtn" id="grudgeBtn" title="Grudge match — challenge a rival ranch" style="margin-right:4px">⚔️</button>
     <button class="sbtn" id="almanacBtn" title="Almanac — weather & season forecast" style="margin-right:4px">🌤️</button>
@@ -3325,6 +3326,7 @@ const ACHIEVEMENTS=[
   {id:'geneticist', icon:'🧬', name:'Coat Geneticist',        desc:'Study ten test-matings in the Genetics Lab.', check:g=>((g.stats&&g.stats.labTests)||0)>=10},
   {id:'characterstudy', icon:'🎭', name:'Character Study',    desc:'Read ten horse personality profiles.',         check:g=>((g.stats&&g.stats.profilesRead)||0)>=10},
   {id:'headofschool',   icon:'🎓', name:'Head of School',     desc:'Grow the riding school to its Competition Squad curriculum.', check:g=>curriculumTierIndex(g)>=CURRICULUM_TIERS.length-1},
+  {id:'rosetteroyalty', icon:'🏵️', name:'Rosette Royalty',    desc:'Earn fifteen first-place gold rosettes.',      check:g=>ribbonTally(g).gold>=15},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3371,6 +3373,62 @@ function trophyRoom(game){
     highlights,
     curator: curatorRank(game),
   };
+}
+// ---------- Keepsake ribbon wall / rosette display (read-only aggregator over trophies[]) ----------
+// A lovely wall of every show placing the ranch has earned. Pure display over the EXISTING
+// trophies[] records ({horse,breed,disc,tier,place,day}); no new awards, no state change.
+const ROSETTE_STYLES=[
+  {place:1, id:'gold',   name:'First',  emoji:'🥇', colour:'#f2c14e', ribbon:'🏵️'},
+  {place:2, id:'silver', name:'Second', emoji:'🥈', colour:'#c7cdd6', ribbon:'🎗️'},
+  {place:3, id:'bronze', name:'Third',  emoji:'🥉', colour:'#cd8b57', ribbon:'🎗️'},
+];
+function rosetteStyleFor(place){ return ROSETTE_STYLES.find(s=>s.place===place) || {place:(place||0), id:'placed', name:'Placed', emoji:'🎗️', colour:'#9aa4af', ribbon:'🎗️'}; }
+function rosetteFor(t){
+  t=t||{};
+  const style=rosetteStyleFor(t.place);
+  const d=disciplineDef(t.disc)||{id:(t.disc||'show'), name:(t.disc||'Show'), emoji:'🏅'};
+  const td=(t.tier!=null)?tierDef(t.tier):null;
+  return { place:(t.place||0), placeName:style.name, emoji:style.emoji, colour:style.colour, ribbon:style.ribbon,
+    disc:d.id, discName:d.name, discEmoji:d.emoji,
+    tier:(t.tier!=null?t.tier:null), tierName:(td?td.name:(t.tier!=null?('Tier '+t.tier):'Show')),
+    horse:(t.horse||'—'), breed:(t.breed||null), day:(t.day||0) };
+}
+function ribbonTally(game){
+  const tr=(game&&Array.isArray(game.trophies))?game.trophies.filter(Boolean):[];
+  let gold=0,silver=0,bronze=0,other=0,bestTier=0; const byDisc={};
+  for(const t of tr){ const p=t.place;
+    if(p===1) gold++; else if(p===2) silver++; else if(p===3) bronze++; else other++;
+    if(typeof t.tier==='number' && t.tier>bestTier) bestTier=t.tier;
+    const d=t.disc||'unknown'; byDisc[d]=(byDisc[d]||0)+1; }
+  let topDiscipline=null, topN=0;
+  for(const d of DISC_IDS){ const n=byDisc[d]||0; if(n>topN){ topN=n; topDiscipline=d; } } // stable: DISC order
+  for(const d in byDisc){ if(DISC_IDS.indexOf(d)<0 && byDisc[d]>topN){ topN=byDisc[d]; topDiscipline=d; } }
+  return { ribbons:tr.length, gold, silver, bronze, other, bestTier,
+    bestTierName:(bestTier?((tierDef(bestTier)||{name:'Tier '+bestTier}).name):'—'),
+    topDiscipline, topDisciplineName:(topDiscipline?((disciplineDef(topDiscipline)||{name:topDiscipline}).name):'—'),
+    topDisciplineCount:topN, byDiscipline:byDisc };
+}
+function ribbonWall(game){
+  const tr=(game&&Array.isArray(game.trophies))?game.trophies.filter(Boolean):[];
+  const rosettes=tr.map(rosetteFor); // trophies are stored newest-first
+  const tally=ribbonTally(game);
+  const byPlace=ROSETTE_STYLES.map(s=>({ place:s.place, name:s.name, emoji:s.emoji, colour:s.colour,
+    count:rosettes.filter(r=>r.place===s.place).length }));
+  const discOrder=DISC_IDS.slice();
+  Object.keys(tally.byDiscipline).forEach(d=>{ if(discOrder.indexOf(d)<0) discOrder.push(d); });
+  const byDiscipline=discOrder.filter(d=>(tally.byDiscipline[d]||0)>0).map(d=>{ const dd=disciplineDef(d)||{name:d,emoji:'🏅'};
+    const rs=rosettes.filter(r=>r.disc===d);
+    return { disc:d, name:dd.name, emoji:dd.emoji, count:rs.length,
+      gold:rs.filter(r=>r.place===1).length, silver:rs.filter(r=>r.place===2).length, bronze:rs.filter(r=>r.place===3).length }; });
+  const byTier=COMP_TIERS.slice().sort((a,b)=>b.id-a.id).map(t=>({ tier:t.id, name:t.name,
+    count:rosettes.filter(r=>r.tier===t.id).length })).filter(x=>x.count>0);
+  // proudest: highest tier, then best place, then most recent
+  const proudest=rosettes.slice().sort((a,b)=>((b.tier||0)-(a.tier||0)) || (a.place-b.place) || (b.day-a.day)).slice(0,6);
+  const recent=rosettes.slice(0,6);
+  const headline = tally.ribbons
+    ? (tally.ribbons+' rosette'+(tally.ribbons!==1?'s':'')+' on the wall — '+tally.gold+' gold'+(tally.bestTier?', best at the '+tally.bestTierName:'')+'.')
+    : 'The ribbon wall is bare — go win some rosettes!';
+  return { rosettes, tally, byPlace, byDiscipline, byTier, proudest, recent, headline, empty:rosettes.length===0 };
 }
 
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
@@ -3476,6 +3534,7 @@ const GOALS=[
   {id:'lab1',    desc:'Run a test-mating in the Genetics Lab (🧬)',   tip:g=>((g.stats&&g.stats.labTests)||0)+'/1',done:g=>((g.stats&&g.stats.labTests)||0)>=1,               reward:{money:400,rep:15}},
   {id:'quiz1',   desc:'Read a horse’s personality profile (🎭)',       tip:g=>((g.stats&&g.stats.profilesRead)||0)+'/1',done:g=>((g.stats&&g.stats.profilesRead)||0)>=1,        reward:{money:300,rep:10}},
   {id:'curric1', desc:'Grow the riding school past Lead-Rein (🎓)',    tip:g=>curriculumTier(g).name+' · '+schoolLessonsTaught(g)+' lessons',done:g=>curriculumTierIndex(g)>=1,   reward:{money:800,rep:25}},
+  {id:'ribbon1', desc:'Pin 5 rosettes on the ribbon wall (🎗️)',        tip:g=>ribbonTally(g).ribbons+'/5 ribbons',done:g=>ribbonTally(g).ribbons>=5,                        reward:{money:700,rep:25}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3559,6 +3618,7 @@ const HR = {
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   CURATOR_RANKS, curatorRank, achievementProgress, trophyRoom,
+  ROSETTE_STYLES, rosetteStyleFor, rosetteFor, ribbonTally, ribbonWall,
   DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
   GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
   dayForecast, forecast, upcomingEvents, seasonAlmanac,
@@ -5820,8 +5880,35 @@ function openTrophyRoom(){
     '<div class="swlabel">🏅 Trophy cabinet</div><div>'+cab+'</div>'+recent+
     '<div class="swlabel" style="margin-top:8px">📊 Career highlights</div><div class="stats">'+hl+'</div>'+
     '<div class="swlabel" style="margin-top:8px">🎖️ Achievements</div><div>'+ach+'</div>'+
-    '<div class="btnrow"><button class="btn ghost" id="trophyClose" style="width:100%">Done</button></div>');
+    '<div class="btnrow" style="gap:6px"><button class="btn" id="trophyRibbon" style="flex:1">🎗️ Ribbon wall</button><button class="btn ghost" id="trophyClose" style="flex:1">Done</button></div>');
   $('trophyClose').onclick=closeModal;
+  { const rb=$('trophyRibbon'); if(rb) rb.onclick=openRibbonWall; }
+}
+function openRibbonWall(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const w=ribbonWall(G), t=w.tally;
+  const rosetteChip=r=>'<span class="pill" title="'+esc(r.horse)+' · '+esc(r.tierName)+' · day '+r.day+'" style="border-color:'+r.colour+';color:'+r.colour+'">'+r.emoji+' '+r.discEmoji+' '+esc(r.horse)+'</span>';
+  const tallyPills='<span class="pill" style="color:#f2c14e">🥇 '+t.gold+'</span> <span class="pill" style="color:#c7cdd6">🥈 '+t.silver+'</span> <span class="pill" style="color:#cd8b57">🥉 '+t.bronze+'</span>'+
+    ' <span class="pill">🎗️ '+t.ribbons+' total</span>'+(t.bestTier?' <span class="pill" style="color:var(--gold)">🏅 '+esc(t.bestTierName)+'</span>':'')+(t.topDiscipline?' <span class="pill">⭐ '+esc(t.topDisciplineName)+'</span>':'');
+  let body;
+  if(w.empty){
+    body='<div class="empty">No rosettes yet — enter a horse show and place top-3 to start your wall.</div>';
+  } else {
+    const proud=w.proudest.map(rosetteChip).join(' ');
+    const wall=w.rosettes.map(rosetteChip).join(' ');
+    const discRows=w.byDiscipline.map(d=>'<div class="lbsub">'+d.emoji+' <b>'+esc(d.name)+'</b> — '+d.count+' ('+d.gold+'🥇 '+d.silver+'🥈 '+d.bronze+'🥉)</div>').join('');
+    const tierRows=w.byTier.map(x=>'<span class="pill">'+esc(x.name)+' ×'+x.count+'</span>').join(' ');
+    body='<div class="swlabel" style="margin-top:8px">🏆 Proudest rosettes</div><div class="pips">'+proud+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">🏅 By discipline</div><div>'+discRows+'</div>'+
+      (tierRows?'<div class="swlabel" style="margin-top:8px">📈 By level</div><div class="pips">'+tierRows+'</div>':'')+
+      '<div class="swlabel" style="margin-top:8px">🎗️ The whole wall ('+w.rosettes.length+')</div><div class="pips">'+wall+'</div>';
+  }
+  modal('<h3>🎗️ Ribbon Wall</h3>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname" style="font-size:14px">'+esc(w.headline)+'</div>'+
+    '<div class="pips" style="margin-top:6px">'+tallyPills+'</div></div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="ribbonClose" style="width:100%">Done</button></div>');
+  $('ribbonClose').onclick=closeModal;
 }
 function openStore(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -6247,6 +6334,7 @@ function boot(){
   { const tb=$('tripBtn'); if(tb) tb.onclick=openTrips; }
   { const sb=$('storeBtn'); if(sb) sb.onclick=openStore; }
   { const tb=$('trophyBtn'); if(tb) tb.onclick=openTrophyRoom; }
+  { const rb=$('ribbonBtn'); if(rb) rb.onclick=openRibbonWall; }
   { const db=$('diaryBtn'); if(db) db.onclick=openDiary; }
   { const gb=$('grudgeBtn'); if(gb) gb.onclick=openGrudge; }
   { const ab=$('almanacBtn'); if(ab) ab.onclick=openAlmanac; }
