@@ -1258,6 +1258,44 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'quartermaster').check(gq), 'Quartermaster unlocks at three presets');
   ok(HR.GOALS.filter(x => x.id === 'loadout1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'quartermaster').length === 1, 'new loadout goal/achievement ids are unique');
 }
+{
+  // ---- stable-yard clock / time-of-day ----
+  // DAYPARTS tile the full 0..1 range with no gaps
+  const dp = HR.DAYPARTS.slice().sort((a, b) => a.lo - b.lo);
+  ok(dp[0].lo === 0 && dp[dp.length - 1].hi === 1, 'the dayparts start at 0 and end at 1');
+  let contiguous = true; for (let i = 1; i < dp.length; i++) { if (Math.abs(dp[i].lo - dp[i - 1].hi) > 1e-9) contiguous = false; }
+  ok(contiguous, 'the dayparts tile 0..1 with no gaps or overlaps');
+  // dayPartFor maps representative phases sensibly
+  ok(HR.dayPartFor(0).id === 'night', 'phase 0 is night (midnight)');
+  ok(HR.dayPartFor(0.5).id === 'noon', 'phase 0.5 is midday');
+  ok(HR.dayPartFor(0.22).id === 'dawn', 'early phase is dawn');
+  ok(HR.dayPartFor(0.75).id === 'dusk', 'late-day phase is dusk');
+  ok(HR.dayPartFor(0.97).id === 'night', 'late-night phase wraps to night');
+  // wraps/clamps out-of-range phases
+  ok(HR.dayPartFor(1.5).id === HR.dayPartFor(0.5).id, 'a phase > 1 wraps around');
+  ok(HR.dayPartFor(-0.25).id === HR.dayPartFor(0.75).id, 'a negative phase wraps around');
+  ok(HR.dayPartFor(NaN).id, 'a non-finite phase is safe');
+  // clockLabel is HH:MM, deterministic, and monotonic across the day
+  ok(HR.clockLabel(0) === '00:00' && HR.clockLabel(0.5) === '12:00' && HR.clockLabel(0.25) === '06:00', 'clockLabel reads the right HH:MM');
+  ok(HR.clockLabel(0.3) === HR.clockLabel(0.3), 'clockLabel is deterministic');
+  const t1 = HR.clockLabel(0.1), t2 = HR.clockLabel(0.4);
+  ok(t1 < t2, 'the clock advances through the day');
+  ok(/am|pm/.test(HR.clock12(0.5)) && HR.clock12(0.5).indexOf('12:00 pm') === 0, 'clock12 gives a 12-hour readout');
+  // yardTimeFlavour is deterministic for a (phase, day) and non-empty
+  const g = HR.freshGame(); g.day = 5;
+  const f1 = HR.yardTimeFlavour(g, 0.5), f2 = HR.yardTimeFlavour(g, 0.5);
+  ok(f1 === f2 && f1.length > 0, 'yardTimeFlavour is deterministic and non-empty');
+  ok(f1.indexOf('{') < 0, 'flavour placeholders are all filled in');
+  const g2 = HR.freshGame(); g2.day = 6;
+  ok(HR.yardTimeFlavour(g, 0.2).length > 0 && HR.yardTimeFlavour(g2, 0.2).length > 0, 'flavour works across days/dayparts');
+  // yardClock bundles the readout; read-only + safe
+  const c = HR.yardClock(g, 0.5);
+  ok(c.part === 'noon' && c.emoji && c.time === '12:00' && c.flavour.length > 0, 'yardClock bundles part + emoji + time + flavour');
+  const snap = JSON.stringify(g);
+  HR.yardClock(g, 0.3); HR.dayPartFor(0.7); HR.clockLabel(0.9); HR.yardTimeFlavour(g, 0.1);
+  ok(JSON.stringify(g) === snap, 'the clock helpers never mutate the game (read-only)');
+  ok(HR.yardClock({}, 0.4).part && HR.dayPartFor(0.4).label, 'clock helpers are safe on a bare game');
+}
 
 // ---- personality traits ----
 {

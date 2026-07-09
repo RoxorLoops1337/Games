@@ -312,6 +312,7 @@
     <div class="chip feed"><span>🌾</span><b id="hudFeed">0</b></div>
     <div class="chip rep"><span>⭐</span><b id="hudRep">0</b></div>
     <div class="chip day" id="dayChip" style="cursor:pointer"><span id="hudWd">🗓️ Mon</span> · Day <b id="hudDay">1</b></div>
+    <div class="chip" id="clockChip" title="Time of day at the yard" style="cursor:pointer"><span id="clockEmoji">☀️</span> <b id="clockTime">12:00</b></div>
     <div class="spacer"></div>
     <button class="sbtn" id="boardBtn" title="Contracts board" style="margin-right:4px;position:relative">📋<span id="boardBadge" class="hudbadge" style="display:none">0</span></button>
     <button class="sbtn" id="regBtn" title="Studbook & names" style="margin-right:4px">📖</button>
@@ -1757,6 +1758,41 @@ function hashDay(day){ let x=(Math.floor(day)*2654435761)>>>0; x^=x>>>15; x=Math
 function weatherFor(day){ const c=seasonOf(day).wx; const r=hashDay(day)%100; return r<c[0]?WEATHER[0] : r<c[1]?WEATHER[1] : r<c[2]?WEATHER[2] : WEATHER[3]; }
 function canteenWeatherMult(day){ return weatherFor(day).canteen; }
 function feedExtraFor(day){ return weatherFor(day).feedExtra + seasonOf(day).feedExtra; } // cold weather & winter both add hay
+// ---------- Stable-yard clock / time-of-day (READ-ONLY presentational readout) ----------
+// Maps the scene's within-day phase (0..1, where 0=midnight, 0.5=noon — the same value the sky uses)
+// to a part-of-day + clock readout + a deterministic yard flavour line. Purely cosmetic; no gameplay.
+const DAYPARTS=[
+  {id:'night',     label:'Night',     emoji:'🌙', lo:0.00, hi:0.18},
+  {id:'dawn',      label:'Dawn',      emoji:'🌅', lo:0.18, hi:0.28},
+  {id:'morning',   label:'Morning',   emoji:'🌤️', lo:0.28, hi:0.42},
+  {id:'noon',      label:'Midday',    emoji:'☀️', lo:0.42, hi:0.58},
+  {id:'afternoon', label:'Afternoon', emoji:'🌇', lo:0.58, hi:0.72},
+  {id:'dusk',      label:'Dusk',      emoji:'🌆', lo:0.72, hi:0.82},
+  {id:'evening',   label:'Evening',   emoji:'🌃', lo:0.82, hi:0.92},
+  {id:'night',     label:'Night',     emoji:'🌙', lo:0.92, hi:1.00},
+];
+function wrapPhase(p){ p=(typeof p==='number'&&isFinite(p))?p:0; p=p%1; if(p<0) p+=1; return p; }
+function dayPartFor(phase){ const p=wrapPhase(phase); for(const d of DAYPARTS){ if(p>=d.lo && p<d.hi) return d; } return DAYPARTS[DAYPARTS.length-1]; }
+function clockLabel(phase){ const p=wrapPhase(phase); const mins=Math.round(p*24*60)%(24*60), h=Math.floor(mins/60), m=mins%60;
+  return (h<10?'0':'')+h+':'+(m<10?'0':'')+m; }
+function clock12(phase){ const p=wrapPhase(phase); const mins=Math.round(p*24*60)%(24*60); let h=Math.floor(mins/60); const m=mins%60;
+  const ap=h<12?'am':'pm'; let hh=h%12; if(hh===0) hh=12; return hh+':'+(m<10?'0':'')+m+' '+ap; }
+const YARD_FLAVOURS={
+  night:    ['The yard is dark and still; the horses doze in their stalls.','Only an owl and the night lantern keep watch over the barn.','A quiet, starlit night at the stables.'],
+  dawn:     ['First light breaks over the paddock; the horses stir.','A cool, dewy dawn — the yard slowly wakes.','Birdsong and soft light as the stable rouses for the day.'],
+  morning:  ['A busy morning of mucking out and turnout.','The yard bustles with feeds, grooming and morning rounds.','{weekday} morning at the stables, {weather} overhead.'],
+  noon:     ['The sun is high; the horses graze in the midday warmth.','A bright midday — riders school in the arena.','The lunchtime lull, hay nets full under {weather} skies.'],
+  afternoon:['A productive afternoon of training and chores.','The light softens as the afternoon wears on.','Afternoon rounds — a {weather} {weekday} at Skyhorse.'],
+  dusk:     ['Golden dusk settles; the last horses come in from the field.','Long shadows stretch across the yard as evening nears.','A peaceful dusk, the {weather} sky fading to night.'],
+  evening:  ['Evening feeds done; the barn winds down for the night.','Lanterns lit, the yard grows quiet and warm.','A calm evening settles over the stables.'],
+};
+function yardTimeFlavour(game, phase){ const d=dayPartFor(phase); const lines=YARD_FLAVOURS[d.id]||['A quiet moment at the yard.'];
+  const day=Math.floor((game&&game.day)||1);
+  let key=(day*13)>>>0; for(let k=0;k<d.id.length;k++) key=(Math.imul(key,31)+d.id.charCodeAt(k))>>>0;
+  const line=lines[hashDay(key)%lines.length];
+  return line.replace(/\{weekday\}/g, WEEKDAY_FULL[weekdayIndex(day)]).replace(/\{weather\}/g, weatherFor(day).name.toLowerCase()); }
+function yardClock(game, phase){ const p=wrapPhase(phase), d=dayPartFor(p);
+  return { phase:p, part:d.id, label:d.label, emoji:d.emoji, time:clockLabel(p), time12:clock12(p), flavour:yardTimeFlavour(game,p) }; }
 
 // ---------- Weather & season forecast / almanac (READ-ONLY look-ahead, fully derived from game.day) ----------
 // A deterministic outlook over the season/weekday calendar, weather (weatherFor is hashDay-deterministic)
@@ -4123,6 +4159,7 @@ const HR = {
   WEEKDAYS, WEEKDAY_FULL, SCHEDULE, weekdayIndex, weekOf, scheduleFor, showsToday, isShowDay,
   disciplineOpenToday, isMarketDay, isHayDay, isCareDay, canteenDayMult, lessonDayMult, nextShowDay,
   WEATHER, weatherDef, weatherFor, hashDay, canteenWeatherMult, feedExtraFor,
+  DAYPARTS, wrapPhase, dayPartFor, clockLabel, clock12, yardTimeFlavour, yardClock,
   SEASONS, SEASON_LEN, seasonOf, yearOf, seasonDay, seasonBreedFeeMul, seasonGestationAdj,
   seasonShowPrizeMul, seasonCanteenMul, seasonHayMul, seasonMarketBonus,
   COAT_CSS, coatColor,
@@ -5982,6 +6019,9 @@ function updateSky(){
   const sun=$('sceneSun'); if(sun){ sun.style.left=x+'%'; sun.style.top=y+'px'; sun.style.opacity=(1-night).toFixed(3); }
   const mt=((phase+0.5)%1-0.22)/0.56; const mx=8+clamp(mt,0,1)*80, my=54-Math.sin(clamp(mt,0,1)*Math.PI)*40;
   const moon=$('sceneMoon'); if(moon){ moon.style.left=mx+'%'; moon.style.top=my+'px'; moon.style.opacity=night.toFixed(3); }
+  // stable-yard clock chip (only rewrite the DOM when the minute/part actually changes)
+  { const ce=$('clockEmoji'), ct=$('clockTime'); if(ce&&ct){ const c=yardClock(G,phase);
+      if(ct.textContent!==c.time){ ct.textContent=c.time; ce.textContent=c.emoji; const chip=$('clockChip'); if(chip) chip.title=c.emoji+' '+c.label+' — '+c.time12; } } }
 }
 // ---- weather particle layer ----
 function buildWeather(wxId){
@@ -7189,6 +7229,8 @@ function boot(){
   if(!load()){ G=freshGame(loadLegacy()); }
   if(_idc<1000) _idc=1000+G.horses.length+G.market.length;
   { const dc=$('dayChip'); if(dc) dc.onclick=openWeek; }
+  { const cc=$('clockChip'); if(cc) cc.onclick=()=>{ const phase=((skyT/SKY_CYCLE)%1+1)%1; const c=yardClock(G,phase);
+      toast(c.emoji+' '+c.label+' ('+c.time12+') — '+c.flavour,'info'); }; }
   { const hb=$('helpBtn'); if(hb) hb.onclick=openHelp; }
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
   { const eb=$('enrichBtn'); if(eb) eb.onclick=openEnrichment; }
