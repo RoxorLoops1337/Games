@@ -261,6 +261,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.zodiacReads = 1; // satisfies the horse-zodiac goal
   g.stats.vaneChecks = 1; // satisfies the weathervane goal
   g.stats.shineChecks = 1; // satisfies the coat-shine goal
+  g.stats.gaitViews = 1; // satisfies the gait-showcase goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5338,6 +5339,44 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'shine1').done(gv), 'the coat-shine goal is unmet before checking');
   gv.stats.shineChecks = 1;
   ok(HR.GOALS.find(x => x.id === 'shine1').done(gv), 'checking a coat shine satisfies the goal');
+}
+{
+  // ---- Horse gait / paces showcase ----
+  ok(HR.GAITS.length === 4 && HR.GAITS.map(g => g.id).join(',') === 'walk,trot,canter,gallop', 'the four classical gaits are defined in order');
+  ok(HR.GAITS.every(g => g.w && Math.abs((g.w.speed || 0) + (g.w.stamina || 0) + (g.w.temperament || 0) - 1) < 0.001), 'each gait stat weighting sums to 1');
+  ok(HR.gaitBand(95).id === 'sublime' && HR.gaitBand(10).id === 'laboured', 'gait bands run from sublime to laboured');
+  const g = HR.freshGame();
+  // a fast horse gallops better than it walks; a calm horse walks better than it gallops
+  const sprinter = HR.mkHorse({ breed: 'thoroughbred', age: 20, speed: 98, stamina: 80, temperament: 40 }); g.horses.push(sprinter);
+  ok(HR.gaitScore(sprinter, 'gallop') > HR.gaitScore(sprinter, 'walk'), 'a fast, hot horse gallops better than it walks');
+  const gentle = HR.mkHorse({ breed: 'fjord', age: 20, speed: 40, stamina: 80, temperament: 96 }); g.horses.push(gentle);
+  ok(HR.gaitScore(gentle, 'walk') > HR.gaitScore(gentle, 'gallop'), 'a calm horse walks better than it gallops');
+  // scores are bounded and every gait is present in the showcase
+  const sc = HR.gaitShowcase(g, sprinter);
+  ok(sc.gaits.length === 4 && sc.gaits.every(x => x.score >= 0 && x.score <= 100 && x.band && x.desc), 'the showcase rates all four gaits, each bounded with a band and descriptor');
+  ok(sc.best && sc.gaits.every(x => x.score <= sc.best.score), 'the best gait is the highest-scoring one');
+  ok(typeof sc.overall === 'number' && sc.overallBand && typeof sc.wayOfGoing === 'string' && sc.wayOfGoing.length > 0, 'the showcase has an overall score, band and a way-of-going line');
+  ok(HR.bestGait(sprinter).id === 'gallop', 'the sprinter’s strong suit is the gallop');
+  // schooling a related discipline lifts the related gaits
+  const plain = HR.mkHorse({ breed: 'arabian', age: 20, speed: 70, stamina: 70, temperament: 70, id: 'p1' });
+  const schooled = HR.mkHorse({ breed: 'arabian', age: 20, speed: 70, stamina: 70, temperament: 70, id: 'p2' });
+  HR.gainAffinity(schooled, 'race', HR.SPECIALIST_AT || 60);
+  ok(HR.gaitScore(schooled, 'gallop') >= HR.gaitScore(plain, 'gallop'), 'a race-schooled horse gallops at least as well');
+  // determinism + read-only (warm up first so needs/affinity are settled)
+  HR.gaitShowcase(g, sprinter); HR.gaitScore(sprinter, 'trot');
+  const snap = JSON.stringify(g);
+  ok(HR.gaitScore(sprinter, 'canter') === HR.gaitScore(sprinter, 'canter'), 'gaitScore is deterministic');
+  ok(JSON.stringify(HR.gaitShowcase(g, sprinter)) === JSON.stringify(HR.gaitShowcase(g, sprinter)), 'the showcase is deterministic');
+  ok(JSON.stringify(g) === snap, 'reading the paces never mutates the game after warm-up');
+  // sparse safety + achievement + goal
+  ok(HR.gaitScore(null, 'walk') === 0 && HR.gaitShowcase({}, null).gaits.length === 0, 'the gait helpers are safe on a sparse game');
+  const fm = HR.ACHIEVEMENTS.find(a => a.id === 'finemover');
+  const ace = HR.mkHorse({ breed: 'akhalteke', age: 20, speed: 100, stamina: 100, temperament: 100 }); const gace = HR.freshGame(); gace.horses.push(ace);
+  ok(fm && fm.check(gace), 'a horse with a 90+ gait unlocks A Fine Mover');
+  const gc = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'gait1').done(gc), 'the gait goal is unmet before watching');
+  gc.stats.gaitViews = 1;
+  ok(HR.GOALS.find(x => x.id === 'gait1').done(gc), 'watching a horse’s paces satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
