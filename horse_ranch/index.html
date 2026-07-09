@@ -339,6 +339,7 @@
     <button class="sbtn" id="enrichBtn" title="Paddock enrichment — toys & comforts for the herd" style="margin-right:4px">🧸</button>
     <button class="sbtn" id="wardrobeBtn" title="Show wardrobe — rider outfits & show attire" style="margin-right:4px">👗</button>
     <button class="sbtn" id="tourBtn" title="Ranch tour — photo album & postcard" style="margin-right:4px">📮</button>
+    <button class="sbtn" id="mascotBtn" title="Stable mascot — adopt a barn companion" style="margin-right:4px">🐾</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1897,7 +1898,7 @@ function freshGame(legacy){
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0,ceremonies:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
-    decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), lastRoutineDay:0,
+    decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[],tiers:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
@@ -1970,6 +1971,7 @@ function advanceDay(game,rng){
   if(staffEffect(game,'autoRoutine')) applyDailyRoutine(game);
   const staffTop=staffEffect(game,'careTopUp'), staffHeal=staffEffect(game,'vetHeal');
   const enrichBonus=enrichmentBonus(game);
+  const mascotP=mascotPerk(game);
 
   // age + growth + pregnancy + rent
   const born=[];
@@ -1986,6 +1988,11 @@ function advanceDay(game,rng){
       if(enrichBonus.needLift>0) for(const id of NEED_IDS) h.needs[id]=clamp(h.needs[id]+enrichBonus.needLift,0,100);
       if(enrichBonus.happy>0) h.happy=clamp(h.happy+enrichBonus.happy,0,100);
       if(enrichBonus.bond>0) h.bond=clamp(h.bond+enrichBonus.bond,0,100); }
+    // stable mascot: at most one tiny, hard-capped daily perk to the whole herd
+    if(mascotP.happy||mascotP.care||mascotP.bond){ needsInit(h);
+      if(mascotP.care>0) for(const id of NEED_IDS) h.needs[id]=clamp(h.needs[id]+mascotP.care,0,100);
+      if(mascotP.happy>0) h.happy=clamp(h.happy+mascotP.happy,0,100);
+      if(mascotP.bond>0) h.bond=clamp(h.bond+mascotP.bond,0,100); }
     { const cs=careScore(h);
       if(cs<35){ h.happy=clamp(h.happy-5,0,100); h.health=clamp(h.health-2,0,100); }
       else if(cs>=80){ h.happy=clamp(h.happy+2,0,100); } }
@@ -2052,6 +2059,8 @@ function advanceDay(game,rng){
   { const pay=staffPayroll(game); if(pay>0){ game.money-=pay; game.stats.staffWages=(game.stats.staffWages||0)+pay; } }
   // retired horses in the pasture draw a small, capped stream of admiring visitors
   { const pb=pastureRepBonus(game); if(pb>0) game.rep+=pb; }
+  // stable mascot rep appeal (a tiny, capped daily draw — e.g. the barn owl the visitors love)
+  { if(mascotP.rep>0) game.rep+=mascotP.rep; }
   // insurance premiums (daily coin sink; only if you hold a policy)
   { const prem=insurancePremium(game); if(prem>0){ game.money-=prem; game.stats.insurancePremiums=(game.stats.insurancePremiums||0)+prem; } }
   // stud fees — visiting mares pay to breed with your at-stud stallions (no foals in your stalls)
@@ -3355,6 +3364,60 @@ function wardrobeSpend(game){ return ownedOutfits(game).reduce((s,id)=>{ const i
 function outfitTurnoutBonus(game){ const o=equippedOutfit(game); return o?Math.min(OUTFIT_TURNOUT_CAP, o.turnout||0):0; }
 // applied only to turnout-weighted (Showing/halter) disciplines
 function outfitTurnoutMult(game,disc){ return (disc&&disc.coat)?(1+outfitTurnoutBonus(game)):1; }
+// ---------- Stable mascot / barn companion (adopt ONE, name it — charm + a tiny capped perk) ----------
+// One mascot at a time, bought once and named. Mostly charm (a badge + a deterministic daily quip),
+// with at most ONE tiny, hard-capped passive perk. Economy-safe; deterministic (quip keyed to hashDay).
+const MASCOT_NAME_MAX=18;
+const MASCOT_PERK_CAP=1;      // most a mascot perk adds per day (happy / care / rep)
+const MASCOT_BOND_CAP=0.5;    // most a mascot perk adds to bond per day
+const MASCOTS=[
+  {id:'barncat', species:'Barn Cat',         emoji:'🐈', cost:500, perk:{kind:'care',  value:1},   blurb:'Keeps the mice down and naps in the hay — the yard runs cleaner.'},
+  {id:'dog',     species:'Loyal Dog',        emoji:'🐕', cost:600, perk:{kind:'happy', value:1},   blurb:'A wagging welcome for everyone — the whole herd is a little happier.'},
+  {id:'goat',    species:'Yard Goat',        emoji:'🐐', cost:450, perk:{kind:'happy', value:1},   blurb:'Comic relief on four legs — impossible to stay glum around.'},
+  {id:'owl',     species:'Wise Owl',         emoji:'🦉', cost:700, perk:{kind:'rep',   value:1},   blurb:'A handsome barn owl the visitors adore — a touch more renown.'},
+  {id:'donkey',  species:'Miniature Donkey', emoji:'🫏', cost:800, perk:{kind:'bond',  value:0.5}, blurb:'A calming companion — steadies nervous horses and builds trust.'},
+];
+function mascotDef(id){ return MASCOTS.find(m=>m.id===id)||null; }
+const MASCOT_QUIPS={
+  barncat:['{name} the barn cat is curled up on a hay bale.','{name} patrolled the feed room — not a mouse in sight.','{name} sunned themselves on the tack trunk all afternoon.','{name} wound between the horses’ legs, purring.'],
+  dog:    ['{name} greeted every visitor with a wagging tail.','{name} trotted the fence line on patrol.','{name} flopped in the aisle for a belly rub.','{name} herded the yard chickens, very pleased with themselves.'],
+  goat:   ['{name} the goat stole a mouthful of someone’s hay again.','{name} balanced on the muck heap like a mountain king.','{name} headbutted the gate until someone laughed.','{name} befriended the shyest foal today.'],
+  owl:    ['{name} watched the yard with wise golden eyes.','{name} hooted softly from the rafters at dusk.','{name} drew a small crowd of admiring visitors.','{name} kept the barn quiet and the rodents nervous.'],
+  donkey: ['{name} the little donkey brayed a cheerful hello.','{name} stood guard beside the nervous yearling.','{name} plodded the paddock, calm as ever.','{name} leaned in for a scratch and refused to move.'],
+};
+function normMascot(m){ m=m||{};
+  const type=mascotDef(m.type)?m.type:null;
+  const name = type ? (((''+(m.name||'')).trim().slice(0,MASCOT_NAME_MAX))||mascotDef(type).species) : null;
+  return { type, name }; }
+function activeMascot(game){ const m=normMascot(game&&game.mascot); if(!m.type) return null; const d=mascotDef(m.type);
+  return d?{ id:d.id, species:d.species, emoji:d.emoji, cost:d.cost, perk:d.perk, blurb:d.blurb, name:m.name }:null; }
+function hasMascot(game){ return !!activeMascot(game); }
+function adoptMascot(game,id,name){
+  const d=mascotDef(id); if(!d) return {ok:false,why:'No such companion.'};
+  if(!game) return {ok:false,why:'No ranch.'};
+  const cur=normMascot(game.mascot), swapping=(cur.type!==id);
+  if(swapping){ if((game.money||0)<d.cost) return {ok:false,why:'Not enough coins.'}; game.money-=d.cost;
+    game.stats=game.stats||{}; game.stats.mascotsAdopted=(game.stats.mascotsAdopted||0)+1; }
+  const nm=(((''+(name||'')).trim().slice(0,MASCOT_NAME_MAX))||d.species);
+  game.mascot={ type:id, name:nm }; return {ok:true, mascot:activeMascot(game), charged:swapping?d.cost:0};
+}
+function renameMascot(game,name){ const cur=normMascot(game&&game.mascot); if(!cur.type) return {ok:false,why:'No mascot to name.'};
+  const nm=(((''+(name||'')).trim().slice(0,MASCOT_NAME_MAX))||mascotDef(cur.type).species);
+  game.mascot={ type:cur.type, name:nm }; return {ok:true, name:nm}; }
+function retireMascot(game){ const had=hasMascot(game); if(game) game.mascot={type:null,name:null}; return {ok:had}; }
+// the tiny, hard-capped daily effect from the active mascot's perk (neutral if none)
+function mascotPerk(game){
+  const m=activeMascot(game); const out={happy:0, care:0, bond:0, rep:0};
+  if(!m||!m.perk) return out; const v=m.perk.value||0;
+  if(m.perk.kind==='happy') out.happy=Math.min(MASCOT_PERK_CAP,v);
+  else if(m.perk.kind==='care') out.care=Math.min(MASCOT_PERK_CAP,v);
+  else if(m.perk.kind==='bond') out.bond=Math.min(MASCOT_BOND_CAP,v);
+  else if(m.perk.kind==='rep') out.rep=Math.min(MASCOT_PERK_CAP,v);
+  return out;
+}
+function mascotQuip(game,day){ const m=activeMascot(game); if(!m) return '';
+  day=(day!=null?day:((game&&game.day)||1)); const qs=MASCOT_QUIPS[m.type]||['{name} watches over the yard.'];
+  const i=hashDay(day)%qs.length; return (qs[i]||'{name} is about the yard.').replace(/\{name\}/g, m.name); }
 
 // ---------- Shareable "trading card" data model (rendering is DOM-only) ----------
 function stampFor(game){
@@ -3531,6 +3594,7 @@ const ACHIEVEMENTS=[
   {id:'playground',     icon:'🧸', name:'Paddock Playground',  desc:'Kit the paddock out with every enrichment toy.', check:g=>ENRICHMENT_ITEMS.every(it=>hasEnrichment(g,it.id))},
   {id:'bestdressed',    icon:'👗', name:'Best Dressed',        desc:'Collect every outfit in the show wardrobe.',   check:g=>OUTFITS.every(o=>hasOutfit(g,o.id))},
   {id:'postcardperfect',icon:'📮', name:'Postcard Perfect',    desc:'Fill a ranch tour with six highlight stops.',  check:g=>tourAlbum(g).count>=6},
+  {id:'menagerie',      icon:'🐾', name:'Menagerie',           desc:'Welcome three different companions to the ranch.', check:g=>((g.stats&&g.stats.mascotsAdopted)||0)>=3},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3780,6 +3844,7 @@ const GOALS=[
   {id:'enrich1', desc:'Add a paddock enrichment toy (🧸)',               tip:g=>ownedEnrichment(g).length+'/1 items',done:g=>ownedEnrichment(g).length>=1,                    reward:{money:400,rep:15}},
   {id:'outfit1', desc:'Buy a show outfit for the wardrobe (👗)',         tip:g=>ownedOutfits(g).length+'/1 outfits',done:g=>ownedOutfits(g).length>=1,                      reward:{money:400,rep:15}},
   {id:'tour1',   desc:'Take the ranch photo tour (📮)',                  tip:g=>((g.stats&&g.stats.toursViewed)||0)+'/1',done:g=>((g.stats&&g.stats.toursViewed)||0)>=1,       reward:{money:300,rep:10}},
+  {id:'mascot1', desc:'Adopt a stable mascot (🐾)',                      tip:g=>hasMascot(g)?activeMascot(g).emoji+' '+activeMascot(g).name:'none yet',done:g=>hasMascot(g),      reward:{money:300,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3863,6 +3928,7 @@ const HR = {
   decorUnlocked, decorAffordable, buyDecor, decorSpend,
   ENRICHMENT_ITEMS, ENRICH_HAPPY_CAP, ENRICH_NEEDLIFT_CAP, ENRICH_BOND_CAP, ENRICH_DECAY_FLOOR, enrichmentDef, normEnrichment, ownedEnrichment, hasEnrichment, enrichmentAffordable, buyEnrichment, enrichmentSpend, enrichmentBonus, enrichmentDecayMult,
   OUTFITS, OUTFIT_TURNOUT_CAP, outfitDef, normWardrobe, ownedOutfits, hasOutfit, outfitAffordable, buyOutfit, equipOutfit, equippedOutfit, wardrobeSpend, outfitTurnoutBonus, outfitTurnoutMult,
+  MASCOTS, MASCOT_NAME_MAX, MASCOT_PERK_CAP, MASCOT_BOND_CAP, mascotDef, normMascot, activeMascot, hasMascot, adoptMascot, renameMascot, retireMascot, mascotPerk, mascotQuip,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
   isAuctionDay, nextAuction, makeAuctionLot, makeAuctionLots, aiCounter, resolveAuction, consignValue,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
@@ -3988,6 +4054,7 @@ function load(){
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     G.enrichment=normEnrichment(G.enrichment); // paddock enrichment owned-set — safe on old saves
     G.wardrobe=normWardrobe(G.wardrobe); // show wardrobe (owned outfits + equipped) — safe on old saves
+    G.mascot=normMascot(G.mascot); // stable mascot (type + name) — safe on old saves
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
@@ -5937,6 +6004,41 @@ function openTourAlbum(){
   $('tourClose').onclick=closeModal;
   { const cp=$('tourCopy'); if(cp) cp.onclick=()=>{ try{ if(navigator&&navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(pcText); toast('📋 Postcard copied — share it anywhere!','good'); } else { toast('Copy not available here.','info'); } }catch(e){ toast('Copy not available here.','info'); } playSfx('tap'); }; }
 }
+function openMascot(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cur=activeMascot(G);
+  const perkLabel=p=>p.kind==='care'?'tidier yard — a little daily care for all':p.kind==='happy'?'a happier herd each day':p.kind==='bond'?'steadier, more trusting horses':p.kind==='rep'?'a touch more renown with visitors':'good company';
+  const active = cur
+    ? '<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname" style="font-size:15px">'+cur.emoji+' '+esc(cur.name)+' <span class="pill">'+esc(cur.species)+'</span></div>'+
+      '<div class="hbreed" style="margin-top:2px;font-style:italic">“'+esc(mascotQuip(G,G.day))+'”</div>'+
+      '<div class="hbreed" style="margin-top:3px">Perk: '+esc(perkLabel(cur.perk))+'</div>'+
+      '<div class="row" style="gap:8px;margin-top:6px"><input class="nameIn" id="mascotName" maxlength="'+MASCOT_NAME_MAX+'" value="'+esc(cur.name)+'"><button class="btn sm" id="mascotRename">Rename</button><button class="btn sm ghost" id="mascotRetire">Retire</button></div></div>'
+    : '<div class="empty">No mascot yet — adopt a companion below to bring a little life to the yard.</div>';
+  const shop=MASCOTS.map(m=>{
+    const isCur=cur&&cur.id===m.id, afford=(G.money||0)>=m.cost;
+    const btn = isCur ? '<span class="pill" style="color:var(--gold)">★ Here</span>'
+      : '<button class="btn sm" data-adopt="'+m.id+'" '+(afford?'':'disabled')+'>🪙'+fmt(m.cost)+'</button>';
+    return '<div class="decoritem"><div class="de">'+m.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:13px">'+esc(m.species)+'</div>'+
+      '<div class="hbreed">'+esc(m.blurb)+'</div><div class="hbreed" style="opacity:.7">'+esc(perkLabel(m.perk))+'</div></div>'+btn+'</div>';
+  }).join('');
+  modal('<h3>🐾 Stable Mascot</h3>'+
+    '<div class="msg">Every good yard has one. Adopt a companion, give them a name, and they’ll live on the ranch — a daily bit of charm and one small, lasting perk.</div>'+
+    active+
+    '<div class="swlabel" style="margin-top:8px">🏡 Companions '+(cur?'<span class="pill">swap any time</span>':'')+'</div>'+
+    '<div>'+shop+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="mascotClose" style="width:100%">Done</button></div>');
+  $('mascotClose').onclick=closeModal;
+  const reopen=()=>{ const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); openMascot(); };
+  const adopt=(id)=>{ const nm=$('mascotName'); const r=adoptMascot(G, id, nm?nm.value:'');
+    if(!r.ok){ toast(r.why,'bad'); return; } if(r.charged) coinPop(-r.charged); burst(mascotDef(id).emoji+'✨',12); playSfx('coin');
+    toast('🐾 '+activeMascot(G).name+' the '+mascotDef(id).species+' has moved in!','good'); reopen(); };
+  document.querySelectorAll('[data-adopt]').forEach(b=>b.onclick=()=>adopt(b.getAttribute('data-adopt')));
+  { const rn=$('mascotRename'); if(rn) rn.onclick=()=>{ const nm=$('mascotName'); const r=renameMascot(G, nm?nm.value:'');
+      if(!r.ok){ toast(r.why,'info'); return; } playSfx('tap'); toast('✏️ Renamed to '+r.name+'.','good'); reopen(); }; }
+  { const rt=$('mascotRetire'); if(rt) rt.onclick=()=>{ retireMascot(G); playSfx('tap'); toast('🐾 Your mascot has retired to a cosy home.','info'); reopen(); }; }
+  const ni=$('mascotName'); if(ni&&ni.addEventListener) ni.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const rn=$('mascotRename'); if(rn) rn.click(); } });
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -6739,6 +6841,7 @@ function boot(){
   { const eb=$('enrichBtn'); if(eb) eb.onclick=openEnrichment; }
   { const wb=$('wardrobeBtn'); if(wb) wb.onclick=openWardrobe; }
   { const tb=$('tourBtn'); if(tb) tb.onclick=openTourAlbum; }
+  { const mb=$('mascotBtn'); if(mb) mb.onclick=openMascot; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
