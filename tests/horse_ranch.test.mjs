@@ -236,6 +236,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.labTests = 10; // satisfies the genetics-lab goal
   g.stats.profilesRead = 10; // satisfies the personality-profile goal
   g.stats.lessons = 1000; // satisfies the riding-curriculum goal (past Lead-Rein)
+  g.trophies = g.trophies || []; for (let i = 0; i < 6; i++) g.trophies.push({ horse: 'H', breed: 'arabian', disc: 'race', tier: 3, place: 1, day: i + 1 }); // satisfies the ribbon-wall goal (≥5)
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -3739,6 +3740,72 @@ function studGame(day) {
   ok(ach && !ach.check(g2), 'Full Trophy Cabinet needs 20 placings');
   g2.trophies = Array.from({ length: 20 }, (_, i) => ({ horse: 'H' + i, disc: 'race', place: 1, day: i }));
   ok(ach.check(g2), '20 placings unlock Full Trophy Cabinet');
+}
+
+// ---- keepsake ribbon wall / rosette display (round 58) ----
+{
+  // rosetteFor maps place → style, incl. a legacy/sparse trophy
+  const g1 = HR.rosetteFor({ horse: 'Blaze', breed: 'arabian', disc: 'jump', tier: 3, place: 1, day: 5 });
+  ok(g1.place === 1 && g1.emoji === '🥇' && g1.placeName === 'First', 'a 1st place maps to a gold rosette');
+  ok(g1.discName === 'Show-Jumping' && g1.tierName === 'Regional Championship', 'discipline + tier names resolve');
+  const s2 = HR.rosetteFor({ place: 2 }), s3 = HR.rosetteFor({ place: 3 });
+  ok(s2.emoji === '🥈' && s3.emoji === '🥉', '2nd/3rd map to silver/bronze');
+  const legacy = HR.rosetteFor({ place: 1 }); // no disc/tier/horse
+  ok(legacy.discName && legacy.tierName === 'Show' && legacy.horse === '—', 'a sparse/legacy trophy falls back gracefully');
+  const weird = HR.rosetteFor({ place: 7 });
+  ok(weird.place === 7 && weird.emoji === '🎗️', 'an unexpected place still yields a rosette');
+  ok(HR.rosetteFor(null).place === 0, 'rosetteFor is null-safe');
+}
+{
+  // ribbonTally + ribbonWall group and count correctly: 2 golds + 1 silver across two disciplines
+  const g = HR.freshGame();
+  g.trophies = [
+    { horse: 'A', breed: 'arabian', disc: 'race', tier: 4, place: 1, day: 30 },
+    { horse: 'B', breed: 'quarter', disc: 'race', tier: 2, place: 2, day: 20 },
+    { horse: 'C', breed: 'welsh', disc: 'jump', tier: 3, place: 1, day: 10 },
+  ];
+  const tally = HR.ribbonTally(g);
+  ok(tally.ribbons === 3 && tally.gold === 2 && tally.silver === 1 && tally.bronze === 0, 'ribbon tally counts by place');
+  ok(tally.bestTier === 4 && tally.bestTierName === 'National Grand Prix', 'best tier is the highest tier won');
+  ok(tally.topDiscipline === 'race' && tally.topDisciplineCount === 2, 'favourite discipline is the most-decorated');
+
+  const w = HR.ribbonWall(g);
+  ok(w.rosettes.length === 3 && !w.empty, 'the wall renders a rosette per placing');
+  ok(w.rosettes[0].horse === 'A', 'rosettes preserve the stored (newest-first) order');
+  const goldPlace = w.byPlace.find(p => p.place === 1);
+  ok(goldPlace.count === 2, 'by-place grouping counts the golds');
+  const raceRow = w.byDiscipline.find(d => d.disc === 'race');
+  ok(raceRow && raceRow.count === 2 && raceRow.gold === 1 && raceRow.silver === 1, 'per-discipline breakdown counts places');
+  ok(w.byDiscipline.length === 2, 'only decorated disciplines appear');
+  const gp = w.byTier.find(t => t.tier === 4);
+  ok(gp && gp.count === 1 && w.byTier[0].tier >= w.byTier[w.byTier.length - 1].tier, 'per-tier breakdown is high→low');
+  // proudest sorts by tier then place then recency; the National Grand Prix gold leads
+  ok(w.proudest[0].horse === 'A', 'the proudest rosette is the top-tier gold');
+  ok(/3 rosettes/.test(w.headline) && /2 gold/.test(w.headline), 'the headline summarises the collection');
+}
+{
+  // empty + read-only + deterministic
+  const g = HR.freshGame(); g.trophies = [];
+  const w = HR.ribbonWall(g);
+  ok(w.empty && w.rosettes.length === 0 && /bare/.test(w.headline), 'an empty wall reports itself gracefully');
+  ok(HR.ribbonTally(g).ribbons === 0 && HR.ribbonTally(g).topDiscipline === null, 'empty tally is all zeroes');
+  ok(HR.ribbonWall({}).empty && HR.ribbonTally({}).ribbons === 0, 'ribbon helpers are safe on a bare game');
+  g.trophies = [{ horse: 'A', disc: 'race', tier: 3, place: 1, day: 5 }, { horse: 'B', disc: 'jump', tier: 2, place: 3, day: 3 }];
+  const snap = JSON.stringify(g);
+  HR.ribbonWall(g); HR.ribbonTally(g); HR.rosetteFor(g.trophies[0]);
+  ok(JSON.stringify(g) === snap, 'the ribbon wall is read-only (never mutates the game or trophies)');
+  ok(JSON.stringify(HR.ribbonWall(g)) === JSON.stringify(HR.ribbonWall(g)), 'ribbonWall is deterministic');
+}
+{
+  // goal + achievement track the wall; ids unique
+  const g = HR.freshGame();
+  g.trophies = Array.from({ length: 5 }, (_, i) => ({ horse: 'H' + i, disc: 'race', tier: 1, place: 2, day: i }));
+  ok(HR.GOALS.find(x => x.id === 'ribbon1').done(g), 'ribbon1 completes at 5 rosettes');
+  const g4 = HR.freshGame(); g4.trophies = Array.from({ length: 4 }, (_, i) => ({ horse: 'H' + i, disc: 'race', place: 1, day: i }));
+  ok(!HR.GOALS.find(x => x.id === 'ribbon1').done(g4), 'ribbon1 not met below 5 rosettes');
+  const g15 = HR.freshGame(); g15.trophies = Array.from({ length: 15 }, (_, i) => ({ horse: 'H' + i, disc: 'jump', tier: 2, place: 1, day: i }));
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'rosetteroyalty').check(g15), 'Rosette Royalty unlocks at 15 golds');
+  ok(HR.GOALS.filter(x => x.id === 'ribbon1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'rosetteroyalty').length === 1, 'new ribbon goal/achievement ids are unique');
 }
 
 // ---- horse diary / mood flavour feed (round 50) ----
