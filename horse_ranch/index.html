@@ -2951,7 +2951,7 @@ function teacherCount(game){ return (game.teachers||[]).length; }
 function schoolHorses(game){ return game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant).length; }
 function teacherCapacityTotal(game){ return (game.teachers||[]).reduce((n,t)=>n+t.capacity,0); }
 function lessonsPerDay(game){ return Math.min(teacherCapacityTotal(game), schoolHorses(game)*3); }
-function lessonFee(game){ return 11 + Math.min(30, Math.round((game.rep||0)*0.006)); } // rep bonus capped so lessons plateau
+function lessonFee(game){ return Math.round((11 + Math.min(30, Math.round((game.rep||0)*0.006))) * curriculumFeeMult(game)); } // rep bonus capped so lessons plateau; curriculum adds a small bounded lift
 function schoolLessonMult(game){ // gentle horses make better lesson mounts
   const hs=game.horses.filter(h=>isAdult(h)&&h.rentDays===0&&!horseAway(h)&&!h.pregnant);
   if(!hs.length) return 1;
@@ -2965,6 +2965,31 @@ function schoolIncome(game){
 }
 function teacherSalaries(game){ return (game.teachers||[]).reduce((n,t)=>n+t.salary,0); }
 function schoolNet(game){ return schoolIncome(game)-teacherSalaries(game); }
+// ---------- Riding-lesson curriculum / student progression (a ladder over the EXISTING school) ----------
+// The school climbs curriculum tiers as it teaches cumulative lessons (game.stats.lessons),
+// each tier lifting the lesson fee by a small, BOUNDED amount. No new income faucet — it just
+// gives the existing lesson business structure and a sense of progression. Deterministic.
+const CURRICULUM_FEE_CAP=1.16; // hard bound on the derived lesson-fee lift (+16% at the very top)
+const CURRICULUM_TIERS=[
+  {id:'leadrein', name:'Lead-Rein',         emoji:'🐴', minLessons:0,    feeMult:1.00,             blurb:'First steps in the saddle — safe, gentle and slow.'},
+  {id:'beginner', name:'Beginner',          emoji:'🥾', minLessons:60,   feeMult:1.04,             blurb:'Rising trot and steering — the basics are landing.'},
+  {id:'interm',   name:'Intermediate',      emoji:'🎯', minLessons:200,  feeMult:1.08,             blurb:'Canter work and little courses — students grow confident.'},
+  {id:'advanced', name:'Advanced',          emoji:'🏅', minLessons:500,  feeMult:1.12,             blurb:'Collected work and bigger fences — a serious riding school.'},
+  {id:'squad',    name:'Competition Squad', emoji:'🏆', minLessons:1000, feeMult:CURRICULUM_FEE_CAP,blurb:'A pipeline of competition riders — the whole region takes notice.'},
+];
+function curriculumTierDef(id){ return CURRICULUM_TIERS.find(t=>t.id===id)||null; }
+function schoolLessonsTaught(game){ return Math.max(0, Math.floor((game&&game.stats&&game.stats.lessons)||0)); }
+function curriculumTierIndex(game){ const n=schoolLessonsTaught(game); let idx=0;
+  for(let i=0;i<CURRICULUM_TIERS.length;i++){ if(n>=CURRICULUM_TIERS[i].minLessons) idx=i; } return idx; }
+function curriculumTier(game){ return CURRICULUM_TIERS[curriculumTierIndex(game)]; }
+function nextCurriculumTier(game){ const i=curriculumTierIndex(game); return i+1<CURRICULUM_TIERS.length?CURRICULUM_TIERS[i+1]:null; }
+function curriculumFeeMult(game){ return Math.min(CURRICULUM_FEE_CAP, curriculumTier(game).feeMult); }
+function curriculumProgress(game){
+  const taught=schoolLessonsTaught(game), cur=curriculumTier(game), nxt=nextCurriculumTier(game);
+  if(!nxt) return { tier:cur, next:null, taught, have:taught-cur.minLessons, need:0, frac:1, toNext:0 };
+  const span=nxt.minLessons-cur.minLessons, have=taught-cur.minLessons;
+  return { tier:cur, next:nxt, taught, have, need:span, frac:clamp(have/span,0,1), toNext:Math.max(0,nxt.minLessons-taught) };
+}
 
 // ---------- Stud farm — stand a top stallion at public stud for recurring income ----------
 function canStand(h){
@@ -3299,6 +3324,7 @@ const ACHIEVEMENTS=[
   {id:'bannerweek', icon:'📰', name:'Banner Week',            desc:'Win three shows in a single week.',            check:g=>weeklyRecap(g).trophies.gold>=3},
   {id:'geneticist', icon:'🧬', name:'Coat Geneticist',        desc:'Study ten test-matings in the Genetics Lab.', check:g=>((g.stats&&g.stats.labTests)||0)>=10},
   {id:'characterstudy', icon:'🎭', name:'Character Study',    desc:'Read ten horse personality profiles.',         check:g=>((g.stats&&g.stats.profilesRead)||0)>=10},
+  {id:'headofschool',   icon:'🎓', name:'Head of School',     desc:'Grow the riding school to its Competition Squad curriculum.', check:g=>curriculumTierIndex(g)>=CURRICULUM_TIERS.length-1},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3449,6 +3475,7 @@ const GOALS=[
   {id:'cer1',    desc:'Hold a coming-of-age ceremony (🎓)',          tip:g=>((g.stats&&g.stats.ceremonies)||0)+' held',done:g=>((g.stats&&g.stats.ceremonies)||0)>=1,             reward:{money:400,rep:15}},
   {id:'lab1',    desc:'Run a test-mating in the Genetics Lab (🧬)',   tip:g=>((g.stats&&g.stats.labTests)||0)+'/1',done:g=>((g.stats&&g.stats.labTests)||0)>=1,               reward:{money:400,rep:15}},
   {id:'quiz1',   desc:'Read a horse’s personality profile (🎭)',       tip:g=>((g.stats&&g.stats.profilesRead)||0)+'/1',done:g=>((g.stats&&g.stats.profilesRead)||0)>=1,        reward:{money:300,rep:10}},
+  {id:'curric1', desc:'Grow the riding school past Lead-Rein (🎓)',    tip:g=>curriculumTier(g).name+' · '+schoolLessonsTaught(g)+' lessons',done:g=>curriculumTierIndex(g)>=1,   reward:{money:800,rep:25}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3508,6 +3535,7 @@ const HR = {
   staffUnlocked, staffAffordable, hireStaff, fireStaff, staffEffect, trainCostFor,
   mkTeacher, restockTeachers, teacherCount, schoolHorses, teacherCapacityTotal,
   lessonsPerDay, lessonFee, schoolIncome, teacherSalaries, schoolNet, schoolLessonMult,
+  CURRICULUM_TIERS, CURRICULUM_FEE_CAP, curriculumTierDef, schoolLessonsTaught, curriculumTierIndex, curriculumTier, nextCurriculumTier, curriculumFeeMult, curriculumProgress,
   TRAITS, traitDef, pickTrait, traitMult,
   NEEDS, NEED_IDS, needDef, freeNeedIds, needsInit, needLevel, careScore, careTier, careBonusMult,
   needDecayFor, decayNeeds, careCost, fullCareCost, applyCare, applyFullCare, lowNeeds,
@@ -4761,6 +4789,24 @@ function renderEstate(){
     '<div class="kv">Net / day<b style="color:'+(net>=0?'var(--good)':'var(--bad)')+'">'+(net>=0?'+':'')+'🪙'+fmt(net)+'</b></div>';
   s.appendChild(sc);
   if(teacherCount(G) && nH===0) s.appendChild(el('div','sub','⚠️ You have teachers but no free adult horses — lessons need horses. Buy/raise horses or free them up from rent.'));
+
+  // ---- Curriculum ladder ----
+  { const cp=curriculumProgress(G), t=cp.tier, feePct=Math.round((curriculumFeeMult(G)-1)*100);
+    const cc=el('div','card'); cc.style.borderLeft='4px solid var(--gold2)';
+    const bar='<div style="position:relative;height:8px;background:#0002;border-radius:5px;margin-top:4px"><div style="height:8px;border-radius:5px;width:'+Math.round(cp.frac*100)+'%;background:var(--gold2)"></div></div>';
+    const nextLine = cp.next
+      ? '<div class="hbreed" style="margin-top:4px">'+cp.have+' / '+cp.need+' lessons toward '+cp.next.emoji+' <b>'+cp.next.name+'</b> ('+cp.toNext+' to go)</div>'+bar
+      : '<div class="hbreed" style="margin-top:4px">Top of the curriculum — a full competition programme. 🏆</div>';
+    // per-tier perk ladder
+    const ladder=CURRICULUM_TIERS.map(x=>{ const here=x.id===t.id, done=x.minLessons<=cp.taught;
+      return '<span class="pill" style="'+(here?'color:var(--gold);border-color:var(--gold2)':done?'color:var(--good)':'opacity:.55')+'">'+x.emoji+' '+x.name+' (+'+Math.round((Math.min(CURRICULUM_FEE_CAP,x.feeMult)-1)*100)+'%)</span>'; }).join(' ');
+    cc.innerHTML='<div class="hname">'+t.emoji+' Curriculum: '+t.name+' <span class="pill">+'+feePct+'% fee</span></div>'+
+      '<div class="hbreed" style="margin-top:2px;font-style:italic">'+t.blurb+'</div>'+
+      '<div class="kv" style="margin-top:4px">Lessons taught (all-time)<b>'+fmt(cp.taught)+'</b></div>'+
+      nextLine+
+      '<div class="pips" style="margin-top:7px">'+ladder+'</div>';
+    s.appendChild(cc);
+  }
 
   // hired teachers
   (G.teachers||[]).forEach(t=>{
