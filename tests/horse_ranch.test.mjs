@@ -249,6 +249,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.loadouts = [{ id: 'lo1', name: 'Show set', slots: { saddle: null, bridle: null, accessory: null } }]; // satisfies the tack-loadout goal
   g.aspBoard = { pinned: ['herd10'], claimed: [] }; // satisfies the aspirations-board goal
   g.stats.grooms = 1; // satisfies the grooming mini-game goal
+  HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -1398,6 +1399,60 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const gAch = HR.freshGame(); gAch.stats.grooms = 20;
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'spitpolish').check(gAch), 'Spit & Polish unlocks at twenty grooms');
   ok(HR.GOALS.filter(x => x.id === 'groom1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'spitpolish').length === 1, 'new grooming goal/achievement ids are unique');
+}
+{
+  // ---- commemorative monuments / founders' plaques ----
+  ok(HR.MONUMENTS.length >= 6, 'a catalogue of monuments exists');
+  const mids = HR.MONUMENTS.map(m => m.id);
+  ok(new Set(mids).size === mids.length, 'monument ids are unique');
+  ok(HR.MONUMENTS.every(m => typeof m.met === 'function' && typeof m.prog === 'function'), 'each monument has met + prog fns');
+  // met fires at the right milestone
+  const g0 = HR.freshGame();
+  ok(!HR.monumentMet(g0, 'goldenshoe'), 'the golden horseshoe is not met on a fresh game');
+  const gg = HR.freshGame(); gg.stats.goldEarned = 100000;
+  ok(HR.monumentMet(gg, 'goldenshoe'), 'earning 🪙100k meets the golden horseshoe');
+  const gh = HR.freshGame(); gh.hallOfFame = [{ name: 'X' }];
+  ok(HR.monumentMet(gh, 'firsthof'), 'a first Hall-of-Famer meets its bronze');
+  const gy = HR.freshGame(); gy.day = HR.SEASON_LEN * 4;
+  ok(HR.monumentMet(gy, 'founder'), "a full year meets the Founder's Plaque");
+  ok(HR.monumentMet(HR.freshGame(), 'goldenshoe') === false && HR.monumentDef('nope') === null, 'unknown/unmet handled');
+  // checkMonuments stamps newly-met monuments with the current day, once, and grants the one-time rep
+  const g = HR.freshGame(); g.day = 40; g.stats.goldEarned = 100000; const rep0 = g.rep;
+  const fresh = HR.checkMonuments(g);
+  ok(fresh.some(m => m.id === 'goldenshoe'), 'checkMonuments returns the newly-unlocked monument');
+  ok(g.monuments.goldenshoe === 40, 'the earned-day is stamped as the current day');
+  ok(g.rep === rep0 + HR.monumentDef('goldenshoe').rep, 'the one-time rep nod is granted');
+  const rep1 = g.rep; const again = HR.checkMonuments(g);
+  ok(!again.some(m => m.id === 'goldenshoe') && g.rep === rep1, 'checkMonuments is idempotent (no re-stamp, no re-reward)');
+  ok(HR.monumentEarnedDay(g, 'goldenshoe') === 40, 'monumentEarnedDay reports the stamp');
+  // monumentProgress reports have/need for locked ones
+  const gp = HR.freshGame(); gp.stats.born = 4;
+  const pr = HR.monumentProgress(gp, 'foalfount');
+  ok(pr.have === 4 && pr.need === 10 && !pr.done && pr.earnedDay === null, 'a locked monument reports have/need + no earned-day');
+  // monumentsGallery splits unlocked (with earned-day) vs locked (with progress)
+  const gg2 = HR.freshGame(); gg2.day = 30; gg2.stats.goldEarned = 100000; HR.checkMonuments(gg2);
+  const gal = HR.monumentsGallery(gg2);
+  ok(gal.unlocked.some(u => u.id === 'goldenshoe' && u.earnedDay === 30) && gal.locked.length > 0, 'the gallery splits unlocked vs locked');
+  ok(gal.count + gal.locked.length === gal.total, 'gallery totals add up');
+  ok(gal.unlocked[0].inscription.indexOf('{') < 0, 'inscriptions fill in the ranch placeholder');
+  // migration: drops invalid ids + non-numbers
+  const mig = HR.normMonuments({ monuments: { goldenshoe: 12, bogus: 3, firsthof: 'x' } });
+  ok(JSON.stringify(mig) === JSON.stringify({ goldenshoe: 12 }), 'normMonuments keeps valid numeric stamps + drops junk');
+  ok(Object.keys(HR.normMonuments({})).length === 0, 'a bare game has no monuments');
+  // checkMonuments flows through advanceDay
+  const ga = HR.freshGame(); ga.day = HR.SEASON_LEN * 4 - 1; ga.feed = 9999;
+  HR.advanceDay(ga, rng(1));
+  ok(HR.monumentEarnedDay(ga, 'founder') != null, 'a monument unlocks via advanceDay when its milestone rolls over');
+  // read-only where expected
+  const gr = HR.freshGame(); gr.stats.born = 3; const snap = JSON.stringify(gr);
+  HR.monumentProgress(gr, 'foalfount'); HR.monumentsGallery(gr); HR.monumentsUnlockedCount(gr); HR.monumentMet(gr, 'founder');
+  ok(JSON.stringify(gr) === snap, 'the monument read helpers never mutate the game');
+  // goal + achievement
+  const gGoal = HR.freshGame(); gGoal.monuments = { founder: 56 };
+  ok(HR.GOALS.find(x => x.id === 'mon1').done(gGoal), 'mon1 completes with one monument');
+  const gAch = HR.freshGame(); gAch.monuments = { founder: 56, firsthof: 60, foalfount: 70, winarch: 80, obelisk: 90 };
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'monumental').check(gAch), 'Monumental unlocks at five monuments');
+  ok(HR.GOALS.filter(x => x.id === 'mon1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'monumental').length === 1, 'new monument goal/achievement ids are unique');
 }
 
 // ---- personality traits ----

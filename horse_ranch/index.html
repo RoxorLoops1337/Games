@@ -347,6 +347,7 @@
     <button class="sbtn" id="loadoutBtn" title="Tack loadouts — save & quick-swap tack sets" style="margin-right:4px">🎽</button>
     <button class="sbtn" id="aspBtn" title="Ranch goals — your personal aspirations board" style="margin-right:4px">📌</button>
     <button class="sbtn" id="groomBtn" title="Grooming — hoof-pick & brush mini-game" style="margin-right:4px">🧽</button>
+    <button class="sbtn" id="monBtn" title="Monuments — commemorative statues & plaques" style="margin-right:4px">🗿</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1983,7 +1984,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -2203,6 +2204,9 @@ function advanceDay(game,rng){
   { const before=game.lastRank; const pr=tickStandings(game);
     if(before!=null && pr<before && pr<=3) notes.push({t:'good',m:'📈 '+ranchName(game)+' climbed to #'+pr+' in the regional standings!'});
     if(before!=null && before!==1 && pr===1) notes.push({t:'good',m:'👑 '+ranchName(game)+' is now the #1 ranch in the region!'}); }
+
+  // commemorative monuments: stamp any milestone reached today (a keepsake + a tiny one-time rep nod)
+  { const fresh=checkMonuments(game); for(const mon of fresh) notes.push({t:'good',m:mon.emoji+' A new monument stands at '+ranchName(game)+': '+mon.name+'!'}); }
 
   return {notes,event,born};
 }
@@ -3868,6 +3872,7 @@ const ACHIEVEMENTS=[
   {id:'quartermaster',  icon:'🎽', name:'Quartermaster',       desc:'Save three tack loadout presets.',             check:g=>tackLoadouts(g).length>=3},
   {id:'aspirant',       icon:'📌', name:'Aspirations Realised', desc:'Complete three of your pinned aspirations.',   check:g=>((g.stats&&g.stats.aspirationsMet)||0)>=3},
   {id:'spitpolish',     icon:'🧽', name:'Spit &amp; Polish',        desc:'Give twenty grooming sessions.',               check:g=>((g.stats&&g.stats.grooms)||0)>=20},
+  {id:'monumental',     icon:'🗿', name:'Monumental',           desc:'Raise five commemorative monuments.',          check:g=>monumentsUnlockedCount(g)>=5},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4124,6 +4129,7 @@ const GOALS=[
   {id:'loadout1',desc:'Save a tack loadout preset (🎽)',                 tip:g=>tackLoadouts(g).length+'/1 saved',done:g=>tackLoadouts(g).length>=1,                        reward:{money:300,rep:10}},
   {id:'asp1',    desc:'Pin an aspiration to your goals board (📌)',      tip:g=>normAspBoard(g).pinned.length+' pinned',done:g=>normAspBoard(g).pinned.length>=1,             reward:{money:300,rep:10}},
   {id:'groom1',  desc:'Groom a horse in the mini-game (🧽)',            tip:g=>((g.stats&&g.stats.grooms)||0)+'/1',done:g=>((g.stats&&g.stats.grooms)||0)>=1,               reward:{money:300,rep:10}},
+  {id:'mon1',    desc:'Unveil your first monument (🗿)',                tip:g=>monumentsUnlockedCount(g)+'/1',done:g=>monumentsUnlockedCount(g)>=1,                       reward:{money:500,rep:20}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4184,6 +4190,49 @@ function claimAspiration(game,id){ const a=aspirationDef(id); if(!a) return {ok:
   if(r.money) game.money=(game.money||0)+r.money; if(r.rep) game.rep=(game.rep||0)+r.rep; if(r.feed) game.feed=(game.feed||0)+r.feed;
   game.stats=game.stats||{}; game.stats.aspirationsMet=(game.stats.aspirationsMet||0)+1;
   return {ok:true, reward:r}; }
+// ---------- Commemorative monuments / founders' plaques (milestones unlock keepsake monuments) ----------
+// A curated set of career milestones that UNLOCK automatically (from EXISTING stats/HoF/rank) and stand
+// as keepsakes, each stamped with the day it was earned + a tiny one-time rep nod. No new grind.
+// Deterministic — the unlock is keyed to stats; the earned-day is recorded when first checked.
+const MONUMENTS=[
+  {id:'founder',   name:"Founder's Plaque",          emoji:'📜', rep:20, inscription:'A full year of hoofbeats — the making of {ranch}.',       met:g=>((g.day)||1)>=SEASON_LEN*4,                        prog:g=>({have:Math.min(SEASON_LEN*4,(g.day)||1), need:SEASON_LEN*4})},
+  {id:'firsthof',  name:'Bronze of the First Legend', emoji:'🥉', rep:25, inscription:'To the first horse honoured in the Hall of Fame.',        met:g=>((g.hallOfFame)||[]).length>=1,                    prog:g=>({have:((g.hallOfFame)||[]).length, need:1})},
+  {id:'foalfount', name:'The Foal Fountain',          emoji:'⛲', rep:20, inscription:'Ten foals born and raised at {ranch}.',                    met:g=>((g.stats&&g.stats.born)||0)>=10,                  prog:g=>({have:(g.stats&&g.stats.born)||0, need:10})},
+  {id:'winarch',   name:"Winners' Arch",              emoji:'🏆', rep:25, inscription:'Twenty-five rosettes won in the ring.',                    met:g=>((g.stats&&g.stats.showWins)||0)>=25,              prog:g=>({have:(g.stats&&g.stats.showWins)||0, need:25})},
+  {id:'obelisk',   name:"Champions' Obelisk",         emoji:'🗿', rep:30, inscription:'Three Seasonal titles carried home.',                     met:g=>((g.stats&&g.stats.seasonTitles)||0)>=3,           prog:g=>({have:(g.stats&&g.stats.seasonTitles)||0, need:3})},
+  {id:'goldenshoe',name:'Golden Horseshoe',           emoji:'🥇', rep:30, inscription:'🪙100,000 earned through honest horsemanship.',           met:g=>((g.stats&&g.stats.goldEarned)||0)>=100000,        prog:g=>({have:Math.min(100000,(g.stats&&g.stats.goldEarned)||0), need:100000})},
+  {id:'bloodline', name:'The Bloodline Column',       emoji:'🌳', rep:30, inscription:'A line bred five generations deep.',                      met:g=>((g.stats&&g.stats.maxGen)||1)>=5,                 prog:g=>({have:Math.min(5,(g.stats&&g.stats.maxGen)||1), need:5})},
+  {id:'rotunda',   name:'Hall of Legends Rotunda',    emoji:'🏛️', rep:40, inscription:'Five legends enshrined forever.',                        met:g=>((g.hallOfFame)||[]).length>=5,                    prog:g=>({have:((g.hallOfFame)||[]).length, need:5})},
+  {id:'regental',  name:'Regional Champion Statue',   emoji:'👑', rep:40, inscription:'{ranch} — first in all the region.',                     met:g=>playerRank(g)===1,                                 prog:g=>({have:playerRank(g)===1?1:0, need:1})},
+];
+function monumentDef(id){ return MONUMENTS.find(m=>m.id===id)||null; }
+function normMonuments(game){ const m=(game&&game.monuments&&typeof game.monuments==='object'&&!Array.isArray(game.monuments))?game.monuments:{}; const out={};
+  for(const k in m){ if(!monumentDef(k)) continue; const d=m[k]; if(typeof d==='number'&&isFinite(d)&&d>=0) out[k]=Math.floor(d); }
+  return out; }
+function monumentMet(game,id){ const mon=monumentDef(id); if(!mon) return false; try{ return !!mon.met(game); }catch(e){ return false; } }
+function monumentEarnedDay(game,id){ const m=normMonuments(game); return (m[id]!=null)?m[id]:null; }
+function monumentProgress(game,id){ const mon=monumentDef(id); if(!mon) return null;
+  let have=0, need=1; try{ const p=mon.prog(game)||{}; have=Math.max(0,p.have||0); need=Math.max(1,p.need||1); }catch(e){}
+  const earnedDay=monumentEarnedDay(game,id), unlocked=earnedDay!=null||have>=need;
+  return { id:mon.id, name:mon.name, emoji:mon.emoji, inscription:mon.inscription, have, need,
+    unlocked, done:have>=need, pct:clamp(have/need,0,1), earnedDay, rep:mon.rep||0 }; }
+function checkMonuments(game){ if(!game) return [];
+  if(!game.monuments||typeof game.monuments!=='object'||Array.isArray(game.monuments)) game.monuments=normMonuments(game);
+  const fresh=[];
+  for(const mon of MONUMENTS){ if(game.monuments[mon.id]!=null) continue; let ok=false; try{ ok=!!mon.met(game); }catch(e){}
+    if(ok){ game.monuments[mon.id]=game.day||1; if(mon.rep) game.rep=(game.rep||0)+mon.rep; fresh.push(mon); } }
+  if(fresh.length){ game.stats=game.stats||{}; game.stats.monuments=Object.keys(game.monuments).length; }
+  return fresh; }
+function monumentsUnlockedCount(game){ return Object.keys(normMonuments(game)).length; }
+function monumentsGallery(game){
+  const unlocked=[], locked=[];
+  for(const mon of MONUMENTS){ const p=monumentProgress(game,mon.id);
+    const inscription=mon.inscription.replace(/\{ranch\}/g, ranchName(game));
+    if(p.earnedDay!=null){ unlocked.push({ id:mon.id, name:mon.name, emoji:mon.emoji, inscription, earnedDay:p.earnedDay, rep:mon.rep||0 }); }
+    else { locked.push({ id:mon.id, name:mon.name, emoji:mon.emoji, inscription, have:p.have, need:p.need, pct:p.pct, done:p.done }); }
+  }
+  unlocked.sort((a,b)=>a.earnedDay-b.earnedDay);
+  return { unlocked, locked, count:unlocked.length, total:MONUMENTS.length }; }
 
 // ---------- Expose logic surface for headless tests ----------
 const HR = {
@@ -4268,6 +4317,7 @@ const HR = {
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
   ACHIEVEMENTS, achievementDef, isUnlocked, checkAchievements, achievementState,
   CURATOR_RANKS, curatorRank, achievementProgress, trophyRoom,
+  MONUMENTS, monumentDef, normMonuments, monumentMet, monumentEarnedDay, monumentProgress, checkMonuments, monumentsUnlockedCount, monumentsGallery,
   ROSETTE_STYLES, rosetteStyleFor, rosetteFor, ribbonTally, ribbonWall,
   DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
   GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
@@ -4384,6 +4434,7 @@ function load(){
     Object.keys(G.tack.tiers).forEach(id=>{ if(!tackDef(id)) delete G.tack.tiers[id]; else G.tack.tiers[id]=Math.max(0,Math.min(TACK_MAX_TIER,Math.floor(G.tack.tiers[id])||0)); });
     G.loadouts=normLoadouts(G); // tack loadout presets — safe on old saves
     G.aspBoard=normAspBoard(G); // personal aspirations board — safe on old saves
+    G.monuments=normMonuments(G); checkMonuments(G); // commemorative monuments — stamp any milestone already reached
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -6606,6 +6657,24 @@ function openAspirations(){
     if(!r.ok){ toast(r.why,'info'); return; } if(r.reward&&r.reward.money) coinPop(r.reward.money); burst('📌✅✨',14); playSfx('goal');
     toast('✅ Aspiration achieved! +🪙'+fmt((r.reward&&r.reward.money)||0)+(r.reward&&r.reward.rep?' +'+r.reward.rep+'⭐':''),'good'); reopen(); });
 }
+function openMonuments(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const g=monumentsGallery(G);
+  const un=g.unlocked.length?g.unlocked.map(m=>'<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname">'+m.emoji+' '+esc(m.name)+' <span class="pill" style="color:var(--gold)">unveiled day '+m.earnedDay+'</span></div>'+
+    '<div class="hbreed" style="margin-top:2px;font-style:italic">“'+esc(m.inscription)+'”</div></div>').join('')
+    : '<div class="empty">No monuments yet — hit your first big milestone (a full year, a Hall-of-Famer, 🪙100k) and one will rise here.</div>';
+  const lk=g.locked.length?g.locked.map(m=>{ const pct=Math.round(m.pct*100);
+    return '<div class="lbrow" style="opacity:.75"><div class="hface" style="background:none;font-size:20px;display:flex;align-items:center;justify-content:center">'+(m.done?m.emoji:'🔒')+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(m.name)+(m.done?' <span class="pill" style="color:var(--good)">ready!</span>':'')+'</div>'+
+      '<div class="lbsub">'+esc(m.inscription)+' — '+fmt(Math.min(m.have,m.need))+'/'+fmt(m.need)+'</div>'+
+      '<div style="height:6px;background:#0002;border-radius:4px;margin-top:3px;overflow:hidden"><div style="height:6px;border-radius:4px;width:'+pct+'%;background:var(--gold2)"></div></div></div></div>'; }).join('') : '';
+  modal('<h3>🗿 Monuments</h3>'+
+    '<div class="swlabel">The great milestones of '+esc(ranchName(G))+', cast in bronze &amp; stone. <span class="pill">'+g.count+'/'+g.total+' raised</span></div>'+
+    '<div class="swlabel" style="margin-top:6px">🏛️ Unveiled</div><div>'+un+'</div>'+
+    (lk?'<div class="swlabel" style="margin-top:8px">🔒 Still to come</div><div>'+lk+'</div>':'')+
+    '<div class="btnrow"><button class="btn ghost" id="monClose" style="width:100%">Done</button></div>');
+  $('monClose').onclick=closeModal;
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -7417,6 +7486,7 @@ function boot(){
   { const lob=$('loadoutBtn'); if(lob) lob.onclick=openLoadouts; }
   { const apb=$('aspBtn'); if(apb) apb.onclick=openAspirations; }
   { const grb=$('groomBtn'); if(grb) grb.onclick=openGroom; }
+  { const mnb=$('monBtn'); if(mnb) mnb.onclick=openMonuments; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
