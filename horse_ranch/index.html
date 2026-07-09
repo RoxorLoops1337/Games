@@ -360,6 +360,7 @@
     <button class="sbtn" id="zodiacBtn" title="Horse zodiac — star signs & readings" style="margin-right:4px">⭐</button>
     <button class="sbtn" id="vaneBtn" title="Weathervane — wind & sky mood" style="margin-right:4px">🌬️</button>
     <button class="sbtn" id="shineBtn" title="Coat shine — grooming-glow meter" style="margin-right:4px">✨</button>
+    <button class="sbtn" id="gaitBtn" title="Paces showcase — the four gaits" style="margin-right:4px">🐎</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -773,6 +774,37 @@ function coatShineReport(game, h){ if(!h) return { horse:null, coat:null, score:
 function herdShineAverage(game){ const hs=(game&&game.horses)||[]; let sum=0, best=null, gleam=0;
   for(const h of hs){ const s=coatShine(h); sum+=s; if(best==null||s>best.score) best={id:h.id, name:h.name, score:s}; if(shineTier(s).id==='gleaming') gleam++; }
   return { count:hs.length, avg: hs.length?Math.round(sum/hs.length):0, best, gleaming:gleam }; }
+
+// ---------- Horse gait / paces showcase (READ-ONLY "way of going" readout from EXISTING stats) ----------
+// Rates the four classical gaits (walk/trot/canter/gallop) 0..100 from the horse's speed/stamina/temperament,
+// with light modifiers from care/condition and schooled discipline affinity. Purely presentational — it changes
+// nothing. Deterministic — no Date/Math.random. (Uses affinityRO, which never mutates; careScore lazily inits a
+// horse's needs record, which is idempotent — warm up before a read-only snapshot in tests.)
+const GAITS=[
+  {id:'walk',   name:'Walk',   emoji:'🚶', w:{temperament:0.60, stamina:0.30, speed:0.10}, rel:['dressage'],          desc:'A relaxed, even four-beat stride.'},
+  {id:'trot',   name:'Trot',   emoji:'🐴', w:{temperament:0.45, stamina:0.35, speed:0.20}, rel:['dressage'],          desc:'A springy two-beat pace with impulsion.'},
+  {id:'canter', name:'Canter', emoji:'🏇', w:{speed:0.40, temperament:0.35, stamina:0.25}, rel:['dressage','jump'],   desc:'A rolling three-beat gait — collected and powerful.'},
+  {id:'gallop', name:'Gallop', emoji:'💨', w:{speed:0.55, stamina:0.40, temperament:0.05}, rel:['race','endurance'],  desc:'A ground-devouring four-beat sprint.'},
+];
+function gaitDef(id){ return GAITS.find(g=>g.id===id)||null; }
+function gaitBand(score){ const s=clamp(Math.round(score||0),0,100);
+  return s>=88?{id:'sublime',label:'Sublime',emoji:'🌟'} : s>=74?{id:'smooth',label:'Smooth',emoji:'✨'}
+    : s>=58?{id:'correct',label:'Correct',emoji:'🙂'} : s>=40?{id:'workmanlike',label:'Workmanlike',emoji:'😐'} : {id:'laboured',label:'Laboured',emoji:'🥴'}; }
+// 0..100 rating for one gait: stat blend + a light care lift + a schooled-affinity bonus for related disciplines
+function gaitScore(h, gaitId){ const g=gaitDef(gaitId); if(!h||!g) return 0;
+  const sp=(h.speed==null?50:h.speed), st=(h.stamina==null?50:h.stamina), tm=(h.temperament==null?50:h.temperament);
+  const base=sp*(g.w.speed||0) + st*(g.w.stamina||0) + tm*(g.w.temperament||0);
+  const careMod=((careScore(h)-60)*0.06); // ~ -3.6 .. +2.4
+  let aff=0; for(const d of (g.rel||[])) aff=Math.max(aff, (typeof affinityRO==='function')?affinityRO(h,d):0);
+  const affMod=(aff/AFF_MAX)*6; // up to +6 for a fully-schooled related discipline
+  return clamp(Math.round(base + careMod + affMod), 0, 100); }
+function bestGait(h){ let best=null; for(const g of GAITS){ const s=gaitScore(h,g.id); if(!best||s>best.score) best={id:g.id, name:g.name, emoji:g.emoji, score:s}; } return best; }
+// the full showcase: all four gaits (score + band + descriptor), the strong suit, an overall average, and a line
+function gaitShowcase(game, h){ if(!h) return { horse:null, gaits:[], best:null, overall:0, overallBand:gaitBand(0), wayOfGoing:'No horse selected.' };
+  const gaits=GAITS.map(g=>{ const score=gaitScore(h,g.id); return { id:g.id, name:g.name, emoji:g.emoji, desc:g.desc, score, band:gaitBand(score) }; });
+  const overall=Math.round(gaits.reduce((s,x)=>s+x.score,0)/gaits.length), ob=gaitBand(overall), best=bestGait(h);
+  const wayOfGoing='A '+ob.label.toLowerCase()+' mover'+(best?', at their best in the '+best.name.toLowerCase():'')+'.';
+  return { horse:{id:h.id, name:h.name}, gaits, best, overall, overallBand:ob, wayOfGoing }; }
 
 // ---------- Feed-mix / nutrition planner (READ-ONLY advisory; a saved plan preference, no economy change) ----------
 // Picks a hay/grain/supplement mix per horse and rates how well it matches that horse's needs, all derived from
@@ -4666,6 +4698,7 @@ const ACHIEVEMENTS=[
   {id:'bestfriend',     icon:'🐕', name:'Best Friend',            desc:'Reach a full bond with a ranch companion.',    check:g=>normCompanion(g).bond>=100},
   {id:'astrologer',     icon:'⭐', name:'Ranch Astrologer',       desc:'Own a horse of every star sign at once.',      check:g=>zodiacHerdSigns(g)>=ZODIAC.length},
   {id:'showshine',      icon:'✨', name:'Show-Ring Shine',        desc:'Bring a horse’s coat to a Gleaming shine.',    check:g=>((g.horses)||[]).some(h=>shineTier(coatShine(h)).id==='gleaming')},
+  {id:'finemover',      icon:'🐎', name:'A Fine Mover',           desc:'Own a horse with a 90+ gait score.',           check:g=>((g.horses)||[]).some(h=>GAITS.some(gt=>gaitScore(h,gt.id)>=90))},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4935,6 +4968,7 @@ const GOALS=[
   {id:'zodiac1', desc:'Read a horse’s star sign (⭐)',                  tip:g=>((g.stats&&g.stats.zodiacReads)||0)+'/1',done:g=>((g.stats&&g.stats.zodiacReads)||0)>=1,           reward:{money:200,rep:10}},
   {id:'vane1',   desc:'Check the ranch weathervane (🌬️)',             tip:g=>((g.stats&&g.stats.vaneChecks)||0)+'/1',done:g=>((g.stats&&g.stats.vaneChecks)||0)>=1,           reward:{money:150,rep:5}},
   {id:'shine1',  desc:'Check a horse’s coat shine (✨)',                tip:g=>((g.stats&&g.stats.shineChecks)||0)+'/1',done:g=>((g.stats&&g.stats.shineChecks)||0)>=1,         reward:{money:150,rep:5}},
+  {id:'gait1',   desc:'Watch a horse’s paces (🐎)',                    tip:g=>((g.stats&&g.stats.gaitViews)||0)+'/1',done:g=>((g.stats&&g.stats.gaitViews)||0)>=1,             reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5136,6 +5170,7 @@ const HR = {
   BDAY_YEAR_DAYS, BDAY_HAPPY, BDAY_BOND, ageYears, birthDayOf, birthDateOfYear, daysToBirthday, isBirthdayToday, nextBirthday, birthdayCelebrated, canCelebrateBirthday, birthdaysToday, upcomingBirthdays, celebrateBirthday,
   HEALTH_GRADES, reportGrade, healthReport, herdHealthSummary,
   SHINE_TIERS, shineTier, coatShine, coatShineReport, herdShineAverage,
+  GAITS, gaitDef, gaitBand, gaitScore, bestGait, gaitShowcase,
   PADDOCKS, paddockDef, paddockRegrowPerDay, normRotation, grazeLevel, grazeStatus, paddockState, bestPaddock, activePaddock, rotateTo,
   COMPANIONS, COMPANION_NAME_MAX, COMPANION_PET_BOND, companionDef, normCompanion, companionBondTier, companionQuip, adoptCompanion, renameCompanion, petCompanion, companionState,
   ZODIAC, ZODIAC_ELEMENTS, zodiacDef, zodiacElement, horseZodiac, zodiacCompat, zodiacReading, zodiacHerdSigns,
@@ -7814,6 +7849,41 @@ function openCoatShine(){
   $('shClose').onclick=closeModal;
   document.querySelectorAll('[data-shhorse]').forEach(x=>x.onclick=()=>{ shineSel.horse=x.getAttribute('data-shhorse'); playSfx('tap'); openCoatShine(); });
 }
+let gaitSel={horse:null};
+function openGaits(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(gaitSel.horse && !horses.some(h=>h.id===gaitSel.horse)) gaitSel.horse=null;
+  if(!gaitSel.horse && horses.length){ // default to the best overall mover
+    let best=null; for(const h of horses){ const o=gaitShowcase(G,h).overall; if(best==null||o>best.o) best={id:h.id,o}; } gaitSel.horse=best?best.id:horses[0].id; }
+  const h=gaitSel.horse?horses.find(x=>x.id===gaitSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.gaitViews=(G.stats.gaitViews||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-gthorse="'+esc(x.id)+'" style="cursor:pointer;'+(gaitSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' ')
+    :'<span class="empty">No horses to showcase yet.</span>';
+  let body='';
+  if(h){
+    const sc=gaitShowcase(G,h);
+    const rows=sc.gaits.map(gt=>{ const col=gt.score>=74?'var(--good)':gt.score>=58?'var(--gold2)':'var(--warn)';
+      const star=sc.best&&sc.best.id===gt.id?' <span class="pill" style="color:var(--gold)">strong suit</span>':'';
+      return '<div style="margin-top:7px"><div class="hbreed" style="font-size:12px;display:flex;justify-content:space-between"><span>'+gt.emoji+' '+esc(gt.name)+star+'</span><span>'+gt.band.emoji+' '+gt.score+'</span></div>'+
+        '<div style="height:8px;background:#0002;border-radius:4px;margin-top:2px;overflow:hidden"><div style="height:8px;border-radius:4px;width:'+gt.score+'%;background:'+col+'"></div></div>'+
+        '<div class="hbreed" style="font-size:11px;opacity:.7;margin-top:2px">'+esc(gt.desc)+'</div></div>'; }).join('');
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc((breedDef(h.breed)||{name:h.breed}).name)+'</div></div>'+
+      '<div style="text-align:right"><div class="hname" style="font-size:18px">'+sc.overallBand.emoji+' '+sc.overall+'</div><div class="hbreed" style="font-size:11px">'+esc(sc.overallBand.label)+'</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px;font-style:italic">“'+esc(sc.wayOfGoing)+'”</div>'+
+      rows+'</div>';
+  } else { body='<div class="empty">Buy or breed a horse to watch it move.</div>'; }
+  modal('<h3>🐎 Paces Showcase</h3>'+
+    '<div class="msg">Watch a horse show off its four gaits — walk, trot, canter and gallop — scored from its build, schooling and condition. Just for show; it changes nothing.</div>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="gtClose" style="width:100%">Done</button></div>');
+  $('gtClose').onclick=closeModal;
+  document.querySelectorAll('[data-gthorse]').forEach(x=>x.onclick=()=>{ gaitSel.horse=x.getAttribute('data-gthorse'); playSfx('tap'); openGaits(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8725,6 +8795,7 @@ function boot(){
   { const zob=$('zodiacBtn'); if(zob) zob.onclick=openZodiac; }
   { const vnb=$('vaneBtn'); if(vnb) vnb.onclick=openWeathervane; }
   { const shb=$('shineBtn'); if(shb) shb.onclick=openCoatShine; }
+  { const gtb=$('gaitBtn'); if(gtb) gtb.onclick=openGaits; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
