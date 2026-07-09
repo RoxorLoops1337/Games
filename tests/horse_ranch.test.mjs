@@ -259,6 +259,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.rotations = 1; // satisfies the paddock-rotation goal
   g.companion = { type: 'dog', name: 'Rex', bond: 20, pettedDay: 0 }; // satisfies the ranch-companion goal
   g.stats.zodiacReads = 1; // satisfies the horse-zodiac goal
+  g.stats.vaneChecks = 1; // satisfies the weathervane goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5257,6 +5258,38 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'zodiac1').done(gv), 'the zodiac goal is unmet before reading');
   gv.stats.zodiacReads = 1;
   ok(HR.GOALS.find(x => x.id === 'zodiac1').done(gv), 'reading a star sign satisfies the goal');
+}
+{
+  // ---- Ranch weathervane / wind & sky mood ----
+  ok(HR.WIND_DIRS.length === 8 && HR.WIND_DIRS.every(d => d.id && d.name && d.arrow), 'there are eight named wind directions with arrows');
+  ok(HR.WIND_LEVELS.length >= 3 && HR.WIND_LEVELS[0].min === 0, 'wind strength has bands starting at calm');
+  const g = HR.freshGame(); g.day = 20;
+  const w = HR.windFor(g, 20);
+  ok(w.dir && w.dir.arrow && typeof w.speed === 'number' && w.speed >= 0 && w.speed <= 45 && w.level, 'windFor gives a bounded direction + speed + level');
+  ok(HR.windLevelFor(0).id === 'calm' && HR.windLevelFor(40).id === 'gale', 'wind speed maps to the right strength band');
+  const sky = HR.skyMood(g, 20);
+  ok(sky.weather && typeof sky.line === 'string' && sky.line.length > 0, 'skyMood returns the weather and an evocative line');
+  const v = HR.weathervane(g);
+  ok(v.season && v.weather && v.wind && v.sky && typeof v.mood === 'string' && v.mood.length > 0, 'the weathervane readout has season, weather, wind, sky and a mood line');
+  // wind/sky track the deterministic weather for the day
+  ok(v.weather.id === HR.weatherFor(20).id, 'the weathervane weather matches weatherFor for the day');
+  // outlook is bounded and forward-looking
+  const out = HR.weathervaneOutlook(g, 3);
+  ok(out.length === 3 && out.every((o, i) => o.inDays === i + 1 && o.wind && o.weather), 'the outlook lists the next few days');
+  ok(HR.weathervaneOutlook(g, 99).length <= 7, 'the outlook is capped');
+  // determinism + read-only
+  ok(JSON.stringify(HR.weathervane(g)) === JSON.stringify(HR.weathervane(g)), 'the weathervane is deterministic for a fixed day');
+  ok(HR.windFor(g, 33).dir.id === HR.windFor(g, 33).dir.id && HR.windSpeed(g, 33) === HR.windSpeed(g, 33), 'wind is deterministic per day');
+  const snap = JSON.stringify(g);
+  HR.weathervane(g); HR.windFor(g, 5); HR.skyMood(g, 5); HR.weathervaneOutlook(g, 4);
+  ok(JSON.stringify(g) === snap, 'reading the weathervane never mutates the game');
+  // sparse safety
+  ok(HR.weathervane({}).mood && Array.isArray(HR.weathervaneOutlook({}, 3)) && HR.windFor({}).dir, 'the weathervane is safe on a sparse game');
+  // the goal fires after a check
+  const gc = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'vane1').done(gc), 'the weathervane goal is unmet before checking');
+  gc.stats.vaneChecks = 1;
+  ok(HR.GOALS.find(x => x.id === 'vane1').done(gc), 'checking the weathervane satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety

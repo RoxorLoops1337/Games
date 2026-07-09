@@ -358,6 +358,7 @@
     <button class="sbtn" id="grazeBtn" title="Grazing map — rotate the paddocks" style="margin-right:4px">🌱</button>
     <button class="sbtn" id="compBtn" title="Ranch companion — your stable dog & friends" style="margin-right:4px">🐕</button>
     <button class="sbtn" id="zodiacBtn" title="Horse zodiac — star signs & readings" style="margin-right:4px">⭐</button>
+    <button class="sbtn" id="vaneBtn" title="Weathervane — wind & sky mood" style="margin-right:4px">🌬️</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -2191,6 +2192,54 @@ function hashDay(day){ let x=(Math.floor(day)*2654435761)>>>0; x^=x>>>15; x=Math
 function weatherFor(day){ const c=seasonOf(day).wx; const r=hashDay(day)%100; return r<c[0]?WEATHER[0] : r<c[1]?WEATHER[1] : r<c[2]?WEATHER[2] : WEATHER[3]; }
 function canteenWeatherMult(day){ return weatherFor(day).canteen; }
 function feedExtraFor(day){ return weatherFor(day).feedExtra + seasonOf(day).feedExtra; } // cold weather & winter both add hay
+
+// ---------- Ranch weathervane / wind & sky mood (READ-ONLY atmospheric flavour, keyed to game.day) ----------
+// A poetic wind-direction + strength + sky-mood readout derived from EXISTING state (the day's weather & season,
+// hashDay). Pure flavour — creates nothing and changes no stat. DISTINCT from the planning forecast almanac (which
+// lists upcoming events) and the time-of-day clock. Deterministic — no Date/Math.random.
+const WIND_DIRS=[
+  {id:'N',  name:'North',     arrow:'↑'}, {id:'NE', name:'North-East', arrow:'↗'},
+  {id:'E',  name:'East',      arrow:'→'}, {id:'SE', name:'South-East', arrow:'↘'},
+  {id:'S',  name:'South',     arrow:'↓'}, {id:'SW', name:'South-West', arrow:'↙'},
+  {id:'W',  name:'West',      arrow:'←'}, {id:'NW', name:'North-West', arrow:'↖'},
+];
+const WIND_LEVELS=[
+  {min:0,  id:'calm',   label:'Calm',          emoji:'🍃'},
+  {min:8,  id:'light',  label:'Light breeze',  emoji:'🍃'},
+  {min:16, id:'fresh',  label:'Fresh breeze',  emoji:'🌬️'},
+  {min:26, id:'strong', label:'Strong wind',   emoji:'💨'},
+  {min:38, id:'gale',   label:'Gale',          emoji:'🌪️'},
+];
+const SKY_LINES={
+  sunny: ['Clear skies stretch bright and wide over the paddocks.','A brilliant blue sky, not a cloud in sight.','Golden light pours warm across the yard.'],
+  cloudy:['A soft grey ceiling of cloud hangs low and still.','Scattered clouds drift lazily across a pale sky.','A muted, pearly sky watches over the barn.'],
+  rain:  ['Rain sweeps in on the wind, drumming the stable roof.','Low dark clouds trail curtains of rain over the hills.','The sky weeps steadily onto the sodden paddocks.'],
+  snow:  ['Snow whirls down from a heavy, iron-grey sky.','Fat flakes drift through the still, cold air.','A white hush settles under a leaden winter sky.'],
+};
+function windDirDef(id){ return WIND_DIRS.find(d=>d.id===id)||null; }
+function windLevelFor(speed){ let L=WIND_LEVELS[0]; for(const w of WIND_LEVELS){ if(speed>=w.min) L=w; } return L; }
+// deterministic wind speed (mph-ish, 0..45) — windier in rain/snow & winter, calmer in summer sun
+function windSpeed(game, day){ day=Math.floor(day||1); const wx=weatherFor(day).id, s=seasonOf(day).id;
+  const wb={sunny:6,cloudy:12,rain:20,snow:16}[wx]||10, sb={winter:8,autumn:5,spring:3,summer:0}[s]||0;
+  const wob=(hashDay(day*5+3)%13)-6; return clamp(Math.round(wb+sb+wob),0,45); }
+// today's (or a given day's) wind: direction + speed + strength band
+function windFor(game, day){ day=Math.floor(day!=null?day:((game&&game.day)||1));
+  const dir=WIND_DIRS[hashDay(day*2+11)%WIND_DIRS.length], speed=windSpeed(game,day);
+  return { dir, speed, level:windLevelFor(speed) }; }
+// the sky descriptor + an evocative line for the day
+function skyMood(game, day){ day=Math.floor(day!=null?day:((game&&game.day)||1)); const wx=weatherFor(day);
+  const lines=SKY_LINES[wx.id]||['The sky drifts quietly over the ranch.'];
+  return { weather:{id:wx.id, name:wx.name, emoji:wx.emoji}, line:lines[hashDay(day*7+5)%lines.length] }; }
+// the full weathervane readout for today
+function weathervane(game){ const day=Math.floor((game&&game.day)||1), w=windFor(game,day), sky=skyMood(game,day), s=seasonOf(day);
+  const mood='The wind is out of the '+w.dir.name+' — '+w.level.label.toLowerCase()+'. '+sky.line;
+  return { day, season:{id:s.id, name:s.name, emoji:s.emoji}, weather:sky.weather, wind:w, sky, mood }; }
+// a short look-ahead of the coming days' wind & sky (bounded)
+function weathervaneOutlook(game, days){ const start=Math.floor((game&&game.day)||1), n=clamp(days||3,1,7), out=[];
+  for(let i=1;i<=n;i++){ const d=start+i, w=windFor(game,d), sk=skyMood(game,d);
+    out.push({ inDays:i, day:d, weather:sk.weather, wind:{dir:w.dir, speed:w.speed, level:w.level} }); }
+  return out; }
+
 // ---------- Stable-yard clock / time-of-day (READ-ONLY presentational readout) ----------
 // Maps the scene's within-day phase (0..1, where 0=midnight, 0.5=noon — the same value the sky uses)
 // to a part-of-day + clock readout + a deterministic yard flavour line. Purely cosmetic; no gameplay.
@@ -4841,6 +4890,7 @@ const GOALS=[
   {id:'graze1',  desc:'Rotate your grazing paddocks (🌱)',             tip:g=>((g.stats&&g.stats.rotations)||0)+'/1',done:g=>((g.stats&&g.stats.rotations)||0)>=1,             reward:{money:200,rep:10}},
   {id:'comp1',   desc:'Adopt a ranch companion (🐕)',                  tip:g=>{const c=normCompanion(g);return c.type?c.name:'none yet';},done:g=>!!normCompanion(g).type,                reward:{money:200,rep:10}},
   {id:'zodiac1', desc:'Read a horse’s star sign (⭐)',                  tip:g=>((g.stats&&g.stats.zodiacReads)||0)+'/1',done:g=>((g.stats&&g.stats.zodiacReads)||0)>=1,           reward:{money:200,rep:10}},
+  {id:'vane1',   desc:'Check the ranch weathervane (🌬️)',             tip:g=>((g.stats&&g.stats.vaneChecks)||0)+'/1',done:g=>((g.stats&&g.stats.vaneChecks)||0)>=1,           reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5002,6 +5052,7 @@ const HR = {
   WEEKDAYS, WEEKDAY_FULL, SCHEDULE, weekdayIndex, weekOf, scheduleFor, showsToday, isShowDay,
   disciplineOpenToday, isMarketDay, isHayDay, isCareDay, canteenDayMult, lessonDayMult, nextShowDay,
   WEATHER, weatherDef, weatherFor, hashDay, canteenWeatherMult, feedExtraFor,
+  WIND_DIRS, WIND_LEVELS, windDirDef, windLevelFor, windSpeed, windFor, skyMood, weathervane, weathervaneOutlook,
   DAYPARTS, wrapPhase, dayPartFor, clockLabel, clock12, yardTimeFlavour, yardClock,
   SEASONS, SEASON_LEN, seasonOf, yearOf, seasonDay, seasonBreedFeeMul, seasonGestationAdj,
   seasonShowPrizeMul, seasonCanteenMul, seasonHayMul, seasonMarketBonus,
@@ -7659,6 +7710,25 @@ function openZodiac(){
   $('zoClose').onclick=closeModal;
   document.querySelectorAll('[data-zohorse]').forEach(x=>x.onclick=()=>{ zodiacSel.horse=x.getAttribute('data-zohorse'); playSfx('tap'); openZodiac(); });
 }
+function openWeathervane(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  G.stats=G.stats||{}; G.stats.vaneChecks=(G.stats.vaneChecks||0)+1; // usage stat — no economy change
+  const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD();
+  const v=weathervane(G), out=weathervaneOutlook(G,3);
+  const vane='<div style="font-size:52px;line-height:1">'+v.wind.dir.arrow+'</div>';
+  const outRows=out.map(o=>'<div class="lbrow"><div class="hface" style="background:none;font-size:18px;display:flex;align-items:center;justify-content:center">'+o.weather.emoji+'</div>'+
+    '<div class="grow"><div class="lbname">'+(o.inDays===1?'Tomorrow':('In '+o.inDays+' days'))+' · '+esc(o.weather.name)+'</div>'+
+    '<div class="lbsub">'+o.wind.dir.arrow+' '+o.wind.dir.id+' wind · '+esc(o.wind.level.label)+' ('+o.wind.speed+' mph)</div></div></div>').join('');
+  modal('<h3>🌬️ The Weathervane</h3>'+
+    '<div class="swlabel">'+v.season.emoji+' '+esc(v.season.name)+' · '+v.weather.emoji+' '+esc(v.weather.name)+'</div>'+
+    '<div class="card" style="margin-top:6px;text-align:center">'+vane+
+      '<div class="hname" style="font-size:15px;margin-top:2px">'+v.wind.level.emoji+' '+esc(v.wind.dir.name)+'erly · '+esc(v.wind.level.label)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+v.wind.speed+' mph</div>'+
+      '<div class="hbreed" style="margin-top:8px;font-style:italic">“'+esc(v.mood)+'”</div></div>'+
+    '<div class="swlabel" style="margin-top:8px">🔭 The days ahead</div><div>'+outRows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="vaneClose" style="width:100%">Done</button></div>');
+  $('vaneClose').onclick=closeModal;
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8568,6 +8638,7 @@ function boot(){
   { const gzb=$('grazeBtn'); if(gzb) gzb.onclick=openGrazing; }
   { const cpb=$('compBtn'); if(cpb) cpb.onclick=openCompanion; }
   { const zob=$('zodiacBtn'); if(zob) zob.onclick=openZodiac; }
+  { const vnb=$('vaneBtn'); if(vnb) vnb.onclick=openWeathervane; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
