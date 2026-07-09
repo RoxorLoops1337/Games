@@ -240,6 +240,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.ledgerViews = 1; // satisfies the balance-sheet goal
   HR.toggleRadio(g); // switches on the stable radio → satisfies the radio goal
   g.enrichment = { owned: ['jollyball'] }; // satisfies the paddock-enrichment goal
+  g.wardrobe = { owned: ['tweed'], equipped: 'tweed' }; // satisfies the show-wardrobe goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -824,6 +825,63 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'playground').check(gall), 'Paddock Playground unlocks with every item');
   ok(!HR.ACHIEVEMENTS.find(a => a.id === 'playground').check(gg), 'Paddock Playground is locked with only one item');
   ok(HR.GOALS.filter(x => x.id === 'enrich1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'playground').length === 1, 'new enrichment goal/achievement ids are unique');
+}
+{
+  // ---- show wardrobe / rider-outfit cosmetics ----
+  ok(HR.OUTFITS.length >= 4, 'a catalogue of show outfits exists');
+  const oids = HR.OUTFITS.map(o => o.id);
+  ok(new Set(oids).size === oids.length, 'outfit ids are unique');
+  ok(HR.OUTFITS.every(o => (o.turnout || 0) <= HR.OUTFIT_TURNOUT_CAP + 1e-9), 'no single outfit exceeds the turnout cap');
+  // buy: deducts once, owned, idempotent, coin-gated
+  const g = HR.freshGame(); g.money = 5000;
+  const it = HR.OUTFITS[0];
+  const before = g.money;
+  const r = HR.buyOutfit(g, it.id);
+  ok(r.ok && g.money === before - it.cost && HR.hasOutfit(g, it.id), 'buyOutfit deducts once and records ownership');
+  ok(!HR.buyOutfit(g, it.id).ok && HR.ownedOutfits(g).length === 1, 'buying an owned outfit is a no-op');
+  const gp = HR.freshGame(); gp.money = 10;
+  ok(!HR.buyOutfit(gp, it.id).ok && HR.ownedOutfits(gp).length === 0, 'buyOutfit is blocked without enough coins');
+  ok(!HR.buyOutfit(gp, 'nope').ok, 'an unknown outfit id is rejected');
+  // equip: requires ownership; sets equipped; can unequip
+  ok(!HR.equipOutfit(g, 'sunday').ok, 'equipping an unowned outfit fails');
+  ok(HR.equipOutfit(g, it.id).ok && g.wardrobe.equipped === it.id, 'equipOutfit sets the equipped outfit');
+  ok(HR.equippedOutfit(g).id === it.id, 'equippedOutfit reports the equipped outfit');
+  HR.equipOutfit(g, null);
+  ok(g.wardrobe.equipped === null && HR.equippedOutfit(g) === null, 'the outfit can be unequipped');
+  // outfitTurnoutBonus: 0 when none equipped; capped when equipped
+  ok(HR.outfitTurnoutBonus(HR.freshGame()) === 0, 'no equipped outfit → 0 turnout bonus');
+  const gall = HR.freshGame(); gall.money = 999999;
+  HR.OUTFITS.forEach(o => HR.buyOutfit(gall, o.id));
+  const best = HR.OUTFITS.slice().sort((a, b) => (b.turnout || 0) - (a.turnout || 0))[0];
+  HR.equipOutfit(gall, best.id);
+  ok(HR.outfitTurnoutBonus(gall) <= HR.OUTFIT_TURNOUT_CAP + 1e-9, 'the turnout bonus never exceeds the cap');
+  ok(HR.outfitTurnoutBonus(gall) === Math.min(HR.OUTFIT_TURNOUT_CAP, best.turnout), 'the turnout bonus is the equipped outfit’s (capped) value');
+  // the bonus is bounded and only touches the turnout-weighted Showing discipline
+  const halter = HR.DISCIPLINES.find(d => d.coat);
+  const race = HR.DISCIPLINES.find(d => !d.coat);
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, speed: 70, stamina: 70, temperament: 70, coat: { name: 'Bay', tier: 0 } });
+  const plain = HR.freshGame();
+  const sHalterPlain = HR.disciplineScore(h, halter, plain);
+  const sHalterDressed = HR.disciplineScore(h, halter, gall);
+  ok(sHalterDressed > sHalterPlain, 'an equipped outfit lifts the Showing score a touch');
+  ok(sHalterDressed <= sHalterPlain * (1 + HR.OUTFIT_TURNOUT_CAP) + 1e-6, 'the Showing lift is within the hard cap');
+  ok(Math.abs(HR.disciplineScore(h, race, gall) - HR.disciplineScore(h, race, plain)) < 1e-6, 'a non-turnout discipline (Racing) is unaffected');
+  // migration: equipped must be owned; bad ids dropped
+  const mig = HR.normWardrobe({ owned: ['tweed', 'bogus', 'tweed'], equipped: 'sunday' });
+  ok(JSON.stringify(mig.owned) === JSON.stringify(['tweed']) && mig.equipped === null, 'normWardrobe validates owned + drops an unowned equipped id');
+  const mig2 = HR.normWardrobe({ owned: ['tails'], equipped: 'tails' });
+  ok(mig2.equipped === 'tails', 'a validly-owned equipped outfit survives migration');
+  // read-only + sparse
+  ok(HR.ownedOutfits({}).length === 0 && HR.outfitTurnoutBonus({}) === 0, 'wardrobe helpers are safe on a bare game');
+  const snap = JSON.stringify(gall);
+  HR.equippedOutfit(gall); HR.outfitTurnoutBonus(gall); HR.ownedOutfits(gall); HR.hasOutfit(gall, 'tweed'); HR.wardrobeSpend(gall);
+  ok(JSON.stringify(gall) === snap, 'the wardrobe read helpers never mutate the game');
+  // goal + achievement
+  const gg = HR.freshGame(); gg.wardrobe = { owned: ['sash'], equipped: null };
+  ok(HR.GOALS.find(x => x.id === 'outfit1').done(gg), 'outfit1 completes with one outfit owned');
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'bestdressed').check(gall), 'Best Dressed unlocks with every outfit');
+  ok(!HR.ACHIEVEMENTS.find(a => a.id === 'bestdressed').check(gg), 'Best Dressed is locked with only one outfit');
+  ok(HR.GOALS.filter(x => x.id === 'outfit1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'bestdressed').length === 1, 'new wardrobe goal/achievement ids are unique');
 }
 
 // ---- personality traits ----

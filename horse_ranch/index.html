@@ -337,6 +337,7 @@
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="enrichBtn" title="Paddock enrichment — toys & comforts for the herd" style="margin-right:4px">🧸</button>
+    <button class="sbtn" id="wardrobeBtn" title="Show wardrobe — rider outfits & show attire" style="margin-right:4px">👗</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1895,7 +1896,7 @@ function freshGame(legacy){
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0,ceremonies:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
-    decor:normDecor(null), enrichment:normEnrichment(null), lastRoutineDay:0,
+    decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[],tiers:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
@@ -2700,7 +2701,7 @@ function disciplineScore(h,disc,game){
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*careBonusMult(h)*bondPoiseMult(h)*careAppointmentMult(h,game)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h); // care, bond-poise, appointments, schooling, tack(+tiers), personality & age shape aptitude
+  return s*form*careBonusMult(h)*bondPoiseMult(h)*careAppointmentMult(h,game)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h)*outfitTurnoutMult(game,disc); // care, bond-poise, appointments, schooling, tack(+tiers), personality, age & show turnout shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -3313,6 +3314,46 @@ function enrichmentBonus(game){
   return { happy:Math.min(ENRICH_HAPPY_CAP,happy), needLift:Math.min(ENRICH_NEEDLIFT_CAP,needLift),
     bond:Math.min(ENRICH_BOND_CAP,bond), decayMult:Math.max(ENRICH_DECAY_FLOOR, 1-dr), items:ownedEnrichment(game).length }; }
 function enrichmentDecayMult(game){ return enrichmentBonus(game).decayMult; }
+// ---------- Show wardrobe / rider-outfit cosmetics (cosmetic-first; a TINY capped turnout nudge) ----------
+// A catalogue of show attire bought once (like décor/enrichment). One outfit can be equipped as the
+// ranch's show look — mostly flavour + a badge, with at most a tiny, hard-capped presentation bonus that
+// only touches the turnout-weighted Showing (halter) discipline. Deterministic; economy-safe.
+const OUTFIT_TURNOUT_CAP=0.03; // hard cap: at most +3% presentation, and only in the Showing ring
+const OUTFITS=[
+  {id:'tweed',  name:'Classic Tweed',         emoji:'🧥', cost:700,  turnout:0.010, blurb:'A smart tweed hacking jacket — timeless country style.'},
+  {id:'sash',   name:'Rosette Sash',          emoji:'🎀', cost:1000, turnout:0.015, blurb:'A champion’s sash worn with quiet pride.'},
+  {id:'xc',     name:'Cross-Country Colours', emoji:'🏇', cost:1200, turnout:0.015, blurb:'Bright silks & a body protector — bold and sporty.'},
+  {id:'tails',  name:'Dressage Tails',        emoji:'🎩', cost:1400, turnout:0.020, blurb:'Top hat & tailcoat — the height of arena elegance.'},
+  {id:'sunday', name:'Sunday Best',           emoji:'✨', cost:2200, turnout:0.030, blurb:'Show whites pressed to perfection — turned out to the nines.'},
+];
+function outfitDef(id){ return OUTFITS.find(o=>o.id===id)||null; }
+function normWardrobe(w){ w=w||{};
+  const owned=Array.isArray(w.owned)?w.owned.filter(id=>!!outfitDef(id)).filter((v,i,a)=>a.indexOf(v)===i):[];
+  const equipped=(w.equipped && outfitDef(w.equipped) && owned.indexOf(w.equipped)>=0)?w.equipped:null;
+  return { owned, equipped }; }
+function ownedOutfits(game){ return (game&&game.wardrobe&&Array.isArray(game.wardrobe.owned))?game.wardrobe.owned:[]; }
+function hasOutfit(game,id){ return ownedOutfits(game).indexOf(id)>=0; }
+function outfitAffordable(game,id){ const it=outfitDef(id); return !!it && !hasOutfit(game,id) && ((game&&game.money)||0)>=it.cost; }
+function buyOutfit(game,id){
+  const it=outfitDef(id); if(!it) return {ok:false,why:'No such outfit.'};
+  if(!game.wardrobe) game.wardrobe=normWardrobe(null);
+  if(hasOutfit(game,id)) return {ok:false,why:'Already in the wardrobe.'};
+  if((game.money||0)<it.cost) return {ok:false,why:'Not enough coins.'};
+  game.money-=it.cost; game.wardrobe.owned.push(id); return {ok:true,item:it};
+}
+function equipOutfit(game,id){
+  if(!game.wardrobe) game.wardrobe=normWardrobe(null);
+  if(id===null||id===undefined){ game.wardrobe.equipped=null; return {ok:true,equipped:null}; }
+  const it=outfitDef(id); if(!it) return {ok:false,why:'No such outfit.'};
+  if(!hasOutfit(game,id)) return {ok:false,why:'You don’t own that outfit yet.'};
+  game.wardrobe.equipped=id; return {ok:true,item:it};
+}
+function equippedOutfit(game){ const w=normWardrobe(game&&game.wardrobe); return w.equipped?outfitDef(w.equipped):null; }
+function wardrobeSpend(game){ return ownedOutfits(game).reduce((s,id)=>{ const it=outfitDef(id); return s+(it?it.cost:0); },0); }
+// the tiny, hard-capped presentation bonus (fraction) from the equipped outfit — 0 if none equipped
+function outfitTurnoutBonus(game){ const o=equippedOutfit(game); return o?Math.min(OUTFIT_TURNOUT_CAP, o.turnout||0):0; }
+// applied only to turnout-weighted (Showing/halter) disciplines
+function outfitTurnoutMult(game,disc){ return (disc&&disc.coat)?(1+outfitTurnoutBonus(game)):1; }
 
 // ---------- Shareable "trading card" data model (rendering is DOM-only) ----------
 function stampFor(game){
@@ -3429,6 +3470,7 @@ const ACHIEVEMENTS=[
   {id:'intheblack',     icon:'💷', name:'In the Black',        desc:'Run the ranch at a daily surplus of 🪙300+.',  check:g=>dailyLedger(g).net>=300},
   {id:'stabledj',       icon:'📻', name:'Stable DJ',           desc:'Tune the stable radio to all four stations.', check:g=>{const h=radioState(g).heard; return RADIO_STATIONS.every(s=>h.indexOf(s.id)>=0);}},
   {id:'playground',     icon:'🧸', name:'Paddock Playground',  desc:'Kit the paddock out with every enrichment toy.', check:g=>ENRICHMENT_ITEMS.every(it=>hasEnrichment(g,it.id))},
+  {id:'bestdressed',    icon:'👗', name:'Best Dressed',        desc:'Collect every outfit in the show wardrobe.',   check:g=>OUTFITS.every(o=>hasOutfit(g,o.id))},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3676,6 +3718,7 @@ const GOALS=[
   {id:'books1',  desc:'Open the ranch books (💷 balance sheet)',        tip:g=>((g.stats&&g.stats.ledgerViews)||0)+'/1',done:g=>((g.stats&&g.stats.ledgerViews)||0)>=1,        reward:{money:300,rep:10}},
   {id:'radio1',  desc:'Switch on the stable radio (📻)',                 tip:g=>radioState(g).heard.length+' station'+(radioState(g).heard.length!==1?'s':''),done:g=>radioState(g).heard.length>=1,     reward:{money:200,rep:10}},
   {id:'enrich1', desc:'Add a paddock enrichment toy (🧸)',               tip:g=>ownedEnrichment(g).length+'/1 items',done:g=>ownedEnrichment(g).length>=1,                    reward:{money:400,rep:15}},
+  {id:'outfit1', desc:'Buy a show outfit for the wardrobe (👗)',         tip:g=>ownedOutfits(g).length+'/1 outfits',done:g=>ownedOutfits(g).length>=1,                      reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3757,6 +3800,7 @@ const HR = {
   barnColor, groundColor, flagColor, DECOR, decorDef, normDecor, ownedDecor, hasDecor,
   decorUnlocked, decorAffordable, buyDecor, decorSpend,
   ENRICHMENT_ITEMS, ENRICH_HAPPY_CAP, ENRICH_NEEDLIFT_CAP, ENRICH_BOND_CAP, ENRICH_DECAY_FLOOR, enrichmentDef, normEnrichment, ownedEnrichment, hasEnrichment, enrichmentAffordable, buyEnrichment, enrichmentSpend, enrichmentBonus, enrichmentDecayMult,
+  OUTFITS, OUTFIT_TURNOUT_CAP, outfitDef, normWardrobe, ownedOutfits, hasOutfit, outfitAffordable, buyOutfit, equipOutfit, equippedOutfit, wardrobeSpend, outfitTurnoutBonus, outfitTurnoutMult,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
   isAuctionDay, nextAuction, makeAuctionLot, makeAuctionLots, aiCounter, resolveAuction, consignValue,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
@@ -3881,6 +3925,7 @@ function load(){
     { const store=loadLegacy(), saved=normLegacy(G.legacy); G.legacy=(store.points>=saved.points)?store:saved; saveLegacy(G.legacy); }
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
     G.enrichment=normEnrichment(G.enrichment); // paddock enrichment owned-set — safe on old saves
+    G.wardrobe=normWardrobe(G.wardrobe); // show wardrobe (owned outfits + equipped) — safe on old saves
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
@@ -5773,6 +5818,38 @@ function openEnrichment(){
     const fresh=checkAchievements(G), gg=checkGoals(G); toast('🧸 '+r.item.name+' is in the paddock!','good');
     save(); renderHUD(); openEnrichment(); });
 }
+function openWardrobe(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const owned=ownedOutfits(G).length, total=OUTFITS.length, eq=equippedOutfit(G);
+  const shop=OUTFITS.map(o=>{
+    const has=hasOutfit(G,o.id), afford=outfitAffordable(G,o.id), isEq=eq&&eq.id===o.id;
+    const turn='+'+(Math.round((o.turnout||0)*1000)/10)+'% ring turnout';
+    const btn = !has ? '<button class="btn sm" data-obuy="'+o.id+'" '+(afford?'':'disabled')+'>🪙'+fmt(o.cost)+'</button>'
+      : isEq ? '<span class="pill" style="color:var(--gold)">★ Worn</span>'
+      : '<button class="btn sm ghost" data-oequip="'+o.id+'">Wear</button>';
+    return '<div class="decoritem'+(isEq?'':'')+'"'+(isEq?' style="border-left:3px solid var(--gold2)"':'')+'><div class="de">'+o.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:13px">'+esc(o.name)+(has?' <span class="pill" style="color:var(--good)">owned</span>':'')+'</div>'+
+      '<div class="hbreed">'+esc(o.blurb)+'</div><div class="hbreed" style="opacity:.7">'+turn+'</div></div>'+btn+'</div>';
+  }).join('');
+  const eqLine = eq
+    ? '<span class="pill" style="color:var(--gold)">'+eq.emoji+' '+esc(eq.name)+'</span> <span class="pill">+'+(Math.round(outfitTurnoutBonus(G)*1000)/10)+'% Showing turnout</span> '+(owned>1?'<button class="btn sm ghost" id="wardUnequip">Take off</button>':'')
+    : '<span class="hbreed" style="opacity:.6">No outfit worn — buy one and wear it to dress up for the ring.</span>';
+  modal('<h3>👗 Show Wardrobe</h3>'+
+    '<div class="msg">Rider attire for the show ring. Mostly for the look — an outfit shows as your ranch’s turnout and adds only a tiny, capped presentation edge in the Showing class.</div>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname" style="font-size:13px">Today’s look</div><div class="pips" style="margin-top:5px">'+eqLine+'</div></div>'+
+    '<div class="swlabel" style="margin-top:8px">🛍️ Wardrobe <span class="pill">'+owned+'/'+total+'</span></div>'+
+    '<div>'+shop+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="wardClose" style="width:100%">Done</button></div>');
+  $('wardClose').onclick=closeModal;
+  const reopen=()=>{ const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); openWardrobe(); };
+  document.querySelectorAll('[data-obuy]').forEach(b=>b.onclick=()=>{ const r=buyOutfit(G,b.getAttribute('data-obuy'));
+    if(!r.ok){ toast(r.why,'bad'); return; } coinPop(-r.item.cost); burst(r.item.emoji+'✨',10); playSfx('coin');
+    if(!G.wardrobe.equipped) equipOutfit(G, r.item.id); // wear the first one you buy
+    toast('👗 '+r.item.name+' added to your wardrobe!','good'); reopen(); });
+  document.querySelectorAll('[data-oequip]').forEach(b=>b.onclick=()=>{ const r=equipOutfit(G,b.getAttribute('data-oequip'));
+    if(!r.ok){ toast(r.why,'bad'); return; } playSfx('tap'); toast('★ Now wearing '+r.item.name+'.','good'); reopen(); });
+  { const u=$('wardUnequip'); if(u) u.onclick=()=>{ equipOutfit(G,null); playSfx('tap'); reopen(); }; }
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -6573,6 +6650,7 @@ function boot(){
   { const hb=$('helpBtn'); if(hb) hb.onclick=openHelp; }
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
   { const eb=$('enrichBtn'); if(eb) eb.onclick=openEnrichment; }
+  { const wb=$('wardrobeBtn'); if(wb) wb.onclick=openWardrobe; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
