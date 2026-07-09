@@ -246,6 +246,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.garden = { sown: true, growth: 0, lastHarvest: 0 }; // satisfies the hay-meadow goal
   g.stats.smithDeals = 1; // satisfies the visiting-farrier goal
   g.stats.spotlightViews = 1; // satisfies the horse-of-the-month goal
+  g.loadouts = [{ id: 'lo1', name: 'Show set', slots: { saddle: null, bridle: null, accessory: null } }]; // satisfies the tack-loadout goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -894,8 +895,8 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.decor = g.decor || {}; g.decor.name = 'Willow Creek';
   g.horses = [
     HR.mkHorse({ breed: 'friesian', age: 20, speed: 90, stamina: 85, temperament: 80, coat: { name: 'Black', tier: 0 }, wins: 4, name: 'Onyx' }),
-    HR.mkHorse({ breed: 'arabian', age: 3, coat: { name: 'Bay', tier: 0 }, name: 'Pip' }),
-    HR.mkHorse({ breed: 'quarter', age: 20, coat: { name: 'Cremello', tier: 2 }, name: 'Pearl' }),
+    HR.mkHorse({ breed: 'arabian', age: 3, speed: 40, stamina: 40, temperament: 40, coat: { name: 'Bay', tier: 0 }, name: 'Pip' }),
+    HR.mkHorse({ breed: 'quarter', age: 20, speed: 55, stamina: 55, temperament: 55, coat: { name: 'Cremello', tier: 2 }, name: 'Pearl' }),
   ];
   g.trophies = [{ horse: 'Onyx', disc: 'race', tier: 3, place: 1, day: 10 }, { horse: 'Onyx', disc: 'jump', tier: 2, place: 2, day: 8 }];
   g.scrapbook = [{ id: 'm1', kind: 'firstwin', emoji: '🥇', title: 'First Win', name: 'Onyx', day: 10, seq: 1, pinned: true }];
@@ -1152,10 +1153,10 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 {
   // ---- horse of the month spotlight / feature board ----
   // spotlightScore weights overall/wins/bond/coat sensibly
-  const plain = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 10, happy: 60 });
-  const winner = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 10, happy: 60, wins: 4 });
+  const plain = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 10, happy: 60, name: 'Plain', id: 'hp' });
+  const winner = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 10, happy: 60, wins: 4, name: 'Winner', id: 'hw' });
   ok(HR.spotlightScore(winner) > HR.spotlightScore(plain), 'wins raise the spotlight score');
-  const fancy = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Cremello', tier: 2 }, bond: 10, happy: 60 });
+  const fancy = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Cremello', tier: 2 }, bond: 10, happy: 60, name: 'Fancy', id: 'hf' });
   ok(HR.spotlightScore(fancy) > HR.spotlightScore(plain), 'a rare coat raises the score');
   const bonded = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 90, happy: 60 });
   ok(HR.spotlightScore(bonded) > HR.spotlightScore(plain), 'a strong bond raises the score');
@@ -1202,6 +1203,60 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'coverstar').check(gc), 'Cover Star unlocks when a Champion is the pick');
   ok(!HR.ACHIEVEMENTS.find(a => a.id === 'coverstar').check(g0), 'Cover Star is locked with no horses');
   ok(HR.GOALS.filter(x => x.id === 'spot1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'coverstar').length === 1, 'new spotlight goal/achievement ids are unique');
+}
+{
+  // ---- tack loadout presets / quick-swap ----
+  const g = HR.freshGame();
+  g.horses = [HR.mkHorse({ breed: 'arabian', age: 20, name: 'A' }), HR.mkHorse({ breed: 'welsh', age: 20, name: 'B' })];
+  const A = g.horses[0], B = g.horses[1];
+  // own + equip a set on A
+  g.tack.owned = ['saddle_training', 'bridle_leather', 'groom_kit'];
+  HR.equipTack(g, A, 'saddle_training'); HR.equipTack(g, A, 'bridle_leather'); HR.equipTack(g, A, 'groom_kit');
+  // captureLoadout reads A's slot→item map
+  const cap = HR.captureLoadout(A);
+  ok(cap.saddle === 'saddle_training' && cap.bridle === 'bridle_leather' && cap.accessory === 'groom_kit', 'captureLoadout reads the horse’s current tack map');
+  // saveLoadout stores a named preset (bounded name length)
+  const r = HR.saveLoadout(g, 'x'.repeat(50), A);
+  ok(r.ok && HR.tackLoadouts(g).length === 1 && r.preset.name.length <= HR.LOADOUT_NAME_MAX, 'saveLoadout stores a preset with a bounded name');
+  ok(JSON.stringify(HR.loadoutDef(g, r.preset.id).slots) === JSON.stringify(cap), 'the saved preset matches the captured set');
+  // apply to B: since tack items are single physical items, they move from A to B (owned)
+  const ap = HR.applyLoadout(g, B, r.preset.id);
+  ok(ap.ok && ap.applied.length === 3, 'applyLoadout equips the preset’s owned items');
+  ok(B.tack.saddle === 'saddle_training' && B.tack.bridle === 'bridle_leather' && B.tack.accessory === 'groom_kit', 'the target horse now wears the preset');
+  ok(HR.equippedTack(B).length === 3, 'equippedTack reflects the applied loadout');
+  // applying NEVER grants unowned tack: a preset referencing an unowned item skips it
+  const g2 = HR.freshGame(); g2.horses = [HR.mkHorse({ breed: 'arabian', age: 20 })];
+  g2.loadouts = [{ id: 'lo1', name: 'Fancy', slots: { saddle: 'saddle_show', bridle: null, accessory: null } }]; // saddle_show NOT owned
+  const ap2 = HR.applyLoadout(g2, g2.horses[0], 'lo1');
+  ok(ap2.ok && ap2.skipped.indexOf('saddle_show') >= 0 && !g2.horses[0].tack.saddle, 'applyLoadout skips items the player does not own (grants no free gear)');
+  // a preset slot that is empty clears that slot on the horse
+  const g3 = HR.freshGame(); g3.horses = [HR.mkHorse({ breed: 'welsh', age: 20 })]; g3.tack.owned = ['bridle_leather'];
+  HR.equipTack(g3, g3.horses[0], 'bridle_leather');
+  g3.loadouts = [{ id: 'lo1', name: 'Bare', slots: { saddle: null, bridle: null, accessory: null } }];
+  const ap3 = HR.applyLoadout(g3, g3.horses[0], 'lo1');
+  ok(ap3.cleared.indexOf('bridle_leather') >= 0 && !g3.horses[0].tack.bridle, 'an empty preset slot clears the horse’s slot');
+  // rename + delete
+  HR.renameLoadout(g, r.preset.id, 'Show Day');
+  ok(HR.loadoutDef(g, r.preset.id).name === 'Show Day', 'renameLoadout updates the name');
+  ok(HR.deleteLoadout(g, r.preset.id).ok && HR.tackLoadouts(g).length === 0, 'deleteLoadout removes the preset');
+  // bounded library
+  const gm = HR.freshGame(); gm.horses = [HR.mkHorse({ breed: 'arabian', age: 20 })];
+  for (let i = 0; i < HR.LOADOUT_MAX + 3; i++) HR.saveLoadout(gm, 'set' + i, gm.horses[0]);
+  ok(HR.tackLoadouts(gm).length === HR.LOADOUT_MAX, 'the loadout library is capped');
+  // migration + read-only + sparse
+  const mig = HR.normLoadouts({ loadouts: [{ id: 'lo1', name: 'ok', slots: { saddle: 'saddle_training', bridle: 'bogus', accessory: 'groom_kit' } }, null, 'nope'] });
+  ok(mig.length === 1 && mig[0].slots.saddle === 'saddle_training' && mig[0].slots.bridle === null, 'normLoadouts validates slot items + drops junk');
+  ok(HR.tackLoadouts({}).length === 0 && HR.captureLoadout(null).saddle === null, 'loadout helpers are safe on bare inputs');
+  const gr = HR.freshGame(); gr.horses = [HR.mkHorse({ breed: 'arabian', age: 20 })]; gr.tack.owned = ['bridle_leather']; HR.equipTack(gr, gr.horses[0], 'bridle_leather');
+  const snap = JSON.stringify(gr);
+  HR.captureLoadout(gr.horses[0]); HR.tackLoadouts(gr); HR.loadoutDef(gr, 'lo1');
+  ok(JSON.stringify(gr) === snap, 'the loadout read helpers never mutate the game');
+  // goal + achievement
+  const gg = HR.freshGame(); gg.loadouts = [{ id: 'lo1', name: 'Set', slots: { saddle: null, bridle: null, accessory: null } }];
+  ok(HR.GOALS.find(x => x.id === 'loadout1').done(gg), 'loadout1 completes after saving a preset');
+  const gq = HR.freshGame(); gq.loadouts = [1, 2, 3].map(i => ({ id: 'lo' + i, name: 'S' + i, slots: { saddle: null, bridle: null, accessory: null } }));
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'quartermaster').check(gq), 'Quartermaster unlocks at three presets');
+  ok(HR.GOALS.filter(x => x.id === 'loadout1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'quartermaster').length === 1, 'new loadout goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
