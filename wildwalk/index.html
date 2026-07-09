@@ -363,6 +363,7 @@ function newGame(){
     // transient message
     msg:'', msgT:0,
     buttons:[],
+    pendingMon:null, afterAcquire:null,
     starterKey,
   };
   Dex.caught(starterKey);
@@ -475,15 +476,29 @@ function doCatch(){
   if(success){
     const cap = makeMon(w.key, w.level);
     Dex.caught(w.key);
-    if(G.team.length<4){ G.team.push(cap); flash('Caught '+w.sp.name+'! Joined your team.'); }
-    else { G.box.push(cap); flash('Caught '+w.sp.name+'! Sent to your box (team full).'); }
     G.honor += 1;
-    endFight(true);
+    flash('Caught '+w.sp.name+'!');
+    acquire(cap, ()=>endFight(true));
   } else {
     flash(w.sp.name+' broke free and fled!');
     endFight(false);
   }
 }
+// Bring a new companion into the roster. If the party (4) is full, hand control
+// to the swap picker so the player chooses who to keep; otherwise slot it in.
+function acquire(mon, ret){
+  if(G.team.length<4){ G.team.push(mon); flash(mon.sp.name+' joined the party!'); if(ret) ret(); return; }
+  G.pendingMon=mon; G.afterAcquire=ret||startWalk; G.state='swapchoice'; clearButtons();
+}
+function finishSwap(){ const ret=G.afterAcquire; G.pendingMon=null; G.afterAcquire=null; if(ret) ret(); }
+function swapOut(i){
+  const out=G.team[i]; G.box.push(out); G.team[i]=G.pendingMon;
+  flash('Swapped '+out.sp.name+' → '+G.pendingMon.sp.name+' (sent to box).');
+  finishSwap();
+}
+function pendingToBox(){ G.box.push(G.pendingMon); flash(G.pendingMon.sp.name+' sent to your box.'); finishSwap(); }
+function pendingRelease(){ const m=G.pendingMon; const h=Math.round(m.level*(1+m.sp.rarity*0.4)*1.6);
+  G.honor+=h; flash('Released '+m.sp.name+'. +'+h+' honor.'); finishSwap(); }
 function catchChance(w){
   let c = CATCH_BASE[w.sp.rarity];
   c += G.ballTier*0.1;
@@ -561,8 +576,8 @@ function buy(item){
   else if(item==='egg' && G.gold>=25){
     G.gold-=25; const k=pick(rnd()<0.7?COMMONS:UNCOMMONS); const m=makeMon(k, Math.max(3,G.tier*2-2));
     Dex.caught(k);
-    if(G.team.length<4) G.team.push(m); else G.box.push(m);
     flash('The egg hatched into '+m.sp.name+'!');
+    acquire(m, ()=>{ G.state='shop'; });
   }
   else if(item==='revive' && G.gold>=20){
     const dead=G.team.find(m=>m.hp<=0);
@@ -597,7 +612,7 @@ const STORIES = [
   {t:'A shrine of coins glints in the mud.', good:'You pocket a hidden purse. +40 gold.',
    bad:'A trap! A snake bites your lead. It loses HP.', apply:(g)=>{if(g){G.gold+=40;}else{const m=activeMon(); if(m)m.hp=Math.max(1,m.hp-m.maxhp*0.3);}}},
   {t:'A wounded creature blocks the path.', good:'You heal it; it joins you in thanks!',
-   bad:'It was a lure — bandits steal 20 gold.', apply:(g)=>{ if(g){const k=pick(UNCOMMONS);const m=makeMon(k,Math.max(4,G.tier*2));Dex.caught(k); if(G.team.length<4)G.team.push(m);else G.box.push(m);} else {G.gold=Math.max(0,G.gold-20);} }},
+   bad:'It was a lure — bandits steal 20 gold.', apply:(g)=>{ if(g){const k=pick(UNCOMMONS);const m=makeMon(k,Math.max(4,G.tier*2));Dex.caught(k); acquire(m, ()=>{G.state='story';});} else {G.gold=Math.max(0,G.gold-20);} }},
   {t:'An old hermit offers a riddle.', good:'You answer true. +30 souls of wisdom.',
    bad:'You falter; he curses your luck. -10 honor.', apply:(g)=>{ if(g){G.souls+=30;} else {G.honor=Math.max(0,G.honor-10);} }},
   {t:'A merchant cart has overturned.', good:'You help; rewarded with 2 potions.',
@@ -641,9 +656,7 @@ function openNest(){
 }
 function takeNest(i){
   const m=G.nestChoices[i]; Dex.caught(m.key);
-  if(G.team.length<4) G.team.push(m); else G.box.push(m);
-  flash(m.sp.name+' joined you!');
-  proceed();
+  acquire(m, ()=>proceed());
 }
 function proceed(){ startWalk(); }
 
@@ -864,6 +877,7 @@ function draw(){
   else if(G.state==='gamble') drawGamble();
   else if(G.state==='shrine') drawShrine();
   else if(G.state==='nest') drawNest();
+  else if(G.state==='swapchoice') drawSwapChoice();
   else if(G.state==='gameover') drawGameOver();
 
   drawHUD();
@@ -1113,6 +1127,36 @@ function drawNest(){
   });
 }
 
+function drawSwapChoice(){
+  const nm=G.pendingMon; if(!nm) return;
+  centerText('PARTY FULL', W/2, 78, '800 30px Segoe UI', '#ffe9a8');
+  centerText('Tap a companion to swap out for '+nm.sp.name+' — or keep the newcomer in your box.',
+    W/2, 106, '600 14px Segoe UI', '#aeb8d8');
+  clearButtons();
+  // the newcomer
+  panel(W/2-150,120,300,116,null);
+  drawMon(nm.sp, W/2-90, 178, 34, 1, G.t); withShadow(W/2-90,214,26,8);
+  ctx.textAlign='left';
+  ctx.fillStyle='#eaf0ff'; ctx.font='800 20px Segoe UI'; ctx.fillText(nm.sp.name+'  Lv'+nm.level, W/2-40, 165);
+  ctx.fillStyle=TYPE_COL[nm.sp.type]; ctx.font='700 13px Segoe UI';
+  ctx.fillText(nm.sp.type+' · '+RARITY_NAME[nm.sp.rarity], W/2-40, 187);
+  ctx.fillStyle='#9fb0cc'; ctx.font='600 12px Segoe UI';
+  ctx.fillText('ATK '+Math.round(nm.atk)+'  ·  HP '+nm.maxhp, W/2-40, 207);
+  // party cards
+  const cw=210, gap=12, x0=W/2-(cw*4+gap*3)/2, y=258, ch=158;
+  G.team.forEach((m,i)=>{
+    const x=x0+i*(cw+gap);
+    panel(x,y,cw,ch,null);
+    drawMon(m.sp, x+cw/2, y+44, 26, 1, G.t,{bob:i}); withShadow(x+cw/2,y+74,20,6);
+    centerText(m.sp.name+' Lv'+m.level, x+cw/2, y+94, '700 15px Segoe UI', '#eaf0ff');
+    centerText(m.sp.type+' · ATK '+Math.round(m.atk)+' · HP '+m.maxhp, x+cw/2, y+110, '600 11px Segoe UI', TYPE_COL[m.sp.type]);
+    btn('swapout_'+i, x+16, y+122, cw-32, 28, 'Swap out', null, {col:'#5a2f3a', accent:'#e07a8a'});
+  });
+  const rel=Math.round(nm.level*(1+nm.sp.rarity*0.4)*1.6);
+  btn('keepbox', W/2-230, 430, 220, 46, '📦 Keep in box', null, {col:'#2a3760', accent:'#5a76b0'});
+  btn('relnew', W/2+10, 430, 220, 46, '🕊️ Release (+'+rel+' honor)', null, {col:'#2f4a5a', accent:'#6fb0e0'});
+}
+
 function drawGameOver(){
   ctx.fillStyle='rgba(6,8,18,.9)'; ctx.fillRect(0,0,W,H);
   centerText('YOUR JOURNEY ENDS', W/2, 150, '900 52px Segoe UI', '#e07a8a');
@@ -1160,6 +1204,10 @@ function onClick(mx,my){
       else if(id==='bless_catch') shrineBless('catch'); else if(id==='bless_power') shrineBless('power'); break;
     case 'nest':
       if(id.startsWith('nest_')) takeNest(+id.slice(5)); break;
+    case 'swapchoice':
+      if(id.startsWith('swapout_')) swapOut(+id.slice(8));
+      else if(id==='keepbox') pendingToBox();
+      else if(id==='relnew') pendingRelease(); break;
   }
 }
 function canvasPos(e){
@@ -1172,13 +1220,12 @@ cv.addEventListener('pointerdown', e=>{ e.preventDefault(); const p=canvasPos(e)
 window.addEventListener('keydown', e=>{
   if(e.key===' '){ if(G.state==='battle') G.speed=G.speed>=3?1:G.speed+1; e.preventDefault(); }
   const n=parseInt(e.key);
-  if(n>=1 && n<=3){
-    // map number to first N buttons of current choice-like states
-    const list=G.buttons.filter(b=>b.enabled);
-    // for choice/crossroads/nest, pick the nth actionable
-    if(G.state==='choice'){ [ 'catch','kill','release' ][n-1] && onClickById(['catch','kill','release'][n-1]); }
-    else if(G.state==='crossroads'){ onClickById('x'+(n-1)); }
-    else if(G.state==='nest'){ onClickById('nest_'+(n-1)); }
+  if(n>=1 && n<=4){
+    // map number to the nth actionable button of choice-like states
+    if(n<=3 && G.state==='choice'){ onClickById(['catch','kill','release'][n-1]); }
+    else if(n<=3 && G.state==='crossroads'){ onClickById('x'+(n-1)); }
+    else if(n<=3 && G.state==='nest'){ onClickById('nest_'+(n-1)); }
+    else if(G.state==='swapchoice'){ onClickById('swapout_'+(n-1)); }
   }
 });
 function onClickById(id){ const b=G.buttons.find(x=>x.id===id && x.enabled); if(b){ const cx=b.x+2,cy=b.y+2; onClick(cx,cy);} }
