@@ -255,6 +255,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.wildlife = { seen: ['robin'] }; // satisfies the wildlife life-list goal
   g.silks = { primary: 'crimson', secondary: 'gold', pattern: 'sash', emblem: 'star', custom: true }; // satisfies the stable-colours goal
   g.stats.birthdays = 1; // satisfies the birthday goal
+  g.stats.vetReports = 1; // satisfies the vet health-report goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5067,6 +5068,54 @@ function studGame(day) {
   ok(ach && !ach.check(gg), 'Party Planner needs ten birthdays');
   gg.stats.birthdays = 10;
   ok(ach.check(gg), 'ten birthdays unlock Party Planner');
+}
+{
+  // ---- Visiting-vet health-check report card ----
+  // reportGrade banding
+  ok(HR.reportGrade(100).letter === 'A+' && HR.reportGrade(90).letter === 'A' && HR.reportGrade(80).letter === 'B', 'high scores grade A/A+/B');
+  ok(HR.reportGrade(65).letter === 'C' && HR.reportGrade(50).letter === 'D' && HR.reportGrade(20).letter === 'F', 'low scores grade C/D/F');
+  ok(HR.reportGrade(-5).letter === 'F' && HR.reportGrade(999).letter === 'A+', 'grade is clamped for out-of-range scores');
+  const g = HR.freshGame();
+  // a well-kept horse grades well
+  const well = HR.mkHorse({ breed: 'arabian', age: 24, health: 98, happy: 96 });
+  for (const id of HR.NEED_IDS) well.needs = Object.assign(well.needs || {}, { [id]: 96 }); well.bond = 90; g.horses.push(well);
+  const rw = HR.healthReport(g, well);
+  ok(rw.categories.length === 4 && rw.categories.every(c => c.grade && c.score >= 0 && c.score <= 100), 'a report has four graded categories, each 0..100');
+  ok(rw.overall.score >= 86 && rw.overall.grade.letter[0] === 'A' && !rw.needsAttention, 'a well-kept horse grades A and needs no attention');
+  ok(Array.isArray(rw.notes) && rw.notes.length >= 1, 'a report carries vet notes');
+  // a neglected/unwell horse grades poorly, flags attention, and recommends care
+  const sick = HR.mkHorse({ breed: 'mustang', age: 24, health: 30, happy: 25 });
+  sick.needs = { groom: 15, exercise: 20, hooves: 10, rest: 25, bond: 20 }; sick.bond = 10; g.horses.push(sick);
+  const rs = HR.healthReport(g, sick);
+  ok(rs.overall.score < rw.overall.score && rs.needsAttention, 'an unwell horse grades lower and flags attention');
+  ok(rs.notes.join(' ').toLowerCase().indexOf('vet') >= 0 || rs.notes.some(n => /unwell|attention/i.test(n)), 'the report recommends veterinary attention');
+  // a senior horse gets an age-appropriate note without being penalised as neglect
+  const old = HR.mkHorse({ breed: 'welsh', age: 50, health: 90, happy: 88 }); g.horses.push(old);
+  ok(HR.healthReport(g, old).notes.some(n => /senior/i.test(n)), 'a senior horse gets a gentle-workload note');
+  // determinism + read-only (warm up first so lazy needsInit has run, then assert no further mutation)
+  HR.healthReport(g, well); HR.healthReport(g, sick); HR.herdHealthSummary(g);
+  const snap = JSON.stringify(g);
+  const a = JSON.stringify(HR.healthReport(g, well)), b = JSON.stringify(HR.healthReport(g, well));
+  ok(a === b, 'healthReport is deterministic');
+  ok(JSON.stringify(g) === snap, 'reading a report never mutates the game after needs are initialised');
+  // herd summary
+  const sum = HR.herdHealthSummary(g);
+  ok(sum.count === g.horses.length && typeof sum.avgScore === 'number' && sum.needAttention >= 1, 'the herd summary counts horses and flags those needing attention');
+  ok(sum.worst && sum.worst.id === sick.id, 'the worst-case horse is the unwell one');
+  ok(sum.rows.length === g.horses.length && sum.rows[0].score <= sum.rows[sum.rows.length - 1].score, 'the herd rows are sorted worst-first');
+  // Clean Bill achievement: needs a herd of 3+ all graded A
+  const gA = HR.freshGame(); gA.horses = [];
+  for (let i = 0; i < 3; i++) { const hh = HR.mkHorse({ breed: 'arabian', age: 24, health: 99, happy: 99, id: 'a' + i }); hh.needs = { groom: 99, exercise: 99, hooves: 99, rest: 99, bond: 99 }; hh.bond = 95; gA.horses.push(hh); }
+  const cb = HR.ACHIEVEMENTS.find(x => x.id === 'cleanbill');
+  ok(cb && cb.check(gA), 'a fully A-graded herd of three unlocks Clean Bill of Health');
+  gA.horses[0].health = 20; gA.horses[0].happy = 15; gA.horses[0].needs = { groom: 10, exercise: 10, hooves: 10, rest: 10, bond: 10 };
+  ok(!cb.check(gA), 'one poorly horse breaks the Clean Bill');
+  // sparse safety + the goal
+  ok(HR.healthReport({}, null).overall && HR.herdHealthSummary({}).count === 0, 'the report card is safe on a sparse game');
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'vet1').done(gv), 'the vet goal is unmet before reading a report');
+  gv.stats.vetReports = 1;
+  ok(HR.GOALS.find(x => x.id === 'vet1').done(gv), 'reading a health report satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
