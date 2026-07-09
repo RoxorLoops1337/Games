@@ -252,6 +252,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.noticeViews = 1; // satisfies the notice-board goal
   g.stats.feedPlans = 1; // satisfies the feed-planner goal
   g.nameBoard = { saved: [{ name: 'Comet', theme: 'classic', day: 1 }] }; // satisfies the name-shortlist goal
+  g.wildlife = { seen: ['robin'] }; // satisfies the wildlife life-list goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -4923,6 +4924,52 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'name1').done(gv), 'the name goal is unmet before shortlisting');
   HR.saveNameIdea(gv, 'Willow', 'nature');
   ok(HR.GOALS.find(x => x.id === 'name1').done(gv), 'shortlisting a name satisfies the goal');
+}
+{
+  // ---- Paddock wildlife / bird-watching log ----
+  const g = HR.freshGame(); g.day = 3;
+  ok(HR.WILDLIFE.length >= 10 && HR.WILDLIFE.every(w => w.id && w.emoji && w.blurb && w.rarity >= 1 && w.rarity <= 4), 'the wildlife catalogue is well-formed');
+  const today = HR.wildlifeToday(g);
+  ok(Array.isArray(today), 'wildlifeToday returns a list');
+  ok(today.every(s => s.name && s.emoji && s.blurb && s.rarityName), 'each sighting carries name, emoji, blurb and rarity name');
+  // rarest-first ordering
+  for (let i = 1; i < today.length; i++) ok(today[i - 1].rarity >= today[i].rarity, 'sightings are ordered rarest-first');
+  // habitat affinity: sowing the meadow can only help pollinator/bird chances, never hurt
+  const bare = HR.freshGame(); bare.day = 20; bare.garden = { sown: false, growth: 0, lastHarvest: 0 };
+  const sown = HR.freshGame(); sown.day = 20; sown.garden = { sown: true, growth: 5, lastHarvest: 0 };
+  const bf = HR.wildlifeDef('butterfly');
+  ok(HR.wildlifeChance(sown, bf, 20) >= HR.wildlifeChance(bare, bf, 20), 'a sown meadow never lowers a pollinator’s sighting chance');
+  // determinism: same day → same sightings
+  ok(JSON.stringify(HR.wildlifeToday(g)) === JSON.stringify(HR.wildlifeToday(g)), 'wildlifeToday is deterministic for a fixed day');
+  // find a (day, species) that is genuinely visible, then spot it
+  let found = null;
+  for (let d = 1; d <= 56 && !found; d++) { const gg = HR.freshGame(); gg.day = d; const t = HR.wildlifeToday(gg); if (t.length) found = { g: gg, id: t[0].id }; }
+  ok(found, 'some creature is visible within the first season-cycle');
+  const rep0 = found.g.rep, r = HR.spotSpecies(found.g, found.id);
+  ok(r.ok && r.newSpecies, 'a visible creature can be spotted');
+  ok(HR.lifeList(found.g).indexOf(found.id) >= 0, 'the spotted creature is added to the life-list');
+  ok(found.g.rep === rep0 + HR.WILDLIFE_REP, 'a new spot gives the tiny bounded rep nudge');
+  ok(!HR.spotSpecies(found.g, found.id).ok, 'a creature already logged cannot be re-spotted');
+  // an out-of-season / absent creature cannot be spotted
+  let absent = null;
+  { const gg = HR.freshGame(); gg.day = found.g.day; for (const w of HR.WILDLIFE) if (!HR.wildlifeVisible(gg, w, gg.day)) { absent = { g: gg, id: w.id }; break; } }
+  if (absent) ok(!HR.spotSpecies(absent.g, absent.id).ok, 'a creature not around today cannot be spotted');
+  // read-only: today/chance/progress never mutate; only spotSpecies does
+  const g2 = HR.freshGame(); g2.day = 15; const snap = JSON.stringify(g2);
+  HR.wildlifeToday(g2); HR.wildlifeChance(g2, HR.WILDLIFE[0], 15); HR.wildlifeProgress(g2); HR.lifeList(g2);
+  ok(JSON.stringify(g2) === snap, 'reading wildlife state never mutates the game');
+  // progress + sparse safety
+  ok(HR.wildlifeProgress(g2).total === HR.WILDLIFE.length && !HR.wildlifeProgress(g2).complete, 'progress reports the full total and starts incomplete');
+  ok(Array.isArray(HR.wildlifeToday({})) && HR.normWildlifeLog({}).seen.length === 0, 'the wildlife log is safe on a sparse game');
+  // the goal fires on the first spot; the achievement needs the full log
+  const gw = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'wild1').done(gw), 'the wildlife goal is unmet before spotting');
+  gw.wildlife = { seen: ['robin'] };
+  ok(HR.GOALS.find(x => x.id === 'wild1').done(gw), 'a first sighting satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'lifelister');
+  ok(ach && !ach.check(gw), 'Life-Lister needs more than one species');
+  gw.wildlife = { seen: HR.WILDLIFE.map(w => w.id) };
+  ok(ach.check(gw), 'a complete life-list unlocks Life-Lister');
 }
 {
   // read-only + determinism + sparse safety

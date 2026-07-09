@@ -351,6 +351,7 @@
     <button class="sbtn" id="noticeBtn" title="Notice-board — regional news & rival gossip" style="margin-right:4px">📰</button>
     <button class="sbtn" id="feedBtn" title="Feed planner — hay/grain/supplement nutrition advisor" style="margin-right:4px">📋</button>
     <button class="sbtn" id="nameBtn" title="Name generator — name ideas & inspiration board" style="margin-right:4px">✨</button>
+    <button class="sbtn" id="wildBtn" title="Paddock wildlife — daily sightings & life-list" style="margin-right:4px">🦋</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -2263,7 +2264,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, wildlife:{seen:[]}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -3855,6 +3856,72 @@ function harvestGarden(game){ if(!game) return {ok:false,why:'No ranch.'};
   game.stats=game.stats||{}; game.stats.harvests=(game.stats.harvests||0)+1; game.stats.hayGrown=(game.stats.hayGrown||0)+hay;
   game.garden={ sown:true, growth:0, lastHarvest:(game.day||0) };
   return {ok:true, hay, happy}; }
+
+// ---------- Paddock wildlife / bird-watching log (READ-ONLY deterministic sightings + a life-list) ----------
+// Each day a small, deterministic set of visiting critters can be spotted around the ranch, derived from
+// EXISTING state: game.day + the season + the day's weather + whether the hay meadow is sown / the paddock has
+// enrichment (both draw more wildlife). Each has a rarity and a flavour blurb. The player keeps a bounded
+// life-list of species they've spotted; spotting a NEW species gives a tiny, bounded one-time rep nudge (at
+// most WILDLIFE.length·WILDLIFE_REP over the whole game). Deterministic — no Date/Math.random.
+const WILDLIFE=[
+  {id:'robin',     name:'Robin',         emoji:'🐦',   rarity:1, seasons:['spring','summer','autumn','winter'], weather:[],                     blurb:'A bold robin hops along the fence rail, eyeing the yard.'},
+  {id:'sparrow',   name:'House Sparrow',  emoji:'🐤',   rarity:1, seasons:['spring','summer','autumn','winter'], weather:[],                     blurb:'A chattering flock of sparrows squabbles in the hedge.'},
+  {id:'butterfly', name:'Butterfly',      emoji:'🦋',   rarity:1, seasons:['spring','summer'],                   weather:['sunny'],  garden:true, blurb:'Butterflies drift lazily over the paddock flowers.'},
+  {id:'bee',       name:'Bumblebee',      emoji:'🐝',   rarity:1, seasons:['spring','summer'],                   weather:['sunny','cloudy'], garden:true, blurb:'Fat bumblebees work the meadow blooms.'},
+  {id:'fieldmouse',name:'Field Mouse',    emoji:'🐭',   rarity:2, seasons:['spring','summer','autumn'],          weather:[],                     blurb:'A tiny field mouse darts between the hay bales.'},
+  {id:'dragonfly', name:'Dragonfly',      emoji:'🪰',   rarity:2, seasons:['summer'],                            weather:['sunny'],  garden:true, blurb:'A jewel-blue dragonfly hovers by the water trough.'},
+  {id:'swallow',   name:'Swallow',        emoji:'🕊️',   rarity:2, seasons:['spring','summer'],                   weather:['sunny','cloudy'],     blurb:'Swallows swoop low over the arena, chasing flies.'},
+  {id:'hedgehog',  name:'Hedgehog',       emoji:'🦔',   rarity:2, seasons:['summer','autumn'],                   weather:[],         enrich:true, blurb:'A hedgehog snuffles along the muck heap at dusk.'},
+  {id:'squirrel',  name:'Red Squirrel',   emoji:'🐿️',   rarity:2, seasons:['autumn'],                            weather:[],                     blurb:'A red squirrel buries acorns by the tack room.'},
+  {id:'kestrel',   name:'Kestrel',        emoji:'🦅',   rarity:3, seasons:['spring','summer','autumn','winter'], weather:['sunny','cloudy'],     blurb:'A kestrel hangs motionless over the far paddock.'},
+  {id:'owl',       name:'Barn Owl',       emoji:'🦉',   rarity:3, seasons:['autumn','winter'],                   weather:[],                     blurb:'A ghost-pale barn owl quarters the field at last light.'},
+  {id:'fox',       name:'Red Fox',        emoji:'🦊',   rarity:3, seasons:['autumn','winter'],                   weather:[],         enrich:true, blurb:'A red fox trots along the treeline, glancing back once.'},
+  {id:'pheasant',  name:'Pheasant',       emoji:'🐓',   rarity:3, seasons:['autumn','winter'],                   weather:['cloudy'],             blurb:'A cock pheasant struts from the long grass, all colour.'},
+  {id:'deer',      name:'Roe Deer',       emoji:'🦌',   rarity:4, seasons:['spring','autumn','winter'],          weather:['cloudy','rain','snow'], blurb:'A roe deer steps from the woods to graze the verge.'},
+  {id:'kingfisher',name:'Kingfisher',     emoji:'🐦‍⬛', rarity:4, seasons:['spring','summer'],                   weather:['sunny'],  garden:true, blurb:'A kingfisher flashes electric-blue along the stream.'},
+  {id:'badger',    name:'Badger',         emoji:'🦡',   rarity:4, seasons:['spring','summer','autumn'],          weather:[],                     blurb:'Fresh diggings and a striped snout — a badger passed in the night.'},
+];
+const WILDLIFE_REP=2;      // tiny one-time rep per NEW species (bounded: ≤ WILDLIFE.length·WILDLIFE_REP lifetime)
+const WL_BASE={1:55,2:32,3:16,4:7}; // base daily sighting chance (%) by rarity
+const WL_RARITY_NAME={1:'Common',2:'Uncommon',3:'Rare',4:'Elusive'};
+function wildlifeDef(id){ return WILDLIFE.find(w=>w.id===id)||null; }
+function _wlHash(s){ let h=2166136261>>>0; s=''+(s||''); for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),16777619)>>>0; } return h>>>0; }
+// deterministic sighting chance for a species on a day, biased by season / weather / habitat (0..100)
+function wildlifeChance(game, sp, day){
+  if(!sp) return 0; day=Math.floor(day||1);
+  const s=seasonOf(day).id, wx=weatherFor(day).id;
+  let base=WL_BASE[sp.rarity]||10;
+  if(sp.seasons && sp.seasons.indexOf(s)<0) base=Math.round(base*0.25); // off-season: much rarer
+  if(sp.weather && sp.weather.length) base += (sp.weather.indexOf(wx)>=0)?12:-8;
+  if(sp.garden && normGarden(game&&game.garden).sown) base += 14;       // a sown meadow draws pollinators & birds
+  if(sp.enrich && ownedEnrichment(game).length>0) base += 10;           // enrichment / cover draws small mammals
+  return clamp(base,3,92);
+}
+function wildlifeVisible(game, sp, day){ if(!sp) return false; day=Math.floor(day||1);
+  return (hashDay((day*131)^_wlHash(sp.id))%100) < wildlifeChance(game,sp,day); }
+// the deterministic set of creatures around the ranch today (rarest first)
+function wildlifeToday(game){ const day=Math.floor((game&&game.day)||1);
+  return WILDLIFE.filter(sp=>wildlifeVisible(game,sp,day))
+    .sort((a,b)=>(b.rarity-a.rarity)||(a.id<b.id?-1:1))
+    .map(sp=>({id:sp.id, name:sp.name, emoji:sp.emoji, rarity:sp.rarity, rarityName:WL_RARITY_NAME[sp.rarity], blurb:sp.blurb})); }
+function normWildlifeLog(game){ if(!game) return {seen:[]}; if(!game.wildlife||typeof game.wildlife!=='object') game.wildlife={seen:[]};
+  if(!Array.isArray(game.wildlife.seen)) game.wildlife.seen=[];
+  game.wildlife.seen=game.wildlife.seen.filter(id=>!!wildlifeDef(id)).filter((v,i,a)=>a.indexOf(v)===i);
+  return game.wildlife; }
+function lifeList(game){ return normWildlifeLog(game).seen.slice(); }
+function hasSpotted(game, id){ return normWildlifeLog(game).seen.indexOf(id)>=0; }
+// spot a creature that's actually around today; records it on the life-list (one-time tiny rep for a NEW species)
+function spotSpecies(game, id){ const sp=wildlifeDef(id); if(!sp) return {ok:false,why:'Unknown creature.'};
+  const day=Math.floor((game&&game.day)||1), log=normWildlifeLog(game);
+  if(log.seen.indexOf(id)>=0) return {ok:false, already:true, why:'Already on your life-list.'};
+  if(!wildlifeVisible(game,sp,day)) return {ok:false, why:'Not around today — look again another day.'};
+  log.seen.push(id);
+  game.rep=(game.rep||0)+WILDLIFE_REP; // a tiny, bounded thrill-of-the-spot nudge
+  game.stats=game.stats||{}; game.stats.wildlifeSpots=(game.stats.wildlifeSpots||0)+1;
+  return {ok:true, species:sp, rep:WILDLIFE_REP, newSpecies:true}; }
+function wildlifeProgress(game){ const seen=lifeList(game).length, total=WILDLIFE.length;
+  return { seen, total, pct: total?seen/total:0, complete: seen>=total }; }
+
 // ---------- Visiting farrier / traveling blacksmith (a time-limited rotating smith stall) ----------
 // Like the general store's restock cycle, but themed to a traveling smith who ARRIVES for a few days
 // each cycle with a small rotating set of deals — deterministic (keyed to the visit index via
@@ -4152,6 +4219,7 @@ const ACHIEVEMENTS=[
   {id:'aspirant',       icon:'📌', name:'Aspirations Realised', desc:'Complete three of your pinned aspirations.',   check:g=>((g.stats&&g.stats.aspirationsMet)||0)>=3},
   {id:'spitpolish',     icon:'🧽', name:'Spit &amp; Polish',        desc:'Give twenty grooming sessions.',               check:g=>((g.stats&&g.stats.grooms)||0)>=20},
   {id:'monumental',     icon:'🗿', name:'Monumental',           desc:'Raise five commemorative monuments.',          check:g=>monumentsUnlockedCount(g)>=5},
+  {id:'lifelister',     icon:'🦋', name:'Life-Lister',           desc:'Spot every creature in the paddock wildlife log.', check:g=>wildlifeProgress(g).complete},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4412,6 +4480,7 @@ const GOALS=[
   {id:'notice1', desc:'Read the stable notice-board (📰)',              tip:g=>((g.stats&&g.stats.noticeViews)||0)+'/1',done:g=>((g.stats&&g.stats.noticeViews)||0)>=1,         reward:{money:250,rep:10}},
   {id:'feed1',   desc:'Draw up a feed plan (📋)',                       tip:g=>((g.stats&&g.stats.feedPlans)||0)+'/1',done:g=>((g.stats&&g.stats.feedPlans)||0)>=1,           reward:{money:300,rep:10}},
   {id:'name1',   desc:'Shortlist a name idea (✨)',                     tip:g=>nameShortlist(g).length+' saved',done:g=>nameShortlist(g).length>=1,                       reward:{money:200,rep:10}},
+  {id:'wild1',   desc:'Spot your first paddock visitor (🦋)',          tip:g=>lifeList(g).length+' species',   done:g=>lifeList(g).length>=1,                                  reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4607,6 +4676,7 @@ const HR = {
   GOSSIP_TEMPLATES, WEATHER_CHATTER, rivalBoast, weatherChatter, rivalGossip, standingHeadline, noticeBoard, regionHeadlines,
   FEED_DIMS, FEED_CATS, FEED_ITEMS, feedItemDef, feedItemsIn, feedCatDef, idealProfile, mixSupply, dietScore, dietTier, suggestMix, normDiet, validMix, dietPlanFor, setDietPlan, nutritionPlan,
   NAME_THEMES, COAT_HINTS, BREED_HINTS, NAME_SHORTLIST_CAP, nameThemeDef, namePoolFor, nameIdeasFor, nameReason, normNameBoard, nameShortlist, saveNameIdea, removeNameIdea,
+  WILDLIFE, WILDLIFE_REP, WL_RARITY_NAME, wildlifeDef, wildlifeChance, wildlifeVisible, wildlifeToday, normWildlifeLog, lifeList, hasSpotted, spotSpecies, wildlifeProgress,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -4722,6 +4792,7 @@ function load(){
     G.monuments=normMonuments(G); checkMonuments(G); // commemorative monuments — stamp any milestone already reached
     G.diet=normDiet(G); { const live={}; for(const h of (G.horses||[])) if(h&&h.id) live[h.id]=1; for(const k of Object.keys(G.diet.plans)) if(!live[k]||!validMix(G.diet.plans[k])) delete G.diet.plans[k]; } // feed-mix plans — prune stale/invalid
     G.nameBoard=normNameBoard(G); // name-idea shortlist — safe on old saves
+    G.wildlife=normWildlifeLog(G); // paddock wildlife life-list — safe on old saves
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -6993,6 +7064,32 @@ function openNameGen(){
     burst('✏️✨',10); playSfx('coin'); toast('✏️ Renamed to “'+res.name+'”.','good');
     const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); if(typeof renderTab==='function') renderTab(); openNameGen(); });
 }
+function openWildlife(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const today=wildlifeToday(G), prog=wildlifeProgress(G);
+  const rarityCol={1:'var(--ink2)',2:'var(--good)',3:'var(--gold2)',4:'#c98bff'};
+  const rows=today.length?today.map(sp=>{ const seen=hasSpotted(G,sp.id);
+    return '<div class="lbrow"><div class="hface" style="background:none;font-size:22px;display:flex;align-items:center;justify-content:center">'+sp.emoji+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(sp.name)+' <span class="pill" style="color:'+(rarityCol[sp.rarity]||'var(--ink2)')+'">'+esc(sp.rarityName)+'</span></div>'+
+      '<div class="lbsub">'+esc(sp.blurb)+'</div></div>'+
+      (seen?'<span class="pill" style="color:var(--good)">✓ Logged</span>':'<button class="btn sm blue" data-wlspot="'+esc(sp.id)+'">🔭 Spot</button>')+
+      '</div>'; }).join('')
+    :'<div class="empty">All quiet around the paddock today — try again another day, or sow the meadow to draw more wildlife.</div>';
+  // life-list gallery (spotted vs still-to-find)
+  const gallery=WILDLIFE.map(sp=>{ const seen=hasSpotted(G,sp.id);
+    return '<span class="wlchip" title="'+esc(seen?sp.name:'Not yet spotted')+'" style="'+(seen?'':'opacity:.35;filter:grayscale(1)')+'">'+sp.emoji+' '+(seen?esc(sp.name):'???')+'</span>'; }).join(' ');
+  modal('<h3>🦋 Paddock Wildlife</h3>'+
+    '<div class="msg">Keep an eye on the hedgerows and paddock edges — different creatures visit with the season and the weather. Spot one to add it to your life-list. Sowing the meadow and adding paddock enrichment draws even more.</div>'+
+    '<div class="swlabel">👀 Around today</div><div>'+rows+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">📓 Life-list <span class="pill">'+prog.seen+'/'+prog.total+'</span></div><div class="pips">'+gallery+'</div>'+
+    (prog.complete?'<div class="hbreed" style="color:var(--good);margin-top:6px">🦋 You’ve spotted every creature — a complete life-list!</div>':'')+
+    '<div class="btnrow"><button class="btn ghost" id="wlClose" style="width:100%">Done</button></div>');
+  $('wlClose').onclick=closeModal;
+  document.querySelectorAll('[data-wlspot]').forEach(b=>b.onclick=()=>{ const r=spotSpecies(G, b.getAttribute('data-wlspot'));
+    if(!r.ok){ toast(r.why,'info'); return; } burst(r.species.emoji+'✨',12); playSfx('coin');
+    toast('🔭 Spotted a '+r.species.name+'! +'+r.rep+'⭐','good');
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); openWildlife(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -7895,6 +7992,7 @@ function boot(){
   { const ntb=$('noticeBtn'); if(ntb) ntb.onclick=openNoticeBoard; }
   { const fdb=$('feedBtn'); if(fdb) fdb.onclick=openNutrition; }
   { const ngb=$('nameBtn'); if(ngb) ngb.onclick=openNameGen; }
+  { const wlb=$('wildBtn'); if(wlb) wlb.onclick=openWildlife; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
