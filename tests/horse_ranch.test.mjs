@@ -235,6 +235,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.ceremonies = 1; // satisfies the coming-of-age ceremony goal
   g.stats.labTests = 10; // satisfies the genetics-lab goal
   g.stats.profilesRead = 10; // satisfies the personality-profile goal
+  g.stats.lessons = 1000; // satisfies the riding-curriculum goal (past Lead-Rein)
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -604,6 +605,54 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const g = HR.freshGame(); g.teacherMarket = [];
   HR.restockTeachers(g, rng(2));
   ok(g.teacherMarket.length >= 1, 'restockTeachers refills applicants');
+}
+{
+  // ---- riding-lesson curriculum / student progression ----
+  const g = HR.freshGame();
+  // fresh school sits at the bottom tier
+  ok(HR.curriculumTierIndex(g) === 0 && HR.curriculumTier(g).id === 'leadrein', 'a new school starts at Lead-Rein');
+  ok(HR.curriculumFeeMult(g) === 1, 'tier-0 curriculum fee multiplier is exactly 1.0');
+  ok(HR.schoolLessonsTaught(g) === 0, 'no lessons taught yet');
+  // climbs at the configured thresholds
+  const tierAt = n => { const gg = HR.freshGame(); gg.stats.lessons = n; return HR.curriculumTier(gg).id; };
+  ok(tierAt(59) === 'leadrein' && tierAt(60) === 'beginner', 'crossing 60 lessons reaches Beginner');
+  ok(tierAt(200) === 'interm' && tierAt(500) === 'advanced' && tierAt(1000) === 'squad', 'higher thresholds reach Intermediate/Advanced/Squad');
+  ok(tierAt(999999) === 'squad', 'the top tier is the ceiling');
+  // fee multiplier is bounded and reflected in lessonFee
+  for (const tt of HR.CURRICULUM_TIERS) { const gg = HR.freshGame(); gg.stats.lessons = tt.minLessons;
+    ok(HR.curriculumFeeMult(gg) <= HR.CURRICULUM_FEE_CAP + 1e-9, 'curriculum fee multiplier never exceeds the cap at ' + tt.id); }
+  const gLow = HR.freshGame(); gLow.rep = 500; gLow.stats.lessons = 0;
+  const gHigh = HR.freshGame(); gHigh.rep = 500; gHigh.stats.lessons = 1000;
+  ok(HR.lessonFee(gHigh) > HR.lessonFee(gLow), 'a higher curriculum tier lifts the lesson fee');
+  ok(HR.lessonFee(gHigh) <= Math.ceil(HR.lessonFee(gLow) * HR.CURRICULUM_FEE_CAP) + 1, 'the lesson-fee lift stays within the bounded cap');
+  // progress fraction toward the next tier
+  const gp = HR.freshGame(); gp.stats.lessons = 130; // Beginner(60) → Intermediate(200): 70/140
+  const cp = HR.curriculumProgress(gp);
+  ok(cp.tier.id === 'beginner' && cp.next.id === 'interm', 'progress reports the current + next tier');
+  ok(cp.have === 70 && cp.need === 140 && Math.abs(cp.frac - 0.5) < 1e-9, 'progress fraction toward the next tier is exact');
+  ok(cp.toNext === 70, 'lessons-to-next-tier is correct');
+  const capd = HR.curriculumProgress((() => { const gg = HR.freshGame(); gg.stats.lessons = 5000; return gg; })());
+  ok(capd.next === null && capd.frac === 1, 'a maxed curriculum reports no next tier and full progress');
+  // the cumulative stat increments through advanceDay when lessons resolve
+  const ga = HR.freshGame(); ga.feed = 9999; ga.rep = 300;
+  const tt = HR.mkTeacher(ga, rng(4)); tt.capacity = 6; tt.salary = 20; ga.teachers.push(tt);
+  const before = HR.schoolLessonsTaught(ga);
+  HR.advanceDay(ga, rng(6));
+  ok(HR.schoolLessonsTaught(ga) > before, 'teaching lessons increments the cumulative curriculum counter');
+  // safe on an old/sparse save with no stats.lessons field
+  ok(HR.curriculumTier({}).id === 'leadrein' && HR.curriculumFeeMult({}) === 1, 'curriculum is safe on a sparse/old save');
+  ok(HR.schoolLessonsTaught({ stats: {} }) === 0, 'missing lessons field defaults to 0');
+  // deterministic
+  const d1 = HR.freshGame(); d1.stats.lessons = 340; const d2 = HR.freshGame(); d2.stats.lessons = 340;
+  ok(JSON.stringify(HR.curriculumProgress(d1)) === JSON.stringify(HR.curriculumProgress(d2)), 'curriculumProgress is deterministic');
+  // goal + achievement
+  const gg1 = HR.freshGame(); gg1.stats.lessons = 60;
+  ok(HR.GOALS.find(x => x.id === 'curric1').done(gg1), 'curric1 goal completes past Lead-Rein');
+  const gg0 = HR.freshGame(); gg0.stats.lessons = 30;
+  ok(!HR.GOALS.find(x => x.id === 'curric1').done(gg0), 'curric1 not met below the Beginner threshold');
+  const gg2 = HR.freshGame(); gg2.stats.lessons = 1000;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'headofschool').check(gg2), 'Head of School unlocks at the Competition Squad tier');
+  ok(HR.GOALS.filter(x => x.id === 'curric1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'headofschool').length === 1, 'new curriculum goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
