@@ -256,6 +256,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.silks = { primary: 'crimson', secondary: 'gold', pattern: 'sash', emblem: 'star', custom: true }; // satisfies the stable-colours goal
   g.stats.birthdays = 1; // satisfies the birthday goal
   g.stats.vetReports = 1; // satisfies the vet health-report goal
+  g.stats.rotations = 1; // satisfies the paddock-rotation goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5116,6 +5117,56 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'vet1').done(gv), 'the vet goal is unmet before reading a report');
   gv.stats.vetReports = 1;
   ok(HR.GOALS.find(x => x.id === 'vet1').done(gv), 'reading a health report satisfies the goal');
+}
+{
+  // ---- Paddock rotation / grazing map ----
+  ok(HR.PADDOCKS.length >= 3 && HR.PADDOCKS.every(p => p.id && p.name && p.emoji), 'the paddock catalogue is populated');
+  const g = HR.freshGame(); g.day = 1;
+  const rot = HR.normRotation(g);
+  ok(HR.paddockDef(rot.active) && rot.since && typeof rot.since === 'object', 'a fresh ranch has a valid active field');
+  // grass levels are bounded 0..100 for every field
+  const st = HR.paddockState(g);
+  ok(st.length === HR.PADDOCKS.length && st.every(f => f.level >= 0 && f.level <= 100 && f.status), 'every field has a bounded grass level and a status');
+  ok(st.filter(f => f.active).length === 1, 'exactly one field is the active turnout');
+  // a rested (never-grazed) field is pristine; the active field grazes down over time
+  const active0 = HR.activePaddock(g).id;
+  const rested = HR.PADDOCKS.find(p => p.id !== active0).id;
+  ok(HR.grazeLevel(g, rested) === 100, 'a never-grazed field reads as pristine');
+  const early = HR.grazeLevel(g, active0); g.day = 6; const later = HR.grazeLevel(g, active0);
+  ok(later < early, 'the active field grazes down as days pass');
+  ok(HR.grazeLevel(g, active0) >= 8, 'grass never grazes below the floor');
+  // determinism + read-only (warm up so normRotation has initialised, then assert no mutation)
+  HR.paddockState(g); HR.bestPaddock(g);
+  const snap = JSON.stringify(g);
+  ok(JSON.stringify(HR.paddockState(g)) === JSON.stringify(HR.paddockState(g)), 'paddockState is deterministic');
+  HR.grazeLevel(g, active0); HR.bestPaddock(g); HR.activePaddock(g);
+  ok(JSON.stringify(g) === snap, 'reading the grazing map never mutates the game');
+  // bestPaddock recommends a non-active, best-rested field
+  const best = HR.bestPaddock(g);
+  ok(best && best.id !== HR.activePaddock(g).id, 'bestPaddock recommends a field other than the active one');
+  // rotateTo moves the herd, regrows the field left behind over time, and counts a rotation
+  const rots0 = (g.stats.rotations || 0), leaving = HR.activePaddock(g).id;
+  const r = HR.rotateTo(g, best.id);
+  ok(r.ok && HR.activePaddock(g).id === best.id, 'rotateTo moves the herd to the chosen field');
+  ok((g.stats.rotations || 0) === rots0 + 1, 'a rotation is counted');
+  ok(!HR.rotateTo(g, best.id).ok, 'rotating onto the field already grazed is rejected');
+  ok(!HR.rotateTo(g, 'nope').ok, 'rotating to an unknown field is rejected');
+  // the field just left now rests and regrows as days pass
+  const restLvl0 = HR.grazeLevel(g, leaving); g.day += 8; const restLvl1 = HR.grazeLevel(g, leaving);
+  ok(restLvl1 >= restLvl0, 'a rested field regrows (or holds) over time');
+  // winter regrowth is slower than spring
+  ok(HR.paddockRegrowPerDay(1) > HR.paddockRegrowPerDay(HR.SEASON_LEN * 3 + 1), 'grass regrows slower in winter than spring');
+  // sparse safety
+  ok(Array.isArray(HR.paddockState({})) && HR.normRotation({}).active, 'the grazing map is safe on a sparse game');
+  // the goal fires after a rotation
+  const gv2 = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'graze1').done(gv2), 'the grazing goal is unmet before rotating');
+  HR.rotateTo(gv2, HR.PADDOCKS.find(p => p.id !== HR.normRotation(gv2).active).id);
+  ok(HR.GOALS.find(x => x.id === 'graze1').done(gv2), 'rotating paddocks satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'grazier');
+  ok(ach && !ach.check(gv2), 'Rotational Grazier needs fifteen rotations');
+  gv2.stats.rotations = 15;
+  ok(ach.check(gv2), 'fifteen rotations unlock Rotational Grazier');
 }
 {
   // read-only + determinism + sparse safety
