@@ -245,6 +245,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.mascot = { type: 'barncat', name: 'Tom' }; // satisfies the stable-mascot goal
   g.garden = { sown: true, growth: 0, lastHarvest: 0 }; // satisfies the hay-meadow goal
   g.stats.smithDeals = 1; // satisfies the visiting-farrier goal
+  g.stats.spotlightViews = 1; // satisfies the horse-of-the-month goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -1147,6 +1148,60 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ga = HR.freshGame(); ga.stats.smithDeals = 10;
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'forgeregular').check(ga), 'Regular at the Forge unlocks at ten deals');
   ok(HR.GOALS.filter(x => x.id === 'smith1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'forgeregular').length === 1, 'new smith goal/achievement ids are unique');
+}
+{
+  // ---- horse of the month spotlight / feature board ----
+  // spotlightScore weights overall/wins/bond/coat sensibly
+  const plain = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 10, happy: 60 });
+  const winner = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 10, happy: 60, wins: 4 });
+  ok(HR.spotlightScore(winner) > HR.spotlightScore(plain), 'wins raise the spotlight score');
+  const fancy = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Cremello', tier: 2 }, bond: 10, happy: 60 });
+  ok(HR.spotlightScore(fancy) > HR.spotlightScore(plain), 'a rare coat raises the score');
+  const bonded = HR.mkHorse({ breed: 'welsh', age: 20, speed: 50, stamina: 50, temperament: 50, coat: { name: 'Bay', tier: 0 }, bond: 90, happy: 60 });
+  ok(HR.spotlightScore(bonded) > HR.spotlightScore(plain), 'a strong bond raises the score');
+  ok(HR.spotlightScore(null) === 0, 'spotlightScore is null-safe');
+  // horseOfTheMonth picks the clear top-score horse regardless of period
+  const g = HR.freshGame();
+  const star = HR.mkHorse({ breed: 'friesian', age: 20, speed: 92, stamina: 88, temperament: 85, coat: { name: 'Black', tier: 0 }, wins: 5, bond: 80, happy: 90, name: 'Onyx' });
+  g.horses = [plain, star, fancy];
+  const s = HR.horseOfTheMonth(g);
+  ok(s && s.name === 'Onyx', 'horseOfTheMonth picks the highest-scoring horse');
+  ok(s.card && s.card.name === 'Onyx' && s.reasons.length >= 1, 'the pick carries a card + reasons');
+  // stable within a period, and the pick can rotate across periods among exact ties
+  g.day = 3; const p1 = HR.horseOfTheMonth(g).name;
+  g.day = 5; const p2 = HR.horseOfTheMonth(g).name; // same herd, same period (both season 1) → wait, day 3 & 5 are same season
+  ok(p1 === p2, 'the pick is stable within a period');
+  // exact-tie rotation across periods
+  const a = HR.mkHorse({ breed: 'welsh', age: 20, speed: 60, stamina: 60, temperament: 60, coat: { name: 'Bay', tier: 0 }, bond: 40, happy: 80, wins: 1, name: 'Twin-A', id: 'ta' });
+  const b = HR.mkHorse({ breed: 'welsh', age: 20, speed: 60, stamina: 60, temperament: 60, coat: { name: 'Bay', tier: 0 }, bond: 40, happy: 80, wins: 1, name: 'Twin-B', id: 'tb' });
+  ok(HR.spotlightScore(a) === HR.spotlightScore(b), 'the twins have identical scores');
+  const gt = HR.freshGame(); gt.horses = [a, b];
+  const picks = new Set();
+  for (let d = 1; d <= HR.SEASON_LEN * 8; d += HR.SEASON_LEN) { gt.day = d; picks.add(HR.horseOfTheMonth(gt).name); }
+  ok(picks.size === 2, 'across periods the spotlight rotates between equally-matched horses');
+  // spotlightBoard: star + honorable mentions (no duplicates)
+  const board = HR.spotlightBoard(g);
+  ok(board.star && board.star.name === 'Onyx' && !board.empty, 'the board features the star');
+  ok(board.mentions.length >= 1 && board.mentions.every(m => m.name !== board.star.name), 'mentions exclude the star + list runners-up');
+  ok(new Set(board.mentions.map(m => m.name)).size === board.mentions.length, 'mentions have no duplicates');
+  // citation is deterministic + mentions the horse
+  const c1 = HR.spotlightCitation(g), c2 = HR.spotlightCitation(g);
+  ok(c1 === c2 && /Onyx/.test(c1), 'the citation is deterministic and names the star');
+  ok(/Year/.test(HR.spotlightPeriod(g).label) && HR.spotlightPeriod(g).label.length > 0, 'the period has a season + year label');
+  // read-only + empty-herd safe
+  const snap = JSON.stringify(g);
+  HR.horseOfTheMonth(g); HR.spotlightBoard(g); HR.spotlightCitation(g); HR.spotlightScore(g.horses[0]);
+  ok(JSON.stringify(g) === snap, 'the spotlight never mutates the game (read-only)');
+  const g0 = HR.freshGame(); g0.horses = [];
+  ok(HR.horseOfTheMonth(g0) === null && HR.spotlightBoard(g0).empty && HR.spotlightCitation(g0) === '', 'an empty herd is safe (no star)');
+  ok(HR.spotlightBoard({}).empty && HR.horseOfTheMonth({}) === null, 'spotlight helpers are safe on a bare game');
+  // goal + achievement
+  const gv = HR.freshGame(); gv.stats.spotlightViews = 1;
+  ok(HR.GOALS.find(x => x.id === 'spot1').done(gv), 'spot1 completes after viewing the board');
+  const gc = HR.freshGame(); gc.horses = [HR.mkHorse({ breed: 'arabian', age: 20, wins: 4, name: 'Champ' })];
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'coverstar').check(gc), 'Cover Star unlocks when a Champion is the pick');
+  ok(!HR.ACHIEVEMENTS.find(a => a.id === 'coverstar').check(g0), 'Cover Star is locked with no horses');
+  ok(HR.GOALS.filter(x => x.id === 'spot1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'coverstar').length === 1, 'new spotlight goal/achievement ids are unique');
 }
 
 // ---- personality traits ----

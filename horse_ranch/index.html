@@ -342,6 +342,7 @@
     <button class="sbtn" id="mascotBtn" title="Stable mascot — adopt a barn companion" style="margin-right:4px">🐾</button>
     <button class="sbtn" id="gardenBtn" title="Hay meadow — grow your own feed" style="margin-right:4px">🌾</button>
     <button class="sbtn" id="smithBtn" title="Visiting farrier — traveling blacksmith stall" style="margin-right:4px;position:relative">🧲<span id="smithBadge" class="hudbadge" style="display:none">!</span></button>
+    <button class="sbtn" id="spotBtn" title="Horse of the Month — the herd's standout" style="margin-right:4px">🌟</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -3622,6 +3623,55 @@ function postcardText(game){
   return ['📮 '+p.title, p.greeting, ''].concat(p.lines).concat(['',
     '— '+p.manager+' · '+p.stamp.season+', Year '+p.stamp.year+' (day '+p.stamp.day+')']).join('\n');
 }
+// ---------- Horse of the Month spotlight / feature board (READ-ONLY deterministic star pick) ----------
+// Each period (a 14-day "month" = one season) the standout horse is chosen by a weighted score of
+// overall + wins + bond + coat tier. Purely derived from the herd + period — no state change, no new
+// persisted data. Deterministic: a clear best always wins; exact ties rotate by period.
+function _spotHash(s){ let h=2166136261>>>0; s=''+(s||''); for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),16777619)>>>0; } return h>>>0; }
+function spotlightPeriod(game){ const day=(game&&game.day)||1; const idx=Math.floor((Math.floor(day)-1)/SEASON_LEN);
+  const s=seasonOf(day), y=yearOf(day); return { index:idx, id:'p'+idx, season:s, year:y, label:s.name+' · Year '+y }; }
+function spotlightScore(h){ if(!h) return 0;
+  const ovr=overall(h), wins=(h.wins||0), bond=(h.bond||0), coat=(coatOf(h).tier||0);
+  return Math.round(ovr*1.0 + wins*6 + bond*0.25 + coat*8 + (h.happy==null?0:h.happy*0.05)); }
+function spotlightRank(h, periodIdx){ return spotlightScore(h)*1000 + (hashDay(((periodIdx+1)*97)^_spotHash(h&&(h.id||h.name)))%1000); }
+function spotlightReasons(h){ if(!h) return []; const out=[];
+  const wins=(h.wins||0), ovr=overall(h), coat=coatOf(h), bond=(h.bond||0), sp=(typeof specialtyOf==='function')?specialtyOf(h):null;
+  if(wins>=3) out.push({emoji:'🏆', text:'a Champion with '+wins+' show wins'});
+  else if(wins>0) out.push({emoji:'🥇', text:wins+' show win'+(wins!==1?'s':'')});
+  if(ovr>=80) out.push({emoji:'⭐', text:'a superb '+ovr+' overall'});
+  if((coat.tier||0)>=2) out.push({emoji:'🎨', text:'a rare '+coat.name+' coat'});
+  if(bond>=70) out.push({emoji:'💖', text:'devoted to the yard'});
+  if(sp){ const d=disciplineDef(sp); if(d) out.push({emoji:d.emoji, text:'a '+d.name+' specialist'}); }
+  if(!out.length) out.push({emoji:'🐴', text:'the heart of the herd'});
+  return out; }
+const SPOTLIGHT_LINES=[
+  '{name}, our {breed}, is the pride of {ranch} this {season} — {reason}.',
+  'All eyes on {name} the {breed} this {season}: {reason}.',
+  'This {season}, {name} takes the rosette as {ranch}’s star — {reason}.',
+  '{ranch} salutes {name}, a {breed} to be proud of — {reason}.',
+];
+function spotlightCitation(game){ const s=horseOfTheMonth(game); if(!s) return '';
+  const p=spotlightPeriod(game), h=s.horse, b=breedDef(h.breed)||{name:h.breed};
+  const line=SPOTLIGHT_LINES[hashDay((p.index+1)*31)%SPOTLIGHT_LINES.length];
+  const reason=(s.reasons[0]||{text:'a fine horse'}).text;
+  return line.replace(/\{name\}/g,h.name).replace(/\{breed\}/g,b.name).replace(/\{ranch\}/g,ranchName(game)).replace(/\{season\}/g,p.season.name).replace(/\{reason\}/g,reason); }
+function horseOfTheMonth(game){
+  const hs=((game&&game.horses)||[]).filter(Boolean); if(!hs.length) return null;
+  const p=spotlightPeriod(game);
+  const star=hs.slice().sort((a,b)=>spotlightRank(b,p.index)-spotlightRank(a,p.index))[0];
+  return { horse:star, id:star.id||null, name:star.name, score:spotlightScore(star),
+    reasons:spotlightReasons(star), card:cardModel(star,game), period:p }; }
+function spotlightBoard(game){
+  const hs=((game&&game.horses)||[]).filter(Boolean), p=spotlightPeriod(game);
+  if(!hs.length) return { period:p, star:null, mentions:[], empty:true };
+  const ranked=hs.slice().sort((a,b)=>spotlightRank(b,p.index)-spotlightRank(a,p.index));
+  const star=ranked[0];
+  const mentions=ranked.slice(1,4).map(h=>({ id:h.id||null, name:h.name,
+    breedName:(breedDef(h.breed)||{name:h.breed}).name, overall:overall(h), score:spotlightScore(h),
+    reason:(spotlightReasons(h)[0]||{text:''}).text, coat:coatOf(h).name }));
+  return { period:p, star:{ id:star.id||null, name:star.name, score:spotlightScore(star), reasons:spotlightReasons(star), card:cardModel(star,game) },
+    citation:spotlightCitation(game), mentions, empty:false };
+}
 
 // ---------- Guided tutorial (data only; the spotlight/positioning is DOM) ----------
 // Each step points at a real element and tab; `done(game)` (optional) auto-advances.
@@ -3708,6 +3758,7 @@ const ACHIEVEMENTS=[
   {id:'menagerie',      icon:'🐾', name:'Menagerie',           desc:'Welcome three different companions to the ranch.', check:g=>((g.stats&&g.stats.mascotsAdopted)||0)>=3},
   {id:'homegrown',      icon:'🌾', name:'Home-Grown',          desc:'Bring in five harvests from your hay meadow.', check:g=>((g.stats&&g.stats.harvests)||0)>=5},
   {id:'forgeregular',   icon:'🧲', name:'Regular at the Forge', desc:'Buy ten deals from the traveling blacksmith.', check:g=>((g.stats&&g.stats.smithDeals)||0)>=10},
+  {id:'coverstar',      icon:'🌟', name:'Cover Star',          desc:'Have a Champion take Horse of the Month.',     check:g=>{const s=horseOfTheMonth(g); return !!(s&&(s.horse.wins||0)>=3);}},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3960,6 +4011,7 @@ const GOALS=[
   {id:'mascot1', desc:'Adopt a stable mascot (🐾)',                      tip:g=>hasMascot(g)?activeMascot(g).emoji+' '+activeMascot(g).name:'none yet',done:g=>hasMascot(g),      reward:{money:300,rep:15}},
   {id:'garden1', desc:'Sow the hay meadow (🌾 garden)',                  tip:g=>normGarden(g.garden).sown?'sown & growing':'not sown',done:g=>normGarden(g.garden).sown,          reward:{money:400,rep:15}},
   {id:'smith1',  desc:'Deal with the visiting farrier (🧲)',             tip:g=>((g.stats&&g.stats.smithDeals)||0)+'/1 deals',done:g=>((g.stats&&g.stats.smithDeals)||0)>=1,        reward:{money:400,rep:15}},
+  {id:'spot1',   desc:'Check the Horse of the Month board (🌟)',         tip:g=>((g.stats&&g.stats.spotlightViews)||0)+'/1',done:g=>((g.stats&&g.stats.spotlightViews)||0)>=1,     reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4038,6 +4090,7 @@ const HR = {
   LEDGER_CATEGORIES, ledgerCategoryDef, dailyLedger, financeSummary, balanceSheet,
   cardModel, hofToModel, stampFor,
   tourHerd, tourScrapbook, tourStops, tourAlbum, postcard, postcardText,
+  spotlightPeriod, spotlightScore, spotlightReasons, spotlightCitation, horseOfTheMonth, spotlightBoard, SPOTLIGHT_LINES,
   RANCH_NAME_MAX, ranchName, setRanchName, BARN_COLORS, GROUND_COLORS, FLAG_COLORS,
   barnColor, groundColor, flagColor, DECOR, decorDef, normDecor, ownedDecor, hasDecor,
   decorUnlocked, decorAffordable, buyDecor, decorSpend,
@@ -6220,6 +6273,40 @@ function openSmith(){
     const fresh=checkAchievements(G), gg=checkGoals(G); toast('🧲 '+r.deal.name+' — deal done!','good');
     save(); renderHUD(); openSmith(); });
 }
+function openSpotlight(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // viewing the board counts toward the spotlight goal (a usage stat — no economy change)
+  G.stats=G.stats||{}; G.stats.spotlightViews=(G.stats.spotlightViews||0)+1;
+  const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD();
+  const s=horseOfTheMonth(G), p=spotlightPeriod(G);
+  let body;
+  if(!s){
+    body='<div class="empty">No horses in the stable yet — buy or breed one and it could be your first Horse of the Month.</div>';
+  } else {
+    const h=s.horse, cm=s.card;
+    const reasons=s.reasons.map(r=>'<span class="pill">'+r.emoji+' '+esc(r.text)+'</span>').join(' ');
+    const stats='<div class="stats" style="margin-top:6px"><div class="stat"><div class="sv">'+cm.overall+'</div><div class="sl">Overall</div></div>'+
+      '<div class="stat"><div class="sv">'+(h.wins||0)+'</div><div class="sl">Wins</div></div>'+
+      '<div class="stat"><div class="sv">'+esc(cm.coat)+'</div><div class="sl">Coat</div></div>'+
+      '<div class="stat"><div class="sv">'+bondTier(h).emoji+'</div><div class="sl">'+esc(bondTier(h).label)+'</div></div></div>';
+    const mentions=spotlightBoard(G).mentions;
+    const mList = mentions.length ? mentions.map(m=>'<div class="lbrow"><div class="hface" style="background:none;font-size:18px;display:flex;align-items:center;justify-content:center">🎗️</div>'+
+      '<div class="grow"><div class="lbname">'+esc(m.name)+' <span class="pill">OVR '+m.overall+'</span></div>'+
+      '<div class="lbsub">'+esc(m.breedName)+(m.reason?' · '+esc(m.reason):'')+'</div></div></div>').join('')
+      : '<div class="hbreed" style="opacity:.6">No runners-up yet.</div>';
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">🌟 '+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(cm.breedName)+' · '+esc(ageLabel(h))+' · '+esc(p.label)+'</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px;font-style:italic">“'+esc(spotlightCitation(G))+'”</div>'+
+      '<div class="pips" style="margin-top:6px">'+reasons+'</div>'+stats+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">🎗️ Honourable mentions</div><div>'+mList+'</div>';
+  }
+  modal('<h3>🌟 Horse of the Month</h3>'+
+    '<div class="swlabel">'+p.season.emoji+' '+esc(p.label)+' — the standout of the herd, chosen for overall, wins, bond &amp; a rare coat.</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="spotClose" style="width:100%">Done</button></div>');
+  $('spotClose').onclick=closeModal;
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -7025,6 +7112,7 @@ function boot(){
   { const mb=$('mascotBtn'); if(mb) mb.onclick=openMascot; }
   { const gb=$('gardenBtn'); if(gb) gb.onclick=openGarden; }
   { const sb=$('smithBtn'); if(sb) sb.onclick=openSmith; }
+  { const spb=$('spotBtn'); if(spb) spb.onclick=openSpotlight; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
