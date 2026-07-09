@@ -361,6 +361,7 @@
     <button class="sbtn" id="vaneBtn" title="Weathervane — wind & sky mood" style="margin-right:4px">🌬️</button>
     <button class="sbtn" id="shineBtn" title="Coat shine — grooming-glow meter" style="margin-right:4px">✨</button>
     <button class="sbtn" id="gaitBtn" title="Paces showcase — the four gaits" style="margin-right:4px">🐎</button>
+    <button class="sbtn" id="heightBtn" title="Measuring stick — height in hands" style="margin-right:4px">📏</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -477,6 +478,41 @@ const STAGES = [
 function stageForAge(age){ for(const s of STAGES){ if(age < s.max) return s; } return STAGES[STAGES.length-1]; }
 function isAdult(h){ const s=stageForAge(h.age); return s.id==='adult'||s.id==='senior'; }
 function feedPerDay(h){ const s=stageForAge(h.age); const draft=(breedDef(h.breed)||{size:1}).size>=1.4?1:0; return s.feed+draft; }
+
+// ---------- Horse height / measuring-stick record (READ-ONLY cosmetic record in hands) ----------
+// A stable height in hands (1 hand = 4 inches) derived from EXISTING data: the breed's size, a small deterministic
+// per-horse variation (hashed from the horse id — NOT random), and a life-stage factor so foals/yearlings measure
+// shorter and grow toward their adult height. Purely a record — it creates nothing and changes no stat.
+const HEIGHT_STAGE={foal:0.68, yearling:0.88, adult:1.0, senior:1.0}; // fraction of adult height by life stage
+function _htHash(s){ let h=2166136261>>>0; s=''+(s||''); for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),16777619)>>>0; } return h>>>0; }
+// a breed's typical ADULT height at the withers, in inches, from its draw-size (piecewise so mid-size breeds read true)
+function breedAdultInches(size){ size=(typeof size==='number'&&isFinite(size))?size:1.0;
+  return (size<=1.0) ? (40 + (size-0.7)/0.3*20) : (60 + (size-1.0)/0.5*12); }
+// the horse's height as {totalInches, hands, inches, hh} — hh is the conventional "15.2" reading (hands.inches)
+function heightHands(h){ if(!h) return { totalInches:0, hands:0, inches:0, hh:0 };
+  const bd=breedDef(h.breed)||{size:1.0}, stage=stageForAge(h.age||0);
+  const adult=breedAdultInches(bd.size), vary=(_htHash(h.id||'anon')%5)-2; // -2..+2 inches, stable per horse
+  const total=clamp(Math.round(adult*(HEIGHT_STAGE[stage.id]||1) + vary), 28, 80); // 7hh..20hh guard
+  const hands=Math.floor(total/4), inches=total%4;
+  return { totalInches:total, hands, inches, hh:hands + inches/10 }; }
+function heightLabel(h){ const m=heightHands(h); return m.hands+'.'+m.inches+'hh'; }
+function sizeClass(totalInches){ const t=totalInches||0;
+  return t<58?{id:'pony', label:'Pony', emoji:'🐴'} : t<68?{id:'horse', label:'Horse', emoji:'🐎'} : {id:'tall', label:'Draught type', emoji:'🐴'}; }
+// the full readout: height, size class, breed-typical range, and how this one compares to its breed
+function heightRecord(game, h){ if(!h) return { horse:null, label:'—', totalInches:0, sizeClass:sizeClass(0), breedTypical:null, vsBreed:'' };
+  const m=heightHands(h), bd=breedDef(h.breed)||{size:1.0,name:h.breed}, adult=breedAdultInches(bd.size);
+  const lo=Math.round(adult-3), hi=Math.round(adult+3);
+  const loH=Math.floor(lo/4)+'.'+(lo%4), hiH=Math.floor(hi/4)+'.'+(hi%4);
+  const vary=(_htHash(h.id||'anon')%5)-2;
+  const vsBreed = vary>=2?'tall for the breed' : vary<=-2?'small for the breed' : 'about average for the breed';
+  const stage=stageForAge(h.age||0), growing=(stage.id==='foal'||stage.id==='yearling');
+  return { horse:{id:h.id, name:h.name}, label:heightLabel(h), hands:m.hands, inches:m.inches, totalInches:m.totalInches,
+    sizeClass:sizeClass(m.totalInches), breedName:bd.name, breedTypical:{ lo, hi, label:loH+'–'+hiH+'hh' },
+    vsBreed, growing }; }
+// the tallest horse currently in the yard
+function tallestHorse(game){ const hs=(game&&game.horses)||[]; let best=null;
+  for(const h of hs){ const t=heightHands(h).totalInches; if(!best||t>best.totalInches) best={id:h.id, name:h.name, totalInches:t, label:heightLabel(h)}; }
+  return best; }
 
 // ---------- Aging: prime, decline, breeding/competing limits ----------
 const PRIME_END=30;   // performance starts to gently ebb after this age
@@ -4699,6 +4735,7 @@ const ACHIEVEMENTS=[
   {id:'astrologer',     icon:'⭐', name:'Ranch Astrologer',       desc:'Own a horse of every star sign at once.',      check:g=>zodiacHerdSigns(g)>=ZODIAC.length},
   {id:'showshine',      icon:'✨', name:'Show-Ring Shine',        desc:'Bring a horse’s coat to a Gleaming shine.',    check:g=>((g.horses)||[]).some(h=>shineTier(coatShine(h)).id==='gleaming')},
   {id:'finemover',      icon:'🐎', name:'A Fine Mover',           desc:'Own a horse with a 90+ gait score.',           check:g=>((g.horses)||[]).some(h=>GAITS.some(gt=>gaitScore(h,gt.id)>=90))},
+  {id:'talloftheyard',  icon:'📏', name:'Tall in the Saddle',    desc:'Own a horse standing 17hh or taller.',         check:g=>((g.horses)||[]).some(h=>heightHands(h).totalInches>=68)},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4969,6 +5006,7 @@ const GOALS=[
   {id:'vane1',   desc:'Check the ranch weathervane (🌬️)',             tip:g=>((g.stats&&g.stats.vaneChecks)||0)+'/1',done:g=>((g.stats&&g.stats.vaneChecks)||0)>=1,           reward:{money:150,rep:5}},
   {id:'shine1',  desc:'Check a horse’s coat shine (✨)',                tip:g=>((g.stats&&g.stats.shineChecks)||0)+'/1',done:g=>((g.stats&&g.stats.shineChecks)||0)>=1,         reward:{money:150,rep:5}},
   {id:'gait1',   desc:'Watch a horse’s paces (🐎)',                    tip:g=>((g.stats&&g.stats.gaitViews)||0)+'/1',done:g=>((g.stats&&g.stats.gaitViews)||0)>=1,             reward:{money:150,rep:5}},
+  {id:'measure1',desc:'Measure a horse with the stick (📏)',           tip:g=>((g.stats&&g.stats.measures)||0)+'/1',done:g=>((g.stats&&g.stats.measures)||0)>=1,               reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5078,6 +5116,7 @@ const HR = {
   BREEDS, breedDef, RARITY_MULT, RARITY_NAME, STAGES, RANKS, EVENTS, GOALS,
   TRAIN_STATS, TRAIN_LABEL, TRAIN_PER_DAY,
   stageForAge, isAdult, feedPerDay, statAvg, overall,
+  HEIGHT_STAGE, breedAdultInches, heightHands, heightLabel, sizeClass, heightRecord, tallestHorse,
   mkHorse, valueOf, buyPrice, sellQuote, rentRate,
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
@@ -7884,6 +7923,37 @@ function openGaits(){
   $('gtClose').onclick=closeModal;
   document.querySelectorAll('[data-gthorse]').forEach(x=>x.onclick=()=>{ gaitSel.horse=x.getAttribute('data-gthorse'); playSfx('tap'); openGaits(); });
 }
+let heightSel={horse:null};
+function openHeight(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(heightSel.horse && !horses.some(h=>h.id===heightSel.horse)) heightSel.horse=null;
+  if(!heightSel.horse && horses.length){ const t=tallestHorse(G); heightSel.horse=(t&&t.id)||horses[0].id; }
+  const h=heightSel.horse?horses.find(x=>x.id===heightSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.measures=(G.stats.measures||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-hthorse="'+esc(x.id)+'" style="cursor:pointer;'+(heightSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+' '+esc(heightLabel(x))+'</span>').join(' ')
+    :'<span class="empty">No horses to measure yet.</span>';
+  let body='';
+  if(h){
+    const r=heightRecord(G,h);
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(r.breedName)+' · '+r.sizeClass.emoji+' '+esc(r.sizeClass.label)+'</div></div>'+
+      '<div style="text-align:right"><div class="hname" style="font-size:24px">'+esc(r.label)+'</div><div class="hbreed" style="font-size:11px">'+r.totalInches+' in</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px">📐 Breed-typical: '+esc(r.breedTypical.label)+' · <b>'+esc(r.vsBreed)+'</b></div>'+
+      (r.growing?'<div class="hbreed" style="color:var(--gold2);margin-top:4px">🌱 Still growing — will stand taller once fully grown.</div>':'')+'</div>';
+  } else { body='<div class="empty">Buy or breed a horse to stand it by the stick.</div>'; }
+  const t=tallestHorse(G);
+  modal('<h3>📏 Measuring Stick</h3>'+
+    '<div class="msg">Stand a horse by the measuring stick to record its height in hands (1 hand = 4 inches). Just for the records — it changes nothing.</div>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    (t?'<div class="swlabel" style="margin-top:8px">🏆 Tallest in the yard</div><div class="hbreed">'+esc(t.name)+' at <b>'+esc(t.label)+'</b></div>':'')+
+    '<div class="btnrow"><button class="btn ghost" id="htClose" style="width:100%">Done</button></div>');
+  $('htClose').onclick=closeModal;
+  document.querySelectorAll('[data-hthorse]').forEach(x=>x.onclick=()=>{ heightSel.horse=x.getAttribute('data-hthorse'); playSfx('tap'); openHeight(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8796,6 +8866,7 @@ function boot(){
   { const vnb=$('vaneBtn'); if(vnb) vnb.onclick=openWeathervane; }
   { const shb=$('shineBtn'); if(shb) shb.onclick=openCoatShine; }
   { const gtb=$('gaitBtn'); if(gtb) gtb.onclick=openGaits; }
+  { const htb=$('heightBtn'); if(htb) htb.onclick=openHeight; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

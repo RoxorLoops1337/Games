@@ -262,6 +262,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.vaneChecks = 1; // satisfies the weathervane goal
   g.stats.shineChecks = 1; // satisfies the coat-shine goal
   g.stats.gaitViews = 1; // satisfies the gait-showcase goal
+  g.stats.measures = 1; // satisfies the measuring-stick goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5377,6 +5378,53 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'gait1').done(gc), 'the gait goal is unmet before watching');
   gc.stats.gaitViews = 1;
   ok(HR.GOALS.find(x => x.id === 'gait1').done(gc), 'watching a horse’s paces satisfies the goal');
+}
+{
+  // ---- Horse height / measuring-stick record ----
+  const g = HR.freshGame();
+  // hands maths: total inches → hands + leftover inches (1 hand = 4 inches)
+  const pony = HR.mkHorse({ breed: 'shetland', age: 20, id: 'ht_pony' });
+  const draft = HR.mkHorse({ breed: 'clydesdale', age: 20, id: 'ht_draft' });
+  g.horses.push(pony, draft);
+  const mp = HR.heightHands(pony), md = HR.heightHands(draft);
+  ok(mp.hands * 4 + mp.inches === mp.totalInches && mp.inches >= 0 && mp.inches <= 3, 'hands maths is consistent (4 inches per hand)');
+  ok(md.totalInches > mp.totalInches, 'a draught horse measures taller than a Shetland pony');
+  ok(/^\d+\.\dhh$/.test(HR.heightLabel(draft)), 'the height label reads like "17.2hh"');
+  // size class thresholds
+  ok(HR.sizeClass(50).id === 'pony' && HR.sizeClass(62).id === 'horse' && HR.sizeClass(70).id === 'tall', 'size classes split at pony/horse/tall');
+  ok(HR.sizeClass(mp.totalInches).id === 'pony', 'the Shetland classes as a pony');
+  // foals measure shorter than they will as adults (same breed & id-variation)
+  const foal = HR.mkHorse({ breed: 'friesian', age: 2, id: 'ht_grow' });
+  const grown = HR.mkHorse({ breed: 'friesian', age: 20, id: 'ht_grow' });
+  ok(HR.heightHands(foal).totalInches < HR.heightHands(grown).totalInches, 'a foal measures shorter than the same horse grown');
+  ok(HR.heightRecord(g, foal).growing === true && HR.heightRecord(g, grown).growing === false, 'the record flags a foal as still growing');
+  // deterministic per-horse variation from the id (not random) — same id ⇒ same height
+  const a = HR.mkHorse({ breed: 'arabian', age: 20, id: 'sameid' });
+  const b = HR.mkHorse({ breed: 'arabian', age: 20, id: 'sameid' });
+  ok(HR.heightHands(a).totalInches === HR.heightHands(b).totalInches, 'height is deterministic for a given id + breed + age');
+  ok(HR.heightHands(a).totalInches >= 28 && HR.heightHands(a).totalInches <= 80, 'height is guarded to a sane range');
+  // the record has shape incl. a breed-typical comparison
+  const r = HR.heightRecord(g, draft);
+  ok(r.label && r.sizeClass && r.breedTypical && r.breedTypical.label && /average|tall|small/.test(r.vsBreed), 'the record includes a breed-typical range and a comparison');
+  // tallest horse
+  const t = HR.tallestHorse(g);
+  ok(t && t.id === draft.id, 'tallestHorse finds the biggest horse in the yard');
+  // read-only + determinism + sparse safety
+  const snap = JSON.stringify(g);
+  HR.heightHands(draft); HR.heightRecord(g, draft); HR.tallestHorse(g); HR.heightLabel(pony);
+  ok(JSON.stringify(g) === snap, 'measuring never mutates the game');
+  ok(JSON.stringify(HR.heightRecord(g, draft)) === JSON.stringify(HR.heightRecord(g, draft)), 'the record is deterministic');
+  ok(HR.heightHands(null).totalInches === 0 && HR.heightRecord({}, null).totalInches === 0 && HR.tallestHorse({}) === null, 'the height helpers are safe on a sparse game');
+  // achievement: a 17hh+ horse
+  const th = HR.ACHIEVEMENTS.find(x => x.id === 'talloftheyard');
+  ok(th && th.check(g), 'a Clydesdale in the yard unlocks Tall in the Saddle');
+  const small = HR.freshGame(); small.horses = [HR.mkHorse({ breed: 'shetland', age: 20, id: 's1' })];
+  ok(!th.check(small), 'a yard of only ponies does not unlock it');
+  // the goal fires after measuring
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'measure1').done(gv), 'the measuring goal is unmet before measuring');
+  gv.stats.measures = 1;
+  ok(HR.GOALS.find(x => x.id === 'measure1').done(gv), 'measuring a horse satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
