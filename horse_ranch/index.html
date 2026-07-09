@@ -343,6 +343,7 @@
     <button class="sbtn" id="gardenBtn" title="Hay meadow — grow your own feed" style="margin-right:4px">🌾</button>
     <button class="sbtn" id="smithBtn" title="Visiting farrier — traveling blacksmith stall" style="margin-right:4px;position:relative">🧲<span id="smithBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="spotBtn" title="Horse of the Month — the herd's standout" style="margin-right:4px">🌟</button>
+    <button class="sbtn" id="loadoutBtn" title="Tack loadouts — save & quick-swap tack sets" style="margin-right:4px">🎽</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -959,6 +960,47 @@ function equipTack(game,h,id){ const t=tackDef(id); if(!t) return {ok:false,why:
   const cur=tackWearer(game,id); if(cur){ tackInit(cur); for(const sl of TACK_SLOTS) if(cur.tack[sl]===id) cur.tack[sl]=null; }
   h.tack[t.slot]=id; return {ok:true,item:t,slot:t.slot}; }
 function unequipTack(game,h,slot){ tackInit(h); const id=h.tack[slot]; h.tack[slot]=null; return {ok:true,id}; }
+// ---- Tack loadout presets / quick-swap (a convenience layer over the EXISTING tack you own) ----
+// Save a horse's current slot→item set as a NAMED preset, then one-tap apply it to any horse. Applying
+// equips only the items you OWN (skipping unowned), so it grants NO new gear or power — it just
+// reorganises what equipTack already does. Deterministic; persisted; economy-neutral.
+const LOADOUT_MAX=8;        // most presets kept in the library
+const LOADOUT_NAME_MAX=20;  // preset name length
+function tackLoadouts(game){ return (game&&Array.isArray(game.loadouts))?game.loadouts:[]; }
+function loadoutDef(game,id){ return tackLoadouts(game).find(p=>p&&p.id===id)||null; }
+function normLoadouts(game){ const arr=(game&&Array.isArray(game.loadouts))?game.loadouts:[]; const out=[], used={};
+  for(const p of arr){ if(!p||typeof p!=='object') continue;
+    const slots={}; for(const sl of TACK_SLOTS){ const id=p.slots&&p.slots[sl], d=id?tackDef(id):null; slots[sl]=(d&&d.slot===sl)?id:null; }
+    let id=(typeof p.id==='string'&&p.id)?p.id:('lo'+(out.length+1)); while(used[id]) id=id+'_';
+    used[id]=1;
+    const name=((''+(p.name||'')).trim().slice(0,LOADOUT_NAME_MAX))||'Loadout';
+    out.push({ id, name, slots });
+    if(out.length>=LOADOUT_MAX) break; }
+  return out; }
+// read a horse's current tack as a slot→itemId map (read-only, validates slot fit)
+function captureLoadout(horse){ const t=(horse&&horse.tack)||{}, out={};
+  for(const sl of TACK_SLOTS){ const id=t[sl], d=id?tackDef(id):null; out[sl]=(d&&d.slot===sl)?id:null; } return out; }
+function _nextLoadoutId(game){ const used={}; tackLoadouts(game).forEach(p=>{ if(p&&p.id) used[p.id]=1; }); let n=1; while(used['lo'+n]) n++; return 'lo'+n; }
+function saveLoadout(game,name,horse){ if(!game) return {ok:false,why:'No ranch.'};
+  if(!Array.isArray(game.loadouts)) game.loadouts=[];
+  if(game.loadouts.length>=LOADOUT_MAX) return {ok:false,why:'Your loadout library is full.'};
+  const slots=captureLoadout(horse);
+  const nm=((''+(name||'')).trim().slice(0,LOADOUT_NAME_MAX))||('Loadout '+(game.loadouts.length+1));
+  const preset={ id:_nextLoadoutId(game), name:nm, slots };
+  game.loadouts.push(preset); return {ok:true, preset}; }
+function renameLoadout(game,id,name){ const p=loadoutDef(game,id); if(!p) return {ok:false,why:'No such loadout.'};
+  p.name=((''+(name||'')).trim().slice(0,LOADOUT_NAME_MAX))||p.name; return {ok:true, name:p.name}; }
+function deleteLoadout(game,id){ if(!game||!Array.isArray(game.loadouts)) return {ok:false}; const n=game.loadouts.length;
+  game.loadouts=game.loadouts.filter(p=>p&&p.id!==id); return {ok:game.loadouts.length<n}; }
+// equip a preset's OWNED items onto a horse (skips unowned; clears slots the preset leaves empty)
+function applyLoadout(game,horse,id){ const p=loadoutDef(game,id); if(!p) return {ok:false,why:'No such loadout.'};
+  if(!horse) return {ok:false,why:'No horse.'};
+  tackInit(horse); const applied=[], skipped=[], cleared=[];
+  for(const sl of TACK_SLOTS){ const want=p.slots[sl];
+    if(want){ if(hasTack(game,want)){ if(horse.tack[sl]!==want){ equipTack(game,horse,want); } applied.push(want); } else skipped.push(want); }
+    else if(horse.tack[sl]){ cleared.push(horse.tack[sl]); horse.tack[sl]=null; }
+  }
+  return {ok:true, applied, skipped, cleared}; }
 // ---- Tack crafting / upgrade tiers (Standard → Fine → Masterwork) ----
 // Owned gear can be upgraded through tiers; each tier lifts that item's small show/disc
 // bonus a little (still under the hard caps). Tier is stored per owned item on the game.
@@ -1903,7 +1945,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -3759,6 +3801,7 @@ const ACHIEVEMENTS=[
   {id:'homegrown',      icon:'🌾', name:'Home-Grown',          desc:'Bring in five harvests from your hay meadow.', check:g=>((g.stats&&g.stats.harvests)||0)>=5},
   {id:'forgeregular',   icon:'🧲', name:'Regular at the Forge', desc:'Buy ten deals from the traveling blacksmith.', check:g=>((g.stats&&g.stats.smithDeals)||0)>=10},
   {id:'coverstar',      icon:'🌟', name:'Cover Star',          desc:'Have a Champion take Horse of the Month.',     check:g=>{const s=horseOfTheMonth(g); return !!(s&&(s.horse.wins||0)>=3);}},
+  {id:'quartermaster',  icon:'🎽', name:'Quartermaster',       desc:'Save three tack loadout presets.',             check:g=>tackLoadouts(g).length>=3},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4012,6 +4055,7 @@ const GOALS=[
   {id:'garden1', desc:'Sow the hay meadow (🌾 garden)',                  tip:g=>normGarden(g.garden).sown?'sown & growing':'not sown',done:g=>normGarden(g.garden).sown,          reward:{money:400,rep:15}},
   {id:'smith1',  desc:'Deal with the visiting farrier (🧲)',             tip:g=>((g.stats&&g.stats.smithDeals)||0)+'/1 deals',done:g=>((g.stats&&g.stats.smithDeals)||0)>=1,        reward:{money:400,rep:15}},
   {id:'spot1',   desc:'Check the Horse of the Month board (🌟)',         tip:g=>((g.stats&&g.stats.spotlightViews)||0)+'/1',done:g=>((g.stats&&g.stats.spotlightViews)||0)>=1,     reward:{money:300,rep:10}},
+  {id:'loadout1',desc:'Save a tack loadout preset (🎽)',                 tip:g=>tackLoadouts(g).length+'/1 saved',done:g=>tackLoadouts(g).length>=1,                        reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4121,6 +4165,7 @@ const HR = {
   leaderRanch, rivalCount, tickStandings,
   TACK, TACK_SLOTS, TACK_SLOT_LABEL, TACK_SHOW_CAP, tackDef, tackInit, equippedTack, equippedIn,
   ownedTack, hasTack, tackUnlocked, tackAffordable, buyTack, tackWearer, equipTack, unequipTack,
+  LOADOUT_MAX, LOADOUT_NAME_MAX, tackLoadouts, loadoutDef, normLoadouts, captureLoadout, saveLoadout, renameLoadout, deleteLoadout, applyLoadout,
   tackShowMult, tackDiscMult, tackGroomDecayMult, tackStressCut, tackShowMultFor,
   TACK_TIERS, TACK_MAX_TIER, TACK_DISC_CAP, tackUpgradable, tackTier, tackTierMult, tackTierName,
   tackTierMark, upgradeTackCost, canUpgradeTack, upgradeTack,
@@ -4217,6 +4262,7 @@ function load(){
     G.tack.owned=G.tack.owned.filter(id=>!!tackDef(id)).filter((v,i,a)=>a.indexOf(v)===i);
     if(!G.tack.tiers||typeof G.tack.tiers!=='object') G.tack.tiers={}; // crafting/upgrade tiers (pre-tier tack → Standard)
     Object.keys(G.tack.tiers).forEach(id=>{ if(!tackDef(id)) delete G.tack.tiers[id]; else G.tack.tiers[id]=Math.max(0,Math.min(TACK_MAX_TIER,Math.floor(G.tack.tiers[id])||0)); });
+    G.loadouts=normLoadouts(G); // tack loadout presets — safe on old saves
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -6307,6 +6353,45 @@ function openSpotlight(){
     '<div class="btnrow"><button class="btn ghost" id="spotClose" style="width:100%">Done</button></div>');
   $('spotClose').onclick=closeModal;
 }
+let loadoutSel={horse:null};
+function openLoadouts(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(loadoutSel.horse && !horses.some(h=>h.id===loadoutSel.horse)) loadoutSel.horse=null;
+  if(!loadoutSel.horse && horses.length) loadoutSel.horse=horses[0].id;
+  const h=loadoutSel.horse?horses.find(x=>x.id===loadoutSel.horse):null;
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-lohorse="'+esc(x.id)+'" style="cursor:pointer;'+(loadoutSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' ')
+    :'<span class="empty">No horses yet — buy or breed one to kit out.</span>';
+  const slotLine = h ? TACK_SLOTS.map(sl=>{ const it=equippedIn(h,sl); return '<span class="pill">'+esc(TACK_SLOT_LABEL[sl])+': '+(it?it.emoji+' '+esc(it.name):'—')+'</span>'; }).join(' ') : '';
+  const presets=tackLoadouts(G);
+  const rows=presets.length?presets.map(p=>{
+    const items=TACK_SLOTS.map(sl=>{ const d=p.slots[sl]?tackDef(p.slots[sl]):null; return d?d.emoji:'·'; }).join(' ');
+    const ownedCount=TACK_SLOTS.filter(sl=>p.slots[sl]&&hasTack(G,p.slots[sl])).length, total=TACK_SLOTS.filter(sl=>p.slots[sl]).length;
+    return '<div class="lbrow"><div class="hface" style="background:none;font-size:18px;display:flex;align-items:center;justify-content:center">'+items+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(p.name)+'</div><div class="lbsub">'+ownedCount+'/'+total+' items owned</div></div>'+
+      '<button class="btn sm blue" data-loapply="'+esc(p.id)+'"'+(h?'':' disabled')+'>Apply</button>'+
+      '<button class="btn sm ghost" data-lodel="'+esc(p.id)+'">✕</button></div>';
+  }).join('') : '<div class="hbreed" style="opacity:.6">No presets saved yet. Kit out a horse, then save its set below.</div>';
+  const full=presets.length>=LOADOUT_MAX;
+  modal('<h3>🎽 Tack Loadouts</h3>'+
+    '<div class="msg">Save a horse’s tack set as a named preset, then apply it to any horse in one tap. Applying only equips gear you already own — it just saves you fiddling with slots.</div>'+
+    '<div class="swlabel">Horse</div><div>'+chips+'</div>'+
+    (h?'<div class="card" style="margin-top:6px"><div class="hname" style="font-size:13px">'+esc(h.name)+'’s tack</div><div class="pips" style="margin-top:5px">'+slotLine+'</div>'+
+      '<div class="row" style="gap:8px;margin-top:8px"><input class="nameIn" id="loName" maxlength="'+LOADOUT_NAME_MAX+'" placeholder="Name this set…"><button class="btn sm" id="loSave"'+(full?' disabled':'')+'>💾 Save set</button></div>'+
+      (full?'<div class="hbreed" style="color:var(--warn);margin-top:4px">Library full ('+LOADOUT_MAX+') — delete one to save more.</div>':'')+'</div>':'')+
+    '<div class="swlabel" style="margin-top:8px">📋 Saved loadouts <span class="pill">'+presets.length+'/'+LOADOUT_MAX+'</span></div><div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="loClose" style="width:100%">Done</button></div>');
+  $('loClose').onclick=closeModal;
+  const reopen=()=>{ const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); renderTab(); openLoadouts(); };
+  document.querySelectorAll('[data-lohorse]').forEach(x=>x.onclick=()=>{ loadoutSel.horse=x.getAttribute('data-lohorse'); playSfx('tap'); openLoadouts(); });
+  { const sv=$('loSave'); if(sv) sv.onclick=()=>{ if(!h) return; const nm=$('loName'); const r=saveLoadout(G, nm?nm.value:'', h);
+      if(!r.ok){ toast(r.why,'info'); return; } playSfx('coin'); toast('💾 Saved loadout “'+r.preset.name+'”.','good'); reopen(); }; }
+  document.querySelectorAll('[data-loapply]').forEach(b=>b.onclick=()=>{ if(!h) return; const r=applyLoadout(G, h, b.getAttribute('data-loapply'));
+    if(!r.ok){ toast(r.why,'bad'); return; } burst('🎽✨',10); playSfx('tap');
+    const msg=r.applied.length+' equipped'+(r.skipped.length?', '+r.skipped.length+' not owned':''); toast('🎽 '+h.name+': '+msg+'.','good'); reopen(); });
+  document.querySelectorAll('[data-lodel]').forEach(b=>b.onclick=()=>{ deleteLoadout(G, b.getAttribute('data-lodel')); playSfx('tap'); toast('Loadout deleted.','info'); reopen(); });
+  const ni=$('loName'); if(ni&&ni.addEventListener) ni.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const sv=$('loSave'); if(sv) sv.click(); } });
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -7113,6 +7198,7 @@ function boot(){
   { const gb=$('gardenBtn'); if(gb) gb.onclick=openGarden; }
   { const sb=$('smithBtn'); if(sb) sb.onclick=openSmith; }
   { const spb=$('spotBtn'); if(spb) spb.onclick=openSpotlight; }
+  { const lob=$('loadoutBtn'); if(lob) lob.onclick=openLoadouts; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
