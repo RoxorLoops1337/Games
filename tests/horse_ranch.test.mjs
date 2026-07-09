@@ -264,6 +264,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.gaitViews = 1; // satisfies the gait-showcase goal
   g.stats.measures = 1; // satisfies the measuring-stick goal
   g.stats.markingViews = 1; // satisfies the markings-card goal
+  g.stats.palateReads = 1; // satisfies the favourite-treat goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5463,6 +5464,41 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'marks1').done(gvv), 'the markings goal is unmet before viewing');
   gvv.stats.markingViews = 1;
   ok(HR.GOALS.find(x => x.id === 'marks1').done(gvv), 'viewing a markings card satisfies the goal');
+}
+{
+  // ---- Horse favourite-treat / palate card ----
+  ok(HR.TREATS.length >= 6 && HR.TREATS.every(t => t.id && t.name && t.emoji), 'the treat catalogue is populated');
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, id: 'pl1' }); g.horses.push(h);
+  const p = HR.horsePalate(h);
+  ok(p.favourite && p.likes.length === 2 && p.dislikes.length === 2, 'a palate has a favourite, two likes and two dislikes');
+  // all distinct, and the favourite is never among the dislikes
+  const ids = [p.favourite.id, ...p.likes.map(t => t.id), ...p.dislikes.map(t => t.id)];
+  ok(new Set(ids).size === ids.length, 'favourite / likes / dislikes are all distinct treats');
+  ok(!p.dislikes.some(t => t.id === p.favourite.id), 'the favourite is never a dislike');
+  ok(HR.favouriteTreat(h).id === p.favourite.id, 'favouriteTreat matches the palate favourite');
+  // determinism: same id ⇒ same palate; the id drives it (not breed/age)
+  const a = HR.mkHorse({ breed: 'arabian', age: 20, id: 'samepal' });
+  const b = HR.mkHorse({ breed: 'welsh', age: 4, id: 'samepal' });
+  ok(JSON.stringify(HR.horsePalate(a)) === JSON.stringify(HR.horsePalate(b)), 'the palate is a pure function of the id (same id ⇒ same tastes)');
+  ok(JSON.stringify(HR.horsePalate(h)) === JSON.stringify(HR.horsePalate(h)), 'the palate is deterministic');
+  // different horses can differ (sanity over a spread of ids)
+  const favs = new Set();
+  for (let i = 0; i < 40; i++) favs.add(HR.favouriteTreat(HR.mkHorse({ breed: 'mustang', age: 20, id: 'sp' + i })).id);
+  ok(favs.size >= 3, 'favourites vary across different horses');
+  // the card carries a flavour line that names the horse and its favourite
+  const c = HR.palateCard(g, h);
+  ok(c.favourite && c.likes.length === 2 && typeof c.line === 'string' && c.line.indexOf(h.name) >= 0 && c.line.indexOf(p.favourite.name) >= 0, 'the palate card has a flavour line naming the horse and favourite');
+  // read-only + sparse safety
+  const snap = JSON.stringify(g);
+  HR.horsePalate(h); HR.palateCard(g, h); HR.favouriteTreat(h);
+  ok(JSON.stringify(g) === snap, 'reading the palate never mutates the game');
+  ok(HR.horsePalate(null).favourite && HR.palateCard({}, null).line === '' && HR.favouriteTreat(null), 'the palate helpers are safe on a sparse game');
+  // the goal fires after learning a favourite
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'treat1').done(gv), 'the palate goal is unmet before learning');
+  gv.stats.palateReads = 1;
+  ok(HR.GOALS.find(x => x.id === 'treat1').done(gv), 'learning a horse’s favourite treat satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety

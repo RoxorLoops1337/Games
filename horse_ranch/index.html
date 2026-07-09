@@ -363,6 +363,7 @@
     <button class="sbtn" id="gaitBtn" title="Paces showcase — the four gaits" style="margin-right:4px">🐎</button>
     <button class="sbtn" id="heightBtn" title="Measuring stick — height in hands" style="margin-right:4px">📏</button>
     <button class="sbtn" id="marksBtn" title="Markings & whorls — the horse's passport" style="margin-right:4px">🌀</button>
+    <button class="sbtn" id="palateBtn" title="Favourite treats — each horse's palate" style="margin-right:4px">🍎</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -700,7 +701,44 @@ function markingsSummary(h){ if(!h) return ''; const m=horseMarkings(h), coat=co
 function markingsCard(game, h){ if(!h) return { horse:null, coat:null, whorl:null, face:null, legs:[], whiteLegs:0, summary:'' };
   const m=horseMarkings(h);
   return { horse:{id:h.id, name:h.name}, coat:coatOf(h).name, whorl:m.whorl, face:m.face, legs:m.legs, whiteLegs:m.whiteLegs, summary:markingsSummary(h) }; }
-// body/mane CSS colours per coat name — drives the drawn horses in the scene & cards
+
+// ---------- Horse palate / favourite-treat card (READ-ONLY cosmetic preference card) ----------
+// Each horse has a stable favourite treat plus a couple of likes & dislikes, derived purely from a hash of the
+// horse id (a deterministic shuffle of the treat list — so the same horse always has the same tastes, and the
+// favourite is never among the dislikes). Cosmetic only — it feeds nothing and changes no stat. No Date/Math.random.
+const TREATS=[
+  {id:'apple',    name:'apple slice',   emoji:'🍎'},
+  {id:'carrot',   name:'carrot',        emoji:'🥕'},
+  {id:'sugar',    name:'sugar cube',    emoji:'🍬'},
+  {id:'mint',     name:'mint',          emoji:'🌿'},
+  {id:'molasses', name:'molasses treat',emoji:'🍯'},
+  {id:'banana',   name:'banana',        emoji:'🍌'},
+  {id:'pear',     name:'pear',          emoji:'🍐'},
+  {id:'watermelon',name:'watermelon',   emoji:'🍉'},
+  {id:'gingersnap',name:'ginger snap',  emoji:'🍪'},
+];
+function treatDef(id){ return TREATS.find(t=>t.id===id)||null; }
+function _ptHash(s){ let h=2166136261>>>0; s=''+(s||''); for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),16777619)>>>0; } return h>>>0; }
+// a horse's stable tastes: favourite + two likes + two dislikes (deterministic shuffle of the treat list)
+function horsePalate(h){
+  if(!h) return { favourite:TREATS[0], likes:[TREATS[1],TREATS[2]], dislikes:[TREATS[TREATS.length-1],TREATS[TREATS.length-2]] };
+  const arr=TREATS.slice(); let s=_ptHash(h.id||'anon')||1;
+  const next=()=>{ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; };
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(next()*(i+1)); const t=arr[i]; arr[i]=arr[j]; arr[j]=t; } // deterministic Fisher-Yates
+  return { favourite:arr[0], likes:[arr[1],arr[2]], dislikes:[arr[arr.length-1],arr[arr.length-2]] };
+}
+function favouriteTreat(h){ return horsePalate(h).favourite; }
+const PALATE_LINES=[
+  '{name} would trade the whole yard for {fav} — but wrinkles their nose at {dis}.',
+  'Wave {fav} and {name} is your best friend for life; {dis}, not so much.',
+  '{name}’s ears prick at the rustle of {fav}. Offer {dis} and they’ll turn away.',
+  'Nothing says love to {name} like {fav}. Just keep the {dis} out of sight.',
+];
+// the full palate card + a flavour line
+function palateCard(game, h){ if(!h) return { horse:null, favourite:null, likes:[], dislikes:[], line:'' };
+  const p=horsePalate(h), tmpl=PALATE_LINES[_ptHash((h.id||'')+'|line')%PALATE_LINES.length];
+  const line=tmpl.replace(/\{name\}/g, h.name).replace(/\{fav\}/g, p.favourite.emoji+' '+p.favourite.name).replace(/\{dis\}/g, p.dislikes[0].emoji+' '+p.dislikes[0].name);
+  return { horse:{id:h.id, name:h.name}, favourite:p.favourite, likes:p.likes, dislikes:p.dislikes, line }; }
 const COAT_CSS={
   Chestnut:{body:'#9a5a2b',mane:'#6b3c17'}, Bay:{body:'#7c4a26',mane:'#221610'},
   Black:{body:'#2c2724',mane:'#141010'},   Palomino:{body:'#d8ad5e',mane:'#f5e6c4'},
@@ -5071,6 +5109,7 @@ const GOALS=[
   {id:'gait1',   desc:'Watch a horse’s paces (🐎)',                    tip:g=>((g.stats&&g.stats.gaitViews)||0)+'/1',done:g=>((g.stats&&g.stats.gaitViews)||0)>=1,             reward:{money:150,rep:5}},
   {id:'measure1',desc:'Measure a horse with the stick (📏)',           tip:g=>((g.stats&&g.stats.measures)||0)+'/1',done:g=>((g.stats&&g.stats.measures)||0)>=1,               reward:{money:150,rep:5}},
   {id:'marks1',  desc:'View a horse’s markings card (🌀)',              tip:g=>((g.stats&&g.stats.markingViews)||0)+'/1',done:g=>((g.stats&&g.stats.markingViews)||0)>=1,       reward:{money:150,rep:5}},
+  {id:'treat1',  desc:'Learn a horse’s favourite treat (🍎)',           tip:g=>((g.stats&&g.stats.palateReads)||0)+'/1',done:g=>((g.stats&&g.stats.palateReads)||0)>=1,         reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5182,6 +5221,7 @@ const HR = {
   stageForAge, isAdult, feedPerDay, statAvg, overall,
   HEIGHT_STAGE, breedAdultInches, heightHands, heightLabel, sizeClass, heightRecord, tallestHorse,
   WHORL_SPOTS, FACE_MARKINGS, LEG_MARKINGS, LEG_SLOTS, whorlDef, faceMarkingDef, legMarkingDef, horseMarkings, markingsSummary, markingsCard,
+  TREATS, treatDef, horsePalate, favouriteTreat, palateCard,
   mkHorse, valueOf, buyPrice, sellQuote, rentRate,
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
@@ -8052,6 +8092,38 @@ function openMarkings(){
   $('mkClose').onclick=closeModal;
   document.querySelectorAll('[data-mkhorse]').forEach(x=>x.onclick=()=>{ marksSel.horse=x.getAttribute('data-mkhorse'); playSfx('tap'); openMarkings(); });
 }
+let palateSel={horse:null};
+function openPalate(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(palateSel.horse && !horses.some(h=>h.id===palateSel.horse)) palateSel.horse=null;
+  if(!palateSel.horse && horses.length) palateSel.horse=horses[0].id;
+  const h=palateSel.horse?horses.find(x=>x.id===palateSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.palateReads=(G.stats.palateReads||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-plhorse="'+esc(x.id)+'" style="cursor:pointer;'+(palateSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+' '+favouriteTreat(x).emoji+'</span>').join(' ')
+    :'<span class="empty">No horses to spoil yet.</span>';
+  let body='';
+  if(h){
+    const c=palateCard(G,h);
+    const likeChips=c.likes.map(t=>'<span class="pill">'+t.emoji+' '+esc(t.name)+'</span>').join(' ');
+    const disChips=c.dislikes.map(t=>'<span class="pill" style="opacity:.7">'+t.emoji+' '+esc(t.name)+'</span>').join(' ');
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">Favourite treat</div></div>'+
+      '<div style="text-align:right"><div style="font-size:34px">'+c.favourite.emoji+'</div><div class="hbreed" style="font-size:11px">'+esc(c.favourite.name)+'</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px;font-style:italic">'+esc(c.line)+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">👍 Also likes</div><div class="pips">'+likeChips+'</div>'+
+      '<div class="swlabel" style="margin-top:6px">👎 Turns their nose up at</div><div class="pips">'+disChips+'</div></div>';
+  } else { body='<div class="empty">Buy or breed a horse to learn its tastes.</div>'; }
+  modal('<h3>🍎 Favourite Treats</h3>'+
+    '<div class="msg">Every horse has its own palate — the treat it would do anything for, and the one it snubs. Handy to know for a bribe on a bad day. Just for fun; it changes nothing.</div>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="plClose" style="width:100%">Done</button></div>');
+  $('plClose').onclick=closeModal;
+  document.querySelectorAll('[data-plhorse]').forEach(x=>x.onclick=()=>{ palateSel.horse=x.getAttribute('data-plhorse'); playSfx('tap'); openPalate(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8966,6 +9038,7 @@ function boot(){
   { const gtb=$('gaitBtn'); if(gtb) gtb.onclick=openGaits; }
   { const htb=$('heightBtn'); if(htb) htb.onclick=openHeight; }
   { const mkb=$('marksBtn'); if(mkb) mkb.onclick=openMarkings; }
+  { const plb=$('palateBtn'); if(plb) plb.onclick=openPalate; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
