@@ -238,6 +238,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.lessons = 1000; // satisfies the riding-curriculum goal (past Lead-Rein)
   g.trophies = g.trophies || []; for (let i = 0; i < 6; i++) g.trophies.push({ horse: 'H', breed: 'arabian', disc: 'race', tier: 3, place: 1, day: i + 1 }); // satisfies the ribbon-wall goal (≥5)
   g.stats.ledgerViews = 1; // satisfies the balance-sheet goal
+  HR.toggleRadio(g); // switches on the stable radio → satisfies the radio goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -709,6 +710,60 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const grich = HR.freshGame(); grich.boarders = 40;
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'intheblack').check(grich), 'In the Black unlocks at a 🪙300+ daily surplus');
   ok(HR.GOALS.filter(x => x.id === 'books1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'intheblack').length === 1, 'new finance goal/achievement ids are unique');
+}
+{
+  // ---- stable radio / ambient music ----
+  ok(HR.RADIO_STATIONS.length >= 3, 'a set of radio stations exists');
+  const ids = HR.RADIO_STATIONS.map(s => s.id);
+  ok(new Set(ids).size === ids.length, 'station ids are unique');
+  ok(HR.RADIO_STATIONS.every(s => s.seq.length > 0 && s.seq.every(n => HR.NOTE_HZ[n] != null)), 'every station note resolves to a real frequency');
+  ok(HR.RADIO_STATIONS.every(s => s.seq.every(n => s.scale.indexOf(n) >= 0)), 'every note in a station loop is within its own scale');
+  // normRadio defaults + migration
+  const d = HR.normRadio(null);
+  ok(d.on === false && d.station === HR.RADIO_STATIONS[0].id && d.vol === 0.5 && Array.isArray(d.heard) && d.heard.length === 0, 'normRadio defaults sensibly (off, first station, mid volume)');
+  const mig = HR.normRadio({ on: true, station: 'nope', vol: 5, heard: ['sunrise', 'bogus', 'sunrise'] });
+  ok(mig.station === HR.RADIO_STATIONS[0].id && mig.vol === 1 && JSON.stringify(mig.heard) === JSON.stringify(['sunrise']), 'normRadio migrates a bad station/volume and de-dupes/validates heard');
+  // reducers persist on the game and stay in bounds
+  const g = HR.freshGame();
+  ok(HR.radioState(g).on === false, 'a fresh game has the radio off');
+  HR.toggleRadio(g);
+  ok(g.radio.on === true && HR.radioState(g).on === true, 'toggleRadio switches on and persists to the game');
+  ok(g.radio.heard.indexOf(g.radio.station) >= 0, 'switching on records the current station as heard');
+  HR.setRadioStation(g, 'barn');
+  ok(g.radio.station === 'barn' && g.radio.heard.indexOf('barn') >= 0, 'setRadioStation switches station and records it heard');
+  HR.setRadioStation(g, 'not-a-station');
+  ok(g.radio.station === 'barn', 'an unknown station id is ignored');
+  HR.setRadioVol(g, 2);
+  ok(g.radio.vol === 1, 'volume is clamped to ≤ 1');
+  HR.setRadioVol(g, -3);
+  ok(g.radio.vol === 0, 'volume is clamped to ≥ 0');
+  // deterministic note sequence
+  ok(HR.radioNoteAt('sunrise', 0) === HR.radioNoteAt('sunrise', 0), 'radioNoteAt is deterministic for the same step');
+  const st0 = HR.RADIO_STATIONS[0];
+  ok(HR.radioNoteAt(st0.id, st0.seq.length) === HR.radioNoteAt(st0.id, 0), 'the note loop wraps around');
+  ok(HR.radioNoteAt('sunrise', 3) === st0.seq[3], 'radioNoteAt returns the fixed sequence note');
+  ok(HR.radioSequence('meadow', 4).every(n => HR.radioStationDef('meadow').scale.indexOf(n) >= 0), 'radioSequence stays within the station scale');
+  ok(HR.radioSequence('sunrise', 5).length === 5, 'radioSequence returns the requested number of notes');
+  // composes with the master audio mute
+  const gm = HR.freshGame(); HR.toggleRadio(gm); // radio on, audio still off
+  ok(HR.radioState(gm).on === true && HR.radioAudible(gm) === false, 'the radio is silent while master audio is off');
+  ok(HR.radioEffectiveVol(gm) === 0, 'effective volume is 0 while muted');
+  gm.audio = { on: true, vol: 0.8 }; HR.setRadioVol(gm, 0.5);
+  ok(HR.radioAudible(gm) === true && Math.abs(HR.radioEffectiveVol(gm) - 0.4) < 1e-9, 'with master on, effective volume = master × radio volume');
+  // read-only read helpers (radioState/radioNoteAt/radioAudible don't mutate)
+  const snap = JSON.stringify(gm);
+  HR.radioState(gm); HR.radioNoteAt('barn', 2); HR.radioAudible(gm); HR.radioEffectiveVol(gm); HR.radioSequence('rainy', 3);
+  ok(JSON.stringify(gm) === snap, 'the radio read helpers never mutate the game');
+  // safe on old/sparse saves
+  ok(HR.radioState({}).station === HR.RADIO_STATIONS[0].id, 'radioState is safe on a game with no radio prefs');
+  // goal + achievement
+  const gg = HR.freshGame(); HR.toggleRadio(gg);
+  ok(HR.GOALS.find(x => x.id === 'radio1').done(gg), 'radio1 completes once the radio has been switched on');
+  const gdj = HR.freshGame();
+  HR.RADIO_STATIONS.forEach(s => HR.setRadioStation(gdj, s.id));
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'stabledj').check(gdj), 'Stable DJ unlocks after tuning to every station');
+  ok(!HR.ACHIEVEMENTS.find(a => a.id === 'stabledj').check(HR.freshGame()), 'Stable DJ is locked on a fresh game');
+  ok(HR.GOALS.filter(x => x.id === 'radio1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'stabledj').length === 1, 'new radio goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
