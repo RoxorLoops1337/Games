@@ -341,6 +341,7 @@
     <button class="sbtn" id="tourBtn" title="Ranch tour — photo album & postcard" style="margin-right:4px">📮</button>
     <button class="sbtn" id="mascotBtn" title="Stable mascot — adopt a barn companion" style="margin-right:4px">🐾</button>
     <button class="sbtn" id="gardenBtn" title="Hay meadow — grow your own feed" style="margin-right:4px">🌾</button>
+    <button class="sbtn" id="smithBtn" title="Visiting farrier — traveling blacksmith stall" style="margin-right:4px;position:relative">🧲<span id="smithBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1899,7 +1900,7 @@ function freshGame(legacy){
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0,ceremonies:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
-    decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), lastRoutineDay:0,
+    decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[],tiers:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
@@ -1933,6 +1934,7 @@ function advanceDay(game,rng){
   const choreResult=resolveDailyChores(game, game.day);
   game.day++; game.stats.days++;
   tickGarden(game); // hay meadow grows a little each day (season-aware; dormant in winter)
+  tickSmith(game); // fresh race shoes wear down over a few days
   const notes=[];
   // roll the weekly-recap baseline at the start of a new week, and nudge a fresh gazette issue
   if(rollWeeklyStats(game) && game.day>1) notes.push({t:'info',m:'📰 A new issue of the Skyhorse Gazette is out — see last week’s recap.'});
@@ -2713,7 +2715,7 @@ function disciplineScore(h,disc,game){
   let s=h.speed*w.speed + h.stamina*w.stamina + h.temperament*w.temperament;
   if(disc.coat){ s += (coatOf(h).tier||0)*7 + ((breedDef(h.breed)||{rarity:1}).rarity)*3; } // looks count in Showing
   const form=(0.6+0.4*(h.health/100))*(0.7+0.3*(h.happy/100));
-  return s*form*careBonusMult(h)*bondPoiseMult(h)*careAppointmentMult(h,game)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h)*outfitTurnoutMult(game,disc); // care, bond-poise, appointments, schooling, tack(+tiers), personality, age & show turnout shape aptitude
+  return s*form*careBonusMult(h)*bondPoiseMult(h)*careAppointmentMult(h,game)*affinityMult(h,disc.id)*tackShowMult(h,game)*tackDiscMult(h,disc.id,game)*traitMult(h,'show')*traitMult(h,'disc',disc.id)*agePerformanceMult(h)*outfitTurnoutMult(game,disc)*smithShoeMult(game); // care, bond-poise, appointments, schooling, tack(+tiers), personality, age, turnout & fresh shoes shape aptitude
 }
 function canEnterShow(game,h){
   if(!isAdult(h)) return {ok:false,why:'Only adult horses can compete.'};
@@ -3463,6 +3465,70 @@ function harvestGarden(game){ if(!game) return {ok:false,why:'No ranch.'};
   game.stats=game.stats||{}; game.stats.harvests=(game.stats.harvests||0)+1; game.stats.hayGrown=(game.stats.hayGrown||0)+hay;
   game.garden={ sown:true, growth:0, lastHarvest:(game.day||0) };
   return {ok:true, hay, happy}; }
+// ---------- Visiting farrier / traveling blacksmith (a time-limited rotating smith stall) ----------
+// Like the general store's restock cycle, but themed to a traveling smith who ARRIVES for a few days
+// each cycle with a small rotating set of deals — deterministic (keyed to the visit index via
+// seededOnce), economy-safe (real coins, bounded effects, one buy per deal per visit). Composes with
+// the EXISTING systems (hooves/care needs, hay, tack via a bounded shoe buff, coins).
+const SMITH_CYCLE=12;   // days between the smith's visits
+const SMITH_STAY=4;     // days the smith stays each visit
+const SMITH_SLOTS=3;    // deals offered per visit
+const SMITH_SHOE_DAYS=6;    // how long a set of race shoes lasts
+const SMITH_SHOE_BONUS=0.03;// the tiny, bounded competition edge from fresh shoes (+3%)
+const SMITH_DEALS=[
+  {id:'trim',    name:'Herd Hoof-Trim',  emoji:'🧰', price:130, effect:{kind:'hooves'},                  desc:'The smith trims & checks every horse — tops the 🧰 Farrier & 🧼 Grooming needs.'},
+  {id:'shoes',   name:'Racing Plates',   emoji:'🧲', price:220, effect:{kind:'shoes'},                   desc:'A set of light race shoes — a small competition edge for a few days.'},
+  {id:'carekit', name:'Full Re-Shod',    emoji:'✨', price:180, effect:{kind:'carekit'},                 desc:'A top-to-toe going-over — every care need topped right up.'},
+  {id:'haydeal', name:'Smithy Hay Cart',  emoji:'🌾', price:70,  effect:{kind:'feed', amount:50},        desc:'A cart of hay off the smith’s wagon — 50 bales.'},
+  {id:'tonic',   name:'Hoof & Coat Tonic',emoji:'💊', price:100, effect:{kind:'tonic', health:8, happy:4},desc:'A soothing tonic — a herd-wide pick-me-up.'},
+  {id:'charm',   name:'Lucky Horseshoe',  emoji:'🍀', price:180, effect:{kind:'rep', rep:10},            desc:'A forged lucky shoe nailed above the gate — a little renown.'},
+];
+function smithDealDef(id){ return SMITH_DEALS.find(d=>d.id===id)||null; }
+function smithVisitIndex(day){ return Math.floor((Math.floor(day||1)-1)/SMITH_CYCLE); }
+function smithDayInCycle(day){ return (Math.floor(day||1)-1)%SMITH_CYCLE; }
+function smithVisitActive(game){ return smithDayInCycle((game&&game.day)||1) < SMITH_STAY; }
+function smithVisitWindow(game){ const day=(game&&game.day)||1, idx=smithVisitIndex(day), arrive=idx*SMITH_CYCLE+1, active=smithVisitActive(game);
+  return { index:idx, arrive, depart:arrive+SMITH_STAY-1, active, daysLeft:active?(SMITH_STAY-smithDayInCycle(day)):0 }; }
+function nextSmithVisit(game){ const day=(game&&game.day)||1, idx=smithVisitIndex(day), arrive=(idx+1)*SMITH_CYCLE+1;
+  return { arrive, inDays:arrive-day }; }
+function normSmith(s){ s=s||{}; return {
+  visit:(typeof s.visit==='number'&&isFinite(s.visit))?s.visit:-1,
+  bought:Array.isArray(s.bought)?s.bought.filter(id=>!!smithDealDef(id)):[],
+  shoesT:(typeof s.shoesT==='number'&&isFinite(s.shoesT))?clamp(s.shoesT,0,SMITH_SHOE_DAYS):0 }; }
+function smithBought(game){ const s=normSmith(game&&game.smith); return (s.visit===smithVisitIndex((game&&game.day)||1))?s.bought:[]; }
+function smithDealBought(game,id){ return smithBought(game).indexOf(id)>=0; }
+function smithCatalogueFor(idx){ const rng=seededOnce(((idx>>>0)*2246822519+777)>>>0); const pool=SMITH_DEALS.slice(), out=[];
+  for(let i=0;i<SMITH_SLOTS && pool.length;i++){ const j=Math.floor(rng()*pool.length); out.push(pool.splice(j,1)[0]); }
+  return out; }
+function smithRoster(game){ const idx=smithVisitIndex((game&&game.day)||1);
+  return smithCatalogueFor(idx).map(it=>({ id:it.id, name:it.name, emoji:it.emoji, desc:it.desc, price:it.price, effect:it.effect, bought:smithDealBought(game,it.id) })); }
+function smithDealAffordable(game,id){ const s=smithRoster(game).find(x=>x.id===id); return !!s && !s.bought && smithVisitActive(game) && ((game&&game.money)||0)>=s.price; }
+function applySmithEffect(game,id){ const it=smithDealDef(id); if(!it) return null; const e=it.effect;
+  if(e.kind==='hooves'){ let n=0; for(const h of (game.horses||[])){ needsInit(h); for(const nid of ['hooves','groom']){ if(h.needs[nid]<100){ n++; h.needs[nid]=100; } } } return {hooves:n}; }
+  if(e.kind==='carekit'){ let n=0; for(const h of (game.horses||[])){ needsInit(h); for(const nid of NEED_IDS){ if(h.needs[nid]<100) n++; h.needs[nid]=100; } } return {caredNeeds:n}; }
+  if(e.kind==='feed'){ game.feed=(game.feed||0)+e.amount; return {feed:e.amount}; }
+  if(e.kind==='tonic'){ for(const h of (game.horses||[])){ h.health=clamp((h.health||0)+(e.health||0),0,100); h.happy=clamp((h.happy||0)+(e.happy||0),0,100); } return {horses:(game.horses||[]).length}; }
+  if(e.kind==='rep'){ game.rep=(game.rep||0)+(e.rep||0); return {rep:e.rep}; }
+  if(e.kind==='shoes'){ if(!game.smith||typeof game.smith!=='object') game.smith=normSmith(null); game.smith.shoesT=SMITH_SHOE_DAYS; return {shoesDays:SMITH_SHOE_DAYS}; }
+  return null; }
+function buySmithDeal(game,id){
+  if(!game) return {ok:false,why:'No ranch.'};
+  if(!smithVisitActive(game)) return {ok:false,why:'The farrier isn’t here right now.'};
+  const slot=smithRoster(game).find(s=>s.id===id);
+  if(!slot) return {ok:false,why:'Not on offer this visit.'};
+  const idx=smithVisitIndex(game.day||1);
+  game.smith=normSmith(game.smith);
+  if(game.smith.visit!==idx){ game.smith.visit=idx; game.smith.bought=[]; } // a fresh visit → reset the bought set
+  if(game.smith.bought.indexOf(id)>=0) return {ok:false,why:'Already bought this visit.'};
+  if((game.money||0)<slot.price) return {ok:false,why:'Not enough coins.'};
+  game.money-=slot.price; game.smith.bought.push(id);
+  const effect=applySmithEffect(game,id);
+  game.stats=game.stats||{}; game.stats.smithDeals=(game.stats.smithDeals||0)+1;
+  return {ok:true, deal:slot, price:slot.price, effect};
+}
+function smithShoeActive(game){ return normSmith(game&&game.smith).shoesT>0; }
+function smithShoeMult(game){ return smithShoeActive(game)?(1+SMITH_SHOE_BONUS):1; }
+function tickSmith(game){ if(!game||!game.smith) return; if((game.smith.shoesT||0)>0) game.smith.shoesT=Math.max(0, game.smith.shoesT-1); }
 
 // ---------- Shareable "trading card" data model (rendering is DOM-only) ----------
 function stampFor(game){
@@ -3641,6 +3707,7 @@ const ACHIEVEMENTS=[
   {id:'postcardperfect',icon:'📮', name:'Postcard Perfect',    desc:'Fill a ranch tour with six highlight stops.',  check:g=>tourAlbum(g).count>=6},
   {id:'menagerie',      icon:'🐾', name:'Menagerie',           desc:'Welcome three different companions to the ranch.', check:g=>((g.stats&&g.stats.mascotsAdopted)||0)>=3},
   {id:'homegrown',      icon:'🌾', name:'Home-Grown',          desc:'Bring in five harvests from your hay meadow.', check:g=>((g.stats&&g.stats.harvests)||0)>=5},
+  {id:'forgeregular',   icon:'🧲', name:'Regular at the Forge', desc:'Buy ten deals from the traveling blacksmith.', check:g=>((g.stats&&g.stats.smithDeals)||0)>=10},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3892,6 +3959,7 @@ const GOALS=[
   {id:'tour1',   desc:'Take the ranch photo tour (📮)',                  tip:g=>((g.stats&&g.stats.toursViewed)||0)+'/1',done:g=>((g.stats&&g.stats.toursViewed)||0)>=1,       reward:{money:300,rep:10}},
   {id:'mascot1', desc:'Adopt a stable mascot (🐾)',                      tip:g=>hasMascot(g)?activeMascot(g).emoji+' '+activeMascot(g).name:'none yet',done:g=>hasMascot(g),      reward:{money:300,rep:15}},
   {id:'garden1', desc:'Sow the hay meadow (🌾 garden)',                  tip:g=>normGarden(g.garden).sown?'sown & growing':'not sown',done:g=>normGarden(g.garden).sown,          reward:{money:400,rep:15}},
+  {id:'smith1',  desc:'Deal with the visiting farrier (🧲)',             tip:g=>((g.stats&&g.stats.smithDeals)||0)+'/1 deals',done:g=>((g.stats&&g.stats.smithDeals)||0)>=1,        reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3977,6 +4045,7 @@ const HR = {
   OUTFITS, OUTFIT_TURNOUT_CAP, outfitDef, normWardrobe, ownedOutfits, hasOutfit, outfitAffordable, buyOutfit, equipOutfit, equippedOutfit, wardrobeSpend, outfitTurnoutBonus, outfitTurnoutMult,
   MASCOTS, MASCOT_NAME_MAX, MASCOT_PERK_CAP, MASCOT_BOND_CAP, mascotDef, normMascot, activeMascot, hasMascot, adoptMascot, renameMascot, retireMascot, mascotPerk, mascotQuip,
   GARDEN, gardenSeasonGrowthMul, normGarden, gardenYield, gardenGrowthPerDay, gardenState, sowGarden, tickGarden, harvestGarden,
+  SMITH_DEALS, SMITH_CYCLE, SMITH_STAY, SMITH_SLOTS, SMITH_SHOE_DAYS, SMITH_SHOE_BONUS, smithDealDef, smithVisitIndex, smithVisitActive, smithVisitWindow, nextSmithVisit, normSmith, smithBought, smithDealBought, smithRoster, smithDealAffordable, applySmithEffect, buySmithDeal, smithShoeActive, smithShoeMult, tickSmith,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
   isAuctionDay, nextAuction, makeAuctionLot, makeAuctionLots, aiCounter, resolveAuction, consignValue,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
@@ -4104,6 +4173,7 @@ function load(){
     G.wardrobe=normWardrobe(G.wardrobe); // show wardrobe (owned outfits + equipped) — safe on old saves
     G.mascot=normMascot(G.mascot); // stable mascot (type + name) — safe on old saves
     G.garden=normGarden(G.garden); // hay meadow plot — safe on old saves
+    G.smith=normSmith(G.smith); // visiting-farrier stall state — safe on old saves
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
@@ -4273,6 +4343,8 @@ function renderHUD(){
   { const tb=$('tripBadge'); if(tb){ const n=horsesAway(G).length; tb.textContent=n; tb.style.display=n>0?'block':'none'; } }
   // general store: badge shows how many affordable deals are still in stock
   { const sb=$('storeBadge'); if(sb){ const n=storeStock(G).filter(s=>!s.sold&&(G.money||0)>=s.price).length; sb.textContent=n; sb.style.display=n>0?'block':'none'; } }
+  // visiting farrier: badge shows when the smith is in town
+  { const sb=$('smithBadge'); if(sb){ sb.style.display=smithVisitActive(G)?'block':'none'; } }
   // coming-of-age: badge shows how many horses have a pending ceremony
   { const cb=$('cerBadge'); if(cb){ const n=comingOfAgeDue(G).length; cb.textContent=n; cb.style.display=n>0?'block':'none'; } }
 }
@@ -6117,6 +6189,37 @@ function openGarden(){
   { const hv=$('gardenHarvest'); if(hv) hv.onclick=()=>{ const r=harvestGarden(G); if(!r.ok){ toast(r.why,'info'); return; }
       burst('🌾✨',14); playSfx('goal'); toast('🌾 Harvest in! +🌾'+r.hay+' hay for the barn.','good'); reopen(); }; }
 }
+function openSmith(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const w=smithVisitWindow(G), shoe=smithShoeActive(G);
+  let body;
+  if(w.active){
+    const roster=smithRoster(G).map(d=>{
+      const afford=smithDealAffordable(G,d.id);
+      const btn = d.bought ? '<span class="pill" style="color:var(--good)">✓ Bought</span>'
+        : '<button class="btn sm" data-smith="'+d.id+'" '+(afford?'':'disabled')+'>🪙'+fmt(d.price)+'</button>';
+      return '<div class="decoritem"><div class="de">'+d.emoji+'</div>'+
+        '<div class="grow"><div class="hname" style="font-size:13px">'+esc(d.name)+'</div>'+
+        '<div class="hbreed">'+esc(d.desc)+'</div></div>'+btn+'</div>';
+    }).join('');
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname">🧑‍🔧 The smith is here! <span class="pill">'+w.daysLeft+' day'+(w.daysLeft!==1?'s':'')+' left</span></div>'+
+      '<div class="hbreed" style="margin-top:2px">A different set of deals each visit — grab what you need before the wagon rolls on.</div></div>'+
+      '<div class="swlabel" style="margin-top:8px">🛠️ Today’s deals</div><div>'+roster+'</div>';
+  } else {
+    const nv=nextSmithVisit(G);
+    body='<div class="empty">The traveling farrier is on the road. Next visit in about '+nv.inDays+' day'+(nv.inDays!==1?'s':'')+' (day '+nv.arrive+').</div>';
+  }
+  modal('<h3>🧲 Visiting Farrier</h3>'+
+    '<div class="msg">A traveling blacksmith who rolls through every so often with a rotating stall of smithing deals — hoof-trims, fresh shoes, tonics and bargains.</div>'+
+    (shoe?'<div class="hbreed" style="color:var(--good);margin-bottom:6px">🧲 Your horses are freshly shod — a small edge in the ring for now.</div>':'')+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="smithClose" style="width:100%">Done</button></div>');
+  $('smithClose').onclick=closeModal;
+  document.querySelectorAll('[data-smith]').forEach(b=>b.onclick=()=>{ const r=buySmithDeal(G, b.getAttribute('data-smith'));
+    if(!r.ok){ toast(r.why,'bad'); return; } coinPop(-r.price); burst(r.deal.emoji+'✨',12); playSfx('coin');
+    const fresh=checkAchievements(G), gg=checkGoals(G); toast('🧲 '+r.deal.name+' — deal done!','good');
+    save(); renderHUD(); openSmith(); });
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -6921,6 +7024,7 @@ function boot(){
   { const tb=$('tourBtn'); if(tb) tb.onclick=openTourAlbum; }
   { const mb=$('mascotBtn'); if(mb) mb.onclick=openMascot; }
   { const gb=$('gardenBtn'); if(gb) gb.onclick=openGarden; }
+  { const sb=$('smithBtn'); if(sb) sb.onclick=openSmith; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

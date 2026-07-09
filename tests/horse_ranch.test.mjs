@@ -244,6 +244,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.toursViewed = 1; // satisfies the ranch-tour goal
   g.mascot = { type: 'barncat', name: 'Tom' }; // satisfies the stable-mascot goal
   g.garden = { sown: true, growth: 0, lastHarvest: 0 }; // satisfies the hay-meadow goal
+  g.stats.smithDeals = 1; // satisfies the visiting-farrier goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -1074,6 +1075,78 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const gAch = HR.freshGame(); gAch.stats.harvests = 5;
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'homegrown').check(gAch), 'Home-Grown unlocks at five harvests');
   ok(HR.GOALS.filter(x => x.id === 'garden1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'homegrown').length === 1, 'new garden goal/achievement ids are unique');
+}
+{
+  // ---- visiting farrier / traveling blacksmith ----
+  ok(HR.SMITH_DEALS.length >= 4, 'a catalogue of smith deals exists');
+  const dids = HR.SMITH_DEALS.map(d => d.id);
+  ok(new Set(dids).size === dids.length, 'smith deal ids are unique');
+  // visit window is deterministic + periodic (here for SMITH_STAY days each cycle)
+  const active = day => HR.smithVisitActive({ day });
+  ok(active(1) && active(HR.SMITH_STAY) && !active(HR.SMITH_STAY + 1), 'the smith is here for the first days of a cycle, then leaves');
+  ok(!active(HR.SMITH_CYCLE) && active(HR.SMITH_CYCLE + 1), 'the smith returns at the start of the next cycle');
+  const w = HR.smithVisitWindow({ day: 2 });
+  ok(w.active && w.arrive === 1 && w.depart === HR.SMITH_STAY && w.daysLeft === HR.SMITH_STAY - 1, 'the visit window reports arrive/depart/days-left');
+  const nv = HR.nextSmithVisit({ day: 8 });
+  ok(nv.arrive === HR.SMITH_CYCLE + 1 && nv.inDays === HR.SMITH_CYCLE + 1 - 8, 'nextSmithVisit reports the upcoming arrival');
+  // roster is deterministic per visit and rotates across visits
+  const r0a = HR.smithRoster({ day: 1 }).map(d => d.id);
+  const r0b = HR.smithRoster({ day: 3 }).map(d => d.id); // same visit index 0
+  ok(JSON.stringify(r0a) === JSON.stringify(r0b) && r0a.length === HR.SMITH_SLOTS, 'the roster is deterministic within a visit');
+  const rosters = [0, 1, 2, 3, 4].map(i => HR.smithRoster({ day: i * HR.SMITH_CYCLE + 1 }).map(d => d.id).join(','));
+  ok(new Set(rosters).size >= 2, 'the roster rotates across visits');
+  // buy: coins checked, bounded effect, one-per-deal-per-visit, resets next visit
+  const g = HR.freshGame(); g.money = 9999; g.day = 2; // smith active, visit 0
+  const roster = HR.smithRoster(g);
+  const feedDeal = roster.find(d => d.effect.kind === 'feed') || HR.SMITH_DEALS.find(d => d.effect.kind === 'feed');
+  // ensure a known deal is on offer by picking the first roster deal
+  const deal = roster[0];
+  const before = g.money;
+  const r = HR.buySmithDeal(g, deal.id);
+  ok(r.ok && g.money === before - deal.price && HR.smithDealBought(g, deal.id), 'buySmithDeal deducts coins and marks the deal bought');
+  ok(!HR.buySmithDeal(g, deal.id).ok, 'the same deal cannot be bought twice in one visit');
+  ok((g.stats.smithDeals || 0) === 1, 'the smith purchase is counted');
+  // away → can't buy
+  const gAway = HR.freshGame(); gAway.money = 9999; gAway.day = 8; // inactive
+  ok(!HR.smithVisitActive(gAway) && !HR.buySmithDeal(gAway, HR.smithRoster(gAway)[0].id).ok, 'you can’t deal when the smith has moved on');
+  // bought-set resets on the next visit
+  const g2 = HR.freshGame(); g2.money = 9999; g2.day = 2; HR.buySmithDeal(g2, HR.smithRoster(g2)[0].id);
+  g2.day = HR.SMITH_CYCLE + 1; // next visit
+  ok(HR.smithBought(g2).length === 0, 'the bought-set resets on the next visit');
+  // blocked without coins
+  const gp = HR.freshGame(); gp.money = 5; gp.day = 2;
+  ok(!HR.buySmithDeal(gp, HR.smithRoster(gp)[0].id).ok, 'buySmithDeal is blocked without enough coins');
+  // bounded effects: hoof-trim tops hooves need to 100 (capped)
+  const gh = HR.freshGame(); gh.money = 9999; gh.day = 2; gh.horses = [HR.mkHorse({ breed: 'arabian', age: 20 })];
+  gh.horses[0].needs.hooves = 20;
+  const eff = HR.applySmithEffect(gh, 'trim');
+  ok(gh.horses[0].needs.hooves === 100 && eff.hooves >= 1, 'the hoof-trim tops the hooves need (capped at 100)');
+  // shoes buff is small + bounded + temporary, and lifts show scores while active
+  const gs = HR.freshGame(); gs.money = 9999; gs.day = 2;
+  HR.applySmithEffect(gs, 'shoes');
+  ok(HR.smithShoeActive(gs) && Math.abs(HR.smithShoeMult(gs) - (1 + HR.SMITH_SHOE_BONUS)) < 1e-9, 'fresh shoes give a small bounded score multiplier');
+  const hh = HR.mkHorse({ breed: 'quarter', age: 20, speed: 70, stamina: 70, temperament: 70 });
+  const race = HR.DISCIPLINES.find(d => d.id === 'race');
+  const noShoe = HR.freshGame();
+  ok(HR.disciplineScore(hh, race, gs) > HR.disciplineScore(hh, race, noShoe), 'shoes lift the show score while active');
+  ok(HR.disciplineScore(hh, race, gs) <= HR.disciplineScore(hh, race, noShoe) * (1 + HR.SMITH_SHOE_BONUS) + 1e-6, 'the shoe lift is within the cap');
+  // shoes wear down via advanceDay
+  gs.feed = 9999; const t0 = gs.smith.shoesT; HR.advanceDay(gs, rng(1));
+  ok(gs.smith.shoesT === t0 - 1, 'the shoes wear down one day at a time');
+  // migration + read-only + sparse
+  const mig = HR.normSmith({ visit: 3, bought: ['trim', 'bogus'], shoesT: 99 });
+  ok(mig.visit === 3 && JSON.stringify(mig.bought) === JSON.stringify(['trim']) && mig.shoesT === HR.SMITH_SHOE_DAYS, 'normSmith validates bought + clamps shoesT');
+  ok(HR.smithVisitActive({}) !== undefined && HR.smithRoster({}).length === HR.SMITH_SLOTS, 'smith helpers are safe on a bare game');
+  const gro = HR.freshGame(); gro.day = 2;
+  const snap = JSON.stringify(gro);
+  HR.smithRoster(gro); HR.smithVisitActive(gro); HR.smithDealBought(gro, 'trim'); HR.nextSmithVisit(gro); HR.smithShoeMult(gro);
+  ok(JSON.stringify(gro) === snap, 'the smith read helpers never mutate the game');
+  // goal + achievement
+  const gg = HR.freshGame(); gg.stats.smithDeals = 1;
+  ok(HR.GOALS.find(x => x.id === 'smith1').done(gg), 'smith1 completes after a smith deal');
+  const ga = HR.freshGame(); ga.stats.smithDeals = 10;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'forgeregular').check(ga), 'Regular at the Forge unlocks at ten deals');
+  ok(HR.GOALS.filter(x => x.id === 'smith1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'forgeregular').length === 1, 'new smith goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
