@@ -241,6 +241,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   HR.toggleRadio(g); // switches on the stable radio → satisfies the radio goal
   g.enrichment = { owned: ['jollyball'] }; // satisfies the paddock-enrichment goal
   g.wardrobe = { owned: ['tweed'], equipped: 'tweed' }; // satisfies the show-wardrobe goal
+  g.stats.toursViewed = 1; // satisfies the ranch-tour goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -882,6 +883,54 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'bestdressed').check(gall), 'Best Dressed unlocks with every outfit');
   ok(!HR.ACHIEVEMENTS.find(a => a.id === 'bestdressed').check(gg), 'Best Dressed is locked with only one outfit');
   ok(HR.GOALS.filter(x => x.id === 'outfit1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'bestdressed').length === 1, 'new wardrobe goal/achievement ids are unique');
+}
+{
+  // ---- ranch-tour photo album / postcard ----
+  const g = HR.freshGame();
+  g.decor = g.decor || {}; g.decor.name = 'Willow Creek';
+  g.horses = [
+    HR.mkHorse({ breed: 'friesian', age: 20, speed: 90, stamina: 85, temperament: 80, coat: { name: 'Black', tier: 0 }, wins: 4, name: 'Onyx' }),
+    HR.mkHorse({ breed: 'arabian', age: 3, coat: { name: 'Bay', tier: 0 }, name: 'Pip' }),
+    HR.mkHorse({ breed: 'quarter', age: 20, coat: { name: 'Cremello', tier: 2 }, name: 'Pearl' }),
+  ];
+  g.trophies = [{ horse: 'Onyx', disc: 'race', tier: 3, place: 1, day: 10 }, { horse: 'Onyx', disc: 'jump', tier: 2, place: 2, day: 8 }];
+  g.scrapbook = [{ id: 'm1', kind: 'firstwin', emoji: '🥇', title: 'First Win', name: 'Onyx', day: 10, seq: 1, pinned: true }];
+  // tourAlbum cover + stops
+  const al = HR.tourAlbum(g);
+  ok(al.cover.ranch === 'Willow Creek' && al.cover.day === g.day, 'the cover shows the ranch name + day');
+  ok(al.stops.length >= 4 && !al.empty, 'a populated ranch has several tour stops');
+  const byId = id => al.stops.find(s => s.id === id);
+  ok(byId('star') && /Onyx/.test(byId('star').subtitle), 'the star stop is the highest-overall horse');
+  ok(byId('champion') && /Onyx/.test(byId('champion').subtitle), 'a 3+-win horse gets the champion stop');
+  ok(byId('coat') && /Pearl/.test(byId('coat').subtitle) && /Cremello/.test(byId('coat').subtitle), 'the finest-coat stop picks the rare-coat horse');
+  ok(byId('foal') && /Pip/.test(byId('foal').subtitle), 'the newest-arrival stop picks the foal');
+  ok(byId('ribbons') && /2 rosettes/.test(byId('ribbons').subtitle), 'the ribbon stop reflects the trophy count');
+  ok(byId('memory') && /First Win/.test(byId('memory').subtitle), 'the scrapbook stop surfaces a highlight');
+  ok(byId('herd') && /3 horses/.test(byId('herd').subtitle), 'the herd stop counts horses + breeds');
+  // postcard + deterministic text
+  const pc = HR.postcard(g);
+  ok(/Willow Creek/.test(pc.title) && pc.lines.length >= 3, 'the postcard is titled for the ranch with highlight lines');
+  const t1 = HR.postcardText(g), t2 = HR.postcardText(g);
+  ok(t1 === t2, 'postcardText is deterministic');
+  ok(/Willow Creek/.test(t1) && /Fleur/.test(t1) && /Onyx/.test(t1), 'postcard text includes the ranch, manager & a headline horse');
+  ok(t1.split('\n').length >= 5, 'postcard text is a multi-line keepsake');
+  // Postcard Perfect achievement at 6 stops
+  ok(al.count >= 6, 'this rich ranch fills six+ stops');
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'postcardperfect').check(g), 'Postcard Perfect unlocks at six stops');
+  // read-only + safe on an empty ranch
+  const snap = JSON.stringify(g);
+  HR.tourAlbum(g); HR.tourStops(g); HR.postcard(g); HR.postcardText(g);
+  ok(JSON.stringify(g) === snap, 'the tour is read-only (never mutates the game)');
+  const g0 = HR.freshGame(); g0.horses = []; g0.trophies = []; g0.scrapbook = [];
+  const snap0 = JSON.stringify(g0);
+  const al0 = HR.tourAlbum(g0);
+  ok(al0.empty && al0.stops.length === 0 && al0.cover.ranch, 'an empty ranch yields a cover with no stops');
+  ok(HR.postcardText(g0).length > 0 && JSON.stringify(g0) === snap0, 'the postcard is safe + read-only on an empty ranch');
+  ok(HR.tourAlbum({}).cover.ranch === 'Skyhorse Stables', 'tourAlbum is safe on a bare game');
+  // goal + achievement ids
+  const gv = HR.freshGame(); gv.stats.toursViewed = 1;
+  ok(HR.GOALS.find(x => x.id === 'tour1').done(gv), 'tour1 completes after taking the tour');
+  ok(HR.GOALS.filter(x => x.id === 'tour1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'postcardperfect').length === 1, 'new tour goal/achievement ids are unique');
 }
 
 // ---- personality traits ----

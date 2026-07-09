@@ -338,6 +338,7 @@
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="enrichBtn" title="Paddock enrichment — toys & comforts for the herd" style="margin-right:4px">🧸</button>
     <button class="sbtn" id="wardrobeBtn" title="Show wardrobe — rider outfits & show attire" style="margin-right:4px">👗</button>
+    <button class="sbtn" id="tourBtn" title="Ranch tour — photo album & postcard" style="margin-right:4px">📮</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -3389,6 +3390,64 @@ function hofToModel(rec,game){
     stamp:stampFor(game), stable:ranchName(game), manager:'Fleur'
   };
 }
+// ---------- Ranch-tour photo album / postcard (READ-ONLY presentation over existing state) ----------
+// A curated gallery + a shareable postcard assembled from the herd, scrapbook, trophies & stats.
+// No economy/state change, no new persisted data. Deterministic — no Date/Math.random.
+function tourHerd(game){ return ((game&&game.horses)||[]).filter(Boolean); }
+function tourScrapbook(game){ // read-only: never creates game.scrapbook
+  const a=(game&&Array.isArray(game.scrapbook))?game.scrapbook:[];
+  return a.slice().sort((x,y)=> (y.day-x.day) || ((y.seq||0)-(x.seq||0)) || (y.pinned?1:0)-(x.pinned?1:0)); }
+function tourStops(game){
+  const hs=tourHerd(game), stops=[];
+  if(hs.length){
+    const star=hs.slice().sort((a,b)=>overall(b)-overall(a))[0];
+    stops.push({ id:'star', emoji:'⭐', title:'Star of the Stable',
+      subtitle:star.name+' — '+((breedDef(star.breed)||{name:star.breed}).name)+' · OVR '+overall(star), ref:star.id||null });
+    const champs=hs.filter(h=>(h.wins||0)>=3);
+    if(champs.length){ const c=champs.slice().sort((a,b)=>(b.wins||0)-(a.wins||0))[0];
+      stops.push({ id:'champion', emoji:'🏆', title:'Champion',
+        subtitle:c.name+' — '+(c.wins||0)+' show wins', ref:c.id||null }); }
+    const coatH=hs.slice().sort((a,b)=>((coatOf(b).tier||0)-(coatOf(a).tier||0))||(overall(b)-overall(a)))[0];
+    if((coatOf(coatH).tier||0)>0) stops.push({ id:'coat', emoji:'🎨', title:'Finest Coat',
+      subtitle:coatH.name+' — '+coatOf(coatH).name+' ('+(COAT_TIER_NAME[coatOf(coatH).tier]||'Rare')+')', ref:coatH.id||null });
+    const foals=hs.filter(h=>stageForAge(h.age||0).id==='foal');
+    if(foals.length){ const f=foals.slice().sort((a,b)=>(a.age||0)-(b.age||0))[0];
+      stops.push({ id:'foal', emoji:'🐣', title:'Newest Arrival',
+        subtitle:f.name+' — '+((breedDef(f.breed)||{name:f.breed}).name)+' · '+ageLabel(f), ref:f.id||null }); }
+  }
+  const rt=ribbonTally(game);
+  if(rt.ribbons>0) stops.push({ id:'ribbons', emoji:'🎗️', title:'Ribbon Wall',
+    subtitle:rt.ribbons+' rosette'+(rt.ribbons!==1?'s':'')+' — '+rt.gold+'🥇 '+rt.silver+'🥈 '+rt.bronze+'🥉', ref:null });
+  const sb=tourScrapbook(game);
+  if(sb.length){ const m=sb.slice().sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.day-a.day))[0];
+    stops.push({ id:'memory', emoji:m.emoji||'📸', title:'From the Scrapbook',
+      subtitle:(m.title||'Memory')+(m.name?' · '+m.name:''), ref:m.id||null }); }
+  if(hs.length){ const breeds=new Set(hs.map(h=>h.breed)).size;
+    stops.push({ id:'herd', emoji:'🐴', title:'The Herd',
+      subtitle:hs.length+' horse'+(hs.length!==1?'s':'')+' across '+breeds+' breed'+(breeds!==1?'s':''), ref:null }); }
+  return stops;
+}
+function tourAlbum(game){
+  const g=game||{}, ranch=ranchName(g), stops=tourStops(g), st=stampFor(g);
+  const hs=tourHerd(g), rt=ribbonTally(g);
+  const star=hs.length?hs.slice().sort((a,b)=>overall(b)-overall(a))[0]:null;
+  const headline = star ? ('Home of '+star.name+', OVR '+overall(star))
+    : (rt.ribbons?('Winners of '+rt.ribbons+' rosettes'):'A brand-new ranch finding its feet');
+  return { cover:{ ranch, day:st.day, stamp:st, rank:playerRank(g), rankName:rankFor(g.rep||0).name,
+      headline, subtitle:'A guided tour of '+ranch }, stops, count:stops.length, empty:stops.length===0 };
+}
+function postcard(game){
+  const g=game||{}, ranch=ranchName(g), st=stampFor(g), stops=tourStops(g);
+  const lines=stops.slice(0,4).map(s=>s.emoji+' '+s.subtitle);
+  if(!lines.length) lines.push('🌱 Just getting started — come back soon!');
+  return { title:'Greetings from '+ranch, greeting:'Wish you were here at '+ranch+'!',
+    lines, stamp:st, ranch, day:st.day, rankName:rankFor(g.rep||0).name, manager:'Fleur' };
+}
+function postcardText(game){
+  const p=postcard(game);
+  return ['📮 '+p.title, p.greeting, ''].concat(p.lines).concat(['',
+    '— '+p.manager+' · '+p.stamp.season+', Year '+p.stamp.year+' (day '+p.stamp.day+')']).join('\n');
+}
 
 // ---------- Guided tutorial (data only; the spotlight/positioning is DOM) ----------
 // Each step points at a real element and tab; `done(game)` (optional) auto-advances.
@@ -3471,6 +3530,7 @@ const ACHIEVEMENTS=[
   {id:'stabledj',       icon:'📻', name:'Stable DJ',           desc:'Tune the stable radio to all four stations.', check:g=>{const h=radioState(g).heard; return RADIO_STATIONS.every(s=>h.indexOf(s.id)>=0);}},
   {id:'playground',     icon:'🧸', name:'Paddock Playground',  desc:'Kit the paddock out with every enrichment toy.', check:g=>ENRICHMENT_ITEMS.every(it=>hasEnrichment(g,it.id))},
   {id:'bestdressed',    icon:'👗', name:'Best Dressed',        desc:'Collect every outfit in the show wardrobe.',   check:g=>OUTFITS.every(o=>hasOutfit(g,o.id))},
+  {id:'postcardperfect',icon:'📮', name:'Postcard Perfect',    desc:'Fill a ranch tour with six highlight stops.',  check:g=>tourAlbum(g).count>=6},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3719,6 +3779,7 @@ const GOALS=[
   {id:'radio1',  desc:'Switch on the stable radio (📻)',                 tip:g=>radioState(g).heard.length+' station'+(radioState(g).heard.length!==1?'s':''),done:g=>radioState(g).heard.length>=1,     reward:{money:200,rep:10}},
   {id:'enrich1', desc:'Add a paddock enrichment toy (🧸)',               tip:g=>ownedEnrichment(g).length+'/1 items',done:g=>ownedEnrichment(g).length>=1,                    reward:{money:400,rep:15}},
   {id:'outfit1', desc:'Buy a show outfit for the wardrobe (👗)',         tip:g=>ownedOutfits(g).length+'/1 outfits',done:g=>ownedOutfits(g).length>=1,                      reward:{money:400,rep:15}},
+  {id:'tour1',   desc:'Take the ranch photo tour (📮)',                  tip:g=>((g.stats&&g.stats.toursViewed)||0)+'/1',done:g=>((g.stats&&g.stats.toursViewed)||0)>=1,       reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3796,6 +3857,7 @@ const HR = {
   canStand, studFee, studDemand, studIncomeFor, studStallions, studIncome,
   LEDGER_CATEGORIES, ledgerCategoryDef, dailyLedger, financeSummary, balanceSheet,
   cardModel, hofToModel, stampFor,
+  tourHerd, tourScrapbook, tourStops, tourAlbum, postcard, postcardText,
   RANCH_NAME_MAX, ranchName, setRanchName, BARN_COLORS, GROUND_COLORS, FLAG_COLORS,
   barnColor, groundColor, flagColor, DECOR, decorDef, normDecor, ownedDecor, hasDecor,
   decorUnlocked, decorAffordable, buyDecor, decorSpend,
@@ -5850,6 +5912,31 @@ function openWardrobe(){
     if(!r.ok){ toast(r.why,'bad'); return; } playSfx('tap'); toast('★ Now wearing '+r.item.name+'.','good'); reopen(); });
   { const u=$('wardUnequip'); if(u) u.onclick=()=>{ equipOutfit(G,null); playSfx('tap'); reopen(); }; }
 }
+function openTourAlbum(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // taking the tour counts toward the tour goal (a usage stat — no economy change)
+  G.stats=G.stats||{}; G.stats.toursViewed=(G.stats.toursViewed||0)+1;
+  const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD();
+  const al=tourAlbum(G), pc=postcard(G), c=al.cover;
+  const stops = al.stops.length ? al.stops.map(s=>{ const h=s.ref?(G.horses||[]).find(x=>x.id===s.ref):null;
+    return '<div class="lbrow"><div class="hface">'+(h?horseArt(h,32):('<span style="font-size:20px">'+s.emoji+'</span>'))+'</div>'+
+      '<div class="grow"><div class="lbname">'+s.emoji+' '+esc(s.title)+'</div>'+
+      '<div class="lbsub">'+esc(s.subtitle)+'</div></div></div>'; }).join('')
+    : '<div class="empty">Your ranch is just getting started — buy or breed a horse and the tour will fill up.</div>';
+  const pcText=postcardText(G);
+  const pcLines=pc.lines.map(l=>'<div class="lbsub">'+esc(l)+'</div>').join('');
+  modal('<h3>📮 Ranch Tour</h3>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname" style="font-size:15px">'+esc(c.ranch)+'</div>'+
+    '<div class="hbreed" style="margin-top:2px">'+esc(c.headline)+'</div>'+
+    '<div class="hbreed" style="margin-top:2px">'+c.stamp.season+' · Year '+c.stamp.year+' · day '+c.day+' · ranked #'+c.rank+' ('+esc(c.rankName)+')</div></div>'+
+    '<div class="swlabel" style="margin-top:8px">📸 On the tour</div><div>'+stops+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">💌 Postcard</div>'+
+    '<div class="card"><div class="hname" style="font-size:13px">'+esc(pc.title)+'</div><div class="hbreed" style="font-style:italic;margin:3px 0">'+esc(pc.greeting)+'</div>'+pcLines+
+    '<div class="hbreed" style="margin-top:4px;opacity:.7">— '+esc(pc.manager)+' · '+pc.stamp.season+', Year '+pc.stamp.year+'</div></div>'+
+    '<div class="btnrow" style="gap:6px"><button class="btn" id="tourCopy" style="flex:1">📋 Copy postcard</button><button class="btn ghost" id="tourClose" style="flex:1">Done</button></div>');
+  $('tourClose').onclick=closeModal;
+  { const cp=$('tourCopy'); if(cp) cp.onclick=()=>{ try{ if(navigator&&navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(pcText); toast('📋 Postcard copied — share it anywhere!','good'); } else { toast('Copy not available here.','info'); } }catch(e){ toast('Copy not available here.','info'); } playSfx('tap'); }; }
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -6651,6 +6738,7 @@ function boot(){
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
   { const eb=$('enrichBtn'); if(eb) eb.onclick=openEnrichment; }
   { const wb=$('wardrobeBtn'); if(wb) wb.onclick=openWardrobe; }
+  { const tb=$('tourBtn'); if(tb) tb.onclick=openTourAlbum; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
