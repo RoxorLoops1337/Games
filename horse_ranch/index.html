@@ -354,6 +354,7 @@
     <button class="sbtn" id="wildBtn" title="Paddock wildlife — daily sightings & life-list" style="margin-right:4px">🦋</button>
     <button class="sbtn" id="silksBtn" title="Stable colours — design your racing silks" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="bdayBtn" title="Birthdays — foaling-day celebrations" style="margin-right:4px">🎂</button>
+    <button class="sbtn" id="vetBtn" title="Vet report card — herd health grades" style="margin-right:4px">🩺</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -667,6 +668,65 @@ function careTier(h){ const c=careScore(h);
        : c>=34?{id:'restless',label:'Needs care',emoji:'😕'} : {id:'neglected',label:'Neglected',emoji:'😟'}; }
 // a gentle performance/mood multiplier: careScore 100→+6%, ~62→neutral, 0→-10%
 function careBonusMult(h){ return 0.9 + 0.16*(careScore(h)/100); }
+
+// ---------- Visiting-vet health-check report card (READ-ONLY wellness assessment; grades + notes, no state change) ----------
+// A diagnostic report card per horse, graded from EXISTING welfare state (health, happiness/mood, care needs,
+// life-stage). DISTINCT from the farrier/vet APPOINTMENTS scheduler — this books nothing; it's purely a readout.
+// Deterministic — no Date/Math.random. (careScore/needsInit lazily initialise a horse's needs record, which is
+// idempotent; the report itself changes no gameplay stat.)
+const HEALTH_GRADES=[
+  {min:95, letter:'A+', label:'Excellent', emoji:'🌟'},
+  {min:86, letter:'A',  label:'Very good',  emoji:'💚'},
+  {min:74, letter:'B',  label:'Good',       emoji:'🙂'},
+  {min:60, letter:'C',  label:'Fair',       emoji:'😐'},
+  {min:45, letter:'D',  label:'Poor',       emoji:'⚠️'},
+  {min:0,  letter:'F',  label:'At risk',    emoji:'🚨'},
+];
+function reportGrade(score){ const s=clamp(Math.round(score||0),0,100); for(const g of HEALTH_GRADES){ if(s>=g.min) return g; } return HEALTH_GRADES[HEALTH_GRADES.length-1]; }
+// stage-based vitality baseline (an old horse is naturally lower here — the notes contextualise it, it isn't "neglect")
+const _VITALITY_BASE={foal:76, yearling:84, adult:94, senior:64};
+function healthReport(game, h){
+  if(!h) return { horse:null, categories:[], overall:{score:0, grade:reportGrade(0)}, notes:['No horse selected.'], needsAttention:false };
+  const health=(h.health==null?92:h.health), happy=(h.happy==null?85:h.happy), care=careScore(h), bond=(h.bond||0);
+  const mood=(typeof horseMood==='function')?horseMood(h):'content';
+  const stg=stageForAge(h.age||0);
+  const condition=clamp(Math.round(health),0,100);
+  let contentment=clamp(Math.round(happy),0,100); if(mood==='sad') contentment=clamp(contentment-8,0,100); if(mood==='sick') contentment=clamp(contentment-15,0,100);
+  const upkeep=clamp(Math.round(care),0,100);
+  const vitality=clamp(Math.round((_VITALITY_BASE[stg.id]||80)*0.6 + health*0.4),0,100);
+  const cats=[
+    {id:'condition',   label:'Condition',   emoji:'❤️', score:condition},
+    {id:'contentment', label:'Contentment', emoji:'😊', score:contentment},
+    {id:'upkeep',      label:'Upkeep',      emoji:'🧼', score:upkeep},
+    {id:'vitality',    label:'Vitality',    emoji:'🏇', score:vitality},
+  ].map(c=>Object.assign(c,{grade:reportGrade(c.score)}));
+  const overallScore=Math.round(condition*0.30 + contentment*0.25 + upkeep*0.30 + vitality*0.15);
+  const overall={score:overallScore, grade:reportGrade(overallScore)};
+  // vet notes / recommendations (deterministic, welfare-first)
+  const notes=[];
+  if(health<45) notes.push('🚨 Unwell — needs veterinary attention right away.');
+  else if(health<70) notes.push('❤️ Condition is down — a tonic or rest would help.');
+  if(contentment<40) notes.push('😟 Low spirits — more turnout, bonding and attention.');
+  else if(contentment<60) notes.push('😊 Could be happier — a little extra fuss goes a long way.');
+  if(upkeep<58){ let worst=null; for(const n of NEEDS){ const v=needLevel(h,n.id); if(worst==null||v<worst.v) worst={n, v}; }
+    if(worst) notes.push(worst.n.emoji+' The '+worst.n.label.toLowerCase()+' need is overdue — top it up.'); }
+  if(stg.id==='foal') notes.push('🐣 Still growing — keep the work light.');
+  else if(stg.id==='senior') notes.push('👴 A senior — a gentle workload keeps them comfortable.');
+  if(bond>=80) notes.push('❤ A wonderfully close bond with the handler.');
+  if(!notes.length) notes.push('✅ In fine fettle — a model of good care. Keep it up!');
+  const needsAttention = overallScore<60 || health<45 || NEEDS.some(n=>needLevel(h,n.id)<40);
+  return { horse:{id:h.id, name:h.name}, stage:stg.name, ageLabel:(typeof ageLabel==='function')?ageLabel(h):stg.name,
+    categories:cats, overall, notes, needsAttention };
+}
+// a roster overview: grade spread, how many need attention, the worst case, and whether the whole herd is A-graded
+function herdHealthSummary(game){ const hs=(game&&game.horses)||[], gradeCounts={}, out=[]; let need=0, sum=0, worst=null;
+  for(const h of hs){ const r=healthReport(game,h); const L=r.overall.grade.letter; gradeCounts[L]=(gradeCounts[L]||0)+1;
+    sum+=r.overall.score; if(r.needsAttention) need++;
+    if(worst==null||r.overall.score<worst.score) worst={id:h.id, name:h.name, score:r.overall.score, grade:r.overall.grade.letter};
+    out.push({id:h.id, name:h.name, score:r.overall.score, grade:L, needsAttention:r.needsAttention}); }
+  const count=hs.length, allA = count>0 && out.every(r=>r.score>=86);
+  return { count, gradeCounts, needAttention:need, avgScore: count?Math.round(sum/count):0, worst, allA, rows:out.sort((a,b)=>a.score-b.score) };
+}
 
 // ---------- Feed-mix / nutrition planner (READ-ONLY advisory; a saved plan preference, no economy change) ----------
 // Picks a hay/grain/supplement mix per horse and rates how well it matches that horse's needs, all derived from
@@ -4351,6 +4411,7 @@ const ACHIEVEMENTS=[
   {id:'monumental',     icon:'🗿', name:'Monumental',           desc:'Raise five commemorative monuments.',          check:g=>monumentsUnlockedCount(g)>=5},
   {id:'lifelister',     icon:'🦋', name:'Life-Lister',           desc:'Spot every creature in the paddock wildlife log.', check:g=>wildlifeProgress(g).complete},
   {id:'partyplanner',   icon:'🎂', name:'Party Planner',         desc:'Celebrate ten horse birthdays.',               check:g=>((g.stats&&g.stats.birthdays)||0)>=10},
+  {id:'cleanbill',      icon:'🩺', name:'Clean Bill of Health',  desc:'Have a herd of three or more all graded A or better.', check:g=>{const s=herdHealthSummary(g); return s.count>=3 && s.allA;}},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4614,6 +4675,7 @@ const GOALS=[
   {id:'wild1',   desc:'Spot your first paddock visitor (🦋)',          tip:g=>lifeList(g).length+' species',   done:g=>lifeList(g).length>=1,                                  reward:{money:200,rep:10}},
   {id:'silks1',  desc:'Design your stable colours (🎨)',               tip:g=>normSilks(g).custom?'done':'not yet',done:g=>normSilks(g).custom===true,                          reward:{money:200,rep:10}},
   {id:'bday1',   desc:'Celebrate a horse’s birthday (🎂)',             tip:g=>((g.stats&&g.stats.birthdays)||0)+'/1',done:g=>((g.stats&&g.stats.birthdays)||0)>=1,             reward:{money:200,rep:10}},
+  {id:'vet1',    desc:'Read a horse’s health report (🩺)',             tip:g=>((g.stats&&g.stats.vetReports)||0)+'/1',done:g=>((g.stats&&g.stats.vetReports)||0)>=1,           reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4812,6 +4874,7 @@ const HR = {
   WILDLIFE, WILDLIFE_REP, WL_RARITY_NAME, wildlifeDef, wildlifeChance, wildlifeVisible, wildlifeToday, normWildlifeLog, lifeList, hasSpotted, spotSpecies, wildlifeProgress,
   SILK_COLOURS, SILK_PATTERNS, SILK_EMBLEMS, silkColourDef, silkPatternDef, silkEmblemDef, normSilksParts, normSilks, setSilks, silksSvg, silksSummary,
   BDAY_YEAR_DAYS, BDAY_HAPPY, BDAY_BOND, ageYears, birthDayOf, birthDateOfYear, daysToBirthday, isBirthdayToday, nextBirthday, birthdayCelebrated, canCelebrateBirthday, birthdaysToday, upcomingBirthdays, celebrateBirthday,
+  HEALTH_GRADES, reportGrade, healthReport, herdHealthSummary,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -7287,6 +7350,46 @@ function openBirthdays(){
     burst('🎂🎉✨',16); playSfx('goal'); toast('🎉 Happy '+ord(r.turning)+' birthday, '+h.name+'! +'+r.happy+'😊 +'+r.bond+'💗','good');
     const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); openBirthdays(); });
 }
+let vetSel={horse:null};
+function openHealthReport(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(vetSel.horse && !horses.some(h=>h.id===vetSel.horse)) vetSel.horse=null;
+  if(!vetSel.horse && horses.length){ // default to the horse most in need of attention
+    const sum=herdHealthSummary(G); vetSel.horse=(sum.worst&&sum.worst.id)||horses[0].id; }
+  const h=vetSel.horse?horses.find(x=>x.id===vetSel.horse):null;
+  // reading a report counts toward the vet goal (a usage stat — no economy change)
+  if(h){ G.stats=G.stats||{}; G.stats.vetReports=(G.stats.vetReports||0)+1;
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const gradeCol={'A+':'var(--good)','A':'var(--good)','B':'var(--gold2)','C':'var(--gold2)','D':'var(--warn)','F':'var(--bad)'};
+  const chips=horses.length?horses.map(x=>{ const r=healthReport(G,x);
+    return '<span class="wlchip" data-vethorse="'+esc(x.id)+'" style="cursor:pointer;'+(vetSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+' <b style="color:'+(gradeCol[r.overall.grade.letter]||'var(--ink2)')+'">'+r.overall.grade.letter+'</b></span>'; }).join(' ')
+    :'<span class="empty">No horses to examine yet.</span>';
+  let body='';
+  if(h){
+    const r=healthReport(G,h), oc=gradeCol[r.overall.grade.letter]||'var(--ink2)';
+    const bar=(sc)=>'<div style="height:7px;background:#0002;border-radius:4px;margin-top:3px;overflow:hidden"><div style="height:7px;border-radius:4px;width:'+sc+'%;background:'+(sc>=74?'var(--good)':sc>=60?'var(--gold2)':'var(--warn)')+'"></div></div>';
+    const cats=r.categories.map(c=>'<div style="margin-top:6px"><div class="hbreed" style="font-size:12px;display:flex;justify-content:space-between"><span>'+c.emoji+' '+esc(c.label)+'</span><span><b style="color:'+(gradeCol[c.grade.letter]||'var(--ink2)')+'">'+c.grade.letter+'</b> · '+c.score+'</span></div>'+bar(c.score)+'</div>').join('');
+    const notes=r.notes.map(n=>'<div class="hbreed" style="margin-top:3px">'+esc(n)+'</div>').join('');
+    body='<div class="card" style="border-left:4px solid '+oc+'"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc((breedDef(h.breed)||{name:h.breed}).name)+' · '+esc(r.ageLabel)+'</div></div>'+
+      '<div style="text-align:right"><div class="hname" style="font-size:22px;color:'+oc+'">'+r.overall.grade.emoji+' '+r.overall.grade.letter+'</div><div class="hbreed" style="font-size:11px">'+esc(r.overall.grade.label)+' · '+r.overall.score+'/100</div></div></div>'+
+      cats+
+      '<div class="swlabel" style="margin-top:8px">🩺 Vet’s notes</div>'+notes+
+      (r.needsAttention?'<div class="hbreed" style="color:var(--warn);margin-top:6px">⚠️ This horse needs some attention.</div>':'')+'</div>';
+  } else { body='<div class="empty">Buy or breed a horse to run a health check.</div>'; }
+  const sum=herdHealthSummary(G);
+  const herdLine=sum.count?('Herd average <b>'+sum.avgScore+'</b>/100 · '+(sum.needAttention?('<b style="color:var(--warn)">'+sum.needAttention+'</b> need attention'):'<b style="color:var(--good)">all doing well</b>')):'No horses yet';
+  modal('<h3>🩺 Vet Health Report</h3>'+
+    '<div class="msg">A visiting vet grades each horse on condition, contentment, upkeep and vitality — with notes on anything to watch. A diagnostic read-out only; it changes nothing.</div>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="swlabel" style="margin-top:8px">📋 Herd overview</div><div class="hbreed">'+herdLine+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="vetClose" style="width:100%">Done</button></div>');
+  $('vetClose').onclick=closeModal;
+  document.querySelectorAll('[data-vethorse]').forEach(x=>x.onclick=()=>{ vetSel.horse=x.getAttribute('data-vethorse'); playSfx('tap'); openHealthReport(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8192,6 +8295,7 @@ function boot(){
   { const wlb=$('wildBtn'); if(wlb) wlb.onclick=openWildlife; }
   { const skb=$('silksBtn'); if(skb) skb.onclick=openSilks; }
   { const bdb=$('bdayBtn'); if(bdb) bdb.onclick=openBirthdays; }
+  { const vtb=$('vetBtn'); if(vtb) vtb.onclick=openHealthReport; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
