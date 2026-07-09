@@ -265,6 +265,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.measures = 1; // satisfies the measuring-stick goal
   g.stats.markingViews = 1; // satisfies the markings-card goal
   g.stats.palateReads = 1; // satisfies the favourite-treat goal
+  g.stats.nameCardViews = 1; // satisfies the names-card goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5499,6 +5500,41 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'treat1').done(gv), 'the palate goal is unmet before learning');
   gv.stats.palateReads = 1;
   ok(HR.GOALS.find(x => x.id === 'treat1').done(gv), 'learning a horse’s favourite treat satisfies the goal');
+}
+{
+  // ---- Barn name vs registered/show name card ----
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, name: 'Thunderbolt', id: 'nm1' }); g.horses.push(h);
+  const barn = HR.horseBarnName(h), reg = HR.showName(g, h);
+  ok(typeof barn === 'string' && barn.length > 0 && barn.length <= h.name.length + 2, 'the barn name is a short nickname');
+  ok(typeof reg === 'string' && reg.length > barn.length && reg.indexOf('Thunderbolt') >= 0, 'the show name is longer and contains the horse name');
+  // a short name is kept as its own barn name
+  const shortH = HR.mkHorse({ breed: 'welsh', age: 20, name: 'Star', id: 'nm_short' });
+  ok(HR.horseBarnName(shortH) === 'Star', 'a short name is its own barn name');
+  // the show name uses the ranch's stud prefix (first word of the ranch name)
+  g.decor = g.decor || {}; g.decor.name = 'Willow Creek Stud';
+  ok(HR.showName(g, h).indexOf('Willow') >= 0 || HR.namesCard(g, h).prefix === 'Willow', 'the show name reflects the ranch prefix');
+  // renaming the ranch changes the prefix deterministically (still no randomness)
+  const r1 = HR.showName(g, h); g.decor.name = 'Skyhorse Stables'; const r2 = HR.showName(g, h);
+  ok(r1 !== r2 || HR.namesCard(g, h).prefix === 'Skyhorse', 'the show name updates with the ranch name');
+  // determinism: names are a pure function of id + name (+ ranch)
+  ok(HR.horseBarnName(h) === HR.horseBarnName(h) && HR.showName(g, h) === HR.showName(g, h), 'the names are deterministic');
+  const a = HR.mkHorse({ breed: 'arabian', age: 20, name: 'Comet', id: 'twin' });
+  const b = HR.mkHorse({ breed: 'mustang', age: 4, name: 'Comet', id: 'twin' });
+  ok(HR.horseBarnName(a) === HR.horseBarnName(b), 'the barn name is a pure function of id + name (not breed/age)');
+  // the card carries both names
+  const c = HR.namesCard(g, h);
+  ok(c.barn && c.registered && c.prefix, 'the names card has a barn name, a registered name and the prefix');
+  // read-only + sparse safety
+  const snap = JSON.stringify(g);
+  HR.horseBarnName(h); HR.showName(g, h); HR.namesCard(g, h);
+  ok(JSON.stringify(g) === snap, 'reading the names never mutates the game');
+  ok(HR.horseBarnName(null) === '' && HR.showName({}, null) === '' && HR.namesCard({}, null).registered === '', 'the names helpers are safe on a sparse game');
+  // the goal fires after viewing
+  const gvn = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'names1').done(gvn), 'the names goal is unmet before viewing');
+  gvn.stats.nameCardViews = 1;
+  ok(HR.GOALS.find(x => x.id === 'names1').done(gvn), 'seeing a registered name satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
