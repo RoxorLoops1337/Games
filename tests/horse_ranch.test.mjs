@@ -260,6 +260,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.companion = { type: 'dog', name: 'Rex', bond: 20, pettedDay: 0 }; // satisfies the ranch-companion goal
   g.stats.zodiacReads = 1; // satisfies the horse-zodiac goal
   g.stats.vaneChecks = 1; // satisfies the weathervane goal
+  g.stats.shineChecks = 1; // satisfies the coat-shine goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5290,6 +5291,53 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'vane1').done(gc), 'the weathervane goal is unmet before checking');
   gc.stats.vaneChecks = 1;
   ok(HR.GOALS.find(x => x.id === 'vane1').done(gc), 'checking the weathervane satisfies the goal');
+}
+{
+  // ---- Coat-shine / grooming-glow meter ----
+  ok(HR.SHINE_TIERS.length >= 3 && HR.SHINE_TIERS[HR.SHINE_TIERS.length - 1].min === 0, 'shine tiers exist and cover from zero');
+  ok(HR.shineTier(95).id === 'gleaming' && HR.shineTier(10).id === 'scruffy', 'high scores gleam, low scores are scruffy');
+  ok(HR.shineTier(-5).id === 'scruffy' && HR.shineTier(999).id === 'gleaming', 'shineTier is clamped for out-of-range scores');
+  const g = HR.freshGame();
+  // a well-groomed, healthy, happy horse shines; a scruffy one does not
+  const clean = HR.mkHorse({ breed: 'friesian', age: 20, health: 100, happy: 100 });
+  clean.needs = { groom: 100, exercise: 100, hooves: 100, rest: 100, bond: 100 }; clean.bond = 100; g.horses.push(clean);
+  const scruff = HR.mkHorse({ breed: 'mustang', age: 20, health: 40, happy: 35 });
+  scruff.needs = { groom: 10, exercise: 20, hooves: 15, rest: 20, bond: 15 }; scruff.bond = 10; g.horses.push(scruff);
+  const sc = HR.coatShine(clean), ss = HR.coatShine(scruff);
+  ok(sc >= 0 && sc <= 100 && ss >= 0 && ss <= 100, 'coat-shine scores are bounded 0..100');
+  ok(sc > ss, 'a well-groomed horse out-shines a neglected one');
+  ok(HR.shineTier(sc).id === 'gleaming' || HR.shineTier(sc).id === 'glossy', 'a pampered horse reads glossy or better');
+  // grooming is the dominant lever: dropping only the groom need lowers the score noticeably
+  const dropped = HR.mkHorse({ breed: 'friesian', age: 20, health: 98, happy: 96 });
+  dropped.needs = { groom: 20, exercise: 90, hooves: 90, rest: 90, bond: 90 }; dropped.bond = 90;
+  ok(HR.coatShine(dropped) < sc, 'a dirty coat drops the shine even when everything else is high');
+  // a rare coat adds a gleam bonus over an identical plain coat
+  const plain = HR.mkHorse({ breed: 'arabian', age: 20, health: 90, happy: 90, coat: { name: 'Bay', tier: 0 } });
+  const rare = HR.mkHorse({ breed: 'arabian', age: 20, health: 90, happy: 90, coat: { name: 'Golden', tier: 3 } });
+  for (const hh of [plain, rare]) hh.needs = { groom: 80, exercise: 80, hooves: 80, rest: 80, bond: 80 };
+  ok(HR.coatShine(rare) >= HR.coatShine(plain), 'a rare coat shines at least as bright as a plain one');
+  // the report has shape + tips
+  const r = HR.coatShineReport(g, scruff);
+  ok(r.tier && r.factors.length >= 4 && Array.isArray(r.tips) && r.tips.length >= 1, 'a report has a tier, factors and tips');
+  ok(r.tips.join(' ').toLowerCase().indexOf('groom') >= 0 || r.tips.some(t => /brush/i.test(t)), 'a scruffy horse is advised to groom');
+  ok(HR.coatShineReport(g, clean).tips.some(t => /bloom|show-ring|ready/i.test(t)), 'a gleaming horse gets a compliment, not a chore');
+  // herd overview
+  const hs = HR.herdShineAverage(g);
+  ok(hs.count === g.horses.length && typeof hs.avg === 'number' && hs.best && hs.best.id === clean.id, 'the herd overview finds the shiniest horse');
+  // determinism + read-only (warm up so needsInit has run, then snapshot)
+  HR.coatShine(clean); HR.coatShineReport(g, clean); HR.herdShineAverage(g);
+  const snap = JSON.stringify(g);
+  ok(HR.coatShine(clean) === HR.coatShine(clean), 'coatShine is deterministic');
+  ok(JSON.stringify(HR.coatShineReport(g, clean)) === JSON.stringify(HR.coatShineReport(g, clean)), 'the report is deterministic');
+  ok(JSON.stringify(g) === snap, 'reading coat shine never mutates the game after needs are initialised');
+  // sparse safety + achievement + goal
+  ok(HR.coatShine(null) === 0 && HR.coatShineReport({}, null).score === 0 && HR.herdShineAverage({}).count === 0, 'the coat-shine helpers are safe on a sparse game');
+  const sh = HR.ACHIEVEMENTS.find(a => a.id === 'showshine');
+  ok(sh && sh.check(g), 'a Gleaming horse unlocks Show-Ring Shine');
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'shine1').done(gv), 'the coat-shine goal is unmet before checking');
+  gv.stats.shineChecks = 1;
+  ok(HR.GOALS.find(x => x.id === 'shine1').done(gv), 'checking a coat shine satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety

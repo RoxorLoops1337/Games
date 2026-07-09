@@ -359,6 +359,7 @@
     <button class="sbtn" id="compBtn" title="Ranch companion — your stable dog & friends" style="margin-right:4px">🐕</button>
     <button class="sbtn" id="zodiacBtn" title="Horse zodiac — star signs & readings" style="margin-right:4px">⭐</button>
     <button class="sbtn" id="vaneBtn" title="Weathervane — wind & sky mood" style="margin-right:4px">🌬️</button>
+    <button class="sbtn" id="shineBtn" title="Coat shine — grooming-glow meter" style="margin-right:4px">✨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -731,6 +732,47 @@ function herdHealthSummary(game){ const hs=(game&&game.horses)||[], gradeCounts=
   const count=hs.length, allA = count>0 && out.every(r=>r.score>=86);
   return { count, gradeCounts, needAttention:need, avgScore: count?Math.round(sum/count):0, worst, allA, rows:out.sort((a,b)=>a.score-b.score) };
 }
+
+// ---------- Coat-shine / grooming-glow meter (READ-ONLY presentational readout of coat condition) ----------
+// A glossy-coat score derived from EXISTING welfare state (grooming need, overall care, health, contentment, and
+// a rare-coat bonus). Purely a summary — it grooms nothing and changes no stat (the grooming action lives
+// elsewhere). Deterministic — no Date/Math.random. (careScore/needLevel lazily initialise a horse's needs record,
+// which is idempotent; the readout itself changes no gameplay value.)
+const SHINE_TIERS=[
+  {min:88, id:'gleaming', label:'Gleaming', emoji:'✨'},
+  {min:72, id:'glossy',   label:'Glossy',   emoji:'🌟'},
+  {min:55, id:'healthy',  label:'Healthy',  emoji:'🙂'},
+  {min:35, id:'dull',     label:'Dull',     emoji:'😐'},
+  {min:0,  id:'scruffy',  label:'Scruffy',  emoji:'🧹'},
+];
+function shineTier(score){ const s=clamp(Math.round(score||0),0,100); for(const t of SHINE_TIERS){ if(s>=t.min) return t; } return SHINE_TIERS[SHINE_TIERS.length-1]; }
+// 0..100 coat-shine score: grooming leads, then overall care, health, contentment, plus a rare-coat gleam
+function coatShine(h){ if(!h) return 0;
+  const groom=needLevel(h,'groom'), care=careScore(h), health=(h.health==null?92:h.health), happy=(h.happy==null?85:h.happy);
+  const tier=(coatOf(h).tier||0), tierBonus=[0,3,6,10][Math.min(3,tier)];
+  return clamp(Math.round(groom*0.45 + care*0.20 + health*0.15 + happy*0.10 + tierBonus),0,100); }
+// the full readout: score, tier, the contributing factors, and short improvement tips
+function coatShineReport(game, h){ if(!h) return { horse:null, coat:null, score:0, tier:shineTier(0), factors:[], tips:['No horse selected.'] };
+  const groom=needLevel(h,'groom'), care=careScore(h), health=(h.health==null?92:h.health), happy=(h.happy==null?85:h.happy), tier=(coatOf(h).tier||0);
+  const score=coatShine(h);
+  const factors=[
+    {id:'groom',  label:'Grooming',     emoji:'🧼', value:groom},
+    {id:'care',   label:'Overall care', emoji:'✨', value:care},
+    {id:'health', label:'Health',       emoji:'❤️', value:health},
+    {id:'happy',  label:'Contentment',  emoji:'😊', value:happy},
+  ];
+  if(tier>=2) factors.push({id:'coat', label:'Rare coat', emoji:'🎨', value:100, note:coatOf(h).name});
+  const tips=[];
+  if(groom<70) tips.push('🧼 Due a brush — a good groom would bring the shine up most.');
+  if(care<60) tips.push('✨ Keep the daily needs topped up for a healthier gloss.');
+  if(health<70) tips.push('❤️ Low health dulls the coat — rest or a tonic will help.');
+  if(happy<60) tips.push('😊 A happier horse carries a brighter coat.');
+  if(!tips.length) tips.push('🌟 In beautiful bloom — this coat is show-ring ready!');
+  return { horse:{id:h.id, name:h.name}, coat:coatOf(h).name, score, tier:shineTier(score), factors, tips }; }
+// herd overview: average shine, the shiniest horse, and how many are Gleaming
+function herdShineAverage(game){ const hs=(game&&game.horses)||[]; let sum=0, best=null, gleam=0;
+  for(const h of hs){ const s=coatShine(h); sum+=s; if(best==null||s>best.score) best={id:h.id, name:h.name, score:s}; if(shineTier(s).id==='gleaming') gleam++; }
+  return { count:hs.length, avg: hs.length?Math.round(sum/hs.length):0, best, gleaming:gleam }; }
 
 // ---------- Feed-mix / nutrition planner (READ-ONLY advisory; a saved plan preference, no economy change) ----------
 // Picks a hay/grain/supplement mix per horse and rates how well it matches that horse's needs, all derived from
@@ -4623,6 +4665,7 @@ const ACHIEVEMENTS=[
   {id:'grazier',        icon:'🌱', name:'Rotational Grazier',    desc:'Rotate your grazing paddocks fifteen times.',  check:g=>((g.stats&&g.stats.rotations)||0)>=15},
   {id:'bestfriend',     icon:'🐕', name:'Best Friend',            desc:'Reach a full bond with a ranch companion.',    check:g=>normCompanion(g).bond>=100},
   {id:'astrologer',     icon:'⭐', name:'Ranch Astrologer',       desc:'Own a horse of every star sign at once.',      check:g=>zodiacHerdSigns(g)>=ZODIAC.length},
+  {id:'showshine',      icon:'✨', name:'Show-Ring Shine',        desc:'Bring a horse’s coat to a Gleaming shine.',    check:g=>((g.horses)||[]).some(h=>shineTier(coatShine(h)).id==='gleaming')},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4891,6 +4934,7 @@ const GOALS=[
   {id:'comp1',   desc:'Adopt a ranch companion (🐕)',                  tip:g=>{const c=normCompanion(g);return c.type?c.name:'none yet';},done:g=>!!normCompanion(g).type,                reward:{money:200,rep:10}},
   {id:'zodiac1', desc:'Read a horse’s star sign (⭐)',                  tip:g=>((g.stats&&g.stats.zodiacReads)||0)+'/1',done:g=>((g.stats&&g.stats.zodiacReads)||0)>=1,           reward:{money:200,rep:10}},
   {id:'vane1',   desc:'Check the ranch weathervane (🌬️)',             tip:g=>((g.stats&&g.stats.vaneChecks)||0)+'/1',done:g=>((g.stats&&g.stats.vaneChecks)||0)>=1,           reward:{money:150,rep:5}},
+  {id:'shine1',  desc:'Check a horse’s coat shine (✨)',                tip:g=>((g.stats&&g.stats.shineChecks)||0)+'/1',done:g=>((g.stats&&g.stats.shineChecks)||0)>=1,         reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5091,6 +5135,7 @@ const HR = {
   SILK_COLOURS, SILK_PATTERNS, SILK_EMBLEMS, silkColourDef, silkPatternDef, silkEmblemDef, normSilksParts, normSilks, setSilks, silksSvg, silksSummary,
   BDAY_YEAR_DAYS, BDAY_HAPPY, BDAY_BOND, ageYears, birthDayOf, birthDateOfYear, daysToBirthday, isBirthdayToday, nextBirthday, birthdayCelebrated, canCelebrateBirthday, birthdaysToday, upcomingBirthdays, celebrateBirthday,
   HEALTH_GRADES, reportGrade, healthReport, herdHealthSummary,
+  SHINE_TIERS, shineTier, coatShine, coatShineReport, herdShineAverage,
   PADDOCKS, paddockDef, paddockRegrowPerDay, normRotation, grazeLevel, grazeStatus, paddockState, bestPaddock, activePaddock, rotateTo,
   COMPANIONS, COMPANION_NAME_MAX, COMPANION_PET_BOND, companionDef, normCompanion, companionBondTier, companionQuip, adoptCompanion, renameCompanion, petCompanion, companionState,
   ZODIAC, ZODIAC_ELEMENTS, zodiacDef, zodiacElement, horseZodiac, zodiacCompat, zodiacReading, zodiacHerdSigns,
@@ -7729,6 +7774,46 @@ function openWeathervane(){
     '<div class="btnrow"><button class="btn ghost" id="vaneClose" style="width:100%">Done</button></div>');
   $('vaneClose').onclick=closeModal;
 }
+let shineSel={horse:null};
+function openCoatShine(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(shineSel.horse && !horses.some(h=>h.id===shineSel.horse)) shineSel.horse=null;
+  if(!shineSel.horse && horses.length){ // default to the dullest-coated horse (most in need of a groom)
+    let worst=null; for(const h of horses){ const s=coatShine(h); if(worst==null||s<worst.s) worst={id:h.id,s}; } shineSel.horse=worst?worst.id:horses[0].id; }
+  const h=shineSel.horse?horses.find(x=>x.id===shineSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.shineChecks=(G.stats.shineChecks||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const tierCol={gleaming:'var(--good)',glossy:'var(--good)',healthy:'var(--gold2)',dull:'#e8883d',scruffy:'var(--warn)'};
+  const chips=horses.length?horses.map(x=>{ const t=shineTier(coatShine(x));
+    return '<span class="wlchip" data-shhorse="'+esc(x.id)+'" style="cursor:pointer;'+(shineSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+' '+t.emoji+'</span>'; }).join(' ')
+    :'<span class="empty">No horses to inspect yet.</span>';
+  let body='';
+  if(h){
+    const r=coatShineReport(G,h), tc=tierCol[r.tier.id]||'var(--ink2)';
+    const meter='<div style="height:12px;background:#0002;border-radius:6px;margin-top:4px;overflow:hidden"><div style="height:12px;border-radius:6px;width:'+r.score+'%;background:linear-gradient(90deg,var(--gold2),'+tc+')"></div></div>';
+    const facts=r.factors.map(f=>'<div style="margin-top:5px"><div class="hbreed" style="font-size:12px;display:flex;justify-content:space-between"><span>'+f.emoji+' '+esc(f.label)+(f.note?' ('+esc(f.note)+')':'')+'</span><span>'+f.value+'</span></div>'+
+      '<div style="height:6px;background:#0002;border-radius:3px;margin-top:2px;overflow:hidden"><div style="height:6px;border-radius:3px;width:'+Math.min(100,f.value)+'%;background:'+(f.value>=70?'var(--good)':f.value>=45?'var(--gold2)':'var(--warn)')+'"></div></div></div>').join('');
+    const tips=r.tips.map(t=>'<div class="hbreed" style="margin-top:3px">'+esc(t)+'</div>').join('');
+    body='<div class="card" style="border-left:4px solid '+tc+'"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(r.coat)+' coat</div></div>'+
+      '<div style="text-align:right"><div class="hname" style="font-size:20px;color:'+tc+'">'+r.tier.emoji+' '+r.score+'</div><div class="hbreed" style="font-size:11px">'+esc(r.tier.label)+'</div></div></div>'+
+      meter+
+      '<div class="swlabel" style="margin-top:8px">What’s shaping the shine</div>'+facts+
+      '<div class="swlabel" style="margin-top:8px">💡 Tips</div>'+tips+'</div>';
+  } else { body='<div class="empty">Buy or breed a horse to check its coat.</div>'; }
+  const hs=herdShineAverage(G);
+  const herdLine=hs.count?('Herd average shine <b>'+hs.avg+'</b>/100'+(hs.gleaming?(' · <b style="color:var(--good)">'+hs.gleaming+'</b> gleaming'):'')):'No horses yet';
+  modal('<h3>✨ Coat Shine</h3>'+
+    '<div class="msg">A quick read on each horse’s coat gloss — driven by grooming, care, health and happiness (a rare coat gleams extra). Just a readout; grooming happens elsewhere.</div>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="swlabel" style="margin-top:8px">📋 Herd overview</div><div class="hbreed">'+herdLine+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="shClose" style="width:100%">Done</button></div>');
+  $('shClose').onclick=closeModal;
+  document.querySelectorAll('[data-shhorse]').forEach(x=>x.onclick=()=>{ shineSel.horse=x.getAttribute('data-shhorse'); playSfx('tap'); openCoatShine(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8639,6 +8724,7 @@ function boot(){
   { const cpb=$('compBtn'); if(cpb) cpb.onclick=openCompanion; }
   { const zob=$('zodiacBtn'); if(zob) zob.onclick=openZodiac; }
   { const vnb=$('vaneBtn'); if(vnb) vnb.onclick=openWeathervane; }
+  { const shb=$('shineBtn'); if(shb) shb.onclick=openCoatShine; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
