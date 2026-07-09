@@ -247,6 +247,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.smithDeals = 1; // satisfies the visiting-farrier goal
   g.stats.spotlightViews = 1; // satisfies the horse-of-the-month goal
   g.loadouts = [{ id: 'lo1', name: 'Show set', slots: { saddle: null, bridle: null, accessory: null } }]; // satisfies the tack-loadout goal
+  g.aspBoard = { pinned: ['herd10'], claimed: [] }; // satisfies the aspirations-board goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -1295,6 +1296,57 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   HR.yardClock(g, 0.3); HR.dayPartFor(0.7); HR.clockLabel(0.9); HR.yardTimeFlavour(g, 0.1);
   ok(JSON.stringify(g) === snap, 'the clock helpers never mutate the game (read-only)');
   ok(HR.yardClock({}, 0.4).part && HR.dayPartFor(0.4).label, 'clock helpers are safe on a bare game');
+}
+{
+  // ---- ranch goals / personal aspirations board ----
+  ok(HR.ASPIRATIONS.length >= 6, 'a catalogue of aspirations exists');
+  const aids = HR.ASPIRATIONS.map(a => a.id);
+  ok(new Set(aids).size === aids.length, 'aspiration ids are unique');
+  ok(HR.ASPIRATIONS.every(a => typeof a.prog === 'function'), 'every aspiration exposes a progress fn');
+  // aspirationProgress computes have/need/done over existing state
+  const g = HR.freshGame();
+  g.horses = []; for (let i = 0; i < 10; i++) g.horses.push(HR.mkHorse({ breed: 'welsh', age: 20 }));
+  const p = HR.aspirationProgress(g, 'herd10');
+  ok(p.have === 10 && p.need === 10 && p.done === true && Math.abs(p.pct - 1) < 1e-9, 'own-10-horses reads done at ten horses');
+  const g9 = HR.freshGame(); g9.horses = []; for (let i = 0; i < 9; i++) g9.horses.push(HR.mkHorse({ breed: 'welsh', age: 20 }));
+  ok(HR.aspirationProgress(g9, 'herd10').done === false, 'nine horses is not yet done');
+  const gr = HR.freshGame(); gr.stats.goldEarned = 100000;
+  ok(HR.aspirationProgress(gr, 'rich100k').done, 'lifetime-earnings aspiration reads existing stats');
+  ok(HR.aspirationProgress(g, 'nope') === null, 'an unknown aspiration id is null');
+  // pin / unpin: bounded + deduped
+  const gp = HR.freshGame();
+  ok(HR.pinAspiration(gp, 'herd10').ok && HR.normAspBoard(gp).pinned.length === 1, 'pinAspiration pins one');
+  ok(!HR.pinAspiration(gp, 'herd10').ok, 'pinning a duplicate is a no-op');
+  ok(!HR.pinAspiration(gp, 'bogus').ok, 'an unknown id cannot be pinned');
+  for (const a of HR.ASPIRATIONS) HR.pinAspiration(gp, a.id);
+  ok(HR.normAspBoard(gp).pinned.length === HR.ASP_PIN_MAX, 'the pinned board is capped');
+  ok(HR.unpinAspiration(gp, HR.normAspBoard(gp).pinned[0]).ok && HR.normAspBoard(gp).pinned.length === HR.ASP_PIN_MAX - 1, 'unpin removes one');
+  // pinnedAspirations returns the board with live progress
+  const gb = HR.freshGame(); gb.horses = []; for (let i = 0; i < 10; i++) gb.horses.push(HR.mkHorse({ breed: 'welsh', age: 20 }));
+  HR.pinAspiration(gb, 'herd10'); HR.pinAspiration(gb, 'hall5');
+  const board = HR.pinnedAspirations(gb);
+  ok(board.length === 2 && board.find(x => x.id === 'herd10').done && !board.find(x => x.id === 'hall5').done, 'pinnedAspirations shows live tick-off progress');
+  // claim: only when done, one-time, grants the reward exactly once
+  const money0 = gb.money, rep0 = gb.rep;
+  ok(!HR.claimAspiration(gb, 'hall5').ok, 'you can’t claim an unmet aspiration');
+  const cr = HR.claimAspiration(gb, 'herd10');
+  ok(cr.ok && gb.money === money0 + HR.aspirationDef('herd10').reward.money && gb.rep === rep0 + HR.aspirationDef('herd10').reward.rep, 'claiming a met aspiration grants its reward once');
+  ok((gb.stats.aspirationsMet || 0) === 1, 'a claimed aspiration is counted');
+  ok(!HR.claimAspiration(gb, 'herd10').ok && gb.money === money0 + HR.aspirationDef('herd10').reward.money, 'claiming twice is blocked (no double reward)');
+  ok(HR.aspirationProgress(gb, 'herd10').claimed === true, 'the claimed flag is reflected in progress');
+  // migration + read-only + sparse
+  const mig = HR.normAspBoard({ aspBoard: { pinned: ['herd10', 'bogus', 'herd10'], claimed: ['hall5', 'nope'] } });
+  ok(JSON.stringify(mig.pinned) === JSON.stringify(['herd10']) && JSON.stringify(mig.claimed) === JSON.stringify(['hall5']), 'normAspBoard validates + de-dupes pinned/claimed');
+  ok(HR.normAspBoard({}).pinned.length === 0 && HR.aspBoard({}).claimed.length === 0, 'board helpers are safe on a bare game');
+  const snap = JSON.stringify(gb);
+  HR.aspirationProgress(gb, 'herd10'); HR.pinnedAspirations(gb); HR.normAspBoard(gb); HR.isAspirationPinned(gb, 'herd10');
+  ok(JSON.stringify(gb) === snap, 'the read helpers never mutate the game');
+  // goal + achievement
+  const gg = HR.freshGame(); gg.aspBoard = { pinned: ['herd10'], claimed: [] };
+  ok(HR.GOALS.find(x => x.id === 'asp1').done(gg), 'asp1 completes once an aspiration is pinned');
+  const ga = HR.freshGame(); ga.stats.aspirationsMet = 3;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'aspirant').check(ga), 'Aspirations Realised unlocks at three claimed');
+  ok(HR.GOALS.filter(x => x.id === 'asp1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'aspirant').length === 1, 'new aspiration goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
