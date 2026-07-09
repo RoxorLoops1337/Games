@@ -353,6 +353,7 @@
     <button class="sbtn" id="nameBtn" title="Name generator — name ideas & inspiration board" style="margin-right:4px">✨</button>
     <button class="sbtn" id="wildBtn" title="Paddock wildlife — daily sightings & life-list" style="margin-right:4px">🦋</button>
     <button class="sbtn" id="silksBtn" title="Stable colours — design your racing silks" style="margin-right:4px">🎨</button>
+    <button class="sbtn" id="bdayBtn" title="Birthdays — foaling-day celebrations" style="margin-right:4px">🎂</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1290,6 +1291,7 @@ function mkHorse(o){
     rentDays:0, rentRate:0,   // >0 = out on rent
     tripType:o.tripType||null, tripBack:o.tripBack||0,   // away on a trailer trip (unavailable until tripBack)
     ceremonies:o.ceremonies||{},   // coming-of-age milestones (pending/done per milestone id)
+    bdayYear:o.bdayYear||0,        // last in-game year a birthday was celebrated (once-a-year guard)
     stable:o.stable!=null?o.stable:0,
     needs:o.needs||null, bond:o.bond,  // daily care needs + bonding level (needsInit fills defaults)
     gwDay:o.gwDay||0, gwEnergy:o.gwEnergy||0, // groundwork handling energy (per-day, auto-resets)
@@ -1868,6 +1870,49 @@ function seasonShowPrizeMul(day){ return seasonOf(day).showPrizeMul; }
 function seasonCanteenMul(day){ return seasonOf(day).canteenMul; }
 function seasonHayMul(day){ return seasonOf(day).hayMul; }
 function seasonMarketBonus(day){ return seasonOf(day).marketBonus; }
+
+// ---------- Horse birthday / foaling-day celebrations (READ-ONLY calendar + a bounded once-a-year fête) ----------
+// Every horse's birth day is derived from EXISTING data: birthDay = game.day - age (both advance together each
+// day, so it's stable). A birthday recurs every SEASON_LEN*4 days (one in-game year). The reader helpers are pure;
+// the only mutating action is celebrateBirthday, guarded by a per-horse per-year stamp (h.bdayYear) so it fires at
+// most once per birthday and cannot be farmed, with a small clamped happiness/bond lift. No Date/Math.random.
+const BDAY_YEAR_DAYS=SEASON_LEN*4; // 56 days = one in-game year (a horse's birthday cycle)
+const BDAY_HAPPY=8;   // small, clamped happiness lift on a birthday
+const BDAY_BOND=5;    // small, clamped bond lift on a birthday
+function ageYears(h){ return Math.floor(Math.max(0,(h&&h.age)||0)/BDAY_YEAR_DAYS); }
+// the absolute game-day on which this horse was born (age & day advance together, so this is stable over time)
+function birthDayOf(h, game){ const day=Math.floor((game&&game.day)||1); return day-Math.max(0,(h&&h.age)||0); }
+// its date within the year cycle (1..BDAY_YEAR_DAYS) — the "birthday" in calendar terms
+function birthDateOfYear(h, game){ const b=birthDayOf(h,game); return ((((b-1)%BDAY_YEAR_DAYS)+BDAY_YEAR_DAYS)%BDAY_YEAR_DAYS)+1; }
+// days until this horse's next birthday (0 = today; a newborn's first is a full year out)
+function daysToBirthday(h){ const age=Math.max(0,(h&&h.age)||0), r=age%BDAY_YEAR_DAYS;
+  return (r===0) ? (age>0?0:BDAY_YEAR_DAYS) : (BDAY_YEAR_DAYS-r); }
+function isBirthdayToday(h){ const age=Math.max(0,(h&&h.age)||0); return age>0 && age%BDAY_YEAR_DAYS===0; }
+function nextBirthday(h, game){ const day=Math.floor((game&&game.day)||1), inDays=daysToBirthday(h);
+  return { inDays, day:day+inDays, turning:ageYears(h)+(inDays===0?0:1) }; }
+function birthdayCelebrated(game, h){ return isBirthdayToday(h) && h && h.bdayYear===yearOf((game&&game.day)||1); }
+function canCelebrateBirthday(game, h){ return isBirthdayToday(h) && (!h || h.bdayYear!==yearOf((game&&game.day)||1)); }
+// everyone whose birthday is today (turning ≥1)
+function birthdaysToday(game){ return ((game&&game.horses)||[]).filter(isBirthdayToday)
+  .map(h=>({ id:h.id, name:h.name, turning:ageYears(h), celebrated:birthdayCelebrated(game,h) })); }
+// a bounded, sorted look-ahead of upcoming birthdays (soonest first; today's included at inDays 0)
+function upcomingBirthdays(game, within){ const day=Math.floor((game&&game.day)||1);
+  const w=Math.max(1, Math.min(BDAY_YEAR_DAYS, within||BDAY_YEAR_DAYS));
+  return ((game&&game.horses)||[]).map(h=>{ const nb=nextBirthday(h,game);
+      return { id:h.id, name:h.name, inDays:nb.inDays, day:nb.day, turning:nb.turning, today:nb.inDays===0,
+        celebrated:birthdayCelebrated(game,h) }; })
+    .filter(b=>b.inDays<=w)
+    .sort((a,b)=>(a.inDays-b.inDays)||(a.name<b.name?-1:1)); }
+// throw a small party for a horse ON its birthday — once per year per horse (stamped), tiny clamped bumps only
+function celebrateBirthday(game, h){ if(!game||!h) return {ok:false,why:'No horse.'};
+  if(!isBirthdayToday(h)) return {ok:false,why:'It’s not their birthday today.'};
+  const yr=yearOf(Math.floor(game.day||1));
+  if(h.bdayYear===yr) return {ok:false, already:true, why:'Already celebrated this year.'};
+  h.bdayYear=yr; needsInit(h);
+  h.happy=clamp((h.happy||0)+BDAY_HAPPY,0,100);
+  h.bond=clamp((h.bond||0)+BDAY_BOND,0,100); if(h.needs) h.needs.bond=clamp((h.needs.bond||0)+BDAY_BOND,0,100);
+  game.stats=game.stats||{}; game.stats.birthdays=(game.stats.birthdays||0)+1;
+  return {ok:true, turning:ageYears(h), happy:BDAY_HAPPY, bond:BDAY_BOND}; }
 
 // ---------- Seasonal festivals (one per season, deterministic & forecastable) ----------
 const FESTIVALS=[
@@ -4305,6 +4350,7 @@ const ACHIEVEMENTS=[
   {id:'spitpolish',     icon:'🧽', name:'Spit &amp; Polish',        desc:'Give twenty grooming sessions.',               check:g=>((g.stats&&g.stats.grooms)||0)>=20},
   {id:'monumental',     icon:'🗿', name:'Monumental',           desc:'Raise five commemorative monuments.',          check:g=>monumentsUnlockedCount(g)>=5},
   {id:'lifelister',     icon:'🦋', name:'Life-Lister',           desc:'Spot every creature in the paddock wildlife log.', check:g=>wildlifeProgress(g).complete},
+  {id:'partyplanner',   icon:'🎂', name:'Party Planner',         desc:'Celebrate ten horse birthdays.',               check:g=>((g.stats&&g.stats.birthdays)||0)>=10},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4567,6 +4613,7 @@ const GOALS=[
   {id:'name1',   desc:'Shortlist a name idea (✨)',                     tip:g=>nameShortlist(g).length+' saved',done:g=>nameShortlist(g).length>=1,                       reward:{money:200,rep:10}},
   {id:'wild1',   desc:'Spot your first paddock visitor (🦋)',          tip:g=>lifeList(g).length+' species',   done:g=>lifeList(g).length>=1,                                  reward:{money:200,rep:10}},
   {id:'silks1',  desc:'Design your stable colours (🎨)',               tip:g=>normSilks(g).custom?'done':'not yet',done:g=>normSilks(g).custom===true,                          reward:{money:200,rep:10}},
+  {id:'bday1',   desc:'Celebrate a horse’s birthday (🎂)',             tip:g=>((g.stats&&g.stats.birthdays)||0)+'/1',done:g=>((g.stats&&g.stats.birthdays)||0)>=1,             reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4764,6 +4811,7 @@ const HR = {
   NAME_THEMES, COAT_HINTS, BREED_HINTS, NAME_SHORTLIST_CAP, nameThemeDef, namePoolFor, nameIdeasFor, nameReason, normNameBoard, nameShortlist, saveNameIdea, removeNameIdea,
   WILDLIFE, WILDLIFE_REP, WL_RARITY_NAME, wildlifeDef, wildlifeChance, wildlifeVisible, wildlifeToday, normWildlifeLog, lifeList, hasSpotted, spotSpecies, wildlifeProgress,
   SILK_COLOURS, SILK_PATTERNS, SILK_EMBLEMS, silkColourDef, silkPatternDef, silkEmblemDef, normSilksParts, normSilks, setSilks, silksSvg, silksSummary,
+  BDAY_YEAR_DAYS, BDAY_HAPPY, BDAY_BOND, ageYears, birthDayOf, birthDateOfYear, daysToBirthday, isBirthdayToday, nextBirthday, birthdayCelebrated, canCelebrateBirthday, birthdaysToday, upcomingBirthdays, celebrateBirthday,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -4856,7 +4904,7 @@ function load(){
     { const ns=(G.stables||[]).length; for(const h of (G.horses||[])){ if(typeof h.stable!=='number'||h.stable<0||h.stable>=ns) h.stable=0; } } // ranch map: normalise stray barn indices
     if(!Array.isArray(G.fairsClaimed)) G.fairsClaimed=[]; // seasonal fairs claimed-reward log
     if(!G.chores||typeof G.chores!=='object'){ G.chores={day:0,done:{},streak:0,lastFull:0}; } else { if(!G.chores.done||typeof G.chores.done!=='object') G.chores.done={}; if(typeof G.chores.streak!=='number') G.chores.streak=0; } // daily chores board
-    for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; if(!h.ceremonies||typeof h.ceremonies!=='object') h.ceremonies={}; } // away-trip & coming-of-age state
+    for(const h of (G.horses||[])){ if(h.tripType===undefined) h.tripType=null; if(typeof h.tripBack!=='number') h.tripBack=0; if(!h.ceremonies||typeof h.ceremonies!=='object') h.ceremonies={}; if(typeof h.bdayYear!=='number') h.bdayYear=0; } // away-trip, coming-of-age & birthday state
     if(!G.store||typeof G.store!=='object'){ G.store={stock:-1,sold:[]}; } else if(!Array.isArray(G.store.sold)) G.store.sold=[]; // general store restock state
     if(!G.breeder||typeof G.breeder!=='object'){ G.breeder={points:(G.stats&&G.stats.breederPoints)||0}; } else if(typeof G.breeder.points!=='number') G.breeder.points=0; // breeder's prestige track
     if(!Array.isArray(G.studBookings)) G.studBookings=[]; // stud-directory outside-mare bookings
@@ -7211,6 +7259,34 @@ function openSilks(){
       burst('🎨✨',10); playSfx('coin'); toast('🎨 Stable colours saved!','good');
       const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); openSilks(); }; }
 }
+function openBirthdays(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ord=n=>{ const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+  const byId=id=>(G.horses||[]).find(h=>h.id===id)||null;
+  const today=birthdaysToday(G), up=upcomingBirthdays(G, BDAY_YEAR_DAYS).filter(b=>!b.today);
+  const todayRows=today.length?today.map(b=>{ const h=byId(b.id);
+    return '<div class="lbrow"><div class="hface">'+(h?horseArt(h,40):'🐴')+'</div>'+
+      '<div class="grow"><div class="lbname">🎂 '+esc(b.name)+' turns '+ord(b.turning)+'!</div>'+
+      '<div class="lbsub">'+(b.celebrated?'Celebrated 🎉':'It’s their foaling day today.')+'</div></div>'+
+      (b.celebrated?'<span class="pill" style="color:var(--good)">✓ Party done</span>':'<button class="btn sm blue" data-bdaycel="'+esc(b.id)+'">🎉 Celebrate</button>')+
+      '</div>'; }).join('')
+    :'<div class="empty">No birthdays today. Check the upcoming list below!</div>';
+  const upRows=up.length?up.slice(0,10).map(b=>{ const when=b.inDays===1?'tomorrow':('in '+b.inDays+' days');
+    return '<div class="lbrow"><div class="hface" style="background:none;font-size:18px;display:flex;align-items:center;justify-content:center">🎈</div>'+
+      '<div class="grow"><div class="lbname">'+esc(b.name)+' <span class="pill">turns '+ord(b.turning)+'</span></div>'+
+      '<div class="lbsub">'+when+' (day '+b.day+')</div></div></div>'; }).join('')
+    :'<div class="hbreed" style="opacity:.6">No upcoming birthdays within the year.</div>';
+  modal('<h3>🎂 Foaling-Day Birthdays</h3>'+
+    '<div class="msg">Every horse has a foaling day — its birthday comes round once a year. Throw a little party on the day for a small happiness &amp; bond lift (once a year each).</div>'+
+    '<div class="swlabel">🎉 Today</div><div>'+todayRows+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">🎈 Coming up</div><div>'+upRows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="bdayClose" style="width:100%">Done</button></div>');
+  $('bdayClose').onclick=closeModal;
+  document.querySelectorAll('[data-bdaycel]').forEach(b=>b.onclick=()=>{ const h=byId(b.getAttribute('data-bdaycel')); if(!h) return;
+    const r=celebrateBirthday(G, h); if(!r.ok){ toast(r.why,'info'); return; }
+    burst('🎂🎉✨',16); playSfx('goal'); toast('🎉 Happy '+ord(r.turning)+' birthday, '+h.name+'! +'+r.happy+'😊 +'+r.bond+'💗','good');
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); openBirthdays(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8115,6 +8191,7 @@ function boot(){
   { const ngb=$('nameBtn'); if(ngb) ngb.onclick=openNameGen; }
   { const wlb=$('wildBtn'); if(wlb) wlb.onclick=openWildlife; }
   { const skb=$('silksBtn'); if(skb) skb.onclick=openSilks; }
+  { const bdb=$('bdayBtn'); if(bdb) bdb.onclick=openBirthdays; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

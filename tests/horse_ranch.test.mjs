@@ -254,6 +254,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.nameBoard = { saved: [{ name: 'Comet', theme: 'classic', day: 1 }] }; // satisfies the name-shortlist goal
   g.wildlife = { seen: ['robin'] }; // satisfies the wildlife life-list goal
   g.silks = { primary: 'crimson', secondary: 'gold', pattern: 'sash', emblem: 'star', custom: true }; // satisfies the stable-colours goal
+  g.stats.birthdays = 1; // satisfies the birthday goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5012,6 +5013,60 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'silks1').done(gv), 'the silks goal is unmet before customising');
   HR.setSilks(gv, { primary: 'emerald' });
   ok(HR.GOALS.find(x => x.id === 'silks1').done(gv), 'designing stable colours satisfies the goal');
+}
+{
+  // ---- Horse birthday / foaling-day celebrations ----
+  const Y = HR.BDAY_YEAR_DAYS;
+  ok(Y === 56, 'a birthday year is 56 days (SEASON_LEN*4)');
+  // a horse exactly N years old has its birthday today
+  const g = HR.freshGame(); g.day = 100;
+  const bh = HR.mkHorse({ breed: 'arabian', age: 2 * Y }); g.horses.push(bh);
+  ok(HR.isBirthdayToday(bh) && HR.ageYears(bh) === 2, 'a horse aged exactly two years is celebrating today');
+  ok(HR.daysToBirthday(bh) === 0, 'days-to-birthday is 0 on the day');
+  // birth day derivation & a horse mid-year
+  ok(HR.birthDayOf(bh, g) === g.day - bh.age, 'birthDayOf is game.day minus age');
+  const mid = HR.mkHorse({ breed: 'welsh', age: Y + 10 }); g.horses.push(mid);
+  ok(!HR.isBirthdayToday(mid) && HR.daysToBirthday(mid) === Y - 10, 'a mid-year horse counts down to its next birthday');
+  ok(HR.nextBirthday(mid, g).turning === 2, 'nextBirthday reports the age it will turn');
+  // a newborn's first birthday is a full year out, not today
+  const foal = HR.mkHorse({ breed: 'fjord', age: 0 }); g.horses.push(foal);
+  ok(!HR.isBirthdayToday(foal) && HR.daysToBirthday(foal) === Y, 'a newborn is not having a birthday today');
+  // today / upcoming readers
+  ok(HR.birthdaysToday(g).some(b => b.id === bh.id) && HR.birthdaysToday(g).every(b => b.turning >= 1), 'birthdaysToday lists the celebrant');
+  const up = HR.upcomingBirthdays(g, Y);
+  ok(Array.isArray(up) && up.every(b => b.inDays >= 0 && b.inDays <= Y), 'upcomingBirthdays is bounded to within the window');
+  for (let i = 1; i < up.length; i++) ok(up[i - 1].inDays <= up[i].inDays, 'upcoming birthdays are sorted soonest-first');
+  // read-only: the readers never mutate
+  const snap = JSON.stringify(g);
+  HR.birthdaysToday(g); HR.upcomingBirthdays(g, Y); HR.nextBirthday(bh, g); HR.birthDateOfYear(bh, g); HR.ageYears(bh);
+  ok(JSON.stringify(g) === snap, 'the birthday readers never mutate the game');
+  // celebrate: works once, gives a small clamped bump, then is guarded for the year
+  const happy0 = bh.happy, spots0 = (g.stats.birthdays || 0);
+  const r = HR.celebrateBirthday(g, bh);
+  ok(r.ok && r.turning === 2 && r.happy === HR.BDAY_HAPPY, 'a birthday can be celebrated once');
+  ok(bh.happy === Math.min(100, happy0 + HR.BDAY_HAPPY) && bh.happy <= 100, 'the happiness bump is applied and clamped');
+  ok((g.stats.birthdays || 0) === spots0 + 1, 'the celebration is counted');
+  ok(!HR.celebrateBirthday(g, bh).ok, 'the same birthday cannot be celebrated twice (once-a-year guard)');
+  ok(HR.canCelebrateBirthday(g, bh) === false && HR.birthdayCelebrated(g, bh) === true, 'the horse now reads as celebrated');
+  // a horse whose birthday is not today cannot be celebrated
+  ok(!HR.celebrateBirthday(g, mid).ok, 'a horse without a birthday today cannot celebrate');
+  // next year the guard clears (bdayYear differs) — a horse turning 3 a year later can celebrate again
+  const g2 = HR.freshGame(); g2.day = 100 + Y;
+  const bh2 = HR.mkHorse({ breed: 'arabian', age: 3 * Y }); bh2.bdayYear = 1; g2.horses.push(bh2); // stale stamp from a prior year
+  ok(HR.canCelebrateBirthday(g2, bh2) && HR.celebrateBirthday(g2, bh2).ok, 'a later-year birthday clears the guard');
+  // sparse safety + the happiness bump never exceeds 100
+  ok(Array.isArray(HR.birthdaysToday({})) && Array.isArray(HR.upcomingBirthdays({}, 10)), 'the birthday readers are safe on a sparse game');
+  const capped = HR.mkHorse({ breed: 'arabian', age: Y, happy: 99 }); const gc = HR.freshGame(); gc.day = 200; gc.horses.push(capped);
+  HR.celebrateBirthday(gc, capped); ok(capped.happy === 100, 'the happiness bump is clamped at 100');
+  // goal + achievement
+  const gg = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'bday1').done(gg), 'the birthday goal is unmet before any party');
+  gg.stats.birthdays = 1;
+  ok(HR.GOALS.find(x => x.id === 'bday1').done(gg), 'celebrating a birthday satisfies the goal');
+  const ach = HR.ACHIEVEMENTS.find(a => a.id === 'partyplanner');
+  ok(ach && !ach.check(gg), 'Party Planner needs ten birthdays');
+  gg.stats.birthdays = 10;
+  ok(ach.check(gg), 'ten birthdays unlock Party Planner');
 }
 {
   // read-only + determinism + sparse safety
