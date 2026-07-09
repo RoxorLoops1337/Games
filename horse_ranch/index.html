@@ -350,6 +350,7 @@
     <button class="sbtn" id="monBtn" title="Monuments — commemorative statues & plaques" style="margin-right:4px">🗿</button>
     <button class="sbtn" id="noticeBtn" title="Notice-board — regional news & rival gossip" style="margin-right:4px">📰</button>
     <button class="sbtn" id="feedBtn" title="Feed planner — hay/grain/supplement nutrition advisor" style="margin-right:4px">📋</button>
+    <button class="sbtn" id="nameBtn" title="Name generator — name ideas & inspiration board" style="margin-right:4px">✨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -779,6 +780,107 @@ function nutritionPlan(game, h){
     dims:res.dims, notes:res.notes, ideal:res.ideal, supply:res.supply,
     suggestion:{mix:suggestion, score:sug.score} };
 }
+
+// ---------- Horse name-generator / inspiration board (READ-ONLY brainstorming aid) ----------
+// Suggests fitting names for a horse from EXISTING name-pack pools plus themed hint lists, each with a short
+// reason, deterministically keyed to game.day + the horse id (+ an optional shuffle nonce). It never renames
+// anything itself (the existing renameHorse flow does that) and never touches the economy or any stat. A tiny
+// bounded shortlist of saved ideas persists. Fully deterministic — no Date/Math.random.
+const NAME_SHORTLIST_CAP=12;
+const NAME_THEMES=[
+  {id:'classic',  name:'Classic',   emoji:'🐴', reason:'a timeless stable name'},
+  {id:'nature',   name:'Nature',    emoji:'🌿', reason:'wild and earthy'},
+  {id:'mythic',   name:'Mythic',    emoji:'🐉', reason:'the stuff of legend'},
+  {id:'regal',    name:'Regal',     emoji:'👑', reason:'fit for royalty'},
+  {id:'whimsical',name:'Whimsical', emoji:'🎠', reason:'playful and sweet'},
+  {id:'coat',     name:'By coat',   emoji:'🎨', reason:'drawn from the coat'},
+  {id:'breed',    name:'By breed',  emoji:'🐎', reason:'true to the breed'},
+];
+function nameThemeDef(id){ return NAME_THEMES.find(t=>t.id===id)||null; }
+// coat-keyword → evocative name ideas (matched loosely against the horse's coat name)
+const COAT_HINTS=[
+  {key:'Black',    names:['Onyx','Shadow','Raven','Coal','Ink','Ebony','Midnight']},
+  {key:'Grey',     names:['Ash','Silver','Storm','Pepper','Smoke','Flint','Cloud']},
+  {key:'White',    names:['Frost','Pearl','Snow','Ivory','Dove','Blanche']},
+  {key:'Golden',   names:['Midas','Sunbeam','Goldie','Amber','Sol','Honey']},
+  {key:'Palomino', names:['Butterscotch','Amber','Sandy','Custard','Honey']},
+  {key:'Cremello', names:['Cream','Buttermilk','Ivory','Pearl']},
+  {key:'Chestnut', names:['Rusty','Copper','Cinnamon','Autumn','Fox']},
+  {key:'Sorrel',   names:['Copper','Ruby','Rosewood','Brick']},
+  {key:'Bay',      names:['Hazel','Acorn','Cocoa','Umber','Chestnut']},
+  {key:'Brown',    names:['Cocoa','Mocha','Bramble','Walnut']},
+  {key:'Dun',      names:['Sahara','Dune','Wheat','Clay','Sandstorm']},
+  {key:'Buckskin', names:['Sandy','Dune','Biscuit','Tawny']},
+  {key:'Grullo',   names:['Slate','Cinder','Basalt','Pewter']},
+  {key:'Roan',     names:['Freckle','Speckle','Marble','Pepper']},
+  {key:'Piebald',  names:['Domino','Patch','Magpie','Checkers']},
+  {key:'Tobiano',  names:['Patch','Splash','Domino','Calico']},
+  {key:'Overo',    names:['Splash','Pinto','Cloud','Patch']},
+  {key:'Leopard',  names:['Dot','Spot','Sprinkle','Confetti']},
+  {key:'Blanket',  names:['Snowcap','Frost','Drift']},
+  {key:'Snowflake',names:['Flurry','Glitter','Frost']},
+];
+// breed id → names evoking the breed's origin & character
+const BREED_HINTS={
+  shetland:['Pixie','Scout','Nibbles','Tinker'], mustang:['Renegade','Sage','Canyon','Dakota','Freedom'],
+  quarter:['Dash','Colt','Boomer','Ace'], appaloosa:['Nez','Chief','Domino','Comanche'],
+  clydesdale:['Angus','Hamish','Bonnie','Duncan','Brawn'], arabian:['Sahara','Zephyr','Mirage','Kaseem','Layla'],
+  andalusian:['Diego','Alma','Fuego','Rioja','Bailar'], thoroughbred:['Furlong','Ascot','Derby','Dash','Stakes'],
+  friesian:['Nero','Ebony','Sterling','Zwart'], akhalteke:['Aurum','Zarina','Turkmen','Shine'],
+  welsh:['Dylan','Gwen','Taffy','Cariad'], fjord:['Bjorn','Freya','Odin','Saga'],
+  haflinger:['Alp','Tyrol','Goldie','Bruno'], paint:['Picasso','Splash','Canvas','Domino'],
+  hanoverian:['Fritz','Kaiser','Greta','Baron'], lipizzaner:['Maestro','Vienna','Pluto','Neapolitano'],
+};
+function _nameUniq(a){ const seen={}, out=[]; for(const x of a){ const k=(''+x).toLowerCase(); if(!seen[k]){ seen[k]=1; out.push(x); } } return out; }
+// resolve the candidate pool for a theme + horse (deterministic, no mutation)
+function namePoolFor(game, h, themeId){
+  if(themeId==='coat'){ const cn=(h?coatOf(h).name:'')||''; let pool=[];
+    for(const c of COAT_HINTS){ if(cn && cn.toLowerCase().indexOf(c.key.toLowerCase())>=0) pool=pool.concat(c.names); }
+    if(!pool.length) pool=['Beau','Pippin','Scout','Willow','Ace','Clover']; // neutral fallback
+    return _nameUniq(pool); }
+  if(themeId==='breed'){ const pool=(h&&BREED_HINTS[h.breed])?BREED_HINTS[h.breed].slice():['Scout','Ace','Beau','Willow','Pip','Clover'];
+    return _nameUniq(pool); }
+  const pk=namePackDef(themeId); const sex=(h&&h.sex==='mare')?'mare':'stallion'; // pack-backed themes map 1:1
+  const a=(sex==='mare'?pk.f:pk.m)||[];
+  return _nameUniq(a.slice());
+}
+// a stable hash of a horse's id string (deterministic)
+function nameHorseSeed(h){ let s=2166136261>>>0; const str=(''+((h&&h.id)||'anon')); for(let i=0;i<str.length;i++){ s^=str.charCodeAt(i); s=Math.imul(s,16777619)>>>0; } return s>>>0; }
+// a short flavour reason for a suggested name under a theme
+function nameReason(name, theme, ctx){ const t=nameThemeDef(theme)||NAME_THEMES[0]; ctx=ctx||{};
+  if(t.id==='coat' && ctx.coat) return t.emoji+' echoes their '+(''+ctx.coat).toLowerCase()+' coat.';
+  if(t.id==='breed' && ctx.breedName) return t.emoji+' honours the '+ctx.breedName+' in them.';
+  return t.emoji+' '+t.reason+'.'; }
+// a deterministic spread of name ideas for a horse under a theme (keyed to day + horse id + optional nonce)
+function nameIdeasFor(game, h, theme, count, nonce){
+  const themeId=nameThemeDef(theme)?theme:'classic';
+  const day=(game&&game.day)||1, pool=namePoolFor(game,h,themeId);
+  const n=Math.max(1, Math.min(pool.length, count||6));
+  let seed=(hashDay(day) ^ nameHorseSeed(h) ^ Math.imul(themeId.length+7,2654435761) ^ Math.imul((nonce|0)+1,40503))>>>0;
+  const rng=seededOnce(seed||1), arr=pool.slice(), out=[];
+  const ctx={coat:h?coatOf(h).name:'', breedName:(breedDef(h&&h.breed)||{}).name||''};
+  for(let k=0;k<n && arr.length;k++){ const idx=Math.floor(rng()*arr.length), nm=arr.splice(idx,1)[0];
+    out.push({name:nm, theme:themeId, reason:nameReason(nm, themeId, ctx)}); }
+  return out;
+}
+// ---- Saved name-idea shortlist (a tiny bounded keepsake list; advisory only) ----
+function normNameBoard(game){ if(!game) return {saved:[]}; if(!game.nameBoard||typeof game.nameBoard!=='object') game.nameBoard={saved:[]};
+  if(!Array.isArray(game.nameBoard.saved)) game.nameBoard.saved=[];
+  game.nameBoard.saved=game.nameBoard.saved
+    .filter(e=>e&&typeof e.name==='string'&&e.name.trim())
+    .map(e=>({name:(''+e.name).replace(/\s+/g,' ').trim().slice(0,HORSE_NAME_MAX), theme:(nameThemeDef(e.theme)?e.theme:'classic'), day:(typeof e.day==='number'&&isFinite(e.day)?e.day:1)}))
+    .filter((e,i,a)=>a.findIndex(x=>x.name.toLowerCase()===e.name.toLowerCase())===i)
+    .slice(0,NAME_SHORTLIST_CAP);
+  return game.nameBoard; }
+function nameShortlist(game){ return normNameBoard(game).saved; }
+function saveNameIdea(game, name, theme){ const b=normNameBoard(game);
+  const t=(''+(name==null?'':name)).replace(/\s+/g,' ').trim().slice(0,HORSE_NAME_MAX);
+  if(!t) return {ok:false,why:'Name can’t be empty.'};
+  if(b.saved.some(e=>e.name.toLowerCase()===t.toLowerCase())) return {ok:false,why:'Already on your shortlist.'};
+  if(b.saved.length>=NAME_SHORTLIST_CAP) return {ok:false,why:'Shortlist full ('+NAME_SHORTLIST_CAP+') — remove one first.'};
+  b.saved.push({name:t, theme:(nameThemeDef(theme)?theme:'classic'), day:(game&&game.day)||1}); return {ok:true, name:t}; }
+function removeNameIdea(game, name){ const b=normNameBoard(game); const t=(''+name).toLowerCase();
+  b.saved=b.saved.filter(e=>e.name.toLowerCase()!==t); return {ok:true}; }
 
 // ---------- Horse diary / mood flavour feed (READ-ONLY charm derived from existing state) ----------
 // A short, deterministic flavour line per horse, keyed to its condition + game.day. No state change.
@@ -2161,7 +2263,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -4309,6 +4411,7 @@ const GOALS=[
   {id:'mon1',    desc:'Unveil your first monument (🗿)',                tip:g=>monumentsUnlockedCount(g)+'/1',done:g=>monumentsUnlockedCount(g)>=1,                       reward:{money:500,rep:20}},
   {id:'notice1', desc:'Read the stable notice-board (📰)',              tip:g=>((g.stats&&g.stats.noticeViews)||0)+'/1',done:g=>((g.stats&&g.stats.noticeViews)||0)>=1,         reward:{money:250,rep:10}},
   {id:'feed1',   desc:'Draw up a feed plan (📋)',                       tip:g=>((g.stats&&g.stats.feedPlans)||0)+'/1',done:g=>((g.stats&&g.stats.feedPlans)||0)>=1,           reward:{money:300,rep:10}},
+  {id:'name1',   desc:'Shortlist a name idea (✨)',                     tip:g=>nameShortlist(g).length+' saved',done:g=>nameShortlist(g).length>=1,                       reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4503,6 +4606,7 @@ const HR = {
   dayForecast, forecast, upcomingEvents, seasonAlmanac,
   GOSSIP_TEMPLATES, WEATHER_CHATTER, rivalBoast, weatherChatter, rivalGossip, standingHeadline, noticeBoard, regionHeadlines,
   FEED_DIMS, FEED_CATS, FEED_ITEMS, feedItemDef, feedItemsIn, feedCatDef, idealProfile, mixSupply, dietScore, dietTier, suggestMix, normDiet, validMix, dietPlanFor, setDietPlan, nutritionPlan,
+  NAME_THEMES, COAT_HINTS, BREED_HINTS, NAME_SHORTLIST_CAP, nameThemeDef, namePoolFor, nameIdeasFor, nameReason, normNameBoard, nameShortlist, saveNameIdea, removeNameIdea,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -4617,6 +4721,7 @@ function load(){
     G.aspBoard=normAspBoard(G); // personal aspirations board — safe on old saves
     G.monuments=normMonuments(G); checkMonuments(G); // commemorative monuments — stamp any milestone already reached
     G.diet=normDiet(G); { const live={}; for(const h of (G.horses||[])) if(h&&h.id) live[h.id]=1; for(const k of Object.keys(G.diet.plans)) if(!live[k]||!validMix(G.diet.plans[k])) delete G.diet.plans[k]; } // feed-mix plans — prune stale/invalid
+    G.nameBoard=normNameBoard(G); // name-idea shortlist — safe on old saves
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -6841,6 +6946,53 @@ function openNutrition(){
       const fresh=checkAchievements(G), gg=checkGoals(G); burst('📋✅',10); playSfx('coin');
       toast('📋 Feed plan saved for '+h.name+'.','good'); save(); if(fresh.length||gg.length) renderHUD(); openNutrition(); }; }
 }
+let nameSel={horse:null, theme:'classic', nonce:0};
+function openNameGen(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(nameSel.horse && !horses.some(h=>h.id===nameSel.horse)) nameSel.horse=null;
+  if(!nameSel.horse && horses.length) nameSel.horse=horses[0].id;
+  if(!nameThemeDef(nameSel.theme)) nameSel.theme='classic';
+  const h=nameSel.horse?horses.find(x=>x.id===nameSel.horse):null;
+  const hChips=horses.length?horses.map(x=>'<span class="wlchip" data-nghorse="'+esc(x.id)+'" style="cursor:pointer;'+(nameSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' ')
+    :'<span class="empty">No horses yet — buy or breed one to name.</span>';
+  const tChips=NAME_THEMES.map(t=>'<span class="wlchip" data-ngtheme="'+esc(t.id)+'" style="cursor:pointer;'+(nameSel.theme===t.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+t.emoji+' '+esc(t.name)+'</span>').join(' ');
+  let ideas='';
+  if(h){
+    const saved={}; nameShortlist(G).forEach(e=>saved[e.name.toLowerCase()]=1);
+    const list=nameIdeasFor(G, h, nameSel.theme, 6, nameSel.nonce);
+    ideas=list.map(it=>{ const on=saved[it.name.toLowerCase()];
+      return '<div class="lbrow"><div class="hface" style="background:none;font-size:18px;display:flex;align-items:center;justify-content:center">'+(nameThemeDef(it.theme)||{emoji:'✨'}).emoji+'</div>'+
+        '<div class="grow"><div class="lbname">'+esc(it.name)+'</div><div class="lbsub">'+esc(it.reason)+'</div></div>'+
+        '<button class="btn sm ghost" data-ngsave="'+esc(it.name)+'"'+(on?' disabled':'')+'>'+(on?'★':'☆')+'</button>'+
+        '<button class="btn sm blue" data-nguse="'+esc(it.name)+'">Use</button></div>'; }).join('');
+  } else { ideas='<div class="empty">Pick a horse above to see name ideas.</div>'; }
+  const shortlist=nameShortlist(G);
+  const slChips=shortlist.length?shortlist.map(e=>'<span class="wlchip" style="cursor:default">'+esc(e.name)+
+    ' <span data-nguse="'+esc(e.name)+'" style="cursor:pointer;color:var(--gold)" title="Use on selected horse">↩</span>'+
+    ' <span data-ngdel="'+esc(e.name)+'" style="cursor:pointer;opacity:.6" title="Remove">✕</span></span>').join(' ')
+    :'<span class="hbreed" style="opacity:.6">No saved ideas yet — tap ☆ to shortlist a favourite.</span>';
+  modal('<h3>✨ Name Inspiration</h3>'+
+    '<div class="msg">Stuck for a name? Brainstorm ideas tuned to a horse’s coat, breed or a theme — save your favourites, or tap <b>Use</b> to name the horse right now. Just a spark of inspiration; nothing’s locked in until you use it.</div>'+
+    '<div class="swlabel">Horse</div><div>'+hChips+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">Theme</div><div class="pips">'+tChips+'</div>'+
+    (h?'<div class="btnrow" style="margin-top:6px"><button class="btn sm" id="ngShuffle" style="width:100%">🎲 More ideas</button></div>':'')+
+    '<div class="swlabel" style="margin-top:8px">💡 Ideas</div><div>'+ideas+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">⭐ Shortlist <span class="pill">'+shortlist.length+'/'+NAME_SHORTLIST_CAP+'</span></div><div class="pips">'+slChips+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="ngClose" style="width:100%">Done</button></div>');
+  $('ngClose').onclick=closeModal;
+  const reopen=()=>{ const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); openNameGen(); };
+  document.querySelectorAll('[data-nghorse]').forEach(x=>x.onclick=()=>{ nameSel.horse=x.getAttribute('data-nghorse'); nameSel.nonce=0; playSfx('tap'); openNameGen(); });
+  document.querySelectorAll('[data-ngtheme]').forEach(x=>x.onclick=()=>{ nameSel.theme=x.getAttribute('data-ngtheme'); nameSel.nonce=0; playSfx('tap'); openNameGen(); });
+  { const sh=$('ngShuffle'); if(sh) sh.onclick=()=>{ nameSel.nonce=(nameSel.nonce+1)%1000; playSfx('tap'); openNameGen(); }; }
+  document.querySelectorAll('[data-ngsave]').forEach(b=>b.onclick=()=>{ const r=saveNameIdea(G, b.getAttribute('data-ngsave'), nameSel.theme);
+    if(!r.ok){ toast(r.why,'info'); return; } burst('✨⭐',8); playSfx('coin'); toast('⭐ Shortlisted “'+r.name+'”.','good'); reopen(); });
+  document.querySelectorAll('[data-ngdel]').forEach(b=>b.onclick=()=>{ removeNameIdea(G, b.getAttribute('data-ngdel')); playSfx('tap'); reopen(); });
+  document.querySelectorAll('[data-nguse]').forEach(b=>b.onclick=()=>{ if(!h){ toast('Pick a horse first.','info'); return; }
+    const nm=b.getAttribute('data-nguse'), res=renameHorse(G, h.id, nm); if(!res.ok){ toast(res.why,'bad'); return; }
+    burst('✏️✨',10); playSfx('coin'); toast('✏️ Renamed to “'+res.name+'”.','good');
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); if(typeof renderTab==='function') renderTab(); openNameGen(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -7742,6 +7894,7 @@ function boot(){
   { const mnb=$('monBtn'); if(mnb) mnb.onclick=openMonuments; }
   { const ntb=$('noticeBtn'); if(ntb) ntb.onclick=openNoticeBoard; }
   { const fdb=$('feedBtn'); if(fdb) fdb.onclick=openNutrition; }
+  { const ngb=$('nameBtn'); if(ngb) ngb.onclick=openNameGen; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

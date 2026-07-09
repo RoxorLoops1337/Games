@@ -251,6 +251,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.grooms = 1; // satisfies the grooming mini-game goal
   g.stats.noticeViews = 1; // satisfies the notice-board goal
   g.stats.feedPlans = 1; // satisfies the feed-planner goal
+  g.nameBoard = { saved: [{ name: 'Comet', theme: 'classic', day: 1 }] }; // satisfies the name-shortlist goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -4880,6 +4881,48 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'feed1').done(gv), 'the feed-plan goal is unmet before planning');
   gv.stats.feedPlans = 1;
   ok(HR.GOALS.find(x => x.id === 'feed1').done(gv), 'drawing up a feed plan satisfies the goal');
+}
+{
+  // ---- Horse name-generator / inspiration board ----
+  const g = HR.freshGame(); g.day = 12;
+  const h = g.horses[0];
+  ok(HR.NAME_THEMES.length >= 5 && HR.NAME_THEMES.every(t => t.id && t.emoji), 'the theme catalogue is populated');
+  // ideas are well-formed, distinct, and reason-tagged
+  const ideas = HR.nameIdeasFor(g, h, 'nature', 5);
+  ok(ideas.length >= 1 && ideas.length <= 5, 'nameIdeasFor returns up to the requested count');
+  ok(ideas.every(i => typeof i.name === 'string' && i.name && typeof i.reason === 'string' && i.reason), 'every idea has a name and a reason');
+  ok(new Set(ideas.map(i => i.name.toLowerCase())).size === ideas.length, 'the ideas are distinct');
+  ok(ideas.every(i => i.name.length <= HR.HORSE_NAME_MAX), 'ideas respect the name-length cap');
+  // themed pools are drawn from the right source
+  const nat = HR.namePoolFor(g, h, 'nature'); ok(nat.length >= 3, 'the nature theme has a pool');
+  const black = HR.mkHorse({ breed: 'friesian', coat: { name: 'Black', tier: 0 } });
+  ok(HR.namePoolFor(g, black, 'coat').some(n => /Onyx|Raven|Shadow|Coal|Ink|Ebony|Midnight/.test(n)), 'the coat theme reflects a black coat');
+  ok(HR.namePoolFor(g, black, 'breed').length >= 1, 'the breed theme has ideas for a known breed');
+  ok(/coat/i.test(HR.nameReason('Onyx', 'coat', { coat: 'Black' })), 'a coat reason mentions the coat');
+  // determinism: same inputs → same spread; a nonce reshuffles deterministically
+  ok(JSON.stringify(HR.nameIdeasFor(g, h, 'mythic', 4, 2)) === JSON.stringify(HR.nameIdeasFor(g, h, 'mythic', 4, 2)), 'nameIdeasFor is deterministic for fixed inputs');
+  // read-only: generating ideas never mutates the game
+  const snap0 = JSON.stringify(g);
+  HR.nameIdeasFor(g, h, 'regal', 6, 1); HR.namePoolFor(g, h, 'breed'); HR.nameReason('Baron', 'regal');
+  ok(JSON.stringify(g) === snap0, 'generating name ideas never mutates the game');
+  // shortlist: save / dedupe / cap / remove
+  ok(HR.nameShortlist(g).length === 0, 'the shortlist starts empty');
+  ok(HR.saveNameIdea(g, 'Thunderbolt Xyz Long Name Overflow', 'classic').ok, 'a name can be shortlisted');
+  ok(HR.nameShortlist(g)[0].name.length <= HR.HORSE_NAME_MAX, 'a saved name is length-capped');
+  const before = HR.nameShortlist(g).length;
+  ok(!HR.saveNameIdea(g, HR.nameShortlist(g)[0].name, 'classic').ok && HR.nameShortlist(g).length === before, 'duplicate names are rejected');
+  for (let i = 0; i < HR.NAME_SHORTLIST_CAP + 5; i++) HR.saveNameIdea(g, 'Name' + i, 'classic');
+  ok(HR.nameShortlist(g).length === HR.NAME_SHORTLIST_CAP, 'the shortlist is capped');
+  const pick = HR.nameShortlist(g)[0].name; HR.removeNameIdea(g, pick);
+  ok(!HR.nameShortlist(g).some(e => e.name === pick), 'a shortlisted name can be removed');
+  // sparse safety
+  ok(Array.isArray(HR.nameIdeasFor({}, null, 'classic', 4)) && HR.nameIdeasFor({}, null, 'classic', 4).length >= 1, 'the generator is safe on a sparse game');
+  ok(HR.normNameBoard({}).saved.length === 0, 'normNameBoard is safe on a sparse game');
+  // the goal fires once an idea is shortlisted
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'name1').done(gv), 'the name goal is unmet before shortlisting');
+  HR.saveNameIdea(gv, 'Willow', 'nature');
+  ok(HR.GOALS.find(x => x.id === 'name1').done(gv), 'shortlisting a name satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
