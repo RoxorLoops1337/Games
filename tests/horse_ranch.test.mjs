@@ -237,6 +237,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.profilesRead = 10; // satisfies the personality-profile goal
   g.stats.lessons = 1000; // satisfies the riding-curriculum goal (past Lead-Rein)
   g.trophies = g.trophies || []; for (let i = 0; i < 6; i++) g.trophies.push({ horse: 'H', breed: 'arabian', disc: 'race', tier: 3, place: 1, day: i + 1 }); // satisfies the ribbon-wall goal (≥5)
+  g.stats.ledgerViews = 1; // satisfies the balance-sheet goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -654,6 +655,60 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const gg2 = HR.freshGame(); gg2.stats.lessons = 1000;
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'headofschool').check(gg2), 'Head of School unlocks at the Competition Squad tier');
   ok(HR.GOALS.filter(x => x.id === 'curric1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'headofschool').length === 1, 'new curriculum goal/achievement ids are unique');
+}
+{
+  // ---- balance sheet / finances summary (read-only reporting lens) ----
+  const g = HR.freshGame();
+  g.canteen = { level: 2 };
+  const tt = HR.mkTeacher(g, rng(3)); tt.capacity = 6; tt.salary = 40; g.teachers = [tt];
+  g.staff = ['groom'];
+  g.insurance = ['vet'];
+  g.horses[0].rentDays = 4; g.horses[0].rentRate = 55;
+  const day = g.day;
+  const led = HR.dailyLedger(g);
+  const inc = id => led.income.find(x => x.id === id).amount;
+  const exp = id => led.expense.find(x => x.id === id).amount;
+  ok(inc('rent') === 55, 'rent line matches the rented horse rate');
+  const expCanteen = Math.round(HR.canteenIncome(g) * HR.canteenDayMult(day) * HR.canteenWeatherMult(day) * HR.seasonCanteenMul(day) * HR.festivalMod(day, 'canteenMul', 1));
+  ok(inc('canteen') === expCanteen, 'canteen line matches the live canteen formula');
+  ok(inc('lessons') === Math.round(HR.schoolIncome(g) * HR.lessonDayMult(day)), 'lessons line matches school income × day boost');
+  ok(inc('stud') === Math.round(HR.studIncome(g)), 'stud line matches studIncome');
+  ok(exp('salaries') === HR.teacherSalaries(g), 'salaries line matches teacher salaries');
+  ok(exp('staff') === HR.staffPayroll(g), 'staff line matches payroll');
+  ok(exp('insurance') === HR.insurancePremium(g), 'insurance line matches premiums');
+  ok(led.incomeTotal === led.income.reduce((n, x) => n + x.amount, 0), 'income total sums the income lines');
+  ok(led.net === led.incomeTotal - led.expenseTotal, 'net = income − expense');
+  // balance sheet
+  const bs = HR.balanceSheet(g);
+  ok(bs.cash === g.money, 'balance sheet cash matches money on hand');
+  ok(bs.ledger.net === led.net && bs.projection30 === led.net * 30, 'projection is 30× the daily net');
+  g.stats.goldEarned = 12345; g.stats.bestSale = 999;
+  const bs2 = HR.balanceSheet(g);
+  ok(bs2.lifetime.find(l => l.id === 'earned').value === 12345 && bs2.lifetime.find(l => l.id === 'bestSale').value === 999, 'lifetime totals read from stats');
+  // finance summary picks the biggest earner/cost
+  const fs = HR.financeSummary(g);
+  const maxInc = led.income.filter(x => x.amount > 0).sort((a, b) => b.amount - a.amount)[0];
+  const maxExp = led.expense.filter(x => x.amount > 0).sort((a, b) => b.amount - a.amount)[0];
+  ok(fs.biggestEarner && fs.biggestEarner.id === maxInc.id, 'biggest earner is the top income line');
+  ok(fs.biggestCost && fs.biggestCost.id === maxExp.id, 'biggest cost is the top expense line');
+  // read-only + deterministic
+  const snap = JSON.stringify(g);
+  HR.dailyLedger(g); HR.balanceSheet(g); HR.financeSummary(g);
+  ok(JSON.stringify(g) === snap, 'the balance sheet is read-only (never mutates the game)');
+  ok(JSON.stringify(HR.dailyLedger(g)) === JSON.stringify(HR.dailyLedger(g)), 'dailyLedger is deterministic');
+  // sparse/new game: no teachers/canteen/staff → all zeroes
+  const g0 = HR.freshGame();
+  const led0 = HR.dailyLedger(g0);
+  ok(led0.income.every(x => x.amount === 0) && led0.expense.every(x => x.amount === 0) && led0.net === 0, 'a bare new ranch has a flat ledger');
+  ok(HR.dailyLedger({}).net === 0 && HR.balanceSheet({}).cash === 0, 'ledger helpers are safe on an empty game');
+  // goal + achievement
+  const gv = HR.freshGame(); gv.stats.ledgerViews = 1;
+  ok(HR.GOALS.find(x => x.id === 'books1').done(gv), 'books1 completes once the books are opened');
+  const gb = HR.freshGame(); gb.canteen = { level: 3 }; gb.rep = 4000;
+  ok(HR.dailyLedger(gb).net >= 0, 'a canteen-only ranch runs a surplus');
+  const grich = HR.freshGame(); grich.boarders = 40;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'intheblack').check(grich), 'In the Black unlocks at a 🪙300+ daily surplus');
+  ok(HR.GOALS.filter(x => x.id === 'books1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'intheblack').length === 1, 'new finance goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
