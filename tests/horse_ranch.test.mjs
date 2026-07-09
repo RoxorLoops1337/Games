@@ -243,6 +243,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.wardrobe = { owned: ['tweed'], equipped: 'tweed' }; // satisfies the show-wardrobe goal
   g.stats.toursViewed = 1; // satisfies the ranch-tour goal
   g.mascot = { type: 'barncat', name: 'Tom' }; // satisfies the stable-mascot goal
+  g.garden = { sown: true, growth: 0, lastHarvest: 0 }; // satisfies the hay-meadow goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -1008,6 +1009,71 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const gm = HR.freshGame(); gm.stats.mascotsAdopted = 3;
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'menagerie').check(gm), 'Menagerie unlocks after three adoptions');
   ok(HR.GOALS.filter(x => x.id === 'mascot1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'menagerie').length === 1, 'new mascot goal/achievement ids are unique');
+}
+{
+  // ---- seasonal hay-meadow / produce garden ----
+  // fresh game: no plot sown
+  const g0 = HR.freshGame();
+  const s0 = HR.gardenState(g0);
+  ok(!s0.sown && s0.growthPct === 0 && s0.daysToHarvest === null, 'a fresh ranch has an unsown meadow');
+  // sow: deducts cost, starts growth, blocked when already sown / without coins
+  const g = HR.freshGame(); g.money = 5000; g.day = 5; // spring
+  const before = g.money;
+  const r = HR.sowGarden(g);
+  ok(r.ok && g.money === before - HR.GARDEN.sowCost && HR.gardenState(g).sown, 'sowGarden deducts the cost and starts the plot');
+  ok(!HR.sowGarden(g).ok, 'sowing an already-sown meadow is blocked');
+  const gp = HR.freshGame(); gp.money = 10;
+  ok(!HR.sowGarden(gp).ok && !HR.gardenState(gp).sown, 'sowGarden is blocked without enough coins');
+  // growth advances per day and is season-aware
+  const gs = HR.freshGame(); gs.money = 5000; gs.day = 20; HR.sowGarden(gs); // summer
+  const gr0 = gs.garden.growth; HR.tickGarden(gs);
+  ok(Math.abs((gs.garden.growth - gr0) - 1.4) < 1e-9, 'growth is faster in summer (×1.4/day)');
+  const gw = HR.freshGame(); gw.money = 5000; gw.day = 50; HR.sowGarden(gw); // winter
+  const gw0 = gw.garden.growth; HR.tickGarden(gw);
+  ok(gw.garden.growth === gw0 && HR.gardenState(gw).dormant, 'the meadow is dormant in winter (no growth)');
+  const gsp = HR.freshGame(); gsp.money = 5000; gsp.day = 5; HR.sowGarden(gsp); // spring
+  const gsp0 = gsp.garden.growth; HR.tickGarden(gsp);
+  ok(Math.abs((gsp.garden.growth - gsp0) - 1.0) < 1e-9, 'growth is the base rate in spring');
+  // gardenState reports growthPct / ready / daysToHarvest
+  const gg = HR.freshGame(); gg.money = 5000; gg.day = 5; HR.sowGarden(gg);
+  gg.garden.growth = HR.GARDEN.growthDays / 2;
+  const half = HR.gardenState(gg);
+  ok(Math.abs(half.growthPct - 0.5) < 1e-9 && !half.ready && half.daysToHarvest > 0, 'a half-grown plot reports 50% and days-to-harvest');
+  // harvest: only when ready; capped yield; resets growth
+  const gh = HR.freshGame(); gh.money = 5000; gh.day = 5; HR.sowGarden(gh); gh.horses = [HR.mkHorse({ breed: 'welsh', age: 20, happy: 50 })];
+  ok(!HR.harvestGarden(gh).ok, 'harvest is blocked before the plot is ready');
+  gh.garden.growth = HR.GARDEN.growthDays; // force ready
+  const feed0 = gh.feed, hp0 = gh.horses[0].happy;
+  const hr = HR.harvestGarden(gh);
+  ok(hr.ok && hr.hay > 0 && hr.hay <= HR.GARDEN.yieldCap, 'harvest grants a capped hay yield');
+  ok(gh.feed === feed0 + hr.hay, 'the hay is added to the barn');
+  ok(gh.horses[0].happy >= hp0, 'a harvest gives the herd a small happy nudge');
+  ok(gh.garden.growth === 0 && gh.gardenReady !== true && HR.gardenState(gh).ready === false, 'harvesting resets the growth timer');
+  ok(gh.garden.lastHarvest === gh.day, 'the last-harvest day is recorded');
+  ok((gh.stats.harvests || 0) === 1, 'the harvest is counted');
+  // the yield never exceeds the cap in any season (autumn bonus still capped)
+  for (const day of [5, 20, 35, 50]) { const gy = HR.freshGame(); gy.day = day; ok(HR.gardenYield(gy) <= HR.GARDEN.yieldCap, 'yield is capped in season starting day ' + day); }
+  // can't be farmed faster than the cooldown: right after harvest it's not ready
+  ok(!HR.harvestGarden(gh).ok, 'a second harvest is blocked until it regrows');
+  // migration + read-only + sparse
+  const mig = HR.normGarden({ sown: true, growth: 999, lastHarvest: 12 });
+  ok(mig.growth === HR.GARDEN.growthDays && mig.sown === true, 'normGarden clamps an over-grown value');
+  ok(HR.normGarden({ growth: 5 }).growth === 0, 'growth is 0 when not sown');
+  ok(HR.gardenState({}).sown === false && HR.gardenGrowthPerDay({}) === 0, 'garden helpers are safe on a bare game');
+  const gm2 = HR.freshGame(); gm2.money = 5000; gm2.day = 5; HR.sowGarden(gm2);
+  const snap = JSON.stringify(gm2);
+  HR.gardenState(gm2); HR.gardenYield(gm2); HR.gardenGrowthPerDay(gm2);
+  ok(JSON.stringify(gm2) === snap, 'the garden read helpers never mutate the game');
+  // tickGarden flows through advanceDay
+  const ga = HR.freshGame(); ga.money = 5000; ga.day = 19; HR.sowGarden(ga); ga.feed = 9999;
+  const grow0 = ga.garden.growth; HR.advanceDay(ga, rng(2));
+  ok(ga.garden.growth > grow0, 'the meadow grows as days pass via advanceDay');
+  // goal + achievement
+  const gGoal = HR.freshGame(); gGoal.garden = { sown: true, growth: 0, lastHarvest: 0 };
+  ok(HR.GOALS.find(x => x.id === 'garden1').done(gGoal), 'garden1 completes once the meadow is sown');
+  const gAch = HR.freshGame(); gAch.stats.harvests = 5;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'homegrown').check(gAch), 'Home-Grown unlocks at five harvests');
+  ok(HR.GOALS.filter(x => x.id === 'garden1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'homegrown').length === 1, 'new garden goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
