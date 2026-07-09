@@ -253,6 +253,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.feedPlans = 1; // satisfies the feed-planner goal
   g.nameBoard = { saved: [{ name: 'Comet', theme: 'classic', day: 1 }] }; // satisfies the name-shortlist goal
   g.wildlife = { seen: ['robin'] }; // satisfies the wildlife life-list goal
+  g.silks = { primary: 'crimson', secondary: 'gold', pattern: 'sash', emblem: 'star', custom: true }; // satisfies the stable-colours goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -4970,6 +4971,47 @@ function studGame(day) {
   ok(ach && !ach.check(gw), 'Life-Lister needs more than one species');
   gw.wildlife = { seen: HR.WILDLIFE.map(w => w.id) };
   ok(ach.check(gw), 'a complete life-list unlocks Life-Lister');
+}
+{
+  // ---- Stable colours / racing-silks designer ----
+  const g = HR.freshGame();
+  ok(HR.SILK_COLOURS.length >= 6 && HR.SILK_PATTERNS.length >= 4 && HR.SILK_EMBLEMS.length >= 4, 'the silks palette catalogues are populated');
+  ok(HR.SILK_COLOURS.every(c => /^#[0-9a-fA-F]{6}$/.test(c.hex)), 'every silk colour has a valid hex');
+  // defaults + not-yet-custom
+  const s0 = HR.normSilks(g);
+  ok(s0.primary === 'royal' && s0.secondary === 'white' && s0.pattern === 'solid' && s0.emblem === 'none' && s0.custom === false, 'a fresh ranch has default, uncustomised silks');
+  // invalid parts fall back to defaults
+  const bad = HR.normSilksParts({ primary: 'zzz', secondary: 42, pattern: 'nope', emblem: {} });
+  ok(bad.primary === 'royal' && bad.pattern === 'solid' && bad.emblem === 'none', 'invalid silk parts fall back to defaults');
+  // setSilks stores valid choices and flags custom
+  const set = HR.setSilks(g, { primary: 'crimson', secondary: 'gold', pattern: 'sash', emblem: 'star' });
+  ok(set.primary === 'crimson' && set.secondary === 'gold' && set.pattern === 'sash' && set.emblem === 'star' && set.custom === true, 'setSilks saves the chosen colours and marks them custom');
+  ok(HR.normSilks(g).custom === true, 'the saved silks persist on the game');
+  // setSilks ignores an invalid slot rather than corrupting state
+  const set2 = HR.setSilks(g, { pattern: 'not-a-pattern' });
+  ok(set2.pattern === 'sash' && HR.silkPatternDef(set2.pattern), 'an invalid slot in setSilks keeps the previous valid value');
+  // silksSvg is a pure, deterministic string builder that reflects the chosen colours
+  const svg = HR.silksSvg(set);
+  ok(typeof svg === 'string' && /^<svg/.test(svg) && /<\/svg>$/.test(svg), 'silksSvg returns a complete SVG string');
+  ok(svg.indexOf(HR.silkColourDef('crimson').hex) >= 0 && svg.indexOf(HR.silkColourDef('gold').hex) >= 0, 'the SVG uses the chosen primary & secondary colours');
+  ok(svg.indexOf('★') >= 0, 'the SVG renders the chosen cap emblem');
+  ok(HR.silksSvg(set) === HR.silksSvg(set), 'silksSvg is deterministic');
+  ok(HR.silksSvg({}).indexOf('<svg') === 0, 'silksSvg is safe on empty parts');
+  // every pattern renders without throwing and stays an SVG
+  for (const p of HR.SILK_PATTERNS) ok(HR.silksSvg({ primary: 'navy', secondary: 'silver', pattern: p.id }).indexOf('<svg') === 0, 'pattern ' + p.id + ' renders');
+  // summary reports names + the custom flag
+  const sum = HR.silksSummary(g);
+  ok(sum.primaryName === 'Crimson' && sum.patternName === 'Sash' && sum.custom === true && typeof sum.label === 'string', 'silksSummary reports human names and the custom flag');
+  // read-only: rendering/summarising never mutates once normalised
+  const g2 = HR.freshGame(); HR.normSilks(g2); const snap = JSON.stringify(g2);
+  HR.silksSvg(HR.normSilks(g2)); HR.silksSummary(g2); HR.normSilksParts({ primary: 'teal' });
+  ok(JSON.stringify(g2) === snap, 'rendering/summarising never mutates the game');
+  ok(HR.normSilks({}).custom === false && typeof HR.silksSvg(HR.normSilks({})) === 'string', 'the silks designer is safe on a sparse game');
+  // the goal fires once the colours are customised
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'silks1').done(gv), 'the silks goal is unmet before customising');
+  HR.setSilks(gv, { primary: 'emerald' });
+  ok(HR.GOALS.find(x => x.id === 'silks1').done(gv), 'designing stable colours satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
