@@ -263,6 +263,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.shineChecks = 1; // satisfies the coat-shine goal
   g.stats.gaitViews = 1; // satisfies the gait-showcase goal
   g.stats.measures = 1; // satisfies the measuring-stick goal
+  g.stats.markingViews = 1; // satisfies the markings-card goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5425,6 +5426,43 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'measure1').done(gv), 'the measuring goal is unmet before measuring');
   gv.stats.measures = 1;
   ok(HR.GOALS.find(x => x.id === 'measure1').done(gv), 'measuring a horse satisfies the goal');
+}
+{
+  // ---- Horse whorl & markings identifier ----
+  ok(HR.WHORL_SPOTS.length >= 3 && HR.FACE_MARKINGS.length >= 4 && HR.LEG_MARKINGS.length >= 3 && HR.LEG_SLOTS.length === 4, 'the markings catalogues are populated with four legs');
+  const g = HR.freshGame();
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, id: 'mk1' }); g.horses.push(h);
+  const m = HR.horseMarkings(h);
+  ok(m.whorl && m.face && m.legs.length === 4 && m.legs.every(l => l.marking && l.label), 'a horse has a whorl, a face marking and four described legs');
+  ok(typeof m.whiteLegs === 'number' && m.whiteLegs >= 0 && m.whiteLegs <= 4, 'the white-leg count is 0..4');
+  // determinism: the SAME id + coat always yields the SAME markings; a different id differs in general
+  const a = HR.mkHorse({ breed: 'arabian', age: 20, id: 'sameid', coat: { name: 'Bay', tier: 0 } });
+  const b = HR.mkHorse({ breed: 'welsh', age: 5, id: 'sameid', coat: { name: 'Bay', tier: 0 } });
+  ok(JSON.stringify(HR.horseMarkings(a)) === JSON.stringify(HR.horseMarkings(b)), 'markings are a pure function of id + coat (same id+coat ⇒ same markings)');
+  ok(JSON.stringify(HR.horseMarkings(h)) === JSON.stringify(HR.horseMarkings(h)), 'markings are deterministic');
+  // the summary names the coat and reads like a passport line
+  const sum = HR.markingsSummary(h);
+  ok(typeof sum === 'string' && sum.indexOf(HR.coatOf(h).name) >= 0 && /whorl/.test(sum), 'the summary names the coat and mentions the whorl');
+  // the card carries the full readout
+  const c = HR.markingsCard(g, h);
+  ok(c.whorl && c.face && c.legs.length === 4 && typeof c.summary === 'string' && c.summary.length > 0, 'the markings card has the full readout');
+  // read-only + sparse safety
+  const snap = JSON.stringify(g);
+  HR.horseMarkings(h); HR.markingsSummary(h); HR.markingsCard(g, h);
+  ok(JSON.stringify(g) === snap, 'reading markings never mutates the game');
+  ok(HR.horseMarkings(null).legs.length === 4 && HR.markingsSummary(null) === '' && HR.markingsCard({}, null).summary === '', 'the markings helpers are safe on a sparse game');
+  // achievement: find (deterministically) an id that yields four white legs, and confirm it unlocks
+  let fourLegId = null;
+  for (let i = 0; i < 4000 && !fourLegId; i++) { const hh = HR.mkHorse({ breed: 'arabian', age: 20, id: 'sock' + i, coat: { name: 'Bay', tier: 0 } }); if (HR.horseMarkings(hh).whiteLegs >= 4) fourLegId = 'sock' + i; }
+  ok(fourLegId, 'a horse with four white legs exists in the deterministic space');
+  const gf = HR.freshGame(); gf.horses = [HR.mkHorse({ breed: 'arabian', age: 20, id: fourLegId, coat: { name: 'Bay', tier: 0 } })];
+  const fs = HR.ACHIEVEMENTS.find(x => x.id === 'foursocks');
+  ok(fs && fs.check(gf), 'a horse with white on all four legs unlocks Four White Socks');
+  // the goal fires after viewing
+  const gvv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'marks1').done(gvv), 'the markings goal is unmet before viewing');
+  gvv.stats.markingViews = 1;
+  ok(HR.GOALS.find(x => x.id === 'marks1').done(gvv), 'viewing a markings card satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
