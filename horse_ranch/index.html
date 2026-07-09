@@ -336,6 +336,7 @@
     <button class="sbtn" id="persBtn" title="Personality profiles — get to know your horses" style="margin-right:4px">🎭</button>
     <button class="sbtn" id="dailyBtn" title="Daily reward" style="margin-right:4px;position:relative">🎁<span id="dailyBadge" class="hudbadge" style="display:none">!</span></button>
     <button class="sbtn" id="decorBtn" title="Decorate your ranch" style="margin-right:4px">🎨</button>
+    <button class="sbtn" id="enrichBtn" title="Paddock enrichment — toys & comforts for the herd" style="margin-right:4px">🧸</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -717,6 +718,7 @@ function needDecayFor(game,n,h){
     if(isCareDay(day)) d=Math.max(2,d-2);                            // Vet & Farrier day: lighter upkeep
   }
   if(h&&n.id==='groom') d*=tackGroomDecayMult(h);                     // grooming kit slows coat fade
+  if(game) d*=enrichmentDecayMult(game);                              // paddock enrichment gently slows all decay (capped)
   return d;
 }
 // decay one horse's needs by a day (mutates); bonding level tracks how well the bond need is kept
@@ -1893,7 +1895,7 @@ function freshGame(legacy){
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0,ceremonies:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
-    decor:normDecor(null), lastRoutineDay:0,
+    decor:normDecor(null), enrichment:normEnrichment(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[],tiers:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
@@ -1965,6 +1967,7 @@ function advanceDay(game,rng){
   // staff: a Stable Hand runs the free routine each morning (before decay)
   if(staffEffect(game,'autoRoutine')) applyDailyRoutine(game);
   const staffTop=staffEffect(game,'careTopUp'), staffHeal=staffEffect(game,'vetHeal');
+  const enrichBonus=enrichmentBonus(game);
 
   // age + growth + pregnancy + rent
   const born=[];
@@ -1976,6 +1979,11 @@ function advanceDay(game,rng){
     // staff chores: a Groom tops up care needs, a Vet heals a little (bounded — not free full care)
     if(staffTop>0){ needsInit(h); for(const id of NEED_IDS) h.needs[id]=clamp(h.needs[id]+staffTop,0,100); }
     if(staffHeal>0) h.health=clamp(h.health+staffHeal,0,100);
+    // paddock enrichment: a small, hard-capped daily lift to the whole herd
+    if(enrichBonus.items){ needsInit(h);
+      if(enrichBonus.needLift>0) for(const id of NEED_IDS) h.needs[id]=clamp(h.needs[id]+enrichBonus.needLift,0,100);
+      if(enrichBonus.happy>0) h.happy=clamp(h.happy+enrichBonus.happy,0,100);
+      if(enrichBonus.bond>0) h.bond=clamp(h.bond+enrichBonus.bond,0,100); }
     { const cs=careScore(h);
       if(cs<35){ h.happy=clamp(h.happy-5,0,100); h.health=clamp(h.health-2,0,100); }
       else if(cs>=80){ h.happy=clamp(h.happy+2,0,100); } }
@@ -3268,6 +3276,43 @@ function buyDecor(game,id){
   game.money-=d.cost; game.decor.owned.push(id); return {ok:true,item:d};
 }
 function decorSpend(game){ return ownedDecor(game).reduce((s,id)=>{ const d=decorDef(id); return s+(d?d.cost:0); },0); }
+// ---------- Paddock enrichment / toys (one-off buys → a gentle, HARD-CAPPED passive care benefit) ----------
+// Modelled on décor (owned set, one-off purchase) but each item adds a mild functional effect to the
+// whole herd: a slightly slower need-decay + a small daily happy/need lift. The AGGREGATE is strictly
+// capped so it can never trivialise care. Deterministic; no per-day coin faucet.
+const ENRICH_HAPPY_CAP=3;      // max daily happy lift from all enrichment combined
+const ENRICH_NEEDLIFT_CAP=3;   // max daily top-up per need from all enrichment combined
+const ENRICH_BOND_CAP=1.5;     // max daily bond lift from all enrichment combined
+const ENRICH_DECAY_FLOOR=0.82; // need-decay can be slowed to at most ~18% (multiplier floor)
+const ENRICHMENT_ITEMS=[
+  {id:'scratchpost', name:'Scratching Post',      emoji:'🪵', cost:600,  effect:{happy:1, needLift:0, bond:0,   decayReduce:0.03}, blurb:'A sturdy post for a good all-over itch.'},
+  {id:'jollyball',   name:'Jolly Ball',           emoji:'⚽', cost:800,  effect:{happy:1, needLift:1, bond:0,   decayReduce:0.02}, blurb:'A big kick-about ball — hours of paddock fun.'},
+  {id:'haynet',      name:'Slow-Feeder Hay Net',  emoji:'🪢', cost:1100, effect:{happy:0, needLift:1, bond:0,   decayReduce:0.05}, blurb:'Trickle-feeding keeps tummies busy and minds calm.'},
+  {id:'saltlick',    name:'Salt Lick',            emoji:'🧂', cost:900,  effect:{happy:1, needLift:1, bond:0,   decayReduce:0.03}, blurb:'Minerals on tap — good for body and mood.'},
+  {id:'agility',     name:'Agility Poles',        emoji:'🚧', cost:1500, effect:{happy:1, needLift:0, bond:0.5, decayReduce:0.03}, blurb:'A little pole course to trot and puzzle through.'},
+  {id:'mirror',      name:'Herd Mirror',          emoji:'🪞', cost:2000, effect:{happy:1, needLift:0, bond:0.5, decayReduce:0.03}, blurb:'A safe “companion” for a horse stabled alone.'},
+];
+function enrichmentDef(id){ return ENRICHMENT_ITEMS.find(e=>e.id===id)||null; }
+function normEnrichment(e){ e=e||{}; return { owned: Array.isArray(e.owned)?e.owned.filter(id=>!!enrichmentDef(id)).filter((v,i,a)=>a.indexOf(v)===i):[] }; }
+function ownedEnrichment(game){ return (game&&game.enrichment&&Array.isArray(game.enrichment.owned))?game.enrichment.owned:[]; }
+function hasEnrichment(game,id){ return ownedEnrichment(game).indexOf(id)>=0; }
+function enrichmentAffordable(game,id){ const it=enrichmentDef(id); return !!it && !hasEnrichment(game,id) && ((game&&game.money)||0)>=it.cost; }
+function buyEnrichment(game,id){
+  const it=enrichmentDef(id); if(!it) return {ok:false,why:'No such item.'};
+  if(!game.enrichment) game.enrichment=normEnrichment(null);
+  if(hasEnrichment(game,id)) return {ok:false,why:'Already in the paddock.'};
+  if((game.money||0)<it.cost) return {ok:false,why:'Not enough coins.'};
+  game.money-=it.cost; game.enrichment.owned.push(id); return {ok:true,item:it};
+}
+function enrichmentSpend(game){ return ownedEnrichment(game).reduce((s,id)=>{ const it=enrichmentDef(id); return s+(it?it.cost:0); },0); }
+// aggregate the owned items into a single HARD-CAPPED per-day bonus applied to the herd
+function enrichmentBonus(game){
+  let happy=0, needLift=0, bond=0, dr=0;
+  for(const id of ownedEnrichment(game)){ const it=enrichmentDef(id); if(!it) continue; const e=it.effect||{};
+    happy+=e.happy||0; needLift+=e.needLift||0; bond+=e.bond||0; dr+=e.decayReduce||0; }
+  return { happy:Math.min(ENRICH_HAPPY_CAP,happy), needLift:Math.min(ENRICH_NEEDLIFT_CAP,needLift),
+    bond:Math.min(ENRICH_BOND_CAP,bond), decayMult:Math.max(ENRICH_DECAY_FLOOR, 1-dr), items:ownedEnrichment(game).length }; }
+function enrichmentDecayMult(game){ return enrichmentBonus(game).decayMult; }
 
 // ---------- Shareable "trading card" data model (rendering is DOM-only) ----------
 function stampFor(game){
@@ -3383,6 +3428,7 @@ const ACHIEVEMENTS=[
   {id:'rosetteroyalty', icon:'🏵️', name:'Rosette Royalty',    desc:'Earn fifteen first-place gold rosettes.',      check:g=>ribbonTally(g).gold>=15},
   {id:'intheblack',     icon:'💷', name:'In the Black',        desc:'Run the ranch at a daily surplus of 🪙300+.',  check:g=>dailyLedger(g).net>=300},
   {id:'stabledj',       icon:'📻', name:'Stable DJ',           desc:'Tune the stable radio to all four stations.', check:g=>{const h=radioState(g).heard; return RADIO_STATIONS.every(s=>h.indexOf(s.id)>=0);}},
+  {id:'playground',     icon:'🧸', name:'Paddock Playground',  desc:'Kit the paddock out with every enrichment toy.', check:g=>ENRICHMENT_ITEMS.every(it=>hasEnrichment(g,it.id))},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3629,6 +3675,7 @@ const GOALS=[
   {id:'ribbon1', desc:'Pin 5 rosettes on the ribbon wall (🎗️)',        tip:g=>ribbonTally(g).ribbons+'/5 ribbons',done:g=>ribbonTally(g).ribbons>=5,                        reward:{money:700,rep:25}},
   {id:'books1',  desc:'Open the ranch books (💷 balance sheet)',        tip:g=>((g.stats&&g.stats.ledgerViews)||0)+'/1',done:g=>((g.stats&&g.stats.ledgerViews)||0)>=1,        reward:{money:300,rep:10}},
   {id:'radio1',  desc:'Switch on the stable radio (📻)',                 tip:g=>radioState(g).heard.length+' station'+(radioState(g).heard.length!==1?'s':''),done:g=>radioState(g).heard.length>=1,     reward:{money:200,rep:10}},
+  {id:'enrich1', desc:'Add a paddock enrichment toy (🧸)',               tip:g=>ownedEnrichment(g).length+'/1 items',done:g=>ownedEnrichment(g).length>=1,                    reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3709,6 +3756,7 @@ const HR = {
   RANCH_NAME_MAX, ranchName, setRanchName, BARN_COLORS, GROUND_COLORS, FLAG_COLORS,
   barnColor, groundColor, flagColor, DECOR, decorDef, normDecor, ownedDecor, hasDecor,
   decorUnlocked, decorAffordable, buyDecor, decorSpend,
+  ENRICHMENT_ITEMS, ENRICH_HAPPY_CAP, ENRICH_NEEDLIFT_CAP, ENRICH_BOND_CAP, ENRICH_DECAY_FLOOR, enrichmentDef, normEnrichment, ownedEnrichment, hasEnrichment, enrichmentAffordable, buyEnrichment, enrichmentSpend, enrichmentBonus, enrichmentDecayMult,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
   isAuctionDay, nextAuction, makeAuctionLot, makeAuctionLots, aiCounter, resolveAuction, consignValue,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
@@ -3832,6 +3880,7 @@ function load(){
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
     { const store=loadLegacy(), saved=normLegacy(G.legacy); G.legacy=(store.points>=saved.points)?store:saved; saveLegacy(G.legacy); }
     G.decor=normDecor(G.decor); // ranch customisation — defaults match the original look
+    G.enrichment=normEnrichment(G.enrichment); // paddock enrichment owned-set — safe on old saves
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
@@ -5697,6 +5746,33 @@ function openDecor(){
     if(!r.ok){ toast(r.why,'bad'); return; } coinPop(-r.item.cost); burst(r.item.emoji+'✨',10); playSfx('coin');
     toast('🎨 '+r.item.name+' added to your ranch!','good'); reopen(); });
 }
+function openEnrichment(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const owned=ownedEnrichment(G).length, total=ENRICHMENT_ITEMS.length, eb=enrichmentBonus(G);
+  const shop=ENRICHMENT_ITEMS.map(it=>{
+    const has=hasEnrichment(G,it.id), afford=enrichmentAffordable(G,it.id), e=it.effect||{};
+    const tags=[]; if(e.happy) tags.push('+'+e.happy+' mood'); if(e.needLift) tags.push('+'+e.needLift+' needs'); if(e.bond) tags.push('+'+e.bond+' bond'); if(e.decayReduce) tags.push('-'+Math.round(e.decayReduce*100)+'% wear');
+    const btn = has ? '<span class="pill" style="color:var(--good)">✓ In paddock</span>'
+      : '<button class="btn sm" data-ebuy="'+it.id+'" '+(afford?'':'disabled')+'>🪙'+fmt(it.cost)+'</button>';
+    return '<div class="decoritem"><div class="de">'+it.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:13px">'+esc(it.name)+'</div>'+
+      '<div class="hbreed">'+esc(it.blurb)+'</div><div class="hbreed" style="opacity:.7">'+tags.join(' · ')+'</div></div>'+btn+'</div>';
+  }).join('');
+  const effLine = eb.items
+    ? '<span class="pill" style="color:var(--good)">+'+eb.happy+' daily mood</span> <span class="pill">+'+eb.needLift+' needs</span> '+(eb.bond?'<span class="pill">+'+eb.bond+' bond</span> ':'')+'<span class="pill">'+Math.round((1-eb.decayMult)*100)+'% slower wear</span>'
+    : '<span class="hbreed" style="opacity:.6">Nothing in the paddock yet — a toy or two keeps the herd happy.</span>';
+  modal('<h3>🧸 Paddock Enrichment</h3>'+
+    '<div class="msg">Toys &amp; comforts for the paddock. Each is a one-off buy that gently &amp; permanently helps the whole herd stay happy and content — the effect is capped, so it complements good care rather than replacing it.</div>'+
+    '<div class="card" style="border-left:4px solid var(--gold2)"><div class="hname" style="font-size:13px">Current herd bonus</div><div class="pips" style="margin-top:5px">'+effLine+'</div></div>'+
+    '<div class="swlabel" style="margin-top:8px">🛍️ Enrichment shop <span class="pill">'+owned+'/'+total+'</span></div>'+
+    '<div>'+shop+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="enrClose" style="width:100%">Done</button></div>');
+  $('enrClose').onclick=closeModal;
+  document.querySelectorAll('[data-ebuy]').forEach(b=>b.onclick=()=>{ const id=b.getAttribute('data-ebuy'); const r=buyEnrichment(G,id);
+    if(!r.ok){ toast(r.why,'bad'); return; } coinPop(-r.item.cost); burst(r.item.emoji+'✨',10); playSfx('coin');
+    const fresh=checkAchievements(G), gg=checkGoals(G); toast('🧸 '+r.item.name+' is in the paddock!','good');
+    save(); renderHUD(); openEnrichment(); });
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -6496,6 +6572,7 @@ function boot(){
   { const dc=$('dayChip'); if(dc) dc.onclick=openWeek; }
   { const hb=$('helpBtn'); if(hb) hb.onclick=openHelp; }
   { const db=$('decorBtn'); if(db) db.onclick=openDecor; }
+  { const eb=$('enrichBtn'); if(eb) eb.onclick=openEnrichment; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

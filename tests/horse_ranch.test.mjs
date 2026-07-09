@@ -239,6 +239,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.trophies = g.trophies || []; for (let i = 0; i < 6; i++) g.trophies.push({ horse: 'H', breed: 'arabian', disc: 'race', tier: 3, place: 1, day: i + 1 }); // satisfies the ribbon-wall goal (≥5)
   g.stats.ledgerViews = 1; // satisfies the balance-sheet goal
   HR.toggleRadio(g); // switches on the stable radio → satisfies the radio goal
+  g.enrichment = { owned: ['jollyball'] }; // satisfies the paddock-enrichment goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -764,6 +765,65 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'stabledj').check(gdj), 'Stable DJ unlocks after tuning to every station');
   ok(!HR.ACHIEVEMENTS.find(a => a.id === 'stabledj').check(HR.freshGame()), 'Stable DJ is locked on a fresh game');
   ok(HR.GOALS.filter(x => x.id === 'radio1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'stabledj').length === 1, 'new radio goal/achievement ids are unique');
+}
+{
+  // ---- paddock enrichment / toys ----
+  ok(HR.ENRICHMENT_ITEMS.length >= 4, 'a catalogue of enrichment items exists');
+  const eids = HR.ENRICHMENT_ITEMS.map(e => e.id);
+  ok(new Set(eids).size === eids.length, 'enrichment ids are unique');
+  // buy deducts once, adds to owned, idempotent, and blocked without coins
+  const g = HR.freshGame(); g.money = 5000;
+  const it = HR.ENRICHMENT_ITEMS[0];
+  const before = g.money;
+  const r = HR.buyEnrichment(g, it.id);
+  ok(r.ok && g.money === before - it.cost && HR.hasEnrichment(g, it.id), 'buyEnrichment deducts the cost once and records ownership');
+  const r2 = HR.buyEnrichment(g, it.id);
+  ok(!r2.ok && HR.ownedEnrichment(g).length === 1, 'buying an owned item is a no-op (no double charge)');
+  const gp = HR.freshGame(); gp.money = 10;
+  ok(!HR.buyEnrichment(gp, it.id).ok && HR.ownedEnrichment(gp).length === 0, 'buyEnrichment is blocked without enough coins');
+  ok(!HR.buyEnrichment(gp, 'nope').ok, 'an unknown item id is rejected');
+  // enrichmentBonus aggregates and is HARD-CAPPED even after buying everything
+  const gall = HR.freshGame(); gall.money = 999999;
+  HR.ENRICHMENT_ITEMS.forEach(x => HR.buyEnrichment(gall, x.id));
+  const eb = HR.enrichmentBonus(gall);
+  ok(eb.happy <= HR.ENRICH_HAPPY_CAP && eb.needLift <= HR.ENRICH_NEEDLIFT_CAP && eb.bond <= HR.ENRICH_BOND_CAP, 'the aggregate bonus never exceeds its caps');
+  ok(eb.decayMult >= HR.ENRICH_DECAY_FLOOR, 'the decay multiplier never drops below its floor');
+  ok(eb.happy === HR.ENRICH_HAPPY_CAP, 'buying everything reaches the happy cap');
+  // a fresh game has no bonus
+  const eb0 = HR.enrichmentBonus(HR.freshGame());
+  ok(eb0.happy === 0 && eb0.needLift === 0 && eb0.decayMult === 1, 'no enrichment → no bonus (neutral)');
+  // the bonus actually slows need-decay (bounded) via needDecayFor / decayNeeds
+  const needN = HR.NEEDS[0];
+  const dBase = HR.needDecayFor(HR.freshGame(), needN, null);
+  const dEnr = HR.needDecayFor(gall, needN, null);
+  ok(dEnr < dBase && dEnr >= dBase * HR.ENRICH_DECAY_FLOOR - 1e-9, 'enrichment slows a need’s decay, but only within the floor');
+  // decayNeeds: an enriched herd retains more care over a day than a bare one
+  const hBase = HR.mkHorse({ breed: 'arabian', age: 20 });
+  const hEnr = JSON.parse(JSON.stringify(hBase));
+  HR.decayNeeds(HR.freshGame(), hBase);
+  HR.decayNeeds(gall, hEnr);
+  ok(HR.careScore(hEnr) > HR.careScore(hBase), 'a horse with enrichment decays a little slower over a day');
+  // the daily tick lift is applied and bounded (advanceDay path)
+  const gTick = HR.freshGame(); gTick.money = 999999; HR.ENRICHMENT_ITEMS.forEach(x => HR.buyEnrichment(gTick, x.id));
+  const hh = HR.mkHorse({ breed: 'welsh', age: 20, happy: 50 }); hh.happy = 50;
+  gTick.horses = [hh]; gTick.feed = 9999;
+  const happy0 = hh.happy;
+  HR.advanceDay(gTick, rng(7));
+  ok(hh.happy >= happy0, 'the enrichment happy lift keeps a horse from sliding (bounded)');
+  ok(hh.happy <= 100, 'happy stays clamped');
+  // migration + read-only + sparse
+  const mig = HR.normEnrichment({ owned: ['jollyball', 'bogus', 'jollyball'] });
+  ok(JSON.stringify(mig.owned) === JSON.stringify(['jollyball']), 'normEnrichment validates + de-dupes the owned set');
+  ok(HR.ownedEnrichment({}).length === 0 && HR.enrichmentBonus({}).decayMult === 1, 'enrichment helpers are safe on a bare game');
+  const snap = JSON.stringify(gall);
+  HR.enrichmentBonus(gall); HR.ownedEnrichment(gall); HR.hasEnrichment(gall, 'mirror'); HR.enrichmentSpend(gall);
+  ok(JSON.stringify(gall) === snap, 'the enrichment read helpers never mutate the game');
+  // goal + achievement
+  const gg = HR.freshGame(); gg.enrichment = { owned: ['saltlick'] };
+  ok(HR.GOALS.find(x => x.id === 'enrich1').done(gg), 'enrich1 completes with one item owned');
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'playground').check(gall), 'Paddock Playground unlocks with every item');
+  ok(!HR.ACHIEVEMENTS.find(a => a.id === 'playground').check(gg), 'Paddock Playground is locked with only one item');
+  ok(HR.GOALS.filter(x => x.id === 'enrich1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'playground').length === 1, 'new enrichment goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
