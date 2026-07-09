@@ -266,6 +266,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.markingViews = 1; // satisfies the markings-card goal
   g.stats.palateReads = 1; // satisfies the favourite-treat goal
   g.stats.nameCardViews = 1; // satisfies the names-card goal
+  g.stats.damTraces = 1; // satisfies the dam-line goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5535,6 +5536,49 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'names1').done(gvn), 'the names goal is unmet before viewing');
   gvn.stats.nameCardViews = 1;
   ok(HR.GOALS.find(x => x.id === 'names1').done(gvn), 'seeing a registered name satisfies the goal');
+}
+{
+  // ---- Dam line / tail-female pedigree ribbon ----
+  const g = HR.freshGame();
+  // hand-craft a 3-generation tail-female pedigree matching the real ped schema (h.ped.dam = {name,breed,id,ped})
+  const gp = { name: 'Starlight', breed: 'fjord', id: 'dam3', ped: null };
+  const gd = { name: 'Luna', breed: 'welsh', id: 'dam2', ped: { dam: gp, sire: { name: 'Bolt', breed: 'mustang', id: 's2', ped: null } } };
+  const dm = { name: 'Bella', breed: 'arabian', id: 'dam1', ped: { dam: gd, sire: { name: 'Ace', breed: 'quarter', id: 's1', ped: null } } };
+  const h = HR.mkHorse({ breed: 'arabian', age: 20, name: 'Comet', id: 'foal1' });
+  h.ped = { dam: dm, sire: { name: 'Dash', breed: 'thoroughbred', id: 's0', ped: null } };
+  g.horses.push(h);
+  const line = HR.damLine(g, h);
+  ok(line.length === 3, 'the dam line walks three generations of dams');
+  ok(line[0].name === 'Bella' && line[1].name === 'Luna' && line[2].name === 'Starlight', 'the dam line is ordered dam → granddam → great-granddam');
+  ok(line.every(a => a.gen >= 1 && a.breedName), 'each ancestor carries a generation index and a breed name');
+  ok(HR.damLineDepth(g, h) === 3, 'damLineDepth counts the tail-female generations');
+  ok(HR.foundationMare(g, h).name === 'Starlight', 'the foundation mare is the earliest recorded dam');
+  const r = HR.pedigreeRibbon(g, h);
+  ok(r.hasDam && r.depth === 3 && r.foundation.name === 'Starlight' && r.self.name === 'Comet', 'the ribbon carries the horse, depth and foundation mare');
+  // a foundation horse (no recorded dam) yields an empty line
+  const found = HR.mkHorse({ breed: 'mustang', age: 20, id: 'nodam' }); g.horses.push(found);
+  ok(HR.damLine(g, found).length === 0 && HR.foundationMare(g, found) === null && HR.pedigreeRibbon(g, found).hasDam === false, 'a horse with no recorded dam has an empty dam line');
+  // determinism + read-only
+  const snap = JSON.stringify(g);
+  ok(JSON.stringify(HR.damLine(g, h)) === JSON.stringify(HR.damLine(g, h)), 'the dam line is deterministic');
+  HR.pedigreeRibbon(g, h); HR.foundationMare(g, h); HR.damLineDepth(g, h);
+  ok(JSON.stringify(g) === snap, 'tracing the dam line never mutates the game');
+  // cycle / self-reference guard: a malformed cyclic ped must not loop forever
+  const cyc = HR.mkHorse({ breed: 'arabian', age: 20, id: 'cyc' });
+  const nodeA = { name: 'A', breed: 'arabian', id: 'cA', ped: null };
+  nodeA.ped = { dam: nodeA }; // points at itself
+  cyc.ped = { dam: nodeA };
+  ok(HR.damLine(g, cyc).length <= HR.DAM_LINE_CAP, 'a cyclic pedigree is bounded by the depth cap');
+  // sparse safety
+  ok(HR.damLine({}, null).length === 0 && HR.pedigreeRibbon({}, null).line.length === 0, 'the dam-line helpers are safe on a sparse game');
+  // achievement: a 3-deep dam line unlocks Matriarch Line
+  const ma = HR.ACHIEVEMENTS.find(a => a.id === 'matriarch');
+  ok(ma && ma.check(g), 'a three-deep dam line unlocks Matriarch Line');
+  // the goal fires after tracing
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'damline1').done(gv), 'the dam-line goal is unmet before tracing');
+  gv.stats.damTraces = 1;
+  ok(HR.GOALS.find(x => x.id === 'damline1').done(gv), 'tracing a dam line satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety

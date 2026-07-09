@@ -365,6 +365,7 @@
     <button class="sbtn" id="marksBtn" title="Markings & whorls — the horse's passport" style="margin-right:4px">🌀</button>
     <button class="sbtn" id="palateBtn" title="Favourite treats — each horse's palate" style="margin-right:4px">🍎</button>
     <button class="sbtn" id="namesBtn" title="Names — barn name & registered show name" style="margin-right:4px">🏷️</button>
+    <button class="sbtn" id="damBtn" title="Dam line — tail-female pedigree ribbon" style="margin-right:4px">♀</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -793,6 +794,27 @@ function ancestorIds(h,depth){
 function relatedness(mare,stallion){ // shared ancestors within ~2 generations
   const a=ancestorIds(mare,2), b=ancestorIds(stallion,2); let n=0; a.forEach(id=>{ if(b.has(id)) n++; }); return n;
 }
+
+// ---------- Dam line / tail-female pedigree ribbon (READ-ONLY genealogy view over the existing ped tree) ----------
+// Walks a horse's pedigree back through DAMS only (mother → her mother → …) using the EXISTING ped snapshot
+// (h.ped.dam = {name,breed,id,ped}). Purely a read-only trace — it creates nothing and changes no stat. Depth is
+// capped and visited ids tracked to guard against any malformed cyclic save. Deterministic — no Date/Math.random.
+const DAM_LINE_CAP=20; // hard cap on how far back the tail-female walk goes
+function damLine(game, h){ const out=[]; if(!h) return out;
+  let node=h.ped&&h.ped.dam, d=0; const seen={};
+  while(node && d<DAM_LINE_CAP){ if(node.id && seen[node.id]) break; if(node.id) seen[node.id]=1;
+    out.push({ gen:d+1, name:node.name||'Unknown', breed:node.breed||null,
+      breedName:(breedDef(node.breed)||{}).name || node.breed || null, id:node.id||null });
+    node = node.ped && node.ped.dam; d++; }
+  return out; }
+function damLineDepth(game, h){ return damLine(game,h).length; }
+// the earliest recorded dam on the tail-female line (the foundation mare of the known line), or null
+function foundationMare(game, h){ const line=damLine(game,h); return line.length?line[line.length-1]:null; }
+// the full ribbon readout: the horse, its dam-line ancestors, depth, and the foundation mare
+function pedigreeRibbon(game, h){ if(!h) return { horse:null, self:null, line:[], depth:0, foundation:null, hasDam:false };
+  const line=damLine(game,h);
+  return { horse:{id:h.id, name:h.name}, self:{ name:h.name, breed:h.breed, breedName:(breedDef(h.breed)||{}).name||h.breed },
+    line, depth:line.length, foundation:line.length?line[line.length-1]:null, hasDam:line.length>0 }; }
 
 // ---------- Personality traits (inheritable quirks) ----------
 // Each horse has one trait that nudges training, show aptitude, lessons & rent.
@@ -4871,6 +4893,7 @@ const ACHIEVEMENTS=[
   {id:'finemover',      icon:'🐎', name:'A Fine Mover',           desc:'Own a horse with a 90+ gait score.',           check:g=>((g.horses)||[]).some(h=>GAITS.some(gt=>gaitScore(h,gt.id)>=90))},
   {id:'talloftheyard',  icon:'📏', name:'Tall in the Saddle',    desc:'Own a horse standing 17hh or taller.',         check:g=>((g.horses)||[]).some(h=>heightHands(h).totalInches>=68)},
   {id:'foursocks',      icon:'🧦', name:'Four White Socks',       desc:'Own a horse with white markings on all four legs.', check:g=>((g.horses)||[]).some(h=>horseMarkings(h).whiteLegs>=4)},
+  {id:'matriarch',      icon:'♀', name:'Matriarch Line',         desc:'Trace a dam line three generations deep.',     check:g=>((g.horses)||[]).some(h=>damLineDepth(g,h)>=3)},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -5145,6 +5168,7 @@ const GOALS=[
   {id:'marks1',  desc:'View a horse’s markings card (🌀)',              tip:g=>((g.stats&&g.stats.markingViews)||0)+'/1',done:g=>((g.stats&&g.stats.markingViews)||0)>=1,       reward:{money:150,rep:5}},
   {id:'treat1',  desc:'Learn a horse’s favourite treat (🍎)',           tip:g=>((g.stats&&g.stats.palateReads)||0)+'/1',done:g=>((g.stats&&g.stats.palateReads)||0)>=1,         reward:{money:150,rep:5}},
   {id:'names1',  desc:'See a horse’s registered show name (🏷️)',        tip:g=>((g.stats&&g.stats.nameCardViews)||0)+'/1',done:g=>((g.stats&&g.stats.nameCardViews)||0)>=1,     reward:{money:150,rep:5}},
+  {id:'damline1',desc:'Trace a horse’s dam line (♀)',                    tip:g=>((g.stats&&g.stats.damTraces)||0)+'/1',done:g=>((g.stats&&g.stats.damTraces)||0)>=1,             reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5284,6 +5308,7 @@ const HR = {
   currentGoal, checkGoals,
   ASPIRATIONS, ASP_PIN_MAX, aspirationDef, normAspBoard, aspBoard, aspirationProgress, isAspirationPinned, pinAspiration, unpinAspiration, pinnedAspirations, claimAspiration,
   seedGenes, phenotype, crossGenes, coatOf, coatValueMult, ancestorIds, relatedness,
+  DAM_LINE_CAP, damLine, damLineDepth, foundationMare, pedigreeRibbon,
   COAT_TIER_MULT, COAT_TIER_NAME, COAT_PROFILE,
   DISCIPLINES, disciplineDef, COMP_TIERS, tierDef, tierUnlocked, highestTier,
   disciplineScore, canEnterShow, runCompetition, applyCompetition,
@@ -8190,6 +8215,39 @@ function openNames(){
   $('nmClose').onclick=closeModal;
   document.querySelectorAll('[data-nmhorse]').forEach(x=>x.onclick=()=>{ namesSel.horse=x.getAttribute('data-nmhorse'); playSfx('tap'); openNames(); });
 }
+let damSel={horse:null};
+function openDamLine(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(damSel.horse && !horses.some(h=>h.id===damSel.horse)) damSel.horse=null;
+  if(!damSel.horse && horses.length){ // default to the horse with the deepest dam line
+    let best=null; for(const h of horses){ const d=damLineDepth(G,h); if(best==null||d>best.d) best={id:h.id,d}; } damSel.horse=best?best.id:horses[0].id; }
+  const h=damSel.horse?horses.find(x=>x.id===damSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.damTraces=(G.stats.damTraces||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-dmhorse="'+esc(x.id)+'" style="cursor:pointer;'+(damSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' ')
+    :'<span class="empty">No horses to trace yet.</span>';
+  let body='';
+  if(h){
+    const r=pedigreeRibbon(G,h);
+    const node=(label,name,sub,accent)=>'<div class="lbrow"><div class="hface" style="background:none;font-size:18px;display:flex;align-items:center;justify-content:center">'+(accent||'♀')+'</div>'+
+      '<div class="grow"><div class="lbname">'+esc(name)+'</div><div class="lbsub">'+esc(label)+(sub?' · '+esc(sub):'')+'</div></div></div>';
+    let chain=node('this horse', r.self.name, r.self.breedName, '🐴');
+    if(r.line.length){ r.line.forEach((a,i)=>{ const rel=i===0?'dam':i===1?'granddam':i===2?'great-granddam':('dam ×'+(i+1)); chain+=node(rel, a.name, a.breedName||''); }); }
+    const foundNote = r.hasDam
+      ? '<div class="hbreed" style="margin-top:6px">🏛️ Foundation of the recorded line: <b>'+esc(r.foundation.name)+'</b> ('+r.depth+' generation'+(r.depth!==1?'s':'')+' back).</div>'
+      : '<div class="hbreed" style="margin-top:6px;opacity:.7">🌱 No recorded dam yet — '+esc(h.name)+' is foundation stock. Breed from a mare to start a tail-female line.</div>';
+    body='<div class="card" style="border-left:4px solid var(--gold2)">'+
+      '<div class="hbreed" style="margin-bottom:4px">The tail-female line — mother to mother, the way breeders trace a family.</div>'+
+      chain+foundNote+'</div>';
+  } else { body='<div class="empty">Buy or breed a horse to trace its dam line.</div>'; }
+  modal('<h3>♀ Dam Line</h3>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="dmClose" style="width:100%">Done</button></div>');
+  $('dmClose').onclick=closeModal;
+  document.querySelectorAll('[data-dmhorse]').forEach(x=>x.onclick=()=>{ damSel.horse=x.getAttribute('data-dmhorse'); playSfx('tap'); openDamLine(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -9106,6 +9164,7 @@ function boot(){
   { const mkb=$('marksBtn'); if(mkb) mkb.onclick=openMarkings; }
   { const plb=$('palateBtn'); if(plb) plb.onclick=openPalate; }
   { const nmb=$('namesBtn'); if(nmb) nmb.onclick=openNames; }
+  { const dmb=$('damBtn'); if(dmb) dmb.onclick=openDamLine; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
