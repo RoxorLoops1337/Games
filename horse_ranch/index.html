@@ -364,6 +364,7 @@
     <button class="sbtn" id="heightBtn" title="Measuring stick — height in hands" style="margin-right:4px">📏</button>
     <button class="sbtn" id="marksBtn" title="Markings & whorls — the horse's passport" style="margin-right:4px">🌀</button>
     <button class="sbtn" id="palateBtn" title="Favourite treats — each horse's palate" style="margin-right:4px">🍎</button>
+    <button class="sbtn" id="namesBtn" title="Names — barn name & registered show name" style="margin-right:4px">🏷️</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -565,6 +566,39 @@ function renameHorse(game,horseId,newName){ const h=((game&&game.horses)||[]).fi
   if(game.stats) game.stats.renames=(game.stats.renames||0)+1;
   if(Array.isArray(game.registry)){ const e=game.registry.find(r=>r.id===h.id); if(e) e.name=t; }
   return {ok:true, name:t}; }
+
+// ---------- Barn name vs registered/show name card (READ-ONLY cosmetic naming card) ----------
+// Shows a horse's everyday BARN NAME (a short affectionate nickname derived from its name) alongside a fancy
+// REGISTERED / SHOW NAME (the ranch's stud prefix + the horse's name + an estate/lineage suffix). Both are pure
+// functions of a stable hash of the horse id + name (+ the ranch name for the show name — so it updates if the
+// ranch is renamed, still deterministically). It NEVER renames the horse or changes any stat. No Date/Math.random.
+const SHOW_SUFFIXES=['Willowmere','Ashcombe','Ravenhill','Goldenvale','Highgrove','Thornfield','Silvermoor','Brackenwood','Oakhaven','Windermere'];
+const SHOW_HONORIFICS=['Sir','Lady','Count','Baron','Duchess'];
+const BARN_SUFFIXES_C=['y','ie','o'];   // for name-stems ending in a consonant
+const BARN_SUFFIXES_V=['','','y'];      // for name-stems ending in a vowel (often keep as-is)
+function _nmHash(s){ let h=2166136261>>>0; s=''+(s||''); for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),16777619)>>>0; } return h>>>0; }
+function _cap(s){ s=''+(s||''); return s? s.charAt(0).toUpperCase()+s.slice(1).toLowerCase() : s; }
+// a short, affectionate barn nickname derived from the horse's name (named horseBarnName to avoid the
+// existing barnName(i) that names stable buildings)
+function horseBarnName(h){ if(!h) return ''; const nm=(''+(h.name||'Horse')).trim(); const first=nm.split(/\s+/)[0];
+  const letters=first.replace(/[^A-Za-z]/g,''); if(letters.length<=5) return _cap(first);
+  const stem=letters.slice(0,4), seed=_nmHash((h.id||'')+'|'+nm);
+  const endsVowel=/[aeiou]$/i.test(stem);
+  const suf = endsVowel ? BARN_SUFFIXES_V[seed%BARN_SUFFIXES_V.length] : BARN_SUFFIXES_C[seed%BARN_SUFFIXES_C.length];
+  return _cap(stem+suf); }
+// the fancy registered / show name — stud prefix (from the ranch) + name + estate suffix, in one of a few styles
+function showName(game, h){ if(!h) return ''; const nm=(''+(h.name||'Horse')).trim().split(/\s+/)[0];
+  const prefix=((typeof ranchName==='function'?ranchName(game):'Skyhorse Stables')||'Skyhorse Stables').trim().split(/\s+/)[0];
+  const seed=_nmHash((h.id||'')+'|'+nm+'|'+prefix), suffix=SHOW_SUFFIXES[seed%SHOW_SUFFIXES.length], pat=seed%4;
+  if(pat===0) return prefix+'’s '+_cap(nm);
+  if(pat===1) return _cap(nm)+' of '+suffix;
+  if(pat===2) return prefix+' '+_cap(nm)+' of '+suffix;
+  return SHOW_HONORIFICS[(seed>>>3)%SHOW_HONORIFICS.length]+' '+_cap(nm)+' of '+suffix; }
+// the full names card
+function namesCard(game, h){ if(!h) return { horse:null, barn:'', registered:'', prefix:'' };
+  return { horse:{id:h.id, name:h.name}, barn:horseBarnName(h), registered:showName(game,h),
+    prefix:((typeof ranchName==='function'?ranchName(game):'Skyhorse Stables')||'Skyhorse Stables').trim().split(/\s+/)[0] }; }
+
 // ---- Studbook registry (a keepsake record of every horse you've owned) ----
 const REGISTRY_CAP=250;
 function registerHorse(game,h){ if(!game||!h) return null; if(!Array.isArray(game.registry)) game.registry=[];
@@ -5110,6 +5144,7 @@ const GOALS=[
   {id:'measure1',desc:'Measure a horse with the stick (📏)',           tip:g=>((g.stats&&g.stats.measures)||0)+'/1',done:g=>((g.stats&&g.stats.measures)||0)>=1,               reward:{money:150,rep:5}},
   {id:'marks1',  desc:'View a horse’s markings card (🌀)',              tip:g=>((g.stats&&g.stats.markingViews)||0)+'/1',done:g=>((g.stats&&g.stats.markingViews)||0)>=1,       reward:{money:150,rep:5}},
   {id:'treat1',  desc:'Learn a horse’s favourite treat (🍎)',           tip:g=>((g.stats&&g.stats.palateReads)||0)+'/1',done:g=>((g.stats&&g.stats.palateReads)||0)>=1,         reward:{money:150,rep:5}},
+  {id:'names1',  desc:'See a horse’s registered show name (🏷️)',        tip:g=>((g.stats&&g.stats.nameCardViews)||0)+'/1',done:g=>((g.stats&&g.stats.nameCardViews)||0)>=1,     reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5222,6 +5257,7 @@ const HR = {
   HEIGHT_STAGE, breedAdultInches, heightHands, heightLabel, sizeClass, heightRecord, tallestHorse,
   WHORL_SPOTS, FACE_MARKINGS, LEG_MARKINGS, LEG_SLOTS, whorlDef, faceMarkingDef, legMarkingDef, horseMarkings, markingsSummary, markingsCard,
   TREATS, treatDef, horsePalate, favouriteTreat, palateCard,
+  SHOW_SUFFIXES, SHOW_HONORIFICS, horseBarnName, showName, namesCard,
   mkHorse, valueOf, buyPrice, sellQuote, rentRate,
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
@@ -8124,6 +8160,36 @@ function openPalate(){
   $('plClose').onclick=closeModal;
   document.querySelectorAll('[data-plhorse]').forEach(x=>x.onclick=()=>{ palateSel.horse=x.getAttribute('data-plhorse'); playSfx('tap'); openPalate(); });
 }
+let namesSel={horse:null};
+function openNames(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(namesSel.horse && !horses.some(h=>h.id===namesSel.horse)) namesSel.horse=null;
+  if(!namesSel.horse && horses.length) namesSel.horse=horses[0].id;
+  const h=namesSel.horse?horses.find(x=>x.id===namesSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.nameCardViews=(G.stats.nameCardViews||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-nmhorse="'+esc(x.id)+'" style="cursor:pointer;'+(namesSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' ')
+    :'<span class="empty">No horses to register yet.</span>';
+  let body='';
+  if(h){
+    const c=namesCard(G,h);
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">Registered under the '+esc(c.prefix)+' prefix</div></div></div>'+
+      '<div class="swlabel" style="margin-top:8px">🏠 Barn name (everyday)</div>'+
+      '<div class="hname" style="font-size:20px;margin-top:2px">'+esc(c.barn)+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">🏆 Registered show name</div>'+
+      '<div class="hname" style="font-size:17px;margin-top:2px;color:var(--gold)">'+esc(c.registered)+'</div>'+
+      '<div class="hbreed" style="opacity:.7;margin-top:8px">A bit of showing tradition — every horse has a fancy passport name and a friendly barn name. Just for flavour.</div></div>';
+  } else { body='<div class="empty">Buy or breed a horse to see its names.</div>'; }
+  modal('<h3>🏷️ Names &amp; Registration</h3>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="nmClose" style="width:100%">Done</button></div>');
+  $('nmClose').onclick=closeModal;
+  document.querySelectorAll('[data-nmhorse]').forEach(x=>x.onclick=()=>{ namesSel.horse=x.getAttribute('data-nmhorse'); playSfx('tap'); openNames(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -9039,6 +9105,7 @@ function boot(){
   { const htb=$('heightBtn'); if(htb) htb.onclick=openHeight; }
   { const mkb=$('marksBtn'); if(mkb) mkb.onclick=openMarkings; }
   { const plb=$('palateBtn'); if(plb) plb.onclick=openPalate; }
+  { const nmb=$('namesBtn'); if(nmb) nmb.onclick=openNames; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
