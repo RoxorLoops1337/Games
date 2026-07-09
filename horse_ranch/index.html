@@ -346,6 +346,7 @@
     <button class="sbtn" id="spotBtn" title="Horse of the Month — the herd's standout" style="margin-right:4px">🌟</button>
     <button class="sbtn" id="loadoutBtn" title="Tack loadouts — save & quick-swap tack sets" style="margin-right:4px">🎽</button>
     <button class="sbtn" id="aspBtn" title="Ranch goals — your personal aspirations board" style="margin-right:4px">📌</button>
+    <button class="sbtn" id="groomBtn" title="Grooming — hoof-pick & brush mini-game" style="margin-right:4px">🧽</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -2378,6 +2379,32 @@ function bondTier(h){ const b=(h&&h.bond)||0;
   return b>=90?{id:'devoted',label:'Devoted',emoji:'💖'} : b>=BONDED_AT?{id:'bonded',label:'Bonded',emoji:'❤'}
        : b>=40?{id:'warming',label:'Warming Up',emoji:'🙂'} : {id:'new',label:'Getting Acquainted',emoji:'👋'}; }
 function bondLabel(h){ return bondTier(h).label; }
+// ---------- Hoof-pick / grooming mini-game (a hands-on, BOUNDED, daily-capped way to top care) ----------
+// A quick skill-timed round: the player's timing gives a 0..1 perf (the show-minigame scoring shape),
+// which maps to a BOUNDED top-up of the horse's groom & hooves care needs plus a little happy/bond.
+// Un-farmable via a per-horse daily energy cap (like groundwork). No coins, no new resource. Deterministic.
+const GROOM_GAME={ energy:2, groom:[20,60], hoof:[12,40], happy:[2,6], bond:[1,3] }; // per-day sessions; [low-perf, high-perf] gain ranges
+function groomResult(perf){ perf=clamp((typeof perf==='number'&&isFinite(perf))?perf:0,0,1);
+  const lerp=r=>Math.round(r[0]+(r[1]-r[0])*perf);
+  const rating = perf>=0.85?{id:'immaculate',label:'Immaculate',stars:3} : perf>=0.55?{id:'tidy',label:'Nicely turned out',stars:2} : {id:'quick',label:'A quick once-over',stars:1};
+  return { perf, groomGain:lerp(GROOM_GAME.groom), hoofGain:lerp(GROOM_GAME.hoof), happy:lerp(GROOM_GAME.happy), bond:lerp(GROOM_GAME.bond), rating }; }
+function groomReset(h,day){ if(!h) return; if(h.groomDay!==day){ h.groomDay=day; h.groomCount=0; } }
+function groomEnergyLeft(game,h,day){ if(!h) return 0; day=(day!=null?day:((game&&game.day)||1));
+  const used=(h.groomDay===day)?(h.groomCount||0):0; return Math.max(0, GROOM_GAME.energy-used); }
+function canGroom(game,h,day){ return !!h && groomEnergyLeft(game,h,day)>=1; }
+function doGroomMinigame(game,horse,perf,day){ if(!horse) return {ok:false,why:'No horse.'};
+  day=(day!=null?day:((game&&game.day)||1));
+  if(!canGroom(game,horse,day)) return {ok:false,why:'This horse has been groomed enough for today.'};
+  needsInit(horse); groomReset(horse,day);
+  const r=groomResult(perf);
+  horse.needs.groom =clamp((horse.needs.groom||0)+r.groomGain,0,100);
+  horse.needs.hooves=clamp((horse.needs.hooves||0)+r.hoofGain,0,100);
+  horse.happy=clamp((horse.happy||0)+r.happy,0,100);
+  horse.bond =clamp((horse.bond||0)+r.bond,0,BOND_CAP);
+  horse.groomCount=(horse.groomCount||0)+1;
+  game.stats=game.stats||{}; game.stats.grooms=(game.stats.grooms||0)+1;
+  if(r.rating.id==='immaculate') game.stats.groomPerfect=(game.stats.groomPerfect||0)+1;
+  return {ok:true, result:r, care:careScore(horse), energyLeft:groomEnergyLeft(game,horse,day) }; }
 // ---------- Horse personality profile / temperament reveal (read-only flavour lens) ----------
 // A rounded character read derived purely from a horse's EXISTING fields (trait, stats, bond,
 // affinity, mood, life stage). No stat/economy change; deterministic — no Date/Math.random.
@@ -3840,6 +3867,7 @@ const ACHIEVEMENTS=[
   {id:'coverstar',      icon:'🌟', name:'Cover Star',          desc:'Have a Champion take Horse of the Month.',     check:g=>{const s=horseOfTheMonth(g); return !!(s&&(s.horse.wins||0)>=3);}},
   {id:'quartermaster',  icon:'🎽', name:'Quartermaster',       desc:'Save three tack loadout presets.',             check:g=>tackLoadouts(g).length>=3},
   {id:'aspirant',       icon:'📌', name:'Aspirations Realised', desc:'Complete three of your pinned aspirations.',   check:g=>((g.stats&&g.stats.aspirationsMet)||0)>=3},
+  {id:'spitpolish',     icon:'🧽', name:'Spit &amp; Polish',        desc:'Give twenty grooming sessions.',               check:g=>((g.stats&&g.stats.grooms)||0)>=20},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4095,6 +4123,7 @@ const GOALS=[
   {id:'spot1',   desc:'Check the Horse of the Month board (🌟)',         tip:g=>((g.stats&&g.stats.spotlightViews)||0)+'/1',done:g=>((g.stats&&g.stats.spotlightViews)||0)>=1,     reward:{money:300,rep:10}},
   {id:'loadout1',desc:'Save a tack loadout preset (🎽)',                 tip:g=>tackLoadouts(g).length+'/1 saved',done:g=>tackLoadouts(g).length>=1,                        reward:{money:300,rep:10}},
   {id:'asp1',    desc:'Pin an aspiration to your goals board (📌)',      tip:g=>normAspBoard(g).pinned.length+' pinned',done:g=>normAspBoard(g).pinned.length>=1,             reward:{money:300,rep:10}},
+  {id:'groom1',  desc:'Groom a horse in the mini-game (🧽)',            tip:g=>((g.stats&&g.stats.grooms)||0)+'/1',done:g=>((g.stats&&g.stats.grooms)||0)>=1,               reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4171,6 +4200,7 @@ const HR = {
   VISITOR_COOLDOWN, VISITOR_FIRST_DAY, ranchAppealScore, nextVisitorDay, visitorDaysUntil, visitorDayAvailable, previewVisitorDay, hostVisitorDay, visitorHighlight,
   APPOINTMENT_TYPES, appointmentTypeDef, appointmentFee, bookAppointment, dueForCare, horsesDueForCare, careTypeDue, resolveAppointments, activeCareBuff,
   GROUNDWORK_ACTIVITIES, GROUNDWORK_ENERGY, BOND_CAP, BONDED_AT, groundworkActivityDef, groundworkEnergyLeft, canDoGroundwork, doGroundwork, bondTier, bondLabel, bondPoiseMult,
+  GROOM_GAME, groomResult, groomReset, groomEnergyLeft, canGroom, doGroomMinigame,
   PERSONALITY_ARCHETYPES, personalityArchetypeDef, temperamentAxes, naturalAptitude, bestDisciplineFor, personalityProfile, personalityMatch,
   ranchMap, stableOccupancy, stableIndexOf, moveHorseToStable,
   FAIRS, FAIR_LEN, fairDef, currentFair, fairActive, fairKey, fairDaysLeft, nextFair, fairClaimed, fairProgress, claimFairReward,
@@ -5381,6 +5411,66 @@ function playShowGame(h,disc,tier){
     waited+=dt; if(waited>2.6){ advance(0); if(done) return; }
     if(mark) mark.style.left=(marker*100)+'%';
     raf=requestAnimationFrame(step);
+  };
+  if(typeof requestAnimationFrame!=='undefined') raf=requestAnimationFrame(step);
+}
+// ---- Grooming / hoof-pick mini-game (a hands-on, daily-capped care top-up) ----
+let groomSel={horse:null};
+function openGroom(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]).filter(h=>!horseAway(h)&&(h.rentDays||0)===0);
+  if(groomSel.horse && !horses.some(h=>h.id===groomSel.horse)) groomSel.horse=null;
+  if(!groomSel.horse && horses.length) groomSel.horse=horses[0].id;
+  const h=groomSel.horse?horses.find(x=>x.id===groomSel.horse):null;
+  const chips=horses.length?horses.map(x=>{ const left=groomEnergyLeft(G,x,G.day);
+    return '<span class="wlchip" data-groomh="'+esc(x.id)+'" style="cursor:pointer;'+(groomSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+' '+(left>0?'🧽'.repeat(left):'✓')+'</span>'; }).join(' ')
+    :'<span class="empty">No horse free to groom right now.</span>';
+  let panel='';
+  if(h){ const left=groomEnergyLeft(G,h,G.day), care=careScore(h);
+    panel='<div class="card"><div class="hname">'+esc(h.name)+' <span class="pill">🧡 care '+care+'%</span></div>'+
+      '<div class="kv" style="margin-top:4px">🧼 Grooming<b>'+needLevel(h,'groom')+'%</b></div>'+
+      '<div class="kv">🧰 Hooves<b>'+needLevel(h,'hooves')+'%</b></div>'+
+      '<div class="hbreed" style="margin-top:4px">'+(left>0?('Sessions left today: '+left+' / '+GROOM_GAME.energy):'Groomed enough for today — back tomorrow.')+'</div></div>'+
+      '<div class="btnrow"><button class="btn blue" id="groomPlay" style="width:100%"'+(left>0?'':' disabled')+'>🧽 '+(left>0?'Start grooming':'Done for today')+'</button></div>';
+  }
+  modal('<h3>🧽 Grooming</h3>'+
+    '<div class="swlabel">A hands-on brush-down & hoof-pick. Time it well to top up a horse’s grooming & hooves — and a little mood & bond. Twice a day per horse.</div>'+
+    '<div class="swlabel" style="margin-top:6px">Horse</div><div>'+chips+'</div>'+panel+
+    '<div class="btnrow"><button class="btn ghost" id="groomClose" style="width:100%">Done</button></div>');
+  $('groomClose').onclick=closeModal;
+  document.querySelectorAll('[data-groomh]').forEach(x=>x.onclick=()=>{ groomSel.horse=x.getAttribute('data-groomh'); playSfx('tap'); openGroom(); });
+  { const pl=$('groomPlay'); if(pl&&h) pl.onclick=()=>playGroomGame(h); }
+}
+function playGroomGame(h){
+  const zoneHalf=0.20, N=3; // three passes: mane, body, hooves
+  let pass=0, scores=[], marker=0, dir=1, tPrev=null, raf=null, done=false, speed=1.0, waited=0;
+  modal('<h3>🧽 Grooming '+((''+h.name).replace(/</g,'&lt;'))+'</h3>'+
+    '<div class="msg" id="ggMsg" style="text-align:center">Tap <b>BRUSH</b> as the marker crosses the <b style="color:var(--good)">green</b> zone. '+N+' passes!</div>'+
+    '<div id="ggPips" style="text-align:center;font-size:15px;margin-bottom:9px;letter-spacing:2px"></div>'+
+    '<div class="sgbar"><div class="sgzone" style="left:'+((0.5-zoneHalf)*100)+'%;width:'+(zoneHalf*2*100)+'%"></div><div class="sgmark" id="ggMark"></div></div>'+
+    '<div class="btnrow"><button class="btn" id="ggBrush" style="flex:2;font-size:18px;padding:14px 0">🧽 BRUSH</button>'+
+    '<button class="btn ghost" id="ggSkip" style="flex:1">Quick tidy</button></div>',{center:true});
+  const mark=$('ggMark'), pips=$('ggPips');
+  const drawPips=()=>{ if(pips) pips.innerHTML=scores.map(s=>s>=0.66?'🟢':s>=0.33?'🟡':'🔴').join(' ')+(scores.length<N?' '+'▫️'.repeat(N-scores.length):''); };
+  drawPips();
+  const perfNow=()=>scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:0;
+  const cleanup=()=>{ done=true; if(raf&&typeof cancelAnimationFrame!=='undefined') cancelAnimationFrame(raf); if(typeof document!=='undefined') document.removeEventListener('keydown',onKey); };
+  const finish=(perf)=>{ cleanup(); closeModal(); const r=doGroomMinigame(G,h,perf,G.day);
+    if(!r.ok){ toast(r.why,'info'); openGroom(); return; }
+    const res=r.result; burst('🧽✨'+(res.rating.stars>=3?'🌟':''),14); playSfx(res.rating.stars>=2?'coin':'tap');
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); renderTab();
+    toast('🧽 '+res.rating.label+'! +'+res.groomGain+' grooming, +'+res.hoofGain+' hooves, +'+res.bond+' bond.','good'); openGroom(); };
+  const brush=()=>{ if(done) return; const s=fenceScore(marker); scores.push(s); pass++; marker=0; dir=1; speed+=0.2; waited=0; drawPips();
+    burst(s>=0.66?'✨':'💨',5); playSfx(s>=0.66?'coin':'tap'); if(pass>=N) finish(perfNow()); };
+  const onKey=(e)=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); brush(); } };
+  { const b=$('ggBrush'); if(b) b.onclick=brush; } { const k=$('ggSkip'); if(k) k.onclick=()=>finish(0.5); }
+  if(typeof document!=='undefined') document.addEventListener('keydown',onKey);
+  const step=(ts)=>{ if(done) return;
+    if(!$('modal')||!/\bon\b/.test($('modal').className||'')){ cleanup(); return; }
+    if(tPrev==null) tPrev=ts; const dt=Math.min(0.05,(ts-tPrev)/1000); tPrev=ts;
+    marker+=dir*speed*dt; if(marker>=1){ marker=1; dir=-1; } else if(marker<=0){ marker=0; dir=1; }
+    waited+=dt; if(waited>2.6){ scores.push(0); pass++; marker=0; dir=1; waited=0; drawPips(); if(pass>=N){ finish(perfNow()); return; } }
+    if(mark) mark.style.left=(marker*100)+'%'; raf=requestAnimationFrame(step);
   };
   if(typeof requestAnimationFrame!=='undefined') raf=requestAnimationFrame(step);
 }
@@ -7326,6 +7416,7 @@ function boot(){
   { const spb=$('spotBtn'); if(spb) spb.onclick=openSpotlight; }
   { const lob=$('loadoutBtn'); if(lob) lob.onclick=openLoadouts; }
   { const apb=$('aspBtn'); if(apb) apb.onclick=openAspirations; }
+  { const grb=$('groomBtn'); if(grb) grb.onclick=openGroom; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
