@@ -357,6 +357,7 @@
     <button class="sbtn" id="vetBtn" title="Vet report card — herd health grades" style="margin-right:4px">🩺</button>
     <button class="sbtn" id="grazeBtn" title="Grazing map — rotate the paddocks" style="margin-right:4px">🌱</button>
     <button class="sbtn" id="compBtn" title="Ranch companion — your stable dog & friends" style="margin-right:4px">🐕</button>
+    <button class="sbtn" id="zodiacBtn" title="Horse zodiac — star signs & readings" style="margin-right:4px">⭐</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1975,6 +1976,55 @@ function celebrateBirthday(game, h){ if(!game||!h) return {ok:false,why:'No hors
   h.bond=clamp((h.bond||0)+BDAY_BOND,0,100); if(h.needs) h.needs.bond=clamp((h.needs.bond||0)+BDAY_BOND,0,100);
   game.stats=game.stats||{}; game.stats.birthdays=(game.stats.birthdays||0)+1;
   return {ok:true, turning:ageYears(h), happy:BDAY_HAPPY, bond:BDAY_BOND}; }
+
+// ---------- Horse zodiac / star-sign reading (READ-ONLY cosmetic reading from the horse's birth date) ----------
+// Each horse's star sign is a PURE function of its birth-date-within-the-year (birthDateOfYear, from the birthday
+// feature): the 56-day year splits into eight 7-day signs, each with an element, traits and a lucky discipline.
+// Purely a fun reading — it creates nothing and changes no stat. Deterministic — no Date/Math.random.
+const ZODIAC=[
+  {id:'firebrand', name:'The Firebrand', glyph:'🔥', element:'fire',  lucky:'race',      traits:['bold','hot-blooded','first out of the gate'], blurb:'Born to lead the charge — fearless, fiery and always in front.'},
+  {id:'cultivator',name:'The Cultivator',glyph:'🌱', element:'earth', lucky:'dressage',  traits:['patient','graceful','composed'],              blurb:'Rooted and serene — a steady soul who blossoms with time.'},
+  {id:'windrunner',name:'The Windrunner',glyph:'💨', element:'air',   lucky:'jump',      traits:['light-footed','clever','quick to learn'],     blurb:'Restless and bright — happiest flying over the fences.'},
+  {id:'tidecaller',name:'The Tidecaller',glyph:'💧', element:'water', lucky:'endurance', traits:['deep-hearted','tireless','calm'],             blurb:'Unhurried and unbreakable — goes the distance every time.'},
+  {id:'sunchaser', name:'The Sunchaser', glyph:'☀️', element:'fire',  lucky:'race',      traits:['radiant','spirited','boundless'],             blurb:'A ball of sunshine and speed who never seems to tire.'},
+  {id:'ironhoof',  name:'The Ironhoof',  glyph:'⛰️', element:'earth', lucky:'halter',    traits:['sturdy','dependable','proud'],                blurb:'Solid as bedrock — a proud presence who shines in the ring.'},
+  {id:'skydancer', name:'The Skydancer', glyph:'🕊️', element:'air',   lucky:'jump',      traits:['airy','playful','full of flair'],             blurb:'Graceful and mischievous — dances where others merely trot.'},
+  {id:'moonmare',  name:'The Moonmare',  glyph:'🌙', element:'water', lucky:'endurance', traits:['mysterious','intuitive','steady'],            blurb:'Quiet and knowing — moves to the pull of an inner tide.'},
+];
+const ZODIAC_ELEMENTS={ fire:{name:'Fire',emoji:'🔥'}, earth:{name:'Earth',emoji:'🌍'}, air:{name:'Air',emoji:'💨'}, water:{name:'Water',emoji:'💧'} };
+function zodiacDef(id){ return ZODIAC.find(z=>z.id===id)||null; }
+function zodiacElement(id){ const z=zodiacDef(id); return z?ZODIAC_ELEMENTS[z.element]:null; }
+// which sign a horse is, from its birth date within the year (pure)
+function horseZodiac(game, h){ if(!h) return ZODIAC[0];
+  const doy=(typeof birthDateOfYear==='function')?birthDateOfYear(h, game):1; // 1..BDAY_YEAR_DAYS
+  const per=BDAY_YEAR_DAYS/ZODIAC.length; // 56/8 = 7 days per sign
+  let idx=Math.floor((clamp(doy,1,BDAY_YEAR_DAYS)-1)/per); if(idx<0) idx=0; if(idx>=ZODIAC.length) idx=ZODIAC.length-1;
+  return ZODIAC[idx]; }
+// the element relationship between two signs (kindred / complement / opposite / neutral)
+function _zodElemPair(a,b){ if(a===b) return 'kindred'; const S=[a,b].sort().join('-');
+  if(S==='air-fire'||S==='earth-water') return 'complement';
+  if(S==='fire-water'||S==='air-earth') return 'opposite'; return 'neutral'; }
+// a compatibility blurb for two signs (ids or defs) — for pairing / breeding flavour
+function zodiacCompat(signA, signB){ const a=(signA&&signA.id)?signA:zodiacDef(signA), b=(signB&&signB.id)?signB:zodiacDef(signB);
+  if(!a||!b) return {level:'unknown', label:'—', blurb:''};
+  const rel=_zodElemPair(a.element,b.element);
+  if(rel==='kindred') return {level:'high', label:'Kindred spirits', blurb:'Two '+ZODIAC_ELEMENTS[a.element].name.toLowerCase()+' souls — an easy, harmonious match.'};
+  if(rel==='complement') return {level:'high', label:'Perfect complement', blurb:a.glyph+' and '+b.glyph+' balance each other beautifully.'};
+  if(rel==='opposite') return {level:'medium', label:'Opposites attract', blurb:'Sparks fly — challenging, but never dull.'};
+  return {level:'medium', label:'Steady pairing', blurb:'A calm, dependable partnership.'}; }
+// the full reading for a horse: sign, element, traits, lucky discipline, birth info, and same-sign kin in the herd
+function zodiacReading(game, h){ if(!h) return null; const z=horseZodiac(game,h), el=ZODIAC_ELEMENTS[z.element];
+  const ld=(typeof disciplineDef==='function')?disciplineDef(z.lucky):null;
+  const compatSigns=ZODIAC.filter(o=>o.id!==z.id && (zodiacCompat(z,o).level==='high')).map(o=>({id:o.id, name:o.name, glyph:o.glyph}));
+  const kin=((game&&game.horses)||[]).filter(o=>o&&o.id!==h.id && horseZodiac(game,o).id===z.id).map(o=>({id:o.id, name:o.name}));
+  return { horse:{id:h.id, name:h.name}, sign:{id:z.id, name:z.name, glyph:z.glyph, blurb:z.blurb},
+    element:{id:z.element, name:el.name, emoji:el.emoji}, traits:z.traits.slice(),
+    lucky:{id:z.lucky, name:ld?ld.name:z.lucky, emoji:ld?ld.emoji:'⭐'},
+    dateOfYear:(typeof birthDateOfYear==='function')?birthDateOfYear(h,game):1,
+    birthDay:(typeof birthDayOf==='function')?birthDayOf(h,game):1,
+    compatible:compatSigns, kin }; }
+// how many distinct signs the current herd covers (for the "own every sign" achievement)
+function zodiacHerdSigns(game){ const seen={}; for(const h of ((game&&game.horses)||[])) seen[horseZodiac(game,h).id]=1; return Object.keys(seen).length; }
 
 // ---------- Paddock rotation / grazing map (READ-ONLY advisory; a tiny saved rotation preference) ----------
 // Models a small fixed set of grazing fields. Grass level is a PURE function of (game.day, a per-field day stamp,
@@ -4523,6 +4573,7 @@ const ACHIEVEMENTS=[
   {id:'cleanbill',      icon:'🩺', name:'Clean Bill of Health',  desc:'Have a herd of three or more all graded A or better.', check:g=>{const s=herdHealthSummary(g); return s.count>=3 && s.allA;}},
   {id:'grazier',        icon:'🌱', name:'Rotational Grazier',    desc:'Rotate your grazing paddocks fifteen times.',  check:g=>((g.stats&&g.stats.rotations)||0)>=15},
   {id:'bestfriend',     icon:'🐕', name:'Best Friend',            desc:'Reach a full bond with a ranch companion.',    check:g=>normCompanion(g).bond>=100},
+  {id:'astrologer',     icon:'⭐', name:'Ranch Astrologer',       desc:'Own a horse of every star sign at once.',      check:g=>zodiacHerdSigns(g)>=ZODIAC.length},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4789,6 +4840,7 @@ const GOALS=[
   {id:'vet1',    desc:'Read a horse’s health report (🩺)',             tip:g=>((g.stats&&g.stats.vetReports)||0)+'/1',done:g=>((g.stats&&g.stats.vetReports)||0)>=1,           reward:{money:200,rep:10}},
   {id:'graze1',  desc:'Rotate your grazing paddocks (🌱)',             tip:g=>((g.stats&&g.stats.rotations)||0)+'/1',done:g=>((g.stats&&g.stats.rotations)||0)>=1,             reward:{money:200,rep:10}},
   {id:'comp1',   desc:'Adopt a ranch companion (🐕)',                  tip:g=>{const c=normCompanion(g);return c.type?c.name:'none yet';},done:g=>!!normCompanion(g).type,                reward:{money:200,rep:10}},
+  {id:'zodiac1', desc:'Read a horse’s star sign (⭐)',                  tip:g=>((g.stats&&g.stats.zodiacReads)||0)+'/1',done:g=>((g.stats&&g.stats.zodiacReads)||0)>=1,           reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4990,6 +5042,7 @@ const HR = {
   HEALTH_GRADES, reportGrade, healthReport, herdHealthSummary,
   PADDOCKS, paddockDef, paddockRegrowPerDay, normRotation, grazeLevel, grazeStatus, paddockState, bestPaddock, activePaddock, rotateTo,
   COMPANIONS, COMPANION_NAME_MAX, COMPANION_PET_BOND, companionDef, normCompanion, companionBondTier, companionQuip, adoptCompanion, renameCompanion, petCompanion, companionState,
+  ZODIAC, ZODIAC_ELEMENTS, zodiacDef, zodiacElement, horseZodiac, zodiacCompat, zodiacReading, zodiacHerdSigns,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -7571,6 +7624,41 @@ function openCompanion(){
   { const rn=$('compRename'); if(rn) rn.onclick=()=>{ const nm=$('compName'); const r=renameCompanion(G, nm?nm.value:''); if(!r.ok){ toast(r.why,'info'); return; }
       playSfx('tap'); toast('✏️ Renamed to '+r.name+'.','good'); reopen(); }; }
 }
+let zodiacSel={horse:null};
+function openZodiac(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(zodiacSel.horse && !horses.some(h=>h.id===zodiacSel.horse)) zodiacSel.horse=null;
+  if(!zodiacSel.horse && horses.length) zodiacSel.horse=horses[0].id;
+  const h=zodiacSel.horse?horses.find(x=>x.id===zodiacSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.zodiacReads=(G.stats.zodiacReads||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const chips=horses.length?horses.map(x=>{ const z=horseZodiac(G,x);
+    return '<span class="wlchip" data-zohorse="'+esc(x.id)+'" style="cursor:pointer;'+(zodiacSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+z.glyph+' '+esc(x.name)+'</span>'; }).join(' ')
+    :'<span class="empty">No horses to read yet.</span>';
+  let body='';
+  if(h){
+    const r=zodiacReading(G,h);
+    const traits=r.traits.map(t=>'<span class="pill">'+esc(t)+'</span>').join(' ');
+    const compat=r.compatible.length?r.compatible.map(c=>c.glyph+' '+esc(c.name)).join(', '):'a rare, singular spirit';
+    const kin=r.kin.length?('<div class="hbreed" style="margin-top:6px">🐎 Shares a sign with: '+r.kin.map(k=>esc(k.name)).join(', ')+'</div>'):'';
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row" style="align-items:center">'+
+      '<div style="font-size:40px">'+r.sign.glyph+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:17px">'+esc(r.sign.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(h.name)+' · '+r.element.emoji+' '+esc(r.element.name)+' sign · lucky at '+r.lucky.emoji+' '+esc(r.lucky.name)+'</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px;font-style:italic">“'+esc(r.sign.blurb)+'”</div>'+
+      '<div class="pips" style="margin-top:6px">'+traits+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">💞 Most compatible with</div><div class="hbreed">'+compat+'</div>'+
+      kin+'</div>';
+  } else { body='<div class="empty">Buy or breed a horse to read its stars.</div>'; }
+  modal('<h3>⭐ Horse Zodiac</h3>'+
+    '<div class="swlabel">The stars at a horse’s foaling shape its character — or so the old grooms say. A bit of fun; it changes nothing.</div>'+
+    '<div class="swlabel" style="margin-top:6px">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="zoClose" style="width:100%">Done</button></div>');
+  $('zoClose').onclick=closeModal;
+  document.querySelectorAll('[data-zohorse]').forEach(x=>x.onclick=()=>{ zodiacSel.horse=x.getAttribute('data-zohorse'); playSfx('tap'); openZodiac(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8479,6 +8567,7 @@ function boot(){
   { const vtb=$('vetBtn'); if(vtb) vtb.onclick=openHealthReport; }
   { const gzb=$('grazeBtn'); if(gzb) gzb.onclick=openGrazing; }
   { const cpb=$('compBtn'); if(cpb) cpb.onclick=openCompanion; }
+  { const zob=$('zodiacBtn'); if(zob) zob.onclick=openZodiac; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

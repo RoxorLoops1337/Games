@@ -258,6 +258,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.vetReports = 1; // satisfies the vet health-report goal
   g.stats.rotations = 1; // satisfies the paddock-rotation goal
   g.companion = { type: 'dog', name: 'Rex', bond: 20, pettedDay: 0 }; // satisfies the ranch-companion goal
+  g.stats.zodiacReads = 1; // satisfies the horse-zodiac goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -5211,6 +5212,51 @@ function studGame(day) {
   ok(bf && !bf.check(gg), 'Best Friend needs a full bond');
   gg.companion.bond = 100;
   ok(bf.check(gg), 'a full bond unlocks Best Friend');
+}
+{
+  // ---- Horse zodiac / star-sign reading ----
+  const Y = HR.BDAY_YEAR_DAYS;
+  ok(HR.ZODIAC.length >= 6 && HR.ZODIAC.every(z => z.id && z.glyph && z.element && z.lucky && z.traits.length), 'the zodiac catalogue is well-formed');
+  ok(HR.ZODIAC.every(z => HR.DISCIPLINES ? HR.DISCIPLINES.some(d => d.id === z.lucky) : true), 'every sign has a real lucky discipline');
+  const g = HR.freshGame(); g.day = 100;
+  // the sign is a pure function of birth-date-within-the-year; a horse born on day 1-of-year is the first sign
+  const per = Y / HR.ZODIAC.length;
+  // craft a horse whose birth-date-of-year lands in each sign window and check the mapping
+  for (let i = 0; i < HR.ZODIAC.length; i++) {
+    const targetDoy = Math.floor(i * per) + 1;           // a day inside sign i's window (1-based)
+    const age = g.day - targetDoy;                        // birthDay = day - age = targetDoy
+    const h = HR.mkHorse({ breed: 'arabian', age });
+    ok(HR.horseZodiac(g, h).id === HR.ZODIAC[i].id, 'a horse born in window ' + i + ' reads as ' + HR.ZODIAC[i].id);
+  }
+  // a full reading has the expected shape and names a lucky discipline
+  const h0 = HR.mkHorse({ breed: 'welsh', age: 10 }); g.horses.push(h0);
+  const r = HR.zodiacReading(g, h0);
+  ok(r.sign && r.element && Array.isArray(r.traits) && r.traits.length && r.lucky.name, 'a reading carries a sign, element, traits and a lucky discipline');
+  ok(Array.isArray(r.compatible) && r.compatible.every(c => c.id !== r.sign.id), 'compatibility never lists the horse’s own sign');
+  // determinism
+  ok(JSON.stringify(HR.zodiacReading(g, h0)) === JSON.stringify(HR.zodiacReading(g, h0)), 'the reading is deterministic');
+  ok(HR.horseZodiac(g, h0).id === HR.horseZodiac(g, h0).id, 'the sign is deterministic');
+  // compatibility: a sign is kindred with itself, and returns a level for any pair
+  const s0 = HR.ZODIAC[0];
+  ok(HR.zodiacCompat(s0.id, s0.id).level === 'high', 'a sign is highly compatible with its own kind');
+  ok(HR.ZODIAC.every(z => ['high', 'medium', 'low'].indexOf(HR.zodiacCompat(s0.id, z.id).level) >= 0), 'every pairing yields a compatibility level');
+  // read-only + sparse safety
+  const snap = JSON.stringify(g);
+  HR.horseZodiac(g, h0); HR.zodiacReading(g, h0); HR.zodiacCompat('firebrand', 'moonmare'); HR.zodiacHerdSigns(g);
+  ok(JSON.stringify(g) === snap, 'reading the zodiac never mutates the game');
+  ok(HR.horseZodiac({}, null) && HR.zodiacReading({}, null) === null && HR.zodiacHerdSigns({}) === 0, 'the zodiac helpers are safe on a sparse game');
+  // achievement: own a horse of every sign
+  const ga = HR.freshGame(); ga.day = 500; ga.horses = [];
+  for (let i = 0; i < HR.ZODIAC.length; i++) { const doy = Math.floor(i * per) + 1; ga.horses.push(HR.mkHorse({ breed: 'mustang', age: ga.day - doy, id: 'z' + i })); }
+  const astro = HR.ACHIEVEMENTS.find(a => a.id === 'astrologer');
+  ok(astro && astro.check(ga), 'owning a horse of every sign unlocks Ranch Astrologer');
+  ga.horses.pop();
+  ok(!astro.check(ga), 'missing a sign breaks Ranch Astrologer');
+  // the goal fires after a reading
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'zodiac1').done(gv), 'the zodiac goal is unmet before reading');
+  gv.stats.zodiacReads = 1;
+  ok(HR.GOALS.find(x => x.id === 'zodiac1').done(gv), 'reading a star sign satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
