@@ -362,6 +362,7 @@
     <button class="sbtn" id="shineBtn" title="Coat shine — grooming-glow meter" style="margin-right:4px">✨</button>
     <button class="sbtn" id="gaitBtn" title="Paces showcase — the four gaits" style="margin-right:4px">🐎</button>
     <button class="sbtn" id="heightBtn" title="Measuring stick — height in hands" style="margin-right:4px">📏</button>
+    <button class="sbtn" id="marksBtn" title="Markings & whorls — the horse's passport" style="margin-right:4px">🌀</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -638,6 +639,67 @@ function crossGenes(a,b,rng){
 }
 function coatOf(h){ if(h.coat) return h.coat; return {name:h.color||'Bay', tier:0}; }
 function coatValueMult(h){ return COAT_TIER_MULT[coatOf(h).tier||0]||1; }
+
+// ---------- Horse whorl & markings identifier (READ-ONLY passport-style identity card) ----------
+// A stable set of identifying white markings & a facial whorl, derived purely from a hash of the horse id (+ its
+// coat name) — like a real horse passport silhouette page. Cosmetic identity only; it creates nothing and changes
+// no stat. Deterministic — no Date/Math.random (all features come from the id hash, so the same horse always reads
+// the same). Distinct from coat-colour genetics: this is about the WHITE markings & whorls used to identify a horse.
+const WHORL_SPOTS=[
+  {id:'centre',    label:'centre of the forehead'},
+  {id:'high',      label:'high on the forehead'},
+  {id:'above',     label:'just above the eyes'},
+  {id:'between',   label:'between the eyes'},
+  {id:'leftoff',   label:'off-centre to the left'},
+  {id:'rightoff',  label:'off-centre to the right'},
+];
+const FACE_MARKINGS=[
+  {id:'none',    label:'no white on the face', emoji:'—'},
+  {id:'star',    label:'a star',               emoji:'⭐'},
+  {id:'snip',    label:'a snip',               emoji:'▫️'},
+  {id:'stripe',  label:'a stripe',             emoji:'│'},
+  {id:'blaze',   label:'a blaze',              emoji:'▮'},
+  {id:'starsnip',label:'a star and snip',      emoji:'✦'},
+  {id:'whiteface',label:'a white face',        emoji:'⬜'},
+];
+const LEG_MARKINGS=[
+  {id:'none',     label:'no white', emoji:'·'},
+  {id:'coronet',  label:'a coronet', emoji:'▪️'},
+  {id:'sock',     label:'a sock',    emoji:'🧦'},
+  {id:'stocking', label:'a stocking',emoji:'🥾'},
+];
+const LEG_SLOTS=[
+  {id:'nf', label:'near fore'}, {id:'of', label:'off fore'},
+  {id:'nh', label:'near hind'}, {id:'oh', label:'off hind'},
+];
+function whorlDef(id){ return WHORL_SPOTS.find(w=>w.id===id)||null; }
+function faceMarkingDef(id){ return FACE_MARKINGS.find(f=>f.id===id)||null; }
+function legMarkingDef(id){ return LEG_MARKINGS.find(l=>l.id===id)||null; }
+function _mkHash(s){ let h=2166136261>>>0; s=''+(s||''); for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),16777619)>>>0; } return h>>>0; }
+function _mkMix(x){ x=(x^(x>>>16))>>>0; x=Math.imul(x,2246822519)>>>0; x=(x^(x>>>13))>>>0; return x>>>0; }
+// the full derived set of markings for a horse (pure function of id + coat name)
+function horseMarkings(h){
+  if(!h) return { whorl:WHORL_SPOTS[0], face:FACE_MARKINGS[0], legs:LEG_SLOTS.map(s=>({slot:s.id, label:s.label, marking:LEG_MARKINGS[0]})), whiteLegs:0 };
+  const seed=_mkHash((h.id||'anon')+'|'+coatOf(h).name);
+  const whorl=WHORL_SPOTS[_mkMix(seed+1)%WHORL_SPOTS.length];
+  const face=FACE_MARKINGS[_mkMix(seed+7)%FACE_MARKINGS.length];
+  const legs=LEG_SLOTS.map((s,i)=>{ const r=_mkMix(seed + (i+1)*101)%100; // most legs are unmarked
+    const mk = r<55?'none' : r<80?'sock' : r<93?'stocking' : 'coronet';
+    return { slot:s.id, label:s.label, marking:legMarkingDef(mk) }; });
+  const whiteLegs=legs.filter(l=>l.marking.id!=='none').length;
+  return { whorl, face, legs, whiteLegs };
+}
+// a passport-style one-line identifying summary
+function markingsSummary(h){ if(!h) return ''; const m=horseMarkings(h), coat=coatOf(h).name;
+  const faceBit = m.face.id==='none' ? 'no white on the face' : m.face.label;
+  const marked = m.legs.filter(l=>l.marking.id!=='none');
+  let legBit; if(!marked.length) legBit='no white on the legs';
+    else legBit='white on the '+marked.map(l=>l.label).join(', ');
+  return coat+' — '+faceBit+'; '+legBit+'; whorl '+m.whorl.label+'.'; }
+// the full identity-card readout
+function markingsCard(game, h){ if(!h) return { horse:null, coat:null, whorl:null, face:null, legs:[], whiteLegs:0, summary:'' };
+  const m=horseMarkings(h);
+  return { horse:{id:h.id, name:h.name}, coat:coatOf(h).name, whorl:m.whorl, face:m.face, legs:m.legs, whiteLegs:m.whiteLegs, summary:markingsSummary(h) }; }
 // body/mane CSS colours per coat name — drives the drawn horses in the scene & cards
 const COAT_CSS={
   Chestnut:{body:'#9a5a2b',mane:'#6b3c17'}, Bay:{body:'#7c4a26',mane:'#221610'},
@@ -4736,6 +4798,7 @@ const ACHIEVEMENTS=[
   {id:'showshine',      icon:'✨', name:'Show-Ring Shine',        desc:'Bring a horse’s coat to a Gleaming shine.',    check:g=>((g.horses)||[]).some(h=>shineTier(coatShine(h)).id==='gleaming')},
   {id:'finemover',      icon:'🐎', name:'A Fine Mover',           desc:'Own a horse with a 90+ gait score.',           check:g=>((g.horses)||[]).some(h=>GAITS.some(gt=>gaitScore(h,gt.id)>=90))},
   {id:'talloftheyard',  icon:'📏', name:'Tall in the Saddle',    desc:'Own a horse standing 17hh or taller.',         check:g=>((g.horses)||[]).some(h=>heightHands(h).totalInches>=68)},
+  {id:'foursocks',      icon:'🧦', name:'Four White Socks',       desc:'Own a horse with white markings on all four legs.', check:g=>((g.horses)||[]).some(h=>horseMarkings(h).whiteLegs>=4)},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -5007,6 +5070,7 @@ const GOALS=[
   {id:'shine1',  desc:'Check a horse’s coat shine (✨)',                tip:g=>((g.stats&&g.stats.shineChecks)||0)+'/1',done:g=>((g.stats&&g.stats.shineChecks)||0)>=1,         reward:{money:150,rep:5}},
   {id:'gait1',   desc:'Watch a horse’s paces (🐎)',                    tip:g=>((g.stats&&g.stats.gaitViews)||0)+'/1',done:g=>((g.stats&&g.stats.gaitViews)||0)>=1,             reward:{money:150,rep:5}},
   {id:'measure1',desc:'Measure a horse with the stick (📏)',           tip:g=>((g.stats&&g.stats.measures)||0)+'/1',done:g=>((g.stats&&g.stats.measures)||0)>=1,               reward:{money:150,rep:5}},
+  {id:'marks1',  desc:'View a horse’s markings card (🌀)',              tip:g=>((g.stats&&g.stats.markingViews)||0)+'/1',done:g=>((g.stats&&g.stats.markingViews)||0)>=1,       reward:{money:150,rep:5}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -5117,6 +5181,7 @@ const HR = {
   TRAIN_STATS, TRAIN_LABEL, TRAIN_PER_DAY,
   stageForAge, isAdult, feedPerDay, statAvg, overall,
   HEIGHT_STAGE, breedAdultInches, heightHands, heightLabel, sizeClass, heightRecord, tallestHorse,
+  WHORL_SPOTS, FACE_MARKINGS, LEG_MARKINGS, LEG_SLOTS, whorlDef, faceMarkingDef, legMarkingDef, horseMarkings, markingsSummary, markingsCard,
   mkHorse, valueOf, buyPrice, sellQuote, rentRate,
   stableCost, upgradeCost, stallsOf, totalStalls, usedStalls, freeStalls, stableQuality, boardRatePerStall,
   canBreed, breedFoal, makeMarketHorse, restockMarket, marketPickBreed,
@@ -7954,6 +8019,39 @@ function openHeight(){
   $('htClose').onclick=closeModal;
   document.querySelectorAll('[data-hthorse]').forEach(x=>x.onclick=()=>{ heightSel.horse=x.getAttribute('data-hthorse'); playSfx('tap'); openHeight(); });
 }
+let marksSel={horse:null};
+function openMarkings(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(marksSel.horse && !horses.some(h=>h.id===marksSel.horse)) marksSel.horse=null;
+  if(!marksSel.horse && horses.length) marksSel.horse=horses[0].id;
+  const h=marksSel.horse?horses.find(x=>x.id===marksSel.horse):null;
+  if(h){ G.stats=G.stats||{}; G.stats.markingViews=(G.stats.markingViews||0)+1; // usage stat — no economy change
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); }
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-mkhorse="'+esc(x.id)+'" style="cursor:pointer;'+(marksSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' ')
+    :'<span class="empty">No horses to identify yet.</span>';
+  let body='';
+  if(h){
+    const c=markingsCard(G,h);
+    const legRows=c.legs.map(l=>'<div class="lbrow"><div class="hface" style="background:none;font-size:16px;display:flex;align-items:center;justify-content:center">'+l.marking.emoji+'</div>'+
+      '<div class="grow"><div class="lbname" style="font-size:13px">'+esc(l.label)+'</div><div class="lbsub">'+esc(l.marking.label)+'</div></div></div>').join('');
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface">'+horseArt(h,44)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:16px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(c.coat)+' · '+(c.whiteLegs?c.whiteLegs+' white leg'+(c.whiteLegs!==1?'s':''):'no white legs')+'</div></div></div>'+
+      '<div class="stats" style="margin-top:6px"><div class="stat"><div class="sv" style="font-size:16px">'+c.face.emoji+'</div><div class="sl">'+esc(c.face.id==='none'?'Plain face':c.face.label.replace(/^a\s/,''))+'</div></div>'+
+      '<div class="stat"><div class="sv" style="font-size:16px">🌀</div><div class="sl">Whorl</div></div></div>'+
+      '<div class="hbreed" style="margin-top:6px">🌀 Whorl '+esc(c.whorl.label)+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">Legs</div>'+legRows+
+      '<div class="swlabel" style="margin-top:8px">🪪 Identifying summary</div><div class="hbreed" style="font-style:italic">'+esc(c.summary)+'</div></div>';
+  } else { body='<div class="empty">Buy or breed a horse to record its markings.</div>'; }
+  modal('<h3>🌀 Markings & Whorls</h3>'+
+    '<div class="msg">Every horse’s passport records its white markings and the whorls in its coat — the details that tell one bay from another. A read-only identity card.</div>'+
+    '<div class="swlabel">Horse</div><div class="pips">'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="mkClose" style="width:100%">Done</button></div>');
+  $('mkClose').onclick=closeModal;
+  document.querySelectorAll('[data-mkhorse]').forEach(x=>x.onclick=()=>{ marksSel.horse=x.getAttribute('data-mkhorse'); playSfx('tap'); openMarkings(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8867,6 +8965,7 @@ function boot(){
   { const shb=$('shineBtn'); if(shb) shb.onclick=openCoatShine; }
   { const gtb=$('gaitBtn'); if(gtb) gtb.onclick=openGaits; }
   { const htb=$('heightBtn'); if(htb) htb.onclick=openHeight; }
+  { const mkb=$('marksBtn'); if(mkb) mkb.onclick=openMarkings; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
