@@ -340,6 +340,7 @@
     <button class="sbtn" id="wardrobeBtn" title="Show wardrobe — rider outfits & show attire" style="margin-right:4px">👗</button>
     <button class="sbtn" id="tourBtn" title="Ranch tour — photo album & postcard" style="margin-right:4px">📮</button>
     <button class="sbtn" id="mascotBtn" title="Stable mascot — adopt a barn companion" style="margin-right:4px">🐾</button>
+    <button class="sbtn" id="gardenBtn" title="Hay meadow — grow your own feed" style="margin-right:4px">🌾</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1898,7 +1899,7 @@ function freshGame(legacy){
     canteen:{level:0}, teachers:[], teacherMarket:[], teacherDay:1,
     log:[], stats:{born:0,sold:0,bought:0,rented:0,days:0,bestSale:0,showWins:0,maxGen:1,trained:0,bestTierWin:0,lessons:0,studIncome:0,festivals:0,goldEarned:0,bestOVR:0,disciplinesWon:{},auctionsWon:0,consigned:0,showGamesPlayed:0,bestShowPerf:0,clearRounds:0,contractsDone:0,staffWages:0,seasonTitles:0,featuredBought:0,disasters:0,renames:0,dailyClaims:0,bestStreak:0,visitorDays:0,bestVisitorDay:0,appointments:0,groundwork:0,fairsWon:0,choresDone:0,bestChoreStreak:0,trips:0,tripCoins:0,storeBuys:0,storeSpent:0,breederPoints:0,studBookings:0,grudgeMatches:0,grudgeWins:0,ceremonies:0},
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
-    decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), lastRoutineDay:0,
+    decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
     tack:{owned:[],tiers:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
@@ -1931,6 +1932,7 @@ function advanceDay(game,rng){
   // settle the day that's ending: a full chore clear pays a small bonus & extends the streak
   const choreResult=resolveDailyChores(game, game.day);
   game.day++; game.stats.days++;
+  tickGarden(game); // hay meadow grows a little each day (season-aware; dormant in winter)
   const notes=[];
   // roll the weekly-recap baseline at the start of a new week, and nudge a fresh gazette issue
   if(rollWeeklyStats(game) && game.day>1) notes.push({t:'info',m:'📰 A new issue of the Skyhorse Gazette is out — see last week’s recap.'});
@@ -3418,6 +3420,49 @@ function mascotPerk(game){
 function mascotQuip(game,day){ const m=activeMascot(game); if(!m) return '';
   day=(day!=null?day:((game&&game.day)||1)); const qs=MASCOT_QUIPS[m.type]||['{name} watches over the yard.'];
   const i=hashDay(day)%qs.length; return (qs[i]||'{name} is about the yard.').replace(/\{name\}/g, m.name); }
+// ---------- Seasonal hay-meadow / produce garden (a bounded, cooldown-gated home hay plot) ----------
+// Sow once (a one-off cost), then harvest a CAPPED hay yield on a growth cooldown. Season-aware:
+// grows faster in summer, dormant in winter. Economy-safe — a real cost, capped yield, cooldown, and
+// winter dormancy mean it's a nice supplement, NOT an infinite feed faucet. Deterministic.
+const GARDEN={ sowCost:600, growthDays:8, baseYield:30, yieldCap:40, happyBonus:2 };
+function gardenSeasonGrowthMul(day){ const s=seasonOf(day).id; return s==='summer'?1.4 : s==='winter'?0 : 1.0; }
+function normGarden(g){ g=g||{};
+  const sown=g.sown===true;
+  const growth=(typeof g.growth==='number'&&isFinite(g.growth))?clamp(g.growth,0,GARDEN.growthDays):0;
+  const lastHarvest=(typeof g.lastHarvest==='number'&&isFinite(g.lastHarvest))?g.lastHarvest:0;
+  return { sown, growth:sown?growth:0, lastHarvest }; }
+function gardenYield(game){ const s=seasonOf((game&&game.day)||1); const mul=(s.id==='autumn')?1.15:1.0;
+  return Math.min(GARDEN.yieldCap, Math.round(GARDEN.baseYield*mul)); }
+function gardenGrowthPerDay(game){ if(!normGarden(game&&game.garden).sown) return 0; return gardenSeasonGrowthMul((game&&game.day)||1); }
+function gardenState(game){
+  const g=normGarden(game&&game.garden), day=(game&&game.day)||1;
+  const ready = g.sown && g.growth>=GARDEN.growthDays;
+  const growthPct = g.sown ? clamp(g.growth/GARDEN.growthDays,0,1) : 0;
+  const perDay = gardenSeasonGrowthMul(day), remain = Math.max(0, GARDEN.growthDays-g.growth);
+  const daysToHarvest = !g.sown ? null : (ready?0 : (perDay>0?Math.ceil(remain/perDay):Infinity));
+  return { sown:g.sown, growth:g.growth, growthDays:GARDEN.growthDays, ready, growthPct,
+    daysToHarvest, dormant:(seasonOf(day).id==='winter'), season:seasonOf(day), lastHarvest:g.lastHarvest,
+    yield:gardenYield(game) };
+}
+function sowGarden(game){ if(!game) return {ok:false,why:'No ranch.'};
+  const g=normGarden(game.garden);
+  if(g.sown) return {ok:false,why:'The meadow is already sown.'};
+  if((game.money||0)<GARDEN.sowCost) return {ok:false,why:'Not enough coins.'};
+  game.money-=GARDEN.sowCost; game.garden={ sown:true, growth:0, lastHarvest:(g.lastHarvest||0) };
+  return {ok:true, cost:GARDEN.sowCost}; }
+function tickGarden(game){ if(!game) return; const g=normGarden(game.garden); if(!g.sown) return;
+  const inc=gardenSeasonGrowthMul(game.day||1); if(inc<=0){ game.garden=g; return; } // dormant in winter
+  g.growth=Math.min(GARDEN.growthDays, g.growth+inc); game.garden=g; }
+function harvestGarden(game){ if(!game) return {ok:false,why:'No ranch.'};
+  const st=gardenState(game);
+  if(!st.sown) return {ok:false,why:'Nothing sown yet.'};
+  if(!st.ready) return {ok:false,why:'Not ready to harvest.'};
+  const hay=gardenYield(game), happy=GARDEN.happyBonus;
+  game.feed=(game.feed||0)+hay;
+  for(const h of (game.horses||[])) h.happy=clamp((h.happy||0)+happy,0,100); // a little fresh produce cheers the herd
+  game.stats=game.stats||{}; game.stats.harvests=(game.stats.harvests||0)+1; game.stats.hayGrown=(game.stats.hayGrown||0)+hay;
+  game.garden={ sown:true, growth:0, lastHarvest:(game.day||0) };
+  return {ok:true, hay, happy}; }
 
 // ---------- Shareable "trading card" data model (rendering is DOM-only) ----------
 function stampFor(game){
@@ -3595,6 +3640,7 @@ const ACHIEVEMENTS=[
   {id:'bestdressed',    icon:'👗', name:'Best Dressed',        desc:'Collect every outfit in the show wardrobe.',   check:g=>OUTFITS.every(o=>hasOutfit(g,o.id))},
   {id:'postcardperfect',icon:'📮', name:'Postcard Perfect',    desc:'Fill a ranch tour with six highlight stops.',  check:g=>tourAlbum(g).count>=6},
   {id:'menagerie',      icon:'🐾', name:'Menagerie',           desc:'Welcome three different companions to the ranch.', check:g=>((g.stats&&g.stats.mascotsAdopted)||0)>=3},
+  {id:'homegrown',      icon:'🌾', name:'Home-Grown',          desc:'Bring in five harvests from your hay meadow.', check:g=>((g.stats&&g.stats.harvests)||0)>=5},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -3845,6 +3891,7 @@ const GOALS=[
   {id:'outfit1', desc:'Buy a show outfit for the wardrobe (👗)',         tip:g=>ownedOutfits(g).length+'/1 outfits',done:g=>ownedOutfits(g).length>=1,                      reward:{money:400,rep:15}},
   {id:'tour1',   desc:'Take the ranch photo tour (📮)',                  tip:g=>((g.stats&&g.stats.toursViewed)||0)+'/1',done:g=>((g.stats&&g.stats.toursViewed)||0)>=1,       reward:{money:300,rep:10}},
   {id:'mascot1', desc:'Adopt a stable mascot (🐾)',                      tip:g=>hasMascot(g)?activeMascot(g).emoji+' '+activeMascot(g).name:'none yet',done:g=>hasMascot(g),      reward:{money:300,rep:15}},
+  {id:'garden1', desc:'Sow the hay meadow (🌾 garden)',                  tip:g=>normGarden(g.garden).sown?'sown & growing':'not sown',done:g=>normGarden(g.garden).sown,          reward:{money:400,rep:15}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -3929,6 +3976,7 @@ const HR = {
   ENRICHMENT_ITEMS, ENRICH_HAPPY_CAP, ENRICH_NEEDLIFT_CAP, ENRICH_BOND_CAP, ENRICH_DECAY_FLOOR, enrichmentDef, normEnrichment, ownedEnrichment, hasEnrichment, enrichmentAffordable, buyEnrichment, enrichmentSpend, enrichmentBonus, enrichmentDecayMult,
   OUTFITS, OUTFIT_TURNOUT_CAP, outfitDef, normWardrobe, ownedOutfits, hasOutfit, outfitAffordable, buyOutfit, equipOutfit, equippedOutfit, wardrobeSpend, outfitTurnoutBonus, outfitTurnoutMult,
   MASCOTS, MASCOT_NAME_MAX, MASCOT_PERK_CAP, MASCOT_BOND_CAP, mascotDef, normMascot, activeMascot, hasMascot, adoptMascot, renameMascot, retireMascot, mascotPerk, mascotQuip,
+  GARDEN, gardenSeasonGrowthMul, normGarden, gardenYield, gardenGrowthPerDay, gardenState, sowGarden, tickGarden, harvestGarden,
   FESTIVALS, festivalDef, festivalOn, isFestival, festivalMod, nextFestival, upcomingFestivals,
   isAuctionDay, nextAuction, makeAuctionLot, makeAuctionLots, aiCounter, resolveAuction, consignValue,
   TUTORIAL, tutorialStep, tutorialLen, stepSatisfied, tutorialActive,
@@ -4055,6 +4103,7 @@ function load(){
     G.enrichment=normEnrichment(G.enrichment); // paddock enrichment owned-set — safe on old saves
     G.wardrobe=normWardrobe(G.wardrobe); // show wardrobe (owned outfits + equipped) — safe on old saves
     G.mascot=normMascot(G.mascot); // stable mascot (type + name) — safe on old saves
+    G.garden=normGarden(G.garden); // hay meadow plot — safe on old saves
     if(!G.tut) G.tut={step:0,done:!!G.seenIntro}; // existing players skip the coach-marks
     // genetics/pedigree + show-career migration for older saves
     (G.horses||[]).concat(G.market||[]).forEach(h=>{
@@ -6039,6 +6088,35 @@ function openMascot(){
   { const rt=$('mascotRetire'); if(rt) rt.onclick=()=>{ retireMascot(G); playSfx('tap'); toast('🐾 Your mascot has retired to a cosy home.','info'); reopen(); }; }
   const ni=$('mascotName'); if(ni&&ni.addEventListener) ni.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const rn=$('mascotRename'); if(rn) rn.click(); } });
 }
+function openGarden(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const st=gardenState(G);
+  let body;
+  if(!st.sown){
+    body='<div class="empty">A patch of ground by the barn, waiting for seed. Sow a hay meadow to grow your own feed through the seasons.</div>'+
+      '<div class="btnrow"><button class="btn" id="gardenSow" style="width:100%"'+((G.money||0)<GARDEN.sowCost?' disabled':'')+'>🌱 Sow the meadow (🪙'+fmt(GARDEN.sowCost)+')</button></div>';
+  } else {
+    const pct=Math.round(st.growthPct*100);
+    const bar='<div style="height:10px;background:#0002;border-radius:5px;margin-top:4px;overflow:hidden"><div style="height:10px;border-radius:5px;width:'+pct+'%;background:'+(st.ready?'var(--good)':'var(--gold2)')+'"></div></div>';
+    const status = st.ready ? '<span class="pill" style="color:var(--good)">🌾 Ready to harvest!</span>'
+      : st.dormant ? '<span class="pill" style="color:var(--warn)">❄️ Dormant for winter</span>'
+      : '<span class="pill">🌱 Growing — '+pct+'% · '+(st.daysToHarvest===Infinity?'—':st.daysToHarvest+'d')+' to go</span>';
+    body='<div class="card" style="border-left:4px solid '+(st.ready?'var(--good)':'var(--gold2)')+'"><div class="hname">🌾 Hay Meadow <span class="pill">'+st.season.emoji+' '+esc(st.season.name)+'</span></div>'+
+      '<div style="margin-top:4px">'+status+'</div>'+bar+
+      '<div class="hbreed" style="margin-top:6px">A ripe cut yields up to <b>🌾'+GARDEN.yieldCap+'</b> hay (this season: 🌾'+st.yield+') plus a little fresh produce for the herd. Grows faster in summer, rests in winter.</div></div>'+
+      '<div class="btnrow"><button class="btn" id="gardenHarvest" style="width:100%"'+(st.ready?'':' disabled')+'>🌾 '+(st.ready?'Harvest the meadow':'Not ready yet')+'</button></div>';
+  }
+  modal('<h3>🌾 Hay Meadow</h3>'+
+    '<div class="msg">Your own little hay plot. Sow it once, then bring in a bounded hay harvest each time it ripens — a handy top-up, not a bottomless supply.</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="gardenClose" style="width:100%">Done</button></div>');
+  $('gardenClose').onclick=closeModal;
+  const reopen=()=>{ const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); openGarden(); };
+  { const sw=$('gardenSow'); if(sw) sw.onclick=()=>{ const r=sowGarden(G); if(!r.ok){ toast(r.why,'bad'); return; }
+      coinPop(-r.cost); burst('🌱🌾',10); playSfx('coin'); toast('🌱 The meadow is sown — come back as it grows.','good'); reopen(); }; }
+  { const hv=$('gardenHarvest'); if(hv) hv.onclick=()=>{ const r=harvestGarden(G); if(!r.ok){ toast(r.why,'info'); return; }
+      burst('🌾✨',14); playSfx('goal'); toast('🌾 Harvest in! +🌾'+r.hay+' hay for the barn.','good'); reopen(); }; }
+}
 // ---------------- Weekly contracts / notice board ----------------
 // ---------------- Naming: rename + studbook registry ----------------
 function openRename(h){
@@ -6842,6 +6920,7 @@ function boot(){
   { const wb=$('wardrobeBtn'); if(wb) wb.onclick=openWardrobe; }
   { const tb=$('tourBtn'); if(tb) tb.onclick=openTourAlbum; }
   { const mb=$('mascotBtn'); if(mb) mb.onclick=openMascot; }
+  { const gb=$('gardenBtn'); if(gb) gb.onclick=openGarden; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
