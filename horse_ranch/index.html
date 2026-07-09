@@ -355,6 +355,7 @@
     <button class="sbtn" id="silksBtn" title="Stable colours — design your racing silks" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="bdayBtn" title="Birthdays — foaling-day celebrations" style="margin-right:4px">🎂</button>
     <button class="sbtn" id="vetBtn" title="Vet report card — herd health grades" style="margin-right:4px">🩺</button>
+    <button class="sbtn" id="grazeBtn" title="Grazing map — rotate the paddocks" style="margin-right:4px">🌱</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1974,6 +1975,57 @@ function celebrateBirthday(game, h){ if(!game||!h) return {ok:false,why:'No hors
   game.stats=game.stats||{}; game.stats.birthdays=(game.stats.birthdays||0)+1;
   return {ok:true, turning:ageYears(h), happy:BDAY_HAPPY, bond:BDAY_BOND}; }
 
+// ---------- Paddock rotation / grazing map (READ-ONLY advisory; a tiny saved rotation preference) ----------
+// Models a small fixed set of grazing fields. Grass level is a PURE function of (game.day, a per-field day stamp,
+// season): the active field is grazed down over time; a rested field regrows (slower in winter, faster in spring).
+// rotateTo just re-stamps which field is active — it never creates resources, alters the feed economy, or changes
+// any gameplay stat; the grass numbers are derived, not a stored grind. Deterministic — no Date/Math.random.
+const PADDOCKS=[
+  {id:'north',  name:'North Field',   emoji:'🌿'},
+  {id:'south',  name:'South Meadow',  emoji:'🍀'},
+  {id:'river',  name:'Riverside',     emoji:'💧'},
+  {id:'hill',   name:'Hill Pasture',  emoji:'⛰️'},
+];
+function paddockDef(id){ return PADDOCKS.find(p=>p.id===id)||null; }
+const GRAZE_PER_DAY=9;   // grass the active field loses per day of turnout
+const GRAZE_FLOOR=8;     // it never grazes fully bare
+const REST_START=30;     // a field starts resting from a grazed-down level
+const REGROW_BASE=7;     // base regrowth per rested day
+function paddockRegrowPerDay(day){ const s=seasonOf(day).id;
+  const m = s==='winter'?0.4 : s==='spring'?1.2 : s==='autumn'?0.9 : 1.0; return REGROW_BASE*m; }
+function normRotation(game){ if(!game) return {active:PADDOCKS[0].id, since:{}};
+  if(!game.rotation||typeof game.rotation!=='object') game.rotation={active:PADDOCKS[0].id, since:{}};
+  if(!paddockDef(game.rotation.active)) game.rotation.active=PADDOCKS[0].id;
+  if(!game.rotation.since||typeof game.rotation.since!=='object') game.rotation.since={};
+  for(const k of Object.keys(game.rotation.since)) if(!paddockDef(k)) delete game.rotation.since[k]; // prune stray keys
+  return game.rotation; }
+// grass level 0..100 for a field — pure function of the day, the field's stamp and the season
+function grazeLevel(game, fieldId){ if(!paddockDef(fieldId)) return 0; const day=Math.floor((game&&game.day)||1), rot=normRotation(game), s=rot.since[fieldId];
+  if(fieldId===rot.active){ const start=(typeof s==='number')?s:1; return clamp(Math.round(100 - GRAZE_PER_DAY*Math.max(0,day-start)), GRAZE_FLOOR, 100); }
+  if(typeof s!=='number') return 100; // never grazed → pristine
+  return clamp(Math.round(REST_START + paddockRegrowPerDay(day)*Math.max(0,day-s)), 0, 100); }
+function grazeStatus(level){ return level>=75?{id:'lush',label:'Lush',emoji:'🟢'} : level>=45?{id:'good',label:'Grazing',emoji:'🟡'}
+  : level>=20?{id:'sparse',label:'Sparse',emoji:'🟠'} : {id:'bare',label:'Overgrazed',emoji:'🔴'}; }
+// the whole map: each field's level, status, whether it's the active turnout, in config order
+function paddockState(game){ const rot=normRotation(game); return PADDOCKS.map(p=>{ const level=grazeLevel(game,p.id);
+  return { id:p.id, name:p.name, emoji:p.emoji, level, active:p.id===rot.active, status:grazeStatus(level) }; }); }
+// the best-rested field to rotate onto next (highest grass among the non-active fields)
+function bestPaddock(game){ const rot=normRotation(game); let best=null;
+  for(const p of PADDOCKS){ if(p.id===rot.active) continue; const level=grazeLevel(game,p.id);
+    if(!best||level>best.level) best={id:p.id, name:p.name, emoji:p.emoji, level}; }
+  return best; }
+function activePaddock(game){ const rot=normRotation(game); const p=paddockDef(rot.active); const level=grazeLevel(game,rot.active);
+  return { id:rot.active, name:p.name, emoji:p.emoji, level, status:grazeStatus(level) }; }
+// move the herd to a rested field — re-stamps the active/rested days (advisory preference only; no economy/stat change beyond a usage counter)
+function rotateTo(game, fieldId){ if(!game) return {ok:false,why:'No ranch.'}; if(!paddockDef(fieldId)) return {ok:false,why:'No such field.'};
+  const rot=normRotation(game), day=Math.floor(game.day||1);
+  if(rot.active===fieldId) return {ok:false, why:'The herd is already grazing there.'};
+  rot.since[rot.active]=day; // the field we're leaving starts resting now
+  rot.since[fieldId]=day;    // the field we move onto starts being grazed now
+  rot.active=fieldId;
+  game.stats=game.stats||{}; game.stats.rotations=(game.stats.rotations||0)+1;
+  return {ok:true, active:fieldId}; }
+
 // ---------- Seasonal festivals (one per season, deterministic & forecastable) ----------
 const FESTIVALS=[
   {season:'spring', sday:7, id:'foalfest',  name:'Spring Foal Festival', emoji:'🌷',
@@ -2370,7 +2422,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, wildlife:{seen:[]}, silks:normSilksParts(null), board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, wildlife:{seen:[]}, silks:normSilksParts(null), rotation:{active:PADDOCKS[0].id, since:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -4412,6 +4464,7 @@ const ACHIEVEMENTS=[
   {id:'lifelister',     icon:'🦋', name:'Life-Lister',           desc:'Spot every creature in the paddock wildlife log.', check:g=>wildlifeProgress(g).complete},
   {id:'partyplanner',   icon:'🎂', name:'Party Planner',         desc:'Celebrate ten horse birthdays.',               check:g=>((g.stats&&g.stats.birthdays)||0)>=10},
   {id:'cleanbill',      icon:'🩺', name:'Clean Bill of Health',  desc:'Have a herd of three or more all graded A or better.', check:g=>{const s=herdHealthSummary(g); return s.count>=3 && s.allA;}},
+  {id:'grazier',        icon:'🌱', name:'Rotational Grazier',    desc:'Rotate your grazing paddocks fifteen times.',  check:g=>((g.stats&&g.stats.rotations)||0)>=15},
 ];
 function achievementDef(id){ return ACHIEVEMENTS.find(a=>a.id===id)||null; }
 function isUnlocked(game,id){ return (game.achievements||[]).indexOf(id)>=0; }
@@ -4676,6 +4729,7 @@ const GOALS=[
   {id:'silks1',  desc:'Design your stable colours (🎨)',               tip:g=>normSilks(g).custom?'done':'not yet',done:g=>normSilks(g).custom===true,                          reward:{money:200,rep:10}},
   {id:'bday1',   desc:'Celebrate a horse’s birthday (🎂)',             tip:g=>((g.stats&&g.stats.birthdays)||0)+'/1',done:g=>((g.stats&&g.stats.birthdays)||0)>=1,             reward:{money:200,rep:10}},
   {id:'vet1',    desc:'Read a horse’s health report (🩺)',             tip:g=>((g.stats&&g.stats.vetReports)||0)+'/1',done:g=>((g.stats&&g.stats.vetReports)||0)>=1,           reward:{money:200,rep:10}},
+  {id:'graze1',  desc:'Rotate your grazing paddocks (🌱)',             tip:g=>((g.stats&&g.stats.rotations)||0)+'/1',done:g=>((g.stats&&g.stats.rotations)||0)>=1,             reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4875,6 +4929,7 @@ const HR = {
   SILK_COLOURS, SILK_PATTERNS, SILK_EMBLEMS, silkColourDef, silkPatternDef, silkEmblemDef, normSilksParts, normSilks, setSilks, silksSvg, silksSummary,
   BDAY_YEAR_DAYS, BDAY_HAPPY, BDAY_BOND, ageYears, birthDayOf, birthDateOfYear, daysToBirthday, isBirthdayToday, nextBirthday, birthdayCelebrated, canCelebrateBirthday, birthdaysToday, upcomingBirthdays, celebrateBirthday,
   HEALTH_GRADES, reportGrade, healthReport, herdHealthSummary,
+  PADDOCKS, paddockDef, paddockRegrowPerDay, normRotation, grazeLevel, grazeStatus, paddockState, bestPaddock, activePaddock, rotateTo,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -4992,6 +5047,7 @@ function load(){
     G.nameBoard=normNameBoard(G); // name-idea shortlist — safe on old saves
     G.wildlife=normWildlifeLog(G); // paddock wildlife life-list — safe on old saves
     G.silks=normSilks(G); // stable colours / racing silks — safe on old saves
+    G.rotation=normRotation(G); // paddock-rotation preference — safe on old saves
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -7390,6 +7446,34 @@ function openHealthReport(){
   $('vetClose').onclick=closeModal;
   document.querySelectorAll('[data-vethorse]').forEach(x=>x.onclick=()=>{ vetSel.horse=x.getAttribute('data-vethorse'); playSfx('tap'); openHealthReport(); });
 }
+function openGrazing(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fields=paddockState(G), best=bestPaddock(G), active=activePaddock(G);
+  const barCol=lv=>lv>=75?'var(--good)':lv>=45?'var(--gold2)':lv>=20?'#e8883d':'var(--warn)';
+  const rows=fields.map(f=>{
+    const bar='<div style="height:9px;background:#0002;border-radius:5px;margin-top:4px;overflow:hidden"><div style="height:9px;border-radius:5px;width:'+f.level+'%;background:'+barCol(f.level)+'"></div></div>';
+    const btn = f.active ? '<span class="pill" style="color:var(--good)">🐴 Grazing now</span>'
+      : '<button class="btn sm blue" data-graze="'+esc(f.id)+'">Move herd here</button>';
+    return '<div class="card" style="margin-top:6px'+(f.active?';border-left:4px solid var(--good)':'')+'"><div class="row" style="align-items:center">'+
+      '<div style="font-size:22px">'+f.emoji+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:14px">'+esc(f.name)+' <span class="pill">'+f.status.emoji+' '+esc(f.status.label)+'</span></div>'+bar+
+      '<div class="hbreed" style="font-size:11px;margin-top:2px">Grass '+f.level+'%</div></div>'+btn+'</div>'; }).join('');
+  const rec = best ? (best.level>=active.level+15
+      ? '💡 '+esc(best.name)+' is well rested ('+best.level+'%) — a good time to rotate the herd over.'
+      : 'The herd is fine where they are for now; '+esc(active.name)+' still has good grass.')
+    : 'Only one field available.';
+  modal('<h3>🌱 Grazing Map</h3>'+
+    '<div class="msg">Rotate the herd between paddocks so the grass can recover. Fields rest and regrow while they’re empty (slower in winter) and get grazed down while the herd is on them. Purely a planning aid — turnout is always free.</div>'+
+    '<div class="swlabel">🐴 Currently grazing: '+active.emoji+' '+esc(active.name)+' ('+active.level+'%)</div>'+
+    '<div class="hbreed" style="margin-top:4px">'+rec+'</div>'+
+    '<div class="swlabel" style="margin-top:8px">Fields</div>'+rows+
+    '<div class="btnrow"><button class="btn ghost" id="grazeClose" style="width:100%">Done</button></div>');
+  $('grazeClose').onclick=closeModal;
+  document.querySelectorAll('[data-graze]').forEach(b=>b.onclick=()=>{ const r=rotateTo(G, b.getAttribute('data-graze'));
+    if(!r.ok){ toast(r.why,'info'); return; } burst('🌱🐴',10); playSfx('tap');
+    toast('🌱 Herd moved to '+(paddockDef(r.active)||{name:'the field'}).name+'.','good');
+    const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); openGrazing(); });
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8296,6 +8380,7 @@ function boot(){
   { const skb=$('silksBtn'); if(skb) skb.onclick=openSilks; }
   { const bdb=$('bdayBtn'); if(bdb) bdb.onclick=openBirthdays; }
   { const vtb=$('vetBtn'); if(vtb) vtb.onclick=openHealthReport; }
+  { const gzb=$('grazeBtn'); if(gzb) gzb.onclick=openGrazing; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
