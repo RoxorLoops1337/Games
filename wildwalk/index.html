@@ -61,6 +61,14 @@ const CHART = {
 };
 function typeMult(att,def){ const r = CHART[att]; return (r && r[def]) || 1; }
 
+// ---------- ability tuning dials (all single-constant balance) ----------
+const BURN_MAX=3, BURN_DUR=3.0, BURN_PCT=0.02;      // Fire DoT: 2% maxhp/s per stack → ≤6%/s
+const WATER_STEAL=0.20;                             // Water lifesteal fraction of dmg
+const GRASS_LEECH=0.25, LEECH_DUR=2.0;              // Grass regen fraction / duration
+const ROCK_GUARD=0.15;                              // Rock incoming-dmg reduction
+const SHADOW_DODGE=0.15;                            // Shadow full-dodge chance
+const VOLT_STUN=0.18, STUN_DUR=0.6, STUN_IMM=2.5;   // Volt stun chance / duration / immunity window
+
 // ---------- species database ----------
 // shape: blob | round | spiky | long | winged ; feat: flame|drip|leaf|bolt|rock|ghost|horn
 // rarity: 0 common,1 uncommon,2 rare,3 legendary
@@ -115,8 +123,11 @@ function makeMon(key,level){
     cd: 0, alive:true,
     // anim
     lunge:0, hurt:0, bob: rnd()*6.28, hpShown:hp, levelFlash:0,
+    // transient status bag (never serialized) — reset each fight in finishSpawn
+    status:{ burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0 },
   };
 }
+function freshStatus(){ return { burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0 }; }
 function xpToLevels(m, gain){
   m.xp += gain;
   let leveled = [];
@@ -476,8 +487,8 @@ function finishSpawn(w){
   // set active lead to first healthy companion
   G.lead = G.team.findIndex(m=>m.hp>0);
   if(G.lead<0) G.lead=0;
-  G.team.forEach(m=>{ m.cd=0.3; });
-  G.wild.cd = 0.6;
+  G.team.forEach(m=>{ m.cd=0.3; m.status=freshStatus(); });
+  G.wild.cd = 0.6; G.wild.status = freshStatus();
   clearButtons();
 }
 function activeMon(){ return G.team[G.lead]; }
@@ -697,10 +708,13 @@ function updateBattle(dt){
   }
   if(!w || w.hp<=0){ afterFightChoices(); return; }
 
+  // status DoT/regen/timers (a hit to 0 HP is caught by the hp<=0 branches next frame)
+  statusTick(you,dt); statusTick(w,dt);
+
   // tick attacks
   you.cd -= dt; w.cd -= dt;
-  if(you.cd<=0){ you.cd = 1/you.spd; strike(you, w, +1); }
-  if(w.cd<=0){ w.cd = 1/w.spd; strike(w, you, -1); }
+  if(you.cd<=0){ if(you.status.stun>0){ you.cd=0; } else { you.cd = 1/you.spd; strike(you, w, +1); } }
+  if(w.cd<=0){ if(w.status.stun>0){ w.cd=0; } else { w.cd = 1/w.spd; strike(w, you, -1); } }
 
   // anim decay
   for(const m of [you,w]){ m.lunge=Math.max(0,m.lunge-dt*4); m.hurt=Math.max(0,m.hurt-dt*4); }
@@ -711,6 +725,16 @@ function strike(att, def, dir){
   const crit = rnd()<0.13;
   let dmg = att.atk * mult * (crit?1.8:1) * rr(0.86,1.14);
   dmg = Math.max(1, Math.round(dmg));
+  const dtx = dir>0? 660 : 300;   // defender's on-screen x
+  // Shadow dodge (defender passive): full evade, no HP change, no on-hit effects
+  if(def.sp.type==='Shadow' && rnd()<SHADOW_DODGE){
+    def.status.fDodge=0.4; att.lunge=1;
+    G.dmgPops.push({x:dtx+rr(-20,20), y:200, vy:-40, life:1, txt:'DODGE', dodge:true, col:'#a06bff', age:0, rot:0});
+    for(let i=0;i<4;i++){ if(G.parts.length<160) G.parts.push({x:dtx,y:210,vx:rr(-70,70),vy:rr(-110,-20),life:rr(0.3,0.6),col:'#a06bff',r:rr(2,4)}); }
+    return;
+  }
+  // Rock guard (defender passive): reduce incoming, floor at 1 so every hit still bites
+  if(def.sp.type==='Rock'){ dmg=Math.max(1, Math.round(dmg*(1-ROCK_GUARD))); def.status.fGuard=0.35; }
   def.hp = Math.max(0, def.hp - dmg);
   att.lunge=1; def.hurt=1;
   G.shake = Math.min(10, G.shake + (crit?7:3));
@@ -729,6 +753,41 @@ function strike(att, def, dir){
       col: crit?'#ffdf5a':'#fff', r:rr(4,7)});
   }
   if(crit && G.parts.length<160) G.parts.push({x:tx,y:210,ring:true,r:6,life:0.5,col:'#ffdf5a'});
+
+  // ---- attacker on-hit effects (only on a landed hit) ----
+  switch(att.sp.type){
+    case 'Fire': { // burn stacks (capped), refresh duration
+      def.status.burn=Math.min(BURN_MAX, def.status.burn+1); def.status.burnT=BURN_DUR; def.status.fBurn=0.4;
+      for(let i=0;i<3;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-40,40),vy:rr(-120,-40),life:rr(0.3,0.6),col:'#ff7a3d',r:rr(2,4)}); }
+      break; }
+    case 'Water': { // instant lifesteal
+      const h=Math.round(dmg*WATER_STEAL);
+      if(h>0){ att.hp=Math.min(att.maxhp, att.hp+h); att.status.fHeal=0.4;
+        G.dmgPops.push({x:(dir>0?300:660)+rr(-20,20), y:200, vy:-40, life:1, txt:'+'+h, heal:true, col:'#7fe0d0', age:0, rot:0});
+        for(let i=0;i<3;i++){ if(G.parts.length<160) G.parts.push({x:(dir>0?300:660),y:210,vx:rr(-40,40),vy:rr(-120,-40),life:rr(0.3,0.6),col:'#7fe0d0',r:rr(2,4)}); }
+      }
+      break; }
+    case 'Grass': { // over-time leech (regen pip)
+      att.status.regen=LEECH_DUR; att.status.regenRate=(dmg*GRASS_LEECH)/LEECH_DUR; att.status.fHeal=0.3;
+      break; }
+    case 'Volt': { // chance to stun (respects immunity window)
+      if(def.status.stunImm<=0 && rnd()<VOLT_STUN){
+        def.status.stun=STUN_DUR; def.status.stunImm=STUN_IMM; def.status.fStun=0.5;
+        G.dmgPops.push({x:tx+rr(-20,20), y:200, vy:-40, life:1, txt:'STUN', stun:true, col:'#ffd23d', age:0, rot:0});
+        for(let i=0;i<5;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-90,90),vy:rr(-120,20),life:rr(0.2,0.5),col:'#ffd23d',r:rr(2,4)}); }
+      }
+      break; }
+  }
+}
+// tick one mon's status effects (DoT/regen/timers). Fractional HP is fine; hpShown lerps.
+function statusTick(m,dt){
+  if(!m || !m.status) return;
+  const s=m.status;
+  if(s.burnT>0){ s.burnT-=dt; m.hp=Math.max(0, m.hp - m.maxhp*BURN_PCT*s.burn*dt); if(s.burnT<=0) s.burn=0; }
+  if(s.regen>0 && m.hp>0){ m.hp=Math.min(m.maxhp, m.hp+s.regenRate*dt); s.regen-=dt; }
+  s.stun=Math.max(0,s.stun-dt); s.stunImm=Math.max(0,s.stunImm-dt);
+  s.fBurn=Math.max(0,s.fBurn-dt); s.fStun=Math.max(0,s.fStun-dt);
+  s.fGuard=Math.max(0,s.fGuard-dt); s.fDodge=Math.max(0,s.fDodge-dt); s.fHeal=Math.max(0,s.fHeal-dt);
 }
 function updateFx(dt){
   for(const p of G.dmgPops){ p.y+=p.vy*dt; p.vy+=40*dt; p.life-=dt*0.9; p.age=(p.age||0)+dt; }
@@ -917,6 +976,34 @@ function bigHP(m,x,y,w,facing){
   ctx.textAlign='left';
   hpBar(x,y,w,12, m.hp, m.hpShown, m.maxhp);
   ctx.strokeStyle='#0c1120'; ctx.lineWidth=1.5; roundRect(x,y,w,12,6); ctx.stroke();
+  drawStatusRow(m,x,y,w,facing);
+}
+// status pips under a big HP bar. Fixed order, ≤4 pips, 14px, stride 17.
+function drawStatusRow(m,x,y,w,facing){
+  const s=m.status; if(!s) return;
+  const pipY=y+26;
+  const pips=[];
+  if(m.sp.type==='Rock')  pips.push({key:'guard', col:TYPE_COL.Rock,  glyph:'shield', on:s.fGuard>0});
+  if(m.sp.type==='Shadow')pips.push({key:'phase', col:TYPE_COL.Shadow,glyph:'phase',  on:s.fDodge>0});
+  if(s.burn>0)  pips.push({key:'burn', col:TYPE_COL.Fire,  glyph:'flame', on:s.fBurn>0, n:s.burn>1?s.burn:0});
+  if(s.stun>0)  pips.push({key:'stun', col:TYPE_COL.Volt,  glyph:'bolt',  on:s.fStun>0});
+  if(s.regen>0) pips.push({key:'regen',col:TYPE_COL.Grass, glyph:'plus',  on:s.fHeal>0});
+  for(let i=0;i<pips.length && i<4;i++){
+    const p=pips[i];
+    const px= facing>0? x+i*17 : x+w-14-i*17;
+    ctx.save();
+    roundRect(px,pipY,14,14,4); ctx.globalAlpha=0.22; ctx.fillStyle=p.col; ctx.fill();
+    ctx.globalAlpha=1; ctx.lineWidth=1; ctx.strokeStyle=p.col; roundRect(px,pipY,14,14,4); ctx.stroke();
+    const gc=p.on?'#ffffff':p.col; ctx.fillStyle=gc; ctx.strokeStyle=gc;
+    const cx=px+7, cy=pipY+7;
+    if(p.glyph==='shield'){ ctx.beginPath(); ctx.moveTo(cx,cy-4); ctx.lineTo(cx+3,cy-2); ctx.lineTo(cx+3,cy+1); ctx.lineTo(cx,cy+4); ctx.lineTo(cx-3,cy+1); ctx.lineTo(cx-3,cy-2); ctx.closePath(); ctx.fill(); }
+    else if(p.glyph==='phase'){ ctx.globalAlpha=0.85; ctx.beginPath(); ctx.arc(cx,cy,3.2,0,6.283); ctx.fill(); }
+    else if(p.glyph==='flame'){ ctx.beginPath(); ctx.moveTo(cx,cy-4); ctx.quadraticCurveTo(cx+3.5,cy,cx,cy+4); ctx.quadraticCurveTo(cx-3.5,cy,cx,cy-4); ctx.fill(); }
+    else if(p.glyph==='bolt'){ ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx+2,cy-4); ctx.lineTo(cx-2,cy); ctx.lineTo(cx+1,cy); ctx.lineTo(cx-2,cy+4); ctx.stroke(); }
+    else if(p.glyph==='plus'){ ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy-3); ctx.lineTo(cx,cy+3); ctx.moveTo(cx-3,cy); ctx.lineTo(cx+3,cy); ctx.stroke(); }
+    if(p.n){ ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.font='700 8px Segoe UI'; ctx.textAlign='right'; ctx.fillText('x'+p.n, px+13, pipY+13); ctx.textAlign='left'; }
+    ctx.restore();
+  }
 }
 
 function drawDmgPops(){
@@ -928,6 +1015,12 @@ function drawDmgPops(){
     ctx.translate(p.x,p.y);
     const s= age<0.08? lerp(0.4,1.25,age/0.08) : lerp(1.25,1.0,clamp((age-0.08)/0.10,0,1));
     ctx.scale(s,s);
+    if(p.dodge||p.stun||p.heal){
+      ctx.font='800 20px Segoe UI';
+      const txt=p.txt; ctx.lineWidth=4; ctx.strokeStyle='rgba(6,8,18,.85)'; ctx.strokeText(txt,0,0);
+      ctx.fillStyle=p.col||'#ffffff'; ctx.fillText(txt,0,0);
+      ctx.restore(); continue;
+    }
     if(p.crit){ ctx.rotate(p.rot||0); ctx.shadowColor='#ffdf5a'; ctx.shadowBlur=8; }
     ctx.font='800 '+(p.crit?34:22)+'px Segoe UI';
     const txt=p.txt + (p.crit?'!':'');
@@ -1085,6 +1178,14 @@ function typeChip(fromT, toT, mult, cy, warn){
   ctx.textAlign='left';
   ctx.restore();
 }
+// additive proc glow tinted by whichever status feedback timer is hot; + faint burn shimmer
+function statusGlow(x,m){ if(!m||!m.status)return; const s=m.status;
+  const g=[[s.fBurn,'255,122,61'],[s.fStun,'255,210,61'],[s.fGuard,'150,170,190'],[s.fDodge,'160,107,255'],[s.fHeal,'110,208,90']];
+  for(const [t,rgb] of g){ if(t>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=clamp(t*0.5,0,0.6);
+    const rg=ctx.createRadialGradient(x,470,0,x,470,56); rg.addColorStop(0,'rgba('+rgb+',1)'); rg.addColorStop(1,'rgba('+rgb+',0)');
+    ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(x,470,56,0,6.283); ctx.fill(); ctx.restore(); } }
+  if(s.burn>0){ for(let i=0;i<2;i++){ if(G.parts.length<140) G.parts.push({x:x+rr(-16,16),y:490,vx:rr(-14,14),vy:rr(-70,-30),life:rr(0.3,0.6),col:'#ff7a3d',r:rr(1.5,3)}); } }
+}
 function hitGlow(x,hurt){ if(hurt<=0)return; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=hurt*0.5; const g=ctx.createRadialGradient(x,470,0,x,470,60); g.addColorStop(0,'#fff'); g.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,470,60,0,6.283); ctx.fill(); ctx.restore(); }
 function drawBattle(){
   const you=activeMon(), w=G.wild;
@@ -1099,6 +1200,7 @@ function drawBattle(){
   drawMon(you.sp, yx - io*300, 470 - Math.abs(Math.sin(G.t*3))*4, 44, 1, G.t*1.2, {bob:you.bob, hurt:you.hurt>0, lunge:you.lunge, wind:youWind, hurtAmt:you.hurt});
   drawMon(w.sp,  wx + io*400, 470, 44 + (w.elite?8:0), -1, G.t*1.2, {bob:w.bob, hurt:w.hurt>0, lunge:w.lunge, wind:wWind, hurtAmt:w.hurt});
   hitGlow(yx,you.hurt); hitGlow(wx,w.hurt);
+  statusGlow(yx,you); statusGlow(wx,w);
   // hp panels
   bigHP(you, 40, 90, 300, 1);
   bigHP(w, W-340, 90, 300, -1);

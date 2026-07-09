@@ -19,8 +19,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Roadmap (next up — take the top unchecked item each cycle)
 1. [x] Graphics & battle-juice overhaul — DONE c1.
-2. [ ] Combat abilities per type (Fire burn, Water heal-on-hit, Volt stun, Rock guard,
-       Grass lifesteal, Shadow dodge) with status icons on HP bars.
+2. [x] Combat abilities per type — DONE c2.
 3. [ ] Mid-battle switch — tap a party member to send it in (short cooldown) for counter-play.
 4. [ ] Pokédex screen (gallery of seen/caught with stats/flavor) from title + game-over.
 5. [ ] Biomes (forest/cave/volcano/shore) that reskin the walk and bias spawn types.
@@ -37,6 +36,13 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c2 — Per-type combat abilities + status UI** (studio: systems-designer, ux-designer,
+  lead, engineer, QA). Fire burn DoT (stacks≤3, ≤6%/s, 3s), Water instant lifesteal (20%),
+  Grass over-time leech (25%), Volt shock-stun (18%, 0.6s, 2.5s immunity — no lock), Rock
+  guard (−15%, floored at 1 dmg), Shadow full-dodge (15%). Transient `status` bag on mon
+  instances (save-safe, reset each fight in finishSpawn); statusTick DoT/regen/timers;
+  stun gate in updateBattle. Status pips under HP bars + proc glows + DODGE/STUN/heal pops.
+  +5 tests incl. a 4000-tick softlock guard (heal & guard mirrors both resolve). 13/13 green.
 - **c1 — Graphics & battle-juice overhaul** (studio: art-director, feel-designer, lead,
   engineer, QA). Radial-lit sprite gradients + rim light + squash/stretch & windup/lunge/
   hurt motion; directional hit sparks (160-cap), crit rings, catch/level-up bursts;
