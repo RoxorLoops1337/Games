@@ -349,6 +349,7 @@
     <button class="sbtn" id="groomBtn" title="Grooming — hoof-pick & brush mini-game" style="margin-right:4px">🧽</button>
     <button class="sbtn" id="monBtn" title="Monuments — commemorative statues & plaques" style="margin-right:4px">🗿</button>
     <button class="sbtn" id="noticeBtn" title="Notice-board — regional news & rival gossip" style="margin-right:4px">📰</button>
+    <button class="sbtn" id="feedBtn" title="Feed planner — hay/grain/supplement nutrition advisor" style="margin-right:4px">📋</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -662,6 +663,122 @@ function careTier(h){ const c=careScore(h);
        : c>=34?{id:'restless',label:'Needs care',emoji:'😕'} : {id:'neglected',label:'Neglected',emoji:'😟'}; }
 // a gentle performance/mood multiplier: careScore 100→+6%, ~62→neutral, 0→-10%
 function careBonusMult(h){ return 0.9 + 0.16*(careScore(h)/100); }
+
+// ---------- Feed-mix / nutrition planner (READ-ONLY advisory; a saved plan preference, no economy change) ----------
+// Picks a hay/grain/supplement mix per horse and rates how well it matches that horse's needs, all derived from
+// EXISTING state (breed, life stage, discipline affinity, condition, season & weather). Fully deterministic — no
+// Date/Math.random. It may store a lightweight per-horse plan preference (game.diet.plans) but never creates
+// resources, alters the feed economy, or changes any stat. Purely informational guidance.
+const FEED_DIMS=[
+  {id:'energy',   label:'Energy',    emoji:'⚡'},
+  {id:'protein',  label:'Protein',   emoji:'💪'},
+  {id:'fibre',    label:'Fibre',     emoji:'🌾'},
+  {id:'condition',label:'Condition', emoji:'✨'},
+  {id:'calm',     label:'Calm',      emoji:'😌'},
+];
+const FEED_DIM_IDS=FEED_DIMS.map(d=>d.id);
+const FEED_CATS=[
+  {id:'forage', label:'Forage / Hay', emoji:'🌾'},
+  {id:'grain',  label:'Grain',        emoji:'🌰'},
+  {id:'supp',   label:'Supplement',   emoji:'💊'},
+];
+const FEED_ITEMS=[
+  {id:'meadow', cat:'forage', name:'Meadow Hay',    emoji:'🌾', cost:1, v:{energy:1,protein:1,fibre:3,condition:1,calm:1}},
+  {id:'alfalfa',cat:'forage', name:'Alfalfa',       emoji:'🍀', cost:2, v:{energy:2,protein:3,fibre:2,condition:1,calm:0}},
+  {id:'haylage',cat:'forage', name:'Haylage',       emoji:'🌿', cost:2, v:{energy:2,protein:2,fibre:2,condition:1,calm:1}},
+  {id:'straw',  cat:'forage', name:'Straw Blend',   emoji:'🎋', cost:1, v:{energy:0,protein:0,fibre:3,condition:0,calm:2}},
+  {id:'nograin',cat:'grain',  name:'No Grain',      emoji:'🚫', cost:0, v:{calm:1}},
+  {id:'oats',   cat:'grain',  name:'Oats',          emoji:'🌰', cost:2, v:{energy:3,protein:1}},
+  {id:'barley', cat:'grain',  name:'Barley',        emoji:'🟤', cost:2, v:{energy:2,protein:1,fibre:1,condition:1}},
+  {id:'muesli', cat:'grain',  name:'Mixed Muesli',  emoji:'🥣', cost:3, v:{energy:2,protein:2,fibre:1,condition:1,calm:1}},
+  {id:'nosupp', cat:'supp',   name:'No Supplement', emoji:'➖', cost:0, v:{}},
+  {id:'joint',  cat:'supp',   name:'Joint Care',    emoji:'🦴', cost:3, v:{condition:2}},
+  {id:'coatoil',cat:'supp',   name:'Coat Oil',      emoji:'💧', cost:2, v:{condition:3}},
+  {id:'electro',cat:'supp',   name:'Electrolytes',  emoji:'🧂', cost:2, v:{energy:1,condition:1}},
+  {id:'herbal', cat:'supp',   name:'Calming Herbs', emoji:'🌼', cost:2, v:{calm:3}},
+];
+function feedItemDef(id){ return FEED_ITEMS.find(f=>f.id===id)||null; }
+function feedItemsIn(cat){ return FEED_ITEMS.filter(f=>f.cat===cat); }
+function feedCatDef(id){ return FEED_CATS.find(c=>c.id===id)||null; }
+const FEED_SCALE=6; // per-dim target/supply is clamped to 0..6
+// the horse's ideal nutrient profile from its state (deterministic)
+function idealProfile(game, h){
+  const prof={energy:2, protein:2, fibre:3, condition:2, calm:2};
+  const bump=(k,n)=>{ prof[k]=(prof[k]||0)+n; };
+  const disc=(typeof topAffinity==='function'&&h)?topAffinity(h).id:'race';
+  if(disc==='race'||disc==='jump'){ bump('energy',2); bump('protein',1); }
+  else if(disc==='endurance'){ bump('fibre',2); bump('energy',1); }
+  else if(disc==='dressage'){ bump('condition',1); bump('calm',1); }
+  else if(disc==='halter'){ bump('condition',2); }
+  const st=(h?stageForAge(h.age||0):{id:'adult'});
+  if(st.id==='foal'||st.id==='yearling'){ bump('protein',2); bump('energy',1); }
+  else if(st.id==='senior'){ bump('fibre',1); bump('condition',1); bump('energy',-1); }
+  const bd=breedDef(h&&h.breed)||{size:1,temperament:60};
+  if((bd.size||1)>=1.4){ bump('fibre',2); }
+  if((bd.temperament||60)<55){ bump('calm',2); } else if((bd.temperament||60)>=82){ bump('calm',-1); }
+  const day=(game&&game.day)||1;
+  const cold=(typeof feedExtraFor==='function')?feedExtraFor(day):0; if(cold) bump('energy',cold); // winter/snow → keep them warm
+  if(h && (typeof careScore==='function') && careScore(h)<55){ bump('condition',1); }
+  const out={}; for(const id of FEED_DIM_IDS) out[id]=clamp(Math.round(prof[id]||0),0,FEED_SCALE);
+  return out;
+}
+// sum the chosen mix into a supply vector (clamped per dim)
+function mixSupply(mix){
+  const sup={}; for(const id of FEED_DIM_IDS) sup[id]=0;
+  for(const cat of FEED_CATS){ const it=feedItemDef(mix&&mix[cat.id]); if(!it) continue;
+    for(const id of FEED_DIM_IDS) sup[id]+=(it.v[id]||0); }
+  for(const id of FEED_DIM_IDS) sup[id]=clamp(sup[id],0,FEED_SCALE);
+  return sup;
+}
+const FEED_NOTES={
+  energy:   {under:'⚡ Needs more energy for the work ahead.', over:'⚡ Rich in energy for a resting horse — ease off the grain.'},
+  protein:  {under:'💪 A little more protein would build topline.', over:'💪 Very high protein — more than this horse needs.'},
+  fibre:    {under:'🌾 Light on fibre — add more forage.', over:'🌾 Very high fibre; fine for a good-doer.'},
+  condition:{under:'✨ A coat or joint supplement would lift condition.', over:'✨ Plenty of condition support here.'},
+  calm:     {under:'😌 A hot type — a calming forage or herb would settle them.', over:'😌 A very calming mix — good for fizzy horses.'},
+};
+// rate a mix against the horse's ideal: 0..100 balance + per-dim breakdown + advisory notes
+function dietScore(game, h, mix){
+  const ideal=idealProfile(game,h), sup=mixSupply(mix);
+  let gap=0; const dims=[];
+  for(const d of FEED_DIMS){ const i=ideal[d.id], s=sup[d.id], diff=s-i; gap+=Math.abs(diff);
+    dims.push({id:d.id, label:d.label, emoji:d.emoji, ideal:i, supply:s, diff:diff}); }
+  const score=Math.round(100*(1-gap/(FEED_DIMS.length*FEED_SCALE)));
+  const notes=dims.slice().sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)||FEED_DIM_IDS.indexOf(a.id)-FEED_DIM_IDS.indexOf(b.id))
+    .filter(d=>Math.abs(d.diff)>=2).slice(0,3)
+    .map(d=>FEED_NOTES[d.id][d.diff<0?'under':'over']);
+  return {score:clamp(score,0,100), dims, notes, ideal, supply:sup};
+}
+function dietTier(score){ return score>=86?{id:'excellent',label:'Excellent',emoji:'🌟'} : score>=70?{id:'balanced',label:'Balanced',emoji:'✅'}
+  : score>=50?{id:'adequate',label:'Adequate',emoji:'🟡'} : {id:'poor',label:'Unbalanced',emoji:'⚠️'}; }
+// brute-force the best-matching mix for a horse (deterministic — 4×4×5 combos)
+function suggestMix(game, h){
+  let best=null, bestScore=-1;
+  for(const f of feedItemsIn('forage')) for(const gr of feedItemsIn('grain')) for(const s of feedItemsIn('supp')){
+    const mix={forage:f.id, grain:gr.id, supp:s.id}, sc=dietScore(game,h,mix).score;
+    if(sc>bestScore){ bestScore=sc; best=mix; } }
+  return best||{forage:'meadow', grain:'nograin', supp:'nosupp'};
+}
+function normDiet(game){ if(!game) return {plans:{}}; if(!game.diet||typeof game.diet!=='object') game.diet={plans:{}};
+  if(!game.diet.plans||typeof game.diet.plans!=='object') game.diet.plans={}; return game.diet; }
+// a stored plan is valid only if each slot names an item of the right category
+function validMix(mix){ if(!mix||typeof mix!=='object') return false;
+  return FEED_CATS.every(c=>{ const it=feedItemDef(mix[c.id]); return !!it && it.cat===c.id; }); }
+function dietPlanFor(game, h){ const d=normDiet(game), id=h&&h.id, p=id?d.plans[id]:null; return validMix(p)?p:null; }
+// save a per-horse plan (advisory preference only; prunes stale entries; NO economy/stat change)
+function setDietPlan(game, h, mix){ const d=normDiet(game), id=h&&h.id; if(!id||!validMix(mix)) return null;
+  d.plans[id]={forage:mix.forage, grain:mix.grain, supp:mix.supp};
+  const live={}; for(const x of (game.horses||[])) if(x&&x.id) live[x.id]=1; // prune plans for horses no longer owned
+  for(const k of Object.keys(d.plans)) if(!live[k]) delete d.plans[k];
+  return d.plans[id]; }
+// the full advisory readout for a horse: current (saved or suggested) plan, its score, and the ideal suggestion
+function nutritionPlan(game, h){
+  const saved=dietPlanFor(game,h), suggestion=suggestMix(game,h);
+  const mix=saved||suggestion, res=dietScore(game,h,mix), sug=dietScore(game,h,suggestion);
+  return { horse:h?{id:h.id,name:h.name}:null, usingSaved:!!saved, mix, score:res.score, tier:dietTier(res.score),
+    dims:res.dims, notes:res.notes, ideal:res.ideal, supply:res.supply,
+    suggestion:{mix:suggestion, score:sug.score} };
+}
 
 // ---------- Horse diary / mood flavour feed (READ-ONLY charm derived from existing state) ----------
 // A short, deterministic flavour line per horse, keyed to its condition + game.day. No state change.
@@ -2044,7 +2161,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -4191,6 +4308,7 @@ const GOALS=[
   {id:'groom1',  desc:'Groom a horse in the mini-game (🧽)',            tip:g=>((g.stats&&g.stats.grooms)||0)+'/1',done:g=>((g.stats&&g.stats.grooms)||0)>=1,               reward:{money:300,rep:10}},
   {id:'mon1',    desc:'Unveil your first monument (🗿)',                tip:g=>monumentsUnlockedCount(g)+'/1',done:g=>monumentsUnlockedCount(g)>=1,                       reward:{money:500,rep:20}},
   {id:'notice1', desc:'Read the stable notice-board (📰)',              tip:g=>((g.stats&&g.stats.noticeViews)||0)+'/1',done:g=>((g.stats&&g.stats.noticeViews)||0)>=1,         reward:{money:250,rep:10}},
+  {id:'feed1',   desc:'Draw up a feed plan (📋)',                       tip:g=>((g.stats&&g.stats.feedPlans)||0)+'/1',done:g=>((g.stats&&g.stats.feedPlans)||0)>=1,           reward:{money:300,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4384,6 +4502,7 @@ const HR = {
   GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
   dayForecast, forecast, upcomingEvents, seasonAlmanac,
   GOSSIP_TEMPLATES, WEATHER_CHATTER, rivalBoast, weatherChatter, rivalGossip, standingHeadline, noticeBoard, regionHeadlines,
+  FEED_DIMS, FEED_CATS, FEED_ITEMS, feedItemDef, feedItemsIn, feedCatDef, idealProfile, mixSupply, dietScore, dietTier, suggestMix, normDiet, validMix, dietPlanFor, setDietPlan, nutritionPlan,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -4497,6 +4616,7 @@ function load(){
     G.loadouts=normLoadouts(G); // tack loadout presets — safe on old saves
     G.aspBoard=normAspBoard(G); // personal aspirations board — safe on old saves
     G.monuments=normMonuments(G); checkMonuments(G); // commemorative monuments — stamp any milestone already reached
+    G.diet=normDiet(G); { const live={}; for(const h of (G.horses||[])) if(h&&h.id) live[h.id]=1; for(const k of Object.keys(G.diet.plans)) if(!live[k]||!validMix(G.diet.plans[k])) delete G.diet.plans[k]; } // feed-mix plans — prune stale/invalid
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -6666,6 +6786,61 @@ function openNoticeBoard(){
     '<div class="btnrow"><button class="btn ghost" id="noticeClose" style="width:100%">Done</button></div>');
   $('noticeClose').onclick=closeModal;
 }
+let feedSel={horse:null, mix:null};
+function openNutrition(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const horses=(G.horses||[]);
+  if(feedSel.horse && !horses.some(h=>h.id===feedSel.horse)){ feedSel.horse=null; feedSel.mix=null; }
+  if(!feedSel.horse && horses.length){ feedSel.horse=horses[0].id; feedSel.mix=null; }
+  const h=feedSel.horse?horses.find(x=>x.id===feedSel.horse):null;
+  // working draft mix: keep the player's in-progress choice, else the saved plan, else the suggestion
+  if(h && (!feedSel.mix || !validMix(feedSel.mix))) feedSel.mix=dietPlanFor(G,h)||suggestMix(G,h);
+  const mix=h?feedSel.mix:null;
+  const chips=horses.length?horses.map(x=>'<span class="wlchip" data-fdhorse="'+esc(x.id)+'" style="cursor:pointer;'+(feedSel.horse===x.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(x.name)+'</span>').join(' ')
+    :'<span class="empty">No horses yet — buy or breed one to plan a diet.</span>';
+  let body='';
+  if(h && mix){
+    const res=dietScore(G,h,mix), tier=dietTier(res.score), sug=suggestMix(G,h), sugScore=dietScore(G,h,sug).score, saved=dietPlanFor(G,h);
+    // per-category item pickers
+    const cats=FEED_CATS.map(c=>{ const opts=feedItemsIn(c.id).map(it=>{ const on=mix[c.id]===it.id;
+        return '<span class="wlchip" data-fditem="'+esc(c.id)+':'+esc(it.id)+'" style="cursor:pointer'+(on?';border-color:var(--gold2);color:var(--gold)':'')+'">'+it.emoji+' '+esc(it.name)+'</span>'; }).join(' ');
+      return '<div class="swlabel" style="margin-top:8px">'+c.emoji+' '+esc(c.label)+'</div><div class="pips">'+opts+'</div>'; }).join('');
+    // balance bars: supply vs ideal per dim
+    const bars=res.dims.map(d=>{ const w=Math.round((d.supply/FEED_SCALE)*100), iw=Math.round((d.ideal/FEED_SCALE)*100);
+      const col=Math.abs(d.diff)<=1?'var(--good)':Math.abs(d.diff)<=2?'var(--gold2)':'var(--warn)';
+      return '<div style="margin-top:5px"><div class="hbreed" style="font-size:11px;display:flex;justify-content:space-between"><span>'+d.emoji+' '+esc(d.label)+'</span><span style="opacity:.7">'+d.supply+' / '+d.ideal+' ideal</span></div>'+
+        '<div style="position:relative;height:8px;background:#0002;border-radius:4px;margin-top:2px;overflow:hidden"><div style="height:8px;border-radius:4px;width:'+w+'%;background:'+col+'"></div>'+
+        '<div style="position:absolute;top:-1px;left:'+iw+'%;width:2px;height:10px;background:#fff8"></div></div></div>'; }).join('');
+    const noteList=res.notes.length?res.notes.map(n=>'<div class="hbreed" style="margin-top:3px">'+esc(n)+'</div>').join(''):'<div class="hbreed" style="color:var(--good);margin-top:3px">A well-balanced ration for this horse. 👍</div>';
+    body='<div class="card" style="border-left:4px solid var(--gold2)"><div class="row"><div class="hface">'+horseArt(h,40)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:15px">'+esc(h.name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc((breedDef(h.breed)||{name:h.breed}).name)+' · '+esc(ageLabel(h))+' · '+esc(topAffinity(h).id)+'</div></div>'+
+      '<div style="text-align:right"><div class="hname" style="font-size:20px">'+tier.emoji+' '+res.score+'</div><div class="hbreed" style="font-size:11px">'+esc(tier.label)+'</div></div></div>'+
+      '<div style="margin-top:6px">'+bars+'</div>'+
+      '<div class="swlabel" style="margin-top:8px">📝 Notes</div>'+noteList+
+      '<div class="hbreed" style="opacity:.7;margin-top:6px">The white marker is this horse’s ideal; the bar is what your mix supplies.</div></div>'+
+      cats+
+      '<div class="btnrow" style="margin-top:10px"><button class="btn sm" id="fdSuggest"'+(res.score>=sugScore?' disabled':'')+'>🌟 Best mix ('+sugScore+')</button>'+
+      '<button class="btn sm blue" id="fdSave">💾 '+(saved?'Update':'Save')+' feed plan</button></div>'+
+      (saved?'<div class="hbreed" style="color:var(--good);margin-top:4px">📋 A feed plan is saved for '+esc(h.name)+'.</div>':'');
+  } else {
+    body='<div class="empty">Pick a horse above to draw up its feed plan.</div>';
+  }
+  modal('<h3>📋 Feed Planner</h3>'+
+    '<div class="msg">Match each horse’s hay, grain &amp; supplements to what it actually needs — worked out from its breed, age, discipline, condition and the season. Purely advisory; saving a plan just records your intended ration.</div>'+
+    '<div class="swlabel">Horse</div><div>'+chips+'</div>'+
+    body+
+    '<div class="btnrow"><button class="btn ghost" id="fdClose" style="width:100%">Done</button></div>');
+  $('fdClose').onclick=closeModal;
+  document.querySelectorAll('[data-fdhorse]').forEach(x=>x.onclick=()=>{ feedSel.horse=x.getAttribute('data-fdhorse'); feedSel.mix=null; playSfx('tap'); openNutrition(); });
+  document.querySelectorAll('[data-fditem]').forEach(x=>x.onclick=()=>{ if(!h) return; const parts=x.getAttribute('data-fditem').split(':');
+    feedSel.mix=Object.assign({}, feedSel.mix, {[parts[0]]:parts[1]}); playSfx('tap'); openNutrition(); });
+  { const sg=$('fdSuggest'); if(sg) sg.onclick=()=>{ if(!h) return; feedSel.mix=suggestMix(G,h); playSfx('tap'); openNutrition(); }; }
+  { const sv=$('fdSave'); if(sv) sv.onclick=()=>{ if(!h||!validMix(feedSel.mix)) return; setDietPlan(G,h,feedSel.mix);
+      G.stats=G.stats||{}; G.stats.feedPlans=(G.stats.feedPlans||0)+1; // usage stat — no economy change
+      const fresh=checkAchievements(G), gg=checkGoals(G); burst('📋✅',10); playSfx('coin');
+      toast('📋 Feed plan saved for '+h.name+'.','good'); save(); if(fresh.length||gg.length) renderHUD(); openNutrition(); }; }
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -7566,6 +7741,7 @@ function boot(){
   { const grb=$('groomBtn'); if(grb) grb.onclick=openGroom; }
   { const mnb=$('monBtn'); if(mnb) mnb.onclick=openMonuments; }
   { const ntb=$('noticeBtn'); if(ntb) ntb.onclick=openNoticeBoard; }
+  { const fdb=$('feedBtn'); if(fdb) fdb.onclick=openNutrition; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

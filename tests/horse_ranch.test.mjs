@@ -250,6 +250,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.aspBoard = { pinned: ['herd10'], claimed: [] }; // satisfies the aspirations-board goal
   g.stats.grooms = 1; // satisfies the grooming mini-game goal
   g.stats.noticeViews = 1; // satisfies the notice-board goal
+  g.stats.feedPlans = 1; // satisfies the feed-planner goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -4829,6 +4830,56 @@ function studGame(day) {
   ok(!HR.GOALS.find(x => x.id === 'notice1').done(gv), 'the notice goal is unmet before reading');
   gv.stats.noticeViews = 1;
   ok(HR.GOALS.find(x => x.id === 'notice1').done(gv), 'reading the notice-board satisfies the goal');
+}
+{
+  // ---- Feed-mix / nutrition planner ----
+  const g = HR.freshGame(); g.day = 10;
+  const h = g.horses[0];
+  // config sanity
+  ok(HR.FEED_CATS.length === 3 && HR.FEED_ITEMS.length >= 9, 'the feed catalogue has forage/grain/supplement items');
+  ok(HR.FEED_CATS.every(c => HR.feedItemsIn(c.id).length >= 2), 'every feed category offers at least two options');
+  // ideal profile is derived and bounded 0..6 on every dimension
+  const ideal = HR.idealProfile(g, h);
+  ok(HR.FEED_DIMS.every(d => ideal[d.id] >= 0 && ideal[d.id] <= 6), 'the ideal profile is bounded per dimension');
+  // an athlete (jump affinity, young) should want more energy than a plain resting profile
+  const athlete = HR.mkHorse({ breed: 'thoroughbred', age: 8 }); HR.gainAffinity(athlete, 'jump', HR.SPECIALIST_AT);
+  ok(HR.idealProfile(g, athlete).energy >= HR.idealProfile(g, h).energy, 'a young jumper needs at least as much energy');
+  // dietScore rates a mix 0..100 with a per-dim breakdown
+  const mix = { forage: 'meadow', grain: 'oats', supp: 'nosupp' };
+  const res = HR.dietScore(g, h, mix);
+  ok(res.score >= 0 && res.score <= 100 && res.dims.length === HR.FEED_DIMS.length, 'dietScore returns a bounded score and full breakdown');
+  ok(Array.isArray(res.notes), 'dietScore returns advisory notes');
+  // suggestMix finds the best-scoring ration — no other mix beats it
+  const sug = HR.suggestMix(g, h), sugScore = HR.dietScore(g, h, sug).score;
+  ok(HR.validMix(sug), 'the suggestion is a valid one-per-category mix');
+  let anyBetter = false;
+  for (const f of HR.feedItemsIn('forage')) for (const gr of HR.feedItemsIn('grain')) for (const s of HR.feedItemsIn('supp'))
+    if (HR.dietScore(g, h, { forage: f.id, grain: gr.id, supp: s.id }).score > sugScore) anyBetter = true;
+  ok(!anyBetter, 'no ration outscores the suggested mix');
+  // nutritionPlan falls back to the suggestion until a plan is saved, then uses the saved plan
+  const plan0 = HR.nutritionPlan(g, h);
+  ok(!plan0.usingSaved && plan0.tier && plan0.suggestion, 'nutritionPlan starts from the suggestion');
+  HR.setDietPlan(g, h, mix);
+  ok(HR.dietPlanFor(g, h) && HR.nutritionPlan(g, h).usingSaved, 'a saved plan is picked up by nutritionPlan');
+  // invalid mixes are rejected; stale plans prune when the horse leaves
+  ok(!HR.validMix({ forage: 'oats', grain: 'oats', supp: 'nosupp' }), 'a wrong-category slot is invalid');
+  ok(HR.setDietPlan(g, h, { forage: 'zzz', grain: 'oats', supp: 'nosupp' }) === null, 'an invalid mix is not saved');
+  const ghost = HR.mkHorse({ breed: 'welsh', age: 20 }); g.horses.push(ghost);
+  HR.setDietPlan(g, ghost, HR.suggestMix(g, ghost));
+  ok(HR.dietPlanFor(g, ghost), 'the new horse has a saved plan');
+  g.horses = g.horses.filter(x => x.id !== ghost.id); HR.setDietPlan(g, h, mix); // any save prunes stale entries
+  ok(!g.diet.plans[ghost.id], 'a sold horse’s plan is pruned on the next save');
+  // read-only (scoring/suggesting never mutate) + determinism + sparse safety
+  const g2 = HR.freshGame(); g2.day = 12; const snap = JSON.stringify(g2);
+  HR.dietScore(g2, g2.horses[0], HR.suggestMix(g2, g2.horses[0])); HR.nutritionPlan(g2, g2.horses[0]); HR.idealProfile(g2, g2.horses[0]);
+  ok(JSON.stringify(g2) === snap, 'scoring and suggesting never mutate the game');
+  ok(JSON.stringify(HR.nutritionPlan(g2, g2.horses[0])) === JSON.stringify(HR.nutritionPlan(g2, g2.horses[0])), 'nutritionPlan is deterministic');
+  ok(HR.normDiet({}).plans && HR.idealProfile({}, null) && HR.suggestMix({}, null), 'the planner is safe on a sparse game');
+  // the goal fires once a plan is drawn up
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'feed1').done(gv), 'the feed-plan goal is unmet before planning');
+  gv.stats.feedPlans = 1;
+  ok(HR.GOALS.find(x => x.id === 'feed1').done(gv), 'drawing up a feed plan satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
