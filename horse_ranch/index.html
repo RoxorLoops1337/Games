@@ -352,6 +352,7 @@
     <button class="sbtn" id="feedBtn" title="Feed planner — hay/grain/supplement nutrition advisor" style="margin-right:4px">📋</button>
     <button class="sbtn" id="nameBtn" title="Name generator — name ideas & inspiration board" style="margin-right:4px">✨</button>
     <button class="sbtn" id="wildBtn" title="Paddock wildlife — daily sightings & life-list" style="margin-right:4px">🦋</button>
+    <button class="sbtn" id="silksBtn" title="Stable colours — design your racing silks" style="margin-right:4px">🎨</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -2264,7 +2265,7 @@ function freshGame(legacy){
     trophies:[], hallOfFame:[], prestige:0, achievements:[], goalIdx:0, seenIntro:false, tut:{step:0,done:false}, audio:{on:false,vol:0.6}, radio:normRadio(null),
     decor:normDecor(null), enrichment:normEnrichment(null), wardrobe:normWardrobe(null), mascot:normMascot(null), garden:normGarden(null), smith:normSmith(null), lastRoutineDay:0,
     prevRank:null, lastRank:null, bestRank:null,
-    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, wildlife:{seen:[]}, board:null, staff:[],
+    tack:{owned:[],tiers:{}}, loadouts:[], aspBoard:{pinned:[],claimed:[]}, monuments:{}, diet:{plans:{}}, nameBoard:{saved:[]}, wildlife:{seen:[]}, silks:normSilksParts(null), board:null, staff:[],
     legacy:normLegacy(legacy),
     champ:{season:seasonIndex(1), points:{}, meta:{}, lastChampion:null},
     featured:null, wishlist:{prefs:[]}, insurance:[],
@@ -3623,6 +3624,90 @@ function ranchName(game){ const n=game&&game.decor&&game.decor.name; const t=n!=
 function setRanchName(game,name){ if(!game.decor) game.decor=normDecor(null);
   let t=(name==null?'':(''+name)).replace(/\s+/g,' ').trim().slice(0,RANCH_NAME_MAX);
   game.decor.name = t || null; return ranchName(game); }
+
+// ---------- Stable colours / racing-silks designer (READ-ONLY cosmetic identity; a saved preference) ----------
+// The ranch's house colours: a primary + secondary colour, a body pattern and a cap emblem, composed from a
+// bounded palette. silksSvg() is a PURE string builder (no DOM) so it's fully testable. Purely cosmetic — it
+// never creates resources or changes stats. Deterministic; no Date/Math.random. ids are stable (never rename).
+const SILK_COLOURS=[
+  {id:'royal',   name:'Royal Blue', hex:'#2f57c4'},
+  {id:'crimson', name:'Crimson',    hex:'#c0392b'},
+  {id:'emerald', name:'Emerald',    hex:'#1f9d55'},
+  {id:'gold',    name:'Gold',       hex:'#e0a416'},
+  {id:'plum',    name:'Plum',       hex:'#7d3c98'},
+  {id:'coral',   name:'Coral',      hex:'#e8663d'},
+  {id:'navy',    name:'Navy',       hex:'#1b2a52'},
+  {id:'teal',    name:'Teal',       hex:'#12a4a4'},
+  {id:'rose',    name:'Rose',       hex:'#e26aa0'},
+  {id:'white',   name:'White',      hex:'#f4f4f0'},
+  {id:'black',   name:'Black',      hex:'#22252b'},
+  {id:'silver',  name:'Silver',     hex:'#b9c0c9'},
+];
+const SILK_PATTERNS=[
+  {id:'solid',    name:'Solid'},
+  {id:'halves',   name:'Halves'},
+  {id:'hoops',    name:'Hoops'},
+  {id:'stripes',  name:'Stripes'},
+  {id:'sash',     name:'Sash'},
+  {id:'chevron',  name:'Chevron'},
+  {id:'quarters', name:'Quarters'},
+];
+const SILK_EMBLEMS=[
+  {id:'none',    name:'None',    glyph:''},
+  {id:'star',    name:'Star',    glyph:'★'},
+  {id:'crown',   name:'Crown',   glyph:'♛'},
+  {id:'clover',  name:'Clover',  glyph:'♣'},
+  {id:'sun',     name:'Sun',     glyph:'☀'},
+  {id:'moon',    name:'Moon',    glyph:'☾'},
+  {id:'diamond', name:'Diamond', glyph:'◆'},
+  {id:'heart',   name:'Heart',   glyph:'♥'},
+];
+function silkColourDef(id){ return SILK_COLOURS.find(c=>c.id===id)||null; }
+function silkPatternDef(id){ return SILK_PATTERNS.find(p=>p.id===id)||null; }
+function silkEmblemDef(id){ return SILK_EMBLEMS.find(e=>e.id===id)||null; }
+function _silkHex(id){ const c=silkColourDef(id); return c?c.hex:'#2f57c4'; }
+// normalise a raw parts object against the config (falls back to sensible defaults for any invalid slot)
+function normSilksParts(p){ p=(p&&typeof p==='object')?p:{};
+  return { primary:silkColourDef(p.primary)?p.primary:'royal', secondary:silkColourDef(p.secondary)?p.secondary:'white',
+    pattern:silkPatternDef(p.pattern)?p.pattern:'solid', emblem:silkEmblemDef(p.emblem)?p.emblem:'none', custom:p.custom===true }; }
+function normSilks(game){ if(!game) return normSilksParts(null); game.silks=normSilksParts(game.silks); return game.silks; }
+// save the player's chosen silks (marks them customised; cosmetic only — no economy/stat change)
+// only applies slots whose values are valid — an invalid/omitted slot keeps the previous choice
+function setSilks(game, parts){ if(!game) return null; const next=Object.assign({}, normSilks(game)); parts=parts||{};
+  if(silkColourDef(parts.primary)) next.primary=parts.primary;
+  if(silkColourDef(parts.secondary)) next.secondary=parts.secondary;
+  if(silkPatternDef(parts.pattern)) next.pattern=parts.pattern;
+  if(silkEmblemDef(parts.emblem)) next.emblem=parts.emblem;
+  next.custom=true; game.silks=normSilksParts(next); return game.silks; }
+// a PURE SVG string of the racing silks + jockey cap (no DOM) — deterministic from the parts
+function silksSvg(parts, size){
+  parts=normSilksParts(parts); size=size||120;
+  const P=_silkHex(parts.primary), S=_silkHex(parts.secondary), pat=parts.pattern, b=[];
+  b.push('<defs><clipPath id="silkClip"><rect x="26" y="30" width="48" height="64" rx="8"/></clipPath></defs>');
+  b.push('<g clip-path="url(#silkClip)">');
+  b.push('<rect x="26" y="30" width="48" height="64" fill="'+P+'"/>');
+  if(pat==='halves'){ b.push('<rect x="50" y="30" width="24" height="64" fill="'+S+'"/>'); }
+  else if(pat==='hoops'){ for(let y=38;y<94;y+=16) b.push('<rect x="26" y="'+y+'" width="48" height="8" fill="'+S+'"/>'); }
+  else if(pat==='stripes'){ for(let x=32;x<74;x+=12) b.push('<rect x="'+x+'" y="30" width="6" height="64" fill="'+S+'"/>'); }
+  else if(pat==='sash'){ b.push('<polygon points="26,88 26,72 62,30 74,30 74,42 38,88" fill="'+S+'"/>'); }
+  else if(pat==='chevron'){ b.push('<polygon points="26,94 50,68 74,94 74,80 50,54 26,80" fill="'+S+'"/>'); }
+  else if(pat==='quarters'){ b.push('<rect x="50" y="30" width="24" height="32" fill="'+S+'"/>'); b.push('<rect x="26" y="62" width="24" height="32" fill="'+S+'"/>'); }
+  b.push('</g>');
+  b.push('<rect x="26" y="30" width="48" height="64" rx="8" fill="none" stroke="#00000033" stroke-width="1.5"/>');
+  b.push('<rect x="12" y="34" width="16" height="30" rx="6" fill="'+S+'" stroke="#00000033" stroke-width="1.5"/>');
+  b.push('<rect x="72" y="34" width="16" height="30" rx="6" fill="'+S+'" stroke="#00000033" stroke-width="1.5"/>');
+  b.push('<circle cx="50" cy="16" r="12" fill="'+P+'" stroke="#00000033" stroke-width="1.5"/>');
+  b.push('<rect x="44" y="26" width="12" height="4" rx="2" fill="'+S+'"/>');
+  const em=silkEmblemDef(parts.emblem); if(em&&em.glyph) b.push('<text x="50" y="21" font-size="13" text-anchor="middle" fill="'+S+'">'+em.glyph+'</text>');
+  return '<svg viewBox="0 0 100 100" width="'+size+'" height="'+size+'" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="stable colours">'+b.join('')+'</svg>';
+}
+function silksSummary(game){ const s=normSilks(game);
+  return { primary:s.primary, secondary:s.secondary, pattern:s.pattern, emblem:s.emblem, custom:s.custom,
+    primaryName:silkColourDef(s.primary).name, secondaryName:silkColourDef(s.secondary).name,
+    patternName:silkPatternDef(s.pattern).name, emblemName:silkEmblemDef(s.emblem).name,
+    label:silkColourDef(s.primary).name+' & '+silkColourDef(s.secondary).name+', '+silkPatternDef(s.pattern).name.toLowerCase()
+      +(silkEmblemDef(s.emblem).glyph?' '+silkEmblemDef(s.emblem).glyph:'') }; }
+
 // Colour palettes — ids are stable (never rename). Defaults match the original scene look
 // so existing saves are visually unchanged until the player customises.
 const BARN_COLORS=[
@@ -4481,6 +4566,7 @@ const GOALS=[
   {id:'feed1',   desc:'Draw up a feed plan (📋)',                       tip:g=>((g.stats&&g.stats.feedPlans)||0)+'/1',done:g=>((g.stats&&g.stats.feedPlans)||0)>=1,           reward:{money:300,rep:10}},
   {id:'name1',   desc:'Shortlist a name idea (✨)',                     tip:g=>nameShortlist(g).length+' saved',done:g=>nameShortlist(g).length>=1,                       reward:{money:200,rep:10}},
   {id:'wild1',   desc:'Spot your first paddock visitor (🦋)',          tip:g=>lifeList(g).length+' species',   done:g=>lifeList(g).length>=1,                                  reward:{money:200,rep:10}},
+  {id:'silks1',  desc:'Design your stable colours (🎨)',               tip:g=>normSilks(g).custom?'done':'not yet',done:g=>normSilks(g).custom===true,                          reward:{money:200,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4677,6 +4763,7 @@ const HR = {
   FEED_DIMS, FEED_CATS, FEED_ITEMS, feedItemDef, feedItemsIn, feedCatDef, idealProfile, mixSupply, dietScore, dietTier, suggestMix, normDiet, validMix, dietPlanFor, setDietPlan, nutritionPlan,
   NAME_THEMES, COAT_HINTS, BREED_HINTS, NAME_SHORTLIST_CAP, nameThemeDef, namePoolFor, nameIdeasFor, nameReason, normNameBoard, nameShortlist, saveNameIdea, removeNameIdea,
   WILDLIFE, WILDLIFE_REP, WL_RARITY_NAME, wildlifeDef, wildlifeChance, wildlifeVisible, wildlifeToday, normWildlifeLog, lifeList, hasSpotted, spotSpecies, wildlifeProgress,
+  SILK_COLOURS, SILK_PATTERNS, SILK_EMBLEMS, silkColourDef, silkPatternDef, silkEmblemDef, normSilksParts, normSilks, setSilks, silksSvg, silksSummary,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -4793,6 +4880,7 @@ function load(){
     G.diet=normDiet(G); { const live={}; for(const h of (G.horses||[])) if(h&&h.id) live[h.id]=1; for(const k of Object.keys(G.diet.plans)) if(!live[k]||!validMix(G.diet.plans[k])) delete G.diet.plans[k]; } // feed-mix plans — prune stale/invalid
     G.nameBoard=normNameBoard(G); // name-idea shortlist — safe on old saves
     G.wildlife=normWildlifeLog(G); // paddock wildlife life-list — safe on old saves
+    G.silks=normSilks(G); // stable colours / racing silks — safe on old saves
     if(G.board===undefined) G.board=null; refreshBoard(G); // weekly contracts board
     if(!Array.isArray(G.staff)) G.staff=[]; G.staff=G.staff.filter(id=>!!staffDef(id)).filter((v,i,a)=>a.indexOf(v)===i); // stable staff
     // New Game+ Legacy: the separate store is source of truth, but never regress a save that has more
@@ -7090,6 +7178,39 @@ function openWildlife(){
     toast('🔭 Spotted a '+r.species.name+'! +'+r.rep+'⭐','good');
     const fresh=checkAchievements(G), gg=checkGoals(G); save(); renderHUD(); openWildlife(); });
 }
+let silksDraft=null;
+function openSilks(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if(!silksDraft) silksDraft=Object.assign({}, normSilks(G));
+  const draft=normSilksParts(silksDraft);
+  const saved=normSilks(G);
+  const dirty=(draft.primary!==saved.primary||draft.secondary!==saved.secondary||draft.pattern!==saved.pattern||draft.emblem!==saved.emblem)||!saved.custom;
+  const swatchRow=(slot,cur)=>SILK_COLOURS.map(c=>'<span class="wlchip" data-silkcol="'+slot+':'+c.id+'" title="'+esc(c.name)+'" style="cursor:pointer;padding:3px 6px;'+(cur===c.id?'border-color:var(--gold2);color:var(--gold)':'')+'"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:'+c.hex+';border:1px solid #0003;vertical-align:middle"></span></span>').join(' ');
+  const patRow=SILK_PATTERNS.map(p=>'<span class="wlchip" data-silkpat="'+p.id+'" style="cursor:pointer;'+(draft.pattern===p.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+esc(p.name)+'</span>').join(' ');
+  const emRow=SILK_EMBLEMS.map(e=>'<span class="wlchip" data-silkem="'+e.id+'" style="cursor:pointer;'+(draft.emblem===e.id?'border-color:var(--gold2);color:var(--gold)':'')+'">'+(e.glyph||'∅')+' '+esc(e.name)+'</span>').join(' ');
+  const sum=silksSummary({silks:draft});
+  modal('<h3>🎨 Stable Colours</h3>'+
+    '<div class="msg">Design your ranch’s racing silks — the colours your riders wear in the show ring. Purely for pride; it changes nothing but your style.</div>'+
+    '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">'+
+      '<div style="background:#0d130a;border-radius:12px;padding:8px;flex:0 0 auto">'+silksSvg(draft,120)+'</div>'+
+      '<div class="grow"><div class="hname" style="font-size:14px">'+esc(silkColourDef(draft.primary).name)+' &amp; '+esc(silkColourDef(draft.secondary).name)+'</div>'+
+      '<div class="hbreed" style="margin-top:2px">'+esc(sum.patternName)+(silkEmblemDef(draft.emblem).glyph?' · '+silkEmblemDef(draft.emblem).glyph+' '+esc(sum.emblemName):'')+'</div></div>'+
+    '</div>'+
+    '<div class="swlabel" style="margin-top:8px">Primary colour</div><div class="pips">'+swatchRow('primary',draft.primary)+'</div>'+
+    '<div class="swlabel" style="margin-top:6px">Secondary colour</div><div class="pips">'+swatchRow('secondary',draft.secondary)+'</div>'+
+    '<div class="swlabel" style="margin-top:6px">Pattern</div><div class="pips">'+patRow+'</div>'+
+    '<div class="swlabel" style="margin-top:6px">Cap emblem</div><div class="pips">'+emRow+'</div>'+
+    '<div class="btnrow" style="margin-top:10px"><button class="btn blue" id="silkSave" style="flex:2"'+(dirty?'':' disabled')+'>💾 Save colours</button>'+
+    '<button class="btn ghost" id="silkClose" style="flex:1">Done</button></div>');
+  $('silkClose').onclick=closeModal;
+  const rerender=()=>openSilks();
+  document.querySelectorAll('[data-silkcol]').forEach(x=>x.onclick=()=>{ const parts=x.getAttribute('data-silkcol').split(':'); silksDraft[parts[0]]=parts[1]; playSfx('tap'); rerender(); });
+  document.querySelectorAll('[data-silkpat]').forEach(x=>x.onclick=()=>{ silksDraft.pattern=x.getAttribute('data-silkpat'); playSfx('tap'); rerender(); });
+  document.querySelectorAll('[data-silkem]').forEach(x=>x.onclick=()=>{ silksDraft.emblem=x.getAttribute('data-silkem'); playSfx('tap'); rerender(); });
+  { const sv=$('silkSave'); if(sv) sv.onclick=()=>{ setSilks(G, silksDraft); silksDraft=Object.assign({}, normSilks(G));
+      burst('🎨✨',10); playSfx('coin'); toast('🎨 Stable colours saved!','good');
+      const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD(); openSilks(); }; }
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -7993,6 +8114,7 @@ function boot(){
   { const fdb=$('feedBtn'); if(fdb) fdb.onclick=openNutrition; }
   { const ngb=$('nameBtn'); if(ngb) ngb.onclick=openNameGen; }
   { const wlb=$('wildBtn'); if(wlb) wlb.onclick=openWildlife; }
+  { const skb=$('silksBtn'); if(skb) skb.onclick=openSilks; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }
