@@ -248,6 +248,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.stats.spotlightViews = 1; // satisfies the horse-of-the-month goal
   g.loadouts = [{ id: 'lo1', name: 'Show set', slots: { saddle: null, bridle: null, accessory: null } }]; // satisfies the tack-loadout goal
   g.aspBoard = { pinned: ['herd10'], claimed: [] }; // satisfies the aspirations-board goal
+  g.stats.grooms = 1; // satisfies the grooming mini-game goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -1347,6 +1348,56 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const ga = HR.freshGame(); ga.stats.aspirationsMet = 3;
   ok(HR.ACHIEVEMENTS.find(a => a.id === 'aspirant').check(ga), 'Aspirations Realised unlocks at three claimed');
   ok(HR.GOALS.filter(x => x.id === 'asp1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'aspirant').length === 1, 'new aspiration goal/achievement ids are unique');
+}
+{
+  // ---- hoof-pick / grooming mini-game ----
+  // groomResult maps perf → bounded gains (low < high, never over the caps)
+  const lo = HR.groomResult(0), hi = HR.groomResult(1), mid = HR.groomResult(0.5);
+  ok(hi.groomGain > lo.groomGain && hi.hoofGain > lo.hoofGain, 'a better round grooms & picks more');
+  ok(hi.groomGain === HR.GROOM_GAME.groom[1] && hi.hoofGain === HR.GROOM_GAME.hoof[1], 'a perfect round hits the max gains');
+  ok(hi.happy <= HR.GROOM_GAME.happy[1] && hi.bond <= HR.GROOM_GAME.bond[1], 'happy/bond gains are within their caps');
+  ok(mid.groomGain > lo.groomGain && mid.groomGain < hi.groomGain, 'a mid round is in between');
+  ok(hi.rating.stars === 3 && lo.rating.stars === 1, 'the rating scales with performance');
+  ok(HR.groomResult(2).groomGain === hi.groomGain && HR.groomResult(-5).groomGain === lo.groomGain, 'perf is clamped to 0..1');
+  ok(HR.groomResult(0.5).groomGain === HR.groomResult(0.5).groomGain, 'groomResult is deterministic');
+  // doGroomMinigame tops the needs + happy/bond (clamped) and decrements the daily cap
+  const g = HR.freshGame(); g.day = 3;
+  const h = HR.mkHorse({ breed: 'welsh', age: 20 });
+  h.needs.groom = 20; h.needs.hooves = 30; h.happy = 50; h.bond = 40;
+  ok(HR.canGroom(g, h, 3) && HR.groomEnergyLeft(g, h, 3) === HR.GROOM_GAME.energy, 'a fresh horse can be groomed');
+  const r = HR.doGroomMinigame(g, h, 1, 3);
+  ok(r.ok && h.needs.groom === Math.min(100, 20 + hi.groomGain) && h.needs.hooves === Math.min(100, 30 + hi.hoofGain), 'grooming tops the groom & hooves needs (clamped)');
+  ok(h.happy === 50 + hi.happy && h.bond === 40 + hi.bond, 'grooming lifts happy & bond');
+  ok(HR.groomEnergyLeft(g, h, 3) === HR.GROOM_GAME.energy - 1, 'the daily energy cap decremented');
+  ok((g.stats.grooms || 0) === 1, 'the grooming session is counted');
+  // needs never exceed 100 even from a low base at full topping
+  const h2 = HR.mkHorse({ breed: 'arabian', age: 20 }); h2.needs.groom = 90;
+  HR.doGroomMinigame(HR.freshGame(), h2, 1, 1);
+  ok(h2.needs.groom === 100, 'a need is clamped to 100');
+  // daily cap can't be farmed: exhaust it, then it's blocked
+  const g3 = HR.freshGame(); g3.day = 5; const h3 = HR.mkHorse({ breed: 'welsh', age: 20 });
+  for (let i = 0; i < HR.GROOM_GAME.energy; i++) HR.doGroomMinigame(g3, h3, 0.8, 5);
+  ok(!HR.canGroom(g3, h3, 5) && HR.groomEnergyLeft(g3, h3, 5) === 0, 'the daily cap is used up');
+  ok(!HR.doGroomMinigame(g3, h3, 1, 5).ok, 'grooming past the daily cap is blocked (un-farmable)');
+  // a new day refreshes the cap
+  ok(HR.canGroom(g3, h3, 6) && HR.groomEnergyLeft(g3, h3, 6) === HR.GROOM_GAME.energy, 'the cap refreshes the next day');
+  // deterministic gains for a given perf
+  const ga = HR.freshGame(); const ha = HR.mkHorse({ breed: 'welsh', age: 20 }); ha.needs.groom = 10;
+  const gb = HR.freshGame(); const hb = HR.mkHorse({ breed: 'welsh', age: 20 }); hb.needs.groom = 10;
+  HR.doGroomMinigame(ga, ha, 0.7, 1); HR.doGroomMinigame(gb, hb, 0.7, 1);
+  ok(ha.needs.groom === hb.needs.groom && ha.happy === hb.happy, 'the same perf yields the same result');
+  // sparse / read-only
+  ok(!HR.doGroomMinigame(HR.freshGame(), null, 1, 1).ok, 'doGroomMinigame is null-safe');
+  ok(HR.groomEnergyLeft(HR.freshGame(), null, 1) === 0 && HR.canGroom(HR.freshGame(), null, 1) === false, 'energy helpers are null-safe');
+  const gg2 = HR.freshGame(); const hg = HR.mkHorse({ breed: 'welsh', age: 20 }); const snap = JSON.stringify(hg);
+  HR.groomEnergyLeft(gg2, hg, 1); HR.canGroom(gg2, hg, 1); HR.groomResult(0.5);
+  ok(JSON.stringify(hg) === snap, 'the read helpers never mutate the horse');
+  // goal + achievement
+  const gGoal = HR.freshGame(); gGoal.stats.grooms = 1;
+  ok(HR.GOALS.find(x => x.id === 'groom1').done(gGoal), 'groom1 completes after a grooming session');
+  const gAch = HR.freshGame(); gAch.stats.grooms = 20;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'spitpolish').check(gAch), 'Spit & Polish unlocks at twenty grooms');
+  ok(HR.GOALS.filter(x => x.id === 'groom1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'spitpolish').length === 1, 'new grooming goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
