@@ -348,6 +348,7 @@
     <button class="sbtn" id="aspBtn" title="Ranch goals — your personal aspirations board" style="margin-right:4px">📌</button>
     <button class="sbtn" id="groomBtn" title="Grooming — hoof-pick & brush mini-game" style="margin-right:4px">🧽</button>
     <button class="sbtn" id="monBtn" title="Monuments — commemorative statues & plaques" style="margin-right:4px">🗿</button>
+    <button class="sbtn" id="noticeBtn" title="Notice-board — regional news & rival gossip" style="margin-right:4px">📰</button>
     <button class="sbtn" id="helpBtn" title="Help" style="margin-right:4px">ℹ️</button>
     <button class="sbtn" id="audioBtn" title="Sound" style="margin-right:4px">🔇</button>
     <button class="sbtn" id="radioBtn" title="Stable radio — ambient background music" style="margin-right:4px">📻</button>
@@ -1836,6 +1837,65 @@ function seasonAlmanac(game){ const day=(game&&game.day)||1, s=seasonOf(day), sd
   return { season:{id:s.id, name:s.name, emoji:s.emoji, note:s.note}, seasonDay:sd, seasonLen:SEASON_LEN,
     daysLeft:SEASON_LEN-sd+1, year:yearOf(day), wxBand:s.wx.slice(), modifiers:mods, upcoming:upcomingEvents(game, SEASON_LEN) };
 }
+
+// ---------- Stable notice-board / regional gossip feed (READ-ONLY flavour headlines, keyed to game.day) ----------
+// A deterministic feed of short headlines about the region — rival ranch news derived from the live
+// standings, upcoming headline events from the forecast, weather chatter and the player's own standing.
+// Every line is derived from EXISTING state via hashDay(game.day); nothing here mutates the game.
+const GOSSIP_TEMPLATES={
+  race:     ['{name} thunder to another win on the flat.','Word is {name} have a flashy new speed prospect in training.','{name} post the fastest gallop times in the county this week.'],
+  jump:     ['{name} sweep the jump-offs at the regional show.','{name} unveil a bold new course at their yard.','Clear rounds all day for {name} over the poles.'],
+  dressage: ['{name} score another elegant test up the centre line.','Judges praise the polish of the {name} string.','{name} host a packed dressage clinic this week.'],
+  halter:   ['{name} take best-in-show with a flawless turnout.','A rare coat from {name} is turning heads in the show ring.','{name} groom their halter horses to a mirror shine.'],
+  endurance:['{name} finish first over the long trail again.','{name} riders log record miles across the hills.','Steady and tireless, {name} own the endurance route.'],
+};
+const WEATHER_CHATTER={
+  sunny: ['Fine sunny spells have the paddocks buzzing with turnout.','Riders across the region make the most of the bright weather.'],
+  cloudy:['A grey, still day — good schooling weather, say the trainers.','Cloud cover keeps the yards cool for a day of chores.'],
+  rain:  ['Rain softens the going; cross-country plans are on hold.','Wet weather keeps most horses in — hay nets all round.'],
+  snow:  ['Snow blankets the region; yards double up on winter feed.','A frosty morning — every trough needs breaking before feeds.'],
+};
+// a deterministic discipline boast for one rival on a given day
+function rivalBoast(rv, day){ if(!rv) return ''; day=Math.floor(day||1);
+  const lines=GOSSIP_TEMPLATES[rv.disc]||['{name} keep busy at their yard.'];
+  return lines[hashDay(day+rv.seed)%lines.length].replace(/\{name\}/g, rv.name); }
+// a deterministic weather-chatter line for the day
+function weatherChatter(day){ day=Math.floor(day||1); const wx=weatherFor(day);
+  const lines=WEATHER_CHATTER[wx.id]||['Changeable skies over the region.'];
+  return lines[hashDay(day*7+3)%lines.length]; }
+// rival-focused headlines derived from the LIVE standings (leader, a featured boast, the ranch just ahead)
+function rivalGossip(game){
+  const day=Math.floor((game&&game.day)||1), rows=standings(game), out=[];
+  const leader=rows[0];
+  if(leader && !leader.isPlayer) out.push({kind:'rival', emoji:leader.emoji, text:leader.name+' top the regional standings this week.'});
+  const rv=RIVALS[hashDay(day)%RIVALS.length]; // a deterministically-featured rival rotates by day
+  out.push({kind:'rival', emoji:rv.emoji, text:rivalBoast(rv, day)});
+  const meIdx=rows.findIndex(r=>r.isPlayer);
+  if(meIdx>0){ const ahead=rows[meIdx-1]; if(ahead && !ahead.isPlayer)
+    out.push({kind:'rival', emoji:ahead.emoji, text:ahead.name+' sit just ahead of you at #'+ahead.rank+'.'}); }
+  return out;
+}
+// a headline about the player's own standing in the region
+function standingHeadline(game){ const pr=playerRank(game), n=rivalCount()+1, ranch=ranchName(game);
+  if(pr===1) return {kind:'you', emoji:'👑', text:ranch+' lead the region — the ranch to beat!'};
+  if(pr<=3) return {kind:'you', emoji:'⭐', text:ranch+' hold a proud #'+pr+' of '+n+' in the standings.'};
+  return {kind:'you', emoji:'🐴', text:ranch+' sit #'+pr+' of '+n+' — plenty of room to climb.'}; }
+// the full ordered notice-board feed: dateline + your standing + rival gossip + upcoming events + weather
+function noticeBoard(game){
+  const day=Math.floor((game&&game.day)||1), s=seasonOf(day), out=[];
+  out.push({kind:'season', emoji:s.emoji, text:WEEKDAY_FULL[weekdayIndex(day)]+' in '+s.name+', Year '+yearOf(day)+', at '+ranchName(game)+'.'});
+  out.push(standingHeadline(game));
+  for(const r of rivalGossip(game)) out.push(r);
+  const up=upcomingEvents(game, SEASON_LEN).slice(0,2);
+  for(const e of up){ const when=e.inDays===0?'today':e.inDays===1?'tomorrow':('in '+e.inDays+' days');
+    out.push({kind:'event', emoji:e.emoji, text:e.name+' '+when+'.'}); }
+  out.push({kind:'weather', emoji:weatherFor(day).emoji, text:weatherChatter(day)});
+  return out;
+}
+// just the headline strings, optionally capped to the first `count`
+function regionHeadlines(game, count){ const feed=noticeBoard(game);
+  const n=(count==null)?feed.length:Math.max(1, Math.min(feed.length, count));
+  return feed.slice(0,n).map(x=>x.text); }
 
 // ---------- Ranch newsletter / weekly recap (READ-ONLY "this week at the ranch" gazette) ----------
 // Aggregates the week's activity from EXISTING data. Exact week-over-week deltas come from a tiny weekly
@@ -4130,6 +4190,7 @@ const GOALS=[
   {id:'asp1',    desc:'Pin an aspiration to your goals board (📌)',      tip:g=>normAspBoard(g).pinned.length+' pinned',done:g=>normAspBoard(g).pinned.length>=1,             reward:{money:300,rep:10}},
   {id:'groom1',  desc:'Groom a horse in the mini-game (🧽)',            tip:g=>((g.stats&&g.stats.grooms)||0)+'/1',done:g=>((g.stats&&g.stats.grooms)||0)>=1,               reward:{money:300,rep:10}},
   {id:'mon1',    desc:'Unveil your first monument (🗿)',                tip:g=>monumentsUnlockedCount(g)+'/1',done:g=>monumentsUnlockedCount(g)>=1,                       reward:{money:500,rep:20}},
+  {id:'notice1', desc:'Read the stable notice-board (📰)',              tip:g=>((g.stats&&g.stats.noticeViews)||0)+'/1',done:g=>((g.stats&&g.stats.noticeViews)||0)>=1,         reward:{money:250,rep:10}},
 ];
 function currentGoal(g){ return (g.goalIdx<GOALS.length)?GOALS[g.goalIdx]:null; }
 function checkGoals(g){
@@ -4322,6 +4383,7 @@ const HR = {
   DIARY_LINES, DIARY_MOOD_META, diaryMoodMeta, horseMood, horseDiaryLine, ranchDiary,
   GRUDGE_STAKE, GRUDGE_COOLDOWN, grudgeRating, grudgeOpponentScore, rivalChallengeReady, grudgeCooldownLeft, nextGrudgeDay, grudgeRecord, grudgeRecordVs, runGrudgeMatch,
   dayForecast, forecast, upcomingEvents, seasonAlmanac,
+  GOSSIP_TEMPLATES, WEATHER_CHATTER, rivalBoast, weatherChatter, rivalGossip, standingHeadline, noticeBoard, regionHeadlines,
   weeklyBaseline, rollWeeklyStats, weeklyRecap, recapHeadlines,
   FOAL_MILESTONES, foalMilestoneDef, foalMilestoneFor, foalMilestonePending, checkFoalMilestone, comingOfAgeDue, holdCeremony,
   isHofChampion, inductHof, retireHorse,
@@ -6588,6 +6650,22 @@ function openSpotlight(){
     '<div class="btnrow"><button class="btn ghost" id="spotClose" style="width:100%">Done</button></div>');
   $('spotClose').onclick=closeModal;
 }
+function openNoticeBoard(){
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // reading the board counts toward the notice-board goal (a usage stat — no economy change)
+  G.stats=G.stats||{}; G.stats.noticeViews=(G.stats.noticeViews||0)+1;
+  const fresh=checkAchievements(G), gg=checkGoals(G); save(); if(fresh.length||gg.length) renderHUD();
+  const feed=noticeBoard(G);
+  const kindLabel={season:'Dateline', you:'Your ranch', rival:'Rivals', event:'Coming up', weather:'Weather'};
+  const rows=feed.map(it=>'<div class="lbrow"><div class="hface" style="background:none;font-size:20px;display:flex;align-items:center;justify-content:center">'+it.emoji+'</div>'+
+    '<div class="grow"><div class="lbname">'+esc(it.text)+'</div>'+
+    '<div class="lbsub" style="opacity:.6">'+esc(kindLabel[it.kind]||'News')+'</div></div></div>').join('');
+  modal('<h3>📰 Stable Notice-Board</h3>'+
+    '<div class="swlabel">The week’s word from around the region — rival ranches, upcoming events and yard chatter.</div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btnrow"><button class="btn ghost" id="noticeClose" style="width:100%">Done</button></div>');
+  $('noticeClose').onclick=closeModal;
+}
 let loadoutSel={horse:null};
 function openLoadouts(){
   const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -7487,6 +7565,7 @@ function boot(){
   { const apb=$('aspBtn'); if(apb) apb.onclick=openAspirations; }
   { const grb=$('groomBtn'); if(grb) grb.onclick=openGroom; }
   { const mnb=$('monBtn'); if(mnb) mnb.onclick=openMonuments; }
+  { const ntb=$('noticeBtn'); if(ntb) ntb.onclick=openNoticeBoard; }
   { const bb=$('boardBtn'); if(bb) bb.onclick=openBoard; }
   { const rb=$('regBtn'); if(rb) rb.onclick=openRegistry; }
   { const cb=$('codexBtn'); if(cb) cb.onclick=openCodex; }

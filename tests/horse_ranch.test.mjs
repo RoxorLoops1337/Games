@@ -249,6 +249,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.loadouts = [{ id: 'lo1', name: 'Show set', slots: { saddle: null, bridle: null, accessory: null } }]; // satisfies the tack-loadout goal
   g.aspBoard = { pinned: ['herd10'], claimed: [] }; // satisfies the aspirations-board goal
   g.stats.grooms = 1; // satisfies the grooming mini-game goal
+  g.stats.noticeViews = 1; // satisfies the notice-board goal
   HR.checkMonuments(g); // this rich state (year+, Hall of Fame) unlocks monuments → satisfies the monument goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
@@ -4793,6 +4794,41 @@ function studGame(day) {
   ok(HR.seasonAlmanac(summer).modifiers.some(m => /Show prizes/.test(m.label) && m.good), 'summer flags bigger show prizes');
   const autumn = HR.freshGame(); autumn.day = 30;
   ok(HR.seasonAlmanac(autumn).modifiers.some(m => /Hay/.test(m.label) && m.good), 'autumn flags cheap hay');
+}
+{
+  // ---- Stable notice-board / regional gossip feed ----
+  const g = HR.freshGame(); g.day = 10;
+  const feed = HR.noticeBoard(g);
+  ok(Array.isArray(feed) && feed.length >= 3, 'the notice-board yields a feed of headlines');
+  ok(feed.every(it => it && typeof it.text === 'string' && it.text && it.emoji && it.kind), 'every notice has text, an emoji and a kind');
+  ok(feed[0].kind === 'season' && new RegExp(HR.ranchName(g)).test(feed[0].text), 'the feed opens with a dateline naming the ranch');
+  ok(feed.some(it => it.kind === 'you'), 'the feed reports the player standing');
+  ok(feed.some(it => it.kind === 'rival'), 'the feed carries rival gossip');
+  ok(feed.some(it => it.kind === 'weather'), 'the feed closes with weather chatter');
+  // rival gossip is standings-derived: the current leader (when a rival) is named
+  const leader = HR.leaderRanch(g);
+  if (leader && !leader.isPlayer) ok(HR.rivalGossip(g).some(r => new RegExp(leader.name).test(r.text)), 'the leading rival is named in the gossip');
+  // a top-ranked player gets a leading-the-region headline
+  const boss = HR.freshGame(); boss.day = 5; boss.rep = 999999; boss.prestige = 999999;
+  ok(HR.playerRank(boss) === 1 && /lead the region/.test(HR.standingHeadline(boss).text), 'a #1 ranch is hailed as the region leader');
+  // regionHeadlines returns plain strings, capped by count
+  const heads = HR.regionHeadlines(g, 2);
+  ok(Array.isArray(heads) && heads.length === 2 && heads.every(s => typeof s === 'string'), 'regionHeadlines caps to the requested count');
+  ok(HR.regionHeadlines(g).length === feed.length, 'regionHeadlines with no count returns the whole feed');
+  // rivalBoast / weatherChatter are deterministic templated lines
+  ok(/Ironhoof/.test(HR.rivalBoast(HR.rivalDef('ironhoof'), 3)) && HR.rivalBoast(HR.rivalDef('ironhoof'), 3) === HR.rivalBoast(HR.rivalDef('ironhoof'), 3), 'rivalBoast names the rival and is deterministic');
+  ok(typeof HR.weatherChatter(10) === 'string' && HR.weatherChatter(10) === HR.weatherChatter(10), 'weatherChatter is deterministic');
+  // read-only + determinism + sparse safety
+  const snap0 = JSON.stringify(g);
+  HR.noticeBoard(g); HR.rivalGossip(g); HR.regionHeadlines(g, 3);
+  ok(JSON.stringify(g) === snap0, 'the notice-board never mutates the game');
+  ok(JSON.stringify(HR.noticeBoard(g)) === JSON.stringify(HR.noticeBoard(g)), 'the notice-board is deterministic for a fixed day');
+  ok(Array.isArray(HR.noticeBoard({})) && HR.noticeBoard({}).length >= 1, 'the notice-board is safe on a sparse game');
+  // the goal fires once the board is read
+  const gv = HR.freshGame();
+  ok(!HR.GOALS.find(x => x.id === 'notice1').done(gv), 'the notice goal is unmet before reading');
+  gv.stats.noticeViews = 1;
+  ok(HR.GOALS.find(x => x.id === 'notice1').done(gv), 'reading the notice-board satisfies the goal');
 }
 {
   // read-only + determinism + sparse safety
