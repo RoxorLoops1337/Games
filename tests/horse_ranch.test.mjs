@@ -242,6 +242,7 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   g.enrichment = { owned: ['jollyball'] }; // satisfies the paddock-enrichment goal
   g.wardrobe = { owned: ['tweed'], equipped: 'tweed' }; // satisfies the show-wardrobe goal
   g.stats.toursViewed = 1; // satisfies the ranch-tour goal
+  g.mascot = { type: 'barncat', name: 'Tom' }; // satisfies the stable-mascot goal
   HR.checkAchievements(g); // this rich state unlocks many achievements → satisfies the trophy-room goal (≥5)
   HR.checkGoals(g);
   ok(g.goalIdx === HR.GOALS.length, 'meeting every condition clears the whole chain');
@@ -931,6 +932,82 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
   const gv = HR.freshGame(); gv.stats.toursViewed = 1;
   ok(HR.GOALS.find(x => x.id === 'tour1').done(gv), 'tour1 completes after taking the tour');
   ok(HR.GOALS.filter(x => x.id === 'tour1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'postcardperfect').length === 1, 'new tour goal/achievement ids are unique');
+}
+{
+  // ---- stable mascot / barn companion ----
+  ok(HR.MASCOTS.length >= 3, 'a catalogue of mascots exists');
+  const mids = HR.MASCOTS.map(m => m.id);
+  ok(new Set(mids).size === mids.length, 'mascot ids are unique');
+  ok(HR.MASCOTS.every(m => (m.perk.value || 0) <= Math.max(HR.MASCOT_PERK_CAP, HR.MASCOT_BOND_CAP) + 1e-9), 'no mascot perk exceeds the caps in config');
+  // fresh game has no mascot; perk is neutral
+  const g0 = HR.freshGame();
+  ok(!HR.hasMascot(g0) && HR.activeMascot(g0) === null, 'a fresh game has no mascot');
+  const p0 = HR.mascotPerk(g0);
+  ok(p0.happy === 0 && p0.care === 0 && p0.bond === 0 && p0.rep === 0, 'no mascot → a neutral perk');
+  ok(HR.mascotQuip(g0, 5) === '', 'no mascot → no quip');
+  // adopt: checks coins, sets the active {type,name}, only one active
+  const g = HR.freshGame(); g.money = 5000;
+  const cat = HR.mascotDef('barncat');
+  const before = g.money;
+  const r = HR.adoptMascot(g, 'barncat', 'Tom');
+  ok(r.ok && g.money === before - cat.cost && HR.activeMascot(g).id === 'barncat' && HR.activeMascot(g).name === 'Tom', 'adoptMascot deducts the cost and sets the active mascot');
+  ok((g.stats.mascotsAdopted || 0) === 1, 'adopting a new mascot counts toward the menagerie stat');
+  // adopting the SAME type again is a free rename (no double charge)
+  const m1 = g.money;
+  HR.adoptMascot(g, 'barncat', 'Tabby');
+  ok(g.money === m1 && HR.activeMascot(g).name === 'Tabby' && g.stats.mascotsAdopted === 1, 're-adopting the same type renames for free');
+  // swapping to a different type charges again + only one active
+  const dog = HR.mascotDef('dog');
+  const m2 = g.money;
+  HR.adoptMascot(g, 'dog', 'Rex');
+  ok(g.money === m2 - dog.cost && HR.activeMascot(g).id === 'dog' && g.stats.mascotsAdopted === 2, 'swapping mascots charges and only one is active');
+  // blocked without coins
+  const gp = HR.freshGame(); gp.money = 10;
+  ok(!HR.adoptMascot(gp, 'owl').ok && !HR.hasMascot(gp), 'adoptMascot is blocked without enough coins');
+  ok(!HR.adoptMascot(gp, 'nope').ok, 'an unknown mascot id is rejected');
+  // rename bounded length; retire clears
+  HR.renameMascot(g, 'x'.repeat(50));
+  ok(HR.activeMascot(g).name.length <= HR.MASCOT_NAME_MAX, 'renameMascot bounds the name length');
+  HR.renameMascot(g, '   ');
+  ok(HR.activeMascot(g).name === dog.species, 'a blank name falls back to the species');
+  ok(HR.retireMascot(g).ok && !HR.hasMascot(g), 'retireMascot clears the mascot');
+  // perk is hard-capped when adopted, per kind
+  const gh = HR.freshGame(); gh.money = 9999; HR.adoptMascot(gh, 'dog', 'Bud'); // happy perk
+  const ph = HR.mascotPerk(gh);
+  ok(ph.happy > 0 && ph.happy <= HR.MASCOT_PERK_CAP + 1e-9 && ph.care === 0, 'a happy-perk mascot lifts happy within the cap');
+  const gc = HR.freshGame(); gc.money = 9999; HR.adoptMascot(gc, 'barncat', 'Tom'); // care perk
+  ok(HR.mascotPerk(gc).care <= HR.MASCOT_PERK_CAP + 1e-9 && HR.mascotPerk(gc).care > 0, 'a care-perk mascot tops needs within the cap');
+  const gd = HR.freshGame(); gd.money = 9999; HR.adoptMascot(gd, 'donkey', 'Jack'); // bond perk
+  ok(HR.mascotPerk(gd).bond <= HR.MASCOT_BOND_CAP + 1e-9 && HR.mascotPerk(gd).bond > 0, 'a bond-perk mascot builds bond within the cap');
+  // the perk feeds the daily tick in a bounded way (rep-appeal owl)
+  const go = HR.freshGame(); go.money = 9999; HR.adoptMascot(go, 'owl', 'Athena'); go.feed = 9999;
+  const rep0 = go.rep;
+  HR.advanceDay(go, rng(3));
+  ok(go.rep >= rep0 && go.rep - rep0 <= HR.MASCOT_PERK_CAP + 3, 'the owl’s rep appeal is applied and bounded per day');
+  // a happy-perk mascot keeps a horse from sliding (bounded), via advanceDay
+  const gt = HR.freshGame(); gt.money = 9999; HR.adoptMascot(gt, 'dog', 'Bud'); gt.feed = 9999;
+  const hh = HR.mkHorse({ breed: 'welsh', age: 20, happy: 50 }); hh.happy = 50; gt.horses = [hh];
+  const hp0 = hh.happy; HR.advanceDay(gt, rng(4));
+  ok(hh.happy >= hp0 && hh.happy <= 100, 'the mascot happy perk lifts the herd, clamped');
+  // deterministic quip keyed to the day
+  const gq = HR.freshGame(); gq.money = 9999; HR.adoptMascot(gq, 'goat', 'Billy');
+  ok(HR.mascotQuip(gq, 7) === HR.mascotQuip(gq, 7) && HR.mascotQuip(gq, 7).length > 0, 'mascotQuip is deterministic + non-empty');
+  ok(/Billy/.test(HR.mascotQuip(gq, 7)), 'the quip includes the mascot name');
+  // migration + read-only + sparse
+  const mig = HR.normMascot({ type: 'bogus', name: 'X' });
+  ok(mig.type === null && mig.name === null, 'normMascot drops an invalid mascot type');
+  const mig2 = HR.normMascot({ type: 'owl', name: '  Hoot  ' });
+  ok(mig2.type === 'owl' && mig2.name === 'Hoot', 'normMascot trims + keeps a valid mascot');
+  ok(HR.activeMascot({}) === null && HR.mascotPerk({}).happy === 0, 'mascot helpers are safe on a bare game');
+  const snap = JSON.stringify(gq);
+  HR.activeMascot(gq); HR.mascotPerk(gq); HR.mascotQuip(gq, 3); HR.hasMascot(gq);
+  ok(JSON.stringify(gq) === snap, 'the mascot read helpers never mutate the game');
+  // goal + achievement
+  const gg = HR.freshGame(); gg.mascot = { type: 'barncat', name: 'Tom' };
+  ok(HR.GOALS.find(x => x.id === 'mascot1').done(gg), 'mascot1 completes once a mascot is adopted');
+  const gm = HR.freshGame(); gm.stats.mascotsAdopted = 3;
+  ok(HR.ACHIEVEMENTS.find(a => a.id === 'menagerie').check(gm), 'Menagerie unlocks after three adoptions');
+  ok(HR.GOALS.filter(x => x.id === 'mascot1').length === 1 && HR.ACHIEVEMENTS.filter(a => a.id === 'menagerie').length === 1, 'new mascot goal/achievement ids are unique');
 }
 
 // ---- personality traits ----
