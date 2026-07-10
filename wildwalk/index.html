@@ -137,6 +137,9 @@ const COMMONS   = ['emberpup','puddlet','sprig','sparky','pebblin','umbrat'];
 const UNCOMMONS  = ['cindermaw','torrentoad','thornbeast','voltfox','boulderk','nightwyrm'];
 const RARES     = ['infernyx','leviatide','verdragon','stormhorn'];
 const LEGENDS   = ['moltengod','abysslord'];
+// starter pool — the ONE source of truth for the starter picker (draw, click,
+// fallback, tests all read this). Menagerie unlock adds uncommons.
+function starterPool(){ return Dex.up('menagerie') ? COMMONS.concat(UNCOMMONS) : COMMONS; }
 
 // ---------- biomes ----------
 // Each biome is a flat, named palette (drawBG reads fields by name, never by
@@ -655,8 +658,9 @@ function drawTrainer(x,y,s,t,walking){
 // Game state
 // ===================================================================
 let G;
-function newGame(){
-  const starterKey = pick(Dex.up('menagerie') ? COMMONS.concat(UNCOMMONS) : COMMONS);
+function newGame(chosenKey){
+  const pool = starterPool();
+  const starterKey = (chosenKey && pool.includes(chosenKey)) ? chosenKey : pick(pool);
   G = {
     state:'title',
     t:0, speed:1,
@@ -680,7 +684,7 @@ function newGame(){
     xoptions:[],
     // transient message
     msg:'', msgT:0,
-    essenceEarned:0, sanctuaryFrom:'title',
+    essenceEarned:0, sanctuaryFrom:'title', starterFrom:'title',
     buttons:[],
     pokedexFrom:'title', pokedexSel:null,
     achFrom:'title', achMsg:'', achIcon:'', achMsgT:0,
@@ -1762,6 +1766,7 @@ function draw(){
   if(G.state==='pokedex'){ drawPokedex(); ctx.restore(); return; }
   if(G.state==='achievements'){ drawAchievements(); ctx.restore(); return; }
   if(G.state==='sanctuary'){ drawSanctuary(); ctx.restore(); return; }
+  if(G.state==='starter'){ drawStarter(); ctx.restore(); return; }
 
   drawBG(G.scroll, G.tier);
 
@@ -1823,6 +1828,7 @@ function openPokedex(from){ G.pokedexFrom=from; G.pokedexSel=null; G.state='poke
 function openAchievements(from){ G.achFrom=from; G.state='achievements'; clearButtons(); }
 function achToast(a){ G.achMsg='Achievement: '+a.name; G.achIcon=a.icon; G.achMsgT=3.0; }
 function openSanctuary(from){ G.sanctuaryFrom=from; G.state='sanctuary'; clearButtons(); }
+function openStarter(from){ G.starterFrom=from; G.state='starter'; clearButtons(); }
 function buyUpgrade(key){
   const u=UPGRADES.find(x=>x.key===key); if(!u) return false;
   const cur=Dex.up(key); if(cur>=u.max) return false;      // max-tier guard
@@ -2024,6 +2030,41 @@ function drawSanctuary(){
     }
   });
   btn('back', W/2-90, 534, 180, 46, '←  BACK', null, {col:'#3a4a3a', accent:'#6a9a6a'});
+  drawButtons();
+}
+
+function drawStarter(){
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#161028'); sky.addColorStop(1,'#3a2a55'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+  for(let i=0;i<6;i++){
+    const k=Object.keys(SPECIES)[i]; const sp=SPECIES[k];
+    const x=(i*170 + G.t*20)% (W+120)-60;
+    ctx.globalAlpha=0.25; drawMon(sp, x, 150+ (i%2)*60, 26, 1, G.t+i,{bob:i}); ctx.globalAlpha=1;
+  }
+  ctx.fillStyle='rgba(6,8,18,.45)'; ctx.fillRect(0,0,W,H);
+  centerText('CHOOSE YOUR STARTER', W/2, 58, '900 44px Segoe UI', '#ffe9a8');
+  centerText('This companion begins your walk at Lv3', W/2, 90, '600 15px Segoe UI', '#c9b8ff');
+  if(!Dex.up('menagerie')){
+    centerText('🐾 unlock Menagerie in the Sanctuary to start with uncommons', W/2, 112, '600 13px Segoe UI', '#8fa0c8');
+  }
+  clearButtons();
+  const pool = starterPool();
+  function starterCardRect(i){ const c=i%6, r=(i/6)|0; return {x:22+c*155, y:128+r*184, w:140, h:176}; }
+  pool.forEach((key,i)=>{
+    const sp=SPECIES[key]; const {x,y,w,h}=starterCardRect(i);
+    panel(x,y,w,h,null);
+    ctx.save();
+    ctx.shadowColor=RARITY_COL[sp.rarity]; ctx.shadowBlur=16;
+    drawMon(sp, x+w/2, y+62, 32, 1, G.t+i, {bob:i});
+    ctx.restore();
+    withShadow(x+w/2, y+94, 22, 7);
+    centerText(sp.name, x+w/2, y+112, '800 17px Segoe UI', RARITY_COL[sp.rarity]);
+    centerText(sp.type+' · '+RARITY_NAME[sp.rarity], x+w/2, y+130, '700 12px Segoe UI', TYPE_COL[sp.type]);
+    centerText('HP '+sp.base.hp+'   ATK '+sp.base.atk+'   SPD '+sp.base.spd, x+w/2, y+147, '600 11px Segoe UI', '#9fb0cc');
+    btn('pick_'+i, x+14, y+150, w-28, 22, 'Choose', null, {col:'#2f5a3a', accent:RARITY_COL[sp.rarity]});
+  });
+  btn('random', W/2-230, 516, 200, 42, '🎲  SURPRISE ME', null, {col:'#3a2f5a', accent:'#c9a8ff'});
+  btn('back', W/2+30, 516, 200, 42, '←  BACK', null, {col:'#3a4a3a', accent:'#6a9a6a'});
   drawButtons();
 }
 
@@ -2433,8 +2474,15 @@ function drawGameOver(){
 function onClick(mx,my){
   { const mb=hitButton(mx,my);
     if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else { newGame(); startWalk(); } } return; }
-  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { newGame(); startWalk(); } } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else { openStarter('title'); } } return; }
+  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
+  if(G.state==='starter'){
+    const b=hitButton(mx,my); if(!b) return;
+    if(b.id==='back'){ G.state=G.starterFrom||'title'; clearButtons(); }
+    else if(b.id==='random'){ newGame(); startWalk(); }
+    else if(b.id.startsWith('pick_')){ newGame(starterPool()[+b.id.slice(5)]); startWalk(); }
+    return;
+  }
   if(G.state==='sanctuary'){
     const b=hitButton(mx,my);
     if(b){ if(b.id==='back'){ G.state=G.sanctuaryFrom||'title'; clearButtons(); }
