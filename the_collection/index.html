@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#16120e">
+<meta name="theme-color" content="#f2e7d1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Collection">
@@ -13,44 +13,63 @@
 <title>The Collection</title>
 <style>
 :root{
-  --bg:#16120e; --surface:#211b15; --surface-2:#2b231b; --pocket:#1b1611;
-  --ink:#f2e8d8; --ink-soft:#b3a58e; --ink-faint:#7d7263;
-  --accent:#e2a755; --accent-ink:#2a1c08;
-  --accent2:#54b899;
-  --line:#3a2f23; --line-soft:#2c241b;
-  --stock:#efe6d2; --stock-ink:#2a241c; --stock-ink-soft:#6b6152;
+  --bg:#f2e7d1; --surface:#fdf8ec; --surface-2:#f2e9d6; --pocket:#ece0c8;
+  --ink:#3a2f20; --ink-soft:#75644c; --ink-faint:#a08d70;
+  --accent:#e2a04a; --accent-ink:#2a1c08; --accent-deep:#a8731d;
+  --accent2:#1f8a6d;
+  --line:#dccbaa; --line-soft:#e8dcc4;
+  --stock:#fffcf3; --stock-ink:#2a241c; --stock-ink-soft:#6b6152;
   --serif:'Iowan Old Style','Palatino Linotype','Book Antiqua',Georgia,serif;
   --sans:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
   --mono:'SF Mono','IBM Plex Mono',Menlo,Consolas,monospace;
-  --t-common:#a8a599; --t-uncommon:#82b06a; --t-rare:#4fa886;
-  --t-rareholo:#58b0dc; --t-doublerare:#7f8ae8; --t-ultrarare:#c77ae8;
-  --t-reverseholo:#4a90c8;
+  --t-common:#98917f; --t-uncommon:#6aa14e; --t-rare:#2f9a77;
+  --t-rareholo:#3391c6; --t-doublerare:#6a6fd8; --t-ultrarare:#b45fd8;
+  --t-reverseholo:#3a7fb8;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
-  margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+  margin:0; color:var(--ink); font-family:var(--sans);
+  background:
+    radial-gradient(circle at 15% 8%, rgba(226,160,74,.14), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(84,184,153,.13), transparent 32%),
+    radial-gradient(circle at 70% 90%, rgba(90,163,220,.10), transparent 38%),
+    var(--bg);
   -webkit-font-smoothing:antialiased; overflow:hidden; position:fixed; inset:0;
   touch-action:manipulation; user-select:none;
 }
 button{font-family:inherit; -webkit-tap-highlight-color:transparent;}
 
 #app{position:absolute; inset:0; display:flex; flex-direction:column;}
+/* faint notebook dot-grid over the scroll area */
+main{
+  background-image:radial-gradient(rgba(58,47,32,.06) 1px, transparent 1.2px);
+  background-size:17px 17px;
+}
 
 /* ---- top bar ---- */
 header.topbar{
   flex:none; padding:calc(env(safe-area-inset-top,0px) + 13px) 18px 11px;
   border-bottom:1px solid var(--line); background:var(--surface);
   display:flex; align-items:center; justify-content:space-between; gap:12px;
+  position:relative; z-index:6;
+}
+/* bunting scallops hanging off the header */
+header.topbar::after{
+  content:""; position:absolute; left:0; right:0; bottom:-9px; height:9px; pointer-events:none;
+  background:
+    radial-gradient(circle at 8px 0, #e2a04a 0 6.5px, transparent 7.5px) 0 0/48px 9px repeat-x,
+    radial-gradient(circle at 8px 0, #54b899 0 6.5px, transparent 7.5px) 16px 0/48px 9px repeat-x,
+    radial-gradient(circle at 8px 0, #5aa3dc 0 6.5px, transparent 7.5px) 32px 0/48px 9px repeat-x;
 }
 header.topbar h1{font-family:var(--serif); font-size:18px; margin:0; font-weight:600; letter-spacing:.01em;}
 .topbar-stats{display:flex; align-items:center; gap:14px;}
 .day-badge{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); letter-spacing:.04em; white-space:nowrap;}
 .coins{
-  font-family:var(--mono); font-size:14px; font-weight:600; color:var(--accent);
+  font-family:var(--mono); font-size:14px; font-weight:600; color:var(--accent-deep);
   display:flex; align-items:center; gap:6px; white-space:nowrap;
 }
-.coins .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--accent); box-shadow:0 0 6px var(--accent);}
+.coins .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--accent); box-shadow:0 0 6px rgba(226,160,74,.7);}
 
 main{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative;}
 .screen{display:none; min-height:100%; padding:16px 16px calc(env(safe-area-inset-bottom,0px) + 16px);}
@@ -79,10 +98,11 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .pcard{
   background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--line);
   border-radius:10px 12px 12px 10px; padding:18px; margin-bottom:14px;
+  box-shadow:0 2px 8px rgba(93,70,35,.10);
 }
-.pcard.accent-gold{border-left-color:var(--accent);}
-.pcard.accent-teal{border-left-color:var(--accent2);}
-.pcard.accent-night{border-left-color:var(--t-doublerare);}
+.pcard.accent-gold{border-left-color:#e2a04a; background:linear-gradient(180deg,#fdf1da,#fdf8ec 55%);}
+.pcard.accent-teal{border-left-color:#2fa583; background:linear-gradient(180deg,#e6f5ec,#fdf8ec 55%);}
+.pcard.accent-night{border-left-color:var(--t-doublerare); background:linear-gradient(180deg,#ecebfb,#fdf8ec 55%);}
 .pcard h2{font-family:var(--serif); font-size:17px; margin:0 0 4px; font-weight:600;}
 .pcard p.sub{color:var(--ink-soft); font-size:13px; margin:0 0 14px;}
 .bigbtn{
@@ -100,21 +120,21 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 
 .progress-ribbon{
   background:var(--surface); border:1px solid var(--line); border-radius:12px;
-  padding:14px 16px; margin-bottom:14px;
+  padding:14px 16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(93,70,35,.10);
 }
 .ribbon-row{display:flex; justify-content:space-between; align-items:baseline; font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-bottom:8px;}
 .ribbon-row strong{color:var(--ink); font-size:13px;}
-.ribbon-hint{margin-top:7px; font-family:var(--mono); font-size:11.5px; color:var(--accent);}
+.ribbon-hint{margin-top:7px; font-family:var(--mono); font-size:11.5px; color:var(--accent-deep);}
 .ribbon-value{margin-top:5px; font-family:var(--mono); font-size:11.5px; color:var(--ink-soft);}
-.progress-bar{height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
-.progress-bar .fill{height:100%; background:var(--accent2);}
+.progress-bar{height:8px; border-radius:5px; background:var(--surface-2); overflow:hidden; box-shadow:inset 0 1px 2px rgba(93,70,35,.15);}
+.progress-bar .fill{height:100%; border-radius:5px; background:linear-gradient(90deg,#54b899,#5aa3dc,#8a7ae0,#e2a04a);}
 
 /* ---- the card itself: cream stock on a dark desk ---- */
 .tcg-card{
   position:relative; width:100%; aspect-ratio:5/7; border-radius:11px;
   background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(0,0,0,.28)), var(--type-c, #8a8a8a);
   padding:7px; display:flex; flex-direction:column; overflow:hidden;
-  box-shadow:0 4px 14px rgba(0,0,0,.45);
+  box-shadow:0 4px 14px rgba(70,50,25,.32);
 }
 .tcg-inner{
   flex:1; min-height:0; background:var(--stock); border-radius:6px; color:var(--stock-ink);
@@ -145,7 +165,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .tcg-flavor{font-size:10.5px; font-style:italic; color:var(--stock-ink-soft); line-height:1.35; min-height:2.7em;}
 .tcg-badges{display:flex; gap:5px;}
 .badge{font-family:var(--mono); font-size:9.5px; padding:2px 7px; border-radius:20px; font-weight:700;}
-.badge.new{background:var(--accent2); color:#0b2a20;}
+.badge.new{background:var(--accent2); color:#ecfff7;}
 .badge.foil{background:var(--t-reverseholo); color:#fff;}
 .holo-sheen{
   position:absolute; inset:0; border-radius:11px; pointer-events:none;
@@ -158,7 +178,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 /* card back: same cream stock, night-sky inside */
 .cardback{
   position:absolute; inset:0; border-radius:11px; background:var(--stock); padding:7px;
-  box-shadow:0 4px 14px rgba(0,0,0,.45);
+  box-shadow:0 4px 14px rgba(0,0,0,.4);
 }
 .cardback .cb-in{
   width:100%; height:100%; border-radius:6px; position:relative; overflow:hidden;
@@ -227,9 +247,18 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .pack-fan .pack-thumb:nth-child(3){transform:rotate(8deg);}
 
 /* ---- opening ritual overlay ---- */
+/* The opening ritual keeps a dark room — the one place drama beats daylight.
+   Tokens are re-scoped locally so shared components (summary card, close
+   button, hints) render in night colors only in here. */
 #opener{
+  --surface:#282152; --surface-2:#332b63; --line:#463c85; --line-soft:#3a3272;
+  --ink:#f2e8d8; --ink-soft:#bfb3e0; --ink-faint:#918aae; --accent-deep:#e2a755;
   position:fixed; inset:0; z-index:50; display:none; flex-direction:column;
-  background:radial-gradient(ellipse at 50% 30%, #241d15, #120e0a 78%);
+  background:
+    radial-gradient(circle at 22% 28%, rgba(255,255,255,.11) 1px, transparent 1.9px) 0 0/110px 90px,
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,.09) 1px, transparent 1.9px) 0 0/90px 130px,
+    radial-gradient(circle at 45% 82%, rgba(255,255,255,.07) 1px, transparent 1.9px) 0 0/140px 100px,
+    radial-gradient(ellipse at 50% 30%, #332a5e, #171233 78%);
   padding:calc(env(safe-area-inset-top,0px) + 10px) 16px calc(env(safe-area-inset-bottom,0px) + 18px);
 }
 #opener.open{display:flex;}
@@ -314,13 +343,26 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .binder-page{
   background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px;
   display:grid; grid-template-columns:repeat(3,1fr); gap:9px; position:relative;
+  box-shadow:0 3px 10px rgba(93,70,35,.12); margin-top:10px;
 }
+/* washi tape holding the page in the binder */
+.binder-page::before, .binder-page::after{
+  content:""; position:absolute; width:58px; height:16px; top:-8px; border-radius:2px; opacity:.9;
+  background:repeating-linear-gradient(45deg, rgba(84,184,153,.8) 0 6px, rgba(84,184,153,.55) 6px 12px);
+  transform:rotate(-5deg); z-index:2;
+}
+.binder-page::after{
+  right:16px; transform:rotate(4deg);
+  background:repeating-linear-gradient(45deg, rgba(226,160,74,.8) 0 6px, rgba(226,160,74,.5) 6px 12px);
+}
+.binder-page::before{left:16px;}
 .pocket{
   aspect-ratio:5/7; border-radius:8px; background:var(--pocket);
-  border:1.5px solid var(--line-soft);
+  border:1.5px dashed var(--line);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   position:relative; overflow:hidden; padding:5px;
 }
+.pocket.owned{border-style:solid;}
 .pocket.owned{background:var(--stock); border-color:var(--tc, var(--line));}
 .pocket.owned:active{transform:scale(.93);}
 .pk-art{width:64%; aspect-ratio:1; background-size:contain; background-repeat:no-repeat; background-position:center; image-rendering:pixelated;}
@@ -397,8 +439,8 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
   font-family:var(--serif); font-weight:800; font-size:32px; letter-spacing:.02em; white-space:nowrap;
   z-index:6; text-shadow:0 3px 12px rgba(0,0,0,.65); pointer-events:none;
 }
-.duel-stamp.win{color:var(--accent2);}
-.duel-stamp.lose{color:#e07a4a;}
+.duel-stamp.win{color:#1f8a6d; text-shadow:0 2px 8px rgba(255,255,255,.75);}
+.duel-stamp.lose{color:#c85f2c; text-shadow:0 2px 8px rgba(255,255,255,.75);}
 .duel-stamp.stamp-in{animation:stampIn 480ms cubic-bezier(.25,1.5,.4,1) forwards;}
 @keyframes stampIn{
   0%{opacity:0; transform:translate(-50%,-50%) scale(2.6) rotate(-7deg);}
@@ -419,7 +461,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .picker-name{font-family:var(--serif); font-weight:700; font-size:13.5px;}
 .picker-meta{font-family:var(--mono); font-size:10.5px; color:var(--ink-soft);}
 .picker-right{margin-left:auto; text-align:right; flex:none;}
-.lastcopy{color:#e07a4a;}
+.lastcopy{color:#c85f2c; font-weight:700;}
 .modal-title{font-family:var(--serif); font-size:18px; font-weight:600; margin:0 24px 2px 0;}
 .price-old{text-decoration:line-through; opacity:.55; margin-right:6px;}
 .sale-badge{font-family:var(--mono); font-size:10px; font-weight:700; background:#e07a4a; color:#2a1206; border-radius:20px; padding:2px 8px; margin-left:8px;}
@@ -431,18 +473,18 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
   z-index:70; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none;
 }
 .toast{
-  background:var(--surface); border:1px solid var(--line); color:var(--ink);
+  background:#fffdf6; border:1.5px solid var(--line); color:var(--ink);
   font-family:var(--mono); font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:20px;
-  box-shadow:0 6px 20px rgba(0,0,0,.45); opacity:0; transform:translateY(-10px) scale(.96);
+  box-shadow:0 6px 18px rgba(93,70,35,.28); opacity:0; transform:translateY(-10px) scale(.96);
   transition:opacity 220ms ease, transform 220ms ease; max-width:82vw; text-align:center;
 }
 .toast.show{opacity:1; transform:translateY(0) scale(1);}
-.toast.coin{border-color:var(--accent); color:var(--accent);}
+.toast.coin{border-color:var(--accent); color:var(--accent-deep);}
 .toast.good{border-color:var(--accent2); color:var(--accent2);}
 @media (prefers-reduced-motion: reduce){.toast{transition:opacity 120ms ease;}}
 
 /* ---- modal ---- */
-#modal-backdrop{position:fixed; inset:0; background:rgba(8,5,3,.68); display:none; align-items:flex-end; z-index:20;}
+#modal-backdrop{position:fixed; inset:0; background:rgba(70,52,26,.45); display:none; align-items:flex-end; z-index:20;}
 #modal-backdrop.open{display:flex;}
 .modal-sheet{
   background:var(--surface); border-radius:16px 16px 0 0; padding:20px 20px calc(env(safe-area-inset-bottom,0px)+20px);
