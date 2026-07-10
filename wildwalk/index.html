@@ -40,11 +40,24 @@ const SAVE = 'wildwalk_save_v1';
 // ---------- tiny utils ----------
 let seed = (Date.now() ^ 0x9e3779b9) >>> 0;
 function rnd(){ seed = (seed*1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+function reseed(n){ seed = (n>>>0) || 1; }
 const rr   = (a,b)=> a + rnd()*(b-a);
 const ri   = (a,b)=> Math.floor(rr(a,b+1));
 const pick = a => a[Math.floor(rnd()*a.length)];
 const clamp= (v,a,b)=> v<a?a:(v>b?b:v);
 const lerp = (a,b,t)=> a+(b-a)*t;
+// ---------- daily-seed challenge ----------
+function dayInt(d){                        // Date -> UTC date int YYYYMMDD (one run per planet-day)
+  d = d || new Date();
+  return d.getUTCFullYear()*10000 + (d.getUTCMonth()+1)*100 + d.getUTCDate();
+}
+function dailySeedFor(day){                // avalanche day int -> well-mixed 32-bit LCG seed (pure)
+  let h = (day ^ 0x9e3779b9) >>> 0;
+  h = Math.imul(h ^ (h>>>15), 0x2c1b3c6d) >>> 0;
+  h = Math.imul(h ^ (h>>>13), 0x297a2d39) >>> 0;
+  h = (h ^ (h>>>16)) >>> 0;
+  return h;
+}
 function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 
 // ---------- type chart ----------
@@ -154,6 +167,7 @@ const LEGENDS   = ['moltengod','abysslord','terralith','tsunareth','sylvarch','f
 // starter pool — the ONE source of truth for the starter picker (draw, click,
 // fallback, tests all read this). Menagerie unlock adds uncommons.
 function starterPool(){ return Dex.up('menagerie') ? COMMONS.concat(UNCOMMONS) : COMMONS; }
+const DAILY_POOL = COMMONS;   // daily starter pool — fixed across saves (ignores menagerie) so the seed is identical for every player
 
 // ---------- biomes ----------
 // Each biome is a flat, named palette (drawBG reads fields by name, never by
@@ -310,7 +324,8 @@ function xpToLevels(m, gain){
 // ---------- pokedex / persistence ----------
 const Dex = {
   data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, upgrades:{}, muted:false,
-         ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0, runsLog:[] },
+         ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0, runsLog:[],
+         daily:{ day:0, dist:0, tier:0 } },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
   save(){ try{ localStorage.setItem(SAVE, JSON.stringify(this.data)); }catch(e){} },
   see(k){ if(!this.data.seen[k]){ this.data.seen[k]=1; this.save(); } },
@@ -329,6 +344,16 @@ const Dex = {
   awardEssence(n){ this.data.essence=(this.data.essence||0)+n; this.save(); },
   nSeen(){ return Object.keys(this.data.seen).length; },
   nCaught(){ return Object.keys(this.data.caught).length; },
+  recordDaily(day, dist, tier){
+    const d = this.data.daily;
+    if(!d || d.day !== day){                      // first run of a new UTC day -> reset to this run
+      this.data.daily = { day:+day||0, dist:+dist||0, tier:+tier||0 };
+    } else if((+dist||0) > d.dist){               // same day -> keep best distance + that run's tier
+      d.dist = +dist||0; d.tier = +tier||0;
+    }
+    this.save();
+    return this.data.daily;
+  },
 };
 Dex.load();
 
@@ -754,6 +779,7 @@ function newGame(chosenKey){
     pokedexFrom:'title', pokedexSel:null,
     achFrom:'title', achMsg:'', achIcon:'', achMsgT:0,
     pendingMon:null, afterAcquire:null,
+    daily:false, dailySeed:0,
     starterKey,
   };
   Dex.caught(starterKey);
@@ -810,6 +836,14 @@ function startWalk(){
   G.scroll=0; G.walkTarget = 320 + G.tier*10;
   setWeather();                  // walk leg previews the coming sky
   clearButtons();
+}
+function startDaily(){
+  const day = dayInt();
+  reseed(dailySeedFor(day));          // 1) reseed LCG — world is deterministic for the day
+  const k = DAILY_POOL[Math.floor(rnd()*DAILY_POOL.length)];   // 2) deterministic starter (fixed pool → identical for every player), consumes 1 rnd()
+  newGame(k);                         // 3) build G; k ∈ COMMONS ⊆ starterPool() so NO extra rnd()
+  G.daily = true; G.dailySeed = day;  // 4) latch mode AFTER newGame (survives startWalk, read in gameOver)
+  startWalk();                        // 5) skip starter-select entirely
 }
 function bossDue(){ return ((G.fights+1) % BOSS_EVERY) === 0; }
 function spawnBoss(forceKey){
@@ -1216,6 +1250,7 @@ function gameOver(){
   Dex.record(G.dist);          // persists (updates best/runs)
   const _rr = Dex.recordRun({dist:G.dist, tier:G.tier, fights:G.fights, dex:Dex.nCaught()});
   G.lastRunRec = _rr.rec; G.lastRunRank = _rr.rank;
+  if(G.daily) Dex.recordDaily(G.dailySeed, G.dist, G.tier);
   checkAch();
   G.state='gameover'; clearButtons();
   sfx('defeat');
@@ -2216,7 +2251,12 @@ function drawTitle(){
   centerText('Best: '+Dex.data.best+'m   ·   Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length+' caught   ·   Runs '+Dex.data.runs,
     W/2, 420, '600 15px Segoe UI', '#8fa0c8');
   clearButtons();
-  btn('start', W/2-130, 460, 260, 60, '▶  BEGIN THE WALK', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
+  const dInt = dayInt();
+  const db = Dex.data.daily;
+  const todayBest = (db && db.day===dInt) ? db.dist : 0;
+  const dSub = '#'+dInt+(todayBest>0 ? '  ·  best '+todayBest+'m' : '  ·  unplayed');
+  btn('start', 200, 452, 270, 60, '▶  BEGIN THE WALK', 'random seed', {col:'#3a5a8a', accent:'#6fa0e0', big:true});
+  btn('daily', 490, 452, 270, 60, '📅 DAILY CHALLENGE', dSub, {col:'#5a4a2a', accent:'#ffd27a', big:true});
   btn('dex',159,528,150,44,'📕 POKÉDEX',Dex.nCaught()+'/'+Object.keys(SPECIES).length,{col:'#4a3a6a',accent:'#c9a8ff'});
   btn('records',323,528,150,44,'🏅 RECORDS',Dex.data.best+'m best',{col:'#3a4a6a',accent:'#8fb0ff'});
   btn('sanctuary',487,528,150,44,'✦ SANCTUARY',Dex.data.essence+' essence',{col:'#3a2f5a',accent:'#ffe9a8'});
@@ -2713,7 +2753,7 @@ function drawGameOver(){
 function onClick(mx,my){
   { const mb=hitButton(mx,my);
     if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else { openStarter('title'); } } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='daily'){ startDaily(); } else { openStarter('title'); } } return; }
   if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='records') openRecords('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
   if(G.state==='starter'){
     const b=hitButton(mx,my); if(!b) return;

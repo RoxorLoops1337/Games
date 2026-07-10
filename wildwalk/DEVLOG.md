@@ -34,7 +34,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 14. [x] Shop restock + reroll — DONE c14.
 15. [x] Distance leaderboard (LOCAL best-runs) — DONE c15.
 16. [x] More species + 2nd-tier evolutions — DONE c16.
-17. [ ] Daily-seed challenge run (deterministic seed → shareable score).
+17. [x] Daily-seed challenge run — DONE c17.
 18. [ ] Prestige / ascension (opt-in run modifiers for bonus essence).
 19. [ ] Guided tutorial / first-run onboarding.
 20. [ ] More biomes + biome-specific boss variety.
@@ -45,6 +45,18 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c17 — Daily-seed challenge run** (studio: designer, ux-designer, lead, engineer, QA + orchestrator fix).
+  A deterministic daily mode: a 📅 DAILY CHALLENGE button on the title reseeds the existing LCG from
+  today's UTC date so every player worldwide gets the identical run that day. dayInt() → YYYYMMDD
+  (human-readable, shown as '#20260710'), dailySeedFor() avalanche-hashes it into the 32-bit seed.
+  startDaily() reseeds → picks a deterministic starter from a FIXED pool (DAILY_POOL = COMMONS, ignores
+  the menagerie upgrade so the seed can't desync cross-player) → newGame(key) → startWalk (skips starter
+  select). gameOver records the day's best (dist+tier) into Dex.data.daily {day,dist,tier}, added
+  additively with new-day reset in Dex.recordDaily; the DAILY button's sub-line shows the seed + today's
+  best ('· best 342m' / '· unplayed'). Title reworked to two side-by-side big buttons; bottom row intact.
+  QA caught the engineer using starterPool() (menagerie-dependent) instead of DAILY_POOL — orchestrator
+  fixed it and added a menagerie cross-player-determinism regression test. +8 tests, 130/130, 0 flakes.
+  Back-compat: Dex.data.daily defaults on old saves via Object.assign; all 7 save-shape arrays updated.
 - **c16 — More species + 2nd-tier evolutions** (studio: designer, ux-designer, lead, engineer, QA).
   Grew the roster from 18 → 24 species: +2 rares (craghorn Rock·spiky·horn, gloomoth Shadow·winged·ghost)
   and +4 legendaries (terralith Rock, tsunareth Water, sylvarch Grass, fulgorax Volt) so every type now
