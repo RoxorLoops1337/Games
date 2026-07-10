@@ -31,11 +31,21 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 11. [x] Achievements + milestone perks — DONE c11.
 12. [x] Starter select — DONE c12.
 13. [x] Weather / day–night — DONE c13.
-14. [ ] Shop restock + reroll; deeper tiers show rarer wares.
+14. [x] Shop restock + reroll — DONE c14.
 15. [ ] Distance leaderboard (reuse the repo's Cloudflare KV board pattern).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c14 — Shop restock + reroll** (studio: designer, ux-designer, lead, engineer, QA). The
+  Merchant now rolls a randomized 4-slot stock (genShopStock) from a weighted pool biased by
+  G.tier — deeper tiers surface more eggs/trinkets, fewer ball upgrades; revive only appears
+  with a fainted ally, ball only while ballTier<3. Duplicates allowed. Per-slot affordability
+  greys unaffordable cards; buying marks a slot SOLD. A 🔄 Reroll button costs escalating gold
+  (5 + 3·rerolls), guarded as a hard no-op when broke. buy() refactored to a single SHOP_CATALOG
+  price source + boolean return; buyStock maps a slot to the existing effect. Transient
+  (G.shopStock/shopRerolls; no save change). +5 tests (valid stock+tier gating; reroll deducts+
+  escalates+refreshes; reroll blocked when broke=same-ref no-op; buy applies effect+marks sold+
+  no-op on sold/broke; save shape unchanged) — invariant-based, not RNG-exact. 113/113, 0 flakes.
 - **c13 — Weather / day–night** (studio: systems + art designers, lead, engineer, QA). 5
   transient weather kinds (Clear/Rain/Sunshine/Night/Fog), set per encounter from a PURE integer
   hash of biome+fights (does NOT consume rnd(), fully reproducible/testable, biome-biased via

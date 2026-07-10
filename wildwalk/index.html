@@ -703,6 +703,7 @@ function newGame(chosenKey){
     bossWin:false,              // boss-reward latch (transient; only Dex.data persists)
     relics:[], relicOffer:null, afterRelic:null,   // roguelike boons (transient)
     trinkets:[], equipSel:null,                     // held-trinket inventory + equip modal sel (transient)
+    shopStock:null, shopRerolls:0,                  // rotating merchant stock (transient; openShop rerolls)
     dist:0, fights:0, tier:1, enc:0,
     lead:0,
     // world scroll
@@ -1039,28 +1040,69 @@ function resolveCross(id){
 }
 
 // ---------- shop ----------
-function openShop(){ G.state='shop'; clearButtons(); }
+// Rotating stock: on entry openShop() rolls a small randomized offer set from
+// SHOP_CATALOG (the single price source), biased by G.tier so deeper runs surface
+// rarer wares. Stock + reroll counter are TRANSIENT on G (never serialized).
+const REROLL_BASE=5, REROLL_STEP=3, SHOP_STOCK_SIZE=4;
+const SHOP_CATALOG = {
+  heal:{icon:'💖',name:'Full Heal',desc:'Restore all HP',price:15},
+  potion:{icon:'🧪',name:'Potion',desc:'+1 mid-battle heal',price:12},
+  ball:{icon:'🎯',name:'Ball Upgrade',desc:'Catch rate ↑',price:30},
+  revive:{icon:'✚',name:'Revive',desc:'Restore a fainted ally',price:20},
+  egg:{icon:'🥚',name:'Mystery Egg',desc:'Hatch a new companion',price:25},
+  trinket:{icon:'🎁',name:'Trinket Bag',desc:'A random held trinket',price:35},
+};
+function genShopStock(){
+  const T=G.tier;
+  const pool=[ {id:'heal',w:10}, {id:'potion',w:10} ];
+  if(G.team.some(m=>m.hp<=0)) pool.push({id:'revive',w:8});
+  if(G.ballTier<3) pool.push({id:'ball',w:Math.max(1,8-2*T)});
+  pool.push({id:'egg',w:4+T*1.5});
+  pool.push({id:'trinket',w:3+T*2});
+  const total=pool.reduce((s,e)=>s+e.w,0);
+  const draw=()=>{ let r=rnd()*total; for(const e of pool){ r-=e.w; if(r<=0) return e.id; } return 'heal'; };
+  const stock=[];
+  for(let i=0;i<SHOP_STOCK_SIZE;i++){ const id=draw(); stock.push({id, price:SHOP_CATALOG[id].price, sold:false}); }
+  return stock;
+}
+function rerollCost(){ return REROLL_BASE + REROLL_STEP*G.shopRerolls; }
+function rerollShop(){
+  const c=rerollCost();
+  if(G.gold<c){ flash('Not enough gold to reroll.'); return; }
+  G.gold-=c; G.shopRerolls++; G.shopStock=genShopStock(); flash('New wares!');
+}
+function buyStock(i){
+  const s=G.shopStock[i];
+  if(!s||s.sold) return;
+  if(buy(s.id)) s.sold=true;
+}
+function openShop(){ G.state='shop'; clearButtons(); G.shopRerolls=0; G.shopStock=genShopStock(); }
 function buy(item){
-  if(item==='potion' && G.gold>=12){ G.gold-=12; G.potions++; flash('Bought a potion.'); }
-  else if(item==='ball' && G.gold>=30 && G.ballTier<3){ G.gold-=30; G.ballTier++; flash('Ball upgraded! Catch rate up.'); }
-  else if(item==='egg' && G.gold>=25){
-    G.gold-=25; const k=pick(rnd()<0.7?COMMONS:UNCOMMONS); const m=makeMon(k, Math.max(3,G.tier*2-2));
+  const price=SHOP_CATALOG[item] ? SHOP_CATALOG[item].price : Infinity;
+  if(item==='potion' && G.gold>=price){ G.gold-=price; G.potions++; flash('Bought a potion.'); return true; }
+  else if(item==='ball' && G.gold>=price){
+    if(G.ballTier>=3){ flash('Ball already maxed.'); return false; }
+    G.gold-=price; G.ballTier++; flash('Ball upgraded! Catch rate up.'); return true;
+  }
+  else if(item==='egg' && G.gold>=price){
+    G.gold-=price; const k=pick(rnd()<0.7?COMMONS:UNCOMMONS); const m=makeMon(k, Math.max(3,G.tier*2-2));
     Dex.caught(k);
     flash('The egg hatched into '+m.sp.name+'!');
     acquire(m, ()=>{ G.state='shop'; });
+    return true;
   }
-  else if(item==='revive' && G.gold>=20){
+  else if(item==='revive' && G.gold>=price){
     const dead=G.team.find(m=>m.hp<=0);
-    if(dead){ G.gold-=20; dead.hp=Math.round(dead.maxhp*0.5); flash(dead.sp.name+' revived!'); }
-    else flash('No fainted companions.');
+    if(dead){ G.gold-=price; dead.hp=Math.round(dead.maxhp*0.5); flash(dead.sp.name+' revived!'); return true; }
+    flash('No fainted companions.'); return false;
   }
-  else if(item==='heal' && G.gold>=15){
-    G.gold-=15; G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; }); flash('Team fully healed!');
+  else if(item==='heal' && G.gold>=price){
+    G.gold-=price; G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; }); flash('Team fully healed!'); return true;
   }
-  else if(item==='trinket' && G.gold>=35){
-    G.gold-=35; const tid=pick(TRINKET_KEYS); G.trinkets.push(tid); flash('Bought '+TRINKETS[tid].name+'!');
+  else if(item==='trinket' && G.gold>=price){
+    G.gold-=price; const tid=pick(TRINKET_KEYS); G.trinkets.push(tid); flash('Bought '+TRINKETS[tid].name+'!'); return true;
   }
-  else flash('Not enough gold.');
+  flash('Not enough gold.'); return false;
 }
 
 // ---------- rest / train ----------
@@ -2355,21 +2397,21 @@ function drawRelic(){
 function drawShop(){
   panel(W/2-320,110,640,380,'🛒  Merchant');
   clearButtons();
-  const items=[
-    ['heal','Full Heal','Restore all HP','15💰', G.gold>=15],
-    ['potion','Potion','+1 mid-battle heal','12💰', G.gold>=12],
-    ['ball','Ball Upgrade','Catch rate ↑ ('+['I','II','III','IV'][G.ballTier]+')','30💰', G.gold>=30 && G.ballTier<3],
-    ['revive','Revive','Restore a fainted ally','20💰', G.gold>=20],
-    ['egg','Mystery Egg','Hatch a new companion','25💰', G.gold>=25],
-    ['trinket','Trinket Bag','A random held trinket','35💰', G.gold>=35],
-  ];
-  const bw=280, x0=W/2-bw-10, y0=170;
-  items.forEach((it,i)=>{
+  if(!G.shopStock) G.shopStock=genShopStock();
+  centerText('💰 '+G.gold+' gold', W/2, 174, '700 16px Segoe UI', '#ffd23d');
+  const cw=290, x0=180, cardH=64, y0=196;
+  G.shopStock.forEach((s,i)=>{
     const col=i%2, row=Math.floor(i/2);
-    const x=x0+col*(bw+20), y=y0+row*72;
-    btn('buy_'+it[0], x, y, bw, 60, it[1]+'   '+it[3], it[2], {col:'#2a3760', accent:'#5a76b0', enabled:it[4]});
+    const x=x0+col*(cw+20), y=y0+row*78;
+    const cat=SHOP_CATALOG[s.id];
+    if(s.sold){
+      btn('slot_'+i, x, y, cw, cardH, cat.icon+'  '+cat.name+'  —  SOLD', 'Purchased', {col:'#242c48', enabled:false});
+    } else {
+      btn('slot_'+i, x, y, cw, cardH, cat.icon+'  '+cat.name+'   '+s.price+'💰', cat.desc, {col:'#2a3760', accent:'#5a76b0', enabled:G.gold>=s.price});
+    }
   });
-  btn('leave', W/2-110, 420, 220, 46, 'Leave →', null, {col:'#3a4a3a', accent:'#6a9a6a'});
+  btn('reroll', W/2-220, 418, 210, 46, '🔄 Reroll  '+rerollCost()+'💰', 'Refresh the wares', {col:'#3a2f5a', accent:'#8a6fd0', enabled:G.gold>=rerollCost()});
+  btn('leave', W/2+10, 418, 210, 46, 'Leave →', null, {col:'#3a4a3a', accent:'#6a9a6a'});
 }
 
 function drawRest(){
@@ -2633,7 +2675,10 @@ function onClick(mx,my){
     case 'relic':
       if(id.startsWith('relic_')) takeRelic(+id.slice(6)); break;
     case 'shop':
-      if(id==='leave') proceed(); else if(id.startsWith('buy_')) buy(id.slice(4)); break;
+      if(id==='leave') proceed();
+      else if(id==='reroll') rerollShop();
+      else if(id.startsWith('slot_')) buyStock(+id.slice(5));
+      break;
     case 'rest':
       if(G.equipSel!=null){
         if(id==='equipclose') G.equipSel=null;
