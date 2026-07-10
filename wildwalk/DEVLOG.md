@@ -28,7 +28,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 8. [x] Held trinkets — DONE c8.
 9. [x] Between-run meta-progression — DONE c9.
 10. [x] Sound & music — DONE c10.
-11. [ ] Achievements + milestone perks.
+11. [x] Achievements + milestone perks — DONE c11.
 12. [ ] Starter select at run start.
 13. [ ] Weather / day–night affecting damage + catch.
 14. [ ] Shop restock + reroll; deeper tiers show rarer wares.
@@ -36,6 +36,17 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c11 — Achievements + milestone perks** (studio: meta + ux designers, lead, engineer, QA).
+  14 persistent achievements (First Friend, Full Spectrum, Rare Find, Legend Keeper, Boss
+  Slayer, Titan Bane ×10, Trailblazer t5, Voidwalker t10, Merciful ×25, Reaper ×25, Full House,
+  Master Collector, Hoarder 500✦, Marathoner 1000m) — each a one-time essence reward with an
+  unlock toast (sfx+burst). Award-once via a Dex.data.ach ledger; cumulative counters
+  (killed/released/bossKills/bestTier/fullPartyWin/wildCatch) persisted in Dex.data
+  (back-compat). checkAch() hooked at catch/kill/release/boss/tier/gameOver. Achievements
+  screen (2×7 grid, locked/unlocked, X/Y) from title + game-over ('a'/Esc). +9 tests incl.
+  old-save-loads, award-once (repeat-call + reload), counters persist, save superset.
+  Orchestrator fix: 'First Friend' now requires a genuine wild catch (new wildCatch counter)
+  instead of nCaught>=2 which the auto-caught starter tripped (+regression test). 98/98, 0 flakes.
 - **c10 — Sound & music** (studio: sound-designer, ux-designer, lead, engineer, QA). A pure
   Web Audio (oscillator) layer — NO asset files. Chiptune music with walk/battle/boss mood
   variants via a 25ms look-ahead scheduler (mood follows G.state/boss), + SFX for hit, crit,

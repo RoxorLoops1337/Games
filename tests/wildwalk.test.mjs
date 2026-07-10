@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:()=>newGame(),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f)};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:()=>newGame(),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices()};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -185,6 +185,9 @@ test('3000 driven iterations across all states never throw', ()=>{
     const key = getKey();
     if(key) key({ key:String((i%4)+1), preventDefault(){} });
   }
+  // route once through the achievements screen (new G.state) — must render clean
+  api.openAchievements('title'); step(2);
+  assert(api.getG().state==='achievements', 'did not enter achievements state');
   // reaching here without throwing is the assertion
   assert(true);
 });
@@ -511,7 +514,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -654,8 +657,9 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']), `save shape changed: ${keys}`);
-  for(const k of keys) assert(!/^boss/i.test(k), `boss field leaked into save: ${k}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  // bossKills is a legit persisted achievement counter; any OTHER boss* field is a leak
+  for(const k of keys) assert(k==='bossKills' || !/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
 
 // ---- 8. telegraph/pause never freeze the battle tick ----
@@ -909,7 +913,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1137,7 +1141,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1309,6 +1313,151 @@ test('A4 mute intercept on gameover does not start a new run', ()=>{
   assert(clickId('mute'), 'no mute button on gameover');
   assert(api.getG().state==='gameover', `intercept failed: state=${api.getG().state}`);
   assert(api.Dex.data.muted!==mutedBefore, 'mute did not flip on gameover');
+});
+
+// ===================================================================
+// ACHIEVEMENTS — award-once milestone perks (persisted in Dex.data)
+// ===================================================================
+
+test('ACH1 old save (no ach) loads and new fields default', ()=>{
+  const { api } = boot(JSON.stringify({seen:{},caught:{},best:120,runs:3,essence:80,upgrades:{},muted:false}));
+  const D = api.Dex.data;
+  assert(JSON.stringify(D.ach)==='{}', `ach not default {}: ${JSON.stringify(D.ach)}`);
+  assert(D.killed===0 && D.released===0 && D.bossKills===0 && D.bestTier===0 && D.fullPartyWin===0,
+    `counters not defaulted: ${JSON.stringify({k:D.killed,r:D.released,b:D.bossKills,t:D.bestTier,f:D.fullPartyWin})}`);
+  assert(D.best===120 && D.essence===80, `old scalars lost: best=${D.best} essence=${D.essence}`);
+  assert(typeof D.upgrades==='object' && Object.keys(D.upgrades).length===0, 'upgrades not intact');
+});
+
+test('ACH2 well-formed table (14 rows, unique ids, essence rewards)', ()=>{
+  const { ACH } = boot().api;
+  assert(ACH.length===14, `expected 14 achievements, got ${ACH.length}`);
+  const ids=new Set();
+  for(const a of ACH){
+    assert(a.id && a.icon && a.name && a.desc, `${a.id}: missing field`);
+    assert(Number.isFinite(a.essence) && a.essence>0, `${a.id}: bad essence`);
+    assert(typeof a.test==='function', `${a.id}: test not a fn`);
+    assert(!ids.has(a.id), `duplicate id ${a.id}`); ids.add(a.id);
+  }
+});
+
+test('ACH3 meeting a condition marks + grants the reward exactly once', ()=>{
+  const b = boot();
+  const api = b.api, D = api.Dex.data;
+  D.released = 25;
+  const e0 = D.essence;
+  api.checkAch();
+  assert(D.ach.release_25===1, 'release_25 not marked');
+  assert(D.essence===e0+35, `essence ${D.essence} != ${e0}+35`);
+  // repeat call: no re-grant
+  api.checkAch();
+  assert(D.ach.release_25===1 && D.essence===e0+35, `re-grant on repeat call (essence ${D.essence})`);
+  // reload path: persisted save re-boots without re-granting
+  const saved = b.store['wildwalk_save_v1'];
+  const b2 = boot(saved);
+  const D2 = b2.api.Dex.data;
+  assert(D2.ach.release_25===1 && D2.essence===e0+35, 'reload lost the grant state');
+  // Isolate release_25's award-once property: the reload boot re-runs newGame(), which
+  // marks a fresh random starter caught. If it differs from the first run's starter,
+  // nCaught() hits 2 and the unrelated first_catch achievement would fire on this recheck.
+  // Zero the caught set so ONLY release_25 is in play here.
+  D2.caught = {};
+  b2.api.checkAch();
+  assert(D2.ach.release_25===1 && D2.essence===e0+35, `re-grant after reload (essence ${D2.essence})`);
+});
+
+test('ACH4 caught-derived achievement (legendary) grants once', ()=>{
+  const { api } = boot();
+  const D = api.Dex.data;
+  const legendKey = api.SPECIESKEYS.find(k=> api.SP[k].rarity===3);
+  assert(legendKey, 'no rarity-3 species found');
+  D.caught[legendKey] = 1;
+  const e0 = D.essence;
+  api.checkAch();
+  assert(D.ach.catch_legend===1, 'catch_legend not marked');
+  assert(D.essence>=e0+60, `essence ${D.essence} did not include the +60 legend reward`);
+  const e1 = D.essence;
+  api.checkAch();
+  assert(D.essence===e1, `essence changed on repeat (${e1}->${D.essence})`);
+});
+
+test('ACH5 cumulative counters increment and persist to the save', ()=>{
+  const { api, step, clickId, toBattle, store } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g = api.getG();
+  // KILL a wild → killed++
+  g.wild = api.mk('emberpup', 5);
+  api.doKill();
+  assert(api.Dex.data.killed===1, `killed ${api.Dex.data.killed} != 1`);
+  // RELEASE a wild → released++
+  g.wild = api.mk('puddlet', 5);
+  api.doRelease();
+  assert(api.Dex.data.released===1, `released ${api.Dex.data.released} != 1`);
+  // boss defeat via the afterFightChoices path → bossKills++
+  api.spawnBoss('moltengod');
+  api.afterFightChoices();
+  assert(api.Dex.data.bossKills===1, `bossKills ${api.Dex.data.bossKills} != 1`);
+  // all persisted at the incremented values
+  const saved = JSON.parse(store['wildwalk_save_v1']);
+  assert(saved.killed===1 && saved.released===1 && saved.bossKills===1,
+    `persisted counters wrong: ${JSON.stringify({k:saved.killed,r:saved.released,b:saved.bossKills})}`);
+});
+
+test('ACH6 first boss kill grants first_boss exactly once', ()=>{
+  const { api } = boot();
+  const D = api.Dex.data;
+  const e0 = D.essence;
+  api.spawnBoss('abysslord');
+  api.afterFightChoices();               // increments bossKills + checkAch
+  assert(D.ach.first_boss===1, 'first_boss not granted');
+  assert(D.essence===e0+25, `essence ${D.essence} != ${e0}+25`);
+  const e1 = D.essence;
+  api.spawnBoss('moltengod');
+  api.afterFightChoices();               // bossKills=2, but no re-grant of first_boss
+  assert(D.bossKills===2 && D.essence===e1, `second boss re-granted (essence ${e1}->${D.essence})`);
+});
+
+test('ACH7 save shape is a superset of the old 7 keys', ()=>{
+  const { api, store } = boot();
+  api.Dex.save();
+  const saved = JSON.parse(store['wildwalk_save_v1']);
+  const keys = Object.keys(saved).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']),
+    `save shape wrong: ${keys}`);
+});
+
+test('ACH8 achievements screen opens from title, renders, back returns', ()=>{
+  const { api, step, clickId } = boot();
+  step(2);
+  assert(clickId('ach'), 'no AWARDS button on title');
+  assert(api.getG().state==='achievements', `expected achievements, got ${api.getG().state}`);
+  api.getG().buttons=[]; api.draw();     // render smoke — must not throw
+  assert(api.getG().buttons.some(b=>b.id==='back'), 'no back button on achievements screen');
+  step(1);
+  assert(clickId('back'), 'no back button click');
+  assert(api.getG().state==='title', `back should return to title, got ${api.getG().state}`);
+});
+
+test('ACH9 fights still resolve with the achievement checks wired in', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g = api.getG(); g.wild.hp=1; g.battleIntro=0;
+  let reached=false;
+  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice'){ reached=true; break; } }
+  assert(reached, 'battle never resolved to a choice');
+  step(1); assert(clickId('kill'), 'no kill button');
+  assert(['walk','crossroads'].includes(api.getG().state), `did not advance after kill (${api.getG().state})`);
+});
+
+// ---- achievements: 'First Friend' needs a genuine wild catch, not the auto-caught starter ----
+test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
+  const { api } = boot();
+  const D = api.Dex;
+  D.data.ach = {}; D.data.wildCatch = 0;
+  api.checkAch();
+  assert(!D.data.ach.first_catch, 'first_catch fired from the auto-caught starter alone');
+  D.data.wildCatch = 1; api.checkAch();
+  assert(D.data.ach.first_catch===1, 'first_catch did not fire after a real wild catch');
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
