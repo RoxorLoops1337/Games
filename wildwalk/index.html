@@ -74,32 +74,32 @@ const SWITCH_ENTRY=0.6;                             // min cd the incoming mon e
 // ---------- species database ----------
 // shape: blob | round | spiky | long | winged ; feat: flame|drip|leaf|bolt|rock|ghost|horn
 // rarity: 0 common,1 uncommon,2 rare,3 legendary
-function S(name,type,rarity,shape,feat,body,acc,belly,base,evo){
-  return {name,type,rarity,shape,feat,body,acc,belly,base,evo:evo||null};
+function S(name,type,rarity,shape,feat,body,acc,belly,base,evo,flavor){
+  return {name,type,rarity,shape,feat,body,acc,belly,base,evo:evo||null,flavor:flavor||''};
 }
 const SPECIES = {
-  emberpup:  S('Emberpup','Fire',0,'blob','flame','#e8623a','#ffb14a','#ffe1b0',{hp:34,atk:9,spd:1.1},'cindermaw'),
-  puddlet:   S('Puddlet','Water',0,'round','drip','#3f9fe0','#8fe0ff','#d5f4ff',{hp:38,atk:8,spd:1.0},'torrentoad'),
-  sprig:     S('Sprig','Grass',0,'blob','leaf','#5fbf52','#a6e86f','#e6ffcf',{hp:40,atk:8,spd:0.95},'thornbeast'),
-  sparky:    S('Sparky','Volt',0,'spiky','bolt','#f2c93a','#fff2a0','#fff8d0',{hp:32,atk:10,spd:1.25},'voltfox'),
-  pebblin:   S('Pebblin','Rock',0,'round','rock','#a9855e','#c9ac82','#e6d6bd',{hp:46,atk:9,spd:0.8},'boulderk'),
-  umbrat:    S('Umbrat','Shadow',0,'blob','ghost','#7b57c8','#b79bff','#e3d6ff',{hp:35,atk:10,spd:1.1},'nightwyrm'),
+  emberpup:  S('Emberpup','Fire',0,'blob','flame','#e8623a','#ffb14a','#ffe1b0',{hp:34,atk:9,spd:1.1},'cindermaw','A pup with a temper; its sneezes singe the grass.'),
+  puddlet:   S('Puddlet','Water',0,'round','drip','#3f9fe0','#8fe0ff','#d5f4ff',{hp:38,atk:8,spd:1.0},'torrentoad','Leaves cool, damp pawprints wherever it wanders.'),
+  sprig:     S('Sprig','Grass',0,'blob','leaf','#5fbf52','#a6e86f','#e6ffcf',{hp:40,atk:8,spd:0.95},'thornbeast','Sprouts a fresh leaf each time it makes a friend.'),
+  sparky:    S('Sparky','Volt',0,'spiky','bolt','#f2c93a','#fff2a0','#fff8d0',{hp:32,atk:10,spd:1.25},'voltfox','Static clings to its fur; petting one is a gamble.'),
+  pebblin:   S('Pebblin','Rock',0,'round','rock','#a9855e','#c9ac82','#e6d6bd',{hp:46,atk:9,spd:0.8},'boulderk','Sleeps as a boulder and wakes up grumpy.'),
+  umbrat:    S('Umbrat','Shadow',0,'blob','ghost','#7b57c8','#b79bff','#e3d6ff',{hp:35,atk:10,spd:1.1},'nightwyrm','Only its glowing eyes give away the hiding spot.'),
 
-  cindermaw: S('Cindermaw','Fire',1,'spiky','flame','#d24a26','#ff8a3a','#ffd08a',{hp:52,atk:14,spd:1.15},'infernyx'),
-  torrentoad:S('Torrentoad','Water',1,'blob','drip','#2f80d0','#63c6ff','#c4ecff',{hp:60,atk:12,spd:1.0},'leviatide'),
-  thornbeast:S('Thornbeast','Grass',1,'spiky','leaf','#489a3f','#8ad84f','#d6ffb0',{hp:62,atk:12,spd:0.95},'verdragon'),
-  voltfox:   S('Voltfox','Volt',1,'long','bolt','#e8b62a','#fff07a','#fff6c0',{hp:48,atk:16,spd:1.3},'stormhorn'),
-  boulderk:  S('Boulderk','Rock',1,'round','rock','#8f6c47','#bd9a6d','#ddc7a6',{hp:74,atk:13,spd:0.78},null),
-  nightwyrm: S('Nightwyrm','Shadow',1,'winged','ghost','#5f3fb0','#a888ff','#d8c6ff',{hp:54,atk:15,spd:1.15},null),
+  cindermaw: S('Cindermaw','Fire',1,'spiky','flame','#d24a26','#ff8a3a','#ffd08a',{hp:52,atk:14,spd:1.15},'infernyx','Its jaws smolder; it chews charcoal for a snack.'),
+  torrentoad:S('Torrentoad','Water',1,'blob','drip','#2f80d0','#63c6ff','#c4ecff',{hp:60,atk:12,spd:1.0},'leviatide','One croak summons a small, sudden downpour.'),
+  thornbeast:S('Thornbeast','Grass',1,'spiky','leaf','#489a3f','#8ad84f','#d6ffb0',{hp:62,atk:12,spd:0.95},'verdragon','Bramble hide that even blades think twice about.'),
+  voltfox:   S('Voltfox','Volt',1,'long','bolt','#e8b62a','#fff07a','#fff6c0',{hp:48,atk:16,spd:1.3},'stormhorn','Runs so fast it leaves a trail of sparks behind.'),
+  boulderk:  S('Boulderk','Rock',1,'round','rock','#8f6c47','#bd9a6d','#ddc7a6',{hp:74,atk:13,spd:0.78},null,'A walking cliff face; nothing on earth budges it.'),
+  nightwyrm: S('Nightwyrm','Shadow',1,'winged','ghost','#5f3fb0','#a888ff','#d8c6ff',{hp:54,atk:15,spd:1.15},null,'Glides through moonless skies, unseen and unheard.'),
 
-  infernyx:  S('Infernyx','Fire',2,'winged','flame','#b83518','#ff7326','#ffb060',{hp:82,atk:22,spd:1.2},null),
-  leviatide: S('Leviatide','Water',2,'long','drip','#1f66b8','#4fb8ff','#b4e6ff',{hp:100,atk:19,spd:1.02},null),
-  verdragon: S('Verdragon','Grass',2,'winged','leaf','#37842f','#77cf3d','#c8ff9a',{hp:96,atk:19,spd:1.0},null),
-  stormhorn: S('Stormhorn','Volt',2,'spiky','bolt','#d9a41a','#ffe855','#fff4a0',{hp:78,atk:26,spd:1.32},null),
+  infernyx:  S('Infernyx','Fire',2,'winged','flame','#b83518','#ff7326','#ffb060',{hp:82,atk:22,spd:1.2},null,'Reborn from its own ashes, hotter every time.'),
+  leviatide: S('Leviatide','Water',2,'long','drip','#1f66b8','#4fb8ff','#b4e6ff',{hp:100,atk:19,spd:1.02},null,'The ancient tides answer when it calls the deep.'),
+  verdragon: S('Verdragon','Grass',2,'winged','leaf','#37842f','#77cf3d','#c8ff9a',{hp:96,atk:19,spd:1.0},null,'A living forest takes wing when it climbs the sky.'),
+  stormhorn: S('Stormhorn','Volt',2,'spiky','bolt','#d9a41a','#ffe855','#fff4a0',{hp:78,atk:26,spd:1.32},null,'Its horns split the clouds with borrowed lightning.'),
 
   // legendaries — only appear as elites
-  moltengod: S('Moltengod','Fire',3,'winged','flame','#e01f1f','#ff9b2e','#ffd27a',{hp:150,atk:30,spd:1.25},null),
-  abysslord: S('Abysslord','Shadow',3,'winged','ghost','#3a1f88','#8a5cff','#c9a8ff',{hp:170,atk:28,spd:1.2},null),
+  moltengod: S('Moltengod','Fire',3,'winged','flame','#e01f1f','#ff9b2e','#ffd27a',{hp:150,atk:30,spd:1.25},null,'Where it treads, mountains remember how to burn.'),
+  abysslord: S('Abysslord','Shadow',3,'winged','ghost','#3a1f88','#8a5cff','#c9a8ff',{hp:170,atk:28,spd:1.2},null,'It rules the dark between stars, and it is patient.'),
 };
 const RARITY_NAME = ['Common','Uncommon','Rare','Legendary'];
 const RARITY_COL  = ['#9fb0cc','#67d089','#ffb43d','#ff6bd5'];
@@ -388,6 +388,7 @@ function newGame(){
     // transient message
     msg:'', msgT:0,
     buttons:[],
+    pokedexFrom:'title', pokedexSel:null,
     pendingMon:null, afterAcquire:null,
     starterKey,
   };
@@ -1109,6 +1110,7 @@ function draw(){
   ctx.save(); ctx.translate(sh.x,sh.y);
 
   if(G.state==='title'){ drawTitle(); ctx.restore(); return; }
+  if(G.state==='pokedex'){ drawPokedex(); ctx.restore(); return; }
 
   const tierForBG = G.state==='battle'&&G.wild&&G.wild.elite? G.tier+1:G.tier;
   drawBG(G.scroll, tierForBG);
@@ -1150,6 +1152,109 @@ function draw(){
   ctx.restore();
 }
 
+// ===================================================================
+// Pokédex — read-only gallery over Dex.data (no save changes)
+// ===================================================================
+function dexStatus(key){ return Dex.data.caught[key]?2:(Dex.data.seen[key]?1:0); }
+function openPokedex(from){ G.pokedexFrom=from; G.pokedexSel=null; G.state='pokedex'; clearButtons(); }
+function dexProgress(){
+  const keys=Object.keys(SPECIES);
+  const byRarity=[{caught:0,total:0},{caught:0,total:0},{caught:0,total:0},{caught:0,total:0}];
+  for(const k of keys){ const sp=SPECIES[k]; const r=byRarity[sp.rarity]; r.total++; if(Dex.data.caught[k]) r.caught++; }
+  return { caught:Dex.nCaught(), seen:Dex.nSeen(), total:keys.length, byRarity };
+}
+function pokedexCardRect(i){ const c=i%6,r=(i/6)|0; return {x:22+c*155, y:118+r*146, w:140, h:132}; }
+function pokedexCardAt(mx,my){
+  for(let i=0;i<Object.keys(SPECIES).length;i++){ const r=pokedexCardRect(i);
+    if(mx>=r.x&&mx<=r.x+r.w&&my>=r.y&&my<=r.y+r.h) return i; }
+  return -1;
+}
+// max base stats across the roster — used to normalize detail stat bars
+function dexMaxBase(){
+  let hp=1,atk=1,spd=1;
+  for(const k of Object.keys(SPECIES)){ const b=SPECIES[k].base; if(b.hp>hp)hp=b.hp; if(b.atk>atk)atk=b.atk; if(b.spd>spd)spd=b.spd; }
+  return {hp,atk,spd};
+}
+function drawPokedex(){
+  ctx.fillStyle='#12162a'; ctx.fillRect(0,0,W,H);
+  const p=dexProgress();
+  // header
+  centerText('POKÉDEX', W/2, 44, '900 40px Segoe UI', '#ffe9a8');
+  centerText('Caught '+p.caught+' / '+p.total+'   ·   Seen '+p.seen+' / '+p.total, W/2, 72, '700 16px Segoe UI', '#c9b8ff');
+  // per-rarity chips
+  const chipW=150, gap=14, totalW=chipW*4+gap*3, cx0=W/2-totalW/2, cy=92;
+  for(let r=0;r<4;r++){ const x=cx0+r*(chipW+gap);
+    roundRect(x,cy-14,chipW,22,11); ctx.fillStyle='rgba(12,16,32,.9)'; ctx.fill();
+    ctx.strokeStyle=RARITY_COL[r]; ctx.lineWidth=1; roundRect(x,cy-14,chipW,22,11); ctx.stroke();
+    centerText(RARITY_NAME[r]+' '+p.byRarity[r].caught+'/'+p.byRarity[r].total, x+chipW/2, cy+2, '700 12px Segoe UI', RARITY_COL[r]);
+  }
+  // grid
+  Object.keys(SPECIES).forEach((key,i)=>{
+    const sp=SPECIES[key], st=dexStatus(key), r=pokedexCardRect(i);
+    const sx=r.x+r.w/2, sy=r.y+56;
+    // card frame
+    const pg=ctx.createLinearGradient(0,r.y,0,r.y+r.h);
+    if(st===0){ pg.addColorStop(0,'#0e1324'); pg.addColorStop(1,'#0a0e1c'); }
+    else { pg.addColorStop(0,'#1a2138'); pg.addColorStop(1,'#111730'); }
+    ctx.save();
+    if(st===2){ ctx.shadowColor=RARITY_COL[sp.rarity]; ctx.shadowBlur=10; }
+    roundRect(r.x,r.y,r.w,r.h,10); ctx.fillStyle=pg; ctx.fill();
+    ctx.restore();
+    ctx.lineWidth=2;
+    ctx.strokeStyle = st===2?RARITY_COL[sp.rarity] : st===1?'#2a3760':'#1a2138';
+    roundRect(r.x,r.y,r.w,r.h,10); ctx.stroke();
+    if(st===2){
+      drawMon(sp, sx, sy, 28, 1, G.t, {bob:i});
+      centerText(sp.name, sx, r.y+r.h-38, '700 14px Segoe UI', '#eaf0ff');
+      centerText(sp.type+' · '+RARITY_NAME[sp.rarity], sx, r.y+r.h-20, '600 11px Segoe UI', TYPE_COL[sp.type]);
+    } else if(st===1){
+      const sil={...sp, body:'#1c2740', acc:'#1c2740', belly:'#26324e'};
+      drawMon(sil, sx, sy, 28, 1, G.t, {bob:i});
+      centerText('???', sx, r.y+r.h-34, '800 16px Segoe UI', '#5a6688');
+      centerText(sp.type, sx, r.y+r.h-16, '600 11px Segoe UI', TYPE_COL[sp.type]);
+    } else {
+      centerText('?', sx, r.y+r.h/2+14, '900 40px Segoe UI', '#242c46');
+    }
+  });
+  // detail overlay
+  if(G.pokedexSel!=null){
+    const key=Object.keys(SPECIES)[G.pokedexSel], sp=SPECIES[key], st=dexStatus(key);
+    if(sp && st>=1){
+      ctx.fillStyle='rgba(6,8,18,.82)'; ctx.fillRect(0,0,W,H);
+      panel(200,110,560,380,null);
+      if(st===2){
+        drawMon(sp, 300, 250, 60, 1, G.t);
+        centerText(sp.name, 540, 175, '800 30px Segoe UI', RARITY_COL[sp.rarity]);
+        centerText(sp.type+'  ·  '+RARITY_NAME[sp.rarity], 540, 202, '700 14px Segoe UI', TYPE_COL[sp.type]);
+        const mx=dexMaxBase(), bx=430, bw=280; let by=232;
+        const stat=(lab,val,max,col)=>{ centerText(lab, bx-24, by+11, '700 12px Segoe UI', '#aeb8d8');
+          bar(bx,by,bw,12,val/max,col,'#0c1120');
+          ctx.textAlign='left'; ctx.font='700 12px Segoe UI'; ctx.fillStyle='#eaf0ff'; ctx.fillText(Math.round(val), bx+bw+8, by+11); by+=30; };
+        stat('HP', sp.base.hp, mx.hp, '#5fd06a');
+        stat('ATK', sp.base.atk, mx.atk, '#ff9b6f');
+        stat('SPD', sp.base.spd, mx.spd, '#ffd23d');
+        if(sp.evo){ centerText('Evolves into '+(Dex.data.seen[sp.evo]?SPECIES[sp.evo].name:'???'), 540, 340, '600 13px Segoe UI', '#8fb0ff'); }
+        // flavor, word-wrapped to ~2 lines
+        ctx.font='600 14px Segoe UI';
+        const words=(sp.flavor||'').split(' '); const lines=[]; let cur='';
+        for(const wd of words){ const test=cur?cur+' '+wd:wd; if(ctx.measureText(test).width>470 && cur){ lines.push(cur); cur=wd; } else cur=test; }
+        if(cur) lines.push(cur);
+        let fy=400; for(const ln of lines){ centerText(ln, W/2, fy, '600 14px Segoe UI', '#c9d4f0'); fy+=20; }
+      } else {
+        const sil={...sp, body:'#1c2740', acc:'#1c2740', belly:'#26324e'};
+        drawMon(sil, W/2, 250, 60, 1, G.t);
+        centerText('???', W/2, 320, '800 30px Segoe UI', '#5a6688');
+        centerText(sp.type, W/2, 350, '700 14px Segoe UI', TYPE_COL[sp.type]);
+        centerText('Not yet caught', W/2, 380, '600 14px Segoe UI', '#8fa0c8');
+      }
+      centerText('tap anywhere to close', W/2, 476, '600 12px Segoe UI', '#8fa0c8');
+    }
+  }
+  clearButtons();
+  btn('back', W/2-90, 552, 180, 40, '◀  BACK', null, {col:'#2a3355'});
+  drawButtons();
+}
+
 function drawTitle(){
   const sky=ctx.createLinearGradient(0,0,0,H);
   sky.addColorStop(0,'#161028'); sky.addColorStop(1,'#3a2a55'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
@@ -1167,6 +1272,7 @@ function drawTitle(){
     W/2, 420, '600 15px Segoe UI', '#8fa0c8');
   clearButtons();
   btn('start', W/2-130, 460, 260, 60, '▶  BEGIN THE WALK', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
+  btn('dex', W/2-130, 528, 260, 44, '📕  POKÉDEX', Dex.nCaught()+' / '+Object.keys(SPECIES).length+' caught', {col:'#4a3a6a', accent:'#c9a8ff'});
   drawButtons();
 }
 
@@ -1476,6 +1582,7 @@ function drawGameOver(){
   centerText('Pokédex: '+Dex.nCaught()+' caught / '+Dex.nSeen()+' seen of '+Object.keys(SPECIES).length, W/2, 375, '600 15px Segoe UI', '#c9b8ff');
   clearButtons();
   btn('again', W/2-130, 420, 260, 58, '↻  WALK AGAIN', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
+  btn('dex', W/2-130, 486, 260, 40, '📕  POKÉDEX', null, {col:'#4a3a6a', accent:'#c9a8ff'});
   drawButtons();
 }
 
@@ -1483,8 +1590,16 @@ function drawGameOver(){
 // Input
 // ===================================================================
 function onClick(mx,my){
-  if(G.state==='title'){ if(hitButton(mx,my)){ newGame(); startWalk(); } return; }
-  if(G.state==='gameover'){ if(hitButton(mx,my)){ newGame(); startWalk(); } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else { newGame(); startWalk(); } } return; }
+  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else { newGame(); startWalk(); } } return; }
+  if(G.state==='pokedex'){
+    if(G.pokedexSel!=null){ G.pokedexSel=null; return; }   // any tap closes detail
+    const b=hitButton(mx,my);
+    if(b && b.id==='back'){ G.state=G.pokedexFrom||'title'; clearButtons(); return; }
+    const i=pokedexCardAt(mx,my);
+    if(i>=0){ const k=Object.keys(SPECIES)[i]; if(dexStatus(k)>=1) G.pokedexSel=i; }  // seen/caught open detail; locked inert
+    return;
+  }
   if(G.state==='battle' && G.battleIntro<=0){ const idx=teamCardAt(mx,my); if(idx>=0){ trySwitch(idx); return; } }
   const b=hitButton(mx,my); if(!b) return;
   const id=b.id;
@@ -1527,6 +1642,8 @@ function canvasPos(e){
 }
 cv.addEventListener('pointerdown', e=>{ e.preventDefault(); const p=canvasPos(e); onClick(p.x,p.y); }, {passive:false});
 window.addEventListener('keydown', e=>{
+  if((G.state==='title'||G.state==='gameover') && (e.key==='d'||e.key==='D')){ openPokedex(G.state); e.preventDefault(); return; }
+  if(G.state==='pokedex' && (e.key==='Escape'||e.key==='Backspace'||e.key==='d'||e.key==='D')){ if(G.pokedexSel!=null) G.pokedexSel=null; else { G.state=G.pokedexFrom||'title'; clearButtons(); } e.preventDefault(); return; }
   if(e.key===' '){ if(G.state==='battle') G.speed=G.speed>=3?1:G.speed+1; e.preventDefault(); }
   const n=parseInt(e.key);
   if(n>=1 && n<=4){

@@ -45,7 +45,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),Dex,SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -351,6 +351,63 @@ test('T8 teamCardAt maps card geometry', ()=>{
   // card i is at x=14+i*118, y=H-70, size 110x60 (H=600)
   assert(api.teamCardAt(14+1*118+5, 600-70+5)===1, 'card 1 hit-test');
   assert(api.teamCardAt(0, 0)===-1, 'off-card miss');
+});
+
+// ---- Pokédex screen ----
+test('pokedex opens from title and back returns to title', ()=>{
+  const { api, step, clickId } = boot();
+  step(2);
+  assert(clickId('dex'), 'no dex button on title');
+  assert(api.getG().state==='pokedex', `expected pokedex, got ${api.getG().state}`);
+  step(1);
+  assert(clickId('back'), 'no back button');
+  assert(api.getG().state==='title', `back should return to title, got ${api.getG().state}`);
+});
+
+test('pokedex opens from gameover and back returns to gameover', ()=>{
+  const { api, step, clickId } = boot();
+  const g=api.getG(); g.state='gameover';
+  step(1);
+  assert(clickId('dex'), 'no dex button on gameover');
+  assert(api.getG().state==='pokedex' && api.getG().pokedexFrom==='gameover', 'from should be gameover');
+  step(1);
+  clickId('back');
+  assert(api.getG().state==='gameover', `back should return to gameover, got ${api.getG().state}`);
+});
+
+test('dexProgress counts reflect Dex.data', ()=>{
+  const { api } = boot();
+  const p=api.dexProgress();
+  assert(p.total===18 && p.caught===api.Dex.nCaught() && p.seen===api.Dex.nSeen(), 'counts mismatch');
+  api.Dex.data.seen['umbrat']=1;
+  const q=api.dexProgress();
+  assert(q.seen>=p.seen, 'seen did not grow');
+  let bc=0; q.byRarity.forEach(x=>{ bc+=x.caught; });
+  assert(bc===q.caught, `byRarity caught sum ${bc} != ${q.caught}`);
+});
+
+test('pokedex renders caught/seen/locked + detail without throwing', ()=>{
+  const { api, step } = boot();
+  const g=api.getG();
+  // caught = starter only; seen-only = umbrat; rest locked
+  api.Dex.data.caught = { [g.starterKey]: 1 };
+  api.Dex.data.seen = { [g.starterKey]: 1, umbrat: 1 };
+  api.openPokedex('title'); step(3);
+  api.getG().pokedexSel=0; step(3);            // detail (likely caught path)
+  // find a seen-only card index and open its spoiler-safe detail
+  const keys=Object.keys(api.SP);
+  const seenIdx=keys.indexOf('umbrat');
+  api.getG().pokedexSel=seenIdx; step(3);
+  assert(true);
+});
+
+test('pokedex key wiring: d opens, Escape closes', ()=>{
+  const { api, step, getKey } = boot();
+  step(2);
+  getKey()({ key:'d', preventDefault(){} });
+  assert(api.getG().state==='pokedex', `d should open pokedex, got ${api.getG().state}`);
+  getKey()({ key:'Escape', preventDefault(){} });
+  assert(api.getG().state==='title', `Escape should return to title, got ${api.getG().state}`);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
