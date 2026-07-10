@@ -44,7 +44,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 24. [x] Online Cloudflare KV leaderboard — DONE c24.
 25. [x] Settings menu — DONE c25.
 26. [x] New element type + species (Frost) — DONE c26.
-27. [ ] Party synergies / auras (type-pair or full-team bonuses that reward deliberate team-building).
+27. [x] Party synergies / auras — DONE c27.
 28. [ ] Boss telegraph & mechanic variety (distinct wind-ups/patterns per boss, readable tells).
 29. [ ] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety).
 30. [ ] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds).
@@ -55,6 +55,20 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c27 — Party synergies / auras** (studio: synergy-systems, balance/ux, lead, engineer, QA + orchestrator fix).
+  A transient team-comp buff layer (G.synergies, never serialized). computeSynergies() reads the live party:
+  each type with ≥2 members grants a small flavored buff (Fire→+8% atk, Rock→+10% hp, Volt→+8% spd, Grass→+6% hp,
+  Water→+6% win-heal, Shadow/Frost→-5% dmg taken); MONO (all same type) doubles that axis; RAINBOW (4 distinct)
+  gives +5% atk/hp/spd. All magnitudes clamped (mul ≤1.20, guard ≤0.10, winHeal ≤0.12) and bounded (≤2 pairs, mono
+  and rainbow exclusive). Applied via the live-read pattern (no free stat mutation): atkMul in strike (attacker,
+  team-only), guardBonus in strike's defender branch + bossHeavyStrike (team defender only), winHeal in endFight,
+  hpMul folded into baseMaxHp and spdMul folded into the team-spd derivations; updateSynergies() (compute+refresh,
+  preserving hp-delta & fainted) runs on every comp change (newGame/acquire/swap/switch/endFight). A TEAM SYNERGY
+  chip readout sits beside the party bar. ORCHESTRATOR FIX: QA caught two real spdMul bugs the green suite missed —
+  finishSpawn stripped the team's spd synergy (inert in combat) and makeMon leaked it to WILDS (wild-safety
+  violation). I fixed both (spd synergy lives in finishSpawn/refreshTeamStats only; makeMon stays base) and added
+  a real-path spawn/cadence test proven to catch BOTH via negative controls. 201/201 wildwalk + 19/19 board,
+  0/16 flakes. No save-shape change. Synergy readout confirmed by screenshot.
 - **c26 — New Frost element type + species line** (studio: type-designer, species/art-designer, lead, engineer,
   QA + orchestrator fix). Added a 7th type, Frost, wired end-to-end: TYPES + all THREE c25 palettes (TYPE_COL,
   TYPE_COL_DEFAULT icy #8fd8e8, TYPE_COL_CB Okabe-Ito #0072B2); type chart row Frost{Grass1.4,Rock1.4,Fire0.72,

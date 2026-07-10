@@ -324,16 +324,62 @@ function pickBiased(keys){
 
 // ---------- monster instance ----------
 function statAt(base,level){ return base * (1 + 0.14*(level-1)); }
+// Safe accessor for the transient synergy layer — returns null when G isn't built
+// yet (the very first starter is made INSIDE the newGame literal, before G exists).
+function synS(){ return (typeof G!=='undefined' && G && G.synergies) || null; }
 // Held-trinket stat helpers (holder-keyed; hasTrinket defined near hasRelic).
-function baseMaxHp(m){ return Math.round(statAt(m.sp.base.hp,m.level)*(hasTrinket(m,'vigorcharm')?1.2:1)); }
+function baseMaxHp(m){ return Math.round(statAt(m.sp.base.hp,m.level)*(hasTrinket(m,'vigorcharm')?1.2:1)*(synS()?.hpMul||1)); }
 function applyTrinketStats(m){
   const wasDead = m.hp<=0;                       // a fainted mon stays fainted — equipping never revives
   const nm=baseMaxHp(m); m.hp += (nm-m.maxhp); m.maxhp=nm;
   if(m.hp>nm)m.hp=nm;
   if(wasDead) m.hp=0; else if(m.hp<1) m.hp=1;
-  m.spd = m.sp.base.spd * (hasTrinket(m,'swiftfeather')?1.15:1);
+  m.spd = m.sp.base.spd * (hasTrinket(m,'swiftfeather')?1.15:1) * (synS()?.spdMul||1);
   m.hpShown = m.hp;
 }
+// ---------- team synergies (transient buff layer computed from live party) ----------
+function computeSynergies(){
+  const S={atkMul:1,hpMul:1,spdMul:1,guardBonus:0,winHeal:0,list:[]};
+  if(typeof G==='undefined' || !G || !G.team){ if(typeof G!=='undefined'&&G) G.synergies=S; return S; }
+  const counts={}; let filled=0;
+  for(const m of G.team){ if(!m) continue; filled++; counts[m.sp.type]=(counts[m.sp.type]||0)+1; }
+  const distinct=Object.keys(counts);
+  const apply=(t,k)=>{ switch(t){
+    case'Fire':   S.atkMul    *=1+0.08*k; return{icon:'🔥',name:(k>1?'Inferno':'Blaze'),   col:TYPE_COL['Fire'],  tag:'+'+Math.round(8*k)+'% ATK',  desc:'Fire — attacks hit '+Math.round(8*k)+'% harder'};
+    case'Rock':   S.hpMul     *=1+0.10*k; return{icon:'🪨',name:(k>1?'Fortress':'Bulwark'),col:TYPE_COL['Rock'],  tag:'+'+Math.round(10*k)+'% HP', desc:'Rock — +'+Math.round(10*k)+'% max HP'};
+    case'Volt':   S.spdMul    *=1+0.08*k; return{icon:'⚡',name:(k>1?'Tempest':'Overcharge'),col:TYPE_COL['Volt'], tag:'+'+Math.round(8*k)+'% SPD', desc:'Volt — act '+Math.round(8*k)+'% faster'};
+    case'Grass':  S.hpMul     *=1+0.06*k; return{icon:'🌿',name:(k>1?'Overgrowth':'Verdant'),col:TYPE_COL['Grass'],tag:'+'+Math.round(6*k)+'% HP', desc:'Grass — +'+Math.round(6*k)+'% max HP'};
+    case'Water':  S.winHeal   +=0.06*k;   return{icon:'💧',name:(k>1?'Monsoon':'Tidewater'),col:TYPE_COL['Water'],tag:'+'+Math.round(6*k)+'% heal',desc:'Water — +'+Math.round(6*k)+'% heal after a win'};
+    case'Shadow': S.guardBonus+=0.05*k;   return{icon:'🌑',name:(k>1?'Eclipse':'Umbral'),  col:TYPE_COL['Shadow'],tag:'-'+Math.round(5*k)+'% dmg',desc:'Shadow — team takes '+Math.round(5*k)+'% less damage'};
+    case'Frost':  S.guardBonus+=0.05*k;   return{icon:'❄️',name:(k>1?'Permafrost':'Frostward'),col:TYPE_COL['Frost'],tag:'-'+Math.round(5*k)+'% dmg',desc:'Frost — team takes '+Math.round(5*k)+'% less damage'};
+  } return null; };
+  if(filled>=2 && distinct.length===1){
+    const e=apply(distinct[0],2); if(e) S.list.push(e);              // MONO (doubled axis, replaces pair)
+  } else if(filled===4 && distinct.length===4){
+    S.atkMul*=1.05; S.hpMul*=1.05; S.spdMul*=1.05;                   // RAINBOW
+    S.list.push({icon:'🌈',name:'Rainbow',col:'#8fa0c8',tag:'+5% all',desc:'Four types — +5% ATK, HP & SPD'});
+  } else {
+    for(const t of distinct){ if(counts[t]>=2){ const e=apply(t,1); if(e) S.list.push(e); } }  // pairs (≤2)
+  }
+  S.atkMul=Math.min(1.20,S.atkMul); S.hpMul=Math.min(1.20,S.hpMul); S.spdMul=Math.min(1.20,S.spdMul);
+  S.guardBonus=Math.min(0.10,S.guardBonus); S.winHeal=Math.min(0.12,S.winHeal);
+  G.synergies=S; return S;
+}
+function refreshTeamStats(){
+  if(typeof G==='undefined' || !G || !G.team) return;
+  for(const m of G.team){ if(!m) continue;
+    const wasDead=m.hp<=0;
+    const nm=baseMaxHp(m);                                   // now includes hpMul
+    m.hp+=(nm-m.maxhp); m.maxhp=nm;
+    if(m.hp>nm)m.hp=nm;
+    if(wasDead)m.hp=0; else if(m.hp<1)m.hp=1;
+    m.spd=m.sp.base.spd*(hasTrinket(m,'swiftfeather')?1.15:1)*(G.synergies?.spdMul||1);
+    m.hpShown=m.hp;
+  }
+}
+function updateSynergies(){ computeSynergies(); refreshTeamStats(); }   // call on ANY team-comp change
+function synAtkMul(dir){ return dir>0 ? (G.synergies?.atkMul||1) : 1; } // attacker-only, team-only
+function synGuard(){ return (G.synergies?.guardBonus||0); }
 function makeMon(key,level){
   const sp = SPECIES[key];
   const lvl = Math.max(1, Math.round(level));
@@ -342,7 +388,7 @@ function makeMon(key,level){
     key, sp, level:lvl,
     maxhp: hp, hp,
     atk: statAt(sp.base.atk,lvl),
-    spd: sp.base.spd,
+    spd: sp.base.spd,           // team spdMul is applied by refreshTeamStats/finishSpawn, NOT here (else wilds would inherit it)
     trinket:null,               // held trinket id (transient; never serialized)
     xp: 0, xpNext: 12 + lvl*8,
     cd: 0, alive:true,
@@ -885,6 +931,7 @@ function newGame(chosenKey){
     shopStock:null, shopRerolls:0,                  // rotating merchant stock (transient; openShop rerolls)
     dist:0, fights:0, tier:1, enc:0,
     lead:0,
+    synergies:{ atkMul:1, hpMul:1, spdMul:1, guardBonus:0, winHeal:0, list:[] },   // transient team-comp buff layer; never serialized
     lastRunRec:null, lastRunRank:-1,   // records-screen highlight (transient)
     // world scroll
     scroll:0, walkTarget:0,
@@ -910,6 +957,7 @@ function newGame(chosenKey){
   };
   G.asc = A;
   Dex.caught(starterKey);
+  updateSynergies();
 }
 function tutStep(){
   if(Dex.data.tutorialDone) return;
@@ -1059,7 +1107,7 @@ function finishSpawn(w){
   // set active lead to first healthy companion
   G.lead = G.team.findIndex(m=>m.hp>0);
   if(G.lead<0) G.lead=0;
-  G.team.forEach(m=>{ m.cd=0.3; m.status=freshStatus(); m.spd = m.sp.base.spd * (hasTrinket(m,'swiftfeather')?1.15:1); });
+  G.team.forEach(m=>{ m.cd=0.3; m.status=freshStatus(); m.spd = m.sp.base.spd * (hasTrinket(m,'swiftfeather')?1.15:1) * (synS()?.spdMul||1); });
   if(hasRelic('startheal')) G.team.forEach(m=>{ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+Math.round(m.maxhp*0.15)); });
   G.wild.cd = 0.6; G.wild.status = freshStatus();
   G.switchCd = 0; G.switchAnim = 0;
@@ -1099,12 +1147,12 @@ function doCatch(){
 // Bring a new companion into the roster. If the party (4) is full, hand control
 // to the swap picker so the player chooses who to keep; otherwise slot it in.
 function acquire(mon, ret){
-  if(G.team.length<4){ G.team.push(mon); flash(mon.sp.name+' joined the party!'); if(ret) ret(); return; }
+  if(G.team.length<4){ G.team.push(mon); updateSynergies(); flash(mon.sp.name+' joined the party!'); if(ret) ret(); return; }
   G.pendingMon=mon; G.afterAcquire=ret||startWalk; G.state='swapchoice'; clearButtons();
 }
 function finishSwap(){ const ret=G.afterAcquire; G.pendingMon=null; G.afterAcquire=null; if(ret) ret(); }
 function swapOut(i){
-  const out=G.team[i]; G.box.push(out); G.team[i]=G.pendingMon;
+  const out=G.team[i]; G.box.push(out); G.team[i]=G.pendingMon; updateSynergies();
   flash('Swapped '+out.sp.name+' → '+G.pendingMon.sp.name+' (sent to box).');
   finishSwap();
 }
@@ -1164,8 +1212,9 @@ function endFight(won){
   if(won && G.team.length===4 && G.team.every(m=>m.hp>0)){ Dex.data.fullPartyWin=1; Dex.save(); }
   Dex.data.best=Math.max(Dex.data.best||0,G.dist); Dex.save(); checkAch();
   G.wild=null;
+  updateSynergies();   // evolutions can change type/maxHP → recompute before the win-heal reads winHeal
   // survivors catch their breath after a win
-  for(const m of G.team){ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+m.maxhp*0.30); }
+  for(const m of G.team){ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+m.maxhp*(0.30+(G.synergies?.winHeal||0))); }
   // boss trophy — full heal of survivors + a consumable + a small permanent buff
   if(G.bossWin){
     G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; });   // extra full heal of survivors
@@ -1463,7 +1512,7 @@ function updateBattle(dt){
 function strike(att, def, dir){
   const mult = typeMult(att.sp.type, def.sp.type);
   const crit = rnd() < (0.13*weatherCritMul() + (hasRelic('crit')?0.10:0) + (hasTrinket(att,'critfang')?0.12:0));
-  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14) * (hasTrinket(att,'typegem')?1.2:1) * weatherDmgMul(att.sp.type);
+  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14) * (hasTrinket(att,'typegem')?1.2:1) * weatherDmgMul(att.sp.type) * synAtkMul(dir);
   dmg = Math.max(1, Math.round(dmg));
   const dtx = dir>0? 660 : 300;   // defender's on-screen x
   // Shadow dodge (defender passive): full evade, no HP change, no on-hit effects
@@ -1476,6 +1525,7 @@ function strike(att, def, dir){
   // Rock guard (defender passive): reduce incoming, floor at 1 so every hit still bites
   if(def.sp.type==='Rock'){ dmg=Math.max(1, Math.round(dmg*(1-ROCK_GUARD))); def.status.fGuard=0.35; }
   if(hasTrinket(def,'guardstone')) dmg=Math.max(1, Math.round(dmg*0.85));
+  if(dir<0){ const g=synGuard(); if(g>0) dmg=Math.max(1, Math.round(dmg*(1-g))); }   // team is defender (wild attacking)
   def.hp = Math.max(0, def.hp - dmg);
   if(hasTrinket(att,'lifeamulet')){ const h=Math.round(dmg*0.15); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
   if(dir>0 && hasRelic('lifesteal')){ const h=Math.round(dmg*0.12); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
@@ -1573,6 +1623,7 @@ function bossHeavyStrike(w, def){
   let dmg = w.atk * mult * BOSS_HEAVY_MUL * weatherDmgMul(w.sp.type);   // enrage already folded into w.atk — do NOT re-multiply
   if(def.sp.type==='Rock') dmg *= (1-ROCK_GUARD);
   if(hasTrinket(def,'guardstone')) dmg *= 0.85;
+  { const g=(G.synergies?.guardBonus||0); if(g>0) dmg *= (1-g); }   // def is always the team mon here
   dmg = Math.min(dmg, def.maxhp*BOSS_HEAVY_CAP);           // HARD CAP — full-HP mon always survives with ≥40%
   dmg = Math.max(1, Math.round(dmg));
   def.hp = Math.max(0, def.hp - dmg); def.hurt=1; w.lunge=1;
@@ -1977,8 +2028,39 @@ function drawTeam(){
       }
     }
   }
-  if(G.box.length){ ctx.fillStyle='#6a76a0'; ctx.font='600 11px Segoe UI';
-    ctx.fillText('📦 Box: '+G.box.length, x0+4*118+4, y+34); }
+  if(G.box.length){ ctx.fillStyle='#6a76a0'; ctx.font='600 11px Segoe UI'; ctx.textAlign='right';
+    ctx.fillText('📦 Box: '+G.box.length, W-14, y+54); ctx.textAlign='left'; }
+  drawSynergyReadout();
+}
+function drawSynergyReadout(){
+  const y=H-70;                                   // matches drawTeam bar top
+  const S=synS(), list=(S&&S.list)||[];
+  ctx.textAlign='left';
+  ctx.font='700 9px Segoe UI'; ctx.fillStyle='#5a6488';
+  ctx.fillText('TEAM SYNERGY', 494, y+9);
+  if(!list.length){
+    ctx.font='600 11px Segoe UI'; ctx.fillStyle='#465074';
+    ctx.fillText('Match 2+ types for a team buff', 494, y+30);
+    return;
+  }
+  const rowY=y+14, chipH=24, maxRight=W-14, single=list.length===1;
+  let x=494;
+  for(const s of list){
+    ctx.font='600 11px Segoe UI';
+    const label = single ? s.name+'  '+s.tag : s.name;
+    const nameW = ctx.measureText(label).width;
+    const w = 9 + 16 + 5 + nameW + 9;
+    if(x + w > maxRight) break;                    // hard clamp — never draw off-strip / into box
+    const col = s.col || '#8fa0c8';
+    roundRect(x,rowY,w,chipH,7); ctx.fillStyle='#161d33'; ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle=col; roundRect(x,rowY,w,chipH,7); ctx.stroke();
+    ctx.font='13px system-ui'; ctx.fillStyle='#fff';
+    ctx.fillText(s.icon, x+9, rowY+17);
+    ctx.font='600 11px Segoe UI'; ctx.fillStyle='#e2e8ff';
+    ctx.fillText(label, x+9+16+5, rowY+16);
+    x += w + 8;
+  }
+  ctx.textAlign='left';
 }
 function bar(x,y,w,h,f,col,bg){
   roundRect(x,y,w,h,h/2); ctx.fillStyle=bg||'#0c1120'; ctx.fill();
@@ -2828,6 +2910,7 @@ function trySwitch(idx){
   }
   if((G.switchCd||0)>0){ flash('Swap recharging…'); return false; }
   G.lead = idx;
+  updateSynergies();
   const m=G.team[idx]; m.cd = Math.max(1/m.spd, SWITCH_ENTRY);
   G.switchCd = switchCdMax(); G.switchAnim = 0.35;
   m.lunge = 1; flash('Go, '+m.sp.name+'!');
@@ -3014,10 +3097,10 @@ function unequipTrinket(i){
 }
 function swapBox(i){
   const m=G.box[i]; if(!m) return;
-  if(G.team.length<4){ G.box.splice(i,1); G.team.push(m); flash(m.sp.name+' joined the party.'); return; }
+  if(G.team.length<4){ G.box.splice(i,1); G.team.push(m); updateSynergies(); flash(m.sp.name+' joined the party.'); return; }
   // swap with the lowest-level party member
   let li=0; for(let k=1;k<G.team.length;k++) if(G.team[k].level<G.team[li].level) li=k;
-  const out=G.team[li]; G.team[li]=m; G.box[i]=out;
+  const out=G.team[li]; G.team[li]=m; G.box[i]=out; updateSynergies();
   flash('Swapped '+out.sp.name+' ↔ '+m.sp.name+'.');
 }
 
