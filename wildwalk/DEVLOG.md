@@ -42,7 +42,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 22. [x] Endless post-game scaling mode — DONE c22.
 23. [x] Status-effect visual polish — DONE c23.
 24. [x] Online Cloudflare KV leaderboard — DONE c24.
-25. [ ] Settings menu (music/SFX volume sliders, reduced-motion toggle dialing down c21 anims, colorblind-friendly type colors, name entry for the board).
+25. [x] Settings menu — DONE c25.
 26. [ ] New element type + species that use it (e.g. Ice or Wind), with type-chart + biome/boss wiring.
 27. [ ] Party synergies / auras (type-pair or full-team bonuses that reward deliberate team-building).
 28. [ ] Boss telegraph & mechanic variety (distinct wind-ups/patterns per boss, readable tells).
@@ -55,6 +55,18 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c25 — Settings menu** (studio: settings-ux-designer, audio-systems-designer, lead, engineer, QA). A ⚙
+  Settings screen from the title with independent MUSIC + SOUND FX volume sliders (click-to-set, shared
+  sliderRect geometry so draw/click can't drift; music scales _musicGain 0..0.35, sfx scales each blip peak
+  live), a REDUCED MOTION toggle (motionAmt() gates ONLY render sites — shake at the draw site, drawParts
+  early-return, and drawMon's c21 bob/breathe/lean/wing-flap; never touches G.shake accumulation, particle
+  spawns, or any combat value), and a COLORBLIND toggle swapping TYPE_COL in place to an Okabe-Ito CVD-safe
+  palette (applyPalette Object.assigns onto the same TYPE_COL object → zero call-site edits; live-recoloring
+  swatch preview). Additive Dex.data.settings {musicVol,sfxVol,reducedMotion,colorblind} with a gset()
+  per-key backfill guard so old saves default cleanly; existing mute still works and overrides volumes to 0.
+  All audio no-ops safely headless. +9 tests incl. a combat-invariance proof (identical damage AND G.shake
+  with reduced-motion on vs off under a fixed seed) and palette-identity/back-compat. 191/191 wildwalk +
+  19/19 board, 0 flakes. Settings screen confirmed by screenshot. First of the appended roadmap (#25-34).
 - **c24 — Online Cloudflare KV leaderboard** (studio: backend-designer, client-integration-designer, lead,
   engineer, QA). A global best-distance board mirroring the proven No Room For Heroes pattern. NEW Pages
   Function functions/api/wildwalk_board.js (own KV binding WWBOARD, distinct from NRFH's BOARD): GET → {top},
