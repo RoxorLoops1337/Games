@@ -48,13 +48,28 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 28. [x] Boss telegraph & mechanic variety — DONE c28.
 29. [x] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety) — DONE c29.
 30. [x] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds) — DONE c30.
-31. [ ] Codex / lore screen (per-species flavor, type guide, mechanics reference).
+31. [x] Codex / lore screen (per-species flavor, type guide, mechanics reference) — DONE c31.
 32. [ ] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe).
 33. [ ] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension).
 34. [ ] Achievement chains / tiered milestones (multi-step goals with escalating essence).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c31 — Codex / lore reference screen** (studio: 3 planners [content/navigation/layout] → lead spec → engineer → QA + orch).
+  A browsable READ-ONLY reference reachable from the title AND gameover menus (returns to whichever opened it), with three
+  tabs: SPECIES (all 28 fully revealed — a lore dex, ungated unlike the Pokédex — each card → a detail overlay with prominent
+  wrapped FLAVOR text, type/rarity, stat bars, evolution line), TYPES (a live 7×7 effectiveness grid rendered straight from
+  typeMult with tinted strong/weak/neutral cells + a live legend), and MECHANICS (4 sub-tabs: status effects, boss mechanics,
+  relics/sets, biomes). EVERY displayed number is interpolated live from the real constants (BURN_*/VOLT_STUN/CHILL_*/WARD_*/
+  FLURRY_HIT_MUL/BOSS_*/RELICS/RELIC_SETS/SET_THRESHOLD/BIOMES) so the reference can never drift from the code. Fully additive
+  and read-only: all state is transient on G (codexFrom/codexTab/codexSel/codexMechTab) — ZERO Dex.data field, ZERO save-shape
+  change (CODEX12 guards WSHAPE), ZERO combat/RNG/balance line touched. Both menu rows re-laid to 5 buttons (📖 CODEX centered,
+  no overlap on the 960px canvas). Keyboard: c opens, Escape/Backspace does the two-step (close species detail → return to
+  opener). +12 tests (CODEX1-12): open/back state for both openers, tab + mech-subtab dispatch, species select/deselect,
+  tab-switch clears selection, typeMult no-drift, both menus expose the button, keyboard two-step, and the REQUIRED CODEX8
+  render-smoke driving draw() over every tab + every mech subtab + a selected species across rarities + both openers. Render
+  safety proven LOAD-BEARING — orchestrator + QA independently injected throws into drawCodexTypes/drawCodexMechBiomes/species
+  detail → CODEX8 went red each time, reverted → 239/0. 239/239 wildwalk + 19/19 board, 0/12 flakes.
 - **c30 — Seeded shareable run codes** (studio: 3 planners [code-format/run-flow/ux] → lead spec → engineer → QA + orch).
   Extends the c17 daily seed to arbitrary copy/paste codes so two players can race the EXACT same run. Codec:
   seedToRunCode(seed) = (seed>>>0).toString(36).toUpperCase() (canonical ≤7-char base36); runCodeToSeed(code)
