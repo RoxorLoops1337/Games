@@ -264,7 +264,7 @@ function xpToLevels(m, gain){
 
 // ---------- pokedex / persistence ----------
 const Dex = {
-  data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, upgrades:{} },
+  data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, upgrades:{}, muted:false },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
   save(){ try{ localStorage.setItem(SAVE, JSON.stringify(this.data)); }catch(e){} },
   see(k){ if(!this.data.seen[k]){ this.data.seen[k]=1; this.save(); } },
@@ -276,6 +276,145 @@ const Dex = {
   nCaught(){ return Object.keys(this.data.caught).length; },
 };
 Dex.load();
+
+// ===================================================================
+// Audio — Web Audio chiptune music + SFX (fully self-guarding).
+// Never throws when AudioContext is unavailable (headless) or muted.
+// Nothing here touches audioCtx() at load; the ctx is created/resumed
+// only on the first user gesture (unlockAudio, from pointerdown/keydown).
+// ===================================================================
+let _ac=null,_master=null,_musicGain=null,_acFailed=false,_voices=0;
+let _musicStarted=false,_nextNoteTime=0,_step=0,_schedTimer=null,_curMood=null;
+
+function audioCtx(){
+  if(_ac) return _ac;
+  if(_acFailed) return null;
+  if(typeof window==='undefined'){ _acFailed=true; return null; }
+  const AC=(typeof AudioContext!=='undefined')?AudioContext:(typeof webkitAudioContext!=='undefined'?webkitAudioContext:null);
+  if(!AC){ _acFailed=true; return null; }
+  try{
+    _ac=new AC();
+    _master=_ac.createGain(); _master.gain.value=0.55; _master.connect(_ac.destination);
+    _musicGain=_ac.createGain(); _musicGain.gain.value=0.35; _musicGain.connect(_master);
+  }catch(e){ _acFailed=true; _ac=null; return null; }
+  return _ac;
+}
+
+// one-shot SFX voice → _master
+function blip(wave,f0,f1,dur,peak,when){
+  if(_voices>16) return;
+  const ac=_ac;
+  const osc=ac.createOscillator(), g=ac.createGain();
+  osc.type=wave;
+  osc.frequency.setValueAtTime(f0,when);
+  if(f1!=null) osc.frequency.linearRampToValueAtTime(f1,when+dur);
+  g.gain.setValueAtTime(0.0001,when);
+  g.gain.linearRampToValueAtTime(peak,when+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+  osc.connect(g); g.connect(_master);
+  osc.start(when); osc.stop(when+dur+0.02);
+  _voices++;
+  osc.onended=()=>{ _voices--; try{ g.disconnect(); osc.disconnect(); }catch(e){} };
+}
+
+function sfx(name){
+  const ac=audioCtx(); if(!ac||Dex.data.muted) return;
+  const t=ac.currentTime;
+  switch(name){
+    case 'hit': blip('square',220,160,0.09,0.22,t); break;
+    case 'crit': blip('square',330,180,0.12,0.28,t); blip('triangle',660,null,0.10,0.16,t); break;
+    case 'catch': blip('triangle',523,null,0.14,0.24,t); blip('triangle',659,null,0.14,0.24,t+0.09); blip('triangle',784,null,0.14,0.24,t+0.18); break;
+    case 'catchfail': blip('sawtooth',300,110,0.28,0.20,t); break;
+    case 'levelup': blip('square',587,null,0.16,0.24,t); blip('square',880,null,0.16,0.24,t+0.10); break;
+    case 'evolve': blip('triangle',523,null,0.16,0.26,t); blip('triangle',659,null,0.16,0.26,t+0.08); blip('triangle',784,null,0.16,0.26,t+0.16); blip('triangle',1047,null,0.16,0.26,t+0.24); blip('sawtooth',1047,null,0.12,0.12,t+0.24); break;
+    case 'boss': blip('sawtooth',110,55,0.5,0.30,t); blip('square',220,null,0.18,0.20,t); break;
+    case 'select': blip('square',440,null,0.05,0.16,t); break;
+    case 'defeat': blip('triangle',392,null,0.30,0.24,t); blip('triangle',311,null,0.30,0.24,t+0.16); blip('triangle',262,null,0.30,0.24,t+0.32); break;
+    case 'potion': blip('sine',660,990,0.2,0.18,t); break;
+  }
+}
+
+// Music patterns — 16 eighth-notes per loop; 0 = rest.
+const PAT={
+  walk:{ tempo:96, bassWave:'sine', leadWave:'triangle',
+    bass:[110,0,0,0,110,0,0,0,110,0,0,0,110,0,0,0],
+    lead:[440,0,0,523,0,659,0,0,784,0,659,0,0,523,0,0] },
+  battle:{ tempo:132, bassWave:'square', leadWave:'square',
+    bass:[110,0,110,0,82,0,110,0,110,0,110,0,82,0,110,0],
+    lead:[440,0,523,587,0,659,587,0,523,0,440,0,392,0,440,0] },
+  boss:{ tempo:108, bassWave:'sawtooth', leadWave:'square',
+    bass:[82,0,0,0,116,0,0,0,82,0,0,0,116,0,0,0],
+    lead:[0,0,330,0,0,0,0,311,0,0,392,0,0,0,0,0] },
+};
+
+function musicMood(){
+  if(G.state==='battle') return (G.wild&&G.wild.boss)?'boss':'battle';
+  return 'walk';
+}
+
+// music voice → _musicGain
+function mblip(wave,freq,dur,peak,when){
+  if(_voices>16) return;
+  const ac=_ac;
+  const osc=ac.createOscillator(), g=ac.createGain();
+  osc.type=wave;
+  osc.frequency.setValueAtTime(freq,when);
+  g.gain.setValueAtTime(0.0001,when);
+  g.gain.linearRampToValueAtTime(peak,when+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+  osc.connect(g); g.connect(_musicGain);
+  osc.start(when); osc.stop(when+dur+0.02);
+  _voices++;
+  osc.onended=()=>{ _voices--; try{ g.disconnect(); osc.disconnect(); }catch(e){} };
+}
+
+function scheduleStep(step,when){
+  const P=PAT[_curMood]; if(!P) return;
+  const bf=P.bass[step], lf=P.lead[step];
+  if(bf) mblip(P.bassWave,bf,0.18,0.5,when);
+  if(lf) mblip(P.leadWave,lf,0.18,0.4,when);
+}
+
+function scheduler(){
+  const ac=audioCtx(); if(!ac) return;
+  if(Dex.data.muted) return;
+  const m=musicMood(); if(m!==_curMood) _curMood=m;
+  while(_nextNoteTime<ac.currentTime+0.10){
+    scheduleStep(_step,_nextNoteTime);
+    const spb=60/PAT[_curMood].tempo/2;
+    _nextNoteTime+=spb;
+    _step=(_step+1)%16;
+  }
+}
+
+function startMusic(){
+  if(_musicStarted||!audioCtx()||Dex.data.muted) return;
+  _musicStarted=true;
+  _nextNoteTime=_ac.currentTime+0.1;
+  _step=0;
+  _curMood=musicMood();
+  _schedTimer=setInterval(scheduler,25);
+}
+
+function unlockAudio(){
+  const ac=audioCtx(); if(!ac) return;
+  if(ac.state==='suspended') ac.resume();
+  if(!Dex.data.muted) startMusic();
+}
+
+function muteIcon(){ return Dex.data.muted?'🔇':'🔊'; }
+
+function stopMusicHard(){
+  if(_schedTimer){ clearInterval(_schedTimer); _schedTimer=null; }
+  _musicStarted=false;
+  if(_musicGain) _musicGain.gain.value=0;
+}
+
+function toggleMute(){
+  Dex.data.muted=!Dex.data.muted; Dex.save();
+  if(Dex.data.muted){ stopMusicHard(); }
+  else { if(_musicGain) _musicGain.gain.value=0.35; unlockAudio(); sfx('select'); }
+}
 
 // ===================================================================
 // Sprite renderer — procedural monsters from species traits
@@ -581,6 +720,7 @@ function spawnBoss(forceKey){
   Dex.see(key);
   finishSpawn(w);                                     // resets cds/status/pops, sets battleIntro=1.0
   G.battleIntro = BOSS_INTRO_T;                        // extend to cover the banner (single timer)
+  sfx('boss');
   return w;
 }
 function spawnWild(elite){
@@ -656,9 +796,11 @@ function doCatch(){
     G.honor += 1;
     flash('Caught '+w.sp.name+'!');
     burst(W/2,250);
+    sfx('catch');
     acquire(cap, ()=>endFight(true));
   } else {
     flash(w.sp.name+' broke free and fled!');
+    sfx('catchfail');
     endFight(false);
   }
 }
@@ -713,12 +855,15 @@ function endFight(won){
   gold = Math.round(gold * (1 + 0.30*relicCount('gold')));
   if(hasTrinket(activeMon(),'luckycoin')) gold=Math.round(gold*1.3);
   G.gold += gold;
-  let evoMsg='';
+  let evoMsg=''; let leveledAny=false, evoAny=false;
   for(const m of G.team){ if(m.hp>0){
     const res = xpToLevels(m, m===activeMon()? xp : Math.round(xp*0.6));
     for(const r of res) if(r.evo) evoMsg = m.sp.name!==r.from? (r.from+' evolved into '+r.to+'!') : evoMsg;
+    if(res.length) leveledAny=true;
+    if(res.some(x=>x.evo)) evoAny=true;
     if(res.length) m.levelFlash = res.some(x=>x.evo)?1.4:0.9;
   }}
+  if(evoAny) sfx('evolve'); else if(leveledAny) sfx('levelup');
   if(evoMsg) setTimeout(()=>flash(evoMsg), 400);
   G.fights++; G.dist += 40 + G.tier*4;
   G.wild=null;
@@ -912,6 +1057,7 @@ function gameOver(){
   Dex.awardEssence(earn);      // persists
   Dex.record(G.dist);          // persists (updates best/runs)
   G.state='gameover'; clearButtons();
+  sfx('defeat');
 }
 
 // ===================================================================
@@ -984,6 +1130,7 @@ function strike(att, def, dir){
   if(dir>0 && hasRelic('lifesteal')){ const h=Math.round(dmg*0.12); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
   if(dir<0 && hasRelic('thorns')) att.hp=Math.max(0, att.hp - Math.round(dmg*0.20));
   att.lunge=1; def.hurt=1;
+  sfx(crit?'crit':'hit');
   G.shake = Math.min(10, G.shake + (crit?7:3));
   const tx = dir>0? 660 : 300;
   G.dmgPops.push({x:tx+rr(-20,20), y:200, vy:-40, life:1, txt:'-'+dmg, crit, eff:mult, age:0, rot: crit?rr(-0.12,0.12):0});
@@ -1297,9 +1444,10 @@ function drawHUD(){
   drawRelicStrip(Math.max(x+8, 420));
   // right side
   ctx.textAlign='right'; ctx.font='700 14px Segoe UI';
-  ctx.fillStyle='#eaf0ff'; ctx.fillText('Dist '+G.dist+'m', W-14, 20);
+  ctx.fillStyle='#eaf0ff'; ctx.fillText('Dist '+G.dist+'m', W-48, 20);
   ctx.fillStyle='#8fa0c8'; ctx.font='600 12px Segoe UI';
-  ctx.fillText('Tier '+G.tier+'  ·  Fights '+G.fights+'  ·  Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length, W-14, 36);
+  ctx.fillText('Tier '+G.tier+'  ·  Fights '+G.fights+'  ·  Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length, W-48, 36);
+  btn('mute', W-40, 7, 30, 30, muteIcon(), null, {col:'#242c48'});
   ctx.textAlign='left';
 }
 function chip(icon,val,col,x){
@@ -1739,6 +1887,7 @@ function drawTitle(){
   btn('start', W/2-130, 460, 260, 60, '▶  BEGIN THE WALK', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
   btn('dex', W/2-208, 528, 200, 44, '📕 POKÉDEX', Dex.nCaught()+' / '+Object.keys(SPECIES).length, {col:'#4a3a6a', accent:'#c9a8ff'});
   btn('sanctuary', W/2+8, 528, 200, 44, '✦ SANCTUARY', Dex.data.essence+' essence', {col:'#3a2f5a', accent:'#ffe9a8'});
+  btn('mute', W-52, 14, 38, 34, muteIcon(), null, {col:'#2a2440'});
   drawButtons();
 }
 
@@ -1866,6 +2015,7 @@ function usePotion(){
   if(G.potions<=0) return;
   const m=activeMon(); if(!m||m.hp>=m.maxhp) return;
   G.potions--; m.hp=Math.min(m.maxhp, m.hp + m.maxhp*0.45);
+  sfx('potion');
   for(let i=0;i<12;i++){ const a=rnd()*6.283; G.parts.push({x:300,y:470,vx:Math.cos(a)*60,vy:Math.sin(a)*60-40,life:rr(.4,.8),col:'#6fe0a0',r:rr(2,4)}); }
   flash('Potion used — HP restored.');
 }
@@ -2188,6 +2338,8 @@ function drawGameOver(){
 // Input
 // ===================================================================
 function onClick(mx,my){
+  { const mb=hitButton(mx,my);
+    if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
   if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='sanctuary') openSanctuary('title'); else { newGame(); startWalk(); } } return; }
   if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else { newGame(); startWalk(); } } return; }
   if(G.state==='sanctuary'){
@@ -2255,8 +2407,10 @@ function canvasPos(e){
   const py=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
   return { x: px*(W/r.width), y: py*(H/r.height) };
 }
-cv.addEventListener('pointerdown', e=>{ e.preventDefault(); const p=canvasPos(e); onClick(p.x,p.y); }, {passive:false});
+cv.addEventListener('pointerdown', e=>{ e.preventDefault(); unlockAudio(); const p=canvasPos(e); onClick(p.x,p.y); }, {passive:false});
 window.addEventListener('keydown', e=>{
+  unlockAudio();
+  if(e.key==='m'||e.key==='M'){ toggleMute(); e.preventDefault(); return; }
   if((G.state==='title'||G.state==='gameover') && (e.key==='d'||e.key==='D')){ openPokedex(G.state); e.preventDefault(); return; }
   if(G.state==='pokedex' && (e.key==='Escape'||e.key==='Backspace'||e.key==='d'||e.key==='D')){ if(G.pokedexSel!=null) G.pokedexSel=null; else { G.state=G.pokedexFrom||'title'; clearButtons(); } e.preventDefault(); return; }
   if((G.state==='title'||G.state==='gameover') && (e.key==='s'||e.key==='S')){ openSanctuary(G.state); e.preventDefault(); return; }

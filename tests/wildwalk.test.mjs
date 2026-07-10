@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:()=>newGame(),gameOver:()=>gameOver(),UPGRADES,openSanctuary:(f)=>openSanctuary(f)};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:()=>newGame(),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f)};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -511,7 +511,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']),
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -654,7 +654,7 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
 
@@ -909,7 +909,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1137,7 +1137,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','muted','runs','seen','upgrades']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1262,6 +1262,53 @@ test('M6 sanctuary screen renders without error from title and gameover', ()=>{
   api.getG().state='gameover'; api.openSanctuary('gameover');
   assert(api.getG().sanctuaryFrom==='gameover', 'sanctuaryFrom not tracked');
   api.draw();
+});
+
+// ===================================================================
+// AUDIO — Web Audio SFX/music must be a pure no-op with no AudioContext
+// (headless sandbox), and the mute toggle must flip + persist.
+// ===================================================================
+
+test('A1 every audio hook is a silent no-op with no AudioContext', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  api.strike(api.mk('emberpup',10), api.mk('sparky',10), +1);   // hit/crit
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g=api.getG(); g.wild.hp=1; g.battleIntro=0;
+  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
+  step(1); assert(clickId('kill'), 'no kill button');           // level-up/evolve path
+  api.spawnBoss('moltengod');                                    // boss
+  api.usePotion();                                               // potion (no-op if full)
+  api.gameOver();                                                // defeat
+  assert(true, 'audio hooks threw with no AudioContext');
+});
+
+test('A2 muted defaults false; old save without muted still loads', ()=>{
+  const a = boot();
+  assert(a.api.Dex.data.muted===false, `fresh muted=${a.api.Dex.data.muted}`);
+  const b = boot(JSON.stringify({seen:{},caught:{},best:10,runs:1}));
+  assert(b.api.Dex.data.best===10, 'old save did not load');
+  assert(b.api.Dex.data.muted===false, `old-save muted=${b.api.Dex.data.muted}`);
+});
+
+test('A3 mute toggle flips and persists', ()=>{
+  const { api, step, clickId, store } = boot();
+  step(2);                                    // draw title (mute button present)
+  assert(clickId('mute'), 'no mute button on title');
+  assert(api.Dex.data.muted===true, 'mute did not flip on');
+  assert(JSON.parse(store['wildwalk_save_v1']).muted===true, 'muted not persisted (on)');
+  step(2); assert(clickId('mute'), 'no mute button after re-draw');
+  assert(api.Dex.data.muted===false, 'mute did not flip off');
+  assert(JSON.parse(store['wildwalk_save_v1']).muted===false, 'muted not persisted (off)');
+});
+
+test('A4 mute intercept on gameover does not start a new run', ()=>{
+  const { api, clickId } = boot();
+  api.getG().state='gameover'; api.getG().buttons=[];
+  api.draw();                                 // gameover buttons + HUD mute button
+  const mutedBefore=api.Dex.data.muted;
+  assert(clickId('mute'), 'no mute button on gameover');
+  assert(api.getG().state==='gameover', `intercept failed: state=${api.getG().state}`);
+  assert(api.Dex.data.muted!==mutedBefore, 'mute did not flip on gameover');
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
