@@ -45,7 +45,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE}};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE}};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -174,6 +174,7 @@ test('doCatch with a full party resolves (swap picker on success, continue on fl
 test('3000 driven iterations across all states never throw', ()=>{
   const { api, step, click, getKey } = boot();
   step(2); click(480,490); // start
+  api.getG().relics = ['catch','gold','gold','crit','swiftpaw'];  // exercise drawRelicStrip (incl. a ×N stack)
   const grid=[]; for(let gx=60;gx<960;gx+=90) for(let gy=90;gy<560;gy+=60) grid.push([gx,gy]);
   for(let i=0;i<3000;i++){
     step(3);
@@ -674,6 +675,252 @@ test('boss loop never freezes across telegraphs + a phase break', ()=>{
   assert(left>0, `battle never terminated (state ${g.state})`);
   assert(g.state==='choice', `execute valve should end the fight in choice, got ${g.state}`);
   assert(left>200, `terminated implausibly early at frame ${left} (valve should engage ~45s+)`);
+});
+
+// ===================================================================
+// RELICS — run-modifier boons (transient G.relics)
+// ===================================================================
+const ALL_RELICS = ['catch','rare','lifesteal','burn','crit','critdmg','thorns','startheal','gold','bosspotion','honor','swiftpaw'];
+
+// drive a fresh boss fight to its choice screen (strong team → defeat)
+function bossToChoiceR(bossKey){
+  const h = boot();
+  const { api, step } = h;
+  const g = api.getG();
+  g.team = [api.mk('leviatide',45)]; g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss(bossKey);
+  g.battleIntro = 0;
+  g.team[0].maxhp = g.team[0].hp = 999999;
+  for(let i=0;i<8000 && g.state==='battle';i++) api.upd(0.05);
+  assert(g.state==='choice', `boss fight did not reach choice (${g.state})`);
+  step(1);
+  return h;
+}
+
+test('R1 RELICS table is well-formed (12, one stackable = gold)', ()=>{
+  const { RELICS } = boot().api;
+  const keys = Object.keys(RELICS);
+  assert(keys.length===12, `expected 12 relics, got ${keys.length}`);
+  for(const k of keys){ const r=RELICS[k];
+    assert(r.name && r.icon && r.col && r.desc, `${k}: missing field`); }
+  const stackers = keys.filter(k=>RELICS[k].stack===true);
+  assert(stackers.length===1 && stackers[0]==='gold', `stackers ${stackers}`);
+});
+
+test('R2 hasRelic/relicCount + no-dup offers', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.relics = ['catch'];
+  assert(api.hasRelic('catch') && api.relicCount('catch')===1, 'hasRelic/count');
+  assert(!api.buildRelicOffer(3).includes('catch'), 'owned relic offered');
+  // own every one-time relic → only the stackable (gold) remains eligible
+  g.relics = ALL_RELICS.filter(id=> id!=='gold');
+  const off = api.buildRelicOffer(3);
+  assert(off.length===1 && off[0]==='gold', `expected [gold], got ${off}`);
+  // even with gold owned, it stays eligible (stackable)
+  g.relics = ALL_RELICS.slice();
+  assert(api.buildRelicOffer(3).join()==='gold', 'gold should stay offerable');
+});
+
+test('R3 catch relics change catchChance', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const rare = api.mk('infernyx', 5);   // rarity 2
+  const common = api.mk('emberpup', 5); // rarity 0
+  g.relics = [];  const baseRare = api.catchChance(rare), baseCommon = api.catchChance(common);
+  g.relics = ['catch']; assert(Math.abs(api.catchChance(common)-(baseCommon+0.08))<1e-6, 'catch +8% off');
+  g.relics = ['rare']; assert(Math.abs(api.catchChance(rare)-(baseRare+0.12))<1e-6, 'rare +12% off');
+  g.relics = ['rare']; assert(Math.abs(api.catchChance(common)-baseCommon)<1e-6, 'rare must not touch commons');
+});
+
+test('R4 lifesteal heals your attacker on landed hit only', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const you = api.mk('sparky', 20); you.hp = you.maxhp - 200;   // Volt, non-Water
+  const def = api.mk('sprig', 20); def.hp = def.maxhp = 1e9;
+  g.relics = ['lifesteal'];
+  const b = you.hp; api.strike(you, def, +1);
+  assert(you.hp > b && you.hp <= you.maxhp, `lifesteal did not heal (${b}->${you.hp})`);
+  // dir<0 (you as passive/wild attacking) does NOT self-heal via lifesteal
+  const you2 = api.mk('sparky', 20); you2.hp = you2.maxhp - 200;
+  const b2 = you2.hp; api.strike(you2, def, -1);
+  assert(you2.hp === b2, 'lifesteal fired on dir<0');
+});
+
+test('R5 thorns reflects onto the attacker (dir<0 only)', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const enemy = api.mk('emberpup', 20); enemy.hp = enemy.maxhp;
+  const you = api.mk('puddlet', 20); you.hp = you.maxhp = 1e9;
+  g.relics = ['thorns'];
+  const b = enemy.hp; api.strike(enemy, you, -1);
+  assert(enemy.hp < b, `thorns did not reflect (${b}->${enemy.hp})`);
+  // without relic: no reflect
+  g.relics = []; const enemy2 = api.mk('emberpup', 20); enemy2.hp = enemy2.maxhp;
+  const b2 = enemy2.hp; api.strike(enemy2, you, -1);
+  assert(enemy2.hp === b2, 'thorns fired without relic');
+  // dir>0 (your mon attacking) never reflects onto itself
+  g.relics = ['thorns']; const att = api.mk('emberpup', 20); att.hp = att.maxhp;
+  const b3 = att.hp; api.strike(att, you, +1);
+  assert(att.hp === b3, 'thorns reflected on dir>0');
+});
+
+test('R6 burn relic adds a stack and raises the cap', ()=>{
+  const { api } = boot();
+  const g = api.getG(); const { C } = api;
+  const fire = api.mk('emberpup', 20);
+  const def = api.mk('sparky', 20); def.hp = def.maxhp = 1e9;
+  g.relics = ['burn'];
+  api.strike(fire, def, +1);
+  assert(def.status.burn >= 2, `one burn strike should stack ≥2, got ${def.status.burn}`);
+  for(let i=0;i<6;i++) api.strike(fire, def, +1);
+  assert(def.status.burn === C.BURN_MAX+1, `burn cap should be ${C.BURN_MAX+1}, got ${def.status.burn}`);
+});
+
+test('R7 crit relic raises crit chance (statistical)', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const count = (relics)=>{
+    g.relics = relics.slice(); g.dmgPops.length = 0;
+    const att = api.mk('emberpup', 20), def = api.mk('sparky', 20); def.hp = def.maxhp = 1e12;
+    for(let i=0;i<3000;i++) api.strike(att, def, +1);
+    return g.dmgPops.filter(p=>p.crit).length;
+  };
+  const base = count([]); const withCrit = count(['crit']);
+  assert(withCrit > base + 100, `crit relic did not clearly raise crits (${base} vs ${withCrit})`);
+});
+
+test('R8 critdmg relic raises max hit magnitude (statistical)', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const maxHit = (relics)=>{
+    g.relics = relics.slice(); g.dmgPops.length = 0;
+    const att = api.mk('emberpup', 20), def = api.mk('sparky', 20); def.hp = def.maxhp = 1e12;
+    for(let i=0;i<3000;i++) api.strike(att, def, +1);
+    let mx = 0; for(const p of g.dmgPops){ const v = parseInt(String(p.txt).replace('-','')); if(v>mx) mx=v; }
+    return mx;
+  };
+  const base = maxHit([]); const boosted = maxHit(['critdmg']);
+  assert(boosted > base, `critdmg max ${boosted} should exceed baseline max ${base}`);
+});
+
+test('R9 startheal tops up the team at fight start', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team = [api.mk('emberpup',10), api.mk('puddlet',10)];
+  g.team.forEach(m=>{ m.hp = Math.round(m.maxhp*0.5); });
+  const before = g.team.map(m=>m.hp);
+  g.relics = ['startheal'];
+  api.finishSpawn(api.mk('sparky',5));
+  g.team.forEach((m,i)=>{ assert(m.hp>before[i] && m.hp<=m.maxhp, `member ${i} not healed (${before[i]}->${m.hp})`); });
+});
+
+test('R10 gold relic scales gold reward (stacks)', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const sample = (relics)=>{
+    let sum=0; const N=600;
+    for(let i=0;i<N;i++){
+      g.relics = relics.slice(); g.gold = 0; g.bossWin = false; g.fights = 0;
+      g.wild = api.mk('emberpup', 5);
+      api.endFight(true);
+      sum += g.gold;
+    }
+    return sum/N;
+  };
+  const base = sample([]); const two = sample(['gold','gold']);
+  const ratio = two/base;
+  assert(ratio>1.45 && ratio<1.75, `gold ×2 stack ratio ${ratio.toFixed(3)} not ~1.6`);
+});
+
+test('R11 bosspotion grants an extra potion after a boss', ()=>{
+  const { api, clickId } = bossToChoiceR('moltengod');
+  const g = api.getG();
+  g.relics = ['bosspotion'];
+  const before = g.potions;
+  assert(clickId('kill'), 'no kill button');
+  assert(g.potions === before + 2, `expected +2 potions, got ${g.potions-before}`);
+});
+
+test('R12 honor relic boosts release honor ×1.5', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.wild = api.mk('emberpup', 10); g.honor = 0; g.relics = [];
+  api.doRelease(); const base = g.honor;
+  g.wild = api.mk('emberpup', 10); g.honor = 0; g.relics = ['honor'];
+  api.doRelease(); const boosted = g.honor;
+  assert(boosted === Math.round(base*1.5), `honor ${boosted} != round(${base}*1.5)`);
+});
+
+test('R13 swiftpaw shortens the switch cooldown', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet','sprig','sparky']);
+  const g = api.getG();
+  g.relics = ['swiftpaw'];
+  assert(api.trySwitch(1)===true, 'switch failed');
+  assert(g.switchCd === api.switchCdMax(), `switchCd ${g.switchCd} != switchCdMax ${api.switchCdMax()}`);
+  assert(g.switchCd < api.SWITCH_CD, `switchCd ${g.switchCd} not < ${api.SWITCH_CD}`);
+  api.draw();  // must not throw with a relic strip present
+});
+
+test('R14 offers never duplicate owned one-time relics', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.relics = ['catch'];
+  assert(!api.buildRelicOffer(3).includes('catch'), 'catch offered while owned');
+  g.relics = ALL_RELICS.slice();   // everything owned
+  assert(api.buildRelicOffer(3).join()==='gold', 'only gold should remain offerable');
+});
+
+test('R15 picking a relic adds it and advances', ()=>{
+  const { api, step } = boot();
+  const g = api.getG();
+  g.relics = [];
+  api.setupRelicPick(()=>{ api.getG().state='walk'; });
+  assert(g.state==='relic', `expected relic state, got ${g.state}`);
+  assert(g.relicOffer.length>=1 && g.relicOffer.length<=3, `offer size ${g.relicOffer.length}`);
+  step(1); api.draw();  // render the relic pick screen
+  const pick = g.relicOffer[0];
+  api.takeRelic(0);
+  assert(g.relics.includes(pick), 'picked relic not added');
+  assert(g.relicOffer===null && g.afterRelic===null, 'offer/afterRelic not cleared');
+  assert(g.state==='walk', `continuation did not run (state ${g.state})`);
+});
+
+test('R16 a relic is offered after a boss victory (integration)', ()=>{
+  const { api, clickId } = bossToChoiceR('abysslord');
+  const g = api.getG();
+  g.relics = [];
+  assert(clickId('kill'), 'no kill button');
+  assert(g.state==='relic', `expected relic pick after boss, got ${g.state}`);
+  assert(g.relicOffer.length>=1, 'no relic offer after boss');
+  api.takeRelic(0);
+  assert(g.state==='walk' || g.state==='crossroads', `did not advance (${g.state})`);
+});
+
+test('R17 relics never change the persisted save shape', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g = api.getG();
+  g.relics = ['catch','gold','gold','crit'];
+  g.wild.hp = 1; g.battleIntro = 0;
+  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
+  step(1); clickId('kill');
+  api.Dex.save();
+  const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
+  const keys = Object.keys(saved).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']), `save shape changed: ${keys}`);
+  for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
+});
+
+test('R18 a battle with all relics active resolves without throwing', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g = api.getG();
+  g.relics = ALL_RELICS.slice();
+  g.battleIntro = 0;
+  api.draw();  // exercise drawRelicStrip with a full strip
+  for(let i=0;i<4000 && g.state==='battle';i++){ api.upd(0.05); }
+  assert(g.state==='choice' || g.state==='gameover', `stuck in ${g.state}`);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
