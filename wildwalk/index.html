@@ -2420,6 +2420,7 @@ function draw(){
   if(G.state==='sanctuary'){ drawSanctuary(); ctx.restore(); return; }
   if(G.state==='settings'){ drawSettings(); ctx.restore(); return; }
   if(G.state==='records'){ drawRecords(); ctx.restore(); return; }
+  if(G.state==='codex'){ drawCodex(); ctx.restore(); return; }
   if(G.state==='starter'){ drawStarter(); ctx.restore(); return; }
 
   drawBG(G.scroll, G.tier);
@@ -2494,6 +2495,7 @@ function ensureBoard(){
 }
 function achToast(a){ G.achMsg='Achievement: '+a.name; G.achIcon=a.icon; G.achMsgT=3.0; }
 function openSanctuary(from){ G.sanctuaryFrom=from; G.state='sanctuary'; clearButtons(); }
+function openCodex(from){ G.codexFrom=from; G.codexTab='species'; G.codexSel=null; G.codexMechTab='status'; G.state='codex'; clearButtons(); }
 function openSettings(from){ G.settingsFrom=from; G.state='settings'; clearButtons(); }
 function sliderRect(which){ return { x:384, y: which==='sfx'?257:205, w:300, h:10 }; }
 function sliderHit(mx,my,which){
@@ -2720,6 +2722,155 @@ function drawRecordsGlobal(){
   });
 }
 
+// ===================================================================
+// Codex — read-only lore/reference screen (species / types / mechanics).
+// Reads existing static data live; changes no combat/RNG/save state.
+// ===================================================================
+function drawCodex(){
+  ctx.fillStyle='#12162a'; ctx.fillRect(0,0,W,H);
+  centerText('CODEX', W/2,44,'900 40px Segoe UI','#ffe9a8');
+  const tab=G.codexTab||'species';
+  clearButtons();
+  const activeCol='#3a4a6a', idleCol='#20263c';
+  [['species','SPECIES'],['types','TYPES'],['mech','MECHANICS']].forEach(([id,lab],k)=>{
+    const x=249+k*158;
+    btn('tab_'+id, x,74,146,30, lab, null,
+      {col: tab===id?activeCol:idleCol, accent: tab===id?'#8fb0ff':undefined, tcol: tab===id?'#eaf0ff':'#8fa0c8'});
+  });
+  if(tab==='types') drawCodexTypes();
+  else if(tab==='mech') drawCodexMech();
+  else drawCodexSpecies();
+  btn('back', W/2-90, 552, 180, 40, '◀  BACK', null, {col:'#2a3355'});
+  drawButtons();
+}
+function drawCodexSpecies(){
+  const keys=Object.keys(SPECIES);
+  keys.forEach((key,i)=>{
+    const sp=SPECIES[key], r=pokedexCardRect(i), cx=r.x+r.w/2;
+    const pg=ctx.createLinearGradient(0,r.y,0,r.y+r.h);
+    pg.addColorStop(0,'#1a2138'); pg.addColorStop(1,'#111730');
+    ctx.save();
+    ctx.shadowColor=RARITY_COL[sp.rarity]; ctx.shadowBlur=10;
+    roundRect(r.x,r.y,r.w,r.h,10); ctx.fillStyle=pg; ctx.fill();
+    ctx.restore();
+    ctx.lineWidth=2; ctx.strokeStyle=RARITY_COL[sp.rarity];
+    roundRect(r.x,r.y,r.w,r.h,10); ctx.stroke();
+    drawMon(sp, cx, r.y+42, 20, 1, G.t, {bob:i});
+    centerText(sp.name, cx, r.y+r.h-40, '700 14px Segoe UI', '#eaf0ff');
+    centerText(sp.type+' · '+RARITY_NAME[sp.rarity], cx, r.y+r.h-22, '600 11px Segoe UI', TYPE_COL[sp.type]);
+  });
+  // detail overlay — species fully revealed (lore reference, no gating)
+  if(G.codexSel!=null){
+    const key=keys[G.codexSel], sp=SPECIES[key];
+    if(!sp) return;
+    ctx.fillStyle='rgba(6,8,18,.82)'; ctx.fillRect(0,0,W,H);
+    panel(200,110,560,380,null);
+    drawMon(sp, 300, 250, 60, 1, G.t);
+    centerText(sp.name, 540, 175, '800 30px Segoe UI', RARITY_COL[sp.rarity]);
+    centerText(sp.type+'  ·  '+RARITY_NAME[sp.rarity], 540, 202, '700 14px Segoe UI', TYPE_COL[sp.type]);
+    const mx=dexMaxBase(), bx=430, bw=280; let by=232;
+    const stat=(lab,val,max,col)=>{ centerText(lab, bx-24, by+11, '700 12px Segoe UI', '#aeb8d8');
+      bar(bx,by,bw,12,val/max,col,'#0c1120');
+      ctx.textAlign='left'; ctx.font='700 12px Segoe UI'; ctx.fillStyle='#eaf0ff'; ctx.fillText(Math.round(val), bx+bw+8, by+11); by+=30; };
+    stat('HP', sp.base.hp, mx.hp, '#5fd06a');
+    stat('ATK', sp.base.atk, mx.atk, '#ff9b6f');
+    stat('SPD', sp.base.spd, mx.spd, '#ffd23d');
+    centerText(sp.evo ? 'Evolves into '+SPECIES[sp.evo].name : 'Final form', 540, 340, '600 13px Segoe UI', '#8fb0ff');
+    ctx.font='italic 600 17px Segoe UI';
+    const lines=wrapText(sp.flavor, 470, 3);
+    let fy=392; for(const ln of lines){ centerText(ln, W/2, fy, 'italic 600 17px Segoe UI', '#dfe8ff'); fy+=18; }
+    centerText('tap anywhere to close', W/2, 476, '600 12px Segoe UI', '#8fa0c8');
+  }
+}
+function drawCodexTypes(){
+  const ox=259, oy=132, cw=52, ch=40;
+  // column headers (defender)
+  TYPES.forEach((def,c)=>{ centerText(def.slice(0,3).toUpperCase(), ox+78+c*cw+26, oy+22, '700 12px Segoe UI', TYPE_COL[def]); });
+  TYPES.forEach((att,r)=>{
+    const rowTop=oy+34+r*ch;
+    ctx.textAlign='right'; ctx.font='700 12px Segoe UI'; ctx.fillStyle=TYPE_COL[att];
+    ctx.fillText(att.slice(0,3).toUpperCase(), ox+72, rowTop+25); ctx.textAlign='left';
+    TYPES.forEach((def,c)=>{
+      const m=typeMult(att,def);
+      const x=ox+78+c*cw, y=rowTop;
+      ctx.fillStyle = m>1 ? '#24402e' : m<1 ? '#40242a' : '#171d31';
+      ctx.fillRect(x,y,cw,ch);
+      ctx.strokeStyle='#2a3760'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,cw-1,ch-1);
+      const g = m>1 ? '×'+m.toFixed(1) : m<1 ? '×'+m.toFixed(2).replace(/^0/,'') : '—';
+      const gc = m>1 ? '#8fe6a0' : m<1 ? '#ff9b8f' : '#4a5578';
+      centerText(g, x+cw/2, y+ch/2+4, '700 12px Segoe UI', gc);
+    });
+  });
+  centerText('▲ '+typeMult('Fire','Grass').toFixed(1)+'× strong    ▼ '+typeMult('Fire','Water').toFixed(2)+'× weak    — neutral',
+    W/2, 476, '600 13px Segoe UI', '#aeb8d8');
+}
+function drawCodexMech(){
+  const sub=G.codexMechTab||'status';
+  const activeCol='#3a4a6a', idleCol='#20263c';
+  [['status','STATUS'],['boss','BOSSES'],['relics','RELICS'],['biomes','BIOMES']].forEach(([id,lab],k)=>{
+    const x=168+k*158;
+    btn('mechsub_'+id, x,112,150,26, lab, null,
+      {col: sub===id?activeCol:idleCol, accent: sub===id?'#8fb0ff':undefined, tcol: sub===id?'#eaf0ff':'#8fa0c8'});
+  });
+  if(sub==='boss') drawCodexMechBoss();
+  else if(sub==='relics') drawCodexMechRelics();
+  else if(sub==='biomes') drawCodexMechBiomes();
+  else drawCodexMechStatus();
+}
+function pct(x){ return Math.round(x*100); }
+function mechLine(head, hcol, body, y){
+  centerText(head, W/2, y, '800 17px Segoe UI', hcol);
+  ctx.font='600 14px Segoe UI';
+  const lines=wrapText(body, 760, 2);
+  let by=y+21; for(const ln of lines){ centerText(ln, W/2, by, '600 14px Segoe UI', '#c9d4f0'); by+=19; }
+  return y + 21 + Math.max(1,lines.length)*19 + 8;
+}
+function drawCodexMechStatus(){
+  let y=176;
+  y=mechLine('🔥 Fire — Burn', TYPE_COL.Fire, 'Stacks to '+BURN_MAX+', each dealing '+pct(BURN_PCT)+'% of max HP per second for '+BURN_DUR+'s (damage over time).', y);
+  y=mechLine('💧 Water — Lifesteal', TYPE_COL.Water, 'A Water hit heals the attacker for '+pct(WATER_STEAL)+'% of the damage it deals.', y);
+  y=mechLine('🌿 Grass — Leech', TYPE_COL.Grass, 'A Grass hit regenerates '+pct(GRASS_LEECH)+'% of damage over '+LEECH_DUR+'s of steady healing.', y);
+  y=mechLine('⚡ Volt — Stun', TYPE_COL.Volt, pct(VOLT_STUN)+'% chance to stun for '+STUN_DUR+'s, then '+STUN_IMM+'s of stun immunity so it can never chain-lock.', y);
+  y=mechLine('🪨 Rock — Guard', TYPE_COL.Rock, 'Rock types reduce incoming damage by '+pct(ROCK_GUARD)+'%.', y);
+  y=mechLine('🌑 Shadow — Dodge', TYPE_COL.Shadow, 'Shadow types have a '+pct(SHADOW_DODGE)+'% chance to fully dodge an attack.', y);
+  y=mechLine('❄️ Frost — Chill', TYPE_COL.Frost, 'A Frost hit chills for '+CHILL_DUR+'s, slowing the target with +'+Math.round((CHILL_MUL-1)*100)+'% attack delay (never a full turn-skip).', y);
+}
+function drawCodexMechBoss(){
+  let y=176;
+  y=mechLine('👑 Boss cadence', '#ffe9a8', 'Every '+BOSS_EVERY+'th fight caps a biome with a boss. Bosses telegraph a rotating mechanic ('+BOSS_MECHS.join(' → ')+').', y);
+  y=mechLine('🛡 Ward', MECH_COL.ward, 'The boss shields itself for '+WARD_DUR+'s; your damage to it is multiplied by ×'+WARD_MUL+' while the ward holds.', y);
+  y=mechLine('⚡ Flurry', MECH_COL.flurry, FLURRY_HITS+' rapid strikes, each dealing ×'+FLURRY_HIT_MUL.toFixed(2)+' of a normal hit — burst pressure you must out-heal or out-race.', y);
+  y=mechLine('⚠ Heavy slam', MECH_COL.slam, 'A telegraphed slam capped at '+pct(BOSS_HEAVY_CAP)+'% of the target’s max HP — punishing, but it never one-shots.', y);
+  y=mechLine('☠ Execute valve', BOSS_DANGER, 'After '+BOSS_SOFTCAP+'s the boss stops healing and takes '+pct(BOSS_EXECUTE_DPS)+'% max HP per second of chip damage, so fights always end.', y);
+}
+function drawCodexMechRelics(){
+  centerText('Run relics — collect '+SET_THRESHOLD+' of a set to light its bonus.', W/2, 162, '700 13px Segoe UI', '#aeb8d8');
+  const ids=Object.keys(RELICS); const half=Math.ceil(ids.length/2);
+  ids.forEach((id,i)=>{
+    const R=RELICS[id];
+    const col=i<half?0:1, row=i<half?i:i-half;
+    const x=col===0?40:492, y=192+row*24;
+    ctx.textAlign='left';
+    ctx.font='700 12px Segoe UI'; ctx.fillStyle=R.col; ctx.fillText(R.icon+' '+R.name, x, y);
+    ctx.font='600 11px Segoe UI'; ctx.fillStyle='#c9d4f0'; ctx.fillText(R.desc, x+160, y);
+  });
+  let fy=192+half*24+16;
+  centerText('Set bonuses', W/2, fy, '800 14px Segoe UI', '#ffe9a8'); fy+=22;
+  Object.keys(RELIC_SETS).forEach(k=>{
+    const S=RELIC_SETS[k];
+    centerText(S.icon+' '+S.name+' — own '+SET_THRESHOLD+': '+S.desc, W/2, fy, '700 13px Segoe UI', S.col); fy+=22;
+  });
+}
+function drawCodexMechBiomes(){
+  centerText('Each biome favors two or three types — expect more of them here.', W/2, 162, '700 13px Segoe UI', '#aeb8d8');
+  let y=196;
+  BIOMES.forEach(b=>{
+    ctx.textAlign='left'; ctx.font='800 15px Segoe UI'; ctx.fillStyle=b.accent; ctx.fillText(b.name, 60, y);
+    ctx.font='600 13px Segoe UI'; ctx.fillStyle='#aeb8d8'; ctx.fillText('Favors '+b.favor.join(' / '), 340, y);
+    y+=30;
+  });
+}
+
 function drawTitle(){
   const sky=ctx.createLinearGradient(0,0,0,H);
   sky.addColorStop(0,'#161028'); sky.addColorStop(1,'#3a2a55'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
@@ -2746,10 +2897,11 @@ function drawTitle(){
   btn('start',  96, 452, 240, 60, '▶  BEGIN THE WALK', startSub, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
   btn('daily', 360, 452, 240, 60, '📅 DAILY CHALLENGE', dSub,    {col:'#5a4a2a', accent:'#ffd27a', big:true});
   btn('seeded',624, 452, 240, 60, '🎲 SEEDED RUN', 'race a code', {col:'#2f5a4a', accent:'#6fd0b0', big:true});
-  btn('dex',159,528,150,44,'📕 POKÉDEX',Dex.nCaught()+'/'+Object.keys(SPECIES).length,{col:'#4a3a6a',accent:'#c9a8ff'});
-  btn('records',323,528,150,44,'🏅 RECORDS',Dex.data.best+'m best',{col:'#3a4a6a',accent:'#8fb0ff'});
-  btn('sanctuary',487,528,150,44,'✦ SANCTUARY',Dex.data.essence+' essence',{col:'#3a2f5a',accent:'#ffe9a8'});
-  btn('ach',651,528,150,44,'🏆 AWARDS',achCount()+'/'+ACH.length,{col:'#3a2f4a',accent:'#ff9b6f'});
+  btn('dex',      85,528,150,44,'📕 POKÉDEX',  Dex.nCaught()+'/'+Object.keys(SPECIES).length,{col:'#4a3a6a',accent:'#c9a8ff'});
+  btn('records', 245,528,150,44,'🏅 RECORDS',  Dex.data.best+'m best',{col:'#3a4a6a',accent:'#8fb0ff'});
+  btn('codex',   405,528,150,44,'📖 CODEX',    'lore & guide',{col:'#2f4a5a',accent:'#6fd0b0'});
+  btn('sanctuary',565,528,150,44,'✦ SANCTUARY',Dex.data.essence+' essence',{col:'#3a2f5a',accent:'#ffe9a8'});
+  btn('ach',     725,528,150,44,'🏆 AWARDS',   achCount()+'/'+ACH.length,{col:'#3a2f4a',accent:'#ff9b6f'});
   btn('settings', W-98, 14, 38, 34, '⚙', null, {col:'#2a2440'});
   btn('mute',     W-52, 14, 38, 34, muteIcon(), null, {col:'#2a2440'});
   drawButtons();
@@ -3352,10 +3504,11 @@ function drawGameOver(){
   centerText('✦ +'+(G.essenceEarned||0)+' ESSENCE   ·   banked '+Dex.data.essence, W/2, 400, '800 20px Segoe UI', '#ffe9a8');
   clearButtons();
   btn('again', W/2-130, 420, 260, 58, '↻  WALK AGAIN', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
-  btn('dex', W/2-208, 486, 200, 40, '📕 POKÉDEX', null, {col:'#4a3a6a', accent:'#c9a8ff'});
-  btn('sanctuary', W/2+8, 486, 200, 40, '✦ SANCTUARY', null, {col:'#3a2f5a', accent:'#ffe9a8'});
-  btn('records', W/2-208, 530, 200, 40, '🏅 RECORDS', null, {col:'#3a4a6a', accent:'#8fb0ff'});
-  btn('ach', W/2+8, 530, 200, 40, '🏆 AWARDS', null, {col:'#3a2f4a', accent:'#ff9b6f'});
+  btn('dex',      85,506,150,44,'📕 POKÉDEX',  null,{col:'#4a3a6a',accent:'#c9a8ff'});
+  btn('records', 245,506,150,44,'🏅 RECORDS',  null,{col:'#3a4a6a',accent:'#8fb0ff'});
+  btn('codex',   405,506,150,44,'📖 CODEX',    null,{col:'#2f4a5a',accent:'#6fd0b0'});
+  btn('sanctuary',565,506,150,44,'✦ SANCTUARY',null,{col:'#3a2f5a',accent:'#ffe9a8'});
+  btn('ach',     725,506,150,44,'🏆 AWARDS',   null,{col:'#3a2f4a',accent:'#ff9b6f'});
   drawButtons();
 }
 
@@ -3366,13 +3519,13 @@ function onClick(mx,my){
   if(G.tutActive){ dismissTut(); sfx('select'); return; }
   { const mb=hitButton(mx,my);
     if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='tutskip') skipTutorial(); else if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='settings') openSettings('title'); else if(b.id==='daily'){ startDaily(); } else if(b.id==='seeded'){
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='tutskip') skipTutorial(); else if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='codex') openCodex('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='settings') openSettings('title'); else if(b.id==='daily'){ startDaily(); } else if(b.id==='seeded'){
       const code = (typeof prompt==='function') ? prompt('Enter a run code to race — or leave blank for a random seed:','') : '';
       const s = runCodeToSeed(code || '');
       startSeededRun(s==null ? (Math.floor(rnd()*4294967296)>>>0) : s);
       flash('Seed: '+G.runCode);   // surface canonical code for copy/share
     } else { openStarter('title'); } } return; }
-  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='records') openRecords('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
+  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='records') openRecords('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='codex') openCodex('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
   if(G.state==='starter'){
     const b=hitButton(mx,my); if(!b) return;
     if(b.id==='back'){ G.state=G.starterFrom||'title'; clearButtons(); }
@@ -3422,6 +3575,20 @@ function onClick(mx,my){
       }
       return;
     }
+    return;
+  }
+  if(G.state==='codex'){
+    const b=hitButton(mx,my);
+    if(b){                                                  // tabs/back always win (switching clears any open detail)
+      if(b.id==='back'){ G.state=G.codexFrom||'title'; clearButtons(); return; }
+      if(b.id==='tab_species'){ G.codexTab='species'; G.codexSel=null; return; }
+      if(b.id==='tab_types'){ G.codexTab='types'; G.codexSel=null; return; }
+      if(b.id==='tab_mech'){ G.codexTab='mech'; G.codexSel=null; return; }
+      if(b.id.startsWith('mechsub_')){ G.codexMechTab=b.id.slice(8); return; }
+      return;
+    }
+    if(G.codexSel!=null){ G.codexSel=null; return; }        // any non-button tap closes species detail
+    if(G.codexTab==='species'){ const i=pokedexCardAt(mx,my); if(i>=0) G.codexSel=i; }  // reuse pokedex hitmap (identical grid)
     return;
   }
   if(G.state==='battle' && G.battleIntro<=0){ const idx=teamCardAt(mx,my); if(idx>=0){ trySwitch(idx); return; } }
@@ -3491,6 +3658,8 @@ window.addEventListener('keydown', e=>{
   if(G.state==='achievements' && (e.key==='Escape'||e.key==='Backspace'||e.key==='a'||e.key==='A')){ G.state=G.achFrom||'title'; clearButtons(); e.preventDefault(); return; }
   if((G.state==='title'||G.state==='gameover') && (e.key==='r'||e.key==='R')){ openRecords(G.state); e.preventDefault(); return; }
   if(G.state==='records' && (e.key==='Escape'||e.key==='Backspace'||e.key==='r'||e.key==='R')){ G.state=G.recordsFrom||'title'; clearButtons(); e.preventDefault(); return; }
+  if((G.state==='title'||G.state==='gameover') && (e.key==='c'||e.key==='C')){ openCodex(G.state); e.preventDefault(); return; }
+  if(G.state==='codex' && (e.key==='Escape'||e.key==='Backspace'||e.key==='c'||e.key==='C')){ if(G.codexSel!=null) G.codexSel=null; else { G.state=G.codexFrom||'title'; clearButtons(); } e.preventDefault(); return; }
   if(e.key===' '){ if(G.state==='battle') G.speed=G.speed>=3?1:G.speed+1; e.preventDefault(); }
   const n=parseInt(e.key);
   if(n>=1 && n<=4){

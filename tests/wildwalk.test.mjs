@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openCodex:(f)=>openCodex(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -3336,6 +3336,124 @@ test('SET9 reduced-motion is visual-only: strike damage + shake identical on/off
   assert(JSON.stringify(off.dmg)===JSON.stringify(on.dmg), `strike damage differs rm off ${off.dmg} vs on ${on.dmg}`);
   assert(off.hp===on.hp, 'foe hp differs rm on vs off');
   assert(off.shake===on.shake, `G.shake accumulation differs rm off ${off.shake} vs on ${on.shake}`);
+});
+
+// ---- Codex (read-only lore/reference screen) ----
+test('CODEX1 openCodex sets state + defaults (title)', ()=>{
+  const { api } = boot();
+  api.openCodex('title');
+  const g=api.getG();
+  assert(g.state==='codex', 'state not codex');
+  assert(g.codexFrom==='title', 'codexFrom not title');
+  assert(g.codexTab==='species', 'codexTab default not species');
+  assert(g.codexSel===null, 'codexSel default not null');
+  assert(g.codexMechTab==='status', 'codexMechTab default not status');
+});
+
+test('CODEX2 openCodex from gameover', ()=>{
+  const { api } = boot();
+  api.getG().state='gameover';
+  api.openCodex('gameover');
+  const g=api.getG();
+  assert(g.codexFrom==='gameover', 'codexFrom not gameover');
+  assert(g.state==='codex', 'state not codex');
+});
+
+test('CODEX3 back returns to opener (title)', ()=>{
+  const { api, clickId } = boot();
+  api.openCodex('title'); api.draw();
+  assert(clickId('back'), 'no back button');
+  assert(api.getG().state==='title', 'did not return to title');
+});
+
+test('CODEX4 back returns to opener (gameover)', ()=>{
+  const { api, clickId } = boot();
+  api.getG().state='gameover';
+  api.openCodex('gameover'); api.draw();
+  assert(clickId('back'), 'no back button');
+  assert(api.getG().state==='gameover', 'did not return to gameover');
+});
+
+test('CODEX5 click dispatch drives tab + mech-subtab branches', ()=>{
+  const { api, clickId } = boot();
+  api.openCodex('title'); api.draw();
+  assert(clickId('tab_types'), 'no tab_types'); assert(api.getG().codexTab==='types', 'not types');
+  api.draw(); assert(clickId('tab_mech'), 'no tab_mech'); assert(api.getG().codexTab==='mech', 'not mech');
+  api.draw(); assert(clickId('mechsub_relics'), 'no mechsub_relics'); assert(api.getG().codexMechTab==='relics', 'not relics');
+  api.draw(); assert(clickId('mechsub_biomes'), 'no mechsub_biomes'); assert(api.getG().codexMechTab==='biomes', 'not biomes');
+  api.draw(); assert(clickId('tab_species'), 'no tab_species'); assert(api.getG().codexTab==='species', 'not species');
+});
+
+test('CODEX6 species select + deselect', ()=>{
+  const { api, click } = boot();
+  api.openCodex('title'); api.getG().codexTab='species'; api.getG().codexSel=0;
+  api.draw();                        // overlay must not throw
+  click(480,300);                    // any tap closes detail
+  assert(api.getG().codexSel===null, 'detail did not close');
+});
+
+test('CODEX7 switching tab clears codexSel', ()=>{
+  const { api, clickId } = boot();
+  api.openCodex('title'); api.getG().codexSel=0; api.draw();
+  assert(clickId('tab_types'), 'no tab_types');
+  assert(api.getG().codexSel===null, 'codexSel not cleared');
+  assert(api.getG().codexTab==='types', 'codexTab not types');
+});
+
+test('CODEX8 render safety: every tab, mech subtab, selection, both openers', ()=>{
+  const { api } = boot();
+  for(const from of ['title','gameover']){
+    api.getG().state=from; api.openCodex(from);
+    // species tab with drawMon bob animated + detail overlays across rarities/evo
+    api.getG().codexTab='species';
+    for(let i=0;i<3;i++){ api.getG().t=i*0.06; api.getG().codexSel=null; api.getG().buttons=[]; api.draw(); }
+    for(const idx of [0,(api.SPECIESKEYS.length/2|0),api.SPECIESKEYS.length-1]){
+      api.getG().codexSel=idx; api.getG().buttons=[]; api.draw();
+    }
+    api.getG().codexSel=null;
+    // types tab
+    api.getG().codexTab='types'; api.getG().buttons=[]; api.draw();
+    // mech tab, every subtab
+    api.getG().codexTab='mech';
+    for(const sub of ['status','boss','relics','biomes']){ api.getG().codexMechTab=sub; api.getG().buttons=[]; api.draw(); }
+  }
+  assert(true);
+});
+
+test('CODEX9 type chart reads typeMult (no drift)', ()=>{
+  const { api } = boot();
+  assert(api.tm('Fire','Grass')>1, 'Fire>Grass not strong');
+  assert(api.tm('Fire','Water')<1, 'Fire>Water not weak');
+  assert(api.tm('Fire','Fire')===1, 'Fire>Fire not neutral');
+});
+
+test('CODEX10 title & gameover menus expose a codex button', ()=>{
+  const { api } = boot();
+  api.getG().state='title'; api.draw();
+  assert(api.getG().buttons.some(b=>b.id==='codex'), 'title has no codex button');
+  api.getG().state='gameover'; api.draw();
+  assert(api.getG().buttons.some(b=>b.id==='codex'), 'gameover has no codex button');
+});
+
+test('CODEX11 keyboard Escape, two-step + open key', ()=>{
+  const { api, getKey } = boot();
+  api.openCodex('title'); getKey()({key:'Escape',preventDefault(){}});
+  assert(api.getG().state==='title', 'Escape did not return to title');
+  api.openCodex('title'); api.getG().codexSel=0;
+  getKey()({key:'Escape',preventDefault(){}});
+  assert(api.getG().codexSel===null && api.getG().state==='codex', 'first Escape should close detail only');
+  getKey()({key:'Escape',preventDefault(){}});
+  assert(api.getG().state==='title', 'second Escape should return to title');
+  api.getG().state='title'; getKey()({key:'c',preventDefault(){}});
+  assert(api.getG().state==='codex', 'c did not open codex');
+});
+
+test('CODEX12 save shape unchanged after codex use (protects WSHAPE)', ()=>{
+  const { api, store } = boot();
+  api.openCodex('title'); api.getG().codexTab='mech'; api.getG().codexSel=3;
+  api.Dex.save();
+  const keys=Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(WSHAPE), keys);
 });
 
 })();
