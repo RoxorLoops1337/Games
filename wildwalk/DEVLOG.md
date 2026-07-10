@@ -35,7 +35,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 15. [x] Distance leaderboard (LOCAL best-runs) — DONE c15.
 16. [x] More species + 2nd-tier evolutions — DONE c16.
 17. [x] Daily-seed challenge run — DONE c17.
-18. [ ] Prestige / ascension (opt-in run modifiers for bonus essence).
+18. [x] Prestige / ascension — DONE c18.
 19. [ ] Guided tutorial / first-run onboarding.
 20. [ ] More biomes + biome-specific boss variety.
 21. [ ] Animated multi-frame sprites / richer idle+attack animation.
@@ -45,6 +45,17 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c18 — Prestige / ascension** (studio: designer, ux-designer, lead, engineer, QA). An opt-in
+  difficulty ladder for bonus essence. Dex.data.ascension {max,sel} added additively (max unlocked,
+  sel chosen 0..max, cap 8). Each level A stacks: wild & boss HP ×(1+0.12A), ATK ×(1+0.10A), −1
+  starting potion per 2 levels — payoff essence ×(1+0.25A). newGame latches G.asc=sel; startDaily
+  forces G.asc=0 (daily is always base difficulty). gameOver awards the scaled essence and, for
+  non-daily runs, unlocks the next level when you clear tier ≥4 at your current top ascension. A
+  stepper on the Sanctuary header (◀ ASCENSION sel/max ▶ + a live modifier hint) sets the level
+  beside the essence pill without touching the upgrades grid; the title's BEGIN button sub reflects
+  the active level + essence bonus. Multipliers guard G.asc undefined via (G.asc||0). +8 deterministic
+  tests (mul helpers, spawnBoss hp/atk scale, potion latch, unlock gate incl. tier/daily/cap negatives,
+  daily-forces-0, stepper clamp, old-save default). 138/138, 0 flakes. All save-shape arrays updated.
 - **c17 — Daily-seed challenge run** (studio: designer, ux-designer, lead, engineer, QA + orchestrator fix).
   A deterministic daily mode: a 📅 DAILY CHALLENGE button on the title reseeds the existing LCG from
   today's UTC date so every player worldwide gets the identical run that day. dayInt() → YYYYMMDD
