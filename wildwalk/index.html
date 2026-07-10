@@ -221,6 +221,20 @@ const BIOMES = [
     orbHalo:'180,160,255', haze:'120,90,180', moteCol:'200,180,255',
     orbKind:'moon', treeN:3, prop:'starfield', favor:['Shadow','Volt'],
     mote:{ col:'rgba(200,180,255,1)', additive:true, density:14, mode:'rise' } },
+  { name:'Frostbound Tundra', accent:'#9fd8ff',
+    skyTop:'#182c4c', skyMid:'#3a6a9c', skyBot:'#accfe8', orb:'#eef6ff',
+    hillFar:'#3f6288', hillNear:'#4e7699', tree:'#39606e',
+    ground:'#cadeec', groundEdge:'#a6c2d6', path:'#dbe9f2', pathStone:'#b7ccda',
+    orbHalo:'232,246,255', haze:'168,208,232', moteCol:'232,246,255',
+    orbKind:'moon', treeN:4, prop:'none', favor:['Water','Rock'],
+    mote:{ col:'rgba(232,246,255,1)', additive:false, density:18, mode:'drift' } },
+  { name:'The Firstlight',    accent:'#ffd76a',
+    skyTop:'#2c286a', skyMid:'#8a5ac2', skyBot:'#ffd98a', orb:'#fff6d8',
+    hillFar:'#5a3f96', hillNear:'#7a52ac', tree:'#6f52a0',
+    ground:'#e2ba7c', groundEdge:'#c89a58', path:'#f5e2b4', pathStone:'#d9c28c',
+    orbHalo:'255,246,216', haze:'220,180,255', moteCol:'255,232,168',
+    orbKind:'sun', treeN:3, prop:'starfield', favor:['Volt','Fire'],
+    mote:{ col:'#ffe8a8', additive:true, density:18, mode:'rise' } },
 ];
 // ---------- weather / day-night (transient, per-encounter; only Dex.data persists) ----------
 // 5 kinds; each reskins the scene via canvas overlay + folds SMALL balanced multipliers
@@ -240,10 +254,12 @@ const BIOME_WEATHER = [
   ['Night','Night','Fog','Clear'],                 // 3 Caverns
   ['Sunshine','Sunshine','Clear','Fog'],           // 4 Ashfall
   ['Night','Night','Fog','Clear'],                 // 5 Void
+  ['Fog','Night','Clear','Fog','Night'],           // 6 Frostbound Tundra
+  ['Sunshine','Clear','Sunshine','Night','Clear'], // 7 The Firstlight
 ];
 // deterministic, monotonic non-decreasing: 1-2 meadow, 3-4 forest, 5-6 shore,
 // 7-8 cave, 9-10 volcano, 11+ void (clamped).
-function biomeForTier(tier){ return Math.min(5, Math.floor((tier-1)/2)); }
+function biomeForTier(tier){ return Math.min(7, Math.floor((tier-1)/2)); }
 // advance the biome as the walk deepens (called from setupCrossroads). Starts a
 // single timer that drives both the crossfade and the name label.
 function updateBiome(){
@@ -884,7 +900,9 @@ function bossDue(){ return ((G.fights+1) % BOSS_EVERY) === 0; }
 function spawnBoss(forceKey){
   const teamAvg = G.team.reduce((s,m)=>s+m.level,0)/G.team.length;
   const pool = G.tier<4 ? RARES : LEGENDS;
-  const key = forceKey || pick(pool);                 // forceKey = test hook only
+  const favor = (BIOMES[G.biome]||BIOMES[0]).favor || [];
+  const themed = pool.filter(k => favor.includes(SPECIES[k].type));
+  const key = forceKey || pick(themed.length ? themed : pool);   // forceKey = test hook only
   const lvl = Math.round(teamAvg + (G.tier-1)*0.9 + BOSS_LVL_BONUS);
   const w = makeMon(key, Math.max(3,lvl));
   w.maxhp = Math.round(w.maxhp*BOSS_HP_MUL); w.hp = w.maxhp;

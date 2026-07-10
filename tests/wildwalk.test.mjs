@@ -524,11 +524,70 @@ test('biome progression maps tiers and is monotonic/pure', ()=>{
   assert(biomeForTier(7)===3, `t7 -> ${biomeForTier(7)}`);
   assert(biomeForTier(9)===4, `t9 -> ${biomeForTier(9)}`);
   assert(biomeForTier(11)===5, `t11 -> ${biomeForTier(11)}`);
-  assert(biomeForTier(50)===5, `t50 -> ${biomeForTier(50)}`);
+  assert(biomeForTier(50)===7, `t50 -> ${biomeForTier(50)}`);
   let prev=-1;
   for(let t=1;t<=40;t++){ const v=biomeForTier(t); assert(v>=prev, `not monotonic at t=${t}`); prev=v; }
   // pure: same input -> same output
   for(let t=1;t<=40;t++) assert(biomeForTier(t)===biomeForTier(t), 'not pure');
+});
+
+// ---- endgame biomes 6 & 7: mapping, visual data, weather, themed bosses ----
+test('biomeForTier extends to 8 endgame biomes', ()=>{
+  const { biomeForTier } = boot().api;
+  assert(biomeForTier(1)===0, `t1 -> ${biomeForTier(1)}`);
+  assert(biomeForTier(11)===5, `t11 -> ${biomeForTier(11)}`);
+  assert(biomeForTier(12)===5, `t12 -> ${biomeForTier(12)}`);
+  assert(biomeForTier(13)===6, `t13 -> ${biomeForTier(13)}`);
+  assert(biomeForTier(14)===6, `t14 -> ${biomeForTier(14)}`);
+  assert(biomeForTier(15)===7, `t15 -> ${biomeForTier(15)}`);
+  assert(biomeForTier(99)===7, `t99 -> ${biomeForTier(99)}`);
+  assert(biomeForTier(999)===7, `t999 -> ${biomeForTier(999)}`);
+});
+
+test('new biomes 6 & 7 exist with all required fields', ()=>{
+  const { BIOMES } = boot().api;
+  assert(BIOMES.length===8, `BIOMES.length ${BIOMES.length}`);
+  assert(BIOMES[6].name==='Frostbound Tundra', `b6 ${BIOMES[6].name}`);
+  assert(BIOMES[7].name==='The Firstlight', `b7 ${BIOMES[7].name}`);
+  const fields=['skyTop','skyMid','skyBot','orb','hillFar','hillNear','tree',
+    'ground','groundEdge','path','pathStone','orbHalo','haze','moteCol',
+    'accent','orbKind','treeN','prop','favor','mote'];
+  const TYPES=new Set(['Fire','Water','Grass','Volt','Rock','Shadow']);
+  const props=new Set(['none','canopy','shore','cave','starfield']);
+  for(const i of [6,7]){
+    for(const f of fields) assert(BIOMES[i][f]!==undefined, `biome ${i} missing ${f}`);
+    assert(props.has(BIOMES[i].prop), `biome ${i} prop ${BIOMES[i].prop} not a draw case`);
+    assert(Array.isArray(BIOMES[i].favor) && BIOMES[i].favor.length>0, `biome ${i} empty favor`);
+    for(const t of BIOMES[i].favor) assert(TYPES.has(t), `biome ${i} bad favor type ${t}`);
+  }
+});
+
+test('weatherFor stays in WEATHER_KINDS for biomes 6 & 7', ()=>{
+  const { weatherFor, WEATHER_KINDS } = boot().api;
+  for(const b of [6,7]) for(let f=0; f<30; f++){
+    assert(WEATHER_KINDS.includes(weatherFor(b,f)), `biome ${b} fight ${f} -> ${weatherFor(b,f)}`);
+  }
+});
+
+test('spawnBoss forceKey still overrides biome theming', ()=>{
+  const { api } = boot();
+  const g=api.getG(); g.team=[ api.mk('emberpup',10) ]; g.tier=14; g.biome=6;
+  const w=api.spawnBoss('moltengod');   // Fire, not in Tundra (Water/Rock) favor
+  assert(w.key==='moltengod', `forceKey ignored -> ${w.key}`);
+});
+
+test('spawnBoss picks a favor-typed boss for each new biome', ()=>{
+  const { api } = boot();
+  const g=api.getG(); g.team=[ api.mk('emberpup',10) ];
+  for(const [biome,tier] of [[6,14],[7,16]]){
+    g.biome=biome; g.tier=tier;
+    const favor=api.BIOMES[biome].favor;
+    for(let i=0;i<40;i++){
+      const w=api.spawnBoss();
+      assert(favor.includes(w.sp.type),
+        `biome ${biome} boss ${w.key} type ${w.sp.type} not in ${favor}`);
+    }
+  }
 });
 
 // ---- biomes: spawn bias raises favored share, never empties the pool ----

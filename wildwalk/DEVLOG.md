@@ -37,7 +37,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 17. [x] Daily-seed challenge run — DONE c17.
 18. [x] Prestige / ascension — DONE c18.
 19. [x] Guided tutorial / first-run onboarding — DONE c19.
-20. [ ] More biomes + biome-specific boss variety.
+20. [x] More biomes + biome-specific boss variety — DONE c20.
 21. [ ] Animated multi-frame sprites / richer idle+attack animation.
 22. [ ] Endless post-game scaling mode.
 23. [ ] Status-effect visual polish (clearer burn/stun/shield readouts).
@@ -45,6 +45,17 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c20 — More biomes + biome-themed bosses** (studio: designer, ux-designer, lead, engineer, QA).
+  Grew the biome roster 6 → 8 with two endgame zones: idx6 Frostbound Tundra (favor Water/Rock, moon,
+  icy blue-white, prop none) and idx7 The Firstlight (favor Volt/Fire, sun, radiant gold/violet starfield —
+  deliberately distinct from the dark Deep Void). biomeForTier now min(7,…) so tiers 13-14→6, 15+→7
+  (low tiers unchanged); +2 BIOME_WEATHER rows keep weatherFor in-bounds. Bosses are now biome-themed:
+  spawnBoss filters the RARES/LEGENDS pool by the current biome's favor types (forceKey preserved,
+  full-pool fallback) so an Ashfall boss is Fire/Rock, a Void boss Shadow/Volt, a Tundra boss Water/Rock,
+  etc. — pure species SELECTION, zero combat/balance math change. New biomes' favor also flavors wild
+  spawns automatically via the existing pickBiased. No new save field. +5 deterministic tests (tier
+  mapping, 8 biomes with full field schema + valid prop, weather bounds, forceKey override, favor-typed
+  boss per new biome). 150/150, 0 flakes. Both biomes confirmed by screenshot.
 - **c19 — Guided tutorial / first-run onboarding** (studio: designer, ux-designer, lead, engineer, QA).
   A first-run coach-mark overlay. One additive Dex.data flag tutorialDone:false; TUT_STEPS = 4 ordered
   tips keyed to the first entry of each core state (walk, battle, choice, crossroads). tutStep() (called
